@@ -26,6 +26,12 @@ shares, archives, "open with" menus.
 
 Each milestone ends in a reviewer-2 round, then Michael's go before `make install`.
 
+**F4 thumbnails, a rule from Nemo (2026-10-20):** Nemo looped at up to 45% CPU on one file
+because it checked an x-large thumbnail, found it stale (an older file of the same name), wrote the
+new one to large, and checked x-large again, decoding the image several times a second. fx must
+check a thumbnail at the size it writes, and try a file once per change (its mtime), never in a
+loop: a failed or stale result is remembered until the file changes.
+
 ## F1 design
 
 **Layers, as uml-viewer:** `base/` (types, arenas, strings: uml-viewer's at cca8e45), `fs/`
