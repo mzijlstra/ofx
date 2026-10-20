@@ -17,10 +17,10 @@ every tool here.
   output through `run-script.sh`. `build/fx-probe` and `build/test` link no raylib and are safe
   to run anywhere.
 - **The theme:** fx reads `$XDG_STATE_HOME/omarchy/current/theme`. `run-script.sh` points it at a
-  scratch copy (`<scratch>/state`), so a theme test edits the copy, never Michael's files.
-- **The sidebar** reads the GTK bookmarks (shared with Nemo) and the XDG user dirs under
-  `$XDG_CONFIG_HOME`; `run-script.sh` points that at `<scratch>/config`. fx never writes them. Never
+  scratch copy (`<scratch>/state`), so a theme test edits the copy, never Michael's files. Never
   run `omarchy-theme-set` or anything else that changes his theme to test a switch.
+- **The sidebar** reads the GTK bookmarks (shared with Nemo) and the XDG user dirs under
+  `$XDG_CONFIG_HOME`; `run-script.sh` points that at `<scratch>/config`. fx never writes them.
 - **fx only reads in F1:** listing folders, the MIME database, the icon theme. The scripts' `sh`
   lines make and change files: point them at scratch folders only, never his home or a work repo.
 - **A window that stops answering** pops Hyprland's "terminate?" dialog on his screen, even on the
@@ -42,8 +42,7 @@ tools/gui/output.sh remove FXGUI              # refuses while a window is left o
   on it. On 2026-10-20 I kept such an output for a minute, and a first version of the script had a
   jq bug and fell through to create: both carried his Nemo onto the invisible output.
 
-- `run-script.sh` refuses to run when the output's workspace holds a window that isn't fx (a
-  new headless output may take one of Michael's hidden workspaces), takes the pid from the launch
+- `run-script.sh` refuses to run when the output's workspace holds any window, takes the pid from the launch
   script (never a class lookup: a reviewer may run fx at the same time), and reports what is left
   on the output.
 - Every rule in `../uml-viewer/CLAUDE.md`, "Testing the GUI", holds here too: only the vetted
