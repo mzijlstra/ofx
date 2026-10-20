@@ -16,7 +16,8 @@
 //   back                    the mouse's back button
 //   shot <file.png>         the next drawn frame; a relative path goes under FX_GUI_SHOTS
 //   sh <command...>         runs the rest of the line with /bin/sh and waits for it (5 s at most),
-//                           $FX_DIR set to the folder shown. Point it only at scratch folders.
+//                           $FX_DIR set to the folder shown, $FX_ROOT to the run's scratch tree.
+//                           Refused unless the folder is under FX_GUI_ROOT and nothing failed yet.
 //   state                   prints one line of key=value words about the window
 //   expect <word>...        each word must be in that line (whole words: `sel=a.txt`); the
 //                           script ends with "script: N of M expectations failed" when any did
@@ -122,9 +123,32 @@ static void script_fail(const char *fmt, ...)
     script.failed++;
 }
 
+// Whether path is root or under it, both resolved.
+static bool script_under(const char *path, const char *root)
+{
+    char p[PATH_MAX], r[PATH_MAX];
+    if (!root || !root[0] || !realpath(path, p) || !realpath(root, r)) return false;
+    size_t n = strlen(r);
+    return strncmp(p, r, n) == 0 && (p[n] == 0 || p[n] == '/');
+}
+
+// An `sh` line runs only while the script is on track: fx's folder inside the run's scratch tree
+// (FX_GUI_ROOT, set by run-script.sh), and no expectation failed yet. The lines delete and edit
+// files relative to $FX_DIR, so a navigation bug (or a GUI mutant that recreates one) would
+// otherwise point them at wherever fx landed: / once, Michael's home another time.
 static void script_sh(Str cmd)
 {
+    const char *root = getenv("FX_GUI_ROOT");
+    if (script.failed) {
+        script_fail("sh skipped after a failure: %.*s", STR_ARG(cmd));
+        return;
+    }
+    if (!script_under(app.cwd, root)) {
+        script_fail("sh refused: %s is not under FX_GUI_ROOT (%s)", app.cwd, root ? root : "unset");
+        return;
+    }
     setenv("FX_DIR", app.cwd, 1);
+    setenv("FX_ROOT", root, 1);
     char *c = arena_cstr(&scratch, cmd);
     // Under `timeout`: the window answers no events while it waits, and a window that stops
     // answering for long pops Hyprland's "terminate?" dialog on Michael's screen.

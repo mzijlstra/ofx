@@ -20,6 +20,7 @@
 # failed, an ASan report appeared, or the window had to be killed.
 set -u
 out=$1 T=$2 sc=$3 bin=$4
+case $T in /?*) ;; *) echo "run-script: the scratch dir must be an absolute path: '$T'" >&2; exit 1 ;; esac
 shift 4
 mkdir -p "$T/shots" "$T/fakes"
 rm -f "$T/run.pid" "$T/out" "$T/err" "$T"/asan.*
@@ -46,7 +47,7 @@ root=$(cd "$(dirname "$0")/../.." && pwd)
 cat > "$T/launch.sh" <<EOS
 #!/bin/sh
 echo \$\$ > "$T/run.pid"
-exec env ${script_env} FX_GUI_SHOTS="$T/shots" PATH="$T/fakes:\$PATH" XDG_STATE_HOME="$T/state" \
+exec env ${script_env} FX_GUI_ROOT="$T" FX_GUI_SHOTS="$T/shots" PATH="$T/fakes:\$PATH" XDG_STATE_HOME="$T/state" \
   LSAN_OPTIONS=suppressions=$root/gui/lsan.supp ASAN_OPTIONS=log_path="$T/asan" ${FX_TEST_LEAK:+FX_TEST_LEAK=1} \
   "$bin" $args >"$T/out" 2>"$T/err"
 EOS
@@ -55,9 +56,11 @@ ws=$(hyprctl monitors -j | jq -r ".[] | select(.name==\"$out\") | .activeWorkspa
 [ -n "$ws" ] || { echo "no output $out"; exit 1; }
 # The output's workspace must hold nothing of Michael's: Hyprland gives a new output the next free
 # workspace, which may be one of his with windows on it (2026-10-14, uml-viewer). Refuse.
-theirs=$(hyprctl clients -j | jq -r "[.[] | select(.workspace.name==\"$ws\") | select(.class!=\"fx\")] | length")
+# Every window counts, fx included: the run's own doesn't exist yet, and an fx window there is
+# Michael's.
+theirs=$(hyprctl clients -j | jq -r "[.[] | select(.workspace.name==\"$ws\")] | length")
 if [ "$theirs" != 0 ]; then
-    echo "run-script: workspace $ws on $out holds $theirs window(s) that are not ours: not running" >&2
+    echo "run-script: workspace $ws on $out holds $theirs window(s): not running" >&2
     exit 1
 fi
 hyprctl dispatch "hl.dsp.exec_cmd(\"$T/launch.sh\", { workspace = \"$ws silent\" })" >/dev/null

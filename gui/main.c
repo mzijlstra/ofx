@@ -164,6 +164,9 @@ static bool go_to(const char *dir, Str select, isize fallback)
         app.status[0] = 0;   // what happened in the last folder
         app.ui.top = 0;
         watch_dir(app.cwd);
+        // A change between the listing and the watch made no event: list once more.
+        atomic_store(&watch.list_ready, true);
+        glfwPostEmptyEvent();
         SetWindowTitle(TextFormat("fx: %s", app.cwd));
     }
     ui_set(&app.ui, l.n, sel);

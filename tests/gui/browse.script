@@ -27,10 +27,10 @@ char k
 key end
 key enter
 expect status=opened
-sh grep -qx "uwsm-app -- xdg-open $FX_DIR/b10.txt" "$FX_DIR/../spawn.log"
+sh grep -qx "uwsm-app -- xdg-open $FX_DIR/b10.txt" "$FX_ROOT/spawn.log"
 char t
 expect status=terminal
-sh grep -qx "uwsm-app -- xdg-terminal-exec --dir=$FX_DIR" "$FX_DIR/../spawn.log"
+sh grep -qx "uwsm-app -- xdg-terminal-exec --dir=$FX_DIR" "$FX_ROOT/spawn.log"
 # Live refresh: create, delete, rename.
 sh touch "$FX_DIR/new.txt"
 wait-for 1000 n=6 sel=b10.txt
@@ -56,7 +56,7 @@ back
 expect sel=adir n=6
 shot browse.png
 # The theme: the scratch copy's accent changes.
-sh sed -i 's/^accent = .*/accent = "#123456"/' "$FX_DIR/../state/omarchy/current/theme/colors.toml"
+sh sed -i 's/^accent = .*/accent = "#123456"/' "$FX_ROOT/state/omarchy/current/theme/colors.toml"
 wait-for 1500 themes=1 accent=#123456
 shot theme.png
 quit
