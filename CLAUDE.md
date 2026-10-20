@@ -2,8 +2,8 @@
 
 fx is Michael's file explorer: one folder at a time as a list, in the Omarchy theme's colours and
 icons, in C on the prdash and uml-viewer stack (arenas, static memory, no malloc in our code;
-Clay; raylib on native Wayland). `docs/plan.md` has the milestones, the decisions and F1's exit
-criteria. This file holds what the code can't tell you. `../CLAUDE.md` has the rules shared by
+Clay; raylib on native Wayland). `docs/plan.md` has the milestones, the decisions and each
+milestone's exit criteria. This file holds what the code can't tell you. `../CLAUDE.md` has the rules shared by
 every tool here.
 
 ## What a test run could do to Michael's desktop
@@ -21,8 +21,20 @@ every tool here.
   run `omarchy-theme-set` or anything else that changes his theme to test a switch.
 - **The sidebar** reads the GTK bookmarks (shared with Nemo) and the XDG user dirs under
   `$XDG_CONFIG_HOME`; `run-script.sh` points that at `<scratch>/config`. fx never writes them.
-- **fx only reads in F1:** listing folders, the MIME database, the icon theme. The scripts' `sh`
-  lines make and change files: point them at scratch folders only, never his home or a work repo.
+- **fx changes files since F3:** rename, new folder, trash, delete for good, copy and move. Every
+  write in fs/ goes through `ops_allowed` (fs/ops.c), which refuses any path outside
+  `FX_GUI_ROOT` when it is set: `run-script.sh` sets it to the run's scratch dir, the unit tests
+  to their mkdtemp root. A guard test aims at a decoy beside that root, never at `/tmp` or a real
+  folder, so a mutant that switches the guard off can only reach the decoy. Never start fx in a
+  test on a folder that isn't scratch; `tests/gui/guard3.script` shows the guard refusing there.
+- **The trash:** fx trashes into `$XDG_DATA_HOME/Trash`, or a drive's own `.Trash-$UID` (on his
+  `/mnt/sd` that is `/mnt/sd/.Trash-1000`, shared with Nemo). `run-script.sh` points
+  `XDG_DATA_HOME` at `<scratch>/data`; the unit tests set it to their root.
+- **The clipboard:** fx sets the system clipboard through `ext-data-control-v1` on Ctrl+C or
+  Ctrl+X, which replaces Michael's clipboard. weston has no data-control, so no test touches it;
+  the one live check (copy in fx, paste in Nemo and a terminal, and back) needs his go first.
+- The scripts' `sh` lines make and change files: point them at scratch folders only, never his
+  home or a work repo.
 - **A window that stops answering** pops Hyprland's "terminate?" dialog on his screen, even on the
   headless output. The script's `sh` runs under `timeout 5` for that reason; keep everything a
   script waits for short.
@@ -54,6 +66,8 @@ tools/mutation/gui.py <absolute scratch>     # the GUI mutants
 - Close a window with SIGTERM (`kill <pid>`; fx exits through main, so LeakSanitizer runs).
 - `FX_TEST_LEAK=1` plants a 4 KiB leak: the control that shows LeakSanitizer reports arrive.
 - `FX_GUI_DEBUG=1` logs every key, character and mouse button event.
+- `FX_TEST_COPY_DELAY_MS` sleeps per copied block (500 ms at most), so a script sees the progress
+  line and can cancel a copy in the middle.
 - The script language is at the top of `gui/script.c`. Start every script with `settle`; check
   the `state` line rather than screenshots where you can.
 

@@ -33,9 +33,21 @@ wayland-cursor, wayland-egl, xkbcommon, fontconfig and freetype2. raylib and Cla
 | Tab | the keys to the places in the sidebar and back |
 | `t` | a terminal in this folder (`xdg-terminal-exec --dir`) |
 | `~` | home |
+| Space, Ctrl+A | select the entry (and move on), select all; Esc clears |
+| F2 | rename, in the row: Enter renames, Esc cancels |
+| Ctrl+Shift+N | a new folder, "New folder", named in the row |
+| Delete | to the trash (the one Nemo shows) |
+| Shift+Delete | delete for good, after "Y/n" (Enter or `y` deletes) |
+| Ctrl+C, Ctrl+X, Ctrl+V | copy, cut, paste; Nemo and terminals paste what fx copied, and fx pastes what Nemo copied |
+| Ctrl+Z | undo the last rename, new folder, trash, copy or move |
 | Ctrl+Q | quit |
 
-Mouse: a click selects, a double click opens, the wheel scrolls a row per notch, a click on a
+An action works on the selected entries, or on the cursor's when none is selected. A copy or move
+runs in the background with its progress in the footer (Esc cancels; a cancelled file never
+appears half-written). When a name is taken it asks: `s` skip, `r` replace (a folder: merge), `k`
+keep both; the capitals answer for all the rest.
+
+Mouse: a click selects, Ctrl+click and Shift+click select more, a double click opens, the wheel scrolls a row per notch, a click on a
 column header sorts by it (again: reversed), a click on a place goes there, and the back and
 forward buttons walk the history. The list refreshes by itself when the folder changes, and the
 colours and icons follow a theme switch.
@@ -51,12 +63,16 @@ and what is mounted under `/mnt`, `/media` and `/run/media`.
   only, at the window's scale.
 - MIME types: shared-mime-info's `globs2` by file name.
 - Programs: through `uwsm-app` when it is there, as Omarchy launches apps.
+- The trash: `~/.local/share/Trash` (`$XDG_DATA_HOME`) for the home drive, a drive's own
+  `.Trash-$UID` (or `.Trash/$UID`) for others, by the freedesktop spec.
+- The clipboard: `ext-data-control-v1` (Hyprland has it), as `x-special/gnome-copied-files`,
+  `text/uri-list` and plain paths. Without it the clipboard stays inside fx.
 
 `docs/plan.md` has the plan and what is next.
 
 ## Testing
 
 `make test` runs the unit tests. `tools/mutation/run.py` mutates `fs/` and `ui/` one site at a
-time against them. GUI scripts run on a Hyprland headless output, never on the desktop: see
-`CLAUDE.md` and `tests/gui/run.sh`. `build/fx-probe DIR` prints a folder as fx sees it (types and
+time against them, `tools/mutation/gui.py` the window against the GUI scripts. GUI scripts run in
+a private headless weston, never on the desktop: see `CLAUDE.md` and `tests/gui/run.sh`. `build/fx-probe DIR` prints a folder as fx sees it (types and
 icon files), without a window.

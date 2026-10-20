@@ -98,10 +98,12 @@ on the cursor's entry when nothing is selected. A reload keeps the selection by 
 **Keys:** F2 rename; Ctrl+Shift+N new folder; Delete to the trash; Shift+Delete for good;
 Ctrl+C, Ctrl+X, Ctrl+V; Ctrl+Z undo.
 
-**Rename and new folder:** an edit line on the row (new folder starts as "New folder", picked
-free with " (2)" and up). Enter commits with `renameat2(RENAME_NOREPLACE)` or `mkdirat`, so
-nothing is overwritten; Esc cancels. A name that exists, is empty, or holds a `/` keeps the edit
-open with the reason in the status line.
+**Rename and new folder:** an edit line on the row, with a caret (Left, Right, Home, End,
+Backspace, Delete). Enter renames with `renameat2(RENAME_NOREPLACE)`, so nothing is overwritten;
+Esc cancels. A name that exists, is empty, or holds a `/` keeps the line open with the reason in
+the status line. A new folder is made at once as "New folder" (" (2)" and up when taken, as Nemo
+does) and its name opens in the line: Esc keeps "New folder", and undo removes it whatever it is
+called by then (built so, 2026-10-20: the row exists to edit in).
 
 **Trash (`fs/trash.c`), the freedesktop Trash spec 1.0:** a file on the home drive goes to
 `$XDG_DATA_HOME/Trash` (default `~/.local/share/Trash`); on another drive (`/mnt/sd` is one) to
