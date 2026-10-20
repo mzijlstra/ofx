@@ -173,6 +173,8 @@ logs the refusal; `XDG_DATA_HOME` points at scratch so the home trash is scratch
    outside the scratch folder.
 3. One live clipboard check on Hyprland, with Michael's go since it replaces his clipboard: copy in
    fx, paste in Nemo and in a terminal; copy in Nemo, paste in fx.
+   Done 2026-10-20 by Michael: all three pasted as expected, and four rounds of Ctrl+C in fx, a
+   copy elsewhere, Ctrl+C in fx again (the cancelled-source path reviewer-2's fix touched) held.
 4. F1 and F2 scripts still pass; idle is still about 0%; LeakSanitizer reports nothing.
 
 ## F2 design (2026-10-20)
