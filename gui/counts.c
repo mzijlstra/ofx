@@ -39,7 +39,7 @@ static void *count_loop(void *arg)
         snprintf(path, sizeof path, "%s", counts.req[k].path);
         counts.rhead = (counts.rhead + 1) % COUNT_QUEUE, counts.rn--;
         pthread_mutex_unlock(&counts.mu);
-        if (counts.delay_ms > 0) nanosleep(&(struct timespec){ 0, counts.delay_ms * 1000000L }, NULL);
+        if (counts.delay_ms > 0) nanosleep(&(struct timespec){ counts.delay_ms / 1000, (counts.delay_ms % 1000) * 1000000L }, NULL);
         isize n = count_entries(path, hidden);
         pthread_mutex_lock(&counts.mu);
         if (gen == counts.gen) counts.res[counts.sn++] = (CountAnswer){ gen, idx, n };
@@ -54,6 +54,9 @@ static void count_start(void)
     counts.started = pthread_create(&counts.thread, NULL, count_loop, NULL) == 0;
 }
 
+// At quit: the thread is told to stop and given 200 ms. A count stuck in the kernel (a hung network
+// mount) must not keep fx from exiting, so it is then left to the process's end, never joined
+// (reviewer-2, F4 review, 2026-10-20).
 static void count_stop(void)
 {
     if (!counts.started) return;
@@ -61,7 +64,11 @@ static void count_stop(void)
     counts.quit = true;
     pthread_cond_broadcast(&counts.cv);
     pthread_mutex_unlock(&counts.mu);
-    pthread_join(counts.thread, NULL);
+    struct timespec until;
+    clock_gettime(CLOCK_REALTIME, &until);
+    until.tv_nsec += 200 * 1000000L;
+    if (until.tv_nsec >= 1000000000L) until.tv_sec++, until.tv_nsec -= 1000000000L;
+    if (pthread_timedjoin_np(counts.thread, NULL, &until) != 0) pthread_detach(counts.thread);
 }
 
 // A new listing: what was asked for the old one is dropped, and its answers with it.

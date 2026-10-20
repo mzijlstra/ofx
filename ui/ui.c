@@ -631,9 +631,12 @@ static void ui_crumbs_set(UiCrumbs *c, const char *cwd, const char *home)
         if (e > at) c->seg[c->n++] = (UiCrumb){ e, false };
         at = e;
     }
-    c->cur = 0;
+    // Past UI_CRUMBS_MAX buttons the current one may not be among them: the deepest shown stands
+    // for it, never the root.
+    c->cur = -1;
     for (int i = 0; i < c->n; i++)
         if (c->seg[i].end == cw.len) c->cur = i;
+    if (c->cur < 0) c->cur = c->n - 1;
 }
 
 // Button i's folder.

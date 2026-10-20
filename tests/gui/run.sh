@@ -37,6 +37,16 @@ T=$base/f4; rm -rf "$T"; H=$T/home; mkdir -p "$H/tree/adir" "$H/tree/bdir" "$T/d
 touch "$H/tree/adir/x" "$H/tree/adir/y" "$H/tree/adir/.h" "$H/tree/f.txt"
 L="$H/tree"; for i in 1 2 3 4 5 6 7 8; do L="$L/zz-a-rather-long-folder-name-$i"; done; mkdir -p "$L"
 echo "== f4"; FX_TEST_COUNT_DELAY_MS=50 FX_TEST_HOME="$H" "$here/../../tools/gui/run-script.sh" "$T" "$here/f4.script" "$bin" "$H/tree" || fail=1
+T=$base/hang; rm -rf "$T"; mkdir -p "$T/tree/stuck"
+echo "== hang"
+t0=$(date +%s)
+FX_TEST_COUNT_DELAY_MS=10000 "$here/../../tools/gui/run-script.sh" "$T" "$here/hang.script" "$bin" "$T/tree" > "$T/run.out" 2>&1
+took=$(( $(date +%s) - t0 ))
+if grep -q "script: 0 of" "$T/run.out" && grep -q "no asan reports" "$T/run.out" && [ "$took" -lt 8 ]; then
+    echo "hang: quit in ${took}s with a count stuck for 10s"
+else
+    cat "$T/run.out"; echo "hang: FAILED (took ${took}s)"; fail=1
+fi
 # fx's own guard: started outside <T>, every change it tries there is refused, nothing changes.
 T=$base/guard3; O=$base/guard3-outside; rm -rf "$T" "$O"; mkdir -p "$T" "$O"; echo keep > "$O/victim.txt"
 echo "== guard3"

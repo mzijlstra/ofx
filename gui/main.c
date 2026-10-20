@@ -1535,10 +1535,10 @@ int main(int argc, char **argv)
     if (!watch_start()) set_status(true, "inotify is unavailable: no live refresh");
     clip_init();   // false: the clipboard stays inside fx
     // FX_TEST_COUNT_DELAY_MS: each count takes that much longer, so a test can change the listing
-    // while answers for the old one are on their way (200 ms at most).
+    // while answers for the old one are on their way, or (10 s) stand in for a hung mount at quit.
     const char *kdelay = getenv("FX_TEST_COUNT_DELAY_MS");
     counts.delay_ms = kdelay ? atoi(kdelay) : 0;
-    if (counts.delay_ms < 0 || counts.delay_ms > 200) counts.delay_ms = 0;
+    if (counts.delay_ms < 0 || counts.delay_ms > 10000) counts.delay_ms = 0;
     count_start();
     char bm[PATH_MAX];
     places_load(&scratch, &app.places, bookmarks_path(bm, sizeof bm), "/proc/self/mountinfo");

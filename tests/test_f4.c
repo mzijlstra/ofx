@@ -58,6 +58,12 @@ static void test_crumbs(void)
     memset(&c, 0, sizeof c);
     ui_crumbs_set(&c, "/home/mm/x", "/home/m");
     crumbs_check(&c, "/|home|mm|x", 3);
+    // Deeper than UI_CRUMBS_MAX: the deepest button shown is marked, not the root.
+    char deep[4096] = "";
+    for (int i = 0; i < UI_CRUMBS_MAX + 10; i++) strcat(deep, "/d");
+    memset(&c, 0, sizeof c);
+    ui_crumbs_set(&c, deep, NULL);
+    CHECK(c.n == UI_CRUMBS_MAX && c.cur == UI_CRUMBS_MAX - 1);
     // The window: all fit, no arrows.
     float w[6] = { 10, 10, 10, 10, 10, 10 };
     memset(&c, 0, sizeof c);
