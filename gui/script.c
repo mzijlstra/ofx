@@ -9,7 +9,7 @@
 //   sleep <ms>              frames until that much time has passed
 //   key <name>              up down pageup pagedown home end enter right left backspace esc tab
 //                           f2 delete shift-delete space, and the chords alt-left alt-right ctrl-f
-//                           ctrl-h ctrl-a ctrl-c ctrl-x ctrl-v ctrl-z ctrl-shift-n
+//                           ctrl-h ctrl-a ctrl-c ctrl-x ctrl-v ctrl-z ctrl-shift-n ctrl-l alt-up
 //   char <c>                one typed character
 //   type <text>             the rest of the line, after one space, as typed characters
 //   wheel <notches>         over the list; positive away from the user (up)
@@ -53,6 +53,7 @@ static struct {
     char  shot[2100];
     int   expects, failed;
     float px, py;        // the last point-ui
+    Str   typing;        // what is left of a `type` longer than a frame's events
 } script;
 
 static u8 script_mem[KiB(256)];
@@ -86,12 +87,23 @@ static void script_state(char *out, size_t cap)
     snprintf(edit, sizeof edit, "%.*s", app.ui.edit_len ? app.ui.edit_len : 1, app.ui.edit_len ? app.ui.edit : "-");
     for (char *c = edit; *c; c++)
         if (*c == ' ') *c = '_';
+    // The path buttons' labels, '|' between; the cursor's folder count (- unknown, ? unreadable).
+    char crumbs[2048] = "", cnt[32] = "-";
+    for (int i = 0; i < app.crumbs.n; i++) {
+        size_t k = strlen(crumbs);
+        snprintf(crumbs + k, sizeof crumbs - k, "%s%.*s", i ? "|" : "", STR_ARG(ui_crumb_label(&app.crumbs, i)));
+    }
+    if (app.have_list && app.ui.list.n > 0 && kind_is_dir(app.list.e[app.ui.list.sel].kind)) {
+        isize c = app.count[app.ui.list.sel];
+        if (c >= 0) snprintf(cnt, sizeof cnt, "%td", c);
+        else if (c == -1) snprintf(cnt, sizeof cnt, "?");
+    }
     snprintf(out, cap,
              "dir=%s n=%td hidden=%td sel=%.*s idx=%td top=%td rows=%d hover=%d accent=#%02x%02x%02x bg=#%02x%02x%02x "
              "icons=%s scale=%d w=%d h=%d reloads=%d themes=%d batches=%d frame_ms_max=%.1f icon=%s "
              "shown=%d sort=%s rev=%d finding=%d miss=%d find=%.*s last=%.*s side=%td sidefocus=%d place=%s here=%s "
              "back=%d fwd=%d marked=%td editing=%d edit=%s confirming=%d asking=%d job=%s done=%lld/%lld undo=%s clip=%td cut=%d "
-             "sysclip=%d status=%s",
+             "sysclip=%d crumbs=%s crumbhome=%d crumb=%d crumbshown=%d-%d arrows=%d locating=%d cnt=%s status=%s",
              app.cwd, app.list.n, app.list.hidden, STR_ARG(sel), app.ui.list.sel, app.ui.list.top, app.ui.list.rows, app.hover,
              t->accent.r, t->accent.g, t->accent.b, t->bg.r, t->bg.g, t->bg.b, t->icons[0] ? t->icons : "-",
              app.icon_scale, GetScreenWidth(), GetScreenHeight(), app.reloads, app.themes, atomic_load(&watch.batches),
@@ -102,7 +114,8 @@ static void script_state(char *out, size_t cap)
              app.places.n ? app.places.p[app.ui.side.sel].label : "-", app.place_cur >= 0 ? app.places.p[app.place_cur].label : "-",
              hist.nback, hist.nfwd, app.ui.marked, app.ui.editing, edit, app.ui.confirming, app.ui.asking,
              !run.running ? "-" : JOB_PHASES[atomic_load(&run.j.phase)], atomic_load(&run.j.files_done), atomic_load(&run.j.files_total),
-             UNDO_KINDS[undo.kind], own.n, own.cut, clip.ok, app.status[0] ? app.status : "-");
+             UNDO_KINDS[undo.kind], own.n, own.cut, clip.ok, crumbs, app.crumbs.seg[0].home ? 0 : -1, app.crumbs.cur, app.crumb_lo, app.crumb_hi, app.crumb_arrows,
+             app.ui.editing && app.ui.edit_path, cnt, app.status[0] ? app.status : "-");
     frame_us_max = 0;
 }
 
@@ -139,7 +152,7 @@ static UiKey script_key(Str name)
         { "alt-left", UK_BACK }, { "alt-right", UK_FORWARD }, { "ctrl-f", UK_FIND }, { "ctrl-h", UK_HIDDEN },
         { "f2", UK_F2 }, { "delete", UK_DELETE }, { "shift-delete", UK_SHIFT_DELETE }, { "ctrl-a", UK_ALL },
         { "ctrl-c", UK_COPY }, { "ctrl-x", UK_CUT }, { "ctrl-v", UK_PASTE }, { "ctrl-z", UK_UNDO },
-        { "ctrl-shift-n", UK_NEWFOLDER },
+        { "ctrl-shift-n", UK_NEWFOLDER }, { "ctrl-l", UK_LOCATION }, { "alt-up", UK_PARENT },
     };
     for (int i = 0; i < COUNT(KEYS); i++)
         if (str_eq(name, str_from_c(KEYS[i].name))) return KEYS[i].k;
@@ -223,6 +236,13 @@ static bool script_input(UiInput *in)
     char state[16384], missing_buf[256];
     const char *missing;
     if (script.wait > 0) return script.wait--, true;
+    if (script.typing.len) {
+        // A long `type` goes on over several frames, UI_EVENTS_MAX characters a frame.
+        isize i = 0;
+        while (i < script.typing.len && in->nev < UI_EVENTS_MAX) in->ev[in->nev++] = (UiEvent){ UK_NONE, utf8_next(script.typing.p, script.typing.len, &i) };
+        script.typing = str_cut(script.typing, i, script.typing.len);
+        return true;
+    }
     if (script.settling) {
         int w = GetScreenWidth(), h = GetScreenHeight();
         if (w == script.settle_w && h == script.settle_h) script.settle_n++;
@@ -269,7 +289,9 @@ static bool script_input(UiInput *in)
             // The raw line for type: its text may start or end with spaces.
             Str text = str_eq(cmd, S("type")) ? str_cut(line, 5, line.len) : arg;
             if (str_eq(cmd, S("char")) && text.len != 1) script_fail("char takes one character");
-            for (isize i = 0; i < text.len && in->nev < UI_EVENTS_MAX;) in->ev[in->nev++] = (UiEvent){ UK_NONE, utf8_next(text.p, text.len, &i) };
+            isize i = 0;
+            while (i < text.len && in->nev < UI_EVENTS_MAX) in->ev[in->nev++] = (UiEvent){ UK_NONE, utf8_next(text.p, text.len, &i) };
+            script.typing = str_cut(text, i, text.len);   // the rest on the next frames
         } else if (str_eq(cmd, S("wheel"))) {
             in->wheel = atoi(a);
         } else if (str_eq(cmd, S("press"))) {

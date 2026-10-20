@@ -182,3 +182,20 @@ static isize listing_find(const Listing *l, Str name)
         if (str_eq(l->e[i].name, name)) return i;
     return -1;
 }
+
+// How many entries folder path holds (dot-files only when hidden), for its Size cell; -1 when it
+// can't be read (F4 "Item counts").
+static isize count_entries(const char *path, bool hidden)
+{
+    DIR *d = opendir(path);
+    if (!d) return -1;
+    isize n = 0;
+    for (struct dirent *de; (de = readdir(d));) {
+        const char *nm = de->d_name;
+        if (strcmp(nm, ".") == 0 || strcmp(nm, "..") == 0) continue;
+        if (nm[0] == '.' && !hidden) continue;
+        n++;
+    }
+    closedir(d);
+    return n;
+}

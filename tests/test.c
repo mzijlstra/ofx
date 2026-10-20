@@ -1309,6 +1309,7 @@ static void test_format(void)
 }
 
 #include "test_f3.c"
+#include "test_f4.c"
 
 int main(void)
 {
@@ -1341,6 +1342,10 @@ int main(void)
     test_job();
     test_undo();
     test_ui_f3();
+    test_crumbs();
+    test_location();
+    test_counts();
+    test_ui_f4();
     char cmd[1600];
     snprintf(cmd, sizeof cmd, "chmod -R u+rwx '%s' && rm -rf '%s' '%s'", root, root, decoy);
     if (system(cmd) != 0) fprintf(stderr, "could not remove %s\n", root);

@@ -24,6 +24,7 @@
 #include "render.c"   // includes raylib and font.c
 #include "watch.c"
 #include "clipboard.c"
+#include "counts.c"
 
 // ---- memory ---------------------------------------------------------------------------------
 
@@ -42,6 +43,7 @@ static u8 job_buf[JOB_BUF];
 static Arena frame, lists[2], data, icona, scratch, joba, undoa, owna, pastea;
 static int   watch_delay_ms;   // FX_TEST_WATCH_DELAY_MS, for one test
 
+enum { BAR_BTN_W = 34, BAR_BTN_H = 30, BAR_GAP = 4, ARROW_W = 22, CRUMB_PAD = 10, CRUMB_ICON_PX = 16 };
 enum { FONT_PX = 15, ROW_H = 28, ICON_PX = 24, HEADER_H = 40, COLS_H = 26, FOOTER_H = 28, PAD = 12, SIZE_W = 90,
        DATE_W = 100, SIDE_W = 200, SIDE_ROW_H = 28, SIDE_ICON_PX = 20, GAP = 10, ICONS_MAX = 512 };
 
@@ -58,6 +60,7 @@ static struct {
     int       cur;          // lists[cur] holds the listing
     Listing   list;
     Str      *mime;         // per entry, filled as rows are drawn; .p NULL until then
+    isize    *count;        // per entry, a folder's item count (counts.c): COUNT_UNKNOWN until asked
     bool      have_list;
     char      error[sizeof(Err)];   // why the folder could not be read
     Ui        ui;           // the list's and sidebar's cursors, find, the sort
@@ -87,6 +90,11 @@ static struct {
     char      edit_from[NAME_MAX + 1];
     bool      edit_new;
     bool      clip_told;    // "the clipboard stays inside fx" said once
+    UiCrumbs  crumbs;       // the top bar's path buttons
+    int       crumb_lo, crumb_hi;   // the ones shown in the last frame
+    bool      crumb_arrows;
+    UiBar     bar_hover;    // the top bar button under the pointer
+    int       crumb_hover;
     int       copy_delay_ms;   // FX_TEST_COPY_DELAY_MS
 } app = { .hover = -1, .side_hover = -1 };
 
@@ -182,7 +190,8 @@ static bool go_to_in(const char *dir, Str select, isize fallback, bool stepping)
     if (sel < 0) sel = fallback;
     Str *mime = arena_try_new(&lists[next], Str, l.n + 1);
     u8 *mark = arena_try_new(&lists[next], u8, l.n + 1);
-    if (!mime || !mark) {
+    isize *count = arena_try_new(&lists[next], isize, l.n + 1);
+    if (!mime || !mark || !count) {
         set_status(true, "%s: too many entries for memory", dir);
         return false;
     }
@@ -197,11 +206,15 @@ static bool go_to_in(const char *dir, Str select, isize fallback, bool stepping)
     // The folder left, with its cursor, for Back: its name is still in the old listing's arena.
     if (!same && app.have_list && !stepping) hist_leave(&hist, app.cwd, sel_name());
     app.cur = next, app.list = l, app.mime = mime, app.have_list = true, app.error[0] = 0;
+    for (isize i = 0; i < l.n; i++) count[i] = COUNT_UNKNOWN;
+    app.count = count;
+    count_new_listing();
     ui_mark_set(&app.ui, mark);
     app.ui.marked = marked;
     if (!same) ui_edit_close(&app.ui);
     if (!same) {
         snprintf(app.cwd, sizeof app.cwd, "%s", dir);
+        ui_crumbs_set(&app.crumbs, app.cwd, getenv("HOME"));
         app.status[0] = 0;   // what happened in the last folder
         app.ui.list.top = 0;
         app.place_cur = places_current(&app.places, app.cwd);
@@ -300,6 +313,9 @@ static void resort(void)
     snprintf(keep, sizeof keep, "%.*s", STR_ARG(sel_name()));
     fs_sort(&app.list, app.ui.sort);
     memset(app.mime, 0, sizeof *app.mime * (size_t)app.list.n);
+    // The counts are by row too: asked again in the new order.
+    for (isize i = 0; i < app.list.n; i++) app.count[i] = COUNT_UNKNOWN;
+    count_new_listing();
     isize sel = listing_find(&app.list, str_from_c(keep));
     ui_set(&app.ui.list, app.list.n, sel >= 0 ? sel : 0);
 }
@@ -620,6 +636,39 @@ static void undo_last(void)
     else reload();
 }
 
+// The location line's Enter: there, if it is a folder; else the line stays open with the reason.
+static void location_go(void)
+{
+    Str to;
+    char path[PATH_MAX];
+    if (!ui_location(&scratch, (Str){ app.ui.edit, app.ui.edit_len }, app.cwd, getenv("HOME"), &to) || to.len >= PATH_MAX) {
+        set_status(true, "Not a folder: %.*s", app.ui.edit_len, app.ui.edit);
+        return;
+    }
+    snprintf(path, sizeof path, "%.*s", STR_ARG(to));
+    struct stat st;
+    if (stat(path, &st) != 0) {
+        set_status(true, "%s: %s", path, strerror(errno));
+        return;
+    }
+    if (!S_ISDIR(st.st_mode)) {
+        set_status(true, "%s isn't a folder", path);
+        return;
+    }
+    if (go_to(path, STR_EMPTY, 0)) ui_edit_close(&app.ui);
+}
+
+// A path button: its folder, the cursor on the next folder down the bar (where you came from).
+static void crumb_go(int i)
+{
+    UiCrumbs *c = &app.crumbs;
+    if (i < 0 || i >= c->n) return;
+    char path[PATH_MAX], below[NAME_MAX + 1] = "";
+    snprintf(path, sizeof path, "%.*s", STR_ARG(ui_crumb_path(c, i)));
+    if (i + 1 < c->n) snprintf(below, sizeof below, "%.*s", STR_ARG(ui_crumb_label(c, i + 1)));
+    if (strcmp(path, app.cwd) != 0) go_to(path, str_from_c(below), 0);
+}
+
 static void act(UiAction a)
 {
     Err err;
@@ -662,6 +711,10 @@ static void act(UiAction a)
         else copy_targets(a.kind == UA_CUT);
         break;
     case UA_RENAME: rename_commit(); break;
+    case UA_LOCATION: ui_location_open(&app.ui, str_from_c(app.cwd)); break;
+    case UA_GO: location_go(); break;
+    case UA_CRUMB: crumb_go((int)a.index); break;
+    case UA_CRUMB_SHIFT: ui_crumbs_shift(&app.crumbs, app.crumb_lo, (int)a.index); break;
     case UA_NEWFOLDER: new_folder(); break;
     case UA_PASTE: paste(); break;
     case UA_UNDO: undo_last(); break;
@@ -865,6 +918,14 @@ static void layout_row(int r, isize i, float w, i64 now)
     IconSlot *icon = entry_icon(i);
     char size[32] = "", when[32] = "";
     if (!kind_is_dir(e->kind) && e->kind != K_LINK_BROKEN && e->kind != K_OTHER) ui_size(size, sizeof size, e->size);
+    if (kind_is_dir(e->kind)) {
+        // A folder's item count, asked of counts.c the first time the row is drawn.
+        char path[PATH_MAX];
+        if (app.count[i] == COUNT_UNKNOWN && join(path, sizeof path, app.cwd, e->name) && count_ask(i, path, app.show_hidden))
+            app.count[i] = COUNT_ASKED;
+        if (app.count[i] >= 0) snprintf(size, sizeof size, "%td item%s", app.count[i], app.count[i] == 1 ? "" : "s");
+        else if (app.count[i] == -1) snprintf(size, sizeof size, "?");
+    }
     if (e->mtime) ui_when(when, sizeof when, e->mtime, now);
     bool link = e->kind == K_LINK_DIR || e->kind == K_LINK_FILE || e->kind == K_LINK_BROKEN;
     float name_w = w - SIDE_W - 2 * PAD - ICON_PX - 3 * GAP - SIZE_W - DATE_W - (link ? 16 : 0);
@@ -875,7 +936,7 @@ static void layout_row(int r, isize i, float w, i64 now)
                                .border = { .color = cc(t->accent), .width = { .left = sel && !app.ui.side_focus ? 3 : 0 } } }) {
         icon_box(CLAY_IDI("icon", r), icon, ICON_PX);
         CLAY(CLAY_IDI("name", r), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .childGap = 6 } }) {
-            if (sel && app.ui.editing) {
+            if (sel && app.ui.editing && !app.ui.edit_path) {
                 layout_edit(t);
             } else {
                 text(fit(e->name, name_w, false), e->kind == K_LINK_BROKEN ? cc(t->red) : marked ? cc(t->accent) : cc(t->fg));
@@ -890,6 +951,109 @@ static void layout_row(int r, isize i, float w, i64 now)
                                                 .childAlignment = { .x = CLAY_ALIGN_X_RIGHT } } }) {
             text(cz(arena_sprintf(&frame, "%s", when)), cc(t->fg_dim));
         }
+    }
+}
+
+// ---- the top bar (F4) -----------------------------------------------------------------------
+
+static IconSlot *named_icon(const char *name)
+{
+    Str n = str_from_c(name);
+    return icon_for(n, &n, 1);
+}
+
+// A top bar button: an icon from the theme when it has one, else a glyph from the UI font (the
+// theme's arrows are SVG only, which fx doesn't draw). Dimmed when it can't act.
+static void bar_button(Clay_ElementId id, UiBar which, const char *glyph, IconSlot *icon, bool enabled, float w)
+{
+    Theme *t = &app.theme;
+    bool hover = enabled && app.bar_hover == which;
+    CLAY(id, { .layout = { .sizing = { CLAY_SIZING_FIXED(w), CLAY_SIZING_FIXED(BAR_BTN_H) },
+                           .childAlignment = { .x = CLAY_ALIGN_X_CENTER, .y = CLAY_ALIGN_Y_CENTER } },
+               .backgroundColor = hover ? cc(t->bg) : cc(t->bg_light) }) {
+        if (icon && icon->tex.id) icon_box(Clay_GetElementId(cz(arena_sprintf(&frame, "%.*s-icon", (int)id.stringId.length, id.stringId.chars))), icon, CRUMB_ICON_PX);
+        else text(cz(glyph), enabled ? cc(t->fg) : mix(t->fg_dim, t->bg_light, 0.5f));
+    }
+}
+
+static float crumb_width(int i)
+{
+    const UiCrumbs *c = &app.crumbs;
+    return str_width(ui_crumb_label(c, i)) + 2 * CRUMB_PAD + (c->seg[i].home ? CRUMB_ICON_PX + 6 : 0);
+}
+
+// The path buttons: the current folder marked, the deeper ones dimmer; ‹ and › when they don't fit.
+static void layout_crumbs(float room)
+{
+    Theme *t = &app.theme;
+    UiCrumbs *c = &app.crumbs;
+    float wd[UI_CRUMBS_MAX];
+    for (int i = 0; i < c->n; i++) wd[i] = crumb_width(i);
+    int lo, hi;
+    app.crumb_arrows = ui_crumbs_window(c, wd, room, ARROW_W, &lo, &hi);
+    app.crumb_lo = lo, app.crumb_hi = hi;
+    if (app.crumb_arrows) bar_button(CLAY_ID("crumb-left"), UB_LEFT, "\xE2\x80\xB9", NULL, lo > 0, ARROW_W);   // ‹
+    for (int i = lo; i < hi; i++) {
+        bool cur = i == c->cur, hover = app.bar_hover == UB_CRUMB && app.crumb_hover == i;
+        CLAY(CLAY_IDI("crumb", i), { .layout = { .sizing = { CLAY_SIZING_FIT(0), CLAY_SIZING_FIXED(BAR_BTN_H) }, .padding = { CRUMB_PAD, CRUMB_PAD, 0, 0 },
+                                                 .childGap = 6, .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
+                                     .backgroundColor = cur ? cc(t->selection) : hover ? cc(t->bg) : cc(t->bg_light) }) {
+            if (c->seg[i].home) icon_box(CLAY_IDI("crumb-icon", i), named_icon("user-home"), CRUMB_ICON_PX);
+            Str label = ui_crumb_label(c, i);
+            float most = room - 2 * ARROW_W - 2 * CRUMB_PAD - (c->seg[i].home ? CRUMB_ICON_PX + 6 : 0);
+            text(fit(label, most > 20 ? most : 20, false), cur ? cc(t->accent) : i > c->cur ? cc(t->fg_dim) : cc(t->fg));
+        }
+    }
+    if (app.crumb_arrows) bar_button(CLAY_ID("crumb-right"), UB_RIGHT, "\xE2\x80\xBA", NULL, hi < c->n, ARROW_W);   // ›
+}
+
+// The location line in the path buttons' place: the path and a caret, the end kept in view; all
+// of it marked as selected while typing would replace it.
+static void layout_location(float room)
+{
+    Theme *t = &app.theme;
+    Str ed = { app.ui.edit, app.ui.edit_len }, before = str_cut(ed, 0, app.ui.caret), after = str_cut(ed, app.ui.caret, ed.len);
+    float aw = str_width(after), bw = room - 24 - (aw < room / 2 ? aw : room / 2);
+    CLAY(CLAY_ID("location"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(BAR_BTN_H) }, .padding = { 6, 6, 0, 0 },
+                                            .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
+                                .clip = { .horizontal = true },
+                                .backgroundColor = cc(t->bg), .border = { .color = cc(t->accent), .width = CLAY_BORDER_ALL(1) } }) {
+        if (app.ui.edit_all) {
+            CLAY(CLAY_ID("location-all"), { .layout = { .sizing = { CLAY_SIZING_FIT(0), CLAY_SIZING_FIXED(FONT_PX + 6) },
+                                                        .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
+                                            .backgroundColor = cc(t->selection) }) {
+                if (ed.len) text(fit(ed, room - 24, true), cc(t->fg));
+            }
+        } else {
+            if (before.len) text(fit(before, bw, true), cc(t->fg));
+            CLAY(CLAY_ID("location-caret"), { .layout = { .sizing = { CLAY_SIZING_FIXED(2), CLAY_SIZING_FIXED(FONT_PX + 2) } },
+                                              .backgroundColor = cc(t->accent) }) {}
+            float bwid = before.len ? (str_width(before) < bw ? str_width(before) : bw) : 0;
+            if (after.len) text(fit(after, room - 24 - bwid, false), cc(t->fg));
+        }
+    }
+}
+
+static void layout_bar(float w)
+{
+    Theme *t = &app.theme;
+    bool can_up = strcmp(app.cwd, "/") != 0;
+    CLAY(CLAY_ID("header"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(HEADER_H) },
+                                          .padding = { PAD / 2, PAD / 2, 0, 0 }, .childGap = BAR_GAP,
+                                          .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
+                              .backgroundColor = cc(t->bg_light) }) {
+        bar_button(CLAY_ID("nav-back"), UB_BACK, "\xE2\x86\x90", NULL, hist.nback > 0, BAR_BTN_W);      // ←
+        bar_button(CLAY_ID("nav-fwd"), UB_FORWARD, "\xE2\x86\x92", NULL, hist.nfwd > 0, BAR_BTN_W);     // →
+        bar_button(CLAY_ID("nav-up"), UB_UP, "\xE2\x86\x91", NULL, can_up, BAR_BTN_W);                 // ↑
+        float room = w - PAD - 5 * BAR_BTN_W - 7 * BAR_GAP - 2 * PAD;
+        CLAY(CLAY_ID("crumbs"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(BAR_BTN_H) }, .padding = { PAD / 2, 0, 0, 0 },
+                                              .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
+                                  .clip = { .horizontal = true } }) {
+            if (app.ui.editing && app.ui.edit_path) layout_location(room);
+            else layout_crumbs(room);
+        }
+        bar_button(CLAY_ID("loc-toggle"), UB_LOCATION, "\xE2\x9C\x8E", NULL, true, BAR_BTN_W);          // ✎
+        bar_button(CLAY_ID("search"), UB_SEARCH, "/", named_icon("edit-find"), true, BAR_BTN_W);
     }
 }
 
@@ -908,15 +1072,8 @@ static Clay_RenderCommandArray layout(int w, int h)
                                 : snprintf(count, sizeof count, "%td item%s", app.list.n, app.list.n == 1 ? "" : "s");
         if (app.ui.marked && k > 0) snprintf(count + k, sizeof count - (size_t)k, ", %td selected", app.ui.marked);
         Str cnt = str_from_c(arena_sprintf(&frame, "%s", count));
-        CLAY(CLAY_ID("header"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(HEADER_H) },
-                                              .padding = { PAD, PAD, 0, 0 }, .childGap = 16,
-                                              .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
-                                  .backgroundColor = cc(t->bg_light) }) {
-            CLAY(CLAY_ID("path"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) } } }) {
-                text(fit(str_from_c(app.cwd), (float)w - 2 * PAD - 16 - str_width(cnt), true), cc(t->accent));
-            }
-            text(cs(cnt), cc(t->fg_dim));
-        }
+        float foot_w = (float)w - 2 * PAD - 24 - str_width(cnt);   // the footer's line beside the count
+        layout_bar((float)w);
         float body_h = (float)(h - HEADER_H - FOOTER_H);
         CLAY(CLAY_ID("body"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(body_h) } } }) {
         layout_side(body_h);
@@ -937,18 +1094,22 @@ static Clay_RenderCommandArray layout(int w, int h)
         }
         }
         CLAY(CLAY_ID("footer"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(FOOTER_H) },
-                                              .padding = { PAD, PAD, 0, 0 }, .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
+                                              .padding = { PAD, PAD, 0, 0 }, .childGap = 24, .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
                                   .backgroundColor = cc(t->bg_light) }) {
+            CLAY(CLAY_ID("footer-line"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
+                                           .clip = { .horizontal = true } }) {
             if (run.running && app.ui.asking) {
                 Str name = path_base(str_from_c(run.clash));
                 text(fit(str_from_c(arena_sprintf(&frame, "%.*s exists: s skip \xC2\xB7 r %s \xC2\xB7 k keep both \xC2\xB7 "
                                                           "capitals for all the rest \xC2\xB7 Esc cancel",
                                                   STR_ARG(name), run.clash_dirs ? "merge" : "replace")),
-                         (float)w - 2 * PAD, false),
+                         foot_w, false),
                      cc(t->accent));
             } else if (app.ui.confirming) {
                 text(cz(arena_sprintf(&frame, "Delete %td %s for good? This can't be undone. Y/n", app.ui.confirm_n, items(app.ui.confirm_n))),
                      cc(t->red));
+            } else if (app.ui.editing && app.ui.edit_path) {
+                text(cz("Go to: Enter goes there \xC2\xB7 Esc cancels \xC2\xB7 ~ is home, a relative path starts here"), cc(t->fg_dim));
             } else if (app.ui.editing) {
                 text(cz(app.edit_new ? "New folder: Enter keeps the name \xC2\xB7 Esc keeps \"New folder\""
                                      : "Rename: Enter renames \xC2\xB7 Esc cancels"),
@@ -964,23 +1125,25 @@ static Clay_RenderCommandArray layout(int w, int h)
                                  : atomic_load(&j->bytes_total) > 0
                                      ? arena_sprintf(&frame, "%s %lld of %lld files, %s of %s \xC2\xB7 Esc cancels", VERB[j->kind], fd, ft, done, total)
                                      : arena_sprintf(&frame, "%s %lld of %lld \xC2\xB7 Esc cancels", VERB[j->kind], fd, ft);
-                text(fit(str_from_c(line), (float)w - 2 * PAD, false), cc(t->fg));
+                text(fit(str_from_c(line), foot_w, false), cc(t->fg));
             } else if (app.ui.finding) {
                 // The find line: its text, red when it matches nothing, and a caret.
                 Str f = { app.ui.find, app.ui.find_len };
                 text(cz("Find: "), cc(t->fg_dim));
-                text(fit(f, (float)w - 2 * PAD - 80, true), app.ui.find_miss ? cc(t->red) : cc(t->fg));
+                text(fit(f, foot_w - 80, true), app.ui.find_miss ? cc(t->red) : cc(t->fg));
                 CLAY(CLAY_ID("caret"), { .layout = { .sizing = { CLAY_SIZING_FIXED(2), CLAY_SIZING_FIXED(FONT_PX + 2) } },
                                          .backgroundColor = cc(t->accent) }) {}
             } else if (app.status[0]) {
-                text(fit(str_from_c(app.status), (float)w - 2 * PAD, false), app.status_bad ? cc(t->red) : cc(t->fg));
+                text(fit(str_from_c(app.status), foot_w, false), app.status_bad ? cc(t->red) : cc(t->fg));
             } else {
                 text(fit(S("Enter open \xC2\xB7 Backspace up \xC2\xB7 Space select \xC2\xB7 F2 rename \xC2\xB7 Del trash \xC2\xB7 "
-                           "Ctrl+C X V \xC2\xB7 Ctrl+Z undo \xC2\xB7 / find \xC2\xB7 . hidden \xC2\xB7 s sort \xC2\xB7 Tab places \xC2\xB7 "
-                           "t terminal"),
-                         (float)w - 2 * PAD, false),
+                           "Ctrl+C X V \xC2\xB7 Ctrl+Z undo \xC2\xB7 / find \xC2\xB7 Ctrl+L location \xC2\xB7 . hidden \xC2\xB7 s sort \xC2\xB7 "
+                           "Tab places \xC2\xB7 t terminal"),
+                         foot_w, false),
                      cc(t->fg_dim));
             }
+            }
+            text(cs(cnt), cc(t->fg_dim));
         }
     }
     return Clay_EndLayout(0);   // deltaTime drives transitions, which we do not use
@@ -1026,6 +1189,8 @@ static UiKey ui_key_of(int key, int mods)
     if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_H) return UK_HIDDEN;
     if (m == GLFW_MOD_ALT && key == GLFW_KEY_LEFT) return UK_BACK;
     if (m == GLFW_MOD_ALT && key == GLFW_KEY_RIGHT) return UK_FORWARD;
+    if (m == GLFW_MOD_ALT && key == GLFW_KEY_UP) return UK_PARENT;
+    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_L) return UK_LOCATION;
     if (m == GLFW_MOD_CONTROL) {
         switch (key) {
         case GLFW_KEY_A: return UK_ALL;
@@ -1091,7 +1256,9 @@ static void on_button(GLFWwindow *w, int button, int action, int mods)
 // What is under a point of the last frame drawn: a list row, a sidebar row, or a column header
 // (each -1 when not).
 typedef struct {
-    int row, side, header;
+    int   row, side, header;
+    UiBar bar;     // a top bar button
+    int   crumb;   // UB_CRUMB: which path button
 } Hit;
 
 static bool in_box(Clay_ElementId id, float x, float y)
@@ -1103,7 +1270,15 @@ static bool in_box(Clay_ElementId id, float x, float y)
 
 static Hit hit_at(float x, float y)
 {
-    Hit h = { -1, -1, -1 };
+    Hit h = { -1, -1, -1, UB_NONE, -1 };
+    static const struct { const char *id; UiBar b; } BAR[] = {
+        { "nav-back", UB_BACK }, { "nav-fwd", UB_FORWARD }, { "nav-up", UB_UP }, { "loc-toggle", UB_LOCATION },
+        { "search", UB_SEARCH }, { "crumb-left", UB_LEFT }, { "crumb-right", UB_RIGHT },
+    };
+    for (int k = 0; k < COUNT(BAR) && h.bar == UB_NONE; k++)
+        if (in_box(Clay_GetElementId(cz(BAR[k].id)), x, y)) h.bar = BAR[k].b;
+    for (int i = app.crumb_lo; h.bar == UB_NONE && i < app.crumb_hi; i++)
+        if (in_box(CLAY_IDI("crumb", i), x, y)) h.bar = UB_CRUMB, h.crumb = i;
     for (int r = 0; r < app.ui.list.rows && h.row < 0; r++)
         if (in_box(CLAY_IDI("row", r), x, y)) h.row = r;
     for (int r = 0; r < app.ui.side.rows && h.side < 0; r++)
@@ -1125,6 +1300,7 @@ static void press_at(UiInput *in, float x, float y, int mods)
     }
     in->side_click = h.side;
     in->header = h.header;
+    in->bar = h.bar, in->crumb = h.crumb;
 }
 
 static float wheel_left;   // a touchpad's part of a notch, carried to the next frame
@@ -1147,8 +1323,8 @@ static UiInput input_real(bool *seen)
     else if (notches) app.ui.side.top = ui_clamp(app.ui.side.top - notches, 0, ui_max_top(&app.ui.side)), *seen = true;
     if (d.x != 0 || d.y != 0) {
         Hit h = hit_at(m.x, m.y);
-        *seen |= h.row != app.hover || h.side != app.side_hover;
-        app.hover = h.row, app.side_hover = h.side;
+        *seen |= h.row != app.hover || h.side != app.side_hover || h.bar != app.bar_hover || h.crumb != app.crumb_hover;
+        app.hover = h.row, app.side_hover = h.side, app.bar_hover = h.bar, app.crumb_hover = h.crumb;
     }
     if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
         int mods = (IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL) ? UI_MOD_CTRL : 0) |
@@ -1158,7 +1334,7 @@ static UiInput input_real(bool *seen)
     in.backs = mouse_backs, mouse_backs = 0;
     in.forwards = mouse_forwards, mouse_forwards = 0;
     *seen |= in.wheel != 0 || in.click >= 0 || in.dclick >= 0 || in.side_click >= 0 || in.header >= 0 || in.backs > 0 ||
-             in.forwards > 0;
+             in.forwards > 0 || in.bar != UB_NONE;
     return in;
 }
 
@@ -1205,7 +1381,8 @@ static void usage(void)
                     "  Alt+Left/Right back and forward; / or Ctrl+F find, n N again; . or Ctrl+H hidden files;\n"
                     "  s sort by the next column, S reverse; Tab the places; t terminal here; ~ home;\n"
                     "  Space select, Ctrl+A all; F2 rename; Ctrl+Shift+N new folder; Delete trash, Shift+Delete for good;\n"
-                    "  Ctrl+C, Ctrl+X, Ctrl+V copy, cut, paste; Ctrl+Z undo; Ctrl+Q quit.\n");
+                    "  Ctrl+C, Ctrl+X, Ctrl+V copy, cut, paste; Ctrl+Z undo; Ctrl+L type a location; Alt+Up up;\n"
+                    "  Ctrl+Q quit.\n");
 }
 
 int main(int argc, char **argv)
@@ -1302,6 +1479,7 @@ int main(int argc, char **argv)
     theme_apply();
     if (!watch_start()) set_status(true, "inotify is unavailable: no live refresh");
     clip_init();   // false: the clipboard stays inside fx
+    count_start();
     char bm[PATH_MAX];
     places_load(&scratch, &app.places, bookmarks_path(bm, sizeof bm), "/proc/self/mountinfo");
     ui_set(&app.ui.side, app.places.n, 0);
@@ -1341,6 +1519,7 @@ int main(int argc, char **argv)
         if (atomic_exchange(&watch.theme_ready, false)) theme_apply(), app.themes++, dirty = true;
         if (atomic_exchange(&watch.list_ready, false)) reload(), dirty = true;
         dirty |= job_poll();
+        if (app.have_list && count_take(app.count, app.list.n)) dirty = true;
         int rows = list_rows(GetScreenHeight()), srows = side_rows(GetScreenHeight());
         if (rows != app.ui.list.rows) ui_resize(&app.ui.list, rows), dirty = true;
         if (srows != app.ui.side.rows) ui_resize(&app.ui.side, srows), dirty = true;
@@ -1354,7 +1533,7 @@ int main(int argc, char **argv)
         bool was_editing = app.ui.editing;
         UiAction a = ui_handle(&app.ui, (UiNames){ list_name, NULL }, &in);
         // F2 opened the edit line: on the cursor's entry, as it is named now.
-        if (!was_editing && app.ui.editing) snprintf(app.edit_from, sizeof app.edit_from, "%.*s", STR_ARG(sel_name())), app.edit_new = false;
+        if (!was_editing && app.ui.editing && !app.ui.edit_path) snprintf(app.edit_from, sizeof app.edit_from, "%.*s", STR_ARG(sel_name())), app.edit_new = false;
         if (a.kind != UA_NONE) act(a);
         dirty |= seen;
     }
@@ -1363,6 +1542,7 @@ int main(int argc, char **argv)
         pthread_join(run.thread, NULL);
     }
     clip_quit();
+    count_stop();
     for (int i = 0; i < app.nslots; i++)
         if (app.slot[i].tex.id) UnloadTexture(app.slot[i].tex);
     CloseWindow();

@@ -29,7 +29,12 @@ typedef enum {
     UK_PASTE,      // Ctrl+V
     UK_UNDO,       // Ctrl+Z
     UK_NEWFOLDER,  // Ctrl+Shift+N
+    UK_LOCATION,   // Ctrl+L
+    UK_PARENT,     // Alt+Up
 } UiKey;
+
+// The top bar's buttons (F4).
+typedef enum { UB_NONE, UB_BACK, UB_FORWARD, UB_UP, UB_LOCATION, UB_SEARCH, UB_LEFT, UB_RIGHT, UB_CRUMB } UiBar;
 
 enum { UI_MOD_CTRL = 1, UI_MOD_SHIFT = 2 };
 
@@ -48,6 +53,8 @@ typedef struct {
     int     dclick;      // a list row double-clicked, -1 for none
     int     side_click;  // a sidebar row pressed, -1 for none
     int     header;      // a column header clicked (a SortKey), -1 for none
+    UiBar   bar;         // a top bar button clicked (UB_CRUMB: path button `crumb`)
+    int     crumb;
     int     backs, forwards;   // presses of the mouse's back and forward buttons
 } UiInput;
 
@@ -58,6 +65,10 @@ typedef enum {
     UA_NEWFOLDER, UA_TRASH, UA_DELETE, UA_COPY, UA_CUT, UA_PASTE, UA_UNDO,
     UA_ANSWER,      // a clash answered: index is the Answer, all "the rest the same"
     UA_CANCEL_JOB,
+    UA_LOCATION,    // the location line, open or closed (gui/ fills it with the folder)
+    UA_GO,          // the location line's Enter: its text is where to go (open until gui/ closes it)
+    UA_CRUMB,       // a path button: index
+    UA_CRUMB_SHIFT, // the path buttons' arrows: index -1 or 1
 } UiActionKind;
 
 typedef struct {
@@ -98,9 +109,12 @@ typedef struct {
     // keeps it by name across a reload.
     u8    *mark;
     isize  marked;           // how many are set
-    // The edit line (rename; a new folder is made at once and renamed with it).
+    // The edit line: a rename (a new folder is made at once and renamed with it), or the top bar's
+    // location line (F4), which holds a path.
     bool   editing;
-    char   edit[NAME_MAX + 1];
+    bool   edit_path;        // the location line
+    bool   edit_all;         // all of it selected (the location line as it opens): typing replaces it
+    char   edit[PATH_MAX];
     int    edit_len, caret;  // bytes
     // The prompts and the job: gui/ says when one runs, and when it asks about a clash.
     bool   confirming;       // "Delete … for good? Y/n"
@@ -111,7 +125,7 @@ typedef struct {
 
 static UiInput ui_input_none(void)
 {
-    return (UiInput){ .click = -1, .dclick = -1, .side_click = -1, .header = -1, .click_mods = 0 };
+    return (UiInput){ .click = -1, .dclick = -1, .side_click = -1, .header = -1, .click_mods = 0, .bar = UB_NONE, .crumb = -1 };
 }
 
 static isize ui_clamp(isize v, isize lo, isize hi)
@@ -279,13 +293,32 @@ static void ui_mark_range(Ui *u, isize from, isize to)
 
 // ---- the edit line -----------------------------------------------------------------------------
 
-// The edit line opened on text, the caret at its end.
+// How many bytes the edit line holds: a name, or a path.
+static int ui_edit_max(const Ui *u)
+{
+    return u->edit_path ? PATH_MAX - 1 : NAME_MAX;
+}
+
+static void ui_edit_start(Ui *u, Str text, bool path)
+{
+    u->edit_path = path;
+    isize max = ui_edit_max(u), n = text.len < max ? text.len : max;
+    memcpy(u->edit, text.p, (size_t)n);
+    u->edit_len = (int)n, u->caret = (int)n, u->edit_all = path;
+    u->editing = true, u->finding = false, u->side_focus = false;
+}
+
+// The edit line opened on a name, the caret at its end.
 static void ui_edit_open(Ui *u, Str text)
 {
-    isize n = text.len < NAME_MAX ? text.len : NAME_MAX;
-    memcpy(u->edit, text.p, (size_t)n);
-    u->edit_len = (int)n, u->caret = (int)n;
-    u->editing = true, u->finding = false, u->side_focus = false;
+    ui_edit_start(u, text, false);
+}
+
+// The location line opened on a path, all of it selected, as browsers and Nemo do: typing a new one
+// replaces it, a move of the caret keeps it.
+static void ui_location_open(Ui *u, Str path)
+{
+    ui_edit_start(u, path, true);
 }
 
 static void ui_edit_close(Ui *u)
@@ -320,10 +353,16 @@ static void ui_edit_cut(Ui *u, int from, int to)
 // A key or character in the edit line: an action for gui/ (UA_RENAME on Enter) or UA_NONE.
 static UiAction ui_edit_event(Ui *u, UiEvent e)
 {
+    if (u->edit_all) {
+        u->edit_all = false;
+        bool replace = e.key == UK_NONE || e.key == UK_BACKSPACE || e.key == UK_DELETE;
+        if (replace) u->edit_len = 0, u->caret = 0;
+        if (e.key == UK_BACKSPACE || e.key == UK_DELETE) return (UiAction){ UA_NONE, 0, false };
+    }
     if (e.key == UK_NONE) {
         char b[4];
         int n = ui_utf8(e.ch, b);
-        if (n == 0 || e.ch == '/' || u->edit_len + n > NAME_MAX) return (UiAction){ UA_NONE, 0, false };
+        if (n == 0 || (e.ch == '/' && !u->edit_path) || u->edit_len + n > ui_edit_max(u)) return (UiAction){ UA_NONE, 0, false };
         memmove(u->edit + u->caret + n, u->edit + u->caret, (size_t)(u->edit_len - u->caret));
         memcpy(u->edit + u->caret, b, (size_t)n);
         u->edit_len += n, u->caret += n;
@@ -336,8 +375,11 @@ static UiAction ui_edit_event(Ui *u, UiEvent e)
     case UK_END: u->caret = u->edit_len; break;
     case UK_BACKSPACE: ui_edit_cut(u, ui_edit_back(u, u->caret), u->caret); break;
     case UK_DELETE: ui_edit_cut(u, u->caret, ui_edit_fwd(u, u->caret)); break;
-    case UK_ENTER: return (UiAction){ UA_RENAME, 0, false };
+    case UK_ENTER: return (UiAction){ u->edit_path ? UA_GO : UA_RENAME, 0, false };
     case UK_ESC: ui_edit_close(u); break;
+    case UK_LOCATION:   // Ctrl+L again: the location line closes; a rename doesn't take it
+        if (u->edit_path) ui_edit_close(u);
+        break;
     default: break;
     }
     return (UiAction){ UA_NONE, 0, false };
@@ -419,6 +461,21 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         u->side.sel = u->side.top + in->side_click;
         ui_edit_close(u);
         return (UiAction){ UA_PLACE, u->side.sel, false };
+    }
+    if (!prompt && in->bar != UB_NONE) {
+        switch (in->bar) {
+        case UB_BACK: ui_edit_close(u); return (UiAction){ UA_BACK, 0, false };
+        case UB_FORWARD: ui_edit_close(u); return (UiAction){ UA_FORWARD, 0, false };
+        case UB_UP: ui_edit_close(u); return (UiAction){ UA_PARENT, 0, false };
+        case UB_LOCATION:
+            if (u->editing && u->edit_path) return ui_edit_close(u), (UiAction){ UA_NONE, 0, false };
+            return (UiAction){ UA_LOCATION, 0, false };
+        case UB_SEARCH: ui_edit_close(u), ui_find_open(u); return (UiAction){ UA_NONE, 0, false };
+        case UB_LEFT: return (UiAction){ UA_CRUMB_SHIFT, -1, false };
+        case UB_RIGHT: return (UiAction){ UA_CRUMB_SHIFT, 1, false };
+        case UB_CRUMB: ui_edit_close(u); return (UiAction){ UA_CRUMB, in->crumb, false };
+        default: break;
+        }
     }
     if (!prompt && in->click >= 0 && l->top + in->click < l->n) {
         isize row = l->top + in->click;
@@ -520,10 +577,131 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         case UK_PASTE: return (UiAction){ UA_PASTE, 0, false };
         case UK_UNDO: return (UiAction){ UA_UNDO, 0, false };
         case UK_NEWFOLDER: return (UiAction){ UA_NEWFOLDER, 0, false };
+        case UK_LOCATION: return (UiAction){ UA_LOCATION, 0, false };
+        case UK_PARENT: return (UiAction){ UA_PARENT, 0, false };
         default: break;
         }
     }
     return (UiAction){ UA_NONE, 0, false };
+}
+
+// ---- the path buttons (F4) ---------------------------------------------------------------------
+//
+// The top bar's path as buttons, one per folder. The bar keeps the deepest path it showed: going
+// up keeps the deeper buttons (Nemo does), going anywhere off that path starts it anew. Under the
+// home folder the first button is home, and the folders above it are left out.
+
+enum { UI_CRUMBS_MAX = 128 };
+
+typedef struct {
+    isize end;    // the button's folder is deep[0..end)
+    bool  home;   // the home folder's button
+} UiCrumb;
+
+typedef struct {
+    char    deep[PATH_MAX];
+    UiCrumb seg[UI_CRUMBS_MAX];
+    int     n;
+    int     cur;  // the button of the current folder
+    int     lo;   // the first button shown when they don't all fit; -1: chosen to show cur
+} UiCrumbs;
+
+// p is dir or below it.
+static bool ui_under(Str p, Str dir)
+{
+    if (str_eq(dir, S("/"))) return p.len > 0 && p.p[0] == '/';
+    return str_starts_with(p, dir) && (p.len == dir.len || p.p[dir.len] == '/');
+}
+
+// The current folder is cwd (absolute); home is $HOME (NULL or empty: none).
+static void ui_crumbs_set(UiCrumbs *c, const char *cwd, const char *home)
+{
+    Str cw = str_from_c(cwd), h = str_from_c(home);
+    while (h.len > 1 && h.p[h.len - 1] == '/') h.len--;
+    if (!c->deep[0] || !ui_under(str_from_c(c->deep), cw)) snprintf(c->deep, sizeof c->deep, "%s", cwd);
+    c->lo = -1;
+    Str d = str_from_c(c->deep);
+    c->n = 0;
+    isize at;
+    if (h.len > 1 && h.p[0] == '/' && ui_under(cw, h)) c->seg[c->n++] = (UiCrumb){ h.len, true }, at = h.len;
+    else c->seg[c->n++] = (UiCrumb){ 1, false }, at = 1;
+    while (at < d.len && c->n < UI_CRUMBS_MAX) {
+        while (at < d.len && d.p[at] == '/') at++;
+        isize e = at;
+        while (e < d.len && d.p[e] != '/') e++;
+        if (e > at) c->seg[c->n++] = (UiCrumb){ e, false };
+        at = e;
+    }
+    c->cur = 0;
+    for (int i = 0; i < c->n; i++)
+        if (c->seg[i].end == (cw.len > 1 ? cw.len : 1)) c->cur = i;
+}
+
+// Button i's folder.
+static Str ui_crumb_path(const UiCrumbs *c, int i)
+{
+    return (Str){ c->deep, c->seg[i].end };
+}
+
+// Button i's label: "/" for the root, else its folder's own name (home's too).
+static Str ui_crumb_label(const UiCrumbs *c, int i)
+{
+    if (!c->seg[i].home && c->seg[i].end == 1) return S("/");
+    return path_base(ui_crumb_path(c, i));
+}
+
+// From lo on, how many buttons of widths w fit in room beside the two arrows: hi (at least lo + 1).
+static int ui_crumbs_fit(const float *w, int n, float room, int lo)
+{
+    float used = 0;
+    int hi = lo;
+    while (hi < n && (hi == lo || used + w[hi] <= room)) used += w[hi++];
+    return hi;
+}
+
+// The buttons shown, [*lo, *hi), and whether the arrows are (when not all fit). Without a scroll of
+// its own (c->lo < 0) the window shows as many folders above the current one as it can, then the
+// deeper ones, never leaving the current one out.
+static bool ui_crumbs_window(const UiCrumbs *c, const float *w, float room, float arrow, int *lo, int *hi)
+{
+    float all = 0;
+    for (int i = 0; i < c->n; i++) all += w[i];
+    if (all <= room) return *lo = 0, *hi = c->n, false;
+    room -= 2 * arrow;
+    if (c->lo >= 0) {
+        *lo = c->lo < c->n ? c->lo : c->n - 1;
+    } else {
+        *lo = 0;
+        while (*lo < c->cur && ui_crumbs_fit(w, c->n, room, *lo) <= c->cur) (*lo)++;
+    }
+    *hi = ui_crumbs_fit(w, c->n, room, *lo);
+    return true;
+}
+
+// The ‹ (by -1) and › (by 1) arrows: the window moves a button, from where it is now (lo).
+static void ui_crumbs_shift(UiCrumbs *c, int lo, int by)
+{
+    int to = lo + by;
+    c->lo = to < 0 ? 0 : to > c->n - 1 ? c->n - 1 : to;
+}
+
+// ---- the location line (F4) -------------------------------------------------------------------
+
+// What the location line says as a folder: "~" and "~/…" from home, a relative path from cwd, then
+// "." and ".." taken out. False for an empty line, or one that climbs above "/".
+static bool ui_location(Arena *a, Str text, const char *cwd, const char *home, Str *out)
+{
+    text = str_trim(text);
+    if (text.len == 0) return false;
+    Str base = str_from_c(cwd);
+    if (text.p[0] == '~' && (text.len == 1 || text.p[1] == '/')) {
+        if (!home || home[0] != '/') return false;
+        base = str_from_c(home), text = str_cut(text, 1, text.len);
+        while (text.len && text.p[0] == '/') text = str_cut(text, 1, text.len);
+    }
+    if (!path_join(a, base, text, out)) return false;
+    if (out->len == 0) *out = S("/");
+    return true;
 }
 
 // ---- history ----------------------------------------------------------------------------------

@@ -1,0 +1,115 @@
+# F4 on a tree made by tests/gui/run.sh, with HOME=<scratch>/home: home/tree holds adir/ (x, y,
+# .h), bdir/ (empty), zz-a-rather-long-folder-name-1/…/-8, f.txt.
+settle
+expect crumbs=home|tree crumb=1 arrows=0 back=0 fwd=0 locating=0
+shot topbar.png
+# ---- item counts: hidden files only when shown; live after a change in the folder
+wait-for 2000 sel=adir cnt=2
+char .
+wait-for 2000 cnt=3
+char .
+wait-for 2000 cnt=2
+key down
+wait-for 2000 sel=bdir cnt=0
+key home
+sh touch "$FX_DIR/adir/z" "$FX_DIR/new.txt"
+wait-for 2000 sel=adir cnt=3
+sh rm "$FX_DIR/new.txt"
+# ---- the buttons: enter, up, back, forward
+key enter
+expect crumbs=home|tree|adir crumb=2 back=1
+point-ui nav-up
+click-here
+expect crumbs=home|tree|adir crumb=1 sel=adir back=2 fwd=0
+point-ui nav-back
+click-here
+expect crumb=2 fwd=1
+point-ui nav-fwd
+click-here
+expect crumb=1 fwd=0 sel=adir
+# ---- path buttons: home, then down again; off the path starts anew
+point-ui crumb 0
+click-here
+expect crumbs=home|tree|adir crumb=0 sel=tree crumbhome=0
+point-ui crumb 2
+click-here
+expect crumbs=home|tree|adir crumb=2
+point-ui crumb 1
+click-here
+expect crumb=1 sel=adir
+key down
+key enter
+expect crumbs=home|tree|bdir crumb=2
+key alt-up
+expect crumbs=home|tree|bdir crumb=1 sel=bdir
+# Dimmed buttons do nothing: forward with nothing ahead
+point-ui nav-fwd
+click-here
+expect crumb=1 fwd=0
+# ---- the location line: Ctrl+L, a relative path, a bad one, Esc, the toggle
+key ctrl-l
+expect locating=1
+key end
+type /../tree/adir
+shot location.png
+key enter
+expect locating=0 crumbs=home|tree|adir crumb=2
+key ctrl-l
+key end
+type /nosuch
+key enter
+expect locating=1 crumb=2
+key esc
+expect locating=0
+point-ui loc-toggle
+click-here
+expect locating=1
+point-ui loc-toggle
+click-here
+expect locating=0
+key ctrl-l
+key ctrl-l
+expect locating=0
+# The search button opens the find line
+point-ui search
+click-here
+expect finding=1
+key esc
+expect finding=0
+# ---- above home: from /, home an ordinary folder; up at / does nothing
+key alt-up
+key alt-up
+expect crumb=0 crumbs=home|tree|adir
+key alt-up
+expect crumbhome=-1
+key ctrl-l
+type /
+key enter
+expect crumb=0 locating=0 dir=/
+point-ui nav-up
+click-here
+expect crumb=0 dir=/
+# ---- overflow: the long path, the current one in view, ‹ and ›
+key ctrl-l
+type ~/tree/zz-a-rather-long-folder-name-1/zz-a-rather-long-folder-name-2/zz-a-rather-long-folder-name-3/zz-a-rather-long-folder-name-4/zz-a-rather-long-folder-name-5/zz-a-rather-long-folder-name-6/zz-a-rather-long-folder-name-7/zz-a-rather-long-folder-name-8
+key enter
+expect locating=0 arrows=1 crumb=9 crumbshown=7-10
+shot overflow.png
+point-ui crumb-left
+click-here
+expect crumbshown=6-9 crumb=9
+shot overflow-left.png
+point-ui crumb-right
+click-here
+expect crumbshown=7-10
+# Up keeps the long path; the window follows the current one
+key alt-up
+key alt-up
+key alt-up
+expect crumb=6 crumbshown=4-7 sel=zz-a-rather-long-folder-name-6
+# Backspace on a fresh line clears it all
+key ctrl-l
+key backspace
+expect edit=- locating=1
+key esc
+quit

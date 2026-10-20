@@ -16,6 +16,7 @@
 # - XDG_CONFIG_HOME=<scratch-dir>/config: the sidebar's GTK bookmarks and the XDG user dirs come
 #   from there (empty unless the caller wrote them), never from Michael's;
 # - XDG_DATA_HOME=<scratch-dir>/data: the home trash is <scratch-dir>/data/Trash, never his;
+# - FX_TEST_HOME, when set, becomes the window's HOME (a scratch home for the path buttons' test);
 # - FX_GUI_SHOTS=<scratch-dir>/shots for the script's shots, FX_GUI_ROOT=<scratch-dir> for its
 #   sh guard and fx's own (fs/ops.c: no write outside it).
 # Prints the script's output, stderr's first lines, and whether LeakSanitizer or ASan reported
@@ -57,7 +58,7 @@ cat > "$T/launch.sh" <<EOS
 echo \$\$ > "$T/run.pid"
 exec env -u DISPLAY -u WAYLAND_SOCKET WAYLAND_DISPLAY="$sock" FX_TEST_SIZE=936x490 ${script_env} FX_GUI_ROOT="$T" FX_GUI_SHOTS="$T/shots" PATH="$T/fakes:\$PATH" XDG_STATE_HOME="$T/state" XDG_CONFIG_HOME="$T/config" XDG_DATA_HOME="$T/data" \
   LSAN_OPTIONS=suppressions=$root/gui/lsan.supp ASAN_OPTIONS=log_path="$T/asan" ${FX_TEST_LEAK:+FX_TEST_LEAK=1} \
-  ${FX_TEST_WATCH_DELAY_MS:+FX_TEST_WATCH_DELAY_MS=$FX_TEST_WATCH_DELAY_MS} ${FX_TEST_COPY_DELAY_MS:+FX_TEST_COPY_DELAY_MS=$FX_TEST_COPY_DELAY_MS} \
+  ${FX_TEST_WATCH_DELAY_MS:+FX_TEST_WATCH_DELAY_MS=$FX_TEST_WATCH_DELAY_MS} ${FX_TEST_COPY_DELAY_MS:+FX_TEST_COPY_DELAY_MS=$FX_TEST_COPY_DELAY_MS} ${FX_TEST_HOME:+HOME=$FX_TEST_HOME} \
   "$bin" $args >"$T/out" 2>"$T/err"
 EOS
 chmod +x "$T/launch.sh"
