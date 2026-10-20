@@ -22,11 +22,26 @@ shares, archives, "open with" menus.
 | F1 | Browse: one folder as a list (icon, name, size, modified), theme colours and icons, keyboard and mouse navigation, open, terminal here, live refresh | Below |
 | F2 | Get around: sidebar (bookmarks, mounts), hidden files, sort, type-to-find, back and forward | |
 | F3 | Change files: select, rename, new folder, trash, delete, copy and move with progress, the system clipboard, undo; on scratch folders only in tests | Below |
-| F4 | Extras: thumbnails, clipboard copy, git status per file | |
+| F4 | Top bar: back, forward, up; the path as buttons; a location entry toggle; search | |
+| F5 | Tabs: Ctrl+T, Ctrl+W, middle click on a path button or folder | |
+| F6 | Bottom bar: sidebar as places, as a tree, or hidden | |
+| F7 | Menus: File, Edit, View, Go, Bookmarks, Help | |
 
 Each milestone ends in a reviewer-2 round, then Michael's go before `make install`.
 
-**F4 thumbnails, a rule from Nemo (2026-10-20):** Nemo looped at up to 45% CPU on one file
+**Order (Michael, 2026-10-20):** after F3 the priority is a GUI closer to Nemo's (his screenshot of
+Nemo: menus, a top bar, tabs, sidebar modes in the bottom bar), in the order F4 to F7. Left out on
+his word: Nemo's compact view and its icon size slider.
+
+**Later, wanted eventually, not scheduled:**
+- Icon view (the top bar's icon and list buttons), and thumbnails, shown only in the icon view.
+- Git status per file (`git status --porcelain=v2 -z` off the main thread, a mark per row).
+- USB drives (from the concept doc): unmounted drives in the sidebar, a click mounts them with
+  `udisksctl mount`, an eject button unmounts.
+- A key that copies the cursor's path as text (Ctrl+C already puts files on the clipboard, F3).
+- Install Nautilus at some point to compare its features with fx's (not a priority).
+
+**Thumbnails, a rule from Nemo (2026-10-20):** Nemo looped at up to 45% CPU on one file
 because it checked an x-large thumbnail, found it stale (an older file of the same name), wrote the
 new one to large, and checked x-large again, decoding the image several times a second. fx must
 check a thumbnail at the size it writes, and try a file once per change (its mtime), never in a
