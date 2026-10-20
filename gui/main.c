@@ -969,17 +969,59 @@ static IconSlot *named_icon(const char *name)
     return icon_for(n, &n, 1);
 }
 
-// A top bar button: an icon from the theme when it has one, else a glyph from the UI font (the
-// theme's arrows are SVG only, which fx doesn't draw). Dimmed when it can't act.
-static void bar_button(Clay_ElementId id, UiBar which, const char *glyph, IconSlot *icon, bool enabled, float w)
+// The top bar's chevrons, drawn as two lines each (Nemo's look; the theme has its arrows only as
+// SVG, which fx doesn't draw). Clay hands the data back to draw_custom at render time; it lives in
+// the frame arena, which outlasts the frame's render.
+typedef enum { CHEV_LEFT, CHEV_RIGHT, CHEV_UP } ChevronDir;
+
+typedef struct {
+    ChevronDir dir;
+    Clay_Color color;
+} Chevron;
+
+static void draw_custom(Clay_BoundingBox b, void *arg)
+{
+    const Chevron *c = arg;
+    if (!c) return;
+    float cx = b.x + b.width / 2, cy = b.y + b.height / 2, r = 5;
+    Color col = { (u8)c->color.r, (u8)c->color.g, (u8)c->color.b, (u8)c->color.a };
+    Vector2 p0, p1, p2;
+    switch (c->dir) {
+    case CHEV_LEFT: p0 = (Vector2){ cx + r / 2, cy - r }, p1 = (Vector2){ cx - r / 2, cy }, p2 = (Vector2){ cx + r / 2, cy + r }; break;
+    case CHEV_RIGHT: p0 = (Vector2){ cx - r / 2, cy - r }, p1 = (Vector2){ cx + r / 2, cy }, p2 = (Vector2){ cx - r / 2, cy + r }; break;
+    default: p0 = (Vector2){ cx - r, cy + r / 2 }, p1 = (Vector2){ cx, cy - r / 2 }, p2 = (Vector2){ cx + r, cy + r / 2 }; break;
+    }
+    DrawLineEx(p0, p1, 1.6f, col);
+    DrawLineEx(p1, p2, 1.6f, col);
+    DrawCircleV(p1, 0.8f, col);   // a clean tip where the lines meet
+}
+
+static void chevron(Clay_ElementId id, ChevronDir dir, Clay_Color color)
+{
+    Chevron *c = arena_new(&frame, Chevron, 1);
+    *c = (Chevron){ dir, color };
+    CLAY(id, { .layout = { .sizing = { CLAY_SIZING_FIXED(16), CLAY_SIZING_FIXED(16) } }, .custom = { .customData = c } }) {}
+}
+
+static Clay_Color dim_color(void)
+{
+    return mix(app.theme.fg_dim, app.theme.bg_light, 0.5f);
+}
+
+// A top bar button: a chevron, an icon from the theme, or a glyph from the UI font. Dimmed when it
+// can't act.
+static void bar_button(Clay_ElementId id, UiBar which, int chev, const char *glyph, IconSlot *icon, bool enabled, float w)
 {
     Theme *t = &app.theme;
     bool hover = enabled && app.bar_hover == which;
+    Clay_Color fg = enabled ? cc(t->fg) : dim_color();
     CLAY(id, { .layout = { .sizing = { CLAY_SIZING_FIXED(w), CLAY_SIZING_FIXED(BAR_BTN_H) },
                            .childAlignment = { .x = CLAY_ALIGN_X_CENTER, .y = CLAY_ALIGN_Y_CENTER } },
                .backgroundColor = hover ? cc(t->bg) : cc(t->bg_light) }) {
-        if (icon && icon->tex.id) icon_box(Clay_GetElementId(cz(arena_sprintf(&frame, "%.*s-icon", (int)id.stringId.length, id.stringId.chars))), icon, CRUMB_ICON_PX);
-        else text(cz(glyph), enabled ? cc(t->fg) : mix(t->fg_dim, t->bg_light, 0.5f));
+        Clay_ElementId inner = Clay_GetElementId(cz(arena_sprintf(&frame, "%.*s-icon", (int)id.stringId.length, id.stringId.chars)));
+        if (chev >= 0) chevron(inner, (ChevronDir)chev, fg);
+        else if (icon && icon->tex.id) icon_box(inner, icon, CRUMB_ICON_PX);
+        else text(cz(glyph), fg);
     }
 }
 
@@ -999,7 +1041,11 @@ static void layout_crumbs(float room)
     int lo, hi;
     app.crumb_arrows = ui_crumbs_window(c, wd, room, ARROW_W, &lo, &hi);
     app.crumb_lo = lo, app.crumb_hi = hi;
-    if (app.crumb_arrows) bar_button(CLAY_ID("crumb-left"), UB_LEFT, "\xE2\x80\xB9", NULL, lo > 0, ARROW_W);   // ‹
+    // One outlined group, a line between the buttons, so they read as one path (Michael, 2026-10-20).
+    Clay_Color line = mix(t->fg_dim, t->bg_light, 0.45f);
+    CLAY(CLAY_ID("crumb-group"), { .layout = { .sizing = { CLAY_SIZING_FIT(0), CLAY_SIZING_FIXED(BAR_BTN_H) } },
+                                   .border = { .color = line, .width = { 1, 1, 1, 1, 1 } } }) {
+    if (app.crumb_arrows) bar_button(CLAY_ID("crumb-left"), UB_LEFT, CHEV_LEFT, NULL, NULL, lo > 0, ARROW_W);
     for (int i = lo; i < hi; i++) {
         bool cur = i == c->cur, hover = app.bar_hover == UB_CRUMB && app.crumb_hover == i;
         CLAY(CLAY_IDI("crumb", i), { .layout = { .sizing = { CLAY_SIZING_FIT(0), CLAY_SIZING_FIXED(BAR_BTN_H) }, .padding = { CRUMB_PAD, CRUMB_PAD, 0, 0 },
@@ -1011,7 +1057,8 @@ static void layout_crumbs(float room)
             text(fit(label, most > 20 ? most : 20, false), cur ? cc(t->accent) : i > c->cur ? cc(t->fg_dim) : cc(t->fg));
         }
     }
-    if (app.crumb_arrows) bar_button(CLAY_ID("crumb-right"), UB_RIGHT, "\xE2\x80\xBA", NULL, hi < c->n, ARROW_W);   // ›
+    if (app.crumb_arrows) bar_button(CLAY_ID("crumb-right"), UB_RIGHT, CHEV_RIGHT, NULL, NULL, hi < c->n, ARROW_W);
+    }
 }
 
 // The location line in the path buttons' place: the path and a caret, the end kept in view; all
@@ -1049,9 +1096,9 @@ static void layout_bar(float w)
                                           .padding = { PAD / 2, PAD / 2, 0, 0 }, .childGap = BAR_GAP,
                                           .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
                               .backgroundColor = cc(t->bg_light) }) {
-        bar_button(CLAY_ID("nav-back"), UB_BACK, "\xE2\x86\x90", NULL, hist.nback > 0, BAR_BTN_W);      // ←
-        bar_button(CLAY_ID("nav-fwd"), UB_FORWARD, "\xE2\x86\x92", NULL, hist.nfwd > 0, BAR_BTN_W);     // →
-        bar_button(CLAY_ID("nav-up"), UB_UP, "\xE2\x86\x91", NULL, can_up, BAR_BTN_W);                 // ↑
+        bar_button(CLAY_ID("nav-back"), UB_BACK, CHEV_LEFT, NULL, NULL, hist.nback > 0, BAR_BTN_W);
+        bar_button(CLAY_ID("nav-fwd"), UB_FORWARD, CHEV_RIGHT, NULL, NULL, hist.nfwd > 0, BAR_BTN_W);
+        bar_button(CLAY_ID("nav-up"), UB_UP, CHEV_UP, NULL, NULL, can_up, BAR_BTN_W);
         float room = w - PAD - 5 * BAR_BTN_W - 7 * BAR_GAP - 2 * PAD;
         CLAY(CLAY_ID("crumbs"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(BAR_BTN_H) }, .padding = { PAD / 2, 0, 0, 0 },
                                               .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
@@ -1059,8 +1106,8 @@ static void layout_bar(float w)
             if (app.ui.editing && app.ui.edit_path) layout_location(room);
             else layout_crumbs(room);
         }
-        bar_button(CLAY_ID("loc-toggle"), UB_LOCATION, "\xE2\x9C\x8E", NULL, true, BAR_BTN_W);          // ✎
-        bar_button(CLAY_ID("search"), UB_SEARCH, "/", named_icon("edit-find"), true, BAR_BTN_W);
+        bar_button(CLAY_ID("loc-toggle"), UB_LOCATION, -1, "\xE2\x9C\x8E", NULL, true, BAR_BTN_W);          // ✎
+        bar_button(CLAY_ID("search"), UB_SEARCH, -1, "/", named_icon("edit-find"), true, BAR_BTN_W);
     }
 }
 
@@ -1480,6 +1527,7 @@ int main(int argc, char **argv)
     Clay_Initialize(arena, (Clay_Dimensions){ (float)GetScreenWidth(), (float)GetScreenHeight() },
                     (Clay_ErrorHandler){ .errorHandlerFunction = on_clay_error });
     Clay_SetMeasureTextFunction(render_measure_text, NULL);
+    render_custom = draw_custom;
 
     mime_load(&data, &app.mime_db);
     user_dirs_load(&data, &app.user_dirs);
