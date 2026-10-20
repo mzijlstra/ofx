@@ -6,7 +6,7 @@ tests/gui/run.sh, each script in its own headless weston (CLAUDE.md, "Testing th
 """
 import os, shutil, subprocess, sys
 
-G, W = 'gui/main.c', 'gui/watch.c'
+G, W, K = 'gui/main.c', 'gui/watch.c', 'gui/counts.c'
 MUTANTS = [
     (G, "    go_to(up, str_from_c(child_buf), 0);", "    go_to(up, STR_EMPTY, 0);"),
     (G, "    if (go_to(app.cwd, str_from_c(keep), app.ui.list.sel)) return;", "    if (go_to(app.cwd, STR_EMPTY, app.ui.list.sel)) return;"),
@@ -38,7 +38,19 @@ MUTANTS = [
     (G, "    if (m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT) && key == GLFW_KEY_N) return UK_NEWFOLDER;", ""),
     (G, "    if (ask && !app.ui.asking) app.ui.asking = true;", ""),
     (G, "    ops_guard(getenv(\"FX_GUI_ROOT\"));", ""),
-    (G, "        if (!was_editing && app.ui.editing) snprintf(app.edit_from, sizeof app.edit_from, \"%.*s\", STR_ARG(sel_name())), app.edit_new = false;", ""),
+    (G, "        if (!was_editing && app.ui.editing && !app.ui.edit_path) snprintf(app.edit_from, sizeof app.edit_from, \"%.*s\", STR_ARG(sel_name())), app.edit_new = false;", ""),
+    # F4
+    (G, "    if (i + 1 < c->n) snprintf(below, sizeof below, \"%.*s\", STR_ARG(ui_crumb_label(c, i + 1)));", ""),
+    (G, "    // The counts are by row too: asked again in the new order.\n    for (isize i = 0; i < app.list.n; i++) app.count[i] = COUNT_UNKNOWN;", "    // The counts are by row too: asked again in the new order."),
+    (G, "        if (app.have_list && count_take(app.count, app.list.n)) dirty = true;", ""),
+    (G, "    if (!S_ISDIR(st.st_mode)) {\n        set_status(true, \"%s isn't a folder\", path);\n        return;\n    }", ""),
+    (G, "        if (in_box(CLAY_IDI(\"crumb\", i), x, y)) h.bar = UB_CRUMB, h.crumb = i;", ""),
+    (G, "            if (sel && app.ui.editing && !app.ui.edit_path) {", "            if (sel && app.ui.editing) {"),
+    (G, "        ui_crumbs_set(&app.crumbs, app.cwd, getenv(\"HOME\"));", ""),
+    (G, "    if (m == GLFW_MOD_ALT && key == GLFW_KEY_UP) return UK_PARENT;", ""),
+    (G, "    if (go_to(path, STR_EMPTY, 0)) ui_edit_close(&app.ui);", "    go_to(path, STR_EMPTY, 0);"),
+    (K, "        if (gen == counts.gen) counts.res[counts.sn++] = (CountAnswer){ gen, idx, n };", "        counts.res[counts.sn++] = (CountAnswer){ gen, idx, n };"),
+    (G, "        if (app.count[i] >= 0) snprintf(size, sizeof size, \"%td item%s\", app.count[i], app.count[i] == 1 ? \"\" : \"s\");", "        if (app.count[i] >= 0) snprintf(size, sizeof size, \"%td items\", app.count[i]);"),
 ]
 scratch = sys.argv[1]
 only = [int(x) for x in sys.argv[2].split(',')] if len(sys.argv) > 2 else None

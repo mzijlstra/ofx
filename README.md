@@ -27,6 +27,8 @@ wayland-cursor, wayland-egl, xkbcommon, fontconfig and freetype2. raylib and Cla
 | Enter, Right, `l` | open: a folder is entered, a file goes to `xdg-open` |
 | Backspace, Left, `h` | up to the parent, the folder you left selected |
 | Alt+Left, Alt+Right | back and forward |
+| Alt+Up | up to the parent |
+| Ctrl+L | type a location: all of it selected, so typing replaces it; `~` is home, a relative path starts here |
 | `/`, Ctrl+F | find: type to jump, Enter keeps, Esc goes back; then `n`/`N` again |
 | `.`, Ctrl+H | hidden files on and off |
 | `s`, `S` | sort by the next column (name, size, modified), reverse |
@@ -46,6 +48,10 @@ An action works on the selected entries, or on the cursor's when none is selecte
 runs in the background with its progress in the footer (Esc cancels; a cancelled file never
 appears half-written). When a name is taken it asks: `s` skip, `r` replace (a folder: merge), `k`
 keep both; the capitals answer for all the rest.
+
+The top bar: back, forward and up, then the path as buttons (they keep the deeper folders after
+you go up, and scroll with ‹ › when the path is long), then the location toggle and search.
+Folders show how many items they hold in the Size column.
 
 Mouse: a click puts the cursor on a row, Ctrl+click and Shift+click select, a double click opens,
 the wheel scrolls a row per notch, a click on a column header sorts by it (again: reversed), a

@@ -117,7 +117,9 @@ ignore clicks; every button lights up under the pointer.
 
 **Arrows and button glyphs:** the icon theme has these only as symbolic SVGs (Yaru, Adwaita), and
 fx has no SVG rasteriser, so they are drawn as text glyphs from the UI font in the theme's colours
-(‹ › ↑ and the like, chosen by what the font has), as Nemo's symbolic icons are monochrome too.
+(← → ↑ ‹ › from Liberation Sans, ✎ from Noto Sans Symbols 2 through fontconfig's fallback), as
+Nemo's symbolic icons are monochrome too. Search uses the theme's own PNG (`edit-find`, which
+Yaru draws as a magnifier over an "A").
 
 **Path buttons:** under `$HOME` the first button is the home folder (its icon and name) and the
 folders above it are left out, as Nemo does; elsewhere the first is `/`. A click goes there.
@@ -127,8 +129,8 @@ left behind a ‹ button and the deeper ones off the right behind ›, and the c
 shown. Middle click is kept for F5 (a new tab). Alt+Up goes up, Alt+Left and Alt+Right as now.
 
 **Location entry:** Ctrl+L or the toggle button swaps the path buttons for an edit line holding the
-current path (F3's edit line), the caret at the end as in a rename. Enter
-goes there (`~` expanded, a relative path taken from the current folder); a path that isn't a
+current path (F3's edit line), all of it selected as browsers and Nemo do, so typing replaces
+it and a move of the caret keeps it (built so, 2026-10-20). Enter goes there (`~` expanded, a relative path taken from the current folder); a path that isn't a
 folder keeps the line open with the reason. Esc, or the toggle again, goes back to the buttons.
 No Tab completion in F4.
 
