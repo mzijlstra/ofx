@@ -54,7 +54,7 @@ case $sock in fx-test-*) ;; *) echo "run-script: unexpected socket '$sock'" >&2;
 cat > "$T/launch.sh" <<EOS
 #!/bin/sh
 echo \$\$ > "$T/run.pid"
-exec env -u DISPLAY WAYLAND_DISPLAY="$sock" FX_TEST_SIZE=936x490 ${script_env} FX_GUI_ROOT="$T" FX_GUI_SHOTS="$T/shots" PATH="$T/fakes:\$PATH" XDG_STATE_HOME="$T/state" XDG_CONFIG_HOME="$T/config" \
+exec env -u DISPLAY -u WAYLAND_SOCKET WAYLAND_DISPLAY="$sock" FX_TEST_SIZE=936x490 ${script_env} FX_GUI_ROOT="$T" FX_GUI_SHOTS="$T/shots" PATH="$T/fakes:\$PATH" XDG_STATE_HOME="$T/state" XDG_CONFIG_HOME="$T/config" \
   LSAN_OPTIONS=suppressions=$root/gui/lsan.supp ASAN_OPTIONS=log_path="$T/asan" ${FX_TEST_LEAK:+FX_TEST_LEAK=1} \
   ${FX_TEST_WATCH_DELAY_MS:+FX_TEST_WATCH_DELAY_MS=$FX_TEST_WATCH_DELAY_MS} \
   "$bin" $args >"$T/out" 2>"$T/err"

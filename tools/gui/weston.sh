@@ -17,7 +17,7 @@ start)
     # --fake-seat: GLFW 3.4 reads the seat's version even when there is none, and crashes without
     # one. --no-config: not his weston.ini (if any). The kiosk shell fills the output with the window:
     # 936x490 logical at scale 2, as a Hyprland headless output tiled it before.
-    env -u WAYLAND_DISPLAY -u DISPLAY weston --backend=headless --fake-seat --shell=kiosk --renderer=gl --width=944 --height=518 --scale=2 \
+    env -u WAYLAND_DISPLAY -u WAYLAND_SOCKET -u DISPLAY weston --backend=headless --fake-seat --shell=kiosk --renderer=gl --width=944 --height=518 --scale=2 \
         --socket="$sock" --idle-time=0 --no-config --log="$T/weston.log" >/dev/null 2>&1 &
     echo $! > "$T/weston.pid"
     for i in $(seq 50); do [ -S "$XDG_RUNTIME_DIR/$sock" ] && break; sleep 0.1; done
