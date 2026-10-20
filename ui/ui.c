@@ -356,8 +356,7 @@ static UiAction ui_edit_event(Ui *u, UiEvent e)
     if (u->edit_all) {
         u->edit_all = false;
         bool replace = e.key == UK_NONE || e.key == UK_BACKSPACE || e.key == UK_DELETE;
-        if (replace) u->edit_len = 0, u->caret = 0;
-        if (e.key == UK_BACKSPACE || e.key == UK_DELETE) return (UiAction){ UA_NONE, 0, false };
+        if (replace) u->edit_len = 0, u->caret = 0;   // Backspace and Delete then find nothing to take
     }
     if (e.key == UK_NONE) {
         char b[4];
@@ -634,7 +633,7 @@ static void ui_crumbs_set(UiCrumbs *c, const char *cwd, const char *home)
     }
     c->cur = 0;
     for (int i = 0; i < c->n; i++)
-        if (c->seg[i].end == (cw.len > 1 ? cw.len : 1)) c->cur = i;
+        if (c->seg[i].end == cw.len) c->cur = i;
 }
 
 // Button i's folder.

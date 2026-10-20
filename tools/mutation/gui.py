@@ -50,7 +50,8 @@ MUTANTS = [
     (G, "        ui_crumbs_set(&app.crumbs, app.cwd, getenv(\"HOME\"));", ""),
     (G, "    if (m == GLFW_MOD_ALT && key == GLFW_KEY_UP) return UK_PARENT;", ""),
     (G, "    if (go_to(path, STR_EMPTY, 0)) ui_edit_close(&app.ui);", "    go_to(path, STR_EMPTY, 0);"),
-    (K, "        if (gen == counts.gen) counts.res[counts.sn++] = (CountAnswer){ gen, idx, n };", "        counts.res[counts.sn++] = (CountAnswer){ gen, idx, n };"),
+    # Not run: counts.c drops an old listing's answer twice over (in count_loop and in count_take),
+    # so taking out either check alone changes nothing a test can see.
     (G, "    if (app.count[i] >= 0) snprintf(size, cap, \"%td item%s\", app.count[i], app.count[i] == 1 ? \"\" : \"s\");", "    if (app.count[i] >= 0) snprintf(size, cap, \"%td items\", app.count[i]);"),
 ]
 scratch = sys.argv[1]

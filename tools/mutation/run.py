@@ -33,6 +33,7 @@ for i, (f, old, new) in enumerate(mutants):
         print(f'#{i} {f}: old text occurs {n} times, not once: {old!r}')
         bad += 1
 if bad:
+    shutil.rmtree(work, ignore_errors=True)
     sys.exit(2)
 
 # The tests' mkdtemp roots go under work (TMPDIR), so a mutant that crashes a run before it cleans
@@ -51,6 +52,7 @@ def run():
 base = run()
 if base != 'pass':
     print('baseline does not pass:', base)
+    shutil.rmtree(work, ignore_errors=True)
     sys.exit(2)
 survivors = []
 try:

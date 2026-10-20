@@ -64,6 +64,11 @@ key enter
 expect crumbs=home|tree|bdir crumb=2
 raw-key 265 4
 expect crumbs=home|tree|bdir crumb=1 sel=bdir
+# A path button above: the cursor on the folder you came up from
+key enter
+point-ui crumb 1
+click-here
+expect crumb=1 sel=bdir
 # Dimmed buttons do nothing: forward with nothing ahead
 point-ui nav-fwd
 click-here
