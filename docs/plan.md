@@ -84,6 +84,48 @@ event, the selection kept by name (or the row it was on, when that name is gone)
 **Idle:** the loop draws only when something changed and otherwise waits in
 `PollInputEvents` (uml-viewer's loop, prdash's `docs/gui-findings.md`).
 
+## F2 design (2026-10-20)
+
+**Decisions (Michael):** find opens with `/` or Ctrl+F; hidden files toggle with `.` or Ctrl+H; the
+mouse's back and forward buttons walk the history (Backspace stays "parent"); sorting by clickable
+column headers (Name, Size, Modified; a second click reverses), with `s` (next column) and `S`
+(reverse) on the keyboard.
+
+**Input becomes keys plus text:** gui/ passes the keys without text (arrows, Enter, Backspace,
+Esc, Tab, and the chords Ctrl+F, Ctrl+H, Alt+Left, Alt+Right) and the typed characters apart;
+ui/ decides what a character means, since the same `j` moves the cursor or goes into the find line.
+
+**Sidebar (`fs/places.c`, raylib-free):** Home, then the GTK bookmarks
+(`~/.config/gtk-3.0/bookmarks`, shared with Nemo: `file://` URIs, percent-decoded, an optional
+label, else the folder's name), then the mounts from `/proc/self/mountinfo`: `/`, and anything
+mounted under `/mnt`, `/media` or `/run/media` (the btrfs subvolumes `/home`, `/var/log` and the
+like are left out). Duplicates by path are dropped. Icons: `user-home`, the XDG folders' own, and
+`drive-harddisk` / `drive-removable-media` (the icon lookup reads the Devices context too). The
+entry holding the current folder (the longest path prefix) is marked. Tab moves the keyboard
+between the sidebar and the list; a click goes there.
+
+**History:** each folder change pushes (folder, selected name) on the back stack and clears
+forward; back and forward restore the selection. 64 deep. Alt+Left/Right and the mouse buttons.
+
+**Hidden files:** a toggle; the listing keeps dot-files out unless it is on (the count still shows).
+
+**Sort:** name (natural, as F1), size, or modified, each either way; folders stay first. Ties
+fall back to the name, so the order is total. A reload keeps the sort; the setting is not saved.
+
+**Find:** a line in the footer. Each character typed moves the cursor to the first entry from
+the cursor on whose name contains the text, ignoring case (wrapping); Backspace deletes; Enter
+keeps the cursor and closes; Esc puts the cursor back and closes. After closing, `n` and `N` find
+the next and previous match of the last text.
+
+## F2 exit criteria
+
+1. `make test` covers places (bookmark and mountinfo parsing on fixtures), history, sort, find and
+   the new key routing; a mutation run over fs/ and ui/ with every survivor killed or shown inert.
+2. GUI scripts: hidden toggle, each sort and its reverse by key and by header click, find (type,
+   n/N, Esc restores, Enter keeps), back/forward by key and by mouse buttons (raw), the sidebar by
+   Tab and click, against a scratch bookmarks file and a scratch HOME.
+3. F1's scripts still pass; idle is still about 0%.
+
 ## F1 exit criteria
 
 1. `make test`: the fs/ and ui/ unit tests pass under ASan and UBSan; a mutation run over fs/ and
