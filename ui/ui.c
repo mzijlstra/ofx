@@ -1,7 +1,7 @@
 // What the keys, characters, wheel and clicks do: the list's cursor and scroll, the sidebar's,
-// find, sort and the history, and the one action a frame may ask of gui/ (open, go somewhere,
-// toggle hidden files, sort again). raylib-free and unit-tested; gui/main.c feeds it
-// (docs/plan.md, F1 "Keys" and F2).
+// find, sort, the history, the selection, the edit line and the prompts, and the one action a
+// frame may ask of gui/ (open, go somewhere, toggle hidden files, sort again, change files).
+// raylib-free and unit-tested; gui/main.c feeds it (docs/plan.md, F1 "Keys", F2 and F3).
 
 #include "../base/base.h"
 
@@ -20,7 +20,18 @@ typedef enum {
     UK_FORWARD,    // Alt+Right
     UK_FIND,       // Ctrl+F
     UK_HIDDEN,     // Ctrl+H
+    UK_F2,         // rename
+    UK_DELETE,     // to the trash; in the edit line, the character after the caret
+    UK_SHIFT_DELETE,   // for good
+    UK_ALL,        // Ctrl+A
+    UK_COPY,       // Ctrl+C
+    UK_CUT,        // Ctrl+X
+    UK_PASTE,      // Ctrl+V
+    UK_UNDO,       // Ctrl+Z
+    UK_NEWFOLDER,  // Ctrl+Shift+N
 } UiKey;
+
+enum { UI_MOD_CTRL = 1, UI_MOD_SHIFT = 2 };
 
 // One key or one typed character, in the order they came: a find needs `/`, then text, then Enter.
 typedef struct {
@@ -33,6 +44,7 @@ typedef struct {
     int     nev;
     int     wheel;       // notches over the list, positive away from the user (up)
     int     click;       // the list row pressed (0 = the first row on screen), -1 for none
+    int     click_mods;  // UI_MOD_CTRL, UI_MOD_SHIFT held for that press
     int     dclick;      // a list row double-clicked, -1 for none
     int     side_click;  // a sidebar row pressed, -1 for none
     int     header;      // a column header clicked (a SortKey), -1 for none
@@ -41,12 +53,21 @@ typedef struct {
 
 typedef enum {
     UA_NONE, UA_OPEN, UA_PARENT, UA_TERMINAL, UA_HOMEDIR, UA_BACK, UA_FORWARD, UA_HIDDEN, UA_SORT, UA_PLACE,
+    UA_RENAME,      // the edit line's Enter: its text is the new name (the line stays open until
+                    // gui/ closes it, so a refused name can be fixed)
+    UA_NEWFOLDER, UA_TRASH, UA_DELETE, UA_COPY, UA_CUT, UA_PASTE, UA_UNDO,
+    UA_ANSWER,      // a clash answered: index is the Answer, all "the rest the same"
+    UA_CANCEL_JOB,
 } UiActionKind;
 
 typedef struct {
     UiActionKind kind;
-    isize        index;   // UA_OPEN: the entry; UA_PLACE: the place
+    isize        index;   // UA_OPEN: the entry; UA_PLACE: the place; UA_ANSWER: the answer
+    bool         all;     // UA_ANSWER: for all the rest
 } UiAction;
+
+// The clash answers, as fs/job.c numbers them (Answer); ui/ doesn't include it.
+enum { UI_ANS_SKIP = 1, UI_ANS_REPLACE = 2, UI_ANS_KEEP = 3, UI_ANS_CANCEL = 4 };
 
 typedef struct {
     isize n;      // rows in the list
@@ -72,11 +93,25 @@ typedef struct {
     char   last[UI_FIND_MAX];   // the last text found, for n and N
     int    last_len;
     Sort   sort;
+
+    // The selection: gui/ gives one byte per entry of the listing (in the listing's arena), and
+    // keeps it by name across a reload.
+    u8    *mark;
+    isize  marked;           // how many are set
+    // The edit line (rename; a new folder is made at once and renamed with it).
+    bool   editing;
+    char   edit[NAME_MAX + 1];
+    int    edit_len, caret;  // bytes
+    // The prompts and the job: gui/ says when one runs, and when it asks about a clash.
+    bool   confirming;       // "Delete … for good? Y/n"
+    isize  confirm_n;
+    bool   busy;             // a job runs: Esc cancels it
+    bool   asking;           // the job waits for a clash answer
 } Ui;
 
 static UiInput ui_input_none(void)
 {
-    return (UiInput){ .click = -1, .dclick = -1, .side_click = -1, .header = -1 };
+    return (UiInput){ .click = -1, .dclick = -1, .side_click = -1, .header = -1, .click_mods = 0 };
 }
 
 static isize ui_clamp(isize v, isize lo, isize hi)
@@ -170,15 +205,22 @@ static void ui_find_open(Ui *u)
     u->finding = true, u->find_miss = false, u->find_len = 0, u->find_from = u->list.sel, u->side_focus = false;
 }
 
+// cp as UTF-8 into b: its length, or 0 for a control character or no code point at all.
+static int ui_utf8(u32 cp, char b[4])
+{
+    if (cp < 0x20 || cp == 0x7F || cp > 0x10FFFF) return 0;
+    return cp < 0x80 ? (b[0] = (char)cp, 1)
+         : cp < 0x800 ? (b[0] = (char)(0xC0 | cp >> 6), b[1] = (char)(0x80 | (cp & 0x3F)), 2)
+         : cp < 0x10000 ? (b[0] = (char)(0xE0 | cp >> 12), b[1] = (char)(0x80 | (cp >> 6 & 0x3F)), b[2] = (char)(0x80 | (cp & 0x3F)), 3)
+         : (b[0] = (char)(0xF0 | cp >> 18), b[1] = (char)(0x80 | (cp >> 12 & 0x3F)), b[2] = (char)(0x80 | (cp >> 6 & 0x3F)), b[3] = (char)(0x80 | (cp & 0x3F)), 4);
+}
+
 // A character typed into the find line, as UTF-8; it is dropped when the line is full.
 static void ui_find_char(Ui *u, u32 cp)
 {
     char b[4];
-    int n = cp < 0x80 ? (b[0] = (char)cp, 1)
-          : cp < 0x800 ? (b[0] = (char)(0xC0 | cp >> 6), b[1] = (char)(0x80 | (cp & 0x3F)), 2)
-          : cp < 0x10000 ? (b[0] = (char)(0xE0 | cp >> 12), b[1] = (char)(0x80 | (cp >> 6 & 0x3F)), b[2] = (char)(0x80 | (cp & 0x3F)), 3)
-          : (b[0] = (char)(0xF0 | cp >> 18), b[1] = (char)(0x80 | (cp >> 12 & 0x3F)), b[2] = (char)(0x80 | (cp >> 6 & 0x3F)), b[3] = (char)(0x80 | (cp & 0x3F)), 4);
-    if (cp < 0x20 || cp == 0x7F || cp > 0x10FFFF || u->find_len + n > UI_FIND_MAX) return;
+    int n = ui_utf8(cp, b);
+    if (n == 0 || u->find_len + n > UI_FIND_MAX) return;
     memcpy(u->find + u->find_len, b, (size_t)n);
     u->find_len += n;
 }
@@ -196,6 +238,138 @@ static void ui_find_again(Ui *u, UiNames names, int dir)
 {
     isize i = ui_find_at(&u->list, names, (Str){ u->last, u->last_len }, u->list.sel + dir, dir);
     if (i >= 0) u->list.sel = i, ui_show_sel(&u->list);
+}
+
+// ---- the selection ----------------------------------------------------------------------------
+
+static bool ui_marked(const Ui *u, isize i)
+{
+    return u->mark && i >= 0 && i < u->list.n && u->mark[i];
+}
+
+static void ui_mark(Ui *u, isize i, bool on)
+{
+    if (!u->mark || i < 0 || i >= u->list.n || (bool)u->mark[i] == on) return;
+    u->mark[i] = on;
+    u->marked += on ? 1 : -1;
+}
+
+static void ui_mark_clear(Ui *u)
+{
+    for (isize i = 0; u->mark && i < u->list.n; i++) u->mark[i] = 0;
+    u->marked = 0;
+}
+
+// A new listing's selection: mark (n bytes, all clear) is the array, marked recounted by gui/
+// as it sets the names it kept.
+static void ui_mark_set(Ui *u, u8 *mark)
+{
+    u->mark = mark, u->marked = 0;
+}
+
+// Rows from..to marked (either way round).
+static void ui_mark_range(Ui *u, isize from, isize to)
+{
+    if (from > to) {
+        isize t = from;
+        from = to, to = t;
+    }
+    for (isize i = from; i <= to; i++) ui_mark(u, i, true);
+}
+
+// ---- the edit line -----------------------------------------------------------------------------
+
+// The edit line opened on text, the caret at its end.
+static void ui_edit_open(Ui *u, Str text)
+{
+    isize n = text.len < NAME_MAX ? text.len : NAME_MAX;
+    memcpy(u->edit, text.p, (size_t)n);
+    u->edit_len = (int)n, u->caret = (int)n;
+    u->editing = true, u->finding = false, u->side_focus = false;
+}
+
+static void ui_edit_close(Ui *u)
+{
+    u->editing = false;
+}
+
+static int ui_edit_back(const Ui *u, int at)
+{
+    if (at <= 0) return 0;
+    at--;
+    while (at > 0 && ((unsigned char)u->edit[at] & 0xC0) == 0x80) at--;
+    return at;
+}
+
+static int ui_edit_fwd(const Ui *u, int at)
+{
+    if (at >= u->edit_len) return u->edit_len;
+    at++;
+    while (at < u->edit_len && ((unsigned char)u->edit[at] & 0xC0) == 0x80) at++;
+    return at;
+}
+
+// Bytes [from, to) of the edit line removed.
+static void ui_edit_cut(Ui *u, int from, int to)
+{
+    memmove(u->edit + from, u->edit + to, (size_t)(u->edit_len - to));
+    u->edit_len -= to - from;
+    u->caret = from;
+}
+
+// A key or character in the edit line: an action for gui/ (UA_RENAME on Enter) or UA_NONE.
+static UiAction ui_edit_event(Ui *u, UiEvent e)
+{
+    if (e.key == UK_NONE) {
+        char b[4];
+        int n = ui_utf8(e.ch, b);
+        if (n == 0 || e.ch == '/' || u->edit_len + n > NAME_MAX) return (UiAction){ UA_NONE, 0, false };
+        memmove(u->edit + u->caret + n, u->edit + u->caret, (size_t)(u->edit_len - u->caret));
+        memcpy(u->edit + u->caret, b, (size_t)n);
+        u->edit_len += n, u->caret += n;
+        return (UiAction){ UA_NONE, 0, false };
+    }
+    switch (e.key) {
+    case UK_LEFT: u->caret = ui_edit_back(u, u->caret); break;
+    case UK_RIGHT: u->caret = ui_edit_fwd(u, u->caret); break;
+    case UK_HOME: u->caret = 0; break;
+    case UK_END: u->caret = u->edit_len; break;
+    case UK_BACKSPACE: ui_edit_cut(u, ui_edit_back(u, u->caret), u->caret); break;
+    case UK_DELETE: ui_edit_cut(u, u->caret, ui_edit_fwd(u, u->caret)); break;
+    case UK_ENTER: return (UiAction){ UA_RENAME, 0, false };
+    case UK_ESC: ui_edit_close(u); break;
+    default: break;
+    }
+    return (UiAction){ UA_NONE, 0, false };
+}
+
+// ---- the prompts -------------------------------------------------------------------------------
+
+// A key or character while "Delete … for good? Y/n" is up: Enter and y go ahead, n and Esc don't,
+// the rest is ignored.
+static UiAction ui_confirm_event(Ui *u, UiEvent e)
+{
+    bool yes = e.key == UK_ENTER || (e.key == UK_NONE && (e.ch == 'y' || e.ch == 'Y'));
+    bool no = e.key == UK_ESC || (e.key == UK_NONE && (e.ch == 'n' || e.ch == 'N'));
+    if (yes || no) u->confirming = false;
+    return (UiAction){ yes ? UA_DELETE : UA_NONE, 0, false };
+}
+
+// A key or character while a clash waits: s skip, r replace (a folder: merge), k keep both, the
+// capitals for all the rest; Esc cancels the job.
+static UiAction ui_ask_event(Ui *u, UiEvent e)
+{
+    if (e.key == UK_ESC) return u->asking = false, (UiAction){ UA_ANSWER, UI_ANS_CANCEL, false };
+    if (e.key != UK_NONE) return (UiAction){ UA_NONE, 0, false };
+    int a = 0;
+    switch (e.ch) {
+    case 's': case 'S': a = UI_ANS_SKIP; break;
+    case 'r': case 'R': a = UI_ANS_REPLACE; break;
+    case 'k': case 'K': a = UI_ANS_KEEP; break;
+    default: return (UiAction){ UA_NONE, 0, false };
+    }
+    u->asking = false;
+    return (UiAction){ UA_ANSWER, a, e.ch >= 'A' && e.ch <= 'Z' };
 }
 
 // ---- input ------------------------------------------------------------------------------------
@@ -230,28 +404,54 @@ static bool ui_find_event(Ui *u, UiNames names, UiEvent e)
 
 // One frame's input. Clicks first, then the events in order up to the first that asks gui/ for
 // something (after it, the list may be another folder's). The wheel scrolls the list without
-// moving its cursor, one row a notch (Michael's choice for prdash-tui).
+// moving its cursor, one row a notch (Michael's choice for prdash-tui). A prompt (a clash, the
+// delete confirm) takes every key until it is answered; the edit line takes the keys that edit.
 static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
 {
     UiList *l = &u->list;
+    bool prompt = u->asking || u->confirming;
     if (in->wheel) l->top = ui_clamp(l->top - in->wheel, 0, ui_max_top(l));
-    if (in->header >= 0 && in->header < SORT_KEYS) {
+    if (!prompt && in->header >= 0 && in->header < SORT_KEYS) {
         u->sort = ui_sort_click(u->sort, (SortKey)in->header);
-        return (UiAction){ UA_SORT, 0 };
+        return (UiAction){ UA_SORT, 0, false };
     }
-    if (in->side_click >= 0 && u->side.top + in->side_click < u->side.n) {
+    if (!prompt && in->side_click >= 0 && u->side.top + in->side_click < u->side.n) {
         u->side.sel = u->side.top + in->side_click;
-        return (UiAction){ UA_PLACE, u->side.sel };
+        ui_edit_close(u);
+        return (UiAction){ UA_PLACE, u->side.sel, false };
     }
-    if (in->click >= 0 && l->top + in->click < l->n) l->sel = l->top + in->click, u->side_focus = false;
-    if (in->dclick >= 0 && l->top + in->dclick < l->n) {
+    if (!prompt && in->click >= 0 && l->top + in->click < l->n) {
+        isize row = l->top + in->click;
+        ui_edit_close(u);
+        if (in->click_mods & UI_MOD_SHIFT) ui_mark_range(u, l->sel, row);
+        else if (in->click_mods & UI_MOD_CTRL) ui_mark(u, row, !ui_marked(u, row));
+        l->sel = row, u->side_focus = false;
+        ui_show_sel(l);
+    }
+    if (!prompt && in->dclick >= 0 && l->top + in->dclick < l->n) {
         l->sel = l->top + in->dclick, u->side_focus = false;
-        return (UiAction){ UA_OPEN, l->sel };
+        ui_edit_close(u);
+        return (UiAction){ UA_OPEN, l->sel, false };
     }
-    if (in->backs > 0) return (UiAction){ UA_BACK, 0 };
-    if (in->forwards > 0) return (UiAction){ UA_FORWARD, 0 };
+    if (!prompt && in->backs > 0) return (UiAction){ UA_BACK, 0, false };
+    if (!prompt && in->forwards > 0) return (UiAction){ UA_FORWARD, 0, false };
     for (int k = 0; k < in->nev; k++) {
         UiEvent e = in->ev[k];
+        if (u->asking) {
+            UiAction a = ui_ask_event(u, e);
+            if (a.kind != UA_NONE) return a;
+            continue;
+        }
+        if (u->confirming) {
+            UiAction a = ui_confirm_event(u, e);
+            if (a.kind != UA_NONE) return a;
+            continue;
+        }
+        if (u->editing) {
+            UiAction a = ui_edit_event(u, e);
+            if (a.kind != UA_NONE) return a;
+            continue;
+        }
         if (u->finding && ui_find_event(u, names, e)) continue;
         // The keys and letters that move a cursor: the sidebar's when it has the keyboard.
         UiList *m = u->side_focus ? &u->side : l;
@@ -267,12 +467,16 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
             case 'G': key = UK_END; break;
             case '/': key = UK_FIND; break;
             case '.': key = UK_HIDDEN; break;
-            case 't': return (UiAction){ UA_TERMINAL, 0 };
-            case '~': return (UiAction){ UA_HOMEDIR, 0 };
-            case 's': u->sort = (Sort){ (SortKey)((u->sort.key + 1) % SORT_KEYS), false }; return (UiAction){ UA_SORT, 0 };
-            case 'S': u->sort.reverse = !u->sort.reverse; return (UiAction){ UA_SORT, 0 };
+            case 't': return (UiAction){ UA_TERMINAL, 0, false };
+            case '~': return (UiAction){ UA_HOMEDIR, 0, false };
+            case 's': u->sort = (Sort){ (SortKey)((u->sort.key + 1) % SORT_KEYS), false }; return (UiAction){ UA_SORT, 0, false };
+            case 'S': u->sort.reverse = !u->sort.reverse; return (UiAction){ UA_SORT, 0, false };
             case 'n': ui_find_again(u, names, 1); continue;
             case 'N': ui_find_again(u, names, -1); continue;
+            case ' ':
+                // Space marks the entry under the cursor, or unmarks it, and moves on.
+                if (!u->side_focus && l->n > 0) ui_mark(u, l->sel, !ui_marked(u, l->sel)), ui_move(l, 1);
+                continue;
             default: continue;
             }
         }
@@ -285,21 +489,41 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         case UK_END: ui_move(m, m->n); break;
         case UK_ENTER:
         case UK_RIGHT:
-            if (u->side_focus && u->side.n > 0) return (UiAction){ UA_PLACE, u->side.sel };
-            if (!u->side_focus && l->n > 0) return (UiAction){ UA_OPEN, l->sel };
+            if (u->side_focus && u->side.n > 0) return (UiAction){ UA_PLACE, u->side.sel, false };
+            if (!u->side_focus && l->n > 0) return (UiAction){ UA_OPEN, l->sel, false };
             break;
         case UK_LEFT:
-        case UK_BACKSPACE: return (UiAction){ UA_PARENT, 0 };
+        case UK_BACKSPACE: return (UiAction){ UA_PARENT, 0, false };
         case UK_TAB: u->side_focus = !u->side_focus && u->side.n > 0; break;
-        case UK_ESC: u->side_focus = false; break;
-        case UK_BACK: return (UiAction){ UA_BACK, 0 };
-        case UK_FORWARD: return (UiAction){ UA_FORWARD, 0 };
+        case UK_ESC:
+            // A job first, then the selection, then the sidebar's keyboard.
+            if (u->busy) return (UiAction){ UA_CANCEL_JOB, 0, false };
+            if (u->marked) ui_mark_clear(u);
+            else u->side_focus = false;
+            break;
+        case UK_BACK: return (UiAction){ UA_BACK, 0, false };
+        case UK_FORWARD: return (UiAction){ UA_FORWARD, 0, false };
         case UK_FIND: ui_find_open(u); break;
-        case UK_HIDDEN: return (UiAction){ UA_HIDDEN, 0 };
+        case UK_HIDDEN: return (UiAction){ UA_HIDDEN, 0, false };
+        case UK_ALL:
+            for (isize i = 0; i < l->n; i++) ui_mark(u, i, true);
+            break;
+        case UK_F2:
+            if (l->n > 0 && !u->side_focus) ui_edit_open(u, names.at(names.ctx, l->sel));
+            break;
+        case UK_DELETE: if (l->n > 0 && !u->side_focus) return (UiAction){ UA_TRASH, 0, false }; break;
+        case UK_SHIFT_DELETE:
+            if (l->n > 0 && !u->side_focus) u->confirming = true, u->confirm_n = u->marked ? u->marked : 1;
+            break;
+        case UK_COPY: if (l->n > 0 && !u->side_focus) return (UiAction){ UA_COPY, 0, false }; break;
+        case UK_CUT: if (l->n > 0 && !u->side_focus) return (UiAction){ UA_CUT, 0, false }; break;
+        case UK_PASTE: return (UiAction){ UA_PASTE, 0, false };
+        case UK_UNDO: return (UiAction){ UA_UNDO, 0, false };
+        case UK_NEWFOLDER: return (UiAction){ UA_NEWFOLDER, 0, false };
         default: break;
         }
     }
-    return (UiAction){ UA_NONE, 0 };
+    return (UiAction){ UA_NONE, 0, false };
 }
 
 // ---- history ----------------------------------------------------------------------------------

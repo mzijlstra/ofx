@@ -102,8 +102,6 @@ static void env_restore(void)
 
 // ---- natural order --------------------------------------------------------------------------
 
-#include "test_f3.c"
-
 static void test_natural(void)
 {
     struct { const char *a, *b; int want; } cases[] = {
@@ -1310,6 +1308,8 @@ static void test_format(void)
     tzset();
 }
 
+#include "test_f3.c"
+
 int main(void)
 {
     arena_init(&ta, "test", test_mem, sizeof test_mem);
@@ -1338,6 +1338,7 @@ int main(void)
     test_clip();
     test_job();
     test_undo();
+    test_ui_f3();
     char cmd[1200];
     snprintf(cmd, sizeof cmd, "chmod -R u+rwx '%s' && rm -rf '%s'", root, root);
     if (system(cmd) != 0) fprintf(stderr, "could not remove %s\n", root);

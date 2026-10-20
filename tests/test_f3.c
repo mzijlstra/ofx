@@ -708,3 +708,268 @@ static void test_undo(void)
     CHECK(u.n == 0 && u.kind == UNDO_COPY);
     env_restore();
 }
+
+// ---- ui: the selection, the edit line, the prompts --------------------------------------------
+
+static UiInput ev1(UiKey k, u32 ch)
+{
+    UiInput in = ui_input_none();
+    in.ev[in.nev++] = (UiEvent){ k, ch };
+    return in;
+}
+
+static void test_ui_f3(void)
+{
+    UiNames names = { name_at, NULL };
+    static Ui u;
+    static u8 marks[20];
+    memset(&u, 0, sizeof u);
+    memset(marks, 0, sizeof marks);
+    ui_resize(&u.list, 5);
+    ui_set(&u.list, 20, 0);
+    ui_mark_set(&u, marks);
+    UiInput in;
+
+    // Space marks and moves on; again unmarks.
+    in = chars("  ");
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE);
+    CHECK(u.marked == 2 && marks[0] && marks[1] && u.list.sel == 2);
+    in = keys(1, UK_UP);
+    ui_handle(&u, names, &in);
+    in = chars(" ");
+    ui_handle(&u, names, &in);
+    CHECK(u.marked == 1 && marks[0] && !marks[1] && u.list.sel == 2);
+    // The last row: marked, the cursor stays.
+    in = keys(1, UK_END);
+    ui_handle(&u, names, &in);
+    in = chars(" ");
+    ui_handle(&u, names, &in);
+    CHECK(marks[19] && u.list.sel == 19 && u.marked == 2);
+    // Esc clears; a second Esc doesn't change it.
+    in = keys(1, UK_ESC);
+    ui_handle(&u, names, &in);
+    CHECK(u.marked == 0 && !marks[0] && !marks[19]);
+    // Ctrl+A.
+    in = keys(1, UK_ALL);
+    ui_handle(&u, names, &in);
+    CHECK(u.marked == 20 && marks[7]);
+    ui_mark_clear(&u);
+    CHECK(u.marked == 0 && !marks[7]);
+    // Marks past the list, or without an array, do nothing.
+    ui_mark(&u, 20, true);
+    ui_mark(&u, -1, true);
+    CHECK(u.marked == 0);
+    ui_mark(&u, 3, true), ui_mark(&u, 3, true);
+    CHECK(u.marked == 1);
+    ui_mark(&u, 3, false), ui_mark(&u, 3, false);
+    CHECK(u.marked == 0);
+
+    // Clicks: Ctrl toggles, Shift marks the range from the cursor.
+    in = keys(1, UK_HOME);
+    ui_handle(&u, names, &in);
+    in = ui_input_none(), in.click = 2, in.click_mods = UI_MOD_CTRL;
+    ui_handle(&u, names, &in);
+    CHECK(marks[2] && u.marked == 1 && u.list.sel == 2);
+    in = ui_input_none(), in.click = 2, in.click_mods = UI_MOD_CTRL;
+    ui_handle(&u, names, &in);
+    CHECK(!marks[2] && u.marked == 0);
+    in = ui_input_none(), in.click = 4, in.click_mods = UI_MOD_SHIFT;
+    ui_handle(&u, names, &in);
+    CHECK(marks[2] && marks[3] && marks[4] && !marks[1] && !marks[5] && u.marked == 3 && u.list.sel == 4);
+    in = ui_input_none(), in.click = 1, in.click_mods = UI_MOD_SHIFT;   // backwards, overlapping
+    ui_handle(&u, names, &in);
+    CHECK(marks[1] && u.marked == 4 && u.list.sel == 1);
+    in = ui_input_none(), in.click = 0;   // a plain click keeps them
+    ui_handle(&u, names, &in);
+    CHECK(u.marked == 4 && u.list.sel == 0);
+    ui_mark_clear(&u);
+
+    // The actions.
+    in = keys(1, UK_DELETE);
+    CHECK(ui_handle(&u, names, &in).kind == UA_TRASH);
+    in = keys(1, UK_COPY);
+    CHECK(ui_handle(&u, names, &in).kind == UA_COPY);
+    in = keys(1, UK_CUT);
+    CHECK(ui_handle(&u, names, &in).kind == UA_CUT);
+    in = keys(1, UK_PASTE);
+    CHECK(ui_handle(&u, names, &in).kind == UA_PASTE);
+    in = keys(1, UK_UNDO);
+    CHECK(ui_handle(&u, names, &in).kind == UA_UNDO);
+    in = keys(1, UK_NEWFOLDER);
+    CHECK(ui_handle(&u, names, &in).kind == UA_NEWFOLDER);
+    // Not with the sidebar's keyboard.
+    ui_set(&u.side, 3, 0);
+    u.side_focus = true;
+    in = keys(4, UK_DELETE, UK_COPY, UK_CUT, UK_F2);
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && !u.editing);
+    in = keys(1, UK_SHIFT_DELETE);
+    ui_handle(&u, names, &in);
+    CHECK(!u.confirming);
+    u.side_focus = false;
+    // Nothing to act on in an empty folder (paste still can).
+    ui_set(&u.list, 0, 0);
+    in = keys(5, UK_DELETE, UK_COPY, UK_CUT, UK_SHIFT_DELETE, UK_F2);
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && !u.confirming && !u.editing);
+    in = keys(1, UK_PASTE);
+    CHECK(ui_handle(&u, names, &in).kind == UA_PASTE);
+    ui_set(&u.list, 20, 0);
+
+    // Shift+Delete: the confirm, Y by default; n and Esc say no; other keys wait.
+    ui_mark(&u, 1, true), ui_mark(&u, 2, true);
+    in = keys(1, UK_SHIFT_DELETE);
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.confirming && u.confirm_n == 2);
+    in = keys(3, UK_DOWN, UK_DELETE, UK_TAB);
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.confirming && u.list.sel == 0 && !u.side_focus);
+    in = chars("jx");
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.confirming && u.list.sel == 0);
+    in = keys(1, UK_ENTER);
+    CHECK(ui_handle(&u, names, &in).kind == UA_DELETE && !u.confirming);
+    in = keys(1, UK_SHIFT_DELETE);
+    ui_handle(&u, names, &in);
+    in = chars("y");
+    CHECK(ui_handle(&u, names, &in).kind == UA_DELETE && !u.confirming);
+    in = keys(1, UK_SHIFT_DELETE);
+    ui_handle(&u, names, &in);
+    in = chars("Y");
+    CHECK(ui_handle(&u, names, &in).kind == UA_DELETE);
+    in = keys(1, UK_SHIFT_DELETE);
+    ui_handle(&u, names, &in);
+    in = chars("n");
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && !u.confirming);
+    in = keys(1, UK_SHIFT_DELETE);
+    ui_handle(&u, names, &in);
+    in = chars("N");
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && !u.confirming);
+    in = keys(1, UK_SHIFT_DELETE);
+    ui_handle(&u, names, &in);
+    in = keys(1, UK_ESC);
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && !u.confirming && u.marked == 2);   // Esc ends the prompt only
+    // Clicks wait too.
+    in = keys(1, UK_SHIFT_DELETE);
+    ui_handle(&u, names, &in);
+    in = ui_input_none(), in.click = 3, in.header = SORT_SIZE, in.side_click = 0, in.backs = 1;
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.list.sel == 0 && u.sort.key == SORT_NAME);
+    u.confirming = false;
+    ui_mark_clear(&u);
+    in = keys(1, UK_SHIFT_DELETE);
+    ui_handle(&u, names, &in);
+    CHECK(u.confirm_n == 1);
+    u.confirming = false;
+
+    // A clash: s r k, the capitals for the rest, Esc cancels; others wait.
+    u.asking = true;
+    in = chars("xj");
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.asking && u.list.sel == 0);
+    in = keys(1, UK_ENTER);
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.asking);
+    static const struct { char c; int a; bool all; } ANS[] = {
+        { 's', UI_ANS_SKIP, false }, { 'r', UI_ANS_REPLACE, false }, { 'k', UI_ANS_KEEP, false },
+        { 'S', UI_ANS_SKIP, true }, { 'R', UI_ANS_REPLACE, true }, { 'K', UI_ANS_KEEP, true },
+    };
+    for (int i = 0; i < COUNT(ANS); i++) {
+        u.asking = true;
+        char c[2] = { ANS[i].c, 0 };
+        in = chars(c);
+        UiAction a = ui_handle(&u, names, &in);
+        CHECK(a.kind == UA_ANSWER && a.index == ANS[i].a && a.all == ANS[i].all && !u.asking);
+    }
+    u.asking = true;
+    in = keys(1, UK_ESC);
+    UiAction a = ui_handle(&u, names, &in);
+    CHECK(a.kind == UA_ANSWER && a.index == UI_ANS_CANCEL && !u.asking);
+
+    // Esc with a job running cancels it, before it clears a selection.
+    u.busy = true;
+    ui_mark(&u, 4, true);
+    in = keys(1, UK_ESC);
+    CHECK(ui_handle(&u, names, &in).kind == UA_CANCEL_JOB && u.marked == 1);
+    u.busy = false;
+    ui_mark_clear(&u);
+
+    // The edit line: F2 opens it on the name, the caret at the end.
+    in = keys(1, UK_HOME);
+    ui_handle(&u, names, &in);
+    in = keys(1, UK_F2);
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.editing);
+    CHECK(u.edit_len == 5 && memcmp(u.edit, "alpha", 5) == 0 && u.caret == 5);
+    // Letters edit, they don't move or act (j, t, Space, '/').
+    in = chars("jt /");
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.list.sel == 0);
+    CHECK(u.edit_len == 8 && memcmp(u.edit, "alphajt ", 8) == 0);
+    in = keys(3, UK_BACKSPACE, UK_LEFT, UK_LEFT);
+    ui_handle(&u, names, &in);
+    CHECK(u.edit_len == 7 && u.caret == 5);
+    in = keys(1, UK_DELETE);
+    ui_handle(&u, names, &in);
+    CHECK(u.edit_len == 6 && memcmp(u.edit, "alphat", 6) == 0 && u.caret == 5);
+    in = keys(1, UK_HOME);
+    ui_handle(&u, names, &in);
+    in = chars("X");
+    ui_handle(&u, names, &in);
+    CHECK(memcmp(u.edit, "Xalphat", 7) == 0 && u.caret == 1);
+    in = keys(2, UK_END, UK_RIGHT);
+    ui_handle(&u, names, &in);
+    CHECK(u.caret == 7);
+    in = keys(1, UK_DELETE);   // nothing after the caret
+    ui_handle(&u, names, &in);
+    CHECK(u.edit_len == 7);
+    in = keys(8, UK_HOME, UK_LEFT, UK_BACKSPACE, UK_UP, UK_DOWN, UK_TAB, UK_PAGEDOWN, UK_COPY);
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.caret == 0 && u.edit_len == 7 && u.list.sel == 0 && !u.side_focus);
+    // UTF-8: one code point at a time.
+    in = keys(1, UK_END);
+    ui_handle(&u, names, &in);
+    in = ui_input_none();
+    in.ev[in.nev++] = (UiEvent){ UK_NONE, 0xE9 };
+    in.ev[in.nev++] = (UiEvent){ UK_NONE, 0x1F600 };
+    ui_handle(&u, names, &in);
+    CHECK(u.edit_len == 7 + 2 + 4 && u.caret == 13);
+    in = keys(1, UK_LEFT);
+    ui_handle(&u, names, &in);
+    CHECK(u.caret == 9);
+    in = keys(1, UK_BACKSPACE);
+    ui_handle(&u, names, &in);
+    CHECK(u.edit_len == 11 && u.caret == 7 && (unsigned char)u.edit[7] == 0xF0);
+    in = keys(1, UK_DELETE);
+    ui_handle(&u, names, &in);
+    CHECK(u.edit_len == 7);
+    // Controls are dropped; the line holds NAME_MAX bytes at most.
+    in = ev1(UK_NONE, 0x7F);
+    ui_handle(&u, names, &in);
+    in = ev1(UK_NONE, 0x09);
+    ui_handle(&u, names, &in);
+    CHECK(u.edit_len == 7);
+    // Enter asks gui/ to rename; the line stays open until gui/ closes it.
+    in = keys(1, UK_ENTER);
+    CHECK(ui_handle(&u, names, &in).kind == UA_RENAME && u.editing);
+    ui_edit_close(&u);
+    // Esc closes it, with nothing asked.
+    in = keys(1, UK_F2);
+    ui_handle(&u, names, &in);
+    in = keys(1, UK_ESC);
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && !u.editing);
+    // A click closes it.
+    in = keys(1, UK_F2);
+    ui_handle(&u, names, &in);
+    in = ui_input_none(), in.click = 1;
+    ui_handle(&u, names, &in);
+    CHECK(!u.editing && u.list.sel == 1);
+    // Full.
+    char big[NAME_MAX + 1];
+    memset(big, 'a', NAME_MAX - 1);
+    ui_edit_open(&u, (Str){ big, NAME_MAX - 1 });
+    in = ui_input_none();
+    in.ev[in.nev++] = (UiEvent){ UK_NONE, 0xE9 };   // 2 bytes: no room
+    in.ev[in.nev++] = (UiEvent){ UK_NONE, 'b' };
+    in.ev[in.nev++] = (UiEvent){ UK_NONE, 'c' };
+    ui_handle(&u, names, &in);
+    CHECK(u.edit_len == NAME_MAX && u.edit[NAME_MAX - 1] == 'b');
+    ui_edit_close(&u);
+    // F2 closes find; the find line doesn't take F2's edit keys after.
+    in = chars("/al");
+    ui_handle(&u, names, &in);
+    CHECK(u.finding);
+    in = keys(1, UK_F2);
+    ui_handle(&u, names, &in);
+    CHECK(!u.finding && u.editing);
+    ui_edit_close(&u);
+}
