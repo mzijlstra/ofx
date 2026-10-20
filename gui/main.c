@@ -129,9 +129,11 @@ void __wrap_glfwDefaultWindowHints(void)
 
 // ---- the folder -----------------------------------------------------------------------------
 
-static void join(char *out, size_t cap, const char *dir, Str name)
+// dir/name into out; false when it would not fit (a cut path could name another file).
+static bool join(char *out, size_t cap, const char *dir, Str name)
 {
-    snprintf(out, cap, "%s%s%.*s", dir, strcmp(dir, "/") == 0 ? "" : "/", STR_ARG(name));
+    int n = snprintf(out, cap, "%s%s%.*s", dir, strcmp(dir, "/") == 0 ? "" : "/", STR_ARG(name));
+    return n >= 0 && (size_t)n < cap;
 }
 
 // Shows dir, the cursor on the entry called `select` (else on row `fallback`). False, with the
@@ -206,7 +208,10 @@ static void open_entry(isize i)
 {
     const Entry *e = &app.list.e[i];
     char path[PATH_MAX];
-    join(path, sizeof path, app.cwd, e->name);
+    if (!join(path, sizeof path, app.cwd, e->name)) {
+        set_status(true, "%.*s: the path is too long", STR_ARG(e->name));
+        return;
+    }
     if (kind_is_dir(e->kind)) {
         go_to(path, STR_EMPTY, 0);
         return;
@@ -273,8 +278,7 @@ static IconSlot *entry_icon(isize i)
     isize n = 0;
     if (kind_is_dir(e->kind)) {
         char path[PATH_MAX];
-        join(path, sizeof path, app.cwd, e->name);
-        Str special = user_dir_icon(&app.user_dirs, path);
+        Str special = join(path, sizeof path, app.cwd, e->name) ? user_dir_icon(&app.user_dirs, path) : STR_EMPTY;
         if (special.len) names[n++] = special;
         names[n++] = S("folder");
         key = names[0];

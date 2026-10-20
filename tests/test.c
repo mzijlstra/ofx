@@ -213,7 +213,15 @@ static void test_mime(void)
     arena_reset(&ta);
     put(at("data1/mime/globs2"),
         "# comment\n"
+        "#50:text/x-commented:*.commented\n"   // a comment that parses as a line
         "50:text/x-csrc:*.c\n"
+        "50:application/x-rcs:*,v\n"            // a suffix without a dot: a pattern
+        "40:text/x-short:READ*\n"               // the same weight as README*, shorter: loses
+        "50:text/x-shorter:READ*\n"
+        "50::*.shadow\n"                        // no type: skipped, so it can't hide the next
+        "40:text/x-shadowed:*.shadow\n"
+        "30:text/x-low-first:LOW*\n"            // a pattern listed first with less weight
+        "60:text/x-high-later:LOW*\n"
         "50:text/x-c++src:*.C:cs\n"
         "50:application/gzip:*.gz\n"
         "50:application/x-compressed-tar:*.tar.gz\n"
@@ -259,6 +267,11 @@ static void test_mime(void)
         { "noext", "" },
         { "x.empty-type", "" },
         { ".c", "text/x-csrc" },
+        { "x.commented", "" },
+        { "file,v", "application/x-rcs" },
+        { "READING", "text/x-shorter" },
+        { "x.shadow", "text/x-shadowed" },
+        { "LOWER", "text/x-high-later" },
     };
     for (int i = 0; i < COUNT(cases); i++) CHECK_STR(mime_of_name(&ta, &db, str_from_c(cases[i].name)), cases[i].want);
 
@@ -288,6 +301,14 @@ static void test_mime(void)
     CHECK_STR(names[0], "inode-directory");
     CHECK_STR(names[1], "application-x-generic");
     env_restore();
+
+    // A file that reads shorter than fstat said (it changed while read): nothing, not a part.
+    // sysfs files say 4096 and hold less, which stands in for the race.
+    const char *sys = "/sys/kernel/mm/transparent_hugepage/enabled";
+    if (access(sys, R_OK) == 0) CHECK(read_file(&ta, sys).len == 0);
+    CHECK(read_file(&ta, at("data1/mime/globs2")).len > 100);
+    CHECK(read_file(&ta, at("data1")).len == 0);   // a directory
+    CHECK(read_file(&ta, at("nothing-here")).len == 0);
 
     // No data dirs at all: nothing matches, nothing breaks.
     env_set("XDG_DATA_HOME", at("none1"));
@@ -342,6 +363,13 @@ static void test_icons(void)
     put(at("icons/Parent/scalable/mimetypes/only-svg.svg"), "");
     put(at("icons/Parent/32x32/mimetypes/image-png.png"), "");
     put(at("icons/Parent/16x16/mimetypes/folder.png"), "");
+    put(at("icons/Child/index.theme.extra"), "");
+    put(at("icons/Order/index.theme"),
+        "[Icon Theme]\nDirectories=48x48/a\nScaledDirectories=24x24@2x/a\n"
+        "[48x48/a]\nSize=48\n[24x24@2x/a]\nSize=24\nScale=2\nType=Fixed\n");
+    put(at("icons/Order/48x48/a/both.png"), "");
+    put(at("icons/Order/24x24@2x/a/both.png"), "");
+    for (int k = 0; k < 100; k++) put(at("icons/Order/48x48/a/many%d.png", k), "");
     put(at("icons/hicolor/index.theme"),
         "[Icon Theme]\nName=Hicolor\nDirectories=48x48/mimetypes,48x48/apps,48x48/places\n"
         "[48x48/mimetypes]\nSize=48\nContext=MimeTypes\nType=Threshold\n"
@@ -392,6 +420,31 @@ static void test_icons(void)
     CHECK(strcmp(FIND(30, 1, S("image-png")), at("icons/Parent/32x32/mimetypes/image-png.png")) == 0);
     env_restore();
 
+    // What index.theme said, as read.
+    CHECK(db.t[1].ndirs == 3);
+    const IconDir *pd = db.t[1].dirs;
+    CHECK(pd[0].type == IT_FIXED && pd[0].size == 16 && pd[0].scale == 1);
+    CHECK(pd[1].type == IT_SCALABLE && pd[1].min == 8 && pd[1].max == 64);
+    CHECK(pd[2].type == IT_THRESHOLD && pd[2].threshold == 2 && pd[2].min == 32 && pd[2].max == 32);
+    bool scaled = false;
+    for (isize k = 0; k < db.t[0].ndirs; k++) scaled |= db.t[0].dirs[k].scale == 2 && db.t[0].dirs[k].size == 24;
+    CHECK(scaled);
+
+    // A theme that inherits nothing still falls back on hicolor; ScaledDirectories are read; an
+    // exact match beats an earlier directory as close (48 px at scale 1 is 48 device pixels, as
+    // 24 at scale 2 is); a directory of more than 64 icons keeps them all.
+    env_set("HOME", at("home"));
+    env_set("XDG_DATA_HOME", at("datahome"));
+    env_set("XDG_DATA_DIRS", root);
+    icon_load(&ta, &db, S("Order"));
+    CHECK(db.n == 2);
+    CHECK_STR(db.t[1].name, "hicolor");
+    CHECK(db.t[0].ndirs == 2);
+    CHECK(strcmp(FIND(24, 2, S("both")), at("icons/Order/24x24@2x/a/both.png")) == 0);
+    CHECK(strcmp(FIND(24, 2, S("many0")), at("icons/Order/48x48/a/many0.png")) == 0);
+    CHECK(strcmp(FIND(24, 2, S("many99")), at("icons/Order/48x48/a/many99.png")) == 0);
+    env_restore();
+
     // The directory rules on their own.
     IconDir fixed = { .size = 24, .scale = 1, .min = 24, .max = 24, .threshold = 2, .type = IT_FIXED };
     IconDir fixed2 = { .size = 24, .scale = 2, .min = 24, .max = 24, .threshold = 2, .type = IT_FIXED };
@@ -416,6 +469,12 @@ static void test_icons(void)
     CHECK_STR(ini_get(ini, S("C"), S("x")), "");
     CHECK(ini_int(ini, S("B"), S("x"), 9) == 3 && ini_int(ini, S("B"), S("n"), 9) == 9 && ini_int(ini, S("B"), S("big"), 9) == 9);
     CHECK(ini_int(ini, S("B"), S("absent"), 7) == 7);
+    CHECK_STR(ini_get(S("[Ax\nk=1\n"), S("A"), S("k")), "");   // no closing ]: not a section
+    Str item, list = S(" a, ,b ,,");
+    isize iat = 0;
+    CHECK(next_item(list, &iat, &item) && str_eq(item, S("a")));
+    CHECK(next_item(list, &iat, &item) && str_eq(item, S("b")));
+    CHECK(!next_item(list, &iat, &item));
 
     // No theme at all: only hicolor, when it is there.
     env_set("HOME", at("nohome"));
@@ -485,6 +544,7 @@ static void test_theme(void)
     CHECK(parse_rgb(S("\"#000000\""), &c) && rgb_is(c, 0, 0, 0));
     CHECK(!parse_rgb(S("\"#000000'"), &c));
     CHECK(!parse_rgb(S("#0000000"), &c) && !parse_rgb(S("000000"), &c) && !parse_rgb(S("#00000g"), &c));
+    CHECK(!parse_rgb(S("x123456"), &c));
     CHECK(hex_digit('9') == 9 && hex_digit('a') == 10 && hex_digit('F') == 15 && hex_digit('g') == -1 && hex_digit('/') == -1);
 }
 
@@ -705,6 +765,8 @@ static void test_ui(void)
     // An empty folder: nothing to open, Enter does nothing, moves are safe.
     ui_set(&l, 0, 5);
     CHECK(l.sel == 0 && l.top == 0);
+    in = keys(1, UK_DOWN);
+    CHECK(ui_handle(&l, &in).kind == UA_NONE && l.sel == 0);
     in = keys(3, UK_DOWN, UK_END, UK_OPEN);
     CHECK(ui_handle(&l, &in).kind == UA_NONE && l.sel == 0);
     in = keys(1, UK_PARENT);
@@ -747,6 +809,8 @@ static void test_timing(void)
     CHECK(ui_press(&p, 3, 1000) == 1);
     CHECK(ui_press(&p, 3, 1400) == 2);          // within 400 ms, inclusive
     CHECK(ui_press(&p, 3, 1500) == 1);          // starts over after a double
+    p = (UiPress){ -1, 0 };
+    CHECK(ui_press(&p, 3, 1000) == 1 && ui_press(&p, 3, 1100) == 2 && ui_press(&p, 3, 1200) == 1);   // a triple is a double, then a press
     CHECK(ui_press(&p, 3, 1901) == 1);          // 401 ms: too slow
     CHECK(ui_press(&p, 4, 1950) == 1);          // another row
     CHECK(ui_press(&p, 4, 2000) == 2);
@@ -803,6 +867,8 @@ static void test_format(void)
     CHECK(strcmp(buf, "Oct 19") == 0);
     ui_when(buf, sizeof buf, 1767225600, now);       // 2026-01-01
     CHECK(strcmp(buf, "Jan  1") == 0);
+    ui_when(buf, sizeof buf, now - 365 * 86400 - 3600, now);   // the same day a year ago
+    CHECK(strcmp(buf, "2025-10-20") == 0);
     ui_when(buf, sizeof buf, 1767225599, now);       // 2025-12-31 23:59:59
     CHECK(strcmp(buf, "2025-12-31") == 0);
     env_restore();

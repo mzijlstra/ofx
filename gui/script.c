@@ -161,7 +161,7 @@ static void script_after_draw(void)
 // The next frame's input: false at the end of the script.
 static bool script_input(UiInput *in)
 {
-    char state[2048], missing_buf[256];
+    char state[16384], missing_buf[256];
     const char *missing;
     if (script.wait > 0) return script.wait--, true;
     if (script.settling) {

@@ -17,6 +17,12 @@ expect sel=adir n=5
 key right
 char h
 expect sel=adir
+# Up from a folder that isn't the first: that folder is selected again.
+char j
+key enter
+key backspace
+expect sel=bdir idx=1
+char k
 # Open and terminal: the fakes log them.
 key end
 key enter
@@ -28,10 +34,18 @@ sh grep -qx "uwsm-app -- xdg-terminal-exec --dir=$FX_DIR" "$FX_DIR/../spawn.log"
 # Live refresh: create, delete, rename.
 sh touch "$FX_DIR/new.txt"
 wait-for 1000 n=6 sel=b10.txt
+# A file sorting before the cursor: the cursor stays on its name, a row further down.
+sh touch "$FX_DIR/0first.txt"
+wait-for 1000 n=7 sel=b10.txt idx=5
+sh rm "$FX_DIR/0first.txt"
+wait-for 1000 n=6 sel=b10.txt idx=4
 sh rm "$FX_DIR/b10.txt"
 wait-for 1000 n=5 sel=new.txt idx=4
 sh mv "$FX_DIR/new.txt" "$FX_DIR/zz.txt"
 wait-for 1000 n=5 sel=zz.txt
+# A new folder sends only IN_CREATE (touch also closes the file).
+sh mkdir "$FX_DIR/cdir"
+wait-for 1000 n=6 sel=zz.txt
 # Mouse: a press selects, a second within 400 ms opens; the back button goes up.
 press 1
 expect sel=bdir
@@ -39,7 +53,7 @@ press 0
 press 0
 expect n=1 sel=inner.txt
 back
-expect sel=adir n=5
+expect sel=adir n=6
 shot browse.png
 # The theme: the scratch copy's accent changes.
 sh sed -i 's/^accent = .*/accent = "#123456"/' "$FX_DIR/../state/omarchy/current/theme/colors.toml"

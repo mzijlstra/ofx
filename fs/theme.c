@@ -67,8 +67,9 @@ static void theme_parse_colors(Theme *t, Str text)
     for (Str line; next_line(text, &at, &line);) {
         line = str_trim(line);
         if (line.len && line.p[0] == '[') break;
-        isize hash = str_find(line, '#'), eq = str_find(line, '=');
-        if (eq <= 0 || (hash >= 0 && hash < eq)) continue;
+        // A comment line's key starts with '#', so it never names a colour.
+        isize eq = str_find(line, '=');
+        if (eq <= 0) continue;
         Str key = str_trim(str_cut(line, 0, eq)), val = str_trim(str_cut(line, eq + 1, line.len));
         // A comment after the value: the colour's own '#' is inside its quotes.
         if (val.len && (val.p[0] == '"' || val.p[0] == '\'')) {
