@@ -43,7 +43,8 @@ static void *count_loop(void *arg)
         isize n = count_entries(path, hidden);
         pthread_mutex_lock(&counts.mu);
         if (gen == counts.gen) counts.res[counts.sn++] = (CountAnswer){ gen, idx, n };
-        glfwPostEmptyEvent();
+        // Not after quit: the window and GLFW may be gone by the time a stuck count comes back.
+        if (!counts.quit) glfwPostEmptyEvent();
     }
     pthread_mutex_unlock(&counts.mu);
     return NULL;

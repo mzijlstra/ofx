@@ -44,6 +44,9 @@ his word: Nemo's compact view and its icon size slider.
 - Optional columns: permissions; type (Michael doesn't want it by default). Date and time format as
   an option; the short form ("14:03", "Oct 20") stays the default.
 - Sidebar sections (Nemo's My Computer, Bookmarks, Network): to brainstorm with Michael first.
+- Counting in a separate process (reviewer-2, F4 review): a readdir on a hard NFS mount that
+  hangs sits in D state, which no thread exit can reap, so fx's process (its Wayland socket) can
+  outlive its window. Only a child process that does the counting decouples a dead mount fully.
 - Not wanted: Nemo's built-in terminal (`t`, a terminal here, covers it).
 
 **Thumbnails, a rule from Nemo (2026-10-20):** Nemo looped at up to 45% CPU on one file
