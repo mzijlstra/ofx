@@ -110,7 +110,9 @@ static const struct ext_data_control_device_v1_listener device_listener = {
     .data_offer = on_data_offer, .selection = on_selection, .finished = on_finished, .primary_selection = on_primary,
 };
 
-// Another program wants our payload: written to fd, a second at most, then closed.
+// Another program wants our payload: written to fd, a second at most, then closed. clip.mu is held
+// meanwhile (clip_set resets the payloads' arena), so a slow reader can stall a Ctrl+C or a paste
+// by that second at most.
 static void on_send(void *data, struct ext_data_control_source_v1 *s, const char *mime, int32_t fd)
 {
     (void)data, (void)s;
@@ -131,14 +133,17 @@ static void on_send(void *data, struct ext_data_control_source_v1 *s, const char
     close(fd);
 }
 
-// Someone else owns the selection now.
+// Someone else owns the selection now. Whoever takes a source out of clip.src destroys it: when
+// clip_set or clip_clear_own already did (a Ctrl+C racing another program's copy), s is gone, and
+// destroying it here too would free it twice (reviewer-2, F3 review, 2026-10-20).
 static void on_cancelled(void *data, struct ext_data_control_source_v1 *s)
 {
     (void)data;
     pthread_mutex_lock(&clip.mu);
-    if (clip.src == s) clip.src = NULL;
+    bool mine = clip.src == s;
+    if (mine) clip.src = NULL;
     pthread_mutex_unlock(&clip.mu);
-    ext_data_control_source_v1_destroy(s);
+    if (mine) ext_data_control_source_v1_destroy(s);
 }
 
 static const struct ext_data_control_source_v1_listener source_listener = { .send = on_send, .cancelled = on_cancelled };

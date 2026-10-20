@@ -35,11 +35,17 @@ for i, (f, old, new) in enumerate(mutants):
 if bad:
     sys.exit(2)
 
+# The tests' mkdtemp roots go under work (TMPDIR), so a mutant that crashes a run before it cleans
+# up leaves nothing in /tmp: work goes as a whole at the end.
+tmp = os.path.join(work, 'tmp')
+os.makedirs(tmp)
+env = dict(os.environ, TMPDIR=tmp)
+
 def run():
     b = subprocess.run(['make', '-s', 'build/test'], cwd=work, capture_output=True, text=True)
     if b.returncode != 0:
         return 'build-fail'
-    t = subprocess.run(['./build/test'], cwd=work, capture_output=True, timeout=120)   # bytes: a mutant may print anything
+    t = subprocess.run(['./build/test'], cwd=work, capture_output=True, timeout=120, env=env)   # bytes: a mutant may print anything
     return 'pass' if t.returncode == 0 else 'fail'
 
 base = run()
@@ -47,18 +53,20 @@ if base != 'pass':
     print('baseline does not pass:', base)
     sys.exit(2)
 survivors = []
-for i, (f, old, new) in enumerate(mutants):
-    path = os.path.join(work, f)
-    text = open(path).read()
-    open(path, 'w').write(text.replace(old, new, 1))
-    try:
-        r = run()
-    except subprocess.TimeoutExpired:
-        r = 'timeout'
-    open(path, 'w').write(text)
-    verdict = 'SURVIVED' if r == 'pass' else 'killed' + (' (build)' if r == 'build-fail' else '')
-    print(f'#{i:02d} {verdict:16} {f}: {old.strip()[:70]!r} -> {new.strip()[:50]!r}', flush=True)
-    if r == 'pass':
-        survivors.append(i)
-shutil.rmtree(work)
+try:
+    for i, (f, old, new) in enumerate(mutants):
+        path = os.path.join(work, f)
+        text = open(path).read()
+        open(path, 'w').write(text.replace(old, new, 1))
+        try:
+            r = run()
+        except subprocess.TimeoutExpired:
+            r = 'timeout'
+        open(path, 'w').write(text)
+        verdict = 'SURVIVED' if r == 'pass' else 'killed' + (' (build)' if r == 'build-fail' else '')
+        print(f'#{i:02d} {verdict:16} {f}: {old.strip()[:70]!r} -> {new.strip()[:50]!r}', flush=True)
+        if r == 'pass':
+            survivors.append(i)
+finally:
+    shutil.rmtree(work, ignore_errors=True)   # an interrupted run too
 print(f'{len(mutants)} mutants, {len(survivors)} survived: {survivors}')
