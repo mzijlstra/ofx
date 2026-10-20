@@ -24,6 +24,21 @@ MUTANTS = [
     (G, "(button == GLFW_MOUSE_BUTTON_5 || button == GLFW_MOUSE_BUTTON_6)) mouse_forwards++;", "(button == GLFW_MOUSE_BUTTON_6)) mouse_forwards++;"),
     (G, "        if (a.index >= 0 && a.index < app.places.n) go_to(app.places.p[a.index].path, STR_EMPTY, 0);", ""),
     (G, "        hist_unstep(&hist, dir);\n", ""),
+    # F3
+    (G, "        if (k >= 0 && !mark[k]) mark[k] = 1, marked++;", ""),
+    (G, "        if (app.ui.marked ? !app.ui.mark[i] : i != app.ui.list.sel) continue;", "        if (i != app.ui.list.sel) continue;"),
+    (G, "            if (it->out != OUT_NEW) continue;", ""),
+    (G, "    if (run.own_cut && !atomic_load(&j->cancel)) own.n = 0, clip_clear_own();", ""),
+    (G, "if (!name_free(app.cwd, base, S_ISDIR(st.st_mode), true, true, name, sizeof name)) continue;", "if (!name_free(app.cwd, base, S_ISDIR(st.st_mode), false, true, name, sizeof name)) continue;"),
+    (G, "        if (S_ISDIR(st.st_mode) && into_itself(src, app.cwd)) {", "        if (0) {"),
+    (G, "            if (c->cut) {\n                here++;", "            if (0) {\n                here++;"),
+    (G, "        undo_begin(&undo, app.edit_new ? UNDO_MKDIR : UNDO_RENAME);", "        undo_begin(&undo, UNDO_RENAME);"),
+    (G, "    if (back[0]) go_to(app.cwd, str_from_c(back), app.ui.list.sel);\n    else reload();", "    reload();"),
+    (G, "        return m == GLFW_MOD_SHIFT ? UK_SHIFT_DELETE : m == 0 ? UK_DELETE : UK_NONE;", "        return m == 0 ? UK_DELETE : UK_SHIFT_DELETE;"),
+    (G, "    if (m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT) && key == GLFW_KEY_N) return UK_NEWFOLDER;", ""),
+    (G, "    if (ask && !app.ui.asking) app.ui.asking = true;", ""),
+    (G, "    ops_guard(getenv(\"FX_GUI_ROOT\"));", ""),
+    (G, "        if (!was_editing && app.ui.editing) snprintf(app.edit_from, sizeof app.edit_from, \"%.*s\", STR_ARG(sel_name())), app.edit_new = false;", ""),
 ]
 scratch = sys.argv[1]
 only = [int(x) for x in sys.argv[2].split(',')] if len(sys.argv) > 2 else None

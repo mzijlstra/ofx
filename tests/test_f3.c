@@ -5,6 +5,19 @@
 #include <fcntl.h>
 #include <sys/time.h>
 
+// A folder beside the root, outside the guard: a guard test aims at it, so a mutant that switches
+// the guard off can only ever reach this decoy, never /tmp or anything of Michael's.
+static char decoy[300];
+
+static const char *out_at(const char *rel)
+{
+    static char buf[4][600];
+    static int k;
+    k = (k + 1) % 4;
+    snprintf(buf[k], sizeof buf[k], "%s/%s", decoy, rel);
+    return buf[k];
+}
+
 static bool there(const char *path)
 {
     struct stat st;
@@ -57,12 +70,12 @@ static void test_ops(void)
     CHECK(ops_allowed(at("ops/new.txt"), &err));
     CHECK(ops_allowed(at("ops"), &err));
     int refused = ops_refusals;
-    CHECK(!ops_allowed("/tmp/fx-not-mine.txt", &err));
+    CHECK(!ops_allowed(out_at("not-mine.txt"), &err));
     CHECK(strstr(err.msg, "outside the test folder") != NULL);
     CHECK(!ops_allowed(at("ops/../../escape"), &err));
     CHECK(!ops_allowed(root, &err));   // the root itself is not under it
     // A link inside that points out: its folder resolves outside.
-    symlink("/tmp", at("ops/out"));
+    symlink(decoy, at("ops/out"));
     CHECK(!ops_allowed(at("ops/out/x"), &err));
     CHECK(ops_allowed(at("ops/out"), &err));   // the link itself is inside
     CHECK(ops_refusals == refused + 4);
@@ -71,7 +84,7 @@ static void test_ops(void)
     ops_guard("/nonexistent/fx-root");
     CHECK(!ops_allowed(at("ops/x"), &err));
     ops_guard(NULL);
-    CHECK(ops_allowed("/tmp/anything", &err));
+    CHECK(ops_allowed(out_at("anything"), &err));
     ops_guard(root);
 
     CHECK(name_valid(S("a.txt"), &err));
@@ -123,8 +136,8 @@ static void test_ops(void)
     CHECK(!op_rename(at("ops"), S("nope"), S("r9"), &err));
     CHECK(strstr(err.msg, "No such file") != NULL);
     // The guard: a rename out of the root is refused before it happens.
-    CHECK(!move_noreplace(at("ops/r3"), "/tmp/fx-escaped", &err));
-    CHECK(there(at("ops/r3")));
+    CHECK(!move_noreplace(at("ops/r3"), out_at("escaped"), &err));
+    CHECK(there(at("ops/r3")) && !there(out_at("escaped")));
 
     // new folder
     char made[NAME_MAX + 1];
@@ -134,6 +147,7 @@ static void test_ops(void)
     CHECK(is_dir_at(at("ops/New folder (2)")));
     CHECK(!op_mkdir(at("ops"), S("a/b"), made, sizeof made, &err));
     CHECK(!op_mkdir(at("ops/missing"), S("x"), made, sizeof made, &err));
+    CHECK(!op_mkdir(decoy, S("x"), made, sizeof made, &err) && !there(out_at("x")));   // the guard
 
     // delete for good: depth first, links removed and not followed.
     mkdirs(at("del/keep"));
@@ -153,7 +167,8 @@ static void test_ops(void)
     CHECK(delete_tree(at("del/l2"), &n, &err) && n == 1);
     CHECK(!there(at("del/l2")) && there(at("del/keep/precious")));
     CHECK(!delete_tree(at("del/none"), &n, &err));
-    CHECK(!delete_tree("/tmp", &n, &err));   // the guard
+    put(out_at("keep.txt"), "k");
+    CHECK(!delete_tree(out_at("keep.txt"), &n, &err) && there(out_at("keep.txt")));   // the guard
     // A folder it can't read: the error, and what it holds stays.
     mkdirs(at("del/locked/in"));
     chmod(at("del/locked"), 0300);
@@ -161,6 +176,18 @@ static void test_ops(void)
     bool root_user = geteuid() == 0;
     if (!root_user) CHECK(!delete_tree(at("del/locked"), &n, &err));
     chmod(at("del/locked"), 0755);
+    // Nested deeper than TREE_DEPTH_MAX: refused with a reason, not a crash (and the levels above
+    // the limit stay).
+    char deep[8192] = "";
+    snprintf(deep, sizeof deep, "%s", at("deep"));
+    mkdir(deep, 0755);
+    for (int i = 0; i < TREE_DEPTH_MAX + 4; i++) {
+        size_t k = strlen(deep);
+        snprintf(deep + k, sizeof deep - k, "/d");
+        mkdir(deep, 0755);
+    }
+    n = 0;
+    CHECK(!delete_tree(at("deep"), &n, &err) && strstr(err.msg, "nested too deep") && there(at("deep/d")));
 }
 
 static void test_trash(void)
@@ -197,6 +224,14 @@ static void test_trash(void)
     put(at("data/Trash/files/s.txt"), "stray");
     put(at("tr/s.txt"), "S");
     CHECK(trash_put(at("tr/s.txt"), &t2, &err) && strcmp(t2.file, at("data/Trash/files/s.txt.2")) == 0);
+    // A stray .trashinfo without its file takes its name too (O_EXCL).
+    put(at("data/Trash/info/z.txt.trashinfo"), "[Trash Info]\n");
+    put(at("tr/z.txt"), "Z");
+    CHECK(trash_put(at("tr/z.txt"), &t2, &err) && strcmp(t2.file, at("data/Trash/files/z.txt.2")) == 0);
+    CHECK(strcmp(slurp(at("data/Trash/info/z.txt.trashinfo")), "[Trash Info]\n") == 0);
+    // A file outside the guard is never trashed, even into a trash inside it.
+    put(out_at("t.txt"), "t");
+    CHECK(!trash_put(out_at("t.txt"), &t2, &err) && there(out_at("t.txt")));
 
     // Percent-encoded Path.
     put(at("tr/a b%%c\xC3\xA9.txt"), "x");
@@ -282,9 +317,9 @@ static void test_trash(void)
     CHECK(dev_of(at("no/such/thing"), &dv) && dv == st.st_dev);
 
     // The home trash outside the guard: refused, the file stays.
-    env_set("XDG_DATA_HOME", "/tmp/fx-test-not-mine");
+    env_set("XDG_DATA_HOME", out_at("data"));
     put(at("tr/g.txt"), "g");
-    CHECK(!trash_put(at("tr/g.txt"), &t2, &err) && there(at("tr/g.txt")));
+    CHECK(!trash_put(at("tr/g.txt"), &t2, &err) && there(at("tr/g.txt")) && !there(out_at("data/Trash")));
     env_restore();
 }
 
@@ -582,6 +617,14 @@ static void test_job(void)
     job_run(j);
     CHECK(there(at("j/x/src/u/a")) && there(at("j/x/src/u/b")) && strcmp(slurp(at("j/x/dst/u/b")), "b") == 0);
     CHECK(j->item[0].out == OUT_MERGED);
+    // A new folder moved across with a part skipped (a fifo): the source stays, and it isn't "new"
+    // (an undo couldn't move it back over the part left behind).
+    put(at("j/x/src/v/a"), "a");
+    mkfifo(at("j/x/src/v/pipe"), 0600);
+    j = job_new(JOB_MOVE, 1, at("j/x/src/v"), at("j/x/dst/v"));
+    job_run(j);
+    CHECK(there(at("j/x/src/v/pipe")) && there(at("j/x/src/v/a")) && strcmp(slurp(at("j/x/dst/v/a")), "a") == 0);
+    CHECK(j->item[0].out == OUT_MERGED);
     job_test_cross = false;
 
     // Delete for good, as a job.
@@ -596,12 +639,16 @@ static void test_job(void)
     CHECK(j->errors == 1 && j->item[0].out == OUT_FAILED);
 
     // The guard: a target outside the root fails, nothing is written.
-    j = job_new(JOB_COPY, 1, at("j/src/a.txt"), "/tmp/fx-test-escape.txt");
+    j = job_new(JOB_COPY, 1, at("j/src/a.txt"), out_at("escape.txt"));
     job_run(j);
-    CHECK(j->item[0].out == OUT_FAILED && j->errors == 1 && !there("/tmp/fx-test-escape.txt"));
-    j = job_new(JOB_DELETE, 1, "/tmp/fx-test-nothing", NULL);
+    CHECK(j->item[0].out == OUT_FAILED && j->errors == 1 && !there(out_at("escape.txt")));
+    put(out_at("victim.txt"), "v");
+    j = job_new(JOB_DELETE, 1, out_at("victim.txt"), NULL);
     job_run(j);
-    CHECK(j->item[0].out == OUT_FAILED);
+    CHECK(j->item[0].out == OUT_FAILED && there(out_at("victim.txt")));
+    j = job_new(JOB_MOVE, 1, out_at("victim.txt"), at("j/stolen.txt"));
+    job_run(j);
+    CHECK(j->item[0].out == OUT_FAILED && there(out_at("victim.txt")) && !there(at("j/stolen.txt")));
 
     // Into itself.
     mkdirs(at("j/self/a/b"));

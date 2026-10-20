@@ -1316,6 +1316,8 @@ int main(void)
     const char *tmp = getenv("TMPDIR");
     snprintf(root, sizeof root, "%s/fx-test-XXXXXX", tmp && tmp[0] ? tmp : "/tmp");
     if (!mkdtemp(root)) return perror("mkdtemp"), 1;
+    snprintf(decoy, sizeof decoy, "%s-decoy", root);
+    if (mkdir(decoy, 0700) != 0) return perror("mkdir decoy"), 1;
     test_natural();
     test_list();
     test_mime();
@@ -1339,8 +1341,8 @@ int main(void)
     test_job();
     test_undo();
     test_ui_f3();
-    char cmd[1200];
-    snprintf(cmd, sizeof cmd, "chmod -R u+rwx '%s' && rm -rf '%s'", root, root);
+    char cmd[1600];
+    snprintf(cmd, sizeof cmd, "chmod -R u+rwx '%s' && rm -rf '%s' '%s'", root, root, decoy);
     if (system(cmd) != 0) fprintf(stderr, "could not remove %s\n", root);
     printf("%d checks, %d failed\n", checks, failures);
     return failures ? 1 : 0;

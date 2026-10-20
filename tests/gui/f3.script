@@ -19,8 +19,44 @@ expect marked=3 sel=big.bin
 press 3 ctrl
 expect marked=2 sel=b.txt
 shot marked.png
+# The marks survive a reload, by name
+sh touch "$FX_DIR/0new"
+wait-for 2000 n=7 marked=2
+sh rm "$FX_DIR/0new"
+wait-for 2000 n=6 marked=2
 key esc
 expect marked=0
+# The keys as GLFW reports them (ui_key_of): Ctrl+A, Esc, Shift+Delete, F2, Ctrl+Shift+N, Ctrl+Z
+raw-key 65 2
+expect marked=6
+raw-key 256 0
+expect marked=0
+raw-key 261 1
+expect confirming=1
+raw-key 256 0
+expect confirming=0
+raw-key 261 6
+expect confirming=0
+raw-key 291 0
+expect editing=1
+raw-key 256 0
+expect editing=0
+raw-key 78 3
+expect editing=1 n=7 undo=mkdir
+raw-key 256 0
+raw-key 90 2
+wait-for 2000 n=6 undo=-
+# Delete trashes the marked entries, not the cursor's; undo brings both back
+press 2 ctrl
+press 5 ctrl
+expect marked=2 sel=c.txt
+key home
+raw-key 261 0
+wait-for 2000 n=4 undo=trash marked=0
+sh test ! -e "$FX_DIR/a.txt" && test ! -e "$FX_DIR/c.txt" && test -d "$FX_DIR/adir"
+key ctrl-z
+wait-for 2000 n=6 undo=-
+sh test -f "$FX_DIR/a.txt" && test -f "$FX_DIR/c.txt" && rm -rf "$FX_ROOT/data/Trash"
 # ---- rename: F2 on a.txt, clash on b.txt (the line stays), Esc, then a real rename and its undo
 key home
 key down
@@ -145,7 +181,7 @@ sh printf x > "$FX_DIR/big.bin"
 key ctrl-v
 wait-for 3000 asking=1
 char r
-wait-for 10000 job=- n=1
+wait-for 10000 job=- n=1 undo=-
 sh cmp -s "$FX_DIR/big.bin" "$FX_ROOT/tree/big.bin"
 # Cancel: Esc in the middle leaves no part file and nothing new
 sh rm "$FX_DIR/big.bin"

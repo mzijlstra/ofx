@@ -25,6 +25,8 @@
 //   click-here              a left press at the last point-ui
 //   back, forward           the mouse's back and forward buttons
 //   raw-button <n>          GLFW's button n (1-8) pressed and released through main.c's callback
+//   raw-key <key> [mods]    GLFW key code <key> pressed through main.c's key callback, with GLFW's
+//                           mod bits (1 Shift, 2 Ctrl, 4 Alt): what ui_key_of makes of it
 //   shot <file.png>         the next drawn frame; a relative path goes under FX_GUI_SHOTS
 //   sh <command...>         runs the rest of the line with /bin/sh and waits for it (5 s at most),
 //                           $FX_DIR set to the folder shown, $FX_ROOT to the run's scratch tree.
@@ -305,6 +307,13 @@ static bool script_input(UiInput *in)
             else on_button(glfwGetCurrentContext(), b - 1, GLFW_PRESS, 0), on_button(glfwGetCurrentContext(), b - 1, GLFW_RELEASE, 0);
             // The callback counted it; this frame's input reads it as the mouse's would.
             in->backs = mouse_backs, in->forwards = mouse_forwards, mouse_backs = mouse_forwards = 0;
+        } else if (str_eq(cmd, S("raw-key"))) {
+            int k = 0, mods = 0;
+            if (sscanf(a, "%d %d", &k, &mods) < 1) script_fail("raw-key <key> [mods]");
+            else on_key(glfwGetCurrentContext(), k, 0, GLFW_PRESS, mods), on_key(glfwGetCurrentContext(), k, 0, GLFW_RELEASE, mods);
+            // The callback queued it; this frame's input takes the queue as the user's would.
+            for (int i = 0; i < evq.n && in->nev < UI_EVENTS_MAX; i++) in->ev[in->nev++] = evq.ev[i];
+            evq.n = 0;
         } else if (str_eq(cmd, S("shot"))) {
             const char *dir = getenv("FX_GUI_SHOTS");
             if (a[0] != '/' && dir && dir[0]) snprintf(script.shot, sizeof script.shot, "%s/%s", dir, a);
