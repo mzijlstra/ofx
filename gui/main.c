@@ -908,6 +908,21 @@ static void layout_edit(Theme *t)
     }
 }
 
+// Entry i's Size cell: a file's size, a folder's item count ("" until known). ask: ask counts.c for
+// a count not asked yet (the row is being drawn).
+static void size_cell(isize i, char *size, size_t cap, bool ask)
+{
+    const Entry *e = &app.list.e[i];
+    size[0] = 0;
+    if (!kind_is_dir(e->kind) && e->kind != K_LINK_BROKEN && e->kind != K_OTHER) ui_size(size, cap, e->size);
+    if (!kind_is_dir(e->kind)) return;
+    char path[PATH_MAX];
+    if (ask && app.count[i] == COUNT_UNKNOWN && join(path, sizeof path, app.cwd, e->name) && count_ask(i, path, app.show_hidden))
+        app.count[i] = COUNT_ASKED;
+    if (app.count[i] >= 0) snprintf(size, cap, "%td item%s", app.count[i], app.count[i] == 1 ? "" : "s");
+    else if (app.count[i] == -1) snprintf(size, cap, "?");
+}
+
 static void layout_row(int r, isize i, float w, i64 now)
 {
     const Entry *e = &app.list.e[i];
@@ -917,15 +932,7 @@ static void layout_row(int r, isize i, float w, i64 now)
     Clay_Color bg = sel ? cc(t->selection) : marked ? mix(t->accent, t->bg, 0.28f) : hover ? cc(t->bg_light) : cc(t->bg);
     IconSlot *icon = entry_icon(i);
     char size[32] = "", when[32] = "";
-    if (!kind_is_dir(e->kind) && e->kind != K_LINK_BROKEN && e->kind != K_OTHER) ui_size(size, sizeof size, e->size);
-    if (kind_is_dir(e->kind)) {
-        // A folder's item count, asked of counts.c the first time the row is drawn.
-        char path[PATH_MAX];
-        if (app.count[i] == COUNT_UNKNOWN && join(path, sizeof path, app.cwd, e->name) && count_ask(i, path, app.show_hidden))
-            app.count[i] = COUNT_ASKED;
-        if (app.count[i] >= 0) snprintf(size, sizeof size, "%td item%s", app.count[i], app.count[i] == 1 ? "" : "s");
-        else if (app.count[i] == -1) snprintf(size, sizeof size, "?");
-    }
+    size_cell(i, size, sizeof size, true);
     if (e->mtime) ui_when(when, sizeof when, e->mtime, now);
     bool link = e->kind == K_LINK_DIR || e->kind == K_LINK_FILE || e->kind == K_LINK_BROKEN;
     float name_w = w - SIDE_W - 2 * PAD - ICON_PX - 3 * GAP - SIZE_W - DATE_W - (link ? 16 : 0);
@@ -1479,6 +1486,11 @@ int main(int argc, char **argv)
     theme_apply();
     if (!watch_start()) set_status(true, "inotify is unavailable: no live refresh");
     clip_init();   // false: the clipboard stays inside fx
+    // FX_TEST_COUNT_DELAY_MS: each count takes that much longer, so a test can change the listing
+    // while answers for the old one are on their way (200 ms at most).
+    const char *kdelay = getenv("FX_TEST_COUNT_DELAY_MS");
+    counts.delay_ms = kdelay ? atoi(kdelay) : 0;
+    if (counts.delay_ms < 0 || counts.delay_ms > 200) counts.delay_ms = 0;
     count_start();
     char bm[PATH_MAX];
     places_load(&scratch, &app.places, bookmarks_path(bm, sizeof bm), "/proc/self/mountinfo");

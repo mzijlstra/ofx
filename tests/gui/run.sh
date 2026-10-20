@@ -36,7 +36,7 @@ echo "== f3"; FX_TEST_COPY_DELAY_MS=150 "$here/../../tools/gui/run-script.sh" "$
 T=$base/f4; rm -rf "$T"; H=$T/home; mkdir -p "$H/tree/adir" "$H/tree/bdir" "$T/data"
 touch "$H/tree/adir/x" "$H/tree/adir/y" "$H/tree/adir/.h" "$H/tree/f.txt"
 L="$H/tree"; for i in 1 2 3 4 5 6 7 8; do L="$L/zz-a-rather-long-folder-name-$i"; done; mkdir -p "$L"
-echo "== f4"; FX_TEST_HOME="$H" "$here/../../tools/gui/run-script.sh" "$T" "$here/f4.script" "$bin" "$H/tree" || fail=1
+echo "== f4"; FX_TEST_COUNT_DELAY_MS=50 FX_TEST_HOME="$H" "$here/../../tools/gui/run-script.sh" "$T" "$here/f4.script" "$bin" "$H/tree" || fail=1
 # fx's own guard: started outside <T>, every change it tries there is refused, nothing changes.
 T=$base/guard3; O=$base/guard3-outside; rm -rf "$T" "$O"; mkdir -p "$T" "$O"; echo keep > "$O/victim.txt"
 echo "== guard3"

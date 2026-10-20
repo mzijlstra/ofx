@@ -13,8 +13,30 @@ key down
 wait-for 2000 sel=bdir cnt=0
 key home
 sh touch "$FX_DIR/adir/z" "$FX_DIR/new.txt"
-wait-for 2000 sel=adir cnt=3
+wait-for 2000 sel=adir cnt=3 sizecell=3_items
 sh rm "$FX_DIR/new.txt"
+wait-for 2000 n=4
+# One item, singular; a file's size as before
+key end
+key up
+wait-for 2000 sel=zz-a-rather-long-folder-name-1 sizecell=1_item
+key end
+expect sizecell=0_B
+key home
+# A new order: the counts follow their folders, not the rows
+char S
+wait-for 2000 sel=adir cnt=3
+key end
+key up
+key up
+wait-for 2000 sel=bdir cnt=0
+char S
+key home
+# Answers for an old listing are dropped (counts slowed by FX_TEST_COUNT_DELAY_MS): toggled twice
+# before they come, the counts are this listing's
+char .
+char .
+wait-for 3000 sel=adir cnt=3
 # ---- the buttons: enter, up, back, forward
 key enter
 expect crumbs=home|tree|adir crumb=2 back=1
@@ -40,7 +62,7 @@ expect crumb=1 sel=adir
 key down
 key enter
 expect crumbs=home|tree|bdir crumb=2
-key alt-up
+raw-key 265 4
 expect crumbs=home|tree|bdir crumb=1 sel=bdir
 # Dimmed buttons do nothing: forward with nothing ahead
 point-ui nav-fwd
@@ -54,6 +76,17 @@ type /../tree/adir
 shot location.png
 key enter
 expect locating=0 crumbs=home|tree|adir crumb=2
+# The folder it is already in: the line closes too
+key ctrl-l
+key enter
+expect locating=0
+# A file isn't a folder
+key ctrl-l
+key end
+type /x
+key enter
+expect locating=1 isn't
+key esc
 key ctrl-l
 key end
 type /nosuch

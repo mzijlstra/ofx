@@ -93,6 +93,14 @@ static void script_state(char *out, size_t cap)
         size_t k = strlen(crumbs);
         snprintf(crumbs + k, sizeof crumbs - k, "%s%.*s", i ? "|" : "", STR_ARG(ui_crumb_label(&app.crumbs, i)));
     }
+    // The cursor's Size cell as drawn, its spaces as '_'.
+    char sizecell[64] = "-";
+    if (app.have_list && app.ui.list.n > 0) {
+        size_cell(app.ui.list.sel, sizecell, sizeof sizecell, false);
+        if (!sizecell[0]) snprintf(sizecell, sizeof sizecell, "-");
+        for (char *c = sizecell; *c; c++)
+            if (*c == ' ') *c = '_';
+    }
     if (app.have_list && app.ui.list.n > 0 && kind_is_dir(app.list.e[app.ui.list.sel].kind)) {
         isize c = app.count[app.ui.list.sel];
         if (c >= 0) snprintf(cnt, sizeof cnt, "%td", c);
@@ -103,7 +111,7 @@ static void script_state(char *out, size_t cap)
              "icons=%s scale=%d w=%d h=%d reloads=%d themes=%d batches=%d frame_ms_max=%.1f icon=%s "
              "shown=%d sort=%s rev=%d finding=%d miss=%d find=%.*s last=%.*s side=%td sidefocus=%d place=%s here=%s "
              "back=%d fwd=%d marked=%td editing=%d edit=%s confirming=%d asking=%d job=%s done=%lld/%lld undo=%s clip=%td cut=%d "
-             "sysclip=%d crumbs=%s crumbhome=%d crumb=%d crumbshown=%d-%d arrows=%d locating=%d cnt=%s status=%s",
+             "sysclip=%d sizecell=%s crumbs=%s crumbhome=%d crumb=%d crumbshown=%d-%d arrows=%d locating=%d cnt=%s status=%s",
              app.cwd, app.list.n, app.list.hidden, STR_ARG(sel), app.ui.list.sel, app.ui.list.top, app.ui.list.rows, app.hover,
              t->accent.r, t->accent.g, t->accent.b, t->bg.r, t->bg.g, t->bg.b, t->icons[0] ? t->icons : "-",
              app.icon_scale, GetScreenWidth(), GetScreenHeight(), app.reloads, app.themes, atomic_load(&watch.batches),
@@ -114,7 +122,7 @@ static void script_state(char *out, size_t cap)
              app.places.n ? app.places.p[app.ui.side.sel].label : "-", app.place_cur >= 0 ? app.places.p[app.place_cur].label : "-",
              hist.nback, hist.nfwd, app.ui.marked, app.ui.editing, edit, app.ui.confirming, app.ui.asking,
              !run.running ? "-" : JOB_PHASES[atomic_load(&run.j.phase)], atomic_load(&run.j.files_done), atomic_load(&run.j.files_total),
-             UNDO_KINDS[undo.kind], own.n, own.cut, clip.ok, crumbs, app.crumbs.seg[0].home ? 0 : -1, app.crumbs.cur, app.crumb_lo, app.crumb_hi, app.crumb_arrows,
+             UNDO_KINDS[undo.kind], own.n, own.cut, clip.ok, sizecell, crumbs, app.crumbs.seg[0].home ? 0 : -1, app.crumbs.cur, app.crumb_lo, app.crumb_hi, app.crumb_arrows,
              app.ui.editing && app.ui.edit_path, cnt, app.status[0] ? app.status : "-");
     frame_us_max = 0;
 }

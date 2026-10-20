@@ -21,6 +21,7 @@ static struct {
     int             rhead, rn;
     CountAnswer     res[COUNT_QUEUE];
     int             sn;
+    int             delay_ms;   // FX_TEST_COUNT_DELAY_MS
 } counts = { .mu = PTHREAD_MUTEX_INITIALIZER, .cv = PTHREAD_COND_INITIALIZER };
 
 static void *count_loop(void *arg)
@@ -38,6 +39,7 @@ static void *count_loop(void *arg)
         snprintf(path, sizeof path, "%s", counts.req[k].path);
         counts.rhead = (counts.rhead + 1) % COUNT_QUEUE, counts.rn--;
         pthread_mutex_unlock(&counts.mu);
+        if (counts.delay_ms > 0) nanosleep(&(struct timespec){ 0, counts.delay_ms * 1000000L }, NULL);
         isize n = count_entries(path, hidden);
         pthread_mutex_lock(&counts.mu);
         if (gen == counts.gen) counts.res[counts.sn++] = (CountAnswer){ gen, idx, n };

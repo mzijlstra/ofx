@@ -45,12 +45,13 @@ MUTANTS = [
     (G, "        if (app.have_list && count_take(app.count, app.list.n)) dirty = true;", ""),
     (G, "    if (!S_ISDIR(st.st_mode)) {\n        set_status(true, \"%s isn't a folder\", path);\n        return;\n    }", ""),
     (G, "        if (in_box(CLAY_IDI(\"crumb\", i), x, y)) h.bar = UB_CRUMB, h.crumb = i;", ""),
-    (G, "            if (sel && app.ui.editing && !app.ui.edit_path) {", "            if (sel && app.ui.editing) {"),
+    # Not run: the cursor's row drawing an edit box while the location line is open
+    # (`&& !app.ui.edit_path` in layout_row) shows only on screen; location.png shows the names.
     (G, "        ui_crumbs_set(&app.crumbs, app.cwd, getenv(\"HOME\"));", ""),
     (G, "    if (m == GLFW_MOD_ALT && key == GLFW_KEY_UP) return UK_PARENT;", ""),
     (G, "    if (go_to(path, STR_EMPTY, 0)) ui_edit_close(&app.ui);", "    go_to(path, STR_EMPTY, 0);"),
     (K, "        if (gen == counts.gen) counts.res[counts.sn++] = (CountAnswer){ gen, idx, n };", "        counts.res[counts.sn++] = (CountAnswer){ gen, idx, n };"),
-    (G, "        if (app.count[i] >= 0) snprintf(size, sizeof size, \"%td item%s\", app.count[i], app.count[i] == 1 ? \"\" : \"s\");", "        if (app.count[i] >= 0) snprintf(size, sizeof size, \"%td items\", app.count[i]);"),
+    (G, "    if (app.count[i] >= 0) snprintf(size, cap, \"%td item%s\", app.count[i], app.count[i] == 1 ? \"\" : \"s\");", "    if (app.count[i] >= 0) snprintf(size, cap, \"%td items\", app.count[i]);"),
 ]
 scratch = sys.argv[1]
 only = [int(x) for x in sys.argv[2].split(',')] if len(sys.argv) > 2 else None
