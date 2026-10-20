@@ -36,8 +36,8 @@ static u8 scratch_mem[MiB(1)];
 static Arena frame, lists[2], data, icona, scratch;
 static int   watch_delay_ms;   // FX_TEST_WATCH_DELAY_MS, for one test
 
-enum { FONT_PX = 15, ROW_H = 28, ICON_PX = 24, HEADER_H = 40, FOOTER_H = 28, PAD = 12, SIZE_W = 90, DATE_W = 100,
-       ICONS_MAX = 512 };
+enum { FONT_PX = 15, ROW_H = 28, ICON_PX = 24, HEADER_H = 40, COLS_H = 26, FOOTER_H = 28, PAD = 12, SIZE_W = 90,
+       DATE_W = 100, SIDE_W = 200, SIDE_ROW_H = 28, SIDE_ICON_PX = 20, GAP = 10, ICONS_MAX = 512 };
 
 // ---- state ----------------------------------------------------------------------------------
 
@@ -54,8 +54,12 @@ static struct {
     Str      *mime;         // per entry, filled as rows are drawn; .p NULL until then
     bool      have_list;
     char      error[sizeof(Err)];   // why the folder could not be read
-    UiList    ui;
+    Ui        ui;           // the list's and sidebar's cursors, find, the sort
     UiPress   press;
+    bool      show_hidden;
+    Places    places;
+    int       place_cur;    // the place holding cwd, -1 for none
+    int       side_hover;   // the sidebar row under the pointer, -1 for none
     char      status[600];
     bool      status_bad;
     i64       status_at;
@@ -71,7 +75,9 @@ static struct {
     int       icon_scale;   // the scale the cache holds icons for
     int       hover;        // the row under the pointer, -1 for none
     int       reloads, themes;
-} app = { .hover = -1 };
+} app = { .hover = -1, .side_hover = -1 };
+
+static UiHistory hist;
 
 static Clay_Color cc(Rgb c)
 {
@@ -137,15 +143,21 @@ static bool join(char *out, size_t cap, const char *dir, Str name)
     return n >= 0 && (size_t)n < cap;
 }
 
-// Shows dir, the cursor on the entry called `select` (else on row `fallback`). False, with the
-// reason in the status line, when dir can't be read: the old listing stays.
-static bool go_to(const char *dir, Str select, isize fallback)
+static Str sel_name(void)
+{
+    return app.have_list && app.ui.list.n > 0 ? app.list.e[app.ui.list.sel].name : STR_EMPTY;
+}
+
+// Shows dir, the cursor on the entry called `select` (else on row `fallback`). A move to another
+// folder goes in the history, unless it is the history's own (`stepping`). False, with the reason
+// in the status line, when dir can't be read: the old listing stays.
+static bool go_to_in(const char *dir, Str select, isize fallback, bool stepping)
 {
     int next = app.have_list ? 1 - app.cur : app.cur;
     arena_reset(&lists[next]);
     Listing l;
     Err err;
-    if (!fs_list(&lists[next], dir, &l, &err)) {
+    if (!fs_list(&lists[next], dir, app.show_hidden, app.ui.sort, &l, &err)) {
         if (!app.have_list) snprintf(app.error, sizeof app.error, "%s", err.msg);
         set_status(true, "%s", err.msg);
         return false;
@@ -159,11 +171,14 @@ static bool go_to(const char *dir, Str select, isize fallback)
         return false;
     }
     bool same = strcmp(dir, app.cwd) == 0;
+    // The folder left, with its cursor, for Back: its name is still in the old listing's arena.
+    if (!same && app.have_list && !stepping) hist_leave(&hist, app.cwd, sel_name());
     app.cur = next, app.list = l, app.mime = mime, app.have_list = true, app.error[0] = 0;
     if (!same) {
         snprintf(app.cwd, sizeof app.cwd, "%s", dir);
         app.status[0] = 0;   // what happened in the last folder
-        app.ui.top = 0;
+        app.ui.list.top = 0;
+        app.place_cur = places_current(&app.places, app.cwd);
         // FX_TEST_WATCH_DELAY_MS widens the gap between the listing and the watch, so
         // tests/gui/watchgap.script can put a change in it.
         if (watch_delay_ms > 0) nanosleep(&(struct timespec){ watch_delay_ms / 1000, (watch_delay_ms % 1000) * 1000000L }, NULL);
@@ -173,8 +188,13 @@ static bool go_to(const char *dir, Str select, isize fallback)
         glfwPostEmptyEvent();
         SetWindowTitle(TextFormat("fx: %s", app.cwd));
     }
-    ui_set(&app.ui, l.n, sel);
+    ui_set(&app.ui.list, l.n, sel);
     return true;
+}
+
+static bool go_to(const char *dir, Str select, isize fallback)
+{
+    return go_to_in(dir, select, fallback, false);
 }
 
 // The folder again (a change on disk): the cursor stays on its name, or on its row when that name
@@ -183,8 +203,8 @@ static void reload(void)
 {
     app.reloads++;
     char keep[NAME_MAX + 1] = "";
-    if (app.ui.n > 0) snprintf(keep, sizeof keep, "%.*s", STR_ARG(app.list.e[app.ui.sel].name));
-    if (go_to(app.cwd, str_from_c(keep), app.ui.sel)) return;
+    snprintf(keep, sizeof keep, "%.*s", STR_ARG(sel_name()));
+    if (go_to(app.cwd, str_from_c(keep), app.ui.list.sel)) return;
     char gone[PATH_MAX], up[PATH_MAX];
     snprintf(gone, sizeof gone, "%s", app.cwd);
     snprintf(up, sizeof up, "%s", app.cwd);
@@ -232,10 +252,50 @@ static void open_entry(isize i)
     else set_status(true, "%s", err.msg);
 }
 
+// Back (-1) or forward (1) through the history. A folder there that is gone now is skipped, with
+// a word in the status line.
+static void hist_go(int dir)
+{
+    UiPlace to;
+    char cur[PATH_MAX], cur_sel[NAME_MAX + 1];
+    snprintf(cur, sizeof cur, "%s", app.cwd);
+    snprintf(cur_sel, sizeof cur_sel, "%.*s", STR_ARG(sel_name()));
+    if (!hist_step(&hist, dir, cur, str_from_c(cur_sel), &to)) return;
+    if (!go_to_in(to.dir, str_from_c(to.sel), 0, true)) {
+        // The step was taken: put the current folder back where it came from.
+        UiPlace back;
+        hist_step(&hist, -dir, to.dir, STR_EMPTY, &back);
+    }
+}
+
+// The listing in a new order, the cursor kept on its entry. The MIME types, cached by row, go.
+static void resort(void)
+{
+    char keep[NAME_MAX + 1];
+    snprintf(keep, sizeof keep, "%.*s", STR_ARG(sel_name()));
+    fs_sort(&app.list, app.ui.sort);
+    memset(app.mime, 0, sizeof *app.mime * (size_t)app.list.n);
+    isize sel = listing_find(&app.list, str_from_c(keep));
+    ui_set(&app.ui.list, app.list.n, sel >= 0 ? sel : 0);
+}
+
 static void act(UiAction a)
 {
     Err err;
     switch (a.kind) {
+    case UA_BACK: hist_go(-1); break;
+    case UA_FORWARD: hist_go(1); break;
+    case UA_HIDDEN: {
+        app.show_hidden = !app.show_hidden;
+        char keep[NAME_MAX + 1];
+        snprintf(keep, sizeof keep, "%.*s", STR_ARG(sel_name()));
+        go_to(app.cwd, str_from_c(keep), 0);
+        break;
+    }
+    case UA_SORT: resort(); break;
+    case UA_PLACE:
+        if (a.index >= 0 && a.index < app.places.n) go_to(app.places.p[a.index].path, STR_EMPTY, 0);
+        break;
     case UA_OPEN: open_entry(a.index); break;
     case UA_PARENT: go_parent(); break;
     case UA_TERMINAL:
@@ -277,29 +337,19 @@ static Str entry_mime(isize i)
     return app.mime[i];
 }
 
-// The texture for entry i, loaded the first time its icon is needed; NULL when the theme has none.
-static IconSlot *entry_icon(isize i)
+// The texture under key, from the first of names the theme has, loaded the first time it is
+// needed; NULL when the cache is full. names NULL: they are the MIME type's (key).
+static IconSlot *icon_for(Str key, const Str *given, isize ngiven)
 {
-    const Entry *e = &app.list.e[i];
-    Str key, names[6];
-    isize n = 0;
-    if (kind_is_dir(e->kind)) {
-        char path[PATH_MAX];
-        Str special = join(path, sizeof path, app.cwd, e->name) ? user_dir_icon(&app.user_dirs, path) : STR_EMPTY;
-        if (special.len) names[n++] = special;
-        names[n++] = S("folder");
-        key = names[0];
-    } else {
-        key = entry_mime(i);
-    }
     int k;
     if (strmap_get(&app.slot_of, key, &k)) return &app.slot[k];
     if (app.nslots == ICONS_MAX) return NULL;
     ArenaMark mark = arena_mark(&scratch);
-    if (!kind_is_dir(e->kind)) n = mime_icon_names(&scratch, &app.mime_db, key, names);
+    Str names[6];
+    isize n = given ? ngiven : mime_icon_names(&scratch, &app.mime_db, key, names);
     IconSlot *s = &app.slot[app.nslots];
     *s = (IconSlot){ .key = { arena_cstr(&icona, key), key.len } };
-    const char *file = icon_find(&scratch, &app.icons, names, n, ICON_PX, app.icon_scale);
+    const char *file = icon_find(&scratch, &app.icons, given ? given : names, n, ICON_PX, app.icon_scale);
     if (file) {
         snprintf(s->file, sizeof s->file, "%s", file);
         s->tex = LoadTexture(file);
@@ -308,6 +358,27 @@ static IconSlot *entry_icon(isize i)
     arena_restore(&scratch, mark);
     strmap_put(&app.slot_of, s->key, app.nslots);
     return &app.slot[app.nslots++];
+}
+
+// The texture for entry i.
+static IconSlot *entry_icon(isize i)
+{
+    const Entry *e = &app.list.e[i];
+    if (!kind_is_dir(e->kind)) return icon_for(entry_mime(i), NULL, 0);
+    Str names[2];
+    isize n = 0;
+    char path[PATH_MAX];
+    Str special = join(path, sizeof path, app.cwd, e->name) ? user_dir_icon(&app.user_dirs, path) : STR_EMPTY;
+    if (special.len) names[n++] = special;
+    names[n++] = S("folder");
+    return icon_for(names[0], names, n);
+}
+
+static IconSlot *place_icon(int i)
+{
+    Str names[4];
+    isize n = place_icon_names(&app.places.p[i], &app.user_dirs, names);
+    return icon_for(names[0], names, n);
 }
 
 // ---- layout ---------------------------------------------------------------------------------
@@ -341,33 +412,87 @@ static Clay_String fit(Str s, float width, bool keep_end)
 
 static int list_rows(int h)
 {
-    int r = (h - HEADER_H - FOOTER_H) / ROW_H;
+    int r = (h - HEADER_H - COLS_H - FOOTER_H) / ROW_H;
     return r > 0 ? r : 0;
+}
+
+static int side_rows(int h)
+{
+    int r = (h - HEADER_H - FOOTER_H - PAD) / SIDE_ROW_H;
+    return r > 0 ? r : 0;
+}
+
+static void icon_box(Clay_ElementId id, IconSlot *icon, int px)
+{
+    CLAY(id, { .layout = { .sizing = { CLAY_SIZING_FIXED(px), CLAY_SIZING_FIXED(px) } },
+               .image = { .imageData = icon && icon->tex.id ? &icon->tex : NULL } }) {}
+}
+
+static void layout_side(float h)
+{
+    Theme *t = &app.theme;
+    CLAY(CLAY_ID("side"), { .layout = { .sizing = { CLAY_SIZING_FIXED(SIDE_W), CLAY_SIZING_FIXED(h) },
+                                        .layoutDirection = CLAY_TOP_TO_BOTTOM, .padding = { 0, 0, PAD / 2, 0 } },
+                            .backgroundColor = cc(t->bg_light) }) {
+        UiList *sl = &app.ui.side;
+        for (int r = 0; r < sl->rows && sl->top + r < sl->n; r++) {
+            int i = (int)(sl->top + r);
+            bool cursor = app.ui.side_focus && i == sl->sel, here = i == app.place_cur, hover = r == app.side_hover;
+            Clay_Color bg = cursor ? cc(t->selection) : hover ? cc(t->bg) : cc(t->bg_light);
+            CLAY(CLAY_IDI("side-row", r), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(SIDE_ROW_H) },
+                                                        .padding = { PAD, PAD, 0, 0 }, .childGap = 8,
+                                                        .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
+                                            .backgroundColor = bg,
+                                            .border = { .color = cc(t->accent), .width = { .left = cursor ? 3 : 0 } } }) {
+                icon_box(CLAY_IDI("side-icon", r), place_icon(i), SIDE_ICON_PX);
+                Str label = str_from_c(app.places.p[i].label);
+                text(fit(label, SIDE_W - 2 * PAD - SIDE_ICON_PX - 8, false), here ? cc(t->accent) : cc(t->fg));
+            }
+        }
+    }
+}
+
+// The column headers: Name, Size, Modified, the sorted one with an arrow; a click sorts.
+static void layout_cols(void)
+{
+    Theme *t = &app.theme;
+    static const char *const NAMES[SORT_KEYS] = { "Name", "Size", "Modified" };
+    static const char *const IDS[SORT_KEYS] = { "col-name", "col-size", "col-date" };
+    CLAY(CLAY_ID("cols"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(COLS_H) },
+                                        .padding = { PAD + ICON_PX + GAP, PAD, 0, 0 }, .childGap = GAP,
+                                        .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
+                            .border = { .color = cc(t->bg_light), .width = { .bottom = 1 } } }) {
+        for (int k = 0; k < SORT_KEYS; k++) {
+            bool on = app.ui.sort.key == (SortKey)k;
+            Clay_String label = cz(arena_sprintf(&frame, "%s%s", NAMES[k], !on ? "" : app.ui.sort.reverse ? " \xE2\x96\xBC" : " \xE2\x96\xB2"));
+            Clay_Sizing size = k == SORT_NAME ? (Clay_Sizing){ CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0) }
+                             : (Clay_Sizing){ CLAY_SIZING_FIXED(k == SORT_SIZE ? SIZE_W : DATE_W), CLAY_SIZING_GROW(0) };
+            CLAY(Clay_GetElementId(cz(IDS[k])), { .layout = { .sizing = size, .childAlignment = { .x = k == SORT_NAME ? CLAY_ALIGN_X_LEFT : CLAY_ALIGN_X_RIGHT,
+                                                                                                    .y = CLAY_ALIGN_Y_CENTER } } }) {
+                text(label, on ? cc(t->fg) : cc(t->fg_dim));
+            }
+        }
+    }
 }
 
 static void layout_row(int r, isize i, float w, i64 now)
 {
     const Entry *e = &app.list.e[i];
     Theme *t = &app.theme;
-    bool sel = i == app.ui.sel, hover = r == app.hover;
+    bool sel = i == app.ui.list.sel, hover = r == app.hover;
     Clay_Color bg = sel ? cc(t->selection) : hover ? cc(t->bg_light) : cc(t->bg);
     IconSlot *icon = entry_icon(i);
     char size[32] = "", when[32] = "";
     if (!kind_is_dir(e->kind) && e->kind != K_LINK_BROKEN && e->kind != K_OTHER) ui_size(size, sizeof size, e->size);
     if (e->mtime) ui_when(when, sizeof when, e->mtime, now);
     bool link = e->kind == K_LINK_DIR || e->kind == K_LINK_FILE || e->kind == K_LINK_BROKEN;
-    float name_w = w - 2 * PAD - ICON_PX - 3 * 10 - SIZE_W - DATE_W - (link ? 16 : 0);
+    float name_w = w - SIDE_W - 2 * PAD - ICON_PX - 3 * GAP - SIZE_W - DATE_W - (link ? 16 : 0);
     CLAY(CLAY_IDI("row", r), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(ROW_H) },
-                                           .padding = { PAD, PAD, 0, 0 }, .childGap = 10,
+                                           .padding = { PAD, PAD, 0, 0 }, .childGap = GAP,
                                            .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
                                .backgroundColor = bg,
-                               .border = { .color = cc(t->accent), .width = { .left = sel ? 3 : 0 } } }) {
-        if (icon && icon->tex.id) {
-            CLAY(CLAY_IDI("icon", r), { .layout = { .sizing = { CLAY_SIZING_FIXED(ICON_PX), CLAY_SIZING_FIXED(ICON_PX) } },
-                                        .image = { .imageData = &icon->tex } }) {}
-        } else {
-            CLAY(CLAY_IDI("noicon", r), { .layout = { .sizing = { CLAY_SIZING_FIXED(ICON_PX), CLAY_SIZING_FIXED(ICON_PX) } } }) {}
-        }
+                               .border = { .color = cc(t->accent), .width = { .left = sel && !app.ui.side_focus ? 3 : 0 } } }) {
+        icon_box(CLAY_IDI("icon", r), icon, ICON_PX);
         CLAY(CLAY_IDI("name", r), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .childGap = 6 } }) {
             text(fit(e->name, name_w, false), e->kind == K_LINK_BROKEN ? cc(t->red) : cc(t->fg));
             if (link) text(cz("\xE2\x86\x92"), cc(t->fg_dim));   // →
@@ -406,6 +531,11 @@ static Clay_RenderCommandArray layout(int w, int h)
             }
             text(cs(cnt), cc(t->fg_dim));
         }
+        float body_h = (float)(h - HEADER_H - FOOTER_H);
+        CLAY(CLAY_ID("body"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(body_h) } } }) {
+        layout_side(body_h);
+        CLAY(CLAY_ID("main"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0) }, .layoutDirection = CLAY_TOP_TO_BOTTOM } }) {
+        layout_cols();
         CLAY(CLAY_ID("list"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0) }, .layoutDirection = CLAY_TOP_TO_BOTTOM },
                                 .clip = { .vertical = true } }) {
             if (!app.have_list) {
@@ -415,14 +545,27 @@ static Clay_RenderCommandArray layout(int w, int h)
                     text(cz(app.list.hidden ? "Only hidden files" : "Empty folder"), cc(t->fg_dim));
                 }
             }
-            for (int r = 0; app.have_list && r < app.ui.rows && app.ui.top + r < app.list.n; r++)
-                layout_row(r, app.ui.top + r, (float)w, now);
+            for (int r = 0; app.have_list && r < app.ui.list.rows && app.ui.list.top + r < app.list.n; r++)
+                layout_row(r, app.ui.list.top + r, (float)w, now);
+        }
+        }
         }
         CLAY(CLAY_ID("footer"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(FOOTER_H) },
                                               .padding = { PAD, PAD, 0, 0 }, .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
                                   .backgroundColor = cc(t->bg_light) }) {
-            if (app.status[0]) text(fit(str_from_c(app.status), (float)w - 2 * PAD, false), app.status_bad ? cc(t->red) : cc(t->fg));
-            else text(cz("Enter open \xC2\xB7 Backspace up \xC2\xB7 t terminal \xC2\xB7 ~ home \xC2\xB7 Ctrl+Q quit"), cc(t->fg_dim));
+            if (app.ui.finding) {
+                // The find line: its text, red when it matches nothing, and a caret.
+                Str f = { app.ui.find, app.ui.find_len };
+                text(cz("Find: "), cc(t->fg_dim));
+                text(fit(f, (float)w - 2 * PAD - 80, true), app.ui.find_miss ? cc(t->red) : cc(t->fg));
+                CLAY(CLAY_ID("caret"), { .layout = { .sizing = { CLAY_SIZING_FIXED(2), CLAY_SIZING_FIXED(FONT_PX + 2) } },
+                                         .backgroundColor = cc(t->accent) }) {}
+            } else if (app.status[0]) {
+                text(fit(str_from_c(app.status), (float)w - 2 * PAD, false), app.status_bad ? cc(t->red) : cc(t->fg));
+            } else {
+                text(cz("Enter open \xC2\xB7 Backspace up \xC2\xB7 / find \xC2\xB7 . hidden \xC2\xB7 s sort \xC2\xB7 "
+                        "Tab places \xC2\xB7 t terminal \xC2\xB7 Ctrl+Q quit"), cc(t->fg_dim));
+            }
         }
     }
     return Clay_EndLayout(0);   // deltaTime drives transitions, which we do not use
@@ -447,20 +590,28 @@ static GLFWcharfun        raylib_char;
 static GLFWmousebuttonfun raylib_button;
 static bool               debug_input;   // FX_GUI_DEBUG: log every key and button event
 
+// Keys and characters in the order they came (find needs `/`, text, then Enter).
 static struct {
-    UiKey key[UI_KEYS_MAX];
-    int   n;
-} keyq;
+    UiEvent ev[UI_EVENTS_MAX];
+    int     n;
+} evq;
 
-static int mouse_backs;
+static int mouse_backs, mouse_forwards;
 
-static void key_push(UiKey k)
+static void ev_push(UiEvent e)
 {
-    if (k && keyq.n < UI_KEYS_MAX) keyq.key[keyq.n++] = k;
+    if (evq.n < UI_EVENTS_MAX) evq.ev[evq.n++] = e;
 }
 
-static UiKey ui_key_of(int key)
+// A key and its modifiers as ui/ names it; UK_NONE for the rest (letters come as characters).
+static UiKey ui_key_of(int key, int mods)
 {
+    int m = mods & (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT | GLFW_MOD_ALT | GLFW_MOD_SUPER);
+    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_F) return UK_FIND;
+    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_H) return UK_HIDDEN;
+    if (m == GLFW_MOD_ALT && key == GLFW_KEY_LEFT) return UK_BACK;
+    if (m == GLFW_MOD_ALT && key == GLFW_KEY_RIGHT) return UK_FORWARD;
+    if (m & (GLFW_MOD_CONTROL | GLFW_MOD_ALT | GLFW_MOD_SUPER)) return UK_NONE;
     switch (key) {
     case GLFW_KEY_UP: return UK_UP;
     case GLFW_KEY_DOWN: return UK_DOWN;
@@ -469,25 +620,12 @@ static UiKey ui_key_of(int key)
     case GLFW_KEY_HOME: return UK_HOME;
     case GLFW_KEY_END: return UK_END;
     case GLFW_KEY_ENTER:
-    case GLFW_KEY_KP_ENTER:
-    case GLFW_KEY_RIGHT: return UK_OPEN;
-    case GLFW_KEY_BACKSPACE:
-    case GLFW_KEY_LEFT: return UK_PARENT;
-    default: return UK_NONE;
-    }
-}
-
-static UiKey ui_char_of(u32 cp)
-{
-    switch (cp) {
-    case 'j': return UK_DOWN;
-    case 'k': return UK_UP;
-    case 'l': return UK_OPEN;
-    case 'h': return UK_PARENT;
-    case 'g': return UK_HOME;
-    case 'G': return UK_END;
-    case 't': return UK_TERMINAL;
-    case '~': return UK_HOMEDIR;
+    case GLFW_KEY_KP_ENTER: return UK_ENTER;
+    case GLFW_KEY_RIGHT: return UK_RIGHT;
+    case GLFW_KEY_LEFT: return UK_LEFT;
+    case GLFW_KEY_BACKSPACE: return UK_BACKSPACE;
+    case GLFW_KEY_ESCAPE: return UK_ESC;
+    case GLFW_KEY_TAB: return m == 0 ? UK_TAB : UK_NONE;
     default: return UK_NONE;
     }
 }
@@ -496,32 +634,65 @@ static void on_key(GLFWwindow *w, int key, int scancode, int action, int mods)
 {
     if (debug_input) fprintf(stderr, "fx: key %d action %d mods %#x\n", key, action, mods);
     if (action == GLFW_PRESS && key == GLFW_KEY_Q && (mods & GLFW_MOD_CONTROL)) app.quit = true;
-    if (action != GLFW_RELEASE && !(mods & (GLFW_MOD_CONTROL | GLFW_MOD_ALT | GLFW_MOD_SUPER))) key_push(ui_key_of(key));
+    UiKey k = action != GLFW_RELEASE ? ui_key_of(key, mods) : UK_NONE;
+    if (k) ev_push((UiEvent){ k, 0 });
     if (raylib_key) raylib_key(w, key, scancode, action, mods);
 }
 
 static void on_char(GLFWwindow *w, unsigned int cp)
 {
     if (debug_input) fprintf(stderr, "fx: char %#x\n", cp);
-    key_push(ui_char_of(cp));
+    ev_push((UiEvent){ UK_NONE, cp });
     if (raylib_char) raylib_char(w, cp);
 }
 
-// The mouse's back (thumb) button goes to the parent, as Backspace does. Linux reports it as
-// BTN_SIDE (GLFW button 4) on most mice, BTN_BACK (7) on some (uml-viewer's finding).
+// The mouse's back and forward (thumb) buttons walk the history. Linux reports them as BTN_SIDE
+// and BTN_EXTRA (GLFW buttons 4 and 5) on most mice, BTN_BACK and BTN_FORWARD (7 and 6) on some
+// (uml-viewer's finding).
 static void on_button(GLFWwindow *w, int button, int action, int mods)
 {
     if (debug_input) fprintf(stderr, "fx: mouse button %d action %d mods %#x\n", button + 1, action, mods);
     if (action == GLFW_PRESS && (button == GLFW_MOUSE_BUTTON_4 || button == GLFW_MOUSE_BUTTON_7)) mouse_backs++;
+    if (action == GLFW_PRESS && (button == GLFW_MOUSE_BUTTON_5 || button == GLFW_MOUSE_BUTTON_6)) mouse_forwards++;
     if (raylib_button) raylib_button(w, button, action, mods);
 }
 
-// The screen row at logical y, -1 off the rows.
-static int row_at(float y)
+// What is under a point of the last frame drawn: a list row, a sidebar row, or a column header
+// (each -1 when not).
+typedef struct {
+    int row, side, header;
+} Hit;
+
+static bool in_box(Clay_ElementId id, float x, float y)
 {
-    if (y < HEADER_H) return -1;
-    int r = (int)((y - HEADER_H) / ROW_H);
-    return r < app.ui.rows && app.ui.top + r < app.ui.n ? r : -1;
+    Clay_ElementData d = Clay_GetElementData(id);
+    return d.found && x >= d.boundingBox.x && x < d.boundingBox.x + d.boundingBox.width && y >= d.boundingBox.y &&
+           y < d.boundingBox.y + d.boundingBox.height;
+}
+
+static Hit hit_at(float x, float y)
+{
+    Hit h = { -1, -1, -1 };
+    for (int r = 0; r < app.ui.list.rows && h.row < 0; r++)
+        if (in_box(CLAY_IDI("row", r), x, y)) h.row = r;
+    for (int r = 0; r < app.ui.side.rows && h.side < 0; r++)
+        if (in_box(CLAY_IDI("side-row", r), x, y)) h.side = r;
+    static const char *const IDS[SORT_KEYS] = { "col-name", "col-size", "col-date" };
+    for (int k = 0; k < SORT_KEYS && h.header < 0; k++)
+        if (in_box(Clay_GetElementId(cz(IDS[k])), x, y)) h.header = k;
+    return h;
+}
+
+// A left press at a point, into in: a list row's goes through the double-click timing.
+static void press_at(UiInput *in, float x, float y)
+{
+    Hit h = hit_at(x, y);
+    if (h.row >= 0) {
+        if (ui_press(&app.press, h.row, now_ms()) == 2) in->dclick = h.row;
+        else in->click = h.row;
+    }
+    in->side_click = h.side;
+    in->header = h.header;
 }
 
 static float wheel_left;   // a touchpad's part of a notch, carried to the next frame
@@ -530,30 +701,36 @@ static float wheel_left;   // a touchpad's part of a notch, carried to the next 
 static UiInput input_real(bool *seen)
 {
     UiInput in = ui_input_none();
-    for (int k = 0; k < keyq.n; k++) in.keys[in.nkeys++] = keyq.key[k];
-    *seen = keyq.n > 0 || IsWindowResized();
-    keyq.n = 0;
+    memcpy(in.ev, evq.ev, sizeof *evq.ev * (size_t)evq.n);
+    in.nev = evq.n;
+    *seen = evq.n > 0 || IsWindowResized();
+    evq.n = 0;
     while (GetKeyPressed() != 0) *seen = true;
     while (GetCharPressed() != 0) {}
-    wheel_left += GetMouseWheelMove();
-    in.wheel = (int)wheel_left;
-    wheel_left -= (float)in.wheel;
     Vector2 m = GetMousePosition(), d = GetMouseDelta();
+    wheel_left += GetMouseWheelMove();
+    int notches = (int)wheel_left;
+    wheel_left -= (float)notches;
+    if (m.x >= SIDE_W) in.wheel = notches;
+    else if (notches) app.ui.side.top = ui_clamp(app.ui.side.top - notches, 0, ui_max_top(&app.ui.side)), *seen = true;
     if (d.x != 0 || d.y != 0) {
-        int h = row_at(m.y);
-        *seen |= h != app.hover;
-        app.hover = h;
+        Hit h = hit_at(m.x, m.y);
+        *seen |= h.row != app.hover || h.side != app.side_hover;
+        app.hover = h.row, app.side_hover = h.side;
     }
-    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-        int r = row_at(m.y);
-        if (r >= 0) {
-            if (ui_press(&app.press, r, now_ms()) == 2) in.dclick = r;
-            else in.click = r;
-        }
-    }
+    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) press_at(&in, m.x, m.y);
     in.backs = mouse_backs, mouse_backs = 0;
-    *seen |= in.wheel != 0 || in.click >= 0 || in.dclick >= 0 || in.backs > 0;
+    in.forwards = mouse_forwards, mouse_forwards = 0;
+    *seen |= in.wheel != 0 || in.click >= 0 || in.dclick >= 0 || in.side_click >= 0 || in.header >= 0 || in.backs > 0 ||
+             in.forwards > 0;
     return in;
+}
+
+// For find: the name of entry i.
+static Str list_name(void *ctx, isize i)
+{
+    (void)ctx;
+    return app.list.e[i].name;
 }
 
 // ---- signals --------------------------------------------------------------------------------
@@ -589,7 +766,8 @@ static void usage(void)
     fprintf(stderr, "usage: fx [FOLDER]\n"
                     "  A file explorer: the folder (default: the current one) as a list.\n"
                     "  Enter, Right, l open; Backspace, Left, h up; j k, arrows, PgUp PgDn, Home End, g G move;\n"
-                    "  t terminal here; ~ home; Ctrl+Q quit.\n");
+                    "  Alt+Left/Right back and forward; / or Ctrl+F find, n N again; . or Ctrl+H hidden files;\n"
+                    "  s sort by the next column, S reverse; Tab the places; t terminal here; ~ home; Ctrl+Q quit.\n");
 }
 
 int main(int argc, char **argv)
@@ -668,7 +846,11 @@ int main(int argc, char **argv)
     user_dirs_load(&data, &app.user_dirs);
     theme_apply();
     if (!watch_start()) set_status(true, "inotify is unavailable: no live refresh");
-    ui_resize(&app.ui, list_rows(GetScreenHeight()));
+    char bm[PATH_MAX];
+    places_load(&scratch, &app.places, bookmarks_path(bm, sizeof bm), "/proc/self/mountinfo");
+    ui_set(&app.ui.side, app.places.n, 0);
+    ui_resize(&app.ui.list, list_rows(GetScreenHeight()));
+    ui_resize(&app.ui.side, side_rows(GetScreenHeight()));
     app.press.row = -1;
     go_to(dir, STR_EMPTY, 0);
     if (!app.have_list) snprintf(app.cwd, sizeof app.cwd, "%s", dir);
@@ -702,8 +884,9 @@ int main(int argc, char **argv)
         PollInputEvents();   // waits for input, or for watch.c's wake-up
         if (atomic_exchange(&watch.theme_ready, false)) theme_apply(), app.themes++, dirty = true;
         if (atomic_exchange(&watch.list_ready, false)) reload(), dirty = true;
-        int rows = list_rows(GetScreenHeight());
-        if (rows != app.ui.rows) ui_resize(&app.ui, rows), dirty = true;
+        int rows = list_rows(GetScreenHeight()), srows = side_rows(GetScreenHeight());
+        if (rows != app.ui.list.rows) ui_resize(&app.ui.list, rows), dirty = true;
+        if (srows != app.ui.side.rows) ui_resize(&app.ui.side, srows), dirty = true;
         bool seen;
         UiInput in = input_real(&seen);
         if (scripted) {
@@ -711,7 +894,7 @@ int main(int argc, char **argv)
             if (!script_input(&in)) break;
             seen = true;
         }
-        UiAction a = ui_handle(&app.ui, &in);
+        UiAction a = ui_handle(&app.ui, (UiNames){ list_name, NULL }, &in);
         if (a.kind != UA_NONE) act(a);
         dirty |= seen;
     }

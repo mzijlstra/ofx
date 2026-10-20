@@ -113,13 +113,14 @@ static bool icon_scan(Arena *a, const char *dir, StrMap *m)
     return true;
 }
 
-// fx asks only for folder and file icons, which themes keep under Places and MimeTypes (and
+// fx asks only for folder, drive and file icons, which themes keep under Places, Devices and
+// MimeTypes (and
 // hicolor's 600-odd app directories would take most of the start-up). A directory that names no
 // context is read too.
 static bool icon_context_used(Str context)
 {
     return context.len == 0 || str_eq(context, S("Places")) || str_eq(context, S("MimeTypes")) ||
-           str_eq(context, S("Mimetypes"));
+           str_eq(context, S("Mimetypes")) || str_eq(context, S("Devices"));
 }
 
 static bool icon_has_theme(const IconDb *db, Str name)

@@ -25,7 +25,7 @@ int main(int argc, char **argv)
     i64 t1 = now_ms();
     Listing l;
     Err err;
-    if (!fs_list(&a, argv[1], &l, &err)) return fprintf(stderr, "%s\n", err.msg), 1;
+    if (!fs_list(&a, argv[1], true, (Sort){ 0 }, &l, &err)) return fprintf(stderr, "%s\n", err.msg), 1;
     i64 t2 = now_ms();
     printf("theme %s, %d colours, accent #%02x%02x%02x; %td globs, %td icon themes (%td dirs in the first); load %lld ms, list %lld ms\n",
            t.icons, t.ncolors, t.accent.r, t.accent.g, t.accent.b, db.n, icons.n, icons.n ? icons.t[0].ndirs : 0,

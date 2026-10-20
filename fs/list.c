@@ -1,5 +1,6 @@
 // One folder's entries: read with readdir and fstatat, into an arena reset per folder, and sorted
-// folders first, then by name in natural order, ignoring case (docs/plan.md, "The listing").
+// folders first, then by name in natural order ignoring case, or by size or modified time
+// (docs/plan.md, "The listing" and F2's "Sort").
 
 #include "../base/base.h"
 
@@ -30,8 +31,15 @@ typedef struct {
 typedef struct {
     Entry *e;
     isize  n;
-    isize  hidden;   // dot-files left out
+    isize  hidden;   // dot-files in the folder (left out unless shown)
 } Listing;
+
+typedef enum { SORT_NAME, SORT_SIZE, SORT_MTIME, SORT_KEYS } SortKey;
+
+typedef struct {
+    SortKey key;
+    bool    reverse;
+} Sort;
 
 static bool kind_is_dir(Kind k)
 {
@@ -81,11 +89,23 @@ static int natural_cmp(Str a, Str b)
     return c < 0 ? -1 : c > 0 ? 1 : a.len < b.len ? -1 : a.len > b.len ? 1 : 0;
 }
 
-static int entry_cmp(const void *x, const void *y)
+// Folders first, whichever way; then the key, reversed if asked; ties by name, so the order is
+// total and the same every time.
+static int entry_cmp(const void *x, const void *y, void *ctx)
 {
     const Entry *a = x, *b = y;
+    const Sort *s = ctx;
     if (kind_is_dir(a->kind) != kind_is_dir(b->kind)) return kind_is_dir(a->kind) ? -1 : 1;
-    return natural_cmp(a->name, b->name);
+    int c = 0;
+    if (s->key == SORT_SIZE && a->size != b->size) c = a->size < b->size ? -1 : 1;
+    else if (s->key == SORT_MTIME && a->mtime != b->mtime) c = a->mtime < b->mtime ? -1 : 1;
+    if (c == 0) c = natural_cmp(a->name, b->name);
+    return s->reverse ? -c : c;
+}
+
+static void fs_sort(Listing *l, Sort s)
+{
+    qsort_r(l->e, (size_t)l->n, sizeof *l->e, entry_cmp, &s);
 }
 
 // ---- reading --------------------------------------------------------------------------------
@@ -102,9 +122,9 @@ static Kind kind_of(int dirfd, const char *name, struct stat *st)
     return S_ISDIR(st->st_mode) ? K_DIR : S_ISREG(st->st_mode) ? K_FILE : K_OTHER;
 }
 
-// The entries of dir, sorted, dot-files left out (counted in hidden). False, with the reason, when
-// the folder can't be opened or the arena is full.
-static bool fs_list(Arena *a, const char *dir, Listing *out, Err *err)
+// The entries of dir, sorted; dot-files counted in hidden, and left out unless show_hidden. False,
+// with the reason, when the folder can't be opened or the arena is full.
+static bool fs_list(Arena *a, const char *dir, bool show_hidden, Sort sort, Listing *out, Err *err)
 {
     *out = (Listing){ 0 };
     DIR *d = opendir(dir);
@@ -117,9 +137,10 @@ static bool fs_list(Arena *a, const char *dir, Listing *out, Err *err)
     bool ok = e != NULL;
     for (struct dirent *de; ok && (de = readdir(d));) {
         const char *nm = de->d_name;
+        if (strcmp(nm, ".") == 0 || strcmp(nm, "..") == 0) continue;
         if (nm[0] == '.') {
-            if (strcmp(nm, ".") != 0 && strcmp(nm, "..") != 0) out->hidden++;
-            continue;
+            out->hidden++;
+            if (!show_hidden) continue;
         }
         if (n == cap) {
             Entry *grown = arena_try_new(a, Entry, cap * 2);
@@ -149,8 +170,8 @@ static bool fs_list(Arena *a, const char *dir, Listing *out, Err *err)
     }
     closedir(d);
     if (!ok) return err_set(err, "%s: too many entries for memory", dir), false;
-    qsort(e, (size_t)n, sizeof *e, entry_cmp);
     out->e = e, out->n = n;
+    fs_sort(out, sort);
     return true;
 }
 

@@ -157,7 +157,7 @@ static void test_list(void)
 
     Listing l;
     Err err;
-    CHECK(fs_list(&ta, at("list"), &l, &err));
+    CHECK(fs_list(&ta, at("list"), false, (Sort){ 0 }, &l, &err));
     const char *want[] = { "Adir", "link-dir", "zdir", "A.txt", "b2.txt", "b10.txt", "link-broken", "link-file", "pipe" };
     CHECK(l.n == COUNT(want));
     for (isize i = 0; i < l.n && i < COUNT(want); i++) CHECK_STR(l.e[i].name, want[i]);
@@ -176,12 +176,12 @@ static void test_list(void)
 
     // An empty folder, a missing one, one without read permission.
     mkdirs(at("empty"));
-    CHECK(fs_list(&ta, at("empty"), &l, &err) && l.n == 0 && l.hidden == 0);
-    CHECK(!fs_list(&ta, at("missing"), &l, &err) && strstr(err.msg, "No such file") && strstr(err.msg, "missing"));
+    CHECK(fs_list(&ta, at("empty"), false, (Sort){ 0 }, &l, &err) && l.n == 0 && l.hidden == 0);
+    CHECK(!fs_list(&ta, at("missing"), false, (Sort){ 0 }, &l, &err) && strstr(err.msg, "No such file") && strstr(err.msg, "missing"));
     mkdirs(at("closed"));
     chmod(at("closed"), 0);
     bool can = access(at("closed"), R_OK) == 0;   // root reads anything
-    if (!can) CHECK(!fs_list(&ta, at("closed"), &l, &err) && strstr(err.msg, "Permission denied"));
+    if (!can) CHECK(!fs_list(&ta, at("closed"), false, (Sort){ 0 }, &l, &err) && strstr(err.msg, "Permission denied"));
     chmod(at("closed"), 0755);
 
     // More entries than the first array holds (256): it grows, and keeps them all in order.
@@ -190,7 +190,7 @@ static void test_list(void)
         snprintf(name, sizeof name, "many/f%d", k);
         put(at("%s", name), "");
     }
-    CHECK(fs_list(&ta, at("many"), &l, &err) && l.n == 600);
+    CHECK(fs_list(&ta, at("many"), false, (Sort){ 0 }, &l, &err) && l.n == 600);
     bool sorted = true;
     for (isize k = 0; k < l.n; k++) {
         char want_name[32];
@@ -203,7 +203,7 @@ static void test_list(void)
     static u8 tiny_mem[KiB(8)];
     Arena tiny;
     arena_init(&tiny, "tiny", tiny_mem, sizeof tiny_mem);
-    CHECK(!fs_list(&tiny, at("many"), &l, &err) && strstr(err.msg, "too many"));
+    CHECK(!fs_list(&tiny, at("many"), false, (Sort){ 0 }, &l, &err) && strstr(err.msg, "too many"));
 }
 
 // ---- MIME -----------------------------------------------------------------------------------
@@ -673,134 +673,533 @@ static UiInput keys(int n, ...)
     UiInput in = ui_input_none();
     va_list ap;
     va_start(ap, n);
-    for (int i = 0; i < n; i++) in.keys[in.nkeys++] = (UiKey)va_arg(ap, int);
+    for (int i = 0; i < n; i++) in.ev[in.nev++] = (UiEvent){ (UiKey)va_arg(ap, int), 0 };
     va_end(ap);
     return in;
 }
 
+// Each byte of s (ASCII) as a typed character.
+static UiInput chars(const char *s)
+{
+    UiInput in = ui_input_none();
+    for (; *s && in.nev < UI_EVENTS_MAX; s++) in.ev[in.nev++] = (UiEvent){ UK_NONE, (u32)(unsigned char)*s };
+    return in;
+}
+
+// The names find searches: f0 .. f99, and a few with letters, for test_find.
+static const char *const find_names[] = { "alpha", "Beta", "gamma.txt", "delta", "BETAMAX", "omega", "caf\xC3\xA9" };
+static Str name_at(void *ctx, isize i)
+{
+    (void)ctx;
+    static char buf[16];
+    if (i < COUNT(find_names)) return str_from_c(find_names[i]);
+    snprintf(buf, sizeof buf, "f%td", i);
+    return str_from_c(buf);
+}
+
 static void test_ui(void)
 {
-    UiList l = { 0 };
-    ui_resize(&l, 10);
-    ui_set(&l, 100, 0);
-    CHECK(l.sel == 0 && l.top == 0);
+    Ui u = { 0 };
+    UiNames names = { name_at, NULL };
+    ui_resize(&u.list, 10);
+    ui_set(&u.list, 100, 0);
+    CHECK(u.list.sel == 0 && u.list.top == 0);
     UiInput in = keys(1, UK_DOWN);
-    CHECK(ui_handle(&l, &in).kind == UA_NONE && l.sel == 1 && l.top == 0);
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.list.sel == 1 && u.list.top == 0);
     in = keys(1, UK_UP);
-    ui_handle(&l, &in);
+    ui_handle(&u, names, &in);
     in = keys(1, UK_UP);   // at the top: stays
-    ui_handle(&l, &in);
-    CHECK(l.sel == 0);
+    ui_handle(&u, names, &in);
+    CHECK(u.list.sel == 0);
     in = keys(1, UK_PAGEDOWN);   // a page is rows - 1, so a row stays in view
-    ui_handle(&l, &in);
-    CHECK(l.sel == 9 && l.top == 0);
-    ui_handle(&l, &in);
-    CHECK(l.sel == 18 && l.top == 9);
+    ui_handle(&u, names, &in);
+    CHECK(u.list.sel == 9 && u.list.top == 0);
+    ui_handle(&u, names, &in);
+    CHECK(u.list.sel == 18 && u.list.top == 9);
     in = keys(1, UK_PAGEUP);
-    ui_handle(&l, &in);
-    CHECK(l.sel == 9 && l.top == 9);
+    ui_handle(&u, names, &in);
+    CHECK(u.list.sel == 9 && u.list.top == 9);
     in = keys(1, UK_END);
-    ui_handle(&l, &in);
-    CHECK(l.sel == 99 && l.top == 90);
+    ui_handle(&u, names, &in);
+    CHECK(u.list.sel == 99 && u.list.top == 90);
     in = keys(1, UK_HOME);
-    ui_handle(&l, &in);
-    CHECK(l.sel == 0 && l.top == 0);
+    ui_handle(&u, names, &in);
+    CHECK(u.list.sel == 0 && u.list.top == 0);
 
     // The wheel scrolls one row a notch and leaves the cursor; it stops at the ends.
     in = ui_input_none();
     in.wheel = -3;
-    ui_handle(&l, &in);
-    CHECK(l.top == 3 && l.sel == 0);
+    ui_handle(&u, names, &in);
+    CHECK(u.list.top == 3 && u.list.sel == 0);
     in.wheel = 1;
-    ui_handle(&l, &in);
-    CHECK(l.top == 2);
+    ui_handle(&u, names, &in);
+    CHECK(u.list.top == 2);
     in.wheel = 5;
-    ui_handle(&l, &in);
-    CHECK(l.top == 0);
+    ui_handle(&u, names, &in);
+    CHECK(u.list.top == 0);
     in.wheel = -1000;
-    ui_handle(&l, &in);
-    CHECK(l.top == 90 && l.sel == 0);
+    ui_handle(&u, names, &in);
+    CHECK(u.list.top == 90 && u.list.sel == 0);
     // A key brings the cursor back into view.
     in = keys(1, UK_DOWN);
-    ui_handle(&l, &in);
-    CHECK(l.sel == 1 && l.top == 1);
+    ui_handle(&u, names, &in);
+    CHECK(u.list.sel == 1 && u.list.top == 1);
 
     // Clicks: on a row, past the last row.
-    ui_set(&l, 100, 0);
+    ui_set(&u.list, 100, 0);
     in = ui_input_none();
     in.click = 4;
-    ui_handle(&l, &in);
-    CHECK(l.sel == 4);
-    ui_set(&l, 3, 0);
+    ui_handle(&u, names, &in);
+    CHECK(u.list.sel == 4);
+    ui_set(&u.list, 3, 0);
     in.click = 5;
-    ui_handle(&l, &in);
-    CHECK(l.sel == 0);
+    ui_handle(&u, names, &in);
+    CHECK(u.list.sel == 0);
     in = ui_input_none();
     in.dclick = 2;
-    UiAction a = ui_handle(&l, &in);
-    CHECK(a.kind == UA_OPEN && a.index == 2 && l.sel == 2);
+    UiAction a = ui_handle(&u, names, &in);
+    CHECK(a.kind == UA_OPEN && a.index == 2 && u.list.sel == 2);
     in.dclick = 3;   // past the end: nothing
-    CHECK(ui_handle(&l, &in).kind == UA_NONE);
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE);
     in = ui_input_none();
     in.backs = 1;
-    CHECK(ui_handle(&l, &in).kind == UA_PARENT);
+    CHECK(ui_handle(&u, names, &in).kind == UA_BACK);
+    in = ui_input_none();
+    in.forwards = 1;
+    CHECK(ui_handle(&u, names, &in).kind == UA_FORWARD);
 
     // Actions; keys after the first action wait for the next frame.
-    ui_set(&l, 5, 3);
-    in = keys(2, UK_OPEN, UK_DOWN);
-    a = ui_handle(&l, &in);
-    CHECK(a.kind == UA_OPEN && a.index == 3 && l.sel == 3);
-    in = keys(2, UK_DOWN, UK_OPEN);
-    a = ui_handle(&l, &in);
+    ui_set(&u.list, 5, 3);
+    in = keys(2, UK_ENTER, UK_DOWN);
+    a = ui_handle(&u, names, &in);
+    CHECK(a.kind == UA_OPEN && a.index == 3 && u.list.sel == 3);
+    in = keys(2, UK_DOWN, UK_ENTER);
+    a = ui_handle(&u, names, &in);
     CHECK(a.kind == UA_OPEN && a.index == 4);
-    in = keys(1, UK_PARENT);
-    CHECK(ui_handle(&l, &in).kind == UA_PARENT);
-    in = keys(1, UK_TERMINAL);
-    CHECK(ui_handle(&l, &in).kind == UA_TERMINAL);
-    in = keys(1, UK_HOMEDIR);
-    CHECK(ui_handle(&l, &in).kind == UA_HOMEDIR);
+    in = keys(1, UK_BACKSPACE);
+    CHECK(ui_handle(&u, names, &in).kind == UA_PARENT);
+    in = chars("t");
+    CHECK(ui_handle(&u, names, &in).kind == UA_TERMINAL);
+    in = chars("~");
+    CHECK(ui_handle(&u, names, &in).kind == UA_HOMEDIR);
     in = keys(1, UK_NONE);
-    CHECK(ui_handle(&l, &in).kind == UA_NONE);
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE);
 
     // An empty folder: nothing to open, Enter does nothing, moves are safe.
-    ui_set(&l, 0, 5);
-    CHECK(l.sel == 0 && l.top == 0);
+    ui_set(&u.list, 0, 5);
+    CHECK(u.list.sel == 0 && u.list.top == 0);
     in = keys(1, UK_DOWN);
-    CHECK(ui_handle(&l, &in).kind == UA_NONE && l.sel == 0);
-    in = keys(3, UK_DOWN, UK_END, UK_OPEN);
-    CHECK(ui_handle(&l, &in).kind == UA_NONE && l.sel == 0);
-    in = keys(1, UK_PARENT);
-    CHECK(ui_handle(&l, &in).kind == UA_PARENT);
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.list.sel == 0);
+    in = keys(3, UK_DOWN, UK_END, UK_ENTER);
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.list.sel == 0);
+    in = keys(1, UK_BACKSPACE);
+    CHECK(ui_handle(&u, names, &in).kind == UA_PARENT);
 
     // A reload keeps the scroll where it can; a shorter list pulls it back.
-    ui_resize(&l, 10);
-    ui_set(&l, 100, 50);
-    CHECK(l.top == 41);
-    ui_set(&l, 100, 45);
-    CHECK(l.top == 41);
-    ui_set(&l, 20, 15);
-    CHECK(l.top == 10 && l.sel == 15);
-    ui_set(&l, 20, 200);
-    CHECK(l.sel == 19);
-    ui_set(&l, 20, -3);
-    CHECK(l.sel == 0 && l.top == 0);
+    ui_resize(&u.list, 10);
+    ui_set(&u.list, 100, 50);
+    CHECK(u.list.top == 41);
+    ui_set(&u.list, 100, 45);
+    CHECK(u.list.top == 41);
+    ui_set(&u.list, 20, 15);
+    CHECK(u.list.top == 10 && u.list.sel == 15);
+    ui_set(&u.list, 20, 200);
+    CHECK(u.list.sel == 19);
+    ui_set(&u.list, 20, -3);
+    CHECK(u.list.sel == 0 && u.list.top == 0);
     // A resize keeps the cursor in view.
-    ui_set(&l, 100, 50);
-    ui_resize(&l, 5);
-    CHECK(l.sel == 50 && l.top <= 50 && l.top + 5 > 50);
-    ui_resize(&l, 200);
-    CHECK(l.top == 0);
+    ui_set(&u.list, 100, 50);
+    ui_resize(&u.list, 5);
+    CHECK(u.list.sel == 50 && u.list.top <= 50 && u.list.top + 5 > 50);
+    ui_resize(&u.list, 200);
+    CHECK(u.list.top == 0);
     // No rows at all (a window too short): treated as one.
-    ui_resize(&l, 0);
-    CHECK(l.top == 50);
+    ui_resize(&u.list, 0);
+    CHECK(u.list.top == 50);
     in = keys(1, UK_PAGEDOWN);
-    ui_handle(&l, &in);
-    CHECK(l.sel == 51);
-    ui_resize(&l, 2);
-    ui_set(&l, 100, 10);
+    ui_handle(&u, names, &in);
+    CHECK(u.list.sel == 51);
+    ui_resize(&u.list, 2);
+    ui_set(&u.list, 100, 10);
     in = keys(1, UK_PAGEDOWN);   // a page of 2 rows is 1
-    ui_handle(&l, &in);
-    CHECK(l.sel == 11);
+    ui_handle(&u, names, &in);
+    CHECK(u.list.sel == 11);
+}
+
+
+static void test_find(void)
+{
+    Ui u = { 0 };
+    UiNames names = { name_at, NULL };
+    ui_resize(&u.list, 10);
+    ui_set(&u.list, COUNT(find_names), 0);
+    // "/" opens, letters jump to the first match from where it opened, ignoring case.
+    UiInput in = chars("/bet");
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.finding && u.list.sel == 1 && !u.find_miss);
+    in = chars("am");   // "betam": only BETAMAX
+    ui_handle(&u, names, &in);
+    CHECK(u.list.sel == 4);
+    in = chars("z");    // no match: the cursor goes back to where find began, marked
+    ui_handle(&u, names, &in);
+    CHECK(u.find_miss && u.list.sel == 0);
+    in = keys(1, UK_BACKSPACE);
+    ui_handle(&u, names, &in);
+    CHECK(!u.find_miss && u.list.sel == 4 && u.find_len == 5);
+    in = keys(1, UK_ENTER);   // keeps the cursor, closes, remembers the text
+    ui_handle(&u, names, &in);
+    CHECK(!u.finding && u.list.sel == 4 && u.last_len == 5);
+    // n wraps to the next match of "betam" (only BETAMAX: stays), N likewise.
+    in = chars("n");
+    ui_handle(&u, names, &in);
+    CHECK(u.list.sel == 4);
+    // Esc puts the cursor back.
+    in = chars("/gam");
+    ui_handle(&u, names, &in);
+    CHECK(u.list.sel == 2);
+    in = keys(1, UK_ESC);
+    ui_handle(&u, names, &in);
+    CHECK(!u.finding && u.list.sel == 4 && u.last_len == 3);
+    // n and N with "gam": gamma (2) both ways, from 4.
+    in = chars("N");
+    ui_handle(&u, names, &in);
+    CHECK(u.list.sel == 2);
+    // A text that two names hold: n goes on, N goes back, both wrap.
+    ui_set(&u.list, COUNT(find_names), 0);
+    in = chars("/ta");   // delta (3) and Beta (1), BETAMAX (4)
+    ui_handle(&u, names, &in);
+    CHECK(u.list.sel == 1);
+    in = keys(1, UK_ENTER);
+    ui_handle(&u, names, &in);
+    in = chars("n");
+    ui_handle(&u, names, &in);
+    CHECK(u.list.sel == 3);
+    ui_handle(&u, names, &in);
+    CHECK(u.list.sel == 4);
+    ui_handle(&u, names, &in);
+    CHECK(u.list.sel == 1);   // wrapped
+    in = chars("N");
+    ui_handle(&u, names, &in);
+    CHECK(u.list.sel == 4);   // wrapped back
+    // Ctrl+F opens it too; a typed "/" and Ctrl+F inside it do nothing; UTF-8 text and its erase.
+    in = keys(1, UK_FIND);
+    ui_handle(&u, names, &in);
+    CHECK(u.finding && u.find_len == 0 && u.find_from == 4);
+    in = chars("/");
+    ui_handle(&u, names, &in);
+    CHECK(u.finding && u.find_len == 0);
+    in = keys(1, UK_FIND);
+    ui_handle(&u, names, &in);
+    CHECK(u.finding);
+    in = ui_input_none();
+    in.ev[in.nev++] = (UiEvent){ UK_NONE, 0xE9 };   // é
+    ui_handle(&u, names, &in);
+    CHECK(u.find_len == 2 && u.list.sel == 6);
+    in = keys(1, UK_BACKSPACE);
+    ui_handle(&u, names, &in);
+    CHECK(u.find_len == 0 && u.list.sel == 4);   // empty: back where it began
+    in = keys(1, UK_BACKSPACE);                  // empty: nothing to erase
+    ui_handle(&u, names, &in);
+    CHECK(u.find_len == 0 && u.finding);
+    // Control characters are not text; a 4-byte one is.
+    in = ui_input_none();
+    in.ev[in.nev++] = (UiEvent){ UK_NONE, 0x7F };
+    in.ev[in.nev++] = (UiEvent){ UK_NONE, 0x1F };
+    in.ev[in.nev++] = (UiEvent){ UK_NONE, 0x1F600 };
+    in.ev[in.nev++] = (UiEvent){ UK_NONE, 0x110000 };
+    ui_handle(&u, names, &in);
+    CHECK(u.find_len == 4 && memcmp(u.find, "\xF0\x9F\x98\x80", 4) == 0);
+    in = ui_input_none();
+    in.ev[in.nev++] = (UiEvent){ UK_NONE, 0x20AC };   // €, 3 bytes
+    in.ev[in.nev++] = (UiEvent){ UK_NONE, 0x3B1 };    // α, 2 bytes
+    ui_handle(&u, names, &in);
+    CHECK(u.find_len == 9 && memcmp(u.find + 4, "\xE2\x82\xAC\xCE\xB1", 5) == 0);
+    // A move closes the line and moves, keeping the text for n.
+    in = keys(1, UK_DOWN);
+    ui_handle(&u, names, &in);
+    CHECK(!u.finding && u.list.sel == 5 && u.last_len == 9);
+    // A full line drops what doesn't fit.
+    ui_find_open(&u);
+    for (int k = 0; k < UI_FIND_MAX + 10; k++) ui_find_char(&u, 'x');
+    CHECK(u.find_len == UI_FIND_MAX);
+    ui_find_char(&u, 0xE9);
+    CHECK(u.find_len == UI_FIND_MAX);
+    ui_find_close(&u);
+    // Nothing to search: no match, no crash.
+    ui_set(&u.list, 0, 0);
+    CHECK(ui_find_at(&u.list, names, S("a"), 0, 1) == -1);
+    ui_set(&u.list, 3, 0);
+    CHECK(ui_find_at(&u.list, names, STR_EMPTY, 0, 1) == -1);
+    CHECK(ui_contains(S("abc"), S("BC")) && !ui_contains(S("ab"), S("abc")) && ui_contains(S("x"), STR_EMPTY));
+    CHECK(!ui_contains(S("abd"), S("abc")));
+}
+
+static void test_sort_keys(void)
+{
+    Ui u = { 0 };
+    UiNames names = { name_at, NULL };
+    ui_set(&u.list, 5, 0);
+    UiInput in = chars("s");
+    CHECK(ui_handle(&u, names, &in).kind == UA_SORT && u.sort.key == SORT_SIZE && !u.sort.reverse);
+    in = chars("S");
+    CHECK(ui_handle(&u, names, &in).kind == UA_SORT && u.sort.key == SORT_SIZE && u.sort.reverse);
+    in = chars("s");   // the next column, not reversed
+    ui_handle(&u, names, &in);
+    CHECK(u.sort.key == SORT_MTIME && !u.sort.reverse);
+    ui_handle(&u, names, &in);
+    CHECK(u.sort.key == SORT_NAME);
+    // Header clicks: a new column, then the same again reverses, then back.
+    in = ui_input_none();
+    in.header = SORT_MTIME;
+    CHECK(ui_handle(&u, names, &in).kind == UA_SORT && u.sort.key == SORT_MTIME && !u.sort.reverse);
+    ui_handle(&u, names, &in);
+    CHECK(u.sort.reverse);
+    ui_handle(&u, names, &in);
+    CHECK(!u.sort.reverse);
+    in.header = SORT_NAME;
+    ui_handle(&u, names, &in);
+    CHECK(u.sort.key == SORT_NAME && !u.sort.reverse);
+    in.header = SORT_KEYS;   // not a column
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE);
+    // Hidden files: "." and Ctrl+H.
+    in = chars(".");
+    CHECK(ui_handle(&u, names, &in).kind == UA_HIDDEN);
+    in = keys(1, UK_HIDDEN);
+    CHECK(ui_handle(&u, names, &in).kind == UA_HIDDEN);
+    in = keys(1, UK_BACK);
+    CHECK(ui_handle(&u, names, &in).kind == UA_BACK);
+    in = keys(1, UK_FORWARD);
+    CHECK(ui_handle(&u, names, &in).kind == UA_FORWARD);
+    in = chars("hlx");   // h: parent; nothing after it
+    CHECK(ui_handle(&u, names, &in).kind == UA_PARENT);
+    in = chars("l");
+    CHECK(ui_handle(&u, names, &in).kind == UA_OPEN);
+    in = keys(1, UK_RIGHT);
+    CHECK(ui_handle(&u, names, &in).kind == UA_OPEN);
+    in = keys(1, UK_LEFT);
+    CHECK(ui_handle(&u, names, &in).kind == UA_PARENT);
+    in = chars("xjq");   // unknown characters are skipped
+    ui_handle(&u, names, &in);
+    CHECK(u.list.sel == 1);
+}
+
+static void test_side(void)
+{
+    Ui u = { 0 };
+    UiNames names = { name_at, NULL };
+    ui_resize(&u.list, 10), ui_resize(&u.side, 4);
+    ui_set(&u.list, 20, 3), ui_set(&u.side, 6, 0);
+    // Tab gives the sidebar the keys; moves go to it; Enter goes to the place.
+    UiInput in = keys(1, UK_TAB);
+    ui_handle(&u, names, &in);
+    CHECK(u.side_focus);
+    in = chars("jj");
+    ui_handle(&u, names, &in);
+    CHECK(u.side.sel == 2 && u.list.sel == 3);
+    in = keys(1, UK_END);
+    ui_handle(&u, names, &in);
+    CHECK(u.side.sel == 5 && u.side.top == 2);
+    in = keys(1, UK_PAGEUP);   // a page of 4 rows is 3
+    ui_handle(&u, names, &in);
+    CHECK(u.side.sel == 2);
+    in = keys(1, UK_ENTER);
+    UiAction a = ui_handle(&u, names, &in);
+    CHECK(a.kind == UA_PLACE && a.index == 2);
+    in = chars("l");
+    a = ui_handle(&u, names, &in);
+    CHECK(a.kind == UA_PLACE && a.index == 2);
+    // Tab and Esc give the keys back.
+    in = keys(1, UK_TAB);
+    ui_handle(&u, names, &in);
+    CHECK(!u.side_focus);
+    in = keys(2, UK_TAB, UK_ESC);
+    ui_handle(&u, names, &in);
+    CHECK(!u.side_focus);
+    // A click in the sidebar goes there; a click in the list takes the keys back.
+    in = ui_input_none();
+    in.side_click = 1;
+    a = ui_handle(&u, names, &in);
+    CHECK(a.kind == UA_PLACE && a.index == 3 && u.side.sel == 3);   // top is 2
+    in.side_click = 4;   // past the end
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE);
+    u.side_focus = true;
+    in = ui_input_none();
+    in.click = 0;
+    ui_handle(&u, names, &in);
+    CHECK(!u.side_focus);
+    u.side_focus = true;
+    in = ui_input_none();
+    in.dclick = 1;
+    CHECK(ui_handle(&u, names, &in).kind == UA_OPEN && !u.side_focus);
+    // Find takes the keys from the sidebar.
+    u.side_focus = true;
+    in = chars("/");
+    ui_handle(&u, names, &in);
+    CHECK(u.finding && !u.side_focus);
+    // No places: Tab keeps the keys in the list.
+    ui_find_close(&u);
+    ui_set(&u.side, 0, 0);
+    in = keys(1, UK_TAB);
+    ui_handle(&u, names, &in);
+    CHECK(!u.side_focus);
+    u.side_focus = true;   // and Enter in an empty sidebar does nothing
+    in = keys(1, UK_ENTER);
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE);
+}
+
+static void test_history(void)
+{
+    static UiHistory h;
+    UiPlace to;
+    CHECK(!hist_step(&h, -1, "/a", S("x"), &to) && !hist_step(&h, 1, "/a", S("x"), &to));
+    hist_leave(&h, "/a", S("one"));
+    hist_leave(&h, "/b", S("two"));
+    // At /c: back to /b (two), then /a (one); forward to /b, then /c (three).
+    CHECK(hist_step(&h, -1, "/c", S("three"), &to) && strcmp(to.dir, "/b") == 0 && strcmp(to.sel, "two") == 0);
+    CHECK(hist_step(&h, -1, "/b", S("two"), &to) && strcmp(to.dir, "/a") == 0 && strcmp(to.sel, "one") == 0);
+    CHECK(!hist_step(&h, -1, "/a", S("one"), &to));
+    CHECK(hist_step(&h, 1, "/a", S("one"), &to) && strcmp(to.dir, "/b") == 0);
+    CHECK(hist_step(&h, 1, "/b", S("two"), &to) && strcmp(to.dir, "/c") == 0 && strcmp(to.sel, "three") == 0);
+    CHECK(!hist_step(&h, 1, "/c", S("three"), &to));
+    // Leaving for a new folder clears forward.
+    CHECK(hist_step(&h, -1, "/c", S("three"), &to));
+    hist_leave(&h, "/b", S("two"));
+    CHECK(h.nfwd == 0 && !hist_step(&h, 1, "/d", S(""), &to));
+    // Full: the oldest goes.
+    h = (UiHistory){ 0 };
+    for (int k = 0; k < UI_HISTORY_MAX + 5; k++) {
+        char d[16];
+        snprintf(d, sizeof d, "/d%d", k);
+        hist_leave(&h, d, S("s"));
+    }
+    CHECK(h.nback == UI_HISTORY_MAX && strcmp(h.back[0].dir, "/d5") == 0 && strcmp(h.back[UI_HISTORY_MAX - 1].dir, "/d68") == 0);
+}
+
+static void test_places(void)
+{
+    arena_reset(&ta);
+    put(at("places/bookmarks"),
+        "file:///home/m/Pictures Pictures\n"
+        "file:///home/m/My%20Docs\n"           // no label: its name, decoded
+        "file:///home/m/Downloads/ Downloads\n"  // a trailing slash
+        "file:/// /\n"
+        "sftp://host/x Remote\n"                // not a file: skipped
+        "file:///bad%zz Bad\n"                  // a broken escape: skipped
+        "file:///short%2 Short\n"               // cut off: skipped
+        "file:///home/m/Pictures Again\n"       // a duplicate: skipped
+        "file://relative Rel\n");               // not absolute: skipped
+    put(at("places/mountinfo"),
+        "26 33 0:24 / /proc rw - proc proc rw\n"
+        "33 1 0:31 /@ / rw shared:1 - btrfs /dev/mapper/root rw\n"
+        "34 33 0:31 /@home /home rw - btrfs /dev/mapper/root rw\n"
+        "40 33 254:2 / /mnt/sd rw - ext4 /dev/mapper/sd rw\n"
+        "41 33 8:17 / /run/media/m/USB\\040Stick rw - vfat /dev/sdb1 rw\n"
+        "42 33 8:18 / /media/cd rw - iso9660 /dev/sr0 ro\n"
+        "43 33 8:19 / /mnt rw - ext4 /dev/sdc rw\n"           // /mnt itself: not under it
+        "44 33 8:20 / /mntx/a rw - ext4 /dev/sdd rw\n"        // only looks like /mnt
+        "45 short\n");
+    env_set("HOME", "/home/m");
+    Places pl;
+    places_load(&ta, &pl, at("places/bookmarks"), at("places/mountinfo"));
+    const char *want[][2] = {
+        { "/home/m", "Home" }, { "/home/m/Pictures", "Pictures" }, { "/home/m/My Docs", "My Docs" },
+        { "/home/m/Downloads", "Downloads" }, { "/", "/" }, { "/mnt/sd", "sd" },
+        { "/run/media/m/USB Stick", "USB Stick" }, { "/media/cd", "cd" },
+    };
+    CHECK(pl.n == COUNT(want));
+    for (int i = 0; i < pl.n && i < COUNT(want); i++) {
+        if (strcmp(pl.p[i].path, want[i][0]) != 0 || strcmp(pl.p[i].label, want[i][1]) != 0)
+            fprintf(stderr, "place %d: %s (%s)\n", i, pl.p[i].path, pl.p[i].label);
+        CHECK(strcmp(pl.p[i].path, want[i][0]) == 0 && strcmp(pl.p[i].label, want[i][1]) == 0);
+    }
+    CHECK(pl.p[0].kind == PL_HOME && pl.p[1].kind == PL_BOOKMARK && pl.p[4].kind == PL_BOOKMARK);   // "/" came as a bookmark first
+    CHECK(pl.p[5].kind == PL_MOUNT && pl.p[6].kind == PL_REMOVABLE && pl.p[7].kind == PL_REMOVABLE);
+    CHECK(places_current(&pl, "/home/m/Pictures/2026") == 1);
+    CHECK(places_current(&pl, "/home/m/Picturesque") == 0);   // a prefix that isn't a folder above
+    CHECK(places_current(&pl, "/home/m") == 0);
+    CHECK(places_current(&pl, "/etc") == 4);
+    CHECK(places_current(&pl, "/mnt/sd/Downloads") == 5);
+    env_restore();
+    // Without bookmarks: home, then "/" from mountinfo as File System.
+    env_set("HOME", "/home/m");
+    places_load(&ta, &pl, at("places/none"), at("places/mountinfo"));
+    CHECK(pl.n == 5 && pl.p[1].kind == PL_ROOT && strcmp(pl.p[1].label, "File System") == 0);
+    env_restore();
+    // No HOME: no Home place.
+    env_set("HOME", NULL);
+    places_load(&ta, &pl, at("places/none"), at("places/none"));
+    CHECK(pl.n == 0 && places_current(&pl, "/x") == -1);
+    env_restore();
+    // Icons.
+    UserDirs ud = { 0 };
+    snprintf(ud.d[0].path, sizeof ud.d[0].path, "/home/m/Pictures");
+    ud.d[0].icon = S("folder-pictures");
+    ud.n = 1;
+    Str names[4];
+    Place p = { .kind = PL_BOOKMARK };
+    snprintf(p.path, sizeof p.path, "/home/m/Pictures");
+    CHECK(place_icon_names(&p, &ud, names) == 2 && str_eq(names[0], S("folder-pictures")) && str_eq(names[1], S("folder")));
+    p.kind = PL_REMOVABLE;
+    CHECK(place_icon_names(&p, &ud, names) == 3 && str_eq(names[0], S("drive-removable-media")) && str_eq(names[1], S("drive-harddisk")));
+    p.kind = PL_ROOT;
+    CHECK(place_icon_names(&p, &ud, names) == 2 && str_eq(names[0], S("drive-harddisk")));
+    p.kind = PL_MOUNT;
+    CHECK(place_icon_names(&p, &ud, names) == 2 && str_eq(names[0], S("drive-harddisk")));
+    snprintf(p.path, sizeof p.path, "/elsewhere");
+    p.kind = PL_BOOKMARK;
+    CHECK(place_icon_names(&p, &ud, names) == 1 && str_eq(names[0], S("folder")));
+    // The decoders.
+    char buf[8];
+    CHECK(percent_decode(S("a%41b"), buf, sizeof buf) && strcmp(buf, "aAb") == 0);
+    CHECK(!percent_decode(S("abcdefgh"), buf, sizeof buf));   // too long for 8 with its 0
+    CHECK(percent_decode(S("abcdefg"), buf, sizeof buf));
+    CHECK(octal_decode(S("a\\040b\\134"), buf, sizeof buf) && strcmp(buf, "a b\\") == 0);
+    CHECK(octal_decode(S("a\\09"), buf, sizeof buf) && strcmp(buf, "a\\09") == 0);   // not octal: kept
+    CHECK(octal_decode(S("\\04"), buf, sizeof buf) && strcmp(buf, "\\04") == 0);      // cut off: kept
+    CHECK(!octal_decode(S("abcdefgh"), buf, sizeof buf));
+    char bp[256];
+    env_set("XDG_CONFIG_HOME", "/cfg");
+    CHECK(strcmp(bookmarks_path(bp, sizeof bp), "/cfg/gtk-3.0/bookmarks") == 0);
+    env_restore();
+    env_set("XDG_CONFIG_HOME", NULL);
+    env_set("HOME", "/h");
+    CHECK(strcmp(bookmarks_path(bp, sizeof bp), "/h/.config/gtk-3.0/bookmarks") == 0);
+    env_restore();
+}
+
+static void test_sort(void)
+{
+    arena_reset(&ta);
+    put(at("sort/b.txt"), "12345");
+    put(at("sort/A.txt"), "1");
+    put(at("sort/c.txt"), "123");
+    put(at("sort/d.txt"), "123");
+    put(at("sort/.dot"), "12");
+    mkdirs(at("sort/zdir"));
+    mkdirs(at("sort/adir"));
+    struct { const char *f; long t; } times[] = { { "b.txt", 300 }, { "A.txt", 100 }, { "c.txt", 200 }, { "d.txt", 200 }, { "zdir", 50 }, { "adir", 60 }, { ".dot", 400 } };
+    for (int i = 0; i < COUNT(times); i++) {
+        struct timespec ts[2] = { { 1700000000 + times[i].t, 0 }, { 1700000000 + times[i].t, 0 } };
+        utimensat(AT_FDCWD, at("sort/%s", times[i].f), ts, 0);
+    }
+    struct { Sort s; bool hidden; const char *want; } cases[] = {
+        { { SORT_NAME, false }, false, "adir zdir A.txt b.txt c.txt d.txt" },
+        { { SORT_NAME, true }, false, "zdir adir d.txt c.txt b.txt A.txt" },
+        { { SORT_SIZE, false }, false, "adir zdir A.txt c.txt d.txt b.txt" },   // c, d tie on size: by name
+        { { SORT_SIZE, true }, false, "zdir adir b.txt d.txt c.txt A.txt" },
+        { { SORT_MTIME, false }, false, "zdir adir A.txt c.txt d.txt b.txt" },
+        { { SORT_MTIME, true }, false, "adir zdir b.txt d.txt c.txt A.txt" },
+        { { SORT_NAME, false }, true, "adir zdir .dot A.txt b.txt c.txt d.txt" },
+    };
+    for (int i = 0; i < COUNT(cases); i++) {
+        Listing l;
+        Err err;
+        CHECK(fs_list(&ta, at("sort"), cases[i].hidden, cases[i].s, &l, &err));
+        char got[256] = "";
+        for (isize k = 0; k < l.n; k++) snprintf(got + strlen(got), sizeof got - strlen(got), "%s%.*s", k ? " " : "", STR_ARG(l.e[k].name));
+        if (strcmp(got, cases[i].want) != 0) fprintf(stderr, "sort case %d: %s\n", i, got);
+        CHECK(strcmp(got, cases[i].want) == 0);
+        CHECK(l.hidden == 1);
+    }
 }
 
 static void test_timing(void)
@@ -889,6 +1288,12 @@ int main(void)
     test_user_dirs();
     test_spawn();
     test_ui();
+    test_find();
+    test_sort_keys();
+    test_side();
+    test_history();
+    test_places();
+    test_sort();
     test_timing();
     test_fit();
     test_format();

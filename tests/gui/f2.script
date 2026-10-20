@@ -1,0 +1,95 @@
+# F2 on a tree made by tests/gui/run.sh: adir/ (in-a.txt, mtime Feb 1), bdir/ (in-b.txt, Jan 15),
+# apple.txt (30 B, Jan 3), Banana.txt (10 B, Jan 1), cherry.txt (20 B, Jan 2), .dot; bookmarks Bee
+# (bdir) and Tree (the tree).
+settle
+expect n=5 hidden=1 shown=0 sort=name rev=0 sel=adir here=Tree
+# Hidden files: . and Ctrl+H; the cursor stays.
+char .
+expect n=6 shown=1 sel=adir
+key ctrl-h
+expect n=5 shown=0 sel=adir
+# Sort by keys: s size, S reverse; folders stay first.
+char s
+expect sort=size rev=0 sel=adir
+key end
+expect sel=apple.txt idx=4
+char S
+expect sort=size rev=1 sel=apple.txt idx=2
+key end
+expect sel=Banana.txt idx=4
+# By headers: a new column, the same again reverses.
+header mtime
+expect sort=mtime rev=0
+key home
+expect sel=bdir
+key end
+expect sel=apple.txt
+header mtime
+expect rev=1 sel=apple.txt idx=2
+# A real click on the Size header, hit-tested on the frame.
+point-ui col-size
+click-here
+expect sort=size rev=0
+header name
+expect sort=name rev=0
+# Find: / then text, Backspace, Enter keeps, n and N, Esc puts back, Ctrl+F.
+key home
+char /
+type an
+expect finding=1 sel=Banana.txt miss=0 find=an
+char z
+expect miss=1 sel=adir
+key backspace
+expect miss=0 sel=Banana.txt
+key enter
+expect finding=0 last=an sel=Banana.txt
+char /
+type e
+expect sel=cherry.txt
+key enter
+char n
+expect sel=apple.txt
+char N
+expect sel=cherry.txt
+key ctrl-f
+type ap
+expect finding=1 sel=apple.txt
+key esc
+expect finding=0 sel=cherry.txt
+# History: Enter, Backspace, Alt+Left twice, Alt+Right, the mouse's buttons.
+key home
+key enter
+expect sel=in-a.txt back=1
+key backspace
+expect sel=adir back=2 fwd=0
+key alt-left
+expect sel=in-a.txt back=1 fwd=1
+key alt-left
+expect sel=adir back=0 fwd=2
+key alt-right
+expect sel=in-a.txt back=1 fwd=1
+raw-button 4
+expect sel=adir back=0 fwd=2
+raw-button 5
+expect sel=in-a.txt back=1 fwd=1
+back
+expect sel=adir back=0
+forward
+expect sel=in-a.txt
+key backspace
+# The sidebar: Tab, j, Enter; a press; a real click on a row.
+key tab
+expect sidefocus=1
+char j
+expect side=1 place=Bee
+key enter
+expect sel=in-b.txt here=Bee
+press-side 2
+expect sel=adir here=Tree
+point-ui side-row 1
+click-here
+expect sel=in-b.txt here=Bee
+key esc
+expect sidefocus=0
+shot f2.png
+quit

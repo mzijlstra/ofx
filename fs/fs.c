@@ -4,4 +4,5 @@
 #include "mime.c"
 #include "icons.c"
 #include "theme.c"
+#include "places.c"
 #include "spawn.c"

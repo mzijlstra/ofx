@@ -7,13 +7,23 @@
 //                           resizes a new window after its first frames)
 //   wait <frames>
 //   sleep <ms>              frames until that much time has passed
-//   key <name>              up down pageup pagedown home end enter right left backspace
-//   char <c>                a typed character: j k h l g G t ~
-//   wheel <notches>         positive away from the user (up)
-//   press <row>             a left press on screen row <row> (0 = the first), through the same
-//                           double-click timing as the mouse: two presses on a row within 400 ms
-//                           open it
-//   back                    the mouse's back button
+//   key <name>              up down pageup pagedown home end enter right left backspace esc tab,
+//                           and the chords alt-left alt-right ctrl-f ctrl-h
+//   char <c>                one typed character
+//   type <text>             the rest of the line, after one space, as typed characters
+//   wheel <notches>         over the list; positive away from the user (up)
+//   press <row>             a left press on list row <row> (0 = the first on screen), through the
+//                           same double-click timing as the mouse: two presses on a row within
+//                           400 ms open it
+//   press-side <row>        a left press on sidebar row <row>
+//   header name|size|mtime  a click on that column's header
+//   click-at <x> <y>        a left press at a point, hit-tested against the last frame as the
+//                           mouse's is (rows, sidebar rows, headers)
+//   point-ui <id> [k]       the point at the middle of a Clay element (k: its CLAY_IDI index),
+//                           printed as "point: x y" and kept for click-here
+//   click-here              a left press at the last point-ui
+//   back, forward           the mouse's back and forward buttons
+//   raw-button <n>          GLFW's button n (1-8) pressed and released through main.c's callback
 //   shot <file.png>         the next drawn frame; a relative path goes under FX_GUI_SHOTS
 //   sh <command...>         runs the rest of the line with /bin/sh and waits for it (5 s at most),
 //                           $FX_DIR set to the folder shown, $FX_ROOT to the run's scratch tree.
@@ -39,6 +49,7 @@ static struct {
     bool  settling;
     char  shot[2100];
     int   expects, failed;
+    float px, py;        // the last point-ui
 } script;
 
 static u8 script_mem[KiB(256)];
@@ -59,19 +70,26 @@ static void script_state(char *out, size_t cap)
 {
     const char *icon = "-";
     Str sel = S("-");
-    if (app.have_list && app.ui.n > 0) {
-        sel = app.list.e[app.ui.sel].name;
-        IconSlot *s = entry_icon(app.ui.sel);
+    if (app.have_list && app.ui.list.n > 0) {
+        sel = app.list.e[app.ui.list.sel].name;
+        IconSlot *s = entry_icon(app.ui.list.sel);
         if (s && s->file[0]) icon = s->file;
     }
     Theme *t = &app.theme;
     snprintf(out, cap,
              "dir=%s n=%td hidden=%td sel=%.*s idx=%td top=%td rows=%d hover=%d accent=#%02x%02x%02x bg=#%02x%02x%02x "
-             "icons=%s scale=%d w=%d h=%d reloads=%d themes=%d batches=%d frame_ms_max=%.1f icon=%s status=%s",
-             app.cwd, app.list.n, app.list.hidden, STR_ARG(sel), app.ui.sel, app.ui.top, app.ui.rows, app.hover,
+             "icons=%s scale=%d w=%d h=%d reloads=%d themes=%d batches=%d frame_ms_max=%.1f icon=%s "
+             "shown=%d sort=%s rev=%d finding=%d miss=%d find=%.*s last=%.*s side=%td sidefocus=%d place=%s here=%s "
+             "back=%d fwd=%d status=%s",
+             app.cwd, app.list.n, app.list.hidden, STR_ARG(sel), app.ui.list.sel, app.ui.list.top, app.ui.list.rows, app.hover,
              t->accent.r, t->accent.g, t->accent.b, t->bg.r, t->bg.g, t->bg.b, t->icons[0] ? t->icons : "-",
              app.icon_scale, GetScreenWidth(), GetScreenHeight(), app.reloads, app.themes, atomic_load(&watch.batches),
-             (double)frame_us_max / 1000.0, icon, app.status[0] ? app.status : "-");
+             (double)frame_us_max / 1000.0, icon, app.show_hidden,
+             app.ui.sort.key == SORT_NAME ? "name" : app.ui.sort.key == SORT_SIZE ? "size" : "mtime", app.ui.sort.reverse,
+             app.ui.finding, app.ui.find_miss, app.ui.find_len ? app.ui.find_len : 1, app.ui.find_len ? app.ui.find : "-",
+             app.ui.last_len ? app.ui.last_len : 1, app.ui.last_len ? app.ui.last : "-", app.ui.side.sel, app.ui.side_focus,
+             app.places.n ? app.places.p[app.ui.side.sel].label : "-", app.place_cur >= 0 ? app.places.p[app.place_cur].label : "-",
+             hist.nback, hist.nfwd, app.status[0] ? app.status : "-");
     frame_us_max = 0;
 }
 
@@ -103,8 +121,9 @@ static UiKey script_key(Str name)
 {
     static const struct { const char *name; UiKey k; } KEYS[] = {
         { "up", UK_UP }, { "down", UK_DOWN }, { "pageup", UK_PAGEUP }, { "pagedown", UK_PAGEDOWN },
-        { "home", UK_HOME }, { "end", UK_END }, { "enter", UK_OPEN }, { "right", UK_OPEN },
-        { "left", UK_PARENT }, { "backspace", UK_PARENT },
+        { "home", UK_HOME }, { "end", UK_END }, { "enter", UK_ENTER }, { "right", UK_RIGHT },
+        { "left", UK_LEFT }, { "backspace", UK_BACKSPACE }, { "esc", UK_ESC }, { "tab", UK_TAB },
+        { "alt-left", UK_BACK }, { "alt-right", UK_FORWARD }, { "ctrl-f", UK_FIND }, { "ctrl-h", UK_HIDDEN },
     };
     for (int i = 0; i < COUNT(KEYS); i++)
         if (str_eq(name, str_from_c(KEYS[i].name))) return KEYS[i].k;
@@ -228,19 +247,48 @@ static bool script_input(UiInput *in)
         } else if (str_eq(cmd, S("key"))) {
             UiKey k = script_key(arg);
             if (!k) script_fail("no key %s", a);
-            else in->keys[in->nkeys++] = k;
-        } else if (str_eq(cmd, S("char"))) {
-            UiKey k = arg.len == 1 ? ui_char_of((u32)(unsigned char)arg.p[0]) : UK_NONE;
-            if (!k) script_fail("no char %s", a);
-            else in->keys[in->nkeys++] = k;
+            else in->ev[in->nev++] = (UiEvent){ k, 0 };
+        } else if (str_eq(cmd, S("char")) || str_eq(cmd, S("type"))) {
+            // The raw line for type: its text may start or end with spaces.
+            Str text = str_eq(cmd, S("type")) ? str_cut(line, 5, line.len) : arg;
+            if (str_eq(cmd, S("char")) && text.len != 1) script_fail("char takes one character");
+            for (isize i = 0; i < text.len && in->nev < UI_EVENTS_MAX;) in->ev[in->nev++] = (UiEvent){ UK_NONE, utf8_next(text.p, text.len, &i) };
         } else if (str_eq(cmd, S("wheel"))) {
             in->wheel = atoi(a);
         } else if (str_eq(cmd, S("press"))) {
             int r = atoi(a);
             if (ui_press(&app.press, r, now_ms()) == 2) in->dclick = r;
             else in->click = r;
+        } else if (str_eq(cmd, S("press-side"))) {
+            in->side_click = atoi(a);
+        } else if (str_eq(cmd, S("header"))) {
+            in->header = str_eq(arg, S("name")) ? SORT_NAME : str_eq(arg, S("size")) ? SORT_SIZE : str_eq(arg, S("mtime")) ? SORT_MTIME : -1;
+            if (in->header < 0) script_fail("no header %s", a);
+        } else if (str_eq(cmd, S("click-at"))) {
+            float x = 0, y = 0;
+            if (sscanf(a, "%f %f", &x, &y) != 2) script_fail("click-at <x> <y>");
+            else press_at(in, x, y);
+        } else if (str_eq(cmd, S("point-ui"))) {
+            char id[200];
+            int k = -1;
+            Clay_ElementData d = { 0 };
+            if (sscanf(a, "%199s %d", id, &k) >= 1)
+                d = Clay_GetElementData(k >= 0 ? Clay_GetElementIdWithIndex(cz(id), (uint32_t)k) : Clay_GetElementId(cz(id)));
+            if (!d.found) script_fail("point-ui: no element %s", a);
+            script.px = d.boundingBox.x + d.boundingBox.width / 2, script.py = d.boundingBox.y + d.boundingBox.height / 2;
+            printf("point: %.0f %.0f\n", script.px, script.py);
+        } else if (str_eq(cmd, S("click-here"))) {
+            press_at(in, script.px, script.py);
         } else if (str_eq(cmd, S("back"))) {
             in->backs = 1;
+        } else if (str_eq(cmd, S("forward"))) {
+            in->forwards = 1;
+        } else if (str_eq(cmd, S("raw-button"))) {
+            int b = atoi(a);
+            if (b < 1 || b > 8) script_fail("raw-button 1-8");
+            else on_button(glfwGetCurrentContext(), b - 1, GLFW_PRESS, 0), on_button(glfwGetCurrentContext(), b - 1, GLFW_RELEASE, 0);
+            // The callback counted it; this frame's input reads it as the mouse's would.
+            in->backs = mouse_backs, in->forwards = mouse_forwards, mouse_backs = mouse_forwards = 0;
         } else if (str_eq(cmd, S("shot"))) {
             const char *dir = getenv("FX_GUI_SHOTS");
             if (a[0] != '/' && dir && dir[0]) snprintf(script.shot, sizeof script.shot, "%s/%s", dir, a);

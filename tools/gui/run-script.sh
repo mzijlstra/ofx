@@ -14,6 +14,8 @@
 #   <scratch-dir>/spawn.log: a test never opens a real file or terminal on Michael's screen;
 # - XDG_STATE_HOME=<scratch-dir>/state, with a copy of Michael's current theme files (colors.toml,
 #   icons.theme) unless the caller made <scratch-dir>/state already: a theme test edits the copy;
+# - XDG_CONFIG_HOME=<scratch-dir>/config: the sidebar's GTK bookmarks and the XDG user dirs come
+#   from there (empty unless the caller wrote them), never from Michael's;
 # - FX_GUI_SHOTS=<scratch-dir>/shots for the script's shots.
 # Prints the script's output, stderr's first lines, whether LeakSanitizer or ASan reported
 # anything, and how many windows are left on the output. Exit status: 1 when an expectation
@@ -22,7 +24,7 @@ set -u
 out=$1 T=$2 sc=$3 bin=$4
 case $T in /?*) ;; *) echo "run-script: the scratch dir must be an absolute path: '$T'" >&2; exit 1 ;; esac
 shift 4
-mkdir -p "$T/shots" "$T/fakes"
+mkdir -p "$T/shots" "$T/fakes" "$T/config"
 rm -f "$T/run.pid" "$T/out" "$T/err" "$T"/asan.*
 # The window starts in the compositor's directory, so a relative script path would not be found
 # there: resolve it here, and refuse a missing one.
@@ -47,7 +49,7 @@ root=$(cd "$(dirname "$0")/../.." && pwd)
 cat > "$T/launch.sh" <<EOS
 #!/bin/sh
 echo \$\$ > "$T/run.pid"
-exec env ${script_env} FX_GUI_ROOT="$T" FX_GUI_SHOTS="$T/shots" PATH="$T/fakes:\$PATH" XDG_STATE_HOME="$T/state" \
+exec env ${script_env} FX_GUI_ROOT="$T" FX_GUI_SHOTS="$T/shots" PATH="$T/fakes:\$PATH" XDG_STATE_HOME="$T/state" XDG_CONFIG_HOME="$T/config" \
   LSAN_OPTIONS=suppressions=$root/gui/lsan.supp ASAN_OPTIONS=log_path="$T/asan" ${FX_TEST_LEAK:+FX_TEST_LEAK=1} \
   ${FX_TEST_WATCH_DELAY_MS:+FX_TEST_WATCH_DELAY_MS=$FX_TEST_WATCH_DELAY_MS} \
   "$bin" $args >"$T/out" 2>"$T/err"

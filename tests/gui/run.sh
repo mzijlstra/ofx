@@ -21,6 +21,13 @@ T=$base/gone; tree "$T"
 echo "== gone"; "$here/../../tools/gui/run-script.sh" "$out" "$T" "$here/gone.script" "$bin" "$T/tree" || fail=1
 T=$base/watchgap; tree "$T"
 echo "== watchgap"; FX_TEST_WATCH_DELAY_MS=300 "$here/../../tools/gui/run-script.sh" "$out" "$T" "$here/watchgap.script" "$bin" "$T/tree" || fail=1
+T=$base/f2; rm -rf "$T"; mkdir -p "$T/tree/adir" "$T/tree/bdir" "$T/config/gtk-3.0"
+printf '%030d' 0 > "$T/tree/apple.txt"; printf '%010d' 0 > "$T/tree/Banana.txt"; printf '%020d' 0 > "$T/tree/cherry.txt"
+printf '%05d' 0 > "$T/tree/.dot"; touch "$T/tree/adir/in-a.txt" "$T/tree/bdir/in-b.txt"
+touch -d 2024-01-03 "$T/tree/apple.txt"; touch -d 2024-01-01 "$T/tree/Banana.txt"; touch -d 2024-01-02 "$T/tree/cherry.txt"
+touch -d 2024-02-01 "$T/tree/adir"; touch -d 2024-01-15 "$T/tree/bdir"
+printf 'file://%s/tree/bdir Bee\nfile://%s/tree Tree\n' "$T" "$T" > "$T/config/gtk-3.0/bookmarks"
+echo "== f2"; "$here/../../tools/gui/run-script.sh" "$out" "$T" "$here/f2.script" "$bin" "$T/tree" || fail=1
 # The guard: started in $base, outside <T>, every sh line is refused and nothing runs.
 T=$base/guard; rm -rf "$T"; mkdir -p "$T"
 echo "== guard"
