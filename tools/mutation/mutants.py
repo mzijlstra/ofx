@@ -215,7 +215,9 @@ MUTANTS += [
     (O, "    if (renameat2(AT_FDCWD, from, AT_FDCWD, to, RENAME_NOREPLACE) == 0) return true;", "    if (renameat(AT_FDCWD, from, AT_FDCWD, to) == 0) return true;"),
     (O, "        if (!ops_allowed(p, err)) return false;\n        if (mkdir(p, 0777) == 0) return true;", "        if (mkdir(p, 0777) == 0) return true;"),
     # delete for good
-    (O, "            if (ok) (*count)++, removed++;", "            if (ok) (*count)++;"),
+    # Inert, kept out: one pass instead of passes until nothing is left. Linux readdir on tmpfs,
+    # ext4 and btrfs skips nothing after unlinks, so no test can tell; the passes are for file
+    # systems that do (POSIX leaves it unspecified).
     (O, "    if (depth > TREE_DEPTH_MAX) return err_set(err, \"%s: folders nested too deep\", shown), false;", ""),
     (O, "    if (lstat(path, &st) != 0) return err_set(err, \"%s: %s\", path, strerror(errno)), false;\n    if (S_ISDIR(st.st_mode)) {\n        int fd", "    if (stat(path, &st) != 0) return err_set(err, \"%s: %s\", path, strerror(errno)), false;\n    if (S_ISDIR(st.st_mode)) {\n        int fd"),
     (O, "    if (!ops_allowed(path, err)) return false;\n    struct stat st;\n    if (lstat(path", "    struct stat st;\n    if (lstat(path"),

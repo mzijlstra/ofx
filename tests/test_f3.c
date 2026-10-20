@@ -74,11 +74,13 @@ static void test_ops(void)
     CHECK(strstr(err.msg, "outside the test folder") != NULL);
     CHECK(!ops_allowed(at("ops/../../escape"), &err));
     CHECK(!ops_allowed(root, &err));   // the root itself is not under it
+    // ".." in the part that doesn't exist yet: realpath can't take it out, so it is refused.
+    CHECK(!ops_allowed(at("nosuch/../../escape"), &err));
     // A link inside that points out: its folder resolves outside.
     symlink(decoy, at("ops/out"));
     CHECK(!ops_allowed(at("ops/out/x"), &err));
     CHECK(ops_allowed(at("ops/out"), &err));   // the link itself is inside
-    CHECK(ops_refusals == refused + 4);
+    CHECK(ops_refusals == refused + 5);
 
     // A guard that can't be resolved refuses everything.
     ops_guard("/nonexistent/fx-root");
@@ -732,6 +734,16 @@ static void test_undo(void)
     CHECK(strcmp(what, "trash of 2 items") == 0);
     CHECK(undo_do(&u, &done, &err) && done == 2 && strcmp(slurp(at("u/t1")), "1") == 0 && strcmp(slurp(at("u/t2")), "2") == 0);
     CHECK(!there(t1.info) && !there(t2.info));
+
+    // one item: no count
+    put(at("u/t3"), "3");
+    Trashed t3;
+    CHECK(trash_put(at("u/t3"), &t3, &err));
+    undo_begin(&u, UNDO_TRASH);
+    undo_add(&u, t3.from, t3.file, t3.info);
+    undo_what(&u, what, sizeof what);
+    CHECK(strcmp(what, "trash") == 0);
+    CHECK(undo_do(&u, &done, &err) && done == 1);
 
     // copy: the copies go to the trash
     put(at("u/c (copy)"), "c");
