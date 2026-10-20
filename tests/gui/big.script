@@ -1,0 +1,27 @@
+# 10,000 files (f0 .. f9999) in <T>/tree: the list, the wheel, pages, the ends, the slowest frame.
+settle
+expect n=10000 sel=f0 top=0
+state
+wheel -3
+expect top=3 sel=f0
+wheel 1
+expect top=2
+key pagedown
+expect sel=f14 top=2
+char G
+expect sel=f9999 top=9985
+wheel -5
+expect top=9985
+wheel 9999
+expect top=0 sel=f9999
+key up
+expect sel=f9998 top=9984
+key home
+expect sel=f0 top=0
+state
+# A file appearing in a big folder.
+sh touch "$FX_DIR/f10000"
+wait-for 2000 n=10001 sel=f0
+state
+shot big.png
+quit

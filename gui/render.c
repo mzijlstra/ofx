@@ -1,5 +1,5 @@
 // Clay render commands drawn with raylib: rectangles (rounded or not), borders, text and clipping.
-// Copied from prdash's gui/render.c.
+// Copied from prdash's gui/render.c, by way of uml-viewer; fx adds images (the icons).
 // One Clay unit is one logical pixel.
 //
 // Text is measured and drawn glyph by glyph from the same metrics (font.c), so what Clay lays out
@@ -64,6 +64,16 @@ static void render_border(Clay_BoundingBox b, Clay_BorderRenderData *r)
     if (r->width.right)  DrawRectangleRec((Rectangle){ b.x + b.width - r->width.right, b.y, r->width.right, b.height }, c);
 }
 
+// An image's imageData is a Texture2D, drawn stretched to the element's box (an icon file of
+// 48 px into a 24 px box on a scale-2 output: texel for device pixel). The tint is the fade's.
+static void render_image(Clay_BoundingBox b, Clay_ImageRenderData *r)
+{
+    const Texture2D *t = r->imageData;
+    if (!t || t->id == 0) return;
+    Rectangle src = { 0, 0, (float)t->width, (float)t->height }, dst = { b.x, b.y, b.width, b.height };
+    DrawTexturePro(*t, src, dst, (Vector2){ 0, 0 }, 0, render_color((Clay_Color){ 255, 255, 255, 255 }));
+}
+
 // Clips nest (a clipped row inside a clipped card), so they are a stack: each one is cut to the one
 // around it, and ending one restores the one around it rather than switching clipping off. Custom
 // elements clip through the same stack.
@@ -119,7 +129,8 @@ static void render_draw(Clay_RenderCommandArray cmds, Clay_Color clear)
         case CLAY_RENDER_COMMAND_TYPE_CUSTOM:
             if (render_custom) render_custom(b, cmd->renderData.custom.customData);
             break;
-        default: break;   // no images
+        case CLAY_RENDER_COMMAND_TYPE_IMAGE:     render_image(b, &cmd->renderData.image); break;
+        default: break;
         }
     }
     EndDrawing();

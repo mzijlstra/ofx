@@ -2,7 +2,8 @@
 // and Yaru ships every size as PNG (docs/plan.md, "Icons").
 //
 // At start the theme, its Inherits chain (depth first, as the spec's FindIcon) and hicolor are
-// read: each one's index.theme and, per subdirectory and base dir, the PNG names in it. A lookup
+// read: each one's index.theme and, per subdirectory and base dir, the PNG names in it (of the
+// contexts fx uses). A lookup
 // is then map probes, no file system calls. Base dirs: ~/.icons, then icons/ under every XDG data
 // dir.
 
@@ -112,6 +113,15 @@ static bool icon_scan(Arena *a, const char *dir, StrMap *m)
     return true;
 }
 
+// fx asks only for folder and file icons, which themes keep under Places and MimeTypes (and
+// hicolor's 600-odd app directories would take most of the start-up). A directory that names no
+// context is read too.
+static bool icon_context_used(Str context)
+{
+    return context.len == 0 || str_eq(context, S("Places")) || str_eq(context, S("MimeTypes")) ||
+           str_eq(context, S("Mimetypes"));
+}
+
 static bool icon_has_theme(const IconDb *db, Str name)
 {
     for (isize i = 0; i < db->n; i++)
@@ -134,7 +144,7 @@ static void icon_add_theme(Arena *a, IconDb *db, const char **bases, isize nb, S
         Str sub;
         for (isize at = 0; next_item(subs[list], &at, &sub);) {
             int size = ini_int(index, sub, S("Size"), 0);
-            if (size <= 0) continue;
+            if (size <= 0 || !icon_context_used(ini_get(index, sub, S("Context")))) continue;
             Str type = ini_get(index, sub, S("Type"));
             IconDir proto = {
                 .size = size,

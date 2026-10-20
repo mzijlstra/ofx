@@ -342,8 +342,14 @@ static void test_icons(void)
     put(at("icons/Parent/scalable/mimetypes/only-svg.svg"), "");
     put(at("icons/Parent/32x32/mimetypes/image-png.png"), "");
     put(at("icons/Parent/16x16/mimetypes/folder.png"), "");
-    put(at("icons/hicolor/index.theme"), "[Icon Theme]\nName=Hicolor\nDirectories=48x48/apps\n[48x48/apps]\nSize=48\nType=Threshold\n");
-    put(at("icons/hicolor/48x48/apps/fallback.png"), "");
+    put(at("icons/hicolor/index.theme"),
+        "[Icon Theme]\nName=Hicolor\nDirectories=48x48/mimetypes,48x48/apps,48x48/places\n"
+        "[48x48/mimetypes]\nSize=48\nContext=MimeTypes\nType=Threshold\n"
+        "[48x48/apps]\nSize=48\nContext=Applications\n"
+        "[48x48/places]\nSize=48\nContext=Places\n");
+    put(at("icons/hicolor/48x48/mimetypes/fallback.png"), "");
+    put(at("icons/hicolor/48x48/apps/an-app.png"), "");
+    put(at("icons/hicolor/48x48/places/a-place.png"), "");
     // A second base dir with more of Child's 24x24 (the spec: a theme's dirs in every base dir).
     put(at("home/.icons/Child/24x24/places/folder-download.png"), "");
     env_set("HOME", at("home"));
@@ -374,7 +380,11 @@ static void test_icons(void)
     CHECK(strcmp(FIND(24, 1, S("text-x-nothing"), S("text-x-generic")), at("icons/Parent/16x16/mimetypes/text-x-generic.png")) == 0);
     // But a later name in an earlier theme beats an earlier name in a later theme.
     CHECK(strcmp(FIND(24, 1, S("text-x-csrc"), S("folder")), at("icons/Child/24x24/places/folder.png")) == 0);
-    CHECK(strcmp(FIND(48, 1, S("fallback")), at("icons/hicolor/48x48/apps/fallback.png")) == 0);
+    CHECK(strcmp(FIND(48, 1, S("fallback")), at("icons/hicolor/48x48/mimetypes/fallback.png")) == 0);
+    CHECK(strcmp(FIND(48, 1, S("a-place")), at("icons/hicolor/48x48/places/a-place.png")) == 0);
+    CHECK(strcmp(FIND(48, 1, S("an-app")), "") == 0);          // Applications: not read
+    CHECK(db.t[2].ndirs == 2);
+    CHECK(icon_context_used(S("Mimetypes")) && !icon_context_used(S("Status")) && icon_context_used(STR_EMPTY));
     CHECK(strcmp(FIND(24, 1, S("only-svg")), "") == 0);       // PNG only
     CHECK(strcmp(FIND(24, 1, S("not-an-icon")), "") == 0);
     CHECK(strcmp(FIND(24, 1, S("absent")), "") == 0);
@@ -731,6 +741,45 @@ static void test_ui(void)
     CHECK(l.sel == 11);
 }
 
+static void test_timing(void)
+{
+    UiPress p = { -1, 0 };
+    CHECK(ui_press(&p, 3, 1000) == 1);
+    CHECK(ui_press(&p, 3, 1400) == 2);          // within 400 ms, inclusive
+    CHECK(ui_press(&p, 3, 1500) == 1);          // starts over after a double
+    CHECK(ui_press(&p, 3, 1901) == 1);          // 401 ms: too slow
+    CHECK(ui_press(&p, 4, 1950) == 1);          // another row
+    CHECK(ui_press(&p, 4, 2000) == 2);
+    CHECK(ui_press(&p, -1, 2100) == 1 && ui_press(&p, -1, 2150) == 1);   // off the rows: never double
+    CHECK(ui_batch_due(1000, 1000, 100, 1000) == 1100);
+    CHECK(ui_batch_due(1000, 1950, 100, 1000) == 2000);   // capped a second after the first
+    CHECK(ui_batch_due(1000, 1899, 100, 1000) == 1999);
+}
+
+static float adv_fixed(u32 cp)
+{
+    return cp == 0x2026 ? 1 : cp >= 0x80 ? 2 : 1;   // wide for anything past ASCII
+}
+
+static void test_fit(void)
+{
+    isize f, t;
+    CHECK(ui_fit(S("abcdef"), 6, 1, adv_fixed, false, &f, &t) && f == 0 && t == 6);
+    CHECK(!ui_fit(S("abcdefg"), 6, 1, adv_fixed, false, &f, &t) && f == 0 && t == 5);   // "abcde…"
+    CHECK(!ui_fit(S("abcdefg"), 6, 1, adv_fixed, true, &f, &t) && f == 2 && t == 7);    // "…cdefg"
+    CHECK(ui_width(S("a\xC3\xA9" "b"), adv_fixed) == 4);
+    // Code points are never split: é is two bytes and two wide.
+    CHECK(!ui_fit(S("ab\xC3\xA9" "cd"), 4, 1, adv_fixed, false, &f, &t) && t == 2);       // "ab…": é doesn't fit in 1
+    CHECK(!ui_fit(S("ab\xC3\xA9" "cd"), 5, 1, adv_fixed, false, &f, &t) && t == 4);       // "abé…"
+    CHECK(!ui_fit(S("ab\xC3\xA9" "cd"), 4, 1, adv_fixed, true, &f, &t) && f == 4);        // "…cd"
+    CHECK(!ui_fit(S("ab\xC3\xA9" "cd"), 5, 1, adv_fixed, true, &f, &t) && f == 2);        // "…écd"
+    // No room at all: nothing kept.
+    CHECK(!ui_fit(S("abc"), 1, 1, adv_fixed, false, &f, &t) && t == 0);
+    CHECK(!ui_fit(S("abc"), 1, 1, adv_fixed, true, &f, &t) && f == 3);
+    CHECK(!ui_fit(S("abc"), 0, 1, adv_fixed, true, &f, &t) && f == 3);
+    CHECK(ui_fit(STR_EMPTY, 0, 1, adv_fixed, false, &f, &t) && t == 0);
+}
+
 static void test_format(void)
 {
     struct { i64 size; const char *want; } sizes[] = {
@@ -774,6 +823,8 @@ int main(void)
     test_user_dirs();
     test_spawn();
     test_ui();
+    test_timing();
+    test_fit();
     test_format();
     char cmd[1200];
     snprintf(cmd, sizeof cmd, "chmod -R u+rwx '%s' && rm -rf '%s'", root, root);

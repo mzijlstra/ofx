@@ -124,6 +124,74 @@ static UiAction ui_handle(UiList *l, const UiInput *in)
     return (UiAction){ UA_NONE, 0 };
 }
 
+// ---- timing -------------------------------------------------------------------------------
+
+enum { UI_DCLICK_MS = 400 };
+
+typedef struct {
+    int row;      // the row of the last press, -1 for none
+    i64 at;       // when
+} UiPress;
+
+// A left press on screen row `row` at `now` (ms): 2 for the second press on the same row within
+// UI_DCLICK_MS (a double click, which then starts over), else 1. raylib reports presses, not
+// double clicks, as terminals do for prdash-tui.
+static int ui_press(UiPress *p, int row, i64 now)
+{
+    if (p->row == row && row >= 0 && now - p->at <= UI_DCLICK_MS) {
+        p->row = -1;
+        return 2;
+    }
+    p->row = row, p->at = now;
+    return 1;
+}
+
+// When a batch of file system events ends: `quiet` ms after its last event, but never more than
+// `most` after its first.
+static i64 ui_batch_due(i64 first, i64 last, int quiet, int most)
+{
+    i64 q = last + quiet, m = first + most;
+    return q < m ? q : m;
+}
+
+// ---- text that fits ------------------------------------------------------------------------
+
+static float ui_width(Str s, float (*adv)(u32))
+{
+    float w = 0;
+    for (isize i = 0; i < s.len;) w += adv(utf8_next(s.p, s.len, &i));
+    return w;
+}
+
+// Whether s fits in width. When it doesn't, [*from, *to) is the part to keep beside an ellipsis
+// of width `dots`: whole code points from the start (a name), or from the end when keep_end (a
+// path, whose end is the part that matters). Nothing is kept when not even one fits.
+static bool ui_fit(Str s, float width, float dots, float (*adv)(u32), bool keep_end, isize *from, isize *to)
+{
+    *from = 0, *to = s.len;
+    if (ui_width(s, adv) <= width) return true;
+    float room = width - dots, w = 0;
+    if (keep_end) {
+        *from = s.len;
+        while (*from > 0) {
+            isize j = *from - 1;
+            while (j > 0 && ((unsigned char)s.p[j] & 0xC0) == 0x80) j--;
+            isize k = j;
+            float a = adv(utf8_next(s.p, s.len, &k));
+            if (w + a > room) break;
+            w += a, *from = j;
+        }
+        return false;
+    }
+    *to = 0;
+    for (isize i = 0; i < s.len;) {
+        float a = adv(utf8_next(s.p, s.len, &i));
+        if (w + a > room) break;
+        w += a, *to = i;
+    }
+    return false;
+}
+
 // ---- display --------------------------------------------------------------------------------
 
 // A size as ls -h prints it, in binary units: "512 B", "4.0 KiB", "13 MiB", one decimal below 10.

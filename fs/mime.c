@@ -14,6 +14,7 @@
 #include <fnmatch.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/stat.h>
 
 enum { MIME_GLOBS_MAX = 8192, MIME_DIRS_MAX = 16 };
 
@@ -44,19 +45,21 @@ static Str lower(Arena *a, Str s)
     return (Str){ p, s.len };
 }
 
-// The whole file, NUL-terminated, into a; STR_EMPTY when it isn't there or won't fit.
+// The whole file, NUL-terminated, into a; STR_EMPTY when it isn't there or won't fit. Sized by
+// fstat first: opening the arena's whole free tail would cost a pass over it under ASan.
 static Str read_file(Arena *a, const char *path)
 {
     FILE *f = fopen(path, "rb");
     if (!f) return STR_EMPTY;
-    isize avail;
-    char *dst = arena_tail(a, &avail);
-    size_t n = avail > 1 ? fread(dst, 1, (size_t)avail - 1, f) : 0;
-    bool whole = feof(f) && !ferror(f);
+    struct stat st;
+    char *dst = NULL;
+    size_t n = 0;
+    if (fstat(fileno(f), &st) == 0 && S_ISREG(st.st_mode) && (dst = arena_try_push(a, (isize)st.st_size + 1, 1)))
+        n = fread(dst, 1, (size_t)st.st_size, f);
+    bool whole = dst && n == (size_t)st.st_size;
     fclose(f);
-    if (!whole) return arena_commit(a, 0), STR_EMPTY;
+    if (!whole) return STR_EMPTY;
     dst[n] = 0;
-    arena_commit(a, (isize)n + 1);
     return (Str){ dst, (isize)n };
 }
 

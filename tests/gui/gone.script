@@ -1,0 +1,14 @@
+# The open folder deleted under fx: it goes to the nearest folder above that is there.
+settle
+key enter
+expect sel=inner.txt
+sh rm -rf "$FX_DIR"
+wait-for 1500 sel=bdir n=4
+state
+# A theme directory replaced as a whole (a theme switch may do that): still followed.
+sh rm -rf "$FX_DIR/../state/omarchy/current/theme"
+sh mkdir -p "$FX_DIR/../state/omarchy/current/theme" && printf 'accent = "#abcdef"\nbackground = "#000000"\n' > "$FX_DIR/../state/omarchy/current/theme/colors.toml"
+wait-for 2000 accent=#abcdef bg=#000000 icons=-
+sh printf 'accent = "#fedcba"\n' > "$FX_DIR/../state/omarchy/current/theme/colors.toml"
+wait-for 2000 accent=#fedcba bg=#1a1b26
+quit
