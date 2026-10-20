@@ -86,7 +86,7 @@ event, the selection kept by name (or the row it was on, when that name is gone)
 
 ## F3 design (2026-10-20)
 
-**Decisions (Michael):** Shift+Delete deletes for good, after a confirm; Ctrl+C and Ctrl+X put the
+**Decisions (Michael):** Shift+Delete deletes for good, after a confirm that defaults to yes; Ctrl+C and Ctrl+X put the
 paths on the system clipboard as well, so a paste in Nemo or a terminal works; Ctrl+Z undoes the
 last action; Ctrl+Shift+N makes a new folder.
 
@@ -111,8 +111,9 @@ absolute in the home trash, relative to the top dir in the others; DeletionDate 
 created with `O_EXCL` first, which also picks the free name (`name`, `name.2`, …); then the file
 is renamed into `files/`. Nemo's trash view and `gio trash --list` show what fx trashed.
 
-**Delete for good:** the footer asks "Delete 3 items for good? This can't be undone. y/N"; only
-`y` goes ahead. Folders are removed depth first with `unlinkat`, never following a symlink.
+**Delete for good:** the footer asks "Delete 3 items for good? This can't be undone. Y/n";
+Enter or `y` goes ahead (whoever presses Shift+Delete means it: Michael, 2026-10-20), `n` or Esc
+cancels. Folders are removed depth first with `unlinkat`, never following a symlink.
 
 **Copy and move (`fs/copy.c`):** Ctrl+C or Ctrl+X remembers the paths and the verb; Ctrl+V into
 the open folder starts a job on a worker thread with its own arena (no malloc).
@@ -165,7 +166,7 @@ logs the refusal; `XDG_DATA_HOME` points at scratch so the home trash is scratch
    guard; a mutation run over the new fs/ and ui/ code with every survivor killed or shown inert.
 2. GUI scripts in weston on scratch trees, with a scratch `XDG_DATA_HOME`: select by keys and by
    Ctrl/Shift click; rename and new folder (commit, clash, Esc); trash then undo; Shift+Delete
-   with `n` and with `y`; copy and cut-paste with the progress line (slowed by a test-only delay),
+   with `n`, Esc, Enter and `y`; copy and cut-paste with the progress line (slowed by a test-only delay),
    Esc cancels with no part file left; a clash answered each way; the guard refusing a path
    outside the scratch folder.
 3. One live clipboard check on Hyprland, with Michael's go since it replaces his clipboard: copy in
