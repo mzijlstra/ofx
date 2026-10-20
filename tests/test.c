@@ -309,6 +309,16 @@ static void test_mime(void)
     CHECK(read_file(&ta, at("data1/mime/globs2")).len > 100);
     CHECK(read_file(&ta, at("data1")).len == 0);   // a directory
     CHECK(read_file(&ta, at("nothing-here")).len == 0);
+    // procfs says 0 bytes: read to the end. An empty regular file is empty either way.
+    Str mi = read_file(&ta, "/proc/self/mountinfo");
+    CHECK(mi.len > 0 && mi.p[mi.len] == 0 && str_find(mi, '\n') > 0);
+    put(at("empty-file"), "");
+    CHECK(read_file(&ta, at("empty-file")).len == 0);
+    // A tail too small for the whole: nothing, and the arena keeps nothing.
+    static u8 small_mem[64];
+    Arena small;
+    arena_init(&small, "small", small_mem, sizeof small_mem);
+    CHECK(read_file(&small, "/proc/self/mountinfo").len == 0 && small.used == 0);
 
     // No data dirs at all: nothing matches, nothing breaks.
     env_set("XDG_DATA_HOME", at("none1"));
@@ -406,8 +416,8 @@ static void test_icons(void)
     // The first name the theme has, theme by theme: Child has neither text name, Parent has both.
     CHECK(strcmp(FIND(24, 1, S("text-x-csrc"), S("text-x-generic")), at("icons/Parent/scalable/mimetypes/text-x-csrc.png")) == 0);
     CHECK(strcmp(FIND(24, 1, S("text-x-nothing"), S("text-x-generic")), at("icons/Parent/16x16/mimetypes/text-x-generic.png")) == 0);
-    // But a later name in an earlier theme beats an earlier name in a later theme.
-    CHECK(strcmp(FIND(24, 1, S("text-x-csrc"), S("folder")), at("icons/Child/24x24/places/folder.png")) == 0);
+    // An earlier name in a later theme beats a later name (a fallback) in an earlier theme.
+    CHECK(strcmp(FIND(24, 1, S("text-x-csrc"), S("folder")), at("icons/Parent/scalable/mimetypes/text-x-csrc.png")) == 0);
     CHECK(strcmp(FIND(48, 1, S("fallback")), at("icons/hicolor/48x48/mimetypes/fallback.png")) == 0);
     CHECK(strcmp(FIND(48, 1, S("a-place")), at("icons/hicolor/48x48/places/a-place.png")) == 0);
     CHECK(strcmp(FIND(48, 1, S("an-app")), "") == 0);          // Applications: not read
@@ -896,7 +906,7 @@ static void test_find(void)
     CHECK(u.find_len == 2 && u.list.sel == 6);
     in = keys(1, UK_BACKSPACE);
     ui_handle(&u, names, &in);
-    CHECK(u.find_len == 0 && u.list.sel == 4);   // empty: back where it began
+    CHECK(u.find_len == 0 && u.list.sel == 4 && !u.find_miss);   // empty: back where it began, no miss
     in = keys(1, UK_BACKSPACE);                  // empty: nothing to erase
     ui_handle(&u, names, &in);
     CHECK(u.find_len == 0 && u.finding);
@@ -1083,6 +1093,7 @@ static void test_places(void)
         "file:///home/m/Downloads/ Downloads\n"  // a trailing slash
         "file:/// /\n"
         "sftp://host/x Remote\n"                // not a file: skipped
+        "trash:///x Trash\n"                    // nor this, though its 8th byte on is a path
         "file:///bad%zz Bad\n"                  // a broken escape: skipped
         "file:///short%2 Short\n"               // cut off: skipped
         "file:///home/m/Pictures Again\n"       // a duplicate: skipped
@@ -1118,6 +1129,13 @@ static void test_places(void)
     CHECK(places_current(&pl, "/home/m") == 0);
     CHECK(places_current(&pl, "/etc") == 4);
     CHECK(places_current(&pl, "/mnt/sd/Downloads") == 5);
+    env_restore();
+    // The real mountinfo, through procfs: "/" is in it.
+    env_set("HOME", "/home/m");
+    places_load(&ta, &pl, at("places/none"), "/proc/self/mountinfo");
+    bool root_seen = false;
+    for (int i = 0; i < pl.n; i++) root_seen |= pl.p[i].kind == PL_ROOT;
+    CHECK(root_seen);
     env_restore();
     // Without bookmarks: home, then "/" from mountinfo as File System.
     env_set("HOME", "/home/m");
@@ -1155,6 +1173,7 @@ static void test_places(void)
     CHECK(octal_decode(S("a\\040b\\134"), buf, sizeof buf) && strcmp(buf, "a b\\") == 0);
     CHECK(octal_decode(S("a\\09"), buf, sizeof buf) && strcmp(buf, "a\\09") == 0);   // not octal: kept
     CHECK(octal_decode(S("\\04"), buf, sizeof buf) && strcmp(buf, "\\04") == 0);      // cut off: kept
+    CHECK(octal_decode(S("\\477"), buf, sizeof buf) && strcmp(buf, "\\477") == 0);    // past \377: kept
     CHECK(!octal_decode(S("abcdefgh"), buf, sizeof buf));
     char bp[256];
     env_set("XDG_CONFIG_HOME", "/cfg");

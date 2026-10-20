@@ -17,7 +17,9 @@ every tool here.
   output through `run-script.sh`. `build/fx-probe` and `build/test` link no raylib and are safe
   to run anywhere.
 - **The theme:** fx reads `$XDG_STATE_HOME/omarchy/current/theme`. `run-script.sh` points it at a
-  scratch copy (`<scratch>/state`), so a theme test edits the copy, never Michael's files. Never
+  scratch copy (`<scratch>/state`), so a theme test edits the copy, never Michael's files.
+- **The sidebar** reads the GTK bookmarks (shared with Nemo) and the XDG user dirs under
+  `$XDG_CONFIG_HOME`; `run-script.sh` points that at `<scratch>/config`. fx never writes them. Never
   run `omarchy-theme-set` or anything else that changes his theme to test a switch.
 - **fx only reads in F1:** listing folders, the MIME database, the icon theme. The scripts' `sh`
   lines make and change files: point them at scratch folders only, never his home or a work repo.
@@ -28,11 +30,17 @@ every tool here.
 ## Testing the GUI
 
 ```sh
-hyprctl output create headless FXGUI          # your own name; it gets the next free workspace and scale 2
-tools/gui/run-script.sh FXGUI <scratch> tests/gui/<script> "$PWD/build/fx" <folder>
-hyprctl output remove FXGUI                   # only once no fx window is left on it
-tail -2 ~/.local/state/omarchy/monitor-hook.log
+tools/gui/output.sh create FXGUI              # your own name; never `hyprctl output create` directly
+tests/gui/run.sh FXGUI <absolute scratch>     # every script; or tools/gui/run-script.sh for one
+tools/gui/output.sh remove FXGUI              # refuses while a window is left on it
 ```
+
+- **Outputs only through `tools/gui/output.sh`.** A new headless output takes a workspace
+  Hyprland picks, and it can't be told in advance which: on 2026-10-14 and twice on 2026-10-20 it
+  was workspace 6 holding Michael's Nemo (his file-exploring workspace), then a fresh workspace 2.
+  `output.sh` checks the workspace it got and removes the output again at once if any window is
+  on it. On 2026-10-20 I kept such an output for a minute, and a first version of the script had a
+  jq bug and fell through to create: both carried his Nemo onto the invisible output.
 
 - `run-script.sh` refuses to run when the output's workspace holds a window that isn't fx (a
   new headless output may take one of Michael's hidden workspaces), takes the pid from the launch

@@ -39,7 +39,7 @@ def run():
     b = subprocess.run(['make', '-s', 'build/test'], cwd=work, capture_output=True, text=True)
     if b.returncode != 0:
         return 'build-fail'
-    t = subprocess.run(['./build/test'], cwd=work, capture_output=True, text=True, timeout=120)
+    t = subprocess.run(['./build/test'], cwd=work, capture_output=True, timeout=120)   # bytes: a mutant may print anything
     return 'pass' if t.returncode == 0 else 'fail'
 
 base = run()

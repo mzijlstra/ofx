@@ -8,6 +8,13 @@ char .
 expect n=6 shown=1 sel=adir
 key ctrl-h
 expect n=5 shown=0 sel=adir
+# On a file after the dot-file: the cursor stays on its name, a row further down.
+char G
+char .
+expect n=6 sel=cherry.txt idx=5
+char .
+expect n=5 sel=cherry.txt idx=4
+key home
 # Sort by keys: s size, S reverse; folders stay first.
 char s
 expect sort=size rev=0 sel=adir

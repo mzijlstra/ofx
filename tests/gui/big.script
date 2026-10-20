@@ -7,15 +7,15 @@ expect top=3 sel=f0
 wheel 1
 expect top=2
 key pagedown
-expect sel=f14 top=2
+expect sel=f13 top=2 rows=14
 char G
-expect sel=f9999 top=9985
+expect sel=f9999 top=9986
 wheel -5
-expect top=9985
+expect top=9986
 wheel 9999
 expect top=0 sel=f9999
 key up
-expect sel=f9998 top=9984
+expect sel=f9998 top=9985
 key home
 expect sel=f0 top=0
 state

@@ -26,13 +26,22 @@ wayland-cursor, wayland-egl, xkbcommon, fontconfig and freetype2. raylib and Cla
 | Home/End, `g`/`G` | first, last |
 | Enter, Right, `l` | open: a folder is entered, a file goes to `xdg-open` |
 | Backspace, Left, `h` | up to the parent, the folder you left selected |
+| Alt+Left, Alt+Right | back and forward |
+| `/`, Ctrl+F | find: type to jump, Enter keeps, Esc goes back; then `n`/`N` again |
+| `.`, Ctrl+H | hidden files on and off |
+| `s`, `S` | sort by the next column (name, size, modified), reverse |
+| Tab | the keys to the places in the sidebar and back |
 | `t` | a terminal in this folder (`xdg-terminal-exec --dir`) |
 | `~` | home |
 | Ctrl+Q | quit |
 
-Mouse: a click selects, a double click opens, the wheel scrolls a row per notch, the back button
-goes up. The list refreshes by itself when the folder changes, and the colours and icons follow
-a theme switch. Dot-files are hidden (F2 adds a toggle).
+Mouse: a click selects, a double click opens, the wheel scrolls a row per notch, a click on a
+column header sorts by it (again: reversed), a click on a place goes there, and the back and
+forward buttons walk the history. The list refreshes by itself when the folder changes, and the
+colours and icons follow a theme switch.
+
+The sidebar: Home, your GTK bookmarks (`~/.config/gtk-3.0/bookmarks`, the ones Nemo shows), `/`
+and what is mounted under `/mnt`, `/media` and `/run/media`.
 
 ## Where things come from
 

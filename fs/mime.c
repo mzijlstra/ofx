@@ -46,7 +46,11 @@ static Str lower(Arena *a, Str s)
 }
 
 // The whole file, NUL-terminated, into a; STR_EMPTY when it isn't there or won't fit. Sized by
-// fstat first: opening the arena's whole free tail would cost a pass over it under ASan.
+// fstat first: opening the arena's whole free tail would cost a pass over it under ASan. A file
+// that reads shorter than that size changed while read, and gives nothing. procfs files say 0
+// (/proc/self/mountinfo): those are read to their end, up to READ_UNSIZED_MAX.
+enum { READ_UNSIZED_MAX = MiB(1) };
+
 static Str read_file(Arena *a, const char *path)
 {
     FILE *f = fopen(path, "rb");
@@ -54,9 +58,18 @@ static Str read_file(Arena *a, const char *path)
     struct stat st;
     char *dst = NULL;
     size_t n = 0;
-    if (fstat(fileno(f), &st) == 0 && S_ISREG(st.st_mode) && (dst = arena_try_push(a, (isize)st.st_size + 1, 1)))
+    bool whole = false;
+    if (fstat(fileno(f), &st) == 0 && S_ISREG(st.st_mode) && st.st_size == 0) {
+        isize avail;
+        dst = arena_tail(a, &avail);
+        size_t cap = avail - 1 < READ_UNSIZED_MAX ? (size_t)(avail - 1) : READ_UNSIZED_MAX;
+        for (size_t got; avail > 1 && n < cap && (got = fread(dst + n, 1, cap - n, f)) > 0;) n += got;
+        whole = feof(f) && !ferror(f);
+        arena_commit(a, whole ? (isize)n + 1 : 0);
+    } else if (S_ISREG(st.st_mode) && (dst = arena_try_push(a, (isize)st.st_size + 1, 1))) {
         n = fread(dst, 1, (size_t)st.st_size, f);
-    bool whole = dst && n == (size_t)st.st_size;
+        whole = n == (size_t)st.st_size;
+    }
     fclose(f);
     if (!whole) return STR_EMPTY;
     dst[n] = 0;

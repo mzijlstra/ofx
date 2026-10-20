@@ -216,12 +216,14 @@ static const IconDir *icon_in_theme(const IconTheme *t, Str name, int size, int 
     return best;
 }
 
-// The file for the first of names any theme has, theme by theme (the spec's FindBestIcon), at size
-// logical pixels on a scale-`scale` output; into a. NULL when there is none.
+// The file for the first of names any theme in the chain has, at size logical pixels on a
+// scale-`scale` output; into a. NULL when there is none. Name by name, not the spec's FindBestIcon
+// (theme by theme): fx's lists end in generic fallbacks (folder, text-x-generic), and Yaru-magenta
+// has a folder but no drive, so theme-first drew the drives as folders (2026-10-20).
 static const char *icon_find(Arena *a, const IconDb *db, const Str *names, isize nnames, int size, int scale)
 {
-    for (isize t = 0; t < db->n; t++)
-        for (isize k = 0; k < nnames; k++) {
+    for (isize k = 0; k < nnames; k++)
+        for (isize t = 0; t < db->n; t++) {
             const IconDir *d = icon_in_theme(&db->t[t], names[k], size, scale);
             if (d) return arena_sprintf(a, "%s/%.*s.png", d->path, STR_ARG(names[k]));
         }
