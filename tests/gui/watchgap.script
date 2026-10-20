@@ -1,0 +1,8 @@
+# A change between a folder's listing and its watch (FX_TEST_WATCH_DELAY_MS=300 holds them apart):
+# a file made 100 ms after Enter lands in the gap, and must still show.
+settle
+expect sel=adir
+sh (sleep 0.1; touch "$FX_ROOT/tree/adir/late.txt") >/dev/null 2>&1 &
+key enter
+wait-for 2000 n=2 sel=inner.txt
+quit

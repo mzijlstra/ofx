@@ -49,6 +49,7 @@ cat > "$T/launch.sh" <<EOS
 echo \$\$ > "$T/run.pid"
 exec env ${script_env} FX_GUI_ROOT="$T" FX_GUI_SHOTS="$T/shots" PATH="$T/fakes:\$PATH" XDG_STATE_HOME="$T/state" \
   LSAN_OPTIONS=suppressions=$root/gui/lsan.supp ASAN_OPTIONS=log_path="$T/asan" ${FX_TEST_LEAK:+FX_TEST_LEAK=1} \
+  ${FX_TEST_WATCH_DELAY_MS:+FX_TEST_WATCH_DELAY_MS=$FX_TEST_WATCH_DELAY_MS} \
   "$bin" $args >"$T/out" 2>"$T/err"
 EOS
 chmod +x "$T/launch.sh"

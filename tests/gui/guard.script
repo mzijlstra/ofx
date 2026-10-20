@@ -1,5 +1,4 @@
-# The sh guard: fx starts outside the run's scratch tree, so sh is refused; inside it, sh runs
-# until the first failure, then is skipped. Expected output: exactly the three marked failures,
-# checked by tests/gui/run.sh (so this script's own failures are its success).
+# The sh guard: fx starts outside the run's scratch tree, so its one sh line must be refused and
+# leave no file. tests/gui/run.sh checks the refusal, so this script failing is its success.
 settle
 sh touch "$FX_ROOT/outside-ran"

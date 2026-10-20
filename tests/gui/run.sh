@@ -19,6 +19,8 @@ T=$base/big; rm -rf "$T"; mkdir -p "$T/tree"; (cd "$T/tree" && seq -f 'f%g' 0 99
 echo "== big"; "$here/../../tools/gui/run-script.sh" "$out" "$T" "$here/big.script" "$bin" "$T/tree" || fail=1
 T=$base/gone; tree "$T"
 echo "== gone"; "$here/../../tools/gui/run-script.sh" "$out" "$T" "$here/gone.script" "$bin" "$T/tree" || fail=1
+T=$base/watchgap; tree "$T"
+echo "== watchgap"; FX_TEST_WATCH_DELAY_MS=300 "$here/../../tools/gui/run-script.sh" "$out" "$T" "$here/watchgap.script" "$bin" "$T/tree" || fail=1
 # The guard: started in $base, outside <T>, every sh line is refused and nothing runs.
 T=$base/guard; rm -rf "$T"; mkdir -p "$T"
 echo "== guard"

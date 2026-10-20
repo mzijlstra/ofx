@@ -34,6 +34,7 @@ static u8 icon_mem[MiB(16)];       // the icon theme's index and the icon cache;
 static u8 scratch_mem[MiB(1)];
 
 static Arena frame, lists[2], data, icona, scratch;
+static int   watch_delay_ms;   // FX_TEST_WATCH_DELAY_MS, for one test
 
 enum { FONT_PX = 15, ROW_H = 28, ICON_PX = 24, HEADER_H = 40, FOOTER_H = 28, PAD = 12, SIZE_W = 90, DATE_W = 100,
        ICONS_MAX = 512 };
@@ -163,6 +164,9 @@ static bool go_to(const char *dir, Str select, isize fallback)
         snprintf(app.cwd, sizeof app.cwd, "%s", dir);
         app.status[0] = 0;   // what happened in the last folder
         app.ui.top = 0;
+        // FX_TEST_WATCH_DELAY_MS widens the gap between the listing and the watch, so
+        // tests/gui/watchgap.script can put a change in it.
+        if (watch_delay_ms > 0) nanosleep(&(struct timespec){ watch_delay_ms / 1000, (watch_delay_ms % 1000) * 1000000L }, NULL);
         watch_dir(app.cwd);
         // A change between the listing and the watch made no event: list once more.
         atomic_store(&watch.list_ready, true);
@@ -610,6 +614,9 @@ int main(int argc, char **argv)
     spawn_init();
     // FX_TEST_LEAK=1 leaks one block on purpose: the control that shows LeakSanitizer reports
     // from this binary at all.
+    const char *delay = getenv("FX_TEST_WATCH_DELAY_MS");
+    watch_delay_ms = delay ? atoi(delay) : 0;
+    if (watch_delay_ms < 0 || watch_delay_ms > 1000) watch_delay_ms = 0;   // a window must never stall long
     const char *leak = getenv("FX_TEST_LEAK");
     if (leak && leak[0]) planted = malloc(4096), planted = NULL;
 

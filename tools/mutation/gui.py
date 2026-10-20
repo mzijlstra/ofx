@@ -11,6 +11,7 @@ MUTANTS = [
     (G, "    go_to(up, str_from_c(child_buf), 0);", "    go_to(up, STR_EMPTY, 0);"),
     (G, "    if (go_to(app.cwd, str_from_c(keep), app.ui.sel)) return;", "    if (go_to(app.cwd, STR_EMPTY, app.ui.sel)) return;"),
     (G, "        memmove(up, d.p, (size_t)d.len);\n        up[d.len] = 0;", "        snprintf(up, sizeof up, \"%.*s\", STR_ARG(d));"),
+    (G, "        atomic_store(&watch.list_ready, true);\n        glfwPostEmptyEvent();\n        SetWindowTitle", "        SetWindowTitle"),
     (W, "static const u32 WATCH_DIR_MASK = IN_CREATE | ", "static const u32 WATCH_DIR_MASK = "),
     (W, "    if (rewatch) watch.theme_wd = inotify_add_watch(watch.fd, watch.theme, WATCH_THEME_MASK);", ""),
     (W, "        if (theme) atomic_store(&watch.theme_ready, true);", ""),
