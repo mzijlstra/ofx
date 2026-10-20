@@ -22,9 +22,9 @@ shares, archives, "open with" menus.
 | F1 | Browse: one folder as a list (icon, name, size, modified), theme colours and icons, keyboard and mouse navigation, open, terminal here, live refresh | Below |
 | F2 | Get around: sidebar (bookmarks, mounts), hidden files, sort, type-to-find, back and forward | |
 | F3 | Change files: select, rename, new folder, trash, delete, copy and move with progress, the system clipboard, undo; on scratch folders only in tests | Below |
-| F4 | Top bar: back, forward, up; the path as buttons; a location entry toggle; search | |
+| F4 | Top bar: back, forward, up; the path as buttons; a location entry toggle; search. Item counts for folders | Below |
 | F5 | Tabs: Ctrl+T, Ctrl+W, middle click on a path button or folder | |
-| F6 | Bottom bar: sidebar as places, as a tree, or hidden | |
+| F6 | Bottom bar: sidebar as places, as a tree, or hidden. Free space per drive in the sidebar | |
 | F7 | Menus: File, Edit, View, Go, Bookmarks, Help | |
 
 Each milestone ends in a reviewer-2 round, then Michael's go before `make install`.
@@ -40,6 +40,11 @@ his word: Nemo's compact view and its icon size slider.
   `udisksctl mount`, an eject button unmounts.
 - A key that copies the cursor's path as text (Ctrl+C already puts files on the clipboard, F3).
 - Install Nautilus at some point to compare its features with fx's (not a priority).
+- Search through subfolders, as Nemo's search does (the top bar's search opens `/` find for now).
+- Optional columns: permissions; type (Michael doesn't want it by default). Date and time format as
+  an option; the short form ("14:03", "Oct 20") stays the default.
+- Sidebar sections (Nemo's My Computer, Bookmarks, Network): to brainstorm with Michael first.
+- Not wanted: Nemo's built-in terminal (`t`, a terminal here, covers it).
 
 **Thumbnails, a rule from Nemo (2026-10-20):** Nemo looped at up to 45% CPU on one file
 because it checked an x-large thumbnail, found it stale (an older file of the same name), wrote the
@@ -98,6 +103,52 @@ event, the selection kept by name (or the row it was on, when that name is gone)
 
 **Idle:** the loop draws only when something changed and otherwise waits in
 `PollInputEvents` (uml-viewer's loop, prdash's `docs/gui-findings.md`).
+
+## F4 design (2026-10-20)
+
+**Decisions (Michael):** search stays the `/` find for now; the path buttons keep the deeper
+folders after going up, as Nemo's do; folders show their item count in the Size column, more
+telling than a byte size; no icon or list view buttons until there is an icon view.
+
+**The top bar** replaces F1's header row: back, forward and up on the left, then the path buttons,
+then (right) the location entry toggle and search. The item count moves to the footer's right end
+("51 items, 2 selected"). Buttons that can't act (back with no history, up at `/`) are dimmed and
+ignore clicks; every button lights up under the pointer.
+
+**Arrows and button glyphs:** the icon theme has these only as symbolic SVGs (Yaru, Adwaita), and
+fx has no SVG rasteriser, so they are drawn as text glyphs from the UI font in the theme's colours
+(‹ › ↑ and the like, chosen by what the font has), as Nemo's symbolic icons are monochrome too.
+
+**Path buttons:** under `$HOME` the first button is the home folder (its icon and name) and the
+folders above it are left out, as Nemo does; elsewhere the first is `/`. A click goes there.
+The bar remembers the deepest path it showed: going up keeps the deeper buttons (the current one
+marked), going to a folder off that path starts it anew. When they don't fit, the oldest go off the
+left behind a ‹ button and the deeper ones off the right behind ›, and the current one is always
+shown. Middle click is kept for F5 (a new tab). Alt+Up goes up, Alt+Left and Alt+Right as now.
+
+**Location entry:** Ctrl+L or the toggle button swaps the path buttons for an edit line holding the
+current path (F3's edit line), the caret at the end as in a rename. Enter
+goes there (`~` expanded, a relative path taken from the current folder); a path that isn't a
+folder keeps the line open with the reason. Esc, or the toggle again, goes back to the buttons.
+No Tab completion in F4.
+
+**Search** opens the find line, as `/` does.
+
+**Item counts:** a folder's Size cell reads "14 items" ("1 item"; "?" when it can't be read). The
+count is the folder's entries, dot-files only when hidden files are shown. Counting reads each
+folder, which can be slow on a big or slow drive, so it happens off the main thread for the rows on
+screen, cached by name per listing and dropped on reload; the cell is blank until it is known.
+Sorting by size keeps folders by name (counts aren't sizes).
+
+## F4 exit criteria
+
+1. `make test`: the path buttons (the segments, the remembered deeper path, home shortening, the
+   overflow window), the location entry's path parsing (`~`, relative, `..`), the counts (hidden
+   on and off, unreadable), the dimmed buttons; a mutation run over the new fs/ and ui/ code.
+2. GUI scripts: each button by click (`point-ui`), dimmed buttons ignore clicks, path buttons after
+   going up and after going elsewhere, overflow on a deep scratch path, Ctrl+L and the toggle, Enter
+   on a good and a bad path, Esc; counts in the Size column, live after a file is added.
+3. F1-F3 scripts still pass; idle is still about 0%; LeakSanitizer reports nothing.
 
 ## F3 design (2026-10-20)
 
