@@ -21,7 +21,7 @@ shares, archives, "open with" menus.
 |---|---|---|
 | F1 | Browse: one folder as a list (icon, name, size, modified), theme colours and icons, keyboard and mouse navigation, open, terminal here, live refresh | Below |
 | F2 | Get around: sidebar (bookmarks, mounts), hidden files, sort, type-to-find, back and forward | |
-| F3 | Change files: rename, trash, copy and move with progress, on scratch folders only in tests | |
+| F3 | Change files: select, rename, new folder, trash, delete, copy and move with progress, the system clipboard, undo; on scratch folders only in tests | Below |
 | F4 | Extras: thumbnails, clipboard copy, git status per file | |
 
 Each milestone ends in a reviewer-2 round, then Michael's go before `make install`.
@@ -83,6 +83,94 @@ event, the selection kept by name (or the row it was on, when that name is gone)
 
 **Idle:** the loop draws only when something changed and otherwise waits in
 `PollInputEvents` (uml-viewer's loop, prdash's `docs/gui-findings.md`).
+
+## F3 design (2026-10-20)
+
+**Decisions (Michael):** Shift+Delete deletes for good, after a confirm; Ctrl+C and Ctrl+X put the
+paths on the system clipboard as well, so a paste in Nemo or a terminal works; Ctrl+Z undoes the
+last action; Ctrl+Shift+N makes a new folder.
+
+**Selection:** Space toggles the entry under the cursor and moves down, Ctrl+A selects all, Esc
+clears; a Ctrl+click toggles, a Shift+click selects the range from the cursor. Selected rows get
+the theme's selection colour, the cursor keeps its own mark. An action works on the selection, or
+on the cursor's entry when nothing is selected. A reload keeps the selection by name.
+
+**Keys:** F2 rename; Ctrl+Shift+N new folder; Delete to the trash; Shift+Delete for good;
+Ctrl+C, Ctrl+X, Ctrl+V; Ctrl+Z undo.
+
+**Rename and new folder:** an edit line on the row (new folder starts as "New folder", picked
+free with " (2)" and up). Enter commits with `renameat2(RENAME_NOREPLACE)` or `mkdirat`, so
+nothing is overwritten; Esc cancels. A name that exists, is empty, or holds a `/` keeps the edit
+open with the reason in the status line.
+
+**Trash (`fs/trash.c`), the freedesktop Trash spec 1.0:** a file on the home drive goes to
+`$XDG_DATA_HOME/Trash` (default `~/.local/share/Trash`); on another drive (`/mnt/sd` is one) to
+`$topdir/.Trash/$uid` when `$topdir/.Trash` is a real folder with the sticky bit, else
+`$topdir/.Trash-$uid` (made 0700), never across drives. The `.trashinfo` (Path, percent-encoded;
+absolute in the home trash, relative to the top dir in the others; DeletionDate in local time) is
+created with `O_EXCL` first, which also picks the free name (`name`, `name.2`, …); then the file
+is renamed into `files/`. Nemo's trash view and `gio trash --list` show what fx trashed.
+
+**Delete for good:** the footer asks "Delete 3 items for good? This can't be undone. y/N"; only
+`y` goes ahead. Folders are removed depth first with `unlinkat`, never following a symlink.
+
+**Copy and move (`fs/copy.c`):** Ctrl+C or Ctrl+X remembers the paths and the verb; Ctrl+V into
+the open folder starts a job on a worker thread with its own arena (no malloc).
+- A move on the same drive is one `renameat2(RENAME_NOREPLACE)` per entry. Across drives it is a
+  copy, then the source is deleted once that entry copied in full.
+- A copy counts the files and bytes first, then copies each file with `copy_file_range` (falling
+  back to `read`/`write` in 1 MiB blocks) into `.fx-part-<name>` beside the target, and renames it
+  into place at the end, so a cancel or a crash never leaves a half file under the real name.
+  Modes and times are kept (`fchmod`, `futimens`); symlinks are copied as links, never followed;
+  sockets and devices are skipped with a note.
+- The footer shows "Copying 3 of 12 files, 1.2 of 4.0 GiB · Esc cancels" while the window stays
+  usable. One job at a time: a second paste while one runs is refused in the status line.
+- Pasting into the folder the files are in makes copies named " (copy)", " (copy 2)".
+- Pasting a folder into itself or below itself is refused.
+
+**Name clashes:** the job stops at a clash and asks in the footer: `s` skip, `r` replace (a folder
+"replace" merges, asking again inside), `k` keep both (" (2)"), with Shift for "all the rest";
+Esc cancels the job. A replaced file is written to the part file first and renamed over the old
+one, so the old file survives until the new one is complete.
+
+**System clipboard (`gui/clipboard.c`):** GLFW only offers `text/plain`, which Nemo can't paste
+as files. fx opens its own second Wayland connection and binds `ext-data-control-v1`
+(Hyprland has it; wayland-protocols 1.49 ships the XML), which needs no input serial. On Ctrl+C
+or Ctrl+X it offers `x-special/gnome-copied-files` (`copy` or `cut`, then `file://` URIs: what
+Nemo reads), `text/uri-list`, and `text/plain;charset=utf-8` / `text/plain` (the paths, one per
+line, for a terminal). Ctrl+V takes fx's own copy when it still owns the selection, else reads
+`x-special/gnome-copied-files` or `text/uri-list` from whoever does, so files copied in Nemo
+paste in fx too. Without the protocol (weston, in the tests) the clipboard stays inside fx and the
+status line says so once.
+
+**Undo (Ctrl+Z, one level: the last action only):**
+- rename: renamed back; new folder: removed if still empty;
+- trash: restored from the trash (the file renamed back, its `.trashinfo` removed);
+- move: moved back; copy: the copies go to the trash (never deleted for good);
+- delete for good: can't be undone, and the confirm says so.
+Undo checks first that things are as the action left them (the new name exists, the old one is
+free); if not it does nothing and says why. The status line names what was undone.
+
+**Test guard:** with `FX_GUI_ROOT` set (the GUI tests), every write in fs/ (rename, mkdir, trash,
+delete, copy, move, undo) refuses a path outside that folder, checked on the resolved path, and
+logs the refusal; `XDG_DATA_HOME` points at scratch so the home trash is scratch too.
+
+## F3 exit criteria
+
+1. `make test` covers the trash (info file, name picking, home and top-dir trash chosen by
+   `st_dev`, restore), delete for good (depth first, symlinks not followed), copy (part file,
+   modes and times, symlinks, cancel leaves nothing, cross-drive move through an injected
+   "other drive"), clashes (each answer, "all the rest", folder merge), paste into itself refused,
+   " (copy)" names, the clipboard payloads both ways, undo of each action and its refusals, and the
+   guard; a mutation run over the new fs/ and ui/ code with every survivor killed or shown inert.
+2. GUI scripts in weston on scratch trees, with a scratch `XDG_DATA_HOME`: select by keys and by
+   Ctrl/Shift click; rename and new folder (commit, clash, Esc); trash then undo; Shift+Delete
+   with `n` and with `y`; copy and cut-paste with the progress line (slowed by a test-only delay),
+   Esc cancels with no part file left; a clash answered each way; the guard refusing a path
+   outside the scratch folder.
+3. One live clipboard check on Hyprland, with Michael's go since it replaces his clipboard: copy in
+   fx, paste in Nemo and in a terminal; copy in Nemo, paste in fx.
+4. F1 and F2 scripts still pass; idle is still about 0%; LeakSanitizer reports nothing.
 
 ## F2 design (2026-10-20)
 
