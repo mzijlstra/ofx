@@ -342,6 +342,14 @@ static bool hist_step(UiHistory *h, int dir, const char *cur, Str sel, UiPlace *
     return true;
 }
 
+// A step that led nowhere (its folder is gone): the folder it left is taken back off the other
+// stack, and the dead entry stays dropped.
+static void hist_unstep(UiHistory *h, int dir)
+{
+    int *no = dir < 0 ? &h->nfwd : &h->nback;
+    if (*no > 0) (*no)--;
+}
+
 // ---- timing -------------------------------------------------------------------------------
 
 enum { UI_DCLICK_MS = 400 };

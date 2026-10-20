@@ -252,19 +252,18 @@ static void open_entry(isize i)
     else set_status(true, "%s", err.msg);
 }
 
-// Back (-1) or forward (1) through the history. A folder there that is gone now is skipped, with
-// a word in the status line.
+// Back (-1) or forward (1) through the history. A folder there that is gone now is dropped and
+// the next one tried, with a word in the status line.
 static void hist_go(int dir)
 {
     UiPlace to;
     char cur[PATH_MAX], cur_sel[NAME_MAX + 1];
     snprintf(cur, sizeof cur, "%s", app.cwd);
     snprintf(cur_sel, sizeof cur_sel, "%.*s", STR_ARG(sel_name()));
-    if (!hist_step(&hist, dir, cur, str_from_c(cur_sel), &to)) return;
-    if (!go_to_in(to.dir, str_from_c(to.sel), 0, true)) {
-        // The step was taken: put the current folder back where it came from.
-        UiPlace back;
-        hist_step(&hist, -dir, to.dir, STR_EMPTY, &back);
+    while (hist_step(&hist, dir, cur, str_from_c(cur_sel), &to)) {
+        if (go_to_in(to.dir, str_from_c(to.sel), 0, true)) return;
+        hist_unstep(&hist, dir);
+        set_status(true, "%s is gone: skipped", to.dir);
     }
 }
 

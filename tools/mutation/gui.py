@@ -23,6 +23,7 @@ MUTANTS = [
     (G, "        if (in_box(Clay_GetElementId(cz(IDS[k])), x, y)) h.header = k;", ""),
     (G, "(button == GLFW_MOUSE_BUTTON_5 || button == GLFW_MOUSE_BUTTON_6)) mouse_forwards++;", "(button == GLFW_MOUSE_BUTTON_6)) mouse_forwards++;"),
     (G, "        if (a.index >= 0 && a.index < app.places.n) go_to(app.places.p[a.index].path, STR_EMPTY, 0);", ""),
+    (G, "        hist_unstep(&hist, dir);\n", ""),
 ]
 out, scratch = sys.argv[1], sys.argv[2]
 only = [int(x) for x in sys.argv[3].split(',')] if len(sys.argv) > 3 else None

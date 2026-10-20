@@ -191,3 +191,7 @@ MUTANTS += [
     (M, "        whole = feof(f) && !ferror(f);", "        whole = true;"),
     (M, "        arena_commit(a, whole ? (isize)n + 1 : 0);", "        arena_commit(a, (isize)n + 1);"),
 ]
+MUTANTS += [
+    (U, "    if (*no > 0) (*no)--;", "    (void)no;"),
+    (M, "    if (stat(path, &pre) != 0 || !S_ISREG(pre.st_mode)) return STR_EMPTY;", "    (void)pre;"),
+]

@@ -312,6 +312,7 @@ static void test_mime(void)
     // procfs says 0 bytes: read to the end. An empty regular file is empty either way.
     Str mi = read_file(&ta, "/proc/self/mountinfo");
     CHECK(mi.len > 0 && mi.p[mi.len] == 0 && str_find(mi, '\n') > 0);
+    CHECK(mkfifo(at("a-fifo"), 0644) == 0 && read_file(&ta, at("a-fifo")).len == 0);   // returns at once
     put(at("empty-file"), "");
     CHECK(read_file(&ta, at("empty-file")).len == 0);
     // A tail too small for the whole: nothing, and the arena keeps nothing.
@@ -1074,6 +1075,20 @@ static void test_history(void)
     CHECK(hist_step(&h, -1, "/c", S("three"), &to));
     hist_leave(&h, "/b", S("two"));
     CHECK(h.nfwd == 0 && !hist_step(&h, 1, "/d", S(""), &to));
+    // A step to a folder that is gone: unstepped, the dead entry stays dropped and the one before
+    // it is next.
+    h = (UiHistory){ 0 };
+    hist_leave(&h, "/a", S("one"));
+    hist_leave(&h, "/dead", S("x"));
+    CHECK(hist_step(&h, -1, "/c", S("three"), &to) && strcmp(to.dir, "/dead") == 0 && h.nfwd == 1);
+    hist_unstep(&h, -1);
+    CHECK(h.nfwd == 0 && h.nback == 1);
+    CHECK(hist_step(&h, -1, "/c", S("three"), &to) && strcmp(to.dir, "/a") == 0 && h.nfwd == 1);
+    CHECK(hist_step(&h, 1, "/a", S("one"), &to) && strcmp(to.dir, "/c") == 0 && h.nback == 1);
+    hist_unstep(&h, 1);
+    CHECK(h.nback == 0 && h.nfwd == 0);
+    hist_unstep(&h, 1);   // nothing to take back: nothing happens
+    CHECK(h.nback == 0);
     // Full: the oldest goes.
     h = (UiHistory){ 0 };
     for (int k = 0; k < UI_HISTORY_MAX + 5; k++) {

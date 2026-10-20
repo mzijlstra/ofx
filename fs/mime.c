@@ -53,6 +53,9 @@ enum { READ_UNSIZED_MAX = MiB(1) };
 
 static Str read_file(Arena *a, const char *path)
 {
+    // A FIFO or a device at one of these paths would block fopen: regular files only.
+    struct stat pre;
+    if (stat(path, &pre) != 0 || !S_ISREG(pre.st_mode)) return STR_EMPTY;
     FILE *f = fopen(path, "rb");
     if (!f) return STR_EMPTY;
     struct stat st;
@@ -65,6 +68,7 @@ static Str read_file(Arena *a, const char *path)
         size_t cap = avail - 1 < READ_UNSIZED_MAX ? (size_t)(avail - 1) : READ_UNSIZED_MAX;
         for (size_t got; avail > 1 && n < cap && (got = fread(dst + n, 1, cap - n, f)) > 0;) n += got;
         whole = feof(f) && !ferror(f);
+        if (!whole && n == READ_UNSIZED_MAX) fprintf(stderr, "fx: WARN %s is over %d bytes: not read\n", path, READ_UNSIZED_MAX);
         arena_commit(a, whole ? (isize)n + 1 : 0);
     } else if (S_ISREG(st.st_mode) && (dst = arena_try_push(a, (isize)st.st_size + 1, 1))) {
         n = fread(dst, 1, (size_t)st.st_size, f);
