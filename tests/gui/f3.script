@@ -1,0 +1,199 @@
+# F3 on a tree made by tests/gui/run.sh: adir/ (inner.txt), bdir/ (empty), a.txt, b.txt,
+# big.bin (8 MiB), c.txt. Copies run slowed (FX_TEST_COPY_DELAY_MS) so the progress shows; the
+# trash is <scratch>/data/Trash (run-script.sh); weston has no data-control, so the clipboard
+# stays inside fx.
+settle
+expect n=6 sel=adir marked=0 undo=- sysclip=0
+# ---- select: Space marks and moves on; Esc clears; Ctrl+A; Shift and Ctrl clicks
+key space
+key space
+expect marked=2 sel=a.txt
+key esc
+expect marked=0
+key ctrl-a
+expect marked=6
+key esc
+press 2
+press 4 shift
+expect marked=3 sel=big.bin
+press 3 ctrl
+expect marked=2 sel=b.txt
+shot marked.png
+key esc
+expect marked=0
+# ---- rename: F2 on a.txt, clash on b.txt (the line stays), Esc, then a real rename and its undo
+key home
+key down
+key down
+expect sel=a.txt
+key f2
+expect editing=1 edit=a.txt
+key backspace
+key backspace
+key backspace
+key backspace
+key backspace
+type b.txt
+key enter
+expect editing=1 status=b.txt
+key esc
+expect editing=0
+sh test -f "$FX_DIR/a.txt"
+key f2
+key home
+type re-
+expect edit=re-a.txt
+shot rename.png
+key enter
+wait-for 2000 sel=re-a.txt editing=0 undo=rename
+sh test -f "$FX_DIR/re-a.txt" && test ! -e "$FX_DIR/a.txt"
+key ctrl-z
+wait-for 2000 undo=- sel=a.txt
+sh test -f "$FX_DIR/a.txt" && test ! -e "$FX_DIR/re-a.txt"
+# ---- new folder: made at once, renamed in the line; undo removes it
+key ctrl-shift-n
+expect editing=1 edit=New_folder undo=mkdir
+sh test -d "$FX_DIR/New folder"
+key backspace
+key backspace
+key backspace
+key backspace
+key backspace
+key backspace
+key backspace
+key backspace
+key backspace
+key backspace
+type made
+key enter
+wait-for 2000 sel=made editing=0 undo=mkdir n=7
+sh test -d "$FX_DIR/made" && test ! -e "$FX_DIR/New folder"
+key ctrl-z
+wait-for 2000 undo=- n=6
+sh test ! -e "$FX_DIR/made"
+# Esc keeps "New folder"
+key ctrl-shift-n
+key esc
+wait-for 2000 editing=0 n=7
+sh test -d "$FX_DIR/New folder" && rmdir "$FX_DIR/New folder"
+wait-for 2000 n=6
+# ---- trash and undo
+char /
+type c.txt
+key enter
+expect sel=c.txt
+key delete
+wait-for 2000 undo=trash n=5 status=Trashed
+sh test ! -e "$FX_DIR/c.txt" && test -f "$FX_ROOT/data/Trash/files/c.txt" && grep -qx "Path=$FX_DIR/c.txt" "$FX_ROOT/data/Trash/info/c.txt.trashinfo"
+key ctrl-z
+wait-for 2000 n=6 undo=-
+sh test -f "$FX_DIR/c.txt" && test ! -e "$FX_ROOT/data/Trash/info/c.txt.trashinfo"
+# ---- delete for good: n and Esc keep it, Enter deletes; y deletes
+char /
+type c.txt
+key enter
+key shift-delete
+expect confirming=1
+shot confirm.png
+char n
+expect confirming=0
+key shift-delete
+key esc
+expect confirming=0 marked=0
+sh test -f "$FX_DIR/c.txt"
+key shift-delete
+key enter
+wait-for 3000 job=- n=5 undo=- status=Deleted
+sh test ! -e "$FX_DIR/c.txt" && test ! -e "$FX_ROOT/data/Trash/files/c.txt"
+char /
+type b.txt
+key enter
+key shift-delete
+char y
+wait-for 3000 job=- n=4
+sh test ! -e "$FX_DIR/b.txt"
+# ---- copy and paste with the progress line, then clashes: keep both, skip, replace
+char /
+type big
+key enter
+key ctrl-c
+expect clip=1 cut=0
+key home
+key down
+expect sel=bdir
+key enter
+expect n=0
+key ctrl-v
+wait-for 3000 job=run
+shot progress.png
+wait-for 10000 job=- n=1 undo=copy status=Copied
+sh cmp -s "$FX_DIR/big.bin" "$FX_ROOT/tree/big.bin"
+key ctrl-v
+wait-for 3000 asking=1
+shot clash.png
+char k
+wait-for 10000 job=- n=2
+sh cmp -s "$FX_DIR/big (2).bin" "$FX_ROOT/tree/big.bin"
+key ctrl-z
+wait-for 2000 n=1 undo=-
+sh test ! -e "$FX_DIR/big (2).bin" && test -f "$FX_ROOT/data/Trash/files/big (2).bin"
+key ctrl-v
+wait-for 3000 asking=1
+char s
+wait-for 5000 job=- n=1 status=Copied
+sh printf x > "$FX_DIR/big.bin"
+key ctrl-v
+wait-for 3000 asking=1
+char r
+wait-for 10000 job=- n=1
+sh cmp -s "$FX_DIR/big.bin" "$FX_ROOT/tree/big.bin"
+# Cancel: Esc in the middle leaves no part file and nothing new
+sh rm "$FX_DIR/big.bin"
+wait-for 2000 n=0
+key ctrl-v
+wait-for 3000 job=run
+key esc
+wait-for 5000 job=- status=Copy
+sh test -z "$(ls -A "$FX_DIR")"
+expect n=0
+# ---- cut and paste: a move, and its undo
+key backspace
+expect sel=bdir
+char /
+type a.txt
+key enter
+key ctrl-x
+expect clip=1 cut=1
+key home
+key enter
+expect sel=inner.txt
+key ctrl-v
+wait-for 3000 job=- n=2 undo=move clip=0
+sh test -f "$FX_DIR/a.txt" && test ! -e "$FX_ROOT/tree/a.txt"
+key ctrl-z
+wait-for 2000 n=1 undo=-
+sh test -f "$FX_ROOT/tree/a.txt" && test ! -e "$FX_DIR/a.txt"
+# ---- paste here makes " (copy)"; a folder into itself is refused
+key backspace
+char /
+type a.txt
+key enter
+key ctrl-c
+key ctrl-v
+wait-for 3000 job=- n=5
+sh test -f "$FX_DIR/a (copy).txt"
+key home
+expect sel=adir
+key ctrl-c
+key enter
+key ctrl-v
+expect status=Can't
+key backspace
+# ---- a cut pasted where it is: nothing moves
+char /
+type a.txt
+key enter
+key ctrl-x
+key ctrl-v
+expect status=Already
+quit

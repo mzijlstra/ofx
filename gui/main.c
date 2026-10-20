@@ -23,6 +23,7 @@
 #include "GLFW/glfw3.h"
 #include "render.c"   // includes raylib and font.c
 #include "watch.c"
+#include "clipboard.c"
 
 // ---- memory ---------------------------------------------------------------------------------
 
@@ -32,8 +33,13 @@ static u8 list_mem[2][MiB(32)];    // the folder shown, and the one being read (
 static u8 data_mem[MiB(4)];        // the MIME database and the user directories, read once
 static u8 icon_mem[MiB(16)];       // the icon theme's index and the icon cache; reset on a theme change
 static u8 scratch_mem[MiB(1)];
+static u8 job_mem[MiB(4)];         // a job's paths
+static u8 undo_mem[MiB(4)];        // the undo record's paths
+static u8 own_mem[MiB(2)];         // what fx itself copied or cut
+static u8 paste_mem[MiB(2)];       // another program's files, read for one paste
+static u8 job_buf[JOB_BUF];
 
-static Arena frame, lists[2], data, icona, scratch;
+static Arena frame, lists[2], data, icona, scratch, joba, undoa, owna, pastea;
 static int   watch_delay_ms;   // FX_TEST_WATCH_DELAY_MS, for one test
 
 enum { FONT_PX = 15, ROW_H = 28, ICON_PX = 24, HEADER_H = 40, COLS_H = 26, FOOTER_H = 28, PAD = 12, SIZE_W = 90,
@@ -75,9 +81,18 @@ static struct {
     int       icon_scale;   // the scale the cache holds icons for
     int       hover;        // the row under the pointer, -1 for none
     int       reloads, themes;
+
+    // The edit line's entry: its name when the line opened, and whether it is a folder just made
+    // (Esc keeps "New folder"; the undo removes it whatever it is called by then).
+    char      edit_from[NAME_MAX + 1];
+    bool      edit_new;
+    bool      clip_told;    // "the clipboard stays inside fx" said once
+    int       copy_delay_ms;   // FX_TEST_COPY_DELAY_MS
 } app = { .hover = -1, .side_hover = -1 };
 
 static UiHistory hist;
+static Undo      undo;
+static ClipFiles own;      // fx's own copy or cut (own.n 0: none)
 
 static Clay_Color cc(Rgb c)
 {
@@ -166,14 +181,25 @@ static bool go_to_in(const char *dir, Str select, isize fallback, bool stepping)
     isize sel = select.len ? listing_find(&l, select) : -1;
     if (sel < 0) sel = fallback;
     Str *mime = arena_try_new(&lists[next], Str, l.n + 1);
-    if (!mime) {
+    u8 *mark = arena_try_new(&lists[next], u8, l.n + 1);
+    if (!mime || !mark) {
         set_status(true, "%s: too many entries for memory", dir);
         return false;
     }
     bool same = strcmp(dir, app.cwd) == 0;
+    // The same folder again: the selection is kept by name.
+    isize marked = 0;
+    for (isize i = 0; same && app.have_list && app.ui.marked && i < app.list.n; i++) {
+        if (!app.ui.mark[i]) continue;
+        isize k = listing_find(&l, app.list.e[i].name);
+        if (k >= 0 && !mark[k]) mark[k] = 1, marked++;
+    }
     // The folder left, with its cursor, for Back: its name is still in the old listing's arena.
     if (!same && app.have_list && !stepping) hist_leave(&hist, app.cwd, sel_name());
     app.cur = next, app.list = l, app.mime = mime, app.have_list = true, app.error[0] = 0;
+    ui_mark_set(&app.ui, mark);
+    app.ui.marked = marked;
+    if (!same) ui_edit_close(&app.ui);
     if (!same) {
         snprintf(app.cwd, sizeof app.cwd, "%s", dir);
         app.status[0] = 0;   // what happened in the last folder
@@ -278,6 +304,322 @@ static void resort(void)
     ui_set(&app.ui.list, app.list.n, sel >= 0 ? sel : 0);
 }
 
+// ---- changing files (F3) ---------------------------------------------------------------------
+
+// The entries an action works on: the marked ones, or the cursor's when none is marked; their
+// paths into a, in list order.
+static isize targets(Arena *a, char **out, isize max)
+{
+    isize n = 0;
+    for (isize i = 0; app.have_list && i < app.list.n && n < max; i++) {
+        if (app.ui.marked ? !app.ui.mark[i] : i != app.ui.list.sel) continue;
+        char p[PATH_MAX];
+        if (join(p, sizeof p, app.cwd, app.list.e[i].name)) out[n++] = arena_cstr(a, str_from_c(p));
+    }
+    return n;
+}
+
+static const char *items(isize n)
+{
+    return n == 1 ? "item" : "items";
+}
+
+// The job on its worker thread: copy, move or delete for good. The worker asks about a clash
+// through run.mu and run.cv; the main loop polls it (job_poll) and answers (job_answer).
+static struct {
+    Job             j;
+    JobItem         item[CLIP_PATHS_MAX];
+    pthread_t       thread;
+    bool            running;
+    bool            reverse;       // an undo's move back: it makes no new undo record
+    bool            own_cut;       // a paste of fx's own cut: the clipboard empties after it
+    pthread_mutex_t mu;
+    pthread_cond_t  cv;
+    bool            waiting;       // the worker waits for an answer
+    int             answer;        // ANS_*, 0 until given
+    bool            all;
+    char            clash[PATH_MAX];
+    bool            clash_dirs;
+    atomic_llong    last_tick;
+} run = { .mu = PTHREAD_MUTEX_INITIALIZER, .cv = PTHREAD_COND_INITIALIZER };
+
+static Answer job_ask(Job *j, const char *dst, bool both_dirs, bool *rest)
+{
+    (void)j;
+    pthread_mutex_lock(&run.mu);
+    snprintf(run.clash, sizeof run.clash, "%s", dst);
+    run.clash_dirs = both_dirs, run.answer = 0, run.waiting = true;
+    glfwPostEmptyEvent();
+    while (run.answer == 0) pthread_cond_wait(&run.cv, &run.mu);
+    Answer a = (Answer)run.answer;
+    *rest = run.all;
+    run.waiting = false;
+    pthread_mutex_unlock(&run.mu);
+    return a;
+}
+
+// The worker's progress: the window wakes to draw it, ten times a second at most.
+static void job_tick_gui(Job *j)
+{
+    i64 now = now_ms();
+    if (atomic_load(&j->phase) == JP_DONE || now - atomic_load(&run.last_tick) >= 100) {
+        atomic_store(&run.last_tick, now);
+        glfwPostEmptyEvent();
+    }
+}
+
+static void *job_thread(void *arg)
+{
+    (void)arg;
+    job_run(&run.j);
+    return NULL;
+}
+
+static void job_answer(int a, bool all)
+{
+    pthread_mutex_lock(&run.mu);
+    if (run.waiting && run.answer == 0) run.answer = a, run.all = all, pthread_cond_signal(&run.cv);
+    pthread_mutex_unlock(&run.mu);
+}
+
+static void job_cancel(void)
+{
+    if (!run.running) return;
+    atomic_store(&run.j.cancel, true);
+    job_answer(ANS_CANCEL, false);
+}
+
+// run.item[0..n) as a job of kind, on the worker.
+static void job_start(JobKind kind, isize n)
+{
+    memset(&run.j, 0, sizeof run.j);
+    run.j.kind = kind, run.j.item = run.item, run.j.n = n, run.j.buf = job_buf;
+    run.j.ask = job_ask, run.j.tick = job_tick_gui, run.j.delay_ms = app.copy_delay_ms;
+    run.waiting = false, run.answer = 0;
+    if (pthread_create(&run.thread, NULL, job_thread, NULL) != 0) {
+        set_status(true, "cannot start the job: %s", strerror(errno));
+        return;
+    }
+    run.running = true;
+    app.ui.busy = true;
+}
+
+static void job_finish(void)
+{
+    Job *j = &run.j;
+    static const char *const DONE[] = { "Copied", "Moved", "Deleted" }, *const STOPPED[] = { "Copy", "Move", "Delete" };
+    isize done = 0;
+    for (isize i = 0; i < j->n; i++)
+        if (j->item[i].out == OUT_NEW || j->item[i].out == OUT_REPLACED || j->item[i].out == OUT_MERGED) done++;
+    char msg[600];
+    int k;
+    if (atomic_load(&j->cancel)) k = snprintf(msg, sizeof msg, "%s cancelled after %td of %td %s", STOPPED[j->kind], done, j->n, items(j->n));
+    else k = snprintf(msg, sizeof msg, "%s %td %s", DONE[j->kind], done, items(done));
+    if (k > 0 && j->skipped) k += snprintf(msg + k, sizeof msg - (size_t)k, ", %td skipped", j->skipped);
+    if (k > 0 && j->errors) snprintf(msg + k, sizeof msg - (size_t)k, "; %td failed: %s", j->errors, j->err);
+    else if (k > 0 && j->note[0] && (size_t)k < sizeof msg) snprintf(msg + k, sizeof msg - (size_t)k, " (%s)", j->note);
+    set_status(j->errors > 0, "%s", msg);
+
+    // The undo record: what the job made new (copies) or moved whole; the rest can't go back.
+    if (run.reverse || j->kind == JOB_DELETE) {
+        undo_clear(&undo);
+    } else {
+        undo_begin(&undo, j->kind == JOB_COPY ? UNDO_COPY : UNDO_MOVE);
+        for (isize i = 0; i < j->n; i++) {
+            JobItem *it = &j->item[i];
+            if (it->out != OUT_NEW) continue;
+            Str d = path_dir(str_from_c(it->dst));
+            char dir[PATH_MAX], made[PATH_MAX];
+            snprintf(dir, sizeof dir, "%.*s", STR_ARG(d.len ? d : S("/")));
+            if (join(made, sizeof made, dir, str_from_c(it->final))) undo_add(&undo, j->kind == JOB_MOVE ? it->src : NULL, made, NULL);
+        }
+        if (undo.n == 0) undo_clear(&undo);
+    }
+    if (run.own_cut && !atomic_load(&j->cancel)) own.n = 0, clip_clear_own();
+    if (j->kind == JOB_DELETE) ui_mark_clear(&app.ui);
+    reload();
+}
+
+// Called every loop: true when something about the job changed on screen.
+static bool job_poll(void)
+{
+    if (!run.running) return false;
+    pthread_mutex_lock(&run.mu);
+    bool ask = run.waiting && run.answer == 0;
+    pthread_mutex_unlock(&run.mu);
+    if (ask && !app.ui.asking) app.ui.asking = true;
+    if (atomic_load(&run.j.phase) != JP_DONE) return true;
+    pthread_join(run.thread, NULL);
+    run.running = false;
+    app.ui.busy = false, app.ui.asking = false;
+    job_finish();
+    return true;
+}
+
+static void trash_targets(void)
+{
+    char *paths[CLIP_PATHS_MAX];
+    arena_reset(&pastea);
+    isize n = targets(&pastea, paths, CLIP_PATHS_MAX), ok = 0;
+    Err err, first = { "" };
+    undo_begin(&undo, UNDO_TRASH);
+    for (isize i = 0; i < n; i++) {
+        Trashed t;
+        if (trash_put(paths[i], &t, &err)) undo_add(&undo, t.from, t.file, t.info), ok++;
+        else if (!first.msg[0]) first = err;
+    }
+    if (ok == 0) undo_clear(&undo);
+    if (ok == n && n == 1) set_status(false, "Trashed %s", path_base(str_from_c(paths[0])).p);
+    else if (ok == n) set_status(false, "Trashed %td items", n);
+    else set_status(true, "Trashed %td of %td: %s", ok, n, first.msg);
+    ui_mark_clear(&app.ui);
+    reload();
+}
+
+static void delete_targets(void)
+{
+    if (run.running) { set_status(true, "a job is still running: wait, or Esc to cancel it"); return; }
+    char *paths[CLIP_PATHS_MAX];
+    arena_reset(&joba);
+    isize n = targets(&joba, paths, CLIP_PATHS_MAX);
+    for (isize i = 0; i < n; i++) run.item[i] = (JobItem){ .src = paths[i] };
+    run.reverse = false, run.own_cut = false;
+    if (n) job_start(JOB_DELETE, n);
+}
+
+static void copy_targets(bool cut)
+{
+    arena_reset(&owna);
+    own.n = targets(&owna, own.path, CLIP_PATHS_MAX);
+    own.cut = cut;
+    if (own.n == 0) return;
+    bool sys = clip_set(&own);
+    char name[NAME_MAX + 1];
+    snprintf(name, sizeof name, "%.*s", STR_ARG(path_base(str_from_c(own.path[0]))));
+    const char *note = !sys && !app.clip_told ? " (no system clipboard here: it stays inside fx)" : "";
+    if (!sys) app.clip_told = true;
+    if (own.n == 1) set_status(false, "%s %s%s", cut ? "Cut" : "Copied", name, note);
+    else set_status(false, "%s %td items%s", cut ? "Cut" : "Copied", own.n, note);
+}
+
+// Whether a and b are the same folder, resolved.
+static bool same_dir(const char *a, const char *b)
+{
+    char x[PATH_MAX], y[PATH_MAX];
+    return realpath(a, x) && realpath(b, y) && strcmp(x, y) == 0;
+}
+
+static void paste(void)
+{
+    if (run.running) { set_status(true, "a job is still running: wait, or Esc to cancel it"); return; }
+    static ClipFiles theirs;
+    arena_reset(&pastea);
+    ClipFrom from = clip_get(&pastea, &theirs);
+    ClipFiles *c = from == CLIP_THEIRS ? &theirs : from == CLIP_OURS || !clip.ok ? &own : NULL;
+    if (!c || c->n == 0) { set_status(true, "The clipboard holds no files"); return; }
+    arena_reset(&joba);
+    isize n = 0, here = 0, self = 0, gone = 0;
+    for (isize i = 0; i < c->n && n < CLIP_PATHS_MAX; i++) {
+        const char *src = c->path[i];
+        Str base = path_base(str_from_c(src)), sd = path_dir(str_from_c(src));
+        char sdir[PATH_MAX], name[NAME_MAX + 1], dst[PATH_MAX];
+        snprintf(sdir, sizeof sdir, "%.*s", STR_ARG(sd.len ? sd : S("/")));
+        struct stat st;
+        if (lstat(src, &st) != 0) {
+            gone++;
+            continue;
+        }
+        if (S_ISDIR(st.st_mode) && into_itself(src, app.cwd)) {
+            self++;
+            continue;
+        }
+        if (same_dir(sdir, app.cwd)) {
+            if (c->cut) {
+                here++;
+                continue;
+            }
+            if (!name_free(app.cwd, base, S_ISDIR(st.st_mode), true, true, name, sizeof name)) continue;
+        } else {
+            snprintf(name, sizeof name, "%.*s", STR_ARG(base));
+        }
+        if (!join(dst, sizeof dst, app.cwd, str_from_c(name))) continue;
+        run.item[n++] = (JobItem){ .src = arena_cstr(&joba, str_from_c(src)), .dst = arena_cstr(&joba, str_from_c(dst)) };
+    }
+    if (n == 0) {
+        if (self) set_status(true, "Can't paste a folder into itself");
+        else if (here) set_status(true, "Already here");
+        else set_status(true, "Nothing to paste: %td %s gone", gone, gone == 1 ? "is" : "are");
+        return;
+    }
+    run.reverse = false, run.own_cut = c == &own && c->cut;
+    job_start(c->cut ? JOB_MOVE : JOB_COPY, n);
+    if (self) set_status(true, "Skipped %td: a folder can't go into itself", self);
+}
+
+static void rename_commit(void)
+{
+    Str to = { app.ui.edit, app.ui.edit_len }, from = str_from_c(app.edit_from);
+    if (str_eq(to, from)) { ui_edit_close(&app.ui); return; }
+    Err err;
+    if (!op_rename(app.cwd, from, to, &err)) { set_status(true, "%s", err.msg); return; }
+    char a[PATH_MAX], b[PATH_MAX], keep[NAME_MAX + 1];
+    snprintf(keep, sizeof keep, "%.*s", STR_ARG(to));
+    if (join(a, sizeof a, app.cwd, from) && join(b, sizeof b, app.cwd, to)) {
+        // A folder just made stays a "new folder" for undo, whatever its name now.
+        undo_begin(&undo, app.edit_new ? UNDO_MKDIR : UNDO_RENAME);
+        undo_add(&undo, app.edit_new ? NULL : a, b, NULL);
+    }
+    ui_edit_close(&app.ui);
+    set_status(false, "Renamed %s to %s", app.edit_from, keep);
+    go_to(app.cwd, str_from_c(keep), app.ui.list.sel);
+}
+
+static void new_folder(void)
+{
+    char made[NAME_MAX + 1], p[PATH_MAX];
+    Err err;
+    if (!op_mkdir(app.cwd, S("New folder"), made, sizeof made, &err)) { set_status(true, "%s", err.msg); return; }
+    if (join(p, sizeof p, app.cwd, str_from_c(made))) undo_begin(&undo, UNDO_MKDIR), undo_add(&undo, NULL, p, NULL);
+    ui_mark_clear(&app.ui);
+    go_to(app.cwd, str_from_c(made), app.ui.list.sel);
+    ui_edit_open(&app.ui, str_from_c(made));
+    snprintf(app.edit_from, sizeof app.edit_from, "%s", made);
+    app.edit_new = true;
+}
+
+static void undo_last(void)
+{
+    if (run.running) { set_status(true, "a job is still running: wait, or Esc to cancel it"); return; }
+    char what[64];
+    undo_what(&undo, what, sizeof what);
+    Err err;
+    if (undo_is_job(&undo)) {
+        // A move across drives goes back as a move.
+        if (!undo_check(&undo, &err)) { undo_clear(&undo), set_status(true, "%s", err.msg); return; }
+        arena_reset(&joba);
+        for (isize i = 0; i < undo.n; i++)
+            run.item[i] = (JobItem){ .src = arena_cstr(&joba, str_from_c(undo.it[i].to)), .dst = arena_cstr(&joba, str_from_c(undo.it[i].from)) };
+        isize n = undo.n;
+        undo_clear(&undo);
+        run.reverse = true, run.own_cut = false;
+        job_start(JOB_MOVE, n);
+        return;
+    }
+    // What comes back here gets the cursor: a renamed, trashed or moved entry.
+    char back[NAME_MAX + 1] = "";
+    if (undo.n && undo.it[0].from && (undo.kind == UNDO_RENAME || undo.kind == UNDO_TRASH || undo.kind == UNDO_MOVE)) {
+        Str f = str_from_c(undo.it[0].from), d = path_dir(f);
+        char dir[PATH_MAX];
+        snprintf(dir, sizeof dir, "%.*s", STR_ARG(d.len ? d : S("/")));
+        if (same_dir(dir, app.cwd)) snprintf(back, sizeof back, "%.*s", STR_ARG(path_base(f)));
+    }
+    isize done;
+    if (undo_do(&undo, &done, &err)) set_status(false, "Undid the %s", what);
+    else set_status(true, "%s", err.msg);
+    if (back[0]) go_to(app.cwd, str_from_c(back), app.ui.list.sel);
+    else reload();
+}
+
 static void act(UiAction a)
 {
     Err err;
@@ -306,6 +648,16 @@ static void act(UiAction a)
         if (home && home[0]) go_to(home, STR_EMPTY, 0);
         break;
     }
+    case UA_RENAME: rename_commit(); break;
+    case UA_NEWFOLDER: new_folder(); break;
+    case UA_TRASH: trash_targets(); break;
+    case UA_DELETE: delete_targets(); break;
+    case UA_COPY: copy_targets(false); break;
+    case UA_CUT: copy_targets(true); break;
+    case UA_PASTE: paste(); break;
+    case UA_UNDO: undo_last(); break;
+    case UA_ANSWER: job_answer((int)a.index, a.all); break;
+    case UA_CANCEL_JOB: job_cancel(); break;
     default: break;
     }
 }
@@ -474,12 +826,33 @@ static void layout_cols(void)
     }
 }
 
+// a mixed into b: t of a.
+static Clay_Color mix(Rgb a, Rgb b, float t)
+{
+    return (Clay_Color){ a.r * t + b.r * (1 - t), a.g * t + b.g * (1 - t), a.b * t + b.b * (1 - t), 255 };
+}
+
+// The edit line in place of the name: the text, and a caret at its place.
+static void layout_edit(Theme *t)
+{
+    Str ed = { app.ui.edit, app.ui.edit_len };
+    CLAY(CLAY_ID("edit"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(ROW_H - 6) }, .padding = { 4, 4, 0, 0 },
+                                        .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
+                            .backgroundColor = cc(t->bg), .border = { .color = cc(t->accent), .width = CLAY_BORDER_ALL(1) } }) {
+        if (app.ui.caret > 0) text(cs(str_cut(ed, 0, app.ui.caret)), cc(t->fg));
+        CLAY(CLAY_ID("edit-caret"), { .layout = { .sizing = { CLAY_SIZING_FIXED(2), CLAY_SIZING_FIXED(FONT_PX + 2) } },
+                                      .backgroundColor = cc(t->accent) }) {}
+        if (app.ui.caret < app.ui.edit_len) text(cs(str_cut(ed, app.ui.caret, ed.len)), cc(t->fg));
+    }
+}
+
 static void layout_row(int r, isize i, float w, i64 now)
 {
     const Entry *e = &app.list.e[i];
     Theme *t = &app.theme;
-    bool sel = i == app.ui.list.sel, hover = r == app.hover;
-    Clay_Color bg = sel ? cc(t->selection) : hover ? cc(t->bg_light) : cc(t->bg);
+    bool sel = i == app.ui.list.sel, hover = r == app.hover, marked = ui_marked(&app.ui, i);
+    // Marked rows: the accent mixed into the background; the cursor keeps the selection colour.
+    Clay_Color bg = sel ? cc(t->selection) : marked ? mix(t->accent, t->bg, 0.28f) : hover ? cc(t->bg_light) : cc(t->bg);
     IconSlot *icon = entry_icon(i);
     char size[32] = "", when[32] = "";
     if (!kind_is_dir(e->kind) && e->kind != K_LINK_BROKEN && e->kind != K_OTHER) ui_size(size, sizeof size, e->size);
@@ -493,8 +866,12 @@ static void layout_row(int r, isize i, float w, i64 now)
                                .border = { .color = cc(t->accent), .width = { .left = sel && !app.ui.side_focus ? 3 : 0 } } }) {
         icon_box(CLAY_IDI("icon", r), icon, ICON_PX);
         CLAY(CLAY_IDI("name", r), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .childGap = 6 } }) {
-            text(fit(e->name, name_w, false), e->kind == K_LINK_BROKEN ? cc(t->red) : cc(t->fg));
-            if (link) text(cz("\xE2\x86\x92"), cc(t->fg_dim));   // →
+            if (sel && app.ui.editing) {
+                layout_edit(t);
+            } else {
+                text(fit(e->name, name_w, false), e->kind == K_LINK_BROKEN ? cc(t->red) : marked ? cc(t->accent) : cc(t->fg));
+                if (link) text(cz("\xE2\x86\x92"), cc(t->fg_dim));   // →
+            }
         }
         CLAY(CLAY_IDI("size", r), { .layout = { .sizing = { CLAY_SIZING_FIXED(SIZE_W), CLAY_SIZING_FIT(0) },
                                                 .childAlignment = { .x = CLAY_ALIGN_X_RIGHT } } }) {
@@ -518,8 +895,9 @@ static Clay_RenderCommandArray layout(int w, int h)
     CLAY(CLAY_ID("root"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0) }, .layoutDirection = CLAY_TOP_TO_BOTTOM },
                             .backgroundColor = cc(t->bg) }) {
         char count[96];
-        if (app.list.hidden) snprintf(count, sizeof count, "%td items, %td hidden", app.list.n, app.list.hidden);
-        else snprintf(count, sizeof count, "%td item%s", app.list.n, app.list.n == 1 ? "" : "s");
+        int k = app.list.hidden ? snprintf(count, sizeof count, "%td items, %td hidden", app.list.n, app.list.hidden)
+                                : snprintf(count, sizeof count, "%td item%s", app.list.n, app.list.n == 1 ? "" : "s");
+        if (app.ui.marked && k > 0) snprintf(count + k, sizeof count - (size_t)k, ", %td selected", app.ui.marked);
         Str cnt = str_from_c(arena_sprintf(&frame, "%s", count));
         CLAY(CLAY_ID("header"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(HEADER_H) },
                                               .padding = { PAD, PAD, 0, 0 }, .childGap = 16,
@@ -552,7 +930,33 @@ static Clay_RenderCommandArray layout(int w, int h)
         CLAY(CLAY_ID("footer"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(FOOTER_H) },
                                               .padding = { PAD, PAD, 0, 0 }, .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
                                   .backgroundColor = cc(t->bg_light) }) {
-            if (app.ui.finding) {
+            if (run.running && app.ui.asking) {
+                Str name = path_base(str_from_c(run.clash));
+                text(fit(str_from_c(arena_sprintf(&frame, "%.*s exists: s skip \xC2\xB7 r %s \xC2\xB7 k keep both \xC2\xB7 "
+                                                          "capitals for all the rest \xC2\xB7 Esc cancel",
+                                                  STR_ARG(name), run.clash_dirs ? "merge" : "replace")),
+                         (float)w - 2 * PAD, false),
+                     cc(t->accent));
+            } else if (app.ui.confirming) {
+                text(cz(arena_sprintf(&frame, "Delete %td %s for good? This can't be undone. Y/n", app.ui.confirm_n, items(app.ui.confirm_n))),
+                     cc(t->red));
+            } else if (app.ui.editing) {
+                text(cz(app.edit_new ? "New folder: Enter keeps the name \xC2\xB7 Esc keeps \"New folder\""
+                                     : "Rename: Enter renames \xC2\xB7 Esc cancels"),
+                     cc(t->fg_dim));
+            } else if (run.running) {
+                Job *j = &run.j;
+                static const char *const VERB[] = { "Copying", "Moving", "Deleting" };
+                char done[32], total[32];
+                ui_size(done, sizeof done, atomic_load(&j->bytes_done));
+                ui_size(total, sizeof total, atomic_load(&j->bytes_total));
+                long long fd = atomic_load(&j->files_done), ft = atomic_load(&j->files_total);
+                const char *line = atomic_load(&j->phase) == JP_SCAN ? arena_sprintf(&frame, "%s: counting\xE2\x80\xA6 \xC2\xB7 Esc cancels", VERB[j->kind])
+                                 : atomic_load(&j->bytes_total) > 0
+                                     ? arena_sprintf(&frame, "%s %lld of %lld files, %s of %s \xC2\xB7 Esc cancels", VERB[j->kind], fd, ft, done, total)
+                                     : arena_sprintf(&frame, "%s %lld of %lld \xC2\xB7 Esc cancels", VERB[j->kind], fd, ft);
+                text(fit(str_from_c(line), (float)w - 2 * PAD, false), cc(t->fg));
+            } else if (app.ui.finding) {
                 // The find line: its text, red when it matches nothing, and a caret.
                 Str f = { app.ui.find, app.ui.find_len };
                 text(cz("Find: "), cc(t->fg_dim));
@@ -562,8 +966,11 @@ static Clay_RenderCommandArray layout(int w, int h)
             } else if (app.status[0]) {
                 text(fit(str_from_c(app.status), (float)w - 2 * PAD, false), app.status_bad ? cc(t->red) : cc(t->fg));
             } else {
-                text(cz("Enter open \xC2\xB7 Backspace up \xC2\xB7 / find \xC2\xB7 . hidden \xC2\xB7 s sort \xC2\xB7 "
-                        "Tab places \xC2\xB7 t terminal \xC2\xB7 Ctrl+Q quit"), cc(t->fg_dim));
+                text(fit(S("Enter open \xC2\xB7 Backspace up \xC2\xB7 Space select \xC2\xB7 F2 rename \xC2\xB7 Del trash \xC2\xB7 "
+                           "Ctrl+C X V \xC2\xB7 Ctrl+Z undo \xC2\xB7 / find \xC2\xB7 . hidden \xC2\xB7 s sort \xC2\xB7 Tab places \xC2\xB7 "
+                           "t terminal"),
+                         (float)w - 2 * PAD, false),
+                     cc(t->fg_dim));
             }
         }
     }
@@ -610,6 +1017,21 @@ static UiKey ui_key_of(int key, int mods)
     if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_H) return UK_HIDDEN;
     if (m == GLFW_MOD_ALT && key == GLFW_KEY_LEFT) return UK_BACK;
     if (m == GLFW_MOD_ALT && key == GLFW_KEY_RIGHT) return UK_FORWARD;
+    if (m == GLFW_MOD_CONTROL) {
+        switch (key) {
+        case GLFW_KEY_A: return UK_ALL;
+        case GLFW_KEY_C: return UK_COPY;
+        case GLFW_KEY_X: return UK_CUT;
+        case GLFW_KEY_V: return UK_PASTE;
+        case GLFW_KEY_Z: return UK_UNDO;
+        default: break;
+        }
+    }
+    if (m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT) && key == GLFW_KEY_N) return UK_NEWFOLDER;
+    if (key == GLFW_KEY_DELETE || key == GLFW_KEY_KP_DECIMAL) {
+        if (key == GLFW_KEY_KP_DECIMAL) return UK_NONE;   // the keypad's . types a dot
+        return m == GLFW_MOD_SHIFT ? UK_SHIFT_DELETE : m == 0 ? UK_DELETE : UK_NONE;
+    }
     if (m & (GLFW_MOD_CONTROL | GLFW_MOD_ALT | GLFW_MOD_SUPER)) return UK_NONE;
     switch (key) {
     case GLFW_KEY_UP: return UK_UP;
@@ -625,6 +1047,7 @@ static UiKey ui_key_of(int key, int mods)
     case GLFW_KEY_BACKSPACE: return UK_BACKSPACE;
     case GLFW_KEY_ESCAPE: return UK_ESC;
     case GLFW_KEY_TAB: return m == 0 ? UK_TAB : UK_NONE;
+    case GLFW_KEY_F2: return m == 0 ? UK_F2 : UK_NONE;
     default: return UK_NONE;
     }
 }
@@ -682,13 +1105,14 @@ static Hit hit_at(float x, float y)
     return h;
 }
 
-// A left press at a point, into in: a list row's goes through the double-click timing.
-static void press_at(UiInput *in, float x, float y)
+// A left press at a point, into in: a list row's goes through the double-click timing (not with
+// Ctrl or Shift held, which mark rows: UI_MOD_*).
+static void press_at(UiInput *in, float x, float y, int mods)
 {
     Hit h = hit_at(x, y);
     if (h.row >= 0) {
-        if (ui_press(&app.press, h.row, now_ms()) == 2) in->dclick = h.row;
-        else in->click = h.row;
+        if (!mods && ui_press(&app.press, h.row, now_ms()) == 2) in->dclick = h.row;
+        else in->click = h.row, in->click_mods = mods;
     }
     in->side_click = h.side;
     in->header = h.header;
@@ -717,7 +1141,11 @@ static UiInput input_real(bool *seen)
         *seen |= h.row != app.hover || h.side != app.side_hover;
         app.hover = h.row, app.side_hover = h.side;
     }
-    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) press_at(&in, m.x, m.y);
+    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+        int mods = (IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL) ? UI_MOD_CTRL : 0) |
+                   (IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT) ? UI_MOD_SHIFT : 0);
+        press_at(&in, m.x, m.y, mods);
+    }
     in.backs = mouse_backs, mouse_backs = 0;
     in.forwards = mouse_forwards, mouse_forwards = 0;
     *seen |= in.wheel != 0 || in.click >= 0 || in.dclick >= 0 || in.side_click >= 0 || in.header >= 0 || in.backs > 0 ||
@@ -766,7 +1194,9 @@ static void usage(void)
                     "  A file explorer: the folder (default: the current one) as a list.\n"
                     "  Enter, Right, l open; Backspace, Left, h up; j k, arrows, PgUp PgDn, Home End, g G move;\n"
                     "  Alt+Left/Right back and forward; / or Ctrl+F find, n N again; . or Ctrl+H hidden files;\n"
-                    "  s sort by the next column, S reverse; Tab the places; t terminal here; ~ home; Ctrl+Q quit.\n");
+                    "  s sort by the next column, S reverse; Tab the places; t terminal here; ~ home;\n"
+                    "  Space select, Ctrl+A all; F2 rename; Ctrl+Shift+N new folder; Delete trash, Shift+Delete for good;\n"
+                    "  Ctrl+C, Ctrl+X, Ctrl+V copy, cut, paste; Ctrl+Z undo; Ctrl+Q quit.\n");
 }
 
 int main(int argc, char **argv)
@@ -794,6 +1224,13 @@ int main(int argc, char **argv)
     const char *delay = getenv("FX_TEST_WATCH_DELAY_MS");
     watch_delay_ms = delay ? atoi(delay) : 0;
     if (watch_delay_ms < 0 || watch_delay_ms > 1000) watch_delay_ms = 0;   // a window must never stall long
+    // FX_TEST_COPY_DELAY_MS: a sleep per copied block, so a test sees the progress (capped short:
+    // a job never stalls the window, but a test must not run long).
+    const char *cdelay = getenv("FX_TEST_COPY_DELAY_MS");
+    app.copy_delay_ms = cdelay ? atoi(cdelay) : 0;
+    if (app.copy_delay_ms < 0 || app.copy_delay_ms > 500) app.copy_delay_ms = 0;
+    // The test guard: with FX_GUI_ROOT set (the GUI tests), no write outside it.
+    ops_guard(getenv("FX_GUI_ROOT"));
     const char *leak = getenv("FX_TEST_LEAK");
     if (leak && leak[0]) planted = malloc(4096), planted = NULL;
 
@@ -803,6 +1240,11 @@ int main(int argc, char **argv)
     arena_init(&data, "data", data_mem, sizeof data_mem);
     arena_init(&icona, "icons", icon_mem, sizeof icon_mem);
     arena_init(&scratch, "scratch", scratch_mem, sizeof scratch_mem);
+    arena_init(&joba, "job", job_mem, sizeof job_mem);
+    arena_init(&undoa, "undo", undo_mem, sizeof undo_mem);
+    arena_init(&owna, "clipboard", own_mem, sizeof own_mem);
+    arena_init(&pastea, "paste", paste_mem, sizeof paste_mem);
+    undo.arena = &undoa;
     uint32_t need = Clay_MinMemorySize();
     if ((size_t)need > sizeof clay_mem) {
         fprintf(stderr, "fx: Clay needs %llu bytes, clay_mem has %zu\n", (unsigned long long)need, sizeof clay_mem);
@@ -850,6 +1292,7 @@ int main(int argc, char **argv)
     user_dirs_load(&data, &app.user_dirs);
     theme_apply();
     if (!watch_start()) set_status(true, "inotify is unavailable: no live refresh");
+    clip_init();   // false: the clipboard stays inside fx
     char bm[PATH_MAX];
     places_load(&scratch, &app.places, bookmarks_path(bm, sizeof bm), "/proc/self/mountinfo");
     ui_set(&app.ui.side, app.places.n, 0);
@@ -888,6 +1331,7 @@ int main(int argc, char **argv)
         PollInputEvents();   // waits for input, or for watch.c's wake-up
         if (atomic_exchange(&watch.theme_ready, false)) theme_apply(), app.themes++, dirty = true;
         if (atomic_exchange(&watch.list_ready, false)) reload(), dirty = true;
+        dirty |= job_poll();
         int rows = list_rows(GetScreenHeight()), srows = side_rows(GetScreenHeight());
         if (rows != app.ui.list.rows) ui_resize(&app.ui.list, rows), dirty = true;
         if (srows != app.ui.side.rows) ui_resize(&app.ui.side, srows), dirty = true;
@@ -898,10 +1342,18 @@ int main(int argc, char **argv)
             if (!script_input(&in)) break;
             seen = true;
         }
+        bool was_editing = app.ui.editing;
         UiAction a = ui_handle(&app.ui, (UiNames){ list_name, NULL }, &in);
+        // F2 opened the edit line: on the cursor's entry, as it is named now.
+        if (!was_editing && app.ui.editing) snprintf(app.edit_from, sizeof app.edit_from, "%.*s", STR_ARG(sel_name())), app.edit_new = false;
         if (a.kind != UA_NONE) act(a);
         dirty |= seen;
     }
+    if (run.running) {
+        job_cancel();
+        pthread_join(run.thread, NULL);
+    }
+    clip_quit();
     for (int i = 0; i < app.nslots; i++)
         if (app.slot[i].tex.id) UnloadTexture(app.slot[i].tex);
     CloseWindow();

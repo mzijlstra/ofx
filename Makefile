@@ -76,16 +76,26 @@ $(RL_OUT)/libraylib.a: $(addprefix $(RL_OUT)/,$(addsuffix .o,$(RL_MODS)))
 
 # ---- fx ---------------------------------------------------------------------------------------
 
-# -isystem: vendored headers are not held to our warning flags. --wrap: see the app id note in
-# gui/main.c.
-VENDOR   = -isystem vendor/clay -isystem $(RL) -isystem $(RL)/external/glfw/include $(patsubst -I%,-isystem %,$(shell pkg-config --cflags freetype2))
+# The system clipboard (gui/clipboard.c) speaks ext-data-control-v1, from wayland-protocols.
+FX_WL    = build/wl
+EDC_XML  = $(shell pkg-config --variable=pkgdatadir wayland-protocols)/staging/ext-data-control/ext-data-control-v1.xml
+
+$(FX_WL)/stamp: | build
+	mkdir -p $(FX_WL)
+	wayland-scanner client-header $(EDC_XML) $(FX_WL)/ext-data-control-v1-client-protocol.h
+	wayland-scanner private-code $(EDC_XML) $(FX_WL)/ext-data-control-v1-client-protocol-code.h
+	touch $@
+
+# -isystem: vendored and generated headers are not held to our warning flags. --wrap: see the
+# app id note in gui/main.c.
+VENDOR   = -isystem vendor/clay -isystem $(RL) -isystem $(RL)/external/glfw/include -isystem $(FX_WL) $(patsubst -I%,-isystem %,$(shell pkg-config --cflags freetype2))
 LINK     = -Wl,--wrap=glfwDefaultWindowHints $(GUI_LIBS)
 SRC      = $(wildcard base/*.c base/*.h fs/*.c ui/*.c gui/*.c)
 
-build/fx: $(SRC) $(RL_OUT)/libraylib.a Makefile | build
+build/fx: $(SRC) $(RL_OUT)/libraylib.a $(FX_WL)/stamp Makefile | build
 	$(CC) $(CFLAGS) $(VENDOR) $(DEBUG) -o $@ gui/main.c $(LINK)
 
-build/release/fx: $(SRC) $(RL_OUT)/libraylib.a Makefile | build/release
+build/release/fx: $(SRC) $(RL_OUT)/libraylib.a $(FX_WL)/stamp Makefile | build/release
 	$(CC) $(CFLAGS) $(VENDOR) $(RELEASE) -o $@ gui/main.c $(LINK)
 
 release: build/release/fx

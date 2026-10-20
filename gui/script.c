@@ -7,14 +7,15 @@
 //                           resizes a new window after its first frames)
 //   wait <frames>
 //   sleep <ms>              frames until that much time has passed
-//   key <name>              up down pageup pagedown home end enter right left backspace esc tab,
-//                           and the chords alt-left alt-right ctrl-f ctrl-h
+//   key <name>              up down pageup pagedown home end enter right left backspace esc tab
+//                           f2 delete shift-delete space, and the chords alt-left alt-right ctrl-f
+//                           ctrl-h ctrl-a ctrl-c ctrl-x ctrl-v ctrl-z ctrl-shift-n
 //   char <c>                one typed character
 //   type <text>             the rest of the line, after one space, as typed characters
 //   wheel <notches>         over the list; positive away from the user (up)
-//   press <row>             a left press on list row <row> (0 = the first on screen), through the
+//   press <row> [ctrl|shift] a left press on list row <row> (0 = the first on screen), through the
 //                           same double-click timing as the mouse: two presses on a row within
-//                           400 ms open it
+//                           400 ms open it; with ctrl or shift held it marks rows instead
 //   press-side <row>        a left press on sidebar row <row>
 //   header name|size|mtime  a click on that column's header
 //   click-at <x> <y>        a left press at a point, hit-tested against the last frame as the
@@ -76,11 +77,19 @@ static void script_state(char *out, size_t cap)
         if (s && s->file[0]) icon = s->file;
     }
     Theme *t = &app.theme;
+    // The edit line's text, its spaces as '_' (the state line is words).
+    static const char *const JOB_PHASES[] = { "scan", "run", "ask", "done" };
+    static const char *const UNDO_KINDS[] = { "-", "rename", "mkdir", "trash", "copy", "move" };
+    char edit[NAME_MAX + 1];
+    snprintf(edit, sizeof edit, "%.*s", app.ui.edit_len ? app.ui.edit_len : 1, app.ui.edit_len ? app.ui.edit : "-");
+    for (char *c = edit; *c; c++)
+        if (*c == ' ') *c = '_';
     snprintf(out, cap,
              "dir=%s n=%td hidden=%td sel=%.*s idx=%td top=%td rows=%d hover=%d accent=#%02x%02x%02x bg=#%02x%02x%02x "
              "icons=%s scale=%d w=%d h=%d reloads=%d themes=%d batches=%d frame_ms_max=%.1f icon=%s "
              "shown=%d sort=%s rev=%d finding=%d miss=%d find=%.*s last=%.*s side=%td sidefocus=%d place=%s here=%s "
-             "back=%d fwd=%d status=%s",
+             "back=%d fwd=%d marked=%td editing=%d edit=%s confirming=%d asking=%d job=%s done=%lld/%lld undo=%s clip=%td cut=%d "
+             "sysclip=%d status=%s",
              app.cwd, app.list.n, app.list.hidden, STR_ARG(sel), app.ui.list.sel, app.ui.list.top, app.ui.list.rows, app.hover,
              t->accent.r, t->accent.g, t->accent.b, t->bg.r, t->bg.g, t->bg.b, t->icons[0] ? t->icons : "-",
              app.icon_scale, GetScreenWidth(), GetScreenHeight(), app.reloads, app.themes, atomic_load(&watch.batches),
@@ -89,7 +98,9 @@ static void script_state(char *out, size_t cap)
              app.ui.finding, app.ui.find_miss, app.ui.find_len ? app.ui.find_len : 1, app.ui.find_len ? app.ui.find : "-",
              app.ui.last_len ? app.ui.last_len : 1, app.ui.last_len ? app.ui.last : "-", app.ui.side.sel, app.ui.side_focus,
              app.places.n ? app.places.p[app.ui.side.sel].label : "-", app.place_cur >= 0 ? app.places.p[app.place_cur].label : "-",
-             hist.nback, hist.nfwd, app.status[0] ? app.status : "-");
+             hist.nback, hist.nfwd, app.ui.marked, app.ui.editing, edit, app.ui.confirming, app.ui.asking,
+             !run.running ? "-" : JOB_PHASES[atomic_load(&run.j.phase)], atomic_load(&run.j.files_done), atomic_load(&run.j.files_total),
+             UNDO_KINDS[undo.kind], own.n, own.cut, clip.ok, app.status[0] ? app.status : "-");
     frame_us_max = 0;
 }
 
@@ -124,6 +135,9 @@ static UiKey script_key(Str name)
         { "home", UK_HOME }, { "end", UK_END }, { "enter", UK_ENTER }, { "right", UK_RIGHT },
         { "left", UK_LEFT }, { "backspace", UK_BACKSPACE }, { "esc", UK_ESC }, { "tab", UK_TAB },
         { "alt-left", UK_BACK }, { "alt-right", UK_FORWARD }, { "ctrl-f", UK_FIND }, { "ctrl-h", UK_HIDDEN },
+        { "f2", UK_F2 }, { "delete", UK_DELETE }, { "shift-delete", UK_SHIFT_DELETE }, { "ctrl-a", UK_ALL },
+        { "ctrl-c", UK_COPY }, { "ctrl-x", UK_CUT }, { "ctrl-v", UK_PASTE }, { "ctrl-z", UK_UNDO },
+        { "ctrl-shift-n", UK_NEWFOLDER },
     };
     for (int i = 0; i < COUNT(KEYS); i++)
         if (str_eq(name, str_from_c(KEYS[i].name))) return KEYS[i].k;
@@ -246,7 +260,8 @@ static bool script_input(UiInput *in)
             script.until = now_ms() + atoi(a);
         } else if (str_eq(cmd, S("key"))) {
             UiKey k = script_key(arg);
-            if (!k) script_fail("no key %s", a);
+            if (str_eq(arg, S("space"))) in->ev[in->nev++] = (UiEvent){ UK_NONE, ' ' };   // a typed space
+            else if (!k) script_fail("no key %s", a);
             else in->ev[in->nev++] = (UiEvent){ k, 0 };
         } else if (str_eq(cmd, S("char")) || str_eq(cmd, S("type"))) {
             // The raw line for type: its text may start or end with spaces.
@@ -257,8 +272,9 @@ static bool script_input(UiInput *in)
             in->wheel = atoi(a);
         } else if (str_eq(cmd, S("press"))) {
             int r = atoi(a);
-            if (ui_press(&app.press, r, now_ms()) == 2) in->dclick = r;
-            else in->click = r;
+            int mods = strstr(a, "ctrl") ? UI_MOD_CTRL : strstr(a, "shift") ? UI_MOD_SHIFT : 0;
+            if (!mods && ui_press(&app.press, r, now_ms()) == 2) in->dclick = r;
+            else in->click = r, in->click_mods = mods;
         } else if (str_eq(cmd, S("press-side"))) {
             in->side_click = atoi(a);
         } else if (str_eq(cmd, S("header"))) {
@@ -267,7 +283,7 @@ static bool script_input(UiInput *in)
         } else if (str_eq(cmd, S("click-at"))) {
             float x = 0, y = 0;
             if (sscanf(a, "%f %f", &x, &y) != 2) script_fail("click-at <x> <y>");
-            else press_at(in, x, y);
+            else press_at(in, x, y, 0);
         } else if (str_eq(cmd, S("point-ui"))) {
             char id[200];
             int k = -1;
@@ -278,7 +294,7 @@ static bool script_input(UiInput *in)
             script.px = d.boundingBox.x + d.boundingBox.width / 2, script.py = d.boundingBox.y + d.boundingBox.height / 2;
             printf("point: %.0f %.0f\n", script.px, script.py);
         } else if (str_eq(cmd, S("click-here"))) {
-            press_at(in, script.px, script.py);
+            press_at(in, script.px, script.py, 0);
         } else if (str_eq(cmd, S("back"))) {
             in->backs = 1;
         } else if (str_eq(cmd, S("forward"))) {

@@ -15,8 +15,9 @@
 #   icons.theme) unless the caller made <scratch-dir>/state already: a theme test edits the copy;
 # - XDG_CONFIG_HOME=<scratch-dir>/config: the sidebar's GTK bookmarks and the XDG user dirs come
 #   from there (empty unless the caller wrote them), never from Michael's;
+# - XDG_DATA_HOME=<scratch-dir>/data: the home trash is <scratch-dir>/data/Trash, never his;
 # - FX_GUI_SHOTS=<scratch-dir>/shots for the script's shots, FX_GUI_ROOT=<scratch-dir> for its
-#   sh guard.
+#   sh guard and fx's own (fs/ops.c: no write outside it).
 # Prints the script's output, stderr's first lines, and whether LeakSanitizer or ASan reported
 # anything. Exit status: 1 when an expectation failed, an ASan report appeared, or the window had
 # to be killed.
@@ -24,7 +25,7 @@ set -u
 T=${1:?scratch dir} sc=${2:?script} bin=${3:?binary}
 case $T in /?*) ;; *) echo "run-script: the scratch dir must be an absolute path: '$T'" >&2; exit 1 ;; esac
 shift 3
-mkdir -p "$T/shots" "$T/fakes" "$T/config"
+mkdir -p "$T/shots" "$T/fakes" "$T/config" "$T/data"
 rm -f "$T/run.pid" "$T/out" "$T/err" "$T"/asan.*
 # The window starts in the compositor's directory, so a relative script path would not be found
 # there: resolve it here, and refuse a missing one.
@@ -54,9 +55,9 @@ case $sock in fx-test-*) ;; *) echo "run-script: unexpected socket '$sock'" >&2;
 cat > "$T/launch.sh" <<EOS
 #!/bin/sh
 echo \$\$ > "$T/run.pid"
-exec env -u DISPLAY -u WAYLAND_SOCKET WAYLAND_DISPLAY="$sock" FX_TEST_SIZE=936x490 ${script_env} FX_GUI_ROOT="$T" FX_GUI_SHOTS="$T/shots" PATH="$T/fakes:\$PATH" XDG_STATE_HOME="$T/state" XDG_CONFIG_HOME="$T/config" \
+exec env -u DISPLAY -u WAYLAND_SOCKET WAYLAND_DISPLAY="$sock" FX_TEST_SIZE=936x490 ${script_env} FX_GUI_ROOT="$T" FX_GUI_SHOTS="$T/shots" PATH="$T/fakes:\$PATH" XDG_STATE_HOME="$T/state" XDG_CONFIG_HOME="$T/config" XDG_DATA_HOME="$T/data" \
   LSAN_OPTIONS=suppressions=$root/gui/lsan.supp ASAN_OPTIONS=log_path="$T/asan" ${FX_TEST_LEAK:+FX_TEST_LEAK=1} \
-  ${FX_TEST_WATCH_DELAY_MS:+FX_TEST_WATCH_DELAY_MS=$FX_TEST_WATCH_DELAY_MS} \
+  ${FX_TEST_WATCH_DELAY_MS:+FX_TEST_WATCH_DELAY_MS=$FX_TEST_WATCH_DELAY_MS} ${FX_TEST_COPY_DELAY_MS:+FX_TEST_COPY_DELAY_MS=$FX_TEST_COPY_DELAY_MS} \
   "$bin" $args >"$T/out" 2>"$T/err"
 EOS
 chmod +x "$T/launch.sh"

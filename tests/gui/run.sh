@@ -29,6 +29,21 @@ touch -d 2024-01-03 "$T/tree/apple.txt"; touch -d 2024-01-01 "$T/tree/Banana.txt
 touch -d 2024-02-01 "$T/tree/adir"; touch -d 2024-01-15 "$T/tree/bdir"
 printf 'file://%s/tree/bdir Bee\nfile://%s/tree Tree\n' "$T" "$T" > "$T/config/gtk-3.0/bookmarks"
 echo "== f2"; "$here/../../tools/gui/run-script.sh" "$T" "$here/f2.script" "$bin" "$T/tree" || fail=1
+T=$base/f3; rm -rf "$T"; mkdir -p "$T/tree/adir" "$T/tree/bdir" "$T/data"
+touch "$T/tree/adir/inner.txt" "$T/tree/a.txt" "$T/tree/b.txt" "$T/tree/c.txt"
+head -c 8388608 /dev/urandom > "$T/tree/big.bin"
+echo "== f3"; FX_TEST_COPY_DELAY_MS=150 "$here/../../tools/gui/run-script.sh" "$T" "$here/f3.script" "$bin" "$T/tree" || fail=1
+# fx's own guard: started outside <T>, every change it tries there is refused, nothing changes.
+T=$base/guard3; O=$base/guard3-outside; rm -rf "$T" "$O"; mkdir -p "$T" "$O"; echo keep > "$O/victim.txt"
+echo "== guard3"
+"$here/../../tools/gui/run-script.sh" "$T" "$here/guard3.script" "$bin" "$O" > "$T/run.out" 2>&1
+if [ "$(ls -A "$O")" = victim.txt ] && [ "$(cat "$O/victim.txt")" = keep ] && grep -q "script: 0 of" "$T/run.out" &&
+   [ "$(grep -c "fx: guard: refused" "$T/err")" -ge 4 ] && grep -q "no asan reports" "$T/run.out"; then
+    echo "guard3: every write outside the scratch tree refused"
+else
+    cat "$T/run.out" "$T/err"; ls -A "$O"; echo "guard3: FAILED"; fail=1
+fi
+rm -rf "$O"
 # The guard: started in $base, outside <T>, every sh line is refused and nothing runs.
 T=$base/guard; rm -rf "$T"; mkdir -p "$T"
 echo "== guard"

@@ -1,0 +1,17 @@
+# fx's own guard (fs/ops.c): started outside the run's scratch tree, so trash, delete for good,
+# rename and new folder must all be refused there. tests/gui/run.sh checks nothing changed.
+settle
+expect sel=victim.txt
+key delete
+expect status=Trashed n=1
+key shift-delete
+key enter
+wait-for 3000 job=- n=1
+key f2
+type x
+key enter
+expect editing=1 n=1
+key esc
+key ctrl-shift-n
+expect n=1
+quit
