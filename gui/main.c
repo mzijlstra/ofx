@@ -648,12 +648,21 @@ static void act(UiAction a)
         if (home && home[0]) go_to(home, STR_EMPTY, 0);
         break;
     }
+    case UA_TRASH:
+    case UA_DELETE:
+    case UA_COPY:
+    case UA_CUT:
+        // One action holds CLIP_PATHS_MAX paths: more would quietly do part of the selection.
+        if (app.ui.marked > CLIP_PATHS_MAX) {
+            set_status(true, "%td selected: fx takes at most %d at a time", app.ui.marked, CLIP_PATHS_MAX);
+            break;
+        }
+        if (a.kind == UA_TRASH) trash_targets();
+        else if (a.kind == UA_DELETE) delete_targets();
+        else copy_targets(a.kind == UA_CUT);
+        break;
     case UA_RENAME: rename_commit(); break;
     case UA_NEWFOLDER: new_folder(); break;
-    case UA_TRASH: trash_targets(); break;
-    case UA_DELETE: delete_targets(); break;
-    case UA_COPY: copy_targets(false); break;
-    case UA_CUT: copy_targets(true); break;
     case UA_PASTE: paste(); break;
     case UA_UNDO: undo_last(); break;
     case UA_ANSWER: job_answer((int)a.index, a.all); break;

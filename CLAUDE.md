@@ -3,8 +3,8 @@
 fx is Michael's file explorer: one folder at a time as a list, in the Omarchy theme's colours and
 icons, in C on the prdash and uml-viewer stack (arenas, static memory, no malloc in our code;
 Clay; raylib on native Wayland). `docs/plan.md` has the milestones, the decisions and each
-milestone's exit criteria. This file holds what the code can't tell you. `../CLAUDE.md` has the rules shared by
-every tool here.
+milestone's exit criteria. This file holds what the code can't tell you. `../CLAUDE.md` has the
+rules shared by every tool here.
 
 ## What a test run could do to Michael's desktop
 

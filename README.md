@@ -38,7 +38,7 @@ wayland-cursor, wayland-egl, xkbcommon, fontconfig and freetype2. raylib and Cla
 | Ctrl+Shift+N | a new folder, "New folder", named in the row |
 | Delete | to the trash (the one Nemo shows) |
 | Shift+Delete | delete for good, after "Y/n" (Enter or `y` deletes) |
-| Ctrl+C, Ctrl+X, Ctrl+V | copy, cut, paste; Nemo and terminals paste what fx copied, and fx pastes what Nemo copied |
+| Ctrl+C, Ctrl+X, Ctrl+V | copy, cut, paste; Nemo and terminals paste what fx copied, fx what Nemo copied |
 | Ctrl+Z | undo the last rename, new folder, trash, copy or move |
 | Ctrl+Q | quit |
 
@@ -47,9 +47,9 @@ runs in the background with its progress in the footer (Esc cancels; a cancelled
 appears half-written). When a name is taken it asks: `s` skip, `r` replace (a folder: merge), `k`
 keep both; the capitals answer for all the rest.
 
-Mouse: a click selects, Ctrl+click and Shift+click select more, a double click opens, the wheel scrolls a row per notch, a click on a
-column header sorts by it (again: reversed), a click on a place goes there, and the back and
-forward buttons walk the history. The list refreshes by itself when the folder changes, and the
+Mouse: a click puts the cursor on a row, Ctrl+click and Shift+click select, a double click opens,
+the wheel scrolls a row per notch, a click on a column header sorts by it (again: reversed), a
+click on a place goes there, and the back and forward buttons walk the history. The list refreshes by itself when the folder changes, and the
 colours and icons follow a theme switch.
 
 The sidebar: Home, your GTK bookmarks (`~/.config/gtk-3.0/bookmarks`, the ones Nemo shows), `/`
@@ -74,5 +74,5 @@ and what is mounted under `/mnt`, `/media` and `/run/media`.
 
 `make test` runs the unit tests. `tools/mutation/run.py` mutates `fs/` and `ui/` one site at a
 time against them, `tools/mutation/gui.py` the window against the GUI scripts. GUI scripts run in
-a private headless weston, never on the desktop: see `CLAUDE.md` and `tests/gui/run.sh`. `build/fx-probe DIR` prints a folder as fx sees it (types and
-icon files), without a window.
+a private headless weston, never on the desktop: see `CLAUDE.md` and `tests/gui/run.sh`.
+`build/fx-probe DIR` prints a folder as fx sees it (types and icon files), without a window.
