@@ -13,8 +13,8 @@ every tool here.
   programs on PATH opens real windows on his screen. Every GUI run goes through
   `tools/gui/run-script.sh`, which puts logging fakes for all three first on PATH (they write
   `<scratch>/spawn.log`). The unit tests use their own fakes in a mkdtemp directory.
-- **fx opens a window** (it links raylib): never from a plain shell, only on a Hyprland headless
-  output through `run-script.sh`. `build/fx-probe` and `build/test` link no raylib and are safe
+- **fx opens a window** (it links raylib): never from a plain shell, only in the test weston
+  through `run-script.sh` (below); with this session's WAYLAND_DISPLAY it would open on his screen. `build/fx-probe` and `build/test` link no raylib and are safe
   to run anywhere.
 - **The theme:** fx reads `$XDG_STATE_HOME/omarchy/current/theme`. `run-script.sh` points it at a
   scratch copy (`<scratch>/state`), so a theme test edits the copy, never Michael's files. Never
@@ -29,25 +29,29 @@ every tool here.
 
 ## Testing the GUI
 
+Since 2026-10-20 fx's window tests run in a **private headless weston** (`tools/gui/weston.sh`),
+started and stopped by `tools/gui/run-script.sh` for each run: its own Wayland socket
+(`fx-test-<pid>` under `$XDG_RUNTIME_DIR`), never `wayland-1` (Michael's Hyprland). Nothing touches
+his Hyprland: no output, no workspace, no dock script, no hyprctl at all.
+
 ```sh
-tools/gui/output.sh create FXGUI              # your own name; never `hyprctl output create` directly
-tests/gui/run.sh FXGUI <absolute scratch>     # every script; or tools/gui/run-script.sh for one
-tools/gui/output.sh remove FXGUI              # refuses while a window is left on it
+tests/gui/run.sh <absolute scratch>          # every script, each in its own weston
+tools/gui/run-script.sh <absolute scratch> tests/gui/<script> "$PWD/build/fx" <folder>   # one
+tools/mutation/gui.py <absolute scratch>     # the GUI mutants
 ```
 
-- **Outputs only through `tools/gui/output.sh`.** A new headless output takes a workspace
-  Hyprland picks, and it can't be told in advance which: on 2026-10-14 and twice on 2026-10-20 it
-  was workspace 6 holding Michael's Nemo (his file-exploring workspace), then a fresh workspace 2.
-  `output.sh` checks the workspace it got and removes the output again at once if any window is
-  on it. On 2026-10-20 I kept such an output for a minute, and a first version of the script had a
-  jq bug and fell through to create: both carried his Nemo onto the invisible output.
-
-- `run-script.sh` refuses to run when the output's workspace holds any window, takes the pid from the launch
-  script (never a class lookup: a reviewer may run fx at the same time), and reports what is left
-  on the output.
-- Every rule in `../uml-viewer/CLAUDE.md`, "Testing the GUI", holds here too: only the vetted
-  hyprctl commands, no mouse, never reconfigure a monitor, remove the output when you stop, close
-  a window with SIGTERM (`kill <pid>`; fx exits through main, so LeakSanitizer runs).
+- **Why not a Hyprland headless output any more:** a new output takes a workspace Hyprland picks,
+  and that can't be steered (workspace rules with `default` and `persistent` didn't). Three times
+  on 2026-10-20 it was one holding Michael's windows (Nemo on 6, Chromium on 2). Never go back to
+  `hyprctl output create` for fx.
+- **weston's flags matter** (`weston.sh`): `--fake-seat`, or GLFW 3.4 crashes reading a seat that
+  isn't there; `--shell=kiosk` fills the 944x518 logical output, and the window opens at
+  `FX_TEST_SIZE=936x490` (the kiosk shell rejects a larger first frame; GLFW's own decorations
+  take the other 8x28). `--width`/`--height` are logical pixels.
+- `run-script.sh` checks the socket is the one weston made before launching, takes the pid from the
+  launch script, and stops weston after the run. For an unscripted run (`-`), kill the pid, then
+  `tools/gui/weston.sh stop <scratch>`.
+- Close a window with SIGTERM (`kill <pid>`; fx exits through main, so LeakSanitizer runs).
 - `FX_TEST_LEAK=1` plants a 4 KiB leak: the control that shows LeakSanitizer reports arrive.
 - `FX_GUI_DEBUG=1` logs every key, character and mouse button event.
 - The script language is at the top of `gui/script.c`. Start every script with `settle`; check

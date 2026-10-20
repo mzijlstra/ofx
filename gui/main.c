@@ -816,7 +816,12 @@ int main(int argc, char **argv)
     // HIGHDPI: without it raylib turns GLFW's framebuffer scaling off on Wayland, so a scale-2
     // output gets a 1x buffer stretched by the compositor.
     SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_WINDOW_HIGHDPI);
-    InitWindow(1000, 700, TextFormat("fx: %s", dir));
+    // FX_TEST_SIZE=WxH: the test compositor's kiosk shell rejects a first frame larger than its
+    // output (tools/gui/weston.sh), so a test opens at the size it will get.
+    int win_w = 1000, win_h = 700;
+    const char *size = getenv("FX_TEST_SIZE");
+    if (size && sscanf(size, "%dx%d", &win_w, &win_h) != 2) win_w = 1000, win_h = 700;
+    InitWindow(win_w, win_h, TextFormat("fx: %s", dir));
     if (!IsWindowReady()) {
         fprintf(stderr, "fx: cannot open a window\n");
         return 1;

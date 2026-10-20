@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """GUI mutants: each applied to a scratch copy of the repo, built, and run through
-tests/gui/run.sh on a headless output the caller made (CLAUDE.md, "Testing the GUI").
+tests/gui/run.sh, each script in its own headless weston (CLAUDE.md, "Testing the GUI").
 
-    tools/mutation/gui.py <output> <scratch-dir> [index,...]
+    tools/mutation/gui.py <scratch-dir> [index,...]
 """
 import os, shutil, subprocess, sys
 
@@ -25,8 +25,8 @@ MUTANTS = [
     (G, "        if (a.index >= 0 && a.index < app.places.n) go_to(app.places.p[a.index].path, STR_EMPTY, 0);", ""),
     (G, "        hist_unstep(&hist, dir);\n", ""),
 ]
-out, scratch = sys.argv[1], sys.argv[2]
-only = [int(x) for x in sys.argv[3].split(',')] if len(sys.argv) > 3 else None
+scratch = sys.argv[1]
+only = [int(x) for x in sys.argv[2].split(',')] if len(sys.argv) > 2 else None
 root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 work = os.path.join(scratch, 'gui-mut-src')
 shutil.rmtree(work, ignore_errors=True)
@@ -48,7 +48,7 @@ for i, (f, old, new) in enumerate(MUTANTS):
         print(f'#{i} build failed: {b.stderr[-300:]}')
         open(path, 'w').write(text)
         continue
-    r = subprocess.run([os.path.join(root, 'tests/gui/run.sh'), out, os.path.join(scratch, f'gm{i}'), os.path.join(work, 'build/fx')],
+    r = subprocess.run([os.path.join(root, 'tests/gui/run.sh'), os.path.join(scratch, f'gm{i}'), os.path.join(work, 'build/fx')],
                        capture_output=True, text=True)
     open(path, 'w').write(text)
     verdict = 'killed' if r.returncode != 0 else 'SURVIVED'
