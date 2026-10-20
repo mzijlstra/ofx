@@ -1,0 +1,18 @@
+# Known leaks in libraries the GUI uses, so LeakSanitizer reports only ours. Run with
+#   LSAN_OPTIONS=suppressions=gui/lsan.supp
+#
+# GLFW 3.4.0 (bundled with raylib 6.0): every glfwPostEmptyEvent on Wayland leaks the wl_callback
+# from wl_display_sync. Fixed in GLFW master, which adds a listener. the main loop posts rarely.
+leak:_glfwPostEmptyEventWayland
+# GLFW 3.4.0: a window's fractional-scale object and its viewport (both made with HIGHDPI) are
+# never destroyed with the window, 2 x 96 bytes once. Fixed in GLFW master.
+leak:_glfwCreateWindowWayland
+# GLFW (3.4.0 and master): a new keymap replaces the xkb compose state without unreferencing the
+# old one, so each keymap event leaks a compose table. Keymaps arrive at startup and on layout
+# changes (and on every Hyprland send_shortcut, which the tests use).
+leak:keyboardHandleKeymap
+leak:xkb_compose_table_new_from_locale
+# Mesa's driver keeps a one-time allocation behind pthread_once. The driver is unloaded before
+# LeakSanitizer reports, so it shows as <unknown module> and only the pthread_once frame can be
+# matched. Our code never calls pthread_once.
+leak:pthread_once

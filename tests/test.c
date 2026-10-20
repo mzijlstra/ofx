@@ -1,0 +1,783 @@
+// Unit tests for fs/ and ui/. `make test` runs them from the repo root. Every fixture is made under
+// a mkdtemp directory, and every variable a test sets (HOME, XDG_*, PATH) is put back after it, so
+// nothing reads or writes Michael's own files.
+#include "../base/base.c"
+#include "../fs/fs.c"
+#include "../ui/ui.c"
+
+#include <stdarg.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/stat.h>
+#include <time.h>
+#include <unistd.h>
+
+static int checks, failures;
+
+#define CHECK(cond)                                                                    \
+    do {                                                                               \
+        checks++;                                                                      \
+        if (!(cond)) {                                                                 \
+            failures++;                                                                \
+            fprintf(stderr, "%s:%d: CHECK(%s) failed\n", __FILE__, __LINE__, #cond);   \
+        }                                                                              \
+    } while (0)
+
+#define CHECK_STR(got, want)                                                                         \
+    do {                                                                                             \
+        checks++;                                                                                    \
+        Str g_ = (got);                                                                              \
+        const char *w_ = (want);                                                                     \
+        if (!str_eq(g_, str_from_c(w_))) {                                                           \
+            failures++;                                                                              \
+            fprintf(stderr, "%s:%d: got \"%.*s\", want \"%s\"\n", __FILE__, __LINE__, STR_ARG(g_), w_); \
+        }                                                                                            \
+    } while (0)
+
+static u8 test_mem[MiB(16)];
+static Arena ta;
+
+// ---- fixtures -------------------------------------------------------------------------------
+
+static char root[256];   // this run's mkdtemp directory
+
+static const char *at(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
+static const char *at(const char *fmt, ...)
+{
+    static char buf[8][1200];
+    static int k;
+    char rel[900];
+    va_list ap;
+    va_start(ap, fmt);
+    vsnprintf(rel, sizeof rel, fmt, ap);
+    va_end(ap);
+    k = (k + 1) % 8;
+    snprintf(buf[k], sizeof buf[k], "%s/%s", root, rel);
+    return buf[k];
+}
+
+// Writes text to path, making its directories.
+static void put(const char *path, const char *text)
+{
+    char dir[1024];
+    snprintf(dir, sizeof dir, "%s", path);
+    for (char *p = dir + 1; *p; p++)
+        if (*p == '/') *p = 0, mkdir(dir, 0755), *p = '/';
+    FILE *f = fopen(path, "w");
+    CHECK(f != NULL);
+    if (!f) return;
+    fputs(text, f);
+    fclose(f);
+}
+
+static void mkdirs(const char *path)
+{
+    char p[1024];
+    snprintf(p, sizeof p, "%s/", path);
+    for (char *s = p + 1; *s; s++)
+        if (*s == '/') *s = 0, mkdir(p, 0755), *s = '/';
+}
+
+// Environment variables a test changes, put back by env_restore.
+static struct { const char *name; char *old; } saved[16];
+static int nsaved;
+
+static void env_set(const char *name, const char *value)
+{
+    const char *old = getenv(name);
+    saved[nsaved].name = name;
+    saved[nsaved++].old = old ? strdup(old) : NULL;   // test-only: the tests may malloc
+    if (value) setenv(name, value, 1);
+    else unsetenv(name);
+}
+
+static void env_restore(void)
+{
+    while (nsaved > 0) {
+        nsaved--;
+        if (saved[nsaved].old) setenv(saved[nsaved].name, saved[nsaved].old, 1), free(saved[nsaved].old);
+        else unsetenv(saved[nsaved].name);
+    }
+}
+
+// ---- natural order --------------------------------------------------------------------------
+
+static void test_natural(void)
+{
+    struct { const char *a, *b; int want; } cases[] = {
+        { "file2", "file10", -1 },
+        { "file10", "file2", 1 },
+        { "a", "B", -1 },          // case ignored
+        { "B", "a", 1 },
+        { "abc", "abd", -1 },
+        { "ab", "abc", -1 },       // a prefix first
+        { "abc", "ab", 1 },
+        { "x007", "x7", 1 },       // equal numbers: the longer run (more zeros) after
+        { "x7", "x007", -1 },
+        { "x07", "x7", 1 },
+        { "x9", "x10", -1 },
+        { "2", "10", -1 },
+        { "a1b2", "a1b10", -1 },
+        { "Readme", "readme", -1 },   // equal when folded: the plain bytes decide ('R' < 'r')
+        { "readme", "Readme", 1 },
+        { "same", "same", 0 },
+        { "", "a", -1 },
+        { "a", "", 1 },
+        { "1.10", "1.9", 1 },
+        { "a_b", "a-b", 1 },          // '_' (0x5f) after '-' (0x2d)
+        { "Z", "a", 1 },              // 'z' after 'a', whatever the case
+        { "x0", "x00", -1 },          // zero: the runs left after the zeros tie, the shorter first
+    };
+    for (int i = 0; i < COUNT(cases); i++) {
+        int got = natural_cmp(str_from_c(cases[i].a), str_from_c(cases[i].b));
+        if (got != cases[i].want) fprintf(stderr, "natural_cmp(%s, %s) = %d\n", cases[i].a, cases[i].b, got);
+        CHECK(got == cases[i].want);
+    }
+}
+
+// ---- listing --------------------------------------------------------------------------------
+
+static void test_list(void)
+{
+    arena_reset(&ta);
+    put(at("list/b10.txt"), "0123456789");
+    put(at("list/b2.txt"), "x");
+    put(at("list/A.txt"), "");
+    put(at("list/.hidden"), "");
+    put(at("list/.hidden2"), "");
+    mkdirs(at("list/zdir"));
+    mkdirs(at("list/Adir"));
+    mkdirs(at("list/.git"));
+    CHECK(symlink("zdir", at("list/link-dir")) == 0);
+    CHECK(symlink("b2.txt", at("list/link-file")) == 0);
+    CHECK(symlink("nowhere", at("list/link-broken")) == 0);
+    CHECK(mkfifo(at("list/pipe"), 0644) == 0);
+    struct timespec ts[2] = { { 1700000000, 0 }, { 1700000000, 0 } };
+    CHECK(utimensat(AT_FDCWD, at("list/b2.txt"), ts, 0) == 0);
+
+    Listing l;
+    Err err;
+    CHECK(fs_list(&ta, at("list"), &l, &err));
+    const char *want[] = { "Adir", "link-dir", "zdir", "A.txt", "b2.txt", "b10.txt", "link-broken", "link-file", "pipe" };
+    CHECK(l.n == COUNT(want));
+    for (isize i = 0; i < l.n && i < COUNT(want); i++) CHECK_STR(l.e[i].name, want[i]);
+    CHECK(l.hidden == 3);
+    isize i;
+    CHECK((i = listing_find(&l, S("Adir"))) >= 0 && l.e[i].kind == K_DIR && l.e[i].size == 0);
+    CHECK((i = listing_find(&l, S("link-dir"))) >= 0 && l.e[i].kind == K_LINK_DIR && kind_is_dir(l.e[i].kind));
+    CHECK((i = listing_find(&l, S("link-file"))) >= 0 && l.e[i].kind == K_LINK_FILE && l.e[i].size == 1);
+    CHECK((i = listing_find(&l, S("link-broken"))) >= 0 && l.e[i].kind == K_LINK_BROKEN && l.e[i].size == 0 &&
+          l.e[i].mtime == 0 && !kind_is_dir(l.e[i].kind));
+    CHECK((i = listing_find(&l, S("pipe"))) >= 0 && l.e[i].kind == K_OTHER);
+    CHECK((i = listing_find(&l, S("b10.txt"))) >= 0 && l.e[i].kind == K_FILE && l.e[i].size == 10 && S_ISREG(l.e[i].mode));
+    CHECK((i = listing_find(&l, S("b2.txt"))) >= 0 && l.e[i].mtime == 1700000000);
+    CHECK(listing_find(&l, S(".hidden")) < 0);
+    CHECK(listing_find(&l, S("nothing")) == -1);
+
+    // An empty folder, a missing one, one without read permission.
+    mkdirs(at("empty"));
+    CHECK(fs_list(&ta, at("empty"), &l, &err) && l.n == 0 && l.hidden == 0);
+    CHECK(!fs_list(&ta, at("missing"), &l, &err) && strstr(err.msg, "No such file") && strstr(err.msg, "missing"));
+    mkdirs(at("closed"));
+    chmod(at("closed"), 0);
+    bool can = access(at("closed"), R_OK) == 0;   // root reads anything
+    if (!can) CHECK(!fs_list(&ta, at("closed"), &l, &err) && strstr(err.msg, "Permission denied"));
+    chmod(at("closed"), 0755);
+
+    // More entries than the first array holds (256): it grows, and keeps them all in order.
+    for (int k = 0; k < 600; k++) {
+        char name[64];
+        snprintf(name, sizeof name, "many/f%d", k);
+        put(at("%s", name), "");
+    }
+    CHECK(fs_list(&ta, at("many"), &l, &err) && l.n == 600);
+    bool sorted = true;
+    for (isize k = 0; k < l.n; k++) {
+        char want_name[32];
+        snprintf(want_name, sizeof want_name, "f%td", k);
+        sorted &= str_eq(l.e[k].name, str_from_c(want_name));
+    }
+    CHECK(sorted);
+
+    // A full arena is an error, not a crash.
+    static u8 tiny_mem[KiB(8)];
+    Arena tiny;
+    arena_init(&tiny, "tiny", tiny_mem, sizeof tiny_mem);
+    CHECK(!fs_list(&tiny, at("many"), &l, &err) && strstr(err.msg, "too many"));
+}
+
+// ---- MIME -----------------------------------------------------------------------------------
+
+static void test_mime(void)
+{
+    arena_reset(&ta);
+    put(at("data1/mime/globs2"),
+        "# comment\n"
+        "50:text/x-csrc:*.c\n"
+        "50:text/x-c++src:*.C:cs\n"
+        "50:application/gzip:*.gz\n"
+        "50:application/x-compressed-tar:*.tar.gz\n"
+        "50:text/x-makefile:Makefile\n"
+        "50:text/x-readme:README*\n"
+        "40:text/x-other-readme:README*\n"
+        "50:text/x-log:*.log\n"
+        "60:text/x-heavy-log:*.log\n"
+        "50:application/x-backup:*~\n"
+        "50:text/x-weird:*.[ch]pp\n"
+        "50:bad-line-without-glob\n"
+        "50::*.empty-type\n"
+        "50:image/png:*.png\n"
+        "50:text/x-tiebreak:*.tb\n");
+    put(at("data2/mime/globs2"),
+        "50:text/x-tiebreak-later:*.tb\n"
+        "50:image/x-other-png:*.png\n");
+    put(at("data1/mime/generic-icons"), "text/x-csrc:text-x-script\nimage/png:image-x-generic\n");
+    put(at("data2/mime/generic-icons"), "text/x-csrc:shadowed\n");
+    put(at("data1/mime/icons"), "application/gzip:package-x-generic\n");
+    env_set("XDG_DATA_HOME", at("data1"));
+    env_set("XDG_DATA_DIRS", at("data2"));
+    MimeDb db;
+    mime_load(&ta, &db);
+    struct { const char *name, *want; } cases[] = {
+        { "main.c", "text/x-csrc" },
+        { "MAIN.c", "text/x-csrc" },
+        { "main.C", "text/x-c++src" },      // case-sensitive *.C before the folded *.c
+        { "x.tar.gz", "application/x-compressed-tar" },   // the longer suffix
+        { "x.gz", "application/gzip" },
+        { "x.GZ", "application/gzip" },
+        { "Makefile", "text/x-makefile" },
+        { "makefile", "text/x-makefile" },  // literals fold too
+        { "README.md", "text/x-readme" },   // a pattern: the higher weight
+        { "README", "text/x-readme" },
+        { "app.log", "text/x-heavy-log" },  // same suffix: the higher weight
+        { "notes~", "application/x-backup" },
+        { "a.cpp", "text/x-weird" },
+        { "a.hpp", "text/x-weird" },
+        { "a.png", "image/png" },           // the first data dir's
+        { "a.tb", "text/x-tiebreak" },      // an exact tie: the first data dir's line
+        { "nothing.xyz", "" },
+        { "noext", "" },
+        { "x.empty-type", "" },
+        { ".c", "text/x-csrc" },
+    };
+    for (int i = 0; i < COUNT(cases); i++) CHECK_STR(mime_of_name(&ta, &db, str_from_c(cases[i].name)), cases[i].want);
+
+    Entry dir = { .name = S("x.c"), .kind = K_LINK_DIR }, broken = { .name = S("x.c"), .kind = K_LINK_BROKEN },
+          other = { .name = S("x.c"), .kind = K_OTHER }, exe = { .name = S("run"), .kind = K_FILE, .mode = 0100755 },
+          plain = { .name = S("run"), .kind = K_FILE, .mode = 0100644 }, c = { .name = S("x.c"), .kind = K_LINK_FILE, .mode = 0100755 };
+    CHECK_STR(mime_of(&ta, &db, &dir), "inode/directory");
+    CHECK_STR(mime_of(&ta, &db, &broken), "inode/symlink");
+    CHECK_STR(mime_of(&ta, &db, &other), "inode/x-other");
+    CHECK_STR(mime_of(&ta, &db, &exe), "application/x-executable");
+    CHECK_STR(mime_of(&ta, &db, &plain), "application/octet-stream");
+    CHECK_STR(mime_of(&ta, &db, &c), "text/x-csrc");   // a glob beats the execute bit
+
+    Str names[4];
+    isize n = mime_icon_names(&ta, &db, S("text/x-csrc"), names);
+    CHECK(n == 3);
+    CHECK_STR(names[0], "text-x-csrc");
+    CHECK_STR(names[1], "text-x-script");
+    CHECK_STR(names[2], "text-x-generic");
+    n = mime_icon_names(&ta, &db, S("application/gzip"), names);
+    CHECK(n == 3);
+    CHECK_STR(names[0], "package-x-generic");
+    CHECK_STR(names[1], "application-gzip");
+    CHECK_STR(names[2], "application-x-generic");
+    n = mime_icon_names(&ta, &db, S("inode/directory"), names);
+    CHECK(n == 2);
+    CHECK_STR(names[0], "inode-directory");
+    CHECK_STR(names[1], "application-x-generic");
+    env_restore();
+
+    // No data dirs at all: nothing matches, nothing breaks.
+    env_set("XDG_DATA_HOME", at("none1"));
+    env_set("XDG_DATA_DIRS", at("none2"));
+    mime_load(&ta, &db);
+    CHECK(db.n == 0);
+    CHECK_STR(mime_of_name(&ta, &db, S("main.c")), "");
+    env_restore();
+
+    // The defaults: ~/.local/share, then /usr/local/share:/usr/share.
+    env_set("XDG_DATA_HOME", NULL);
+    env_set("XDG_DATA_DIRS", NULL);
+    env_set("HOME", at("home"));
+    const char *dirs[MIME_DIRS_MAX];
+    isize nd = data_dirs(&ta, dirs, MIME_DIRS_MAX);
+    CHECK(nd == 3 && strcmp(dirs[0], at("home/.local/share")) == 0 && strcmp(dirs[1], "/usr/local/share") == 0 &&
+          strcmp(dirs[2], "/usr/share") == 0);
+    env_restore();
+    env_set("XDG_DATA_DIRS", "/a::/b:");   // empty items skipped
+    env_set("XDG_DATA_HOME", "/h");
+    nd = data_dirs(&ta, dirs, MIME_DIRS_MAX);
+    CHECK(nd == 3 && strcmp(dirs[0], "/h") == 0 && strcmp(dirs[1], "/a") == 0 && strcmp(dirs[2], "/b") == 0);
+    env_restore();
+}
+
+// ---- icons ----------------------------------------------------------------------------------
+
+static void test_icons(void)
+{
+    arena_reset(&ta);
+    // Child inherits Parent; hicolor last. Sizes: Child has 24 at scales 1 and 2 and 48; Parent
+    // has 16, a Scalable 8-64 and a Threshold 32 (+-2 by default).
+    put(at("icons/Child/index.theme"),
+        "[Icon Theme]\nName=Child\nInherits=Parent\n"
+        "Directories=24x24/places,24x24@2x/places,48x48/places,missing/places\n\n"
+        "[24x24/places]\nSize=24\nType=Fixed\n\n"
+        "[24x24@2x/places]\nSize=24\nScale=2\nType=Fixed\n\n"
+        "[48x48/places]\nSize=48\nType=Fixed\n\n"
+        "[missing/places]\nSize=24\nType=Fixed\n");
+    put(at("icons/Child/24x24/places/folder.png"), "");
+    put(at("icons/Child/24x24@2x/places/folder.png"), "");
+    put(at("icons/Child/48x48/places/user-home.png"), "");
+    put(at("icons/Child/24x24/places/not-an-icon.svg"), "");
+    put(at("icons/Parent/index.theme"),
+        "[Icon Theme]\nName=Parent\nInherits=hicolor, Child\n"   // a loop back to Child: ignored
+        "Directories=16x16/mimetypes,scalable/mimetypes,32x32/mimetypes\n"
+        "[16x16/mimetypes]\nSize=16\nType=Fixed\n"
+        "[scalable/mimetypes]\nSize=16\nMinSize=8\nMaxSize=64\nType=Scalable\n"
+        "[32x32/mimetypes]\nSize=32\n");
+    put(at("icons/Parent/16x16/mimetypes/text-x-generic.png"), "");
+    put(at("icons/Parent/scalable/mimetypes/text-x-csrc.png"), "");
+    put(at("icons/Parent/scalable/mimetypes/only-svg.svg"), "");
+    put(at("icons/Parent/32x32/mimetypes/image-png.png"), "");
+    put(at("icons/Parent/16x16/mimetypes/folder.png"), "");
+    put(at("icons/hicolor/index.theme"), "[Icon Theme]\nName=Hicolor\nDirectories=48x48/apps\n[48x48/apps]\nSize=48\nType=Threshold\n");
+    put(at("icons/hicolor/48x48/apps/fallback.png"), "");
+    // A second base dir with more of Child's 24x24 (the spec: a theme's dirs in every base dir).
+    put(at("home/.icons/Child/24x24/places/folder-download.png"), "");
+    env_set("HOME", at("home"));
+    env_set("XDG_DATA_HOME", at("datahome"));
+    env_set("XDG_DATA_DIRS", root);
+    IconDb db;
+    icon_load(&ta, &db, S("Child"));
+    CHECK(db.n == 3);
+    CHECK_STR(db.t[0].name, "Child");
+    CHECK_STR(db.t[1].name, "Parent");
+    CHECK_STR(db.t[2].name, "hicolor");
+
+#define FIND(size, scale, ...)                                                    \
+    ({                                                                            \
+        Str ns_[] = { __VA_ARGS__ };                                              \
+        const char *f_ = icon_find(&ta, &db, ns_, COUNT(ns_), (size), (scale));   \
+        f_ ? f_ : "";                                                             \
+    })
+    CHECK(strcmp(FIND(24, 1, S("folder")), at("icons/Child/24x24/places/folder.png")) == 0);
+    CHECK(strcmp(FIND(24, 2, S("folder")), at("icons/Child/24x24@2x/places/folder.png")) == 0);
+    // 16 has no exact match in Child: its closest (24 at scale 1 is 8 away, @2x 32), before
+    // Parent's exact 16, since themes go first.
+    CHECK(strcmp(FIND(16, 1, S("folder")), at("icons/Child/24x24/places/folder.png")) == 0);
+    CHECK(strcmp(FIND(24, 1, S("folder-download")), at("home/.icons/Child/24x24/places/folder-download.png")) == 0);
+    CHECK(strcmp(FIND(24, 1, S("user-home")), at("icons/Child/48x48/places/user-home.png")) == 0);
+    // The first name the theme has, theme by theme: Child has neither text name, Parent has both.
+    CHECK(strcmp(FIND(24, 1, S("text-x-csrc"), S("text-x-generic")), at("icons/Parent/scalable/mimetypes/text-x-csrc.png")) == 0);
+    CHECK(strcmp(FIND(24, 1, S("text-x-nothing"), S("text-x-generic")), at("icons/Parent/16x16/mimetypes/text-x-generic.png")) == 0);
+    // But a later name in an earlier theme beats an earlier name in a later theme.
+    CHECK(strcmp(FIND(24, 1, S("text-x-csrc"), S("folder")), at("icons/Child/24x24/places/folder.png")) == 0);
+    CHECK(strcmp(FIND(48, 1, S("fallback")), at("icons/hicolor/48x48/apps/fallback.png")) == 0);
+    CHECK(strcmp(FIND(24, 1, S("only-svg")), "") == 0);       // PNG only
+    CHECK(strcmp(FIND(24, 1, S("not-an-icon")), "") == 0);
+    CHECK(strcmp(FIND(24, 1, S("absent")), "") == 0);
+    // Threshold 32 +-2: 30 and 34 match it.
+    CHECK(strcmp(FIND(30, 1, S("image-png")), at("icons/Parent/32x32/mimetypes/image-png.png")) == 0);
+    env_restore();
+
+    // The directory rules on their own.
+    IconDir fixed = { .size = 24, .scale = 1, .min = 24, .max = 24, .threshold = 2, .type = IT_FIXED };
+    IconDir fixed2 = { .size = 24, .scale = 2, .min = 24, .max = 24, .threshold = 2, .type = IT_FIXED };
+    IconDir scal = { .size = 16, .scale = 1, .min = 8, .max = 64, .threshold = 2, .type = IT_SCALABLE };
+    IconDir thr = { .size = 32, .scale = 1, .min = 32, .max = 32, .threshold = 2, .type = IT_THRESHOLD };
+    CHECK(icon_dir_matches(&fixed, 24, 1) && !icon_dir_matches(&fixed, 23, 1) && !icon_dir_matches(&fixed, 25, 1));
+    CHECK(!icon_dir_matches(&fixed, 24, 2) && icon_dir_matches(&fixed2, 24, 2));
+    CHECK(icon_dir_matches(&scal, 8, 1) && icon_dir_matches(&scal, 64, 1) && !icon_dir_matches(&scal, 7, 1) && !icon_dir_matches(&scal, 65, 1));
+    CHECK(icon_dir_matches(&thr, 30, 1) && icon_dir_matches(&thr, 34, 1) && !icon_dir_matches(&thr, 29, 1) && !icon_dir_matches(&thr, 35, 1));
+    CHECK(icon_dir_distance(&fixed, 16, 1) == 8 && icon_dir_distance(&fixed, 32, 1) == 8 && icon_dir_distance(&fixed, 24, 1) == 0);
+    CHECK(icon_dir_distance(&fixed2, 24, 1) == 24 && icon_dir_distance(&fixed2, 24, 2) == 0);
+    CHECK(icon_dir_distance(&scal, 4, 1) == 4 && icon_dir_distance(&scal, 70, 1) == 6 && icon_dir_distance(&scal, 30, 1) == 0);
+    CHECK(icon_dir_distance(&thr, 28, 1) == 2 && icon_dir_distance(&thr, 36, 1) == 2 && icon_dir_distance(&thr, 33, 1) == 0);
+    CHECK(icon_dir_distance(&fixed2, 30, 2) == 12);   // 60 against 48
+
+    // ini parsing.
+    Str ini = S("[A]\nx = 1\n y=two \n[B]\nx=3\nn=12a\nbig=1234567890\n");
+    CHECK_STR(ini_get(ini, S("A"), S("x")), "1");
+    CHECK_STR(ini_get(ini, S("A"), S("y")), "two");
+    CHECK_STR(ini_get(ini, S("B"), S("x")), "3");
+    CHECK_STR(ini_get(ini, S("B"), S("y")), "");
+    CHECK_STR(ini_get(ini, S("C"), S("x")), "");
+    CHECK(ini_int(ini, S("B"), S("x"), 9) == 3 && ini_int(ini, S("B"), S("n"), 9) == 9 && ini_int(ini, S("B"), S("big"), 9) == 9);
+    CHECK(ini_int(ini, S("B"), S("absent"), 7) == 7);
+
+    // No theme at all: only hicolor, when it is there.
+    env_set("HOME", at("nohome"));
+    env_set("XDG_DATA_HOME", at("nodata"));
+    env_set("XDG_DATA_DIRS", at("nodata2"));
+    icon_load(&ta, &db, S("Child"));
+    CHECK(db.n == 0);
+    CHECK(strcmp(FIND(24, 1, S("folder")), "") == 0);
+    env_restore();
+#undef FIND
+}
+
+// ---- theme ----------------------------------------------------------------------------------
+
+static bool rgb_is(Rgb c, u8 r, u8 g, u8 b)
+{
+    return c.r == r && c.g == g && c.b == b;
+}
+
+static void test_theme(void)
+{
+    arena_reset(&ta);
+    put(at("state/omarchy/current/theme/colors.toml"),
+        "# a theme\n"
+        "accent = \"#112233\"\n"
+        "background=\"#AABBCC\"   # trailing comment\n"
+        "foreground = '#010203'\n"
+        "dark_foreground = \"#zz0000\"\n"     // bad: keeps the default
+        "selection = \"#123\"\n"              // too short: default
+        "lighter_background = #445566\n"      // unquoted is fine
+        "red = \"#ff0000\"\n"
+        "unknown = \"#ffffff\"\n"
+        "# red = \"#000000\"\n"
+        "[section]\n"
+        "accent = \"#999999\"\n");
+    put(at("state/omarchy/current/theme/icons.theme"), "Yaru-magenta\n");
+    env_set("XDG_STATE_HOME", at("state"));
+    Theme t = theme_load(&ta);
+    CHECK(rgb_is(t.accent, 0x11, 0x22, 0x33));
+    CHECK(rgb_is(t.bg, 0xaa, 0xbb, 0xcc));
+    CHECK(rgb_is(t.fg, 1, 2, 3));
+    CHECK(rgb_is(t.fg_dim, THEME_DEFAULT.fg_dim.r, THEME_DEFAULT.fg_dim.g, THEME_DEFAULT.fg_dim.b));
+    CHECK(rgb_is(t.selection, THEME_DEFAULT.selection.r, THEME_DEFAULT.selection.g, THEME_DEFAULT.selection.b));
+    CHECK(rgb_is(t.bg_light, 0x44, 0x55, 0x66));
+    CHECK(rgb_is(t.red, 0xff, 0, 0));
+    CHECK(t.ncolors == 5);
+    CHECK(strcmp(t.icons, "Yaru-magenta") == 0);
+    env_restore();
+
+    // No theme: Tokyo Night, no icon theme.
+    env_set("XDG_STATE_HOME", at("nostate"));
+    t = theme_load(&ta);
+    CHECK(memcmp(&t, &THEME_DEFAULT, sizeof t) == 0);
+    env_restore();
+
+    // XDG_STATE_HOME unset: under HOME.
+    put(at("h2/.local/state/omarchy/current/theme/colors.toml"), "accent=\"#000001\"\n");
+    put(at("h2/.local/state/omarchy/current/theme/icons.theme"), "../evil\n");   // a path: refused
+    env_set("XDG_STATE_HOME", NULL);
+    env_set("HOME", at("h2"));
+    t = theme_load(&ta);
+    CHECK(rgb_is(t.accent, 0, 0, 1) && t.ncolors == 1 && t.icons[0] == 0);
+    env_restore();
+
+    Rgb c;
+    CHECK(parse_rgb(S("#aBcDeF"), &c) && rgb_is(c, 0xab, 0xcd, 0xef));
+    CHECK(parse_rgb(S("\"#000000\""), &c) && rgb_is(c, 0, 0, 0));
+    CHECK(!parse_rgb(S("\"#000000'"), &c));
+    CHECK(!parse_rgb(S("#0000000"), &c) && !parse_rgb(S("000000"), &c) && !parse_rgb(S("#00000g"), &c));
+    CHECK(hex_digit('9') == 9 && hex_digit('a') == 10 && hex_digit('F') == 15 && hex_digit('g') == -1 && hex_digit('/') == -1);
+}
+
+static void test_user_dirs(void)
+{
+    arena_reset(&ta);
+    put(at("uh/.config/user-dirs.dirs"),
+        "# comment\n"
+        "XDG_DESKTOP_DIR=\"$HOME/Desktop/\"\n"
+        "XDG_DOWNLOAD_DIR=\"$HOME/Downloads\"\n"
+        "XDG_TEMPLATES_DIR=\"$HOME/\"\n"        // home itself: skipped
+        "XDG_MUSIC_DIR=\"/srv/music\"\n"        // absolute
+        "XDG_VIDEOS_DIR=\"relative\"\n"         // neither: skipped
+        "XDG_UNKNOWN_DIR=\"$HOME/x\"\n");
+    env_set("HOME", at("uh"));
+    env_set("XDG_CONFIG_HOME", NULL);
+    UserDirs u;
+    user_dirs_load(&ta, &u);
+    CHECK_STR(user_dir_icon(&u, at("uh")), "user-home");
+    CHECK_STR(user_dir_icon(&u, at("uh/Desktop")), "user-desktop");
+    CHECK_STR(user_dir_icon(&u, at("uh/Downloads")), "folder-download");
+    CHECK_STR(user_dir_icon(&u, "/srv/music"), "folder-music");
+    CHECK_STR(user_dir_icon(&u, at("uh/x")), "");
+    CHECK_STR(user_dir_icon(&u, "relative"), "");
+    CHECK(u.n == 4);
+    env_restore();
+    put(at("cfg/user-dirs.dirs"), "XDG_PICTURES_DIR=\"$HOME/Pics\"\n");
+    env_set("HOME", at("uh"));
+    env_set("XDG_CONFIG_HOME", at("cfg"));
+    user_dirs_load(&ta, &u);
+    CHECK(u.n == 2);
+    CHECK_STR(user_dir_icon(&u, at("uh/Pics")), "folder-pictures");
+    env_restore();
+}
+
+// ---- spawning -------------------------------------------------------------------------------
+
+// Waits until path holds a line, up to 2 s (the child runs detached).
+static bool wait_file(const char *path, char *out, size_t cap)
+{
+    for (int i = 0; i < 200; i++) {
+        FILE *f = fopen(path, "r");
+        if (f) {
+            size_t n = fread(out, 1, cap - 1, f);
+            fclose(f);
+            out[n] = 0;
+            if (n > 0 && out[n - 1] == '\n') return out[n - 1] = 0, true;
+        }
+        struct timespec ts = { 0, 10 * 1000 * 1000 };
+        nanosleep(&ts, NULL);
+    }
+    return false;
+}
+
+static void fake(const char *dir, const char *name, const char *log)
+{
+    char path[1024], text[2048];
+    snprintf(path, sizeof path, "%s/%s", dir, name);
+    // The session id from /proc with builtins only: PATH holds just the fakes.
+    snprintf(text, sizeof text, "#!/bin/sh\nread -r _ _ _ _ _ sid _ < /proc/$$/stat\necho \"%s $* sid=$sid pid=$$\" >> %s\n", name, log);
+    put(path, text);
+    chmod(path, 0755);
+}
+
+static void test_spawn(void)
+{
+    spawn_init();
+    char out[2048], want[1200];
+    // Without uwsm-app: straight to xdg-open, in its own session.
+    mkdirs(at("bin1"));
+    fake(at("bin1"), "xdg-open", at("spawn1.log"));
+    fake(at("bin1"), "xdg-terminal-exec", at("spawn1.log"));
+    env_set("PATH", at("bin1"));
+    Err err;
+    CHECK(spawn_open("/some/file with space", &err));
+    CHECK(wait_file(at("spawn1.log"), out, sizeof out));
+    CHECK(strncmp(out, "xdg-open /some/file with space sid=", 35) == 0);
+    // Its own session: sid equals its pid.
+    char *sid = strstr(out, "sid="), *pid = strstr(out, "pid=");
+    CHECK(sid && pid && atoi(sid + 4) == atoi(pid + 4) && atoi(sid + 4) != getsid(0));
+    unlink(at("spawn1.log"));
+    CHECK(spawn_terminal("/a/dir", &err));
+    CHECK(wait_file(at("spawn1.log"), out, sizeof out));
+    CHECK(strncmp(out, "xdg-terminal-exec --dir=/a/dir sid=", 35) == 0);
+    env_restore();
+
+    // With uwsm-app: through it.
+    mkdirs(at("bin2"));
+    fake(at("bin2"), "uwsm-app", at("spawn2.log"));
+    fake(at("bin2"), "xdg-open", at("spawn2-never.log"));
+    env_set("PATH", at("bin2"));
+    CHECK(spawn_open("/f", &err));
+    CHECK(wait_file(at("spawn2.log"), out, sizeof out));
+    snprintf(want, sizeof want, "uwsm-app -- xdg-open /f sid=");
+    CHECK(strncmp(out, want, strlen(want)) == 0);
+    env_restore();
+
+    // Nothing installed: a clear error, nothing run.
+    mkdirs(at("bin3"));
+    env_set("PATH", at("bin3"));
+    CHECK(!spawn_open("/f", &err) && strcmp(err.msg, "xdg-open is not installed") == 0);
+    CHECK(!spawn_terminal("/d", &err) && strcmp(err.msg, "xdg-terminal-exec is not installed") == 0);
+    env_restore();
+    // uwsm-app without the command behind it: still an error for the command.
+    mkdirs(at("bin4"));
+    fake(at("bin4"), "uwsm-app", at("spawn4.log"));
+    env_set("PATH", at("bin4"));
+    CHECK(spawn_open("/f", &err));   // uwsm-app is what runs; it reports the missing xdg-open itself
+    env_restore();
+
+    // on_path: empty items and a non-executable file.
+    put(at("bin5/plain"), "");
+    env_set("PATH", at("bin5"));
+    CHECK(!on_path("plain") && !on_path("absent"));
+    env_restore();
+    env_set("PATH", NULL);
+    CHECK(!on_path("sh"));
+    env_restore();
+    signal(SIGCHLD, SIG_DFL);   // system() at the end waits for its child
+}
+
+// ---- ui -------------------------------------------------------------------------------------
+
+static UiInput keys(int n, ...)
+{
+    UiInput in = ui_input_none();
+    va_list ap;
+    va_start(ap, n);
+    for (int i = 0; i < n; i++) in.keys[in.nkeys++] = (UiKey)va_arg(ap, int);
+    va_end(ap);
+    return in;
+}
+
+static void test_ui(void)
+{
+    UiList l = { 0 };
+    ui_resize(&l, 10);
+    ui_set(&l, 100, 0);
+    CHECK(l.sel == 0 && l.top == 0);
+    UiInput in = keys(1, UK_DOWN);
+    CHECK(ui_handle(&l, &in).kind == UA_NONE && l.sel == 1 && l.top == 0);
+    in = keys(1, UK_UP);
+    ui_handle(&l, &in);
+    in = keys(1, UK_UP);   // at the top: stays
+    ui_handle(&l, &in);
+    CHECK(l.sel == 0);
+    in = keys(1, UK_PAGEDOWN);   // a page is rows - 1, so a row stays in view
+    ui_handle(&l, &in);
+    CHECK(l.sel == 9 && l.top == 0);
+    ui_handle(&l, &in);
+    CHECK(l.sel == 18 && l.top == 9);
+    in = keys(1, UK_PAGEUP);
+    ui_handle(&l, &in);
+    CHECK(l.sel == 9 && l.top == 9);
+    in = keys(1, UK_END);
+    ui_handle(&l, &in);
+    CHECK(l.sel == 99 && l.top == 90);
+    in = keys(1, UK_HOME);
+    ui_handle(&l, &in);
+    CHECK(l.sel == 0 && l.top == 0);
+
+    // The wheel scrolls one row a notch and leaves the cursor; it stops at the ends.
+    in = ui_input_none();
+    in.wheel = -3;
+    ui_handle(&l, &in);
+    CHECK(l.top == 3 && l.sel == 0);
+    in.wheel = 1;
+    ui_handle(&l, &in);
+    CHECK(l.top == 2);
+    in.wheel = 5;
+    ui_handle(&l, &in);
+    CHECK(l.top == 0);
+    in.wheel = -1000;
+    ui_handle(&l, &in);
+    CHECK(l.top == 90 && l.sel == 0);
+    // A key brings the cursor back into view.
+    in = keys(1, UK_DOWN);
+    ui_handle(&l, &in);
+    CHECK(l.sel == 1 && l.top == 1);
+
+    // Clicks: on a row, past the last row.
+    ui_set(&l, 100, 0);
+    in = ui_input_none();
+    in.click = 4;
+    ui_handle(&l, &in);
+    CHECK(l.sel == 4);
+    ui_set(&l, 3, 0);
+    in.click = 5;
+    ui_handle(&l, &in);
+    CHECK(l.sel == 0);
+    in = ui_input_none();
+    in.dclick = 2;
+    UiAction a = ui_handle(&l, &in);
+    CHECK(a.kind == UA_OPEN && a.index == 2 && l.sel == 2);
+    in.dclick = 3;   // past the end: nothing
+    CHECK(ui_handle(&l, &in).kind == UA_NONE);
+    in = ui_input_none();
+    in.backs = 1;
+    CHECK(ui_handle(&l, &in).kind == UA_PARENT);
+
+    // Actions; keys after the first action wait for the next frame.
+    ui_set(&l, 5, 3);
+    in = keys(2, UK_OPEN, UK_DOWN);
+    a = ui_handle(&l, &in);
+    CHECK(a.kind == UA_OPEN && a.index == 3 && l.sel == 3);
+    in = keys(2, UK_DOWN, UK_OPEN);
+    a = ui_handle(&l, &in);
+    CHECK(a.kind == UA_OPEN && a.index == 4);
+    in = keys(1, UK_PARENT);
+    CHECK(ui_handle(&l, &in).kind == UA_PARENT);
+    in = keys(1, UK_TERMINAL);
+    CHECK(ui_handle(&l, &in).kind == UA_TERMINAL);
+    in = keys(1, UK_HOMEDIR);
+    CHECK(ui_handle(&l, &in).kind == UA_HOMEDIR);
+    in = keys(1, UK_NONE);
+    CHECK(ui_handle(&l, &in).kind == UA_NONE);
+
+    // An empty folder: nothing to open, Enter does nothing, moves are safe.
+    ui_set(&l, 0, 5);
+    CHECK(l.sel == 0 && l.top == 0);
+    in = keys(3, UK_DOWN, UK_END, UK_OPEN);
+    CHECK(ui_handle(&l, &in).kind == UA_NONE && l.sel == 0);
+    in = keys(1, UK_PARENT);
+    CHECK(ui_handle(&l, &in).kind == UA_PARENT);
+
+    // A reload keeps the scroll where it can; a shorter list pulls it back.
+    ui_resize(&l, 10);
+    ui_set(&l, 100, 50);
+    CHECK(l.top == 41);
+    ui_set(&l, 100, 45);
+    CHECK(l.top == 41);
+    ui_set(&l, 20, 15);
+    CHECK(l.top == 10 && l.sel == 15);
+    ui_set(&l, 20, 200);
+    CHECK(l.sel == 19);
+    ui_set(&l, 20, -3);
+    CHECK(l.sel == 0 && l.top == 0);
+    // A resize keeps the cursor in view.
+    ui_set(&l, 100, 50);
+    ui_resize(&l, 5);
+    CHECK(l.sel == 50 && l.top <= 50 && l.top + 5 > 50);
+    ui_resize(&l, 200);
+    CHECK(l.top == 0);
+    // No rows at all (a window too short): treated as one.
+    ui_resize(&l, 0);
+    CHECK(l.top == 50);
+    in = keys(1, UK_PAGEDOWN);
+    ui_handle(&l, &in);
+    CHECK(l.sel == 51);
+    ui_resize(&l, 2);
+    ui_set(&l, 100, 10);
+    in = keys(1, UK_PAGEDOWN);   // a page of 2 rows is 1
+    ui_handle(&l, &in);
+    CHECK(l.sel == 11);
+}
+
+static void test_format(void)
+{
+    struct { i64 size; const char *want; } sizes[] = {
+        { 0, "0 B" },          { 1, "1 B" },           { 1023, "1023 B" },        { 1024, "1.0 KiB" },
+        { 1536, "1.5 KiB" },   { 10188, "9.9 KiB" },   { 10189, "10 KiB" },       { 10240, "10 KiB" },
+        { 1048063, "1023 KiB" },                       { 1048064, "1.0 MiB" },    { 1048576, "1.0 MiB" },
+        { 5LL << 30, "5.0 GiB" }, { 3LL << 40, "3.0 TiB" }, { INT64_MAX, "8.0 EiB" },
+    };
+    char buf[64];
+    for (int i = 0; i < COUNT(sizes); i++) {
+        ui_size(buf, sizeof buf, sizes[i].size);
+        if (strcmp(buf, sizes[i].want) != 0) fprintf(stderr, "ui_size(%lld) = %s\n", (long long)sizes[i].size, buf);
+        CHECK(strcmp(buf, sizes[i].want) == 0);
+    }
+    env_set("TZ", "UTC");
+    tzset();
+    i64 now = 1792483200;   // 2026-10-20 08:00 UTC
+    ui_when(buf, sizeof buf, now - 3600, now);
+    CHECK(strcmp(buf, "07:00") == 0);
+    ui_when(buf, sizeof buf, now - 9 * 3600, now);   // yesterday 23:00
+    CHECK(strcmp(buf, "Oct 19") == 0);
+    ui_when(buf, sizeof buf, 1767225600, now);       // 2026-01-01
+    CHECK(strcmp(buf, "Jan  1") == 0);
+    ui_when(buf, sizeof buf, 1767225599, now);       // 2025-12-31 23:59:59
+    CHECK(strcmp(buf, "2025-12-31") == 0);
+    env_restore();
+    tzset();
+}
+
+int main(void)
+{
+    arena_init(&ta, "test", test_mem, sizeof test_mem);
+    const char *tmp = getenv("TMPDIR");
+    snprintf(root, sizeof root, "%s/fx-test-XXXXXX", tmp && tmp[0] ? tmp : "/tmp");
+    if (!mkdtemp(root)) return perror("mkdtemp"), 1;
+    test_natural();
+    test_list();
+    test_mime();
+    test_icons();
+    test_theme();
+    test_user_dirs();
+    test_spawn();
+    test_ui();
+    test_format();
+    char cmd[1200];
+    snprintf(cmd, sizeof cmd, "chmod -R u+rwx '%s' && rm -rf '%s'", root, root);
+    if (system(cmd) != 0) fprintf(stderr, "could not remove %s\n", root);
+    printf("%d checks, %d failed\n", checks, failures);
+    return failures ? 1 : 0;
+}

@@ -1,0 +1,8 @@
+-std=c11
+-D_GNU_SOURCE
+-isystem
+vendor/clay
+-isystem
+vendor/raylib/src
+-isystem
+vendor/raylib/src/external/glfw/include
