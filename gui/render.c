@@ -112,11 +112,11 @@ static void render_clip_pop(void)
 // Draws a custom element (the diagram canvas); set by the program.
 static void (*render_custom)(Clay_BoundingBox b, void *data);
 
-static void render_draw(Clay_RenderCommandArray cmds, Clay_Color clear)
+// The commands, into whatever is being drawn to (the screen, or a texture for fx's blurred
+// backdrop).
+static void render_cmds(Clay_RenderCommandArray cmds)
 {
-    BeginDrawing();
     render_nclips = 0;
-    ClearBackground(render_color(clear));
     for (int32_t i = 0; i < cmds.length; i++) {
         Clay_RenderCommand *cmd = Clay_RenderCommandArray_Get(&cmds, i);
         Clay_BoundingBox b = cmd->boundingBox;
@@ -133,5 +133,13 @@ static void render_draw(Clay_RenderCommandArray cmds, Clay_Color clear)
         default: break;
         }
     }
+    if (render_nclips) EndScissorMode(), render_nclips = 0;
+}
+
+static void render_draw(Clay_RenderCommandArray cmds, Clay_Color clear)
+{
+    BeginDrawing();
+    ClearBackground(render_color(clear));
+    render_cmds(cmds);
     EndDrawing();
 }

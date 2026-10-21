@@ -94,6 +94,8 @@ static struct {
     UiCrumbs  crumbs;       // the top bar's path buttons
     int       crumb_lo, crumb_hi;   // the ones shown in the last frame
     bool      crumb_arrows;
+    int       modal_hover;  // the modal panel's button under the pointer (UI_MODAL_*), 0 for none
+    bool      modal_blur;   // FX_MODAL=blur: the backdrop blurred, else dimmed (F5.1, to pick one)
     UiBar     bar_hover;    // the top bar button under the pointer
     int       crumb_hover;
     int       tab_hover, tab_x_hover;   // the tab, and the tab's ×, under the pointer; -1 for none
@@ -500,7 +502,7 @@ static bool job_poll(void)
     pthread_mutex_lock(&run.mu);
     bool ask = run.waiting && run.answer == 0;
     pthread_mutex_unlock(&run.mu);
-    if (ask && !app.ui.asking) app.ui.asking = true;
+    if (ask && !app.ui.asking) app.ui.asking = true, app.ui.ask_all = false;
     if (atomic_load(&run.j.phase) != JP_DONE) return true;
     pthread_join(run.thread, NULL);
     run.running = false;
@@ -1350,7 +1352,89 @@ static void layout_tabs(float w)
     }
 }
 
-static Clay_RenderCommandArray layout(int w, int h)
+// ---- the modal panels (F5.1) --------------------------------------------------------------------
+
+typedef enum { MODAL_NONE, MODAL_DELETE, MODAL_CLASH } ModalKind;
+
+static ModalKind modal_kind(void)
+{
+    if (app.ui.confirming) return MODAL_DELETE;
+    if (run.running && app.ui.asking) return MODAL_CLASH;
+    return MODAL_NONE;
+}
+
+// A panel's button; the main one (Enter's) filled, in red when it destroys something.
+static void modal_button(const char *id, int which, const char *label, bool main_one, bool danger)
+{
+    Theme *t = &app.theme;
+    bool hover = app.modal_hover == which;
+    Rgb fill = danger ? t->red : t->accent;
+    Clay_Color bg = main_one ? (hover ? mix(fill, t->bg_light, 0.85f) : cc(fill)) : hover ? cc(t->bg) : cc(t->bg_light);
+    CLAY(Clay_GetElementId(cz(id)), { .layout = { .sizing = { CLAY_SIZING_FIT(0), CLAY_SIZING_FIXED(32) }, .padding = { 16, 16, 0, 0 },
+                                                  .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
+                                      .backgroundColor = bg,
+                                      .border = { .color = main_one ? cc(fill) : mix(t->fg_dim, t->bg_light, 0.45f), .width = CLAY_BORDER_OUTSIDE(1) } }) {
+        text(cz(label), main_one ? cc(t->bg) : cc(t->fg));
+    }
+}
+
+// The panel itself, in the window's middle over the rest.
+static void layout_modal_panel(ModalKind k)
+{
+    Theme *t = &app.theme;
+    CLAY(CLAY_ID("modal"), { .layout = { .sizing = { CLAY_SIZING_FIXED(480), CLAY_SIZING_FIT(0) }, .padding = { 24, 24, 20, 20 }, .childGap = 10,
+                                         .layoutDirection = CLAY_TOP_TO_BOTTOM },
+                             .backgroundColor = cc(t->bg_light),
+                             .border = { .color = k == MODAL_DELETE ? cc(t->red) : cc(t->accent), .width = CLAY_BORDER_OUTSIDE(1) },
+                             .floating = { .attachTo = CLAY_ATTACH_TO_ROOT, .zIndex = 20,
+                                           .attachPoints = { CLAY_ATTACH_POINT_CENTER_CENTER, CLAY_ATTACH_POINT_CENTER_CENTER } } }) {
+        if (k == MODAL_DELETE) {
+            text(cz(arena_sprintf(&frame, "Delete %td %s for good?", app.ui.confirm_n, items(app.ui.confirm_n))), cc(t->fg));
+            CLAY(CLAY_ID("modal-names"), { .layout = { .layoutDirection = CLAY_TOP_TO_BOTTOM, .childGap = 2, .padding = { 12, 0, 4, 4 } } }) {
+                isize shown = doomed.n > 8 ? 7 : doomed.n;
+                for (isize i = 0; i < shown; i++) text(fit(path_base(str_from_c(doomed.path[i])), 420, false), cc(t->fg_dim));
+                if (doomed.n > shown) text(cz(arena_sprintf(&frame, "and %td more", doomed.n - shown)), cc(t->fg_dim));
+            }
+            text(cz("This can't be undone."), cc(t->red));
+            CLAY(CLAY_ID("modal-buttons"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .childGap = 10,
+                                                         .childAlignment = { .x = CLAY_ALIGN_X_RIGHT }, .padding = { 0, 0, 8, 0 } } }) {
+                modal_button("modal-no", UI_MODAL_NO, "Cancel", false, false);
+                modal_button("modal-yes", UI_MODAL_YES, "Delete", true, true);
+            }
+        } else {
+            Str name = path_base(str_from_c(run.clash)), dir = path_dir(str_from_c(run.clash));
+            Str in_dir = path_base(dir.len ? dir : S("/"));
+            text(fit(str_from_c(arena_sprintf(&frame, "%.*s already exists in %.*s", STR_ARG(name), STR_ARG(in_dir))), 430, false), cc(t->fg));
+            text(cz(run.clash_dirs ? "Merge the folders, keep both, or skip it?" : "Replace it, keep both, or skip it?"), cc(t->fg_dim));
+            CLAY(CLAY_ID("modal-all"), { .layout = { .childGap = 8, .childAlignment = { .y = CLAY_ALIGN_Y_CENTER }, .padding = { 0, 0, 4, 4 } } }) {
+                CLAY(CLAY_ID("modal-all-box"), { .layout = { .sizing = { CLAY_SIZING_FIXED(16), CLAY_SIZING_FIXED(16) } },
+                                                 .backgroundColor = app.ui.ask_all ? cc(t->accent) : cc(t->bg),
+                                                 .border = { .color = cc(t->fg_dim), .width = CLAY_BORDER_OUTSIDE(1) } }) {}
+                text(cz("Do the same for the rest"), app.modal_hover == UI_MODAL_ALL ? cc(t->fg) : cc(t->fg_dim));
+            }
+            CLAY(CLAY_ID("modal-buttons"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .childGap = 10,
+                                                         .childAlignment = { .x = CLAY_ALIGN_X_RIGHT }, .padding = { 0, 0, 8, 0 } } }) {
+                modal_button("modal-cancel", UI_MODAL_CANCEL, "Cancel", false, false);
+                modal_button("modal-skip", UI_MODAL_SKIP, "Skip", false, false);
+                modal_button("modal-keep", UI_MODAL_KEEP, "Keep both", false, false);
+                modal_button("modal-replace", UI_MODAL_REPLACE, run.clash_dirs ? "Merge" : "Replace", true, false);
+            }
+        }
+    }
+}
+
+// The backdrop over the window and the panel on it: dimmed (`dim`), or lighter over a blurred copy
+// of the window (`blur`, drawn by draw()).
+static void layout_modal(ModalKind k, float w, float h)
+{
+    CLAY(CLAY_ID("modal-backdrop"), { .layout = { .sizing = { CLAY_SIZING_FIXED(w), CLAY_SIZING_FIXED(h) } },
+                                      .backgroundColor = { 0, 0, 0, app.modal_blur ? 70 : 150 },
+                                      .floating = { .attachTo = CLAY_ATTACH_TO_ROOT, .zIndex = 10 } }) {}
+    layout_modal_panel(k);
+}
+
+// The window. with_modal: the modal panel (and its dim) on top, when one is up.
+static Clay_RenderCommandArray layout_window(int w, int h, bool with_modal)
 {
     arena_reset(&frame);
     arena_reset(&scratch);
@@ -1393,16 +1477,8 @@ static Clay_RenderCommandArray layout(int w, int h)
                                   .backgroundColor = cc(t->bg_light) }) {
             CLAY(CLAY_ID("footer-line"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
                                            .clip = { .horizontal = true } }) {
-            if (run.running && app.ui.asking) {
-                Str name = path_base(str_from_c(run.clash));
-                text(fit(str_from_c(arena_sprintf(&frame, "%.*s exists: s skip \xC2\xB7 r %s \xC2\xB7 k keep both \xC2\xB7 "
-                                                          "capitals for all the rest \xC2\xB7 Esc cancel",
-                                                  STR_ARG(name), run.clash_dirs ? "merge" : "replace")),
-                         foot_w, false),
-                     cc(t->accent));
-            } else if (app.ui.confirming) {
-                text(cz(arena_sprintf(&frame, "Delete %td %s for good? This can't be undone. Y/n", app.ui.confirm_n, items(app.ui.confirm_n))),
-                     cc(t->red));
+            if (app.ui.confirming || (run.running && app.ui.asking)) {
+                text(cz("Answer the question above"), cc(t->fg_dim));
             } else if (app.ui.editing && app.ui.edit_path) {
                 text(cz("Go to: Enter goes there \xC2\xB7 Esc cancels \xC2\xB7 ~ is home, a relative path starts here"), cc(t->fg_dim));
             } else if (app.ui.editing) {
@@ -1440,8 +1516,44 @@ static Clay_RenderCommandArray layout(int w, int h)
             }
             text(cs(cnt), cc(t->fg_dim));
         }
+        ModalKind mk = modal_kind();
+        if (with_modal && mk != MODAL_NONE) layout_modal(mk, (float)w, (float)h);
     }
     return Clay_EndLayout(0);   // deltaTime drives transitions, which we do not use
+}
+
+// Only the backdrop and the panel, for the blurred frame's second pass.
+static Clay_RenderCommandArray layout_modal_only(int w, int h)
+{
+    Clay_SetLayoutDimensions((Clay_Dimensions){ (float)w, (float)h });
+    Clay_BeginLayout();
+    CLAY(CLAY_ID("root"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0) } } }) {
+        layout_modal(modal_kind(), (float)w, (float)h);
+    }
+    return Clay_EndLayout(0);
+}
+
+// The blurred backdrop's images: the window at 1x, then a quarter and an eighth of it; scaled back up
+// with bilinear filtering, that is the blur. Made at the window's size, again when it changes.
+static RenderTexture2D blur_rt[3];
+
+static void blur_fit(int w, int h)
+{
+    int div[3] = { 1, 4, 8 };
+    for (int i = 0; i < 3; i++) {
+        int bw = w / div[i] > 0 ? w / div[i] : 1, bh = h / div[i] > 0 ? h / div[i] : 1;
+        if (blur_rt[i].id && blur_rt[i].texture.width == bw && blur_rt[i].texture.height == bh) continue;
+        if (blur_rt[i].id) UnloadRenderTexture(blur_rt[i]);
+        blur_rt[i] = LoadRenderTexture(bw, bh);
+        SetTextureFilter(blur_rt[i].texture, TEXTURE_FILTER_BILINEAR);
+    }
+}
+
+// src's whole texture into the target being drawn (a render texture is upside down).
+static void blur_blit(RenderTexture2D src, float w, float h)
+{
+    Rectangle from = { 0, 0, (float)src.texture.width, -(float)src.texture.height }, to = { 0, 0, w, h };
+    DrawTexturePro(src.texture, from, to, (Vector2){ 0, 0 }, 0, WHITE);
 }
 
 static void draw(void)
@@ -1449,8 +1561,30 @@ static void draw(void)
     font_set_dpi(GetWindowScaleDPI().x);
     if (window_scale() != app.icon_scale) icons_reset();
     font_frame_begin();
-    Clay_RenderCommandArray cmds = layout(GetScreenWidth(), GetScreenHeight());
-    render_draw(cmds, cc(app.theme.bg));
+    int w = GetScreenWidth(), h = GetScreenHeight();
+    if (!app.modal_blur || modal_kind() == MODAL_NONE) {
+        render_draw(layout_window(w, h, true), cc(app.theme.bg));
+        return;
+    }
+    // Blurred: the window without the panel into an image, scaled down twice, then up onto the
+    // screen, and the panel drawn over it from a second layout (whose boxes the clicks then use).
+    blur_fit(w, h);
+    Clay_RenderCommandArray base = layout_window(w, h, false);
+    BeginTextureMode(blur_rt[0]);
+    ClearBackground(render_color(cc(app.theme.bg)));
+    render_cmds(base);
+    EndTextureMode();
+    for (int i = 1; i < 3; i++) {
+        BeginTextureMode(blur_rt[i]);
+        blur_blit(blur_rt[i - 1], (float)blur_rt[i].texture.width, (float)blur_rt[i].texture.height);
+        EndTextureMode();
+    }
+    Clay_RenderCommandArray top = layout_modal_only(w, h);
+    BeginDrawing();
+    ClearBackground(render_color(cc(app.theme.bg)));
+    blur_blit(blur_rt[2], (float)w, (float)h);
+    render_cmds(top);
+    EndDrawing();
 }
 
 // ---- input ----------------------------------------------------------------------------------
@@ -1566,6 +1700,7 @@ typedef struct {
     UiBar bar;     // a top bar button
     int   crumb;   // UB_CRUMB: which path button
     int   tab, tab_x;   // a tab, or its ×
+    int   modal;        // a modal panel's button (UI_MODAL_*), 0 for none
 } Hit;
 
 static bool in_box(Clay_ElementId id, float x, float y)
@@ -1577,7 +1712,17 @@ static bool in_box(Clay_ElementId id, float x, float y)
 
 static Hit hit_at(float x, float y)
 {
-    Hit h = { -1, -1, -1, UB_NONE, -1, -1, -1 };
+    Hit h = { -1, -1, -1, UB_NONE, -1, -1, -1, 0 };
+    if (modal_kind() != MODAL_NONE) {
+        // A panel is up: its buttons are all there is to hit.
+        static const struct { const char *id; int b; } MB[] = {
+            { "modal-yes", UI_MODAL_YES }, { "modal-no", UI_MODAL_NO }, { "modal-skip", UI_MODAL_SKIP }, { "modal-replace", UI_MODAL_REPLACE },
+            { "modal-keep", UI_MODAL_KEEP }, { "modal-cancel", UI_MODAL_CANCEL }, { "modal-all", UI_MODAL_ALL },
+        };
+        for (int k = 0; k < COUNT(MB) && !h.modal; k++)
+            if (in_box(Clay_GetElementId(cz(MB[k].id)), x, y)) h.modal = MB[k].b;
+        return h;
+    }
     for (int i = 0; tabbar.n >= 2 && i < tabbar.n && h.tab < 0; i++) {
         if (in_box(CLAY_IDI("tab-x", i), x, y)) h.tab_x = h.tab = i;
         else if (in_box(CLAY_IDI("tab", i), x, y)) h.tab = i;
@@ -1612,6 +1757,7 @@ static void press_at(UiInput *in, float x, float y, int mods)
     in->side_click = h.side;
     in->header = h.header;
     in->bar = h.bar, in->crumb = h.crumb;
+    in->modal = h.modal;
     if (h.tab_x >= 0) in->tab_close = h.tab_x;
     else if (h.tab >= 0) in->tab_click = h.tab;
 }
@@ -1651,6 +1797,8 @@ static UiInput input_real(bool *seen)
                  h.tab != app.tab_hover || h.tab_x != app.tab_x_hover;
         app.hover = h.row, app.side_hover = h.side, app.bar_hover = h.bar, app.crumb_hover = h.crumb;
         app.tab_hover = h.tab, app.tab_x_hover = h.tab_x;
+        *seen |= h.modal != app.modal_hover;
+        app.modal_hover = h.modal;
     }
     if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
         int mods = (IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL) ? UI_MOD_CTRL : 0) |
@@ -1662,7 +1810,7 @@ static UiInput input_real(bool *seen)
     in.forwards = mouse_forwards, mouse_forwards = 0;
     *seen |= in.wheel != 0 || in.click >= 0 || in.dclick >= 0 || in.side_click >= 0 || in.header >= 0 || in.backs > 0 ||
              in.forwards > 0 || in.bar != UB_NONE || in.tab_click >= 0 || in.tab_close >= 0 || in.mid_row >= 0 || in.mid_side >= 0 ||
-             in.mid_crumb >= 0;
+             in.mid_crumb >= 0 || in.modal;
     return in;
 }
 
@@ -1812,6 +1960,9 @@ int main(int argc, char **argv)
     clip_init();   // false: the clipboard stays inside fx
     // FX_TEST_COUNT_DELAY_MS: each count takes that much longer, so a test can change the listing
     // while answers for the old one are on their way, or (10 s) stand in for a hung mount at quit.
+    // FX_MODAL=blur: the modal panels' backdrop blurred, else dimmed (F5.1: both, for Michael to pick).
+    const char *modal_env = getenv("FX_MODAL");
+    app.modal_blur = modal_env && strcmp(modal_env, "blur") == 0;
     const char *kdelay = getenv("FX_TEST_COUNT_DELAY_MS");
     counts.delay_ms = kdelay ? atoi(kdelay) : 0;
     if (counts.delay_ms < 0 || counts.delay_ms > 10000) counts.delay_ms = 0;
@@ -1886,6 +2037,8 @@ int main(int argc, char **argv)
     }
     clip_quit();
     count_stop();
+    for (int i = 0; i < 3; i++)
+        if (blur_rt[i].id) UnloadRenderTexture(blur_rt[i]);
     for (int i = 0; i < app.nslots; i++)
         if (app.slot[i].tex.id) UnloadTexture(app.slot[i].tex);
     CloseWindow();

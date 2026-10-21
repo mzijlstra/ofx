@@ -65,6 +65,7 @@ typedef struct {
     int     tab_click;   // a tab clicked (its place in the bar), -1 for none
     int     tab_close;   // a tab's × clicked, or the tab middle-clicked, -1 for none
     int     mid_row, mid_side, mid_crumb;   // a middle click on a list row, a place, a path button
+    int     modal;       // a modal panel's button (F5.1): UI_MODAL_*, 0 for none
     int     backs, forwards;   // presses of the mouse's back and forward buttons
 } UiInput;
 
@@ -98,6 +99,10 @@ typedef struct {
 
 // The clash answers, as fs/job.c numbers them (Answer); ui/ doesn't include it.
 enum { UI_ANS_SKIP = 1, UI_ANS_REPLACE = 2, UI_ANS_KEEP = 3, UI_ANS_CANCEL = 4 };
+
+// The modal panels' buttons (F5.1): the delete question's, then the clash question's (the answers
+// above, and the "same for the rest" box).
+enum { UI_MODAL_YES = 1, UI_MODAL_NO, UI_MODAL_SKIP, UI_MODAL_REPLACE, UI_MODAL_KEEP, UI_MODAL_CANCEL, UI_MODAL_ALL };
 
 typedef struct {
     isize n;      // rows in the list
@@ -140,12 +145,13 @@ typedef struct {
     isize  confirm_n;
     bool   busy;             // a job runs: Esc cancels it
     bool   asking;           // the job waits for a clash answer
+    bool   ask_all;          // its "same for the rest" box (the capitals too)
 } Ui;
 
 static UiInput ui_input_none(void)
 {
     return (UiInput){ .click = -1, .dclick = -1, .side_click = -1, .header = -1, .click_mods = 0, .bar = UB_NONE, .crumb = -1,
-                      .tab_click = -1, .tab_close = -1, .mid_row = -1, .mid_side = -1, .mid_crumb = -1 };
+                      .tab_click = -1, .tab_close = -1, .mid_row = -1, .mid_side = -1, .mid_crumb = -1, .modal = 0 };
 }
 
 static isize ui_clamp(isize v, isize lo, isize hi)
@@ -430,7 +436,7 @@ static UiAction ui_ask_event(Ui *u, UiEvent e)
     default: return (UiAction){ UA_NONE, 0, false };
     }
     u->asking = false;
-    return (UiAction){ UA_ANSWER, a, e.ch >= 'A' && e.ch <= 'Z' };
+    return (UiAction){ UA_ANSWER, a, (e.ch >= 'A' && e.ch <= 'Z') || u->ask_all };
 }
 
 // ---- input ------------------------------------------------------------------------------------
@@ -471,6 +477,18 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
 {
     UiList *l = &u->list;
     bool prompt = u->asking || u->confirming;
+    // A modal panel's buttons: as the keys they stand for.
+    if (u->confirming && (in->modal == UI_MODAL_YES || in->modal == UI_MODAL_NO)) {
+        u->confirming = false;
+        return (UiAction){ in->modal == UI_MODAL_YES ? UA_DELETE : UA_NONE, 0, false };
+    }
+    if (u->asking && in->modal == UI_MODAL_ALL) u->ask_all = !u->ask_all;
+    if (u->asking && in->modal >= UI_MODAL_SKIP && in->modal <= UI_MODAL_CANCEL) {
+        static const int ANSWER[] = { UI_ANS_SKIP, UI_ANS_REPLACE, UI_ANS_KEEP, UI_ANS_CANCEL };
+        int a = ANSWER[in->modal - UI_MODAL_SKIP];
+        u->asking = false;
+        return (UiAction){ UA_ANSWER, a, a != UI_ANS_CANCEL && u->ask_all };
+    }
     if (in->wheel) l->top = ui_clamp(l->top - in->wheel, 0, ui_max_top(l));
     if (!prompt && in->header >= 0 && in->header < SORT_KEYS) {
         u->sort = ui_sort_click(u->sort, (SortKey)in->header);

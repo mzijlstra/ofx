@@ -129,8 +129,15 @@ char /
 type c.txt
 key enter
 key shift-delete
-expect confirming=1
+expect confirming=1 modal=delete
 shot confirm.png
+# Clicks outside the panel do nothing; its Cancel cancels
+click-at 120 460
+expect confirming=1 sel=c.txt
+point-ui modal-no
+click-here
+expect confirming=0 modal=-
+key shift-delete
 char n
 expect confirming=0
 key shift-delete
@@ -165,8 +172,15 @@ shot progress.png
 wait-for 10000 job=- n=1 undo=copy status=Copied
 sh cmp -s "$FX_DIR/big.bin" "$FX_ROOT/tree/big.bin"
 key ctrl-v
-wait-for 3000 asking=1
+wait-for 3000 asking=1 modal=clash askall=0
 shot clash.png
+# The "same for the rest" box toggles
+point-ui modal-all
+click-here
+expect askall=1 asking=1
+point-ui modal-all
+click-here
+expect askall=0
 char k
 wait-for 10000 job=- n=2
 sh cmp -s "$FX_DIR/big (2).bin" "$FX_ROOT/tree/big.bin"
@@ -175,7 +189,8 @@ wait-for 2000 n=1 undo=-
 sh test ! -e "$FX_DIR/big (2).bin" && test -f "$FX_ROOT/data/Trash/files/big (2).bin"
 key ctrl-v
 wait-for 3000 asking=1
-char s
+point-ui modal-skip
+click-here
 wait-for 5000 job=- n=1 status=Copied
 sh printf x > "$FX_DIR/big.bin"
 key ctrl-v
