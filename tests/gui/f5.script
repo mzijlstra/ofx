@@ -1,0 +1,130 @@
+# F5 on a tree made by tests/gui/run.sh, HOME=<scratch>/home: home/tree holds adir/ (a1, a2),
+# bdir/ (b1), cdir/, gone/ (g1) and f01..f40; tree/big.bin 8 MiB. Copies slowed
+# (FX_TEST_COPY_DELAY_MS).
+settle
+expect tabs=1 tab=0 tabdirs=tree
+# ---- Ctrl+T: a tab on this folder, shown, history its own; the bar from two tabs on
+key down
+expect sel=bdir rows=14
+key ctrl-t
+wait 2
+expect tabs=2 tab=1 tabdirs=tree|tree sel=bdir back=0 rows=13
+shot tabs.png
+key enter
+expect tabdirs=tree|bdir back=1 sel=b1
+key ctrl-tab
+expect tab=0 tabdirs=tree|bdir sel=bdir back=0
+key ctrl-tab
+expect tab=1 sel=b1 back=1
+key ctrl-shift-tab
+expect tab=0
+# ---- each tab keeps its selection and scroll
+key home
+key space
+key space
+expect marked=2 sel=cdir
+key ctrl-tab
+expect tab=1 marked=0
+key ctrl-tab
+expect tab=0 marked=2 sel=cdir
+key esc
+key end
+expect sel=f40 top=32
+key ctrl-tab
+key ctrl-tab
+expect sel=f40 top=32 marked=0
+# ---- sort and hidden files belong to the window
+char S
+key ctrl-tab
+expect sort=name rev=1
+char S
+expect rev=0
+key ctrl-tab
+expect rev=0
+# ---- Alt+N, Ctrl+PgUp/Down through the key callback, moving a tab
+key alt-2
+expect tab=1
+key alt-1
+expect tab=0
+key alt-9
+expect tab=1
+raw-key 266 2
+expect tab=0
+raw-key 267 2
+expect tab=1
+raw-key 266 3
+expect tab=0 tabdirs=bdir|tree
+raw-key 267 3
+expect tab=1 tabdirs=tree|bdir
+raw-key 84 2
+expect tabs=3 tab=2 tabdirs=tree|bdir|bdir
+raw-key 87 2
+expect tabs=2 tab=1 tabdirs=tree|bdir
+# ---- middle clicks open folders in background tabs; the cursor stays
+key alt-1
+key home
+middle 0
+expect tabs=3 tab=0 tabdirs=tree|adir|bdir sel=adir
+key end
+middle 0
+point-ui crumb 0
+middle-here
+expect tabs=4 tab=0 tabdirs=tree|home|adir|bdir
+point-ui side-row 0
+middle-here
+expect tabs=5 tab=0 tabdirs=tree|home|home|adir|bdir
+# A file: not a folder
+key end
+middle 12
+expect tabs=5 isn't
+# ---- clicks on the tab bar: show, × closes, a middle click closes
+point-ui tab 2
+click-here
+expect tab=2 tabdirs=tree|home|home|adir|bdir
+point-ui tab-x 1
+click-here
+expect tabs=4 tab=1 tabdirs=tree|home|adir|bdir
+point-ui tab 3
+middle-here
+expect tabs=3 tab=1 tabdirs=tree|home|adir
+# ---- a tab whose folder is gone
+key alt-1
+key ctrl-t
+char /
+type gone
+key enter
+key enter
+expect sel=g1 tab=1
+key alt-1
+sh rm -rf "$FX_DIR/gone"
+key alt-2
+expect tab=1 tabdirs=tree|tree|home|adir gone sel=adir
+key ctrl-w
+# ---- a copy keeps running across a switch
+key alt-1
+char /
+type big
+key enter
+key ctrl-c
+key alt-3
+expect tab=2
+point-ui crumb 1
+click-here
+key home
+key enter
+key end
+key ctrl-v
+wait-for 3000 job=run
+key alt-1
+expect tab=0
+wait-for 15000 job=- status=Copied
+sh test -f "$FX_ROOT/home/tree/adir/big.bin" && cmp -s "$FX_ROOT/home/tree/adir/big.bin" "$FX_ROOT/home/tree/big.bin"
+key alt-3
+expect tab=2 tabdirs=tree|home|adir n=3
+# ---- Ctrl+W down to the last; the last closes fx
+key ctrl-w
+key ctrl-w
+expect tabs=1
+key ctrl-w
+wait 5
+expect never-reached

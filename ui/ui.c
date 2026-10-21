@@ -31,6 +31,13 @@ typedef enum {
     UK_NEWFOLDER,  // Ctrl+Shift+N
     UK_LOCATION,   // Ctrl+L
     UK_PARENT,     // Alt+Up
+    UK_TAB_NEW,    // Ctrl+T
+    UK_TAB_CLOSE,  // Ctrl+W
+    UK_TAB_NEXT,   // Ctrl+Tab, Ctrl+PgDn
+    UK_TAB_PREV,   // Ctrl+Shift+Tab, Ctrl+PgUp
+    UK_TAB_LEFT,   // Ctrl+Shift+PgUp: the tab moves
+    UK_TAB_RIGHT,  // Ctrl+Shift+PgDn
+    UK_TAB_JUMP,   // Alt+1 .. Alt+9: the event's ch is the digit
 } UiKey;
 
 // The top bar's buttons (F4).
@@ -55,6 +62,9 @@ typedef struct {
     int     header;      // a column header clicked (a SortKey), -1 for none
     UiBar   bar;         // a top bar button clicked (UB_CRUMB: path button `crumb`)
     int     crumb;
+    int     tab_click;   // a tab clicked (its place in the bar), -1 for none
+    int     tab_close;   // a tab's × clicked, or the tab middle-clicked, -1 for none
+    int     mid_row, mid_side, mid_crumb;   // a middle click on a list row, a place, a path button
     int     backs, forwards;   // presses of the mouse's back and forward buttons
 } UiInput;
 
@@ -69,6 +79,15 @@ typedef enum {
     UA_GO,          // the location line's Enter: its text is where to go (open until gui/ closes it)
     UA_CRUMB,       // a path button: index
     UA_CRUMB_SHIFT, // the path buttons' arrows: index -1 or 1
+    UA_TAB_NEW,     // Ctrl+T
+    UA_TAB_CLOSE,   // index: the tab's place, -1 the current one
+    UA_TAB_SHOW,    // index: the tab's place
+    UA_TAB_STEP,    // index: -1 or 1, wrapping
+    UA_TAB_MOVE,    // index: -1 or 1, the current tab moves
+    UA_TAB_JUMP,    // index: 1..9 (9 the last)
+    UA_TAB_BG_ROW,  // a middle click: entry index in a new tab in the background
+    UA_TAB_BG_PLACE,
+    UA_TAB_BG_CRUMB,
 } UiActionKind;
 
 typedef struct {
@@ -125,7 +144,8 @@ typedef struct {
 
 static UiInput ui_input_none(void)
 {
-    return (UiInput){ .click = -1, .dclick = -1, .side_click = -1, .header = -1, .click_mods = 0, .bar = UB_NONE, .crumb = -1 };
+    return (UiInput){ .click = -1, .dclick = -1, .side_click = -1, .header = -1, .click_mods = 0, .bar = UB_NONE, .crumb = -1,
+                      .tab_click = -1, .tab_close = -1, .mid_row = -1, .mid_side = -1, .mid_crumb = -1 };
 }
 
 static isize ui_clamp(isize v, isize lo, isize hi)
@@ -461,6 +481,11 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         ui_edit_close(u);
         return (UiAction){ UA_PLACE, u->side.sel, false };
     }
+    if (!prompt && in->tab_close >= 0) return ui_edit_close(u), (UiAction){ UA_TAB_CLOSE, in->tab_close, false };
+    if (!prompt && in->tab_click >= 0) return ui_edit_close(u), (UiAction){ UA_TAB_SHOW, in->tab_click, false };
+    if (!prompt && in->mid_row >= 0 && l->top + in->mid_row < l->n) return (UiAction){ UA_TAB_BG_ROW, l->top + in->mid_row, false };
+    if (!prompt && in->mid_side >= 0 && u->side.top + in->mid_side < u->side.n) return (UiAction){ UA_TAB_BG_PLACE, u->side.top + in->mid_side, false };
+    if (!prompt && in->mid_crumb >= 0) return (UiAction){ UA_TAB_BG_CRUMB, in->mid_crumb, false };
     if (!prompt && in->bar != UB_NONE) {
         switch (in->bar) {
         case UB_BACK: ui_edit_close(u); return (UiAction){ UA_BACK, 0, false };
@@ -578,6 +603,13 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         case UK_NEWFOLDER: return (UiAction){ UA_NEWFOLDER, 0, false };
         case UK_LOCATION: return (UiAction){ UA_LOCATION, 0, false };
         case UK_PARENT: return (UiAction){ UA_PARENT, 0, false };
+        case UK_TAB_NEW: return (UiAction){ UA_TAB_NEW, 0, false };
+        case UK_TAB_CLOSE: return (UiAction){ UA_TAB_CLOSE, -1, false };
+        case UK_TAB_NEXT: return (UiAction){ UA_TAB_STEP, 1, false };
+        case UK_TAB_PREV: return (UiAction){ UA_TAB_STEP, -1, false };
+        case UK_TAB_LEFT: return (UiAction){ UA_TAB_MOVE, -1, false };
+        case UK_TAB_RIGHT: return (UiAction){ UA_TAB_MOVE, 1, false };
+        case UK_TAB_JUMP: return (UiAction){ UA_TAB_JUMP, (isize)e.ch, false };
         default: break;
         }
     }
@@ -704,6 +736,64 @@ static bool ui_location(Arena *a, Str text, const char *cwd, const char *home, S
     if (!path_join(a, base, text, out)) return false;
     if (out->len == 0) *out = S("/");
     return true;
+}
+
+// ---- tabs (F5) ---------------------------------------------------------------------------------
+//
+// The tab bar's order: place -> slot, where gui/ keeps each tab's folder, cursor and history.
+
+enum { UI_TABS_MAX = 32 };
+
+typedef struct {
+    int slot[UI_TABS_MAX];
+    int n;
+    int cur;   // the place of the tab on screen
+} UiTabs;
+
+// A tab for slot, placed after the current one; shown when `show`. False when the bar is full.
+static bool ui_tabs_open(UiTabs *t, int slot, bool show)
+{
+    if (t->n == UI_TABS_MAX) return false;
+    int at = t->n == 0 ? 0 : t->cur + 1;
+    memmove(t->slot + at + 1, t->slot + at, sizeof *t->slot * (size_t)(t->n - at));
+    t->slot[at] = slot, t->n++;
+    if (show || t->n == 1) t->cur = at;
+    return true;
+}
+
+// The tab at place `at` closed: its slot (now free), or -1 for no such tab. Closing the current
+// one shows the tab to its right, or to its left at the end.
+static int ui_tabs_close(UiTabs *t, int at)
+{
+    if (at < 0 || at >= t->n) return -1;
+    int slot = t->slot[at];
+    memmove(t->slot + at, t->slot + at + 1, sizeof *t->slot * (size_t)(t->n - at - 1));
+    t->n--;
+    if (at < t->cur || (at == t->cur && t->cur == t->n)) t->cur--;
+    if (t->cur < 0) t->cur = 0;
+    return slot;
+}
+
+// The next (1) or previous (-1) tab, wrapping.
+static void ui_tabs_step(UiTabs *t, int by)
+{
+    if (t->n > 0) t->cur = ((t->cur + by) % t->n + t->n) % t->n;
+}
+
+// Alt+k: the k-th tab (1-based), Alt+9 the last; a tab that isn't there changes nothing.
+static void ui_tabs_jump(UiTabs *t, int k)
+{
+    if (k == 9 && t->n > 0) t->cur = t->n - 1;
+    else if (k >= 1 && k <= t->n) t->cur = k - 1;
+}
+
+// The current tab one place left (-1) or right (1), not past the ends.
+static void ui_tabs_move(UiTabs *t, int by)
+{
+    int to = t->cur + by;
+    if (to < 0 || to >= t->n) return;
+    int s = t->slot[to];
+    t->slot[to] = t->slot[t->cur], t->slot[t->cur] = s, t->cur = to;
 }
 
 // ---- history ----------------------------------------------------------------------------------

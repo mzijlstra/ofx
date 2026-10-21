@@ -10,6 +10,8 @@
 //   key <name>              up down pageup pagedown home end enter right left backspace esc tab
 //                           f2 delete shift-delete space, and the chords alt-left alt-right ctrl-f
 //                           ctrl-h ctrl-a ctrl-c ctrl-x ctrl-v ctrl-z ctrl-shift-n ctrl-l alt-up
+//                           ctrl-t ctrl-w ctrl-tab ctrl-shift-tab ctrl-shift-pageup ctrl-shift-pagedown,
+//                           and alt-1 .. alt-9
 //   char <c>                one typed character
 //   type <text>             the rest of the line, after one space, as typed characters
 //   wheel <notches>         over the list; positive away from the user (up)
@@ -23,6 +25,8 @@
 //   point-ui <id> [k]       the point at the middle of a Clay element (k: its CLAY_IDI index),
 //                           printed as "point: x y" and kept for click-here
 //   click-here              a left press at the last point-ui
+//   middle-here             a middle press there (a folder into a background tab, a tab closed)
+//   middle <row>            a middle press on list row <row>
 //   back, forward           the mouse's back and forward buttons
 //   raw-button <n>          GLFW's button n (1-8) pressed and released through main.c's callback
 //   raw-key <key> [mods]    GLFW key code <key> pressed through main.c's key callback, with GLFW's
@@ -93,6 +97,13 @@ static void script_state(char *out, size_t cap)
         size_t k = strlen(crumbs);
         snprintf(crumbs + k, sizeof crumbs - k, "%s%.*s", i ? "|" : "", STR_ARG(ui_crumb_label(&app.crumbs, i)));
     }
+    // The tabs' folder names in order, '|' between (the current one from app.cwd).
+    char tabdirs[1024] = "";
+    for (int i = 0; i < tabbar.n; i++) {
+        const char *d = i == tabbar.cur ? app.cwd : tabs[tabbar.slot[i]].dir;
+        size_t k = strlen(tabdirs);
+        snprintf(tabdirs + k, sizeof tabdirs - k, "%s%.*s", i ? "|" : "", STR_ARG(strcmp(d, "/") == 0 ? S("/") : path_base(str_from_c(d))));
+    }
     // The cursor's Size cell as drawn, its spaces as '_'.
     char sizecell[64] = "-";
     if (app.have_list && app.ui.list.n > 0) {
@@ -111,7 +122,7 @@ static void script_state(char *out, size_t cap)
              "icons=%s scale=%d w=%d h=%d reloads=%d themes=%d batches=%d frame_ms_max=%.1f icon=%s "
              "shown=%d sort=%s rev=%d finding=%d miss=%d find=%.*s last=%.*s side=%td sidefocus=%d place=%s here=%s "
              "back=%d fwd=%d marked=%td editing=%d edit=%s confirming=%d asking=%d job=%s done=%lld/%lld undo=%s clip=%td cut=%d "
-             "sysclip=%d sizecell=%s crumbs=%s crumbhome=%d crumb=%d crumbshown=%d-%d arrows=%d locating=%d cnt=%s status=%s",
+             "sysclip=%d tabs=%d tab=%d tabdirs=%s sizecell=%s crumbs=%s crumbhome=%d crumb=%d crumbshown=%d-%d arrows=%d locating=%d cnt=%s status=%s",
              app.cwd, app.list.n, app.list.hidden, STR_ARG(sel), app.ui.list.sel, app.ui.list.top, app.ui.list.rows, app.hover,
              t->accent.r, t->accent.g, t->accent.b, t->bg.r, t->bg.g, t->bg.b, t->icons[0] ? t->icons : "-",
              app.icon_scale, GetScreenWidth(), GetScreenHeight(), app.reloads, app.themes, atomic_load(&watch.batches),
@@ -122,7 +133,7 @@ static void script_state(char *out, size_t cap)
              app.places.n ? app.places.p[app.ui.side.sel].label : "-", app.place_cur >= 0 ? app.places.p[app.place_cur].label : "-",
              hist.nback, hist.nfwd, app.ui.marked, app.ui.editing, edit, app.ui.confirming, app.ui.asking,
              !run.running ? "-" : JOB_PHASES[atomic_load(&run.j.phase)], atomic_load(&run.j.files_done), atomic_load(&run.j.files_total),
-             UNDO_KINDS[undo.kind], own.n, own.cut, clip.ok, sizecell, crumbs, app.crumbs.seg[0].home ? 0 : -1, app.crumbs.cur, app.crumb_lo, app.crumb_hi, app.crumb_arrows,
+             UNDO_KINDS[undo.kind], own.n, own.cut, clip.ok, tabbar.n, tabbar.cur, tabdirs, sizecell, crumbs, app.crumbs.seg[0].home ? 0 : -1, app.crumbs.cur, app.crumb_lo, app.crumb_hi, app.crumb_arrows,
              app.ui.editing && app.ui.edit_path, cnt, app.status[0] ? app.status : "-");
     frame_us_max = 0;
 }
@@ -161,6 +172,8 @@ static UiKey script_key(Str name)
         { "f2", UK_F2 }, { "delete", UK_DELETE }, { "shift-delete", UK_SHIFT_DELETE }, { "ctrl-a", UK_ALL },
         { "ctrl-c", UK_COPY }, { "ctrl-x", UK_CUT }, { "ctrl-v", UK_PASTE }, { "ctrl-z", UK_UNDO },
         { "ctrl-shift-n", UK_NEWFOLDER }, { "ctrl-l", UK_LOCATION }, { "alt-up", UK_PARENT },
+        { "ctrl-t", UK_TAB_NEW }, { "ctrl-w", UK_TAB_CLOSE }, { "ctrl-tab", UK_TAB_NEXT }, { "ctrl-shift-tab", UK_TAB_PREV },
+        { "ctrl-shift-pageup", UK_TAB_LEFT }, { "ctrl-shift-pagedown", UK_TAB_RIGHT },
     };
     for (int i = 0; i < COUNT(KEYS); i++)
         if (str_eq(name, str_from_c(KEYS[i].name))) return KEYS[i].k;
@@ -238,6 +251,17 @@ static void script_after_draw(void)
     script.shot[0] = 0;
 }
 
+// The script's last line, once: at its end, or when the window quits under it (the last tab's
+// Ctrl+W).
+static void script_end(void)
+{
+    static bool done;
+    if (done) return;
+    done = true;
+    printf("script: %d of %d expectations failed\n", script.failed, script.expects);
+    fflush(stdout);
+}
+
 // The next frame's input: false at the end of the script.
 static bool script_input(UiInput *in)
 {
@@ -291,6 +315,8 @@ static bool script_input(UiInput *in)
         } else if (str_eq(cmd, S("key"))) {
             UiKey k = script_key(arg);
             if (str_eq(arg, S("space"))) in->ev[in->nev++] = (UiEvent){ UK_NONE, ' ' };   // a typed space
+            else if (arg.len == 5 && str_starts_with(arg, S("alt-")) && arg.p[4] >= '1' && arg.p[4] <= '9')
+                in->ev[in->nev++] = (UiEvent){ UK_TAB_JUMP, (u32)(arg.p[4] - '0') };
             else if (!k) script_fail("no key %s", a);
             else in->ev[in->nev++] = (UiEvent){ k, 0 };
         } else if (str_eq(cmd, S("char")) || str_eq(cmd, S("type"))) {
@@ -327,6 +353,10 @@ static bool script_input(UiInput *in)
             printf("point: %.0f %.0f\n", script.px, script.py);
         } else if (str_eq(cmd, S("click-here"))) {
             press_at(in, script.px, script.py, 0);
+        } else if (str_eq(cmd, S("middle-here"))) {
+            middle_at(in, script.px, script.py);
+        } else if (str_eq(cmd, S("middle"))) {
+            in->mid_row = atoi(a);
         } else if (str_eq(cmd, S("back"))) {
             in->backs = 1;
         } else if (str_eq(cmd, S("forward"))) {
@@ -375,7 +405,6 @@ static bool script_input(UiInput *in)
         fflush(stdout);
         return true;
     }
-    printf("script: %d of %d expectations failed\n", script.failed, script.expects);
-    fflush(stdout);
+    script_end();
     return false;
 }

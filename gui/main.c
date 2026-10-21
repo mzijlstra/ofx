@@ -44,6 +44,7 @@ static Arena frame, lists[2], data, icona, scratch, joba, undoa, owna, pastea;
 static int   watch_delay_ms;   // FX_TEST_WATCH_DELAY_MS, for one test
 
 enum { BAR_BTN_W = 34, BAR_BTN_H = 30, BAR_GAP = 4, ARROW_W = 22, CRUMB_PAD = 10, CRUMB_ICON_PX = 16 };
+enum { TAB_H = 30, TAB_X_W = 22 };
 enum { FONT_PX = 15, ROW_H = 28, ICON_PX = 24, HEADER_H = 40, COLS_H = 26, FOOTER_H = 28, PAD = 12, SIZE_W = 90,
        DATE_W = 100, SIDE_W = 200, SIDE_ROW_H = 28, SIDE_ICON_PX = 20, GAP = 10, ICONS_MAX = 512 };
 
@@ -95,10 +96,39 @@ static struct {
     bool      crumb_arrows;
     UiBar     bar_hover;    // the top bar button under the pointer
     int       crumb_hover;
+    int       tab_hover, tab_x_hover;   // the tab, and the tab's ×, under the pointer; -1 for none
     int       copy_delay_ms;   // FX_TEST_COPY_DELAY_MS
-} app = { .hover = -1, .side_hover = -1 };
+} app = { .hover = -1, .side_hover = -1, .tab_hover = -1, .tab_x_hover = -1 };
 
 static UiHistory hist;
+
+// ---- tabs (F5) --------------------------------------------------------------------------------
+//
+// The tab on screen lives in app, hist and app.crumbs; a tab left is kept in its slot by name, and
+// listed again when it is shown (docs/plan.md, "F5 design").
+
+typedef struct {
+    bool      used;
+    char      dir[PATH_MAX];
+    char      sel[NAME_MAX + 1];   // the cursor's entry
+    isize     row, top;            // its row (when the name is gone) and the scroll
+    UiHistory hist;
+    UiCrumbs  crumbs;
+    char      last[UI_FIND_MAX];   // the find line's last text, for n and N
+    int       last_len;
+    char      marks[KiB(32)];      // the selection: names, each ending in a NUL
+    isize     marks_len;
+    bool      marks_cut;           // more than fitted: the selection was left out
+} Tab;
+
+static Tab    tabs[UI_TABS_MAX];
+static UiTabs tabbar;
+
+// The top bar's height, with the tab bar under it from two tabs on.
+static int top_h(void)
+{
+    return HEADER_H + (tabbar.n >= 2 ? TAB_H : 0);
+}
 static Undo      undo;
 static ClipFiles own;      // fx's own copy or cut (own.n 0: none)
 
@@ -236,6 +266,8 @@ static bool go_to(const char *dir, Str select, isize fallback)
     return go_to_in(dir, select, fallback, false);
 }
 
+static void go_up_from(const char *from);
+
 // The folder again (a change on disk): the cursor stays on its name, or on its row when that name
 // is gone. A folder that is gone itself gives way to the nearest one above that is there.
 static void reload(void)
@@ -244,9 +276,15 @@ static void reload(void)
     char keep[NAME_MAX + 1] = "";
     snprintf(keep, sizeof keep, "%.*s", STR_ARG(sel_name()));
     if (go_to(app.cwd, str_from_c(keep), app.ui.list.sel)) return;
+    go_up_from(app.cwd);
+}
+
+// Folder `from` is gone: the nearest folder above it that is there, with a word in the status line.
+static void go_up_from(const char *from)
+{
     char gone[PATH_MAX], up[PATH_MAX];
-    snprintf(gone, sizeof gone, "%s", app.cwd);
-    snprintf(up, sizeof up, "%s", app.cwd);
+    snprintf(gone, sizeof gone, "%s", from);
+    snprintf(up, sizeof up, "%s", from);
     while (strcmp(up, "/") != 0) {
         // Cut in place: snprintf from up into up would copy a buffer onto itself.
         Str d = path_dir(str_from_c(up));
@@ -636,6 +674,114 @@ static void undo_last(void)
     else reload();
 }
 
+static int tab_slot_free(void)
+{
+    for (int i = 0; i < UI_TABS_MAX; i++)
+        if (!tabs[i].used) return i;
+    return -1;
+}
+
+// The tab on screen into its slot.
+static void tab_save(void)
+{
+    Tab *t = &tabs[tabbar.slot[tabbar.cur]];
+    t->used = true;
+    snprintf(t->dir, sizeof t->dir, "%s", app.cwd);
+    snprintf(t->sel, sizeof t->sel, "%.*s", STR_ARG(sel_name()));
+    t->row = app.ui.list.sel, t->top = app.ui.list.top;
+    t->hist = hist, t->crumbs = app.crumbs;
+    memcpy(t->last, app.ui.last, sizeof t->last), t->last_len = app.ui.last_len;
+    t->marks_len = 0, t->marks_cut = false;
+    for (isize i = 0; app.have_list && app.ui.marked && i < app.list.n; i++) {
+        if (!app.ui.mark[i]) continue;
+        Str nm = app.list.e[i].name;
+        if (t->marks_len + nm.len + 1 > (isize)sizeof t->marks) {
+            t->marks_cut = true;
+            break;
+        }
+        memcpy(t->marks + t->marks_len, nm.p, (size_t)nm.len);
+        t->marks_len += nm.len, t->marks[t->marks_len++] = 0;
+    }
+}
+
+// The tab at the current place onto the screen: its folder listed again, its cursor, scroll,
+// selection and history back. A folder that is gone gives way to the nearest one above.
+static void tab_load(void)
+{
+    Tab *t = &tabs[tabbar.slot[tabbar.cur]];
+    hist = t->hist, app.crumbs = t->crumbs;
+    memcpy(app.ui.last, t->last, sizeof app.ui.last), app.ui.last_len = t->last_len;
+    ui_edit_close(&app.ui);
+    app.ui.finding = false;
+    ui_mark_clear(&app.ui);   // the same folder in two tabs: this tab's marks, not the other's
+    if (!go_to_in(t->dir, str_from_c(t->sel), t->row, true)) {
+        go_up_from(t->dir);
+        return;
+    }
+    app.ui.list.top = t->top;
+    ui_set(&app.ui.list, app.list.n, app.ui.list.sel);
+    for (isize at = 0; at < t->marks_len;) {
+        Str nm = str_from_c(t->marks + at);
+        isize k = listing_find(&app.list, nm);
+        if (k >= 0) ui_mark(&app.ui, k, true);
+        at += nm.len + 1;
+    }
+    if (t->marks_cut) set_status(true, "This tab's selection was too long to keep");
+}
+
+static void tab_show(int at)
+{
+    if (at < 0 || at >= tabbar.n || at == tabbar.cur) return;
+    tab_save();
+    tabbar.cur = at;
+    tab_load();
+}
+
+// A new tab on dir: shown (Ctrl+T, on the current folder) or in the background (a middle click).
+static void tab_open(const char *dir, Str sel, bool show)
+{
+    int slot = tab_slot_free();
+    if (slot < 0 || tabbar.n == UI_TABS_MAX) {
+        set_status(true, "%d tabs is the most fx keeps open", UI_TABS_MAX);
+        return;
+    }
+    tab_save();
+    Tab *t = &tabs[slot];
+    *t = (Tab){ .used = true };
+    snprintf(t->dir, sizeof t->dir, "%s", dir);
+    snprintf(t->sel, sizeof t->sel, "%.*s", STR_ARG(sel));
+    ui_crumbs_set(&t->crumbs, t->dir, getenv("HOME"));
+    ui_tabs_open(&tabbar, slot, show);
+    if (show) tab_load();
+    else set_status(false, "Opened %s in a new tab", path_base(str_from_c(t->dir)).p);
+}
+
+// A middle click's folder, in a background tab; a file isn't one.
+static void tab_open_bg(const char *path)
+{
+    struct stat st;
+    if (stat(path, &st) != 0 || !S_ISDIR(st.st_mode)) {
+        set_status(true, "%s isn't a folder", path_base(str_from_c(path)).p);
+        return;
+    }
+    tab_open(path, STR_EMPTY, false);
+}
+
+// The tab at place `at` (-1: the one on screen) closed; the last one closes fx.
+static void tab_close(int at)
+{
+    if (at < 0) at = tabbar.cur;
+    if (at < 0 || at >= tabbar.n) return;
+    if (tabbar.n == 1) {
+        app.quit = true;
+        return;
+    }
+    bool shown = at == tabbar.cur;
+    int slot = ui_tabs_close(&tabbar, at);
+    if (slot >= 0) tabs[slot].used = false;
+    if (shown) tab_load();
+}
+
 // The location line's Enter: there, if it is a folder; else the line stays open with the reason.
 static void location_go(void)
 {
@@ -711,6 +857,37 @@ static void act(UiAction a)
         else copy_targets(a.kind == UA_CUT);
         break;
     case UA_RENAME: rename_commit(); break;
+    case UA_TAB_NEW: tab_open(app.cwd, sel_name(), true); break;
+    case UA_TAB_CLOSE: tab_close((int)a.index); break;
+    case UA_TAB_SHOW: tab_show((int)a.index); break;
+    case UA_TAB_STEP: {
+        UiTabs t = tabbar;
+        ui_tabs_step(&t, (int)a.index);
+        tab_show(t.cur);
+        break;
+    }
+    case UA_TAB_JUMP: {
+        UiTabs t = tabbar;
+        ui_tabs_jump(&t, (int)a.index);
+        tab_show(t.cur);
+        break;
+    }
+    case UA_TAB_MOVE: ui_tabs_move(&tabbar, (int)a.index); break;
+    case UA_TAB_BG_ROW: {
+        char path[PATH_MAX];
+        if (a.index < app.list.n && join(path, sizeof path, app.cwd, app.list.e[a.index].name)) tab_open_bg(path);
+        break;
+    }
+    case UA_TAB_BG_PLACE:
+        if (a.index >= 0 && a.index < app.places.n) tab_open_bg(app.places.p[a.index].path);
+        break;
+    case UA_TAB_BG_CRUMB:
+        if (a.index >= 0 && a.index < app.crumbs.n) {
+            char path[PATH_MAX];
+            snprintf(path, sizeof path, "%.*s", STR_ARG(ui_crumb_path(&app.crumbs, (int)a.index)));
+            tab_open_bg(path);
+        }
+        break;
     case UA_LOCATION: ui_location_open(&app.ui, str_from_c(app.cwd)); break;
     case UA_GO: location_go(); break;
     case UA_CRUMB: crumb_go((int)a.index); break;
@@ -825,13 +1002,13 @@ static Clay_String fit(Str s, float width, bool keep_end)
 
 static int list_rows(int h)
 {
-    int r = (h - HEADER_H - COLS_H - FOOTER_H) / ROW_H;
+    int r = (h - top_h() - COLS_H - FOOTER_H) / ROW_H;
     return r > 0 ? r : 0;
 }
 
 static int side_rows(int h)
 {
-    int r = (h - HEADER_H - FOOTER_H - PAD) / SIDE_ROW_H;
+    int r = (h - top_h() - FOOTER_H - PAD) / SIDE_ROW_H;
     return r > 0 ? r : 0;
 }
 
@@ -1111,6 +1288,37 @@ static void layout_bar(float w)
     }
 }
 
+// The tab bar: the tabs share the width, each its folder's name and a ×; the one on screen marked.
+static void layout_tabs(float w)
+{
+    Theme *t = &app.theme;
+    float each = (w - PAD) / (float)tabbar.n;
+    CLAY(CLAY_ID("tabs"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(TAB_H) }, .padding = { PAD / 2, PAD / 2, 0, 0 } },
+                            .backgroundColor = cc(t->bg_light),
+                            .border = { .color = mix(t->fg_dim, t->bg_light, 0.45f), .width = { .bottom = 1 } } }) {
+        for (int i = 0; i < tabbar.n; i++) {
+            bool cur = i == tabbar.cur, hover = app.tab_hover == i;
+            const char *dir = cur ? app.cwd : tabs[tabbar.slot[i]].dir;
+            Str name = strcmp(dir, "/") == 0 ? S("/") : path_base(str_from_c(dir));
+            CLAY(CLAY_IDI("tab", i), { .layout = { .sizing = { CLAY_SIZING_FIXED(each), CLAY_SIZING_FIXED(TAB_H) }, .padding = { PAD, 4, 0, 0 },
+                                                   .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
+                                       .backgroundColor = cur ? cc(t->bg) : hover ? mix(t->bg, t->bg_light, 0.5f) : cc(t->bg_light),
+                                       .border = { .color = cur ? cc(t->accent) : mix(t->fg_dim, t->bg_light, 0.45f),
+                                                   .width = { .right = 1, .bottom = cur ? 2 : 0 } } }) {
+                CLAY(CLAY_IDI("tab-name", i), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) } } }) {
+                    text(fit(name, each - PAD - TAB_X_W - 12, false), cur ? cc(t->fg) : cc(t->fg_dim));
+                }
+                bool xhover = app.tab_x_hover == i;
+                CLAY(CLAY_IDI("tab-x", i), { .layout = { .sizing = { CLAY_SIZING_FIXED(TAB_X_W), CLAY_SIZING_FIXED(TAB_X_W) },
+                                                         .childAlignment = { .x = CLAY_ALIGN_X_CENTER, .y = CLAY_ALIGN_Y_CENTER } },
+                                             .backgroundColor = xhover ? cc(t->bg_light) : (cur ? cc(t->bg) : hover ? mix(t->bg, t->bg_light, 0.5f) : cc(t->bg_light)) }) {
+                    text(cz("\xC3\x97"), xhover ? cc(t->fg) : cc(t->fg_dim));   // ×
+                }
+            }
+        }
+    }
+}
+
 static Clay_RenderCommandArray layout(int w, int h)
 {
     arena_reset(&frame);
@@ -1128,7 +1336,8 @@ static Clay_RenderCommandArray layout(int w, int h)
         Str cnt = str_from_c(arena_sprintf(&frame, "%s", count));
         float foot_w = (float)w - 2 * PAD - 24 - str_width(cnt);   // the footer's line beside the count
         layout_bar((float)w);
-        float body_h = (float)(h - HEADER_H - FOOTER_H);
+        if (tabbar.n >= 2) layout_tabs((float)w);
+        float body_h = (float)(h - top_h() - FOOTER_H);
         CLAY(CLAY_ID("body"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(body_h) } } }) {
         layout_side(body_h);
         CLAY(CLAY_ID("main"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0) }, .layoutDirection = CLAY_TOP_TO_BOTTOM } }) {
@@ -1244,6 +1453,12 @@ static UiKey ui_key_of(int key, int mods)
     if (m == GLFW_MOD_ALT && key == GLFW_KEY_LEFT) return UK_BACK;
     if (m == GLFW_MOD_ALT && key == GLFW_KEY_RIGHT) return UK_FORWARD;
     if (m == GLFW_MOD_ALT && key == GLFW_KEY_UP) return UK_PARENT;
+    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_T) return UK_TAB_NEW;
+    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_W) return UK_TAB_CLOSE;
+    if ((m == GLFW_MOD_CONTROL && key == GLFW_KEY_TAB) || (m == GLFW_MOD_CONTROL && key == GLFW_KEY_PAGE_DOWN)) return UK_TAB_NEXT;
+    if ((m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT) && key == GLFW_KEY_TAB) || (m == GLFW_MOD_CONTROL && key == GLFW_KEY_PAGE_UP)) return UK_TAB_PREV;
+    if (m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT) && key == GLFW_KEY_PAGE_UP) return UK_TAB_LEFT;
+    if (m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT) && key == GLFW_KEY_PAGE_DOWN) return UK_TAB_RIGHT;
     if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_L) return UK_LOCATION;
     if (m == GLFW_MOD_CONTROL) {
         switch (key) {
@@ -1286,13 +1501,18 @@ static void on_key(GLFWwindow *w, int key, int scancode, int action, int mods)
     if (action == GLFW_PRESS && key == GLFW_KEY_Q && (mods & GLFW_MOD_CONTROL)) app.quit = true;
     UiKey k = action != GLFW_RELEASE ? ui_key_of(key, mods) : UK_NONE;
     if (k) ev_push((UiEvent){ k, 0 });
+    // Alt+1 .. Alt+9: a tab by place (the digit rides in ch).
+    int m = mods & (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT | GLFW_MOD_ALT | GLFW_MOD_SUPER);
+    if (action == GLFW_PRESS && m == GLFW_MOD_ALT && key >= GLFW_KEY_1 && key <= GLFW_KEY_9) ev_push((UiEvent){ UK_TAB_JUMP, (u32)(key - GLFW_KEY_0) });
     if (raylib_key) raylib_key(w, key, scancode, action, mods);
 }
 
 static void on_char(GLFWwindow *w, unsigned int cp)
 {
     if (debug_input) fprintf(stderr, "fx: char %#x\n", cp);
-    ev_push((UiEvent){ UK_NONE, cp });
+    // With Alt held a digit is a tab (Alt+1), not text in the find or edit line.
+    bool alt = glfwGetKey(w, GLFW_KEY_LEFT_ALT) == GLFW_PRESS || glfwGetKey(w, GLFW_KEY_RIGHT_ALT) == GLFW_PRESS;
+    if (!alt) ev_push((UiEvent){ UK_NONE, cp });
     if (raylib_char) raylib_char(w, cp);
 }
 
@@ -1313,6 +1533,7 @@ typedef struct {
     int   row, side, header;
     UiBar bar;     // a top bar button
     int   crumb;   // UB_CRUMB: which path button
+    int   tab, tab_x;   // a tab, or its ×
 } Hit;
 
 static bool in_box(Clay_ElementId id, float x, float y)
@@ -1324,7 +1545,11 @@ static bool in_box(Clay_ElementId id, float x, float y)
 
 static Hit hit_at(float x, float y)
 {
-    Hit h = { -1, -1, -1, UB_NONE, -1 };
+    Hit h = { -1, -1, -1, UB_NONE, -1, -1, -1 };
+    for (int i = 0; tabbar.n >= 2 && i < tabbar.n && h.tab < 0; i++) {
+        if (in_box(CLAY_IDI("tab-x", i), x, y)) h.tab_x = h.tab = i;
+        else if (in_box(CLAY_IDI("tab", i), x, y)) h.tab = i;
+    }
     static const struct { const char *id; UiBar b; } BAR[] = {
         { "nav-back", UB_BACK }, { "nav-fwd", UB_FORWARD }, { "nav-up", UB_UP }, { "loc-toggle", UB_LOCATION },
         { "search", UB_SEARCH }, { "crumb-left", UB_LEFT }, { "crumb-right", UB_RIGHT },
@@ -1355,6 +1580,19 @@ static void press_at(UiInput *in, float x, float y, int mods)
     in->side_click = h.side;
     in->header = h.header;
     in->bar = h.bar, in->crumb = h.crumb;
+    if (h.tab_x >= 0) in->tab_close = h.tab_x;
+    else if (h.tab >= 0) in->tab_click = h.tab;
+}
+
+// A middle press at a point: a folder (a row, a place, a path button) in a background tab, or a
+// tab closed.
+static void middle_at(UiInput *in, float x, float y)
+{
+    Hit h = hit_at(x, y);
+    if (h.tab >= 0) in->tab_close = h.tab;
+    else if (h.row >= 0) in->mid_row = h.row;
+    else if (h.side >= 0) in->mid_side = h.side;
+    else if (h.bar == UB_CRUMB) in->mid_crumb = h.crumb;
 }
 
 static float wheel_left;   // a touchpad's part of a notch, carried to the next frame
@@ -1377,18 +1615,22 @@ static UiInput input_real(bool *seen)
     else if (notches) app.ui.side.top = ui_clamp(app.ui.side.top - notches, 0, ui_max_top(&app.ui.side)), *seen = true;
     if (d.x != 0 || d.y != 0) {
         Hit h = hit_at(m.x, m.y);
-        *seen |= h.row != app.hover || h.side != app.side_hover || h.bar != app.bar_hover || h.crumb != app.crumb_hover;
+        *seen |= h.row != app.hover || h.side != app.side_hover || h.bar != app.bar_hover || h.crumb != app.crumb_hover ||
+                 h.tab != app.tab_hover || h.tab_x != app.tab_x_hover;
         app.hover = h.row, app.side_hover = h.side, app.bar_hover = h.bar, app.crumb_hover = h.crumb;
+        app.tab_hover = h.tab, app.tab_x_hover = h.tab_x;
     }
     if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
         int mods = (IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL) ? UI_MOD_CTRL : 0) |
                    (IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT) ? UI_MOD_SHIFT : 0);
         press_at(&in, m.x, m.y, mods);
     }
+    if (IsMouseButtonPressed(MOUSE_BUTTON_MIDDLE)) middle_at(&in, m.x, m.y);
     in.backs = mouse_backs, mouse_backs = 0;
     in.forwards = mouse_forwards, mouse_forwards = 0;
     *seen |= in.wheel != 0 || in.click >= 0 || in.dclick >= 0 || in.side_click >= 0 || in.header >= 0 || in.backs > 0 ||
-             in.forwards > 0 || in.bar != UB_NONE;
+             in.forwards > 0 || in.bar != UB_NONE || in.tab_click >= 0 || in.tab_close >= 0 || in.mid_row >= 0 || in.mid_side >= 0 ||
+             in.mid_crumb >= 0;
     return in;
 }
 
@@ -1436,7 +1678,8 @@ static void usage(void)
                     "  s sort by the next column, S reverse; Tab the places; t terminal here; ~ home;\n"
                     "  Space select, Ctrl+A all; F2 rename; Ctrl+Shift+N new folder; Delete trash, Shift+Delete for good;\n"
                     "  Ctrl+C, Ctrl+X, Ctrl+V copy, cut, paste; Ctrl+Z undo; Ctrl+L type a location; Alt+Up up;\n"
-                    "  Ctrl+Q quit.\n");
+                    "  Ctrl+T new tab, Ctrl+W close it, Ctrl+Tab / Ctrl+PgDn next, Ctrl+Shift+Tab / Ctrl+PgUp previous,\n"
+                    "  Alt+1..9 a tab, Ctrl+Shift+PgUp/PgDn move it; middle click a folder for a tab behind; Ctrl+Q quit.\n");
 }
 
 int main(int argc, char **argv)
@@ -1548,6 +1791,8 @@ int main(int argc, char **argv)
     app.press.row = -1;
     go_to(dir, STR_EMPTY, 0);
     if (!app.have_list) snprintf(app.cwd, sizeof app.cwd, "%s", dir);
+    tabs[0].used = true;
+    ui_tabs_open(&tabbar, 0, true);
 
     const char *script_path = getenv("FX_GUI_SCRIPT");
     bool scripted = script_path && script_path[0];
@@ -1597,6 +1842,7 @@ int main(int argc, char **argv)
         if (a.kind != UA_NONE) act(a);
         dirty |= seen;
     }
+    if (scripted) script_end();
     if (run.running) {
         job_cancel();
         pthread_join(run.thread, NULL);
