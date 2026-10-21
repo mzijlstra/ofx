@@ -174,13 +174,15 @@ sh cmp -s "$FX_DIR/big.bin" "$FX_ROOT/tree/big.bin"
 key ctrl-v
 wait-for 3000 asking=1 modal=clash askall=0
 shot clash.png
-# The "same for the rest" box toggles
+# The "same for the rest" box toggles; ticked, it goes with the answer (one item here)
 point-ui modal-all
 click-here
 expect askall=1 asking=1
 point-ui modal-all
 click-here
 expect askall=0
+point-ui modal-all
+click-here
 char k
 wait-for 10000 job=- n=2
 sh cmp -s "$FX_DIR/big (2).bin" "$FX_ROOT/tree/big.bin"
@@ -188,7 +190,7 @@ key ctrl-z
 wait-for 2000 n=1 undo=-
 sh test ! -e "$FX_DIR/big (2).bin" && test -f "$FX_ROOT/data/Trash/files/big (2).bin"
 key ctrl-v
-wait-for 3000 asking=1
+wait-for 3000 asking=1 askall=0
 point-ui modal-skip
 click-here
 wait-for 5000 job=- n=1 status=Copied

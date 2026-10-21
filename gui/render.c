@@ -112,8 +112,7 @@ static void render_clip_pop(void)
 // Draws a custom element (the diagram canvas); set by the program.
 static void (*render_custom)(Clay_BoundingBox b, void *data);
 
-// The commands, into whatever is being drawn to (the screen, or a texture for fx's blurred
-// backdrop).
+// The commands, into whatever is being drawn to.
 static void render_cmds(Clay_RenderCommandArray cmds)
 {
     render_nclips = 0;

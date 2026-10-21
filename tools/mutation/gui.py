@@ -36,7 +36,7 @@ MUTANTS = [
     (G, "    if (back[0]) go_to(app.cwd, str_from_c(back), app.ui.list.sel);\n    else reload();", "    reload();"),
     (G, "        return m == GLFW_MOD_SHIFT ? UK_SHIFT_DELETE : m == 0 ? UK_DELETE : UK_NONE;", "        return m == 0 ? UK_DELETE : UK_SHIFT_DELETE;"),
     (G, "    if (m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT) && key == GLFW_KEY_N) return UK_NEWFOLDER;", ""),
-    (G, "    if (ask && !app.ui.asking) app.ui.asking = true;", ""),
+    (G, "    if (ask && !app.ui.asking) app.ui.asking = true, app.ui.ask_all = false;", ""),
     (G, "    ops_guard(getenv(\"FX_GUI_ROOT\"));", ""),
     (G, "        if (!was_editing && app.ui.editing && !app.ui.edit_path) snprintf(app.edit_from, sizeof app.edit_from, \"%.*s\", STR_ARG(sel_name())), app.edit_new = false;", ""),
     # F4
@@ -72,6 +72,11 @@ MUTANTS = [
     (G, "    if (undo.n == 0) undo_clear(&undo);\n    }", "    if (undo.n == 0) undo_clear(&undo);\n    }\n    if (j->kind == JOB_DELETE) ui_mark_clear(&app.ui);"),
     (G, "        if (!was_confirming && (app.ui.confirming || a.kind == UA_DELETE)) delete_ask();", "        if (!was_confirming && app.ui.confirming) delete_ask();"),
     (G, "    doomed.n = 0;\n    if (app.ui.marked > CLIP_PATHS_MAX) {", "    if (app.ui.marked > CLIP_PATHS_MAX) {"),
+    # F5.1: the modal panels
+    (G, "        for (int k = 0; k < COUNT(MB) && !h.modal; k++)\n            if (in_box(Clay_GetElementId(cz(MB[k].id)), x, y)) h.modal = MB[k].b;\n        return h;", "        return h;"),
+    # Not run: hit_at's early return while a panel is up; ui_handle drops every other click during a
+    # prompt anyway, so leaving it out changes nothing a test can see.
+    (G, "    if (ask && !app.ui.asking) app.ui.asking = true, app.ui.ask_all = false;", "    if (ask && !app.ui.asking) app.ui.asking = true;"),
 ]
 scratch = sys.argv[1]
 only = [int(x) for x in sys.argv[2].split(',')] if len(sys.argv) > 2 else None

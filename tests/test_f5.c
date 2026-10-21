@@ -134,3 +134,59 @@ static void test_ui_f5(void)
     CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.editing);
     ui_edit_close(&u);
 }
+
+// F5.1: the modal panels' buttons.
+static void test_ui_modal(void)
+{
+    UiNames names = { name_at, NULL };
+    static Ui u;
+    memset(&u, 0, sizeof u);
+    ui_resize(&u.list, 5);
+    ui_set(&u.list, 20, 0);
+    UiInput in;
+    // The delete panel: Delete deletes, Cancel doesn't; neither does anything without the question.
+    in = ui_input_none(), in.modal = UI_MODAL_YES;
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE);
+    u.confirming = true;
+    in = ui_input_none(), in.modal = UI_MODAL_NO;
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && !u.confirming);
+    u.confirming = true;
+    in = ui_input_none(), in.modal = UI_MODAL_YES;
+    CHECK(ui_handle(&u, names, &in).kind == UA_DELETE && !u.confirming);
+    // The clash panel: each answer; the box toggles "the same for the rest", which rides along on
+    // an answer (not on Cancel), and on a lower-case key too.
+    static const struct { int b; int a; } B[] = {
+        { UI_MODAL_SKIP, UI_ANS_SKIP }, { UI_MODAL_REPLACE, UI_ANS_REPLACE }, { UI_MODAL_KEEP, UI_ANS_KEEP }, { UI_MODAL_CANCEL, UI_ANS_CANCEL },
+    };
+    for (int i = 0; i < COUNT(B); i++) {
+        u.asking = true, u.ask_all = false;
+        in = ui_input_none(), in.modal = B[i].b;
+        UiAction a = ui_handle(&u, names, &in);
+        CHECK(a.kind == UA_ANSWER && a.index == B[i].a && !a.all && !u.asking);
+    }
+    u.asking = true, u.ask_all = false;
+    in = ui_input_none(), in.modal = UI_MODAL_ALL;
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.ask_all && u.asking);
+    in = ui_input_none(), in.modal = UI_MODAL_KEEP;
+    UiAction a = ui_handle(&u, names, &in);
+    CHECK(a.kind == UA_ANSWER && a.index == UI_ANS_KEEP && a.all);
+    u.asking = true, u.ask_all = true;
+    in = ui_input_none(), in.modal = UI_MODAL_CANCEL;
+    a = ui_handle(&u, names, &in);
+    CHECK(a.kind == UA_ANSWER && a.index == UI_ANS_CANCEL && !a.all);
+    u.asking = true, u.ask_all = true;
+    in = chars("s");
+    a = ui_handle(&u, names, &in);
+    CHECK(a.kind == UA_ANSWER && a.index == UI_ANS_SKIP && a.all);
+    u.asking = true, u.ask_all = false;
+    in = ui_input_none(), in.modal = UI_MODAL_ALL;
+    ui_handle(&u, names, &in);
+    in = ui_input_none(), in.modal = UI_MODAL_ALL;
+    ui_handle(&u, names, &in);
+    CHECK(!u.ask_all);
+    u.asking = false;
+    // The box does nothing without a clash.
+    in = ui_input_none(), in.modal = UI_MODAL_ALL;
+    ui_handle(&u, names, &in);
+    CHECK(!u.ask_all);
+}

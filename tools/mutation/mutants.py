@@ -297,7 +297,7 @@ MUTANTS += [
     (U, "    bool yes = e.key == UK_ENTER || (e.key == UK_NONE", "    bool yes = (e.key == UK_NONE"),
     (U, "(e.key == UK_NONE && (e.ch == 'n' || e.ch == 'N'));", "(e.key == UK_NONE && e.ch == 'N');"),
     (U, "u->confirm_n = u->marked ? u->marked : 1;", "u->confirm_n = 1;"),
-    (U, "return (UiAction){ UA_ANSWER, a, e.ch >= 'A' && e.ch <= 'Z' };", "return (UiAction){ UA_ANSWER, a, false };"),
+    (U, "return (UiAction){ UA_ANSWER, a, (e.ch >= 'A' && e.ch <= 'Z') || u->ask_all };", "return (UiAction){ UA_ANSWER, a, u->ask_all };"),
     (U, "    if (e.key == UK_ESC) return u->asking = false, (UiAction){ UA_ANSWER, UI_ANS_CANCEL, false };", "    if (e.key == UK_ESC) return u->asking = false, (UiAction){ UA_ANSWER, UI_ANS_SKIP, false };"),
     (U, "|| u->edit_len + n > ui_edit_max(u))", "|| u->edit_len + n > ui_edit_max(u) + 1)"),
     (U, "    while (at > 0 && ((unsigned char)u->edit[at] & 0xC0) == 0x80) at--;", ""),
@@ -365,4 +365,12 @@ MUTANTS += [
     (U, "        case UK_TAB_CLOSE: return (UiAction){ UA_TAB_CLOSE, -1, false };", "        case UK_TAB_CLOSE: return (UiAction){ UA_TAB_CLOSE, 0, false };"),
     (U, "        case UK_TAB_JUMP: return (UiAction){ UA_TAB_JUMP, (isize)e.ch, false };", ""),
     (U, "    if (!prompt && in->tab_click >= 0) return ui_edit_close(u), (UiAction){ UA_TAB_SHOW, in->tab_click, false };", "    if (!prompt && in->tab_click >= 0) return (UiAction){ UA_TAB_SHOW, in->tab_click, false };"),
+]
+# ---- F5.1: the modal panels
+MUTANTS += [
+    (U, "    if (u->confirming && (in->modal == UI_MODAL_YES || in->modal == UI_MODAL_NO)) {", "    if (in->modal == UI_MODAL_YES || in->modal == UI_MODAL_NO) {"),
+    (U, "        return (UiAction){ in->modal == UI_MODAL_YES ? UA_DELETE : UA_NONE, 0, false };", "        return (UiAction){ UA_DELETE, 0, false };"),
+    (U, "    if (u->asking && in->modal == UI_MODAL_ALL) u->ask_all = !u->ask_all;", ""),
+    (U, "        return (UiAction){ UA_ANSWER, a, a != UI_ANS_CANCEL && u->ask_all };", "        return (UiAction){ UA_ANSWER, a, false };"),
+    (U, "    return (UiAction){ UA_ANSWER, a, (e.ch >= 'A' && e.ch <= 'Z') || u->ask_all };", "    return (UiAction){ UA_ANSWER, a, e.ch >= 'A' && e.ch <= 'Z' };"),
 ]

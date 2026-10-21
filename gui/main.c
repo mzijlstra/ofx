@@ -95,7 +95,6 @@ static struct {
     int       crumb_lo, crumb_hi;   // the ones shown in the last frame
     bool      crumb_arrows;
     int       modal_hover;  // the modal panel's button under the pointer (UI_MODAL_*), 0 for none
-    bool      modal_blur;   // FX_MODAL=blur: the backdrop blurred, else dimmed (F5.1, to pick one)
     UiBar     bar_hover;    // the top bar button under the pointer
     int       crumb_hover;
     int       tab_hover, tab_x_hover;   // the tab, and the tab's ×, under the pointer; -1 for none
@@ -1423,18 +1422,18 @@ static void layout_modal_panel(ModalKind k)
     }
 }
 
-// The backdrop over the window and the panel on it: dimmed (`dim`), or lighter over a blurred copy
-// of the window (`blur`, drawn by draw()).
+// The panel over the window, the rest darkened but still readable (Michael's pick over a blur,
+// 2026-10-21).
 static void layout_modal(ModalKind k, float w, float h)
 {
     CLAY(CLAY_ID("modal-backdrop"), { .layout = { .sizing = { CLAY_SIZING_FIXED(w), CLAY_SIZING_FIXED(h) } },
-                                      .backgroundColor = { 0, 0, 0, app.modal_blur ? 70 : 150 },
+                                      .backgroundColor = { 0, 0, 0, 150 },
                                       .floating = { .attachTo = CLAY_ATTACH_TO_ROOT, .zIndex = 10 } }) {}
     layout_modal_panel(k);
 }
 
-// The window. with_modal: the modal panel (and its dim) on top, when one is up.
-static Clay_RenderCommandArray layout_window(int w, int h, bool with_modal)
+// The window, and the modal panel on top when one is up.
+static Clay_RenderCommandArray layout(int w, int h)
 {
     arena_reset(&frame);
     arena_reset(&scratch);
@@ -1517,43 +1516,9 @@ static Clay_RenderCommandArray layout_window(int w, int h, bool with_modal)
             text(cs(cnt), cc(t->fg_dim));
         }
         ModalKind mk = modal_kind();
-        if (with_modal && mk != MODAL_NONE) layout_modal(mk, (float)w, (float)h);
+        if (mk != MODAL_NONE) layout_modal(mk, (float)w, (float)h);
     }
     return Clay_EndLayout(0);   // deltaTime drives transitions, which we do not use
-}
-
-// Only the backdrop and the panel, for the blurred frame's second pass.
-static Clay_RenderCommandArray layout_modal_only(int w, int h)
-{
-    Clay_SetLayoutDimensions((Clay_Dimensions){ (float)w, (float)h });
-    Clay_BeginLayout();
-    CLAY(CLAY_ID("root"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0) } } }) {
-        layout_modal(modal_kind(), (float)w, (float)h);
-    }
-    return Clay_EndLayout(0);
-}
-
-// The blurred backdrop's images: the window at 1x, then a quarter and an eighth of it; scaled back up
-// with bilinear filtering, that is the blur. Made at the window's size, again when it changes.
-static RenderTexture2D blur_rt[3];
-
-static void blur_fit(int w, int h)
-{
-    int div[3] = { 1, 4, 8 };
-    for (int i = 0; i < 3; i++) {
-        int bw = w / div[i] > 0 ? w / div[i] : 1, bh = h / div[i] > 0 ? h / div[i] : 1;
-        if (blur_rt[i].id && blur_rt[i].texture.width == bw && blur_rt[i].texture.height == bh) continue;
-        if (blur_rt[i].id) UnloadRenderTexture(blur_rt[i]);
-        blur_rt[i] = LoadRenderTexture(bw, bh);
-        SetTextureFilter(blur_rt[i].texture, TEXTURE_FILTER_BILINEAR);
-    }
-}
-
-// src's whole texture into the target being drawn (a render texture is upside down).
-static void blur_blit(RenderTexture2D src, float w, float h)
-{
-    Rectangle from = { 0, 0, (float)src.texture.width, -(float)src.texture.height }, to = { 0, 0, w, h };
-    DrawTexturePro(src.texture, from, to, (Vector2){ 0, 0 }, 0, WHITE);
 }
 
 static void draw(void)
@@ -1561,30 +1526,8 @@ static void draw(void)
     font_set_dpi(GetWindowScaleDPI().x);
     if (window_scale() != app.icon_scale) icons_reset();
     font_frame_begin();
-    int w = GetScreenWidth(), h = GetScreenHeight();
-    if (!app.modal_blur || modal_kind() == MODAL_NONE) {
-        render_draw(layout_window(w, h, true), cc(app.theme.bg));
-        return;
-    }
-    // Blurred: the window without the panel into an image, scaled down twice, then up onto the
-    // screen, and the panel drawn over it from a second layout (whose boxes the clicks then use).
-    blur_fit(w, h);
-    Clay_RenderCommandArray base = layout_window(w, h, false);
-    BeginTextureMode(blur_rt[0]);
-    ClearBackground(render_color(cc(app.theme.bg)));
-    render_cmds(base);
-    EndTextureMode();
-    for (int i = 1; i < 3; i++) {
-        BeginTextureMode(blur_rt[i]);
-        blur_blit(blur_rt[i - 1], (float)blur_rt[i].texture.width, (float)blur_rt[i].texture.height);
-        EndTextureMode();
-    }
-    Clay_RenderCommandArray top = layout_modal_only(w, h);
-    BeginDrawing();
-    ClearBackground(render_color(cc(app.theme.bg)));
-    blur_blit(blur_rt[2], (float)w, (float)h);
-    render_cmds(top);
-    EndDrawing();
+    Clay_RenderCommandArray cmds = layout(GetScreenWidth(), GetScreenHeight());
+    render_draw(cmds, cc(app.theme.bg));
 }
 
 // ---- input ----------------------------------------------------------------------------------
@@ -1960,9 +1903,6 @@ int main(int argc, char **argv)
     clip_init();   // false: the clipboard stays inside fx
     // FX_TEST_COUNT_DELAY_MS: each count takes that much longer, so a test can change the listing
     // while answers for the old one are on their way, or (10 s) stand in for a hung mount at quit.
-    // FX_MODAL=blur: the modal panels' backdrop blurred, else dimmed (F5.1: both, for Michael to pick).
-    const char *modal_env = getenv("FX_MODAL");
-    app.modal_blur = modal_env && strcmp(modal_env, "blur") == 0;
     const char *kdelay = getenv("FX_TEST_COUNT_DELAY_MS");
     counts.delay_ms = kdelay ? atoi(kdelay) : 0;
     if (counts.delay_ms < 0 || counts.delay_ms > 10000) counts.delay_ms = 0;
@@ -2037,8 +1977,6 @@ int main(int argc, char **argv)
     }
     clip_quit();
     count_stop();
-    for (int i = 0; i < 3; i++)
-        if (blur_rt[i].id) UnloadRenderTexture(blur_rt[i]);
     for (int i = 0; i < app.nslots; i++)
         if (app.slot[i].tex.id) UnloadTexture(app.slot[i].tex);
     CloseWindow();
