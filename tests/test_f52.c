@@ -196,6 +196,9 @@ static void test_edit_clipboard(void)
     edit_keys(&u, names, 1, UK_ALL);
     edit_paste(&u, names, S("one\r\ntwo"));
     edit_check(&u, "one", 3, 3, 3);
+    edit_keys(&u, names, 1, UK_ALL);
+    edit_paste(&u, names, S("one\rtwo"));   // a lone CR ends the line too
+    edit_check(&u, "one", 3, 3, 3);
     // Nothing left to paste (empty, a line break first, only '/'): the selection stays.
     edit_keys(&u, names, 1, UK_ALL);
     edit_paste(&u, names, STR_EMPTY);
@@ -256,6 +259,16 @@ static void test_crumb_keys(void)
         CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.crumb_focus);
         CHECK(u.crumb_at == MOVES[i].at);
     }
+    // h and l as Left and Right.
+    in = chars("l"), in.crumb_n = 5, in.crumb_last = 3;
+    ui_handle(&u, names, &in);
+    CHECK(u.crumb_focus && u.crumb_at == 1);
+    in = chars("lhh"), in.crumb_n = 5, in.crumb_last = 3;
+    ui_handle(&u, names, &in);
+    CHECK(u.crumb_focus && u.crumb_at == 0);
+    in = chars("h"), in.crumb_n = 5, in.crumb_last = 3;   // at the start: stays
+    ui_handle(&u, names, &in);
+    CHECK(u.crumb_focus && u.crumb_at == 0);
     CHECK(u.list.sel == 3);   // the list's cursor didn't move
     // Shift+Enter: a background tab, the keyboard staying; Enter goes and gives it back.
     in = keys(1, UK_SEL_RIGHT), in.crumb_n = 5, in.crumb_last = 3;
@@ -359,7 +372,21 @@ static void test_crumb_keys(void)
     CHECK(!u.finding && u.crumb_focus);
     in = keys(1, UK_ESC), in.crumb_n = 3;
     ui_handle(&u, names, &in);
-    // A prompt keeps the keys: Ctrl+K does nothing while the delete question is up.
+    // From the sidebar's keyboard: the buttons take it.
+    u.side_focus = true;
+    in = keys(1, UK_CRUMBS), in.crumb_n = 3, in.crumb_last = 2;
+    ui_handle(&u, names, &in);
+    CHECK(u.crumb_focus && !u.side_focus);
+    in = keys(1, UK_ESC), in.crumb_n = 3;
+    ui_handle(&u, names, &in);
+    // A prompt keeps the keys: Ctrl+K does nothing while the delete question is up, the location
+    // line open under it or not.
+    ui_location_open(&u, S("/a"));
+    u.confirming = true;
+    in = keys(1, UK_CRUMBS), in.crumb_n = 3, in.crumb_last = 2;
+    ui_handle(&u, names, &in);
+    CHECK(u.editing && !u.crumb_focus && u.confirming);
+    ui_edit_close(&u);
     u.confirming = true;
     in = keys(1, UK_CRUMBS), in.crumb_n = 3, in.crumb_last = 2;
     ui_handle(&u, names, &in);

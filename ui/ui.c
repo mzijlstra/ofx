@@ -438,7 +438,7 @@ static void ui_edit_paste(Ui *u, Str text)
         isize e = i + 1;
         while (e < text.len && ((unsigned char)text.p[e] & 0xC0) == 0x80) e++;
         bool drop = c < 0x20 || c == 0x7F || (c == '/' && !u->edit_path);
-        if (!drop && n + (e - i) > room) break;
+        if (n + (e - i) > room) break;   // a dropped one is a byte: none fits after it either
         if (!drop) memcpy(b + n, text.p + i, (size_t)(e - i)), n += (int)(e - i);
         i = e;
     }
@@ -492,15 +492,18 @@ static UiAction ui_edit_event(Ui *u, UiEvent e, Str paste)
 static void ui_crumbs_focus(Ui *u, const UiInput *in)
 {
     if (in->crumb_n <= 0) return;
-    u->crumb_focus = true, u->finding = false, u->side_focus = false;
+    u->crumb_focus = true, u->side_focus = false;
     u->crumb_at = in->crumb_last < 0 ? 0 : in->crumb_last >= in->crumb_n ? in->crumb_n - 1 : in->crumb_last;
 }
 
-// A key while the path buttons have the keyboard: true when it was theirs (*a: what gui/ does).
+// A key while the path buttons have the keyboard (h and l as Left and Right): true when it was
+// theirs (*a: what gui/ does).
 // Any other key gives the keyboard back to the list and is the list's.
 static bool ui_crumbs_event(Ui *u, const UiInput *in, UiEvent e, UiAction *a)
 {
     *a = (UiAction){ UA_NONE, 0, false };
+    if (e.key == UK_NONE && e.ch == 'h') e.key = UK_LEFT;    // as in the list (Michael, 2026-10-21)
+    if (e.key == UK_NONE && e.ch == 'l') e.key = UK_RIGHT;
     switch (e.key) {
     case UK_LEFT: case UK_SEL_LEFT: if (u->crumb_at > 0) u->crumb_at--; return true;
     case UK_RIGHT: case UK_SEL_RIGHT: if (u->crumb_at < in->crumb_n - 1) u->crumb_at++; return true;
@@ -871,7 +874,7 @@ static void ui_crumbs_shift(UiCrumbs *c, int lo, int by)
 static void ui_crumbs_show(UiCrumbs *c, const float *w, float room, float arrow, int at)
 {
     int lo, hi;
-    if (!ui_crumbs_window(c, w, room, arrow, &lo, &hi)) return;
+    ui_crumbs_window(c, w, room, arrow, &lo, &hi);   // all shown: at is among them
     if (at < lo) c->lo = at;
     while (at >= hi && lo < at) hi = ui_crumbs_fit(w, c->n, room - 2 * arrow, ++lo), c->lo = lo;
 }

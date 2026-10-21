@@ -92,7 +92,7 @@ static void script_state(char *out, size_t cap)
     // The edit line's text, its spaces as '_' (the state line is words).
     static const char *const JOB_PHASES[] = { "scan", "run", "ask", "done" };
     static const char *const UNDO_KINDS[] = { "-", "rename", "mkdir", "trash", "copy", "move" };
-    char edit[PATH_MAX];
+    char edit[NAME_MAX + 1];
     snprintf(edit, sizeof edit, "%.*s", app.ui.edit_len ? app.ui.edit_len : 1, app.ui.edit_len ? app.ui.edit : "-");
     for (char *c = edit; *c; c++)
         if (*c == ' ') *c = '_';
@@ -100,8 +100,8 @@ static void script_state(char *out, size_t cap)
     // keyboard mark (- when they don't have it).
     int slo, shi;
     ui_edit_sel(&app.ui, &slo, &shi);
-    char copied[PATH_MAX], keyed[16] = "-";
-    snprintf(copied, sizeof copied, "%s", app.text_copied[0] ? app.text_copied : "-");
+    char copied[NAME_MAX + 1], keyed[16] = "-";
+    snprintf(copied, sizeof copied, "%.*s", NAME_MAX, app.text_copied[0] ? app.text_copied : "-");
     for (char *c = copied; *c; c++)
         if (*c == ' ') *c = '_';
     if (app.ui.crumb_focus) snprintf(keyed, sizeof keyed, "%d", app.ui.crumb_at);

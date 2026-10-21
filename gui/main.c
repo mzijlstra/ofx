@@ -1534,7 +1534,7 @@ static Clay_RenderCommandArray layout(int w, int h)
             if (app.ui.confirming || (run.running && app.ui.asking)) {
                 text(cz("Answer the question above"), cc(t->fg_dim));
             } else if (app.ui.crumb_focus) {
-                text(fit(S("Path: \xE2\x86\x90 \xE2\x86\x92 move \xC2\xB7 Enter goes there \xC2\xB7 Shift+Enter in a new tab \xC2\xB7 Esc back to the list"), foot_w, false),
+                text(fit(S("Path: \xE2\x86\x90 \xE2\x86\x92 (h l) move \xC2\xB7 Enter goes there \xC2\xB7 Shift+Enter in a new tab \xC2\xB7 Esc back to the list"), foot_w, false),
                      cc(t->fg_dim));
             } else if (app.ui.editing && app.ui.edit_path) {
                 text(cz("Go to: Enter goes there \xC2\xB7 Esc cancels \xC2\xB7 ~ is home, a relative path starts here"), cc(t->fg_dim));

@@ -77,6 +77,18 @@ MUTANTS = [
     # Not run: hit_at's early return while a panel is up; ui_handle drops every other click during a
     # prompt anyway, so leaving it out changes nothing a test can see.
     (G, "    if (ask && !app.ui.asking) app.ui.asking = true, app.ui.ask_all = false;", "    if (ask && !app.ui.asking) app.ui.asking = true;"),
+    # F5.2: the edit lines' text clipboard, the path buttons by keyboard. Not run: clipboard.c's
+    # data-control text (clip_set_text, clip_get_text, clip_get's "our text holds no files"):
+    # weston has no data-control, so it is the live check's.
+    (G, "        case GLFW_KEY_LEFT: return UK_SEL_LEFT;\n", ""),
+    (G, "        case GLFW_KEY_KP_ENTER: return UK_SHIFT_ENTER;\n", ""),
+    (G, "    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_K) return UK_CRUMBS;\n", ""),
+    (G, "    if (app.ui.crumb_focus) ui_crumbs_show(c, wd, room, ARROW_W, app.ui.crumb_at);\n", ""),
+    (G, "        in.crumb_n = app.crumbs.n, in.crumb_last = app.crumb_hi - 1;", "        in.crumb_n = app.crumbs.n, in.crumb_last = app.crumb_hi;"),
+    (G, "        if (pasting && app.ui.editing) in.paste = text_paste();\n", ""),
+    (G, "        if (app.ui.copied) text_copy((Str){ app.ui.copy, app.ui.copy_len }), app.ui.copied = false;", "        app.ui.copied = false;"),
+    (G, "    if (!clip_set_text(t)) SetClipboardText(app.text_copied);\n    own.n = 0;", "    if (!clip_set_text(t)) SetClipboardText(app.text_copied);"),
+    (G, "    if (own.n > 0) return clip_payload(&pastea, &own, CLIP_FMT_TEXT);\n", ""),
 ]
 scratch = sys.argv[1]
 only = [int(x) for x in sys.argv[2].split(',')] if len(sys.argv) > 2 else None

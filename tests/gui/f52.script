@@ -110,7 +110,10 @@ shot crumbs-key-home.png
 key end
 expect crumbkey=9 crumbshown=7-10
 key home
-key right
+char l
+expect crumbkey=1
+char l
+char h
 expect crumbkey=1
 # Shift+Enter: a background tab on that folder, the keyboard staying on the buttons
 key shift-enter
