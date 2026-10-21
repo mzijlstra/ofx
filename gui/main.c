@@ -490,7 +490,6 @@ static void job_finish(void)
         if (undo.n == 0) undo_clear(&undo);
     }
     if (run.own_cut && !atomic_load(&j->cancel)) own.n = 0, clip_clear_own();
-    if (j->kind == JOB_DELETE) ui_mark_clear(&app.ui);
     reload();
 }
 
@@ -530,13 +529,38 @@ static void trash_targets(void)
     reload();
 }
 
+// What the delete question asks about, taken when it opens: a selection or a cursor that changes
+// while it is up (a delete job finishing in another tab, the cursor's file removed from outside)
+// must not change what Yes deletes (reviewer-2, F5 review, 2026-10-21).
+static struct {
+    char *path[CLIP_PATHS_MAX];
+    isize n;
+} doomed;
+
+static u8    doomed_mem[MiB(2)];
+static Arena doomeda;
+
+// The question just opened: its targets taken now, and its count made theirs.
+static void delete_ask(void)
+{
+    if (app.ui.marked > CLIP_PATHS_MAX) {
+        app.ui.confirming = false;
+        set_status(true, "%td selected: fx takes at most %d at a time", app.ui.marked, CLIP_PATHS_MAX);
+        return;
+    }
+    arena_reset(&doomeda);
+    doomed.n = targets(&doomeda, doomed.path, CLIP_PATHS_MAX);
+    app.ui.confirm_n = doomed.n;
+    if (doomed.n == 0) app.ui.confirming = false;
+}
+
 static void delete_targets(void)
 {
     if (run.running) { set_status(true, "a job is still running: wait, or Esc to cancel it"); return; }
-    char *paths[CLIP_PATHS_MAX];
     arena_reset(&joba);
-    isize n = targets(&joba, paths, CLIP_PATHS_MAX);
-    for (isize i = 0; i < n; i++) run.item[i] = (JobItem){ .src = paths[i] };
+    isize n = doomed.n;
+    for (isize i = 0; i < n; i++) run.item[i] = (JobItem){ .src = arena_cstr(&joba, str_from_c(doomed.path[i])) };
+    doomed.n = 0;
     run.reverse = false, run.own_cut = false;
     if (n) job_start(JOB_DELETE, n);
 }
@@ -715,7 +739,13 @@ static void tab_load(void)
     app.ui.finding = false;
     ui_mark_clear(&app.ui);   // the same folder in two tabs: this tab's marks, not the other's
     if (!go_to_in(t->dir, str_from_c(t->sel), t->row, true)) {
+        // Gone: the nearest folder above. There but unreadable: the same, with its error kept.
+        char why[sizeof app.status];
+        snprintf(why, sizeof why, "%s", app.status);
+        struct stat st;
+        bool there = stat(t->dir, &st) == 0;
         go_up_from(t->dir);
+        if (there) set_status(true, "%s", why);
         return;
     }
     app.ui.list.top = t->top;
@@ -843,8 +873,8 @@ static void act(UiAction a)
         if (home && home[0]) go_to(home, STR_EMPTY, 0);
         break;
     }
+    case UA_DELETE: delete_targets(); break;   // its targets were taken when the question opened
     case UA_TRASH:
-    case UA_DELETE:
     case UA_COPY:
     case UA_CUT:
         // One action holds CLIP_PATHS_MAX paths: more would quietly do part of the selection.
@@ -853,7 +883,6 @@ static void act(UiAction a)
             break;
         }
         if (a.kind == UA_TRASH) trash_targets();
-        else if (a.kind == UA_DELETE) delete_targets();
         else copy_targets(a.kind == UA_CUT);
         break;
     case UA_RENAME: rename_commit(); break;
@@ -1511,9 +1540,9 @@ static void on_key(GLFWwindow *w, int key, int scancode, int action, int mods)
 static void on_char(GLFWwindow *w, unsigned int cp)
 {
     if (debug_input) fprintf(stderr, "fx: char %#x\n", cp);
-    // With Alt held a digit is a tab (Alt+1), not text in the find or edit line.
-    bool alt = glfwGetKey(w, GLFW_KEY_LEFT_ALT) == GLFW_PRESS || glfwGetKey(w, GLFW_KEY_RIGHT_ALT) == GLFW_PRESS;
-    if (!alt) ev_push((UiEvent){ UK_NONE, cp });
+    // GLFW sends no character with Alt (Mod1) held, so Alt+1 is a tab only; AltGr (Mod5) still
+    // types (reviewer-2, F5 review).
+    ev_push((UiEvent){ UK_NONE, cp });
     if (raylib_char) raylib_char(w, cp);
 }
 
@@ -1728,6 +1757,7 @@ int main(int argc, char **argv)
     arena_init(&undoa, "undo", undo_mem, sizeof undo_mem);
     arena_init(&owna, "clipboard", own_mem, sizeof own_mem);
     arena_init(&pastea, "paste", paste_mem, sizeof paste_mem);
+    arena_init(&doomeda, "delete", doomed_mem, sizeof doomed_mem);
     undo.arena = &undoa;
     uint32_t need = Clay_MinMemorySize();
     if ((size_t)need > sizeof clay_mem) {
@@ -1836,8 +1866,9 @@ int main(int argc, char **argv)
             if (!script_input(&in)) break;
             seen = true;
         }
-        bool was_editing = app.ui.editing;
+        bool was_editing = app.ui.editing, was_confirming = app.ui.confirming;
         UiAction a = ui_handle(&app.ui, (UiNames){ list_name, NULL }, &in);
+        if (!was_confirming && app.ui.confirming) delete_ask();
         // F2 opened the edit line: on the cursor's entry, as it is named now.
         if (!was_editing && app.ui.editing && !app.ui.edit_path) snprintf(app.edit_from, sizeof app.edit_from, "%.*s", STR_ARG(sel_name())), app.edit_new = false;
         if (a.kind != UA_NONE) act(a);

@@ -52,7 +52,7 @@ struct Job {
     void  *ctx;
     Answer rest_file, rest_dir;
 
-    int delay_ms;   // FX_TEST_COPY_DELAY_MS: a sleep per block, so a test can see the progress
+    int delay_ms;   // FX_TEST_COPY_DELAY_MS: a sleep per block (and per item deleted), so a test can see the progress
 
     // The result.
     isize errors, skipped;
@@ -543,6 +543,7 @@ static void job_run(Job *j)
         if (j->kind == JOB_DELETE) {
             Err err;
             isize n = 0;
+            if (j->delay_ms > 0) nanosleep(&(struct timespec){ j->delay_ms / 1000, (j->delay_ms % 1000) * 1000000L }, NULL);
             if (delete_tree(it->src, &n, &err)) it->out = OUT_NEW;
             else job_error(j, "%s", err.msg), it->out = OUT_FAILED;
             atomic_fetch_add(&j->files_done, n);

@@ -136,6 +136,38 @@ wait-for 15000 job=- status=Copied
 sh test -f "$FX_ROOT/home/tree/adir/big.bin" && cmp -s "$FX_ROOT/home/tree/adir/big.bin" "$FX_ROOT/home/tree/big.bin"
 key alt-3
 expect tab=2 tabdirs=tree|home|adir n=3
+# ---- a delete job finishing in another tab leaves this tab's selection, and the question there
+# deletes what it asked about (deletes slowed by FX_TEST_COPY_DELAY_MS, 150 ms an item)
+sh mkdir -p "$FX_ROOT/home/tree/del" "$FX_ROOT/home/tree/keep" && cd "$FX_ROOT/home/tree/del" && touch d01 d02 d03 d04 d05 d06 d07 d08 d09 d10 d11 d12 && touch ../keep/k1 ../keep/k2 ../keep/k3
+key alt-1
+wait-for 2000 tab=0
+char /
+type del
+key enter
+key enter
+wait-for 2000 n=12
+key ctrl-a
+key shift-delete
+key enter
+wait-for 2000 job=run
+key ctrl-t
+key backspace
+char /
+type keep
+key enter
+key enter
+expect n=3 sel=k1
+key space
+key space
+expect marked=2 sel=k3
+key shift-delete
+expect confirming=1
+wait-for 5000 job=-
+expect marked=2 confirming=1
+key enter
+wait-for 3000 job=- n=1 sel=k3
+sh test -f "$FX_ROOT/home/tree/keep/k3" && test ! -e "$FX_ROOT/home/tree/keep/k1" && test ! -e "$FX_ROOT/home/tree/keep/k2"
+key ctrl-w
 # ---- Ctrl+W down to the last; the last closes fx
 key ctrl-w
 key ctrl-w

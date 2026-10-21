@@ -58,7 +58,7 @@ MUTANTS = [
     (G, "        if (k >= 0) ui_mark(&app.ui, k, true);\n        at += nm.len + 1;", "        at += nm.len + 1;"),
     (G, "    app.ui.list.top = t->top;\n", ""),
     (G, "    t->hist = hist, t->crumbs = app.crumbs;", "    t->crumbs = app.crumbs;"),
-    (G, "        go_up_from(t->dir);\n        return;", "        return;"),
+    (G, "        go_up_from(t->dir);\n        if (there)", "        if (there)"),
     (G, "    if (tabbar.n == 1) {\n        app.quit = true;\n        return;\n    }", ""),
     (G, "    if (shown) tab_load();", ""),
     (G, "    if (stat(path, &st) != 0 || !S_ISDIR(st.st_mode)) {", "    if (stat(path, &st) != 0) {"),
@@ -67,6 +67,10 @@ MUTANTS = [
     (G, "    if (action == GLFW_PRESS && m == GLFW_MOD_ALT && key >= GLFW_KEY_1 && key <= GLFW_KEY_9)", "    if (action == GLFW_PRESS && key >= GLFW_KEY_1 && key <= GLFW_KEY_9)"),
     (G, "    return HEADER_H + (tabbar.n >= 2 ? TAB_H : 0);", "    return HEADER_H;"),
     (G, "    case UA_TAB_MOVE: ui_tabs_move(&tabbar, (int)a.index); break;", "    case UA_TAB_MOVE: break;"),
+    # F5 review: the delete question's targets taken when it opens
+    (G, "    for (isize i = 0; i < n; i++) run.item[i] = (JobItem){ .src = arena_cstr(&joba, str_from_c(doomed.path[i])) };", "    char *late[CLIP_PATHS_MAX];\n    n = targets(&joba, late, CLIP_PATHS_MAX);\n    for (isize i = 0; i < n; i++) run.item[i] = (JobItem){ .src = late[i] };"),
+    (G, "    if (undo.n == 0) undo_clear(&undo);\n    }", "    if (undo.n == 0) undo_clear(&undo);\n    }\n    if (j->kind == JOB_DELETE) ui_mark_clear(&app.ui);"),
+    (G, "        if (!was_confirming && app.ui.confirming) delete_ask();", ""),
 ]
 scratch = sys.argv[1]
 only = [int(x) for x in sys.argv[2].split(',')] if len(sys.argv) > 2 else None

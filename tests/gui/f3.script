@@ -232,4 +232,20 @@ key enter
 key ctrl-x
 key ctrl-v
 expect status=Already
+# ---- the delete question deletes what it asked about: the cursor's file removed from outside while
+# it is up moves the cursor, and Enter must not delete the file the cursor moved to
+sh touch "$FX_DIR/k1" "$FX_DIR/k2" "$FX_DIR/k3"
+wait-for 2000 n=8
+char /
+type k2
+key enter
+expect sel=k2
+key shift-delete
+expect confirming=1
+sh rm "$FX_DIR/k2"
+sleep 800
+expect confirming=1 sel=k3
+key enter
+wait-for 3000 job=-
+sh test -f "$FX_DIR/k3" && test -f "$FX_DIR/k1"
 quit
