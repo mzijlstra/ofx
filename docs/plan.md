@@ -25,6 +25,8 @@ shares, archives, "open with" menus.
 | F4 | Top bar: back, forward, up; the path as buttons; a location entry toggle; search. Item counts for folders | Below |
 | F5 | Tabs: Ctrl+T, Ctrl+W, middle click on a path button or folder | Below |
 | F5.1 | The delete question and the name-clash question as a modal panel in the window's middle, the rest darkened | Below |
+| F5.2 | The edit lines (rename, location): copy, cut and paste as text, a selection with Shift; the path buttons by keyboard (Ctrl+K) | Below |
+| F5.3 | Jobs: up to 4 at once, each a progress row with a throughput line at the bottom of the files; a queue of 32 | Below |
 | F6 | Bottom bar: sidebar as places, as a tree, or hidden. Free space per drive in the sidebar | |
 | F7 | Menus: File, Edit, View, Go, Bookmarks, Help | |
 
@@ -108,6 +110,52 @@ event, the selection kept by name (or the row it was on, when that name is gone)
 
 **Idle:** the loop draws only when something changed and otherwise waits in
 `PollInputEvents` (uml-viewer's loop, prdash's `docs/gui-findings.md`).
+
+## F5.2 design (2026-10-21)
+
+**Asked (Michael):** copy and paste in the location line and the rename line (he leans on it);
+Ctrl+K to the path buttons from the keyboard. Decisions: Shift+arrows select part of the text;
+Shift+Enter on a path button opens it in a background tab, as a middle click does.
+
+**The edit lines** (rename, new folder, location) gain a selection: an anchor and the caret.
+Shift+Left/Right/Home/End extend it, Ctrl+A selects all (the location line still opens all
+selected); typing or Backspace/Delete replaces what is selected. Ctrl+C copies the selection as
+text (nothing selected: nothing copied), Ctrl+X cuts it, Ctrl+V pastes text at the caret over the
+selection: the first line only, and in a name line the characters a name can't hold left out
+(`/`, controls). The text clipboard is GLFW's (`text/plain`), which replaces whatever is on the
+clipboard, files included, as any program's copy does.
+
+**The path buttons by keyboard:** Ctrl+K, from the list or from the location line (which it closes),
+puts the keyboard on the path buttons, the rightmost shown marked. Left and Right move (the window
+scrolls to keep it in view), Home and End go to the ends, Enter goes to that folder, Shift+Enter
+opens it in a background tab; Esc, Tab, or a click on the list give the keyboard back to the list.
+
+## F5.3 design (2026-10-21)
+
+**Asked (Michael):** the progress of a copy or move where it can't be missed, without covering
+anything that matters: a strip at the bottom of the files area (as the tab bar is at its top, never
+over the sidebar), a row per job, up to 4 at once, the rest queued (32 at most), and a modal panel
+when the queue is full. Each row a throughput line as Windows draws it: x the progress, y the
+speed, squashed to the fastest seen so far, no axes; only the percentage and the current speed as
+numbers. Decisions: quitting with jobs running or waiting asks in a panel; delete for good gets a
+row too; a job on files another running job uses waits in the queue until that one ends.
+
+**Jobs:** up to 4 workers at once, each with its own `Job` and clash state; the rest wait in a
+queue of 32 (FIFO). A job "uses" its sources and its targets' folders; a job whose paths overlap a
+running job's (the same path, or one under the other) waits, even when a worker is free. A 33rd job
+opens a panel: "No more jobs can be queued right now. Wait until one finishes." (OK). Clashes from
+two jobs at once take turns in the clash panel, which names the job asking. Undo undoes the job
+that finished last. The "a job is still running" refusals go.
+
+**The rows,** about 40 px each, over the bottom of the files: the throughput line across the row
+(1 device pixel), the done part tinted in the accent; on it, what the job is ("Copying 12 items to
+bdir") and the percentage on the left, the speed on the right, a × that cancels it (with its part
+file cleaned up, as Esc cancels now). Under them "5 waiting" when the queue holds any. A job without
+bytes to measure (delete for good, a move within a drive) is a plain bar by items. Speed is
+smoothed over about 2 s; the line keeps 300 points, one per 1/300 of the job.
+
+**Quitting** with jobs running or waiting: a panel, "2 jobs are running and 3 are waiting. Quit
+and cancel them?", Cancel and Quit.
 
 ## F5.1 design (2026-10-21)
 
