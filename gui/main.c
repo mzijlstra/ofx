@@ -1395,12 +1395,15 @@ static void layout_modal_panel(ModalKind k)
                 if (doomed.n > shown) text(cz(arena_sprintf(&frame, "and %td more", doomed.n - shown)), cc(t->fg_dim));
             }
             text(cz("This can't be undone."), cc(t->red));
+            text(cz("Enter or y deletes \xC2\xB7 n or Esc cancels"), cc(t->fg_dim));
             CLAY(CLAY_ID("modal-buttons"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .childGap = 10,
                                                          .childAlignment = { .x = CLAY_ALIGN_X_RIGHT }, .padding = { 0, 0, 8, 0 } } }) {
                 modal_button("modal-no", UI_MODAL_NO, "Cancel", false, false);
                 modal_button("modal-yes", UI_MODAL_YES, "Delete", true, true);
             }
         } else {
+            // run.clash is safe to read here without run.mu: asking is set only after job_poll saw
+            // the worker waiting (under the lock), and cleared before job_answer lets it go on.
             Str name = path_base(str_from_c(run.clash)), dir = path_dir(str_from_c(run.clash));
             Str in_dir = path_base(dir.len ? dir : S("/"));
             text(fit(str_from_c(arena_sprintf(&frame, "%.*s already exists in %.*s", STR_ARG(name), STR_ARG(in_dir))), 430, false), cc(t->fg));
@@ -1411,12 +1414,15 @@ static void layout_modal_panel(ModalKind k)
                                                  .border = { .color = cc(t->fg_dim), .width = CLAY_BORDER_OUTSIDE(1) } }) {}
                 text(cz("Do the same for the rest"), app.modal_hover == UI_MODAL_ALL ? cc(t->fg) : cc(t->fg_dim));
             }
+            text(cz(run.clash_dirs ? "s skip \xC2\xB7 r merge \xC2\xB7 k keep both \xC2\xB7 Shift: for the rest \xC2\xB7 Esc cancels"
+                                    : "s skip \xC2\xB7 r replace \xC2\xB7 k keep both \xC2\xB7 Shift: for the rest \xC2\xB7 Esc cancels"),
+                 cc(t->fg_dim));
             CLAY(CLAY_ID("modal-buttons"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .childGap = 10,
                                                          .childAlignment = { .x = CLAY_ALIGN_X_RIGHT }, .padding = { 0, 0, 8, 0 } } }) {
                 modal_button("modal-cancel", UI_MODAL_CANCEL, "Cancel", false, false);
                 modal_button("modal-skip", UI_MODAL_SKIP, "Skip", false, false);
                 modal_button("modal-keep", UI_MODAL_KEEP, "Keep both", false, false);
-                modal_button("modal-replace", UI_MODAL_REPLACE, run.clash_dirs ? "Merge" : "Replace", true, false);
+                modal_button("modal-replace", UI_MODAL_REPLACE, run.clash_dirs ? "Merge" : "Replace", false, false);   // no default: Enter doesn't answer
             }
         }
     }
