@@ -42,6 +42,10 @@ wayland-cursor, wayland-egl, xkbcommon, fontconfig and freetype2. raylib and Cla
 | Shift+Delete | delete for good, after "Y/n" (Enter or `y` deletes) |
 | Ctrl+C, Ctrl+X, Ctrl+V | copy, cut, paste; Nemo and terminals paste what fx copied, fx what Nemo copied |
 | Ctrl+Z | undo the last rename, new folder, trash, copy or move |
+| Ctrl+T, Ctrl+W | a new tab on this folder, close the tab (the last one closes fx) |
+| Ctrl+Tab, Ctrl+Shift+Tab | the next and previous tab (Ctrl+PgDn, Ctrl+PgUp too) |
+| Alt+1 … Alt+9 | a tab by place, Alt+9 the last |
+| Ctrl+Shift+PgUp, Ctrl+Shift+PgDn | move the tab left or right |
 | Ctrl+Q | quit |
 
 An action works on the selected entries, or on the cursor's when none is selected. A copy or move
@@ -52,6 +56,10 @@ keep both; the capitals answer for all the rest.
 The top bar: back, forward and up, then the path as buttons (they keep the deeper folders after
 you go up, and scroll with ‹ › when the path is long), then the location toggle and search.
 Folders show how many items they hold in the Size column.
+
+Tabs: each keeps its own folder, cursor, selection and history; sort and hidden files are the
+window's. A middle click on a folder, a place or a path button opens it in a tab behind the
+current one; a middle click on a tab, or its ×, closes it.
 
 Mouse: a click puts the cursor on a row, Ctrl+click and Shift+click select, a double click opens,
 the wheel scrolls a row per notch, a click on a column header sorts by it (again: reversed), a
