@@ -99,6 +99,7 @@ static struct {
     int       crumb_hover;
     int       tab_hover, tab_x_hover;   // the tab, and the tab's ×, under the pointer; -1 for none
     int       copy_delay_ms;   // FX_TEST_COPY_DELAY_MS
+    char      text_copied[PATH_MAX];   // the last text an edit line put on the clipboard (F5.2)
 } app = { .hover = -1, .side_hover = -1, .tab_hover = -1, .tab_x_hover = -1 };
 
 static UiHistory hist;
@@ -637,6 +638,27 @@ static void paste(void)
     if (self) set_status(true, "Skipped %td: a folder can't go into itself", self);
 }
 
+// An edit line's Ctrl+C or Ctrl+X (F5.2): its selection onto the clipboard as text, in place of
+// whatever was there, our files too. Without data-control (weston) GLFW's clipboard holds it.
+static void text_copy(Str t)
+{
+    snprintf(app.text_copied, sizeof app.text_copied, "%.*s", STR_ARG(t));
+    if (!clip_set_text(t)) SetClipboardText(app.text_copied);
+    own.n = 0;
+}
+
+// The clipboard's text for an edit line's Ctrl+V, into pastea: through data-control where there
+// is one; else our own files' paths as text when we hold some, or GLFW's text.
+static Str text_paste(void)
+{
+    arena_reset(&pastea);
+    Str t;
+    if (clip_get_text(&pastea, &t)) return t;
+    if (own.n > 0) return clip_payload(&pastea, &own, CLIP_FMT_TEXT);
+    const char *g = GetClipboardText();
+    return g ? str_from_c(arena_cstr(&pastea, str_from_c(g))) : STR_EMPTY;
+}
+
 static void rename_commit(void)
 {
     Str to = { app.ui.edit, app.ui.edit_len }, from = str_from_c(app.edit_from);
@@ -1103,17 +1125,55 @@ static Clay_Color mix(Rgb a, Rgb b, float t)
     return (Clay_Color){ a.r * t + b.r * (1 - t), a.g * t + b.g * (1 - t), a.b * t + b.b * (1 - t), 255 };
 }
 
-// The edit line in place of the name: the text, and a caret at its place.
-static void layout_edit(Theme *t)
+// A run of the edit line's text: at most `most` wide (cut with "…" from the end, or from its
+// start with keep_end), on the accent half mixed in when selected (the row under a rename has the
+// selection colour already).
+static void edit_run(Clay_ElementId sel_id, Str s, bool sel, float most, bool keep_end)
 {
+    Theme *t = &app.theme;
+    if (!s.len || most < 1) return;
+    Clay_String txt = fit(s, most, keep_end);
+    if (!sel) { text(txt, cc(t->fg)); return; }
+    CLAY(sel_id, { .layout = { .sizing = { CLAY_SIZING_FIT(0), CLAY_SIZING_FIXED(FONT_PX + 6) }, .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
+                   .backgroundColor = mix(t->accent, t->bg, 0.45f) }) {
+        text(txt, cc(t->fg));
+    }
+}
+
+// The edit line's text in `room`: the selection marked (F5.2) and the caret at its place, kept in
+// view (the text after it gets half the room at most, the ends cut with "…").
+static void edit_text(const char *id, float room)
+{
+    Theme *t = &app.theme;
     Str ed = { app.ui.edit, app.ui.edit_len };
+    int lo, hi, c = app.ui.caret;
+    ui_edit_sel(&app.ui, &lo, &hi);
+    // Left of the caret the text before the selection and, when the caret is its right end, the
+    // selection; right of it the rest.
+    Str l1 = str_cut(ed, 0, c == hi ? lo : c), l2 = c == hi ? str_cut(ed, lo, hi) : STR_EMPTY;
+    Str r1 = c == lo ? str_cut(ed, lo, hi) : STR_EMPTY, r2 = str_cut(ed, c == lo ? hi : c, ed.len);
+    float rw = str_width(r1) + str_width(r2), lw = str_width(l1) + str_width(l2);
+    float left = room - (rw < room / 2 ? rw : room / 2);
+    float w2 = str_width(l2) < left ? str_width(l2) : left, w1 = left - w2;
+    float right = room - (lw < left ? lw : left);
+    float v1 = str_width(r1) < right ? str_width(r1) : right, v2 = right - v1;
+    Clay_ElementId sel = Clay_GetElementId(cz(arena_sprintf(&frame, "%s-sel", id)));
+    edit_run(sel, l1, false, w1, true);
+    edit_run(sel, l2, true, w2, true);
+    CLAY(Clay_GetElementId(cz(arena_sprintf(&frame, "%s-caret", id))), { .layout = { .sizing = { CLAY_SIZING_FIXED(2), CLAY_SIZING_FIXED(FONT_PX + 2) } },
+                                                                          .backgroundColor = cc(t->accent) }) {}
+    edit_run(sel, r1, true, v1, false);
+    edit_run(sel, r2, false, v2, false);
+}
+
+// The edit line in place of the name.
+static void layout_edit(Theme *t, float room)
+{
     CLAY(CLAY_ID("edit"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(ROW_H - 6) }, .padding = { 4, 4, 0, 0 },
                                         .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
+                            .clip = { .horizontal = true },
                             .backgroundColor = cc(t->bg), .border = { .color = cc(t->accent), .width = CLAY_BORDER_ALL(1) } }) {
-        if (app.ui.caret > 0) text(cs(str_cut(ed, 0, app.ui.caret)), cc(t->fg));
-        CLAY(CLAY_ID("edit-caret"), { .layout = { .sizing = { CLAY_SIZING_FIXED(2), CLAY_SIZING_FIXED(FONT_PX + 2) } },
-                                      .backgroundColor = cc(t->accent) }) {}
-        if (app.ui.caret < app.ui.edit_len) text(cs(str_cut(ed, app.ui.caret, ed.len)), cc(t->fg));
+        edit_text("edit", room - 12);
     }
 }
 
@@ -1153,7 +1213,7 @@ static void layout_row(int r, isize i, float w, i64 now)
         icon_box(CLAY_IDI("icon", r), icon, ICON_PX);
         CLAY(CLAY_IDI("name", r), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .childGap = 6 } }) {
             if (sel && app.ui.editing && !app.ui.edit_path) {
-                layout_edit(t);
+                layout_edit(t, name_w);
             } else {
                 text(fit(e->name, name_w, false), e->kind == K_LINK_BROKEN ? cc(t->red) : marked ? cc(t->accent) : cc(t->fg));
                 if (link) text(cz("\xE2\x86\x92"), cc(t->fg_dim));   // →
@@ -1248,6 +1308,7 @@ static void layout_crumbs(float room)
     float wd[UI_CRUMBS_MAX];
     for (int i = 0; i < c->n; i++) wd[i] = crumb_width(i);
     int lo, hi;
+    if (app.ui.crumb_focus) ui_crumbs_show(c, wd, room, ARROW_W, app.ui.crumb_at);
     app.crumb_arrows = ui_crumbs_window(c, wd, room, ARROW_W, &lo, &hi);
     app.crumb_lo = lo, app.crumb_hi = hi;
     // One outlined group, a line between the buttons, so they read as one path (Michael, 2026-10-20).
@@ -1257,9 +1318,11 @@ static void layout_crumbs(float room)
     if (app.crumb_arrows) bar_button(CLAY_ID("crumb-left"), UB_LEFT, CHEV_LEFT, NULL, NULL, lo > 0, ARROW_W);
     for (int i = lo; i < hi; i++) {
         bool cur = i == c->cur, hover = app.bar_hover == UB_CRUMB && app.crumb_hover == i;
+        bool keyed = app.ui.crumb_focus && app.ui.crumb_at == i;   // Ctrl+K's mark: an accent outline
         CLAY(CLAY_IDI("crumb", i), { .layout = { .sizing = { CLAY_SIZING_FIT(0), CLAY_SIZING_FIXED(BAR_BTN_H) }, .padding = { CRUMB_PAD, CRUMB_PAD, 0, 0 },
                                                  .childGap = 6, .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
-                                     .backgroundColor = cur ? cc(t->selection) : hover ? cc(t->bg) : cc(t->bg_light) }) {
+                                     .backgroundColor = cur ? cc(t->selection) : hover ? cc(t->bg) : cc(t->bg_light),
+                                     .border = { .color = cc(t->accent), .width = { keyed * 2, keyed * 2, keyed * 2, keyed * 2, 0 } } }) {
             if (c->seg[i].home) icon_box(CLAY_IDI("crumb-icon", i), named_icon("user-home"), CRUMB_ICON_PX);
             Str label = ui_crumb_label(c, i);
             float most = room - 2 * ARROW_W - 2 * CRUMB_PAD - (c->seg[i].home ? CRUMB_ICON_PX + 6 : 0);
@@ -1270,30 +1333,16 @@ static void layout_crumbs(float room)
     }
 }
 
-// The location line in the path buttons' place: the path and a caret, the end kept in view; all
-// of it marked as selected while typing would replace it.
+// The location line in the path buttons' place: the path, its selection and a caret (all of it
+// selected as it opens).
 static void layout_location(float room)
 {
     Theme *t = &app.theme;
-    Str ed = { app.ui.edit, app.ui.edit_len }, before = str_cut(ed, 0, app.ui.caret), after = str_cut(ed, app.ui.caret, ed.len);
-    float aw = str_width(after), bw = room - 24 - (aw < room / 2 ? aw : room / 2);
     CLAY(CLAY_ID("location"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(BAR_BTN_H) }, .padding = { 6, 6, 0, 0 },
                                             .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
                                 .clip = { .horizontal = true },
                                 .backgroundColor = cc(t->bg), .border = { .color = cc(t->accent), .width = CLAY_BORDER_ALL(1) } }) {
-        if (app.ui.edit_all) {
-            CLAY(CLAY_ID("location-all"), { .layout = { .sizing = { CLAY_SIZING_FIT(0), CLAY_SIZING_FIXED(FONT_PX + 6) },
-                                                        .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
-                                            .backgroundColor = cc(t->selection) }) {
-                if (ed.len) text(fit(ed, room - 24, true), cc(t->fg));
-            }
-        } else {
-            if (before.len) text(fit(before, bw, true), cc(t->fg));
-            CLAY(CLAY_ID("location-caret"), { .layout = { .sizing = { CLAY_SIZING_FIXED(2), CLAY_SIZING_FIXED(FONT_PX + 2) } },
-                                              .backgroundColor = cc(t->accent) }) {}
-            float bwid = before.len ? (str_width(before) < bw ? str_width(before) : bw) : 0;
-            if (after.len) text(fit(after, room - 24 - bwid, false), cc(t->fg));
-        }
+        edit_text("location", room - 24);
     }
 }
 
@@ -1484,6 +1533,9 @@ static Clay_RenderCommandArray layout(int w, int h)
                                            .clip = { .horizontal = true } }) {
             if (app.ui.confirming || (run.running && app.ui.asking)) {
                 text(cz("Answer the question above"), cc(t->fg_dim));
+            } else if (app.ui.crumb_focus) {
+                text(fit(S("Path: \xE2\x86\x90 \xE2\x86\x92 move \xC2\xB7 Enter goes there \xC2\xB7 Shift+Enter in a new tab \xC2\xB7 Esc back to the list"), foot_w, false),
+                     cc(t->fg_dim));
             } else if (app.ui.editing && app.ui.edit_path) {
                 text(cz("Go to: Enter goes there \xC2\xB7 Esc cancels \xC2\xB7 ~ is home, a relative path starts here"), cc(t->fg_dim));
             } else if (app.ui.editing) {
@@ -1575,6 +1627,18 @@ static UiKey ui_key_of(int key, int mods)
     if (m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT) && key == GLFW_KEY_PAGE_UP) return UK_TAB_LEFT;
     if (m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT) && key == GLFW_KEY_PAGE_DOWN) return UK_TAB_RIGHT;
     if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_L) return UK_LOCATION;
+    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_K) return UK_CRUMBS;
+    if (m == GLFW_MOD_SHIFT) {
+        switch (key) {
+        case GLFW_KEY_LEFT: return UK_SEL_LEFT;
+        case GLFW_KEY_RIGHT: return UK_SEL_RIGHT;
+        case GLFW_KEY_HOME: return UK_SEL_HOME;
+        case GLFW_KEY_END: return UK_SEL_END;
+        case GLFW_KEY_ENTER:
+        case GLFW_KEY_KP_ENTER: return UK_SHIFT_ENTER;
+        default: break;
+        }
+    }
     if (m == GLFW_MOD_CONTROL) {
         switch (key) {
         case GLFW_KEY_A: return UK_ALL;
@@ -1965,8 +2029,14 @@ int main(int argc, char **argv)
             if (!script_input(&in)) break;
             seen = true;
         }
+        in.crumb_n = app.crumbs.n, in.crumb_last = app.crumb_hi - 1;
+        // A Ctrl+V in an edit line reads the clipboard first, and only then.
+        bool pasting = false;
+        for (int k = 0; k < in.nev; k++) pasting |= in.ev[k].key == UK_PASTE;
+        if (pasting && app.ui.editing) in.paste = text_paste();
         bool was_editing = app.ui.editing, was_confirming = app.ui.confirming;
         UiAction a = ui_handle(&app.ui, (UiNames){ list_name, NULL }, &in);
+        if (app.ui.copied) text_copy((Str){ app.ui.copy, app.ui.copy_len }), app.ui.copied = false;
         // Shift+Delete and its y can come in one frame's input: the question opened and was answered
         // within ui_handle, so the targets are taken here either way (reviewer-2, F5 confirm). A
         // new question always starts from no targets.

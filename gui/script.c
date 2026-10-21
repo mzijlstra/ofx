@@ -11,6 +11,7 @@
 //                           f2 delete shift-delete space, and the chords alt-left alt-right ctrl-f
 //                           ctrl-h ctrl-a ctrl-c ctrl-x ctrl-v ctrl-z ctrl-shift-n ctrl-l alt-up
 //                           ctrl-t ctrl-w ctrl-tab ctrl-shift-tab ctrl-shift-pageup ctrl-shift-pagedown,
+//                           shift-left shift-right shift-home shift-end shift-enter ctrl-k,
 //                           and alt-1 .. alt-9
 //   char <c>                one typed character
 //   keys <word>...          keys and characters in one frame's input, as fast typing during a slow
@@ -33,6 +34,8 @@
 //   raw-button <n>          GLFW's button n (1-8) pressed and released through main.c's callback
 //   raw-key <key> [mods]    GLFW key code <key> pressed through main.c's key callback, with GLFW's
 //                           mod bits (1 Shift, 2 Ctrl, 4 Alt): what ui_key_of makes of it
+//   clip-text <text>        the rest of the line onto GLFW's clipboard as another program's copy
+//                           would put it, \n a line break (weston has no data-control)
 //   shot <file.png>         the next drawn frame; a relative path goes under FX_GUI_SHOTS
 //   sh <command...>         runs the rest of the line with /bin/sh and waits for it (5 s at most),
 //                           $FX_DIR set to the folder shown, $FX_ROOT to the run's scratch tree.
@@ -89,10 +92,19 @@ static void script_state(char *out, size_t cap)
     // The edit line's text, its spaces as '_' (the state line is words).
     static const char *const JOB_PHASES[] = { "scan", "run", "ask", "done" };
     static const char *const UNDO_KINDS[] = { "-", "rename", "mkdir", "trash", "copy", "move" };
-    char edit[NAME_MAX + 1];
+    char edit[PATH_MAX];
     snprintf(edit, sizeof edit, "%.*s", app.ui.edit_len ? app.ui.edit_len : 1, app.ui.edit_len ? app.ui.edit : "-");
     for (char *c = edit; *c; c++)
         if (*c == ' ') *c = '_';
+    // The edit line's selection and caret (bytes), the text it last copied, the path buttons'
+    // keyboard mark (- when they don't have it).
+    int slo, shi;
+    ui_edit_sel(&app.ui, &slo, &shi);
+    char copied[PATH_MAX], keyed[16] = "-";
+    snprintf(copied, sizeof copied, "%s", app.text_copied[0] ? app.text_copied : "-");
+    for (char *c = copied; *c; c++)
+        if (*c == ' ') *c = '_';
+    if (app.ui.crumb_focus) snprintf(keyed, sizeof keyed, "%d", app.ui.crumb_at);
     // The path buttons' labels, '|' between; the cursor's folder count (- unknown, ? unreadable).
     char crumbs[2048] = "", cnt[32] = "-";
     for (int i = 0; i < app.crumbs.n; i++) {
@@ -124,7 +136,8 @@ static void script_state(char *out, size_t cap)
              "icons=%s scale=%d w=%d h=%d reloads=%d themes=%d batches=%d frame_ms_max=%.1f icon=%s "
              "shown=%d sort=%s rev=%d finding=%d miss=%d find=%.*s last=%.*s side=%td sidefocus=%d place=%s here=%s "
              "back=%d fwd=%d marked=%td editing=%d edit=%s confirming=%d asking=%d job=%s done=%lld/%lld undo=%s clip=%td cut=%d "
-             "sysclip=%d modal=%s askall=%d tabs=%d tab=%d tabdirs=%s sizecell=%s crumbs=%s crumbhome=%d crumb=%d crumbshown=%d-%d arrows=%d locating=%d cnt=%s status=%s",
+             "sysclip=%d modal=%s askall=%d tabs=%d tab=%d tabdirs=%s sizecell=%s crumbs=%s crumbhome=%d crumb=%d crumbshown=%d-%d arrows=%d locating=%d cnt=%s "
+             "esel=%d-%d caret=%d copied=%s crumbkey=%s status=%s",
              app.cwd, app.list.n, app.list.hidden, STR_ARG(sel), app.ui.list.sel, app.ui.list.top, app.ui.list.rows, app.hover,
              t->accent.r, t->accent.g, t->accent.b, t->bg.r, t->bg.g, t->bg.b, t->icons[0] ? t->icons : "-",
              app.icon_scale, GetScreenWidth(), GetScreenHeight(), app.reloads, app.themes, atomic_load(&watch.batches),
@@ -136,7 +149,7 @@ static void script_state(char *out, size_t cap)
              hist.nback, hist.nfwd, app.ui.marked, app.ui.editing, edit, app.ui.confirming, app.ui.asking,
              !run.running ? "-" : JOB_PHASES[atomic_load(&run.j.phase)], atomic_load(&run.j.files_done), atomic_load(&run.j.files_total),
              UNDO_KINDS[undo.kind], own.n, own.cut, clip.ok, modal_kind() == MODAL_DELETE ? "delete" : modal_kind() == MODAL_CLASH ? "clash" : "-", app.ui.ask_all, tabbar.n, tabbar.cur, tabdirs, sizecell, crumbs, app.crumbs.seg[0].home ? 0 : -1, app.crumbs.cur, app.crumb_lo, app.crumb_hi, app.crumb_arrows,
-             app.ui.editing && app.ui.edit_path, cnt, app.status[0] ? app.status : "-");
+             app.ui.editing && app.ui.edit_path, cnt, slo, shi, app.ui.caret, copied, keyed, app.status[0] ? app.status : "-");
     frame_us_max = 0;
 }
 
@@ -176,6 +189,8 @@ static UiKey script_key(Str name)
         { "ctrl-shift-n", UK_NEWFOLDER }, { "ctrl-l", UK_LOCATION }, { "alt-up", UK_PARENT },
         { "ctrl-t", UK_TAB_NEW }, { "ctrl-w", UK_TAB_CLOSE }, { "ctrl-tab", UK_TAB_NEXT }, { "ctrl-shift-tab", UK_TAB_PREV },
         { "ctrl-shift-pageup", UK_TAB_LEFT }, { "ctrl-shift-pagedown", UK_TAB_RIGHT },
+        { "shift-left", UK_SEL_LEFT }, { "shift-right", UK_SEL_RIGHT }, { "shift-home", UK_SEL_HOME }, { "shift-end", UK_SEL_END },
+        { "shift-enter", UK_SHIFT_ENTER }, { "ctrl-k", UK_CRUMBS },
     };
     for (int i = 0; i < COUNT(KEYS); i++)
         if (str_eq(name, str_from_c(KEYS[i].name))) return KEYS[i].k;
@@ -388,6 +403,15 @@ static bool script_input(UiInput *in)
             // The callback queued it; this frame's input takes the queue as the user's would.
             for (int i = 0; i < evq.n && in->nev < UI_EVENTS_MAX; i++) in->ev[in->nev++] = evq.ev[i];
             evq.n = 0;
+        } else if (str_eq(cmd, S("clip-text"))) {
+            char t[PATH_MAX];
+            int n = 0;
+            for (isize i = 10; i < line.len && n < (int)sizeof t - 1; i++) {
+                if (line.p[i] == '\\' && i + 1 < line.len && line.p[i + 1] == 'n') t[n++] = '\n', i++;
+                else t[n++] = line.p[i];
+            }
+            t[n] = 0;
+            SetClipboardText(t);
         } else if (str_eq(cmd, S("shot"))) {
             const char *dir = getenv("FX_GUI_SHOTS");
             if (a[0] != '/' && dir && dir[0]) snprintf(script.shot, sizeof script.shot, "%s/%s", dir, a);

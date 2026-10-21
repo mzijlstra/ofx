@@ -1,0 +1,165 @@
+# F5.2 on a tree made by tests/gui/run.sh, with HOME=<scratch>/home: home/tree holds adir/ (a1),
+# bdir/, zz-a-rather-long-folder-name-1/…/-8, notes.txt. weston has no data-control: the text
+# clipboard is GLFW's there, and `clip-text` puts another program's text on it.
+settle
+key end
+expect sel=notes.txt
+# ---- the rename line: Shift selects, Ctrl+C copies the selection, Ctrl+A, Ctrl+V
+key f2
+expect editing=1 edit=notes.txt esel=9-9 caret=9
+keys shift-left shift-left shift-left shift-left
+expect esel=5-9 caret=5
+shot edit-select.png
+key ctrl-c
+expect copied=.txt edit=notes.txt
+key ctrl-a
+expect esel=0-9 caret=9
+type memo
+expect edit=memo esel=4-4
+key ctrl-v
+expect edit=memo.txt esel=8-8
+key enter
+wait-for 2000 sel=memo.txt editing=0
+# Shift+Home, then Shift+End past the anchor; Left and Right end the selection at its ends
+key f2
+keys left left left left shift-home
+expect esel=0-4 caret=0
+keys shift-end
+expect esel=4-8 caret=8
+key left
+expect esel=4-4 caret=4
+keys shift-right shift-right right
+expect esel=6-6 caret=6
+key esc
+# ---- another program's text: the first line, '/' left out of a name
+clip-text a/b\nsecond line
+key f2
+key ctrl-a
+key ctrl-v
+expect edit=ab esel=2-2
+key esc
+expect editing=0 sel=memo.txt
+# ---- Ctrl+X cuts; Ctrl+C with nothing selected copies nothing
+key f2
+key shift-home
+key ctrl-x
+expect edit=- copied=memo.txt
+key ctrl-c
+expect copied=memo.txt
+key ctrl-v
+expect edit=memo.txt esel=8-8
+key esc
+# ---- the location line: all selected as it opens, copy it, paste it back later
+key ctrl-l
+expect locating=1
+key ctrl-c
+key ctrl-a
+type ~/tree/adir
+key enter
+wait-for 2000 crumbs=home|tree|adir crumb=2 locating=0
+key ctrl-l
+key ctrl-v
+key enter
+wait-for 2000 crumb=1 sel=adir locating=0
+# Pasted over part of it: the selection only
+key ctrl-l
+key end
+type /adir
+keys shift-left shift-left shift-left shift-left
+clip-text bdir
+key ctrl-v
+key enter
+wait-for 2000 crumbs=home|tree|bdir crumb=2
+key alt-up
+wait-for 2000 crumb=1
+# ---- files and text share the clipboard: a folder copied pastes as its path; a text copy then
+# leaves no files to paste
+key home
+expect sel=adir
+key ctrl-c
+expect clip=1
+key ctrl-l
+key ctrl-v
+key enter
+wait-for 2000 crumbs=home|tree|adir crumb=2
+key ctrl-l
+key ctrl-c
+expect clip=0
+key esc
+key ctrl-v
+expect status=The clipboard holds no files
+key alt-up
+wait-for 2000 crumb=1
+# ---- the path buttons by keyboard, on the long path (three shown at a time)
+key ctrl-l
+type ~/tree/zz-a-rather-long-folder-name-1/zz-a-rather-long-folder-name-2/zz-a-rather-long-folder-name-3/zz-a-rather-long-folder-name-4/zz-a-rather-long-folder-name-5/zz-a-rather-long-folder-name-6/zz-a-rather-long-folder-name-7/zz-a-rather-long-folder-name-8
+key enter
+expect locating=0 arrows=1 crumb=9 crumbshown=7-10 crumbkey=-
+key ctrl-k
+expect crumbkey=9
+shot crumbs-key.png
+key left
+expect crumbkey=8 crumbshown=7-10
+key left
+expect crumbkey=7 crumbshown=7-10
+key left
+expect crumbkey=6 crumbshown=6-9
+key home
+expect crumbkey=0 crumbshown=0-4
+shot crumbs-key-home.png
+key end
+expect crumbkey=9 crumbshown=7-10
+key home
+key right
+expect crumbkey=1
+# Shift+Enter: a background tab on that folder, the keyboard staying on the buttons
+key shift-enter
+expect tabs=2 tab=0 tabdirs=zz-a-rather-long-folder-name-8|tree crumbkey=1
+# Enter goes there and gives the keyboard back
+key enter
+wait-for 2000 crumb=1 crumbkey=- sel=zz-a-rather-long-folder-name-1 crumbshown=0-4
+# Esc gives it back; so does another key, which is the list's
+key ctrl-k
+expect crumbkey=3
+key esc
+expect crumbkey=-
+key ctrl-k
+key down
+expect crumbkey=- sel=memo.txt
+# A click on the list gives it back
+key ctrl-k
+press 0
+expect crumbkey=- sel=adir
+# From the location line: it closes
+key ctrl-l
+key ctrl-k
+expect locating=0 crumbkey=3
+key esc
+# ---- the chords as GLFW sends them, through main.c's key callback: Shift+Left (263), Shift+Right
+# (262), Shift+Home (268), Shift+End (269), Shift+Enter (257), Ctrl+K (75)
+key f2
+expect edit=adir
+raw-key 263 1
+raw-key 263 1
+expect esel=2-4 caret=2
+raw-key 262 1
+expect esel=3-4
+raw-key 268 1
+expect esel=0-4 caret=0
+raw-key 269 1
+expect esel=4-4 caret=4
+raw-key 257 1
+wait-for 2000 editing=0 sel=adir
+raw-key 75 2
+expect crumbkey=3
+raw-key 263 0
+expect crumbkey=2
+raw-key 257 1
+expect tabs=3 crumbkey=2 tabdirs=tree|zz-a-rather-long-folder-name-1|tree
+key esc
+# Shift+Left in the list is Left as before: up a folder
+key enter
+wait-for 2000 crumb=2
+raw-key 263 1
+wait-for 2000 crumb=1 sel=adir
+quit

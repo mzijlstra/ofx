@@ -31,7 +31,7 @@ rules shared by every tool here.
   `/mnt/sd` that is `/mnt/sd/.Trash-1000`, shared with Nemo). `run-script.sh` points
   `XDG_DATA_HOME` at `<scratch>/data`; the unit tests set it to their root.
 - **The clipboard:** fx sets the system clipboard through `ext-data-control-v1` on Ctrl+C or
-  Ctrl+X, which replaces Michael's clipboard. weston has no data-control, so no test touches it;
+  Ctrl+X, in the list and in the edit lines (text, F5.2), which replaces Michael's clipboard. weston has no data-control, so no test touches it;
   the one live check (copy in fx, paste in Nemo and a terminal, and back) needs his go first.
 - The scripts' `sh` lines make and change files: point them at scratch folders only, never his
   home or a work repo.

@@ -29,6 +29,7 @@ wayland-cursor, wayland-egl, xkbcommon, fontconfig and freetype2. raylib and Cla
 | Alt+Left, Alt+Right | back and forward |
 | Alt+Up | up to the parent |
 | Ctrl+L | type a location: all of it selected, so typing replaces it; `~` is home, a relative path starts here |
+| Ctrl+K | the keys to the path buttons: Left/Right, Home/End move, Enter goes there, Shift+Enter opens it in a background tab, Esc back to the list |
 | `/`, Ctrl+F | find: type to jump, Enter keeps, Esc goes back; then `n`/`N` again |
 | `.`, Ctrl+H | hidden files on and off |
 | `s`, `S` | sort by the next column (name, size, modified), reverse |
@@ -37,6 +38,7 @@ wayland-cursor, wayland-egl, xkbcommon, fontconfig and freetype2. raylib and Cla
 | `~` | home |
 | Space, Ctrl+A | select the entry (and move on), select all; Esc clears |
 | F2 | rename, in the row: Enter renames, Esc cancels |
+| In the rename and location lines | Shift+Left/Right/Home/End select, Ctrl+A all; Ctrl+C, Ctrl+X, Ctrl+V copy, cut and paste text (the first line; a name leaves `/` out) |
 | Ctrl+Shift+N | a new folder, "New folder", named in the row |
 | Delete | to the trash (the one Nemo shows) |
 | Shift+Delete | delete for good, after "Y/n" (Enter or `y` deletes) |

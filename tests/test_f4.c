@@ -178,10 +178,10 @@ static void test_ui_f4(void)
 
     // The location line: all selected as it opens; typing replaces it, Backspace clears it.
     ui_location_open(&u, S("/home/m/code"));
-    CHECK(u.editing && u.edit_path && u.edit_all && u.caret == 12);
+    CHECK(u.editing && u.edit_path && u.anchor == 0 && u.caret == 12);
     in = chars("/tmp");
     ui_handle(&u, names, &in);
-    CHECK(u.edit_len == 4 && memcmp(u.edit, "/tmp", 4) == 0 && !u.edit_all);   // '/' allowed in a path
+    CHECK(u.edit_len == 4 && memcmp(u.edit, "/tmp", 4) == 0 && u.anchor == 4);   // '/' allowed in a path
     in = keys(1, UK_ENTER);
     CHECK(ui_handle(&u, names, &in).kind == UA_GO && u.editing);
     ui_location_open(&u, S("/home/m"));
@@ -220,7 +220,7 @@ static void test_ui_f4(void)
     CHECK(u.edit_len == 599);
     ui_edit_close(&u);
     ui_edit_open(&u, S("name"));
-    CHECK(!u.edit_path && !u.edit_all);
+    CHECK(!u.edit_path && u.anchor == 4);
     in = chars("/");
     ui_handle(&u, names, &in);
     CHECK(u.edit_len == 4);

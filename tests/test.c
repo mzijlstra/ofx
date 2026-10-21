@@ -702,7 +702,7 @@ static const char *const find_names[] = { "alpha", "Beta", "gamma.txt", "delta",
 static Str name_at(void *ctx, isize i)
 {
     (void)ctx;
-    static char buf[16];
+    static char buf[24];
     if (i < COUNT(find_names)) return str_from_c(find_names[i]);
     snprintf(buf, sizeof buf, "f%td", i);
     return str_from_c(buf);
@@ -1311,6 +1311,7 @@ static void test_format(void)
 #include "test_f3.c"
 #include "test_f4.c"
 #include "test_f5.c"
+#include "test_f52.c"
 
 int main(void)
 {
@@ -1349,6 +1350,7 @@ int main(void)
     test_ui_f4();
     test_tabs();
     test_ui_f5();
+    test_ui_f52();
     test_ui_modal();
     char cmd[1600];
     snprintf(cmd, sizeof cmd, "chmod -R u+rwx '%s' && rm -rf '%s' '%s'", root, root, decoy);

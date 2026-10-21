@@ -17,7 +17,7 @@ all: build/fx
 build/fx-probe: tools/probe.c $(wildcard base/*.c base/*.h fs/*.c) | build
 	$(CC) $(CFLAGS) $(DEBUG) -o $@ tools/probe.c -lm
 
-build/test: tests/test.c $(wildcard base/*.c base/*.h fs/*.c ui/*.c) | build
+build/test: $(wildcard tests/*.c) $(wildcard base/*.c base/*.h fs/*.c ui/*.c) | build
 	$(CC) $(CFLAGS) $(DEBUG) -o $@ tests/test.c -lm
 
 test: build/test

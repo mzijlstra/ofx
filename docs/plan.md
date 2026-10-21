@@ -122,13 +122,22 @@ Shift+Left/Right/Home/End extend it, Ctrl+A selects all (the location line still
 selected); typing or Backspace/Delete replaces what is selected. Ctrl+C copies the selection as
 text (nothing selected: nothing copied), Ctrl+X cuts it, Ctrl+V pastes text at the caret over the
 selection: the first line only, and in a name line the characters a name can't hold left out
-(`/`, controls). The text clipboard is GLFW's (`text/plain`), which replaces whatever is on the
-clipboard, files included, as any program's copy does.
+(`/`, controls). A text copy replaces whatever is on the clipboard, files included, as any
+program's copy does; a paste after a copy of files gives their paths.
+
+*Built (2026-10-21):* the text goes through fx's own data-control connection (F3's), offered as
+`text/plain` only, not through GLFW's clipboard as planned: GLFW reads another program's text with
+no time limit (a hung program would hang the window), and while the main thread waited on GLFW's
+own source through data-control, nothing could answer it. GLFW's clipboard is the fallback where
+there is no data-control (weston, the tests).
 
 **The path buttons by keyboard:** Ctrl+K, from the list or from the location line (which it closes),
 puts the keyboard on the path buttons, the rightmost shown marked. Left and Right move (the window
 scrolls to keep it in view), Home and End go to the ends, Enter goes to that folder, Shift+Enter
 opens it in a background tab; Esc, Tab, or a click on the list give the keyboard back to the list.
+*Built:* any click gives it back, and so does any other key, which then does what it does in the
+list (Down moves the cursor); the marked button has an accent outline and the footer names the
+keys.
 
 ## F5.3 design (2026-10-21)
 

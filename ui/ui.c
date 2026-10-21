@@ -38,6 +38,12 @@ typedef enum {
     UK_TAB_LEFT,   // Ctrl+Shift+PgUp: the tab moves
     UK_TAB_RIGHT,  // Ctrl+Shift+PgDn
     UK_TAB_JUMP,   // Alt+1 .. Alt+9: the event's ch is the digit
+    UK_SEL_LEFT,   // Shift+Left: in an edit line the selection grows; elsewhere as Left
+    UK_SEL_RIGHT,  // Shift+Right
+    UK_SEL_HOME,   // Shift+Home
+    UK_SEL_END,    // Shift+End
+    UK_SHIFT_ENTER,   // on a path button: a background tab; elsewhere as Enter
+    UK_CRUMBS,     // Ctrl+K: the keyboard on the path buttons (F5.2)
 } UiKey;
 
 // The top bar's buttons (F4).
@@ -67,6 +73,9 @@ typedef struct {
     int     mid_row, mid_side, mid_crumb;   // a middle click on a list row, a place, a path button
     int     modal;       // a modal panel's button (F5.1): UI_MODAL_*, 0 for none
     int     backs, forwards;   // presses of the mouse's back and forward buttons
+    Str     paste;       // the clipboard's text for a Ctrl+V in an edit line (gui/ reads it first)
+    int     crumb_n;     // the path buttons there are, and the rightmost one shown (F5.2)
+    int     crumb_last;
 } UiInput;
 
 typedef enum {
@@ -137,9 +146,16 @@ typedef struct {
     // location line (F4), which holds a path.
     bool   editing;
     bool   edit_path;        // the location line
-    bool   edit_all;         // all of it selected (the location line as it opens): typing replaces it
     char   edit[PATH_MAX];
     int    edit_len, caret;  // bytes
+    int    anchor;           // the selection's other end (F5.2): selected between it and the caret
+    // A Ctrl+C or Ctrl+X in the edit line: the text gui/ puts on the clipboard, then clears copied.
+    bool   copied;
+    char   copy[PATH_MAX];
+    int    copy_len;
+    // The keyboard on the path buttons (Ctrl+K, F5.2): the one marked.
+    bool   crumb_focus;
+    int    crumb_at;
     // The prompts and the job: gui/ says when one runs, and when it asks about a clash.
     bool   confirming;       // "Delete … for good? Y/n"
     isize  confirm_n;
@@ -330,8 +346,8 @@ static void ui_edit_start(Ui *u, Str text, bool path)
     u->edit_path = path;
     isize max = ui_edit_max(u), n = text.len < max ? text.len : max;
     memcpy(u->edit, text.p, (size_t)n);
-    u->edit_len = (int)n, u->caret = (int)n, u->edit_all = path;
-    u->editing = true, u->finding = false, u->side_focus = false;
+    u->edit_len = (int)n, u->caret = (int)n, u->anchor = path ? 0 : (int)n;
+    u->editing = true, u->finding = false, u->side_focus = false, u->crumb_focus = false;
 }
 
 // The edit line opened on a name, the caret at its end.
@@ -341,7 +357,7 @@ static void ui_edit_open(Ui *u, Str text)
 }
 
 // The location line opened on a path, all of it selected, as browsers and Nemo do: typing a new one
-// replaces it, a move of the caret keeps it.
+// replaces it, a move of the caret ends the selection.
 static void ui_location_open(Ui *u, Str path)
 {
     ui_edit_start(u, path, true);
@@ -350,6 +366,13 @@ static void ui_location_open(Ui *u, Str path)
 static void ui_edit_close(Ui *u)
 {
     u->editing = false;
+}
+
+// The selection, [*lo, *hi): empty when the anchor is at the caret.
+static void ui_edit_sel(const Ui *u, int *lo, int *hi)
+{
+    *lo = u->anchor < u->caret ? u->anchor : u->caret;
+    *hi = u->anchor < u->caret ? u->caret : u->anchor;
 }
 
 static int ui_edit_back(const Ui *u, int at)
@@ -368,39 +391,92 @@ static int ui_edit_fwd(const Ui *u, int at)
     return at;
 }
 
-// Bytes [from, to) of the edit line removed.
+// Bytes [from, to) of the edit line removed, the caret where they were.
 static void ui_edit_cut(Ui *u, int from, int to)
 {
     memmove(u->edit + from, u->edit + to, (size_t)(u->edit_len - to));
     u->edit_len -= to - from;
-    u->caret = from;
+    u->caret = u->anchor = from;
 }
 
-// A key or character in the edit line: an action for gui/ (UA_RENAME on Enter) or UA_NONE.
-static UiAction ui_edit_event(Ui *u, UiEvent e)
+// Bytes b[0..n) in place of the selection, the caret after them; false (nothing changed) when they
+// don't fit.
+static bool ui_edit_put(Ui *u, const char *b, int n)
 {
-    if (u->edit_all) {
-        u->edit_all = false;
-        bool replace = e.key == UK_NONE || e.key == UK_BACKSPACE || e.key == UK_DELETE;
-        if (replace) u->edit_len = 0, u->caret = 0;   // Backspace and Delete then find nothing to take
+    int lo, hi;
+    ui_edit_sel(u, &lo, &hi);
+    if (u->edit_len - (hi - lo) + n > ui_edit_max(u)) return false;
+    ui_edit_cut(u, lo, hi);
+    memmove(u->edit + u->caret + n, u->edit + u->caret, (size_t)(u->edit_len - u->caret));
+    memcpy(u->edit + u->caret, b, (size_t)n);
+    u->edit_len += n, u->caret += n, u->anchor = u->caret;
+    return true;
+}
+
+// The selection onto u->copy for gui/'s clipboard; nothing selected: nothing.
+static bool ui_edit_copy(Ui *u)
+{
+    int lo, hi;
+    ui_edit_sel(u, &lo, &hi);
+    if (lo == hi) return false;
+    memcpy(u->copy, u->edit + lo, (size_t)(hi - lo));
+    u->copy_len = hi - lo, u->copied = true;
+    return true;
+}
+
+// Ctrl+V: the clipboard's first line over the selection; in a name line without the characters a
+// name can't hold ('/'), and never a control character. What doesn't fit is left off, whole
+// characters only.
+static void ui_edit_paste(Ui *u, Str text)
+{
+    char b[PATH_MAX];
+    int n = 0, lo, hi;
+    ui_edit_sel(u, &lo, &hi);
+    int room = ui_edit_max(u) - (u->edit_len - (hi - lo));
+    for (isize i = 0; i < text.len && text.p[i] != '\n' && text.p[i] != '\r';) {
+        unsigned char c = (unsigned char)text.p[i];
+        isize e = i + 1;
+        while (e < text.len && ((unsigned char)text.p[e] & 0xC0) == 0x80) e++;
+        bool drop = c < 0x20 || c == 0x7F || (c == '/' && !u->edit_path);
+        if (!drop && n + (e - i) > room) break;
+        if (!drop) memcpy(b + n, text.p + i, (size_t)(e - i)), n += (int)(e - i);
+        i = e;
     }
+    if (n > 0) ui_edit_put(u, b, n);
+}
+
+// A key or character in the edit line: an action for gui/ (UA_RENAME or UA_GO on Enter) or UA_NONE.
+static UiAction ui_edit_event(Ui *u, UiEvent e, Str paste)
+{
     if (e.key == UK_NONE) {
         char b[4];
         int n = ui_utf8(e.ch, b);
-        if (n == 0 || (e.ch == '/' && !u->edit_path) || u->edit_len + n > ui_edit_max(u)) return (UiAction){ UA_NONE, 0, false };
-        memmove(u->edit + u->caret + n, u->edit + u->caret, (size_t)(u->edit_len - u->caret));
-        memcpy(u->edit + u->caret, b, (size_t)n);
-        u->edit_len += n, u->caret += n;
+        if (n > 0 && (e.ch != '/' || u->edit_path)) ui_edit_put(u, b, n);
         return (UiAction){ UA_NONE, 0, false };
     }
+    int lo, hi;
+    ui_edit_sel(u, &lo, &hi);
     switch (e.key) {
-    case UK_LEFT: u->caret = ui_edit_back(u, u->caret); break;
-    case UK_RIGHT: u->caret = ui_edit_fwd(u, u->caret); break;
-    case UK_HOME: u->caret = 0; break;
-    case UK_END: u->caret = u->edit_len; break;
-    case UK_BACKSPACE: ui_edit_cut(u, ui_edit_back(u, u->caret), u->caret); break;
-    case UK_DELETE: ui_edit_cut(u, u->caret, ui_edit_fwd(u, u->caret)); break;
-    case UK_ENTER: return (UiAction){ u->edit_path ? UA_GO : UA_RENAME, 0, false };
+    // A move ends the selection; Left and Right from one land at its ends.
+    case UK_LEFT: u->caret = u->anchor = lo < hi ? lo : ui_edit_back(u, u->caret); break;
+    case UK_RIGHT: u->caret = u->anchor = lo < hi ? hi : ui_edit_fwd(u, u->caret); break;
+    case UK_HOME: u->caret = u->anchor = 0; break;
+    case UK_END: u->caret = u->anchor = u->edit_len; break;
+    // With Shift the caret moves and the anchor stays.
+    case UK_SEL_LEFT: u->caret = ui_edit_back(u, u->caret); break;
+    case UK_SEL_RIGHT: u->caret = ui_edit_fwd(u, u->caret); break;
+    case UK_SEL_HOME: u->caret = 0; break;
+    case UK_SEL_END: u->caret = u->edit_len; break;
+    case UK_ALL: u->anchor = 0, u->caret = u->edit_len; break;
+    case UK_BACKSPACE: ui_edit_cut(u, lo < hi ? lo : ui_edit_back(u, u->caret), lo < hi ? hi : u->caret); break;
+    case UK_DELETE: ui_edit_cut(u, lo < hi ? lo : u->caret, lo < hi ? hi : ui_edit_fwd(u, u->caret)); break;
+    case UK_COPY: ui_edit_copy(u); break;
+    case UK_CUT:
+        if (ui_edit_copy(u)) ui_edit_cut(u, lo, hi);
+        break;
+    case UK_PASTE: ui_edit_paste(u, paste); break;
+    case UK_ENTER:
+    case UK_SHIFT_ENTER: return (UiAction){ u->edit_path ? UA_GO : UA_RENAME, 0, false };
     case UK_ESC: ui_edit_close(u); break;
     case UK_LOCATION:   // Ctrl+L again: the location line closes; a rename doesn't take it
         if (u->edit_path) ui_edit_close(u);
@@ -408,6 +484,34 @@ static UiAction ui_edit_event(Ui *u, UiEvent e)
     default: break;
     }
     return (UiAction){ UA_NONE, 0, false };
+}
+
+// ---- the path buttons by keyboard (F5.2) -------------------------------------------------------
+
+// Ctrl+K: the keyboard on the path buttons, the rightmost shown marked (none there: nothing).
+static void ui_crumbs_focus(Ui *u, const UiInput *in)
+{
+    if (in->crumb_n <= 0) return;
+    u->crumb_focus = true, u->finding = false, u->side_focus = false;
+    u->crumb_at = in->crumb_last < 0 ? 0 : in->crumb_last >= in->crumb_n ? in->crumb_n - 1 : in->crumb_last;
+}
+
+// A key while the path buttons have the keyboard: true when it was theirs (*a: what gui/ does).
+// Any other key gives the keyboard back to the list and is the list's.
+static bool ui_crumbs_event(Ui *u, const UiInput *in, UiEvent e, UiAction *a)
+{
+    *a = (UiAction){ UA_NONE, 0, false };
+    switch (e.key) {
+    case UK_LEFT: case UK_SEL_LEFT: if (u->crumb_at > 0) u->crumb_at--; return true;
+    case UK_RIGHT: case UK_SEL_RIGHT: if (u->crumb_at < in->crumb_n - 1) u->crumb_at++; return true;
+    case UK_HOME: case UK_SEL_HOME: u->crumb_at = 0; return true;
+    case UK_END: case UK_SEL_END: u->crumb_at = in->crumb_n - 1; return true;
+    case UK_ENTER: u->crumb_focus = false, *a = (UiAction){ UA_CRUMB, u->crumb_at, false }; return true;
+    case UK_SHIFT_ENTER: *a = (UiAction){ UA_TAB_BG_CRUMB, u->crumb_at, false }; return true;
+    case UK_CRUMBS: return true;
+    case UK_ESC: case UK_TAB: u->crumb_focus = false; return true;
+    default: u->crumb_focus = false; return false;
+    }
 }
 
 // ---- the prompts -------------------------------------------------------------------------------
@@ -477,6 +581,11 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
 {
     UiList *l = &u->list;
     bool prompt = u->asking || u->confirming;
+    // A click anywhere gives the path buttons' keyboard back; so does their going.
+    bool clicked = in->click >= 0 || in->dclick >= 0 || in->side_click >= 0 || in->header >= 0 || in->bar != UB_NONE ||
+                   in->tab_click >= 0 || in->tab_close >= 0 || in->mid_row >= 0 || in->mid_side >= 0 || in->mid_crumb >= 0;
+    if (clicked || in->crumb_n <= 0) u->crumb_focus = false;
+    if (u->crumb_focus && u->crumb_at >= in->crumb_n) u->crumb_at = in->crumb_n - 1;
     // A modal panel's buttons: as the keys they stand for.
     if (u->confirming && (in->modal == UI_MODAL_YES || in->modal == UI_MODAL_NO)) {
         u->confirming = false;
@@ -536,6 +645,31 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
     if (!prompt && in->forwards > 0) return (UiAction){ UA_FORWARD, 0, false };
     for (int k = 0; k < in->nev; k++) {
         UiEvent e = in->ev[k];
+        if (u->editing && u->edit_path && !prompt && e.key == UK_CRUMBS) {   // from the location line: it closes
+            ui_edit_close(u), ui_crumbs_focus(u, in);
+            continue;
+        }
+        if (u->editing && !prompt) {
+            UiAction a = ui_edit_event(u, e, in->paste);
+            if (a.kind != UA_NONE) return a;
+            continue;
+        }
+        if (u->crumb_focus && !prompt) {
+            UiAction a;
+            if (ui_crumbs_event(u, in, e, &a)) {
+                if (a.kind != UA_NONE) return a;
+                continue;
+            }
+        }
+        // Outside an edit line and the path buttons, Shift doesn't change a move or Enter.
+        switch (e.key) {
+        case UK_SEL_LEFT: e.key = UK_LEFT; break;
+        case UK_SEL_RIGHT: e.key = UK_RIGHT; break;
+        case UK_SEL_HOME: e.key = UK_HOME; break;
+        case UK_SEL_END: e.key = UK_END; break;
+        case UK_SHIFT_ENTER: e.key = UK_ENTER; break;
+        default: break;
+        }
         if (u->asking) {
             UiAction a = ui_ask_event(u, e);
             if (a.kind != UA_NONE) return a;
@@ -543,11 +677,6 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         }
         if (u->confirming) {
             UiAction a = ui_confirm_event(u, e);
-            if (a.kind != UA_NONE) return a;
-            continue;
-        }
-        if (u->editing) {
-            UiAction a = ui_edit_event(u, e);
             if (a.kind != UA_NONE) return a;
             continue;
         }
@@ -620,6 +749,7 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         case UK_UNDO: return (UiAction){ UA_UNDO, 0, false };
         case UK_NEWFOLDER: return (UiAction){ UA_NEWFOLDER, 0, false };
         case UK_LOCATION: return (UiAction){ UA_LOCATION, 0, false };
+        case UK_CRUMBS: ui_crumbs_focus(u, in); break;
         case UK_PARENT: return (UiAction){ UA_PARENT, 0, false };
         case UK_TAB_NEW: return (UiAction){ UA_TAB_NEW, 0, false };
         case UK_TAB_CLOSE: return (UiAction){ UA_TAB_CLOSE, -1, false };
@@ -735,6 +865,15 @@ static void ui_crumbs_shift(UiCrumbs *c, int lo, int by)
 {
     int to = lo + by;
     c->lo = to < 0 ? 0 : to > c->n - 1 ? c->n - 1 : to;
+}
+
+// The window moved, if it must, so button at is shown (the one the keyboard marks, F5.2).
+static void ui_crumbs_show(UiCrumbs *c, const float *w, float room, float arrow, int at)
+{
+    int lo, hi;
+    if (!ui_crumbs_window(c, w, room, arrow, &lo, &hi)) return;
+    if (at < lo) c->lo = at;
+    while (at >= hi && lo < at) hi = ui_crumbs_fit(w, c->n, room - 2 * arrow, ++lo), c->lo = lo;
 }
 
 // ---- the location line (F4) -------------------------------------------------------------------

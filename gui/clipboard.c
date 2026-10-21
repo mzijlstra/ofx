@@ -14,7 +14,7 @@
 #include <poll.h>
 
 enum { CLIP_OFFERS = 8, CLIP_READ_MAX = MiB(1), CLIP_WAIT_MS = 1000 };
-enum { OFFER_GNOME = 1, OFFER_URIS = 2 };
+enum { OFFER_GNOME = 1, OFFER_URIS = 2, OFFER_TEXT = 4, OFFER_UTF8 = 8 };
 
 static u8 clip_mem[MiB(2)];   // our payloads, under clip.mu
 
@@ -29,6 +29,7 @@ static struct {
     pthread_mutex_t mu;
 
     struct ext_data_control_source_v1 *src;   // ours, while we own the selection
+    bool      text;        // it is an edit line's text, not files (F5.2)
     Arena     arena;
     Str       payload[CLIP_FMTS];
 
@@ -59,6 +60,8 @@ static void on_offer_type(void *data, struct ext_data_control_offer_v1 *o, const
     int i = offer_slot(o);
     if (i >= 0 && strcmp(mime, CLIP_MIME_GNOME) == 0) clip.offers[i].types |= OFFER_GNOME;
     if (i >= 0 && strcmp(mime, CLIP_MIME_URIS) == 0) clip.offers[i].types |= OFFER_URIS;
+    if (i >= 0 && strcmp(mime, CLIP_MIME_TEXT[0]) == 0) clip.offers[i].types |= OFFER_UTF8;
+    if (i >= 0 && strcmp(mime, CLIP_MIME_TEXT[1]) == 0) clip.offers[i].types |= OFFER_TEXT;
     pthread_mutex_unlock(&clip.mu);
 }
 
@@ -237,6 +240,21 @@ static void clip_quit(void)
     close(clip.wake[0]), close(clip.wake[1]);
 }
 
+// A new source of ours offered as the selection, the payloads made already; under clip.mu.
+static void clip_offer(bool files)
+{
+    struct ext_data_control_source_v1 *old = clip.src;
+    clip.src = ext_data_control_manager_v1_create_data_source(clip.mgr);
+    ext_data_control_source_v1_add_listener(clip.src, &source_listener, NULL);
+    if (files) ext_data_control_source_v1_offer(clip.src, CLIP_MIME_GNOME);
+    if (files) ext_data_control_source_v1_offer(clip.src, CLIP_MIME_URIS);
+    ext_data_control_source_v1_offer(clip.src, CLIP_MIME_TEXT[0]);
+    ext_data_control_source_v1_offer(clip.src, CLIP_MIME_TEXT[1]);
+    ext_data_control_device_v1_set_selection(clip.dev, clip.src);
+    clip.text = !files;
+    if (old) ext_data_control_source_v1_destroy(old);
+}
+
 // The selection becomes files: every payload made, then offered.
 static bool clip_set(const ClipFiles *c)
 {
@@ -244,15 +262,24 @@ static bool clip_set(const ClipFiles *c)
     pthread_mutex_lock(&clip.mu);
     arena_reset(&clip.arena);
     for (int f = 0; f < CLIP_FMTS; f++) clip.payload[f] = clip_payload(&clip.arena, c, (ClipFormat)f);
-    struct ext_data_control_source_v1 *old = clip.src;
-    clip.src = ext_data_control_manager_v1_create_data_source(clip.mgr);
-    ext_data_control_source_v1_add_listener(clip.src, &source_listener, NULL);
-    ext_data_control_source_v1_offer(clip.src, CLIP_MIME_GNOME);
-    ext_data_control_source_v1_offer(clip.src, CLIP_MIME_URIS);
-    ext_data_control_source_v1_offer(clip.src, CLIP_MIME_TEXT[0]);
-    ext_data_control_source_v1_offer(clip.src, CLIP_MIME_TEXT[1]);
-    ext_data_control_device_v1_set_selection(clip.dev, clip.src);
-    if (old) ext_data_control_source_v1_destroy(old);
+    clip_offer(true);
+    pthread_mutex_unlock(&clip.mu);
+    wl_display_flush(clip.dpy);
+    return true;
+}
+
+// The selection becomes text (an edit line's Ctrl+C, F5.2), offered as text/plain only, as any
+// program's copy: our files leave the clipboard. Through our own connection rather than GLFW's,
+// whose reads have no time limit, and whose source the main thread couldn't serve while
+// clip_get_text waits on it.
+static bool clip_set_text(Str text)
+{
+    if (!clip.ok) return false;
+    pthread_mutex_lock(&clip.mu);
+    arena_reset(&clip.arena);
+    for (int f = 0; f < CLIP_FMTS; f++) clip.payload[f] = STR_EMPTY;
+    clip.payload[CLIP_FMT_TEXT] = str_from_c(arena_cstr(&clip.arena, text));
+    clip_offer(false);
     pthread_mutex_unlock(&clip.mu);
     wl_display_flush(clip.dpy);
     return true;
@@ -282,29 +309,19 @@ static bool clip_ours(void)
 
 typedef enum { CLIP_NONE, CLIP_OURS, CLIP_THEIRS } ClipFrom;
 
-// What a paste would take: our own files (the caller has them), another program's files (into c,
-// strings in a), or none (text, an image, or nothing).
-static ClipFrom clip_get(Arena *a, ClipFiles *c)
+// Offer i's `mime` read into a, NUL-ended: the other program writes it, a second at most, so the
+// window keeps answering. Called with clip.mu held; returns with it released.
+static bool clip_receive(Arena *a, int i, const char *mime, Str *out)
 {
-    if (!clip.ok) return CLIP_NONE;
-    pthread_mutex_lock(&clip.mu);
-    if (clip.src) {
-        pthread_mutex_unlock(&clip.mu);
-        return CLIP_OURS;
-    }
-    int i = clip.sel;
-    unsigned types = i >= 0 ? clip.offers[i].types : 0;
-    bool gnome = types & OFFER_GNOME;
     int fds[2] = { -1, -1 };
-    if (!types || pipe2(fds, O_CLOEXEC) != 0) {
+    if (pipe2(fds, O_CLOEXEC) != 0) {
         pthread_mutex_unlock(&clip.mu);
-        return CLIP_NONE;
+        return false;
     }
-    ext_data_control_offer_v1_receive(clip.offers[i].offer, gnome ? CLIP_MIME_GNOME : CLIP_MIME_URIS, fds[1]);
+    ext_data_control_offer_v1_receive(clip.offers[i].offer, mime, fds[1]);
     pthread_mutex_unlock(&clip.mu);
     wl_display_flush(clip.dpy);
     close(fds[1]);
-    // The other program writes it; a second at most, so the window keeps answering.
     isize avail;
     char *buf = arena_tail(a, &avail);
     if (avail > CLIP_READ_MAX) avail = CLIP_READ_MAX;
@@ -319,5 +336,48 @@ static ClipFrom clip_get(Arena *a, ClipFiles *c)
     close(fds[0]);
     buf[n] = 0;
     arena_commit(a, n + 1);
-    return clip_parse(a, (Str){ buf, n }, gnome, c) ? CLIP_THEIRS : CLIP_NONE;
+    *out = (Str){ buf, n };
+    return true;
+}
+
+// What a paste would take: our own files (the caller has them), another program's files (into c,
+// strings in a), or none (text, an image, or nothing).
+static ClipFrom clip_get(Arena *a, ClipFiles *c)
+{
+    if (!clip.ok) return CLIP_NONE;
+    pthread_mutex_lock(&clip.mu);
+    if (clip.src) {
+        bool text = clip.text;
+        pthread_mutex_unlock(&clip.mu);
+        return text ? CLIP_NONE : CLIP_OURS;
+    }
+    int i = clip.sel;
+    unsigned types = i >= 0 ? clip.offers[i].types & (OFFER_GNOME | OFFER_URIS) : 0;
+    bool gnome = types & OFFER_GNOME;
+    Str got;
+    if (!types || !clip_receive(a, i, gnome ? CLIP_MIME_GNOME : CLIP_MIME_URIS, &got)) return CLIP_NONE;
+    return clip_parse(a, got, gnome, c) ? CLIP_THEIRS : CLIP_NONE;
+}
+
+// The selection as text for an edit line's Ctrl+V (into a): ours as we offer it, another
+// program's text/plain. False without the protocol (the caller asks GLFW); true and empty when the
+// selection holds no text.
+static bool clip_get_text(Arena *a, Str *out)
+{
+    *out = STR_EMPTY;
+    if (!clip.ok) return false;
+    pthread_mutex_lock(&clip.mu);
+    if (clip.src) {
+        *out = str_from_c(arena_cstr(a, clip.payload[CLIP_FMT_TEXT]));
+        pthread_mutex_unlock(&clip.mu);
+        return true;
+    }
+    int i = clip.sel;
+    unsigned types = i >= 0 ? clip.offers[i].types : 0;
+    if (!(types & (OFFER_UTF8 | OFFER_TEXT))) {
+        pthread_mutex_unlock(&clip.mu);
+        return true;
+    }
+    clip_receive(a, i, types & OFFER_UTF8 ? CLIP_MIME_TEXT[0] : CLIP_MIME_TEXT[1], out);
+    return true;
 }
