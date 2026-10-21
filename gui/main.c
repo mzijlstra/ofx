@@ -852,11 +852,21 @@ static void location_go(void)
         set_status(true, "%s: %s", path, strerror(errno));
         return;
     }
+    // A file: its folder, the cursor on it, as Nemo does (Michael, 2026-10-21).
+    Str select = STR_EMPTY;
+    char dir[PATH_MAX];
     if (!S_ISDIR(st.st_mode)) {
-        set_status(true, "%s isn't a folder", path);
-        return;
+        Str d = path_dir(str_from_c(path));
+        select = path_base(str_from_c(path));
+        snprintf(dir, sizeof dir, "%.*s", STR_ARG(d.len ? d : S("/")));
+    } else {
+        snprintf(dir, sizeof dir, "%s", path);
     }
-    if (go_to(path, STR_EMPTY, 0)) ui_edit_close(&app.ui);
+    char name[NAME_MAX + 1];
+    snprintf(name, sizeof name, "%.*s", STR_ARG(select));
+    if (!go_to(dir, str_from_c(name), 0)) return;
+    ui_edit_close(&app.ui);
+    if (name[0] == '.' && !app.show_hidden) set_status(false, "%s is hidden: . shows hidden files", name);
 }
 
 // A path button: its folder, the cursor on the next folder down the bar (where you came from).

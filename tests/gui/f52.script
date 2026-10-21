@@ -165,4 +165,15 @@ key enter
 wait-for 2000 crumb=2
 raw-key 263 1
 wait-for 2000 crumb=1 sel=adir
+# ---- a file's path in the location line: its folder, the cursor on it, as Nemo does; a hidden
+# one says how to show it
+key ctrl-l
+type ~/tree/adir/a1
+key enter
+wait-for 2000 crumbs=home|tree|adir crumb=2 sel=a1 locating=0
+key ctrl-l
+type ~/tree/.dot
+key enter
+wait-for 2000 crumb=1 locating=0 status=.dot is hidden
+key home
 quit

@@ -89,6 +89,8 @@ MUTANTS = [
     (G, "        if (app.ui.copied) text_copy((Str){ app.ui.copy, app.ui.copy_len }), app.ui.copied = false;", "        app.ui.copied = false;"),
     (G, "    if (!clip_set_text(t)) SetClipboardText(app.text_copied);\n    own.n = 0;", "    if (!clip_set_text(t)) SetClipboardText(app.text_copied);"),
     (G, "    if (own.n > 0) return clip_payload(&pastea, &own, CLIP_FMT_TEXT);\n", ""),
+    (G, "    if (!go_to(dir, str_from_c(name), 0)) return;", "    if (!go_to(dir, STR_EMPTY, 0)) return;"),
+    (G, "    if (name[0] == '.' && !app.show_hidden) set_status(", "    if (0) set_status("),
 ]
 scratch = sys.argv[1]
 only = [int(x) for x in sys.argv[2].split(',')] if len(sys.argv) > 2 else None

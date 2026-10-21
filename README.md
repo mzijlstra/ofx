@@ -28,7 +28,7 @@ wayland-cursor, wayland-egl, xkbcommon, fontconfig and freetype2. raylib and Cla
 | Backspace, Left, `h` | up to the parent, the folder you left selected |
 | Alt+Left, Alt+Right | back and forward |
 | Alt+Up | up to the parent |
-| Ctrl+L | type a location: all of it selected, so typing replaces it; `~` is home, a relative path starts here |
+| Ctrl+L | type a location: all of it selected, so typing replaces it; `~` is home, a relative path starts here; a file's path opens its folder with the file selected |
 | Ctrl+K | the keys to the path buttons: Left/Right (`h`/`l`), Home/End move, Enter goes there, Shift+Enter opens it in a background tab, Esc back to the list |
 | `/`, Ctrl+F | find: type to jump, Enter keeps, Esc goes back; then `n`/`N` again |
 | `.`, Ctrl+H | hidden files on and off |

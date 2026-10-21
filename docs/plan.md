@@ -135,6 +135,8 @@ there is no data-control (weston, the tests).
 puts the keyboard on the path buttons, the rightmost shown marked. Left and Right move (the window
 scrolls to keep it in view), Home and End go to the ends, Enter goes to that folder, Shift+Enter
 opens it in a background tab; Esc, Tab, or a click on the list give the keyboard back to the list.
+*Added (Michael, after trying it):* a file's path in the location line (pasted, typed) opens its
+folder with the cursor on the file, as Nemo does; a hidden one says `.` shows hidden files.
 *Built:* any click gives it back, and so does any other key, which then does what it does in the
 list (Down moves the cursor); `h` and `l` move as Left and Right do (Michael, after trying it); the marked button has an accent outline and the footer names the
 keys.
