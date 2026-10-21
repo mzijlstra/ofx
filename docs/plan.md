@@ -24,6 +24,7 @@ shares, archives, "open with" menus.
 | F3 | Change files: select, rename, new folder, trash, delete, copy and move with progress, the system clipboard, undo; on scratch folders only in tests | Below |
 | F4 | Top bar: back, forward, up; the path as buttons; a location entry toggle; search. Item counts for folders | Below |
 | F5 | Tabs: Ctrl+T, Ctrl+W, middle click on a path button or folder | Below |
+| F5.1 | The delete question and the name-clash question as a modal panel in the window's middle, the rest dimmed or blurred | Below |
 | F6 | Bottom bar: sidebar as places, as a tree, or hidden. Free space per drive in the sidebar | |
 | F7 | Menus: File, Edit, View, Go, Bookmarks, Help | |
 
@@ -107,6 +108,24 @@ event, the selection kept by name (or the row it was on, when that name is gone)
 
 **Idle:** the loop draws only when something changed and otherwise waits in
 `PollInputEvents` (uml-viewer's loop, prdash's `docs/gui-findings.md`).
+
+## F5.1 design (2026-10-21)
+
+**Asked (Michael):** the delete-for-good question front and centre instead of in the status bar:
+a modal panel in the middle of the window, the rest dimmed or blurred, so it can't be missed; the
+name-clash question of a copy or move the same. Both backdrops are built behind `FX_MODAL=dim` /
+`FX_MODAL=blur` so he can try them and pick; the other then goes.
+
+**The delete panel:** "Delete 3 items for good?", the names it will delete (the targets taken
+when it opened, F5's fix: up to 8, then "and 12 more"), "This can't be undone.", and Cancel and
+Delete buttons, Delete the default (Enter, `y`); `n` and Esc cancel. **The clash panel:**
+"big.bin already exists in bdir", Skip, Replace (Merge for a folder onto a folder), Keep both and
+Cancel, and a "Do the same for the rest" box (a click, or the capitals as before). Clicks outside
+the panel do nothing; the keys are the prompts' as before.
+
+**Backdrops:** `dim`: a dark see-through layer over the window. `blur`: the frame drawn into an
+image at 1x, scaled down twice and back up with bilinear filtering (no shader), then lightly
+dimmed; drawn only while a panel is up.
 
 ## F5 design (2026-10-21)
 
