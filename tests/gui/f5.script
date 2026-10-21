@@ -27,12 +27,24 @@ key ctrl-tab
 expect tab=1 marked=0
 key ctrl-tab
 expect tab=0 marked=2 sel=cdir
+# A new tab on the same folder starts with nothing selected; the old one keeps its own
+key ctrl-t
+expect tabs=3 tab=1 marked=0 sel=cdir
+key ctrl-w
+expect tabs=2 tab=1 tabdirs=tree|bdir
+key ctrl-shift-tab
+expect tab=0 marked=2
 key esc
 key end
-expect sel=f40 top=32
+key up
+key up
+key up
+key up
+key up
+expect sel=f35 top=32
 key ctrl-tab
 key ctrl-tab
-expect sel=f40 top=32 marked=0
+expect sel=f35 top=32 marked=0
 # ---- sort and hidden files belong to the window
 char S
 key ctrl-tab
@@ -43,6 +55,9 @@ key ctrl-tab
 expect rev=0
 # ---- Alt+N, Ctrl+PgUp/Down through the key callback, moving a tab
 key alt-2
+expect tab=1
+# A digit without Alt is no tab
+raw-key 49 0
 expect tab=1
 key alt-1
 expect tab=0
