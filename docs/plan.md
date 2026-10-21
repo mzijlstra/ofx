@@ -23,7 +23,7 @@ shares, archives, "open with" menus.
 | F2 | Get around: sidebar (bookmarks, mounts), hidden files, sort, type-to-find, back and forward | |
 | F3 | Change files: select, rename, new folder, trash, delete, copy and move with progress, the system clipboard, undo; on scratch folders only in tests | Below |
 | F4 | Top bar: back, forward, up; the path as buttons; a location entry toggle; search. Item counts for folders | Below |
-| F5 | Tabs: Ctrl+T, Ctrl+W, middle click on a path button or folder | |
+| F5 | Tabs: Ctrl+T, Ctrl+W, middle click on a path button or folder | Below |
 | F6 | Bottom bar: sidebar as places, as a tree, or hidden. Free space per drive in the sidebar | |
 | F7 | Menus: File, Edit, View, Go, Bookmarks, Help | |
 
@@ -47,6 +47,7 @@ his word: Nemo's compact view and its icon size slider.
 - Counting in a separate process (reviewer-2, F4 review): a readdir on a hard NFS mount that
   hangs sits in D state, which no thread exit can reap, so fx's process (its Wayland socket) can
   outlive its window. Only a child process that does the counting decouples a dead mount fully.
+- Remember the open tabs across a restart (F5 doesn't).
 - Not wanted: Nemo's built-in terminal (`t`, a terminal here, covers it).
 
 **Thumbnails, a rule from Nemo (2026-10-20):** Nemo looped at up to 45% CPU on one file
@@ -106,6 +107,44 @@ event, the selection kept by name (or the row it was on, when that name is gone)
 
 **Idle:** the loop draws only when something changed and otherwise waits in
 `PollInputEvents` (uml-viewer's loop, prdash's `docs/gui-findings.md`).
+
+## F5 design (2026-10-21)
+
+**Decisions (Michael):** Ctrl+W on the last tab closes fx; a middle click opens its tab in the
+background; sort order and hidden files belong to the window, not to a tab; tabs are not
+remembered across a restart (on the later list).
+
+**Per tab:** the folder, the cursor (by name) and the scroll, the history, the selection (by
+name), the find line's last text, the path buttons. **The window's:** sort, hidden files, the
+sidebar, the job, the clipboard, undo, the theme. Only the tab on screen holds a listing and the
+inotify watch; switching re-lists its folder (the listing arenas stay two, however many tabs) and
+puts its cursor, scroll and selection back by name. A tab whose folder is gone goes to the nearest
+folder above that is there, as a reload does. At most 32 tabs.
+
+**The tab bar,** below the top bar, only with two tabs or more (Nemo): the tabs share the width,
+each the folder's name, cut to fit, and a ×; the one on screen marked in the accent. A click on a
+tab shows it; a middle click or its × closes it.
+
+**Keys and mouse:** Ctrl+T a new tab on the current folder, after the current one, shown;
+Ctrl+W closes the current tab (the one to its right shows, or to its left at the end; the last
+closes fx); Ctrl+Tab / Ctrl+Shift+Tab and Ctrl+PgDn / Ctrl+PgUp the next and previous (wrapping);
+Alt+1 to Alt+9 a tab by place (Alt+9 the last); Ctrl+Shift+PgUp / PgDn move the current tab left
+or right. A middle click on a path button, a folder row or a sidebar place opens it in a new tab in
+the background.
+
+**A job across tabs:** a copy, move or delete runs on whatever tab is shown; its progress and its
+prompts stay in the footer, and a tab showing a folder it changed lists again when it is shown.
+
+## F5 exit criteria
+
+1. `make test`: the tab list in ui/ (open after the current one, close and who shows next, the
+   last tab, move, next/previous wrapping, Alt+N, the 32 limit) and the per-tab state kept by name;
+   a mutation run over the new ui/ code.
+2. GUI scripts: Ctrl+T, Ctrl+W (and the last tab quitting), switching by key, by click and by
+   Alt+N; each tab back on its folder, cursor, scroll, selection and history; sort and hidden
+   shared; middle clicks on a path button, a row and a place open background tabs; a tab whose
+   folder is gone; the tab bar only from two tabs; a copy that keeps running across a switch.
+3. F1-F4 scripts still pass; idle about 0%; LeakSanitizer reports nothing.
 
 ## F4 design (2026-10-20)
 
