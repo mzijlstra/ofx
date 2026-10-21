@@ -123,6 +123,8 @@ static void test_ui_f5(void)
     u.confirming = true;
     in = ui_input_none(), in.tab_click = 0, in.mid_row = 0;
     CHECK(ui_handle(&u, names, &in).kind == UA_NONE);
+    in = ui_input_none(), in.tab_close = 0, in.mid_side = 0, in.mid_crumb = 0;
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE);
     in = keys(1, UK_TAB_NEW);
     CHECK(ui_handle(&u, names, &in).kind == UA_NONE);
     u.confirming = false;

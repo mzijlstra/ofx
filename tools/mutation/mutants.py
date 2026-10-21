@@ -345,3 +345,24 @@ MUTANTS += [
     (L, "        if (nm[0] == '.' && !hidden) continue;\n        n++;", "        n++;"),
     (L, "    if (!d) return -1;\n    isize n = 0;", "    if (!d) return 0;\n    isize n = 0;"),
 ]
+# ---- F5: tabs
+MUTANTS += [
+    (U, "    if (t->n == UI_TABS_MAX) return false;\n    int at", "    int at"),
+    (U, "    int at = t->n == 0 ? 0 : t->cur + 1;", "    int at = t->n;"),
+    (U, "    if (show) t->cur = at;   // the first", "    if (0) t->cur = at;   // the first"),
+    (U, "    if (at < 0 || at >= t->n) return -1;\n    int slot", "    int slot"),
+    (U, "    if (at < t->cur || (at == t->cur && t->cur == t->n)) t->cur--;", "    if (at < t->cur) t->cur--;"),
+    (U, "    if (at < t->cur || (at == t->cur && t->cur == t->n)) t->cur--;", "    if (at == t->cur && t->cur == t->n) t->cur--;"),
+    (U, "    if (t->cur < 0) t->cur = 0;\n    return slot;", "    return slot;"),
+    (U, "    if (t->n > 0) t->cur = ((t->cur + by) % t->n + t->n) % t->n;", "    if (t->n > 0) t->cur = (t->cur + by) % t->n;"),
+    (U, "    if (k == 9 && t->n > 0) t->cur = t->n - 1;", ""),
+    (U, "    else if (k >= 1 && k <= t->n) t->cur = k - 1;", "    else if (k >= 1) t->cur = k - 1;"),
+    (U, "    if (to < 0 || to >= t->n) return;\n    int s = t->slot[to];", "    if (to < 0) return;\n    int s = t->slot[to];"),
+    (U, "    t->slot[to] = t->slot[t->cur], t->slot[t->cur] = s, t->cur = to;", "    t->slot[to] = t->slot[t->cur], t->slot[t->cur] = s;"),
+    (U, "    if (!prompt && in->tab_close >= 0) return", "    if (in->tab_close >= 0) return"),
+    (U, "    if (!prompt && in->mid_row >= 0 && l->top + in->mid_row < l->n) return (UiAction){ UA_TAB_BG_ROW, l->top + in->mid_row, false };", "    if (!prompt && in->mid_row >= 0) return (UiAction){ UA_TAB_BG_ROW, in->mid_row, false };"),
+    (U, "    if (!prompt && in->mid_side >= 0 && u->side.top + in->mid_side < u->side.n) return", "    if (!prompt && in->mid_side >= 0) return"),
+    (U, "        case UK_TAB_CLOSE: return (UiAction){ UA_TAB_CLOSE, -1, false };", "        case UK_TAB_CLOSE: return (UiAction){ UA_TAB_CLOSE, 0, false };"),
+    (U, "        case UK_TAB_JUMP: return (UiAction){ UA_TAB_JUMP, (isize)e.ch, false };", ""),
+    (U, "    if (!prompt && in->tab_click >= 0) return ui_edit_close(u), (UiAction){ UA_TAB_SHOW, in->tab_click, false };", "    if (!prompt && in->tab_click >= 0) return (UiAction){ UA_TAB_SHOW, in->tab_click, false };"),
+]

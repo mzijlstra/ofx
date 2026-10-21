@@ -757,7 +757,7 @@ static bool ui_tabs_open(UiTabs *t, int slot, bool show)
     int at = t->n == 0 ? 0 : t->cur + 1;
     memmove(t->slot + at + 1, t->slot + at, sizeof *t->slot * (size_t)(t->n - at));
     t->slot[at] = slot, t->n++;
-    if (show || t->n == 1) t->cur = at;
+    if (show) t->cur = at;   // the first tab is at 0, where cur already is
     return true;
 }
 
