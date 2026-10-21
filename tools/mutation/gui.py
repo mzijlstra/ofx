@@ -70,7 +70,8 @@ MUTANTS = [
     # F5 review: the delete question's targets taken when it opens
     (G, "    for (isize i = 0; i < n; i++) run.item[i] = (JobItem){ .src = arena_cstr(&joba, str_from_c(doomed.path[i])) };", "    char *late[CLIP_PATHS_MAX];\n    n = targets(&joba, late, CLIP_PATHS_MAX);\n    for (isize i = 0; i < n; i++) run.item[i] = (JobItem){ .src = late[i] };"),
     (G, "    if (undo.n == 0) undo_clear(&undo);\n    }", "    if (undo.n == 0) undo_clear(&undo);\n    }\n    if (j->kind == JOB_DELETE) ui_mark_clear(&app.ui);"),
-    (G, "        if (!was_confirming && app.ui.confirming) delete_ask();", ""),
+    (G, "        if (!was_confirming && (app.ui.confirming || a.kind == UA_DELETE)) delete_ask();", "        if (!was_confirming && app.ui.confirming) delete_ask();"),
+    (G, "    doomed.n = 0;\n    if (app.ui.marked > CLIP_PATHS_MAX) {", "    if (app.ui.marked > CLIP_PATHS_MAX) {"),
 ]
 scratch = sys.argv[1]
 only = [int(x) for x in sys.argv[2].split(',')] if len(sys.argv) > 2 else None

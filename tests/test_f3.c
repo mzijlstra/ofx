@@ -914,6 +914,12 @@ static void test_ui_f3(void)
     ui_handle(&u, names, &in);
     CHECK(u.confirm_n == 1);
     u.confirming = false;
+    // Opened and answered in one frame's input: ui_handle returns UA_DELETE with the question
+    // already closed, so gui/ takes the targets on UA_DELETE too.
+    in = ui_input_none();
+    in.ev[in.nev++] = (UiEvent){ UK_SHIFT_DELETE, 0 };
+    in.ev[in.nev++] = (UiEvent){ UK_NONE, 'y' };
+    CHECK(ui_handle(&u, names, &in).kind == UA_DELETE && !u.confirming);
 
     // A clash: s r k, the capitals for the rest, Esc cancels; others wait.
     u.asking = true;

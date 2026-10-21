@@ -13,6 +13,8 @@
 //                           ctrl-t ctrl-w ctrl-tab ctrl-shift-tab ctrl-shift-pageup ctrl-shift-pagedown,
 //                           and alt-1 .. alt-9
 //   char <c>                one typed character
+//   keys <word>...          keys and characters in one frame's input, as fast typing during a slow
+//                           frame gives them: each word a key name (as for `key`) or char:<c>
 //   type <text>             the rest of the line, after one space, as typed characters
 //   wheel <notches>         over the list; positive away from the user (up)
 //   press <row> [ctrl|shift] a left press on list row <row> (0 = the first on screen), through the
@@ -319,6 +321,18 @@ static bool script_input(UiInput *in)
                 in->ev[in->nev++] = (UiEvent){ UK_TAB_JUMP, (u32)(arg.p[4] - '0') };
             else if (!k) script_fail("no key %s", a);
             else in->ev[in->nev++] = (UiEvent){ k, 0 };
+        } else if (str_eq(cmd, S("keys"))) {
+            for (isize at = 0; at < arg.len && in->nev < UI_EVENTS_MAX;) {
+                while (at < arg.len && arg.p[at] == ' ') at++;
+                isize e = at;
+                while (e < arg.len && arg.p[e] != ' ') e++;
+                Str w = str_cut(arg, at, e);
+                at = e;
+                if (w.len == 0) break;
+                if (str_starts_with(w, S("char:")) && w.len == 6) in->ev[in->nev++] = (UiEvent){ UK_NONE, (u32)(unsigned char)w.p[5] };
+                else if (script_key(w)) in->ev[in->nev++] = (UiEvent){ script_key(w), 0 };
+                else script_fail("keys: no key %.*s", STR_ARG(w));
+            }
         } else if (str_eq(cmd, S("char")) || str_eq(cmd, S("type"))) {
             // The raw line for type: its text may start or end with spaces.
             Str text = str_eq(cmd, S("type")) ? str_cut(line, 5, line.len) : arg;

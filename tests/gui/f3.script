@@ -248,4 +248,34 @@ expect confirming=1 sel=k3
 key enter
 wait-for 3000 job=-
 sh test -f "$FX_DIR/k3" && test -f "$FX_DIR/k1"
+# A question answered No forgets its targets; Shift+Delete and y in one frame delete the cursor's
+# file, not the earlier question's
+char /
+type k1
+key enter
+key shift-delete
+char n
+expect confirming=0
+key down
+expect sel=k3
+keys shift-delete char:y
+wait-for 3000 job=-
+sh test -f "$FX_DIR/k1" && test ! -e "$FX_DIR/k3"
+# More selected than fx takes: the question refuses, and forgets an earlier question's targets
+sh mkdir "$FX_DIR/many" && cd "$FX_DIR/many" && seq -f 'm%g' 1 4100 | xargs touch
+wait-for 2000 n=7
+char /
+type k1
+key enter
+key shift-delete
+char n
+char /
+type many
+key enter
+key enter
+wait-for 3000 n=4100
+key ctrl-a
+keys shift-delete char:y
+wait-for 3000 job=- confirming=0
+sh test -f "$FX_DIR/m1" && test -f "$FX_DIR/../k1" && test "$(ls "$FX_DIR" | wc -l)" = 4100
 quit

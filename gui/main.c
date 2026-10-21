@@ -540,9 +540,11 @@ static struct {
 static u8    doomed_mem[MiB(2)];
 static Arena doomeda;
 
-// The question just opened: its targets taken now, and its count made theirs.
+// The question just opened (and maybe was answered in the same frame): its targets taken now, and
+// its count made theirs; none when it may delete nothing (then Yes deletes nothing).
 static void delete_ask(void)
 {
+    doomed.n = 0;
     if (app.ui.marked > CLIP_PATHS_MAX) {
         app.ui.confirming = false;
         set_status(true, "%td selected: fx takes at most %d at a time", app.ui.marked, CLIP_PATHS_MAX);
@@ -1868,7 +1870,10 @@ int main(int argc, char **argv)
         }
         bool was_editing = app.ui.editing, was_confirming = app.ui.confirming;
         UiAction a = ui_handle(&app.ui, (UiNames){ list_name, NULL }, &in);
-        if (!was_confirming && app.ui.confirming) delete_ask();
+        // Shift+Delete and its y can come in one frame's input: the question opened and was answered
+        // within ui_handle, so the targets are taken here either way (reviewer-2, F5 confirm). A
+        // new question always starts from no targets.
+        if (!was_confirming && (app.ui.confirming || a.kind == UA_DELETE)) delete_ask();
         // F2 opened the edit line: on the cursor's entry, as it is named now.
         if (!was_editing && app.ui.editing && !app.ui.edit_path) snprintf(app.edit_from, sizeof app.edit_from, "%.*s", STR_ARG(sel_name())), app.edit_new = false;
         if (a.kind != UA_NONE) act(a);
