@@ -124,7 +124,7 @@ typedef struct {
 static Tab    tabs[UI_TABS_MAX];
 static UiTabs tabbar;
 
-// The top bar's height, with the tab bar under it from two tabs on.
+// What is above the list: the top bar, and the tab bar over the files from two tabs on.
 static int top_h(void)
 {
     return HEADER_H + (tabbar.n >= 2 ? TAB_H : 0);
@@ -1008,7 +1008,7 @@ static int list_rows(int h)
 
 static int side_rows(int h)
 {
-    int r = (h - top_h() - FOOTER_H - PAD) / SIDE_ROW_H;
+    int r = (h - HEADER_H - FOOTER_H - PAD) / SIDE_ROW_H;   // the tab bar isn't over the sidebar
     return r > 0 ? r : 0;
 }
 
@@ -1336,11 +1336,12 @@ static Clay_RenderCommandArray layout(int w, int h)
         Str cnt = str_from_c(arena_sprintf(&frame, "%s", count));
         float foot_w = (float)w - 2 * PAD - 24 - str_width(cnt);   // the footer's line beside the count
         layout_bar((float)w);
-        if (tabbar.n >= 2) layout_tabs((float)w);
-        float body_h = (float)(h - top_h() - FOOTER_H);
+        float body_h = (float)(h - HEADER_H - FOOTER_H);
         CLAY(CLAY_ID("body"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(body_h) } } }) {
         layout_side(body_h);
         CLAY(CLAY_ID("main"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0) }, .layoutDirection = CLAY_TOP_TO_BOTTOM } }) {
+        // The tab bar over the files only, not the sidebar (Michael, 2026-10-21).
+        if (tabbar.n >= 2) layout_tabs((float)w - SIDE_W);
         layout_cols();
         CLAY(CLAY_ID("list"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0) }, .layoutDirection = CLAY_TOP_TO_BOTTOM },
                                 .clip = { .vertical = true } }) {
