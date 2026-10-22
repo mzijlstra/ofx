@@ -28,7 +28,7 @@ MUTANTS = [
     (G, "        if (k >= 0 && !mark[k]) mark[k] = 1, marked++;", ""),
     (G, "        if (app.ui.marked ? !app.ui.mark[i] : i != app.ui.list.sel) continue;", "        if (i != app.ui.list.sel) continue;"),
     (G, "            if (it->out != OUT_NEW) continue;", ""),
-    (G, "    if (run.own_cut && !atomic_load(&j->cancel)) own.n = 0, clip_clear_own();", ""),
+    (G, "    if (run.own_cut && !atomic_load(&j->cancel) && own_gen == run.own_gen) own.n = 0, clip_clear_own();", ""),
     (G, "if (!name_free(app.cwd, base, S_ISDIR(st.st_mode), true, true, name, sizeof name)) continue;", "if (!name_free(app.cwd, base, S_ISDIR(st.st_mode), false, true, name, sizeof name)) continue;"),
     (G, "        if (S_ISDIR(st.st_mode) && into_itself(src, app.cwd)) {", "        if (0) {"),
     (G, "            if (c->cut) {\n                here++;", "            if (0) {\n                here++;"),
@@ -91,6 +91,7 @@ MUTANTS = [
     (G, "    if (own.n > 0) return clip_payload(&pastea, &own, CLIP_FMT_TEXT);\n", ""),
     (G, "    if (!go_to(dir, str_from_c(name), 0)) return;", "    if (!go_to(dir, STR_EMPTY, 0)) return;"),
     (G, "    if (name[0] == '.' && !app.show_hidden) set_status(", "    if (0) set_status("),
+    (G, "!atomic_load(&j->cancel) && own_gen == run.own_gen)", "!atomic_load(&j->cancel))"),
 ]
 scratch = sys.argv[1]
 only = [int(x) for x in sys.argv[2].split(',')] if len(sys.argv) > 2 else None

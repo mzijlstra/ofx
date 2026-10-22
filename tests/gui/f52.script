@@ -176,4 +176,25 @@ type ~/tree/.dot
 key enter
 wait-for 2000 crumb=1 locating=0 status=.dot is hidden
 key home
+# ---- files copied while a cut's paste runs stay on the clipboard after it (reviewer-2, F5.2
+# review; a text copy is the same case, but weston has no data-control to clear). FX_TEST_CROSS
+# makes the move a slow copy.
+char /
+type bdir
+key enter
+key enter
+expect sel=big.bin
+key ctrl-x
+expect clip=1 cut=1
+key backspace
+key home
+key enter
+expect sel=a1
+key ctrl-v
+wait-for 2000 job=run
+key ctrl-c
+expect clip=1 cut=0 job=run
+wait-for 8000 job=-
+sh test -f "$FX_DIR/big.bin"
+expect clip=1 cut=0
 quit

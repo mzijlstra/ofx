@@ -44,8 +44,9 @@ head -c 8388608 /dev/urandom > "$H/tree/big.bin"
 echo "== f5"; FX_TEST_COPY_DELAY_MS=150 FX_TEST_HOME="$H" "$here/../../tools/gui/run-script.sh" "$T" "$here/f5.script" "$bin" "$H/tree" || fail=1
 T=$base/f52; rm -rf "$T"; H=$T/home; mkdir -p "$H/tree/adir" "$H/tree/bdir" "$T/data"
 touch "$H/tree/adir/a1" "$H/tree/notes.txt" "$H/tree/.dot"
+head -c 4194304 /dev/urandom > "$H/tree/bdir/big.bin"
 L="$H/tree"; for i in 1 2 3 4 5 6 7 8; do L="$L/zz-a-rather-long-folder-name-$i"; done; mkdir -p "$L"
-echo "== f52"; FX_TEST_HOME="$H" "$here/../../tools/gui/run-script.sh" "$T" "$here/f52.script" "$bin" "$H/tree" || fail=1
+echo "== f52"; FX_TEST_COPY_DELAY_MS=150 FX_TEST_CROSS=1 FX_TEST_HOME="$H" "$here/../../tools/gui/run-script.sh" "$T" "$here/f52.script" "$bin" "$H/tree" || fail=1
 T=$base/hang; rm -rf "$T"; mkdir -p "$T/tree/stuck"
 echo "== hang"
 t0=$(date +%s)

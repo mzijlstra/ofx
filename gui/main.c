@@ -133,6 +133,9 @@ static int top_h(void)
 }
 static Undo      undo;
 static ClipFiles own;      // fx's own copy or cut (own.n 0: none)
+// Bumped by every copy of ours, files or text: a cut's paste empties the clipboard after it only
+// if nothing was copied meanwhile (reviewer-2, F5.2 review).
+static u32       own_gen;
 
 static Clay_Color cc(Rgb c)
 {
@@ -389,6 +392,7 @@ static struct {
     bool            running;
     bool            reverse;       // an undo's move back: it makes no new undo record
     bool            own_cut;       // a paste of fx's own cut: the clipboard empties after it
+    u32             own_gen;       // own_gen when it started
     pthread_mutex_t mu;
     pthread_cond_t  cv;
     bool            waiting;       // the worker waits for an answer
@@ -491,7 +495,7 @@ static void job_finish(void)
         }
         if (undo.n == 0) undo_clear(&undo);
     }
-    if (run.own_cut && !atomic_load(&j->cancel)) own.n = 0, clip_clear_own();
+    if (run.own_cut && !atomic_load(&j->cancel) && own_gen == run.own_gen) own.n = 0, clip_clear_own();
     reload();
 }
 
@@ -571,6 +575,7 @@ static void delete_targets(void)
 
 static void copy_targets(bool cut)
 {
+    own_gen++;
     arena_reset(&owna);
     own.n = targets(&owna, own.path, CLIP_PATHS_MAX);
     own.cut = cut;
@@ -633,7 +638,7 @@ static void paste(void)
         else set_status(true, "Nothing to paste: %td %s gone", gone, gone == 1 ? "is" : "are");
         return;
     }
-    run.reverse = false, run.own_cut = c == &own && c->cut;
+    run.reverse = false, run.own_cut = c == &own && c->cut, run.own_gen = own_gen;
     job_start(c->cut ? JOB_MOVE : JOB_COPY, n);
     if (self) set_status(true, "Skipped %td: a folder can't go into itself", self);
 }
@@ -642,6 +647,7 @@ static void paste(void)
 // whatever was there, our files too. Without data-control (weston) GLFW's clipboard holds it.
 static void text_copy(Str t)
 {
+    own_gen++;
     snprintf(app.text_copied, sizeof app.text_copied, "%.*s", STR_ARG(t));
     if (!clip_set_text(t)) SetClipboardText(app.text_copied);
     own.n = 0;
@@ -1915,6 +1921,8 @@ int main(int argc, char **argv)
     const char *cdelay = getenv("FX_TEST_COPY_DELAY_MS");
     app.copy_delay_ms = cdelay ? atoi(cdelay) : 0;
     if (app.copy_delay_ms < 0 || app.copy_delay_ms > 500) app.copy_delay_ms = 0;
+    // FX_TEST_CROSS=1: a move copies as across drives, so a test can see a move run (F5.2).
+    if (getenv("FX_TEST_CROSS")) job_test_cross = true;
     // The test guard: with FX_GUI_ROOT set (the GUI tests), no write outside it.
     ops_guard(getenv("FX_GUI_ROOT"));
     const char *leak = getenv("FX_TEST_LEAK");
