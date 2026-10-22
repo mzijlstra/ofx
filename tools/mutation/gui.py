@@ -43,13 +43,13 @@ MUTANTS = [
     (G, "    if (i + 1 < c->n) snprintf(below, sizeof below, \"%.*s\", STR_ARG(ui_crumb_label(c, i + 1)));", ""),
     (G, "    // The counts are by row too: asked again in the new order.\n    for (isize i = 0; i < app.list.n; i++) app.count[i] = COUNT_UNKNOWN;", "    // The counts are by row too: asked again in the new order."),
     (G, "        if (app.have_list && count_take(app.count, app.list.n)) dirty = true;", ""),
-    (G, "    if (!S_ISDIR(st.st_mode)) {\n        set_status(true, \"%s isn't a folder\", path);\n        return;\n    }", ""),
+    (G, "    if (!S_ISDIR(st.st_mode)) {\n        Str d = path_dir(str_from_c(path));", "    if (0) {\n        Str d = path_dir(str_from_c(path));"),
     (G, "        if (in_box(CLAY_IDI(\"crumb\", i), x, y)) h.bar = UB_CRUMB, h.crumb = i;", ""),
     # Not run: the cursor's row drawing an edit box while the location line is open
     # (`&& !app.ui.edit_path` in layout_row) shows only on screen; location.png shows the names.
     (G, "        ui_crumbs_set(&app.crumbs, app.cwd, getenv(\"HOME\"));", ""),
     (G, "    if (m == GLFW_MOD_ALT && key == GLFW_KEY_UP) return UK_PARENT;", ""),
-    (G, "    if (go_to(path, STR_EMPTY, 0)) ui_edit_close(&app.ui);", "    go_to(path, STR_EMPTY, 0);"),
+    (G, "    ui_edit_close(&app.ui);\n    if (name[0] == '.'", "    if (name[0] == '.'"),
     # Not run: counts.c drops an old listing's answer twice over (in count_loop and in count_take),
     # so taking out either check alone changes nothing a test can see.
     (G, "    if (app.count[i] >= 0) snprintf(size, cap, \"%td item%s\", app.count[i], app.count[i] == 1 ? \"\" : \"s\");", "    if (app.count[i] >= 0) snprintf(size, cap, \"%td items\", app.count[i]);"),

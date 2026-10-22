@@ -88,9 +88,9 @@ expect locating=0
 # A file: its folder, the cursor on it (F5.2)
 key ctrl-l
 key end
-type /x
+type /y
 key enter
-wait-for 2000 locating=0 sel=x
+wait-for 2000 locating=0 sel=y
 key ctrl-l
 key end
 type /nosuch
