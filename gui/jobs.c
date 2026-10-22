@@ -14,7 +14,7 @@ typedef struct {
     Arena   arena;          // the items' paths and the uses
     JobUses uses;
     bool    reverse;        // an undo's move back: it makes no new undo record
-    bool    own_cut;        // a paste of fx's own cut: the clipboard empties after it
+    bool    own_cut;        // a paste of ofx's own cut: the clipboard empties after it
     u32     own_gen;        // own_gen when it was asked for
     u32     undo_gen;       // undo_gen then: a newer action's undo record wins over this job's
     char    label[200];     // "Copying 12 items to bdir"

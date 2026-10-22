@@ -46,7 +46,7 @@ void arena_reset(Arena *a)
 // than planned, and handing back NULL would only move the crash somewhere harder to read.
 static void arena_full(const Arena *a, isize asked)
 {
-    fprintf(stderr, "fx: arena '%s' is full (%td of %td bytes used, %td more asked)\n",
+    fprintf(stderr, "ofx: arena '%s' is full (%td of %td bytes used, %td more asked)\n",
             a->name, a->used, a->cap, asked);
     abort();
 }
@@ -96,7 +96,7 @@ char *arena_sprintf(Arena *a, const char *fmt, ...)
     // vsnprintf fails only on an encoding error (a wide string it cannot convert), which no
     // format here can produce; treat it as the bug it would be.
     if (n < 0) {
-        fprintf(stderr, "fx: arena_sprintf: encoding error in \"%s\"\n", fmt);
+        fprintf(stderr, "ofx: arena_sprintf: encoding error in \"%s\"\n", fmt);
         abort();
     }
     if ((isize)n + 1 > avail) arena_full(a, (isize)n + 1);

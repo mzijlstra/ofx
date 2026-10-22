@@ -1,7 +1,7 @@
 # F3 on a tree made by tests/gui/run.sh: adir/ (inner.txt), bdir/ (empty), a.txt, b.txt,
-# big.bin (8 MiB), c.txt. Copies run slowed (FX_TEST_COPY_DELAY_MS) so the progress shows; the
+# big.bin (8 MiB), c.txt. Copies run slowed (OFX_TEST_COPY_DELAY_MS) so the progress shows; the
 # trash is <scratch>/data/Trash (run-script.sh); weston has no data-control, so the clipboard
-# stays inside fx.
+# stays inside ofx.
 settle
 expect n=6 sel=adir marked=0 undo=- sysclip=0
 # ---- select: Space marks and moves on; Esc clears; Ctrl+A; Shift and Ctrl clicks
@@ -20,9 +20,9 @@ press 3 ctrl
 expect marked=2 sel=b.txt
 shot marked.png
 # The marks survive a reload, by name
-sh touch "$FX_DIR/0new"
+sh touch "$OFX_DIR/0new"
 wait-for 2000 n=7 marked=2
-sh rm "$FX_DIR/0new"
+sh rm "$OFX_DIR/0new"
 wait-for 2000 n=6 marked=2
 key esc
 expect marked=0
@@ -53,10 +53,10 @@ expect marked=2 sel=c.txt
 key home
 raw-key 261 0
 wait-for 2000 n=4 undo=trash marked=0
-sh test ! -e "$FX_DIR/a.txt" && test ! -e "$FX_DIR/c.txt" && test -d "$FX_DIR/adir"
+sh test ! -e "$OFX_DIR/a.txt" && test ! -e "$OFX_DIR/c.txt" && test -d "$OFX_DIR/adir"
 key ctrl-z
 wait-for 2000 n=6 undo=-
-sh test -f "$FX_DIR/a.txt" && test -f "$FX_DIR/c.txt" && rm -rf "$FX_ROOT/data/Trash"
+sh test -f "$OFX_DIR/a.txt" && test -f "$OFX_DIR/c.txt" && rm -rf "$OFX_ROOT/data/Trash"
 # ---- rename: F2 on a.txt, clash on b.txt (the line stays), Esc, then a real rename and its undo
 key home
 key down
@@ -74,7 +74,7 @@ key enter
 expect editing=1 status=b.txt
 key esc
 expect editing=0
-sh test -f "$FX_DIR/a.txt"
+sh test -f "$OFX_DIR/a.txt"
 key f2
 key home
 type re-
@@ -82,14 +82,14 @@ expect edit=re-a.txt
 shot rename.png
 key enter
 wait-for 2000 sel=re-a.txt editing=0 undo=rename
-sh test -f "$FX_DIR/re-a.txt" && test ! -e "$FX_DIR/a.txt"
+sh test -f "$OFX_DIR/re-a.txt" && test ! -e "$OFX_DIR/a.txt"
 key ctrl-z
 wait-for 2000 undo=- sel=a.txt
-sh test -f "$FX_DIR/a.txt" && test ! -e "$FX_DIR/re-a.txt"
+sh test -f "$OFX_DIR/a.txt" && test ! -e "$OFX_DIR/re-a.txt"
 # ---- new folder: made at once, renamed in the line; undo removes it
 key ctrl-shift-n
 expect editing=1 edit=New_folder undo=mkdir
-sh test -d "$FX_DIR/New folder"
+sh test -d "$OFX_DIR/New folder"
 key backspace
 key backspace
 key backspace
@@ -103,15 +103,15 @@ key backspace
 type made
 key enter
 wait-for 2000 sel=made editing=0 undo=mkdir n=7
-sh test -d "$FX_DIR/made" && test ! -e "$FX_DIR/New folder"
+sh test -d "$OFX_DIR/made" && test ! -e "$OFX_DIR/New folder"
 key ctrl-z
 wait-for 2000 undo=- n=6
-sh test ! -e "$FX_DIR/made"
+sh test ! -e "$OFX_DIR/made"
 # Esc keeps "New folder"
 key ctrl-shift-n
 key esc
 wait-for 2000 editing=0 n=7
-sh test -d "$FX_DIR/New folder" && rmdir "$FX_DIR/New folder"
+sh test -d "$OFX_DIR/New folder" && rmdir "$OFX_DIR/New folder"
 wait-for 2000 n=6
 # ---- trash and undo
 char /
@@ -120,10 +120,10 @@ key enter
 expect sel=c.txt
 key delete
 wait-for 2000 undo=trash n=5 status=Trashed
-sh test ! -e "$FX_DIR/c.txt" && test -f "$FX_ROOT/data/Trash/files/c.txt" && grep -qx "Path=$FX_DIR/c.txt" "$FX_ROOT/data/Trash/info/c.txt.trashinfo"
+sh test ! -e "$OFX_DIR/c.txt" && test -f "$OFX_ROOT/data/Trash/files/c.txt" && grep -qx "Path=$OFX_DIR/c.txt" "$OFX_ROOT/data/Trash/info/c.txt.trashinfo"
 key ctrl-z
 wait-for 2000 n=6 undo=-
-sh test -f "$FX_DIR/c.txt" && test ! -e "$FX_ROOT/data/Trash/info/c.txt.trashinfo"
+sh test -f "$OFX_DIR/c.txt" && test ! -e "$OFX_ROOT/data/Trash/info/c.txt.trashinfo"
 # ---- delete for good: n and Esc keep it, Enter deletes; y deletes
 char /
 type c.txt
@@ -143,18 +143,18 @@ expect confirming=0
 key shift-delete
 key esc
 expect confirming=0 marked=0
-sh test -f "$FX_DIR/c.txt"
+sh test -f "$OFX_DIR/c.txt"
 key shift-delete
 key enter
 wait-for 3000 job=- n=5 undo=- status=Deleted
-sh test ! -e "$FX_DIR/c.txt" && test ! -e "$FX_ROOT/data/Trash/files/c.txt"
+sh test ! -e "$OFX_DIR/c.txt" && test ! -e "$OFX_ROOT/data/Trash/files/c.txt"
 char /
 type b.txt
 key enter
 key shift-delete
 char y
 wait-for 3000 job=- n=4
-sh test ! -e "$FX_DIR/b.txt"
+sh test ! -e "$OFX_DIR/b.txt"
 # ---- copy and paste with the progress line, then clashes: keep both, skip, replace
 char /
 type big
@@ -170,7 +170,7 @@ key ctrl-v
 wait-for 3000 job=run
 shot progress.png
 wait-for 10000 job=- n=1 undo=copy status=Copied
-sh cmp -s "$FX_DIR/big.bin" "$FX_ROOT/tree/big.bin"
+sh cmp -s "$OFX_DIR/big.bin" "$OFX_ROOT/tree/big.bin"
 key ctrl-v
 wait-for 3000 asking=1 modal=clash askall=0
 shot clash.png
@@ -185,23 +185,23 @@ point-ui modal-all
 click-here
 char k
 wait-for 10000 job=- n=2
-sh cmp -s "$FX_DIR/big (2).bin" "$FX_ROOT/tree/big.bin"
+sh cmp -s "$OFX_DIR/big (2).bin" "$OFX_ROOT/tree/big.bin"
 key ctrl-z
 wait-for 2000 n=1 undo=-
-sh test ! -e "$FX_DIR/big (2).bin" && test -f "$FX_ROOT/data/Trash/files/big (2).bin"
+sh test ! -e "$OFX_DIR/big (2).bin" && test -f "$OFX_ROOT/data/Trash/files/big (2).bin"
 key ctrl-v
 wait-for 3000 asking=1 askall=0
 point-ui modal-skip
 click-here
 wait-for 5000 job=- n=1 status=Copied
-sh printf x > "$FX_DIR/big.bin"
+sh printf x > "$OFX_DIR/big.bin"
 key ctrl-v
 wait-for 3000 asking=1
 char r
 wait-for 10000 job=- n=1 undo=-
-sh cmp -s "$FX_DIR/big.bin" "$FX_ROOT/tree/big.bin"
+sh cmp -s "$OFX_DIR/big.bin" "$OFX_ROOT/tree/big.bin"
 # Cancel from the job's row (F5.3; Esc no longer cancels): no part file, nothing new
-sh rm "$FX_DIR/big.bin"
+sh rm "$OFX_DIR/big.bin"
 wait-for 2000 n=0
 key ctrl-v
 wait-for 3000 job=run
@@ -212,7 +212,7 @@ key enter
 expect modal=cancel
 key enter
 wait-for 5000 job=- status=Copy
-sh test -z "$(ls -A "$FX_DIR")"
+sh test -z "$(ls -A "$OFX_DIR")"
 expect n=0
 # ---- cut and paste: a move, and its undo
 key backspace
@@ -227,10 +227,10 @@ key enter
 expect sel=inner.txt
 key ctrl-v
 wait-for 3000 job=- n=2 undo=move clip=0
-sh test -f "$FX_DIR/a.txt" && test ! -e "$FX_ROOT/tree/a.txt"
+sh test -f "$OFX_DIR/a.txt" && test ! -e "$OFX_ROOT/tree/a.txt"
 key ctrl-z
 wait-for 2000 n=1 undo=-
-sh test -f "$FX_ROOT/tree/a.txt" && test ! -e "$FX_DIR/a.txt"
+sh test -f "$OFX_ROOT/tree/a.txt" && test ! -e "$OFX_DIR/a.txt"
 # ---- paste here makes " (copy)"; a folder into itself is refused
 key backspace
 char /
@@ -239,7 +239,7 @@ key enter
 key ctrl-c
 key ctrl-v
 wait-for 3000 job=- n=5
-sh test -f "$FX_DIR/a (copy).txt"
+sh test -f "$OFX_DIR/a (copy).txt"
 key home
 expect sel=adir
 key ctrl-c
@@ -256,7 +256,7 @@ key ctrl-v
 expect status=Already
 # ---- the delete question deletes what it asked about: the cursor's file removed from outside while
 # it is up moves the cursor, and Enter must not delete the file the cursor moved to
-sh touch "$FX_DIR/k1" "$FX_DIR/k2" "$FX_DIR/k3"
+sh touch "$OFX_DIR/k1" "$OFX_DIR/k2" "$OFX_DIR/k3"
 wait-for 2000 n=8
 char /
 type k2
@@ -264,12 +264,12 @@ key enter
 expect sel=k2
 key shift-delete
 expect confirming=1
-sh rm "$FX_DIR/k2"
+sh rm "$OFX_DIR/k2"
 sleep 800
 expect confirming=1 sel=k3
 key enter
 wait-for 3000 job=-
-sh test -f "$FX_DIR/k3" && test -f "$FX_DIR/k1"
+sh test -f "$OFX_DIR/k3" && test -f "$OFX_DIR/k1"
 # A question answered No forgets its targets; Shift+Delete and y in one frame delete the cursor's
 # file, not the earlier question's
 char /
@@ -282,9 +282,9 @@ key down
 expect sel=k3
 keys shift-delete char:y
 wait-for 3000 job=-
-sh test -f "$FX_DIR/k1" && test ! -e "$FX_DIR/k3"
-# More selected than fx takes: the question refuses, and forgets an earlier question's targets
-sh mkdir "$FX_DIR/many" && cd "$FX_DIR/many" && seq -f 'm%g' 1 4100 | xargs touch
+sh test -f "$OFX_DIR/k1" && test ! -e "$OFX_DIR/k3"
+# More selected than ofx takes: the question refuses, and forgets an earlier question's targets
+sh mkdir "$OFX_DIR/many" && cd "$OFX_DIR/many" && seq -f 'm%g' 1 4100 | xargs touch
 wait-for 2000 n=7
 char /
 type k1
@@ -299,5 +299,5 @@ wait-for 3000 n=4100
 key ctrl-a
 keys shift-delete char:y
 wait-for 3000 job=- confirming=0
-sh test -f "$FX_DIR/m1" && test -f "$FX_DIR/../k1" && test "$(ls "$FX_DIR" | wc -l)" = 4100
+sh test -f "$OFX_DIR/m1" && test -f "$OFX_DIR/../k1" && test "$(ls "$OFX_DIR" | wc -l)" = 4100
 quit

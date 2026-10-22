@@ -1,5 +1,5 @@
 // Clay render commands drawn with raylib: rectangles (rounded or not), borders, text and clipping.
-// Copied from prdash's gui/render.c, by way of uml-viewer; fx adds images (the icons).
+// Copied from prdash's gui/render.c, by way of uml-viewer; ofx adds images (the icons).
 // One Clay unit is one logical pixel.
 //
 // Text is measured and drawn glyph by glyph from the same metrics (font.c), so what Clay lays out

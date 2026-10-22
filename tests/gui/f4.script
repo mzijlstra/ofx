@@ -12,9 +12,9 @@ wait-for 2000 cnt=2
 key down
 wait-for 2000 sel=bdir cnt=0
 key home
-sh touch "$FX_DIR/adir/z" "$FX_DIR/new.txt"
+sh touch "$OFX_DIR/adir/z" "$OFX_DIR/new.txt"
 wait-for 2000 sel=adir cnt=3 sizecell=3_items
-sh rm "$FX_DIR/new.txt"
+sh rm "$OFX_DIR/new.txt"
 wait-for 2000 n=4
 # One item, singular; a file's size as before
 key end
@@ -32,7 +32,7 @@ key up
 wait-for 2000 sel=bdir cnt=0
 char S
 key home
-# Answers for an old listing are dropped (counts slowed by FX_TEST_COUNT_DELAY_MS): toggled twice
+# Answers for an old listing are dropped (counts slowed by OFX_TEST_COUNT_DELAY_MS): toggled twice
 # before they come, the counts are this listing's
 char .
 char .

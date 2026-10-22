@@ -1,4 +1,4 @@
-# The sh guard: fx starts outside the run's scratch tree, so its one sh line must be refused and
+# The sh guard: ofx starts outside the run's scratch tree, so its one sh line must be refused and
 # leave no file. tests/gui/run.sh checks the refusal, so this script failing is its success.
 settle
-sh touch "$FX_ROOT/outside-ran"
+sh touch "$OFX_ROOT/outside-ran"

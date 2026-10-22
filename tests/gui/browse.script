@@ -27,24 +27,24 @@ char k
 key end
 key enter
 expect status=opened
-sh grep -qx "uwsm-app -- xdg-open $FX_DIR/b10.txt" "$FX_ROOT/spawn.log"
+sh grep -qx "uwsm-app -- xdg-open $OFX_DIR/b10.txt" "$OFX_ROOT/spawn.log"
 char t
 expect status=terminal
-sh grep -qx "uwsm-app -- xdg-terminal-exec --dir=$FX_DIR" "$FX_ROOT/spawn.log"
+sh grep -qx "uwsm-app -- xdg-terminal-exec --dir=$OFX_DIR" "$OFX_ROOT/spawn.log"
 # Live refresh: create, delete, rename.
-sh touch "$FX_DIR/new.txt"
+sh touch "$OFX_DIR/new.txt"
 wait-for 1000 n=6 sel=b10.txt
 # A file sorting before the cursor: the cursor stays on its name, a row further down.
-sh touch "$FX_DIR/0first.txt"
+sh touch "$OFX_DIR/0first.txt"
 wait-for 1000 n=7 sel=b10.txt idx=5
-sh rm "$FX_DIR/0first.txt"
+sh rm "$OFX_DIR/0first.txt"
 wait-for 1000 n=6 sel=b10.txt idx=4
-sh rm "$FX_DIR/b10.txt"
+sh rm "$OFX_DIR/b10.txt"
 wait-for 1000 n=5 sel=new.txt idx=4
-sh mv "$FX_DIR/new.txt" "$FX_DIR/zz.txt"
+sh mv "$OFX_DIR/new.txt" "$OFX_DIR/zz.txt"
 wait-for 1000 n=5 sel=zz.txt
 # A new folder sends only IN_CREATE (touch also closes the file).
-sh mkdir "$FX_DIR/cdir"
+sh mkdir "$OFX_DIR/cdir"
 wait-for 1000 n=6 sel=zz.txt
 # Mouse: a press selects, a second within 400 ms opens; the back button goes up.
 press 1
@@ -56,7 +56,7 @@ back
 expect sel=adir n=6
 shot browse.png
 # The theme: the scratch copy's accent changes.
-sh sed -i 's/^accent = .*/accent = "#123456"/' "$FX_ROOT/state/omarchy/current/theme/colors.toml"
+sh sed -i 's/^accent = .*/accent = "#123456"/' "$OFX_ROOT/state/omarchy/current/theme/colors.toml"
 wait-for 1500 themes=1 accent=#123456
 shot theme.png
 quit

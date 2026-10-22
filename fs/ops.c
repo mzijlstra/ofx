@@ -15,7 +15,7 @@
 
 // ---- the test guard ---------------------------------------------------------------------------
 //
-// With FX_GUI_ROOT set (the GUI tests) every write is refused outside that folder, so a bug in a
+// With OFX_GUI_ROOT set (the GUI tests) every write is refused outside that folder, so a bug in a
 // test, or a mutant, can never reach Michael's files. The unit tests set it to their mkdtemp root.
 
 static char ops_root[PATH_MAX];   // resolved; empty: no guard
@@ -26,7 +26,7 @@ static void ops_guard(const char *root)
     ops_root[0] = 0;
     if (root && root[0] && !realpath(root, ops_root)) {
         // A guard that can't be resolved refuses everything rather than nothing.
-        snprintf(ops_root, sizeof ops_root, "/nonexistent/fx-guard");
+        snprintf(ops_root, sizeof ops_root, "/nonexistent/ofx-guard");
     }
 }
 
@@ -62,7 +62,7 @@ static bool ops_allowed(const char *path, Err *err)
     size_t n = strlen(ops_root);
     if (ops_resolve(path, r, sizeof r) && strncmp(r, ops_root, n) == 0 && r[n] == '/') return true;
     ops_refusals++;
-    fprintf(stderr, "fx: guard: refused a write to %s (outside %s)\n", path, ops_root);
+    fprintf(stderr, "ofx: guard: refused a write to %s (outside %s)\n", path, ops_root);
     return err_set(err, "%s: outside the test folder, refused", path), false;
 }
 

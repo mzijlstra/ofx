@@ -2,7 +2,7 @@
 # A private headless Wayland compositor for GUI tests: weston's headless backend, on its own
 # socket. Nothing it shows reaches Michael's screen, and nothing in it touches his Hyprland
 # (workspaces, monitors, the dock script). Since 2026-10-20 it replaces Hyprland headless outputs
-# for fx: those took a workspace Hyprland picked, three times one holding his windows.
+# for ofx: those took a workspace Hyprland picked, three times one holding his windows.
 #
 #   tools/gui/weston.sh start <scratch-dir>   prints the socket name; pid in <scratch-dir>/weston.pid
 #   tools/gui/weston.sh stop <scratch-dir>
@@ -12,7 +12,7 @@ case $T in /?*) ;; *) echo "weston.sh: the scratch dir must be an absolute path"
 mkdir -p "$T"
 case $cmd in
 start)
-    sock="fx-test-$$"
+    sock="ofx-test-$$"
     [ -e "$XDG_RUNTIME_DIR/$sock" ] && { echo "weston.sh: $sock exists" >&2; exit 1; }
     # --fake-seat: GLFW 3.4 reads the seat's version even when there is none, and crashes without
     # one. --no-config: not his weston.ini (if any). The kiosk shell fills the output with the window:

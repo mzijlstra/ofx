@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Single-site mutation testing for fx's unit-tested layers (fs/, ui/).
+"""Single-site mutation testing for ofx's unit-tested layers (fs/, ui/).
 
     tools/mutation/run.py [mutants.py] [filter]
 
@@ -20,7 +20,7 @@ mod = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(mod)
 mutants = [m for m in mod.MUTANTS if only in m[0] or only in m[1]]
 
-work = tempfile.mkdtemp(prefix='fx-mut-')
+work = tempfile.mkdtemp(prefix='ofx-mut-')
 for d in ('base', 'fs', 'ui', 'tests'):
     shutil.copytree(os.path.join(root, d), os.path.join(work, d))
 shutil.copy(os.path.join(root, 'Makefile'), work)

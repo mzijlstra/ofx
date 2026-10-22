@@ -1,6 +1,6 @@
 // The trash, by the freedesktop Trash spec 1.0 (docs/plan.md, F3 "Trash"): a file on the home
 // drive goes to $XDG_DATA_HOME/Trash, one on another drive to that drive's own trash, never across
-// drives. Nemo's trash view and `gio trash --list` show what fx trashed.
+// drives. Nemo's trash view and `gio trash --list` show what ofx trashed.
 
 #include "../base/base.h"
 

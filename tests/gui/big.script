@@ -20,7 +20,7 @@ key home
 expect sel=f0 top=0
 state
 # A file appearing in a big folder.
-sh touch "$FX_DIR/f10000"
+sh touch "$OFX_DIR/f10000"
 wait-for 2000 n=10001 sel=f0
 state
 shot big.png

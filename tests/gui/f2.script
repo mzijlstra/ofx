@@ -105,7 +105,7 @@ key enter
 expect sel=in-a.txt
 key backspace
 expect sel=adir
-sh rm -rf "$FX_ROOT/tree/adir"
+sh rm -rf "$OFX_ROOT/tree/adir"
 wait-for 1500 n=4
 key alt-left
 expect fwd=1 n=4 skipped

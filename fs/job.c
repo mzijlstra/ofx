@@ -1,7 +1,7 @@
 // Copy, move and delete for good, as a job: gui/ runs job_run on a worker thread and reads the
 // progress; the tests run it in place (docs/plan.md, F3 "Copy and move", "Name clashes").
 //
-// A file is copied into ".fx-part-<name>" beside its target and renamed into place at the end, a
+// A file is copied into ".ofx-part-<name>" beside its target and renamed into place at the end, a
 // new folder the same way as a whole, so a cancel or a crash never leaves a half copy under the
 // real name. Modes and times are kept; a symlink is copied as a link, never followed.
 
@@ -52,7 +52,7 @@ struct Job {
     void  *ctx;
     Answer rest_file, rest_dir;
 
-    int delay_ms;   // FX_TEST_COPY_DELAY_MS: a sleep per block (and per item deleted), so a test can see the progress
+    int delay_ms;   // OFX_TEST_COPY_DELAY_MS: a sleep per block (and per item deleted), so a test can see the progress
 
     // The result.
     isize errors, skipped;
@@ -132,12 +132,12 @@ static Answer job_clash(Job *j, bool src_dir, bool dst_dir)
     return a;
 }
 
-// The part name for name: ".fx-part-<name>", or a numbered one when that would be too long.
+// The part name for name: ".ofx-part-<name>", or a numbered one when that would be too long.
 static void part_name(char *out, size_t cap, const char *name)
 {
     static atomic_int seq;
-    if (strlen(name) + 9 <= NAME_MAX) snprintf(out, cap, ".fx-part-%s", name);
-    else snprintf(out, cap, ".fx-part-%d-%d", (int)getpid(), atomic_fetch_add(&seq, 1));
+    if (strlen(name) + 9 <= NAME_MAX) snprintf(out, cap, ".ofx-part-%s", name);
+    else snprintf(out, cap, ".ofx-part-%d-%d", (int)getpid(), atomic_fetch_add(&seq, 1));
 }
 
 // ---- counting -----------------------------------------------------------------------------------

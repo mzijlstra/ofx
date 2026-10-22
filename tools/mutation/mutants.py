@@ -201,7 +201,7 @@ MUTANTS += [
     # the guard
     (O, "strncmp(r, ops_root, n) == 0 && r[n] == '/') return true;", "strncmp(r, ops_root, n) == 0) return true;"),
     (O, "    if (!ops_root[0]) return true;", "    return true;"),
-    (O, '        snprintf(ops_root, sizeof ops_root, "/nonexistent/fx-guard");', "        ops_root[0] = 0;"),
+    (O, '        snprintf(ops_root, sizeof ops_root, "/nonexistent/ofx-guard");', "        ops_root[0] = 0;"),
     (O, '        if (str_eq(str_cut(rest, i, e), S(".."))) return false;', ""),
     # names
     (O, "    if (str_find(name, '/') >= 0)", "    if (0)"),

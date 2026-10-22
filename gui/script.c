@@ -1,4 +1,4 @@
-// FX_GUI_SCRIPT=FILE: the input comes from a script instead of the user, one frame per loop, so
+// OFX_GUI_SCRIPT=FILE: the input comes from a script instead of the user, one frame per loop, so
 // the window can be tested and screenshotted on a headless output without touching anyone's
 // keyboard or pointer (CLAUDE.md, "Testing the GUI"). Included by main.c after its state.
 //
@@ -36,10 +36,10 @@
 //                           mod bits (1 Shift, 2 Ctrl, 4 Alt): what ui_key_of makes of it
 //   clip-text <text>        the rest of the line onto GLFW's clipboard as another program's copy
 //                           would put it, \n a line break (weston has no data-control)
-//   shot <file.png>         the next drawn frame; a relative path goes under FX_GUI_SHOTS
+//   shot <file.png>         the next drawn frame; a relative path goes under OFX_GUI_SHOTS
 //   sh <command...>         runs the rest of the line with /bin/sh and waits for it (5 s at most),
-//                           $FX_DIR set to the folder shown, $FX_ROOT to the run's scratch tree.
-//                           Refused unless the folder is under FX_GUI_ROOT and nothing failed yet.
+//                           $OFX_DIR set to the folder shown, $OFX_ROOT to the run's scratch tree.
+//                           Refused unless the folder is under OFX_GUI_ROOT and nothing failed yet.
 //   state                   prints one line of key=value words about the window
 //   expect <word>...        each word must be in that line (whole words: `sel=a.txt`); the
 //                           script ends with "script: N of M expectations failed" when any did
@@ -73,7 +73,7 @@ static bool script_open(const char *path)
     arena_init(&a, "script", script_mem, sizeof script_mem);
     script.text = read_file(&a, path);
     if (!script.text.p || script.text.len == 0) {
-        fprintf(stderr, "fx: script %s: cannot read it\n", path);
+        fprintf(stderr, "ofx: script %s: cannot read it\n", path);
         return false;
     }
     return true;
@@ -239,23 +239,23 @@ static bool script_under(const char *path, const char *root)
     return strncmp(p, r, n) == 0 && (p[n] == 0 || p[n] == '/');
 }
 
-// An `sh` line runs only while the script is on track: fx's folder inside the run's scratch tree
-// (FX_GUI_ROOT, set by run-script.sh), and no expectation failed yet. The lines delete and edit
-// files relative to $FX_DIR, so a navigation bug (or a GUI mutant that recreates one) would
-// otherwise point them at wherever fx landed: / once, Michael's home another time.
+// An `sh` line runs only while the script is on track: ofx's folder inside the run's scratch tree
+// (OFX_GUI_ROOT, set by run-script.sh), and no expectation failed yet. The lines delete and edit
+// files relative to $OFX_DIR, so a navigation bug (or a GUI mutant that recreates one) would
+// otherwise point them at wherever ofx landed: / once, Michael's home another time.
 static void script_sh(Str cmd)
 {
-    const char *root = getenv("FX_GUI_ROOT");
+    const char *root = getenv("OFX_GUI_ROOT");
     if (script.failed) {
         script_fail("sh skipped after a failure: %.*s", STR_ARG(cmd));
         return;
     }
     if (!script_under(app.cwd, root)) {
-        script_fail("sh refused: %s is not under FX_GUI_ROOT (%s)", app.cwd, root ? root : "unset");
+        script_fail("sh refused: %s is not under OFX_GUI_ROOT (%s)", app.cwd, root ? root : "unset");
         return;
     }
-    setenv("FX_DIR", app.cwd, 1);
-    setenv("FX_ROOT", root, 1);
+    setenv("OFX_DIR", app.cwd, 1);
+    setenv("OFX_ROOT", root, 1);
     char *c = arena_cstr(&scratch, cmd);
     // Under `timeout`: the window answers no events while it waits, and a window that stops
     // answering for long pops Hyprland's "terminate?" dialog on Michael's screen.
@@ -434,7 +434,7 @@ static bool script_input(UiInput *in)
             t[n] = 0;
             SetClipboardText(t);
         } else if (str_eq(cmd, S("shot"))) {
-            const char *dir = getenv("FX_GUI_SHOTS");
+            const char *dir = getenv("OFX_GUI_SHOTS");
             if (a[0] != '/' && dir && dir[0]) snprintf(script.shot, sizeof script.shot, "%s/%s", dir, a);
             else snprintf(script.shot, sizeof script.shot, "%s", a);
             script.wait = 1;   // drawn on the next frame

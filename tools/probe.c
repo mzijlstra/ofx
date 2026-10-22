@@ -1,4 +1,4 @@
-// fx-probe DIR [SIZE SCALE]: the listing as fx sees it, one line per entry (kind, MIME type, icon
+// ofx-probe DIR [SIZE SCALE]: the listing as ofx sees it, one line per entry (kind, MIME type, icon
 // file), from the real MIME database, icon theme and Omarchy theme. No window: fs/ only.
 #include "../base/base.c"
 #include "../fs/fs.c"
@@ -10,7 +10,7 @@ static u8 mem[MiB(64)];
 
 int main(int argc, char **argv)
 {
-    if (argc != 2 && argc != 4) return fprintf(stderr, "usage: fx-probe DIR [SIZE SCALE]\n"), 2;
+    if (argc != 2 && argc != 4) return fprintf(stderr, "usage: ofx-probe DIR [SIZE SCALE]\n"), 2;
     int size = argc == 4 ? atoi(argv[2]) : 24, scale = argc == 4 ? atoi(argv[3]) : 2;
     Arena a;
     arena_init(&a, "probe", mem, sizeof mem);

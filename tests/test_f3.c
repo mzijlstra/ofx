@@ -45,13 +45,13 @@ static const char *slurp(const char *path)
     return buf[k];
 }
 
-// Whether any ".fx-part-" entry is in dir.
+// Whether any ".ofx-part-" entry is in dir.
 static bool has_part(const char *dir)
 {
     DIR *d = opendir(dir);
     bool found = false;
     for (struct dirent *de; d && (de = readdir(d));)
-        if (strncmp(de->d_name, ".fx-part-", 9) == 0) found = true;
+        if (strncmp(de->d_name, ".ofx-part-", 9) == 0) found = true;
     if (d) closedir(d);
     return found;
 }
@@ -83,7 +83,7 @@ static void test_ops(void)
     CHECK(ops_refusals == refused + 5);
 
     // A guard that can't be resolved refuses everything.
-    ops_guard("/nonexistent/fx-root");
+    ops_guard("/nonexistent/ofx-root");
     CHECK(!ops_allowed(at("ops/x"), &err));
     ops_guard(NULL);
     CHECK(ops_allowed(out_at("anything"), &err));
@@ -664,10 +664,10 @@ static void test_job(void)
     // Part names: by name, or numbered when too long.
     char part[NAME_MAX + 1], longname[NAME_MAX + 1];
     part_name(part, sizeof part, "a.txt");
-    CHECK(strcmp(part, ".fx-part-a.txt") == 0);
+    CHECK(strcmp(part, ".ofx-part-a.txt") == 0);
     memset(longname, 'n', NAME_MAX), longname[NAME_MAX] = 0;
     part_name(part, sizeof part, longname);
-    CHECK(strncmp(part, ".fx-part-", 9) == 0 && strlen(part) < 40);
+    CHECK(strncmp(part, ".ofx-part-", 9) == 0 && strlen(part) < 40);
 }
 
 static void test_undo(void)

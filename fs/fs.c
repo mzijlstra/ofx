@@ -1,4 +1,4 @@
-// fx's file system side, raylib-free and unit-tested: the folder, MIME types, the icon theme, the
+// ofx's file system side, raylib-free and unit-tested: the folder, MIME types, the icon theme, the
 // Omarchy theme, launching, and changing files (F3). Unity build: included once by each binary,
 // after base.
 #include "list.c"

@@ -63,7 +63,7 @@ static void watch_read(bool *list, bool *theme)
         if (e->wd == watch.theme_wd && !(e->mask & IN_IGNORED)) *theme = true;
         if (e->wd == watch.current_wd) *theme = true, rewatch = true;
     }
-    // The theme directory replaced, or made after fx started: watch the new one.
+    // The theme directory replaced, or made after ofx started: watch the new one.
     if (rewatch) watch.theme_wd = inotify_add_watch(watch.fd, watch.theme, WATCH_THEME_MASK);
 }
 
@@ -95,7 +95,7 @@ static void *watch_thread(void *arg)
     return NULL;
 }
 
-// False when inotify is unavailable: fx then works without refreshing.
+// False when inotify is unavailable: ofx then works without refreshing.
 static bool watch_start(void)
 {
     watch.fd = inotify_init1(IN_CLOEXEC);

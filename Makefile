@@ -12,9 +12,9 @@ PREFIX  ?= $(HOME)/.local
 
 .PHONY: all release test install clean
 
-all: build/fx
+all: build/ofx
 
-build/fx-probe: tools/probe.c $(wildcard base/*.c base/*.h fs/*.c) | build
+build/ofx-probe: tools/probe.c $(wildcard base/*.c base/*.h fs/*.c) | build
 	$(CC) $(CFLAGS) $(DEBUG) -o $@ tools/probe.c -lm
 
 build/test: $(wildcard tests/*.c) $(wildcard base/*.c base/*.h fs/*.c ui/*.c) | build
@@ -74,35 +74,36 @@ $(RL_OUT)/%.o: $(RL)/%.c $(RL_WL)/stamp Makefile
 $(RL_OUT)/libraylib.a: $(addprefix $(RL_OUT)/,$(addsuffix .o,$(RL_MODS)))
 	$(AR) rcs $@ $^
 
-# ---- fx ---------------------------------------------------------------------------------------
+# ---- ofx ---------------------------------------------------------------------------------------
 
 # The system clipboard (gui/clipboard.c) speaks ext-data-control-v1, from wayland-protocols.
-FX_WL    = build/wl
+OFX_WL    = build/wl
 EDC_XML  = $(shell pkg-config --variable=pkgdatadir wayland-protocols)/staging/ext-data-control/ext-data-control-v1.xml
 
-$(FX_WL)/stamp: | build
-	mkdir -p $(FX_WL)
-	wayland-scanner client-header $(EDC_XML) $(FX_WL)/ext-data-control-v1-client-protocol.h
-	wayland-scanner private-code $(EDC_XML) $(FX_WL)/ext-data-control-v1-client-protocol-code.h
+$(OFX_WL)/stamp: | build
+	mkdir -p $(OFX_WL)
+	wayland-scanner client-header $(EDC_XML) $(OFX_WL)/ext-data-control-v1-client-protocol.h
+	wayland-scanner private-code $(EDC_XML) $(OFX_WL)/ext-data-control-v1-client-protocol-code.h
 	touch $@
 
 # -isystem: vendored and generated headers are not held to our warning flags. --wrap: see the
 # app id note in gui/main.c.
-VENDOR   = -isystem vendor/clay -isystem $(RL) -isystem $(RL)/external/glfw/include -isystem $(FX_WL) $(patsubst -I%,-isystem %,$(shell pkg-config --cflags freetype2))
+VENDOR   = -isystem vendor/clay -isystem $(RL) -isystem $(RL)/external/glfw/include -isystem $(OFX_WL) $(patsubst -I%,-isystem %,$(shell pkg-config --cflags freetype2))
 LINK     = -Wl,--wrap=glfwDefaultWindowHints $(GUI_LIBS)
 SRC      = $(wildcard base/*.c base/*.h fs/*.c ui/*.c gui/*.c)
 
-build/fx: $(SRC) $(RL_OUT)/libraylib.a $(FX_WL)/stamp Makefile | build
+build/ofx: $(SRC) $(RL_OUT)/libraylib.a $(OFX_WL)/stamp Makefile | build
 	$(CC) $(CFLAGS) $(VENDOR) $(DEBUG) -o $@ gui/main.c $(LINK)
 
-build/release/fx: $(SRC) $(RL_OUT)/libraylib.a $(FX_WL)/stamp Makefile | build/release
+build/release/ofx: $(SRC) $(RL_OUT)/libraylib.a $(OFX_WL)/stamp Makefile | build/release
 	$(CC) $(CFLAGS) $(VENDOR) $(RELEASE) -o $@ gui/main.c $(LINK)
 
-release: build/release/fx
+release: build/release/ofx
 
-install: build/release/fx
+install: build/release/ofx
 	install -d $(PREFIX)/bin
-	install -m 755 build/release/fx $(PREFIX)/bin/
+	install -m 755 build/release/ofx $(PREFIX)/bin/
+	rm -f $(PREFIX)/bin/fx   # the name before ofx (2026-10-22)
 
 build build/release:
 	mkdir -p $@

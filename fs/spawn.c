@@ -1,6 +1,6 @@
-// Launching what fx hands off: a file to xdg-open, a folder to the terminal (docs/plan.md,
-// "Launching"). Each child gets its own session (it outlives fx, and a Ctrl+C in a terminal that
-// started fx doesn't reach it), /dev/null for stdin and stdout, and fx's stderr. Children are
+// Launching what ofx hands off: a file to xdg-open, a folder to the terminal (docs/plan.md,
+// "Launching"). Each child gets its own session (it outlives ofx, and a Ctrl+C in a terminal that
+// started ofx doesn't reach it), /dev/null for stdin and stdout, and ofx's stderr. Children are
 // reaped by the kernel: spawn_init sets SA_NOCLDWAIT on SIGCHLD.
 
 #include "../base/base.h"
@@ -45,8 +45,8 @@ static bool spawn_detached(char *const *argv, Err *err)
     posix_spawnattr_t attr;
     posix_spawn_file_actions_t fa;
     posix_spawnattr_init(&attr);
-    // The child must not inherit fx's blocked SIGTERM and SIGINT (gui/main.c blocks them in every
-    // thread): a terminal started from fx would ignore Ctrl+C.
+    // The child must not inherit ofx's blocked SIGTERM and SIGINT (gui/main.c blocks them in every
+    // thread): a terminal started from ofx would ignore Ctrl+C.
     sigset_t none;
     sigemptyset(&none);
     posix_spawnattr_setsigmask(&attr, &none);

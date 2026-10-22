@@ -1,4 +1,4 @@
-// fx: a file explorer, drawn natively on Wayland. One folder at a time, as a list. Clay lays out
+// ofx: a file explorer, drawn natively on Wayland. One folder at a time, as a list. Clay lays out
 // the window, render.c draws it with raylib. docs/plan.md has the plan; ui/ decides what input
 // does, fs/ reads the folder, the MIME types, the icon theme and the Omarchy theme.
 //
@@ -48,11 +48,11 @@ static u8 data_mem[MiB(4)];        // the MIME database and the user directories
 static u8 icon_mem[MiB(16)];       // the icon theme's index and the icon cache; reset on a theme change
 static u8 scratch_mem[MiB(1)];
 static u8 undo_mem[MiB(4)];        // the undo record's paths
-static u8 own_mem[MiB(2)];         // what fx itself copied or cut
+static u8 own_mem[MiB(2)];         // what ofx itself copied or cut
 static u8 paste_mem[MiB(2)];       // another program's files, read for one paste
 
 static Arena frame, lists[2], data, icona, scratch, undoa, owna, pastea;
-static int   watch_delay_ms;   // FX_TEST_WATCH_DELAY_MS, for one test
+static int   watch_delay_ms;   // OFX_TEST_WATCH_DELAY_MS, for one test
 
 enum { BAR_BTN_W = 34, BAR_BTN_H = 30, BAR_GAP = 4, ARROW_W = 22, CRUMB_PAD = 10, CRUMB_ICON_PX = 16 };
 enum { TAB_H = 30, TAB_X_W = 22, JOB_ROW_H = 40, JOB_WAIT_H = 22 };
@@ -101,7 +101,7 @@ static struct {
     // (Esc keeps "New folder"; the undo removes it whatever it is called by then).
     char      edit_from[NAME_MAX + 1];
     bool      edit_new;
-    bool      clip_told;    // "the clipboard stays inside fx" said once
+    bool      clip_told;    // "the clipboard stays inside ofx" said once
     UiCrumbs  crumbs;       // the top bar's path buttons
     int       crumb_lo, crumb_hi;   // the ones shown in the last frame
     bool      crumb_arrows;
@@ -109,7 +109,7 @@ static struct {
     UiBar     bar_hover;    // the top bar button under the pointer
     int       crumb_hover;
     int       tab_hover, tab_x_hover;   // the tab, and the tab's ×, under the pointer; -1 for none
-    int       copy_delay_ms;   // FX_TEST_COPY_DELAY_MS
+    int       copy_delay_ms;   // OFX_TEST_COPY_DELAY_MS
     int       jobx_hover;      // the job row whose × is under the pointer, -1 for none
     char      text_copied[PATH_MAX];   // the last text an edit line put on the clipboard (F5.2)
 } app = { .hover = -1, .side_hover = -1, .tab_hover = -1, .tab_x_hover = -1, .jobx_hover = -1 };
@@ -144,7 +144,7 @@ static int top_h(void)
     return HEADER_H + (tabbar.n >= 2 ? TAB_H : 0);
 }
 static Undo      undo;
-static ClipFiles own;      // fx's own copy or cut (own.n 0: none)
+static ClipFiles own;      // ofx's own copy or cut (own.n 0: none)
 // Bumped by every copy of ours, files or text: a cut's paste empties the clipboard after it only
 // if nothing was copied meanwhile (reviewer-2, F5.2 review).
 static u32       own_gen;
@@ -194,14 +194,14 @@ static void on_clay_error(Clay_ErrorData e)
 //
 // raylib calls glfwDefaultWindowHints() inside InitWindow, which clears any hint set before it,
 // and it never sets an app id of its own. The link wraps that call (-Wl,--wrap): the real one
-// runs, then the app id goes in, so compositor rules can match class "fx".
+// runs, then the app id goes in, so compositor rules can match class "ofx".
 
 void __real_glfwDefaultWindowHints(void);
 void __wrap_glfwDefaultWindowHints(void);
 void __wrap_glfwDefaultWindowHints(void)
 {
     __real_glfwDefaultWindowHints();
-    glfwWindowHintString(GLFW_WAYLAND_APP_ID, "fx");
+    glfwWindowHintString(GLFW_WAYLAND_APP_ID, "ofx");
 }
 
 // ---- the folder -----------------------------------------------------------------------------
@@ -265,14 +265,14 @@ static bool go_to_in(const char *dir, Str select, isize fallback, bool stepping)
         app.status[0] = 0;   // what happened in the last folder
         app.ui.list.top = 0;
         app.place_cur = places_current(&app.places, app.cwd);
-        // FX_TEST_WATCH_DELAY_MS widens the gap between the listing and the watch, so
+        // OFX_TEST_WATCH_DELAY_MS widens the gap between the listing and the watch, so
         // tests/gui/watchgap.script can put a change in it.
         if (watch_delay_ms > 0) nanosleep(&(struct timespec){ watch_delay_ms / 1000, (watch_delay_ms % 1000) * 1000000L }, NULL);
         watch_dir(app.cwd);
         // A change between the listing and the watch made no event: list once more.
         atomic_store(&watch.list_ready, true);
         glfwPostEmptyEvent();
-        SetWindowTitle(TextFormat("fx: %s", app.cwd));
+        SetWindowTitle(TextFormat("ofx: %s", app.cwd));
     }
     ui_set(&app.ui.list, l.n, sel);
     return true;
@@ -438,7 +438,7 @@ static void delete_ask(void)
     doomed.n = 0;
     if (app.ui.marked > CLIP_PATHS_MAX) {
         app.ui.confirming = false;
-        set_status(true, "%td selected: fx takes at most %d at a time", app.ui.marked, CLIP_PATHS_MAX);
+        set_status(true, "%td selected: ofx takes at most %d at a time", app.ui.marked, CLIP_PATHS_MAX);
         return;
     }
     arena_reset(&doomeda);
@@ -467,7 +467,7 @@ static void copy_targets(bool cut)
     bool sys = clip_set(&own);
     char name[NAME_MAX + 1];
     snprintf(name, sizeof name, "%.*s", STR_ARG(path_base(str_from_c(own.path[0]))));
-    const char *note = !sys && !app.clip_told ? " (no system clipboard here: it stays inside fx)" : "";
+    const char *note = !sys && !app.clip_told ? " (no system clipboard here: it stays inside ofx)" : "";
     if (!sys) app.clip_told = true;
     if (own.n == 1) set_status(false, "%s %s%s", cut ? "Cut" : "Copied", name, note);
     else set_status(false, "%s %td items%s", cut ? "Cut" : "Copied", own.n, note);
@@ -694,7 +694,7 @@ static void tab_open(const char *dir, Str sel, bool show)
 {
     int slot = tab_slot_free();
     if (slot < 0 || tabbar.n == UI_TABS_MAX) {
-        set_status(true, "%d tabs is the most fx keeps open", UI_TABS_MAX);
+        set_status(true, "%d tabs is the most ofx keeps open", UI_TABS_MAX);
         return;
     }
     tab_save();
@@ -719,7 +719,7 @@ static void tab_open_bg(const char *path)
     tab_open(path, STR_EMPTY, false);
 }
 
-// The tab at place `at` (-1: the one on screen) closed; the last one closes fx.
+// The tab at place `at` (-1: the one on screen) closed; the last one closes ofx.
 static void tab_close(int at)
 {
     if (at < 0) at = tabbar.cur;
@@ -811,7 +811,7 @@ static void act(UiAction a)
     case UA_CUT:
         // One action holds CLIP_PATHS_MAX paths: more would quietly do part of the selection.
         if (app.ui.marked > CLIP_PATHS_MAX) {
-            set_status(true, "%td selected: fx takes at most %d at a time", app.ui.marked, CLIP_PATHS_MAX);
+            set_status(true, "%td selected: ofx takes at most %d at a time", app.ui.marked, CLIP_PATHS_MAX);
             break;
         }
         if (a.kind == UA_TRASH) trash_targets();
@@ -1153,7 +1153,7 @@ static IconSlot *named_icon(const char *name)
 }
 
 // The top bar's chevrons, drawn as two lines each (Nemo's look; the theme has its arrows only as
-// SVG, which fx doesn't draw). Clay hands the data back to draw_custom at render time; it lives in
+// SVG, which ofx doesn't draw). Clay hands the data back to draw_custom at render time; it lives in
 // the frame arena, which outlasts the frame's render.
 typedef enum { CHEV_LEFT, CHEV_RIGHT, CHEV_UP } ChevronDir;
 typedef enum { CUSTOM_CHEVRON = 1, CUSTOM_LINE } CustomKind;   // the first field of each custom's data
@@ -1630,7 +1630,7 @@ static bool               script_on;     // a script drives the window: Ctrl+Q q
 static bool               close_asked;   // the compositor asked the window to close
 static GLFWcharfun        raylib_char;
 static GLFWmousebuttonfun raylib_button;
-static bool               debug_input;   // FX_GUI_DEBUG: log every key and button event
+static bool               debug_input;   // OFX_GUI_DEBUG: log every key and button event
 
 // Keys and characters in the order they came (find needs `/`, text, then Enter).
 static struct {
@@ -1711,7 +1711,7 @@ static UiKey ui_key_of(int key, int mods)
 
 static void on_key(GLFWwindow *w, int key, int scancode, int action, int mods)
 {
-    if (debug_input) fprintf(stderr, "fx: key %d action %d mods %#x\n", key, action, mods);
+    if (debug_input) fprintf(stderr, "ofx: key %d action %d mods %#x\n", key, action, mods);
     // Ctrl+Q asks first when jobs run or wait (F5.3); a scripted window quits at once.
     if (action == GLFW_PRESS && key == GLFW_KEY_Q && (mods & GLFW_MOD_CONTROL)) {
         if (script_on) app.quit = true;
@@ -1736,7 +1736,7 @@ static void on_close(GLFWwindow *w)
 
 static void on_char(GLFWwindow *w, unsigned int cp)
 {
-    if (debug_input) fprintf(stderr, "fx: char %#x\n", cp);
+    if (debug_input) fprintf(stderr, "ofx: char %#x\n", cp);
     // GLFW sends no character with Alt (Mod1) held, so Alt+1 is a tab only; AltGr (Mod5) still
     // types (reviewer-2, F5 review).
     ev_push((UiEvent){ UK_NONE, cp });
@@ -1748,7 +1748,7 @@ static void on_char(GLFWwindow *w, unsigned int cp)
 // (uml-viewer's finding).
 static void on_button(GLFWwindow *w, int button, int action, int mods)
 {
-    if (debug_input) fprintf(stderr, "fx: mouse button %d action %d mods %#x\n", button + 1, action, mods);
+    if (debug_input) fprintf(stderr, "ofx: mouse button %d action %d mods %#x\n", button + 1, action, mods);
     if (action == GLFW_PRESS && (button == GLFW_MOUSE_BUTTON_4 || button == GLFW_MOUSE_BUTTON_7)) mouse_backs++;
     if (action == GLFW_PRESS && (button == GLFW_MOUSE_BUTTON_5 || button == GLFW_MOUSE_BUTTON_6)) mouse_forwards++;
     if (raylib_button) raylib_button(w, button, action, mods);
@@ -1896,7 +1896,7 @@ static Str list_name(void *ctx, isize i)
 
 static atomic_bool quit_signal;
 static sigset_t    quit_signals;
-static void *volatile planted;   // FX_TEST_LEAK's block, dropped so nothing points at it
+static void *volatile planted;   // OFX_TEST_LEAK's block, dropped so nothing points at it
 
 static void *signal_waiter(void *arg)
 {
@@ -1918,7 +1918,7 @@ static void theme_apply(void)
 
 static void usage(void)
 {
-    fprintf(stderr, "usage: fx [FOLDER]\n"
+    fprintf(stderr, "usage: ofx [FOLDER]\n"
                     "  A file explorer: the folder (default: the current one) as a list.\n"
                     "  Enter, Right, l open; Backspace, Left, h up; j k, arrows, PgUp PgDn, Home End, g G move;\n"
                     "  Alt+Left/Right back and forward; / or Ctrl+F find, n N again; . or Ctrl+H hidden files;\n"
@@ -1939,7 +1939,7 @@ int main(int argc, char **argv)
     }
     char dir[PATH_MAX];
     if (!realpath(start ? start : ".", dir)) {
-        fprintf(stderr, "fx: %s: %s\n", start ? start : ".", strerror(errno));
+        fprintf(stderr, "ofx: %s: %s\n", start ? start : ".", strerror(errno));
         return 1;
     }
 
@@ -1949,21 +1949,21 @@ int main(int argc, char **argv)
     sigaddset(&quit_signals, SIGINT);
     pthread_sigmask(SIG_BLOCK, &quit_signals, NULL);
     spawn_init();
-    // FX_TEST_LEAK=1 leaks one block on purpose: the control that shows LeakSanitizer reports
+    // OFX_TEST_LEAK=1 leaks one block on purpose: the control that shows LeakSanitizer reports
     // from this binary at all.
-    const char *delay = getenv("FX_TEST_WATCH_DELAY_MS");
+    const char *delay = getenv("OFX_TEST_WATCH_DELAY_MS");
     watch_delay_ms = delay ? atoi(delay) : 0;
     if (watch_delay_ms < 0 || watch_delay_ms > 1000) watch_delay_ms = 0;   // a window must never stall long
-    // FX_TEST_COPY_DELAY_MS: a sleep per copied block, so a test sees the progress (capped short:
+    // OFX_TEST_COPY_DELAY_MS: a sleep per copied block, so a test sees the progress (capped short:
     // a job never stalls the window, but a test must not run long).
-    const char *cdelay = getenv("FX_TEST_COPY_DELAY_MS");
+    const char *cdelay = getenv("OFX_TEST_COPY_DELAY_MS");
     app.copy_delay_ms = cdelay ? atoi(cdelay) : 0;
     if (app.copy_delay_ms < 0 || app.copy_delay_ms > 500) app.copy_delay_ms = 0;
-    // FX_TEST_CROSS=1: a move copies as across drives, so a test can see a move run (F5.2).
-    if (getenv("FX_TEST_CROSS")) job_test_cross = true;
-    // The test guard: with FX_GUI_ROOT set (the GUI tests), no write outside it.
-    ops_guard(getenv("FX_GUI_ROOT"));
-    const char *leak = getenv("FX_TEST_LEAK");
+    // OFX_TEST_CROSS=1: a move copies as across drives, so a test can see a move run (F5.2).
+    if (getenv("OFX_TEST_CROSS")) job_test_cross = true;
+    // The test guard: with OFX_GUI_ROOT set (the GUI tests), no write outside it.
+    ops_guard(getenv("OFX_GUI_ROOT"));
+    const char *leak = getenv("OFX_TEST_LEAK");
     if (leak && leak[0]) planted = malloc(4096), planted = NULL;
 
     arena_init(&frame, "frame", frame_mem, sizeof frame_mem);
@@ -1979,7 +1979,7 @@ int main(int argc, char **argv)
     undo.arena = &undoa;
     uint32_t need = Clay_MinMemorySize();
     if ((size_t)need > sizeof clay_mem) {
-        fprintf(stderr, "fx: Clay needs %llu bytes, clay_mem has %zu\n", (unsigned long long)need, sizeof clay_mem);
+        fprintf(stderr, "ofx: Clay needs %llu bytes, clay_mem has %zu\n", (unsigned long long)need, sizeof clay_mem);
         return 1;
     }
 
@@ -1990,18 +1990,18 @@ int main(int argc, char **argv)
     // HIGHDPI: without it raylib turns GLFW's framebuffer scaling off on Wayland, so a scale-2
     // output gets a 1x buffer stretched by the compositor.
     SetConfigFlags(FLAG_WINDOW_RESIZABLE | FLAG_WINDOW_HIGHDPI);
-    // FX_TEST_SIZE=WxH: the test compositor's kiosk shell rejects a first frame larger than its
+    // OFX_TEST_SIZE=WxH: the test compositor's kiosk shell rejects a first frame larger than its
     // output (tools/gui/weston.sh), so a test opens at the size it will get.
     int win_w = 1000, win_h = 700;
-    const char *size = getenv("FX_TEST_SIZE");
+    const char *size = getenv("OFX_TEST_SIZE");
     if (size && sscanf(size, "%dx%d", &win_w, &win_h) != 2) win_w = 1000, win_h = 700;
-    InitWindow(win_w, win_h, TextFormat("fx: %s", dir));
+    InitWindow(win_w, win_h, TextFormat("ofx: %s", dir));
     if (!IsWindowReady()) {
-        fprintf(stderr, "fx: cannot open a window\n");
+        fprintf(stderr, "ofx: cannot open a window\n");
         return 1;
     }
     SetExitKey(KEY_NULL);   // Ctrl+Q quits; Esc is free for later
-    const char *dbg = getenv("FX_GUI_DEBUG");
+    const char *dbg = getenv("OFX_GUI_DEBUG");
     debug_input = dbg && dbg[0];
     GLFWwindow *gw = glfwGetCurrentContext();
     raylib_key = glfwSetKeyCallback(gw, on_key);
@@ -2012,7 +2012,7 @@ int main(int argc, char **argv)
     pthread_create(&waiter, NULL, signal_waiter, NULL);
     pthread_detach(waiter);
     if (!font_init()) {
-        fprintf(stderr, "fx: fontconfig finds no usable sans-serif font\n");
+        fprintf(stderr, "ofx: fontconfig finds no usable sans-serif font\n");
         CloseWindow();
         return 1;
     }
@@ -2026,10 +2026,10 @@ int main(int argc, char **argv)
     user_dirs_load(&data, &app.user_dirs);
     theme_apply();
     if (!watch_start()) set_status(true, "inotify is unavailable: no live refresh");
-    clip_init();   // false: the clipboard stays inside fx
-    // FX_TEST_COUNT_DELAY_MS: each count takes that much longer, so a test can change the listing
+    clip_init();   // false: the clipboard stays inside ofx
+    // OFX_TEST_COUNT_DELAY_MS: each count takes that much longer, so a test can change the listing
     // while answers for the old one are on their way, or (10 s) stand in for a hung mount at quit.
-    const char *kdelay = getenv("FX_TEST_COUNT_DELAY_MS");
+    const char *kdelay = getenv("OFX_TEST_COUNT_DELAY_MS");
     counts.delay_ms = kdelay ? atoi(kdelay) : 0;
     if (counts.delay_ms < 0 || counts.delay_ms > 10000) counts.delay_ms = 0;
     count_start();
@@ -2044,7 +2044,7 @@ int main(int argc, char **argv)
     tabs[0].used = true;
     ui_tabs_open(&tabbar, 0, true);
 
-    const char *script_path = getenv("FX_GUI_SCRIPT");
+    const char *script_path = getenv("OFX_GUI_SCRIPT");
     bool scripted = script_path && script_path[0];
     script_on = scripted;
     if (scripted && !script_open(script_path)) {

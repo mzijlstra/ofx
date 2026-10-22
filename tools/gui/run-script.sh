@@ -1,5 +1,5 @@
 #!/bin/sh
-# Runs one scripted fx window (FX_GUI_SCRIPT, gui/script.c) in a private headless weston
+# Runs one scripted ofx window (OFX_GUI_SCRIPT, gui/script.c) in a private headless weston
 # (tools/gui/weston.sh), started for the run and stopped after it. Nothing reaches Michael's
 # screen or his Hyprland: the window's WAYLAND_DISPLAY is weston's socket, checked before launch.
 #
@@ -16,9 +16,9 @@
 # - XDG_CONFIG_HOME=<scratch-dir>/config: the sidebar's GTK bookmarks and the XDG user dirs come
 #   from there (empty unless the caller wrote them), never from Michael's;
 # - XDG_DATA_HOME=<scratch-dir>/data: the home trash is <scratch-dir>/data/Trash, never his;
-# - FX_TEST_HOME, when set, becomes the window's HOME (a scratch home for the path buttons' test);
-# - FX_GUI_SHOTS=<scratch-dir>/shots for the script's shots, FX_GUI_ROOT=<scratch-dir> for its
-#   sh guard and fx's own (fs/ops.c: no write outside it).
+# - OFX_TEST_HOME, when set, becomes the window's HOME (a scratch home for the path buttons' test);
+# - OFX_GUI_SHOTS=<scratch-dir>/shots for the script's shots, OFX_GUI_ROOT=<scratch-dir> for its
+#   sh guard and ofx's own (fs/ops.c: no write outside it).
 # Prints the script's output, stderr's first lines, and whether LeakSanitizer or ASan reported
 # anything. Exit status: 1 when an expectation failed, an ASan report appeared, or the window had
 # to be killed.
@@ -44,21 +44,21 @@ if [ ! -d "$T/state" ]; then
     cp "$real/colors.toml" "$real/icons.theme" "$T/state/omarchy/current/theme/" 2>/dev/null
 fi
 args=""
-script_env="FX_GUI_SCRIPT=$sc"
+script_env="OFX_GUI_SCRIPT=$sc"
 [ "$sc" = - ] && script_env=""
 for a in "$@"; do args="$args '$a'"; done
 root=$(cd "$(dirname "$0")/../.." && pwd)
 here=$(cd "$(dirname "$0")" && pwd)
 sock=$("$here/weston.sh" start "$T") || exit 1
 # Never Michael's display: the socket must be the one weston just made, and not his.
-case $sock in fx-test-*) ;; *) echo "run-script: unexpected socket '$sock'" >&2; "$here/weston.sh" stop "$T"; exit 1 ;; esac
+case $sock in ofx-test-*) ;; *) echo "run-script: unexpected socket '$sock'" >&2; "$here/weston.sh" stop "$T"; exit 1 ;; esac
 [ "$sock" != "${WAYLAND_DISPLAY:-}" ] || { echo "run-script: weston's socket is this session's display" >&2; "$here/weston.sh" stop "$T"; exit 1; }
 cat > "$T/launch.sh" <<EOS
 #!/bin/sh
 echo \$\$ > "$T/run.pid"
-exec env -u DISPLAY -u WAYLAND_SOCKET WAYLAND_DISPLAY="$sock" FX_TEST_SIZE=936x490 ${script_env} FX_GUI_ROOT="$T" FX_GUI_SHOTS="$T/shots" PATH="$T/fakes:\$PATH" XDG_STATE_HOME="$T/state" XDG_CONFIG_HOME="$T/config" XDG_DATA_HOME="$T/data" \
-  LSAN_OPTIONS=suppressions=$root/gui/lsan.supp ASAN_OPTIONS=log_path="$T/asan" ${FX_TEST_LEAK:+FX_TEST_LEAK=1} \
-  ${FX_TEST_WATCH_DELAY_MS:+FX_TEST_WATCH_DELAY_MS=$FX_TEST_WATCH_DELAY_MS} ${FX_TEST_COPY_DELAY_MS:+FX_TEST_COPY_DELAY_MS=$FX_TEST_COPY_DELAY_MS} ${FX_TEST_CROSS:+FX_TEST_CROSS=1} ${FX_TEST_HOME:+HOME=$FX_TEST_HOME} ${FX_TEST_COUNT_DELAY_MS:+FX_TEST_COUNT_DELAY_MS=$FX_TEST_COUNT_DELAY_MS} \
+exec env -u DISPLAY -u WAYLAND_SOCKET WAYLAND_DISPLAY="$sock" OFX_TEST_SIZE=936x490 ${script_env} OFX_GUI_ROOT="$T" OFX_GUI_SHOTS="$T/shots" PATH="$T/fakes:\$PATH" XDG_STATE_HOME="$T/state" XDG_CONFIG_HOME="$T/config" XDG_DATA_HOME="$T/data" \
+  LSAN_OPTIONS=suppressions=$root/gui/lsan.supp ASAN_OPTIONS=log_path="$T/asan" ${OFX_TEST_LEAK:+OFX_TEST_LEAK=1} \
+  ${OFX_TEST_WATCH_DELAY_MS:+OFX_TEST_WATCH_DELAY_MS=$OFX_TEST_WATCH_DELAY_MS} ${OFX_TEST_COPY_DELAY_MS:+OFX_TEST_COPY_DELAY_MS=$OFX_TEST_COPY_DELAY_MS} ${OFX_TEST_CROSS:+OFX_TEST_CROSS=1} ${OFX_TEST_HOME:+HOME=$OFX_TEST_HOME} ${OFX_TEST_COUNT_DELAY_MS:+OFX_TEST_COUNT_DELAY_MS=$OFX_TEST_COUNT_DELAY_MS} \
   "$bin" $args >"$T/out" 2>"$T/err"
 EOS
 chmod +x "$T/launch.sh"

@@ -1,10 +1,10 @@
-// fx base (copied from uml-viewer): types, strings, arenas, UTF-8 and time, shared by every module.
+// ofx base (copied from uml-viewer): types, strings, arenas, UTF-8 and time, shared by every module.
 //
 // Memory: our code never calls malloc. Every allocation comes from an arena backed by a static
 // buffer and is released only by resetting the whole arena. Strings are Str slices into memory
 // someone else owns, so they are never freed one by one.
-#ifndef FX_BASE_H
-#define FX_BASE_H
+#ifndef OFX_BASE_H
+#define OFX_BASE_H
 
 #include <stdbool.h>
 #include <stddef.h>

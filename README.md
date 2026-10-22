@@ -1,4 +1,4 @@
-# fx
+# ofx
 
 A keyboard-first file explorer for Omarchy: one folder at a time as a list, in the current
 theme's colours and icons. C with arenas, Clay for layout, raylib on native Wayland. It idles at
@@ -7,11 +7,11 @@ about 0% CPU: it draws only when something changes.
 ## Build and run
 
 ```sh
-make            # build/fx, debug with ASan and UBSan
-make release    # build/release/fx
+make            # build/ofx, debug with ASan and UBSan
+make release    # build/release/ofx
 make test       # unit tests for fs/ and ui/
-make install    # build/release/fx into ~/.local/bin
-fx [FOLDER]     # the current folder by default
+make install    # build/release/ofx into ~/.local/bin
+ofx [FOLDER]     # the current folder by default
 ```
 
 Needs a C11 compiler, `wayland-scanner`, and the pkg-config packages wayland-client,
@@ -42,9 +42,9 @@ wayland-cursor, wayland-egl, xkbcommon, fontconfig and freetype2. raylib and Cla
 | Ctrl+Shift+N | a new folder, "New folder", named in the row |
 | Delete | to the trash (the one Nemo shows) |
 | Shift+Delete | delete for good, after "Y/n" (Enter or `y` deletes) |
-| Ctrl+C, Ctrl+X, Ctrl+V | copy, cut, paste; Nemo and terminals paste what fx copied, fx what Nemo copied |
+| Ctrl+C, Ctrl+X, Ctrl+V | copy, cut, paste; Nemo and terminals paste what ofx copied, ofx what Nemo copied |
 | Ctrl+Z | undo the last rename, new folder, trash, copy or move |
-| Ctrl+T, Ctrl+W | a new tab on this folder, close the tab (the last one closes fx) |
+| Ctrl+T, Ctrl+W | a new tab on this folder, close the tab (the last one closes ofx) |
 | Ctrl+Tab, Ctrl+Shift+Tab | the next and previous tab (Ctrl+PgDn, Ctrl+PgUp too) |
 | Alt+1 … Alt+9 | a tab by place, Alt+9 the last |
 | Ctrl+Shift+PgUp, Ctrl+Shift+PgDn | move the tab left or right |
@@ -85,7 +85,7 @@ and what is mounted under `/mnt`, `/media` and `/run/media`.
 - The trash: `~/.local/share/Trash` (`$XDG_DATA_HOME`) for the home drive, a drive's own
   `.Trash-$UID` (or `.Trash/$UID`) for others, by the freedesktop spec.
 - The clipboard: `ext-data-control-v1` (Hyprland has it), as `x-special/gnome-copied-files`,
-  `text/uri-list` and plain paths. Without it the clipboard stays inside fx.
+  `text/uri-list` and plain paths. Without it the clipboard stays inside ofx.
 
 `docs/plan.md` has the plan and what is next.
 
@@ -94,4 +94,4 @@ and what is mounted under `/mnt`, `/media` and `/run/media`.
 `make test` runs the unit tests. `tools/mutation/run.py` mutates `fs/` and `ui/` one site at a
 time against them, `tools/mutation/gui.py` the window against the GUI scripts. GUI scripts run in
 a private headless weston, never on the desktop: see `CLAUDE.md` and `tests/gui/run.sh`.
-`build/fx-probe DIR` prints a folder as fx sees it (types and icon files), without a window.
+`build/ofx-probe DIR` prints a folder as ofx sees it (types and icon files), without a window.

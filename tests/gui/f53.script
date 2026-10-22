@@ -1,4 +1,4 @@
-# F5.3 on a tree made by tests/gui/run.sh, HOME=<scratch>/home, FX_TEST_COPY_DELAY_MS=300: home/tree
+# F5.3 on a tree made by tests/gui/run.sh, HOME=<scratch>/home, OFX_TEST_COPY_DELAY_MS=300: home/tree
 # holds src/ (big1.bin 8 MiB, z.txt), src2/ (big2.bin 8 MiB, z.txt), adir/, bdir/ (z.txt),
 # cdir/ (z.txt), ddir/ (d.txt), many/ (f01..f10).
 settle
@@ -78,17 +78,17 @@ point-ui modal-yes
 click-here
 wait-for 3000 status=Copy cancelled after 0 of 1 item
 wait-for 3000 jobs=1 waiting=2 jobrows=Copying_big2.bin_to_bdir
-sh test ! -e "$FX_DIR/big1.bin" && ! ls -A "$FX_DIR" | grep -q fx-part
+sh test ! -e "$OFX_DIR/big1.bin" && ! ls -A "$OFX_DIR" | grep -q ofx-part
 # big2 into adir runs when big2's first copy ends; z.txt, also into adir, stays behind it (in the
 # order asked) though big1's copy, which held it, is gone. Undo takes back the one that finished
 # last: z.txt.
 wait-for 4000 jobrows=Copying_big2.bin_to_adir waiting=1
 wait-for 10000 jobs=0 job=-
-sh cmp -s "$FX_DIR/big2.bin" "$FX_ROOT/home/tree/src2/big2.bin" && test -f "$FX_ROOT/home/tree/bdir/big2.bin"
+sh cmp -s "$OFX_DIR/big2.bin" "$OFX_ROOT/home/tree/src2/big2.bin" && test -f "$OFX_ROOT/home/tree/bdir/big2.bin"
 wait-for 3000 n=2
 key ctrl-z
 wait-for 3000 n=1 sel=big2.bin
-sh test -f "$FX_ROOT/home/tree/bdir/big2.bin"
+sh test -f "$OFX_ROOT/home/tree/bdir/big2.bin"
 # ---- an action during a job (reviewer-2, F5.3 review): a file the job reads can't be trashed; a
 # file it doesn't touch can, and the job's end leaves that trash's undo be
 key ctrl-l
@@ -122,7 +122,7 @@ wait-for 2000 undo=trash status=Trashed
 wait-for 8000 job=- undo=trash
 key ctrl-z
 wait-for 3000 sel=d.txt
-sh test -f "$FX_DIR/big2.bin" && test -f "$FX_DIR/d.txt" && test -f "$FX_ROOT/home/tree/src2/big2.bin"
+sh test -f "$OFX_DIR/big2.bin" && test -f "$OFX_DIR/d.txt" && test -f "$OFX_ROOT/home/tree/src2/big2.bin"
 # ---- two jobs clash at once: one panel at a time, each naming its job
 key ctrl-l
 type ~/tree/src

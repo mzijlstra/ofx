@@ -3,7 +3,7 @@
 //
 // At start the theme, its Inherits chain (depth first, as the spec's FindIcon) and hicolor are
 // read: each one's index.theme and, per subdirectory and base dir, the PNG names in it (of the
-// contexts fx uses). A lookup
+// contexts ofx uses). A lookup
 // is then map probes, no file system calls. Base dirs: ~/.icons, then icons/ under every XDG data
 // dir.
 
@@ -113,7 +113,7 @@ static bool icon_scan(Arena *a, const char *dir, StrMap *m)
     return true;
 }
 
-// fx asks only for folder, drive and file icons, which themes keep under Places, Devices and
+// ofx asks only for folder, drive and file icons, which themes keep under Places, Devices and
 // MimeTypes, and the top bar's search (edit-find, under Actions); hicolor's 600-odd app
 // directories would take most of the start-up. A directory that names no context is read too.
 static bool icon_context_used(Str context)
@@ -217,7 +217,7 @@ static const IconDir *icon_in_theme(const IconTheme *t, Str name, int size, int 
 
 // The file for the first of names any theme in the chain has, at size logical pixels on a
 // scale-`scale` output; into a. NULL when there is none. Name by name, not the spec's FindBestIcon
-// (theme by theme): fx's lists end in generic fallbacks (folder, text-x-generic), and Yaru-magenta
+// (theme by theme): ofx's lists end in generic fallbacks (folder, text-x-generic), and Yaru-magenta
 // has a folder but no drive, so theme-first drew the drives as folders (2026-10-20).
 static const char *icon_find(Arena *a, const IconDb *db, const Str *names, isize nnames, int size, int scale)
 {

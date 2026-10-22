@@ -37,7 +37,7 @@ MUTANTS = [
     (G, "        return m == GLFW_MOD_SHIFT ? UK_SHIFT_DELETE : m == 0 ? UK_DELETE : UK_NONE;", "        return m == 0 ? UK_DELETE : UK_SHIFT_DELETE;"),
     (G, "    if (m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT) && key == GLFW_KEY_N) return UK_NEWFOLDER;", ""),
     (J, "        if (jobs.asking >= 0) app.ui.asking = true, app.ui.ask_all = false;", ""),
-    (G, "    ops_guard(getenv(\"FX_GUI_ROOT\"));", ""),
+    (G, "    ops_guard(getenv(\"OFX_GUI_ROOT\"));", ""),
     (G, "        if (!was_editing && app.ui.editing && !app.ui.edit_path) snprintf(app.edit_from, sizeof app.edit_from, \"%.*s\", STR_ARG(sel_name())), app.edit_new = false;", ""),
     # F4
     (G, "    if (i + 1 < c->n) snprintf(below, sizeof below, \"%.*s\", STR_ARG(ui_crumb_label(c, i + 1)));", ""),
@@ -102,7 +102,7 @@ MUTANTS = [
     (J, "        p[k++] = last_dir;", ""),
     (J, "        atomic_store(&r->j.cancel, true);", ""),
     (J, "    jobs.asking = -1;\n}", "}"),
-    (J, "    if (app.ui.cancel_asking && !job_running_id(app.ui.cancel_id)) app.ui.cancel_asking = false;", ""),
+    (J, "    if (gone) app.ui.cancel_asking = false;   // it ended meanwhile", ""),
     (J, "    for (int i = 0; i < jobs.nrun; i++) job_cancel(job_recs[jobs.run[i]].id);", ""),
     (J, "        jobline_sample(&r->line, now,", "        if (0) jobline_sample(&r->line, now,"),
     (G, "    int r = (h - top_h() - COLS_H - FOOTER_H - jobs_h()) / ROW_H;", "    int r = (h - top_h() - COLS_H - FOOTER_H) / ROW_H;"),
@@ -133,12 +133,12 @@ for i, (f, old, new) in enumerate(MUTANTS):
     path = os.path.join(work, f)
     text = open(path).read()
     open(path, 'w').write(text.replace(old, new, 1))
-    b = subprocess.run(['make', '-s', 'build/fx'], cwd=work, capture_output=True, text=True)
+    b = subprocess.run(['make', '-s', 'build/ofx'], cwd=work, capture_output=True, text=True)
     if b.returncode != 0:
         print(f'#{i} build failed: {b.stderr[-300:]}')
         open(path, 'w').write(text)
         continue
-    r = subprocess.run([os.path.join(root, 'tests/gui/run.sh'), os.path.join(scratch, f'gm{i}'), os.path.join(work, 'build/fx')],
+    r = subprocess.run([os.path.join(root, 'tests/gui/run.sh'), os.path.join(scratch, f'gm{i}'), os.path.join(work, 'build/ofx')],
                        capture_output=True, text=True)
     open(path, 'w').write(text)
     verdict = 'killed' if r.returncode != 0 else 'SURVIVED'

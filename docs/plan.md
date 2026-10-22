@@ -1,6 +1,6 @@
-# fx: plan
+# ofx: plan
 
-fx is Michael's file explorer: a keyboard-first list of one folder at a time, in the Omarchy
+ofx is Michael's file explorer: a keyboard-first list of one folder at a time, in the Omarchy
 theme's colours and icons, written in C on the prdash and uml-viewer stack (arenas, Clay,
 raylib on native Wayland). It replaces Nemo, which idles at about 5% CPU, and Nautilus, which
 had no "terminal here". The concept, with what is in and out of scope, is the doc "File explorer
@@ -9,9 +9,14 @@ concept" (https://claude.ai/code/artifact/8d990266-71ea-4d0e-a109-a8f3a71807ba).
 Out for good: drag and drop (Michael doesn't drag files), the "Save as" portal dialogs, network
 shares, archives, "open with" menus.
 
+**Name (2026-10-22, Michael):** fx became **ofx**, Omarchy File eXplorer, for its close ties to
+Omarchy's theme: the binary, the folder `tools/ofx`, the window's title and Wayland app id, the
+`OFX_*` test variables, the part files' `.ofx-part-` prefix. Review files before it keep their
+`fx-*` names. Text below written before then says ofx too.
+
 ## Decisions (2026-10-20, Michael)
 
-- Name `fx`, in `tools/fx/`, its own local git repo.
+- Name `ofx`, in `tools/ofx/`, its own local git repo.
 - Keys: arrows, Enter and Backspace, and vim-style `h j k l`, `g`/`G` alongside.
 - A list view only; an icon grid may come later.
 
@@ -42,20 +47,20 @@ his word: Nemo's compact view and its icon size slider.
 - USB drives (from the concept doc): unmounted drives in the sidebar, a click mounts them with
   `udisksctl mount`, an eject button unmounts.
 - A key that copies the cursor's path as text (Ctrl+C already puts files on the clipboard, F3).
-- Install Nautilus at some point to compare its features with fx's (not a priority).
+- Install Nautilus at some point to compare its features with ofx's (not a priority).
 - Search through subfolders, as Nemo's search does (the top bar's search opens `/` find for now).
 - Optional columns: permissions; type (Michael doesn't want it by default). Date and time format as
   an option; the short form ("14:03", "Oct 20") stays the default.
 - Sidebar sections (Nemo's My Computer, Bookmarks, Network): to brainstorm with Michael first.
 - Counting in a separate process (reviewer-2, F4 review): a readdir on a hard NFS mount that
-  hangs sits in D state, which no thread exit can reap, so fx's process (its Wayland socket) can
+  hangs sits in D state, which no thread exit can reap, so ofx's process (its Wayland socket) can
   outlive its window. Only a child process that does the counting decouples a dead mount fully.
 - Remember the open tabs across a restart (F5 doesn't).
 - Not wanted: Nemo's built-in terminal (`t`, a terminal here, covers it).
 
 **Thumbnails, a rule from Nemo (2026-10-20):** Nemo looped at up to 45% CPU on one file
 because it checked an x-large thumbnail, found it stale (an older file of the same name), wrote the
-new one to large, and checked x-large again, decoding the image several times a second. fx must
+new one to large, and checked x-large again, decoding the image several times a second. ofx must
 check a thumbnail at the size it writes, and try a file once per change (its mtime), never in a
 loop: a failed or stale result is remembered until the file changes.
 
@@ -71,7 +76,7 @@ fontconfig and Mesa allocate for themselves).
 reset per folder. Each entry: name, kind (folder, file, symlink to either, broken symlink, other),
 size, modified time, mode. Dot-files are left out in F1 (F2 adds the toggle). Order: folders first,
 then names in natural order, ignoring case (`file2` before `file10`), as Nemo and GTK sort.
-A folder fx can't read shows the error in the window, not a crash.
+A folder ofx can't read shows the error in the window, not a crash.
 
 **MIME type (`fs/mime.c`):** from file names only, by the shared-mime-info glob tables
 (`<data dir>/mime/globs2` for every XDG data dir, weights honoured, literal names before
@@ -120,7 +125,7 @@ across the window, its left part the sidebar's, its right part the status. Decis
   there and not removable, the GTK bookmarks (shared with Nemo) between them; the XDG user dirs
   (Documents, Downloads) show only when bookmarked. *Drives*: `/` and each mounted drive (`sd`
   here, a USB drive when one is mounted), each with a thin bar of how full it is and its free space
-  in numbers. Drives come and go live: fx watches the mount list (`/proc/self/mountinfo`).
+  in numbers. Drives come and go live: ofx watches the mount list (`/proc/self/mountinfo`).
 - **Tree mode:** from `/`, opened down to the current folder.
 - **Hidden mode:** no sidebar.
 - **Switching:** three small icon buttons in the bar's sidebar part (places, tree, hidden); F9
@@ -131,9 +136,9 @@ across the window, its left part the sidebar's, its right part the status. Decis
   own later). With one folder selected: `"adir" selected (12 items)`; several: `3 items selected`;
   else the folder's count and its drive's free space, `14 items, 87 GB free`.
 - **Remembered across a restart:** the sidebar's mode now, the files' view (list or icons)
-  later. Options Michael sets (a date format, columns) go in `$XDG_CONFIG_HOME/fx/fx.conf`, which
-  fx only reads; what fx remembers by itself (the mode, later the tabs) in
-  `$XDG_STATE_HOME/fx/state`, which fx writes. The XDG split; Michael agreed (2026-10-22).
+  later. Options Michael sets (a date format, columns) go in `$XDG_CONFIG_HOME/ofx/ofx.conf`, which
+  ofx only reads; what ofx remembers by itself (the mode, later the tabs) in
+  `$XDG_STATE_HOME/ofx/state`, which ofx writes. The XDG split; Michael agreed (2026-10-22).
 
 ## F5.2 design (2026-10-21)
 
@@ -149,7 +154,7 @@ selection: the first line only, and in a name line the characters a name can't h
 (`/`, controls). A text copy replaces whatever is on the clipboard, files included, as any
 program's copy does; a paste after a copy of files gives their paths.
 
-*Built (2026-10-21):* the text goes through fx's own data-control connection (F3's), offered as
+*Built (2026-10-21):* the text goes through ofx's own data-control connection (F3's), offered as
 `text/plain` only, not through GLFW's clipboard as planned: GLFW reads another program's text with
 no time limit (a hung program would hang the window), and while the main thread waited on GLFW's
 own source through data-control, nothing could answer it. GLFW's clipboard is the fallback where
@@ -226,7 +231,7 @@ live and picked this over the blur (the frame scaled down and back up), which th
 
 ## F5 design (2026-10-21)
 
-**Decisions (Michael):** Ctrl+W on the last tab closes fx; a middle click opens its tab in the
+**Decisions (Michael):** Ctrl+W on the last tab closes ofx; a middle click opens its tab in the
 background; sort order and hidden files belong to the window, not to a tab; tabs are not
 remembered across a restart (on the later list).
 
@@ -243,7 +248,7 @@ tab shows it; a middle click or its × closes it.
 
 **Keys and mouse:** Ctrl+T a new tab on the current folder, after the current one, shown;
 Ctrl+W closes the current tab (the one to its right shows, or to its left at the end; the last
-closes fx); Ctrl+Tab / Ctrl+Shift+Tab and Ctrl+PgDn / Ctrl+PgUp the next and previous (wrapping);
+closes ofx); Ctrl+Tab / Ctrl+Shift+Tab and Ctrl+PgDn / Ctrl+PgUp the next and previous (wrapping);
 Alt+1 to Alt+9 a tab by place (Alt+9 the last); Ctrl+Shift+PgUp / PgDn move the current tab left
 or right. A middle click on a path button, a folder row or a sidebar place opens it in a new tab in
 the background.
@@ -274,7 +279,7 @@ then (right) the location entry toggle and search. The item count moves to the f
 ignore clicks; every button lights up under the pointer.
 
 **Arrows and button glyphs:** the icon theme has these only as symbolic SVGs (Yaru, Adwaita), and
-fx has no SVG rasteriser, so they are drawn as text glyphs from the UI font in the theme's colours
+ofx has no SVG rasteriser, so they are drawn as text glyphs from the UI font in the theme's colours
 (← → ↑ ‹ › from Liberation Sans, ✎ from Noto Sans Symbols 2 through fontconfig's fallback), as
 Nemo's symbolic icons are monochrome too. Search uses the theme's own PNG (`edit-find`, which
 Yaru draws as a magnifier over an "A").
@@ -337,7 +342,7 @@ called by then (built so, 2026-10-20: the row exists to edit in).
 `$topdir/.Trash-$uid` (made 0700), never across drives. The `.trashinfo` (Path, percent-encoded;
 absolute in the home trash, relative to the top dir in the others; DeletionDate in local time) is
 created with `O_EXCL` first, which also picks the free name (`name`, `name.2`, …); then the file
-is renamed into `files/`. Nemo's trash view and `gio trash --list` show what fx trashed.
+is renamed into `files/`. Nemo's trash view and `gio trash --list` show what ofx trashed.
 
 **Delete for good:** the footer asks "Delete 3 items for good? This can't be undone. Y/n";
 Enter or `y` goes ahead (whoever presses Shift+Delete means it: Michael, 2026-10-20), `n` or Esc
@@ -348,7 +353,7 @@ the open folder starts a job on a worker thread with its own arena (no malloc).
 - A move on the same drive is one `renameat2(RENAME_NOREPLACE)` per entry. Across drives it is a
   copy, then the source is deleted once that entry copied in full.
 - A copy counts the files and bytes first, then copies each file with `copy_file_range` (falling
-  back to `read`/`write` in 1 MiB blocks) into `.fx-part-<name>` beside the target, and renames it
+  back to `read`/`write` in 1 MiB blocks) into `.ofx-part-<name>` beside the target, and renames it
   into place at the end, so a cancel or a crash never leaves a half file under the real name.
   Modes and times are kept (`fchmod`, `futimens`); symlinks are copied as links, never followed;
   sockets and devices are skipped with a note.
@@ -363,13 +368,13 @@ Esc cancels the job. A replaced file is written to the part file first and renam
 one, so the old file survives until the new one is complete.
 
 **System clipboard (`gui/clipboard.c`):** GLFW only offers `text/plain`, which Nemo can't paste
-as files. fx opens its own second Wayland connection and binds `ext-data-control-v1`
+as files. ofx opens its own second Wayland connection and binds `ext-data-control-v1`
 (Hyprland has it; wayland-protocols 1.49 ships the XML), which needs no input serial. On Ctrl+C
 or Ctrl+X it offers `x-special/gnome-copied-files` (`copy` or `cut`, then `file://` URIs: what
 Nemo reads), `text/uri-list`, and `text/plain;charset=utf-8` / `text/plain` (the paths, one per
-line, for a terminal). Ctrl+V takes fx's own copy when it still owns the selection, else reads
+line, for a terminal). Ctrl+V takes ofx's own copy when it still owns the selection, else reads
 `x-special/gnome-copied-files` or `text/uri-list` from whoever does, so files copied in Nemo
-paste in fx too. Without the protocol (weston, in the tests) the clipboard stays inside fx and the
+paste in ofx too. Without the protocol (weston, in the tests) the clipboard stays inside ofx and the
 status line says so once.
 
 **Undo (Ctrl+Z, one level: the last action only):**
@@ -380,7 +385,7 @@ status line says so once.
 Undo checks first that things are as the action left them (the new name exists, the old one is
 free); if not it does nothing and says why. The status line names what was undone.
 
-**Test guard:** with `FX_GUI_ROOT` set (the GUI tests), every write in fs/ (rename, mkdir, trash,
+**Test guard:** with `OFX_GUI_ROOT` set (the GUI tests), every write in fs/ (rename, mkdir, trash,
 delete, copy, move, undo) refuses a path outside that folder, checked on the resolved path, and
 logs the refusal; `XDG_DATA_HOME` points at scratch so the home trash is scratch too.
 
@@ -398,9 +403,9 @@ logs the refusal; `XDG_DATA_HOME` points at scratch so the home trash is scratch
    Esc cancels with no part file left; a clash answered each way; the guard refusing a path
    outside the scratch folder.
 3. One live clipboard check on Hyprland, with Michael's go since it replaces his clipboard: copy in
-   fx, paste in Nemo and in a terminal; copy in Nemo, paste in fx.
-   Done 2026-10-20 by Michael: all three pasted as expected, and four rounds of Ctrl+C in fx, a
-   copy elsewhere, Ctrl+C in fx again (the cancelled-source path reviewer-2's fix touched) held.
+   ofx, paste in Nemo and in a terminal; copy in Nemo, paste in ofx.
+   Done 2026-10-20 by Michael: all three pasted as expected, and four rounds of Ctrl+C in ofx, a
+   copy elsewhere, Ctrl+C in ofx again (the cancelled-source path reviewer-2's fix touched) held.
 4. F1 and F2 scripts still pass; idle is still about 0%; LeakSanitizer reports nothing.
 
 ## F2 design (2026-10-20)
@@ -457,6 +462,6 @@ the next and previous match of the last text.
    - theme switch: rewriting the scratch `colors.toml` recolours the running window;
    - icons at scale 2 come from the `@2x` directories (state line names the file).
 3. A folder of 10,000 entries lists and scrolls; the slowest frame is recorded.
-4. Idle: 60 s with fx open and untouched, its CPU time and wakeups against Nemo's on the same
+4. Idle: 60 s with ofx open and untouched, its CPU time and wakeups against Nemo's on the same
    folder.
 5. LeakSanitizer reports nothing with `gui/lsan.supp`.

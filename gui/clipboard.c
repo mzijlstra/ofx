@@ -1,7 +1,7 @@
 // The system clipboard for files (docs/plan.md, F3 "System clipboard"). GLFW offers only
-// text/plain, which Nemo can't paste as files, so fx opens a second Wayland connection of its own
+// text/plain, which Nemo can't paste as files, so ofx opens a second Wayland connection of its own
 // and binds ext-data-control-v1, which needs no input serial: Hyprland has it, weston (the tests)
-// doesn't, and without it the clipboard stays inside fx. fs/clip.c makes the payloads.
+// doesn't, and without it the clipboard stays inside ofx. fs/clip.c makes the payloads.
 //
 // A thread dispatches the connection: it answers other programs' requests for our payloads and
 // keeps track of what the selection offers. The main thread sets the selection and reads others'.
@@ -99,7 +99,7 @@ static void on_primary(void *data, struct ext_data_control_device_v1 *d, struct 
     (void)data, (void)d;
     if (!o) return;
     pthread_mutex_lock(&clip.mu);
-    offer_drop(offer_slot(o));   // fx doesn't use the primary selection
+    offer_drop(offer_slot(o));   // ofx doesn't use the primary selection
     pthread_mutex_unlock(&clip.mu);
 }
 
@@ -194,7 +194,7 @@ static void *clip_loop(void *arg)
     return NULL;
 }
 
-// Connects and starts the thread: false (and the clipboard stays inside fx) without the protocol.
+// Connects and starts the thread: false (and the clipboard stays inside ofx) without the protocol.
 static bool clip_init(void)
 {
     arena_init(&clip.arena, "clipboard", clip_mem, sizeof clip_mem);

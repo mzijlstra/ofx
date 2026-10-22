@@ -1318,7 +1318,7 @@ int main(void)
 {
     arena_init(&ta, "test", test_mem, sizeof test_mem);
     const char *tmp = getenv("TMPDIR");
-    snprintf(root, sizeof root, "%s/fx-test-XXXXXX", tmp && tmp[0] ? tmp : "/tmp");
+    snprintf(root, sizeof root, "%s/ofx-test-XXXXXX", tmp && tmp[0] ? tmp : "/tmp");
     if (!mkdtemp(root)) return perror("mkdtemp"), 1;
     snprintf(decoy, sizeof decoy, "%s-decoy", root);
     if (mkdir(decoy, 0700) != 0) return perror("mkdir decoy"), 1;
