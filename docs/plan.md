@@ -202,7 +202,9 @@ before it, so a later job on other files doesn't queue behind a held one, and tw
 files keep their order. Esc no longer cancels a job (the row's × does, after asking); the panels'
 Enter is their yes (Cancel job, Quit), as the delete panel's. The window's close button asks as
 Ctrl+Q does. The speed is read over at least half a second (a first block from the page cache
-would set the line's scale for good). Each job record holds its items and paths (36 records, about
+would set the line's scale for good). The line's full height is the fastest point of the last 30 s, a fifth over it (Michael, after
+a USB 2 stick: a burst into the page cache at the start pressed the rest to the floor when scaled
+to the fastest, and still did at the 90th percentile while the burst was most of the points). Each job record holds its items and paths (36 records, about
 5 MiB each, static: only a used one's pages are touched).
 
 ## F5.1 design (2026-10-21)

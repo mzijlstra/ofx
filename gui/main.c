@@ -1181,7 +1181,7 @@ static Color rl(Clay_Color c)
 
 static void draw_line(Clay_BoundingBox b, const LineDraw *d)
 {
-    float scale = d->line ? jobline_scale(d->line) : 0;
+    float scale = d->line ? jobline_scale(d->line, now_ms()) : 0;
     if (scale <= 0) {
         DrawRectangleRec((Rectangle){ b.x, b.y, b.width * d->done, b.height }, rl(d->fill));
         return;

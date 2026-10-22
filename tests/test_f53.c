@@ -88,19 +88,28 @@ static void test_jobline(void)
     for (int t = 0; t <= 10000; t += 50) jobline_sample(&l, t, (i64)t * 500, 0);
     CHECK(l.ns == JOBQ_SAMPLES && l.now > 499000 && l.now < 501000);
 
-    // The line's scale: the 90th percentile, so a burst doesn't press the rest down.
+    // The line's scale: the fastest point of the last 30 s, a fifth over it. A burst 40 s ago is
+    // out of it; one 20 s ago is in.
     memset(&l, 0, sizeof l);
-    CHECK(jobline_scale(&l) == 0);
+    CHECK(jobline_scale(&l, 0) == 0);
     l.reached = 100;
-    for (int k = 0; k < 100; k++) l.speed[k] = k < 5 ? 500e6f : 5e6f + (float)k * 1000;
-    float sc = jobline_scale(&l);
-    CHECK(sc > 5.08e6f && sc < 5.1e6f);   // the 90th of 100: point 94's 5.094 MB/s, not the burst
-    l.reached = 3;
-    l.speed[0] = 0, l.speed[1] = 0, l.speed[2] = 7;   // points without a speed don't count
-    CHECK(jobline_scale(&l) == 7);
-    l.reached = 10;
-    for (int k = 0; k < 10; k++) l.speed[k] = (float)(10 - k);   // unsorted: 1..10, the 90th is 9
-    CHECK(jobline_scale(&l) == 9);
+    for (int k = 0; k < 100; k++) l.speed[k] = k < 5 ? 500e6f : 5e6f + (float)k * 1000, l.at_ms[k] = (i64)k * 1000;
+    float sc = jobline_scale(&l, 99000);   // points 69..99 in the window: 5.099 MB/s the fastest
+    CHECK(sc > 5.099e6f * 1.2f - 10 && sc < 5.099e6f * 1.2f + 10);
+    sc = jobline_scale(&l, 30000);   // points 0..30: the burst
+    CHECK(sc > 500e6f * 1.2f - 100 && sc < 500e6f * 1.2f + 100);
+    CHECK(jobline_scale(&l, 34000) > 400e6f && jobline_scale(&l, 34001) < 10e6f);   // the last burst point, 4, just left it
+    // No point in the window (a stall since): the last point's speed.
+    sc = jobline_scale(&l, 500000);
+    CHECK(sc > 5.099e6f * 1.2f - 10 && sc < 5.099e6f * 1.2f + 10);
+    // Points with no speed in the window: the last one's, 0 when that has none.
+    l.reached = 3, l.speed[0] = 0, l.speed[1] = 0, l.speed[2] = 0;
+    CHECK(jobline_scale(&l, 2000) == 0);
+    // jobline_sample stamps the points it reaches.
+    memset(&l, 0, sizeof l);
+    jobline_sample(&l, 0, 0, 1000);
+    jobline_sample(&l, 700, 500, 1000);
+    CHECK(l.reached == 150 && l.at_ms[0] == 700 && l.at_ms[149] == 700);
 
     char b[32];
     jobq_speed(b, sizeof b, 0);

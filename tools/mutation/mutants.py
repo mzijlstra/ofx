@@ -496,8 +496,10 @@ MUTANTS += [
     (U, "    bool no = e.key == UK_ESC || (e.key == UK_NONE && (e.ch == 'n' || e.ch == 'N'));\n    *answered", "    bool no = e.key == UK_NONE && (e.ch == 'n' || e.ch == 'N');\n    *answered"),
 ]
 MUTANTS += [
-    (Q, "        if (l->speed[k] > 0) v[n++] = l->speed[k];", "        v[n++] = l->speed[k];"),
-    (Q, "    if (n == 0) return 0;\n", ""),
-    (Q, "        while (k >= 0 && v[k] > x) v[k + 1] = v[k], k--;", "        while (k > 0 && v[k] > x) v[k + 1] = v[k], k--;"),
-    (Q, "    return v[(n - 1) * 9 / 10];", "    return v[n - 1];"),
+    (Q, "k >= 0 && ms - l->at_ms[k] <= JOBQ_SCALE_MS; k--)", "k >= 0; k--)"),
+    (Q, "k >= 0 && ms - l->at_ms[k] <= JOBQ_SCALE_MS; k--)", "k >= 0 && ms - l->at_ms[k] < JOBQ_SCALE_MS; k--)"),
+    (Q, "        if (l->speed[k] > top) top = l->speed[k];", ""),
+    (Q, "    if (top <= 0 && l->reached > 0) top = l->speed[l->reached - 1];\n", ""),
+    (Q, "    return top * 1.2f;", "    return top;"),
+    (Q, "l->at_ms[l->reached] = ms, ", ""),
 ]

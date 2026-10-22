@@ -6,7 +6,8 @@
 
 #include <stdio.h>
 
-enum { JOBQ_WORKERS = 4, JOBQ_WAITING = 32, JOBQ_POINTS = 300, JOBQ_SAMPLES = 64, JOBQ_SPEED_MS = 2000, JOBQ_SPAN_MS = 500 };
+enum { JOBQ_WORKERS = 4, JOBQ_WAITING = 32, JOBQ_POINTS = 300, JOBQ_SAMPLES = 64, JOBQ_SPEED_MS = 2000, JOBQ_SPAN_MS = 500,
+       JOBQ_SCALE_MS = 30000 };
 
 // The paths a job uses: its sources and its targets' folders.
 typedef struct {
@@ -51,6 +52,7 @@ static int jobq_next(const JobUses *const *wait, int nwait, const JobUses *const
 // there; the speed smoothed over the last JOBQ_SPEED_MS.
 typedef struct {
     float speed[JOBQ_POINTS];   // bytes a second; 0 where the job hasn't been
+    i64   at_ms[JOBQ_POINTS];   // when the job got there
     int   reached;              // points filled, 0..JOBQ_POINTS
     float max;                  // the fastest so far, for the line's scale
     float now;                  // the current speed
@@ -91,26 +93,22 @@ static void jobline_sample(JobLine *l, i64 ms, i64 done, i64 total)
     }
     int to = total > 0 ? (int)((double)done / (double)total * JOBQ_POINTS) : 0;
     if (to > JOBQ_POINTS) to = JOBQ_POINTS;
-    while (l->reached < to) l->speed[l->reached++] = l->now;
+    while (l->reached < to) l->at_ms[l->reached] = ms, l->speed[l->reached++] = l->now;
 }
 
-// The speed the line's full height stands for: the 90th percentile of the points so far, so a
-// burst into the page cache at the start (hundreds of MB/s before a USB stick's 5) runs off the top
-// instead of pressing the rest to the floor (Michael's pick, 2026-10-22); 0 before any.
-static float jobline_scale(const JobLine *l)
+// The speed the line's full height stands for: the fastest of the points reached in the last
+// JOBQ_SCALE_MS, a fifth over it. A burst into the page cache at the start (hundreds of MB/s
+// before a USB stick's 5) leaves that window within half a minute and then runs off the top,
+// instead of pressing the rest of the line to the floor (Michael, a USB 2 stick, 2026-10-22). The
+// scale follows the copy as it speeds up or slows down. 0 before any speed; the last point's when
+// none came in the window (a long stall).
+static float jobline_scale(const JobLine *l, i64 ms)
 {
-    float v[JOBQ_POINTS];
-    int n = 0;
-    for (int k = 0; k < l->reached; k++)
-        if (l->speed[k] > 0) v[n++] = l->speed[k];
-    if (n == 0) return 0;
-    for (int i = 1; i < n; i++) {   // insertion sort: 300 at most
-        float x = v[i];
-        int k = i - 1;
-        while (k >= 0 && v[k] > x) v[k + 1] = v[k], k--;
-        v[k + 1] = x;
-    }
-    return v[(n - 1) * 9 / 10];
+    float top = 0;
+    for (int k = l->reached - 1; k >= 0 && ms - l->at_ms[k] <= JOBQ_SCALE_MS; k--)
+        if (l->speed[k] > top) top = l->speed[k];
+    if (top <= 0 && l->reached > 0) top = l->speed[l->reached - 1];
+    return top * 1.2f;
 }
 
 // A speed for the row's right end: "12.4 MB/s"; "" before there is one.
