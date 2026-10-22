@@ -9,7 +9,7 @@
 #include <stdio.h>
 #include <time.h>
 
-enum { UI_EVENTS_MAX = 64, UI_FIND_MAX = 256, UI_HISTORY_MAX = 64 };
+enum { UI_EVENTS_MAX = 64, UI_FIND_MAX = 256, UI_HISTORY_MAX = 64, UI_JOB_ROWS = 4 };
 
 // The keys without text, as gui/ reads them (a chord already named). Characters come apart.
 typedef enum {
@@ -44,6 +44,8 @@ typedef enum {
     UK_SEL_END,    // Shift+End
     UK_SHIFT_ENTER,   // on a path button: a background tab; elsewhere as Enter
     UK_CRUMBS,     // Ctrl+K: the keyboard on the path buttons (F5.2)
+    UK_JOBS,       // Ctrl+J: the keyboard on the job rows' × (F5.3)
+    UK_QUIT,       // Ctrl+Q, or the window closed
 } UiKey;
 
 // The top bar's buttons (F4).
@@ -76,6 +78,12 @@ typedef struct {
     Str     paste;       // the clipboard's text for a Ctrl+V in an edit line (gui/ reads it first)
     int     crumb_n;     // the path buttons there are, and the rightmost one shown (F5.2)
     int     crumb_last;
+    // The job rows (F5.3): each running job's id, top row first; a row's × clicked (its place), -1
+    // for none; and how many jobs there are in all, running and waiting.
+    int     job_n;
+    int     job_id[UI_JOB_ROWS];
+    int     job_x;
+    int     jobs_all;
 } UiInput;
 
 typedef enum {
@@ -84,7 +92,8 @@ typedef enum {
                     // gui/ closes it, so a refused name can be fixed)
     UA_NEWFOLDER, UA_TRASH, UA_DELETE, UA_COPY, UA_CUT, UA_PASTE, UA_UNDO,
     UA_ANSWER,      // a clash answered: index is the Answer, all "the rest the same"
-    UA_CANCEL_JOB,
+    UA_CANCEL_JOB,  // index: the job's id, asked and answered
+    UA_QUIT,        // asked first when jobs run or wait
     UA_LOCATION,    // the location line, open or closed (gui/ fills it with the folder)
     UA_GO,          // the location line's Enter: its text is where to go (open until gui/ closes it)
     UA_CRUMB,       // a path button: index
@@ -111,7 +120,8 @@ enum { UI_ANS_SKIP = 1, UI_ANS_REPLACE = 2, UI_ANS_KEEP = 3, UI_ANS_CANCEL = 4 }
 
 // The modal panels' buttons (F5.1): the delete question's, then the clash question's (the answers
 // above, and the "same for the rest" box).
-enum { UI_MODAL_YES = 1, UI_MODAL_NO, UI_MODAL_SKIP, UI_MODAL_REPLACE, UI_MODAL_KEEP, UI_MODAL_CANCEL, UI_MODAL_ALL };
+// The cancel, quit and queue-full panels (F5.3) use YES and NO, and OK.
+enum { UI_MODAL_YES = 1, UI_MODAL_NO, UI_MODAL_SKIP, UI_MODAL_REPLACE, UI_MODAL_KEEP, UI_MODAL_CANCEL, UI_MODAL_ALL, UI_MODAL_OK };
 
 typedef struct {
     isize n;      // rows in the list
@@ -159,15 +169,22 @@ typedef struct {
     // The prompts and the job: gui/ says when one runs, and when it asks about a clash.
     bool   confirming;       // "Delete … for good? Y/n"
     isize  confirm_n;
-    bool   busy;             // a job runs: Esc cancels it
-    bool   asking;           // the job waits for a clash answer
+    bool   asking;           // a job waits for a clash answer
     bool   ask_all;          // its "same for the rest" box (the capitals too)
+    // The job rows (F5.3): the keyboard on their × (Ctrl+J), the row marked; "Cancel this job?"
+    // about job cancel_id; "Quit and cancel them?"; "No more jobs can be queued".
+    bool   jobs_focus;
+    int    job_at;
+    bool   cancel_asking;
+    int    cancel_id;
+    bool   quit_asking;
+    bool   full_told;
 } Ui;
 
 static UiInput ui_input_none(void)
 {
     return (UiInput){ .click = -1, .dclick = -1, .side_click = -1, .header = -1, .click_mods = 0, .bar = UB_NONE, .crumb = -1,
-                      .tab_click = -1, .tab_close = -1, .mid_row = -1, .mid_side = -1, .mid_crumb = -1, .modal = 0 };
+                      .tab_click = -1, .tab_close = -1, .mid_row = -1, .mid_side = -1, .mid_crumb = -1, .modal = 0, .job_x = -1 };
 }
 
 static isize ui_clamp(isize v, isize lo, isize hi)
@@ -347,7 +364,7 @@ static void ui_edit_start(Ui *u, Str text, bool path)
     isize max = ui_edit_max(u), n = text.len < max ? text.len : max;
     memcpy(u->edit, text.p, (size_t)n);
     u->edit_len = (int)n, u->caret = (int)n, u->anchor = path ? 0 : (int)n;
-    u->editing = true, u->finding = false, u->side_focus = false, u->crumb_focus = false;
+    u->editing = true, u->finding = false, u->side_focus = false, u->crumb_focus = false, u->jobs_focus = false;
 }
 
 // The edit line opened on a name, the caret at its end.
@@ -492,7 +509,7 @@ static UiAction ui_edit_event(Ui *u, UiEvent e, Str paste)
 static void ui_crumbs_focus(Ui *u, const UiInput *in)
 {
     if (in->crumb_n <= 0) return;
-    u->crumb_focus = true, u->side_focus = false;
+    u->crumb_focus = true, u->side_focus = false, u->jobs_focus = false;
     u->crumb_at = in->crumb_last < 0 ? 0 : in->crumb_last >= in->crumb_n ? in->crumb_n - 1 : in->crumb_last;
 }
 
@@ -546,6 +563,33 @@ static UiAction ui_ask_event(Ui *u, UiEvent e)
     return (UiAction){ UA_ANSWER, a, (e.ch >= 'A' && e.ch <= 'Z') || u->ask_all };
 }
 
+// A yes-or-no panel (cancel a job, quit with jobs): Enter and y say yes, n and Esc no; *answered
+// when either.
+static bool ui_yes_no(UiEvent e, bool *answered)
+{
+    bool yes = e.key == UK_ENTER || (e.key == UK_NONE && (e.ch == 'y' || e.ch == 'Y'));
+    bool no = e.key == UK_ESC || (e.key == UK_NONE && (e.ch == 'n' || e.ch == 'N'));
+    *answered = yes || no;
+    return yes;
+}
+
+// The job rows by keyboard: true when the key was theirs (*a: what gui/ does). Up, Down, k and j
+// move the mark, Enter asks to cancel the marked job; any other key gives the keyboard back to the
+// list and is the list's.
+static bool ui_jobs_event(Ui *u, const UiInput *in, UiEvent e)
+{
+    if (e.key == UK_NONE && e.ch == 'k') e.key = UK_UP;
+    if (e.key == UK_NONE && e.ch == 'j') e.key = UK_DOWN;
+    switch (e.key) {
+    case UK_UP: if (u->job_at > 0) u->job_at--; return true;
+    case UK_DOWN: if (u->job_at < in->job_n - 1) u->job_at++; return true;
+    case UK_ENTER: u->cancel_asking = true, u->cancel_id = in->job_id[u->job_at]; return true;
+    case UK_JOBS: return true;
+    case UK_ESC: case UK_TAB: u->jobs_focus = false; return true;
+    default: u->jobs_focus = false; return false;
+    }
+}
+
 // ---- input ------------------------------------------------------------------------------------
 
 // The next sort for a header click (or `s`'s next column): the same column again reverses.
@@ -583,11 +627,33 @@ static bool ui_find_event(Ui *u, UiNames names, UiEvent e)
 static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
 {
     UiList *l = &u->list;
-    bool prompt = u->asking || u->confirming;
+    // The panels F5.3 adds: the queue full (any key or OK), quit, cancel a job.
+    if (u->full_told && (in->modal == UI_MODAL_OK || in->nev > 0)) {
+        u->full_told = false;
+        return (UiAction){ UA_NONE, 0, false };
+    }
+    if (u->quit_asking && (in->modal == UI_MODAL_YES || in->modal == UI_MODAL_NO)) {
+        u->quit_asking = false;
+        return (UiAction){ in->modal == UI_MODAL_YES ? UA_QUIT : UA_NONE, 0, false };
+    }
+    if (u->cancel_asking && (in->modal == UI_MODAL_YES || in->modal == UI_MODAL_NO)) {
+        u->cancel_asking = false;
+        return (UiAction){ in->modal == UI_MODAL_YES ? UA_CANCEL_JOB : UA_NONE, u->cancel_id, false };
+    }
+    bool prompt = u->asking || u->confirming || u->cancel_asking || u->quit_asking || u->full_told;
+    // The job rows: the mark kept on a row there is; none left, no keyboard there.
+    if (u->job_at >= in->job_n) u->job_at = in->job_n - 1;
+    if (u->job_at < 0) u->job_at = 0;
+    if (in->job_n <= 0) u->jobs_focus = false;
+    if (!prompt && in->job_x >= 0 && in->job_x < in->job_n) {
+        u->cancel_asking = true, u->cancel_id = in->job_id[in->job_x];
+        return (UiAction){ UA_NONE, 0, false };
+    }
     // A click anywhere gives the path buttons' keyboard back; so does their going.
     bool clicked = in->click >= 0 || in->dclick >= 0 || in->side_click >= 0 || in->header >= 0 || in->bar != UB_NONE ||
                    in->tab_click >= 0 || in->tab_close >= 0 || in->mid_row >= 0 || in->mid_side >= 0 || in->mid_crumb >= 0;
     if (clicked || in->crumb_n <= 0) u->crumb_focus = false;
+    if (clicked) u->jobs_focus = false;
     if (u->crumb_focus && u->crumb_at >= in->crumb_n) u->crumb_at = in->crumb_n - 1;
     // A modal panel's buttons: as the keys they stand for.
     if (u->confirming && (in->modal == UI_MODAL_YES || in->modal == UI_MODAL_NO)) {
@@ -648,6 +714,20 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
     if (!prompt && in->forwards > 0) return (UiAction){ UA_FORWARD, 0, false };
     for (int k = 0; k < in->nev; k++) {
         UiEvent e = in->ev[k];
+        // Ctrl+Q: at once, or asked first when jobs run or wait; under any panel but these.
+        if (e.key == UK_QUIT && !u->quit_asking && !u->full_told) {
+            if (in->jobs_all <= 0) return (UiAction){ UA_QUIT, 0, false };
+            u->quit_asking = true, u->cancel_asking = false;
+            continue;
+        }
+        if (u->quit_asking || u->cancel_asking) {
+            bool answered, yes = ui_yes_no(e, &answered);
+            if (!answered) continue;
+            bool quit = u->quit_asking;
+            u->quit_asking = u->cancel_asking = false;
+            if (yes) return (UiAction){ quit ? UA_QUIT : UA_CANCEL_JOB, quit ? 0 : u->cancel_id, false };
+            continue;
+        }
         if (u->editing && u->edit_path && !prompt && e.key == UK_CRUMBS) {   // from the location line: it closes
             ui_edit_close(u), ui_crumbs_focus(u, in);
             continue;
@@ -664,6 +744,7 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
                 continue;
             }
         }
+        if (u->jobs_focus && !prompt && ui_jobs_event(u, in, e)) continue;
         // Outside an edit line and the path buttons, Shift doesn't change a move or Enter.
         switch (e.key) {
         case UK_SEL_LEFT: e.key = UK_LEFT; break;
@@ -727,8 +808,7 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         case UK_BACKSPACE: return (UiAction){ UA_PARENT, 0, false };
         case UK_TAB: u->side_focus = !u->side_focus && u->side.n > 0; break;
         case UK_ESC:
-            // A job first, then the selection, then the sidebar's keyboard.
-            if (u->busy) return (UiAction){ UA_CANCEL_JOB, 0, false };
+            // The selection, then the sidebar's keyboard (a job is cancelled from its row, F5.3).
             if (u->marked) ui_mark_clear(u);
             else u->side_focus = false;
             break;
@@ -753,6 +833,9 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         case UK_NEWFOLDER: return (UiAction){ UA_NEWFOLDER, 0, false };
         case UK_LOCATION: return (UiAction){ UA_LOCATION, 0, false };
         case UK_CRUMBS: ui_crumbs_focus(u, in); break;
+        case UK_JOBS:
+            if (in->job_n > 0) u->jobs_focus = true, u->job_at = 0, u->crumb_focus = false, u->side_focus = false;
+            break;
         case UK_PARENT: return (UiAction){ UA_PARENT, 0, false };
         case UK_TAB_NEW: return (UiAction){ UA_TAB_NEW, 0, false };
         case UK_TAB_CLOSE: return (UiAction){ UA_TAB_CLOSE, -1, false };

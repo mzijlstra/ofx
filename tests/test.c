@@ -1312,6 +1312,7 @@ static void test_format(void)
 #include "test_f4.c"
 #include "test_f5.c"
 #include "test_f52.c"
+#include "test_f53.c"
 
 int main(void)
 {
@@ -1351,6 +1352,7 @@ int main(void)
     test_tabs();
     test_ui_f5();
     test_ui_f52();
+    test_ui_f53();
     test_ui_modal();
     char cmd[1600];
     snprintf(cmd, sizeof cmd, "chmod -R u+rwx '%s' && rm -rf '%s' '%s'", root, root, decoy);

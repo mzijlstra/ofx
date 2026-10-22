@@ -200,12 +200,17 @@ wait-for 3000 asking=1
 char r
 wait-for 10000 job=- n=1 undo=-
 sh cmp -s "$FX_DIR/big.bin" "$FX_ROOT/tree/big.bin"
-# Cancel: Esc in the middle leaves no part file and nothing new
+# Cancel from the job's row (F5.3; Esc no longer cancels): no part file, nothing new
 sh rm "$FX_DIR/big.bin"
 wait-for 2000 n=0
 key ctrl-v
 wait-for 3000 job=run
 key esc
+expect job=run
+key ctrl-j
+key enter
+expect modal=cancel
+key enter
 wait-for 5000 job=- status=Copy
 sh test -z "$(ls -A "$FX_DIR")"
 expect n=0

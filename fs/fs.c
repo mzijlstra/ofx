@@ -12,3 +12,4 @@
 #include "clip.c"
 #include "job.c"
 #include "undo.c"
+#include "jobq.c"

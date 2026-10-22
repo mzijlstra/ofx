@@ -11,7 +11,7 @@
 //                           f2 delete shift-delete space, and the chords alt-left alt-right ctrl-f
 //                           ctrl-h ctrl-a ctrl-c ctrl-x ctrl-v ctrl-z ctrl-shift-n ctrl-l alt-up
 //                           ctrl-t ctrl-w ctrl-tab ctrl-shift-tab ctrl-shift-pageup ctrl-shift-pagedown,
-//                           shift-left shift-right shift-home shift-end shift-enter ctrl-k,
+//                           shift-left shift-right shift-home shift-end shift-enter ctrl-k ctrl-j ctrl-q,
 //                           and alt-1 .. alt-9
 //   char <c>                one typed character
 //   keys <word>...          keys and characters in one frame's input, as fast typing during a slow
@@ -105,6 +105,20 @@ static void script_state(char *out, size_t cap)
     for (char *c = copied; *c; c++)
         if (*c == ' ') *c = '_';
     if (app.ui.crumb_focus) snprintf(keyed, sizeof keyed, "%d", app.ui.crumb_at);
+    // The jobs (F5.3): the oldest running one for job= and done=; the rows' labels, '|' between,
+    // spaces as '_'; the marked row; the first row's line (points reached) and whether it has a
+    // speed.
+    JobRec *oldest = job_oldest();
+    char joblabels[1024] = "", jobkey[16] = "-";
+    for (int i = 0; i < jobs.nrun; i++) {
+        size_t k = strlen(joblabels);
+        snprintf(joblabels + k, sizeof joblabels - k, "%s%s", i ? "|" : "", job_recs[jobs.run[i]].label);
+    }
+    for (char *c = joblabels; *c; c++)
+        if (*c == ' ') *c = '_';
+    if (!joblabels[0]) snprintf(joblabels, sizeof joblabels, "-");
+    if (app.ui.jobs_focus) snprintf(jobkey, sizeof jobkey, "%d", app.ui.job_at);
+    static const char *const MODALS[] = { "-", "delete", "clash", "cancel", "quit", "full" };
     // The path buttons' labels, '|' between; the cursor's folder count (- unknown, ? unreadable).
     char crumbs[2048] = "", cnt[32] = "-";
     for (int i = 0; i < app.crumbs.n; i++) {
@@ -137,7 +151,7 @@ static void script_state(char *out, size_t cap)
              "shown=%d sort=%s rev=%d finding=%d miss=%d find=%.*s last=%.*s side=%td sidefocus=%d place=%s here=%s "
              "back=%d fwd=%d marked=%td editing=%d edit=%s confirming=%d asking=%d job=%s done=%lld/%lld undo=%s clip=%td cut=%d "
              "sysclip=%d modal=%s askall=%d tabs=%d tab=%d tabdirs=%s sizecell=%s crumbs=%s crumbhome=%d crumb=%d crumbshown=%d-%d arrows=%d locating=%d cnt=%s "
-             "esel=%d-%d caret=%d copied=%s crumbkey=%s status=%s",
+             "esel=%d-%d caret=%d copied=%s crumbkey=%s jobs=%d waiting=%d jobrows=%s jobkey=%s jobline=%d jobspeed=%d status=%s",
              app.cwd, app.list.n, app.list.hidden, STR_ARG(sel), app.ui.list.sel, app.ui.list.top, app.ui.list.rows, app.hover,
              t->accent.r, t->accent.g, t->accent.b, t->bg.r, t->bg.g, t->bg.b, t->icons[0] ? t->icons : "-",
              app.icon_scale, GetScreenWidth(), GetScreenHeight(), app.reloads, app.themes, atomic_load(&watch.batches),
@@ -147,9 +161,12 @@ static void script_state(char *out, size_t cap)
              app.ui.last_len ? app.ui.last_len : 1, app.ui.last_len ? app.ui.last : "-", app.ui.side.sel, app.ui.side_focus,
              app.places.n ? app.places.p[app.ui.side.sel].label : "-", app.place_cur >= 0 ? app.places.p[app.place_cur].label : "-",
              hist.nback, hist.nfwd, app.ui.marked, app.ui.editing, edit, app.ui.confirming, app.ui.asking,
-             !run.running ? "-" : JOB_PHASES[atomic_load(&run.j.phase)], atomic_load(&run.j.files_done), atomic_load(&run.j.files_total),
-             UNDO_KINDS[undo.kind], own.n, own.cut, clip.ok, modal_kind() == MODAL_DELETE ? "delete" : modal_kind() == MODAL_CLASH ? "clash" : "-", app.ui.ask_all, tabbar.n, tabbar.cur, tabdirs, sizecell, crumbs, app.crumbs.seg[0].home ? 0 : -1, app.crumbs.cur, app.crumb_lo, app.crumb_hi, app.crumb_arrows,
-             app.ui.editing && app.ui.edit_path, cnt, slo, shi, app.ui.caret, copied, keyed, app.status[0] ? app.status : "-");
+             !oldest ? "-" : JOB_PHASES[atomic_load(&oldest->j.phase)], oldest ? atomic_load(&oldest->j.files_done) : 0LL,
+             oldest ? atomic_load(&oldest->j.files_total) : 0LL,
+             UNDO_KINDS[undo.kind], own.n, own.cut, clip.ok, MODALS[modal_kind()], app.ui.ask_all, tabbar.n, tabbar.cur, tabdirs, sizecell, crumbs, app.crumbs.seg[0].home ? 0 : -1, app.crumbs.cur, app.crumb_lo, app.crumb_hi, app.crumb_arrows,
+             app.ui.editing && app.ui.edit_path, cnt, slo, shi, app.ui.caret, copied, keyed,
+             jobs.nrun, jobs.nwait, joblabels, jobkey, oldest ? oldest->line.reached : 0, oldest && oldest->line.now > 0,
+             app.status[0] ? app.status : "-");
     frame_us_max = 0;
 }
 
@@ -190,7 +207,7 @@ static UiKey script_key(Str name)
         { "ctrl-t", UK_TAB_NEW }, { "ctrl-w", UK_TAB_CLOSE }, { "ctrl-tab", UK_TAB_NEXT }, { "ctrl-shift-tab", UK_TAB_PREV },
         { "ctrl-shift-pageup", UK_TAB_LEFT }, { "ctrl-shift-pagedown", UK_TAB_RIGHT },
         { "shift-left", UK_SEL_LEFT }, { "shift-right", UK_SEL_RIGHT }, { "shift-home", UK_SEL_HOME }, { "shift-end", UK_SEL_END },
-        { "shift-enter", UK_SHIFT_ENTER }, { "ctrl-k", UK_CRUMBS },
+        { "shift-enter", UK_SHIFT_ENTER }, { "ctrl-k", UK_CRUMBS }, { "ctrl-j", UK_JOBS }, { "ctrl-q", UK_QUIT },
     };
     for (int i = 0; i < COUNT(KEYS); i++)
         if (str_eq(name, str_from_c(KEYS[i].name))) return KEYS[i].k;

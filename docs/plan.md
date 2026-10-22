@@ -165,6 +165,11 @@ file cleaned up, as Esc cancels now). Under them "5 waiting" when the queue hold
 bytes to measure (delete for good, a move within a drive) is a plain bar by items. Speed is
 smoothed over about 2 s; the line keeps 300 points, one per 1/300 of the job.
 
+**By keyboard (Michael, 2026-10-22):** Ctrl+J takes the keyboard down to the job rows, the top
+row's × marked; Up and Down (and `k`, `j`) move between the rows' ×. Enter presses the marked ×.
+Esc, Tab or a click give the keyboard back to the list. A ×, by Enter or by the mouse, first asks
+in a panel: "Cancel copying 12 items to bdir?", Keep going and Cancel job.
+
 **Quitting** with jobs running or waiting: a panel, "2 jobs are running and 3 are waiting. Quit
 and cancel them?", Cancel and Quit.
 

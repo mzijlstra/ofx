@@ -34,17 +34,15 @@ static u8 list_mem[2][MiB(32)];    // the folder shown, and the one being read (
 static u8 data_mem[MiB(4)];        // the MIME database and the user directories, read once
 static u8 icon_mem[MiB(16)];       // the icon theme's index and the icon cache; reset on a theme change
 static u8 scratch_mem[MiB(1)];
-static u8 job_mem[MiB(4)];         // a job's paths
 static u8 undo_mem[MiB(4)];        // the undo record's paths
 static u8 own_mem[MiB(2)];         // what fx itself copied or cut
 static u8 paste_mem[MiB(2)];       // another program's files, read for one paste
-static u8 job_buf[JOB_BUF];
 
-static Arena frame, lists[2], data, icona, scratch, joba, undoa, owna, pastea;
+static Arena frame, lists[2], data, icona, scratch, undoa, owna, pastea;
 static int   watch_delay_ms;   // FX_TEST_WATCH_DELAY_MS, for one test
 
 enum { BAR_BTN_W = 34, BAR_BTN_H = 30, BAR_GAP = 4, ARROW_W = 22, CRUMB_PAD = 10, CRUMB_ICON_PX = 16 };
-enum { TAB_H = 30, TAB_X_W = 22 };
+enum { TAB_H = 30, TAB_X_W = 22, JOB_ROW_H = 40, JOB_WAIT_H = 22 };
 enum { FONT_PX = 15, ROW_H = 28, ICON_PX = 24, HEADER_H = 40, COLS_H = 26, FOOTER_H = 28, PAD = 12, SIZE_W = 90,
        DATE_W = 100, SIDE_W = 200, SIDE_ROW_H = 28, SIDE_ICON_PX = 20, GAP = 10, ICONS_MAX = 512 };
 
@@ -99,8 +97,9 @@ static struct {
     int       crumb_hover;
     int       tab_hover, tab_x_hover;   // the tab, and the tab's ×, under the pointer; -1 for none
     int       copy_delay_ms;   // FX_TEST_COPY_DELAY_MS
+    int       jobx_hover;      // the job row whose × is under the pointer, -1 for none
     char      text_copied[PATH_MAX];   // the last text an edit line put on the clipboard (F5.2)
-} app = { .hover = -1, .side_hover = -1, .tab_hover = -1, .tab_x_hover = -1 };
+} app = { .hover = -1, .side_hover = -1, .tab_hover = -1, .tab_x_hover = -1, .jobx_hover = -1 };
 
 static UiHistory hist;
 
@@ -383,137 +382,7 @@ static const char *items(isize n)
     return n == 1 ? "item" : "items";
 }
 
-// The job on its worker thread: copy, move or delete for good. The worker asks about a clash
-// through run.mu and run.cv; the main loop polls it (job_poll) and answers (job_answer).
-static struct {
-    Job             j;
-    JobItem         item[CLIP_PATHS_MAX];
-    pthread_t       thread;
-    bool            running;
-    bool            reverse;       // an undo's move back: it makes no new undo record
-    bool            own_cut;       // a paste of fx's own cut: the clipboard empties after it
-    u32             own_gen;       // own_gen when it started
-    pthread_mutex_t mu;
-    pthread_cond_t  cv;
-    bool            waiting;       // the worker waits for an answer
-    int             answer;        // ANS_*, 0 until given
-    bool            all;
-    char            clash[PATH_MAX];
-    bool            clash_dirs;
-    atomic_llong    last_tick;
-} run = { .mu = PTHREAD_MUTEX_INITIALIZER, .cv = PTHREAD_COND_INITIALIZER };
-
-static Answer job_ask(Job *j, const char *dst, bool both_dirs, bool *rest)
-{
-    (void)j;
-    pthread_mutex_lock(&run.mu);
-    snprintf(run.clash, sizeof run.clash, "%s", dst);
-    run.clash_dirs = both_dirs, run.answer = 0, run.waiting = true;
-    glfwPostEmptyEvent();
-    while (run.answer == 0) pthread_cond_wait(&run.cv, &run.mu);
-    Answer a = (Answer)run.answer;
-    *rest = run.all;
-    run.waiting = false;
-    pthread_mutex_unlock(&run.mu);
-    return a;
-}
-
-// The worker's progress: the window wakes to draw it, ten times a second at most.
-static void job_tick_gui(Job *j)
-{
-    i64 now = now_ms();
-    if (atomic_load(&j->phase) == JP_DONE || now - atomic_load(&run.last_tick) >= 100) {
-        atomic_store(&run.last_tick, now);
-        glfwPostEmptyEvent();
-    }
-}
-
-static void *job_thread(void *arg)
-{
-    (void)arg;
-    job_run(&run.j);
-    return NULL;
-}
-
-static void job_answer(int a, bool all)
-{
-    pthread_mutex_lock(&run.mu);
-    if (run.waiting && run.answer == 0) run.answer = a, run.all = all, pthread_cond_signal(&run.cv);
-    pthread_mutex_unlock(&run.mu);
-}
-
-static void job_cancel(void)
-{
-    if (!run.running) return;
-    atomic_store(&run.j.cancel, true);
-    job_answer(ANS_CANCEL, false);
-}
-
-// run.item[0..n) as a job of kind, on the worker.
-static void job_start(JobKind kind, isize n)
-{
-    memset(&run.j, 0, sizeof run.j);
-    run.j.kind = kind, run.j.item = run.item, run.j.n = n, run.j.buf = job_buf;
-    run.j.ask = job_ask, run.j.tick = job_tick_gui, run.j.delay_ms = app.copy_delay_ms;
-    run.waiting = false, run.answer = 0;
-    if (pthread_create(&run.thread, NULL, job_thread, NULL) != 0) {
-        set_status(true, "cannot start the job: %s", strerror(errno));
-        return;
-    }
-    run.running = true;
-    app.ui.busy = true;
-}
-
-static void job_finish(void)
-{
-    Job *j = &run.j;
-    static const char *const DONE[] = { "Copied", "Moved", "Deleted" }, *const STOPPED[] = { "Copy", "Move", "Delete" };
-    isize done = 0;
-    for (isize i = 0; i < j->n; i++)
-        if (j->item[i].out == OUT_NEW || j->item[i].out == OUT_REPLACED || j->item[i].out == OUT_MERGED) done++;
-    char msg[600];
-    int k;
-    if (atomic_load(&j->cancel)) k = snprintf(msg, sizeof msg, "%s cancelled after %td of %td %s", STOPPED[j->kind], done, j->n, items(j->n));
-    else k = snprintf(msg, sizeof msg, "%s %td %s", DONE[j->kind], done, items(done));
-    if (k > 0 && j->skipped) k += snprintf(msg + k, sizeof msg - (size_t)k, ", %td skipped", j->skipped);
-    if (k > 0 && j->errors) snprintf(msg + k, sizeof msg - (size_t)k, "; %td failed: %s", j->errors, j->err);
-    else if (k > 0 && j->note[0] && (size_t)k < sizeof msg) snprintf(msg + k, sizeof msg - (size_t)k, " (%s)", j->note);
-    set_status(j->errors > 0, "%s", msg);
-
-    // The undo record: what the job made new (copies) or moved whole; the rest can't go back.
-    if (run.reverse || j->kind == JOB_DELETE) {
-        undo_clear(&undo);
-    } else {
-        undo_begin(&undo, j->kind == JOB_COPY ? UNDO_COPY : UNDO_MOVE);
-        for (isize i = 0; i < j->n; i++) {
-            JobItem *it = &j->item[i];
-            if (it->out != OUT_NEW) continue;
-            Str d = path_dir(str_from_c(it->dst));
-            char dir[PATH_MAX], made[PATH_MAX];
-            snprintf(dir, sizeof dir, "%.*s", STR_ARG(d.len ? d : S("/")));
-            if (join(made, sizeof made, dir, str_from_c(it->final))) undo_add(&undo, j->kind == JOB_MOVE ? it->src : NULL, made, NULL);
-        }
-        if (undo.n == 0) undo_clear(&undo);
-    }
-    if (run.own_cut && !atomic_load(&j->cancel) && own_gen == run.own_gen) own.n = 0, clip_clear_own();
-    reload();
-}
-
-// Called every loop: true when something about the job changed on screen.
-static bool job_poll(void)
-{
-    if (!run.running) return false;
-    pthread_mutex_lock(&run.mu);
-    bool ask = run.waiting && run.answer == 0;
-    pthread_mutex_unlock(&run.mu);
-    if (ask && !app.ui.asking) app.ui.asking = true, app.ui.ask_all = false;
-    if (atomic_load(&run.j.phase) != JP_DONE) return true;
-    pthread_join(run.thread, NULL);
-    run.running = false;
-    app.ui.busy = false, app.ui.asking = false;
-    job_finish();
-    return true;
-}
+#include "jobs.c"
 
 static void trash_targets(void)
 {
@@ -564,13 +433,12 @@ static void delete_ask(void)
 
 static void delete_targets(void)
 {
-    if (run.running) { set_status(true, "a job is still running: wait, or Esc to cancel it"); return; }
-    arena_reset(&joba);
     isize n = doomed.n;
-    for (isize i = 0; i < n; i++) run.item[i] = (JobItem){ .src = arena_cstr(&joba, str_from_c(doomed.path[i])) };
     doomed.n = 0;
-    run.reverse = false, run.own_cut = false;
-    if (n) job_start(JOB_DELETE, n);
+    JobRec *r = n ? job_new() : NULL;
+    if (!r) return;
+    for (isize i = 0; i < n; i++) r->item[i] = (JobItem){ .src = arena_cstr(&r->arena, str_from_c(doomed.path[i])) };
+    job_submit(r, JOB_DELETE, n);
 }
 
 static void copy_targets(bool cut)
@@ -598,13 +466,13 @@ static bool same_dir(const char *a, const char *b)
 
 static void paste(void)
 {
-    if (run.running) { set_status(true, "a job is still running: wait, or Esc to cancel it"); return; }
     static ClipFiles theirs;
     arena_reset(&pastea);
     ClipFrom from = clip_get(&pastea, &theirs);
     ClipFiles *c = from == CLIP_THEIRS ? &theirs : from == CLIP_OURS || !clip.ok ? &own : NULL;
     if (!c || c->n == 0) { set_status(true, "The clipboard holds no files"); return; }
-    arena_reset(&joba);
+    JobRec *r = job_new();
+    if (!r) return;
     isize n = 0, here = 0, self = 0, gone = 0;
     for (isize i = 0; i < c->n && n < CLIP_PATHS_MAX; i++) {
         const char *src = c->path[i];
@@ -630,7 +498,7 @@ static void paste(void)
             snprintf(name, sizeof name, "%.*s", STR_ARG(base));
         }
         if (!join(dst, sizeof dst, app.cwd, str_from_c(name))) continue;
-        run.item[n++] = (JobItem){ .src = arena_cstr(&joba, str_from_c(src)), .dst = arena_cstr(&joba, str_from_c(dst)) };
+        r->item[n++] = (JobItem){ .src = arena_cstr(&r->arena, str_from_c(src)), .dst = arena_cstr(&r->arena, str_from_c(dst)) };
     }
     if (n == 0) {
         if (self) set_status(true, "Can't paste a folder into itself");
@@ -638,8 +506,8 @@ static void paste(void)
         else set_status(true, "Nothing to paste: %td %s gone", gone, gone == 1 ? "is" : "are");
         return;
     }
-    run.reverse = false, run.own_cut = c == &own && c->cut, run.own_gen = own_gen;
-    job_start(c->cut ? JOB_MOVE : JOB_COPY, n);
+    r->own_cut = c == &own && c->cut, r->own_gen = own_gen;
+    job_submit(r, c->cut ? JOB_MOVE : JOB_COPY, n);
     if (self) set_status(true, "Skipped %td: a folder can't go into itself", self);
 }
 
@@ -698,20 +566,20 @@ static void new_folder(void)
 
 static void undo_last(void)
 {
-    if (run.running) { set_status(true, "a job is still running: wait, or Esc to cancel it"); return; }
     char what[64];
     undo_what(&undo, what, sizeof what);
     Err err;
     if (undo_is_job(&undo)) {
         // A move across drives goes back as a move.
         if (!undo_check(&undo, &err)) { undo_clear(&undo), set_status(true, "%s", err.msg); return; }
-        arena_reset(&joba);
+        JobRec *r = job_new();
+        if (!r) return;
         for (isize i = 0; i < undo.n; i++)
-            run.item[i] = (JobItem){ .src = arena_cstr(&joba, str_from_c(undo.it[i].to)), .dst = arena_cstr(&joba, str_from_c(undo.it[i].from)) };
+            r->item[i] = (JobItem){ .src = arena_cstr(&r->arena, str_from_c(undo.it[i].to)), .dst = arena_cstr(&r->arena, str_from_c(undo.it[i].from)) };
         isize n = undo.n;
         undo_clear(&undo);
-        run.reverse = true, run.own_cut = false;
-        job_start(JOB_MOVE, n);
+        r->reverse = true;
+        job_submit(r, JOB_MOVE, n);
         return;
     }
     // What comes back here gets the cursor: a renamed, trashed or moved entry.
@@ -966,7 +834,8 @@ static void act(UiAction a)
     case UA_PASTE: paste(); break;
     case UA_UNDO: undo_last(); break;
     case UA_ANSWER: job_answer((int)a.index, a.all); break;
-    case UA_CANCEL_JOB: job_cancel(); break;
+    case UA_CANCEL_JOB: job_cancel((int)a.index); break;
+    case UA_QUIT: app.quit = true; break;
     default: break;
     }
 }
@@ -1070,9 +939,15 @@ static Clay_String fit(Str s, float width, bool keep_end)
     return cs(str_from_c(arena_sprintf(&frame, "%.*s%.*s", (int)(to - from), s.p + from, STR_ARG(dots))));
 }
 
+// The job rows' strip under the files: a row per running job, a line for those waiting.
+static int jobs_h(void)
+{
+    return jobs.nrun * JOB_ROW_H + (jobs.nwait ? JOB_WAIT_H : 0);
+}
+
 static int list_rows(int h)
 {
-    int r = (h - top_h() - COLS_H - FOOTER_H) / ROW_H;
+    int r = (h - top_h() - COLS_H - FOOTER_H - jobs_h()) / ROW_H;
     return r > 0 ? r : 0;
 }
 
@@ -1258,16 +1133,52 @@ static IconSlot *named_icon(const char *name)
 // SVG, which fx doesn't draw). Clay hands the data back to draw_custom at render time; it lives in
 // the frame arena, which outlasts the frame's render.
 typedef enum { CHEV_LEFT, CHEV_RIGHT, CHEV_UP } ChevronDir;
+typedef enum { CUSTOM_CHEVRON = 1, CUSTOM_LINE } CustomKind;   // the first field of each custom's data
 
 typedef struct {
+    CustomKind kind;
     ChevronDir dir;
     Clay_Color color;
 } Chevron;
 
+// A job row's throughput line (F5.3): the speed at each point it reached, scaled to the fastest,
+// 1 device pixel wide, the part done tinted under it; a job without bytes to count (a delete, a
+// move within a drive) a plain bar by items.
+typedef struct {
+    CustomKind     kind;
+    const JobLine *line;   // NULL: the plain bar
+    float          done;   // 0..1
+    Clay_Color     stroke, fill;
+} LineDraw;
+
+static Color rl(Clay_Color c)
+{
+    return (Color){ (u8)c.r, (u8)c.g, (u8)c.b, (u8)c.a };
+}
+
+static void draw_line(Clay_BoundingBox b, const LineDraw *d)
+{
+    if (!d->line || d->line->max <= 0) {
+        DrawRectangleRec((Rectangle){ b.x, b.y, b.width * d->done, b.height }, rl(d->fill));
+        return;
+    }
+    const JobLine *l = d->line;
+    float step = b.width / JOBQ_POINTS, room = b.height - 6, px = 1.0f / GetWindowScaleDPI().x;
+    Vector2 prev = { 0 };
+    for (int k = 0; k < l->reached; k++) {
+        float y = b.y + b.height - room * (l->speed[k] / l->max);
+        Vector2 p = { b.x + step * ((float)k + 0.5f), y };
+        DrawRectangleRec((Rectangle){ b.x + step * (float)k, y, step + 0.5f, b.y + b.height - y }, rl(d->fill));
+        if (k > 0) DrawLineEx(prev, p, px, rl(d->stroke));
+        prev = p;
+    }
+}
+
 static void draw_custom(Clay_BoundingBox b, void *arg)
 {
+    if (!arg) return;
+    if (*(const CustomKind *)arg == CUSTOM_LINE) { draw_line(b, arg); return; }
     const Chevron *c = arg;
-    if (!c) return;
     float cx = b.x + b.width / 2, cy = b.y + b.height / 2, r = 5;
     Color col = { (u8)c->color.r, (u8)c->color.g, (u8)c->color.b, (u8)c->color.a };
     Vector2 p0, p1, p2;
@@ -1284,7 +1195,7 @@ static void draw_custom(Clay_BoundingBox b, void *arg)
 static void chevron(Clay_ElementId id, ChevronDir dir, Clay_Color color)
 {
     Chevron *c = arena_new(&frame, Chevron, 1);
-    *c = (Chevron){ dir, color };
+    *c = (Chevron){ CUSTOM_CHEVRON, dir, color };
     CLAY(id, { .layout = { .sizing = { CLAY_SIZING_FIXED(16), CLAY_SIZING_FIXED(16) } }, .custom = { .customData = c } }) {}
 }
 
@@ -1418,13 +1329,24 @@ static void layout_tabs(float w)
 
 // ---- the modal panels (F5.1) --------------------------------------------------------------------
 
-typedef enum { MODAL_NONE, MODAL_DELETE, MODAL_CLASH } ModalKind;
+typedef enum { MODAL_NONE, MODAL_DELETE, MODAL_CLASH, MODAL_CANCEL, MODAL_QUIT, MODAL_FULL } ModalKind;
 
+// The panel on top, in the order ui_handle takes their keys.
 static ModalKind modal_kind(void)
 {
+    if (app.ui.full_told) return MODAL_FULL;
+    if (app.ui.quit_asking) return MODAL_QUIT;
+    if (app.ui.cancel_asking) return MODAL_CANCEL;
     if (app.ui.confirming) return MODAL_DELETE;
-    if (run.running && app.ui.asking) return MODAL_CLASH;
+    if (jobs.asking >= 0 && app.ui.asking) return MODAL_CLASH;
     return MODAL_NONE;
+}
+
+static JobRec *job_by_id(int id)
+{
+    for (int i = 0; i < jobs.nrun; i++)
+        if (job_recs[jobs.run[i]].id == id) return &job_recs[jobs.run[i]];
+    return NULL;
 }
 
 // A panel's button; the main one (Enter's) filled, in red when it destroys something.
@@ -1449,10 +1371,40 @@ static void layout_modal_panel(ModalKind k)
     CLAY(CLAY_ID("modal"), { .layout = { .sizing = { CLAY_SIZING_FIXED(480), CLAY_SIZING_FIT(0) }, .padding = { 24, 24, 20, 20 }, .childGap = 10,
                                          .layoutDirection = CLAY_TOP_TO_BOTTOM },
                              .backgroundColor = cc(t->bg_light),
-                             .border = { .color = k == MODAL_DELETE ? cc(t->red) : cc(t->accent), .width = CLAY_BORDER_OUTSIDE(1) },
+                             .border = { .color = k == MODAL_DELETE || k == MODAL_CANCEL || k == MODAL_QUIT ? cc(t->red) : cc(t->accent), .width = CLAY_BORDER_OUTSIDE(1) },
                              .floating = { .attachTo = CLAY_ATTACH_TO_ROOT, .zIndex = 20,
                                            .attachPoints = { CLAY_ATTACH_POINT_CENTER_CENTER, CLAY_ATTACH_POINT_CENTER_CENTER } } }) {
-        if (k == MODAL_DELETE) {
+        if (k == MODAL_FULL || k == MODAL_QUIT || k == MODAL_CANCEL) {
+            const char *line, *hint;
+            if (k == MODAL_FULL) {
+                line = "No more jobs can be queued right now. Wait until one finishes.";
+                hint = "Enter or Esc closes this";
+            } else if (k == MODAL_QUIT) {
+                line = arena_sprintf(&frame, "%d %s running and %d waiting. Quit and cancel them?", jobs.nrun, jobs.nrun == 1 ? "job is" : "jobs are", jobs.nwait);
+                if (jobs.nwait == 0) line = arena_sprintf(&frame, "%d %s running. Quit and cancel %s?", jobs.nrun, jobs.nrun == 1 ? "job is" : "jobs are", jobs.nrun == 1 ? "it" : "them");
+                hint = "Enter or y quits \xC2\xB7 n or Esc stays";
+            } else {
+                JobRec *r = job_by_id(app.ui.cancel_id);
+                Str label = r ? str_from_c(r->label) : S("this job");
+                // "Copying 12 items to bdir" asked as "Cancel copying 12 items to bdir?"
+                char lower[sizeof r->label];
+                snprintf(lower, sizeof lower, "%.*s", STR_ARG(label));
+                if (lower[0] >= 'A' && lower[0] <= 'Z') lower[0] = (char)(lower[0] - 'A' + 'a');
+                line = arena_sprintf(&frame, "Cancel %s?", lower);
+                hint = "Enter or y cancels it \xC2\xB7 n or Esc keeps it going";
+            }
+            text(fit(str_from_c(line), 430, false), cc(t->fg));
+            text(cz(hint), cc(t->fg_dim));
+            CLAY(CLAY_ID("modal-buttons"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .childGap = 10,
+                                                         .childAlignment = { .x = CLAY_ALIGN_X_RIGHT }, .padding = { 0, 0, 8, 0 } } }) {
+                if (k == MODAL_FULL) {
+                    modal_button("modal-ok", UI_MODAL_OK, "OK", true, false);
+                } else {
+                    modal_button("modal-no", UI_MODAL_NO, k == MODAL_QUIT ? "Stay" : "Keep going", false, false);
+                    modal_button("modal-yes", UI_MODAL_YES, k == MODAL_QUIT ? "Quit" : "Cancel job", true, true);
+                }
+            }
+        } else if (k == MODAL_DELETE) {
             text(cz(arena_sprintf(&frame, "Delete %td %s for good?", app.ui.confirm_n, items(app.ui.confirm_n))), cc(t->fg));
             CLAY(CLAY_ID("modal-names"), { .layout = { .layoutDirection = CLAY_TOP_TO_BOTTOM, .childGap = 2, .padding = { 12, 0, 4, 4 } } }) {
                 isize shown = doomed.n > 8 ? 7 : doomed.n;
@@ -1467,19 +1419,21 @@ static void layout_modal_panel(ModalKind k)
                 modal_button("modal-yes", UI_MODAL_YES, "Delete", true, true);
             }
         } else {
-            // run.clash is safe to read here without run.mu: asking is set only after job_poll saw
+            // r->clash is safe to read here without jobs.mu: asking is set only after jobs_poll saw
             // the worker waiting (under the lock), and cleared before job_answer lets it go on.
-            Str name = path_base(str_from_c(run.clash)), dir = path_dir(str_from_c(run.clash));
+            JobRec *r = &job_recs[jobs.asking];
+            text(fit(str_from_c(r->label), 430, false), cc(t->fg_dim));   // which job asks (two may)
+            Str name = path_base(str_from_c(r->clash)), dir = path_dir(str_from_c(r->clash));
             Str in_dir = path_base(dir.len ? dir : S("/"));
             text(fit(str_from_c(arena_sprintf(&frame, "%.*s already exists in %.*s", STR_ARG(name), STR_ARG(in_dir))), 430, false), cc(t->fg));
-            text(cz(run.clash_dirs ? "Merge the folders, keep both, or skip it?" : "Replace it, keep both, or skip it?"), cc(t->fg_dim));
+            text(cz(r->clash_dirs ? "Merge the folders, keep both, or skip it?" : "Replace it, keep both, or skip it?"), cc(t->fg_dim));
             CLAY(CLAY_ID("modal-all"), { .layout = { .childGap = 8, .childAlignment = { .y = CLAY_ALIGN_Y_CENTER }, .padding = { 0, 0, 4, 4 } } }) {
                 CLAY(CLAY_ID("modal-all-box"), { .layout = { .sizing = { CLAY_SIZING_FIXED(16), CLAY_SIZING_FIXED(16) } },
                                                  .backgroundColor = app.ui.ask_all ? cc(t->accent) : cc(t->bg),
                                                  .border = { .color = cc(t->fg_dim), .width = CLAY_BORDER_OUTSIDE(1) } }) {}
                 text(cz("Do the same for the rest"), app.modal_hover == UI_MODAL_ALL ? cc(t->fg) : cc(t->fg_dim));
             }
-            text(cz(run.clash_dirs ? "s skip \xC2\xB7 r merge \xC2\xB7 k keep both \xC2\xB7 Shift: for the rest \xC2\xB7 Esc cancels"
+            text(cz(r->clash_dirs ? "s skip \xC2\xB7 r merge \xC2\xB7 k keep both \xC2\xB7 Shift: for the rest \xC2\xB7 Esc cancels"
                                     : "s skip \xC2\xB7 r replace \xC2\xB7 k keep both \xC2\xB7 Shift: for the rest \xC2\xB7 Esc cancels"),
                  cc(t->fg_dim));
             CLAY(CLAY_ID("modal-buttons"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .childGap = 10,
@@ -1487,7 +1441,7 @@ static void layout_modal_panel(ModalKind k)
                 modal_button("modal-cancel", UI_MODAL_CANCEL, "Cancel", false, false);
                 modal_button("modal-skip", UI_MODAL_SKIP, "Skip", false, false);
                 modal_button("modal-keep", UI_MODAL_KEEP, "Keep both", false, false);
-                modal_button("modal-replace", UI_MODAL_REPLACE, run.clash_dirs ? "Merge" : "Replace", false, false);   // no default: Enter doesn't answer
+                modal_button("modal-replace", UI_MODAL_REPLACE, r->clash_dirs ? "Merge" : "Replace", false, false);   // no default: Enter doesn't answer
             }
         }
     }
@@ -1501,6 +1455,51 @@ static void layout_modal(ModalKind k, float w, float h)
                                       .backgroundColor = { 0, 0, 0, 150 },
                                       .floating = { .attachTo = CLAY_ATTACH_TO_ROOT, .zIndex = 10 } }) {}
     layout_modal_panel(k);
+}
+
+// The job rows under the files (F5.3): a row a running job, its throughput line across it, what it
+// does and how far on the left, its speed and a × on the right; then how many wait.
+static void layout_jobs(void)
+{
+    Theme *t = &app.theme;
+    for (int i = 0; i < jobs.nrun; i++) {
+        JobRec *r = &job_recs[jobs.run[i]];
+        Job *j = &r->j;
+        i64 bt = atomic_load(&j->bytes_total), ft = atomic_load(&j->files_total);
+        float done = bt > 0 ? (float)atomic_load(&j->bytes_done) / (float)bt : ft > 0 ? (float)atomic_load(&j->files_done) / (float)ft : 0;
+        if (done > 1) done = 1;
+        LineDraw *d = arena_new(&frame, LineDraw, 1);
+        *d = (LineDraw){ CUSTOM_LINE, bt > 0 && j->kind != JOB_DELETE ? &r->line : NULL, done, cc(t->accent), mix(t->accent, t->bg_light, 0.25f) };
+        bool keyed = app.ui.jobs_focus && app.ui.job_at == i, hover = app.jobx_hover == i;
+        char speed[32] = "";
+        if (d->line) jobq_speed(speed, sizeof speed, r->line.now);
+        const char *pct = atomic_load(&j->phase) == JP_SCAN ? "counting\xE2\x80\xA6" : arena_sprintf(&frame, "%d%%", (int)(done * 100));
+        CLAY(CLAY_IDI("job-row", i), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(JOB_ROW_H) } },
+                                       .backgroundColor = cc(t->bg_light),
+                                       .border = { .color = mix(t->fg_dim, t->bg_light, 0.45f), .width = { .top = 1 } } }) {
+            CLAY(CLAY_IDI("job-line", i), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0) }, .padding = { PAD, 8, 0, 0 }, .childGap = 12,
+                                                        .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
+                                            .custom = { .customData = d } }) {
+                text(fit(str_from_c(r->label), 420, false), cc(t->fg));
+                text(cz(pct), cc(t->fg_dim));
+                CLAY(CLAY_IDI("job-gap", i), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(1) } } }) {}
+                if (speed[0]) text(cz(arena_sprintf(&frame, "%s", speed)), cc(t->fg));
+                CLAY(CLAY_IDI("job-x", i), { .layout = { .sizing = { CLAY_SIZING_FIXED(26), CLAY_SIZING_FIXED(26) },
+                                                         .childAlignment = { .x = CLAY_ALIGN_X_CENTER, .y = CLAY_ALIGN_Y_CENTER } },
+                                             .backgroundColor = hover ? cc(t->bg) : (Clay_Color){ 0, 0, 0, 0 },
+                                             .border = { .color = cc(t->accent), .width = { keyed * 2, keyed * 2, keyed * 2, keyed * 2, 0 } } }) {
+                    text(cz("\xC3\x97"), hover || keyed ? cc(t->red) : cc(t->fg_dim));   // ×
+                }
+            }
+        }
+    }
+    if (jobs.nwait) {
+        CLAY(CLAY_ID("jobs-waiting"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(JOB_WAIT_H) }, .padding = { PAD, PAD, 0, 0 },
+                                                    .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
+                                        .backgroundColor = cc(t->bg_light) }) {
+            text(cz(arena_sprintf(&frame, "%d waiting", jobs.nwait)), cc(t->fg_dim));
+        }
+    }
 }
 
 // The window, and the modal panel on top when one is up.
@@ -1540,6 +1539,7 @@ static Clay_RenderCommandArray layout(int w, int h)
             for (int r = 0; app.have_list && r < app.ui.list.rows && app.ui.list.top + r < app.list.n; r++)
                 layout_row(r, app.ui.list.top + r, (float)w, now);
         }
+        layout_jobs();
         }
         }
         CLAY(CLAY_ID("footer"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(FOOTER_H) },
@@ -1547,7 +1547,7 @@ static Clay_RenderCommandArray layout(int w, int h)
                                   .backgroundColor = cc(t->bg_light) }) {
             CLAY(CLAY_ID("footer-line"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
                                            .clip = { .horizontal = true } }) {
-            if (app.ui.confirming || (run.running && app.ui.asking)) {
+            if (modal_kind() != MODAL_NONE) {
                 text(cz("Answer the question above"), cc(t->fg_dim));
             } else if (app.ui.crumb_focus) {
                 text(fit(S("Path: \xE2\x86\x90 \xE2\x86\x92 (h l) move \xC2\xB7 Enter goes there \xC2\xB7 Shift+Enter in a new tab \xC2\xB7 Esc back to the list"), foot_w, false),
@@ -1558,18 +1558,9 @@ static Clay_RenderCommandArray layout(int w, int h)
                 text(cz(app.edit_new ? "New folder: Enter keeps the name \xC2\xB7 Esc keeps \"New folder\""
                                      : "Rename: Enter renames \xC2\xB7 Esc cancels"),
                      cc(t->fg_dim));
-            } else if (run.running) {
-                Job *j = &run.j;
-                static const char *const VERB[] = { "Copying", "Moving", "Deleting" };
-                char done[32], total[32];
-                ui_size(done, sizeof done, atomic_load(&j->bytes_done));
-                ui_size(total, sizeof total, atomic_load(&j->bytes_total));
-                long long fd = atomic_load(&j->files_done), ft = atomic_load(&j->files_total);
-                const char *line = atomic_load(&j->phase) == JP_SCAN ? arena_sprintf(&frame, "%s: counting\xE2\x80\xA6 \xC2\xB7 Esc cancels", VERB[j->kind])
-                                 : atomic_load(&j->bytes_total) > 0
-                                     ? arena_sprintf(&frame, "%s %lld of %lld files, %s of %s \xC2\xB7 Esc cancels", VERB[j->kind], fd, ft, done, total)
-                                     : arena_sprintf(&frame, "%s %lld of %lld \xC2\xB7 Esc cancels", VERB[j->kind], fd, ft);
-                text(fit(str_from_c(line), foot_w, false), cc(t->fg));
+            } else if (app.ui.jobs_focus) {
+                text(fit(S("Jobs: \xE2\x86\x91 \xE2\x86\x93 (k j) move \xC2\xB7 Enter cancels the marked job \xC2\xB7 Esc back to the list"), foot_w, false),
+                     cc(t->fg_dim));
             } else if (app.ui.finding) {
                 // The find line: its text, red when it matches nothing, and a caret.
                 Str f = { app.ui.find, app.ui.find_len };
@@ -1610,6 +1601,8 @@ static void draw(void)
 // raylib's; letters come from the character callback, so the layout and Shift are the
 // compositor's (`G`, `~`). The pointer's callbacks are chained the same way.
 static GLFWkeyfun         raylib_key;
+static bool               script_on;     // a script drives the window: Ctrl+Q quits at once
+static bool               close_asked;   // the compositor asked the window to close
 static GLFWcharfun        raylib_char;
 static GLFWmousebuttonfun raylib_button;
 static bool               debug_input;   // FX_GUI_DEBUG: log every key and button event
@@ -1644,6 +1637,7 @@ static UiKey ui_key_of(int key, int mods)
     if (m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT) && key == GLFW_KEY_PAGE_DOWN) return UK_TAB_RIGHT;
     if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_L) return UK_LOCATION;
     if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_K) return UK_CRUMBS;
+    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_J) return UK_JOBS;
     if (m == GLFW_MOD_SHIFT) {
         switch (key) {
         case GLFW_KEY_LEFT: return UK_SEL_LEFT;
@@ -1693,13 +1687,26 @@ static UiKey ui_key_of(int key, int mods)
 static void on_key(GLFWwindow *w, int key, int scancode, int action, int mods)
 {
     if (debug_input) fprintf(stderr, "fx: key %d action %d mods %#x\n", key, action, mods);
-    if (action == GLFW_PRESS && key == GLFW_KEY_Q && (mods & GLFW_MOD_CONTROL)) app.quit = true;
+    // Ctrl+Q asks first when jobs run or wait (F5.3); a scripted window quits at once.
+    if (action == GLFW_PRESS && key == GLFW_KEY_Q && (mods & GLFW_MOD_CONTROL)) {
+        if (script_on) app.quit = true;
+        else ev_push((UiEvent){ UK_QUIT, 0 });
+    }
     UiKey k = action != GLFW_RELEASE ? ui_key_of(key, mods) : UK_NONE;
     if (k) ev_push((UiEvent){ k, 0 });
     // Alt+1 .. Alt+9: a tab by place (the digit rides in ch).
     int m = mods & (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT | GLFW_MOD_ALT | GLFW_MOD_SUPER);
     if (action == GLFW_PRESS && m == GLFW_MOD_ALT && key >= GLFW_KEY_1 && key <= GLFW_KEY_9) ev_push((UiEvent){ UK_TAB_JUMP, (u32)(key - GLFW_KEY_0) });
     if (raylib_key) raylib_key(w, key, scancode, action, mods);
+}
+
+// The window's close button or the compositor's close: as Ctrl+Q (asked first with jobs), so
+// raylib's own callback, which would end the loop, isn't called.
+static void on_close(GLFWwindow *w)
+{
+    glfwSetWindowShouldClose(w, GLFW_FALSE);
+    close_asked = true;
+    glfwPostEmptyEvent();
 }
 
 static void on_char(GLFWwindow *w, unsigned int cp)
@@ -1730,6 +1737,7 @@ typedef struct {
     int   crumb;   // UB_CRUMB: which path button
     int   tab, tab_x;   // a tab, or its ×
     int   modal;        // a modal panel's button (UI_MODAL_*), 0 for none
+    int   job_x;        // a job row's ×, -1 for none
 } Hit;
 
 static bool in_box(Clay_ElementId id, float x, float y)
@@ -1741,12 +1749,12 @@ static bool in_box(Clay_ElementId id, float x, float y)
 
 static Hit hit_at(float x, float y)
 {
-    Hit h = { -1, -1, -1, UB_NONE, -1, -1, -1, 0 };
+    Hit h = { -1, -1, -1, UB_NONE, -1, -1, -1, 0, -1 };
     if (modal_kind() != MODAL_NONE) {
         // A panel is up: its buttons are all there is to hit.
         static const struct { const char *id; int b; } MB[] = {
             { "modal-yes", UI_MODAL_YES }, { "modal-no", UI_MODAL_NO }, { "modal-skip", UI_MODAL_SKIP }, { "modal-replace", UI_MODAL_REPLACE },
-            { "modal-keep", UI_MODAL_KEEP }, { "modal-cancel", UI_MODAL_CANCEL }, { "modal-all", UI_MODAL_ALL },
+            { "modal-keep", UI_MODAL_KEEP }, { "modal-cancel", UI_MODAL_CANCEL }, { "modal-all", UI_MODAL_ALL }, { "modal-ok", UI_MODAL_OK },
         };
         for (int k = 0; k < COUNT(MB) && !h.modal; k++)
             if (in_box(Clay_GetElementId(cz(MB[k].id)), x, y)) h.modal = MB[k].b;
@@ -1766,6 +1774,8 @@ static Hit hit_at(float x, float y)
         if (in_box(CLAY_IDI("crumb", i), x, y)) h.bar = UB_CRUMB, h.crumb = i;
     for (int r = 0; r < app.ui.list.rows && h.row < 0; r++)
         if (in_box(CLAY_IDI("row", r), x, y)) h.row = r;
+    for (int i = 0; i < jobs.nrun && h.job_x < 0; i++)
+        if (in_box(CLAY_IDI("job-x", i), x, y)) h.job_x = i;
     for (int r = 0; r < app.ui.side.rows && h.side < 0; r++)
         if (in_box(CLAY_IDI("side-row", r), x, y)) h.side = r;
     static const char *const IDS[SORT_KEYS] = { "col-name", "col-size", "col-date" };
@@ -1787,6 +1797,7 @@ static void press_at(UiInput *in, float x, float y, int mods)
     in->header = h.header;
     in->bar = h.bar, in->crumb = h.crumb;
     in->modal = h.modal;
+    in->job_x = h.job_x;
     if (h.tab_x >= 0) in->tab_close = h.tab_x;
     else if (h.tab >= 0) in->tab_click = h.tab;
 }
@@ -1828,6 +1839,8 @@ static UiInput input_real(bool *seen)
         app.tab_hover = h.tab, app.tab_x_hover = h.tab_x;
         *seen |= h.modal != app.modal_hover;
         app.modal_hover = h.modal;
+        *seen |= h.job_x != app.jobx_hover;
+        app.jobx_hover = h.job_x;
     }
     if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
         int mods = (IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL) ? UI_MOD_CTRL : 0) |
@@ -1839,7 +1852,7 @@ static UiInput input_real(bool *seen)
     in.forwards = mouse_forwards, mouse_forwards = 0;
     *seen |= in.wheel != 0 || in.click >= 0 || in.dclick >= 0 || in.side_click >= 0 || in.header >= 0 || in.backs > 0 ||
              in.forwards > 0 || in.bar != UB_NONE || in.tab_click >= 0 || in.tab_close >= 0 || in.mid_row >= 0 || in.mid_side >= 0 ||
-             in.mid_crumb >= 0 || in.modal;
+             in.mid_crumb >= 0 || in.modal || in.job_x >= 0;
     return in;
 }
 
@@ -1934,7 +1947,6 @@ int main(int argc, char **argv)
     arena_init(&data, "data", data_mem, sizeof data_mem);
     arena_init(&icona, "icons", icon_mem, sizeof icon_mem);
     arena_init(&scratch, "scratch", scratch_mem, sizeof scratch_mem);
-    arena_init(&joba, "job", job_mem, sizeof job_mem);
     arena_init(&undoa, "undo", undo_mem, sizeof undo_mem);
     arena_init(&owna, "clipboard", own_mem, sizeof own_mem);
     arena_init(&pastea, "paste", paste_mem, sizeof paste_mem);
@@ -1968,6 +1980,7 @@ int main(int argc, char **argv)
     debug_input = dbg && dbg[0];
     GLFWwindow *gw = glfwGetCurrentContext();
     raylib_key = glfwSetKeyCallback(gw, on_key);
+    glfwSetWindowCloseCallback(gw, on_close);
     raylib_char = glfwSetCharCallback(gw, on_char);
     raylib_button = glfwSetMouseButtonCallback(gw, on_button);
     pthread_t waiter;
@@ -2008,6 +2021,7 @@ int main(int argc, char **argv)
 
     const char *script_path = getenv("FX_GUI_SCRIPT");
     bool scripted = script_path && script_path[0];
+    script_on = scripted;
     if (scripted && !script_open(script_path)) {
         CloseWindow();
         return 1;
@@ -2035,7 +2049,7 @@ int main(int argc, char **argv)
         PollInputEvents();   // waits for input, or for watch.c's wake-up
         if (atomic_exchange(&watch.theme_ready, false)) theme_apply(), app.themes++, dirty = true;
         if (atomic_exchange(&watch.list_ready, false)) reload(), dirty = true;
-        dirty |= job_poll();
+        dirty |= jobs_poll();
         if (app.have_list && count_take(app.count, app.list.n)) dirty = true;
         int rows = list_rows(GetScreenHeight()), srows = side_rows(GetScreenHeight());
         if (rows != app.ui.list.rows) ui_resize(&app.ui.list, rows), dirty = true;
@@ -2048,6 +2062,9 @@ int main(int argc, char **argv)
             seen = true;
         }
         in.crumb_n = app.crumbs.n, in.crumb_last = app.crumb_hi - 1;
+        in.job_n = jobs.nrun, in.jobs_all = jobs.nrun + jobs.nwait;
+        for (int k = 0; k < jobs.nrun; k++) in.job_id[k] = job_recs[jobs.run[k]].id;
+        if (close_asked && in.nev < UI_EVENTS_MAX) in.ev[in.nev++] = (UiEvent){ UK_QUIT, 0 }, close_asked = false, seen = true;
         // A Ctrl+V in an edit line reads the clipboard first, and only then.
         bool pasting = false;
         for (int k = 0; k < in.nev; k++) pasting |= in.ev[k].key == UK_PASTE;
@@ -2065,10 +2082,7 @@ int main(int argc, char **argv)
         dirty |= seen;
     }
     if (scripted) script_end();
-    if (run.running) {
-        job_cancel();
-        pthread_join(run.thread, NULL);
-    }
+    jobs_stop();
     clip_quit();
     count_stop();
     for (int i = 0; i < app.nslots; i++)

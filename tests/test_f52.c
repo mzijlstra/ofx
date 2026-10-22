@@ -279,11 +279,12 @@ static void test_crumb_keys(void)
     in = keys(1, UK_ENTER), in.crumb_n = 5, in.crumb_last = 3;
     a = ui_handle(&u, names, &in);
     CHECK(a.kind == UA_CRUMB && a.index == 1 && !u.crumb_focus);
-    // Esc and Tab give it back and do nothing else (no job cancelled, the sidebar not taken).
-    u.busy = true;
+    // Esc and Tab give it back and do nothing else (the selection kept, the sidebar not taken).
+    static u8 mark[20];
+    u.mark = mark, ui_mark(&u, 2, true);
     in = keys(2, UK_CRUMBS, UK_ESC), in.crumb_n = 5, in.crumb_last = 3;
-    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && !u.crumb_focus);
-    u.busy = false;
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && !u.crumb_focus && u.marked == 1);
+    ui_mark_clear(&u), u.mark = NULL;
     in = keys(2, UK_CRUMBS, UK_TAB), in.crumb_n = 5, in.crumb_last = 3;
     ui_handle(&u, names, &in);
     CHECK(!u.crumb_focus && !u.side_focus);

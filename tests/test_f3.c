@@ -943,13 +943,11 @@ static void test_ui_f3(void)
     UiAction a = ui_handle(&u, names, &in);
     CHECK(a.kind == UA_ANSWER && a.index == UI_ANS_CANCEL && !u.asking);
 
-    // Esc with a job running cancels it, before it clears a selection.
-    u.busy = true;
+    // Esc clears a selection; a job is cancelled from its row since F5.3, never by Esc.
     ui_mark(&u, 4, true);
     in = keys(1, UK_ESC);
-    CHECK(ui_handle(&u, names, &in).kind == UA_CANCEL_JOB && u.marked == 1);
-    u.busy = false;
-    ui_mark_clear(&u);
+    in.job_n = 1, in.job_id[0] = 7, in.jobs_all = 1;
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.marked == 0);
 
     // The edit line: F2 opens it on the name, the caret at the end.
     in = keys(1, UK_HOME);
