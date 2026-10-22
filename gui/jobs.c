@@ -48,7 +48,45 @@ static struct {
     int    next_id;
     int    asking;               // the record whose clash the panel shows, -1 for none
     atomic_llong last_tick;
-} jobs = { .mu = PTHREAD_MUTEX_INITIALIZER, .asking = -1 };
+    i64    last_draw;            // when jobs_poll last asked for a frame
+    // The ticker: wakes the main loop 4 times a second while jobs run, so a row's speed and
+    // percentage move on while a drive stalls (no worker ticks then).
+    pthread_mutex_t tick_mu;
+    pthread_cond_t  tick_cv;
+    bool   tick_on, tick_started;
+} jobs = { .mu = PTHREAD_MUTEX_INITIALIZER, .asking = -1, .tick_mu = PTHREAD_MUTEX_INITIALIZER, .tick_cv = PTHREAD_COND_INITIALIZER };
+
+enum { JOBS_FRAME_MS = 100, JOBS_TICK_MS = 250 };
+
+static void *job_ticker(void *arg)
+{
+    (void)arg;
+    pthread_mutex_lock(&jobs.tick_mu);
+    for (;;) {
+        while (!jobs.tick_on) pthread_cond_wait(&jobs.tick_cv, &jobs.tick_mu);
+        struct timespec until;
+        clock_gettime(CLOCK_REALTIME, &until);
+        until.tv_nsec += JOBS_TICK_MS * 1000000L;
+        if (until.tv_nsec >= 1000000000L) until.tv_sec++, until.tv_nsec -= 1000000000L;
+        pthread_cond_timedwait(&jobs.tick_cv, &jobs.tick_mu, &until);
+        if (!jobs.tick_on) continue;
+        pthread_mutex_unlock(&jobs.tick_mu);
+        wake_main();
+        pthread_mutex_lock(&jobs.tick_mu);
+    }
+    return NULL;
+}
+
+static void jobs_tick_set(bool on)
+{
+    pthread_mutex_lock(&jobs.tick_mu);
+    if (on && !jobs.tick_started) {
+        pthread_t t;
+        if (pthread_create(&t, NULL, job_ticker, NULL) == 0) pthread_detach(t), jobs.tick_started = true;
+    }
+    if (jobs.tick_on != on) jobs.tick_on = on, pthread_cond_signal(&jobs.tick_cv);
+    pthread_mutex_unlock(&jobs.tick_mu);
+}
 
 static Answer job_ask(Job *j, const char *dst, bool both_dirs, bool *rest)
 {
@@ -153,6 +191,7 @@ static void job_launch(JobRec *r)
         return;
     }
     jobs.run[jobs.nrun++] = job_index(r);
+    jobs_tick_set(true);
 }
 
 // Every waiting job that may start now, in order.
@@ -259,10 +298,14 @@ static void job_finish(JobRec *r)
     reload();
 }
 
-// Called every loop: true when something about the jobs changed on screen.
+// Called every loop: true when the window should draw a frame for the jobs: when one ended or
+// asks something, else at most every JOBS_FRAME_MS. Drawing on every loop pass while a job ran
+// spun at the display's rate (each frame wakes the next pass): 67% of a core for the main thread
+// and 41% for Mesa's on Michael's USB copy, the copy itself 0.2% (2026-10-22).
 static bool jobs_poll(void)
 {
     if (jobs.nrun == 0) return false;
+    bool asked = jobs.asking >= 0;
     i64 now = now_ms();
     bool finished = false;
     for (int i = 0; i < jobs.nrun;) {
@@ -290,8 +333,14 @@ static bool jobs_poll(void)
         pthread_mutex_unlock(&jobs.mu);
         if (jobs.asking >= 0) app.ui.asking = true, app.ui.ask_all = false;
     }
-    if (app.ui.cancel_asking && !job_running_id(app.ui.cancel_id)) app.ui.cancel_asking = false;   // it ended meanwhile
-    return true;
+    bool gone = app.ui.cancel_asking && !job_running_id(app.ui.cancel_id);
+    if (gone) app.ui.cancel_asking = false;   // it ended meanwhile
+    if (jobs.nrun == 0) jobs_tick_set(false);
+    if (finished || gone || (jobs.asking >= 0) != asked || now - jobs.last_draw >= JOBS_FRAME_MS) {
+        jobs.last_draw = now;
+        return true;
+    }
+    return false;
 }
 
 // Quitting: the running jobs cancelled and waited for half a second in all, the waiting ones
