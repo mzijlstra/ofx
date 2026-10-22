@@ -27,7 +27,7 @@ shares, archives, "open with" menus.
 | F5.1 | The delete question and the name-clash question as a modal panel in the window's middle, the rest darkened | Below |
 | F5.2 | The edit lines (rename, location): copy, cut and paste as text, a selection with Shift; the path buttons by keyboard (Ctrl+K) | Below |
 | F5.3 | Jobs: up to 4 at once, each a progress row with a throughput line at the bottom of the files; a queue of 32 | Below |
-| F6 | Bottom bar: sidebar as places (bookmarks with Trash, drives with free space), as a tree, or hidden; the status line only; the mode remembered | Below |
+| F6 | Bottom bar: sidebar as places (Home, bookmarks, Trash; drives with free space), as a tree, or hidden (F9); Trash restore and empty; the status line only; the mode remembered | Below |
 | F7 | Menus: File, Edit, View, Go, Bookmarks, Help | |
 
 Each milestone ends in a reviewer-2 round, then Michael's go before `make install`.
@@ -111,21 +111,29 @@ event, the selection kept by name (or the row it was on, when that name is gone)
 **Idle:** the loop draws only when something changed and otherwise waits in
 `PollInputEvents` (uml-viewer's loop, prdash's `docs/gui-findings.md`).
 
-## F6 design (2026-10-22, in progress)
+## F6 design (2026-10-22)
 
 **Asked (Michael):** the sidebar's modes in the part of the bottom bar under the sidebar: one bar
-across the window, its left part the sidebar's, its right part the status. **Places** in two
-sections: *Bookmarks*, Trash first (always there, can't be removed; with no bookmarks it's the only
-one), then the GTK bookmarks; *Drives*, `/` and each mounted drive (`sd` here, a USB drive when one
-is plugged in), each with a thin bar of how full it is and its free space in numbers. **Tree:** from
-`/`, opened down to the current folder. **Hidden:** no sidebar. **The status part** shows the
-status message only, no key list (the keys get a panel of their own later); with one folder
-selected it says what it holds, as Nemo does.
+across the window, its left part the sidebar's, its right part the status. Decisions:
 
-**Remembered across a restart:** the sidebar's mode now, the files' view (list or icons) later.
-Real options (a date format, columns) go in a config file Michael edits; fx never writes that one.
-What fx remembers by itself (the mode, later the tabs) goes in a state file fx writes:
-`$XDG_CONFIG_HOME/fx/fx.conf` and `$XDG_STATE_HOME/fx/state`, as the XDG spec splits them.
+- **Places mode, two sections.** *Places*: Home at the top and Trash at the bottom, both always
+  there and not removable, the GTK bookmarks (shared with Nemo) between them; the XDG user dirs
+  (Documents, Downloads) show only when bookmarked. *Drives*: `/` and each mounted drive (`sd`
+  here, a USB drive when one is mounted), each with a thin bar of how full it is and its free space
+  in numbers. Drives come and go live: fx watches the mount list (`/proc/self/mountinfo`).
+- **Tree mode:** from `/`, opened down to the current folder.
+- **Hidden mode:** no sidebar.
+- **Switching:** three small icon buttons in the bar's sidebar part (places, tree, hidden); F9
+  cycles through them.
+- **Trash:** opening it lists the trashed files; Restore puts the marked ones back where they came
+  from (from their `.trashinfo`), Empty Trash deletes all of it for good after a panel asks.
+- **The status part:** the status message only; the key list goes (the keys get a panel of their
+  own later). With one folder selected: `"adir" selected (12 items)`; several: `3 items selected`;
+  else the folder's count and its drive's free space, `14 items, 87 GB free`.
+- **Remembered across a restart:** the sidebar's mode now, the files' view (list or icons)
+  later. Options Michael sets (a date format, columns) go in `$XDG_CONFIG_HOME/fx/fx.conf`, which
+  fx only reads; what fx remembers by itself (the mode, later the tabs) in
+  `$XDG_STATE_HOME/fx/state`, which fx writes. The XDG split; Michael agreed (2026-10-22).
 
 ## F5.2 design (2026-10-21)
 
