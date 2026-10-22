@@ -16,6 +16,7 @@ typedef struct {
     bool    reverse;        // an undo's move back: it makes no new undo record
     bool    own_cut;        // a paste of fx's own cut: the clipboard empties after it
     u32     own_gen;        // own_gen when it was asked for
+    u32     undo_gen;       // undo_gen then: a newer action's undo record wins over this job's
     char    label[200];     // "Copying 12 items to bdir"
     int     worker;         // its buffer, while it runs
     pthread_t thread;
@@ -28,6 +29,10 @@ typedef struct {
     char    clash[PATH_MAX];
     bool    clash_dirs;
 } JobRec;
+
+// Bumped by every undo record the main thread writes (trash, rename, a new folder, an undo): a job
+// that finishes after one of those leaves its record be (reviewer-2, F5.3 review).
+static u32 undo_gen;
 
 static JobRec job_recs[JOB_RECS];
 static u8     job_rec_mem[JOB_RECS][MiB(4)];
@@ -177,6 +182,7 @@ static void job_submit(JobRec *r, JobKind kind, isize n)
     job_label(r, kind, n);
     job_uses(r, n);
     pthread_cond_init(&r->cv, NULL);
+    r->undo_gen = undo_gen;
     r->id = ++jobs.next_id;
     jobs.wait[jobs.nwait++] = job_index(r);
     jobs_schedule();
@@ -231,8 +237,11 @@ static void job_finish(JobRec *r)
     set_status(j->errors > 0, "%s", msg);
 
     // The undo record: what the job made new (copies) or moved whole; the rest can't go back. The
-    // job that finished last is the one Ctrl+Z undoes.
-    if (r->reverse || j->kind == JOB_DELETE) {
+    // job that finished last is the one Ctrl+Z undoes, unless a trash, rename, new folder or undo
+    // came since the job was asked for.
+    if (undo_gen != r->undo_gen) {
+        // a newer action's record stays
+    } else if (r->reverse || j->kind == JOB_DELETE) {
         undo_clear(&undo);
     } else {
         undo_begin(&undo, j->kind == JOB_COPY ? UNDO_COPY : UNDO_MOVE);
@@ -285,13 +294,42 @@ static bool jobs_poll(void)
     return true;
 }
 
-// Quitting: the running jobs cancelled and waited for, the waiting ones dropped.
+// Quitting: the running jobs cancelled and waited for half a second in all, the waiting ones
+// dropped. A worker stuck in a hung mount is left behind (detached), as count_stop does; its part
+// file stays.
 static void jobs_stop(void)
 {
     jobs.nwait = 0;
     for (int i = 0; i < jobs.nrun; i++) job_cancel(job_recs[jobs.run[i]].id);
-    for (int i = 0; i < jobs.nrun; i++) pthread_join(job_recs[jobs.run[i]].thread, NULL);
+    struct timespec until;
+    clock_gettime(CLOCK_REALTIME, &until);
+    until.tv_nsec += 500 * 1000000L;
+    if (until.tv_nsec >= 1000000000L) until.tv_sec++, until.tv_nsec -= 1000000000L;
+    for (int i = 0; i < jobs.nrun; i++)
+        if (pthread_timedjoin_np(job_recs[jobs.run[i]].thread, NULL, &until) != 0) pthread_detach(job_recs[jobs.run[i]].thread);
     jobs.nrun = 0;
+}
+
+// Whether a job running or waiting reads or writes path, or something under or above it: a
+// trash, rename, new folder or undo then waits (reviewer-2, F5.3 review).
+static bool jobs_touch(const char *path)
+{
+    Str p = str_from_c(path);
+    for (int i = 0; i < JOB_RECS; i++) {
+        JobRec *r = &job_recs[i];
+        if (!r->id) continue;
+        for (isize k = 0; k < r->j.n; k++)
+            if (jobq_nested(p, str_from_c(r->item[k].src)) || (r->item[k].dst && jobq_nested(p, str_from_c(r->item[k].dst)))) return true;
+    }
+    return false;
+}
+
+// The status says so when path is a job's.
+static bool jobs_refuse(const char *path)
+{
+    if (!jobs_touch(path)) return false;
+    set_status(true, "%.*s is in use by a job: wait until it ends", STR_ARG(path_base(str_from_c(path))));
+    return true;
 }
 
 static JobRec *job_oldest(void)

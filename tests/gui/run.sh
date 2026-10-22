@@ -47,7 +47,8 @@ touch "$H/tree/adir/a1" "$H/tree/notes.txt" "$H/tree/.dot"
 head -c 4194304 /dev/urandom > "$H/tree/bdir/big.bin"
 L="$H/tree"; for i in 1 2 3 4 5 6 7 8; do L="$L/zz-a-rather-long-folder-name-$i"; done; mkdir -p "$L"
 echo "== f52"; FX_TEST_COPY_DELAY_MS=150 FX_TEST_CROSS=1 FX_TEST_HOME="$H" "$here/../../tools/gui/run-script.sh" "$T" "$here/f52.script" "$bin" "$H/tree" || fail=1
-T=$base/f53; rm -rf "$T"; H=$T/home; mkdir -p "$H/tree/src" "$H/tree/src2" "$H/tree/adir" "$H/tree/bdir" "$H/tree/cdir" "$H/tree/many" "$T/data"
+T=$base/f53; rm -rf "$T"; H=$T/home; mkdir -p "$H/tree/src" "$H/tree/src2" "$H/tree/adir" "$H/tree/bdir" "$H/tree/cdir" "$H/tree/ddir" "$H/tree/many" "$T/data"
+echo d > "$H/tree/ddir/d.txt"
 head -c 8388608 /dev/urandom > "$H/tree/src/big1.bin"; head -c 8388608 /dev/urandom > "$H/tree/src2/big2.bin"
 echo z > "$H/tree/src/z.txt"; echo z > "$H/tree/src2/z.txt"; echo old > "$H/tree/bdir/z.txt"; echo old > "$H/tree/cdir/z.txt"
 for i in $(seq -w 1 10); do touch "$H/tree/many/f$i"; done

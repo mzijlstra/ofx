@@ -110,6 +110,10 @@ MUTANTS = [
     (G, "    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_J) return UK_JOBS;\n", ""),
     (G, "    if (app.ui.cancel_asking) return MODAL_CANCEL;", ""),
     (G, "        for (int k = 0; k < jobs.nrun; k++) in.job_id[k] = job_recs[jobs.run[k]].id;", ""),
+    # F5.3 review fixes. Not run: the refusals in rename, new folder and undo (the same
+    # jobs_refuse as trash's), and the timed join at quit (it needs a worker stuck in a hung mount).
+    (J, "    if (undo_gen != r->undo_gen) {", "    if (0) {"),
+    (G, "    for (isize i = 0; i < n; i++)\n        if (jobs_refuse(paths[i])) return;\n", ""),
 ]
 scratch = sys.argv[1]
 only = [int(x) for x in sys.argv[2].split(',')] if len(sys.argv) > 2 else None

@@ -1,6 +1,6 @@
 # F5.3 on a tree made by tests/gui/run.sh, HOME=<scratch>/home, FX_TEST_COPY_DELAY_MS=300: home/tree
 # holds src/ (big1.bin 8 MiB, z.txt), src2/ (big2.bin 8 MiB, z.txt), adir/, bdir/ (z.txt),
-# cdir/ (z.txt), many/ (f01..f10).
+# cdir/ (z.txt), ddir/ (d.txt), many/ (f01..f10).
 settle
 # ---- two copies at once; a third on a file one of them uses waits
 key ctrl-l
@@ -89,6 +89,40 @@ wait-for 3000 n=2
 key ctrl-z
 wait-for 3000 n=1 sel=big2.bin
 sh test -f "$FX_ROOT/home/tree/bdir/big2.bin"
+# ---- an action during a job (reviewer-2, F5.3 review): a file the job reads can't be trashed; a
+# file it doesn't touch can, and the job's end leaves that trash's undo be
+key ctrl-l
+type ~/tree/src2
+key enter
+char /
+type big2
+key enter
+key ctrl-c
+key ctrl-l
+type ~/tree/ddir
+key enter
+key ctrl-v
+wait-for 2000 job=run
+key ctrl-l
+type ~/tree/src2
+key enter
+char /
+type big2
+key enter
+key delete
+expect status=big2.bin is in use by a
+key ctrl-l
+type ~/tree/ddir
+key enter
+char /
+type d.txt
+key enter
+key delete
+wait-for 2000 undo=trash status=Trashed
+wait-for 8000 job=- undo=trash
+key ctrl-z
+wait-for 3000 sel=d.txt
+sh test -f "$FX_DIR/big2.bin" && test -f "$FX_DIR/d.txt" && test -f "$FX_ROOT/home/tree/src2/big2.bin"
 # ---- two jobs clash at once: one panel at a time, each naming its job
 key ctrl-l
 type ~/tree/src

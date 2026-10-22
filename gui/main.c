@@ -402,7 +402,10 @@ static void trash_targets(void)
     char *paths[CLIP_PATHS_MAX];
     arena_reset(&pastea);
     isize n = targets(&pastea, paths, CLIP_PATHS_MAX), ok = 0;
+    for (isize i = 0; i < n; i++)
+        if (jobs_refuse(paths[i])) return;
     Err err, first = { "" };
+    undo_gen++;
     undo_begin(&undo, UNDO_TRASH);
     for (isize i = 0; i < n; i++) {
         Trashed t;
@@ -550,12 +553,16 @@ static void rename_commit(void)
 {
     Str to = { app.ui.edit, app.ui.edit_len }, from = str_from_c(app.edit_from);
     if (str_eq(to, from)) { ui_edit_close(&app.ui); return; }
+    char was[PATH_MAX], will[PATH_MAX];
+    if (join(was, sizeof was, app.cwd, from) && jobs_refuse(was)) return;
+    if (join(will, sizeof will, app.cwd, to) && jobs_refuse(will)) return;
     Err err;
     if (!op_rename(app.cwd, from, to, &err)) { set_status(true, "%s", err.msg); return; }
     char a[PATH_MAX], b[PATH_MAX], keep[NAME_MAX + 1];
     snprintf(keep, sizeof keep, "%.*s", STR_ARG(to));
     if (join(a, sizeof a, app.cwd, from) && join(b, sizeof b, app.cwd, to)) {
         // A folder just made stays a "new folder" for undo, whatever its name now.
+        undo_gen++;
         undo_begin(&undo, app.edit_new ? UNDO_MKDIR : UNDO_RENAME);
         undo_add(&undo, app.edit_new ? NULL : a, b, NULL);
     }
@@ -569,7 +576,7 @@ static void new_folder(void)
     char made[NAME_MAX + 1], p[PATH_MAX];
     Err err;
     if (!op_mkdir(app.cwd, S("New folder"), made, sizeof made, &err)) { set_status(true, "%s", err.msg); return; }
-    if (join(p, sizeof p, app.cwd, str_from_c(made))) undo_begin(&undo, UNDO_MKDIR), undo_add(&undo, NULL, p, NULL);
+    if (join(p, sizeof p, app.cwd, str_from_c(made))) undo_gen++, undo_begin(&undo, UNDO_MKDIR), undo_add(&undo, NULL, p, NULL);
     ui_mark_clear(&app.ui);
     go_to(app.cwd, str_from_c(made), app.ui.list.sel);
     ui_edit_open(&app.ui, str_from_c(made));
@@ -581,6 +588,9 @@ static void undo_last(void)
 {
     char what[64];
     undo_what(&undo, what, sizeof what);
+    for (isize i = 0; i < undo.n; i++)
+        if ((undo.it[i].from && jobs_refuse(undo.it[i].from)) || (undo.it[i].to && jobs_refuse(undo.it[i].to))) return;
+    undo_gen++;
     Err err;
     if (undo_is_job(&undo)) {
         // A move across drives goes back as a move.
