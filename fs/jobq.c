@@ -94,6 +94,25 @@ static void jobline_sample(JobLine *l, i64 ms, i64 done, i64 total)
     while (l->reached < to) l->speed[l->reached++] = l->now;
 }
 
+// The speed the line's full height stands for: the 90th percentile of the points so far, so a
+// burst into the page cache at the start (hundreds of MB/s before a USB stick's 5) runs off the top
+// instead of pressing the rest to the floor (Michael's pick, 2026-10-22); 0 before any.
+static float jobline_scale(const JobLine *l)
+{
+    float v[JOBQ_POINTS];
+    int n = 0;
+    for (int k = 0; k < l->reached; k++)
+        if (l->speed[k] > 0) v[n++] = l->speed[k];
+    if (n == 0) return 0;
+    for (int i = 1; i < n; i++) {   // insertion sort: 300 at most
+        float x = v[i];
+        int k = i - 1;
+        while (k >= 0 && v[k] > x) v[k + 1] = v[k], k--;
+        v[k + 1] = x;
+    }
+    return v[(n - 1) * 9 / 10];
+}
+
 // A speed for the row's right end: "12.4 MB/s"; "" before there is one.
 static void jobq_speed(char *buf, size_t cap, float bps)
 {

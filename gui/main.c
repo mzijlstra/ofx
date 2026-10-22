@@ -1181,7 +1181,8 @@ static Color rl(Clay_Color c)
 
 static void draw_line(Clay_BoundingBox b, const LineDraw *d)
 {
-    if (!d->line || d->line->max <= 0) {
+    float scale = d->line ? jobline_scale(d->line) : 0;
+    if (scale <= 0) {
         DrawRectangleRec((Rectangle){ b.x, b.y, b.width * d->done, b.height }, rl(d->fill));
         return;
     }
@@ -1189,7 +1190,8 @@ static void draw_line(Clay_BoundingBox b, const LineDraw *d)
     float step = b.width / JOBQ_POINTS, room = b.height - 8, px = 1.0f / GetWindowScaleDPI().x;   // the fastest 8 px under the top
     Vector2 prev = { 0 };
     for (int k = 0; k < l->reached; k++) {
-        float y = b.y + b.height - room * (l->speed[k] / l->max);
+        float h = l->speed[k] / scale;
+        float y = b.y + b.height - room * (h < 1 ? h : 1) - (h > 1 ? 4 : 0);   // over the scale: clipped at the top
         Vector2 p = { b.x + step * ((float)k + 0.5f), y };
         DrawRectangleRec((Rectangle){ b.x + step * (float)k, y, step + 0.5f, b.y + b.height - y }, rl(d->fill));
         if (k > 0) DrawLineEx(prev, p, px, rl(d->stroke));
