@@ -456,6 +456,46 @@ static void test_icons(void)
     CHECK(strcmp(FIND(24, 2, S("many99")), at("icons/Order/48x48/a/many99.png")) == 0);
     env_restore();
 
+    // A theme that isn't installed (F5.4): its name cut at the last '-' until one is, else
+    // Adwaita; never hicolor alone.
+    put(at("icons/Yaru/index.theme"), "[Icon Theme]\nDirectories=24x24/places\n[24x24/places]\nSize=24\nType=Fixed\n");
+    put(at("icons/Yaru/24x24/places/folder.png"), "");
+    put(at("icons/Yaru-sage/index.theme"), "[Icon Theme]\nInherits=Yaru\nDirectories=24x24/places\n[24x24/places]\nSize=24\n");
+    put(at("icons/Adwaita/index.theme"), "[Icon Theme]\nDirectories=24x24/places\n[24x24/places]\nSize=24\n");
+    env_set("HOME", at("home"));
+    env_set("XDG_DATA_HOME", at("datahome"));
+    env_set("XDG_DATA_DIRS", root);
+    static const struct { const char *asked, *first; isize n; } FB[] = {
+        { "Yaru-grey", "Yaru", 2 },               // Omarchy's white
+        { "Yaru-gray", "Yaru", 2 },               // and vantablack
+        { "Yaru-sage-dark", "Yaru-sage", 3 },     // two steps: Yaru-sage-dark, Yaru-sage (and its Yaru)
+        { "Yaru-sage", "Yaru-sage", 3 },          // there: as before
+        { "Yaru-sage-abc", "Yaru-sage", 3 },      // any length after the dash
+        { "Nothing", "Yaru", 2 },                 // no dash, not there: plain Yaru
+        { "Nothing-at-all", "Yaru", 2 },
+        { "", "Yaru", 2 },                        // no icons.theme
+        { "-", "Yaru", 2 },
+        { "Yaru-", "Yaru", 2 },
+    };
+    for (int k = 0; k < COUNT(FB); k++) {
+        icon_load(&ta, &db, str_from_c(FB[k].asked));
+        checks++;
+        if (db.n != FB[k].n || !str_eq(db.t[0].name, str_from_c(FB[k].first)) || !str_eq(db.t[db.n - 1].name, S("hicolor"))) {
+            failures++;
+            fprintf(stderr, "icon fallback for '%s': %td themes, first %.*s\n", FB[k].asked, db.n, STR_ARG(db.t[0].name));
+        }
+    }
+    icon_load(&ta, &db, S("Yaru-grey"));
+    CHECK(strcmp(FIND(24, 1, S("folder")), at("icons/Yaru/24x24/places/folder.png")) == 0);
+    // No Yaru either: Adwaita.
+    rename(at("icons/Yaru"), at("icons/Yaru-away"));
+    icon_load(&ta, &db, S("Nothing"));
+    CHECK(db.n == 2 && str_eq(db.t[0].name, S("Adwaita")));
+    icon_load(&ta, &db, S("Yaru-grey"));
+    CHECK(db.n == 2 && str_eq(db.t[0].name, S("Adwaita")));
+    rename(at("icons/Yaru-away"), at("icons/Yaru"));
+    env_restore();
+
     // The directory rules on their own.
     IconDir fixed = { .size = 24, .scale = 1, .min = 24, .max = 24, .threshold = 2, .type = IT_FIXED };
     IconDir fixed2 = { .size = 24, .scale = 2, .min = 24, .max = 24, .threshold = 2, .type = IT_FIXED };

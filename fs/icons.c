@@ -165,12 +165,26 @@ static void icon_add_theme(Arena *a, IconDb *db, const char **bases, isize nb, S
     for (isize at = 0; next_item(inherits, &at, &parent);) icon_add_theme(a, db, bases, nb, parent, depth + 1);
 }
 
+// The theme named and what it inherits, then hicolor. A theme that isn't installed gives way to its
+// name cut at the last '-', again until one is (Yaru-grey, Yaru-sage-dark: Yaru, Yaru-sage):
+// Omarchy's vantablack and white themes name Yaru-gray and
+// Yaru-grey, which no package ships (omacom/omarchy#14851), and hicolor alone has no file or
+// folder icons. Then plain Yaru (Omarchy installs it), then Adwaita, GTK's own fallback, last:
+// GTK draws its SVGs, ofx only PNGs, and Adwaita has a few dozen PNGs, most of them 16 px. No
+// name (no icons.theme) takes the same way.
 static void icon_load(Arena *a, IconDb *db, Str theme)
 {
     *db = (IconDb){ 0 };
     const char *bases[ICON_BASES_MAX];
     isize nb = icon_bases(a, bases, ICON_BASES_MAX);
-    if (theme.len) icon_add_theme(a, db, bases, nb, theme, 0);
+    for (Str name = theme; name.len && db->n == 0;) {
+        icon_add_theme(a, db, bases, nb, name, 0);
+        isize dash = name.len;
+        while (dash > 0 && name.p[dash - 1] != '-') dash--;
+        name.len = dash > 1 ? dash - 1 : 0;
+    }
+    if (db->n == 0) icon_add_theme(a, db, bases, nb, S("Yaru"), 0);
+    if (db->n == 0) icon_add_theme(a, db, bases, nb, S("Adwaita"), 0);
     icon_add_theme(a, db, bases, nb, S("hicolor"), 0);
 }
 

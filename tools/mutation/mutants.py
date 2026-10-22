@@ -509,3 +509,12 @@ MUTANTS += [
     (Q, "    if (!happened && ms - *last < JOBQ_FRAME_MS) return false;", ""),
     (Q, "    *last = ms;\n    return true;", "    return true;"),
 ]
+# ---- F5.4: a missing icon theme falls back
+MUTANTS += [
+    (I, "    for (Str name = theme; name.len && db->n == 0;) {", "    for (Str name = theme; name.len && db->n == 0; name.len = 0) {"),
+    (I, "        while (dash > 0 && name.p[dash - 1] != '-') dash--;", "        while (dash > 0 && name.p[dash - 1] != '-') dash--, dash--;"),
+    (I, "        name.len = dash > 1 ? dash - 1 : 0;", "        name.len = dash > 1 ? dash : 0;"),
+    (I, "        name.len = dash > 1 ? dash - 1 : 0;", "        name.len = dash - 1;"),
+    (I, "    if (db->n == 0) icon_add_theme(a, db, bases, nb, S(\"Yaru\"), 0);\n", ""),
+    (I, "    if (db->n == 0) icon_add_theme(a, db, bases, nb, S(\"Adwaita\"), 0);\n", ""),
+]

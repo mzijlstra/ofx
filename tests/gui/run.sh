@@ -55,6 +55,8 @@ for i in $(seq -w 1 10); do touch "$H/tree/many/f$i"; done
 echo "== f53"; OFX_TEST_COPY_DELAY_MS=300 OFX_TEST_HOME="$H" "$here/../../tools/gui/run-script.sh" "$T" "$here/f53.script" "$bin" "$H/tree" || fail=1
 # Quitting cancelled the running copy and dropped the waiting ones: no part file, no big1.bin.
 if ls -A "$H/tree/adir" | grep -q ofx-part || [ -e "$H/tree/adir/big1.bin" ]; then echo "f53: quitting left a copy in adir"; ls -A "$H/tree/adir"; fail=1; fi
+T=$base/f54; tree "$T"
+echo "== f54"; "$here/../../tools/gui/run-script.sh" "$T" "$here/f54.script" "$bin" "$T/tree" || fail=1
 T=$base/hang; rm -rf "$T"; mkdir -p "$T/tree/stuck"
 echo "== hang"
 t0=$(date +%s)

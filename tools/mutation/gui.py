@@ -114,6 +114,10 @@ MUTANTS = [
     # jobs_refuse as trash's), and the timed join at quit (it needs a worker stuck in a hung mount).
     (J, "    if (undo_gen != r->undo_gen) {", "    if (0) {"),
     (G, "    for (isize i = 0; i < n; i++)\n        if (jobs_refuse(paths[i])) return;\n", ""),
+    # F5.4: a theme switch as omarchy-theme-set makes it
+    (W, "        if (e->wd == watch.current_wd) *theme = true, rewatch = true;", "        if (e->wd == watch.current_wd) rewatch = true;"),
+    (W, "        if (e->wd == watch.theme_wd && !(e->mask & IN_IGNORED)) *theme = true;", ""),
+    (G, "    app.theme = theme_load(&scratch);\n    icons_reset();", "    app.theme = theme_load(&scratch);"),
 ]
 scratch = sys.argv[1]
 only = [int(x) for x in sys.argv[2].split(',')] if len(sys.argv) > 2 else None

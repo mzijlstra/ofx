@@ -32,6 +32,7 @@ Omarchy's theme: the binary, the folder `tools/ofx`, the window's title and Wayl
 | F5.1 | The delete question and the name-clash question as a modal panel in the window's middle, the rest darkened | Below |
 | F5.2 | The edit lines (rename, location): copy, cut and paste as text, a selection with Shift; the path buttons by keyboard (Ctrl+K) | Below |
 | F5.3 | Jobs: up to 4 at once, each a progress row with a throughput line at the bottom of the files; a queue of 32 | Below |
+| F5.4 | A theme switch as `omarchy theme set` makes it (the theme folder replaced) followed live, colours and icons; an icon theme that isn't installed falls back | Below |
 | F6 | Bottom bar: sidebar as places (Home, bookmarks, Trash; drives with free space), as a tree, or hidden (F9); Trash restore and empty; the status line only; the mode remembered | Below |
 | F7 | Menus: File, Edit, View, Go, Bookmarks, Help | |
 
@@ -115,6 +116,21 @@ event, the selection kept by name (or the row it was on, when that name is gone)
 
 **Idle:** the loop draws only when something changed and otherwise waits in
 `PollInputEvents` (uml-viewer's loop, prdash's `docs/gui-findings.md`).
+
+## F5.4 design (2026-10-22)
+
+**Asked (Michael):** when the Omarchy theme changes, ofx changes over to its colours and icons.
+That was there since F1 (inotify on `current/` and `current/theme/`), but tested only by an edit
+in place. `omarchy-theme-set` builds `current/next-theme`, removes `current/theme` and moves the new
+one into its place: `f54` does exactly that on the scratch copy, twice back to back too, then an
+edit in place to show the watch moved to the new folder.
+
+**Found:** Omarchy's `vantablack` and `white` themes name `Yaru-gray` and `Yaru-grey`, which no
+package ships (upstream Yaru has no grey; omacom/omarchy#7203, #14851 and PRs #13497, #14852,
+#14879 are open). ofx then had hicolor alone: no file or folder icons. GTK4 apps crash on those
+themes (#14851). **Fallback:** a missing icon theme gives way to its name cut at the last `-`
+until one is installed (`Yaru-grey` → `Yaru`), then plain Yaru, then Adwaita (GTK's own, but
+mostly SVG, and ofx draws PNGs), then hicolor. No `icons.theme`: the same way.
 
 ## F6 design (2026-10-22)
 
