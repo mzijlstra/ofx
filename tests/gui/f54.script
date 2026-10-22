@@ -26,6 +26,11 @@ shot theme-noicons.png
 # ---- a theme set again after that, the watch still there: in place, as an edit
 sh sed -i 's/^accent = .*/accent = "#667788"/' "$OFX_ROOT/state/omarchy/current/theme/colors.toml"
 wait-for 3000 accent=#667788
+# ---- no theme folder for a while, then one moved in (only current/ sees that)
+sh rm -rf "$OFX_ROOT/state/omarchy/current/theme"
+sleep 600
+sh C="$OFX_ROOT/state/omarchy/current"; rm -rf "$C/next-theme"; mkdir "$C/next-theme" && printf 'accent = "#778899"\n' > "$C/next-theme/colors.toml" && echo Yaru-purple > "$C/next-theme/icons.theme" && mv "$C/next-theme" "$C/theme"
+wait-for 3000 accent=#778899 icons=Yaru-purple
 # ---- the list, the sidebar and the selection keep going through all of it
 key down
 expect sel=bdir
