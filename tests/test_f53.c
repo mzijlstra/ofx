@@ -7,6 +7,7 @@ static void test_jobq(void)
     CHECK(jobq_nested(S("/a/b"), S("/a/b/c")) && jobq_nested(S("/a/b/c"), S("/a/b")));
     CHECK(!jobq_nested(S("/a/b"), S("/a/bc")) && !jobq_nested(S("/a/bc"), S("/a/b")));
     CHECK(jobq_nested(S("/a/b/"), S("/a/b")) && jobq_nested(S("/"), S("/x")));
+    CHECK(jobq_nested(S("/a/b/"), S("/a/b/c")) && jobq_nested(S("/a/b/c"), S("/a/b/")));
     CHECK(!jobq_nested(S("/a"), S("/b")));
 
     const char *pa[] = { "/s/one", "/d" }, *pb[] = { "/s/two", "/e" }, *pc[] = { "/s/one/in", "/f" }, *pd[] = { "/g", "/d/sub" };
@@ -59,7 +60,7 @@ static void test_jobline(void)
     CHECK(l.reached == 300);
     float before = l.now;
     jobline_sample(&l, 4200, 5, 10000000);
-    CHECK(l.now >= 0 && l.max >= before);
+    CHECK(l.now > 0 && l.max >= before);   // a count that went back reads as the last one
     // Samples closer than 50 ms keep the ring; no total: no points. No speed over less than
     // half a second (a first block from the page cache), then the points reached take it.
     memset(&l, 0, sizeof l);
@@ -135,8 +136,15 @@ static void test_job_keys(void)
     in = job_input(3, 3), in.ev[in.nev++] = (UiEvent){ UK_NONE, 'k' };
     ui_handle(&u, names, &in);
     CHECK(u.job_at == 1);
-    job_keys(&u, names, job_input(3, 3), 3, UK_UP, UK_UP, UK_JOBS);
+    job_keys(&u, names, job_input(3, 3), 2, UK_UP, UK_JOBS);   // Ctrl+J again keeps the mark
     CHECK(u.job_at == 0 && u.jobs_focus && u.list.sel == 3);
+    job_keys(&u, names, job_input(3, 3), 2, UK_DOWN, UK_JOBS);
+    CHECK(u.job_at == 1 && u.jobs_focus);
+    job_keys(&u, names, job_input(3, 3), 2, UK_ESC, UK_JOBS);   // given back and taken again: the top row
+    CHECK(u.job_at == 0 && u.jobs_focus);
+    job_keys(&u, names, job_input(3, 3), 2, UK_UP, UK_ENTER);   // at the top already: the top row's job
+    CHECK(u.job_at == 0 && u.cancel_asking && u.cancel_id == 10);
+    u.cancel_asking = false;
     // Enter asks about the marked job by its id; Esc keeps it going, Enter or y cancels it.
     job_keys(&u, names, job_input(3, 3), 2, UK_DOWN, UK_ENTER);
     CHECK(u.cancel_asking && u.cancel_id == 11);
@@ -214,11 +222,16 @@ static void test_job_keys(void)
     // Esc in the list never cancels a job.
     in = job_input(2, 2), in.ev[in.nev++] = (UiEvent){ UK_ESC, 0 };
     CHECK(ui_handle(&u, names, &in).kind == UA_NONE && !u.cancel_asking);
-    // A clash panel up: the job keys wait.
+    // A clash panel up: the job keys wait, with the rows' keyboard or without.
     u.asking = true;
     job_keys(&u, names, job_input(2, 2), 1, UK_JOBS);
     CHECK(!u.jobs_focus && u.asking);
     u.asking = false;
+    job_keys(&u, names, job_input(2, 2), 1, UK_JOBS);
+    u.asking = true;
+    job_keys(&u, names, job_input(2, 2), 2, UK_DOWN, UK_ENTER);
+    CHECK(u.job_at == 0 && !u.cancel_asking && u.asking);
+    u.asking = false, u.jobs_focus = false;
 }
 
 static void test_quit_full(void)
@@ -239,6 +252,9 @@ static void test_quit_full(void)
     CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.quit_asking);
     in = job_input(1, 3), in.ev[in.nev++] = (UiEvent){ UK_ESC, 0 };
     CHECK(ui_handle(&u, names, &in).kind == UA_NONE && !u.quit_asking);
+    in = job_input(0, 2), in.ev[in.nev++] = (UiEvent){ UK_QUIT, 0 };   // only waiting ones: asked too
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.quit_asking);
+    u.quit_asking = false;
     in = job_input(0, 2), in.ev[in.nev++] = (UiEvent){ UK_QUIT, 0 }, in.ev[in.nev++] = (UiEvent){ UK_NONE, 'y' };
     CHECK(ui_handle(&u, names, &in).kind == UA_QUIT && !u.quit_asking);
     in = job_input(1, 1), in.ev[in.nev++] = (UiEvent){ UK_QUIT, 0 }, in.ev[in.nev++] = (UiEvent){ UK_ENTER, 0 };

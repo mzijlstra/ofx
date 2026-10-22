@@ -33,10 +33,26 @@ type ~/tree/adir
 key enter
 key ctrl-v
 expect jobs=2 waiting=1
+# Another file into a folder a running job writes to waits too
+key ctrl-l
+type ~/tree/src
+key enter
+char /
+type z.txt
+key enter
+key ctrl-c
+key ctrl-l
+type ~/tree/adir
+key enter
+key ctrl-v
+expect jobs=2 waiting=2
+# The rows take their room from the list: (490 - 40 - 26 - 28 - 2 x 40 - 22) / 28 rows
+expect rows=10
 wait-for 2000 jobspeed=1
 shot jobs.png
-# ---- by keyboard: Ctrl+J, j and k between the rows' ×, Enter asks, n keeps it going
-key ctrl-j
+# ---- by keyboard: Ctrl+J (as GLFW sends it: J is 74, Ctrl 2), j and k between the rows' ×, Enter
+# asks, n keeps it going
+raw-key 74 2
 expect jobkey=0
 char j
 expect jobkey=1
@@ -60,14 +76,18 @@ click-here
 expect modal=cancel
 point-ui modal-yes
 click-here
-wait-for 3000 jobs=1 waiting=1 jobrows=Copying_big2.bin_to_bdir status=Copy cancelled after 0 of 1 item
+wait-for 3000 status=Copy cancelled after 0 of 1 item
+wait-for 3000 jobs=1 waiting=2 jobrows=Copying_big2.bin_to_bdir
 sh test ! -e "$FX_DIR/big1.bin" && ! ls -A "$FX_DIR" | grep -q fx-part
-# The waiting one runs when big2's first copy ends; undo takes back the one that finished last
-wait-for 3000 jobrows=Copying_big2.bin_to_adir waiting=0
+# big2 into adir runs when big2's first copy ends; z.txt, also into adir, stays behind it (in the
+# order asked) though big1's copy, which held it, is gone. Undo takes back the one that finished
+# last: z.txt.
+wait-for 4000 jobrows=Copying_big2.bin_to_adir waiting=1
 wait-for 10000 jobs=0 job=-
 sh cmp -s "$FX_DIR/big2.bin" "$FX_ROOT/home/tree/src2/big2.bin" && test -f "$FX_ROOT/home/tree/bdir/big2.bin"
+wait-for 3000 n=2
 key ctrl-z
-wait-for 3000 n=0
+wait-for 3000 n=1 sel=big2.bin
 sh test -f "$FX_ROOT/home/tree/bdir/big2.bin"
 # ---- two jobs clash at once: one panel at a time, each naming its job
 key ctrl-l
@@ -104,7 +124,11 @@ key shift-delete
 key enter
 wait-for 2000 jobs=1 jobrows=Deleting_10_items jobspeed=0
 shot delete-row.png
-wait-for 8000 jobs=0 n=0
+# Asked to cancel it, and it ends meanwhile: the question goes
+key ctrl-j
+key enter
+expect modal=cancel
+wait-for 8000 jobs=0 n=0 modal=-
 # ---- the queue full: one running, 32 waiting, then a panel
 key ctrl-l
 type ~/tree/src

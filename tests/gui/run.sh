@@ -52,8 +52,8 @@ head -c 8388608 /dev/urandom > "$H/tree/src/big1.bin"; head -c 8388608 /dev/uran
 echo z > "$H/tree/src/z.txt"; echo z > "$H/tree/src2/z.txt"; echo old > "$H/tree/bdir/z.txt"; echo old > "$H/tree/cdir/z.txt"
 for i in $(seq -w 1 10); do touch "$H/tree/many/f$i"; done
 echo "== f53"; FX_TEST_COPY_DELAY_MS=300 FX_TEST_HOME="$H" "$here/../../tools/gui/run-script.sh" "$T" "$here/f53.script" "$bin" "$H/tree" || fail=1
-# Quitting cancelled the jobs it asked about: no part file left behind.
-if ls -A "$H/tree/adir" | grep -q fx-part; then echo "f53: a part file was left in adir"; fail=1; fi
+# Quitting cancelled the running copy and dropped the waiting ones: no part file, no big1.bin.
+if ls -A "$H/tree/adir" | grep -q fx-part || [ -e "$H/tree/adir/big1.bin" ]; then echo "f53: quitting left a copy in adir"; ls -A "$H/tree/adir"; fail=1; fi
 T=$base/hang; rm -rf "$T"; mkdir -p "$T/tree/stuck"
 echo "== hang"
 t0=$(date +%s)

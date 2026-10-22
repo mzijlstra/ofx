@@ -63,6 +63,7 @@ typedef struct {
 static void jobline_sample(JobLine *l, i64 ms, i64 done, i64 total)
 {
     int last = (l->at + JOBQ_SAMPLES - 1) % JOBQ_SAMPLES;
+    if (l->ns > 0 && done < l->s[last].bytes) done = l->s[last].bytes;   // never back
     if (l->ns == 0 || ms - l->s[last].ms >= 50) {
         l->s[l->at].ms = ms, l->s[l->at].bytes = done;
         l->at = (l->at + 1) % JOBQ_SAMPLES;
@@ -70,7 +71,6 @@ static void jobline_sample(JobLine *l, i64 ms, i64 done, i64 total)
     }
     // The oldest sample within the window (or the oldest kept) against this one.
     int newest = (l->at + JOBQ_SAMPLES - 1) % JOBQ_SAMPLES, from = newest;
-    done = done > l->s[newest].bytes ? done : l->s[newest].bytes;   // never back
     for (int k = 1; k < l->ns; k++) {
         int i = (newest - k + JOBQ_SAMPLES) % JOBQ_SAMPLES;
         if (ms - l->s[i].ms > JOBQ_SPEED_MS) break;
@@ -81,7 +81,6 @@ static void jobline_sample(JobLine *l, i64 ms, i64 done, i64 total)
     i64 dt = ms - l->s[from].ms;
     bool first = l->now <= 0;
     if (dt >= JOBQ_SPAN_MS) l->now = (float)(done - l->s[from].bytes) * 1000.0f / (float)dt;
-    if (l->now < 0) l->now = 0;
     if (l->now > l->max) l->max = l->now;
     // The points reached before there was a speed take the first one.
     if (first && l->now > 0)

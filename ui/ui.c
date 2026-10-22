@@ -509,7 +509,7 @@ static UiAction ui_edit_event(Ui *u, UiEvent e, Str paste)
 static void ui_crumbs_focus(Ui *u, const UiInput *in)
 {
     if (in->crumb_n <= 0) return;
-    u->crumb_focus = true, u->side_focus = false, u->jobs_focus = false;
+    u->crumb_focus = true, u->side_focus = false;   // the job rows' keyboard went with the key
     u->crumb_at = in->crumb_last < 0 ? 0 : in->crumb_last >= in->crumb_n ? in->crumb_n - 1 : in->crumb_last;
 }
 
@@ -536,13 +536,22 @@ static bool ui_crumbs_event(Ui *u, const UiInput *in, UiEvent e, UiAction *a)
 
 // ---- the prompts -------------------------------------------------------------------------------
 
+// A yes-or-no question (delete for good, cancel a job, quit with jobs): Enter and y say yes, n and Esc no; *answered
+// when either.
+static bool ui_yes_no(UiEvent e, bool *answered)
+{
+    bool yes = e.key == UK_ENTER || (e.key == UK_NONE && (e.ch == 'y' || e.ch == 'Y'));
+    bool no = e.key == UK_ESC || (e.key == UK_NONE && (e.ch == 'n' || e.ch == 'N'));
+    *answered = yes || no;
+    return yes;
+}
+
 // A key or character while "Delete … for good? Y/n" is up: Enter and y go ahead, n and Esc don't,
 // the rest is ignored.
 static UiAction ui_confirm_event(Ui *u, UiEvent e)
 {
-    bool yes = e.key == UK_ENTER || (e.key == UK_NONE && (e.ch == 'y' || e.ch == 'Y'));
-    bool no = e.key == UK_ESC || (e.key == UK_NONE && (e.ch == 'n' || e.ch == 'N'));
-    if (yes || no) u->confirming = false;
+    bool answered, yes = ui_yes_no(e, &answered);
+    if (answered) u->confirming = false;
     return (UiAction){ yes ? UA_DELETE : UA_NONE, 0, false };
 }
 
@@ -561,16 +570,6 @@ static UiAction ui_ask_event(Ui *u, UiEvent e)
     }
     u->asking = false;
     return (UiAction){ UA_ANSWER, a, (e.ch >= 'A' && e.ch <= 'Z') || u->ask_all };
-}
-
-// A yes-or-no panel (cancel a job, quit with jobs): Enter and y say yes, n and Esc no; *answered
-// when either.
-static bool ui_yes_no(UiEvent e, bool *answered)
-{
-    bool yes = e.key == UK_ENTER || (e.key == UK_NONE && (e.ch == 'y' || e.ch == 'Y'));
-    bool no = e.key == UK_ESC || (e.key == UK_NONE && (e.ch == 'n' || e.ch == 'N'));
-    *answered = yes || no;
-    return yes;
 }
 
 // The job rows by keyboard: true when the key was theirs (*a: what gui/ does). Up, Down, k and j
@@ -715,7 +714,7 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
     for (int k = 0; k < in->nev; k++) {
         UiEvent e = in->ev[k];
         // Ctrl+Q: at once, or asked first when jobs run or wait; under any panel but these.
-        if (e.key == UK_QUIT && !u->quit_asking && !u->full_told) {
+        if (e.key == UK_QUIT && !u->quit_asking) {   // (a full queue's note took the frame's keys)
             if (in->jobs_all <= 0) return (UiAction){ UA_QUIT, 0, false };
             u->quit_asking = true, u->cancel_asking = false;
             continue;
@@ -744,7 +743,7 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
                 continue;
             }
         }
-        if (u->jobs_focus && !prompt && ui_jobs_event(u, in, e)) continue;
+        if (u->jobs_focus && !prompt && ui_jobs_event(u, in, e)) continue;   // before a clash's keys
         // Outside an edit line and the path buttons, Shift doesn't change a move or Enter.
         switch (e.key) {
         case UK_SEL_LEFT: e.key = UK_LEFT; break;

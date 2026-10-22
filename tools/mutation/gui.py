@@ -6,7 +6,7 @@ tests/gui/run.sh, each script in its own headless weston (CLAUDE.md, "Testing th
 """
 import os, shutil, subprocess, sys
 
-G, W, K = 'gui/main.c', 'gui/watch.c', 'gui/counts.c'
+G, W, K, J = 'gui/main.c', 'gui/watch.c', 'gui/counts.c', 'gui/jobs.c'
 MUTANTS = [
     (G, "    go_to(up, str_from_c(child_buf), 0);", "    go_to(up, STR_EMPTY, 0);"),
     (G, "    if (go_to(app.cwd, str_from_c(keep), app.ui.list.sel)) return;", "    if (go_to(app.cwd, STR_EMPTY, app.ui.list.sel)) return;"),
@@ -27,8 +27,8 @@ MUTANTS = [
     # F3
     (G, "        if (k >= 0 && !mark[k]) mark[k] = 1, marked++;", ""),
     (G, "        if (app.ui.marked ? !app.ui.mark[i] : i != app.ui.list.sel) continue;", "        if (i != app.ui.list.sel) continue;"),
-    (G, "            if (it->out != OUT_NEW) continue;", ""),
-    (G, "    if (run.own_cut && !atomic_load(&j->cancel) && own_gen == run.own_gen) own.n = 0, clip_clear_own();", ""),
+    (J, "            if (it->out != OUT_NEW) continue;", ""),
+    (J, "    if (r->own_cut && !atomic_load(&j->cancel) && own_gen == r->own_gen) own.n = 0, clip_clear_own();", ""),
     (G, "if (!name_free(app.cwd, base, S_ISDIR(st.st_mode), true, true, name, sizeof name)) continue;", "if (!name_free(app.cwd, base, S_ISDIR(st.st_mode), false, true, name, sizeof name)) continue;"),
     (G, "        if (S_ISDIR(st.st_mode) && into_itself(src, app.cwd)) {", "        if (0) {"),
     (G, "            if (c->cut) {\n                here++;", "            if (0) {\n                here++;"),
@@ -36,7 +36,7 @@ MUTANTS = [
     (G, "    if (back[0]) go_to(app.cwd, str_from_c(back), app.ui.list.sel);\n    else reload();", "    reload();"),
     (G, "        return m == GLFW_MOD_SHIFT ? UK_SHIFT_DELETE : m == 0 ? UK_DELETE : UK_NONE;", "        return m == 0 ? UK_DELETE : UK_SHIFT_DELETE;"),
     (G, "    if (m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT) && key == GLFW_KEY_N) return UK_NEWFOLDER;", ""),
-    (G, "    if (ask && !app.ui.asking) app.ui.asking = true, app.ui.ask_all = false;", ""),
+    (J, "        if (jobs.asking >= 0) app.ui.asking = true, app.ui.ask_all = false;", ""),
     (G, "    ops_guard(getenv(\"FX_GUI_ROOT\"));", ""),
     (G, "        if (!was_editing && app.ui.editing && !app.ui.edit_path) snprintf(app.edit_from, sizeof app.edit_from, \"%.*s\", STR_ARG(sel_name())), app.edit_new = false;", ""),
     # F4
@@ -68,15 +68,15 @@ MUTANTS = [
     (G, "    return HEADER_H + (tabbar.n >= 2 ? TAB_H : 0);", "    return HEADER_H;"),
     (G, "    case UA_TAB_MOVE: ui_tabs_move(&tabbar, (int)a.index); break;", "    case UA_TAB_MOVE: break;"),
     # F5 review: the delete question's targets taken when it opens
-    (G, "    for (isize i = 0; i < n; i++) run.item[i] = (JobItem){ .src = arena_cstr(&joba, str_from_c(doomed.path[i])) };", "    char *late[CLIP_PATHS_MAX];\n    n = targets(&joba, late, CLIP_PATHS_MAX);\n    for (isize i = 0; i < n; i++) run.item[i] = (JobItem){ .src = late[i] };"),
-    (G, "    if (undo.n == 0) undo_clear(&undo);\n    }", "    if (undo.n == 0) undo_clear(&undo);\n    }\n    if (j->kind == JOB_DELETE) ui_mark_clear(&app.ui);"),
+    (G, "    for (isize i = 0; i < n; i++) r->item[i] = (JobItem){ .src = arena_cstr(&r->arena, str_from_c(doomed.path[i])) };", "    char *late[CLIP_PATHS_MAX];\n    n = targets(&r->arena, late, CLIP_PATHS_MAX);\n    for (isize i = 0; i < n; i++) r->item[i] = (JobItem){ .src = late[i] };"),
+    (J, "    if (undo.n == 0) undo_clear(&undo);\n    }", "    if (undo.n == 0) undo_clear(&undo);\n    }\n    if (j->kind == JOB_DELETE) ui_mark_clear(&app.ui);"),
     (G, "        if (!was_confirming && (app.ui.confirming || a.kind == UA_DELETE)) delete_ask();", "        if (!was_confirming && app.ui.confirming) delete_ask();"),
     (G, "    doomed.n = 0;\n    if (app.ui.marked > CLIP_PATHS_MAX) {", "    if (app.ui.marked > CLIP_PATHS_MAX) {"),
     # F5.1: the modal panels
     (G, "        for (int k = 0; k < COUNT(MB) && !h.modal; k++)\n            if (in_box(Clay_GetElementId(cz(MB[k].id)), x, y)) h.modal = MB[k].b;\n        return h;", "        return h;"),
     # Not run: hit_at's early return while a panel is up; ui_handle drops every other click during a
     # prompt anyway, so leaving it out changes nothing a test can see.
-    (G, "    if (ask && !app.ui.asking) app.ui.asking = true, app.ui.ask_all = false;", "    if (ask && !app.ui.asking) app.ui.asking = true;"),
+    (J, "        if (jobs.asking >= 0) app.ui.asking = true, app.ui.ask_all = false;", "        if (jobs.asking >= 0) app.ui.asking = true;"),
     # F5.2: the edit lines' text clipboard, the path buttons by keyboard. Not run: clipboard.c's
     # data-control text (clip_set_text, clip_get_text, clip_get's "our text holds no files"):
     # weston has no data-control, so it is the live check's.
@@ -91,7 +91,25 @@ MUTANTS = [
     (G, "    if (own.n > 0) return clip_payload(&pastea, &own, CLIP_FMT_TEXT);\n", ""),
     (G, "    if (!go_to(dir, str_from_c(name), 0)) return;", "    if (!go_to(dir, STR_EMPTY, 0)) return;"),
     (G, "    if (name[0] == '.' && !app.show_hidden) set_status(", "    if (0) set_status("),
-    (G, "!atomic_load(&j->cancel) && own_gen == run.own_gen)", "!atomic_load(&j->cancel))"),
+    (J, "!atomic_load(&j->cancel) && own_gen == r->own_gen)", "!atomic_load(&j->cancel))"),
+    # F5.3: the jobs. Not run: the clash shown only while no other panel is up (no test makes a
+    # clash come during the delete question); the earliest job's clash first when two wait at once
+    # (which job's worker gets there first is the scheduler's); Ctrl+Q and the window's close
+    # asking (a scripted window quits at once, and weston has no close to send).
+    (J, "    if (jobs.nwait >= JOBQ_WAITING) {", "    if (jobs.nwait > JOBQ_WAITING) {"),
+    (J, "    jobs.wait[jobs.nwait++] = job_index(r);\n    jobs_schedule();", "    jobs.wait[jobs.nwait++] = job_index(r);"),
+    (J, "    if (finished) jobs_schedule();", ""),
+    (J, "        p[k++] = last_dir;", ""),
+    (J, "        atomic_store(&r->j.cancel, true);", ""),
+    (J, "    jobs.asking = -1;\n}", "}"),
+    (J, "    if (app.ui.cancel_asking && !job_running_id(app.ui.cancel_id)) app.ui.cancel_asking = false;", ""),
+    (J, "    for (int i = 0; i < jobs.nrun; i++) job_cancel(job_recs[jobs.run[i]].id);", ""),
+    (J, "        jobline_sample(&r->line, now,", "        if (0) jobline_sample(&r->line, now,"),
+    (G, "    int r = (h - top_h() - COLS_H - FOOTER_H - jobs_h()) / ROW_H;", "    int r = (h - top_h() - COLS_H - FOOTER_H) / ROW_H;"),
+    (G, "        if (in_box(CLAY_IDI(\"job-x\", i), x, y)) h.job_x = i;", ""),
+    (G, "    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_J) return UK_JOBS;\n", ""),
+    (G, "    if (app.ui.cancel_asking) return MODAL_CANCEL;", ""),
+    (G, "        for (int k = 0; k < jobs.nrun; k++) in.job_id[k] = job_recs[jobs.run[k]].id;", ""),
 ]
 scratch = sys.argv[1]
 only = [int(x) for x in sys.argv[2].split(',')] if len(sys.argv) > 2 else None
