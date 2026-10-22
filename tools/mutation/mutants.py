@@ -503,3 +503,9 @@ MUTANTS += [
     (Q, "    return top * 1.2f;", "    return top;"),
     (Q, "l->at_ms[l->reached] = ms, ", ""),
 ]
+MUTANTS += [
+    (Q, "    if (!happened && ms - *last < JOBQ_FRAME_MS) return false;", "    if (ms - *last < JOBQ_FRAME_MS) return false;"),
+    (Q, "    if (!happened && ms - *last < JOBQ_FRAME_MS) return false;", "    if (!happened && ms - *last <= JOBQ_FRAME_MS) return false;"),
+    (Q, "    if (!happened && ms - *last < JOBQ_FRAME_MS) return false;", ""),
+    (Q, "    *last = ms;\n    return true;", "    return true;"),
+]

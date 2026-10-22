@@ -6,6 +6,8 @@
 
 #include <stdio.h>
 
+enum { JOBQ_FRAME_MS = 100 };   // a job row's frames: 10 a second at most
+
 enum { JOBQ_WORKERS = 4, JOBQ_WAITING = 32, JOBQ_POINTS = 300, JOBQ_SAMPLES = 64, JOBQ_SPEED_MS = 2000, JOBQ_SPAN_MS = 500,
        JOBQ_SCALE_MS = 30000 };
 
@@ -109,6 +111,17 @@ static float jobline_scale(const JobLine *l, i64 ms)
         if (l->speed[k] > top) top = l->speed[k];
     if (top <= 0 && l->reached > 0) top = l->speed[l->reached - 1];
     return top * 1.2f;
+}
+
+// Whether the window should draw a frame for the jobs at ms: at once when something happened (a
+// job ended, a question came or went), else every JOBQ_FRAME_MS at most; *last is when it last
+// did. Drawing on every loop pass spun at the display's rate (each frame wakes the next pass): over
+// 100% of a core on Michael's USB copy, 2026-10-22.
+static bool jobq_draw_due(bool happened, i64 ms, i64 *last)
+{
+    if (!happened && ms - *last < JOBQ_FRAME_MS) return false;
+    *last = ms;
+    return true;
 }
 
 // A speed for the row's right end: "12.4 MB/s"; "" before there is one.

@@ -39,6 +39,21 @@ static void test_jobq(void)
     CHECK(jobq_next(w, 0, r, 0) == -1);
 }
 
+static void test_draw_due(void)
+{
+    i64 last = 0;
+    CHECK(jobq_draw_due(false, 100, &last) && last == 100);    // 100 ms on
+    CHECK(!jobq_draw_due(false, 150, &last) && last == 100);   // not yet
+    CHECK(!jobq_draw_due(false, 199, &last));
+    CHECK(jobq_draw_due(false, 200, &last) && last == 200);
+    CHECK(jobq_draw_due(true, 210, &last) && last == 210);     // something happened: at once
+    CHECK(!jobq_draw_due(false, 250, &last) && last == 210);
+    // Many passes in a second (each frame waking the next): ten frames, not hundreds.
+    int frames = 0;
+    for (i64 ms = 1000; ms < 2000; ms += 7) frames += jobq_draw_due(false, ms, &last);
+    CHECK(frames == 10);
+}
+
 static void test_jobline(void)
 {
     static JobLine l;
@@ -332,6 +347,7 @@ static void test_quit_full(void)
 static void test_ui_f53(void)
 {
     test_jobq();
+    test_draw_due();
     test_jobline();
     test_job_keys();
     test_quit_full();

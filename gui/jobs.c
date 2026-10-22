@@ -54,9 +54,9 @@ static struct {
     pthread_mutex_t tick_mu;
     pthread_cond_t  tick_cv;
     bool   tick_on, tick_started;
-} jobs = { .mu = PTHREAD_MUTEX_INITIALIZER, .asking = -1, .tick_mu = PTHREAD_MUTEX_INITIALIZER, .tick_cv = PTHREAD_COND_INITIALIZER };
+} jobs = { .mu = PTHREAD_MUTEX_INITIALIZER, .asking = -1, .tick_mu = PTHREAD_MUTEX_INITIALIZER };
 
-enum { JOBS_FRAME_MS = 100, JOBS_TICK_MS = 250 };
+enum { JOBS_TICK_MS = 250 };
 
 static void *job_ticker(void *arg)
 {
@@ -65,7 +65,7 @@ static void *job_ticker(void *arg)
     for (;;) {
         while (!jobs.tick_on) pthread_cond_wait(&jobs.tick_cv, &jobs.tick_mu);
         struct timespec until;
-        clock_gettime(CLOCK_REALTIME, &until);
+        clock_gettime(CLOCK_MONOTONIC, &until);   // tick_cv waits on it: a clock step can't freeze it
         until.tv_nsec += JOBS_TICK_MS * 1000000L;
         if (until.tv_nsec >= 1000000000L) until.tv_sec++, until.tv_nsec -= 1000000000L;
         pthread_cond_timedwait(&jobs.tick_cv, &jobs.tick_mu, &until);
@@ -81,6 +81,11 @@ static void jobs_tick_set(bool on)
 {
     pthread_mutex_lock(&jobs.tick_mu);
     if (on && !jobs.tick_started) {
+        pthread_condattr_t ca;
+        pthread_condattr_init(&ca);
+        pthread_condattr_setclock(&ca, CLOCK_MONOTONIC);
+        pthread_cond_init(&jobs.tick_cv, &ca);
+        pthread_condattr_destroy(&ca);
         pthread_t t;
         if (pthread_create(&t, NULL, job_ticker, NULL) == 0) pthread_detach(t), jobs.tick_started = true;
     }
@@ -299,7 +304,7 @@ static void job_finish(JobRec *r)
 }
 
 // Called every loop: true when the window should draw a frame for the jobs: when one ended or
-// asks something, else at most every JOBS_FRAME_MS. Drawing on every loop pass while a job ran
+// asks something, else at most every JOBQ_FRAME_MS (jobq_draw_due). Drawing on every loop pass while a job ran
 // spun at the display's rate (each frame wakes the next pass): 67% of a core for the main thread
 // and 41% for Mesa's on Michael's USB copy, the copy itself 0.2% (2026-10-22).
 static bool jobs_poll(void)
@@ -336,11 +341,7 @@ static bool jobs_poll(void)
     bool gone = app.ui.cancel_asking && !job_running_id(app.ui.cancel_id);
     if (gone) app.ui.cancel_asking = false;   // it ended meanwhile
     if (jobs.nrun == 0) jobs_tick_set(false);
-    if (finished || gone || (jobs.asking >= 0) != asked || now - jobs.last_draw >= JOBS_FRAME_MS) {
-        jobs.last_draw = now;
-        return true;
-    }
-    return false;
+    return jobq_draw_due(finished || gone || (jobs.asking >= 0) != asked, now, &jobs.last_draw);
 }
 
 // Quitting: the running jobs cancelled and waited for half a second in all, the waiting ones
