@@ -456,6 +456,7 @@ MUTANTS += [
     (Q, "    if (dt >= JOBQ_SPAN_MS) l->now", "    if (dt > 0) l->now"),
     (Q, "    if (l->now > l->max) l->max = l->now;\n", ""),
     (Q, "        for (int k = 0; k < l->reached; k++) l->speed[k] = l->now;", ""),
+    (Q, "    if (!l->known && l->now > 0) {", "    if (l->now > 0) {"),
     (Q, "    if (to > JOBQ_POINTS) to = JOBQ_POINTS;\n    while", "    while"),
     (Q, "    while (v >= 1000 && u < 3) v /= 1000, u++;", "    while (v >= 1000) v /= 1000, u++;"),
     (Q, "    if (bps <= 0) snprintf(buf, cap, \"%s\", \"\");", "    if (0) snprintf(buf, cap, \"%s\", \"\");"),

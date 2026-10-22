@@ -54,6 +54,7 @@ typedef struct {
     int   reached;              // points filled, 0..JOBQ_POINTS
     float max;                  // the fastest so far, for the line's scale
     float now;                  // the current speed
+    bool  known;                // there has been one: the points before it took it
     struct { i64 ms, bytes; } s[JOBQ_SAMPLES];   // a ring of recent samples
     int   ns, at;
 } JobLine;
@@ -79,12 +80,15 @@ static void jobline_sample(JobLine *l, i64 ms, i64 done, i64 total)
     // Not over less than JOBQ_SPAN_MS: a job's first block lands at once (the page cache), and a
     // speed read off it would set the line's scale for good.
     i64 dt = ms - l->s[from].ms;
-    bool first = l->now <= 0;
     if (dt >= JOBQ_SPAN_MS) l->now = (float)(done - l->s[from].bytes) * 1000.0f / (float)dt;
     if (l->now > l->max) l->max = l->now;
-    // The points reached before there was a speed take the first one.
-    if (first && l->now > 0)
+    // The points reached before there was a speed take the first one; only the first: a drive that
+    // stalls for the whole window reads 0 again, and must not repaint the history after it
+    // (Michael, a USB 2 stick, 2026-10-22).
+    if (!l->known && l->now > 0) {
+        l->known = true;
         for (int k = 0; k < l->reached; k++) l->speed[k] = l->now;
+    }
     int to = total > 0 ? (int)((double)done / (double)total * JOBQ_POINTS) : 0;
     if (to > JOBQ_POINTS) to = JOBQ_POINTS;
     while (l->reached < to) l->speed[l->reached++] = l->now;

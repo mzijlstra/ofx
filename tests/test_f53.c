@@ -70,6 +70,15 @@ static void test_jobline(void)
     CHECK(l.ns == 1 && l.now == 0 && l.reached == 15 && l.speed[14] == 0);
     for (int t = 100; t <= 500; t += 100) jobline_sample(&l, t, 5000000 + (i64)t * 1000, 100000000);
     CHECK(l.now > 10900000 && l.now < 11100000 && l.speed[0] == l.now && l.speed[14] == l.now);   // 5.5 MB in 0.5 s
+    // A stall of the whole window (a USB stick flushing): the speed reads 0, then picks up again,
+    // and the points before keep what they had.
+    for (int t = 600; t <= 1000; t += 100) jobline_sample(&l, t, 5500000 + (i64)(t - 500) * 1000, 100000000);
+    float early = l.speed[0];
+    int reached0 = l.reached;
+    for (int t = 1100; t <= 3500; t += 100) jobline_sample(&l, t, 6000000, 100000000);
+    CHECK(l.now == 0 && l.speed[0] == early && l.reached == reached0);
+    for (int t = 3600; t <= 5000; t += 100) jobline_sample(&l, t, 6000000 + (i64)(t - 3500) * 20000, 100000000);
+    CHECK(l.now > 0 && l.speed[0] == early && l.speed[reached0 - 1] != l.now);
     memset(&l, 0, sizeof l);
     jobline_sample(&l, 0, 0, 0);
     jobline_sample(&l, 600, 6000, 0);
