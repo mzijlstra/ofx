@@ -48,11 +48,14 @@ wayland-cursor, wayland-egl, xkbcommon, fontconfig and freetype2. raylib and Cla
 | Ctrl+Tab, Ctrl+Shift+Tab | the next and previous tab (Ctrl+PgDn, Ctrl+PgUp too) |
 | Alt+1 … Alt+9 | a tab by place, Alt+9 the last |
 | Ctrl+Shift+PgUp, Ctrl+Shift+PgDn | move the tab left or right |
-| Ctrl+Q | quit |
+| Ctrl+J | the keys to the job rows' ×: Up/Down (`k`/`j`) move, Enter asks to cancel that job, Esc back |
+| Ctrl+Q | quit (asked first while jobs run or wait) |
 
-An action works on the selected entries, or on the cursor's when none is selected. A copy or move
-runs in the background with its progress in the footer (Esc cancels; a cancelled file never
-appears half-written). When a name is taken it asks: `s` skip, `r` replace (a folder: merge), `k`
+An action works on the selected entries, or on the cursor's when none is selected. Copies, moves
+and deletes for good run in the background, up to four at once, each with a row under the files:
+a throughput line, how far it is and its speed, and a × that cancels it after asking (a cancelled
+file never appears half-written). Up to 32 more wait their turn; a job on files another one uses
+waits for it. Ctrl+Q with jobs running asks first. When a name is taken it asks: `s` skip, `r` replace (a folder: merge), `k`
 keep both; the capitals answer for all the rest.
 
 The top bar: back, forward and up, then the path as buttons (they keep the deeper folders after

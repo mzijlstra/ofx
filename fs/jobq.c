@@ -6,7 +6,7 @@
 
 #include <stdio.h>
 
-enum { JOBQ_WORKERS = 4, JOBQ_WAITING = 32, JOBQ_POINTS = 300, JOBQ_SAMPLES = 64, JOBQ_SPEED_MS = 2000 };
+enum { JOBQ_WORKERS = 4, JOBQ_WAITING = 32, JOBQ_POINTS = 300, JOBQ_SAMPLES = 64, JOBQ_SPEED_MS = 2000, JOBQ_SPAN_MS = 500 };
 
 // The paths a job uses: its sources and its targets' folders.
 typedef struct {
@@ -76,10 +76,16 @@ static void jobline_sample(JobLine *l, i64 ms, i64 done, i64 total)
         if (ms - l->s[i].ms > JOBQ_SPEED_MS) break;
         from = i;
     }
+    // Not over less than JOBQ_SPAN_MS: a job's first block lands at once (the page cache), and a
+    // speed read off it would set the line's scale for good.
     i64 dt = ms - l->s[from].ms;
-    if (dt > 0) l->now = (float)(done - l->s[from].bytes) * 1000.0f / (float)dt;
+    bool first = l->now <= 0;
+    if (dt >= JOBQ_SPAN_MS) l->now = (float)(done - l->s[from].bytes) * 1000.0f / (float)dt;
     if (l->now < 0) l->now = 0;
     if (l->now > l->max) l->max = l->now;
+    // The points reached before there was a speed take the first one.
+    if (first && l->now > 0)
+        for (int k = 0; k < l->reached; k++) l->speed[k] = l->now;
     int to = total > 0 ? (int)((double)done / (double)total * JOBQ_POINTS) : 0;
     if (to > JOBQ_POINTS) to = JOBQ_POINTS;
     while (l->reached < to) l->speed[l->reached++] = l->now;

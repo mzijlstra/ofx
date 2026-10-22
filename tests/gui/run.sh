@@ -47,6 +47,13 @@ touch "$H/tree/adir/a1" "$H/tree/notes.txt" "$H/tree/.dot"
 head -c 4194304 /dev/urandom > "$H/tree/bdir/big.bin"
 L="$H/tree"; for i in 1 2 3 4 5 6 7 8; do L="$L/zz-a-rather-long-folder-name-$i"; done; mkdir -p "$L"
 echo "== f52"; FX_TEST_COPY_DELAY_MS=150 FX_TEST_CROSS=1 FX_TEST_HOME="$H" "$here/../../tools/gui/run-script.sh" "$T" "$here/f52.script" "$bin" "$H/tree" || fail=1
+T=$base/f53; rm -rf "$T"; H=$T/home; mkdir -p "$H/tree/src" "$H/tree/src2" "$H/tree/adir" "$H/tree/bdir" "$H/tree/cdir" "$H/tree/many" "$T/data"
+head -c 8388608 /dev/urandom > "$H/tree/src/big1.bin"; head -c 8388608 /dev/urandom > "$H/tree/src2/big2.bin"
+echo z > "$H/tree/src/z.txt"; echo z > "$H/tree/src2/z.txt"; echo old > "$H/tree/bdir/z.txt"; echo old > "$H/tree/cdir/z.txt"
+for i in $(seq -w 1 10); do touch "$H/tree/many/f$i"; done
+echo "== f53"; FX_TEST_COPY_DELAY_MS=300 FX_TEST_HOME="$H" "$here/../../tools/gui/run-script.sh" "$T" "$here/f53.script" "$bin" "$H/tree" || fail=1
+# Quitting cancelled the jobs it asked about: no part file left behind.
+if ls -A "$H/tree/adir" | grep -q fx-part; then echo "f53: a part file was left in adir"; fail=1; fi
 T=$base/hang; rm -rf "$T"; mkdir -p "$T/tree/stuck"
 echo "== hang"
 t0=$(date +%s)

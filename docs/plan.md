@@ -173,6 +173,14 @@ in a panel: "Cancel copying 12 items to bdir?", Keep going and Cancel job.
 **Quitting** with jobs running or waiting: a panel, "2 jobs are running and 3 are waiting. Quit
 and cancel them?", Cancel and Quit.
 
+*Built (2026-10-22):* a waiting job starts when it overlaps no running job and no waiting job
+before it, so a later job on other files doesn't queue behind a held one, and two on the same
+files keep their order. Esc no longer cancels a job (the row's × does, after asking); the panels'
+Enter is their yes (Cancel job, Quit), as the delete panel's. The window's close button asks as
+Ctrl+Q does. The speed is read over at least half a second (a first block from the page cache
+would set the line's scale for good). Each job record holds its items and paths (36 records, about
+5 MiB each, static: only a used one's pages are touched).
+
 ## F5.1 design (2026-10-21)
 
 **Asked (Michael):** the delete-for-good question front and centre instead of in the status bar:

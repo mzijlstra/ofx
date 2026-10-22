@@ -1,0 +1,166 @@
+# F5.3 on a tree made by tests/gui/run.sh, HOME=<scratch>/home, FX_TEST_COPY_DELAY_MS=300: home/tree
+# holds src/ (big1.bin 8 MiB, z.txt), src2/ (big2.bin 8 MiB, z.txt), adir/, bdir/ (z.txt),
+# cdir/ (z.txt), many/ (f01..f10).
+settle
+# ---- two copies at once; a third on a file one of them uses waits
+key ctrl-l
+type ~/tree/src
+key enter
+char /
+type big1
+key enter
+expect sel=big1.bin
+key ctrl-c
+key ctrl-l
+type ~/tree/adir
+key enter
+key ctrl-v
+wait-for 2000 jobs=1 job=run
+key ctrl-l
+type ~/tree/src2
+key enter
+char /
+type big2
+key enter
+key ctrl-c
+key ctrl-l
+type ~/tree/bdir
+key enter
+key ctrl-v
+wait-for 2000 jobs=2 jobrows=Copying_big1.bin_to_adir|Copying_big2.bin_to_bdir
+key ctrl-l
+type ~/tree/adir
+key enter
+key ctrl-v
+expect jobs=2 waiting=1
+wait-for 2000 jobspeed=1
+shot jobs.png
+# ---- by keyboard: Ctrl+J, j and k between the rows' ×, Enter asks, n keeps it going
+key ctrl-j
+expect jobkey=0
+char j
+expect jobkey=1
+char j
+expect jobkey=1
+char k
+expect jobkey=0
+key enter
+expect modal=cancel
+shot cancel.png
+char n
+expect modal=- jobs=2 jobkey=0
+key esc
+expect jobkey=- jobs=2
+# Esc in the list doesn't cancel anything
+key esc
+expect jobs=2
+# ---- by mouse: row 0's ×, then Cancel job: big1's copy stops, nothing of it left in adir
+point-ui job-x 0
+click-here
+expect modal=cancel
+point-ui modal-yes
+click-here
+wait-for 3000 jobs=1 waiting=1 jobrows=Copying_big2.bin_to_bdir status=Copy cancelled after 0 of 1 item
+sh test ! -e "$FX_DIR/big1.bin" && ! ls -A "$FX_DIR" | grep -q fx-part
+# The waiting one runs when big2's first copy ends; undo takes back the one that finished last
+wait-for 3000 jobrows=Copying_big2.bin_to_adir waiting=0
+wait-for 10000 jobs=0 job=-
+sh cmp -s "$FX_DIR/big2.bin" "$FX_ROOT/home/tree/src2/big2.bin" && test -f "$FX_ROOT/home/tree/bdir/big2.bin"
+key ctrl-z
+wait-for 3000 n=0
+sh test -f "$FX_ROOT/home/tree/bdir/big2.bin"
+# ---- two jobs clash at once: one panel at a time, each naming its job
+key ctrl-l
+type ~/tree/src
+key enter
+key ctrl-a
+key ctrl-c
+key ctrl-l
+type ~/tree/bdir
+key enter
+key ctrl-v
+key ctrl-l
+type ~/tree/src2
+key enter
+key ctrl-a
+key ctrl-c
+key ctrl-l
+type ~/tree/cdir
+key enter
+key ctrl-v
+expect jobs=2
+wait-for 8000 modal=clash clashjob=Copying_2_items_to_bdir
+shot clash.png
+char s
+wait-for 8000 modal=clash clashjob=Copying_2_items_to_cdir
+char s
+wait-for 3000 jobs=0 modal=-
+# ---- delete for good gets a row: a plain bar, no speed
+key ctrl-l
+type ~/tree/many
+key enter
+key ctrl-a
+key shift-delete
+key enter
+wait-for 2000 jobs=1 jobrows=Deleting_10_items jobspeed=0
+shot delete-row.png
+wait-for 8000 jobs=0 n=0
+# ---- the queue full: one running, 32 waiting, then a panel
+key ctrl-l
+type ~/tree/src
+key enter
+key esc
+char /
+type big1
+key enter
+key ctrl-c
+key ctrl-l
+type ~/tree/adir
+key enter
+key ctrl-v
+key ctrl-v
+key ctrl-v
+key ctrl-v
+key ctrl-v
+key ctrl-v
+key ctrl-v
+key ctrl-v
+key ctrl-v
+key ctrl-v
+key ctrl-v
+key ctrl-v
+key ctrl-v
+key ctrl-v
+key ctrl-v
+key ctrl-v
+key ctrl-v
+key ctrl-v
+key ctrl-v
+key ctrl-v
+key ctrl-v
+key ctrl-v
+key ctrl-v
+key ctrl-v
+key ctrl-v
+key ctrl-v
+key ctrl-v
+key ctrl-v
+key ctrl-v
+key ctrl-v
+key ctrl-v
+key ctrl-v
+key ctrl-v
+expect jobs=1 waiting=32
+key ctrl-v
+expect modal=full waiting=32
+shot full.png
+key esc
+expect modal=- waiting=32
+# ---- quitting with jobs asks: n stays; then Enter quits, the jobs cancelled
+key ctrl-q
+expect modal=quit
+shot quit.png
+char n
+expect modal=- jobs=1
+key ctrl-q
+key enter

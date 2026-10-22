@@ -118,6 +118,10 @@ static void script_state(char *out, size_t cap)
         if (*c == ' ') *c = '_';
     if (!joblabels[0]) snprintf(joblabels, sizeof joblabels, "-");
     if (app.ui.jobs_focus) snprintf(jobkey, sizeof jobkey, "%d", app.ui.job_at);
+    char clashjob[256] = "-";   // the job the clash panel names
+    if (jobs.asking >= 0) snprintf(clashjob, sizeof clashjob, "%s", job_recs[jobs.asking].label);
+    for (char *c = clashjob; *c; c++)
+        if (*c == ' ') *c = '_';
     static const char *const MODALS[] = { "-", "delete", "clash", "cancel", "quit", "full" };
     // The path buttons' labels, '|' between; the cursor's folder count (- unknown, ? unreadable).
     char crumbs[2048] = "", cnt[32] = "-";
@@ -151,7 +155,7 @@ static void script_state(char *out, size_t cap)
              "shown=%d sort=%s rev=%d finding=%d miss=%d find=%.*s last=%.*s side=%td sidefocus=%d place=%s here=%s "
              "back=%d fwd=%d marked=%td editing=%d edit=%s confirming=%d asking=%d job=%s done=%lld/%lld undo=%s clip=%td cut=%d "
              "sysclip=%d modal=%s askall=%d tabs=%d tab=%d tabdirs=%s sizecell=%s crumbs=%s crumbhome=%d crumb=%d crumbshown=%d-%d arrows=%d locating=%d cnt=%s "
-             "esel=%d-%d caret=%d copied=%s crumbkey=%s jobs=%d waiting=%d jobrows=%s jobkey=%s jobline=%d jobspeed=%d status=%s",
+             "esel=%d-%d caret=%d copied=%s crumbkey=%s jobs=%d waiting=%d jobrows=%s jobkey=%s jobline=%d jobspeed=%d clashjob=%s status=%s",
              app.cwd, app.list.n, app.list.hidden, STR_ARG(sel), app.ui.list.sel, app.ui.list.top, app.ui.list.rows, app.hover,
              t->accent.r, t->accent.g, t->accent.b, t->bg.r, t->bg.g, t->bg.b, t->icons[0] ? t->icons : "-",
              app.icon_scale, GetScreenWidth(), GetScreenHeight(), app.reloads, app.themes, atomic_load(&watch.batches),
@@ -165,7 +169,7 @@ static void script_state(char *out, size_t cap)
              oldest ? atomic_load(&oldest->j.files_total) : 0LL,
              UNDO_KINDS[undo.kind], own.n, own.cut, clip.ok, MODALS[modal_kind()], app.ui.ask_all, tabbar.n, tabbar.cur, tabdirs, sizecell, crumbs, app.crumbs.seg[0].home ? 0 : -1, app.crumbs.cur, app.crumb_lo, app.crumb_hi, app.crumb_arrows,
              app.ui.editing && app.ui.edit_path, cnt, slo, shi, app.ui.caret, copied, keyed,
-             jobs.nrun, jobs.nwait, joblabels, jobkey, oldest ? oldest->line.reached : 0, oldest && oldest->line.now > 0,
+             jobs.nrun, jobs.nwait, joblabels, jobkey, oldest ? oldest->line.reached : 0, oldest && oldest->line.now > 0, clashjob,
              app.status[0] ? app.status : "-");
     frame_us_max = 0;
 }

@@ -51,7 +51,7 @@ static Answer job_ask(Job *j, const char *dst, bool both_dirs, bool *rest)
     pthread_mutex_lock(&jobs.mu);
     snprintf(r->clash, sizeof r->clash, "%s", dst);
     r->clash_dirs = both_dirs, r->answer = 0, r->waiting = true;
-    glfwPostEmptyEvent();
+    wake_main();
     while (r->answer == 0) pthread_cond_wait(&r->cv, &jobs.mu);
     Answer a = (Answer)r->answer;
     *rest = r->all;
@@ -66,7 +66,7 @@ static void job_tick_gui(Job *j)
     i64 now = now_ms();
     if (atomic_load(&j->phase) == JP_DONE || now - atomic_load(&jobs.last_tick) >= 100) {
         atomic_store(&jobs.last_tick, now);
-        glfwPostEmptyEvent();
+        wake_main();
     }
 }
 

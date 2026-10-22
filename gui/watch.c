@@ -90,7 +90,7 @@ static void *watch_thread(void *arg)
         if (list) atomic_store(&watch.list_ready, true);
         if (theme) atomic_store(&watch.theme_ready, true);
         atomic_fetch_add(&watch.batches, 1);
-        glfwPostEmptyEvent();
+        wake_main();
     }
     return NULL;
 }

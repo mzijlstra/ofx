@@ -60,13 +60,19 @@ static void test_jobline(void)
     float before = l.now;
     jobline_sample(&l, 4200, 5, 10000000);
     CHECK(l.now >= 0 && l.max >= before);
-    // Samples closer than 50 ms keep the ring; no total: no points.
+    // Samples closer than 50 ms keep the ring; no total: no points. No speed over less than
+    // half a second (a first block from the page cache), then the points reached take it.
+    memset(&l, 0, sizeof l);
+    jobline_sample(&l, 0, 0, 100000000);
+    jobline_sample(&l, 10, 5000000, 100000000);   // 5 MB in 10 ms: not a speed
+    jobline_sample(&l, 20, 5000000, 100000000);
+    CHECK(l.ns == 1 && l.now == 0 && l.reached == 15 && l.speed[14] == 0);
+    for (int t = 100; t <= 500; t += 100) jobline_sample(&l, t, 5000000 + (i64)t * 1000, 100000000);
+    CHECK(l.now > 10900000 && l.now < 11100000 && l.speed[0] == l.now && l.speed[14] == l.now);   // 5.5 MB in 0.5 s
     memset(&l, 0, sizeof l);
     jobline_sample(&l, 0, 0, 0);
-    jobline_sample(&l, 10, 1000, 0);
-    jobline_sample(&l, 20, 2000, 0);
-    CHECK(l.ns == 1 && l.reached == 0);
-    CHECK(l.now > 99000 && l.now < 101000);   // 2000 bytes in 20 ms
+    jobline_sample(&l, 600, 6000, 0);
+    CHECK(l.reached == 0 && l.now > 9999 && l.now < 10001);
     // The ring wraps (64 samples) and the speed still reads the last 2 s.
     memset(&l, 0, sizeof l);
     for (int t = 0; t <= 10000; t += 50) jobline_sample(&l, t, (i64)t * 500, 0);

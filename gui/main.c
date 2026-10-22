@@ -22,6 +22,19 @@
 #include "clay.h"
 #include "GLFW/glfw3.h"
 #include "render.c"   // includes raylib and font.c
+
+// Wakes the main loop's event wait from another thread; never once the window is closing, when
+// GLFW is being torn down (a cancelled job's part file removed at quit woke the watcher then).
+static pthread_mutex_t wake_mu = PTHREAD_MUTEX_INITIALIZER;
+static bool            wake_off;
+
+static void wake_main(void)
+{
+    pthread_mutex_lock(&wake_mu);
+    if (!wake_off) glfwPostEmptyEvent();
+    pthread_mutex_unlock(&wake_mu);
+}
+
 #include "watch.c"
 #include "clipboard.c"
 #include "counts.c"
@@ -1163,7 +1176,7 @@ static void draw_line(Clay_BoundingBox b, const LineDraw *d)
         return;
     }
     const JobLine *l = d->line;
-    float step = b.width / JOBQ_POINTS, room = b.height - 6, px = 1.0f / GetWindowScaleDPI().x;
+    float step = b.width / JOBQ_POINTS, room = b.height - 8, px = 1.0f / GetWindowScaleDPI().x;   // the fastest 8 px under the top
     Vector2 prev = { 0 };
     for (int k = 0; k < l->reached; k++) {
         float y = b.y + b.height - room * (l->speed[k] / l->max);
@@ -1469,7 +1482,7 @@ static void layout_jobs(void)
         float done = bt > 0 ? (float)atomic_load(&j->bytes_done) / (float)bt : ft > 0 ? (float)atomic_load(&j->files_done) / (float)ft : 0;
         if (done > 1) done = 1;
         LineDraw *d = arena_new(&frame, LineDraw, 1);
-        *d = (LineDraw){ CUSTOM_LINE, bt > 0 && j->kind != JOB_DELETE ? &r->line : NULL, done, cc(t->accent), mix(t->accent, t->bg_light, 0.25f) };
+        *d = (LineDraw){ CUSTOM_LINE, bt > 0 && j->kind != JOB_DELETE ? &r->line : NULL, done, cc(t->accent), mix(t->accent, t->bg_light, 0.2f) };
         bool keyed = app.ui.jobs_focus && app.ui.job_at == i, hover = app.jobx_hover == i;
         char speed[32] = "";
         if (d->line) jobq_speed(speed, sizeof speed, r->line.now);
@@ -1879,7 +1892,7 @@ static void *signal_waiter(void *arg)
     int sig;
     sigwait(&quit_signals, &sig);
     atomic_store(&quit_signal, true);
-    glfwPostEmptyEvent();
+    wake_main();
     return NULL;
 }
 
@@ -2087,6 +2100,9 @@ int main(int argc, char **argv)
     count_stop();
     for (int i = 0; i < app.nslots; i++)
         if (app.slot[i].tex.id) UnloadTexture(app.slot[i].tex);
+    pthread_mutex_lock(&wake_mu);
+    wake_off = true;
+    pthread_mutex_unlock(&wake_mu);
     CloseWindow();
     return scripted && script.failed ? 1 : 0;
 }
