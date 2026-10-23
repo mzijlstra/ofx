@@ -9,14 +9,16 @@
 # with kill (pid in <scratch-dir>/run.pid) and then `tools/gui/weston.sh stop <scratch-dir>`.
 #
 # Everything the window gets is set here:
-# - fakes for uwsm-app, xdg-open and xdg-terminal-exec first on PATH, logging their arguments to
-#   <scratch-dir>/spawn.log: a test never opens a real file or terminal on Michael's screen;
+# - fakes for uwsm-app, xdg-open, xdg-terminal-exec and udisksctl first on PATH, logging their
+#   arguments to <scratch-dir>/spawn.log: a test never opens a real file or terminal on Michael's
+#   screen, nor unmounts one of his drives;
 # - XDG_STATE_HOME=<scratch-dir>/state, with a copy of Michael's current theme files (colors.toml,
 #   icons.theme) unless the caller made <scratch-dir>/state already: a theme test edits the copy;
 # - XDG_CONFIG_HOME=<scratch-dir>/config: the sidebar's GTK bookmarks and the XDG user dirs come
 #   from there (empty unless the caller wrote them), never from Michael's;
 # - XDG_DATA_HOME=<scratch-dir>/data: the home trash is <scratch-dir>/data/Trash, never his;
 # - OFX_TEST_SPACE_DELAY_MS, when set, is passed on: each drive space answer that much later;
+# - OFX_TEST_MEDIA, when set, is passed on: mounts under it count as removable drives;
 # - OFX_TEST_MOUNTINFO, when set, is passed on: the mount list read instead of /proc/self/mountinfo;
 # - OFX_TEST_HOME, when set, becomes the window's HOME (a scratch home for the path buttons' test);
 # - OFX_GUI_SHOTS=<scratch-dir>/shots for the script's shots, OFX_GUI_ROOT=<scratch-dir> for its
@@ -40,6 +42,13 @@ for f in uwsm-app xdg-open xdg-terminal-exec; do
     printf '#!/bin/sh\necho "%s $*" >> "%s/spawn.log"\n' "$f" "$T" > "$T/fakes/$f"
     chmod +x "$T/fakes/$f"
 done
+# udisksctl (eject, F6.1): logs too, and fails the step named in <scratch-dir>/udisks-fail.
+cat > "$T/fakes/udisksctl" <<EOS
+#!/bin/sh
+echo "udisksctl \$*" >> "$T/spawn.log"
+if [ "\$1" = "\$(cat "$T/udisks-fail" 2>/dev/null)" ]; then echo "Error \$1: target is busy" >&2; exit 1; fi
+EOS
+chmod +x "$T/fakes/udisksctl"
 if [ ! -d "$T/state" ]; then
     mkdir -p "$T/state/omarchy/current/theme"
     real=${XDG_STATE_HOME:-$HOME/.local/state}/omarchy/current/theme
@@ -60,7 +69,7 @@ cat > "$T/launch.sh" <<EOS
 echo \$\$ > "$T/run.pid"
 exec env -u DISPLAY -u WAYLAND_SOCKET WAYLAND_DISPLAY="$sock" OFX_TEST_SIZE=936x490 ${script_env} OFX_GUI_ROOT="$T" OFX_GUI_SHOTS="$T/shots" PATH="$T/fakes:\$PATH" XDG_STATE_HOME="$T/state" XDG_CONFIG_HOME="$T/config" XDG_DATA_HOME="$T/data" \
   LSAN_OPTIONS=suppressions=$root/gui/lsan.supp ASAN_OPTIONS=log_path="$T/asan" ${OFX_TEST_LEAK:+OFX_TEST_LEAK=1} \
-  ${OFX_TEST_WATCH_DELAY_MS:+OFX_TEST_WATCH_DELAY_MS=$OFX_TEST_WATCH_DELAY_MS} ${OFX_TEST_COPY_DELAY_MS:+OFX_TEST_COPY_DELAY_MS=$OFX_TEST_COPY_DELAY_MS} ${OFX_TEST_CROSS:+OFX_TEST_CROSS=1} ${OFX_TEST_HOME:+HOME=$OFX_TEST_HOME} ${OFX_TEST_COUNT_DELAY_MS:+OFX_TEST_COUNT_DELAY_MS=$OFX_TEST_COUNT_DELAY_MS} ${OFX_TEST_MOUNTINFO:+OFX_TEST_MOUNTINFO=$OFX_TEST_MOUNTINFO} ${OFX_TEST_SPACE_DELAY_MS:+OFX_TEST_SPACE_DELAY_MS=$OFX_TEST_SPACE_DELAY_MS} \
+  ${OFX_TEST_WATCH_DELAY_MS:+OFX_TEST_WATCH_DELAY_MS=$OFX_TEST_WATCH_DELAY_MS} ${OFX_TEST_COPY_DELAY_MS:+OFX_TEST_COPY_DELAY_MS=$OFX_TEST_COPY_DELAY_MS} ${OFX_TEST_CROSS:+OFX_TEST_CROSS=1} ${OFX_TEST_HOME:+HOME=$OFX_TEST_HOME} ${OFX_TEST_COUNT_DELAY_MS:+OFX_TEST_COUNT_DELAY_MS=$OFX_TEST_COUNT_DELAY_MS} ${OFX_TEST_MOUNTINFO:+OFX_TEST_MOUNTINFO=$OFX_TEST_MOUNTINFO} ${OFX_TEST_MEDIA:+OFX_TEST_MEDIA=$OFX_TEST_MEDIA} ${OFX_TEST_SPACE_DELAY_MS:+OFX_TEST_SPACE_DELAY_MS=$OFX_TEST_SPACE_DELAY_MS} \
   "$bin" $args >"$T/out" 2>"$T/err"
 EOS
 chmod +x "$T/launch.sh"

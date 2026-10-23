@@ -26,6 +26,9 @@ rules shared by every tool here.
   drives sets `OFX_TEST_MOUNTINFO` to a scratch file (run-script passes it on), so it sees only
   `/` and never his drives' trash; Empty Trash in a test with his real mount list would aim at
   `/mnt/sd/.Trash-1000` (the guard refuses it, but don't rely on that).
+- **Eject** (F6.1) runs `udisksctl unmount` and `power-off` on a removable drive: a test with the
+  real udisksctl would unmount and power off his USB drive. `run-script.sh` puts a logging fake
+  first on PATH (it fails the step named in `<scratch>/udisks-fail`); the unit test makes its own.
 - **The state file** (F6): ofx writes the sidebar's mode to `$XDG_STATE_HOME/ofx/state`;
   `run-script.sh` points that at `<scratch>/state`, so a test never changes his.
 - **ofx changes files since F3:** rename, new folder, trash, delete for good, copy and move. Every

@@ -96,7 +96,7 @@ MUTANTS = [
     (T, "Str text = read_file(scratch, cfg && cfg[0] ? arena_sprintf(scratch, \"%s/user-dirs.dirs\", cfg)", "Str text = read_file(scratch, 0 ? arena_sprintf(scratch, \"%s/user-dirs.dirs\", cfg)"),
     # ---- spawn
     (P, "if (e > at && snprintf(full, sizeof full, \"%.*s/%s\", (int)(e - at), p.p + at, prog) < (int)sizeof full &&\n            access(full, X_OK) == 0)", "if (e > at && snprintf(full, sizeof full, \"%.*s/%s\", (int)(e - at), p.p + at, prog) < (int)sizeof full &&\n            access(full, F_OK) == 0)"),
-    (P, "posix_spawnattr_setflags(&attr, POSIX_SPAWN_SETSID | POSIX_SPAWN_SETSIGMASK);", "posix_spawnattr_setflags(&attr, POSIX_SPAWN_SETSIGMASK);"),
+    (P, "posix_spawnattr_setflags(&attr, POSIX_SPAWN_SETSID | POSIX_SPAWN_SETSIGMASK);\n    posix_spawn_file_actions_init(&fa);\n    posix_spawn_file_actions_addopen(&fa, 0, \"/dev/null\", O_RDONLY, 0);\n    posix_spawn_file_actions_addopen(&fa, 1,", "posix_spawnattr_setflags(&attr, POSIX_SPAWN_SETSIGMASK);\n    posix_spawn_file_actions_init(&fa);\n    posix_spawn_file_actions_addopen(&fa, 0, \"/dev/null\", O_RDONLY, 0);\n    posix_spawn_file_actions_addopen(&fa, 1,"),
     (P, "if (on_path(\"uwsm-app\")) argv[k++] = \"uwsm-app\", argv[k++] = \"--\";", ""),
     (P, "if (!on_path(argv[0])) return err_set(err, \"%s is not installed\", argv[0]), false;", ""),
     (P, "snprintf(arg, sizeof arg, \"--dir=%s\", dir);", "snprintf(arg, sizeof arg, \"%s\", dir);"),
@@ -148,7 +148,7 @@ MUTANTS += [
     (PL, "|| path[0] != '/') continue;", ") continue;"),
     (PL, "for (size_t n = strlen(path); n > 1 && path[n - 1] == '/';) path[--n] = 0;", ""),
     (PL, "return strncmp(path, dir, n) == 0 && path[n] == '/' && path[n + 1];", "return strncmp(path, dir, n) == 0;"),
-    (PL, "else if (under(mp, \"/run/media\") || under(mp, \"/media\")) places_add(pl, PL_REMOVABLE, mp, STR_EMPTY);", "else if (under(mp, \"/run/media\")) places_add(pl, PL_REMOVABLE, mp, STR_EMPTY);"),
+    (PL, "else if (under(mp, \"/run/media\") || under(mp, \"/media\") ||", "else if (under(mp, \"/run/media\") ||"),
     (PL, "        for (int k = 0; k < 4; k++) {", "        for (int k = 0; k < 3; k++) {"),
     (PL, "if (home && home[0]) places_add(pl, PL_HOME, home, S(\"Home\"));", ""),
     (PL, "bool in = strcmp(p, \"/\") == 0 || (strncmp(path, p, n) == 0 && (path[n] == 0 || path[n] == '/'));", "bool in = strcmp(p, \"/\") == 0 || strncmp(path, p, n) == 0;"),
@@ -539,7 +539,7 @@ MUTANTS += [
     (U, "    if (m == SIDE_HIDDEN) u->side_focus = false;\n", ""),
     (U, " && u->side.n > 0 && u->side_mode != SIDE_HIDDEN;", " && u->side.n > 0;"),
     (U, "    if (!prompt && in->side_mode >= 0 && in->side_mode < SIDE_MODES) return", "    if (!prompt && in->side_mode >= 0) return"),
-    (U, " || in->job_x >= 0 || in->side_mode >= 0 || in->side_twisty >= 0;", " || in->job_x >= 0 || in->side_twisty >= 0;"),
+    (U, " || in->job_x >= 0 || in->side_mode >= 0 || in->side_twisty >= 0 || in->side_eject >= 0;", " || in->job_x >= 0 || in->side_twisty >= 0 || in->side_eject >= 0;"),
     (U, " || in->mid_crumb >= 0 || in->modal > 0 ||", " || in->mid_crumb >= 0 ||"),
     (U, "           in->backs > 0 || in->forwards > 0 || in->job_x", "           in->forwards > 0 || in->job_x"),
     (U, "        if (in->one_dir && in->one_count >= 0) snprintf", "        if (in->one_dir) snprintf"),
@@ -629,4 +629,27 @@ MUTANTS += [
     (T, "            if (*n + 1 > max) return false;\n            out[(*n)++] = (TrashDoomed){ arena_cstr(a, str_from_c(cache)), false };", "            out[(*n)++] = (TrashDoomed){ arena_cstr(a, str_from_c(cache)), false };"),
     (U, "    return !bad || now_ms - at_ms >= UI_ERROR_MIN_MS;", "    return !bad || now_ms - at_ms > UI_ERROR_MIN_MS;"),
     (U, "    return !bad || now_ms - at_ms >= UI_ERROR_MIN_MS;", "    return true;"),
+]
+# ---- F6.1: a drive's device, eject's command and result, the eject click
+SP = 'fs/spawn.c'
+MUTANTS += [
+    (PL, "        if (pl->n == before || dash < 0) continue;", "        if (dash < 0) continue;"),
+    (PL, "        if (s2 >= 0) src = str_cut(src, 0, s2);", ""),
+    (PL, "        if (!octal_decode(src, p->dev, sizeof p->dev)) p->dev[0] = 0;", "        snprintf(p->dev, sizeof p->dev, \"%.*s\", STR_ARG(src));"),
+    (PL, "    return p->kind == PL_REMOVABLE && strncmp(p->dev, \"/dev/\", 5) == 0;", "    return p->kind == PL_REMOVABLE && p->dev[0];"),
+    (PL, "    return p->kind == PL_REMOVABLE && strncmp(p->dev, \"/dev/\", 5) == 0;", "    return place_is_drive(p->kind) && strncmp(p->dev, \"/dev/\", 5) == 0;"),
+    (SP, "    posix_spawn_file_actions_adddup2(&fa, fd[1], 2);\n", ""),
+    (SP, "        n += take;", "        n += (size_t)r;"),
+    (SP, "(size_t)r < room ? (size_t)r : room;", "(size_t)r;"),
+    (SP, "\"udisksctl unmount -b \\\"$1\\\" && echo OFX-UNMOUNTED && udisksctl power-off", "\"udisksctl unmount -b \\\"$1\\\"; echo OFX-UNMOUNTED && udisksctl power-off"),
+    (SP, "    return done && unmounted ? EJECT_DONE : unmounted ? EJECT_UNMOUNTED : EJECT_FAILED;", "    return done ? EJECT_DONE : unmounted ? EJECT_UNMOUNTED : EJECT_FAILED;"),
+    (SP, "        else if (line.len && !why[0]) snprintf(why, cap, \"%.*s\", STR_ARG(line));", "        else if (line.len) snprintf(why, cap, \"%.*s\", STR_ARG(line));"),
+    (SP, "        line = str_trim(line);\n        if (str_eq(line, S(\"OFX-UNMOUNTED\")))", "        if (str_eq(line, S(\"OFX-UNMOUNTED\")))"),
+    (U, " || in->side_twisty >= 0 || in->side_eject >= 0;", " || in->side_twisty >= 0;"),
+    (U, "    if (!prompt && in->side_eject >= 0 && u->side_mode == SIDE_PLACES && u->side.top", "    if (!prompt && in->side_eject >= 0 && u->side.top"),
+]
+MUTANTS += [
+    (T, "    if (at + k < n && d[at + k].after_ok) k--;", ""),
+    (T, "    isize k = n - at < max ? n - at : max;", "    isize k = max;"),
+    (PL, " || (places_test_media[0] && under(mp, places_test_media)))", ")"),
 ]

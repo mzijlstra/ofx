@@ -27,6 +27,8 @@
 //                           mouse's is (rows, sidebar rows, headers)
 //   point-ui <id> [k]       the point at the middle of a Clay element (k: its CLAY_IDI index),
 //                           printed as "point: x y" and kept for click-here
+//   hover-here              the pointer to the last point-ui (the hover highlights, a drive's
+//                           eject button)
 //   click-here              a left press at the last point-ui
 //   middle-here             a middle press there (a folder into a background tab, a tab closed)
 //   middle <row>            a middle press on list row <row>
@@ -159,6 +161,19 @@ static void script_state(char *out, size_t cap)
         snprintf(treecur, sizeof treecur, "%.*s:%d", STR_ARG(r->name), r->open);
         treehere = tree_find(&tree, str_from_c(app.cwd)) == (int)app.ui.side.sel;
     }
+    // The sidebar row under the pointer (F6.1): its number as drawn ("used:" or "free:"), and
+    // whether its eject button shows.
+    // The number drawn there, said as which it is: worked out here apart from the layout's.
+    char hovernum[64] = "-";
+    int ejectbtn = 0;
+    isize hi = app.side_hover >= 0 ? app.ui.side.top + app.side_hover : -1;
+    if (app.ui.side_mode == SIDE_PLACES && hi >= 0 && hi < app.places.n && app.hover_num[0]) {
+        const Place *hp = &app.places.p[hi];
+        char used[32], avail[32];
+        ui_size(used, sizeof used, hp->size - hp->avail), ui_size(avail, sizeof avail, hp->avail);
+        snprintf(hovernum, sizeof hovernum, "%s", strcmp(app.hover_num, used) == 0 ? "used" : strcmp(app.hover_num, avail) == 0 ? "free" : "?");
+    }
+    if (app.ui.side_mode == SIDE_PLACES && hi >= 0 && hi < app.places.n) ejectbtn = place_ejectable(&app.places.p[hi]);
     char info[NAME_MAX + 64];
     status_info(info, sizeof info);
     for (char *c = info; *c; c++)
@@ -183,7 +198,7 @@ static void script_state(char *out, size_t cap)
              "back=%d fwd=%d marked=%td editing=%d edit=%s confirming=%d asking=%d job=%s done=%lld/%lld undo=%s clip=%td cut=%d "
              "sysclip=%d modal=%s askall=%d tabs=%d tab=%d tabdirs=%s sizecell=%s crumbs=%s crumbhome=%d crumb=%d crumbshown=%d-%d arrows=%d locating=%d cnt=%s "
              "esel=%d-%d caret=%d copied=%s crumbkey=%s jobs=%d waiting=%d jobrows=%s jobkey=%s jobline=%d jobspeed=%d clashjob=%s "
-             "sides=%s spaced=%d sidemode=%s treen=%d treecur=%s treerow=%td treehere=%d trash=%d info=%s status=%s",
+             "sides=%s spaced=%d sidemode=%s treen=%d treecur=%s treerow=%td treehere=%d trash=%d sidehover=%d hovernum=%s ejectbtn=%d cwdavail=%d info=%s status=%s",
              app.cwd, app.list.n, app.list.hidden, STR_ARG(sel), app.ui.list.sel, app.ui.list.top, app.ui.list.rows, app.hover,
              t->accent.r, t->accent.g, t->accent.b, t->bg.r, t->bg.g, t->bg.b, t->icons[0] ? t->icons : "-",
              app.icon_scale, GetScreenWidth(), GetScreenHeight(), app.reloads, app.themes, atomic_load(&watch.batches),
@@ -199,7 +214,7 @@ static void script_state(char *out, size_t cap)
              app.ui.editing && app.ui.edit_path, cnt, slo, shi, app.ui.caret, copied, keyed,
              jobs.nrun, jobs.nwait, joblabels, jobkey, oldest ? oldest->line.reached : 0, oldest && oldest->line.now > 0, clashjob,
              sides[0] ? sides : "-", spaced, SIDE_MODES_W[app.ui.side_mode], app.ui.side_mode == SIDE_TREE ? tree.n : 0, treecur,
-             app.ui.side.sel - app.ui.side.top, treehere, app.ui.in_trash, info, app.status[0] ? app.status : "-");
+             app.ui.side.sel - app.ui.side.top, treehere, app.ui.in_trash, app.side_hover, hovernum, ejectbtn, app.cwd_avail >= 0, info, app.status[0] ? app.status : "-");
     frame_us_max = 0;
 }
 
@@ -433,6 +448,8 @@ static bool script_input(UiInput *in)
             if (!d.found) script_fail("point-ui: no element %s", a);
             script.px = d.boundingBox.x + d.boundingBox.width / 2, script.py = d.boundingBox.y + d.boundingBox.height / 2;
             printf("point: %.0f %.0f\n", script.px, script.py);
+        } else if (str_eq(cmd, S("hover-here"))) {
+            hover_at(script.px, script.py);
         } else if (str_eq(cmd, S("click-here"))) {
             press_at(in, script.px, script.py, 0);
         } else if (str_eq(cmd, S("middle-here"))) {

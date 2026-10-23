@@ -1234,6 +1234,8 @@ static void test_places(void)
         "40 33 254:2 / /mnt/sd rw - ext4 /dev/mapper/sd rw\n"
         "41 33 8:17 / /run/media/m/USB\\040Stick rw - vfat /dev/sdb1 rw\n"
         "42 33 8:18 / /media/cd rw - iso9660 /dev/sr0 ro\n"
+        "46 33 8:21 / /media/nosrc rw - vfat\n"               // no source field
+        "47 33 8:22 / /media/esc rw - vfat /dev/a\\040b rw\n"  // a space in it
         "43 33 8:19 / /mnt rw - ext4 /dev/sdc rw\n"           // /mnt itself: not under it
         "44 33 8:20 / /mntx/a rw - ext4 /dev/sdd rw\n"        // only looks like /mnt
         "45 short\n");
@@ -1243,7 +1245,8 @@ static void test_places(void)
     const char *want[][2] = {
         { "", "Places" }, { "/home/m", "Home" }, { "/home/m/Pictures", "Pictures" }, { "/home/m/My Docs", "My Docs" },
         { "/home/m/Downloads", "Downloads" }, { "/", "/" }, { TRASH_URI, "Trash" }, { "", "Drives" }, { "/", "File System" },
-        { "/mnt/sd", "sd" }, { "/run/media/m/USB Stick", "USB Stick" }, { "/media/cd", "cd" },
+        { "/mnt/sd", "sd" }, { "/run/media/m/USB Stick", "USB Stick" }, { "/media/cd", "cd" }, { "/media/nosrc", "nosrc" },
+        { "/media/esc", "esc" },
     };
     CHECK(pl.n == COUNT(want));
     for (int i = 0; i < pl.n && i < COUNT(want); i++) {
@@ -1254,12 +1257,28 @@ static void test_places(void)
     CHECK(pl.p[0].kind == PL_HEAD && pl.p[1].kind == PL_HOME && pl.p[2].kind == PL_BOOKMARK && pl.p[5].kind == PL_BOOKMARK);
     CHECK(pl.p[6].kind == PL_TRASH && pl.p[7].kind == PL_HEAD && pl.p[8].kind == PL_ROOT);   // "/" as a bookmark and as a drive
     CHECK(pl.p[9].kind == PL_MOUNT && pl.p[10].kind == PL_REMOVABLE && pl.p[11].kind == PL_REMOVABLE);
+    // Each drive's source (F6.1, for eject): after the " - " that ends the optional fields.
+    CHECK(strcmp(pl.p[8].dev, "/dev/mapper/root") == 0 && strcmp(pl.p[9].dev, "/dev/mapper/sd") == 0);
+    CHECK(strcmp(pl.p[10].dev, "/dev/sdb1") == 0 && strcmp(pl.p[11].dev, "/dev/sr0") == 0 && pl.p[5].dev[0] == 0);
+    CHECK(pl.p[12].dev[0] == 0 && strcmp(pl.p[13].dev, "/dev/a b") == 0);
+    CHECK(place_ejectable(&pl.p[10]) && place_ejectable(&pl.p[11]) && !place_ejectable(&pl.p[12]));
+    CHECK(!place_ejectable(&pl.p[9]) && !place_ejectable(&pl.p[8]));   // /mnt/sd and /: not removable
+    Place fuse = { .kind = PL_REMOVABLE };
+    snprintf(fuse.dev, sizeof fuse.dev, "sshfs#host:/x");
+    CHECK(!place_ejectable(&fuse));
     CHECK(places_current(&pl, "/home/m/Pictures/2026") == 2);
     CHECK(places_current(&pl, "/home/m/Picturesque") == 1);   // a prefix that isn't a folder above
     CHECK(places_current(&pl, "/home/m") == 1);
     CHECK(places_current(&pl, "/etc") == 5);                  // the bookmark before the drive
     CHECK(places_current(&pl, "/mnt/sd/Downloads") == 9);
     CHECK(places_current(&pl, TRASH_URI) == 6);
+    // The tests' media folder: mounts under it removable, the folder itself not.
+    snprintf(places_test_media, sizeof places_test_media, "/scratch/media");
+    put(at("places/mi2"), "1 1 0:1 / /scratch/media/STICK rw - vfat /dev/sdq1 rw\n2 1 0:1 / /scratch/media rw - tmpfs t rw\n"
+                          "3 1 0:1 / /scratch/other rw - vfat /dev/sdq2 rw\n");
+    places_load(&ta, &pl, at("places/none"), at("places/mi2"));
+    places_test_media[0] = 0;
+    CHECK(pl.n == 5 && pl.p[4].kind == PL_REMOVABLE && strcmp(pl.p[4].path, "/scratch/media/STICK") == 0 && place_ejectable(&pl.p[4]));
     env_restore();
     // The real mountinfo, through procfs: "/" is in it.
     env_set("HOME", "/home/m");
@@ -1271,7 +1290,7 @@ static void test_places(void)
     // Without bookmarks: home, Trash, then "/" from mountinfo as File System.
     env_set("HOME", "/home/m");
     places_load(&ta, &pl, at("places/none"), at("places/mountinfo"));
-    CHECK(pl.n == 8 && pl.p[2].kind == PL_TRASH && pl.p[4].kind == PL_ROOT && strcmp(pl.p[4].label, "File System") == 0);
+    CHECK(pl.n == 10 && pl.p[2].kind == PL_TRASH && pl.p[4].kind == PL_ROOT && strcmp(pl.p[4].label, "File System") == 0);
     // A drive's space: none read yet; a drive that is there has a size and room up to it; one
     // that is gone has none, and that is a change.
     CHECK(pl.p[4].size == 0 && pl.p[5].size == 0);
@@ -1505,6 +1524,9 @@ int main(void)
     test_status_clears();
     test_trash_empty_items();
     test_trash_dirs_owned();
+    test_eject();
+    test_eject_keys();
+    test_trash_empty_chunk();
     char cmd[1600];
     snprintf(cmd, sizeof cmd, "chmod -R u+rwx '%s' && rm -rf '%s' '%s'", root, root, decoy);
     if (system(cmd) != 0) fprintf(stderr, "could not remove %s\n", root);

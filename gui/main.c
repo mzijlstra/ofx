@@ -117,8 +117,10 @@ static struct {
     int       copy_delay_ms;   // OFX_TEST_COPY_DELAY_MS
     int       jobx_hover;      // the job row whose × is under the pointer, -1 for none
     int       mode_hover;      // the sidebar mode button under the pointer (a SideMode), -1 for none
+    int       eject_hover;     // the sidebar row whose eject button is under the pointer, -1 for none
     char      text_copied[PATH_MAX];   // the last text an edit line put on the clipboard (F5.2)
-} app = { .hover = -1, .side_hover = -1, .tab_hover = -1, .tab_x_hover = -1, .jobx_hover = -1, .mode_hover = -1 };
+    char      hover_num[32];   // the number drawn on the drive row under the pointer (F6.1), for the tests
+} app = { .hover = -1, .side_hover = -1, .tab_hover = -1, .tab_x_hover = -1, .jobx_hover = -1, .mode_hover = -1, .eject_hover = -1 };
 
 static UiHistory hist;
 static Tree      tree;     // the sidebar's tree mode (F6)
@@ -511,6 +513,7 @@ static const char *items(isize n)
 }
 
 #include "jobs.c"
+#include "eject.c"
 
 static void trash_targets(void)
 {
@@ -608,8 +611,7 @@ static void trash_empty(void)
     }
     // A job per CLIP_PATHS_MAX items, never between an item and its .trashinfo.
     for (isize at = 0; at < n;) {
-        isize k = n - at < CLIP_PATHS_MAX ? n - at : CLIP_PATHS_MAX;
-        if (at + k < n && doomed_all[at + k].after_ok) k--;
+        isize k = trash_empty_chunk(doomed_all, n, at, CLIP_PATHS_MAX);
         JobRec *r = job_new();
         if (!r) return;   // the queue is full: its panel says so; Empty Trash again for the rest
         for (isize i = 0; i < k; i++)
@@ -970,6 +972,9 @@ static void act(UiAction a)
     Err err;
     switch (a.kind) {
     case UA_RESTORE: trash_restore_targets(); break;
+    case UA_EJECT:
+        if (a.index >= 0 && a.index < app.places.n && place_ejectable(&app.places.p[a.index])) eject_start(&app.places.p[a.index]);
+        break;
     case UA_EMPTY_TRASH: trash_empty(); break;
     case UA_NOT_IN_TRASH: set_status(true, "That doesn't work in the trash: restore it first"); break;
     case UA_SIDE_MODE: {
@@ -1213,19 +1218,35 @@ static Clay_Color mix(Rgb a, Rgb b, float t)
     return (Clay_Color){ a.r * t + b.r * (1 - t), a.g * t + b.g * (1 - t), a.b * t + b.b * (1 - t), 255 };
 }
 
-// A drive's fullness: a thin bar under its name, the used part in the accent (red from 90% on).
+// How full a drive is, 0..1.
+static float drive_used(const Place *p)
+{
+    float used = p->size > 0 ? 1.0f - (float)p->avail / (float)p->size : 0;
+    return used < 0 ? 0 : used > 1 ? 1 : used;
+}
+
+// The bar's colours, which its numbers take too (F6.1): the used part in the accent (red from 90%
+// full on), the free part dimmed.
+static Clay_Color drive_used_color(const Place *p)
+{
+    return drive_used(p) >= 0.9f ? cc(app.theme.red) : cc(app.theme.accent);
+}
+
+static Clay_Color drive_free_color(void)
+{
+    return mix(app.theme.fg_dim, app.theme.bg_light, 0.75f);
+}
+
+// A drive's fullness: a thin bar under its name.
 static void drive_bar(int r, const Place *p, float w)
 {
-    Theme *t = &app.theme;
-    float used = p->size > 0 ? 1.0f - (float)p->avail / (float)p->size : 0;
-    if (used < 0) used = 0;
-    if (used > 1) used = 1;
     CLAY(CLAY_IDI("side-bar", r), { .layout = { .sizing = { CLAY_SIZING_FIXED(w), CLAY_SIZING_FIXED(3) } },
-                                    .backgroundColor = mix(t->fg_dim, t->bg_light, 0.3f) }) {
-        CLAY(CLAY_IDI("side-used", r), { .layout = { .sizing = { CLAY_SIZING_FIXED(w * used), CLAY_SIZING_GROW(0) } },
-                                         .backgroundColor = used >= 0.9f ? cc(t->red) : cc(t->accent) }) {}
+                                    .backgroundColor = drive_free_color() }) {
+        CLAY(CLAY_IDI("side-used", r), { .layout = { .sizing = { CLAY_SIZING_FIXED(w * drive_used(p)), CLAY_SIZING_GROW(0) } },
+                                         .backgroundColor = drive_used_color(p) }) {}
     }
 }
+
 
 // The tree mode (F6): a row a folder, indented by its depth, with its open (▾) or closed (▸)
 // mark; the folder shown in the accent.
@@ -1276,6 +1297,7 @@ static void layout_side(float h)
                                         .layoutDirection = CLAY_TOP_TO_BOTTOM, .padding = { 0, 0, PAD / 2, 0 } },
                             .backgroundColor = cc(t->bg_light) }) {
         UiList *sl = &app.ui.side;
+        app.hover_num[0] = 0;
         for (int r = 0; r < sl->rows && sl->top + r < sl->n; r++) {
             int i = (int)(sl->top + r);
             const Place *p = &app.places.p[i];
@@ -1289,8 +1311,10 @@ static void layout_side(float h)
             bool cursor = app.ui.side_focus && i == sl->sel, here = i == app.place_cur, hover = r == app.side_hover;
             bool drive = place_is_drive(p->kind) && p->size > 0;
             Clay_Color bg = cursor ? cc(t->selection) : hover ? cc(t->bg) : cc(t->bg_light);
+            // The free space; with the pointer over it, the used space (F6.1), each in its bar colour.
             char avail[32] = "";
-            if (drive) ui_size(avail, sizeof avail, p->avail);
+            if (drive) ui_size(avail, sizeof avail, hover ? p->size - p->avail : p->avail);
+            if (hover) snprintf(app.hover_num, sizeof app.hover_num, "%s", avail);
             Str free_s = str_from_c(arena_sprintf(&frame, "%s", avail));
             float room = SIDE_W - 2 * PAD - SIDE_ICON_PX - 8 - (drive ? str_width(free_s) + 8 : 0);
             CLAY(CLAY_IDI("side-row", r), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(SIDE_ROW_H) },
@@ -1298,14 +1322,25 @@ static void layout_side(float h)
                                                         .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
                                             .backgroundColor = bg,
                                             .border = { .color = cc(t->accent), .width = { .left = cursor ? 3 : 0 } } }) {
-                icon_box(CLAY_IDI("side-icon", r), place_icon(i), SIDE_ICON_PX);
+                if (hover && place_ejectable(p)) {   // in the icon's place while the pointer is over it
+                    bool on = app.eject_hover == r;
+                    CLAY(CLAY_IDI("side-eject", r), { .layout = { .sizing = { CLAY_SIZING_FIXED(SIDE_ICON_PX), CLAY_SIZING_FIXED(SIDE_ICON_PX) },
+                                                                  .childAlignment = { .x = CLAY_ALIGN_X_CENTER, .y = CLAY_ALIGN_Y_CENTER } },
+                                                      .backgroundColor = on ? cc(t->bg_light) : (Clay_Color){ 0, 0, 0, 0 },
+                                                      .cornerRadius = CLAY_CORNER_RADIUS(3),
+                                                      .border = { .color = on ? cc(t->accent) : mix(t->fg_dim, t->bg, 0.5f), .width = CLAY_BORDER_OUTSIDE(1) } }) {
+                        text(cz("\xE2\x8F\x8F"), on ? cc(t->accent) : cc(t->fg));   // ⏏
+                    }
+                } else {
+                    icon_box(CLAY_IDI("side-icon", r), place_icon(i), SIDE_ICON_PX);
+                }
                 CLAY(CLAY_IDI("side-text", r), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .layoutDirection = CLAY_TOP_TO_BOTTOM,
                                                              .childGap = 3 } }) {
                     CLAY(CLAY_IDI("side-line", r), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .childGap = 8 } }) {
                         text(fit(str_from_c(p->label), room, false), here ? cc(t->accent) : cc(t->fg));
                         if (drive) {
                             CLAY(CLAY_IDI("side-gap", r), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(1) } } }) {}
-                            text(cs(free_s), cc(t->fg_dim));
+                            text(cs(free_s), hover ? drive_used_color(p) : drive_free_color());
                         }
                     }
                     if (drive) drive_bar(r, p, SIDE_W - 2 * PAD - SIDE_ICON_PX - 8);
@@ -2175,6 +2210,7 @@ typedef struct {
     int   job_x;        // a job row's ×, -1 for none
     int   mode;         // a sidebar mode button (a SideMode), -1 for none
     int   twisty;       // a tree row's open/close mark, -1 for none
+    int   eject;        // a drive's eject button, -1 for none
 } Hit;
 
 static bool in_box(Clay_ElementId id, float x, float y)
@@ -2186,7 +2222,7 @@ static bool in_box(Clay_ElementId id, float x, float y)
 
 static Hit hit_at(float x, float y)
 {
-    Hit h = { -1, -1, -1, UB_NONE, -1, -1, -1, 0, -1, -1, -1 };
+    Hit h = { -1, -1, -1, UB_NONE, -1, -1, -1, 0, -1, -1, -1, -1 };
     if (modal_kind() != MODAL_NONE) {
         // A panel is up: its buttons are all there is to hit.
         static const struct { const char *id; int b; } MB[] = {
@@ -2217,6 +2253,7 @@ static Hit hit_at(float x, float y)
     for (int r = 0; side_w() && r < app.ui.side.rows && h.side < 0; r++)
         if (in_box(CLAY_IDI("side-row", r), x, y)) h.side = r;
     if (h.side >= 0 && app.ui.side_mode == SIDE_TREE && in_box(CLAY_IDI("side-twisty", h.side), x, y)) h.twisty = h.side;
+    if (h.side >= 0 && app.ui.side_mode == SIDE_PLACES && in_box(CLAY_IDI("side-eject", h.side), x, y)) h.eject = h.side;
     for (int k = 0; k < SIDE_MODES && h.mode < 0; k++)
         if (in_box(CLAY_IDI("mode", k), x, y)) h.mode = k;
     static const char *const IDS[SORT_KEYS] = { "col-name", "col-size", "col-date" };
@@ -2234,7 +2271,8 @@ static void press_at(UiInput *in, float x, float y, int mods)
         if (!mods && ui_press(&app.press, h.row, now_ms()) == 2) in->dclick = h.row;
         else in->click = h.row, in->click_mods = mods;
     }
-    in->side_click = h.twisty >= 0 ? -1 : h.side;   // the mark opens or closes; the rest of the row goes there
+    in->side_click = h.twisty >= 0 || h.eject >= 0 ? -1 : h.side;   // the mark opens or closes; the rest of the row goes there
+    in->side_eject = h.eject;
     in->header = h.header;
     in->bar = h.bar, in->crumb = h.crumb;
     in->modal = h.modal;
@@ -2258,6 +2296,19 @@ static void middle_at(UiInput *in, float x, float y)
 
 static float wheel_left;   // a touchpad's part of a notch, carried to the next frame
 
+// What is under the pointer at x, y, for the hover highlights: true when any changed.
+static bool hover_at(float x, float y)
+{
+    Hit h = hit_at(x, y);
+    bool changed = h.row != app.hover || h.side != app.side_hover || h.bar != app.bar_hover || h.crumb != app.crumb_hover ||
+                   h.tab != app.tab_hover || h.tab_x != app.tab_x_hover || h.mode != app.mode_hover || h.eject != app.eject_hover ||
+                   h.modal != app.modal_hover || h.job_x != app.jobx_hover;
+    app.hover = h.row, app.side_hover = h.side, app.bar_hover = h.bar, app.crumb_hover = h.crumb;
+    app.tab_hover = h.tab, app.tab_x_hover = h.tab_x, app.mode_hover = h.mode, app.eject_hover = h.eject;
+    app.modal_hover = h.modal, app.jobx_hover = h.job_x;
+    return changed;
+}
+
 // The user's input since the last frame. *seen: anything that could change what is on screen.
 static UiInput input_real(bool *seen)
 {
@@ -2274,19 +2325,7 @@ static UiInput input_real(bool *seen)
     wheel_left -= (float)notches;
     if (m.x >= side_w()) in.wheel = notches;
     else if (notches) app.ui.side.top = ui_clamp(app.ui.side.top - notches, 0, ui_max_top(&app.ui.side)), *seen = true;
-    if (d.x != 0 || d.y != 0) {
-        Hit h = hit_at(m.x, m.y);
-        *seen |= h.row != app.hover || h.side != app.side_hover || h.bar != app.bar_hover || h.crumb != app.crumb_hover ||
-                 h.tab != app.tab_hover || h.tab_x != app.tab_x_hover;
-        app.hover = h.row, app.side_hover = h.side, app.bar_hover = h.bar, app.crumb_hover = h.crumb;
-        app.tab_hover = h.tab, app.tab_x_hover = h.tab_x;
-        *seen |= h.mode != app.mode_hover;
-        app.mode_hover = h.mode;
-        *seen |= h.modal != app.modal_hover;
-        app.modal_hover = h.modal;
-        *seen |= h.job_x != app.jobx_hover;
-        app.jobx_hover = h.job_x;
-    }
+    if (d.x != 0 || d.y != 0) *seen |= hover_at(m.x, m.y);
     if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
         int mods = (IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL) ? UI_MOD_CTRL : 0) |
                    (IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT) ? UI_MOD_SHIFT : 0);
@@ -2384,6 +2423,8 @@ int main(int argc, char **argv)
     if (getenv("OFX_TEST_CROSS")) job_test_cross = true;
     // The test guard: with OFX_GUI_ROOT set (the GUI tests), no write outside it.
     ops_guard(getenv("OFX_GUI_ROOT"));
+    const char *media = getenv("OFX_TEST_MEDIA");   // tests: mounts under it are removable (places.c)
+    if (media && media[0]) snprintf(places_test_media, sizeof places_test_media, "%s", media);
     const char *leak = getenv("OFX_TEST_LEAK");
     if (leak && leak[0]) planted = malloc(4096), planted = NULL;
 
@@ -2502,6 +2543,7 @@ int main(int argc, char **argv)
         dirty |= jobs_poll();
         if (app.have_list && count_take(app.count, app.list.n)) dirty = true;
         if (space_take(&app.places, app.cwd, &app.cwd_avail)) dirty = true;
+        if (eject_take()) dirty = true;
         int rows = list_rows(GetScreenHeight()), srows = side_rows(GetScreenHeight());
         if (rows != app.ui.list.rows) ui_resize(&app.ui.list, rows), dirty = true;
         if (srows != app.ui.side.rows) ui_resize(&app.ui.side, srows), dirty = true;

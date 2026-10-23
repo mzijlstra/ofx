@@ -447,6 +447,15 @@ typedef struct {
     bool        after_ok;
 } TrashDoomed;
 
+// How many of d[at..n) one job of at most max items takes: never an item without its .trashinfo
+// after it (which then waits for the next job).
+static isize trash_empty_chunk(const TrashDoomed *d, isize n, isize at, isize max)
+{
+    isize k = n - at < max ? n - at : max;
+    if (at + k < n && d[at + k].after_ok) k--;
+    return k;
+}
+
 static bool trash_empty_items(Arena *a, const TrashDirs *d, TrashDoomed *out, isize max, isize *n)
 {
     *n = 0;

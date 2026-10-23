@@ -6,8 +6,63 @@ settle
 expect sidemode=places sides=^Places|Home|Bee|Trash|^Drives|File_System trash=0
 wait-for 2000 spaced=1
 # A drive mounted, and gone again
-sh printf '33 1 0:31 / / rw - btrfs /dev/x rw\n50 33 8:17 / /run/media/m/OFXUSB rw - vfat /dev/sdz1 rw\n' > "$OFX_ROOT/mountinfo"
+sh printf '33 1 0:31 / / rw - btrfs /dev/x rw\n50 33 8:17 / %s rw - vfat /dev/sdz1 rw\n' "$OFX_ROOT/media/OFXUSB" > "$OFX_ROOT/mountinfo"
 wait-for 3000 sides=^Places|Home|Bee|Trash|^Drives|File_System|OFXUSB
+# The pointer over a drive: its used space in place of its free; a removable one's eject button
+# in its icon's place (F6.1). The fake udisksctl logs; a step named in udisks-fail fails.
+point-ui side-row 5
+hover-here
+expect sidehover=5 hovernum=used ejectbtn=0
+shot f61-used.png
+point-ui side-row 6
+hover-here
+wait-for 2000 sidehover=6 ejectbtn=1 hovernum=used
+point-ui side-row 3
+hover-here
+expect hovernum=-
+point-ui side-row 6
+hover-here
+expect hovernum=used
+shot f61-hover.png
+point-ui side-eject 6
+hover-here
+click-here
+wait-for 3000 status=OFXUSB
+expect status=OFXUSB can be removed now
+sh grep -qx "udisksctl unmount -b /dev/sdz1" "$OFX_ROOT/spawn.log" && grep -qx "udisksctl power-off -b /dev/sdz1" "$OFX_ROOT/spawn.log"
+sh echo unmount > "$OFX_ROOT/udisks-fail"
+click-here
+wait-for 3000 status=Can't
+expect status=Can't eject OFXUSB: Error unmount: target is busy
+sh echo power-off > "$OFX_ROOT/udisks-fail"
+click-here
+wait-for 3000 status=OFXUSB
+expect status=OFXUSB is unmounted, but didn't power off: Error power-off: target is busy
+sh rm "$OFX_ROOT/udisks-fail"
+# Not while a job of ofx's writes there: an 8 MiB copy onto the drive, slowed
+key ctrl-l
+type ../big.bin
+key enter
+expect sel=big.bin cwdavail=1
+key ctrl-c
+key ctrl-l
+type media/OFXUSB
+key enter
+wait-for 2000 cwdavail=1 n=0
+key ctrl-v
+wait-for 2000 jobs=1
+point-ui side-row 6
+hover-here
+point-ui side-eject 6
+click-here
+expect status=OFXUSB is in use by a job: wait until it ends
+wait-for 6000 jobs=0 n=1
+key alt-left
+key alt-left
+expect sel=adir
+point-ui side-row 0
+hover-here
+expect sidehover=0 hovernum=- ejectbtn=0
 sh printf '33 1 0:31 / / rw - btrfs /dev/x rw\n' > "$OFX_ROOT/mountinfo"
 wait-for 3000 sides=^Places|Home|Bee|Trash|^Drives|File_System
 # The cursor skips the headings
@@ -64,7 +119,7 @@ expect status=adir trash=1
 key f2
 expect editing=0 status=That
 key ctrl-c
-expect clip=0 status=That
+expect clip=1 status=That
 char t
 expect status=That
 # r restores a.txt
@@ -92,20 +147,24 @@ press 2
 expect sel=c.txt
 key delete
 wait-for 2000 n=2
+# and a trashed folder that can't be deleted (a locked folder in it): its .trashinfo stays with it
+sh mkdir -p "$OFX_ROOT/data/Trash/files/locked/sub" && touch "$OFX_ROOT/data/Trash/files/locked/sub/x" && chmod 500 "$OFX_ROOT/data/Trash/files/locked/sub" && printf '[Trash Info]\nPath=/elsewhere/locked\n' > "$OFX_ROOT/data/Trash/info/locked.trashinfo"
 key alt-right
-expect trash=1 n=2
+wait-for 3000 trash=1 n=3
 point-ui trash-empty
 click-here
 expect modal=empty
 shot f6-empty.png
 key esc
-expect modal=- n=2
+expect modal=- n=3
 click-here
 expect modal=empty
 char y
-wait-for 3000 n=0 job=-
-expect status=Emptied
-sh test -d "$OFX_ROOT/data/Trash/files" && test -z "$(find "$OFX_ROOT/data/Trash/files" "$OFX_ROOT/data/Trash/info" -mindepth 1)"
+wait-for 4000 n=1 job=-
+expect sel=locked status=Emptied the trash; 1 failed:
+sh test "$(cd "$OFX_ROOT/data/Trash" && find files info -mindepth 1 -maxdepth 1 | sort | tr '\n' ' ')" = "files/locked info/locked.trashinfo "
+sh chmod 700 "$OFX_ROOT/data/Trash/files/locked/sub" && rm -r "$OFX_ROOT/data/Trash/files/locked" "$OFX_ROOT/data/Trash/info/locked.trashinfo"
+wait-for 3000 n=0
 # The trash works on after it (its folders kept, emptied)
 key alt-left
 press 1
@@ -138,7 +197,7 @@ key ctrl-l
 type many/zz
 key enter
 expect treecur=zz:0 treehere=1
-sh printf '33 1 0:31 / / rw - btrfs /dev/x rw\n50 33 8:17 / /run/media/m/OFXUSB rw - vfat /dev/sdz1 rw\n' > "$OFX_ROOT/mountinfo"
+sh printf '33 1 0:31 / / rw - btrfs /dev/x rw\n50 33 8:17 / %s rw - vfat /dev/sdz1 rw\n' "$OFX_ROOT/media/OFXUSB" > "$OFX_ROOT/mountinfo"
 wait-for 3000 sides=^Places|Home|Bee|Trash|^Drives|File_System|OFXUSB
 expect sidemode=tree treecur=zz:0 treehere=1 place=-
 sh printf '33 1 0:31 / / rw - btrfs /dev/x rw\n' > "$OFX_ROOT/mountinfo"

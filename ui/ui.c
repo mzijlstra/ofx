@@ -88,6 +88,7 @@ typedef struct {
     int     jobs_all;
     int     side_mode;   // a sidebar mode button clicked (a SideMode, F6), -1 for none
     int     side_twisty; // a tree row's open/close mark clicked (its row on screen), -1 for none
+    int     side_eject;  // a drive's eject button clicked (its row on screen, F6.1), -1 for none
 } UiInput;
 
 typedef enum {
@@ -118,6 +119,7 @@ typedef enum {
     UA_RESTORE,     // the trash view: the marked items (or the cursor's) back where they came from
     UA_EMPTY_TRASH, // the trash view: everything in it deleted for good, asked and answered
     UA_NOT_IN_TRASH,   // something that doesn't work in the trash view (gui/ says so)
+    UA_EJECT,       // index: the sidebar row of the drive to eject (F6.1)
 } UiActionKind;
 
 typedef struct {
@@ -200,7 +202,7 @@ typedef struct {
 static UiInput ui_input_none(void)
 {
     return (UiInput){ .click = -1, .dclick = -1, .side_click = -1, .header = -1, .click_mods = 0, .bar = UB_NONE, .crumb = -1,
-                      .tab_click = -1, .tab_close = -1, .mid_row = -1, .mid_side = -1, .mid_crumb = -1, .modal = 0, .job_x = -1, .side_mode = -1, .side_twisty = -1 };
+                      .tab_click = -1, .tab_close = -1, .mid_row = -1, .mid_side = -1, .mid_crumb = -1, .modal = 0, .job_x = -1, .side_mode = -1, .side_twisty = -1, .side_eject = -1 };
 }
 
 static isize ui_clamp(isize v, isize lo, isize hi)
@@ -273,7 +275,7 @@ static bool ui_input_acts(const UiInput *in)
 {
     return in->nev > 0 || in->click >= 0 || in->dclick >= 0 || in->side_click >= 0 || in->header >= 0 || in->bar != UB_NONE ||
            in->tab_click >= 0 || in->tab_close >= 0 || in->mid_row >= 0 || in->mid_side >= 0 || in->mid_crumb >= 0 || in->modal > 0 ||
-           in->backs > 0 || in->forwards > 0 || in->job_x >= 0 || in->side_mode >= 0 || in->side_twisty >= 0;
+           in->backs > 0 || in->forwards > 0 || in->job_x >= 0 || in->side_mode >= 0 || in->side_twisty >= 0 || in->side_eject >= 0;
 }
 
 // Whether a status message gives way to the status line on input that acts (ui_input_acts): a
@@ -746,6 +748,8 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         return (UiAction){ UA_SORT, 0, false };
     }
     if (!prompt && in->side_mode >= 0 && in->side_mode < SIDE_MODES) return ui_side_mode(u, (SideMode)in->side_mode);
+    if (!prompt && in->side_eject >= 0 && u->side_mode == SIDE_PLACES && u->side.top + in->side_eject < u->side.n)
+        return (UiAction){ UA_EJECT, u->side.top + in->side_eject, false };
     if (!prompt && in->side_twisty >= 0 && u->side_mode == SIDE_TREE && u->side.top + in->side_twisty < u->side.n)
         return ui_edit_close(u), (UiAction){ UA_TREE_TOGGLE, u->side.top + in->side_twisty, false };
     if (!prompt && in->side_click >= 0 && ui_side_head(u, u->side.top + in->side_click)) return (UiAction){ UA_NONE, 0, false };

@@ -23,6 +23,7 @@ typedef struct {
     char      label[256];
     PlaceKind kind;
     i64       size, avail;      // a drive's, in bytes (places_space); size 0 when unknown
+    char      dev[256];         // a drive's source in mountinfo (/dev/sdd1), "" when it has none
 } Place;
 
 typedef struct {
@@ -71,6 +72,13 @@ static bool place_is_drive(PlaceKind k)
     return k == PL_ROOT || k == PL_MOUNT || k == PL_REMOVABLE;
 }
 
+// Whether a place is a drive that can be ejected (F6.1): a removable one, with a device under
+// /dev (not a FUSE or network source udisks knows nothing of).
+static bool place_ejectable(const Place *p)
+{
+    return p->kind == PL_REMOVABLE && strncmp(p->dev, "/dev/", 5) == 0;
+}
+
 // Whether path is a place already in its section (a drive among the drives, else among the rest).
 static bool places_has(const Places *pl, PlaceKind kind, const char *path)
 {
@@ -114,6 +122,10 @@ static void places_add_bookmarks(Places *pl, Str text)
     }
 }
 
+// For the tests: mounts under this folder count as removable drives, as under /run/media (a test
+// can't mount a USB stick, nor write under /run/media). gui/ sets it from OFX_TEST_MEDIA.
+static char places_test_media[PATH_MAX];
+
 static bool under(const char *path, const char *dir)
 {
     size_t n = strlen(dir);
@@ -133,9 +145,23 @@ static void places_add_mounts(Places *pl, Str text)
         isize sp = str_find(f, ' ');
         char mp[PATH_MAX];
         if (sp <= 0 || !octal_decode(str_cut(f, 0, sp), mp, sizeof mp)) continue;
+        int before = pl->n;
         if (strcmp(mp, "/") == 0) places_add(pl, PL_ROOT, mp, S("File System"));
-        else if (under(mp, "/run/media") || under(mp, "/media")) places_add(pl, PL_REMOVABLE, mp, STR_EMPTY);
+        else if (under(mp, "/run/media") || under(mp, "/media") || (places_test_media[0] && under(mp, places_test_media)))
+            places_add(pl, PL_REMOVABLE, mp, STR_EMPTY);
         else if (under(mp, "/mnt")) places_add(pl, PL_MOUNT, mp, STR_EMPTY);
+        // The source: the second field after the " - " that ends the optional fields.
+        isize dash = -1;
+        for (isize i = 0; dash < 0 && i + 3 <= line.len; i++)
+            if (memcmp(line.p + i, " - ", 3) == 0) dash = i;
+        if (pl->n == before || dash < 0) continue;
+        Str rest = str_cut(line, dash + 3, line.len);
+        isize s1 = str_find(rest, ' ');
+        Str src = s1 < 0 ? STR_EMPTY : str_cut(rest, s1 + 1, rest.len);
+        isize s2 = str_find(src, ' ');
+        if (s2 >= 0) src = str_cut(src, 0, s2);
+        Place *p = &pl->p[pl->n - 1];
+        if (!octal_decode(src, p->dev, sizeof p->dev)) p->dev[0] = 0;
     }
 }
 

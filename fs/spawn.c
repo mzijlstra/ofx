@@ -87,3 +87,74 @@ static bool spawn_terminal(const char *dir, Err *err)
     const char *cmd[] = { "xdg-terminal-exec", arg };
     return spawn_app(cmd, COUNT(cmd), err);
 }
+
+// ---- eject (F6.1) -----------------------------------------------------------------------------
+
+// Runs argv (argv[0] on PATH) and reads what it writes, stdout and stderr together, until it ends:
+// into out (cut at cap). Blocking: gui/ runs it off the main thread. The exit status can't be had
+// (SA_NOCLDWAIT reaps the child), so a caller that needs it has the command say so (eject_argv).
+static bool spawn_capture(char *const *argv, char *out, size_t cap, Err *err)
+{
+    int fd[2];
+    if (pipe2(fd, O_CLOEXEC) != 0) return err_set(err, "pipe: %s", strerror(errno)), false;
+    posix_spawnattr_t attr;
+    posix_spawn_file_actions_t fa;
+    posix_spawnattr_init(&attr);
+    sigset_t none;
+    sigemptyset(&none);
+    posix_spawnattr_setsigmask(&attr, &none);
+    posix_spawnattr_setflags(&attr, POSIX_SPAWN_SETSID | POSIX_SPAWN_SETSIGMASK);
+    posix_spawn_file_actions_init(&fa);
+    posix_spawn_file_actions_addopen(&fa, 0, "/dev/null", O_RDONLY, 0);
+    posix_spawn_file_actions_adddup2(&fa, fd[1], 1);
+    posix_spawn_file_actions_adddup2(&fa, fd[1], 2);
+    pid_t pid;
+    int rc = posix_spawnp(&pid, argv[0], &fa, &attr, argv, environ);
+    posix_spawn_file_actions_destroy(&fa);
+    posix_spawnattr_destroy(&attr);
+    close(fd[1]);
+    if (rc != 0) {
+        close(fd[0]);
+        return err_set(err, "%s: %s", argv[0], strerror(rc)), false;
+    }
+    // Read to the end (the child must not block on a full pipe), keeping what fits.
+    size_t n = 0;
+    char chunk[512];
+    for (ssize_t r; (r = read(fd[0], chunk, sizeof chunk)) != 0;) {
+        if (r < 0 && errno == EINTR) continue;
+        if (r < 0) break;
+        size_t room = cap ? cap - 1 - n : 0, take = (size_t)r < room ? (size_t)r : room;
+        memcpy(out + n, chunk, take);
+        n += take;
+    }
+    close(fd[0]);
+    if (cap) out[n] = 0;
+    return true;
+}
+
+// The command that ejects the drive dev: unmount, then power off, each step saying it went (an
+// exit status can't be read, spawn_capture).
+static void eject_argv(const char *dev, const char **argv)
+{
+    argv[0] = "sh", argv[1] = "-c";
+    argv[2] = "udisksctl unmount -b \"$1\" && echo OFX-UNMOUNTED && udisksctl power-off -b \"$1\" && echo OFX-EJECTED";
+    argv[3] = "sh", argv[4] = dev, argv[5] = NULL;
+}
+
+typedef enum { EJECT_FAILED, EJECT_UNMOUNTED, EJECT_DONE } EjectResult;
+
+// What eject_argv's output says: ejected, unmounted only, or neither; *why gets the first line
+// that isn't ours (udisksctl's error), "" when there is none.
+static EjectResult eject_result(Str out, char *why, size_t cap)
+{
+    bool unmounted = false, done = false;
+    why[0] = 0;
+    isize at = 0;
+    for (Str line; next_line(out, &at, &line);) {
+        line = str_trim(line);
+        if (str_eq(line, S("OFX-UNMOUNTED"))) unmounted = true;
+        else if (str_eq(line, S("OFX-EJECTED"))) done = true;
+        else if (line.len && !why[0]) snprintf(why, cap, "%.*s", STR_ARG(line));
+    }
+    return done && unmounted ? EJECT_DONE : unmounted ? EJECT_UNMOUNTED : EJECT_FAILED;
+}

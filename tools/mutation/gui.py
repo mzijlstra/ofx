@@ -124,10 +124,10 @@ MUTANTS = [
     (G, "    tree_refresh(!same, app.ui.side.sel);\n", "    tree_refresh(false, app.ui.side.sel);\n"),
     (G, "    if (in_trash) trash_scan();\n", ""),
     (G, "        if (app.ui.in_trash && str_eq(path_base(files), S(\"files\")))\n            r->item[k++]", "        if (0)\n            r->item[k++]"),
-    (G, "            if (lstat(p, &st) == 0) r->item[k++] = (JobItem){ .src = arena_cstr(&r->arena, str_from_c(p)) };", ""),
+    (G, "        job_submit(r, JOB_DELETE, k);\n        r->trash = JOB_TRASH_EMPTY;", "        r->trash = JOB_TRASH_EMPTY;"),
     (G, "    app.ui.in_trash = in_trash;\n", ""),
     (G, "    case UA_RESTORE: trash_restore_targets(); break;\n", ""),
-    (G, "        if (ui_input_acts(&in)) app.status[0] = 0;", ""),
+    (G, "        if (ui_input_acts(&in) && ui_status_clears(app.status_bad, app.status_at, now_ms())) app.status[0] = 0;", ""),
     (G, "        if (state_path(path, sizeof path) && !state_save(path, &st, &err)) set_status(true, \"%s\", err.msg);", ""),
     (G, "    if (state_path(state_file, sizeof state_file)) app.ui.side_mode = state_load(&scratch, state_file).side;", ""),
     (G, "    case UA_SIDE_MODE: {\n        side_refresh();", "    case UA_SIDE_MODE: {"),
@@ -139,8 +139,13 @@ MUTANTS = [
     # F6 review
     (G, "        if (space_take(&app.places, app.cwd, &app.cwd_avail)) dirty = true;", ""),
     (G, "    space_ask(&app.places, app.cwd);\n    return true;", "    return true;"),
-    (G, "        if (at + k < n && doomed_all[at + k].after_ok) k--;\n", ""),
     (G, ".src = arena_cstr(&r->arena, str_from_c(doomed_all[at + i].path)), .after_ok = doomed_all[at + i].after_ok };", ".src = arena_cstr(&r->arena, str_from_c(doomed_all[at + i].path)) };"),
+    # F6.1
+    (G, "            if (drive) ui_size(avail, sizeof avail, hover ? p->size - p->avail : p->avail);", "            if (drive) ui_size(avail, sizeof avail, p->avail);"),
+    (G, "                if (hover && place_ejectable(p)) {", "                if (0) {"),
+    (G, "    if (h.side >= 0 && app.ui.side_mode == SIDE_PLACES && in_box(CLAY_IDI(\"side-eject\", h.side), x, y)) h.eject = h.side;", ""),
+    (G, "        if (eject_take()) dirty = true;", ""),
+    ('gui/eject.c', "    if (jobs_refuse(p->path)) return false;   // a job of ours writes there: it says so", ""),
 ]
 scratch = sys.argv[1]
 only = [int(x) for x in sys.argv[2].split(',')] if len(sys.argv) > 2 else None

@@ -690,3 +690,81 @@ static void test_trash_dirs_owned(void)
     CHECK(trash_dir_ours("/anything", TRASH_HOME));
     CHECK(!trash_dir_ours("/nonexistent/x", TRASH_USER));
 }
+
+// Eject's pieces (F6.1): a command's output read whole, and what eject's says.
+static void test_eject(void)
+{
+    char out[64];
+    Err err;
+    char *sh[] = { "sh", "-c", "echo out; echo err >&2; exit 3", NULL };
+    CHECK(spawn_capture(sh, out, sizeof out, &err) && strcmp(out, "out\nerr\n") == 0);
+    char small[5];
+    char *lots[] = { "sh", "-c", "seq 1000", NULL };   // more than fits: cut, read to its end
+    CHECK(spawn_capture(lots, small, sizeof small, &err) && strcmp(small, "1\n2\n") == 0);
+    char *none[] = { "/nonexistent/prog", NULL };
+    CHECK(!spawn_capture(none, out, sizeof out, &err) && strstr(err.msg, "/nonexistent/prog"));
+    // The command, with a fake udisksctl first on PATH that logs and succeeds, or fails a step.
+    mkdirs(at("ej/bin"));
+    put(at("ej/bin/udisksctl"), "#!/bin/sh\necho \"$*\" >> \"$EJ_LOG\"\n"
+                                "[ \"$1\" = \"$EJ_FAIL\" ] && { echo \"Error $1: target is busy\" >&2; exit 1; }\nexit 0\n");
+    chmod(at("ej/bin/udisksctl"), 0755);
+    char path[PATH_MAX * 2];
+    snprintf(path, sizeof path, "%s:%s", at("ej/bin"), getenv("PATH"));
+    env_set("PATH", path);
+    env_set("EJ_LOG", at("ej/log"));
+    const char *argv[6];
+    eject_argv("/dev/sd x1", argv);   // a space: passed as one word
+    char big[512], why[128];
+    env_set("EJ_FAIL", "none");
+    CHECK(spawn_capture((char *const *)argv, big, sizeof big, &err) && eject_result(str_from_c(big), why, sizeof why) == EJECT_DONE && !why[0]);
+    CHECK(strcmp(slurp(at("ej/log")), "unmount -b /dev/sd x1\npower-off -b /dev/sd x1\n") == 0);
+    env_set("EJ_FAIL", "power-off");
+    CHECK(spawn_capture((char *const *)argv, big, sizeof big, &err) && eject_result(str_from_c(big), why, sizeof why) == EJECT_UNMOUNTED);
+    CHECK(strstr(why, "power-off: target is busy"));
+    env_set("EJ_FAIL", "unmount");
+    put(at("ej/log"), "");
+    CHECK(spawn_capture((char *const *)argv, big, sizeof big, &err) && eject_result(str_from_c(big), why, sizeof why) == EJECT_FAILED);
+    CHECK(strstr(why, "unmount: target is busy") && strcmp(slurp(at("ej/log")), "unmount -b /dev/sd x1\n") == 0);   // no power-off after
+    env_restore(), env_restore(), env_restore(), env_restore(), env_restore();
+    // Reading the output.
+    CHECK(eject_result(S(""), why, sizeof why) == EJECT_FAILED && !why[0]);
+    CHECK(eject_result(S("OFX-EJECTED\n"), why, sizeof why) == EJECT_FAILED);   // never without the unmount
+    CHECK(eject_result(S("  OFX-UNMOUNTED \nOFX-EJECTED"), why, sizeof why) == EJECT_DONE);
+    CHECK(eject_result(S("\nfirst\nsecond\nOFX-UNMOUNTED\n"), why, sizeof why) == EJECT_UNMOUNTED && strcmp(why, "first") == 0);
+}
+
+static void test_eject_keys(void)
+{
+    static Ui u;
+    u = (Ui){ 0 };
+    UiNames names = { name_at, NULL };
+    ui_resize(&u.list, 10), ui_resize(&u.side, 4);
+    ui_set(&u.list, 5, 0), ui_set(&u.side, 8, 0);
+    u.side.top = 2;
+    UiInput in = ui_input_none();
+    CHECK(in.side_eject == -1);
+    in.side_eject = 1;
+    CHECK(ui_input_acts(&in));
+    UiAction a = ui_handle(&u, names, &in);
+    CHECK(a.kind == UA_EJECT && a.index == 3);
+    in.side_eject = 6;   // past the end
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE);
+    in.side_eject = 1;
+    u.side_mode = SIDE_TREE;   // no drives there
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE);
+    u.side_mode = SIDE_PLACES, u.confirming = true;   // not under a panel
+    CHECK(ui_handle(&u, names, &in).kind != UA_EJECT);
+}
+
+static void test_trash_empty_chunk(void)
+{
+    // file, info, file, info, stray, file, info
+    TrashDoomed d[] = { { "f1", false }, { "i1", true }, { "f2", false }, { "i2", true }, { "s", false }, { "f3", false }, { "i3", true } };
+    CHECK(trash_empty_chunk(d, 7, 0, 10) == 7);   // all fit
+    CHECK(trash_empty_chunk(d, 7, 0, 2) == 2);    // ends after i1
+    CHECK(trash_empty_chunk(d, 7, 0, 3) == 2);    // would end on f2 without i2: f2 waits
+    CHECK(trash_empty_chunk(d, 7, 2, 3) == 3);    // f2 i2 s
+    CHECK(trash_empty_chunk(d, 7, 5, 3) == 2);    // the rest
+    CHECK(trash_empty_chunk(d, 7, 4, 2) == 1);    // s, then f3 with i3 next time
+    CHECK(trash_empty_chunk(d, 7, 7, 3) == 0);
+}
