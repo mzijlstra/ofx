@@ -16,6 +16,7 @@
 # - XDG_CONFIG_HOME=<scratch-dir>/config: the sidebar's GTK bookmarks and the XDG user dirs come
 #   from there (empty unless the caller wrote them), never from Michael's;
 # - XDG_DATA_HOME=<scratch-dir>/data: the home trash is <scratch-dir>/data/Trash, never his;
+# - OFX_TEST_MOUNTINFO, when set, is passed on: the mount list read instead of /proc/self/mountinfo;
 # - OFX_TEST_HOME, when set, becomes the window's HOME (a scratch home for the path buttons' test);
 # - OFX_GUI_SHOTS=<scratch-dir>/shots for the script's shots, OFX_GUI_ROOT=<scratch-dir> for its
 #   sh guard and ofx's own (fs/ops.c: no write outside it).
@@ -58,7 +59,7 @@ cat > "$T/launch.sh" <<EOS
 echo \$\$ > "$T/run.pid"
 exec env -u DISPLAY -u WAYLAND_SOCKET WAYLAND_DISPLAY="$sock" OFX_TEST_SIZE=936x490 ${script_env} OFX_GUI_ROOT="$T" OFX_GUI_SHOTS="$T/shots" PATH="$T/fakes:\$PATH" XDG_STATE_HOME="$T/state" XDG_CONFIG_HOME="$T/config" XDG_DATA_HOME="$T/data" \
   LSAN_OPTIONS=suppressions=$root/gui/lsan.supp ASAN_OPTIONS=log_path="$T/asan" ${OFX_TEST_LEAK:+OFX_TEST_LEAK=1} \
-  ${OFX_TEST_WATCH_DELAY_MS:+OFX_TEST_WATCH_DELAY_MS=$OFX_TEST_WATCH_DELAY_MS} ${OFX_TEST_COPY_DELAY_MS:+OFX_TEST_COPY_DELAY_MS=$OFX_TEST_COPY_DELAY_MS} ${OFX_TEST_CROSS:+OFX_TEST_CROSS=1} ${OFX_TEST_HOME:+HOME=$OFX_TEST_HOME} ${OFX_TEST_COUNT_DELAY_MS:+OFX_TEST_COUNT_DELAY_MS=$OFX_TEST_COUNT_DELAY_MS} \
+  ${OFX_TEST_WATCH_DELAY_MS:+OFX_TEST_WATCH_DELAY_MS=$OFX_TEST_WATCH_DELAY_MS} ${OFX_TEST_COPY_DELAY_MS:+OFX_TEST_COPY_DELAY_MS=$OFX_TEST_COPY_DELAY_MS} ${OFX_TEST_CROSS:+OFX_TEST_CROSS=1} ${OFX_TEST_HOME:+HOME=$OFX_TEST_HOME} ${OFX_TEST_COUNT_DELAY_MS:+OFX_TEST_COUNT_DELAY_MS=$OFX_TEST_COUNT_DELAY_MS} ${OFX_TEST_MOUNTINFO:+OFX_TEST_MOUNTINFO=$OFX_TEST_MOUNTINFO} \
   "$bin" $args >"$T/out" 2>"$T/err"
 EOS
 chmod +x "$T/launch.sh"

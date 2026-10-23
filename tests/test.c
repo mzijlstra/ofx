@@ -1097,6 +1097,64 @@ static void test_side(void)
     CHECK(ui_handle(&u, names, &in).kind == UA_NONE);
 }
 
+// The sidebar's headings (F6): the cursor steps over them, a click on one does nothing.
+static void test_side_heads(void)
+{
+    static Ui u;
+    u = (Ui){ 0 };
+    UiNames names = { name_at, NULL };
+    // 0 Places, 1 Home, 2 Trash, 3 Drives, 4 /, 5 sd
+    static const u8 HEAD[] = { 1, 0, 0, 1, 0, 0 };
+    u.side_head = HEAD;
+    ui_resize(&u.list, 10), ui_resize(&u.side, 3);
+    ui_set(&u.list, 5, 0), ui_set(&u.side, 6, 0);
+    UiInput in = keys(1, UK_TAB);   // the keys to the sidebar: off the first heading
+    ui_handle(&u, names, &in);
+    CHECK(u.side_focus && u.side.sel == 1 && u.side.top == 0);
+    in = keys(2, UK_DOWN, UK_DOWN);   // over Drives to /
+    ui_handle(&u, names, &in);
+    CHECK(u.side.sel == 4 && u.side.top == 2);
+    in = keys(1, UK_UP);   // back over it
+    ui_handle(&u, names, &in);
+    CHECK(u.side.sel == 2);
+    in = keys(1, UK_HOME);   // to the top: Home, with its heading in view
+    ui_handle(&u, names, &in);
+    CHECK(u.side.sel == 1 && u.side.top == 0);
+    in = keys(1, UK_END);
+    ui_handle(&u, names, &in);
+    CHECK(u.side.sel == 5);
+    in = keys(1, UK_UP);   // / with Drives above it in view
+    ui_handle(&u, names, &in);
+    CHECK(u.side.sel == 4 && u.side.top == 3);
+    // A click on a heading does nothing; on a row it goes there.
+    in = ui_input_none();
+    in.side_click = 0;   // top 3: Drives
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.side.sel == 4);
+    in.side_click = 2;
+    UiAction a = ui_handle(&u, names, &in);
+    CHECK(a.kind == UA_PLACE && a.index == 5);
+    in = ui_input_none();
+    in.mid_side = 0;
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE);
+    in.mid_side = 1;
+    CHECK(ui_handle(&u, names, &in).kind == UA_TAB_BG_PLACE);
+    // Headings at the end: the cursor goes back up off them.
+    static const u8 TAIL[] = { 0, 0, 1, 1 };
+    u.side_head = TAIL;
+    ui_set(&u.side, 4, 1);
+    u.side_focus = true;
+    in = keys(1, UK_DOWN);
+    ui_handle(&u, names, &in);
+    CHECK(u.side.sel == 1);
+    // All headings: the cursor stays where it is.
+    static const u8 ALL[] = { 1, 1 };
+    u.side_head = ALL;
+    ui_set(&u.side, 2, 0);
+    in = keys(1, UK_DOWN);
+    ui_handle(&u, names, &in);
+    CHECK(u.side.sel == 1);
+}
+
 static void test_history(void)
 {
     static UiHistory h;
@@ -1167,9 +1225,9 @@ static void test_places(void)
     Places pl;
     places_load(&ta, &pl, at("places/bookmarks"), at("places/mountinfo"));
     const char *want[][2] = {
-        { "/home/m", "Home" }, { "/home/m/Pictures", "Pictures" }, { "/home/m/My Docs", "My Docs" },
-        { "/home/m/Downloads", "Downloads" }, { "/", "/" }, { "/mnt/sd", "sd" },
-        { "/run/media/m/USB Stick", "USB Stick" }, { "/media/cd", "cd" },
+        { "", "Places" }, { "/home/m", "Home" }, { "/home/m/Pictures", "Pictures" }, { "/home/m/My Docs", "My Docs" },
+        { "/home/m/Downloads", "Downloads" }, { "/", "/" }, { TRASH_URI, "Trash" }, { "", "Drives" }, { "/", "File System" },
+        { "/mnt/sd", "sd" }, { "/run/media/m/USB Stick", "USB Stick" }, { "/media/cd", "cd" },
     };
     CHECK(pl.n == COUNT(want));
     for (int i = 0; i < pl.n && i < COUNT(want); i++) {
@@ -1177,13 +1235,15 @@ static void test_places(void)
             fprintf(stderr, "place %d: %s (%s)\n", i, pl.p[i].path, pl.p[i].label);
         CHECK(strcmp(pl.p[i].path, want[i][0]) == 0 && strcmp(pl.p[i].label, want[i][1]) == 0);
     }
-    CHECK(pl.p[0].kind == PL_HOME && pl.p[1].kind == PL_BOOKMARK && pl.p[4].kind == PL_BOOKMARK);   // "/" came as a bookmark first
-    CHECK(pl.p[5].kind == PL_MOUNT && pl.p[6].kind == PL_REMOVABLE && pl.p[7].kind == PL_REMOVABLE);
-    CHECK(places_current(&pl, "/home/m/Pictures/2026") == 1);
-    CHECK(places_current(&pl, "/home/m/Picturesque") == 0);   // a prefix that isn't a folder above
-    CHECK(places_current(&pl, "/home/m") == 0);
-    CHECK(places_current(&pl, "/etc") == 4);
-    CHECK(places_current(&pl, "/mnt/sd/Downloads") == 5);
+    CHECK(pl.p[0].kind == PL_HEAD && pl.p[1].kind == PL_HOME && pl.p[2].kind == PL_BOOKMARK && pl.p[5].kind == PL_BOOKMARK);
+    CHECK(pl.p[6].kind == PL_TRASH && pl.p[7].kind == PL_HEAD && pl.p[8].kind == PL_ROOT);   // "/" as a bookmark and as a drive
+    CHECK(pl.p[9].kind == PL_MOUNT && pl.p[10].kind == PL_REMOVABLE && pl.p[11].kind == PL_REMOVABLE);
+    CHECK(places_current(&pl, "/home/m/Pictures/2026") == 2);
+    CHECK(places_current(&pl, "/home/m/Picturesque") == 1);   // a prefix that isn't a folder above
+    CHECK(places_current(&pl, "/home/m") == 1);
+    CHECK(places_current(&pl, "/etc") == 5);                  // the bookmark before the drive
+    CHECK(places_current(&pl, "/mnt/sd/Downloads") == 9);
+    CHECK(places_current(&pl, TRASH_URI) == 6);
     env_restore();
     // The real mountinfo, through procfs: "/" is in it.
     env_set("HOME", "/home/m");
@@ -1192,15 +1252,35 @@ static void test_places(void)
     for (int i = 0; i < pl.n; i++) root_seen |= pl.p[i].kind == PL_ROOT;
     CHECK(root_seen);
     env_restore();
-    // Without bookmarks: home, then "/" from mountinfo as File System.
+    // Without bookmarks: home, Trash, then "/" from mountinfo as File System.
     env_set("HOME", "/home/m");
     places_load(&ta, &pl, at("places/none"), at("places/mountinfo"));
-    CHECK(pl.n == 5 && pl.p[1].kind == PL_ROOT && strcmp(pl.p[1].label, "File System") == 0);
+    CHECK(pl.n == 8 && pl.p[2].kind == PL_TRASH && pl.p[4].kind == PL_ROOT && strcmp(pl.p[4].label, "File System") == 0);
+    // A drive's space: none read yet; a drive that is there has a size and room up to it; one
+    // that is gone has none, and that is a change.
+    CHECK(pl.p[4].size == 0 && pl.p[5].size == 0);
+    snprintf(pl.p[5].path, sizeof pl.p[5].path, "%s", at("places"));
+    snprintf(pl.p[6].path, sizeof pl.p[6].path, "%s", at("places/gone"));
+    pl.p[6].size = pl.p[6].avail = 1;
+    snprintf(pl.p[1].path, sizeof pl.p[1].path, "%s", at("places"));   // Home: not a drive, not read
+    CHECK(places_space(&pl));
+    CHECK(pl.p[5].size > 0 && pl.p[5].avail > 0 && pl.p[5].avail <= pl.p[5].size);
+    CHECK(pl.p[6].size == 0 && pl.p[6].avail == 0 && pl.p[1].size == 0);
+    pl.n = 7;
+    for (int i = 0; i < 5; i++) pl.p[i].kind = PL_HEAD;
+    pl.p[5].kind = pl.p[6].kind = PL_HOME;   // nothing a drive: nothing read, nothing changed
+    pl.p[6].size = 5;
+    CHECK(!places_space(&pl) && pl.p[6].size == 5);
+    pl.p[6].kind = PL_MOUNT;   // gone, its size 0 already: no change either
+    pl.p[6].size = pl.p[6].avail = 0;
+    CHECK(!places_space(&pl));
+    pl.p[6].avail = 3;         // the free space alone changed
+    CHECK(places_space(&pl));
     env_restore();
-    // No HOME: no Home place.
+    // No HOME: no Home place, the headings and Trash.
     env_set("HOME", NULL);
     places_load(&ta, &pl, at("places/none"), at("places/none"));
-    CHECK(pl.n == 0 && places_current(&pl, "/x") == -1);
+    CHECK(pl.n == 3 && pl.p[1].kind == PL_TRASH && places_current(&pl, "/x") == -1);
     env_restore();
     // Icons.
     UserDirs ud = { 0 };
@@ -1217,6 +1297,8 @@ static void test_places(void)
     CHECK(place_icon_names(&p, &ud, names) == 2 && str_eq(names[0], S("drive-harddisk")));
     p.kind = PL_MOUNT;
     CHECK(place_icon_names(&p, &ud, names) == 2 && str_eq(names[0], S("drive-harddisk")));
+    p.kind = PL_TRASH;
+    CHECK(place_icon_names(&p, &ud, names) == 2 && str_eq(names[0], S("user-trash")));
     snprintf(p.path, sizeof p.path, "/elsewhere");
     p.kind = PL_BOOKMARK;
     CHECK(place_icon_names(&p, &ud, names) == 1 && str_eq(names[0], S("folder")));
@@ -1375,6 +1457,7 @@ int main(void)
     test_side();
     test_history();
     test_places();
+    test_side_heads();
     test_sort();
     test_timing();
     test_fit();

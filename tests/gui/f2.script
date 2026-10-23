@@ -88,12 +88,12 @@ key backspace
 key tab
 expect sidefocus=1
 char j
-expect side=1 place=Bee
+expect side=2 place=Bee
 key enter
 expect sel=in-b.txt here=Bee
-press-side 2
+press-side 3
 expect sel=adir here=Tree
-point-ui side-row 1
+point-ui side-row 2
 click-here
 expect sel=in-b.txt here=Bee
 key esc

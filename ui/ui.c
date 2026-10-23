@@ -139,6 +139,7 @@ typedef struct {
 typedef struct {
     UiList list, side;
     bool   side_focus;       // the keys move the sidebar's cursor
+    const u8 *side_head;     // a byte per sidebar row, 1 for a heading (F6), never the cursor's; NULL: none
     bool   finding;          // the find line is open
     bool   find_miss;        // its text matches nothing
     char   find[UI_FIND_MAX];
@@ -230,6 +231,32 @@ static void ui_move(UiList *l, isize by)
     if (l->n == 0) return;
     l->sel = ui_clamp(l->sel + by, 0, l->n - 1);
     ui_show_sel(l);
+}
+
+static bool ui_side_head(const Ui *u, isize i)
+{
+    return u->side_head && i >= 0 && i < u->side.n && u->side_head[i];
+}
+
+// The sidebar's cursor off a heading: on the way it moved (dir 1 down, -1 up), else back the
+// other way; a heading right above it kept in view.
+static void ui_side_settle(Ui *u, int dir)
+{
+    UiList *s = &u->side;
+    isize i = s->sel;
+    while (ui_side_head(u, i)) i += dir;
+    if (i < 0 || i >= s->n)
+        for (i = s->sel; ui_side_head(u, i);) i -= dir;
+    if (i >= 0 && i < s->n) s->sel = i;
+    ui_show_sel(s);
+    if (s->top == s->sel && ui_side_head(u, s->sel - 1)) s->top--;
+}
+
+// A move of the list's cursor or the sidebar's.
+static void ui_step(Ui *u, UiList *m, isize by)
+{
+    ui_move(m, by);
+    if (m == &u->side) ui_side_settle(u, by < 0 ? -1 : 1);
 }
 
 // ---- find -------------------------------------------------------------------------------------
@@ -671,6 +698,7 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         u->sort = ui_sort_click(u->sort, (SortKey)in->header);
         return (UiAction){ UA_SORT, 0, false };
     }
+    if (!prompt && in->side_click >= 0 && ui_side_head(u, u->side.top + in->side_click)) return (UiAction){ UA_NONE, 0, false };
     if (!prompt && in->side_click >= 0 && u->side.top + in->side_click < u->side.n) {
         u->side.sel = u->side.top + in->side_click;
         ui_edit_close(u);
@@ -679,7 +707,7 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
     if (!prompt && in->tab_close >= 0) return ui_edit_close(u), (UiAction){ UA_TAB_CLOSE, in->tab_close, false };
     if (!prompt && in->tab_click >= 0) return ui_edit_close(u), (UiAction){ UA_TAB_SHOW, in->tab_click, false };
     if (!prompt && in->mid_row >= 0 && l->top + in->mid_row < l->n) return (UiAction){ UA_TAB_BG_ROW, l->top + in->mid_row, false };
-    if (!prompt && in->mid_side >= 0 && u->side.top + in->mid_side < u->side.n) return (UiAction){ UA_TAB_BG_PLACE, u->side.top + in->mid_side, false };
+    if (!prompt && in->mid_side >= 0 && u->side.top + in->mid_side < u->side.n && !ui_side_head(u, u->side.top + in->mid_side)) return (UiAction){ UA_TAB_BG_PLACE, u->side.top + in->mid_side, false };
     if (!prompt && in->mid_crumb >= 0) return (UiAction){ UA_TAB_BG_CRUMB, in->mid_crumb, false };
     if (!prompt && in->bar != UB_NONE) {
         switch (in->bar) {
@@ -792,12 +820,12 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
             }
         }
         switch (key) {
-        case UK_UP: ui_move(m, -1); break;
-        case UK_DOWN: ui_move(m, 1); break;
-        case UK_PAGEUP: ui_move(m, -page); break;
-        case UK_PAGEDOWN: ui_move(m, page); break;
-        case UK_HOME: ui_move(m, -m->n); break;
-        case UK_END: ui_move(m, m->n); break;
+        case UK_UP: ui_step(u, m, -1); break;
+        case UK_DOWN: ui_step(u, m, 1); break;
+        case UK_PAGEUP: ui_step(u, m, -page); break;
+        case UK_PAGEDOWN: ui_step(u, m, page); break;
+        case UK_HOME: ui_step(u, m, -m->n); break;
+        case UK_END: ui_step(u, m, m->n); break;
         case UK_ENTER:
         case UK_RIGHT:
             if (u->side_focus && u->side.n > 0) return (UiAction){ UA_PLACE, u->side.sel, false };
@@ -805,7 +833,10 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
             break;
         case UK_LEFT:
         case UK_BACKSPACE: return (UiAction){ UA_PARENT, 0, false };
-        case UK_TAB: u->side_focus = !u->side_focus && u->side.n > 0; break;
+        case UK_TAB:
+            u->side_focus = !u->side_focus && u->side.n > 0;
+            if (u->side_focus) ui_side_settle(u, 1);
+            break;
         case UK_ESC:
             // The selection, then the sidebar's keyboard (a job is cancelled from its row, F5.3).
             if (u->marked) ui_mark_clear(u);

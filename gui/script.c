@@ -136,6 +136,18 @@ static void script_state(char *out, size_t cap)
         size_t k = strlen(tabdirs);
         snprintf(tabdirs + k, sizeof tabdirs - k, "%s%.*s", i ? "|" : "", STR_ARG(strcmp(d, "/") == 0 ? S("/") : path_base(str_from_c(d))));
     }
+    // The sidebar's rows (F6): labels, '|' between, a heading with a '^' first, spaces as '_'; how
+    // many drives have their space read.
+    char sides[2048] = "";
+    int spaced = 0;
+    for (int i = 0; i < app.places.n; i++) {
+        const Place *p = &app.places.p[i];
+        size_t k = strlen(sides);
+        snprintf(sides + k, sizeof sides - k, "%s%s%s", i ? "|" : "", p->kind == PL_HEAD ? "^" : "", p->label);
+        spaced += place_is_drive(p->kind) && p->size > 0;
+    }
+    for (char *c = sides; *c; c++)
+        if (*c == ' ') *c = '_';
     // The cursor's Size cell as drawn, its spaces as '_'.
     char sizecell[64] = "-";
     if (app.have_list && app.ui.list.n > 0) {
@@ -155,7 +167,8 @@ static void script_state(char *out, size_t cap)
              "shown=%d sort=%s rev=%d finding=%d miss=%d find=%.*s last=%.*s side=%td sidefocus=%d place=%s here=%s "
              "back=%d fwd=%d marked=%td editing=%d edit=%s confirming=%d asking=%d job=%s done=%lld/%lld undo=%s clip=%td cut=%d "
              "sysclip=%d modal=%s askall=%d tabs=%d tab=%d tabdirs=%s sizecell=%s crumbs=%s crumbhome=%d crumb=%d crumbshown=%d-%d arrows=%d locating=%d cnt=%s "
-             "esel=%d-%d caret=%d copied=%s crumbkey=%s jobs=%d waiting=%d jobrows=%s jobkey=%s jobline=%d jobspeed=%d clashjob=%s status=%s",
+             "esel=%d-%d caret=%d copied=%s crumbkey=%s jobs=%d waiting=%d jobrows=%s jobkey=%s jobline=%d jobspeed=%d clashjob=%s "
+             "sides=%s spaced=%d status=%s",
              app.cwd, app.list.n, app.list.hidden, STR_ARG(sel), app.ui.list.sel, app.ui.list.top, app.ui.list.rows, app.hover,
              t->accent.r, t->accent.g, t->accent.b, t->bg.r, t->bg.g, t->bg.b, t->icons[0] ? t->icons : "-",
              app.icon_scale, GetScreenWidth(), GetScreenHeight(), app.reloads, app.themes, atomic_load(&watch.batches),
@@ -170,7 +183,7 @@ static void script_state(char *out, size_t cap)
              UNDO_KINDS[undo.kind], own.n, own.cut, clip.ok, MODALS[modal_kind()], app.ui.ask_all, tabbar.n, tabbar.cur, tabdirs, sizecell, crumbs, app.crumbs.seg[0].home ? 0 : -1, app.crumbs.cur, app.crumb_lo, app.crumb_hi, app.crumb_arrows,
              app.ui.editing && app.ui.edit_path, cnt, slo, shi, app.ui.caret, copied, keyed,
              jobs.nrun, jobs.nwait, joblabels, jobkey, oldest ? oldest->line.reached : 0, oldest && oldest->line.now > 0, clashjob,
-             app.status[0] ? app.status : "-");
+             sides[0] ? sides : "-", spaced, app.status[0] ? app.status : "-");
     frame_us_max = 0;
 }
 

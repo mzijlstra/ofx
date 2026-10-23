@@ -1,21 +1,28 @@
-// The sidebar's places (docs/plan.md, F2 "Sidebar"): Home, the GTK bookmarks (shared with Nemo),
-// then `/` and what is mounted under /mnt, /media or /run/media. A path appears once, at its
-// first place in that order.
+// The sidebar's places (docs/plan.md, F2 "Sidebar", F6 "Places mode"), in two sections, each
+// under a heading row: Places, with Home first, the GTK bookmarks (shared with Nemo) and Trash
+// last; Drives, with `/` and what is mounted under /mnt, /media or /run/media, each with its size
+// and free space. A path appears once in each section, at its first place in it.
 
 #include "../base/base.h"
 
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/statvfs.h>
 
 enum { PLACES_MAX = 64 };
 
-typedef enum { PL_HOME, PL_BOOKMARK, PL_ROOT, PL_MOUNT, PL_REMOVABLE } PlaceKind;
+// The trash view's folder name: no real path, so nothing that writes into a folder can take it for
+// one (gio and Nemo name it the same).
+#define TRASH_URI "trash:///"
+
+typedef enum { PL_HEAD, PL_HOME, PL_BOOKMARK, PL_TRASH, PL_ROOT, PL_MOUNT, PL_REMOVABLE } PlaceKind;
 
 typedef struct {
-    char      path[PATH_MAX];
+    char      path[PATH_MAX];   // "" for a heading
     char      label[256];
     PlaceKind kind;
+    i64       size, avail;      // a drive's, in bytes (places_space); size 0 when unknown
 } Place;
 
 typedef struct {
@@ -59,18 +66,32 @@ static bool octal_decode(Str s, char *out, size_t cap)
     return true;
 }
 
-static bool places_has(const Places *pl, const char *path)
+static bool place_is_drive(PlaceKind k)
+{
+    return k == PL_ROOT || k == PL_MOUNT || k == PL_REMOVABLE;
+}
+
+// Whether path is a place already in its section (a drive among the drives, else among the rest).
+static bool places_has(const Places *pl, PlaceKind kind, const char *path)
 {
     for (int i = 0; i < pl->n; i++)
-        if (strcmp(pl->p[i].path, path) == 0) return true;
+        if (place_is_drive(pl->p[i].kind) == place_is_drive(kind) && strcmp(pl->p[i].path, path) == 0) return true;
     return false;
+}
+
+static void places_head(Places *pl, const char *label)
+{
+    if (pl->n == PLACES_MAX) return;
+    Place *p = &pl->p[pl->n++];
+    *p = (Place){ .kind = PL_HEAD };
+    snprintf(p->label, sizeof p->label, "%s", label);
 }
 
 static void places_add(Places *pl, PlaceKind kind, const char *path, Str label)
 {
-    if (pl->n == PLACES_MAX || !path[0] || places_has(pl, path)) return;
+    if (pl->n == PLACES_MAX || !path[0] || places_has(pl, kind, path)) return;
     Place *p = &pl->p[pl->n++];
-    p->kind = kind;
+    *p = (Place){ .kind = kind };
     snprintf(p->path, sizeof p->path, "%s", path);
     if (label.len == 0) label = strcmp(path, "/") == 0 ? S("/") : path_base(str_from_c(path));
     snprintf(p->label, sizeof p->label, "%.*s", STR_ARG(label));
@@ -118,14 +139,45 @@ static void places_add_mounts(Places *pl, Str text)
     }
 }
 
-// Home, the bookmarks file, the mountinfo file; scratch holds only the files' text.
+// A drive's size and free space (what an unprivileged user may still write), by statvfs; size 0
+// when it can't be read.
+static void place_space(Place *p)
+{
+    struct statvfs v;
+    if (statvfs(p->path, &v) != 0) {
+        p->size = p->avail = 0;
+        return;
+    }
+    p->size = (i64)v.f_blocks * (i64)v.f_frsize;
+    p->avail = (i64)v.f_bavail * (i64)v.f_frsize;
+}
+
+// Every drive's space read again; true when any changed.
+static bool places_space(Places *pl)
+{
+    bool changed = false;
+    for (int i = 0; i < pl->n; i++) {
+        Place *p = &pl->p[i];
+        if (!place_is_drive(p->kind)) continue;
+        i64 size = p->size, avail = p->avail;
+        place_space(p);
+        changed |= p->size != size || p->avail != avail;
+    }
+    return changed;
+}
+
+// The Places section (Home, the bookmarks file, Trash) and the Drives section (the mountinfo
+// file), each under its heading; scratch holds only the files' text. No drive's space yet.
 static void places_load(Arena *scratch, Places *pl, const char *bookmarks, const char *mountinfo)
 {
     pl->n = 0;
+    places_head(pl, "Places");
     const char *home = getenv("HOME");
     if (home && home[0]) places_add(pl, PL_HOME, home, S("Home"));
     ArenaMark mark = arena_mark(scratch);
     places_add_bookmarks(pl, read_file(scratch, bookmarks));
+    places_add(pl, PL_TRASH, TRASH_URI, S("Trash"));
+    places_head(pl, "Drives");
     places_add_mounts(pl, read_file(scratch, mountinfo));
     arena_restore(scratch, mark);
 }
@@ -139,12 +191,15 @@ static const char *bookmarks_path(char *buf, size_t cap)
     return buf;
 }
 
-// The place holding path: the longest one that is path or a folder above it; -1 for none.
+// The place holding path: the longest one that is path or a folder above it, the first of two the
+// same (a bookmark before its drive); Trash for the trash view; -1 for none.
 static int places_current(const Places *pl, const char *path)
 {
     int best = -1;
     size_t best_n = 0;
     for (int i = 0; i < pl->n; i++) {
+        if (pl->p[i].kind == PL_TRASH && strcmp(path, TRASH_URI) == 0) return i;
+        if (pl->p[i].kind == PL_HEAD || pl->p[i].kind == PL_TRASH) continue;
         const char *p = pl->p[i].path;
         size_t n = strlen(p);
         bool in = strcmp(p, "/") == 0 || (strncmp(path, p, n) == 0 && (path[n] == 0 || path[n] == '/'));
@@ -161,6 +216,7 @@ static isize place_icon_names(const Place *p, const UserDirs *u, Str *names)
     case PL_ROOT:
     case PL_MOUNT: names[n++] = S("drive-harddisk"); break;
     case PL_REMOVABLE: names[n++] = S("drive-removable-media"), names[n++] = S("drive-harddisk"); break;
+    case PL_TRASH: names[n++] = S("user-trash"); break;
     default: {
         Str special = user_dir_icon(u, p->path);
         if (special.len) names[n++] = special;

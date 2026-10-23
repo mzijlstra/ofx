@@ -15,6 +15,7 @@
 #include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/statvfs.h>
 #include <time.h>
 
 // Vendored, and included with -isystem so our warning flags do not apply to them.
@@ -79,7 +80,9 @@ static struct {
     UiPress   press;
     bool      show_hidden;
     Places    places;
+    u8        place_head[PLACES_MAX];   // 1 for a heading row (app.ui.side_head)
     int       place_cur;    // the place holding cwd, -1 for none
+    i64       cwd_avail;    // the free space on cwd's drive, -1 unknown
     int       side_hover;   // the sidebar row under the pointer, -1 for none
     char      status[600];
     bool      status_bad;
@@ -275,7 +278,33 @@ static bool go_to_in(const char *dir, Str select, isize fallback, bool stepping)
         SetWindowTitle(TextFormat("ofx: %s", app.cwd));
     }
     ui_set(&app.ui.list, l.n, sel);
+    // The drives' space moves with what changes on them; read it with every listing.
+    struct statvfs v;
+    app.cwd_avail = statvfs(app.cwd, &v) == 0 ? (i64)v.f_bavail * (i64)v.f_frsize : -1;
+    places_space(&app.places);
     return true;
+}
+
+// The places read again (at the start, a drive mounted or gone): the sidebar's cursor stays on its
+// place, found by path and kind, else on the first row that isn't a heading.
+static void places_reload(void)
+{
+    Place keep = { 0 };
+    if (app.places.n) keep = app.places.p[app.ui.side.sel];
+    char bm[PATH_MAX];
+    places_load(&scratch, &app.places, bookmarks_path(bm, sizeof bm), mountinfo_path());
+    places_space(&app.places);
+    isize sel = 0;
+    for (int i = 0; i < app.places.n; i++) {
+        app.place_head[i] = app.places.p[i].kind == PL_HEAD;
+        if (keep.kind != PL_HEAD && app.places.p[i].kind == keep.kind && strcmp(app.places.p[i].path, keep.path) == 0) sel = i;
+    }
+    app.ui.side_head = app.place_head;
+    isize top = app.ui.side.top;
+    ui_set(&app.ui.side, app.places.n, sel);
+    app.ui.side.top = ui_clamp(top, 0, ui_max_top(&app.ui.side));
+    ui_side_settle(&app.ui, 1);
+    app.place_cur = places_current(&app.places, app.cwd);
 }
 
 static bool go_to(const char *dir, Str select, isize fallback)
@@ -986,6 +1015,28 @@ static void icon_box(Clay_ElementId id, IconSlot *icon, int px)
                .image = { .imageData = icon && icon->tex.id ? &icon->tex : NULL } }) {}
 }
 
+// a mixed into b: t of a.
+static Clay_Color mix(Rgb a, Rgb b, float t)
+{
+    return (Clay_Color){ a.r * t + b.r * (1 - t), a.g * t + b.g * (1 - t), a.b * t + b.b * (1 - t), 255 };
+}
+
+// A drive's fullness: a thin bar under its name, the used part in the accent (red from 90% on).
+static void drive_bar(int r, const Place *p, float w)
+{
+    Theme *t = &app.theme;
+    float used = p->size > 0 ? 1.0f - (float)p->avail / (float)p->size : 0;
+    if (used < 0) used = 0;
+    if (used > 1) used = 1;
+    CLAY(CLAY_IDI("side-bar", r), { .layout = { .sizing = { CLAY_SIZING_FIXED(w), CLAY_SIZING_FIXED(3) } },
+                                    .backgroundColor = mix(t->fg_dim, t->bg_light, 0.3f) }) {
+        CLAY(CLAY_IDI("side-used", r), { .layout = { .sizing = { CLAY_SIZING_FIXED(w * used), CLAY_SIZING_GROW(0) } },
+                                         .backgroundColor = used >= 0.9f ? cc(t->red) : cc(t->accent) }) {}
+    }
+}
+
+// The places mode (F6): the two headings, the places under each; a drive with its free space on
+// the right and its fullness under its name.
 static void layout_side(float h)
 {
     Theme *t = &app.theme;
@@ -995,16 +1046,38 @@ static void layout_side(float h)
         UiList *sl = &app.ui.side;
         for (int r = 0; r < sl->rows && sl->top + r < sl->n; r++) {
             int i = (int)(sl->top + r);
+            const Place *p = &app.places.p[i];
+            if (p->kind == PL_HEAD) {
+                CLAY(CLAY_IDI("side-row", r), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(SIDE_ROW_H) },
+                                                            .padding = { PAD, PAD, 6, 0 }, .childAlignment = { .y = CLAY_ALIGN_Y_BOTTOM } } }) {
+                    text(cz(p->label), cc(t->fg_dim));
+                }
+                continue;
+            }
             bool cursor = app.ui.side_focus && i == sl->sel, here = i == app.place_cur, hover = r == app.side_hover;
+            bool drive = place_is_drive(p->kind) && p->size > 0;
             Clay_Color bg = cursor ? cc(t->selection) : hover ? cc(t->bg) : cc(t->bg_light);
+            char avail[32] = "";
+            if (drive) ui_size(avail, sizeof avail, p->avail);
+            Str free_s = str_from_c(arena_sprintf(&frame, "%s", avail));
+            float room = SIDE_W - 2 * PAD - SIDE_ICON_PX - 8 - (drive ? str_width(free_s) + 8 : 0);
             CLAY(CLAY_IDI("side-row", r), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(SIDE_ROW_H) },
                                                         .padding = { PAD, PAD, 0, 0 }, .childGap = 8,
                                                         .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
                                             .backgroundColor = bg,
                                             .border = { .color = cc(t->accent), .width = { .left = cursor ? 3 : 0 } } }) {
                 icon_box(CLAY_IDI("side-icon", r), place_icon(i), SIDE_ICON_PX);
-                Str label = str_from_c(app.places.p[i].label);
-                text(fit(label, SIDE_W - 2 * PAD - SIDE_ICON_PX - 8, false), here ? cc(t->accent) : cc(t->fg));
+                CLAY(CLAY_IDI("side-text", r), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .layoutDirection = CLAY_TOP_TO_BOTTOM,
+                                                             .childGap = 3 } }) {
+                    CLAY(CLAY_IDI("side-line", r), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .childGap = 8 } }) {
+                        text(fit(str_from_c(p->label), room, false), here ? cc(t->accent) : cc(t->fg));
+                        if (drive) {
+                            CLAY(CLAY_IDI("side-gap", r), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(1) } } }) {}
+                            text(cs(free_s), cc(t->fg_dim));
+                        }
+                    }
+                    if (drive) drive_bar(r, p, SIDE_W - 2 * PAD - SIDE_ICON_PX - 8);
+                }
             }
         }
     }
@@ -1031,12 +1104,6 @@ static void layout_cols(void)
             }
         }
     }
-}
-
-// a mixed into b: t of a.
-static Clay_Color mix(Rgb a, Rgb b, float t)
-{
-    return (Clay_Color){ a.r * t + b.r * (1 - t), a.g * t + b.g * (1 - t), a.b * t + b.b * (1 - t), 255 };
 }
 
 // A run of the edit line's text: at most `most` wide (cut with "…" from the end, or from its
@@ -2033,9 +2100,7 @@ int main(int argc, char **argv)
     counts.delay_ms = kdelay ? atoi(kdelay) : 0;
     if (counts.delay_ms < 0 || counts.delay_ms > 10000) counts.delay_ms = 0;
     count_start();
-    char bm[PATH_MAX];
-    places_load(&scratch, &app.places, bookmarks_path(bm, sizeof bm), "/proc/self/mountinfo");
-    ui_set(&app.ui.side, app.places.n, 0);
+    places_reload();
     ui_resize(&app.ui.list, list_rows(GetScreenHeight()));
     ui_resize(&app.ui.side, side_rows(GetScreenHeight()));
     app.press.row = -1;
@@ -2074,6 +2139,7 @@ int main(int argc, char **argv)
         PollInputEvents();   // waits for input, or for watch.c's wake-up
         if (atomic_exchange(&watch.theme_ready, false)) theme_apply(), app.themes++, dirty = true;
         if (atomic_exchange(&watch.list_ready, false)) reload(), dirty = true;
+        if (atomic_exchange(&watch.mounts_ready, false)) places_reload(), dirty = true;
         dirty |= jobs_poll();
         if (app.have_list && count_take(app.count, app.list.n)) dirty = true;
         int rows = list_rows(GetScreenHeight()), srows = side_rows(GetScreenHeight());

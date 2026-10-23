@@ -4,6 +4,10 @@
 // theme switch may replace the theme directory itself, which ends its watch: an event in
 // `current/` watches it again).
 //
+// The mounts (F6): /proc/self/mountinfo reports a mount or unmount to poll as POLLPRI (proc(5)),
+// which raises mounts_ready at once. OFX_TEST_MOUNTINFO names a file to read instead, for the
+// tests (a test can't mount anything): an inotify watch on it stands in for the poll.
+//
 // The main thread points the folder watch at a new folder (watch_dir); the thread owns the theme
 // watches. inotify's calls are safe from both threads. A batch ends 100 ms after its last event,
 // and never more than a second after its first, so a file being written all the time (a download)
@@ -19,11 +23,19 @@ static struct {
     int         fd;
     atomic_int  dir_wd;        // the open folder's watch, -1 for none
     int         theme_wd, current_wd;
+    int         mount_fd, mount_wd;  // the mountinfo file polled, or the test's watched; -1 for none
     char        current[PATH_MAX];   // $XDG_STATE_HOME/omarchy/current
     char        theme[PATH_MAX + 8]; // .../current/theme
-    atomic_bool list_ready, theme_ready;
+    atomic_bool list_ready, theme_ready, mounts_ready;
     atomic_int  batches;       // how many batches it raised, for the tests' state line
-} watch = { .fd = -1, .dir_wd = -1, .theme_wd = -1, .current_wd = -1 };
+} watch = { .fd = -1, .dir_wd = -1, .theme_wd = -1, .current_wd = -1, .mount_fd = -1, .mount_wd = -1 };
+
+// The mount list ofx reads: /proc/self/mountinfo, or the tests' OFX_TEST_MOUNTINFO.
+static const char *mountinfo_path(void)
+{
+    const char *t = getenv("OFX_TEST_MOUNTINFO");
+    return t && t[0] ? t : "/proc/self/mountinfo";
+}
 
 static const u32 WATCH_DIR_MASK = IN_CREATE | IN_DELETE | IN_MOVED_FROM | IN_MOVED_TO | IN_CLOSE_WRITE | IN_MODIFY |
                                   IN_ATTRIB | IN_DELETE_SELF | IN_MOVE_SELF | IN_ONLYDIR;
@@ -47,7 +59,7 @@ static void watch_theme_dirs(void)
 }
 
 // Reads what is waiting: which flags it calls for.
-static void watch_read(bool *list, bool *theme)
+static void watch_read(bool *list, bool *theme, bool *mounts)
 {
     _Alignas(struct inotify_event) char buf[16384];
     ssize_t len = read(watch.fd, buf, sizeof buf);
@@ -56,9 +68,10 @@ static void watch_read(bool *list, bool *theme)
         const struct inotify_event *e = (const struct inotify_event *)(buf + at);
         at += (ssize_t)(sizeof *e + e->len);
         if (e->mask & IN_Q_OVERFLOW) {
-            *list = *theme = true;
+            *list = *theme = *mounts = true;
             continue;
         }
+        if (watch.mount_wd >= 0 && e->wd == watch.mount_wd) *mounts = true;
         if (e->wd == atomic_load(&watch.dir_wd)) *list = true;
         if (e->wd == watch.theme_wd && !(e->mask & IN_IGNORED)) *theme = true;
         if (e->wd == watch.current_wd) *theme = true, rewatch = true;
@@ -67,28 +80,35 @@ static void watch_read(bool *list, bool *theme)
     if (rewatch) watch.theme_wd = inotify_add_watch(watch.fd, watch.theme, WATCH_THEME_MASK);
 }
 
+// One poll of inotify and the mountinfo file, for at most ms (-1: no limit): the flags it raises.
+static void watch_poll(int ms, bool *list, bool *theme, bool *mounts)
+{
+    struct pollfd p[2] = { { watch.fd, POLLIN, 0 }, { watch.mount_fd, POLLPRI, 0 } };
+    if (poll(p, 2, ms) <= 0) return;
+    if (p[0].revents & POLLIN) watch_read(list, theme, mounts);
+    if (p[1].revents & (POLLPRI | POLLERR)) *mounts = true;
+}
+
 static void *watch_thread(void *arg)
 {
     (void)arg;
     // Its signal mask is the main thread's (SIGTERM and SIGINT blocked), so a quit still goes to
     // main.c's signal_waiter.
     watch_theme_dirs();
-    struct pollfd p = { watch.fd, POLLIN, 0 };
     for (;;) {
-        bool list = false, theme = false;
-        if (poll(&p, 1, -1) <= 0) continue;
-        watch_read(&list, &theme);
-        if (!list && !theme) continue;
+        bool list = false, theme = false, mounts = false;
+        watch_poll(-1, &list, &theme, &mounts);
+        if (!list && !theme && !mounts) continue;
         i64 first = now_ms(), last = first;
         for (i64 now; (now = now_ms()) < ui_batch_due(first, last, WATCH_QUIET_MS, WATCH_MAX_MS);) {
-            if (poll(&p, 1, (int)(ui_batch_due(first, last, WATCH_QUIET_MS, WATCH_MAX_MS) - now)) <= 0) continue;
-            bool l2 = false, t2 = false;
-            watch_read(&l2, &t2);
-            if (l2 || t2) last = now_ms();
-            list |= l2, theme |= t2;
+            bool l2 = false, t2 = false, m2 = false;
+            watch_poll((int)(ui_batch_due(first, last, WATCH_QUIET_MS, WATCH_MAX_MS) - now), &l2, &t2, &m2);
+            if (l2 || t2 || m2) last = now_ms();
+            list |= l2, theme |= t2, mounts |= m2;
         }
         if (list) atomic_store(&watch.list_ready, true);
         if (theme) atomic_store(&watch.theme_ready, true);
+        if (mounts) atomic_store(&watch.mounts_ready, true);
         atomic_fetch_add(&watch.batches, 1);
         wake_main();
     }
@@ -104,6 +124,9 @@ static bool watch_start(void)
     theme_dir(dir, sizeof dir);
     snprintf(watch.theme, sizeof watch.theme, "%s", dir);
     snprintf(watch.current, sizeof watch.current, "%.*s", STR_ARG(path_dir(str_from_c(dir))));
+    const char *mi = mountinfo_path();
+    if (strcmp(mi, "/proc/self/mountinfo") == 0) watch.mount_fd = open(mi, O_RDONLY | O_CLOEXEC);
+    else watch.mount_wd = inotify_add_watch(watch.fd, mi, IN_CLOSE_WRITE | IN_MODIFY | IN_MOVE_SELF | IN_DELETE_SELF);
     pthread_t t;
     if (pthread_create(&t, NULL, watch_thread, NULL) != 0) return false;
     pthread_detach(t);
