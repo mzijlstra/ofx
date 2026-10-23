@@ -51,6 +51,11 @@ key enter
 expect trash=1 n=2 sel=adir crumbs=Trash here=Trash
 key esc
 expect sidefocus=0
+# Another program trashes a file: the view follows the home trash
+sh printf x > "$OFX_ROOT/data/Trash/files/other.txt" && printf '[Trash Info]\nPath=/elsewhere/other.txt\nDeletionDate=2026-01-02T03:04:05\n' > "$OFX_ROOT/data/Trash/info/other.txt.trashinfo"
+wait-for 3000 n=3
+sh rm "$OFX_ROOT/data/Trash/files/other.txt" "$OFX_ROOT/data/Trash/info/other.txt.trashinfo"
+wait-for 3000 n=2
 shot f6-trash.png
 # A folder doesn't open there; a rename, a copy, a terminal don't work
 key enter
@@ -126,6 +131,18 @@ char h
 expect treecur=f6:1
 key enter
 expect treecur=f6:1 treehere=1
+# A drive mounted while the tree shows, its cursor on a row past the 64th (many/zz, after 70
+# folders): the tree stays, its cursor too
+key ctrl-l
+type many/zz
+key enter
+expect treecur=zz:0 treehere=1
+sh printf '33 1 0:31 / / rw - btrfs /dev/x rw\n50 33 8:17 / /run/media/m/OFXUSB rw - vfat /dev/sdz1 rw\n' > "$OFX_ROOT/mountinfo"
+wait-for 3000 sides=^Places|Home|Bee|Trash|^Drives|File_System|OFXUSB
+expect sidemode=tree treecur=zz:0 treehere=1 place=-
+sh printf '33 1 0:31 / / rw - btrfs /dev/x rw\n' > "$OFX_ROOT/mountinfo"
+wait-for 3000 sides=^Places|Home|Bee|Trash|^Drives|File_System
+key alt-left
 key alt-left
 expect sel=a.txt treehere=1
 shot f6-tree.png

@@ -63,6 +63,7 @@ T=$base/f6; rm -rf "$T"; mkdir -p "$T/tree/adir" "$T/tree/bdir" "$T/config/gtk-3
 touch "$T/tree/adir/inner.txt" "$T/tree/b.txt" "$T/tree/c.txt"; printf abc > "$T/tree/a.txt"
 printf 'file://%s/tree/bdir Bee\n' "$T" > "$T/config/gtk-3.0/bookmarks"
 printf '33 1 0:31 / / rw - btrfs /dev/x rw\n' > "$T/mountinfo"
+mkdir -p "$T/many/zz"; for i in $(seq -w 0 69); do mkdir "$T/many/d$i"; done
 echo "== f6"; OFX_TEST_MOUNTINFO="$T/mountinfo" "$here/../../tools/gui/run-script.sh" "$T" "$here/f6.script" "$bin" "$T/tree" || fail=1
 echo "== f6b"; OFX_TEST_MOUNTINFO="$T/mountinfo" "$here/../../tools/gui/run-script.sh" "$T" "$here/f6b.script" "$bin" "$T/tree" || fail=1
 T=$base/hang; rm -rf "$T"; mkdir -p "$T/tree/stuck"

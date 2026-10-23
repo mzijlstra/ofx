@@ -131,10 +131,11 @@ MUTANTS = [
     (G, "        if (state_path(path, sizeof path) && !state_save(path, &st, &err)) set_status(true, \"%s\", err.msg);", ""),
     (G, "    if (state_path(state_file, sizeof state_file)) app.ui.side_mode = state_load(&scratch, state_file).side;", ""),
     (G, "    case UA_SIDE_MODE: {\n        side_refresh();", "    case UA_SIDE_MODE: {"),
-    (G, "        if (in_box(CLAY_IDI(\"mode\", k), x, y)) h.mode = k;", ""),
+    (G, "        if (in_box(CLAY_IDI(\"mode\", k), x, y)) h.mode = k;", "        if (0) h.mode = k;"),
     (J, "    if (r->trash == JOB_TRASH_ITEMS) done /= 2, shown_n /= 2;", ""),
     (G, "    if (kind_is_dir(e->kind) && e->trash) {", "    if (0) {"),
     (G, "        if (in_trash && trash_home(tinfo, sizeof tinfo - 8)) strcat(tinfo, \"/info\");", ""),
+    (G, "    if (app.ui.side_mode == SIDE_PLACES && app.ui.side.sel < app.places.n) keep = app.places.p[app.ui.side.sel];", "    if (app.places.n) keep = app.places.p[app.ui.side.sel];"),
 ]
 scratch = sys.argv[1]
 only = [int(x) for x in sys.argv[2].split(',')] if len(sys.argv) > 2 else None

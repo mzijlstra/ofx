@@ -333,8 +333,8 @@ static bool go_to_in(const char *dir, Str select, isize fallback, bool stepping)
 // place, found by path and kind, else on the first row that isn't a heading.
 static void places_reload(void)
 {
-    Place keep = { 0 };
-    if (app.places.n) keep = app.places.p[app.ui.side.sel];
+    Place keep = { .kind = PL_HEAD };   // in the tree mode the cursor is a tree row's: none kept
+    if (app.ui.side_mode == SIDE_PLACES && app.ui.side.sel < app.places.n) keep = app.places.p[app.ui.side.sel];
     char bm[PATH_MAX];
     places_load(&scratch, &app.places, bookmarks_path(bm, sizeof bm), mountinfo_path());
     places_space(&app.places);
