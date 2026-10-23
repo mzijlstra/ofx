@@ -63,6 +63,12 @@ tools/gui/run-script.sh <absolute scratch> tests/gui/<script> "$PWD/build/ofx" <
 tools/mutation/gui.py <absolute scratch>     # the GUI mutants
 ```
 
+`tools/mutation/run.py` (the unit mutants) builds with clang, ASan and UBSan as `make test` does,
+in one worker per core: 598 mutants in about 4 minutes (gcc, one at a time, took about 45).
+Every worker runs the unmutated tests first, all at once, so a test that only fails under load
+shows before any kill counts. A faster compiler wouldn't help the GUI mutants: their time is the
+86 s GUI suite each, not the 4.5 s build.
+
 - **Why not a Hyprland headless output any more:** a new output takes a workspace Hyprland picks,
   and that can't be steered (workspace rules with `default` and `persistent` didn't). Three times
   on 2026-10-20 it was one holding Michael's windows (Nemo on 6, Chromium on 2). Never go back to
