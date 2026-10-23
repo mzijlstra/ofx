@@ -46,7 +46,8 @@ his word: Nemo's compact view and its icon size slider.
 - Icon view (the top bar's icon and list buttons), and thumbnails, shown only in the icon view.
 - Git status per file (`git status --porcelain=v2 -z` off the main thread, a mark per row).
 - USB drives (from the concept doc): unmounted drives in the sidebar, a click mounts them with
-  `udisksctl mount`, an eject button unmounts.
+  `udisksctl mount` (eject came in F6.1).
+- A panel with the keys (F6 took the key list out of the status line).
 - A key that copies the cursor's path as text (Ctrl+C already puts files on the clipboard, F3).
 - Install Nautilus at some point to compare its features with ofx's (not a priority).
 - Search through subfolders, as Nemo's search does (the top bar's search opens `/` find for now).
