@@ -34,6 +34,10 @@ Omarchy's theme: the binary, the folder `tools/ofx`, the window's title and Wayl
 | F5.3 | Jobs: up to 4 at once, each a progress row with a throughput line at the bottom of the files; a queue of 32 | Below |
 | F5.4 | A theme switch as `omarchy theme set` makes it (the theme folder replaced) followed live, colours and icons; an icon theme that isn't installed falls back | Below |
 | F6 | Bottom bar: sidebar as places (Home, bookmarks, Trash; drives with free space), as a tree, or hidden (F9); Trash restore and empty; the status line only; the mode remembered | Below |
+| F6.1 | A drive's used space under the pointer; eject for removable drives | |
+| F6.2 | Icon view: a grid beside the list, buttons in the top bar, Ctrl+1 and Ctrl+2, remembered | Below |
+| F6.3 | Icon sizes: a zoom slider at the bottom right, Ctrl+wheel and Ctrl+= / Ctrl+-, remembered | |
+| F6.4 | Previews in the icon view: the freedesktop thumbnail cache (shared with Nemo), PNG and JPEG made on a thread | |
 | F7 | Menus: File, Edit, View, Go, Bookmarks, Help | |
 
 Each milestone ends in a reviewer-2 round, then Michael's go before `make install`.
@@ -43,7 +47,8 @@ Nemo: menus, a top bar, tabs, sidebar modes in the bottom bar), in the order F4 
 his word: Nemo's compact view and its icon size slider.
 
 **Later, wanted eventually, not scheduled:**
-- Icon view (the top bar's icon and list buttons), and thumbnails, shown only in the icon view.
+- The view (list or icons) per folder, as Nemo keeps it (F6.2 keeps one for all folders).
+- Previews of videos and PDFs through the system's thumbnailers (`/usr/share/thumbnailers`), after F6.4.
 - Git status per file (`git status --porcelain=v2 -z` off the main thread, a mark per row).
 - USB drives (from the concept doc): unmounted drives in the sidebar, a click mounts them with
   `udisksctl mount` (eject came in F6.1).
@@ -134,6 +139,28 @@ package ships (upstream Yaru has no grey; omacom/omarchy#7203, #14851 and PRs #1
 themes (#14851). **Fallback:** a missing icon theme gives way to its name cut at the last `-`
 until one is installed (`Yaru-grey` → `Yaru`), then plain Yaru, then Adwaita (GTK's own, but
 mostly SVG, and ofx draws PNGs), then hicolor. No `icons.theme`: the same way.
+
+## F6.2 design (2026-10-23)
+
+**Asked (Michael):** an icon view, then a zoom slider (F6.3), then previews (F6.4), each its own
+step: F6.4 is the biggest, and the plain icon view gets used before previews change it.
+Decisions:
+
+- **Switching:** a list button and an icon button in the top bar, beside the location toggle and
+  search, as Nemo has them; Ctrl+1 the icons, Ctrl+2 the list (Nemo's keys).
+- **Remembered:** one view for every folder, in `$XDG_STATE_HOME/ofx/state` beside the sidebar's
+  mode (per folder: later).
+- **Names:** under each icon, wrapped to two lines and cut with "…"; the selected one's in full.
+- **Built the list's way:** the grid is the same listing, sort, selection, find, tabs and actions;
+  only the layout and the cursor's moves differ. Left/Right (`h`/`l`) move a cell, Up/Down
+  (`k`/`j`) a row, PgUp/PgDn a page of rows, Home/End the first and last; Enter opens, Backspace
+  goes up (Left no longer does, in the grid). Size and date aren't shown; the status line has them.
+- **Icon size:** 48 px at first (Yaru's PNGs: 16, 22, 24, 32, 48 and 256, each also @2x); F6.3
+  adds the others, scaling the 256 down between 48 and 256.
+
+**Thumbnails, F6.4 (noted now):** read and written in `~/.cache/thumbnails` by the freedesktop
+spec (Nemo fills it here already: `normal`, `large`, `x-large`, `fail`), PNG and JPEG decoded off
+the main thread, a cap on textures held; the rule from Nemo's loop below holds.
 
 ## F6 design (2026-10-22)
 
