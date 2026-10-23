@@ -12,13 +12,14 @@
 //                           ctrl-h ctrl-a ctrl-c ctrl-x ctrl-v ctrl-z ctrl-shift-n ctrl-l alt-up
 //                           ctrl-t ctrl-w ctrl-tab ctrl-shift-tab ctrl-shift-pageup ctrl-shift-pagedown,
 //                           shift-left shift-right shift-home shift-end shift-enter ctrl-k ctrl-j ctrl-q,
-//                           and alt-1 .. alt-9
+//                           ctrl-1 ctrl-2, and alt-1 .. alt-9
 //   char <c>                one typed character
 //   keys <word>...          keys and characters in one frame's input, as fast typing during a slow
 //                           frame gives them: each word a key name (as for `key`) or char:<c>
 //   type <text>             the rest of the line, after one space, as typed characters
 //   wheel <notches>         over the list; positive away from the user (up)
-//   press <row> [ctrl|shift] a left press on list row <row> (0 = the first on screen), through the
+//   press <row> [ctrl|shift] a left press on list row <row> (0 = the first on screen; in the icon
+//                           view the cell, across then down), through the
 //                           same double-click timing as the mouse: two presses on a row within
 //                           400 ms open it; with ctrl or shift held it marks rows instead
 //   press-side <row>        a left press on sidebar row <row>
@@ -86,10 +87,12 @@ static void script_state(char *out, size_t cap)
 {
     const char *icon = "-";
     Str sel = S("-");
+    int icontex = 0;   // the width of the cursor's icon texture as loaded (F6.2: the view's size)
     if (app.have_list && app.ui.list.n > 0) {
         sel = app.list.e[app.ui.list.sel].name;
         IconSlot *s = entry_icon(app.ui.list.sel);
         if (s && s->file[0]) icon = s->file;
+        if (s) icontex = s->tex.width;
     }
     Theme *t = &app.theme;
     // The edit line's text, its spaces as '_' (the state line is words).
@@ -198,7 +201,8 @@ static void script_state(char *out, size_t cap)
              "back=%d fwd=%d marked=%td editing=%d edit=%s confirming=%d asking=%d job=%s done=%lld/%lld undo=%s clip=%td cut=%d "
              "sysclip=%d modal=%s askall=%d tabs=%d tab=%d tabdirs=%s sizecell=%s crumbs=%s crumbhome=%d crumb=%d crumbshown=%d-%d arrows=%d locating=%d cnt=%s "
              "esel=%d-%d caret=%d copied=%s crumbkey=%s jobs=%d waiting=%d jobrows=%s jobkey=%s jobline=%d jobspeed=%d clashjob=%s "
-             "sides=%s spaced=%d sidemode=%s treen=%d treecur=%s treerow=%td treehere=%d trash=%d sidehover=%d hovernum=%s ejectbtn=%d cwdavail=%d info=%s status=%s",
+             "sides=%s spaced=%d sidemode=%s treen=%d treecur=%s treerow=%td treehere=%d trash=%d sidehover=%d hovernum=%s ejectbtn=%d cwdavail=%d info=%s "
+             "view=%s cols=%d cells=%d cellfirst=%td celllast=%td fulllines=%d celllines=%d cellcut=%d iconpx=%d icontex=%d status=%s",
              app.cwd, app.list.n, app.list.hidden, STR_ARG(sel), app.ui.list.sel, app.ui.list.top, app.ui.list.rows, app.hover,
              t->accent.r, t->accent.g, t->accent.b, t->bg.r, t->bg.g, t->bg.b, t->icons[0] ? t->icons : "-",
              app.icon_scale, GetScreenWidth(), GetScreenHeight(), app.reloads, app.themes, atomic_load(&watch.batches),
@@ -214,7 +218,9 @@ static void script_state(char *out, size_t cap)
              app.ui.editing && app.ui.edit_path, cnt, slo, shi, app.ui.caret, copied, keyed,
              jobs.nrun, jobs.nwait, joblabels, jobkey, oldest ? oldest->line.reached : 0, oldest && oldest->line.now > 0, clashjob,
              sides[0] ? sides : "-", spaced, SIDE_MODES_W[app.ui.side_mode], app.ui.side_mode == SIDE_TREE ? tree.n : 0, treecur,
-             app.ui.side.sel - app.ui.side.top, treehere, app.ui.in_trash, app.side_hover, hovernum, ejectbtn, app.cwd_avail >= 0, info, app.status[0] ? app.status : "-");
+             app.ui.side.sel - app.ui.side.top, treehere, app.ui.in_trash, app.side_hover, hovernum, ejectbtn, app.cwd_avail >= 0, info,
+             app.ui.grid ? "icons" : "list", (int)ui_cols(&app.ui.list), app.grid_cells, app.grid_first, app.grid_last, app.grid_full_lines, app.grid_hover_lines, app.grid_hover_cut, entry_px(), icontex,
+             app.status[0] ? app.status : "-");
     frame_us_max = 0;
 }
 
@@ -256,6 +262,7 @@ static UiKey script_key(Str name)
         { "ctrl-shift-pageup", UK_TAB_LEFT }, { "ctrl-shift-pagedown", UK_TAB_RIGHT },
         { "shift-left", UK_SEL_LEFT }, { "shift-right", UK_SEL_RIGHT }, { "shift-home", UK_SEL_HOME }, { "shift-end", UK_SEL_END },
         { "shift-enter", UK_SHIFT_ENTER }, { "ctrl-k", UK_CRUMBS }, { "ctrl-j", UK_JOBS }, { "ctrl-q", UK_QUIT },
+        { "ctrl-1", UK_VIEW_ICONS }, { "ctrl-2", UK_VIEW_LIST },
     };
     for (int i = 0; i < COUNT(KEYS); i++)
         if (str_eq(name, str_from_c(KEYS[i].name))) return KEYS[i].k;

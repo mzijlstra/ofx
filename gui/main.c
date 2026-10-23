@@ -61,6 +61,9 @@ enum { TREE_STEP = 10, TRASH_BAR_H = 38 };
 enum { TAB_H = 30, TAB_X_W = 22, JOB_ROW_H = 40, JOB_WAIT_H = 22, MODE_BTN_W = 28, MODE_BTN_H = 22, MODE_GAP = 4 };
 enum { FONT_PX = 15, ROW_H = 28, ICON_PX = 24, HEADER_H = 40, COLS_H = 26, FOOTER_H = 28, PAD = 12, SIZE_W = 90,
        DATE_W = 100, SIDE_W = 200, SIDE_ROW_H = 28, SIDE_ICON_PX = 20, GAP = 10, ICONS_MAX = 512 };
+// The icon view (F6.2): a cell holds a 48 px icon over two lines of its name; the cursor's name in
+// full, up to CELL_LINES_FULL lines, over the cells below it.
+enum { GRID_ICON_PX = 48, CELL_W = 112, CELL_H = 104, CELL_PAD = 4, CELL_LINE_H = FONT_PX + 4, CELL_LINES_FULL = 8 };
 
 // ---- state ----------------------------------------------------------------------------------
 
@@ -120,6 +123,11 @@ static struct {
     int       eject_hover;     // the sidebar row whose eject button is under the pointer, -1 for none
     char      text_copied[PATH_MAX];   // the last text an edit line put on the clipboard (F5.2)
     char      hover_num[32];   // the number drawn on the drive row under the pointer (F6.1), for the tests
+    // What the last frame's icon view drew, for the tests (F6.2): its cells, the cursor's name's
+    // lines, and the lines of the name under the pointer and whether it was cut.
+    int       grid_cells, grid_full_lines, grid_hover_lines;
+    bool      grid_hover_cut;
+    isize     grid_first, grid_last;   // the entries in the first and last cell drawn, -1 for none
 } app = { .hover = -1, .side_hover = -1, .tab_hover = -1, .tab_x_hover = -1, .jobx_hover = -1, .mode_hover = -1, .eject_hover = -1 };
 
 static UiHistory hist;
@@ -980,7 +988,13 @@ static void act(UiAction a)
     case UA_SIDE_MODE: {
         side_refresh();
         char path[PATH_MAX];
-        State st = { app.ui.side_mode };
+        State st = { app.ui.side_mode, app.ui.grid };
+        if (state_path(path, sizeof path) && !state_save(path, &st, &err)) set_status(true, "%s", err.msg);
+        break;
+    }
+    case UA_VIEW: {   // F6.2: remembered; the loop lays it out before the next frame
+        char path[PATH_MAX];
+        State st = { app.ui.side_mode, app.ui.grid };
         if (state_path(path, sizeof path) && !state_save(path, &st, &err)) set_status(true, "%s", err.msg);
         break;
     }
@@ -1115,19 +1129,21 @@ static Str entry_mime(isize i)
     return app.mime[i];
 }
 
-// The texture under key, from the first of names the theme has, loaded the first time it is
-// needed; NULL when the cache is full. names NULL: they are the MIME type's (key).
-static IconSlot *icon_for(Str key, const Str *given, isize ngiven)
+// The texture under key at px, from the first of names the theme has, loaded the first time it is
+// needed; NULL when the cache is full. names NULL: they are the MIME type's (key). A size other
+// than the list's is cached under "<px>:<key>".
+static IconSlot *icon_for_px(Str key, const Str *given, isize ngiven, int px)
 {
     int k;
-    if (strmap_get(&app.slot_of, key, &k)) return &app.slot[k];
-    if (app.nslots == ICONS_MAX) return NULL;
     ArenaMark mark = arena_mark(&scratch);
+    Str slot_key = px == ICON_PX ? key : str_from_c(arena_sprintf(&scratch, "%d:%.*s", px, STR_ARG(key)));
+    if (strmap_get(&app.slot_of, slot_key, &k)) return arena_restore(&scratch, mark), &app.slot[k];
+    if (app.nslots == ICONS_MAX) return arena_restore(&scratch, mark), NULL;
     Str names[6];
     isize n = given ? ngiven : mime_icon_names(&scratch, &app.mime_db, key, names);
     IconSlot *s = &app.slot[app.nslots];
-    *s = (IconSlot){ .key = { arena_cstr(&icona, key), key.len } };
-    const char *file = icon_find(&scratch, &app.icons, given ? given : names, n, ICON_PX, app.icon_scale);
+    *s = (IconSlot){ .key = { arena_cstr(&icona, slot_key), slot_key.len } };
+    const char *file = icon_find(&scratch, &app.icons, given ? given : names, n, px, app.icon_scale);
     if (file) {
         snprintf(s->file, sizeof s->file, "%s", file);
         s->tex = LoadTexture(file);
@@ -1138,18 +1154,30 @@ static IconSlot *icon_for(Str key, const Str *given, isize ngiven)
     return &app.slot[app.nslots++];
 }
 
-// The texture for entry i.
+static IconSlot *icon_for(Str key, const Str *given, isize ngiven)
+{
+    return icon_for_px(key, given, ngiven, ICON_PX);
+}
+
+// The size the files' icons are drawn at: the list's, or the icon view's (F6.2).
+static int entry_px(void)
+{
+    return app.ui.grid ? GRID_ICON_PX : ICON_PX;
+}
+
+// The texture for entry i, at the view's size.
 static IconSlot *entry_icon(isize i)
 {
     const Entry *e = &app.list.e[i];
-    if (!kind_is_dir(e->kind)) return icon_for(entry_mime(i), NULL, 0);
+    int px = entry_px();
+    if (!kind_is_dir(e->kind)) return icon_for_px(entry_mime(i), NULL, 0, px);
     Str names[2];
     isize n = 0;
     char path[PATH_MAX];
     Str special = !e->trash && join(path, sizeof path, app.cwd, e->name) ? user_dir_icon(&app.user_dirs, path) : STR_EMPTY;
     if (special.len) names[n++] = special;
     names[n++] = S("folder");
-    return icon_for(names[0], names, n);
+    return icon_for_px(names[0], names, n, px);
 }
 
 static IconSlot *place_icon(int i)
@@ -1194,10 +1222,33 @@ static int jobs_h(void)
     return jobs.nrun * JOB_ROW_H + (jobs.nwait ? JOB_WAIT_H : 0);
 }
 
+// The list's rows that fit, or the icon view's rows of cells (no column headers there).
 static int list_rows(int h)
 {
-    int r = (h - top_h() - COLS_H - FOOTER_H - jobs_h() - (app.ui.in_trash ? TRASH_BAR_H : 0)) / ROW_H;
+    int room = h - top_h() - FOOTER_H - jobs_h() - (app.ui.in_trash ? TRASH_BAR_H : 0);
+    int r = app.ui.grid ? (room - PAD) / CELL_H : (room - COLS_H) / ROW_H;
     return r > 0 ? r : 0;
+}
+
+// The icon view's columns at window width w (the list: 1).
+static int list_cols(int w)
+{
+    if (!app.ui.grid) return 1;
+    int c = (w - side_w() - 2 * PAD) / CELL_W;
+    return c > 1 ? c : 1;
+}
+
+// The list's rows, or the icon view's cells, there are places for on screen.
+static int list_cells(void)
+{
+    return app.ui.list.rows * (int)ui_cols(&app.ui.list);
+}
+
+// The list's rows and columns for the window as it is now.
+static void list_fit(void)
+{
+    ui_set_cols(&app.ui.list, list_cols(GetScreenWidth()));
+    ui_resize(&app.ui.list, list_rows(GetScreenHeight()));
 }
 
 static int side_rows(int h)
@@ -1516,6 +1567,89 @@ static void layout_row(int r, isize i, float w, i64 now)
     }
 }
 
+// Lines of a name under its icon, centred: the first `most` of them, the last cut with "…" when
+// the name doesn't end there (ui_wrap). How many, and *cut_out whether it was cut.
+static int name_lines(const char *id, int k, Str name, int most, float w, Clay_Color color, bool *cut_out)
+{
+    Str dots = S("\xE2\x80\xA6");
+    isize from[CELL_LINES_FULL], to[CELL_LINES_FULL];
+    bool cut;
+    int n = ui_wrap(name, w, str_width(dots), advance, most, from, to, &cut);
+    for (int j = 0; j < n; j++) {
+        Str line = str_cut(name, from[j], to[j]);
+        Clay_String txt = cut && j == n - 1 ? cz(arena_sprintf(&frame, "%.*s%.*s", STR_ARG(line), STR_ARG(dots))) : cs(line);
+        CLAY(Clay_GetElementIdWithIndex(cz(id), (uint32_t)(k * CELL_LINES_FULL + j)),
+             { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(CELL_LINE_H) }, .childAlignment = { .x = CLAY_ALIGN_X_CENTER } } }) {
+            text(txt, color);
+        }
+    }
+    *cut_out = cut;
+    return n;
+}
+
+// Entry i in cell k of the icon view (F6.2): its icon over its name. The cursor's name shows in
+// full on the selection colour, over the cells below (Nemo's way); a rename's edit line is there,
+// wider than the cell.
+static void layout_cell(int k, isize i)
+{
+    const Entry *e = &app.list.e[i];
+    Theme *t = &app.theme;
+    bool sel = i == app.ui.list.sel, hover = k == app.hover, marked = ui_marked(&app.ui, i);
+    bool keyed = sel && !app.ui.side_focus;
+    Clay_Color fg = e->kind == K_LINK_BROKEN ? cc(t->red) : marked ? cc(t->accent) : cc(t->fg);
+    Clay_Color bg = marked ? mix(t->accent, t->bg, 0.28f) : hover ? cc(t->bg_light) : (Clay_Color){ 0, 0, 0, 0 };
+    float name_w = CELL_W - 2 * CELL_PAD;
+    CLAY(CLAY_IDI("row", k), { .layout = { .sizing = { CLAY_SIZING_FIXED(CELL_W), CLAY_SIZING_FIXED(CELL_H) }, .padding = { CELL_PAD, CELL_PAD, 6, CELL_PAD },
+                                           .childGap = 4, .layoutDirection = CLAY_TOP_TO_BOTTOM, .childAlignment = { .x = CLAY_ALIGN_X_CENTER } },
+                               .backgroundColor = sel ? mix(t->selection, t->bg, 0.5f) : bg, .cornerRadius = CLAY_CORNER_RADIUS(4) }) {
+        icon_box(CLAY_IDI("icon", k), entry_icon(i), GRID_ICON_PX);
+        if (sel && app.ui.editing && !app.ui.edit_path) {
+            // As wide as the name and a little, from a cell's width to two cells'.
+            float ew = str_width((Str){ app.ui.edit, app.ui.edit_len }) + 24;
+            ew = ew < CELL_W ? CELL_W : ew > 2 * CELL_W ? 2 * CELL_W : ew;
+            CLAY(CLAY_ID("cell-edit"), { .layout = { .sizing = { CLAY_SIZING_FIXED(ew), CLAY_SIZING_FIT(0) } },
+                                         .floating = { .attachTo = CLAY_ATTACH_TO_PARENT, .zIndex = 3, .offset = { 0, 6 + GRID_ICON_PX + 4 },
+                                                       .attachPoints = { CLAY_ATTACH_POINT_CENTER_TOP, CLAY_ATTACH_POINT_CENTER_TOP },
+                                                       .clipTo = CLAY_CLIP_TO_ATTACHED_PARENT } }) {
+                layout_edit(t, ew);
+            }
+        } else if (sel) {
+            // Its two lines' room stays taken, so the cell keeps its size.
+            CLAY(CLAY_IDI("cell-room", k), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(2 * CELL_LINE_H) } } }) {}
+            CLAY(CLAY_ID("cell-full"), { .layout = { .sizing = { CLAY_SIZING_FIXED(CELL_W), CLAY_SIZING_FIT(0) }, .padding = { CELL_PAD, CELL_PAD, 0, 2 },
+                                                     .layoutDirection = CLAY_TOP_TO_BOTTOM },
+                                         .backgroundColor = cc(t->selection), .cornerRadius = CLAY_CORNER_RADIUS(4),
+                                         .border = { .color = cc(t->accent), .width = CLAY_BORDER_OUTSIDE(keyed ? 1 : 0) },
+                                         .floating = { .attachTo = CLAY_ATTACH_TO_PARENT, .zIndex = 3, .offset = { 0, 6 + GRID_ICON_PX + 4 },
+                                                       .attachPoints = { CLAY_ATTACH_POINT_CENTER_TOP, CLAY_ATTACH_POINT_CENTER_TOP },
+                                                       .clipTo = CLAY_CLIP_TO_ATTACHED_PARENT } }) {
+                bool cut;
+                app.grid_full_lines = name_lines("cell-full-line", 0, e->name, CELL_LINES_FULL, name_w, fg, &cut);
+                if (hover) app.grid_hover_lines = app.grid_full_lines, app.grid_hover_cut = cut;
+            }
+        } else {
+            bool cut;
+            int n = name_lines("cell-line", k, e->name, 2, name_w, fg, &cut);
+            if (hover) app.grid_hover_lines = n, app.grid_hover_cut = cut;
+        }
+    }
+    if (k == 0) app.grid_first = i;
+    app.grid_last = i, app.grid_cells++;
+}
+
+// The icon view: cells across, then down, from the scroll's row.
+static void layout_grid(void)
+{
+    int cols = (int)ui_cols(&app.ui.list);
+    for (int r = 0; r < app.ui.list.rows; r++) {
+        isize first = app.ui.list.top + (isize)r * cols;
+        if (first >= app.list.n) break;
+        CLAY(CLAY_IDI("grid-row", r), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(CELL_H) }, .padding = { PAD, PAD, 0, 0 } } }) {
+            for (int c = 0; c < cols && first + c < app.list.n; c++) layout_cell(r * cols + c, first + c);
+        }
+    }
+}
+
 // ---- the top bar (F4) -----------------------------------------------------------------------
 
 static IconSlot *named_icon(const char *name)
@@ -1670,6 +1804,38 @@ static void layout_location(float room)
     }
 }
 
+// A view button's picture (F6.2), drawn in c: three lines for the list, four squares for the icons
+// (the theme has its view icons as SVG only, which ofx doesn't draw).
+static void view_picture(bool icons, Clay_Color c)
+{
+    const char *id = icons ? "view-pic-icons" : "view-pic-list";
+    CLAY(Clay_GetElementId(cz(id)), { .layout = { .sizing = { CLAY_SIZING_FIXED(14), CLAY_SIZING_FIXED(12) }, .layoutDirection = CLAY_TOP_TO_BOTTOM,
+                                                  .childGap = icons ? 2 : 3, .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } } }) {
+        for (int j = 0; j < (icons ? 2 : 3); j++) {
+            if (!icons) {
+                CLAY(CLAY_IDI("view-line", j), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(2) } }, .backgroundColor = c }) {}
+                continue;
+            }
+            CLAY(CLAY_IDI("view-sq-row", j), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(5) }, .childGap = 2 } }) {
+                for (int q = 0; q < 2; q++)
+                    CLAY(CLAY_IDI("view-sq", j * 2 + q), { .layout = { .sizing = { CLAY_SIZING_FIXED(6), CLAY_SIZING_FIXED(5) } }, .backgroundColor = c }) {}
+            }
+        }
+    }
+}
+
+// The list and icon buttons, the view shown marked in the accent.
+static void view_button(const char *id, UiBar which, bool icons)
+{
+    Theme *t = &app.theme;
+    bool on = app.ui.grid == icons, hover = app.bar_hover == which;
+    CLAY(Clay_GetElementId(cz(id)), { .layout = { .sizing = { CLAY_SIZING_FIXED(BAR_BTN_W), CLAY_SIZING_FIXED(BAR_BTN_H) },
+                                                  .childAlignment = { .x = CLAY_ALIGN_X_CENTER, .y = CLAY_ALIGN_Y_CENTER } },
+                                      .backgroundColor = on ? mix(t->accent, t->bg_light, 0.25f) : hover ? cc(t->bg) : cc(t->bg_light) }) {
+        view_picture(icons, on ? cc(t->accent) : hover ? cc(t->fg) : cc(t->fg_dim));
+    }
+}
+
 static void layout_bar(float w)
 {
     Theme *t = &app.theme;
@@ -1681,7 +1847,7 @@ static void layout_bar(float w)
         bar_button(CLAY_ID("nav-back"), UB_BACK, CHEV_LEFT, NULL, NULL, hist.nback > 0, BAR_BTN_W);
         bar_button(CLAY_ID("nav-fwd"), UB_FORWARD, CHEV_RIGHT, NULL, NULL, hist.nfwd > 0, BAR_BTN_W);
         bar_button(CLAY_ID("nav-up"), UB_UP, CHEV_UP, NULL, NULL, can_up, BAR_BTN_W);
-        float room = w - PAD - 5 * BAR_BTN_W - 7 * BAR_GAP - 2 * PAD;
+        float room = w - PAD - 7 * BAR_BTN_W - 9 * BAR_GAP - 2 * PAD;
         CLAY(CLAY_ID("crumbs"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(BAR_BTN_H) }, .padding = { PAD / 2, 0, 0, 0 },
                                               .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
                                   .clip = { .horizontal = true } }) {
@@ -1690,6 +1856,8 @@ static void layout_bar(float w)
         }
         bar_button(CLAY_ID("loc-toggle"), UB_LOCATION, -1, "\xE2\x9C\x8E", NULL, true, BAR_BTN_W);          // ✎
         bar_button(CLAY_ID("search"), UB_SEARCH, -1, "/", named_icon("edit-find"), true, BAR_BTN_W);
+        view_button("view-list", UB_VIEW_LIST, false);
+        view_button("view-icons", UB_VIEW_ICONS, true);
     }
 }
 
@@ -1980,6 +2148,8 @@ static Clay_RenderCommandArray layout(int w, int h)
 {
     arena_reset(&frame);
     arena_reset(&scratch);
+    app.grid_cells = app.grid_full_lines = app.grid_hover_lines = 0, app.grid_hover_cut = false;
+    app.grid_first = app.grid_last = -1;
     Theme *t = &app.theme;
     Clay_SetLayoutDimensions((Clay_Dimensions){ (float)w, (float)h });
     Clay_BeginLayout();
@@ -1996,8 +2166,9 @@ static Clay_RenderCommandArray layout(int w, int h)
         // The tab bar over the files only, not the sidebar (Michael, 2026-10-21).
         if (tabbar.n >= 2) layout_tabs((float)(w - side_w()));
         if (app.ui.in_trash) layout_trash_bar();
-        layout_cols();
-        CLAY(CLAY_ID("list"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0) }, .layoutDirection = CLAY_TOP_TO_BOTTOM },
+        if (!app.ui.grid) layout_cols();
+        CLAY(CLAY_ID("list"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0) }, .layoutDirection = CLAY_TOP_TO_BOTTOM,
+                                            .padding = { 0, 0, app.ui.grid ? PAD : 0, 0 } },
                                 .clip = { .vertical = true } }) {
             if (!app.have_list) {
                 CLAY(CLAY_ID("error"), { .layout = { .padding = { PAD, PAD, PAD, PAD } } }) { text(cz(app.error), cc(t->red)); }
@@ -2006,7 +2177,8 @@ static Clay_RenderCommandArray layout(int w, int h)
                     text(cz(app.list.hidden ? "Only hidden files" : "Empty folder"), cc(t->fg_dim));
                 }
             }
-            for (int r = 0; app.have_list && r < app.ui.list.rows && app.ui.list.top + r < app.list.n; r++)
+            if (app.have_list && app.ui.grid) layout_grid();
+            for (int r = 0; app.have_list && !app.ui.grid && r < app.ui.list.rows && app.ui.list.top + r < app.list.n; r++)
                 layout_row(r, app.ui.list.top + r, (float)w, now);
         }
         layout_jobs();
@@ -2107,6 +2279,8 @@ static UiKey ui_key_of(int key, int mods)
     if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_L) return UK_LOCATION;
     if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_K) return UK_CRUMBS;
     if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_J) return UK_JOBS;
+    if (m == GLFW_MOD_CONTROL && (key == GLFW_KEY_1 || key == GLFW_KEY_KP_1)) return UK_VIEW_ICONS;   // Nemo's keys (F6.2)
+    if (m == GLFW_MOD_CONTROL && (key == GLFW_KEY_2 || key == GLFW_KEY_KP_2)) return UK_VIEW_LIST;
     if (m == GLFW_MOD_SHIFT) {
         switch (key) {
         case GLFW_KEY_LEFT: return UK_SEL_LEFT;
@@ -2240,13 +2414,15 @@ static Hit hit_at(float x, float y)
     static const struct { const char *id; UiBar b; } BAR[] = {
         { "nav-back", UB_BACK }, { "nav-fwd", UB_FORWARD }, { "nav-up", UB_UP }, { "loc-toggle", UB_LOCATION },
         { "search", UB_SEARCH }, { "crumb-left", UB_LEFT }, { "crumb-right", UB_RIGHT },
-        { "trash-restore", UB_RESTORE }, { "trash-empty", UB_EMPTY },
+        { "trash-restore", UB_RESTORE }, { "trash-empty", UB_EMPTY }, { "view-list", UB_VIEW_LIST }, { "view-icons", UB_VIEW_ICONS },
     };
     for (int k = 0; k < COUNT(BAR) && h.bar == UB_NONE; k++)
         if (in_box(Clay_GetElementId(cz(BAR[k].id)), x, y)) h.bar = BAR[k].b;
     for (int i = app.crumb_lo; h.bar == UB_NONE && i < app.crumb_hi; i++)
         if (in_box(CLAY_IDI("crumb", i), x, y)) h.bar = UB_CRUMB, h.crumb = i;
-    for (int r = 0; r < app.ui.list.rows && h.row < 0; r++)
+    // The cursor's full name in the icon view lies over the cells below it: a press there is its.
+    if (app.ui.grid && app.ui.list.sel >= app.ui.list.top && in_box(CLAY_ID("cell-full"), x, y)) h.row = (int)(app.ui.list.sel - app.ui.list.top);
+    for (int r = 0; r < list_cells() && h.row < 0; r++)
         if (in_box(CLAY_IDI("row", r), x, y)) h.row = r;
     for (int i = 0; i < jobs.nrun && h.job_x < 0; i++)
         if (in_box(CLAY_IDI("job-x", i), x, y)) h.job_x = i;
@@ -2502,9 +2678,12 @@ int main(int argc, char **argv)
     space_start();
     places_reload();
     char state_file[PATH_MAX];
-    if (state_path(state_file, sizeof state_file)) app.ui.side_mode = state_load(&scratch, state_file).side;
+    if (state_path(state_file, sizeof state_file)) {
+        State st = state_load(&scratch, state_file);
+        app.ui.side_mode = st.side, app.ui.grid = st.icons;
+    }
     side_refresh();
-    ui_resize(&app.ui.list, list_rows(GetScreenHeight()));
+    list_fit();
     ui_resize(&app.ui.side, side_rows(GetScreenHeight()));
     app.press.row = -1;
     go_to(dir, STR_EMPTY, 0);
@@ -2528,6 +2707,12 @@ int main(int argc, char **argv)
     if (!scripted) EnableEventWaiting();
     bool dirty = true;
     while (!app.quit && !atomic_load(&quit_signal) && !WindowShouldClose()) {
+        // Rows and columns for the window as it is, before a frame shows them: a resize, the
+        // sidebar's mode, the view (F6.2) and the jobs' rows all change them.
+        int rows = list_rows(GetScreenHeight()), srows = side_rows(GetScreenHeight()), cols = list_cols(GetScreenWidth());
+        if (cols != (int)ui_cols(&app.ui.list)) ui_set_cols(&app.ui.list, cols), dirty = true;
+        if (rows != app.ui.list.rows) ui_resize(&app.ui.list, rows), dirty = true;
+        if (srows != app.ui.side.rows) ui_resize(&app.ui.side, srows), dirty = true;
         if (dirty || scripted) {
             i64 t0 = now_us();
             draw();
@@ -2547,9 +2732,6 @@ int main(int argc, char **argv)
         if (app.have_list && count_take(app.count, app.list.n)) dirty = true;
         if (space_take(&app.places, app.cwd, &app.cwd_avail)) dirty = true;
         if (eject_take()) dirty = true;
-        int rows = list_rows(GetScreenHeight()), srows = side_rows(GetScreenHeight());
-        if (rows != app.ui.list.rows) ui_resize(&app.ui.list, rows), dirty = true;
-        if (srows != app.ui.side.rows) ui_resize(&app.ui.side, srows), dirty = true;
         bool seen;
         UiInput in = input_real(&seen);
         if (scripted) {

@@ -1,0 +1,127 @@
+# F6.2: the icon view. run.sh's tree: adir, bdir, "a rather long file name that wraps over
+# lines.txt", f01 .. f20, verylongnamewithoutanybreaksatallhere.bin (24 entries). The window is
+# 936x490: 6 columns of cells beside the sidebar, 3 rows of them (rows 0-5, 6-11, 12-17, 18-23).
+settle
+expect view=list cols=1 iconpx=24 icontex=48 cells=0
+# Ctrl+1 through the key callback (GLFW_KEY_1 is 49, Ctrl 2), as the keyboard gives it.
+raw-key 49 2
+expect view=icons cols=6 rows=3 cells=18 cellfirst=0 celllast=17 iconpx=48 idx=0 top=0
+# Its own texture, not the list's stretched: 48 px at the test's scale 2.
+expect icontex=96
+sh grep -qx view=icons "$OFX_ROOT/state/ofx/state"
+# Left and Right a cell, Up and Down a row; the scroll a row at a time.
+key right
+expect idx=1
+key down
+expect idx=7 top=0
+key down
+key down
+expect idx=19 top=6 cells=18 cellfirst=6 celllast=23
+key end
+expect idx=23 top=6
+key up
+expect idx=17
+key home
+expect idx=0 top=0 cellfirst=0
+char l
+char j
+expect idx=7
+key pagedown
+expect idx=19 top=6
+key pageup
+expect idx=7
+# Left doesn't go up in the grid; Left and Right run across a row's end.
+key home
+key left
+expect idx=0 sel=adir back=0
+key end
+key right
+expect idx=23
+key home
+key left
+key right
+key right
+key right
+key right
+key right
+key right
+expect idx=6 sel=f04
+# The wheel a row a notch, the cursor stays.
+key home
+wheel -1
+expect top=6 idx=0
+wheel -5
+expect top=6
+wheel 3
+expect top=0
+# The name under the pointer: two lines, cut; the cursor's in full, never cut.
+point-ui row 2
+hover-here
+expect hover=2 celllines=2 cellcut=1
+press 2
+expect idx=2 cellcut=0
+# A press on the full name's third line, which lies over the cell below, is the cursor's cell.
+point-ui cell-full-line 2
+click-here
+expect idx=2
+# A press on a cell in the second row, hit-tested as the mouse's.
+point-ui row 9
+click-here
+expect idx=9
+# Ctrl and Shift mark cells.
+press 3 ctrl
+press 5 ctrl
+expect marked=2 idx=5
+press 8 shift
+expect marked=5
+key esc
+expect marked=0
+# Enter and a double click open; Backspace goes up, back onto the folder left.
+key home
+key enter
+expect sel=inner.txt view=icons
+key backspace
+expect sel=adir
+press 1
+press 1
+expect sel=bin.txt
+key backspace
+expect sel=bdir
+# A middle click: a folder in a background tab.
+middle 0
+expect tabs=2 tab=0
+key ctrl-tab
+key ctrl-w
+expect tabs=1 view=icons
+# F2: the edit line on the cell; Esc keeps the name.
+press 3
+key f2
+expect editing=1 edit=f01
+shot rename.png
+key esc
+expect editing=0 sel=f01
+# The list again: the cursor stays, one entry a row; and back (Ctrl+2 through the callback).
+raw-key 50 2
+expect view=list cols=1 idx=3 iconpx=24
+sh grep -qx view=list "$OFX_ROOT/state/ofx/state"
+key ctrl-1
+expect view=icons cols=6 idx=3
+# The sidebar hidden: 8 columns in the wider room, then 6 again (F9: tree, hidden, places).
+key f9
+key f9
+expect sidemode=hidden cols=8 cells=24
+key f9
+expect sidemode=places cols=6
+# The view buttons in the top bar.
+point-ui view-list
+click-here
+expect view=list
+point-ui view-icons
+click-here
+expect view=icons cols=6
+# Find works in the grid: the cursor goes there, the scroll follows.
+type /very
+key enter
+expect idx=23 top=6
+shot icons.png
+quit

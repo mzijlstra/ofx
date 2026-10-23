@@ -47,11 +47,14 @@ typedef enum {
     UK_JOBS,       // Ctrl+J: the keyboard on the job rows' × (F5.3)
     UK_QUIT,       // Ctrl+Q, or the window closed
     UK_F9,         // the sidebar's next mode (F6)
+    UK_VIEW_ICONS, // Ctrl+1: the files as icons (F6.2)
+    UK_VIEW_LIST,  // Ctrl+2: the files as the list
 } UiKey;
 
 // The top bar's buttons (F4).
 typedef enum { UB_NONE, UB_BACK, UB_FORWARD, UB_UP, UB_LOCATION, UB_SEARCH, UB_LEFT, UB_RIGHT, UB_CRUMB,
-               UB_RESTORE, UB_EMPTY } UiBar;   // the last two: the trash view's (F6)
+               UB_RESTORE, UB_EMPTY,   // the trash view's (F6)
+               UB_VIEW_LIST, UB_VIEW_ICONS } UiBar;   // the view buttons (F6.2)
 
 enum { UI_MOD_CTRL = 1, UI_MOD_SHIFT = 2 };
 
@@ -65,7 +68,8 @@ typedef struct {
     UiEvent ev[UI_EVENTS_MAX];
     int     nev;
     int     wheel;       // notches over the list, positive away from the user (up)
-    int     click;       // the list row pressed (0 = the first row on screen), -1 for none
+    int     click;       // the list row pressed (0 = the first row on screen; in the icon view the
+                         // cell, counted across then down from the first on screen), -1 for none
     int     click_mods;  // UI_MOD_CTRL, UI_MOD_SHIFT held for that press
     int     dclick;      // a list row double-clicked, -1 for none
     int     side_click;  // a sidebar row pressed, -1 for none
@@ -120,6 +124,7 @@ typedef enum {
     UA_EMPTY_TRASH, // the trash view: everything in it deleted for good, asked and answered
     UA_NOT_IN_TRASH,   // something that doesn't work in the trash view (gui/ says so)
     UA_EJECT,       // index: the sidebar row of the drive to eject (F6.1)
+    UA_VIEW,        // the view changed (Ui.grid, F6.2): gui/ lays it out again and remembers it
 } UiActionKind;
 
 typedef struct {
@@ -137,10 +142,11 @@ enum { UI_ANS_SKIP = 1, UI_ANS_REPLACE = 2, UI_ANS_KEEP = 3, UI_ANS_CANCEL = 4 }
 enum { UI_MODAL_YES = 1, UI_MODAL_NO, UI_MODAL_SKIP, UI_MODAL_REPLACE, UI_MODAL_KEEP, UI_MODAL_CANCEL, UI_MODAL_ALL, UI_MODAL_OK };
 
 typedef struct {
-    isize n;      // rows in the list
+    isize n;      // entries in the list
     isize sel;    // the cursor, 0..n-1; 0 for an empty list
-    isize top;    // the first row on screen
+    isize top;    // the first entry on screen (in a grid, the first of a row)
     int   rows;   // how many rows fit
+    int   cols;   // entries a row: the icon view's columns (F6.2); 0 or 1 for a list
 } UiList;
 
 // The entries' names, for find: gui/ hands its listing in through this.
@@ -152,6 +158,7 @@ typedef struct {
 typedef struct {
     UiList list, side;
     SideMode side_mode;      // places, tree or hidden (F6)
+    bool   grid;             // the files as icons in a grid, not the list (F6.2)
     bool   side_focus;       // the keys move the sidebar's cursor
     const u8 *side_head;     // a byte per sidebar row, 1 for a heading (F6), never the cursor's; NULL: none
     bool   finding;          // the find line is open
@@ -210,19 +217,33 @@ static isize ui_clamp(isize v, isize lo, isize hi)
     return v < lo ? lo : v > hi ? hi : v;
 }
 
-static isize ui_max_top(const UiList *l)
+// Entries a row: 1 in a list.
+static isize ui_cols(const UiList *l)
 {
-    isize rows = l->rows > 0 ? l->rows : 1;
-    return l->n > rows ? l->n - rows : 0;
+    return l->cols > 1 ? l->cols : 1;
 }
 
-// The cursor on screen: the scroll moves as little as it must.
+// The scroll as far down as it goes: the first entry of the row that puts the last row at the bottom.
+static isize ui_max_top(const UiList *l)
+{
+    isize rows = l->rows > 0 ? l->rows : 1, c = ui_cols(l), all = (l->n + c - 1) / c;
+    return all > rows ? (all - rows) * c : 0;
+}
+
+// The scroll at top, in range. Its callers keep it on the first entry of a row: ui_scroll moves
+// whole rows, and the rest call ui_show_sel after it, which puts it there.
+static isize ui_top_at(const UiList *l, isize top)
+{
+    return ui_clamp(top, 0, ui_max_top(l));
+}
+
+// The cursor on screen: the scroll moves as little as it must, a row at a time.
 static void ui_show_sel(UiList *l)
 {
-    isize rows = l->rows > 0 ? l->rows : 1;
-    if (l->sel < l->top) l->top = l->sel;
-    if (l->sel >= l->top + rows) l->top = l->sel - rows + 1;
-    l->top = ui_clamp(l->top, 0, ui_max_top(l));
+    isize rows = l->rows > 0 ? l->rows : 1, c = ui_cols(l), row = l->sel / c, top = l->top / c;
+    if (row < top) top = row;
+    if (row >= top + rows) top = row - rows + 1;
+    l->top = ui_top_at(l, top * c);
 }
 
 // A new list (a folder entered, or the same one reloaded) of n entries, the cursor on sel. The
@@ -231,7 +252,7 @@ static void ui_set(UiList *l, isize n, isize sel)
 {
     l->n = n;
     l->sel = n > 0 ? ui_clamp(sel, 0, n - 1) : 0;
-    l->top = ui_clamp(l->top, 0, ui_max_top(l));
+    l->top = ui_top_at(l, l->top);
     ui_show_sel(l);
 }
 
@@ -239,14 +260,43 @@ static void ui_set(UiList *l, isize n, isize sel)
 static void ui_resize(UiList *l, int rows)
 {
     l->rows = rows;
-    l->top = ui_clamp(l->top, 0, ui_max_top(l));
+    l->top = ui_top_at(l, l->top);
     ui_show_sel(l);
+}
+
+// A new number of columns (the icon view's width changed, or the view itself: 1 for the list). The
+// scroll keeps the row its first entry was on, the cursor on screen.
+static void ui_set_cols(UiList *l, int cols)
+{
+    l->cols = cols;
+    l->top = ui_top_at(l, l->top);
+    ui_show_sel(l);
+}
+
+// The wheel: notches rows up (positive) or down, the cursor left where it is.
+static void ui_scroll(UiList *l, int notches)
+{
+    l->top = ui_top_at(l, l->top - (isize)notches * ui_cols(l));
 }
 
 static void ui_move(UiList *l, isize by)
 {
     if (l->n == 0) return;
     l->sel = ui_clamp(l->sel + by, 0, l->n - 1);
+    ui_show_sel(l);
+}
+
+// The icon view's cursor `rows` rows down (up when negative), in its column: past the first row it
+// stays in the first; past the last, in the last row's cell under it, or on the last entry when
+// that row ends before its column (as Nemo does).
+static void ui_move_rows(UiList *l, isize rows)
+{
+    if (l->n == 0) return;
+    isize c = ui_cols(l), col = l->sel % c, to = l->sel + rows * c;
+    if (to < 0) to = col;
+    if (to >= l->n) to = (l->n - 1) / c * c + col;
+    if (to >= l->n) to = l->n - 1;
+    l->sel = to;
     ui_show_sel(l);
 }
 
@@ -301,6 +351,14 @@ static void ui_step(Ui *u, UiList *m, isize by)
 {
     ui_move(m, by);
     if (m == &u->side) ui_side_settle(u, by < 0 ? -1 : 1);
+}
+
+// The view: icons in a grid, or the list. gui/ sets the columns at its next layout.
+static UiAction ui_view(Ui *u, bool grid)
+{
+    u->grid = grid;
+    if (!grid) ui_set_cols(&u->list, 1);
+    return (UiAction){ UA_VIEW, grid, false };
 }
 
 // ---- find -------------------------------------------------------------------------------------
@@ -742,7 +800,7 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         u->asking = false;
         return (UiAction){ UA_ANSWER, a, a != UI_ANS_CANCEL && u->ask_all };
     }
-    if (in->wheel) l->top = ui_clamp(l->top - in->wheel, 0, ui_max_top(l));
+    if (in->wheel) ui_scroll(l, in->wheel);
     if (!prompt && in->header >= 0 && in->header < SORT_KEYS) {
         u->sort = ui_sort_click(u->sort, (SortKey)in->header);
         return (UiAction){ UA_SORT, 0, false };
@@ -777,6 +835,8 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         case UB_CRUMB: ui_edit_close(u); return (UiAction){ UA_CRUMB, in->crumb, false };
         case UB_RESTORE: if (u->in_trash && l->n > 0) return (UiAction){ UA_RESTORE, 0, false }; break;
         case UB_EMPTY: if (u->in_trash) u->empty_asking = true; break;
+        case UB_VIEW_LIST: return ui_view(u, false);
+        case UB_VIEW_ICONS: return ui_view(u, true);
         default: break;
         }
     }
@@ -855,9 +915,11 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
             continue;
         }
         if (u->finding && ui_find_event(u, names, e)) continue;
-        // The keys and letters that move a cursor: the sidebar's when it has the keyboard.
+        // The keys and letters that move a cursor: the sidebar's when it has the keyboard. In the
+        // icon view, Up and Down move a row and Left and Right a cell (F6.2).
         UiList *m = u->side_focus ? &u->side : l;
         isize page = m->rows > 1 ? m->rows - 1 : 1;
+        bool grid = u->grid && m == l;
         UiKey key = e.key;
         if (key == UK_NONE) {
             switch (e.ch) {
@@ -885,6 +947,14 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
             default: continue;
             }
         }
+        if (grid && (key == UK_LEFT || key == UK_RIGHT)) {
+            ui_move(l, key == UK_LEFT ? -1 : 1);
+            continue;
+        }
+        if (grid && (key == UK_UP || key == UK_DOWN || key == UK_PAGEUP || key == UK_PAGEDOWN)) {
+            ui_move_rows(l, key == UK_UP ? -1 : key == UK_DOWN ? 1 : key == UK_PAGEUP ? -page : page);
+            continue;
+        }
         switch (key) {
         case UK_UP: ui_step(u, m, -1); break;
         case UK_DOWN: ui_step(u, m, 1); break;
@@ -892,6 +962,8 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         case UK_PAGEDOWN: ui_step(u, m, page); break;
         case UK_HOME: ui_step(u, m, -m->n); break;
         case UK_END: ui_step(u, m, m->n); break;
+        case UK_VIEW_ICONS: return ui_view(u, true);
+        case UK_VIEW_LIST: return ui_view(u, false);
         case UK_ENTER:
         case UK_RIGHT:
             if (u->side_focus && u->side.n > 0 && key == UK_RIGHT && u->side_mode == SIDE_TREE)
@@ -1266,6 +1338,48 @@ static bool ui_fit(Str s, float width, float dots, float (*adv)(u32), bool keep_
         w += a, *to = i;
     }
     return false;
+}
+
+// Whether s breaks after byte i: after a space, '-', '_' or '.', where a name reads as words.
+static bool ui_breaks_after(Str s, isize i)
+{
+    char c = s.p[i];
+    return c == ' ' || c == '-' || c == '_' || c == '.';
+}
+
+// s in lines of `width` at most, for a name under its icon (F6.2): each line ends after the last
+// break (ui_breaks_after) that fits, or between code points when none does, and holds one code
+// point at least. At most `most` lines: the last holds the rest, cut to fit with an ellipsis of
+// width `dots` when it doesn't (*cut true). Line k is [from[k], to[k]); returns how many.
+static int ui_wrap(Str s, float width, float dots, float (*adv)(u32), int most, isize *from, isize *to, bool *cut)
+{
+    *cut = false;
+    int n = 0;
+    isize at = 0;
+    while (n < most && (at < s.len || n == 0)) {
+        Str rest = str_cut(s, at, s.len);
+        isize f, t;
+        if (n == most - 1 || ui_width(rest, adv) <= width) {
+            *cut = !ui_fit(rest, width, dots, adv, false, &f, &t);
+            from[n] = at, to[n] = at + t, n++;
+            break;
+        }
+        // The longest run of whole code points that fits, then back to its last break.
+        float w = 0;
+        isize end = at, brk = -1;
+        for (isize i = at; i < s.len;) {
+            isize j = i;
+            float a = adv(utf8_next(s.p, s.len, &j));
+            if (w + a > width && end > at) break;
+            w += a, end = j;
+            if (ui_breaks_after(s, i)) brk = j;
+            i = j;
+        }
+        isize e = brk > at ? brk : end;   // end < s.len: the rest fitting was the case above
+        from[n] = at, to[n] = e, n++;
+        at = e;
+    }
+    return n;
 }
 
 // ---- display --------------------------------------------------------------------------------

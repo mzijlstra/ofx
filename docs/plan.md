@@ -158,6 +158,20 @@ Decisions:
 - **Icon size:** 48 px at first (Yaru's PNGs: 16, 22, 24, 32, 48 and 256, each also @2x); F6.3
   adds the others, scaling the 256 down between 48 and 256.
 
+**As built (2026-10-23):**
+- A cell is 112 by 104 px: the icon, then two lines of name (`ui_wrap`: after a space, `-`, `_` or
+  `.` where one fits, else between characters; the second line cut with "…"). The cursor's cell
+  keeps its size; its name, up to 8 lines, floats over the cells below on the selection colour,
+  and a press there is the cursor's. Columns follow the width beside the sidebar; the scroll moves
+  a row at a time, the wheel a row a notch.
+- Down onto a last row that ends before the cursor's column goes to the last entry; Up in the
+  first row and Down in the last stay put, as in Nemo. PgUp/PgDn keep the column.
+- The buttons are drawn (three lines, four squares): Yaru has its view icons as SVG only.
+- Rename's edit line sits under the icon, as wide as the name (one to two cells).
+- No column headers in the icon view; `s`/`S` still sort.
+- Found on the way, not F6.2's: an empty `photo.png` shows no icon, in the list too (not looked
+  into yet).
+
 **Thumbnails, F6.4 (noted now):** read and written in `~/.cache/thumbnails` by the freedesktop
 spec (Nemo fills it here already: `normal`, `large`, `x-large`, `fail`), PNG and JPEG decoded off
 the main thread, a cap on textures held; the rule from Nemo's loop below holds.

@@ -130,20 +130,20 @@ expect crumb=0 dir=/
 key ctrl-l
 type ~/tree/zz-a-rather-long-folder-name-1/zz-a-rather-long-folder-name-2/zz-a-rather-long-folder-name-3/zz-a-rather-long-folder-name-4/zz-a-rather-long-folder-name-5/zz-a-rather-long-folder-name-6/zz-a-rather-long-folder-name-7/zz-a-rather-long-folder-name-8
 key enter
-expect locating=0 arrows=1 crumb=9 crumbshown=7-10
+expect locating=0 arrows=1 crumb=9 crumbshown=8-10
 shot overflow.png
 point-ui crumb-left
 click-here
-expect crumbshown=6-9 crumb=9
+expect crumbshown=7-9 crumb=9
 shot overflow-left.png
 point-ui crumb-right
 click-here
-expect crumbshown=7-10
+expect crumbshown=8-10
 # Up keeps the long path; the window follows the current one
 key alt-up
 key alt-up
 key alt-up
-expect crumb=6 crumbshown=4-7 sel=zz-a-rather-long-folder-name-6
+expect crumb=6 crumbshown=5-7 sel=zz-a-rather-long-folder-name-6
 # Backspace on a fresh line clears it all
 key ctrl-l
 key backspace

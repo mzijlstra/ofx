@@ -1,6 +1,7 @@
 // What ofx remembers by itself across a restart (docs/plan.md, F6 "Remembered"): the sidebar's
-// mode, in $XDG_STATE_HOME/ofx/state (~/.local/state by default), which ofx writes. Options
-// Michael sets go in $XDG_CONFIG_HOME/ofx/ofx.conf, which ofx only reads (none yet).
+// mode and the files' view (list or icons, F6.2), in $XDG_STATE_HOME/ofx/state (~/.local/state by
+// default), which ofx writes. Options Michael sets go in $XDG_CONFIG_HOME/ofx/ofx.conf, which ofx
+// only reads (none yet).
 //
 // One `key=value` a line; a key ofx doesn't know, or a value it doesn't, is left out.
 
@@ -19,6 +20,7 @@ static const char *const SIDE_MODE_NAMES[SIDE_MODES] = { "places", "tree", "hidd
 
 typedef struct {
     SideMode side;
+    bool     icons;   // the files as icons, not the list (F6.2)
 } State;
 
 // $XDG_STATE_HOME/ofx/state, else ~/.local/state/ofx/state; false when neither is set.
@@ -35,7 +37,7 @@ static bool state_path(char *out, size_t cap)
 // The state in file path; the defaults for what it doesn't say (or no file at all).
 static State state_load(Arena *scratch, const char *path)
 {
-    State s = { SIDE_PLACES };
+    State s = { SIDE_PLACES, false };
     ArenaMark mark = arena_mark(scratch);
     Str text = read_file(scratch, path);
     isize at = 0;
@@ -44,6 +46,10 @@ static State state_load(Arena *scratch, const char *path)
         isize eq = str_find(line, '=');
         if (eq < 0) continue;
         Str key = str_trim(str_cut(line, 0, eq)), val = str_trim(str_cut(line, eq + 1, line.len));
+        if (str_eq(key, S("view"))) {
+            if (str_eq(val, S("icons"))) s.icons = true;
+            else if (str_eq(val, S("list"))) s.icons = false;
+        }
         if (!str_eq(key, S("sidebar"))) continue;
         for (int k = 0; k < SIDE_MODES; k++)
             if (str_eq(val, str_from_c(SIDE_MODE_NAMES[k]))) s.side = (SideMode)k;
@@ -65,7 +71,8 @@ static bool state_save(const char *path, const State *s, Err *err)
     int fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0600);
     if (fd < 0) return err_set(err, "%s: %s", tmp, strerror(errno)), false;
     char body[128];
-    int n = snprintf(body, sizeof body, "sidebar=%s\n", SIDE_MODE_NAMES[s->side < SIDE_MODES ? s->side : SIDE_PLACES]);
+    int n = snprintf(body, sizeof body, "sidebar=%s\nview=%s\n", SIDE_MODE_NAMES[s->side < SIDE_MODES ? s->side : SIDE_PLACES],
+                     s->icons ? "icons" : "list");
     bool ok = write(fd, body, (size_t)n) == n;
     ok &= close(fd) == 0;
     if (!ok || rename(tmp, path) != 0) {

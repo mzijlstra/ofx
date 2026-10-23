@@ -105,7 +105,7 @@ MUTANTS = [
     (J, "    if (gone) app.ui.cancel_asking = false;   // it ended meanwhile", ""),
     (J, "    for (int i = 0; i < jobs.nrun; i++) job_cancel(job_recs[jobs.run[i]].id);", ""),
     (J, "        jobline_sample(&r->line, now,", "        if (0) jobline_sample(&r->line, now,"),
-    (G, "    int r = (h - top_h() - COLS_H - FOOTER_H - jobs_h() - (app.ui.in_trash", "    int r = (h - top_h() - COLS_H - FOOTER_H - (app.ui.in_trash"),
+    (G, "    int room = h - top_h() - FOOTER_H - jobs_h() - (app.ui.in_trash", "    int room = h - top_h() - FOOTER_H - (app.ui.in_trash"),
     (G, "        if (in_box(CLAY_IDI(\"job-x\", i), x, y)) h.job_x = i;", ""),
     (G, "    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_J) return UK_JOBS;\n", ""),
     (G, "    if (app.ui.cancel_asking) return MODAL_CANCEL;", ""),
@@ -128,8 +128,8 @@ MUTANTS = [
     (G, "    app.ui.in_trash = in_trash;\n", ""),
     (G, "    case UA_RESTORE: trash_restore_targets(); break;\n", ""),
     (G, "        if (ui_input_acts(&in) && ui_status_clears(app.status_bad, app.status_at, now_ms())) app.status[0] = 0;", ""),
-    (G, "        if (state_path(path, sizeof path) && !state_save(path, &st, &err)) set_status(true, \"%s\", err.msg);", ""),
-    (G, "    if (state_path(state_file, sizeof state_file)) app.ui.side_mode = state_load(&scratch, state_file).side;", ""),
+    (G, "        if (state_path(path, sizeof path) && !state_save(path, &st, &err)) set_status(true, \"%s\", err.msg);\n        break;\n    }\n    case UA_VIEW", "        break;\n    }\n    case UA_VIEW"),
+    (G, "    if (state_path(state_file, sizeof state_file)) {\n        State st", "    if (0) {\n        State st"),
     (G, "    case UA_SIDE_MODE: {\n        side_refresh();", "    case UA_SIDE_MODE: {"),
     (G, "        if (in_box(CLAY_IDI(\"mode\", k), x, y)) h.mode = k;", "        if (0) h.mode = k;"),
     (J, "    if (r->trash == JOB_TRASH_ITEMS) done /= 2, shown_n /= 2;", ""),
@@ -147,6 +147,24 @@ MUTANTS = [
     (G, "        if (eject_take()) dirty = true;", ""),
     ('gui/eject.c', "    if (jobs_refuse(p->path)) return false;   // a job of ours writes there: it says so", ""),
     (G, "    if (chdir(\"/\") != 0) fprintf(stderr, \"ofx: chdir /: %s\\n\", strerror(errno));", ""),
+    # F6.2: the icon view
+    (G, "    int c = (w - side_w() - 2 * PAD) / CELL_W;", "    int c = (w - 2 * PAD) / CELL_W;"),
+    (G, "    int r = app.ui.grid ? (room - PAD) / CELL_H : (room - COLS_H) / ROW_H;", "    int r = (room - COLS_H) / ROW_H;"),
+    (G, "    for (int r = 0; r < list_cells() && h.row < 0; r++)", "    for (int r = 0; r < app.ui.list.rows && h.row < 0; r++)"),
+    (G, "    if (app.ui.grid && app.ui.list.sel >= app.ui.list.top && in_box(CLAY_ID(\"cell-full\"), x, y)) h.row = (int)(app.ui.list.sel - app.ui.list.top);\n", ""),
+    (G, "        if (rows != app.ui.list.rows) ui_resize(&app.ui.list, rows), dirty = true;\n", ""),
+    (G, "    if (!app.ui.grid) return 1;\n    int c = (w", "    int c = (w"),
+    (G, "        State st = { app.ui.side_mode, app.ui.grid };\n        if (state_path(path, sizeof path) && !state_save(path, &st, &err)) set_status(true, \"%s\", err.msg);\n        break;\n    }\n    case UA_BACK", "        break;\n    }\n    case UA_BACK"),
+    (G, "        app.ui.side_mode = st.side, app.ui.grid = st.icons;", "        app.ui.side_mode = st.side;"),
+    (G, "    if (m == GLFW_MOD_CONTROL && (key == GLFW_KEY_1 || key == GLFW_KEY_KP_1)) return UK_VIEW_ICONS;", ""),
+    (G, "    if (m == GLFW_MOD_CONTROL && (key == GLFW_KEY_2 || key == GLFW_KEY_KP_2)) return UK_VIEW_LIST;", ""),
+    (G, "    return app.ui.grid ? GRID_ICON_PX : ICON_PX;", "    return ICON_PX;"),
+    (G, "            int n = name_lines(\"cell-line\", k, e->name, 2, name_w, fg, &cut);", "            int n = name_lines(\"cell-line\", k, e->name, CELL_LINES_FULL, name_w, fg, &cut);"),
+    (G, "        isize first = app.ui.list.top + (isize)r * cols;", "        isize first = app.ui.list.top + r;"),
+    (G, "        if (cols != (int)ui_cols(&app.ui.list)) ui_set_cols(&app.ui.list, cols), dirty = true;", ""),
+    (G, "{ \"view-list\", UB_VIEW_LIST }, { \"view-icons\", UB_VIEW_ICONS },", "{ \"view-list\", UB_VIEW_LIST },"),
+    (G, "            if (app.have_list && app.ui.grid) layout_grid();\n", ""),
+    (G, "    if (strmap_get(&app.slot_of, slot_key, &k))", "    if (strmap_get(&app.slot_of, key, &k))"),
 ]
 scratch = sys.argv[1]
 only = [int(x) for x in sys.argv[2].split(',')] if len(sys.argv) > 2 else None
@@ -159,6 +177,16 @@ os.symlink(os.path.join(root, 'build', 'raylib'), os.path.join(work, 'build', 'r
 for f, old, new in MUTANTS:
     n = open(os.path.join(work, f)).read().count(old)
     assert n == 1, (f, old, n)
+# The unmutated build first: if it fails, every mutant would count as killed (as they did while
+# f6 couldn't start, from fe01f7c to e8c2c57).
+b = subprocess.run(['make', '-s', 'build/ofx'], cwd=work, capture_output=True, text=True)
+r = subprocess.run([os.path.join(root, 'tests/gui/run.sh'), os.path.join(scratch, 'gm-base'), os.path.join(work, 'build/ofx')],
+                   capture_output=True, text=True)
+if b.returncode != 0 or r.returncode != 0:
+    print('the unmutated build fails tests/gui/run.sh: fix that first')
+    print(b.stderr[-300:], '\n'.join(l for l in r.stdout.splitlines() if 'FAILED' in l or (l.startswith('script:') and not l.startswith('script: 0 of'))))
+    sys.exit(2)
+print('base: tests/gui/run.sh passes unmutated', flush=True)
 survivors = []
 for i, (f, old, new) in enumerate(MUTANTS):
     if only is not None and i not in only:

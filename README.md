@@ -35,6 +35,7 @@ wayland-cursor, wayland-egl, xkbcommon, fontconfig and freetype2. raylib and Cla
 | `s`, `S` | sort by the next column (name, size, modified), reverse |
 | Tab | the keys to the sidebar and back; in the tree, Left/Right (`h`/`l`) close and open a folder (or move up and down a level), Enter goes there |
 | F9 | the sidebar's next mode: places, tree, hidden |
+| Ctrl+1, Ctrl+2 | the files as icons, as the list (also the two buttons at the right of the top bar; remembered) |
 | `t` | a terminal in this folder (`xdg-terminal-exec --dir`) |
 | `~` | home |
 | Space, Ctrl+A | select the entry (and move on), select all; Esc clears |
@@ -72,6 +73,13 @@ Mouse: a click puts the cursor on a row, Ctrl+click and Shift+click select, a do
 the wheel scrolls a row per notch, a click on a column header sorts by it (again: reversed), a
 click on a place goes there, and the back and forward buttons walk the history. The list refreshes by itself when the folder changes, and the
 colours and icons follow a theme switch.
+
+The icon view (Ctrl+1): each entry a 48 px icon over its name, wrapped to two lines and cut with
+"…"; the cursor's name shows in full, over the cells below. Left/Right (`h`/`l`) move a cell and run
+on across the rows, Up/Down (`k`/`j`) a row, PgUp/PgDn a page of rows, Home/End the first and
+last; Enter opens and Backspace goes up (Left doesn't, there). Sort, find, the selection, rename,
+tabs and the rest work as in the list; size and date are in the status line. The view is one for
+every folder, remembered beside the sidebar's mode.
 
 The sidebar, in one of three modes, picked with the three buttons at the left of the bottom bar
 or F9 (remembered in `~/.local/state/ofx/state`):
