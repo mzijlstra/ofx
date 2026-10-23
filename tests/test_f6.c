@@ -1,3 +1,6 @@
+#include <signal.h>
+#include <sys/resource.h>
+
 // F6's unit tests: the remembered state, the status line, the sidebar's modes. Included by
 // test.c.
 
@@ -23,7 +26,7 @@ static void test_state(void)
     struct stat st;
     CHECK(stat(at("state/ofx"), &st) == 0 && (st.st_mode & 0777) == 0700);
     // What it doesn't know is left out; spaces around the = are fine; the last word wins.
-    put(path, "# a comment\nwindow=big\nsidebar = tree\nsidebar=nonsense\nnoequals\n");
+    put(path, "# a comment\nwindow=big\nsidebar = tree\nsidebar=nonsense\nnoequals\nother=hidden\n");
     CHECK(state_load(&ta, path).side == SIDE_TREE);
     put(path, "sidebar=hidden\nsidebar=places\n");
     CHECK(state_load(&ta, path).side == SIDE_PLACES);
@@ -32,6 +35,21 @@ static void test_state(void)
     // An out of range mode is saved as places.
     s.side = SIDE_MODES;
     CHECK(state_save(path, &s, &err) && state_load(&ta, path).side == SIDE_PLACES);
+    // A write that fails (no room: the file size limit at 0): the save fails, the old file stays,
+    // no temporary file is left.
+    s.side = SIDE_TREE;
+    CHECK(state_save(path, &s, &err));
+    struct rlimit was;
+    getrlimit(RLIMIT_FSIZE, &was);
+    signal(SIGXFSZ, SIG_IGN);
+    struct rlimit none = { 0, was.rlim_max };
+    setrlimit(RLIMIT_FSIZE, &none);
+    s.side = SIDE_HIDDEN;
+    bool wrote = state_save(path, &s, &err);
+    setrlimit(RLIMIT_FSIZE, &was);
+    signal(SIGXFSZ, SIG_DFL);
+    CHECK(!wrote && strstr(err.msg, "cannot write it"));
+    CHECK(state_load(&ta, path).side == SIDE_TREE && access(tmp, F_OK) != 0);
     // A folder in the way: the save fails and says why, the old file stays.
     env_restore();
     env_set("XDG_STATE_HOME", at("state-blocked"));
@@ -398,14 +416,20 @@ static void test_trash_view(void)
     snprintf(tr2, sizeof tr2, "tv/drive2/.Trash/%u/files", (unsigned)getuid());
     mkdirs(at("%s", tr2));
 
-    const char *mounts[] = { at("tv/drive"), at("tv/drive"), at("tv/drive2"), at("tv/none") };
-    char m0[PATH_MAX], m2[PATH_MAX], m3[PATH_MAX];
-    snprintf(m0, sizeof m0, "%s", mounts[0]), snprintf(m2, sizeof m2, "%s", mounts[2]), snprintf(m3, sizeof m3, "%s", mounts[3]);
-    const char *mp[] = { m0, m0, m2, m3 };
+    char m0[PATH_MAX], m2[PATH_MAX], m3[PATH_MAX], m4[PATH_MAX];
+    snprintf(m0, sizeof m0, "%s", at("tv/drive")), snprintf(m2, sizeof m2, "%s", at("tv/drive2"));
+    snprintf(m3, sizeof m3, "%s", at("tv/none")), snprintf(m4, sizeof m4, "%s", at("tv/drive3"));
+    // A drive's .Trash/$uid with an info/ in it: its trash too.
+    char tr3[PATH_MAX];
+    snprintf(tr3, sizeof tr3, "tv/drive3/.Trash/%u", (unsigned)getuid());
+    mkdirs(at("%s/files", tr3));
+    mkdirs(at("%s/info", tr3));
+    const char *mp[] = { m0, m0, m2, m3, m4 };
     static TrashDirs d;
-    trash_dirs(&d, mp, 4);
-    CHECK(d.n == 2 && strcmp(d.dir[0], at("tv/data/Trash")) == 0 && d.top[0][0] == 0);
+    trash_dirs(&d, mp, 5);
+    CHECK(d.n == 3 && strcmp(d.dir[0], at("tv/data/Trash")) == 0 && d.top[0][0] == 0);
     CHECK(strcmp(d.dir[1], at("%s", tr)) == 0 && strcmp(d.top[1], m0) == 0);
+    CHECK(strcmp(d.dir[2], at("%s", tr3)) == 0 && strcmp(d.top[2], m4) == 0);
     Listing l;
     CHECK(trash_list(&ta, &d, false, (Sort){ SORT_NAME, false }, &l, &err));
     const char *want[] = { "folder", "a.txt", "abs", "b.txt", "c d.txt" };
@@ -439,7 +463,7 @@ static void test_trash_view(void)
     // Its folder can't be made (a file in the way).
     put(at("tv/blocker"), "x");
     TrashItem blocked = { l.e[0].trash->file, l.e[0].trash->info, at("tv/blocker/sub/folder") };
-    CHECK(!trash_restore_item(&blocked, &err) && there(l.e[0].trash->file));
+    CHECK(!trash_restore_item(&blocked, &err) && strstr(err.msg, "blocker/sub") && there(l.e[0].trash->file));
     // What is left: the folder and abs, and the dot-file.
     CHECK(trash_list(&ta, &d, false, (Sort){ SORT_NAME, false }, &l, &err) && l.n == 2);
     // No trash at all.
@@ -487,6 +511,8 @@ static void test_trash_keys(void)
     in.bar = UB_EMPTY;
     CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.empty_asking);
     in = chars("r");   // a panel is up: no restore under it
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.empty_asking);
+    in = ui_input_none(), in.bar = UB_RESTORE;   // nor a click on Restore
     CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.empty_asking);
     in = keys(1, UK_ESC);
     CHECK(ui_handle(&u, names, &in).kind == UA_NONE && !u.empty_asking);

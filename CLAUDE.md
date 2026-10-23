@@ -21,6 +21,13 @@ rules shared by every tool here.
   run `omarchy-theme-set` or anything else that changes his theme to test a switch.
 - **The sidebar** reads the GTK bookmarks (shared with Nemo) and the XDG user dirs under
   `$XDG_CONFIG_HOME`; `run-script.sh` points that at `<scratch>/config`. ofx never writes them.
+- **The mount list** (F6): ofx polls `/proc/self/mountinfo`, and reads each drive's trash
+  (`/mnt/sd/.Trash-1000` here) in the trash view. A GUI test that opens the trash view or counts
+  drives sets `OFX_TEST_MOUNTINFO` to a scratch file (run-script passes it on), so it sees only
+  `/` and never his drives' trash; Empty Trash in a test with his real mount list would aim at
+  `/mnt/sd/.Trash-1000` (the guard refuses it, but don't rely on that).
+- **The state file** (F6): ofx writes the sidebar's mode to `$XDG_STATE_HOME/ofx/state`;
+  `run-script.sh` points that at `<scratch>/state`, so a test never changes his.
 - **ofx changes files since F3:** rename, new folder, trash, delete for good, copy and move. Every
   write in fs/ goes through `ops_allowed` (fs/ops.c), which refuses any path outside
   `OFX_GUI_ROOT` when it is set: `run-script.sh` sets it to the run's scratch dir, the unit tests

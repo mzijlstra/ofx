@@ -33,14 +33,16 @@ wayland-cursor, wayland-egl, xkbcommon, fontconfig and freetype2. raylib and Cla
 | `/`, Ctrl+F | find: type to jump, Enter keeps, Esc goes back; then `n`/`N` again |
 | `.`, Ctrl+H | hidden files on and off |
 | `s`, `S` | sort by the next column (name, size, modified), reverse |
-| Tab | the keys to the places in the sidebar and back |
+| Tab | the keys to the sidebar and back; in the tree, Left/Right (`h`/`l`) close and open a folder (or move up and down a level), Enter goes there |
+| F9 | the sidebar's next mode: places, tree, hidden |
 | `t` | a terminal in this folder (`xdg-terminal-exec --dir`) |
 | `~` | home |
 | Space, Ctrl+A | select the entry (and move on), select all; Esc clears |
 | F2 | rename, in the row: Enter renames, Esc cancels |
 | In the rename and location lines | Shift+Left/Right/Home/End select, Ctrl+A all; Ctrl+C, Ctrl+X, Ctrl+V copy, cut and paste text (the first line; a name leaves `/` out) |
 | Ctrl+Shift+N | a new folder, "New folder", named in the row |
-| Delete | to the trash (the one Nemo shows) |
+| Delete | to the trash (the one Nemo shows); in the trash view, for good after asking |
+| `r` | in the trash view: restore the selected entries where they came from |
 | Shift+Delete | delete for good, after "Y/n" (Enter or `y` deletes) |
 | Ctrl+C, Ctrl+X, Ctrl+V | copy, cut, paste; Nemo and terminals paste what ofx copied, ofx what Nemo copied |
 | Ctrl+Z | undo the last rename, new folder, trash, copy or move |
@@ -71,8 +73,23 @@ the wheel scrolls a row per notch, a click on a column header sorts by it (again
 click on a place goes there, and the back and forward buttons walk the history. The list refreshes by itself when the folder changes, and the
 colours and icons follow a theme switch.
 
-The sidebar: Home, your GTK bookmarks (`~/.config/gtk-3.0/bookmarks`, the ones Nemo shows), `/`
-and what is mounted under `/mnt`, `/media` and `/run/media`.
+The sidebar, in one of three modes, picked with the three buttons at the left of the bottom bar
+or F9 (remembered in `~/.local/state/ofx/state`):
+- **places**: under *Places*, Home, your GTK bookmarks (`~/.config/gtk-3.0/bookmarks`, the ones
+  Nemo shows) and Trash; under *Drives*, `/` and what is mounted under `/mnt`, `/media` and
+  `/run/media`, each with its free space and a bar of how full it is. A drive mounted or unmounted
+  shows at once.
+- **tree**: the folders from `/`, opened down to the one shown.
+- **hidden**: no sidebar.
+
+The bottom bar's status part: what just happened, until the next key or click; else the selected
+entry (`"adir" selected (12 items)`), how many are selected, or the folder's count and its drive's
+free space.
+
+The trash view (Trash in the sidebar): every trash, the home one and each drive's, as one list;
+each entry with the folder it came from and when it was trashed. Restore (or `r`) puts the
+selected entries back, making their folder again if it is gone; Delete deletes them for good;
+Empty Trash deletes all of it after asking. Rename, paste and a new folder don't work there.
 
 ## Where things come from
 

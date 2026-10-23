@@ -57,6 +57,8 @@ his word: Nemo's compact view and its icon size slider.
   hangs sits in D state, which no thread exit can reap, so ofx's process (its Wayland socket) can
   outlive its window. Only a child process that does the counting decouples a dead mount fully.
 - Remember the open tabs across a restart (F5 doesn't).
+- A resizable sidebar (the tree's deep levels get little room at 200 px).
+- The Trash place's icon full or empty; watching the drives' trashes too.
 - Not wanted: Nemo's built-in terminal (`t`, a terminal here, covers it).
 
 **Thumbnails, a rule from Nemo (2026-10-20):** Nemo looped at up to 45% CPU on one file
@@ -155,6 +157,30 @@ across the window, its left part the sidebar's, its right part the status. Decis
   later. Options Michael sets (a date format, columns) go in `$XDG_CONFIG_HOME/ofx/ofx.conf`, which
   ofx only reads; what ofx remembers by itself (the mode, later the tabs) in
   `$XDG_STATE_HOME/ofx/state`, which ofx writes. The XDG split; Michael agreed (2026-10-22).
+
+**As built (2026-10-23), the calls made along the way:**
+- The headings *Places* and *Drives* are rows of their own; the cursor steps over them, a click
+  on one does nothing. A drive's free space is on the right of its row, the fullness bar under
+  its name, red from 90% full. The mounts come live from `/proc/self/mountinfo`'s POLLPRI
+  (proc(5)); a drive's space is read again with every listing (no timer: idle stays idle).
+- The tree opens the folders above the one shown, not that folder itself; folders opened by hand
+  stay open (up to 128). Left/Right (`h`/`l`) in the sidebar close and open a folder, or move up to
+  its folder and down into it; a click on the ▸/▾ mark opens or closes, a click on the name goes
+  there. 10 px a level; deep names are cut with "…" (the sidebar is 200 px, not resizable yet).
+- The status part: a message (an error, "Copied 3 items") stays until the next key or click, then
+  the status line comes back. A selected file shows its size the way a folder shows its count
+  (`"a.txt" selected (4.2 KiB)`); hidden files left out are counted, `14 items (2 hidden), 87 GiB
+  free`. The prompts' one-line hints (find, rename, location, path buttons, jobs) stay; the key
+  list goes.
+- The trash view is `trash:///`, a listing of every trash (the home one and each drive's
+  `.Trash/$uid` and `.Trash-$uid`): an item by its first name, the folder it came from beside it,
+  the Modified column as Deleted. Restore (the button, or `r`) makes a missing folder again and
+  never replaces a file there now (it says so). Delete there is for good, asked first, with the
+  `.trashinfo`. Empty Trash deletes each trash's `files/` and `info/` as one job; the next trash
+  makes them again. A file opens from there, a folder doesn't; rename, paste, a new folder, copy,
+  cut and a terminal say they don't work there. Only the home trash is watched (a drive's trash
+  changes by ofx reload the view).
+- `ofx.conf`: nothing reads it yet (no options so far).
 
 ## F5.2 design (2026-10-21)
 

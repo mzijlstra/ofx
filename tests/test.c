@@ -1126,6 +1126,22 @@ static void test_side_heads(void)
     in = keys(1, UK_UP);   // / with Drives above it in view
     ui_handle(&u, names, &in);
     CHECK(u.side.sel == 4 && u.side.top == 3);
+    // Scrolling up onto the row under a heading brings the heading into view too.
+    static const u8 LONG[] = { 1, 0, 0, 1, 0, 0, 0, 0 };
+    u.side_head = LONG;
+    ui_set(&u.side, 8, 1);
+    in = keys(1, UK_END);
+    ui_handle(&u, names, &in);
+    CHECK(u.side.sel == 7 && u.side.top == 5);
+    in = keys(3, UK_UP, UK_UP, UK_UP);
+    ui_handle(&u, names, &in);
+    CHECK(u.side.sel == 4 && u.side.top == 3);
+    u.side_head = HEAD;
+    ui_set(&u.side, 6, 4);
+    in = keys(1, UK_END);
+    ui_handle(&u, names, &in);
+    in = keys(1, UK_UP);
+    ui_handle(&u, names, &in);
     // A click on a heading does nothing; on a row it goes there.
     in = ui_input_none();
     in.side_click = 0;   // top 3: Drives

@@ -73,7 +73,7 @@ key shift-delete
 expect modal=delete
 char y
 wait-for 3000 n=0 job=-
-expect status=Deleted
+expect status=Deleted 1 item
 sh test ! -e "$OFX_ROOT/data/Trash/files/adir" && test ! -e "$OFX_ROOT/data/Trash/info/adir.trashinfo"
 # Two more trashed; Empty Trash asks, Esc keeps them, Yes deletes all
 key alt-left
