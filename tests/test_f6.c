@@ -696,13 +696,27 @@ static void test_eject(void)
 {
     char out[64];
     Err err;
+    bool late;
     char *sh[] = { "sh", "-c", "echo out; echo err >&2; exit 3", NULL };
-    CHECK(spawn_capture(sh, out, sizeof out, &err) && strcmp(out, "out\nerr\n") == 0);
+    CHECK(spawn_capture(sh, out, sizeof out, 5000, &late, &err) && strcmp(out, "out\nerr\n") == 0);
     char small[5];
     char *lots[] = { "sh", "-c", "seq 1000", NULL };   // more than fits: cut, read to its end
-    CHECK(spawn_capture(lots, small, sizeof small, &err) && strcmp(small, "1\n2\n") == 0);
+    CHECK(spawn_capture(lots, small, sizeof small, 5000, &late, &err) && strcmp(small, "1\n2\n") == 0);
     char *none[] = { "/nonexistent/prog", NULL };
-    CHECK(!spawn_capture(none, out, sizeof out, &err) && strstr(err.msg, "/nonexistent/prog"));
+    CHECK(!spawn_capture(none, out, sizeof out, 5000, &late, &err) && strstr(err.msg, "/nonexistent/prog"));
+    CHECK(!late);
+    // One that doesn't end, nor its child holding the pipe: killed, group and all, at the deadline.
+    put(at("ej-pid"), "");
+    char sleeper[PATH_MAX + 64];
+    snprintf(sleeper, sizeof sleeper, "echo started; sleep 30 & echo $! > '%s'; wait", at("ej-pid"));
+    char *slow[] = { "sh", "-c", sleeper, NULL };
+    i64 t0 = now_ms();
+    CHECK(spawn_capture(slow, out, sizeof out, 300, &late, &err) && late && strcmp(out, "started\n") == 0);
+    CHECK(now_ms() - t0 < 2000);
+    int gpid = atoi(slurp(at("ej-pid")));
+    for (int k = 0; k < 50 && gpid > 0 && kill(gpid, 0) == 0; k++) nanosleep(&(struct timespec){ 0, 20000000L }, NULL);
+    CHECK(gpid > 0 && kill(gpid, 0) != 0);   // the grandchild went too
+    CHECK(spawn_capture(sh, out, sizeof out, 5000, &late, &err) && !late);
     // The command, with a fake udisksctl first on PATH that logs and succeeds, or fails a step.
     mkdirs(at("ej/bin"));
     put(at("ej/bin/udisksctl"), "#!/bin/sh\necho \"$*\" >> \"$EJ_LOG\"\n"
@@ -716,14 +730,14 @@ static void test_eject(void)
     eject_argv("/dev/sd x1", argv);   // a space: passed as one word
     char big[512], why[128];
     env_set("EJ_FAIL", "none");
-    CHECK(spawn_capture((char *const *)argv, big, sizeof big, &err) && eject_result(str_from_c(big), why, sizeof why) == EJECT_DONE && !why[0]);
+    CHECK(spawn_capture((char *const *)argv, big, sizeof big, 5000, &late, &err) && eject_result(str_from_c(big), why, sizeof why) == EJECT_DONE && !why[0]);
     CHECK(strcmp(slurp(at("ej/log")), "unmount -b /dev/sd x1\npower-off -b /dev/sd x1\n") == 0);
     env_set("EJ_FAIL", "power-off");
-    CHECK(spawn_capture((char *const *)argv, big, sizeof big, &err) && eject_result(str_from_c(big), why, sizeof why) == EJECT_UNMOUNTED);
+    CHECK(spawn_capture((char *const *)argv, big, sizeof big, 5000, &late, &err) && eject_result(str_from_c(big), why, sizeof why) == EJECT_UNMOUNTED);
     CHECK(strstr(why, "power-off: target is busy"));
     env_set("EJ_FAIL", "unmount");
     put(at("ej/log"), "");
-    CHECK(spawn_capture((char *const *)argv, big, sizeof big, &err) && eject_result(str_from_c(big), why, sizeof why) == EJECT_FAILED);
+    CHECK(spawn_capture((char *const *)argv, big, sizeof big, 5000, &late, &err) && eject_result(str_from_c(big), why, sizeof why) == EJECT_FAILED);
     CHECK(strstr(why, "unmount: target is busy") && strcmp(slurp(at("ej/log")), "unmount -b /dev/sd x1\n") == 0);   // no power-off after
     env_restore(), env_restore(), env_restore(), env_restore(), env_restore();
     // Reading the output.

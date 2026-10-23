@@ -201,6 +201,8 @@ across the window, its left part the sidebar's, its right part the status. Decis
   pointer is over the row: `udisksctl unmount -b <device>`, then `udisksctl power-off`; a busy
   drive says why in the status part; never while a job of ofx's uses it. Tests use a fake
   `udisksctl` that logs.
+- ofx runs from `/` (chdir after resolving its folder), so a launch from inside a stick doesn't
+  keep it busy; eject's udisksctl gets 60 s, then it and what it started are killed (reviewer-2).
 - Fixed on the way: a click on a mode button (or a tree mark) drew no frame until the next event,
   so the switch showed only when the pointer moved (places looked fast: the space thread's answer
   drew one).

@@ -7,6 +7,7 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <poll.h>
 #include <signal.h>
 #include <spawn.h>
 #include <stdio.h>
@@ -90,11 +91,13 @@ static bool spawn_terminal(const char *dir, Err *err)
 
 // ---- eject (F6.1) -----------------------------------------------------------------------------
 
-// Runs argv (argv[0] on PATH) and reads what it writes, stdout and stderr together, until it ends:
-// into out (cut at cap). Blocking: gui/ runs it off the main thread. The exit status can't be had
-// (SA_NOCLDWAIT reaps the child), so a caller that needs it has the command say so (eject_argv).
-static bool spawn_capture(char *const *argv, char *out, size_t cap, Err *err)
+// Runs argv (argv[0] on PATH) and reads what it writes, stdout and stderr together, until it ends
+// or timeout_ms pass (then it and what it started are killed, *timed_out set): into out (cut at
+// cap). Blocking: gui/ runs it off the main thread. The exit status can't be had (SA_NOCLDWAIT
+// reaps the child), so a caller that needs it has the command say so (eject_argv).
+static bool spawn_capture(char *const *argv, char *out, size_t cap, int timeout_ms, bool *timed_out, Err *err)
 {
+    *timed_out = false;
     int fd[2];
     if (pipe2(fd, O_CLOEXEC) != 0) return err_set(err, "pipe: %s", strerror(errno)), false;
     posix_spawnattr_t attr;
@@ -120,7 +123,19 @@ static bool spawn_capture(char *const *argv, char *out, size_t cap, Err *err)
     // Read to the end (the child must not block on a full pipe), keeping what fits.
     size_t n = 0;
     char chunk[512];
-    for (ssize_t r; (r = read(fd[0], chunk, sizeof chunk)) != 0;) {
+    i64 until = now_ms() + timeout_ms;
+    for (;;) {
+        i64 left = until - now_ms();
+        struct pollfd p = { fd[0], POLLIN, 0 };
+        int ready = left > 0 ? poll(&p, 1, (int)left) : 0;
+        if (ready < 0 && errno == EINTR) continue;
+        if (ready == 0) {   // the deadline: the child is a session (and group) leader, its group goes
+            kill(-pid, SIGKILL);
+            *timed_out = true;
+            break;
+        }
+        ssize_t r = read(fd[0], chunk, sizeof chunk);
+        if (r == 0) break;
         if (r < 0 && errno == EINTR) continue;
         if (r < 0) break;
         size_t room = cap ? cap - 1 - n : 0, take = (size_t)r < room ? (size_t)r : room;

@@ -653,3 +653,10 @@ MUTANTS += [
     (T, "    isize k = n - at < max ? n - at : max;", "    isize k = max;"),
     (PL, " || (places_test_media[0] && under(mp, places_test_media)))", ")"),
 ]
+# ---- F6.1 review: spawn_capture's deadline
+MUTANTS += [
+    (SP, "            kill(-pid, SIGKILL);", "            kill(pid, SIGKILL);"),
+    (SP, "            kill(-pid, SIGKILL);\n", ""),
+    (SP, "            *timed_out = true;\n", ""),
+    (SP, "        int ready = left > 0 ? poll(&p, 1, (int)left) : 0;", "        int ready = poll(&p, 1, -1);"),
+]

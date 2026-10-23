@@ -59,7 +59,7 @@ T=$base/f54; tree "$T"
 echo "== f54"; "$here/../../tools/gui/run-script.sh" "$T" "$here/f54.script" "$bin" "$T/tree" || fail=1
 # F6: a bookmark, a mount list of its own (OFX_TEST_MOUNTINFO), then f6b on the same tree: the
 # sidebar's mode came back from the state file.
-T=$base/f6; rm -rf "$T"; mkdir -p "$T/tree/adir" "$T/tree/bdir" "$T/config/gtk-3.0" "$T/data"
+T=$base/f6; [ -d "$T" ] && chmod -R u+rwx "$T"; rm -rf "$T";   # a failed run can leave f6's locked folder mkdir -p "$T/tree/adir" "$T/tree/bdir" "$T/config/gtk-3.0" "$T/data"
 touch "$T/tree/adir/inner.txt" "$T/tree/b.txt" "$T/tree/c.txt"; printf abc > "$T/tree/a.txt"
 printf 'file://%s/tree/bdir Bee\n' "$T" > "$T/config/gtk-3.0/bookmarks"
 printf '33 1 0:31 / / rw - btrfs /dev/x rw\n' > "$T/mountinfo"

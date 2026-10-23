@@ -4,6 +4,8 @@
 // says it in the status part. The drive leaves the sidebar through the mount watch. Included by
 // main.c.
 
+enum { EJECT_TIMEOUT_MS = 60000 };   // a USB stick's cache written out takes seconds, not a minute
+
 static struct {
     pthread_mutex_t mu;
     bool            busy, ready;
@@ -21,8 +23,10 @@ static void *eject_thread(void *arg)
     Err err;
     char why[sizeof(Err)];
     EjectResult r = EJECT_FAILED;
-    if (spawn_capture((char *const *)argv, out, sizeof out, &err)) r = eject_result(str_from_c(out), why, sizeof why);
+    bool late;
+    if (spawn_capture((char *const *)argv, out, sizeof out, EJECT_TIMEOUT_MS, &late, &err)) r = eject_result(str_from_c(out), why, sizeof why);
     else snprintf(why, sizeof why, "%s", err.msg);
+    if (late) snprintf(why, sizeof why, "udisksctl gave no answer in %d s", EJECT_TIMEOUT_MS / 1000);
     pthread_mutex_lock(&ej.mu);
     ej.result = r, ej.ready = true;
     snprintf(ej.why, sizeof ej.why, "%s", why);

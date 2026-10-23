@@ -2402,6 +2402,9 @@ int main(int argc, char **argv)
         fprintf(stderr, "ofx: %s: %s\n", start ? start : ".", strerror(errno));
         return 1;
     }
+    // Every path is absolute from here on: off the folder ofx was started in, so that folder's
+    // drive isn't kept busy by ofx (or by what it starts) when it is to be ejected (reviewer-2, F6.1).
+    if (chdir("/") != 0) fprintf(stderr, "ofx: chdir /: %s\n", strerror(errno));
 
     // Before any thread exists (GLFW and Mesa start some), so all of them inherit the mask.
     sigemptyset(&quit_signals);
