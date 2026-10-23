@@ -46,6 +46,7 @@ typedef enum {
     UK_CRUMBS,     // Ctrl+K: the keyboard on the path buttons (F5.2)
     UK_JOBS,       // Ctrl+J: the keyboard on the job rows' × (F5.3)
     UK_QUIT,       // Ctrl+Q, or the window closed
+    UK_F9,         // the sidebar's next mode (F6)
 } UiKey;
 
 // The top bar's buttons (F4).
@@ -84,6 +85,7 @@ typedef struct {
     int     job_id[UI_JOB_ROWS];
     int     job_x;
     int     jobs_all;
+    int     side_mode;   // a sidebar mode button clicked (a SideMode, F6), -1 for none
 } UiInput;
 
 typedef enum {
@@ -107,6 +109,7 @@ typedef enum {
     UA_TAB_BG_ROW,  // a middle click: entry index in a new tab in the background
     UA_TAB_BG_PLACE,
     UA_TAB_BG_CRUMB,
+    UA_SIDE_MODE,   // the sidebar's mode changed (Ui.side_mode): gui/ remembers it
 } UiActionKind;
 
 typedef struct {
@@ -138,6 +141,7 @@ typedef struct {
 
 typedef struct {
     UiList list, side;
+    SideMode side_mode;      // places, tree or hidden (F6)
     bool   side_focus;       // the keys move the sidebar's cursor
     const u8 *side_head;     // a byte per sidebar row, 1 for a heading (F6), never the cursor's; NULL: none
     bool   finding;          // the find line is open
@@ -185,7 +189,7 @@ typedef struct {
 static UiInput ui_input_none(void)
 {
     return (UiInput){ .click = -1, .dclick = -1, .side_click = -1, .header = -1, .click_mods = 0, .bar = UB_NONE, .crumb = -1,
-                      .tab_click = -1, .tab_close = -1, .mid_row = -1, .mid_side = -1, .mid_crumb = -1, .modal = 0, .job_x = -1 };
+                      .tab_click = -1, .tab_close = -1, .mid_row = -1, .mid_side = -1, .mid_crumb = -1, .modal = 0, .job_x = -1, .side_mode = -1 };
 }
 
 static isize ui_clamp(isize v, isize lo, isize hi)
@@ -250,6 +254,23 @@ static void ui_side_settle(Ui *u, int dir)
     if (i >= 0 && i < s->n) s->sel = i;
     ui_show_sel(s);
     if (s->top == s->sel && ui_side_head(u, s->sel - 1)) s->top--;
+}
+
+// Whether in holds something the user did: a key, a character, a press of a button (not the
+// wheel, nor the pointer moving). A status message gives way to the status line then (F6).
+static bool ui_input_acts(const UiInput *in)
+{
+    return in->nev > 0 || in->click >= 0 || in->dclick >= 0 || in->side_click >= 0 || in->header >= 0 || in->bar != UB_NONE ||
+           in->tab_click >= 0 || in->tab_close >= 0 || in->mid_row >= 0 || in->mid_side >= 0 || in->mid_crumb >= 0 || in->modal > 0 ||
+           in->backs > 0 || in->forwards > 0 || in->job_x >= 0 || in->side_mode >= 0;
+}
+
+// The sidebar in mode m: a hidden one gives the keys back to the list.
+static UiAction ui_side_mode(Ui *u, SideMode m)
+{
+    u->side_mode = m;
+    if (m == SIDE_HIDDEN) u->side_focus = false;
+    return (UiAction){ UA_SIDE_MODE, m, false };
 }
 
 // A move of the list's cursor or the sidebar's.
@@ -698,6 +719,7 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         u->sort = ui_sort_click(u->sort, (SortKey)in->header);
         return (UiAction){ UA_SORT, 0, false };
     }
+    if (!prompt && in->side_mode >= 0 && in->side_mode < SIDE_MODES) return ui_side_mode(u, (SideMode)in->side_mode);
     if (!prompt && in->side_click >= 0 && ui_side_head(u, u->side.top + in->side_click)) return (UiAction){ UA_NONE, 0, false };
     if (!prompt && in->side_click >= 0 && u->side.top + in->side_click < u->side.n) {
         u->side.sel = u->side.top + in->side_click;
@@ -833,8 +855,9 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
             break;
         case UK_LEFT:
         case UK_BACKSPACE: return (UiAction){ UA_PARENT, 0, false };
+        case UK_F9: return ui_side_mode(u, (SideMode)((u->side_mode + 1) % SIDE_MODES));
         case UK_TAB:
-            u->side_focus = !u->side_focus && u->side.n > 0;
+            u->side_focus = !u->side_focus && u->side.n > 0 && u->side_mode != SIDE_HIDDEN;
             if (u->side_focus) ui_side_settle(u, 1);
             break;
         case UK_ESC:
@@ -1206,6 +1229,37 @@ static void ui_size(char *buf, size_t cap, i64 size)
 
 // A modification time: "14:03" today, "Oct 20" this year, "2025-10-20" before, as `now` sees it
 // (local time).
+// What the status line says when no message is up (F6): about the one entry marked, how many are
+// marked, or else the folder's count and its drive's free space.
+typedef struct {
+    isize n, hidden;     // the listing's entries, and its dot-files (left out or not)
+    isize marked;
+    Str   one;           // marked == 1: its name,
+    bool  one_dir;       //   whether it is a folder,
+    isize one_count;     //   a folder's item count (< 0 unknown),
+    i64   one_size;      //   a file's size (< 0 none: a broken link, a device)
+    i64   avail;         // the drive's free space, < 0 unknown
+} UiInfo;
+
+static void ui_status_info(char *buf, size_t cap, const UiInfo *in)
+{
+    char size[32];
+    if (in->marked == 1) {
+        int k = snprintf(buf, cap, "\"%.*s\" selected", STR_ARG(in->one));
+        if (k < 0 || (size_t)k >= cap) return;
+        if (in->one_dir && in->one_count >= 0) snprintf(buf + k, cap - (size_t)k, " (%td item%s)", in->one_count, in->one_count == 1 ? "" : "s");
+        else if (!in->one_dir && in->one_size >= 0) ui_size(size, sizeof size, in->one_size), snprintf(buf + k, cap - (size_t)k, " (%s)", size);
+        return;
+    }
+    if (in->marked > 1) {
+        snprintf(buf, cap, "%td items selected", in->marked);
+        return;
+    }
+    int k = snprintf(buf, cap, "%td item%s", in->n, in->n == 1 ? "" : "s");
+    if (k > 0 && in->hidden && (size_t)k < cap) k += snprintf(buf + k, cap - (size_t)k, " (%td hidden)", in->hidden);
+    if (k > 0 && in->avail >= 0 && (size_t)k < cap) ui_size(size, sizeof size, in->avail), snprintf(buf + k, cap - (size_t)k, ", %s free", size);
+}
+
 static void ui_when(char *buf, size_t cap, i64 mtime, i64 now)
 {
     time_t t = (time_t)mtime, n = (time_t)now;

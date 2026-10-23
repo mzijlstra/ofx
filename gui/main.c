@@ -56,7 +56,7 @@ static Arena frame, lists[2], data, icona, scratch, undoa, owna, pastea;
 static int   watch_delay_ms;   // OFX_TEST_WATCH_DELAY_MS, for one test
 
 enum { BAR_BTN_W = 34, BAR_BTN_H = 30, BAR_GAP = 4, ARROW_W = 22, CRUMB_PAD = 10, CRUMB_ICON_PX = 16 };
-enum { TAB_H = 30, TAB_X_W = 22, JOB_ROW_H = 40, JOB_WAIT_H = 22 };
+enum { TAB_H = 30, TAB_X_W = 22, JOB_ROW_H = 40, JOB_WAIT_H = 22, MODE_BTN_W = 28, MODE_BTN_H = 22, MODE_GAP = 4 };
 enum { FONT_PX = 15, ROW_H = 28, ICON_PX = 24, HEADER_H = 40, COLS_H = 26, FOOTER_H = 28, PAD = 12, SIZE_W = 90,
        DATE_W = 100, SIDE_W = 200, SIDE_ROW_H = 28, SIDE_ICON_PX = 20, GAP = 10, ICONS_MAX = 512 };
 
@@ -114,8 +114,9 @@ static struct {
     int       tab_hover, tab_x_hover;   // the tab, and the tab's ×, under the pointer; -1 for none
     int       copy_delay_ms;   // OFX_TEST_COPY_DELAY_MS
     int       jobx_hover;      // the job row whose × is under the pointer, -1 for none
+    int       mode_hover;      // the sidebar mode button under the pointer (a SideMode), -1 for none
     char      text_copied[PATH_MAX];   // the last text an edit line put on the clipboard (F5.2)
-} app = { .hover = -1, .side_hover = -1, .tab_hover = -1, .tab_x_hover = -1, .jobx_hover = -1 };
+} app = { .hover = -1, .side_hover = -1, .tab_hover = -1, .tab_x_hover = -1, .jobx_hover = -1, .mode_hover = -1 };
 
 static UiHistory hist;
 
@@ -145,6 +146,12 @@ static UiTabs tabbar;
 static int top_h(void)
 {
     return HEADER_H + (tabbar.n >= 2 ? TAB_H : 0);
+}
+
+// The sidebar's width: none when it is hidden (F6).
+static int side_w(void)
+{
+    return app.ui.side_mode == SIDE_HIDDEN ? 0 : SIDE_W;
 }
 static Undo      undo;
 static ClipFiles own;      // ofx's own copy or cut (own.n 0: none)
@@ -810,6 +817,12 @@ static void act(UiAction a)
 {
     Err err;
     switch (a.kind) {
+    case UA_SIDE_MODE: {
+        char path[PATH_MAX];
+        State st = { app.ui.side_mode };
+        if (state_path(path, sizeof path) && !state_save(path, &st, &err)) set_status(true, "%s", err.msg);
+        break;
+    }
     case UA_BACK: hist_go(-1); break;
     case UA_FORWARD: hist_go(1); break;
     case UA_HIDDEN: {
@@ -1185,7 +1198,7 @@ static void layout_row(int r, isize i, float w, i64 now)
     size_cell(i, size, sizeof size, true);
     if (e->mtime) ui_when(when, sizeof when, e->mtime, now);
     bool link = e->kind == K_LINK_DIR || e->kind == K_LINK_FILE || e->kind == K_LINK_BROKEN;
-    float name_w = w - SIDE_W - 2 * PAD - ICON_PX - 3 * GAP - SIZE_W - DATE_W - (link ? 16 : 0);
+    float name_w = w - side_w() - 2 * PAD - ICON_PX - 3 * GAP - SIZE_W - DATE_W - (link ? 16 : 0);
     CLAY(CLAY_IDI("row", r), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(ROW_H) },
                                            .padding = { PAD, PAD, 0, 0 }, .childGap = GAP,
                                            .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
@@ -1594,6 +1607,70 @@ static void layout_jobs(void)
     }
 }
 
+// The bottom bar's sidebar part (F6): as wide as the sidebar, or the buttons' own width when it
+// is hidden.
+static float modes_w(void)
+{
+    return side_w() ? (float)side_w() : (float)(2 * PAD + SIDE_MODES * MODE_BTN_W + (SIDE_MODES - 1) * MODE_GAP);
+}
+
+// A mode button's picture, drawn in the theme's colour: a window with a sidebar of places, the
+// same with a tree's steps in it, and a window alone.
+static void mode_picture(int k, Clay_Color c)
+{
+    CLAY(CLAY_IDI("mode-pic", k), { .layout = { .sizing = { CLAY_SIZING_FIXED(16), CLAY_SIZING_FIXED(12) }, .padding = { 2, 2, 2, 2 },
+                                                .layoutDirection = CLAY_TOP_TO_BOTTOM, .childGap = 2 },
+                                    .border = { .color = c, .width = CLAY_BORDER_OUTSIDE(1) } }) {
+        if (k == SIDE_PLACES) {
+            CLAY(CLAY_IDI("mode-side", k), { .layout = { .sizing = { CLAY_SIZING_FIXED(4), CLAY_SIZING_GROW(0) } }, .backgroundColor = c }) {}
+        } else if (k == SIDE_TREE) {
+            for (int j = 0; j < 3; j++)
+                CLAY(CLAY_IDI("mode-step", j), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(1) }, .padding = { (uint16_t)(j * 3), 0, 0, 0 } } }) {
+                    CLAY(CLAY_IDI("mode-line", j), { .layout = { .sizing = { CLAY_SIZING_FIXED(6), CLAY_SIZING_FIXED(1) } }, .backgroundColor = c }) {}
+                }
+        }
+    }
+}
+
+// The three mode buttons: places, tree, hidden; the one on in the accent.
+static void layout_modes(void)
+{
+    Theme *t = &app.theme;
+    CLAY(CLAY_ID("modes"), { .layout = { .sizing = { CLAY_SIZING_FIXED(modes_w()), CLAY_SIZING_GROW(0) }, .padding = { PAD, PAD, 0, 0 },
+                                         .childGap = MODE_GAP, .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } } }) {
+        for (int k = 0; k < SIDE_MODES; k++) {
+            bool on = app.ui.side_mode == (SideMode)k, hover = app.mode_hover == k;
+            CLAY(CLAY_IDI("mode", k), { .layout = { .sizing = { CLAY_SIZING_FIXED(MODE_BTN_W), CLAY_SIZING_FIXED(MODE_BTN_H) },
+                                                    .childAlignment = { .x = CLAY_ALIGN_X_CENTER, .y = CLAY_ALIGN_Y_CENTER } },
+                                        .backgroundColor = on ? mix(t->accent, t->bg_light, 0.25f) : hover ? cc(t->bg) : (Clay_Color){ 0, 0, 0, 0 },
+                                        .cornerRadius = CLAY_CORNER_RADIUS(3) }) {
+                mode_picture(k, on ? cc(t->accent) : hover ? cc(t->fg) : cc(t->fg_dim));
+            }
+        }
+    }
+}
+
+// The status line when no message is up (ui_status_info): the marked entry, or how many, or the
+// folder's count and its drive's free space.
+static void status_info(char *buf, size_t cap)
+{
+    UiInfo in = { .n = app.list.n, .hidden = app.show_hidden ? 0 : app.list.hidden, .marked = app.ui.marked,
+                  .one_count = -1, .one_size = -1, .avail = app.cwd_avail };
+    for (isize i = 0; app.ui.marked == 1 && i < app.list.n; i++) {
+        if (!app.ui.mark[i]) continue;
+        const Entry *e = &app.list.e[i];
+        in.one = e->name, in.one_dir = kind_is_dir(e->kind);
+        in.one_count = app.count[i] >= 0 ? app.count[i] : -1;
+        if (!in.one_dir && e->kind != K_LINK_BROKEN && e->kind != K_OTHER) in.one_size = e->size;
+        if (in.one_dir && app.count[i] == COUNT_UNKNOWN) {
+            char path[PATH_MAX];
+            if (join(path, sizeof path, app.cwd, e->name) && count_ask(i, path, app.show_hidden)) app.count[i] = COUNT_ASKED;
+        }
+    }
+    if (!app.have_list) in.n = 0, in.avail = -1;
+    ui_status_info(buf, cap, &in);
+}
+
 // The window, and the modal panel on top when one is up.
 static Clay_RenderCommandArray layout(int w, int h)
 {
@@ -1605,19 +1682,14 @@ static Clay_RenderCommandArray layout(int w, int h)
     i64 now = (i64)time(NULL);
     CLAY(CLAY_ID("root"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0) }, .layoutDirection = CLAY_TOP_TO_BOTTOM },
                             .backgroundColor = cc(t->bg) }) {
-        char count[96];
-        int k = app.list.hidden ? snprintf(count, sizeof count, "%td items, %td hidden", app.list.n, app.list.hidden)
-                                : snprintf(count, sizeof count, "%td item%s", app.list.n, app.list.n == 1 ? "" : "s");
-        if (app.ui.marked && k > 0) snprintf(count + k, sizeof count - (size_t)k, ", %td selected", app.ui.marked);
-        Str cnt = str_from_c(arena_sprintf(&frame, "%s", count));
-        float foot_w = (float)w - 2 * PAD - 24 - str_width(cnt);   // the footer's line beside the count
+        float foot_w = (float)w - modes_w() - 2 * PAD;   // the status part of the bottom bar
         layout_bar((float)w);
         float body_h = (float)(h - HEADER_H - FOOTER_H);
         CLAY(CLAY_ID("body"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(body_h) } } }) {
-        layout_side(body_h);
+        if (side_w()) layout_side(body_h);
         CLAY(CLAY_ID("main"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0) }, .layoutDirection = CLAY_TOP_TO_BOTTOM } }) {
         // The tab bar over the files only, not the sidebar (Michael, 2026-10-21).
-        if (tabbar.n >= 2) layout_tabs((float)w - SIDE_W);
+        if (tabbar.n >= 2) layout_tabs((float)(w - side_w()));
         layout_cols();
         CLAY(CLAY_ID("list"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0) }, .layoutDirection = CLAY_TOP_TO_BOTTOM },
                                 .clip = { .vertical = true } }) {
@@ -1635,8 +1707,10 @@ static Clay_RenderCommandArray layout(int w, int h)
         }
         }
         CLAY(CLAY_ID("footer"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(FOOTER_H) },
-                                              .padding = { PAD, PAD, 0, 0 }, .childGap = 24, .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
-                                  .backgroundColor = cc(t->bg_light) }) {
+                                              .padding = { 0, PAD, 0, 0 }, .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
+                                  .backgroundColor = cc(t->bg_light),
+                                  .border = { .color = mix(t->fg_dim, t->bg_light, 0.3f), .width = { .top = 1 } } }) {
+            layout_modes();
             CLAY(CLAY_ID("footer-line"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
                                            .clip = { .horizontal = true } }) {
             if (modal_kind() != MODAL_NONE) {
@@ -1663,14 +1737,11 @@ static Clay_RenderCommandArray layout(int w, int h)
             } else if (app.status[0]) {
                 text(fit(str_from_c(app.status), foot_w, false), app.status_bad ? cc(t->red) : cc(t->fg));
             } else {
-                text(fit(S("Enter open \xC2\xB7 Backspace up \xC2\xB7 Space select \xC2\xB7 F2 rename \xC2\xB7 Del trash \xC2\xB7 "
-                           "Ctrl+C X V \xC2\xB7 Ctrl+Z undo \xC2\xB7 / find \xC2\xB7 Ctrl+L location \xC2\xB7 . hidden \xC2\xB7 s sort \xC2\xB7 "
-                           "Tab places \xC2\xB7 t terminal"),
-                         foot_w, false),
-                     cc(t->fg_dim));
+                char info[NAME_MAX + 64];
+                status_info(info, sizeof info);
+                text(fit(str_from_c(arena_sprintf(&frame, "%s", info)), foot_w, false), cc(t->fg_dim));
             }
             }
-            text(cs(cnt), cc(t->fg_dim));
         }
         ModalKind mk = modal_kind();
         if (mk != MODAL_NONE) layout_modal(mk, (float)w, (float)h);
@@ -1772,6 +1843,7 @@ static UiKey ui_key_of(int key, int mods)
     case GLFW_KEY_ESCAPE: return UK_ESC;
     case GLFW_KEY_TAB: return m == 0 ? UK_TAB : UK_NONE;
     case GLFW_KEY_F2: return m == 0 ? UK_F2 : UK_NONE;
+    case GLFW_KEY_F9: return m == 0 ? UK_F9 : UK_NONE;
     default: return UK_NONE;
     }
 }
@@ -1830,6 +1902,7 @@ typedef struct {
     int   tab, tab_x;   // a tab, or its ×
     int   modal;        // a modal panel's button (UI_MODAL_*), 0 for none
     int   job_x;        // a job row's ×, -1 for none
+    int   mode;         // a sidebar mode button (a SideMode), -1 for none
 } Hit;
 
 static bool in_box(Clay_ElementId id, float x, float y)
@@ -1841,7 +1914,7 @@ static bool in_box(Clay_ElementId id, float x, float y)
 
 static Hit hit_at(float x, float y)
 {
-    Hit h = { -1, -1, -1, UB_NONE, -1, -1, -1, 0, -1 };
+    Hit h = { -1, -1, -1, UB_NONE, -1, -1, -1, 0, -1, -1 };
     if (modal_kind() != MODAL_NONE) {
         // A panel is up: its buttons are all there is to hit.
         static const struct { const char *id; int b; } MB[] = {
@@ -1868,8 +1941,10 @@ static Hit hit_at(float x, float y)
         if (in_box(CLAY_IDI("row", r), x, y)) h.row = r;
     for (int i = 0; i < jobs.nrun && h.job_x < 0; i++)
         if (in_box(CLAY_IDI("job-x", i), x, y)) h.job_x = i;
-    for (int r = 0; r < app.ui.side.rows && h.side < 0; r++)
+    for (int r = 0; side_w() && r < app.ui.side.rows && h.side < 0; r++)
         if (in_box(CLAY_IDI("side-row", r), x, y)) h.side = r;
+    for (int k = 0; k < SIDE_MODES && h.mode < 0; k++)
+        if (in_box(CLAY_IDI("mode", k), x, y)) h.mode = k;
     static const char *const IDS[SORT_KEYS] = { "col-name", "col-size", "col-date" };
     for (int k = 0; k < SORT_KEYS && h.header < 0; k++)
         if (in_box(Clay_GetElementId(cz(IDS[k])), x, y)) h.header = k;
@@ -1890,6 +1965,7 @@ static void press_at(UiInput *in, float x, float y, int mods)
     in->bar = h.bar, in->crumb = h.crumb;
     in->modal = h.modal;
     in->job_x = h.job_x;
+    in->side_mode = h.mode;
     if (h.tab_x >= 0) in->tab_close = h.tab_x;
     else if (h.tab >= 0) in->tab_click = h.tab;
 }
@@ -1921,7 +1997,7 @@ static UiInput input_real(bool *seen)
     wheel_left += GetMouseWheelMove();
     int notches = (int)wheel_left;
     wheel_left -= (float)notches;
-    if (m.x >= SIDE_W) in.wheel = notches;
+    if (m.x >= side_w()) in.wheel = notches;
     else if (notches) app.ui.side.top = ui_clamp(app.ui.side.top - notches, 0, ui_max_top(&app.ui.side)), *seen = true;
     if (d.x != 0 || d.y != 0) {
         Hit h = hit_at(m.x, m.y);
@@ -1929,6 +2005,8 @@ static UiInput input_real(bool *seen)
                  h.tab != app.tab_hover || h.tab_x != app.tab_x_hover;
         app.hover = h.row, app.side_hover = h.side, app.bar_hover = h.bar, app.crumb_hover = h.crumb;
         app.tab_hover = h.tab, app.tab_x_hover = h.tab_x;
+        *seen |= h.mode != app.mode_hover;
+        app.mode_hover = h.mode;
         *seen |= h.modal != app.modal_hover;
         app.modal_hover = h.modal;
         *seen |= h.job_x != app.jobx_hover;
@@ -2101,6 +2179,8 @@ int main(int argc, char **argv)
     if (counts.delay_ms < 0 || counts.delay_ms > 10000) counts.delay_ms = 0;
     count_start();
     places_reload();
+    char state_file[PATH_MAX];
+    if (state_path(state_file, sizeof state_file)) app.ui.side_mode = state_load(&scratch, state_file).side;
     ui_resize(&app.ui.list, list_rows(GetScreenHeight()));
     ui_resize(&app.ui.side, side_rows(GetScreenHeight()));
     app.press.row = -1;
@@ -2160,6 +2240,7 @@ int main(int argc, char **argv)
         bool pasting = false;
         for (int k = 0; k < in.nev; k++) pasting |= in.ev[k].key == UK_PASTE;
         if (pasting && app.ui.editing) in.paste = text_paste();
+        if (ui_input_acts(&in)) app.status[0] = 0;   // a message stays until the next key or click
         bool was_editing = app.ui.editing, was_confirming = app.ui.confirming;
         UiAction a = ui_handle(&app.ui, (UiNames){ list_name, NULL }, &in);
         if (app.ui.copied) text_copy((Str){ app.ui.copy, app.ui.copy_len }), app.ui.copied = false;

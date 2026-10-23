@@ -13,3 +13,4 @@
 #include "job.c"
 #include "undo.c"
 #include "jobq.c"
+#include "state.c"

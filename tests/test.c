@@ -1435,6 +1435,7 @@ static void test_format(void)
 #include "test_f5.c"
 #include "test_f52.c"
 #include "test_f53.c"
+#include "test_f6.c"
 
 int main(void)
 {
@@ -1477,6 +1478,10 @@ int main(void)
     test_ui_f52();
     test_ui_f53();
     test_ui_modal();
+    test_state();
+    test_status_info();
+    test_side_modes();
+    test_input_acts();
     char cmd[1600];
     snprintf(cmd, sizeof cmd, "chmod -R u+rwx '%s' && rm -rf '%s' '%s'", root, root, decoy);
     if (system(cmd) != 0) fprintf(stderr, "could not remove %s\n", root);
