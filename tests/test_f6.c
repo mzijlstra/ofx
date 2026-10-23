@@ -414,6 +414,8 @@ static void test_trash_view(void)
     put(at("%s/info/up.trashinfo", tr), "[Trash Info]\nPath=../escaped\n");
     put(at("%s/files/up2", tr), "x");
     put(at("%s/info/up2.trashinfo", tr), "[Trash Info]\nPath=docs/../../escaped\n");
+    put(at("%s/files/enc", tr), "x");   // a ".." percent-encoded: decoded first
+    put(at("%s/info/enc.trashinfo", tr), "[Trash Info]\nPath=%2E%2E/%2e%2e/escaped\n");
     put(at("%s/files/away", tr), "x");
     snprintf(body, sizeof body, "[Trash Info]\nPath=%s\n", at("tv/away"));
     put(at("%s/info/away.trashinfo", tr), body);
