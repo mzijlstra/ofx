@@ -1,0 +1,9 @@
+# F6.2 review: a full icon cache. run.sh gives it 2 slots (OFX_TEST_ICONS_MAX): the first frame
+# fills it; each listing after that empties it, so icons come back rather than staying blank.
+settle
+expect iconresets=0
+key enter
+expect iconresets=1 sel=inner.txt
+key backspace
+expect iconresets=2 sel=adir
+quit

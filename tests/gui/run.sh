@@ -82,6 +82,7 @@ for i in $(seq -w 1 20); do touch "$T/tree/f$i"; done
 printf '33 1 0:31 / / rw - btrfs /dev/x rw\n' > "$T/mountinfo"
 echo "== f62"; OFX_TEST_MOUNTINFO="$T/mountinfo" "$here/../../tools/gui/run-script.sh" "$T" "$here/f62.script" "$bin" "$T/tree" || failed f62
 echo "== f62b"; OFX_TEST_MOUNTINFO="$T/mountinfo" "$here/../../tools/gui/run-script.sh" "$T" "$here/f62b.script" "$bin" "$T/tree" || failed f62b
+echo "== f62c"; OFX_TEST_ICONS_MAX=2 OFX_TEST_MOUNTINFO="$T/mountinfo" "$here/../../tools/gui/run-script.sh" "$T" "$here/f62c.script" "$bin" "$T/tree" || failed f62c
 T=$base/hang; rm -rf "$T"; mkdir -p "$T/tree/stuck"
 echo "== hang"
 t0=$(date +%s)

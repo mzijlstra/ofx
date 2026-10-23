@@ -161,14 +161,17 @@ Decisions:
 **As built (2026-10-23):**
 - A cell is 112 by 104 px: the icon, then two lines of name (`ui_wrap`: after a space, `-`, `_` or
   `.` where one fits, else between characters; the second line cut with "…"). The cursor's cell
-  keeps its size; its name, up to 8 lines, floats over the cells below on the selection colour,
-  and a press there is the cursor's. Columns follow the width beside the sidebar; the scroll moves
+  keeps its size; its name, up to 8 lines, floats over the cells below on the selection colour;
+  a press there is the cell's underneath (reviewer-2: else a double click there opened the
+  cursor's entry). Columns follow the width beside the sidebar; the scroll moves
   a row at a time, the wheel a row a notch.
 - Down onto a last row that ends before the cursor's column goes to the last entry; Up in the
   first row and Down in the last stay put, as in Nemo. PgUp/PgDn keep the column.
 - The buttons are drawn (three lines, four squares): Yaru has its view icons as SVG only.
 - Rename's edit line sits under the icon, as wide as the name (one to two cells).
 - No column headers in the icon view; `s`/`S` still sort.
+- The icon cache (512 textures, both sizes) is emptied when full as another folder is entered,
+  rather than leaving icons blank until a theme change (reviewer-2).
 - Found on the way, not F6.2's: an empty `photo.png` shows no icon, in the list too (not looked
   into yet).
 

@@ -78,6 +78,7 @@ tools/mutation/gui.py <absolute scratch>     # the GUI mutants
 - `OFX_TEST_LEAK=1` plants a 4 KiB leak: the control that shows LeakSanitizer reports arrive.
 - `OFX_GUI_DEBUG=1` logs every key, character and mouse button event.
 - `OFX_TEST_CROSS=1` makes a move copy as across drives (a slow move with the delay below).
+- `OFX_TEST_ICONS_MAX` shrinks the icon cache (512 slots), so a script can fill it (f62c).
 - `OFX_TEST_COPY_DELAY_MS` sleeps per copied block (500 ms at most), so a script sees the progress
   line and can cancel a copy in the middle.
 - The script language is at the top of `gui/script.c`. Start every script with `settle`; check

@@ -151,7 +151,7 @@ MUTANTS = [
     (G, "    int c = (w - side_w() - 2 * PAD) / CELL_W;", "    int c = (w - 2 * PAD) / CELL_W;"),
     (G, "    int r = app.ui.grid ? (room - PAD) / CELL_H : (room - COLS_H) / ROW_H;", "    int r = (room - COLS_H) / ROW_H;"),
     (G, "    for (int r = 0; r < list_cells() && h.row < 0; r++)", "    for (int r = 0; r < app.ui.list.rows && h.row < 0; r++)"),
-    (G, "    if (app.ui.grid && app.ui.list.sel >= app.ui.list.top && in_box(CLAY_ID(\"cell-full\"), x, y)) h.row = (int)(app.ui.list.sel - app.ui.list.top);\n", ""),
+    (G, "    if (!same && app.nslots >= app.icons_max) icons_reset(), app.icon_full_resets++;\n", ""),
     (G, "        if (rows != app.ui.list.rows) ui_resize(&app.ui.list, rows), dirty = true;\n", ""),
     (G, "    if (!app.ui.grid) return 1;\n    int c = (w", "    int c = (w"),
     (G, "        State st = { app.ui.side_mode, app.ui.grid };\n        if (state_path(path, sizeof path) && !state_save(path, &st, &err)) set_status(true, \"%s\", err.msg);\n        break;\n    }\n    case UA_BACK", "        break;\n    }\n    case UA_BACK"),

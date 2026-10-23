@@ -128,6 +128,8 @@ static struct {
     int       grid_cells, grid_full_lines, grid_hover_lines;
     bool      grid_hover_cut;
     isize     grid_first, grid_last;   // the entries in the first and last cell drawn, -1 for none
+    int       icons_max;    // the icon cache's slots: ICONS_MAX, or OFX_TEST_ICONS_MAX for a test
+    int       icon_full_resets;   // a full cache emptied at a listing (reviewer-2, F6.2 review)
 } app = { .hover = -1, .side_hover = -1, .tab_hover = -1, .tab_x_hover = -1, .jobx_hover = -1, .mode_hover = -1, .eject_hover = -1 };
 
 static UiHistory hist;
@@ -254,6 +256,7 @@ static bool entry_path(isize i, char *out, size_t cap)
 }
 
 static void tree_refresh(bool follow, int fallback);
+static void icons_reset(void);
 
 static TrashDirs trashd;   // the trash folders the trash view shows (F6)
 
@@ -331,6 +334,10 @@ static bool go_to_in(const char *dir, Str select, isize fallback, bool stepping)
         SetWindowTitle(in_trash ? "ofx: Trash" : TextFormat("ofx: %s", app.cwd));
     }
     ui_set(&app.ui.list, l.n, sel);
+    // A full icon cache would leave every icon not in it blank until a theme change: emptied as
+    // another folder is entered, where a frame holds none of its slots, it fills again with what is
+    // on screen. (A reload of the same folder shows the same icons.)
+    if (!same && app.nslots >= app.icons_max) icons_reset(), app.icon_full_resets++;
     tree_refresh(!same, app.ui.side.sel);
     // The drives' space moves with what changes on them; asked again with every listing.
     if (!same) app.cwd_avail = -1;
@@ -1138,7 +1145,7 @@ static IconSlot *icon_for_px(Str key, const Str *given, isize ngiven, int px)
     ArenaMark mark = arena_mark(&scratch);
     Str slot_key = px == ICON_PX ? key : str_from_c(arena_sprintf(&scratch, "%d:%.*s", px, STR_ARG(key)));
     if (strmap_get(&app.slot_of, slot_key, &k)) return arena_restore(&scratch, mark), &app.slot[k];
-    if (app.nslots == ICONS_MAX) return arena_restore(&scratch, mark), NULL;
+    if (app.nslots >= app.icons_max) return arena_restore(&scratch, mark), NULL;
     Str names[6];
     isize n = given ? ngiven : mime_icon_names(&scratch, &app.mime_db, key, names);
     IconSlot *s = &app.slot[app.nslots];
@@ -2420,8 +2427,9 @@ static Hit hit_at(float x, float y)
         if (in_box(Clay_GetElementId(cz(BAR[k].id)), x, y)) h.bar = BAR[k].b;
     for (int i = app.crumb_lo; h.bar == UB_NONE && i < app.crumb_hi; i++)
         if (in_box(CLAY_IDI("crumb", i), x, y)) h.bar = UB_CRUMB, h.crumb = i;
-    // The cursor's full name in the icon view lies over the cells below it: a press there is its.
-    if (app.ui.grid && app.ui.list.sel >= app.ui.list.top && in_box(CLAY_ID("cell-full"), x, y)) h.row = (int)(app.ui.list.sel - app.ui.list.top);
+    // The cursor's full name in the icon view lies over the cells below it; a press there is the
+    // cell's underneath, so a double click never opens the cursor's entry from another's place
+    // (reviewer-2, F6.2 review).
     for (int r = 0; r < list_cells() && h.row < 0; r++)
         if (in_box(CLAY_IDI("row", r), x, y)) h.row = r;
     for (int i = 0; i < jobs.nrun && h.job_x < 0; i++)
@@ -2595,6 +2603,10 @@ int main(int argc, char **argv)
     if (watch_delay_ms < 0 || watch_delay_ms > 1000) watch_delay_ms = 0;   // a window must never stall long
     // OFX_TEST_COPY_DELAY_MS: a sleep per copied block, so a test sees the progress (capped short:
     // a job never stalls the window, but a test must not run long).
+    // OFX_TEST_ICONS_MAX: a smaller icon cache, so a test can fill it.
+    const char *imax = getenv("OFX_TEST_ICONS_MAX");
+    app.icons_max = imax ? atoi(imax) : ICONS_MAX;
+    if (app.icons_max < 1 || app.icons_max > ICONS_MAX) app.icons_max = ICONS_MAX;
     const char *cdelay = getenv("OFX_TEST_COPY_DELAY_MS");
     app.copy_delay_ms = cdelay ? atoi(cdelay) : 0;
     if (app.copy_delay_ms < 0 || app.copy_delay_ms > 500) app.copy_delay_ms = 0;

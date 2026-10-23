@@ -60,10 +60,11 @@ hover-here
 expect hover=2 celllines=2 cellcut=1
 press 2
 expect idx=2 cellcut=0
-# A press on the full name's third line, which lies over the cell below, is the cursor's cell.
+# A press on the full name's third line, which lies over the cell below, is that cell's (8).
 point-ui cell-full-line 2
 click-here
-expect idx=2
+expect idx=8
+press 2
 # A press on a cell in the second row, hit-tested as the mouse's.
 point-ui row 9
 click-here
@@ -123,5 +124,7 @@ expect view=icons cols=6
 type /very
 key enter
 expect idx=23 top=6
+# The cache never filled.
+expect iconresets=0
 shot icons.png
 quit
