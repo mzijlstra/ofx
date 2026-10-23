@@ -14,3 +14,4 @@
 #include "undo.c"
 #include "jobq.c"
 #include "state.c"
+#include "tree.c"

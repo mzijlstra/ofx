@@ -181,3 +181,171 @@ static void test_input_acts(void)
     in = ui_input_none(), in.forwards = 1;
     CHECK(ui_input_acts(&in));
 }
+
+// The tree from a scratch folder standing in for /.
+static void test_tree(void)
+{
+    arena_reset(&ta);
+    static Tree t;
+    t = (Tree){ 0 };
+    mkdirs(at("tree/top/b10/deep"));
+    mkdirs(at("tree/top/b2"));
+    mkdirs(at("tree/top/A"));
+    mkdirs(at("tree/top/.dot"));
+    put(at("tree/top/file.txt"), "x");
+    put(at("tree/top/b2/inner.txt"), "x");
+    CHECK(symlink("b2", at("tree/top/link")) == 0);
+    CHECK(symlink("file.txt", at("tree/top/flink")) == 0);
+    CHECK(symlink("nowhere", at("tree/top/broken")) == 0);
+    Str top = str_from_c(arena_cstr(&ta, str_from_c(at("tree/top"))));
+    // Nothing open: the root alone.
+    tree_build(&ta, &t, top, false);
+    CHECK(t.n == 1 && t.row[0].depth == 0 && !t.row[0].open && str_eq(t.row[0].name, S("top")) && str_eq(t.row[0].path, top));
+    // Following b10/deep opens everything above it: the root, b10.
+    tree_follow(&t, at("tree/top/b10/deep"));
+    tree_build(&ta, &t, top, false);
+    const char *want[] = { "top", "A", "b2", "b10", "deep", "link" };
+    const int depth[] = { 0, 1, 1, 1, 2, 1 };
+    CHECK(t.n == COUNT(want));
+    for (int i = 0; i < t.n && i < COUNT(want); i++) {
+        if (!str_eq(t.row[i].name, str_from_c(want[i])) || t.row[i].depth != depth[i])
+            fprintf(stderr, "tree row %d: %.*s %d\n", i, STR_ARG(t.row[i].name), t.row[i].depth);
+        CHECK(str_eq(t.row[i].name, str_from_c(want[i])) && t.row[i].depth == depth[i]);
+    }
+    CHECK(t.row[0].open && t.row[3].open && !t.row[2].open && !t.row[4].open);
+    CHECK(tree_find(&t, str_from_c(at("tree/top/b10/deep"))) == 4 && tree_find(&t, str_from_c(at("tree/top/nope"))) == -1);
+    CHECK(str_eq(t.row[5].path, str_from_c(at("tree/top/link"))));
+    // Dot-folders when hidden files are shown.
+    tree_build(&ta, &t, top, true);
+    CHECK(t.n == COUNT(want) + 1 && str_eq(t.row[1].name, S(".dot")));
+    // Parent rows; Left and Right.
+    tree_build(&ta, &t, top, false);
+    CHECK(tree_parent(&t, 4) == 3 && tree_parent(&t, 5) == 0 && tree_parent(&t, 0) == -1);
+    bool tg;
+    CHECK(tree_left(&t, 3, &tg) == 3 && tg);    // b10 is open: it closes
+    CHECK(tree_left(&t, 4, &tg) == 3 && !tg);   // deep is closed: to b10
+    CHECK(tree_left(&t, 0, &tg) == 0 && tg);    // the root is open: it closes
+    CHECK(tree_right(&t, 2, &tg) == 2 && tg);   // b2 is closed: it opens
+    CHECK(tree_right(&t, 3, &tg) == 4 && !tg);  // b10 is open: to deep
+    CHECK(tree_right(&t, 0, &tg) == 1 && !tg);
+    CHECK(tree_left(&t, -1, &tg) == -1 && !tg && tree_right(&t, t.n, &tg) == t.n && !tg);
+    // An open folder with no subfolders: Right stays on it.
+    tree_open(&t, str_from_c(at("tree/top/b10/deep")));
+    tree_build(&ta, &t, top, false);
+    CHECK(t.row[4].open && tree_right(&t, 4, &tg) == 4 && !tg);
+    // The last row, closed: Left goes to its folder.
+    CHECK(tree_left(&t, t.n - 1, &tg) == 0 && !tg);
+    // Closing b10 hides deep; deep stays open for when b10 opens again.
+    tree_close(&t, str_from_c(at("tree/top/b10")));
+    tree_build(&ta, &t, top, false);
+    CHECK(t.n == 5 && tree_find(&t, str_from_c(at("tree/top/b10/deep"))) == -1);
+    tree_open(&t, str_from_c(at("tree/top/b10")));
+    tree_build(&ta, &t, top, false);
+    CHECK(t.n == 6 && t.row[4].open);
+    tree_close(&t, S("/not/open"));   // nothing to close
+    CHECK(t.nopen > 0);
+    // A folder that can't be read: no rows under it.
+    tree_open(&t, str_from_c(at("tree/top/A")));
+    chmod(at("tree/top/A"), 0);
+    mkdirs(at("tree/top/A2"));
+    tree_build(&ta, &t, top, false);
+    chmod(at("tree/top/A"), 0755);
+    CHECK(t.row[1].open && str_eq(t.row[2].name, S("A2")));
+    // Opening twice keeps one; the oldest gives way when the list is full.
+    int before = t.nopen;
+    tree_open(&t, str_from_c(at("tree/top/A")));
+    CHECK(t.nopen == before);
+    t.nopen = 0;
+    for (int i = 0; i < TREE_OPEN_MAX + 2; i++) {
+        char p[64];
+        snprintf(p, sizeof p, "/o%d", i);
+        tree_open(&t, str_from_c(p));
+    }
+    CHECK(t.nopen == TREE_OPEN_MAX && strcmp(t.open[0], "/o2") == 0 && strcmp(t.open[TREE_OPEN_MAX - 1], "/o129") == 0);
+    tree_close(&t, S("/o5"));
+    CHECK(t.nopen == TREE_OPEN_MAX - 1 && strcmp(t.open[3], "/o6") == 0 && strcmp(t.open[TREE_OPEN_MAX - 2], "/o129") == 0);
+    // Follow: a relative path or an empty one opens nothing; / opens / alone.
+    t.nopen = 0;
+    tree_follow(&t, "rel/x");
+    tree_follow(&t, "");
+    CHECK(t.nopen == 0);
+    tree_follow(&t, "/");
+    CHECK(t.nopen == 1 && strcmp(t.open[0], "/") == 0);
+    tree_follow(&t, "/a/b/c");
+    CHECK(t.nopen == 3 && strcmp(t.open[1], "/a") == 0 && strcmp(t.open[2], "/a/b") == 0);
+    // The real /: its row is "/", its subfolders under it.
+    t.nopen = 0;
+    tree_follow(&t, "/usr");
+    tree_build(&ta, &t, S("/"), false);
+    CHECK(str_eq(t.row[0].name, S("/")) && t.row[0].open && tree_find(&t, S("/usr")) > 0);
+    // Full: cut.
+    t.nopen = 0;
+    mkdirs(at("tree/many"));
+    tree_open(&t, str_from_c(at("tree/many")));
+    for (int i = 0; i < TREE_ROWS_MAX + 1; i++) {
+        char p[64];
+        snprintf(p, sizeof p, "tree/many/d%d", i);
+        mkdir(at("%s", p), 0755);
+    }
+    tree_build(&ta, &t, str_from_c(at("tree/many")), false);
+    CHECK(t.n == TREE_ROWS_MAX && t.cut);
+    tree_build(&ta, &t, top, false);
+    CHECK(!t.cut);
+}
+
+// The tree's keys (F6): Left and Right ask gui/ to close, open or move; Enter goes there.
+static void test_tree_keys(void)
+{
+    static Ui u;
+    u = (Ui){ 0 };
+    UiNames names = { name_at, NULL };
+    ui_resize(&u.list, 10), ui_resize(&u.side, 5);
+    ui_set(&u.list, 5, 0), ui_set(&u.side, 8, 3);
+    u.side_mode = SIDE_TREE, u.side_focus = true;
+    UiInput in = keys(1, UK_LEFT);
+    UiAction a = ui_handle(&u, names, &in);
+    CHECK(a.kind == UA_TREE_LEFT && a.index == 3);
+    in = chars("h");
+    CHECK(ui_handle(&u, names, &in).kind == UA_TREE_LEFT);
+    in = keys(1, UK_RIGHT);
+    a = ui_handle(&u, names, &in);
+    CHECK(a.kind == UA_TREE_RIGHT && a.index == 3);
+    in = chars("l");
+    CHECK(ui_handle(&u, names, &in).kind == UA_TREE_RIGHT);
+    in = keys(1, UK_SEL_RIGHT);   // Shift+Right outside an edit line: as Right
+    CHECK(ui_handle(&u, names, &in).kind == UA_TREE_RIGHT);
+    in = keys(1, UK_ENTER);
+    a = ui_handle(&u, names, &in);
+    CHECK(a.kind == UA_PLACE && a.index == 3);
+    in = keys(1, UK_BACKSPACE);
+    CHECK(ui_handle(&u, names, &in).kind == UA_PARENT);
+    // A mark clicked: that row, top 0 here.
+    in = ui_input_none();
+    in.side_twisty = 2;
+    a = ui_handle(&u, names, &in);
+    CHECK(a.kind == UA_TREE_TOGGLE && a.index == 2);
+    in.side_twisty = 8;   // past the end
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE);
+    // In the places mode Left goes up and Right goes to the place; a mark is no mark there.
+    u.side_mode = SIDE_PLACES;
+    in = keys(1, UK_LEFT);
+    CHECK(ui_handle(&u, names, &in).kind == UA_PARENT);
+    in = keys(1, UK_RIGHT);
+    CHECK(ui_handle(&u, names, &in).kind == UA_PLACE);
+    in = ui_input_none();
+    in.side_twisty = 1;
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE);
+    // The keys in the list: Left is up, Right opens, in the tree mode too.
+    u.side_mode = SIDE_TREE, u.side_focus = false;
+    in = keys(1, UK_LEFT);
+    CHECK(ui_handle(&u, names, &in).kind == UA_PARENT);
+    in = keys(1, UK_RIGHT);
+    CHECK(ui_handle(&u, names, &in).kind == UA_OPEN);
+    // An empty tree: nothing for Left or Right.
+    u.side_focus = true;
+    ui_set(&u.side, 0, 0);
+    in = keys(1, UK_LEFT);
+    CHECK(ui_handle(&u, names, &in).kind == UA_PARENT);
+    in = keys(1, UK_RIGHT);
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE);
+}

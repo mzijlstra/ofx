@@ -8,7 +8,7 @@
 //   wait <frames>
 //   sleep <ms>              frames until that much time has passed
 //   key <name>              up down pageup pagedown home end enter right left backspace esc tab
-//                           f2 delete shift-delete space, and the chords alt-left alt-right ctrl-f
+//                           f2 f9 delete shift-delete space, and the chords alt-left alt-right ctrl-f
 //                           ctrl-h ctrl-a ctrl-c ctrl-x ctrl-v ctrl-z ctrl-shift-n ctrl-l alt-up
 //                           ctrl-t ctrl-w ctrl-tab ctrl-shift-tab ctrl-shift-pageup ctrl-shift-pagedown,
 //                           shift-left shift-right shift-home shift-end shift-enter ctrl-k ctrl-j ctrl-q,
@@ -148,6 +148,16 @@ static void script_state(char *out, size_t cap)
     }
     for (char *c = sides; *c; c++)
         if (*c == ' ') *c = '_';
+    // The tree (F6): its rows, the cursor's row name:depth:open and its row on screen, the folder
+    // shown's row.
+    static const char *const SIDE_MODES_W[] = { "places", "tree", "hidden" };
+    char treecur[NAME_MAX + 32] = "-";
+    int treehere = -1;
+    if (app.ui.side_mode == SIDE_TREE && app.ui.side.sel < tree.n) {
+        const TreeRow *r = &tree.row[app.ui.side.sel];
+        snprintf(treecur, sizeof treecur, "%.*s:%d:%d", STR_ARG(r->name), r->depth, r->open);
+        treehere = tree_find(&tree, str_from_c(app.cwd));
+    }
     // The cursor's Size cell as drawn, its spaces as '_'.
     char sizecell[64] = "-";
     if (app.have_list && app.ui.list.n > 0) {
@@ -168,7 +178,7 @@ static void script_state(char *out, size_t cap)
              "back=%d fwd=%d marked=%td editing=%d edit=%s confirming=%d asking=%d job=%s done=%lld/%lld undo=%s clip=%td cut=%d "
              "sysclip=%d modal=%s askall=%d tabs=%d tab=%d tabdirs=%s sizecell=%s crumbs=%s crumbhome=%d crumb=%d crumbshown=%d-%d arrows=%d locating=%d cnt=%s "
              "esel=%d-%d caret=%d copied=%s crumbkey=%s jobs=%d waiting=%d jobrows=%s jobkey=%s jobline=%d jobspeed=%d clashjob=%s "
-             "sides=%s spaced=%d status=%s",
+             "sides=%s spaced=%d sidemode=%s treen=%d treecur=%s treerow=%td treehere=%d status=%s",
              app.cwd, app.list.n, app.list.hidden, STR_ARG(sel), app.ui.list.sel, app.ui.list.top, app.ui.list.rows, app.hover,
              t->accent.r, t->accent.g, t->accent.b, t->bg.r, t->bg.g, t->bg.b, t->icons[0] ? t->icons : "-",
              app.icon_scale, GetScreenWidth(), GetScreenHeight(), app.reloads, app.themes, atomic_load(&watch.batches),
@@ -183,7 +193,8 @@ static void script_state(char *out, size_t cap)
              UNDO_KINDS[undo.kind], own.n, own.cut, clip.ok, MODALS[modal_kind()], app.ui.ask_all, tabbar.n, tabbar.cur, tabdirs, sizecell, crumbs, app.crumbs.seg[0].home ? 0 : -1, app.crumbs.cur, app.crumb_lo, app.crumb_hi, app.crumb_arrows,
              app.ui.editing && app.ui.edit_path, cnt, slo, shi, app.ui.caret, copied, keyed,
              jobs.nrun, jobs.nwait, joblabels, jobkey, oldest ? oldest->line.reached : 0, oldest && oldest->line.now > 0, clashjob,
-             sides[0] ? sides : "-", spaced, app.status[0] ? app.status : "-");
+             sides[0] ? sides : "-", spaced, SIDE_MODES_W[app.ui.side_mode], app.ui.side_mode == SIDE_TREE ? tree.n : 0, treecur,
+             app.ui.side.sel - app.ui.side.top, treehere, app.status[0] ? app.status : "-");
     frame_us_max = 0;
 }
 
@@ -218,7 +229,7 @@ static UiKey script_key(Str name)
         { "home", UK_HOME }, { "end", UK_END }, { "enter", UK_ENTER }, { "right", UK_RIGHT },
         { "left", UK_LEFT }, { "backspace", UK_BACKSPACE }, { "esc", UK_ESC }, { "tab", UK_TAB },
         { "alt-left", UK_BACK }, { "alt-right", UK_FORWARD }, { "ctrl-f", UK_FIND }, { "ctrl-h", UK_HIDDEN },
-        { "f2", UK_F2 }, { "delete", UK_DELETE }, { "shift-delete", UK_SHIFT_DELETE }, { "ctrl-a", UK_ALL },
+        { "f2", UK_F2 }, { "f9", UK_F9 }, { "delete", UK_DELETE }, { "shift-delete", UK_SHIFT_DELETE }, { "ctrl-a", UK_ALL },
         { "ctrl-c", UK_COPY }, { "ctrl-x", UK_CUT }, { "ctrl-v", UK_PASTE }, { "ctrl-z", UK_UNDO },
         { "ctrl-shift-n", UK_NEWFOLDER }, { "ctrl-l", UK_LOCATION }, { "alt-up", UK_PARENT },
         { "ctrl-t", UK_TAB_NEW }, { "ctrl-w", UK_TAB_CLOSE }, { "ctrl-tab", UK_TAB_NEXT }, { "ctrl-shift-tab", UK_TAB_PREV },

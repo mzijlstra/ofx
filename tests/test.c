@@ -1482,6 +1482,8 @@ int main(void)
     test_status_info();
     test_side_modes();
     test_input_acts();
+    test_tree();
+    test_tree_keys();
     char cmd[1600];
     snprintf(cmd, sizeof cmd, "chmod -R u+rwx '%s' && rm -rf '%s' '%s'", root, root, decoy);
     if (system(cmd) != 0) fprintf(stderr, "could not remove %s\n", root);

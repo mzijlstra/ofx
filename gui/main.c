@@ -51,11 +51,13 @@ static u8 scratch_mem[MiB(1)];
 static u8 undo_mem[MiB(4)];        // the undo record's paths
 static u8 own_mem[MiB(2)];         // what ofx itself copied or cut
 static u8 paste_mem[MiB(2)];       // another program's files, read for one paste
+static u8 tree_mem[MiB(4)];        // the sidebar tree's paths and names; reset per build
 
-static Arena frame, lists[2], data, icona, scratch, undoa, owna, pastea;
+static Arena frame, lists[2], data, icona, scratch, undoa, owna, pastea, treea;
 static int   watch_delay_ms;   // OFX_TEST_WATCH_DELAY_MS, for one test
 
 enum { BAR_BTN_W = 34, BAR_BTN_H = 30, BAR_GAP = 4, ARROW_W = 22, CRUMB_PAD = 10, CRUMB_ICON_PX = 16 };
+enum { TREE_STEP = 10 };
 enum { TAB_H = 30, TAB_X_W = 22, JOB_ROW_H = 40, JOB_WAIT_H = 22, MODE_BTN_W = 28, MODE_BTN_H = 22, MODE_GAP = 4 };
 enum { FONT_PX = 15, ROW_H = 28, ICON_PX = 24, HEADER_H = 40, COLS_H = 26, FOOTER_H = 28, PAD = 12, SIZE_W = 90,
        DATE_W = 100, SIDE_W = 200, SIDE_ROW_H = 28, SIDE_ICON_PX = 20, GAP = 10, ICONS_MAX = 512 };
@@ -119,6 +121,7 @@ static struct {
 } app = { .hover = -1, .side_hover = -1, .tab_hover = -1, .tab_x_hover = -1, .jobx_hover = -1, .mode_hover = -1 };
 
 static UiHistory hist;
+static Tree      tree;     // the sidebar's tree mode (F6)
 
 // ---- tabs (F5) --------------------------------------------------------------------------------
 //
@@ -228,6 +231,8 @@ static Str sel_name(void)
     return app.have_list && app.ui.list.n > 0 ? app.list.e[app.ui.list.sel].name : STR_EMPTY;
 }
 
+static void tree_refresh(bool follow, int fallback);
+
 // Shows dir, the cursor on the entry called `select` (else on row `fallback`). A move to another
 // folder goes in the history, unless it is the history's own (`stepping`). False, with the reason
 // in the status line, when dir can't be read: the old listing stays.
@@ -285,6 +290,7 @@ static bool go_to_in(const char *dir, Str select, isize fallback, bool stepping)
         SetWindowTitle(TextFormat("ofx: %s", app.cwd));
     }
     ui_set(&app.ui.list, l.n, sel);
+    tree_refresh(!same, app.ui.side.sel);
     // The drives' space moves with what changes on them; read it with every listing.
     struct statvfs v;
     app.cwd_avail = statvfs(app.cwd, &v) == 0 ? (i64)v.f_bavail * (i64)v.f_frsize : -1;
@@ -306,12 +312,51 @@ static void places_reload(void)
         app.place_head[i] = app.places.p[i].kind == PL_HEAD;
         if (keep.kind != PL_HEAD && app.places.p[i].kind == keep.kind && strcmp(app.places.p[i].path, keep.path) == 0) sel = i;
     }
+    app.place_cur = places_current(&app.places, app.cwd);
+    if (app.ui.side_mode != SIDE_PLACES) return;
     app.ui.side_head = app.place_head;
     isize top = app.ui.side.top;
     ui_set(&app.ui.side, app.places.n, sel);
     app.ui.side.top = ui_clamp(top, 0, ui_max_top(&app.ui.side));
     ui_side_settle(&app.ui, 1);
-    app.place_cur = places_current(&app.places, app.cwd);
+}
+
+// The tree built again (tree mode only): opened down to the folder shown when `follow`, with the
+// cursor on its row; else the cursor stays on its folder, or on the row `fallback`.
+static void tree_refresh(bool follow, int fallback)
+{
+    if (app.ui.side_mode != SIDE_TREE) return;
+    char keep[PATH_MAX] = "";
+    if (!follow && app.ui.side.sel < tree.n) snprintf(keep, sizeof keep, "%.*s", STR_ARG(tree.row[app.ui.side.sel].path));
+    if (follow) tree_follow(&tree, app.cwd);
+    arena_reset(&treea);
+    tree_build(&treea, &tree, S("/"), app.show_hidden);
+    int sel = tree_find(&tree, str_from_c(follow ? app.cwd : keep));
+    if (sel < 0) sel = fallback < tree.n ? fallback : 0;
+    app.ui.side_head = NULL;
+    isize top = app.ui.side.top;
+    ui_set(&app.ui.side, tree.n, sel);
+    if (!follow) app.ui.side.top = ui_clamp(top, 0, ui_max_top(&app.ui.side)), ui_show_sel(&app.ui.side);
+}
+
+// The sidebar after a change of mode: the places' rows, or the tree's opened to the folder shown.
+static void side_refresh(void)
+{
+    app.ui.side.top = 0;
+    if (app.ui.side_mode == SIDE_PLACES) places_reload();
+    else if (app.ui.side_mode == SIDE_TREE) tree_refresh(true, 0);
+}
+
+// The folder of sidebar row i: a place's, or a tree row's; NULL for a heading or none.
+static const char *side_path(isize i, char *buf, size_t cap)
+{
+    if (app.ui.side_mode == SIDE_TREE) {
+        if (i < 0 || i >= tree.n) return NULL;
+        snprintf(buf, cap, "%.*s", STR_ARG(tree.row[i].path));
+        return buf;
+    }
+    if (i < 0 || i >= app.places.n || app.places.p[i].kind == PL_HEAD) return NULL;
+    return app.places.p[i].path;
 }
 
 static bool go_to(const char *dir, Str select, isize fallback)
@@ -818,6 +863,7 @@ static void act(UiAction a)
     Err err;
     switch (a.kind) {
     case UA_SIDE_MODE: {
+        side_refresh();
         char path[PATH_MAX];
         State st = { app.ui.side_mode };
         if (state_path(path, sizeof path) && !state_save(path, &st, &err)) set_status(true, "%s", err.msg);
@@ -833,9 +879,29 @@ static void act(UiAction a)
         break;
     }
     case UA_SORT: resort(); break;
-    case UA_PLACE:
-        if (a.index >= 0 && a.index < app.places.n) go_to(app.places.p[a.index].path, STR_EMPTY, 0);
+    case UA_PLACE: {
+        char buf[PATH_MAX];
+        const char *p = side_path(a.index, buf, sizeof buf);
+        if (p) go_to(p, STR_EMPTY, 0);
         break;
+    }
+    case UA_TREE_LEFT:
+    case UA_TREE_RIGHT:
+    case UA_TREE_TOGGLE: {
+        if (a.index < 0 || a.index >= tree.n) break;
+        bool toggle = a.kind == UA_TREE_TOGGLE;
+        int to = a.kind == UA_TREE_LEFT ? tree_left(&tree, (int)a.index, &toggle) : a.kind == UA_TREE_RIGHT ? tree_right(&tree, (int)a.index, &toggle) : app.ui.side.sel;
+        if (!toggle) {
+            app.ui.side.sel = to, ui_show_sel(&app.ui.side);
+            break;
+        }
+        TreeRow *r = &tree.row[a.index];
+        if (r->open) tree_close(&tree, r->path);
+        else tree_open(&tree, r->path);
+        // The cursor stays on its folder; one hidden by the close goes to the closed folder.
+        tree_refresh(false, (int)a.index);
+        break;
+    }
     case UA_OPEN: open_entry(a.index); break;
     case UA_PARENT: go_parent(); break;
     case UA_TERMINAL:
@@ -881,9 +947,12 @@ static void act(UiAction a)
         if (a.index < app.list.n && join(path, sizeof path, app.cwd, app.list.e[a.index].name)) tab_open_bg(path);
         break;
     }
-    case UA_TAB_BG_PLACE:
-        if (a.index >= 0 && a.index < app.places.n) tab_open_bg(app.places.p[a.index].path);
+    case UA_TAB_BG_PLACE: {
+        char buf[PATH_MAX];
+        const char *p = side_path(a.index, buf, sizeof buf);
+        if (p) tab_open_bg(p);
         break;
+    }
     case UA_TAB_BG_CRUMB:
         if (a.index >= 0 && a.index < app.crumbs.n) {
             char path[PATH_MAX];
@@ -1045,6 +1114,46 @@ static void drive_bar(int r, const Place *p, float w)
                                     .backgroundColor = mix(t->fg_dim, t->bg_light, 0.3f) }) {
         CLAY(CLAY_IDI("side-used", r), { .layout = { .sizing = { CLAY_SIZING_FIXED(w * used), CLAY_SIZING_GROW(0) } },
                                          .backgroundColor = used >= 0.9f ? cc(t->red) : cc(t->accent) }) {}
+    }
+}
+
+// The tree mode (F6): a row a folder, indented by its depth, with its open (▾) or closed (▸)
+// mark; the folder shown in the accent.
+static void layout_tree(float h)
+{
+    Theme *t = &app.theme;
+    CLAY(CLAY_ID("side"), { .layout = { .sizing = { CLAY_SIZING_FIXED(SIDE_W), CLAY_SIZING_FIXED(h) },
+                                        .layoutDirection = CLAY_TOP_TO_BOTTOM, .padding = { 0, 0, PAD / 2, 0 } },
+                            .clip = { .horizontal = true }, .backgroundColor = cc(t->bg_light) }) {
+        UiList *sl = &app.ui.side;
+        Str cwd = str_from_c(app.cwd);
+        for (int r = 0; r < sl->rows && sl->top + r < sl->n; r++) {
+            int i = (int)(sl->top + r);
+            const TreeRow *row = &tree.row[i];
+            bool cursor = app.ui.side_focus && i == sl->sel, here = str_eq(row->path, cwd), hover = r == app.side_hover;
+            Clay_Color bg = cursor ? cc(t->selection) : hover ? cc(t->bg) : cc(t->bg_light);
+            int indent = row->depth * TREE_STEP;   // deep names are cut short with "…"
+            CLAY(CLAY_IDI("side-row", r), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(SIDE_ROW_H) },
+                                                        .padding = { (uint16_t)(PAD / 2 + indent), PAD, 0, 0 }, .childGap = 4,
+                                                        .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
+                                            .backgroundColor = bg,
+                                            .border = { .color = cc(t->accent), .width = { .left = cursor ? 3 : 0 } } }) {
+                CLAY(CLAY_IDI("side-twisty", r), { .layout = { .sizing = { CLAY_SIZING_FIXED(16), CLAY_SIZING_FIXED(SIDE_ROW_H) },
+                                                               .childAlignment = { .x = CLAY_ALIGN_X_CENTER, .y = CLAY_ALIGN_Y_CENTER } } }) {
+                    text(cz(row->open ? "\xE2\x96\xBE" : "\xE2\x96\xB8"), cc(t->fg_dim));   // ▾ ▸
+                }
+                Str names[2];
+                isize n = 0;
+                char path[PATH_MAX];
+                snprintf(path, sizeof path, "%.*s", STR_ARG(row->path));
+                Str special = row->depth == 0 ? S("drive-harddisk") : user_dir_icon(&app.user_dirs, path);
+                if (special.len) names[n++] = special;
+                names[n++] = S("folder");
+                icon_box(CLAY_IDI("side-icon", r), icon_for(names[0], names, n), SIDE_ICON_PX);
+                float room = SIDE_W - PAD / 2 - indent - 16 - 4 - SIDE_ICON_PX - 4 - PAD;
+                if (room > 0) text(fit(row->name, room, false), here ? cc(t->accent) : cc(t->fg));
+            }
+        }
     }
 }
 
@@ -1686,7 +1795,8 @@ static Clay_RenderCommandArray layout(int w, int h)
         layout_bar((float)w);
         float body_h = (float)(h - HEADER_H - FOOTER_H);
         CLAY(CLAY_ID("body"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(body_h) } } }) {
-        if (side_w()) layout_side(body_h);
+        if (app.ui.side_mode == SIDE_TREE) layout_tree(body_h);
+        else if (side_w()) layout_side(body_h);
         CLAY(CLAY_ID("main"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0) }, .layoutDirection = CLAY_TOP_TO_BOTTOM } }) {
         // The tab bar over the files only, not the sidebar (Michael, 2026-10-21).
         if (tabbar.n >= 2) layout_tabs((float)(w - side_w()));
@@ -1903,6 +2013,7 @@ typedef struct {
     int   modal;        // a modal panel's button (UI_MODAL_*), 0 for none
     int   job_x;        // a job row's ×, -1 for none
     int   mode;         // a sidebar mode button (a SideMode), -1 for none
+    int   twisty;       // a tree row's open/close mark, -1 for none
 } Hit;
 
 static bool in_box(Clay_ElementId id, float x, float y)
@@ -1914,7 +2025,7 @@ static bool in_box(Clay_ElementId id, float x, float y)
 
 static Hit hit_at(float x, float y)
 {
-    Hit h = { -1, -1, -1, UB_NONE, -1, -1, -1, 0, -1, -1 };
+    Hit h = { -1, -1, -1, UB_NONE, -1, -1, -1, 0, -1, -1, -1 };
     if (modal_kind() != MODAL_NONE) {
         // A panel is up: its buttons are all there is to hit.
         static const struct { const char *id; int b; } MB[] = {
@@ -1943,6 +2054,7 @@ static Hit hit_at(float x, float y)
         if (in_box(CLAY_IDI("job-x", i), x, y)) h.job_x = i;
     for (int r = 0; side_w() && r < app.ui.side.rows && h.side < 0; r++)
         if (in_box(CLAY_IDI("side-row", r), x, y)) h.side = r;
+    if (h.side >= 0 && app.ui.side_mode == SIDE_TREE && in_box(CLAY_IDI("side-twisty", h.side), x, y)) h.twisty = h.side;
     for (int k = 0; k < SIDE_MODES && h.mode < 0; k++)
         if (in_box(CLAY_IDI("mode", k), x, y)) h.mode = k;
     static const char *const IDS[SORT_KEYS] = { "col-name", "col-size", "col-date" };
@@ -1960,12 +2072,13 @@ static void press_at(UiInput *in, float x, float y, int mods)
         if (!mods && ui_press(&app.press, h.row, now_ms()) == 2) in->dclick = h.row;
         else in->click = h.row, in->click_mods = mods;
     }
-    in->side_click = h.side;
+    in->side_click = h.twisty >= 0 ? -1 : h.side;   // the mark opens or closes; the rest of the row goes there
     in->header = h.header;
     in->bar = h.bar, in->crumb = h.crumb;
     in->modal = h.modal;
     in->job_x = h.job_x;
     in->side_mode = h.mode;
+    in->side_twisty = h.twisty;
     if (h.tab_x >= 0) in->tab_close = h.tab_x;
     else if (h.tab >= 0) in->tab_click = h.tab;
 }
@@ -2120,6 +2233,7 @@ int main(int argc, char **argv)
     arena_init(&undoa, "undo", undo_mem, sizeof undo_mem);
     arena_init(&owna, "clipboard", own_mem, sizeof own_mem);
     arena_init(&pastea, "paste", paste_mem, sizeof paste_mem);
+    arena_init(&treea, "tree", tree_mem, sizeof tree_mem);
     arena_init(&doomeda, "delete", doomed_mem, sizeof doomed_mem);
     undo.arena = &undoa;
     uint32_t need = Clay_MinMemorySize();
@@ -2181,6 +2295,7 @@ int main(int argc, char **argv)
     places_reload();
     char state_file[PATH_MAX];
     if (state_path(state_file, sizeof state_file)) app.ui.side_mode = state_load(&scratch, state_file).side;
+    side_refresh();
     ui_resize(&app.ui.list, list_rows(GetScreenHeight()));
     ui_resize(&app.ui.side, side_rows(GetScreenHeight()));
     app.press.row = -1;
