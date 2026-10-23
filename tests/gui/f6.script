@@ -1,0 +1,139 @@
+# F6: the sidebar's places and drives, a drive mounted and gone, the headings skipped, the status
+# line's forms, the trash view (restore, delete for good, Empty Trash), the tree and hidden
+# modes, the mode remembered (f6b.script reads it after a restart). The mount list is
+# $OFX_ROOT/mountinfo (OFX_TEST_MOUNTINFO); run.sh makes the tree, the bookmark Bee, the list.
+settle
+expect sidemode=places sides=^Places|Home|Bee|Trash|^Drives|File_System spaced=1 trash=0
+# A drive mounted, and gone again
+sh printf '33 1 0:31 / / rw - btrfs /dev/x rw\n50 33 8:17 / /run/media/m/OFXUSB rw - vfat /dev/sdz1 rw\n' > "$OFX_ROOT/mountinfo"
+wait-for 3000 sides=^Places|Home|Bee|Trash|^Drives|File_System|OFXUSB
+sh printf '33 1 0:31 / / rw - btrfs /dev/x rw\n' > "$OFX_ROOT/mountinfo"
+wait-for 3000 sides=^Places|Home|Bee|Trash|^Drives|File_System
+# The cursor skips the headings
+key tab
+expect sidefocus=1 side=1 place=Home
+key up
+expect side=1
+key end
+expect side=5
+key up
+expect side=3 place=Trash
+key esc
+expect sidefocus=0
+# The status line: one folder marked (its count once known), two, one file; a message until the
+# next key
+expect sel=adir
+key space
+wait-for 2000 marked=1 info="adir"_selected_(1_item)
+key space
+expect info=2_items_selected
+key esc
+expect marked=0 sel=a.txt
+key space
+expect info="a.txt"_selected_(3_B)
+key esc
+char t
+expect status=terminal
+key down
+expect status=-
+# Trash a.txt and adir; the Trash place lists them, folders first
+press 2
+expect sel=a.txt
+key delete
+wait-for 2000 n=4
+press 0
+expect sel=adir
+key delete
+wait-for 2000 n=3
+key tab
+expect place=Trash
+key enter
+expect trash=1 n=2 sel=adir crumbs=Trash here=Trash
+key esc
+expect sidefocus=0
+shot f6-trash.png
+# A folder doesn't open there; a rename, a copy, a terminal don't work
+key enter
+expect status=adir trash=1
+key f2
+expect editing=0 status=That
+key ctrl-c
+expect clip=0 status=That
+char t
+expect status=That
+# r restores a.txt
+key down
+expect sel=a.txt
+char r
+expect status=Restored
+sh test -f "$OFX_ROOT/tree/a.txt" && test ! -e "$OFX_ROOT/data/Trash/info/a.txt.trashinfo"
+wait-for 2000 n=1
+# Shift+Delete: adir and its .trashinfo, for good
+key shift-delete
+expect modal=delete
+char y
+wait-for 3000 n=0 job=-
+expect status=Deleted
+sh test ! -e "$OFX_ROOT/data/Trash/files/adir" && test ! -e "$OFX_ROOT/data/Trash/info/adir.trashinfo"
+# Two more trashed; Empty Trash asks, Esc keeps them, Yes deletes all
+key alt-left
+expect trash=0 n=4
+press 2
+expect sel=b.txt
+key delete
+wait-for 2000 n=3
+press 2
+expect sel=c.txt
+key delete
+wait-for 2000 n=2
+key alt-right
+expect trash=1 n=2
+point-ui trash-empty
+click-here
+expect modal=empty
+shot f6-empty.png
+key esc
+expect modal=- n=2
+click-here
+expect modal=empty
+char y
+wait-for 3000 n=0 job=-
+expect status=Emptied
+sh test ! -e "$OFX_ROOT/data/Trash/files" && test ! -e "$OFX_ROOT/data/Trash/info"
+# The trash works again after it: its folders made anew
+key alt-left
+press 1
+expect sel=a.txt
+key delete
+wait-for 2000 n=1
+sh test -f "$OFX_ROOT/data/Trash/files/a.txt"
+key ctrl-z
+wait-for 2000 n=2
+# The tree: F9, opened down to the folder shown, the cursor on it; Left and Right
+key f9
+expect sidemode=tree treehere=1 treecur=tree:0
+sh grep -qx sidebar=tree "$OFX_ROOT/state/ofx/state"
+key tab
+char l
+expect treecur=tree:1 treehere=1
+char l
+expect treecur=bdir:0 treehere=0
+char h
+expect treecur=tree:1
+char h
+expect treecur=tree:0
+char h
+expect treecur=f6:1
+key enter
+expect treecur=f6:1 treehere=1
+key alt-left
+expect sel=a.txt treehere=1
+shot f6-tree.png
+# Hidden: no sidebar, Tab keeps the keys in the list; remembered
+key f9
+expect sidemode=hidden
+sh grep -qx sidebar=hidden "$OFX_ROOT/state/ofx/state"
+key tab
+expect sidefocus=0
+shot f6-hidden.png
+quit

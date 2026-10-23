@@ -5,6 +5,7 @@
 // loop polls (jobs_poll), shows one clash at a time, and answers (job_answer). Included by main.c.
 
 enum { JOB_RECS = JOBQ_WORKERS + JOBQ_WAITING };
+enum { JOB_TRASH_ITEMS = 1, JOB_TRASH_EMPTY };
 
 typedef struct {
     int     id;             // > 0 while the record holds a job
@@ -15,6 +16,7 @@ typedef struct {
     JobUses uses;
     bool    reverse;        // an undo's move back: it makes no new undo record
     bool    own_cut;        // a paste of ofx's own cut: the clipboard empties after it
+    int     trash;          // the trash view's delete (F6): JOB_TRASH_ITEMS (an item, its .trashinfo), JOB_TRASH_EMPTY
     u32     own_gen;        // own_gen when it was asked for
     u32     undo_gen;       // undo_gen then: a newer action's undo record wins over this job's
     char    label[200];     // "Copying 12 items to bdir"
@@ -136,7 +138,7 @@ static JobRec *job_new(void)
         JobRec *r = &job_recs[i];
         if (r->id) continue;
         arena_init(&r->arena, "job", job_rec_mem[i], sizeof job_rec_mem[i]);
-        r->reverse = false, r->own_cut = false, r->own_gen = 0;
+        r->reverse = false, r->own_cut = false, r->own_gen = 0, r->trash = 0;
         return r;
     }
     app.ui.full_told = true;
@@ -273,7 +275,10 @@ static void job_finish(JobRec *r)
         if (j->item[i].out == OUT_NEW || j->item[i].out == OUT_REPLACED || j->item[i].out == OUT_MERGED) done++;
     char msg[600];
     int k;
-    if (atomic_load(&j->cancel)) k = snprintf(msg, sizeof msg, "%s cancelled after %td of %td %s", STOPPED[j->kind], done, j->n, items(j->n));
+    isize shown_n = j->n;
+    if (r->trash == JOB_TRASH_ITEMS) done /= 2, shown_n /= 2;   // the .trashinfo files go uncounted
+    if (r->trash == JOB_TRASH_EMPTY) k = snprintf(msg, sizeof msg, atomic_load(&j->cancel) ? "Emptying the trash cancelled" : "Emptied the trash");
+    else if (atomic_load(&j->cancel)) k = snprintf(msg, sizeof msg, "%s cancelled after %td of %td %s", STOPPED[j->kind], done, shown_n, items(shown_n));
     else k = snprintf(msg, sizeof msg, "%s %td %s", DONE[j->kind], done, items(done));
     if (k > 0 && j->skipped) k += snprintf(msg + k, sizeof msg - (size_t)k, ", %td skipped", j->skipped);
     if (k > 0 && j->errors) snprintf(msg + k, sizeof msg - (size_t)k, "; %td failed: %s", j->errors, j->err);

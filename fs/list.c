@@ -20,12 +20,15 @@ typedef enum {
     K_OTHER,         // a device, socket or pipe
 } Kind;
 
+typedef struct TrashItem TrashItem;
+
 typedef struct {
     Str   name;
     Kind  kind;
     i64   size;      // the target's, for a symlink; 0 for a folder
-    i64   mtime;     // seconds since the epoch
+    i64   mtime;     // seconds since the epoch; in the trash view, when it was trashed
     u32   mode;      // st_mode, of the target when there is one
+    const TrashItem *trash;   // the trash view's (F6, trash.c): where the item is; NULL elsewhere
 } Entry;
 
 typedef struct {

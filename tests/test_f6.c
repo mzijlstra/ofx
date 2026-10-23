@@ -349,3 +349,187 @@ static void test_tree_keys(void)
     in = keys(1, UK_RIGHT);
     CHECK(ui_handle(&u, names, &in).kind == UA_NONE);
 }
+
+// The trash view's listing and restore (F6): the home trash and a drive's, read as one.
+static void test_trash_view(void)
+{
+    arena_reset(&ta);
+    ops_guard(root);
+    Err err;
+    env_set("XDG_DATA_HOME", at("tv/data"));
+    mkdirs(at("tv/data"));
+    mkdirs(at("tv/src/sub"));
+    put(at("tv/src/a.txt"), "AAAA");
+    put(at("tv/src/sub/b.txt"), "B");
+    put(at("tv/src/.dot"), "D");
+    mkdirs(at("tv/src/folder/in"));
+    Trashed t;
+    CHECK(trash_put(at("tv/src/a.txt"), &t, &err));
+    CHECK(trash_put(at("tv/src/sub/b.txt"), &t, &err));
+    CHECK(trash_put(at("tv/src/.dot"), &t, &err));
+    CHECK(trash_put(at("tv/src/folder"), &t, &err));
+    // A drive's own trash, by hand: a Path relative to the drive's top, one absolute.
+    char tr[PATH_MAX];
+    snprintf(tr, sizeof tr, "tv/drive/.Trash-%u", (unsigned)getuid());
+    mkdirs(at("%s/files", tr));
+    mkdirs(at("%s/info", tr));
+    put(at("%s/files/c.txt", tr), "CC");
+    put(at("%s/info/c.txt.trashinfo", tr), "[Trash Info]\nPath=docs/c%20d.txt\nDeletionDate=2026-01-02T03:04:05\n");
+    put(at("%s/files/abs", tr), "Z");
+    char body[PATH_MAX + 64];
+    snprintf(body, sizeof body, "[Trash Info]\nDeletionDate=bad\nPath=%s\n", at("tv/elsewhere/abs"));
+    put(at("%s/info/abs.trashinfo", tr), body);
+    // Left out: an info without its item, an item without its info, no Path, a Path outside the
+    // group, a broken escape, a bare ".trashinfo".
+    put(at("%s/info/orphan.trashinfo", tr), "[Trash Info]\nPath=x\n");
+    put(at("%s/files/noinfo", tr), "x");
+    put(at("%s/files/nopath", tr), "x");
+    put(at("%s/info/nopath.trashinfo", tr), "[Trash Info]\nDeletionDate=2026-01-02T03:04:05\n");
+    put(at("%s/files/other", tr), "x");
+    put(at("%s/info/other.trashinfo", tr), "[Other]\nPath=x\n[Trash Info]\n");
+    put(at("%s/files/esc", tr), "x");
+    put(at("%s/info/esc.trashinfo", tr), "[Trash Info]\nPath=bad%zz\n");
+    put(at("%s/info/.trashinfo", tr), "[Trash Info]\nPath=x\n");
+    // A relative Path in the home trash: nowhere to restore it to, left out.
+    put(at("tv/data/Trash/files/rel"), "x");
+    put(at("tv/data/Trash/info/rel.trashinfo"), "[Trash Info]\nPath=rel\n");
+    // A mount point with a .Trash folder of its own but no info/ in it: not a trash folder.
+    char tr2[PATH_MAX];
+    snprintf(tr2, sizeof tr2, "tv/drive2/.Trash/%u/files", (unsigned)getuid());
+    mkdirs(at("%s", tr2));
+
+    const char *mounts[] = { at("tv/drive"), at("tv/drive"), at("tv/drive2"), at("tv/none") };
+    char m0[PATH_MAX], m2[PATH_MAX], m3[PATH_MAX];
+    snprintf(m0, sizeof m0, "%s", mounts[0]), snprintf(m2, sizeof m2, "%s", mounts[2]), snprintf(m3, sizeof m3, "%s", mounts[3]);
+    const char *mp[] = { m0, m0, m2, m3 };
+    static TrashDirs d;
+    trash_dirs(&d, mp, 4);
+    CHECK(d.n == 2 && strcmp(d.dir[0], at("tv/data/Trash")) == 0 && d.top[0][0] == 0);
+    CHECK(strcmp(d.dir[1], at("%s", tr)) == 0 && strcmp(d.top[1], m0) == 0);
+    Listing l;
+    CHECK(trash_list(&ta, &d, false, (Sort){ SORT_NAME, false }, &l, &err));
+    const char *want[] = { "folder", "a.txt", "abs", "b.txt", "c d.txt" };
+    CHECK(l.n == COUNT(want) && l.hidden == 1);
+    for (isize i = 0; i < l.n && i < COUNT(want); i++) {
+        if (!str_eq(l.e[i].name, str_from_c(want[i]))) fprintf(stderr, "trash %td: %.*s\n", i, STR_ARG(l.e[i].name));
+        CHECK(str_eq(l.e[i].name, str_from_c(want[i])) && l.e[i].trash);
+    }
+    CHECK(l.e[0].kind == K_DIR && l.e[1].size == 4 && l.e[1].kind == K_FILE);
+    CHECK(strcmp(l.e[1].trash->from, at("tv/src/a.txt")) == 0 && strcmp(l.e[1].trash->file, at("tv/data/Trash/files/a.txt")) == 0);
+    CHECK(strcmp(l.e[1].trash->info, at("tv/data/Trash/info/a.txt.trashinfo")) == 0);
+    CHECK(strcmp(l.e[4].trash->from, at("tv/drive/docs/c d.txt")) == 0);
+    CHECK(strcmp(l.e[2].trash->from, at("tv/elsewhere/abs")) == 0 && l.e[2].mtime == 0);   // an unreadable date: 0
+    struct tm tm = { .tm_year = 126, .tm_mon = 0, .tm_mday = 2, .tm_hour = 3, .tm_min = 4, .tm_sec = 5, .tm_isdst = -1 };
+    CHECK(l.e[4].mtime == (i64)mktime(&tm));
+    CHECK(l.e[1].mtime > 0 && l.e[1].mtime <= (i64)time(NULL));
+    // Shown hidden: the dot-file too; by date, newest last.
+    CHECK(trash_list(&ta, &d, true, (Sort){ SORT_NAME, false }, &l, &err) && l.n == COUNT(want) + 1 && l.hidden == 1);
+    CHECK(trash_list(&ta, &d, false, (Sort){ SORT_MTIME, false }, &l, &err) && str_eq(l.e[1].name, S("abs")));
+    // Restore: back where it was; its folder made again when it is gone; never over a file there.
+    CHECK(trash_list(&ta, &d, false, (Sort){ SORT_NAME, false }, &l, &err));
+    CHECK(trash_restore_item(l.e[1].trash, &err) && there(at("tv/src/a.txt")) && !there(at("tv/data/Trash/info/a.txt.trashinfo")));
+    rmdir(at("tv/src/sub"));
+    CHECK(trash_restore_item(l.e[3].trash, &err) && there(at("tv/src/sub/b.txt")));
+    put(at("tv/elsewhere/abs"), "in the way");
+    CHECK(!trash_restore_item(l.e[2].trash, &err) && strstr(err.msg, "is there again") && there(at("%s/files/abs", tr)));
+    CHECK(trash_restore_item(l.e[4].trash, &err) && there(at("tv/drive/docs/c d.txt")));
+    // A folder the guard refuses: nothing made, nothing moved.
+    TrashItem out = { l.e[0].trash->file, l.e[0].trash->info, out_at("restored/folder") };
+    CHECK(!trash_restore_item(&out, &err) && strstr(err.msg, "outside the test folder") && !there(out_at("restored")));
+    // Its folder can't be made (a file in the way).
+    put(at("tv/blocker"), "x");
+    TrashItem blocked = { l.e[0].trash->file, l.e[0].trash->info, at("tv/blocker/sub/folder") };
+    CHECK(!trash_restore_item(&blocked, &err) && there(l.e[0].trash->file));
+    // What is left: the folder and abs, and the dot-file.
+    CHECK(trash_list(&ta, &d, false, (Sort){ SORT_NAME, false }, &l, &err) && l.n == 2);
+    // No trash at all.
+    env_set("XDG_DATA_HOME", at("tv/none"));
+    trash_dirs(&d, NULL, 0);
+    CHECK(d.n == 0 && trash_list(&ta, &d, false, (Sort){ SORT_NAME, false }, &l, &err) && l.n == 0);
+    // "/" as a mount point: /.Trash-$uid, which isn't there.
+    const char *slash[] = { "/" };
+    trash_dirs(&d, slash, 1);
+    CHECK(d.n == 0);
+    env_restore();
+    env_restore();
+    ops_guard(NULL);
+}
+
+// The trash view's keys and panel (F6).
+static void test_trash_keys(void)
+{
+    static Ui u;
+    u = (Ui){ 0 };
+    UiNames names = { name_at, NULL };
+    ui_resize(&u.list, 10), ui_resize(&u.side, 5);
+    ui_set(&u.list, 5, 1), ui_set(&u.side, 5, 0);
+    u.in_trash = true;
+    // r restores; Delete asks first, as Shift+Delete does.
+    UiInput in = chars("r");
+    CHECK(ui_handle(&u, names, &in).kind == UA_RESTORE);
+    in = keys(1, UK_DELETE);
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.confirming && u.confirm_n == 1);
+    in = chars("y");
+    CHECK(ui_handle(&u, names, &in).kind == UA_DELETE && !u.confirming);
+    // What doesn't work there.
+    UiKey refused[] = { UK_F2, UK_COPY, UK_CUT, UK_PASTE, UK_NEWFOLDER };
+    for (int k = 0; k < COUNT(refused); k++) {
+        in = keys(1, refused[k]);
+        CHECK(ui_handle(&u, names, &in).kind == UA_NOT_IN_TRASH && !u.editing);
+    }
+    in = chars("t");
+    CHECK(ui_handle(&u, names, &in).kind == UA_NOT_IN_TRASH);
+    in = keys(1, UK_UNDO);   // undo still works
+    CHECK(ui_handle(&u, names, &in).kind == UA_UNDO);
+    // The buttons: Restore; Empty Trash asks, Yes empties, No and Esc don't.
+    in = ui_input_none(), in.bar = UB_RESTORE;
+    CHECK(ui_handle(&u, names, &in).kind == UA_RESTORE);
+    in.bar = UB_EMPTY;
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.empty_asking);
+    in = chars("r");   // a panel is up: no restore under it
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.empty_asking);
+    in = keys(1, UK_ESC);
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && !u.empty_asking);
+    u.empty_asking = true;
+    in = chars("y");
+    CHECK(ui_handle(&u, names, &in).kind == UA_EMPTY_TRASH && !u.empty_asking);
+    u.empty_asking = true;
+    in = ui_input_none(), in.modal = UI_MODAL_NO;
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && !u.empty_asking);
+    u.empty_asking = true;
+    in.modal = UI_MODAL_YES;
+    CHECK(ui_handle(&u, names, &in).kind == UA_EMPTY_TRASH);
+    // Left the trash view meanwhile: the panel goes, Yes empties nothing.
+    u.empty_asking = true, u.in_trash = false;
+    in = ui_input_none(), in.modal = UI_MODAL_YES;
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && !u.empty_asking);
+    u.empty_asking = true;
+    in = ui_input_none();
+    ui_handle(&u, names, &in);
+    CHECK(!u.empty_asking);
+    // Outside the trash view: r is nothing, Delete trashes, the buttons do nothing.
+    in = chars("r");
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE);
+    in = keys(1, UK_DELETE);
+    CHECK(ui_handle(&u, names, &in).kind == UA_TRASH);
+    in = ui_input_none(), in.bar = UB_EMPTY;
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && !u.empty_asking);
+    in.bar = UB_RESTORE;
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE);
+    in = keys(1, UK_COPY);
+    CHECK(ui_handle(&u, names, &in).kind == UA_COPY);
+    // An empty trash: nothing to restore.
+    u.in_trash = true;
+    ui_set(&u.list, 0, 0);
+    in = chars("r");
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE);
+    in = ui_input_none(), in.bar = UB_RESTORE;
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE);
+    // The path buttons in the trash view: one, Trash.
+    static UiCrumbs c;
+    ui_crumbs_set(&c, "/home/m/x", "/home/m");
+    ui_crumbs_set(&c, TRASH_URI, "/home/m");
+    CHECK(c.n == 1 && c.cur == 0 && str_eq(ui_crumb_label(&c, 0), S("Trash")) && str_eq(ui_crumb_path(&c, 0), S(TRASH_URI)));
+    ui_crumbs_set(&c, "/home/m/y", "/home/m");   // and back
+    CHECK(c.n == 2 && str_eq(ui_crumb_label(&c, 1), S("y")));
+}

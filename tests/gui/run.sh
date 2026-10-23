@@ -57,6 +57,14 @@ echo "== f53"; OFX_TEST_COPY_DELAY_MS=300 OFX_TEST_HOME="$H" "$here/../../tools/
 if ls -A "$H/tree/adir" | grep -q ofx-part || [ -e "$H/tree/adir/big1.bin" ]; then echo "f53: quitting left a copy in adir"; ls -A "$H/tree/adir"; fail=1; fi
 T=$base/f54; tree "$T"
 echo "== f54"; "$here/../../tools/gui/run-script.sh" "$T" "$here/f54.script" "$bin" "$T/tree" || fail=1
+# F6: a bookmark, a mount list of its own (OFX_TEST_MOUNTINFO), then f6b on the same tree: the
+# sidebar's mode came back from the state file.
+T=$base/f6; rm -rf "$T"; mkdir -p "$T/tree/adir" "$T/tree/bdir" "$T/config/gtk-3.0" "$T/data"
+touch "$T/tree/adir/inner.txt" "$T/tree/b.txt" "$T/tree/c.txt"; printf abc > "$T/tree/a.txt"
+printf 'file://%s/tree/bdir Bee\n' "$T" > "$T/config/gtk-3.0/bookmarks"
+printf '33 1 0:31 / / rw - btrfs /dev/x rw\n' > "$T/mountinfo"
+echo "== f6"; OFX_TEST_MOUNTINFO="$T/mountinfo" "$here/../../tools/gui/run-script.sh" "$T" "$here/f6.script" "$bin" "$T/tree" || fail=1
+echo "== f6b"; OFX_TEST_MOUNTINFO="$T/mountinfo" "$here/../../tools/gui/run-script.sh" "$T" "$here/f6b.script" "$bin" "$T/tree" || fail=1
 T=$base/hang; rm -rf "$T"; mkdir -p "$T/tree/stuck"
 echo "== hang"
 t0=$(date +%s)

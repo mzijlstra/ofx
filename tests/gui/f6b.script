@@ -1,0 +1,12 @@
+# F6, after f6.script on the same scratch tree: the sidebar's mode came back from the state file;
+# a mode button clicked changes it.
+settle
+expect sidemode=hidden
+point-ui mode 1
+click-here
+expect sidemode=tree treehere=1
+sh grep -qx sidebar=tree "$OFX_ROOT/state/ofx/state"
+point-ui mode 0
+click-here
+expect sidemode=places sides=^Places|Home|Bee|Trash|^Drives|File_System
+quit

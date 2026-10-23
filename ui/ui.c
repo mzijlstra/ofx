@@ -50,7 +50,8 @@ typedef enum {
 } UiKey;
 
 // The top bar's buttons (F4).
-typedef enum { UB_NONE, UB_BACK, UB_FORWARD, UB_UP, UB_LOCATION, UB_SEARCH, UB_LEFT, UB_RIGHT, UB_CRUMB } UiBar;
+typedef enum { UB_NONE, UB_BACK, UB_FORWARD, UB_UP, UB_LOCATION, UB_SEARCH, UB_LEFT, UB_RIGHT, UB_CRUMB,
+               UB_RESTORE, UB_EMPTY } UiBar;   // the last two: the trash view's (F6)
 
 enum { UI_MOD_CTRL = 1, UI_MOD_SHIFT = 2 };
 
@@ -114,6 +115,9 @@ typedef enum {
     UA_TREE_LEFT,   // index: the tree row Left was pressed on (gui/ closes it, or goes up a row)
     UA_TREE_RIGHT,  // index: the tree row Right was pressed on (opens it, or goes down into it)
     UA_TREE_TOGGLE, // index: the tree row whose mark was clicked
+    UA_RESTORE,     // the trash view: the marked items (or the cursor's) back where they came from
+    UA_EMPTY_TRASH, // the trash view: everything in it deleted for good, asked and answered
+    UA_NOT_IN_TRASH,   // something that doesn't work in the trash view (gui/ says so)
 } UiActionKind;
 
 typedef struct {
@@ -188,6 +192,9 @@ typedef struct {
     int    cancel_id;
     bool   quit_asking;
     bool   full_told;
+    // The trash view (F6): gui/ says when it is shown; "Empty the trash?" up.
+    bool   in_trash;
+    bool   empty_asking;
 } Ui;
 
 static UiInput ui_input_none(void)
@@ -691,7 +698,12 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         u->cancel_asking = false;
         return (UiAction){ in->modal == UI_MODAL_YES ? UA_CANCEL_JOB : UA_NONE, u->cancel_id, false };
     }
-    bool prompt = u->asking || u->confirming || u->cancel_asking || u->quit_asking || u->full_told;
+    if (u->empty_asking && (in->modal == UI_MODAL_YES || in->modal == UI_MODAL_NO)) {
+        u->empty_asking = false;
+        return (UiAction){ in->modal == UI_MODAL_YES && u->in_trash ? UA_EMPTY_TRASH : UA_NONE, 0, false };
+    }
+    if (!u->in_trash) u->empty_asking = false;
+    bool prompt = u->asking || u->confirming || u->cancel_asking || u->quit_asking || u->full_told || u->empty_asking;
     // The job rows: the mark kept on a row there is; none left, no keyboard there.
     if (u->job_at >= in->job_n) u->job_at = in->job_n - 1;
     if (u->job_at < 0) u->job_at = 0;
@@ -749,6 +761,8 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         case UB_LEFT: return (UiAction){ UA_CRUMB_SHIFT, -1, false };
         case UB_RIGHT: return (UiAction){ UA_CRUMB_SHIFT, 1, false };
         case UB_CRUMB: ui_edit_close(u); return (UiAction){ UA_CRUMB, in->crumb, false };
+        case UB_RESTORE: if (u->in_trash && l->n > 0) return (UiAction){ UA_RESTORE, 0, false }; break;
+        case UB_EMPTY: if (u->in_trash) u->empty_asking = true; break;
         default: break;
         }
     }
@@ -781,6 +795,13 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
             bool quit = u->quit_asking;
             u->quit_asking = u->cancel_asking = false;
             if (yes) return (UiAction){ quit ? UA_QUIT : UA_CANCEL_JOB, quit ? 0 : u->cancel_id, false };
+            continue;
+        }
+        if (u->empty_asking) {
+            bool answered, yes = ui_yes_no(e, &answered);
+            if (!answered) continue;
+            u->empty_asking = false;
+            if (yes) return (UiAction){ UA_EMPTY_TRASH, 0, false };
             continue;
         }
         if (u->editing && u->edit_path && !prompt && e.key == UK_CRUMBS) {   // from the location line: it closes
@@ -834,7 +855,10 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
             case 'G': key = UK_END; break;
             case '/': key = UK_FIND; break;
             case '.': key = UK_HIDDEN; break;
-            case 't': return (UiAction){ UA_TERMINAL, 0, false };
+            case 't': return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : UA_TERMINAL, 0, false };
+            case 'r':
+                if (u->in_trash && !u->side_focus && l->n > 0) return (UiAction){ UA_RESTORE, 0, false };
+                continue;
             case '~': return (UiAction){ UA_HOMEDIR, 0, false };
             case 's': u->sort = (Sort){ (SortKey)((u->sort.key + 1) % SORT_KEYS), false }; return (UiAction){ UA_SORT, 0, false };
             case 'S': u->sort.reverse = !u->sort.reverse; return (UiAction){ UA_SORT, 0, false };
@@ -883,17 +907,22 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
             for (isize i = 0; i < l->n; i++) ui_mark(u, i, true);
             break;
         case UK_F2:
+            if (l->n > 0 && !u->side_focus && u->in_trash) return (UiAction){ UA_NOT_IN_TRASH, 0, false };
             if (l->n > 0 && !u->side_focus) ui_edit_open(u, names.at(names.ctx, l->sel));
             break;
-        case UK_DELETE: if (l->n > 0 && !u->side_focus) return (UiAction){ UA_TRASH, 0, false }; break;
+        case UK_DELETE:
+            // In the trash view Delete is for good, asked first.
+            if (l->n > 0 && !u->side_focus && u->in_trash) u->confirming = true, u->confirm_n = u->marked ? u->marked : 1;
+            else if (l->n > 0 && !u->side_focus) return (UiAction){ UA_TRASH, 0, false };
+            break;
         case UK_SHIFT_DELETE:
             if (l->n > 0 && !u->side_focus) u->confirming = true, u->confirm_n = u->marked ? u->marked : 1;
             break;
-        case UK_COPY: if (l->n > 0 && !u->side_focus) return (UiAction){ UA_COPY, 0, false }; break;
-        case UK_CUT: if (l->n > 0 && !u->side_focus) return (UiAction){ UA_CUT, 0, false }; break;
-        case UK_PASTE: return (UiAction){ UA_PASTE, 0, false };
+        case UK_COPY: if (l->n > 0 && !u->side_focus) return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : UA_COPY, 0, false }; break;
+        case UK_CUT: if (l->n > 0 && !u->side_focus) return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : UA_CUT, 0, false }; break;
+        case UK_PASTE: return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : UA_PASTE, 0, false };
         case UK_UNDO: return (UiAction){ UA_UNDO, 0, false };
-        case UK_NEWFOLDER: return (UiAction){ UA_NEWFOLDER, 0, false };
+        case UK_NEWFOLDER: return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : UA_NEWFOLDER, 0, false };
         case UK_LOCATION: return (UiAction){ UA_LOCATION, 0, false };
         case UK_CRUMBS: ui_crumbs_focus(u, in); break;
         case UK_JOBS:
@@ -945,6 +974,12 @@ static bool ui_under(Str p, Str dir)
 static void ui_crumbs_set(UiCrumbs *c, const char *cwd, const char *home)
 {
     Str cw = str_from_c(cwd), h = str_from_c(home);
+    if (str_eq(cw, S(TRASH_URI))) {   // the trash view (F6): one button, "Trash"
+        snprintf(c->deep, sizeof c->deep, "%s", TRASH_URI);
+        c->seg[0] = (UiCrumb){ cw.len, false };
+        c->n = 1, c->cur = 0, c->lo = -1;
+        return;
+    }
     while (h.len > 1 && h.p[h.len - 1] == '/') h.len--;
     if (!c->deep[0] || !ui_under(str_from_c(c->deep), cw)) snprintf(c->deep, sizeof c->deep, "%s", cwd);
     c->lo = -1;
@@ -978,6 +1013,7 @@ static Str ui_crumb_path(const UiCrumbs *c, int i)
 static Str ui_crumb_label(const UiCrumbs *c, int i)
 {
     if (!c->seg[i].home && c->seg[i].end == 1) return S("/");
+    if (str_eq(ui_crumb_path(c, i), S(TRASH_URI))) return S("Trash");
     return path_base(ui_crumb_path(c, i));
 }
 

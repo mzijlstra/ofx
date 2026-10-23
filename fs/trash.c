@@ -207,3 +207,185 @@ static bool trash_restore(const Trashed *t, Err *err)
     unlink(t->info);
     return true;
 }
+
+// ---- the trash view (F6) ----------------------------------------------------------------------
+//
+// The home trash and each drive's (its .Trash/$uid and .Trash-$uid), read into one listing: an
+// entry a trashed item, by its first name, with the time it was trashed as its time, and where
+// it is (Entry.trash). An item without its .trashinfo, or a .trashinfo without its item, is left
+// out, as gio does.
+
+enum { TRASH_DIRS_MAX = 2 * PLACES_MAX + 1 };
+
+typedef struct {
+    char dir[TRASH_DIRS_MAX][PATH_MAX];   // trash folders (each with files/ and info/)
+    char top[TRASH_DIRS_MAX][PATH_MAX];   // the top dir its relative Paths are under; "" for the home trash
+    int  n;
+} TrashDirs;
+
+static void trash_dirs_add(TrashDirs *d, const char *dir, const char *top)
+{
+    if (d->n == TRASH_DIRS_MAX) return;
+    for (int i = 0; i < d->n; i++)
+        if (strcmp(d->dir[i], dir) == 0) return;
+    char info[PATH_MAX + 8];
+    snprintf(info, sizeof info, "%s/info", dir);
+    struct stat st;
+    if (lstat(info, &st) != 0 || !S_ISDIR(st.st_mode)) return;
+    snprintf(d->dir[d->n], PATH_MAX, "%s", dir);
+    snprintf(d->top[d->n++], PATH_MAX, "%s", top);
+}
+
+// The trash folders there are: the home trash, then each mount point's (the drives in pl, or
+// the tests' own list), the ones that hold an info/ folder.
+static void trash_dirs(TrashDirs *d, const char *const *mounts, int nmounts)
+{
+    d->n = 0;
+    char home[PATH_MAX];
+    if (trash_home(home, sizeof home)) trash_dirs_add(d, home, "");
+    unsigned uid = (unsigned)getuid();
+    for (int i = 0; i < nmounts; i++) {
+        const char *mp = mounts[i];
+        const char *sep = strcmp(mp, "/") == 0 ? "" : "/";
+        char dir[PATH_MAX + 32];
+        snprintf(dir, sizeof dir, "%s%s.Trash/%u", mp, sep, uid);
+        trash_dirs_add(d, dir, mp);
+        snprintf(dir, sizeof dir, "%s%s.Trash-%u", mp, sep, uid);
+        trash_dirs_add(d, dir, mp);
+    }
+}
+
+// Where a trashed item is, kept with its entry.
+typedef struct TrashItem {
+    const char *file, *info, *from;
+} TrashItem;
+
+// A .trashinfo's Path (decoded, made absolute against top) and DeletionDate (local time, 0 when
+// missing or unreadable); false when it has no usable Path.
+static bool trash_info_parse(Str text, const char *top, char *from, size_t cap, i64 *when)
+{
+    *when = 0;
+    bool in_group = false, have = false;
+    isize at = 0;
+    for (Str line; next_line(text, &at, &line);) {
+        line = str_trim(line);
+        if (line.len && line.p[0] == '[') {
+            in_group = str_eq(line, S("[Trash Info]"));
+            continue;
+        }
+        if (!in_group) continue;
+        if (str_starts_with(line, S("Path="))) {
+            char dec[PATH_MAX];
+            if (!percent_decode(str_cut(line, 5, line.len), dec, sizeof dec) || !dec[0]) continue;
+            int n;
+            if (dec[0] == '/') n = snprintf(from, cap, "%s", dec);
+            else if (top[0]) n = snprintf(from, cap, "%s%s%s", top, strcmp(top, "/") == 0 ? "" : "/", dec);
+            else continue;   // relative in the home trash: nowhere to put it
+            have = n > 0 && (size_t)n < cap;
+        } else if (str_starts_with(line, S("DeletionDate="))) {
+            char d[32];
+            snprintf(d, sizeof d, "%.*s", STR_ARG(str_cut(line, 13, line.len)));
+            struct tm tm = { 0 };
+            char *end = strptime(d, "%Y-%m-%dT%H:%M:%S", &tm);
+            if (end && *end == 0) tm.tm_isdst = -1, *when = (i64)mktime(&tm);
+        }
+    }
+    return have;
+}
+
+// Every trashed item of the folders in d, sorted as a folder's listing is; dot-named ones counted
+// in hidden and left out unless show_hidden. False when the arena is full.
+static bool trash_list(Arena *a, const TrashDirs *d, bool show_hidden, Sort sort, Listing *out, Err *err)
+{
+    *out = (Listing){ 0 };
+    isize cap = 64, n = 0;
+    Entry *e = arena_try_new(a, Entry, cap);
+    if (!e) return err_set(err, "the trash: too many items for memory"), false;
+    for (int k = 0; k < d->n; k++) {
+        char info[PATH_MAX + 8], files[PATH_MAX + 8];
+        snprintf(info, sizeof info, "%s/info", d->dir[k]);
+        snprintf(files, sizeof files, "%s/files", d->dir[k]);
+        DIR *dir = opendir(info);
+        if (!dir) continue;
+        int ffd = open(files, O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+        for (struct dirent *de; ffd >= 0 && (de = readdir(dir));) {
+            Str nm = str_from_c(de->d_name);
+            if (!str_ends_with(nm, S(".trashinfo")) || nm.len == 10) continue;
+            Str base = str_cut(nm, 0, nm.len - 10);
+            char item[NAME_MAX + 1];
+            snprintf(item, sizeof item, "%.*s", STR_ARG(base));
+            struct stat st;
+            if (fstatat(ffd, item, &st, AT_SYMLINK_NOFOLLOW) != 0) continue;   // no item: an orphan
+            ArenaMark mark = arena_mark(a);
+            char ipath[PATH_MAX + 8 + NAME_MAX + 16], from[PATH_MAX];
+            snprintf(ipath, sizeof ipath, "%s/%s", info, de->d_name);
+            i64 when;
+            bool ok = trash_info_parse(read_file(a, ipath), d->top[k], from, sizeof from, &when);
+            arena_restore(a, mark);
+            if (!ok) continue;
+            Str first = path_base(str_from_c(from));
+            if (first.len && first.p[0] == '.') {
+                out->hidden++;
+                if (!show_hidden) continue;
+            }
+            if (n == cap) {
+                Entry *grown = arena_try_new(a, Entry, cap * 2);
+                if (!grown) {
+                    closedir(dir), close(ffd);
+                    return err_set(err, "the trash: too many items for memory"), false;
+                }
+                memcpy(grown, e, sizeof *e * (size_t)n);
+                e = grown, cap *= 2;
+            }
+            TrashItem *t = arena_try_new(a, TrashItem, 1);
+            char fpath[PATH_MAX + 8 + NAME_MAX + 2];
+            snprintf(fpath, sizeof fpath, "%s/%s", files, item);
+            if (!t) {
+                closedir(dir), close(ffd);
+                return err_set(err, "the trash: too many items for memory"), false;
+            }
+            *t = (TrashItem){ arena_cstr(a, str_from_c(fpath)), arena_cstr(a, str_from_c(ipath)), arena_cstr(a, str_from_c(from)) };
+            Kind kd = kind_of(ffd, item, &st);
+            Str shown = path_base(str_from_c(t->from));
+            e[n++] = (Entry){
+                .name = shown,
+                .kind = kd,
+                .size = kind_is_dir(kd) || kd == K_LINK_BROKEN ? 0 : (i64)st.st_size,
+                .mtime = when,
+                .mode = kd == K_LINK_BROKEN ? 0 : (u32)st.st_mode,
+                .trash = t,
+            };
+        }
+        if (ffd >= 0) close(ffd);
+        closedir(dir);
+    }
+    out->e = e, out->n = n;
+    fs_sort(out, sort);
+    return true;
+}
+
+// A trashed item back where it came from (its folder made again when it is gone, as Nemo does);
+// never over something there now.
+static bool trash_restore_item(const TrashItem *t, Err *err)
+{
+    Trashed tr;
+    snprintf(tr.file, sizeof tr.file, "%s", t->file);
+    snprintf(tr.info, sizeof tr.info, "%s", t->info);
+    snprintf(tr.from, sizeof tr.from, "%s", t->from);
+    Str dir = path_dir(str_from_c(t->from));
+    char d[PATH_MAX];
+    snprintf(d, sizeof d, "%.*s", STR_ARG(dir.len ? dir : S("/")));
+    struct stat st;
+    if (stat(d, &st) != 0) {
+        if (!ops_allowed(d, err)) return false;
+        for (char *s = d + 1;; s++) {
+            if (*s != '/' && *s != 0) continue;
+            char c = *s;
+            *s = 0;
+            if (mkdir(d, 0755) != 0 && errno != EEXIST) return err_set(err, "%s: %s", d, strerror(errno)), false;
+            *s = c;
+            if (!c) break;
+        }
+    }
+    return trash_restore(&tr, err);
+}

@@ -57,7 +57,7 @@ static Arena frame, lists[2], data, icona, scratch, undoa, owna, pastea, treea;
 static int   watch_delay_ms;   // OFX_TEST_WATCH_DELAY_MS, for one test
 
 enum { BAR_BTN_W = 34, BAR_BTN_H = 30, BAR_GAP = 4, ARROW_W = 22, CRUMB_PAD = 10, CRUMB_ICON_PX = 16 };
-enum { TREE_STEP = 10 };
+enum { TREE_STEP = 10, TRASH_BAR_H = 38 };
 enum { TAB_H = 30, TAB_X_W = 22, JOB_ROW_H = 40, JOB_WAIT_H = 22, MODE_BTN_W = 28, MODE_BTN_H = 22, MODE_GAP = 4 };
 enum { FONT_PX = 15, ROW_H = 28, ICON_PX = 24, HEADER_H = 40, COLS_H = 26, FOOTER_H = 28, PAD = 12, SIZE_W = 90,
        DATE_W = 100, SIDE_W = 200, SIDE_ROW_H = 28, SIDE_ICON_PX = 20, GAP = 10, ICONS_MAX = 512 };
@@ -231,7 +231,31 @@ static Str sel_name(void)
     return app.have_list && app.ui.list.n > 0 ? app.list.e[app.ui.list.sel].name : STR_EMPTY;
 }
 
+// Entry i's file: in the folder shown, or in the trash view where the trash keeps it. False when
+// the path doesn't fit.
+static bool entry_path(isize i, char *out, size_t cap)
+{
+    const Entry *e = &app.list.e[i];
+    if (e->trash) {
+        int n = snprintf(out, cap, "%s", e->trash->file);
+        return n >= 0 && (size_t)n < cap;
+    }
+    return join(out, cap, app.cwd, e->name);
+}
+
 static void tree_refresh(bool follow, int fallback);
+
+static TrashDirs trashd;   // the trash folders the trash view shows (F6)
+
+// The trash folders there are now: the home trash, and each drive's.
+static void trash_scan(void)
+{
+    const char *mp[PLACES_MAX];
+    int n = 0;
+    for (int i = 0; i < app.places.n; i++)
+        if (place_is_drive(app.places.p[i].kind)) mp[n++] = app.places.p[i].path;
+    trash_dirs(&trashd, mp, n);
+}
 
 // Shows dir, the cursor on the entry called `select` (else on row `fallback`). A move to another
 // folder goes in the history, unless it is the history's own (`stepping`). False, with the reason
@@ -242,7 +266,10 @@ static bool go_to_in(const char *dir, Str select, isize fallback, bool stepping)
     arena_reset(&lists[next]);
     Listing l;
     Err err;
-    if (!fs_list(&lists[next], dir, app.show_hidden, app.ui.sort, &l, &err)) {
+    bool in_trash = strcmp(dir, TRASH_URI) == 0;
+    if (in_trash) trash_scan();
+    if (in_trash ? !trash_list(&lists[next], &trashd, app.show_hidden, app.ui.sort, &l, &err)
+                 : !fs_list(&lists[next], dir, app.show_hidden, app.ui.sort, &l, &err)) {
         if (!app.have_list) snprintf(app.error, sizeof app.error, "%s", err.msg);
         set_status(true, "%s", err.msg);
         return false;
@@ -268,6 +295,7 @@ static bool go_to_in(const char *dir, Str select, isize fallback, bool stepping)
     // The folder left, with its cursor, for Back: its name is still in the old listing's arena.
     if (!same && app.have_list && !stepping) hist_leave(&hist, app.cwd, sel_name());
     app.cur = next, app.list = l, app.mime = mime, app.have_list = true, app.error[0] = 0;
+    app.ui.in_trash = in_trash;
     for (isize i = 0; i < l.n; i++) count[i] = COUNT_UNKNOWN;
     app.count = count;
     count_new_listing();
@@ -283,11 +311,14 @@ static bool go_to_in(const char *dir, Str select, isize fallback, bool stepping)
         // OFX_TEST_WATCH_DELAY_MS widens the gap between the listing and the watch, so
         // tests/gui/watchgap.script can put a change in it.
         if (watch_delay_ms > 0) nanosleep(&(struct timespec){ watch_delay_ms / 1000, (watch_delay_ms % 1000) * 1000000L }, NULL);
-        watch_dir(app.cwd);
+        // The trash view watches the home trash's info/ (a drive's trash changes from ofx reload it).
+        char tinfo[PATH_MAX + 8] = "";
+        if (in_trash && trash_home(tinfo, sizeof tinfo - 8)) strcat(tinfo, "/info");
+        watch_dir(in_trash ? tinfo : app.cwd);
         // A change between the listing and the watch made no event: list once more.
         atomic_store(&watch.list_ready, true);
         glfwPostEmptyEvent();
-        SetWindowTitle(TextFormat("ofx: %s", app.cwd));
+        SetWindowTitle(in_trash ? "ofx: Trash" : TextFormat("ofx: %s", app.cwd));
     }
     ui_set(&app.ui.list, l.n, sel);
     tree_refresh(!same, app.ui.side.sel);
@@ -410,8 +441,12 @@ static void open_entry(isize i)
 {
     const Entry *e = &app.list.e[i];
     char path[PATH_MAX];
-    if (!join(path, sizeof path, app.cwd, e->name)) {
+    if (!entry_path(i, path, sizeof path)) {
         set_status(true, "%.*s: the path is too long", STR_ARG(e->name));
+        return;
+    }
+    if (kind_is_dir(e->kind) && e->trash) {   // the trash view: a file opens, a folder doesn't
+        set_status(true, "%.*s is in the trash: restore it to open it", STR_ARG(e->name));
         return;
     }
     if (kind_is_dir(e->kind)) {
@@ -466,7 +501,7 @@ static isize targets(Arena *a, char **out, isize max)
     for (isize i = 0; app.have_list && i < app.list.n && n < max; i++) {
         if (app.ui.marked ? !app.ui.mark[i] : i != app.ui.list.sel) continue;
         char p[PATH_MAX];
-        if (join(p, sizeof p, app.cwd, app.list.e[i].name)) out[n++] = arena_cstr(a, str_from_c(p));
+        if (entry_path(i, p, sizeof p)) out[n++] = arena_cstr(a, str_from_c(p));
     }
     return n;
 }
@@ -522,8 +557,13 @@ static void delete_ask(void)
         set_status(true, "%td selected: ofx takes at most %d at a time", app.ui.marked, CLIP_PATHS_MAX);
         return;
     }
+    if (app.ui.in_trash && app.ui.marked > CLIP_PATHS_MAX / 2) {   // each goes with its .trashinfo
+        app.ui.confirming = false;
+        set_status(true, "%td selected: ofx deletes at most %d at a time from the trash", app.ui.marked, CLIP_PATHS_MAX / 2);
+        return;
+    }
     arena_reset(&doomeda);
-    doomed.n = targets(&doomeda, doomed.path, CLIP_PATHS_MAX);
+    doomed.n = targets(&doomeda, doomed.path, app.ui.in_trash ? CLIP_PATHS_MAX / 2 : CLIP_PATHS_MAX);
     app.ui.confirm_n = doomed.n;
     if (doomed.n == 0) app.ui.confirming = false;
 }
@@ -534,8 +574,69 @@ static void delete_targets(void)
     doomed.n = 0;
     JobRec *r = n ? job_new() : NULL;
     if (!r) return;
-    for (isize i = 0; i < n; i++) r->item[i] = (JobItem){ .src = arena_cstr(&r->arena, str_from_c(doomed.path[i])) };
-    job_submit(r, JOB_DELETE, n);
+    isize k = 0;
+    for (isize i = 0; i < n; i++) {
+        r->item[k++] = (JobItem){ .src = arena_cstr(&r->arena, str_from_c(doomed.path[i])) };
+        // In the trash view, each item's .trashinfo after it: <trash>/files/NAME has <trash>/info/NAME.trashinfo.
+        Str f = str_from_c(doomed.path[i]), files = path_dir(f), top = path_dir(files);
+        if (app.ui.in_trash && str_eq(path_base(files), S("files")))
+            r->item[k++] = (JobItem){ .src = arena_sprintf(&r->arena, "%.*s/info/%.*s.trashinfo", STR_ARG(top), STR_ARG(path_base(f))) };
+    }
+    bool pairs = k > n;
+    job_submit(r, JOB_DELETE, k);
+    if (pairs) {
+        r->trash = JOB_TRASH_ITEMS;
+        if (n == 1) snprintf(r->label, sizeof r->label, "Deleting %.*s from the trash", STR_ARG(path_base(str_from_c(doomed.path[0]))));
+        else snprintf(r->label, sizeof r->label, "Deleting %td items from the trash", n);
+    }
+}
+
+// Empty Trash, answered (F6): every trash folder's files/ and info/ deleted for good as one job
+// (trash_put makes them again).
+static void trash_empty(void)
+{
+    trash_scan();
+    JobRec *r = trashd.n ? job_new() : NULL;
+    if (!r) {
+        if (!trashd.n) set_status(false, "The trash is empty");
+        return;
+    }
+    isize k = 0;
+    for (int i = 0; i < trashd.n; i++) {
+        static const char *const SUB[] = { "files", "info" };
+        for (int j = 0; j < 2; j++) {
+            char p[PATH_MAX + 8];
+            struct stat st;
+            snprintf(p, sizeof p, "%s/%s", trashd.dir[i], SUB[j]);
+            if (lstat(p, &st) == 0) r->item[k++] = (JobItem){ .src = arena_cstr(&r->arena, str_from_c(p)) };
+        }
+    }
+    job_submit(r, JOB_DELETE, k);
+    r->trash = JOB_TRASH_EMPTY;
+    snprintf(r->label, sizeof r->label, "Emptying the trash");
+}
+
+// Restore (F6): the marked items, or the cursor's, back where they came from.
+static void trash_restore_targets(void)
+{
+    isize n = 0, ok = 0;
+    Err first = { 0 };
+    char name[NAME_MAX + 1] = "";
+    for (isize i = 0; app.have_list && i < app.list.n; i++) {
+        if (app.ui.marked ? !app.ui.mark[i] : i != app.ui.list.sel) continue;
+        const Entry *e = &app.list.e[i];
+        if (!e->trash) continue;
+        n++;
+        Err err;
+        if (jobs_refuse(e->trash->from)) continue;
+        if (trash_restore_item(e->trash, &err)) ok++, snprintf(name, sizeof name, "%.*s", STR_ARG(e->name));
+        else if (!first.msg[0]) first = err;
+    }
+    if (n == 0) return;
+    if (ok == n && n == 1) set_status(false, "Restored %s", name);
+    else if (ok == n) set_status(false, "Restored %td items", n);
+    else set_status(true, "Restored %td of %td: %s", ok, n, first.msg[0] ? first.msg : "a job is using it");
+    reload();
 }
 
 static void copy_targets(bool cut)
@@ -793,7 +894,7 @@ static void tab_open(const char *dir, Str sel, bool show)
 static void tab_open_bg(const char *path)
 {
     struct stat st;
-    if (stat(path, &st) != 0 || !S_ISDIR(st.st_mode)) {
+    if (strcmp(path, TRASH_URI) != 0 && (stat(path, &st) != 0 || !S_ISDIR(st.st_mode))) {
         set_status(true, "%s isn't a folder", path_base(str_from_c(path)).p);
         return;
     }
@@ -862,6 +963,9 @@ static void act(UiAction a)
 {
     Err err;
     switch (a.kind) {
+    case UA_RESTORE: trash_restore_targets(); break;
+    case UA_EMPTY_TRASH: trash_empty(); break;
+    case UA_NOT_IN_TRASH: set_status(true, "That doesn't work in the trash: restore it first"); break;
     case UA_SIDE_MODE: {
         side_refresh();
         char path[PATH_MAX];
@@ -944,7 +1048,7 @@ static void act(UiAction a)
     case UA_TAB_MOVE: ui_tabs_move(&tabbar, (int)a.index); break;
     case UA_TAB_BG_ROW: {
         char path[PATH_MAX];
-        if (a.index < app.list.n && join(path, sizeof path, app.cwd, app.list.e[a.index].name)) tab_open_bg(path);
+        if (a.index < app.list.n && !app.ui.in_trash && join(path, sizeof path, app.cwd, app.list.e[a.index].name)) tab_open_bg(path);
         break;
     }
     case UA_TAB_BG_PLACE: {
@@ -1031,7 +1135,7 @@ static IconSlot *entry_icon(isize i)
     Str names[2];
     isize n = 0;
     char path[PATH_MAX];
-    Str special = join(path, sizeof path, app.cwd, e->name) ? user_dir_icon(&app.user_dirs, path) : STR_EMPTY;
+    Str special = !e->trash && join(path, sizeof path, app.cwd, e->name) ? user_dir_icon(&app.user_dirs, path) : STR_EMPTY;
     if (special.len) names[n++] = special;
     names[n++] = S("folder");
     return icon_for(names[0], names, n);
@@ -1081,7 +1185,7 @@ static int jobs_h(void)
 
 static int list_rows(int h)
 {
-    int r = (h - top_h() - COLS_H - FOOTER_H - jobs_h()) / ROW_H;
+    int r = (h - top_h() - COLS_H - FOOTER_H - jobs_h() - (app.ui.in_trash ? TRASH_BAR_H : 0)) / ROW_H;
     return r > 0 ? r : 0;
 }
 
@@ -1205,11 +1309,38 @@ static void layout_side(float h)
     }
 }
 
+// The trash view's bar over the columns (F6): what it is, Restore and Empty Trash.
+static void trash_button(const char *id, UiBar b, const char *label, bool danger)
+{
+    Theme *t = &app.theme;
+    bool hover = app.bar_hover == b;
+    CLAY(Clay_GetElementId(cz(id)), { .layout = { .sizing = { CLAY_SIZING_FIT(0), CLAY_SIZING_FIXED(26) }, .padding = { 12, 12, 0, 0 },
+                                                  .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
+                                      .backgroundColor = hover ? cc(t->bg) : cc(t->bg_light),
+                                      .border = { .color = danger ? cc(t->red) : mix(t->fg_dim, t->bg_light, 0.45f), .width = CLAY_BORDER_OUTSIDE(1) } }) {
+        text(cz(label), danger && hover ? cc(t->red) : cc(t->fg));
+    }
+}
+
+static void layout_trash_bar(void)
+{
+    Theme *t = &app.theme;
+    CLAY(CLAY_ID("trash-bar"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(TRASH_BAR_H) }, .padding = { PAD, PAD, 0, 0 },
+                                             .childGap = 10, .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
+                                 .backgroundColor = cc(t->bg_light) }) {
+        text(cz("Trash"), cc(t->fg));
+        text(cz("Restore puts the marked items back where they came from"), cc(t->fg_dim));
+        CLAY(CLAY_ID("trash-gap"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(1) } } }) {}
+        if (app.list.n > 0) trash_button("trash-restore", UB_RESTORE, "Restore", false);
+        if (app.list.n > 0 || app.list.hidden > 0) trash_button("trash-empty", UB_EMPTY, "Empty Trash", true);
+    }
+}
+
 // The column headers: Name, Size, Modified, the sorted one with an arrow; a click sorts.
 static void layout_cols(void)
 {
     Theme *t = &app.theme;
-    static const char *const NAMES[SORT_KEYS] = { "Name", "Size", "Modified" };
+    const char *const NAMES[SORT_KEYS] = { "Name", "Size", app.ui.in_trash ? "Deleted" : "Modified" };
     static const char *const IDS[SORT_KEYS] = { "col-name", "col-size", "col-date" };
     CLAY(CLAY_ID("cols"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(COLS_H) },
                                         .padding = { PAD + ICON_PX + GAP, PAD, 0, 0 }, .childGap = GAP,
@@ -1289,7 +1420,7 @@ static void size_cell(isize i, char *size, size_t cap, bool ask)
     if (!kind_is_dir(e->kind) && e->kind != K_LINK_BROKEN && e->kind != K_OTHER) ui_size(size, cap, e->size);
     if (!kind_is_dir(e->kind)) return;
     char path[PATH_MAX];
-    if (ask && app.count[i] == COUNT_UNKNOWN && join(path, sizeof path, app.cwd, e->name) && count_ask(i, path, app.show_hidden))
+    if (ask && app.count[i] == COUNT_UNKNOWN && entry_path(i, path, sizeof path) && count_ask(i, path, app.show_hidden))
         app.count[i] = COUNT_ASKED;
     if (app.count[i] >= 0) snprintf(size, cap, "%td item%s", app.count[i], app.count[i] == 1 ? "" : "s");
     else if (app.count[i] == -1) snprintf(size, cap, "?");
@@ -1320,6 +1451,17 @@ static void layout_row(int r, isize i, float w, i64 now)
             } else {
                 text(fit(e->name, name_w, false), e->kind == K_LINK_BROKEN ? cc(t->red) : marked ? cc(t->accent) : cc(t->fg));
                 if (link) text(cz("\xE2\x86\x92"), cc(t->fg_dim));   // →
+                if (e->trash) {   // where it came from, home as ~
+                    Str from = path_dir(str_from_c(e->trash->from));
+                    const char *home = getenv("HOME");
+                    Str h = str_from_c(home ? home : "");
+                    char shown[PATH_MAX];
+                    if (h.len > 1 && str_starts_with(from, h) && (from.len == h.len || from.p[h.len] == '/'))
+                        snprintf(shown, sizeof shown, "~%.*s", STR_ARG(str_cut(from, h.len, from.len)));
+                    else snprintf(shown, sizeof shown, "%.*s", STR_ARG(from.len ? from : S("/")));
+                    float room = name_w - str_width(e->name) - 12;
+                    if (room > 40) text(fit(str_from_c(arena_sprintf(&frame, "%s", shown)), room, true), cc(t->fg_dim));
+                }
             }
         }
         CLAY(CLAY_IDI("size", r), { .layout = { .sizing = { CLAY_SIZING_FIXED(SIZE_W), CLAY_SIZING_FIT(0) },
@@ -1543,7 +1685,7 @@ static void layout_tabs(float w)
 
 // ---- the modal panels (F5.1) --------------------------------------------------------------------
 
-typedef enum { MODAL_NONE, MODAL_DELETE, MODAL_CLASH, MODAL_CANCEL, MODAL_QUIT, MODAL_FULL } ModalKind;
+typedef enum { MODAL_NONE, MODAL_DELETE, MODAL_CLASH, MODAL_CANCEL, MODAL_QUIT, MODAL_FULL, MODAL_EMPTY } ModalKind;
 
 // The panel on top, in the order ui_handle takes their keys.
 static ModalKind modal_kind(void)
@@ -1552,6 +1694,7 @@ static ModalKind modal_kind(void)
     if (app.ui.quit_asking) return MODAL_QUIT;
     if (app.ui.cancel_asking) return MODAL_CANCEL;
     if (app.ui.confirming) return MODAL_DELETE;
+    if (app.ui.empty_asking) return MODAL_EMPTY;
     if (jobs.asking >= 0 && app.ui.asking) return MODAL_CLASH;
     return MODAL_NONE;
 }
@@ -1585,7 +1728,7 @@ static void layout_modal_panel(ModalKind k)
     CLAY(CLAY_ID("modal"), { .layout = { .sizing = { CLAY_SIZING_FIXED(480), CLAY_SIZING_FIT(0) }, .padding = { 24, 24, 20, 20 }, .childGap = 10,
                                          .layoutDirection = CLAY_TOP_TO_BOTTOM },
                              .backgroundColor = cc(t->bg_light),
-                             .border = { .color = k == MODAL_DELETE || k == MODAL_CANCEL || k == MODAL_QUIT ? cc(t->red) : cc(t->accent), .width = CLAY_BORDER_OUTSIDE(1) },
+                             .border = { .color = k == MODAL_DELETE || k == MODAL_CANCEL || k == MODAL_QUIT || k == MODAL_EMPTY ? cc(t->red) : cc(t->accent), .width = CLAY_BORDER_OUTSIDE(1) },
                              .floating = { .attachTo = CLAY_ATTACH_TO_ROOT, .zIndex = 20,
                                            .attachPoints = { CLAY_ATTACH_POINT_CENTER_CENTER, CLAY_ATTACH_POINT_CENTER_CENTER } } }) {
         if (k == MODAL_FULL || k == MODAL_QUIT || k == MODAL_CANCEL) {
@@ -1617,6 +1760,17 @@ static void layout_modal_panel(ModalKind k)
                     modal_button("modal-no", UI_MODAL_NO, k == MODAL_QUIT ? "Stay" : "Keep going", false, false);
                     modal_button("modal-yes", UI_MODAL_YES, k == MODAL_QUIT ? "Quit" : "Cancel job", true, true);
                 }
+            }
+        } else if (k == MODAL_EMPTY) {
+            isize all = app.list.n + (app.show_hidden ? 0 : app.list.hidden);
+            text(cz("Empty the trash?"), cc(t->fg));
+            text(cz(arena_sprintf(&frame, "All %td %s in it %s deleted for good.", all, items(all), all == 1 ? "is" : "are")), cc(t->fg_dim));
+            text(cz("This can't be undone."), cc(t->red));
+            text(cz("Enter or y empties it \xC2\xB7 n or Esc cancels"), cc(t->fg_dim));
+            CLAY(CLAY_ID("modal-buttons"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .childGap = 10,
+                                                         .childAlignment = { .x = CLAY_ALIGN_X_RIGHT }, .padding = { 0, 0, 8, 0 } } }) {
+                modal_button("modal-no", UI_MODAL_NO, "Cancel", false, false);
+                modal_button("modal-yes", UI_MODAL_YES, "Empty Trash", true, true);
             }
         } else if (k == MODAL_DELETE) {
             text(cz(arena_sprintf(&frame, "Delete %td %s for good?", app.ui.confirm_n, items(app.ui.confirm_n))), cc(t->fg));
@@ -1773,7 +1927,7 @@ static void status_info(char *buf, size_t cap)
         if (!in.one_dir && e->kind != K_LINK_BROKEN && e->kind != K_OTHER) in.one_size = e->size;
         if (in.one_dir && app.count[i] == COUNT_UNKNOWN) {
             char path[PATH_MAX];
-            if (join(path, sizeof path, app.cwd, e->name) && count_ask(i, path, app.show_hidden)) app.count[i] = COUNT_ASKED;
+            if (entry_path(i, path, sizeof path) && count_ask(i, path, app.show_hidden)) app.count[i] = COUNT_ASKED;
         }
     }
     if (!app.have_list) in.n = 0, in.avail = -1;
@@ -1800,6 +1954,7 @@ static Clay_RenderCommandArray layout(int w, int h)
         CLAY(CLAY_ID("main"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0) }, .layoutDirection = CLAY_TOP_TO_BOTTOM } }) {
         // The tab bar over the files only, not the sidebar (Michael, 2026-10-21).
         if (tabbar.n >= 2) layout_tabs((float)(w - side_w()));
+        if (app.ui.in_trash) layout_trash_bar();
         layout_cols();
         CLAY(CLAY_ID("list"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0) }, .layoutDirection = CLAY_TOP_TO_BOTTOM },
                                 .clip = { .vertical = true } }) {
@@ -2043,6 +2198,7 @@ static Hit hit_at(float x, float y)
     static const struct { const char *id; UiBar b; } BAR[] = {
         { "nav-back", UB_BACK }, { "nav-fwd", UB_FORWARD }, { "nav-up", UB_UP }, { "loc-toggle", UB_LOCATION },
         { "search", UB_SEARCH }, { "crumb-left", UB_LEFT }, { "crumb-right", UB_RIGHT },
+        { "trash-restore", UB_RESTORE }, { "trash-empty", UB_EMPTY },
     };
     for (int k = 0; k < COUNT(BAR) && h.bar == UB_NONE; k++)
         if (in_box(Clay_GetElementId(cz(BAR[k].id)), x, y)) h.bar = BAR[k].b;

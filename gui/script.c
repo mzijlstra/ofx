@@ -38,7 +38,8 @@
 //                           would put it, \n a line break (weston has no data-control)
 //   shot <file.png>         the next drawn frame; a relative path goes under OFX_GUI_SHOTS
 //   sh <command...>         runs the rest of the line with /bin/sh and waits for it (5 s at most),
-//                           $OFX_DIR set to the folder shown, $OFX_ROOT to the run's scratch tree.
+//                           $OFX_DIR set to the folder shown (the home trash in the trash
+//                           view), $OFX_ROOT to the run's scratch tree.
 //                           Refused unless the folder is under OFX_GUI_ROOT and nothing failed yet.
 //   state                   prints one line of key=value words about the window
 //   expect <word>...        each word must be in that line (whole words: `sel=a.txt`); the
@@ -122,7 +123,7 @@ static void script_state(char *out, size_t cap)
     if (jobs.asking >= 0) snprintf(clashjob, sizeof clashjob, "%s", job_recs[jobs.asking].label);
     for (char *c = clashjob; *c; c++)
         if (*c == ' ') *c = '_';
-    static const char *const MODALS[] = { "-", "delete", "clash", "cancel", "quit", "full" };
+    static const char *const MODALS[] = { "-", "delete", "clash", "cancel", "quit", "full", "empty" };
     // The path buttons' labels, '|' between; the cursor's folder count (- unknown, ? unreadable).
     char crumbs[2048] = "", cnt[32] = "-";
     for (int i = 0; i < app.crumbs.n; i++) {
@@ -148,16 +149,20 @@ static void script_state(char *out, size_t cap)
     }
     for (char *c = sides; *c; c++)
         if (*c == ' ') *c = '_';
-    // The tree (F6): its rows, the cursor's row name:depth:open and its row on screen, the folder
-    // shown's row.
+    // The tree (F6): its rows, the cursor's row name:open and its row on screen, whether it is the
+    // folder shown's row. The status line as it reads without a message, spaces as '_'.
     static const char *const SIDE_MODES_W[] = { "places", "tree", "hidden" };
     char treecur[NAME_MAX + 32] = "-";
     int treehere = -1;
     if (app.ui.side_mode == SIDE_TREE && app.ui.side.sel < tree.n) {
         const TreeRow *r = &tree.row[app.ui.side.sel];
-        snprintf(treecur, sizeof treecur, "%.*s:%d:%d", STR_ARG(r->name), r->depth, r->open);
-        treehere = tree_find(&tree, str_from_c(app.cwd));
+        snprintf(treecur, sizeof treecur, "%.*s:%d", STR_ARG(r->name), r->open);
+        treehere = tree_find(&tree, str_from_c(app.cwd)) == (int)app.ui.side.sel;
     }
+    char info[NAME_MAX + 64];
+    status_info(info, sizeof info);
+    for (char *c = info; *c; c++)
+        if (*c == ' ') *c = '_';
     // The cursor's Size cell as drawn, its spaces as '_'.
     char sizecell[64] = "-";
     if (app.have_list && app.ui.list.n > 0) {
@@ -178,7 +183,7 @@ static void script_state(char *out, size_t cap)
              "back=%d fwd=%d marked=%td editing=%d edit=%s confirming=%d asking=%d job=%s done=%lld/%lld undo=%s clip=%td cut=%d "
              "sysclip=%d modal=%s askall=%d tabs=%d tab=%d tabdirs=%s sizecell=%s crumbs=%s crumbhome=%d crumb=%d crumbshown=%d-%d arrows=%d locating=%d cnt=%s "
              "esel=%d-%d caret=%d copied=%s crumbkey=%s jobs=%d waiting=%d jobrows=%s jobkey=%s jobline=%d jobspeed=%d clashjob=%s "
-             "sides=%s spaced=%d sidemode=%s treen=%d treecur=%s treerow=%td treehere=%d status=%s",
+             "sides=%s spaced=%d sidemode=%s treen=%d treecur=%s treerow=%td treehere=%d trash=%d info=%s status=%s",
              app.cwd, app.list.n, app.list.hidden, STR_ARG(sel), app.ui.list.sel, app.ui.list.top, app.ui.list.rows, app.hover,
              t->accent.r, t->accent.g, t->accent.b, t->bg.r, t->bg.g, t->bg.b, t->icons[0] ? t->icons : "-",
              app.icon_scale, GetScreenWidth(), GetScreenHeight(), app.reloads, app.themes, atomic_load(&watch.batches),
@@ -194,7 +199,7 @@ static void script_state(char *out, size_t cap)
              app.ui.editing && app.ui.edit_path, cnt, slo, shi, app.ui.caret, copied, keyed,
              jobs.nrun, jobs.nwait, joblabels, jobkey, oldest ? oldest->line.reached : 0, oldest && oldest->line.now > 0, clashjob,
              sides[0] ? sides : "-", spaced, SIDE_MODES_W[app.ui.side_mode], app.ui.side_mode == SIDE_TREE ? tree.n : 0, treecur,
-             app.ui.side.sel - app.ui.side.top, treehere, app.status[0] ? app.status : "-");
+             app.ui.side.sel - app.ui.side.top, treehere, app.ui.in_trash, info, app.status[0] ? app.status : "-");
     frame_us_max = 0;
 }
 
@@ -274,11 +279,14 @@ static void script_sh(Str cmd)
         script_fail("sh skipped after a failure: %.*s", STR_ARG(cmd));
         return;
     }
-    if (!script_under(app.cwd, root)) {
-        script_fail("sh refused: %s is not under OFX_GUI_ROOT (%s)", app.cwd, root ? root : "unset");
+    // The trash view (F6) has no folder of its own: the home trash's stands in for it.
+    char shown[PATH_MAX];
+    if (!app.ui.in_trash || !trash_home(shown, sizeof shown)) snprintf(shown, sizeof shown, "%s", app.cwd);
+    if (!script_under(shown, root)) {
+        script_fail("sh refused: %s is not under OFX_GUI_ROOT (%s)", shown, root ? root : "unset");
         return;
     }
-    setenv("OFX_DIR", app.cwd, 1);
+    setenv("OFX_DIR", shown, 1);
     setenv("OFX_ROOT", root, 1);
     char *c = arena_cstr(&scratch, cmd);
     // Under `timeout`: the window answers no events while it waits, and a window that stops
