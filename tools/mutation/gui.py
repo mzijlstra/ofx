@@ -136,6 +136,11 @@ MUTANTS = [
     (G, "    if (kind_is_dir(e->kind) && e->trash) {", "    if (0) {"),
     (G, "        if (in_trash && trash_home(tinfo, sizeof tinfo - 8)) strcat(tinfo, \"/info\");", ""),
     (G, "    if (app.ui.side_mode == SIDE_PLACES && app.ui.side.sel < app.places.n) keep = app.places.p[app.ui.side.sel];", "    if (app.places.n) keep = app.places.p[app.ui.side.sel];"),
+    # F6 review
+    (G, "        if (space_take(&app.places, app.cwd, &app.cwd_avail)) dirty = true;", ""),
+    (G, "    space_ask(&app.places, app.cwd);\n    return true;", "    return true;"),
+    (G, "        if (at + k < n && doomed_all[at + k].after_ok) k--;\n", ""),
+    (G, ".src = arena_cstr(&r->arena, str_from_c(doomed_all[at + i].path)), .after_ok = doomed_all[at + i].after_ok };", ".src = arena_cstr(&r->arena, str_from_c(doomed_all[at + i].path)) };"),
 ]
 scratch = sys.argv[1]
 only = [int(x) for x in sys.argv[2].split(',')] if len(sys.argv) > 2 else None

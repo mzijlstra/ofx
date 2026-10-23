@@ -223,9 +223,25 @@ typedef struct {
     int  n;
 } TrashDirs;
 
-static void trash_dirs_add(TrashDirs *d, const char *dir, const char *top)
+// A drive's trash folder that ofx lists only as the spec lets it write there (trash_for): its own
+// folder, no symlink; .Trash/$uid only in a sticky .Trash that isn't a symlink (reviewer-2, F6).
+enum { TRASH_HOME, TRASH_ADMIN, TRASH_USER };
+
+static bool trash_dir_ours(const char *dir, int kind)
 {
-    if (d->n == TRASH_DIRS_MAX) return;
+    struct stat st;
+    if (kind == TRASH_HOME) return true;
+    if (lstat(dir, &st) != 0 || !S_ISDIR(st.st_mode) || st.st_uid != getuid()) return false;
+    if (kind == TRASH_USER) return true;
+    Str admin = path_dir(str_from_c(dir));
+    char a[PATH_MAX];
+    snprintf(a, sizeof a, "%.*s", STR_ARG(admin));
+    return lstat(a, &st) == 0 && S_ISDIR(st.st_mode) && (st.st_mode & S_ISVTX);
+}
+
+static void trash_dirs_add(TrashDirs *d, const char *dir, const char *top, int kind)
+{
+    if (d->n == TRASH_DIRS_MAX || !trash_dir_ours(dir, kind)) return;
     for (int i = 0; i < d->n; i++)
         if (strcmp(d->dir[i], dir) == 0) return;
     char info[PATH_MAX + 8];
@@ -242,16 +258,16 @@ static void trash_dirs(TrashDirs *d, const char *const *mounts, int nmounts)
 {
     d->n = 0;
     char home[PATH_MAX];
-    if (trash_home(home, sizeof home)) trash_dirs_add(d, home, "");
+    if (trash_home(home, sizeof home)) trash_dirs_add(d, home, "", TRASH_HOME);
     unsigned uid = (unsigned)getuid();
     for (int i = 0; i < nmounts; i++) {
         const char *mp = mounts[i];
         const char *sep = strcmp(mp, "/") == 0 ? "" : "/";
         char dir[PATH_MAX + 32];
         snprintf(dir, sizeof dir, "%s%s.Trash/%u", mp, sep, uid);
-        trash_dirs_add(d, dir, mp);
+        trash_dirs_add(d, dir, mp, TRASH_ADMIN);
         snprintf(dir, sizeof dir, "%s%s.Trash-%u", mp, sep, uid);
-        trash_dirs_add(d, dir, mp);
+        trash_dirs_add(d, dir, mp, TRASH_USER);
     }
 }
 
@@ -420,4 +436,56 @@ static bool trash_restore_item(const TrashItem *t, Err *err)
         }
     }
     return trash_restore(&tr, err);
+}
+
+// What Empty Trash deletes, the folders themselves kept (a trash watcher, gvfs's, watches info/;
+// reviewer-2, F6 review): each item in files/ and after it its .trashinfo (deleted only when the
+// item went), the items without one, the .trashinfo files without an item, and the home trash's
+// directorysizes cache. Into out, at most max; false when that was too few.
+typedef struct {
+    const char *path;
+    bool        after_ok;
+} TrashDoomed;
+
+static bool trash_empty_items(Arena *a, const TrashDirs *d, TrashDoomed *out, isize max, isize *n)
+{
+    *n = 0;
+    for (int k = 0; k < d->n; k++) {
+        static const char *const SUB[] = { "files", "info" };
+        for (int s = 0; s < 2; s++) {
+            char sub[PATH_MAX + 8];
+            snprintf(sub, sizeof sub, "%s/%s", d->dir[k], SUB[s]);
+            DIR *dir = opendir(sub);
+            if (!dir) continue;
+            for (struct dirent *de; (de = readdir(dir));) {
+                const char *nm = de->d_name;
+                if (strcmp(nm, ".") == 0 || strcmp(nm, "..") == 0) continue;
+                Str name = str_from_c(nm);
+                char other[PATH_MAX + NAME_MAX + 32];
+                struct stat st;
+                if (s == 0) {   // an item, and its .trashinfo right after it
+                    if (*n + 2 > max) return closedir(dir), false;
+                    out[(*n)++] = (TrashDoomed){ arena_sprintf(a, "%s/%s", sub, nm), false };
+                    snprintf(other, sizeof other, "%s/info/%s.trashinfo", d->dir[k], nm);
+                    if (lstat(other, &st) == 0) out[(*n)++] = (TrashDoomed){ arena_cstr(a, str_from_c(other)), true };
+                } else {        // a .trashinfo whose item isn't there (the others went with theirs)
+                    if (str_ends_with(name, S(".trashinfo"))) {
+                        snprintf(other, sizeof other, "%s/files/%.*s", d->dir[k], (int)(name.len - 10), nm);
+                        if (lstat(other, &st) == 0) continue;
+                    }
+                    if (*n + 1 > max) return closedir(dir), false;
+                    out[(*n)++] = (TrashDoomed){ arena_sprintf(a, "%s/%s", sub, nm), false };
+                }
+            }
+            closedir(dir);
+        }
+        char cache[PATH_MAX + 32];
+        struct stat st;
+        snprintf(cache, sizeof cache, "%s/directorysizes", d->dir[k]);
+        if (d->top[k][0] == 0 && lstat(cache, &st) == 0) {
+            if (*n + 1 > max) return false;
+            out[(*n)++] = (TrashDoomed){ arena_cstr(a, str_from_c(cache)), false };
+        }
+    }
+    return true;
 }

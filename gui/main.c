@@ -15,7 +15,6 @@
 #include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <sys/statvfs.h>
 #include <time.h>
 
 // Vendored, and included with -isystem so our warning flags do not apply to them.
@@ -39,6 +38,7 @@ static void wake_main(void)
 #include "watch.c"
 #include "clipboard.c"
 #include "counts.c"
+#include "space.c"
 
 // ---- memory ---------------------------------------------------------------------------------
 
@@ -322,10 +322,9 @@ static bool go_to_in(const char *dir, Str select, isize fallback, bool stepping)
     }
     ui_set(&app.ui.list, l.n, sel);
     tree_refresh(!same, app.ui.side.sel);
-    // The drives' space moves with what changes on them; read it with every listing.
-    struct statvfs v;
-    app.cwd_avail = statvfs(app.cwd, &v) == 0 ? (i64)v.f_bavail * (i64)v.f_frsize : -1;
-    places_space(&app.places);
+    // The drives' space moves with what changes on them; asked again with every listing.
+    if (!same) app.cwd_avail = -1;
+    space_ask(&app.places, app.cwd);
     return true;
 }
 
@@ -337,7 +336,7 @@ static void places_reload(void)
     if (app.ui.side_mode == SIDE_PLACES && app.ui.side.sel < app.places.n) keep = app.places.p[app.ui.side.sel];
     char bm[PATH_MAX];
     places_load(&scratch, &app.places, bookmarks_path(bm, sizeof bm), mountinfo_path());
-    places_space(&app.places);
+    space_ask(&app.places, app.cwd);
     isize sel = 0;
     for (int i = 0; i < app.places.n; i++) {
         app.place_head[i] = app.places.p[i].kind == PL_HEAD;
@@ -580,7 +579,7 @@ static void delete_targets(void)
         // In the trash view, each item's .trashinfo after it: <trash>/files/NAME has <trash>/info/NAME.trashinfo.
         Str f = str_from_c(doomed.path[i]), files = path_dir(f), top = path_dir(files);
         if (app.ui.in_trash && str_eq(path_base(files), S("files")))
-            r->item[k++] = (JobItem){ .src = arena_sprintf(&r->arena, "%.*s/info/%.*s.trashinfo", STR_ARG(top), STR_ARG(path_base(f))) };
+            r->item[k++] = (JobItem){ .src = arena_sprintf(&r->arena, "%.*s/info/%.*s.trashinfo", STR_ARG(top), STR_ARG(path_base(f))), .after_ok = true };
     }
     bool pairs = k > n;
     job_submit(r, JOB_DELETE, k);
@@ -595,25 +594,32 @@ static void delete_targets(void)
 // (trash_put makes them again).
 static void trash_empty(void)
 {
+    enum { EMPTY_MAX = 8 * CLIP_PATHS_MAX };
+    static TrashDoomed doomed_all[EMPTY_MAX];
+    static u8 empty_mem[MiB(4)];
+    static Arena emptya;
+    arena_init(&emptya, "empty", empty_mem, sizeof empty_mem);
     trash_scan();
-    JobRec *r = trashd.n ? job_new() : NULL;
-    if (!r) {
-        if (!trashd.n) set_status(false, "The trash is empty");
+    isize n;
+    bool all = trash_empty_items(&emptya, &trashd, doomed_all, EMPTY_MAX, &n);
+    if (n == 0) {
+        set_status(false, "The trash is empty");
         return;
     }
-    isize k = 0;
-    for (int i = 0; i < trashd.n; i++) {
-        static const char *const SUB[] = { "files", "info" };
-        for (int j = 0; j < 2; j++) {
-            char p[PATH_MAX + 8];
-            struct stat st;
-            snprintf(p, sizeof p, "%s/%s", trashd.dir[i], SUB[j]);
-            if (lstat(p, &st) == 0) r->item[k++] = (JobItem){ .src = arena_cstr(&r->arena, str_from_c(p)) };
-        }
+    // A job per CLIP_PATHS_MAX items, never between an item and its .trashinfo.
+    for (isize at = 0; at < n;) {
+        isize k = n - at < CLIP_PATHS_MAX ? n - at : CLIP_PATHS_MAX;
+        if (at + k < n && doomed_all[at + k].after_ok) k--;
+        JobRec *r = job_new();
+        if (!r) return;   // the queue is full: its panel says so; Empty Trash again for the rest
+        for (isize i = 0; i < k; i++)
+            r->item[i] = (JobItem){ .src = arena_cstr(&r->arena, str_from_c(doomed_all[at + i].path)), .after_ok = doomed_all[at + i].after_ok };
+        job_submit(r, JOB_DELETE, k);
+        r->trash = JOB_TRASH_EMPTY;
+        snprintf(r->label, sizeof r->label, "Emptying the trash");
+        at += k;
     }
-    job_submit(r, JOB_DELETE, k);
-    r->trash = JOB_TRASH_EMPTY;
-    snprintf(r->label, sizeof r->label, "Emptying the trash");
+    if (!all) set_status(true, "More in the trash than ofx empties at once: Empty Trash again for the rest");
 }
 
 // Restore (F6): the marked items, or the cursor's, back where they came from.
@@ -2289,9 +2295,10 @@ static UiInput input_real(bool *seen)
     if (IsMouseButtonPressed(MOUSE_BUTTON_MIDDLE)) middle_at(&in, m.x, m.y);
     in.backs = mouse_backs, mouse_backs = 0;
     in.forwards = mouse_forwards, mouse_forwards = 0;
-    *seen |= in.wheel != 0 || in.click >= 0 || in.dclick >= 0 || in.side_click >= 0 || in.header >= 0 || in.backs > 0 ||
-             in.forwards > 0 || in.bar != UB_NONE || in.tab_click >= 0 || in.tab_close >= 0 || in.mid_row >= 0 || in.mid_side >= 0 ||
-             in.mid_crumb >= 0 || in.modal || in.job_x >= 0;
+    // Anything the user did draws a frame: one list, ui_input_acts (unit-tested), so a new click
+    // can't be left out. The mode buttons and the tree's marks were (F6, Michael 2026-10-23: a
+    // mode click showed only when the pointer next moved).
+    *seen |= in.wheel != 0 || ui_input_acts(&in);
     return in;
 }
 
@@ -2448,6 +2455,7 @@ int main(int argc, char **argv)
     counts.delay_ms = kdelay ? atoi(kdelay) : 0;
     if (counts.delay_ms < 0 || counts.delay_ms > 10000) counts.delay_ms = 0;
     count_start();
+    space_start();
     places_reload();
     char state_file[PATH_MAX];
     if (state_path(state_file, sizeof state_file)) app.ui.side_mode = state_load(&scratch, state_file).side;
@@ -2493,6 +2501,7 @@ int main(int argc, char **argv)
         if (atomic_exchange(&watch.mounts_ready, false)) places_reload(), dirty = true;
         dirty |= jobs_poll();
         if (app.have_list && count_take(app.count, app.list.n)) dirty = true;
+        if (space_take(&app.places, app.cwd, &app.cwd_avail)) dirty = true;
         int rows = list_rows(GetScreenHeight()), srows = side_rows(GetScreenHeight());
         if (rows != app.ui.list.rows) ui_resize(&app.ui.list, rows), dirty = true;
         if (srows != app.ui.side.rows) ui_resize(&app.ui.side, srows), dirty = true;
@@ -2511,7 +2520,8 @@ int main(int argc, char **argv)
         bool pasting = false;
         for (int k = 0; k < in.nev; k++) pasting |= in.ev[k].key == UK_PASTE;
         if (pasting && app.ui.editing) in.paste = text_paste();
-        if (ui_input_acts(&in)) app.status[0] = 0;   // a message stays until the next key or click
+        // A message stays until the next key or click; an error at least a second.
+        if (ui_input_acts(&in) && ui_status_clears(app.status_bad, app.status_at, now_ms())) app.status[0] = 0;
         bool was_editing = app.ui.editing, was_confirming = app.ui.confirming;
         UiAction a = ui_handle(&app.ui, (UiNames){ list_name, NULL }, &in);
         if (app.ui.copied) text_copy((Str){ app.ui.copy, app.ui.copy_len }), app.ui.copied = false;
@@ -2528,6 +2538,7 @@ int main(int argc, char **argv)
     jobs_stop();
     clip_quit();
     count_stop();
+    space_stop();
     for (int i = 0; i < app.nslots; i++)
         if (app.slot[i].tex.id) UnloadTexture(app.slot[i].tex);
     pthread_mutex_lock(&wake_mu);

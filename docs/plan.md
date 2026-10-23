@@ -182,6 +182,29 @@ across the window, its left part the sidebar's, its right part the status. Decis
   changes by ofx reload the view).
 - `ofx.conf`: nothing reads it yet (no options so far).
 
+**After reviewer-2's F6 round (2026-10-23):**
+- A drive's trash can't send Restore off its drive (a stick's `.trashinfo` can say anything): a
+  Path with a `..` part, or an absolute one elsewhere, is left out; Restore resolves the target's
+  folder, symlinks followed, and refuses one off the drive. Listed only: the user's own
+  `.Trash-$uid` and `.Trash/$uid` in a sticky `.Trash`, no symlinks (as `trash_for` writes).
+- Delete for good in the trash view deletes an item's `.trashinfo` only when the item went.
+- Empty Trash empties `files/` and `info/` (and the home trash's `directorysizes`), the folders
+  kept, so a watcher on them (gvfs's) keeps working; more than 4096 items go as several jobs.
+- The drives' space is read on a thread of its own (`gui/space.c`): a hung mount or a disk spinning
+  up never stalls the window.
+- An error in the status part stays until a key or click at least a second after it.
+
+**F6.1 (Michael, 2026-10-23), after trying F6:**
+- A drive's row shows its free space in the colour of the bar's free part; with the pointer over
+  it, its used space in the colour of the used part (one number at a time: the row is 200 px).
+- A removable drive (`/run/media`, `/media`) gets an eject button in its icon's place while the
+  pointer is over the row: `udisksctl unmount -b <device>`, then `udisksctl power-off`; a busy
+  drive says why in the status part; never while a job of ofx's uses it. Tests use a fake
+  `udisksctl` that logs.
+- Fixed on the way: a click on a mode button (or a tree mark) drew no frame until the next event,
+  so the switch showed only when the pointer moved (places looked fast: the space thread's answer
+  drew one).
+
 ## F5.2 design (2026-10-21)
 
 **Asked (Michael):** copy and paste in the location line and the rename line (he leans on it);

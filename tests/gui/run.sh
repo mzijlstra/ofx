@@ -65,7 +65,10 @@ printf 'file://%s/tree/bdir Bee\n' "$T" > "$T/config/gtk-3.0/bookmarks"
 printf '33 1 0:31 / / rw - btrfs /dev/x rw\n' > "$T/mountinfo"
 mkdir -p "$T/many/zz"; for i in $(seq -w 0 69); do mkdir "$T/many/d$i"; done
 echo "== f6"; OFX_TEST_MOUNTINFO="$T/mountinfo" "$here/../../tools/gui/run-script.sh" "$T" "$here/f6.script" "$bin" "$T/tree" || fail=1
-echo "== f6b"; OFX_TEST_MOUNTINFO="$T/mountinfo" "$here/../../tools/gui/run-script.sh" "$T" "$here/f6b.script" "$bin" "$T/tree" || fail=1
+# f6b with the drives' space 10 s late (a hung drive): the window answers meanwhile and quits at once.
+echo "== f6b"; start=$(date +%s)
+OFX_TEST_SPACE_DELAY_MS=10000 OFX_TEST_MOUNTINFO="$T/mountinfo" "$here/../../tools/gui/run-script.sh" "$T" "$here/f6b.script" "$bin" "$T/tree" || fail=1
+took=$(( $(date +%s) - start )); if [ "$took" -ge 9 ]; then echo "f6b: FAILED, took ${took}s (the space thread held the quit?)"; fail=1; else echo "f6b: quit in ${took}s with the space 10s late"; fi
 T=$base/hang; rm -rf "$T"; mkdir -p "$T/tree/stuck"
 echo "== hang"
 t0=$(date +%s)

@@ -276,6 +276,16 @@ static bool ui_input_acts(const UiInput *in)
            in->backs > 0 || in->forwards > 0 || in->job_x >= 0 || in->side_mode >= 0 || in->side_twisty >= 0;
 }
 
+// Whether a status message gives way to the status line on input that acts (ui_input_acts): a
+// plain one at once; an error only from a second after it came, so one that lands while keys are
+// being pressed (a job failing) is seen (reviewer-2, F6 review).
+enum { UI_ERROR_MIN_MS = 1000 };
+
+static bool ui_status_clears(bool bad, i64 at_ms, i64 now_ms)
+{
+    return !bad || now_ms - at_ms >= UI_ERROR_MIN_MS;
+}
+
 // The sidebar in mode m: a hidden one gives the keys back to the list.
 static UiAction ui_side_mode(Ui *u, SideMode m)
 {

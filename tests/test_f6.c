@@ -437,6 +437,7 @@ static void test_trash_view(void)
     snprintf(tr3, sizeof tr3, "tv/drive3/.Trash/%u", (unsigned)getuid());
     mkdirs(at("%s/files", tr3));
     mkdirs(at("%s/info", tr3));
+    chmod(at("tv/drive3/.Trash"), 01777);   // sticky, as the spec wants
     const char *mp[] = { m0, m0, m2, m3, m4 };
     static TrashDirs d;
     trash_dirs(&d, mp, 5);
@@ -602,4 +603,90 @@ static void test_trash_keys(void)
     CHECK(c.n == 1 && c.cur == 0 && str_eq(ui_crumb_label(&c, 0), S("Trash")) && str_eq(ui_crumb_path(&c, 0), S(TRASH_URI)));
     ui_crumbs_set(&c, "/home/m/y", "/home/m");   // and back
     CHECK(c.n == 2 && str_eq(ui_crumb_label(&c, 1), S("y")));
+}
+
+static void test_status_clears(void)
+{
+    CHECK(ui_status_clears(false, 1000, 1000) && ui_status_clears(false, 1000, 1001));
+    CHECK(!ui_status_clears(true, 1000, 1000) && !ui_status_clears(true, 1000, 1999));
+    CHECK(ui_status_clears(true, 1000, 2000) && ui_status_clears(true, 1000, 9000));
+}
+
+// Empty Trash's items (F6 review): each item with its .trashinfo after it, the strays, the home
+// trash's directorysizes; the folders themselves stay.
+static void test_trash_empty_items(void)
+{
+    arena_reset(&ta);
+    static TrashDirs d;
+    d.n = 2;
+    snprintf(d.dir[0], PATH_MAX, "%s", at("te/home/Trash")), d.top[0][0] = 0;
+    snprintf(d.dir[1], PATH_MAX, "%s", at("te/drive/.Trash-1")), snprintf(d.top[1], PATH_MAX, "%s", at("te/drive"));
+    put(at("te/home/Trash/files/a"), "a");
+    put(at("te/home/Trash/info/a.trashinfo"), "i");
+    put(at("te/home/Trash/files/noinfo"), "x");
+    put(at("te/home/Trash/info/orphan.trashinfo"), "i");
+    put(at("te/home/Trash/info/stray"), "s");
+    put(at("te/home/Trash/directorysizes"), "1 2 a\n");
+    put(at("te/drive/.Trash-1/files/b"), "b");
+    put(at("te/drive/.Trash-1/info/b.trashinfo"), "i");
+    put(at("te/drive/.Trash-1/directorysizes"), "not ours to clear");   // only the home trash keeps one
+    static TrashDoomed out[32];
+    isize n;
+    CHECK(trash_empty_items(&ta, &d, out, 32, &n) && n == 8);
+    int afters = 0, seen_a = 0, seen_ai = 0, seen_cache = 0, seen_drive_cache = 0;
+    for (isize i = 0; i < n; i++) {
+        if (out[i].after_ok) {
+            afters++;
+            CHECK(i > 0 && strstr(out[i].path, ".trashinfo") && !out[i - 1].after_ok);
+            char want[PATH_MAX];   // the item right before it is its own
+            Str prev = path_base(str_from_c(out[i - 1].path));
+            snprintf(want, sizeof want, "%.*s.trashinfo", STR_ARG(prev));
+            CHECK(str_eq(path_base(str_from_c(out[i].path)), str_from_c(want)));
+        }
+        seen_a += strcmp(out[i].path, at("te/home/Trash/files/a")) == 0;
+        seen_ai += strcmp(out[i].path, at("te/home/Trash/info/a.trashinfo")) == 0;
+        seen_cache += strcmp(out[i].path, at("te/home/Trash/directorysizes")) == 0;
+        seen_drive_cache += strcmp(out[i].path, at("te/drive/.Trash-1/directorysizes")) == 0;
+    }
+    CHECK(afters == 2 && seen_a == 1 && seen_ai == 1 && seen_cache == 1 && seen_drive_cache == 0);
+    // Too little room: false, never past max, an item never without room for its .trashinfo.
+    CHECK(!trash_empty_items(&ta, &d, out, 3, &n) && n <= 3);
+    CHECK(!trash_empty_items(&ta, &d, out, 1, &n) && n == 0);
+    CHECK(!trash_empty_items(&ta, &d, out, 7, &n) && n <= 7);
+    CHECK(!trash_empty_items(&ta, &d, out, 5, &n) && n == 5);   // the home trash's all but its cache
+    // An empty trash, a missing one: nothing.
+    d.n = 1;
+    snprintf(d.dir[0], PATH_MAX, "%s", at("te/none"));
+    CHECK(trash_empty_items(&ta, &d, out, 32, &n) && n == 0);
+}
+
+// Which drive trash folders are listed (F6 review): the user's own, no symlinks; .Trash/$uid only
+// in a sticky .Trash.
+static void test_trash_dirs_owned(void)
+{
+    unsigned uid = (unsigned)getuid();
+    char p[PATH_MAX];
+    snprintf(p, sizeof p, "to/sticky/.Trash/%u/info", uid);
+    mkdirs(at("%s", p));
+    chmod(at("to/sticky/.Trash"), 01777);
+    snprintf(p, sizeof p, "to/plain/.Trash/%u/info", uid);   // not sticky: not listed
+    mkdirs(at("%s", p));
+    mkdirs(at("to/real/info"));
+    snprintf(p, sizeof p, "to/linked/.Trash-%u", uid);       // a symlink: not listed
+    mkdirs(at("to/linked"));
+    CHECK(symlink(at("to/real"), at("%s", p)) == 0);
+    snprintf(p, sizeof p, "to/linkadmin/.Trash");             // .Trash a symlink to a sticky one
+    mkdirs(at("to/linkadmin"));
+    CHECK(symlink(at("to/sticky/.Trash"), at("%s", p)) == 0);
+    char m1[PATH_MAX], m2[PATH_MAX], m3[PATH_MAX], m4[PATH_MAX];
+    snprintf(m1, sizeof m1, "%s", at("to/sticky")), snprintf(m2, sizeof m2, "%s", at("to/plain"));
+    snprintf(m3, sizeof m3, "%s", at("to/linked")), snprintf(m4, sizeof m4, "%s", at("to/linkadmin"));
+    const char *mp[] = { m1, m2, m3, m4 };
+    env_set("XDG_DATA_HOME", at("to/nohome"));
+    static TrashDirs d;
+    trash_dirs(&d, mp, 4);
+    CHECK(d.n == 1 && strstr(d.dir[0], "to/sticky/.Trash/"));
+    env_restore();
+    CHECK(trash_dir_ours("/anything", TRASH_HOME));
+    CHECK(!trash_dir_ours("/nonexistent/x", TRASH_USER));
 }

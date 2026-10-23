@@ -1502,6 +1502,9 @@ int main(void)
     test_tree_keys();
     test_trash_view();
     test_trash_keys();
+    test_status_clears();
+    test_trash_empty_items();
+    test_trash_dirs_owned();
     char cmd[1600];
     snprintf(cmd, sizeof cmd, "chmod -R u+rwx '%s' && rm -rf '%s' '%s'", root, root, decoy);
     if (system(cmd) != 0) fprintf(stderr, "could not remove %s\n", root);

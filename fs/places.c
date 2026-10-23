@@ -139,17 +139,23 @@ static void places_add_mounts(Places *pl, Str text)
     }
 }
 
-// A drive's size and free space (what an unprivileged user may still write), by statvfs; size 0
-// when it can't be read.
-static void place_space(Place *p)
+// The size and free space (what an unprivileged user may still write) of the drive holding path,
+// by statvfs; both 0 when it can't be read. It can block on a hung mount: gui/ calls it off the
+// main thread (space.c).
+static void fs_space(const char *path, i64 *size, i64 *avail)
 {
     struct statvfs v;
-    if (statvfs(p->path, &v) != 0) {
-        p->size = p->avail = 0;
+    if (statvfs(path, &v) != 0) {
+        *size = *avail = 0;
         return;
     }
-    p->size = (i64)v.f_blocks * (i64)v.f_frsize;
-    p->avail = (i64)v.f_bavail * (i64)v.f_frsize;
+    *size = (i64)v.f_blocks * (i64)v.f_frsize;
+    *avail = (i64)v.f_bavail * (i64)v.f_frsize;
+}
+
+static void place_space(Place *p)
+{
+    fs_space(p->path, &p->size, &p->avail);
 }
 
 // Every drive's space read again; true when any changed.

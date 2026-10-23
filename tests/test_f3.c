@@ -639,6 +639,26 @@ static void test_job(void)
     j = job_new(JOB_DELETE, 1, at("j/del/none"), NULL);
     job_run(j);
     CHECK(j->errors == 1 && j->item[0].out == OUT_FAILED);
+    // An item that goes only when the one before it went (a .trashinfo after its item, F6): kept
+    // when that one fails (a folder in it that can't be written), deleted when it goes.
+    put(at("j/del/stuck/locked/x"), "x");
+    put(at("j/del/stuck.info"), "i");
+    put(at("j/del/free"), "f");
+    put(at("j/del/free.info"), "i");
+    chmod(at("j/del/stuck/locked"), 0500);
+    j = job_new(JOB_DELETE, 4, at("j/del/stuck"), NULL, at("j/del/stuck.info"), NULL, at("j/del/free"), NULL, at("j/del/free.info"), NULL);
+    j->item[1].after_ok = j->item[3].after_ok = true;
+    job_run(j);
+    chmod(at("j/del/stuck/locked"), 0700);
+    CHECK(j->item[0].out == OUT_FAILED && j->item[1].out == OUT_SKIPPED && there(at("j/del/stuck.info")));
+    CHECK(j->item[2].out == OUT_NEW && j->item[3].out == OUT_NEW && !there(at("j/del/free.info")) && j->errors == 1);
+    // First in the job: nothing before it went, whatever lies before it in memory.
+    j = job_new(JOB_DELETE, 2, at("j/del/free"), NULL, at("j/del/stuck.info"), NULL);
+    j->item[0].out = OUT_NEW;
+    j->item = &job_items[1], j->n = 1;
+    j->item[0].after_ok = true;
+    job_run(j);
+    CHECK(j->item[0].out == OUT_SKIPPED && there(at("j/del/stuck.info")));
 
     // The guard: a target outside the root fails, nothing is written.
     j = job_new(JOB_COPY, 1, at("j/src/a.txt"), out_at("escape.txt"));

@@ -31,6 +31,7 @@ typedef struct {
     const char *dst;     // absolute, the target's own path (not its folder); NULL for a delete
     Outcome     out;
     char        final[NAME_MAX + 1];   // the name it got (another after "keep both")
+    bool        after_ok;   // a delete: only when the item before it went (a .trashinfo after its item)
 } JobItem;
 
 typedef struct Job Job;
@@ -543,6 +544,12 @@ static void job_run(Job *j)
         if (j->kind == JOB_DELETE) {
             Err err;
             isize n = 0;
+            // The item before it is still there: so is this (its .trashinfo, which the trash view
+            // lists it by; reviewer-2, F6 review).
+            if (it->after_ok && (i == 0 || j->item[i - 1].out != OUT_NEW)) {
+                it->out = OUT_SKIPPED;
+                continue;
+            }
             if (j->delay_ms > 0) nanosleep(&(struct timespec){ j->delay_ms / 1000, (j->delay_ms % 1000) * 1000000L }, NULL);
             if (delete_tree(it->src, &n, &err)) it->out = OUT_NEW;
             else job_error(j, "%s", err.msg), it->out = OUT_FAILED;
