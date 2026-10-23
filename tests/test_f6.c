@@ -395,7 +395,7 @@ static void test_trash_view(void)
     put(at("%s/info/c.txt.trashinfo", tr), "[Trash Info]\nPath=docs/c%20d.txt\nDeletionDate=2026-01-02T03:04:05\n");
     put(at("%s/files/abs", tr), "Z");
     char body[PATH_MAX + 64];
-    snprintf(body, sizeof body, "[Trash Info]\nDeletionDate=bad\nPath=%s\n", at("tv/elsewhere/abs"));
+    snprintf(body, sizeof body, "[Trash Info]\nDeletionDate=bad\nPath=%s\n", at("tv/drive/elsewhere/abs"));
     put(at("%s/info/abs.trashinfo", tr), body);
     // Left out: an info without its item, an item without its info, no Path, a Path outside the
     // group, a broken escape, a bare ".trashinfo".
@@ -408,6 +408,17 @@ static void test_trash_view(void)
     put(at("%s/files/esc", tr), "x");
     put(at("%s/info/esc.trashinfo", tr), "[Trash Info]\nPath=bad%zz\n");
     put(at("%s/info/.trashinfo", tr), "[Trash Info]\nPath=x\n");
+    // Nor a Path that would leave the drive: a ".." part, an absolute one elsewhere (a stick's
+    // .trashinfo can say anything).
+    put(at("%s/files/up", tr), "x");
+    put(at("%s/info/up.trashinfo", tr), "[Trash Info]\nPath=../escaped\n");
+    put(at("%s/files/up2", tr), "x");
+    put(at("%s/info/up2.trashinfo", tr), "[Trash Info]\nPath=docs/../../escaped\n");
+    put(at("%s/files/away", tr), "x");
+    snprintf(body, sizeof body, "[Trash Info]\nPath=%s\n", at("tv/away"));
+    put(at("%s/info/away.trashinfo", tr), body);
+    put(at("%s/files/dotdot", tr), "x");   // ".." only as a whole part: "a..b" is a name
+    put(at("%s/info/dotdot.trashinfo", tr), "[Trash Info]\nPath=docs/a..b\n");
     // A relative Path in the home trash: nowhere to restore it to, left out.
     put(at("tv/data/Trash/files/rel"), "x");
     put(at("tv/data/Trash/info/rel.trashinfo"), "[Trash Info]\nPath=rel\n");
@@ -432,40 +443,71 @@ static void test_trash_view(void)
     CHECK(strcmp(d.dir[2], at("%s", tr3)) == 0 && strcmp(d.top[2], m4) == 0);
     Listing l;
     CHECK(trash_list(&ta, &d, false, (Sort){ SORT_NAME, false }, &l, &err));
-    const char *want[] = { "folder", "a.txt", "abs", "b.txt", "c d.txt" };
+    const char *want[] = { "folder", "a..b", "a.txt", "abs", "b.txt", "c d.txt" };
     CHECK(l.n == COUNT(want) && l.hidden == 1);
     for (isize i = 0; i < l.n && i < COUNT(want); i++) {
         if (!str_eq(l.e[i].name, str_from_c(want[i]))) fprintf(stderr, "trash %td: %.*s\n", i, STR_ARG(l.e[i].name));
         CHECK(str_eq(l.e[i].name, str_from_c(want[i])) && l.e[i].trash);
     }
+    // "a..b" off the list for the rest: the indices as before.
+    CHECK(strcmp(l.e[1].trash->from, at("tv/drive/docs/a..b")) == 0);
+    CHECK(trash_restore_item(l.e[1].trash, &err) && there(at("tv/drive/docs/a..b")));
+    CHECK(trash_list(&ta, &d, false, (Sort){ SORT_NAME, false }, &l, &err) && l.n == COUNT(want) - 1);
     CHECK(l.e[0].kind == K_DIR && l.e[1].size == 4 && l.e[1].kind == K_FILE);
     CHECK(strcmp(l.e[1].trash->from, at("tv/src/a.txt")) == 0 && strcmp(l.e[1].trash->file, at("tv/data/Trash/files/a.txt")) == 0);
     CHECK(strcmp(l.e[1].trash->info, at("tv/data/Trash/info/a.txt.trashinfo")) == 0);
-    CHECK(strcmp(l.e[4].trash->from, at("tv/drive/docs/c d.txt")) == 0);
-    CHECK(strcmp(l.e[2].trash->from, at("tv/elsewhere/abs")) == 0 && l.e[2].mtime == 0);   // an unreadable date: 0
+    CHECK(strcmp(l.e[4].trash->from, at("tv/drive/docs/c d.txt")) == 0 && strcmp(l.e[4].trash->top, m0) == 0);
+    CHECK(l.e[1].trash->top[0] == 0);   // the home trash's: no top
+    CHECK(strcmp(l.e[2].trash->from, at("tv/drive/elsewhere/abs")) == 0 && l.e[2].mtime == 0);   // an unreadable date: 0
     struct tm tm = { .tm_year = 126, .tm_mon = 0, .tm_mday = 2, .tm_hour = 3, .tm_min = 4, .tm_sec = 5, .tm_isdst = -1 };
     CHECK(l.e[4].mtime == (i64)mktime(&tm));
+    CHECK(!there(at("tv/escaped")) && !there(at("escaped")));
     CHECK(l.e[1].mtime > 0 && l.e[1].mtime <= (i64)time(NULL));
     // Shown hidden: the dot-file too; by date, newest last.
-    CHECK(trash_list(&ta, &d, true, (Sort){ SORT_NAME, false }, &l, &err) && l.n == COUNT(want) + 1 && l.hidden == 1);
+    CHECK(trash_list(&ta, &d, true, (Sort){ SORT_NAME, false }, &l, &err) && l.n == COUNT(want) && l.hidden == 1);
     CHECK(trash_list(&ta, &d, false, (Sort){ SORT_MTIME, false }, &l, &err) && str_eq(l.e[1].name, S("abs")));
     // Restore: back where it was; its folder made again when it is gone; never over a file there.
     CHECK(trash_list(&ta, &d, false, (Sort){ SORT_NAME, false }, &l, &err));
     CHECK(trash_restore_item(l.e[1].trash, &err) && there(at("tv/src/a.txt")) && !there(at("tv/data/Trash/info/a.txt.trashinfo")));
     rmdir(at("tv/src/sub"));
     CHECK(trash_restore_item(l.e[3].trash, &err) && there(at("tv/src/sub/b.txt")));
-    put(at("tv/elsewhere/abs"), "in the way");
+    put(at("tv/drive/elsewhere/abs"), "in the way");
     CHECK(!trash_restore_item(l.e[2].trash, &err) && strstr(err.msg, "is there again") && there(at("%s/files/abs", tr)));
     CHECK(trash_restore_item(l.e[4].trash, &err) && there(at("tv/drive/docs/c d.txt")));
     // A folder the guard refuses: nothing made, nothing moved.
-    TrashItem out = { l.e[0].trash->file, l.e[0].trash->info, out_at("restored/folder") };
+    TrashItem out = { l.e[0].trash->file, l.e[0].trash->info, out_at("restored/folder"), "" };
     CHECK(!trash_restore_item(&out, &err) && strstr(err.msg, "outside the test folder") && !there(out_at("restored")));
     // Its folder can't be made (a file in the way).
     put(at("tv/blocker"), "x");
-    TrashItem blocked = { l.e[0].trash->file, l.e[0].trash->info, at("tv/blocker/sub/folder") };
+    TrashItem blocked = { l.e[0].trash->file, l.e[0].trash->info, at("tv/blocker/sub/folder"), "" };
     CHECK(!trash_restore_item(&blocked, &err) && strstr(err.msg, "blocker/sub") && there(l.e[0].trash->file));
-    // What is left: the folder and abs, and the dot-file.
-    CHECK(trash_list(&ta, &d, false, (Sort){ SORT_NAME, false }, &l, &err) && l.n == 2);
+    // From a drive's trash, never off the drive: through a symlink on it, by a "..", or to an
+    // absolute path elsewhere (each made by hand here; the listing leaves the last two out).
+    mkdirs(at("tv/outside"));
+    CHECK(symlink(at("tv/outside"), at("tv/drive/link")) == 0);
+    char top[PATH_MAX];
+    snprintf(top, sizeof top, "%s", m0);
+    TrashItem via = { l.e[0].trash->file, l.e[0].trash->info, at("tv/drive/link/folder"), top };
+    CHECK(!trash_restore_item(&via, &err) && strstr(err.msg, "outside its drive") && !there(at("tv/outside/folder")));
+    char climb[PATH_MAX + 32];
+    snprintf(climb, sizeof climb, "%s/../outside/folder", m0);
+    TrashItem up = { l.e[0].trash->file, l.e[0].trash->info, climb, top };
+    CHECK(!trash_restore_item(&up, &err) && strstr(err.msg, "outside its drive") && !there(at("tv/outside/folder")));
+    TrashItem away = { l.e[0].trash->file, l.e[0].trash->info, at("tv/outside/folder"), top };
+    CHECK(!trash_restore_item(&away, &err) && !there(at("tv/outside/folder")) && there(l.e[0].trash->file));
+    TrashItem gone_top = { l.e[0].trash->file, l.e[0].trash->info, at("tv/nodrive/folder"), at("tv/nodrive") };
+    CHECK(!trash_restore_item(&gone_top, &err) && there(l.e[0].trash->file));
+    // On the drive, under a folder that isn't there yet: fine.
+    char ok_from[PATH_MAX];
+    snprintf(ok_from, sizeof ok_from, "%s", at("tv/drive/new/deep/folder"));
+    TrashItem on = { l.e[0].trash->file, l.e[0].trash->info, ok_from, top };
+    CHECK(trash_restore_item(&on, &err) && there(at("tv/drive/new/deep/folder")));
+    // The trash_path_climbs and trash_under edges.
+    CHECK(trash_path_climbs("..") && trash_path_climbs("/a/..") && trash_path_climbs("a/../b") && !trash_path_climbs("a/..b/c"));
+    CHECK(!trash_path_climbs("...") && !trash_path_climbs("/a/b/") && !trash_path_climbs("") && !trash_path_climbs("x/.a/y"));
+    CHECK(trash_under("/m/x", "/m") && trash_under("/m", "/m") && !trash_under("/mx", "/m") && trash_under("/anything", "/"));
+    // What is left: abs, and the dot-file.
+    CHECK(trash_list(&ta, &d, false, (Sort){ SORT_NAME, false }, &l, &err) && l.n == 1 && str_eq(l.e[0].name, S("abs")));
     // No trash at all.
     env_set("XDG_DATA_HOME", at("tv/none"));
     trash_dirs(&d, NULL, 0);

@@ -599,3 +599,16 @@ MUTANTS += [
     (T, "    if (stat(d, &st) != 0) {\n", "    if (0) {\n"),
     (T, "            if (end && *end == 0) tm.tm_isdst = -1, *when = (i64)mktime(&tm);", ""),
 ]
+# ---- F6 review: a drive's trash can't send a restore off its drive
+MUTANTS += [
+    (T, " || !dec[0] || trash_path_climbs(dec)) continue;", " || !dec[0]) continue;"),
+    (T, "            if (dec[0] == '/' && top[0] && !trash_under(dec, top)) continue;\n", ""),
+    (T, "    if (t->top && t->top[0]) {\n        char res[PATH_MAX], top[PATH_MAX];", "    if (0) {\n        char res[PATH_MAX], top[PATH_MAX];"),
+    (T, " || !ops_resolve(t->from, res, sizeof res) || !trash_under(res, top))", " || !ops_resolve(t->from, res, sizeof res))"),
+    (T, "        if (e - i == 2 && p.p[i] == '.' && p.p[i + 1] == '.') return true;", "        if (e - i >= 2 && p.p[i] == '.' && p.p[i + 1] == '.') return true;"),
+    (T, "        if (e - i == 2 && p.p[i] == '.' && p.p[i + 1] == '.') return true;", "        if (e - i == 2 && p.p[i] == '.') return true;"),
+    (T, "    return strcmp(top, \"/\") == 0 || (strncmp(path, top, n) == 0 && (path[n] == '/' || path[n] == 0));", "    return strcmp(top, \"/\") == 0 || (strncmp(path, top, n) == 0 && path[n] == '/');"),
+    (T, "    return strcmp(top, \"/\") == 0 || (strncmp(path, top, n) == 0 && (path[n] == '/' || path[n] == 0));", "    return strcmp(top, \"/\") == 0 || strncmp(path, top, n) == 0;"),
+    (T, "    return strcmp(top, \"/\") == 0 || (strncmp(path, top, n) == 0 && (path[n] == '/' || path[n] == 0));", "    return strncmp(path, top, n) == 0 && (path[n] == '/' || path[n] == 0);"),
+    (T, "                              arena_cstr(a, str_from_c(d->top[k])) };", "                              \"\" };"),
+]

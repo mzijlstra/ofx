@@ -258,10 +258,33 @@ static void trash_dirs(TrashDirs *d, const char *const *mounts, int nmounts)
 // Where a trashed item is, kept with its entry.
 typedef struct TrashItem {
     const char *file, *info, *from;
+    const char *top;   // the drive's top dir for a drive's trash, "" for the home trash
 } TrashItem;
 
+// Whether path has a ".." part: a .trashinfo on a drive anyone could have written (a USB stick)
+// must not send a restore out of its drive (reviewer-2, F6 review).
+static bool trash_path_climbs(const char *path)
+{
+    Str p = str_from_c(path);
+    for (isize i = 0; i < p.len;) {
+        isize e = i;
+        while (e < p.len && p.p[e] != '/') e++;
+        if (e - i == 2 && p.p[i] == '.' && p.p[i + 1] == '.') return true;
+        i = e + 1;
+    }
+    return false;
+}
+
+// Whether path is top or under it ("/" holds everything).
+static bool trash_under(const char *path, const char *top)
+{
+    size_t n = strlen(top);
+    return strcmp(top, "/") == 0 || (strncmp(path, top, n) == 0 && (path[n] == '/' || path[n] == 0));
+}
+
 // A .trashinfo's Path (decoded, made absolute against top) and DeletionDate (local time, 0 when
-// missing or unreadable); false when it has no usable Path.
+// missing or unreadable); false when it has no usable Path. In a drive's trash (top set) the Path
+// must stay on that drive: no ".." part, and an absolute one under top.
 static bool trash_info_parse(Str text, const char *top, char *from, size_t cap, i64 *when)
 {
     *when = 0;
@@ -276,8 +299,9 @@ static bool trash_info_parse(Str text, const char *top, char *from, size_t cap, 
         if (!in_group) continue;
         if (str_starts_with(line, S("Path="))) {
             char dec[PATH_MAX];
-            if (!percent_decode(str_cut(line, 5, line.len), dec, sizeof dec) || !dec[0]) continue;
+            if (!percent_decode(str_cut(line, 5, line.len), dec, sizeof dec) || !dec[0] || trash_path_climbs(dec)) continue;
             int n;
+            if (dec[0] == '/' && top[0] && !trash_under(dec, top)) continue;
             if (dec[0] == '/') n = snprintf(from, cap, "%s", dec);
             else if (top[0]) n = snprintf(from, cap, "%s%s%s", top, strcmp(top, "/") == 0 ? "" : "/", dec);
             else continue;   // relative in the home trash: nowhere to put it
@@ -344,7 +368,8 @@ static bool trash_list(Arena *a, const TrashDirs *d, bool show_hidden, Sort sort
                 closedir(dir), close(ffd);
                 return err_set(err, "the trash: too many items for memory"), false;
             }
-            *t = (TrashItem){ arena_cstr(a, str_from_c(fpath)), arena_cstr(a, str_from_c(ipath)), arena_cstr(a, str_from_c(from)) };
+            *t = (TrashItem){ arena_cstr(a, str_from_c(fpath)), arena_cstr(a, str_from_c(ipath)), arena_cstr(a, str_from_c(from)),
+                              arena_cstr(a, str_from_c(d->top[k])) };
             Kind kd = kind_of(ffd, item, &st);
             Str shown = path_base(str_from_c(t->from));
             e[n++] = (Entry){
@@ -368,6 +393,13 @@ static bool trash_list(Arena *a, const TrashDirs *d, bool show_hidden, Sort sort
 // never over something there now.
 static bool trash_restore_item(const TrashItem *t, Err *err)
 {
+    // From a drive's trash: the place it goes, its symlinks followed, still on that drive (a link
+    // on a stick could point the restore at the home folder).
+    if (t->top && t->top[0]) {
+        char res[PATH_MAX], top[PATH_MAX];
+        if (!realpath(t->top, top) || !ops_resolve(t->from, res, sizeof res) || !trash_under(res, top))
+            return err_set(err, "%s: its trash says it came from outside its drive: not restored", t->from), false;
+    }
     Trashed tr;
     snprintf(tr.file, sizeof tr.file, "%s", t->file);
     snprintf(tr.info, sizeof tr.info, "%s", t->info);
