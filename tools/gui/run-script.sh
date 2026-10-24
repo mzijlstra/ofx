@@ -9,7 +9,7 @@
 # with kill (pid in <scratch-dir>/run.pid) and then `tools/gui/weston.sh stop <scratch-dir>`.
 #
 # Everything the window gets is set here:
-# - fakes for uwsm-app, xdg-open, xdg-terminal-exec and udisksctl first on PATH, logging their
+# - fakes for uwsm-app, gio, xdg-open, xdg-terminal-exec and udisksctl first on PATH, logging their
 #   arguments to <scratch-dir>/spawn.log: a test never opens a real file or terminal on Michael's
 #   screen, nor unmounts one of his drives;
 # - XDG_STATE_HOME=<scratch-dir>/state, with a copy of Michael's current theme files (colors.toml,
@@ -39,7 +39,7 @@ if [ "$sc" != - ]; then
     [ -f "$sc" ] || { echo "run-script: no script $sc" >&2; exit 1; }
     sc=$(cd "$(dirname "$sc")" && pwd)/$(basename "$sc")
 fi
-for f in uwsm-app xdg-open xdg-terminal-exec; do
+for f in uwsm-app gio xdg-open xdg-terminal-exec; do   # xdg-open: ofx's opener before gio
     printf '#!/bin/sh\necho "%s $*" >> "%s/spawn.log"\n' "$f" "$T" > "$T/fakes/$f"
     chmod +x "$T/fakes/$f"
 done

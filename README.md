@@ -24,7 +24,7 @@ wayland-cursor, wayland-egl, xkbcommon, fontconfig and freetype2. raylib and Cla
 | Up/Down, `j`/`k` | move |
 | PgUp/PgDn | a page |
 | Home/End, `g`/`G` | first, last |
-| Enter | open: a folder is entered, a file goes to `xdg-open` |
+| Enter | open: a folder is entered, a file goes to `gio open` (Nemo's way: the type from its name; a terminal app such as nvim in a terminal) |
 | Backspace | up to the parent, the folder you left selected |
 | Alt+Left, Alt+Right | back and forward |
 | Alt+Up | up to the parent |

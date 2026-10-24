@@ -112,7 +112,11 @@ when the theme changes.
 **Launching (`fs/spawn.c`):** `posix_spawnp` with `POSIX_SPAWN_SETSID`, stdin and stdout on
 `/dev/null`, children reaped automatically (`SA_NOCLDWAIT`). Open: `uwsm-app -- xdg-open <path>`
 (plain `xdg-open` without uwsm-app). Terminal: `uwsm-app -- xdg-terminal-exec --dir=<folder>`, as
-`omarchy-launch-terminal` does.
+`omarchy-launch-terminal` does. **Since 2026-10-24 files open with `uwsm-app -- gio open <path>`**
+(Michael): on Hyprland xdg-open is xdg-utils' generic mode, which typed a `.md` by its content
+(`text/plain`, nvim, not his Typora for `text/markdown`) and ran a `Terminal=true` app in the
+terminal it was called from: from ofx, none, so nothing opened. GIO types by name and runs such an
+app through `xdg-terminal-exec`, as Nemo does.
 
 **Keys:** Up/Down and `j`/`k` move; PgUp/PgDn; Home/End and `g`/`G`; Enter, Right and `l` open
 (a folder is entered, a file goes to `xdg-open`); Backspace, Left and `h` go to the parent, with

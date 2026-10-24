@@ -1,4 +1,4 @@
-// Launching what ofx hands off: a file to xdg-open, a folder to the terminal (docs/plan.md,
+// Launching what ofx hands off: a file to `gio open`, a folder to the terminal (docs/plan.md,
 // "Launching"). Each child gets its own session (it outlives ofx, and a Ctrl+C in a terminal that
 // started ofx doesn't reach it), /dev/null for stdin and stdout, and ofx's stderr. Children are
 // reaped by the kernel: spawn_init sets SA_NOCLDWAIT on SIGCHLD.
@@ -75,9 +75,13 @@ static bool spawn_app(const char *const *cmd, isize n, Err *err)
     return spawn_detached((char *const *)argv, err);
 }
 
+// GIO, as Nemo opens files (Michael, 2026-10-24): the type from the name (a .md is text/markdown,
+// Typora), and a Terminal=true app (nvim) in a terminal through xdg-terminal-exec. xdg-open on
+// Hyprland is xdg-utils' generic mode: it typed CLAUDE.md by content (text/plain, nvim) and ran
+// nvim in the terminal it was called from, which ofx hasn't: nothing opened.
 static bool spawn_open(const char *path, Err *err)
 {
-    const char *cmd[] = { "xdg-open", path };
+    const char *cmd[] = { "gio", "open", path };
     return spawn_app(cmd, COUNT(cmd), err);
 }
 

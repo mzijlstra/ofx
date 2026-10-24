@@ -8,10 +8,11 @@ rules shared by every tool here.
 
 ## What a test run could do to Michael's desktop
 
-- **ofx launches programs.** Enter on a file runs `uwsm-app -- xdg-open <file>`, `t` runs
+- **ofx launches programs.** Enter on a file runs `uwsm-app -- gio open <file>`, `t` runs
   `uwsm-app -- xdg-terminal-exec --dir=<folder>`. A test that reaches them with the real
   programs on PATH opens real windows on his screen. Every GUI run goes through
-  `tools/gui/run-script.sh`, which puts logging fakes for all three first on PATH (they write
+  `tools/gui/run-script.sh`, which puts logging fakes for them (and `xdg-open`, the opener before
+  2026-10-24) first on PATH (they write
   `<scratch>/spawn.log`). The unit tests use their own fakes in a mkdtemp directory.
 - **ofx opens a window** (it links raylib): never from a plain shell, only in the test weston
   through `run-script.sh` (below); with this session's WAYLAND_DISPLAY it would open on his screen. `build/ofx-probe` and `build/test` link no raylib and are safe

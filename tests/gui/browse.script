@@ -27,7 +27,7 @@ char k
 key end
 key enter
 expect status=opened
-sh grep -qx "uwsm-app -- xdg-open $OFX_DIR/b10.txt" "$OFX_ROOT/spawn.log"
+sh grep -qx "uwsm-app -- gio open $OFX_DIR/b10.txt" "$OFX_ROOT/spawn.log"
 char t
 expect status=terminal
 sh grep -qx "uwsm-app -- xdg-terminal-exec --dir=$OFX_DIR" "$OFX_ROOT/spawn.log"

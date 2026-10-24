@@ -676,15 +676,17 @@ static void test_spawn(void)
 {
     spawn_init();
     char out[2048], want[1200];
-    // Without uwsm-app: straight to xdg-open, in its own session.
+    // Without uwsm-app: straight to gio open, in its own session.
     mkdirs(at("bin1"));
-    fake(at("bin1"), "xdg-open", at("spawn1.log"));
+    fake(at("bin1"), "gio", at("spawn1.log"));
+    fake(at("bin1"), "xdg-open", at("spawn1-never.log"));
     fake(at("bin1"), "xdg-terminal-exec", at("spawn1.log"));
     env_set("PATH", at("bin1"));
     Err err;
     CHECK(spawn_open("/some/file with space", &err));
     CHECK(wait_file(at("spawn1.log"), out, sizeof out));
-    CHECK(strncmp(out, "xdg-open /some/file with space sid=", 35) == 0);
+    CHECK(strncmp(out, "gio open /some/file with space sid=", 35) == 0);
+    CHECK(access(at("spawn1-never.log"), F_OK) != 0);
     // Its own session: sid equals its pid.
     char *sid = strstr(out, "sid="), *pid = strstr(out, "pid=");
     CHECK(sid && pid && atoi(sid + 4) == atoi(pid + 4) && atoi(sid + 4) != getsid(0));
@@ -697,25 +699,25 @@ static void test_spawn(void)
     // With uwsm-app: through it.
     mkdirs(at("bin2"));
     fake(at("bin2"), "uwsm-app", at("spawn2.log"));
-    fake(at("bin2"), "xdg-open", at("spawn2-never.log"));
+    fake(at("bin2"), "gio", at("spawn2-never.log"));
     env_set("PATH", at("bin2"));
     CHECK(spawn_open("/f", &err));
     CHECK(wait_file(at("spawn2.log"), out, sizeof out));
-    snprintf(want, sizeof want, "uwsm-app -- xdg-open /f sid=");
+    snprintf(want, sizeof want, "uwsm-app -- gio open /f sid=");
     CHECK(strncmp(out, want, strlen(want)) == 0);
     env_restore();
 
     // Nothing installed: a clear error, nothing run.
     mkdirs(at("bin3"));
     env_set("PATH", at("bin3"));
-    CHECK(!spawn_open("/f", &err) && strcmp(err.msg, "xdg-open is not installed") == 0);
+    CHECK(!spawn_open("/f", &err) && strcmp(err.msg, "gio is not installed") == 0);
     CHECK(!spawn_terminal("/d", &err) && strcmp(err.msg, "xdg-terminal-exec is not installed") == 0);
     env_restore();
     // uwsm-app without the command behind it: still an error for the command.
     mkdirs(at("bin4"));
     fake(at("bin4"), "uwsm-app", at("spawn4.log"));
     env_set("PATH", at("bin4"));
-    CHECK(spawn_open("/f", &err));   // uwsm-app is what runs; it reports the missing xdg-open itself
+    CHECK(spawn_open("/f", &err));   // uwsm-app is what runs; it reports the missing gio itself
     env_restore();
 
     // on_path: empty items and a non-executable file.

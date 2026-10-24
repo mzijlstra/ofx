@@ -739,3 +739,8 @@ MUTANTS += [
     (I, "        if (!best || (best_short && !short_) || (best_short == short_ && dist < best_d)) best", "        if (!best || (best_short && !short_) || dist < best_d) best"),
     (ST, "    if (s->zoom > 0) n += snprintf(", "    if (s->zoom >= 0) n += snprintf("),
 ]
+# ---- files open with gio, as Nemo does (Michael, 2026-10-24)
+MUTANTS += [
+    (SP, '    const char *cmd[] = { "gio", "open", path };', '    const char *cmd[] = { "xdg-open", path };'),
+    (SP, '    const char *cmd[] = { "gio", "open", path };', '    const char *cmd[] = { "gio", path };'),
+]
