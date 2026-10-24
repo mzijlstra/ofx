@@ -513,7 +513,7 @@ static bool script_input(UiInput *in)
             hover_at(script.px, script.py);
         } else if (str_eq(cmd, S("pointer-off"))) {
             script.pointing = false;
-            hover_refresh(false, 0, 0);
+            hover_refresh(false, script.px, script.py);   // GLFW keeps the last position
         } else if (str_eq(cmd, S("idle"))) {
             script_idle();
         } else if (str_eq(cmd, S("click-here"))) {

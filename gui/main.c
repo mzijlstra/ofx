@@ -1226,9 +1226,8 @@ static IconSlot *icon_for_px(Str key, const Str *given, isize ngiven, int px)
         // grains, and holds four times the pixels, or sixteen.
         snprintf(s->file, sizeof s->file, "%s", file);
         Image img = LoadImage(file);
-        int want = px * app.icon_scale;
-        if (img.data && img.width > want && img.width >= img.height) ImageResize(&img, want, img.height * want / img.width);
-        else if (img.data && img.height > want) ImageResize(&img, img.width * want / img.height, want);
+        int want = px * app.icon_scale, big = img.width > img.height ? img.width : img.height;
+        if (img.data && big > want) ImageResize(&img, img.width * want / big, img.height * want / big);   // the longer side drawn
         if (img.data) s->tex = LoadTextureFromImage(img);
         UnloadImage(img);
         if (s->tex.id) SetTextureFilter(s->tex, TEXTURE_FILTER_BILINEAR);

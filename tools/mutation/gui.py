@@ -195,7 +195,7 @@ MUTANTS = [
     (G, "    return app.ui.grid ? grid_px() : ICON_PX;", "    return app.ui.grid ? 48 : ICON_PX;"),
     (G, "        app.ui.side_mode = st.side, app.ui.grid = st.icons, app.ui.zoom = st.zoom;", "        app.ui.side_mode = st.side, app.ui.grid = st.icons;"),
     (G, "        if (a.kind == UA_ZOOM) app.zoomed = true;\n        char path[PATH_MAX];\n        State st = { app.ui.side_mode, app.ui.grid, app.ui.zoom };", "        if (a.kind == UA_ZOOM) app.zoomed = true;\n        char path[PATH_MAX];\n        State st = { app.ui.side_mode, app.ui.grid, 0 };"),
-    (G, "        if (img.data && img.width > want && img.width >= img.height) ImageResize(&img, want, img.height * want / img.width);", "        if (0) {}"),
+    (G, "        if (img.data && big > want) ImageResize(", "        if (0) ImageResize("),
     (G, "        if (app.zoomed) ui_refit(&app.ui.list, cols, rows), app.zoomed = false, dirty = true;\n", ""),
     (G, "        if (a.kind == UA_ZOOM) app.zoomed = true;\n", ""),
     (G, "    int k = (int)lroundf((x - d.boundingBox.x - ZOOM_KNOB_W / 2.0f) / step);", "    int k = (int)((x - d.boundingBox.x - ZOOM_KNOB_W / 2.0f) / step);"),
