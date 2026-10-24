@@ -24,17 +24,17 @@ wayland-cursor, wayland-egl, xkbcommon, fontconfig and freetype2. raylib and Cla
 | Up/Down, `j`/`k` | move |
 | PgUp/PgDn | a page |
 | Home/End, `g`/`G` | first, last |
-| Enter, Right, `l` | open: a folder is entered, a file goes to `xdg-open` |
-| Backspace, Left, `h` | up to the parent, the folder you left selected |
+| Enter | open: a folder is entered, a file goes to `xdg-open` |
+| Backspace | up to the parent, the folder you left selected |
 | Alt+Left, Alt+Right | back and forward |
 | Alt+Up | up to the parent |
-| Ctrl+L | type a location: all of it selected, so typing replaces it; `~` is home, a relative path starts here; a file's path opens its folder with the file selected |
-| Ctrl+K | the keys to the path buttons: Left/Right (`h`/`l`), Home/End move, Enter goes there, Shift+Enter opens it in a background tab, Esc back to the list |
+| Ctrl+L, Ctrl+Right | type a location: all of it selected, so typing replaces it; `~` is home, a relative path starts here; a file's path opens its folder with the file selected |
+| Ctrl+K, Ctrl+Up | the keys to the path buttons: Left/Right (`h`/`l`), Home/End move, Enter goes there, Shift+Enter opens it in a background tab, Esc back to the list |
 | `/`, Ctrl+F | find: type to jump, Enter keeps, Esc goes back; then `n`/`N` again |
 | `.`, Ctrl+H | hidden files on and off |
 | `s`, `S` | sort by the next column (name, size, modified), reverse |
-| Tab | the keys to the sidebar and back; in the tree, Left/Right (`h`/`l`) close and open a folder (or move up and down a level), Enter goes there |
-| F9 | the sidebar's next mode: places, tree, hidden |
+| Tab, Ctrl+Left | the keys to the sidebar (a hidden one shows as places); Tab again back; in the tree, Left/Right (`h`/`l`) close and open a folder (or move up and down a level), Enter goes there |
+| F9, Ctrl+S | the sidebar's next mode: places, tree, hidden |
 | Ctrl+1, Ctrl+2 | the files as icons, as the list (also the two buttons at the right of the top bar; remembered) |
 | `t` | a terminal in this folder (`xdg-terminal-exec --dir`) |
 | `~` | home |
@@ -51,7 +51,7 @@ wayland-cursor, wayland-egl, xkbcommon, fontconfig and freetype2. raylib and Cla
 | Ctrl+Tab, Ctrl+Shift+Tab | the next and previous tab (Ctrl+PgDn, Ctrl+PgUp too) |
 | Alt+1 … Alt+9 | a tab by place, Alt+9 the last |
 | Ctrl+Shift+PgUp, Ctrl+Shift+PgDn | move the tab left or right |
-| Ctrl+J | the keys to the job rows' ×: Up/Down (`k`/`j`) move, Enter asks to cancel that job, Esc back |
+| Ctrl+J, Ctrl+Down | the keys to the job rows' ×: Up/Down (`k`/`j`) move, Enter asks to cancel that job, Esc back |
 | Ctrl+Q | quit (asked first while jobs run or wait) |
 
 An action works on the selected entries, or on the cursor's when none is selected. Copies, moves
@@ -76,8 +76,8 @@ colours and icons follow a theme switch.
 
 The icon view (Ctrl+1): each entry a 48 px icon over its name, wrapped to two lines and cut with
 "…"; the cursor's name shows in full, over the cells below. Left/Right (`h`/`l`) move a cell and run
-on across the rows, Up/Down (`k`/`j`) a row, PgUp/PgDn a page of rows, Home/End the first and
-last; Enter opens and Backspace goes up (Left doesn't, there). Sort, find, the selection, rename,
+on across the rows (in the list they do nothing), Up/Down (`k`/`j`) a row, PgUp/PgDn a page of rows,
+Home/End the first and last; Enter opens and Backspace goes up. Sort, find, the selection, rename,
 tabs and the rest work as in the list; size and date are in the status line. The view is one for
 every folder, remembered beside the sidebar's mode.
 

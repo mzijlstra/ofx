@@ -53,6 +53,8 @@ static void test_grid_keys(void)
     // 23 entries, 5 across: rows 0-4, 5-9, 10-14, 15-19, 20-22.
     grid(&u, 23, 5, 3, 7);
     CHECK(key_sel(&u, UK_RIGHT) == 8 && key_sel(&u, UK_LEFT) == 7);
+    // With Shift held they are the same moves (Shift only selects in an edit line).
+    CHECK(key_sel(&u, UK_SEL_RIGHT) == 8 && key_sel(&u, UK_SEL_LEFT) == 7);
     // Left and Right run on across the rows' ends.
     u.list.sel = 9;
     CHECK(key_sel(&u, UK_RIGHT) == 10 && key_sel(&u, UK_LEFT) == 9);
@@ -101,12 +103,12 @@ static void test_grid_keys(void)
     in = keys(2, UK_TAB, UK_DOWN);
     ui_handle(&u, (UiNames){ name_at, NULL }, &in);
     CHECK(u.side_focus && u.side.sel == 1 && u.list.sel == 7);
-    // In the list, Left still goes up and Down moves one.
+    // In the list Down moves one; Left and Right do nothing there either (Michael, 2026-10-24).
     grid(&u, 23, 5, 3, 7);
     u.grid = false, ui_set_cols(&u.list, 1);
     CHECK(key_sel(&u, UK_DOWN) == 8);
-    in = keys(1, UK_LEFT);
-    CHECK(ui_handle(&u, (UiNames){ name_at, NULL }, &in).kind == UA_PARENT);
+    in = keys(2, UK_LEFT, UK_RIGHT);
+    CHECK(ui_handle(&u, (UiNames){ name_at, NULL }, &in).kind == UA_NONE && u.list.sel == 8);
     // An empty folder: nothing moves, nothing breaks.
     grid(&u, 0, 5, 3, 0);
     CHECK(key_sel(&u, UK_DOWN) == 0 && key_sel(&u, UK_PAGEDOWN) == 0 && key_sel(&u, UK_RIGHT) == 0);

@@ -54,6 +54,7 @@ his word: Nemo's compact view and its icon size slider.
   `udisksctl mount` (eject came in F6.1).
 - A panel with the keys (F6 took the key list out of the status line).
 - A key that copies the cursor's path as text (Ctrl+C already puts files on the clipboard, F3).
+- Keybindings the user sets (Michael, 2026-10-24: the keys are reaching personal preference).
 - Install Nautilus at some point to compare its features with ofx's (not a priority).
 - Search through subfolders, as Nemo's search does (the top bar's search opens `/` find for now).
 - Optional columns: permissions; type (Michael doesn't want it by default). Date and time format as
@@ -170,6 +171,12 @@ Decisions:
 - The buttons are drawn (three lines, four squares): Yaru has its view icons as SVG only.
 - Rename's edit line sits under the icon, as wide as the name (one to two cells).
 - No column headers in the icon view; `s`/`S` still sort.
+- **Keys, after trying it (Michael, 2026-10-24):** Left/Right and `h`/`l` no longer open or go up,
+  in the list or the grid; Enter and Backspace do (the tree keeps them, to close and open). Ctrl
+  and an arrow move the keys to that part of the window, beside the letters: Ctrl+Left the sidebar
+  (as Tab), Ctrl+Up the path buttons (Ctrl+K), Ctrl+Down the job rows (Ctrl+J), Ctrl+Right the
+  location line (Ctrl+L). Tab or Ctrl+Left with the sidebar hidden shows it as places. Ctrl+S is
+  F9. Ctrl+H stays hidden files (Nemo's).
 - The icon cache (512 textures, both sizes) is emptied when full as another folder is entered,
   rather than leaving icons blank until a theme change (reviewer-2).
 - Found on the way, not F6.2's: an empty `photo.png` shows no icon, in the list too (not looked

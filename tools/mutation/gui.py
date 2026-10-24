@@ -177,6 +177,12 @@ MUTANTS = [
     (G, "{ \"view-list\", UB_VIEW_LIST }, { \"view-icons\", UB_VIEW_ICONS },", "{ \"view-list\", UB_VIEW_LIST },"),
     (G, "            if (app.have_list && app.ui.grid) layout_grid();\n", ""),
     (G, "    if (strmap_get(&app.slot_of, slot_key, &k))", "    if (strmap_get(&app.slot_of, key, &k))"),
+    # F6.2 keys (Michael, 2026-10-24): Ctrl and an arrow, Ctrl+S
+    (G, "    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_LEFT) return UK_SIDE;\n", ""),
+    (G, "    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_UP) return UK_CRUMBS;\n", ""),
+    (G, "    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_DOWN) return UK_JOBS;\n", ""),
+    (G, "    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_RIGHT) return UK_LOCATION;\n", ""),
+    (G, "    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_S) return UK_F9;\n", ""),
 ]
 args = [a for a in sys.argv[1:] if a != '--full']
 full = len(args) != len(sys.argv) - 1

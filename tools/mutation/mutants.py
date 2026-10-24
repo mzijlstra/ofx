@@ -176,7 +176,7 @@ MUTANTS += [
     (U, "    if (!prompt && in->forwards > 0) return (UiAction){ UA_FORWARD, 0, false };\n", ""),
     (U, "UiList *m = u->side_focus ? &u->side : l;", "UiList *m = l;"),
     (U, "case 's': u->sort = (Sort){ (SortKey)((u->sort.key + 1) % SORT_KEYS), false }; return (UiAction){ UA_SORT, 0, false };", "case 's': u->sort = (Sort){ (SortKey)((u->sort.key + 1) % SORT_KEYS), u->sort.reverse }; return (UiAction){ UA_SORT, 0, false };"),
-    (U, "            u->side_focus = !u->side_focus && u->side.n > 0 && u->side_mode != SIDE_HIDDEN;", "            u->side_focus = !u->side_focus && u->side_mode != SIDE_HIDDEN;"),
+    (U, "            u->side_focus = u->side.n > 0;", "            u->side_focus = true;"),
     (U, "            else u->side_focus = false;\n", ""),
     (U, "            if (u->side_focus && u->side.n > 0) return (UiAction){ UA_PLACE, u->side.sel, false };", "            if (u->side_focus) return (UiAction){ UA_PLACE, u->side.sel, false };"),
     (U, "u->finding = true, u->find_miss = false, u->find_len = 0, u->find_from = u->list.sel, u->side_focus = false;", "u->finding = true, u->find_miss = false, u->find_len = 0, u->find_from = u->list.sel;"),
@@ -537,7 +537,7 @@ MUTANTS += [
     (U, "            if (u->side_focus) ui_side_settle(u, 1);\n", ""),
     (U, "        case UK_F9: return ui_side_mode(u, (SideMode)((u->side_mode + 1) % SIDE_MODES));", "        case UK_F9: return ui_side_mode(u, (SideMode)((u->side_mode + 1) % 2));"),
     (U, "    if (m == SIDE_HIDDEN) u->side_focus = false;\n", ""),
-    (U, " && u->side.n > 0 && u->side_mode != SIDE_HIDDEN;", " && u->side.n > 0;"),
+    (U, "            u->side_focus = u->side.n > 0;\n            if (u->side_focus) ui_side_settle(u, 1);", "            u->side_focus = u->side.n > 0;"),
     (U, "    if (!prompt && in->side_mode >= 0 && in->side_mode < SIDE_MODES) return", "    if (!prompt && in->side_mode >= 0) return"),
     (U, " || in->job_x >= 0 || in->side_mode >= 0 || in->side_twisty >= 0 || in->side_eject >= 0;", " || in->job_x >= 0 || in->side_twisty >= 0 || in->side_eject >= 0;"),
     (U, " || in->mid_crumb >= 0 || in->modal > 0 ||", " || in->mid_crumb >= 0 ||"),
@@ -548,7 +548,7 @@ MUTANTS += [
     (U, "    if (in->marked > 1) {\n        snprintf(buf, cap, \"%td items selected\", in->marked);\n        return;\n    }\n", ""),
     (U, "    if (k > 0 && in->hidden && (size_t)k < cap) k += snprintf", "    if (k > 0 && (size_t)k < cap) k += snprintf"),
     (U, "    if (k > 0 && in->avail >= 0 && (size_t)k < cap) ui_size", "    if (k > 0 && (size_t)k < cap) ui_size"),
-    (U, "            if (u->side_focus && u->side.n > 0 && key == UK_RIGHT && u->side_mode == SIDE_TREE)", "            if (u->side_focus && u->side.n > 0 && u->side_mode == SIDE_TREE)"),
+    (U, "            if (u->side_focus && u->side.n > 0 && u->side_mode == SIDE_TREE) return (UiAction){ UA_TREE_RIGHT", "            if (u->side_focus && u->side.n > 0) return (UiAction){ UA_TREE_RIGHT"),
     (U, "    if (!prompt && in->side_twisty >= 0 && u->side_mode == SIDE_TREE && u->side.top", "    if (!prompt && in->side_twisty >= 0 && u->side.top"),
     (U, "            if (u->side_focus && u->side.n > 0 && u->side_mode == SIDE_TREE) return (UiAction){ UA_TREE_LEFT", "            if (u->side_focus && u->side.n > 0) return (UiAction){ UA_TREE_LEFT"),
     (U, "                if (u->in_trash && !u->side_focus && l->n > 0) return (UiAction){ UA_RESTORE, 0, false };", "                if (!u->side_focus && l->n > 0) return (UiAction){ UA_RESTORE, 0, false };"),
@@ -686,4 +686,14 @@ MUTANTS += [
     (U, "            if (w + a > width && end > at) break;", "            if (w + a > width) break;"),
     (U, "        isize e = brk > at ? brk : end;", "        isize e = end;"),
     (U, "    while (n < most && (at < s.len || n == 0)) {", "    while (n < most && at < s.len) {"),
+]
+# ---- F6.2 keys (Michael, 2026-10-24): Left/Right only in the tree; Tab and Ctrl+Left to the sidebar
+MUTANTS += [
+    (U, "            if (key == UK_TAB && u->side_focus) {", "            if (u->side_focus) {"),
+    (U, "                UiAction a = ui_side_mode(u, SIDE_PLACES);\n                u->side_focus = true;", "                UiAction a = ui_side_mode(u, SIDE_PLACES);"),
+    (U, "            if (u->side_mode == SIDE_HIDDEN) {\n                UiAction a", "            if (0) {\n                UiAction a"),
+    (U, "            if (u->side_focus && u->side.n > 0 && u->side_mode == SIDE_TREE) return (UiAction){ UA_TREE_RIGHT, u->side.sel, false };\n            break;",
+        "            if (u->side_focus && u->side.n > 0 && u->side_mode == SIDE_TREE) return (UiAction){ UA_TREE_RIGHT, u->side.sel, false };\n            if (!u->side_focus && l->n > 0) return (UiAction){ UA_OPEN, l->sel, false };\n            break;"),
+    (U, "            if (u->side_focus && u->side.n > 0 && u->side_mode == SIDE_TREE) return (UiAction){ UA_TREE_LEFT, u->side.sel, false };\n            break;",
+        "            if (u->side_focus && u->side.n > 0 && u->side_mode == SIDE_TREE) return (UiAction){ UA_TREE_LEFT, u->side.sel, false };\n            return (UiAction){ UA_PARENT, 0, false };"),
 ]

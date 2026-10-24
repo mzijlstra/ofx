@@ -158,8 +158,8 @@ key shift-delete
 key enter
 wait-for 2000 jobs=1 jobrows=Deleting_10_items jobspeed=0
 shot delete-row.png
-# Asked to cancel it, and it ends meanwhile: the question goes
-key ctrl-j
+# Asked to cancel it, and it ends meanwhile: the question goes (Ctrl+Down, GLFW's 264, as Ctrl+J)
+raw-key 264 2
 key enter
 expect modal=cancel
 wait-for 8000 jobs=0 n=0 modal=-

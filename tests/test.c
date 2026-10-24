@@ -1020,13 +1020,12 @@ static void test_sort_keys(void)
     CHECK(ui_handle(&u, names, &in).kind == UA_BACK);
     in = keys(1, UK_FORWARD);
     CHECK(ui_handle(&u, names, &in).kind == UA_FORWARD);
-    in = chars("hlx");   // h: parent; nothing after it
-    CHECK(ui_handle(&u, names, &in).kind == UA_PARENT);
-    in = chars("l");
-    CHECK(ui_handle(&u, names, &in).kind == UA_OPEN);
-    in = keys(1, UK_RIGHT);
-    CHECK(ui_handle(&u, names, &in).kind == UA_OPEN);
-    in = keys(1, UK_LEFT);
+    // h, l, Left and Right neither go up nor open (Michael, 2026-10-24): Enter and Backspace do.
+    in = chars("hl");
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE);
+    in = keys(2, UK_RIGHT, UK_LEFT);
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE);
+    in = keys(1, UK_BACKSPACE);
     CHECK(ui_handle(&u, names, &in).kind == UA_PARENT);
     in = chars("xjq");   // unknown characters are skipped
     ui_handle(&u, names, &in);
@@ -1055,9 +1054,8 @@ static void test_side(void)
     in = keys(1, UK_ENTER);
     UiAction a = ui_handle(&u, names, &in);
     CHECK(a.kind == UA_PLACE && a.index == 2);
-    in = chars("l");
-    a = ui_handle(&u, names, &in);
-    CHECK(a.kind == UA_PLACE && a.index == 2);
+    in = chars("l");   // Right and l don't go to a place: Enter does
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.side_focus);
     // Tab and Esc give the keys back.
     in = keys(1, UK_TAB);
     ui_handle(&u, names, &in);

@@ -143,17 +143,22 @@ static void test_side_modes(void)
     CHECK(a.kind == UA_SIDE_MODE && a.index == SIDE_TREE && u.side_mode == SIDE_TREE);
     a = ui_handle(&u, names, &in);
     CHECK(a.kind == UA_SIDE_MODE && a.index == SIDE_HIDDEN && u.side_mode == SIDE_HIDDEN);
-    // Hidden: Tab leaves the keys with the list.
+    // Hidden: Tab shows it as places and gives it the keys (Michael, 2026-10-24); Tab again takes
+    // them back.
     in = keys(1, UK_TAB);
-    ui_handle(&u, names, &in);
-    CHECK(!u.side_focus);
-    in = keys(1, UK_F9);
     a = ui_handle(&u, names, &in);
-    CHECK(a.index == SIDE_PLACES && u.side_mode == SIDE_PLACES);
-    // Hiding it takes the keys from it.
+    CHECK(a.kind == UA_SIDE_MODE && a.index == SIDE_PLACES && u.side_mode == SIDE_PLACES && u.side_focus);
     in = keys(1, UK_TAB);
     ui_handle(&u, names, &in);
-    CHECK(u.side_focus);
+    CHECK(!u.side_focus && u.side_mode == SIDE_PLACES);
+    // Ctrl+Left goes there and stays; from hidden as Tab does.
+    in = keys(2, UK_SIDE, UK_SIDE);
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.side_focus);
+    u.side_mode = SIDE_HIDDEN, u.side_focus = false;
+    in = keys(1, UK_SIDE);
+    a = ui_handle(&u, names, &in);
+    CHECK(a.kind == UA_SIDE_MODE && a.index == SIDE_PLACES && u.side_focus);
+    // Hiding it takes the keys from it.
     in = keys(2, UK_F9, UK_F9);
     ui_handle(&u, names, &in);   // the first F9 returns: tree, keys still on it
     CHECK(u.side_mode == SIDE_TREE && u.side_focus);
@@ -344,26 +349,22 @@ static void test_tree_keys(void)
     CHECK(a.kind == UA_TREE_TOGGLE && a.index == 2);
     in.side_twisty = 8;   // past the end
     CHECK(ui_handle(&u, names, &in).kind == UA_NONE);
-    // In the places mode Left goes up and Right goes to the place; a mark is no mark there.
+    // In the places mode Left and Right do nothing (Enter goes there); a mark is no mark there.
     u.side_mode = SIDE_PLACES;
-    in = keys(1, UK_LEFT);
-    CHECK(ui_handle(&u, names, &in).kind == UA_PARENT);
-    in = keys(1, UK_RIGHT);
-    CHECK(ui_handle(&u, names, &in).kind == UA_PLACE);
+    in = keys(2, UK_LEFT, UK_RIGHT);
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE);
     in = ui_input_none();
     in.side_twisty = 1;
     CHECK(ui_handle(&u, names, &in).kind == UA_NONE);
-    // The keys in the list: Left is up, Right opens, in the tree mode too.
+    // The keys in the list, in the tree mode too: Left and Right do nothing.
     u.side_mode = SIDE_TREE, u.side_focus = false;
-    in = keys(1, UK_LEFT);
-    CHECK(ui_handle(&u, names, &in).kind == UA_PARENT);
-    in = keys(1, UK_RIGHT);
-    CHECK(ui_handle(&u, names, &in).kind == UA_OPEN);
+    in = keys(2, UK_LEFT, UK_RIGHT);
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE);
     // An empty tree: nothing for Left or Right.
     u.side_focus = true;
     ui_set(&u.side, 0, 0);
     in = keys(1, UK_LEFT);
-    CHECK(ui_handle(&u, names, &in).kind == UA_PARENT);
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE);
     in = keys(1, UK_RIGHT);
     CHECK(ui_handle(&u, names, &in).kind == UA_NONE);
 }

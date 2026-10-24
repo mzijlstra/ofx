@@ -2331,6 +2331,13 @@ static UiKey ui_key_of(int key, int mods)
     if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_L) return UK_LOCATION;
     if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_K) return UK_CRUMBS;
     if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_J) return UK_JOBS;
+    // Ctrl and an arrow: the keys to the part of the window that way (Michael, 2026-10-24); Ctrl+S
+    // the sidebar's next mode, as F9.
+    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_LEFT) return UK_SIDE;
+    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_UP) return UK_CRUMBS;
+    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_DOWN) return UK_JOBS;
+    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_RIGHT) return UK_LOCATION;
+    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_S) return UK_F9;
     if (m == GLFW_MOD_CONTROL && (key == GLFW_KEY_1 || key == GLFW_KEY_KP_1)) return UK_VIEW_ICONS;   // Nemo's keys (F6.2)
     if (m == GLFW_MOD_CONTROL && (key == GLFW_KEY_2 || key == GLFW_KEY_KP_2)) return UK_VIEW_LIST;
     if (m == GLFW_MOD_SHIFT) {

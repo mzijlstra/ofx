@@ -160,10 +160,12 @@ expect crumbkey=2
 raw-key 257 1
 expect tabs=3 crumbkey=2 tabdirs=tree|zz-a-rather-long-folder-name-1|tree
 key esc
-# Shift+Left in the list is Left as before: up a folder
+# Shift+Left in the list is Left: nothing (Michael, 2026-10-24: Backspace goes up)
 key enter
 wait-for 2000 crumb=2
 raw-key 263 1
+expect crumb=2
+key backspace
 wait-for 2000 crumb=1 sel=adir
 # ---- a file's path in the location line: its folder, the cursor on it, as Nemo does; a hidden
 # one says how to show it

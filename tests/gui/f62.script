@@ -120,6 +120,15 @@ expect view=list
 point-ui view-icons
 click-here
 expect view=icons cols=6
+# Ctrl and an arrow (GLFW's 265 up, 262 right): the path buttons, the location line.
+raw-key 265 2
+expect crumbfocus=1
+key esc
+expect crumbfocus=0 crumbkey=-
+raw-key 262 2
+expect locating=1
+raw-key 262 2
+expect locating=0
 # Find works in the grid: the cursor goes there, the scroll follows.
 type /very
 key enter

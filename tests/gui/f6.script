@@ -208,11 +208,23 @@ key alt-left
 key alt-left
 expect sel=a.txt treehere=1
 shot f6-tree.png
-# Hidden: no sidebar, Tab keeps the keys in the list; remembered
+# Hidden: no sidebar; remembered. Tab, and Ctrl+Left (GLFW's 263, Ctrl 2), show it as places and
+# give it the keys (Michael, 2026-10-24); hidden again, it takes them back.
 key f9
 expect sidemode=hidden
 sh grep -qx sidebar=hidden "$OFX_ROOT/state/ofx/state"
 key tab
-expect sidefocus=0
+expect sidemode=places sidefocus=1
+key f9
+key f9
+expect sidemode=hidden sidefocus=0
+raw-key 263 2
+expect sidemode=places sidefocus=1
+# Ctrl+S (83) is F9: tree, then hidden, for f6b
+raw-key 83 2
+expect sidemode=tree
+raw-key 83 2
+expect sidemode=hidden sidefocus=0
+sh grep -qx sidebar=hidden "$OFX_ROOT/state/ofx/state"
 shot f6-hidden.png
 quit

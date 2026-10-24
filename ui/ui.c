@@ -49,6 +49,7 @@ typedef enum {
     UK_F9,         // the sidebar's next mode (F6)
     UK_VIEW_ICONS, // Ctrl+1: the files as icons (F6.2)
     UK_VIEW_LIST,  // Ctrl+2: the files as the list
+    UK_SIDE,       // Ctrl+Left: the keys to the sidebar (Tab goes there and back)
 } UiKey;
 
 // The top bar's buttons (F4).
@@ -964,20 +965,34 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         case UK_END: ui_step(u, m, m->n); break;
         case UK_VIEW_ICONS: return ui_view(u, true);
         case UK_VIEW_LIST: return ui_view(u, false);
+        // Enter opens and Backspace goes up; Left and Right don't, in the list or the icon view
+        // (Michael, 2026-10-24): they only open and close the tree's folders.
         case UK_ENTER:
-        case UK_RIGHT:
-            if (u->side_focus && u->side.n > 0 && key == UK_RIGHT && u->side_mode == SIDE_TREE)
-                return (UiAction){ UA_TREE_RIGHT, u->side.sel, false };
             if (u->side_focus && u->side.n > 0) return (UiAction){ UA_PLACE, u->side.sel, false };
             if (!u->side_focus && l->n > 0) return (UiAction){ UA_OPEN, l->sel, false };
             break;
+        case UK_RIGHT:
+            if (u->side_focus && u->side.n > 0 && u->side_mode == SIDE_TREE) return (UiAction){ UA_TREE_RIGHT, u->side.sel, false };
+            break;
         case UK_LEFT:
             if (u->side_focus && u->side.n > 0 && u->side_mode == SIDE_TREE) return (UiAction){ UA_TREE_LEFT, u->side.sel, false };
-            return (UiAction){ UA_PARENT, 0, false };
+            break;
         case UK_BACKSPACE: return (UiAction){ UA_PARENT, 0, false };
         case UK_F9: return ui_side_mode(u, (SideMode)((u->side_mode + 1) % SIDE_MODES));
         case UK_TAB:
-            u->side_focus = !u->side_focus && u->side.n > 0 && u->side_mode != SIDE_HIDDEN;
+        case UK_SIDE:
+            // Tab goes to the sidebar and back, Ctrl+Left there; a hidden one shows as places
+            // (gui/ lists them for the mode, the cursor off a heading).
+            if (key == UK_TAB && u->side_focus) {
+                u->side_focus = false;
+                break;
+            }
+            if (u->side_mode == SIDE_HIDDEN) {
+                UiAction a = ui_side_mode(u, SIDE_PLACES);
+                u->side_focus = true;
+                return a;
+            }
+            u->side_focus = u->side.n > 0;
             if (u->side_focus) ui_side_settle(u, 1);
             break;
         case UK_ESC:
