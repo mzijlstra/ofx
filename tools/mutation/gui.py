@@ -233,6 +233,17 @@ for f, old, new in MUTANTS:
     n = open(os.path.join(work, f)).read().count(old)
     assert n == 1, (f, old, n)
 
+# A tree removed whole: a mutant that fails f6 half way leaves its read-only folders (`locked`),
+# which rmtree alone can't empty (two such trees stayed behind on 2026-10-24).
+def rmtree(path):
+    for d, dirs, _ in os.walk(path):
+        for x in dirs:
+            try:
+                os.chmod(os.path.join(d, x), 0o700)
+            except OSError:
+                pass
+    shutil.rmtree(path, ignore_errors=True)
+
 # A mutant's tag key: its file and texts, so a mutant edited is a new one, untagged.
 def key(m):
     return hashlib.sha1('\0'.join(m).encode()).hexdigest()[:12]
@@ -262,7 +273,7 @@ if b.returncode != 0 or r.returncode != 0:
     print('the unmutated build fails tests/gui/run.sh: fix that first')
     print(b.stderr[-300:], '\n'.join(l for l in r.stdout.splitlines() if 'FAILED' in l or (l.startswith('script:') and not l.startswith('script: 0 of'))))
     sys.exit(2)
-shutil.rmtree(os.path.join(scratch, 'gm-base'), ignore_errors=True)
+rmtree(os.path.join(scratch, 'gm-base'))
 print('base: tests/gui/run.sh passes unmutated', flush=True)
 MIN_FREE = 2 << 30   # bytes left in the scratch dir's file system before a mutant starts
 survivors, retagged = [], 0
@@ -285,7 +296,7 @@ for i, m in enumerate(MUTANTS):
         continue
     r = subprocess.run([run_sh, os.path.join(scratch, f'gm{i}'), os.path.join(work, 'build/ofx')] + groups, capture_output=True, text=True)
     open(path, 'w').write(text)
-    shutil.rmtree(os.path.join(scratch, f'gm{i}'), ignore_errors=True)
+    rmtree(os.path.join(scratch, f'gm{i}'))
     if r.returncode != 0 and not groups:
         tags[k] = failed_groups(r.stdout) or ['all']   # 'all': it failed without naming a group
         retagged += 1
