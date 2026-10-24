@@ -66,6 +66,13 @@ his word: Nemo's compact view and its icon size slider.
 - Remember the open tabs across a restart (F5 doesn't).
 - A resizable sidebar (the tree's deep levels get little room at 200 px).
 - The Trash place's icon full or empty; watching the drives' trashes too.
+- Options in `ofx.conf` (Michael, 2026-10-24): previews on or off; the largest image ofx makes a
+  preview of (`max_image_size_to_preview`, 10 MiB in F6.4).
+- Cache cleanup (Michael, 2026-10-24): nothing here cleans `~/.cache/thumbnails`. GNOME's
+  housekeeping daemon (`gsd-housekeeping`, 180 days by the `org.gnome.desktop.thumbnail-cache`
+  setting) isn't installed, nor Cinnamon's, and Nemo doesn't do it (all 3637 x-large files date
+  from 2025). Two options: remove the orphaned previews (whose `Thumb::URI` file is gone or has
+  another mtime), and clear the cache completely.
 - Not wanted: Nemo's built-in terminal (`t`, a terminal here, covers it).
 
 **Thumbnails, a rule from Nemo (2026-10-20):** Nemo looped at up to 45% CPU on one file
