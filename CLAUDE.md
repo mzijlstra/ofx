@@ -69,8 +69,8 @@ under tcc first (a 25 ms build, no sanitizers), then the ones tcc didn't kill, o
 under clang with ASan and UBSan as `make test` has them. 609 mutants in 44 s (clang alone 190 s;
 gcc, one at a time, about 45 min). Every worker runs the unmutated tests first under both, all at
 once, so a test that only fails under load shows before any kill counts. `--clang-only` skips tcc
-(and it is skipped without `tcc` on PATH: `sudo pacman -S tcc`). Three mutants are syntax errors,
-killed as builds under both (#229, #247, #308: an `if` deleted before its `else`). A faster compiler wouldn't help the GUI mutants: their time is the
+(and it is skipped without `tcc` on PATH: `sudo pacman -S tcc`). A mutant that doesn't compile tests
+nothing: when deleting a statement would leave an `else` without its `if`, empty it instead (`{}`). A faster compiler wouldn't help the GUI mutants: their time is the
 86 s GUI suite, not the 4.5 s build. So each GUI mutant runs only the `run.sh` groups that killed
 it on a whole-suite run (`tools/mutation/gui-tags.txt`, written by `gui.py`); a new or changed
 mutant runs the whole suite and is tagged. `--full` reruns every mutant on the whole suite, before
