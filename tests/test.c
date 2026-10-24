@@ -285,21 +285,30 @@ static void test_mime(void)
     CHECK_STR(mime_of(&ta, &db, &plain), "application/octet-stream");
     CHECK_STR(mime_of(&ta, &db, &c), "text/x-csrc");   // a glob beats the execute bit
 
-    Str names[4];
+    Str names[5];
     isize n = mime_icon_names(&ta, &db, S("text/x-csrc"), names);
-    CHECK(n == 3);
+    CHECK(n == 4);
     CHECK_STR(names[0], "text-x-csrc");
     CHECK_STR(names[1], "text-x-script");
     CHECK_STR(names[2], "text-x-generic");
+    CHECK_STR(names[3], "application-x-generic");
     n = mime_icon_names(&ta, &db, S("application/gzip"), names);
     CHECK(n == 3);
     CHECK_STR(names[0], "package-x-generic");
     CHECK_STR(names[1], "application-gzip");
     CHECK_STR(names[2], "application-x-generic");
     n = mime_icon_names(&ta, &db, S("inode/directory"), names);
-    CHECK(n == 2);
+    CHECK(n == 3);
     CHECK_STR(names[0], "inode-directory");
-    CHECK_STR(names[1], "application-x-generic");
+    CHECK_STR(names[1], "inode-x-generic");
+    CHECK_STR(names[2], "application-x-generic");
+    // No generic icon in generic-icons (the system's has none for image/png): the media type's,
+    // the spec's.
+    n = mime_icon_names(&ta, &db, S("image/webp"), names);
+    CHECK(n == 3);
+    CHECK_STR(names[0], "image-webp");
+    CHECK_STR(names[1], "image-x-generic");
+    CHECK_STR(names[2], "application-x-generic");
     env_restore();
 
     // A file that reads shorter than fstat said (it changed while read): nothing, not a part.
@@ -1555,6 +1564,7 @@ int main(void)
     test_state_zoom();
     test_md5();
     test_thumb_names();
+    test_thumb_local();
     test_png_meta();
     test_thumb_decode();
     test_thumb_get();

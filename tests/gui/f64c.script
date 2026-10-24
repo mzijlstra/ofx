@@ -1,0 +1,17 @@
+# F6.4: 40 previews of 96 by 64 (24 KiB each), at most 20 held (OFX_TEST_THUMB_HELD_MAX). 18 cells
+# on screen and a page ahead asked: the page ahead's dropped first, never one on screen.
+settle
+key ctrl-2
+wait-for 10000 thumbbusy=0 previews=18 thumbmade=36
+wait 5
+expect thumbdropped=16 thumbheld=491520
+# The last page: what it needs read from the cache again, or made; the first page's dropped.
+key end
+wait-for 10000 thumbbusy=0 previews=16 thumbmade=40
+wait 5
+expect thumbheld=491520
+key home
+wait-for 10000 thumbbusy=0 previews=18
+wait 5
+expect thumbheld=491520 thumbmade=40
+quit

@@ -1,0 +1,85 @@
+# F6.4: previews in the icon view. run.sh's tree: far/ (an NFS mount in the test's mountinfo), sub/,
+# then anim.gif (60x40) broken.png empty.jpg notes.pdf (Nemo's preview of it in the cache, 90x128)
+# photo.jpg (400x300, EXIF orientation 6) pic.webp (200x100) readme.txt small.png (10x10)
+# wide.png (300x200). The test output is scale 2: at 48 px a preview is 96 device pixels, from
+# normal (128).
+settle
+# The list asks for none.
+expect view=list previews=0 thumblocal=1 thumbmade=0 thumbread=0 thumbnone=0
+key ctrl-2
+wait-for 5000 thumbbusy=0 previews=6
+expect thumbmade=5 thumbread=1 thumbfailed=2 thumbnone=1 thumbknown=0 thumbchanged=0
+shot previews-48.png
+# Each one's shape kept; the photo stands (turned by its EXIF); a small one is never made bigger.
+key end
+expect sel=wide.png thumbsel=96x64
+key left
+expect sel=small.png thumbsel=10x10
+key left
+expect sel=readme.txt thumbsel=-
+key left
+expect sel=pic.webp thumbsel=96x48
+key left
+expect sel=photo.jpg thumbsel=72x96
+key left
+expect sel=notes.pdf thumbsel=68x96
+key left
+expect sel=empty.jpg thumbsel=- icontex=96
+# A preview that failed: the type's icon (image-x-generic: there was none before, 2026-10-24).
+key left
+expect sel=broken.png thumbsel=- icontex=96
+key home
+key right
+key right
+expect sel=anim.gif thumbsel=60x40
+# In the cache: the five made in normal beside Nemo's; the two that won't decode in fail/ofx/;
+# nothing for readme.txt, nothing in large.
+sh for f in wide.png photo.jpg anim.gif pic.webp small.png; do test -f "$OFX_ROOT/cache/thumbnails/normal/$(printf 'file://%s' "$OFX_DIR/$f" | md5sum | cut -c1-32).png" || exit 1; done
+sh test "$(ls "$OFX_ROOT/cache/thumbnails/normal" | wc -l)" -eq 6
+sh for f in broken.png empty.jpg; do test -f "$OFX_ROOT/cache/thumbnails/fail/ofx/$(printf 'file://%s' "$OFX_DIR/$f" | md5sum | cut -c1-32).png" || exit 1; done
+sh test "$(ls "$OFX_ROOT/cache/thumbnails/fail/ofx" | wc -l)" -eq 2 && test ! -e "$OFX_ROOT/cache/thumbnails/large"
+sh tr '\0' ' ' < "$OFX_ROOT/cache/thumbnails/normal/$(printf 'file://%s' "$OFX_DIR/wide.png" | md5sum | cut -c1-32).png" | grep -q 'Software ofx'
+# 64 px is 128 device pixels: normal again, read; the failures known from fail/ofx/.
+key ctrl-equal
+wait-for 5000 zoom=64 thumbbusy=0 previews=6
+expect thumbmade=5 thumbread=7 thumbknown=2 thumbnone=2 thumbfailed=2
+# 96 px is 192: large, made there; Nemo's PDF preview is in normal only, so none at this size.
+# 8 cells on screen (3 previews), the page ahead made too.
+key ctrl-equal
+wait-for 5000 zoom=96 thumbbusy=0 previews=3
+expect thumbmade=10 thumbread=7 thumbknown=4 thumbnone=4
+sh test "$(ls "$OFX_ROOT/cache/thumbnails/large" | wc -l)" -eq 5
+shot previews-96.png
+# Back to 48: still held, nothing asked.
+key ctrl-0
+wait-for 5000 zoom=48 thumbbusy=0 previews=6
+expect thumbmade=10 thumbread=7 thumbknown=4 thumbnone=4
+# The file changed: made again, once (no loop: the rule from Nemo's).
+sh touch -d @1700000500 "$OFX_DIR/wide.png"
+wait-for 5000 thumbmade=11 thumbbusy=0 previews=6
+wait 30
+expect thumbmade=11 thumbread=7 previews=6
+# Nemo's PDF preview gone stale: the icon, and nothing written for it.
+sh touch -d @1700000600 "$OFX_DIR/notes.pdf"
+wait-for 5000 thumbnone=5 thumbbusy=0 previews=5
+wait 30
+expect thumbnone=5 thumbmade=11
+sh test "$(ls "$OFX_ROOT/cache/thumbnails/normal" | wc -l)" -eq 6 && test "$(ls "$OFX_ROOT/cache/thumbnails/fail/ofx" | wc -l)" -eq 2
+# The list view keeps its icons.
+key ctrl-1
+wait 2
+expect view=list previews=0
+key ctrl-2
+wait 2
+expect previews=5
+# A network drive: no preview made there, nothing written.
+key home
+expect sel=far
+key enter
+wait-for 5000 thumblocal=0 thumbbusy=0
+wait 2
+expect previews=0 thumbmade=11 thumbnone=6
+sh test ! -e "$OFX_ROOT/cache/thumbnails/normal/$(printf 'file://%s' "$OFX_DIR/x.png" | md5sum | cut -c1-32).png"
+key backspace
+wait-for 5000 thumblocal=1 previews=5
+quit

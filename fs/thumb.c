@@ -498,6 +498,45 @@ static bool thumb_make(Arena *a, ThumbKind k, Str src, int side, Img *out)
     }
 }
 
+// ---- which drives ------------------------------------------------------------------------------
+
+// Whether ofx makes previews on the drive holding path, by mountinfo (the mount with the longest
+// mount point above it): not on network file systems or FUSE ones (SSHFS, gvfs), whose reads can
+// hang a worker; fuseblk is a local disk (NTFS). Unknown: local.
+static bool thumb_local(Str mountinfo, const char *path)
+{
+    static const char *const far[] = { "nfs", "nfs4", "cifs", "smb3", "smbfs", "9p", "ceph", "afs", "glusterfs", "davfs", "lustre", "fuse" };
+    isize at = 0, best = -1;
+    char type[64] = "";
+    for (Str line; next_line(mountinfo, &at, &line);) {
+        Str f = line;
+        for (int k = 0; k < 4; k++) {
+            isize sp = str_find(f, ' ');
+            f = sp < 0 ? STR_EMPTY : str_cut(f, sp + 1, f.len);
+        }
+        isize sp = str_find(f, ' ');
+        char mp[PATH_MAX];
+        if (sp <= 0 || !octal_decode(str_cut(f, 0, sp), mp, sizeof mp)) continue;
+        size_t n = strlen(mp);
+        bool above = strcmp(mp, "/") == 0 || (strncmp(path, mp, n) == 0 && (path[n] == '/' || path[n] == 0));
+        isize dash = -1;
+        for (isize i = 0; dash < 0 && i + 3 <= line.len; i++)
+            if (memcmp(line.p + i, " - ", 3) == 0) dash = i;
+        if (!above || (isize)n < best || dash < 0) continue;   // a later mount on the same point wins
+        Str t = str_cut(line, dash + 3, line.len);
+        isize e = str_find(t, ' ');
+        if (e >= 0) t = str_cut(t, 0, e);
+        snprintf(type, sizeof type, "%.*s", STR_ARG(t));
+        best = (isize)n;
+    }
+    if (strcmp(type, "fuseblk") == 0) return true;
+    for (int i = 0; i < COUNT(far); i++) {
+        size_t n = strlen(far[i]);
+        if (strncmp(type, far[i], n) == 0 && (type[n] == 0 || type[n] == '.')) return false;
+    }
+    return true;
+}
+
 // ---- one preview --------------------------------------------------------------------------------
 
 typedef struct {

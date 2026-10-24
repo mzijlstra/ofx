@@ -102,6 +102,7 @@ static void timer_stop(void)
 #include "watch.c"
 #include "clipboard.c"
 #include "counts.c"
+#include "thumbs.c"
 #include "space.c"
 
 // ---- memory ---------------------------------------------------------------------------------
@@ -203,6 +204,7 @@ static struct {
     bool      zoomed;       // the icon size changed: the next refit keeps the cursor's row (ui_refit)
     bool      zoom_drag;    // the zoom slider's knob held (F6.3)
     bool      zoom_hover;   // the pointer over its track
+    bool      thumb_local;  // the folder's drive is one ofx makes previews on (F6.4: not a network one)
 } app = { .tip = { -1, 0, false, false }, .hover = -1, .side_hover = -1, .tab_hover = -1, .tab_x_hover = -1, .jobx_hover = -1, .mode_hover = -1, .eject_hover = -1 };
 
 static UiHistory hist;
@@ -385,6 +387,9 @@ static bool go_to_in(const char *dir, Str select, isize fallback, bool stepping)
     for (isize i = 0; i < l.n; i++) count[i] = COUNT_UNKNOWN;
     app.count = count;
     count_new_listing();
+    ArenaMark mi_mark = arena_mark(&scratch);
+    app.thumb_local = thumb_local(read_file(&scratch, mountinfo_path()), dir);
+    arena_restore(&scratch, mi_mark);
     ui_mark_set(&app.ui, mark);
     app.ui.marked = marked;
     if (!same) ui_edit_close(&app.ui);
@@ -1288,6 +1293,16 @@ static IconSlot *entry_icon(isize i)
     return icon_for_px(names[0], names, n, px);
 }
 
+// Entry i's preview in the icon view (F6.4), asked for when not known yet; NULL while there is none.
+// draw: a cell on screen (else a page ahead).
+static Texture2D *entry_thumb(isize i, bool draw)
+{
+    const Entry *e = &app.list.e[i];
+    char path[PATH_MAX];
+    if (kind_is_dir(e->kind) || e->kind == K_LINK_BROKEN || e->trash || !join(path, sizeof path, app.cwd, e->name)) return NULL;
+    return thumb_for(path, e->mtime, e->size, thumb_kind(entry_mime(i)), app.thumb_local, grid_px() * app.icon_scale, draw);
+}
+
 static IconSlot *place_icon(int i)
 {
     Str names[4];
@@ -1710,7 +1725,18 @@ static void layout_cell(int k, isize i)
     CLAY(CLAY_IDI("row", k), { .layout = { .sizing = { CLAY_SIZING_FIXED(cw), CLAY_SIZING_FIXED(cell_h()) }, .padding = { CELL_PAD, CELL_PAD, 6, CELL_PAD },
                                            .childGap = 4, .layoutDirection = CLAY_TOP_TO_BOTTOM, .childAlignment = { .x = CLAY_ALIGN_X_CENTER } },
                                .backgroundColor = sel ? mix(t->selection, t->bg, 0.5f) : bg, .cornerRadius = CLAY_CORNER_RADIUS(4) }) {
-        icon_box(CLAY_IDI("icon", k), entry_icon(i), px);
+        Texture2D *th = entry_thumb(i, true);
+        if (th) {
+            // In the icon's square, its shape kept: a texel a device pixel.
+            float s = (float)app.icon_scale;
+            CLAY(CLAY_IDI("icon", k), { .layout = { .sizing = { CLAY_SIZING_FIXED(px), CLAY_SIZING_FIXED(px) },
+                                                    .childAlignment = { CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER } } }) {
+                CLAY(CLAY_IDI("thumb", k), { .layout = { .sizing = { CLAY_SIZING_FIXED(th->width / s), CLAY_SIZING_FIXED(th->height / s) } },
+                                             .image = { .imageData = th } }) {}
+            }
+        } else {
+            icon_box(CLAY_IDI("icon", k), entry_icon(i), px);
+        }
         if (sel && app.ui.editing && !app.ui.edit_path) {
             // As wide as the name and a little, from a cell's width to two cells'.
             float ew = str_width((Str){ app.ui.edit, app.ui.edit_len }) + 24;
@@ -1755,6 +1781,9 @@ static void layout_grid(void)
             for (int c = 0; c < cols && first + c < app.list.n; c++) layout_cell(r * cols + c, first + c);
         }
     }
+    // The previews of a page ahead are asked for after the screen's (F6.4).
+    isize ahead = app.ui.list.top + (isize)app.ui.list.rows * cols;
+    for (isize i = ahead; i < ahead + (isize)app.ui.list.rows * cols && i < app.list.n; i++) entry_thumb(i, false);
 }
 
 // ---- the top bar (F4) -----------------------------------------------------------------------
@@ -2526,6 +2555,7 @@ static void draw(void)
     font_set_dpi(GetWindowScaleDPI().x);
     if (window_scale() != app.icon_scale) icons_reset();
     font_frame_begin();
+    thumbs_frame();
     Clay_RenderCommandArray cmds = layout(GetScreenWidth(), GetScreenHeight());
     render_draw(cmds, cc(app.theme.bg));
 }
@@ -3046,6 +3076,7 @@ int main(int argc, char **argv)
     counts.delay_ms = kdelay ? atoi(kdelay) : 0;
     if (counts.delay_ms < 0 || counts.delay_ms > 10000) counts.delay_ms = 0;
     count_start();
+    thumbs_start();
     space_start();
     timer_start();
     places_reload();
@@ -3115,6 +3146,7 @@ int main(int argc, char **argv)
         if (app.have_list && count_take(app.count, app.list.n)) dirty = true;
         if (space_take(&app.places, app.cwd, &app.cwd_avail)) dirty = true;
         if (eject_take()) dirty = true;
+        if (thumbs_take()) dirty = true;
         bool seen;
         UiInput in = input_real(&seen);
         if (scripted) {
@@ -3149,6 +3181,7 @@ int main(int argc, char **argv)
     jobs_stop();
     clip_quit();
     count_stop();
+    thumbs_stop();
     space_stop();
     timer_stop();
     for (int i = 0; i < app.nslots; i++)

@@ -1,0 +1,7 @@
+# F6.4, after f64 on the same tree and cache: a new window reads every preview it made and knows
+# both failures from fail/ofx/, making none; Nemo's PDF preview is stale since f64 touched it.
+# (Its first frames, before the output's scale 2 comes, ask at 48 device pixels too: counts double.)
+settle
+wait-for 5000 view=icons thumbbusy=0 previews=5
+expect thumbmade=0 thumbfailed=0 thumbchanged=0
+quit

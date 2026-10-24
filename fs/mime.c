@@ -269,8 +269,11 @@ static Str mime_of(Arena *scratch, const MimeDb *db, const Entry *e)
     return (e->mode & 0111) ? S("application/x-executable") : S("application/octet-stream");
 }
 
-// The icon names to try for a MIME type, most specific first, into names (at most 4); each one
-// into a. The theme lookup (icons.c) takes the first it has.
+// The icon names to try for a MIME type, most specific first, into names (at most 5); each one
+// into a. The theme lookup (icons.c) takes the first it has. Without a generic icon in
+// generic-icons, the spec's: the media type and "-x-generic" (image-x-generic: generic-icons names
+// none for image/png, and Yaru has no application-x-generic, so a PNG without a preview had no
+// icon at all, 2026-10-24).
 static isize mime_icon_names(Arena *a, const MimeDb *db, Str type, Str *names)
 {
     isize n = 0;
@@ -283,6 +286,7 @@ static isize mime_icon_names(Arena *a, const MimeDb *db, Str type, Str *names)
     if (strmap_get(&db->generic, type, &i)) names[n++] = db->icon_of[i];
     isize slash = str_find(type, '/');
     Str media = slash > 0 ? str_cut(type, 0, slash) : type;
-    names[n++] = str_eq(media, S("text")) ? S("text-x-generic") : S("application-x-generic");
+    names[n++] = str_from_c(arena_sprintf(a, "%.*s-x-generic", STR_ARG(media)));
+    if (!str_eq(media, S("application"))) names[n++] = S("application-x-generic");
     return n;
 }

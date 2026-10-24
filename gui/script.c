@@ -230,6 +230,13 @@ static void script_state(char *out, size_t cap)
     status_info(info, sizeof info);
     for (char *c = info; *c; c++)
         if (*c == ' ') *c = '_';
+    // The cursor's preview, as its texture's size (F6.4).
+    char thumbsel[32] = "-";
+    char tpath[PATH_MAX];
+    if (app.have_list && app.ui.list.n > 0 && join(tpath, sizeof tpath, app.cwd, app.list.e[app.ui.list.sel].name)) {
+        Texture2D *tt = thumb_peek(tpath, grid_px() * app.icon_scale);
+        if (tt) snprintf(thumbsel, sizeof thumbsel, "%dx%d", tt->width, tt->height);
+    }
     // The cursor's Size cell as drawn, its spaces as '_'.
     char sizecell[64] = "-";
     if (app.have_list && app.ui.list.n > 0) {
@@ -252,7 +259,9 @@ static void script_state(char *out, size_t cap)
              "esel=%d-%d caret=%d copied=%s crumbkey=%s jobs=%d waiting=%d jobrows=%s jobkey=%s jobline=%d jobspeed=%d clashjob=%s "
              "sides=%s spaced=%d sidemode=%s treen=%d treecur=%s treerow=%td treehere=%d trash=%d sidehover=%d hovernum=%s ejectbtn=%d cwdavail=%d info=%s "
              "view=%s cols=%d cells=%d cellfirst=%td celllast=%td fulllines=%d celllines=%d cellcut=%d iconpx=%d icontex=%d iconresets=%d crumbfocus=%d tooltip=%s idlewoke=%s "
-             "zoom=%d cellw=%d cellh=%d zoomshown=%d tipin=%d slots=%d status=%s",
+             "zoom=%d cellw=%d cellh=%d zoomshown=%d tipin=%d slots=%d "
+             "previews=%d thumbsel=%s thumbbusy=%d thumbmade=%d thumbread=%d thumbfailed=%d thumbknown=%d thumbnone=%d thumbchanged=%d "
+             "thumbheld=%td thumbdropped=%d thumbresets=%d thumblocal=%d status=%s",
              app.cwd, app.list.n, app.list.hidden, STR_ARG(sel), app.ui.list.sel, app.ui.list.top, app.ui.list.rows, app.hover,
              t->accent.r, t->accent.g, t->accent.b, t->bg.r, t->bg.g, t->bg.b, t->icons[0] ? t->icons : "-",
              app.icon_scale, GetScreenWidth(), GetScreenHeight(), app.reloads, app.themes, atomic_load(&watch.batches),
@@ -271,6 +280,8 @@ static void script_state(char *out, size_t cap)
              app.ui.side.sel - app.ui.side.top, treehere, app.ui.in_trash, app.side_hover, hovernum, ejectbtn, app.cwd_avail >= 0, info,
              app.ui.grid ? "icons" : "list", (int)ui_cols(&app.ui.list), app.grid_cells, app.grid_first, app.grid_last, app.grid_full_lines, app.grid_hover_lines, app.grid_hover_cut, entry_px(), icontex, app.icon_full_resets, app.ui.crumb_focus, tipword, idle_woke,
              ui_zoom_px(&app.ui), cell_w(), cell_h(), Clay_GetElementData(CLAY_ID("zoom-track")).found, tipin, app.nslots,
+             thumbs.drawn_last, thumbsel, thumbs_busy(), thumbs.got[TG_MADE], thumbs.got[TG_CACHED], thumbs.got[TG_FAILED],
+             thumbs.got[TG_FAIL_KNOWN], thumbs.got[TG_NONE], thumbs.got[TG_CHANGED], thumbs.held, thumbs.evicted, thumbs.resets, app.thumb_local,
              app.status[0] ? app.status : "-");
     frame_us_max = 0;
 }
