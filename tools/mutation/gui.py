@@ -215,7 +215,8 @@ full = len(args) != len(sys.argv) - 1
 scratch = args[0]
 only = [int(x) for x in args[1].split(',')] if len(args) > 1 else None
 root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-tags_path = os.path.join(root, 'tools', 'mutation', 'gui-tags.txt')
+# OFX_GUI_TAGS: another tags file, for a run beside one that will write this one.
+tags_path = os.environ.get('OFX_GUI_TAGS') or os.path.join(root, 'tools', 'mutation', 'gui-tags.txt')
 work = os.path.join(scratch, 'gui-mut-src')
 shutil.rmtree(work, ignore_errors=True)
 shutil.copytree(root, work, ignore=shutil.ignore_patterns('.git', 'build'))
@@ -238,7 +239,7 @@ if os.path.exists(tags_path):
             tags[w[0]] = w[1:]
 
 # The group of a script that failed: run.sh prints "== <script>: FAILED" or "<group>: FAILED".
-GROUP_OF = {'f6b': 'f6', 'f62b': 'f62', 'f62c': 'f62'}
+GROUP_OF = {'f6b': 'f6', 'f62b': 'f62', 'f62c': 'f62', 'f63b': 'f63'}
 def failed_groups(out):
     g = []
     for l in out.splitlines():
