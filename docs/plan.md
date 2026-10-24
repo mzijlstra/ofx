@@ -145,7 +145,7 @@ themes (#14851). **Fallback:** a missing icon theme gives way to its name cut at
 until one is installed (`Yaru-grey` → `Yaru`), then plain Yaru, then Adwaita (GTK's own, but
 mostly SVG, and ofx draws PNGs), then hicolor. No `icons.theme`: the same way.
 
-## F6.4 design (2026-10-24, proposed: Michael's decisions pending)
+## F6.4 design (2026-10-24)
 
 **Asked (Michael):** previews in the icon view, from the freedesktop thumbnail cache shared with
 Nemo, PNG and JPEG made on a thread.
@@ -164,7 +164,9 @@ Nemo, PNG and JPEG made on a thread.
 - The output: DP-3, 1920x1200, scale 1. The sizes 32 to 128 draw from `normal` (128 px), 256
   from `large` (256); scale 2 would take `large` and `x-large` (512).
 
-**Proposal:**
+**Decided (Michael, 2026-10-24):** points 1, 2 and 5 as proposed; 4 with a 10 MiB limit, not 50.
+The rest are proposals until he says otherwise.
+
 1. **What gets a preview:** ofx makes PNG, JPEG, GIF (the first frame) and WebP; any other file
    shows a preview when the cache already holds a fresh one (Nemo's PDFs and slides), else its
    icon. Videos and PDFs made by the system's thumbnailers stay on the later list.
@@ -179,7 +181,7 @@ Nemo, PNG and JPEG made on a thread.
    it there when missing or stale, and tries a file once per mtime: a failure or a stale result it
    can't replace is remembered until the file changes.
 4. **Which files:** local drives only (not NFS, CIFS, SSHFS or other FUSE mounts: their reads can
-   hang), and images up to 50 MiB (a 100 MP JPEG takes about a second).
+   hang), and images up to 10 MiB (Michael; 50 was proposed. A 100 MP JPEG takes about a second).
 5. **The decoder:** libjpeg-turbo for JPEG (system library, scaled decode); raylib's stb_image for
    PNG and GIF; libwebp (system) for WebP. The thumbnail PNG written through stb_image_write's
    zlib, with our own tEXt chunks (stb writes none).
