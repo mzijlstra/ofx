@@ -2736,7 +2736,7 @@ static Hit hit_at(float x, float y)
     if (h.side >= 0 && app.ui.side_mode == SIDE_PLACES && in_box(CLAY_IDI("side-eject", h.side), x, y)) h.eject = h.side;
     for (int k = 0; k < SIDE_MODES && h.mode < 0; k++)
         if (in_box(CLAY_IDI("mode", k), x, y)) h.mode = k;
-    h.zoom = app.ui.grid && in_box(CLAY_ID("zoom-track"), x, y);
+    h.zoom = in_box(CLAY_ID("zoom-track"), x, y);   // only drawn in the icon view
     static const char *const IDS[SORT_KEYS] = { "col-name", "col-size", "col-date" };
     for (int k = 0; k < SORT_KEYS && h.header < 0; k++)
         if (in_box(Clay_GetElementId(cz(IDS[k])), x, y)) h.header = k;
