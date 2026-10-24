@@ -60,14 +60,19 @@ his Hyprland: no output, no workspace, no dock script, no hyprctl at all.
 ```sh
 tests/gui/run.sh <absolute scratch>          # every script, each in its own weston
 tools/gui/run-script.sh <absolute scratch> tests/gui/<script> "$PWD/build/ofx" <folder>   # one
-tools/mutation/gui.py <absolute scratch>     # the GUI mutants
+tools/mutation/gui.py <absolute scratch> [--full]   # the GUI mutants (each on its tagged groups)
+tests/gui/run.sh <absolute scratch> "$PWD/build/ofx" f62 f6   # some groups only
 ```
 
 `tools/mutation/run.py` (the unit mutants) builds with clang, ASan and UBSan as `make test` does,
 in one worker per core: 598 mutants in about 4 minutes (gcc, one at a time, took about 45).
 Every worker runs the unmutated tests first, all at once, so a test that only fails under load
 shows before any kill counts. A faster compiler wouldn't help the GUI mutants: their time is the
-86 s GUI suite each, not the 4.5 s build.
+86 s GUI suite, not the 4.5 s build. So each GUI mutant runs only the `run.sh` groups that killed
+it on a whole-suite run (`tools/mutation/gui-tags.txt`, written by `gui.py`); a new or changed
+mutant runs the whole suite and is tagged. `--full` reruns every mutant on the whole suite, before
+an install (Michael, 2026-10-24). `gui.py` runs from its scratch copy, scripts included, so editing
+`tests/gui` during a run is safe now.
 
 - **Why not a Hyprland headless output any more:** a new output takes a workspace Hyprland picks,
   and that can't be steered (workspace rules with `default` and `persistent` didn't). Three times

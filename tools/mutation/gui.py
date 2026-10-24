@@ -2,9 +2,18 @@
 """GUI mutants: each applied to a scratch copy of the repo, built, and run through
 tests/gui/run.sh, each script in its own headless weston (CLAUDE.md, "Testing the GUI").
 
-    tools/mutation/gui.py <scratch-dir> [index,...]
+    tools/mutation/gui.py <scratch-dir> [index,...] [--full]
+
+The whole GUI suite takes about 86 s, so each mutant runs only the script groups that killed it
+before (its tags, in gui-tags.txt): a grid mutant runs f62, not the copy jobs' f53. A mutant with
+no tags (new, or its text changed) runs the whole suite, and the groups that fail become its
+tags. --full runs every mutant on the whole suite and writes the tags again: before an install,
+since a narrow run can't see a mutant break something its tags don't cover (Michael, 2026-10-24).
+The unmutated build always runs the whole suite first.
+
+Everything runs from the scratch copy, scripts included, so the repo can be edited meanwhile.
 """
-import os, shutil, subprocess, sys
+import hashlib, os, re, shutil, subprocess, sys
 
 G, W, K, J = 'gui/main.c', 'gui/watch.c', 'gui/counts.c', 'gui/jobs.c'
 MUTANTS = [
@@ -166,31 +175,59 @@ MUTANTS = [
     (G, "            if (app.have_list && app.ui.grid) layout_grid();\n", ""),
     (G, "    if (strmap_get(&app.slot_of, slot_key, &k))", "    if (strmap_get(&app.slot_of, key, &k))"),
 ]
-scratch = sys.argv[1]
-only = [int(x) for x in sys.argv[2].split(',')] if len(sys.argv) > 2 else None
+args = [a for a in sys.argv[1:] if a != '--full']
+full = len(args) != len(sys.argv) - 1
+scratch = args[0]
+only = [int(x) for x in args[1].split(',')] if len(args) > 1 else None
 root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+tags_path = os.path.join(root, 'tools', 'mutation', 'gui-tags.txt')
 work = os.path.join(scratch, 'gui-mut-src')
 shutil.rmtree(work, ignore_errors=True)
 shutil.copytree(root, work, ignore=shutil.ignore_patterns('.git', 'build'))
 os.makedirs(os.path.join(work, 'build'))
 os.symlink(os.path.join(root, 'build', 'raylib'), os.path.join(work, 'build', 'raylib'))
+run_sh = os.path.join(work, 'tests/gui/run.sh')
 for f, old, new in MUTANTS:
     n = open(os.path.join(work, f)).read().count(old)
     assert n == 1, (f, old, n)
-# The unmutated build first: if it fails, every mutant would count as killed (as they did while
-# f6 couldn't start, from fe01f7c to e8c2c57).
+
+# A mutant's tag key: its file and texts, so a mutant edited is a new one, untagged.
+def key(m):
+    return hashlib.sha1('\0'.join(m).encode()).hexdigest()[:12]
+
+tags = {}
+if os.path.exists(tags_path):
+    for line in open(tags_path):
+        w = line.split('#')[0].split()
+        if len(w) >= 2:
+            tags[w[0]] = w[1:]
+
+# The group of a script that failed: run.sh prints "== <script>: FAILED" or "<group>: FAILED".
+GROUP_OF = {'f6b': 'f6', 'f62b': 'f62', 'f62c': 'f62'}
+def failed_groups(out):
+    g = []
+    for l in out.splitlines():
+        m = re.match(r'(?:== )?([a-z0-9]+): FAILED', l)
+        if m and GROUP_OF.get(m[1], m[1]) not in g:
+            g.append(GROUP_OF.get(m[1], m[1]))
+    return g
+
+# The unmutated build first, on the whole suite: if it fails, every mutant would count as killed
+# (as they did while f6 couldn't start, from fe01f7c to e8c2c57).
 b = subprocess.run(['make', '-s', 'build/ofx'], cwd=work, capture_output=True, text=True)
-r = subprocess.run([os.path.join(root, 'tests/gui/run.sh'), os.path.join(scratch, 'gm-base'), os.path.join(work, 'build/ofx')],
-                   capture_output=True, text=True)
+r = subprocess.run([run_sh, os.path.join(scratch, 'gm-base'), os.path.join(work, 'build/ofx')], capture_output=True, text=True)
 if b.returncode != 0 or r.returncode != 0:
     print('the unmutated build fails tests/gui/run.sh: fix that first')
     print(b.stderr[-300:], '\n'.join(l for l in r.stdout.splitlines() if 'FAILED' in l or (l.startswith('script:') and not l.startswith('script: 0 of'))))
     sys.exit(2)
 print('base: tests/gui/run.sh passes unmutated', flush=True)
-survivors = []
-for i, (f, old, new) in enumerate(MUTANTS):
+survivors, retagged = [], 0
+for i, m in enumerate(MUTANTS):
     if only is not None and i not in only:
         continue
+    f, old, new = m
+    k = key(m)
+    groups = [] if full else tags.get(k, [])
     path = os.path.join(work, f)
     text = open(path).read()
     open(path, 'w').write(text.replace(old, new, 1))
@@ -199,12 +236,23 @@ for i, (f, old, new) in enumerate(MUTANTS):
         print(f'#{i} build failed: {b.stderr[-300:]}')
         open(path, 'w').write(text)
         continue
-    r = subprocess.run([os.path.join(root, 'tests/gui/run.sh'), os.path.join(scratch, f'gm{i}'), os.path.join(work, 'build/ofx')],
-                       capture_output=True, text=True)
+    r = subprocess.run([run_sh, os.path.join(scratch, f'gm{i}'), os.path.join(work, 'build/ofx')] + groups, capture_output=True, text=True)
     open(path, 'w').write(text)
+    if r.returncode != 0 and not groups:
+        tags[k] = failed_groups(r.stdout) or ['all']   # 'all': it failed without naming a group
+        retagged += 1
     verdict = 'killed' if r.returncode != 0 else 'SURVIVED'
     fails = [l for l in r.stdout.splitlines() if l.startswith('script:') and not l.startswith('script: 0 of')]
-    print(f'#{i} {verdict} {f}: {old.strip()[:60]!r}  {fails[:1]}', flush=True)
+    ran = ' '.join(groups) if groups else 'all'
+    print(f'#{i} {verdict} [{ran}] {f}: {old.strip()[:60]!r}  {fails[:1]}', flush=True)
     if r.returncode == 0:
         survivors.append(i)
+if retagged:
+    live = {key(m) for m in MUTANTS}
+    with open(tags_path, 'w') as out:
+        out.write('# tools/mutation/gui.py: each GUI mutant (its key) and the run.sh groups that kill it\n')
+        for k in sorted(tags):
+            if k in live and tags[k] != ['all']:
+                out.write(f'{k} {" ".join(tags[k])}\n')
+    print(f'{retagged} mutants tagged in {tags_path}')
 print(f'{len(MUTANTS)} GUI mutants, {len(survivors)} survived: {survivors}')
