@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Single-site mutation testing for ofx's unit-tested layers (fs/, ui/).
 
-    tools/mutation/run.py [mutants.py] [filter] [-j N]
+    tools/mutation/run.py [mutants.py] [filter] [-j N] [--clang-only]
 
 Each mutant is (file, old, new): `old` must occur exactly once in the file (asserted before the
 run, so a mutant never lands on a second site unseen). The repo is copied to one scratch directory
@@ -11,14 +11,21 @@ compile as gcc: Michael, 2026-10-23) and run, and the file put back. Every worke
 unmutated tests first, all at once, so a test that only fails under load shows before any kill
 counts. A mutant the tests don't fail on SURVIVES: a missing test until it is shown inert (house
 standard, ../CLAUDE.md). Prints one line per mutant as it finishes and the survivors at the end.
+
+Two passes when tcc is there (Michael, 2026-10-24): tcc builds the tests in about 25 ms, against
+clang's 1.45 s, but has no sanitizers. So every mutant runs first under tcc; what its tests fail on
+is killed. Only the rest (survivors, and mutants tcc can't build: it may refuse valid C) run again
+under clang with ASan and UBSan, where a sanitizer may still catch them. --clang-only skips tcc.
 """
-import os, shutil, subprocess, sys, tempfile, importlib.util
+import os, shutil, subprocess, sys, tempfile, time, importlib.util
 from concurrent.futures import ThreadPoolExecutor
 from queue import Queue
 
 here = os.path.dirname(os.path.abspath(__file__))
 root = os.path.dirname(os.path.dirname(here))
 args = sys.argv[1:]
+use_tcc = '--clang-only' not in args and shutil.which('tcc') is not None
+args = [a for a in args if a != '--clang-only']
 jobs = os.cpu_count() or 1
 if '-j' in args:
     k = args.index('-j')
@@ -53,45 +60,72 @@ for w in range(jobs):
     os.makedirs(os.path.join(work, 'tmp'))
     workers.append(work)
 
-def run(work):
-    b = subprocess.run(['make', '-s', 'CC=clang', 'build/test'], cwd=work, capture_output=True, text=True)
+def run(work, cc='clang'):
+    if cc == 'tcc':
+        os.makedirs(os.path.join(work, 'build'), exist_ok=True)
+        b = subprocess.run(['tcc', '-std=c11', '-D_GNU_SOURCE', '-pthread', '-o', 'build/test-tcc', 'tests/test.c', '-lm'],
+                           cwd=work, capture_output=True, text=True)
+        exe = './build/test-tcc'
+    else:
+        b = subprocess.run(['make', '-s', 'CC=clang', 'build/test'], cwd=work, capture_output=True, text=True)
+        exe = './build/test'
     if b.returncode != 0:
         return 'build-fail'
     env = dict(os.environ, TMPDIR=os.path.join(work, 'tmp'))
-    t = subprocess.run(['./build/test'], cwd=work, capture_output=True, timeout=120, env=env)   # bytes: a mutant may print anything
+    # 10 s: the tests take 0.5-0.7 s, and a mutant that hangs them (#172 waited 120 s here, holding
+    # up a whole pass) is killed by the timeout either way.
+    t = subprocess.run([exe], cwd=work, capture_output=True, timeout=10, env=env)   # bytes: a mutant may print anything
     return 'pass' if t.returncode == 0 else 'fail'
 
 free = Queue()
 for work in workers:
     free.put(work)
 
-def one(item):
+def one(item, cc='clang'):
     i, (f, old, new) = item
     work = free.get()
+    t0 = time.time()
     try:
         path = os.path.join(work, f)
         text = open(path).read()
         open(path, 'w').write(text.replace(old, new, 1))
         try:
-            r = run(work)
+            r = run(work, cc)
         except subprocess.TimeoutExpired:
             r = 'timeout'
         open(path, 'w').write(text)
     finally:
         free.put(work)
-    verdict = 'SURVIVED' if r == 'pass' else 'killed' + (' (build)' if r == 'build-fail' else '')
-    print(f'#{i:02d} {verdict:16} {f}: {old.strip()[:70]!r} -> {new.strip()[:50]!r}', flush=True)
+    took = time.time() - t0
+    if cc == 'tcc' and r in ('pass', 'build-fail'):
+        return i, r   # clang decides
+    verdict = 'SURVIVED' if r == 'pass' else 'killed' + (' (build)' if r == 'build-fail' else '') + (' (tcc)' if cc == 'tcc' else '')
+    print(f'#{i:02d} {verdict:16} {took:5.1f}s {f}: {old.strip()[:70]!r} -> {new.strip()[:50]!r}', flush=True)
     return i, r
 
 try:
-    with ThreadPoolExecutor(jobs) as pool:
-        bases = list(pool.map(run, workers))
-    if any(b != 'pass' for b in bases):
-        print('baseline does not pass in every worker:', bases)
-        sys.exit(2)
-    print(f'baseline passes in {jobs} workers at once', flush=True)
-    with ThreadPoolExecutor(jobs) as pool:
-        results = list(pool.map(one, enumerate(mutants)))
+    passes = ['tcc', 'clang'] if use_tcc else ['clang']
+    for cc in passes:
+        with ThreadPoolExecutor(jobs) as pool:
+            bases = list(pool.map(lambda w: run(w, cc), workers))
+        if any(b != 'pass' for b in bases):
+            print(f'baseline does not pass under {cc} in every worker:', bases)
+            sys.exit(2)
+    print(f'baseline passes under {" and ".join(passes)} in {jobs} workers at once', flush=True)
+    todo = list(enumerate(mutants))
+    results = []
+    for cc in passes:
+        t0 = time.time()
+        with ThreadPoolExecutor(jobs) as pool:
+            got = list(pool.map(lambda it: one(it, cc), todo))
+        if cc == 'tcc':
+            results += [(i, r) for i, r in got if r not in ('pass', 'build-fail')]
+            again = {i for i, r in got if r in ('pass', 'build-fail')}
+            todo = [it for it in todo if it[0] in again]
+            print(f'tcc: {len(got) - len(todo)} killed in {time.time() - t0:.0f} s; {len(todo)} go to clang', flush=True)
+        else:
+            results += got
+            print(f'{cc}: {len(got)} run in {time.time() - t0:.0f} s', flush=True)
 finally:
     shutil.rmtree(top, ignore_errors=True)   # an interrupted run too
 survivors = sorted(i for i, r in results if r == 'pass')
