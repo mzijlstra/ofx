@@ -100,16 +100,26 @@ build/release/ofx: $(SRC) $(RL_OUT)/libraylib.a $(OFX_WL)/stamp Makefile | build
 
 release: build/release/ofx
 
+# The GUI mutants' build (tools/mutation/gui.py): clang, with the sanitizers as `make` has them,
+# builds main.c in about half gcc's time; Clay's code, a third of the rest, is compiled once in its
+# own object and only linked after (Michael, 2026-10-24). Not for use: `make` is the build.
+MUT_CC   = clang
+build/mut/clay.o: gui/clay.c vendor/clay/clay.h Makefile | build/mut
+	$(MUT_CC) -std=c11 -D_GNU_SOURCE -MMD -MP -w -isystem vendor/clay $(DEBUG) -c -o $@ gui/clay.c
+
+build/ofx-mut: $(SRC) build/mut/clay.o $(RL_OUT)/libraylib.a $(OFX_WL)/stamp Makefile | build
+	$(MUT_CC) $(CFLAGS) $(VENDOR) $(DEBUG) -DOFX_CLAY_APART -o $@ gui/main.c build/mut/clay.o $(LINK)
+
 install: build/release/ofx
 	install -d $(PREFIX)/bin
 	install -m 755 build/release/ofx $(PREFIX)/bin/
 	rm -f $(PREFIX)/bin/fx   # the name before ofx (2026-10-22)
 
-build build/release:
+build build/release build/mut:
 	mkdir -p $@
 
 clean:
 	rm -rf build
 
 # Last, so a target in a .d file can never become the default goal.
--include $(wildcard build/*.d build/release/*.d)
+-include $(wildcard build/*.d build/release/*.d build/mut/*.d)

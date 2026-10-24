@@ -267,8 +267,8 @@ def failed_groups(out):
 
 # The unmutated build first, on the whole suite: if it fails, every mutant would count as killed
 # (as they did while f6 couldn't start, from fe01f7c to e8c2c57).
-b = subprocess.run(['make', '-s', 'build/ofx'], cwd=work, capture_output=True, text=True)
-r = subprocess.run([run_sh, os.path.join(scratch, 'gm-base'), os.path.join(work, 'build/ofx')], capture_output=True, text=True)
+b = subprocess.run(['make', '-s', 'build/ofx-mut'], cwd=work, capture_output=True, text=True)
+r = subprocess.run([run_sh, os.path.join(scratch, 'gm-base'), os.path.join(work, 'build/ofx-mut')], capture_output=True, text=True)
 if b.returncode != 0 or r.returncode != 0:
     print('the unmutated build fails tests/gui/run.sh: fix that first')
     print(b.stderr[-300:], '\n'.join(l for l in r.stdout.splitlines() if 'FAILED' in l or (l.startswith('script:') and not l.startswith('script: 0 of'))))
@@ -289,12 +289,12 @@ for i, m in enumerate(MUTANTS):
     path = os.path.join(work, f)
     text = open(path).read()
     open(path, 'w').write(text.replace(old, new, 1))
-    b = subprocess.run(['make', '-s', 'build/ofx'], cwd=work, capture_output=True, text=True)
+    b = subprocess.run(['make', '-s', 'build/ofx-mut'], cwd=work, capture_output=True, text=True)
     if b.returncode != 0:
         print(f'#{i} build failed: {b.stderr[-300:]}')
         open(path, 'w').write(text)
         continue
-    r = subprocess.run([run_sh, os.path.join(scratch, f'gm{i}'), os.path.join(work, 'build/ofx')] + groups, capture_output=True, text=True)
+    r = subprocess.run([run_sh, os.path.join(scratch, f'gm{i}'), os.path.join(work, 'build/ofx-mut')] + groups, capture_output=True, text=True)
     open(path, 'w').write(text)
     rmtree(os.path.join(scratch, f'gm{i}'))
     if r.returncode != 0 and not groups:

@@ -71,10 +71,14 @@ under clang with ASan and UBSan as `make test` has them. 609 mutants in 44 s (cl
 gcc, one at a time, about 45 min). Every worker runs the unmutated tests first under both, all at
 once, so a test that only fails under load shows before any kill counts. `--clang-only` skips tcc
 (and it is skipped without `tcc` on PATH: `sudo pacman -S tcc`). A mutant that doesn't compile tests
-nothing: when deleting a statement would leave an `else` without its `if`, empty it instead (`{}`). A faster compiler wouldn't help the GUI mutants: their time is the
-86 s GUI suite, not the 4.5 s build. So each GUI mutant runs only the `run.sh` groups that killed
-it on a whole-suite run (`tools/mutation/gui-tags.txt`, written by `gui.py`); a new or changed
-mutant runs the whole suite and is tagged. `--full` reruns every mutant on the whole suite, before
+nothing: when deleting a statement would leave an `else` without its `if`, empty it instead (`{}`).
+
+The GUI mutants' time is mostly the 86 s GUI suite, not the build. So each runs only the `run.sh`
+groups that killed it on a whole-suite run (`tools/mutation/gui-tags.txt`, written by `gui.py`):
+164 mutants in 71 min, against about 4 h on the whole suite each. A new or changed mutant runs the
+whole suite and is tagged. They build `build/ofx-mut`: clang with ASan and UBSan, Clay's code in
+its own object compiled once a run (`gui/clay.c`), 1.1 s a mutant against gcc's 3.5 s (Michael,
+2026-10-24; tcc has no ASan, so not there). `--full` reruns every mutant on the whole suite, before
 an install (Michael, 2026-10-24). `gui.py` runs from its scratch copy, scripts included, so editing
 `tests/gui` during a run is safe now.
 

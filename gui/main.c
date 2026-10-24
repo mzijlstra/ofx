@@ -17,8 +17,11 @@
 #include <stdlib.h>
 #include <time.h>
 
-// Vendored, and included with -isystem so our warning flags do not apply to them.
+// Vendored, and included with -isystem so our warning flags do not apply to them. Clay's code is
+// compiled here, except in the GUI mutants' build, which has it once in its own object (gui/clay.c).
+#ifndef OFX_CLAY_APART
 #define CLAY_IMPLEMENTATION
+#endif
 #include "clay.h"
 #include "GLFW/glfw3.h"
 #include "render.c"   // includes raylib and font.c
