@@ -208,6 +208,7 @@ Decisions:
   first row and Down in the last stay put, as in Nemo. PgUp/PgDn keep the column.
 - The buttons are drawn (three lines, four squares): Yaru has its view icons as SVG only.
 - Rename's edit line sits under the icon, as wide as the name (one to two cells).
+- No accent outline on the cursor's name (Michael, 2026-10-24): its background shows it.
 - No column headers in the icon view; `s`/`S` still sort.
 - **Keys, after trying it (Michael, 2026-10-24):** Left/Right and `h`/`l` no longer open or go up,
   in the list or the grid; Enter and Backspace do (the tree keeps them, to close and open). Ctrl

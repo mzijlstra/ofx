@@ -1697,7 +1697,6 @@ static void layout_cell(int k, isize i)
     const Entry *e = &app.list.e[i];
     Theme *t = &app.theme;
     bool sel = i == app.ui.list.sel, hover = k == app.hover, marked = ui_marked(&app.ui, i);
-    bool keyed = sel && !app.ui.side_focus;
     Clay_Color fg = e->kind == K_LINK_BROKEN ? cc(t->red) : marked ? cc(t->accent) : cc(t->fg);
     Clay_Color bg = marked ? mix(t->accent, t->bg, 0.28f) : hover ? cc(t->bg_light) : (Clay_Color){ 0, 0, 0, 0 };
     int cw = cell_w(), px = grid_px();
@@ -1722,7 +1721,6 @@ static void layout_cell(int k, isize i)
             CLAY(CLAY_ID("cell-full"), { .layout = { .sizing = { CLAY_SIZING_FIXED(cw), CLAY_SIZING_FIT(0) }, .padding = { CELL_PAD, CELL_PAD, 0, 2 },
                                                      .layoutDirection = CLAY_TOP_TO_BOTTOM },
                                          .backgroundColor = cc(t->selection), .cornerRadius = CLAY_CORNER_RADIUS(4),
-                                         .border = { .color = cc(t->accent), .width = CLAY_BORDER_OUTSIDE(keyed ? 1 : 0) },
                                          .floating = { .attachTo = CLAY_ATTACH_TO_PARENT, .zIndex = 3, .offset = { 0, 6 + (float)px + 4 },
                                                        .attachPoints = { CLAY_ATTACH_POINT_CENTER_TOP, CLAY_ATTACH_POINT_CENTER_TOP },
                                                        .clipTo = CLAY_CLIP_TO_ATTACHED_PARENT } }) {
