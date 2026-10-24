@@ -63,7 +63,8 @@ for w in range(jobs):
 def run(work, cc='clang'):
     if cc == 'tcc':
         os.makedirs(os.path.join(work, 'build'), exist_ok=True)
-        b = subprocess.run(['tcc', '-std=c11', '-D_GNU_SOURCE', '-pthread', '-o', 'build/test-tcc', 'tests/test.c', '-lm'],
+        b = subprocess.run(['tcc', '-std=c11', '-D_GNU_SOURCE', '-pthread', '-isystem', 'vendor/raylib/src', '-o', 'build/test-tcc',
+                            'tests/test.c', '-lturbojpeg', '-lwebp', '-lz', '-lm'],
                            cwd=work, capture_output=True, text=True)
         exe = './build/test-tcc'
     else:

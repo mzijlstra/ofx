@@ -15,3 +15,4 @@
 #include "jobq.c"
 #include "state.c"
 #include "tree.c"
+#include "thumb.c"

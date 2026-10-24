@@ -7,6 +7,9 @@ WARN     = -Wall -Wextra -Wshadow -Wstrict-prototypes -Wmissing-prototypes -Wno-
 CFLAGS   = -std=c11 -D_GNU_SOURCE -pthread -MMD -MP $(WARN)
 DEBUG    = -g3 -O0 -fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer
 RELEASE  = -O2 -DNDEBUG
+# The previews' decoders (fs/thumb.c, F6.4): system libraries, and raylib's copy of stb_image.
+IMG_INC  = -isystem vendor/raylib/src
+IMG_LIBS = -lturbojpeg -lwebp -lz
 
 PREFIX  ?= $(HOME)/.local
 
@@ -15,10 +18,10 @@ PREFIX  ?= $(HOME)/.local
 all: build/ofx
 
 build/ofx-probe: tools/probe.c $(wildcard base/*.c base/*.h fs/*.c) | build
-	$(CC) $(CFLAGS) $(DEBUG) -o $@ tools/probe.c -lm
+	$(CC) $(CFLAGS) $(IMG_INC) $(DEBUG) -o $@ tools/probe.c $(IMG_LIBS) -lm
 
 build/test: $(wildcard tests/*.c) $(wildcard base/*.c base/*.h fs/*.c ui/*.c) | build
-	$(CC) $(CFLAGS) $(DEBUG) -o $@ tests/test.c -lm
+	$(CC) $(CFLAGS) $(IMG_INC) $(DEBUG) -o $@ tests/test.c $(IMG_LIBS) -lm
 
 test: build/test
 	./build/test
@@ -53,7 +56,7 @@ RL_PROTO = wayland:wayland-client-protocol \
 # would pull in libGLX and libX11. So the binary is not linked against X11 and never connects to
 # it, although Mesa's libEGL_mesa still maps libX11 and libxcb at run time.
 GUI_LIBS = $(RL_OUT)/libraylib.a $(shell pkg-config --libs wayland-client wayland-cursor wayland-egl xkbcommon fontconfig freetype2) \
-           -lm -lpthread -ldl -lrt
+           $(IMG_LIBS) -lm -lpthread -ldl -lrt
 
 $(RL_WL)/stamp: | build
 	mkdir -p $(RL_WL)
