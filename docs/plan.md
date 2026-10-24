@@ -141,6 +141,31 @@ themes (#14851). **Fallback:** a missing icon theme gives way to its name cut at
 until one is installed (`Yaru-grey` → `Yaru`), then plain Yaru, then Adwaita (GTK's own, but
 mostly SVG, and ofx draws PNGs), then hicolor. No `icons.theme`: the same way.
 
+## F6.3 design (2026-10-24, proposed)
+
+**Asked (Michael):** icon sizes: a zoom slider at the bottom right, Ctrl+wheel and Ctrl+= / Ctrl+-,
+remembered. Proposed, for his decisions (marked **Q**):
+
+- **Levels:** 32, 48, 64, 96, 128 and 256 px, 48 the default (F6.2's). Yaru has PNGs at 32, 48 and
+  256 (each also @2x); 64, 96 and 128 are the 256 scaled down (one texture per size and icon,
+  cached as now under `"<px>:<key>"`). The cell grows with the icon: as wide as the icon plus 64 px,
+  112 at least; two lines of name under it as now.
+- **The slider:** in the footer's right end, about 120 px: a minus, a track with a notch per level
+  and a knob, a plus. A click on the track or a drag snaps to the nearest level; the minus and plus
+  step one. A tooltip says "Zoom: Ctrl+= Ctrl+- Ctrl+0" (F6.2's tooltips). The status text keeps the
+  rest of the footer.
+- **Keys:** Ctrl+= (and Ctrl++, Ctrl+keypad +) one level up, Ctrl+- one down, Ctrl+0 back to 48
+  (Nemo's). Ctrl+wheel a level a notch, over the files; the plain wheel still scrolls.
+- **Keeping your place:** after a zoom the cursor's cell stays in view, as near its old row on
+  screen as the new rows allow.
+- **Remembered:** `zoom=<px>` in the state file beside `view=`, one size for every folder (per
+  folder: later, with the view).
+- **Q1, the list view:** (a) the slider and keys only in the icon view, the list stays 24 px rows
+  (hidden there); or (b) the list zooms too, its own levels (16, 24, 32, 48: row height follows),
+  remembered apart, as Nemo does. Proposed: (a) now, (b) on the later list if wanted.
+- **Q2, the levels:** the six above, or fewer (48, 96, 256), or 24 and 16 added at the small end.
+- **Q3, the slider's place:** the footer's right end, or the top bar beside the view buttons.
+
 ## F6.2 design (2026-10-23)
 
 **Asked (Michael):** an icon view, then a zoom slider (F6.3), then previews (F6.4), each its own
