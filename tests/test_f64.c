@@ -181,7 +181,7 @@ static void test_png_meta(void)
     CHECK(!thumb_fresh(&m, "file:///p/q.png", 1700000000, 1234));
     // It decodes, and is the picture.
     Img back;
-    CHECK(stb_decode(&a, png, 64, &back) && back.w == 6 && back.h == 4 && reddish(&back, 0, 0) && blueish(&back, 5, 3));
+    CHECK(png_decode(&a, png, 64, &back) && back.w == 6 && back.h == 4 && reddish(&back, 0, 0) && blueish(&back, 5, 3));
     // Cut short (no IEND), a wrong signature, no text: not a preview.
     CHECK(!png_meta((Str){ png.p, png.len - 1 }, &m));
     CHECK(!png_meta((Str){ png.p, 7 }, &m));
@@ -255,6 +255,33 @@ static void test_thumb_decode(void)
                               ',', 0, 0, 0, 0, 2, 0, 1, 0, 0, 2, 2, 0x44, 0x0A, 0, ';' };
     CHECK(thumb_make(&a, TK_GIF, (Str){ (const char *)gif, sizeof gif }, 128, &out) && out.w == 2 && out.h == 1);
     CHECK(reddish(&out, 0, 0) && blueish(&out, 1, 0));
+    // Its graphic control's transparent colour (1, blue) clear; a frame at (1,0) on a 3 by 1
+    // screen, the rest clear too.
+    static const u8 gif_t[] = { 'G', 'I', 'F', '8', '9', 'a', 2, 0, 1, 0, 0x80, 0, 0, 255, 0, 0, 0, 0, 255,
+                                0x21, 0xF9, 4, 1, 0, 0, 1, 0, ',', 0, 0, 0, 0, 2, 0, 1, 0, 0, 2, 2, 0x44, 0x0A, 0, ';' };
+    CHECK(thumb_make(&a, TK_GIF, (Str){ (const char *)gif_t, sizeof gif_t }, 128, &out) && out.w == 2 && out.h == 1);
+    CHECK(reddish(&out, 0, 0) && out.px[3] == 255 && out.px[7] == 0);
+    static const u8 gif_o[] = { 'G', 'I', 'F', '8', '9', 'a', 3, 0, 1, 0, 0x80, 0, 0, 255, 0, 0, 0, 0, 255,
+                                ',', 1, 0, 0, 0, 2, 0, 1, 0, 0, 2, 2, 0x44, 0x0A, 0, ';' };
+    CHECK(thumb_make(&a, TK_GIF, (Str){ (const char *)gif_o, sizeof gif_o }, 128, &out) && out.w == 3 && out.h == 1);
+    CHECK(out.px[3] == 0 && reddish(&out, 1, 0) && blueish(&out, 2, 0));
+    // Interlaced (ImageMagick's, 2 by 4, its rows red, lime, white, blue as `magick ... txt:` reads
+    // them; stored red, white, lime, blue), its rows put back in order.
+    static const u8 gif_i[] = { 0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0x02, 0x00, 0x04, 0x00, 0xf1, 0x03, 0x00, 0xff, 0x00, 0x00, 0x00,
+                                0xff, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff, 0x21, 0xf9, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x2c,
+                                0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x04, 0x00, 0x40, 0x02, 0x05, 0x04, 0x36, 0x11, 0x22, 0x05, 0x00, 0x3b };
+    CHECK(thumb_make(&a, TK_GIF, (Str){ (const char *)gif_i, sizeof gif_i }, 128, &out) && out.w == 2 && out.h == 4);
+    CHECK(reddish(&out, 1, 0) && out.px[8] == 0 && out.px[9] == 255 && out.px[10] == 0 && out.px[16] == 255 && out.px[17] == 255 && blueish(&out, 1, 3));
+    // A frame past its screen's edge, a screen of more than THUMB_PIXELS_MAX, a cut file: refused.
+    u8 bad_gif[sizeof gif_o];
+    memcpy(bad_gif, gif_o, sizeof gif_o);
+    bad_gif[20] = 2;   // Left 2, Width 2, on a screen 3 wide
+    CHECK(!thumb_make(&a, TK_GIF, (Str){ (const char *)bad_gif, sizeof bad_gif }, 128, &out));
+    memcpy(bad_gif, gif_o, sizeof gif_o);
+    bad_gif[6] = 0x10, bad_gif[7] = 0x27, bad_gif[8] = 0x88, bad_gif[9] = 0x13;   // 10000 by 5000
+    CHECK(!thumb_make(&a, TK_GIF, (Str){ (const char *)bad_gif, sizeof bad_gif }, 128, &out));
+    CHECK(!thumb_make(&a, TK_GIF, (Str){ (const char *)gif_o, 30 }, 128, &out));
+    CHECK(!thumb_make(&a, TK_GIF, S("GIF89a"), 128, &out) && !thumb_make(&a, TK_PNG, S("\x89PNG\r\n\x1a\n"), 128, &out));
     // WebP, scaled as it decodes.
     u8 *wp = NULL;
     size_t wn = WebPEncodeLosslessRGBA(im.px, im.w, im.h, im.w * 4, &wp);
@@ -301,9 +328,8 @@ static bool cached_fresh(Arena *a, const char *cache, const char *dir, const cha
     struct stat st;
     ThumbMeta m;
     Str c = thumb_read(a, file, THUMB_CACHED_MAX, &st);
-    int n;
-    bool ok = c.len && png_meta(c, &m) && thumb_fresh(&m, uri, mtime_of(path), size_of(path)) &&
-              stbi_info_from_memory((const u8 *)c.p, (int)c.len, w, h, &n);
+    bool ok = c.len >= 24 && png_meta(c, &m) && thumb_fresh(&m, uri, mtime_of(path), size_of(path));
+    if (ok) *w = (int)be32((const u8 *)c.p + 16), *h = (int)be32((const u8 *)c.p + 20);   // IHDR
     return ok && (st.st_mode & 0777) == 0600;
 }
 

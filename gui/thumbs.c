@@ -9,7 +9,7 @@
 // to keep at most THUMB_HELD_MAX bytes of them (the least recently drawn first).
 
 enum { THUMB_WORKERS = 2, THUMB_QUEUE = 64, THUMB_DONE = 8, THUMB_PX_MAX = 512, THUMB_ENTRIES = 8192,
-       THUMB_HELD_MAX = MiB(64), THUMB_WORK_MEM = MiB(64) };
+       THUMB_HELD_MAX = MiB(64), THUMB_WORK_MEM = MiB(192) };
 
 typedef enum { TS_UNKNOWN, TS_ASKED, TS_SHOWN, TS_NONE, TS_DROPPED } ThumbState;
 
@@ -41,7 +41,11 @@ typedef struct {
 } ThumbDone;
 
 static u8 thumb_entry_mem[MiB(4)];                       // the entries' keys
-static u8 thumb_work_mem[THUMB_WORKERS][THUMB_WORK_MEM];   // each worker's, reset per preview
+// Each worker's, reset per preview: a 40 MP PNG decodes whole into 160 MiB of it. Pages past the
+// first THUMB_WORK_KEEP are handed back after a preview that used them, so a big one doesn't
+// stay resident.
+enum { THUMB_WORK_KEEP = MiB(16) };
+static _Alignas(4096) u8 thumb_work_mem[THUMB_WORKERS][THUMB_WORK_MEM];
 
 static struct {
     // The main thread's.
@@ -85,6 +89,7 @@ static void *thumb_loop(void *arg)
         Img out = { 0 };
         ThumbAsk q = { .path = r.path, .mtime = r.mtime, .size = r.size, .kind = r.kind, .make = r.make, .px = r.px, .root = thumbs.root };
         ThumbGot got = thumb_get(&a, &q, &out);
+        isize used = a.used;
         pthread_mutex_lock(&thumbs.mu);
         while (!thumbs.quit && thumbs.dn == THUMB_DONE) pthread_cond_wait(&thumbs.cv, &thumbs.mu);
         thumbs.busy--;
@@ -94,6 +99,11 @@ static void *thumb_loop(void *arg)
         if ((got == TG_CACHED || got == TG_MADE) && out.w <= THUMB_PX_MAX && out.h <= THUMB_PX_MAX)
             d->w = out.w, d->h = out.h, memcpy(d->px, out.px, (size_t)out.w * out.h * 4);
         wake_main();
+        if (used > THUMB_WORK_KEEP) {
+            pthread_mutex_unlock(&thumbs.mu);   // the pixels are copied out: the arena is free
+            madvise(thumb_work_mem[w] + THUMB_WORK_KEEP, THUMB_WORK_MEM - THUMB_WORK_KEEP, MADV_DONTNEED);
+            pthread_mutex_lock(&thumbs.mu);
+        }
     }
     pthread_mutex_unlock(&thumbs.mu);
     return NULL;
@@ -211,7 +221,9 @@ static bool thumbs_take(void)
         if (d->gen != thumbs.gen || d->entry >= thumbs.n) continue;
         thumbs.got[d->got]++;
         ThumbEntry *e = &thumbs.e[d->entry];
-        if (e->state != TS_ASKED || e->mtime != d->mtime) continue;
+        // Its mtime is the asked one: thumb_for leaves an asked entry's mtime alone, and asks
+        // again after this answer when the file has changed meanwhile.
+        if (e->state != TS_ASKED) continue;
         e->state = TS_NONE;
         if (d->w > 0) {
             Image img = { .data = d->px, .width = d->w, .height = d->h, .mipmaps = 1, .format = PIXELFORMAT_UNCOMPRESSED_R8G8B8A8 };
@@ -221,8 +233,7 @@ static bool thumbs_take(void)
                 e->state = TS_SHOWN, e->drawn = thumbs.frame, thumbs.held += (isize)d->w * d->h * 4;
             }
         }
-        // A changed file's answer is dropped (the mtime check above); a TG_CHANGED one stays "none"
-        // until its next listing brings the new mtime.
+        // A TG_CHANGED answer stays "none" until the next listing brings the new mtime.
     }
     thumbs.dn = 0;
     pthread_cond_broadcast(&thumbs.cv);

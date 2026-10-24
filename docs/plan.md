@@ -190,7 +190,7 @@ the rest as proposed ("sounds good").
 4. **Which files:** local drives only (not NFS, CIFS, SSHFS or other FUSE mounts: their reads can
    hang), and images up to 10 MiB (Michael; 50 was proposed. A 100 MP JPEG takes about a second).
 5. **The decoder:** libjpeg-turbo for JPEG (system library, scaled decode); raylib's stb_image for
-   PNG and GIF; libwebp (system) for WebP. The thumbnail PNG written through stb_image_write's
+   PNG and GIF (libpng and giflib since, as built below); libwebp (system) for WebP. The thumbnail PNG written through stb_image_write's
    zlib, with our own tEXt chunks (stb writes none).
 6. **Threads:** two workers, so a folder of photos fills in seconds while the window stays at
    60 fps; the queue holds only the cells on screen and a page ahead, newest first, and is emptied
@@ -221,9 +221,17 @@ escaping (spaces, `#`, UTF-8), since Nemo must find what ofx writes.
   next listing has the new mtime.
 - JPEG: libjpeg-turbo at the smallest of its scales that keeps the longer side at least the
   directory's size, then stb's resize, then turned by the EXIF orientation (all 8). WebP: libwebp
-  scales as it decodes (an animated one fails). PNG and GIF (the first frame): a static copy of
-  stb_image beside raylib's, refusing more than 40 MP (decoded whole). Resizes are stb's linear,
-  as raylib's: the sRGB one's tables trip clang's UBSan.
+  scales as it decodes (an animated one fails). PNG: libpng's simplified API (the cache's previews
+  too); GIF: giflib, the first frame only, on its screen, its transparent colour clear, interlaced
+  rows put back; both decoded whole, refusing more than 40 MP. Resizes are stb_image_resize2's
+  linear, as raylib's: the sRGB one's tables trip clang's UBSan.
+- **The decoders are the system's (Michael, 2026-10-24):** the first build used a static copy of
+  stb_image for PNG and GIF; stb makes no claim to handle hostile files and has had many
+  memory-safety CVEs, and a preview decodes whatever is in a folder (a download). libjpeg-turbo,
+  libwebp, libpng and giflib are fuzzed on OSS-Fuzz and patched by Arch's updates. A sandboxed
+  decoder process, as Nemo's glycin, would go further: not now.
+- Each worker has a 192 MiB arena (a 40 MP PNG is 160 MiB decoded); past its first 16 MiB the
+  pages go back to the system (`madvise`) after a preview that used them.
 - Not made on network or FUSE drives: `thumb_local` reads mountinfo for the folder's mount (nfs,
   nfs4, cifs, smb3, smbfs, 9p, ceph, afs, glusterfs, davfs, lustre, fuse, fuse.*; fuseblk is a
   local disk). Previews another program made there still show.
@@ -235,7 +243,8 @@ escaping (spaces, `#`, UTF-8), since Nemo must find what ofx writes.
   which would load it, drop it and ask again each frame.
 - Not in the trash view (its entries aren't at their paths), nor for broken links.
 - Measured, release build, the test weston (scale 2, previews from `normal`): 100 photos of 1 to
-  6 MiB, the first screen and a page ahead (36) in 0.47 s; the longest frame 0.3 ms.
+  6 MiB, the first screen and a page ahead (36) in 0.47 s; the longest frame 0.3 ms. RSS 139 MiB
+  before, 154 MiB after 52 previews made (the high-water mark the same).
 - Found on the way: a PNG without a preview had no icon (F6.2's empty `photo.png`):
   `generic-icons` names none for `image/png`, and the fallback was `application-x-generic`, which
   Yaru lacks. Now the spec's `<media>-x-generic` (`image-x-generic`), then

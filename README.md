@@ -15,8 +15,8 @@ ofx [FOLDER]     # the current folder by default
 ```
 
 Needs a C11 compiler, `wayland-scanner`, and the pkg-config packages wayland-client,
-wayland-cursor, wayland-egl, xkbcommon, fontconfig and freetype2, and libjpeg-turbo, libwebp and
-zlib for the previews. raylib and Clay are vendored.
+wayland-cursor, wayland-egl, xkbcommon, fontconfig and freetype2, and libjpeg-turbo, libwebp,
+libpng, giflib and zlib for the previews. raylib and Clay are vendored.
 
 ## Use
 

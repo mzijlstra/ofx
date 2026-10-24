@@ -224,7 +224,6 @@ MUTANTS = [
     (TB, "    if (e->mtime != mtime && e->state != TS_ASKED) {", "    if (0) {"),
     (TB, "        if ((got == TG_CACHED || got == TG_MADE) && out.w <= THUMB_PX_MAX", "        if (got == TG_MADE && out.w <= THUMB_PX_MAX"),
     (TB, "                             .make = local && kind != TK_NONE && size <= THUMB_SRC_MAX, .px = px };", "                             .make = kind != TK_NONE && size <= THUMB_SRC_MAX, .px = px };"),
-    (TB, "        if (e->state != TS_ASKED || e->mtime != d->mtime) continue;", "        if (e->state != TS_ASKED) continue;"),
     (G, "    app.thumb_local = thumb_local(read_file(&scratch, mountinfo_path()), dir);", "    app.thumb_local = true;"),
     (G, "    for (isize i = ahead; i < ahead + (isize)app.ui.list.rows * cols && i < app.list.n; i++) entry_thumb(i, false);\n", ""),
     (G, "        Texture2D *th = entry_thumb(i, true);", "        Texture2D *th = NULL;"),
@@ -270,7 +269,7 @@ if os.path.exists(tags_path):
             tags[w[0]] = w[1:]
 
 # The group of a script that failed: run.sh prints "== <script>: FAILED" or "<group>: FAILED".
-GROUP_OF = {'f6b': 'f6', 'f62b': 'f62', 'f62c': 'f62', 'f63b': 'f63', 'f63c': 'f63', 'f64b': 'f64', 'f64c': 'f64'}
+GROUP_OF = {'f6b': 'f6', 'f62b': 'f62', 'f62c': 'f62', 'f63b': 'f63', 'f63c': 'f63', 'f64b': 'f64', 'f64c': 'f64', 'f64d': 'f64'}
 def failed_groups(out):
     g = []
     for l in out.splitlines():

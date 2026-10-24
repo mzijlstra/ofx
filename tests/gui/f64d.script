@@ -1,0 +1,9 @@
+# F6.4: a screen of 18 previews (24 KiB each) where 10 may be held (OFX_TEST_THUMB_HELD_MAX): the
+# ones on screen are all kept, over the limit, and nothing is read again: dropping one drawn in the
+# last frame would ask for it again at once, and again, a read every frame.
+settle
+key ctrl-2
+wait-for 10000 thumbbusy=0 previews=18
+wait 30
+expect thumbbusy=0 previews=18 thumbheld=442368
+quit

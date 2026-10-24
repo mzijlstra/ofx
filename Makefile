@@ -7,9 +7,10 @@ WARN     = -Wall -Wextra -Wshadow -Wstrict-prototypes -Wmissing-prototypes -Wno-
 CFLAGS   = -std=c11 -D_GNU_SOURCE -pthread -MMD -MP $(WARN)
 DEBUG    = -g3 -O0 -fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer
 RELEASE  = -O2 -DNDEBUG
-# The previews' decoders (fs/thumb.c, F6.4): system libraries, and raylib's copy of stb_image.
+# The previews' decoders (fs/thumb.c, F6.4): system libraries, and raylib's copy of
+# stb_image_resize2.
 IMG_INC  = -isystem vendor/raylib/src
-IMG_LIBS = -lturbojpeg -lwebp -lz
+IMG_LIBS = -lturbojpeg -lwebp -lpng16 -lgif -lz
 
 PREFIX  ?= $(HOME)/.local
 

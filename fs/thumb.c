@@ -9,9 +9,11 @@
 // changes. gui/thumbs.c runs thumb_get on its workers, and remembers each answer by the file's
 // mtime, so nothing here runs twice for one change.
 //
-// The decoders: libjpeg-turbo (decodes straight at 1/2 to 1/8 size), libwebp (scales as it
-// decodes), and stb_image for PNG and GIF, its own static copy beside raylib's. They allocate on
-// their own; ours comes from the caller's arena.
+// The decoders read files from anywhere (a download), so they are the system's, fuzzed on
+// OSS-Fuzz and patched with its updates (Michael, 2026-10-24: stb_image makes no claim to handle
+// hostile files): libjpeg-turbo (decodes straight at 1/2 to 1/8 size), libwebp (scales as it
+// decodes), libpng (the previews in the cache too) and giflib. They allocate on their own; the
+// images come from the caller's arena. stb_image_resize2 only resizes our own buffers.
 
 #include "../base/base.h"
 
@@ -24,29 +26,23 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include <gif_lib.h>
+#include <png.h>
 #include <turbojpeg.h>
 #include <webp/decode.h>
 #include <zlib.h>
 
 #ifdef __TINYC__   // the unit mutants' first build (tools/mutation/run.py): tcc has no SSE headers
-#define STBI_NO_SIMD
 #define STBIR_NO_SIMD
 #endif
-#define STB_IMAGE_STATIC
-#define STBI_ONLY_PNG
-#define STBI_ONLY_GIF
-#define STBI_NO_STDIO
-#define STB_IMAGE_IMPLEMENTATION
-#include "external/stb_image.h"
-#undef STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_RESIZE_STATIC
 #define STB_IMAGE_RESIZE_IMPLEMENTATION
 #include "external/stb_image_resize2.h"
 #undef STB_IMAGE_RESIZE_IMPLEMENTATION
 
 // THUMB_SRC_MAX: the largest file ofx makes a preview of (Michael, 2026-10-24; an option in
-// ofx.conf later). THUMB_PIXELS_MAX: a PNG or GIF stb decodes whole, four bytes a pixel, so a
-// small file of a huge image is refused before it takes 160 MiB. THUMB_CACHED_MAX: a cached
+// ofx.conf later). THUMB_PIXELS_MAX: a PNG or GIF is decoded whole, four bytes a pixel, so a
+// small file of a huge image is refused before it takes more than 160 MiB of the worker's arena. THUMB_CACHED_MAX: a cached
 // preview bigger than this isn't one (an xx-large is 1024 px, about 3 MiB).
 enum { THUMB_SRC_MAX = MiB(10), THUMB_PIXELS_MAX = 40000000, THUMB_CACHED_MAX = MiB(8), THUMB_LEVELS = 4 };
 
@@ -231,7 +227,7 @@ static bool thumb_fresh(const ThumbMeta *m, const char *uri, i64 mtime, i64 size
 static void put32(u8 *p, u32 v) { p[0] = (u8)(v >> 24), p[1] = (u8)(v >> 16), p[2] = (u8)(v >> 8), p[3] = (u8)v; }
 
 // One chunk at *at in out: length, type, data, CRC over type and data.
-static void png_chunk(u8 *out, isize *at, const char *type, const void *data, isize n)
+static void thumb_chunk(u8 *out, isize *at, const char *type, const void *data, isize n)
 {
     u8 *c = out + *at;
     put32(c, (u32)n);
@@ -241,11 +237,11 @@ static void png_chunk(u8 *out, isize *at, const char *type, const void *data, is
     *at += 12 + n;
 }
 
-static void png_text(u8 *out, isize *at, const char *key, const char *val)
+static void thumb_text(u8 *out, isize *at, const char *key, const char *val)
 {
     char t[sizeof ((ThumbMeta *)0)->uri + 32];
     int n = snprintf(t, sizeof t, "%s%c%s", key, 0, val);
-    png_chunk(out, at, "tEXt", t, n);
+    thumb_chunk(out, at, "tEXt", t, n);
 }
 
 static int paeth(int a, int b, int c)
@@ -275,15 +271,15 @@ static bool png_encode(Arena *a, Img im, const char *uri, i64 mtime, i64 size, S
     memcpy(png, "\x89PNG\r\n\x1a\n", 8);
     u8 ihdr[13] = { 0, 0, 0, 0, 0, 0, 0, 0, 8, 6, 0, 0, 0 };
     put32(ihdr, (u32)im.w), put32(ihdr + 4, (u32)im.h);
-    png_chunk(png, &at, "IHDR", ihdr, 13);
+    thumb_chunk(png, &at, "IHDR", ihdr, 13);
     if (uri) {
         char num[24];
-        png_text(png, &at, "Thumb::URI", uri);
+        thumb_text(png, &at, "Thumb::URI", uri);
         snprintf(num, sizeof num, "%lld", (long long)mtime);
-        png_text(png, &at, "Thumb::MTime", num);
+        thumb_text(png, &at, "Thumb::MTime", num);
         snprintf(num, sizeof num, "%lld", (long long)size);
-        png_text(png, &at, "Thumb::Size", num);
-        png_text(png, &at, "Software", "ofx");
+        thumb_text(png, &at, "Thumb::Size", num);
+        thumb_text(png, &at, "Software", "ofx");
     }
     // The IDAT's data is compressed in place after its length and type.
     uLongf zn = zcap;
@@ -292,7 +288,7 @@ static bool png_encode(Arena *a, Img im, const char *uri, i64 mtime, i64 size, S
     memcpy(png + at + 4, "IDAT", 4);
     put32(png + at + 8 + zn, (u32)crc32(0, png + at + 4, (uInt)(zn + 4)));
     at += 12 + (isize)zn;
-    png_chunk(png, &at, "IEND", NULL, 0);
+    thumb_chunk(png, &at, "IEND", NULL, 0);
     *out = (Str){ (const char *)png, at };
     return true;
 }
@@ -475,16 +471,82 @@ static bool webp_decode(Arena *a, Str src, int side, Img *out)
     return ok;
 }
 
-// A PNG or a GIF (its first frame) through stb_image, whole, then fitted.
-static bool stb_decode(Arena *a, Str src, int side, Img *out)
+// A PNG through libpng's simplified API, whole (as 8-bit sRGB RGBA), then fitted.
+static bool png_decode(Arena *a, Str src, int side, Img *out)
 {
-    int w, h, n;
-    if (!stbi_info_from_memory((const u8 *)src.p, (int)src.len, &w, &h, &n) || w <= 0 || h <= 0 || (i64)w * h > THUMB_PIXELS_MAX) return false;
-    u8 *p = stbi_load_from_memory((const u8 *)src.p, (int)src.len, &w, &h, &n, 4);
-    if (!p) return false;
-    bool ok = img_fit(a, (Img){ p, w, h }, side, out);
-    stbi_image_free(p);
-    return ok;
+    png_image im = { .version = PNG_IMAGE_VERSION };
+    if (!png_image_begin_read_from_memory(&im, src.p, (size_t)src.len)) return false;
+    Img full;
+    im.format = PNG_FORMAT_RGBA;
+    if (im.width == 0 || im.height == 0 || (i64)im.width * im.height > THUMB_PIXELS_MAX || !img_new(a, (int)im.width, (int)im.height, &full)) {
+        png_image_free(&im);
+        return false;
+    }
+    if (!png_image_finish_read(&im, NULL, full.px, 0, NULL)) return false;   // it frees im itself, either way
+    return img_fit(a, full, side, out);
+}
+
+typedef struct { const u8 *p; isize n, at; } GifSrc;
+
+static int gif_read(GifFileType *g, GifByteType *buf, int n)
+{
+    GifSrc *s = g->UserData;
+    isize k = n < s->n - s->at ? n : s->n - s->at;
+    memcpy(buf, s->p + s->at, (size_t)k);
+    s->at += k;
+    return (int)k;
+}
+
+// A GIF's first frame through giflib, on its screen (clear where the frame doesn't cover it, and
+// where its graphic control says transparent), then fitted. Only the first frame is read: an
+// animated GIF of many frames costs no more.
+static bool gif_decode(Arena *a, Str src, int side, Img *out)
+{
+    GifSrc in = { (const u8 *)src.p, src.len, 0 };
+    int err, transparent = -1;
+    GifFileType *g = DGifOpen(&in, gif_read, &err);
+    if (!g) return false;
+    Img full;
+    bool ok = false, done = false;
+    if (g->SWidth > 0 && g->SHeight > 0 && (i64)g->SWidth * g->SHeight <= THUMB_PIXELS_MAX && img_new(a, g->SWidth, g->SHeight, &full)) {
+        for (GifRecordType t; !done && DGifGetRecordType(g, &t) == GIF_OK;) {
+            if (t == EXTENSION_RECORD_TYPE) {
+                int code;
+                GifByteType *ext;
+                if (DGifGetExtension(g, &code, &ext) != GIF_OK) break;
+                GraphicsControlBlock gcb;
+                if (code == GRAPHICS_EXT_FUNC_CODE && ext && DGifExtensionToGCB(ext[0], ext + 1, &gcb) == GIF_OK) transparent = gcb.TransparentColor;
+                while (ext && DGifGetExtensionNext(g, &ext) == GIF_OK && ext) {}
+            } else if (t == IMAGE_DESC_RECORD_TYPE) {
+                done = true;
+                if (DGifGetImageDesc(g) != GIF_OK) break;
+                GifImageDesc *d = &g->Image;
+                ColorMapObject *map = d->ColorMap ? d->ColorMap : g->SColorMap;
+                if (!map || d->Left < 0 || d->Top < 0 || d->Width <= 0 || d->Height <= 0 || d->Left + d->Width > g->SWidth || d->Top + d->Height > g->SHeight) break;
+                GifPixelType *line = arena_try_push(a, d->Width, 1);
+                if (!line) break;
+                // An interlaced frame's rows come in four passes: every 8th from 0, every 8th from
+                // 4, every 4th from 2, every 2nd from 1.
+                static const int start[4] = { 0, 4, 2, 1 }, step[4] = { 8, 8, 4, 2 };
+                ok = true;
+                for (int pass = 0; ok && pass < (d->Interlace ? 4 : 1); pass++)
+                    for (int y = d->Interlace ? start[pass] : 0; ok && y < d->Height; y += d->Interlace ? step[pass] : 1) {
+                        ok = DGifGetLine(g, line, d->Width) == GIF_OK;
+                        u8 *row = full.px + ((isize)(d->Top + y) * full.w + d->Left) * 4;
+                        for (int x = 0; ok && x < d->Width; x++) {
+                            int c = line[x];
+                            if (c == transparent || c >= map->ColorCount) continue;
+                            row[4 * x] = map->Colors[c].Red, row[4 * x + 1] = map->Colors[c].Green;
+                            row[4 * x + 2] = map->Colors[c].Blue, row[4 * x + 3] = 255;
+                        }
+                    }
+            } else if (t == TERMINATE_RECORD_TYPE) {
+                break;
+            }
+        }
+    }
+    DGifCloseFile(g, &err);
+    return ok && img_fit(a, full, side, out);
 }
 
 // The file's bytes as an image with its longer side at most side.
@@ -493,8 +555,8 @@ static bool thumb_make(Arena *a, ThumbKind k, Str src, int side, Img *out)
     switch (k) {
     case TK_JPEG: return jpeg_decode(a, src, side, out);
     case TK_WEBP: return webp_decode(a, src, side, out);
-    case TK_PNG:
-    case TK_GIF: return stb_decode(a, src, side, out);
+    case TK_PNG: return png_decode(a, src, side, out);
+    case TK_GIF: return gif_decode(a, src, side, out);
     default: return false;
     }
 }
@@ -570,7 +632,7 @@ static ThumbGot thumb_get(Arena *a, const ThumbAsk *q, Img *out)
     struct stat st;
     ThumbMeta m;
     Str c = thumb_read(a, file, THUMB_CACHED_MAX, &st);
-    if (c.len && png_meta(c, &m) && thumb_fresh(&m, uri, q->mtime, q->size) && stb_decode(a, c, q->px, out)) return TG_CACHED;
+    if (c.len && png_meta(c, &m) && thumb_fresh(&m, uri, q->mtime, q->size) && png_decode(a, c, q->px, out)) return TG_CACHED;
     if (q->kind == TK_NONE || !q->make || !thumb_file(q->root, "fail/ofx", uri, fail, sizeof fail)) return TG_NONE;
     Str f = thumb_read(a, fail, THUMB_CACHED_MAX, &st);
     if (f.len && png_meta(f, &m) && thumb_fresh(&m, uri, q->mtime, q->size)) return TG_FAIL_KNOWN;

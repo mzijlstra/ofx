@@ -57,7 +57,7 @@ for w in range(jobs):
     for d in ('base', 'fs', 'ui', 'tests'):
         shutil.copytree(os.path.join(root, d), os.path.join(work, d))
     shutil.copy(os.path.join(root, 'Makefile'), work)
-    os.symlink(os.path.join(root, 'vendor'), os.path.join(work, 'vendor'))   # stb_image (fs/thumb.c), never mutated
+    os.symlink(os.path.join(root, 'vendor'), os.path.join(work, 'vendor'))   # stb_image_resize2 (fs/thumb.c), never mutated
     os.makedirs(os.path.join(work, 'tmp'))
     workers.append(work)
 
@@ -65,7 +65,7 @@ def run(work, cc='clang'):
     if cc == 'tcc':
         os.makedirs(os.path.join(work, 'build'), exist_ok=True)
         b = subprocess.run(['tcc', '-std=c11', '-D_GNU_SOURCE', '-pthread', '-isystem', 'vendor/raylib/src', '-o', 'build/test-tcc',
-                            'tests/test.c', '-lturbojpeg', '-lwebp', '-lz', '-lm'],
+                            'tests/test.c', '-lturbojpeg', '-lwebp', '-lpng16', '-lgif', '-lz', '-lm'],
                            cwd=work, capture_output=True, text=True)
         exe = './build/test-tcc'
     else:

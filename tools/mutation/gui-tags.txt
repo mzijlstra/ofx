@@ -1,7 +1,9 @@
 # tools/mutation/gui.py: each GUI mutant (its key) and the run.sh groups that kill it
 017cdde789d5 f2
+035e843b0934 f64
 04db0337b677 browse gone f54
 073156151c0b f3 f53
+093ec0d3909c f64
 09aa08666241 f3 f52
 0afba57e2c96 f4 f52
 0ba75f00199e browse
@@ -20,6 +22,7 @@
 1ca48313e5ae f63
 1d56cafe988a f2 f5 f53 f6
 1e0c3bcc0029 f3 f53
+1e1e0aa6b2af f64
 1e315eb56bd9 f3 f5
 1eb768f9b3c9 f3
 1f8cc354c374 f53
@@ -35,6 +38,7 @@
 31ebf1711289 f52
 3250e3580527 f52
 3559c1acec7a f6
+36083773e610 f64
 37692009a5af f62
 376ea7f0a821 f53
 38d532691b1b f52
@@ -103,13 +107,16 @@ a283c5d28e84 browse f2 f4 f5 f6
 a2a7bc8f5d2e f5
 a2f9ac4641c1 f5
 a92411c8dc5c f6
+a92e79c395e0 f64
 ab7570d1a18d f2 f4
 abfec07ab080 f53
+aea2b9294c20 f64
 aea486f2304a f3
 aeb6f285a56c f63
 b29034c9b688 f63
 b3871519e086 f3
 b3d7da4ea0a6 f3
+b45e3b0d2467 f64 hang
 b4a39f45cdcf f5
 b60179857fe2 guard3
 b79a69431969 f6
@@ -121,8 +128,10 @@ ba95d2004a8c f6
 bc7be4d8f705 f5
 bdbd629ee035 f6
 bde3f6b13bb1 f3
+be3d8bb687ee f64
 be83b4356aa9 f4
 c08fb00218bc f6
+c20f84c5f07a f64
 c36fd6b536ad f6
 c572208bdadc f62
 c6c81e095729 f6
@@ -133,6 +142,7 @@ cc02179b576f f6
 cdf1accdaba1 f3
 cf03bdc5aba6 f62 f63
 cfd4f1a566ea f2 f6
+d1d173628235 f64
 d1fe8c38f917 f3 f53
 d392c5e95a9f f53
 d4cb4878fa60 f52
@@ -152,12 +162,14 @@ e556d7998ea5 f2
 e5653debe390 f6
 e76be212d3b1 f3 f53
 e9db2edb1edc f53
+eb251701b2fd f64
 ed01b1e1bff7 f62 f63
 eeea876060a7 f62
 f0559de7167d f6
 f20730defb76 f3
 f4a09201281a browse gone f54
 f5afcace2147 f52
+f9105641d117 f64
 fb1e9593e591 f63
 fb50b52ec02f f3 f53 f6
 fc26e4aab9b2 f53
