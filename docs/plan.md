@@ -185,7 +185,8 @@ step: F6.4 is the biggest, and the plain icon view gets used before previews cha
 Decisions:
 
 - **Switching:** a list button and an icon button in the top bar, beside the location toggle and
-  search, as Nemo has them; Ctrl+1 the icons, Ctrl+2 the list (Nemo's keys).
+  search, as Nemo has them; Ctrl+1 the icons, Ctrl+2 the list (Nemo's keys). Swapped after trying it
+  (Michael, 2026-10-24): Ctrl+1 the list, Ctrl+2 the icons, in the buttons' order.
 - **Remembered:** one view for every folder, in `$XDG_STATE_HOME/ofx/state` beside the sidebar's
   mode (per folder: later).
 - **Names:** under each icon, wrapped to two lines and cut with "…"; the selected one's in full.

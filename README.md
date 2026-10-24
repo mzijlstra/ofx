@@ -35,7 +35,7 @@ wayland-cursor, wayland-egl, xkbcommon, fontconfig and freetype2. raylib and Cla
 | `s`, `S` | sort by the next column (name, size, modified), reverse |
 | Tab, Ctrl+Left | the keys to the sidebar (a hidden one shows as places); Tab again back; in the tree, Left/Right (`h`/`l`) close and open a folder (or move up and down a level), Enter goes there |
 | F9, Ctrl+S | the sidebar's next mode: places, tree, hidden |
-| Ctrl+1, Ctrl+2 | the files as icons, as the list (also the two buttons at the right of the top bar; remembered) |
+| Ctrl+1, Ctrl+2 | the files as the list, as icons (also the two buttons at the right of the top bar; remembered) |
 | Ctrl+=, Ctrl+-, Ctrl+0 | in the icon view, the icons a size bigger, smaller, back to 48 px (also Ctrl+wheel, and the slider at the right of the bottom bar; remembered) |
 | `t` | a terminal in this folder (`xdg-terminal-exec --dir`) |
 | `~` | home |
@@ -78,7 +78,7 @@ colours and icons follow a theme switch.
 The icon-only buttons (back, forward, up, location, search, the views, the sidebar's modes, eject,
 a tab's ×, the zoom's minus, plus and slider) show what they do and their key when the pointer rests on them.
 
-The icon view (Ctrl+1): each entry an icon over its name (48 px at first; 32, 64, 96, 128 or 256
+The icon view (Ctrl+2): each entry an icon over its name (48 px at first; 32, 64, 96, 128 or 256
 with the slider at the right of the bottom bar, Ctrl+= and Ctrl+-, or Ctrl+wheel; the list doesn't
 zoom), wrapped to two lines and cut with
 "…"; the cursor's name shows in full, over the cells below. Left/Right (`h`/`l`) move a cell and run

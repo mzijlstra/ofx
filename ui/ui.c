@@ -48,8 +48,8 @@ typedef enum {
     UK_JOBS,       // Ctrl+J: the keyboard on the job rows' × (F5.3)
     UK_QUIT,       // Ctrl+Q, or the window closed
     UK_F9,         // the sidebar's next mode (F6)
-    UK_VIEW_ICONS, // Ctrl+1: the files as icons (F6.2)
-    UK_VIEW_LIST,  // Ctrl+2: the files as the list
+    UK_VIEW_ICONS, // Ctrl+2: the files as icons (F6.2)
+    UK_VIEW_LIST,  // Ctrl+1: the files as the list
     UK_SIDE,       // Ctrl+Left: the keys to the sidebar (Tab goes there and back)
     UK_ZOOM_IN,    // Ctrl+= (Ctrl++, the keypad's +): the icon view's icons a size bigger (F6.3)
     UK_ZOOM_OUT,   // Ctrl+-

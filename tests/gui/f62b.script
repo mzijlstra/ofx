@@ -1,7 +1,7 @@
 # F6.2, after f62.script on the same scratch tree: the icon view came back from the state file.
 settle
 expect view=icons cols=6 iconpx=48
-key ctrl-2
+key ctrl-1
 expect view=list
 sh grep -qx view=list "$OFX_ROOT/state/ofx/state"
 sh grep -qx sidebar=places "$OFX_ROOT/state/ofx/state"

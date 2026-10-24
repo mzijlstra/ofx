@@ -174,7 +174,7 @@ static void test_view_switch(void)
     static Ui u;
     grid(&u, 23, 5, 3, 7);
     u.grid = false, ui_set_cols(&u.list, 1);
-    // Ctrl+1 the icons, Ctrl+2 the list; the cursor stays.
+    // Ctrl+2 the icons, Ctrl+1 the list; the cursor stays.
     UiInput in = keys(1, UK_VIEW_ICONS);
     UiAction a = ui_handle(&u, (UiNames){ name_at, NULL }, &in);
     CHECK(a.kind == UA_VIEW && a.index == 1 && u.grid && u.list.sel == 7);

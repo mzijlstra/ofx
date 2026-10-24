@@ -2377,8 +2377,8 @@ static bool tip_of(int k, char *buf, size_t cap, Clay_ElementId *id)
         { UB_BACK, "nav-back", "Back (Alt+Left)" }, { UB_FORWARD, "nav-fwd", "Forward (Alt+Right)" },
         { UB_UP, "nav-up", "Up to the parent (Backspace)" }, { UB_LOCATION, "loc-toggle", "Type a location (Ctrl+L)" },
         { UB_SEARCH, "search", "Find (Ctrl+F)" }, { UB_LEFT, "crumb-left", "Earlier folders in the path" },
-        { UB_RIGHT, "crumb-right", "Later folders in the path" }, { UB_VIEW_LIST, "view-list", "List (Ctrl+2)" },
-        { UB_VIEW_ICONS, "view-icons", "Icons (Ctrl+1)" }, { UB_ZOOM_OUT, "zoom-out", "Smaller icons (Ctrl+-)" },
+        { UB_RIGHT, "crumb-right", "Later folders in the path" }, { UB_VIEW_LIST, "view-list", "List (Ctrl+1)" },
+        { UB_VIEW_ICONS, "view-icons", "Icons (Ctrl+2)" }, { UB_ZOOM_OUT, "zoom-out", "Smaller icons (Ctrl+-)" },
         { UB_ZOOM_IN, "zoom-in", "Bigger icons (Ctrl+=)" },
     };
     static const char *const MODES[SIDE_MODES] = { "Places (F9)", "Tree (F9)", "No sidebar (F9)" };
@@ -2576,8 +2576,9 @@ static UiKey ui_key_of(int key, int mods)
     if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_DOWN) return UK_JOBS;
     if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_RIGHT) return UK_LOCATION;
     if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_S) return UK_F9;
-    if (m == GLFW_MOD_CONTROL && (key == GLFW_KEY_1 || key == GLFW_KEY_KP_1)) return UK_VIEW_ICONS;   // Nemo's keys (F6.2)
-    if (m == GLFW_MOD_CONTROL && (key == GLFW_KEY_2 || key == GLFW_KEY_KP_2)) return UK_VIEW_LIST;
+    // The views in the top bar's order, list first (Michael, 2026-10-24; Nemo has them the other way).
+    if (m == GLFW_MOD_CONTROL && (key == GLFW_KEY_1 || key == GLFW_KEY_KP_1)) return UK_VIEW_LIST;
+    if (m == GLFW_MOD_CONTROL && (key == GLFW_KEY_2 || key == GLFW_KEY_KP_2)) return UK_VIEW_ICONS;
     // The icon view's sizes (F6.3), as Nemo's: Ctrl+= or Ctrl++ (Shift+= on most layouts), Ctrl+-,
     // Ctrl+0, and the keypad's.
     if ((m == GLFW_MOD_CONTROL || m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT)) && (key == GLFW_KEY_EQUAL || key == GLFW_KEY_KP_ADD)) return UK_ZOOM_IN;

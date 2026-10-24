@@ -3,8 +3,8 @@
 # 936x490: 6 columns of cells beside the sidebar, 3 rows of them (rows 0-5, 6-11, 12-17, 18-23).
 settle
 expect view=list cols=1 iconpx=24 icontex=48 cells=0
-# Ctrl+1 through the key callback (GLFW_KEY_1 is 49, Ctrl 2), as the keyboard gives it.
-raw-key 49 2
+# Ctrl+2 through the key callback (GLFW_KEY_2 is 50, Ctrl 2), as the keyboard gives it.
+raw-key 50 2
 expect view=icons cols=6 rows=3 cells=18 cellfirst=0 celllast=17 iconpx=48 idx=0 top=0
 # Its own texture, not the list's stretched: 48 px at the test's scale 2.
 expect icontex=96
@@ -101,11 +101,11 @@ expect editing=1 edit=f01
 shot rename.png
 key esc
 expect editing=0 sel=f01
-# The list again: the cursor stays, one entry a row; and back (Ctrl+2 through the callback).
-raw-key 50 2
+# The list again: the cursor stays, one entry a row (Ctrl+1 through the callback); and back.
+raw-key 49 2
 expect view=list cols=1 idx=3 iconpx=24
 sh grep -qx view=list "$OFX_ROOT/state/ofx/state"
-key ctrl-1
+key ctrl-2
 expect view=icons cols=6 idx=3
 # The sidebar hidden: 8 columns in the wider room, then 6 again (F9: tree, hidden, places).
 key f9
@@ -148,7 +148,7 @@ point-ui view-icons
 hover-here
 expect tooltip=-
 sleep 700
-expect tooltip=Icons_(Ctrl+1)
+expect tooltip=Icons_(Ctrl+2)
 shot tip-icons.png
 key down
 expect tooltip=-

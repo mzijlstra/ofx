@@ -2,7 +2,7 @@
 # the sidebar 712 px for cells, 410 for their rows. At 48 px 6 across and 3 down; 32: 6 by 4;
 # 64: 5 by 3; 96: 4 by 2; 128: 3 by 2; 256: 2 by 1.
 settle
-key ctrl-1
+key ctrl-2
 expect view=icons zoom=48 cols=6 rows=3 cellw=112 cellh=104 zoomshown=1 iconpx=48 icontex=96
 shot zoom-48.png
 # Ctrl+= through the key callback (GLFW_KEY_EQUAL 61, Ctrl 2); a size bigger is Yaru's 256@2x made
@@ -94,14 +94,14 @@ expect zoom=48 top=18
 wheel 3
 expect top=0
 # ---- the list doesn't zoom: no slider, the keys and Ctrl+wheel do nothing
-key ctrl-2
+key ctrl-1
 expect view=list zoomshown=0 iconpx=24 rows=14
 key ctrl-equal
 wheel 1 ctrl
 expect zoom=48 view=list
 shot zoom-list.png
 # Back to the icons at the size they had; 128 is remembered for f63b.
-key ctrl-1
+key ctrl-2
 expect view=icons zoom=48 zoomshown=1
 key ctrl-equal
 key ctrl-equal
