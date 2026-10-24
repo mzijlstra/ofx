@@ -38,7 +38,7 @@ Omarchy's theme: the binary, the folder `tools/ofx`, the window's title and Wayl
 | F6.2 | Icon view: a grid beside the list, buttons in the top bar, Ctrl+1 and Ctrl+2, remembered | Below |
 | F6.3 | Icon sizes (the icon view): a zoom slider at the bottom right, Ctrl+wheel and Ctrl+= / Ctrl+-, remembered | |
 | F6.4 | Previews in the icon view: the freedesktop thumbnail cache (shared with Nemo), PNG, JPEG, GIF and WebP made on two threads | |
-| F7 | Menus: File, Edit, View, Go, Bookmarks, Help | |
+| F7 | Menus: File, Edit, View, Go, Bookmarks, Help; New Window as a second process | Below |
 | F8 | Right-click menus, with "Open with" (the apps the freedesktop MIME lists name for the file's type) | |
 
 Each milestone ends in a reviewer-2 round, then Michael's go before `make install`.
@@ -152,6 +152,29 @@ package ships (upstream Yaru has no grey; omacom/omarchy#7203, #14851 and PRs #1
 themes (#14851). **Fallback:** a missing icon theme gives way to its name cut at the last `-`
 until one is installed (`Yaru-grey` → `Yaru`), then plain Yaru, then Adwaita (GTK's own, but
 mostly SVG, and ofx draws PNGs), then hicolor. No `icons.theme`: the same way.
+
+## F7 design (2026-10-24)
+
+**Asked (Michael):** menus as Nemo has them: File, Edit, View, Go, Bookmarks, Help. The rest of
+this design (the entries, which keys they show, how a menu opens and closes) is still to come.
+
+**Decided (Michael, 2026-10-24): New Window is a second process.** File → New Window (Ctrl+N) runs
+`uwsm-app -- ofx <current folder>`, the way ofx launches other programs. There is no window that
+one process controls besides its own: raylib keeps one window and one GL context in global state,
+so that would mean patching vendored raylib or leaving it, for no gain here.
+- What the processes share already: the clipboard (`ext-data-control-v1`, `fs/clipboard.c`), so
+  Ctrl+C in one window and Ctrl+V in another works as it does with Nemo; the thumbnail cache
+  (writes renamed into place); the state file (also renamed into place, never half written).
+- What it costs: each window is a whole process, about 140 MiB RSS (F6.4's measure: 139 MiB
+  started, mostly Mesa and GL). Each has its own job queue, so two windows can run 8 jobs.
+- What it gains: a crash or a hang takes down one window only; closing one leaves the other's
+  jobs running. Hyprland tiles each window on its own anyway, and SUPER+SHIFT+F works this way.
+- **To fix with it:** `state_save` writes every field from the window's own memory, so window B's
+  save undoes window A's change to a field B didn't touch. A save re-reads the file and changes
+  only the field that changed.
+- Tests: the fake `uwsm-app` in `run-script.sh` logs the command; a script checks `ofx <folder>`
+  in `spawn.log`. A unit test for the state merge (two saves of different fields keep both).
+- F8 reuses it: "Open in New Window" on a folder's right-click menu.
 
 ## F6.4 design (2026-10-24)
 
