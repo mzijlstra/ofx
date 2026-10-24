@@ -138,10 +138,13 @@ static i64 size_of(const char *path)
     return stat(path, &st) == 0 ? (i64)st.st_size : -1;
 }
 
+static bool jpeg_progressive;   // jpeg_of makes a progressive JPEG
+
 // A JPEG of im (quality 95, no subsampling), with an EXIF orientation when o > 0, MM or II order.
 static Str jpeg_of(Arena *a, Img im, int o, bool le)
 {
     tjhandle tj = tj3Init(TJINIT_COMPRESS);
+    tj3Set(tj, TJPARAM_PROGRESSIVE, jpeg_progressive);
     tj3Set(tj, TJPARAM_SUBSAMP, TJSAMP_444);
     tj3Set(tj, TJPARAM_QUALITY, 95);
     u8 *buf = NULL;
@@ -238,6 +241,22 @@ static void test_thumb_decode(void)
     CHECK(thumb_make(&a, TK_JPEG, jpeg_of(&a, small, 0, false), 128, &out) && out.w == 40 && out.h == 20);
     // Not a JPEG.
     CHECK(!thumb_make(&a, TK_JPEG, S("not a jpeg at all"), 128, &out));
+    // libjpeg's own memory capped (reviewer-2, F6.4 review): a progressive JPEG holds its
+    // coefficients at full size, 1000 by 500 about 3 MiB, over a 1 MiB cap; a baseline one doesn't.
+    jpeg_progressive = true;
+    Str prog = jpeg_of(&a, im, 0, false);
+    jpeg_progressive = false;
+    CHECK(thumb_make(&a, TK_JPEG, prog, 128, &out) && out.w == 128);
+    thumb_jpeg_max_mib = 1;
+    CHECK(!thumb_make(&a, TK_JPEG, prog, 128, &out));
+    CHECK(thumb_make(&a, TK_JPEG, j, 128, &out) && out.w == 128);
+    thumb_jpeg_max_mib = 256;
+    // Only warnings (reviewer-2): 3 junk bytes before a marker, and a cut file, still decode.
+    isize seg = 4 + ((u8)j.p[4] << 8 | (u8)j.p[5]);   // past SOI and APP0
+    u8 *junk = arena_push(&a, j.len + 3, 1);
+    memcpy(junk, j.p, (size_t)seg), memcpy(junk + seg, "\0\0\0", 3), memcpy(junk + seg + 3, j.p + seg, (size_t)(j.len - seg));
+    CHECK((u8)j.p[seg] == 0xFF && thumb_make(&a, TK_JPEG, (Str){ (const char *)junk, j.len + 3 }, 128, &out) && out.w == 128);
+    CHECK(thumb_make(&a, TK_JPEG, (Str){ j.p, j.len * 6 / 10 }, 128, &out) && out.w == 128 && reddish(&out, 10, 5));
     // Fitted, each side rounded: 200 by 300 to 256 is 171 by 256 (170.67).
     CHECK(img_fit(&a, halves(&a, 200, 300), 256, &out) && out.w == 171 && out.h == 256);
     // PNG, fitted.

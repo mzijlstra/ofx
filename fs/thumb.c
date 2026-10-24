@@ -424,6 +424,20 @@ static bool img_orient(Arena *a, Img in, int o, Img *out)
     return true;
 }
 
+// libjpeg-turbo's own memory for one JPEG, in MiB, and a progressive one's scans: it allocates a
+// progressive file's coefficients at full size itself, outside the arena, and TurboJPEG 3.2's
+// defaults are unlimited (reviewer-2, F6.4 review: a 6.3 MB 40000 by 40000 file took 3.1 GiB).
+// A 12 MP progressive photo needs about 70. A variable, so a test can lower it.
+static int thumb_jpeg_max_mib = 256;
+enum { THUMB_JPEG_SCANS_MAX = 500 };
+
+// A TurboJPEG call that succeeded, or only warned: junk before a marker, a cut file (gdk-pixbuf,
+// Nemo's, decodes both; reviewer-2, F6.4 review).
+static bool tj_ok(tjhandle tj, int r)
+{
+    return r == 0 || tj3GetErrorCode(tj) == TJERR_WARNING;
+}
+
 // A JPEG decoded at the smallest of libjpeg-turbo's scales that keeps its longer side at least
 // side, then fitted and turned.
 static bool jpeg_decode(Arena *a, Str src, int side, Img *out)
@@ -432,7 +446,8 @@ static bool jpeg_decode(Arena *a, Str src, int side, Img *out)
     if (!tj) return false;
     Img full;
     bool ok = false;
-    if (tj3DecompressHeader(tj, (const u8 *)src.p, (size_t)src.len) == 0) {
+    if (tj3Set(tj, TJPARAM_MAXMEMORY, thumb_jpeg_max_mib) == 0 && tj3Set(tj, TJPARAM_SCANLIMIT, THUMB_JPEG_SCANS_MAX) == 0 &&
+        tj_ok(tj, tj3DecompressHeader(tj, (const u8 *)src.p, (size_t)src.len))) {
         int w = tj3Get(tj, TJPARAM_JPEGWIDTH), h = tj3Get(tj, TJPARAM_JPEGHEIGHT), big = w > h ? w : h, nsf;
         tjscalingfactor *sf = tj3GetScalingFactors(&nsf), best = { 1, 1 };
         for (int k = 0; sf && k < nsf; k++) {
@@ -440,7 +455,7 @@ static bool jpeg_decode(Arena *a, Str src, int side, Img *out)
             if (s >= side && s < TJSCALED(big, best)) best = sf[k];
         }
         ok = w > 0 && h > 0 && tj3SetScalingFactor(tj, best) == 0 && img_new(a, TJSCALED(w, best), TJSCALED(h, best), &full) &&
-             tj3Decompress8(tj, (const u8 *)src.p, (size_t)src.len, full.px, 0, TJPF_RGBA) == 0;
+             tj_ok(tj, tj3Decompress8(tj, (const u8 *)src.p, (size_t)src.len, full.px, 0, TJPF_RGBA));
     }
     tj3Destroy(tj);
     Img fit;

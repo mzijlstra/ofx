@@ -217,7 +217,8 @@ MUTANTS = [
     (G, "return app.icons_missed = true, arena_restore(&scratch, mark), NULL;", "return arena_restore(&scratch, mark), NULL;"),
     # F6.4: previews in the icon view
     (TB, "        if (thumbs.e[i].state == TS_ASKED) thumbs.e[i].state = TS_UNKNOWN;\n", ""),
-    (TB, "    if (e->state == TS_UNKNOWN || (draw && e->state == TS_DROPPED)) {", "    if (e->state == TS_UNKNOWN || e->state == TS_DROPPED) {"),
+    (TB, "    if ((e->state == TS_UNKNOWN && (draw || kind != TK_NONE)) || (draw && e->state == TS_DROPPED)) {", "    if (e->state == TS_UNKNOWN || e->state == TS_DROPPED) {"),
+    (TB, "    if ((e->state == TS_UNKNOWN && (draw || kind != TK_NONE)) || (draw && e->state == TS_DROPPED)) {", "    if (e->state == TS_UNKNOWN || (draw && e->state == TS_DROPPED)) {"),
     (TB, "    if (draw) e->drawn = thumbs.frame, thumbs.drawn_now++;", "    if (draw) thumbs.drawn_now++;"),
     (TB, "thumbs.e[i].state == TS_SHOWN && thumbs.e[i].drawn < thumbs.frame && (old < 0", "thumbs.e[i].state == TS_SHOWN && (old < 0"),
     (TB, "    while (thumbs.held > thumbs.held_max) {", "    while (0) {"),

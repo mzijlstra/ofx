@@ -783,6 +783,8 @@ MUTANTS += [
     (TH, '            case 7: dx = h - 1 - y, dy = w - 1 - x; break;', '            case 7: dx = y, dy = w - 1 - x; break;'),
     (TH, '            case 8: dx = y, dy = w - 1 - x; break;', '            case 8: dx = h - 1 - y, dy = w - 1 - x; break;'),
     (TH, '    bool swap = o >= 5;', '    bool swap = o > 5;'),
+    (TH, '    if (tj3Set(tj, TJPARAM_MAXMEMORY, thumb_jpeg_max_mib) == 0 && tj3Set(tj, TJPARAM_SCANLIMIT, THUMB_JPEG_SCANS_MAX) == 0 &&', '    if ('),
+    (TH, '    return r == 0 || tj3GetErrorCode(tj) == TJERR_WARNING;', '    return r == 0;'),
     (TH, '            if (s >= side && s < TJSCALED(big, best)) best = sf[k];', '            if (s < TJSCALED(big, best)) best = sf[k];'),
     (TH, '    return ok && img_fit(a, full, side, &fit) && (o == 1 ?', '    return ok && img_fit(a, full, side, &fit) && (1 ?'),
     (TH, '        c.options.use_scaling = 1;\n', ''),
