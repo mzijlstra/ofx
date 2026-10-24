@@ -12,6 +12,9 @@ since a narrow run can't see a mutant break something its tags don't cover (Mich
 The unmutated build always runs the whole suite first.
 
 Everything runs from the scratch copy, scripts included, so the repo can be edited meanwhile.
+Each run's trees (about 50 MB: the copy tests' big files) are removed once it is judged, and the
+run stops while there is still room: the scratch dir is usually /tmp, a tmpfs in RAM, and keeping
+them filled it on 2026-10-24.
 """
 import hashlib, os, re, shutil, subprocess, sys
 
@@ -220,11 +223,16 @@ if b.returncode != 0 or r.returncode != 0:
     print('the unmutated build fails tests/gui/run.sh: fix that first')
     print(b.stderr[-300:], '\n'.join(l for l in r.stdout.splitlines() if 'FAILED' in l or (l.startswith('script:') and not l.startswith('script: 0 of'))))
     sys.exit(2)
+shutil.rmtree(os.path.join(scratch, 'gm-base'), ignore_errors=True)
 print('base: tests/gui/run.sh passes unmutated', flush=True)
+MIN_FREE = 2 << 30   # bytes left in the scratch dir's file system before a mutant starts
 survivors, retagged = [], 0
 for i, m in enumerate(MUTANTS):
     if only is not None and i not in only:
         continue
+    if shutil.disk_usage(scratch).free < MIN_FREE:
+        print(f'stopped before #{i}: less than 2 GiB free in {scratch}')
+        break
     f, old, new = m
     k = key(m)
     groups = [] if full else tags.get(k, [])
@@ -238,6 +246,7 @@ for i, m in enumerate(MUTANTS):
         continue
     r = subprocess.run([run_sh, os.path.join(scratch, f'gm{i}'), os.path.join(work, 'build/ofx')] + groups, capture_output=True, text=True)
     open(path, 'w').write(text)
+    shutil.rmtree(os.path.join(scratch, f'gm{i}'), ignore_errors=True)
     if r.returncode != 0 and not groups:
         tags[k] = failed_groups(r.stdout) or ['all']   # 'all': it failed without naming a group
         retagged += 1
@@ -255,4 +264,5 @@ if retagged:
             if k in live and tags[k] != ['all']:
                 out.write(f'{k} {" ".join(tags[k])}\n')
     print(f'{retagged} mutants tagged in {tags_path}')
+shutil.rmtree(work, ignore_errors=True)
 print(f'{len(MUTANTS)} GUI mutants, {len(survivors)} survived: {survivors}')
