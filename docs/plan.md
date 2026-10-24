@@ -145,6 +145,60 @@ themes (#14851). **Fallback:** a missing icon theme gives way to its name cut at
 until one is installed (`Yaru-grey` → `Yaru`), then plain Yaru, then Adwaita (GTK's own, but
 mostly SVG, and ofx draws PNGs), then hicolor. No `icons.theme`: the same way.
 
+## F6.4 design (2026-10-24, proposed: Michael's decisions pending)
+
+**Asked (Michael):** previews in the icon view, from the freedesktop thumbnail cache shared with
+Nemo, PNG and JPEG made on a thread.
+
+**Measured here (2026-10-24):**
+- `~/.cache/thumbnails`: `normal` 15 files, `large` 2918 (85 MiB), `x-large` 3637 (270 MiB),
+  `fail/gnome-thumbnail-factory` 1396. Nemo writes PNGs with `Thumb::URI` and `Thumb::MTime`
+  (seconds) and `Software`, as the spec has it. Many are of PDFs and slides, which ofx can't make.
+- Nemo here: `show-image-thumbnails 'local-only'`, `thumbnail-limit` 1 MiB, so Nemo makes no
+  preview for most photos.
+- Images under `~` and `/mnt/sd`: 22399 PNG, 8501 JPEG, 4063 GIF, 677 WebP, 5 HEIC (SVGs left
+  out: mostly icons in repos).
+- One photo, to a 256 px preview, one core: stb_image (raylib's) decodes in 60 to 160 ms, then
+  13 to 86 ms to shrink. libjpeg-turbo (a system library here, 3.2.0) decodes straight at 1/2 to
+  1/8 size in 14 to 39 ms, 3 to 6 times less. Writing the 256 px PNG: 4 to 8 ms, 50 to 120 KiB.
+- The output: DP-3, 1920x1200, scale 1. The sizes 32 to 128 draw from `normal` (128 px), 256
+  from `large` (256); scale 2 would take `large` and `x-large` (512).
+
+**Proposal:**
+1. **What gets a preview:** ofx makes PNG, JPEG, GIF (the first frame) and WebP; any other file
+   shows a preview when the cache already holds a fresh one (Nemo's PDFs and slides), else its
+   icon. Videos and PDFs made by the system's thumbnailers stay on the later list.
+2. **The cache:** read and written by the spec: `$XDG_CACHE_HOME/thumbnails/<size>/<md5 of the
+   file's URI>.png`, fresh when `Thumb::MTime` equals the file's mtime (and `Thumb::Size` its size
+   when present). Written with those, `Thumb::Size` and `Software ofx`, through a temporary file
+   renamed into place, so Nemo never reads half a file. A file ofx can't decode gets
+   `fail/ofx/<md5>.png` (the spec's failure entry, per program). Files in the cache itself never get
+   previews.
+3. **The size, one per drawn size (the rule from Nemo's loop):** the drawn pixels pick the one
+   directory (`normal` up to 128, `large` to 256, `x-large` to 512); ofx checks only there, makes
+   it there when missing or stale, and tries a file once per mtime: a failure or a stale result it
+   can't replace is remembered until the file changes.
+4. **Which files:** local drives only (not NFS, CIFS, SSHFS or other FUSE mounts: their reads can
+   hang), and images up to 50 MiB (a 100 MP JPEG takes about a second).
+5. **The decoder:** libjpeg-turbo for JPEG (system library, scaled decode); raylib's stb_image for
+   PNG and GIF; libwebp (system) for WebP. The thumbnail PNG written through stb_image_write's
+   zlib, with our own tEXt chunks (stb writes none).
+6. **Threads:** two workers, so a folder of photos fills in seconds while the window stays at
+   60 fps; the queue holds only the cells on screen and a page ahead, newest first, and is emptied
+   when another folder, zoom or view comes. Idle stays at 0 CPU: a finished preview posts one empty
+   event, as the timer does.
+7. **Held:** each preview a texture at its drawn size (as the icons since F6.3), at most 64 MiB of
+   them, the least recently drawn dropped first; at 256 px that is about 256 previews, at 48 px
+   thousands.
+8. **The look:** the preview fitted in the icon's square, its shape kept, no frame; the file's icon
+   until the preview comes. The list view keeps its icons (24 px is too small to tell photos apart).
+9. **On and off:** always on in F6.4; a switch comes with `ofx.conf` (later).
+
+**Tests:** `XDG_CACHE_HOME` pointed at the scratch dir by `run-script.sh` and the unit tests, so no
+run reads or writes Michael's cache; fixture images (a PNG, a JPEG, a GIF, a WebP, a broken one, a
+stale cache entry) made in the scratch dir. The thumbnail name checked against a URI that needs
+escaping (spaces, `#`, UTF-8), since Nemo must find what ofx writes.
+
 ## F6.3 design (2026-10-24)
 
 **Asked (Michael):** icon sizes: a zoom slider at the bottom right, Ctrl+wheel and Ctrl+= / Ctrl+-,
