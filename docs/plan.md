@@ -7,7 +7,7 @@ had no "terminal here". The concept, with what is in and out of scope, is the do
 concept" (https://claude.ai/code/artifact/8d990266-71ea-4d0e-a109-a8f3a71807ba).
 
 Out for good: drag and drop (Michael doesn't drag files), the "Save as" portal dialogs, network
-shares, archives, "open with" menus.
+shares, archives. ("Open with" was here until 2026-10-24, when Michael moved it into F8.)
 
 **Name (2026-10-22, Michael):** fx became **ofx**, Omarchy File eXplorer, for its close ties to
 Omarchy's theme: the binary, the folder `tools/ofx`, the window's title and Wayland app id, the
@@ -39,6 +39,7 @@ Omarchy's theme: the binary, the folder `tools/ofx`, the window's title and Wayl
 | F6.3 | Icon sizes (the icon view): a zoom slider at the bottom right, Ctrl+wheel and Ctrl+= / Ctrl+-, remembered | |
 | F6.4 | Previews in the icon view: the freedesktop thumbnail cache (shared with Nemo), PNG, JPEG, GIF and WebP made on two threads | |
 | F7 | Menus: File, Edit, View, Go, Bookmarks, Help | |
+| F8 | Right-click menus, with "Open with" (the apps the freedesktop MIME lists name for the file's type) | |
 
 Each milestone ends in a reviewer-2 round, then Michael's go before `make install`.
 
