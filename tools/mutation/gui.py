@@ -7,8 +7,9 @@ tests/gui/run.sh, each script in its own headless weston (CLAUDE.md, "Testing th
 The whole GUI suite takes about 86 s, so each mutant runs only the script groups that killed it
 before (its tags, in gui-tags.txt): a grid mutant runs f62, not the copy jobs' f53. A mutant with
 no tags (new, or its text changed) runs the whole suite, and the groups that fail become its
-tags. --full runs every mutant on the whole suite and writes the tags again: before an install,
-since a narrow run can't see a mutant break something its tags don't cover (Michael, 2026-10-24).
+tags. --full runs every mutant on the whole suite and writes the tags again: before installing the
+last step of a major milestone (F6 to F7), since a narrow run can't see a mutant break something its
+tags don't cover; the installs between run the tagged mutants (Michael, 2026-10-24).
 The unmutated build always runs the whole suite first.
 
 Everything runs from the scratch copy, scripts included, so the repo can be edited meanwhile.

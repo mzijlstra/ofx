@@ -83,8 +83,9 @@ groups that killed it on a whole-suite run (`tools/mutation/gui-tags.txt`, writt
 164 mutants in 71 min, against about 4 h on the whole suite each. A new or changed mutant runs the
 whole suite and is tagged. They build `build/ofx-mut`: clang with ASan and UBSan, Clay's code in
 its own object compiled once a run (`gui/clay.c`), 1.1 s a mutant against gcc's 3.5 s (Michael,
-2026-10-24; tcc has no ASan, so not there). `--full` reruns every mutant on the whole suite, before
-an install (Michael, 2026-10-24). `gui.py` runs from its scratch copy, scripts included, so editing
+2026-10-24; tcc has no ASan, so not there). `--full` reruns every mutant on the whole suite (about
+4.5 h), only before installing the last step of a major milestone, as F6 to F7 (Michael,
+2026-10-24); the installs between run the tagged mutants. `gui.py` runs from its scratch copy, scripts included, so editing
 `tests/gui` during a run is safe now.
 
 - **Why not a Hyprland headless output any more:** a new output takes a workspace Hyprland picks,
