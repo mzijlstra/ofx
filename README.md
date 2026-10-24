@@ -74,6 +74,9 @@ the wheel scrolls a row per notch, a click on a column header sorts by it (again
 click on a place goes there, and the back and forward buttons walk the history. The list refreshes by itself when the folder changes, and the
 colours and icons follow a theme switch.
 
+The icon-only buttons (back, forward, up, location, search, the views, the sidebar's modes, eject,
+a tab's ×) show what they do and their key when the pointer rests on them.
+
 The icon view (Ctrl+1): each entry a 48 px icon over its name, wrapped to two lines and cut with
 "…"; the cursor's name shows in full, over the cells below. Left/Right (`h`/`l`) move a cell and run
 on across the rows (in the list they do nothing), Up/Down (`k`/`j`) a row, PgUp/PgDn a page of rows,

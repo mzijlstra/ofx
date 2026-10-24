@@ -697,3 +697,12 @@ MUTANTS += [
     (U, "            if (u->side_focus && u->side.n > 0 && u->side_mode == SIDE_TREE) return (UiAction){ UA_TREE_LEFT, u->side.sel, false };\n            break;",
         "            if (u->side_focus && u->side.n > 0 && u->side_mode == SIDE_TREE) return (UiAction){ UA_TREE_LEFT, u->side.sel, false };\n            return (UiAction){ UA_PARENT, 0, false };"),
 ]
+# ---- tooltips (Michael, 2026-10-24)
+MUTANTS += [
+    (U, "    if (target == t->target) return false;\n    *t = (UiTip)", "    *t = (UiTip)"),
+    (U, "    return t->target >= 0 && !t->shown && !t->off ? t->since + UI_TIP_MS : 0;", "    return t->target >= 0 && !t->shown && !t->off ? t->since : 0;"),
+    (U, "    return t->target >= 0 && !t->shown && !t->off ? t->since + UI_TIP_MS : 0;", "    return t->target >= 0 && !t->shown ? t->since + UI_TIP_MS : 0;"),
+    (U, "    if (!due || now < due) return false;", "    if (!due || now <= due) return false;"),
+    (U, "    t->shown = false, t->off = t->target >= 0;", "    t->shown = false, t->off = true;"),
+    (U, "    t->shown = false, t->off = t->target >= 0;", "    t->off = t->target >= 0;"),
+]

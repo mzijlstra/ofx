@@ -29,7 +29,10 @@
 //   point-ui <id> [k]       the point at the middle of a Clay element (k: its CLAY_IDI index),
 //                           printed as "point: x y" and kept for click-here
 //   hover-here              the pointer to the last point-ui (the hover highlights, a drive's
-//                           eject button)
+//                           eject button, a button's tooltip)
+//   idle                    the window waits for events as it does unscripted, until a tooltip
+//                           waiting is due; a wake-up 3 s on stands in if nothing comes, and the
+//                           state's idlewoke says which ended the wait (timer or fallback)
 //   click-here              a left press at the last point-ui
 //   middle-here             a middle press there (a folder into a background tab, a tab closed)
 //   middle <row>            a middle press on list row <row>
@@ -70,6 +73,35 @@ static struct {
 } script;
 
 static u8 script_mem[KiB(256)];
+
+// `idle`'s stand-in wake-up: 3 s on, should the timer never come.
+static atomic_bool idle_fallback;
+static const char *idle_woke = "-";
+
+static void *idle_fallback_main(void *arg)
+{
+    (void)arg;
+    nanosleep(&(struct timespec){ 3, 0 }, NULL);
+    atomic_store(&idle_fallback, true);
+    glfwPostEmptyEvent();
+    return NULL;
+}
+
+// The window asleep until the tooltip waiting is due, as unscripted: only the timer thread's
+// wake-up (or the fallback) ends it. Frame-done events from the last swap wake it once or twice
+// on the way; it sleeps again after each.
+static void script_idle(void)
+{
+    i64 due = ui_tip_due(&app.tip);
+    atomic_store(&idle_fallback, false);
+    pthread_t th;
+    pthread_create(&th, NULL, idle_fallback_main, NULL);
+    pthread_detach(th);
+    EnableEventWaiting();
+    while (due && now_ms() < due && !atomic_load(&idle_fallback)) PollInputEvents();
+    DisableEventWaiting();
+    idle_woke = !due ? "nothing" : atomic_load(&idle_fallback) ? "fallback" : "timer";
+}
 
 static bool script_open(const char *path)
 {
@@ -177,6 +209,12 @@ static void script_state(char *out, size_t cap)
         snprintf(hovernum, sizeof hovernum, "%s", strcmp(app.hover_num, used) == 0 ? "used" : strcmp(app.hover_num, avail) == 0 ? "free" : "?");
     }
     if (app.ui.side_mode == SIDE_PLACES && hi >= 0 && hi < app.places.n) ejectbtn = place_ejectable(&app.places.p[hi]);
+    // The tooltip shown (Michael, 2026-10-24), spaces as '_'.
+    char tipword[NAME_MAX + 64] = "-";
+    Clay_ElementId tipid;
+    if (app.tip.shown && tip_of(app.tip.target, tipword, sizeof tipword, &tipid))
+        for (char *c = tipword; *c; c++)
+            if (*c == ' ') *c = '_';
     char info[NAME_MAX + 64];
     status_info(info, sizeof info);
     for (char *c = info; *c; c++)
@@ -202,7 +240,7 @@ static void script_state(char *out, size_t cap)
              "sysclip=%d modal=%s askall=%d tabs=%d tab=%d tabdirs=%s sizecell=%s crumbs=%s crumbhome=%d crumb=%d crumbshown=%d-%d arrows=%d locating=%d cnt=%s "
              "esel=%d-%d caret=%d copied=%s crumbkey=%s jobs=%d waiting=%d jobrows=%s jobkey=%s jobline=%d jobspeed=%d clashjob=%s "
              "sides=%s spaced=%d sidemode=%s treen=%d treecur=%s treerow=%td treehere=%d trash=%d sidehover=%d hovernum=%s ejectbtn=%d cwdavail=%d info=%s "
-             "view=%s cols=%d cells=%d cellfirst=%td celllast=%td fulllines=%d celllines=%d cellcut=%d iconpx=%d icontex=%d iconresets=%d crumbfocus=%d status=%s",
+             "view=%s cols=%d cells=%d cellfirst=%td celllast=%td fulllines=%d celllines=%d cellcut=%d iconpx=%d icontex=%d iconresets=%d crumbfocus=%d tooltip=%s idlewoke=%s status=%s",
              app.cwd, app.list.n, app.list.hidden, STR_ARG(sel), app.ui.list.sel, app.ui.list.top, app.ui.list.rows, app.hover,
              t->accent.r, t->accent.g, t->accent.b, t->bg.r, t->bg.g, t->bg.b, t->icons[0] ? t->icons : "-",
              app.icon_scale, GetScreenWidth(), GetScreenHeight(), app.reloads, app.themes, atomic_load(&watch.batches),
@@ -219,7 +257,7 @@ static void script_state(char *out, size_t cap)
              jobs.nrun, jobs.nwait, joblabels, jobkey, oldest ? oldest->line.reached : 0, oldest && oldest->line.now > 0, clashjob,
              sides[0] ? sides : "-", spaced, SIDE_MODES_W[app.ui.side_mode], app.ui.side_mode == SIDE_TREE ? tree.n : 0, treecur,
              app.ui.side.sel - app.ui.side.top, treehere, app.ui.in_trash, app.side_hover, hovernum, ejectbtn, app.cwd_avail >= 0, info,
-             app.ui.grid ? "icons" : "list", (int)ui_cols(&app.ui.list), app.grid_cells, app.grid_first, app.grid_last, app.grid_full_lines, app.grid_hover_lines, app.grid_hover_cut, entry_px(), icontex, app.icon_full_resets, app.ui.crumb_focus,
+             app.ui.grid ? "icons" : "list", (int)ui_cols(&app.ui.list), app.grid_cells, app.grid_first, app.grid_last, app.grid_full_lines, app.grid_hover_lines, app.grid_hover_cut, entry_px(), icontex, app.icon_full_resets, app.ui.crumb_focus, tipword, idle_woke,
              app.status[0] ? app.status : "-");
     frame_us_max = 0;
 }
@@ -457,6 +495,8 @@ static bool script_input(UiInput *in)
             printf("point: %.0f %.0f\n", script.px, script.py);
         } else if (str_eq(cmd, S("hover-here"))) {
             hover_at(script.px, script.py);
+        } else if (str_eq(cmd, S("idle"))) {
+            script_idle();
         } else if (str_eq(cmd, S("click-here"))) {
             press_at(in, script.px, script.py, 0);
         } else if (str_eq(cmd, S("middle-here"))) {

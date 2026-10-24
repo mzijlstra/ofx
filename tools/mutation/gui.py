@@ -183,6 +183,12 @@ MUTANTS = [
     (G, "    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_DOWN) return UK_JOBS;\n", ""),
     (G, "    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_RIGHT) return UK_LOCATION;\n", ""),
     (G, "    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_S) return UK_F9;\n", ""),
+    # tooltips (Michael, 2026-10-24)
+    (G, "        timer_at(ui_tip_due(&app.tip));\n", ""),
+    (G, "        if (ui_tip_tick(&app.tip, now_ms())) dirty = true;\n", ""),
+    (G, "        if (ui_input_acts(&in) && ui_tip_act(&app.tip)) seen = true;   // a click or key: the tooltip goes\n", ""),
+    (G, "        pthread_cond_timedwait(&timer.cv, &timer.mu, &ts);", "        pthread_cond_wait(&timer.cv, &timer.mu);"),
+    (G, "    if (h.mode >= 0) return TIP_MODE + h.mode;\n", ""),
 ]
 args = [a for a in sys.argv[1:] if a != '--full']
 full = len(args) != len(sys.argv) - 1

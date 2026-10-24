@@ -135,5 +135,34 @@ key enter
 expect idx=23 top=6
 # The cache never filled.
 expect iconresets=0
+# Tooltips (Michael, 2026-10-24): after 600 ms on an icon button; the window asleep meanwhile is
+# woken by the timer, not the 3 s stand-in.
+point-ui search
+hover-here
+expect tooltip=-
+idle
+expect idlewoke=timer tooltip=Find_(Ctrl+F)
+shot tip-search.png
+# Another button: gone at once, its own after the wait; a key takes it away while the pointer stays.
+point-ui view-icons
+hover-here
+expect tooltip=-
+sleep 700
+expect tooltip=Icons_(Ctrl+1)
+shot tip-icons.png
+key down
+expect tooltip=-
+sleep 700
+expect tooltip=-
+# The bottom bar's mode buttons; off any button, none.
+point-ui mode 1
+hover-here
+sleep 700
+expect tooltip=Tree_(F9)
+shot tip-mode.png
+point-ui row 0
+hover-here
+sleep 700
+expect tooltip=-
 shot icons.png
 quit

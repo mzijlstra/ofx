@@ -1531,6 +1531,7 @@ int main(void)
     test_grid_scroll();
     test_view_switch();
     test_wrap();
+    test_tooltip();
     char cmd[1600];
     snprintf(cmd, sizeof cmd, "chmod -R u+rwx '%s' && rm -rf '%s' '%s'", root, root, decoy);
     if (system(cmd) != 0) fprintf(stderr, "could not remove %s\n", root);

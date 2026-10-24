@@ -235,3 +235,31 @@ static void test_wrap(void)
     // A break as the very last character that fits: the line ends there.
     CHECK(ui_wrap(S("abc defg"), 4, 1, adv_fixed, 2, f, t, &cut) == 2 && t[0] == 4 && f[1] == 4 && t[1] == 8 && !cut);
 }
+
+static void test_tooltip(void)
+{
+    UiTip t = { -1, 0, false, false };
+    // Nothing under the pointer: nothing due.
+    CHECK(!ui_tip_hover(&t, -1, 100) && ui_tip_due(&t) == 0 && !ui_tip_tick(&t, 10000));
+    // Onto a button: due UI_TIP_MS later, not before.
+    CHECK(ui_tip_hover(&t, 7, 1000) && ui_tip_due(&t) == 1000 + UI_TIP_MS);
+    CHECK(!ui_tip_tick(&t, 1000 + UI_TIP_MS - 1) && !t.shown);
+    CHECK(ui_tip_tick(&t, 1000 + UI_TIP_MS) && t.shown);
+    CHECK(!ui_tip_tick(&t, 5000) && t.shown && ui_tip_due(&t) == 0);   // it appears once
+    // Moving on the same button changes nothing.
+    CHECK(!ui_tip_hover(&t, 7, 2000) && t.shown);
+    // To another: gone, and due from then.
+    CHECK(ui_tip_hover(&t, 8, 3000) && !t.shown && ui_tip_due(&t) == 3000 + UI_TIP_MS);
+    // A click before it shows: none while the pointer stays.
+    CHECK(!ui_tip_act(&t) && ui_tip_due(&t) == 0 && !ui_tip_tick(&t, 9000) && !t.shown);
+    // A click while it shows: gone (true: draw again), and it stays away.
+    ui_tip_hover(&t, 9, 10000);
+    ui_tip_tick(&t, 10000 + UI_TIP_MS);
+    CHECK(ui_tip_act(&t) && !t.shown && !ui_tip_tick(&t, 20000));
+    // Off the button and back: due again.
+    CHECK(ui_tip_hover(&t, -1, 21000) && ui_tip_due(&t) == 0);
+    CHECK(ui_tip_hover(&t, 9, 22000) && ui_tip_due(&t) == 22000 + UI_TIP_MS);
+    // A key with nothing under the pointer: nothing to stay off.
+    ui_tip_hover(&t, -1, 23000);
+    CHECK(!ui_tip_act(&t) && !t.off);
+}

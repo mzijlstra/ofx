@@ -35,6 +35,67 @@ static void wake_main(void)
     pthread_mutex_unlock(&wake_mu);
 }
 
+// A wake-up at a time to come: the main loop sleeps until an event, so a tooltip's delay needs a
+// thread that sleeps until then and wakes it (Michael, 2026-10-24).
+static struct {
+    pthread_mutex_t mu;
+    pthread_cond_t  cv;
+    i64             due;   // now_ms() time; 0 for none
+    bool            quit;
+    pthread_t       th;
+} timer = { .mu = PTHREAD_MUTEX_INITIALIZER };
+
+static void *timer_main(void *arg)
+{
+    (void)arg;
+    pthread_mutex_lock(&timer.mu);
+    while (!timer.quit) {
+        if (!timer.due) {
+            pthread_cond_wait(&timer.cv, &timer.mu);
+            continue;
+        }
+        if (now_ms() >= timer.due) {
+            timer.due = 0;
+            pthread_mutex_unlock(&timer.mu);
+            wake_main();
+            pthread_mutex_lock(&timer.mu);
+            continue;
+        }
+        struct timespec ts = { (time_t)(timer.due / 1000), (long)(timer.due % 1000) * 1000000L };
+        pthread_cond_timedwait(&timer.cv, &timer.mu, &ts);   // the cv waits on CLOCK_MONOTONIC, as now_ms
+    }
+    pthread_mutex_unlock(&timer.mu);
+    return NULL;
+}
+
+static void timer_start(void)
+{
+    pthread_condattr_t ca;
+    pthread_condattr_init(&ca);
+    pthread_condattr_setclock(&ca, CLOCK_MONOTONIC);
+    pthread_cond_init(&timer.cv, &ca);
+    pthread_condattr_destroy(&ca);
+    pthread_create(&timer.th, NULL, timer_main, NULL);
+}
+
+// A wake-up at due (now_ms() time); 0 cancels it.
+static void timer_at(i64 due)
+{
+    pthread_mutex_lock(&timer.mu);
+    timer.due = due;
+    pthread_cond_signal(&timer.cv);
+    pthread_mutex_unlock(&timer.mu);
+}
+
+static void timer_stop(void)
+{
+    pthread_mutex_lock(&timer.mu);
+    timer.quit = true;
+    pthread_cond_signal(&timer.cv);
+    pthread_mutex_unlock(&timer.mu);
+    pthread_join(timer.th, NULL);
+}
+
 #include "watch.c"
 #include "clipboard.c"
 #include "counts.c"
@@ -130,7 +191,8 @@ static struct {
     isize     grid_first, grid_last;   // the entries in the first and last cell drawn, -1 for none
     int       icons_max;    // the icon cache's slots: ICONS_MAX, or OFX_TEST_ICONS_MAX for a test
     int       icon_full_resets;   // a full cache emptied at a listing (reviewer-2, F6.2 review)
-} app = { .hover = -1, .side_hover = -1, .tab_hover = -1, .tab_x_hover = -1, .jobx_hover = -1, .mode_hover = -1, .eject_hover = -1 };
+    UiTip     tip;          // the tooltip of the icon button under the pointer (Michael, 2026-10-24)
+} app = { .tip = { -1, 0, false, false }, .hover = -1, .side_hover = -1, .tab_hover = -1, .tab_x_hover = -1, .jobx_hover = -1, .mode_hover = -1, .eject_hover = -1 };
 
 static UiHistory hist;
 static Tree      tree;     // the sidebar's tree mode (F6)
@@ -2196,6 +2258,68 @@ static void status_info(char *buf, size_t cap)
 }
 
 // The window, and the modal panel on top when one is up.
+// ---- tooltips (Michael, 2026-10-24) ------------------------------------------------------------
+//
+// The icon-only buttons, numbered for UiTip: a top bar button 100 + its UiBar, a sidebar mode
+// button 200 + its SideMode, a drive's eject button 300 + its row, a tab's x 400 + its place.
+
+enum { TIP_BAR = 100, TIP_MODE = 200, TIP_EJECT = 300, TIP_TAB_X = 400 };
+
+// Target k's text, and the element it hangs from; false for none (gone since).
+static bool tip_of(int k, char *buf, size_t cap, Clay_ElementId *id)
+{
+    static const struct { UiBar b; const char *id, *text; } BAR[] = {
+        { UB_BACK, "nav-back", "Back (Alt+Left)" }, { UB_FORWARD, "nav-fwd", "Forward (Alt+Right)" },
+        { UB_UP, "nav-up", "Up to the parent (Backspace)" }, { UB_LOCATION, "loc-toggle", "Type a location (Ctrl+L)" },
+        { UB_SEARCH, "search", "Find (Ctrl+F)" }, { UB_LEFT, "crumb-left", "Earlier folders in the path" },
+        { UB_RIGHT, "crumb-right", "Later folders in the path" }, { UB_VIEW_LIST, "view-list", "List (Ctrl+2)" },
+        { UB_VIEW_ICONS, "view-icons", "Icons (Ctrl+1)" },
+    };
+    static const char *const MODES[SIDE_MODES] = { "Places (F9)", "Tree (F9)", "No sidebar (F9)" };
+    if (k >= TIP_TAB_X) {
+        *id = CLAY_IDI("tab-x", k - TIP_TAB_X);
+        return snprintf(buf, cap, "Close the tab (Ctrl+W)") > 0;
+    }
+    if (k >= TIP_EJECT) {
+        isize i = app.ui.side.top + (k - TIP_EJECT);
+        if (app.ui.side_mode != SIDE_PLACES || i >= app.places.n) return false;
+        *id = CLAY_IDI("side-eject", k - TIP_EJECT);
+        return snprintf(buf, cap, "Eject %s", app.places.p[i].label) > 0;
+    }
+    if (k >= TIP_MODE) {
+        *id = CLAY_IDI("mode", k - TIP_MODE);
+        return snprintf(buf, cap, "%s", MODES[k - TIP_MODE]) > 0;
+    }
+    for (int j = 0; j < COUNT(BAR); j++)
+        if (TIP_BAR + (int)BAR[j].b == k) return *id = Clay_GetElementId(cz(BAR[j].id)), snprintf(buf, cap, "%s", BAR[j].text) > 0;
+    return false;
+}
+
+// The tooltip, under a top bar button or a tab's x, over the bottom bar's, beside the sidebar's;
+// lined up with the button's edge on the side the window has room.
+static void layout_tip(int w)
+{
+    char txt[NAME_MAX + 64];
+    Clay_ElementId id;
+    if (!app.tip.shown || !tip_of(app.tip.target, txt, sizeof txt, &id)) return;
+    Clay_ElementData d = Clay_GetElementData(id);
+    if (!d.found) return;
+    bool above = app.tip.target >= TIP_MODE && app.tip.target < TIP_EJECT;
+    bool right = d.boundingBox.x + d.boundingBox.width / 2 > w / 2.0f;
+    Clay_FloatingAttachPoints at = above ? (Clay_FloatingAttachPoints){ CLAY_ATTACH_POINT_LEFT_BOTTOM, CLAY_ATTACH_POINT_LEFT_TOP }
+                                 : right ? (Clay_FloatingAttachPoints){ CLAY_ATTACH_POINT_RIGHT_TOP, CLAY_ATTACH_POINT_RIGHT_BOTTOM }
+                                         : (Clay_FloatingAttachPoints){ CLAY_ATTACH_POINT_LEFT_TOP, CLAY_ATTACH_POINT_LEFT_BOTTOM };
+    Theme *t = &app.theme;
+    CLAY(CLAY_ID("tooltip"), { .layout = { .sizing = { CLAY_SIZING_FIT(0), CLAY_SIZING_FIT(0) }, .padding = { 8, 8, 4, 4 } },
+                               .backgroundColor = cc(t->bg_light), .cornerRadius = CLAY_CORNER_RADIUS(3),
+                               .border = { .color = mix(t->fg_dim, t->bg_light, 0.6f), .width = CLAY_BORDER_OUTSIDE(1) },
+                               .floating = { .attachTo = CLAY_ATTACH_TO_ELEMENT_WITH_ID, .parentId = id.id, .zIndex = 40,
+                                             .offset = { 0, above ? -4.0f : 4.0f }, .attachPoints = at,
+                                             .pointerCaptureMode = CLAY_POINTER_CAPTURE_MODE_PASSTHROUGH } }) {
+        text(cz(arena_sprintf(&frame, "%s", txt)), cc(t->fg));
+    }
+}
+
 static Clay_RenderCommandArray layout(int w, int h)
 {
     arena_reset(&frame);
@@ -2273,6 +2397,7 @@ static Clay_RenderCommandArray layout(int w, int h)
             }
             }
         }
+        layout_tip(w);
         ModalKind mk = modal_kind();
         if (mk != MODAL_NONE) layout_modal(mk, (float)w, (float)h);
     }
@@ -2532,6 +2657,19 @@ static void middle_at(UiInput *in, float x, float y)
 
 static float wheel_left;   // a touchpad's part of a notch, carried to the next frame
 
+static int tip_target(Hit h)
+{
+    switch (h.bar) {
+    case UB_BACK: case UB_FORWARD: case UB_UP: case UB_LOCATION: case UB_SEARCH: case UB_LEFT: case UB_RIGHT:
+    case UB_VIEW_LIST: case UB_VIEW_ICONS: return TIP_BAR + h.bar;
+    default: break;
+    }
+    if (h.mode >= 0) return TIP_MODE + h.mode;
+    if (h.eject >= 0) return TIP_EJECT + h.eject;
+    if (h.tab_x >= 0) return TIP_TAB_X + h.tab_x;
+    return -1;
+}
+
 // What is under the pointer at x, y, for the hover highlights: true when any changed.
 static bool hover_at(float x, float y)
 {
@@ -2542,6 +2680,11 @@ static bool hover_at(float x, float y)
     app.hover = h.row, app.side_hover = h.side, app.bar_hover = h.bar, app.crumb_hover = h.crumb;
     app.tab_hover = h.tab, app.tab_x_hover = h.tab_x, app.mode_hover = h.mode, app.eject_hover = h.eject;
     app.modal_hover = h.modal, app.jobx_hover = h.job_x;
+    // Onto another icon button (or off one): its tooltip waits UI_TIP_MS, the timer wakes the loop.
+    if (ui_tip_hover(&app.tip, tip_target(h), now_ms())) {
+        changed = true;
+        timer_at(ui_tip_due(&app.tip));
+    }
     return changed;
 }
 
@@ -2740,6 +2883,7 @@ int main(int argc, char **argv)
     if (counts.delay_ms < 0 || counts.delay_ms > 10000) counts.delay_ms = 0;
     count_start();
     space_start();
+    timer_start();
     places_reload();
     char state_file[PATH_MAX];
     if (state_path(state_file, sizeof state_file)) {
@@ -2777,6 +2921,7 @@ int main(int argc, char **argv)
         if (cols != (int)ui_cols(&app.ui.list)) ui_set_cols(&app.ui.list, cols), dirty = true;
         if (rows != app.ui.list.rows) ui_resize(&app.ui.list, rows), dirty = true;
         if (srows != app.ui.side.rows) ui_resize(&app.ui.side, srows), dirty = true;
+        if (ui_tip_tick(&app.tip, now_ms())) dirty = true;
         if (dirty || scripted) {
             i64 t0 = now_us();
             draw();
@@ -2813,6 +2958,7 @@ int main(int argc, char **argv)
         if (pasting && app.ui.editing) in.paste = text_paste();
         // A message stays until the next key or click; an error at least a second.
         if (ui_input_acts(&in) && ui_status_clears(app.status_bad, app.status_at, now_ms())) app.status[0] = 0;
+        if (ui_input_acts(&in) && ui_tip_act(&app.tip)) seen = true;   // a click or key: the tooltip goes
         bool was_editing = app.ui.editing, was_confirming = app.ui.confirming;
         UiAction a = ui_handle(&app.ui, (UiNames){ list_name, NULL }, &in);
         if (app.ui.copied) text_copy((Str){ app.ui.copy, app.ui.copy_len }), app.ui.copied = false;
@@ -2830,6 +2976,7 @@ int main(int argc, char **argv)
     clip_quit();
     count_stop();
     space_stop();
+    timer_stop();
     for (int i = 0; i < app.nslots; i++)
         if (app.slot[i].tex.id) UnloadTexture(app.slot[i].tex);
     pthread_mutex_lock(&wake_mu);

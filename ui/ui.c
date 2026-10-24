@@ -1289,6 +1289,48 @@ static void hist_unstep(UiHistory *h, int dir)
 
 // ---- timing -------------------------------------------------------------------------------
 
+// A tooltip (Michael, 2026-10-24): shown once the pointer has rested UI_TIP_MS on one button (gui/
+// numbers them, -1 for none); gone when the pointer moves to another, and after a click or a key
+// until the pointer leaves that button.
+enum { UI_TIP_MS = 600 };
+
+typedef struct {
+    int  target;   // the button under the pointer, -1 for none
+    i64  since;    // when the pointer came onto it (ms)
+    bool shown;
+    bool off;      // a click or key on it: no tooltip until the pointer leaves
+} UiTip;
+
+// The pointer over target at now: true when that is another button than before.
+static bool ui_tip_hover(UiTip *t, int target, i64 now)
+{
+    if (target == t->target) return false;
+    *t = (UiTip){ target, now, false, false };
+    return true;
+}
+
+// When the tooltip is due (ms), 0 when none is waiting.
+static i64 ui_tip_due(const UiTip *t)
+{
+    return t->target >= 0 && !t->shown && !t->off ? t->since + UI_TIP_MS : 0;
+}
+
+// At now: true when the tooltip appears just now.
+static bool ui_tip_tick(UiTip *t, i64 now)
+{
+    i64 due = ui_tip_due(t);
+    if (!due || now < due) return false;
+    return t->shown = true;
+}
+
+// A click or key: the tooltip goes, and stays away while the pointer stays. True when one was shown.
+static bool ui_tip_act(UiTip *t)
+{
+    bool was = t->shown;
+    t->shown = false, t->off = t->target >= 0;
+    return was;
+}
+
 enum { UI_DCLICK_MS = 400 };
 
 typedef struct {

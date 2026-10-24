@@ -177,6 +177,10 @@ Decisions:
   (as Tab), Ctrl+Up the path buttons (Ctrl+K), Ctrl+Down the job rows (Ctrl+J), Ctrl+Right the
   location line (Ctrl+L). Tab or Ctrl+Left with the sidebar hidden shows it as places. Ctrl+S is
   F9. Ctrl+H stays hidden files (Nemo's).
+- **Tooltips (Michael, 2026-10-24):** the icon-only buttons say what they do and their key after
+  600 ms under the pointer (GTK's wait); gone when it moves off, and after a click or key until it
+  leaves the button. The window sleeps meanwhile: a timer thread wakes it (idle stays at 0 CPU).
+  Path buttons, Restore and Empty have their words already.
 - The icon cache (512 textures, both sizes) is emptied when full as another folder is entered,
   rather than leaving icons blank until a theme change (reviewer-2).
 - Found on the way, not F6.2's: an empty `photo.png` shows no icon, in the list too (not looked
