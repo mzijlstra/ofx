@@ -1669,7 +1669,14 @@ static IconSlot *named_icon(const char *name)
 // SVG, which ofx doesn't draw). Clay hands the data back to draw_custom at render time; it lives in
 // the frame arena, which outlasts the frame's render.
 typedef enum { CHEV_LEFT, CHEV_RIGHT, CHEV_UP } ChevronDir;
-typedef enum { CUSTOM_CHEVRON = 1, CUSTOM_LINE } CustomKind;   // the first field of each custom's data
+typedef enum { CUSTOM_CHEVRON = 1, CUSTOM_LINE, CUSTOM_TOOL } CustomKind;   // the first field of each custom's data
+typedef enum { TOOL_SEARCH, TOOL_PENCIL } ToolDir;   // the top bar's search and location pictures
+
+typedef struct {
+    CustomKind kind;
+    ToolDir    which;
+    Clay_Color color;
+} ToolDraw;
 
 typedef struct {
     CustomKind kind;
@@ -1712,10 +1719,33 @@ static void draw_line(Clay_BoundingBox b, const LineDraw *d)
     }
 }
 
+// The search button's magnifier and the location button's pencil, in lines as the chevrons are, so
+// they take the theme's colours as the drawn buttons beside them do (Michael, 2026-10-24).
+static void draw_tool(Clay_BoundingBox b, const ToolDraw *d)
+{
+    float cx = b.x + b.width / 2, cy = b.y + b.height / 2;
+    Color col = rl(d->color);
+    if (d->which == TOOL_SEARCH) {
+        Vector2 c = { cx - 1.5f, cy - 1.5f };
+        float r = 4.5f;
+        DrawRing(c, r - 0.8f, r + 0.8f, 0, 360, 36, col);
+        DrawLineEx((Vector2){ c.x + r * 0.72f, c.y + r * 0.72f }, (Vector2){ cx + 6, cy + 6 }, 2.2f, col);
+        return;
+    }
+    // A pencil from the lower left to the upper right, along u: its tip, then its body, 3.4 wide.
+    Vector2 u = { 0.7071f, -0.7071f }, n = { 0.7071f, 0.7071f }, t = { cx - 6, cy + 6 };
+    Vector2 a = { t.x + u.x * 4, t.y + u.y * 4 }, z = { t.x + u.x * 16, t.y + u.y * 16 };
+    DrawLineEx(a, z, 3.4f, col);
+    Vector2 l = { a.x + n.x * 1.7f, a.y + n.y * 1.7f }, r = { a.x - n.x * 1.7f, a.y - n.y * 1.7f };
+    DrawTriangle(t, l, r, col);   // raylib draws one winding only: either way round, one of these does
+    DrawTriangle(t, r, l, col);
+}
+
 static void draw_custom(Clay_BoundingBox b, void *arg)
 {
     if (!arg) return;
     if (*(const CustomKind *)arg == CUSTOM_LINE) { draw_line(b, arg); return; }
+    if (*(const CustomKind *)arg == CUSTOM_TOOL) { draw_tool(b, arg); return; }
     const Chevron *c = arg;
     float cx = b.x + b.width / 2, cy = b.y + b.height / 2, r = 5;
     Color col = { (u8)c->color.r, (u8)c->color.g, (u8)c->color.b, (u8)c->color.a };
@@ -1811,6 +1841,21 @@ static void layout_location(float room)
     }
 }
 
+// The location and search buttons, drawn (draw_tool), marked in the accent while theirs is open.
+static void tool_button(const char *id, UiBar which, ToolDir pic, bool on)
+{
+    Theme *t = &app.theme;
+    bool hover = app.bar_hover == which;
+    ToolDraw *d = arena_new(&frame, ToolDraw, 1);
+    *d = (ToolDraw){ CUSTOM_TOOL, pic, on ? cc(t->accent) : hover ? cc(t->fg) : cc(t->fg_dim) };
+    CLAY(Clay_GetElementId(cz(id)), { .layout = { .sizing = { CLAY_SIZING_FIXED(BAR_BTN_W), CLAY_SIZING_FIXED(BAR_BTN_H) },
+                                                  .childAlignment = { .x = CLAY_ALIGN_X_CENTER, .y = CLAY_ALIGN_Y_CENTER } },
+                                      .backgroundColor = on ? mix(t->accent, t->bg_light, 0.25f) : hover ? cc(t->bg) : cc(t->bg_light) }) {
+        CLAY(Clay_GetElementId(cz(arena_sprintf(&frame, "%s-pic", id))), { .layout = { .sizing = { CLAY_SIZING_FIXED(16), CLAY_SIZING_FIXED(16) } },
+                                                                             .custom = { .customData = d } }) {}
+    }
+}
+
 // A view button's picture (F6.2), drawn in c: three lines for the list, four squares for the icons
 // (the theme has its view icons as SVG only, which ofx doesn't draw).
 static void view_picture(bool icons, Clay_Color c)
@@ -1861,8 +1906,8 @@ static void layout_bar(float w)
             if (app.ui.editing && app.ui.edit_path) layout_location(room);
             else layout_crumbs(room);
         }
-        bar_button(CLAY_ID("loc-toggle"), UB_LOCATION, -1, "\xE2\x9C\x8E", NULL, true, BAR_BTN_W);          // ✎
-        bar_button(CLAY_ID("search"), UB_SEARCH, -1, "/", named_icon("edit-find"), true, BAR_BTN_W);
+        tool_button("loc-toggle", UB_LOCATION, TOOL_PENCIL, app.ui.editing && app.ui.edit_path);
+        tool_button("search", UB_SEARCH, TOOL_SEARCH, app.ui.finding);
         view_button("view-list", UB_VIEW_LIST, false);
         view_button("view-icons", UB_VIEW_ICONS, true);
     }
