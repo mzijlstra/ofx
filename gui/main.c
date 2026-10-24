@@ -122,9 +122,11 @@ enum { TREE_STEP = 10, TRASH_BAR_H = 38 };
 enum { TAB_H = 30, TAB_X_W = 22, JOB_ROW_H = 40, JOB_WAIT_H = 22, MODE_BTN_W = 28, MODE_BTN_H = 22, MODE_GAP = 4 };
 enum { FONT_PX = 15, ROW_H = 28, ICON_PX = 24, HEADER_H = 40, COLS_H = 26, FOOTER_H = 28, PAD = 12, SIZE_W = 90,
        DATE_W = 100, SIDE_W = 200, SIDE_ROW_H = 28, SIDE_ICON_PX = 20, GAP = 10, ICONS_MAX = 512 };
-// The icon view (F6.2): a cell holds a 48 px icon over two lines of its name; the cursor's name in
-// full, up to CELL_LINES_FULL lines, over the cells below it.
-enum { GRID_ICON_PX = 48, CELL_W = 112, CELL_H = 104, CELL_PAD = 4, CELL_LINE_H = FONT_PX + 4, CELL_LINES_FULL = 8 };
+// The icon view (F6.2): a cell holds its icon (48 px at first, F6.3's zoom from 32 to 256) over two
+// lines of its name; the cursor's name in full, up to CELL_LINES_FULL lines, over the cells below it.
+enum { CELL_W_MIN = 112, CELL_W_ROOM = 64, CELL_H_ROOM = 56, CELL_PAD = 4, CELL_LINE_H = FONT_PX + 4, CELL_LINES_FULL = 8 };
+// The footer's zoom slider (F6.3): a minus, a track with a notch a size, a plus.
+enum { ZOOM_BTN_W = 22, ZOOM_TRACK_W = 84, ZOOM_KNOB_W = 10 };
 
 // ---- state ----------------------------------------------------------------------------------
 
@@ -192,6 +194,9 @@ static struct {
     int       icons_max;    // the icon cache's slots: ICONS_MAX, or OFX_TEST_ICONS_MAX for a test
     int       icon_full_resets;   // a full cache emptied at a listing (reviewer-2, F6.2 review)
     UiTip     tip;          // the tooltip of the icon button under the pointer (Michael, 2026-10-24)
+    bool      zoomed;       // the icon size changed: the next refit keeps the cursor's row (ui_refit)
+    bool      zoom_drag;    // the zoom slider's knob held (F6.3)
+    bool      zoom_hover;   // the pointer over its track
 } app = { .tip = { -1, 0, false, false }, .hover = -1, .side_hover = -1, .tab_hover = -1, .tab_x_hover = -1, .jobx_hover = -1, .mode_hover = -1, .eject_hover = -1 };
 
 static UiHistory hist;
@@ -1057,13 +1062,15 @@ static void act(UiAction a)
     case UA_SIDE_MODE: {
         side_refresh();
         char path[PATH_MAX];
-        State st = { app.ui.side_mode, app.ui.grid };
+        State st = { app.ui.side_mode, app.ui.grid, app.ui.zoom };
         if (state_path(path, sizeof path) && !state_save(path, &st, &err)) set_status(true, "%s", err.msg);
         break;
     }
+    case UA_ZOOM:     // F6.3: as the view, the cursor kept on its row at the refit (ui_refit)
     case UA_VIEW: {   // F6.2: remembered; the loop lays it out before the next frame
+        if (a.kind == UA_ZOOM) app.zoomed = true;
         char path[PATH_MAX];
-        State st = { app.ui.side_mode, app.ui.grid };
+        State st = { app.ui.side_mode, app.ui.grid, app.ui.zoom };
         if (state_path(path, sizeof path) && !state_save(path, &st, &err)) set_status(true, "%s", err.msg);
         break;
     }
@@ -1214,8 +1221,16 @@ static IconSlot *icon_for_px(Str key, const Str *given, isize ngiven, int px)
     *s = (IconSlot){ .key = { arena_cstr(&icona, slot_key), slot_key.len } };
     const char *file = icon_find(&scratch, &app.icons, given ? given : names, n, px, app.icon_scale);
     if (file) {
+        // A bigger file than drawn (F6.3: Yaru's 256 and 256@2x stand in for 64 to 256 px) is
+        // made the drawn size once here: the GPU's bilinear filter alone blurs a 4x shrink to
+        // grains, and holds four times the pixels, or sixteen.
         snprintf(s->file, sizeof s->file, "%s", file);
-        s->tex = LoadTexture(file);
+        Image img = LoadImage(file);
+        int want = px * app.icon_scale;
+        if (img.data && img.width > want && img.width >= img.height) ImageResize(&img, want, img.height * want / img.width);
+        else if (img.data && img.height > want) ImageResize(&img, img.width * want / img.height, want);
+        if (img.data) s->tex = LoadTextureFromImage(img);
+        UnloadImage(img);
         if (s->tex.id) SetTextureFilter(s->tex, TEXTURE_FILTER_BILINEAR);
     }
     arena_restore(&scratch, mark);
@@ -1228,10 +1243,28 @@ static IconSlot *icon_for(Str key, const Str *given, isize ngiven)
     return icon_for_px(key, given, ngiven, ICON_PX);
 }
 
+// The icon view's icon size and its cells' (F6.3): as wide as the icon and a little, a cell's width
+// at least, so two lines of a name fit under a small one.
+static int grid_px(void)
+{
+    return ui_zoom_px(&app.ui);
+}
+
+static int cell_w(void)
+{
+    int w = grid_px() + CELL_W_ROOM;
+    return w > CELL_W_MIN ? w : CELL_W_MIN;
+}
+
+static int cell_h(void)
+{
+    return grid_px() + CELL_H_ROOM;
+}
+
 // The size the files' icons are drawn at: the list's, or the icon view's (F6.2).
 static int entry_px(void)
 {
-    return app.ui.grid ? GRID_ICON_PX : ICON_PX;
+    return app.ui.grid ? grid_px() : ICON_PX;
 }
 
 // The texture for entry i, at the view's size.
@@ -1295,7 +1328,7 @@ static int jobs_h(void)
 static int list_rows(int h)
 {
     int room = h - top_h() - FOOTER_H - jobs_h() - (app.ui.in_trash ? TRASH_BAR_H : 0);
-    int r = app.ui.grid ? (room - PAD) / CELL_H : (room - COLS_H) / ROW_H;
+    int r = app.ui.grid ? (room - PAD) / cell_h() : (room - COLS_H) / ROW_H;
     return r > 0 ? r : 0;
 }
 
@@ -1303,7 +1336,7 @@ static int list_rows(int h)
 static int list_cols(int w)
 {
     if (!app.ui.grid) return 1;
-    int c = (w - side_w() - 2 * PAD) / CELL_W;
+    int c = (w - side_w() - 2 * PAD) / cell_w();
     return c > 1 ? c : 1;
 }
 
@@ -1667,17 +1700,18 @@ static void layout_cell(int k, isize i)
     bool keyed = sel && !app.ui.side_focus;
     Clay_Color fg = e->kind == K_LINK_BROKEN ? cc(t->red) : marked ? cc(t->accent) : cc(t->fg);
     Clay_Color bg = marked ? mix(t->accent, t->bg, 0.28f) : hover ? cc(t->bg_light) : (Clay_Color){ 0, 0, 0, 0 };
-    float name_w = CELL_W - 2 * CELL_PAD;
-    CLAY(CLAY_IDI("row", k), { .layout = { .sizing = { CLAY_SIZING_FIXED(CELL_W), CLAY_SIZING_FIXED(CELL_H) }, .padding = { CELL_PAD, CELL_PAD, 6, CELL_PAD },
+    int cw = cell_w(), px = grid_px();
+    float name_w = (float)(cw - 2 * CELL_PAD);
+    CLAY(CLAY_IDI("row", k), { .layout = { .sizing = { CLAY_SIZING_FIXED(cw), CLAY_SIZING_FIXED(cell_h()) }, .padding = { CELL_PAD, CELL_PAD, 6, CELL_PAD },
                                            .childGap = 4, .layoutDirection = CLAY_TOP_TO_BOTTOM, .childAlignment = { .x = CLAY_ALIGN_X_CENTER } },
                                .backgroundColor = sel ? mix(t->selection, t->bg, 0.5f) : bg, .cornerRadius = CLAY_CORNER_RADIUS(4) }) {
-        icon_box(CLAY_IDI("icon", k), entry_icon(i), GRID_ICON_PX);
+        icon_box(CLAY_IDI("icon", k), entry_icon(i), px);
         if (sel && app.ui.editing && !app.ui.edit_path) {
             // As wide as the name and a little, from a cell's width to two cells'.
             float ew = str_width((Str){ app.ui.edit, app.ui.edit_len }) + 24;
-            ew = ew < CELL_W ? CELL_W : ew > 2 * CELL_W ? 2 * CELL_W : ew;
+            ew = ew < cw ? cw : ew > 2 * cw ? 2 * cw : ew;
             CLAY(CLAY_ID("cell-edit"), { .layout = { .sizing = { CLAY_SIZING_FIXED(ew), CLAY_SIZING_FIT(0) } },
-                                         .floating = { .attachTo = CLAY_ATTACH_TO_PARENT, .zIndex = 3, .offset = { 0, 6 + GRID_ICON_PX + 4 },
+                                         .floating = { .attachTo = CLAY_ATTACH_TO_PARENT, .zIndex = 3, .offset = { 0, 6 + (float)px + 4 },
                                                        .attachPoints = { CLAY_ATTACH_POINT_CENTER_TOP, CLAY_ATTACH_POINT_CENTER_TOP },
                                                        .clipTo = CLAY_CLIP_TO_ATTACHED_PARENT } }) {
                 layout_edit(t, ew);
@@ -1685,11 +1719,11 @@ static void layout_cell(int k, isize i)
         } else if (sel) {
             // Its two lines' room stays taken, so the cell keeps its size.
             CLAY(CLAY_IDI("cell-room", k), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(2 * CELL_LINE_H) } } }) {}
-            CLAY(CLAY_ID("cell-full"), { .layout = { .sizing = { CLAY_SIZING_FIXED(CELL_W), CLAY_SIZING_FIT(0) }, .padding = { CELL_PAD, CELL_PAD, 0, 2 },
+            CLAY(CLAY_ID("cell-full"), { .layout = { .sizing = { CLAY_SIZING_FIXED(cw), CLAY_SIZING_FIT(0) }, .padding = { CELL_PAD, CELL_PAD, 0, 2 },
                                                      .layoutDirection = CLAY_TOP_TO_BOTTOM },
                                          .backgroundColor = cc(t->selection), .cornerRadius = CLAY_CORNER_RADIUS(4),
                                          .border = { .color = cc(t->accent), .width = CLAY_BORDER_OUTSIDE(keyed ? 1 : 0) },
-                                         .floating = { .attachTo = CLAY_ATTACH_TO_PARENT, .zIndex = 3, .offset = { 0, 6 + GRID_ICON_PX + 4 },
+                                         .floating = { .attachTo = CLAY_ATTACH_TO_PARENT, .zIndex = 3, .offset = { 0, 6 + (float)px + 4 },
                                                        .attachPoints = { CLAY_ATTACH_POINT_CENTER_TOP, CLAY_ATTACH_POINT_CENTER_TOP },
                                                        .clipTo = CLAY_CLIP_TO_ATTACHED_PARENT } }) {
                 bool cut;
@@ -1713,7 +1747,7 @@ static void layout_grid(void)
     for (int r = 0; r < app.ui.list.rows; r++) {
         isize first = app.ui.list.top + (isize)r * cols;
         if (first >= app.list.n) break;
-        CLAY(CLAY_IDI("grid-row", r), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(CELL_H) }, .padding = { PAD, PAD, 0, 0 } } }) {
+        CLAY(CLAY_IDI("grid-row", r), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(cell_h()) }, .padding = { PAD, PAD, 0, 0 } } }) {
             for (int c = 0; c < cols && first + c < app.list.n; c++) layout_cell(r * cols + c, first + c);
         }
     }
@@ -1947,6 +1981,76 @@ static void view_button(const char *id, UiBar which, bool icons)
                                                   .childAlignment = { .x = CLAY_ALIGN_X_CENTER, .y = CLAY_ALIGN_Y_CENTER } },
                                       .backgroundColor = on ? mix(t->accent, t->bg_light, 0.25f) : hover ? cc(t->bg) : cc(t->bg_light) }) {
         view_picture(icons, on ? cc(t->accent) : hover ? cc(t->fg) : cc(t->fg_dim));
+    }
+}
+
+// ---- the zoom slider (F6.3) ------------------------------------------------------------------
+
+// Its width at the footer's right end; 0 in the list, which doesn't zoom.
+static float zoom_w(void)
+{
+    return app.ui.grid ? 2 * ZOOM_BTN_W + ZOOM_TRACK_W + 2 * 4 + PAD : 0;
+}
+
+// The knob's middle for level k, from the track's left.
+static float zoom_x(int k)
+{
+    return ZOOM_KNOB_W / 2.0f + (float)k * (float)(ZOOM_TRACK_W - ZOOM_KNOB_W) / (UI_ZOOMS - 1);
+}
+
+// The level nearest x on the track as last drawn; -1 when it isn't there.
+static int zoom_level_at(float x)
+{
+    Clay_ElementData d = Clay_GetElementData(CLAY_ID("zoom-track"));
+    if (!d.found) return -1;
+    float step = (float)(ZOOM_TRACK_W - ZOOM_KNOB_W) / (UI_ZOOMS - 1);
+    int k = (int)lroundf((x - d.boundingBox.x - ZOOM_KNOB_W / 2.0f) / step);
+    return k < 0 ? 0 : k >= UI_ZOOMS ? UI_ZOOMS - 1 : k;
+}
+
+// The minus or the plus, drawn; dim at its end of the sizes.
+static void zoom_button(const char *id, UiBar which, bool plus, bool enabled)
+{
+    Theme *t = &app.theme;
+    bool hover = enabled && app.bar_hover == which;
+    Clay_Color c = !enabled ? dim_color() : hover ? cc(t->fg) : cc(t->fg_dim);
+    CLAY(Clay_GetElementId(cz(id)), { .layout = { .sizing = { CLAY_SIZING_FIXED(ZOOM_BTN_W), CLAY_SIZING_FIXED(MODE_BTN_H) },
+                                                  .childAlignment = { .x = CLAY_ALIGN_X_CENTER, .y = CLAY_ALIGN_Y_CENTER } },
+                                      .backgroundColor = hover ? cc(t->bg) : (Clay_Color){ 0, 0, 0, 0 }, .cornerRadius = CLAY_CORNER_RADIUS(3) }) {
+        CLAY(Clay_GetElementId(cz(arena_sprintf(&frame, "%s-bar", id))), { .layout = { .sizing = { CLAY_SIZING_FIXED(10), CLAY_SIZING_FIXED(2) } },
+                                                                             .backgroundColor = c }) {
+            if (plus)
+                CLAY(CLAY_ID("zoom-in-stem"), { .layout = { .sizing = { CLAY_SIZING_FIXED(2), CLAY_SIZING_FIXED(10) } }, .backgroundColor = c,
+                                                .floating = { .attachTo = CLAY_ATTACH_TO_PARENT, .zIndex = 1,
+                                                              .attachPoints = { CLAY_ATTACH_POINT_CENTER_CENTER, CLAY_ATTACH_POINT_CENTER_CENTER } } }) {}
+        }
+    }
+}
+
+// The slider: a line with a notch a size, the knob on the size shown, the minus and plus beside.
+static void layout_zoom(void)
+{
+    Theme *t = &app.theme;
+    int k = ui_zoom_level(app.ui.zoom);
+    Clay_Color line = mix(t->fg_dim, t->bg_light, 0.45f);
+    CLAY(CLAY_ID("zoom"), { .layout = { .sizing = { CLAY_SIZING_FIT(0), CLAY_SIZING_GROW(0) }, .padding = { PAD, 0, 0, 0 }, .childGap = 4,
+                                        .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } } }) {
+        zoom_button("zoom-out", UB_ZOOM_OUT, false, k > 0);
+        CLAY(CLAY_ID("zoom-track"), { .layout = { .sizing = { CLAY_SIZING_FIXED(ZOOM_TRACK_W), CLAY_SIZING_FIXED(MODE_BTN_H) } } }) {
+            CLAY(CLAY_ID("zoom-line"), { .layout = { .sizing = { CLAY_SIZING_FIXED(ZOOM_TRACK_W - ZOOM_KNOB_W), CLAY_SIZING_FIXED(2) } }, .backgroundColor = line,
+                                         .floating = { .attachTo = CLAY_ATTACH_TO_PARENT, .zIndex = 1,
+                                                       .attachPoints = { CLAY_ATTACH_POINT_CENTER_CENTER, CLAY_ATTACH_POINT_CENTER_CENTER } } }) {}
+            for (int j = 0; j < UI_ZOOMS; j++)
+                CLAY(CLAY_IDI("zoom-notch", j), { .layout = { .sizing = { CLAY_SIZING_FIXED(2), CLAY_SIZING_FIXED(8) } }, .backgroundColor = line,
+                                                  .floating = { .attachTo = CLAY_ATTACH_TO_PARENT, .zIndex = 1, .offset = { zoom_x(j) - 1, 0 },
+                                                                .attachPoints = { CLAY_ATTACH_POINT_LEFT_CENTER, CLAY_ATTACH_POINT_LEFT_CENTER } } }) {}
+            bool lit = app.zoom_hover || app.zoom_drag;
+            CLAY(CLAY_ID("zoom-knob"), { .layout = { .sizing = { CLAY_SIZING_FIXED(ZOOM_KNOB_W), CLAY_SIZING_FIXED(14) } },
+                                         .backgroundColor = lit ? cc(t->fg) : cc(t->accent), .cornerRadius = CLAY_CORNER_RADIUS(3),
+                                         .floating = { .attachTo = CLAY_ATTACH_TO_PARENT, .zIndex = 2, .offset = { zoom_x(k) - ZOOM_KNOB_W / 2.0f, 0 },
+                                                       .attachPoints = { CLAY_ATTACH_POINT_LEFT_CENTER, CLAY_ATTACH_POINT_LEFT_CENTER } } }) {}
+        }
+        zoom_button("zoom-in", UB_ZOOM_IN, true, k < UI_ZOOMS - 1);
     }
 }
 
@@ -2263,7 +2367,8 @@ static void status_info(char *buf, size_t cap)
 // The icon-only buttons, numbered for UiTip: a top bar button 100 + its UiBar, a sidebar mode
 // button 200 + its SideMode, a drive's eject button 300 + its row, a tab's x 400 + its place.
 
-enum { TIP_BAR = 100, TIP_MODE = 200, TIP_EJECT = 300, TIP_TAB_X = 400 };
+// The zoom slider's track is 500 (F6.3).
+enum { TIP_BAR = 100, TIP_MODE = 200, TIP_EJECT = 300, TIP_TAB_X = 400, TIP_ZOOM = 500 };
 
 // Target k's text, and the element it hangs from; false for none (gone since).
 static bool tip_of(int k, char *buf, size_t cap, Clay_ElementId *id)
@@ -2273,9 +2378,14 @@ static bool tip_of(int k, char *buf, size_t cap, Clay_ElementId *id)
         { UB_UP, "nav-up", "Up to the parent (Backspace)" }, { UB_LOCATION, "loc-toggle", "Type a location (Ctrl+L)" },
         { UB_SEARCH, "search", "Find (Ctrl+F)" }, { UB_LEFT, "crumb-left", "Earlier folders in the path" },
         { UB_RIGHT, "crumb-right", "Later folders in the path" }, { UB_VIEW_LIST, "view-list", "List (Ctrl+2)" },
-        { UB_VIEW_ICONS, "view-icons", "Icons (Ctrl+1)" },
+        { UB_VIEW_ICONS, "view-icons", "Icons (Ctrl+1)" }, { UB_ZOOM_OUT, "zoom-out", "Smaller icons (Ctrl+-)" },
+        { UB_ZOOM_IN, "zoom-in", "Bigger icons (Ctrl+=)" },
     };
     static const char *const MODES[SIDE_MODES] = { "Places (F9)", "Tree (F9)", "No sidebar (F9)" };
+    if (k == TIP_ZOOM) {
+        *id = CLAY_ID("zoom-track");
+        return app.ui.grid && snprintf(buf, cap, "Icons %d px (Ctrl+0: %d px)", ui_zoom_px(&app.ui), UI_ZOOM_DEFAULT) > 0;
+    }
     if (k >= TIP_TAB_X) {
         *id = CLAY_IDI("tab-x", k - TIP_TAB_X);
         return snprintf(buf, cap, "Close the tab (Ctrl+W)") > 0;
@@ -2304,9 +2414,11 @@ static void layout_tip(int w)
     if (!app.tip.shown || !tip_of(app.tip.target, txt, sizeof txt, &id)) return;
     Clay_ElementData d = Clay_GetElementData(id);
     if (!d.found) return;
-    bool above = app.tip.target >= TIP_MODE && app.tip.target < TIP_EJECT;
+    bool above = (app.tip.target >= TIP_MODE && app.tip.target < TIP_EJECT) || app.tip.target == TIP_ZOOM ||
+                 app.tip.target == TIP_BAR + UB_ZOOM_OUT || app.tip.target == TIP_BAR + UB_ZOOM_IN;
     bool right = d.boundingBox.x + d.boundingBox.width / 2 > w / 2.0f;
-    Clay_FloatingAttachPoints at = above ? (Clay_FloatingAttachPoints){ CLAY_ATTACH_POINT_LEFT_BOTTOM, CLAY_ATTACH_POINT_LEFT_TOP }
+    Clay_FloatingAttachPoints at = above && right ? (Clay_FloatingAttachPoints){ CLAY_ATTACH_POINT_RIGHT_BOTTOM, CLAY_ATTACH_POINT_RIGHT_TOP }
+                                 : above ? (Clay_FloatingAttachPoints){ CLAY_ATTACH_POINT_LEFT_BOTTOM, CLAY_ATTACH_POINT_LEFT_TOP }
                                  : right ? (Clay_FloatingAttachPoints){ CLAY_ATTACH_POINT_RIGHT_TOP, CLAY_ATTACH_POINT_RIGHT_BOTTOM }
                                          : (Clay_FloatingAttachPoints){ CLAY_ATTACH_POINT_LEFT_TOP, CLAY_ATTACH_POINT_LEFT_BOTTOM };
     Theme *t = &app.theme;
@@ -2332,7 +2444,7 @@ static Clay_RenderCommandArray layout(int w, int h)
     i64 now = (i64)time(NULL);
     CLAY(CLAY_ID("root"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0) }, .layoutDirection = CLAY_TOP_TO_BOTTOM },
                             .backgroundColor = cc(t->bg) }) {
-        float foot_w = (float)w - modes_w() - 2 * PAD;   // the status part of the bottom bar
+        float foot_w = (float)w - modes_w() - zoom_w() - 2 * PAD;   // the status part of the bottom bar
         layout_bar((float)w);
         float body_h = (float)(h - HEADER_H - FOOTER_H);
         CLAY(CLAY_ID("body"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(body_h) } } }) {
@@ -2396,6 +2508,7 @@ static Clay_RenderCommandArray layout(int w, int h)
                 text(fit(str_from_c(arena_sprintf(&frame, "%s", info)), foot_w, false), cc(t->fg_dim));
             }
             }
+            if (app.ui.grid) layout_zoom();
         }
         layout_tip(w);
         ModalKind mk = modal_kind();
@@ -2465,6 +2578,11 @@ static UiKey ui_key_of(int key, int mods)
     if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_S) return UK_F9;
     if (m == GLFW_MOD_CONTROL && (key == GLFW_KEY_1 || key == GLFW_KEY_KP_1)) return UK_VIEW_ICONS;   // Nemo's keys (F6.2)
     if (m == GLFW_MOD_CONTROL && (key == GLFW_KEY_2 || key == GLFW_KEY_KP_2)) return UK_VIEW_LIST;
+    // The icon view's sizes (F6.3), as Nemo's: Ctrl+= or Ctrl++ (Shift+= on most layouts), Ctrl+-,
+    // Ctrl+0, and the keypad's.
+    if ((m == GLFW_MOD_CONTROL || m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT)) && (key == GLFW_KEY_EQUAL || key == GLFW_KEY_KP_ADD)) return UK_ZOOM_IN;
+    if (m == GLFW_MOD_CONTROL && (key == GLFW_KEY_MINUS || key == GLFW_KEY_KP_SUBTRACT)) return UK_ZOOM_OUT;
+    if (m == GLFW_MOD_CONTROL && (key == GLFW_KEY_0 || key == GLFW_KEY_KP_0)) return UK_ZOOM_RESET;
     if (m == GLFW_MOD_SHIFT) {
         switch (key) {
         case GLFW_KEY_LEFT: return UK_SEL_LEFT;
@@ -2569,6 +2687,7 @@ typedef struct {
     int   mode;         // a sidebar mode button (a SideMode), -1 for none
     int   twisty;       // a tree row's open/close mark, -1 for none
     int   eject;        // a drive's eject button, -1 for none
+    bool  zoom;         // the zoom slider's track (F6.3)
 } Hit;
 
 static bool in_box(Clay_ElementId id, float x, float y)
@@ -2580,7 +2699,7 @@ static bool in_box(Clay_ElementId id, float x, float y)
 
 static Hit hit_at(float x, float y)
 {
-    Hit h = { -1, -1, -1, UB_NONE, -1, -1, -1, 0, -1, -1, -1, -1 };
+    Hit h = { -1, -1, -1, UB_NONE, -1, -1, -1, 0, -1, -1, -1, -1, false };
     if (modal_kind() != MODAL_NONE) {
         // A panel is up: its buttons are all there is to hit.
         static const struct { const char *id; int b; } MB[] = {
@@ -2599,6 +2718,7 @@ static Hit hit_at(float x, float y)
         { "nav-back", UB_BACK }, { "nav-fwd", UB_FORWARD }, { "nav-up", UB_UP }, { "loc-toggle", UB_LOCATION },
         { "search", UB_SEARCH }, { "crumb-left", UB_LEFT }, { "crumb-right", UB_RIGHT },
         { "trash-restore", UB_RESTORE }, { "trash-empty", UB_EMPTY }, { "view-list", UB_VIEW_LIST }, { "view-icons", UB_VIEW_ICONS },
+        { "zoom-out", UB_ZOOM_OUT }, { "zoom-in", UB_ZOOM_IN },
     };
     for (int k = 0; k < COUNT(BAR) && h.bar == UB_NONE; k++)
         if (in_box(Clay_GetElementId(cz(BAR[k].id)), x, y)) h.bar = BAR[k].b;
@@ -2617,6 +2737,7 @@ static Hit hit_at(float x, float y)
     if (h.side >= 0 && app.ui.side_mode == SIDE_PLACES && in_box(CLAY_IDI("side-eject", h.side), x, y)) h.eject = h.side;
     for (int k = 0; k < SIDE_MODES && h.mode < 0; k++)
         if (in_box(CLAY_IDI("mode", k), x, y)) h.mode = k;
+    h.zoom = app.ui.grid && in_box(CLAY_ID("zoom-track"), x, y);
     static const char *const IDS[SORT_KEYS] = { "col-name", "col-size", "col-date" };
     for (int k = 0; k < SORT_KEYS && h.header < 0; k++)
         if (in_box(Clay_GetElementId(cz(IDS[k])), x, y)) h.header = k;
@@ -2640,6 +2761,8 @@ static void press_at(UiInput *in, float x, float y, int mods)
     in->job_x = h.job_x;
     in->side_mode = h.mode;
     in->side_twisty = h.twisty;
+    // The zoom track: the size nearest the press, and the knob held until the button is let go.
+    if (h.zoom) in->zoom_to = zoom_level_at(x), app.zoom_drag = true;
     if (h.tab_x >= 0) in->tab_close = h.tab_x;
     else if (h.tab >= 0) in->tab_click = h.tab;
 }
@@ -2657,17 +2780,38 @@ static void middle_at(UiInput *in, float x, float y)
 
 static float wheel_left;   // a touchpad's part of a notch, carried to the next frame
 
+// The wheel's notches at x: the files scroll, or with Ctrl held their icons zoom (F6.3); the
+// sidebar scrolls by itself. True when the sidebar moved.
+static bool wheel_at(UiInput *in, float x, int notches, bool ctrl)
+{
+    if (x >= side_w() && ctrl) in->zoom_wheel = notches;
+    else if (x >= side_w()) in->wheel = notches;
+    else if (notches) return app.ui.side.top = ui_clamp(app.ui.side.top - notches, 0, ui_max_top(&app.ui.side)), true;
+    return false;
+}
+
 static int tip_target(Hit h)
 {
     switch (h.bar) {
     case UB_BACK: case UB_FORWARD: case UB_UP: case UB_LOCATION: case UB_SEARCH: case UB_LEFT: case UB_RIGHT:
-    case UB_VIEW_LIST: case UB_VIEW_ICONS: return TIP_BAR + h.bar;
+    case UB_VIEW_LIST: case UB_VIEW_ICONS: case UB_ZOOM_OUT: case UB_ZOOM_IN: return TIP_BAR + h.bar;
     default: break;
     }
+    if (h.zoom) return TIP_ZOOM;
     if (h.mode >= 0) return TIP_MODE + h.mode;
     if (h.eject >= 0) return TIP_EJECT + h.eject;
     if (h.tab_x >= 0) return TIP_TAB_X + h.tab_x;
     return -1;
+}
+
+// The zoom slider's knob held, the pointer at x (F6.3): the size nearest it; the button let go, the
+// knob is dropped (true then: it is drawn unlit).
+static bool zoom_drag_at(UiInput *in, float x, bool held)
+{
+    if (!app.zoom_drag) return false;
+    if (!held) return app.zoom_drag = false, true;
+    in->zoom_to = zoom_level_at(x);
+    return false;
 }
 
 // What is under the pointer at x, y, for the hover highlights: true when any changed.
@@ -2676,10 +2820,10 @@ static bool hover_at(float x, float y)
     Hit h = hit_at(x, y);
     bool changed = h.row != app.hover || h.side != app.side_hover || h.bar != app.bar_hover || h.crumb != app.crumb_hover ||
                    h.tab != app.tab_hover || h.tab_x != app.tab_x_hover || h.mode != app.mode_hover || h.eject != app.eject_hover ||
-                   h.modal != app.modal_hover || h.job_x != app.jobx_hover;
+                   h.modal != app.modal_hover || h.job_x != app.jobx_hover || h.zoom != app.zoom_hover;
     app.hover = h.row, app.side_hover = h.side, app.bar_hover = h.bar, app.crumb_hover = h.crumb;
     app.tab_hover = h.tab, app.tab_x_hover = h.tab_x, app.mode_hover = h.mode, app.eject_hover = h.eject;
-    app.modal_hover = h.modal, app.jobx_hover = h.job_x;
+    app.modal_hover = h.modal, app.jobx_hover = h.job_x, app.zoom_hover = h.zoom;
     // Onto another icon button (or off one): its tooltip waits UI_TIP_MS, the timer wakes the loop.
     if (ui_tip_hover(&app.tip, tip_target(h), now_ms())) {
         changed = true;
@@ -2702,8 +2846,7 @@ static UiInput input_real(bool *seen)
     wheel_left += GetMouseWheelMove();
     int notches = (int)wheel_left;
     wheel_left -= (float)notches;
-    if (m.x >= side_w()) in.wheel = notches;
-    else if (notches) app.ui.side.top = ui_clamp(app.ui.side.top - notches, 0, ui_max_top(&app.ui.side)), *seen = true;
+    *seen |= wheel_at(&in, m.x, notches, IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL));
     if (d.x != 0 || d.y != 0) *seen |= hover_at(m.x, m.y);
     if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
         int mods = (IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL) ? UI_MOD_CTRL : 0) |
@@ -2711,6 +2854,8 @@ static UiInput input_real(bool *seen)
         press_at(&in, m.x, m.y, mods);
     }
     if (IsMouseButtonPressed(MOUSE_BUTTON_MIDDLE)) middle_at(&in, m.x, m.y);
+    bool held = IsMouseButtonDown(MOUSE_BUTTON_LEFT);
+    if (d.x != 0 || !held) *seen |= zoom_drag_at(&in, m.x, held);
     in.backs = mouse_backs, mouse_backs = 0;
     in.forwards = mouse_forwards, mouse_forwards = 0;
     // Anything the user did draws a frame: one list, ui_input_acts (unit-tested), so a new click
@@ -2888,7 +3033,7 @@ int main(int argc, char **argv)
     char state_file[PATH_MAX];
     if (state_path(state_file, sizeof state_file)) {
         State st = state_load(&scratch, state_file);
-        app.ui.side_mode = st.side, app.ui.grid = st.icons;
+        app.ui.side_mode = st.side, app.ui.grid = st.icons, app.ui.zoom = st.zoom;
     }
     side_refresh();
     list_fit();
@@ -2918,6 +3063,7 @@ int main(int argc, char **argv)
         // Rows and columns for the window as it is, before a frame shows them: a resize, the
         // sidebar's mode, the view (F6.2) and the jobs' rows all change them.
         int rows = list_rows(GetScreenHeight()), srows = side_rows(GetScreenHeight()), cols = list_cols(GetScreenWidth());
+        if (app.zoomed) ui_refit(&app.ui.list, cols, rows), app.zoomed = false, dirty = true;
         if (cols != (int)ui_cols(&app.ui.list)) ui_set_cols(&app.ui.list, cols), dirty = true;
         if (rows != app.ui.list.rows) ui_resize(&app.ui.list, rows), dirty = true;
         if (srows != app.ui.side.rows) ui_resize(&app.ui.side, srows), dirty = true;

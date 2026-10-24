@@ -7,6 +7,7 @@
 
 #include <limits.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <time.h>
 
 enum { UI_EVENTS_MAX = 64, UI_FIND_MAX = 256, UI_HISTORY_MAX = 64, UI_JOB_ROWS = 4 };
@@ -50,12 +51,16 @@ typedef enum {
     UK_VIEW_ICONS, // Ctrl+1: the files as icons (F6.2)
     UK_VIEW_LIST,  // Ctrl+2: the files as the list
     UK_SIDE,       // Ctrl+Left: the keys to the sidebar (Tab goes there and back)
+    UK_ZOOM_IN,    // Ctrl+= (Ctrl++, the keypad's +): the icon view's icons a size bigger (F6.3)
+    UK_ZOOM_OUT,   // Ctrl+-
+    UK_ZOOM_RESET, // Ctrl+0: the first size, 48 px
 } UiKey;
 
 // The top bar's buttons (F4).
 typedef enum { UB_NONE, UB_BACK, UB_FORWARD, UB_UP, UB_LOCATION, UB_SEARCH, UB_LEFT, UB_RIGHT, UB_CRUMB,
                UB_RESTORE, UB_EMPTY,   // the trash view's (F6)
-               UB_VIEW_LIST, UB_VIEW_ICONS } UiBar;   // the view buttons (F6.2)
+               UB_VIEW_LIST, UB_VIEW_ICONS,   // the view buttons (F6.2)
+               UB_ZOOM_OUT, UB_ZOOM_IN } UiBar;   // the zoom slider's minus and plus (F6.3), in the footer
 
 enum { UI_MOD_CTRL = 1, UI_MOD_SHIFT = 2 };
 
@@ -94,6 +99,8 @@ typedef struct {
     int     side_mode;   // a sidebar mode button clicked (a SideMode, F6), -1 for none
     int     side_twisty; // a tree row's open/close mark clicked (its row on screen), -1 for none
     int     side_eject;  // a drive's eject button clicked (its row on screen, F6.1), -1 for none
+    int     zoom_wheel;  // Ctrl+wheel notches over the files, positive up: the icons bigger (F6.3)
+    int     zoom_to;     // the zoom slider's track pressed or dragged: the level (UI_ZOOM_PX), -1 for none
 } UiInput;
 
 typedef enum {
@@ -126,6 +133,7 @@ typedef enum {
     UA_NOT_IN_TRASH,   // something that doesn't work in the trash view (gui/ says so)
     UA_EJECT,       // index: the sidebar row of the drive to eject (F6.1)
     UA_VIEW,        // the view changed (Ui.grid, F6.2): gui/ lays it out again and remembers it
+    UA_ZOOM,        // the icon view's size changed (Ui.zoom, F6.3): gui/ refits it (ui_refit) and remembers it
 } UiActionKind;
 
 typedef struct {
@@ -141,6 +149,11 @@ enum { UI_ANS_SKIP = 1, UI_ANS_REPLACE = 2, UI_ANS_KEEP = 3, UI_ANS_CANCEL = 4 }
 // above, and the "same for the rest" box).
 // The cancel, quit and queue-full panels (F5.3) use YES and NO, and OK.
 enum { UI_MODAL_YES = 1, UI_MODAL_NO, UI_MODAL_SKIP, UI_MODAL_REPLACE, UI_MODAL_KEEP, UI_MODAL_CANCEL, UI_MODAL_ALL, UI_MODAL_OK };
+
+// The icon view's sizes (F6.3, Michael 2026-10-24): Yaru's 32 and 48, and its 256 scaled down
+// between them. The list doesn't zoom.
+static const int UI_ZOOM_PX[] = { 32, 48, 64, 96, 128, 256 };
+enum { UI_ZOOMS = sizeof UI_ZOOM_PX / sizeof UI_ZOOM_PX[0], UI_ZOOM_DEFAULT = 48 };
 
 typedef struct {
     isize n;      // entries in the list
@@ -160,6 +173,7 @@ typedef struct {
     UiList list, side;
     SideMode side_mode;      // places, tree or hidden (F6)
     bool   grid;             // the files as icons in a grid, not the list (F6.2)
+    int    zoom;             // the icon view's icon size in px, one of UI_ZOOM_PX; 0: UI_ZOOM_DEFAULT (F6.3)
     bool   side_focus;       // the keys move the sidebar's cursor
     const u8 *side_head;     // a byte per sidebar row, 1 for a heading (F6), never the cursor's; NULL: none
     bool   finding;          // the find line is open
@@ -210,7 +224,8 @@ typedef struct {
 static UiInput ui_input_none(void)
 {
     return (UiInput){ .click = -1, .dclick = -1, .side_click = -1, .header = -1, .click_mods = 0, .bar = UB_NONE, .crumb = -1,
-                      .tab_click = -1, .tab_close = -1, .mid_row = -1, .mid_side = -1, .mid_crumb = -1, .modal = 0, .job_x = -1, .side_mode = -1, .side_twisty = -1, .side_eject = -1 };
+                      .tab_click = -1, .tab_close = -1, .mid_row = -1, .mid_side = -1, .mid_crumb = -1, .modal = 0, .job_x = -1, .side_mode = -1, .side_twisty = -1, .side_eject = -1,
+                      .zoom_to = -1 };
 }
 
 static isize ui_clamp(isize v, isize lo, isize hi)
@@ -274,6 +289,17 @@ static void ui_set_cols(UiList *l, int cols)
     ui_show_sel(l);
 }
 
+// New columns and rows after a zoom (F6.3): the cursor's cell stays on its row on screen where the
+// new rows allow (its last row when there are fewer), not wherever the least scroll leaves it.
+static void ui_refit(UiList *l, int cols, int rows)
+{
+    isize c = ui_cols(l), on = l->sel / c - l->top / c;
+    l->cols = cols, l->rows = rows;
+    c = ui_cols(l);
+    l->top = (l->sel / c - on) * c;   // out of range here: ui_show_sel brings it in, the cursor on screen
+    ui_show_sel(l);
+}
+
 // The wheel: notches rows up (positive) or down, the cursor left where it is.
 static void ui_scroll(UiList *l, int notches)
 {
@@ -326,7 +352,8 @@ static bool ui_input_acts(const UiInput *in)
 {
     return in->nev > 0 || in->click >= 0 || in->dclick >= 0 || in->side_click >= 0 || in->header >= 0 || in->bar != UB_NONE ||
            in->tab_click >= 0 || in->tab_close >= 0 || in->mid_row >= 0 || in->mid_side >= 0 || in->mid_crumb >= 0 || in->modal > 0 ||
-           in->backs > 0 || in->forwards > 0 || in->job_x >= 0 || in->side_mode >= 0 || in->side_twisty >= 0 || in->side_eject >= 0;
+           in->backs > 0 || in->forwards > 0 || in->job_x >= 0 || in->side_mode >= 0 || in->side_twisty >= 0 || in->side_eject >= 0 ||
+           in->zoom_wheel != 0 || in->zoom_to >= 0;
 }
 
 // Whether a status message gives way to the status line on input that acts (ui_input_acts): a
@@ -352,6 +379,31 @@ static void ui_step(Ui *u, UiList *m, isize by)
 {
     ui_move(m, by);
     if (m == &u->side) ui_side_settle(u, by < 0 ? -1 : 1);
+}
+
+// The level of px in UI_ZOOM_PX: the nearest (a state file written by hand may say any size).
+static int ui_zoom_level(int px)
+{
+    if (px <= 0) px = UI_ZOOM_DEFAULT;
+    int best = 0;
+    for (int k = 1; k < UI_ZOOMS; k++)
+        if (abs(UI_ZOOM_PX[k] - px) < abs(UI_ZOOM_PX[best] - px)) best = k;
+    return best;
+}
+
+// The icon view's icon size now.
+static int ui_zoom_px(const Ui *u)
+{
+    return UI_ZOOM_PX[ui_zoom_level(u->zoom)];
+}
+
+// The icon view's icons at level k (clamped); nothing in the list, or at the size it has.
+static UiAction ui_zoom(Ui *u, int k)
+{
+    k = (int)ui_clamp(k, 0, UI_ZOOMS - 1);
+    if (!u->grid || UI_ZOOM_PX[k] == ui_zoom_px(u)) return (UiAction){ UA_NONE, 0, false };
+    u->zoom = UI_ZOOM_PX[k];
+    return (UiAction){ UA_ZOOM, u->zoom, false };
 }
 
 // The view: icons in a grid, or the list. gui/ sets the columns at its next layout.
@@ -802,6 +854,8 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         return (UiAction){ UA_ANSWER, a, a != UI_ANS_CANCEL && u->ask_all };
     }
     if (in->wheel) ui_scroll(l, in->wheel);
+    if (!prompt && in->zoom_to >= 0) return ui_zoom(u, in->zoom_to);
+    if (!prompt && in->zoom_wheel) return ui_zoom(u, ui_zoom_level(u->zoom) + (in->zoom_wheel > 0 ? 1 : -1));
     if (!prompt && in->header >= 0 && in->header < SORT_KEYS) {
         u->sort = ui_sort_click(u->sort, (SortKey)in->header);
         return (UiAction){ UA_SORT, 0, false };
@@ -838,6 +892,8 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         case UB_EMPTY: if (u->in_trash) u->empty_asking = true; break;
         case UB_VIEW_LIST: return ui_view(u, false);
         case UB_VIEW_ICONS: return ui_view(u, true);
+        case UB_ZOOM_OUT: return ui_zoom(u, ui_zoom_level(u->zoom) - 1);
+        case UB_ZOOM_IN: return ui_zoom(u, ui_zoom_level(u->zoom) + 1);
         default: break;
         }
     }
@@ -965,6 +1021,9 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         case UK_END: ui_step(u, m, m->n); break;
         case UK_VIEW_ICONS: return ui_view(u, true);
         case UK_VIEW_LIST: return ui_view(u, false);
+        case UK_ZOOM_IN: return ui_zoom(u, ui_zoom_level(u->zoom) + 1);
+        case UK_ZOOM_OUT: return ui_zoom(u, ui_zoom_level(u->zoom) - 1);
+        case UK_ZOOM_RESET: return ui_zoom(u, ui_zoom_level(UI_ZOOM_DEFAULT));
         // Enter opens and Backspace goes up; Left and Right don't, in the list or the icon view
         // (Michael, 2026-10-24): they only open and close the tree's folders.
         case UK_ENTER:

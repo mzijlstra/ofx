@@ -3,7 +3,7 @@
 # (tools/gui/run-script.sh):
 #   tests/gui/run.sh <scratch-dir> [binary] [group...]
 # The groups (one or more scripts on one tree): browse big gone watchgap f2 f3 f4 f5 f52 f53 f54
-# f6 (f6, f6b) f62 (f62, f62b, f62c) hang guard3 guard. Named ones only, or all of them; a group
+# f6 (f6, f6b) f62 (f62, f62b, f62c) f63 (f63, f63b) hang guard3 guard. Named ones only, or all of them; a group
 # that fails says "== <script>: FAILED" or "<group>: FAILED" (tools/mutation/gui.py reads it).
 set -u
 base=${1:?usage: run.sh <scratch-dir> [binary]}
@@ -114,6 +114,14 @@ printf '33 1 0:31 / / rw - btrfs /dev/x rw\n' > "$T/mountinfo"
 echo "== f62"; OFX_TEST_MOUNTINFO="$T/mountinfo" "$here/../../tools/gui/run-script.sh" "$T" "$here/f62.script" "$bin" "$T/tree" || failed f62
 echo "== f62b"; OFX_TEST_MOUNTINFO="$T/mountinfo" "$here/../../tools/gui/run-script.sh" "$T" "$here/f62b.script" "$bin" "$T/tree" || failed f62b
 echo "== f62c"; OFX_TEST_ICONS_MAX=2 OFX_TEST_MOUNTINFO="$T/mountinfo" "$here/../../tools/gui/run-script.sh" "$T" "$here/f62c.script" "$bin" "$T/tree" || failed f62c
+fi
+if want f63; then
+# F6.3: the icon view's sizes, then f63b on the same tree: the size came back from the state file.
+T=$base/f63; rm -rf "$T"; mkdir -p "$T/tree"
+for i in $(seq -w 1 60); do touch "$T/tree/f$i"; done
+printf '33 1 0:31 / / rw - btrfs /dev/x rw\n' > "$T/mountinfo"
+echo "== f63"; OFX_TEST_MOUNTINFO="$T/mountinfo" "$here/../../tools/gui/run-script.sh" "$T" "$here/f63.script" "$bin" "$T/tree" || failed f63
+echo "== f63b"; OFX_TEST_MOUNTINFO="$T/mountinfo" "$here/../../tools/gui/run-script.sh" "$T" "$here/f63b.script" "$bin" "$T/tree" || failed f63b
 fi
 if want hang; then
 T=$base/hang; rm -rf "$T"; mkdir -p "$T/tree/stuck"

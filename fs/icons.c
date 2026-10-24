@@ -212,8 +212,17 @@ static int icon_dir_distance(const IconDir *d, int size, int scale)
     return want < lo ? lo - want : want > hi ? want - hi : 0;
 }
 
+// Whether d's icons are smaller than size at scale, in device pixels: drawn there they would be
+// scaled up.
+static bool icon_dir_short(const IconDir *d, int size, int scale)
+{
+    int hi = d->type == IT_FIXED ? d->size : d->type == IT_SCALABLE ? d->max : d->size + d->threshold;
+    return hi * d->scale < size * scale;
+}
+
 // The spec's LookupIcon in one theme: a directory that matches the size and scale, else the
-// closest one. NULL when the theme has no such icon.
+// closest one, but one at least as big before any smaller (F6.3: 96 px on a scale-2 output is
+// Yaru's 256 scaled down, not its 48@2x scaled up and blurred). NULL when the theme has no such icon.
 static const IconDir *icon_in_theme(const IconTheme *t, Str name, int size, int scale)
 {
     int have;
@@ -221,10 +230,12 @@ static const IconDir *icon_in_theme(const IconTheme *t, Str name, int size, int 
         if (icon_dir_matches(&t->dirs[i], size, scale) && strmap_get(&t->dirs[i].names, name, &have)) return &t->dirs[i];
     const IconDir *best = NULL;
     int best_d = 0;
+    bool best_short = false;
     for (isize i = 0; i < t->ndirs; i++) {
         if (!strmap_get(&t->dirs[i].names, name, &have)) continue;
         int dist = icon_dir_distance(&t->dirs[i], size, scale);
-        if (!best || dist < best_d) best = &t->dirs[i], best_d = dist;
+        bool short_ = icon_dir_short(&t->dirs[i], size, scale);
+        if (!best || (best_short && !short_) || (best_short == short_ && dist < best_d)) best = &t->dirs[i], best_d = dist, best_short = short_;
     }
     return best;
 }

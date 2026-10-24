@@ -12,12 +12,13 @@
 //                           ctrl-h ctrl-a ctrl-c ctrl-x ctrl-v ctrl-z ctrl-shift-n ctrl-l alt-up
 //                           ctrl-t ctrl-w ctrl-tab ctrl-shift-tab ctrl-shift-pageup ctrl-shift-pagedown,
 //                           shift-left shift-right shift-home shift-end shift-enter ctrl-k ctrl-j ctrl-q,
-//                           ctrl-1 ctrl-2 ctrl-left, and alt-1 .. alt-9
+//                           ctrl-1 ctrl-2 ctrl-left, ctrl-equal ctrl-minus ctrl-0, and alt-1 .. alt-9
 //   char <c>                one typed character
 //   keys <word>...          keys and characters in one frame's input, as fast typing during a slow
 //                           frame gives them: each word a key name (as for `key`) or char:<c>
 //   type <text>             the rest of the line, after one space, as typed characters
-//   wheel <notches>         over the list; positive away from the user (up)
+//   wheel <notches> [ctrl]  over the list; positive away from the user (up); with ctrl at the
+//                           window's right edge, as the mouse's wheel goes (wheel_at): the zoom
 //   press <row> [ctrl|shift] a left press on list row <row> (0 = the first on screen; in the icon
 //                           view the cell, across then down), through the
 //                           same double-click timing as the mouse: two presses on a row within
@@ -34,6 +35,8 @@
 //                           waiting is due; a wake-up 3 s on stands in if nothing comes, and the
 //                           state's idlewoke says which ended the wait (timer or fallback)
 //   click-here              a left press at the last point-ui
+//   drag-here <dx>          a left press there, the pointer <dx> px across and the button let go,
+//                           in one frame, as the mouse's go (zoom_drag_at: the zoom slider's knob)
 //   middle-here             a middle press there (a folder into a background tab, a tab closed)
 //   middle <row>            a middle press on list row <row>
 //   back, forward           the mouse's back and forward buttons
@@ -211,6 +214,11 @@ static void script_state(char *out, size_t cap)
     if (app.ui.side_mode == SIDE_PLACES && hi >= 0 && hi < app.places.n) ejectbtn = place_ejectable(&app.places.p[hi]);
     // The tooltip shown (Michael, 2026-10-24), spaces as '_'.
     char tipword[NAME_MAX + 64] = "-";
+    // The tooltip shown lies inside the window (F6.3: the zoom plus's, at the right edge); -1 none.
+    Clay_ElementData tipbox = Clay_GetElementData(CLAY_ID("tooltip"));
+    int tipin = !app.tip.shown || !tipbox.found ? -1
+              : tipbox.boundingBox.x >= 0 && tipbox.boundingBox.y >= 0 && tipbox.boundingBox.x + tipbox.boundingBox.width <= (float)GetScreenWidth() &&
+                    tipbox.boundingBox.y + tipbox.boundingBox.height <= (float)GetScreenHeight();
     Clay_ElementId tipid;
     if (app.tip.shown && tip_of(app.tip.target, tipword, sizeof tipword, &tipid))
         for (char *c = tipword; *c; c++)
@@ -240,7 +248,8 @@ static void script_state(char *out, size_t cap)
              "sysclip=%d modal=%s askall=%d tabs=%d tab=%d tabdirs=%s sizecell=%s crumbs=%s crumbhome=%d crumb=%d crumbshown=%d-%d arrows=%d locating=%d cnt=%s "
              "esel=%d-%d caret=%d copied=%s crumbkey=%s jobs=%d waiting=%d jobrows=%s jobkey=%s jobline=%d jobspeed=%d clashjob=%s "
              "sides=%s spaced=%d sidemode=%s treen=%d treecur=%s treerow=%td treehere=%d trash=%d sidehover=%d hovernum=%s ejectbtn=%d cwdavail=%d info=%s "
-             "view=%s cols=%d cells=%d cellfirst=%td celllast=%td fulllines=%d celllines=%d cellcut=%d iconpx=%d icontex=%d iconresets=%d crumbfocus=%d tooltip=%s idlewoke=%s status=%s",
+             "view=%s cols=%d cells=%d cellfirst=%td celllast=%td fulllines=%d celllines=%d cellcut=%d iconpx=%d icontex=%d iconresets=%d crumbfocus=%d tooltip=%s idlewoke=%s "
+             "zoom=%d cellw=%d cellh=%d zoomshown=%d tipin=%d status=%s",
              app.cwd, app.list.n, app.list.hidden, STR_ARG(sel), app.ui.list.sel, app.ui.list.top, app.ui.list.rows, app.hover,
              t->accent.r, t->accent.g, t->accent.b, t->bg.r, t->bg.g, t->bg.b, t->icons[0] ? t->icons : "-",
              app.icon_scale, GetScreenWidth(), GetScreenHeight(), app.reloads, app.themes, atomic_load(&watch.batches),
@@ -258,6 +267,7 @@ static void script_state(char *out, size_t cap)
              sides[0] ? sides : "-", spaced, SIDE_MODES_W[app.ui.side_mode], app.ui.side_mode == SIDE_TREE ? tree.n : 0, treecur,
              app.ui.side.sel - app.ui.side.top, treehere, app.ui.in_trash, app.side_hover, hovernum, ejectbtn, app.cwd_avail >= 0, info,
              app.ui.grid ? "icons" : "list", (int)ui_cols(&app.ui.list), app.grid_cells, app.grid_first, app.grid_last, app.grid_full_lines, app.grid_hover_lines, app.grid_hover_cut, entry_px(), icontex, app.icon_full_resets, app.ui.crumb_focus, tipword, idle_woke,
+             ui_zoom_px(&app.ui), cell_w(), cell_h(), Clay_GetElementData(CLAY_ID("zoom-track")).found, tipin,
              app.status[0] ? app.status : "-");
     frame_us_max = 0;
 }
@@ -301,6 +311,7 @@ static UiKey script_key(Str name)
         { "shift-left", UK_SEL_LEFT }, { "shift-right", UK_SEL_RIGHT }, { "shift-home", UK_SEL_HOME }, { "shift-end", UK_SEL_END },
         { "shift-enter", UK_SHIFT_ENTER }, { "ctrl-k", UK_CRUMBS }, { "ctrl-j", UK_JOBS }, { "ctrl-q", UK_QUIT },
         { "ctrl-1", UK_VIEW_ICONS }, { "ctrl-2", UK_VIEW_LIST }, { "ctrl-left", UK_SIDE },
+        { "ctrl-equal", UK_ZOOM_IN }, { "ctrl-minus", UK_ZOOM_OUT }, { "ctrl-0", UK_ZOOM_RESET },
     };
     for (int i = 0; i < COUNT(KEYS); i++)
         if (str_eq(name, str_from_c(KEYS[i].name))) return KEYS[i].k;
@@ -469,7 +480,8 @@ static bool script_input(UiInput *in)
             while (i < text.len && in->nev < UI_EVENTS_MAX) in->ev[in->nev++] = (UiEvent){ UK_NONE, utf8_next(text.p, text.len, &i) };
             script.typing = str_cut(text, i, text.len);   // the rest on the next frames
         } else if (str_eq(cmd, S("wheel"))) {
-            in->wheel = atoi(a);
+            if (strstr(a, "ctrl")) wheel_at(in, (float)GetScreenWidth() - 2, atoi(a), true);
+            else in->wheel = atoi(a);
         } else if (str_eq(cmd, S("press"))) {
             int r = atoi(a);
             int mods = strstr(a, "ctrl") ? UI_MOD_CTRL : strstr(a, "shift") ? UI_MOD_SHIFT : 0;
@@ -499,6 +511,10 @@ static bool script_input(UiInput *in)
             script_idle();
         } else if (str_eq(cmd, S("click-here"))) {
             press_at(in, script.px, script.py, 0);
+        } else if (str_eq(cmd, S("drag-here"))) {
+            press_at(in, script.px, script.py, 0);
+            zoom_drag_at(in, script.px + (float)atoi(a), true);
+            zoom_drag_at(in, script.px + (float)atoi(a), false);
         } else if (str_eq(cmd, S("middle-here"))) {
             middle_at(in, script.px, script.py);
         } else if (str_eq(cmd, S("middle"))) {

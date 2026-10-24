@@ -36,6 +36,7 @@ wayland-cursor, wayland-egl, xkbcommon, fontconfig and freetype2. raylib and Cla
 | Tab, Ctrl+Left | the keys to the sidebar (a hidden one shows as places); Tab again back; in the tree, Left/Right (`h`/`l`) close and open a folder (or move up and down a level), Enter goes there |
 | F9, Ctrl+S | the sidebar's next mode: places, tree, hidden |
 | Ctrl+1, Ctrl+2 | the files as icons, as the list (also the two buttons at the right of the top bar; remembered) |
+| Ctrl+=, Ctrl+-, Ctrl+0 | in the icon view, the icons a size bigger, smaller, back to 48 px (also Ctrl+wheel, and the slider at the right of the bottom bar; remembered) |
 | `t` | a terminal in this folder (`xdg-terminal-exec --dir`) |
 | `~` | home |
 | Space, Ctrl+A | select the entry (and move on), select all; Esc clears |
@@ -75,14 +76,16 @@ click on a place goes there, and the back and forward buttons walk the history. 
 colours and icons follow a theme switch.
 
 The icon-only buttons (back, forward, up, location, search, the views, the sidebar's modes, eject,
-a tab's ×) show what they do and their key when the pointer rests on them.
+a tab's ×, the zoom's minus, plus and slider) show what they do and their key when the pointer rests on them.
 
-The icon view (Ctrl+1): each entry a 48 px icon over its name, wrapped to two lines and cut with
+The icon view (Ctrl+1): each entry an icon over its name (48 px at first; 32, 64, 96, 128 or 256
+with the slider at the right of the bottom bar, Ctrl+= and Ctrl+-, or Ctrl+wheel; the list doesn't
+zoom), wrapped to two lines and cut with
 "…"; the cursor's name shows in full, over the cells below. Left/Right (`h`/`l`) move a cell and run
 on across the rows (in the list they do nothing), Up/Down (`k`/`j`) a row, PgUp/PgDn a page of rows,
 Home/End the first and last; Enter opens and Backspace goes up. Sort, find, the selection, rename,
 tabs and the rest work as in the list; size and date are in the status line. The view is one for
-every folder, remembered beside the sidebar's mode.
+every folder, remembered beside the sidebar's mode, and so is the size.
 
 The sidebar, in one of three modes, picked with the three buttons at the left of the bottom bar
 or F9 (remembered in `~/.local/state/ofx/state`):

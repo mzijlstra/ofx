@@ -376,9 +376,10 @@ static void test_icons(void)
     put(at("icons/Parent/16x16/mimetypes/folder.png"), "");
     put(at("icons/Child/index.theme.extra"), "");
     put(at("icons/Order/index.theme"),
-        "[Icon Theme]\nDirectories=48x48/a\nScaledDirectories=24x24@2x/a\n"
-        "[48x48/a]\nSize=48\n[24x24@2x/a]\nSize=24\nScale=2\nType=Fixed\n");
+        "[Icon Theme]\nDirectories=48x48/a,16x16/a\nScaledDirectories=24x24@2x/a\n"
+        "[48x48/a]\nSize=48\n[16x16/a]\nSize=16\nType=Fixed\n[24x24@2x/a]\nSize=24\nScale=2\nType=Fixed\n");
     put(at("icons/Order/48x48/a/both.png"), "");
+    put(at("icons/Order/16x16/a/both.png"), "");
     put(at("icons/Order/24x24@2x/a/both.png"), "");
     for (int k = 0; k < 100; k++) put(at("icons/Order/48x48/a/many%d.png", k), "");
     put(at("icons/hicolor/index.theme"),
@@ -412,6 +413,12 @@ static void test_icons(void)
     // 16 has no exact match in Child: its closest (24 at scale 1 is 8 away, @2x 32), before
     // Parent's exact 16, since themes go first.
     CHECK(strcmp(FIND(16, 1, S("folder")), at("icons/Child/24x24/places/folder.png")) == 0);
+    // No exact match: one at least as big before a closer smaller one (F6.3), so a bigger size is
+    // scaled down, not up: 32 is 24@2x's 48 device pixels, not 24's; when all are smaller, the
+    // biggest; when all are bigger, the smallest.
+    CHECK(strcmp(FIND(32, 1, S("folder")), at("icons/Child/24x24@2x/places/folder.png")) == 0);
+    CHECK(strcmp(FIND(64, 2, S("folder")), at("icons/Child/24x24@2x/places/folder.png")) == 0);
+    CHECK(strcmp(FIND(20, 1, S("folder")), at("icons/Child/24x24/places/folder.png")) == 0);
     CHECK(strcmp(FIND(24, 1, S("folder-download")), at("home/.icons/Child/24x24/places/folder-download.png")) == 0);
     CHECK(strcmp(FIND(24, 1, S("user-home")), at("icons/Child/48x48/places/user-home.png")) == 0);
     // The first name the theme has, theme by theme: Child has neither text name, Parent has both.
@@ -450,10 +457,12 @@ static void test_icons(void)
     icon_load(&ta, &db, S("Order"));
     CHECK(db.n == 2);
     CHECK_STR(db.t[1].name, "hicolor");
-    CHECK(db.t[0].ndirs == 2);
+    CHECK(db.t[0].ndirs == 3);
     CHECK(strcmp(FIND(24, 2, S("both")), at("icons/Order/24x24@2x/a/both.png")) == 0);
     CHECK(strcmp(FIND(24, 2, S("many0")), at("icons/Order/48x48/a/many0.png")) == 0);
     CHECK(strcmp(FIND(24, 2, S("many99")), at("icons/Order/48x48/a/many99.png")) == 0);
+    // A smaller directory after a bigger one doesn't win for being closer (F6.3): 20 px is 48's.
+    CHECK(strcmp(FIND(20, 1, S("both")), at("icons/Order/48x48/a/both.png")) == 0);
     env_restore();
 
     // A theme that isn't installed (F5.4): its name cut at the last '-' until one is, else
@@ -510,6 +519,9 @@ static void test_icons(void)
     CHECK(icon_dir_distance(&scal, 4, 1) == 4 && icon_dir_distance(&scal, 70, 1) == 6 && icon_dir_distance(&scal, 30, 1) == 0);
     CHECK(icon_dir_distance(&thr, 28, 1) == 2 && icon_dir_distance(&thr, 36, 1) == 2 && icon_dir_distance(&thr, 33, 1) == 0);
     CHECK(icon_dir_distance(&fixed2, 30, 2) == 12);   // 60 against 48
+    CHECK(!icon_dir_short(&fixed, 24, 1) && icon_dir_short(&fixed, 25, 1) && !icon_dir_short(&fixed2, 24, 2) && icon_dir_short(&fixed2, 25, 2));
+    CHECK(!icon_dir_short(&fixed2, 48, 1) && !icon_dir_short(&fixed, 12, 2) && icon_dir_short(&fixed, 13, 2));
+    CHECK(!icon_dir_short(&scal, 64, 1) && icon_dir_short(&scal, 65, 1) && !icon_dir_short(&thr, 34, 1) && icon_dir_short(&thr, 35, 1));
 
     // ini parsing.
     Str ini = S("[A]\nx = 1\n y=two \n[B]\nx=3\nn=12a\nbig=1234567890\n");
@@ -1470,6 +1482,7 @@ static void test_format(void)
 #include "test_f53.c"
 #include "test_f6.c"
 #include "test_f62.c"
+#include "test_f63.c"
 
 int main(void)
 {
@@ -1532,6 +1545,11 @@ int main(void)
     test_view_switch();
     test_wrap();
     test_tooltip();
+    test_zoom_levels();
+    test_zoom_keys();
+    test_zoom_mouse();
+    test_zoom_refit();
+    test_state_zoom();
     char cmd[1600];
     snprintf(cmd, sizeof cmd, "chmod -R u+rwx '%s' && rm -rf '%s' '%s'", root, root, decoy);
     if (system(cmd) != 0) fprintf(stderr, "could not remove %s\n", root);

@@ -36,7 +36,7 @@ Omarchy's theme: the binary, the folder `tools/ofx`, the window's title and Wayl
 | F6 | Bottom bar: sidebar as places (Home, bookmarks, Trash; drives with free space), as a tree, or hidden (F9); Trash restore and empty; the status line only; the mode remembered | Below |
 | F6.1 | A drive's used space under the pointer; eject for removable drives | |
 | F6.2 | Icon view: a grid beside the list, buttons in the top bar, Ctrl+1 and Ctrl+2, remembered | Below |
-| F6.3 | Icon sizes: a zoom slider at the bottom right, Ctrl+wheel and Ctrl+= / Ctrl+-, remembered | |
+| F6.3 | Icon sizes (the icon view): a zoom slider at the bottom right, Ctrl+wheel and Ctrl+= / Ctrl+-, remembered | |
 | F6.4 | Previews in the icon view: the freedesktop thumbnail cache (shared with Nemo), PNG and JPEG made on a thread | |
 | F7 | Menus: File, Edit, View, Go, Bookmarks, Help | |
 
@@ -141,10 +141,10 @@ themes (#14851). **Fallback:** a missing icon theme gives way to its name cut at
 until one is installed (`Yaru-grey` → `Yaru`), then plain Yaru, then Adwaita (GTK's own, but
 mostly SVG, and ofx draws PNGs), then hicolor. No `icons.theme`: the same way.
 
-## F6.3 design (2026-10-24, proposed)
+## F6.3 design (2026-10-24)
 
 **Asked (Michael):** icon sizes: a zoom slider at the bottom right, Ctrl+wheel and Ctrl+= / Ctrl+-,
-remembered. Proposed, for his decisions (marked **Q**):
+remembered. Decided (Michael, 2026-10-24: each Q took the proposal):
 
 - **Levels:** 32, 48, 64, 96, 128 and 256 px, 48 the default (F6.2's). Yaru has PNGs at 32, 48 and
   256 (each also @2x); 64, 96 and 128 are the 256 scaled down (one texture per size and icon,
@@ -160,11 +160,23 @@ remembered. Proposed, for his decisions (marked **Q**):
   screen as the new rows allow.
 - **Remembered:** `zoom=<px>` in the state file beside `view=`, one size for every folder (per
   folder: later, with the view).
-- **Q1, the list view:** (a) the slider and keys only in the icon view, the list stays 24 px rows
-  (hidden there); or (b) the list zooms too, its own levels (16, 24, 32, 48: row height follows),
-  remembered apart, as Nemo does. Proposed: (a) now, (b) on the later list if wanted.
-- **Q2, the levels:** the six above, or fewer (48, 96, 256), or 24 and 16 added at the small end.
-- **Q3, the slider's place:** the footer's right end, or the top bar beside the view buttons.
+- **The list view doesn't zoom:** the slider is hidden there and the keys do nothing; its rows stay
+  24 px (a zooming list, with its own levels, on the later list if wanted).
+
+**As built (2026-10-24):**
+- A cell is the icon plus 64 px wide (112 at least) and the icon plus 56 high: at 936 px beside
+  the sidebar, 6 across at 32 and 48, 5 at 64, 4 at 96, 3 at 128, 2 at 256.
+- Icons bigger than drawn are made the drawn size as they load (raylib's `ImageResize`): Yaru's
+  256 and 256@2x are Scalable from 64 to 256, so 64 px on a scale-2 output loaded a 512 px file,
+  four times too big; the GPU's bilinear shrink left it grainy and held 1 MiB an icon.
+- The icon lookup takes, when nothing matches the size, a directory at least as big before a
+  closer smaller one (as GTK does): a theme with a fixed 256 only is scaled down, never its 48@2x up.
+- The slider: a minus, a track of 84 px with a notch a size, the knob in the accent, a plus; a
+  press on the track or a drag goes to the nearest size; tooltips on all three, above them.
+  The status text gives up their room in the icon view.
+- Ctrl+wheel is a size a notch, however many notches a frame brings.
+- Keeping the cursor's place: `ui_refit` puts its row where it was on screen (its last row when
+  fewer fit); the plain resize keeps the least scroll, as before.
 
 ## F6.2 design (2026-10-23)
 

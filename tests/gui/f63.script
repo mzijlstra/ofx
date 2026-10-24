@@ -1,0 +1,111 @@
+# F6.3: the icon view's sizes. run.sh's tree: f01 .. f60 (60 entries). The window is 936x490: beside
+# the sidebar 712 px for cells, 410 for their rows. At 48 px 6 across and 3 down; 32: 6 by 4;
+# 64: 5 by 3; 96: 4 by 2; 128: 3 by 2; 256: 2 by 1.
+settle
+key ctrl-1
+expect view=icons zoom=48 cols=6 rows=3 cellw=112 cellh=104 zoomshown=1 iconpx=48 icontex=96
+shot zoom-48.png
+# Ctrl+= through the key callback (GLFW_KEY_EQUAL 61, Ctrl 2); a size bigger is Yaru's 256@2x made
+# 128 px (64 at scale 2) as it loads, not its 48@2x scaled up.
+raw-key 61 2
+expect zoom=64 cols=5 rows=3 cellw=128 cellh=120 iconpx=64 icontex=128
+sh grep -qx zoom=64 "$OFX_ROOT/state/ofx/state"
+shot zoom-64.png
+# Ctrl++ (Shift held, 3), the keypad's + (334); Ctrl+= at 256 stays.
+raw-key 61 3
+expect zoom=96 cols=4 rows=2 cellw=160 icontex=192
+raw-key 334 2
+expect zoom=128 cols=3 rows=2 cellw=192 icontex=256
+key ctrl-equal
+expect zoom=256 cols=2 rows=1 cellw=320 cellh=312 icontex=512
+shot zoom-256.png
+key ctrl-equal
+expect zoom=256
+# Ctrl+- (45), the keypad's - (333), Ctrl+0 (48) back to 48, then the smallest.
+raw-key 45 2
+expect zoom=128
+raw-key 333 2
+expect zoom=96
+raw-key 48 2
+expect zoom=48 cols=6 rows=3
+key ctrl-minus
+expect zoom=32 cols=6 rows=4 cellw=112 cellh=88 icontex=64
+shot zoom-32.png
+key ctrl-minus
+expect zoom=32
+key ctrl-0
+expect zoom=48
+# ---- the cursor's row on screen kept: on the top row (entry 40, rows from 36), at 64 px it is
+# still the top row (from 40), where the least scroll would have left it on the second (from 35).
+key end
+keys up up up
+expect idx=41 top=36
+key ctrl-equal
+expect idx=41 top=40 cols=5
+key ctrl-0
+expect idx=41 top=36 cols=6
+key home
+expect top=0
+# ---- the slider: the plus and minus, a press on the track, the knob dragged
+point-ui zoom-in
+click-here
+expect zoom=64
+point-ui zoom-out
+click-here
+expect zoom=48
+click-here
+expect zoom=32
+# At 32 the minus does nothing.
+click-here
+expect zoom=32
+point-ui zoom-notch 3
+click-here
+expect zoom=96
+point-ui zoom-knob
+drag-here 100
+expect zoom=256
+point-ui zoom-knob
+drag-here -30
+expect zoom=96
+point-ui zoom-knob
+drag-here -500
+expect zoom=32
+# The track's tooltip says the size; the plus's its key.
+point-ui zoom-track
+hover-here
+idle
+expect tooltip=Icons_32_px_(Ctrl+0:_48_px) tipin=1
+point-ui zoom-in
+hover-here
+idle
+expect tooltip=Bigger_icons_(Ctrl+=) tipin=1
+shot zoom-tip.png
+point-ui view-list
+hover-here
+# ---- Ctrl+wheel over the files: a size a notch; the plain wheel still scrolls
+wheel 1 ctrl
+expect zoom=48 top=0
+wheel 2 ctrl
+expect zoom=64
+wheel -1 ctrl
+expect zoom=48
+wheel -3
+expect zoom=48 top=18
+wheel 3
+expect top=0
+# ---- the list doesn't zoom: no slider, the keys and Ctrl+wheel do nothing
+key ctrl-2
+expect view=list zoomshown=0 iconpx=24 rows=14
+key ctrl-equal
+wheel 1 ctrl
+expect zoom=48 view=list
+shot zoom-list.png
+# Back to the icons at the size they had; 128 is remembered for f63b.
+key ctrl-1
+expect view=icons zoom=48 zoomshown=1
+key ctrl-equal
+key ctrl-equal
+key ctrl-equal
+expect zoom=128 cols=3
+sh grep -qx zoom=128 "$OFX_ROOT/state/ofx/state"
+quit

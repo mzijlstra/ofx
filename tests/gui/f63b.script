@@ -1,0 +1,4 @@
+# F6.3, after f63 on the same state: the icons come back at the size they had.
+settle
+expect view=icons zoom=128 cols=3 rows=2 zoomshown=1 iconpx=128
+quit
