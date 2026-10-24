@@ -37,7 +37,7 @@ Omarchy's theme: the binary, the folder `tools/ofx`, the window's title and Wayl
 | F6.1 | A drive's used space under the pointer; eject for removable drives | |
 | F6.2 | Icon view: a grid beside the list, buttons in the top bar, Ctrl+1 and Ctrl+2, remembered | Below |
 | F6.3 | Icon sizes (the icon view): a zoom slider at the bottom right, Ctrl+wheel and Ctrl+= / Ctrl+-, remembered | |
-| F6.4 | Previews in the icon view: the freedesktop thumbnail cache (shared with Nemo), PNG and JPEG made on a thread | |
+| F6.4 | Previews in the icon view: the freedesktop thumbnail cache (shared with Nemo), PNG, JPEG, GIF and WebP made on two threads | |
 | F7 | Menus: File, Edit, View, Go, Bookmarks, Help | |
 
 Each milestone ends in a reviewer-2 round, then Michael's go before `make install`.
@@ -171,8 +171,8 @@ Nemo, PNG and JPEG made on a thread.
 - The output: DP-3, 1920x1200, scale 1. The sizes 32 to 128 draw from `normal` (128 px), 256
   from `large` (256); scale 2 would take `large` and `x-large` (512).
 
-**Decided (Michael, 2026-10-24):** points 1, 2 and 5 as proposed; 4 with a 10 MiB limit, not 50.
-The rest are proposals until he says otherwise.
+**Decided (Michael, 2026-10-24):** points 1, 2 and 5 as proposed; 4 with a 10 MiB limit, not 50;
+the rest as proposed ("sounds good").
 
 1. **What gets a preview:** ofx makes PNG, JPEG, GIF (the first frame) and WebP; any other file
    shows a preview when the cache already holds a fresh one (Nemo's PDFs and slides), else its
@@ -207,6 +207,39 @@ The rest are proposals until he says otherwise.
 run reads or writes Michael's cache; fixture images (a PNG, a JPEG, a GIF, a WebP, a broken one, a
 stale cache entry) made in the scratch dir. The thumbnail name checked against a URI that needs
 escaping (spaces, `#`, UTF-8), since Nemo must find what ofx writes.
+
+**As built (2026-10-24):**
+- `fs/thumb.c` (raylib-free, unit-tested): MD5, the URI as GLib escapes it (letters, digits and
+  `-._~!$&'()*+,=@:/` kept, the rest `%XX` in upper case, as `gio info` printed), checked against a
+  name Nemo wrote in `large/`. Freshness: `Thumb::URI`, `Thumb::MTime`, and `Thumb::Size` when
+  there (Nemo writes none). ofx writes all three and `Software ofx`, mode 0600 in folders of 0700,
+  through `.ofx-<pid>-<n>.png` renamed into place, behind the test guard (`ops_allowed`).
+- One directory per drawn size: `normal` to 128 device pixels, `large` to 256, `x-large` to 512,
+  `xx-large` beyond. ofx reads and writes only there: Nemo's PDF preview in `large` shows at 256
+  (scale 1), not at 48. A failure is a 1 by 1 PNG in `fail/ofx/` with the file's text, one for every
+  size; an empty file fails too. A file that changed since its listing (`TG_CHANGED`) isn't made: its
+  next listing has the new mtime.
+- JPEG: libjpeg-turbo at the smallest of its scales that keeps the longer side at least the
+  directory's size, then stb's resize, then turned by the EXIF orientation (all 8). WebP: libwebp
+  scales as it decodes (an animated one fails). PNG and GIF (the first frame): a static copy of
+  stb_image beside raylib's, refusing more than 40 MP (decoded whole). Resizes are stb's linear,
+  as raylib's: the sRGB one's tables trip clang's UBSan.
+- Not made on network or FUSE drives: `thumb_local` reads mountinfo for the folder's mount (nfs,
+  nfs4, cifs, smb3, smbfs, 9p, ceph, afs, glusterfs, davfs, lustre, fuse, fuse.*; fuseblk is a
+  local disk). Previews another program made there still show.
+- `gui/thumbs.c`: two workers, a 64-request queue that each frame empties and fills again with
+  what it draws, then a page ahead. Answers are kept by `<px>:<path>` with the mtime (8192 entries,
+  all dropped when full): a file is asked again only when its mtime changes. Textures at most
+  64 MiB, the least recently drawn dropped first (never one drawn in the last frame, nor one just
+  loaded); a dropped one is asked again only for a cell on screen, never for the page ahead,
+  which would load it, drop it and ask again each frame.
+- Not in the trash view (its entries aren't at their paths), nor for broken links.
+- Measured, release build, the test weston (scale 2, previews from `normal`): 100 photos of 1 to
+  6 MiB, the first screen and a page ahead (36) in 0.47 s; the longest frame 0.3 ms.
+- Found on the way: a PNG without a preview had no icon (F6.2's empty `photo.png`):
+  `generic-icons` names none for `image/png`, and the fallback was `application-x-generic`, which
+  Yaru lacks. Now the spec's `<media>-x-generic` (`image-x-generic`), then
+  `application-x-generic`.
 
 ## F6.3 design (2026-10-24)
 
@@ -299,8 +332,8 @@ Decisions:
   Path buttons, Restore and Empty have their words already.
 - The icon cache (512 textures, both sizes) is emptied when full as another folder is entered,
   rather than leaving icons blank until a theme change (reviewer-2).
-- Found on the way, not F6.2's: an empty `photo.png` shows no icon, in the list too (not looked
-  into yet).
+- Found on the way, not F6.2's: an empty `photo.png` shows no icon, in the list too (fixed in
+  F6.4: `image-x-generic`).
 
 **Thumbnails, F6.4 (noted now):** read and written in `~/.cache/thumbnails` by the freedesktop
 spec (Nemo fills it here already: `normal`, `large`, `x-large`, `fail`), PNG and JPEG decoded off

@@ -15,7 +15,8 @@ ofx [FOLDER]     # the current folder by default
 ```
 
 Needs a C11 compiler, `wayland-scanner`, and the pkg-config packages wayland-client,
-wayland-cursor, wayland-egl, xkbcommon, fontconfig and freetype2. raylib and Clay are vendored.
+wayland-cursor, wayland-egl, xkbcommon, fontconfig and freetype2, and libjpeg-turbo, libwebp and
+zlib for the previews. raylib and Clay are vendored.
 
 ## Use
 
@@ -86,6 +87,14 @@ on across the rows (in the list they do nothing), Up/Down (`k`/`j`) a row, PgUp/
 Home/End the first and last; Enter opens and Backspace goes up. Sort, find, the selection, rename,
 tabs and the rest work as in the list; size and date are in the status line. The view is one for
 every folder, remembered beside the sidebar's mode, and so is the size.
+
+Previews, in the icon view: PNG, JPEG (turned as its EXIF says), GIF and WebP files show their
+picture in the icon's place, its shape kept, made on two threads while the window stays live. They
+are kept in the shared freedesktop cache, `~/.cache/thumbnails` (`normal` up to 128 device pixels,
+`large` to 256, `x-large` to 512), so ofx shows the previews Nemo made (PDFs, slides) and Nemo the
+ones ofx made. A file over 10 MiB, or on a network or FUSE drive, gets none made; one that won't
+decode gets an entry in `fail/ofx/` and isn't tried again until it changes. The list view keeps its
+icons.
 
 The sidebar, in one of three modes, picked with the three buttons at the left of the bottom bar
 or F9 (remembered in `~/.local/state/ofx/state`):

@@ -33,6 +33,11 @@ rules shared by every tool here.
 - **The state file** (F6): ofx writes the sidebar's mode, the view (F6.2) and the icon size (F6.3) to
   `$XDG_STATE_HOME/ofx/state`; `run-script.sh` points that at `<scratch>/state`, so a test never
   changes his.
+- **The thumbnail cache** (F6.4): ofx reads and writes previews in `$XDG_CACHE_HOME/thumbnails`,
+  which is Michael's `~/.cache/thumbnails`, shared with Nemo (and where Nemo's stale-preview loop
+  came from, 2026-10-20). `run-script.sh` points `XDG_CACHE_HOME` at `<scratch>/cache`, and the
+  unit tests give thumb_get a cache in their root, so no test reads or writes his. Never delete or
+  rewrite anything in his cache to test; a cleanup option is on the later list, for his decision.
 - **ofx changes files since F3:** rename, new folder, trash, delete for good, copy and move. Every
   write in fs/ goes through `ops_allowed` (fs/ops.c), which refuses any path outside
   `OFX_GUI_ROOT` when it is set: `run-script.sh` sets it to the run's scratch dir, the unit tests
@@ -98,6 +103,8 @@ an install (Michael, 2026-10-24). `gui.py` runs from its scratch copy, scripts i
 - `OFX_GUI_DEBUG=1` logs every key, character and mouse button event.
 - `OFX_TEST_CROSS=1` makes a move copy as across drives (a slow move with the delay below).
 - `OFX_TEST_ICONS_MAX` shrinks the icon cache (512 slots), so a script can fill it (f62c).
+- `OFX_TEST_THUMB_HELD_MAX` shrinks the previews' texture bytes (64 MiB), so a script sees them
+  dropped and read back (f64c).
 - `OFX_TEST_COPY_DELAY_MS` sleeps per copied block (500 ms at most), so a script sees the progress
   line and can cancel a copy in the middle.
 - The script language is at the top of `gui/script.c`. Start every script with `settle`; check
