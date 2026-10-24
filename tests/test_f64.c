@@ -196,6 +196,16 @@ static void test_png_meta(void)
     memcpy(big, png.p, 33);
     big[33] = 0x7f;
     CHECK(!png_meta((Str){ big, 40 }, &m));
+    // A tEXt chunk's length past the file's end: refused, never read past (ASan has the copy's end).
+    isize uc = -1;
+    for (isize i = 0; uc < 0 && i + 16 <= png.len; i++)
+        if (memcmp(png.p + i, "tEXtThumb::URI", 14) == 0) uc = i - 4;
+    CHECK(uc > 0);
+    u8 *cut = malloc((size_t)png.len);   // test-only: exactly the file, so a read past it shows
+    memcpy(cut, png.p, (size_t)png.len);
+    put32(cut + uc, (u32)(png.len - uc));   // its value would be copied from past the end
+    CHECK(!png_meta((Str){ (const char *)cut, png.len }, &m));
+    free(cut);
     // Numbers: digits only.
     i64 v;
     CHECK(parse_i64(S("0"), &v) && v == 0 && parse_i64(S("123456789012345678"), &v) && v == 123456789012345678LL);
@@ -228,6 +238,8 @@ static void test_thumb_decode(void)
     CHECK(thumb_make(&a, TK_JPEG, jpeg_of(&a, small, 0, false), 128, &out) && out.w == 40 && out.h == 20);
     // Not a JPEG.
     CHECK(!thumb_make(&a, TK_JPEG, S("not a jpeg at all"), 128, &out));
+    // Fitted, each side rounded: 200 by 300 to 256 is 171 by 256 (170.67).
+    CHECK(img_fit(&a, halves(&a, 200, 300), 256, &out) && out.w == 171 && out.h == 256);
     // PNG, fitted.
     Str png;
     CHECK(png_encode(&a, im, NULL, 0, 0, &png));
@@ -253,17 +265,26 @@ static void test_thumb_decode(void)
     WebPFree(wp);
     CHECK(!thumb_make(&a, TK_WEBP, S("RIFF....WEBPVP8 nonsense"), 128, &out));
     CHECK(!thumb_make(&a, TK_NONE, png, 128, &out));
-    // Every orientation of a 3 by 2: where its first pixel lands.
+    // Every orientation of a 3 by 2 (0 1 2 over 3 4 5), every pixel where EXIF puts it.
     Img t;
     img_new(&a, 3, 2, &t);
     for (int i = 0; i < 6; i++) memset(t.px + i * 4, i, 4);
-    static const int at_w[9] = { 0, 3, 3, 3, 3, 2, 2, 2, 2 };
-    static const int first[9] = { 0, 0, 2, 5, 3, 0, 1, 5, 4 };   // the index in the result of source pixel 0
+    static const u8 want[9][6] = { { 0 }, { 0, 1, 2, 3, 4, 5 }, { 2, 1, 0, 5, 4, 3 }, { 5, 4, 3, 2, 1, 0 }, { 3, 4, 5, 0, 1, 2 },
+                                   { 0, 3, 1, 4, 2, 5 }, { 3, 0, 4, 1, 5, 2 }, { 5, 2, 4, 1, 3, 0 }, { 2, 5, 1, 4, 0, 3 } };
     for (int o = 1; o <= 8; o++) {
         Img r;
-        CHECK(img_orient(&a, t, o, &r) && r.w == at_w[o] && r.w * r.h == 6);
-        CHECK(r.px[first[o] * 4] == 0);
+        bool same = img_orient(&a, t, o, &r) && r.w == (o >= 5 ? 2 : 3) && r.h == (o >= 5 ? 3 : 2);
+        for (int i = 0; same && i < 6; i++) same = r.px[i * 4] == want[o][i] && r.px[i * 4 + 3] == want[o][i];
+        CHECK(same);
     }
+    // The reads' limit: a file over it isn't read (THUMB_SRC_MAX for a source).
+    const char *big = at("f64/big.bin");
+    put(big, "");
+    CHECK(truncate(big, THUMB_SRC_MAX + 1) == 0);
+    struct stat st;
+    CHECK(thumb_read(&a, big, THUMB_SRC_MAX, &st).len == 0 && st.st_size == THUMB_SRC_MAX + 1);
+    CHECK(truncate(big, 100) == 0);
+    CHECK(thumb_read(&a, big, 100, &st).len == 100 && thumb_read(&a, big, 99, &st).len == 0);
 }
 
 // The ask for path at px, as gui/thumbs.c makes it.

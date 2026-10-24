@@ -12,15 +12,15 @@ expect thumbmade=5 thumbread=1 thumbfailed=2 thumbnone=1 thumbknown=0 thumbchang
 shot previews-48.png
 # Each one's shape kept; the photo stands (turned by its EXIF); a small one is never made bigger.
 key end
-expect sel=wide.png thumbsel=96x64
+expect sel=wide.png thumbsel=96x64 thumbbox=48x32
 key left
 expect sel=small.png thumbsel=10x10
 key left
-expect sel=readme.txt thumbsel=-
+expect sel=readme.txt thumbsel=- thumbbox=-
 key left
 expect sel=pic.webp thumbsel=96x48
 key left
-expect sel=photo.jpg thumbsel=72x96
+expect sel=photo.jpg thumbsel=72x96 thumbbox=36x48
 key left
 expect sel=notes.pdf thumbsel=68x96
 key left

@@ -18,7 +18,7 @@ them filled it on 2026-10-24.
 """
 import hashlib, os, re, shutil, subprocess, sys
 
-G, W, K, J = 'gui/main.c', 'gui/watch.c', 'gui/counts.c', 'gui/jobs.c'
+G, W, K, J, TB = 'gui/main.c', 'gui/watch.c', 'gui/counts.c', 'gui/jobs.c', 'gui/thumbs.c'
 MUTANTS = [
     (G, "    go_to(up, str_from_c(child_buf), 0);", "    go_to(up, STR_EMPTY, 0);"),
     (G, "    if (go_to(app.cwd, str_from_c(keep), app.ui.list.sel)) return;", "    if (go_to(app.cwd, STR_EMPTY, app.ui.list.sel)) return;"),
@@ -215,6 +215,20 @@ MUTANTS = [
     (G, "        if (app.icons_missed && app.icons_reset_armed) icons_reset()", "        if (app.icons_missed) icons_reset()"),
     (G, "        app.icons_reset_armed = true;   // the other", "        ;   // the other"),
     (G, "return app.icons_missed = true, arena_restore(&scratch, mark), NULL;", "return arena_restore(&scratch, mark), NULL;"),
+    # F6.4: previews in the icon view
+    (TB, "        if (thumbs.e[i].state == TS_ASKED) thumbs.e[i].state = TS_UNKNOWN;\n", ""),
+    (TB, "    if (e->state == TS_UNKNOWN || (draw && e->state == TS_DROPPED)) {", "    if (e->state == TS_UNKNOWN || e->state == TS_DROPPED) {"),
+    (TB, "    if (draw) e->drawn = thumbs.frame, thumbs.drawn_now++;", "    if (draw) thumbs.drawn_now++;"),
+    (TB, "thumbs.e[i].state == TS_SHOWN && thumbs.e[i].drawn < thumbs.frame && (old < 0", "thumbs.e[i].state == TS_SHOWN && (old < 0"),
+    (TB, "    while (thumbs.held > thumbs.held_max) {", "    while (0) {"),
+    (TB, "    if (e->mtime != mtime && e->state != TS_ASKED) {", "    if (0) {"),
+    (TB, "        if ((got == TG_CACHED || got == TG_MADE) && out.w <= THUMB_PX_MAX", "        if (got == TG_MADE && out.w <= THUMB_PX_MAX"),
+    (TB, "                             .make = local && kind != TK_NONE && size <= THUMB_SRC_MAX, .px = px };", "                             .make = kind != TK_NONE && size <= THUMB_SRC_MAX, .px = px };"),
+    (TB, "        if (e->state != TS_ASKED || e->mtime != d->mtime) continue;", "        if (e->state != TS_ASKED) continue;"),
+    (G, "    app.thumb_local = thumb_local(read_file(&scratch, mountinfo_path()), dir);", "    app.thumb_local = true;"),
+    (G, "    for (isize i = ahead; i < ahead + (isize)app.ui.list.rows * cols && i < app.list.n; i++) entry_thumb(i, false);\n", ""),
+    (G, "        Texture2D *th = entry_thumb(i, true);", "        Texture2D *th = NULL;"),
+    (G, "CLAY_SIZING_FIXED(th->width / s), CLAY_SIZING_FIXED(th->height / s)", "CLAY_SIZING_FIXED(px), CLAY_SIZING_FIXED(px)"),
 ]
 args = [a for a in sys.argv[1:] if a != '--full']
 full = len(args) != len(sys.argv) - 1
@@ -256,7 +270,7 @@ if os.path.exists(tags_path):
             tags[w[0]] = w[1:]
 
 # The group of a script that failed: run.sh prints "== <script>: FAILED" or "<group>: FAILED".
-GROUP_OF = {'f6b': 'f6', 'f62b': 'f62', 'f62c': 'f62', 'f63b': 'f63', 'f63c': 'f63'}
+GROUP_OF = {'f6b': 'f6', 'f62b': 'f62', 'f62c': 'f62', 'f63b': 'f63', 'f63c': 'f63', 'f64b': 'f64', 'f64c': 'f64'}
 def failed_groups(out):
     g = []
     for l in out.splitlines():

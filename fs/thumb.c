@@ -365,7 +365,8 @@ static bool img_fit(Arena *a, Img in, int side, Img *out)
     if (big <= side) return img_new(a, in.w, in.h, out) && (memcpy(out->px, in.px, (size_t)in.w * in.h * 4), true);
     int w = (int)(((i64)in.w * side + big / 2) / big), h = (int)(((i64)in.h * side + big / 2) / big);
     if (!img_new(a, w > 0 ? w : 1, h > 0 ? h : 1, out)) return false;
-    return stbir_resize_uint8_srgb(in.px, in.w, in.h, 0, out->px, out->w, out->h, 0, STBIR_RGBA) != NULL;
+    // Linear, as raylib's ImageResize: the sRGB path's table indexing trips clang's UBSan (vendored code).
+    return stbir_resize_uint8_linear(in.px, in.w, in.h, 0, out->px, out->w, out->h, 0, STBIR_RGBA) != NULL;
 }
 
 static u32 tiff16(const u8 *p, bool le) { return le ? (u32)p[0] | (u32)p[1] << 8 : (u32)p[0] << 8 | p[1]; }
@@ -501,8 +502,9 @@ static bool thumb_make(Arena *a, ThumbKind k, Str src, int side, Img *out)
 // ---- which drives ------------------------------------------------------------------------------
 
 // Whether ofx makes previews on the drive holding path, by mountinfo (the mount with the longest
-// mount point above it): not on network file systems or FUSE ones (SSHFS, gvfs), whose reads can
-// hang a worker; fuseblk is a local disk (NTFS). Unknown: local.
+// mount point above it): not on network file systems or FUSE ones (fuse.sshfs, fuse.gvfsd-fuse),
+// whose reads can hang a worker; fuseblk, a local disk (NTFS), isn't "fuse" nor "fuse.*". Unknown:
+// local.
 static bool thumb_local(Str mountinfo, const char *path)
 {
     static const char *const far[] = { "nfs", "nfs4", "cifs", "smb3", "smbfs", "9p", "ceph", "afs", "glusterfs", "davfs", "lustre", "fuse" };
@@ -529,7 +531,6 @@ static bool thumb_local(Str mountinfo, const char *path)
         snprintf(type, sizeof type, "%.*s", STR_ARG(t));
         best = (isize)n;
     }
-    if (strcmp(type, "fuseblk") == 0) return true;
     for (int i = 0; i < COUNT(far); i++) {
         size_t n = strlen(far[i]);
         if (strncmp(type, far[i], n) == 0 && (type[n] == 0 || type[n] == '.')) return false;
