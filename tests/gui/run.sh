@@ -3,7 +3,7 @@
 # (tools/gui/run-script.sh):
 #   tests/gui/run.sh <scratch-dir> [binary] [group...]
 # The groups (one or more scripts on one tree): browse big gone watchgap f2 f3 f4 f5 f52 f53 f54
-# f6 (f6, f6b) f62 (f62, f62b, f62c) f63 (f63, f63b) hang guard3 guard. Named ones only, or all of them; a group
+# f6 (f6, f6b) f62 (f62, f62b, f62c) f63 (f63, f63b, f63c) hang guard3 guard. Named ones only, or all of them; a group
 # that fails says "== <script>: FAILED" or "<group>: FAILED" (tools/mutation/gui.py reads it).
 set -u
 base=${1:?usage: run.sh <scratch-dir> [binary]}
@@ -122,6 +122,10 @@ for i in $(seq -w 1 60); do touch "$T/tree/f$i"; done
 printf '33 1 0:31 / / rw - btrfs /dev/x rw\n' > "$T/mountinfo"
 echo "== f63"; OFX_TEST_MOUNTINFO="$T/mountinfo" "$here/../../tools/gui/run-script.sh" "$T" "$here/f63.script" "$bin" "$T/tree" || failed f63
 echo "== f63b"; OFX_TEST_MOUNTINFO="$T/mountinfo" "$here/../../tools/gui/run-script.sh" "$T" "$here/f63b.script" "$bin" "$T/tree" || failed f63b
+# A full icon cache at a zoom (reviewer-2, F6.3 review): 24 slots, 12 MIME types.
+T=$base/f63c; rm -rf "$T"; mkdir -p "$T/tree"
+for f in a.txt b.png c.jpg d.pdf e.c f.py g.sh h.html i.md j.zip k.mp3 l.mp4; do touch "$T/tree/$f"; done
+echo "== f63c"; OFX_TEST_ICONS_MAX=24 OFX_TEST_MOUNTINFO="$base/f63/mountinfo" "$here/../../tools/gui/run-script.sh" "$T" "$here/f63c.script" "$bin" "$T/tree" || failed f63c
 fi
 if want hang; then
 T=$base/hang; rm -rf "$T"; mkdir -p "$T/tree/stuck"

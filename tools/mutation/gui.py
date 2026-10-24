@@ -211,6 +211,10 @@ MUTANTS = [
     # the hover for the pointer where it is (Michael, 2026-10-24)
     (G, "    return on ? hover_at(x, y) : hover_at(-1e6f, -1e6f);", "    return hover_at(x, y);"),
     (G, "            if (scripted ? script.pointing && hover_refresh(true, script.px, script.py) : hover_refresh(IsCursorOnScreen(), m.x, m.y))\n                dirty = true, glfwPostEmptyEvent();\n", ""),
+    # a full icon cache at a zoom (reviewer-2, F6.3 review)
+    (G, "        if (app.icons_missed && app.icons_reset_armed) icons_reset()", "        if (app.icons_missed) icons_reset()"),
+    (G, "        app.icons_reset_armed = true;   // the other", "        ;   // the other"),
+    (G, "return app.icons_missed = true, arena_restore(&scratch, mark), NULL;", "return arena_restore(&scratch, mark), NULL;"),
 ]
 args = [a for a in sys.argv[1:] if a != '--full']
 full = len(args) != len(sys.argv) - 1
@@ -241,7 +245,7 @@ if os.path.exists(tags_path):
             tags[w[0]] = w[1:]
 
 # The group of a script that failed: run.sh prints "== <script>: FAILED" or "<group>: FAILED".
-GROUP_OF = {'f6b': 'f6', 'f62b': 'f62', 'f62c': 'f62', 'f63b': 'f63'}
+GROUP_OF = {'f6b': 'f6', 'f62b': 'f62', 'f62c': 'f62', 'f63b': 'f63', 'f63c': 'f63'}
 def failed_groups(out):
     g = []
     for l in out.splitlines():

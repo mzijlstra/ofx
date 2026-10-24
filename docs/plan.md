@@ -175,6 +175,12 @@ remembered. Decided (Michael, 2026-10-24: each Q took the proposal):
   press on the track or a drag goes to the nearest size; tooltips on all three, above them.
   The status text gives up their room in the icon view.
 - Ctrl+wheel is a size a notch, however many notches a frame brings.
+- A zoom or a view change that finds the icon cache full empties it once, before the next frame,
+  and what is on screen fills it again (reviewer-2: zooming within one folder filled it, and icons
+  went blank until another folder was entered). Once, so a frame that alone needs more doesn't
+  empty it every frame. The slots then hold about what is on screen, not every size seen.
+- A zoom drag ends when the pointer leaves the window: Wayland's leave releases no button, and a
+  compositor grab mid-drag would keep the knob following the pointer (reviewer-2).
 - Keeping the cursor's place: `ui_refit` puts its row where it was on screen (its last row when
   fewer fit); the plain resize keeps the least scroll, as before.
 

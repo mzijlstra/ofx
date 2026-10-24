@@ -192,7 +192,10 @@ static struct {
     bool      grid_hover_cut;
     isize     grid_first, grid_last;   // the entries in the first and last cell drawn, -1 for none
     int       icons_max;    // the icon cache's slots: ICONS_MAX, or OFX_TEST_ICONS_MAX for a test
-    int       icon_full_resets;   // a full cache emptied at a listing (reviewer-2, F6.2 review)
+    int       icon_full_resets;   // a full cache emptied at a listing (reviewer-2, F6.2 review), or a zoom
+    // A lookup found the cache full; after a zoom or a view change that may empty it once, before
+    // the next frame (reviewer-2, F6.3 review: zooming in one folder filled it, icons went blank).
+    bool      icons_missed, icons_reset_armed;
     UiTip     tip;          // the tooltip of the icon button under the pointer (Michael, 2026-10-24)
     bool      zoomed;       // the icon size changed: the next refit keeps the cursor's row (ui_refit)
     bool      zoom_drag;    // the zoom slider's knob held (F6.3)
@@ -1069,6 +1072,7 @@ static void act(UiAction a)
     case UA_ZOOM:     // F6.3: as the view, the cursor kept on its row at the refit (ui_refit)
     case UA_VIEW: {   // F6.2: remembered; the loop lays it out before the next frame
         if (a.kind == UA_ZOOM) app.zoomed = true;
+        app.icons_reset_armed = true;   // the other size's icons may not fit beside these
         char path[PATH_MAX];
         State st = { app.ui.side_mode, app.ui.grid, app.ui.zoom };
         if (state_path(path, sizeof path) && !state_save(path, &st, &err)) set_status(true, "%s", err.msg);
@@ -1214,7 +1218,7 @@ static IconSlot *icon_for_px(Str key, const Str *given, isize ngiven, int px)
     ArenaMark mark = arena_mark(&scratch);
     Str slot_key = px == ICON_PX ? key : str_from_c(arena_sprintf(&scratch, "%d:%.*s", px, STR_ARG(key)));
     if (strmap_get(&app.slot_of, slot_key, &k)) return arena_restore(&scratch, mark), &app.slot[k];
-    if (app.nslots >= app.icons_max) return arena_restore(&scratch, mark), NULL;
+    if (app.nslots >= app.icons_max) return app.icons_missed = true, arena_restore(&scratch, mark), NULL;
     Str names[6];
     isize n = given ? ngiven : mime_icon_names(&scratch, &app.mime_db, key, names);
     IconSlot *s = &app.slot[app.nslots];
@@ -2864,7 +2868,10 @@ static UiInput input_real(bool *seen)
     }
     if (IsMouseButtonPressed(MOUSE_BUTTON_MIDDLE)) middle_at(&in, m.x, m.y);
     bool held = IsMouseButtonDown(MOUSE_BUTTON_LEFT);
-    if (d.x != 0 || !held) *seen |= zoom_drag_at(&in, m.x, held);
+    // Off the window the drag ends: Wayland's leave releases no button, and a compositor grab
+    // (a keybind, a screenshot) can take the release (reviewer-2, F6.3 review).
+    bool on = IsCursorOnScreen();
+    if (d.x != 0 || !held || !on) *seen |= zoom_drag_at(&in, m.x, held && on);
     in.backs = mouse_backs, mouse_backs = 0;
     in.forwards = mouse_forwards, mouse_forwards = 0;
     // Anything the user did draws a frame: one list, ui_input_acts (unit-tested), so a new click
@@ -3073,6 +3080,10 @@ int main(int argc, char **argv)
         // sidebar's mode, the view (F6.2) and the jobs' rows all change them.
         int rows = list_rows(GetScreenHeight()), srows = side_rows(GetScreenHeight()), cols = list_cols(GetScreenWidth());
         if (app.zoomed) ui_refit(&app.ui.list, cols, rows), app.zoomed = false, dirty = true;
+        // Once a zoom or view change: the cache emptied, it fills with this size's icons (a frame
+        // that alone needs more than it holds would otherwise empty it every frame: f62c).
+        if (app.icons_missed && app.icons_reset_armed) icons_reset(), app.icon_full_resets++, app.icons_reset_armed = false, dirty = true;
+        app.icons_missed = false;
         if (cols != (int)ui_cols(&app.ui.list)) ui_set_cols(&app.ui.list, cols), dirty = true;
         if (rows != app.ui.list.rows) ui_resize(&app.ui.list, rows), dirty = true;
         if (srows != app.ui.side.rows) ui_resize(&app.ui.side, srows), dirty = true;
@@ -3091,6 +3102,7 @@ int main(int argc, char **argv)
             Vector2 m = GetMousePosition();
             if (scripted ? script.pointing && hover_refresh(true, script.px, script.py) : hover_refresh(IsCursorOnScreen(), m.x, m.y))
                 dirty = true, glfwPostEmptyEvent();
+            if (app.icons_missed && app.icons_reset_armed) dirty = true, glfwPostEmptyEvent();   // emptied and drawn again at once
         }
         PollInputEvents();   // waits for input, or for watch.c's wake-up
         if (atomic_exchange(&watch.theme_ready, false)) theme_apply(), app.themes++, dirty = true;
