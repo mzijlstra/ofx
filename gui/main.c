@@ -1720,7 +1720,7 @@ static void layout_cell(int k, isize i)
             CLAY(CLAY_IDI("cell-room", k), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(2 * CELL_LINE_H) } } }) {}
             CLAY(CLAY_ID("cell-full"), { .layout = { .sizing = { CLAY_SIZING_FIXED(cw), CLAY_SIZING_FIT(0) }, .padding = { CELL_PAD, CELL_PAD, 0, 2 },
                                                      .layoutDirection = CLAY_TOP_TO_BOTTOM },
-                                         .backgroundColor = cc(t->selection), .cornerRadius = CLAY_CORNER_RADIUS(4),
+                                         .backgroundColor = mix(t->selection, t->bg, 0.5f), .cornerRadius = CLAY_CORNER_RADIUS(4),
                                          .floating = { .attachTo = CLAY_ATTACH_TO_PARENT, .zIndex = 3, .offset = { 0, 6 + (float)px + 4 },
                                                        .attachPoints = { CLAY_ATTACH_POINT_CENTER_TOP, CLAY_ATTACH_POINT_CENTER_TOP },
                                                        .clipTo = CLAY_CLIP_TO_ATTACHED_PARENT } }) {
@@ -2813,6 +2813,17 @@ static bool zoom_drag_at(UiInput *in, float x, bool held)
     return false;
 }
 
+static bool hover_at(float x, float y);
+
+// The hover highlights for the pointer where it is now, not where it last moved: none once it has
+// left the window (GLFW keeps its last position), and again after a frame that moved things under
+// a still pointer (a folder entered, the view or the size changed). Else a cell stayed lit that
+// the pointer wasn't on (Michael, 2026-10-24). True when any changed.
+static bool hover_refresh(bool on, float x, float y)
+{
+    return on ? hover_at(x, y) : hover_at(-1e6f, -1e6f);
+}
+
 // What is under the pointer at x, y, for the hover highlights: true when any changed.
 static bool hover_at(float x, float y)
 {
@@ -2846,7 +2857,7 @@ static UiInput input_real(bool *seen)
     int notches = (int)wheel_left;
     wheel_left -= (float)notches;
     *seen |= wheel_at(&in, m.x, notches, IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL));
-    if (d.x != 0 || d.y != 0) *seen |= hover_at(m.x, m.y);
+    if (!script_on) *seen |= hover_refresh(IsCursorOnScreen(), m.x, m.y);
     if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
         int mods = (IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL) ? UI_MOD_CTRL : 0) |
                    (IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT) ? UI_MOD_SHIFT : 0);
@@ -3077,6 +3088,10 @@ int main(int argc, char **argv)
             i64 us = now_us() - t0 - (tb - ta);
             if (us > frame_us_max) frame_us_max = us;
             dirty = font_frame_end();   // out of atlas: the next frame starts from an empty one
+            // The frame may have moved things under the pointer: lit again, at once.
+            Vector2 m = GetMousePosition();
+            if (scripted ? script.pointing && hover_refresh(true, script.px, script.py) : hover_refresh(IsCursorOnScreen(), m.x, m.y))
+                dirty = true, glfwPostEmptyEvent();
         }
         PollInputEvents();   // waits for input, or for watch.c's wake-up
         if (atomic_exchange(&watch.theme_ready, false)) theme_apply(), app.themes++, dirty = true;

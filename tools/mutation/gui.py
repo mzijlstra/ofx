@@ -209,6 +209,9 @@ MUTANTS = [
     (G, "    Clay_FloatingAttachPoints at = above && right ?", "    Clay_FloatingAttachPoints at = 0 ?"),
     (G, "    if (h.zoom) return TIP_ZOOM;\n", ""),
     (G, "        { UB_ZOOM_IN, \"zoom-in\", \"Bigger icons (Ctrl+=)\" },", ""),
+    # the hover for the pointer where it is (Michael, 2026-10-24)
+    (G, "    return on ? hover_at(x, y) : hover_at(-1e6f, -1e6f);", "    return hover_at(x, y);"),
+    (G, "            if (scripted ? script.pointing && hover_refresh(true, script.px, script.py) : hover_refresh(IsCursorOnScreen(), m.x, m.y))\n                dirty = true, glfwPostEmptyEvent();\n", ""),
 ]
 args = [a for a in sys.argv[1:] if a != '--full']
 full = len(args) != len(sys.argv) - 1

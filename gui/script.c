@@ -30,7 +30,9 @@
 //   point-ui <id> [k]       the point at the middle of a Clay element (k: its CLAY_IDI index),
 //                           printed as "point: x y" and kept for click-here
 //   hover-here              the pointer to the last point-ui (the hover highlights, a drive's
-//                           eject button, a button's tooltip)
+//                           eject button, a button's tooltip); it rests there, hit again after
+//                           each frame as the mouse's is (hover_refresh)
+//   pointer-off             the pointer out of the window
 //   idle                    the window waits for events as it does unscripted, until a tooltip
 //                           waiting is due; a wake-up 3 s on stands in if nothing comes, and the
 //                           state's idlewoke says which ended the wait (timer or fallback)
@@ -72,6 +74,7 @@ static struct {
     char  shot[2100];
     int   expects, failed;
     float px, py;        // the last point-ui
+    bool  pointing;      // the pointer rests there (hover-here), until pointer-off
     Str   typing;        // what is left of a `type` longer than a frame's events
 } script;
 
@@ -506,7 +509,11 @@ static bool script_input(UiInput *in)
             script.px = d.boundingBox.x + d.boundingBox.width / 2, script.py = d.boundingBox.y + d.boundingBox.height / 2;
             printf("point: %.0f %.0f\n", script.px, script.py);
         } else if (str_eq(cmd, S("hover-here"))) {
+            script.pointing = true;
             hover_at(script.px, script.py);
+        } else if (str_eq(cmd, S("pointer-off"))) {
+            script.pointing = false;
+            hover_refresh(false, 0, 0);
         } else if (str_eq(cmd, S("idle"))) {
             script_idle();
         } else if (str_eq(cmd, S("click-here"))) {

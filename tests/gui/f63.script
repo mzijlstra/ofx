@@ -93,6 +93,24 @@ wheel -3
 expect zoom=48 top=18
 wheel 3
 expect top=0
+# ---- the hover follows a still pointer: lit on the cell under it after a zoom moved the cells
+# (at 256 the point on cell 7 is on cell 0), and none once the pointer leaves the window
+point-ui row 7
+hover-here
+expect hover=7 zoom=48 top=0
+key ctrl-equal
+key ctrl-equal
+key ctrl-equal
+key ctrl-equal
+expect zoom=256 hover=0
+shot zoom-hover.png
+key ctrl-0
+expect zoom=48 hover=7
+pointer-off
+expect hover=-1
+key ctrl-minus
+key ctrl-0
+expect hover=-1
 # ---- the list doesn't zoom: no slider, the keys and Ctrl+wheel do nothing
 key ctrl-1
 expect view=list zoomshown=0 iconpx=24 rows=14
