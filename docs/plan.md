@@ -237,6 +237,9 @@ No test reads or writes Michael's cache; the first run on it is his `--dry-run`.
   before a `readlink` there could hang, and keeps the preview. Measured on a copy with a mount list
   without `/mnt/sd`: 202 orphans (none on the card, all files that are gone), against 3919 before.
   **LOW:** a link's preview carries its target's MTime and Size, so `stat`, not `lstat`.
+  Following links costs time: reviewer-2 measured 664 to 943 ms for the dry run at `9fe78b7`,
+  against 162 to 238 ms before, on a loaded machine. Fine for a niced daily job; parsing
+  mountinfo once into an array would win it back if it ever matters.
 - Unit tests: `tests/test_f65.c`; `make test` went from 2933 checks to 3288. Mutants: 58 for
   `fs/clean.c` (69 after the review), 0 survived. Two left out as inert or equivalent, each with its reason in
   `mutants.py`.
