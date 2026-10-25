@@ -12,6 +12,7 @@
 #include "trash.c"
 #include "clip.c"
 #include "job.c"
+#include "props.c"
 #include "undo.c"
 #include "jobq.c"
 #include "state.c"

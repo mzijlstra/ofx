@@ -1,0 +1,136 @@
+# F7.2: the Properties panel, on the tree tests/gui/run.sh makes (see there).
+settle
+# ---- a file: its details; the focus on the grid's first box
+char /
+type notes
+key enter
+expect sel=notes.txt
+key ctrl-i
+wait-for 2000 props=1 propat=0 propcan=1 propn=1 propmode=0644 propname=notes.txt modal=props propwhere=~/tree propdrive=File_System proplink=- propcreated=1
+shot props-file.png
+# ---- the keys: arrows and h j k l move, stopping at the edges; Space and Enter flip at once
+key left
+key up
+expect propat=0
+key right
+key down
+expect propat=4
+key space
+expect propmode=0664
+sh [ "$(stat -c %a "$OFX_DIR/notes.txt")" = 664 ]
+char l
+char j
+expect propat=8
+key enter
+expect propmode=0665
+char k
+char h
+char h
+char k
+expect propat=0
+# Every other key is the panel's: t starts no terminal, Delete trashes nothing.
+char t
+key delete
+expect props=1 n=8
+sh ! grep -q xdg-terminal-exec "$OFX_ROOT/spawn.log" 2>/dev/null
+key esc
+expect props=0 modal=-
+# ---- Ctrl+Z puts the last change back
+key ctrl-z
+expect undo=-
+sh [ "$(stat -c %a "$OFX_DIR/notes.txt")" = 664 ]
+# ---- the pointer: a box flips; Close closes
+key ctrl-i
+point-ui prop-box 2
+click-here
+expect propmode=0764 propat=2
+point-ui modal-ok
+click-here
+expect props=0
+pointer-off
+sh chmod 644 "$OFX_DIR/notes.txt"
+# ---- a folder: its contents counted all the way down (2 files, 30 bytes; dir and sub)
+char /
+type dir
+key enter
+expect sel=dir
+key ctrl-i
+wait-for 3000 propdone=1 propdirs=2 propfiles=2 propbytes=30 propcut=0 propname=dir
+shot props-dir.png
+key esc
+# ---- a link: its target's permissions, changed through it
+char /
+type link
+key enter
+expect sel=link
+key ctrl-i
+wait-for 2000 propmode=0644 propcan=1 proplink=notes.txt
+key space
+expect propmode=0244
+sh [ "$(stat -c %a "$OFX_DIR/notes.txt")" = 244 ]
+key esc
+sh chmod 644 "$OFX_DIR/notes.txt"
+# A link to a file outside the scratch tree: the guard refuses (run.sh checks it unchanged).
+char /
+type out
+key enter
+expect sel=out
+key ctrl-i
+key space
+expect propmode=0644
+key esc
+# A link to root's file: not Michael's to change; a broken link: nothing to change.
+char /
+type root
+key enter
+expect sel=root
+key ctrl-i
+wait-for 2000 propcan=0 props=1
+key space
+expect propcan=0
+shot props-root.png
+key esc
+char /
+type broken
+key enter
+key ctrl-i
+expect propcan=0
+key esc
+# ---- several: counted, no permissions
+key ctrl-a
+key ctrl-i
+wait-for 3000 propn=8 propcan=0 propdone=1 propwhere=~/tree propdirs=3 propfiles=8
+shot props-several.png
+key esc
+key esc
+# ---- an empty folder: the folder itself
+char /
+type empty
+key enter
+key enter
+wait-for 2000 n=0
+key ctrl-i
+wait-for 2000 propname=empty propn=1 propcan=1 propdirs=1 propfiles=0 propdone=1 propwhere=~/tree
+key esc
+key backspace
+# ---- from the menu; Alt+Enter is a terminal
+key f10
+keys up up up
+expect menuat=properties
+key enter
+expect props=1 menu=-
+key esc
+key alt-enter
+sh grep -qx "uwsm-app -- xdg-terminal-exec --dir=$OFX_DIR" "$OFX_ROOT/spawn.log"
+# ---- the trash view: shown, not changeable
+char /
+type run.sh
+key enter
+key delete
+wait-for 2000 n=7
+press-side 2
+wait-for 2000 trash=1 n=1
+key ctrl-i
+wait-for 2000 propcan=0 propname=run.sh propwhere=Trash
+key esc
+quit

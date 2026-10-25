@@ -8,9 +8,11 @@
 #include "../ui/ui.c"
 
 #include <errno.h>
+#include <grp.h>
 #include <limits.h>
 #include <math.h>
 #include <pthread.h>
+#include <pwd.h>
 #include <signal.h>
 #include <stdatomic.h>
 #include <stdio.h>
@@ -104,6 +106,7 @@ static void timer_stop(void)
 #include "counts.c"
 #include "thumbs.c"
 #include "space.c"
+#include "walk.c"
 
 // ---- memory ---------------------------------------------------------------------------------
 
@@ -898,6 +901,8 @@ static void new_file(void)
 }
 
 static void close_others(bool quit);
+static void props_open(void);
+static void props_chmod(int k);
 
 static void undo_last(void)
 {
@@ -1222,6 +1227,8 @@ static void act(UiAction a)
         else set_status(true, "%s", err.msg);
         break;
     case UA_CLOSE_ALL: close_others(a.all); break;
+    case UA_PROPS: props_open(); break;
+    case UA_CHMOD: props_chmod((int)a.index); break;
     case UA_PASTE: paste(); break;
     case UA_UNDO: undo_last(); break;
     case UA_ANSWER: job_answer((int)a.index, a.all); break;
@@ -2243,7 +2250,7 @@ static void layout_menubar(void)
 
 // ---- the modal panels (F5.1) --------------------------------------------------------------------
 
-typedef enum { MODAL_NONE, MODAL_DELETE, MODAL_CLASH, MODAL_CANCEL, MODAL_QUIT, MODAL_FULL, MODAL_EMPTY } ModalKind;
+typedef enum { MODAL_NONE, MODAL_DELETE, MODAL_CLASH, MODAL_CANCEL, MODAL_QUIT, MODAL_FULL, MODAL_EMPTY, MODAL_PROPS } ModalKind;
 
 // The panel on top, in the order ui_handle takes their keys.
 static ModalKind modal_kind(void)
@@ -2254,6 +2261,7 @@ static ModalKind modal_kind(void)
     if (app.ui.confirming) return MODAL_DELETE;
     if (app.ui.empty_asking) return MODAL_EMPTY;
     if (jobs.asking >= 0 && app.ui.asking) return MODAL_CLASH;
+    if (app.ui.props) return MODAL_PROPS;   // under any question (F7.2)
     return MODAL_NONE;
 }
 
@@ -2373,6 +2381,284 @@ static void layout_modal_panel(ModalKind k)
     }
 }
 
+// ---- the Properties panel (F7.2) ---------------------------------------------------------------
+//
+// One entry's details and permissions, or several entries' counts (docs/plan.md, "F7.2"). What it
+// shows is read when it opens (props_open), and again after a permission change; a folder's
+// contents are counted on walk.c's thread.
+
+static u8    props_mem[MiB(2)];
+static Arena propsa;
+static char *props_path[WALK_ROOTS_MAX];   // in propsa
+
+typedef struct {
+    isize       n;          // the entries shown
+    bool        cut;        // more were selected than it counts (WALK_ROOTS_MAX)
+    isize       idx;        // the one entry's place in the list, -1 for the folder itself
+    char        name[NAME_MAX + 1];
+    char        where[PATH_MAX];   // its folder (or theirs), "~" for home
+    char        drive[256];
+    char        link[PATH_MAX];    // a link's target, "" for none
+    bool        have;       // st holds it (a link: its target's; a broken one: the link's)
+    bool        broken, walking, local;
+    struct stat st;
+    i64         btime;      // its creation (statx), -1 when the file system doesn't say
+    char        owner[64], group[64];
+    DuSum       sum;
+    bool        done;
+} Props;
+
+static Props props;
+
+// t as 2026-10-25 14:03:12, local time.
+static void props_when(char *buf, size_t cap, i64 t)
+{
+    struct tm tm;
+    time_t tt = (time_t)t;
+    if (!localtime_r(&tt, &tm) || !strftime(buf, cap, "%Y-%m-%d %H:%M:%S", &tm)) snprintf(buf, cap, "?");
+}
+
+// n with its thousands apart: 2,345,678.
+static void props_digits(char *buf, size_t cap, i64 n)
+{
+    char d[32];
+    int len = snprintf(d, sizeof d, "%lld", (long long)(n < 0 ? 0 : n)), o = 0;
+    for (int i = 0; i < len && o + 2 < (int)cap; i++) {
+        if (i && (len - i) % 3 == 0) buf[o++] = ',';
+        buf[o++] = d[i];
+    }
+    buf[o] = 0;
+}
+
+// path with home as "~".
+static void props_tilde(char *buf, size_t cap, const char *path)
+{
+    const char *home = getenv("HOME");
+    size_t n = home ? strlen(home) : 0;
+    if (n > 1 && strncmp(path, home, n) == 0 && (path[n] == '/' || path[n] == 0)) snprintf(buf, cap, "~%s", path + n);
+    else snprintf(buf, cap, "%s", path);
+}
+
+// The drive holding path: the drive place with the longest path above it.
+static const char *props_drive(const char *path)
+{
+    int best = -1;
+    size_t bn = 0;
+    for (int i = 0; i < app.places.n; i++) {
+        const Place *p = &app.places.p[i];
+        size_t n = strlen(p->path);
+        if (!place_is_drive(p->kind) || !n) continue;
+        bool above = strcmp(p->path, "/") == 0 || (strncmp(path, p->path, n) == 0 && (path[n] == '/' || path[n] == 0));
+        if (above && n >= bn) best = i, bn = n;
+    }
+    return best >= 0 ? app.places.p[best].label : "-";
+}
+
+// The one entry's details, read again.
+static void props_read(void)
+{
+    const char *path = props_path[0];
+    struct stat lst;
+    props.have = lstat(path, &lst) == 0;
+    props.link[0] = 0, props.broken = false, props.btime = -1;
+    if (!props.have) return;
+    props.st = lst;
+    if (S_ISLNK(lst.st_mode)) {
+        ssize_t k = readlink(path, props.link, sizeof props.link - 1);
+        props.link[k > 0 ? k : 0] = 0;
+        props.broken = stat(path, &props.st) != 0;
+        if (props.broken) props.st = lst;
+    }
+    struct statx sx;
+    if (statx(AT_FDCWD, path, props.broken ? AT_SYMLINK_NOFOLLOW : 0, STATX_BTIME, &sx) == 0 && (sx.stx_mask & STATX_BTIME))
+        props.btime = (i64)sx.stx_btime.tv_sec;
+    char buf[1024];
+    struct passwd pw, *pwp = NULL;
+    struct group gr, *grp = NULL;
+    if (getpwuid_r(props.st.st_uid, &pw, buf, sizeof buf, &pwp) == 0 && pwp) snprintf(props.owner, sizeof props.owner, "%s", pw.pw_name);
+    else snprintf(props.owner, sizeof props.owner, "%u", (unsigned)props.st.st_uid);
+    if (getgrgid_r(props.st.st_gid, &gr, buf, sizeof buf, &grp) == 0 && grp) snprintf(props.group, sizeof props.group, "%s", gr.gr_name);
+    else snprintf(props.group, sizeof props.group, "%u", (unsigned)props.st.st_gid);
+    // Its permissions change only when it is Michael's, alone, not in the trash, and there.
+    app.ui.prop_can = props.n == 1 && !app.ui.in_trash && !props.broken && props.st.st_uid == geteuid();
+}
+
+// The panel opened (ui_props_open): the marked entries, or the cursor's; the folder itself when it
+// is empty. A folder among them is counted all the way down, on a local drive only.
+static void props_open(void)
+{
+    arena_reset(&propsa);
+    props = (Props){ .idx = -1, .btime = -1 };
+    isize n = app.have_list && app.list.n > 0 ? targets(&propsa, props_path, WALK_ROOTS_MAX) : 0;
+    props.cut = app.ui.marked > WALK_ROOTS_MAX;
+    if (n == 0 && !app.ui.in_trash) props_path[0] = arena_cstr(&propsa, str_from_c(app.cwd)), n = 1;
+    props.n = n;
+    app.ui.prop_can = false;
+    if (n == 0) {   // the trash view, empty
+        snprintf(props.name, sizeof props.name, "Trash");
+        snprintf(props.where, sizeof props.where, "-");
+        return;
+    }
+    if (app.have_list && app.list.n > 0 && n == 1)
+        for (isize i = 0; i < app.list.n; i++)
+            if (app.ui.marked ? app.ui.mark[i] : i == app.ui.list.sel) props.idx = i;
+    Str base = path_base(str_from_c(props_path[0])), dir = path_dir(str_from_c(props_path[0]));
+    char d[PATH_MAX];
+    snprintf(d, sizeof d, "%.*s", STR_ARG(dir.len ? dir : S("/")));
+    if (n == 1) {
+        snprintf(props.name, sizeof props.name, "%.*s", STR_ARG(base.len ? base : S("/")));
+        if (app.ui.in_trash && props.idx >= 0) snprintf(props.name, sizeof props.name, "%.*s", STR_ARG(app.list.e[props.idx].name));
+    }
+    if (app.ui.in_trash) snprintf(props.where, sizeof props.where, "Trash");
+    else props_tilde(props.where, sizeof props.where, n == 1 ? d : app.cwd);
+    snprintf(props.drive, sizeof props.drive, "%s", props_drive(props_path[0]));
+    if (n == 1) props_read();
+    // Counted all the way down, but not on a network drive (its reads can hang, F6.4).
+    props.local = app.thumb_local;
+    bool any_dir = false;
+    for (isize i = 0; i < n; i++) {
+        struct stat st;
+        any_dir |= lstat(props_path[i], &st) == 0 && S_ISDIR(st.st_mode);
+    }
+    props.walking = props.local;
+    if (props.local) walk_ask(props_path, n);
+    else if (!any_dir) {   // files on a network drive: the listing's sizes
+        for (isize i = 0; i < app.list.n; i++)
+            if (app.ui.marked ? app.ui.mark[i] : i == app.ui.list.sel) props.sum.files++, props.sum.bytes += app.list.e[i].size;
+        props.done = true;
+    }
+}
+
+// The grid's place k flipped (UA_CHMOD): applied at once, Ctrl+Z puts it back (F7.2).
+static void props_chmod(int k)
+{
+    if (!app.ui.prop_can || props.n != 1 || k < 0 || k > 8) return;
+    mode_t old, perms = (props.st.st_mode & 0777) ^ perm_bit(k);
+    Err err;
+    if (jobs_refuse(props_path[0])) return;
+    if (!op_chmod(props_path[0], perms, &old, &err)) {
+        set_status(true, "%s", err.msg);
+        props_read();
+        return;
+    }
+    char was[16];
+    snprintf(was, sizeof was, "%o", (unsigned)old);
+    undo_gen++, undo_begin(&undo, UNDO_CHMOD), undo_add(&undo, NULL, props_path[0], was);
+    props_read();
+    set_status(false, "%s: %04o", props.name, (unsigned)(props.st.st_mode & 07777));
+}
+
+// A label and its value, one line of the panel.
+static void props_line(const char *label, const char *value)
+{
+    Theme *t = &app.theme;
+    CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .childGap = 12 } }) {
+        CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_FIXED(96), CLAY_SIZING_FIT(0) } } }) { text(cz(label), cc(t->fg_dim)); }
+        text(fit(str_from_c(value), 360, false), cc(t->fg));
+    }
+}
+
+// The sums as "12 folders, 340 files, 1.2 GiB", "counting…" while the walk runs.
+static const char *props_counts(bool less_root)
+{
+    char sz[32], b[32];
+    ui_size(sz, sizeof sz, props.sum.bytes);
+    props_digits(b, sizeof b, props.sum.bytes);
+    i64 dirs = props.sum.dirs - (less_root && props.sum.dirs > 0);
+    if (!props.local && !props.done) return "not counted on a network drive";
+    return arena_sprintf(&frame, "%lld %s, %lld %s, %s (%s bytes)%s%s", (long long)dirs, dirs == 1 ? "folder" : "folders",
+                         (long long)props.sum.files, props.sum.files == 1 ? "file" : "files", sz, b,
+                         props.done ? "" : " \xE2\x80\xA6 counting", props.sum.cut || props.cut ? " (some unreadable)" : "");
+}
+
+static void layout_props_panel(void)
+{
+    Theme *t = &app.theme;
+    CLAY(CLAY_ID("props"), { .layout = { .sizing = { CLAY_SIZING_FIXED(560), CLAY_SIZING_FIT(0) }, .padding = { 24, 24, 20, 20 }, .childGap = 8,
+                                         .layoutDirection = CLAY_TOP_TO_BOTTOM },
+                             .backgroundColor = cc(t->bg_light), .border = { .color = cc(t->accent), .width = CLAY_BORDER_OUTSIDE(1) },
+                             .floating = { .attachTo = CLAY_ATTACH_TO_ROOT, .zIndex = 20,
+                                           .attachPoints = { CLAY_ATTACH_POINT_CENTER_CENTER, CLAY_ATTACH_POINT_CENTER_CENTER } } }) {
+        // The icon (or preview) and the name, or the count of several.
+        CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .childGap = 14, .childAlignment = { .y = CLAY_ALIGN_Y_CENTER },
+                                   .padding = { 0, 0, 0, 8 } } }) {
+            Texture2D *th = props.idx >= 0 ? entry_thumb(props.idx, true) : NULL;
+            if (th) {
+                float sc = 48.0f / (float)(th->width > th->height ? th->width : th->height);
+                CLAY(CLAY_ID("props-thumb"), { .layout = { .sizing = { CLAY_SIZING_FIXED(th->width * sc), CLAY_SIZING_FIXED(th->height * sc) } }, .image = { .imageData = th } }) {}
+            } else {
+                IconSlot *ic = props.idx >= 0 ? entry_icon(props.idx) : named_icon(app.ui.in_trash ? "user-trash" : "folder");
+                icon_box(CLAY_ID("props-icon"), ic, 48);
+            }
+            const char *title = props.n == 1 ? props.name : arena_sprintf(&frame, "%td selected%s", props.n, props.cut ? " (the first counted)" : "");
+            text(fit(str_from_c(title), 420, false), cc(t->fg));
+        }
+        if (props.n == 0) {
+            props_line("Contents", "empty");
+        } else if (props.n > 1) {
+            props_line("Contents", props_counts(false));
+            props_line("Location", props.where);
+            props_line("Drive", props.drive);
+        } else {
+            char when[64], sz[32], b[32];
+            if (props.have && S_ISDIR(props.st.st_mode)) props_line("Contents", props_counts(true));
+            else if (props.have) {
+                ui_size(sz, sizeof sz, props.st.st_size), props_digits(b, sizeof b, props.st.st_size);
+                props_line("Size", arena_sprintf(&frame, "%s bytes (%s)", b, sz));
+            }
+            props_line("Location", props.where);
+            props_line("Drive", props.drive);
+            if (props.link[0]) props_line("Link to", arena_sprintf(&frame, "%s%s", props.link, props.broken ? " (not there)" : ""));
+            if (props.have) {
+                props_when(when, sizeof when, props.st.st_mtim.tv_sec), props_line("Modified", arena_sprintf(&frame, "%s", when));
+                props_when(when, sizeof when, props.st.st_atim.tv_sec), props_line("Accessed", arena_sprintf(&frame, "%s", when));
+                if (props.btime >= 0) props_when(when, sizeof when, props.btime), props_line("Created", arena_sprintf(&frame, "%s", when));
+                props_line("Owner", arena_sprintf(&frame, "%s, group %s", props.owner, props.group));
+                // The permissions: the octal number, then the grid; greyed when they can't change.
+                bool can = app.ui.prop_can;
+                Clay_Color off = mix(t->fg_dim, t->bg_light, 0.45f);
+                CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .childGap = 12, .padding = { 0, 0, 8, 0 } } }) {
+                    CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_FIXED(96), CLAY_SIZING_FIT(0) } } }) { text(cz("Permissions"), cc(t->fg_dim)); }
+                    text(cz(arena_sprintf(&frame, "%04o%s", (unsigned)(props.st.st_mode & 07777), can ? "" : app.ui.in_trash ? "  (in the trash)" : "  (not yours to change)")), cc(t->fg));
+                }
+                static const char *const WHO[] = { "Owner", "Group", "Others" }, *const WHAT[] = { "Read", "Write", "Execute" };
+                CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .padding = { 108, 0, 0, 0 } } }) {
+                    for (int c = 0; c < 3; c++)
+                        CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_FIXED(80), CLAY_SIZING_FIT(0) } } }) { text(cz(WHAT[c]), cc(t->fg_dim)); }
+                }
+                for (int r = 0; r < 3; r++) {
+                    CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(30) }, .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } } }) {
+                        CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_FIXED(108), CLAY_SIZING_FIT(0) } } }) { text(cz(WHO[r]), can ? cc(t->fg) : off); }
+                        for (int c = 0; c < 3; c++) {
+                            int k = r * 3 + c;
+                            bool on = (props.st.st_mode & perm_bit(k)) != 0, focus = can && app.ui.prop_at == k;
+                            CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_FIXED(80), CLAY_SIZING_FIT(0) } } }) {
+                                // The focus ring around the box, then the box: filled when on.
+                                CLAY_AUTO_ID({ .layout = { .padding = { 3, 3, 3, 3 } }, .cornerRadius = CLAY_CORNER_RADIUS(4),
+                                               .border = { .color = focus ? cc(t->accent) : cc(t->bg_light), .width = CLAY_BORDER_OUTSIDE(2) } }) {
+                                    CLAY(CLAY_IDI("prop-box", k), { .layout = { .sizing = { CLAY_SIZING_FIXED(18), CLAY_SIZING_FIXED(18) },
+                                                                               .childAlignment = { CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER } },
+                                                                   .backgroundColor = on ? (can ? cc(t->accent) : off) : cc(t->bg),
+                                                                   .cornerRadius = CLAY_CORNER_RADIUS(3),
+                                                                   .border = { .color = can ? cc(t->fg_dim) : off, .width = CLAY_BORDER_OUTSIDE(1) } }) {
+                                        if (on) text(cz("\xE2\x9C\x93"), cc(t->bg));   // ✓
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                props_line("", "can't be read now");
+            }
+        }
+        CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .padding = { 0, 0, 10, 0 },
+                                   .childAlignment = { .x = CLAY_ALIGN_X_RIGHT } } }) {
+            modal_button("modal-ok", UI_MODAL_OK, "Close", true, false);
+        }
+    }
+}
+
 // The panel over the window, the rest darkened but still readable (Michael's pick over a blur,
 // 2026-10-21).
 static void layout_modal(ModalKind k, float w, float h)
@@ -2380,7 +2666,8 @@ static void layout_modal(ModalKind k, float w, float h)
     CLAY(CLAY_ID("modal-backdrop"), { .layout = { .sizing = { CLAY_SIZING_FIXED(w), CLAY_SIZING_FIXED(h) } },
                                       .backgroundColor = { 0, 0, 0, 150 },
                                       .floating = { .attachTo = CLAY_ATTACH_TO_ROOT, .zIndex = 10 } }) {}
-    layout_modal_panel(k);
+    if (k == MODAL_PROPS) layout_props_panel();
+    else layout_modal_panel(k);
 }
 
 // The job rows under the files (F5.3): a row a running job, its throughput line across it, what it
@@ -2611,7 +2898,10 @@ static Clay_RenderCommandArray layout(int w, int h)
             layout_modes();
             CLAY(CLAY_ID("footer-line"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
                                            .clip = { .horizontal = true } }) {
-            if (modal_kind() != MODAL_NONE) {
+            if (modal_kind() == MODAL_PROPS) {
+                text(fit(S("Properties: \xE2\x86\x90 \xE2\x86\x91 \xE2\x86\x93 \xE2\x86\x92 (h j k l) move \xC2\xB7 Space or Enter changes \xC2\xB7 Esc closes"), foot_w, false),
+                     cc(t->fg_dim));
+            } else if (modal_kind() != MODAL_NONE) {
                 text(cz("Answer the question above"), cc(t->fg_dim));
             } else if (app.ui.menu_on) {
                 text(fit(S("Menu: \xE2\x86\x91 \xE2\x86\x93 (k j) move \xC2\xB7 \xE2\x86\x90 \xE2\x86\x92 the next menu \xC2\xB7 Enter picks \xC2\xB7 Esc closes"), foot_w, false),
@@ -2699,6 +2989,8 @@ static UiKey ui_key_of(int key, int mods)
     if (m == GLFW_MOD_ALT && key == GLFW_KEY_UP) return UK_PARENT;
     if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_T) return UK_TAB_NEW;
     if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_N) return UK_NEW_WINDOW;
+    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_I) return UK_PROPERTIES;
+    if (m == GLFW_MOD_ALT && (key == GLFW_KEY_ENTER || key == GLFW_KEY_KP_ENTER)) return UK_TERMINAL;
     if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_W) return UK_TAB_CLOSE;
     if ((m == GLFW_MOD_CONTROL && key == GLFW_KEY_TAB) || (m == GLFW_MOD_CONTROL && key == GLFW_KEY_PAGE_DOWN)) return UK_TAB_NEXT;
     if ((m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT) && key == GLFW_KEY_TAB) || (m == GLFW_MOD_CONTROL && key == GLFW_KEY_PAGE_UP)) return UK_TAB_PREV;
@@ -2833,6 +3125,7 @@ typedef struct {
     bool  zoom;         // the zoom slider's track (F6.3)
     int   menu_title;   // a menu bar title, -1 for none (F7.1)
     int   menu_item;    // an entry of the open menu (its place), -1 for none
+    int   prop_box;     // a checkbox of the Properties panel's grid, -1 for none (F7.2)
 } Hit;
 
 static bool in_box(Clay_ElementId id, float x, float y)
@@ -2844,7 +3137,7 @@ static bool in_box(Clay_ElementId id, float x, float y)
 
 static Hit hit_at(float x, float y)
 {
-    Hit h = { -1, -1, -1, UB_NONE, -1, -1, -1, 0, -1, -1, -1, -1, false, -1, -1 };
+    Hit h = { -1, -1, -1, UB_NONE, -1, -1, -1, 0, -1, -1, -1, -1, false, -1, -1, -1 };
     if (modal_kind() == MODAL_NONE)
         for (int m = 0; m < UI_MENUS && h.menu_title < 0; m++)
             if (in_box(CLAY_IDI("menu-title", m), x, y)) h.menu_title = m;
@@ -2862,6 +3155,8 @@ static Hit hit_at(float x, float y)
         };
         for (int k = 0; k < COUNT(MB) && !h.modal; k++)
             if (in_box(Clay_GetElementId(cz(MB[k].id)), x, y)) h.modal = MB[k].b;
+        for (int k = 0; modal_kind() == MODAL_PROPS && k < 9 && h.prop_box < 0; k++)
+            if (in_box(CLAY_IDI("prop-box", k), x, y)) h.prop_box = k;
         return h;
     }
     for (int i = 0; tabbar.n >= 2 && i < tabbar.n && h.tab < 0; i++) {
@@ -2918,6 +3213,7 @@ static void press_at(UiInput *in, float x, float y, int mods)
     in->header = h.header;
     in->bar = h.bar, in->crumb = h.crumb;
     in->modal = h.modal;
+    in->prop_box = h.prop_box;
     in->job_x = h.job_x;
     in->side_mode = h.mode;
     in->side_twisty = h.twisty;
@@ -3174,6 +3470,7 @@ int main(int argc, char **argv)
     arena_init(&pastea, "paste", paste_mem, sizeof paste_mem);
     arena_init(&treea, "tree", tree_mem, sizeof tree_mem);
     arena_init(&doomeda, "delete", doomed_mem, sizeof doomed_mem);
+    arena_init(&propsa, "properties", props_mem, sizeof props_mem);
     undo.arena = &undoa;
     uint32_t need = Clay_MinMemorySize();
     if ((size_t)need > sizeof clay_mem) {
@@ -3231,6 +3528,7 @@ int main(int argc, char **argv)
     counts.delay_ms = kdelay ? atoi(kdelay) : 0;
     if (counts.delay_ms < 0 || counts.delay_ms > 10000) counts.delay_ms = 0;
     count_start();
+    walk_start();
     thumbs_start();
     space_start();
     timer_start();
@@ -3312,6 +3610,8 @@ int main(int argc, char **argv)
         if (app.have_list && count_take(app.count, app.list.n)) dirty = true;
         if (space_take(&app.places, app.cwd, &app.cwd_avail)) dirty = true;
         if (eject_take()) dirty = true;
+        if (props.walking && walk_take(&props.sum, &props.done)) dirty = true;
+        if (props.walking && !app.ui.props) walk_ask(NULL, 0), props.walking = false;   // the panel closed: the count stops
         if (thumbs_take()) dirty = true;
         bool seen;
         UiInput in = input_real(&seen);
@@ -3348,6 +3648,7 @@ int main(int argc, char **argv)
     jobs_stop();
     clip_quit();
     count_stop();
+    walk_stop();
     thumbs_stop();
     space_stop();
     timer_stop();

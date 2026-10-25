@@ -1,7 +1,7 @@
 # F7.1: the menu bar and the File menu, on a tree made by tests/gui/run.sh: HOME=<scratch>/home,
 # home/tree with a.txt, b.txt, sub.d/, ro/ (x.txt, the folder read only); a mount list of / alone.
 settle
-expect menu=- menuat=- canwrite=1 windows=1 menuoff=open-with,properties
+expect menu=- menuat=- canwrite=1 windows=1 menuoff=open-with
 # Under the menu bar, the sidebar's rows and the bottom bar fit: (516 - 26 - 40 - 28 - 12) / 28.
 expect siderows=14 footerin=1
 sh test -f "$OFX_ROOT/windows/$(cat "$OFX_ROOT/run.pid")"
@@ -16,6 +16,8 @@ key down
 expect menuat=new-file
 key down
 expect menuat=open
+key down
+expect menuat=properties
 key down
 expect menuat=close-all
 key down
@@ -135,7 +137,7 @@ expect tabs=1 menu=-
 key ctrl-l
 type ro
 key enter
-wait-for 2000 sel=x.txt canwrite=0 menuoff=new-folder,new-file,open-with,properties
+wait-for 2000 sel=x.txt canwrite=0 menuoff=new-folder,new-file,open-with
 key f10
 keys down down
 expect menuat=open
@@ -143,7 +145,7 @@ key esc
 # ---- the trash view: no Create, no New Window; Open with nothing in it neither
 key backspace
 press-side 2
-wait-for 2000 trash=1 canwrite=0 menuoff=new-window,new-folder,new-file,open,open-with,properties
+wait-for 2000 trash=1 canwrite=0 menuoff=new-window,new-folder,new-file,open,open-with
 key ctrl-n
 press-side 1
 wait-for 2000 trash=0

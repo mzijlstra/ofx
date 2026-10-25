@@ -1,0 +1,102 @@
+// The Properties panel's counts (F7.2): the files, folders and bytes under what it shows, counted
+// all the way down (fs/props.c, du_walk) on a thread of its own, the sums showing as they grow.
+// One walk at a time: a new one (or the panel closing) moves the generation, which the old walk
+// sees at its next entry and stops. Like counts.c's, the thread is never joined at quit if it
+// is stuck. Included by main.c.
+
+enum { WALK_ROOTS_MAX = 512 };
+
+static struct {
+    pthread_t       thread;
+    bool            started, quit;
+    pthread_mutex_t mu;
+    pthread_cond_t  cv;
+    atomic_uint     gen;      // the walk wanted; a walk with another stops
+    bool            asked;    // a walk for gen waits to start
+    char            req[WALK_ROOTS_MAX][PATH_MAX];   // its roots, written by the main thread
+    isize           nreq;
+    DuSum           sum;      // the sums for sum_gen so far
+    u32             sum_gen;
+    bool            done, fresh;   // the walk for sum_gen ended; sums came since walk_take
+} walk = { .mu = PTHREAD_MUTEX_INITIALIZER, .cv = PTHREAD_COND_INITIALIZER };
+
+static char walk_roots[WALK_ROOTS_MAX][PATH_MAX];   // the thread's copy of the roots
+
+static void walk_tick(void *ctx, const DuSum *s)
+{
+    u32 gen = (u32)(uintptr_t)ctx;
+    pthread_mutex_lock(&walk.mu);
+    if (gen == atomic_load(&walk.gen)) walk.sum = *s, walk.sum_gen = gen, walk.fresh = true;
+    if (!walk.quit) glfwPostEmptyEvent();
+    pthread_mutex_unlock(&walk.mu);
+}
+
+static void *walk_loop(void *arg)
+{
+    (void)arg;
+    pthread_mutex_lock(&walk.mu);
+    for (;;) {
+        while (!walk.quit && !walk.asked) pthread_cond_wait(&walk.cv, &walk.mu);
+        if (walk.quit) break;
+        u32 gen = atomic_load(&walk.gen);
+        isize n = walk.nreq;
+        for (isize i = 0; i < n; i++) memcpy(walk_roots[i], walk.req[i], sizeof walk_roots[i]);
+        walk.asked = false;
+        pthread_mutex_unlock(&walk.mu);
+        const char *roots[WALK_ROOTS_MAX];
+        for (isize i = 0; i < n; i++) roots[i] = walk_roots[i];
+        DuWalk w = { .gen = &walk.gen, .mine = gen, .tick = walk_tick, .ctx = (void *)(uintptr_t)gen };
+        DuSum s;
+        bool whole = du_walk(&w, roots, n, &s);
+        pthread_mutex_lock(&walk.mu);
+        if (whole && gen == atomic_load(&walk.gen)) walk.sum = s, walk.sum_gen = gen, walk.done = walk.fresh = true;
+        if (!walk.quit) glfwPostEmptyEvent();
+    }
+    pthread_mutex_unlock(&walk.mu);
+    return NULL;
+}
+
+static void walk_start(void)
+{
+    walk.started = pthread_create(&walk.thread, NULL, walk_loop, NULL) == 0;
+}
+
+// A new walk of roots (n of them, at most WALK_ROOTS_MAX), the old one stopped; n 0 only stops.
+static void walk_ask(char *const *roots, isize n)
+{
+    pthread_mutex_lock(&walk.mu);
+    atomic_fetch_add(&walk.gen, 1);
+    walk.sum = (DuSum){ 0 }, walk.done = false, walk.fresh = true;
+    walk.nreq = n < WALK_ROOTS_MAX ? n : WALK_ROOTS_MAX;
+    for (isize i = 0; i < walk.nreq; i++) snprintf(walk.req[i], sizeof walk.req[i], "%s", roots[i]);
+    walk.asked = n > 0 && walk.started;
+    pthread_cond_signal(&walk.cv);
+    pthread_mutex_unlock(&walk.mu);
+}
+
+// The sums so far and whether the walk ended; true when they changed since the last take.
+static bool walk_take(DuSum *s, bool *done)
+{
+    pthread_mutex_lock(&walk.mu);
+    bool came = walk.fresh;
+    *s = walk.sum, *done = walk.done && walk.sum_gen == atomic_load(&walk.gen);
+    walk.fresh = false;
+    pthread_mutex_unlock(&walk.mu);
+    return came;
+}
+
+// At quit, as count_stop: told to stop, 200 ms, then left to the process's end if stuck.
+static void walk_stop(void)
+{
+    if (!walk.started) return;
+    pthread_mutex_lock(&walk.mu);
+    walk.quit = true;
+    atomic_fetch_add(&walk.gen, 1);
+    pthread_cond_broadcast(&walk.cv);
+    pthread_mutex_unlock(&walk.mu);
+    struct timespec until;
+    clock_gettime(CLOCK_REALTIME, &until);
+    until.tv_nsec += 200 * 1000000L;
+    if (until.tv_nsec >= 1000000000L) until.tv_sec++, until.tv_nsec -= 1000000000L;
+    if (pthread_timedjoin_np(walk.thread, NULL, &until) != 0) pthread_detach(walk.thread);
+}

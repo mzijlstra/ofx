@@ -14,7 +14,8 @@
 //                           shift-left shift-right shift-home shift-end shift-enter ctrl-k ctrl-j ctrl-q,
 //                           ctrl-1 ctrl-2 ctrl-left, ctrl-equal ctrl-minus ctrl-0, and alt-1 .. alt-9;
 //                           f10, alt-<letter> (a menu), ctrl-n, and close-window (the compositor's
-//                           close, as SIGUSR1 from another window's Close All); ctrl-q is Close All
+//                           close, as SIGUSR1 from another window's Close All); ctrl-q is Close All;
+//                           ctrl-i (Properties, F7.2), alt-enter (a terminal)
 //   char <c>                one typed character
 //   keys <word>...          keys and characters in one frame's input, as fast typing during a slow
 //                           frame gives them: each word a key name (as for `key`) or char:<c>
@@ -137,7 +138,7 @@ static void script_state(char *out, size_t cap)
     Theme *t = &app.theme;
     // The edit line's text, its spaces as '_' (the state line is words).
     static const char *const JOB_PHASES[] = { "scan", "run", "ask", "done" };
-    static const char *const UNDO_KINDS[] = { "-", "rename", "mkdir", "trash", "copy", "move", "mkfile" };
+    static const char *const UNDO_KINDS[] = { "-", "rename", "mkdir", "trash", "copy", "move", "mkfile", "chmod" };
     char edit[NAME_MAX + 1];
     snprintf(edit, sizeof edit, "%.*s", app.ui.edit_len ? app.ui.edit_len : 1, app.ui.edit_len ? app.ui.edit : "-");
     for (char *c = edit; *c; c++)
@@ -168,7 +169,7 @@ static void script_state(char *out, size_t cap)
     if (jobs.asking >= 0) snprintf(clashjob, sizeof clashjob, "%s", job_recs[jobs.asking].label);
     for (char *c = clashjob; *c; c++)
         if (*c == ' ') *c = '_';
-    static const char *const MODALS[] = { "-", "delete", "clash", "cancel", "quit", "full", "empty" };
+    static const char *const MODALS[] = { "-", "delete", "clash", "cancel", "quit", "full", "empty", "props" };
     // The path buttons' labels, '|' between; the cursor's folder count (- unknown, ? unreadable).
     char crumbs[2048] = "", cnt[32] = "-";
     for (int i = 0; i < app.crumbs.n; i++) {
@@ -257,6 +258,17 @@ static void script_state(char *out, size_t cap)
     // 26 px the rest is as tall as before).
     Clay_ElementData fd = Clay_GetElementData(CLAY_ID("footer"));
     int footerin = fd.found && fd.boundingBox.y + fd.boundingBox.height <= (float)GetScreenHeight() + 0.5f;
+    char propname[NAME_MAX + 1];   // the Properties panel's name, spaces as '_'
+    snprintf(propname, sizeof propname, "%s", props.name[0] ? props.name : "-");
+    for (char *c = propname; *c; c++)
+        if (*c == ' ') *c = '_';
+    char propwhere[PATH_MAX], propdrive[256], proplink[PATH_MAX];
+    snprintf(propwhere, sizeof propwhere, "%s", props.where[0] ? props.where : "-");
+    snprintf(propdrive, sizeof propdrive, "%s", props.drive[0] ? props.drive : "-");
+    snprintf(proplink, sizeof proplink, "%s", props.link[0] ? props.link : "-");
+    for (char *c = propwhere; *c; c++) *c = *c == ' ' ? '_' : *c;
+    for (char *c = propdrive; *c; c++) *c = *c == ' ' ? '_' : *c;
+    for (char *c = proplink; *c; c++) *c = *c == ' ' ? '_' : *c;
     int windows = 0;
     DIR *wd = app.windows[0] ? opendir(app.windows) : NULL;
     for (struct dirent *we; wd && (we = readdir(wd));) windows += we->d_name[0] != '.';
@@ -285,7 +297,9 @@ static void script_state(char *out, size_t cap)
              "view=%s cols=%d cells=%d cellfirst=%td celllast=%td fulllines=%d celllines=%d cellcut=%d iconpx=%d icontex=%d iconresets=%d crumbfocus=%d tooltip=%s idlewoke=%s "
              "zoom=%d cellw=%d cellh=%d zoomshown=%d tipin=%d slots=%d "
              "previews=%d thumbsel=%s thumbbox=%s thumbbusy=%d thumbmade=%d thumbread=%d thumbfailed=%d thumbknown=%d thumbnone=%d thumbchanged=%d "
-             "thumbheld=%td thumbdropped=%d thumbresets=%d thumblocal=%d menu=%s menuat=%s menuoff=%s menuhover=%d canwrite=%d windows=%d siderows=%d footerin=%d status=%s",
+             "thumbheld=%td thumbdropped=%d thumbresets=%d thumblocal=%d menu=%s menuat=%s menuoff=%s menuhover=%d canwrite=%d windows=%d siderows=%d footerin=%d "
+             "props=%d propat=%d propcan=%d propn=%td propmode=%04o propfiles=%lld propdirs=%lld propbytes=%lld propdone=%d propcut=%d propname=%s "
+             "propwhere=%s propdrive=%s proplink=%s propcreated=%d status=%s",
              app.cwd, app.list.n, app.list.hidden, STR_ARG(sel), app.ui.list.sel, app.ui.list.top, app.ui.list.rows, app.hover,
              t->accent.r, t->accent.g, t->accent.b, t->bg.r, t->bg.g, t->bg.b, t->icons[0] ? t->icons : "-",
              app.icon_scale, GetScreenWidth(), GetScreenHeight(), app.reloads, app.themes, atomic_load(&watch.batches),
@@ -307,7 +321,10 @@ static void script_state(char *out, size_t cap)
              thumbs.drawn_last, thumbsel, thumbbox, thumbs_busy(), thumbs.got[TG_MADE], thumbs.got[TG_CACHED], thumbs.got[TG_FAILED],
              thumbs.got[TG_FAIL_KNOWN], thumbs.got[TG_NONE], thumbs.got[TG_CHANGED], thumbs.held, thumbs.evicted, thumbs.resets, app.thumb_local,
              app.ui.menu_on ? UI_MENU[app.ui.menu].title : "-", menuat, menuoff, app.menu_title_hover, app.ui.can_write, windows,
-             app.ui.side.rows, footerin, app.status[0] ? app.status : "-");
+             app.ui.side.rows, footerin,
+             app.ui.props, app.ui.prop_at, app.ui.prop_can, props.n, props.have ? (unsigned)(props.st.st_mode & 07777) : 0u,
+             (long long)props.sum.files, (long long)props.sum.dirs, (long long)props.sum.bytes, props.done, props.sum.cut || props.cut, propname,
+             propwhere, propdrive, proplink, props.btime >= 0, app.status[0] ? app.status : "-");
     frame_us_max = 0;
 }
 
@@ -349,7 +366,7 @@ static UiKey script_key(Str name)
         { "ctrl-shift-pageup", UK_TAB_LEFT }, { "ctrl-shift-pagedown", UK_TAB_RIGHT },
         { "shift-left", UK_SEL_LEFT }, { "shift-right", UK_SEL_RIGHT }, { "shift-home", UK_SEL_HOME }, { "shift-end", UK_SEL_END },
         { "shift-enter", UK_SHIFT_ENTER }, { "ctrl-k", UK_CRUMBS }, { "ctrl-j", UK_JOBS }, { "ctrl-q", UK_QUIT_ALL }, { "close-window", UK_QUIT },
-        { "f10", UK_F10 }, { "ctrl-n", UK_NEW_WINDOW },
+        { "f10", UK_F10 }, { "ctrl-n", UK_NEW_WINDOW }, { "ctrl-i", UK_PROPERTIES }, { "alt-enter", UK_TERMINAL },
         { "ctrl-1", UK_VIEW_LIST }, { "ctrl-2", UK_VIEW_ICONS }, { "ctrl-left", UK_SIDE },
         { "ctrl-equal", UK_ZOOM_IN }, { "ctrl-minus", UK_ZOOM_OUT }, { "ctrl-0", UK_ZOOM_RESET },
     };

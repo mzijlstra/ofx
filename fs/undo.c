@@ -9,9 +9,10 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-typedef enum { UNDO_NONE, UNDO_RENAME, UNDO_MKDIR, UNDO_TRASH, UNDO_COPY, UNDO_MOVE, UNDO_MKFILE } UndoKind;
+typedef enum { UNDO_NONE, UNDO_RENAME, UNDO_MKDIR, UNDO_TRASH, UNDO_COPY, UNDO_MOVE, UNDO_MKFILE, UNDO_CHMOD } UndoKind;
 
-// rename, move: from was moved to to; new folder, new file, copy: to was made; trash: from went to file,
+// rename, move: from was moved to to; new folder, new file, copy: to was made; a permission change
+// (F7.2): to's mode was info (octal); trash: from went to file,
 // with its info.
 typedef struct {
     char *from, *to, *info;
@@ -61,8 +62,8 @@ static bool present(const char *path)
 // What the undo would do, in a few words ("rename", "trash of 3 items").
 static void undo_what(const Undo *u, char *out, size_t cap)
 {
-    static const char *const NAMES[] = { "nothing", "rename", "new folder", "trash", "copy", "move", "new file" };
-    if (u->n == 1 || u->kind == UNDO_RENAME || u->kind == UNDO_MKDIR || u->kind == UNDO_MKFILE) snprintf(out, cap, "%s", NAMES[u->kind]);
+    static const char *const NAMES[] = { "nothing", "rename", "new folder", "trash", "copy", "move", "new file", "permission change" };
+    if (u->n == 1 || u->kind == UNDO_RENAME || u->kind == UNDO_MKDIR || u->kind == UNDO_MKFILE || u->kind == UNDO_CHMOD) snprintf(out, cap, "%s", NAMES[u->kind]);
     else snprintf(out, cap, "%s of %td items", NAMES[u->kind], u->n);
 }
 
@@ -121,6 +122,11 @@ static bool undo_do(Undo *u, isize *done, Err *err)
         case UNDO_MKDIR:
             one = ops_allowed(it->to, &e) && (rmdir(it->to) == 0 || (err_set(&e, "%s isn't empty now: can't undo", it->to), false));
             break;
+        case UNDO_CHMOD: {
+            mode_t was;
+            one = op_chmod(it->to, (mode_t)strtol(it->info ? it->info : "", NULL, 8), &was, &e);
+            break;
+        }
         case UNDO_MKFILE: one = ops_allowed(it->to, &e) && (unlink(it->to) == 0 || (err_set(&e, "%s: %s", it->to, strerror(errno)), false)); break;
         case UNDO_TRASH: {
             Trashed t = { 0 };

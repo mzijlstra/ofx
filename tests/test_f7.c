@@ -47,14 +47,16 @@ static void test_menu_keys(void)
     CHECK(menu_keys(&u, 1, UK_F10).kind == UA_NONE && u.menu_on && u.menu == 0 && u.menu_at == file_at(UM_NEW_TAB));
     menu_keys(&u, 4, UK_DOWN, UK_DOWN, UK_DOWN, UK_DOWN);
     CHECK(u.menu_at == file_at(UM_OPEN));
-    menu_keys(&u, 1, UK_DOWN);   // past Open With (F7.3), the line, Properties (F7.2), the line
+    menu_keys(&u, 1, UK_DOWN);   // past Open With (F7.3) and the line
+    CHECK(u.menu_at == file_at(UM_PROPERTIES));
+    menu_keys(&u, 1, UK_DOWN);
     CHECK(u.menu_at == file_at(UM_CLOSE_ALL));
     menu_keys(&u, 2, UK_DOWN, UK_DOWN);   // round the end
     CHECK(u.menu_at == file_at(UM_NEW_TAB));
     menu_keys(&u, 1, UK_UP);
     CHECK(u.menu_at == file_at(UM_CLOSE));
     menu_keys(&u, 2, 0x100 + 'k', 0x100 + 'k');   // k and j as Up and Down
-    CHECK(u.menu_at == file_at(UM_OPEN));
+    CHECK(u.menu_at == file_at(UM_PROPERTIES));
     menu_keys(&u, 1, 0x100 + 'j');
     CHECK(u.menu_at == file_at(UM_CLOSE_ALL));
     menu_keys(&u, 1, UK_HOME);
@@ -87,7 +89,8 @@ static void test_menu_keys(void)
     // Enter picks: each entry's action, the menu closed.
     static const struct { UiMenuItem it; UiActionKind a; isize index; } PICK[] = {
         { UM_NEW_TAB, UA_TAB_NEW, 0 }, { UM_NEW_WINDOW, UA_NEW_WINDOW, 0 }, { UM_NEW_FOLDER, UA_NEWFOLDER, 0 },
-        { UM_NEW_FILE, UA_NEWFILE, 0 }, { UM_OPEN, UA_OPEN, 2 }, { UM_CLOSE_ALL, UA_CLOSE_ALL, 0 }, { UM_CLOSE, UA_TAB_CLOSE, -1 },
+        { UM_NEW_FILE, UA_NEWFILE, 0 }, { UM_OPEN, UA_OPEN, 2 }, { UM_PROPERTIES, UA_PROPS, 0 }, { UM_CLOSE_ALL, UA_CLOSE_ALL, 0 },
+        { UM_CLOSE, UA_TAB_CLOSE, -1 },
     };
     for (int k = 0; k < COUNT(PICK); k++) {
         u = menu_ui(3);
@@ -101,7 +104,7 @@ static void test_menu_keys(void)
     // One that can't be picked: Enter does nothing, the menu stays.
     u = menu_ui(3);
     menu_keys(&u, 1, UK_F10);
-    u.menu_at = file_at(UM_PROPERTIES);
+    u.menu_at = file_at(UM_OPEN_WITH);
     CHECK(menu_keys(&u, 1, UK_ENTER).kind == UA_NONE && u.menu_on);
     u.menu_at = -1;   // nothing marked (the pointer opened it)
     CHECK(menu_keys(&u, 1, UK_ENTER).kind == UA_NONE && u.menu_on);
@@ -145,10 +148,10 @@ static void test_menu_keys(void)
 static void test_menu_enabled(void)
 {
     // What can be picked: Open needs an entry; the Create entries a folder that takes them, not the
-    // trash; New Window not the trash; Open With and Properties not yet.
+    // trash; New Window not the trash; Open With not yet (F7.3).
     Ui u = menu_ui(3);
     bool want[UM_ITEMS] = { [UM_NEW_TAB] = true, [UM_NEW_WINDOW] = true, [UM_NEW_FOLDER] = true, [UM_NEW_FILE] = true,
-                            [UM_OPEN] = true, [UM_CLOSE_ALL] = true, [UM_CLOSE] = true };
+                            [UM_OPEN] = true, [UM_PROPERTIES] = true, [UM_CLOSE_ALL] = true, [UM_CLOSE] = true };
     for (int it = 0; it < UM_ITEMS; it++) CHECK(ui_menu_enabled(&u, (UiMenuItem)it) == want[it]);
     u = menu_ui(0);
     CHECK(!ui_menu_enabled(&u, UM_OPEN) && ui_menu_enabled(&u, UM_NEW_FILE));
@@ -185,7 +188,7 @@ static void test_menu_mouse(void)
     ui_handle(&u, names, &in);
     CHECK(ui_menu_hover(&u, -1, file_at(UM_NEW_FILE)) && u.menu_at == file_at(UM_NEW_FILE));
     CHECK(!ui_menu_hover(&u, -1, file_at(UM_NEW_FILE)));   // no change
-    CHECK(!ui_menu_hover(&u, -1, file_at(UM_PROPERTIES)) && u.menu_at == file_at(UM_NEW_FILE));
+    CHECK(!ui_menu_hover(&u, -1, file_at(UM_OPEN_WITH)) && u.menu_at == file_at(UM_NEW_FILE));
     CHECK(!ui_menu_hover(&u, -1, 4) && !ui_menu_hover(&u, -1, -1) && !ui_menu_hover(&u, -1, 99));
     CHECK(!ui_menu_hover(&u, 0, -1));   // its own title
     CHECK(ui_menu_hover(&u, -1, 0) && u.menu_at == 0);
@@ -193,7 +196,7 @@ static void test_menu_mouse(void)
     closed.menu_at = -1;
     CHECK(!ui_menu_hover(&closed, 0, 0) && !closed.menu_on && closed.menu_at == -1);
     // A press on an entry picks it; on one greyed nothing happens and the menu stays.
-    in = ui_input_none(), in.menu_item = file_at(UM_PROPERTIES);
+    in = ui_input_none(), in.menu_item = file_at(UM_OPEN_WITH);
     CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.menu_on);
     in.menu_item = 99;
     CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.menu_on);

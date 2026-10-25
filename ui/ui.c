@@ -51,6 +51,8 @@ typedef enum {
     UK_QUIT_ALL,   // Ctrl+Q: every ofx window closes (F7.1)
     UK_F10,        // the menu bar's first menu (F7.1)
     UK_MENU,       // Alt and a letter: the menu it opens (F7.1); the event's ch is the letter, lower case
+    UK_PROPERTIES, // Ctrl+I: the Properties panel (F7.2)
+    UK_TERMINAL,   // Alt+Enter: a terminal here, as t (Michael, 2026-10-25)
     UK_F9,         // the sidebar's next mode (F6)
     UK_VIEW_ICONS, // Ctrl+2: the files as icons (F6.2)
     UK_VIEW_LIST,  // Ctrl+1: the files as the list
@@ -110,6 +112,7 @@ typedef struct {
     int     menu_title;
     int     menu_item;
     bool    menu_away;
+    int     prop_box;    // a checkbox of the Properties panel's grid pressed (0..8, F7.2), -1 for none
 } UiInput;
 
 typedef enum {
@@ -147,6 +150,8 @@ typedef enum {
     UA_NEWFILE,     // an empty file, named in the row as a new folder is (F7.1)
     UA_CLOSE_ALL,   // the other ofx windows asked to close (F7.1); all: this one quits too, else it
                     // asks first (quit_asking), its jobs running or waiting
+    UA_PROPS,       // the Properties panel opened (Ui.props): gui/ reads what it shows (F7.2)
+    UA_CHMOD,       // index: the grid's place (0..8) whose permission bit flips
 } UiActionKind;
 
 typedef struct {
@@ -179,7 +184,7 @@ static const struct { const char *label, *key, *word; } UI_MENU_ITEM[UM_ITEMS] =
     [UM_NEW_FILE] = { "Create New Empty File", "", "new-file" },
     [UM_OPEN] = { "Open", "Enter", "open" },
     [UM_OPEN_WITH] = { "Open With Other Application\xE2\x80\xA6", "", "open-with" },
-    [UM_PROPERTIES] = { "Properties\xE2\x80\xA6", "", "properties" },
+    [UM_PROPERTIES] = { "Properties\xE2\x80\xA6", "Ctrl+I", "properties" },
     [UM_CLOSE_ALL] = { "Close All Windows", "Ctrl+Q", "close-all" },
     [UM_CLOSE] = { "Close", "Ctrl+W", "close" },
 };
@@ -273,13 +278,18 @@ typedef struct {
     int    menu;
     int    menu_at;
     bool   can_write;
+    // The Properties panel (F7.2): up, its grid's place with the focus (0..8: owner read, write,
+    // execute, then group's, others'), and whether gui/ lets its permissions change.
+    bool   props;
+    int    prop_at;
+    bool   prop_can;
 } Ui;
 
 static UiInput ui_input_none(void)
 {
     return (UiInput){ .click = -1, .dclick = -1, .side_click = -1, .header = -1, .click_mods = 0, .bar = UB_NONE, .crumb = -1,
                       .tab_click = -1, .tab_close = -1, .mid_row = -1, .mid_side = -1, .mid_crumb = -1, .modal = 0, .job_x = -1, .side_mode = -1, .side_twisty = -1, .side_eject = -1,
-                      .zoom_to = -1, .menu_title = -1, .menu_item = -1 };
+                      .zoom_to = -1, .menu_title = -1, .menu_item = -1, .prop_box = -1 };
 }
 
 static isize ui_clamp(isize v, isize lo, isize hi)
@@ -407,7 +417,7 @@ static bool ui_input_acts(const UiInput *in)
     return in->nev > 0 || in->click >= 0 || in->dclick >= 0 || in->side_click >= 0 || in->header >= 0 || in->bar != UB_NONE ||
            in->tab_click >= 0 || in->tab_close >= 0 || in->mid_row >= 0 || in->mid_side >= 0 || in->mid_crumb >= 0 || in->modal > 0 ||
            in->backs > 0 || in->forwards > 0 || in->job_x >= 0 || in->side_mode >= 0 || in->side_twisty >= 0 || in->side_eject >= 0 ||
-           in->zoom_wheel != 0 || in->zoom_to >= 0 || in->menu_title >= 0 || in->menu_item >= 0 || in->menu_away;
+           in->zoom_wheel != 0 || in->zoom_to >= 0 || in->menu_title >= 0 || in->menu_item >= 0 || in->menu_away || in->prop_box >= 0;
 }
 
 // Whether a status message gives way to the status line on input that acts (ui_input_acts): a
@@ -860,7 +870,7 @@ static bool ui_jobs_event(Ui *u, const UiInput *in, UiEvent e)
 static bool ui_menu_enabled(const Ui *u, UiMenuItem it)
 {
     switch (it) {
-    case UM_NEW_TAB: case UM_CLOSE_ALL: case UM_CLOSE: return true;
+    case UM_NEW_TAB: case UM_CLOSE_ALL: case UM_CLOSE: case UM_PROPERTIES: return true;
     case UM_NEW_WINDOW: return !u->in_trash;   // ofx starts on a folder, not on the trash view
     case UM_NEW_FOLDER: case UM_NEW_FILE: return !u->in_trash && u->can_write;
     case UM_OPEN: return u->list.n > 0;
@@ -889,6 +899,43 @@ static void ui_menu_open(Ui *u, int m, bool keys)
     ui_edit_close(u), ui_find_close(u);
 }
 
+// The Properties panel opened, the focus on the grid's first box (F7.2).
+static UiAction ui_props_open(Ui *u)
+{
+    u->props = true, u->prop_at = 0;   // (the menu closed the edit and find lines; Ctrl+I in them is theirs)
+    return (UiAction){ UA_PROPS, 0, false };
+}
+
+// A key while the Properties panel is up; it takes every key (a panel). Arrows and h, j, k, l move
+// the focus in the 3 by 3 grid (stopping at its edges), Space or Enter flips that permission when
+// gui/ allows it, Esc or Ctrl+I closes the panel.
+static UiAction ui_props_event(Ui *u, UiEvent e)
+{
+    if (e.key == UK_NONE) {
+        switch (e.ch) {
+        case 'h': e.key = UK_LEFT; break;
+        case 'j': e.key = UK_DOWN; break;
+        case 'k': e.key = UK_UP; break;
+        case 'l': e.key = UK_RIGHT; break;
+        case ' ': e.key = UK_ENTER; break;
+        default: break;
+        }
+    }
+    int row = u->prop_at / 3, col = u->prop_at % 3;
+    switch (e.key) {
+    case UK_LEFT: case UK_SEL_LEFT: if (col > 0) u->prop_at--; break;
+    case UK_RIGHT: case UK_SEL_RIGHT: if (col < 2) u->prop_at++; break;
+    case UK_UP: if (row > 0) u->prop_at -= 3; break;
+    case UK_DOWN: if (row < 2) u->prop_at += 3; break;
+    case UK_ENTER: case UK_SHIFT_ENTER:
+        if (u->prop_can) return (UiAction){ UA_CHMOD, u->prop_at, false };
+        break;
+    case UK_ESC: case UK_PROPERTIES: u->props = false; break;
+    default: break;
+    }
+    return (UiAction){ UA_NONE, 0, false };
+}
+
 // Entry it picked: the menu closes, and gui/ does what it says.
 static UiAction ui_menu_pick(Ui *u, UiMenuItem it)
 {
@@ -901,6 +948,7 @@ static UiAction ui_menu_pick(Ui *u, UiMenuItem it)
     case UM_OPEN: return (UiAction){ UA_OPEN, u->list.sel, false };
     case UM_CLOSE_ALL: return (UiAction){ UA_CLOSE_ALL, 0, true };   // gui/ asks first with jobs (close_others)
     case UM_CLOSE: return (UiAction){ UA_TAB_CLOSE, -1, false };
+    case UM_PROPERTIES: return ui_props_open(u);
     default: return (UiAction){ UA_NONE, 0, false };
     }
 }
@@ -1035,7 +1083,7 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         return (UiAction){ in->modal == UI_MODAL_YES && u->in_trash ? UA_EMPTY_TRASH : UA_NONE, 0, false };
     }
     if (!u->in_trash) u->empty_asking = false;
-    bool prompt = u->asking || u->confirming || u->cancel_asking || u->quit_asking || u->full_told || u->empty_asking;
+    bool prompt = u->asking || u->confirming || u->cancel_asking || u->quit_asking || u->full_told || u->empty_asking || u->props;
     if (prompt) u->menu_on = false;
     // The menu bar (F7.1): a title opens its menu or closes it; while a menu is open a press on one
     // of its entries picks it (one that can't be picked keeps the menu open), and a press anywhere
@@ -1050,6 +1098,12 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         return ui_menu_enabled(u, it) ? ui_menu_pick(u, it) : (UiAction){ UA_NONE, 0, false };
     }
     if (u->menu_on && in->menu_away) return u->menu_on = false, (UiAction){ UA_NONE, 0, false };
+    // The Properties panel's pointer (F7.2): a checkbox takes the focus and flips; Close closes.
+    if (u->props && !u->quit_asking && !u->full_told && in->prop_box >= 0 && in->prop_box < 9) {
+        u->prop_at = in->prop_box;
+        return u->prop_can ? (UiAction){ UA_CHMOD, in->prop_box, false } : (UiAction){ UA_NONE, 0, false };
+    }
+    if (u->props && in->modal == UI_MODAL_OK && !u->full_told) return u->props = false, (UiAction){ UA_NONE, 0, false };
     // The job rows: the mark kept on a row there is; none left, no keyboard there.
     if (u->job_at >= in->job_n) u->job_at = in->job_n - 1;
     if (u->job_at < 0) u->job_at = 0;
@@ -1170,6 +1224,11 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
                 if (a.kind != UA_NONE) return a;
                 continue;
             }
+        }
+        if (u->props && !u->asking && !u->confirming) {   // (quit, cancel and empty took their keys above)
+            UiAction a = ui_props_event(u, e);
+            if (a.kind != UA_NONE) return a;
+            continue;
         }
         if (u->editing && u->edit_path && !prompt && e.key == UK_CRUMBS) {   // from the location line: it closes
             ui_edit_close(u), ui_crumbs_focus(u, in);
@@ -1327,6 +1386,8 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         case UK_PARENT: return (UiAction){ UA_PARENT, 0, false };
         case UK_TAB_NEW: return (UiAction){ UA_TAB_NEW, 0, false };
         case UK_NEW_WINDOW: return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : UA_NEW_WINDOW, 0, false };
+        case UK_PROPERTIES: return ui_props_open(u);
+        case UK_TERMINAL: return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : UA_TERMINAL, 0, false };
         case UK_TAB_CLOSE: return (UiAction){ UA_TAB_CLOSE, -1, false };
         case UK_TAB_NEXT: return (UiAction){ UA_TAB_STEP, 1, false };
         case UK_TAB_PREV: return (UiAction){ UA_TAB_STEP, -1, false };
