@@ -384,15 +384,27 @@ so that would mean patching vendored raylib or leaving it, for no gain here.
   removal reaches only what comes after), which differs from `apps.c` when [Removed Associations]
   are used; Michael's lists have none. gui.py names mutants that didn't build or run, and fails.
 
-**F7.2 Properties (decided in part, Michael 2026-10-25):** a panel in the window like the Delete
-panel (one process, one window), one page, tabs only if it gets too long. Nothing selected: the
-current folder's. Several selected: their count and total size, no permissions. Not shown: the
-type (the name says it) and free space (the drive's, not the file's). Sketch, not decided: the
-icon or preview and the name in a field (Enter renames); the size in bytes and short; a folder's
-contents counted in the background; the parent folder; the drive; modified, accessed and created
-(statx birth time); a link's target; owner and group shown (changing them needs root); read, write
-and execute for owner, group and others as a grid of checkboxes with the octal number, applied at
-once, Ctrl+Z undoes. "Apply to everything inside" is later.
+**F7.2 Properties (Michael, 2026-10-25):** a panel in the window like the Delete panel (one
+process, one window), one page; only for showing a file's properties and changing its permissions
+(no name field: F2 renames).
+- **Opened by** Ctrl+I (Nautilus's key) or File → Properties. (Alt+Enter, Nemo's, opens a
+  terminal here instead, as `t` does: Michael's herdr and Omarchy bind Alt+Enter and Super+Enter
+  to terminals.)
+- **What it shows:** the marked entries, or the cursor's; in an empty folder, that folder. One
+  entry: its icon (or preview), name, size in bytes and short (a folder: "12 folders, 340 files,
+  1.2 GiB", counted in the background, filling in as it goes, not on a network drive), location
+  (the parent, `~` for home), the drive, modified, accessed and created as full date and time
+  (`2026-10-25 14:03:12`; created from statx), a link's target. Owner and group, shown. Several:
+  "3 folders, 12 files — 845 MiB" (folders counted all the way down) and their common location,
+  no permissions. Not shown: the type, free space.
+- **Permissions:** read, write and execute for owner, group and others as a 3 by 3 grid of
+  checkboxes, and the octal number (special bits in it, kept by a change). A change applies at
+  once; Ctrl+Z after closing the panel puts the old mode back. Greyed (shown, not changeable)
+  when the file isn't Michael's, in the trash view, and for several entries. A link shows and
+  changes its target's (chmod follows links); the guard checks the target's real path, so a link
+  in a test's scratch tree can't reach a file outside it.
+- **Keys:** the focus starts on the grid (owner's read); arrows and h/j/k/l move it, Space or
+  Enter toggles, Esc (or Ctrl+I again) closes. The pointer: a checkbox toggles, Close closes.
 
 **F7.3 Open With Other Application (sketch, not decided):** a panel listing the default app for
 the file's type first, then the recommended ones (others that name the type or a parent type),
