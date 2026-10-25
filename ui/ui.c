@@ -978,6 +978,14 @@ static bool ui_find_event(Ui *u, UiNames names, UiEvent e)
 static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
 {
     UiList *l = &u->list;
+    // The window closed, or another window's Close All (SIGUSR1, F7.1): taken before anything that
+    // ends the frame early (a click, the queue-full note), as gui/ queues it once (reviewer-2,
+    // F7.1 review). At once, or asked first when jobs run or wait.
+    for (int k = 0; k < in->nev && !u->quit_asking; k++)
+        if (in->ev[k].key == UK_QUIT) {   // (asking closes a menu: below)
+            if (in->jobs_all <= 0) return (UiAction){ UA_QUIT, 0, false };
+            u->quit_asking = true, u->cancel_asking = false;
+        }
     // The panels F5.3 adds: the queue full (any key or OK), quit, cancel a job.
     if (u->full_told && (in->modal == UI_MODAL_OK || in->nev > 0)) {
         u->full_told = false;
@@ -1103,12 +1111,6 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
             u->menu_on = false;
             if (in->jobs_all > 0) u->quit_asking = true, u->cancel_asking = false;
             return (UiAction){ UA_CLOSE_ALL, 0, in->jobs_all <= 0 };
-        }
-        // Ctrl+Q: at once, or asked first when jobs run or wait; under any panel but these.
-        if (e.key == UK_QUIT && !u->quit_asking) {   // (a full queue's note took the frame's keys)
-            if (in->jobs_all <= 0) return (UiAction){ UA_QUIT, 0, false };
-            u->quit_asking = true, u->cancel_asking = false;
-            continue;
         }
         if (u->quit_asking || u->cancel_asking) {
             bool answered, yes = ui_yes_no(e, &answered);

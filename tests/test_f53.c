@@ -335,8 +335,10 @@ static void test_quit_full(void)
     in = job_input(1, 1), in.modal = UI_MODAL_OK;
     CHECK(ui_handle(&u, names, &in).kind == UA_NONE && !u.full_told);
     u.full_told = true;
+    // The window closed (or another window's Close All, F7.1) isn't eaten by the note: it asks.
     in = job_input(1, 1), in.ev[in.nev++] = (UiEvent){ UK_QUIT, 0 };
-    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && !u.full_told && !u.quit_asking);
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && !u.full_told && u.quit_asking);
+    u.quit_asking = false;
     u.full_told = true;
     in = job_input(1, 1), in.click = 2;   // a click doesn't reach the list under it
     ui_handle(&u, names, &in);

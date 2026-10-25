@@ -14,6 +14,8 @@
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/stat.h>
+#include <sys/syscall.h>
 #include <unistd.h>
 
 // OFX_TEST_WINDOWS, else $XDG_RUNTIME_DIR/ofx; false when neither is set.
@@ -76,8 +78,32 @@ static void win_unregister(const char *dir, pid_t pid)
     if (snprintf(p, sizeof p, "%s/%d", dir, (int)pid) < (int)sizeof p && ops_allowed(p, &err)) unlink(p);
 }
 
+// Whether name is an entry's: a pid as win_register writes it, digits without a leading 0.
+static bool win_name(const char *name)
+{
+    if (name[0] < '1' || name[0] > '9') return false;
+    size_t i = 1;
+    while (name[i] >= '0' && name[i] <= '9') i++;
+    return name[i] == 0 && i <= 10;
+}
+
+// An entry's body as win_register writes it, digits then a newline, into *t.
+static bool win_body(const char *buf, ssize_t n, i64 *t)
+{
+    if (n < 2 || buf[n - 1] != '\n') return false;
+    i64 v = 0;
+    for (ssize_t i = 0; i < n - 1; i++) {
+        if (buf[i] < '0' || buf[i] > '9' || v > INT64_MAX / 10 - 1) return false;
+        v = v * 10 + (buf[i] - '0');
+    }
+    return *t = v, true;
+}
+
 // Sends sig to every window listed in dir but self that is still the process it was; an entry
-// whose process is gone, or is another one now, is removed. The number signalled.
+// whose process is gone, or is another one now, is removed. Only names and bodies as win_register
+// writes them, and regular files (a FIFO would block the read: reviewer-2, F7.1 review). The
+// signal goes through a pidfd taken before the start time is checked, so a pid freed and used
+// again in between can't get it. The number signalled.
 static int win_signal_others(const char *dir, pid_t self, int sig)
 {
     Err err;
@@ -86,24 +112,31 @@ static int win_signal_others(const char *dir, pid_t self, int sig)
     if (!d) return 0;
     int told = 0;
     for (struct dirent *e; (e = readdir(d));) {
-        char *end;
-        long pid = strtol(e->d_name, &end, 10);
-        if (*end || end == e->d_name || pid <= 0 || pid > INT32_MAX || (pid_t)pid == self) continue;
+        if (!win_name(e->d_name)) continue;
+        long pid = strtol(e->d_name, NULL, 10);
+        if (pid > INT32_MAX || (pid_t)pid == self) continue;
         char p[PATH_MAX], buf[32];
         if (snprintf(p, sizeof p, "%s/%s", dir, e->d_name) >= (int)sizeof p) continue;
-        int fd = open(p, O_RDONLY | O_NOFOLLOW | O_CLOEXEC);
+        int fd = open(p, O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC);
         if (fd < 0) continue;
-        ssize_t n = read(fd, buf, sizeof buf - 1);
+        struct stat st;
+        ssize_t n = fstat(fd, &st) == 0 && S_ISREG(st.st_mode) ? read(fd, buf, sizeof buf) : -1;
         close(fd);
-        buf[n > 0 ? n : 0] = 0;
-        long long want = strtoll(buf, &end, 10);
-        i64 now = win_started((pid_t)pid);
-        if (now < 0 || (n > 0 && end != buf && now != (i64)want)) {
-            unlink(p);   // gone, or the pid is another process's now
+        if (n < 0) continue;   // not a regular file: not ofx's
+        i64 want;
+        bool whole = win_body(buf, n, &want);
+        int pfd = (int)syscall(SYS_pidfd_open, (pid_t)pid, 0);
+        if (pfd < 0) {
+            if (errno == ESRCH) unlink(p);   // gone
             continue;
         }
-        if (n <= 0 || end == buf) continue;   // still being written
-        if (kill((pid_t)pid, sig) == 0) told++;
+        i64 now = win_started((pid_t)pid);   // the pidfd's process, or one that took the pid since
+        if (now < 0 || (whole && now != want)) {
+            unlink(p);   // gone, or the pid is another process's now
+        } else if (whole && syscall(SYS_pidfd_send_signal, pfd, sig, NULL, 0) == 0) {
+            told++;
+        }   // not whole: still being written
+        close(pfd);
     }
     closedir(d);
     return told;

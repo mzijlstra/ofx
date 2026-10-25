@@ -347,6 +347,16 @@ so that would mean patching vendored raylib or leaving it, for no gain here.
   test weston output grew to 944x544 and the window to 936x516, so the area under the menu bar
   is what every script had before. `make test` 3478 checks; unit mutants 850, 0 survived (three
   left out with reasons in `mutants.py`).
+- reviewer-2's SHIP at `1992f0a` (2026-10-25) had two LOWs, landed after it:
+  - **A close lost to a click:** gui/ queues UK_QUIT once (the window's close, another window's
+    Close All), and `ui_handle`'s early returns (a click, a menu, the queue-full note) dropped
+    it. `ui_handle` now takes it first. So the queue-full note no longer eats it: F5.3's test
+    pinned that from when UK_QUIT was Ctrl+Q; it now asks (reviewer-2's recommendation).
+  - **The registry reader** took names such as `+pid` and `0pid`, bodies with more after the
+    number, and blocked on a FIFO. Now: names as written (digits, no leading 0), a regular file
+    opened `O_NONBLOCK`, the body digits and a newline, and the signal through a pidfd taken
+    before the start time is checked.
+  - `make test` 3511; unit mutants 861, 0 survived (one more left out: `now < 0`, race only).
 
 **F7.2 Properties (decided in part, Michael 2026-10-25):** a panel in the window like the Delete
 panel (one process, one window), one page, tabs only if it gets too long. Nothing selected: the

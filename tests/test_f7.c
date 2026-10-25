@@ -242,6 +242,27 @@ static void test_close_all_keys(void)
     // The window closed, or another window's Close All (SIGUSR1): as before, this one only.
     in = job_input(0, 0), in.ev[in.nev++] = (UiEvent){ UK_QUIT, 0 };
     CHECK(ui_handle(&u, names, &in).kind == UA_QUIT);
+    // Not lost to a click in the same frame (gui/ queues it once: reviewer-2, F7.1 review): a bar
+    // button, a header, a double click, a menu title or entry, a press away from a menu, a job's ×.
+    for (int c = 0; c < 7; c++) {
+        Ui v = menu_ui(3);
+        if (c >= 4) menu_keys(&v, 1, UK_F10);
+        for (int jobs = 0; jobs < 2; jobs++) {
+            in = job_input(jobs, jobs), in.ev[in.nev++] = (UiEvent){ UK_QUIT, 0 };
+            switch (c) {
+            case 0: in.bar = UB_UP; break;
+            case 1: in.header = 1; break;
+            case 2: in.dclick = 1; break;
+            case 3: in.menu_title = 0; break;
+            case 4: in.menu_item = file_at(UM_NEW_TAB); break;
+            case 5: in.menu_away = true; break;
+            default: in.job_x = 0; break;
+            }
+            v.quit_asking = false;
+            a = ui_handle(&v, names, &in);
+            CHECK(jobs ? a.kind == UA_NONE && v.quit_asking && !v.menu_on : a.kind == UA_QUIT);
+        }
+    }
 }
 
 static void test_new_file(void)
@@ -400,7 +421,7 @@ static void test_windows(void)
     // (another start time) no, its entry removed; a dead one's entry removed; junk left alone.
     pid_t live = waiting_child(), reused = waiting_child(), dead = waiting_child();
     CHECK(win_register(dir, live, &err) && win_register(dir, reused, &err) && win_register(dir, dead, &err));
-    char rp[PATH_MAX + 16], dp[PATH_MAX + 16];
+    char rp[PATH_MAX + 48], dp[PATH_MAX + 16];
     snprintf(rp, sizeof rp, "%s/%d", dir, (int)reused);
     snprintf(dp, sizeof dp, "%s/%d", dir, (int)dead);
     snprintf(out, sizeof out, "%lld\n", (long long)win_started(reused) + 1);
@@ -463,6 +484,45 @@ static void test_windows(void)
     CHECK(win_started(named) >= me);
     kill(named, SIGKILL);
     child_signal(named);
+    // Only names and bodies as win_register writes them (reviewer-2, F7.1 review): "+pid", " pid",
+    // "0pid", or the time with more after it, are left alone; so is a FIFO, without blocking.
+    pid_t odd = waiting_child();
+    snprintf(out, sizeof out, "%lld\n", (long long)win_started(odd));
+    const char *const ODD[] = { "+%d", " %d", "0%d" };
+    for (int k = 0; k < COUNT(ODD); k++) {
+        char name[32];
+        snprintf(name, sizeof name, ODD[k], (int)odd);
+        snprintf(rp, sizeof rp, "%s/%s", dir, name);
+        put(rp, out);
+        CHECK(win_signal_others(dir, getpid(), SIGUSR1) == 0 && kill(odd, 0) == 0);
+        unlink(rp);
+    }
+    snprintf(rp, sizeof rp, "%s/%d", dir, (int)odd);
+    char junk[80];
+    snprintf(junk, sizeof junk, "%lld junk\n", (long long)win_started(odd));
+    put(rp, junk);
+    CHECK(win_signal_others(dir, getpid(), SIGUSR1) == 0 && kill(odd, 0) == 0 && access(rp, F_OK) == 0);
+    snprintf(junk, sizeof junk, "%lld", (long long)win_started(odd));   // no newline yet
+    put(rp, junk);
+    CHECK(win_signal_others(dir, getpid(), SIGUSR1) == 0 && kill(odd, 0) == 0);
+    unlink(rp);
+    CHECK(mkfifo(rp, 0600) == 0);
+    CHECK(win_signal_others(dir, getpid(), SIGUSR1) == 0 && kill(odd, 0) == 0);
+    unlink(rp);
+    // Not ofx's, so not removed either, even named after a pid that is gone (a FIFO, a folder).
+    snprintf(rp, sizeof rp, "%s/%d", dir, (int)dead);
+    CHECK(mkfifo(rp, 0600) == 0);
+    snprintf(dp, sizeof dp, "%s/%d", dir, (int)reused);   // gone by now too
+    CHECK(mkdir(dp, 0700) == 0);
+    CHECK(win_signal_others(dir, getpid(), SIGUSR1) == 0 && access(rp, F_OK) == 0 && access(dp, F_OK) == 0);
+    unlink(rp), rmdir(dp);
+    CHECK(win_name("1") && win_name("4194304") && win_name("1234567890"));
+    CHECK(!win_name("") && !win_name("0") && !win_name("12345678901") && !win_name("1 ") && !win_name("-1"));
+    i64 t;
+    CHECK(win_body("12\n", 3, &t) && t == 12 && !win_body("\n", 1, &t) && !win_body("1", 1, &t) && !win_body("1a\n", 3, &t));
+    CHECK(!win_body("99999999999999999999\n", 21, &t));
+    kill(odd, SIGKILL);
+    child_signal(odd);
     // Unregistered: its file gone; a missing folder signals nobody.
     win_unregister(dir, getpid());
     CHECK(access(p, F_OK) != 0);
