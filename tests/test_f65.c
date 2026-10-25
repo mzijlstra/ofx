@@ -100,6 +100,53 @@ static void test_clean_names(void)
     CHECK(!clean_absent_drive(mi, "/mnt") && !clean_absent_drive(mi, "/run/media") && !clean_absent_drive(mi, "/mntx/y/a.png"));
 }
 
+static void test_clean_real(void)
+{
+    char base[1200], r[PATH_MAX], want[PATH_MAX], nas[1300], mi[3 * PATH_MAX];
+    snprintf(base, sizeof base, "%s", at("f65r"));
+    snprintf(nas, sizeof nas, "%s/nas", base);
+    snprintf(mi, sizeof mi, "1 0 0:1 / / rw - ext4 a rw\n2 1 0:2 / %s rw - nfs4 b rw\n", nas);
+    Str m = str_from_c(mi);
+    mkdirs(at("f65r/real/deep")), mkdirs(nas);
+    CHECK(symlink("real", at("f65r/rel")) == 0);                         // relative
+    CHECK(symlink(at("f65r/real"), at("f65r/abs")) == 0);                // absolute
+    CHECK(symlink("rel", at("f65r/chain")) == 0);                        // a link to a link
+    CHECK(symlink("/mnt/ofx-test-nodrive/D", at("f65r/away")) == 0);     // leads nowhere
+    CHECK(symlink("real/deep", at("f65r/down")) == 0);
+    CHECK(symlink("loop2", at("f65r/loop1")) == 0 && symlink("loop1", at("f65r/loop2")) == 0);
+    CHECK(symlink("nas", at("f65r/tonas")) == 0);
+    struct { const char *in, *out; } cases[] = {
+        { "real/a.png", "real/a.png" }, { "rel/a.png", "real/a.png" }, { "abs/a.png", "real/a.png" },
+        { "chain/x/a.png", "real/x/a.png" }, { "rel/./deep/../a.png", "real/a.png" },
+        { "down/../a.png", "real/a.png" },   // .. of where the link leads, as the kernel has it
+        { "missing/rel/a.png", "missing/rel/a.png" },
+    };
+    for (int i = 0; i < COUNT(cases); i++) {
+        snprintf(want, sizeof want, "%s/%s", base, cases[i].out);
+        CHECK(clean_real(m, at("f65r/%s", cases[i].in), r, sizeof r) && strcmp(r, want) == 0);
+        if (strcmp(r, want) != 0) fprintf(stderr, "  %s -> %s\n", cases[i].in, r);
+    }
+    CHECK(clean_real(m, at("f65r/away/x/a.png"), r, sizeof r));
+    CHECK_STR(str_from_c(r), "/mnt/ofx-test-nodrive/D/x/a.png");
+    CHECK(clean_real(m, "/", r, sizeof r));
+    CHECK_STR(str_from_c(r), "/");
+    CHECK(clean_real(m, "/..//a/", r, sizeof r));
+    CHECK_STR(str_from_c(r), "/a");
+    // 40 links followed, not 41: c0 -> c1 -> ... -> c40 -> real.
+    char cn[64], tn[64];
+    for (int i = 0; i <= 40; i++) {
+        snprintf(cn, sizeof cn, "f65r/c%d", i);
+        snprintf(tn, sizeof tn, i == 40 ? "real" : "c%d", i + 1);
+        CHECK(symlink(tn, at("%s", cn)) == 0);
+    }
+    CHECK(clean_real(m, at("f65r/c1/a.png"), r, sizeof r) && !clean_real(m, at("f65r/c0/a.png"), r, sizeof r));
+    // Refused: a loop, a network mount (by the path, or through a link), too small an out.
+    CHECK(!clean_real(m, at("f65r/loop1/a.png"), r, sizeof r));
+    CHECK(!clean_real(m, at("f65r/nas/a.png"), r, sizeof r) && !clean_real(m, at("f65r/tonas/a.png"), r, sizeof r));
+    CHECK(!clean_real(m, at("f65r/real/a.png"), r, 1) && !clean_real(m, at("f65r/real/a.png"), r, strlen(base) + 5));
+    CHECK(clean_real(m, at("f65r/real"), r, strlen(base) + 6));
+}
+
 static void test_clean_run(void)
 {
     Arena a;
@@ -124,7 +171,8 @@ static void test_clean_run(void)
     put(keep, "k"), put(gone, "g"), put(gonedir, "g"), put(changed, "c"), put(grown, "g"), put(old, "o");
 
     enum { P_KEEP, P_GONE, P_GONEDIR, P_CHANGED, P_GROWN, P_OLD, P_DAYS89, P_NAS, P_NODRIVE, P_DRIVE, P_TRASH, P_JUNK,
-           P_FAIL_GONE, P_FAIL_OLD, P_TMP_OLD, P_TMP_NEW, P_LINK, P_DIR, P_OTHER, P_NOURI, P_NOTDIR, P_LOCKED, P_BIG, P_N };
+           P_FAIL_GONE, P_FAIL_OLD, P_TMP_OLD, P_TMP_NEW, P_LINK, P_DIR, P_OTHER, P_NOURI, P_NOTDIR, P_LOCKED, P_BIG,
+           P_VIA_AWAY, P_VIA_MOUNTED, P_VIA_NAS, P_LINKED_FILE, P_N };
     char p[P_N][PATH_MAX];
     preview_of(&a, cache, "normal", keep, recent, p[P_KEEP]);
     preview_of(&a, cache, "large", gone, recent, p[P_GONE]);
@@ -170,6 +218,26 @@ static void test_clean_run(void)
     put(locked, "l");
     preview_of(&a, cache, "x-large", locked, recent, p[P_LOCKED]);
     CHECK(chmod(path_dir(str_from_c(locked)).len ? arena_cstr(&a, path_dir(str_from_c(locked))) : "", 0) == 0);
+    // Through links (Michael's ~/Documents is a link onto /mnt/sd): judged where they lead. Onto a
+    // drive that is out: kept. Onto one mounted: gone. Onto a network mount: kept.
+    CHECK(symlink("/mnt/ofx-test-nodrive/D", at("f65/pics/Away")) == 0);
+    snprintf(uri, sizeof uri, "file://%s/Away/a.png", pics);
+    preview(&a, cache, "large", uri, 1, 1, recent, p[P_VIA_AWAY]);
+    CHECK(symlink("/mnt/ofx-test-drive/D", at("f65/pics/Mounted")) == 0);
+    snprintf(uri, sizeof uri, "file://%s/Mounted/a.png", pics);
+    preview(&a, cache, "large", uri, 1, 1, recent, p[P_VIA_MOUNTED]);
+    mkdirs(nas);
+    CHECK(symlink(nas, at("f65/pics/Nas")) == 0);
+    snprintf(uri, sizeof uri, "file://%s/Nas/missing.png", pics);
+    preview(&a, cache, "large", uri, 1, 1, recent, p[P_VIA_NAS]);
+    // A link to a file: its preview has the target's mtime and size, as ofx writes it. Fresh.
+    {
+        char lf[PATH_MAX], lu[PATH_MAX * 3];
+        struct stat ks;
+        snprintf(lf, sizeof lf, "%s/link.png", pics);
+        CHECK(symlink("keep.png", lf) == 0 && stat(keep, &ks) == 0 && thumb_uri(lf, lu, sizeof lu));
+        preview(&a, cache, "large", lu, ks.st_mtim.tv_sec, ks.st_size, recent, p[P_LINKED_FILE]);
+    }
     // Bigger than a cached preview can be: not read, so kept although its file is gone.
     {
         u8 px[4] = { 0 };
@@ -202,7 +270,7 @@ static void test_clean_run(void)
 
     static const CleanRule want[P_N] = {
         [P_GONE] = CR_ORPHAN, [P_GONEDIR] = CR_ORPHAN, [P_CHANGED] = CR_STALE, [P_GROWN] = CR_STALE, [P_OLD] = CR_UNUSED,
-        [P_DRIVE] = CR_ORPHAN, [P_FAIL_GONE] = CR_ORPHAN, [P_FAIL_OLD] = CR_UNUSED, [P_TMP_OLD] = CR_TEMP, [P_NOTDIR] = CR_ORPHAN,
+        [P_DRIVE] = CR_ORPHAN, [P_FAIL_GONE] = CR_ORPHAN, [P_FAIL_OLD] = CR_UNUSED, [P_TMP_OLD] = CR_TEMP, [P_NOTDIR] = CR_ORPHAN, [P_VIA_MOUNTED] = CR_ORPHAN,
     };
     i64 before[P_N];
     for (int i = 0; i < P_N; i++) before[i] = atime_ns(p[i]);
@@ -212,17 +280,17 @@ static void test_clean_run(void)
     CleanOpts o = { .now = now, .cap = CLEAN_CAP, .dry = true, .say = said, .ctx = &s };
     CleanStats st;
     clean_run(&a, cache, str_from_c(mi), &o, &st);
-    CHECK(st.n[CR_ORPHAN] == 5 && st.n[CR_STALE] == 2 && st.n[CR_UNUSED] == 2 && st.n[CR_TEMP] == 1 && st.n[CR_CAP] == 0);
-    CHECK(s.n[CR_ORPHAN] == 5 && s.n[CR_STALE] == 2 && s.n[CR_UNUSED] == 2 && s.n[CR_TEMP] == 1 && s.n[CR_KEEP] == 0);
-    CHECK(st.n[CR_KEEP] == 10 && st.failed == 0 && !st.cut);   // keep, 89 days, nas, nodrive, trash, junk, tmp_new, nouri, locked, big
+    CHECK(st.n[CR_ORPHAN] == 6 && st.n[CR_STALE] == 2 && st.n[CR_UNUSED] == 2 && st.n[CR_TEMP] == 1 && st.n[CR_CAP] == 0);
+    CHECK(s.n[CR_ORPHAN] == 6 && s.n[CR_STALE] == 2 && s.n[CR_UNUSED] == 2 && s.n[CR_TEMP] == 1 && s.n[CR_KEEP] == 0);
+    CHECK(st.n[CR_KEEP] == 13 && st.failed == 0 && !st.cut);   // keep, 89 days, nas, nodrive, trash, junk, tmp_new, nouri, locked, big, via away, via nas, linked file
     for (int i = 0; i < P_N; i++) CHECK(exists(p[i]) && atime_ns(p[i]) == before[i]);
 
     // The run: the same files go, the others stay with their atimes.
     memset(&s, 0, sizeof s);
     o.dry = false;
     clean_run(&a, cache, str_from_c(mi), &o, &st);
-    CHECK(st.n[CR_ORPHAN] == 5 && st.n[CR_STALE] == 2 && st.n[CR_UNUSED] == 2 && st.n[CR_TEMP] == 1 && st.failed == 0);
-    CHECK(s.n[CR_ORPHAN] == 5);
+    CHECK(st.n[CR_ORPHAN] == 6 && st.n[CR_STALE] == 2 && st.n[CR_UNUSED] == 2 && st.n[CR_TEMP] == 1 && st.failed == 0);
+    CHECK(s.n[CR_ORPHAN] == 6);
     for (int i = 0; i < P_N; i++) {
         bool stays = want[i] == CR_KEEP;
         CHECK(exists(p[i]) == stays);
@@ -243,7 +311,7 @@ static void test_clean_run(void)
     }
     // Again: nothing more.
     clean_run(&a, cache, str_from_c(mi), &o, &st);
-    CHECK(st.n[CR_ORPHAN] + st.n[CR_STALE] + st.n[CR_UNUSED] + st.n[CR_TEMP] + st.n[CR_CAP] == 0 && st.n[CR_KEEP] == 10);
+    CHECK(st.n[CR_ORPHAN] + st.n[CR_STALE] + st.n[CR_UNUSED] + st.n[CR_TEMP] + st.n[CR_CAP] == 0 && st.n[CR_KEEP] == 13);
 
     // The cap: the least recently read go first, until the rest fit.
     char capc[PATH_MAX], c[4][PATH_MAX];

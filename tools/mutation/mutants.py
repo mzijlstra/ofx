@@ -849,10 +849,8 @@ MUTANTS += [
     (CL, "st.st_size > 0 && st.st_size <= THUMB_CACHED_MAX &&", "st.st_size > 0 &&"),
     # Not a mutant: dropping `n == st.st_size` (a short read) is inert, as the loop reads to the
     # fstat size unless the file shrinks in the middle; kept as a guard.
-    (CL, "            thumb_local(mountinfo, path) && !clean_absent_drive(mountinfo, path)) {", "            !clean_absent_drive(mountinfo, path)) {"),
-    (CL, "            thumb_local(mountinfo, path) && !clean_absent_drive(mountinfo, path)) {", "            thumb_local(mountinfo, path)) {"),
-    (CL, "            if (lstat(path, &f) != 0) r = errno == ENOENT || errno == ENOTDIR ? CR_ORPHAN : CR_KEEP;", "            if (lstat(path, &f) != 0) r = errno == ENOENT ? CR_ORPHAN : CR_KEEP;"),
-    (CL, "            if (lstat(path, &f) != 0) r = errno == ENOENT || errno == ENOTDIR ? CR_ORPHAN : CR_KEEP;", "            if (lstat(path, &f) != 0) r = CR_ORPHAN;"),
+    (CL, "            if (stat(path, &f) != 0) r = errno == ENOENT || errno == ENOTDIR ? CR_ORPHAN : CR_KEEP;", "            if (stat(path, &f) != 0) r = errno == ENOENT ? CR_ORPHAN : CR_KEEP;"),
+    (CL, "            if (stat(path, &f) != 0) r = errno == ENOENT || errno == ENOTDIR ? CR_ORPHAN : CR_KEEP;", "            if (stat(path, &f) != 0) r = CR_ORPHAN;"),
     (CL, "            else if ((m->has_mtime && m->mtime != f.st_mtim.tv_sec) || (m->has_size && m->size != f.st_size)) r = CR_STALE;", "            else if (m->has_mtime && m->mtime != f.st_mtim.tv_sec) r = CR_STALE;"),
     (CL, "            else if ((m->has_mtime && m->mtime != f.st_mtim.tv_sec) || (m->has_size && m->size != f.st_size)) r = CR_STALE;", "            else if (m->has_size && m->size != f.st_size) r = CR_STALE;"),
     (CL, "    return a->atime < b->atime ? -1 : a->atime > b->atime;", "    return a->atime > b->atime ? -1 : a->atime < b->atime;"),
@@ -877,4 +875,18 @@ MUTANTS += [
     (CL, "            if (s->n[CR_CAP] > before) total -= files[i].size;", "            total -= files[i].size;"),
     (CL, "        qsort(files, (size_t)kept, sizeof *files, clean_by_atime);\n", ""),
     (CL, "    s->n[CR_KEEP] = kept - s->n[CR_CAP], s->bytes[CR_KEEP] = total;", "    s->n[CR_KEEP] = kept, s->bytes[CR_KEEP] = total;"),
+    # ---- F6.5 review: links followed (clean_real), stat for the file
+    (CL, "            clean_real(mountinfo, path, real, sizeof real) && !clean_absent_drive(mountinfo, real)) {", "            clean_real(mountinfo, path, real, sizeof real) && !clean_absent_drive(mountinfo, path)) {"),
+    (CL, "            clean_real(mountinfo, path, real, sizeof real) && !clean_absent_drive(mountinfo, real)) {", "            !clean_absent_drive(mountinfo, path)) {"),
+    (CL, "            if (stat(path, &f) != 0) r =", "            if (lstat(path, &f) != 0) r ="),
+    (CL, "        if (!thumb_local(mountinfo, out)) return false;\n", ""),
+    (CL, "        if (++hops > 40) return false;", "        if (++hops > 40000) return false;"),
+    (CL, "        if (t[0] == '/') snprintf(out, cap, \"/\");", "        ;"),
+    (CL, "        if (strcmp(part, \".\") == 0) continue;", ""),
+    (CL, "            s == out ? (void)(out[1] = 0) : (void)(*s = 0);\n            continue;", "            continue;"),
+    (CL, "        if (k < 0) continue;   // not a link, or not there: kept as it is", "        if (k < 0) return false;"),
+    (CL, "        s == out ? (void)(out[1] = 0) : (void)(*s = 0);\n        if (t[0] == '/')", "        if (t[0] == '/')"),
+    (CL, "        if (snprintf(out + o, cap - o, \"%s%s\", o > 1 ? \"/\" : \"\", part) >= (int)(cap - o)) return false;", "        snprintf(out + o, cap - o, \"%s%s\", o > 1 ? \"/\" : \"\", part);"),
+    (CL, "        if (snprintf(out + o, cap - o, \"%s%s\", o > 1 ? \"/\" : \"\", part) >= (int)(cap - o)) return false;", "        if (snprintf(out + o, cap - o, \"%s%s\", \"/\", part) >= (int)(cap - o)) return false;"),
+    (CL, "        while (*p == '/') p++;", "        if (*p == '/') p++;"),
 ]

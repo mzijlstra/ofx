@@ -167,9 +167,10 @@ days), and a size cap that deletes the least recently used first.
   orphans. 2 are stale (another mtime), 70 have no `file://` URI.
 - Reading every preview's header takes 0.12 s.
 - Access times: `/home` is btrfs with `relatime`, so a read updates a file's atime at most once a
-  day; enough for a rule in days. Every preview's atime is in October 2026: a read by anyone
-  counts (Nemo's loop on 10-20, reviewer-2's name check on 10-24). The 1314 entries older than 90
-  days are all `fail` markers. Opening with `O_NOATIME` leaves the atime alone (checked); a plain
+  day; enough for a rule in days. A read by anyone counts. Every preview in the size folders
+  (6518) was read at 2026-10-24 12:38:05Z, within one second (reviewer-2): that was this
+  session's own plain `open()` of each, measuring the cache for F6.4. So no preview there ages out
+  before 2027-01-22. The 1314 entries older than 90 days are all `fail` markers. Opening with `O_NOATIME` leaves the atime alone (checked); a plain
   open by the cleaner would mark every preview it checks as just used.
 
 **Decided (Michael, 2026-10-25):** a systemd user timer, daily; fixed defaults until the settings
@@ -228,8 +229,16 @@ No test reads or writes Michael's cache; the first run on it is his `--dry-run`.
   mtime.
 - A test found a read past the end in the URI decoder on a cut escape (`%2` at the end); fixed
   before anything ran on real files.
-- Unit tests: `tests/test_f65.c`; `make test` went from 2933 checks to 3191. Mutants: 58 for
-  `fs/clean.c`, 0 survived. Two left out as inert or equivalent, each with its reason in
+- **reviewer-2 (2026-10-25), MEDIUM:** Michael's `~/Documents`, `~/Pictures`, `~/Downloads`,
+  `~/Dropbox`, `~/Desktop` and `~/Videos` are links onto `/mnt/sd`, a removable card. The drive
+  rules saw only the `/home/...` path, so with the card out the previews of 3037 files that exist
+  would have gone as orphans. Fixed: `clean_real` follows the links (as far as they lead, a
+  dangling one included), and the drive rules judge that path. It stops at a network or FUSE mount
+  before a `readlink` there could hang, and keeps the preview. Measured on a copy with a mount list
+  without `/mnt/sd`: 202 orphans (none on the card, all files that are gone), against 3919 before.
+  **LOW:** a link's preview carries its target's MTime and Size, so `stat`, not `lstat`.
+- Unit tests: `tests/test_f65.c`; `make test` went from 2933 checks to 3288. Mutants: 58 for
+  `fs/clean.c` (69 after the review), 0 survived. Two left out as inert or equivalent, each with its reason in
   `mutants.py`.
 
 ## F7 design (2026-10-24)

@@ -1570,6 +1570,7 @@ int main(void)
     test_thumb_decode();
     test_thumb_get();
     test_clean_names();
+    test_clean_real();
     test_clean_run();
     char cmd[1600];
     snprintf(cmd, sizeof cmd, "chmod -R u+rwx '%s' && rm -rf '%s' '%s'", root, root, decoy);

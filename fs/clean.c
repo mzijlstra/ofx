@@ -8,6 +8,8 @@
 // folders and fail/<program>/, never followed through a link, and each delete asks the test guard
 // (ops.c) first.
 //
+// A file's path is judged where its links lead: a link onto a drive that is out keeps its previews.
+//
 // Every preview is opened with O_NOATIME: a plain read would mark it as just used, and the first
 // rule would never fire for anything the second one checks.
 
@@ -134,6 +136,47 @@ static bool clean_absent_drive(Str mountinfo, const char *path)
     return false;
 }
 
+// path with its links followed as far as they go, into out: a link that leads nowhere (its drive
+// away) still names where it leads. Michael's ~/Documents and the like are links onto /mnt/sd, a
+// card that may be out (reviewer-2, 2026-10-25), so the drive rules judge where a file really is.
+// False past 40 links, past PATH_MAX, or on reaching a network or FUSE mount, where a readlink could
+// hang (thumb_local): the caller then keeps the preview.
+static bool clean_real(Str mountinfo, const char *path, char *out, size_t cap)
+{
+    char rest[PATH_MAX], t[PATH_MAX];
+    if (snprintf(rest, sizeof rest, "%s", path) >= (int)sizeof rest || cap < 2) return false;
+    snprintf(out, cap, "/");
+    for (int hops = 0; rest[0];) {
+        char *p = rest;
+        while (*p == '/') p++;
+        size_t n = strcspn(p, "/");
+        if (n == 0) break;
+        char part[NAME_MAX + 1];
+        if (n > NAME_MAX) return false;
+        memcpy(part, p, n), part[n] = 0;
+        memmove(rest, p + n, strlen(p + n) + 1);
+        if (strcmp(part, ".") == 0) continue;
+        if (strcmp(part, "..") == 0) {   // out is resolved already, so its parent is the real one
+            char *s = strrchr(out, '/');
+            s == out ? (void)(out[1] = 0) : (void)(*s = 0);
+            continue;
+        }
+        size_t o = strlen(out);
+        if (snprintf(out + o, cap - o, "%s%s", o > 1 ? "/" : "", part) >= (int)(cap - o)) return false;
+        if (!thumb_local(mountinfo, out)) return false;
+        ssize_t k = readlink(out, t, sizeof t - 1);
+        if (k < 0) continue;   // not a link, or not there: kept as it is
+        if (++hops > 40) return false;
+        t[k] = 0;
+        char *s = strrchr(out, '/');
+        s == out ? (void)(out[1] = 0) : (void)(*s = 0);
+        if (t[0] == '/') snprintf(out, cap, "/");
+        if (snprintf(t + k, sizeof t - (size_t)k, "/%s", rest) >= (int)(sizeof t - (size_t)k)) return false;
+        memcpy(rest, t, strlen(t) + 1);
+    }
+    return true;
+}
+
 // What the second rule makes of one preview, read from dfd/name: CR_ORPHAN, CR_STALE or CR_KEEP.
 static CleanRule clean_judge(Arena *a, Str mountinfo, int dfd, const char *name)
 {
@@ -148,11 +191,13 @@ static CleanRule clean_judge(Arena *a, Str mountinfo, int dfd, const char *name)
         (p = arena_try_push(a, (isize)st.st_size, 1))) {
         isize n = 0;
         for (ssize_t got; n < st.st_size && (got = read(fd, p + n, (size_t)(st.st_size - n))) > 0;) n += got;
-        char path[PATH_MAX];
+        char path[PATH_MAX], real[PATH_MAX];
         struct stat f;
         if (n == st.st_size && png_meta((Str){ p, n }, m) && m->has_uri && clean_uri_path(m->uri, path, sizeof path) &&
-            thumb_local(mountinfo, path) && !clean_absent_drive(mountinfo, path)) {
-            if (lstat(path, &f) != 0) r = errno == ENOENT || errno == ENOTDIR ? CR_ORPHAN : CR_KEEP;
+            clean_real(mountinfo, path, real, sizeof real) && !clean_absent_drive(mountinfo, real)) {
+            // stat, not lstat: a link's preview carries its target's MTime and Size (kind_of follows
+            // it), so the link itself would be stale on every run (reviewer-2, 2026-10-25).
+            if (stat(path, &f) != 0) r = errno == ENOENT || errno == ENOTDIR ? CR_ORPHAN : CR_KEEP;
             else if ((m->has_mtime && m->mtime != f.st_mtim.tv_sec) || (m->has_size && m->size != f.st_size)) r = CR_STALE;
         }
     }
