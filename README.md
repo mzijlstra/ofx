@@ -48,13 +48,18 @@ libpng, giflib and zlib for the previews. raylib and Clay are vendored.
 | `r` | in the trash view: restore the selected entries where they came from |
 | Shift+Delete | delete for good, after "Y/n" (Enter or `y` deletes) |
 | Ctrl+C, Ctrl+X, Ctrl+V | copy, cut, paste; Nemo and terminals paste what ofx copied, ofx what Nemo copied |
-| Ctrl+Z | undo the last rename, new folder, trash, copy or move |
-| Ctrl+T, Ctrl+W | a new tab on this folder, close the tab (the last one closes ofx) |
+| Ctrl+Z | undo the last rename, new folder, new file (while it is still empty), trash, copy or move |
+| Ctrl+T, Ctrl+W | a new tab on this folder, close the tab (the last one closes the window) |
+| Ctrl+N | a new window on this folder: another ofx, through `uwsm-app` |
 | Ctrl+Tab, Ctrl+Shift+Tab | the next and previous tab (Ctrl+PgDn, Ctrl+PgUp too) |
 | Alt+1 … Alt+9 | a tab by place, Alt+9 the last |
 | Ctrl+Shift+PgUp, Ctrl+Shift+PgDn | move the tab left or right |
 | Ctrl+J, Ctrl+Down | the keys to the job rows' ×: Up/Down (`k`/`j`) move, Enter asks to cancel that job, Esc back |
-| Ctrl+Q | quit (asked first while jobs run or wait) |
+| Ctrl+Q | close every ofx window (each asks first while its jobs run or wait) |
+| F10, Alt+F | the File menu: Up/Down (`k`/`j`) move, Enter picks, Esc closes; also by the pointer |
+
+The File menu also has Create New Empty File ("New file", named in the row, as a new folder is).
+Open With Other Application and Properties show greyed: they come with F7.3 and F7.2.
 
 An action works on the selected entries, or on the cursor's when none is selected. Copies, moves
 and deletes for good run in the background, up to four at once, each with a row under the files:

@@ -26,7 +26,9 @@ rules shared by every tool here.
   (`/mnt/sd/.Trash-1000` here) in the trash view. A GUI test that opens the trash view or counts
   drives sets `OFX_TEST_MOUNTINFO` to a scratch file (run-script passes it on), so it sees only
   `/` and never his drives' trash; Empty Trash in a test with his real mount list would aim at
-  `/mnt/sd/.Trash-1000` (the guard refuses it, but don't rely on that).
+  `/mnt/sd/.Trash-1000` (the guard refuses it, but don't rely on that). The first f7 run on
+  2026-10-25 forgot it and listed his SD trash (read only, nothing changed). Likewise a script
+  that types `~` or presses Home sets `OFX_TEST_HOME`, or it browses his real home.
 - **Eject** (F6.1) runs `udisksctl unmount` and `power-off` on a removable drive: a test with the
   real udisksctl would unmount and power off his USB drive. `run-script.sh` puts a logging fake
   first on PATH (it fails the step named in `<scratch>/udisks-fail`); the unit test makes its own.
@@ -59,6 +61,14 @@ rules shared by every tool here.
   the one live check (copy in ofx, paste in Nemo and a terminal, and back) needs his go first.
 - The scripts' `sh` lines make and change files: point them at scratch folders only, never his
   home or a work repo.
+- **Close All Windows** (F7.1, Ctrl+Q) sends SIGUSR1 to every ofx window in the registry,
+  `$XDG_RUNTIME_DIR/ofx/<pid>`: a test with the real registry would close Michael's open ofx
+  windows. `run-script.sh` sets `OFX_TEST_WINDOWS` to `<scratch>/windows`, and with the guard on
+  (`OFX_GUI_ROOT`) ofx signals no registry outside it; the unit test forks its own children. A
+  test that fakes another window registers a `sleep` there with its start time (f7b), never a
+  real pid of his.
+- **New Window** (F7.1, Ctrl+N) runs `uwsm-app -- <this ofx> <folder>`: through the fake
+  `uwsm-app` in a test, so no second window opens.
 - **A window that stops answering** pops Hyprland's "terminate?" dialog on his screen, even on the
   headless output. The script's `sh` runs under `timeout 5` for that reason; keep everything a
   script waits for short.
@@ -100,9 +110,10 @@ its own object compiled once a run (`gui/clay.c`), 1.1 s a mutant against gcc's 
   on 2026-10-20 it was one holding Michael's windows (Nemo on 6, Chromium on 2). Never go back to
   `hyprctl output create` for ofx.
 - **weston's flags matter** (`weston.sh`): `--fake-seat`, or GLFW 3.4 crashes reading a seat that
-  isn't there; `--shell=kiosk` fills the 944x518 logical output, and the window opens at
-  `OFX_TEST_SIZE=936x490` (the kiosk shell rejects a larger first frame; GLFW's own decorations
-  take the other 8x28). `--width`/`--height` are logical pixels.
+  isn't there; `--shell=kiosk` fills the 944x544 logical output, and the window opens at
+  `OFX_TEST_SIZE=936x516` (the kiosk shell rejects a larger first frame; GLFW's own decorations
+  take the other 8x28). 516 is 490 plus F7.1's menu bar, so under the bar every script has the
+  room it was written for. `--width`/`--height` are logical pixels.
 - `run-script.sh` checks the socket is the one weston made before launching, takes the pid from the
   launch script, and stops weston after the run. For an unscripted run (`-`), kill the pid, then
   `tools/gui/weston.sh stop <scratch>`.

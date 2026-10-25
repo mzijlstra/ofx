@@ -40,6 +40,9 @@ Omarchy's theme: the binary, the folder `tools/ofx`, the window's title and Wayl
 | F6.4 | Previews in the icon view: the freedesktop thumbnail cache (shared with Nemo), PNG, JPEG, GIF and WebP made on two threads | |
 | F6.5 | Thumbnail cache cleanup: `ofx-clean` on a daily systemd user timer; orphans, 90 days unused, a 1 GiB cap | Below |
 | F7 | Menus: File, Edit, View, Go, Bookmarks, Help; New Window as a second process | Below |
+| F7.1 | The menu bar and the File menu; New Window (Ctrl+N), Create New Empty File, Close All Windows (Ctrl+Q) | Below |
+| F7.2 | Properties: a panel with the file's details and permissions | Below |
+| F7.3 | Open With Other Application: a panel listing the apps for the file's type | Below |
 | F8 | Right-click menus, with "Open with" (the apps the freedesktop MIME lists name for the file's type) | |
 
 Each milestone ends in a reviewer-2 round, then Michael's go before `make install`.
@@ -312,6 +315,38 @@ so that would mean patching vendored raylib or leaving it, for no gain here.
 - Tests: the fake `uwsm-app` in `run-script.sh` logs the command; a script checks `ofx <folder>`
   in `spawn.log`. A unit test for the state merge (two saves of different fields keep both).
 - F8 reuses it: "Open in New Window" on a folder's right-click menu.
+
+**F7.1 as built (2026-10-25):**
+- `ui/ui.c`: the menus as tables (`UI_MENU`, `UI_MENU_ITEM`: label, key, a word for the tests);
+  `ui_menu_enabled`, `ui_menu_event` (the keys), `ui_menu_hover` (the pointer), the clicks in
+  `ui_handle`. A menu open takes the typed characters (`t` would start a terminal behind it) and
+  Tab; any other key closes it and does what it does (Ctrl+T opens a tab). A question up closes
+  it. `gui/main.c` draws the bar (26 px, `MENU_H`) and the menu as a floating panel under its
+  title; with a menu open, hit tests see only the titles and the entries, and a press anywhere
+  else only closes it.
+- Two changes from the design above: **New Window is greyed in the trash view** (ofx starts on a
+  folder, and Ctrl+N there says so, as other keys do), and the registry tells a window by its
+  **start time** (`/proc/<pid>/stat`'s 22nd field, written in its entry), not by
+  `/proc/<pid>/exe`: an ofx replaced by `make install` reads "… (deleted)" there, yet is a window
+  to close. A pid used again has another start time; an entry being written (empty) is skipped.
+- Ctrl+Q: the others get SIGUSR1 (`fs/windows.c`, `win_signal_others`); this window quits at once,
+  or asks while its jobs run, in the same frame. SIGUSR1 at a window is its own close (the
+  compositor's), asked first with jobs. The menu's entry does the same.
+- New Window: `uwsm-app -- <this binary> <folder>` (`/proc/self/exe`; "ofx" from PATH when the
+  binary was replaced since), so a build in the repo starts the same build.
+- Create New Empty File: `op_mkfile` (`O_EXCL`, "New file (2)" when taken), `UNDO_MKFILE`, whose
+  undo removes the file only while it is still empty (a file written to since is kept, said so).
+- The state: `state_put` re-reads the file and changes one key, keeping the rest (a key ofx
+  doesn't know too); the sidebar, the view and the zoom each save their own.
+- Tests: `tests/test_f7.c` (the keys, the clicks, what is greyed, Close All with and without jobs,
+  the new file and its undo, `state_put` with two windows' saves, `spawn_window`, the registry with
+  forked children: live, a reused pid, a dead one, junk names, the guard). GUI: `f7` (the menu by
+  keys, raw GLFW keys and the pointer, New File, New Window, New Tab and Close, a read-only folder,
+  the trash view, a question up) and `f7b` (Close All: a registered `sleep` signalled, stale
+  entries removed, this window asking with a copy running, SIGUSR1 at it, the menu's entry). The
+  test weston output grew to 944x544 and the window to 936x516, so the area under the menu bar
+  is what every script had before. `make test` 3478 checks; unit mutants 850, 0 survived (three
+  left out with reasons in `mutants.py`).
 
 **F7.2 Properties (decided in part, Michael 2026-10-25):** a panel in the window like the Delete
 panel (one process, one window), one page, tabs only if it gets too long. Nothing selected: the
