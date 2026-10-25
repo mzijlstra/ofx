@@ -189,7 +189,7 @@ type empty.txt
 key enter
 wait-for 2000 sel=empty.txt
 key enter
-sh grep -qx "uwsm-app -- gio launch $OFX_ROOT/data/applications/ofx-test-editor.desktop $OFX_DIR/empty.txt" "$OFX_ROOT/spawn.log"
+sh grep -qx "uwsm-app -- gio launch $OFX_ROOT/data/applications/ofx-test-editor.desktop $OFX_DIR/empty.txt" "$OFX_ROOT/spawn.log" && ! grep -q "gio open $OFX_DIR/empty.txt" "$OFX_ROOT/spawn.log"
 char /
 type blob
 key enter

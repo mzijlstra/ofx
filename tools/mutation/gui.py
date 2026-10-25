@@ -323,15 +323,18 @@ def rmtree(path):
 def key(m):
     return hashlib.sha1('\0'.join(m[:3]).encode()).hexdigest()[:12]
 
+# The group of a script that failed: run.sh prints "== <script>: FAILED" or "<group>: FAILED".
+GROUP_OF = {'f6b': 'f6', 'f62b': 'f62', 'f62c': 'f62', 'f63b': 'f63', 'f63c': 'f63', 'f64b': 'f64', 'f64c': 'f64', 'f64d': 'f64', 'f7b': 'f7'}
+
+# The tags as groups run.sh knows: a script's name (f7b, written before GROUP_OF had it) as its
+# group; anything else dropped, so a mutant never "survives" a group that runs nothing.
 tags = {}
 if os.path.exists(tags_path):
     for line in open(tags_path):
         w = line.split('#')[0].split()
-        if len(w) >= 2:
-            tags[w[0]] = w[1:]
-
-# The group of a script that failed: run.sh prints "== <script>: FAILED" or "<group>: FAILED".
-GROUP_OF = {'f6b': 'f6', 'f62b': 'f62', 'f62c': 'f62', 'f63b': 'f63', 'f63c': 'f63', 'f64b': 'f64', 'f64c': 'f64', 'f64d': 'f64', 'f7b': 'f7'}
+        g = list(dict.fromkeys(GROUP_OF.get(x, x) for x in w[1:] if GROUP_OF.get(x, x) in GROUPS))
+        if len(w) >= 2 and g:
+            tags[w[0]] = g
 def failed_groups(out):
     g = []
     for l in out.splitlines():

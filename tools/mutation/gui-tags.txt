@@ -1,8 +1,10 @@
-# tools/mutation/gui.py: each GUI mutant (its key) and the run.sh groups that kill it
+# tools/mutation/gui.py: each GUI mutant (its key) and the run.sh group that killed it
 017cdde789d5 f2
+01e51d3cc0a3 f7
 035e843b0934 f64
 04db0337b677 browse gone f54
 073156151c0b f3 f53
+08ee600246c9 f7
 093ec0d3909c f64
 0afba57e2c96 f4 f52
 0ba75f00199e browse
@@ -37,7 +39,7 @@
 2a452d61a3a6 f7
 2dda8b34b1fc f6 hang
 2e023e08bc57 f3
-2f8c1340e088 f7b
+2f8c1340e088 f7
 31ebf1711289 f52
 3250e3580527 f52
 348858f9871e f62 f63 f64
@@ -54,7 +56,7 @@
 402cd36eea36 f63
 410639ec89cf f7
 42609b98298d f62 f63 f64
-442b240a431f f7 f7b
+442b240a431f f7
 442ef4925d2b f6
 45845dfcde97 f7
 463d0393de6d gone f5
@@ -81,7 +83,7 @@
 5f339dad35c9 f6
 600bee51afd6 f5
 607c988a0a6a f5
-608b9aa5425e f7b
+608b9aa5425e f7
 642d369b2f4f f54 hang
 6523d96a9bd6 f7
 65d091a213cd f62 f63 f64
@@ -89,14 +91,16 @@
 69b90cb37bbb f63
 6bf196f95bfc f63 hang
 6df0aaa57248 f53
+703b13dde871 f7
 7152bce0a185 f4 f6
 7196e0b55d95 f6
 72ab759923ae f7 hang
+7318568ea12b f3
 739779cbc580 f7
 7567f1a6b104 f7
 75e3aa4734a1 f52
 789bb35e942c f7
-7a76d4f2c9ff f7b hang
+7a76d4f2c9ff f7 hang
 7c499b30de0f f6
 7dd49ee72c0a f63
 7faccaeee466 f52
@@ -120,13 +124,14 @@
 94a878d561d0 f6 hang
 98c5025f9580 f5
 98e9ea80f6fe f3
-99c532ff31c6 f7b
+99c532ff31c6 f7
 9a2f7d638849 f2 f5 f6
 9bf86c139eeb f63 hang
 a0732953c239 f62
 a283c5d28e84 browse f2 f4 f5 f6
 a2a7bc8f5d2e f5
 a2f9ac4641c1 f5
+a41ac73ee16b f7
 a92411c8dc5c f6
 a92e79c395e0 f64
 ab7570d1a18d f2 f4
@@ -134,6 +139,7 @@ abfec07ab080 f53 hang
 aea2b9294c20 f64 hang
 aea486f2304a f3
 aeb6f285a56c f63
+af623f625975 f7
 b29034c9b688 f63
 b3871519e086 f3
 b3d7da4ea0a6 f3
@@ -159,7 +165,7 @@ c572208bdadc f62
 c5db6f265b25 f7
 c6c81e095729 f6
 c7d46735ab5e f63 f64
-c852b770f446 f7b
+c852b770f446 f7
 c8f2e7422f47 browse f3 f4 f62
 c9a55c69ccd3 f6 f62 f63 f64
 cc02179b576f f6
@@ -171,7 +177,7 @@ d392c5e95a9f f53
 d4cb4878fa60 f52
 d553b4a5a9c7 f6
 d5b4872a0c93 browse
-d72d26357752 f7b
+d72d26357752 f7
 d8e3fcd6d265 f63
 daffd6fd3a1b f62
 dc2016be897b f62
