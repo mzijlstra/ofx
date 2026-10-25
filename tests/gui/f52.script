@@ -6,7 +6,9 @@ key end
 expect sel=notes.txt
 # ---- the rename line: Shift selects, Ctrl+C copies the selection, Ctrl+A, Ctrl+V
 key f2
-expect editing=1 edit=notes.txt esel=9-9 caret=9
+expect editing=1 edit=notes.txt esel=0-5 caret=5
+key end
+expect esel=9-9 caret=9
 keys shift-left shift-left shift-left shift-left
 expect esel=5-9 caret=5
 shot edit-select.png
@@ -22,6 +24,7 @@ key enter
 wait-for 2000 sel=memo.txt editing=0
 # Shift+Home, then Shift+End past the anchor; Left and Right end the selection at its ends
 key f2
+key end
 keys left left left left shift-home
 expect esel=0-4 caret=0
 keys shift-end
@@ -41,6 +44,7 @@ key esc
 expect editing=0 sel=memo.txt
 # ---- Ctrl+X cuts; Ctrl+C with nothing selected copies nothing
 key f2
+key end
 key shift-home
 key ctrl-x
 expect edit=- copied=memo.txt
@@ -141,7 +145,8 @@ key esc
 # ---- the chords as GLFW sends them, through main.c's key callback: Shift+Left (263), Shift+Right
 # (262), Shift+Home (268), Shift+End (269), Shift+Enter (257), Ctrl+K (75)
 key f2
-expect edit=adir
+expect edit=adir esel=0-4 caret=4
+key end
 raw-key 263 1
 raw-key 263 1
 expect esel=2-4 caret=2

@@ -39,7 +39,7 @@ static void edit_paste(Ui *u, UiNames names, Str text)
 
 static void test_edit_select(void)
 {
-    UiNames names = { name_at, NULL };
+    UiNames names = { name_at, NULL, NULL };
     static Ui u;
     memset(&u, 0, sizeof u);
     ui_resize(&u.list, 5);
@@ -156,7 +156,7 @@ static void test_edit_select(void)
 
 static void test_edit_clipboard(void)
 {
-    UiNames names = { name_at, NULL };
+    UiNames names = { name_at, NULL, NULL };
     static Ui u;
     memset(&u, 0, sizeof u);
     ui_resize(&u.list, 5);
@@ -236,7 +236,7 @@ static void test_edit_clipboard(void)
 
 static void test_crumb_keys(void)
 {
-    UiNames names = { name_at, NULL };
+    UiNames names = { name_at, NULL, NULL };
     static Ui u;
     memset(&u, 0, sizeof u);
     ui_resize(&u.list, 5);

@@ -134,7 +134,7 @@ static void test_side_modes(void)
 {
     static Ui u;
     u = (Ui){ 0 };
-    UiNames names = { name_at, NULL };
+    UiNames names = { name_at, NULL, NULL };
     ui_resize(&u.list, 10), ui_resize(&u.side, 5);
     ui_set(&u.list, 5, 0), ui_set(&u.side, 5, 0);
     // F9 cycles places, tree, hidden, places.
@@ -321,7 +321,7 @@ static void test_tree_keys(void)
 {
     static Ui u;
     u = (Ui){ 0 };
-    UiNames names = { name_at, NULL };
+    UiNames names = { name_at, NULL, NULL };
     ui_resize(&u.list, 10), ui_resize(&u.side, 5);
     ui_set(&u.list, 5, 0), ui_set(&u.side, 8, 3);
     u.side_mode = SIDE_TREE, u.side_focus = true;
@@ -530,7 +530,7 @@ static void test_trash_keys(void)
 {
     static Ui u;
     u = (Ui){ 0 };
-    UiNames names = { name_at, NULL };
+    UiNames names = { name_at, NULL, NULL };
     ui_resize(&u.list, 10), ui_resize(&u.side, 5);
     ui_set(&u.list, 5, 1), ui_set(&u.side, 5, 0);
     u.in_trash = true;
@@ -752,7 +752,7 @@ static void test_eject_keys(void)
 {
     static Ui u;
     u = (Ui){ 0 };
-    UiNames names = { name_at, NULL };
+    UiNames names = { name_at, NULL, NULL };
     ui_resize(&u.list, 10), ui_resize(&u.side, 4);
     ui_set(&u.list, 5, 0), ui_set(&u.side, 8, 0);
     u.side.top = 2;

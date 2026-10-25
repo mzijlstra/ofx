@@ -24,7 +24,7 @@ static UiAction menu_keys(Ui *u, int n, ...)
         in.ev[in.nev++] = k < 0 ? (UiEvent){ UK_MENU, (u32)-k } : k >= 0x100 ? (UiEvent){ UK_NONE, (u32)(k - 0x100) } : (UiEvent){ (UiKey)k, 0 };
     }
     va_end(ap);
-    return ui_handle(u, (UiNames){ name_at, NULL }, &in);
+    return ui_handle(u, (UiNames){ name_at, NULL, NULL }, &in);
 }
 
 // The place in the File menu of entry it.
@@ -168,7 +168,7 @@ static void test_menu_enabled(void)
 
 static void test_menu_mouse(void)
 {
-    UiNames names = { name_at, NULL };
+    UiNames names = { name_at, NULL, NULL };
     Ui u = menu_ui(3);
     // A title opens its menu with nothing marked, and closes it again.
     UiInput in = ui_input_none();
@@ -220,7 +220,7 @@ static void test_menu_mouse(void)
 
 static void test_close_all_keys(void)
 {
-    UiNames names = { name_at, NULL };
+    UiNames names = { name_at, NULL, NULL };
     // Ctrl+Q: the others asked, this one quits; with jobs it asks first, the others asked anyway.
     Ui u = menu_ui(3);
     UiInput in = job_input(0, 0);
@@ -263,6 +263,40 @@ static void test_close_all_keys(void)
             CHECK(jobs ? a.kind == UA_NONE && v.quit_asking && !v.menu_on : a.kind == UA_QUIT);
         }
     }
+}
+
+static bool dir_at(void *ctx, isize i)
+{
+    (void)ctx;
+    return i == 2;   // name_at's "gamma.txt", as a folder
+}
+
+static void test_rename_select(void)
+{
+    // Where the extension starts: the last '.', ".tar" before it, none for a dot-file.
+    static const struct { const char *name; int stem; } STEM[] = {
+        { "test.txt", 4 }, { "a.b.c", 3 }, { "archive.tar.gz", 7 }, { "x.tar", 1 }, { ".tar.gz", 4 }, { "a.tar.gz", 1 },
+        { ".bashrc", 7 }, { "README", 6 }, { "a.", 1 }, { "..", 1 }, { ".a.txt", 2 }, { "tar.gz", 3 }, { "", 0 },
+    };
+    for (int k = 0; k < COUNT(STEM); k++) {
+        CHECK(ui_name_stem(str_from_c(STEM[k].name)) == STEM[k].stem);
+        if (ui_name_stem(str_from_c(STEM[k].name)) != STEM[k].stem) fprintf(stderr, "  stem %s\n", STEM[k].name);
+    }
+    // F2: a file's name up to its extension selected, the caret there; a folder's whole name.
+    Ui u = menu_ui(3);
+    UiInput in = ui_input_none();
+    in.ev[in.nev++] = (UiEvent){ UK_F2, 0 };
+    u.list.sel = 2;
+    ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in);
+    CHECK(u.editing && u.anchor == 0 && u.caret == 5);   // "gamma" of gamma.txt
+    ui_edit_close(&u);
+    ui_handle(&u, (UiNames){ name_at, NULL, dir_at }, &in);
+    CHECK(u.editing && u.anchor == 0 && u.caret == 9);   // a folder: all of it
+    ui_edit_close(&u);
+    // Typing replaces the name and keeps the extension.
+    ui_edit_rename(&u, S("test.txt"), false);
+    ui_edit_event(&u, (UiEvent){ UK_NONE, 'n' }, STR_EMPTY);
+    CHECK(u.edit_len == 5 && memcmp(u.edit, "n.txt", 5) == 0 && u.caret == 1);
 }
 
 static void test_new_file(void)

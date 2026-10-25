@@ -63,7 +63,8 @@ key down
 key down
 expect sel=a.txt
 key f2
-expect editing=1 edit=a.txt
+expect editing=1 edit=a.txt esel=0-1 caret=1
+key end
 key backspace
 key backspace
 key backspace

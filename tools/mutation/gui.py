@@ -261,6 +261,7 @@ MUTANTS = [
     (G, "                if (open) layout_menu(m);", "", 'f7'),
     (G, "    ui_edit_open_all(&app.ui, str_from_c(made));\n    snprintf(app.edit_from, sizeof app.edit_from, \"%s\", made);\n    app.edit_new = UNDO_MKDIR;", "    ui_edit_open(&app.ui, str_from_c(made));\n    snprintf(app.edit_from, sizeof app.edit_from, \"%s\", made);\n    app.edit_new = UNDO_MKDIR;", 'f3'),
     (G, "    ui_edit_open_all(&app.ui, str_from_c(made));\n    snprintf(app.edit_from, sizeof app.edit_from, \"%s\", made);\n    app.edit_new = UNDO_MKFILE;", "    ui_edit_open(&app.ui, str_from_c(made));\n    snprintf(app.edit_from, sizeof app.edit_from, \"%s\", made);\n    app.edit_new = UNDO_MKFILE;", 'f7'),
+    (G, "    return kind_is_dir(app.list.e[i].kind);\n}", "    return false;\n}", 'f7'),
 ]
 import concurrent.futures, queue, threading
 

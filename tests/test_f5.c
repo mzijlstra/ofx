@@ -73,7 +73,7 @@ static void test_tabs(void)
 
 static void test_ui_f5(void)
 {
-    UiNames names = { name_at, NULL };
+    UiNames names = { name_at, NULL, NULL };
     static Ui u;
     memset(&u, 0, sizeof u);
     ui_resize(&u.list, 5);
@@ -138,7 +138,7 @@ static void test_ui_f5(void)
 // F5.1: the modal panels' buttons.
 static void test_ui_modal(void)
 {
-    UiNames names = { name_at, NULL };
+    UiNames names = { name_at, NULL, NULL };
     static Ui u;
     memset(&u, 0, sizeof u);
     ui_resize(&u.list, 5);

@@ -774,7 +774,7 @@ static Str name_at(void *ctx, isize i)
 static void test_ui(void)
 {
     Ui u = { 0 };
-    UiNames names = { name_at, NULL };
+    UiNames names = { name_at, NULL, NULL };
     ui_resize(&u.list, 10);
     ui_set(&u.list, 100, 0);
     CHECK(u.list.sel == 0 && u.list.top == 0);
@@ -904,7 +904,7 @@ static void test_ui(void)
 static void test_find(void)
 {
     Ui u = { 0 };
-    UiNames names = { name_at, NULL };
+    UiNames names = { name_at, NULL, NULL };
     ui_resize(&u.list, 10);
     ui_set(&u.list, COUNT(find_names), 0);
     // "/" opens, letters jump to the first match from where it opened, ignoring case.
@@ -1010,7 +1010,7 @@ static void test_find(void)
 static void test_sort_keys(void)
 {
     Ui u = { 0 };
-    UiNames names = { name_at, NULL };
+    UiNames names = { name_at, NULL, NULL };
     ui_set(&u.list, 5, 0);
     UiInput in = chars("s");
     CHECK(ui_handle(&u, names, &in).kind == UA_SORT && u.sort.key == SORT_SIZE && !u.sort.reverse);
@@ -1058,7 +1058,7 @@ static void test_sort_keys(void)
 static void test_side(void)
 {
     Ui u = { 0 };
-    UiNames names = { name_at, NULL };
+    UiNames names = { name_at, NULL, NULL };
     ui_resize(&u.list, 10), ui_resize(&u.side, 4);
     ui_set(&u.list, 20, 3), ui_set(&u.side, 6, 0);
     // Tab gives the sidebar the keys; moves go to it; Enter goes to the place.
@@ -1123,7 +1123,7 @@ static void test_side_heads(void)
 {
     static Ui u;
     u = (Ui){ 0 };
-    UiNames names = { name_at, NULL };
+    UiNames names = { name_at, NULL, NULL };
     // 0 Places, 1 Home, 2 Trash, 3 Drives, 4 /, 5 sd
     static const u8 HEAD[] = { 1, 0, 0, 1, 0, 0 };
     u.side_head = HEAD;
@@ -1577,6 +1577,7 @@ int main(void)
     test_menu_enabled();
     test_menu_mouse();
     test_close_all_keys();
+    test_rename_select();
     test_new_file();
     test_state_put();
     test_spawn_window();

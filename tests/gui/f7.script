@@ -1,5 +1,5 @@
 # F7.1: the menu bar and the File menu, on a tree made by tests/gui/run.sh: HOME=<scratch>/home,
-# home/tree with a.txt, b.txt, sub/, ro/ (x.txt, the folder read only); a mount list of / alone.
+# home/tree with a.txt, b.txt, sub.d/, ro/ (x.txt, the folder read only); a mount list of / alone.
 settle
 expect menu=- menuat=- canwrite=1 windows=1 menuoff=open-with,properties
 # Under the menu bar, the sidebar's rows and the bottom bar fit: (516 - 26 - 40 - 28 - 12) / 28.
@@ -161,6 +161,25 @@ key f10
 expect menu=- modal=delete
 key esc
 expect modal=-
+# ---- F2: a file's name up to its extension selected; a folder's whole name
+key ctrl-l
+type ~/tree
+key enter
+char /
+type a.txt
+key enter
+expect sel=a.txt
+key f2
+expect editing=1 edit=a.txt esel=0-1 caret=1
+type c
+expect edit=c.txt
+key esc
+key home
+key down
+expect sel=sub.d
+key f2
+expect edit=sub.d esel=0-5 caret=5
+key esc
 # ---- the keys as GLFW gives them (ui_key_of, on_key): F10, Alt+F, Ctrl+N
 raw-key 299
 expect menu=File menuat=new-tab

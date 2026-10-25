@@ -142,7 +142,7 @@ static void test_counts(void)
 
 static void test_ui_f4(void)
 {
-    UiNames names = { name_at, NULL };
+    UiNames names = { name_at, NULL, NULL };
     static Ui u;
     memset(&u, 0, sizeof u);
     ui_resize(&u.list, 5);

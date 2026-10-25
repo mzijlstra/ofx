@@ -161,7 +161,7 @@ static void job_keys(Ui *u, UiNames names, UiInput in, int n, ...)
 
 static void test_job_keys(void)
 {
-    UiNames names = { name_at, NULL };
+    UiNames names = { name_at, NULL, NULL };
     static Ui u;
     memset(&u, 0, sizeof u);
     ui_resize(&u.list, 5);
@@ -283,7 +283,7 @@ static void test_job_keys(void)
 
 static void test_quit_full(void)
 {
-    UiNames names = { name_at, NULL };
+    UiNames names = { name_at, NULL, NULL };
     static Ui u;
     memset(&u, 0, sizeof u);
     ui_resize(&u.list, 5);

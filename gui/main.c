@@ -3038,6 +3038,13 @@ static Str list_name(void *ctx, isize i)
     return app.list.e[i].name;
 }
 
+// For F2: whether entry i is a folder (its whole name selected).
+static bool list_dir(void *ctx, isize i)
+{
+    (void)ctx;
+    return kind_is_dir(app.list.e[i].kind);
+}
+
 // ---- signals --------------------------------------------------------------------------------
 //
 // SIGTERM and SIGINT end the loop like Ctrl+Q, so the process exits through main: CloseWindow
@@ -3315,7 +3322,7 @@ int main(int argc, char **argv)
         if (ui_input_acts(&in) && ui_status_clears(app.status_bad, app.status_at, now_ms())) app.status[0] = 0;
         if (ui_input_acts(&in) && ui_tip_act(&app.tip)) seen = true;   // a click or key: the tooltip goes
         bool was_editing = app.ui.editing, was_confirming = app.ui.confirming;
-        UiAction a = ui_handle(&app.ui, (UiNames){ list_name, NULL }, &in);
+        UiAction a = ui_handle(&app.ui, (UiNames){ list_name, NULL, list_dir }, &in);
         if (app.ui.copied) text_copy((Str){ app.ui.copy, app.ui.copy_len }), app.ui.copied = false;
         // Shift+Delete and its y can come in one frame's input: the question opened and was answered
         // within ui_handle, so the targets are taken here either way (reviewer-2, F5 confirm). A

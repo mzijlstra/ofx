@@ -3,7 +3,7 @@
 
 static UiAction zoom_by(Ui *u, UiInput in)
 {
-    return ui_handle(u, (UiNames){ name_at, NULL }, &in);
+    return ui_handle(u, (UiNames){ name_at, NULL, NULL }, &in);
 }
 
 static void test_zoom_levels(void)

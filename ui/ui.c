@@ -209,10 +209,12 @@ typedef struct {
     int   cols;   // entries a row: the icon view's columns (F6.2); 0 or 1 for a list
 } UiList;
 
-// The entries' names, for find: gui/ hands its listing in through this.
+// The entries' names, for find: gui/ hands its listing in through this; and which are folders,
+// for F2's selection (NULL: none are).
 typedef struct {
     Str (*at)(void *ctx, isize i);
     void *ctx;
+    bool (*dir)(void *ctx, isize i);
 } UiNames;
 
 typedef struct {
@@ -613,6 +615,27 @@ static void ui_edit_open_all(Ui *u, Str text)
 {
     ui_edit_start(u, text, false);
     u->anchor = 0;
+}
+
+// Where a file name's extension starts, as F2 selects the rest (Michael, 2026-10-25): at its last
+// '.', or at ".tar" before it ("a.tar.gz" selects "a"); the length when there is none, or when the
+// name only starts with a dot (".bashrc").
+static int ui_name_stem(Str name)
+{
+    isize dot = name.len;
+    while (dot > 0 && name.p[dot - 1] != '.') dot--;
+    if (dot <= 1) return (int)name.len;
+    dot--;
+    if (dot > 4 && memcmp(name.p + dot - 4, ".tar", 4) == 0) dot -= 4;
+    return (int)dot;
+}
+
+// F2's edit line: a file's name selected up to its extension, a folder's whole (as Nemo does).
+static void ui_edit_rename(Ui *u, Str name, bool dir)
+{
+    ui_edit_start(u, name, false);
+    u->anchor = 0;
+    if (!dir) u->caret = ui_name_stem((Str){ u->edit, u->edit_len });
 }
 
 // The location line opened on a path, all of it selected, as browsers and Nemo do: typing a new one
@@ -1281,7 +1304,7 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
             break;
         case UK_F2:
             if (l->n > 0 && !u->side_focus && u->in_trash) return (UiAction){ UA_NOT_IN_TRASH, 0, false };
-            if (l->n > 0 && !u->side_focus) ui_edit_open(u, names.at(names.ctx, l->sel));
+            if (l->n > 0 && !u->side_focus) ui_edit_rename(u, names.at(names.ctx, l->sel), names.dir && names.dir(names.ctx, l->sel));
             break;
         case UK_DELETE:
             // In the trash view Delete is for good, asked first.

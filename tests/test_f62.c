@@ -43,7 +43,7 @@ static void grid(Ui *u, isize n, int cols, int rows, isize sel)
 static isize key_sel(Ui *u, UiKey k)
 {
     UiInput in = keys(1, k);
-    ui_handle(u, (UiNames){ name_at, NULL }, &in);
+    ui_handle(u, (UiNames){ name_at, NULL, NULL }, &in);
     return u->list.sel;
 }
 
@@ -72,10 +72,10 @@ static void test_grid_keys(void)
     // h l k j as the arrows.
     u.list.sel = 7;
     UiInput in = chars("ljkh");
-    ui_handle(&u, (UiNames){ name_at, NULL }, &in);
+    ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in);
     CHECK(u.list.sel == 7);
     in = chars("j");
-    ui_handle(&u, (UiNames){ name_at, NULL }, &in);
+    ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in);
     CHECK(u.list.sel == 12);
     // A page is the rows on screen less one (2 here): PgDn from 2 to 12, then 22, then the last row
     // stays put; PgUp back.
@@ -89,26 +89,26 @@ static void test_grid_keys(void)
     // Left doesn't go up in the grid, Right doesn't open; Enter opens, Backspace goes up.
     u.list.sel = 0;
     in = keys(1, UK_LEFT);
-    CHECK(ui_handle(&u, (UiNames){ name_at, NULL }, &in).kind == UA_NONE && u.list.sel == 0);
+    CHECK(ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in).kind == UA_NONE && u.list.sel == 0);
     u.list.sel = 22;
     in = keys(1, UK_RIGHT);
-    CHECK(ui_handle(&u, (UiNames){ name_at, NULL }, &in).kind == UA_NONE && u.list.sel == 22);
+    CHECK(ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in).kind == UA_NONE && u.list.sel == 22);
     in = keys(1, UK_ENTER);
-    UiAction a = ui_handle(&u, (UiNames){ name_at, NULL }, &in);
+    UiAction a = ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in);
     CHECK(a.kind == UA_OPEN && a.index == 22);
     in = keys(1, UK_BACKSPACE);
-    CHECK(ui_handle(&u, (UiNames){ name_at, NULL }, &in).kind == UA_PARENT);
+    CHECK(ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in).kind == UA_PARENT);
     // The sidebar keeps its own keys: Down moves its cursor, Left in the tree is the tree's.
     u.list.sel = 7;
     in = keys(2, UK_TAB, UK_DOWN);
-    ui_handle(&u, (UiNames){ name_at, NULL }, &in);
+    ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in);
     CHECK(u.side_focus && u.side.sel == 1 && u.list.sel == 7);
     // In the list Down moves one; Left and Right do nothing there either (Michael, 2026-10-24).
     grid(&u, 23, 5, 3, 7);
     u.grid = false, ui_set_cols(&u.list, 1);
     CHECK(key_sel(&u, UK_DOWN) == 8);
     in = keys(2, UK_LEFT, UK_RIGHT);
-    CHECK(ui_handle(&u, (UiNames){ name_at, NULL }, &in).kind == UA_NONE && u.list.sel == 8);
+    CHECK(ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in).kind == UA_NONE && u.list.sel == 8);
     // An empty folder: nothing moves, nothing breaks.
     grid(&u, 0, 5, 3, 0);
     CHECK(key_sel(&u, UK_DOWN) == 0 && key_sel(&u, UK_PAGEDOWN) == 0 && key_sel(&u, UK_RIGHT) == 0);
@@ -131,25 +131,25 @@ static void test_grid_scroll(void)
     // The wheel: a row a notch, the cursor left alone; not past either end.
     UiInput in = ui_input_none();
     in.wheel = -2;
-    ui_handle(&u, (UiNames){ name_at, NULL }, &in);
+    ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in);
     CHECK(u.list.top == 10 && u.list.sel == 0);
     in.wheel = -5;
-    ui_handle(&u, (UiNames){ name_at, NULL }, &in);
+    ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in);
     CHECK(u.list.top == 15);
     in.wheel = 9;
-    ui_handle(&u, (UiNames){ name_at, NULL }, &in);
+    ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in);
     CHECK(u.list.top == 0);
     // A click is a cell on screen, counted from the first shown.
     in = ui_input_none();
     in.wheel = -1;
-    ui_handle(&u, (UiNames){ name_at, NULL }, &in);
+    ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in);
     in = ui_input_none();
     in.click = 3;
-    ui_handle(&u, (UiNames){ name_at, NULL }, &in);
+    ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in);
     CHECK(u.list.sel == 8);
     in = ui_input_none();
     in.click = 9;   // the last cell on screen: 5 + 9
-    ui_handle(&u, (UiNames){ name_at, NULL }, &in);
+    ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in);
     CHECK(u.list.sel == 14);
     // Fewer columns (a narrower window): the top row's first entry stays in view, the cursor too.
     grid(&u, 23, 5, 2, 12);
@@ -176,27 +176,27 @@ static void test_view_switch(void)
     u.grid = false, ui_set_cols(&u.list, 1);
     // Ctrl+2 the icons, Ctrl+1 the list; the cursor stays.
     UiInput in = keys(1, UK_VIEW_ICONS);
-    UiAction a = ui_handle(&u, (UiNames){ name_at, NULL }, &in);
+    UiAction a = ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in);
     CHECK(a.kind == UA_VIEW && a.index == 1 && u.grid && u.list.sel == 7);
     ui_set_cols(&u.list, 5);   // as gui/ does at its next layout
     in = keys(1, UK_VIEW_LIST);
-    a = ui_handle(&u, (UiNames){ name_at, NULL }, &in);
+    a = ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in);
     CHECK(a.kind == UA_VIEW && a.index == 0 && !u.grid && u.list.sel == 7 && ui_cols(&u.list) == 1);
     // The top bar's buttons.
     in = ui_input_none();
     in.bar = UB_VIEW_ICONS;
-    a = ui_handle(&u, (UiNames){ name_at, NULL }, &in);
+    a = ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in);
     CHECK(a.kind == UA_VIEW && a.index == 1 && u.grid);
     in.bar = UB_VIEW_LIST;
-    a = ui_handle(&u, (UiNames){ name_at, NULL }, &in);
+    a = ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in);
     CHECK(a.kind == UA_VIEW && a.index == 0 && !u.grid);
     // From the sidebar's keyboard too; a prompt takes the keys first.
     in = keys(2, UK_TAB, UK_VIEW_ICONS);
-    a = ui_handle(&u, (UiNames){ name_at, NULL }, &in);
+    a = ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in);
     CHECK(a.kind == UA_VIEW && u.grid);
     u.confirming = true;
     in = keys(1, UK_VIEW_LIST);
-    a = ui_handle(&u, (UiNames){ name_at, NULL }, &in);
+    a = ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in);
     CHECK(a.kind == UA_NONE && u.grid);
     u.confirming = false;
     // A view button pressed is input that acts (it draws a frame).

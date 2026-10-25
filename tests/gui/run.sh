@@ -158,9 +158,9 @@ echo "== f64c"; OFX_TEST_THUMB_HELD_MAX=491520 OFX_TEST_MOUNTINFO="$base/f64/mou
 echo "== f64d"; OFX_TEST_THUMB_HELD_MAX=245760 OFX_TEST_MOUNTINFO="$base/f64/mountinfo" "$here/../../tools/gui/run-script.sh" "$T" "$here/f64d.script" "$bin" "$T/tree" || failed f64d
 fi
 if want f7; then
-# F7.1: the menu bar. f7: home/tree with a.txt, b.txt, sub/, ro/ (read only); f7b: Close All Windows, a copy running.
+# F7.1: the menu bar. f7: home/tree with a.txt, b.txt, sub.d/, ro/ (read only); f7b: Close All Windows, a copy running.
 # HOME and the mount list are scratch: the trash view shows the scratch trash only, never a drive's.
-T=$base/f7; rm -rf "$T"; H=$T/home; mkdir -p "$H/tree/sub" "$H/tree/ro"; echo a > "$H/tree/a.txt"; echo b > "$H/tree/b.txt"
+T=$base/f7; rm -rf "$T"; H=$T/home; mkdir -p "$H/tree/sub.d" "$H/tree/ro"; echo a > "$H/tree/a.txt"; echo b > "$H/tree/b.txt"
 echo x > "$H/tree/ro/x.txt"; chmod 555 "$H/tree/ro"
 printf '1 0 0:1 / / rw - ext4 /dev/x rw\n' > "$T/mountinfo"
 echo "== f7"; OFX_TEST_HOME="$H" OFX_TEST_MOUNTINFO="$T/mountinfo" "$here/../../tools/gui/run-script.sh" "$T" "$here/f7.script" "$bin" "$H/tree" || failed f7

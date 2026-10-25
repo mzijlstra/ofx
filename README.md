@@ -41,7 +41,7 @@ libpng, giflib and zlib for the previews. raylib and Clay are vendored.
 | `t` | a terminal in this folder (`xdg-terminal-exec --dir`) |
 | `~` | home |
 | Space, Ctrl+A | select the entry (and move on), select all; Esc clears |
-| F2 | rename, in the row: Enter renames, Esc cancels |
+| F2 | rename, in the row, the name up to its extension selected (a folder's whole name): Enter renames, Esc cancels |
 | In the rename and location lines | Shift+Left/Right/Home/End select, Ctrl+A all; Ctrl+C, Ctrl+X, Ctrl+V copy, cut and paste text (the first line; a name leaves `/` out) |
 | Ctrl+Shift+N | a new folder, "New folder", named in the row |
 | Delete | to the trash (the one Nemo shows); in the trash view, for good after asking |

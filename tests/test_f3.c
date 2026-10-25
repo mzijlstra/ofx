@@ -799,7 +799,7 @@ static UiInput ev1(UiKey k, u32 ch)
 
 static void test_ui_f3(void)
 {
-    UiNames names = { name_at, NULL };
+    UiNames names = { name_at, NULL, NULL };
     static Ui u;
     static u8 marks[20];
     memset(&u, 0, sizeof u);
@@ -969,12 +969,15 @@ static void test_ui_f3(void)
     in.job_n = 1, in.job_id[0] = 7, in.jobs_all = 1;
     CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.marked == 0);
 
-    // The edit line: F2 opens it on the name, the caret at the end.
+    // The edit line: F2 opens it on the name, all of it selected (no extension); End to its end.
     in = keys(1, UK_HOME);
     ui_handle(&u, names, &in);
     in = keys(1, UK_F2);
     CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.editing);
-    CHECK(u.edit_len == 5 && memcmp(u.edit, "alpha", 5) == 0 && u.caret == 5);
+    CHECK(u.edit_len == 5 && memcmp(u.edit, "alpha", 5) == 0 && u.caret == 5 && u.anchor == 0);
+    in = keys(1, UK_END);
+    ui_handle(&u, names, &in);
+    CHECK(u.caret == 5 && u.anchor == 5);
     // Letters edit, they don't move or act (j, t, Space, '/').
     in = chars("jt /");
     CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.list.sel == 0);
