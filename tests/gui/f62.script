@@ -30,15 +30,21 @@ key pagedown
 expect idx=19 top=6
 key pageup
 expect idx=7
-# Left doesn't go up in the grid; Left and Right run across a row's end.
+# Left doesn't go up in the grid; Left and Right run across a row's end, and round the ends
+# (Michael, 2026-10-25).
 key home
 key left
-expect idx=0 sel=adir back=0
+expect idx=23 back=0
+key right
+expect idx=0 sel=adir
 key end
 key right
-expect idx=23
+expect idx=0
+key up
+expect idx=18
+key down
+expect idx=0
 key home
-key left
 key right
 key right
 key right

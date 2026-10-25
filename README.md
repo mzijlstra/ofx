@@ -22,7 +22,7 @@ libpng, giflib and zlib for the previews. raylib and Clay are vendored.
 
 | Key | |
 |---|---|
-| Up/Down, `j`/`k` | move |
+| Up/Down, `j`/`k` | move; past the first or the last, round to the other end (the icon view: Left/Right round the ends, Up/Down in the column) |
 | PgUp/PgDn | a page |
 | Home/End, `g`/`G` | first, last |
 | Enter | open: a folder is entered, a file goes to `gio open` (Nemo's way: the type from its name; a terminal app such as nvim in a terminal); an empty file, which gio can't type, to the default app for its name's type (`gio launch`) |

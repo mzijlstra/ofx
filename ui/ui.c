@@ -438,6 +438,27 @@ static UiAction ui_side_mode(Ui *u, SideMode m)
     return (UiAction){ UA_SIDE_MODE, m, false };
 }
 
+// The files' cursor one step (Michael, 2026-10-25): past either end it goes round, one step at a
+// time only (PgUp, PgDn, Home and End stop at the ends). In the icon view by is a cell (Left,
+// Right) or, rows true, a row (Up, Down): a row's move keeps its column, onto the last row that
+// has it.
+static void ui_step_round(UiList *l, isize by, bool rows)
+{
+    if (l->n == 0) return;
+    isize c = rows ? ui_cols(l) : 1, col = l->sel % ui_cols(l), last_row = (l->n - 1) / ui_cols(l) * ui_cols(l);
+    if (!rows) {
+        l->sel = by < 0 ? (l->sel == 0 ? l->n - 1 : l->sel - 1) : (l->sel == l->n - 1 ? 0 : l->sel + 1);
+    } else if (by < 0 && l->sel < c) {   // the top row: up to the bottom row's cell in this column
+        l->sel = last_row + col < l->n ? last_row + col : last_row + col - c;
+    } else if (by > 0 && l->sel >= last_row) {   // the bottom row: down to the top
+        l->sel = col;
+    } else {
+        ui_move_rows(l, by);
+        return;
+    }
+    ui_show_sel(l);
+}
+
 // A move of the list's cursor or the sidebar's.
 static void ui_step(Ui *u, UiList *m, isize by)
 {
@@ -1300,16 +1321,26 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
             }
         }
         if (grid && (key == UK_LEFT || key == UK_RIGHT)) {
-            ui_move(l, key == UK_LEFT ? -1 : 1);
+            ui_step_round(l, key == UK_LEFT ? -1 : 1, false);
             continue;
         }
-        if (grid && (key == UK_UP || key == UK_DOWN || key == UK_PAGEUP || key == UK_PAGEDOWN)) {
-            ui_move_rows(l, key == UK_UP ? -1 : key == UK_DOWN ? 1 : key == UK_PAGEUP ? -page : page);
+        if (grid && (key == UK_UP || key == UK_DOWN)) {
+            ui_step_round(l, key == UK_UP ? -1 : 1, true);
+            continue;
+        }
+        if (grid && (key == UK_PAGEUP || key == UK_PAGEDOWN)) {
+            ui_move_rows(l, key == UK_PAGEUP ? -page : page);
             continue;
         }
         switch (key) {
-        case UK_UP: ui_step(u, m, -1); break;
-        case UK_DOWN: ui_step(u, m, 1); break;
+        case UK_UP:
+            if (m == l) ui_step_round(l, -1, false);
+            else ui_step(u, m, -1);
+            break;
+        case UK_DOWN:
+            if (m == l) ui_step_round(l, 1, false);
+            else ui_step(u, m, 1);
+            break;
         case UK_PAGEUP: ui_step(u, m, -page); break;
         case UK_PAGEDOWN: ui_step(u, m, page); break;
         case UK_HOME: ui_step(u, m, -m->n); break;

@@ -61,12 +61,15 @@ static void test_grid_keys(void)
     // Up and Down a row, in the column.
     u.list.sel = 7;
     CHECK(key_sel(&u, UK_DOWN) == 12 && key_sel(&u, UK_UP) == 7 && key_sel(&u, UK_UP) == 2);
-    // The first row: Up stays.
-    CHECK(key_sel(&u, UK_UP) == 2);
+    // The first row: Up goes round to the last row's cell in its column (Michael, 2026-10-25).
+    CHECK(key_sel(&u, UK_UP) == 22);
+    u.list.sel = 4;   // a column the last row lacks: the row above it
+    CHECK(key_sel(&u, UK_UP) == 19);
+    u.list.sel = 2;
     // Down onto the last row's cell under it; from 18, whose column the last row lacks, the last.
     u.list.sel = 16;
     CHECK(key_sel(&u, UK_DOWN) == 21);
-    CHECK(key_sel(&u, UK_DOWN) == 21);   // the last row: Down stays
+    CHECK(key_sel(&u, UK_DOWN) == 1);   // the last row: Down goes round to the top, in its column
     u.list.sel = 18;
     CHECK(key_sel(&u, UK_DOWN) == 22);
     // h l k j as the arrows.
@@ -86,13 +89,14 @@ static void test_grid_keys(void)
     CHECK(key_sel(&u, UK_PAGEDOWN) == 22);   // no cell under it two rows down: the last
     // Home and End.
     CHECK(key_sel(&u, UK_HOME) == 0 && key_sel(&u, UK_END) == 22);
-    // Left doesn't go up in the grid, Right doesn't open; Enter opens, Backspace goes up.
+    // Left from the first goes round to the last, Right from the last to the first; neither opens
+    // nor goes up. Enter opens, Backspace goes up.
     u.list.sel = 0;
     in = keys(1, UK_LEFT);
+    CHECK(ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in).kind == UA_NONE && u.list.sel == 22);
+    in = keys(1, UK_RIGHT);
     CHECK(ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in).kind == UA_NONE && u.list.sel == 0);
     u.list.sel = 22;
-    in = keys(1, UK_RIGHT);
-    CHECK(ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in).kind == UA_NONE && u.list.sel == 22);
     in = keys(1, UK_ENTER);
     UiAction a = ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in);
     CHECK(a.kind == UA_OPEN && a.index == 22);

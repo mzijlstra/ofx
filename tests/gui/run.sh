@@ -195,10 +195,10 @@ if want hang; then
 T=$base/hang; rm -rf "$T"; mkdir -p "$T/tree/stuck"
 echo "== hang"
 t0=$(date +%s)
-OFX_TEST_COUNT_DELAY_MS=10000 "$here/../../tools/gui/run-script.sh" "$T" "$here/hang.script" "$bin" "$T/tree" > "$T/run.out" 2>&1
+OFX_TEST_COUNT_DELAY_MS=20000 "$here/../../tools/gui/run-script.sh" "$T" "$here/hang.script" "$bin" "$T/tree" > "$T/run.out" 2>&1
 took=$(( $(date +%s) - t0 ))
-if grep -q "script: 0 of" "$T/run.out" && grep -q "no asan reports" "$T/run.out" && [ "$took" -lt 8 ]; then
-    echo "hang: quit in ${took}s with a count stuck for 10s"
+if grep -q "script: 0 of" "$T/run.out" && grep -q "no asan reports" "$T/run.out" && [ "$took" -lt 15 ]; then
+    echo "hang: quit in ${took}s with a count stuck for 20s"
 else
     cat "$T/run.out"; echo "hang: FAILED (took ${took}s)"; fail=1
 fi

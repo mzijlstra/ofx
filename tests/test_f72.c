@@ -230,3 +230,74 @@ static void test_props_keys(void)
     u.in_trash = true;
     CHECK(props_keys(&u, 1, UK_TERMINAL).kind == UA_NOT_IN_TRASH);
 }
+
+static void test_step_round(void)
+{
+    // The list: Up from the first to the last, Down from the last to the first; k and j too.
+    Ui u = menu_ui(5);
+    u.list.rows = 3;
+    props_keys(&u, 1, UK_UP);
+    CHECK(u.list.sel == 4 && u.list.top == 2);
+    props_keys(&u, 1, 0x100 + 'j');
+    CHECK(u.list.sel == 0 && u.list.top == 0);
+    props_keys(&u, 1, 0x100 + 'k');
+    CHECK(u.list.sel == 4);
+    // PgUp, PgDn, Home and End stop at the ends.
+    props_keys(&u, 1, UK_PAGEDOWN);
+    CHECK(u.list.sel == 4);
+    props_keys(&u, 2, UK_HOME, UK_PAGEUP);
+    CHECK(u.list.sel == 0);
+    // One entry: round to itself; none: nothing.
+    Ui one = menu_ui(1);
+    props_keys(&one, 2, UK_UP, UK_DOWN);
+    CHECK(one.list.sel == 0);
+    Ui none = menu_ui(0);
+    props_keys(&none, 2, UK_UP, UK_DOWN);
+    CHECK(none.list.sel == 0);
+    // The sidebar doesn't go round.
+    u.side.rows = 10;
+    ui_set(&u.side, 3, 0);
+    u.side_focus = true;
+    props_keys(&u, 1, UK_UP);
+    CHECK(u.side.sel == 0);
+    u.side.sel = 2;
+    props_keys(&u, 1, UK_DOWN);
+    CHECK(u.side.sel == 2);
+    // The icon view, 3 columns, 7 entries (rows 0-2, 3-5, 6): Left and Right round the ends; Up
+    // from the top row to the bottom row's cell in its column, or the row above when it lacks one;
+    // Down from the bottom row (and from a cell with none under it) to the top, in its column.
+    Ui g = menu_ui(7);
+    g.grid = true, g.list.rows = 2;
+    ui_set_cols(&g.list, 3);
+    props_keys(&g, 1, UK_LEFT);
+    CHECK(g.list.sel == 6);
+    props_keys(&g, 1, UK_RIGHT);
+    CHECK(g.list.sel == 0);
+    props_keys(&g, 1, UK_UP);
+    CHECK(g.list.sel == 6);
+    props_keys(&g, 1, UK_DOWN);
+    CHECK(g.list.sel == 0);
+    g.list.sel = 2;
+    props_keys(&g, 1, UK_UP);
+    CHECK(g.list.sel == 5);
+    props_keys(&g, 1, UK_DOWN);   // row 1 to the last row: column 2 isn't there, the last entry
+    CHECK(g.list.sel == 6);
+    g.list.sel = 4;
+    props_keys(&g, 1, 0x100 + 'j');
+    CHECK(g.list.sel == 6);
+    props_keys(&g, 2, 0x100 + 'j', 0x100 + 'l');
+    CHECK(g.list.sel == 1);
+    props_keys(&g, 1, 0x100 + 'h');
+    CHECK(g.list.sel == 0);
+    props_keys(&g, 1, 0x100 + 'h');
+    CHECK(g.list.sel == 6);
+    // PgUp and PgDn stop; past the end PgDn takes the last row's cell in the column.
+    g.list.sel = 1;
+    props_keys(&g, 1, UK_PAGEUP);
+    CHECK(g.list.sel == 1);
+    Ui g8 = menu_ui(8);   // rows 0-2, 3-5, 6-7
+    g8.grid = true, g8.list.rows = 4;
+    ui_set_cols(&g8.list, 3);
+    props_keys(&g8, 1, UK_PAGEDOWN);   // a page of 3 rows from 0: past the end, column 0 of the last row
+    CHECK(g8.list.sel == 6);
+}

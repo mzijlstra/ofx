@@ -2198,7 +2198,7 @@ static void layout_menu(int m)
 {
     Theme *t = &app.theme;
     Clay_Color off = mix(t->fg_dim, t->bg_light, 0.45f);
-    CLAY(CLAY_ID("menu"), { .layout = { .sizing = { CLAY_SIZING_FIT(MENU_W_MIN), CLAY_SIZING_FIT(0) }, .padding = { 4, 4, 4, 4 },
+    CLAY(CLAY_ID("menu"), { .layout = { .sizing = { CLAY_SIZING_FIT(MENU_W_MIN, 0), CLAY_SIZING_FIT(0) }, .padding = { 4, 4, 4, 4 },
                                         .layoutDirection = CLAY_TOP_TO_BOTTOM },
                             .backgroundColor = cc(t->bg_light),
                             .border = { .color = mix(t->fg_dim, t->bg_light, 0.6f), .width = CLAY_BORDER_OUTSIDE(1) },
@@ -2613,7 +2613,13 @@ static void layout_props_panel(void)
                 props_when(when, sizeof when, props.st.st_mtim.tv_sec), props_line("Modified", arena_sprintf(&frame, "%s", when));
                 props_when(when, sizeof when, props.st.st_atim.tv_sec), props_line("Accessed", arena_sprintf(&frame, "%s", when));
                 if (props.btime >= 0) props_when(when, sizeof when, props.btime), props_line("Created", arena_sprintf(&frame, "%s", when));
-                props_line("Owner", arena_sprintf(&frame, "%s, group %s", props.owner, props.group));
+                // Owner and group, each with its label (Michael, 2026-10-25: "group" read as a value).
+                CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .childGap = 12 } }) {
+                    CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_FIXED(96), CLAY_SIZING_FIT(0) } } }) { text(cz("Owner"), cc(t->fg_dim)); }
+                    CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_FIXED(150), CLAY_SIZING_FIT(0) } } }) { text(fit(str_from_c(props.owner), 150, false), cc(t->fg)); }
+                    text(cz("Group"), cc(t->fg_dim));
+                    text(fit(str_from_c(props.group), 150, false), cc(t->fg));
+                }
                 // The permissions: the octal number, then the grid; greyed when they can't change.
                 bool can = app.ui.prop_can;
                 Clay_Color off = mix(t->fg_dim, t->bg_light, 0.45f);
@@ -3523,10 +3529,10 @@ int main(int argc, char **argv)
     if (!watch_start()) set_status(true, "inotify is unavailable: no live refresh");
     clip_init();   // false: the clipboard stays inside ofx
     // OFX_TEST_COUNT_DELAY_MS: each count takes that much longer, so a test can change the listing
-    // while answers for the old one are on their way, or (10 s) stand in for a hung mount at quit.
+    // while answers for the old one are on their way, or (20 s) stand in for a hung mount at quit.
     const char *kdelay = getenv("OFX_TEST_COUNT_DELAY_MS");
     counts.delay_ms = kdelay ? atoi(kdelay) : 0;
-    if (counts.delay_ms < 0 || counts.delay_ms > 10000) counts.delay_ms = 0;
+    if (counts.delay_ms < 0 || counts.delay_ms > 20000) counts.delay_ms = 0;
     count_start();
     walk_start();
     thumbs_start();

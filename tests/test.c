@@ -782,9 +782,12 @@ static void test_ui(void)
     CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.list.sel == 1 && u.list.top == 0);
     in = keys(1, UK_UP);
     ui_handle(&u, names, &in);
-    in = keys(1, UK_UP);   // at the top: stays
+    in = keys(1, UK_UP);   // at the top: round to the last (Michael, 2026-10-25), and back
     ui_handle(&u, names, &in);
-    CHECK(u.list.sel == 0);
+    CHECK(u.list.sel == u.list.n - 1 && u.list.top == u.list.n - u.list.rows);
+    in = keys(1, UK_DOWN);
+    ui_handle(&u, names, &in);
+    CHECK(u.list.sel == 0 && u.list.top == 0);
     in = keys(1, UK_PAGEDOWN);   // a page is rows - 1, so a row stays in view
     ui_handle(&u, names, &in);
     CHECK(u.list.sel == 9 && u.list.top == 0);
@@ -1588,6 +1591,7 @@ int main(void)
     test_du_walk();
     test_chmod();
     test_props_keys();
+    test_step_round();
     char cmd[1600];
     snprintf(cmd, sizeof cmd, "chmod -R u+rwx '%s' && rm -rf '%s' '%s'", root, root, decoy);
     if (system(cmd) != 0) fprintf(stderr, "could not remove %s\n", root);
