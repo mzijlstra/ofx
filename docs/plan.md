@@ -38,6 +38,7 @@ Omarchy's theme: the binary, the folder `tools/ofx`, the window's title and Wayl
 | F6.2 | Icon view: a grid beside the list, buttons in the top bar, Ctrl+1 and Ctrl+2, remembered | Below |
 | F6.3 | Icon sizes (the icon view): a zoom slider at the bottom right, Ctrl+wheel and Ctrl+= / Ctrl+-, remembered | |
 | F6.4 | Previews in the icon view: the freedesktop thumbnail cache (shared with Nemo), PNG, JPEG, GIF and WebP made on two threads | |
+| F6.5 | Thumbnail cache cleanup: `ofx-clean` on a daily systemd user timer; orphans, 90 days unused, a 1 GiB cap | Below |
 | F7 | Menus: File, Edit, View, Go, Bookmarks, Help; New Window as a second process | Below |
 | F8 | Right-click menus, with "Open with" (the apps the freedesktop MIME lists name for the file's type) | |
 
@@ -68,12 +69,10 @@ his word: Nemo's compact view and its icon size slider.
 - A resizable sidebar (the tree's deep levels get little room at 200 px).
 - The Trash place's icon full or empty; watching the drives' trashes too.
 - Options in `ofx.conf` (Michael, 2026-10-24): previews on or off; the largest image ofx makes a
-  preview of (`max_image_size_to_preview`, 10 MiB in F6.4).
-- Cache cleanup (Michael, 2026-10-24): nothing here cleans `~/.cache/thumbnails`. GNOME's
-  housekeeping daemon (`gsd-housekeeping`, 180 days by the `org.gnome.desktop.thumbnail-cache`
-  setting) isn't installed, nor Cinnamon's, and Nemo doesn't do it (all 3637 x-large files date
-  from 2025). Two options: remove the orphaned previews (whose `Thumb::URI` file is gone or has
-  another mtime), and clear the cache completely.
+  preview of (`max_image_size_to_preview`, 10 MiB in F6.4); F6.5's cleanup (on, orphans, the days
+  unused, the cap).
+- Cache cleanup (Michael, 2026-10-24): orphans, age and a cap are F6.5. Still later: clearing the
+  cache completely, and the cleanup's settings on a settings page.
 - Not wanted: Nemo's built-in terminal (`t`, a terminal here, covers it).
 
 **Thumbnails, a rule from Nemo (2026-10-20):** Nemo looped at up to 45% CPU on one file
@@ -152,6 +151,71 @@ package ships (upstream Yaru has no grey; omacom/omarchy#7203, #14851 and PRs #1
 themes (#14851). **Fallback:** a missing icon theme gives way to its name cut at the last `-`
 until one is installed (`Yaru-grey` → `Yaru`), then plain Yaru, then Adwaita (GTK's own, but
 mostly SVG, and ofx draws PNGs), then hicolor. No `icons.theme`: the same way.
+
+## F6.5 design (2026-10-25)
+
+**Asked (Michael):** a cleanup of the thumbnail cache, with settings for later (a settings page):
+manage the cache (on), delete orphaned previews (on), delete previews not used for a while (90
+days), and a size cap that deletes the least recently used first.
+
+**Measured here (2026-10-25, reading only; previews opened with `O_NOATIME`):**
+- `~/.cache/thumbnails`: 362 MiB. `normal` 73, `large` 2936, `x-large` 3637, `fail` 1396 (empty
+  markers, Nemo's).
+- Orphans (the file named by `Thumb::URI` is gone): 4127 of 6646 previews, 258 MiB. For 3387 the
+  file's folder is gone too. Most under `~/Documents` (2194), `~/Pictures` (650), `~/Dropbox`
+  (331), `~/Downloads` (323). 152 are under `/run/media/mzijlstra`: drives not plugged in, not
+  orphans. 2 are stale (another mtime), 70 have no `file://` URI.
+- Reading every preview's header takes 0.12 s.
+- Access times: `/home` is btrfs with `relatime`, so a read updates a file's atime at most once a
+  day; enough for a rule in days. Every preview's atime is in October 2026: a read by anyone
+  counts (Nemo's loop on 10-20, reviewer-2's name check on 10-24). The 1314 entries older than 90
+  days are all `fail` markers. Opening with `O_NOATIME` leaves the atime alone (checked); a plain
+  open by the cleaner would mark every preview it checks as just used.
+
+**Decided (Michael, 2026-10-25):** a systemd user timer, daily; fixed defaults until the settings
+page (on, orphans on, 90 days, 1 GiB); it is F6.5.
+
+**The design:**
+1. **`ofx-clean`**, a program of its own beside `ofx-probe`: `fs/clean.c` (no raylib, unit-tested)
+   and `tools/clean.c` (its main). It opens no window and is safe to run anywhere.
+2. **What it looks at:** the files in `<cache>/thumbnails/{normal,large,x-large,xx-large}` and in
+   each `fail/<program>/` folder, nothing else: names of 32 hex digits plus `.png`, and ofx's own
+   `.ofx-<pid>-<n>.png` left by a crash. Everything is `lstat`ed, nothing followed: a symlink or a
+   folder in there is left alone. Each delete is an `unlinkat` in that folder's fd, behind
+   `ops_allowed` (so `OFX_GUI_ROOT` confines a test). The cache is `$XDG_CACHE_HOME` or
+   `~/.cache`; a relative `XDG_CACHE_HOME` is refused.
+3. **The rules, in this order:**
+   - **Not used for 90 days:** atime older than 90 days, from `lstat` alone (the `fail` markers go
+     this way; Nemo tries such a file once more if it meets it again). ofx's leftover temp files go
+     after a day.
+   - **Orphans:** the header read with `O_NOATIME | O_NOFOLLOW`, its tEXt chunks parsed as
+     `fs/thumb.c` does. A `file://` URI, unescaped, whose `lstat` answers `ENOENT` or `ENOTDIR` is
+     an orphan; one whose `Thumb::MTime` differs from the file's is stale; both go. Any other error
+     keeps it. Kept, never judged: a path on a network or FUSE mount (by mountinfo, as
+     `thumb_local`, with no `stat` that could hang), and a path on a drive not mounted now: under
+     `/run/media/<user>/<name>`, `/media/<name>` or `/mnt/<name>` when that folder isn't a mount
+     point in mountinfo. A preview whose header can't be parsed, or with another URI scheme, is
+     left to the age rule.
+   - **The cap, 1 GiB:** if what is left (by `st_size`) is over it, the least recently read (atime)
+     go first until it is under.
+4. **Output:** one line for the journal: what went by each rule, the MiB freed and left.
+   `--dry-run` lists each file with its rule and size and deletes nothing.
+5. **The timer:** `ofx-clean.service` (oneshot, `Nice=19`, `IOSchedulingClass=idle`) and
+   `ofx-clean.timer` (`OnCalendar=daily`, `Persistent=true`, so a missed day runs at the next
+   login, `RandomizedDelaySec=1h`). `make install` copies both to `~/.config/systemd/user` and
+   reloads, but doesn't enable the timer: Michael runs `ofx-clean --dry-run` on his cache first,
+   reads the list, then enables it (`systemctl --user enable --now ofx-clean.timer`). "Manage the
+   cache" is the timer being on until the settings page has the switch.
+6. **Defaults:** constants in `fs/clean.c` (orphans on, 90 days, 1 GiB); the settings page and
+   `ofx.conf` set them later.
+
+**Tests:** unit tests (`tests/test_f65.c`) on a scratch cache with fixture previews made by
+`thumb_put`: fresh, orphan, file in a deleted folder, stale mtime, a path under a drive not
+mounted and under a network mount (a fake mountinfo), a `trash://` URI, an unparseable PNG, old
+atimes set with `utimensat`, a cap test with a smaller cap, a symlink and a folder in the cache, a
+name not of the pattern, and the guard refusing a cache outside the root. Each kept file's atime is
+checked unchanged after a run. Unit mutants for every rule. No GUI code changes, so no GUI mutants.
+No test reads or writes Michael's cache; the first run on it is his `--dry-run`.
 
 ## F7 design (2026-10-24)
 
