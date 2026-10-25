@@ -70,7 +70,9 @@ his word: Nemo's compact view and its icon size slider.
 - The Trash place's icon full or empty; watching the drives' trashes too.
 - Options in `ofx.conf` (Michael, 2026-10-24): previews on or off; the largest image ofx makes a
   preview of (`max_image_size_to_preview`, 10 MiB in F6.4); F6.5's cleanup (on, orphans, the days
-  unused, the cap).
+  unused, the cap); the menu bar hidden until Alt or F10 (F7, 2026-10-25).
+- Properties (F7.2): "apply to everything inside" a folder, its permissions set on the files and
+  folders under it (Michael, 2026-10-25: later).
 - Cache cleanup (Michael, 2026-10-24): orphans, age and a cap are F6.5. Still later: clearing the
   cache completely, and the cleanup's settings on a settings page.
 - Not wanted: Nemo's built-in terminal (`t`, a terminal here, covers it).
@@ -249,8 +251,49 @@ No test reads or writes Michael's cache; the first run on it is his `--dry-run`.
 
 ## F7 design (2026-10-24)
 
-**Asked (Michael):** menus as Nemo has them: File, Edit, View, Go, Bookmarks, Help. The rest of
-this design (the entries, which keys they show, how a menu opens and closes) is still to come.
+**Asked (Michael):** menus as Nemo has them: File, Edit, View, Go, Bookmarks, Help.
+
+**Parts (Michael, 2026-10-25):** F7.1 the menu bar and the File menu; F7.2 Properties; F7.3 Open
+With Other Application; then the Edit, View, Go, Bookmarks and Help menus (F7.4 on, still to
+design). Properties first: it is self-contained (statx, rename since F3, chmod through the guard)
+and builds the panel parts Open With needs (a text field, checkboxes, a scrolled list); Open With is
+mostly the freedesktop MIME plumbing (`.desktop` files, `mimeinfo.cache`, parent types,
+`mimeapps.list`), which F8's right-click menu shares, so F7.3 leads into F8.
+
+**Decided for F7.1 (Michael, 2026-10-25):**
+- **The menu bar** is always shown, one row above the top bar. Hiding it until Alt or F10 is an
+  `ofx.conf` option (later list).
+- **Keys:** F10 opens File; Alt+F, Alt+E, Alt+V, Alt+G, Alt+B, Alt+H open their menu; Up/Down
+  (`k`/`j`) move, Left/Right go to the next menu, Enter picks, Esc closes; with a menu open, the
+  pointer over another title opens that one. Each entry shows its key at the right.
+- **The File menu:**
+
+  | Entry | Key | Grayed when |
+  |---|---|---|
+  | New Tab | Ctrl+T | never |
+  | New Window | Ctrl+N | never |
+  | Create New Folder | Ctrl+Shift+N | the trash view; a folder ofx can't write to |
+  | Create New Empty File | none | as Create New Folder |
+  | — | | |
+  | Open | Enter | nothing selected |
+  | Open With Other Application… | | until F7.3; then nothing selected, or a folder |
+  | — | | |
+  | Properties… | | until F7.2 |
+  | — | | |
+  | Close All Windows | Ctrl+Q | never |
+  | Close | Ctrl+W | never |
+
+- **Create New Empty File** works like Create New Folder: an empty file "New file" (a number added
+  when taken) is made and named in the row; Ctrl+Z removes it.
+- **Close** closes the tab, the last one the window, as Ctrl+W does now.
+- **Close All Windows takes Ctrl+Q** (Nemo's key for it): every ofx window closes as Ctrl+Q closes
+  one today, so a window with jobs running or waiting asks first, in itself. Ctrl+Q in a window
+  that is alone does what it did.
+- **Finding the other windows: a registry.** Each window writes `$XDG_RUNTIME_DIR/ofx/<pid>` at
+  start and removes it on exit; Close All asks each listed pid that is still an ofx (its
+  `/proc/<pid>/exe`) to close, by a signal its main loop turns into Ctrl+Q. A leftover entry from
+  a crash is removed when found dead. Not a search of every running ofx: `run-script.sh` points
+  the registry at the scratch dir, so a test can never close Michael's windows.
 
 **Decided (Michael, 2026-10-24): New Window is a second process.** File → New Window (Ctrl+N) runs
 `uwsm-app -- ofx <current folder>`, the way ofx launches other programs. There is no window that
@@ -269,6 +312,21 @@ so that would mean patching vendored raylib or leaving it, for no gain here.
 - Tests: the fake `uwsm-app` in `run-script.sh` logs the command; a script checks `ofx <folder>`
   in `spawn.log`. A unit test for the state merge (two saves of different fields keep both).
 - F8 reuses it: "Open in New Window" on a folder's right-click menu.
+
+**F7.2 Properties (decided in part, Michael 2026-10-25):** a panel in the window like the Delete
+panel (one process, one window), one page, tabs only if it gets too long. Nothing selected: the
+current folder's. Several selected: their count and total size, no permissions. Not shown: the
+type (the name says it) and free space (the drive's, not the file's). Sketch, not decided: the
+icon or preview and the name in a field (Enter renames); the size in bytes and short; a folder's
+contents counted in the background; the parent folder; the drive; modified, accessed and created
+(statx birth time); a link's target; owner and group shown (changing them needs root); read, write
+and execute for owner, group and others as a grid of checkboxes with the octal number, applied at
+once, Ctrl+Z undoes. "Apply to everything inside" is later.
+
+**F7.3 Open With Other Application (sketch, not decided):** a panel listing the default app for
+the file's type first, then the recommended ones (others that name the type or a parent type),
+then every other app; launched as `uwsm-app -- gio launch <desktop file> <file>`. No "set as
+default" (it would write Michael's `mimeapps.list`).
 
 ## F6.4 design (2026-10-24)
 
