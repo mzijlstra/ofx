@@ -406,6 +406,23 @@ process, one window), one page; only for showing a file's properties and changin
 - **Keys:** the focus starts on the grid (owner's read); arrows and h/j/k/l move it, Space or
   Enter toggles, Esc (or Ctrl+I again) closes. The pointer: a checkbox toggles, Close closes.
 
+**F7.2 as built (2026-10-25):**
+- `fs/props.c`: `du_walk` (files, folders and bytes under some roots; links not followed, other
+  drives counted not entered, past 256 levels cut; stops when its generation moves; a tick every
+  512 entries), `op_chmod` (the 0777 part, special bits kept; the guard on the real path, so a link
+  can't reach outside the test tree), `perm_bit`. `fs/undo.c` `UNDO_CHMOD` (the old mode, octal).
+- `gui/walk.c`: one walk thread, as counts.c's (a generation per walk, the panel closing stops it,
+  never joined when stuck); `gui/main.c` the panel (`props_open`, `props_read`, `props_chmod`,
+  `layout_props_panel`); `ui/ui.c` `ui_props_open`, `ui_props_event`, the clicks. A clash or delete
+  question over the panel takes its keys; quit and the queue-full note as everywhere.
+- Ctrl+I in the rename or location line is the line's (as every key there); the menu closes those
+  lines before it opens the panel.
+- Tests: `tests/test_f72.c`; GUI `f72` (a file, the keys and the pointer, undo, a folder counted,
+  a link changing its target, a link outside the tree refused by the guard and checked unchanged
+  by run.sh, root's file and a broken link greyed, several, an empty folder, the menu, Alt+Enter,
+  the trash view). Unit mutants 939, 0 survived (four left out with reasons: the other-drive rule,
+  which needs a mount; `realpath`'s check; UNDO_CHMOD in undo_what; and F7.1's).
+
 **F7.3 Open With Other Application (sketch, not decided):** a panel listing the default app for
 the file's type first, then the recommended ones (others that name the type or a parent type),
 then every other app; launched as `uwsm-app -- gio launch <desktop file> <file>`. No "set as

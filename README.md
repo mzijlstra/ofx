@@ -38,7 +38,8 @@ libpng, giflib and zlib for the previews. raylib and Clay are vendored.
 | F9, Ctrl+S | the sidebar's next mode: places, tree, hidden |
 | Ctrl+1, Ctrl+2 | the files as the list, as icons (also the two buttons at the right of the top bar; remembered) |
 | Ctrl+=, Ctrl+-, Ctrl+0 | in the icon view, the icons a size bigger, smaller, back to 48 px (also Ctrl+wheel, and the slider at the right of the bottom bar; remembered) |
-| `t` | a terminal in this folder (`xdg-terminal-exec --dir`) |
+| `t`, Alt+Enter | a terminal in this folder (`xdg-terminal-exec --dir`) |
+| Ctrl+I | Properties: size or a folder's contents (counted all the way down), location, drive, dates, owner, and the permissions as a grid: arrows (`h`/`j`/`k`/`l`) move, Space or Enter changes one at once (Ctrl+Z puts it back), Esc closes |
 | `~` | home |
 | Space, Ctrl+A | select the entry (and move on), select all; Esc clears |
 | F2 | rename, in the row, the name up to its extension selected (a folder's whole name): Enter renames, Esc cancels |
@@ -59,7 +60,7 @@ libpng, giflib and zlib for the previews. raylib and Clay are vendored.
 | F10, Alt+F | the File menu: Up/Down (`k`/`j`) move, Enter picks, Esc closes; also by the pointer |
 
 The File menu also has Create New Empty File ("New file", named in the row, as a new folder is).
-Open With Other Application and Properties show greyed: they come with F7.3 and F7.2.
+Open With Other Application shows greyed: it comes with F7.3.
 
 An action works on the selected entries, or on the cursor's when none is selected. Copies, moves
 and deletes for good run in the background, up to four at once, each with a row under the files:
