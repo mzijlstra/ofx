@@ -88,16 +88,53 @@ static void test_clean_names(void)
                "2 1 0:2 / /mnt/sd rw - ext4 b rw\n"
                "3 1 0:3 / /run/media/m/USB\\040KEY rw - vfat c rw\n"
                "4 1 0:4 / /media/cd rw - iso9660 d rw\n");
-    CHECK(clean_mounted(mi, "/mnt/sd") && clean_mounted(mi, "/") && clean_mounted(mi, "/run/media/m/USB KEY"));
-    CHECK(!clean_mounted(mi, "/mnt") && !clean_mounted(mi, "/mnt/s") && !clean_mounted(STR_EMPTY, "/"));
+    Arena a;
+    arena_init(&a, "clean test", clean_test_mem, sizeof clean_test_mem);
+    CleanMounts m = clean_mounts(&a, mi), none = clean_mounts(&a, STR_EMPTY);
+    CleanMounts *ms = &m;
+    CHECK(m.n == 4 && none.n == 0);
+    CHECK(clean_mounted(ms, "/mnt/sd") && clean_mounted(ms, "/") && clean_mounted(ms, "/run/media/m/USB KEY"));
+    CHECK(!clean_mounted(ms, "/mnt") && !clean_mounted(ms, "/mnt/s") && !clean_mounted(&none, "/"));
     // On a drive that isn't mounted: kept for it.
-    CHECK(clean_absent_drive(mi, "/run/media/m/OTHER/a.png") && clean_absent_drive(mi, "/media/dvd/a.png"));
-    CHECK(clean_absent_drive(mi, "/mnt/usb/x/a.png") && clean_absent_drive(mi, "/run/media/n/USB KEY/a"));
+    CHECK(clean_absent_drive(ms, "/run/media/m/OTHER/a.png") && clean_absent_drive(ms, "/media/dvd/a.png"));
+    CHECK(clean_absent_drive(ms, "/mnt/usb/x/a.png") && clean_absent_drive(ms, "/run/media/n/USB KEY/a"));
     // Mounted, or not under a drive's folder: judged.
-    CHECK(!clean_absent_drive(mi, "/mnt/sd/a.png") && !clean_absent_drive(mi, "/run/media/m/USB KEY/a.png"));
-    CHECK(!clean_absent_drive(mi, "/media/cd/x/a.png") && !clean_absent_drive(mi, "/home/m/a.png"));
-    CHECK(!clean_absent_drive(mi, "/mnt/a.png") && !clean_absent_drive(mi, "/media/a.png") && !clean_absent_drive(mi, "/run/media/m/a.png"));
-    CHECK(!clean_absent_drive(mi, "/mnt") && !clean_absent_drive(mi, "/run/media") && !clean_absent_drive(mi, "/mntx/y/a.png"));
+    CHECK(!clean_absent_drive(ms, "/mnt/sd/a.png") && !clean_absent_drive(ms, "/run/media/m/USB KEY/a.png"));
+    CHECK(!clean_absent_drive(ms, "/media/cd/x/a.png") && !clean_absent_drive(ms, "/home/m/a.png"));
+    CHECK(!clean_absent_drive(ms, "/mnt/a.png") && !clean_absent_drive(ms, "/media/a.png") && !clean_absent_drive(ms, "/run/media/m/a.png"));
+    CHECK(!clean_absent_drive(ms, "/mnt") && !clean_absent_drive(ms, "/run/media") && !clean_absent_drive(ms, "/mntx/y/a.png"));
+
+    // clean_local, the parsed list's thumb_local: the same verdict on test_thumb_local's list.
+    Str tl = S("22 1 259:2 / / rw,relatime shared:1 - ext4 /dev/nvme0n1p2 rw\n"
+               "40 22 179:1 / /mnt/sd rw shared:20 - exfat /dev/mmcblk0p1 rw\n"
+               "41 22 0:50 / /mnt/nas rw - nfs4 server:/export rw\n"
+               "42 22 0:51 / /mnt/box rw - fuse.sshfs me@box: rw\n"
+               "43 22 8:17 / /mnt/win rw - fuseblk /dev/sdb1 rw\n"
+               "44 22 0:52 / /mnt/my\\040share rw - cifs //srv/s rw\n"
+               "45 41 259:3 / /mnt/nas/local rw - ext4 /dev/nvme0n1p3 rw\n"
+               "46 22 0:53 / /run/user/1000/gvfs rw - fuse.gvfsd-fuse gvfsd-fuse rw\n"
+               "47 22 0:54 / /mnt/fuser rw - fuserfs x rw\n"
+               "48 22 0:55 / /mnt/over rw - ext4 e rw\n"
+               "49 22 0:56 / /mnt/over rw - nfs f rw\n"
+               "50 22 0:57 / /mnt/back rw - nfs g rw\n"
+               "51 22 0:58 / /mnt/back rw - ext4 h rw\n"
+               "52 22 0:59 / /mnt/nodash rw ext4 i rw\n"
+               "53 22 0:60 / /mnt/deep/in rw - ext4 j rw\n"   // listed before the mount above it
+               "54 22 0:61 / /mnt/deep rw - nfs k rw\n");
+    CleanMounts t = clean_mounts(&a, tl);
+    const char *paths[] = { "/", "/home/m/a.png", "/mnt/sd/x/y.jpg", "/mnt/win/a.png", "/mnt/nas/a.png", "/mnt/nas",
+                            "/mnt/box/p/a.png", "/mnt/my share/a.png", "/run/user/1000/gvfs/sftp:host=x/a.png",
+                            "/mnt/nas/local/a.png", "/mnt/nasty/a.png", "/mnt/sdx", "/mnt/fuser/a.png", "/mnt/over/a",
+                            "/mnt/back/a", "/mnt/nodash/a", "/mnt/nas/localx/a", "/mnt/deep/in/a", "/mnt/deep/a" };
+    for (int i = 0; i < COUNT(paths); i++) {
+        CHECK(clean_local(&t, paths[i]) == thumb_local(tl, paths[i]));
+        if (clean_local(&t, paths[i]) != thumb_local(tl, paths[i])) fprintf(stderr, "  clean_local %s\n", paths[i]);
+    }
+    CHECK(!clean_local(&t, "/mnt/nas/a.png") && !clean_local(&t, "/mnt/over/a") && clean_local(&t, "/mnt/back/a"));
+    CHECK(clean_local(&t, "/mnt/nas/local/a.png") && clean_local(&t, "/mnt/deep/in/a") && !clean_local(&t, "/mnt/deep/a"));
+    CHECK(clean_local(&none, "/x"));
+    CleanMounts rootnfs = clean_mounts(&a, S("1 0 0:1 / / rw - nfs a rw\n"));
+    CHECK(!clean_local(&rootnfs, "/m/a") && !clean_local(&rootnfs, "/"));
 }
 
 static void test_clean_real(void)
@@ -106,7 +143,9 @@ static void test_clean_real(void)
     snprintf(base, sizeof base, "%s", at("f65r"));
     snprintf(nas, sizeof nas, "%s/nas", base);
     snprintf(mi, sizeof mi, "1 0 0:1 / / rw - ext4 a rw\n2 1 0:2 / %s rw - nfs4 b rw\n", nas);
-    Str m = str_from_c(mi);
+    Arena a;
+    arena_init(&a, "clean test", clean_test_mem, sizeof clean_test_mem);
+    CleanMounts mounts = clean_mounts(&a, str_from_c(mi)), *m = &mounts;
     mkdirs(at("f65r/real/deep")), mkdirs(nas);
     CHECK(symlink("real", at("f65r/rel")) == 0);                         // relative
     CHECK(symlink(at("f65r/real"), at("f65r/abs")) == 0);                // absolute
@@ -305,8 +344,9 @@ static void test_clean_run(void)
         snprintf(lnk, sizeof lnk, "%s", at("f65/linked/normal/link.png"));
         CHECK(symlink(orph, lnk) == 0);
         int dfd = open(at("f65/linked/normal"), O_RDONLY | O_DIRECTORY);
-        CHECK(clean_judge(&a, str_from_c(mi), dfd, path_base(str_from_c(orph)).p) == CR_ORPHAN);
-        CHECK(clean_judge(&a, str_from_c(mi), dfd, "link.png") == CR_KEEP);
+        CleanMounts ms = clean_mounts(&a, str_from_c(mi));
+        CHECK(clean_judge(&a, &ms, dfd, path_base(str_from_c(orph)).p) == CR_ORPHAN);
+        CHECK(clean_judge(&a, &ms, dfd, "link.png") == CR_KEEP);
         close(dfd);
     }
     // Again: nothing more.

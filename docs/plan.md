@@ -238,10 +238,13 @@ No test reads or writes Michael's cache; the first run on it is his `--dry-run`.
   without `/mnt/sd`: 202 orphans (none on the card, all files that are gone), against 3919 before.
   **LOW:** a link's preview carries its target's MTime and Size, so `stat`, not `lstat`.
   Following links costs time: reviewer-2 measured 664 to 943 ms for the dry run at `9fe78b7`,
-  against 162 to 238 ms before, on a loaded machine. Fine for a niced daily job; parsing
-  mountinfo once into an array would win it back if it ever matters.
-- Unit tests: `tests/test_f65.c`; `make test` went from 2933 checks to 3288. Mutants: 58 for
-  `fs/clean.c` (69 after the review), 0 survived. Two left out as inert or equivalent, each with its reason in
+  against 162 to 238 ms before, on a loaded machine: each prefix of each path read mountinfo's text
+  again (about 66,000 times). Since 2026-10-25 (Michael's call) `clean_mounts` parses it once a run
+  into a table, each mount point carrying thumb_local's verdict on it, and `clean_local` and
+  `clean_mounted` look paths up there: 663 to 684 ms down to 153 to 164 ms on the same copy (five
+  runs each, alternated), with the same lists on both mount lists.
+- Unit tests: `tests/test_f65.c`; `make test` went from 2933 checks to 3288 (3312 with the mount table). Mutants: 58 for
+  `fs/clean.c` (69 after the review, 77 with the mount table), 0 survived. Two left out as inert or equivalent, each with its reason in
   `mutants.py`.
 
 ## F7 design (2026-10-24)

@@ -98,10 +98,27 @@ static bool clean_uri_path(const char *uri, char *out, size_t cap)
     return true;
 }
 
-// Whether mountinfo lists dir as a mount point.
-static bool clean_mounted(Str mountinfo, const char *dir)
+// The mount list, parsed once a run: clean_real looks up every prefix of every preview's path, and
+// reading mountinfo's text for each (about 66,000 times on Michael's cache) made a run 4-5 times
+// slower (reviewer-2, 2026-10-25). far is thumb_local's verdict on the mount point itself: the same
+// mount wins for any path below it, so it is the verdict for those paths too.
+typedef struct {
+    char  *mp;
+    size_t n;
+    bool   far;
+} CleanMount;
+
+typedef struct {
+    CleanMount *m;
+    isize       n;
+} CleanMounts;
+
+static CleanMounts clean_mounts(Arena *a, Str mountinfo)
 {
-    isize at = 0;
+    isize at = 0, lines = 0;
+    for (Str line; next_line(mountinfo, &at, &line);) lines++;
+    CleanMounts ms = { arena_new(a, CleanMount, lines + 1), 0 };
+    at = 0;
     for (Str line; next_line(mountinfo, &at, &line);) {
         Str f = line;
         for (int k = 0; k < 4; k++) {
@@ -110,14 +127,37 @@ static bool clean_mounted(Str mountinfo, const char *dir)
         }
         isize sp = str_find(f, ' ');
         char mp[PATH_MAX];
-        if (sp > 0 && octal_decode(str_cut(f, 0, sp), mp, sizeof mp) && strcmp(mp, dir) == 0) return true;
+        if (sp <= 0 || !octal_decode(str_cut(f, 0, sp), mp, sizeof mp)) continue;
+        ms.m[ms.n++] = (CleanMount){ arena_sprintf(a, "%s", mp), strlen(mp), !thumb_local(mountinfo, mp) };
     }
+    return ms;
+}
+
+// thumb_local on the parsed list: the mount with the longest mount point above path, a later one
+// on the same point winning.
+static bool clean_local(const CleanMounts *ms, const char *path)
+{
+    isize best = -1;
+    bool far = false;
+    for (isize i = 0; i < ms->n; i++) {
+        const CleanMount *m = &ms->m[i];
+        bool above = strcmp(m->mp, "/") == 0 || (strncmp(path, m->mp, m->n) == 0 && (path[m->n] == '/' || path[m->n] == 0));
+        if (above && (isize)m->n >= best) best = (isize)m->n, far = m->far;
+    }
+    return !far;
+}
+
+// Whether the mount list has dir as a mount point.
+static bool clean_mounted(const CleanMounts *ms, const char *dir)
+{
+    for (isize i = 0; i < ms->n; i++)
+        if (strcmp(ms->m[i].mp, dir) == 0) return true;
     return false;
 }
 
 // Whether path is on a drive that isn't mounted now: under /run/media/<user>/<name>, /media/<name>
 // or /mnt/<name> when that folder isn't a mount point. Its previews wait for the drive.
-static bool clean_absent_drive(Str mountinfo, const char *path)
+static bool clean_absent_drive(const CleanMounts *ms, const char *path)
 {
     static const struct { const char *prefix; int depth; } roots[] = { { "/run/media/", 2 }, { "/media/", 1 }, { "/mnt/", 1 } };
     for (int i = 0; i < COUNT(roots); i++) {
@@ -131,7 +171,7 @@ static bool clean_absent_drive(Str mountinfo, const char *path)
         }
         char top[PATH_MAX];
         snprintf(top, sizeof top, "%.*s", (int)(p - 1 - path), path);
-        return !clean_mounted(mountinfo, top);
+        return !clean_mounted(ms, top);
     }
     return false;
 }
@@ -140,8 +180,8 @@ static bool clean_absent_drive(Str mountinfo, const char *path)
 // away) still names where it leads. Michael's ~/Documents and the like are links onto /mnt/sd, a
 // card that may be out (reviewer-2, 2026-10-25), so the drive rules judge where a file really is.
 // False past 40 links, past PATH_MAX, or on reaching a network or FUSE mount, where a readlink could
-// hang (thumb_local): the caller then keeps the preview.
-static bool clean_real(Str mountinfo, const char *path, char *out, size_t cap)
+// hang (clean_local): the caller then keeps the preview.
+static bool clean_real(const CleanMounts *ms, const char *path, char *out, size_t cap)
 {
     char rest[PATH_MAX], t[PATH_MAX];
     if (snprintf(rest, sizeof rest, "%s", path) >= (int)sizeof rest || cap < 2) return false;
@@ -163,7 +203,7 @@ static bool clean_real(Str mountinfo, const char *path, char *out, size_t cap)
         }
         size_t o = strlen(out);
         if (snprintf(out + o, cap - o, "%s%s", o > 1 ? "/" : "", part) >= (int)(cap - o)) return false;
-        if (!thumb_local(mountinfo, out)) return false;
+        if (!clean_local(ms, out)) return false;
         ssize_t k = readlink(out, t, sizeof t - 1);
         if (k < 0) continue;   // not a link, or not there: kept as it is
         if (++hops > 40) return false;
@@ -178,7 +218,7 @@ static bool clean_real(Str mountinfo, const char *path, char *out, size_t cap)
 }
 
 // What the second rule makes of one preview, read from dfd/name: CR_ORPHAN, CR_STALE or CR_KEEP.
-static CleanRule clean_judge(Arena *a, Str mountinfo, int dfd, const char *name)
+static CleanRule clean_judge(Arena *a, const CleanMounts *ms, int dfd, const char *name)
 {
     int fd = openat(dfd, name, O_RDONLY | O_NOATIME | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC);
     if (fd < 0) return CR_KEEP;   // not ours to read without touching its atime: left to the others
@@ -194,7 +234,7 @@ static CleanRule clean_judge(Arena *a, Str mountinfo, int dfd, const char *name)
         char path[PATH_MAX], real[PATH_MAX];
         struct stat f;
         if (n == st.st_size && png_meta((Str){ p, n }, m) && m->has_uri && clean_uri_path(m->uri, path, sizeof path) &&
-            clean_real(mountinfo, path, real, sizeof real) && !clean_absent_drive(mountinfo, real)) {
+            clean_real(ms, path, real, sizeof real) && !clean_absent_drive(ms, real)) {
             // stat, not lstat: a link's preview carries its target's MTime and Size (kind_of follows
             // it), so the link itself would be stale on every run (reviewer-2, 2026-10-25).
             if (stat(path, &f) != 0) r = errno == ENOENT || errno == ENOTDIR ? CR_ORPHAN : CR_KEEP;
@@ -233,6 +273,7 @@ static void clean_drop(const CleanOpts *o, CleanStats *s, const char *const *dir
 static void clean_run(Arena *a, const char *root, Str mountinfo, const CleanOpts *o, CleanStats *s)
 {
     *s = (CleanStats){ 0 };
+    CleanMounts ms = clean_mounts(a, mountinfo);
     const char *dirs[CLEAN_DIRS_MAX];
     int fds[CLEAN_DIRS_MAX], nd = 0;
     int rfd = open(root, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
@@ -286,7 +327,7 @@ static void clean_run(Arena *a, const char *root, Str mountinfo, const CleanOpts
         CleanFile *f = &files[i];
         CleanRule r = f->temp ? (o->now - f->mtime > CLEAN_TMP_S ? CR_TEMP : CR_KEEP)
                     : o->now - f->atime > CLEAN_UNUSED_S ? CR_UNUSED
-                    : clean_judge(a, mountinfo, fds[f->dir], f->name);
+                    : clean_judge(a, &ms, fds[f->dir], f->name);
         if (r != CR_KEEP) {
             clean_drop(o, s, dirs, fds, f, r);
             continue;
