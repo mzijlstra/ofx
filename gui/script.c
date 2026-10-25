@@ -253,6 +253,10 @@ static void script_state(char *out, size_t cap)
         if (it != UM_SEP && !ui_menu_enabled(&app.ui, it)) snprintf(menuoff + k, sizeof menuoff - k, "%s%s", k ? "," : "", UI_MENU_ITEM[it].word);
     }
     if (!menuoff[0]) snprintf(menuoff, sizeof menuoff, "-");
+    // The bottom bar as the last frame drew it lies inside the window (F7.1: under the menu bar's
+    // 26 px the rest is as tall as before).
+    Clay_ElementData fd = Clay_GetElementData(CLAY_ID("footer"));
+    int footerin = fd.found && fd.boundingBox.y + fd.boundingBox.height <= (float)GetScreenHeight() + 0.5f;
     int windows = 0;
     DIR *wd = app.windows[0] ? opendir(app.windows) : NULL;
     for (struct dirent *we; wd && (we = readdir(wd));) windows += we->d_name[0] != '.';
@@ -281,7 +285,7 @@ static void script_state(char *out, size_t cap)
              "view=%s cols=%d cells=%d cellfirst=%td celllast=%td fulllines=%d celllines=%d cellcut=%d iconpx=%d icontex=%d iconresets=%d crumbfocus=%d tooltip=%s idlewoke=%s "
              "zoom=%d cellw=%d cellh=%d zoomshown=%d tipin=%d slots=%d "
              "previews=%d thumbsel=%s thumbbox=%s thumbbusy=%d thumbmade=%d thumbread=%d thumbfailed=%d thumbknown=%d thumbnone=%d thumbchanged=%d "
-             "thumbheld=%td thumbdropped=%d thumbresets=%d thumblocal=%d menu=%s menuat=%s menuoff=%s menuhover=%d canwrite=%d windows=%d status=%s",
+             "thumbheld=%td thumbdropped=%d thumbresets=%d thumblocal=%d menu=%s menuat=%s menuoff=%s menuhover=%d canwrite=%d windows=%d siderows=%d footerin=%d status=%s",
              app.cwd, app.list.n, app.list.hidden, STR_ARG(sel), app.ui.list.sel, app.ui.list.top, app.ui.list.rows, app.hover,
              t->accent.r, t->accent.g, t->accent.b, t->bg.r, t->bg.g, t->bg.b, t->icons[0] ? t->icons : "-",
              app.icon_scale, GetScreenWidth(), GetScreenHeight(), app.reloads, app.themes, atomic_load(&watch.batches),
@@ -303,7 +307,7 @@ static void script_state(char *out, size_t cap)
              thumbs.drawn_last, thumbsel, thumbbox, thumbs_busy(), thumbs.got[TG_MADE], thumbs.got[TG_CACHED], thumbs.got[TG_FAILED],
              thumbs.got[TG_FAIL_KNOWN], thumbs.got[TG_NONE], thumbs.got[TG_CHANGED], thumbs.held, thumbs.evicted, thumbs.resets, app.thumb_local,
              app.ui.menu_on ? UI_MENU[app.ui.menu].title : "-", menuat, menuoff, app.menu_title_hover, app.ui.can_write, windows,
-             app.status[0] ? app.status : "-");
+             app.ui.side.rows, footerin, app.status[0] ? app.status : "-");
     frame_us_max = 0;
 }
 

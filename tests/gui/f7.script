@@ -2,6 +2,8 @@
 # home/tree with a.txt, b.txt, sub/, ro/ (x.txt, the folder read only); a mount list of / alone.
 settle
 expect menu=- menuat=- canwrite=1 windows=1 menuoff=open-with,properties
+# Under the menu bar, the sidebar's rows and the bottom bar fit: (516 - 26 - 40 - 28 - 12) / 28.
+expect siderows=14 footerin=1
 sh test -f "$OFX_ROOT/windows/$(cat "$OFX_ROOT/run.pid")"
 shot menubar.png
 # ---- F10: File open, its first entry marked; Down steps over the lines and what can't be picked
@@ -89,6 +91,16 @@ expect menu=File
 point-ui row 1
 click-here
 expect menu=- idx=0
+# A menu open: no row lights under the pointer, and a middle click on a folder opens no tab.
+point-ui menu-title 0
+click-here
+point-ui row 1
+hover-here
+expect menu=File hover=-1
+middle-here
+expect menu=File tabs=1
+key esc
+expect menu=-
 pointer-off
 expect menuhover=-1
 # Open by the pointer: a file to gio open.

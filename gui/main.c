@@ -2921,8 +2921,7 @@ static void press_at(UiInput *in, float x, float y, int mods)
 // tab closed.
 static void middle_at(UiInput *in, float x, float y)
 {
-    if (app.ui.menu_on) return;
-    Hit h = hit_at(x, y);
+    Hit h = hit_at(x, y);   // a menu open: only its titles and entries, so nothing here (F7.1)
     if (h.tab >= 0) in->tab_close = h.tab;
     else if (h.row >= 0) in->mid_row = h.row;
     else if (h.side >= 0) in->mid_side = h.side;

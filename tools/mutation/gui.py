@@ -255,7 +255,6 @@ MUTANTS = [
     (G, "    int r = (h - MENU_H - HEADER_H - FOOTER_H - PAD) / SIDE_ROW_H;", "    int r = (h - HEADER_H - FOOTER_H - PAD) / SIDE_ROW_H;"),
     (G, "        layout_menubar();\n", ""),
     (G, "                if (open) layout_menu(m);", ""),
-    (G, "    if (app.ui.menu_on) return;\n    Hit h = hit_at(x, y);", "    Hit h = hit_at(x, y);"),
 ]
 args = [a for a in sys.argv[1:] if a != '--full']
 full = len(args) != len(sys.argv) - 1
