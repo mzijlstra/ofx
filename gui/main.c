@@ -123,6 +123,8 @@ static int   watch_delay_ms;   // OFX_TEST_WATCH_DELAY_MS, for one test
 
 enum { BAR_BTN_W = 34, BAR_BTN_H = 30, BAR_GAP = 4, ARROW_W = 22, CRUMB_PAD = 10, CRUMB_ICON_PX = 16 };
 enum { TREE_STEP = 10, TRASH_BAR_H = 38 };
+// The menu bar (F7.1): a row of titles over the top bar; a menu's entries, its lines between groups.
+enum { MENU_H = 26, MENU_TITLE_PAD = 10, MENU_ROW_H = 26, MENU_SEP_H = 9, MENU_W_MIN = 280 };
 enum { TAB_H = 30, TAB_X_W = 22, JOB_ROW_H = 40, JOB_WAIT_H = 22, MODE_BTN_W = 28, MODE_BTN_H = 22, MODE_GAP = 4 };
 enum { FONT_PX = 15, ROW_H = 28, ICON_PX = 24, HEADER_H = 40, COLS_H = 26, FOOTER_H = 28, PAD = 12, SIZE_W = 90,
        DATE_W = 100, SIDE_W = 200, SIDE_ROW_H = 28, SIDE_ICON_PX = 20, GAP = 10, ICONS_MAX = 512 };
@@ -173,9 +175,9 @@ static struct {
     int       reloads, themes;
 
     // The edit line's entry: its name when the line opened, and whether it is a folder just made
-    // (Esc keeps "New folder"; the undo removes it whatever it is called by then).
+    // or file (Esc keeps "New folder"; the undo removes it whatever it is called by then).
     char      edit_from[NAME_MAX + 1];
-    bool      edit_new;
+    UndoKind  edit_new;     // UNDO_MKDIR, UNDO_MKFILE (F7.1) for one just made, else UNDO_NONE
     bool      clip_told;    // "the clipboard stays inside ofx" said once
     UiCrumbs  crumbs;       // the top bar's path buttons
     int       crumb_lo, crumb_hi;   // the ones shown in the last frame
@@ -205,7 +207,10 @@ static struct {
     bool      zoom_drag;    // the zoom slider's knob held (F6.3)
     bool      zoom_hover;   // the pointer over its track
     bool      thumb_local;  // the folder's drive is one ofx makes previews on (F6.4: not a network one)
-} app = { .tip = { -1, 0, false, false }, .hover = -1, .side_hover = -1, .tab_hover = -1, .tab_x_hover = -1, .jobx_hover = -1, .mode_hover = -1, .eject_hover = -1 };
+    int       menu_title_hover;   // the menu bar title under the pointer, -1 for none (F7.1)
+    char      exe[PATH_MAX];      // this ofx's binary, for New Window (F7.1); "ofx" when unknown
+    char      windows[PATH_MAX];  // the window registry's folder (fs/windows.c); "" for none
+} app = { .tip = { -1, 0, false, false }, .hover = -1, .side_hover = -1, .tab_hover = -1, .tab_x_hover = -1, .jobx_hover = -1, .mode_hover = -1, .eject_hover = -1, .menu_title_hover = -1 };
 
 static UiHistory hist;
 static Tree      tree;     // the sidebar's tree mode (F6)
@@ -235,7 +240,7 @@ static UiTabs tabbar;
 // What is above the list: the top bar, and the tab bar over the files from two tabs on.
 static int top_h(void)
 {
-    return HEADER_H + (tabbar.n >= 2 ? TAB_H : 0);
+    return MENU_H + HEADER_H + (tabbar.n >= 2 ? TAB_H : 0);
 }
 
 // The sidebar's width: none when it is hidden (F6).
@@ -384,6 +389,7 @@ static bool go_to_in(const char *dir, Str select, isize fallback, bool stepping)
     if (!same && app.have_list && !stepping) hist_leave(&hist, app.cwd, sel_name());
     app.cur = next, app.list = l, app.mime = mime, app.have_list = true, app.error[0] = 0;
     app.ui.in_trash = in_trash;
+    app.ui.can_write = !in_trash && access(dir, W_OK) == 0;   // the File menu's Create entries (F7.1)
     for (isize i = 0; i < l.n; i++) count[i] = COUNT_UNKNOWN;
     app.count = count;
     count_new_listing();
@@ -846,7 +852,7 @@ static void rename_commit(void)
     if (join(a, sizeof a, app.cwd, from) && join(b, sizeof b, app.cwd, to)) {
         // A folder just made stays a "new folder" for undo, whatever its name now.
         undo_gen++;
-        undo_begin(&undo, app.edit_new ? UNDO_MKDIR : UNDO_RENAME);
+        undo_begin(&undo, app.edit_new ? app.edit_new : UNDO_RENAME);
         undo_add(&undo, app.edit_new ? NULL : a, b, NULL);
     }
     ui_edit_close(&app.ui);
@@ -864,8 +870,24 @@ static void new_folder(void)
     go_to(app.cwd, str_from_c(made), app.ui.list.sel);
     ui_edit_open(&app.ui, str_from_c(made));
     snprintf(app.edit_from, sizeof app.edit_from, "%s", made);
-    app.edit_new = true;
+    app.edit_new = UNDO_MKDIR;
 }
+
+// An empty file "New file", named in the row as a new folder is (F7.1).
+static void new_file(void)
+{
+    char made[NAME_MAX + 1], p[PATH_MAX];
+    Err err;
+    if (!op_mkfile(app.cwd, S("New file"), made, sizeof made, &err)) { set_status(true, "%s", err.msg); return; }
+    if (join(p, sizeof p, app.cwd, str_from_c(made))) undo_gen++, undo_begin(&undo, UNDO_MKFILE), undo_add(&undo, NULL, p, NULL);
+    ui_mark_clear(&app.ui);
+    go_to(app.cwd, str_from_c(made), app.ui.list.sel);
+    ui_edit_open(&app.ui, str_from_c(made));
+    snprintf(app.edit_from, sizeof app.edit_from, "%s", made);
+    app.edit_new = UNDO_MKFILE;
+}
+
+static void close_others(bool quit);
 
 static void undo_last(void)
 {
@@ -1073,17 +1095,19 @@ static void act(UiAction a)
     case UA_SIDE_MODE: {
         side_refresh();
         char path[PATH_MAX];
-        State st = { app.ui.side_mode, app.ui.grid, app.ui.zoom };
-        if (state_path(path, sizeof path) && !state_save(path, &st, &err)) set_status(true, "%s", err.msg);
+        if (state_path(path, sizeof path) && !state_put(&scratch, path, "sidebar", SIDE_MODE_NAMES[app.ui.side_mode], &err)) set_status(true, "%s", err.msg);
         break;
     }
     case UA_ZOOM:     // F6.3: as the view, the cursor kept on its row at the refit (ui_refit)
     case UA_VIEW: {   // F6.2: remembered; the loop lays it out before the next frame
         if (a.kind == UA_ZOOM) app.zoomed = true;
         app.icons_reset_armed = true;   // the other size's icons may not fit beside these
-        char path[PATH_MAX];
-        State st = { app.ui.side_mode, app.ui.grid, app.ui.zoom };
-        if (state_path(path, sizeof path) && !state_save(path, &st, &err)) set_status(true, "%s", err.msg);
+        // Only the key that changed: another window may have changed the others (F7.1).
+        char path[PATH_MAX], zoom[16];
+        snprintf(zoom, sizeof zoom, "%d", app.ui.zoom > 0 ? app.ui.zoom : UI_ZOOM_DEFAULT);
+        if (state_path(path, sizeof path) &&
+            !(a.kind == UA_ZOOM ? state_put(&scratch, path, "zoom", zoom, &err) : state_put(&scratch, path, "view", app.ui.grid ? "icons" : "list", &err)))
+            set_status(true, "%s", err.msg);
         break;
     }
     case UA_BACK: hist_go(-1); break;
@@ -1182,6 +1206,12 @@ static void act(UiAction a)
     case UA_CRUMB: crumb_go((int)a.index); break;
     case UA_CRUMB_SHIFT: ui_crumbs_shift(&app.crumbs, app.crumb_lo, (int)a.index); break;
     case UA_NEWFOLDER: new_folder(); break;
+    case UA_NEWFILE: new_file(); break;
+    case UA_NEW_WINDOW:
+        if (spawn_window(app.exe, app.cwd, &err)) set_status(false, "New window on %s", app.cwd);
+        else set_status(true, "%s", err.msg);
+        break;
+    case UA_CLOSE_ALL: close_others(a.all); break;
     case UA_PASTE: paste(); break;
     case UA_UNDO: undo_last(); break;
     case UA_ANSWER: job_answer((int)a.index, a.all); break;
@@ -1376,7 +1406,7 @@ static void list_fit(void)
 
 static int side_rows(int h)
 {
-    int r = (h - HEADER_H - FOOTER_H - PAD) / SIDE_ROW_H;   // the tab bar isn't over the sidebar
+    int r = (h - MENU_H - HEADER_H - FOOTER_H - PAD) / SIDE_ROW_H;   // the tab bar isn't over the sidebar
     return r > 0 ? r : 0;
 }
 
@@ -2143,6 +2173,64 @@ static void layout_tabs(float w)
     }
 }
 
+// ---- the menu bar (F7.1) ----------------------------------------------------------------------
+
+// Menu m's entries under its title: each label on the left and its key on the right, those that
+// can't be picked now dimmed, the marked one in the selection colour; lines between the groups.
+static void layout_menu(int m)
+{
+    Theme *t = &app.theme;
+    Clay_Color off = mix(t->fg_dim, t->bg_light, 0.45f);
+    CLAY(CLAY_ID("menu"), { .layout = { .sizing = { CLAY_SIZING_FIT(MENU_W_MIN), CLAY_SIZING_FIT(0) }, .padding = { 4, 4, 4, 4 },
+                                        .layoutDirection = CLAY_TOP_TO_BOTTOM },
+                            .backgroundColor = cc(t->bg_light),
+                            .border = { .color = mix(t->fg_dim, t->bg_light, 0.6f), .width = CLAY_BORDER_OUTSIDE(1) },
+                            .floating = { .attachTo = CLAY_ATTACH_TO_PARENT, .zIndex = 30, .offset = { 0, 2 },
+                                          .attachPoints = { CLAY_ATTACH_POINT_LEFT_TOP, CLAY_ATTACH_POINT_LEFT_BOTTOM } } }) {
+        for (int i = 0; i < UI_MENU[m].n; i++) {
+            UiMenuItem it = UI_MENU[m].items[i];
+            if (it == UM_SEP) {
+                CLAY(CLAY_IDI("menu-sep", i), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(MENU_SEP_H) }, .padding = { 8, 8, 4, 4 } } }) {
+                    CLAY(CLAY_IDI("menu-line", i), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(1) } },
+                                                     .backgroundColor = mix(t->fg_dim, t->bg_light, 0.3f) }) {}
+                }
+                continue;
+            }
+            bool on = ui_menu_enabled(&app.ui, it), at = on && app.ui.menu_at == i;
+            CLAY(CLAY_IDI("menu-item", i), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(MENU_ROW_H) }, .padding = { 10, 10, 0, 0 },
+                                                         .childGap = 32, .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
+                                             .backgroundColor = at ? cc(t->selection) : cc(t->bg_light), .cornerRadius = CLAY_CORNER_RADIUS(3) }) {
+                text(cz(UI_MENU_ITEM[it].label), on ? cc(t->fg) : off);
+                CLAY(CLAY_IDI("menu-gap", i), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(1) } } }) {}
+                if (UI_MENU_ITEM[it].key[0]) text(cz(UI_MENU_ITEM[it].key), on ? cc(t->fg_dim) : off);
+            }
+        }
+    }
+}
+
+// The menu bar over the top bar (always shown, Michael 2026-10-25): the menus' titles, the open
+// one's menu hanging from it.
+static void layout_menubar(void)
+{
+    Theme *t = &app.theme;
+    CLAY(CLAY_ID("menubar"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(MENU_H) }, .padding = { PAD / 2, PAD / 2, 0, 0 },
+                                           .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
+                               .backgroundColor = cc(t->bg_light),
+                               .border = { .color = mix(t->fg_dim, t->bg_light, 0.2f), .width = { .bottom = 1 } } }) {
+        for (int m = 0; m < UI_MENUS; m++) {
+            bool open = app.ui.menu_on && app.ui.menu == m, hover = app.menu_title_hover == m;
+            CLAY(CLAY_IDI("menu-title", m), { .layout = { .sizing = { CLAY_SIZING_FIT(0), CLAY_SIZING_FIXED(MENU_H - 4) },
+                                                          .padding = { MENU_TITLE_PAD, MENU_TITLE_PAD, 0, 0 },
+                                                          .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
+                                              .backgroundColor = open ? cc(t->selection) : hover ? cc(t->bg) : cc(t->bg_light),
+                                              .cornerRadius = CLAY_CORNER_RADIUS(3) }) {
+                text(cz(UI_MENU[m].title), cc(t->fg));
+                if (open) layout_menu(m);
+            }
+        }
+    }
+}
+
 // ---- the modal panels (F5.1) --------------------------------------------------------------------
 
 typedef enum { MODAL_NONE, MODAL_DELETE, MODAL_CLASH, MODAL_CANCEL, MODAL_QUIT, MODAL_FULL, MODAL_EMPTY } ModalKind;
@@ -2478,8 +2566,9 @@ static Clay_RenderCommandArray layout(int w, int h)
     CLAY(CLAY_ID("root"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0) }, .layoutDirection = CLAY_TOP_TO_BOTTOM },
                             .backgroundColor = cc(t->bg) }) {
         float foot_w = (float)w - modes_w() - zoom_w() - 2 * PAD;   // the status part of the bottom bar
+        layout_menubar();
         layout_bar((float)w);
-        float body_h = (float)(h - HEADER_H - FOOTER_H);
+        float body_h = (float)(h - MENU_H - HEADER_H - FOOTER_H);
         CLAY(CLAY_ID("body"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(body_h) } } }) {
         if (app.ui.side_mode == SIDE_TREE) layout_tree(body_h);
         else if (side_w()) layout_side(body_h);
@@ -2514,14 +2603,18 @@ static Clay_RenderCommandArray layout(int w, int h)
                                            .clip = { .horizontal = true } }) {
             if (modal_kind() != MODAL_NONE) {
                 text(cz("Answer the question above"), cc(t->fg_dim));
+            } else if (app.ui.menu_on) {
+                text(fit(S("Menu: \xE2\x86\x91 \xE2\x86\x93 (k j) move \xC2\xB7 \xE2\x86\x90 \xE2\x86\x92 the next menu \xC2\xB7 Enter picks \xC2\xB7 Esc closes"), foot_w, false),
+                     cc(t->fg_dim));
             } else if (app.ui.crumb_focus) {
                 text(fit(S("Path: \xE2\x86\x90 \xE2\x86\x92 (h l) move \xC2\xB7 Enter goes there \xC2\xB7 Shift+Enter in a new tab \xC2\xB7 Esc back to the list"), foot_w, false),
                      cc(t->fg_dim));
             } else if (app.ui.editing && app.ui.edit_path) {
                 text(cz("Go to: Enter goes there \xC2\xB7 Esc cancels \xC2\xB7 ~ is home, a relative path starts here"), cc(t->fg_dim));
             } else if (app.ui.editing) {
-                text(cz(app.edit_new ? "New folder: Enter keeps the name \xC2\xB7 Esc keeps \"New folder\""
-                                     : "Rename: Enter renames \xC2\xB7 Esc cancels"),
+                text(cz(app.edit_new == UNDO_MKDIR  ? "New folder: Enter keeps the name \xC2\xB7 Esc keeps \"New folder\""
+                        : app.edit_new == UNDO_MKFILE ? "New file: Enter keeps the name \xC2\xB7 Esc keeps \"New file\""
+                                                      : "Rename: Enter renames \xC2\xB7 Esc cancels"),
                      cc(t->fg_dim));
             } else if (app.ui.jobs_focus) {
                 text(fit(S("Jobs: \xE2\x86\x91 \xE2\x86\x93 (k j) move \xC2\xB7 Enter cancels the marked job \xC2\xB7 Esc back to the list"), foot_w, false),
@@ -2595,6 +2688,7 @@ static UiKey ui_key_of(int key, int mods)
     if (m == GLFW_MOD_ALT && key == GLFW_KEY_RIGHT) return UK_FORWARD;
     if (m == GLFW_MOD_ALT && key == GLFW_KEY_UP) return UK_PARENT;
     if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_T) return UK_TAB_NEW;
+    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_N) return UK_NEW_WINDOW;
     if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_W) return UK_TAB_CLOSE;
     if ((m == GLFW_MOD_CONTROL && key == GLFW_KEY_TAB) || (m == GLFW_MOD_CONTROL && key == GLFW_KEY_PAGE_DOWN)) return UK_TAB_NEXT;
     if ((m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT) && key == GLFW_KEY_TAB) || (m == GLFW_MOD_CONTROL && key == GLFW_KEY_PAGE_UP)) return UK_TAB_PREV;
@@ -2661,6 +2755,7 @@ static UiKey ui_key_of(int key, int mods)
     case GLFW_KEY_TAB: return m == 0 ? UK_TAB : UK_NONE;
     case GLFW_KEY_F2: return m == 0 ? UK_F2 : UK_NONE;
     case GLFW_KEY_F9: return m == 0 ? UK_F9 : UK_NONE;
+    case GLFW_KEY_F10: return m == 0 ? UK_F10 : UK_NONE;
     default: return UK_NONE;
     }
 }
@@ -2668,16 +2763,19 @@ static UiKey ui_key_of(int key, int mods)
 static void on_key(GLFWwindow *w, int key, int scancode, int action, int mods)
 {
     if (debug_input) fprintf(stderr, "ofx: key %d action %d mods %#x\n", key, action, mods);
-    // Ctrl+Q asks first when jobs run or wait (F5.3); a scripted window quits at once.
+    // Ctrl+Q closes every ofx window (F7.1), each asking first when its jobs run or wait (F5.3);
+    // a scripted window quits at once.
     if (action == GLFW_PRESS && key == GLFW_KEY_Q && (mods & GLFW_MOD_CONTROL)) {
         if (script_on) app.quit = true;
-        else ev_push((UiEvent){ UK_QUIT, 0 });
+        else ev_push((UiEvent){ UK_QUIT_ALL, 0 });
     }
     UiKey k = action != GLFW_RELEASE ? ui_key_of(key, mods) : UK_NONE;
     if (k) ev_push((UiEvent){ k, 0 });
     // Alt+1 .. Alt+9: a tab by place (the digit rides in ch).
     int m = mods & (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT | GLFW_MOD_ALT | GLFW_MOD_SUPER);
     if (action == GLFW_PRESS && m == GLFW_MOD_ALT && key >= GLFW_KEY_1 && key <= GLFW_KEY_9) ev_push((UiEvent){ UK_TAB_JUMP, (u32)(key - GLFW_KEY_0) });
+    // Alt and a letter: a menu (F7.1); ui/ knows which letters have one.
+    if (action == GLFW_PRESS && m == GLFW_MOD_ALT && key >= GLFW_KEY_A && key <= GLFW_KEY_Z) ev_push((UiEvent){ UK_MENU, (u32)('a' + key - GLFW_KEY_A) });
     if (raylib_key) raylib_key(w, key, scancode, action, mods);
 }
 
@@ -2723,6 +2821,8 @@ typedef struct {
     int   twisty;       // a tree row's open/close mark, -1 for none
     int   eject;        // a drive's eject button, -1 for none
     bool  zoom;         // the zoom slider's track (F6.3)
+    int   menu_title;   // a menu bar title, -1 for none (F7.1)
+    int   menu_item;    // an entry of the open menu (its place), -1 for none
 } Hit;
 
 static bool in_box(Clay_ElementId id, float x, float y)
@@ -2734,7 +2834,16 @@ static bool in_box(Clay_ElementId id, float x, float y)
 
 static Hit hit_at(float x, float y)
 {
-    Hit h = { -1, -1, -1, UB_NONE, -1, -1, -1, 0, -1, -1, -1, -1, false };
+    Hit h = { -1, -1, -1, UB_NONE, -1, -1, -1, 0, -1, -1, -1, -1, false, -1, -1 };
+    if (modal_kind() == MODAL_NONE)
+        for (int m = 0; m < UI_MENUS && h.menu_title < 0; m++)
+            if (in_box(CLAY_IDI("menu-title", m), x, y)) h.menu_title = m;
+    // A menu open: its titles and its entries are all there is to hit (F7.1).
+    if (app.ui.menu_on && modal_kind() == MODAL_NONE) {
+        for (int i = 0; i < UI_MENU[app.ui.menu].n && h.menu_item < 0; i++)
+            if (UI_MENU[app.ui.menu].items[i] != UM_SEP && in_box(CLAY_IDI("menu-item", i), x, y)) h.menu_item = i;
+        return h;
+    }
     if (modal_kind() != MODAL_NONE) {
         // A panel is up: its buttons are all there is to hit.
         static const struct { const char *id; int b; } MB[] = {
@@ -2784,6 +2893,12 @@ static Hit hit_at(float x, float y)
 static void press_at(UiInput *in, float x, float y, int mods)
 {
     Hit h = hit_at(x, y);
+    // The menu bar (F7.1): with a menu open a press elsewhere only closes it.
+    in->menu_title = h.menu_title, in->menu_item = h.menu_item;
+    if (app.ui.menu_on) {
+        in->menu_away = h.menu_title < 0 && h.menu_item < 0;
+        return;
+    }
     if (h.row >= 0) {
         if (!mods && ui_press(&app.press, h.row, now_ms()) == 2) in->dclick = h.row;
         else in->click = h.row, in->click_mods = mods;
@@ -2806,6 +2921,7 @@ static void press_at(UiInput *in, float x, float y, int mods)
 // tab closed.
 static void middle_at(UiInput *in, float x, float y)
 {
+    if (app.ui.menu_on) return;
     Hit h = hit_at(x, y);
     if (h.tab >= 0) in->tab_close = h.tab;
     else if (h.row >= 0) in->mid_row = h.row;
@@ -2866,7 +2982,9 @@ static bool hover_at(float x, float y)
     Hit h = hit_at(x, y);
     bool changed = h.row != app.hover || h.side != app.side_hover || h.bar != app.bar_hover || h.crumb != app.crumb_hover ||
                    h.tab != app.tab_hover || h.tab_x != app.tab_x_hover || h.mode != app.mode_hover || h.eject != app.eject_hover ||
-                   h.modal != app.modal_hover || h.job_x != app.jobx_hover || h.zoom != app.zoom_hover;
+                   h.modal != app.modal_hover || h.job_x != app.jobx_hover || h.zoom != app.zoom_hover || h.menu_title != app.menu_title_hover;
+    app.menu_title_hover = h.menu_title;
+    changed |= ui_menu_hover(&app.ui, h.menu_title, h.menu_item);
     app.hover = h.row, app.side_hover = h.side, app.bar_hover = h.bar, app.crumb_hover = h.crumb;
     app.tab_hover = h.tab, app.tab_x_hover = h.tab_x, app.mode_hover = h.mode, app.eject_hover = h.eject;
     app.modal_hover = h.modal, app.jobx_hover = h.job_x, app.zoom_hover = h.zoom;
@@ -2924,21 +3042,40 @@ static Str list_name(void *ctx, isize i)
 // ---- signals --------------------------------------------------------------------------------
 //
 // SIGTERM and SIGINT end the loop like Ctrl+Q, so the process exits through main: CloseWindow
-// runs, and so does LeakSanitizer, which a default SIGTERM death skips. Both signals are blocked
-// in every thread, and this one takes them with sigwait, then wakes the event wait.
+// runs, and so does LeakSanitizer, which a default SIGTERM death skips. SIGUSR1 is another
+// window's Close All (F7.1): this one closes as when its own window closes, asking first when jobs
+// run. All three are blocked in every thread, and this one takes them with sigwait, then wakes the
+// event wait.
 
-static atomic_bool quit_signal;
+static atomic_bool quit_signal, close_signal;
 static sigset_t    quit_signals;
 static void *volatile planted;   // OFX_TEST_LEAK's block, dropped so nothing points at it
 
 static void *signal_waiter(void *arg)
 {
     (void)arg;
-    int sig;
-    sigwait(&quit_signals, &sig);
-    atomic_store(&quit_signal, true);
-    wake_main();
-    return NULL;
+    for (;;) {
+        int sig;
+        if (sigwait(&quit_signals, &sig) != 0) continue;
+        if (sig == SIGUSR1) {
+            atomic_store(&close_signal, true);
+            wake_main();
+            continue;
+        }
+        atomic_store(&quit_signal, true);
+        wake_main();
+        return NULL;
+    }
+}
+
+// Close All Windows (F7.1): the other ofx windows in the registry are asked to close (SIGUSR1),
+// and this one quits (quit), or has asked first (ui_handle, with jobs). From the menu, it closes
+// as when its window closes: at once, or after that question.
+static void close_others(bool quit)
+{
+    if (app.windows[0]) win_signal_others(app.windows, getpid(), SIGUSR1);
+    if (quit && jobs.nrun + jobs.nwait > 0) close_asked = true;
+    else if (quit) app.quit = true;
 }
 
 static void theme_apply(void)
@@ -2959,7 +3096,8 @@ static void usage(void)
                     "  Space select, Ctrl+A all; F2 rename; Ctrl+Shift+N new folder; Delete trash, Shift+Delete for good;\n"
                     "  Ctrl+C, Ctrl+X, Ctrl+V copy, cut, paste; Ctrl+Z undo; Ctrl+L type a location; Alt+Up up;\n"
                     "  Ctrl+T new tab, Ctrl+W close it, Ctrl+Tab / Ctrl+PgDn next, Ctrl+Shift+Tab / Ctrl+PgUp previous,\n"
-                    "  Alt+1..9 a tab, Ctrl+Shift+PgUp/PgDn move it; middle click a folder for a tab behind; Ctrl+Q quit.\n");
+                    "  Alt+1..9 a tab, Ctrl+Shift+PgUp/PgDn move it; middle click a folder for a tab behind;\n"
+                    "  F10 or Alt+F the File menu; Ctrl+N a new window; Ctrl+Q close every ofx window.\n");
 }
 
 int main(int argc, char **argv)
@@ -2983,6 +3121,7 @@ int main(int argc, char **argv)
     sigemptyset(&quit_signals);
     sigaddset(&quit_signals, SIGTERM);
     sigaddset(&quit_signals, SIGINT);
+    sigaddset(&quit_signals, SIGUSR1);
     pthread_sigmask(SIG_BLOCK, &quit_signals, NULL);
     spawn_init();
     // OFX_TEST_LEAK=1 leaks one block on purpose: the control that shows LeakSanitizer reports
@@ -3080,6 +3219,16 @@ int main(int argc, char **argv)
     space_start();
     timer_start();
     places_reload();
+    // New Window starts this binary (F7.1); one replaced since it started reads "… (deleted)".
+    ssize_t xn = readlink("/proc/self/exe", app.exe, sizeof app.exe - 1);
+    app.exe[xn > 0 ? xn : 0] = 0;
+    if (xn <= 0 || strstr(app.exe, " (deleted)")) snprintf(app.exe, sizeof app.exe, "ofx");
+    // In the window registry, for another window's Close All (F7.1).
+    Err werr;
+    if (win_dir(app.windows, sizeof app.windows) && !win_register(app.windows, getpid(), &werr)) {
+        fprintf(stderr, "ofx: %s\n", werr.msg);
+        app.windows[0] = 0;
+    }
     char state_file[PATH_MAX];
     if (state_path(state_file, sizeof state_file)) {
         State st = state_load(&scratch, state_file);
@@ -3139,6 +3288,7 @@ int main(int argc, char **argv)
             if (app.icons_missed && app.icons_reset_armed) dirty = true, glfwPostEmptyEvent();   // emptied and drawn again at once
         }
         PollInputEvents();   // waits for input, or for watch.c's wake-up
+        if (atomic_exchange(&close_signal, false)) close_asked = true;
         if (atomic_exchange(&watch.theme_ready, false)) theme_apply(), app.themes++, dirty = true;
         if (atomic_exchange(&watch.list_ready, false)) reload(), dirty = true;
         if (atomic_exchange(&watch.mounts_ready, false)) places_reload(), dirty = true;
@@ -3173,11 +3323,12 @@ int main(int argc, char **argv)
         // new question always starts from no targets.
         if (!was_confirming && (app.ui.confirming || a.kind == UA_DELETE)) delete_ask();
         // F2 opened the edit line: on the cursor's entry, as it is named now.
-        if (!was_editing && app.ui.editing && !app.ui.edit_path) snprintf(app.edit_from, sizeof app.edit_from, "%.*s", STR_ARG(sel_name())), app.edit_new = false;
+        if (!was_editing && app.ui.editing && !app.ui.edit_path) snprintf(app.edit_from, sizeof app.edit_from, "%.*s", STR_ARG(sel_name())), app.edit_new = UNDO_NONE;
         if (a.kind != UA_NONE) act(a);
         dirty |= seen;
     }
     if (scripted) script_end();
+    if (app.windows[0]) win_unregister(app.windows, getpid());
     jobs_stop();
     clip_quit();
     count_stop();

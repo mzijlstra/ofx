@@ -1,0 +1,163 @@
+# F7.1: the menu bar and the File menu, on a tree made by tests/gui/run.sh: HOME=<scratch>/home,
+# home/tree with a.txt, b.txt, sub/, ro/ (x.txt, the folder read only); a mount list of / alone.
+settle
+expect menu=- menuat=- canwrite=1 windows=1 menuoff=open-with,properties
+sh test -f "$OFX_ROOT/windows/$(cat "$OFX_ROOT/run.pid")"
+shot menubar.png
+# ---- F10: File open, its first entry marked; Down steps over the lines and what can't be picked
+key f10
+expect menu=File menuat=new-tab modal=-
+shot file-menu.png
+key down
+key down
+key down
+expect menuat=new-file
+key down
+expect menuat=open
+key down
+expect menuat=close-all
+key down
+key down
+expect menuat=new-tab
+key up
+expect menuat=close
+key right
+expect menu=File menuat=new-tab
+key esc
+expect menu=-
+# A typed letter under the menu goes no further: t starts no terminal.
+key f10
+char t
+expect menu=File
+key esc
+expect menu=-
+sh ! grep -q xdg-terminal-exec "$OFX_ROOT/spawn.log" 2>/dev/null
+# Alt+F opens it and closes it again.
+key alt-f
+expect menu=File menuat=new-tab
+key alt-f
+expect menu=-
+# ---- Create New Empty File: made, named in the row; Enter keeps the new name; Ctrl+Z removes it
+key alt-f
+keys down down down
+expect menuat=new-file
+key enter
+wait-for 2000 menu=- editing=1 edit=New_file undo=mkfile
+sh test -f "$OFX_DIR/New file" && test ! -s "$OFX_DIR/New file"
+shot new-file.png
+key ctrl-a
+type notes.txt
+key enter
+wait-for 2000 sel=notes.txt editing=0 undo=mkfile
+sh test -f "$OFX_DIR/notes.txt" && test ! -e "$OFX_DIR/New file"
+key ctrl-z
+wait-for 2000 undo=- n=4
+sh test ! -e "$OFX_DIR/notes.txt"
+# Esc keeps "New file"; written to since, the undo keeps it.
+key f10
+keys down down down enter
+wait-for 2000 editing=1 edit=New_file
+key esc
+wait-for 2000 editing=0 undo=mkfile n=5
+sh echo text > "$OFX_DIR/New file"
+key ctrl-z
+expect undo=mkfile
+sh test -s "$OFX_DIR/New file" && rm "$OFX_DIR/New file"
+wait-for 2000 n=4
+# ---- the mouse: a title opens its menu with nothing marked, and closes it again
+key home
+expect idx=0
+point-ui menu-title 0
+hover-here
+expect menuhover=0
+click-here
+expect menu=File menuat=-
+shot pointer-menu.png
+click-here
+expect menu=-
+click-here
+point-ui menu-item 1
+hover-here
+expect menuat=new-window
+# A greyed entry: not marked, and a press on it leaves the menu open.
+point-ui menu-item 6
+hover-here
+expect menuat=new-window
+click-here
+expect menu=File
+# A press anywhere else only closes it: the row isn't selected.
+point-ui row 1
+click-here
+expect menu=- idx=0
+pointer-off
+expect menuhover=-1
+# Open by the pointer: a file to gio open.
+char /
+type a.txt
+key enter
+expect sel=a.txt
+point-ui menu-title 0
+click-here
+point-ui menu-item 5
+click-here
+expect menu=-
+pointer-off
+sh grep -qx "uwsm-app -- gio open $OFX_DIR/a.txt" "$OFX_ROOT/spawn.log"
+# ---- New Window: this binary on this folder, through uwsm-app; by Ctrl+N and by the menu
+key ctrl-n
+sh grep -qx "uwsm-app -- /.*/ofx[^ /]* $OFX_DIR" "$OFX_ROOT/spawn.log"
+key f10
+key down
+key enter
+expect menu=-
+sh [ "$(grep -c "uwsm-app -- /.*/ofx[^ /]* $OFX_DIR\$" "$OFX_ROOT/spawn.log")" = 2 ]
+# ---- New Tab and Close
+key f10
+key enter
+expect tabs=2 menu=-
+key f10
+key end
+expect menuat=close
+key enter
+expect tabs=1 menu=-
+# ---- a folder ofx can't write to: the Create entries greyed, skipped by the keys
+key ctrl-l
+type ro
+key enter
+wait-for 2000 sel=x.txt canwrite=0 menuoff=new-folder,new-file,open-with,properties
+key f10
+keys down down
+expect menuat=open
+key esc
+# ---- the trash view: no Create, no New Window; Open with nothing in it neither
+key backspace
+press-side 2
+wait-for 2000 trash=1 canwrite=0 menuoff=new-window,new-folder,new-file,open,open-with,properties
+key ctrl-n
+press-side 1
+wait-for 2000 trash=0
+sh [ "$(grep -c "uwsm-app -- /.*/ofx" "$OFX_ROOT/spawn.log")" = 2 ]
+# ---- a question up: no menu
+key ctrl-l
+type ~
+key enter
+char /
+type a.txt
+key enter
+key shift-delete
+expect modal=delete
+key f10
+expect menu=- modal=delete
+key esc
+expect modal=-
+# ---- the keys as GLFW gives them (ui_key_of, on_key): F10, Alt+F, Ctrl+N
+raw-key 299
+expect menu=File menuat=new-tab
+raw-key 299
+expect menu=-
+raw-key 70 4
+expect menu=File
+key esc
+raw-key 78 2
+sh [ "$(grep -c "uwsm-app -- /.*/ofx" "$OFX_ROOT/spawn.log")" = 3 ]
+quit

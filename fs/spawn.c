@@ -71,7 +71,7 @@ static bool spawn_app(const char *const *cmd, isize n, Err *err)
     if (on_path("uwsm-app")) argv[k++] = "uwsm-app", argv[k++] = "--";
     for (isize i = 0; i < n && k < COUNT(argv) - 1; i++) argv[k++] = cmd[i];
     argv[k] = NULL;
-    if (!on_path(argv[0])) return err_set(err, "%s is not installed", argv[0]), false;
+    if (strchr(argv[0], '/') ? access(argv[0], X_OK) != 0 : !on_path(argv[0])) return err_set(err, "%s is not installed", argv[0]), false;
     return spawn_detached((char *const *)argv, err);
 }
 
@@ -82,6 +82,14 @@ static bool spawn_app(const char *const *cmd, isize n, Err *err)
 static bool spawn_open(const char *path, Err *err)
 {
     const char *cmd[] = { "gio", "open", path };
+    return spawn_app(cmd, COUNT(cmd), err);
+}
+
+// Another ofx on dir (F7.1, New Window): exe is this one's own binary, so the window that opens is
+// the same build.
+static bool spawn_window(const char *exe, const char *dir, Err *err)
+{
+    const char *cmd[] = { exe, dir };
     return spawn_app(cmd, COUNT(cmd), err);
 }
 

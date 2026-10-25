@@ -1,0 +1,43 @@
+# F7.1's Close All Windows, on a tree made by tests/gui/run.sh: src/big.bin (8 MiB), dst/;
+# OFX_TEST_COPY_DELAY_MS=300, so a copy runs while it is asked.
+settle
+expect windows=1
+# Three more in the registry: a live one (sleep, which dies of SIGUSR1), one whose pid is another
+# process's now (its start time wrong), one gone. stat's 22nd field is the start time.
+sh sleep 30 >/dev/null 2>&1 & echo $! > "$OFX_ROOT/live.pid"; sleep 30 >/dev/null 2>&1 & echo $! > "$OFX_ROOT/reused.pid"; sh -c 'echo $$ > "$OFX_ROOT/dead.pid"'
+sh for k in live reused; do p=$(cat "$OFX_ROOT/$k.pid"); read -r l < /proc/$p/stat; set -- ${l##*) }; shift 19; echo $(( $1 + $([ $k = reused ] && echo 1 || echo 0) )) > "$OFX_ROOT/windows/$p"; done; echo 1 > "$OFX_ROOT/windows/$(cat "$OFX_ROOT/dead.pid")"
+expect windows=4
+# A copy running.
+key ctrl-l
+type src
+key enter
+char /
+type big
+key enter
+key ctrl-c
+key ctrl-l
+type ../dst
+key enter
+key ctrl-v
+wait-for 2000 jobs=1
+# ---- Ctrl+Q: the live window told, the others' entries gone; this one asks (its job), n stays
+key ctrl-q
+expect modal=quit
+sh p=$(cat "$OFX_ROOT/live.pid"); for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do kill -0 $p 2>/dev/null || exit 0; sleep 0.1; done; exit 1
+sh kill -0 $(cat "$OFX_ROOT/reused.pid") && test ! -e "$OFX_ROOT/windows/$(cat "$OFX_ROOT/reused.pid")" && test ! -e "$OFX_ROOT/windows/$(cat "$OFX_ROOT/dead.pid")"
+expect windows=2
+char n
+expect modal=- jobs=1
+# ---- another window's Close All (SIGUSR1) at this one: as its window closing, asked first
+sh kill -USR1 $(cat "$OFX_ROOT/run.pid")
+wait-for 2000 modal=quit
+char n
+expect modal=- jobs=1
+# ---- the menu's Close All Windows: asked too; Enter quits, the copy cancelled
+key f10
+key end
+key up
+expect menuat=close-all
+key enter
+wait-for 2000 modal=quit menu=-
+key enter

@@ -132,7 +132,7 @@ key shift-delete
 expect confirming=1 modal=delete
 shot confirm.png
 # Clicks outside the panel do nothing; its Cancel cancels
-click-at 120 460
+click-at 120 486
 expect confirming=1 sel=c.txt
 point-ui modal-no
 click-here

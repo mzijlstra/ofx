@@ -1,4 +1,4 @@
-// One level of undo: the last rename, new folder, trash, copy or move (docs/plan.md, F3 "Undo").
+// One level of undo: the last rename, new folder, new file (F7.1), trash, copy or move (docs/plan.md, F3 "Undo").
 // Before it does anything it checks that things are as the action left them; if not, it does
 // nothing and says why. Delete for good can't be undone.
 
@@ -9,9 +9,9 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-typedef enum { UNDO_NONE, UNDO_RENAME, UNDO_MKDIR, UNDO_TRASH, UNDO_COPY, UNDO_MOVE } UndoKind;
+typedef enum { UNDO_NONE, UNDO_RENAME, UNDO_MKDIR, UNDO_TRASH, UNDO_COPY, UNDO_MOVE, UNDO_MKFILE } UndoKind;
 
-// rename, move: from was moved to to; new folder, copy: to was made; trash: from went to file,
+// rename, move: from was moved to to; new folder, new file, copy: to was made; trash: from went to file,
 // with its info.
 typedef struct {
     char *from, *to, *info;
@@ -61,8 +61,8 @@ static bool present(const char *path)
 // What the undo would do, in a few words ("rename", "trash of 3 items").
 static void undo_what(const Undo *u, char *out, size_t cap)
 {
-    static const char *const NAMES[] = { "nothing", "rename", "new folder", "trash", "copy", "move" };
-    if (u->n == 1 || u->kind == UNDO_RENAME || u->kind == UNDO_MKDIR) snprintf(out, cap, "%s", NAMES[u->kind]);
+    static const char *const NAMES[] = { "nothing", "rename", "new folder", "trash", "copy", "move", "new file" };
+    if (u->n == 1 || u->kind == UNDO_RENAME || u->kind == UNDO_MKDIR || u->kind == UNDO_MKFILE) snprintf(out, cap, "%s", NAMES[u->kind]);
     else snprintf(out, cap, "%s of %td items", NAMES[u->kind], u->n);
 }
 
@@ -76,6 +76,12 @@ static bool undo_check(const Undo *u, Err *err)
         if (u->kind == UNDO_MKDIR) {
             struct stat st;
             if (lstat(it->to, &st) != 0 || !S_ISDIR(st.st_mode)) return err_set(err, "%s isn't a folder now: can't undo", it->to), false;
+        }
+        // A new file goes only while it is still empty: what was written into it since is kept.
+        if (u->kind == UNDO_MKFILE) {
+            struct stat st;
+            if (lstat(it->to, &st) != 0 || !S_ISREG(st.st_mode)) return err_set(err, "%s isn't a file now: can't undo", it->to), false;
+            if (st.st_size != 0) return err_set(err, "%s isn't empty now: can't undo", it->to), false;
         }
         if ((u->kind == UNDO_RENAME || u->kind == UNDO_TRASH || u->kind == UNDO_MOVE) && present(it->from))
             return err_set(err, "%s is there again: can't undo", it->from), false;
@@ -115,6 +121,7 @@ static bool undo_do(Undo *u, isize *done, Err *err)
         case UNDO_MKDIR:
             one = ops_allowed(it->to, &e) && (rmdir(it->to) == 0 || (err_set(&e, "%s isn't empty now: can't undo", it->to), false));
             break;
+        case UNDO_MKFILE: one = ops_allowed(it->to, &e) && (unlink(it->to) == 0 || (err_set(&e, "%s: %s", it->to, strerror(errno)), false)); break;
         case UNDO_TRASH: {
             Trashed t = { 0 };
             snprintf(t.file, sizeof t.file, "%s", it->to);

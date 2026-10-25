@@ -33,6 +33,7 @@ typedef enum {
     UK_LOCATION,   // Ctrl+L
     UK_PARENT,     // Alt+Up
     UK_TAB_NEW,    // Ctrl+T
+    UK_NEW_WINDOW, // Ctrl+N (F7.1)
     UK_TAB_CLOSE,  // Ctrl+W
     UK_TAB_NEXT,   // Ctrl+Tab, Ctrl+PgDn
     UK_TAB_PREV,   // Ctrl+Shift+Tab, Ctrl+PgUp
@@ -46,7 +47,10 @@ typedef enum {
     UK_SHIFT_ENTER,   // on a path button: a background tab; elsewhere as Enter
     UK_CRUMBS,     // Ctrl+K: the keyboard on the path buttons (F5.2)
     UK_JOBS,       // Ctrl+J: the keyboard on the job rows' × (F5.3)
-    UK_QUIT,       // Ctrl+Q, or the window closed
+    UK_QUIT,       // the window closed, or another window's Close All (F7.1)
+    UK_QUIT_ALL,   // Ctrl+Q: every ofx window closes (F7.1)
+    UK_F10,        // the menu bar's first menu (F7.1)
+    UK_MENU,       // Alt and a letter: the menu it opens (F7.1); the event's ch is the letter, lower case
     UK_F9,         // the sidebar's next mode (F6)
     UK_VIEW_ICONS, // Ctrl+2: the files as icons (F6.2)
     UK_VIEW_LIST,  // Ctrl+1: the files as the list
@@ -101,6 +105,11 @@ typedef struct {
     int     side_eject;  // a drive's eject button clicked (its row on screen, F6.1), -1 for none
     int     zoom_wheel;  // Ctrl+wheel notches over the files, positive up: the icons bigger (F6.3)
     int     zoom_to;     // the zoom slider's track pressed or dragged: the level (UI_ZOOM_PX), -1 for none
+    // The menu bar (F7.1): a menu's title pressed, an entry of the open menu pressed (its place in
+    // the menu), each -1 for none; a press anywhere else while a menu is open.
+    int     menu_title;
+    int     menu_item;
+    bool    menu_away;
 } UiInput;
 
 typedef enum {
@@ -134,6 +143,10 @@ typedef enum {
     UA_EJECT,       // index: the sidebar row of the drive to eject (F6.1)
     UA_VIEW,        // the view changed (Ui.grid, F6.2): gui/ lays it out again and remembers it
     UA_ZOOM,        // the icon view's size changed (Ui.zoom, F6.3): gui/ refits it (ui_refit) and remembers it
+    UA_NEW_WINDOW,  // another ofx on this folder (F7.1)
+    UA_NEWFILE,     // an empty file, named in the row as a new folder is (F7.1)
+    UA_CLOSE_ALL,   // the other ofx windows asked to close (F7.1); all: this one quits too, else it
+                    // asks first (quit_asking), its jobs running or waiting
 } UiActionKind;
 
 typedef struct {
@@ -149,6 +162,39 @@ enum { UI_ANS_SKIP = 1, UI_ANS_REPLACE = 2, UI_ANS_KEEP = 3, UI_ANS_CANCEL = 4 }
 // above, and the "same for the rest" box).
 // The cancel, quit and queue-full panels (F5.3) use YES and NO, and OK.
 enum { UI_MODAL_YES = 1, UI_MODAL_NO, UI_MODAL_SKIP, UI_MODAL_REPLACE, UI_MODAL_KEEP, UI_MODAL_CANCEL, UI_MODAL_ALL, UI_MODAL_OK };
+
+// The menu bar (F7.1, docs/plan.md "F7 design"): its menus, each a list of entries; UM_SEP is a
+// line between groups.
+typedef enum {
+    UM_SEP, UM_NEW_TAB, UM_NEW_WINDOW, UM_NEW_FOLDER, UM_NEW_FILE, UM_OPEN, UM_OPEN_WITH, UM_PROPERTIES, UM_CLOSE_ALL, UM_CLOSE,
+    UM_ITEMS
+} UiMenuItem;
+
+// Each entry's label, its key as the menu shows it, and its name in a script's state line.
+static const struct { const char *label, *key, *word; } UI_MENU_ITEM[UM_ITEMS] = {
+    [UM_SEP] = { "", "", "-" },
+    [UM_NEW_TAB] = { "New Tab", "Ctrl+T", "new-tab" },
+    [UM_NEW_WINDOW] = { "New Window", "Ctrl+N", "new-window" },
+    [UM_NEW_FOLDER] = { "Create New Folder", "Ctrl+Shift+N", "new-folder" },
+    [UM_NEW_FILE] = { "Create New Empty File", "", "new-file" },
+    [UM_OPEN] = { "Open", "Enter", "open" },
+    [UM_OPEN_WITH] = { "Open With Other Application\xE2\x80\xA6", "", "open-with" },
+    [UM_PROPERTIES] = { "Properties\xE2\x80\xA6", "", "properties" },
+    [UM_CLOSE_ALL] = { "Close All Windows", "Ctrl+Q", "close-all" },
+    [UM_CLOSE] = { "Close", "Ctrl+W", "close" },
+};
+
+static const UiMenuItem UI_MENU_FILE[] = {
+    UM_NEW_TAB, UM_NEW_WINDOW, UM_NEW_FOLDER, UM_NEW_FILE, UM_SEP, UM_OPEN, UM_OPEN_WITH, UM_SEP, UM_PROPERTIES, UM_SEP,
+    UM_CLOSE_ALL, UM_CLOSE,
+};
+
+// The menus in the bar's order: a title, its Alt letter, its entries. F7.4 on adds Edit, View, Go,
+// Bookmarks and Help.
+static const struct { const char *title; char letter; const UiMenuItem *items; int n; } UI_MENU[] = {
+    { "File", 'f', UI_MENU_FILE, sizeof UI_MENU_FILE / sizeof UI_MENU_FILE[0] },
+};
+enum { UI_MENUS = sizeof UI_MENU / sizeof UI_MENU[0] };
 
 // The icon view's sizes (F6.3, Michael 2026-10-24): Yaru's 32 and 48, and its 256 scaled down
 // between them. The list doesn't zoom.
@@ -219,13 +265,19 @@ typedef struct {
     // The trash view (F6): gui/ says when it is shown; "Empty the trash?" up.
     bool   in_trash;
     bool   empty_asking;
+    // The menu bar (F7.1): a menu open, and its entry marked (-1: none, as a menu the pointer
+    // opened). gui/ says whether the folder shown takes new files.
+    bool   menu_on;
+    int    menu;
+    int    menu_at;
+    bool   can_write;
 } Ui;
 
 static UiInput ui_input_none(void)
 {
     return (UiInput){ .click = -1, .dclick = -1, .side_click = -1, .header = -1, .click_mods = 0, .bar = UB_NONE, .crumb = -1,
                       .tab_click = -1, .tab_close = -1, .mid_row = -1, .mid_side = -1, .mid_crumb = -1, .modal = 0, .job_x = -1, .side_mode = -1, .side_twisty = -1, .side_eject = -1,
-                      .zoom_to = -1 };
+                      .zoom_to = -1, .menu_title = -1, .menu_item = -1 };
 }
 
 static isize ui_clamp(isize v, isize lo, isize hi)
@@ -353,7 +405,7 @@ static bool ui_input_acts(const UiInput *in)
     return in->nev > 0 || in->click >= 0 || in->dclick >= 0 || in->side_click >= 0 || in->header >= 0 || in->bar != UB_NONE ||
            in->tab_click >= 0 || in->tab_close >= 0 || in->mid_row >= 0 || in->mid_side >= 0 || in->mid_crumb >= 0 || in->modal > 0 ||
            in->backs > 0 || in->forwards > 0 || in->job_x >= 0 || in->side_mode >= 0 || in->side_twisty >= 0 || in->side_eject >= 0 ||
-           in->zoom_wheel != 0 || in->zoom_to >= 0;
+           in->zoom_wheel != 0 || in->zoom_to >= 0 || in->menu_title >= 0 || in->menu_item >= 0 || in->menu_away;
 }
 
 // Whether a status message gives way to the status line on input that acts (ui_input_acts): a
@@ -771,6 +823,124 @@ static bool ui_jobs_event(Ui *u, const UiInput *in, UiEvent e)
     }
 }
 
+// ---- the menu bar (F7.1) -----------------------------------------------------------------------
+
+// Whether entry it can be picked now. Open With and Properties come with F7.3 and F7.2.
+static bool ui_menu_enabled(const Ui *u, UiMenuItem it)
+{
+    switch (it) {
+    case UM_NEW_TAB: case UM_CLOSE_ALL: case UM_CLOSE: return true;
+    case UM_NEW_WINDOW: return !u->in_trash;   // ofx starts on a folder, not on the trash view
+    case UM_NEW_FOLDER: case UM_NEW_FILE: return !u->in_trash && u->can_write;
+    case UM_OPEN: return u->list.n > 0;
+    default: return false;
+    }
+}
+
+// The open menu's next entry that can be picked from place at, dir 1 down or -1 up, round the
+// end; at itself when none other can, -1 when none at all.
+static int ui_menu_next(const Ui *u, int at, int dir)
+{
+    int n = UI_MENU[u->menu].n;
+    for (int k = 1; k <= n; k++) {
+        int i = ((at + dir * k) % n + n) % n;
+        if (ui_menu_enabled(u, UI_MENU[u->menu].items[i])) return i;
+    }
+    return -1;
+}
+
+// Menu m open: by a key, its first entry that can be picked marked; by the pointer, none. The edit
+// line and the find line close (a new folder keeps its name).
+static void ui_menu_open(Ui *u, int m, bool keys)
+{
+    u->menu_on = true, u->menu = m;
+    u->menu_at = keys ? ui_menu_next(u, -1, 1) : -1;
+    ui_edit_close(u), ui_find_close(u);
+}
+
+// Entry it picked: the menu closes, and gui/ does what it says.
+static UiAction ui_menu_pick(Ui *u, UiMenuItem it)
+{
+    u->menu_on = false;
+    switch (it) {
+    case UM_NEW_TAB: return (UiAction){ UA_TAB_NEW, 0, false };
+    case UM_NEW_WINDOW: return (UiAction){ UA_NEW_WINDOW, 0, false };
+    case UM_NEW_FOLDER: return (UiAction){ UA_NEWFOLDER, 0, false };
+    case UM_NEW_FILE: return (UiAction){ UA_NEWFILE, 0, false };
+    case UM_OPEN: return (UiAction){ UA_OPEN, u->list.sel, false };
+    case UM_CLOSE_ALL: return (UiAction){ UA_CLOSE_ALL, 0, true };   // gui/ asks first with jobs (close_others)
+    case UM_CLOSE: return (UiAction){ UA_TAB_CLOSE, -1, false };
+    default: return (UiAction){ UA_NONE, 0, false };
+    }
+}
+
+// The menu whose Alt letter is ch, -1 for none.
+static int ui_menu_of(u32 ch)
+{
+    for (int m = 0; m < UI_MENUS; m++)
+        if ((u32)UI_MENU[m].letter == ch) return m;
+    return -1;
+}
+
+// A key while a menu is open: true when it was the menu's (*a: what gui/ does). Up, Down, k and j
+// move the mark over what can be picked, round the end; Left, Right, h and l go to the menu that
+// way; Enter picks; Esc and F10 close it, as its own Alt letter does. A typed character goes no
+// further (t would start a terminal behind the menu). Any other key closes the menu and is the
+// list's (a shortcut does what it does).
+static bool ui_menu_event(Ui *u, UiEvent e, UiAction *a)
+{
+    *a = (UiAction){ UA_NONE, 0, false };
+    if (e.key == UK_NONE) {
+        switch (e.ch) {
+        case 'j': e.key = UK_DOWN; break;
+        case 'k': e.key = UK_UP; break;
+        case 'h': e.key = UK_LEFT; break;
+        case 'l': e.key = UK_RIGHT; break;
+        default: return true;
+        }
+    }
+    switch (e.key) {
+    case UK_DOWN: case UK_UP: {
+        int at = ui_menu_next(u, u->menu_at < 0 && e.key == UK_UP ? 0 : u->menu_at, e.key == UK_DOWN ? 1 : -1);
+        u->menu_at = at;
+        return true;
+    }
+    case UK_HOME: u->menu_at = ui_menu_next(u, -1, 1); return true;
+    case UK_END: u->menu_at = ui_menu_next(u, 0, -1); return true;
+    case UK_LEFT: case UK_SEL_LEFT: case UK_RIGHT: case UK_SEL_RIGHT: {
+        int by = e.key == UK_LEFT || e.key == UK_SEL_LEFT ? -1 : 1;
+        ui_menu_open(u, ((u->menu + by) % UI_MENUS + UI_MENUS) % UI_MENUS, true);
+        return true;
+    }
+    case UK_ENTER: case UK_SHIFT_ENTER:
+        if (u->menu_at >= 0 && ui_menu_enabled(u, UI_MENU[u->menu].items[u->menu_at])) *a = ui_menu_pick(u, UI_MENU[u->menu].items[u->menu_at]);
+        return true;
+    case UK_ESC: case UK_F10: case UK_TAB: u->menu_on = false; return true;
+    case UK_MENU: {
+        int m = ui_menu_of(e.ch);
+        if (m == u->menu) u->menu_on = false;
+        else if (m >= 0) ui_menu_open(u, m, true);
+        return true;
+    }
+    default: u->menu_on = false; return false;
+    }
+}
+
+// The pointer over the menu bar (F7.1): over another menu's title while one is open, that menu
+// opens (nothing marked); over an entry, it is marked if it can be picked. True when anything
+// changed.
+static bool ui_menu_hover(Ui *u, int title, int item)
+{
+    if (!u->menu_on) return false;
+    if (title >= 0 && title < UI_MENUS && title != u->menu) {
+        u->menu = title, u->menu_at = -1;
+        return true;
+    }
+    if (item < 0 || item >= UI_MENU[u->menu].n || !ui_menu_enabled(u, UI_MENU[u->menu].items[item]) || item == u->menu_at) return false;
+    u->menu_at = item;
+    return true;
+}
+
 // ---- input ------------------------------------------------------------------------------------
 
 // The next sort for a header click (or `s`'s next column): the same column again reverses.
@@ -827,6 +997,20 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
     }
     if (!u->in_trash) u->empty_asking = false;
     bool prompt = u->asking || u->confirming || u->cancel_asking || u->quit_asking || u->full_told || u->empty_asking;
+    if (prompt) u->menu_on = false;
+    // The menu bar (F7.1): a title opens its menu or closes it; while a menu is open a press on one
+    // of its entries picks it (one that can't be picked keeps the menu open), and a press anywhere
+    // else only closes it.
+    if (!prompt && in->menu_title >= 0 && in->menu_title < UI_MENUS) {
+        if (u->menu_on && u->menu == in->menu_title) u->menu_on = false;
+        else ui_menu_open(u, in->menu_title, false);
+        return (UiAction){ UA_NONE, 0, false };
+    }
+    if (u->menu_on && in->menu_item >= 0 && in->menu_item < UI_MENU[u->menu].n) {
+        UiMenuItem it = UI_MENU[u->menu].items[in->menu_item];
+        return ui_menu_enabled(u, it) ? ui_menu_pick(u, it) : (UiAction){ UA_NONE, 0, false };
+    }
+    if (u->menu_on && in->menu_away) return u->menu_on = false, (UiAction){ UA_NONE, 0, false };
     // The job rows: the mark kept on a row there is; none left, no keyboard there.
     if (u->job_at >= in->job_n) u->job_at = in->job_n - 1;
     if (u->job_at < 0) u->job_at = 0;
@@ -914,6 +1098,12 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
     if (!prompt && in->forwards > 0) return (UiAction){ UA_FORWARD, 0, false };
     for (int k = 0; k < in->nev; k++) {
         UiEvent e = in->ev[k];
+        // Ctrl+Q (F7.1): every window closes, this one as Ctrl+Q closed it before (below).
+        if (e.key == UK_QUIT_ALL && !u->quit_asking) {
+            u->menu_on = false;
+            if (in->jobs_all > 0) u->quit_asking = true, u->cancel_asking = false;
+            return (UiAction){ UA_CLOSE_ALL, 0, in->jobs_all <= 0 };
+        }
         // Ctrl+Q: at once, or asked first when jobs run or wait; under any panel but these.
         if (e.key == UK_QUIT && !u->quit_asking) {   // (a full queue's note took the frame's keys)
             if (in->jobs_all <= 0) return (UiAction){ UA_QUIT, 0, false };
@@ -934,6 +1124,19 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
             u->empty_asking = false;
             if (yes) return (UiAction){ UA_EMPTY_TRASH, 0, false };
             continue;
+        }
+        // The menu bar's keys (F7.1): F10 the first menu, Alt and a letter its menu; under a menu
+        // open, its keys.
+        if (!prompt && !u->menu_on && (e.key == UK_F10 || (e.key == UK_MENU && ui_menu_of(e.ch) >= 0))) {
+            ui_menu_open(u, e.key == UK_F10 ? 0 : ui_menu_of(e.ch), true);
+            continue;
+        }
+        if (u->menu_on && !prompt) {
+            UiAction a;
+            if (ui_menu_event(u, e, &a)) {
+                if (a.kind != UA_NONE) return a;
+                continue;
+            }
         }
         if (u->editing && u->edit_path && !prompt && e.key == UK_CRUMBS) {   // from the location line: it closes
             ui_edit_close(u), ui_crumbs_focus(u, in);
@@ -1090,6 +1293,7 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
             break;
         case UK_PARENT: return (UiAction){ UA_PARENT, 0, false };
         case UK_TAB_NEW: return (UiAction){ UA_TAB_NEW, 0, false };
+        case UK_NEW_WINDOW: return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : UA_NEW_WINDOW, 0, false };
         case UK_TAB_CLOSE: return (UiAction){ UA_TAB_CLOSE, -1, false };
         case UK_TAB_NEXT: return (UiAction){ UA_TAB_STEP, 1, false };
         case UK_TAB_PREV: return (UiAction){ UA_TAB_STEP, -1, false };

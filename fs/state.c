@@ -65,9 +65,9 @@ static State state_load(Arena *scratch, const char *path)
     return s;
 }
 
-// s into file path, its folder made first: written beside it and renamed over it, so a crash
-// leaves the old file or the new, never half of one.
-static bool state_save(const char *path, const State *s, Err *err)
+// body (n bytes) as file path, its folder made first: written beside it and renamed over it, so a
+// crash leaves the old file or the new, never half of one.
+static bool state_write(const char *path, const char *body, isize n, Err *err)
 {
     if (!ops_allowed(path, err)) return false;
     Str d = path_dir(str_from_c(path));
@@ -77,10 +77,6 @@ static bool state_save(const char *path, const State *s, Err *err)
     snprintf(tmp, sizeof tmp, "%s.%d.tmp", path, (int)getpid());
     int fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0600);
     if (fd < 0) return err_set(err, "%s: %s", tmp, strerror(errno)), false;
-    char body[128];
-    int n = snprintf(body, sizeof body, "sidebar=%s\nview=%s\n", SIDE_MODE_NAMES[s->side < SIDE_MODES ? s->side : SIDE_PLACES],
-                     s->icons ? "icons" : "list");
-    if (s->zoom > 0) n += snprintf(body + n, sizeof body - (size_t)n, "zoom=%d\n", s->zoom);
     bool ok = write(fd, body, (size_t)n) == n;
     ok &= close(fd) == 0;
     if (!ok || rename(tmp, path) != 0) {
@@ -89,4 +85,40 @@ static bool state_save(const char *path, const State *s, Err *err)
         return err_set(err, "%s: %s", path, ok ? strerror(e) : "cannot write it"), false;
     }
     return true;
+}
+
+// All of s into file path.
+static bool state_save(const char *path, const State *s, Err *err)
+{
+    char body[128];
+    int n = snprintf(body, sizeof body, "sidebar=%s\nview=%s\n", SIDE_MODE_NAMES[s->side < SIDE_MODES ? s->side : SIDE_PLACES],
+                     s->icons ? "icons" : "list");
+    if (s->zoom > 0) n += snprintf(body + n, sizeof body - (size_t)n, "zoom=%d\n", s->zoom);
+    return state_write(path, body, n, err);
+}
+
+// One key's value into file path, the rest of it as it is now (F7.1): each window is its own
+// process (New Window), so a save of the whole State would put back what another window changed
+// since this one read the file. The file is read again here, the key's line replaced (or added),
+// every other line kept, a key ofx doesn't know too.
+static bool state_put(Arena *scratch, const char *path, const char *key, const char *value, Err *err)
+{
+    ArenaMark mark = arena_mark(scratch);
+    Str text = read_file(scratch, path), k = str_from_c(key);
+    isize cap = text.len + (isize)strlen(key) + (isize)strlen(value) + 4;
+    char *body = arena_try_push(scratch, cap, 1);
+    if (!body) return arena_restore(scratch, mark), err_set(err, "%s: too big", path), false;
+    isize n = 0, at = 0;
+    bool put = false;
+    for (Str line; next_line(text, &at, &line);) {
+        isize eq = str_find(line, '=');
+        bool mine = eq >= 0 && str_eq(str_trim(str_cut(line, 0, eq)), k);
+        if (mine && put) continue;   // a key said twice: once
+        if (mine) n += snprintf(body + n, (size_t)(cap - n), "%s=%s\n", key, value), put = true;
+        else if (line.len) memcpy(body + n, line.p, (size_t)line.len), n += line.len, body[n++] = '\n';
+    }
+    if (!put) n += snprintf(body + n, (size_t)(cap - n), "%s=%s\n", key, value);
+    bool ok = state_write(path, body, n, err);
+    arena_restore(scratch, mark);
+    return ok;
 }

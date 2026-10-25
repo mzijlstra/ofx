@@ -12,7 +12,9 @@
 //                           ctrl-h ctrl-a ctrl-c ctrl-x ctrl-v ctrl-z ctrl-shift-n ctrl-l alt-up
 //                           ctrl-t ctrl-w ctrl-tab ctrl-shift-tab ctrl-shift-pageup ctrl-shift-pagedown,
 //                           shift-left shift-right shift-home shift-end shift-enter ctrl-k ctrl-j ctrl-q,
-//                           ctrl-1 ctrl-2 ctrl-left, ctrl-equal ctrl-minus ctrl-0, and alt-1 .. alt-9
+//                           ctrl-1 ctrl-2 ctrl-left, ctrl-equal ctrl-minus ctrl-0, and alt-1 .. alt-9;
+//                           f10, alt-<letter> (a menu), ctrl-n, and close-window (the compositor's
+//                           close, as SIGUSR1 from another window's Close All); ctrl-q is Close All
 //   char <c>                one typed character
 //   keys <word>...          keys and characters in one frame's input, as fast typing during a slow
 //                           frame gives them: each word a key name (as for `key`) or char:<c>
@@ -135,7 +137,7 @@ static void script_state(char *out, size_t cap)
     Theme *t = &app.theme;
     // The edit line's text, its spaces as '_' (the state line is words).
     static const char *const JOB_PHASES[] = { "scan", "run", "ask", "done" };
-    static const char *const UNDO_KINDS[] = { "-", "rename", "mkdir", "trash", "copy", "move" };
+    static const char *const UNDO_KINDS[] = { "-", "rename", "mkdir", "trash", "copy", "move", "mkfile" };
     char edit[NAME_MAX + 1];
     snprintf(edit, sizeof edit, "%.*s", app.ui.edit_len ? app.ui.edit_len : 1, app.ui.edit_len ? app.ui.edit : "-");
     for (char *c = edit; *c; c++)
@@ -241,6 +243,20 @@ static void script_state(char *out, size_t cap)
     char thumbbox[32] = "-";
     Clay_ElementData tb = Clay_GetElementData(CLAY_IDI("thumb", (int)(app.ui.list.sel - app.ui.list.top)));
     if (tb.found) snprintf(thumbbox, sizeof thumbbox, "%.0fx%.0f", tb.boundingBox.width, tb.boundingBox.height);
+    // The menu bar (F7.1): the open menu's marked entry, the File menu's entries that can't be
+    // picked now (whether or not it is open), and the windows in the registry.
+    char menuat[32] = "-", menuoff[256] = "";
+    if (app.ui.menu_on && app.ui.menu_at >= 0) snprintf(menuat, sizeof menuat, "%s", UI_MENU_ITEM[UI_MENU[app.ui.menu].items[app.ui.menu_at]].word);
+    for (int i = 0; i < UI_MENU[0].n; i++) {
+        UiMenuItem it = UI_MENU[0].items[i];
+        size_t k = strlen(menuoff);
+        if (it != UM_SEP && !ui_menu_enabled(&app.ui, it)) snprintf(menuoff + k, sizeof menuoff - k, "%s%s", k ? "," : "", UI_MENU_ITEM[it].word);
+    }
+    if (!menuoff[0]) snprintf(menuoff, sizeof menuoff, "-");
+    int windows = 0;
+    DIR *wd = app.windows[0] ? opendir(app.windows) : NULL;
+    for (struct dirent *we; wd && (we = readdir(wd));) windows += we->d_name[0] != '.';
+    if (wd) closedir(wd);
     // The cursor's Size cell as drawn, its spaces as '_'.
     char sizecell[64] = "-";
     if (app.have_list && app.ui.list.n > 0) {
@@ -265,7 +281,7 @@ static void script_state(char *out, size_t cap)
              "view=%s cols=%d cells=%d cellfirst=%td celllast=%td fulllines=%d celllines=%d cellcut=%d iconpx=%d icontex=%d iconresets=%d crumbfocus=%d tooltip=%s idlewoke=%s "
              "zoom=%d cellw=%d cellh=%d zoomshown=%d tipin=%d slots=%d "
              "previews=%d thumbsel=%s thumbbox=%s thumbbusy=%d thumbmade=%d thumbread=%d thumbfailed=%d thumbknown=%d thumbnone=%d thumbchanged=%d "
-             "thumbheld=%td thumbdropped=%d thumbresets=%d thumblocal=%d status=%s",
+             "thumbheld=%td thumbdropped=%d thumbresets=%d thumblocal=%d menu=%s menuat=%s menuoff=%s menuhover=%d canwrite=%d windows=%d status=%s",
              app.cwd, app.list.n, app.list.hidden, STR_ARG(sel), app.ui.list.sel, app.ui.list.top, app.ui.list.rows, app.hover,
              t->accent.r, t->accent.g, t->accent.b, t->bg.r, t->bg.g, t->bg.b, t->icons[0] ? t->icons : "-",
              app.icon_scale, GetScreenWidth(), GetScreenHeight(), app.reloads, app.themes, atomic_load(&watch.batches),
@@ -286,6 +302,7 @@ static void script_state(char *out, size_t cap)
              ui_zoom_px(&app.ui), cell_w(), cell_h(), Clay_GetElementData(CLAY_ID("zoom-track")).found, tipin, app.nslots,
              thumbs.drawn_last, thumbsel, thumbbox, thumbs_busy(), thumbs.got[TG_MADE], thumbs.got[TG_CACHED], thumbs.got[TG_FAILED],
              thumbs.got[TG_FAIL_KNOWN], thumbs.got[TG_NONE], thumbs.got[TG_CHANGED], thumbs.held, thumbs.evicted, thumbs.resets, app.thumb_local,
+             app.ui.menu_on ? UI_MENU[app.ui.menu].title : "-", menuat, menuoff, app.menu_title_hover, app.ui.can_write, windows,
              app.status[0] ? app.status : "-");
     frame_us_max = 0;
 }
@@ -327,7 +344,8 @@ static UiKey script_key(Str name)
         { "ctrl-t", UK_TAB_NEW }, { "ctrl-w", UK_TAB_CLOSE }, { "ctrl-tab", UK_TAB_NEXT }, { "ctrl-shift-tab", UK_TAB_PREV },
         { "ctrl-shift-pageup", UK_TAB_LEFT }, { "ctrl-shift-pagedown", UK_TAB_RIGHT },
         { "shift-left", UK_SEL_LEFT }, { "shift-right", UK_SEL_RIGHT }, { "shift-home", UK_SEL_HOME }, { "shift-end", UK_SEL_END },
-        { "shift-enter", UK_SHIFT_ENTER }, { "ctrl-k", UK_CRUMBS }, { "ctrl-j", UK_JOBS }, { "ctrl-q", UK_QUIT },
+        { "shift-enter", UK_SHIFT_ENTER }, { "ctrl-k", UK_CRUMBS }, { "ctrl-j", UK_JOBS }, { "ctrl-q", UK_QUIT_ALL }, { "close-window", UK_QUIT },
+        { "f10", UK_F10 }, { "ctrl-n", UK_NEW_WINDOW },
         { "ctrl-1", UK_VIEW_LIST }, { "ctrl-2", UK_VIEW_ICONS }, { "ctrl-left", UK_SIDE },
         { "ctrl-equal", UK_ZOOM_IN }, { "ctrl-minus", UK_ZOOM_OUT }, { "ctrl-0", UK_ZOOM_RESET },
     };
@@ -476,6 +494,8 @@ static bool script_input(UiInput *in)
             if (str_eq(arg, S("space"))) in->ev[in->nev++] = (UiEvent){ UK_NONE, ' ' };   // a typed space
             else if (arg.len == 5 && str_starts_with(arg, S("alt-")) && arg.p[4] >= '1' && arg.p[4] <= '9')
                 in->ev[in->nev++] = (UiEvent){ UK_TAB_JUMP, (u32)(arg.p[4] - '0') };
+            else if (arg.len == 5 && str_starts_with(arg, S("alt-")) && arg.p[4] >= 'a' && arg.p[4] <= 'z')
+                in->ev[in->nev++] = (UiEvent){ UK_MENU, (u32)arg.p[4] };
             else if (!k) script_fail("no key %s", a);
             else in->ev[in->nev++] = (UiEvent){ k, 0 };
         } else if (str_eq(cmd, S("keys"))) {

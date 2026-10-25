@@ -155,6 +155,22 @@ static bool op_mkdir(const char *dir, Str name, char *made, size_t cap, Err *err
     return err_set(err, "no free name for %.*s", STR_ARG(name)), false;
 }
 
+// An empty file named name in dir (F7.1), as op_mkdir makes a folder: "New file (2)" when taken.
+static bool op_mkfile(const char *dir, Str name, char *made, size_t cap, Err *err)
+{
+    if (!name_valid(name, err)) return false;
+    for (int tries = 0; tries < 5; tries++) {
+        char p[PATH_MAX];
+        if (!name_free(dir, name, false, false, false, made, cap) || !path_put(p, sizeof p, dir, str_from_c(made)))
+            return err_set(err, "no free name for %.*s", STR_ARG(name)), false;
+        if (!ops_allowed(p, err)) return false;
+        int fd = open(p, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0666);
+        if (fd >= 0) return close(fd), true;
+        if (errno != EEXIST) return err_set(err, "%s: %s", p, strerror(errno)), false;
+    }
+    return err_set(err, "no free name for %.*s", STR_ARG(name)), false;
+}
+
 // ---- delete for good --------------------------------------------------------------------------
 
 enum { TREE_DEPTH_MAX = 256 };

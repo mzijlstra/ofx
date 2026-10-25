@@ -3,7 +3,7 @@
 # (tools/gui/run-script.sh):
 #   tests/gui/run.sh <scratch-dir> [binary] [group...]
 # The groups (one or more scripts on one tree): browse big gone watchgap f2 f3 f4 f5 f52 f53 f54
-# f6 (f6, f6b) f62 (f62, f62b, f62c) f63 (f63, f63b, f63c) f64 (f64, f64b, f64c, f64d) hang guard3 guard. Named ones only, or all of them; a group
+# f6 (f6, f6b) f62 (f62, f62b, f62c) f63 (f63, f63b, f63c) f64 (f64, f64b, f64c, f64d) f7 (f7, f7b) hang guard3 guard. Named ones only, or all of them; a group
 # that fails says "== <script>: FAILED" or "<group>: FAILED" (tools/mutation/gui.py reads it).
 set -u
 base=${1:?usage: run.sh <scratch-dir> [binary]}
@@ -156,6 +156,21 @@ T=$base/f64c; rm -rf "$T"; mkdir -p "$T/tree"
 for i in $(seq -w 1 40); do cp "$here/f64/wide.png" "$T/tree/w$i.png"; done
 echo "== f64c"; OFX_TEST_THUMB_HELD_MAX=491520 OFX_TEST_MOUNTINFO="$base/f64/mountinfo" "$here/../../tools/gui/run-script.sh" "$T" "$here/f64c.script" "$bin" "$T/tree" || failed f64c
 echo "== f64d"; OFX_TEST_THUMB_HELD_MAX=245760 OFX_TEST_MOUNTINFO="$base/f64/mountinfo" "$here/../../tools/gui/run-script.sh" "$T" "$here/f64d.script" "$bin" "$T/tree" || failed f64d
+fi
+if want f7; then
+# F7.1: the menu bar. f7: home/tree with a.txt, b.txt, sub/, ro/ (read only); f7b: Close All Windows, a copy running.
+# HOME and the mount list are scratch: the trash view shows the scratch trash only, never a drive's.
+T=$base/f7; rm -rf "$T"; H=$T/home; mkdir -p "$H/tree/sub" "$H/tree/ro"; echo a > "$H/tree/a.txt"; echo b > "$H/tree/b.txt"
+echo x > "$H/tree/ro/x.txt"; chmod 555 "$H/tree/ro"
+printf '1 0 0:1 / / rw - ext4 /dev/x rw\n' > "$T/mountinfo"
+echo "== f7"; OFX_TEST_HOME="$H" OFX_TEST_MOUNTINFO="$T/mountinfo" "$here/../../tools/gui/run-script.sh" "$T" "$here/f7.script" "$bin" "$H/tree" || failed f7
+chmod 755 "$H/tree/ro"
+T=$base/f7b; rm -rf "$T"; mkdir -p "$T/tree/src" "$T/tree/dst"; head -c 8388608 /dev/urandom > "$T/tree/src/big.bin"
+echo "== f7b"; OFX_TEST_COPY_DELAY_MS=300 OFX_TEST_MOUNTINFO="$base/f7/mountinfo" "$here/../../tools/gui/run-script.sh" "$T" "$here/f7b.script" "$bin" "$T/tree" || failed f7b
+# Its own entry gone with it, the live one's taken away at the menu's pass; the sleeps ended.
+for k in live reused; do [ -f "$T/$k.pid" ] && kill "$(cat "$T/$k.pid")" 2>/dev/null; done
+if [ -n "$(ls -A "$T/windows" 2>/dev/null)" ]; then echo "f7b: FAILED: left in the registry: $(ls -A "$T/windows")"; fail=1; fi
+if [ -e "$T/tree/dst/big.bin" ] || ls -A "$T/tree/dst" | grep -q ofx-part; then echo "f7b: FAILED: the copy wasn't cancelled"; fail=1; fi
 fi
 if want hang; then
 T=$base/hang; rm -rf "$T"; mkdir -p "$T/tree/stuck"

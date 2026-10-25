@@ -1496,6 +1496,7 @@ static void test_format(void)
 #include "test_f63.c"
 #include "test_f64.c"
 #include "test_f65.c"
+#include "test_f7.c"
 
 int main(void)
 {
@@ -1572,6 +1573,14 @@ int main(void)
     test_clean_names();
     test_clean_real();
     test_clean_run();
+    test_menu_keys();
+    test_menu_enabled();
+    test_menu_mouse();
+    test_close_all_keys();
+    test_new_file();
+    test_state_put();
+    test_spawn_window();
+    test_windows();
     char cmd[1600];
     snprintf(cmd, sizeof cmd, "chmod -R u+rwx '%s' && rm -rf '%s' '%s'", root, root, decoy);
     if (system(cmd) != 0) fprintf(stderr, "could not remove %s\n", root);
