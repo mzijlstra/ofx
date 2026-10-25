@@ -37,7 +37,14 @@ rules shared by every tool here.
   which is Michael's `~/.cache/thumbnails`, shared with Nemo (and where Nemo's stale-preview loop
   came from, 2026-10-20). `run-script.sh` points `XDG_CACHE_HOME` at `<scratch>/cache`, and the
   unit tests give thumb_get a cache in their root, so no test reads or writes his. Never delete or
-  rewrite anything in his cache to test; a cleanup option is on the later list, for his decision.
+  rewrite anything in his cache to test.
+- **ofx-clean deletes previews** (F6.5) in `$XDG_CACHE_HOME/thumbnails`, which is his cache unless
+  that is set. Michael runs it (his `--dry-run` first, then the timer he enables), not a test.
+  Try it on a copy only: copy with `O_NOATIME` (a plain `cp` resets the access times the 90-day
+  rule reads, on his whole cache), set `XDG_CACHE_HOME` and `OFX_GUI_ROOT` to the copy's folder.
+  The unit tests make their own caches under the root. `make install` writes
+  `~/.config/systemd/user/ofx-clean.{service,timer}` and runs `systemctl --user daemon-reload`;
+  only Michael enables the timer.
 - **ofx changes files since F3:** rename, new folder, trash, delete for good, copy and move. Every
   write in fs/ goes through `ops_allowed` (fs/ops.c), which refuses any path outside
   `OFX_GUI_ROOT` when it is set: `run-script.sh` sets it to the run's scratch dir, the unit tests

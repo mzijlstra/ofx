@@ -1,0 +1,12 @@
+# Daily; a day missed (the machine off) runs at the next login. Enabled by hand after a look at
+# `ofx-clean --dry-run` (docs/plan.md, "F6.5 design").
+[Unit]
+Description=ofx: clean the thumbnail cache daily
+
+[Timer]
+OnCalendar=daily
+Persistent=true
+RandomizedDelaySec=1h
+
+[Install]
+WantedBy=timers.target

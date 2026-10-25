@@ -1495,6 +1495,7 @@ static void test_format(void)
 #include "test_f62.c"
 #include "test_f63.c"
 #include "test_f64.c"
+#include "test_f65.c"
 
 int main(void)
 {
@@ -1568,6 +1569,8 @@ int main(void)
     test_png_meta();
     test_thumb_decode();
     test_thumb_get();
+    test_clean_names();
+    test_clean_run();
     char cmd[1600];
     snprintf(cmd, sizeof cmd, "chmod -R u+rwx '%s' && rm -rf '%s' '%s'", root, root, decoy);
     if (system(cmd) != 0) fprintf(stderr, "could not remove %s\n", root);

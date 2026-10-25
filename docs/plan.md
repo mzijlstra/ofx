@@ -217,6 +217,21 @@ name not of the pattern, and the guard refusing a cache outside the root. Each k
 checked unchanged after a run. Unit mutants for every rule. No GUI code changes, so no GUI mutants.
 No test reads or writes Michael's cache; the first run on it is his `--dry-run`.
 
+**As built (2026-10-25):**
+- `fs/clean.c` (`clean_run`) and `tools/clean.c` (`build/ofx-clean`, and
+  `build/release/ofx-clean` for the install); `tools/systemd/ofx-clean.{service,timer}`.
+- On a copy of Michael's cache (copied with `O_NOATIME`, his left untouched: 8042 files, no atime
+  or mtime changed): 1314 unused (the `fail` markers), 3991 orphans, 8 stale, 243.6 MiB of 362
+  would go, 2729 kept (98.0 MiB); 0.16 s for the dry run, 0.25 s for the run, then nothing on a
+  second run. Each orphan and stale verdict checked again by a separate script: 0 wrong, none
+  under `/run/media`. The stale ones: 6 `fail` markers and 2 previews, all of files with another
+  mtime.
+- A test found a read past the end in the URI decoder on a cut escape (`%2` at the end); fixed
+  before anything ran on real files.
+- Unit tests: `tests/test_f65.c`; `make test` went from 2933 checks to 3191. Mutants: 58 for
+  `fs/clean.c`, 0 survived. Two left out as inert or equivalent, each with its reason in
+  `mutants.py`.
+
 ## F7 design (2026-10-24)
 
 **Asked (Michael):** menus as Nemo has them: File, Edit, View, Go, Bookmarks, Help. The rest of

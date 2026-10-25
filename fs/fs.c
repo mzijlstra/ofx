@@ -16,3 +16,4 @@
 #include "state.c"
 #include "tree.c"
 #include "thumb.c"
+#include "clean.c"

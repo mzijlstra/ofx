@@ -1,0 +1,10 @@
+# The thumbnail cache's daily cleanup (ofx F6.5); started by ofx-clean.timer. `make install` puts
+# the binary's path in place of @BIN@.
+[Unit]
+Description=ofx: clean the thumbnail cache
+
+[Service]
+Type=oneshot
+ExecStart=@BIN@/ofx-clean
+Nice=19
+IOSchedulingClass=idle

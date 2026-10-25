@@ -1,0 +1,293 @@
+// F6.5's unit tests: the thumbnail cache's cleanup (fs/clean.c). Every preview is made here with
+// png_encode, in a cache under the run's root; the mount list is a string. Included by test.c.
+
+static u8 clean_test_mem[MiB(16)];
+
+static void set_times(const char *path, i64 atime, i64 mtime)
+{
+    struct timespec ts[2] = { { (time_t)atime, 0 }, { (time_t)mtime, 0 } };
+    CHECK(utimensat(AT_FDCWD, path, ts, AT_SYMLINK_NOFOLLOW) == 0);
+}
+
+static i64 atime_ns(const char *path)
+{
+    struct stat st;
+    return lstat(path, &st) == 0 ? (i64)st.st_atim.tv_sec * 1000000000 + st.st_atim.tv_nsec : -1;
+}
+
+static bool exists(const char *path)
+{
+    struct stat st;
+    return lstat(path, &st) == 0;
+}
+
+// A preview in cache/dir of uri (with mtime and size when >= 0), read last at atime; its path in
+// out.
+static void preview(Arena *a, const char *cache, const char *dir, const char *uri, i64 mtime, i64 size, i64 atime, char *out)
+{
+    u8 px[4] = { 1, 2, 3, 255 };
+    Str png;
+    CHECK(png_encode(a, (Img){ px, 1, 1 }, uri, mtime < 0 ? 0 : mtime, size < 0 ? 0 : size, &png));
+    CHECK(thumb_file(cache, dir, uri ? uri : "file:///no-uri", out, PATH_MAX));   // NULL: a PNG without the text
+    put_bytes(out, png.p, (size_t)png.len);
+    set_times(out, atime, atime);
+}
+
+// A preview of the file at path, as it is now.
+static void preview_of(Arena *a, const char *cache, const char *dir, const char *path, i64 atime, char *out)
+{
+    char uri[PATH_MAX * 3];
+    struct stat st;
+    CHECK(thumb_uri(path, uri, sizeof uri) && stat(path, &st) == 0);
+    preview(a, cache, dir, uri, st.st_mtim.tv_sec, st.st_size, atime, out);
+}
+
+typedef struct { int n[CR_N]; char last[PATH_MAX]; } Said;
+
+static void said(void *ctx, CleanRule r, const char *path, i64 size)
+{
+    (void)size;
+    Said *s = ctx;
+    s->n[r]++;
+    snprintf(s->last, sizeof s->last, "%s", path);
+}
+
+static void test_clean_names(void)
+{
+    CHECK(clean_name("0123456789abcdef0123456789abcdef.png"));
+    CHECK(!clean_name("0123456789ABCDEF0123456789abcdef.png") && !clean_name("0123456789abcdef0123456789abcde.png"));
+    CHECK(!clean_name("0123456789abcdef0123456789abcdefa.png") && !clean_name("0123456789abcdef0123456789abcdef.pn"));
+    CHECK(!clean_name("0123456789abcdef0123456789abcdeg.png") && !clean_name("0123456789abcdef0123456789abcdef.png~"));
+    CHECK(!clean_name("/123456789abcdef0123456789abcdef.png") && !clean_name("0123456789abcdef0123456789abcde:.png"));
+    CHECK(clean_temp_name(".ofx-123-0.png") && clean_temp_name(".ofx-1234567890-1234567890.png"));
+    CHECK(!clean_temp_name(".ofx--0.png") && !clean_temp_name(".ofx-1-.png") && !clean_temp_name(".ofx-1-2.pngx"));
+    CHECK(!clean_temp_name(".ofx-12345678901-0.png") && !clean_temp_name(".ofx-1-2-3.png") && !clean_temp_name("ofx-1-2.png"));
+    CHECK(!clean_temp_name(".ofx-1.2.png") && !clean_temp_name(".ofx-a-2.png") && !clean_temp_name(".ofx-1-2.jpg"));
+    CHECK(!clean_temp_name(".ofxx1-2.png") && !clean_temp_name(".ofx1-2.png"));
+
+    char p[PATH_MAX];
+    CHECK(clean_uri_path("file:///a%20b/%C3%A9%2f%7E", p, sizeof p));
+    CHECK_STR(str_from_c(p), "/a b/\xc3\xa9/~");
+    CHECK(clean_uri_path("file:///x/A-z_0.9", p, sizeof p));
+    CHECK_STR(str_from_c(p), "/x/A-z_0.9");
+    CHECK(!clean_uri_path("trash:///a", p, sizeof p) && !clean_uri_path("file://host/a", p, sizeof p));
+    CHECK(!clean_uri_path("file:///a%00b", p, sizeof p) && !clean_uri_path("file:///a%2", p, sizeof p));
+    CHECK(!clean_uri_path("file:///a%g0", p, sizeof p) && !clean_uri_path("file:///a%0g", p, sizeof p));
+    CHECK(!clean_uri_path("file:///a%1g", p, sizeof p) && !clean_uri_path("file:///a%1G", p, sizeof p));
+    CHECK(!clean_uri_path("file:///a%", p, sizeof p) && !clean_uri_path("http:///a", p, sizeof p));
+    // Too small: refused, never cut.
+    CHECK(!clean_uri_path("file:///abc", p, 4) && clean_uri_path("file:///abc", p, 5));
+    // Its round trip with thumb_uri, for every byte but NUL.
+    char path[300], uri[PATH_MAX * 3];
+    path[0] = '/';
+    for (int i = 1; i < 256; i++) path[i] = (char)i;
+    path[256] = 0;
+    CHECK(thumb_uri(path, uri, sizeof uri) && clean_uri_path(uri, p, sizeof p) && strcmp(p, path) == 0);
+
+    Str mi = S("1 0 0:1 / / rw - ext4 a rw\n"
+               "2 1 0:2 / /mnt/sd rw - ext4 b rw\n"
+               "3 1 0:3 / /run/media/m/USB\\040KEY rw - vfat c rw\n"
+               "4 1 0:4 / /media/cd rw - iso9660 d rw\n");
+    CHECK(clean_mounted(mi, "/mnt/sd") && clean_mounted(mi, "/") && clean_mounted(mi, "/run/media/m/USB KEY"));
+    CHECK(!clean_mounted(mi, "/mnt") && !clean_mounted(mi, "/mnt/s") && !clean_mounted(STR_EMPTY, "/"));
+    // On a drive that isn't mounted: kept for it.
+    CHECK(clean_absent_drive(mi, "/run/media/m/OTHER/a.png") && clean_absent_drive(mi, "/media/dvd/a.png"));
+    CHECK(clean_absent_drive(mi, "/mnt/usb/x/a.png") && clean_absent_drive(mi, "/run/media/n/USB KEY/a"));
+    // Mounted, or not under a drive's folder: judged.
+    CHECK(!clean_absent_drive(mi, "/mnt/sd/a.png") && !clean_absent_drive(mi, "/run/media/m/USB KEY/a.png"));
+    CHECK(!clean_absent_drive(mi, "/media/cd/x/a.png") && !clean_absent_drive(mi, "/home/m/a.png"));
+    CHECK(!clean_absent_drive(mi, "/mnt/a.png") && !clean_absent_drive(mi, "/media/a.png") && !clean_absent_drive(mi, "/run/media/m/a.png"));
+    CHECK(!clean_absent_drive(mi, "/mnt") && !clean_absent_drive(mi, "/run/media") && !clean_absent_drive(mi, "/mntx/y/a.png"));
+}
+
+static void test_clean_run(void)
+{
+    Arena a;
+    arena_init(&a, "clean test", clean_test_mem, sizeof clean_test_mem);
+    ops_guard(root);
+    i64 now = (i64)time(NULL), day = 86400, recent = now - 10 * day;   // a read 10 days ago: relatime would update it
+    char cache[1200], pics[1200], nas[1200];   // at()'s size, so a name added still fits PATH_MAX
+    snprintf(cache, sizeof cache, "%s", at("f65/cache/thumbnails"));
+    snprintf(pics, sizeof pics, "%s", at("f65/pics"));
+    snprintf(nas, sizeof nas, "%s", at("f65/nas"));
+    char mi[3 * PATH_MAX];
+    snprintf(mi, sizeof mi, "1 0 0:1 / / rw - ext4 a rw\n2 1 0:2 / %s rw - nfs4 b rw\n3 1 0:3 / /mnt/ofx-test-drive rw - ext4 c rw\n", nas);
+
+    // The files.
+    char keep[PATH_MAX], gone[PATH_MAX], gonedir[PATH_MAX], changed[PATH_MAX], grown[PATH_MAX], old[PATH_MAX];
+    snprintf(keep, sizeof keep, "%s/keep.png", pics);
+    snprintf(gone, sizeof gone, "%s/gone.png", pics);
+    snprintf(gonedir, sizeof gonedir, "%s/sub/gone.png", pics);
+    snprintf(changed, sizeof changed, "%s/changed.png", pics);
+    snprintf(grown, sizeof grown, "%s/grown.png", pics);
+    snprintf(old, sizeof old, "%s/old.png", pics);
+    put(keep, "k"), put(gone, "g"), put(gonedir, "g"), put(changed, "c"), put(grown, "g"), put(old, "o");
+
+    enum { P_KEEP, P_GONE, P_GONEDIR, P_CHANGED, P_GROWN, P_OLD, P_DAYS89, P_NAS, P_NODRIVE, P_DRIVE, P_TRASH, P_JUNK,
+           P_FAIL_GONE, P_FAIL_OLD, P_TMP_OLD, P_TMP_NEW, P_LINK, P_DIR, P_OTHER, P_NOURI, P_NOTDIR, P_LOCKED, P_BIG, P_N };
+    char p[P_N][PATH_MAX];
+    preview_of(&a, cache, "normal", keep, recent, p[P_KEEP]);
+    preview_of(&a, cache, "large", gone, recent, p[P_GONE]);
+    preview_of(&a, cache, "x-large", gonedir, recent, p[P_GONEDIR]);
+    preview_of(&a, cache, "xx-large", changed, recent, p[P_CHANGED]);
+    preview_of(&a, cache, "normal", grown, recent, p[P_GROWN]);
+    preview_of(&a, cache, "large", old, now - 91 * day, p[P_OLD]);
+    set_times(p[P_OLD], now - 91 * day, now - day);   // the atime decides, not the mtime
+    char uri[PATH_MAX * 3];
+    preview_of(&a, cache, "x-large", keep, now - 89 * day, p[P_DAYS89]);
+    set_times(p[P_DAYS89], now - 89 * day, now - 200 * day);
+    snprintf(uri, sizeof uri, "file://%s/missing.png", nas);
+    preview(&a, cache, "normal", uri, 1, 1, recent, p[P_NAS]);
+    preview(&a, cache, "normal", "file:///mnt/ofx-test-nodrive/a.png", 1, 1, recent, p[P_NODRIVE]);
+    preview(&a, cache, "normal", "file:///mnt/ofx-test-drive/a.png", 1, 1, recent, p[P_DRIVE]);
+    preview(&a, cache, "normal", "trash:///a.png", 1, 1, recent, p[P_TRASH]);
+    snprintf(p[P_JUNK], PATH_MAX, "%s/normal/%s", cache, "00000000000000000000000000000000.png");
+    put(p[P_JUNK], "not a png"), set_times(p[P_JUNK], recent, recent);
+    preview_of(&a, cache, "fail/gnome-thumbnail-factory", gone, recent, p[P_FAIL_GONE]);
+    preview_of(&a, cache, "fail/ofx", keep, now - 200 * day, p[P_FAIL_OLD]);
+    snprintf(p[P_TMP_OLD], PATH_MAX, "%s/large/.ofx-12-3.png", cache);
+    put(p[P_TMP_OLD], "t"), set_times(p[P_TMP_OLD], now, now - 2 * day);
+    snprintf(p[P_TMP_NEW], PATH_MAX, "%s/large/.ofx-12-4.png", cache);
+    put(p[P_TMP_NEW], "t"), set_times(p[P_TMP_NEW], now - 300 * day, now - 3600);
+    // A link and a folder with a preview's name, and a file without one: never touched, even old.
+    char target[PATH_MAX];
+    snprintf(target, sizeof target, "%s", at("f65/target.png"));
+    put(target, "t");
+    snprintf(p[P_LINK], PATH_MAX, "%s/normal/11111111111111111111111111111111.png", cache);
+    CHECK(symlink(target, p[P_LINK]) == 0);
+    set_times(p[P_LINK], now - 300 * day, now - 300 * day);
+    snprintf(p[P_DIR], PATH_MAX, "%s/normal/22222222222222222222222222222222.png", cache);
+    mkdirs(p[P_DIR]);
+    set_times(p[P_DIR], now - 300 * day, now - 300 * day);
+    snprintf(p[P_OTHER], PATH_MAX, "%s/normal/other.png", cache);
+    put(p[P_OTHER], "o"), set_times(p[P_OTHER], now - 300 * day, now - 300 * day);
+    preview(&a, cache, "x-large", NULL, -1, -1, recent, p[P_NOURI]);
+    // A file below a file (ENOTDIR): gone. One in a folder it can't search (EACCES): kept.
+    snprintf(uri, sizeof uri, "file://%s/keep.png/a.png", pics);
+    preview(&a, cache, "x-large", uri, 1, 1, recent, p[P_NOTDIR]);
+    char locked[PATH_MAX];
+    snprintf(locked, sizeof locked, "%s/locked/a.png", pics);
+    put(locked, "l");
+    preview_of(&a, cache, "x-large", locked, recent, p[P_LOCKED]);
+    CHECK(chmod(path_dir(str_from_c(locked)).len ? arena_cstr(&a, path_dir(str_from_c(locked))) : "", 0) == 0);
+    // Bigger than a cached preview can be: not read, so kept although its file is gone.
+    {
+        u8 px[4] = { 0 };
+        Str png;
+        CHECK(png_encode(&a, (Img){ px, 1, 1 }, "file:///ofx-test-none/big.png", 1, 1, &png));
+        CHECK(thumb_file(cache, "x-large", "file:///ofx-test-none/big.png", p[P_BIG], PATH_MAX));
+        FILE *bf = fopen(p[P_BIG], "wb");
+        CHECK(bf != NULL);
+        if (bf) {
+            fwrite(png.p, 1, (size_t)png.len, bf);
+            CHECK(fseek(bf, THUMB_CACHED_MAX, SEEK_CUR) == 0 && fputc(0, bf) == 0);
+            fclose(bf);
+        }
+        set_times(p[P_BIG], recent, recent);
+    }
+    // Not looked at: a size folder that is a link, and a file in the cache's root.
+    char away[PATH_MAX], awayf[PATH_MAX], rootf[PATH_MAX];
+    snprintf(away, sizeof away, "%s", at("f65/away"));
+    preview_of(&a, away, "normal", gone, now - 300 * day, awayf);
+    CHECK(symlink(at("f65/away/normal"), at("f65/cache/thumbnails/fail/linked")) == 0);
+    snprintf(rootf, sizeof rootf, "%s/33333333333333333333333333333333.png", cache);
+    put(rootf, "r"), set_times(rootf, now - 300 * day, now - 300 * day);
+
+    // The files change after their previews: one deleted, one in a deleted folder, one touched, one grown.
+    unlink(gone), unlink(gonedir), rmdir(path_dir(str_from_c(gonedir)).len ? arena_cstr(&a, path_dir(str_from_c(gonedir))) : "");
+    set_mtime(changed, mtime_of(changed) + 5);
+    put(grown, "grown");
+    set_mtime(grown, mtime_of(keep));
+    (void)size_of;
+
+    static const CleanRule want[P_N] = {
+        [P_GONE] = CR_ORPHAN, [P_GONEDIR] = CR_ORPHAN, [P_CHANGED] = CR_STALE, [P_GROWN] = CR_STALE, [P_OLD] = CR_UNUSED,
+        [P_DRIVE] = CR_ORPHAN, [P_FAIL_GONE] = CR_ORPHAN, [P_FAIL_OLD] = CR_UNUSED, [P_TMP_OLD] = CR_TEMP, [P_NOTDIR] = CR_ORPHAN,
+    };
+    i64 before[P_N];
+    for (int i = 0; i < P_N; i++) before[i] = atime_ns(p[i]);
+
+    // A dry run: each said, nothing deleted, no atime touched.
+    Said s = { 0 };
+    CleanOpts o = { .now = now, .cap = CLEAN_CAP, .dry = true, .say = said, .ctx = &s };
+    CleanStats st;
+    clean_run(&a, cache, str_from_c(mi), &o, &st);
+    CHECK(st.n[CR_ORPHAN] == 5 && st.n[CR_STALE] == 2 && st.n[CR_UNUSED] == 2 && st.n[CR_TEMP] == 1 && st.n[CR_CAP] == 0);
+    CHECK(s.n[CR_ORPHAN] == 5 && s.n[CR_STALE] == 2 && s.n[CR_UNUSED] == 2 && s.n[CR_TEMP] == 1 && s.n[CR_KEEP] == 0);
+    CHECK(st.n[CR_KEEP] == 10 && st.failed == 0 && !st.cut);   // keep, 89 days, nas, nodrive, trash, junk, tmp_new, nouri, locked, big
+    for (int i = 0; i < P_N; i++) CHECK(exists(p[i]) && atime_ns(p[i]) == before[i]);
+
+    // The run: the same files go, the others stay with their atimes.
+    memset(&s, 0, sizeof s);
+    o.dry = false;
+    clean_run(&a, cache, str_from_c(mi), &o, &st);
+    CHECK(st.n[CR_ORPHAN] == 5 && st.n[CR_STALE] == 2 && st.n[CR_UNUSED] == 2 && st.n[CR_TEMP] == 1 && st.failed == 0);
+    CHECK(s.n[CR_ORPHAN] == 5);
+    for (int i = 0; i < P_N; i++) {
+        bool stays = want[i] == CR_KEEP;
+        CHECK(exists(p[i]) == stays);
+        if (stays && exists(p[i]) != stays) fprintf(stderr, "  preview %d\n", i);
+        if (stays) CHECK(atime_ns(p[i]) == before[i]);
+    }
+    CHECK(exists(target) && exists(awayf) && exists(rootf) && exists(keep));
+    // A preview reached through a link is never read (O_NOFOLLOW): a link to an orphan's preview.
+    {
+        char orph[PATH_MAX], lnk[PATH_MAX];
+        preview(&a, at("f65/linked"), "normal", "file:///ofx-test-none/l.png", 1, 1, recent, orph);
+        snprintf(lnk, sizeof lnk, "%s", at("f65/linked/normal/link.png"));
+        CHECK(symlink(orph, lnk) == 0);
+        int dfd = open(at("f65/linked/normal"), O_RDONLY | O_DIRECTORY);
+        CHECK(clean_judge(&a, str_from_c(mi), dfd, path_base(str_from_c(orph)).p) == CR_ORPHAN);
+        CHECK(clean_judge(&a, str_from_c(mi), dfd, "link.png") == CR_KEEP);
+        close(dfd);
+    }
+    // Again: nothing more.
+    clean_run(&a, cache, str_from_c(mi), &o, &st);
+    CHECK(st.n[CR_ORPHAN] + st.n[CR_STALE] + st.n[CR_UNUSED] + st.n[CR_TEMP] + st.n[CR_CAP] == 0 && st.n[CR_KEEP] == 10);
+
+    // The cap: the least recently read go first, until the rest fit.
+    char capc[PATH_MAX], c[4][PATH_MAX];
+    snprintf(capc, sizeof capc, "%s", at("f65/capcache/thumbnails"));
+    for (int i = 0; i < 4; i++) {
+        snprintf(uri, sizeof uri, "trash:///cap%d", i);
+        preview(&a, capc, "large", uri, -1, -1, now - (10 - i) * day, c[i]);   // c[0] read longest ago
+    }
+    i64 one = size_of(c[0]);
+    CHECK(one > 0 && size_of(c[3]) == one);
+    o.cap = 2 * one;
+    clean_run(&a, capc, str_from_c(mi), &o, &st);
+    CHECK(st.n[CR_CAP] == 2 && st.bytes[CR_CAP] == 2 * one && st.n[CR_KEEP] == 2 && st.bytes[CR_KEEP] == 2 * one);
+    CHECK(!exists(c[0]) && !exists(c[1]) && exists(c[2]) && exists(c[3]));
+    clean_run(&a, capc, str_from_c(mi), &o, &st);   // exactly at the cap: nothing goes
+    CHECK(st.n[CR_CAP] == 0 && exists(c[2]) && exists(c[3]));
+    o.cap = 2 * one - 1;   // one byte over: one more goes
+    clean_run(&a, capc, str_from_c(mi), &o, &st);
+    CHECK(st.n[CR_CAP] == 1 && !exists(c[2]) && exists(c[3]));
+    // A delete that fails frees nothing: the next ones still go until the rest fit.
+    char capd[1200], d[4][PATH_MAX];
+    snprintf(capd, sizeof capd, "%s", at("f65/capfail/thumbnails"));
+    for (int i = 0; i < 4; i++) {
+        snprintf(uri, sizeof uri, "trash:///capfail%d", i);
+        preview(&a, capd, i ? "large" : "normal", uri, -1, -1, now - (10 - i) * day, d[i]);
+    }
+    char ro[PATH_MAX];
+    snprintf(ro, sizeof ro, "%s/normal", capd);
+    CHECK(chmod(ro, 0555) == 0);
+    o.cap = 2 * size_of(d[1]);
+    clean_run(&a, capd, str_from_c(mi), &o, &st);
+    CHECK(st.failed == 1 && st.n[CR_CAP] == 2 && exists(d[0]) && !exists(d[1]) && !exists(d[2]) && exists(d[3]));
+    chmod(ro, 0755);
+    o.cap = CLEAN_CAP;
+
+    // The guard: a cache outside the root deletes nothing.
+    char far[PATH_MAX], farf[PATH_MAX];
+    snprintf(far, sizeof far, "%s/thumbnails", decoy);
+    preview(&a, far, "normal", "file:///nowhere/a.png", 1, 1, recent, farf);
+    clean_run(&a, far, str_from_c(mi), &o, &st);
+    CHECK(st.failed == 1 && st.n[CR_ORPHAN] == 0 && exists(farf));
+    // A cache that is a link: not followed.
+    CHECK(symlink(capc, at("f65/linkcache")) == 0);
+    clean_run(&a, at("f65/linkcache"), str_from_c(mi), &o, &st);
+    CHECK(st.n[CR_KEEP] == 0 && exists(c[3]));
+    ops_guard(NULL);
+}

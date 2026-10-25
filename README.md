@@ -10,7 +10,7 @@ about 0% CPU: it draws only when something changes.
 make            # build/ofx, debug with ASan and UBSan
 make release    # build/release/ofx
 make test       # unit tests for fs/ and ui/
-make install    # build/release/ofx into ~/.local/bin
+make install    # ofx and ofx-clean into ~/.local/bin, the cleanup's timer into ~/.config/systemd/user
 ofx [FOLDER]     # the current folder by default
 ```
 
@@ -96,6 +96,18 @@ ones ofx made. A file over 10 MiB, or on a network or FUSE drive, gets none made
 decode gets an entry in `fail/ofx/` and isn't tried again until it changes. The list view keeps its
 icons.
 
+The cache's cleanup, `ofx-clean` (nothing else cleans it, Nemo neither): a preview not read for 90
+days goes; so does one whose file is gone or has changed (kept: files on a network drive or on a
+drive not mounted now); then, while the cache is over 1 GiB, the least recently read go. It reads
+the previews without changing their access times. `ofx-clean --dry-run` lists what would go and
+deletes nothing. `make install` puts in a daily systemd user timer but leaves it off; after a look
+at the dry run:
+
+```sh
+systemctl --user enable --now ofx-clean.timer
+journalctl --user -u ofx-clean   # one line a day: what went, and the MiB freed and kept
+```
+
 The sidebar, in one of three modes, picked with the three buttons at the left of the bottom bar
 or F9 (remembered in `~/.local/state/ofx/state`):
 - **places**: under *Places*, Home, your GTK bookmarks (`~/.config/gtk-3.0/bookmarks`, the ones
@@ -136,3 +148,5 @@ Empty Trash deletes all of it after asking. Rename, paste and a new folder don't
 time against them, `tools/mutation/gui.py` the window against the GUI scripts. GUI scripts run in
 a private headless weston, never on the desktop: see `CLAUDE.md` and `tests/gui/run.sh`.
 `build/ofx-probe DIR` prints a folder as ofx sees it (types and icon files), without a window.
+`build/ofx-clean` is the cache's cleanup: it deletes in `~/.cache/thumbnails`, so try it with
+`--dry-run`, or with `XDG_CACHE_HOME` on a copy.

@@ -16,10 +16,16 @@ PREFIX  ?= $(HOME)/.local
 
 .PHONY: all release test install clean
 
-all: build/ofx
+all: build/ofx build/ofx-clean
 
 build/ofx-probe: tools/probe.c $(wildcard base/*.c base/*.h fs/*.c) | build
 	$(CC) $(CFLAGS) $(IMG_INC) $(DEBUG) -o $@ tools/probe.c $(IMG_LIBS) -lm
+
+build/ofx-clean: tools/clean.c $(wildcard base/*.c base/*.h fs/*.c) | build
+	$(CC) $(CFLAGS) $(IMG_INC) $(DEBUG) -o $@ tools/clean.c $(IMG_LIBS) -lm
+
+build/release/ofx-clean: tools/clean.c $(wildcard base/*.c base/*.h fs/*.c) | build/release
+	$(CC) $(CFLAGS) $(IMG_INC) $(RELEASE) -o $@ tools/clean.c $(IMG_LIBS) -lm
 
 build/test: $(wildcard tests/*.c) $(wildcard base/*.c base/*.h fs/*.c ui/*.c) | build
 	$(CC) $(CFLAGS) $(IMG_INC) $(DEBUG) -o $@ tests/test.c $(IMG_LIBS) -lm
@@ -114,10 +120,17 @@ build/mut/clay.o: gui/clay.c vendor/clay/clay.h Makefile | build/mut
 build/ofx-mut: $(SRC) build/mut/clay.o $(RL_OUT)/libraylib.a $(OFX_WL)/stamp Makefile | build
 	$(MUT_CC) $(CFLAGS) $(VENDOR) $(DEBUG) -DOFX_CLAY_APART -o $@ gui/main.c build/mut/clay.o $(LINK)
 
-install: build/release/ofx
-	install -d $(PREFIX)/bin
-	install -m 755 build/release/ofx $(PREFIX)/bin/
+# The cleanup's timer (F6.5) is installed and loaded, not enabled: Michael enables it after a look
+# at `ofx-clean --dry-run`.
+UNITS   ?= $(HOME)/.config/systemd/user
+
+install: build/release/ofx build/release/ofx-clean
+	install -d $(PREFIX)/bin $(UNITS)
+	install -m 755 build/release/ofx build/release/ofx-clean $(PREFIX)/bin/
 	rm -f $(PREFIX)/bin/fx   # the name before ofx (2026-10-22)
+	sed 's|@BIN@|$(PREFIX)/bin|' tools/systemd/ofx-clean.service > $(UNITS)/ofx-clean.service
+	install -m 644 tools/systemd/ofx-clean.timer $(UNITS)/
+	systemctl --user daemon-reload
 
 build build/release build/mut:
 	mkdir -p $@
