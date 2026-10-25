@@ -44,10 +44,9 @@ key alt-f
 keys down down down
 expect menuat=new-file
 key enter
-wait-for 2000 menu=- editing=1 edit=New_file undo=mkfile
+wait-for 2000 menu=- editing=1 edit=New_file undo=mkfile esel=0-8
 sh test -f "$OFX_DIR/New file" && test ! -s "$OFX_DIR/New file"
 shot new-file.png
-key ctrl-a
 type notes.txt
 key enter
 wait-for 2000 sel=notes.txt editing=0 undo=mkfile

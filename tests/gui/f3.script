@@ -88,7 +88,7 @@ wait-for 2000 undo=- sel=a.txt
 sh test -f "$OFX_DIR/a.txt" && test ! -e "$OFX_DIR/re-a.txt"
 # ---- new folder: made at once, renamed in the line; undo removes it
 key ctrl-shift-n
-expect editing=1 edit=New_folder undo=mkdir
+expect editing=1 edit=New_folder undo=mkdir esel=0-10 caret=10
 sh test -d "$OFX_DIR/New folder"
 key backspace
 key backspace

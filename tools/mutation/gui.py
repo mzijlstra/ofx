@@ -259,6 +259,8 @@ MUTANTS = [
     (G, "    int r = (h - MENU_H - HEADER_H - FOOTER_H - PAD) / SIDE_ROW_H;", "    int r = (h - HEADER_H - FOOTER_H - PAD) / SIDE_ROW_H;", 'f7'),
     (G, "        layout_menubar();\n", "", 'f7'),
     (G, "                if (open) layout_menu(m);", "", 'f7'),
+    (G, "    ui_edit_open_all(&app.ui, str_from_c(made));\n    snprintf(app.edit_from, sizeof app.edit_from, \"%s\", made);\n    app.edit_new = UNDO_MKDIR;", "    ui_edit_open(&app.ui, str_from_c(made));\n    snprintf(app.edit_from, sizeof app.edit_from, \"%s\", made);\n    app.edit_new = UNDO_MKDIR;", 'f3'),
+    (G, "    ui_edit_open_all(&app.ui, str_from_c(made));\n    snprintf(app.edit_from, sizeof app.edit_from, \"%s\", made);\n    app.edit_new = UNDO_MKFILE;", "    ui_edit_open(&app.ui, str_from_c(made));\n    snprintf(app.edit_from, sizeof app.edit_from, \"%s\", made);\n    app.edit_new = UNDO_MKFILE;", 'f7'),
 ]
 import concurrent.futures, queue, threading
 

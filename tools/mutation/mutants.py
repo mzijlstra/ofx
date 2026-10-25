@@ -990,4 +990,5 @@ MUTANTS += [
     (U, "    for (int k = 0; k < in->nev && !u->quit_asking; k++)\n        if (in->ev[k].key == UK_QUIT) {", "    for (int k = 0; k < 0; k++)\n        if (in->ev[k].key == UK_QUIT) {"),
     (U, "            if (in->jobs_all <= 0) return (UiAction){ UA_QUIT, 0, false };\n            u->quit_asking = true, u->cancel_asking = false;\n        }\n    // The panels", "            if (in->jobs_all < 0) return (UiAction){ UA_QUIT, 0, false };\n            u->quit_asking = true, u->cancel_asking = false;\n        }\n    // The panels"),
     (U, "            u->quit_asking = true, u->cancel_asking = false;\n        }\n    // The panels", "            u->quit_asking = true;\n        }\n    // The panels"),
+    (U, "    ui_edit_start(u, text, false);\n    u->anchor = 0;", "    ui_edit_start(u, text, false);"),
 ]

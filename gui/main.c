@@ -868,7 +868,7 @@ static void new_folder(void)
     if (join(p, sizeof p, app.cwd, str_from_c(made))) undo_gen++, undo_begin(&undo, UNDO_MKDIR), undo_add(&undo, NULL, p, NULL);
     ui_mark_clear(&app.ui);
     go_to(app.cwd, str_from_c(made), app.ui.list.sel);
-    ui_edit_open(&app.ui, str_from_c(made));
+    ui_edit_open_all(&app.ui, str_from_c(made));
     snprintf(app.edit_from, sizeof app.edit_from, "%s", made);
     app.edit_new = UNDO_MKDIR;
 }
@@ -882,7 +882,7 @@ static void new_file(void)
     if (join(p, sizeof p, app.cwd, str_from_c(made))) undo_gen++, undo_begin(&undo, UNDO_MKFILE), undo_add(&undo, NULL, p, NULL);
     ui_mark_clear(&app.ui);
     go_to(app.cwd, str_from_c(made), app.ui.list.sel);
-    ui_edit_open(&app.ui, str_from_c(made));
+    ui_edit_open_all(&app.ui, str_from_c(made));
     snprintf(app.edit_from, sizeof app.edit_from, "%s", made);
     app.edit_new = UNDO_MKFILE;
 }

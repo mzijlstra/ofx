@@ -267,6 +267,19 @@ static void test_close_all_keys(void)
 
 static void test_new_file(void)
 {
+    // The name just made, all of it selected: typing replaces it (a rename keeps the caret at the
+    // end, nothing selected).
+    Ui u = menu_ui(1);
+    ui_edit_open_all(&u, S("New file"));
+    int lo, hi;
+    ui_edit_sel(&u, &lo, &hi);
+    CHECK(u.editing && lo == 0 && hi == 8 && u.caret == 8);
+    ui_edit_event(&u, (UiEvent){ UK_NONE, 'x' }, STR_EMPTY);
+    CHECK(u.edit_len == 1 && u.edit[0] == 'x');
+    ui_edit_open(&u, S("a.txt"));
+    ui_edit_sel(&u, &lo, &hi);
+    CHECK(lo == hi && u.caret == 5);
+
     arena_reset(&ta);
     ops_guard(root);
     mkdirs(at("f7new"));

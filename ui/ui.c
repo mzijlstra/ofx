@@ -607,6 +607,14 @@ static void ui_edit_open(Ui *u, Str text)
     ui_edit_start(u, text, false);
 }
 
+// The edit line opened on a name just made (a new folder or file), all of it selected, so typing
+// replaces it (Michael, 2026-10-25).
+static void ui_edit_open_all(Ui *u, Str text)
+{
+    ui_edit_start(u, text, false);
+    u->anchor = 0;
+}
+
 // The location line opened on a path, all of it selected, as browsers and Nemo do: typing a new one
 // replaces it, a move of the caret ends the selection.
 static void ui_location_open(Ui *u, Str path)
