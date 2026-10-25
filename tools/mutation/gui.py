@@ -262,6 +262,9 @@ MUTANTS = [
     (G, "    ui_edit_open_all(&app.ui, str_from_c(made));\n    snprintf(app.edit_from, sizeof app.edit_from, \"%s\", made);\n    app.edit_new = UNDO_MKDIR;", "    ui_edit_open(&app.ui, str_from_c(made));\n    snprintf(app.edit_from, sizeof app.edit_from, \"%s\", made);\n    app.edit_new = UNDO_MKDIR;", 'f3'),
     (G, "    ui_edit_open_all(&app.ui, str_from_c(made));\n    snprintf(app.edit_from, sizeof app.edit_from, \"%s\", made);\n    app.edit_new = UNDO_MKFILE;", "    ui_edit_open(&app.ui, str_from_c(made));\n    snprintf(app.edit_from, sizeof app.edit_from, \"%s\", made);\n    app.edit_new = UNDO_MKFILE;", 'f7'),
     (G, "    return kind_is_dir(app.list.e[i].kind);\n}", "    return false;\n}", 'f7'),
+    (G, "    if (e->size == 0 && (e->kind == K_FILE || e->kind == K_LINK_FILE) && apps_default(", "    if (e->kind == K_FILE && false && apps_default(", 'f7'),
+    (G, "    if (e->size == 0 && (e->kind == K_FILE || e->kind == K_LINK_FILE) && apps_default(", "    if ((e->kind == K_FILE || e->kind == K_LINK_FILE) && apps_default(", 'f7'),
+    (G, "        if (spawn_launch(desktop, path, &err)) set_status(false, \"opened %.*s\", STR_ARG(e->name));\n        else set_status(true, \"%s\", err.msg);\n        return;", "        if (spawn_launch(desktop, path, &err)) set_status(false, \"opened %.*s\", STR_ARG(e->name));\n        else set_status(true, \"%s\", err.msg);", 'f7'),
 ]
 import concurrent.futures, queue, threading
 

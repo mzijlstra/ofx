@@ -999,4 +999,38 @@ MUTANTS += [
     (U, "    if (!dir) u->caret = ui_name_stem((Str){ u->edit, u->edit_len });", ""),
     (U, "    u->anchor = 0;\n    if (!dir)", "    if (!dir)"),
     (U, "names.dir && names.dir(names.ctx, l->sel));", "false);"),
+    # ---- F7.1.1: the default app for a type
+]
+AP = 'fs/apps.c'
+MUTANTS += [
+    (AP, "    if (ch && ch[0] == '/') dirs[nd++] = arena_cstr(a, str_from_c(ch));", "    if (ch && ch[0] == '/') {}"),
+    (AP, "        if (e > at) dirs[nd++] = arena_cstr(a, str_cut(cds, at, e));", ""),
+    (AP, "    for (isize k = 0; k < ndata; k++) dirs[nd++] = arena_sprintf(a, \"%s/applications\", data[k]);", ""),
+    (AP, "STR_ARG(lower(a, str_cut(ds, at, e))));", "STR_ARG(str_cut(ds, at, e)));"),
+    (AP, "        if (n < max) out[n++] = arena_sprintf(a, \"%s/mimeapps.list\", dirs[k]);", ""),
+    (AP, "        for (isize at = 0; at < ds.len && n < max;) {", "        for (isize at = 0; at < 0;) {"),
+    (AP, "        if (str_eq(str_trim(str_cut(list, at, e)), id)) return true;", ""),
+    (AP, "    if (str_eq(ini_get(text, S(\"Desktop Entry\"), S(\"Hidden\")), S(\"true\"))) return false;", ""),
+    # Not a mutant: dropping `t.len == 0` is inert, as on_path("") finds a folder, which access
+    # takes as executable; kept to say what an app without TryExec is.
+    (AP, "    return prog[0] == '/' ? access(prog, X_OK) == 0 : on_path(prog);", "    return true;"),
+    (AP, "    return prog[0] == '/' ? access(prog, X_OK) == 0 : on_path(prog);", "    return prog[0] == '/' ? access(prog, X_OK) == 0 : true;"),
+    (AP, "    if (id.len == 0 || str_find(id, '/') >= 0 || !str_ends_with(id, S(\".desktop\"))) return false;", "    if (id.len == 0) return false;"),
+    (AP, "            dash = strchr(dash, '-');\n            if (!dash) break;\n            *dash = '/';", "            break;"),
+    (AP, "    if (ok) ok = apps_usable(read_file(a, out));", ""),
+    (AP, "    for (isize k = 0; k < nd && !ok; k++) {\n        char rel", "    for (isize k = 0; k < nd; k++) {\n        char rel"),
+    (AP, "        if (id.len && !apps_listed(removed, id) && apps_find(a, id, out, cap)) return true;", "        if (id.len && apps_find(a, id, out, cap)) return true;"),
+    (AP, "                if (!have && parent.len) out[n++] = parent;", ""),
+    (AP, "    if (!plain && n < max && str_starts_with(type, S(\"text/\"))) out[n++] = S(\"text/plain\");", ""),
+    (AP, "    for (isize i = 0; i < n && n < max; i++) {", "    for (isize i = 0; i < 1 && n < max; i++) {"),
+    (AP, "                if (pass == 0 && str_eq(alias, *type)) *type = canon;", ""),
+    (AP, "                if (pass == 1 && str_eq(canon, *type) && n < max - 1) out[1 + n++] = alias;", ""),
+    (AP, "        if (r.len) removed = str_from_c(", "        if (false) removed = str_from_c("),
+    (AP, "        for (isize k = 0; k < nl && !ok; k++) ok = apps_first_of(a, text[k], S(\"Default Applications\")", "        for (isize k = 0; k < 0 && !ok; k++) ok = apps_first_of(a, text[k], S(\"Default Applications\")"),
+    (AP, "            removed = apps_removed(a, text[k], names, nn, removed);\n", ""),
+    (AP, "            ok = apps_first_of(a, text[k], S(\"Added Associations\"), names, nn, removed, out, cap);", ""),
+    (AP, "            ok = apps_first_of(a, cache, S(\"MIME Cache\"), names, nn, removed, out, cap);", ""),
+    (AP, "    apps_names(a, &type, names, COUNT(names));   // canonical first\n", ""),
+    (AP, "        isize nn = apps_names(a, &tt, names, COUNT(names));", "        isize nn = (names[0] = tt, 1);"),
+    (SP, "    const char *cmd[] = { \"gio\", \"launch\", desktop, path };", "    const char *cmd[] = { \"gio\", \"open\", path };"),
 ]

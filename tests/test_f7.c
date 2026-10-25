@@ -575,3 +575,123 @@ static void test_windows(void)
     CHECK(access(p, F_OK) != 0);
     CHECK(win_signal_others(at("f7win/none"), getpid(), SIGUSR1) == 0);
 }
+
+// ---- F7.1.1: the default app for a type ----------------------------------------------------------
+
+static void app_file(const char *rel, const char *text)
+{
+    char p[1300];
+    snprintf(p, sizeof p, "%s", at("f7apps/%s", rel));
+    char d[1300];
+    snprintf(d, sizeof d, "%s", p);
+    *strrchr(d, '/') = 0;
+    mkdirs(d);
+    put(p, text);
+}
+
+// The default app for type as apps_default finds it: its file's path from f7apps/, or "-".
+static const char *app_for(const char *type)
+{
+    static char out[PATH_MAX];
+    char got[PATH_MAX];
+    if (!apps_default(&ta, str_from_c(type), got, sizeof got)) return "-";
+    const char *base = at("f7apps/");
+    snprintf(out, sizeof out, "%s", strncmp(got, base, strlen(base)) == 0 ? got + strlen(base) : got);
+    return out;
+}
+
+static void test_apps(void)
+{
+    arena_reset(&ta);
+    env_set("XDG_CONFIG_HOME", at("f7apps/cfg"));
+    env_set("XDG_CONFIG_DIRS", at("f7apps/etc"));
+    env_set("XDG_DATA_HOME", at("f7apps/home"));
+    env_set("XDG_DATA_DIRS", at("f7apps/sys"));
+    env_set("XDG_CURRENT_DESKTOP", "Test:Other");
+    const char *app = "[Desktop Entry]\nType=Application\nName=x\nExec=x %f\n";
+    static const char *const APPS[] = { "edit", "viewer", "gone", "cached", "removed", "sub", "base", "mark" };
+    for (int k = 0; k < COUNT(APPS); k++) {
+        char rel[64];
+        snprintf(rel, sizeof rel, "sys/applications/%s.desktop", APPS[k]);
+        app_file(rel, app);
+    }
+    app_file("sys/applications/kde/foo.desktop", app);
+    app_file("sys/applications/tryx.desktop", "[Desktop Entry]\nName=x\nTryExec=/ofx-test-none/prog\nExec=x\n");
+    app_file("sys/applications/trysh.desktop", "[Desktop Entry]\nName=x\nTryExec=sh\nExec=x\n");
+    app_file("sys/applications/tryy.desktop", "[Desktop Entry]\nName=x\nTryExec=ofx-test-no-such-prog\nExec=x\n");
+    app_file("sys/applications/plain", app);   // not a .desktop name
+    app_file("home/applications/gone.desktop", "[Desktop Entry]\nName=x\nHidden=true\n");   // the user's copy deletes it
+    app_file("sys/mime/subclasses", "text/markdown text/plain\napplication/x-sub application/x-base\napplication/x-base application/x-root\n"
+                                    "application/x-kid application/x-base\napplication/x-leaf application/x-mid\napplication/x-mid application/x-root\n"
+                                    "application/x-new2 application/x-root\n");
+    app_file("sys/mime/aliases", "application/x-old application/x-new\napplication/x-old2 application/x-new2\n");
+    // The desktop's list before the plain one; the user's before the system's.
+    app_file("cfg/test-mimeapps.list", "[Default Applications]\ntext/plain=edit.desktop\n");
+    app_file("cfg/mimeapps.list",
+             "[Default Applications]\ntext/plain=viewer.desktop\ntext/x-a=missing.desktop;viewer.desktop;\ntext/x-b=missing.desktop\n"
+             "text/x-c=gone.desktop\ntext/x-d=tryx.desktop;tryy.desktop;trysh.desktop\ntext/x-e=kde-foo.desktop\ntext/x-h=../edit.desktop;edit\n"
+             "application/x-root=edit.desktop\n"
+             "[Added Associations]\napplication/x-f=removed.desktop;viewer.desktop;\n"
+             "[Removed Associations]\napplication/x-f=removed.desktop\n");
+    app_file("etc/mimeapps.list", "[Default Applications]\ntext/x-b=edit.desktop\napplication/x-old=viewer.desktop\n");
+    app_file("sys/applications/mimeapps.list", "[Default Applications]\ntext/x-b=viewer.desktop\n");
+    app_file("sys/applications/mimeinfo.cache",
+             "[MIME Cache]\ntext/x-c=gone.desktop;cached.desktop;\napplication/x-f=removed.desktop;\napplication/x-g=cached.desktop;\n"
+             "application/x-sub=sub.desktop;\napplication/x-base=base.desktop;\ntext/x-h=mark.desktop;\n");
+    static const struct { const char *type, *app; } WANT[] = {
+        { "text/plain", "sys/applications/edit.desktop" },       // the desktop's list
+        { "text/x-a", "sys/applications/viewer.desktop" },       // the first installed of a list
+        { "text/x-b", "sys/applications/edit.desktop" },         // the next list naming an installed one
+        { "text/x-c", "sys/applications/cached.desktop" },       // hidden by the user's copy: the cache's next
+        { "text/x-d", "sys/applications/trysh.desktop" },        // TryExec not there; TryExec on PATH
+        { "text/x-e", "sys/applications/kde/foo.desktop" },      // a dash as a folder
+        { "text/x-h", "sys/applications/mark.desktop" },         // ids that aren't ids: none of them
+        { "application/x-f", "sys/applications/viewer.desktop" },   // added, less removed (the cache's too)
+        { "application/x-g", "sys/applications/cached.desktop" },   // the cache
+        { "text/markdown", "sys/applications/edit.desktop" },       // a parent's default
+        { "application/x-sub", "sys/applications/sub.desktop" },    // its own association before its parent's
+        { "application/x-base", "sys/applications/base.desktop" },  // its own association before its parent's default
+        { "application/x-new", "sys/applications/viewer.desktop" }, // a list names it by its alias
+        { "application/x-old", "sys/applications/viewer.desktop" }, // asked by the alias
+        { "text/x-unknown", "sys/applications/edit.desktop" },      // text/* under text/plain
+        { "application/x-kid", "sys/applications/base.desktop" },   // a parent's association
+        { "application/x-leaf", "sys/applications/edit.desktop" },  // a grandparent's default
+        { "application/x-old2", "sys/applications/edit.desktop" },  // an alias: its canonical type's parent
+        { "application/x-none", "-" },
+        { "image/png", "-" },
+    };
+    for (int k = 0; k < COUNT(WANT); k++) {
+        const char *got = app_for(WANT[k].type);
+        CHECK(strcmp(got, WANT[k].app) == 0);
+        if (strcmp(got, WANT[k].app) != 0) fprintf(stderr, "  %s: %s, not %s\n", WANT[k].type, got, WANT[k].app);
+    }
+    // Without XDG_CURRENT_DESKTOP only the plain lists; a desktop's name in lower case.
+    env_set("XDG_CURRENT_DESKTOP", "");
+    CHECK(strcmp(app_for("text/plain"), "sys/applications/viewer.desktop") == 0);
+    env_set("XDG_CURRENT_DESKTOP", "Other:TEST");
+    CHECK(strcmp(app_for("text/plain"), "sys/applications/edit.desktop") == 0);
+    // The order of the lists: config home, config dirs, data home, data dirs; desktop's first in each.
+    const char *lists[APPS_LISTS_MAX];
+    CHECK(apps_lists(&ta, lists, APPS_LISTS_MAX) == 12);
+    CHECK(strcmp(lists[0], at("f7apps/cfg/other-mimeapps.list")) == 0 && strcmp(lists[1], at("f7apps/cfg/test-mimeapps.list")) == 0);
+    CHECK(strcmp(lists[2], at("f7apps/cfg/mimeapps.list")) == 0 && strcmp(lists[5], at("f7apps/etc/mimeapps.list")) == 0);
+    CHECK(strcmp(lists[8], at("f7apps/home/applications/mimeapps.list")) == 0 && strcmp(lists[11], at("f7apps/sys/applications/mimeapps.list")) == 0);
+    char p[PATH_MAX];
+    CHECK(!apps_find(&ta, S("a/b.desktop"), p, sizeof p) && !apps_find(&ta, S("edit"), p, sizeof p) && !apps_find(&ta, S(""), p, sizeof p));
+    CHECK(!apps_find(&ta, S("../applications/edit.desktop"), p, sizeof p) && !apps_find(&ta, S("plain"), p, sizeof p));
+    CHECK(apps_find(&ta, S("edit.desktop"), p, sizeof p) && !apps_find(&ta, S("edit.desktop"), p, 10));
+    env_restore();
+}
+
+static void test_spawn_launch(void)
+{
+    char out[2048];
+    Err err;
+    mkdirs(at("bin7l"));
+    fake(at("bin7l"), "uwsm-app", at("spawn7l.log"));
+    env_set("PATH", at("bin7l"));
+    CHECK(spawn_launch("/usr/share/applications/nvim.desktop", "/a b/test.txt", &err));
+    CHECK(wait_file(at("spawn7l.log"), out, sizeof out) &&
+          strncmp(out, "uwsm-app -- gio launch /usr/share/applications/nvim.desktop /a b/test.txt sid=", 78) == 0);
+    env_restore();
+}

@@ -41,6 +41,7 @@ Omarchy's theme: the binary, the folder `tools/ofx`, the window's title and Wayl
 | F6.5 | Thumbnail cache cleanup: `ofx-clean` on a daily systemd user timer; orphans, 90 days unused, a 1 GiB cap | Below |
 | F7 | Menus: File, Edit, View, Go, Bookmarks, Help; New Window as a second process | Below |
 | F7.1 | The menu bar and the File menu; New Window (Ctrl+N), Create New Empty File, Close All Windows (Ctrl+Q) | Below |
+| F7.1.1 | An empty file opens with the default app for its name's type (gio types it `application/x-zerosize`); F2 selects a name up to its extension; a new name is selected whole | Below |
 | F7.2 | Properties: a panel with the file's details and permissions | Below |
 | F7.3 | Open With Other Application: a panel listing the apps for the file's type | Below |
 | F8 | Right-click menus, with "Open with" (the apps the freedesktop MIME lists name for the file's type) | |
@@ -357,6 +358,25 @@ so that would mean patching vendored raylib or leaving it, for no gain here.
     opened `O_NONBLOCK`, the body digits and a newline, and the signal through a pidfd taken
     before the start time is checked.
   - `make test` 3511; unit mutants 861, 0 survived (one more left out: `now < 0`, race only).
+
+**F7.1.1 (Michael, 2026-10-25), after trying F7.1:**
+- **An empty file wouldn't open:** `gio open test.txt` (empty) said "Failed to find default
+  application for content type 'application/x-zerosize'": GIO types every empty file by its
+  content, whatever its name (checked with `gio info`), and nothing here opens x-zerosize (Nemo
+  has the same). Michael's pick: go by the name, not a mimeapps.list line making every empty file
+  text. `fs/apps.c` finds a type's default app as the MIME apps spec has it: the lists
+  (`<desktop>-mimeapps.list` before `mimeapps.list`; config home, config dirs, data home, data
+  dirs), per type its [Default Applications], then [Added Associations] less [Removed
+  Associations], then each `mimeinfo.cache`; then its parents (`mime/subclasses`, text/* under
+  text/plain); a list may name a type by an alias (`mime/aliases`); an app is its first desktop
+  file found, and isn't there when that is `Hidden=true` (Michael's
+  `~/.local/share/applications/java-java-openjdk.desktop` is) or its `TryExec` is missing. An
+  empty file opens with `uwsm-app -- gio launch <desktop file> <file>`; no default, `gio open` as
+  before; a file with content always `gio open`. Checked against `gio mime` on Michael's own lists
+  for 557 types: the same app for 556; the one apart is an unknown text/ type, which ofx gives
+  text/plain's app (gio none). F7.3's Open With builds on it.
+- **F2** selects a file's name up to its extension (`.tar.gz` as one), a folder's whole; a new
+  folder or file opens with its whole name selected.
 
 **F7.2 Properties (decided in part, Michael 2026-10-25):** a panel in the window like the Delete
 panel (one process, one window), one page, tabs only if it gets too long. Nothing selected: the

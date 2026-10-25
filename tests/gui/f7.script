@@ -180,6 +180,27 @@ expect sel=sub.d
 key f2
 expect edit=sub.d esel=0-5 caret=5
 key esc
+# ---- an empty file opens with its name's type's default app (gio types it x-zerosize: F7.1.1);
+# an empty one whose type has none, and one with text, go to gio open as before
+sh : > "$OFX_DIR/empty.txt" && : > "$OFX_DIR/blob.zzzq"
+wait-for 2000 n=6
+char /
+type empty.txt
+key enter
+wait-for 2000 sel=empty.txt
+key enter
+sh grep -qx "uwsm-app -- gio launch $OFX_ROOT/data/applications/ofx-test-editor.desktop $OFX_DIR/empty.txt" "$OFX_ROOT/spawn.log"
+char /
+type blob
+key enter
+expect sel=blob.zzzq
+key enter
+sh grep -qx "uwsm-app -- gio open $OFX_DIR/blob.zzzq" "$OFX_ROOT/spawn.log"
+char /
+type b.txt
+key enter
+key enter
+sh grep -qx "uwsm-app -- gio open $OFX_DIR/b.txt" "$OFX_ROOT/spawn.log"
 # ---- the keys as GLFW gives them (ui_key_of, on_key): F10, Alt+F, Ctrl+N
 raw-key 299
 expect menu=File menuat=new-tab

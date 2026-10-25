@@ -163,6 +163,10 @@ if want f7; then
 T=$base/f7; rm -rf "$T"; H=$T/home; mkdir -p "$H/tree/sub.d" "$H/tree/ro"; echo a > "$H/tree/a.txt"; echo b > "$H/tree/b.txt"
 echo x > "$H/tree/ro/x.txt"; chmod 555 "$H/tree/ro"
 printf '1 0 0:1 / / rw - ext4 /dev/x rw\n' > "$T/mountinfo"
+# F7.1.1: text/plain's default app in the scratch config, its desktop file in the scratch data home.
+mkdir -p "$T/config" "$T/data/applications"
+printf '[Default Applications]\ntext/plain=ofx-test-editor.desktop\n' > "$T/config/mimeapps.list"
+printf '[Desktop Entry]\nType=Application\nName=Test editor\nExec=true %%f\n' > "$T/data/applications/ofx-test-editor.desktop"
 echo "== f7"; OFX_TEST_HOME="$H" OFX_TEST_MOUNTINFO="$T/mountinfo" "$here/../../tools/gui/run-script.sh" "$T" "$here/f7.script" "$bin" "$H/tree" || failed f7
 chmod 755 "$H/tree/ro"
 T=$base/f7b; rm -rf "$T"; mkdir -p "$T/tree/src" "$T/tree/dst"; head -c 8388608 /dev/urandom > "$T/tree/src/big.bin"

@@ -1582,6 +1582,8 @@ int main(void)
     test_state_put();
     test_spawn_window();
     test_windows();
+    test_apps();
+    test_spawn_launch();
     char cmd[1600];
     snprintf(cmd, sizeof cmd, "chmod -R u+rwx '%s' && rm -rf '%s' '%s'", root, root, decoy);
     if (system(cmd) != 0) fprintf(stderr, "could not remove %s\n", root);

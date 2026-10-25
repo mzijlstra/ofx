@@ -7,6 +7,7 @@
 #include "theme.c"
 #include "places.c"
 #include "spawn.c"
+#include "apps.c"
 #include "ops.c"
 #include "trash.c"
 #include "clip.c"

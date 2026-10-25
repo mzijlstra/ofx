@@ -93,6 +93,14 @@ static bool spawn_window(const char *exe, const char *dir, Err *err)
     return spawn_app(cmd, COUNT(cmd), err);
 }
 
+// An app's desktop file run on path (F7.1.1: an empty file, whose type gio can't tell): GIO's own
+// launch, so a Terminal=true app (nvim) gets its terminal as with `gio open`.
+static bool spawn_launch(const char *desktop, const char *path, Err *err)
+{
+    const char *cmd[] = { "gio", "launch", desktop, path };
+    return spawn_app(cmd, COUNT(cmd), err);
+}
+
 static bool spawn_terminal(const char *dir, Err *err)
 {
     char arg[4200];

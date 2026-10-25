@@ -537,6 +537,8 @@ static void go_parent(void)
     go_to(up, str_from_c(child_buf), 0);
 }
 
+static Str entry_mime(isize i);
+
 static void open_entry(isize i)
 {
     const Entry *e = &app.list.e[i];
@@ -558,6 +560,14 @@ static void open_entry(isize i)
         return;
     }
     Err err;
+    // An empty file: gio types it application/x-zerosize, for which no app is set, and refuses it.
+    // Its name's type's default app instead (F7.1.1); none, and gio open says why.
+    char desktop[PATH_MAX];
+    if (e->size == 0 && (e->kind == K_FILE || e->kind == K_LINK_FILE) && apps_default(&scratch, entry_mime(i), desktop, sizeof desktop)) {
+        if (spawn_launch(desktop, path, &err)) set_status(false, "opened %.*s", STR_ARG(e->name));
+        else set_status(true, "%s", err.msg);
+        return;
+    }
     if (spawn_open(path, &err)) set_status(false, "opened %.*s", STR_ARG(e->name));
     else set_status(true, "%s", err.msg);
 }

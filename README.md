@@ -25,7 +25,7 @@ libpng, giflib and zlib for the previews. raylib and Clay are vendored.
 | Up/Down, `j`/`k` | move |
 | PgUp/PgDn | a page |
 | Home/End, `g`/`G` | first, last |
-| Enter | open: a folder is entered, a file goes to `gio open` (Nemo's way: the type from its name; a terminal app such as nvim in a terminal) |
+| Enter | open: a folder is entered, a file goes to `gio open` (Nemo's way: the type from its name; a terminal app such as nvim in a terminal); an empty file, which gio can't type, to the default app for its name's type (`gio launch`) |
 | Backspace | up to the parent, the folder you left selected |
 | Alt+Left, Alt+Right | back and forward |
 | Alt+Up | up to the parent |
