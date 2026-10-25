@@ -2,12 +2,16 @@
 """GUI mutants: each applied to a scratch copy of the repo, built, and run through
 tests/gui/run.sh, each script in its own headless weston (CLAUDE.md, "Testing the GUI").
 
-    tools/mutation/gui.py <scratch-dir> [index,...] [--full]
+    tools/mutation/gui.py <scratch-dir> [index,...] [--full] [--jobs N]
 
-The whole GUI suite takes about 86 s, so each mutant runs only the script groups that killed it
-before (its tags, in gui-tags.txt): a grid mutant runs f62, not the copy jobs' f53. A mutant with
-no tags (new, or its text changed) runs the whole suite, and the groups that fail become its
-tags. --full runs every mutant on the whole suite and writes the tags again: before installing the
+The whole GUI suite takes about 90 s, so each mutant runs only the script groups that killed it
+before (its tags, in gui-tags.txt): a grid mutant runs f62, not the copy jobs' f53. Groups run one
+at a time and a mutant stops at the first that kills it (Michael, 2026-10-25). A mutant with no
+tags (new, or its text changed) tries its hint first (a fourth field, `'f7'`), then the rest; the
+group that kills it becomes its tag. --jobs N (4 by default) runs N mutants at once, each in its
+own copy of the repo: the unmutated build runs the whole suite in all N at once first, so a
+script that fails under that load stops the run instead of killing mutants it doesn't see (3 of 3
+such runs passed at 4, 2026-10-25, 135 s each). --full runs every mutant on the whole suite and writes the tags again: before installing the
 last step of a major milestone (F6 to F7), since a narrow run can't see a mutant break something its
 tags don't cover; the installs between run the tagged mutants (Michael, 2026-10-24).
 The unmutated build always runs the whole suite first.
@@ -231,46 +235,71 @@ MUTANTS = [
     (G, "        Texture2D *th = entry_thumb(i, true);", "        Texture2D *th = NULL;"),
     (G, "CLAY_SIZING_FIXED(th->width / s), CLAY_SIZING_FIXED(th->height / s)", "CLAY_SIZING_FIXED(px), CLAY_SIZING_FIXED(px)"),
     # ---- F7.1: the menu bar, New Window, Create New Empty File, Close All Windows
-    (G, "            if (UI_MENU[app.ui.menu].items[i] != UM_SEP && in_box(CLAY_IDI(\"menu-item\", i), x, y)) h.menu_item = i;\n        return h;", "            if (UI_MENU[app.ui.menu].items[i] != UM_SEP && in_box(CLAY_IDI(\"menu-item\", i), x, y)) h.menu_item = i;"),
-    (G, "        in->menu_away = h.menu_title < 0 && h.menu_item < 0;", "        in->menu_away = false;"),
-    (G, "    changed |= ui_menu_hover(&app.ui, h.menu_title, h.menu_item);", ""),
-    (G, "    app.menu_title_hover = h.menu_title;\n", ""),
-    (G, "            if (in_box(CLAY_IDI(\"menu-title\", m), x, y)) h.menu_title = m;", ""),
-    (G, "    app.ui.can_write = !in_trash && access(dir, W_OK) == 0;", "    app.ui.can_write = !in_trash;"),
-    (G, "    app.edit_new = UNDO_MKFILE;", "    app.edit_new = UNDO_MKDIR;"),
-    (G, "    if (!op_mkfile(app.cwd, S(\"New file\"), made, sizeof made, &err))", "    if (!op_mkdir(app.cwd, S(\"New file\"), made, sizeof made, &err))"),
-    (G, "    case UA_NEWFILE: new_file(); break;", "    case UA_NEWFILE: new_folder(); break;"),
-    (G, "        if (spawn_window(app.exe, app.cwd, &err))", "        if (spawn_window(\"ofx\", app.cwd, &err))"),
-    (G, "    if (app.windows[0]) win_signal_others(app.windows, getpid(), SIGUSR1);", ""),
-    (G, "    if (quit && jobs.nrun + jobs.nwait > 0) close_asked = true;", ""),
-    (G, "        if (sig == SIGUSR1) {", "        if (sig == SIGUSR2) {"),
-    (G, "        if (atomic_exchange(&close_signal, false)) close_asked = true;", ""),
-    (G, "    if (win_dir(app.windows, sizeof app.windows) && !win_register(app.windows, getpid(), &werr)) {", "    if (win_dir(app.windows, sizeof app.windows) && false) {"),
-    (G, "    if (app.windows[0]) win_unregister(app.windows, getpid());", ""),
-    (G, "    sigaddset(&quit_signals, SIGUSR1);", ""),
-    (G, "    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_N) return UK_NEW_WINDOW;", ""),
-    (G, "    case GLFW_KEY_F10: return m == 0 ? UK_F10 : UK_NONE;", ""),
-    (G, "key >= GLFW_KEY_A && key <= GLFW_KEY_Z) ev_push((UiEvent){ UK_MENU, (u32)('a' + key - GLFW_KEY_A) });", "key >= GLFW_KEY_A && key <= GLFW_KEY_Z) ev_push((UiEvent){ UK_MENU, (u32)('A' + key - GLFW_KEY_A) });"),
-    (G, "        float body_h = (float)(h - MENU_H - HEADER_H - FOOTER_H);", "        float body_h = (float)(h - HEADER_H - FOOTER_H);"),
-    (G, "    int r = (h - MENU_H - HEADER_H - FOOTER_H - PAD) / SIDE_ROW_H;", "    int r = (h - HEADER_H - FOOTER_H - PAD) / SIDE_ROW_H;"),
-    (G, "        layout_menubar();\n", ""),
-    (G, "                if (open) layout_menu(m);", ""),
+    (G, "            if (UI_MENU[app.ui.menu].items[i] != UM_SEP && in_box(CLAY_IDI(\"menu-item\", i), x, y)) h.menu_item = i;\n        return h;", "            if (UI_MENU[app.ui.menu].items[i] != UM_SEP && in_box(CLAY_IDI(\"menu-item\", i), x, y)) h.menu_item = i;", 'f7'),
+    (G, "        in->menu_away = h.menu_title < 0 && h.menu_item < 0;", "        in->menu_away = false;", 'f7'),
+    (G, "    changed |= ui_menu_hover(&app.ui, h.menu_title, h.menu_item);", "", 'f7'),
+    (G, "    app.menu_title_hover = h.menu_title;\n", "", 'f7'),
+    (G, "            if (in_box(CLAY_IDI(\"menu-title\", m), x, y)) h.menu_title = m;", "", 'f7'),
+    (G, "    app.ui.can_write = !in_trash && access(dir, W_OK) == 0;", "    app.ui.can_write = !in_trash;", 'f7'),
+    (G, "    app.edit_new = UNDO_MKFILE;", "    app.edit_new = UNDO_MKDIR;", 'f7'),
+    (G, "    if (!op_mkfile(app.cwd, S(\"New file\"), made, sizeof made, &err))", "    if (!op_mkdir(app.cwd, S(\"New file\"), made, sizeof made, &err))", 'f7'),
+    (G, "    case UA_NEWFILE: new_file(); break;", "    case UA_NEWFILE: new_folder(); break;", 'f7'),
+    (G, "        if (spawn_window(app.exe, app.cwd, &err))", "        if (spawn_window(\"ofx\", app.cwd, &err))", 'f7'),
+    (G, "    if (app.windows[0]) win_signal_others(app.windows, getpid(), SIGUSR1);", "", 'f7'),
+    (G, "    if (quit && jobs.nrun + jobs.nwait > 0) close_asked = true;", "", 'f7'),
+    (G, "        if (sig == SIGUSR1) {", "        if (sig == SIGUSR2) {", 'f7'),
+    (G, "        if (atomic_exchange(&close_signal, false)) close_asked = true;", "", 'f7'),
+    (G, "    if (win_dir(app.windows, sizeof app.windows) && !win_register(app.windows, getpid(), &werr)) {", "    if (win_dir(app.windows, sizeof app.windows) && false) {", 'f7'),
+    (G, "    if (app.windows[0]) win_unregister(app.windows, getpid());", "", 'f7'),
+    (G, "    sigaddset(&quit_signals, SIGUSR1);", "", 'f7'),
+    (G, "    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_N) return UK_NEW_WINDOW;", "", 'f7'),
+    (G, "    case GLFW_KEY_F10: return m == 0 ? UK_F10 : UK_NONE;", "", 'f7'),
+    (G, "key >= GLFW_KEY_A && key <= GLFW_KEY_Z) ev_push((UiEvent){ UK_MENU, (u32)('a' + key - GLFW_KEY_A) });", "key >= GLFW_KEY_A && key <= GLFW_KEY_Z) ev_push((UiEvent){ UK_MENU, (u32)('A' + key - GLFW_KEY_A) });", 'f7'),
+    (G, "        float body_h = (float)(h - MENU_H - HEADER_H - FOOTER_H);", "        float body_h = (float)(h - HEADER_H - FOOTER_H);", 'f7'),
+    (G, "    int r = (h - MENU_H - HEADER_H - FOOTER_H - PAD) / SIDE_ROW_H;", "    int r = (h - HEADER_H - FOOTER_H - PAD) / SIDE_ROW_H;", 'f7'),
+    (G, "        layout_menubar();\n", "", 'f7'),
+    (G, "                if (open) layout_menu(m);", "", 'f7'),
 ]
-args = [a for a in sys.argv[1:] if a != '--full']
-full = len(args) != len(sys.argv) - 1
+import concurrent.futures, queue, threading
+
+args = sys.argv[1:]
+full = '--full' in args
+jobs = 4
+if '--jobs' in args:
+    jobs = int(args[args.index('--jobs') + 1])
+    del args[args.index('--jobs'):args.index('--jobs') + 2]
+args = [a for a in args if a != '--full']
 scratch = args[0]
 only = [int(x) for x in args[1].split(',')] if len(args) > 1 else None
 root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # OFX_GUI_TAGS: another tags file, for a run beside one that will write this one.
 tags_path = os.environ.get('OFX_GUI_TAGS') or os.path.join(root, 'tools', 'mutation', 'gui-tags.txt')
-work = os.path.join(scratch, 'gui-mut-src')
-shutil.rmtree(work, ignore_errors=True)
-shutil.copytree(root, work, ignore=shutil.ignore_patterns('.git', 'build'))
-os.makedirs(os.path.join(work, 'build'))
-os.symlink(os.path.join(root, 'build', 'raylib'), os.path.join(work, 'build', 'raylib'))
-run_sh = os.path.join(work, 'tests/gui/run.sh')
-for f, old, new in MUTANTS:
-    n = open(os.path.join(work, f)).read().count(old)
+
+# run.sh's groups, in its order: a mutant runs them one at a time and stops at the first that
+# kills it (Michael, 2026-10-25).
+GROUPS = ['browse', 'big', 'gone', 'watchgap', 'f2', 'f3', 'f4', 'f5', 'f52', 'f53', 'f54', 'f6', 'f62', 'f63', 'f64', 'f7',
+          'hang', 'guard3', 'guard']
+run_text = open(os.path.join(root, 'tests/gui/run.sh')).read()
+assert re.findall(r'want ([a-z0-9]+)', run_text) == GROUPS, 'GROUPS in gui.py no longer match tests/gui/run.sh'
+
+# A mutant is (file, old, new) or (file, old, new, hint): the hint names the group(s) likeliest to
+# kill it, tried first when it has no tags. Its key is the first three only, so a hint added later
+# keeps its tags.
+for m in MUTANTS:
+    assert len(m) in (3, 4) and (len(m) == 3 or all(g in GROUPS for g in m[3].split())), m
+
+# Each worker its own copy of the repo and its own build; the scripts run from the copy, so the
+# repo can be edited meanwhile.
+def make_work(w):
+    work = os.path.join(scratch, f'gui-mut-src-{w}')
+    shutil.rmtree(work, ignore_errors=True)
+    shutil.copytree(root, work, ignore=shutil.ignore_patterns('.git', 'build'))
+    os.makedirs(os.path.join(work, 'build'))
+    os.symlink(os.path.join(root, 'build', 'raylib'), os.path.join(work, 'build', 'raylib'))
+    return work
+works = [make_work(w) for w in range(jobs)]
+for f, old, new, *_ in MUTANTS:
+    n = open(os.path.join(works[0], f)).read().count(old)
     assert n == 1, (f, old, n)
 
 # A tree removed whole: a mutant that fails f6 half way leaves its read-only folders (`locked`),
@@ -286,7 +315,7 @@ def rmtree(path):
 
 # A mutant's tag key: its file and texts, so a mutant edited is a new one, untagged.
 def key(m):
-    return hashlib.sha1('\0'.join(m).encode()).hexdigest()[:12]
+    return hashlib.sha1('\0'.join(m[:3]).encode()).hexdigest()[:12]
 
 tags = {}
 if os.path.exists(tags_path):
@@ -296,7 +325,7 @@ if os.path.exists(tags_path):
             tags[w[0]] = w[1:]
 
 # The group of a script that failed: run.sh prints "== <script>: FAILED" or "<group>: FAILED".
-GROUP_OF = {'f6b': 'f6', 'f62b': 'f62', 'f62c': 'f62', 'f63b': 'f63', 'f63c': 'f63', 'f64b': 'f64', 'f64c': 'f64', 'f64d': 'f64'}
+GROUP_OF = {'f6b': 'f6', 'f62b': 'f62', 'f62c': 'f62', 'f63b': 'f63', 'f63c': 'f63', 'f64b': 'f64', 'f64c': 'f64', 'f64d': 'f64', 'f7b': 'f7'}
 def failed_groups(out):
     g = []
     for l in out.splitlines():
@@ -305,54 +334,97 @@ def failed_groups(out):
             g.append(GROUP_OF.get(m[1], m[1]))
     return g
 
-# The unmutated build first, on the whole suite: if it fails, every mutant would count as killed
-# (as they did while f6 couldn't start, from fe01f7c to e8c2c57).
-b = subprocess.run(['make', '-s', 'build/ofx-mut'], cwd=work, capture_output=True, text=True)
-r = subprocess.run([run_sh, os.path.join(scratch, 'gm-base'), os.path.join(work, 'build/ofx-mut')], capture_output=True, text=True)
-if b.returncode != 0 or r.returncode != 0:
-    print('the unmutated build fails tests/gui/run.sh: fix that first')
-    print(b.stderr[-300:], '\n'.join(l for l in r.stdout.splitlines() if 'FAILED' in l or (l.startswith('script:') and not l.startswith('script: 0 of'))))
+def run_groups(work, base, groups):
+    return subprocess.run([os.path.join(work, 'tests/gui/run.sh'), base, os.path.join(work, 'build/ofx-mut')] + groups,
+                          capture_output=True, text=True)
+
+# The unmutated build first, on the whole suite, in every worker at once: under the load the
+# mutants will run with. If any fails, every mutant would count as killed (as they did while f6
+# couldn't start, from fe01f7c to e8c2c57), and a script that fails only under load would kill
+# mutants it doesn't see.
+def base_run(w):
+    b = subprocess.run(['make', '-s', 'build/ofx-mut'], cwd=works[w], capture_output=True, text=True)
+    r = run_groups(works[w], os.path.join(scratch, f'gm-base{w}'), [])
+    rmtree(os.path.join(scratch, f'gm-base{w}'))
+    return b, r
+with concurrent.futures.ThreadPoolExecutor(jobs) as ex:
+    bases = list(ex.map(base_run, range(jobs)))
+bad = [(w, b, r) for w, (b, r) in enumerate(bases) if b.returncode != 0 or r.returncode != 0]
+if bad:
+    print(f'the unmutated build fails tests/gui/run.sh in {len(bad)} of {jobs} workers at once: fix that first (or fewer --jobs)')
+    for w, b, r in bad:
+        print(f'worker {w}:', b.stderr[-300:], '\n'.join(l for l in r.stdout.splitlines() if 'FAILED' in l or (l.startswith('script:') and not l.startswith('script: 0 of'))))
     sys.exit(2)
-rmtree(os.path.join(scratch, 'gm-base'))
-print('base: tests/gui/run.sh passes unmutated', flush=True)
+print(f'base: tests/gui/run.sh passes unmutated, {jobs} at once', flush=True)
+if 'GUI_BASE_ONLY' in os.environ:
+    sys.exit(0)
+
 MIN_FREE = 2 << 30   # bytes left in the scratch dir's file system before a mutant starts
-survivors, retagged = [], 0
-for i, m in enumerate(MUTANTS):
-    if only is not None and i not in only:
-        continue
-    if shutil.disk_usage(scratch).free < MIN_FREE:
-        print(f'stopped before #{i}: less than 2 GiB free in {scratch}')
-        break
-    f, old, new = m
+free_works = queue.Queue()
+for w in works:
+    free_works.put(w)
+lock = threading.Lock()
+survivors, retagged, stopped = [], 0, False
+
+# One mutant in a free worker: its groups one run.sh at a time, until one kills it. Tagged (and
+# not --full): its tags only. Else its hint and its old tags first, then the rest of the groups;
+# the group that kills it becomes its tag.
+def one(i):
+    global retagged, stopped
+    m = MUTANTS[i]
+    f, old, new = m[:3]
     k = key(m)
-    groups = [] if full else tags.get(k, [])
-    path = os.path.join(work, f)
-    text = open(path).read()
-    open(path, 'w').write(text.replace(old, new, 1))
-    b = subprocess.run(['make', '-s', 'build/ofx-mut'], cwd=work, capture_output=True, text=True)
-    if b.returncode != 0:
-        print(f'#{i} build failed: {b.stderr[-300:]}')
+    with lock:
+        if stopped or shutil.disk_usage(scratch).free < MIN_FREE:
+            if not stopped:
+                print(f'stopped before #{i}: less than 2 GiB free in {scratch}', flush=True)
+            stopped = True
+            return
+    work = free_works.get()
+    try:
+        path = os.path.join(work, f)
+        text = open(path).read()
+        open(path, 'w').write(text.replace(old, new, 1))
+        b = subprocess.run(['make', '-s', 'build/ofx-mut'], cwd=work, capture_output=True, text=True)
+        if b.returncode != 0:
+            open(path, 'w').write(text)
+            print(f'#{i} build failed: {b.stderr[-300:]}', flush=True)
+            return
+        tagged = tags.get(k, []) if not full else []
+        hint = m[3].split() if len(m) == 4 else []
+        order = tagged or list(dict.fromkeys(hint + tags.get(k, []) + GROUPS))
+        killer, out, ran = None, '', 0
+        for g in order:
+            r = run_groups(work, os.path.join(scratch, f'gm{i}'), [g])
+            ran += 1
+            if r.returncode != 0:
+                killer, out = (failed_groups(r.stdout) or [g])[0], r.stdout
+                break
         open(path, 'w').write(text)
-        continue
-    r = subprocess.run([run_sh, os.path.join(scratch, f'gm{i}'), os.path.join(work, 'build/ofx-mut')] + groups, capture_output=True, text=True)
-    open(path, 'w').write(text)
-    rmtree(os.path.join(scratch, f'gm{i}'))
-    if r.returncode != 0 and not groups:
-        tags[k] = failed_groups(r.stdout) or ['all']   # 'all': it failed without naming a group
-        retagged += 1
-    verdict = 'killed' if r.returncode != 0 else 'SURVIVED'
-    fails = [l for l in r.stdout.splitlines() if l.startswith('script:') and not l.startswith('script: 0 of')]
-    ran = ' '.join(groups) if groups else 'all'
-    print(f'#{i} {verdict} [{ran}] {f}: {old.strip()[:60]!r}  {fails[:1]}', flush=True)
-    if r.returncode == 0:
-        survivors.append(i)
+        rmtree(os.path.join(scratch, f'gm{i}'))
+        fails = [l for l in out.splitlines() if l.startswith('script:') and not l.startswith('script: 0 of')]
+        with lock:
+            if killer and not tagged:
+                tags[k] = [killer]
+                retagged += 1
+            if not killer:
+                survivors.append(i)
+            how = f'killed by {killer}' if killer else 'SURVIVED'
+            print(f'#{i} {how} [{ran} of {len(order)} groups] {f}: {old.strip()[:60]!r}  {fails[:1]}', flush=True)
+    finally:
+        free_works.put(work)
+
+todo = [i for i in range(len(MUTANTS)) if only is None or i in only]
+with concurrent.futures.ThreadPoolExecutor(jobs) as ex:
+    list(ex.map(one, todo))
 if retagged:
     live = {key(m) for m in MUTANTS}
     with open(tags_path, 'w') as out:
-        out.write('# tools/mutation/gui.py: each GUI mutant (its key) and the run.sh groups that kill it\n')
+        out.write('# tools/mutation/gui.py: each GUI mutant (its key) and the run.sh group that killed it\n')
         for k in sorted(tags):
             if k in live and tags[k] != ['all']:
                 out.write(f'{k} {" ".join(tags[k])}\n')
     print(f'{retagged} mutants tagged in {tags_path}')
-shutil.rmtree(work, ignore_errors=True)
-print(f'{len(MUTANTS)} GUI mutants, {len(survivors)} survived: {survivors}')
+for w in works:
+    shutil.rmtree(w, ignore_errors=True)
+print(f'{len(todo)} GUI mutants, {len(survivors)} survived: {sorted(survivors)}')
