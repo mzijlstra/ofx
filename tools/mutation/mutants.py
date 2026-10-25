@@ -1033,4 +1033,5 @@ MUTANTS += [
     (AP, "    apps_names(a, &type, names, COUNT(names));   // canonical first\n", ""),
     (AP, "        isize nn = apps_names(a, &tt, names, COUNT(names));", "        isize nn = (names[0] = tt, 1);"),
     (SP, "    const char *cmd[] = { \"gio\", \"launch\", desktop, path };", "    const char *cmd[] = { \"gio\", \"open\", path };"),
+    (AP, "    if (!str_eq(ini_get(text, S(\"Desktop Entry\"), S(\"Type\")), S(\"Application\"))) return false;", ""),
 ]

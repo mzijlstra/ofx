@@ -100,7 +100,7 @@ groups that killed it on a whole-suite run (`tools/mutation/gui-tags.txt`, writt
 164 mutants in 71 min, against about 4 h on the whole suite each. Since 2026-10-25 (Michael): a
 mutant runs its groups one at a time and stops at the first kill; a new or changed one tries its
 hint (a fourth field naming the group, as `'f7'`) and then the rest, and the killing group becomes
-its tag; and `--jobs N` (4 by default) runs N at once, each worker in its own copy, after the
+its tag; and `--jobs N` (6 by default: 8 is no faster) runs N at once, each worker in its own copy, after the
 unmutated suite passes in all N at once (a script that fails only under load stops the run). They build `build/ofx-mut`: clang with ASan and UBSan, Clay's code in
 its own object compiled once a run (`gui/clay.c`), 1.1 s a mutant against gcc's 3.5 s (Michael,
 2026-10-24; tcc has no ASan, so not there). `--full` reruns every mutant past its tags (about

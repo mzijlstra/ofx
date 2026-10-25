@@ -8,9 +8,11 @@
 // lower case) before `mimeapps.list`. A type's default is the first installed app its
 // [Default Applications] names, in the first list that names one; else the first installed app
 // its [Added Associations] name, then each data dir's applications/mimeinfo.cache, leaving out
-// what [Removed Associations] removes; a list may name the type by an alias; an app Hidden or without its TryExec isn't there. The type's
-// parents come after it (subclasses, and every
-// text/* under text/plain), as gio does.
+// what [Removed Associations] removes; a list may name the type by an alias; an app that isn't
+// Type=Application, is Hidden, or lacks its TryExec isn't there. The type's parents come after it
+// (subclasses, as gio does; and every text/* under text/plain, which gio doesn't when the
+// subclasses don't say so: text/x-awk and the like get the text editor here, none from gio,
+// reviewer-2's comparison over 1,619 types, 2026-10-25).
 
 #include "../base/base.h"
 
@@ -65,11 +67,12 @@ static bool apps_listed(Str list, Str id)
     return false;
 }
 
-// Whether the desktop file text is an app that is there: not Hidden (a user's copy saying so
+// Whether the desktop file text is an app that is there: Type=Application, not Hidden (a user's copy saying so
 // deletes the app, as ~/.local/share/applications/java-java-openjdk.desktop does here), and its
 // TryExec, when it has one, a program that is installed.
 static bool apps_usable(Str text)
 {
+    if (!str_eq(ini_get(text, S("Desktop Entry"), S("Type")), S("Application"))) return false;   // a Link isn't (gio skips it)
     if (str_eq(ini_get(text, S("Desktop Entry"), S("Hidden")), S("true"))) return false;
     Str t = ini_get(text, S("Desktop Entry"), S("TryExec"));
     if (t.len == 0) return true;

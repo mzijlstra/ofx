@@ -8,10 +8,11 @@ The whole GUI suite takes about 90 s, so each mutant runs only the script groups
 before (its tags, in gui-tags.txt): a grid mutant runs f62, not the copy jobs' f53. Groups run one
 at a time and a mutant stops at the first that kills it (Michael, 2026-10-25). A mutant with no
 tags (new, or its text changed) tries its hint first (a fourth field, `'f7'`), then the rest; the
-group that kills it becomes its tag. --jobs N (4 by default) runs N mutants at once, each in its
+group that kills it becomes its tag. --jobs N (6 by default) runs N mutants at once, each in its
 own copy of the repo: the unmutated build runs the whole suite in all N at once first, so a
 script that fails under that load stops the run instead of killing mutants it doesn't see (3 of 3
-such runs passed at 4, 2026-10-25, 135 s each). --full runs every mutant on the whole suite and writes the tags again: before installing the
+such runs passed at 4, 6 and 8 each, 2026-10-25; 6 is as fast as 8). Mutants that didn't build, or
+weren't run for want of disk, are named in the summary and fail the run. --full runs every mutant on the whole suite and writes the tags again: before installing the
 last step of a major milestone (F6 to F7), since a narrow run can't see a mutant break something its
 tags don't cover; the installs between run the tagged mutants (Michael, 2026-10-24).
 The unmutated build always runs the whole suite first.
@@ -270,7 +271,7 @@ import concurrent.futures, queue, threading
 
 args = sys.argv[1:]
 full = '--full' in args
-jobs = 4
+jobs = 6   # the throughput levels off there: 4 workers 1.8 suites a minute, 6 and 8 both 2.3 (2026-10-25)
 if '--jobs' in args:
     jobs = int(args[args.index('--jobs') + 1])
     del args[args.index('--jobs'):args.index('--jobs') + 2]
@@ -373,7 +374,7 @@ free_works = queue.Queue()
 for w in works:
     free_works.put(w)
 lock = threading.Lock()
-survivors, retagged, stopped = [], 0, False
+survivors, unbuilt, retagged, stopped = [], [], 0, False
 
 # One mutant in a free worker: its groups one run.sh at a time, until one kills it. Tagged (and
 # not --full): its tags only. Else its hint and its old tags first, then the rest of the groups;
@@ -398,6 +399,8 @@ def one(i):
         if b.returncode != 0:
             open(path, 'w').write(text)
             print(f'#{i} build failed: {b.stderr[-300:]}', flush=True)
+            with lock:
+                unbuilt.append(i)
             return
         tagged = tags.get(k, []) if not full else []
         hint = m[3].split() if len(m) == 4 else []
@@ -436,4 +439,9 @@ if retagged:
     print(f'{retagged} mutants tagged in {tags_path}')
 for w in works:
     shutil.rmtree(w, ignore_errors=True)
-print(f'{len(todo)} GUI mutants, {len(survivors)} survived: {sorted(survivors)}')
+# What didn't run is said, so a summary never reads 0 for mutants that weren't tested (reviewer-2,
+# F7.1.1 review).
+untested = sorted(unbuilt) + (['the rest: out of disk'] if stopped else [])
+print(f'{len(todo)} GUI mutants, {len(survivors)} survived: {sorted(survivors)}' + (f'; NOT TESTED: {untested}' if untested else ''))
+if untested:
+    sys.exit(1)

@@ -377,6 +377,12 @@ so that would mean patching vendored raylib or leaving it, for no gain here.
   text/plain's app (gio none). F7.3's Open With builds on it.
 - **F2** selects a file's name up to its extension (`.tar.gz` as one), a folder's whole; a new
   folder or file opens with its whole name selected.
+- reviewer-2's SHIP at `b83d128`: `gio mime` over 1,619 types and four desktops differs on 9, all
+  text/* types without text/plain in their chain (ofx gives the text editor, gio none: kept, for
+  empty files). LOW, landed: an app must be `Type=Application` (gio skips a Link). For F7.3: gio
+  reads the lists per dir (a dir's added associations, then its removed ones, then its cache; a
+  removal reaches only what comes after), which differs from `apps.c` when [Removed Associations]
+  are used; Michael's lists have none. gui.py names mutants that didn't build or run, and fails.
 
 **F7.2 Properties (decided in part, Michael 2026-10-25):** a panel in the window like the Delete
 panel (one process, one window), one page, tabs only if it gets too long. Nothing selected: the

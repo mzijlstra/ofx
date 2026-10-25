@@ -616,11 +616,12 @@ static void test_apps(void)
         app_file(rel, app);
     }
     app_file("sys/applications/kde/foo.desktop", app);
-    app_file("sys/applications/tryx.desktop", "[Desktop Entry]\nName=x\nTryExec=/ofx-test-none/prog\nExec=x\n");
-    app_file("sys/applications/trysh.desktop", "[Desktop Entry]\nName=x\nTryExec=sh\nExec=x\n");
-    app_file("sys/applications/tryy.desktop", "[Desktop Entry]\nName=x\nTryExec=ofx-test-no-such-prog\nExec=x\n");
+    app_file("sys/applications/link.desktop", "[Desktop Entry]\nType=Link\nName=x\nURL=https://example.org\n");
+    app_file("sys/applications/tryx.desktop", "[Desktop Entry]\nType=Application\nName=x\nTryExec=/ofx-test-none/prog\nExec=x\n");
+    app_file("sys/applications/trysh.desktop", "[Desktop Entry]\nType=Application\nName=x\nTryExec=sh\nExec=x\n");
+    app_file("sys/applications/tryy.desktop", "[Desktop Entry]\nType=Application\nName=x\nTryExec=ofx-test-no-such-prog\nExec=x\n");
     app_file("sys/applications/plain", app);   // not a .desktop name
-    app_file("home/applications/gone.desktop", "[Desktop Entry]\nName=x\nHidden=true\n");   // the user's copy deletes it
+    app_file("home/applications/gone.desktop", "[Desktop Entry]\nType=Application\nName=x\nExec=x\nHidden=true\n");   // the user's copy deletes it
     app_file("sys/mime/subclasses", "text/markdown text/plain\napplication/x-sub application/x-base\napplication/x-base application/x-root\n"
                                     "application/x-kid application/x-base\napplication/x-leaf application/x-mid\napplication/x-mid application/x-root\n"
                                     "application/x-new2 application/x-root\n");
@@ -628,7 +629,7 @@ static void test_apps(void)
     // The desktop's list before the plain one; the user's before the system's.
     app_file("cfg/test-mimeapps.list", "[Default Applications]\ntext/plain=edit.desktop\n");
     app_file("cfg/mimeapps.list",
-             "[Default Applications]\ntext/plain=viewer.desktop\ntext/x-a=missing.desktop;viewer.desktop;\ntext/x-b=missing.desktop\n"
+             "[Default Applications]\ntext/plain=viewer.desktop\ntext/x-a=missing.desktop;link.desktop;viewer.desktop;\ntext/x-b=missing.desktop\n"
              "text/x-c=gone.desktop\ntext/x-d=tryx.desktop;tryy.desktop;trysh.desktop\ntext/x-e=kde-foo.desktop\ntext/x-h=../edit.desktop;edit\n"
              "application/x-root=edit.desktop\n"
              "[Added Associations]\napplication/x-f=removed.desktop;viewer.desktop;\n"
