@@ -296,11 +296,13 @@ import concurrent.futures, queue, threading
 
 args = sys.argv[1:]
 full = '--full' in args
-jobs = 6   # the throughput levels off there: 4 workers 1.8 suites a minute, 6 and 8 both 2.3 (2026-10-25)
+jobs = 6   # the time levels off there: 46 mutants on a quiet machine took 414-451 s at 6, 411-419 at 8, 442 at 10, 477 at 12, CPU 43-62% (2026-10-26)
 if '--jobs' in args:
     jobs = int(args[args.index('--jobs') + 1])
     del args[args.index('--jobs'):args.index('--jobs') + 2]
 args = [a for a in args if a != '--full']
+if len(args) not in (1, 2) or any(a.startswith('-') for a in args):
+    sys.exit(__doc__.strip())   # an unknown flag isn't taken for the scratch folder
 scratch = args[0]
 only = [int(x) for x in args[1].split(',')] if len(args) > 1 else None
 root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
