@@ -118,11 +118,13 @@ nothing: when deleting a statement would leave an `else` without its `if`, empty
 
 The GUI mutants' time is mostly the 86 s GUI suite, not the build. So each runs only the `run.sh`
 groups that killed it on a whole-suite run (`tools/mutation/gui-tags.txt`, written by `gui.py`):
-164 mutants in 71 min, against about 4 h on the whole suite each; and since 2026-10-26 a mutant stops at its first failure (`OFX_GUI_FAIL_FAST`: the script ends, run.sh skips the group's other scripts), 290 mutants in 881 s against 1591. Since 2026-10-25 (Michael): a
+164 mutants in 71 min, against about 4 h on the whole suite each; and since 2026-10-26 a mutant stops at its first failure (`OFX_GUI_FAIL_FAST`: the script ends, run.sh skips the group's other scripts), 290 mutants in 881 s against 1591, and with the base in the pool (below) 671 s. Since 2026-10-25 (Michael): a
 mutant runs its groups one at a time and stops at the first kill; a new or changed one tries its
 hint (a fourth field naming the group, as `'f7'`) and then the rest, and the killing group becomes
-its tag; and `--jobs N` (6 by default: on a quiet machine 8 is no faster and 10 or 12 slower, 2026-10-26) runs N at once, each worker in its own copy, after the
-unmutated suite passes in all N at once (a script that fails only under load stops the run). They build `build/ofx-mut`: clang with ASan and UBSan, Clay's code in
+its tag; and `--jobs N` (6 by default: on a quiet machine 8 is no faster and 10 or 12 slower, 2026-10-26) runs N at once, each worker in its own copy. The
+unmutated suite runs once, its groups the first tasks in the same pool, under the mutants' load (Michael,
+2026-10-26; before, in all N workers before any mutant): a script that fails there stops the run and
+throws its results away. They build `build/ofx-mut`: clang with ASan and UBSan, Clay's code in
 its own object compiled once a run with nanosvg's (`gui/vendor.c`), 1.1 s a mutant against gcc's 3.5 s (Michael,
 2026-10-24; tcc has no ASan, so not there). `--full` reruns every mutant past its tags (about
 4.5 h before these changes), only before installing the last step of a major milestone, as F6 to F7 (Michael,

@@ -11,13 +11,14 @@ at its first failure (OFX_GUI_FAIL_FAST: the script ends there, run.sh skips the
 scripts; 2026-10-26, a run 1591 s to 881 s: every wait-for after a failure ran out its time). A mutant with no
 tags (new, or its text changed) tries its hint first (a fourth field, `'f7'`), then the rest; the
 group that kills it becomes its tag. --jobs N (6 by default) runs N mutants at once, each in its
-own copy of the repo: the unmutated build runs the whole suite in all N at once first, so a
-script that fails under that load stops the run instead of killing mutants it doesn't see (3 of 3
-such runs passed at 4, 6 and 8 each, 2026-10-25; 6 is as fast as 8). Mutants that didn't build, or
+own copy of the repo (6 is as fast as 8, 2026-10-25). The unmutated build runs the whole suite
+once, its groups the first tasks in the same pool, so under the mutants' load while they start: a
+script that fails there stops the run and throws its results away, instead of killing mutants it
+doesn't see (until 2026-10-26 it ran in all N workers before any mutant: 30% of a run). Mutants that didn't build, or
 weren't run for want of disk, are named in the summary and fail the run. --full runs every mutant on the whole suite and writes the tags again: before installing the
 last step of a major milestone (F6 to F7), since a narrow run can't see a mutant break something its
 tags don't cover; the installs between run the tagged mutants (Michael, 2026-10-24).
-The unmutated build always runs the whole suite first.
+The unmutated build always runs the whole suite (GUI_BASE_ONLY=1: only that).
 
 Everything runs from the scratch copy, scripts included, so the repo can be edited meanwhile.
 Each run's trees (about 50 MB: the copy tests' big files) are removed once it is judged, and the
@@ -453,35 +454,51 @@ def failed_groups(out):
 
 # A mutant's run stops at its first failure (OFX_GUI_FAIL_FAST, run.sh and script.c), the base's
 # never: it must pass everything.
-def run_groups(work, base, groups, fast=True):
+def run_groups(work, base, groups, fast=True, binary='build/ofx-mut'):
     env = dict(os.environ, OFX_GUI_FAIL_FAST='1') if fast else {k: v for k, v in os.environ.items() if k != 'OFX_GUI_FAIL_FAST'}
-    return subprocess.run([os.path.join(work, 'tests/gui/run.sh'), base, os.path.join(work, 'build/ofx-mut')] + groups,
+    return subprocess.run([os.path.join(work, 'tests/gui/run.sh'), base, os.path.join(work, binary)] + groups,
                           capture_output=True, text=True, env=env)
 
-# The unmutated build first, on the whole suite, in every worker at once: under the load the
-# mutants will run with. If any fails, every mutant would count as killed (as they did while f6
-# couldn't start, from fe01f7c to e8c2c57), and a script that fails only under load would kill
-# mutants it doesn't see.
-def base_run(w):
+# The unmutated build in each worker, kept as build/ofx-base for the base's groups (a mutant's build
+# replaces build/ofx-mut).
+def build_base(w):
     b = subprocess.run(['make', '-s', 'build/ofx-mut'], cwd=works[w], capture_output=True, text=True)
-    r = run_groups(works[w], os.path.join(scratch, f'gm-base{w}'), [], fast=False)
-    rmtree(os.path.join(scratch, f'gm-base{w}'))
-    return b, r
+    if b.returncode == 0:
+        shutil.copy2(os.path.join(works[w], 'build/ofx-mut'), os.path.join(works[w], 'build/ofx-base'))
+    return b
 with concurrent.futures.ThreadPoolExecutor(jobs) as ex:
-    bases = list(ex.map(base_run, range(jobs)))
-t_base = time.monotonic()
-bad = [(w, b, r) for w, (b, r) in enumerate(bases) if b.returncode != 0 or r.returncode != 0]
-if bad:
-    print(f'the unmutated build fails tests/gui/run.sh in {len(bad)} of {jobs} workers at once: fix that first (or fewer --jobs)')
-    for w, b, r in bad:
-        print(f'worker {w}:', b.stderr[-300:], '\n'.join(l for l in r.stdout.splitlines() if 'FAILED' in l or (l.startswith('script:') and not l.startswith('script: 0 of'))))
-        log = os.path.join(scratch, f'base{w}.log')   # the whole of it: why a script failed under load
-        open(log, 'w').write(b.stdout + b.stderr + r.stdout + r.stderr)
-        print(f'  (all of worker {w}\'s output: {log})')
+    builds = list(ex.map(build_base, range(jobs)))
+if any(b.returncode != 0 for b in builds):
+    print('the unmutated build fails:', next(b for b in builds if b.returncode != 0).stderr[-600:])
     sys.exit(2)
-print(f'base: tests/gui/run.sh passes unmutated, {jobs} at once ({t_base - t_start:.0f} s)', flush=True)
-if 'GUI_BASE_ONLY' in os.environ:
-    sys.exit(0)
+
+# The base: the unmutated build on the whole suite, a group a task, the first tasks in the same pool
+# as the mutants, so it runs under the load they run with while they start (Michael, 2026-10-26:
+# once, not in every worker; it was 30% of a run). If any group fails, every mutant would count as
+# killed (as they did while f6 couldn't start, from fe01f7c to e8c2c57), and a script that fails
+# only under load would kill mutants it doesn't see: then no mutant starts after it, and every
+# result of the run is thrown away.
+base_failed = []
+t_base = None
+def base_group(g):
+    global t_base
+    work = free_works.get()
+    try:
+        d = os.path.join(scratch, f'gm-base-{g}')
+        r = run_groups(work, d, [g], fast=False, binary='build/ofx-base')
+        rmtree(d)
+        with lock:
+            if r.returncode != 0:
+                log = os.path.join(scratch, f'base-{g}.log')   # the whole of it: why a script failed under load
+                open(log, 'w').write(r.stdout + r.stderr)
+                base_failed.append(g)
+                print(f'base: {g} FAILED unmutated: ' + '; '.join(l for l in r.stdout.splitlines() if 'FAILED' in l or (l.startswith('script:') and not l.startswith('script: 0 of')))[:300] + f'  (all of it: {log})', flush=True)
+            base_left.remove(g)
+            if not base_left and not base_failed:
+                t_base = time.monotonic()
+                print(f'base: tests/gui/run.sh passes unmutated, under the mutants\' load ({t_base - t_start:.0f} s)', flush=True)
+    finally:
+        free_works.put(work)
 
 MIN_FREE = 2 << 30   # bytes left in the scratch dir's file system before a mutant starts
 free_works = queue.Queue()
@@ -489,6 +506,7 @@ for w in works:
     free_works.put(w)
 lock = threading.Lock()
 survivors, unbuilt, retagged, stopped = [], [], 0, False
+base_left = list(GROUPS)
 
 # One mutant in a free worker: its groups one run.sh at a time, until one kills it. Tagged (and
 # not --full): its tags only. Else its hint and its old tags first, then the rest of the groups;
@@ -499,6 +517,8 @@ def one(i):
     f, old, new = m[:3]
     k = key(m)
     with lock:
+        if base_failed:
+            return
         if stopped or shutil.disk_usage(scratch).free < MIN_FREE:
             if not stopped:
                 print(f'stopped before #{i}: less than 2 GiB free in {scratch}', flush=True)
@@ -542,10 +562,21 @@ def one(i):
     finally:
         free_works.put(work)
 
-todo = [i for i in range(len(MUTANTS)) if only is None or i in only]
+todo = [i for i in range(len(MUTANTS)) if only is None or i in only] if 'GUI_BASE_ONLY' not in os.environ else []
 with concurrent.futures.ThreadPoolExecutor(jobs) as ex:
-    list(ex.map(one, todo))
+    # The pool takes them in order: the base's groups first, the mutants as workers come free.
+    futs = [ex.submit(base_group, g) for g in GROUPS] + [ex.submit(one, i) for i in todo]
+    for f in futs:
+        f.result()
 t_end = time.monotonic()
+if base_failed:
+    for w in works:
+        shutil.rmtree(w, ignore_errors=True)
+    print(f'the unmutated build fails tests/gui/run.sh under load in {base_failed}: fix that first (or fewer --jobs); '
+          f'every mutant result of this run is thrown away, no tags written')
+    sys.exit(2)
+if 'GUI_BASE_ONLY' in os.environ:
+    sys.exit(0)
 if retagged:
     live = {key(m) for m in MUTANTS}
     with open(tags_path, 'w') as out:
@@ -560,6 +591,6 @@ for w in works:
 # F7.1.1 review).
 untested = sorted(unbuilt) + (['the rest: out of disk'] if stopped else [])
 print(f'{len(todo)} GUI mutants, {len(survivors)} survived: {sorted(survivors)}' + (f'; NOT TESTED: {untested}' if untested else ''))
-print(f'time: {t_end - t_start:.0f} s ({t_base - t_start:.0f} s the base, {t_end - t_base:.0f} s the mutants, {jobs} at once)')
+print(f'time: {t_end - t_start:.0f} s, {jobs} at once (the base done at {t_base - t_start:.0f} s)')
 if untested:
     sys.exit(1)
