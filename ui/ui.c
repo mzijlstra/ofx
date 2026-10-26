@@ -770,6 +770,7 @@ static void ui_find_open(Ui *u)
 {
     u->finding = true, u->find_keys = true, u->find_miss = false, u->find_len = 0, u->find_from = u->list.sel, u->side_focus = false;
     u->jobs_focus = false, u->crumb_focus = false;
+    ui_matcher_set(&u->find_m, STR_EMPTY, u->find_opts);   // Up and Down in an empty bar find nothing (reviewer-2)
 }
 
 // cp as UTF-8 into b: its length, or 0 for a control character or no code point at all.
@@ -1770,11 +1771,13 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
             }
         }
         if (grid && (key == UK_LEFT || key == UK_RIGHT)) {
-            ui_step_round(l, key == UK_LEFT ? -1 : 1, false);
+            if (shifted) ui_move(l, key == UK_LEFT ? -1 : 1);   // a Shift move doesn't wrap
+            else ui_step_round(l, key == UK_LEFT ? -1 : 1, false);
             continue;
         }
         if (grid && (key == UK_UP || key == UK_DOWN)) {
-            ui_step_round(l, key == UK_UP ? -1 : 1, true);
+            if (shifted) ui_move_rows(l, key == UK_UP ? -1 : 1);
+            else ui_step_round(l, key == UK_UP ? -1 : 1, true);
             continue;
         }
         if (grid && (key == UK_PAGEUP || key == UK_PAGEDOWN)) {
@@ -1783,11 +1786,11 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         }
         switch (key) {
         case UK_UP:
-            if (m == l) ui_step_round(l, -1, false);
+            if (m == l && !shifted) ui_step_round(l, -1, false);
             else ui_step(u, m, -1);
             break;
         case UK_DOWN:
-            if (m == l) ui_step_round(l, 1, false);
+            if (m == l && !shifted) ui_step_round(l, 1, false);
             else ui_step(u, m, 1);
             break;
         case UK_PAGEUP: ui_step(u, m, -page); break;

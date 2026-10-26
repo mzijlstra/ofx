@@ -694,10 +694,23 @@ static void test_find_count(void)
     in = ui_input_none(), in.find_step = 1;
     ui_handle(&u, names, &in);
     CHECK(u.list.sel == was);
-    // Opened again, no text yet (the matcher still holds the last one): no count.
+    // Opened again, no text yet: no count, and Up and Down find nothing (reviewer-2: they stepped
+    // through the last find's matches).
     in = chars("/");
     ui_handle(&u, names, &in);
-    CHECK(u.finding && u.find_m.len > 0 && ui_find_count(&u, names, &at) == 0 && at == 0);
+    was = u.list.sel;
+    CHECK(u.finding && u.find_m.len == 0 && ui_find_count(&u, names, &at) == 0 && at == 0);
+    in = keys(2, UK_DOWN, UK_DOWN);
+    ui_handle(&u, names, &in);
+    CHECK(u.list.sel == was);
+    // Enter, then n: the last text found again, the bar still empty and counting nothing.
+    in = keys(1, UK_ENTER);
+    ui_handle(&u, names, &in);
+    in = chars("n");
+    ui_handle(&u, names, &in);
+    CHECK(u.finding && u.find_len == 0 && u.find_m.len > 0 && ui_find_count(&u, names, &at) == 0);
+    in = keys(1, UK_ESC);
+    ui_handle(&u, names, &in);
 }
 
 static void test_find_bar(void)
@@ -865,8 +878,20 @@ static void test_shift_select(void)
     in = keys(1, UK_SEL_HOME);
     ui_handle(&u, names, &in);
     CHECK(u.list.sel == 0 && u.marked == 20);
+    // A Shift move doesn't wrap round (reviewer-2: Shift+Up on the first entry marked them all).
+    ui_mark_clear(&u);
+    in = keys(1, UK_SEL_UP);
+    ui_handle(&u, names, &in);
+    CHECK(u.list.sel == 0 && u.marked == 1);
+    ui_mark_clear(&u);
+    in = keys(1, UK_END);
+    ui_handle(&u, names, &in);
+    in = chars("J");
+    ui_handle(&u, names, &in);
+    CHECK(u.list.sel == 19 && u.marked == 1);
     // In the same frame as Enter: marked before Enter opens them all.
     ui_mark_clear(&u);
+    ui_set(&u.list, 20, 0);
     in = keys(2, UK_SEL_DOWN, UK_ENTER);
     UiAction a = ui_handle(&u, names, &in);
     CHECK(a.kind == UA_OPEN && a.all && u.marked == 2);
@@ -885,6 +910,18 @@ static void test_shift_select(void)
     in = chars("LH");
     ui_handle(&u, names, &in);
     CHECK(u.list.sel == 6 && u.marked == 7 && mark[7]);
+    ui_mark_clear(&u);
+    in = keys(1, UK_END);
+    ui_handle(&u, names, &in);
+    in = keys(2, UK_SEL_RIGHT, UK_SEL_DOWN);   // the last cell: neither wraps
+    ui_handle(&u, names, &in);
+    CHECK(u.list.sel == 19 && u.marked == 1);
+    in = keys(1, UK_HOME);
+    ui_handle(&u, names, &in);
+    ui_mark_clear(&u);
+    in = keys(2, UK_SEL_LEFT, UK_SEL_UP);
+    ui_handle(&u, names, &in);
+    CHECK(u.list.sel == 0 && u.marked == 1);
     u.grid = false;
     ui_set_cols(&u.list, 1);
     // The sidebar with the keys: its cursor moves, nothing is marked.

@@ -2813,12 +2813,12 @@ static bool list_dir(void *ctx, isize i);
 // when the listing, the text, its toggles or the cursor changed: not on every hover's frame.
 static isize find_count(isize *at)
 {
-    static struct { int lists; isize sel, n, at; UiMatchOpts o; int len; char text[UI_FIND_MAX + 1]; bool valid; } c;
+    static struct { int lists; isize sel, n, at; UiMatchOpts o; int len, find_len; char text[UI_FIND_MAX + 1]; bool valid, finding; } c;
     const UiMatcher *m = &app.ui.find_m;
-    if (!c.valid || c.lists != app.lists || c.sel != app.ui.list.sel || c.len != m->len || memcmp(c.text, m->text, (size_t)m->len) ||
+    if (!c.valid || c.finding != app.ui.finding || c.find_len != app.ui.find_len || c.lists != app.lists || c.sel != app.ui.list.sel || c.len != m->len || memcmp(c.text, m->text, (size_t)m->len) ||
         c.o.cased != m->o.cased || c.o.word != m->o.word || c.o.regex != m->o.regex) {
         c.n = ui_find_count(&app.ui, (UiNames){ list_name, NULL, list_dir }, &c.at);
-        c.lists = app.lists, c.sel = app.ui.list.sel, c.len = m->len, c.o = m->o, c.valid = true;
+        c.finding = app.ui.finding, c.find_len = app.ui.find_len, c.lists = app.lists, c.sel = app.ui.list.sel, c.len = m->len, c.o = m->o, c.valid = true;
         memcpy(c.text, m->text, (size_t)m->len);
     }
     *at = c.at;
@@ -3325,9 +3325,9 @@ static bool in_box(Clay_ElementId id, float x, float y)
 static Hit hit_at(float x, float y)
 {
     Hit h = { -1, -1, -1, UB_NONE, -1, -1, -1, 0, -1, -1, -1, -1, false, -1, -1, -1, -1, false, false, false, 0, 0 };
-    // The find bar's toggles only without a panel over them (a click on Properties' OK above them
-    // flipped one, 2026-10-26); Open With's are its panel's.
-    for (int k = 1; k <= 4 && !h.toggle && (app.ui.ow || (app.ui.finding && modal_kind() == MODAL_NONE)); k++)
+    // The find bar's toggles only without a panel or a menu over them (a click on Properties' OK
+    // above them flipped one, 2026-10-26); Open With's are its panel's.
+    for (int k = 1; k <= 4 && !h.toggle && (app.ui.ow || (app.ui.finding && modal_kind() == MODAL_NONE && !app.ui.menu_on)); k++)
         if (in_box(CLAY_IDI("toggle", k), x, y)) h.toggle = k;
     if (modal_kind() == MODAL_NONE)
         for (int m = 0; m < UI_MENUS && h.menu_title < 0; m++)

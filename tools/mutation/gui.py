@@ -344,8 +344,9 @@ MUTANTS = [
     (G, '    if (!c.valid || c.lists != app.lists || c.sel != app.ui.list.sel ||', '    if (!c.valid || c.lists != app.lists ||', 'f2'),
     (G, '    if (!c.valid || c.lists != app.lists || c.sel != app.ui.list.sel || c.len != m->len || memcmp(c.text, m->text, (size_t)m->len) ||', '    if (!c.valid || c.lists != app.lists || c.sel != app.ui.list.sel || c.len != m->len ||', 'f2'),
     (G, '    if (h.find_step) return TIP_FIND + (h.find_step > 0);', '', 'f2'),
+    (G, 'c.finding != app.ui.finding || c.find_len != app.ui.find_len || ', '', 'f2'),
     (G, '"Previous match (Up)" : "Next match (Down)"', '"Next match (Down)" : "Next match (Down)"', 'f2'),
-    (G, '(app.ui.ow || (app.ui.finding && modal_kind() == MODAL_NONE))', '(app.ui.ow || app.ui.finding)', 'f72'),
+    (G, '(app.ui.ow || (app.ui.finding && modal_kind() == MODAL_NONE && !app.ui.menu_on))', '(app.ui.ow || app.ui.finding)', 'f72'),
     (G, '    ui_find_close(&app.ui);   // (a tab\'s own find isn\'t kept)', '', 'f2'),
     # ---- F7.3.1: Set as default
     (OW, '    if (strcmp(ow.type, "application/x-zerosize") == 0) snprintf(', '    if (false) snprintf(', 'f73'),
@@ -355,7 +356,7 @@ MUTANTS = [
     (OW, '    if (set && !op_set_default(&scratch, str_from_c(ow.type), id, &err)) {', '    if (false) {', 'f73'),
     (OW, '    if (set) set_status(false, "opened %s with %.*s, the default for %s now"', '    if (false) set_status(false, "opened %s with %.*s, the default for %s now"', 'f73'),
     (G, '    case UA_LAUNCH: ow_launch(a.index, a.all); break;', '    case UA_LAUNCH: ow_launch(a.index, false); break;', 'f73'),
-    (G, '    for (int k = 1; k <= 4 && !h.toggle && (app.ui.ow || app.ui.finding); k++)', '    for (int k = 1; k <= 3 && !h.toggle && (app.ui.ow || app.ui.finding); k++)', 'f73'),
+    (G, '    for (int k = 1; k <= 4 && !h.toggle && (app.ui.ow || (app.ui.finding && modal_kind() == MODAL_NONE && !app.ui.menu_on)); k++)', '    for (int k = 1; k <= 3 && !h.toggle && (app.ui.ow || (app.ui.finding && modal_kind() == MODAL_NONE && !app.ui.menu_on)); k++)', 'f73'),
     # Left out: nsvgRasterize gone leaves a blank texture, which no state word sees (the pixels);
     # f73's ow-panel.png shows the SVG drawn.
 ]

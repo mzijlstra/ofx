@@ -1118,10 +1118,10 @@ MUTANTS += [
     (U, "    } else if (by > 0 && l->sel >= last_row) {   // the bottom row: down to the top\n        l->sel = col;", "    } else if (by > 0 && l->sel >= last_row) {   // the bottom row: down to the top\n        l->sel = 0;"),
     (U, "    } else if (by > 0 && l->sel >= last_row) {", "    } else if (by > 0 && l->sel > last_row) {"),
     (U, "    if (l->n == 0) return;\n    isize c = rows", "    isize c = rows"),
-    (U, "            if (m == l) ui_step_round(l, -1, false);", "            if (false) ui_step_round(l, -1, false);"),
-    (U, "            if (m == l) ui_step_round(l, 1, false);", "            if (true) ui_step_round(l, 1, false);"),
-    (U, "            ui_step_round(l, key == UK_UP ? -1 : 1, true);", "            ui_move_rows(l, key == UK_UP ? -1 : 1);"),
-    (U, "            ui_step_round(l, key == UK_LEFT ? -1 : 1, false);", "            ui_move(l, key == UK_LEFT ? -1 : 1);"),
+    (U, "            if (m == l && !shifted) ui_step_round(l, -1, false);", "            if (false) ui_step_round(l, -1, false);"),
+    (U, "            if (m == l && !shifted) ui_step_round(l, 1, false);", "            if (true) ui_step_round(l, 1, false);"),
+    (U, "            else ui_step_round(l, key == UK_UP ? -1 : 1, true);", "            else ui_move_rows(l, key == UK_UP ? -1 : 1);"),
+    (U, "            else ui_step_round(l, key == UK_LEFT ? -1 : 1, false);", "            else ui_move(l, key == UK_LEFT ? -1 : 1);"),
     (U, "    if (n > 1 && strncmp(path, home, n) == 0 && (path[n] == '/' || path[n] == 0)) snprintf(buf, cap, \"~%s\", path + n);", "    if (n > 1 && strncmp(path, home, n) == 0) snprintf(buf, cap, \"~%s\", path + n);"),
     (U, "    if (n > 1 && strncmp(path, home, n) == 0 && (path[n] == '/' || path[n] == 0)) snprintf(buf, cap, \"~%s\", path + n);", "    if (n > 0 && strncmp(path, home, n) == 0 && (path[n] == '/' || path[n] == 0)) snprintf(buf, cap, \"~%s\", path + n);"),
     (N, "(unsigned long long)st.st_dev != dev || (unsigned long long)st.st_ino != ino)", "(unsigned long long)st.st_ino != ino)"),
@@ -1293,6 +1293,12 @@ MUTANTS += [
     (U, "ui_find_step(u, names, in->find_step > 0 ? 1 : -1);", "ui_find_step(u, names, 1);"),
     (U, "in->find_x || in->find_field || in->find_step;\n", "in->find_x || in->find_field;\n"),
     (U, "u->finding && (in->find_x || in->find_field || in->find_step)) {", "u->finding && (in->find_x || in->find_field)) {"),
+    # reviewer-2's LOWs: a Shift move doesn't wrap; an empty bar finds nothing
+    (U, "            if (shifted) ui_move(l, key == UK_LEFT ? -1 : 1);   // a Shift move doesn't wrap\n            else ", "            "),
+    (U, "            if (shifted) ui_move_rows(l, key == UK_UP ? -1 : 1);\n            else ", "            "),
+    (U, "            if (m == l && !shifted) ui_step_round(l, -1, false);", "            if (m == l) ui_step_round(l, -1, false);"),
+    (U, "            if (m == l && !shifted) ui_step_round(l, 1, false);", "            if (m == l) ui_step_round(l, 1, false);"),
+    (U, "    ui_matcher_set(&u->find_m, STR_EMPTY, u->find_opts);   // Up and Down in an empty bar find nothing (reviewer-2)\n", ""),
 ]
 # ---- Shift and a move select (Michael, 2026-10-26)
 MUTANTS += [
