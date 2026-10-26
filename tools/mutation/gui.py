@@ -280,7 +280,7 @@ MUTANTS = [
     (G, '    if (props.walking && walk_take(&props.sum, &props.done)) dirty = true;', '', 'f72'),
     (G, '    mode_t old, perms = (props.st.st_mode & 0777) ^ perm_bit(k);', '    mode_t old, perms = (props.st.st_mode & 0777) | perm_bit(k);', 'f72'),
     (G, '    undo_gen++, undo_begin(&undo, UNDO_CHMOD), undo_add(&undo, NULL, props_path[0], was);', '', 'f72'),
-    (G, '    snprintf(was, sizeof was, "%o", (unsigned)old);', '    snprintf(was, sizeof was, "%u", (unsigned)old);', 'f72'),
+    (G, '    snprintf(was, sizeof was, "%o %llu %llu", (unsigned)old,', '    snprintf(was, sizeof was, "%u %llu %llu", (unsigned)old,', 'f72'),
     (G, '    props_read();\n    set_status(false,', '    set_status(false,', 'f72'),
     (G, '            if (in_box(CLAY_IDI("prop-box", k), x, y)) h.prop_box = k;', '', 'f72'),
     (G, '    in->prop_box = h.prop_box;\n', '', 'f72'),

@@ -6,7 +6,7 @@ type notes
 key enter
 expect sel=notes.txt
 key ctrl-i
-wait-for 2000 props=1 propat=0 propcan=1 propn=1 propmode=0644 propname=notes.txt modal=props propwhere=~/tree propdrive=File_System proplink=- propcreated=1
+wait-for 2000 props=1 propat=0 propcan=1 propn=1 propmode=0644 propname=notes.txt modal=props propwhere=~/tree propdrive=File_System proplink=- propcreated=1 propidx=4
 shot props-file.png
 # ---- the keys: arrows and h j k l move, stopping at the edges; Space and Enter flip at once
 key left
