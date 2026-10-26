@@ -2873,7 +2873,7 @@ static void layout_find_bar(void)
             layout_toggles(u->find_opts);
         }
         // At least as wide as "88 of 88", so the chevrons don't move as the count grows.
-        CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_FIT(str_width(S("88 of 88"))), CLAY_SIZING_FIT(0) }, .childAlignment = { .x = CLAY_ALIGN_X_RIGHT } } }) {
+        CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_FIT(str_width(S("88 of 88")), 0), CLAY_SIZING_FIT(0) }, .childAlignment = { .x = CLAY_ALIGN_X_RIGHT } } }) {
             if (bad) text(fit(str_from_c(u->find_m.err), 240, false), cc(t->red));
             else if (u->find_miss) text(cz("No match"), cc(t->red));
             else if (n > 0) text(cz(find_label(n, at, arena_new(&frame, char, 48), 48)), cc(t->fg_dim));

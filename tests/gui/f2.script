@@ -123,7 +123,7 @@ expect sel=adir findkeys=0 findtext=1_of_3
 pointer-off
 point-ui find-x
 click-here
-expect finding=0 findkeys=0 rows=14
+expect finding=0 findkeys=0 rows=14 findn=0 findtext=-
 pointer-off
 # Opened again: an empty bar counts nothing (reviewer-2: it showed the last find's count)
 char /
