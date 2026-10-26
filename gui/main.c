@@ -1273,7 +1273,9 @@ static Str entry_mime(isize i)
 // The texture under key at px, from the first of names the theme has, loaded the first time it is
 // needed; NULL when the cache is full. names NULL: they are the MIME type's (key). A size other
 // than the list's is cached under "<px>:<key>".
-static IconSlot *icon_for_px(Str key, const Str *given, isize ngiven, int px)
+// The slot for key at px: loaded the first time from the first of names (or the MIME type's) the
+// theme has, else from `file` when given (an app's own picture, F7.3).
+static IconSlot *icon_for_px_or(Str key, const Str *given, isize ngiven, int px, const char *or_file)
 {
     int k;
     ArenaMark mark = arena_mark(&scratch);
@@ -1284,7 +1286,8 @@ static IconSlot *icon_for_px(Str key, const Str *given, isize ngiven, int px)
     isize n = given ? ngiven : mime_icon_names(&scratch, &app.mime_db, key, names);
     IconSlot *s = &app.slot[app.nslots];
     *s = (IconSlot){ .key = { arena_cstr(&icona, slot_key), slot_key.len } };
-    const char *file = icon_find(&scratch, &app.icons, given ? given : names, n, px, app.icon_scale);
+    const char *file = n ? icon_find(&scratch, &app.icons, given ? given : names, n, px, app.icon_scale) : NULL;
+    if (!file) file = or_file;
     if (file) {
         // A bigger file than drawn (F6.3: Yaru's 256 and 256@2x stand in for 64 to 256 px) is
         // made the drawn size once here: the GPU's bilinear filter alone blurs a 4x shrink to
@@ -1300,6 +1303,11 @@ static IconSlot *icon_for_px(Str key, const Str *given, isize ngiven, int px)
     arena_restore(&scratch, mark);
     strmap_put(&app.slot_of, s->key, app.nslots);
     return &app.slot[app.nslots++];
+}
+
+static IconSlot *icon_for_px(Str key, const Str *given, isize ngiven, int px)
+{
+    return icon_for_px_or(key, given, ngiven, px, NULL);
 }
 
 static IconSlot *icon_for(Str key, const Str *given, isize ngiven)

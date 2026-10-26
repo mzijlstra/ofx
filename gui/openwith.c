@@ -39,6 +39,11 @@ static void ow_open(void)
     apps_all(&owa, &ow.apps);
     ow.shown = apps_rank(&owa, &ow.apps, str_from_c(ow.type));
     for (isize i = 0; i < ow.shown && i < UI_APPS_MAX; i++) ow.names[i] = ow.apps.a[i].name;
+    // Filtered now: an idle window draws its next frame only on input, and showed "No app
+    // matches" until then (Michael, 2026-10-26).
+    UiInput in = ui_input_none();
+    in.app_name = ow.names, in.app_n = ow.shown < UI_APPS_MAX ? ow.shown : UI_APPS_MAX;
+    ui_ow_filter(&app.ui, &in);
 }
 
 // The app ui/ picked (UA_LAUNCH): it gets every file, SPAWN_FILES_MAX a launch.
@@ -110,6 +115,35 @@ static void open_marked(void)
 }
 
 // ---- the panel ----------------------------------------------------------------------------------
+
+// An app's icon: Icon= a name the theme has (its Apps), a PNG of that name in a data dir's
+// pixmaps/ (Spotify's, hyprmon's), or a PNG's own path; else the generic one. An SVG only can't
+// be drawn (ofx loads PNG), and gets the generic one too.
+static IconSlot *ow_icon(Str icon)
+{
+    Str generic = S("application-x-executable");
+    if (icon.len == 0) return icon_for(generic, &generic, 1);
+    Str key = str_from_c(arena_sprintf(&frame, "app:%.*s", STR_ARG(icon)));
+    int k;
+    if (strmap_get(&app.slot_of, key, &k)) return &app.slot[k];
+    ArenaMark mark = arena_mark(&scratch);
+    const char *file = NULL;
+    bool path = icon.p[0] == '/';
+    if (path) {
+        char *f = arena_cstr(&scratch, icon);
+        if (str_ends_with(icon, S(".png")) && access(f, R_OK) == 0) file = f;
+    } else {
+        const char *dirs[MIME_DIRS_MAX];
+        isize nd = data_dirs(&scratch, dirs, MIME_DIRS_MAX);
+        for (isize d = 0; d < nd && !file; d++) {
+            char *f = arena_sprintf(&scratch, "%s/pixmaps/%.*s.png", dirs[d], STR_ARG(icon));
+            if (access(f, R_OK) == 0) file = f;
+        }
+    }
+    IconSlot *s = icon_for_px_or(key, &icon, path ? 0 : 1, ICON_PX, file);   // (a path: no theme name to try)
+    arena_restore(&scratch, mark);
+    return s && s->tex.id ? s : icon_for(generic, &generic, 1);
+}
 
 // The rows the list shows for a window h high: OW_ROWS_MAX, fewer in a small window.
 static int ow_rows(int h)
@@ -195,9 +229,7 @@ static void layout_ow_panel(void)
                                                           .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
                                               .backgroundColor = bg,
                                               .border = { .color = first && v > 0 ? mix(t->fg_dim, t->bg_light, 0.3f) : bg, .width = { .top = first && v > 0 ? 1 : 0 } } }) {
-                    Str names[2] = { p->icon.len && p->icon.p[0] != '/' ? p->icon : S("application-x-executable"), S("application-x-executable") };
-                    Str key = str_from_c(arena_sprintf(&frame, "app:%.*s", STR_ARG(names[0])));
-                    icon_box(CLAY_IDI("ow-icon", r), icon_for(key, names, 2), ICON_PX);
+                    icon_box(CLAY_IDI("ow-icon", r), ow_icon(p->icon), ICON_PX);
                     text(fit(p->name, OW_W - 260, false), cc(t->fg));
                     CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) } } }) {}
                     if (first && p->section < AS_NONE) text(cz(SECTION[p->section]), cc(t->fg_dim));

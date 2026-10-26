@@ -199,9 +199,11 @@ T=$base/f73; rm -rf "$T"; H=$T/home; mkdir -p "$H/tree/sub" "$T/config" "$T/data
 echo b > "$H/tree/b.txt"; echo notes > "$H/tree/notes.txt"; : > "$H/tree/e.txt"; cp "$here/f64/wide.png" "$H/tree/pic.png"
 printf '[Default Applications]\ntext/plain=ofx-t-edit.desktop\nimage/png=ofx-t-view.desktop\n' > "$T/config/mimeapps.list"
 app() { printf '[Desktop Entry]\nType=Application\nName=%s\nExec=true %%F\n%b' "$2" "$3" > "$T/data/applications/$1.desktop"; }
-app ofx-t-edit "Ofx T Edit" 'MimeType=text/plain;\n'
-app ofx-t-view "Ofx T View" 'MimeType=image/png;\n'
-app ofx-t-code "Ofx T Code" 'MimeType=text/plain;inode/directory;\n'
+# Icons: a PNG in the data home's pixmaps/, a PNG's own path, a theme's app icon by name.
+mkdir -p "$T/data/pixmaps"; cp "$here/f64/wide.png" "$T/data/pixmaps/ofx-t-pix.png"; cp "$here/f64/wide.png" "$T/abs-icon.png"
+app ofx-t-edit "Ofx T Edit" 'Icon=ofx-t-pix\nMimeType=text/plain;\n'
+app ofx-t-view "Ofx T View" "Icon=$T/abs-icon.png\\nMimeType=image/png;\\n"
+app ofx-t-code "Ofx T Code" 'Icon=utilities-terminal\nMimeType=text/plain;inode/directory;\n'
 app ofx-t-helper "Ofx T Helper" 'NoDisplay=true\nMimeType=text/plain;\n'
 app ofx-t-hidden "Ofx T Hidden" 'NoDisplay=true\n'
 app ofx-t-other "Ofx T Other" ''

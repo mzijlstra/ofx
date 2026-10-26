@@ -437,9 +437,10 @@ static void test_icons(void)
     CHECK(strcmp(FIND(24, 1, S("text-x-csrc"), S("folder")), at("icons/Parent/scalable/mimetypes/text-x-csrc.png")) == 0);
     CHECK(strcmp(FIND(48, 1, S("fallback")), at("icons/hicolor/48x48/mimetypes/fallback.png")) == 0);
     CHECK(strcmp(FIND(48, 1, S("a-place")), at("icons/hicolor/48x48/places/a-place.png")) == 0);
-    CHECK(strcmp(FIND(48, 1, S("an-app")), "") == 0);          // Applications: not read
-    CHECK(db.t[2].ndirs == 2);
+    CHECK(strcmp(FIND(48, 1, S("an-app")), at("icons/hicolor/48x48/apps/an-app.png")) == 0);   // Applications: read for Open With (F7.3)
+    CHECK(db.t[2].ndirs == 3);
     CHECK(icon_context_used(S("Mimetypes")) && !icon_context_used(S("Status")) && icon_context_used(STR_EMPTY));
+    CHECK(icon_context_used(S("Apps")) && icon_context_used(S("Applications")));   // the apps' own (Open With, F7.3)
     CHECK(strcmp(FIND(24, 1, S("only-svg")), "") == 0);       // PNG only
     CHECK(strcmp(FIND(24, 1, S("not-an-icon")), "") == 0);
     CHECK(strcmp(FIND(24, 1, S("absent")), "") == 0);

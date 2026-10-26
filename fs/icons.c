@@ -119,7 +119,8 @@ static bool icon_scan(Arena *a, const char *dir, StrMap *m)
 static bool icon_context_used(Str context)
 {
     return context.len == 0 || str_eq(context, S("Places")) || str_eq(context, S("MimeTypes")) ||
-           str_eq(context, S("Mimetypes")) || str_eq(context, S("Devices")) || str_eq(context, S("Actions"));
+           str_eq(context, S("Mimetypes")) || str_eq(context, S("Devices")) || str_eq(context, S("Actions")) ||
+           str_eq(context, S("Apps")) || str_eq(context, S("Applications"));
 }
 
 static bool icon_has_theme(const IconDb *db, Str name)
