@@ -324,6 +324,26 @@ so that would mean patching vendored raylib or leaving it, for no gain here.
   in `spawn.log`. A unit test for the state merge (two saves of different fields keep both).
 - F8 reuses it: "Open in New Window" on a folder's right-click menu.
 
+**F7.4 decided (Michael, 2026-10-26): Edit, View and Go first, then Bookmarks, then Help.** The
+comparison with Nemo 6.6.4's menus, entry by entry: https://claude.ai/artifact/Xc2GJdmohbFyJmgwTQFKpb
+(he agreed with every proposal there and every recommendation):
+- **Edit:** Undo; Cut, Copy, Paste; Select All, Select Items Matching… (new: find's field and
+  toggles, Enter selects every match; Ctrl+Shift+A, Ctrl+S stays the sidebar's), Invert Selection
+  (new, Ctrl+Shift+I); Duplicate (new: "name (copy)" as a copy job, undoable); Rename…; Move to
+  Trash (outside the trash view), Delete…, Restore (trash view only). Later: Redo (needs a history of
+  undone actions), Make Link, Paste Into Folder (with F8). Out: Copy to/Move to submenus, favourites
+  and pins, Preferences (until ofx.conf).
+- **View:** Reload (new, Ctrl+R, for drives without change events); Places Sidebar, Tree Sidebar,
+  No Sidebar (marked, F9); Show Hidden Files (checked); Sort by Name, Size, Modified (marked),
+  Reverse Order (checked); Zoom In, Zoom Out, Normal Size (icon view only); List (Ctrl+1), Icons
+  (Ctrl+2), marked. Out: Stop, toolbar and statusbar toggles, extra pane, reset view, thumbnails
+  toggle, the other sort keys, manual layout, compact view. The menu bar's hide stays with ofx.conf.
+- **Go:** Open Parent, Back, Forward; Home (Alt+Home added beside `~`); Trash; Find in Folder…,
+  Location…, Terminal Here. Out: Computer, Templates, Network, Same Location as Other Pane.
+- **Keys kept:** Alt+Enter stays the terminal (Properties is Ctrl+I); Ctrl+1/Ctrl+2 as ofx has them.
+- **Build:** check marks and one-of-a-group marks in a menu; entries that hide (not only grey);
+  every entry runs its key's action through ui/.
+
 **F7.1 as built (2026-10-25):**
 - `ui/ui.c`: the menus as tables (`UI_MENU`, `UI_MENU_ITEM`: label, key, a word for the tests);
   `ui_menu_enabled`, `ui_menu_event` (the keys), `ui_menu_hover` (the pointer), the clicks in
