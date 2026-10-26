@@ -139,7 +139,9 @@ its own object compiled once a run (`gui/clay.c`), 1.1 s a mutant against gcc's 
 ## Vendored code
 
 `vendor/`: Clay (`main` at e6cc369, `clay.h` and its licence) and raylib 6.0 (dbc56a8, `src/` and
-`LICENSE`), both as in prdash and uml-viewer, built by our Makefile. `base/` and `gui/font.c`,
+`LICENSE`), both as in prdash and uml-viewer, built by our Makefile; nanosvg (`master` at
+239e102, `nanosvg.h`, `nanosvgrast.h`, `LICENSE.txt`; zlib licence) for the SVG app icons in Open
+With (Michael, 2026-10-26), compiled into gui/main.c. `base/` and `gui/font.c`,
 `gui/render.c` are uml-viewer's at cca8e45 (`render.c` gained images). Do not edit vendored files.
 
 ## Git

@@ -201,10 +201,11 @@ printf '[Default Applications]\ntext/plain=ofx-t-edit.desktop\nimage/png=ofx-t-v
 app() { printf '[Desktop Entry]\nType=Application\nName=%s\nExec=true %%F\n%b' "$2" "$3" > "$T/data/applications/$1.desktop"; }
 # Icons: a PNG in the data home's pixmaps/, a PNG's own path, a theme's app icon by name.
 mkdir -p "$T/data/pixmaps"; cp "$here/f64/wide.png" "$T/data/pixmaps/ofx-t-pix.png"; cp "$here/f64/wide.png" "$T/abs-icon.png"
+printf '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"><rect width="16" height="16" fill="#3c8"/></svg>\n' > "$T/data/pixmaps/ofx-t-vec.svg"
 app ofx-t-edit "Ofx T Edit" 'Icon=ofx-t-pix\nMimeType=text/plain;\n'
 app ofx-t-view "Ofx T View" "Icon=$T/abs-icon.png\\nMimeType=image/png;\\n"
 app ofx-t-code "Ofx T Code" 'Icon=utilities-terminal\nMimeType=text/plain;inode/directory;\n'
-app ofx-t-helper "Ofx T Helper" 'NoDisplay=true\nMimeType=text/plain;\n'
+app ofx-t-helper "Ofx T Helper" 'Icon=ofx-t-vec\nNoDisplay=true\nMimeType=text/plain;\n'
 app ofx-t-hidden "Ofx T Hidden" 'NoDisplay=true\n'
 app ofx-t-other "Ofx T Other" 'Icon=ofx-t-no-such-icon\n'
 printf '1 0 0:1 / / rw - ext4 /dev/x rw\n' > "$T/mountinfo"

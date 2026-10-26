@@ -277,9 +277,11 @@ static void script_state(char *out, size_t cap)
     // The icon drawn for that app: its file's name ("-" none).
     const char *owicon = "-";
     if (owsel >= 0) {
-        IconSlot *ic = ow_icon(ow.apps.a[owsel].icon);
+        IconSlot *ic = ow_icon(owsel);
         if (ic && ic->file[0]) owicon = strrchr(ic->file, '/') ? strrchr(ic->file, '/') + 1 : ic->file;
     }
+    int owtex = 0;   // the panel's icon textures held (none once it closed)
+    for (isize i = 0; i < UI_APPS_MAX; i++) owtex += ow.icon[i].tex.id != 0;
     UiMatchOpts mo[2] = { app.ui.ow_opts, app.ui.find_opts };
     char *mout[2] = { owopts, findopts };
     for (int k = 0; k < 2; k++) {
@@ -328,7 +330,7 @@ static void script_state(char *out, size_t cap)
              "thumbheld=%td thumbdropped=%d thumbresets=%d thumblocal=%d menu=%s menuat=%s menuoff=%s menuhover=%d canwrite=%d windows=%d siderows=%d footerin=%d "
              "props=%d propat=%d propcan=%d propn=%td propmode=%04o propfiles=%lld propdirs=%lld propbytes=%lld propdone=%d propcut=%d proplinks=%lld,%lld,%lld,%d propnlink=%llu proptype=%s proptypename=%s propbyname=%d propname=%s "
              "propwhere=%s propdrive=%s proplink=%s propcreated=%d propidx=%td "
-             "ow=%d owfresh=%d owlist=%d owtext=%s own=%td owsel=%td owapp=%s owicon=%s owshown=%td owtype=%s owfiles=%td owrows=%d owtop=%td owopts=%s owbad=%d findopts=%s findbad=%d status=%s",
+             "ow=%d owfresh=%d owlist=%d owtext=%s own=%td owsel=%td owapp=%s owicon=%s owtex=%d owshown=%td owtype=%s owfiles=%td owrows=%d owtop=%td owopts=%s owbad=%d findopts=%s findbad=%d status=%s",
              app.cwd, app.list.n, app.list.hidden, STR_ARG(sel), app.ui.list.sel, app.ui.list.top, app.ui.list.rows, app.hover,
              t->accent.r, t->accent.g, t->accent.b, t->bg.r, t->bg.g, t->bg.b, t->icons[0] ? t->icons : "-",
              app.icon_scale, GetScreenWidth(), GetScreenHeight(), app.reloads, app.themes, atomic_load(&watch.batches),
@@ -357,7 +359,7 @@ static void script_state(char *out, size_t cap)
              props.have ? (unsigned long long)props.st.st_nlink : 0ull,
              props.type[0] ? props.type : "-", proptypename, props.type_by_name, propname,
              propwhere, propdrive, proplink, props.btime >= 0, props.idx,
-             app.ui.ow, app.ui.ow_fresh, app.ui.ow_in_list, owtext, app.ui.ow_list.n, app.ui.ow_list.sel, owapp, owicon, ow.shown, ow.type[0] ? ow.type : "-", ow.n,
+             app.ui.ow, app.ui.ow_fresh, app.ui.ow_in_list, owtext, app.ui.ow_list.n, app.ui.ow_list.sel, owapp, owicon, owtex, ow.shown, ow.type[0] ? ow.type : "-", ow.n,
              app.ui.ow_list.rows, app.ui.ow_list.top, owopts, app.ui.ow_m.bad, findopts, app.ui.find_m.bad, app.status[0] ? app.status : "-");
     frame_us_max = 0;
 }

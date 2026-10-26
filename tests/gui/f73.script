@@ -27,7 +27,7 @@ expect owlist=1 owsel=0
 char j
 expect owapp=ofx-t-code.desktop owicon=utilities-terminal.png
 char j
-expect owapp=ofx-t-helper.desktop owicon=application-x-executable.png
+expect owapp=ofx-t-helper.desktop owicon=ofx-t-vec.svg
 char j
 expect owapp=ofx-t-other.desktop owicon=application-x-executable.png
 char j
@@ -95,7 +95,7 @@ char t
 key ctrl-i
 expect ow=1 props=0 owtext=t
 key esc
-expect ow=0
+expect ow=0 owtex=0
 sh [ "$(grep -c 'gio launch' "$OFX_ROOT/spawn.log")" = 1 ] && ! grep -q xdg-terminal-exec "$OFX_ROOT/spawn.log"
 # ---- several marked: all in one launch, the first one's type
 key home

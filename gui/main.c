@@ -25,6 +25,10 @@
 #define CLAY_IMPLEMENTATION
 #endif
 #include "clay.h"
+#define NANOSVG_IMPLEMENTATION
+#include "nanosvg.h"
+#define NANOSVGRAST_IMPLEMENTATION
+#include "nanosvgrast.h"
 #include "GLFW/glfw3.h"
 #include "render.c"   // includes raylib and font.c
 
@@ -1270,12 +1274,56 @@ static Str entry_mime(isize i)
     return app.mime[i];
 }
 
+// An SVG drawn into an image `want` px on its longer side (app icons, F7.3; nanosvg, vendored):
+// into a static buffer, which LoadTextureFromImage copies. data NULL when it won't parse.
+static Image svg_image(const char *file, int want)
+{
+    enum { SVG_PX_MAX = 512 };
+    static u8 pixels[SVG_PX_MAX * SVG_PX_MAX * 4];
+    Image img = { 0 };
+    if (want > SVG_PX_MAX) want = SVG_PX_MAX;
+    NSVGimage *svg = nsvgParseFromFile(file, "px", 96.0f);
+    if (!svg) return img;
+    float big = svg->width > svg->height ? svg->width : svg->height;
+    NSVGrasterizer *r = big > 0 ? nsvgCreateRasterizer() : NULL;
+    if (r) {
+        float sc = (float)want / big;
+        int w = (int)(svg->width * sc + 0.5f), h = (int)(svg->height * sc + 0.5f);
+        if (w < 1) w = 1;
+        if (h < 1) h = 1;
+        memset(pixels, 0, (size_t)w * (size_t)h * 4);
+        nsvgRasterize(r, svg, 0, 0, sc, pixels, w, h, w * 4);
+        img = (Image){ .data = pixels, .width = w, .height = h, .mipmaps = 1, .format = PIXELFORMAT_UNCOMPRESSED_R8G8B8A8 };
+        nsvgDeleteRasterizer(r);
+    }
+    nsvgDelete(svg);
+    return img;
+}
+
+// file into s's texture, px logical pixels on its longer side. A bigger file than drawn (F6.3:
+// Yaru's 256 and 256@2x stand in for 64 to 256 px) is made the drawn size once here: the GPU's
+// bilinear filter alone blurs a 4x shrink to grains, and holds four times the pixels, or sixteen.
+static void icon_tex_load(IconSlot *s, const char *file, int px)
+{
+    snprintf(s->file, sizeof s->file, "%s", file);
+    int want = px * app.icon_scale;
+    if (str_ends_with(str_from_c(file), S(".svg"))) {
+        Image img = svg_image(file, want);
+        if (img.data) s->tex = LoadTextureFromImage(img);   // (the buffer is static: not unloaded)
+    } else {
+        Image img = LoadImage(file);
+        int big = img.width > img.height ? img.width : img.height;
+        if (img.data && big > want) ImageResize(&img, img.width * want / big, img.height * want / big);   // the longer side drawn
+        if (img.data) s->tex = LoadTextureFromImage(img);
+        UnloadImage(img);
+    }
+    if (s->tex.id) SetTextureFilter(s->tex, TEXTURE_FILTER_BILINEAR);
+}
+
 // The texture under key at px, from the first of names the theme has, loaded the first time it is
 // needed; NULL when the cache is full. names NULL: they are the MIME type's (key). A size other
 // than the list's is cached under "<px>:<key>".
-// The slot for key at px: loaded the first time from the first of names (or the MIME type's) the
-// theme has, else from `file` when given (an app's own picture, F7.3).
-static IconSlot *icon_for_px_or(Str key, const Str *given, isize ngiven, int px, const char *or_file)
+static IconSlot *icon_for_px(Str key, const Str *given, isize ngiven, int px)
 {
     int k;
     ArenaMark mark = arena_mark(&scratch);
@@ -1286,28 +1334,11 @@ static IconSlot *icon_for_px_or(Str key, const Str *given, isize ngiven, int px,
     isize n = given ? ngiven : mime_icon_names(&scratch, &app.mime_db, key, names);
     IconSlot *s = &app.slot[app.nslots];
     *s = (IconSlot){ .key = { arena_cstr(&icona, slot_key), slot_key.len } };
-    const char *file = n ? icon_find(&scratch, &app.icons, given ? given : names, n, px, app.icon_scale) : NULL;
-    if (!file) file = or_file;
-    if (file) {
-        // A bigger file than drawn (F6.3: Yaru's 256 and 256@2x stand in for 64 to 256 px) is
-        // made the drawn size once here: the GPU's bilinear filter alone blurs a 4x shrink to
-        // grains, and holds four times the pixels, or sixteen.
-        snprintf(s->file, sizeof s->file, "%s", file);
-        Image img = LoadImage(file);
-        int want = px * app.icon_scale, big = img.width > img.height ? img.width : img.height;
-        if (img.data && big > want) ImageResize(&img, img.width * want / big, img.height * want / big);   // the longer side drawn
-        if (img.data) s->tex = LoadTextureFromImage(img);
-        UnloadImage(img);
-        if (s->tex.id) SetTextureFilter(s->tex, TEXTURE_FILTER_BILINEAR);
-    }
+    const char *file = icon_find(&scratch, &app.icons, given ? given : names, n, px, app.icon_scale);
+    if (file) icon_tex_load(s, file, px);
     arena_restore(&scratch, mark);
     strmap_put(&app.slot_of, s->key, app.nslots);
     return &app.slot[app.nslots++];
-}
-
-static IconSlot *icon_for_px(Str key, const Str *given, isize ngiven, int px)
-{
-    return icon_for_px_or(key, given, ngiven, px, NULL);
 }
 
 static IconSlot *icon_for(Str key, const Str *given, isize ngiven)
@@ -3708,6 +3739,7 @@ int main(int argc, char **argv)
         bool was_editing = app.ui.editing, was_confirming = app.ui.confirming;
         if (app.ui.ow) in.app_name = ow.names, in.app_n = ow.shown < UI_APPS_MAX ? ow.shown : UI_APPS_MAX;
         UiAction a = ui_handle(&app.ui, (UiNames){ list_name, NULL, list_dir }, &in);
+        if (!app.ui.ow && ow.icons_on) ow_drop();   // the panel closed: its icons go (F7.3)
         if (app.ui.copied) text_copy((Str){ app.ui.copy, app.ui.copy_len }), app.ui.copied = false;
         // Shift+Delete and its y can come in one frame's input: the question opened and was answered
         // within ui_handle, so the targets are taken here either way (reviewer-2, F5 confirm). A

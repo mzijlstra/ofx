@@ -319,10 +319,16 @@ MUTANTS = [
     (G, '    ui_resize(&app.ui.ow_list, ow_rows(GetScreenHeight()));   // Open With\'s list (F7.3)', '', 'f73'),
     # ---- after Michael's try: listed at once, the apps' icons
     (OW, '    ui_ow_filter(&app.ui, &in);\n}', '}', 'f73'),
-    (OW, '        if (str_ends_with(icon, S(".png")) && access(f, R_OK) == 0) file = f;', '', 'f73'),
     (OW, '            if (access(f, R_OK) == 0) file = f;', '', 'f73'),
-    (OW, '    return s && s->tex.id ? s : icon_for(generic, &generic, 1);   // none found: the generic one, every frame', '    return s;', 'f73'),
-    (G, '    if (!file) file = or_file;', '', 'f73'),
+    (OW, '            if ((str_ends_with(icon, S(".png")) || str_ends_with(icon, S(".svg"))) && access(f, R_OK) == 0) file = f;', '', 'f73'),
+    (OW, '    return s->tex.id ? s : icon_for(generic, &generic, 1);', '    return s;', 'f73'),
+    (OW, '        if (file) icon_tex_load(s, file, ICON_PX);', '', 'f73'),
+    (OW, '            file = icon_find(&scratch, &ow.idb, &icon, 1, ICON_PX, app.icon_scale);', '            file = NULL;', 'f73'),
+    (OW, '        if (ow.icon[i].tex.id) UnloadTexture(ow.icon[i].tex);\n        ow.icon[i] = (IconSlot){ 0 }, ow.icon_tried[i] = false;', '        ow.icon_tried[i] = false;', 'f73'),
+    (G, '        if (!app.ui.ow && ow.icons_on) ow_drop();   // the panel closed: its icons go (F7.3)', '', 'f73'),
+    (G, '    if (str_ends_with(str_from_c(file), S(".svg"))) {', '    if (false) {', 'f73'),
+    # Left out: nsvgRasterize gone leaves a blank texture, which no state word sees (the pixels);
+    # f73's ow-panel.png shows the SVG drawn.
 ]
 import concurrent.futures, queue, threading
 

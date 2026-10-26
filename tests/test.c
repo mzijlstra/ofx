@@ -437,10 +437,29 @@ static void test_icons(void)
     CHECK(strcmp(FIND(24, 1, S("text-x-csrc"), S("folder")), at("icons/Parent/scalable/mimetypes/text-x-csrc.png")) == 0);
     CHECK(strcmp(FIND(48, 1, S("fallback")), at("icons/hicolor/48x48/mimetypes/fallback.png")) == 0);
     CHECK(strcmp(FIND(48, 1, S("a-place")), at("icons/hicolor/48x48/places/a-place.png")) == 0);
-    CHECK(strcmp(FIND(48, 1, S("an-app")), at("icons/hicolor/48x48/apps/an-app.png")) == 0);   // Applications: read for Open With (F7.3)
-    CHECK(db.t[2].ndirs == 3);
-    CHECK(icon_context_used(S("Mimetypes")) && !icon_context_used(S("Status")) && icon_context_used(STR_EMPTY));
-    CHECK(icon_context_used(S("Apps")) && icon_context_used(S("Applications")));   // the apps' own (Open With, F7.3)
+    CHECK(strcmp(FIND(48, 1, S("an-app")), "") == 0);          // Applications: not read at start
+    CHECK(db.t[2].ndirs == 2);
+    CHECK(icon_context_used(S("Mimetypes"), false) && !icon_context_used(S("Status"), false) && icon_context_used(STR_EMPTY, false));
+    CHECK(!icon_context_used(S("Apps"), false) && !icon_context_used(S("Applications"), false));
+    // The apps' own, apart (Open With, F7.3): only Apps folders, an SVG too, a PNG before an SVG.
+    CHECK(icon_context_used(S("Apps"), true) && icon_context_used(S("Applications"), true) && !icon_context_used(S("Places"), true));
+    CHECK(!icon_context_used(STR_EMPTY, true));
+    put(at("icons/hicolor/48x48/apps/vec-app.svg"), "");
+    put(at("icons/hicolor/48x48/apps/an-app.svg"), "");
+    put(at("icons/hicolor/48x48/apps/both.svg"), "");   // made before its PNG: read in either order
+    put(at("icons/hicolor/48x48/apps/both.png"), "");
+    put(at("icons/hicolor/48x48/apps/not-an-icon.txt"), "");
+    IconDb apps_db;
+    icon_load_apps(&ta, &apps_db, S("Child"));
+    CHECK(apps_db.n == 3 && apps_db.t[2].ndirs == 1);
+    const char *af = icon_find(&ta, &apps_db, (Str[]){ S("an-app") }, 1, 48, 1);
+    CHECK(af && strcmp(af, at("icons/hicolor/48x48/apps/an-app.png")) == 0);
+    af = icon_find(&ta, &apps_db, (Str[]){ S("both") }, 1, 48, 1);
+    CHECK(af && strcmp(af, at("icons/hicolor/48x48/apps/both.png")) == 0);
+    af = icon_find(&ta, &apps_db, (Str[]){ S("vec-app") }, 1, 48, 1);
+    CHECK(af && strcmp(af, at("icons/hicolor/48x48/apps/vec-app.svg")) == 0);
+    CHECK(!icon_find(&ta, &apps_db, (Str[]){ S("a-place") }, 1, 48, 1) && !icon_find(&ta, &apps_db, (Str[]){ S("not-an-icon") }, 1, 48, 1));
+    CHECK(strcmp(FIND(48, 1, S("vec-app")), "") == 0);   // the files' lookup takes no SVG
     CHECK(strcmp(FIND(24, 1, S("only-svg")), "") == 0);       // PNG only
     CHECK(strcmp(FIND(24, 1, S("not-an-icon")), "") == 0);
     CHECK(strcmp(FIND(24, 1, S("absent")), "") == 0);

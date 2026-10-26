@@ -90,37 +90,46 @@ static isize icon_bases(Arena *a, const char **out, isize max)
     return n;
 }
 
-// The PNG names in dir into m (sized to them); false when dir isn't there.
-static bool icon_scan(Arena *a, const char *dir, StrMap *m)
+// The PNG names in dir into m (sized to them), and with svg the SVG ones too (a name with both:
+// the PNG); the value is 1 for a PNG, 2 for an SVG. False when dir isn't there.
+static bool icon_scan(Arena *a, const char *dir, StrMap *m, bool svg)
 {
     DIR *d = opendir(dir);
     if (!d) return false;
     isize n = 0, cap = 64;
     Str *names = arena_new(a, Str, cap);
+    u8 *kind = arena_new(a, u8, cap);
     for (struct dirent *de; (de = readdir(d));) {
         Str s = str_from_c(de->d_name);
-        if (!str_ends_with(s, S(".png")) || s.len == 4) continue;
+        bool png = str_ends_with(s, S(".png")), is_svg = svg && str_ends_with(s, S(".svg"));
+        if ((!png && !is_svg) || s.len == 4) continue;
         if (n == cap) {
             Str *grown = arena_new(a, Str, cap * 2);
-            memcpy(grown, names, (size_t)n * sizeof *names);
-            names = grown, cap *= 2;
+            u8 *kgrown = arena_new(a, u8, cap * 2);
+            memcpy(grown, names, (size_t)n * sizeof *names), memcpy(kgrown, kind, (size_t)n);
+            names = grown, kind = kgrown, cap *= 2;
         }
+        kind[n] = png ? 1 : 2;
         names[n++] = (Str){ arena_cstr(a, str_cut(s, 0, s.len - 4)), s.len - 4 };
     }
     closedir(d);
     strmap_init(m, a, n + 1);
-    for (isize i = 0; i < n; i++) strmap_put(m, names[i], 1);
+    for (isize i = 0; i < n; i++) {
+        int had;
+        if (!strmap_get(m, names[i], &had) || kind[i] < had) strmap_put(m, names[i], kind[i]);
+    }
     return true;
 }
 
 // ofx asks only for folder, drive and file icons, which themes keep under Places, Devices and
 // MimeTypes, and the top bar's search (edit-find, under Actions); hicolor's 600-odd app
 // directories would take most of the start-up. A directory that names no context is read too.
-static bool icon_context_used(Str context)
+// The apps' own (Apps) are read apart, when Open With opens (icon_load_apps, Michael 2026-10-26).
+static bool icon_context_used(Str context, bool apps)
 {
+    if (apps) return str_eq(context, S("Apps")) || str_eq(context, S("Applications"));
     return context.len == 0 || str_eq(context, S("Places")) || str_eq(context, S("MimeTypes")) ||
-           str_eq(context, S("Mimetypes")) || str_eq(context, S("Devices")) || str_eq(context, S("Actions")) ||
-           str_eq(context, S("Apps")) || str_eq(context, S("Applications"));
+           str_eq(context, S("Mimetypes")) || str_eq(context, S("Devices")) || str_eq(context, S("Actions"));
 }
 
 static bool icon_has_theme(const IconDb *db, Str name)
@@ -131,7 +140,7 @@ static bool icon_has_theme(const IconDb *db, Str name)
 }
 
 // Reads theme `name` (unless it is in already), then, depth first, every theme it inherits.
-static void icon_add_theme(Arena *a, IconDb *db, const char **bases, isize nb, Str name, int depth)
+static void icon_add_theme(Arena *a, IconDb *db, const char **bases, isize nb, Str name, int depth, bool apps)
 {
     if (depth > 8 || db->n == ICON_THEMES_MAX || icon_has_theme(db, name)) return;
     Str index = STR_EMPTY;
@@ -145,7 +154,7 @@ static void icon_add_theme(Arena *a, IconDb *db, const char **bases, isize nb, S
         Str sub;
         for (isize at = 0; next_item(subs[list], &at, &sub);) {
             int size = ini_int(index, sub, S("Size"), 0);
-            if (size <= 0 || !icon_context_used(ini_get(index, sub, S("Context")))) continue;
+            if (size <= 0 || !icon_context_used(ini_get(index, sub, S("Context")), apps)) continue;
             Str type = ini_get(index, sub, S("Type"));
             IconDir proto = {
                 .size = size,
@@ -158,12 +167,12 @@ static void icon_add_theme(Arena *a, IconDb *db, const char **bases, isize nb, S
             for (isize b = 0; b < nb && t->ndirs < ICON_DIRS_MAX; b++) {
                 IconDir d = proto;
                 d.path = arena_sprintf(a, "%s/%.*s/%.*s", bases[b], STR_ARG(name), STR_ARG(sub));
-                if (icon_scan(a, d.path, &d.names)) t->dirs[t->ndirs++] = d;
+                if (icon_scan(a, d.path, &d.names, apps)) t->dirs[t->ndirs++] = d;
             }
         }
     }
     Str inherits = ini_get(index, S("Icon Theme"), S("Inherits")), parent;
-    for (isize at = 0; next_item(inherits, &at, &parent);) icon_add_theme(a, db, bases, nb, parent, depth + 1);
+    for (isize at = 0; next_item(inherits, &at, &parent);) icon_add_theme(a, db, bases, nb, parent, depth + 1, apps);
 }
 
 // The theme named and what it inherits, then hicolor. A theme that isn't installed gives way to its
@@ -173,20 +182,32 @@ static void icon_add_theme(Arena *a, IconDb *db, const char **bases, isize nb, S
 // folder icons. Then plain Yaru (Omarchy installs it), then Adwaita, GTK's own fallback, last:
 // GTK draws its SVGs, ofx only PNGs, and Adwaita has a few dozen PNGs, most of them 16 px. No
 // name (no icons.theme) takes the same way.
-static void icon_load(Arena *a, IconDb *db, Str theme)
+static void icon_load_ctx(Arena *a, IconDb *db, Str theme, bool apps)
 {
     *db = (IconDb){ 0 };
     const char *bases[ICON_BASES_MAX];
     isize nb = icon_bases(a, bases, ICON_BASES_MAX);
     for (Str name = theme; name.len && db->n == 0;) {
-        icon_add_theme(a, db, bases, nb, name, 0);
+        icon_add_theme(a, db, bases, nb, name, 0, apps);
         isize dash = name.len;
         while (dash > 0 && name.p[dash - 1] != '-') dash--;
         name.len = dash > 1 ? dash - 1 : 0;
     }
-    if (db->n == 0) icon_add_theme(a, db, bases, nb, S("Yaru"), 0);
-    if (db->n == 0) icon_add_theme(a, db, bases, nb, S("Adwaita"), 0);
-    icon_add_theme(a, db, bases, nb, S("hicolor"), 0);
+    if (db->n == 0) icon_add_theme(a, db, bases, nb, S("Yaru"), 0, apps);
+    if (db->n == 0) icon_add_theme(a, db, bases, nb, S("Adwaita"), 0, apps);
+    icon_add_theme(a, db, bases, nb, S("hicolor"), 0, apps);
+}
+
+static void icon_load(Arena *a, IconDb *db, Str theme)
+{
+    icon_load_ctx(a, db, theme, false);
+}
+
+// The apps' icons of the same chain, SVG ones too (Open With, F7.3): read when the panel opens,
+// into its own arena, and dropped with it.
+static void icon_load_apps(Arena *a, IconDb *db, Str theme)
+{
+    icon_load_ctx(a, db, theme, true);
 }
 
 // ---- lookup ---------------------------------------------------------------------------------
@@ -250,7 +271,9 @@ static const char *icon_find(Arena *a, const IconDb *db, const Str *names, isize
     for (isize k = 0; k < nnames; k++)
         for (isize t = 0; t < db->n; t++) {
             const IconDir *d = icon_in_theme(&db->t[t], names[k], size, scale);
-            if (d) return arena_sprintf(a, "%s/%.*s.png", d->path, STR_ARG(names[k]));
+            int kind = 1;
+            if (d) strmap_get(&d->names, names[k], &kind);
+            if (d) return arena_sprintf(a, "%s/%.*s.%s", d->path, STR_ARG(names[k]), kind == 2 ? "svg" : "png");
         }
     return NULL;
 }

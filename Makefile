@@ -98,7 +98,7 @@ $(OFX_WL)/stamp: | build
 
 # -isystem: vendored and generated headers are not held to our warning flags. --wrap: see the
 # app id note in gui/main.c.
-VENDOR   = -isystem vendor/clay -isystem $(RL) -isystem $(RL)/external/glfw/include -isystem $(OFX_WL) $(patsubst -I%,-isystem %,$(shell pkg-config --cflags freetype2))
+VENDOR   = -isystem vendor/clay -isystem vendor/nanosvg -isystem $(RL) -isystem $(RL)/external/glfw/include -isystem $(OFX_WL) $(patsubst -I%,-isystem %,$(shell pkg-config --cflags freetype2))
 LINK     = -Wl,--wrap=glfwDefaultWindowHints $(GUI_LIBS)
 SRC      = $(wildcard base/*.c base/*.h fs/*.c ui/*.c gui/*.c)
 

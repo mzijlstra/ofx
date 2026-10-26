@@ -498,6 +498,11 @@ process, one window), one page; only for showing a file's properties and changin
   once, and f73 checks that frame), and every app had the generic icon (the theme's Apps folders
   weren't read; now they are, +6 ms at start, with pixmaps/ and an Icon= PNG path). An SVG-only
   icon (Omawrite, Omacalc, Foliate) still gets the generic one: ofx draws PNG.
+- Then (Michael): the apps' icons only while the panel is up, and SVG too. The theme's app folders
+  are read when it opens (`icon_load_apps`, into its arena: about 34 ms, most of it the themes'
+  index.theme files read again; start-up is back to about 51 ms), each app's texture when its row
+  is first drawn, all of them dropped when it closes (`ow_drop`). SVG icons (theme, pixmaps/ or a
+  path) are drawn with nanosvg, vendored; only for the apps, the files' icons stay PNG.
 
 ## F6.4 design (2026-10-24)
 

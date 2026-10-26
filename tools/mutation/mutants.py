@@ -59,8 +59,8 @@ MUTANTS = [
     (I, "if (!is_digit(v.p[i])) return dflt;", ""),
     (I, "if (item->len) return true;", "return true;"),
     (I, "if (home && home[0]) out[n++] = arena_sprintf(a, \"%s/.icons\", home);", ""),
-    (I, "if (!str_ends_with(s, S(\".png\")) || s.len == 4) continue;", "if (s.len == 4) continue;"),
-    (I, "memcpy(grown, names, (size_t)n * sizeof *names);", ""),
+    (I, "if ((!png && !is_svg) || s.len == 4) continue;", "if (s.len == 4) continue;"),
+    (I, "memcpy(grown, names, (size_t)n * sizeof *names), memcpy(kgrown, kind, (size_t)n);", "memcpy(kgrown, kind, (size_t)n);"),
     (I, "return context.len == 0 || str_eq(context, S(\"Places\")) || str_eq(context, S(\"MimeTypes\")) ||", "return true || str_eq(context, S(\"Places\")) || str_eq(context, S(\"MimeTypes\")) ||"),
     (I, "if (depth > 8 || db->n == ICON_THEMES_MAX || icon_has_theme(db, name)) return;", "if (depth > 8 || db->n == ICON_THEMES_MAX) return;"),
     (I, "for (int list = 0; list < 2; list++) {", "for (int list = 0; list < 1; list++) {"),
@@ -69,8 +69,8 @@ MUTANTS = [
     (I, ".max = ini_int(index, sub, S(\"MaxSize\"), size),", ".max = size,"),
     (I, ".threshold = ini_int(index, sub, S(\"Threshold\"), 2),", ".threshold = 0,"),
     (I, ".type = str_eq(type, S(\"Fixed\")) ? IT_FIXED : str_eq(type, S(\"Scalable\")) ? IT_SCALABLE : IT_THRESHOLD,", ".type = str_eq(type, S(\"Fixed\")) ? IT_FIXED : IT_THRESHOLD,"),
-    (I, "for (isize at = 0; next_item(inherits, &at, &parent);) icon_add_theme(a, db, bases, nb, parent, depth + 1);", ""),
-    (I, "icon_add_theme(a, db, bases, nb, S(\"hicolor\"), 0);", ""),
+    (I, "for (isize at = 0; next_item(inherits, &at, &parent);) icon_add_theme(a, db, bases, nb, parent, depth + 1, apps);", ""),
+    (I, "icon_add_theme(a, db, bases, nb, S(\"hicolor\"), 0, apps);", ""),
     (I, "if (d->scale != scale) return false;", ""),
     (I, "case IT_SCALABLE: return d->min <= size && size <= d->max;", "case IT_SCALABLE: return d->min <= size;"),
     (I, "default: return d->size - d->threshold <= size && size <= d->size + d->threshold;", "default: return d->size == size;"),
@@ -515,8 +515,8 @@ MUTANTS += [
     (I, "        while (dash > 0 && name.p[dash - 1] != '-') dash--;", "        while (dash > 0 && name.p[dash - 1] != '-') dash--, dash--;"),
     (I, "        name.len = dash > 1 ? dash - 1 : 0;", "        name.len = dash > 1 ? dash : 0;"),
     (I, "        name.len = dash > 1 ? dash - 1 : 0;", "        name.len = dash - 1;"),
-    (I, "    if (db->n == 0) icon_add_theme(a, db, bases, nb, S(\"Yaru\"), 0);\n", ""),
-    (I, "    if (db->n == 0) icon_add_theme(a, db, bases, nb, S(\"Adwaita\"), 0);\n", ""),
+    (I, "    if (db->n == 0) icon_add_theme(a, db, bases, nb, S(\"Yaru\"), 0, apps);\n", ""),
+    (I, "    if (db->n == 0) icon_add_theme(a, db, bases, nb, S(\"Adwaita\"), 0, apps);\n", ""),
 ]
 # ---- F6: places and drives, the headings, the modes, the state, the status line, the tree, the trash view
 ST, TR = 'fs/state.c', 'fs/tree.c'
@@ -1227,4 +1227,14 @@ MUTANTS += [
     (AP, "        isize upto = sc ? nn : nself;", "        isize upto = nn;"),
     (AP, "                   : p->nodisplay                                 ? AS_NONE", "                   : false                                        ? AS_NONE"),
     (AP, "            removed[sc] = apps_removed(a, text[k], names, upto, removed[sc]);", ""),
+]
+# ---- the apps' icons apart, SVG among them (Michael, 2026-10-26)
+MUTANTS += [
+    (I, "    if (apps) return str_eq(context, S(\"Apps\")) || str_eq(context, S(\"Applications\"));", ""),
+    (I, "    if (apps) return str_eq(context, S(\"Apps\")) || str_eq(context, S(\"Applications\"));", "    if (apps) return str_eq(context, S(\"Apps\"));"),
+    (I, "        bool png = str_ends_with(s, S(\".png\")), is_svg = svg && str_ends_with(s, S(\".svg\"));", "        bool png = str_ends_with(s, S(\".png\")), is_svg = str_ends_with(s, S(\".svg\"));"),
+    (I, "        if (!strmap_get(m, names[i], &had) || kind[i] < had) strmap_put(m, names[i], kind[i]);", "        strmap_put(m, names[i], kind[i]);"),
+    (I, "kind == 2 ? \"svg\" : \"png\");", "\"png\");"),
+    (I, "    icon_load_ctx(a, db, theme, true);", "    icon_load_ctx(a, db, theme, false);"),
+    (I, "                if (icon_scan(a, d.path, &d.names, apps)) t->dirs[t->ndirs++] = d;", "                if (icon_scan(a, d.path, &d.names, false)) t->dirs[t->ndirs++] = d;"),
 ]
