@@ -58,7 +58,7 @@ libpng, giflib and zlib for the previews. raylib and Clay are vendored.
 | Ctrl+J, Ctrl+Down | the keys to the job rows' ×: Up/Down (`k`/`j`) move, Enter asks to cancel that job, Esc back |
 | Ctrl+Q | close every ofx window (each asks first while its jobs run or wait) |
 | F10, Alt+F | the File menu: Up/Down (`k`/`j`) move, Enter picks, Esc closes; also by the pointer |
-| File, Open With Other Application… | the apps for the selected files (or the cursor's): the default, the recommended ones (they name the type), then the rest. Type to filter (any part of the name; Alt+C, Alt+W, Alt+R as in find), Tab or Down to the list, Up/Down (`k`/`j`) there, Enter opens all the files with it in one `gio launch`, Esc closes |
+| File, Open With Other Application… | the apps for the selected files (or the cursor's): the default, the recommended ones (they name the type), then the rest. Type to filter (any part of the name; Alt+C, Alt+W, Alt+R as in find), Tab or Down to the list, Up/Down (`k`/`j`) there, Enter opens all the files with it in one `gio launch`, Esc closes. Alt+D (or the box under the list): make it the default for the type too (`gio mime`, in `~/.config/mimeapps.list`; not for an empty file's type, nor for one `hyprland-mimeapps.list` sets) |
 
 The File menu also has Create New Empty File ("New file", named in the row, as a new folder is).
 Open With Other Application shows greyed: it comes with F7.3.

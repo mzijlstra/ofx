@@ -547,7 +547,7 @@ static void go_parent(void)
 
 static Str entry_mime(isize i);
 static void ow_open(void);   // Open With (gui/openwith.c, F7.3)
-static void ow_launch(isize i);
+static void ow_launch(isize i, bool def);
 static void open_marked(void);
 
 static void open_entry(isize i)
@@ -1238,7 +1238,7 @@ static void act(UiAction a)
     case UA_PROPS: props_open(); break;
     case UA_CHMOD: props_chmod((int)a.index); break;
     case UA_OPEN_WITH: ow_open(); break;
-    case UA_LAUNCH: ow_launch(a.index); break;
+    case UA_LAUNCH: ow_launch(a.index, a.all); break;
     case UA_PASTE: paste(); break;
     case UA_UNDO: undo_last(); break;
     case UA_ANSWER: job_answer((int)a.index, a.all); break;
@@ -2982,7 +2982,7 @@ static Clay_RenderCommandArray layout(int w, int h)
                      cc(t->fg_dim));
             } else if (modal_kind() == MODAL_OW) {
                 text(fit(S("Open With: type to filter \xC2\xB7 Tab or \xE2\x86\x93 the list \xC2\xB7 Enter opens \xC2\xB7 Esc closes \xC2\xB7 "
-                           "Alt+C case, Alt+W words, Alt+R regex"), foot_w, false), cc(t->fg_dim));
+                           "Alt+C/W/R case, words, regex \xC2\xB7 Alt+D default"), foot_w, false), cc(t->fg_dim));
             } else if (modal_kind() != MODAL_NONE) {
                 text(cz("Answer the question above"), cc(t->fg_dim));
             } else if (app.ui.menu_on) {
@@ -3230,7 +3230,7 @@ static bool in_box(Clay_ElementId id, float x, float y)
 static Hit hit_at(float x, float y)
 {
     Hit h = { -1, -1, -1, UB_NONE, -1, -1, -1, 0, -1, -1, -1, -1, false, -1, -1, -1, -1, false, 0 };
-    for (int k = 1; k <= 3 && !h.toggle && (app.ui.ow || app.ui.finding); k++)
+    for (int k = 1; k <= 4 && !h.toggle && (app.ui.ow || app.ui.finding); k++)
         if (in_box(CLAY_IDI("toggle", k), x, y)) h.toggle = k;
     if (modal_kind() == MODAL_NONE)
         for (int m = 0; m < UI_MENUS && h.menu_title < 0; m++)

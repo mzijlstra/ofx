@@ -199,6 +199,59 @@ click-here
 expect ow=0
 sh grep -qx "uwsm-app -- gio launch $OFX_ROOT/data/applications/ofx-t-code.desktop $OFX_DIR/sub" "$OFX_ROOT/spawn.log"
 pointer-off
+# ---- Set as default (F7.3.1): Alt+D ticks the box, Enter makes the app the type's default and
+# opens; the next time it is the default, the box clear again
+char /
+type notes
+key enter
+key f10
+keys down down down down down
+key enter
+wait-for 2000 ow=1 owdefcan=1 owdef=0 owtype=text/plain
+key alt-d
+expect owdef=1
+key alt-d
+expect owdef=0
+point-ui toggle 4
+click-here
+expect owdef=1
+pointer-off
+shot ow-default.png
+type ofx t code
+key enter
+expect ow=0
+sh grep -qx "gio mime -- text/plain ofx-t-code.desktop" "$OFX_ROOT/spawn.log" && grep -qx "text/plain=ofx-t-code.desktop" "$OFX_ROOT/config/mimeapps.list" && grep -qx "image/png=ofx-t-view.desktop" "$OFX_ROOT/config/mimeapps.list"
+sh grep -qx "uwsm-app -- gio launch $OFX_ROOT/data/applications/ofx-t-code.desktop $OFX_DIR/notes.txt" "$OFX_ROOT/spawn.log"
+expect status=opened notes.txt with Ofx T Code, the default for text/plain now
+key f10
+keys down down down down down
+key enter
+wait-for 2000 ow=1 owdef=0 owapp=ofx-t-code.desktop
+key esc
+# A type a list read first sets (the desktop's: image/png), and an empty file's: greyed, Alt+D
+# does nothing, Enter opens without setting
+char /
+type pic
+key enter
+key f10
+keys down down down down down
+key enter
+wait-for 2000 ow=1 owtype=image/png owdefcan=0
+key alt-d
+expect owdef=0
+shot ow-default-shadowed.png
+key esc
+char /
+type e.txt
+key enter
+key f10
+keys down down down down down
+key enter
+wait-for 2000 ow=1 owtype=application/x-zerosize owdefcan=0
+key alt-d
+key enter
+expect ow=0
+sh [ "$(grep -c '^gio mime' "$OFX_ROOT/spawn.log")" = 1 ]
 # ---- find's toggles: Alt+C in the find line, and its pointer
 char /
 type B.TXT

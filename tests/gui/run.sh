@@ -208,8 +208,10 @@ app ofx-t-code "Ofx T Code" 'Icon=utilities-terminal\nMimeType=text/plain;inode/
 app ofx-t-helper "Ofx T Helper" 'Icon=ofx-t-vec\nNoDisplay=true\nMimeType=text/plain;\n'
 app ofx-t-hidden "Ofx T Hidden" 'NoDisplay=true\n'
 app ofx-t-other "Ofx T Other" 'Icon=ofx-t-no-such-icon\n'
+# Set as default (F7.3.1): the desktop's list, read first, sets image/png (Omarchy's sets http).
+printf '[Default Applications]\nimage/png=ofx-t-view.desktop\n' > "$T/config/hyprland-mimeapps.list"
 printf '1 0 0:1 / / rw - ext4 /dev/x rw\n' > "$T/mountinfo"
-echo "== f73"; OFX_TEST_HOME="$H" OFX_TEST_MOUNTINFO="$T/mountinfo" "$here/../../tools/gui/run-script.sh" "$T" "$here/f73.script" "$bin" "$H/tree" || failed f73
+echo "== f73"; XDG_CURRENT_DESKTOP=Hyprland OFX_TEST_HOME="$H" OFX_TEST_MOUNTINFO="$T/mountinfo" "$here/../../tools/gui/run-script.sh" "$T" "$here/f73.script" "$bin" "$H/tree" || failed f73
 fi
 if want hang; then
 T=$base/hang; rm -rf "$T"; mkdir -p "$T/tree/stuck"

@@ -1166,7 +1166,7 @@ MUTANTS += [
     (U, "    if (l->n == 0 || m->len == 0) return -1;", "    if (l->n == 0) return -1;"),
     (U, "    ui_matcher_set(&u->find_m, (Str){ u->last, u->last_len }, u->find_opts);\n", ""),
     (U, "        u->find_opts = ui_toggle(u->find_opts, ui_toggle_key(e));\n        ui_find_update(u, names);", "        u->find_opts = ui_toggle(u->find_opts, ui_toggle_key(e));"),
-    (U, "    u->ow = true, u->ow_in_list = false, u->ow_fresh = true, u->ow_len = u->ow_caret = 0;", "    u->ow = true, u->ow_in_list = false, u->ow_fresh = true;"),
+    (U, "    u->ow = true, u->ow_in_list = false, u->ow_fresh = true, u->ow_len = u->ow_caret = 0, u->ow_def = false;", "    u->ow = true, u->ow_in_list = false, u->ow_fresh = true, u->ow_def = false;"),
     (U, "    u->ow_list = (UiList){ .rows = u->ow_list.rows };", ""),
     (U, "    ui_matcher_set(&u->ow_m, STR_EMPTY, u->ow_opts);   // (a compiled expression freed)", ""),
     (U, "        if (ui_match(&u->ow_m, in->app_name[i])) u->ow_idx[n++] = i;", "        u->ow_idx[n++] = i;"),
@@ -1237,4 +1237,20 @@ MUTANTS += [
     (I, "kind == 2 ? \"svg\" : \"png\");", "\"png\");"),
     (I, "    icon_load_ctx(a, db, theme, true);", "    icon_load_ctx(a, db, theme, false);"),
     (I, "                if (icon_scan(a, d.path, &d.names, apps)) t->dirs[t->ndirs++] = d;", "                if (icon_scan(a, d.path, &d.names, false)) t->dirs[t->ndirs++] = d;"),
+]
+# ---- F7.3.1: Set as default (Michael, 2026-10-26)
+MUTANTS += [
+    (O, "    int n = ch && ch[0] == '/' ? snprintf(out, cap, \"%s/mimeapps.list\", ch)", "    int n = ch ? snprintf(out, cap, \"%s/mimeapps.list\", ch)"),
+    (O, "    for (isize k = 0; k < nl && !found && strcmp(lists[k], mine) != 0; k++) {", "    for (isize k = 0; k < nl && !found; k++) {"),
+    (O, "        for (isize j = 0; j < nn && !found; j++)\n            if (ini_get(text, S(\"Default Applications\"), names[j]).len)", "        for (isize j = 0; j < 1 && !found; j++)\n            if (ini_get(text, S(\"Default Applications\"), names[j]).len)"),
+    (O, "if (ini_get(text, S(\"Default Applications\"), names[j]).len) found = true", "if (ini_get(text, S(\"Added Associations\"), names[j]).len) found = true"),
+    (O, "    if (semi >= 0) v = str_cut(v, 0, semi);", ""),
+    (O, "    snprintf(out, cap, \"%.*s\", STR_ARG(str_trim(v)));", "    snprintf(out, cap, \"%.*s\", STR_ARG(v));"),
+    (O, "    if (!ops_allowed(list, err)) return false;\n    char t[256]", "    char t[256]"),
+    (O, "    if (late || strcmp(now, app) != 0) {", "    if (late) {"),
+    (O, "        return err_set(err, \"%s\", out[0] ? out : \"gio didn't set it\"), false;", "        return err_set(err, \"gio didn't set it\"), false;"),
+    (U, "    if (e.key == UK_MENU && e.ch == 'd') {\n        if (u->ow_def_can) u->ow_def = !u->ow_def;", "    if (e.key == UK_MENU && e.ch == 'd') {\n        u->ow_def = !u->ow_def;"),
+    (U, "    bool def = u->ow_def && u->ow_def_can;", "    bool def = u->ow_def;"),
+    (U, "u->ow_len = u->ow_caret = 0, u->ow_def = false;", "u->ow_len = u->ow_caret = 0;"),
+    (U, "        if (in->toggle == 4) {\n            if (u->ow_def_can) u->ow_def = !u->ow_def;", "        if (in->toggle == 4) {\n            u->ow_def = !u->ow_def;"),
 ]

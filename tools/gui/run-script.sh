@@ -48,7 +48,9 @@ for f in uwsm-app gio xdg-open xdg-terminal-exec; do   # xdg-open: ofx's opener 
 done
 # gio info (the Properties panel's MIME type) only reads: the real gio answers it, unlogged.
 real_gio=$(command -v gio)
-printf '#!/bin/sh\nif [ "$1" = info ]; then exec %s "$@"; fi\necho "gio $*" >> "%s/spawn.log"\n' "$real_gio" "$T" > "$T/fakes/gio"
+# gio mime (Set as default, F7.3.1) logs and runs the real one too: XDG_CONFIG_HOME is <scratch>/config,
+# so it writes the scratch mimeapps.list only.
+printf '#!/bin/sh\nif [ "$1" = info ]; then exec %s "$@"; fi\necho "gio $*" >> "%s/spawn.log"\nif [ "$1" = mime ]; then exec %s "$@"; fi\n' "$real_gio" "$T" "$real_gio" > "$T/fakes/gio"
 # udisksctl (eject, F6.1): logs too, and fails the step named in <scratch-dir>/udisks-fail.
 cat > "$T/fakes/udisksctl" <<EOS
 #!/bin/sh

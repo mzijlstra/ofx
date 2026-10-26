@@ -15,6 +15,7 @@ static struct {
     isize  n;
     char   type[128];             // the first one's MIME type, as gio has it
     char   what[NAME_MAX + 32];   // "notes.txt", "3 files"
+    char   def_why[PATH_MAX + 64];   // why the type's default can't be set here, "" when it can (F7.3.1)
     // The apps' icons (Michael, 2026-10-26: only while the panel is up): the theme's app folders
     // read when it opens (in owa), each app's texture when its row is first drawn, all dropped
     // when it closes.
@@ -58,6 +59,15 @@ static void ow_open(void)
     icon_load_apps(&owa, &ow.idb, str_from_c(app.theme.icons));
     ow.icons_on = true;
     ow.shown = apps_rank(&owa, &ow.apps, str_from_c(ow.type));
+    // Set as default (F7.3.1, Michael 2026-10-26): not for an empty file's type, which every empty
+    // file has; not for a type a list read before the user's sets (Omarchy's hyprland-mimeapps.list),
+    // where the change would do nothing.
+    char shadow[PATH_MAX];
+    ow.def_why[0] = 0;
+    if (strcmp(ow.type, "application/x-zerosize") == 0) snprintf(ow.def_why, sizeof ow.def_why, "an empty file's type: every empty file has it");
+    else if (apps_shadowed(&owa, str_from_c(ow.type), shadow, sizeof shadow))
+        snprintf(ow.def_why, sizeof ow.def_why, "set in %s, which is read first", strrchr(shadow, '/') ? strrchr(shadow, '/') + 1 : shadow);
+    app.ui.ow_def_can = !ow.def_why[0];
     for (isize i = 0; i < ow.shown && i < UI_APPS_MAX; i++) ow.names[i] = ow.apps.a[i].name;
     // Filtered now: an idle window draws its next frame only on input, and showed "No app
     // matches" until then (Michael, 2026-10-26).
@@ -66,14 +76,21 @@ static void ow_open(void)
     ui_ow_filter(&app.ui, &in);
 }
 
-// The app ui/ picked (UA_LAUNCH): it gets every file, SPAWN_FILES_MAX a launch.
-static void ow_launch(isize i)
+// The app ui/ picked (UA_LAUNCH): made the type's default first when the box was ticked (def);
+// then it gets every file, SPAWN_FILES_MAX a launch.
+static void ow_launch(isize i, bool def)
 {
     if (i < 0 || i >= ow.shown) return;   // (ui/ hands only the listed ones)
     const App *p = &ow.apps.a[i];
-    char desktop[PATH_MAX];
+    char desktop[PATH_MAX], id[NAME_MAX + 1];
     snprintf(desktop, sizeof desktop, "%.*s", STR_ARG(p->path));
+    snprintf(id, sizeof id, "%.*s", STR_ARG(p->id));
     Err err;
+    bool set = def && !ow.def_why[0];
+    if (set && !op_set_default(&scratch, str_from_c(ow.type), id, &err)) {
+        set_status(true, "%s", err.msg);
+        set = false;
+    }
     for (isize at = 0; at < ow.n; at += SPAWN_FILES_MAX) {
         isize k = ow.n - at < SPAWN_FILES_MAX ? ow.n - at : SPAWN_FILES_MAX;
         if (!spawn_launch_all(desktop, ow.paths + at, k, &err)) {
@@ -81,7 +98,8 @@ static void ow_launch(isize i)
             return;
         }
     }
-    set_status(false, "opened %s with %.*s", ow.what, STR_ARG(p->name));
+    if (set) set_status(false, "opened %s with %.*s, the default for %s now", ow.what, STR_ARG(p->name), ow.type);
+    else if (!def || !app.status_bad) set_status(false, "opened %s with %.*s", ow.what, STR_ARG(p->name));
 }
 
 // Enter (or Open) on several marked entries (F7.3, Michael 2026-10-26): the files, those with the
@@ -169,7 +187,7 @@ static IconSlot *ow_icon(isize i)
 // The rows the list shows for a window h high: OW_ROWS_MAX, fewer in a small window.
 static int ow_rows(int h)
 {
-    int r = (h - 250) / OW_ROW_H;
+    int r = (h - 280) / OW_ROW_H;
     return r < 1 ? 1 : r > OW_ROWS_MAX ? OW_ROWS_MAX : r;
 }
 
@@ -256,6 +274,19 @@ static void layout_ow_panel(void)
                     if (first && p->section < AS_NONE) text(cz(SECTION[p->section]), cc(t->fg_dim));
                 }
             }
+        }
+        // Set as default (F7.3.1): a box, Alt+D; greyed with the reason when it can't be.
+        bool can = u->ow_def_can, on = can && u->ow_def;
+        Clay_Color off = mix(t->fg_dim, t->bg_light, 0.45f);
+        CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .childGap = 10, .padding = { 8, 0, 4, 0 },
+                                   .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } } }) {
+            CLAY(CLAY_IDI("toggle", 4), { .layout = { .sizing = { CLAY_SIZING_FIXED(18), CLAY_SIZING_FIXED(18) }, .childAlignment = { CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER } },
+                                          .backgroundColor = on ? cc(t->accent) : cc(t->bg), .cornerRadius = CLAY_CORNER_RADIUS(3),
+                                          .border = { .color = can ? cc(t->fg_dim) : off, .width = CLAY_BORDER_OUTSIDE(1) } }) {
+                if (on) text(cz("\xE2\x9C\x93"), cc(t->bg));   // ✓
+            }
+            if (can) text(fit(str_from_c(arena_sprintf(&frame, "Always open %s files with this app", ow.type)), OW_W - 90, false), cc(t->fg));
+            else text(fit(str_from_c(arena_sprintf(&frame, "Can't be the default: %s", ow.def_why)), OW_W - 90, false), off);
         }
         CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .padding = { 0, 0, 6, 0 }, .childGap = 10,
                                    .childAlignment = { .x = CLAY_ALIGN_X_RIGHT } } }) {

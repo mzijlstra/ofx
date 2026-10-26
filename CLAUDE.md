@@ -73,6 +73,11 @@ rules shared by every tool here.
   files does too: through the fake `uwsm-app` in a test. The panel reads every installed app
   (the data dirs' `applications/`, read only) and asks the real `gio info` for a file's type
   (it only reads); run-script.sh's `gio` fake hands `info` to the real one, unlogged.
+- **Set as default** (F7.3.1) runs `gio mime <type> <app>`, which writes `$XDG_CONFIG_HOME/mimeapps.list`:
+  Michael's `~/.config/mimeapps.list` unless that is set. run-script.sh sets it to `<scratch>/config`
+  and its `gio` fake logs `mime` and hands it to the real gio, which writes the scratch list; with
+  the guard on (`OFX_GUI_ROOT`) ofx refuses a list outside it before gio runs. The unit test uses a
+  fake gio. Never run `gio mime` against his own list to test.
 - **A window that stops answering** pops Hyprland's "terminate?" dialog on his screen, even on the
   headless output. The script's `sh` runs under `timeout 5` for that reason; keep everything a
   script waits for short.

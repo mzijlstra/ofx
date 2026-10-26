@@ -307,7 +307,7 @@ MUTANTS = [
     (OW, '    if (n == 0) {   // only folders marked: the cursor\'s, as before\n        open_entry(app.ui.list.sel);\n        return;\n    }', '', 'f73'),
     (G, '    case UA_OPEN: a.all ? open_marked() : open_entry(a.index); break;', '    case UA_OPEN: open_entry(a.index); break;', 'f73'),
     (G, '    case UA_OPEN_WITH: ow_open(); break;', '', 'f73'),
-    (G, '    case UA_LAUNCH: ow_launch(a.index); break;', '', 'f73'),
+    (G, '    case UA_LAUNCH: ow_launch(a.index, a.all); break;', '', 'f73'),
     (G, '    if (app.ui.ow) return MODAL_OW;         // likewise (F7.3)', '', 'f73'),
     (G, '            if (in_box(CLAY_IDI("ow-row", r), x, y)) h.ow_row = r;', '', 'f73'),
     (G, '        h.ow_field = modal_kind() == MODAL_OW && !h.toggle && in_box(CLAY_ID("ow-field"), x, y);', '', 'f73'),
@@ -327,6 +327,15 @@ MUTANTS = [
     (OW, '        if (ow.icon[i].tex.id) UnloadTexture(ow.icon[i].tex);\n        ow.icon[i] = (IconSlot){ 0 }, ow.icon_tried[i] = false;', '        ow.icon_tried[i] = false;', 'f73'),
     (G, '        if (!app.ui.ow && ow.icons_on) ow_drop();   // the panel closed: its icons go (F7.3)', '', 'f73'),
     (G, '    if (str_ends_with(str_from_c(file), S(".svg"))) {', '    if (false) {', 'f73'),
+    # ---- F7.3.1: Set as default
+    (OW, '    if (strcmp(ow.type, "application/x-zerosize") == 0) snprintf(', '    if (false) snprintf(', 'f73'),
+    (OW, '    else if (apps_shadowed(&owa, str_from_c(ow.type), shadow, sizeof shadow))', '    else if (false)', 'f73'),
+    (OW, '    app.ui.ow_def_can = !ow.def_why[0];', '    app.ui.ow_def_can = true;', 'f73'),
+    # Not a mutant: `&& !ow.def_why[0]` in ow_launch is inert, ui/ hands def only when gui/ allowed it.
+    (OW, '    if (set && !op_set_default(&scratch, str_from_c(ow.type), id, &err)) {', '    if (false) {', 'f73'),
+    (OW, '    if (set) set_status(false, "opened %s with %.*s, the default for %s now"', '    if (false) set_status(false, "opened %s with %.*s, the default for %s now"', 'f73'),
+    (G, '    case UA_LAUNCH: ow_launch(a.index, a.all); break;', '    case UA_LAUNCH: ow_launch(a.index, false); break;', 'f73'),
+    (G, '    for (int k = 1; k <= 4 && !h.toggle && (app.ui.ow || app.ui.finding); k++)', '    for (int k = 1; k <= 3 && !h.toggle && (app.ui.ow || app.ui.finding); k++)', 'f73'),
     # Left out: nsvgRasterize gone leaves a blank texture, which no state word sees (the pixels);
     # f73's ow-panel.png shows the SVG drawn.
 ]

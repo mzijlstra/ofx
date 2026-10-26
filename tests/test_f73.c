@@ -497,3 +497,119 @@ static void test_spawn_launch_all(void)
           strncmp(out, "uwsm-app -- gio launch /x/imv.desktop /a b/one.png /two.png /three.png sid=", 75) == 0);
     env_restore();
 }
+
+// ---- Set as default (F7.3.1) ------------------------------------------------------------------
+
+static void test_set_default(void)
+{
+    arena_reset(&ta);
+    env_set("XDG_CONFIG_HOME", at("f731/cfg"));
+    env_set("XDG_CONFIG_DIRS", at("f731/etc"));
+    env_set("XDG_DATA_HOME", at("f731/home"));
+    env_set("XDG_DATA_DIRS", at("f731/sys"));
+    env_set("XDG_CURRENT_DESKTOP", "Hyprland");
+    mkdirs(at("f731/cfg"));
+    mkdirs(at("f731/etc"));
+    mkdirs(at("f731/sys/mime"));
+    put(at("f731/sys/mime/aliases"), "image/x-old image/png\n");
+    char list[PATH_MAX], why[PATH_MAX];
+    CHECK(apps_user_list(list, sizeof list) && strcmp(list, at("f731/cfg/mimeapps.list")) == 0);
+    // The desktop's list in the config home is read first: what it sets can't be changed in ours;
+    // an alias counts; a list read after ours (the system's) doesn't.
+    put(at("f731/cfg/hyprland-mimeapps.list"), "[Default Applications]\nimage/png=v.desktop\n[Added Associations]\ntext/x-added=e.desktop\n");
+    put(at("f731/cfg/mimeapps.list"), "[Default Applications]\ntext/plain=e.desktop\n");
+    put(at("f731/etc/mimeapps.list"), "[Default Applications]\ntext/html=w.desktop\n");
+    CHECK(apps_shadowed(&ta, S("image/png"), why, sizeof why) && strcmp(why, at("f731/cfg/hyprland-mimeapps.list")) == 0);
+    CHECK(apps_shadowed(&ta, S("image/x-old"), why, sizeof why));
+    put(at("f731/cfg/hyprland-mimeapps.list"), "[Default Applications]\nimage/x-old=v.desktop\n");   // set by the alias, asked by the type
+    CHECK(apps_shadowed(&ta, S("image/png"), why, sizeof why));
+    put(at("f731/cfg/hyprland-mimeapps.list"), "[Default Applications]\nimage/png=v.desktop\n[Added Associations]\ntext/x-added=e.desktop\n");
+    CHECK(!apps_shadowed(&ta, S("text/plain"), why, sizeof why) && !apps_shadowed(&ta, S("text/html"), why, sizeof why));
+    CHECK(!apps_shadowed(&ta, S("text/x-added"), why, sizeof why));   // only a default shadows
+    // Our list first in the order (no desktop): nothing before it.
+    env_set("XDG_CURRENT_DESKTOP", "");
+    CHECK(!apps_shadowed(&ta, S("image/png"), why, sizeof why));
+    env_set("XDG_CURRENT_DESKTOP", "Hyprland");
+    char now[64];
+    apps_user_default(&ta, list, S("text/plain"), now, sizeof now);
+    CHECK(strcmp(now, "e.desktop") == 0);
+    put(list, "[Default Applications]\ntext/plain= e.desktop ;f.desktop\n");
+    apps_user_default(&ta, list, S("text/plain"), now, sizeof now);
+    CHECK(strcmp(now, "e.desktop") == 0);
+    apps_user_default(&ta, list, S("text/none"), now, sizeof now);
+    CHECK(now[0] == 0);
+    // The setting goes through `gio mime -- <type> <app>`: a fake that writes the line as GLib
+    // does; one that says no; none at all.
+    mkdirs(at("bin731"));
+    put(at("bin731/gio"), "#!/bin/sh\necho \"$*\" > \"${0%/*}/args\"\nprintf '[Default Applications]\\n%s=%s\\n' \"$3\" \"$4\" > \"$XDG_CONFIG_HOME/mimeapps.list\"\necho \"Set $4 as the default for $3\"\n");
+    chmod(at("bin731/gio"), 0755);
+    mkdirs(at("bin731no"));
+    put(at("bin731no/gio"), "#!/bin/sh\necho 'Failed to set: no such app'\n");
+    chmod(at("bin731no/gio"), 0755);
+    Err err;
+    env_set("PATH", at("bin731"));
+    CHECK(op_set_default(&ta, S("text/x-tex"), "nvim.desktop", &err));
+    char args[256];
+    CHECK(wait_file(at("bin731/args"), args, sizeof args) && strcmp(args, "mime -- text/x-tex nvim.desktop") == 0);
+    env_set("PATH", at("bin731no"));
+    CHECK(!op_set_default(&ta, S("text/x-other"), "nvim.desktop", &err) && strcmp(err.msg, "Failed to set: no such app") == 0);
+    put(at("bin731no/gio"), "#!/bin/sh\n");
+    CHECK(!op_set_default(&ta, S("text/x-other"), "nvim.desktop", &err) && strcmp(err.msg, "gio didn't set it") == 0);
+    env_set("PATH", at("bin731-none"));
+    CHECK(!op_set_default(&ta, S("text/x-other"), "nvim.desktop", &err));
+    // The guard: a config home outside the test root is refused before gio runs.
+    env_set("PATH", at("bin731"));
+    char out_cfg[PATH_MAX + 8];
+    snprintf(out_cfg, sizeof out_cfg, "%s/cfg", decoy);
+    env_set("XDG_CONFIG_HOME", out_cfg);
+    unlink(at("bin731/args"));
+    CHECK(!op_set_default(&ta, S("text/x-tex"), "nvim.desktop", &err) && access(at("bin731/args"), F_OK) != 0);
+    // No home at all.
+    env_set("XDG_CONFIG_HOME", "relative");
+    env_set("HOME", "");
+    CHECK(!apps_user_list(list, sizeof list) && !op_set_default(&ta, S("text/x-tex"), "nvim.desktop", &err));
+    env_restore();
+}
+
+static void test_ow_default(void)
+{
+    UiNames names = { name_at, NULL, NULL };
+    Ui u = menu_ui(3);
+    u.ow_list.rows = 4;
+    ui_ow_open(&u);
+    ow_keys(&u, 0);
+    // Not allowed (gui/ says why): Alt+D and the box do nothing; Enter opens without it.
+    u.ow_def_can = false;
+    ow_keys(&u, 1, -'d');
+    UiInput in = ui_input_none();
+    in.app_name = OW_APPS, in.app_n = COUNT(OW_APPS), in.toggle = 4;
+    ui_handle(&u, names, &in);
+    CHECK(!u.ow_def && u.ow);
+    u.ow_def = true;   // (even ticked before gui/ said no)
+    UiAction a = ow_keys(&u, 1, UK_ENTER);
+    CHECK(a.kind == UA_LAUNCH && !a.all);
+    // Allowed: Alt+D and the box flip it, the field keeps its text; Enter carries it; Open too.
+    ui_ow_open(&u);
+    ow_keys(&u, 0);
+    CHECK(!u.ow_def);   // clear at each opening
+    u.ow_def_can = true;
+    ow_type(&u, "neo");
+    ow_keys(&u, 1, -'d');
+    CHECK(u.ow_def && u.ow_len == 3);
+    ow_keys(&u, 1, -'d');
+    CHECK(!u.ow_def);
+    ui_handle(&u, names, &in);
+    CHECK(u.ow_def && ui_input_acts(&in));
+    ow_keys(&u, 2, UK_TAB, -'d');   // from the list as well
+    CHECK(!u.ow_def && u.ow_in_list);
+    ow_keys(&u, 1, -'d');
+    a = ow_keys(&u, 1, UK_ENTER);
+    CHECK(a.kind == UA_LAUNCH && a.all && a.index == 0 && !u.ow);
+    ui_ow_open(&u);
+    ow_keys(&u, 0);
+    u.ow_def_can = true;
+    ui_handle(&u, names, &in);
+    in = ui_input_none(), in.app_name = OW_APPS, in.app_n = COUNT(OW_APPS), in.modal = UI_MODAL_YES;
+    a = ui_handle(&u, names, &in);
+    CHECK(a.kind == UA_LAUNCH && a.all);
+}

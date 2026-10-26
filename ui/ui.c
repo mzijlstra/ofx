@@ -123,7 +123,7 @@ typedef struct {
     int     ow_row, ow_drow;
     bool    ow_field;
     int     ow_wheel;    // notches over its list, as wheel
-    int     toggle;
+    int     toggle;      // 4: Open With's "Always open … with this app" box (F7.3.1)
 } UiInput;
 
 typedef enum {
@@ -164,7 +164,8 @@ typedef enum {
     UA_PROPS,       // the Properties panel opened (Ui.props): gui/ reads what it shows (F7.2)
     UA_CHMOD,       // index: the grid's place (0..8) whose permission bit flips
     UA_OPEN_WITH,   // the Open With panel opened (Ui.ow): gui/ lists the apps (F7.3)
-    UA_LAUNCH,      // index: the app (its place in gui/'s list) to open the files with
+    UA_LAUNCH,      // index: the app (its place in gui/'s list) to open the files with; all: made the
+                    // type's default first (F7.3.1)
 } UiActionKind;
 
 typedef struct {
@@ -327,6 +328,10 @@ typedef struct {
     UiMatcher   ow_m;
     UiList ow_list;
     isize  ow_idx[UI_APPS_MAX];
+    // Set as default (F7.3.1): the box ticked, and whether gui/ lets it be (an empty file's type,
+    // or one a list read first sets, can't).
+    bool   ow_def;
+    bool   ow_def_can;
 } Ui;
 
 static UiInput ui_input_none(void)
@@ -1112,7 +1117,7 @@ static UiAction ui_props_event(Ui *u, UiEvent e)
 // The panel opened: the field empty with the keys, the toggles as last time; gui/ lists the apps.
 static UiAction ui_ow_open(Ui *u)
 {
-    u->ow = true, u->ow_in_list = false, u->ow_fresh = true, u->ow_len = u->ow_caret = 0;
+    u->ow = true, u->ow_in_list = false, u->ow_fresh = true, u->ow_len = u->ow_caret = 0, u->ow_def = false;
     u->ow_list = (UiList){ .rows = u->ow_list.rows };
     return (UiAction){ UA_OPEN_WITH, 0, false };
 }
@@ -1172,19 +1177,25 @@ static UiAction ui_ow_launch(Ui *u)
 {
     if (u->ow_list.n == 0) return (UiAction){ UA_NONE, 0, false };
     isize app = u->ow_idx[u->ow_list.sel];
+    bool def = u->ow_def && u->ow_def_can;
     ui_ow_close(u);
-    return (UiAction){ UA_LAUNCH, app, false };
+    return (UiAction){ UA_LAUNCH, app, def };
 }
 
 // A key while the panel is up; it takes every key (Michael, 2026-10-26). Tab moves between the
 // field and the list. In the field typing, Backspace, Delete, Left, Right, Home and End edit, Down
 // goes to the list; in the list Up, Down, k, j, Home, End, PgUp and PgDn move, Up on the first
 // row goes to the field, another character goes to the field and is typed there. Enter opens the
-// app under the cursor, Esc closes, Alt+C, Alt+W and Alt+R flip the toggles.
+// app under the cursor, Esc closes, Alt+C, Alt+W and Alt+R flip the toggles, Alt+D the box that
+// makes it the default (F7.3.1).
 static UiAction ui_ow_event(Ui *u, UiEvent e, const UiInput *in)
 {
     UiList *l = &u->ow_list;
     int page = l->rows > 1 ? l->rows - 1 : 1;
+    if (e.key == UK_MENU && e.ch == 'd') {
+        if (u->ow_def_can) u->ow_def = !u->ow_def;
+        return (UiAction){ UA_NONE, 0, false };
+    }
     if (ui_toggle_key(e)) {
         u->ow_opts = ui_toggle(u->ow_opts, ui_toggle_key(e));
         ui_ow_filter(u, in);
@@ -1397,6 +1408,10 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
     // cursor (a double click opens it), the field the keys, a toggle flips, Open and Cancel.
     if (u->ow && u->ow_fresh && in->app_name) ui_ow_filter(u, in);
     if (u->ow && !u->quit_asking && !u->full_told && !u->asking && !u->confirming) {
+        if (in->toggle == 4) {
+            if (u->ow_def_can) u->ow_def = !u->ow_def;
+            return (UiAction){ UA_NONE, 0, false };
+        }
         if (in->toggle >= 1 && in->toggle <= 3) {
             u->ow_opts = ui_toggle(u->ow_opts, in->toggle);
             ui_ow_filter(u, in);

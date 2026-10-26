@@ -238,3 +238,70 @@ static bool delete_tree(const char *path, isize *count, Err *err)
     (*count)++;
     return true;
 }
+
+// ---- the default app for a type (F7.3.1) ------------------------------------------------------
+
+// The user's own mimeapps.list, where a default is set: $XDG_CONFIG_HOME's, else ~/.config's.
+static bool apps_user_list(char *out, size_t cap)
+{
+    const char *ch = getenv("XDG_CONFIG_HOME"), *home = getenv("HOME");
+    int n = ch && ch[0] == '/' ? snprintf(out, cap, "%s/mimeapps.list", ch)
+          : home && home[0]   ? snprintf(out, cap, "%s/.config/mimeapps.list", home)
+                              : -1;
+    return n > 0 && (size_t)n < cap;
+}
+
+// A list read before the user's own that sets a default for type (or an alias of it), whose
+// setting a change in the user's list wouldn't override (Omarchy's hyprland-mimeapps.list): its
+// path into out. False when none does.
+static bool apps_shadowed(Arena *a, Str type, char *out, size_t cap)
+{
+    ArenaMark mark = arena_mark(a);
+    char mine[PATH_MAX];
+    const char *lists[APPS_LISTS_MAX];
+    isize nl = apps_user_list(mine, sizeof mine) ? apps_lists(a, lists, APPS_LISTS_MAX) : 0;
+    Str names[APPS_TYPES_MAX];
+    isize nn = apps_names(a, &type, names, APPS_TYPES_MAX);
+    bool found = false;
+    for (isize k = 0; k < nl && !found && strcmp(lists[k], mine) != 0; k++) {
+        Str text = read_file(a, lists[k]);
+        for (isize j = 0; j < nn && !found; j++)
+            if (ini_get(text, S("Default Applications"), names[j]).len) found = true, snprintf(out, cap, "%s", lists[k]);
+    }
+    arena_restore(a, mark);
+    return found;
+}
+
+// The first app the user's list sets as type's default, into out ("" none).
+static void apps_user_default(Arena *a, const char *list, Str type, char *out, size_t cap)
+{
+    ArenaMark mark = arena_mark(a);
+    Str v = ini_get(read_file(a, list), S("Default Applications"), type);
+    isize semi = str_find(v, ';');
+    if (semi >= 0) v = str_cut(v, 0, semi);
+    snprintf(out, cap, "%.*s", STR_ARG(str_trim(v)));
+    arena_restore(a, mark);
+}
+
+// app (a desktop id) made type's default in the user's list, by `gio mime` (what Nemo's "Set as
+// default" does: GLib writes [Default Applications] and adds it to [Added Associations]). No undo
+// (Michael, 2026-10-26). False with the reason when the guard refuses it, gio doesn't run, or the
+// list doesn't say so after.
+static bool op_set_default(Arena *a, Str type, const char *app, Err *err)
+{
+    char list[PATH_MAX];
+    if (!apps_user_list(list, sizeof list)) return err_set(err, "no home folder to keep the default in"), false;
+    if (!ops_allowed(list, err)) return false;
+    char t[256], out[1024];
+    snprintf(t, sizeof t, "%.*s", STR_ARG(type));
+    char *argv[] = { "gio", "mime", "--", t, (char *)app, NULL };
+    bool late = false;
+    if (!spawn_capture(argv, out, sizeof out, 3000, &late, err)) return false;
+    char now[NAME_MAX + 1];
+    apps_user_default(a, list, type, now, sizeof now);
+    if (late || strcmp(now, app) != 0) {
+        out[strcspn(out, "\n")] = 0;
+        return err_set(err, "%s", out[0] ? out : "gio didn't set it"), false;
+    }
+    return true;
+}

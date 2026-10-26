@@ -83,6 +83,9 @@ his word: Nemo's compact view and its icon size slider.
   mutants first. On a quiet machine 46 mutants took about 410 s at 6, 8, 10 or 12 workers alike,
   CPU 42-63%: the time is the unmutated suite at the start plus the slowest mutants at the end,
   not the processor. The order by each tag group's time in the baseline is the first thing to try.
+- Find in a bar of its own (Michael, 2026-10-26, after F7.3.1): above the job rows and the status
+  bar, as wide as the files, with a close button; Ctrl+J and Ctrl+Down go into it first while it is
+  open, Ctrl+J again on to the job rows.
 - Open With (Michael, 2026-10-26: not worth it yet, he can't notice the delay): keep the theme's
   app-folder list (0.7 MiB) after the first open, so a later open skips its ~34 ms; the icons
   themselves would still go when the panel closes.
@@ -464,6 +467,15 @@ process, one window), one page; only for showing a file's properties and changin
   empty file's `application/x-zerosize` is named as such). Written by `gio mime <type> <app>`
   into `~/.config/mimeapps.list`; a type that `hyprland-mimeapps.list` (read first) sets is said,
   not silently shadowed. Ctrl+Z puts the old default back (no old one: ofx removes the line).
+
+**F7.3.1 as built (2026-10-26):** a box under Open With's list, "Always open <type> files with this
+app" (Alt+D or a click), clear at each opening. Enter or Open with it ticked runs
+`gio mime -- <type> <app>` (GLib adds the line to [Default Applications] and [Added Associations]
+of `$XDG_CONFIG_HOME/mimeapps.list`, the rest of the file as it was: checked on a copy of
+Michael's), checks the list says so, then opens. Greyed with the reason for an empty file's type
+(`application/x-zerosize`, every empty file's) and for a type a list read before the user's sets
+(`hyprland-mimeapps.list`: the change would do nothing). No undo (Michael). A folder's type can be
+set: ofx goes into folders itself, other programs would open the new default.
 
 **F7.3 as built (2026-10-26):**
 - `ui/ui.c`: one matcher (`UiMatcher`, `ui_match`) for find and the filter: case folded or as

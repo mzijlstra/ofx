@@ -1619,6 +1619,8 @@ int main(void)
     test_ow_keys();
     test_ow_mouse();
     test_spawn_launch_all();
+    test_set_default();
+    test_ow_default();
     test_chmod();
     test_props_keys();
     test_step_round();
