@@ -158,13 +158,13 @@ MUTANTS += [
     # ---- F2: find
     (U, "isize i = ((from + dir * k) % l->n + l->n) % l->n;", "isize i = (from + dir * k) % l->n;"),
     (U, "u->find_miss = text.len > 0 && i < 0;", "u->find_miss = i < 0;"),
-    (U, "u->list.sel = i >= 0 ? i : u->find_from;", "u->list.sel = i >= 0 ? i : u->list.sel;"),
+    (U, "u->list.sel = i >= 0 ? i : ui_find_back(u);", "u->list.sel = i >= 0 ? i : u->list.sel;"),
     (U, "    u->find_keys = false;\n    if (u->find_len) memcpy(u->last, u->find, (size_t)u->find_len), u->last_len = u->find_len;", "    u->find_keys = false;"),
     (U, "    if (cp < 0x20 || cp == 0x7F || cp > 0x10FFFF) return 0;", "    if (cp < 0x20) return 0;"),
     (U, "while (u->find_len > 0 && ((unsigned char)u->find[u->find_len] & 0xC0) == 0x80) u->find_len--;", ""),
     (U, "    ui_matcher_set(&u->find_m, (Str){ u->last, u->last_len }, u->find_opts);\n    isize i = ui_find_at(&u->list, names, &u->find_m, u->list.sel + dir, dir);", "    ui_matcher_set(&u->find_m, (Str){ u->last, u->last_len }, u->find_opts);\n    isize i = ui_find_at(&u->list, names, &u->find_m, u->list.sel, dir);"),
     (U, "        if (e.ch == '/') return true;   // can't be in a name\n", ""),
-    (U, "        u->list.sel = ui_clamp(u->find_from, 0, u->list.n > 0 ? u->list.n - 1 : 0), ui_show_sel(&u->list);\n        return true;", "        return true;"),
+    (U, "        u->list.sel = ui_find_back(u), ui_show_sel(&u->list);\n        return true;", "        return true;"),
     (U, "    default: ui_find_leave(u); return false;   // a command", "    default: ui_find_leave(u); return true;   // a command"),
     # ---- F2: input
     (U, "return s.key == k ? (Sort){ k, !s.reverse } : (Sort){ k, false };", "return (Sort){ k, !s.reverse };"),
@@ -1262,7 +1262,7 @@ MUTANTS += [
     (U, "        if (u->finding && u->find_keys && ui_find_event(u, names, e, in)) continue;", "        if (u->finding && ui_find_event(u, names, e, in)) continue;"),
     (U, "            if (u->finding) ui_find_close(u);\n            else ui_find_open(u);", "            ui_find_open(u);"),
     (U, "        if (in->find_x) ui_find_close(u);", "        if (in->find_x) ui_find_leave(u);"),
-    (U, "        else u->find_keys = true, u->side_focus = false, u->crumb_focus = false, u->jobs_focus = false;", "        else u->side_focus = false, u->crumb_focus = false, u->jobs_focus = false;"),
+    (U, "        else ui_edit_close(u), u->find_keys = true, u->side_focus = false,", "        else ui_edit_close(u), u->side_focus = false,"),
     # Not a mutant: ui_find_open's `jobs_focus = false` is inert, every way there (a key, a click)
     # has taken the keys from the job rows already.
 ]
@@ -1279,5 +1279,7 @@ MUTANTS += [
     (U, "            end = i + m->len;\n", ""),
 ]
 MUTANTS += [
-    (U, "        u->list.sel = ui_clamp(u->find_from, 0, u->list.n > 0 ? u->list.n - 1 : 0), ui_show_sel(&u->list);", "        u->list.sel = u->find_from, ui_show_sel(&u->list);"),
+    (U, "    return ui_clamp(u->find_from, 0, u->list.n > 0 ? u->list.n - 1 : 0);", "    return u->find_from;"),
+    (U, "u->list.sel = i >= 0 ? i : ui_find_back(u);", "u->list.sel = i >= 0 ? i : u->find_from;"),
+    (U, "        else ui_edit_close(u), u->find_keys = true,", "        else u->find_keys = true,"),
 ]

@@ -707,6 +707,13 @@ static isize ui_find_at(const UiList *l, UiNames names, const UiMatcher *m, isiz
     return -1;
 }
 
+// Where the find began, inside the list: the folder may have been listed again with fewer entries
+// since (reviewer-2, find bar review).
+static isize ui_find_back(const Ui *u)
+{
+    return ui_clamp(u->find_from, 0, u->list.n > 0 ? u->list.n - 1 : 0);
+}
+
 // The find line's text changed: the cursor goes to its first match from where the find began,
 // or back there when the text is empty.
 static void ui_find_update(Ui *u, UiNames names)
@@ -715,7 +722,7 @@ static void ui_find_update(Ui *u, UiNames names)
     ui_matcher_set(&u->find_m, text, u->find_opts);
     isize i = ui_find_at(&u->list, names, &u->find_m, u->find_from, 1);
     u->find_miss = text.len > 0 && i < 0;
-    u->list.sel = i >= 0 ? i : u->find_from;
+    u->list.sel = i >= 0 ? i : ui_find_back(u);
     ui_show_sel(&u->list);
 }
 
@@ -1405,9 +1412,9 @@ static bool ui_find_event(Ui *u, UiNames names, UiEvent e, const UiInput *in)
     switch (e.key) {
     case UK_BACKSPACE: ui_find_erase(u), ui_find_update(u, names); return true;
     case UK_ENTER: case UK_SHIFT_ENTER: ui_find_leave(u); return true;
-    case UK_ESC:   // (in range: the folder may have been listed again with fewer entries since)
+    case UK_ESC:
         ui_find_close(u);
-        u->list.sel = ui_clamp(u->find_from, 0, u->list.n > 0 ? u->list.n - 1 : 0), ui_show_sel(&u->list);
+        u->list.sel = ui_find_back(u), ui_show_sel(&u->list);
         return true;
     case UK_UP: case UK_DOWN: {
         int dir = e.key == UK_UP ? -1 : 1;
@@ -1483,7 +1490,7 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         if (in->ow_wheel) ui_scroll(&u->ow_list, in->ow_wheel);
     } else if (!u->ow && !prompt && u->finding && (in->find_x || in->find_field)) {
         if (in->find_x) ui_find_close(u);
-        else u->find_keys = true, u->side_focus = false, u->crumb_focus = false, u->jobs_focus = false;
+        else ui_edit_close(u), u->find_keys = true, u->side_focus = false, u->crumb_focus = false, u->jobs_focus = false;   // (an open edit line would take the keys first: reviewer-2)
         return (UiAction){ UA_NONE, 0, false };
     } else if (!u->ow && in->toggle >= 1 && in->toggle <= 3 && u->finding) {
         u->find_opts = ui_toggle(u->find_opts, in->toggle);

@@ -473,7 +473,11 @@ to the list; in the bar Up and Down go to the previous and next match; Ctrl+J an
 list, bar, job rows, list. A command typed in the bar gives the keys back and is the list's; the
 menu, the edit line and the path buttons take the keys and leave the bar open; a tab change
 closes it. `/` or Ctrl+F with the bar open starts a new find from the cursor; the search button
-opens and closes it. (`Ui.find_keys`; `ui_find_leave` against `ui_find_close`.)
+opens and closes it. (`Ui.find_keys`; `ui_find_leave` against `ui_find_close`.) reviewer-2's review
+at `91b4d98`: MEDIUM, landed: with no match the cursor went back to where the find began, not
+kept inside a list listed again shorter, so Enter opened past its end (ASan in weston); now both
+that and Esc clamp it (`ui_find_back`). LOW, landed: a click in the bar's field with the rename
+line open left the keys with the line; it closes now.
 
 **F7.3.1 as built (2026-10-26):** a box under Open With's list, "Always open <type> files with this
 app" (Alt+D or a click), clear at each opening. Enter or Open with it ticked runs

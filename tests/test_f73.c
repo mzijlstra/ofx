@@ -715,7 +715,38 @@ static void test_find_bar(void)
     in = keys(1, UK_ESC);
     ui_handle(&u, names, &in);
     CHECK(u.list.sel == 2);
+    // The same with no match: the cursor where the find began, inside the list (reviewer-2: it was
+    // past the end, and Enter opened entry 6 of 3).
     ui_set(&u.list, COUNT(find_names), 6);
+    in = chars("/");
+    ui_handle(&u, names, &in);
+    ui_set(&u.list, 3, 1);
+    in = chars("qq");
+    ui_handle(&u, names, &in);
+    CHECK(u.find_miss && u.list.sel == 2);
+    in = keys(2, UK_ENTER, UK_ENTER);
+    UiAction act = ui_handle(&u, names, &in);
+    CHECK(act.kind == UA_OPEN && act.index == 2);
+    in = chars("/");
+    ui_handle(&u, names, &in);
+    in = keys(1, UK_ESC);
+    ui_handle(&u, names, &in);
+    ui_set(&u.list, COUNT(find_names), 6);
+    // A click in the field with the rename line open: the line closes, the keys go to the bar
+    // (reviewer-2: the line took them, and Enter renamed).
+    in = chars("/a");
+    ui_handle(&u, names, &in);
+    in = keys(2, UK_ENTER, UK_F2);
+    ui_handle(&u, names, &in);
+    CHECK(u.editing && u.finding && !u.find_keys);
+    in = ui_input_none(), in.find_field = true;
+    ui_handle(&u, names, &in);
+    CHECK(!u.editing && u.find_keys);
+    in = chars("l");
+    ui_handle(&u, names, &in);
+    CHECK(u.find_len == 2 && !u.editing);
+    in = keys(1, UK_ESC);
+    ui_handle(&u, names, &in);
     // Under a question its pointer does nothing.
     in = chars("/a");
     ui_handle(&u, names, &in);
