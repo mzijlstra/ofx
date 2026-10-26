@@ -32,6 +32,18 @@ static void test_match(void)
     // inside it), and ^ there is not the start.
     CHECK(m_has(S("a-b"), "a-|b", (UiMatchOpts){ .regex = true, .word = true }));
     CHECK(!m_has(S("-ab"), "^(-a|ab)", (UiMatchOpts){ .regex = true, .word = true }));
+    // A shorter match from the same start that is whole, where the longest isn't (reviewer-2).
+    CHECK(m_has(S("--_ "), "-*-", (UiMatchOpts){ .regex = true, .word = true }));
+    CHECK(m_has(S("ab-cd"), "ab|ab-c", (UiMatchOpts){ .regex = true, .word = true }));
+    CHECK(!m_has(S("abcd"), "ab|ab-c", (UiMatchOpts){ .regex = true, .word = true }));
+    CHECK(m_has(S("x AB"), "ab", (UiMatchOpts){ .regex = true, .word = true }) && !m_has(S("x AB"), "ab", (UiMatchOpts){ .regex = true, .word = true, .cased = true }));
+    CHECK(m_has(S("ab"), "", (UiMatchOpts){ .regex = true, .word = true }));
+    // ^ and $ are the name's ends, not a word's.
+    UiMatchOpts rw = { .regex = true, .word = true };
+    CHECK(!m_has(S("text more"), "text$", rw) && m_has(S("more text"), "text$", rw) && !m_has(S("a text"), "^text", rw));
+    CHECK(m_has(S("text a"), "^text", rw) && m_has(S("a-b c"), "b c$", rw) && !m_has(S("a-b cd"), "b c$", rw));
+    CHECK(!m_has(S("text atext"), "text$", rw));   // $ matches at the end only, where "text" isn't whole
+    CHECK(m_has(S("-"), "x*", rw) && !m_has(S("ab"), "x*", rw));   // an empty span between two boundaries
     // A match only past the end of what was given (the name is not NUL-terminated there).
     CHECK(!m_has((Str){ "abcdef", 3 }, "def", re) && !m_has((Str){ "abcdef", 3 }, "c$x", re) && m_has((Str){ "abcdef", 3 }, "c$", re));
     // A bad expression: nothing matches, and the reason; the next good one is compiled again.

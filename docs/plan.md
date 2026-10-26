@@ -483,6 +483,13 @@ process, one window), one page; only for showing a file's properties and changin
 - Tests: `tests/test_f73.c`; GUI `f73` (the menu, the filter and toggles, the keys, Shift+Tab, the
   pointer, several files, a folder, Enter on several, find's toggles); `f7` updated (Open With is
   enabled now).
+- reviewer-2's SHIP at `24b475a` (2026-10-26): LOW, landed: a whole-word expression now tries
+  every span between two word boundaries (the longest match from a start could run past one a
+  shorter match stops at: `-*-` in "--_ "); `^` and `$` still mean the name's ends. 0 of 30,000
+  random cases disagree with a span oracle, but for `.` on a character past ASCII: ofx runs in the
+  C locale (no `setlocale`), so `.` is a byte and case folding is ASCII, as for plain text.
+  Decision for Michael: "Recommended" holds the parent types' apps too, which GTK's chooser lists
+  apart as "Related" (broader than GTK's on 629 of 1,477 types).
 
 ## F6.4 design (2026-10-24)
 

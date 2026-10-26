@@ -580,11 +580,22 @@ static bool ui_match(const UiMatcher *m, Str hay)
     if (m->len == 0) return true;
     if (m->o.regex) {
         if (!m->re_on) return false;
-        for (isize off = 0; off <= hay.len;) {
-            regmatch_t pm = { .rm_so = (regoff_t)off, .rm_eo = (regoff_t)hay.len };
-            if (regexec(&m->re, hay.p ? hay.p : "", 1, &pm, REG_STARTEND | (off > 0 ? REG_NOTBOL : 0)) != 0) return false;
-            if (!m->o.word || ui_whole(hay, pm.rm_so, pm.rm_eo)) return true;
-            off = (isize)pm.rm_so + 1;
+        regmatch_t all = { .rm_so = 0, .rm_eo = (regoff_t)hay.len };
+        if (regexec(&m->re, hay.p ? hay.p : "", 1, &all, REG_STARTEND) != 0) return false;
+        if (!m->o.word) return true;
+        // Whole words: some span from a boundary to a boundary that the expression matches in
+        // full. The longest match from a start may run past a boundary a shorter one stops at
+        // (`-*-` in "--_ ", reviewer-2, F7.3 review), so each span is tried: the leftmost-longest
+        // match within it is all of it exactly when the span matches. ^ and $ keep meaning the
+        // name's start and end (NOTBOL, NOTEOL inside it).
+        for (isize from = 0; from <= hay.len; from++) {
+            if (from > 0 && ui_word_byte((unsigned char)hay.p[from - 1])) continue;
+            for (isize to = hay.len; to >= from; to--) {
+                if (to < hay.len && ui_word_byte((unsigned char)hay.p[to])) continue;
+                regmatch_t pm = { .rm_so = 0, .rm_eo = (regoff_t)(to - from) };
+                int flags = REG_STARTEND | (from > 0 ? REG_NOTBOL : 0) | (to < hay.len ? REG_NOTEOL : 0);
+                if (regexec(&m->re, hay.p ? hay.p + from : "", 1, &pm, flags) == 0 && pm.rm_so == 0 && pm.rm_eo == to - from) return true;
+            }
         }
         return false;
     }
