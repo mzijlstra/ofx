@@ -12,7 +12,8 @@
 typedef enum { UNDO_NONE, UNDO_RENAME, UNDO_MKDIR, UNDO_TRASH, UNDO_COPY, UNDO_MOVE, UNDO_MKFILE, UNDO_CHMOD } UndoKind;
 
 // rename, move: from was moved to to; new folder, new file, copy: to was made; a permission change
-// (F7.2): to's mode was info (octal); trash: from went to file,
+// (F7.2): to's mode was info's first word (octal), the file then its device and inode (the rest),
+// so the undo never reaches another file put at that path since (reviewer-2, F7.2 review); trash: from went to file,
 // with its info.
 typedef struct {
     char *from, *to, *info;
@@ -77,6 +78,15 @@ static bool undo_check(const Undo *u, Err *err)
         if (u->kind == UNDO_MKDIR) {
             struct stat st;
             if (lstat(it->to, &st) != 0 || !S_ISDIR(st.st_mode)) return err_set(err, "%s isn't a folder now: can't undo", it->to), false;
+        }
+        // A permission change goes back only on the file it was made on (a link's target).
+        if (u->kind == UNDO_CHMOD) {
+            struct stat st;
+            unsigned long long dev = 0, ino = 0;
+            unsigned mode;
+            if (!it->info || sscanf(it->info, "%o %llu %llu", &mode, &dev, &ino) != 3 || stat(it->to, &st) != 0 ||
+                (unsigned long long)st.st_dev != dev || (unsigned long long)st.st_ino != ino)
+                return err_set(err, "%s is another file now: can't undo", it->to), false;
         }
         // A new file goes only while it is still empty: what was written into it since is kept.
         if (u->kind == UNDO_MKFILE) {

@@ -1098,4 +1098,9 @@ MUTANTS += [
     (U, "            ui_step_round(l, key == UK_LEFT ? -1 : 1, false);", "            ui_move(l, key == UK_LEFT ? -1 : 1);"),
     (U, "    if (n > 1 && strncmp(path, home, n) == 0 && (path[n] == '/' || path[n] == 0)) snprintf(buf, cap, \"~%s\", path + n);", "    if (n > 1 && strncmp(path, home, n) == 0) snprintf(buf, cap, \"~%s\", path + n);"),
     (U, "    if (n > 1 && strncmp(path, home, n) == 0 && (path[n] == '/' || path[n] == 0)) snprintf(buf, cap, \"~%s\", path + n);", "    if (n > 0 && strncmp(path, home, n) == 0 && (path[n] == '/' || path[n] == 0)) snprintf(buf, cap, \"~%s\", path + n);"),
+    (N, "(unsigned long long)st.st_dev != dev || (unsigned long long)st.st_ino != ino)", "(unsigned long long)st.st_ino != ino)"),
+    (N, "(unsigned long long)st.st_dev != dev || (unsigned long long)st.st_ino != ino)", "(unsigned long long)st.st_dev != dev)"),
+    # Not a mutant: `!= 3` as `< 1` in UNDO_CHMOD's check is inert, a short record leaving dev 0,
+    # which no file has.
+    (N, "        if (u->kind == UNDO_CHMOD) {\n            struct stat st;", "        if (false) {\n            struct stat st;"),
 ]

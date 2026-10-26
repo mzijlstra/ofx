@@ -2533,8 +2533,8 @@ static void props_chmod(int k)
         props_read();
         return;
     }
-    char was[16];
-    snprintf(was, sizeof was, "%o", (unsigned)old);
+    char was[64];   // the old mode, and the file's device and inode (UNDO_CHMOD)
+    snprintf(was, sizeof was, "%o %llu %llu", (unsigned)old, (unsigned long long)props.st.st_dev, (unsigned long long)props.st.st_ino);
     undo_gen++, undo_begin(&undo, UNDO_CHMOD), undo_add(&undo, NULL, props_path[0], was);
     props_read();
     set_status(false, "%s: %04o", props.name, (unsigned)(props.st.st_mode & 07777));

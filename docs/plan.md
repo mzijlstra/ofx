@@ -423,6 +423,13 @@ process, one window), one page; only for showing a file's properties and changin
   the trash view). Unit mutants 939, 0 survived (four left out with reasons: the other-drive rule,
   which needs a mount; `realpath`'s check; UNDO_CHMOD in undo_what; and F7.1's).
 
+- reviewer-2's SHIP at `b388295` (2026-10-26): LOW, landed: a permission change's undo now
+  records the file's device and inode and refuses another file put at that path since (a link to
+  another file, in their harness, got that file's mode back). Decisions for Michael: Down from a
+  column the short last row lacks goes to the last cell (Nemo's rule, kept from F6.2), so Up and
+  Down aren't inverses there; a hard link counts once per name in the panel's sums (du dedupes:
+  +0.16% on /usr/share). Checked: du_walk equals `find -xdev` on /usr/share.
+
 **F7.3 Open With Other Application (sketch, not decided):** a panel listing the default app for
 the file's type first, then the recommended ones (others that name the type or a parent type),
 then every other app; launched as `uwsm-app -- gio launch <desktop file> <file>`. No "set as

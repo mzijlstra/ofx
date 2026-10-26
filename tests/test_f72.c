@@ -111,14 +111,32 @@ static void test_chmod(void)
     CHECK(!op_chmod(at("f72ch/broken"), 0644, &old, &err) && strstr(err.msg, "f72ch/broken: No such file"));
     // Its undo puts the mode back, and says what it undoes.
     Undo un = { .arena = &ta };
-    undo_begin(&un, UNDO_CHMOD), undo_add(&un, NULL, at("f72ch/f"), "644");
+    stat(at("f72ch/f"), &st);
+    char was[64];
+    snprintf(was, sizeof was, "644 %llu %llu", (unsigned long long)st.st_dev, (unsigned long long)st.st_ino);
+    undo_begin(&un, UNDO_CHMOD), undo_add(&un, NULL, at("f72ch/f"), was);
     char what[64];
     undo_what(&un, what, sizeof what);
     CHECK_STR(str_from_c(what), "permission change");
     isize done;
     CHECK(undo_do(&un, &done, &err) && done == 1 && stat(at("f72ch/f"), &st) == 0 && (st.st_mode & 0777) == 0644);
-    undo_begin(&un, UNDO_CHMOD), undo_add(&un, NULL, at("f72ch/gone"), "644");
+    undo_begin(&un, UNDO_CHMOD), undo_add(&un, NULL, at("f72ch/gone"), "644 1 1");
     CHECK(!undo_do(&un, &done, &err) && strstr(err.msg, "is gone"));
+    // Another file at the path since (reviewer-2's case: replaced by a link to another file):
+    // refused, nothing changed; a record without the inode, too.
+    put(at("f72ch/other"), "o");
+    chmod(at("f72ch/other"), 0600);
+    chmod(at("f72ch/f"), 0640);
+    undo_begin(&un, UNDO_CHMOD), undo_add(&un, NULL, at("f72ch/f"), was);
+    unlink(at("f72ch/f"));
+    CHECK(symlink("other", at("f72ch/f")) == 0);
+    CHECK(!undo_do(&un, &done, &err) && strstr(err.msg, "another file now") && stat(at("f72ch/other"), &st) == 0 && (st.st_mode & 0777) == 0600);
+    undo_begin(&un, UNDO_CHMOD), undo_add(&un, NULL, at("f72ch/other"), "644");
+    CHECK(!undo_do(&un, &done, &err) && strstr(err.msg, "another file now"));
+    stat(at("f72ch/other"), &st);
+    snprintf(was, sizeof was, "644 %llu %llu", (unsigned long long)st.st_dev + 1, (unsigned long long)st.st_ino);
+    undo_begin(&un, UNDO_CHMOD), undo_add(&un, NULL, at("f72ch/other"), was);
+    CHECK(!undo_do(&un, &done, &err) && strstr(err.msg, "another file now"));
 }
 
 static UiAction props_keys(Ui *u, int n, ...)
