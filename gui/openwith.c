@@ -44,7 +44,7 @@ static void ow_open(void)
 // The app ui/ picked (UA_LAUNCH): it gets every file, SPAWN_FILES_MAX a launch.
 static void ow_launch(isize i)
 {
-    if (i < 0 || i >= ow.shown) return;
+    if (i < 0 || i >= ow.shown) return;   // (ui/ hands only the listed ones)
     const App *p = &ow.apps.a[i];
     char desktop[PATH_MAX];
     snprintf(desktop, sizeof desktop, "%.*s", STR_ARG(p->path));

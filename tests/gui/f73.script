@@ -113,7 +113,14 @@ wait-for 2000 ow=1 owfiles=2 owtype=text/plain
 type ofx t code
 key enter
 sh grep -qx "uwsm-app -- gio launch $OFX_ROOT/data/applications/ofx-t-code.desktop $OFX_DIR/b.txt $OFX_DIR/notes.txt" "$OFX_ROOT/spawn.log"
-# ---- Enter on several marked (F7.3): each default app once, with its files; a folder left
+# ---- Enter on several marked (F7.3): each default app once, with its files; one no app is set
+# for through gio open; a folder left
+sh : > "$OFX_DIR/x.zzq"
+wait-for 2000 n=6 marked=2
+char /
+type x.zzq
+key enter
+key space
 char /
 type pic
 key enter
@@ -126,13 +133,34 @@ char /
 type sub
 key enter
 key space
-expect marked=5
+expect marked=6
 key enter
 sh grep -qx "uwsm-app -- gio launch $OFX_ROOT/data/applications/ofx-t-edit.desktop $OFX_DIR/b.txt $OFX_DIR/e.txt $OFX_DIR/notes.txt" "$OFX_ROOT/spawn.log"
 sh grep -qx "uwsm-app -- gio launch $OFX_ROOT/data/applications/ofx-t-view.desktop $OFX_DIR/pic.png" "$OFX_ROOT/spawn.log"
-expect status=opened 4 files (folders left)
+sh grep -qx "uwsm-app -- gio open $OFX_DIR/x.zzq" "$OFX_ROOT/spawn.log"
+expect status=opened 5 files (folders left)
 key esc
 expect marked=0
+# Only a folder marked: Enter goes into the cursor's, as without marks
+key home
+key space
+key up
+expect marked=1 sel=sub
+key enter
+wait-for 2000 n=0
+key backspace
+wait-for 2000 n=6 sel=sub
+key esc
+expect marked=0
+# ---- an empty file: gio's type, application/x-zerosize, not its name's
+char /
+type e.txt
+key enter
+key f10
+keys down down down down down
+key enter
+wait-for 2000 ow=1 owtype=application/x-zerosize
+key esc
 # ---- a folder: gio's inode/directory; the apps that name it
 char /
 type sub

@@ -299,7 +299,7 @@ MUTANTS = [
     (OW, '    if (!app.thumb_local || !spawn_gio_type(ow.paths[0], ow.type, sizeof ow.type, 1000)) {', '    if (true) {', 'f73'),
     (OW, '    ow.shown = apps_rank(&owa, &ow.apps, str_from_c(ow.type));', '    ow.shown = ow.apps.n;', 'f73'),
     (OW, '    for (isize i = 0; i < ow.shown && i < UI_APPS_MAX; i++) ow.names[i] = ow.apps.a[i].name;', '    for (isize i = 0; i < ow.shown && i < UI_APPS_MAX; i++) ow.names[i] = ow.apps.a[i].id;', 'f73'),
-    (OW, '    if (i < 0 || i >= ow.shown) return;', '    if (i < 0) return;', 'f73'),
+    # Not a mutant: ow_launch's `i >= ow.shown` is inert, ui/ hands only the listed apps' places.
     (OW, '        isize k = ow.n - at < SPAWN_FILES_MAX ? ow.n - at : SPAWN_FILES_MAX;', '        isize k = 1;', 'f73'),
     (OW, '        if (kind_is_dir(e->kind) || e->kind == K_LINK_BROKEN || !entry_path(i, p, sizeof p)) {', '        if (!entry_path(i, p, sizeof p)) {', 'f73'),
     (OW, '                if (strcmp(desk[k], d) == 0) g = k;', '', 'f73'),
