@@ -1592,6 +1592,7 @@ int main(void)
     test_chmod();
     test_props_keys();
     test_step_round();
+    test_tilde();
     char cmd[1600];
     snprintf(cmd, sizeof cmd, "chmod -R u+rwx '%s' && rm -rf '%s' '%s'", root, root, decoy);
     if (system(cmd) != 0) fprintf(stderr, "could not remove %s\n", root);

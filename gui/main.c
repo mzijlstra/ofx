@@ -2430,15 +2430,6 @@ static void props_digits(char *buf, size_t cap, i64 n)
     buf[o] = 0;
 }
 
-// path with home as "~".
-static void props_tilde(char *buf, size_t cap, const char *path)
-{
-    const char *home = getenv("HOME");
-    size_t n = home ? strlen(home) : 0;
-    if (n > 1 && strncmp(path, home, n) == 0 && (path[n] == '/' || path[n] == 0)) snprintf(buf, cap, "~%s", path + n);
-    else snprintf(buf, cap, "%s", path);
-}
-
 // The drive holding path: the drive place with the longest path above it.
 static const char *props_drive(const char *path)
 {
@@ -2479,8 +2470,9 @@ static void props_read(void)
     else snprintf(props.owner, sizeof props.owner, "%u", (unsigned)props.st.st_uid);
     if (getgrgid_r(props.st.st_gid, &gr, buf, sizeof buf, &grp) == 0 && grp) snprintf(props.group, sizeof props.group, "%s", gr.gr_name);
     else snprintf(props.group, sizeof props.group, "%u", (unsigned)props.st.st_gid);
-    // Its permissions change only when it is Michael's, alone, not in the trash, and there.
-    app.ui.prop_can = props.n == 1 && !app.ui.in_trash && !props.broken && props.st.st_uid == geteuid();
+    // Its permissions change only when it is Michael's, not in the trash, and there (one entry:
+    // props_read is only for one).
+    app.ui.prop_can = !app.ui.in_trash && !props.broken && props.st.st_uid == geteuid();
 }
 
 // The panel opened (ui_props_open): the marked entries, or the cursor's; the folder itself when it
@@ -2510,7 +2502,7 @@ static void props_open(void)
         if (app.ui.in_trash && props.idx >= 0) snprintf(props.name, sizeof props.name, "%.*s", STR_ARG(app.list.e[props.idx].name));
     }
     if (app.ui.in_trash) snprintf(props.where, sizeof props.where, "Trash");
-    else props_tilde(props.where, sizeof props.where, n == 1 ? d : app.cwd);
+    else ui_tilde(props.where, sizeof props.where, n == 1 ? d : app.cwd, getenv("HOME"));
     snprintf(props.drive, sizeof props.drive, "%s", props_drive(props_path[0]));
     if (n == 1) props_read();
     // Counted all the way down, but not on a network drive (its reads can hang, F6.4).

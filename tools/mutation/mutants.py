@@ -1096,4 +1096,6 @@ MUTANTS += [
     (U, "            if (m == l) ui_step_round(l, 1, false);", "            if (true) ui_step_round(l, 1, false);"),
     (U, "            ui_step_round(l, key == UK_UP ? -1 : 1, true);", "            ui_move_rows(l, key == UK_UP ? -1 : 1);"),
     (U, "            ui_step_round(l, key == UK_LEFT ? -1 : 1, false);", "            ui_move(l, key == UK_LEFT ? -1 : 1);"),
+    (U, "    if (n > 1 && strncmp(path, home, n) == 0 && (path[n] == '/' || path[n] == 0)) snprintf(buf, cap, \"~%s\", path + n);", "    if (n > 1 && strncmp(path, home, n) == 0) snprintf(buf, cap, \"~%s\", path + n);"),
+    (U, "    if (n > 1 && strncmp(path, home, n) == 0 && (path[n] == '/' || path[n] == 0)) snprintf(buf, cap, \"~%s\", path + n);", "    if (n > 0 && strncmp(path, home, n) == 0 && (path[n] == '/' || path[n] == 0)) snprintf(buf, cap, \"~%s\", path + n);"),
 ]

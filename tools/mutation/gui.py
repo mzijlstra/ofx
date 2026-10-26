@@ -266,23 +266,22 @@ MUTANTS = [
     (G, "    if (e->size == 0 && (e->kind == K_FILE || e->kind == K_LINK_FILE) && apps_default(", "    if (e->kind == K_FILE && false && apps_default(", 'f7'),
     (G, "    if (e->size == 0 && (e->kind == K_FILE || e->kind == K_LINK_FILE) && apps_default(", "    if ((e->kind == K_FILE || e->kind == K_LINK_FILE) && apps_default(", 'f7'),
     (G, "        if (spawn_launch(desktop, path, &err)) set_status(false, \"opened %.*s\", STR_ARG(e->name));\n        else set_status(true, \"%s\", err.msg);\n        return;", "        if (spawn_launch(desktop, path, &err)) set_status(false, \"opened %.*s\", STR_ARG(e->name));\n        else set_status(true, \"%s\", err.msg);", 'f7'),
-    (G, '    app.ui.prop_can = props.n == 1 && !app.ui.in_trash && !props.broken && props.st.st_uid == geteuid();', '    app.ui.prop_can = props.n == 1 && !props.broken && props.st.st_uid == geteuid();', 'f72'),
-    (G, '    app.ui.prop_can = props.n == 1 && !app.ui.in_trash && !props.broken && props.st.st_uid == geteuid();', '    app.ui.prop_can = props.n == 1 && !app.ui.in_trash && !props.broken;', 'f72'),
-    (G, '    app.ui.prop_can = props.n == 1 && !app.ui.in_trash && !props.broken && props.st.st_uid == geteuid();', '    app.ui.prop_can = !app.ui.in_trash && !props.broken && props.st.st_uid == geteuid();', 'f72'),
+    (G, '    app.ui.prop_can = !app.ui.in_trash && !props.broken && props.st.st_uid == geteuid();', '    app.ui.prop_can = !props.broken && props.st.st_uid == geteuid();', 'f72'),
+    (G, '    app.ui.prop_can = !app.ui.in_trash && !props.broken && props.st.st_uid == geteuid();', '    app.ui.prop_can = !app.ui.in_trash && !props.broken;', 'f72'),
     (G, '        props.broken = stat(path, &props.st) != 0;', '        props.broken = false;', 'f72'),
     (G, '        props.link[k > 0 ? k : 0] = 0;', '        props.link[0] = 0;', 'f72'),
     (G, '    if (n == 0 && !app.ui.in_trash) props_path[0] = arena_cstr(&propsa, str_from_c(app.cwd)), n = 1;', '', 'f72'),
-    (G, '    else props_tilde(props.where, sizeof props.where, n == 1 ? d : app.cwd);', '    else snprintf(props.where, sizeof props.where, "%s", n == 1 ? d : app.cwd);', 'f72'),
-    (G, '    if (n > 1 && strncmp(path, home, n) == 0 && (path[n] == \'/\' || path[n] == 0)) snprintf(buf, cap, "~%s", path + n);', '    if (n > 1 && strncmp(path, home, n) == 0) snprintf(buf, cap, "~%s", path + n);', 'f72'),
     (G, '    if (app.ui.in_trash) snprintf(props.where, sizeof props.where, "Trash");', '', 'f72'),
-    (G, '        if (above && n >= bn) best = i, bn = n;', '        if (above) best = i, bn = n;', 'f72'),
-    (G, '    props.walking = props.local;\n    if (props.local) walk_ask(props_path, n);', '    props.walking = false;', 'f72'),
+    # Not mutants: `n >= bn` in props_drive (mountinfo lists a drive before those mounted inside it,
+    # so the last above is the longest); prop_can in props_chmod (ui/ sends no UA_CHMOD without it);
+    # walk_tick's sums (the final ones are the same; progress can't be timed in a script); `n > 0`
+    # in walk_ask (an empty walk ends at once).
+    (G, '    props.walking = props.local;\n    if (props.local) walk_ask(props_path, n);', '    props.walking = false;\n    if (false) {}', 'f72'),
     (G, '    if (props.walking && walk_take(&props.sum, &props.done)) dirty = true;', '', 'f72'),
     (G, '    mode_t old, perms = (props.st.st_mode & 0777) ^ perm_bit(k);', '    mode_t old, perms = (props.st.st_mode & 0777) | perm_bit(k);', 'f72'),
     (G, '    undo_gen++, undo_begin(&undo, UNDO_CHMOD), undo_add(&undo, NULL, props_path[0], was);', '', 'f72'),
     (G, '    snprintf(was, sizeof was, "%o", (unsigned)old);', '    snprintf(was, sizeof was, "%u", (unsigned)old);', 'f72'),
     (G, '    props_read();\n    set_status(false,', '    set_status(false,', 'f72'),
-    (G, '    if (!app.ui.prop_can || props.n != 1 || k < 0 || k > 8) return;', '    if (props.n != 1 || k < 0 || k > 8) return;', 'f72'),
     (G, '            if (in_box(CLAY_IDI("prop-box", k), x, y)) h.prop_box = k;', '', 'f72'),
     (G, '    in->prop_box = h.prop_box;\n', '', 'f72'),
     (G, '    if (app.ui.props) return MODAL_PROPS;   // under any question (F7.2)', '', 'f72'),
@@ -290,10 +289,8 @@ MUTANTS = [
     (G, '    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_I) return UK_PROPERTIES;', '', 'f72'),
     (G, '    if (m == GLFW_MOD_ALT && (key == GLFW_KEY_ENTER || key == GLFW_KEY_KP_ENTER)) return UK_TERMINAL;', '', 'f72'),
     (G, '    if (statx(AT_FDCWD, path, props.broken ? AT_SYMLINK_NOFOLLOW : 0, STATX_BTIME, &sx) == 0 && (sx.stx_mask & STATX_BTIME))', '    if (false)', 'f72'),
-    (G, '            if (app.ui.marked ? app.ui.mark[i] : i == app.ui.list.sel) props.idx = i;', '', 'f72'),
-    (WK, '    if (gen == atomic_load(&walk.gen)) walk.sum = *s, walk.sum_gen = gen, walk.fresh = true;', '', 'f72'),
+    (G, '            if (app.ui.marked ? app.ui.mark[i] : i == app.ui.list.sel) props.idx = i;', '            {}', 'f72'),
     (WK, '        if (whole && gen == atomic_load(&walk.gen)) walk.sum = s, walk.sum_gen = gen, walk.done = walk.fresh = true;', '', 'f72'),
-    (WK, '    walk.asked = n > 0 && walk.started;', '    walk.asked = walk.started;', 'f72'),
 ]
 import concurrent.futures, queue, threading
 

@@ -1552,6 +1552,14 @@ static void ui_crumbs_show(UiCrumbs *c, const float *w, float room, float arrow,
 
 // ---- the location line (F4) -------------------------------------------------------------------
 
+// path with home as "~" ("~/x" under it), into buf: the Properties panel's location (F7.2).
+static void ui_tilde(char *buf, size_t cap, const char *path, const char *home)
+{
+    size_t n = home ? strlen(home) : 0;
+    if (n > 1 && strncmp(path, home, n) == 0 && (path[n] == '/' || path[n] == 0)) snprintf(buf, cap, "~%s", path + n);
+    else snprintf(buf, cap, "%s", path);
+}
+
 // What the location line says as a folder: "~" and "~/…" from home, a relative path from cwd, then
 // "." and ".." taken out. False for an empty line, or one that climbs above "/".
 static bool ui_location(Arena *a, Str text, const char *cwd, const char *home, Str *out)

@@ -122,6 +122,13 @@ expect props=1 menu=-
 key esc
 key alt-enter
 sh grep -qx "uwsm-app -- xdg-terminal-exec --dir=$OFX_DIR" "$OFX_ROOT/spawn.log"
+# As GLFW gives them: Ctrl+I (73, Ctrl 2) opens and closes the panel; Alt+Enter (257, Alt 4) a terminal.
+raw-key 73 2
+expect props=1
+raw-key 73 2
+expect props=0
+raw-key 257 4
+sh [ "$(grep -c "xdg-terminal-exec --dir=$OFX_DIR\$" "$OFX_ROOT/spawn.log")" = 2 ]
 # ---- the trash view: shown, not changeable
 char /
 type run.sh

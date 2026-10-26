@@ -231,6 +231,23 @@ static void test_props_keys(void)
     CHECK(props_keys(&u, 1, UK_TERMINAL).kind == UA_NOT_IN_TRASH);
 }
 
+static void test_tilde(void)
+{
+    char b[64];
+    ui_tilde(b, sizeof b, "/home/m/a", "/home/m");
+    CHECK_STR(str_from_c(b), "~/a");
+    ui_tilde(b, sizeof b, "/home/m", "/home/m");
+    CHECK_STR(str_from_c(b), "~");
+    ui_tilde(b, sizeof b, "/home/mx/a", "/home/m");   // a sibling that only starts the same
+    CHECK_STR(str_from_c(b), "/home/mx/a");
+    ui_tilde(b, sizeof b, "/a", "/");   // home "/" isn't shortened
+    CHECK_STR(str_from_c(b), "/a");
+    ui_tilde(b, sizeof b, "/", "/");
+    CHECK_STR(str_from_c(b), "/");
+    ui_tilde(b, sizeof b, "/a", NULL);
+    CHECK_STR(str_from_c(b), "/a");
+}
+
 static void test_step_round(void)
 {
     // The list: Up from the first to the last, Down from the last to the first; k and j too.
