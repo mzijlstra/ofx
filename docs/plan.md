@@ -429,11 +429,34 @@ process, one window), one page; only for showing a file's properties and changin
   column the short last row lacks goes to the last cell (Nemo's rule, kept from F6.2), so Up and
   Down aren't inverses there; a hard link counts once per name in the panel's sums (du dedupes:
   +0.16% on /usr/share). Checked: du_walk equals `find -xdev` on /usr/share.
+- After the review (Michael, 2026-10-26): Nemo's rule kept for Down over a short last row. Hard
+  links: both totals, a "Hard links" line ("5 names of 2 files; … counting each once") when there
+  are any, a file's own names on its own; each linked file once by device and inode, up to 65,536
+  of them (past that, "at most"). A "MIME type" line for one entry: gio's (`gio info`, the content
+  read, so an empty file is `application/x-zerosize`, as `gio open` sees it) with its words from
+  shared-mime-info; the name's type, said, on a network drive or when gio doesn't answer in 1 s.
 
-**F7.3 Open With Other Application (sketch, not decided):** a panel listing the default app for
-the file's type first, then the recommended ones (others that name the type or a parent type),
-then every other app; launched as `uwsm-app -- gio launch <desktop file> <file>`. No "set as
-default" (it would write Michael's `mimeapps.list`).
+**F7.3 Open With Other Application (Michael, 2026-10-26):**
+- **The panel:** a filter field on top, then the list in three parts: the default app for the
+  file's type; Recommended (others that name the type or a parent type; `NoDisplay=true` apps only
+  here); Other (every other app, by name). Each row the app's icon and name. Launched as
+  `uwsm-app -- gio launch <desktop file> <files>`.
+- **The filter:** any part of the app's displayed name (not its desktop file name), case folded;
+  three toggles inside the field's right end as VS Code's: `Aa` match case (Alt+C), `ab` whole word
+  (Alt+W), `.*` regular expression (Alt+R; a bad one shows a red border and the error under the
+  field). The same three in find (`/`, Ctrl+F), one matcher for both.
+- **Keys:** the focus starts in the field. Tab and Shift+Tab move between the field and the list.
+  In the field: typing, Left/Right, Home/End and Backspace edit, Down goes to the list, Enter opens
+  the highlighted app. In the list: Up/Down and j/k move, Up on the top row goes to the field,
+  Home/End, PgUp/PgDn; another letter goes to the field and is typed there. Esc closes. Pointer: a
+  click selects a row, a double click opens.
+- **Several files:** all of them in one launch. And Enter on several marked files groups them too:
+  files with the same default app go in one `gio launch` (one viewer for five images).
+- **Folders:** allowed (VS Code and Nemo list `inode/directory`).
+- **Set as default** (F7.3.1): "Always use for <type>", the type gio sees (what opening uses; an
+  empty file's `application/x-zerosize` is named as such). Written by `gio mime <type> <app>`
+  into `~/.config/mimeapps.list`; a type that `hyprland-mimeapps.list` (read first) sets is said,
+  not silently shadowed. Ctrl+Z puts the old default back (no old one: ofx removes the line).
 
 ## F6.4 design (2026-10-24)
 

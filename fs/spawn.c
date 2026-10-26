@@ -167,6 +167,27 @@ static bool spawn_capture(char *const *argv, char *out, size_t cap, int timeout_
     return true;
 }
 
+// The type gio gives path (its content read, as `gio open` types it: an empty file is
+// application/x-zerosize) into out; false, out empty, when gio doesn't say within timeout_ms. For
+// the Properties panel's MIME type (Michael, 2026-10-26).
+static bool spawn_gio_type(const char *path, char *out, size_t cap, int timeout_ms)
+{
+    char buf[4096];
+    bool late = false;
+    Err err;
+    char *argv[] = { "gio", "info", "-a", "standard::content-type", "--", (char *)path, NULL };
+    out[0] = 0;
+    if (!spawn_capture(argv, buf, sizeof buf, timeout_ms, &late, &err) || late) return false;
+    const char *key = "\n  standard::content-type: ";
+    char *at = strstr(buf, key);
+    if (!at) return false;
+    at += strlen(key);
+    size_t n = strcspn(at, "\n");
+    if (n == 0 || n >= cap) return false;
+    memcpy(out, at, n), out[n] = 0;
+    return true;
+}
+
 // The command that ejects the drive dev: unmount, then power off, each step saying it went (an
 // exit status can't be read, spawn_capture).
 static void eject_argv(const char *dev, const char **argv)

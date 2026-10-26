@@ -290,3 +290,39 @@ static isize mime_icon_names(Arena *a, const MimeDb *db, Str type, Str *names)
     if (!str_eq(media, S("application"))) names[n++] = S("application-x-generic");
     return n;
 }
+
+// ---- the type's name ------------------------------------------------------------------------
+
+// The type's name in words ("Plain text document" for text/plain) into out: the first <comment>
+// without xml:lang in mime/<type>.xml of the first data dir that has it (the user's own first), its
+// entities read. False, out empty, when none says (F7.2's Type line, Michael, 2026-10-26).
+static bool mime_comment(Arena *scratch, Str type, char *out, size_t cap)
+{
+    out[0] = 0;
+    isize slash = str_find(type, '/');
+    if (slash <= 0 || str_find(str_cut(type, slash + 1, type.len), '/') >= 0 || type.p[0] == '.')
+        return false;   // one media/subtype: no "..", so nothing outside mime/ is read
+    ArenaMark mark = arena_mark(scratch);
+    const char *dirs[MIME_DIRS_MAX];
+    isize nd = data_dirs(scratch, dirs, MIME_DIRS_MAX);
+    for (isize k = 0; k < nd && !out[0]; k++) {
+        Str x = read_file(scratch, arena_sprintf(scratch, "%s/mime/%.*s.xml", dirs[k], STR_ARG(type)));
+        char *at = x.len ? strstr(arena_cstr(scratch, x), "<comment>") : NULL;
+        if (!at) continue;
+        at += strlen("<comment>");
+        char *end = strstr(at, "</comment>");
+        if (!end) continue;
+        size_t n = 0;
+        static const struct { const char *e; char c; } ents[] = { { "&amp;", '&' }, { "&lt;", '<' }, { "&gt;", '>' }, { "&quot;", '"' }, { "&apos;", '\'' } };
+        while (at < end && n + 1 < cap) {
+            int which = -1;
+            for (int e = 0; *at == '&' && e < (int)COUNT(ents); e++)
+                if (strncmp(at, ents[e].e, strlen(ents[e].e)) == 0) which = e;
+            if (which >= 0) out[n++] = ents[which].c, at += strlen(ents[which].e);
+            else out[n++] = *at++;
+        }
+        out[n] = 0;
+    }
+    arena_restore(scratch, mark);
+    return out[0] != 0;
+}

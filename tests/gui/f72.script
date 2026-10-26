@@ -7,6 +7,8 @@ key enter
 expect sel=notes.txt
 key ctrl-i
 wait-for 2000 props=1 propat=0 propcan=1 propn=1 propmode=0644 propname=notes.txt modal=props propwhere=~/tree propdrive=File_System proplink=- propcreated=1 propidx=4
+# Its MIME type as gio has it, in words from shared-mime-info (Michael, 2026-10-26)
+expect proptype=text/plain proptypename=Plain_text_document propbyname=0
 shot props-file.png
 # ---- the keys: arrows and h j k l move, stopping at the edges; Space and Enter flip at once
 key left
@@ -55,7 +57,7 @@ type dir
 key enter
 expect sel=dir
 key ctrl-i
-wait-for 3000 propdone=1 propdirs=2 propfiles=2 propbytes=30 propcut=0 propname=dir
+wait-for 3000 propdone=1 propdirs=2 propfiles=2 propbytes=30 propcut=0 propname=dir proptype=inode/directory proptypename=Folder
 shot props-dir.png
 key esc
 # ---- a link: its target's permissions, changed through it
@@ -129,6 +131,37 @@ raw-key 73 2
 expect props=0
 raw-key 257 4
 sh [ "$(grep -c "xdg-terminal-exec --dir=$OFX_DIR\$" "$OFX_ROOT/spawn.log")" = 2 ]
+# ---- hard links (Michael, 2026-10-26): both totals; a file's names
+sh mkdir "$OFX_DIR/dir/hl" && printf 0123456789 > "$OFX_DIR/dir/hl/a" && ln "$OFX_DIR/dir/hl/a" "$OFX_DIR/dir/hl/b" && printf 01234 > "$OFX_DIR/dir/hl/c" && : > "$OFX_DIR/dir/hl/e.txt"
+char /
+type dir
+key enter
+key enter
+char /
+type hl
+key enter
+expect sel=hl
+key ctrl-i
+wait-for 3000 propdone=1 propfiles=4 propbytes=25 proplinks=2,1,15,0
+shot props-links.png
+key esc
+key enter
+char /
+type b
+key enter
+key ctrl-i
+wait-for 2000 propname=b propnlink=2
+key esc
+# An empty file: gio reads it as application/x-zerosize, whatever its name says
+char /
+type e.txt
+key enter
+key ctrl-i
+wait-for 2000 propname=e.txt proptype=application/x-zerosize propbyname=0
+key esc
+key backspace
+key backspace
+expect sel=dir
 # ---- the trash view: shown, not changeable
 char /
 type run.sh

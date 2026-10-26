@@ -77,6 +77,41 @@ static void test_du_walk(void)
     // Without a generation to watch (no stop), without a tick.
     DuWalk plain = { 0 };
     CHECK(du_walk(&plain, one, 1, &s) && s.dirs == 3);
+    // Hard links: every name counted, and each file once (a, its two other names, one in a sub
+    // folder; c alone). Without the slots, nothing told apart; the slots cleared for each walk.
+    static DuInode slots[DU_INODES];
+    mkdirs(at("f72du/hl/in"));
+    put(at("f72du/hl/a"), "0123456789");
+    put(at("f72du/hl/c"), "012");
+    CHECK(link(at("f72du/hl/a"), at("f72du/hl/b")) == 0 && link(at("f72du/hl/a"), at("f72du/hl/in/a2")) == 0);
+    const char *hl[] = { at("f72du/hl") };
+    DuWalk lw = { .inodes = slots };
+    CHECK(du_walk(&lw, hl, 1, &s) && s.files == 4 && s.bytes == 33);
+    CHECK(s.linked_names == 3 && s.linked_files == 1 && s.once_bytes == 13 && !s.once_over);
+    CHECK(du_walk(&lw, hl, 1, &s) && s.linked_files == 1 && s.once_bytes == 13);
+    CHECK(du_walk(&plain, hl, 1, &s) && s.linked_names == 0 && s.once_bytes == 33);
+    // A root that is a linked file counts the same, and as a name of a file seen inside another root.
+    const char *hl2[] = { at("f72du/hl/b"), at("f72du/hl") };
+    CHECK(du_walk(&lw, hl2, 2, &s) && s.files == 5 && s.linked_names == 4 && s.linked_files == 1 && s.once_bytes == 13);
+    // More linked files than slots: each one past them counted as new, and said.
+    for (isize i = 0; i < DU_INODES; i++) slots[i] = (DuInode){ 1, (u64)i + 1 };
+    DuSum full = { 0 };
+    struct stat st;
+    CHECK(lstat(at("f72du/hl/a"), &st) == 0);
+    du_file(&lw, &st, &full), du_file(&lw, &st, &full);
+    CHECK(full.linked_names == 2 && full.linked_files == 2 && full.once_bytes == 20 && full.once_over);
+    // The same inode number on another drive is another file.
+    memset(slots, 0, sizeof slots);
+    DuSum two = { 0 };
+    struct stat other = st;
+    other.st_dev = st.st_dev + 1;
+    du_file(&lw, &st, &two), du_file(&lw, &other, &two);
+    CHECK(two.linked_files == 2 && two.once_bytes == 20);
+    // Every slot holding its inode number on another drive: none of them is it.
+    for (isize i = 0; i < DU_INODES; i++) slots[i] = (DuInode){ (u64)other.st_dev + 1, (u64)st.st_ino };
+    DuSum taken = { 0 };
+    du_file(&lw, &st, &taken);
+    CHECK(taken.linked_files == 1 && taken.once_bytes == 10 && taken.once_over);
 }
 
 static void test_chmod(void)
@@ -335,4 +370,72 @@ static void test_step_round(void)
     ui_set_cols(&g8.list, 3);
     props_keys(&g8, 1, UK_PAGEDOWN);   // a page of 3 rows from 0: past the end, column 0 of the last row
     CHECK(g8.list.sel == 6);
+}
+
+// The Type line's words: the untranslated <comment>, entities read, the user's data dir first;
+// a type that would leave mime/ is refused.
+static void test_mime_comment(void)
+{
+    mkdirs(at("f72mc/home/mime/text"));
+    mkdirs(at("f72mc/sys/mime/text"));
+    mkdirs(at("f72mc/sys/mime/image"));
+    put(at("f72mc/home/mime/text/x-mine.xml"), "<mime-type type=\"text/x-mine\">\n  <comment xml:lang=\"nl\">Mijn</comment>\n"
+                                               "  <comment>Tom &amp; Jerry&apos;s &lt;notes&gt; &quot;x&quot; &bogus;</comment>\n</mime-type>\n");
+    put(at("f72mc/sys/mime/text/x-mine.xml"), "<comment>shadowed</comment>");
+    put(at("f72mc/sys/mime/image/x-cut.xml"), "<comment>never closed");
+    put(at("f72mc/sys/mime/image/x-none.xml"), "<mime-type/>");
+    // What a type with ".." would reach, outside mime/: never read.
+    put(at("f72mc/sys/mime/x.xml"), "<comment>above</comment>");
+    put(at("f72mc/sys/x.xml"), "<comment>outside</comment>");
+    put(at("f72mc/sys/mime/text/x.xml"), "<comment>beside</comment>");
+    env_set("XDG_DATA_HOME", at("f72mc/home"));
+    env_set("XDG_DATA_DIRS", at("f72mc/sys"));
+    char out[64];
+    CHECK(mime_comment(&ta, S("text/x-mine"), out, sizeof out));
+    CHECK(strcmp(out, "Tom & Jerry's <notes> \"x\" &bogus;") == 0);
+    char tiny[5];
+    memset(tiny, 'X', sizeof tiny);
+    CHECK(mime_comment(&ta, S("text/x-mine"), tiny, sizeof tiny) && strcmp(tiny, "Tom ") == 0);
+    CHECK(!mime_comment(&ta, S("image/x-cut"), out, sizeof out) && out[0] == 0);
+    CHECK(!mime_comment(&ta, S("image/x-none"), out, sizeof out));
+    CHECK(!mime_comment(&ta, S("image/x-gone"), out, sizeof out));
+    const char *bad[] = { "x", "/x", "../x", "text/../../x", "../text/x-mine", "text/../x" };
+    for (int i = 0; i < COUNT(bad); i++) CHECK(!mime_comment(&ta, str_from_c(bad[i]), out, sizeof out));
+    env_restore();
+}
+
+// gio's type for a path: the content-type line of `gio info`, nothing when it lacks one, takes too
+// long, or gives more than fits.
+static void test_gio_type(void)
+{
+    char out[32];
+    mkdirs(at("f72gio/ok"));
+    mkdirs(at("f72gio/none"));
+    mkdirs(at("f72gio/slow"));
+    mkdirs(at("f72gio/long"));
+    put(at("f72gio/ok/gio"), "#!/bin/sh\necho \"$*\" > \"${0%/*}/args\"\n"
+                             "printf 'uri: file:///x\\nattributes:\\n  standard::content-type: application/x-zerosize\\n'\n");
+    put(at("f72gio/none/gio"), "#!/bin/sh\nprintf 'uri: file:///x\\nattributes:\\n'\n");
+    put(at("f72gio/slow/gio"), "#!/bin/sh\nprintf 'attributes:\\n  standard::content-type: text/plain\\n'\nexec /usr/bin/sleep 5\n");
+    put(at("f72gio/long/gio"), "#!/bin/sh\nprintf 'attributes:\\n  standard::content-type: application/a-type-longer-than-the-room\\n'\n");
+    const char *dirs[] = { "ok", "none", "slow", "long" };
+    for (int i = 0; i < COUNT(dirs); i++) chmod(at("f72gio/%s/gio", dirs[i]), 0755);
+    env_set("PATH", at("f72gio/ok"));
+    CHECK(spawn_gio_type("/a b", out, sizeof out, 2000) && strcmp(out, "application/x-zerosize") == 0);
+    char args[256];
+    CHECK(wait_file(at("f72gio/ok/args"), args, sizeof args) && strcmp(args, "info -a standard::content-type -- /a b") == 0);
+    env_restore();
+    env_set("PATH", at("f72gio/none"));
+    CHECK(!spawn_gio_type("/a", out, sizeof out, 2000) && out[0] == 0);
+    env_restore();
+    env_set("PATH", at("f72gio/slow"));
+    i64 t0 = now_ms();
+    CHECK(!spawn_gio_type("/a", out, sizeof out, 200) && out[0] == 0 && now_ms() - t0 < 2000);
+    env_restore();
+    env_set("PATH", at("f72gio/long"));
+    CHECK(!spawn_gio_type("/a", out, sizeof out, 2000) && out[0] == 0);
+    env_restore();
+    env_set("PATH", at("f72gio/empty-dir-not-there"));
+    CHECK(!spawn_gio_type("/a", out, sizeof out, 2000) && out[0] == 0);
+    env_restore();
 }

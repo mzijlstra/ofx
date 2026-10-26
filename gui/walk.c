@@ -20,7 +20,8 @@ static struct {
     bool            done, fresh;   // the walk for sum_gen ended; sums came since walk_take
 } walk = { .mu = PTHREAD_MUTEX_INITIALIZER, .cv = PTHREAD_COND_INITIALIZER };
 
-static char walk_roots[WALK_ROOTS_MAX][PATH_MAX];   // the thread's copy of the roots
+static char    walk_roots[WALK_ROOTS_MAX][PATH_MAX];   // the thread's copy of the roots
+static DuInode walk_inodes[DU_INODES];                 // the linked files the walk has seen
 
 static void walk_tick(void *ctx, const DuSum *s)
 {
@@ -45,7 +46,8 @@ static void *walk_loop(void *arg)
         pthread_mutex_unlock(&walk.mu);
         const char *roots[WALK_ROOTS_MAX];
         for (isize i = 0; i < n; i++) roots[i] = walk_roots[i];
-        DuWalk w = { .gen = &walk.gen, .mine = gen, .tick = walk_tick, .ctx = (void *)(uintptr_t)gen };
+        DuWalk w = { .gen = &walk.gen, .mine = gen, .tick = walk_tick, .ctx = (void *)(uintptr_t)gen,
+                    .inodes = walk_inodes };
         DuSum s;
         bool whole = du_walk(&w, roots, n, &s);
         pthread_mutex_lock(&walk.mu);

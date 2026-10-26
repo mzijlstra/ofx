@@ -1589,6 +1589,8 @@ int main(void)
     test_apps();
     test_spawn_launch();
     test_du_walk();
+    test_mime_comment();
+    test_gio_type();
     test_chmod();
     test_props_keys();
     test_step_round();

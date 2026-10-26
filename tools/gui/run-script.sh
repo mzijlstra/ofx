@@ -46,6 +46,9 @@ for f in uwsm-app gio xdg-open xdg-terminal-exec; do   # xdg-open: ofx's opener 
     printf '#!/bin/sh\necho "%s $*" >> "%s/spawn.log"\n' "$f" "$T" > "$T/fakes/$f"
     chmod +x "$T/fakes/$f"
 done
+# gio info (the Properties panel's MIME type) only reads: the real gio answers it, unlogged.
+real_gio=$(command -v gio)
+printf '#!/bin/sh\nif [ "$1" = info ]; then exec %s "$@"; fi\necho "gio $*" >> "%s/spawn.log"\n' "$real_gio" "$T" > "$T/fakes/gio"
 # udisksctl (eject, F6.1): logs too, and fails the step named in <scratch-dir>/udisks-fail.
 cat > "$T/fakes/udisksctl" <<EOS
 #!/bin/sh

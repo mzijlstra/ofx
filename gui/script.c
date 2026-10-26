@@ -262,6 +262,10 @@ static void script_state(char *out, size_t cap)
     snprintf(propname, sizeof propname, "%s", props.name[0] ? props.name : "-");
     for (char *c = propname; *c; c++)
         if (*c == ' ') *c = '_';
+    char proptypename[128];   // its type in words, spaces as '_'
+    snprintf(proptypename, sizeof proptypename, "%s", props.type_name[0] ? props.type_name : "-");
+    for (char *c = proptypename; *c; c++)
+        if (*c == ' ') *c = '_';
     char propwhere[PATH_MAX], propdrive[256], proplink[PATH_MAX];
     snprintf(propwhere, sizeof propwhere, "%s", props.where[0] ? props.where : "-");
     snprintf(propdrive, sizeof propdrive, "%s", props.drive[0] ? props.drive : "-");
@@ -298,7 +302,7 @@ static void script_state(char *out, size_t cap)
              "zoom=%d cellw=%d cellh=%d zoomshown=%d tipin=%d slots=%d "
              "previews=%d thumbsel=%s thumbbox=%s thumbbusy=%d thumbmade=%d thumbread=%d thumbfailed=%d thumbknown=%d thumbnone=%d thumbchanged=%d "
              "thumbheld=%td thumbdropped=%d thumbresets=%d thumblocal=%d menu=%s menuat=%s menuoff=%s menuhover=%d canwrite=%d windows=%d siderows=%d footerin=%d "
-             "props=%d propat=%d propcan=%d propn=%td propmode=%04o propfiles=%lld propdirs=%lld propbytes=%lld propdone=%d propcut=%d propname=%s "
+             "props=%d propat=%d propcan=%d propn=%td propmode=%04o propfiles=%lld propdirs=%lld propbytes=%lld propdone=%d propcut=%d proplinks=%lld,%lld,%lld,%d propnlink=%llu proptype=%s proptypename=%s propbyname=%d propname=%s "
              "propwhere=%s propdrive=%s proplink=%s propcreated=%d propidx=%td status=%s",
              app.cwd, app.list.n, app.list.hidden, STR_ARG(sel), app.ui.list.sel, app.ui.list.top, app.ui.list.rows, app.hover,
              t->accent.r, t->accent.g, t->accent.b, t->bg.r, t->bg.g, t->bg.b, t->icons[0] ? t->icons : "-",
@@ -323,7 +327,10 @@ static void script_state(char *out, size_t cap)
              app.ui.menu_on ? UI_MENU[app.ui.menu].title : "-", menuat, menuoff, app.menu_title_hover, app.ui.can_write, windows,
              app.ui.side.rows, footerin,
              app.ui.props, app.ui.prop_at, app.ui.prop_can, props.n, props.have ? (unsigned)(props.st.st_mode & 07777) : 0u,
-             (long long)props.sum.files, (long long)props.sum.dirs, (long long)props.sum.bytes, props.done, props.sum.cut || props.cut, propname,
+             (long long)props.sum.files, (long long)props.sum.dirs, (long long)props.sum.bytes, props.done, props.sum.cut || props.cut,
+             (long long)props.sum.linked_names, (long long)props.sum.linked_files, (long long)props.sum.once_bytes, props.sum.once_over,
+             props.have ? (unsigned long long)props.st.st_nlink : 0ull,
+             props.type[0] ? props.type : "-", proptypename, props.type_by_name, propname,
              propwhere, propdrive, proplink, props.btime >= 0, props.idx, app.status[0] ? app.status : "-");
     frame_us_max = 0;
 }

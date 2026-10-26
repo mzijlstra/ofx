@@ -2404,6 +2404,8 @@ typedef struct {
     struct stat st;
     i64         btime;      // its creation (statx), -1 when the file system doesn't say
     char        owner[64], group[64];
+    char        type[128], type_name[128];   // one entry's MIME type, as gio has it, and its words
+    bool        type_by_name;                // the type from its name only (gio didn't say)
     DuSum       sum;
     bool        done;
 } Props;
@@ -2500,6 +2502,14 @@ static void props_open(void)
     if (n == 1) {
         snprintf(props.name, sizeof props.name, "%.*s", STR_ARG(base.len ? base : S("/")));
         if (app.ui.in_trash && props.idx >= 0) snprintf(props.name, sizeof props.name, "%.*s", STR_ARG(app.list.e[props.idx].name));
+        // The type gio opens it as, its content read (Michael, 2026-10-26); on a network drive,
+        // whose reads can hang (F6.4), or when gio doesn't say, the name's.
+        props.type_by_name = !app.thumb_local || !spawn_gio_type(props_path[0], props.type, sizeof props.type, 1000);
+        if (props.type_by_name) {
+            Str type = props.idx >= 0 ? entry_mime(props.idx) : S("inode/directory");
+            snprintf(props.type, sizeof props.type, "%.*s", STR_ARG(type));
+        }
+        mime_comment(&scratch, str_from_c(props.type), props.type_name, sizeof props.type_name);
     }
     if (app.ui.in_trash) snprintf(props.where, sizeof props.where, "Trash");
     else ui_tilde(props.where, sizeof props.where, n == 1 ? d : app.cwd, getenv("HOME"));
@@ -2563,6 +2573,19 @@ static const char *props_counts(bool less_root)
                          props.done ? "" : " \xE2\x80\xA6 counting", props.sum.cut || props.cut ? " (some unreadable)" : "");
 }
 
+// The hard links among the sums, when there are any (Michael, 2026-10-26): "5 names of 2 files;
+// 1.1 GiB (… bytes) counting each once". NULL when there are none.
+static const char *props_links(void)
+{
+    if (props.sum.linked_names == 0) return NULL;
+    char sz[32], b[32];
+    ui_size(sz, sizeof sz, props.sum.once_bytes);
+    props_digits(b, sizeof b, props.sum.once_bytes);
+    return arena_sprintf(&frame, "%lld names of %lld %s; %s%s (%s bytes) counting each once", (long long)props.sum.linked_names,
+                         (long long)props.sum.linked_files, props.sum.linked_files == 1 ? "file" : "files",
+                         props.sum.once_over ? "at most " : "", sz, b);
+}
+
 static void layout_props_panel(void)
 {
     Theme *t = &app.theme;
@@ -2589,14 +2612,20 @@ static void layout_props_panel(void)
             props_line("Contents", "empty");
         } else if (props.n > 1) {
             props_line("Contents", props_counts(false));
+            if (props_links()) props_line("Hard links", props_links());
             props_line("Location", props.where);
             props_line("Drive", props.drive);
         } else {
             char when[64], sz[32], b[32];
-            if (props.have && S_ISDIR(props.st.st_mode)) props_line("Contents", props_counts(true));
-            else if (props.have) {
+            props_line("MIME type", arena_sprintf(&frame, "%s%s%s%s%s", props.type, props.type_name[0] ? " (" : "", props.type_name,
+                                                  props.type_name[0] ? ")" : "", props.type_by_name ? ", by its name" : ""));
+            if (props.have && S_ISDIR(props.st.st_mode)) {
+                props_line("Contents", props_counts(true));
+                if (props_links()) props_line("Hard links", props_links());
+            } else if (props.have) {
                 ui_size(sz, sizeof sz, props.st.st_size), props_digits(b, sizeof b, props.st.st_size);
                 props_line("Size", arena_sprintf(&frame, "%s bytes (%s)", b, sz));
+                if (props.st.st_nlink > 1) props_line("Hard links", arena_sprintf(&frame, "%llu names", (unsigned long long)props.st.st_nlink));
             }
             props_line("Location", props.where);
             props_line("Drive", props.drive);
