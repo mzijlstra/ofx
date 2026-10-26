@@ -206,7 +206,7 @@ app ofx-t-view "Ofx T View" "Icon=$T/abs-icon.png\\nMimeType=image/png;\\n"
 app ofx-t-code "Ofx T Code" 'Icon=utilities-terminal\nMimeType=text/plain;inode/directory;\n'
 app ofx-t-helper "Ofx T Helper" 'NoDisplay=true\nMimeType=text/plain;\n'
 app ofx-t-hidden "Ofx T Hidden" 'NoDisplay=true\n'
-app ofx-t-other "Ofx T Other" ''
+app ofx-t-other "Ofx T Other" 'Icon=ofx-t-no-such-icon\n'
 printf '1 0 0:1 / / rw - ext4 /dev/x rw\n' > "$T/mountinfo"
 echo "== f73"; OFX_TEST_HOME="$H" OFX_TEST_MOUNTINFO="$T/mountinfo" "$here/../../tools/gui/run-script.sh" "$T" "$here/f73.script" "$bin" "$H/tree" || failed f73
 fi

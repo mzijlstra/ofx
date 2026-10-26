@@ -233,7 +233,7 @@ static bool apps_default(Arena *a, Str type, char *out, size_t cap)
 
 enum { APPS_MAX = 1024, APPS_DEPTH_MAX = 3 };
 
-typedef enum { AS_DEFAULT, AS_RECOMMENDED, AS_OTHER, AS_NONE } AppSection;
+typedef enum { AS_DEFAULT, AS_RECOMMENDED, AS_RELATED, AS_OTHER, AS_NONE } AppSection;
 
 typedef struct {
     Str        id;          // its desktop id, "org.gnome.TextEditor.desktop" (a folder's dashes: kde-foo.desktop)
@@ -313,10 +313,11 @@ static int apps_order(const void *pa, const void *pb)
     return c ? c : x->id.len < y->id.len ? -1 : x->id.len > y->id.len;
 }
 
-// apps sorted for type: its default app first, then the recommended ones (that name it, a parent
-// or an alias in MimeType=, or a list names for it; less what a list removes), then the rest by
-// name; a NoDisplay app only when recommended (AS_NONE, at the end, otherwise). Returns how many are
-// shown (all but AS_NONE).
+// apps sorted for type: its default app first, then the recommended ones (that name it or an alias
+// in MimeType=, or a list names for it; less what a list removes for it), then the related ones
+// (the same for its parent types: GTK's chooser lists them apart, reviewer-2 and Michael,
+// 2026-10-26), then the rest by name; a NoDisplay app only when recommended (AS_NONE, at the end,
+// otherwise). Returns how many are shown (all but AS_NONE).
 static isize apps_rank(Arena *a, Apps *apps, Str type)
 {
     ArenaMark mark = arena_mark(a);
@@ -329,27 +330,38 @@ static isize apps_rank(Arena *a, Apps *apps, Str type)
     Str types[APPS_TYPES_MAX], names[APPS_TYPES_MAX * 4];
     Str canon = type;
     apps_names(a, &canon, names, APPS_TYPES_MAX);
-    isize nt = apps_types(a, canon, types, APPS_TYPES_MAX), nn = 0;
+    isize nt = apps_types(a, canon, types, APPS_TYPES_MAX), nn = 0, nself = 0;
     for (isize t = 0; t < nt; t++) {
         Str tt = types[t], one[APPS_TYPES_MAX];
         isize k1 = apps_names(a, &tt, one, APPS_TYPES_MAX);
         for (isize j = 0; j < k1 && nn < COUNT(names); j++) names[nn++] = one[j];
+        if (t == 0) nself = nn;   // the type and its aliases; the parents' after them
     }
-    Str removed = STR_EMPTY, listed = STR_EMPTY;
-    for (isize k = 0; k < nl; k++) {
-        removed = apps_removed(a, text[k], names, nn, removed);
-        for (isize j = 0; j < nn; j++) {
-            Str add = ini_get(text[k], S("Added Associations"), names[j]), dflt = ini_get(text[k], S("Default Applications"), names[j]);
-            listed = str_from_c(arena_sprintf(a, "%.*s;%.*s;%.*s", STR_ARG(listed), STR_ARG(add), STR_ARG(dflt)));
+    // For the type itself (scope 0, names[0, nself)) and with its parents (1, all of names): what
+    // the lists add or set, and what they remove.
+    Str removed[2] = { STR_EMPTY, STR_EMPTY }, listed[2] = { STR_EMPTY, STR_EMPTY };
+    for (int sc = 0; sc < 2; sc++) {
+        isize upto = sc ? nn : nself;
+        for (isize k = 0; k < nl; k++) {
+            removed[sc] = apps_removed(a, text[k], names, upto, removed[sc]);
+            for (isize j = 0; j < upto; j++) {
+                Str add = ini_get(text[k], S("Added Associations"), names[j]), dflt = ini_get(text[k], S("Default Applications"), names[j]);
+                listed[sc] = str_from_c(arena_sprintf(a, "%.*s;%.*s;%.*s", STR_ARG(listed[sc]), STR_ARG(add), STR_ARG(dflt)));
+            }
         }
     }
     isize shown = 0;
     for (isize i = 0; i < apps->n; i++) {
         App *p = &apps->a[i];
-        bool names_it = apps_listed(listed, p->id);
-        for (isize j = 0; j < nn && !names_it; j++) names_it = apps_listed(p->mimes, names[j]);
-        if (apps_listed(removed, p->id)) names_it = false;
-        p->section = have_def && str_eq(p->path, str_from_c(def)) ? AS_DEFAULT : names_it ? AS_RECOMMENDED : p->nodisplay ? AS_NONE : AS_OTHER;
+        bool own = apps_listed(listed[0], p->id), related = apps_listed(listed[1], p->id);
+        for (isize j = 0; j < nn; j++)
+            if (apps_listed(p->mimes, names[j])) own |= j < nself, related = true;
+        own &= !apps_listed(removed[0], p->id), related &= !apps_listed(removed[1], p->id);
+        p->section = have_def && str_eq(p->path, str_from_c(def)) ? AS_DEFAULT
+                   : own                                          ? AS_RECOMMENDED
+                   : related && !p->nodisplay                     ? AS_RELATED
+                   : p->nodisplay                                 ? AS_NONE
+                                                                  : AS_OTHER;
         shown += p->section != AS_NONE;
     }
     arena_restore(a, mark);

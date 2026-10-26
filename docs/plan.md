@@ -490,6 +490,14 @@ process, one window), one page; only for showing a file's properties and changin
   C locale (no `setlocale`), so `.` is a byte and case folding is ASCII, as for plain text.
   Decision for Michael: "Recommended" holds the parent types' apps too, which GTK's chooser lists
   apart as "Related" (broader than GTK's on 629 of 1,477 types).
+- After Michael's try (2026-10-26): "Related" apart (his pick): Recommended names the type or an
+  alias, Related a parent type (a NoDisplay one stays out of it). Regular expressions run in
+  C.UTF-8 (`uselocale` around regcomp and regexec only): `.` is a character, case folds é/É;
+  plain text still folds ASCII only. Two bugs he found: the list was empty until a key or click
+  (it was filtered on the frame after the panel opened, and an idle window draws no other: now at
+  once, and f73 checks that frame), and every app had the generic icon (the theme's Apps folders
+  weren't read; now they are, +6 ms at start, with pixmaps/ and an Icon= PNG path). An SVG-only
+  icon (Omawrite, Omacalc, Foliate) still gets the generic one: ofx draws PNG.
 
 ## F6.4 design (2026-10-24)
 

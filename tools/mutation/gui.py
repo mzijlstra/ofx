@@ -317,6 +317,12 @@ MUTANTS = [
     (G, '        if (app.ui.ow) in.app_name = ow.names, in.app_n = ow.shown < UI_APPS_MAX ? ow.shown : UI_APPS_MAX;', '', 'f73'),
     (G, '    case GLFW_KEY_TAB: return m == 0 || m == GLFW_MOD_SHIFT ? UK_TAB : UK_NONE;', '    case GLFW_KEY_TAB: return m == 0 ? UK_TAB : UK_NONE;', 'f73'),
     (G, '    ui_resize(&app.ui.ow_list, ow_rows(GetScreenHeight()));   // Open With\'s list (F7.3)', '', 'f73'),
+    # ---- after Michael's try: listed at once, the apps' icons
+    (OW, '    ui_ow_filter(&app.ui, &in);\n}', '}', 'f73'),
+    (OW, '        if (str_ends_with(icon, S(".png")) && access(f, R_OK) == 0) file = f;', '', 'f73'),
+    (OW, '            if (access(f, R_OK) == 0) file = f;', '', 'f73'),
+    (OW, '    return s && s->tex.id ? s : icon_for(generic, &generic, 1);   // none found: the generic one, every frame', '    return s;', 'f73'),
+    (G, '    if (!file) file = or_file;', '', 'f73'),
 ]
 import concurrent.futures, queue, threading
 

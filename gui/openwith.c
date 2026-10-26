@@ -125,24 +125,26 @@ static IconSlot *ow_icon(Str icon)
     if (icon.len == 0) return icon_for(generic, &generic, 1);
     Str key = str_from_c(arena_sprintf(&frame, "app:%.*s", STR_ARG(icon)));
     int k;
-    if (strmap_get(&app.slot_of, key, &k)) return &app.slot[k];
-    ArenaMark mark = arena_mark(&scratch);
-    const char *file = NULL;
-    bool path = icon.p[0] == '/';
-    if (path) {
-        char *f = arena_cstr(&scratch, icon);
-        if (str_ends_with(icon, S(".png")) && access(f, R_OK) == 0) file = f;
-    } else {
-        const char *dirs[MIME_DIRS_MAX];
-        isize nd = data_dirs(&scratch, dirs, MIME_DIRS_MAX);
-        for (isize d = 0; d < nd && !file; d++) {
-            char *f = arena_sprintf(&scratch, "%s/pixmaps/%.*s.png", dirs[d], STR_ARG(icon));
-            if (access(f, R_OK) == 0) file = f;
+    IconSlot *s = strmap_get(&app.slot_of, key, &k) ? &app.slot[k] : NULL;
+    if (!s) {
+        ArenaMark mark = arena_mark(&scratch);
+        const char *file = NULL;
+        bool path = icon.p[0] == '/';
+        if (path) {
+            char *f = arena_cstr(&scratch, icon);
+            if (str_ends_with(icon, S(".png")) && access(f, R_OK) == 0) file = f;
+        } else {
+            const char *dirs[MIME_DIRS_MAX];
+            isize nd = data_dirs(&scratch, dirs, MIME_DIRS_MAX);
+            for (isize d = 0; d < nd && !file; d++) {
+                char *f = arena_sprintf(&scratch, "%s/pixmaps/%.*s.png", dirs[d], STR_ARG(icon));
+                if (access(f, R_OK) == 0) file = f;
+            }
         }
+        s = icon_for_px_or(key, &icon, path ? 0 : 1, ICON_PX, file);   // (a path: no theme name to try)
+        arena_restore(&scratch, mark);
     }
-    IconSlot *s = icon_for_px_or(key, &icon, path ? 0 : 1, ICON_PX, file);   // (a path: no theme name to try)
-    arena_restore(&scratch, mark);
-    return s && s->tex.id ? s : icon_for(generic, &generic, 1);
+    return s && s->tex.id ? s : icon_for(generic, &generic, 1);   // none found: the generic one, every frame
 }
 
 // The rows the list shows for a window h high: OW_ROWS_MAX, fewer in a small window.
@@ -179,7 +181,7 @@ static void layout_ow_panel(void)
 {
     Theme *t = &app.theme;
     Ui *u = &app.ui;
-    static const char *const SECTION[] = { "Default", "Recommended", "Other applications" };
+    static const char *const SECTION[] = { "Default", "Recommended", "Related", "Other applications" };
     CLAY(CLAY_ID("ow"), { .layout = { .sizing = { CLAY_SIZING_FIXED(OW_W), CLAY_SIZING_FIT(0) }, .padding = { 24, 24, 20, 20 }, .childGap = 10,
                                       .layoutDirection = CLAY_TOP_TO_BOTTOM },
                           .backgroundColor = cc(t->bg_light),

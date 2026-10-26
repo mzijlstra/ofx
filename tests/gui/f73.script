@@ -29,7 +29,7 @@ expect owapp=ofx-t-code.desktop owicon=utilities-terminal.png
 char j
 expect owapp=ofx-t-helper.desktop owicon=application-x-executable.png
 char j
-expect owapp=ofx-t-other.desktop
+expect owapp=ofx-t-other.desktop owicon=application-x-executable.png
 char j
 expect owapp=ofx-t-view.desktop owsel=4 owicon=abs-icon.png
 char j

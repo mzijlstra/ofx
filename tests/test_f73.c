@@ -46,6 +46,14 @@ static void test_match(void)
     CHECK(m_has(S("-"), "x*", rw) && !m_has(S("ab"), "x*", rw));   // an empty span between two boundaries
     // A match only past the end of what was given (the name is not NUL-terminated there).
     CHECK(!m_has((Str){ "abcdef", 3 }, "def", re) && !m_has((Str){ "abcdef", 3 }, "c$x", re) && m_has((Str){ "abcdef", 3 }, "c$", re));
+    // Past ASCII (C.UTF-8): `.` is one character, case folds é and É; a name that isn't UTF-8
+    // goes through without harm (Michael, 2026-10-26).
+    CHECK(m_has(S("caf\xC3\xA9"), "^caf.$", re) && m_has(S("\xC3\xA9"), "^.$", re) && !m_has(S("\xC3\xA9"), "^..$", re));
+    CHECK(m_has(S("\xC3\x89T\xC3\x89"), "\xC3\xA9t\xC3\xA9", re) && !m_has(S("\xC3\x89T\xC3\x89"), "\xC3\xA9t\xC3\xA9", (UiMatchOpts){ .regex = true, .cased = true }));
+    CHECK(m_has(S("x \xC3\xA9t\xC3\xA9"), ".t.", (UiMatchOpts){ .regex = true, .word = true }));
+    CHECK(m_has(S("a\xFF\xFEz"), "z$", re) && !m_has(S("\xFF"), "^a", re));
+    m_has(S("a\xFF" "b"), "a.b", re), m_has(S("\xC3"), ".", (UiMatchOpts){ .regex = true, .word = true });   // (no crash either way)
+    CHECK(m_has(S("CAF\xC3\x89"), "caf\xC3\xA9", plain) == false);   // plain text folds ASCII only
     // A bad expression: nothing matches, and the reason; the next good one is compiled again.
     static UiMatcher m;
     ui_matcher_set(&m, S("a(b"), re);
@@ -151,7 +159,7 @@ static void test_find_toggles(void)
 // The section and place of the app with id in apps, "-" when it isn't listed.
 static const char *rank_of(const Apps *apps, const char *id, isize *place)
 {
-    static const char *const SEC[] = { "default", "recommended", "other", "none" };
+    static const char *const SEC[] = { "default", "recommended", "related", "other", "none" };
     for (isize i = 0; i < apps->n; i++)
         if (str_eq(apps->a[i].id, str_from_c(id))) return *place = i, SEC[apps->a[i].section];
     return *place = -1, "-";
@@ -193,7 +201,7 @@ static void test_apps_rank(void)
     app73("home/applications/edit.desktop", "[Desktop Entry]\nType=Application\nName=My editor\nIcon=accessories-text-editor\nMimeType=text/plain;text/markdown;\nExec=e %F\n");
     app73("home/applications/added.desktop", "[Desktop Entry]\nType=Application\nName=added\nHidden=true\n");   // deleted: the system's isn't there
     app73("sys/applications/plus.desktop", "[Desktop Entry]\nType=Application\nName=Plus\nExec=p\n");
-    app73("sys/mime/subclasses", "text/markdown text/plain\n");
+    app73("sys/mime/subclasses", "text/markdown text/plain\ntext/x-kid text/markdown\n");
     app73("sys/mime/aliases", "text/x-old text/markdown\n");
     app73("cfg/mimeapps.list", "[Default Applications]\ntext/markdown=md.desktop\n[Added Associations]\ntext/markdown=plus.desktop;\n"
                                   "[Removed Associations]\ntext/markdown=nope.desktop;\n");
@@ -208,11 +216,11 @@ static void test_apps_rank(void)
     CHECK(shown == 9);   // all but the hidden helper
     struct { const char *id, *sec; isize place; } want[] = {
         { "md.desktop", "default", 0 },          // the list's default
-        { "code.desktop", "recommended", 1 },    // text/plain, a parent; names folded: code < Helper < My editor
-        { "helper.desktop", "recommended", 2 },  // NoDisplay, but it names the type
-        { "edit.desktop", "recommended", 3 },    // the user's copy (My editor), not the system's
-        { "plus.desktop", "recommended", 4 },    // added by a list
-        { "zed.desktop", "recommended", 5 },     // by the type's alias
+        { "helper.desktop", "recommended", 1 },  // NoDisplay, but it names the type; names folded: Helper < My editor
+        { "edit.desktop", "recommended", 2 },    // the user's copy (My editor), not the system's
+        { "plus.desktop", "recommended", 3 },    // added by a list
+        { "zed.desktop", "recommended", 4 },     // by the type's alias
+        { "code.desktop", "related", 5 },        // text/plain, a parent's (GTK's "Related")
         { "kde-foo.desktop", "other", 6 },       // Foo
         { "gimp.desktop", "other", 7 },          // no Name: by its id
         { "nope.desktop", "other", 8 },          // removed by a list
@@ -223,7 +231,14 @@ static void test_apps_rank(void)
         CHECK(strcmp(sec, want[k].sec) == 0 && at_k == want[k].place);
         if (strcmp(sec, want[k].sec) != 0 || at_k != want[k].place) fprintf(stderr, "  %s: %s at %td\n", want[k].id, sec, at_k);
     }
-    CHECK(str_eq(apps.a[3].name, S("My editor")) && str_eq(apps.a[3].icon, S("accessories-text-editor")) && str_eq(apps.a[7].name, S("gimp.desktop")));
+    CHECK(str_eq(apps.a[2].name, S("My editor")) && str_eq(apps.a[2].icon, S("accessories-text-editor")) && str_eq(apps.a[7].name, S("gimp.desktop")));
+    // A type under text/markdown: the parent's default is its default; the apps for its parents are
+    // related, a NoDisplay one only for a parent not shown at all.
+    shown = apps_rank(&ta, &apps, S("text/x-kid"));
+    CHECK(strcmp(rank_of(&apps, "md.desktop", &at_k), "default") == 0 && strcmp(rank_of(&apps, "edit.desktop", &at_k), "related") == 0);
+    CHECK(strcmp(rank_of(&apps, "code.desktop", &at_k), "related") == 0 && strcmp(rank_of(&apps, "plus.desktop", &at_k), "related") == 0);
+    CHECK(strcmp(rank_of(&apps, "helper.desktop", &at_k), "none") == 0 && strcmp(rank_of(&apps, "nope.desktop", &at_k), "other") == 0);
+    CHECK(shown == 8);
     // A folder: who names inode/directory; no default.
     apps_rank(&ta, &apps, S("inode/directory"));
     CHECK(strcmp(rank_of(&apps, "code.desktop", &at_k), "recommended") == 0 && at_k == 0);

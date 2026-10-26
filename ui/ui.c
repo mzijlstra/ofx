@@ -6,6 +6,7 @@
 #include "../base/base.h"
 
 #include <limits.h>
+#include <locale.h>
 #include <regex.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -547,6 +548,28 @@ static UiAction ui_view(Ui *u, bool grid)
 
 // ---- matching (F7.3) ---------------------------------------------------------------------------
 
+// Regular expressions run in C.UTF-8 (glibc's own, whatever the user's locale): `.` is a character,
+// not a byte, and case folds past ASCII (é and É, Michael 2026-10-26). Only around regcomp and
+// regexec, on this thread: the rest of ofx keeps the C locale. (locale_t)0 when there is none:
+// then bytes, as before.
+static locale_t ui_utf8_locale(void)
+{
+    static locale_t loc;
+    static bool tried;
+    if (!tried) tried = true, loc = newlocale(LC_CTYPE_MASK, "C.UTF-8", (locale_t)0);
+    return loc;
+}
+
+static locale_t ui_utf8_on(void)
+{
+    return ui_utf8_locale() ? uselocale(ui_utf8_locale()) : (locale_t)0;
+}
+
+static void ui_utf8_off(locale_t was)
+{
+    if (was) uselocale(was);
+}
+
 // m to match text with o: a regular expression compiled (the one before freed); one that doesn't
 // compile leaves m bad, with regerror's words.
 static void ui_matcher_set(UiMatcher *m, Str text, UiMatchOpts o)
@@ -557,7 +580,9 @@ static void ui_matcher_set(UiMatcher *m, Str text, UiMatchOpts o)
     memcpy(m->text, text.p, (size_t)m->len);
     m->text[m->len] = 0;
     if (!o.regex || m->len == 0) return;
+    locale_t was = ui_utf8_on();
     int rc = regcomp(&m->re, m->text, REG_EXTENDED | (o.cased ? 0 : REG_ICASE));
+    ui_utf8_off(was);
     if (rc == 0) m->re_on = true;
     else m->bad = true, regerror(rc, NULL, m->err, sizeof m->err);
 }
@@ -574,30 +599,38 @@ static bool ui_whole(Str hay, isize from, isize to)
     return (from == 0 || !ui_word_byte((unsigned char)hay.p[from - 1])) && (to >= hay.len || !ui_word_byte((unsigned char)hay.p[to]));
 }
 
+// Whether hay matches m's expression (compiled, in C.UTF-8). With whole words: some span from a
+// boundary to a boundary that it matches in full. The longest match from a start may run past a
+// boundary a shorter one stops at (`-*-` in "--_ ", reviewer-2, F7.3 review), so each span is
+// tried: the leftmost-longest match within it is all of it exactly when the span matches. ^ and $
+// keep meaning the name's start and end (NOTBOL, NOTEOL inside it).
+static bool ui_match_re(const UiMatcher *m, Str hay)
+{
+    regmatch_t all = { .rm_so = 0, .rm_eo = (regoff_t)hay.len };
+    if (regexec(&m->re, hay.p ? hay.p : "", 1, &all, REG_STARTEND) != 0) return false;
+    if (!m->o.word) return true;
+    for (isize from = 0; from <= hay.len; from++) {
+        if (from > 0 && ui_word_byte((unsigned char)hay.p[from - 1])) continue;
+        for (isize to = hay.len; to >= from; to--) {
+            if (to < hay.len && ui_word_byte((unsigned char)hay.p[to])) continue;
+            regmatch_t pm = { .rm_so = 0, .rm_eo = (regoff_t)(to - from) };
+            int flags = REG_STARTEND | (from > 0 ? REG_NOTBOL : 0) | (to < hay.len ? REG_NOTEOL : 0);
+            if (regexec(&m->re, hay.p ? hay.p + from : "", 1, &pm, flags) == 0 && pm.rm_so == 0 && pm.rm_eo == to - from) return true;
+        }
+    }
+    return false;
+}
+
 // Whether hay matches m. An empty text matches everything; a bad expression nothing.
 static bool ui_match(const UiMatcher *m, Str hay)
 {
     if (m->len == 0) return true;
     if (m->o.regex) {
         if (!m->re_on) return false;
-        regmatch_t all = { .rm_so = 0, .rm_eo = (regoff_t)hay.len };
-        if (regexec(&m->re, hay.p ? hay.p : "", 1, &all, REG_STARTEND) != 0) return false;
-        if (!m->o.word) return true;
-        // Whole words: some span from a boundary to a boundary that the expression matches in
-        // full. The longest match from a start may run past a boundary a shorter one stops at
-        // (`-*-` in "--_ ", reviewer-2, F7.3 review), so each span is tried: the leftmost-longest
-        // match within it is all of it exactly when the span matches. ^ and $ keep meaning the
-        // name's start and end (NOTBOL, NOTEOL inside it).
-        for (isize from = 0; from <= hay.len; from++) {
-            if (from > 0 && ui_word_byte((unsigned char)hay.p[from - 1])) continue;
-            for (isize to = hay.len; to >= from; to--) {
-                if (to < hay.len && ui_word_byte((unsigned char)hay.p[to])) continue;
-                regmatch_t pm = { .rm_so = 0, .rm_eo = (regoff_t)(to - from) };
-                int flags = REG_STARTEND | (from > 0 ? REG_NOTBOL : 0) | (to < hay.len ? REG_NOTEOL : 0);
-                if (regexec(&m->re, hay.p ? hay.p + from : "", 1, &pm, flags) == 0 && pm.rm_so == 0 && pm.rm_eo == to - from) return true;
-            }
-        }
-        return false;
+        locale_t was = ui_utf8_on();
+        bool hit = ui_match_re(m, hay);
+        ui_utf8_off(was);
+        return hit;
     }
     for (isize i = 0; i + m->len <= hay.len; i++) {
         isize k = 0;
