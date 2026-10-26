@@ -124,6 +124,8 @@ typedef struct {
     bool    ow_field;
     int     ow_wheel;    // notches over its list, as wheel
     int     toggle;      // 4: Open With's "Always open … with this app" box (F7.3.1)
+    bool    find_x;      // the find bar's × pressed
+    bool    find_field;  // its field pressed: the keys go there
 } UiInput;
 
 typedef enum {
@@ -260,7 +262,8 @@ typedef struct {
     int    zoom;             // the icon view's icon size in px, one of UI_ZOOM_PX; 0: UI_ZOOM_DEFAULT (F6.3)
     bool   side_focus;       // the keys move the sidebar's cursor
     const u8 *side_head;     // a byte per sidebar row, 1 for a heading (F6), never the cursor's; NULL: none
-    bool   finding;          // the find line is open
+    bool   finding;          // the find bar is open (Michael, 2026-10-26: until Esc or its ×)
+    bool   find_keys;        // and has the keys
     bool   find_miss;        // its text matches nothing
     char   find[UI_FIND_MAX];
     int    find_len;
@@ -467,7 +470,7 @@ static bool ui_input_acts(const UiInput *in)
            in->tab_click >= 0 || in->tab_close >= 0 || in->mid_row >= 0 || in->mid_side >= 0 || in->mid_crumb >= 0 || in->modal > 0 ||
            in->backs > 0 || in->forwards > 0 || in->job_x >= 0 || in->side_mode >= 0 || in->side_twisty >= 0 || in->side_eject >= 0 ||
            in->zoom_wheel != 0 || in->zoom_to >= 0 || in->menu_title >= 0 || in->menu_item >= 0 || in->menu_away || in->prop_box >= 0 ||
-           in->ow_row >= 0 || in->ow_drow >= 0 || in->ow_field || in->toggle > 0;
+           in->ow_row >= 0 || in->ow_drow >= 0 || in->ow_field || in->toggle > 0 || in->find_x || in->find_field;
 }
 
 // Whether a status message gives way to the status line on input that acts (ui_input_acts): a
@@ -687,15 +690,24 @@ static void ui_find_update(Ui *u, UiNames names)
     ui_show_sel(&u->list);
 }
 
+// The keys leave the find bar (Enter, a command, the menu, the edit line); it stays open, its text
+// kept for n and N.
+static void ui_find_leave(Ui *u)
+{
+    u->find_keys = false;
+    if (u->find_len) memcpy(u->last, u->find, (size_t)u->find_len), u->last_len = u->find_len;
+}
+
 static void ui_find_close(Ui *u)
 {
-    u->finding = false, u->find_miss = false;
+    u->finding = false, u->find_keys = false, u->find_miss = false;
     if (u->find_len) memcpy(u->last, u->find, (size_t)u->find_len), u->last_len = u->find_len;
 }
 
 static void ui_find_open(Ui *u)
 {
-    u->finding = true, u->find_miss = false, u->find_len = 0, u->find_from = u->list.sel, u->side_focus = false;
+    u->finding = true, u->find_keys = true, u->find_miss = false, u->find_len = 0, u->find_from = u->list.sel, u->side_focus = false;
+    u->jobs_focus = false, u->crumb_focus = false;
 }
 
 // cp as UTF-8 into b: its length, or 0 for a control character or no code point at all.
@@ -785,7 +797,8 @@ static void ui_edit_start(Ui *u, Str text, bool path)
     isize max = ui_edit_max(u), n = text.len < max ? text.len : max;
     memcpy(u->edit, text.p, (size_t)n);
     u->edit_len = (int)n, u->caret = (int)n, u->anchor = path ? 0 : (int)n;
-    u->editing = true, u->finding = false, u->side_focus = false, u->crumb_focus = false, u->jobs_focus = false;
+    ui_find_leave(u);
+    u->editing = true, u->side_focus = false, u->crumb_focus = false, u->jobs_focus = false;
 }
 
 // The edit line opened on a name, the caret at its end.
@@ -1033,7 +1046,7 @@ static bool ui_jobs_event(Ui *u, const UiInput *in, UiEvent e)
     case UK_UP: if (u->job_at > 0) u->job_at--; return true;
     case UK_DOWN: if (u->job_at < in->job_n - 1) u->job_at++; return true;
     case UK_ENTER: u->cancel_asking = true, u->cancel_id = in->job_id[u->job_at]; return true;
-    case UK_JOBS: return true;
+    case UK_JOBS: u->jobs_focus = false; return true;   // the third Ctrl+J: back to the list (list, find bar, jobs)
     case UK_ESC: case UK_TAB: u->jobs_focus = false; return true;
     default: u->jobs_focus = false; return false;
     }
@@ -1072,7 +1085,7 @@ static void ui_menu_open(Ui *u, int m, bool keys)
 {
     u->menu_on = true, u->menu = m;
     u->menu_at = keys ? ui_menu_next(u, -1, 1) : -1;
-    ui_edit_close(u), ui_find_close(u);
+    ui_edit_close(u), ui_find_leave(u);
 }
 
 // The Properties panel opened, the focus on the grid's first box (F7.2).
@@ -1342,11 +1355,14 @@ static Sort ui_sort_click(Sort s, SortKey k)
     return s.key == k ? (Sort){ k, !s.reverse } : (Sort){ k, false };
 }
 
-// A key or character while the find line is open: true when it was the line's (the rest of the
-// event is then done).
-static bool ui_find_event(Ui *u, UiNames names, UiEvent e)
+// A key or character while the find bar has the keys: true when it was the bar's (the rest of
+// the event is then done). Typing jumps to the first match from where the find began; Up and Down
+// go to the previous and next match; Enter keeps the cursor there and gives the keys back to the
+// list (the bar stays); Esc closes the bar and puts the cursor back; Ctrl+J goes on to the job rows
+// (Michael, 2026-10-26). A command gives the keys back and is the list's.
+static bool ui_find_event(Ui *u, UiNames names, UiEvent e, const UiInput *in)
 {
-    if (ui_toggle_key(e)) {   // Alt+C, Alt+W, Alt+R: a toggle, the line kept open
+    if (ui_toggle_key(e)) {   // Alt+C, Alt+W, Alt+R: a toggle
         u->find_opts = ui_toggle(u->find_opts, ui_toggle_key(e));
         ui_find_update(u, names);
         return true;
@@ -1359,13 +1375,23 @@ static bool ui_find_event(Ui *u, UiNames names, UiEvent e)
     }
     switch (e.key) {
     case UK_BACKSPACE: ui_find_erase(u), ui_find_update(u, names); return true;
-    case UK_ENTER: ui_find_close(u); return true;
+    case UK_ENTER: case UK_SHIFT_ENTER: ui_find_leave(u); return true;
     case UK_ESC:
         ui_find_close(u);
         u->list.sel = u->find_from, ui_show_sel(&u->list);
         return true;
+    case UK_UP: case UK_DOWN: {
+        int dir = e.key == UK_UP ? -1 : 1;
+        isize i = ui_find_at(&u->list, names, &u->find_m, u->list.sel + dir, dir);
+        if (i >= 0) u->list.sel = i, ui_show_sel(&u->list);
+        return true;
+    }
+    case UK_JOBS:
+        ui_find_leave(u);
+        if (in->job_n > 0) u->jobs_focus = true, u->job_at = 0;
+        return true;
     case UK_FIND: return true;
-    default: ui_find_close(u); return false;   // a move or a command: the line closes, the cursor stays
+    default: ui_find_leave(u); return false;   // a command: the keys go back to the list, which does it
     }
 }
 
@@ -1426,6 +1452,10 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         if (in->modal == UI_MODAL_YES) return ui_ow_launch(u);
         if (in->modal == UI_MODAL_NO) return ui_ow_close(u), (UiAction){ UA_NONE, 0, false };
         if (in->ow_wheel) ui_scroll(&u->ow_list, in->ow_wheel);
+    } else if (!u->ow && !prompt && u->finding && (in->find_x || in->find_field)) {
+        if (in->find_x) ui_find_close(u);
+        else u->find_keys = true, u->side_focus = false, u->crumb_focus = false, u->jobs_focus = false;
+        return (UiAction){ UA_NONE, 0, false };
     } else if (!u->ow && in->toggle >= 1 && in->toggle <= 3 && u->finding) {
         u->find_opts = ui_toggle(u->find_opts, in->toggle);
         ui_find_update(u, names);
@@ -1507,7 +1537,11 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         case UB_LOCATION:
             if (u->editing && u->edit_path) return ui_edit_close(u), (UiAction){ UA_NONE, 0, false };
             return (UiAction){ UA_LOCATION, 0, false };
-        case UB_SEARCH: ui_edit_close(u), ui_find_open(u); return (UiAction){ UA_NONE, 0, false };
+        case UB_SEARCH:   // opens the find bar, or closes it
+            ui_edit_close(u);
+            if (u->finding) ui_find_close(u);
+            else ui_find_open(u);
+            return (UiAction){ UA_NONE, 0, false };
         case UB_LEFT: return (UiAction){ UA_CRUMB_SHIFT, -1, false };
         case UB_RIGHT: return (UiAction){ UA_CRUMB_SHIFT, 1, false };
         case UB_CRUMB: ui_edit_close(u); return (UiAction){ UA_CRUMB, in->crumb, false };
@@ -1617,7 +1651,7 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
             if (a.kind != UA_NONE) return a;
             continue;
         }
-        if (u->finding && ui_find_event(u, names, e)) continue;
+        if (u->finding && u->find_keys && ui_find_event(u, names, e, in)) continue;
         // The keys and letters that move a cursor: the sidebar's when it has the keyboard. In the
         // icon view, Up and Down move a row and Left and Right a cell (F6.2).
         UiList *m = u->side_focus ? &u->side : l;
@@ -1741,8 +1775,9 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         case UK_NEWFOLDER: return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : UA_NEWFOLDER, 0, false };
         case UK_LOCATION: return (UiAction){ UA_LOCATION, 0, false };
         case UK_CRUMBS: ui_crumbs_focus(u, in); break;
-        case UK_JOBS:
-            if (in->job_n > 0) u->jobs_focus = true, u->job_at = 0, u->crumb_focus = false, u->side_focus = false;
+        case UK_JOBS:   // the find bar first when it is open, then the job rows (Michael, 2026-10-26)
+            if (u->finding) u->find_keys = true, u->crumb_focus = false, u->side_focus = false;
+            else if (in->job_n > 0) u->jobs_focus = true, u->job_at = 0, u->crumb_focus = false, u->side_focus = false;
             break;
         case UK_PARENT: return (UiAction){ UA_PARENT, 0, false };
         case UK_TAB_NEW: return (UiAction){ UA_TAB_NEW, 0, false };

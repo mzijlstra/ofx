@@ -132,7 +132,7 @@ enum { BAR_BTN_W = 34, BAR_BTN_H = 30, BAR_GAP = 4, ARROW_W = 22, CRUMB_PAD = 10
 enum { TREE_STEP = 10, TRASH_BAR_H = 38 };
 // The menu bar (F7.1): a row of titles over the top bar; a menu's entries, its lines between groups.
 enum { MENU_H = 26, MENU_TITLE_PAD = 10, MENU_ROW_H = 26, MENU_SEP_H = 9, MENU_W_MIN = 280 };
-enum { TAB_H = 30, TAB_X_W = 22, JOB_ROW_H = 40, JOB_WAIT_H = 22, MODE_BTN_W = 28, MODE_BTN_H = 22, MODE_GAP = 4 };
+enum { TAB_H = 30, TAB_X_W = 22, JOB_ROW_H = 40, JOB_WAIT_H = 22, MODE_BTN_W = 28, MODE_BTN_H = 22, MODE_GAP = 4, FIND_BAR_H = 36 };
 enum { FONT_PX = 15, ROW_H = 28, ICON_PX = 24, HEADER_H = 40, COLS_H = 26, FOOTER_H = 28, PAD = 12, SIZE_W = 90,
        DATE_W = 100, SIDE_W = 200, SIDE_ROW_H = 28, SIDE_ICON_PX = 20, GAP = 10, ICONS_MAX = 512 };
 // The icon view (F6.2): a cell holds its icon (48 px at first, F6.3's zoom from 32 to 256) over two
@@ -191,6 +191,7 @@ static struct {
     int       crumb_lo, crumb_hi;   // the ones shown in the last frame
     bool      crumb_arrows;
     int       modal_hover;  // the modal panel's button under the pointer (UI_MODAL_*), 0 for none
+    bool      findx_hover;  // the find bar's × under it
     UiBar     bar_hover;    // the top bar button under the pointer
     int       crumb_hover;
     int       tab_hover, tab_x_hover;   // the tab, and the tab's ×, under the pointer; -1 for none
@@ -986,7 +987,7 @@ static void tab_load(void)
     hist = t->hist, app.crumbs = t->crumbs;
     memcpy(app.ui.last, t->last, sizeof app.ui.last), app.ui.last_len = t->last_len;
     ui_edit_close(&app.ui);
-    app.ui.finding = false;
+    ui_find_close(&app.ui);   // (a tab's own find isn't kept)
     ui_mark_clear(&app.ui);   // the same folder in two tabs: this tab's marks, not the other's
     if (!go_to_in(t->dir, str_from_c(t->sel), t->row, true)) {
         // Gone: the nearest folder above. There but unreadable: the same, with its error kept.
@@ -1440,7 +1441,7 @@ static int jobs_h(void)
 // The list's rows that fit, or the icon view's rows of cells (no column headers there).
 static int list_rows(int h)
 {
-    int room = h - top_h() - FOOTER_H - jobs_h() - (app.ui.in_trash ? TRASH_BAR_H : 0);
+    int room = h - top_h() - FOOTER_H - jobs_h() - (app.ui.in_trash ? TRASH_BAR_H : 0) - (app.ui.finding ? FIND_BAR_H : 0);
     int r = app.ui.grid ? (room - PAD) / cell_h() : (room - COLS_H) / ROW_H;
     return r > 0 ? r : 0;
 }
@@ -2794,6 +2795,43 @@ static void layout_jobs(void)
     }
 }
 
+// The find bar (Michael, 2026-10-26): over the job rows, as wide as the files. Its field (red text
+// when nothing matches, a caret while it has the keys) with the three toggles, a bad expression's
+// reason, and a × that closes it.
+static void layout_find_bar(void)
+{
+    Theme *t = &app.theme;
+    Ui *u = &app.ui;
+    bool bad = u->find_m.bad && u->find_opts.regex && u->find_len;
+    Clay_Color edge = bad ? cc(t->red) : u->find_keys ? cc(t->accent) : mix(t->fg_dim, t->bg_light, 0.45f);
+    CLAY(CLAY_ID("find-bar"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(FIND_BAR_H) }, .padding = { PAD, 8, 0, 0 }, .childGap = 10,
+                                            .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
+                                .backgroundColor = cc(t->bg_light),
+                                .border = { .color = mix(t->fg_dim, t->bg_light, 0.45f), .width = { .top = 1 } } }) {
+        text(cz("Find"), cc(t->fg_dim));
+        CLAY(CLAY_ID("find-field"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(26) }, .padding = { 8, 3, 0, 0 }, .childGap = 6,
+                                                  .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
+                                      .backgroundColor = cc(t->bg), .border = { .color = edge, .width = CLAY_BORDER_OUTSIDE(1) } }) {
+            CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
+                           .clip = { .horizontal = true } }) {
+                Str f = { u->find, u->find_len };
+                text(fit(f, 400, true), u->find_miss ? cc(t->red) : cc(t->fg));
+                if (u->find_keys)
+                    CLAY(CLAY_ID("caret"), { .layout = { .sizing = { CLAY_SIZING_FIXED(2), CLAY_SIZING_FIXED(FONT_PX + 2) } }, .backgroundColor = cc(t->accent) }) {}
+            }
+            layout_toggles(u->find_opts);
+        }
+        if (bad) text(fit(str_from_c(u->find_m.err), 240, false), cc(t->red));
+        else if (u->find_miss) text(cz("No match"), cc(t->red));
+        bool hover = app.findx_hover;
+        CLAY(CLAY_ID("find-x"), { .layout = { .sizing = { CLAY_SIZING_FIXED(26), CLAY_SIZING_FIXED(26) },
+                                              .childAlignment = { .x = CLAY_ALIGN_X_CENTER, .y = CLAY_ALIGN_Y_CENTER } },
+                                  .backgroundColor = hover ? cc(t->bg) : (Clay_Color){ 0, 0, 0, 0 } }) {
+            text(cz("\xC3\x97"), hover ? cc(t->red) : cc(t->fg_dim));   // ×
+        }
+    }
+}
+
 // The bottom bar's sidebar part (F6): as wide as the sidebar, or the buttons' own width when it
 // is hidden.
 static float modes_w(void)
@@ -2967,6 +3005,7 @@ static Clay_RenderCommandArray layout(int w, int h)
             for (int r = 0; app.have_list && !app.ui.grid && r < app.ui.list.rows && app.ui.list.top + r < app.list.n; r++)
                 layout_row(r, app.ui.list.top + r, (float)w, now);
         }
+        if (app.ui.finding) layout_find_bar();
         layout_jobs();
         }
         }
@@ -3001,20 +3040,9 @@ static Clay_RenderCommandArray layout(int w, int h)
             } else if (app.ui.jobs_focus) {
                 text(fit(S("Jobs: \xE2\x86\x91 \xE2\x86\x93 (k j) move \xC2\xB7 Enter cancels the marked job \xC2\xB7 Esc back to the list"), foot_w, false),
                      cc(t->fg_dim));
-            } else if (app.ui.finding) {
-                // The find line: its text, red when it matches nothing, and a caret; the toggles
-                // (F7.3) and a bad expression's reason after it.
-                Str f = { app.ui.find, app.ui.find_len };
-                text(cz("Find: "), cc(t->fg_dim));
-                text(fit(f, foot_w - 200, true), app.ui.find_miss ? cc(t->red) : cc(t->fg));
-                CLAY(CLAY_ID("caret"), { .layout = { .sizing = { CLAY_SIZING_FIXED(2), CLAY_SIZING_FIXED(FONT_PX + 2) } },
-                                         .backgroundColor = cc(t->accent) }) {}
-                CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_FIXED(12), CLAY_SIZING_FIT(0) } } }) {}
-                layout_toggles(app.ui.find_opts);
-                if (app.ui.find_m.bad) {
-                    CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_FIXED(12), CLAY_SIZING_FIT(0) } } }) {}
-                    text(fit(str_from_c(app.ui.find_m.err), foot_w - 300 - str_width(f), false), cc(t->red));
-                }
+            } else if (app.ui.finding && app.ui.find_keys) {
+                text(fit(S("Find: \xE2\x86\x91 \xE2\x86\x93 previous and next \xC2\xB7 Enter keeps \xC2\xB7 Esc closes \xC2\xB7 Ctrl+J the jobs \xC2\xB7 "
+                           "Alt+C/W/R case, words, regex"), foot_w, false), cc(t->fg_dim));
             } else if (app.status[0]) {
                 text(fit(str_from_c(app.status), foot_w, false), app.status_bad ? cc(t->red) : cc(t->fg));
             } else {
@@ -3216,6 +3244,7 @@ typedef struct {
     int   menu_item;    // an entry of the open menu (its place), -1 for none
     int   prop_box;     // a checkbox of the Properties panel's grid, -1 for none (F7.2)
     int   ow_row;       // a row of Open With's list (on screen), -1 for none (F7.3)
+    bool  find_x, find_field;   // the find bar's × and its field
     bool  ow_field;     // its field
     int   toggle;       // a toggle of its field or of the find line (1..3), 0 for none
 } Hit;
@@ -3229,7 +3258,7 @@ static bool in_box(Clay_ElementId id, float x, float y)
 
 static Hit hit_at(float x, float y)
 {
-    Hit h = { -1, -1, -1, UB_NONE, -1, -1, -1, 0, -1, -1, -1, -1, false, -1, -1, -1, -1, false, 0 };
+    Hit h = { -1, -1, -1, UB_NONE, -1, -1, -1, 0, -1, -1, -1, -1, false, -1, -1, -1, -1, false, false, false, 0 };
     for (int k = 1; k <= 4 && !h.toggle && (app.ui.ow || app.ui.finding); k++)
         if (in_box(CLAY_IDI("toggle", k), x, y)) h.toggle = k;
     if (modal_kind() == MODAL_NONE)
@@ -3255,6 +3284,10 @@ static Hit hit_at(float x, float y)
             if (in_box(CLAY_IDI("ow-row", r), x, y)) h.ow_row = r;
         h.ow_field = modal_kind() == MODAL_OW && !h.toggle && in_box(CLAY_ID("ow-field"), x, y);
         return h;
+    }
+    if (app.ui.finding) {
+        h.find_x = in_box(CLAY_ID("find-x"), x, y);
+        h.find_field = !h.toggle && !h.find_x && in_box(CLAY_ID("find-field"), x, y);
     }
     for (int i = 0; tabbar.n >= 2 && i < tabbar.n && h.tab < 0; i++) {
         if (in_box(CLAY_IDI("tab-x", i), x, y)) h.tab_x = h.tab = i;
@@ -3317,6 +3350,7 @@ static void press_at(UiInput *in, float x, float y, int mods)
     }
     in->ow_field = h.ow_field;
     in->toggle = h.toggle;
+    in->find_x = h.find_x, in->find_field = h.find_field;
     in->job_x = h.job_x;
     in->side_mode = h.mode;
     in->side_twisty = h.twisty;
@@ -3391,12 +3425,13 @@ static bool hover_at(float x, float y)
     Hit h = hit_at(x, y);
     bool changed = h.row != app.hover || h.side != app.side_hover || h.bar != app.bar_hover || h.crumb != app.crumb_hover ||
                    h.tab != app.tab_hover || h.tab_x != app.tab_x_hover || h.mode != app.mode_hover || h.eject != app.eject_hover ||
-                   h.modal != app.modal_hover || h.job_x != app.jobx_hover || h.zoom != app.zoom_hover || h.menu_title != app.menu_title_hover;
+                   h.modal != app.modal_hover || h.job_x != app.jobx_hover || h.zoom != app.zoom_hover || h.menu_title != app.menu_title_hover ||
+                   h.find_x != app.findx_hover;
     app.menu_title_hover = h.menu_title;
     changed |= ui_menu_hover(&app.ui, h.menu_title, h.menu_item);
     app.hover = h.row, app.side_hover = h.side, app.bar_hover = h.bar, app.crumb_hover = h.crumb;
     app.tab_hover = h.tab, app.tab_x_hover = h.tab_x, app.mode_hover = h.mode, app.eject_hover = h.eject;
-    app.modal_hover = h.modal, app.jobx_hover = h.job_x, app.zoom_hover = h.zoom;
+    app.modal_hover = h.modal, app.jobx_hover = h.job_x, app.zoom_hover = h.zoom, app.findx_hover = h.find_x;
     // Onto another icon button (or off one): its tooltip waits UI_TIP_MS, the timer wakes the loop.
     if (ui_tip_hover(&app.tip, tip_target(h), now_ms())) {
         changed = true;

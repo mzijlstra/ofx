@@ -1056,6 +1056,6 @@ static void test_ui_f3(void)
     CHECK(u.finding);
     in = keys(1, UK_F2);
     ui_handle(&u, names, &in);
-    CHECK(!u.finding && u.editing);
+    CHECK(u.finding && !u.find_keys && u.editing);   // the bar stays, the keys go to the edit line
     ui_edit_close(&u);
 }

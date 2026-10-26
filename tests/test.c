@@ -942,9 +942,9 @@ static void test_find(void)
     in = keys(1, UK_BACKSPACE);
     ui_handle(&u, names, &in);
     CHECK(!u.find_miss && u.list.sel == 4 && u.find_len == 5);
-    in = keys(1, UK_ENTER);   // keeps the cursor, closes, remembers the text
+    in = keys(1, UK_ENTER);   // keeps the cursor, gives the keys back (the bar stays), remembers the text
     ui_handle(&u, names, &in);
-    CHECK(!u.finding && u.list.sel == 4 && u.last_len == 5);
+    CHECK(u.finding && !u.find_keys && u.list.sel == 4 && u.last_len == 5);
     // n wraps to the next match of "betam" (only BETAMAX: stays), N likewise.
     in = chars("n");
     ui_handle(&u, names, &in);
@@ -1010,10 +1010,10 @@ static void test_find(void)
     in.ev[in.nev++] = (UiEvent){ UK_NONE, 0x3B1 };    // α, 2 bytes
     ui_handle(&u, names, &in);
     CHECK(u.find_len == 9 && memcmp(u.find + 4, "\xE2\x82\xAC\xCE\xB1", 5) == 0);
-    // A move closes the line and moves, keeping the text for n.
-    in = keys(1, UK_DOWN);
+    // A command gives the keys back and is the list's, keeping the text for n; the bar stays.
+    in = keys(1, UK_HOME);
     ui_handle(&u, names, &in);
-    CHECK(!u.finding && u.list.sel == 5 && u.last_len == 9);
+    CHECK(u.finding && !u.find_keys && u.list.sel == 0 && u.last_len == 9);
     // A full line drops what doesn't fit.
     ui_find_open(&u);
     for (int k = 0; k < UI_FIND_MAX + 10; k++) ui_find_char(&u, 'x');
@@ -1621,6 +1621,7 @@ int main(void)
     test_spawn_launch_all();
     test_set_default();
     test_ow_default();
+    test_find_bar();
     test_chmod();
     test_props_keys();
     test_step_round();

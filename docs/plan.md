@@ -83,9 +83,6 @@ his word: Nemo's compact view and its icon size slider.
   mutants first. On a quiet machine 46 mutants took about 410 s at 6, 8, 10 or 12 workers alike,
   CPU 42-63%: the time is the unmutated suite at the start plus the slowest mutants at the end,
   not the processor. The order by each tag group's time in the baseline is the first thing to try.
-- Find in a bar of its own (Michael, 2026-10-26, after F7.3.1): above the job rows and the status
-  bar, as wide as the files, with a close button; Ctrl+J and Ctrl+Down go into it first while it is
-  open, Ctrl+J again on to the job rows.
 - Open With (Michael, 2026-10-26: not worth it yet, he can't notice the delay): keep the theme's
   app-folder list (0.7 MiB) after the first open, so a later open skips its ~34 ms; the icons
   themselves would still go when the panel closes.
@@ -467,6 +464,16 @@ process, one window), one page; only for showing a file's properties and changin
   empty file's `application/x-zerosize` is named as such). Written by `gio mime <type> <app>`
   into `~/.config/mimeapps.list`; a type that `hyprland-mimeapps.list` (read first) sets is said,
   not silently shadowed. Ctrl+Z puts the old default back (no old one: ofx removes the line).
+
+**The find bar (Michael, 2026-10-26, after F7.3.1):** find in a bar of its own, over the job rows
+and the status bar, as wide as the files (36 px, its room taken from the list), with the field, the
+three toggles, "No match" or a bad expression's reason, and a ×. His choices: it stays open until
+Esc (the cursor back where the find began) or the × (the cursor kept); Enter gives the keys back
+to the list; in the bar Up and Down go to the previous and next match; Ctrl+J and Ctrl+Down go
+list, bar, job rows, list. A command typed in the bar gives the keys back and is the list's; the
+menu, the edit line and the path buttons take the keys and leave the bar open; a tab change
+closes it. `/` or Ctrl+F with the bar open starts a new find from the cursor; the search button
+opens and closes it. (`Ui.find_keys`; `ui_find_leave` against `ui_find_close`.)
 
 **F7.3.1 as built (2026-10-26):** a box under Open With's list, "Always open <type> files with this
 app" (Alt+D or a click), clear at each opening. Enter or Open with it ticked runs

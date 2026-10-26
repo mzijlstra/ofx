@@ -49,7 +49,7 @@ expect miss=1 sel=adir
 key backspace
 expect miss=0 sel=Banana.txt
 key enter
-expect finding=0 last=an sel=Banana.txt
+expect finding=1 findkeys=0 last=an sel=Banana.txt
 char /
 type e
 expect sel=cherry.txt
@@ -63,6 +63,30 @@ type ap
 expect finding=1 sel=apple.txt
 key esc
 expect finding=0 sel=cherry.txt
+# ---- the find bar (Michael, 2026-10-26): over the job rows, its own room; Up and Down the
+# previous and next match; Enter gives the keys back, the bar stays; Ctrl+J back into it; the
+# field and the × by the pointer
+expect rows=14
+char /
+type a
+expect finding=1 findkeys=1 rows=12
+shot find-bar.png
+key down
+expect findkeys=1
+key up
+key enter
+expect finding=1 findkeys=0
+key ctrl-j
+expect findkeys=1
+key enter
+point-ui find-field
+click-here
+expect findkeys=1
+key enter
+point-ui find-x
+click-here
+expect finding=0 findkeys=0 rows=14
+pointer-off
 # History: Enter, Backspace, Alt+Left twice, Alt+Right, the mouse's buttons.
 key home
 key enter

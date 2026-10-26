@@ -40,6 +40,11 @@ key enter
 char /
 type z.txt
 key enter
+# The find bar stays after Enter (Michael, 2026-10-26); / and Esc close it, the cursor kept.
+expect finding=1 findkeys=0 sel=z.txt
+char /
+key esc
+expect finding=0 sel=z.txt
 key ctrl-c
 key ctrl-l
 type ~/tree/adir
@@ -158,7 +163,10 @@ key shift-delete
 key enter
 wait-for 2000 jobs=1 jobrows=Deleting_10_items jobspeed=0
 shot delete-row.png
-# Asked to cancel it, and it ends meanwhile: the question goes (Ctrl+Down, GLFW's 264, as Ctrl+J)
+# Asked to cancel it, and it ends meanwhile: the question goes (Ctrl+Down, GLFW's 264, as Ctrl+J;
+# the find bar, open since the last find, would take it first: / and Esc close it)
+char /
+key esc
 raw-key 264 2
 key enter
 expect modal=cancel

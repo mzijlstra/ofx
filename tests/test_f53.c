@@ -183,9 +183,9 @@ static void test_job_keys(void)
     in = job_input(3, 3), in.ev[in.nev++] = (UiEvent){ UK_NONE, 'k' };
     ui_handle(&u, names, &in);
     CHECK(u.job_at == 1);
-    job_keys(&u, names, job_input(3, 3), 2, UK_UP, UK_JOBS);   // Ctrl+J again keeps the mark
-    CHECK(u.job_at == 0 && u.jobs_focus && u.list.sel == 3);
-    job_keys(&u, names, job_input(3, 3), 2, UK_DOWN, UK_JOBS);
+    job_keys(&u, names, job_input(3, 3), 2, UK_UP, UK_JOBS);   // Ctrl+J again: back to the list (F7.3 find bar order)
+    CHECK(u.job_at == 0 && !u.jobs_focus && u.list.sel == 3);
+    job_keys(&u, names, job_input(3, 3), 2, UK_JOBS, UK_DOWN);
     CHECK(u.job_at == 1 && u.jobs_focus);
     job_keys(&u, names, job_input(3, 3), 2, UK_ESC, UK_JOBS);   // given back and taken again: the top row
     CHECK(u.job_at == 0 && u.jobs_focus);

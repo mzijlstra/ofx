@@ -129,7 +129,7 @@ static void test_menu_keys(void)
     menu_keys(&u, 2, UK_ESC, UK_FIND);
     CHECK(u.finding);
     menu_keys(&u, 1, -'f');
-    CHECK(u.menu_on && !u.finding);
+    CHECK(u.menu_on && u.finding && !u.find_keys);   // the bar stays, its keys go to the menu
     // A question up: no menu, and one open closes.
     u = menu_ui(3);
     u.confirming = true;

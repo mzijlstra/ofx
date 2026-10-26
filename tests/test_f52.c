@@ -368,10 +368,10 @@ static void test_crumb_keys(void)
     CHECK(u.finding && !u.crumb_focus);
     in = keys(1, UK_ESC);
     ui_handle(&u, names, &in);
-    // From the find line Ctrl+K closes it.
+    // From the find bar Ctrl+K takes the keys to the path buttons; the bar stays.
     in = keys(2, UK_FIND, UK_CRUMBS), in.crumb_n = 3, in.crumb_last = 2;
     ui_handle(&u, names, &in);
-    CHECK(!u.finding && u.crumb_focus);
+    CHECK(u.finding && !u.find_keys && u.crumb_focus);
     in = keys(1, UK_ESC), in.crumb_n = 3;
     ui_handle(&u, names, &in);
     // From the sidebar's keyboard: the buttons take it.

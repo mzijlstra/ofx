@@ -208,6 +208,10 @@ key ctrl-v
 wait-for 3000 job=run
 key esc
 expect job=run
+# (the find bar, open since the last find, would take Ctrl+J first: / and Esc close it)
+char /
+key esc
+expect finding=0
 key ctrl-j
 key enter
 expect modal=cancel

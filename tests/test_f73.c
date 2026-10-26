@@ -128,7 +128,7 @@ static void test_find_toggles(void)
     in = ui_input_none();
     in.ev[in.nev++] = (UiEvent){ UK_MENU, 'f' };
     ui_handle(&u, names, &in);
-    CHECK(!u.finding && u.menu_on);
+    CHECK(u.finding && !u.find_keys && u.menu_on);
     // n after a find closed empty: the last text found, not the empty one.
     ui_matcher_set(&u.find_m, STR_EMPTY, (UiMatchOpts){ 0 });   // (regfree)
     u = (Ui){ 0 };
@@ -612,4 +612,97 @@ static void test_ow_default(void)
     in = ui_input_none(), in.app_name = OW_APPS, in.app_n = COUNT(OW_APPS), in.modal = UI_MODAL_YES;
     a = ui_handle(&u, names, &in);
     CHECK(a.kind == UA_LAUNCH && a.all);
+}
+
+// ---- the find bar (Michael, 2026-10-26) ------------------------------------------------------
+
+static void test_find_bar(void)
+{
+    Ui u = { 0 };
+    UiNames names = { name_at, NULL, NULL };
+    ui_resize(&u.list, 10);
+    ui_set(&u.list, COUNT(find_names), 0);   // alpha Beta gamma.txt delta BETAMAX omega café
+    // Up and Down in the bar: the previous and next match, round the ends; the bar keeps the keys.
+    UiInput in = chars("/ta");
+    ui_handle(&u, names, &in);
+    CHECK(u.list.sel == 1 && u.find_keys);
+    in = keys(1, UK_DOWN);
+    ui_handle(&u, names, &in);
+    CHECK(u.list.sel == 3 && u.find_keys && u.finding);
+    ui_handle(&u, names, &in);
+    CHECK(u.list.sel == 4);
+    ui_handle(&u, names, &in);
+    CHECK(u.list.sel == 1);   // round
+    in = keys(1, UK_UP);
+    ui_handle(&u, names, &in);
+    CHECK(u.list.sel == 4 && u.find_keys);
+    in = chars("zz");   // no match: Up and Down stay
+    ui_handle(&u, names, &in);
+    in = keys(2, UK_DOWN, UK_UP);
+    ui_handle(&u, names, &in);
+    CHECK(u.find_miss && u.list.sel == 0 && u.find_keys);
+    in = keys(2, UK_BACKSPACE, UK_BACKSPACE);
+    ui_handle(&u, names, &in);
+    // Enter: the keys back to the list, the bar open; a letter is the list's then (j moves).
+    in = keys(1, UK_ENTER);
+    ui_handle(&u, names, &in);
+    CHECK(u.finding && !u.find_keys && u.list.sel == 1);
+    in = chars("j");
+    ui_handle(&u, names, &in);
+    CHECK(u.list.sel == 2 && u.find_len == 2);
+    // Ctrl+J: list, bar, job rows, list; without jobs the bar's Ctrl+J goes back to the list.
+    in = keys(1, UK_JOBS), in.job_n = 2, in.job_id[0] = 7, in.job_id[1] = 8;
+    ui_handle(&u, names, &in);
+    CHECK(u.find_keys && !u.jobs_focus);
+    ui_handle(&u, names, &in);
+    CHECK(!u.find_keys && u.jobs_focus && u.job_at == 0 && u.finding);
+    ui_handle(&u, names, &in);
+    CHECK(!u.find_keys && !u.jobs_focus);
+    in = keys(2, UK_JOBS, UK_JOBS);   // no jobs
+    ui_handle(&u, names, &in);
+    CHECK(!u.find_keys && !u.jobs_focus && u.finding);
+    // The pointer: the field takes the keys (from the sidebar too), × closes, keeping the cursor.
+    u.side_focus = true;
+    in = ui_input_none(), in.find_field = true;
+    CHECK(ui_input_acts(&in));
+    ui_handle(&u, names, &in);
+    CHECK(u.find_keys && !u.side_focus);
+    in = keys(1, UK_ENTER);
+    ui_handle(&u, names, &in);
+    u.list.sel = 5;
+    in = ui_input_none(), in.find_x = true;
+    CHECK(ui_input_acts(&in));
+    ui_handle(&u, names, &in);
+    CHECK(!u.finding && !u.find_keys && u.list.sel == 5);
+    ui_handle(&u, names, &in);   // closed: nothing
+    CHECK(!u.finding);
+    // The search button opens it (taking the keys from the job rows) and closes it.
+    u.jobs_focus = true;
+    in = ui_input_none(), in.bar = UB_SEARCH, in.job_n = 1;
+    ui_handle(&u, names, &in);
+    CHECK(u.finding && u.find_keys && u.find_len == 0 && !u.jobs_focus);
+    ui_handle(&u, names, &in);
+    CHECK(!u.finding);
+    // / with the bar open but not its keys: a new find, from the cursor.
+    in = chars("/gam");
+    ui_handle(&u, names, &in);
+    in = keys(1, UK_ENTER);
+    ui_handle(&u, names, &in);
+    u.list.sel = 6;
+    in = chars("/al");
+    ui_handle(&u, names, &in);
+    CHECK(u.find_keys && u.find_len == 2 && u.find_from == 6 && u.list.sel == 0);
+    // Esc in the bar: closed, the cursor where the find began.
+    in = keys(1, UK_ESC);
+    ui_handle(&u, names, &in);
+    CHECK(!u.finding && !u.find_keys && u.list.sel == 6);
+    // Under a question its pointer does nothing.
+    in = chars("/a");
+    ui_handle(&u, names, &in);
+    u.confirming = true;
+    in = ui_input_none(), in.find_x = true;
+    ui_handle(&u, names, &in);
+    CHECK(u.finding);
+    u.confirming = false;
+    ui_matcher_set(&u.find_m, STR_EMPTY, (UiMatchOpts){ 0 });
 }

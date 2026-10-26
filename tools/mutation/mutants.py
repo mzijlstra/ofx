@@ -161,13 +161,13 @@ MUTANTS += [
     (U, "isize i = ((from + dir * k) % l->n + l->n) % l->n;", "isize i = (from + dir * k) % l->n;"),
     (U, "u->find_miss = text.len > 0 && i < 0;", "u->find_miss = i < 0;"),
     (U, "u->list.sel = i >= 0 ? i : u->find_from;", "u->list.sel = i >= 0 ? i : u->list.sel;"),
-    (U, "if (u->find_len) memcpy(u->last, u->find, (size_t)u->find_len), u->last_len = u->find_len;", ""),
+    (U, "    u->find_keys = false;\n    if (u->find_len) memcpy(u->last, u->find, (size_t)u->find_len), u->last_len = u->find_len;", "    u->find_keys = false;"),
     (U, "    if (cp < 0x20 || cp == 0x7F || cp > 0x10FFFF) return 0;", "    if (cp < 0x20) return 0;"),
     (U, "while (u->find_len > 0 && ((unsigned char)u->find[u->find_len] & 0xC0) == 0x80) u->find_len--;", ""),
-    (U, "isize i = ui_find_at(&u->list, names, &u->find_m, u->list.sel + dir, dir);", "isize i = ui_find_at(&u->list, names, &u->find_m, u->list.sel, dir);"),
+    (U, "    ui_matcher_set(&u->find_m, (Str){ u->last, u->last_len }, u->find_opts);\n    isize i = ui_find_at(&u->list, names, &u->find_m, u->list.sel + dir, dir);", "    ui_matcher_set(&u->find_m, (Str){ u->last, u->last_len }, u->find_opts);\n    isize i = ui_find_at(&u->list, names, &u->find_m, u->list.sel, dir);"),
     (U, "        if (e.ch == '/') return true;   // can't be in a name\n", ""),
     (U, "        u->list.sel = u->find_from, ui_show_sel(&u->list);\n        return true;", "        return true;"),
-    (U, "    default: ui_find_close(u); return false;", "    default: ui_find_close(u); return true;"),
+    (U, "    default: ui_find_leave(u); return false;   // a command", "    default: ui_find_leave(u); return true;   // a command"),
     # ---- F2: input
     (U, "return s.key == k ? (Sort){ k, !s.reverse } : (Sort){ k, false };", "return (Sort){ k, !s.reverse };"),
     (U, "if (!prompt && in->header >= 0 && in->header < SORT_KEYS) {", "if (!prompt && in->header >= 0) {"),
@@ -179,7 +179,7 @@ MUTANTS += [
     (U, "            u->side_focus = u->side.n > 0;", "            u->side_focus = true;"),
     (U, "            else u->side_focus = false;\n", ""),
     (U, "            if (u->side_focus && u->side.n > 0) return (UiAction){ UA_PLACE, u->side.sel, false };", "            if (u->side_focus) return (UiAction){ UA_PLACE, u->side.sel, false };"),
-    (U, "u->finding = true, u->find_miss = false, u->find_len = 0, u->find_from = u->list.sel, u->side_focus = false;", "u->finding = true, u->find_miss = false, u->find_len = 0, u->find_from = u->list.sel;"),
+    (U, "u->finding = true, u->find_keys = true, u->find_miss = false, u->find_len = 0, u->find_from = u->list.sel, u->side_focus = false;", "u->finding = true, u->find_keys = true, u->find_miss = false, u->find_len = 0, u->find_from = u->list.sel;"),
     # ---- F2: history
     (U, "if (*n == UI_HISTORY_MAX) memmove(stack, stack + 1, sizeof *stack * (UI_HISTORY_MAX - 1)), (*n)--;", "if (*n == UI_HISTORY_MAX) (*n)--;"),
     (U, "    h->nfwd = 0;\n", ""),
@@ -401,7 +401,7 @@ MUTANTS += [
     (U, "    case UK_BACKSPACE: ui_edit_cut(u, lo < hi ? lo : ui_edit_back(u, u->caret), lo < hi ? hi : u->caret); break;", "    case UK_BACKSPACE: ui_edit_cut(u, ui_edit_back(u, u->caret), u->caret); break;"),
     (U, "        if (ui_edit_copy(u)) ui_edit_cut(u, lo, hi);", "        ui_edit_copy(u);"),
     (U, "    case UK_PASTE: ui_edit_paste(u, paste); break;\n", ""),
-    (U, "    u->editing = true, u->finding = false, u->side_focus = false, u->crumb_focus = false, u->jobs_focus = false;", "    u->editing = true, u->finding = false, u->side_focus = false, u->jobs_focus = false;"),
+    (U, "    u->editing = true, u->side_focus = false, u->crumb_focus = false, u->jobs_focus = false;", "    u->editing = true, u->side_focus = false, u->jobs_focus = false;"),
     # the path buttons
     (U, "    if (in->crumb_n <= 0) return;\n    u->crumb_focus = true", "    u->crumb_focus = true"),
     (U, "    u->crumb_focus = true, u->side_focus = false;   //", "    u->crumb_focus = true;   //"),
@@ -467,13 +467,13 @@ MUTANTS += [
     (U, "    case UK_UP: if (u->job_at > 0) u->job_at--; return true;", "    case UK_UP: u->job_at--; return true;"),
     (U, "    case UK_DOWN: if (u->job_at < in->job_n - 1) u->job_at++; return true;", "    case UK_DOWN: u->job_at++; return true;"),
     (U, "    case UK_ENTER: u->cancel_asking = true, u->cancel_id = in->job_id[u->job_at]; return true;", "    case UK_ENTER: u->cancel_asking = true, u->cancel_id = in->job_id[0]; return true;"),
-    (U, "    case UK_JOBS: return true;\n    case UK_ESC: case UK_TAB: u->jobs_focus = false; return true;", "    case UK_ESC: case UK_TAB: u->jobs_focus = false; return true;"),
+    (U, "    case UK_JOBS: u->jobs_focus = false; return true;", "    case UK_JOBS: return true;"),
     (U, "    case UK_ESC: case UK_TAB: u->jobs_focus = false; return true;\n    default: u->jobs_focus = false; return false;", "    default: u->jobs_focus = false; return false;"),
     (U, "    default: u->jobs_focus = false; return false;\n    }\n}\n\n// ---- the menu bar", "    default: return false;\n    }\n}\n\n// ---- the menu bar"),
     (U, "        if (u->jobs_focus && !prompt && ui_jobs_event(u, in, e)) continue;", "        if (u->jobs_focus && ui_jobs_event(u, in, e)) continue;"),
-    (U, "            if (in->job_n > 0) u->jobs_focus = true, u->job_at = 0, u->crumb_focus = false, u->side_focus = false;", "            u->jobs_focus = true, u->job_at = 0, u->crumb_focus = false, u->side_focus = false;"),
-    (U, "            if (in->job_n > 0) u->jobs_focus = true, u->job_at = 0, u->crumb_focus = false, u->side_focus = false;", "            if (in->job_n > 0) u->jobs_focus = true, u->job_at = 0, u->crumb_focus = false;"),
-    (U, "            if (in->job_n > 0) u->jobs_focus = true, u->job_at = 0, u->crumb_focus = false, u->side_focus = false;", "            if (in->job_n > 0) u->jobs_focus = true, u->crumb_focus = false, u->side_focus = false;"),
+    (U, "            else if (in->job_n > 0) u->jobs_focus = true, u->job_at = 0, u->crumb_focus = false, u->side_focus = false;", "            else u->jobs_focus = true, u->job_at = 0, u->crumb_focus = false, u->side_focus = false;"),
+    (U, "            else if (in->job_n > 0) u->jobs_focus = true, u->job_at = 0, u->crumb_focus = false, u->side_focus = false;", "            else if (in->job_n > 0) u->jobs_focus = true, u->job_at = 0, u->crumb_focus = false;"),
+    (U, "            else if (in->job_n > 0) u->jobs_focus = true, u->job_at = 0, u->crumb_focus = false, u->side_focus = false;", "            else if (in->job_n > 0) u->jobs_focus = true, u->crumb_focus = false, u->side_focus = false;"),
     (U, "    if (u->job_at >= in->job_n) u->job_at = in->job_n - 1;\n", ""),
     (U, "    if (in->job_n <= 0) u->jobs_focus = false;\n", ""),
     (U, "    if (clicked) u->jobs_focus = false;\n", ""),
@@ -918,8 +918,8 @@ MUTANTS += [
     # `keys ? 0` (its first entry, New Tab) are equivalent, as New Tab, Close All and Close can
     # always be picked. Edit (F7.4) has entries that can't.
     (U, "    u->menu_at = keys ? ui_menu_next(u, -1, 1) : -1;", "    u->menu_at = ui_menu_next(u, -1, 1);"),
-    (U, "    ui_edit_close(u), ui_find_close(u);\n}", "    ui_find_close(u);\n}"),
-    (U, "    ui_edit_close(u), ui_find_close(u);\n}", "    ui_edit_close(u);\n}"),
+    (U, "    ui_edit_close(u), ui_find_leave(u);\n}", "    ui_find_leave(u);\n}"),
+    (U, "    ui_edit_close(u), ui_find_leave(u);\n}", "    ui_edit_close(u);\n}"),
     (U, "static UiAction ui_menu_pick(Ui *u, UiMenuItem it)\n{\n    u->menu_on = false;", "static UiAction ui_menu_pick(Ui *u, UiMenuItem it)\n{"),
     (U, "    case UM_OPEN: return (UiAction){ UA_OPEN, u->list.sel, u->marked > 0 };", "    case UM_OPEN: return (UiAction){ UA_OPEN, 0, u->marked > 0 };"),
     (U, "    case UM_CLOSE_ALL: return (UiAction){ UA_CLOSE_ALL, 0, true };", "    case UM_CLOSE_ALL: return (UiAction){ UA_CLOSE_ALL, 0, false };"),
@@ -1198,7 +1198,7 @@ MUTANTS += [
     (U, "        if (in->ow_wheel) ui_scroll(&u->ow_list, in->ow_wheel);", ""),
     (U, "    if (u->ow && !u->quit_asking && !u->full_told && !u->asking && !u->confirming) {", "    if (u->ow) {"),
     (U, "            if (!u->side_focus && l->n > 0) return (UiAction){ UA_OPEN, l->sel, u->marked > 0 };", "            if (!u->side_focus && l->n > 0) return (UiAction){ UA_OPEN, l->sel, false };"),
-    (U, "           in->ow_row >= 0 || in->ow_drow >= 0 || in->ow_field || in->toggle > 0;", "           in->ow_row >= 0 || in->ow_drow >= 0;"),
+    (U, "           in->ow_row >= 0 || in->ow_drow >= 0 || in->ow_field || in->toggle > 0 || in->find_x || in->find_field;", "           in->ow_row >= 0 || in->ow_drow >= 0 || in->find_x || in->find_field;"),
     (AP, "        if (e->d_name[0] == '.') continue;\n        char *path", "        char *path"),
     (AP, "            if (depth < APPS_DEPTH_MAX) apps_scan", "            if (true) apps_scan"),
     (AP, "        if (!S_ISREG(st.st_mode) || !str_ends_with(id, S(\".desktop\"))) continue;", "        if (!S_ISREG(st.st_mode)) continue;"),
@@ -1253,4 +1253,20 @@ MUTANTS += [
     (U, "    bool def = u->ow_def && u->ow_def_can;", "    bool def = u->ow_def;"),
     (U, "u->ow_len = u->ow_caret = 0, u->ow_def = false;", "u->ow_len = u->ow_caret = 0;"),
     (U, "        if (in->toggle == 4) {\n            if (u->ow_def_can) u->ow_def = !u->ow_def;", "        if (in->toggle == 4) {\n            u->ow_def = !u->ow_def;"),
+]
+# ---- the find bar (Michael, 2026-10-26)
+MUTANTS += [
+    (U, "    u->finding = false, u->find_keys = false, u->find_miss = false;", "    u->finding = false, u->find_miss = false;"),
+    (U, "    case UK_ENTER: case UK_SHIFT_ENTER: ui_find_leave(u); return true;", "    case UK_ENTER: case UK_SHIFT_ENTER: ui_find_close(u); return true;"),
+    (U, "        int dir = e.key == UK_UP ? -1 : 1;", "        int dir = 1;"),
+    (U, "        if (i >= 0) u->list.sel = i, ui_show_sel(&u->list);\n        return true;\n    }", "        return true;\n    }"),
+    (U, "        if (in->job_n > 0) u->jobs_focus = true, u->job_at = 0;\n        return true;", "        return true;"),
+    (U, "    case UK_JOBS:\n        ui_find_leave(u);", "    case UK_JOBS:\n        ui_find_close(u);"),
+    (U, "            if (u->finding) u->find_keys = true, u->crumb_focus = false, u->side_focus = false;", "            if (false) u->find_keys = true, u->crumb_focus = false, u->side_focus = false;"),
+    (U, "        if (u->finding && u->find_keys && ui_find_event(u, names, e, in)) continue;", "        if (u->finding && ui_find_event(u, names, e, in)) continue;"),
+    (U, "            if (u->finding) ui_find_close(u);\n            else ui_find_open(u);", "            ui_find_open(u);"),
+    (U, "        if (in->find_x) ui_find_close(u);", "        if (in->find_x) ui_find_leave(u);"),
+    (U, "        else u->find_keys = true, u->side_focus = false, u->crumb_focus = false, u->jobs_focus = false;", "        else u->side_focus = false, u->crumb_focus = false, u->jobs_focus = false;"),
+    # Not a mutant: ui_find_open's `jobs_focus = false` is inert, every way there (a key, a click)
+    # has taken the keys from the job rows already.
 ]
