@@ -289,6 +289,11 @@ static void apps_user_default(Arena *a, const char *list, Str type, char *out, s
 // list doesn't say so after.
 static bool op_set_default(Arena *a, Str type, const char *app, Err *err)
 {
+    // The canonical name, not an alias gio info may give (.p12, .p7b): a list's canonical key would
+    // win over the alias's, so setting the alias would do nothing while the check said done
+    // (reviewer-2, F7.3.1 review).
+    Str names[APPS_TYPES_MAX];
+    apps_names(a, &type, names, APPS_TYPES_MAX);
     char list[PATH_MAX];
     if (!apps_user_list(list, sizeof list)) return err_set(err, "no home folder to keep the default in"), false;
     if (!ops_allowed(list, err)) return false;

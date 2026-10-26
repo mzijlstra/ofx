@@ -1276,12 +1276,16 @@ static Str entry_mime(isize i)
 }
 
 // An SVG drawn into an image `want` px on its longer side (app icons, F7.3; nanosvg, vendored):
-// into a static buffer, which LoadTextureFromImage copies. data NULL when it won't parse.
+// into a static buffer, which LoadTextureFromImage copies. data NULL when it won't parse, or is
+// over 1 MiB: nanosvg takes seconds on the main thread for a 10 MB one, and real icons are a few
+// KiB (reviewer-2, F7.3.1 review).
 static Image svg_image(const char *file, int want)
 {
-    enum { SVG_PX_MAX = 512 };
+    enum { SVG_PX_MAX = 512, SVG_BYTES_MAX = 1 << 20 };
     static u8 pixels[SVG_PX_MAX * SVG_PX_MAX * 4];
     Image img = { 0 };
+    struct stat st;
+    if (stat(file, &st) != 0 || st.st_size > SVG_BYTES_MAX) return img;
     if (want > SVG_PX_MAX) want = SVG_PX_MAX;
     NSVGimage *svg = nsvgParseFromFile(file, "px", 96.0f);
     if (!svg) return img;

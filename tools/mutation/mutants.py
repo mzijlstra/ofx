@@ -156,8 +156,6 @@ MUTANTS += [
     (PL, "case PL_REMOVABLE: names[n++] = S(\"drive-removable-media\"), names[n++] = S(\"drive-harddisk\"); break;", "case PL_REMOVABLE: names[n++] = S(\"drive-harddisk\"); break;"),
     (PL, "if (cfg && cfg[0]) snprintf(buf, cap, \"%s/gtk-3.0/bookmarks\", cfg);", "if (0) {}"),
     # ---- F2: find
-    (U, "else while (k < m->len && fold((unsigned char)hay.p[i + k]) == fold((unsigned char)m->text[k])) k++;", "else while (k < m->len && hay.p[i + k] == m->text[k]) k++;"),
-    (U, "for (isize i = 0; i + m->len <= hay.len; i++) {", "for (isize i = 0; i + m->len < hay.len; i++) {"),
     (U, "isize i = ((from + dir * k) % l->n + l->n) % l->n;", "isize i = (from + dir * k) % l->n;"),
     (U, "u->find_miss = text.len > 0 && i < 0;", "u->find_miss = i < 0;"),
     (U, "u->list.sel = i >= 0 ? i : u->find_from;", "u->list.sel = i >= 0 ? i : u->list.sel;"),
@@ -1156,8 +1154,6 @@ MUTANTS += [
     (U, "== 0 && pm.rm_so == 0 && pm.rm_eo == to - from) return true;", "== 0 && pm.rm_so == 0) return true;"),
     (U, "== 0 && pm.rm_so == 0 && pm.rm_eo == to - from) return true;", "== 0 && pm.rm_eo == to - from) return true;"),
     (U, "        for (isize to = hay.len; to >= from; to--) {", "        for (isize to = hay.len; to > from; to--) {"),
-    (U, "        if (m->o.cased) while (k < m->len && hay.p[i + k] == m->text[k]) k++;\n        else while", "        while"),
-    (U, "        if (k == m->len && (!m->o.word || ui_whole(hay, i, i + k))) return true;", "        if (k == m->len) return true;"),
     (U, "    if (which == 1) o.cased = !o.cased;", ""),
     (U, "    if (which == 2) o.word = !o.word;", ""),
     (U, "    if (which == 3) o.regex = !o.regex;", ""),
@@ -1269,4 +1265,16 @@ MUTANTS += [
     (U, "        else u->find_keys = true, u->side_focus = false, u->crumb_focus = false, u->jobs_focus = false;", "        else u->side_focus = false, u->crumb_focus = false, u->jobs_focus = false;"),
     # Not a mutant: ui_find_open's `jobs_focus = false` is inert, every way there (a key, a click)
     # has taken the keys from the job rows already.
+]
+# ---- reviewer-2's F7.3.1 notes: plain text folds past ASCII, an alias set by its canonical name
+MUTANTS += [
+    (U, "    return l ? (u32)towlower_l((wint_t)cp, l) : cp;", "    return cp;"),
+    (U, "        if (ui_fold_cp(x) != ui_fold_cp(y)) return false;", "        if (x != y) return false;"),
+    (U, "        if (a >= hay.len) return false;\n        u32 x", "        u32 x"),
+    (U, "        if (((unsigned char)hay.p[i] & 0xC0) == 0x80) continue;   // a match starts at a character", ""),
+    (U, "            if (i + m->len > hay.len || memcmp(hay.p + i, m->text, (size_t)m->len) != 0) continue;", "            if (i + m->len > hay.len) continue;"),
+    (U, "        if (!m->o.word || ui_whole(hay, i, end)) return true;", "        if (!m->o.word || ui_whole(hay, i, i + m->len)) return true;"),
+    (O, "    apps_names(a, &type, names, APPS_TYPES_MAX);\n    char list[PATH_MAX];", "    char list[PATH_MAX];"),
+    (U, "    for (isize i = 0; i < hay.len; i++) {\n        if (((unsigned char)hay.p[i] & 0xC0) == 0x80) continue;", "    for (isize i = 1; i < hay.len; i++) {\n        if (((unsigned char)hay.p[i] & 0xC0) == 0x80) continue;"),
+    (U, "            end = i + m->len;\n", ""),
 ]

@@ -78,6 +78,11 @@ expect owopts=-
 keys backspace backspace backspace backspace backspace backspace backspace backspace backspace backspace
 keys backspace backspace backspace backspace backspace backspace backspace backspace backspace backspace
 expect owtext=-
+# An SVG over 1 MiB: the generic icon, not drawn
+type zz big
+expect own=1 owapp=zz-big.desktop owicon=application-x-executable.png
+keys backspace backspace backspace backspace backspace backspace
+expect owtext=-
 type ofx t
 # ---- Enter: the app under the cursor gets the file; the panel closes
 key tab

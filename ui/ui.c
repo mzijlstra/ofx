@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include <wctype.h>
 
 enum { UI_EVENTS_MAX = 64, UI_FIND_MAX = 256, UI_HISTORY_MAX = 64, UI_JOB_ROWS = 4, UI_APPS_MAX = 1024 };
 
@@ -629,6 +630,29 @@ static bool ui_match_re(const UiMatcher *m, Str hay)
     return false;
 }
 
+// cp with its case folded as C.UTF-8 has it (towlower), so plain text folds é and É as a regular
+// expression does (reviewer-2, F7.3.1 review); ASCII as before.
+static u32 ui_fold_cp(u32 cp)
+{
+    if (cp < 0x80) return (u32)fold((unsigned char)cp);
+    locale_t l = ui_utf8_locale();
+    return l ? (u32)towlower_l((wint_t)cp, l) : cp;
+}
+
+// Whether m's text, case folded, is at hay[i]: *end where it ends there (a folded letter can be
+// another length in bytes).
+static bool ui_folded_at(const UiMatcher *m, Str hay, isize i, isize *end)
+{
+    isize a = i, b = 0;
+    while (b < m->len) {
+        if (a >= hay.len) return false;
+        u32 x = utf8_next(hay.p, hay.len, &a), y = utf8_next(m->text, m->len, &b);
+        if (ui_fold_cp(x) != ui_fold_cp(y)) return false;
+    }
+    *end = a;
+    return true;
+}
+
 // Whether hay matches m. An empty text matches everything; a bad expression nothing.
 static bool ui_match(const UiMatcher *m, Str hay)
 {
@@ -640,11 +664,16 @@ static bool ui_match(const UiMatcher *m, Str hay)
         ui_utf8_off(was);
         return hit;
     }
-    for (isize i = 0; i + m->len <= hay.len; i++) {
-        isize k = 0;
-        if (m->o.cased) while (k < m->len && hay.p[i + k] == m->text[k]) k++;
-        else while (k < m->len && fold((unsigned char)hay.p[i + k]) == fold((unsigned char)m->text[k])) k++;
-        if (k == m->len && (!m->o.word || ui_whole(hay, i, i + k))) return true;
+    for (isize i = 0; i < hay.len; i++) {
+        if (((unsigned char)hay.p[i] & 0xC0) == 0x80) continue;   // a match starts at a character
+        isize end = i;
+        if (m->o.cased) {
+            if (i + m->len > hay.len || memcmp(hay.p + i, m->text, (size_t)m->len) != 0) continue;
+            end = i + m->len;
+        } else if (!ui_folded_at(m, hay, i, &end)) {
+            continue;
+        }
+        if (!m->o.word || ui_whole(hay, i, end)) return true;
     }
     return false;
 }

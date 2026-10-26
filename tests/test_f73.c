@@ -53,7 +53,15 @@ static void test_match(void)
     CHECK(m_has(S("x \xC3\xA9t\xC3\xA9"), ".t.", (UiMatchOpts){ .regex = true, .word = true }));
     CHECK(m_has(S("a\xFF\xFEz"), "z$", re) && !m_has(S("\xFF"), "^a", re));
     m_has(S("a\xFF" "b"), "a.b", re), m_has(S("\xC3"), ".", (UiMatchOpts){ .regex = true, .word = true });   // (no crash either way)
-    CHECK(m_has(S("CAF\xC3\x89"), "caf\xC3\xA9", plain) == false);   // plain text folds ASCII only
+    // Plain text folds past ASCII too (reviewer-2): é and É; not with the case toggle; whole words;
+    // never from inside a character; a byte that isn't UTF-8 still matches itself.
+    CHECK(m_has(S("CAF\xC3\x89"), "caf\xC3\xA9", plain) && !m_has(S("CAF\xC3\x89"), "caf\xC3\xA9", cased));
+    CHECK(m_has(S("x \xC3\x89t\xC3\xA9 y"), "\xC3\xA9T\xC3\x89", word) && !m_has(S("\xC3\x89t\xC3\xA9s"), "\xC3\xA9t\xC3\xA9", word));
+    CHECK(!m_has(S("\xC3\xA9"), "\xA9", plain));   // never from inside a character
+    CHECK(m_has(S("a\xFF" "b"), "\xFF" "B", plain) && m_has(S("ab"), "b", plain) && !m_has(S("a"), "ab", plain));
+    CHECK(!m_has((Str){ "abcdef", 3 }, "cd", plain));   // not past the name's end
+    // A letter that folds to fewer bytes (K, the Kelvin sign, 3 bytes, is k): the word ends after it.
+    CHECK(m_has(S("\xE2\x84\xAA-"), "k", word) && m_has(S("\xE2\x84\xAA"), "K", plain));
     // A bad expression: nothing matches, and the reason; the next good one is compiled again.
     static UiMatcher m;
     ui_matcher_set(&m, S("a(b"), re);
@@ -551,6 +559,10 @@ static void test_set_default(void)
     CHECK(op_set_default(&ta, S("text/x-tex"), "nvim.desktop", &err));
     char args[256];
     CHECK(wait_file(at("bin731/args"), args, sizeof args) && strcmp(args, "mime -- text/x-tex nvim.desktop") == 0);
+    // An alias is set (and checked) by its canonical name (reviewer-2).
+    unlink(at("bin731/args"));
+    CHECK(op_set_default(&ta, S("image/x-old"), "imv.desktop", &err));
+    CHECK(wait_file(at("bin731/args"), args, sizeof args) && strcmp(args, "mime -- image/png imv.desktop") == 0);
     env_set("PATH", at("bin731no"));
     CHECK(!op_set_default(&ta, S("text/x-other"), "nvim.desktop", &err) && strcmp(err.msg, "Failed to set: no such app") == 0);
     put(at("bin731no/gio"), "#!/bin/sh\n");

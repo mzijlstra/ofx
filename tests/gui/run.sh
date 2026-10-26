@@ -208,6 +208,9 @@ app ofx-t-code "Ofx T Code" 'Icon=utilities-terminal\nMimeType=text/plain;inode/
 app ofx-t-helper "Ofx T Helper" 'Icon=ofx-t-vec\nNoDisplay=true\nMimeType=text/plain;\n'
 app ofx-t-hidden "Ofx T Hidden" 'NoDisplay=true\n'
 app ofx-t-other "Ofx T Other" 'Icon=ofx-t-no-such-icon\n'
+# An SVG over 1 MiB isn't drawn (reviewer-2, F7.3.1): the generic icon.
+{ printf '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"><!-- '; head -c 1100000 /dev/zero | tr '\0' x; printf ' --><rect width="16" height="16"/></svg>\n'; } > "$T/data/pixmaps/zz-big.svg"
+app zz-big "Zz Big Icon" 'Icon=zz-big\n'
 # Set as default (F7.3.1): the desktop's list, read first, sets image/png (Omarchy's sets http).
 printf '[Default Applications]\nimage/png=ofx-t-view.desktop\n' > "$T/config/hyprland-mimeapps.list"
 printf '1 0 0:1 / / rw - ext4 /dev/x rw\n' > "$T/mountinfo"

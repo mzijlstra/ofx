@@ -327,6 +327,14 @@ MUTANTS = [
     (OW, '        if (ow.icon[i].tex.id) UnloadTexture(ow.icon[i].tex);\n        ow.icon[i] = (IconSlot){ 0 }, ow.icon_tried[i] = false;', '        ow.icon_tried[i] = false;', 'f73'),
     (G, '        if (!app.ui.ow && ow.icons_on) ow_drop();   // the panel closed: its icons go (F7.3)', '', 'f73'),
     (G, '    if (str_ends_with(str_from_c(file), S(".svg"))) {', '    if (false) {', 'f73'),
+    (G, '    if (stat(file, &st) != 0 || st.st_size > SVG_BYTES_MAX) return img;', '    if (stat(file, &st) != 0) return img;', 'f73'),
+    # ---- the find bar (Michael, 2026-10-26)
+    (G, '        if (app.ui.finding) layout_find_bar();', '', 'f2'),
+    (G, ' - (app.ui.finding ? FIND_BAR_H : 0);', ';', 'f2'),
+    (G, '        h.find_x = in_box(CLAY_ID("find-x"), x, y);', '', 'f2'),
+    (G, '        h.find_field = !h.toggle && !h.find_x && in_box(CLAY_ID("find-field"), x, y);', '', 'f2'),
+    (G, '    in->find_x = h.find_x, in->find_field = h.find_field;', '', 'f2'),
+    (G, '    ui_find_close(&app.ui);   // (a tab\'s own find isn\'t kept)', '', 'f2'),
     # ---- F7.3.1: Set as default
     (OW, '    if (strcmp(ow.type, "application/x-zerosize") == 0) snprintf(', '    if (false) snprintf(', 'f73'),
     (OW, '    else if (apps_shadowed(&owa, str_from_c(ow.type), shadow, sizeof shadow))', '    else if (false)', 'f73'),

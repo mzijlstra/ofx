@@ -483,6 +483,11 @@ Michael's), checks the list says so, then opens. Greyed with the reason for an e
 (`application/x-zerosize`, every empty file's) and for a type a list read before the user's sets
 (`hyprland-mimeapps.list`: the change would do nothing). No undo (Michael). A folder's type can be
 set: ofx goes into folders itself, other programs would open the new default.
+reviewer-2's SHIP at `6c60ef7` (2026-10-26), three notes, landed: plain-text find folds past
+ASCII too (towlower in C.UTF-8: é finds É, as the regular expression does); a type is set (and
+checked) by its canonical name, not an alias gio info may give (.p12, .p7b); an SVG over 1 MiB isn't
+drawn (a 10 MB one took 1.4 s at 48 px on the main thread; real icons are a few KiB). Its checks:
+Default and Recommended equal GIO's; GLib's rewrite of a copy adds the two lines only.
 
 **F7.3 as built (2026-10-26):**
 - `ui/ui.c`: one matcher (`UiMatcher`, `ui_match`) for find and the filter: case folded or as

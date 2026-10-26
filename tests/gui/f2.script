@@ -87,6 +87,13 @@ point-ui find-x
 click-here
 expect finding=0 findkeys=0 rows=14
 pointer-off
+# A tab change closes it (a tab doesn't keep its own find).
+char /
+type a
+key ctrl-t
+expect tabs=2 finding=0 findkeys=0
+key ctrl-w
+expect tabs=1 finding=0
 # History: Enter, Backspace, Alt+Left twice, Alt+Right, the mouse's buttons.
 key home
 key enter
