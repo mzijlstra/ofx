@@ -79,6 +79,10 @@ his word: Nemo's compact view and its icon size slider.
   folders under it (Michael, 2026-10-25: later).
 - Cache cleanup (Michael, 2026-10-24): orphans, age and a cap are F6.5. Still later: clearing the
   cache completely, and the cleanup's settings on a settings page.
+- The GUI mutants, the next time `gui.py` is worked on (Michael, 2026-10-26): start the slowest
+  mutants first. On a quiet machine 46 mutants took about 410 s at 6, 8, 10 or 12 workers alike,
+  CPU 42-63%: the time is the unmutated suite at the start plus the slowest mutants at the end,
+  not the processor. The order by each tag group's time in the baseline is the first thing to try.
 - Not wanted: Nemo's built-in terminal (`t`, a terminal here, covers it).
 
 **Thumbnails, a rule from Nemo (2026-10-20):** Nemo looped at up to 45% CPU on one file
