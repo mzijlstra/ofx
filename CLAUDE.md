@@ -69,6 +69,10 @@ rules shared by every tool here.
   real pid of his.
 - **New Window** (F7.1, Ctrl+N) runs `uwsm-app -- <this ofx> <folder>`: through the fake
   `uwsm-app` in a test, so no second window opens.
+- **Open With** (F7.3) runs `uwsm-app -- gio launch <app> <files>` and Enter on several marked
+  files does too: through the fake `uwsm-app` in a test. The panel reads every installed app
+  (the data dirs' `applications/`, read only) and asks the real `gio info` for a file's type
+  (it only reads); run-script.sh's `gio` fake hands `info` to the real one, unlogged.
 - **A window that stops answering** pops Hyprland's "terminate?" dialog on his screen, even on the
   headless output. The script's `sh` runs under `timeout 5` for that reason; keep everything a
   script waits for short.

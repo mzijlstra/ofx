@@ -25,13 +25,13 @@ libpng, giflib and zlib for the previews. raylib and Clay are vendored.
 | Up/Down, `j`/`k` | move; past the first or the last, round to the other end (the icon view: Left/Right round the ends, Up/Down in the column) |
 | PgUp/PgDn | a page |
 | Home/End, `g`/`G` | first, last |
-| Enter | open: a folder is entered, a file goes to `gio open` (Nemo's way: the type from its name; a terminal app such as nvim in a terminal); an empty file, which gio can't type, to the default app for its name's type (`gio launch`) |
+| Enter | open: a folder is entered, a file goes to `gio open` (Nemo's way: the type from its name; a terminal app such as nvim in a terminal); an empty file, which gio can't type, to the default app for its name's type (`gio launch`); several selected files, each default app once with all of its files (folders among them stay) |
 | Backspace | up to the parent, the folder you left selected |
 | Alt+Left, Alt+Right | back and forward |
 | Alt+Up | up to the parent |
 | Ctrl+L, Ctrl+Right | type a location: all of it selected, so typing replaces it; `~` is home, a relative path starts here; a file's path opens its folder with the file selected |
 | Ctrl+K, Ctrl+Up | the keys to the path buttons: Left/Right (`h`/`l`), Home/End move, Enter goes there, Shift+Enter opens it in a background tab, Esc back to the list |
-| `/`, Ctrl+F | find: type to jump, Enter keeps, Esc goes back; then `n`/`N` again |
+| `/`, Ctrl+F | find: type to jump, Enter keeps, Esc goes back; then `n`/`N` again. Alt+C match case, Alt+W whole words, Alt+R a regular expression (the toggles beside it too; kept for the next find) |
 | `.`, Ctrl+H | hidden files on and off |
 | `s`, `S` | sort by the next column (name, size, modified), reverse |
 | Tab, Ctrl+Left | the keys to the sidebar (a hidden one shows as places); Tab again back; in the tree, Left/Right (`h`/`l`) close and open a folder (or move up and down a level), Enter goes there |
@@ -58,6 +58,7 @@ libpng, giflib and zlib for the previews. raylib and Clay are vendored.
 | Ctrl+J, Ctrl+Down | the keys to the job rows' ×: Up/Down (`k`/`j`) move, Enter asks to cancel that job, Esc back |
 | Ctrl+Q | close every ofx window (each asks first while its jobs run or wait) |
 | F10, Alt+F | the File menu: Up/Down (`k`/`j`) move, Enter picks, Esc closes; also by the pointer |
+| File, Open With Other Application… | the apps for the selected files (or the cursor's): the default, the recommended ones (they name the type), then the rest. Type to filter (any part of the name; Alt+C, Alt+W, Alt+R as in find), Tab or Down to the list, Up/Down (`k`/`j`) there, Enter opens all the files with it in one `gio launch`, Esc closes |
 
 The File menu also has Create New Empty File ("New file", named in the row, as a new folder is).
 Open With Other Application shows greyed: it comes with F7.3.

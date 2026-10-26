@@ -1,7 +1,7 @@
 # F7.1: the menu bar and the File menu, on a tree made by tests/gui/run.sh: HOME=<scratch>/home,
 # home/tree with a.txt, b.txt, sub.d/, ro/ (x.txt, the folder read only); a mount list of / alone.
 settle
-expect menu=- menuat=- canwrite=1 windows=1 menuoff=open-with
+expect menu=- menuat=- canwrite=1 windows=1 menuoff=-
 # Under the menu bar, the sidebar's rows and the bottom bar fit: (516 - 26 - 40 - 28 - 12) / 28.
 expect siderows=14 footerin=1
 sh test -f "$OFX_ROOT/windows/$(cat "$OFX_ROOT/run.pid")"
@@ -16,6 +16,8 @@ key down
 expect menuat=new-file
 key down
 expect menuat=open
+key down
+expect menuat=open-with
 key down
 expect menuat=properties
 key down
@@ -82,12 +84,6 @@ click-here
 point-ui menu-item 1
 hover-here
 expect menuat=new-window
-# A greyed entry: not marked, and a press on it leaves the menu open.
-point-ui menu-item 6
-hover-here
-expect menuat=new-window
-click-here
-expect menu=File
 # A press anywhere else only closes it: the row isn't selected.
 point-ui row 1
 click-here
@@ -137,10 +133,17 @@ expect tabs=1 menu=-
 key ctrl-l
 type ro
 key enter
-wait-for 2000 sel=x.txt canwrite=0 menuoff=new-folder,new-file,open-with
+wait-for 2000 sel=x.txt canwrite=0 menuoff=new-folder,new-file
 key f10
 keys down down
 expect menuat=open
+# A greyed entry: not marked by the pointer, and a press on it leaves the menu open.
+point-ui menu-item 2
+hover-here
+expect menuat=open
+click-here
+expect menu=File menuat=open
+pointer-off
 key esc
 # ---- the trash view: no Create, no New Window; Open with nothing in it neither
 key backspace

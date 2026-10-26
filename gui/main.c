@@ -155,6 +155,7 @@ static struct {
     char      error[sizeof(Err)];   // why the folder could not be read
     Ui        ui;           // the list's and sidebar's cursors, find, the sort
     UiPress   press;
+    UiPress   ow_press;   // Open With's rows (F7.3)
     bool      show_hidden;
     Places    places;
     u8        place_head[PLACES_MAX];   // 1 for a heading row (app.ui.side_head)
@@ -541,6 +542,9 @@ static void go_parent(void)
 }
 
 static Str entry_mime(isize i);
+static void ow_open(void);   // Open With (gui/openwith.c, F7.3)
+static void ow_launch(isize i);
+static void open_marked(void);
 
 static void open_entry(isize i)
 {
@@ -1158,7 +1162,7 @@ static void act(UiAction a)
         tree_refresh(false, (int)a.index);
         break;
     }
-    case UA_OPEN: open_entry(a.index); break;
+    case UA_OPEN: a.all ? open_marked() : open_entry(a.index); break;
     case UA_PARENT: go_parent(); break;
     case UA_TERMINAL:
         if (spawn_terminal(app.cwd, &err)) set_status(false, "terminal in %s", app.cwd);
@@ -1229,6 +1233,8 @@ static void act(UiAction a)
     case UA_CLOSE_ALL: close_others(a.all); break;
     case UA_PROPS: props_open(); break;
     case UA_CHMOD: props_chmod((int)a.index); break;
+    case UA_OPEN_WITH: ow_open(); break;
+    case UA_LAUNCH: ow_launch(a.index); break;
     case UA_PASTE: paste(); break;
     case UA_UNDO: undo_last(); break;
     case UA_ANSWER: job_answer((int)a.index, a.all); break;
@@ -1415,10 +1421,13 @@ static int list_cells(void)
 }
 
 // The list's rows and columns for the window as it is now.
+static int  ow_rows(int h);   // Open With (gui/openwith.c, F7.3)
+
 static void list_fit(void)
 {
     ui_set_cols(&app.ui.list, list_cols(GetScreenWidth()));
     ui_resize(&app.ui.list, list_rows(GetScreenHeight()));
+    ui_resize(&app.ui.ow_list, ow_rows(GetScreenHeight()));   // Open With's list (F7.3)
 }
 
 static int side_rows(int h)
@@ -2250,7 +2259,7 @@ static void layout_menubar(void)
 
 // ---- the modal panels (F5.1) --------------------------------------------------------------------
 
-typedef enum { MODAL_NONE, MODAL_DELETE, MODAL_CLASH, MODAL_CANCEL, MODAL_QUIT, MODAL_FULL, MODAL_EMPTY, MODAL_PROPS } ModalKind;
+typedef enum { MODAL_NONE, MODAL_DELETE, MODAL_CLASH, MODAL_CANCEL, MODAL_QUIT, MODAL_FULL, MODAL_EMPTY, MODAL_PROPS, MODAL_OW } ModalKind;
 
 // The panel on top, in the order ui_handle takes their keys.
 static ModalKind modal_kind(void)
@@ -2262,6 +2271,7 @@ static ModalKind modal_kind(void)
     if (app.ui.empty_asking) return MODAL_EMPTY;
     if (jobs.asking >= 0 && app.ui.asking) return MODAL_CLASH;
     if (app.ui.props) return MODAL_PROPS;   // under any question (F7.2)
+    if (app.ui.ow) return MODAL_OW;         // likewise (F7.3)
     return MODAL_NONE;
 }
 
@@ -2686,6 +2696,8 @@ static void layout_props_panel(void)
     }
 }
 
+#include "openwith.c"
+
 // The panel over the window, the rest darkened but still readable (Michael's pick over a blur,
 // 2026-10-21).
 static void layout_modal(ModalKind k, float w, float h)
@@ -2694,6 +2706,7 @@ static void layout_modal(ModalKind k, float w, float h)
                                       .backgroundColor = { 0, 0, 0, 150 },
                                       .floating = { .attachTo = CLAY_ATTACH_TO_ROOT, .zIndex = 10 } }) {}
     if (k == MODAL_PROPS) layout_props_panel();
+    else if (k == MODAL_OW) layout_ow_panel();
     else layout_modal_panel(k);
 }
 
@@ -2928,6 +2941,9 @@ static Clay_RenderCommandArray layout(int w, int h)
             if (modal_kind() == MODAL_PROPS) {
                 text(fit(S("Properties: \xE2\x86\x90 \xE2\x86\x91 \xE2\x86\x93 \xE2\x86\x92 (h j k l) move \xC2\xB7 Space or Enter changes \xC2\xB7 Esc closes"), foot_w, false),
                      cc(t->fg_dim));
+            } else if (modal_kind() == MODAL_OW) {
+                text(fit(S("Open With: type to filter \xC2\xB7 Tab or \xE2\x86\x93 the list \xC2\xB7 Enter opens \xC2\xB7 Esc closes \xC2\xB7 "
+                           "Alt+C case, Alt+W words, Alt+R regex"), foot_w, false), cc(t->fg_dim));
             } else if (modal_kind() != MODAL_NONE) {
                 text(cz("Answer the question above"), cc(t->fg_dim));
             } else if (app.ui.menu_on) {
@@ -2947,12 +2963,19 @@ static Clay_RenderCommandArray layout(int w, int h)
                 text(fit(S("Jobs: \xE2\x86\x91 \xE2\x86\x93 (k j) move \xC2\xB7 Enter cancels the marked job \xC2\xB7 Esc back to the list"), foot_w, false),
                      cc(t->fg_dim));
             } else if (app.ui.finding) {
-                // The find line: its text, red when it matches nothing, and a caret.
+                // The find line: its text, red when it matches nothing, and a caret; the toggles
+                // (F7.3) and a bad expression's reason after it.
                 Str f = { app.ui.find, app.ui.find_len };
                 text(cz("Find: "), cc(t->fg_dim));
-                text(fit(f, foot_w - 80, true), app.ui.find_miss ? cc(t->red) : cc(t->fg));
+                text(fit(f, foot_w - 200, true), app.ui.find_miss ? cc(t->red) : cc(t->fg));
                 CLAY(CLAY_ID("caret"), { .layout = { .sizing = { CLAY_SIZING_FIXED(2), CLAY_SIZING_FIXED(FONT_PX + 2) } },
                                          .backgroundColor = cc(t->accent) }) {}
+                CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_FIXED(12), CLAY_SIZING_FIT(0) } } }) {}
+                layout_toggles(app.ui.find_opts);
+                if (app.ui.find_m.bad) {
+                    CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_FIXED(12), CLAY_SIZING_FIT(0) } } }) {}
+                    text(fit(str_from_c(app.ui.find_m.err), foot_w - 300 - str_width(f), false), cc(t->red));
+                }
             } else if (app.status[0]) {
                 text(fit(str_from_c(app.status), foot_w, false), app.status_bad ? cc(t->red) : cc(t->fg));
             } else {
@@ -3081,7 +3104,7 @@ static UiKey ui_key_of(int key, int mods)
     case GLFW_KEY_LEFT: return UK_LEFT;
     case GLFW_KEY_BACKSPACE: return UK_BACKSPACE;
     case GLFW_KEY_ESCAPE: return UK_ESC;
-    case GLFW_KEY_TAB: return m == 0 ? UK_TAB : UK_NONE;
+    case GLFW_KEY_TAB: return m == 0 || m == GLFW_MOD_SHIFT ? UK_TAB : UK_NONE;   // Shift+Tab: back, where there are two places (F7.3)
     case GLFW_KEY_F2: return m == 0 ? UK_F2 : UK_NONE;
     case GLFW_KEY_F9: return m == 0 ? UK_F9 : UK_NONE;
     case GLFW_KEY_F10: return m == 0 ? UK_F10 : UK_NONE;
@@ -3153,6 +3176,9 @@ typedef struct {
     int   menu_title;   // a menu bar title, -1 for none (F7.1)
     int   menu_item;    // an entry of the open menu (its place), -1 for none
     int   prop_box;     // a checkbox of the Properties panel's grid, -1 for none (F7.2)
+    int   ow_row;       // a row of Open With's list (on screen), -1 for none (F7.3)
+    bool  ow_field;     // its field
+    int   toggle;       // a toggle of its field or of the find line (1..3), 0 for none
 } Hit;
 
 static bool in_box(Clay_ElementId id, float x, float y)
@@ -3164,7 +3190,9 @@ static bool in_box(Clay_ElementId id, float x, float y)
 
 static Hit hit_at(float x, float y)
 {
-    Hit h = { -1, -1, -1, UB_NONE, -1, -1, -1, 0, -1, -1, -1, -1, false, -1, -1, -1 };
+    Hit h = { -1, -1, -1, UB_NONE, -1, -1, -1, 0, -1, -1, -1, -1, false, -1, -1, -1, -1, false, 0 };
+    for (int k = 1; k <= 3 && !h.toggle && (app.ui.ow || app.ui.finding); k++)
+        if (in_box(CLAY_IDI("toggle", k), x, y)) h.toggle = k;
     if (modal_kind() == MODAL_NONE)
         for (int m = 0; m < UI_MENUS && h.menu_title < 0; m++)
             if (in_box(CLAY_IDI("menu-title", m), x, y)) h.menu_title = m;
@@ -3184,6 +3212,9 @@ static Hit hit_at(float x, float y)
             if (in_box(Clay_GetElementId(cz(MB[k].id)), x, y)) h.modal = MB[k].b;
         for (int k = 0; modal_kind() == MODAL_PROPS && k < 9 && h.prop_box < 0; k++)
             if (in_box(CLAY_IDI("prop-box", k), x, y)) h.prop_box = k;
+        for (int r = 0; modal_kind() == MODAL_OW && r < app.ui.ow_list.rows && h.ow_row < 0; r++)
+            if (in_box(CLAY_IDI("ow-row", r), x, y)) h.ow_row = r;
+        h.ow_field = modal_kind() == MODAL_OW && !h.toggle && in_box(CLAY_ID("ow-field"), x, y);
         return h;
     }
     for (int i = 0; tabbar.n >= 2 && i < tabbar.n && h.tab < 0; i++) {
@@ -3241,6 +3272,12 @@ static void press_at(UiInput *in, float x, float y, int mods)
     in->bar = h.bar, in->crumb = h.crumb;
     in->modal = h.modal;
     in->prop_box = h.prop_box;
+    if (h.ow_row >= 0) {
+        if (ui_press(&app.ow_press, app.ui.ow_list.top + h.ow_row, now_ms()) == 2) in->ow_drow = h.ow_row;
+        else in->ow_row = h.ow_row;
+    }
+    in->ow_field = h.ow_field;
+    in->toggle = h.toggle;
     in->job_x = h.job_x;
     in->side_mode = h.mode;
     in->side_twisty = h.twisty;
@@ -3267,6 +3304,7 @@ static float wheel_left;   // a touchpad's part of a notch, carried to the next 
 // sidebar scrolls by itself. True when the sidebar moved.
 static bool wheel_at(UiInput *in, float x, int notches, bool ctrl)
 {
+    if (app.ui.ow) return in->ow_wheel = notches, false;   // the panel's list (F7.3)
     if (x >= side_w() && ctrl) in->zoom_wheel = notches;
     else if (x >= side_w()) in->wheel = notches;
     else if (notches) return app.ui.side.top = ui_clamp(app.ui.side.top - notches, 0, ui_max_top(&app.ui.side)), true;
@@ -3498,6 +3536,7 @@ int main(int argc, char **argv)
     arena_init(&treea, "tree", tree_mem, sizeof tree_mem);
     arena_init(&doomeda, "delete", doomed_mem, sizeof doomed_mem);
     arena_init(&propsa, "properties", props_mem, sizeof props_mem);
+    arena_init(&owa, "open with", ow_mem, sizeof ow_mem);
     undo.arena = &undoa;
     uint32_t need = Clay_MinMemorySize();
     if ((size_t)need > sizeof clay_mem) {
@@ -3578,7 +3617,7 @@ int main(int argc, char **argv)
     side_refresh();
     list_fit();
     ui_resize(&app.ui.side, side_rows(GetScreenHeight()));
-    app.press.row = -1;
+    app.press.row = -1, app.ow_press.row = -1;
     go_to(dir, STR_EMPTY, 0);
     if (!app.have_list) snprintf(app.cwd, sizeof app.cwd, "%s", dir);
     tabs[0].used = true;
@@ -3659,6 +3698,7 @@ int main(int argc, char **argv)
         if (ui_input_acts(&in) && ui_status_clears(app.status_bad, app.status_at, now_ms())) app.status[0] = 0;
         if (ui_input_acts(&in) && ui_tip_act(&app.tip)) seen = true;   // a click or key: the tooltip goes
         bool was_editing = app.ui.editing, was_confirming = app.ui.confirming;
+        if (app.ui.ow) in.app_name = ow.names, in.app_n = ow.shown < UI_APPS_MAX ? ow.shown : UI_APPS_MAX;
         UiAction a = ui_handle(&app.ui, (UiNames){ list_name, NULL, list_dir }, &in);
         if (app.ui.copied) text_copy((Str){ app.ui.copy, app.ui.copy_len }), app.ui.copied = false;
         // Shift+Delete and its y can come in one frame's input: the question opened and was answered
@@ -3676,6 +3716,7 @@ int main(int argc, char **argv)
     clip_quit();
     count_stop();
     walk_stop();
+    ui_matcher_set(&app.ui.find_m, STR_EMPTY, app.ui.find_opts), ui_matcher_set(&app.ui.ow_m, STR_EMPTY, app.ui.ow_opts);   // (a compiled expression freed: LeakSanitizer)
     thumbs_stop();
     space_stop();
     timer_stop();

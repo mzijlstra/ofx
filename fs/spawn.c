@@ -64,9 +64,11 @@ static bool spawn_detached(char *const *argv, Err *err)
 }
 
 // Through uwsm-app when it is there, as Omarchy launches apps (each in its own systemd scope).
+enum { SPAWN_FILES_MAX = 256 };   // files in one launch (F7.3); more go in further launches
+
 static bool spawn_app(const char *const *cmd, isize n, Err *err)
 {
-    const char *argv[16];
+    const char *argv[SPAWN_FILES_MAX + 8];
     isize k = 0;
     if (on_path("uwsm-app")) argv[k++] = "uwsm-app", argv[k++] = "--";
     for (isize i = 0; i < n && k < COUNT(argv) - 1; i++) argv[k++] = cmd[i];
@@ -99,6 +101,17 @@ static bool spawn_launch(const char *desktop, const char *path, Err *err)
 {
     const char *cmd[] = { "gio", "launch", desktop, path };
     return spawn_app(cmd, COUNT(cmd), err);
+}
+
+// The app's desktop file run on n files at once (F7.3, Open With and Enter on several): one
+// `gio launch`, which hands them all to an app that takes several (%F, %U) and runs one that takes
+// one (%f) once a file. At most SPAWN_FILES_MAX: the caller splits more.
+static bool spawn_launch_all(const char *desktop, char *const *paths, isize n, Err *err)
+{
+    const char *cmd[SPAWN_FILES_MAX + 3] = { "gio", "launch", desktop };
+    isize k = 3;
+    for (isize i = 0; i < n && i < SPAWN_FILES_MAX; i++) cmd[k++] = paths[i];
+    return spawn_app(cmd, k, err);
 }
 
 static bool spawn_terminal(const char *dir, Err *err)

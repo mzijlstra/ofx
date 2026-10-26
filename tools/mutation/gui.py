@@ -24,7 +24,7 @@ them filled it on 2026-10-24.
 """
 import hashlib, os, re, shutil, subprocess, sys
 
-G, W, K, J, TB, WK = 'gui/main.c', 'gui/watch.c', 'gui/counts.c', 'gui/jobs.c', 'gui/thumbs.c', 'gui/walk.c'
+G, W, K, J, TB, WK, OW = 'gui/main.c', 'gui/watch.c', 'gui/counts.c', 'gui/jobs.c', 'gui/thumbs.c', 'gui/walk.c', 'gui/openwith.c'
 MUTANTS = [
     (G, "    go_to(up, str_from_c(child_buf), 0);", "    go_to(up, STR_EMPTY, 0);"),
     (G, "    if (go_to(app.cwd, str_from_c(keep), app.ui.list.sel)) return;", "    if (go_to(app.cwd, STR_EMPTY, app.ui.list.sel)) return;"),
@@ -291,6 +291,32 @@ MUTANTS = [
     (G, '    if (statx(AT_FDCWD, path, props.broken ? AT_SYMLINK_NOFOLLOW : 0, STATX_BTIME, &sx) == 0 && (sx.stx_mask & STATX_BTIME))', '    if (false)', 'f72'),
     (G, '            if (app.ui.marked ? app.ui.mark[i] : i == app.ui.list.sel) props.idx = i;', '            {}', 'f72'),
     (WK, '        if (whole && gen == atomic_load(&walk.gen)) walk.sum = s, walk.sum_gen = gen, walk.done = walk.fresh = true;', '', 'f72'),
+    # ---- F7.2 follow-ups: hard links, the MIME type (Michael, 2026-10-26)
+    (WK, '                    .inodes = walk_inodes };', '                    .inodes = NULL };', 'f72'),
+    (G, '        props.type_by_name = !app.thumb_local || !spawn_gio_type(props_path[0], props.type, sizeof props.type, 1000);', '        props.type_by_name = true;', 'f72'),
+    (G, '        mime_comment(&scratch, str_from_c(props.type), props.type_name, sizeof props.type_name);', '', 'f72'),
+    # ---- F7.3: Open With, Enter on several, find's toggles
+    (OW, '    if (!app.thumb_local || !spawn_gio_type(ow.paths[0], ow.type, sizeof ow.type, 1000)) {', '    if (true) {', 'f73'),
+    (OW, '    ow.shown = apps_rank(&owa, &ow.apps, str_from_c(ow.type));', '    ow.shown = ow.apps.n;', 'f73'),
+    (OW, '    for (isize i = 0; i < ow.shown && i < UI_APPS_MAX; i++) ow.names[i] = ow.apps.a[i].name;', '    for (isize i = 0; i < ow.shown && i < UI_APPS_MAX; i++) ow.names[i] = ow.apps.a[i].id;', 'f73'),
+    (OW, '    if (i < 0 || i >= ow.shown) return;', '    if (i < 0) return;', 'f73'),
+    (OW, '        isize k = ow.n - at < SPAWN_FILES_MAX ? ow.n - at : SPAWN_FILES_MAX;', '        isize k = 1;', 'f73'),
+    (OW, '        if (kind_is_dir(e->kind) || e->kind == K_LINK_BROKEN || !entry_path(i, p, sizeof p)) {', '        if (!entry_path(i, p, sizeof p)) {', 'f73'),
+    (OW, '                if (strcmp(desk[k], d) == 0) g = k;', '', 'f73'),
+    (OW, '        if (group[i] < 0) bad |= !spawn_open(paths[i], &err), opened++;', '', 'f73'),
+    (OW, '    if (n == 0) {   // only folders marked: the cursor\'s, as before\n        open_entry(app.ui.list.sel);\n        return;\n    }', '', 'f73'),
+    (G, '    case UA_OPEN: a.all ? open_marked() : open_entry(a.index); break;', '    case UA_OPEN: open_entry(a.index); break;', 'f73'),
+    (G, '    case UA_OPEN_WITH: ow_open(); break;', '', 'f73'),
+    (G, '    case UA_LAUNCH: ow_launch(a.index); break;', '', 'f73'),
+    (G, '    if (app.ui.ow) return MODAL_OW;         // likewise (F7.3)', '', 'f73'),
+    (G, '            if (in_box(CLAY_IDI("ow-row", r), x, y)) h.ow_row = r;', '', 'f73'),
+    (G, '        h.ow_field = modal_kind() == MODAL_OW && !h.toggle && in_box(CLAY_ID("ow-field"), x, y);', '', 'f73'),
+    (G, '        if (in_box(CLAY_IDI("toggle", k), x, y)) h.toggle = k;', '', 'f73'),
+    (G, '        if (ui_press(&app.ow_press, app.ui.ow_list.top + h.ow_row, now_ms()) == 2) in->ow_drow = h.ow_row;', '        if (false) in->ow_drow = h.ow_row;', 'f73'),
+    (G, '    in->toggle = h.toggle;\n', '', 'f73'),
+    (G, '        if (app.ui.ow) in.app_name = ow.names, in.app_n = ow.shown < UI_APPS_MAX ? ow.shown : UI_APPS_MAX;', '', 'f73'),
+    (G, '    case GLFW_KEY_TAB: return m == 0 || m == GLFW_MOD_SHIFT ? UK_TAB : UK_NONE;', '    case GLFW_KEY_TAB: return m == 0 ? UK_TAB : UK_NONE;', 'f73'),
+    (G, '    ui_resize(&app.ui.ow_list, ow_rows(GetScreenHeight()));   // Open With\'s list (F7.3)', '', 'f73'),
 ]
 import concurrent.futures, queue, threading
 
@@ -312,7 +338,7 @@ tags_path = os.environ.get('OFX_GUI_TAGS') or os.path.join(root, 'tools', 'mutat
 # run.sh's groups, in its order: a mutant runs them one at a time and stops at the first that
 # kills it (Michael, 2026-10-25).
 GROUPS = ['browse', 'big', 'gone', 'watchgap', 'f2', 'f3', 'f4', 'f5', 'f52', 'f53', 'f54', 'f6', 'f62', 'f63', 'f64', 'f7',
-          'f72', 'hang', 'guard3', 'guard']
+          'f72', 'f73', 'hang', 'guard3', 'guard']
 run_text = open(os.path.join(root, 'tests/gui/run.sh')).read()
 assert re.findall(r'want ([a-z0-9]+)', run_text) == GROUPS, 'GROUPS in gui.py no longer match tests/gui/run.sh'
 

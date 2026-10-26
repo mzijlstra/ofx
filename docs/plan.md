@@ -462,6 +462,28 @@ process, one window), one page; only for showing a file's properties and changin
   into `~/.config/mimeapps.list`; a type that `hyprland-mimeapps.list` (read first) sets is said,
   not silently shadowed. Ctrl+Z puts the old default back (no old one: ofx removes the line).
 
+**F7.3 as built (2026-10-26):**
+- `ui/ui.c`: one matcher (`UiMatcher`, `ui_match`) for find and the filter: case folded or as
+  typed, whole words (no letter, digit, `_` or byte past ASCII on either side; with a regular
+  expression each match is tried until one stands alone), POSIX extended expressions (`regcomp`;
+  a bad one matches nothing and its reason shows in red). Find's toggles live in the find line
+  and are kept for the next find and for `n`/`N`. The panel (`ui_ow_*`): its field (a caret,
+  Left/Right/Home/End/Backspace/Delete by code point), the list (`UiList`), the keys and pointer
+  as decided; Enter with entries marked opens them all (`UiAction.all`).
+- `fs/apps.c`: `apps_all` (every app of the data dirs' `applications/`, three folders deep, a
+  desktop id's first file the app, unusable ones left out) and `apps_rank` (the type's default,
+  then those whose MimeType= names it, a parent or an alias, or that a list's Default or Added
+  Associations names, less Removed Associations; then the rest; NoDisplay apps only when
+  recommended; each part by name, case folded). The type is the first file's, as gio has it.
+- `fs/spawn.c`: `spawn_launch_all`, up to 256 files a launch (more go in further launches).
+- `gui/openwith.c`: the panel (`ow_open`, `ow_launch`, `layout_ow_panel`, ten rows, fewer in a
+  small window; a part's name on its first row) and `open_marked` (Enter on several: grouped by
+  each file's default app for its name's type; those without one through `gio open` each; folders
+  left, and with only folders marked Enter goes into the cursor's as before). Shift+Tab is Tab.
+- Tests: `tests/test_f73.c`; GUI `f73` (the menu, the filter and toggles, the keys, Shift+Tab, the
+  pointer, several files, a folder, Enter on several, find's toggles); `f7` updated (Open With is
+  enabled now).
+
 ## F6.4 design (2026-10-24)
 
 **Asked (Michael):** previews in the icon view, from the freedesktop thumbnail cache shared with

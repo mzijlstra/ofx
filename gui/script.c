@@ -169,7 +169,7 @@ static void script_state(char *out, size_t cap)
     if (jobs.asking >= 0) snprintf(clashjob, sizeof clashjob, "%s", job_recs[jobs.asking].label);
     for (char *c = clashjob; *c; c++)
         if (*c == ' ') *c = '_';
-    static const char *const MODALS[] = { "-", "delete", "clash", "cancel", "quit", "full", "empty", "props" };
+    static const char *const MODALS[] = { "-", "delete", "clash", "cancel", "quit", "full", "empty", "props", "open-with" };
     // The path buttons' labels, '|' between; the cursor's folder count (- unknown, ? unreadable).
     char crumbs[2048] = "", cnt[32] = "-";
     for (int i = 0; i < app.crumbs.n; i++) {
@@ -266,6 +266,24 @@ static void script_state(char *out, size_t cap)
     snprintf(proptypename, sizeof proptypename, "%s", props.type_name[0] ? props.type_name : "-");
     for (char *c = proptypename; *c; c++)
         if (*c == ' ') *c = '_';
+    // Open With (F7.3): its field's text (spaces '_'), the app under the cursor (its desktop id),
+    // and the toggles as letters (c, w, r; "-" none), the panel's and find's.
+    char owtext[UI_FIND_MAX + 1], owapp[NAME_MAX + 1], owopts[4], findopts[4];
+    snprintf(owtext, sizeof owtext, "%.*s", app.ui.ow_len ? app.ui.ow_len : 1, app.ui.ow_len ? app.ui.ow_text : "-");
+    for (char *c = owtext; *c; c++)
+        if (*c == ' ') *c = '_';
+    isize owsel = app.ui.ow && app.ui.ow_list.n > 0 ? app.ui.ow_idx[app.ui.ow_list.sel] : -1;
+    snprintf(owapp, sizeof owapp, "%.*s", owsel >= 0 ? (int)ow.apps.a[owsel].id.len : 1, owsel >= 0 ? ow.apps.a[owsel].id.p : "-");
+    UiMatchOpts mo[2] = { app.ui.ow_opts, app.ui.find_opts };
+    char *mout[2] = { owopts, findopts };
+    for (int k = 0; k < 2; k++) {
+        int n = 0;
+        if (mo[k].cased) mout[k][n++] = 'c';
+        if (mo[k].word) mout[k][n++] = 'w';
+        if (mo[k].regex) mout[k][n++] = 'r';
+        if (!n) mout[k][n++] = '-';
+        mout[k][n] = 0;
+    }
     char propwhere[PATH_MAX], propdrive[256], proplink[PATH_MAX];
     snprintf(propwhere, sizeof propwhere, "%s", props.where[0] ? props.where : "-");
     snprintf(propdrive, sizeof propdrive, "%s", props.drive[0] ? props.drive : "-");
@@ -303,7 +321,8 @@ static void script_state(char *out, size_t cap)
              "previews=%d thumbsel=%s thumbbox=%s thumbbusy=%d thumbmade=%d thumbread=%d thumbfailed=%d thumbknown=%d thumbnone=%d thumbchanged=%d "
              "thumbheld=%td thumbdropped=%d thumbresets=%d thumblocal=%d menu=%s menuat=%s menuoff=%s menuhover=%d canwrite=%d windows=%d siderows=%d footerin=%d "
              "props=%d propat=%d propcan=%d propn=%td propmode=%04o propfiles=%lld propdirs=%lld propbytes=%lld propdone=%d propcut=%d proplinks=%lld,%lld,%lld,%d propnlink=%llu proptype=%s proptypename=%s propbyname=%d propname=%s "
-             "propwhere=%s propdrive=%s proplink=%s propcreated=%d propidx=%td status=%s",
+             "propwhere=%s propdrive=%s proplink=%s propcreated=%d propidx=%td "
+             "ow=%d owlist=%d owtext=%s own=%td owsel=%td owapp=%s owshown=%td owtype=%s owfiles=%td owrows=%d owtop=%td owopts=%s owbad=%d findopts=%s findbad=%d status=%s",
              app.cwd, app.list.n, app.list.hidden, STR_ARG(sel), app.ui.list.sel, app.ui.list.top, app.ui.list.rows, app.hover,
              t->accent.r, t->accent.g, t->accent.b, t->bg.r, t->bg.g, t->bg.b, t->icons[0] ? t->icons : "-",
              app.icon_scale, GetScreenWidth(), GetScreenHeight(), app.reloads, app.themes, atomic_load(&watch.batches),
@@ -331,7 +350,9 @@ static void script_state(char *out, size_t cap)
              (long long)props.sum.linked_names, (long long)props.sum.linked_files, (long long)props.sum.once_bytes, props.sum.once_over,
              props.have ? (unsigned long long)props.st.st_nlink : 0ull,
              props.type[0] ? props.type : "-", proptypename, props.type_by_name, propname,
-             propwhere, propdrive, proplink, props.btime >= 0, props.idx, app.status[0] ? app.status : "-");
+             propwhere, propdrive, proplink, props.btime >= 0, props.idx,
+             app.ui.ow, app.ui.ow_in_list, owtext, app.ui.ow_list.n, app.ui.ow_list.sel, owapp, ow.shown, ow.type[0] ? ow.type : "-", ow.n,
+             app.ui.ow_list.rows, app.ui.ow_list.top, owopts, app.ui.ow_m.bad, findopts, app.ui.find_m.bad, app.status[0] ? app.status : "-");
     frame_us_max = 0;
 }
 

@@ -28,6 +28,10 @@ static void test_match(void)
     CHECK(!m_has(S("textual texts"), "te.t", (UiMatchOpts){ .regex = true, .word = true }));
     CHECK(!m_has(S("xxtext"), "^text", (UiMatchOpts){ .regex = true }));
     CHECK(!m_has(S("atext"), "text", (UiMatchOpts){ .regex = true, .word = true }));
+    // The next try after a match that isn't a whole word starts one byte on (a whole match can begin
+    // inside it), and ^ there is not the start.
+    CHECK(m_has(S("a-b"), "a-|b", (UiMatchOpts){ .regex = true, .word = true }));
+    CHECK(!m_has(S("-ab"), "^(-a|ab)", (UiMatchOpts){ .regex = true, .word = true }));
     // A match only past the end of what was given (the name is not NUL-terminated there).
     CHECK(!m_has((Str){ "abcdef", 3 }, "def", re) && !m_has((Str){ "abcdef", 3 }, "c$x", re) && m_has((Str){ "abcdef", 3 }, "c$", re));
     // A bad expression: nothing matches, and the reason; the next good one is compiled again.
@@ -105,6 +109,30 @@ static void test_find_toggles(void)
     in.ev[in.nev++] = (UiEvent){ UK_MENU, 'f' };
     ui_handle(&u, names, &in);
     CHECK(!u.finding && u.menu_on);
+    // n after a find closed empty: the last text found, not the empty one.
+    ui_matcher_set(&u.find_m, STR_EMPTY, (UiMatchOpts){ 0 });   // (regfree)
+    u = (Ui){ 0 };
+    ui_resize(&u.list, 10);
+    ui_set(&u.list, COUNT(find_names), 0);
+    in = chars("/gam");
+    ui_handle(&u, names, &in);
+    in = keys(1, UK_ENTER);
+    ui_handle(&u, names, &in);
+    u.list.sel = 0;
+    in = chars("/x");
+    ui_handle(&u, names, &in);
+    in = keys(2, UK_BACKSPACE, UK_ESC);
+    ui_handle(&u, names, &in);
+    in = chars("n");
+    ui_handle(&u, names, &in);
+    CHECK(u.list.sel == 2);
+    // Enter with entries marked: all of them (F7.3); without, the cursor's only.
+    u.mark = (u8[COUNT(find_names)]){ 0 };
+    in = keys(1, UK_ENTER);
+    CHECK(!ui_handle(&u, names, &in).all);
+    ui_mark(&u, 1, true);
+    UiAction a = ui_handle(&u, names, &in);
+    CHECK(a.kind == UA_OPEN && a.all && a.index == 2);
     ui_matcher_set(&u.find_m, STR_EMPTY, (UiMatchOpts){ 0 });   // (regfree)
 }
 
@@ -246,7 +274,7 @@ static void test_ow_keys(void)
     CHECK(u.ow_len == 5 && u.ow_caret == 5 && u.ow_list.n == 1 && u.ow_idx[0] == 8);
     ow_keys(&u, 1, UK_LEFT);
     CHECK(u.ow_caret == 3);
-    ow_keys(&u, 2, UK_RIGHT, UK_RIGHT);
+    ow_keys(&u, 1, UK_RIGHT);
     CHECK(u.ow_caret == 5);
     ow_keys(&u, 2, UK_HOME, UK_DELETE);
     CHECK(u.ow_len == 4 && u.ow_caret == 0 && memcmp(u.ow_text, "af\xC3\xA9", 4) == 0);
@@ -274,6 +302,15 @@ static void test_ow_keys(void)
     CHECK(u.ow_opts.regex && u.ow_list.n == 2 && u.ow_idx[1] == 5);
     ow_type(&u, "(");
     CHECK(u.ow_list.n == 0 && u.ow_m.bad);
+    ow_keys(&u, 1, UK_BACKSPACE);
+    CHECK(u.ow_m.re_on);
+    // Closed with an expression compiled: freed; opened again as it was, the toggle kept.
+    ui_ow_close(&u);
+    CHECK(!u.ow_m.re_on && !u.ow);
+    ui_ow_open(&u);
+    ow_keys(&u, 0);
+    ow_type(&u, "^(neo|imv)(");
+    CHECK(u.ow_opts.regex && u.ow_m.bad);
     for (int k = 0; k < 11; k++) ow_keys(&u, 1, UK_BACKSPACE);
     ow_keys(&u, 1, -'r');
     CHECK(u.ow_len == 0 && !u.ow_opts.regex && u.ow_list.n == COUNT(OW_APPS));
@@ -398,13 +435,38 @@ static void test_ow_mouse(void)
     ui_find_close(&u);
     ui_handle(&u, names, &f);
     CHECK(!u.find_opts.cased);
-    // Under a question the panel's pointer does nothing.
+    // Under a question the panel's pointer does nothing; nor does the menu bar over the panel.
     ui_ow_open(&u);
     u.quit_asking = true;
     in = ui_input_none(), in.app_name = OW_APPS, in.app_n = COUNT(OW_APPS), in.modal = UI_MODAL_NO;
     ui_handle(&u, names, &in);
     CHECK(u.ow);
+    u.quit_asking = true;   // (No answered it)
+    in = ui_input_none(), in.app_name = OW_APPS, in.app_n = COUNT(OW_APPS), in.toggle = 1;
+    ui_handle(&u, names, &in);
+    CHECK(!u.ow_opts.cased);
     u.quit_asking = false;
+    u.confirming = true;
+    ui_handle(&u, names, &in);
+    CHECK(!u.ow_opts.cased);
+    u.confirming = false;
+    in = ui_input_none(), in.app_name = OW_APPS, in.app_n = COUNT(OW_APPS), in.menu_title = 0;
+    ui_handle(&u, names, &in);
+    CHECK(!u.menu_on && u.ow);
     ui_ow_close(&u);
     ui_matcher_set(&u.find_m, STR_EMPTY, (UiMatchOpts){ 0 });
+}
+
+static void test_spawn_launch_all(void)
+{
+    char out[2048];
+    Err err;
+    mkdirs(at("bin73"));
+    fake(at("bin73"), "uwsm-app", at("spawn73.log"));
+    env_set("PATH", at("bin73"));
+    char *paths[] = { "/a b/one.png", "/two.png", "/three.png" };
+    CHECK(spawn_launch_all("/x/imv.desktop", paths, 3, &err));
+    CHECK(wait_file(at("spawn73.log"), out, sizeof out) &&
+          strncmp(out, "uwsm-app -- gio launch /x/imv.desktop /a b/one.png /two.png /three.png sid=", 75) == 0);
+    env_restore();
 }

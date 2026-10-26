@@ -1,0 +1,188 @@
+# F7.3: Open With, on the tree tests/gui/run.sh makes (see there): the panel, its filter and
+# toggles, the keys and the pointer, several files, a folder; Enter on several marked files; find's
+# toggles.
+settle
+expect n=5
+# ---- from the menu: the field has the keys, the default app first
+char /
+type notes
+key enter
+expect sel=notes.txt
+key f10
+keys down down down down down
+expect menuat=open-with
+key enter
+wait-for 2000 ow=1 owlist=0 owtype=text/plain owfiles=1 owapp=ofx-t-edit.desktop modal=open-with
+# The filter: any part, case folded; the default (Edit), then the recommended (Code, and Helper, a
+# NoDisplay one that names the type), then the rest (Other, View); Hidden, NoDisplay and not for
+# the type, not at all.
+type ofx t
+expect owtext=ofx_t own=5 owsel=0 owapp=ofx-t-edit.desktop
+shot ow-panel.png
+# Down to the list; j and k there; Up on the first row back to the field.
+key down
+expect owlist=1 owsel=0
+char j
+expect owapp=ofx-t-code.desktop
+char j
+expect owapp=ofx-t-helper.desktop
+char j
+expect owapp=ofx-t-other.desktop
+char j
+expect owapp=ofx-t-view.desktop owsel=4
+char j
+expect owsel=4
+char k
+char k
+char k
+char k
+expect owsel=0 owlist=1
+key up
+expect owlist=0 owsel=0 owtext=ofx_t
+# j and k are text in the field
+char j
+expect owtext=ofx_tj own=0
+key backspace
+expect own=5
+# Tab and Shift+Tab (as GLFW gives it: 258, Shift 1) between the field and the list
+key tab
+expect owlist=1
+raw-key 258 1
+expect owlist=0
+# A letter in the list goes to the field, at its end
+key tab
+char x
+expect owlist=0 owtext=ofx_tx own=0 owapp=-
+key backspace
+expect own=5
+# ---- the toggles: Alt+C case, Alt+W whole words, Alt+R a regular expression
+key alt-c
+expect owopts=c own=0 ow=1 menu=-
+key alt-c
+expect owopts=- own=5
+keys backspace backspace backspace backspace backspace
+key alt-r
+type ^ofx t (edit|code)$
+expect owopts=r own=2 owbad=0
+char (
+expect own=0 owbad=1
+shot ow-bad.png
+key backspace
+key alt-w
+expect owopts=wr own=2
+key alt-w
+key alt-r
+expect owopts=-
+keys backspace backspace backspace backspace backspace backspace backspace backspace backspace backspace
+keys backspace backspace backspace backspace backspace backspace backspace backspace backspace backspace
+expect owtext=-
+type ofx t
+# ---- Enter: the app under the cursor gets the file; the panel closes
+key tab
+key end
+expect owapp=ofx-t-view.desktop
+key enter
+expect ow=0 modal=-
+sh grep -qx "uwsm-app -- gio launch $OFX_ROOT/data/applications/ofx-t-view.desktop $OFX_DIR/notes.txt" "$OFX_ROOT/spawn.log"
+# ---- Esc closes, nothing launched; other keys are the panel's
+key f10
+keys down down down down down
+key enter
+wait-for 2000 ow=1
+char t
+key ctrl-i
+expect ow=1 props=0 owtext=t
+key esc
+expect ow=0
+sh [ "$(grep -c 'gio launch' "$OFX_ROOT/spawn.log")" = 1 ] && ! grep -q xdg-terminal-exec "$OFX_ROOT/spawn.log"
+# ---- several marked: all in one launch, the first one's type
+key home
+char /
+type b.txt
+key enter
+key space
+char /
+type notes
+key enter
+key space
+expect marked=2
+key f10
+keys down down down down down
+key enter
+wait-for 2000 ow=1 owfiles=2 owtype=text/plain
+type ofx t code
+key enter
+sh grep -qx "uwsm-app -- gio launch $OFX_ROOT/data/applications/ofx-t-code.desktop $OFX_DIR/b.txt $OFX_DIR/notes.txt" "$OFX_ROOT/spawn.log"
+# ---- Enter on several marked (F7.3): each default app once, with its files; a folder left
+char /
+type pic
+key enter
+key space
+char /
+type e.txt
+key enter
+key space
+char /
+type sub
+key enter
+key space
+expect marked=5
+key enter
+sh grep -qx "uwsm-app -- gio launch $OFX_ROOT/data/applications/ofx-t-edit.desktop $OFX_DIR/b.txt $OFX_DIR/e.txt $OFX_DIR/notes.txt" "$OFX_ROOT/spawn.log"
+sh grep -qx "uwsm-app -- gio launch $OFX_ROOT/data/applications/ofx-t-view.desktop $OFX_DIR/pic.png" "$OFX_ROOT/spawn.log"
+expect status=opened 4 files (folders left)
+key esc
+expect marked=0
+# ---- a folder: gio's inode/directory; the apps that name it
+char /
+type sub
+key enter
+key f10
+keys down down down down down
+key enter
+wait-for 2000 ow=1 owtype=inode/directory owfiles=1
+type ofx t
+expect own=4 owapp=ofx-t-code.desktop
+# ---- the pointer: a row, a double click opens; a toggle; Cancel
+point-ui ow-row 1
+click-here
+expect owsel=1 owlist=1 owapp=ofx-t-edit.desktop
+point-ui ow-field
+click-here
+expect owlist=0
+point-ui toggle 3
+click-here
+expect owopts=r ow=1
+click-here
+expect owopts=-
+point-ui modal-no
+click-here
+expect ow=0
+key f10
+keys down down down down down
+key enter
+wait-for 2000 ow=1
+type ofx t
+point-ui ow-row 0
+click-here
+click-here
+expect ow=0
+sh grep -qx "uwsm-app -- gio launch $OFX_ROOT/data/applications/ofx-t-code.desktop $OFX_DIR/sub" "$OFX_ROOT/spawn.log"
+pointer-off
+# ---- find's toggles: Alt+C in the find line, and its pointer
+char /
+type B.TXT
+expect sel=b.txt findopts=-
+key alt-c
+expect findopts=c finding=1
+point-ui toggle 1
+click-here
+expect findopts=- sel=b.txt
+pointer-off
+key alt-r
+type (
+expect findopts=r findbad=1
+shot find-toggles.png
+key esc
+key alt-r
+quit

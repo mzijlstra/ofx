@@ -169,7 +169,7 @@ typedef enum {
 typedef struct {
     UiActionKind kind;
     isize        index;   // UA_OPEN: the entry; UA_PLACE: the place; UA_ANSWER: the answer
-    bool         all;     // UA_ANSWER: for all the rest
+    bool         all;     // UA_ANSWER: for all the rest; UA_OPEN: the marked entries, not only index (Enter, F7.3)
 } UiAction;
 
 // The clash answers, as fs/job.c numbers them (Answer); ui/ doesn't include it.
@@ -1203,7 +1203,7 @@ static UiAction ui_menu_pick(Ui *u, UiMenuItem it)
     case UM_NEW_WINDOW: return (UiAction){ UA_NEW_WINDOW, 0, false };
     case UM_NEW_FOLDER: return (UiAction){ UA_NEWFOLDER, 0, false };
     case UM_NEW_FILE: return (UiAction){ UA_NEWFILE, 0, false };
-    case UM_OPEN: return (UiAction){ UA_OPEN, u->list.sel, false };
+    case UM_OPEN: return (UiAction){ UA_OPEN, u->list.sel, u->marked > 0 };
     case UM_CLOSE_ALL: return (UiAction){ UA_CLOSE_ALL, 0, true };   // gui/ asks first with jobs (close_others)
     case UM_CLOSE: return (UiAction){ UA_TAB_CLOSE, -1, false };
     case UM_PROPERTIES: return ui_props_open(u);
@@ -1625,7 +1625,7 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         // (Michael, 2026-10-24): they only open and close the tree's folders.
         case UK_ENTER:
             if (u->side_focus && u->side.n > 0) return (UiAction){ UA_PLACE, u->side.sel, false };
-            if (!u->side_focus && l->n > 0) return (UiAction){ UA_OPEN, l->sel, false };
+            if (!u->side_focus && l->n > 0) return (UiAction){ UA_OPEN, l->sel, u->marked > 0 };   // all: the marked ones (F7.3)
             break;
         case UK_RIGHT:
             if (u->side_focus && u->side.n > 0 && u->side_mode == SIDE_TREE) return (UiAction){ UA_TREE_RIGHT, u->side.sel, false };

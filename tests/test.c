@@ -1598,6 +1598,7 @@ int main(void)
     test_apps_rank();
     test_ow_keys();
     test_ow_mouse();
+    test_spawn_launch_all();
     test_chmod();
     test_props_keys();
     test_step_round();
