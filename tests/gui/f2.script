@@ -69,11 +69,12 @@ expect finding=0 sel=cherry.txt
 expect rows=14
 char /
 type a
-expect finding=1 findkeys=1 rows=12
+expect finding=1 findkeys=1 rows=12 sel=adir findn=3 findat=1 findtext=1_of_3
 shot find-bar.png
 key down
-expect findkeys=1
+expect findkeys=1 sel=apple.txt findtext=2_of_3
 key up
+expect findtext=1_of_3
 key enter
 expect finding=1 findkeys=0
 key ctrl-j
@@ -82,7 +83,39 @@ key enter
 point-ui find-field
 click-here
 expect findkeys=1
+# The chevrons: the next and previous match, round the list, the keys left where they are; their
+# tooltips; inert with one match
+point-ui find-next
+click-here
+expect sel=apple.txt findtext=2_of_3 findkeys=1
+click-here
+click-here
+expect sel=adir findtext=1_of_3
+point-ui find-prev
+click-here
+expect sel=Banana.txt findtext=3_of_3 findkeys=1
+hover-here
+idle
+expect tooltip=Previous_match_(Up) tipin=1
+point-ui find-next
+hover-here
+idle
+expect tooltip=Next_match_(Down) tipin=1
+shot find-chevrons.png
+char n
+expect find=an findn=1 sel=Banana.txt
+click-here
+point-ui find-prev
+click-here
+expect sel=Banana.txt findtext=1_of_1
+key backspace
 key enter
+key end
+expect findkeys=0 sel=cherry.txt findtext=3_matches
+point-ui find-next
+click-here
+expect sel=adir findkeys=0 findtext=1_of_3
+pointer-off
 point-ui find-x
 click-here
 expect finding=0 findkeys=0 rows=14

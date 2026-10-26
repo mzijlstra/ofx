@@ -1622,6 +1622,7 @@ int main(void)
     test_set_default();
     test_ow_default();
     test_find_bar();
+    test_find_count();
     test_shift_select();
     test_chmod();
     test_props_keys();

@@ -336,7 +336,16 @@ MUTANTS = [
     (G, ' - (app.ui.finding ? FIND_BAR_H : 0);', ';', 'f2'),
     (G, '        h.find_x = in_box(CLAY_ID("find-x"), x, y);', '', 'f2'),
     (G, '        h.find_field = !h.toggle && !h.find_x && in_box(CLAY_ID("find-field"), x, y);', '', 'f2'),
-    (G, '    in->find_x = h.find_x, in->find_field = h.find_field;', '', 'f2'),
+    (G, '    in->find_x = h.find_x, in->find_field = h.find_field, in->find_step = h.find_step;', '', 'f2'),
+    # ---- its count and chevrons (Michael, 2026-10-26)
+    (G, '        h.find_step = in_box(CLAY_ID("find-prev"), x, y) ? -1 : in_box(CLAY_ID("find-next"), x, y) ? 1 : 0;', '', 'f2'),
+    (G, '        h.find_step = in_box(CLAY_ID("find-prev"), x, y) ? -1 : in_box(CLAY_ID("find-next"), x, y) ? 1 : 0;', '        h.find_step = in_box(CLAY_ID("find-prev"), x, y) ? -1 : 0;', 'f2'),
+    (G, '    if (at > 0) snprintf(buf, cap, "%td of %td", at, n);', '    if (false) snprintf(buf, cap, "%td of %td", at, n);', 'f2'),
+    (G, '    if (!c.valid || c.lists != app.lists || c.sel != app.ui.list.sel ||', '    if (!c.valid || c.lists != app.lists ||', 'f2'),
+    (G, '    if (!c.valid || c.lists != app.lists || c.sel != app.ui.list.sel || c.len != m->len || memcmp(c.text, m->text, (size_t)m->len) ||', '    if (!c.valid || c.lists != app.lists || c.sel != app.ui.list.sel || c.len != m->len ||', 'f2'),
+    (G, '    if (h.find_step) return TIP_FIND + (h.find_step > 0);', '', 'f2'),
+    (G, '"Previous match (Up)" : "Next match (Down)"', '"Next match (Down)" : "Next match (Down)"', 'f2'),
+    (G, '(app.ui.ow || (app.ui.finding && modal_kind() == MODAL_NONE))', '(app.ui.ow || app.ui.finding)', 'f72'),
     (G, '    ui_find_close(&app.ui);   // (a tab\'s own find isn\'t kept)', '', 'f2'),
     # ---- F7.3.1: Set as default
     (OW, '    if (strcmp(ow.type, "application/x-zerosize") == 0) snprintf(', '    if (false) snprintf(', 'f73'),

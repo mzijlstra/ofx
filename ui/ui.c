@@ -129,6 +129,7 @@ typedef struct {
     int     toggle;      // 4: Open With's "Always open … with this app" box (F7.3.1)
     bool    find_x;      // the find bar's × pressed
     bool    find_field;  // its field pressed: the keys go there
+    int     find_step;   // its chevrons: -1 the previous match, 1 the next, 0 none
 } UiInput;
 
 typedef enum {
@@ -473,7 +474,7 @@ static bool ui_input_acts(const UiInput *in)
            in->tab_click >= 0 || in->tab_close >= 0 || in->mid_row >= 0 || in->mid_side >= 0 || in->mid_crumb >= 0 || in->modal > 0 ||
            in->backs > 0 || in->forwards > 0 || in->job_x >= 0 || in->side_mode >= 0 || in->side_twisty >= 0 || in->side_eject >= 0 ||
            in->zoom_wheel != 0 || in->zoom_to >= 0 || in->menu_title >= 0 || in->menu_item >= 0 || in->menu_away || in->prop_box >= 0 ||
-           in->ow_row >= 0 || in->ow_drow >= 0 || in->ow_field || in->toggle > 0 || in->find_x || in->find_field;
+           in->ow_row >= 0 || in->ow_drow >= 0 || in->ow_field || in->toggle > 0 || in->find_x || in->find_field || in->find_step;
 }
 
 // Whether a status message gives way to the status line on input that acts (ui_input_acts): a
@@ -726,6 +727,29 @@ static void ui_find_update(Ui *u, UiNames names)
     u->find_miss = text.len > 0 && i < 0;
     u->list.sel = i >= 0 ? i : ui_find_back(u);
     ui_show_sel(&u->list);
+}
+
+// The find bar's next match after the cursor (dir 1) or before it (-1), round the list: Up and
+// Down, and the chevrons.
+static void ui_find_step(Ui *u, UiNames names, int dir)
+{
+    isize i = ui_find_at(&u->list, names, &u->find_m, u->list.sel + dir, dir);
+    if (i >= 0) u->list.sel = i, ui_show_sel(&u->list);
+}
+
+// How many names the find bar's text matches, and *at the cursor's place among them from 1, 0 when
+// it isn't on one: "2 of 5" (Michael, 2026-10-26). 0 without text.
+static isize ui_find_count(const Ui *u, UiNames names, isize *at)
+{
+    *at = 0;
+    if (!u->finding || u->find_len == 0 || u->find_m.len == 0) return 0;
+    isize n = 0;
+    for (isize i = 0; i < u->list.n; i++) {
+        if (!ui_match(&u->find_m, names.at(names.ctx, i))) continue;
+        n++;
+        if (i == u->list.sel) *at = n;
+    }
+    return n;
 }
 
 // The keys leave the find bar (Enter, a command, the menu, the edit line); it stays open, its text
@@ -1427,12 +1451,7 @@ static bool ui_find_event(Ui *u, UiNames names, UiEvent e, const UiInput *in)
         ui_find_close(u);
         u->list.sel = ui_find_back(u), ui_show_sel(&u->list);
         return true;
-    case UK_UP: case UK_DOWN: {
-        int dir = e.key == UK_UP ? -1 : 1;
-        isize i = ui_find_at(&u->list, names, &u->find_m, u->list.sel + dir, dir);
-        if (i >= 0) u->list.sel = i, ui_show_sel(&u->list);
-        return true;
-    }
+    case UK_UP: case UK_DOWN: ui_find_step(u, names, e.key == UK_UP ? -1 : 1); return true;
     case UK_JOBS:
         ui_find_leave(u);
         if (in->job_n > 0) u->jobs_focus = true, u->job_at = 0;
@@ -1499,8 +1518,13 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         if (in->modal == UI_MODAL_YES) return ui_ow_launch(u);
         if (in->modal == UI_MODAL_NO) return ui_ow_close(u), (UiAction){ UA_NONE, 0, false };
         if (in->ow_wheel) ui_scroll(&u->ow_list, in->ow_wheel);
-    } else if (!u->ow && !prompt && u->finding && (in->find_x || in->find_field)) {
-        if (in->find_x) ui_find_close(u);
+    } else if (!u->ow && !prompt && u->finding && (in->find_x || in->find_field || in->find_step)) {
+        // A chevron steps with two matches or more (greyed under that) and leaves the keys where
+        // they are.
+        isize at;
+        if (in->find_step) {
+            if (ui_find_count(u, names, &at) >= 2) ui_find_step(u, names, in->find_step > 0 ? 1 : -1);
+        } else if (in->find_x) ui_find_close(u);
         else ui_edit_close(u), u->find_keys = true, u->side_focus = false, u->crumb_focus = false, u->jobs_focus = false;   // (an open edit line would take the keys first: reviewer-2)
         return (UiAction){ UA_NONE, 0, false };
     } else if (!u->ow && in->toggle >= 1 && in->toggle <= 3 && u->finding) {

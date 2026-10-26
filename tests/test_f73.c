@@ -628,6 +628,78 @@ static void test_ow_default(void)
 
 // ---- the find bar (Michael, 2026-10-26) ------------------------------------------------------
 
+// The find bar's count and chevrons (Michael, 2026-10-26): "2 of 5"; a chevron steps round the
+// list with two matches or more and leaves the keys where they are.
+static void test_find_count(void)
+{
+    Ui u = { 0 };
+    UiNames names = { name_at, NULL, NULL };
+    ui_resize(&u.list, 10);
+    ui_set(&u.list, COUNT(find_names), 0);   // alpha Beta gamma.txt delta BETAMAX omega café
+    isize at = -1;
+    CHECK(ui_find_count(&u, names, &at) == 0 && at == 0);   // no bar
+    UiInput in = chars("/");
+    ui_handle(&u, names, &in);
+    CHECK(ui_find_count(&u, names, &at) == 0 && at == 0);   // no text
+    in = chars("ta");
+    ui_handle(&u, names, &in);
+    CHECK(u.list.sel == 1 && ui_find_count(&u, names, &at) == 3 && at == 1);
+    in = ui_input_none(), in.find_step = 1;
+    CHECK(ui_input_acts(&in));
+    ui_handle(&u, names, &in);
+    CHECK(u.list.sel == 3 && u.find_keys && ui_find_count(&u, names, &at) == 3 && at == 2);
+    ui_handle(&u, names, &in);
+    ui_handle(&u, names, &in);
+    CHECK(u.list.sel == 1);   // round
+    in.find_step = -1;
+    ui_handle(&u, names, &in);
+    CHECK(u.list.sel == 4 && ui_find_count(&u, names, &at) == 3 && at == 3);
+    // The keys in the list: a chevron leaves them there; the cursor off the matches: at 0.
+    in = keys(1, UK_ENTER);
+    ui_handle(&u, names, &in);
+    u.list.sel = 0;
+    CHECK(ui_find_count(&u, names, &at) == 3 && at == 0);
+    in = ui_input_none(), in.find_step = 1;
+    ui_handle(&u, names, &in);
+    CHECK(u.list.sel == 1 && !u.find_keys && u.finding);
+    // One match: the chevrons do nothing, the cursor stays off it.
+    in = chars("/gam");
+    ui_handle(&u, names, &in);
+    u.list.sel = 5;
+    CHECK(ui_find_count(&u, names, &at) == 1 && at == 0);
+    in = ui_input_none(), in.find_step = -1;
+    ui_handle(&u, names, &in);
+    CHECK(u.list.sel == 5);
+    in.find_step = 1;
+    ui_handle(&u, names, &in);
+    CHECK(u.list.sel == 5);
+    // The toggles count too: case kept, "Beta" alone; whole words, none of "ta"'s.
+    in = keys(3, UK_BACKSPACE, UK_BACKSPACE, UK_BACKSPACE);
+    ui_handle(&u, names, &in);
+    in = chars("Bet");
+    ui_handle(&u, names, &in);
+    CHECK(ui_find_count(&u, names, &at) == 2);
+    u.find_opts.cased = true;
+    in = keys(1, UK_BACKSPACE);
+    ui_handle(&u, names, &in);
+    in = chars("t");
+    ui_handle(&u, names, &in);
+    CHECK(ui_find_count(&u, names, &at) == 1 && at == 1 && u.list.sel == 1);
+    u.find_opts.cased = false;
+    // Closed: no count, and a chevron press does nothing.
+    in = keys(1, UK_ESC);
+    ui_handle(&u, names, &in);
+    isize was = u.list.sel;
+    CHECK(ui_find_count(&u, names, &at) == 0 && at == 0);
+    in = ui_input_none(), in.find_step = 1;
+    ui_handle(&u, names, &in);
+    CHECK(u.list.sel == was);
+    // Opened again, no text yet (the matcher still holds the last one): no count.
+    in = chars("/");
+    ui_handle(&u, names, &in);
+    CHECK(u.finding && u.find_m.len > 0 && ui_find_count(&u, names, &at) == 0 && at == 0);
+}
+
 static void test_find_bar(void)
 {
     Ui u = { 0 };

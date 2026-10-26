@@ -479,6 +479,14 @@ kept inside a list listed again shorter, so Enter opened past its end (ASan in w
 that and Esc clamp it (`ui_find_back`). LOW, landed: a click in the bar's field with the rename
 line open left the keys with the line; it closes now.
 
+**The find bar's count and chevrons (Michael, 2026-10-26):** as VS Code's: "2 of 5" beside the
+field (the cursor's place among the matches; "5 matches" with the cursor off them; "No match"),
+then ⌃ and ⌄ for the previous and next match, round the list as Up and Down, greyed and inert
+under two matches, tooltips "Previous match (Up)" and "Next match (Down)". A chevron leaves the
+keys where they are. `ui_find_count` scans the listing; gui/ counts again only when the listing,
+the text, its toggles or the cursor change (`find_count`), not on a hover's frame. Shift+Enter
+stays as Enter.
+
 **ofx as the folder handler (Michael, 2026-10-26, dogfooding):** SUPER+SHIFT+F runs ofx (his
 bindings.lua). `make install` adds `ofx.desktop` (`Exec=ofx %f`, `MimeType=inode/directory`), so
 ofx can be the default for folders that other programs open (`xdg-open ~`, `gio open`). Started

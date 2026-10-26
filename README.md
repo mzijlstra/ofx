@@ -31,7 +31,7 @@ libpng, giflib and zlib for the previews. raylib and Clay are vendored.
 | Alt+Up | up to the parent |
 | Ctrl+L, Ctrl+Right | type a location: all of it selected, so typing replaces it; `~` is home, a relative path starts here; a file's path opens its folder with the file selected |
 | Ctrl+K, Ctrl+Up | the keys to the path buttons: Left/Right (`h`/`l`), Home/End move, Enter goes there, Shift+Enter opens it in a background tab, Esc back to the list |
-| `/`, Ctrl+F | find, in a bar over the job rows: type to jump, Up/Down the previous and next match, Enter keeps (the bar stays, the keys go back to the list), Esc closes it and goes back, its × closes it; then `n`/`N` again. Alt+C match case, Alt+W whole words, Alt+R a regular expression (the toggles in the bar too; kept for the next find) |
+| `/`, Ctrl+F | find, in a bar over the job rows: type to jump (the bar counts the matches: "2 of 5"), Up/Down or its chevrons the previous and next match, Enter keeps (the bar stays, the keys go back to the list), Esc closes it and goes back, its × closes it; then `n`/`N` again. Alt+C match case, Alt+W whole words, Alt+R a regular expression (the toggles in the bar too; kept for the next find) |
 | `.`, Ctrl+H | hidden files on and off |
 | `s`, `S` | sort by the next column (name, size, modified), reverse |
 | Tab, Ctrl+Left | the keys to the sidebar (a hidden one shows as places); Tab again back; in the tree, Left/Right (`h`/`l`) close and open a folder (or move up and down a level), Enter goes there |

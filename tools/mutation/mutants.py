@@ -1194,7 +1194,7 @@ MUTANTS += [
     (U, "        if (in->ow_wheel) ui_scroll(&u->ow_list, in->ow_wheel);", ""),
     (U, "    if (u->ow && !u->quit_asking && !u->full_told && !u->asking && !u->confirming) {", "    if (u->ow) {"),
     (U, "            if (!u->side_focus && l->n > 0) return (UiAction){ UA_OPEN, l->sel, u->marked > 0 };", "            if (!u->side_focus && l->n > 0) return (UiAction){ UA_OPEN, l->sel, false };"),
-    (U, "           in->ow_row >= 0 || in->ow_drow >= 0 || in->ow_field || in->toggle > 0 || in->find_x || in->find_field;", "           in->ow_row >= 0 || in->ow_drow >= 0 || in->find_x || in->find_field;"),
+    (U, "           in->ow_row >= 0 || in->ow_drow >= 0 || in->ow_field || in->toggle > 0 || in->find_x || in->find_field || in->find_step;", "           in->ow_row >= 0 || in->ow_drow >= 0 || in->find_x || in->find_field || in->find_step;"),
     (AP, "        if (e->d_name[0] == '.') continue;\n        char *path", "        char *path"),
     (AP, "            if (depth < APPS_DEPTH_MAX) apps_scan", "            if (true) apps_scan"),
     (AP, "        if (!S_ISREG(st.st_mode) || !str_ends_with(id, S(\".desktop\"))) continue;", "        if (!S_ISREG(st.st_mode)) continue;"),
@@ -1254,14 +1254,14 @@ MUTANTS += [
 MUTANTS += [
     (U, "    u->finding = false, u->find_keys = false, u->find_miss = false;", "    u->finding = false, u->find_miss = false;"),
     (U, "    case UK_ENTER: case UK_SHIFT_ENTER: ui_find_leave(u); return true;", "    case UK_ENTER: case UK_SHIFT_ENTER: ui_find_close(u); return true;"),
-    (U, "        int dir = e.key == UK_UP ? -1 : 1;", "        int dir = 1;"),
-    (U, "        if (i >= 0) u->list.sel = i, ui_show_sel(&u->list);\n        return true;\n    }", "        return true;\n    }"),
+    (U, "    case UK_UP: case UK_DOWN: ui_find_step(u, names, e.key == UK_UP ? -1 : 1); return true;", "    case UK_UP: case UK_DOWN: ui_find_step(u, names, 1); return true;"),
+    (U, "    if (i >= 0) u->list.sel = i, ui_show_sel(&u->list);\n}\n\n// How many", "}\n\n// How many"),
     (U, "        if (in->job_n > 0) u->jobs_focus = true, u->job_at = 0;\n        return true;", "        return true;"),
     (U, "    case UK_JOBS:\n        ui_find_leave(u);", "    case UK_JOBS:\n        ui_find_close(u);"),
     (U, "            if (u->finding) u->find_keys = true, u->crumb_focus = false, u->side_focus = false;", "            if (false) u->find_keys = true, u->crumb_focus = false, u->side_focus = false;"),
     (U, "        if (u->finding && u->find_keys && ui_find_event(u, names, e, in)) continue;", "        if (u->finding && ui_find_event(u, names, e, in)) continue;"),
     (U, "            if (u->finding) ui_find_close(u);\n            else ui_find_open(u);", "            ui_find_open(u);"),
-    (U, "        if (in->find_x) ui_find_close(u);", "        if (in->find_x) ui_find_leave(u);"),
+    (U, "        } else if (in->find_x) ui_find_close(u);", "        } else if (in->find_x) ui_find_leave(u);"),
     (U, "        else ui_edit_close(u), u->find_keys = true, u->side_focus = false,", "        else ui_edit_close(u), u->side_focus = false,"),
     # Not a mutant: ui_find_open's `jobs_focus = false` is inert, every way there (a key, a click)
     # has taken the keys from the job rows already.
@@ -1282,6 +1282,17 @@ MUTANTS += [
     (U, "    return ui_clamp(u->find_from, 0, u->list.n > 0 ? u->list.n - 1 : 0);", "    return u->find_from;"),
     (U, "u->list.sel = i >= 0 ? i : ui_find_back(u);", "u->list.sel = i >= 0 ? i : u->find_from;"),
     (U, "        else ui_edit_close(u), u->find_keys = true,", "        else u->find_keys = true,"),
+]
+# ---- the find bar's count and chevrons (Michael, 2026-10-26)
+MUTANTS += [
+    (U, "    if (!u->finding || u->find_len == 0 || u->find_m.len == 0) return 0;", "    if (u->find_len == 0 || u->find_m.len == 0) return 0;"),
+    (U, "    if (!u->finding || u->find_len == 0 || u->find_m.len == 0) return 0;", "    if (!u->finding || u->find_m.len == 0) return 0;"),
+    (U, "        if (i == u->list.sel) *at = n;", "        *at = n;"),
+    (U, "        n++;\n        if (i == u->list.sel)", "        if (i == u->list.sel)"),
+    (U, "            if (ui_find_count(u, names, &at) >= 2) ui_find_step(", "            if (ui_find_count(u, names, &at) >= 1) ui_find_step("),
+    (U, "ui_find_step(u, names, in->find_step > 0 ? 1 : -1);", "ui_find_step(u, names, 1);"),
+    (U, "in->find_x || in->find_field || in->find_step;\n", "in->find_x || in->find_field;\n"),
+    (U, "u->finding && (in->find_x || in->find_field || in->find_step)) {", "u->finding && (in->find_x || in->find_field)) {"),
 ]
 # ---- Shift and a move select (Michael, 2026-10-26)
 MUTANTS += [

@@ -181,6 +181,7 @@ static struct {
     int       icon_scale;   // the scale the cache holds icons for
     int       hover;        // the row under the pointer, -1 for none
     int       reloads, themes;
+    int       lists;        // listings shown and sorts: the find bar's count is counted again
 
     // The edit line's entry: its name when the line opened, and whether it is a folder just made
     // or file (Esc keeps "New folder"; the undo removes it whatever it is called by then).
@@ -192,6 +193,7 @@ static struct {
     bool      crumb_arrows;
     int       modal_hover;  // the modal panel's button under the pointer (UI_MODAL_*), 0 for none
     bool      findx_hover;  // the find bar's × under it
+    int       findstep_hover;   // its chevron under it: -1 the previous, 1 the next, 0 none
     UiBar     bar_hover;    // the top bar button under the pointer
     int       crumb_hover;
     int       tab_hover, tab_x_hover;   // the tab, and the tab's ×, under the pointer; -1 for none
@@ -396,7 +398,7 @@ static bool go_to_in(const char *dir, Str select, isize fallback, bool stepping)
     }
     // The folder left, with its cursor, for Back: its name is still in the old listing's arena.
     if (!same && app.have_list && !stepping) hist_leave(&hist, app.cwd, sel_name());
-    app.cur = next, app.list = l, app.mime = mime, app.have_list = true, app.error[0] = 0;
+    app.cur = next, app.list = l, app.mime = mime, app.have_list = true, app.error[0] = 0, app.lists++;
     app.ui.in_trash = in_trash;
     app.ui.can_write = !in_trash && access(dir, W_OK) == 0;   // the File menu's Create entries (F7.1)
     for (isize i = 0; i < l.n; i++) count[i] = COUNT_UNKNOWN;
@@ -608,6 +610,7 @@ static void resort(void)
     char keep[NAME_MAX + 1];
     snprintf(keep, sizeof keep, "%.*s", STR_ARG(sel_name()));
     fs_sort(&app.list, app.ui.sort);
+    app.lists++;
     memset(app.mime, 0, sizeof *app.mime * (size_t)app.list.n);
     // The counts are by row too: asked again in the new order.
     for (isize i = 0; i < app.list.n; i++) app.count[i] = COUNT_UNKNOWN;
@@ -1900,7 +1903,7 @@ static IconSlot *named_icon(const char *name)
 // The top bar's chevrons, drawn as two lines each (Nemo's look; the theme has its arrows only as
 // SVG, which ofx doesn't draw). Clay hands the data back to draw_custom at render time; it lives in
 // the frame arena, which outlasts the frame's render.
-typedef enum { CHEV_LEFT, CHEV_RIGHT, CHEV_UP } ChevronDir;
+typedef enum { CHEV_LEFT, CHEV_RIGHT, CHEV_UP, CHEV_DOWN } ChevronDir;
 typedef enum { CUSTOM_CHEVRON = 1, CUSTOM_LINE, CUSTOM_TOOL } CustomKind;   // the first field of each custom's data
 typedef enum { TOOL_SEARCH, TOOL_PENCIL } ToolDir;   // the top bar's search and location pictures
 
@@ -1985,6 +1988,7 @@ static void draw_custom(Clay_BoundingBox b, void *arg)
     switch (c->dir) {
     case CHEV_LEFT: p0 = (Vector2){ cx + r / 2, cy - r }, p1 = (Vector2){ cx - r / 2, cy }, p2 = (Vector2){ cx + r / 2, cy + r }; break;
     case CHEV_RIGHT: p0 = (Vector2){ cx - r / 2, cy - r }, p1 = (Vector2){ cx + r / 2, cy }, p2 = (Vector2){ cx - r / 2, cy + r }; break;
+    case CHEV_DOWN: p0 = (Vector2){ cx - r, cy - r / 2 }, p1 = (Vector2){ cx, cy + r / 2 }, p2 = (Vector2){ cx + r, cy - r / 2 }; break;
     default: p0 = (Vector2){ cx - r, cy + r / 2 }, p1 = (Vector2){ cx, cy - r / 2 }, p2 = (Vector2){ cx + r, cy + r / 2 }; break;
     }
     DrawLineEx(p0, p1, 1.6f, col);
@@ -2802,13 +2806,53 @@ static void layout_jobs(void)
     }
 }
 
+static Str  list_name(void *ctx, isize i);
+static bool list_dir(void *ctx, isize i);
+
+// The find bar's count and the cursor's place among the matches (ui_find_count), counted again only
+// when the listing, the text, its toggles or the cursor changed: not on every hover's frame.
+static isize find_count(isize *at)
+{
+    static struct { int lists; isize sel, n, at; UiMatchOpts o; int len; char text[UI_FIND_MAX + 1]; bool valid; } c;
+    const UiMatcher *m = &app.ui.find_m;
+    if (!c.valid || c.lists != app.lists || c.sel != app.ui.list.sel || c.len != m->len || memcmp(c.text, m->text, (size_t)m->len) ||
+        c.o.cased != m->o.cased || c.o.word != m->o.word || c.o.regex != m->o.regex) {
+        c.n = ui_find_count(&app.ui, (UiNames){ list_name, NULL, list_dir }, &c.at);
+        c.lists = app.lists, c.sel = app.ui.list.sel, c.len = m->len, c.o = m->o, c.valid = true;
+        memcpy(c.text, m->text, (size_t)m->len);
+    }
+    *at = c.at;
+    return c.n;
+}
+
+// The count's words: "2 of 5", or "5 matches" with the cursor off them.
+static const char *find_label(isize n, isize at, char *buf, size_t cap)
+{
+    if (at > 0) snprintf(buf, cap, "%td of %td", at, n);
+    else snprintf(buf, cap, n == 1 ? "%td match" : "%td matches", n);
+    return buf;
+}
+
+// A find bar chevron: dimmed and inert under two matches.
+static void find_chevron(Clay_ElementId id, ChevronDir dir, int step, bool on)
+{
+    Theme *t = &app.theme;
+    bool hover = on && app.findstep_hover == step;
+    CLAY(id, { .layout = { .sizing = { CLAY_SIZING_FIXED(26), CLAY_SIZING_FIXED(26) }, .childAlignment = { .x = CLAY_ALIGN_X_CENTER, .y = CLAY_ALIGN_Y_CENTER } },
+               .backgroundColor = hover ? cc(t->bg) : (Clay_Color){ 0, 0, 0, 0 } }) {
+        chevron(Clay_GetElementId(cz(arena_sprintf(&frame, "%.*s-icon", (int)id.stringId.length, id.stringId.chars))), dir, on ? cc(t->fg) : dim_color());
+    }
+}
+
 // The find bar (Michael, 2026-10-26): over the job rows, as wide as the files. Its field (red text
 // when nothing matches, a caret while it has the keys) with the three toggles, a bad expression's
-// reason, and a × that closes it.
+// reason or the count ("2 of 5", "No match"), the chevrons to the previous and the next match, and
+// a × that closes it.
 static void layout_find_bar(void)
 {
     Theme *t = &app.theme;
     Ui *u = &app.ui;
+    isize at, n = find_count(&at);
     bool bad = u->find_m.bad && u->find_opts.regex && u->find_len;
     Clay_Color edge = bad ? cc(t->red) : u->find_keys ? cc(t->accent) : mix(t->fg_dim, t->bg_light, 0.45f);
     CLAY(CLAY_ID("find-bar"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(FIND_BAR_H) }, .padding = { PAD, 8, 0, 0 }, .childGap = 10,
@@ -2828,8 +2872,16 @@ static void layout_find_bar(void)
             }
             layout_toggles(u->find_opts);
         }
-        if (bad) text(fit(str_from_c(u->find_m.err), 240, false), cc(t->red));
-        else if (u->find_miss) text(cz("No match"), cc(t->red));
+        // At least as wide as "88 of 88", so the chevrons don't move as the count grows.
+        CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_FIT(str_width(S("88 of 88"))), CLAY_SIZING_FIT(0) }, .childAlignment = { .x = CLAY_ALIGN_X_RIGHT } } }) {
+            if (bad) text(fit(str_from_c(u->find_m.err), 240, false), cc(t->red));
+            else if (u->find_miss) text(cz("No match"), cc(t->red));
+            else if (n > 0) text(cz(find_label(n, at, arena_new(&frame, char, 48), 48)), cc(t->fg_dim));
+        }
+        CLAY_AUTO_ID({ .layout = { .childGap = 2, .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } } }) {
+            find_chevron(CLAY_ID("find-prev"), CHEV_UP, -1, n >= 2);
+            find_chevron(CLAY_ID("find-next"), CHEV_DOWN, 1, n >= 2);
+        }
         bool hover = app.findx_hover;
         CLAY(CLAY_ID("find-x"), { .layout = { .sizing = { CLAY_SIZING_FIXED(26), CLAY_SIZING_FIXED(26) },
                                               .childAlignment = { .x = CLAY_ALIGN_X_CENTER, .y = CLAY_ALIGN_Y_CENTER } },
@@ -2909,8 +2961,8 @@ static void status_info(char *buf, size_t cap)
 // The icon-only buttons, numbered for UiTip: a top bar button 100 + its UiBar, a sidebar mode
 // button 200 + its SideMode, a drive's eject button 300 + its row, a tab's x 400 + its place.
 
-// The zoom slider's track is 500 (F6.3).
-enum { TIP_BAR = 100, TIP_MODE = 200, TIP_EJECT = 300, TIP_TAB_X = 400, TIP_ZOOM = 500 };
+// The zoom slider's track is 500 (F6.3), the find bar's chevrons 600 and 601.
+enum { TIP_BAR = 100, TIP_MODE = 200, TIP_EJECT = 300, TIP_TAB_X = 400, TIP_ZOOM = 500, TIP_FIND = 600 };
 
 // Target k's text, and the element it hangs from; false for none (gone since).
 static bool tip_of(int k, char *buf, size_t cap, Clay_ElementId *id)
@@ -2924,6 +2976,10 @@ static bool tip_of(int k, char *buf, size_t cap, Clay_ElementId *id)
         { UB_ZOOM_IN, "zoom-in", "Bigger icons (Ctrl+=)" },
     };
     static const char *const MODES[SIDE_MODES] = { "Places (F9)", "Tree (F9)", "No sidebar (F9)" };
+    if (k >= TIP_FIND) {
+        *id = k == TIP_FIND ? CLAY_ID("find-prev") : CLAY_ID("find-next");
+        return app.ui.finding && snprintf(buf, cap, "%s", k == TIP_FIND ? "Previous match (Up)" : "Next match (Down)") > 0;
+    }
     if (k == TIP_ZOOM) {
         *id = CLAY_ID("zoom-track");
         return app.ui.grid && snprintf(buf, cap, "Icons %d px (Ctrl+0: %d px)", ui_zoom_px(&app.ui), UI_ZOOM_DEFAULT) > 0;
@@ -2956,7 +3012,7 @@ static void layout_tip(int w)
     if (!app.tip.shown || !tip_of(app.tip.target, txt, sizeof txt, &id)) return;
     Clay_ElementData d = Clay_GetElementData(id);
     if (!d.found) return;
-    bool above = (app.tip.target >= TIP_MODE && app.tip.target < TIP_EJECT) || app.tip.target == TIP_ZOOM ||
+    bool above = (app.tip.target >= TIP_MODE && app.tip.target < TIP_EJECT) || app.tip.target == TIP_ZOOM || app.tip.target >= TIP_FIND ||
                  app.tip.target == TIP_BAR + UB_ZOOM_OUT || app.tip.target == TIP_BAR + UB_ZOOM_IN;
     bool right = d.boundingBox.x + d.boundingBox.width / 2 > w / 2.0f;
     Clay_FloatingAttachPoints at = above && right ? (Clay_FloatingAttachPoints){ CLAY_ATTACH_POINT_RIGHT_BOTTOM, CLAY_ATTACH_POINT_RIGHT_TOP }
@@ -3256,6 +3312,7 @@ typedef struct {
     bool  find_x, find_field;   // the find bar's × and its field
     bool  ow_field;     // its field
     int   toggle;       // a toggle of its field or of the find line (1..3), 0 for none
+    int   find_step;    // the find bar's chevrons: -1 the previous, 1 the next, 0 none
 } Hit;
 
 static bool in_box(Clay_ElementId id, float x, float y)
@@ -3267,8 +3324,10 @@ static bool in_box(Clay_ElementId id, float x, float y)
 
 static Hit hit_at(float x, float y)
 {
-    Hit h = { -1, -1, -1, UB_NONE, -1, -1, -1, 0, -1, -1, -1, -1, false, -1, -1, -1, -1, false, false, false, 0 };
-    for (int k = 1; k <= 4 && !h.toggle && (app.ui.ow || app.ui.finding); k++)
+    Hit h = { -1, -1, -1, UB_NONE, -1, -1, -1, 0, -1, -1, -1, -1, false, -1, -1, -1, -1, false, false, false, 0, 0 };
+    // The find bar's toggles only without a panel over them (a click on Properties' OK above them
+    // flipped one, 2026-10-26); Open With's are its panel's.
+    for (int k = 1; k <= 4 && !h.toggle && (app.ui.ow || (app.ui.finding && modal_kind() == MODAL_NONE)); k++)
         if (in_box(CLAY_IDI("toggle", k), x, y)) h.toggle = k;
     if (modal_kind() == MODAL_NONE)
         for (int m = 0; m < UI_MENUS && h.menu_title < 0; m++)
@@ -3296,6 +3355,7 @@ static Hit hit_at(float x, float y)
     }
     if (app.ui.finding) {
         h.find_x = in_box(CLAY_ID("find-x"), x, y);
+        h.find_step = in_box(CLAY_ID("find-prev"), x, y) ? -1 : in_box(CLAY_ID("find-next"), x, y) ? 1 : 0;
         h.find_field = !h.toggle && !h.find_x && in_box(CLAY_ID("find-field"), x, y);
     }
     for (int i = 0; tabbar.n >= 2 && i < tabbar.n && h.tab < 0; i++) {
@@ -3359,7 +3419,7 @@ static void press_at(UiInput *in, float x, float y, int mods)
     }
     in->ow_field = h.ow_field;
     in->toggle = h.toggle;
-    in->find_x = h.find_x, in->find_field = h.find_field;
+    in->find_x = h.find_x, in->find_field = h.find_field, in->find_step = h.find_step;
     in->job_x = h.job_x;
     in->side_mode = h.mode;
     in->side_twisty = h.twisty;
@@ -3401,6 +3461,7 @@ static int tip_target(Hit h)
     default: break;
     }
     if (h.zoom) return TIP_ZOOM;
+    if (h.find_step) return TIP_FIND + (h.find_step > 0);
     if (h.mode >= 0) return TIP_MODE + h.mode;
     if (h.eject >= 0) return TIP_EJECT + h.eject;
     if (h.tab_x >= 0) return TIP_TAB_X + h.tab_x;
@@ -3435,12 +3496,12 @@ static bool hover_at(float x, float y)
     bool changed = h.row != app.hover || h.side != app.side_hover || h.bar != app.bar_hover || h.crumb != app.crumb_hover ||
                    h.tab != app.tab_hover || h.tab_x != app.tab_x_hover || h.mode != app.mode_hover || h.eject != app.eject_hover ||
                    h.modal != app.modal_hover || h.job_x != app.jobx_hover || h.zoom != app.zoom_hover || h.menu_title != app.menu_title_hover ||
-                   h.find_x != app.findx_hover;
+                   h.find_x != app.findx_hover || h.find_step != app.findstep_hover;
     app.menu_title_hover = h.menu_title;
     changed |= ui_menu_hover(&app.ui, h.menu_title, h.menu_item);
     app.hover = h.row, app.side_hover = h.side, app.bar_hover = h.bar, app.crumb_hover = h.crumb;
     app.tab_hover = h.tab, app.tab_x_hover = h.tab_x, app.mode_hover = h.mode, app.eject_hover = h.eject;
-    app.modal_hover = h.modal, app.jobx_hover = h.job_x, app.zoom_hover = h.zoom, app.findx_hover = h.find_x;
+    app.modal_hover = h.modal, app.jobx_hover = h.job_x, app.zoom_hover = h.zoom, app.findx_hover = h.find_x, app.findstep_hover = h.find_step;
     // Onto another icon button (or off one): its tooltip waits UI_TIP_MS, the timer wakes the loop.
     if (ui_tip_hover(&app.tip, tip_target(h), now_ms())) {
         changed = true;
