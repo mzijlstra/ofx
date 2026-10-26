@@ -1523,6 +1523,7 @@ static void test_format(void)
 #include "test_f7.c"
 #include "test_f72.c"
 #include "test_f73.c"
+#include "test_fm1.c"
 
 int main(void)
 {
@@ -1628,6 +1629,7 @@ int main(void)
     test_props_keys();
     test_step_round();
     test_tilde();
+    test_fm1();
     char cmd[1600];
     snprintf(cmd, sizeof cmd, "chmod -R u+rwx '%s' && rm -rf '%s' '%s'", root, root, decoy);
     if (system(cmd) != 0) fprintf(stderr, "could not remove %s\n", root);

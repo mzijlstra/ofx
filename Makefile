@@ -14,9 +14,9 @@ IMG_LIBS = -lturbojpeg -lwebp -lpng16 -lgif -lz
 
 PREFIX  ?= $(HOME)/.local
 
-.PHONY: all release test install clean
+.PHONY: all release test test-fm1 install clean
 
-all: build/ofx build/ofx-clean
+all: build/ofx build/ofx-clean build/ofx-fm1
 
 build/ofx-probe: tools/probe.c $(wildcard base/*.c base/*.h fs/*.c) | build
 	$(CC) $(CFLAGS) $(IMG_INC) $(DEBUG) -o $@ tools/probe.c $(IMG_LIBS) -lm
@@ -27,11 +27,23 @@ build/ofx-clean: tools/clean.c $(wildcard base/*.c base/*.h fs/*.c) | build
 build/release/ofx-clean: tools/clean.c $(wildcard base/*.c base/*.h fs/*.c) | build/release
 	$(CC) $(CFLAGS) $(IMG_INC) $(RELEASE) -o $@ tools/clean.c $(IMG_LIBS) -lm
 
+# FileManager1 on the session bus (2026-10-26): sd-bus, from libsystemd.
+build/ofx-fm1: tools/fm1.c $(wildcard base/*.c base/*.h fs/*.c) | build
+	$(CC) $(CFLAGS) $(IMG_INC) $(DEBUG) -o $@ tools/fm1.c $(IMG_LIBS) -lsystemd -lm
+
+build/release/ofx-fm1: tools/fm1.c $(wildcard base/*.c base/*.h fs/*.c) | build/release
+	$(CC) $(CFLAGS) $(IMG_INC) $(RELEASE) -o $@ tools/fm1.c $(IMG_LIBS) -lsystemd -lm
+
 build/test: $(wildcard tests/*.c) $(wildcard base/*.c base/*.h fs/*.c ui/*.c) | build
 	$(CC) $(CFLAGS) $(IMG_INC) $(DEBUG) -o $@ tests/test.c $(IMG_LIBS) -lm
 
 test: build/test
 	./build/test
+
+# ofx-fm1 on a private bus (dbus-run-session, its own config: only the test's service folder),
+# with fakes for uwsm-app and ofx: no call reaches Michael's bus, no window opens.
+test-fm1: build/ofx-fm1
+	tests/fm1/run.sh "$(CURDIR)/build/fm1-test" "$(CURDIR)/build/ofx-fm1"
 
 # ---- raylib: native Wayland, built from here ---------------------------------------------------
 #
@@ -124,14 +136,18 @@ build/ofx-mut: $(SRC) build/mut/clay.o $(RL_OUT)/libraylib.a $(OFX_WL)/stamp Mak
 # at `ofx-clean --dry-run`.
 UNITS   ?= $(HOME)/.config/systemd/user
 APPS    ?= $(PREFIX)/share/applications
+DBUS_SVC ?= $(PREFIX)/share/dbus-1/services
 
-install: build/release/ofx build/release/ofx-clean
+install: build/release/ofx build/release/ofx-clean build/release/ofx-fm1
 	install -d $(PREFIX)/bin $(UNITS)
-	install -m 755 build/release/ofx build/release/ofx-clean $(PREFIX)/bin/
+	install -m 755 build/release/ofx build/release/ofx-clean build/release/ofx-fm1 $(PREFIX)/bin/
 	rm -f $(PREFIX)/bin/fx   # the name before ofx (2026-10-22)
 	install -d $(APPS)
 	sed 's|@BIN@|$(PREFIX)/bin|' tools/desktop/ofx.desktop > $(APPS)/ofx.desktop   # the folder handler's entry (2026-10-26)
 	update-desktop-database $(APPS) 2>/dev/null || true
+	install -d $(DBUS_SVC)   # FileManager1 (2026-10-26): read before Nemo's in /usr/share
+	sed 's|@BIN@|$(PREFIX)/bin|' tools/dbus/org.freedesktop.FileManager1.service > $(DBUS_SVC)/org.freedesktop.FileManager1.service
+	busctl --user call org.freedesktop.DBus /org/freedesktop/DBus org.freedesktop.DBus ReloadConfig 2>/dev/null || true
 	sed 's|@BIN@|$(PREFIX)/bin|' tools/systemd/ofx-clean.service > $(UNITS)/ofx-clean.service
 	install -m 644 tools/systemd/ofx-clean.timer $(UNITS)/
 	systemctl --user daemon-reload

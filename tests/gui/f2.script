@@ -75,6 +75,11 @@ key down
 expect findkeys=1 sel=apple.txt findtext=2_of_3
 key up
 expect findtext=1_of_3
+# Backspace and a letter in one frame: the same length, another text, counted again
+keys backspace char:d
+expect find=d sel=adir findn=2 findtext=1_of_2
+keys backspace char:a
+expect find=a findn=3 findtext=1_of_3
 key enter
 expect finding=1 findkeys=0
 key ctrl-j
@@ -191,7 +196,9 @@ expect sel=in-b.txt here=Bee
 shot f2.png
 # The find bar stays open in another folder; Esc there puts the cursor back where that folder
 # opened, not at a place in the last one's list.
+# (bdir gets more entries than the place the find began, so the clamp alone can't put it right.)
 key backspace
+sh for i in 1 2 3 4 5; do : > "$OFX_DIR/bdir/x$i"; done
 key end
 char /
 type cherry
@@ -199,7 +206,7 @@ key enter
 wait-for 2000 sel=cherry.txt finding=1 findkeys=0
 key home
 key enter
-wait-for 2000 n=1 sel=in-b.txt finding=1
+wait-for 2000 n=6 sel=in-b.txt finding=1
 key ctrl-j
 key esc
 expect finding=0 sel=in-b.txt

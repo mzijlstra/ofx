@@ -1311,3 +1311,15 @@ MUTANTS += [
     (U, "            e = (UiEvent){ e.ch == 'H' ? UK_LEFT : e.ch == 'J' ? UK_DOWN : e.ch == 'K' ? UK_UP : UK_RIGHT, 0 };", "            e = (UiEvent){ e.ch == 'H' ? UK_LEFT : e.ch == 'J' ? UK_DOWN : UK_RIGHT, 0 };"),
     (U, "        if (shifted && !u->side_focus) extend = l->sel;", "        if (shifted) extend = l->sel;"),
 ]
+# ---- FileManager1 (2026-10-26): the URIs to windows
+FM1 = 'fs/fm1.c'
+MUTANTS += [
+    (FM1, "    return (Str){ p, s && s > p ? s - p : 1 };", "    return (Str){ p, s ? s - p : 1 };"),
+    (FM1, "        if (!clean_uri_path(uris[i], path, sizeof path) || stat(path, &st) != 0) {", "        if (!clean_uri_path(uris[i], path, sizeof path)) {"),
+    (FM1, "        Str key = c == FM1_FOLDERS ? str_from_c(path) : fm1_parent(path);", "        Str key = fm1_parent(path);"),
+    (FM1, "            seen = str_eq(c == FM1_FOLDERS ? str_from_c(out->path[k]) : fm1_parent(out->path[k]), key);", "            seen = str_eq(str_from_c(out->path[k]), key);"),
+    (FM1, "        if (seen) continue;", ""),
+    (FM1, "        if (out->n == FM1_MAX) {", "        if (out->n == FM1_MAX + 1) {"),
+    (FM1, "            out->skipped++;\n            continue;\n        }\n        memcpy", "            continue;\n        }\n        memcpy"),
+    (FM1, "    out->n = 0, out->skipped = 0;", "    out->n = 0;"),
+]

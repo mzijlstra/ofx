@@ -10,13 +10,19 @@ about 0% CPU: it draws only when something changes.
 make            # build/ofx, debug with ASan and UBSan
 make release    # build/release/ofx
 make test       # unit tests for fs/ and ui/
-make install    # ofx and ofx-clean into ~/.local/bin, the cleanup's timer into ~/.config/systemd/user
+make test-fm1   # ofx-fm1 end to end, on a private D-Bus session
+make install    # ofx, ofx-clean and ofx-fm1 into ~/.local/bin, the cleanup's timer into ~/.config/systemd/user
 ofx [FOLDER]     # the current folder by default
 ```
 
 Needs a C11 compiler, `wayland-scanner`, and the pkg-config packages wayland-client,
 wayland-cursor, wayland-egl, xkbcommon, fontconfig and freetype2, and libjpeg-turbo, libwebp,
-libpng, giflib and zlib for the previews. raylib and Clay are vendored.
+libpng, giflib and zlib for the previews, and libsystemd (sd-bus) for ofx-fm1. raylib, Clay and
+nanosvg are vendored.
+
+`ofx-fm1` answers `org.freedesktop.FileManager1` on the session bus, so a browser's "Show in
+folder" opens ofx (the file selected) instead of Nemo. The bus starts it when asked (`make install`
+puts its service file in `~/.local/share/dbus-1/services`), and it exits when idle.
 
 ## Use
 

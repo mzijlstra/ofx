@@ -81,6 +81,15 @@ rules shared by every tool here.
   and its `gio` fake logs `mime` and hands it to the real gio, which writes the scratch list; with
   the guard on (`OFX_GUI_ROOT`) ofx refuses a list outside it before gio runs. The unit test uses a
   fake gio. Never run `gio mime` against his own list to test.
+- **ofx-fm1 (FileManager1, 2026-10-26) claims a name on the session bus:** run on Michael's bus
+  it would take `org.freedesktop.FileManager1` from Nemo for 30 s, and a call would open real ofx
+  windows. Never run it outside `make test-fm1` (tests/fm1/run.sh): a private `dbus-run-session`
+  whose config lists only the test's service folder, without his `DBUS_SESSION_BUS_ADDRESS`,
+  `XDG_RUNTIME_DIR` (where sd-bus would find his bus) or `WAYLAND_DISPLAY`, with fakes for
+  `uwsm-app` and ofx (`OFX_FM1_OFX`). It connects with `sd_bus_open`, so a copy the test's bus
+  starts uses that bus (`DBUS_STARTER_ADDRESS`). `make install` writes
+  `~/.local/share/dbus-1/services/org.freedesktop.FileManager1.service` and reloads his bus's
+  config: his go, as every install.
 - **A window that stops answering** pops Hyprland's "terminate?" dialog on his screen, even on the
   headless output. The script's `sh` runs under `timeout 5` for that reason; keep everything a
   script waits for short.

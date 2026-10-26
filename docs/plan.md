@@ -494,6 +494,20 @@ on a file, ofx opens its folder with the file selected. Not yet: browsers' "Show
 `org.freedesktop.FileManager1` on D-Bus, which Nemo provides (nemo.FileManager1.service); that
 stays Nemo's until ofx answers it.
 
+**FileManager1 (Michael, 2026-10-26, to finish the switch):** `ofx-fm1` (tools/fm1.c, sd-bus, no
+window) answers `org.freedesktop.FileManager1`. `make install` puts its service file in
+`~/.local/share/dbus-1/services`, which the bus should read before Nemo's in `/usr/share` (the
+first file for a name wins; to check after the install: dbus-broker-launch's journal names the one
+it ignores), and asks the bus to reload. The bus starts it on a call; it starts
+`uwsm-app -- ofx <path>` a window and exits after 30 s without a call, letting the name go before
+it answers the last calls. ShowFolders opens each folder; ShowItems opens each item's folder with
+it selected (one window a folder, the first item asked for); ShowItemProperties for now as
+ShowItems. Only local `file://` URIs that are there; 16 windows a call at most. A Nemo already
+running most likely holds the name (it has FileManager1's code built in), and then the call is
+Nemo's. The startup id is not
+used: ofx's window takes the focus as any new one. Tests: fs/fm1.c's unit tests, and `make
+test-fm1`, end to end on a private bus.
+
 **Shift and a move (Michael, 2026-10-26):** in the files, Shift with an arrow, Home, End, or
 H/J/K/L selects every entry the cursor passes over, the start included, as a Shift+click does
 (ofx's selection only grows that way: going back unmarks nothing; Esc clears). The icon view

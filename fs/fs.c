@@ -19,4 +19,5 @@
 #include "tree.c"
 #include "thumb.c"
 #include "clean.c"
+#include "fm1.c"
 #include "windows.c"
