@@ -83,6 +83,9 @@ his word: Nemo's compact view and its icon size slider.
   mutants first. On a quiet machine 46 mutants took about 410 s at 6, 8, 10 or 12 workers alike,
   CPU 42-63%: the time is the unmutated suite at the start plus the slowest mutants at the end,
   not the processor. The order by each tag group's time in the baseline is the first thing to try.
+- Open With (Michael, 2026-10-26: not worth it yet, he can't notice the delay): keep the theme's
+  app-folder list (0.7 MiB) after the first open, so a later open skips its ~34 ms; the icons
+  themselves would still go when the panel closes.
 - Not wanted: Nemo's built-in terminal (`t`, a terminal here, covers it).
 
 **Thumbnails, a rule from Nemo (2026-10-20):** Nemo looped at up to 45% CPU on one file
