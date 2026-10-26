@@ -1405,9 +1405,9 @@ static bool ui_find_event(Ui *u, UiNames names, UiEvent e, const UiInput *in)
     switch (e.key) {
     case UK_BACKSPACE: ui_find_erase(u), ui_find_update(u, names); return true;
     case UK_ENTER: case UK_SHIFT_ENTER: ui_find_leave(u); return true;
-    case UK_ESC:
+    case UK_ESC:   // (in range: the folder may have been listed again with fewer entries since)
         ui_find_close(u);
-        u->list.sel = u->find_from, ui_show_sel(&u->list);
+        u->list.sel = ui_clamp(u->find_from, 0, u->list.n > 0 ? u->list.n - 1 : 0), ui_show_sel(&u->list);
         return true;
     case UK_UP: case UK_DOWN: {
         int dir = e.key == UK_UP ? -1 : 1;

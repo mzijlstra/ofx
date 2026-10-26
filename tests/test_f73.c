@@ -708,6 +708,14 @@ static void test_find_bar(void)
     in = keys(1, UK_ESC);
     ui_handle(&u, names, &in);
     CHECK(!u.finding && !u.find_keys && u.list.sel == 6);
+    // Listed again with fewer entries meanwhile: Esc goes to the last one there is.
+    in = chars("/a");
+    ui_handle(&u, names, &in);
+    ui_set(&u.list, 3, 1);
+    in = keys(1, UK_ESC);
+    ui_handle(&u, names, &in);
+    CHECK(u.list.sel == 2);
+    ui_set(&u.list, COUNT(find_names), 6);
     // Under a question its pointer does nothing.
     in = chars("/a");
     ui_handle(&u, names, &in);

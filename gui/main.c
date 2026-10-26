@@ -427,6 +427,9 @@ static bool go_to_in(const char *dir, Str select, isize fallback, bool stepping)
         SetWindowTitle(in_trash ? "ofx: Trash" : TextFormat("ofx: %s", app.cwd));
     }
     ui_set(&app.ui.list, l.n, sel);
+    // The find bar stays open in another folder; Esc there goes back to where this one opened, not
+    // to a place in the last one's list.
+    if (!same) app.ui.find_from = app.ui.list.sel;
     // A full icon cache would leave every icon not in it blank until a theme change: emptied as
     // another folder is entered, where a frame holds none of its slots, it fills again with what is
     // on screen. (A reload of the same folder shows the same icons.)

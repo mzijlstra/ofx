@@ -164,7 +164,7 @@ MUTANTS += [
     (U, "while (u->find_len > 0 && ((unsigned char)u->find[u->find_len] & 0xC0) == 0x80) u->find_len--;", ""),
     (U, "    ui_matcher_set(&u->find_m, (Str){ u->last, u->last_len }, u->find_opts);\n    isize i = ui_find_at(&u->list, names, &u->find_m, u->list.sel + dir, dir);", "    ui_matcher_set(&u->find_m, (Str){ u->last, u->last_len }, u->find_opts);\n    isize i = ui_find_at(&u->list, names, &u->find_m, u->list.sel, dir);"),
     (U, "        if (e.ch == '/') return true;   // can't be in a name\n", ""),
-    (U, "        u->list.sel = u->find_from, ui_show_sel(&u->list);\n        return true;", "        return true;"),
+    (U, "        u->list.sel = ui_clamp(u->find_from, 0, u->list.n > 0 ? u->list.n - 1 : 0), ui_show_sel(&u->list);\n        return true;", "        return true;"),
     (U, "    default: ui_find_leave(u); return false;   // a command", "    default: ui_find_leave(u); return true;   // a command"),
     # ---- F2: input
     (U, "return s.key == k ? (Sort){ k, !s.reverse } : (Sort){ k, false };", "return (Sort){ k, !s.reverse };"),
@@ -1277,4 +1277,7 @@ MUTANTS += [
     (O, "    apps_names(a, &type, names, APPS_TYPES_MAX);\n    char list[PATH_MAX];", "    char list[PATH_MAX];"),
     (U, "    for (isize i = 0; i < hay.len; i++) {\n        if (((unsigned char)hay.p[i] & 0xC0) == 0x80) continue;", "    for (isize i = 1; i < hay.len; i++) {\n        if (((unsigned char)hay.p[i] & 0xC0) == 0x80) continue;"),
     (U, "            end = i + m->len;\n", ""),
+]
+MUTANTS += [
+    (U, "        u->list.sel = ui_clamp(u->find_from, 0, u->list.n > 0 ? u->list.n - 1 : 0), ui_show_sel(&u->list);", "        u->list.sel = u->find_from, ui_show_sel(&u->list);"),
 ]
