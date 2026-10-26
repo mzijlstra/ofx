@@ -77,11 +77,12 @@ cat > "$T/launch.sh" <<EOS
 #!/bin/sh
 echo \$\$ > "$T/run.pid"
 exec env -u DISPLAY -u WAYLAND_SOCKET WAYLAND_DISPLAY="$sock" OFX_TEST_SIZE=936x516 OFX_TEST_WINDOWS="$T/windows" ${script_env} OFX_GUI_ROOT="$T" OFX_GUI_SHOTS="$T/shots" PATH="$T/fakes:\$PATH" XDG_STATE_HOME="$T/state" XDG_CONFIG_HOME="$T/config" XDG_DATA_HOME="$T/data" XDG_CACHE_HOME="$T/cache" \
-  LSAN_OPTIONS=suppressions=$root/gui/lsan.supp ASAN_OPTIONS=log_path="$T/asan" ${OFX_TEST_LEAK:+OFX_TEST_LEAK=1} \
+  LSAN_OPTIONS=suppressions=$root/gui/lsan.supp ASAN_OPTIONS=log_path="$T/asan" ${OFX_TEST_LEAK:+OFX_TEST_LEAK=1} ${OFX_GUI_FAIL_FAST:+OFX_GUI_FAIL_FAST=1} \
   ${OFX_TEST_WATCH_DELAY_MS:+OFX_TEST_WATCH_DELAY_MS=$OFX_TEST_WATCH_DELAY_MS} ${OFX_TEST_COPY_DELAY_MS:+OFX_TEST_COPY_DELAY_MS=$OFX_TEST_COPY_DELAY_MS} ${OFX_TEST_CROSS:+OFX_TEST_CROSS=1} ${OFX_TEST_HOME:+HOME=$OFX_TEST_HOME} ${OFX_TEST_COUNT_DELAY_MS:+OFX_TEST_COUNT_DELAY_MS=$OFX_TEST_COUNT_DELAY_MS} ${OFX_TEST_MOUNTINFO:+OFX_TEST_MOUNTINFO=$OFX_TEST_MOUNTINFO} ${OFX_TEST_MEDIA:+OFX_TEST_MEDIA=$OFX_TEST_MEDIA} ${OFX_TEST_SPACE_DELAY_MS:+OFX_TEST_SPACE_DELAY_MS=$OFX_TEST_SPACE_DELAY_MS} ${OFX_TEST_ICONS_MAX:+OFX_TEST_ICONS_MAX=$OFX_TEST_ICONS_MAX} ${OFX_TEST_THUMB_HELD_MAX:+OFX_TEST_THUMB_HELD_MAX=$OFX_TEST_THUMB_HELD_MAX} \
   "$bin" $args >"$T/out" 2>"$T/err"
 EOS
 chmod +x "$T/launch.sh"
+t_launch=$(date +%s.%N)
 setsid "$T/launch.sh" </dev/null >/dev/null 2>&1 &
 for i in $(seq 50); do [ -s "$T/run.pid" ] && break; sleep 0.2; done
 pid=$(cat "$T/run.pid")
@@ -90,7 +91,13 @@ limit=${RUN_SCRIPT_LIMIT:-120}
 if [ "$sc" != - ]; then
     for i in $(seq $((limit * 5))); do kill -0 "$pid" 2>/dev/null || break; sleep 0.2; done
     if kill -0 "$pid" 2>/dev/null; then echo "still running after $limit s, killing $pid"; kill "$pid"; sleep 1; bad=1; fi
+    t_gone=$(date +%s.%N)
     "$here/weston.sh" stop "$T"
+    # Where a slow run's time went (2026-10-26, f6b's quit late under load): seconds from the
+    # launch to the script's end (its out file last written) and to the window's process gone, and
+    # weston's stop after it. run.sh's timed groups print it when they fail.
+    awk -v l="$t_launch" -v e="$(stat -c %.9Y "$T/out" 2>/dev/null || echo 0)" -v g="$t_gone" -v s="$(date +%s.%N)" \
+        'BEGIN { printf "times: script ended at %.1f s, window gone at %.1f s, weston stopped at %.1f s\n", e - l, g - l, s - l }' > "$T/times"
     grep -v "GLFW: Error: 65548" "$T/out" | grep -v "^$"
     grep -v "GLFW: Error: 65548" "$T/err" | head -20
     grep -q "expectations failed" "$T/out" && ! grep -q "script: 0 of" "$T/out" && bad=1

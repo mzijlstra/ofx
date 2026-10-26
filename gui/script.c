@@ -502,11 +502,18 @@ static void script_end(void)
     fflush(stdout);
 }
 
-// The next frame's input: false at the end of the script.
+// The next frame's input: false at the end of the script. With OFX_GUI_FAIL_FAST (the GUI
+// mutants) the first failure ends it: every wait-for after it would only run out its time.
 static bool script_input(UiInput *in)
 {
     char state[16384], missing_buf[256];
     const char *missing;
+    static int fast = -1;
+    if (fast < 0) fast = getenv("OFX_GUI_FAIL_FAST") && getenv("OFX_GUI_FAIL_FAST")[0];
+    if (fast && script.failed) {
+        script_end();
+        return false;
+    }
     if (script.wait > 0) return script.wait--, true;
     if (script.typing.len) {
         // A long `type` goes on over several frames, UI_EVENTS_MAX characters a frame.

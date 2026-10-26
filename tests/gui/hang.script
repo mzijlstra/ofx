@@ -1,4 +1,4 @@
-# A count stuck as on a hung mount (OFX_TEST_COUNT_DELAY_MS=20000; the run must end within 15 s): quitting must not wait for it.
+# A count stuck as on a hung mount (OFX_TEST_COUNT_DELAY_MS=60000; the run must end within 45 s): quitting must not wait for it.
 # tests/gui/run.sh times the run.
 settle
 expect n=1 cnt=-

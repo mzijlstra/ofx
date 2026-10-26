@@ -52,7 +52,7 @@ static void space_start(void)
 {
     const char *d = getenv("OFX_TEST_SPACE_DELAY_MS");
     space.delay_ms = d ? atoi(d) : 0;
-    if (space.delay_ms < 0 || space.delay_ms > 10000) space.delay_ms = 0;
+    if (space.delay_ms < 0 || space.delay_ms > 30000) space.delay_ms = 0;   // f6b: 30 s
     space.started = pthread_create(&space.thread, NULL, space_loop, NULL) == 0;
 }
 

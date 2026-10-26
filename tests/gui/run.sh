@@ -17,7 +17,9 @@ here=$(cd "$(dirname "$0")" && pwd)
 fail=0
 # A run that fails says so by name: a script that can't even start (its tree missing) prints no
 # "script: N of M" line of its own (fe01f7c ran f6 that way unseen).
-failed() { echo "== $1: FAILED"; fail=1; }
+# OFX_GUI_FAIL_FAST=1 (the GUI mutants, tools/mutation/gui.py): the first failed script ends the run,
+# and each script ends at its first failure; one is all a mutant needs to count as killed.
+failed() { echo "== $1: FAILED"; fail=1; [ -z "${OFX_GUI_FAIL_FAST:-}" ] || exit 1; }
 tree() {   # a fresh <T>/tree
     rm -rf "$1" && mkdir -p "$1/tree/adir" "$1/tree/bdir"
     touch "$1/tree/adir/inner.txt" "$1/tree/a.txt" "$1/tree/b2.txt" "$1/tree/.hidden"
@@ -99,10 +101,11 @@ printf '33 1 0:31 / / rw - btrfs /dev/x rw\n' > "$T/mountinfo"
 mkdir -p "$T/many/zz" "$T/media/OFXUSB"; for i in $(seq -w 0 69); do mkdir "$T/many/d$i"; done
 head -c 8388608 /dev/zero > "$T/big.bin"
 echo "== f6"; OFX_TEST_COPY_DELAY_MS=200 OFX_TEST_MEDIA="$T/media" OFX_TEST_MOUNTINFO="$T/mountinfo" "$here/../../tools/gui/run-script.sh" "$T" "$here/f6.script" "$bin" "$T/tree" || failed f6
-# f6b with the drives' space 10 s late (a hung drive): the window answers meanwhile and quits at once.
+# f6b with the drives' space 30 s late (a hung drive): the window answers meanwhile and quits at once
+# (under 25 s: with 10 and 9 s it failed with six runs at once, 2026-10-26).
 echo "== f6b"; start=$(date +%s)
-OFX_TEST_SPACE_DELAY_MS=10000 OFX_TEST_MEDIA="$T/media" OFX_TEST_MOUNTINFO="$T/mountinfo" "$here/../../tools/gui/run-script.sh" "$T" "$here/f6b.script" "$bin" "$T/tree" || failed f6b
-took=$(( $(date +%s) - start )); if [ "$took" -ge 9 ]; then echo "f6b: FAILED, took ${took}s (the space thread held the quit?)"; fail=1; else echo "f6b: quit in ${took}s with the space 10s late"; fi
+OFX_TEST_SPACE_DELAY_MS=30000 OFX_TEST_MEDIA="$T/media" OFX_TEST_MOUNTINFO="$T/mountinfo" "$here/../../tools/gui/run-script.sh" "$T" "$here/f6b.script" "$bin" "$T/tree" || failed f6b
+took=$(( $(date +%s) - start )); if [ "$took" -ge 25 ]; then cat "$T/times"; echo "f6b: FAILED, took ${took}s (the space thread held the quit?)"; fail=1; else echo "f6b: quit in ${took}s with the space 30s late"; fi
 fi
 if want f62; then
 # F6.2: the icon view, then f62b on the same tree: the view came back from the state file.
@@ -225,12 +228,15 @@ if want hang; then
 T=$base/hang; rm -rf "$T"; mkdir -p "$T/tree/stuck"
 echo "== hang"
 t0=$(date +%s)
-OFX_TEST_COUNT_DELAY_MS=20000 "$here/../../tools/gui/run-script.sh" "$T" "$here/hang.script" "$bin" "$T/tree" > "$T/run.out" 2>&1
+# The count stuck 60 s and the run due within 45 s: a window that waits for the count takes over 60 s,
+# and one that doesn't is far under 45 even with six runs at once (with 20 and 15 s, start and quit
+# alone took 16-19 s under that load, 2026-10-26).
+OFX_TEST_COUNT_DELAY_MS=60000 "$here/../../tools/gui/run-script.sh" "$T" "$here/hang.script" "$bin" "$T/tree" > "$T/run.out" 2>&1
 took=$(( $(date +%s) - t0 ))
-if grep -q "script: 0 of" "$T/run.out" && grep -q "no asan reports" "$T/run.out" && [ "$took" -lt 15 ]; then
-    echo "hang: quit in ${took}s with a count stuck for 20s"
+if grep -q "script: 0 of" "$T/run.out" && grep -q "no asan reports" "$T/run.out" && [ "$took" -lt 45 ]; then
+    echo "hang: quit in ${took}s with a count stuck for 60s"
 else
-    cat "$T/run.out"; echo "hang: FAILED (took ${took}s)"; fail=1
+    cat "$T/run.out" "$T/times"; echo "hang: FAILED (took ${took}s)"; fail=1
 fi
 fi
 if want guard3; then

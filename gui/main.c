@@ -19,15 +19,16 @@
 #include <stdlib.h>
 #include <time.h>
 
-// Vendored, and included with -isystem so our warning flags do not apply to them. Clay's code is
-// compiled here, except in the GUI mutants' build, which has it once in its own object (gui/clay.c).
-#ifndef OFX_CLAY_APART
+// Vendored, and included with -isystem so our warning flags do not apply to them. Clay's and
+// nanosvg's code is compiled here, except in the GUI mutants' build, which has it once in its own
+// object (gui/vendor.c).
+#ifndef OFX_VENDOR_APART
 #define CLAY_IMPLEMENTATION
+#define NANOSVG_IMPLEMENTATION
+#define NANOSVGRAST_IMPLEMENTATION
 #endif
 #include "clay.h"
-#define NANOSVG_IMPLEMENTATION
 #include "nanosvg.h"
-#define NANOSVGRAST_IMPLEMENTATION
 #include "nanosvgrast.h"
 #include "GLFW/glfw3.h"
 #include "render.c"   // includes raylib and font.c
@@ -3760,10 +3761,10 @@ int main(int argc, char **argv)
     if (!watch_start()) set_status(true, "inotify is unavailable: no live refresh");
     clip_init();   // false: the clipboard stays inside ofx
     // OFX_TEST_COUNT_DELAY_MS: each count takes that much longer, so a test can change the listing
-    // while answers for the old one are on their way, or (20 s) stand in for a hung mount at quit.
+    // while answers for the old one are on their way, or (60 s) stand in for a hung mount at quit.
     const char *kdelay = getenv("OFX_TEST_COUNT_DELAY_MS");
     counts.delay_ms = kdelay ? atoi(kdelay) : 0;
-    if (counts.delay_ms < 0 || counts.delay_ms > 20000) counts.delay_ms = 0;
+    if (counts.delay_ms < 0 || counts.delay_ms > 60000) counts.delay_ms = 0;
     count_start();
     walk_start();
     thumbs_start();

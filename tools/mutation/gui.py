@@ -6,7 +6,9 @@ tests/gui/run.sh, each script in its own headless weston (CLAUDE.md, "Testing th
 
 The whole GUI suite takes about 90 s, so each mutant runs only the script groups that killed it
 before (its tags, in gui-tags.txt): a grid mutant runs f62, not the copy jobs' f53. Groups run one
-at a time and a mutant stops at the first that kills it (Michael, 2026-10-25). A mutant with no
+at a time and a mutant stops at the first that kills it (Michael, 2026-10-25), and within a group
+at its first failure (OFX_GUI_FAIL_FAST: the script ends there, run.sh skips the group's other
+scripts; 2026-10-26, a run 1591 s to 881 s: every wait-for after a failure ran out its time). A mutant with no
 tags (new, or its text changed) tries its hint first (a fourth field, `'f7'`), then the rest; the
 group that kills it becomes its tag. --jobs N (6 by default) runs N mutants at once, each in its
 own copy of the repo: the unmutated build runs the whole suite in all N at once first, so a
@@ -337,6 +339,9 @@ MUTANTS = [
     (G, '        h.find_x = in_box(CLAY_ID("find-x"), x, y);', '', 'f2'),
     (G, '        h.find_field = !h.toggle && !h.find_x && in_box(CLAY_ID("find-field"), x, y);', '', 'f2'),
     (G, '    in->find_x = h.find_x, in->find_field = h.find_field, in->find_step = h.find_step;', '', 'f2'),
+    # ---- quit doesn't wait for a hung drive (2026-10-26: no mutant was hang's or f6b's alone)
+    (K, '    if (pthread_timedjoin_np(counts.thread, NULL, &until) != 0) pthread_detach(counts.thread);', '    pthread_join(counts.thread, NULL);', 'hang'),
+    ('gui/space.c', '    if (pthread_timedjoin_np(space.thread, NULL, &until) != 0) pthread_detach(space.thread);', '    pthread_join(space.thread, NULL);', 'f6'),
     # ---- --select (FileManager1's ShowItems, 2026-10-26)
     (G, '    if ((selecting && strcmp(dir, "/") != 0) || (stat(', '    if ((stat(', 'f73'),
     (G, '    if (selecting ? !select_path(start, dir, sizeof dir) : !realpath(', '    if (!realpath(', 'f73'),
@@ -363,7 +368,7 @@ MUTANTS = [
     # Left out: nsvgRasterize gone leaves a blank texture, which no state word sees (the pixels);
     # f73's ow-panel.png shows the SVG drawn.
 ]
-import concurrent.futures, queue, threading
+import concurrent.futures, queue, threading, time
 
 args = sys.argv[1:]
 full = '--full' in args
@@ -379,6 +384,10 @@ only = [int(x) for x in args[1].split(',')] if len(args) > 1 else None
 root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # OFX_GUI_TAGS: another tags file, for a run beside one that will write this one.
 tags_path = os.environ.get('OFX_GUI_TAGS') or os.path.join(root, 'tools', 'mutation', 'gui-tags.txt')
+# The run's times, and each mutant's, are printed. Starting the slowest first was measured on
+# 2026-10-26 and left out: 290 mutants took 1360 s against a floor of 1349 (their worker time over
+# 6), so the order can't gain; there's no long tail to trim.
+t_start = time.monotonic()
 
 # run.sh's groups, in its order: a mutant runs them one at a time and stops at the first that
 # kills it (Michael, 2026-10-25).
@@ -442,9 +451,12 @@ def failed_groups(out):
             g.append(GROUP_OF.get(m[1], m[1]))
     return g
 
-def run_groups(work, base, groups):
+# A mutant's run stops at its first failure (OFX_GUI_FAIL_FAST, run.sh and script.c), the base's
+# never: it must pass everything.
+def run_groups(work, base, groups, fast=True):
+    env = dict(os.environ, OFX_GUI_FAIL_FAST='1') if fast else {k: v for k, v in os.environ.items() if k != 'OFX_GUI_FAIL_FAST'}
     return subprocess.run([os.path.join(work, 'tests/gui/run.sh'), base, os.path.join(work, 'build/ofx-mut')] + groups,
-                          capture_output=True, text=True)
+                          capture_output=True, text=True, env=env)
 
 # The unmutated build first, on the whole suite, in every worker at once: under the load the
 # mutants will run with. If any fails, every mutant would count as killed (as they did while f6
@@ -452,18 +464,22 @@ def run_groups(work, base, groups):
 # mutants it doesn't see.
 def base_run(w):
     b = subprocess.run(['make', '-s', 'build/ofx-mut'], cwd=works[w], capture_output=True, text=True)
-    r = run_groups(works[w], os.path.join(scratch, f'gm-base{w}'), [])
+    r = run_groups(works[w], os.path.join(scratch, f'gm-base{w}'), [], fast=False)
     rmtree(os.path.join(scratch, f'gm-base{w}'))
     return b, r
 with concurrent.futures.ThreadPoolExecutor(jobs) as ex:
     bases = list(ex.map(base_run, range(jobs)))
+t_base = time.monotonic()
 bad = [(w, b, r) for w, (b, r) in enumerate(bases) if b.returncode != 0 or r.returncode != 0]
 if bad:
     print(f'the unmutated build fails tests/gui/run.sh in {len(bad)} of {jobs} workers at once: fix that first (or fewer --jobs)')
     for w, b, r in bad:
         print(f'worker {w}:', b.stderr[-300:], '\n'.join(l for l in r.stdout.splitlines() if 'FAILED' in l or (l.startswith('script:') and not l.startswith('script: 0 of'))))
+        log = os.path.join(scratch, f'base{w}.log')   # the whole of it: why a script failed under load
+        open(log, 'w').write(b.stdout + b.stderr + r.stdout + r.stderr)
+        print(f'  (all of worker {w}\'s output: {log})')
     sys.exit(2)
-print(f'base: tests/gui/run.sh passes unmutated, {jobs} at once', flush=True)
+print(f'base: tests/gui/run.sh passes unmutated, {jobs} at once ({t_base - t_start:.0f} s)', flush=True)
 if 'GUI_BASE_ONLY' in os.environ:
     sys.exit(0)
 
@@ -489,6 +505,7 @@ def one(i):
             stopped = True
             return
     work = free_works.get()
+    t0 = time.monotonic()
     try:
         path = os.path.join(work, f)
         text = open(path).read()
@@ -513,6 +530,7 @@ def one(i):
         open(path, 'w').write(text)
         rmtree(os.path.join(scratch, f'gm{i}'))
         fails = [l for l in out.splitlines() if l.startswith('script:') and not l.startswith('script: 0 of')]
+        took = time.monotonic() - t0
         with lock:
             if killer and not tagged:
                 tags[k] = [killer]
@@ -520,13 +538,14 @@ def one(i):
             if not killer:
                 survivors.append(i)
             how = f'killed by {killer}' if killer else 'SURVIVED'
-            print(f'#{i} {how} [{ran} of {len(order)} groups] {f}: {old.strip()[:60]!r}  {fails[:1]}', flush=True)
+            print(f'#{i} {how} [{ran} of {len(order)} groups, {took:.0f} s] {f}: {old.strip()[:60]!r}  {fails[:1]}', flush=True)
     finally:
         free_works.put(work)
 
 todo = [i for i in range(len(MUTANTS)) if only is None or i in only]
 with concurrent.futures.ThreadPoolExecutor(jobs) as ex:
     list(ex.map(one, todo))
+t_end = time.monotonic()
 if retagged:
     live = {key(m) for m in MUTANTS}
     with open(tags_path, 'w') as out:
@@ -541,5 +560,6 @@ for w in works:
 # F7.1.1 review).
 untested = sorted(unbuilt) + (['the rest: out of disk'] if stopped else [])
 print(f'{len(todo)} GUI mutants, {len(survivors)} survived: {sorted(survivors)}' + (f'; NOT TESTED: {untested}' if untested else ''))
+print(f'time: {t_end - t_start:.0f} s ({t_base - t_start:.0f} s the base, {t_end - t_base:.0f} s the mutants, {jobs} at once)')
 if untested:
     sys.exit(1)
