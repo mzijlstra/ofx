@@ -39,6 +39,7 @@ static void fm1_plan(Fm1Call c, const char *const *uris, isize n, Fm1Plan *out)
             out->skipped++;
             continue;
         }
+        for (size_t k = strlen(path); k > 1 && path[k - 1] == '/'; k--) path[k - 1] = 0;   // a/b/ is a/b
         // Already one window for it: the same folder, or (an item) the same folder above.
         Str key = c == FM1_FOLDERS ? str_from_c(path) : fm1_parent(path);
         bool seen = false;

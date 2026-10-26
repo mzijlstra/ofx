@@ -3624,7 +3624,8 @@ static void usage(void)
 
 // --select PATH: PATH's folder (links in it resolved) and PATH's own name, not resolved, so a
 // folder or a link is selected where it is (FileManager1's ShowItems, 2026-10-26). False, errno
-// set, when the folder or the name isn't there; "/", "." and ".." as a plain start.
+// set, when the folder or the name isn't there. "/", "." and ".." are resolved whole first (the
+// folder they name, then selected in its own parent; "/" alone as a plain start).
 static bool select_path(const char *start, char *out, size_t cap)
 {
     char p[PATH_MAX];

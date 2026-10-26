@@ -1323,3 +1323,6 @@ MUTANTS += [
     (FM1, "            out->skipped++;\n            continue;\n        }\n        memcpy", "            continue;\n        }\n        memcpy"),
     (FM1, "    out->n = 0, out->skipped = 0;", "    out->n = 0;"),
 ]
+MUTANTS += [
+    (FM1, "        for (size_t k = strlen(path); k > 1 && path[k - 1] == '/'; k--) path[k - 1] = 0;   // a/b/ is a/b\n", ""),
+]

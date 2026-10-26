@@ -32,6 +32,13 @@ static void test_fm1(void)
     fm1_plan(FM1_FOLDERS, dirs, COUNT(dirs), &p);
     snprintf(want, sizeof want, "%s/fm1", root);
     CHECK(p.n == 2 && p.skipped == 0 && strcmp(p.path[1], want) == 0);
+    char slashed[700];
+    snprintf(slashed, sizeof slashed, "%s/", u[5]);
+    const char *items2[] = { slashed, u[2] };   // sub dir/ and top.txt: both in fm1
+    fm1_plan(FM1_ITEMS, items2, COUNT(items2), &p);
+    snprintf(want, sizeof want, "%s/fm1/sub dir", root);
+    CHECK(p.n == 1 && strcmp(p.path[0], want) == 0);
+    snprintf(want, sizeof want, "%s/fm1", root);
     const char *twice[] = { u[5], u[5] };
     fm1_plan(FM1_FOLDERS, twice, COUNT(twice), &p);
     CHECK(p.n == 1);
