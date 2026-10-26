@@ -479,6 +479,12 @@ kept inside a list listed again shorter, so Enter opened past its end (ASan in w
 that and Esc clamp it (`ui_find_back`). LOW, landed: a click in the bar's field with the rename
 line open left the keys with the line; it closes now.
 
+**Shift and a move (Michael, 2026-10-26):** in the files, Shift with an arrow, Home, End, or
+H/J/K/L selects every entry the cursor passes over, the start included, as a Shift+click does
+(ofx's selection only grows that way: going back unmarks nothing; Esc clears). The icon view
+marks in the list's order, a row down being the cells between. Not in the sidebar, the find bar
+(Shift+Down is its next match, capitals are text), or a question (K keeps all in a clash).
+
 **F7.3.1 as built (2026-10-26):** a box under Open With's list, "Always open <type> files with this
 app" (Alt+D or a click), clear at each opening. Enter or Open with it ticked runs
 `gio mime -- <type> <app>` (GLib adds the line to [Default Applications] and [Added Associations]

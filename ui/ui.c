@@ -47,6 +47,8 @@ typedef enum {
     UK_SEL_RIGHT,  // Shift+Right
     UK_SEL_HOME,   // Shift+Home
     UK_SEL_END,    // Shift+End
+    UK_SEL_UP,     // Shift+Up: in the files the selection grows that way (Michael, 2026-10-26); elsewhere as Up
+    UK_SEL_DOWN,   // Shift+Down
     UK_SHIFT_ENTER,   // on a path button: a background tab; elsewhere as Enter
     UK_CRUMBS,     // Ctrl+K: the keyboard on the path buttons (F5.2)
     UK_JOBS,       // Ctrl+J: the keyboard on the job rows' × (F5.3)
@@ -817,6 +819,15 @@ static void ui_mark_range(Ui *u, isize from, isize to)
         from = to, to = t;
     }
     for (isize i = from; i <= to; i++) ui_mark(u, i, true);
+}
+
+// Shift and a move in the files (Michael, 2026-10-26): every entry the cursor passed over, from
+// where it was (from) to where it is, joins the selection, as a Shift+click does. -1: none
+// pending. Returns -1, for the next event.
+static isize ui_extend(Ui *u, isize from)
+{
+    if (from >= 0) ui_mark_range(u, from, u->list.sel);   // (ui_mark keeps to the list)
+    return -1;
 }
 
 // ---- the edit line -----------------------------------------------------------------------------
@@ -1605,7 +1616,8 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
     }
     if (!prompt && in->backs > 0) return (UiAction){ UA_BACK, 0, false };
     if (!prompt && in->forwards > 0) return (UiAction){ UA_FORWARD, 0, false };
-    for (int k = 0; k < in->nev; k++) {
+    isize extend = -1;   // a Shift move's start, marked to the cursor once the move is done (ui_extend)
+    for (int k = 0; k < in->nev; k++, extend = ui_extend(u, extend)) {
         UiEvent e = in->ev[k];
         // Ctrl+Q (F7.1): every window closes, this one as Ctrl+Q closed it before (below).
         if (e.key == UK_QUIT_ALL && !u->quit_asking) {
@@ -1668,15 +1680,21 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
             }
         }
         if (u->jobs_focus && !prompt && ui_jobs_event(u, in, e)) continue;   // before a clash's keys
-        // Outside an edit line and the path buttons, Shift doesn't change a move or Enter.
+        // Outside an edit line and the path buttons, Shift doesn't change Enter; with a move in the
+        // files (arrows, Home, End, or H, J, K, L) it selects what the cursor passes over (below).
+        bool shifted = e.key == UK_SEL_LEFT || e.key == UK_SEL_RIGHT || e.key == UK_SEL_HOME || e.key == UK_SEL_END ||
+                       e.key == UK_SEL_UP || e.key == UK_SEL_DOWN;
         switch (e.key) {
         case UK_SEL_LEFT: e.key = UK_LEFT; break;
         case UK_SEL_RIGHT: e.key = UK_RIGHT; break;
         case UK_SEL_HOME: e.key = UK_HOME; break;
         case UK_SEL_END: e.key = UK_END; break;
+        case UK_SEL_UP: e.key = UK_UP; break;
+        case UK_SEL_DOWN: e.key = UK_DOWN; break;
         case UK_SHIFT_ENTER: e.key = UK_ENTER; break;
         default: break;
         }
+
         if (u->asking) {
             UiAction a = ui_ask_event(u, e);
             if (a.kind != UA_NONE) return a;
@@ -1688,6 +1706,13 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
             continue;
         }
         if (u->finding && u->find_keys && ui_find_event(u, names, e, in)) continue;
+        // H, J, K and L (Shift and h, j, k, l) as the Shift arrows: here, after the questions and the
+        // find bar have taken their letters (K keeps all in a clash; text in the find bar).
+        if (e.key == UK_NONE && (e.ch == 'H' || e.ch == 'J' || e.ch == 'K' || e.ch == 'L')) {
+            shifted = true;
+            e = (UiEvent){ e.ch == 'H' ? UK_LEFT : e.ch == 'J' ? UK_DOWN : e.ch == 'K' ? UK_UP : UK_RIGHT, 0 };
+        }
+        if (shifted && !u->side_focus) extend = l->sel;
         // The keys and letters that move a cursor: the sidebar's when it has the keyboard. In the
         // icon view, Up and Down move a row and Left and Right a cell (F6.2).
         UiList *m = u->side_focus ? &u->side : l;

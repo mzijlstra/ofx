@@ -1283,3 +1283,14 @@ MUTANTS += [
     (U, "u->list.sel = i >= 0 ? i : ui_find_back(u);", "u->list.sel = i >= 0 ? i : u->find_from;"),
     (U, "        else ui_edit_close(u), u->find_keys = true,", "        else u->find_keys = true,"),
 ]
+# ---- Shift and a move select (Michael, 2026-10-26)
+MUTANTS += [
+    (U, "    if (from >= 0) ui_mark_range(u, from, u->list.sel);", "    if (from > 0) ui_mark_range(u, from, u->list.sel);"),
+    (U, "    for (int k = 0; k < in->nev; k++, extend = ui_extend(u, extend)) {", "    for (int k = 0; k < in->nev; k++) {"),
+    (U, "e.key == UK_SEL_UP || e.key == UK_SEL_DOWN;\n", "false;\n"),
+    (U, "        case UK_SEL_UP: e.key = UK_UP; break;\n", ""),
+    (U, "        case UK_SEL_DOWN: e.key = UK_DOWN; break;\n", ""),
+    (U, "        if (e.key == UK_NONE && (e.ch == 'H' || e.ch == 'J' || e.ch == 'K' || e.ch == 'L')) {", "        if (e.key == UK_NONE && (e.ch == 'J' || e.ch == 'K' || e.ch == 'L')) {"),
+    (U, "            e = (UiEvent){ e.ch == 'H' ? UK_LEFT : e.ch == 'J' ? UK_DOWN : e.ch == 'K' ? UK_UP : UK_RIGHT, 0 };", "            e = (UiEvent){ e.ch == 'H' ? UK_LEFT : e.ch == 'J' ? UK_DOWN : UK_RIGHT, 0 };"),
+    (U, "        if (shifted && !u->side_focus) extend = l->sel;", "        if (shifted) extend = l->sel;"),
+]

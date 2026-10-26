@@ -757,3 +757,88 @@ static void test_find_bar(void)
     u.confirming = false;
     ui_matcher_set(&u.find_m, STR_EMPTY, (UiMatchOpts){ 0 });
 }
+
+// ---- Shift and a move select (Michael, 2026-10-26) ---------------------------------------------
+
+static void test_shift_select(void)
+{
+    UiNames names = { name_at, NULL, NULL };
+    static u8 mark[20];
+    Ui u = { 0 };
+    ui_resize(&u.list, 10);
+    ui_set(&u.list, 20, 2);
+    u.mark = mark;
+    // Shift+Down twice: the start and the two passed over; Shift+Up back marks nothing more and
+    // unmarks nothing (as a Shift+click, the selection only grows).
+    UiInput in = keys(2, UK_SEL_DOWN, UK_SEL_DOWN);
+    ui_handle(&u, names, &in);
+    CHECK(u.list.sel == 4 && u.marked == 3 && mark[2] && mark[3] && mark[4] && !mark[5]);
+    in = keys(1, UK_SEL_UP);
+    ui_handle(&u, names, &in);
+    CHECK(u.list.sel == 3 && u.marked == 3);
+    // A plain move marks nothing; J and K as Shift+Down and Shift+Up, from where the cursor is.
+    in = keys(3, UK_DOWN, UK_DOWN, UK_DOWN);
+    ui_handle(&u, names, &in);
+    CHECK(u.list.sel == 6 && u.marked == 3);
+    in = chars("JJ");
+    ui_handle(&u, names, &in);
+    CHECK(u.list.sel == 8 && u.marked == 6 && mark[6] && mark[7] && mark[8]);
+    in = chars("K");
+    ui_handle(&u, names, &in);
+    CHECK(u.list.sel == 7 && u.marked == 6);
+    // Shift+End and Shift+Home: all the way.
+    in = keys(1, UK_SEL_END);
+    ui_handle(&u, names, &in);
+    CHECK(u.list.sel == 19 && u.marked == 17 && mark[19] && !mark[1]);
+    in = keys(1, UK_SEL_HOME);
+    ui_handle(&u, names, &in);
+    CHECK(u.list.sel == 0 && u.marked == 20);
+    // In the same frame as Enter: marked before Enter opens them all.
+    ui_mark_clear(&u);
+    in = keys(2, UK_SEL_DOWN, UK_ENTER);
+    UiAction a = ui_handle(&u, names, &in);
+    CHECK(a.kind == UA_OPEN && a.all && u.marked == 2);
+    // The icon view: Shift+Right a cell, Shift+Down a row, everything between in the list's order;
+    // H and L left and right.
+    ui_mark_clear(&u);
+    u.grid = true;
+    ui_set_cols(&u.list, 4);
+    ui_set(&u.list, 20, 1);
+    in = keys(1, UK_SEL_RIGHT);
+    ui_handle(&u, names, &in);
+    CHECK(u.list.sel == 2 && u.marked == 2 && mark[1] && mark[2]);
+    in = keys(1, UK_SEL_DOWN);
+    ui_handle(&u, names, &in);
+    CHECK(u.list.sel == 6 && u.marked == 6 && mark[6] && !mark[7]);
+    in = chars("LH");
+    ui_handle(&u, names, &in);
+    CHECK(u.list.sel == 6 && u.marked == 7 && mark[7]);
+    u.grid = false;
+    ui_set_cols(&u.list, 1);
+    // The sidebar with the keys: its cursor moves, nothing is marked.
+    ui_mark_clear(&u);
+    u.side.rows = 5;
+    ui_set(&u.side, 4, 0);
+    u.side_focus = true;
+    in = keys(1, UK_SEL_DOWN);
+    ui_handle(&u, names, &in);
+    CHECK(u.side.sel == 1 && u.marked == 0);
+    u.side_focus = false;
+    // In the find bar: Shift+Down is Down (the next match), uppercase letters are text.
+    ui_set(&u.list, COUNT(find_names), 0);
+    in = chars("/a");
+    ui_handle(&u, names, &in);
+    in = keys(1, UK_SEL_DOWN);
+    ui_handle(&u, names, &in);
+    CHECK(u.marked == 0 && u.find_keys && u.list.sel == 1);
+    in = chars("J");
+    ui_handle(&u, names, &in);
+    CHECK(u.find_len == 2 && u.marked == 0);
+    ui_find_close(&u);
+    ui_matcher_set(&u.find_m, STR_EMPTY, (UiMatchOpts){ 0 });
+    // An empty list: nothing to mark, no crash.
+    ui_set(&u.list, 0, 0);
+    in = keys(1, UK_SEL_DOWN);
+    ui_handle(&u, names, &in);
+    CHECK(u.marked == 0);
+}

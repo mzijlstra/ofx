@@ -401,6 +401,7 @@ static UiKey script_key(Str name)
         { "ctrl-t", UK_TAB_NEW }, { "ctrl-w", UK_TAB_CLOSE }, { "ctrl-tab", UK_TAB_NEXT }, { "ctrl-shift-tab", UK_TAB_PREV },
         { "ctrl-shift-pageup", UK_TAB_LEFT }, { "ctrl-shift-pagedown", UK_TAB_RIGHT },
         { "shift-left", UK_SEL_LEFT }, { "shift-right", UK_SEL_RIGHT }, { "shift-home", UK_SEL_HOME }, { "shift-end", UK_SEL_END },
+        { "shift-up", UK_SEL_UP }, { "shift-down", UK_SEL_DOWN },
         { "shift-enter", UK_SHIFT_ENTER }, { "ctrl-k", UK_CRUMBS }, { "ctrl-j", UK_JOBS }, { "ctrl-q", UK_QUIT_ALL }, { "close-window", UK_QUIT },
         { "f10", UK_F10 }, { "ctrl-n", UK_NEW_WINDOW }, { "ctrl-i", UK_PROPERTIES }, { "alt-enter", UK_TERMINAL },
         { "ctrl-1", UK_VIEW_LIST }, { "ctrl-2", UK_VIEW_ICONS }, { "ctrl-left", UK_SIDE },

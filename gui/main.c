@@ -3144,6 +3144,8 @@ static UiKey ui_key_of(int key, int mods)
         case GLFW_KEY_RIGHT: return UK_SEL_RIGHT;
         case GLFW_KEY_HOME: return UK_SEL_HOME;
         case GLFW_KEY_END: return UK_SEL_END;
+        case GLFW_KEY_UP: return UK_SEL_UP;
+        case GLFW_KEY_DOWN: return UK_SEL_DOWN;
         case GLFW_KEY_ENTER:
         case GLFW_KEY_KP_ENTER: return UK_SHIFT_ENTER;
         default: break;

@@ -87,6 +87,15 @@ point-ui find-x
 click-here
 expect finding=0 findkeys=0 rows=14
 pointer-off
+# ---- Shift and a move select what the cursor passes over (Michael, 2026-10-26): Shift+Down as
+# GLFW gives it (264, Shift 1), J as Shift+j; Esc clears
+key home
+raw-key 264 1
+expect sel=bdir marked=2
+char J
+expect sel=apple.txt marked=3
+key esc
+expect marked=0
 # A tab change closes it (a tab doesn't keep its own find).
 char /
 type a

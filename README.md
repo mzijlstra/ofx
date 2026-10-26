@@ -42,6 +42,7 @@ libpng, giflib and zlib for the previews. raylib and Clay are vendored.
 | Ctrl+I | Properties: size or a folder's contents (counted all the way down), location, drive, dates, owner, and the permissions as a grid: arrows (`h`/`j`/`k`/`l`) move, Space or Enter changes one at once (Ctrl+Z puts it back), Esc closes |
 | `~` | home |
 | Space, Ctrl+A | select the entry (and move on), select all; Esc clears |
+| Shift and a move | the arrows, Home/End or `H`/`J`/`K`/`L` with Shift: everything the cursor passes over joins the selection (as Shift+click), in the list and the icon view |
 | F2 | rename, in the row, the name up to its extension selected (a folder's whole name): Enter renames, Esc cancels |
 | In the rename and location lines | Shift+Left/Right/Home/End select, Ctrl+A all; Ctrl+C, Ctrl+X, Ctrl+V copy, cut and paste text (the first line; a name leaves `/` out) |
 | Ctrl+Shift+N | a new folder, "New folder", named in the row |
