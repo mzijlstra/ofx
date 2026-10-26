@@ -1002,12 +1002,13 @@ static void test_find(void)
     CHECK(u.find_len == UI_FIND_MAX);
     ui_find_close(&u);
     // Nothing to search: no match, no crash.
+    UiMatcher fm = { 0 };
     ui_set(&u.list, 0, 0);
-    CHECK(ui_find_at(&u.list, names, S("a"), 0, 1) == -1);
+    ui_matcher_set(&fm, S("a"), (UiMatchOpts){ 0 });
+    CHECK(ui_find_at(&u.list, names, &fm, 0, 1) == -1);
     ui_set(&u.list, 3, 0);
-    CHECK(ui_find_at(&u.list, names, STR_EMPTY, 0, 1) == -1);
-    CHECK(ui_contains(S("abc"), S("BC")) && !ui_contains(S("ab"), S("abc")) && ui_contains(S("x"), STR_EMPTY));
-    CHECK(!ui_contains(S("abd"), S("abc")));
+    ui_matcher_set(&fm, STR_EMPTY, (UiMatchOpts){ 0 });
+    CHECK(ui_find_at(&u.list, names, &fm, 0, 1) == -1);
 }
 
 static void test_sort_keys(void)
@@ -1501,6 +1502,7 @@ static void test_format(void)
 #include "test_f65.c"
 #include "test_f7.c"
 #include "test_f72.c"
+#include "test_f73.c"
 
 int main(void)
 {
@@ -1591,6 +1593,11 @@ int main(void)
     test_du_walk();
     test_mime_comment();
     test_gio_type();
+    test_match();
+    test_find_toggles();
+    test_apps_rank();
+    test_ow_keys();
+    test_ow_mouse();
     test_chmod();
     test_props_keys();
     test_step_round();

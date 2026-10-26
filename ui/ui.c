@@ -6,11 +6,12 @@
 #include "../base/base.h"
 
 #include <limits.h>
+#include <regex.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
 
-enum { UI_EVENTS_MAX = 64, UI_FIND_MAX = 256, UI_HISTORY_MAX = 64, UI_JOB_ROWS = 4 };
+enum { UI_EVENTS_MAX = 64, UI_FIND_MAX = 256, UI_HISTORY_MAX = 64, UI_JOB_ROWS = 4, UI_APPS_MAX = 1024 };
 
 // The keys without text, as gui/ reads them (a chord already named). Characters come apart.
 typedef enum {
@@ -113,6 +114,15 @@ typedef struct {
     int     menu_item;
     bool    menu_away;
     int     prop_box;    // a checkbox of the Properties panel's grid pressed (0..8, F7.2), -1 for none
+    // Open With (F7.3): the apps gui/ lists, in its order (their names, which the filter
+    // matches); a row pressed or double-clicked (its place on screen), the field pressed, a
+    // toggle pressed (1 case, 2 whole word, 3 regular expression; for find too), each -1 or 0 for none.
+    const Str *app_name;
+    isize   app_n;
+    int     ow_row, ow_drow;
+    bool    ow_field;
+    int     ow_wheel;    // notches over its list, as wheel
+    int     toggle;
 } UiInput;
 
 typedef enum {
@@ -152,6 +162,8 @@ typedef enum {
                     // asks first (quit_asking), its jobs running or waiting
     UA_PROPS,       // the Properties panel opened (Ui.props): gui/ reads what it shows (F7.2)
     UA_CHMOD,       // index: the grid's place (0..8) whose permission bit flips
+    UA_OPEN_WITH,   // the Open With panel opened (Ui.ow): gui/ lists the apps (F7.3)
+    UA_LAUNCH,      // index: the app (its place in gui/'s list) to open the files with
 } UiActionKind;
 
 typedef struct {
@@ -222,6 +234,23 @@ typedef struct {
     bool (*dir)(void *ctx, isize i);
 } UiNames;
 
+// How find and Open With's filter match (F7.3, Michael 2026-10-26, as VS Code's three toggles):
+// case as typed, whole words only, the text a regular expression (POSIX extended).
+typedef struct {
+    bool cased, word, regex;
+} UiMatchOpts;
+
+// A text to match, ready: a regular expression compiled once, or why it doesn't compile.
+typedef struct {
+    UiMatchOpts o;
+    char        text[UI_FIND_MAX + 1];
+    int         len;
+    bool        re_on;     // re holds the compiled expression
+    bool        bad;       // it doesn't compile: nothing matches, err says why
+    regex_t     re;
+    char        err[128];
+} UiMatcher;
+
 typedef struct {
     UiList list, side;
     SideMode side_mode;      // places, tree or hidden (F6)
@@ -236,6 +265,8 @@ typedef struct {
     isize  find_from;        // the cursor when the find line opened
     char   last[UI_FIND_MAX];   // the last text found, for n and N
     int    last_len;
+    UiMatchOpts find_opts;   // find's toggles, kept from one find to the next (F7.3)
+    UiMatcher   find_m;      // the find line's text (or the last, for n and N) as it matches
     Sort   sort;
 
     // The selection: gui/ gives one byte per entry of the listing (in the listing's arena), and
@@ -283,13 +314,25 @@ typedef struct {
     bool   props;
     int    prop_at;
     bool   prop_can;
+    // Open With (F7.3): up; the filter field's text and caret (bytes); the keys in the list, not the
+    // field; the toggles; the apps the filter shows (their places in gui/'s list) and the cursor
+    // over them; ow_fresh until the list is filtered from gui/'s apps.
+    bool   ow;
+    bool   ow_in_list;
+    bool   ow_fresh;
+    char   ow_text[UI_FIND_MAX];
+    int    ow_len, ow_caret;
+    UiMatchOpts ow_opts;
+    UiMatcher   ow_m;
+    UiList ow_list;
+    isize  ow_idx[UI_APPS_MAX];
 } Ui;
 
 static UiInput ui_input_none(void)
 {
     return (UiInput){ .click = -1, .dclick = -1, .side_click = -1, .header = -1, .click_mods = 0, .bar = UB_NONE, .crumb = -1,
                       .tab_click = -1, .tab_close = -1, .mid_row = -1, .mid_side = -1, .mid_crumb = -1, .modal = 0, .job_x = -1, .side_mode = -1, .side_twisty = -1, .side_eject = -1,
-                      .zoom_to = -1, .menu_title = -1, .menu_item = -1, .prop_box = -1 };
+                      .zoom_to = -1, .menu_title = -1, .menu_item = -1, .prop_box = -1, .ow_row = -1, .ow_drow = -1 };
 }
 
 static isize ui_clamp(isize v, isize lo, isize hi)
@@ -417,7 +460,8 @@ static bool ui_input_acts(const UiInput *in)
     return in->nev > 0 || in->click >= 0 || in->dclick >= 0 || in->side_click >= 0 || in->header >= 0 || in->bar != UB_NONE ||
            in->tab_click >= 0 || in->tab_close >= 0 || in->mid_row >= 0 || in->mid_side >= 0 || in->mid_crumb >= 0 || in->modal > 0 ||
            in->backs > 0 || in->forwards > 0 || in->job_x >= 0 || in->side_mode >= 0 || in->side_twisty >= 0 || in->side_eject >= 0 ||
-           in->zoom_wheel != 0 || in->zoom_to >= 0 || in->menu_title >= 0 || in->menu_item >= 0 || in->menu_away || in->prop_box >= 0;
+           in->zoom_wheel != 0 || in->zoom_to >= 0 || in->menu_title >= 0 || in->menu_item >= 0 || in->menu_away || in->prop_box >= 0 ||
+           in->ow_row >= 0 || in->ow_drow >= 0 || in->ow_field || in->toggle > 0;
 }
 
 // Whether a status message gives way to the status line on input that acts (ui_input_acts): a
@@ -501,24 +545,83 @@ static UiAction ui_view(Ui *u, bool grid)
 
 // ---- find -------------------------------------------------------------------------------------
 
-// Whether needle is in hay, ASCII letters folded.
-static bool ui_contains(Str hay, Str needle)
+// ---- matching (F7.3) ---------------------------------------------------------------------------
+
+// m to match text with o: a regular expression compiled (the one before freed); one that doesn't
+// compile leaves m bad, with regerror's words.
+static void ui_matcher_set(UiMatcher *m, Str text, UiMatchOpts o)
 {
-    for (isize i = 0; i + needle.len <= hay.len; i++) {
+    if (m->re_on) regfree(&m->re);
+    m->re_on = false, m->bad = false, m->err[0] = 0, m->o = o;
+    m->len = (int)(text.len < UI_FIND_MAX ? text.len : UI_FIND_MAX);
+    memcpy(m->text, text.p, (size_t)m->len);
+    m->text[m->len] = 0;
+    if (!o.regex || m->len == 0) return;
+    int rc = regcomp(&m->re, m->text, REG_EXTENDED | (o.cased ? 0 : REG_ICASE));
+    if (rc == 0) m->re_on = true;
+    else m->bad = true, regerror(rc, NULL, m->err, sizeof m->err);
+}
+
+// A byte of a word, for whole words: a letter, a digit, '_', or part of a character past ASCII.
+static bool ui_word_byte(unsigned char c)
+{
+    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c >= 0x80;
+}
+
+// Whether hay[from, to) stands as a whole word: no word byte just before or just after.
+static bool ui_whole(Str hay, isize from, isize to)
+{
+    return (from == 0 || !ui_word_byte((unsigned char)hay.p[from - 1])) && (to >= hay.len || !ui_word_byte((unsigned char)hay.p[to]));
+}
+
+// Whether hay matches m. An empty text matches everything; a bad expression nothing.
+static bool ui_match(const UiMatcher *m, Str hay)
+{
+    if (m->len == 0) return true;
+    if (m->o.regex) {
+        if (!m->re_on) return false;
+        for (isize off = 0; off <= hay.len;) {
+            regmatch_t pm = { .rm_so = (regoff_t)off, .rm_eo = (regoff_t)hay.len };
+            if (regexec(&m->re, hay.p ? hay.p : "", 1, &pm, REG_STARTEND | (off > 0 ? REG_NOTBOL : 0)) != 0) return false;
+            if (!m->o.word || ui_whole(hay, pm.rm_so, pm.rm_eo)) return true;
+            off = (isize)pm.rm_so + 1;
+        }
+        return false;
+    }
+    for (isize i = 0; i + m->len <= hay.len; i++) {
         isize k = 0;
-        while (k < needle.len && fold((unsigned char)hay.p[i + k]) == fold((unsigned char)needle.p[k])) k++;
-        if (k == needle.len) return true;
+        if (m->o.cased) while (k < m->len && hay.p[i + k] == m->text[k]) k++;
+        else while (k < m->len && fold((unsigned char)hay.p[i + k]) == fold((unsigned char)m->text[k])) k++;
+        if (k == m->len && (!m->o.word || ui_whole(hay, i, i + k))) return true;
     }
     return false;
 }
 
-// The first entry from `from` on (dir 1) or back (dir -1), wrapping, whose name holds text; -1.
-static isize ui_find_at(const UiList *l, UiNames names, Str text, isize from, int dir)
+// A toggle flipped (1 case, 2 whole word, 3 regular expression; 0 none).
+static UiMatchOpts ui_toggle(UiMatchOpts o, int which)
 {
-    if (l->n == 0 || text.len == 0) return -1;
+    if (which == 1) o.cased = !o.cased;
+    if (which == 2) o.word = !o.word;
+    if (which == 3) o.regex = !o.regex;
+    return o;
+}
+
+// Alt and the toggle's letter (c, w, r) as its number, 0 for another key.
+static int ui_toggle_key(UiEvent e)
+{
+    if (e.key != UK_MENU) return 0;
+    return e.ch == 'c' ? 1 : e.ch == 'w' ? 2 : e.ch == 'r' ? 3 : 0;
+}
+
+// ---- find -------------------------------------------------------------------------------------
+
+// The first entry from `from` on (dir 1) or back (dir -1), wrapping, whose name matches m; -1.
+static isize ui_find_at(const UiList *l, UiNames names, const UiMatcher *m, isize from, int dir)
+{
+    if (l->n == 0 || m->len == 0) return -1;
     for (isize k = 0; k < l->n; k++) {
         isize i = ((from + dir * k) % l->n + l->n) % l->n;
-        if (ui_contains(names.at(names.ctx, i), text)) return i;
+        if (ui_match(m, names.at(names.ctx, i))) return i;
     }
     return -1;
 }
@@ -528,7 +631,8 @@ static isize ui_find_at(const UiList *l, UiNames names, Str text, isize from, in
 static void ui_find_update(Ui *u, UiNames names)
 {
     Str text = { u->find, u->find_len };
-    isize i = ui_find_at(&u->list, names, text, u->find_from, 1);
+    ui_matcher_set(&u->find_m, text, u->find_opts);
+    isize i = ui_find_at(&u->list, names, &u->find_m, u->find_from, 1);
     u->find_miss = text.len > 0 && i < 0;
     u->list.sel = i >= 0 ? i : u->find_from;
     ui_show_sel(&u->list);
@@ -576,7 +680,8 @@ static void ui_find_erase(Ui *u)
 // n and N: the next or previous match of the last text, from the cursor.
 static void ui_find_again(Ui *u, UiNames names, int dir)
 {
-    isize i = ui_find_at(&u->list, names, (Str){ u->last, u->last_len }, u->list.sel + dir, dir);
+    ui_matcher_set(&u->find_m, (Str){ u->last, u->last_len }, u->find_opts);
+    isize i = ui_find_at(&u->list, names, &u->find_m, u->list.sel + dir, dir);
     if (i >= 0) u->list.sel = i, ui_show_sel(&u->list);
 }
 
@@ -887,7 +992,7 @@ static bool ui_jobs_event(Ui *u, const UiInput *in, UiEvent e)
 
 // ---- the menu bar (F7.1) -----------------------------------------------------------------------
 
-// Whether entry it can be picked now. Open With and Properties come with F7.3 and F7.2.
+// Whether entry it can be picked now.
 static bool ui_menu_enabled(const Ui *u, UiMenuItem it)
 {
     switch (it) {
@@ -895,6 +1000,7 @@ static bool ui_menu_enabled(const Ui *u, UiMenuItem it)
     case UM_NEW_WINDOW: return !u->in_trash;   // ofx starts on a folder, not on the trash view
     case UM_NEW_FOLDER: case UM_NEW_FILE: return !u->in_trash && u->can_write;
     case UM_OPEN: return u->list.n > 0;
+    case UM_OPEN_WITH: return u->list.n > 0 && !u->in_trash;
     default: return false;
     }
 }
@@ -957,6 +1063,137 @@ static UiAction ui_props_event(Ui *u, UiEvent e)
     return (UiAction){ UA_NONE, 0, false };
 }
 
+// ---- Open With (F7.3) ------------------------------------------------------------------------
+
+// The panel opened: the field empty with the keys, the toggles as last time; gui/ lists the apps.
+static UiAction ui_ow_open(Ui *u)
+{
+    u->ow = true, u->ow_in_list = false, u->ow_fresh = true, u->ow_len = u->ow_caret = 0;
+    u->ow_list = (UiList){ .rows = u->ow_list.rows };
+    return (UiAction){ UA_OPEN_WITH, 0, false };
+}
+
+static void ui_ow_close(Ui *u)
+{
+    u->ow = false;
+    ui_matcher_set(&u->ow_m, STR_EMPTY, u->ow_opts);   // (a compiled expression freed)
+}
+
+// The apps the field's text matches, in gui/'s order; the cursor on the first.
+static void ui_ow_filter(Ui *u, const UiInput *in)
+{
+    ui_matcher_set(&u->ow_m, (Str){ u->ow_text, u->ow_len }, u->ow_opts);
+    isize n = 0;
+    for (isize i = 0; i < in->app_n && n < UI_APPS_MAX; i++)
+        if (ui_match(&u->ow_m, in->app_name[i])) u->ow_idx[n++] = i;
+    u->ow_list.n = n, u->ow_list.sel = 0, u->ow_list.top = 0;
+    u->ow_fresh = false;
+}
+
+// A character into the field at the caret (dropped when it is full).
+static void ui_ow_char(Ui *u, u32 cp)
+{
+    char b[4];
+    int n = ui_utf8(cp, b);
+    if (n == 0 || u->ow_len + n > UI_FIND_MAX) return;
+    memmove(u->ow_text + u->ow_caret + n, u->ow_text + u->ow_caret, (size_t)(u->ow_len - u->ow_caret));
+    memcpy(u->ow_text + u->ow_caret, b, (size_t)n);
+    u->ow_len += n, u->ow_caret += n;
+}
+
+// The caret's place a code point before (dir -1) or after (1) at.
+static int ui_ow_step(const Ui *u, int at, int dir)
+{
+    if (dir < 0) {
+        if (at == 0) return 0;
+        at--;
+        while (at > 0 && ((unsigned char)u->ow_text[at] & 0xC0) == 0x80) at--;
+        return at;
+    }
+    if (at >= u->ow_len) return u->ow_len;
+    at++;
+    while (at < u->ow_len && ((unsigned char)u->ow_text[at] & 0xC0) == 0x80) at++;
+    return at;
+}
+
+// The field's text from a to b (a < b) removed.
+static void ui_ow_cut(Ui *u, int a, int b)
+{
+    memmove(u->ow_text + a, u->ow_text + b, (size_t)(u->ow_len - b));
+    u->ow_len -= b - a, u->ow_caret = a;
+}
+
+// The app under the cursor launched, when the filter shows any.
+static UiAction ui_ow_launch(Ui *u)
+{
+    if (u->ow_list.n == 0) return (UiAction){ UA_NONE, 0, false };
+    isize app = u->ow_idx[u->ow_list.sel];
+    ui_ow_close(u);
+    return (UiAction){ UA_LAUNCH, app, false };
+}
+
+// A key while the panel is up; it takes every key (Michael, 2026-10-26). Tab moves between the
+// field and the list. In the field typing, Backspace, Delete, Left, Right, Home and End edit, Down
+// goes to the list; in the list Up, Down, k, j, Home, End, PgUp and PgDn move, Up on the first
+// row goes to the field, another character goes to the field and is typed there. Enter opens the
+// app under the cursor, Esc closes, Alt+C, Alt+W and Alt+R flip the toggles.
+static UiAction ui_ow_event(Ui *u, UiEvent e, const UiInput *in)
+{
+    UiList *l = &u->ow_list;
+    int page = l->rows > 1 ? l->rows - 1 : 1;
+    if (ui_toggle_key(e)) {
+        u->ow_opts = ui_toggle(u->ow_opts, ui_toggle_key(e));
+        ui_ow_filter(u, in);
+        return (UiAction){ UA_NONE, 0, false };
+    }
+    switch (e.key) {
+    case UK_ESC: ui_ow_close(u); return (UiAction){ UA_NONE, 0, false };
+    case UK_TAB: u->ow_in_list = !u->ow_in_list; return (UiAction){ UA_NONE, 0, false };
+    case UK_ENTER: case UK_SHIFT_ENTER: return ui_ow_launch(u);
+    default: break;
+    }
+    if (u->ow_in_list) {
+        if (e.key == UK_NONE && e.ch == 'j') e.key = UK_DOWN;
+        else if (e.key == UK_NONE && e.ch == 'k') e.key = UK_UP;
+        switch (e.key) {
+        case UK_DOWN: ui_move(l, 1); break;
+        case UK_UP:
+            if (l->sel == 0) u->ow_in_list = false;
+            else ui_move(l, -1);
+            break;
+        case UK_HOME: ui_move(l, -l->n); break;
+        case UK_END: ui_move(l, l->n); break;
+        case UK_PAGEUP: ui_move(l, -page); break;
+        case UK_PAGEDOWN: ui_move(l, page); break;
+        case UK_NONE:
+            if (ui_utf8(e.ch, (char[4]){ 0 }) == 0) break;
+            u->ow_in_list = false, u->ow_caret = u->ow_len;
+            ui_ow_char(u, e.ch), ui_ow_filter(u, in);
+            break;
+        case UK_BACKSPACE:
+            u->ow_in_list = false, u->ow_caret = u->ow_len;
+            if (u->ow_len) ui_ow_cut(u, ui_ow_step(u, u->ow_len, -1), u->ow_len), ui_ow_filter(u, in);
+            break;
+        default: break;
+        }
+        return (UiAction){ UA_NONE, 0, false };
+    }
+    int before = u->ow_len;
+    switch (e.key) {
+    case UK_NONE: ui_ow_char(u, e.ch); break;
+    case UK_BACKSPACE: if (u->ow_caret > 0) ui_ow_cut(u, ui_ow_step(u, u->ow_caret, -1), u->ow_caret); break;
+    case UK_DELETE: if (u->ow_caret < u->ow_len) ui_ow_cut(u, u->ow_caret, ui_ow_step(u, u->ow_caret, 1)); break;
+    case UK_LEFT: case UK_SEL_LEFT: u->ow_caret = ui_ow_step(u, u->ow_caret, -1); break;
+    case UK_RIGHT: case UK_SEL_RIGHT: u->ow_caret = ui_ow_step(u, u->ow_caret, 1); break;
+    case UK_HOME: case UK_SEL_HOME: u->ow_caret = 0; break;
+    case UK_END: case UK_SEL_END: u->ow_caret = u->ow_len; break;
+    case UK_DOWN: if (l->n > 0) u->ow_in_list = true; break;
+    default: break;
+    }
+    if (u->ow_len != before || e.key == UK_NONE) ui_ow_filter(u, in);
+    return (UiAction){ UA_NONE, 0, false };
+}
+
 // Entry it picked: the menu closes, and gui/ does what it says.
 static UiAction ui_menu_pick(Ui *u, UiMenuItem it)
 {
@@ -970,6 +1207,7 @@ static UiAction ui_menu_pick(Ui *u, UiMenuItem it)
     case UM_CLOSE_ALL: return (UiAction){ UA_CLOSE_ALL, 0, true };   // gui/ asks first with jobs (close_others)
     case UM_CLOSE: return (UiAction){ UA_TAB_CLOSE, -1, false };
     case UM_PROPERTIES: return ui_props_open(u);
+    case UM_OPEN_WITH: return ui_ow_open(u);
     default: return (UiAction){ UA_NONE, 0, false };
     }
 }
@@ -1053,6 +1291,11 @@ static Sort ui_sort_click(Sort s, SortKey k)
 // event is then done).
 static bool ui_find_event(Ui *u, UiNames names, UiEvent e)
 {
+    if (ui_toggle_key(e)) {   // Alt+C, Alt+W, Alt+R: a toggle, the line kept open
+        u->find_opts = ui_toggle(u->find_opts, ui_toggle_key(e));
+        ui_find_update(u, names);
+        return true;
+    }
     if (e.key == UK_NONE) {
         if (e.ch == '/') return true;   // can't be in a name
         ui_find_char(u, e.ch);
@@ -1104,8 +1347,31 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         return (UiAction){ in->modal == UI_MODAL_YES && u->in_trash ? UA_EMPTY_TRASH : UA_NONE, 0, false };
     }
     if (!u->in_trash) u->empty_asking = false;
-    bool prompt = u->asking || u->confirming || u->cancel_asking || u->quit_asking || u->full_told || u->empty_asking || u->props;
+    bool prompt = u->asking || u->confirming || u->cancel_asking || u->quit_asking || u->full_told || u->empty_asking || u->props || u->ow;
     if (prompt) u->menu_on = false;
+    // Open With (F7.3): filtered once gui/ has listed the apps; the pointer: a row takes the
+    // cursor (a double click opens it), the field the keys, a toggle flips, Open and Cancel.
+    if (u->ow && u->ow_fresh && in->app_name) ui_ow_filter(u, in);
+    if (u->ow && !u->quit_asking && !u->full_told && !u->asking && !u->confirming) {
+        if (in->toggle >= 1 && in->toggle <= 3) {
+            u->ow_opts = ui_toggle(u->ow_opts, in->toggle);
+            ui_ow_filter(u, in);
+            return (UiAction){ UA_NONE, 0, false };
+        }
+        if (in->ow_field) u->ow_in_list = false;
+        isize row = in->ow_drow >= 0 ? in->ow_drow : in->ow_row;
+        if (row >= 0 && u->ow_list.top + row < u->ow_list.n) {
+            u->ow_list.sel = u->ow_list.top + row, u->ow_in_list = true;
+            if (in->ow_drow >= 0) return ui_ow_launch(u);
+        }
+        if (in->modal == UI_MODAL_YES) return ui_ow_launch(u);
+        if (in->modal == UI_MODAL_NO) return ui_ow_close(u), (UiAction){ UA_NONE, 0, false };
+        if (in->ow_wheel) ui_scroll(&u->ow_list, in->ow_wheel);
+    } else if (!u->ow && in->toggle >= 1 && in->toggle <= 3 && u->finding) {
+        u->find_opts = ui_toggle(u->find_opts, in->toggle);
+        ui_find_update(u, names);
+        return (UiAction){ UA_NONE, 0, false };
+    }
     // The menu bar (F7.1): a title opens its menu or closes it; while a menu is open a press on one
     // of its entries picks it (one that can't be picked keeps the menu open), and a press anywhere
     // else only closes it.
@@ -1248,6 +1514,11 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         }
         if (u->props && !u->asking && !u->confirming) {   // (quit, cancel and empty took their keys above)
             UiAction a = ui_props_event(u, e);
+            if (a.kind != UA_NONE) return a;
+            continue;
+        }
+        if (u->ow && !u->asking && !u->confirming) {
+            UiAction a = ui_ow_event(u, e, in);
             if (a.kind != UA_NONE) return a;
             continue;
         }

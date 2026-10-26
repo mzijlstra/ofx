@@ -16,8 +16,10 @@
 
 #include "../base/base.h"
 
+#include <dirent.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 enum { APPS_LISTS_MAX = 64, APPS_TYPES_MAX = 8 };
@@ -225,4 +227,132 @@ static bool apps_default(Arena *a, Str type, char *out, size_t cap)
     }
     arena_restore(a, mark);
     return ok;
+}
+
+// ---- every app, for Open With (F7.3) ------------------------------------------------------------
+
+enum { APPS_MAX = 1024, APPS_DEPTH_MAX = 3 };
+
+typedef enum { AS_DEFAULT, AS_RECOMMENDED, AS_OTHER, AS_NONE } AppSection;
+
+typedef struct {
+    Str        id;          // its desktop id, "org.gnome.TextEditor.desktop" (a folder's dashes: kde-foo.desktop)
+    Str        path;        // its file
+    Str        name, icon;  // Name= and Icon= (an icon name, or a file's path)
+    Str        mimes;       // MimeType=, ';'-separated
+    bool       nodisplay;   // NoDisplay=true: a helper, shown only where it names the type
+    AppSection section;     // for the type apps_rank was given
+} App;
+
+typedef struct {
+    App  *a;
+    isize n;
+    bool  cut;   // more than APPS_MAX
+} Apps;
+
+// The apps in dir (applications/ of a data dir, or a folder in it, its id's prefix pre), an id
+// that an earlier data dir has kept by that one (the desktop entry spec: the first is the app, even
+// when it isn't usable, as a user's Hidden copy).
+static void apps_scan(Arena *a, Apps *out, const char *dir, const char *pre, int depth, Str *seen, isize *nseen)
+{
+    DIR *d = opendir(dir);
+    if (!d) return;
+    for (struct dirent *e; (e = readdir(d));) {
+        if (e->d_name[0] == '.') continue;
+        char *path = arena_sprintf(a, "%s/%s", dir, e->d_name);
+        struct stat st;
+        if (stat(path, &st) != 0) continue;
+        if (S_ISDIR(st.st_mode)) {
+            if (depth < APPS_DEPTH_MAX) apps_scan(a, out, path, arena_sprintf(a, "%s%s-", pre, e->d_name), depth + 1, seen, nseen);
+            continue;
+        }
+        Str id = str_from_c(arena_sprintf(a, "%s%s", pre, e->d_name));
+        if (!S_ISREG(st.st_mode) || !str_ends_with(id, S(".desktop"))) continue;
+        bool dup = false;
+        for (isize k = 0; k < *nseen && !dup; k++) dup = str_eq(seen[k], id);
+        if (dup) continue;
+        if (*nseen < APPS_MAX * 2) seen[(*nseen)++] = id;
+        Str text = read_file(a, path);
+        if (!apps_usable(text)) continue;
+        if (out->n >= APPS_MAX) {
+            out->cut = true;
+            continue;
+        }
+        Str name = ini_get(text, S("Desktop Entry"), S("Name"));
+        out->a[out->n++] = (App){
+            .id = id, .path = str_from_c(path), .name = name.len ? name : id, .icon = ini_get(text, S("Desktop Entry"), S("Icon")),
+            .mimes = ini_get(text, S("Desktop Entry"), S("MimeType")),
+            .nodisplay = str_eq(ini_get(text, S("Desktop Entry"), S("NoDisplay")), S("true")), .section = AS_OTHER,
+        };
+    }
+    closedir(d);
+}
+
+// Every installed app (the data dirs' applications/, the user's first), into out (its slots in a).
+static void apps_all(Arena *a, Apps *out)
+{
+    *out = (Apps){ .a = arena_new(a, App, APPS_MAX) };
+    Str *seen = arena_new(a, Str, APPS_MAX * 2);
+    isize nseen = 0;
+    const char *data[MIME_DIRS_MAX];
+    isize nd = data_dirs(a, data, MIME_DIRS_MAX);
+    for (isize k = 0; k < nd; k++) apps_scan(a, out, arena_sprintf(a, "%s/applications", data[k]), "", 0, seen, &nseen);
+}
+
+static int apps_order(const void *pa, const void *pb)
+{
+    const App *x = pa, *y = pb;
+    if (x->section != y->section) return x->section < y->section ? -1 : 1;
+    for (isize i = 0; i < x->name.len && i < y->name.len; i++) {
+        int cx = fold((unsigned char)x->name.p[i]), cy = fold((unsigned char)y->name.p[i]);
+        if (cx != cy) return cx < cy ? -1 : 1;
+    }
+    if (x->name.len != y->name.len) return x->name.len < y->name.len ? -1 : 1;
+    isize n = x->id.len < y->id.len ? x->id.len : y->id.len;
+    int c = memcmp(x->id.p, y->id.p, (size_t)n);
+    return c ? c : x->id.len < y->id.len ? -1 : x->id.len > y->id.len;
+}
+
+// apps sorted for type: its default app first, then the recommended ones (that name it, a parent
+// or an alias in MimeType=, or a list names for it; less what a list removes), then the rest by
+// name; a NoDisplay app only when recommended (AS_NONE, at the end, otherwise). Returns how many are
+// shown (all but AS_NONE).
+static isize apps_rank(Arena *a, Apps *apps, Str type)
+{
+    ArenaMark mark = arena_mark(a);
+    char def[PATH_MAX];
+    bool have_def = apps_default(a, type, def, sizeof def);
+    const char *lists[APPS_LISTS_MAX];
+    isize nl = apps_lists(a, lists, APPS_LISTS_MAX);
+    Str text[APPS_LISTS_MAX];
+    for (isize k = 0; k < nl; k++) text[k] = read_file(a, lists[k]);
+    Str types[APPS_TYPES_MAX], names[APPS_TYPES_MAX * 4];
+    Str canon = type;
+    apps_names(a, &canon, names, APPS_TYPES_MAX);
+    isize nt = apps_types(a, canon, types, APPS_TYPES_MAX), nn = 0;
+    for (isize t = 0; t < nt; t++) {
+        Str tt = types[t], one[APPS_TYPES_MAX];
+        isize k1 = apps_names(a, &tt, one, APPS_TYPES_MAX);
+        for (isize j = 0; j < k1 && nn < COUNT(names); j++) names[nn++] = one[j];
+    }
+    Str removed = STR_EMPTY, listed = STR_EMPTY;
+    for (isize k = 0; k < nl; k++) {
+        removed = apps_removed(a, text[k], names, nn, removed);
+        for (isize j = 0; j < nn; j++) {
+            Str add = ini_get(text[k], S("Added Associations"), names[j]), dflt = ini_get(text[k], S("Default Applications"), names[j]);
+            listed = str_from_c(arena_sprintf(a, "%.*s;%.*s;%.*s", STR_ARG(listed), STR_ARG(add), STR_ARG(dflt)));
+        }
+    }
+    isize shown = 0;
+    for (isize i = 0; i < apps->n; i++) {
+        App *p = &apps->a[i];
+        bool names_it = apps_listed(listed, p->id);
+        for (isize j = 0; j < nn && !names_it; j++) names_it = apps_listed(p->mimes, names[j]);
+        if (apps_listed(removed, p->id)) names_it = false;
+        p->section = have_def && str_eq(p->path, str_from_c(def)) ? AS_DEFAULT : names_it ? AS_RECOMMENDED : p->nodisplay ? AS_NONE : AS_OTHER;
+        shown += p->section != AS_NONE;
+    }
+    arena_restore(a, mark);
+    qsort(apps->a, (size_t)apps->n, sizeof *apps->a, apps_order);
+    return shown;
 }
