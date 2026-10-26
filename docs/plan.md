@@ -496,15 +496,16 @@ stays Nemo's until ofx answers it.
 
 **FileManager1 (Michael, 2026-10-26, to finish the switch):** `ofx-fm1` (tools/fm1.c, sd-bus, no
 window) answers `org.freedesktop.FileManager1`. `make install` puts its service file in
-`~/.local/share/dbus-1/services`, which the bus should read before Nemo's in `/usr/share` (the
-first file for a name wins; to check after the install: dbus-broker-launch's journal names the one
-it ignores), and asks the bus to reload. The bus starts it on a call; it starts
-`uwsm-app -- ofx <path>` a window and exits after 30 s without a call, letting the name go before
+`~/.local/share/dbus-1/services`, which dbus-broker reads before Nemo's in `/usr/share` (the
+first file for a name wins; it logs "Ignoring duplicate name" for Nemo's), and asks the bus to reload. The bus starts it on a call; it starts
+`uwsm-app -- ofx <path>` a window (`ofx --select <path>` for an item) and exits after 30 s without a call, letting the name go before
 it answers the last calls. ShowFolders opens each folder; ShowItems opens each item's folder with
-it selected (one window a folder, the first item asked for); ShowItemProperties for now as
+it selected, a folder or a link too (`--select`: the folder above resolved, the name itself not;
+reviewer-2 found a folder opened inside itself), one window a folder, the first item asked for; ShowItemProperties for now as
 ShowItems. Only local `file://` URIs that are there; 16 windows a call at most. A Nemo already
-running most likely holds the name (it has FileManager1's code built in), and then the call is
-Nemo's. The startup id is not
+running holds the name (it owns it at start, with no flags: ofx-fm1 can't take it over), and then
+the call is Nemo's; a Nemo started while ofx-fm1 has it queues for it and gets it when ofx-fm1 goes
+idle (reviewer-2, from Nemo's and dbus-broker's source). The startup id is not
 used: ofx's window takes the focus as any new one. Tests: fs/fm1.c's unit tests, and `make
 test-fm1`, end to end on a private bus.
 

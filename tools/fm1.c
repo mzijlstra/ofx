@@ -36,7 +36,8 @@ static int fm1_call(sd_bus_message *m, Fm1Call c)
     fm1_plan(c, uris, n, &plan);
     for (isize i = 0; i < plan.n; i++) {
         Err err = { 0 };
-        if (!spawn_window(ofx_exe, plan.path[i], &err)) fprintf(stderr, "ofx-fm1: %s\n", err.msg);
+        bool ok = c == FM1_FOLDERS ? spawn_window(ofx_exe, plan.path[i], &err) : spawn_window_select(ofx_exe, plan.path[i], &err);
+        if (!ok) fprintf(stderr, "ofx-fm1: %s\n", err.msg);
     }
     if (plan.skipped + over) fprintf(stderr, "ofx-fm1: %td of the URIs skipped (not a local file there, or too many)\n", plan.skipped + over);
     return sd_bus_reply_method_return(m, "");

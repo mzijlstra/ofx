@@ -12,7 +12,7 @@ make release    # build/release/ofx
 make test       # unit tests for fs/ and ui/
 make test-fm1   # ofx-fm1 end to end, on a private D-Bus session
 make install    # ofx, ofx-clean and ofx-fm1 into ~/.local/bin, the cleanup's timer into ~/.config/systemd/user
-ofx [FOLDER]     # the current folder by default
+ofx [--select] [PATH]   # the current folder by default; on a file (or with --select), its folder, it selected
 ```
 
 Needs a C11 compiler, `wayland-scanner`, and the pkg-config packages wayland-client,

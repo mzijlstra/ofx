@@ -1,8 +1,8 @@
 // org.freedesktop.FileManager1 (Michael, 2026-10-26): what its calls ask of ofx. A browser's
 // "Show in folder" calls ShowItems with the file's URI; xdg-open and others call ShowFolders.
 // tools/fm1.c answers on the session bus; here the URIs become the paths ofx is started on, one
-// window each: a folder as it is (ShowFolders), an item as itself, so ofx opens its folder with
-// it selected (ShowItems, and ShowItemProperties for now), one window a folder however many of
+// window each: a folder as it is (ShowFolders), an item with --select, so ofx opens its folder
+// with it selected, a folder too (ShowItems, and ShowItemProperties for now), one window a folder however many of
 // its items are asked for. Only local file:// URIs, and only paths that are there; FM1_MAX
 // windows a call at most.
 

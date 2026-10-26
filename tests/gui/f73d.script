@@ -1,0 +1,4 @@
+# --select on a link to a folder: the link selected where it is, not its target's folder.
+settle
+expect n=7 sel=zlink
+quit

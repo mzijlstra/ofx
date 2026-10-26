@@ -9,6 +9,10 @@ set -eu
 S=$1 BIN=$2
 case $S in /*) ;; *) echo "fm1: the scratch folder must be absolute" >&2; exit 2 ;; esac
 rm -rf "$S"
+# The bus's socket in a short folder of its own: a unix socket's path is at most 107 bytes, and a
+# long scratch path overran it (reviewer-2).
+B=$(mktemp -d "${TMPDIR:-/tmp}/ofx-fm1-XXXXXX")
+trap 'rm -rf "$B"' EXIT
 mkdir -p "$S/services" "$S/fakes" "$S/t/sub dir" "$S/t/b"
 : > "$S/t/sub dir/a b.txt"
 : > "$S/t/sub dir/c.txt"
@@ -33,7 +37,7 @@ cat > "$S/bus.conf" <<EOF
  "http://www.freedesktop.org/standards/dbus/1.0/busconfig.dtd">
 <busconfig>
   <type>session</type>
-  <listen>unix:path=$S/bus</listen>
+  <listen>unix:path=$B/bus</listen>
   <servicedir>$S/services</servicedir>
   <policy context="default">
     <allow send_destination="*" eavesdrop="true"/>
@@ -46,7 +50,7 @@ EOF
 # Inside the private session: each call, then a second ofx-fm1 (the name is taken: it exits 1).
 cat > "$S/calls.sh" <<'EOF'
 set -u
-case $DBUS_SESSION_BUS_ADDRESS in "unix:path=$S/bus"*) ;; *) echo "fm1: not the test's bus: $DBUS_SESSION_BUS_ADDRESS" >&2; exit 3 ;; esac
+case $DBUS_SESSION_BUS_ADDRESS in "unix:path=$B/bus"*) ;; *) echo "fm1: not the test's bus: $DBUS_SESSION_BUS_ADDRESS" >&2; exit 3 ;; esac
 call() { gdbus call --session --timeout 5 --dest org.freedesktop.FileManager1 --object-path /org/freedesktop/FileManager1 --method "org.freedesktop.FileManager1.$1" "$2" "''" > /dev/null; }
 T=$S/t
 call ShowItems "['file://$T/sub%20dir/a%20b.txt']"
@@ -59,22 +63,22 @@ EOF
 # Neither Michael's bus address nor his runtime folder (where sd-bus would look for it) reaches the
 # session: a service the bus starts inherits the daemon's environment.
 mkdir -p "$S/run" && chmod 700 "$S/run"
-env -u WAYLAND_DISPLAY -u DISPLAY -u DBUS_SESSION_BUS_ADDRESS XDG_RUNTIME_DIR="$S/run" PATH="$S/fakes:$PATH" OFX_FM1_OFX="$S/fakes/ofx" S="$S" BIN="$BIN" \
+env -u WAYLAND_DISPLAY -u DISPLAY -u DBUS_SESSION_BUS_ADDRESS XDG_RUNTIME_DIR="$S/run" PATH="$S/fakes:$PATH" OFX_FM1_OFX="$S/fakes/ofx" S="$S" B="$B" BIN="$BIN" \
     ASAN_OPTIONS="log_path=$S/asan" \
     dbus-run-session --config-file="$S/bus.conf" -- sh "$S/calls.sh"
 sleep 0.3   # the bus is gone: ofx-fm1 sees it and exits
 
 # Sorted: each launch is detached, so the lines come in no set order. ShowItems on a file: its
-# folder's window (ofx selects it); the same folder twice, a path not there or not file://, once
+# folder's window, it selected (--select); the same folder twice, a path not there or not file://, once
 # or not at all; ShowItemProperties as ShowItems.
 X=$S/fakes/ofx T=$S/t
 sort > "$S/want" <<EOF
--- $X $T/sub dir/a b.txt
+-- $X --select $T/sub dir/a b.txt
 -- $X $T/b
 -- $X $T/sub dir
--- $X $T/sub dir/c.txt
--- $X $T/b/d.txt
--- $X $T/b/d.txt
+-- $X --select $T/sub dir/c.txt
+-- $X --select $T/b/d.txt
+-- $X --select $T/b/d.txt
 second: 1
 EOF
 sort "$S/spawn.log" > "$S/got"

@@ -3609,8 +3609,9 @@ static void theme_apply(void)
 
 static void usage(void)
 {
-    fprintf(stderr, "usage: ofx [FOLDER]\n"
-                    "  A file explorer: the folder (default: the current one) as a list.\n"
+    fprintf(stderr, "usage: ofx [--select] [PATH]\n"
+                    "  A file explorer: the folder (default: the current one) as a list; on a file, its folder\n"
+                    "  with it selected; --select: PATH's folder with PATH selected, a folder too.\n"
                     "  Enter, Right, l open; Backspace, Left, h up; j k, arrows, PgUp PgDn, Home End, g G move;\n"
                     "  Alt+Left/Right back and forward; / or Ctrl+F find, n N again; . or Ctrl+H hidden files;\n"
                     "  s sort by the next column, S reverse; Tab the places; t terminal here; ~ home;\n"
@@ -3621,16 +3622,41 @@ static void usage(void)
                     "  F10 or Alt+F the File menu; Ctrl+N a new window; Ctrl+Q close every ofx window.\n");
 }
 
+// --select PATH: PATH's folder (links in it resolved) and PATH's own name, not resolved, so a
+// folder or a link is selected where it is (FileManager1's ShowItems, 2026-10-26). False, errno
+// set, when the folder or the name isn't there; "/", "." and ".." as a plain start.
+static bool select_path(const char *start, char *out, size_t cap)
+{
+    char p[PATH_MAX];
+    snprintf(p, sizeof p, "%s", start);
+    for (size_t n = strlen(p); n > 1 && p[n - 1] == '/'; n--) p[n - 1] = 0;
+    char *slash = strrchr(p, '/');
+    const char *base = slash ? slash + 1 : p;
+    if (!*base || strcmp(base, ".") == 0 || strcmp(base, "..") == 0) return realpath(p, out) != NULL;
+    char parent[PATH_MAX];
+    if (!realpath(!slash ? "." : slash == p ? "/" : (*slash = 0, p), parent)) return false;
+    int n = snprintf(out, cap, "%s/%s", strcmp(parent, "/") == 0 ? "" : parent, base);
+    if (n < 0 || (size_t)n >= cap) return errno = ENAMETOOLONG, false;
+    struct stat st;
+    return lstat(out, &st) == 0;
+}
+
 int main(int argc, char **argv)
 {
     const char *start = NULL;
+    bool selecting = false;
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) return usage(), 0;
+        if (strcmp(argv[i], "--select") == 0 && !selecting) {
+            selecting = true;
+            continue;
+        }
         if (argv[i][0] == '-' || start) return usage(), 2;
         start = argv[i];
     }
     char dir[PATH_MAX];
-    if (!realpath(start ? start : ".", dir)) {
+    selecting = selecting && start;
+    if (selecting ? !select_path(start, dir, sizeof dir) : !realpath(start ? start : ".", dir)) {
         fprintf(stderr, "ofx: %s: %s\n", start ? start : ".", strerror(errno));
         return 1;
     }
@@ -3762,11 +3788,11 @@ int main(int argc, char **argv)
     list_fit();
     ui_resize(&app.ui.side, side_rows(GetScreenHeight()));
     app.press.row = -1, app.ow_press.row = -1;
-    // Started on a file (a desktop entry's %f, xdg-open on a file's folder): its folder, the file
-    // selected.
+    // Started on a file (a desktop entry's %f, xdg-open on a file's folder), or with --select
+    // (ShowItems): its folder, it selected.
     struct stat sst;
     Str pick = STR_EMPTY;
-    if (stat(dir, &sst) == 0 && !S_ISDIR(sst.st_mode)) {
+    if ((selecting && strcmp(dir, "/") != 0) || (stat(dir, &sst) == 0 && !S_ISDIR(sst.st_mode))) {
         char *slash = strrchr(dir, '/');
         static char base[NAME_MAX + 1];
         snprintf(base, sizeof base, "%s", slash + 1);

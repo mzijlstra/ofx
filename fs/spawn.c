@@ -95,6 +95,13 @@ static bool spawn_window(const char *exe, const char *dir, Err *err)
     return spawn_app(cmd, COUNT(cmd), err);
 }
 
+// Another ofx on path's folder with path selected, a folder too (FileManager1's ShowItems).
+static bool spawn_window_select(const char *exe, const char *path, Err *err)
+{
+    const char *cmd[] = { exe, "--select", path };
+    return spawn_app(cmd, COUNT(cmd), err);
+}
+
 // An app's desktop file run on path (F7.1.1: an empty file, whose type gio can't tell): GIO's own
 // launch, so a Terminal=true app (nvim) gets its terminal as with `gio open`.
 static bool spawn_launch(const char *desktop, const char *path, Err *err)
