@@ -479,6 +479,13 @@ kept inside a list listed again shorter, so Enter opened past its end (ASan in w
 that and Esc clamp it (`ui_find_back`). LOW, landed: a click in the bar's field with the rename
 line open left the keys with the line; it closes now.
 
+**ofx as the folder handler (Michael, 2026-10-26, dogfooding):** SUPER+SHIFT+F runs ofx (his
+bindings.lua). `make install` adds `ofx.desktop` (`Exec=ofx %f`, `MimeType=inode/directory`), so
+ofx can be the default for folders that other programs open (`xdg-open ~`, `gio open`). Started
+on a file, ofx opens its folder with the file selected. Not yet: browsers' "Show in folder" asks
+`org.freedesktop.FileManager1` on D-Bus, which Nemo provides (nemo.FileManager1.service); that
+stays Nemo's until ofx answers it.
+
 **Shift and a move (Michael, 2026-10-26):** in the files, Shift with an arrow, Home, End, or
 H/J/K/L selects every entry the cursor passes over, the start included, as a Shift+click does
 (ofx's selection only grows that way: going back unmarks nothing; Esc clears). The icon view

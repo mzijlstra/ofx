@@ -1,0 +1,4 @@
+# Started on a file (a desktop entry's %f, as ofx.desktop has it): its folder, the file selected.
+settle
+expect n=6 sel=notes.txt
+quit

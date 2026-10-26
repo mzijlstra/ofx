@@ -331,6 +331,7 @@ MUTANTS = [
     # ---- the find bar (Michael, 2026-10-26)
     (G, '        if (app.ui.finding) layout_find_bar();', '', 'f2'),
     (G, '        case GLFW_KEY_DOWN: return UK_SEL_DOWN;', '', 'f2'),
+    (G, '    if (stat(dir, &sst) == 0 && !S_ISDIR(sst.st_mode)) {', '    if (false) {', 'f73'),
     (G, '    if (!same) app.ui.find_from = app.ui.list.sel;', '', 'f2'),
     (G, ' - (app.ui.finding ? FIND_BAR_H : 0);', ';', 'f2'),
     (G, '        h.find_x = in_box(CLAY_ID("find-x"), x, y);', '', 'f2'),
@@ -409,7 +410,7 @@ def key(m):
     return hashlib.sha1('\0'.join(m[:3]).encode()).hexdigest()[:12]
 
 # The group of a script that failed: run.sh prints "== <script>: FAILED" or "<group>: FAILED".
-GROUP_OF = {'f6b': 'f6', 'f62b': 'f62', 'f62c': 'f62', 'f63b': 'f63', 'f63c': 'f63', 'f64b': 'f64', 'f64c': 'f64', 'f64d': 'f64', 'f7b': 'f7'}
+GROUP_OF = {'f6b': 'f6', 'f62b': 'f62', 'f62c': 'f62', 'f63b': 'f63', 'f63c': 'f63', 'f64b': 'f64', 'f64c': 'f64', 'f64d': 'f64', 'f7b': 'f7', 'f73b': 'f73'}
 
 # The tags as groups run.sh knows: a script's name (f7b, written before GROUP_OF had it) as its
 # group; anything else dropped, so a mutant never "survives" a group that runs nothing.

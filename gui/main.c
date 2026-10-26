@@ -3701,7 +3701,19 @@ int main(int argc, char **argv)
     list_fit();
     ui_resize(&app.ui.side, side_rows(GetScreenHeight()));
     app.press.row = -1, app.ow_press.row = -1;
-    go_to(dir, STR_EMPTY, 0);
+    // Started on a file (a desktop entry's %f, xdg-open on a file's folder): its folder, the file
+    // selected.
+    struct stat sst;
+    Str pick = STR_EMPTY;
+    if (stat(dir, &sst) == 0 && !S_ISDIR(sst.st_mode)) {
+        char *slash = strrchr(dir, '/');
+        static char base[NAME_MAX + 1];
+        snprintf(base, sizeof base, "%s", slash + 1);
+        pick = str_from_c(base);
+        if (slash == dir) dir[1] = 0;
+        else *slash = 0;
+    }
+    go_to(dir, pick, 0);
     if (!app.have_list) snprintf(app.cwd, sizeof app.cwd, "%s", dir);
     tabs[0].used = true;
     ui_tabs_open(&tabbar, 0, true);

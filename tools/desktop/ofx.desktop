@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=ofx
+GenericName=File Manager
+Comment=Omarchy File eXplorer: one folder at a time, in the theme's colours and icons
+Exec=@BIN@/ofx %f
+Icon=system-file-manager
+Terminal=false
+StartupWMClass=ofx
+Categories=System;FileTools;FileManager;
+MimeType=inode/directory;

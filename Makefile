@@ -123,11 +123,15 @@ build/ofx-mut: $(SRC) build/mut/clay.o $(RL_OUT)/libraylib.a $(OFX_WL)/stamp Mak
 # The cleanup's timer (F6.5) is installed and loaded, not enabled: Michael enables it after a look
 # at `ofx-clean --dry-run`.
 UNITS   ?= $(HOME)/.config/systemd/user
+APPS    ?= $(PREFIX)/share/applications
 
 install: build/release/ofx build/release/ofx-clean
 	install -d $(PREFIX)/bin $(UNITS)
 	install -m 755 build/release/ofx build/release/ofx-clean $(PREFIX)/bin/
 	rm -f $(PREFIX)/bin/fx   # the name before ofx (2026-10-22)
+	install -d $(APPS)
+	sed 's|@BIN@|$(PREFIX)/bin|' tools/desktop/ofx.desktop > $(APPS)/ofx.desktop   # the folder handler's entry (2026-10-26)
+	update-desktop-database $(APPS) 2>/dev/null || true
 	sed 's|@BIN@|$(PREFIX)/bin|' tools/systemd/ofx-clean.service > $(UNITS)/ofx-clean.service
 	install -m 644 tools/systemd/ofx-clean.timer $(UNITS)/
 	systemctl --user daemon-reload
