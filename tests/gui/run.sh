@@ -256,8 +256,8 @@ printf aaa > "$H/tree/a.txt"; : > "$H/tree/sub/inner.txt"; ln -s sub/inner.txt "
 printf '1 0 0:1 / / rw - ext4 /dev/x rw\n' > "$T/mountinfo"
 echo "== f8b"; OFX_TEST_HOME="$H" OFX_TEST_MOUNTINFO="$T/mountinfo" "$here/../../tools/gui/run-script.sh" "$T" "$here/f8b.script" "$bin" "$H/tree" || failed f8b
 # F8 step 3: a folder elsewhere's menu. home/tree: sub/, sub2/; the bookmarks file: home/tree/sub
-# labelled "Sub", then home/tree/sub2.
-T=$base/f8c; rm -rf "$T"; H=$T/home; mkdir -p "$H/tree/sub" "$H/tree/sub2" "$T/config/gtk-3.0"
+# labelled "Sub", then home/tree/sub2; the scratch trash there and empty.
+T=$base/f8c; rm -rf "$T"; H=$T/home; mkdir -p "$H/tree/sub" "$H/tree/sub2" "$T/config/gtk-3.0" "$T/data/Trash/files" "$T/data/Trash/info"
 printf 'file://%s/tree/sub Sub\nfile://%s/tree/sub2\n' "$H" "$H" > "$T/config/gtk-3.0/bookmarks"
 printf '1 0 0:1 / / rw - ext4 /dev/x rw\n' > "$T/mountinfo"
 echo "== f8c"; OFX_TEST_HOME="$H" OFX_TEST_MOUNTINFO="$T/mountinfo" "$here/../../tools/gui/run-script.sh" "$T" "$here/f8c.script" "$bin" "$H/tree" || failed f8c

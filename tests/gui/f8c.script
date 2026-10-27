@@ -96,14 +96,35 @@ wait-for 2000 sidemode=tree
 point-ui side-row 0
 right-here
 expect menu=folder menuhid=bm-rename,bm-up,bm-down,bm-remove,bm-edit,eject,empty-it
+key esc
+key f9
+key f9
+wait-for 2000 sidemode=places
+# A path button's Copy is its folder's: tree, which can't be pasted into itself (the cursor's sub
+# would paste as "sub (copy)")
+point-ui crumb 1
+right-here
+expect menuhid=bm-rename,bm-up,bm-down,bm-remove,bm-edit,eject,empty-it
 point-ui menu-item 6
 click-here
 expect menu=- clip=1 cut=0
+key ctrl-v
+sh sleep 1; test ! -e "$OFX_DIR/sub (copy)"
+# Open: there
+point-ui side-row 2
+right-here
+point-ui menu-item 0
+click-here
+wait-for 2000 crumbs=home|tree|sub
+key alt-left
+wait-for 2000 crumb=1
 # By the keys: the sidebar's cursor (Tab), the path buttons' (Ctrl+K); the keys stay there
 key tab
 expect sidefocus=1
 raw-key 299 1
 expect menu=folder menuat=open-it menuin=1
+# (under the cursor's sidebar row: Home)
+expect menubox=12,156,280,321
 key esc
 expect menu=- sidefocus=1
 key tab
