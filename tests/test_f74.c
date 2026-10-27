@@ -55,6 +55,7 @@ static void test_menu_f74(void)
             Ui a = menu_all_on(m1), b = menu_all_on(m2);
             a.list.sel = b.list.sel = 1;
             a.in_trash = b.in_trash = it == UM_RESTORE;   // shown in the trash view only
+            if (it == UM_PERMS_COLS || it == UM_GROUP_COL) a.grid = b.grid = false;   // the list's own (greyed among icons)
             UiInput in = ui_input_none();
             in.ev[in.nev++] = ev;
             UiAction ka = ui_handle(&a, names, &in);

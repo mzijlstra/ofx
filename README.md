@@ -76,7 +76,7 @@ puts its service file in `~/.local/share/dbus-1/services`), and it exits when id
 | View → Show Menu | the menu bar shown or hidden, remembered; hidden, F10 and Alt+F, E, V, G, B, H still open its menus (the bar shows while one is open), and a note says so as it hides |
 | View → Show Colors | the list in `ls`'s (eza's) colours from the theme: permissions r, w, x; your owner and group; size, date; names by kind. On unless turned off, remembered |
 | View → Show Permissions, Ctrl+P | the list's Owner and Permissions columns (`rwxr-xr-x`, a link's target's), on or off together, remembered, given way (the status line says so) while Name would have under 150 px; a link also shows where it leads after its → |
-| View → Show Group, Ctrl+G | the Group column between them, off at first (as eza), remembered; greyed while Show Permissions is off |
+| View → Show Group, Ctrl+G | the Group column between them, off at first (as eza), remembered; greyed while Show Permissions is off. All three of these (and Show Colors) are greyed in the icon view, which has no columns or colours |
 | Ctrl+M | Make Link: "Link to <name>" beside each selected entry, pointing at its full path; Ctrl+Z removes them |
 | Ctrl+Shift+A | Select Items Matching: the find bar as "Select", the same field and toggles; Enter makes the selection every match and closes it, Esc leaves the selection as it was |
 | Ctrl+Shift+I | invert the selection |

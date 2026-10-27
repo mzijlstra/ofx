@@ -1566,8 +1566,11 @@ static bool ui_menu_enabled(const Ui *u, UiMenuItem it)
     case UM_SELECT_ALL: case UM_SELECT_MATCH: case UM_INVERT: return files;
     case UM_RENAME: case UM_DUPLICATE: case UM_MAKE_LINK: return here && !u->in_trash && u->can_write;
     case UM_TRASH: case UM_DELETE: case UM_RESTORE: return here;
-    case UM_RELOAD: case UM_SIDE_PLACES: case UM_SIDE_TREE: case UM_SIDE_NONE: case UM_HIDDEN: case UM_PERMS_COLS: case UM_COLORS: case UM_SHOW_MENU: return true;
-    case UM_GROUP_COL: return u->perms_cols;   // (a group without the permissions says little, Michael 2026-10-27)
+    case UM_RELOAD: case UM_SIDE_PLACES: case UM_SIDE_TREE: case UM_SIDE_NONE: case UM_HIDDEN: case UM_SHOW_MENU: return true;
+    // The list's own (Michael, 2026-10-27): the icon view has no columns or colours; a group without
+    // the permissions says little.
+    case UM_PERMS_COLS: case UM_COLORS: return !u->grid;
+    case UM_GROUP_COL: return !u->grid && u->perms_cols;
     case UM_SORT_NAME: case UM_SORT_SIZE: case UM_SORT_MTIME: case UM_SORT_REVERSE: return true;
     case UM_ZOOM_IN: return u->grid && ui_zoom_level(ui_zoom_px(u)) < UI_ZOOMS - 1;
     case UM_ZOOM_OUT: return u->grid && ui_zoom_level(ui_zoom_px(u)) > 0;
@@ -2633,9 +2636,11 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
             if (l->n > 0) ui_find_open(u), u->find_select = true;
             break;
         case UK_HIDDEN: return (UiAction){ UA_HIDDEN, 0, false };
-        case UK_PERMS_COLS: return u->perms_cols = !u->perms_cols, (UiAction){ UA_PERMS_COLS, 0, false };
+        case UK_PERMS_COLS:   // (greyed in the icon view, as its entry)
+            if (!u->grid) return u->perms_cols = !u->perms_cols, (UiAction){ UA_PERMS_COLS, 0, false };
+            break;
         case UK_GROUP_COL:
-            if (u->perms_cols) return u->group_col = !u->group_col, (UiAction){ UA_GROUP_COL, 0, false };
+            if (!u->grid && u->perms_cols) return u->group_col = !u->group_col, (UiAction){ UA_GROUP_COL, 0, false };
             break;
         case UK_ALL:
             for (isize i = 0; i < l->n; i++) ui_mark(u, i, true);

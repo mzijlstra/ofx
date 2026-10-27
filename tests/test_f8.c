@@ -495,6 +495,15 @@ static void test_list_columns(void)
     // Show Permissions off keeps Show Group's check for when it comes back.
     u.group_col = true;
     CHECK(menu_keys(&u, 1, UK_PERMS_COLS).kind == UA_PERMS_COLS && !u.perms_cols && u.group_col && ui_menu_mark(&u, UM_GROUP_COL) == 1);
+    // In the icon view (Michael, 2026-10-27) all three are greyed and the keys do nothing: no
+    // columns there, nor colours; their checks stay for the list.
+    u.grid = true, u.colors = true, u.perms_cols = true;
+    CHECK(!ui_menu_enabled(&u, UM_PERMS_COLS) && !ui_menu_enabled(&u, UM_GROUP_COL) && !ui_menu_enabled(&u, UM_COLORS));
+    CHECK(ui_menu_mark(&u, UM_PERMS_COLS) == 1 && ui_menu_mark(&u, UM_GROUP_COL) == 1 && ui_menu_mark(&u, UM_COLORS) == 1);
+    CHECK(menu_keys(&u, 1, UK_PERMS_COLS).kind == UA_NONE && u.perms_cols);
+    CHECK(menu_keys(&u, 1, UK_GROUP_COL).kind == UA_NONE && u.group_col);
+    u.grid = false;
+    CHECK(ui_menu_enabled(&u, UM_PERMS_COLS) && ui_menu_enabled(&u, UM_GROUP_COL) && ui_menu_enabled(&u, UM_COLORS));
     u.perms_cols = false, u.group_col = false;
     // View → Show Colors (2026-10-27): on unless "colors=off"; the entry toggles it.
     CHECK(!state_load(&ta, path).no_colors);

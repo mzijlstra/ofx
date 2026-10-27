@@ -199,15 +199,16 @@ click-here
 point-ui menu-item 22
 click-here
 expect view=icons
+# (the list's Show Permissions, Show Group and Show Colors greyed among icons, Michael 2026-10-27)
 point-ui menu-title 2
 click-here
-expect menumarked=side-places,perms-cols,colors,show-menu,sort-name,view-icons menugrey=zoom-reset
+expect menumarked=side-places,perms-cols,colors,show-menu,sort-name,view-icons menugrey=perms-cols,group-col,colors,zoom-reset
 point-ui menu-item 17
 click-here
 expect zoom=64
 point-ui menu-title 2
 click-here
-expect menugrey=-
+expect menugrey=perms-cols,group-col,colors
 point-ui menu-item 19
 click-here
 expect zoom=48

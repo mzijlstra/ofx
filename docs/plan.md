@@ -688,6 +688,8 @@ link's target (`link_target`); names cached by `id_name`.
 Ctrl+P toggles them too; Group became its own View → Show Group (Ctrl+G, `group=on`), off by
 default as eza's `ls -l` has none, greyed (its key doing nothing) while Show Permissions is off
 (Michael, 2026-10-27: a group without the permissions says little; a submenu wasn't worth it).
+In the icon view Show Permissions, Show Group and Show Colors are greyed and their keys do nothing
+(Michael, 2026-10-27: none of them shows there); their checks stay for the list.
 The columns give way while Name would have under 150 px (200 at first; Michael's window beside
 another app had none), and the status line then says "Permissions hidden: the window is too narrow".
 View → Show Colors (checked; `colors=off`): eza's built-in colours, which his `ls` uses (no eza theme
