@@ -23,7 +23,7 @@ static Ui menu_all_on(u8 *mark)
 {
     Ui u = menu_ui(4);
     u.mark = mark, u.can_undo = u.can_back = u.can_forward = u.can_up = u.can_paste = u.can_bookmark = true;
-    u.bm_here = -1;
+    u.bm_here = -1, u.perms_cols = true;   // (Show Group is greyed without it)
     u.grid = true, u.zoom = 64;
     ui_set_cols(&u.list, 2);
     memset(mark, 0, 4);
@@ -72,7 +72,8 @@ static void test_menu_f74(void)
             }
             CHECK(ka.kind == ma.kind && ka.index == ma.index && ka.all == ma.all && !b.menu_on);
             CHECK(a.marked == b.marked && memcmp(m1, m2, 4) == 0 && a.finding == b.finding && a.editing == b.editing &&
-                  a.confirming == b.confirming && a.sort.key == b.sort.key && a.sort.reverse == b.sort.reverse && a.list.sel == b.list.sel);
+                  a.confirming == b.confirming && a.sort.key == b.sort.key && a.sort.reverse == b.sort.reverse && a.list.sel == b.list.sel &&
+                  a.perms_cols == b.perms_cols && a.group_col == b.group_col);
             CHECK(!b.menu_key.key && !b.menu_key.ch);   // run once
         }
     }

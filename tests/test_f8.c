@@ -470,6 +470,32 @@ static void test_list_columns(void)
     UiInput in = ui_input_none();
     in.menu_item = menu_place(2, UM_PERMS_COLS);
     CHECK(ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in).kind == UA_PERMS_COLS && !u.perms_cols && ui_menu_mark(&u, UM_PERMS_COLS) == 0);
+    // Ctrl+P toggles it too (Michael, 2026-10-27), from the files and from the sidebar.
+    CHECK(menu_keys(&u, 1, UK_PERMS_COLS).kind == UA_PERMS_COLS && u.perms_cols);
+    u.side_focus = true;
+    CHECK(menu_keys(&u, 1, UK_PERMS_COLS).kind == UA_PERMS_COLS && !u.perms_cols);
+    u.side_focus = false;
+    // View → Show Group, Ctrl+G (2026-10-27): off unless "group=on"; greyed, and the key does
+    // nothing, while Show Permissions is off.
+    CHECK(!state_load(&ta, path).group);
+    CHECK(state_put(&ta, path, "group", "on", &e2) && state_load(&ta, path).group);
+    CHECK(state_put(&ta, path, "group", "off", &e2) && !state_load(&ta, path).group);
+    st = (State){ .side = SIDE_PLACES, .group = true };
+    CHECK(state_save(path, &st, &e2) && strstr(read_file(&ta, path).p, "group=on\n") && state_load(&ta, path).group && !state_load(&ta, path).no_perms);
+    st.group = false;
+    CHECK(state_save(path, &st, &e2) && !strstr(read_file(&ta, path).p, "group=") && !state_load(&ta, path).group);
+    CHECK(!ui_menu_enabled(&u, UM_GROUP_COL) && ui_menu_mark(&u, UM_GROUP_COL) == 0);
+    CHECK(menu_keys(&u, 1, UK_GROUP_COL).kind == UA_NONE && !u.group_col);
+    u.perms_cols = true;
+    CHECK(ui_menu_enabled(&u, UM_GROUP_COL));
+    CHECK(menu_keys(&u, 1, UK_GROUP_COL).kind == UA_GROUP_COL && u.group_col && ui_menu_mark(&u, UM_GROUP_COL) == 1);
+    u.menu_on = true, u.menu = 2;
+    in = ui_input_none(), in.menu_item = menu_place(2, UM_GROUP_COL);
+    CHECK(ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in).kind == UA_GROUP_COL && !u.group_col && !u.menu_on);
+    // Show Permissions off keeps Show Group's check for when it comes back.
+    u.group_col = true;
+    CHECK(menu_keys(&u, 1, UK_PERMS_COLS).kind == UA_PERMS_COLS && !u.perms_cols && u.group_col && ui_menu_mark(&u, UM_GROUP_COL) == 1);
+    u.perms_cols = false, u.group_col = false;
     // View → Show Colors (2026-10-27): on unless "colors=off"; the entry toggles it.
     CHECK(!state_load(&ta, path).no_colors);
     CHECK(state_put(&ta, path, "colors", "off", &e2) && state_load(&ta, path).no_colors);

@@ -1289,6 +1289,11 @@ static void act(UiAction a)
         if (state_path(path, sizeof path) && !state_put(&scratch, path, "perms", app.ui.perms_cols ? "on" : "off", &err)) set_status(true, "%s", err.msg);
         break;
     }
+    case UA_GROUP_COL: {
+        char path[PATH_MAX];
+        if (state_path(path, sizeof path) && !state_put(&scratch, path, "group", app.ui.group_col ? "on" : "off", &err)) set_status(true, "%s", err.msg);
+        break;
+    }
     case UA_ZOOM:     // F6.3: as the view, the cursor kept on its row at the refit (ui_refit)
     case UA_VIEW: {   // F6.2: remembered; the loop lays it out before the next frame
         if (a.kind == UA_ZOOM) app.zoomed = true;
@@ -1867,15 +1872,21 @@ static void layout_trash_bar(void)
     }
 }
 
-// Whether the list shows Owner, Group and Permissions: View → Show Permissions on, and Name keeps
-// NAME_MIN_W beside them in a window w wide (Michael, 2026-10-27: they give way on a narrow one,
-// and the status line says so).
+// The width Owner, Group (View → Show Group) and Permissions take in a row, their gaps included.
+static float perms_w(void)
+{
+    return app.ui.group_col ? 3 * GAP + OWNER_W + GROUP_W + PERM_W : 2 * GAP + OWNER_W + PERM_W;
+}
+
+// Whether the list shows Owner and Permissions (and Group): View → Show Permissions on, and Name
+// keeps NAME_MIN_W beside them in a window w wide (Michael, 2026-10-27: they give way on a narrow
+// one, and the status line says so).
 enum { NAME_MIN_W = 150 };   // (200 until Michael found it hid them beside a second window)
 
 static bool perms_shown(float w)
 {
     float rest = w - side_w() - 2 * PAD - ICON_PX - 3 * GAP - SIZE_W - DATE_W;
-    return app.ui.perms_cols && rest - (3 * GAP + OWNER_W + GROUP_W + PERM_W) >= NAME_MIN_W;
+    return app.ui.perms_cols && rest - perms_w() >= NAME_MIN_W;
 }
 
 // A user's or a group's name, cached (the list's Owner and Group, 2026-10-27): a getpwuid per row
@@ -1899,7 +1910,7 @@ static const char *id_name(bool group, u32 id)
 }
 
 // The column headers: Name, Size, Modified, the sorted one with an arrow; a click sorts. Then Owner,
-// Group and Permissions, which don't sort (Michael, 2026-10-27).
+// Group (when shown) and Permissions, which don't sort (Michael, 2026-10-27).
 static void layout_cols(void)
 {
     Theme *t = &app.theme;
@@ -1921,12 +1932,14 @@ static void layout_cols(void)
         }
         static const struct { const char *id, *name; int w; } MORE[] = { { "col-owner", "Owner", OWNER_W }, { "col-group", "Group", GROUP_W },
                                                                          { "col-perms", "Permissions", PERM_W } };
-        for (int k = 0; perms_shown((float)GetScreenWidth()) && k < COUNT(MORE); k++)
+        for (int k = 0; perms_shown((float)GetScreenWidth()) && k < COUNT(MORE); k++) {
+            if (k == 1 && !app.ui.group_col) continue;
             CLAY(Clay_GetElementId(cz(MORE[k].id)), { .layout = { .sizing = { CLAY_SIZING_FIXED(MORE[k].w), CLAY_SIZING_GROW(0) },
                                                                   .padding = { k == 0 ? OWNER_PAD : 0, 0, 0, 0 },   // (clear of Modified, right-aligned)
                                                                   .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } } }) {
                 text(cz(MORE[k].name), cc(t->fg_dim));
             }
+        }
     }
 }
 
@@ -2062,8 +2075,7 @@ static void layout_row(int r, isize i, float w, i64 now)
     if (e->mtime) ui_when(when, sizeof when, e->mtime, now);
     bool link = e->kind == K_LINK_DIR || e->kind == K_LINK_FILE || e->kind == K_LINK_BROKEN;
     bool perms = perms_shown(w);
-    float perms_w = perms ? 3 * GAP + OWNER_W + GROUP_W + PERM_W : 0;   // (View → Show Permissions, room for Name)
-    float name_w = w - side_w() - 2 * PAD - ICON_PX - 3 * GAP - SIZE_W - DATE_W - perms_w - (link ? 16 : 0);
+    float name_w = w - side_w() - 2 * PAD - ICON_PX - 3 * GAP - SIZE_W - DATE_W - (perms ? perms_w() : 0) - (link ? 16 : 0);
     CLAY(CLAY_IDI("row", r), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(ROW_H) },
                                            .padding = { PAD, PAD, 0, 0 }, .childGap = GAP,
                                            .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
@@ -2105,11 +2117,11 @@ static void layout_row(int r, isize i, float w, i64 now)
                                                 .childAlignment = { .x = CLAY_ALIGN_X_RIGHT } } }) {
             text(cz(arena_sprintf(&frame, "%s", when)), app.ui.colors ? cc(t->blue) : cc(t->fg_dim));   // (eza's)
         }
-        // Owner, Group, Permissions (2026-10-27): the target's for a link, as Size is.
+        // Owner, Group (View → Show Group), Permissions (2026-10-27): the target's for a link, as Size is.
         if (perms) {
             // (eza's: you and your group yellow, others plain)
             info_cell(CLAY_IDI("owner", r), id_name(false, e->uid), OWNER_W, OWNER_PAD, app.ui.colors && e->uid == (u32)geteuid() ? cc(t->yellow) : cc(t->fg_dim));
-            info_cell(CLAY_IDI("group", r), id_name(true, e->gid), GROUP_W, 0, app.ui.colors && e->gid == (u32)getegid() ? cc(t->yellow) : cc(t->fg_dim));
+            if (app.ui.group_col) info_cell(CLAY_IDI("group", r), id_name(true, e->gid), GROUP_W, 0, app.ui.colors && e->gid == (u32)getegid() ? cc(t->yellow) : cc(t->fg_dim));
             ls_perms_cell(CLAY_IDI("perms", r), e->mode, PERM_W);
         }
     }
@@ -3576,6 +3588,8 @@ static UiKey ui_key_of(int key, int mods)
     if ((m == 0 || m == GLFW_MOD_CONTROL) && key == GLFW_KEY_F1) return UK_SHORTCUTS;   // (F7.5: F1 and Ctrl+F1, Nemo's two)
     if (m == GLFW_MOD_ALT && key == GLFW_KEY_DOWN) return UK_ALT_DOWN;   // (Edit Bookmarks' move down)
     if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_R) return UK_RELOAD;
+    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_P) return UK_PERMS_COLS;   // (Michael, 2026-10-27)
+    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_G) return UK_GROUP_COL;
     if (m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT) && key == GLFW_KEY_I) return UK_INVERT;
     if (m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT) && key == GLFW_KEY_A) return UK_SELECT_MATCH;
     if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_T) return UK_TAB_NEW;
@@ -4184,6 +4198,7 @@ static void usage(void)
                     "  with it selected; --select: PATH's folder with PATH selected, a folder too.\n"
                     "  Enter, Right, l open; Backspace, Left, h up; j k, arrows, PgUp PgDn, Home End, g G move;\n"
                     "  Alt+Left/Right back and forward; / or Ctrl+F find, n N again; . or Ctrl+H hidden files;\n"
+                    "  Ctrl+P the owner and permissions columns, Ctrl+G the group column;\n"
                     "  s sort by the next column, S reverse; Tab the places; t terminal here; ~ home;\n"
                     "  Space select, Ctrl+A all; F2 rename; Ctrl+Shift+N new folder; Delete trash, Shift+Delete for good;\n"
                     "  Ctrl+C, Ctrl+X, Ctrl+V copy, cut, paste; Ctrl+Z undo; Ctrl+L type a location; Alt+Up up;\n"
@@ -4358,7 +4373,7 @@ int main(int argc, char **argv)
     if (state_path(state_file, sizeof state_file)) {
         State st = state_load(&scratch, state_file);
         app.ui.side_mode = st.side, app.ui.grid = st.icons, app.ui.zoom = st.zoom, app.ui.perms_cols = !st.no_perms, app.ui.bar_hidden = st.no_bar,
-        app.ui.colors = !st.no_colors;
+        app.ui.colors = !st.no_colors, app.ui.group_col = st.group;
     }
     side_refresh();
     list_fit();

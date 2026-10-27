@@ -40,6 +40,7 @@ puts its service file in `~/.local/share/dbus-1/services`), and it exits when id
 | Ctrl+K, Ctrl+Up | the keys to the path buttons: Left/Right (`h`/`l`), Home/End move, Enter goes there, Shift+Enter opens it in a background tab, Esc back to the list |
 | `/`, Ctrl+F | find, in a bar over the job rows: type to jump (the bar counts the matches: "2 of 5"), Up/Down or its chevrons the previous and next match, Enter keeps (the bar stays, the keys go back to the list), Esc closes it and goes back, its × closes it; then `n`/`N` again. Alt+C match case, Alt+W whole words, Alt+R a regular expression (the toggles in the bar too; kept for the next find) |
 | `.`, Ctrl+H | hidden files on and off |
+| Ctrl+P, Ctrl+G | View → Show Permissions, View → Show Group |
 | `s`, `S` | sort by the next column (name, size, modified), reverse |
 | Tab, Ctrl+Left | the keys to the sidebar (a hidden one shows as places); Tab again back; in the tree, Left/Right (`h`/`l`) close and open a folder (or move up and down a level), Enter goes there |
 | F9, Ctrl+S | the sidebar's next mode: places, tree, hidden |
@@ -74,7 +75,8 @@ puts its service file in `~/.local/share/dbus-1/services`), and it exits when id
 | Right click, Shift+F10, Menu key | the right-click menu: an entry's (an unmarked one becomes the selection; a marked one keeps the marks), or on empty space the folder shown's (New Folder, Paste, Select All, Terminal Here, Properties of the folder). By the keys it opens under the cursor's entry. On one folder it also opens it in a new window or a terminal, pastes into it, bookmarks it; on a link, Follow Link goes to what it points at. On a sidebar row or a path button, that folder's menu: open it (a tab, a window, a terminal), Cut, Copy (not a place), Paste Into Folder, Add Bookmark, Properties; a bookmark's Rename…, Move Up, Move Down, Remove; a drive's Eject; Trash's Empty Trash…. On a tab: New Tab, Move Tab Left and Right, Close, Close Other Tabs |
 | View → Show Menu | the menu bar shown or hidden, remembered; hidden, F10 and Alt+F, E, V, G, B, H still open its menus (the bar shows while one is open), and a note says so as it hides |
 | View → Show Colors | the list in `ls`'s (eza's) colours from the theme: permissions r, w, x; your owner and group; size, date; names by kind. On unless turned off, remembered |
-| View → Show Permissions | the list's Owner, Group and Permissions columns (`rwxr-xr-x`, a link's target's), on or off together, remembered, given way (the status line says so) while Name would have under 150 px; a link also shows where it leads after its → |
+| View → Show Permissions, Ctrl+P | the list's Owner and Permissions columns (`rwxr-xr-x`, a link's target's), on or off together, remembered, given way (the status line says so) while Name would have under 150 px; a link also shows where it leads after its → |
+| View → Show Group, Ctrl+G | the Group column between them, off at first (as eza), remembered; greyed while Show Permissions is off |
 | Ctrl+M | Make Link: "Link to <name>" beside each selected entry, pointing at its full path; Ctrl+Z removes them |
 | Ctrl+Shift+A | Select Items Matching: the find bar as "Select", the same field and toggles; Enter makes the selection every match and closes it, Esc leaves the selection as it was |
 | Ctrl+Shift+I | invert the selection |

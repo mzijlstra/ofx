@@ -23,8 +23,9 @@ typedef struct {
     bool     icons;   // the files as icons, not the list (F6.2)
     int      zoom;    // the icon view's icon size in px (F6.3); 0: not said, the default
     bool     no_bar;     // the menu bar hidden (2026-10-27): "menubar=off"
-    bool     no_perms;
-    bool     no_colors;  // the list's colours off (2026-10-27): "colors=off"   // the list's Owner, Group and Permissions columns left out (2026-10-27): "perms=off"
+    bool     no_perms;   // the list's Owner and Permissions columns left out (2026-10-27): "perms=off"
+    bool     group;      // and Group shown between them (2026-10-27, off by default as eza's): "group=on"
+    bool     no_colors;  // the list's colours off (2026-10-27): "colors=off"
 } State;
 
 // $XDG_STATE_HOME/ofx/state, else ~/.local/state/ofx/state; false when neither is set.
@@ -41,7 +42,7 @@ static bool state_path(char *out, size_t cap)
 // The state in file path; the defaults for what it doesn't say (or no file at all).
 static State state_load(Arena *scratch, const char *path)
 {
-    State s = { SIDE_PLACES, false, 0, false, false, false };
+    State s = { SIDE_PLACES, false, 0, false, false, false, false };
     ArenaMark mark = arena_mark(scratch);
     Str text = read_file(scratch, path);
     isize at = 0;
@@ -63,6 +64,7 @@ static State state_load(Arena *scratch, const char *path)
         if (str_eq(key, S("perms"))) s.no_perms = str_eq(val, S("off"));
         if (str_eq(key, S("menubar"))) s.no_bar = str_eq(val, S("off"));
         if (str_eq(key, S("colors"))) s.no_colors = str_eq(val, S("off"));
+        if (str_eq(key, S("group"))) s.group = str_eq(val, S("on"));
         if (!str_eq(key, S("sidebar"))) continue;
         for (int k = 0; k < SIDE_MODES; k++)
             if (str_eq(val, str_from_c(SIDE_MODE_NAMES[k]))) s.side = (SideMode)k;
@@ -103,6 +105,7 @@ static bool state_save(const char *path, const State *s, Err *err)
     if (s->no_perms) n += snprintf(body + n, sizeof body - (size_t)n, "perms=off\n");
     if (s->no_bar) n += snprintf(body + n, sizeof body - (size_t)n, "menubar=off\n");
     if (s->no_colors) n += snprintf(body + n, sizeof body - (size_t)n, "colors=off\n");
+    if (s->group) n += snprintf(body + n, sizeof body - (size_t)n, "group=on\n");
     return state_write(path, body, n, err);
 }
 

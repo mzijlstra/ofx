@@ -255,10 +255,10 @@ T=$base/f8b; rm -rf "$T"; H=$T/home; mkdir -p "$H/tree/sub" "$T/config/gtk-3.0"
 printf aaa > "$H/tree/a.txt"; : > "$H/tree/sub/inner.txt"; ln -s sub/inner.txt "$H/tree/zlink"
 printf '1 0 0:1 / / rw - ext4 /dev/x rw\n' > "$T/mountinfo"
 echo "== f8b"; OFX_TEST_HOME="$H" OFX_TEST_MOUNTINFO="$T/mountinfo" "$here/../../tools/gui/run-script.sh" "$T" "$here/f8b.script" "$bin" "$H/tree" || failed f8b
-printf 'perms=off\nmenubar=off\ncolors=off\n' > "$T/state/ofx/state"   # (View → Show Permissions, Show Menu, Show Colors off, as a start finds them)
-# A 760 px window (OFX_SCRIPT_SIZE): home/tree with two files, its own scratch.
+printf 'perms=off\nmenubar=off\ncolors=off\ngroup=on\n' > "$T/state/ofx/state"   # (View → Show Permissions, Show Menu, Show Colors off, Show Group on, as a start finds them)
+# An 860 px window (OFX_SCRIPT_SIZE): home/tree with two files, its own scratch.
 E=$base/f8e; rm -rf "$E"; mkdir -p "$E/home/tree"; printf a > "$E/home/tree/a.txt"; printf b > "$E/home/tree/b.txt"; cp "$T/mountinfo" "$E/"
-echo "== f8e"; OFX_SCRIPT_SIZE=760x516 OFX_TEST_HOME="$E/home" OFX_TEST_MOUNTINFO="$E/mountinfo" "$here/../../tools/gui/run-script.sh" "$E" "$here/f8e.script" "$bin" "$E/home/tree" || failed f8e
+echo "== f8e"; OFX_SCRIPT_SIZE=860x516 OFX_TEST_HOME="$E/home" OFX_TEST_MOUNTINFO="$E/mountinfo" "$here/../../tools/gui/run-script.sh" "$E" "$here/f8e.script" "$bin" "$E/home/tree" || failed f8e
 echo "== f8d"; OFX_TEST_HOME="$H" OFX_TEST_MOUNTINFO="$T/mountinfo" "$here/../../tools/gui/run-script.sh" "$T" "$here/f8d.script" "$bin" "$H/tree" || failed f8d
 # F8 step 3: a folder elsewhere's menu. home/tree: sub/, sub2/; the bookmarks file: home/tree/sub
 # labelled "Sub", then home/tree/sub2; the scratch trash there and empty.

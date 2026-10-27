@@ -480,11 +480,11 @@ MUTANTS = [
     (G, '        app.ui.side_mode = st.side, app.ui.grid = st.icons, app.ui.zoom = st.zoom, app.ui.perms_cols = !st.no_perms,', '        app.ui.side_mode = st.side, app.ui.grid = st.icons, app.ui.zoom = st.zoom, app.ui.perms_cols = true,', 'f8'),
     (G, '        if (state_path(path, sizeof path) && !state_put(&scratch, path, "perms", app.ui.perms_cols ? "on" : "off", &err))', '        if (state_path(path, sizeof path) && !state_put(&scratch, path, "perms", "on", &err))', 'f8'),
     # ---- the three columns give way to a Name under 200 px (2026-10-27)
-    (G, '    return app.ui.perms_cols && rest - (3 * GAP + OWNER_W + GROUP_W + PERM_W) >= NAME_MIN_W;', '    return app.ui.perms_cols;', 'f8'),
-    (G, '    return app.ui.perms_cols && rest - (3 * GAP + OWNER_W + GROUP_W + PERM_W) >= NAME_MIN_W;', '    return rest - (3 * GAP + OWNER_W + GROUP_W + PERM_W) >= NAME_MIN_W;', 'f8'),
+    (G, '    return app.ui.perms_cols && rest - perms_w() >= NAME_MIN_W;', '    return app.ui.perms_cols;', 'f8'),
+    (G, '    return app.ui.perms_cols && rest - perms_w() >= NAME_MIN_W;', '    return rest - perms_w() >= NAME_MIN_W;', 'f8'),
     # ---- View → Show Colors and the note (2026-10-27). Not run: the colours drawn (pixels:
     # f8e's list-plain.png, f8b's list-columns.png)
-    (G, '        app.ui.colors = !st.no_colors;', '        app.ui.colors = true;', 'f8'),
+    (G, '        app.ui.colors = !st.no_colors,', '        app.ui.colors = true,', 'f8'),
     (G, '        if (state_path(path, sizeof path) && !state_put(&scratch, path, "colors", app.ui.colors ? "on" : "off", &err))', '        if (state_path(path, sizeof path) && !state_put(&scratch, path, "colors", "on", &err))', 'f8'),
     (G, '                  .cramped = app.ui.perms_cols && !app.ui.grid && !perms_shown((float)GetScreenWidth()) };', '                  .cramped = false };', 'f8'),
     (G, '                  .cramped = app.ui.perms_cols && !app.ui.grid && !perms_shown((float)GetScreenWidth()) };', '                  .cramped = !perms_shown((float)GetScreenWidth()) };', 'f8'),
@@ -495,6 +495,13 @@ MUTANTS = [
     (G, ', app.ui.perms_cols = !st.no_perms, app.ui.bar_hidden = st.no_bar,', ', app.ui.perms_cols = !st.no_perms,', 'f8'),
     (G, '        if (state_path(path, sizeof path) && !state_put(&scratch, path, "menubar", app.ui.bar_hidden ? "off" : "on", &err))', '        if (state_path(path, sizeof path) && !state_put(&scratch, path, "menubar", "on", &err))', 'f8'),
     (G, '    if (app.ui.bar_told) return MODAL_BAR;   // the menu bar just hidden (2026-10-27)', '', 'f8'),
+    # ---- View → Show Group, Ctrl+P, Ctrl+G (2026-10-27). Not run: the key chords' GLFW mapping
+    # (scripts send ui/'s keys); the cells drawn (pixels: f8b's list-group.png)
+    (G, '        app.ui.colors = !st.no_colors, app.ui.group_col = st.group;', '        app.ui.colors = !st.no_colors;', 'f8'),
+    (G, '        if (state_path(path, sizeof path) && !state_put(&scratch, path, "group", app.ui.group_col ? "on" : "off", &err))', '        if (state_path(path, sizeof path) && !state_put(&scratch, path, "group", "on", &err))', 'f8'),
+    (G, '    return app.ui.group_col ? 3 * GAP + OWNER_W + GROUP_W + PERM_W : 2 * GAP + OWNER_W + PERM_W;', '    return 3 * GAP + OWNER_W + GROUP_W + PERM_W;', 'f8'),
+    (G, '            if (k == 1 && !app.ui.group_col) continue;', '', 'f8'),
+    (G, '            if (app.ui.group_col) info_cell(CLAY_IDI("group", r)', '            info_cell(CLAY_IDI("group", r)', 'f8'),
     # ---- quit doesn't wait for a hung drive (2026-10-26: no mutant was hang's or f6b's alone)
     (K, '    if (pthread_timedjoin_np(counts.thread, NULL, &until) != 0) pthread_detach(counts.thread);', '    pthread_join(counts.thread, NULL);', 'hang'),
     ('gui/space.c', '    if (pthread_timedjoin_np(space.thread, NULL, &until) != 0) pthread_detach(space.thread);', '    pthread_join(space.thread, NULL);', 'f6'),

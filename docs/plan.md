@@ -685,7 +685,10 @@ cut with "…" (as the trash view's "from"); Owner, Group and Permissions column
 target's for a link, `ui_perms`: ls's letters without the type), not sortable, on and off together
 from View → Show Permissions (checked; `perms=off` in the state file). Entry has uid, gid and the
 link's target (`link_target`); names cached by `id_name`.
-The three columns give way while Name would have under 150 px (200 at first; Michael's window beside
+Ctrl+P toggles them too; Group became its own View → Show Group (Ctrl+G, `group=on`), off by
+default as eza's `ls -l` has none, greyed (its key doing nothing) while Show Permissions is off
+(Michael, 2026-10-27: a group without the permissions says little; a submenu wasn't worth it).
+The columns give way while Name would have under 150 px (200 at first; Michael's window beside
 another app had none), and the status line then says "Permissions hidden: the window is too narrow".
 View → Show Colors (checked; `colors=off`): eza's built-in colours, which his `ls` uses (no eza theme
 of his own) on the terminal's palette, from colors.toml's yellow, green, blue, cyan, magenta:

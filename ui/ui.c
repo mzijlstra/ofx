@@ -77,6 +77,8 @@ typedef enum {
     UK_SHORTCUTS,  // F1, Ctrl+F1: the Keyboard Shortcuts panel (F7.5)
     UK_MAKE_LINK,  // Ctrl+M: Make Link (F8, as Nemo)
     UK_CONTEXT,    // Shift+F10, the Menu key: the right-click menu of the files' cursor, or of the folder shown (F8)
+    UK_PERMS_COLS, // Ctrl+P: View → Show Permissions (Michael, 2026-10-27: no printing in ofx)
+    UK_GROUP_COL,  // Ctrl+G: View → Show Group (2026-10-27)
 } UiKey;
 
 // The top bar's buttons (F4).
@@ -209,7 +211,8 @@ typedef enum {
     UA_TAB_OTHERS,  // every tab but the current one closed (F8)
     UA_COLORS,      // the list's colours on or off (Ui.colors): gui/ remembers it
     UA_MENUBAR,     // the menu bar hidden or shown (Ui.bar_hidden): gui/ remembers it
-    UA_PERMS_COLS,  // the list's Owner, Group and Permissions shown or not (Ui.perms_cols): gui/ remembers it
+    UA_PERMS_COLS,  // the list's Owner and Permissions shown or not (Ui.perms_cols): gui/ remembers it
+    UA_GROUP_COL,   // the list's Group beside them shown or not (Ui.group_col): gui/ remembers it
     UA_FOLDER_DO,   // index: a UiMenuItem of the folder menu, for the folder it opened on (Ui.ctx_side or ctx_crumb, F8)
 } UiActionKind;
 // A right-click menu's entry on a folder of the files (F8) acts on that folder, not the folder
@@ -234,7 +237,7 @@ enum { UI_MODAL_YES = 1, UI_MODAL_NO, UI_MODAL_SKIP, UI_MODAL_REPLACE, UI_MODAL_
 typedef enum {
     UM_SEP, UM_NEW_TAB, UM_NEW_WINDOW, UM_NEW_FOLDER, UM_NEW_FILE, UM_OPEN, UM_OPEN_WITH, UM_PROPERTIES, UM_CLOSE_ALL, UM_CLOSE,
     UM_UNDO, UM_CUT, UM_COPY, UM_PASTE, UM_SELECT_ALL, UM_SELECT_MATCH, UM_INVERT, UM_DUPLICATE, UM_MAKE_LINK, UM_RENAME, UM_TRASH, UM_DELETE, UM_RESTORE,
-    UM_RELOAD, UM_SIDE_PLACES, UM_SIDE_TREE, UM_SIDE_NONE, UM_HIDDEN, UM_PERMS_COLS, UM_COLORS, UM_SHOW_MENU, UM_SORT_NAME, UM_SORT_SIZE, UM_SORT_MTIME, UM_SORT_REVERSE,
+    UM_RELOAD, UM_SIDE_PLACES, UM_SIDE_TREE, UM_SIDE_NONE, UM_HIDDEN, UM_PERMS_COLS, UM_GROUP_COL, UM_COLORS, UM_SHOW_MENU, UM_SORT_NAME, UM_SORT_SIZE, UM_SORT_MTIME, UM_SORT_REVERSE,
     UM_ZOOM_IN, UM_ZOOM_OUT, UM_ZOOM_RESET, UM_VIEW_LIST, UM_VIEW_ICONS,
     UM_PARENT, UM_BACK, UM_FORWARD, UM_HOME, UM_TRASH_VIEW, UM_FIND, UM_LOCATION, UM_TERMINAL,
     UM_ADD_BOOKMARK, UM_EDIT_BOOKMARKS, UM_BM_0, UM_BM_1, UM_BM_2, UM_BM_3, UM_BM_4, UM_BM_5, UM_BM_6, UM_BM_7, UM_BM_MORE,
@@ -282,7 +285,8 @@ static const struct { const char *label, *key, *word; UiEvent ev; char mark; } U
     [UM_SIDE_TREE] = { "Tree Sidebar", "", "side-tree", .mark = 'r' },
     [UM_SIDE_NONE] = { "No Sidebar", "", "side-none", .mark = 'r' },
     [UM_HIDDEN] = { "Show Hidden Files", "Ctrl+H", "hidden", { UK_HIDDEN, 0 }, 'c' },
-    [UM_PERMS_COLS] = { "Show Permissions", "", "perms-cols", .mark = 'c' },   // the list's Owner, Group, Permissions (2026-10-27)
+    [UM_PERMS_COLS] = { "Show Permissions", "Ctrl+P", "perms-cols", { UK_PERMS_COLS, 0 }, 'c' },   // the list's Owner and Permissions (2026-10-27)
+    [UM_GROUP_COL] = { "Show Group", "Ctrl+G", "group-col", { UK_GROUP_COL, 0 }, 'c' },   // and Group, off by default as eza's (Michael, 2026-10-27)
     [UM_COLORS] = { "Show Colors", "", "colors", .mark = 'c' },   // the list in eza's colours (2026-10-27)
     [UM_SHOW_MENU] = { "Show Menu", "", "show-menu", .mark = 'c' },   // the menu bar (2026-10-27): F10 and Alt+letters open its menus either way
     [UM_SORT_NAME] = { "Sort by Name", "", "sort-name", .mark = 'r' },
@@ -355,7 +359,7 @@ static const UiMenuItem UI_MENU_EDIT[] = {
     UM_TRASH, UM_RESTORE, UM_DELETE,
 };
 static const UiMenuItem UI_MENU_VIEW[] = {
-    UM_RELOAD, UM_SEP, UM_SIDE_PLACES, UM_SIDE_TREE, UM_SIDE_NONE, UM_SEP, UM_HIDDEN, UM_PERMS_COLS, UM_COLORS, UM_SHOW_MENU, UM_SEP,
+    UM_RELOAD, UM_SEP, UM_SIDE_PLACES, UM_SIDE_TREE, UM_SIDE_NONE, UM_SEP, UM_HIDDEN, UM_PERMS_COLS, UM_GROUP_COL, UM_COLORS, UM_SHOW_MENU, UM_SEP,
     UM_SORT_NAME, UM_SORT_SIZE, UM_SORT_MTIME, UM_SORT_REVERSE, UM_SEP, UM_ZOOM_IN, UM_ZOOM_OUT, UM_ZOOM_RESET, UM_SEP,
     UM_VIEW_LIST, UM_VIEW_ICONS,
 };
@@ -466,6 +470,8 @@ static const struct { UiKeySection sec; const char *action, *key, *key2; } UI_KE
     { KS_VIEW, "Keyboard Shortcuts", "F1", "Ctrl+F1" },
     { KS_VIEW, "Reload", "Ctrl+R", "" },
     { KS_VIEW, "Show Hidden Files", "Ctrl+H", "." },
+    { KS_VIEW, "Show Permissions", "Ctrl+P", "" },
+    { KS_VIEW, "Show Group", "Ctrl+G", "" },
     { KS_VIEW, "Sort by the next column", "s", "a column's header" },
     { KS_VIEW, "Reverse Order", "S", "" },
     { KS_VIEW, "List", "Ctrl+1", "" },
@@ -612,7 +618,8 @@ typedef struct {
     // frame: an undo to make, history back and forward, a folder above, files to paste, hidden
     // files shown. And an entry picked whose key is still to run (ui_handle runs it next).
     bool   can_undo, can_back, can_forward, can_up, can_paste, shows_hidden;
-    bool   perms_cols;   // the list's Owner, Group and Permissions columns shown (gui/ reads it from the state)
+    bool   perms_cols;   // the list's Owner and Permissions columns shown (gui/ reads it from the state)
+    bool   group_col;    // and Group between them (View → Show Group, 2026-10-27; only with perms_cols)
     // The menu bar hidden (View → Show Menu unchecked, 2026-10-27; gui/ reads it from the state), and
     // the panel up that says how its menus still open.
     bool   bar_hidden, bar_told;
@@ -1560,6 +1567,7 @@ static bool ui_menu_enabled(const Ui *u, UiMenuItem it)
     case UM_RENAME: case UM_DUPLICATE: case UM_MAKE_LINK: return here && !u->in_trash && u->can_write;
     case UM_TRASH: case UM_DELETE: case UM_RESTORE: return here;
     case UM_RELOAD: case UM_SIDE_PLACES: case UM_SIDE_TREE: case UM_SIDE_NONE: case UM_HIDDEN: case UM_PERMS_COLS: case UM_COLORS: case UM_SHOW_MENU: return true;
+    case UM_GROUP_COL: return u->perms_cols;   // (a group without the permissions says little, Michael 2026-10-27)
     case UM_SORT_NAME: case UM_SORT_SIZE: case UM_SORT_MTIME: case UM_SORT_REVERSE: return true;
     case UM_ZOOM_IN: return u->grid && ui_zoom_level(ui_zoom_px(u)) < UI_ZOOMS - 1;
     case UM_ZOOM_OUT: return u->grid && ui_zoom_level(ui_zoom_px(u)) > 0;
@@ -1592,6 +1600,7 @@ static int ui_menu_mark(const Ui *u, UiMenuItem it)
     case UM_SIDE_NONE: return u->side_mode == SIDE_HIDDEN;
     case UM_HIDDEN: return u->shows_hidden;
     case UM_PERMS_COLS: return u->perms_cols;
+    case UM_GROUP_COL: return u->group_col;
     case UM_SHOW_MENU: return !u->bar_hidden;
     case UM_COLORS: return u->colors;
     case UM_SORT_NAME: return u->sort.key == SORT_NAME;
@@ -2017,7 +2026,6 @@ static UiAction ui_menu_pick(Ui *u, UiMenuItem it)
         u->sort.key = it == UM_SORT_NAME ? SORT_NAME : it == UM_SORT_SIZE ? SORT_SIZE : SORT_MTIME;
         return (UiAction){ UA_SORT, 0, false };
     case UM_DUPLICATE: return (UiAction){ UA_DUPLICATE, 0, false };
-    case UM_PERMS_COLS: return u->perms_cols = !u->perms_cols, (UiAction){ UA_PERMS_COLS, 0, false };
     case UM_COLORS: return u->colors = !u->colors, (UiAction){ UA_COLORS, 0, false };
     case UM_SHOW_MENU: return u->bar_hidden = !u->bar_hidden, u->bar_told = u->bar_hidden, (UiAction){ UA_MENUBAR, 0, false };
     case UM_BM_0: case UM_BM_1: case UM_BM_2: case UM_BM_3: case UM_BM_4: case UM_BM_5: case UM_BM_6: case UM_BM_7:
@@ -2625,6 +2633,10 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
             if (l->n > 0) ui_find_open(u), u->find_select = true;
             break;
         case UK_HIDDEN: return (UiAction){ UA_HIDDEN, 0, false };
+        case UK_PERMS_COLS: return u->perms_cols = !u->perms_cols, (UiAction){ UA_PERMS_COLS, 0, false };
+        case UK_GROUP_COL:
+            if (u->perms_cols) return u->group_col = !u->group_col, (UiAction){ UA_GROUP_COL, 0, false };
+            break;
         case UK_ALL:
             for (isize i = 0; i < l->n; i++) ui_mark(u, i, true);
             break;
