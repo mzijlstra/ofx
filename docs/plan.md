@@ -45,6 +45,7 @@ Omarchy's theme: the binary, the folder `tools/ofx`, the window's title and Wayl
 | F7.2 | Properties: a panel with the file's details and permissions | Below |
 | F7.3 | Open With Other Application: a panel listing the apps for the file's type | Below |
 | F8 | Right-click menus: the selection, empty space, a folder elsewhere, a tab | Below |
+| F9 | Search below the folder: names as you type in a tab of its own, then working with results, then (turned on per search) inside files | Below |
 
 Each milestone ends in a reviewer-2 round, then Michael's go before `make install`.
 
@@ -62,7 +63,7 @@ his word: Nemo's compact view and its icon size slider.
 - A key that copies the cursor's path as text (Ctrl+C already puts files on the clipboard, F3).
 - Keybindings the user sets (Michael, 2026-10-24: the keys are reaching personal preference).
 - Install Nautilus at some point to compare its features with ofx's (not a priority).
-- Search through subfolders, as Nemo's search does (the top bar's search opens `/` find for now).
+- Search through subfolders: F9 (2026-10-27).
 - Optional columns: permissions; type (Michael doesn't want it by default). Date and time format as
   an option; the short form ("14:03", "Oct 20") stays the default.
 - Sidebar sections (Nemo's My Computer, Bookmarks, Network): to brainstorm with Michael first.
@@ -677,6 +678,39 @@ Default and Recommended equal GIO's; GLib's rewrite of a copy adds the two lines
   index.theme files read again; start-up is back to about 51 ms), each app's texture when its row
   is first drawn, all of them dropped when it closes (`ow_drop`). SVG icons (theme, pixmaps/ or a
   path) are drawn with nanosvg, vendored; only for the apps, the files' icons stay PNG.
+
+## F9 design (2026-10-27)
+
+Search below the folder shown. Michael's answers to the questions on
+https://claude.ai/artifact/TNnResXH36peMEMkbJhVhX (Nemo 6.6.4's search compared; file counts
+measured: his home 1.94 M entries, 6,364 outside hidden folders; a code folder 739 k, 148 k
+without `.git` and `node_modules`, a 0.06 s walk warm):
+
+- **Its own view, always in a new tab** of its own, named for what it searches (Michael: clearer
+  than taking over the tab). Opened by Ctrl+Shift+F, Go → Search…, the top bar's magnifier, and a
+  folder's right-click menu (Search in Folder…). `/` and Ctrl+F stay the find bar.
+- **From the folder shown,** named in the bar ("Search in ~/code"); to search elsewhere, go
+  there and search again.
+- **As you type:** a new search 150 ms after the last key, the old one stopped; results come in as
+  found; Enter gives the keys to the results; the status line counts them and says when done.
+- **Names:** text anywhere in the name, ignoring case; find's Alt+C, Alt+W, Alt+R (shared with
+  it); text with `*` or `?` is a wildcard over the whole name (`*.ts`).
+- **Skips:** `.git` and `node_modules` (a fixed list until ofx.conf), the drive it starts on only,
+  no links to folders followed, hidden files as View → Show Hidden Files; the status line names
+  what it skipped. No `.gitignore`.
+- **Results:** the list as now (View's settings apply); after each name its folder, dim, relative
+  to the folder searched (as the trash view's origin); sorted as the list; at most 10,000.
+- **On results:** everything the list does, plus Open Containing Folder (the entry's menu,
+  Ctrl+Enter: its folder with it selected). Paste and New Folder greyed. No watching: a result
+  trashed goes away, Ctrl+R searches again.
+- **Inside files** (step 3): a second field, off until turned on in the bar for that search;
+  plain text only (a NUL in the first 8 KB means binary), files up to 16 MB. No helpers for PDF,
+  Office, EPUB or tags.
+
+**Steps:** 1. the view by name (a walk thread as Properties' `du_walk`, stopped by the next
+search; the tab, bar, toggles, results with folders, skips, limit, status); 2. working with
+results (actions on entries in other folders, Open Containing Folder, Ctrl+R, greying, Search in
+Folder…); 3. inside files. Each with tests, mutants and a reviewer-2 round before install.
 
 ## F8 design (2026-10-27)
 
