@@ -1393,3 +1393,26 @@ MUTANTS += [
 MUTANTS += [
     (U, "    if (u->find_m.bad && u->find_len > 0) return;\n", ""),
 ]
+# ---- F7.5: the bookmarks file, the Bookmarks menu
+BMK = 'fs/bookmarks.c'
+MUTANTS += [
+    (BMK, "        if (!line.len) continue;\n        if (out->n == BM_MAX) {", "        if (out->n == BM_MAX) {"),
+    (BMK, "            out->full = true;\n            break;", "            break;"),
+    (BMK, "        if (!str_starts_with(uri, S(\"file://\")) || !percent_decode(", "        if (!percent_decode("),
+    (BMK, "        for (size_t n = strlen(b->path); n > 1 && b->path[n - 1] == '/';) b->path[--n] = 0;", ""),
+    (BMK, "        if (bm->b[i].path[0] && strcmp(bm->b[i].path, path) == 0) return i;", "        if (strcmp(bm->b[i].path, path) == 0) return i;"),
+    (BMK, "    if (bm_find(bm, path) >= 0) return err_set(err, \"already a bookmark\"), false;", ""),
+    (BMK, "        int k = b->label.len ? snprintf(", "        int k = false ? snprintf("),
+    (BMK, "    if (!ops_allowed(file, err)) return false;\n", ""),
+    (BMK, "    mode_t mode = stat(file, &st) == 0 ? st.st_mode & 0777 : 0644;", "    mode_t mode = 0644;"),
+    (BMK, "    if (mkdir(dir, 0700) != 0 && errno != EEXIST)", "    if (mkdir(dir, 0755) != 0 && errno != EEXIST)"),
+    # Not a mutant: `ok &&` before bm_write's rename needs a write() or fsync() that fails midway,
+    # which no test can bring about.
+    (BMK, "    unlink(tmp);\n    return false;", "    return false;"),
+    (U, "    if (it >= UM_BM_0 && it <= UM_BM_7) return (int)(it - UM_BM_0) < u->bm_n;", "    if (it >= UM_BM_0 && it <= UM_BM_7) return (int)(it - UM_BM_0) <= u->bm_n;"),
+    (U, "        if (ui_menu_shown(u, UI_MENU[m].items[k])) return true;\n    return false;", "        if (ui_menu_shown(u, UI_MENU[m].items[k])) return true;\n    return true;"),
+    (U, "    case UM_ADD_BOOKMARK: return u->can_bookmark && !u->in_trash;", "    case UM_ADD_BOOKMARK: return !u->in_trash;"),
+    (U, "        return u->bm_here == (int)(it - UM_BM_0);", "        return 0;"),
+    (U, "        return (UiAction){ UA_BOOKMARK, it - UM_BM_0, false };", "        return (UiAction){ UA_BOOKMARK, 0, false };"),
+    (U, "        case UK_ADD_BOOKMARK: return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : UA_ADD_BOOKMARK, 0, false };", "        case UK_ADD_BOOKMARK: return (UiAction){ UA_ADD_BOOKMARK, 0, false };"),
+]

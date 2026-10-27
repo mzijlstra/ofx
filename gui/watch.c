@@ -8,6 +8,10 @@
 // which raises mounts_ready at once. OFX_TEST_MOUNTINFO names a file to read instead, for the
 // tests (a test can't mount anything): an inotify watch on it stands in for the poll.
 //
+// The bookmarks file (F7.5): its folder is watched (writers rename a new file over it), and a change
+// to `bookmarks` there reads the places again, as a mount does (mounts_ready), so a bookmark Nemo
+// adds shows at once. A folder made after ofx started (its first bookmark) is watched then.
+//
 // The main thread points the folder watch at a new folder (watch_dir); the thread owns the theme
 // watches. inotify's calls are safe from both threads. A batch ends 100 ms after its last event,
 // and never more than a second after its first, so a file being written all the time (a download)
@@ -24,11 +28,12 @@ static struct {
     atomic_int  dir_wd;        // the open folder's watch, -1 for none
     int         theme_wd, current_wd;
     int         mount_fd, mount_wd;  // the mountinfo file polled, or the test's watched; -1 for none
+    atomic_int  bm_wd;         // the bookmarks file's folder, -1 for none (F7.5)
     char        current[PATH_MAX];   // $XDG_STATE_HOME/omarchy/current
     char        theme[PATH_MAX + 8]; // .../current/theme
     atomic_bool list_ready, theme_ready, mounts_ready;
     atomic_int  batches;       // how many batches it raised, for the tests' state line
-} watch = { .fd = -1, .dir_wd = -1, .theme_wd = -1, .current_wd = -1, .mount_fd = -1, .mount_wd = -1 };
+} watch = { .fd = -1, .dir_wd = -1, .theme_wd = -1, .current_wd = -1, .mount_fd = -1, .mount_wd = -1, .bm_wd = -1 };
 
 // The mount list ofx reads: /proc/self/mountinfo, or the tests' OFX_TEST_MOUNTINFO.
 static const char *mountinfo_path(void)
@@ -52,6 +57,17 @@ static void watch_dir(const char *dir)
     atomic_store(&watch.dir_wd, inotify_add_watch(watch.fd, dir, WATCH_DIR_MASK));
 }
 
+// The bookmarks file's folder, watched unless it is already (or there is none yet).
+static void watch_bookmarks(void)
+{
+    if (watch.fd < 0 || atomic_load(&watch.bm_wd) >= 0) return;
+    char file[PATH_MAX];
+    Str dir = path_dir(str_from_c(bookmarks_path(file, sizeof file)));
+    char d[PATH_MAX];
+    snprintf(d, sizeof d, "%.*s", STR_ARG(dir));
+    atomic_store(&watch.bm_wd, inotify_add_watch(watch.fd, d, IN_CREATE | IN_DELETE | IN_MOVED_FROM | IN_MOVED_TO | IN_CLOSE_WRITE | IN_ONLYDIR));
+}
+
 static void watch_theme_dirs(void)
 {
     watch.current_wd = inotify_add_watch(watch.fd, watch.current, WATCH_THEME_MASK);
@@ -72,6 +88,7 @@ static void watch_read(bool *list, bool *theme, bool *mounts)
             continue;
         }
         if (watch.mount_wd >= 0 && e->wd == watch.mount_wd) *mounts = true;
+        if (e->wd == atomic_load(&watch.bm_wd) && e->len && strcmp(e->name, "bookmarks") == 0) *mounts = true;   // the places again (F7.5)
         if (e->wd == atomic_load(&watch.dir_wd)) *list = true;
         if (e->wd == watch.theme_wd && !(e->mask & IN_IGNORED)) *theme = true;
         if (e->wd == watch.current_wd) *theme = true, rewatch = true;
@@ -127,6 +144,7 @@ static bool watch_start(void)
     const char *mi = mountinfo_path();
     if (strcmp(mi, "/proc/self/mountinfo") == 0) watch.mount_fd = open(mi, O_RDONLY | O_CLOEXEC);
     else watch.mount_wd = inotify_add_watch(watch.fd, mi, IN_CLOSE_WRITE | IN_MODIFY | IN_MOVE_SELF | IN_DELETE_SELF);
+    watch_bookmarks();
     pthread_t t;
     if (pthread_create(&t, NULL, watch_thread, NULL) != 0) return false;
     pthread_detach(t);

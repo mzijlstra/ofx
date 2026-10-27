@@ -81,6 +81,12 @@ rules shared by every tool here.
   and its `gio` fake logs `mime` and hands it to the real gio, which writes the scratch list; with
   the guard on (`OFX_GUI_ROOT`) ofx refuses a list outside it before gio runs. The unit test uses a
   fake gio. Never run `gio mime` against his own list to test.
+- **Bookmarks (F7.5) writes the GTK bookmarks file**, `$XDG_CONFIG_HOME/gtk-3.0/bookmarks`:
+  Michael's `~/.config/gtk-3.0/bookmarks`, shared with Nemo and every GTK file chooser, unless that
+  is set. run-script.sh points `XDG_CONFIG_HOME` at `<scratch>/config` (f75 makes its own file
+  there); the unit test writes under its root; with the guard on (`OFX_GUI_ROOT`) `bm_write`
+  refuses a file outside it before making anything. Never add or edit bookmarks in his file to
+  test.
 - **ofx-fm1 (FileManager1, 2026-10-26) claims a name on the session bus:** run on Michael's bus
   it would take `org.freedesktop.FileManager1` from Nemo for 30 s, and a call would open real ofx
   windows. Never run it outside `make test-fm1` (tests/fm1/run.sh): a private `dbus-run-session`

@@ -2,6 +2,10 @@
 # by the pointer, what they grey, hide and mark, and that each entry does what its key does.
 settle
 expect n=4 sel=sub menu=-
+# No bookmarks (F7.5): the Bookmarks menu has Add Bookmark only, without the line under it
+key alt-b
+expect menu=Bookmarks menuseps=0 bmn=0
+key esc
 # ---- Edit: nothing to undo or paste yet; Restore not shown outside the trash view
 key alt-e
 expect menu=Edit menuat=cut menugrey=undo,paste,restore menuhid=restore menumarked=-

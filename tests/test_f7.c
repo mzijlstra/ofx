@@ -38,8 +38,9 @@ static int file_at(UiMenuItem it)
 static void test_menu_keys(void)
 {
     // The table: every entry has a label and a word; File's Alt letter is f; the groups as decided.
-    for (int it = 1; it < UM_ITEMS; it++) CHECK(UI_MENU_ITEM[it].label[0] && UI_MENU_ITEM[it].word[0]);
-    CHECK(UI_MENUS == 4 && strcmp(UI_MENU[0].title, "File") == 0 && ui_menu_of('f') == 0 && ui_menu_of('e') == 1 && ui_menu_of('z') == -1);
+    // (A bookmark's label is gui/'s, F7.5.)
+    for (int it = 1; it < UM_ITEMS; it++) CHECK((UI_MENU_ITEM[it].label[0] || (it >= UM_BM_0 && it <= UM_BM_7)) && UI_MENU_ITEM[it].word[0]);
+    CHECK(UI_MENUS == 5 && strcmp(UI_MENU[0].title, "File") == 0 && ui_menu_of('f') == 0 && ui_menu_of('e') == 1 && ui_menu_of('z') == -1);
     CHECK(UI_MENU[0].n == 12 && file_at(UM_NEW_TAB) == 0 && file_at(UM_CLOSE) == 11 && UI_MENU[0].items[4] == UM_SEP);
 
     // F10 opens File, its first entry marked; Down steps over a line and what can't be picked.

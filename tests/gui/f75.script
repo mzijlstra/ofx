@@ -1,0 +1,49 @@
+# F7.5: the Bookmarks menu, on the tree and bookmarks file tests/gui/run.sh makes (see there): what it
+# lists, Add Bookmark writing the file (Nemo's lines kept), going to one, a change from outside shown
+# at once, at most 8 listed.
+settle
+expect n=2 bmlist=Alpha|home bmn=2 bmhere=-1 canbm=1
+# A change from outside before ofx has written the file (Nemo's): shown at once, then put back
+sh printf 'file:///nowhere\n' >> "$OFX_ROOT/config/gtk-3.0/bookmarks"
+wait-for 2000 bmlist=Alpha|home|nowhere
+sh sed -i '/nowhere/d' "$OFX_ROOT/config/gtk-3.0/bookmarks"
+wait-for 2000 bmlist=Alpha|home
+key alt-b
+expect menu=Bookmarks menuat=add-bookmark menumarked=- menugrey=bm-2,bm-3,bm-4,bm-5,bm-6,bm-7 menuhid=bm-2,bm-3,bm-4,bm-5,bm-6,bm-7
+shot menu-bookmarks.png
+# Add Bookmark: the folder shown at the end of the file, the others as they were
+key enter
+wait-for 2000 bmlist=Alpha|home|tree bmhere=2 canbm=0
+expect status=Bookmarked tree
+sh grep -qx "file://$OFX_ROOT/home/tree" "$OFX_ROOT/config/gtk-3.0/bookmarks" && grep -qx "sftp://host/x Server" "$OFX_ROOT/config/gtk-3.0/bookmarks" && [ "$(wc -l < "$OFX_ROOT/config/gtk-3.0/bookmarks")" = 4 ]
+key alt-b
+expect menugrey=add-bookmark,bm-3,bm-4,bm-5,bm-6,bm-7 menumarked=bm-2
+# A bookmark by the pointer: there, marked
+point-ui menu-item 2
+click-here
+wait-for 2000 n=0 bmhere=0 canbm=0
+pointer-off
+# Ctrl+D where it is one already: refused, the file as it was
+key ctrl-d
+expect status=No bookmark: already a bookmark
+# Ctrl+D as GLFW gives it (D 68, Ctrl 2), in b
+key backspace
+wait-for 2000 n=2 sel=a
+key down
+key enter
+wait-for 2000 n=0 canbm=1
+raw-key 68 2
+wait-for 2000 bmlist=Alpha|home|tree|b bmhere=3
+# A change from outside (Nemo's): shown at once; eight listed at most
+sh for d in c d e f g h; do printf 'file://%s/home/tree/%s\n' "$OFX_ROOT" "$d" >> "$OFX_ROOT/config/gtk-3.0/bookmarks"; done
+wait-for 2000 bmn=8 bmlist=Alpha|home|tree|b|c|d|e|f
+key alt-b
+expect menuhid=-
+key esc
+# The trash view: nothing to bookmark
+key alt-end
+wait-for 2000 trash=1
+key alt-b
+expect menugrey=add-bookmark
+key esc
+quit

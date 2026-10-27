@@ -391,6 +391,15 @@ background tab, and in the sidebar, the find bar, a question and the edit line i
 - Steps: 1 the Bookmarks menu, Add Bookmark, the watch; 2 the Edit Bookmarks panel; 3 the Help
   menu and the shortcuts panel. F7 ends there: the `--full` GUI mutant run before its install.
 
+**F7.5 as built, step 1 (2026-10-27):** `fs/bookmarks.c` reads the file's lines (`bm_parse`: every
+line in order, `path` decoded for a local one, "" for another scheme), adds (`bm_add`: the URI as
+GLib writes it, `thumb_uri`), formats and writes (`bm_write`: a new file beside it, its mode kept,
+synced, renamed; its folder made 0700; the guard first). gui/'s `bookmark_add` reads the file again
+right before. More than `BM_MAX` (256) lines: `full`, and no write (one would drop the rest). The
+menu's 8 slots (`UM_BM_0`..`7`) show while there is a local bookmark for them, labelled from gui/,
+the folder shown marked; the line above them hides with none (`ui_menu_sep_shown`). watch.c
+watches the file's folder (`bm_wd`); a change to `bookmarks` reads the places again.
+
 **F7.1 as built (2026-10-25):**
 - `ui/ui.c`: the menus as tables (`UI_MENU`, `UI_MENU_ITEM`: label, key, a word for the tests);
   `ui_menu_enabled`, `ui_menu_event` (the keys), `ui_menu_hover` (the pointer), the clicks in

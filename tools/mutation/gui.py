@@ -351,7 +351,7 @@ MUTANTS = [
     (G, '    if (m == GLFW_MOD_ALT && key == GLFW_KEY_HOME) return UK_HOMEDIR;', '', 'f74'),
     (G, '    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_R) return UK_RELOAD;', '', 'f74'),
     (G, '    if (m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT) && key == GLFW_KEY_I) return UK_INVERT;', '', 'f74'),
-    (G, '            if (!ui_menu_shown(&app.ui, it)) continue;\n            if (it == UM_SEP) {', '            if (it == UM_SEP) {', 'f74'),
+    (G, '            if (!ui_menu_shown(&app.ui, it) || (it == UM_SEP', '            if ((it == UM_SEP', 'f74'),
     # Left out: the marks' column and the ✓ / • drawn (pixels only); menu-view.png shows them.
     (G, '    if (m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT) && key == GLFW_KEY_A) return UK_SELECT_MATCH;', '', 'f74'),
     (G, '    if (m == GLFW_MOD_ALT && key == GLFW_KEY_END) return UK_TRASH_VIEW;', '', 'f74'),
@@ -359,6 +359,21 @@ MUTANTS = [
     (G, '    if (dup.n > 0) copy_here(&dup);', '', 'f74'),
     (G, '    dup.cut = false, dup.n = targets(&pastea, dup.path, CLIP_PATHS_MAX);', '    dup.cut = true, dup.n = targets(&pastea, dup.path, CLIP_PATHS_MAX);', 'f74'),
     (G, '        else duplicate();', '', 'f74'),
+    # ---- F7.5: the Bookmarks menu
+    (G, '    bm_parse(&bma, read_file(&bma, bm), &bmarks);   // the Bookmarks menu\'s (F7.5)', '', 'f75'),
+    (G, '        if (strcmp(bmarks.b[i].path, app.cwd) == 0) u->bm_here = u->bm_n;', '', 'f75'),
+    (G, '        if (!bmarks.b[i].path[0]) continue;\n        if (strcmp(bmarks.b[i].path, app.cwd)', '        if (strcmp(bmarks.b[i].path, app.cwd)', 'f75'),
+    (G, '    u->can_bookmark = !u->in_trash && !bmarks.full && bm_find(&bmarks, app.cwd) < 0;', '    u->can_bookmark = !u->in_trash && !bmarks.full;', 'f75'),
+    (G, '        if (bmarks.b[i].path[0] && k-- == 0) return &bmarks.b[i];', '        if (k-- == 0) return &bmarks.b[i];', 'f75'),
+    (G, '    return b->label.len ? b->label : strcmp(b->path, "/") == 0', '    return false ? b->label : strcmp(b->path, "/") == 0', 'f75'),
+    (G, '    bm_parse(&bmwa, read_file(&bmwa, file), &now);', '    now.n = 0;', 'f75'),
+    # Not a mutant: bookmark_add's places_reload, the watch reads them again 100 ms later; it is kept so
+    # the menu is right at once.
+    (G, '        if (b) go_to(b->path, STR_EMPTY, 0);', '', 'f75'),
+    (G, '    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_D) return UK_ADD_BOOKMARK;   // (F7.5, as Nemo)', '', 'f75'),
+    (G, ' || (it == UM_SEP && !ui_menu_sep_shown(&app.ui, m, i))) continue;', ') continue;', 'f74'),
+    (W, '        if (e->wd == atomic_load(&watch.bm_wd) && e->len && strcmp(e->name, "bookmarks") == 0) *mounts = true;', '', 'f75'),
+    (W, '    watch_bookmarks();\n    pthread_t t;', '    pthread_t t;', 'f75'),
     # ---- quit doesn't wait for a hung drive (2026-10-26: no mutant was hang's or f6b's alone)
     (K, '    if (pthread_timedjoin_np(counts.thread, NULL, &until) != 0) pthread_detach(counts.thread);', '    pthread_join(counts.thread, NULL);', 'hang'),
     ('gui/space.c', '    if (pthread_timedjoin_np(space.thread, NULL, &until) != 0) pthread_detach(space.thread);', '    pthread_join(space.thread, NULL);', 'f6'),
@@ -412,7 +427,7 @@ t_start = time.monotonic()
 # run.sh's groups, in its order: a mutant runs them one at a time and stops at the first that
 # kills it (Michael, 2026-10-25).
 GROUPS = ['browse', 'big', 'gone', 'watchgap', 'f2', 'f3', 'f4', 'f5', 'f52', 'f53', 'f54', 'f6', 'f62', 'f63', 'f64', 'f7',
-          'f72', 'f73', 'f74', 'hang', 'guard3', 'guard']
+          'f72', 'f73', 'f74', 'f75', 'hang', 'guard3', 'guard']
 run_text = open(os.path.join(root, 'tests/gui/run.sh')).read()
 assert re.findall(r'want ([a-z0-9]+)', run_text) == GROUPS, 'GROUPS in gui.py no longer match tests/gui/run.sh'
 

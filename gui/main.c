@@ -125,8 +125,10 @@ static u8 undo_mem[MiB(4)];        // the undo record's paths
 static u8 own_mem[MiB(2)];         // what ofx itself copied or cut
 static u8 paste_mem[MiB(2)];       // another program's files, read for one paste
 static u8 tree_mem[MiB(4)];        // the sidebar tree's paths and names; reset per build
+static u8 bm_mem[MiB(1)], bmw_mem[MiB(1)];   // the bookmarks file as the menu lists it; a change's own read (F7.5)
 
-static Arena frame, lists[2], data, icona, scratch, undoa, owna, pastea, treea;
+static Arena frame, lists[2], data, icona, scratch, undoa, owna, pastea, treea, bma, bmwa;
+static Bookmarks bmarks;   // the bookmarks file's lines (F7.5), read with the places
 static int   watch_delay_ms;   // OFX_TEST_WATCH_DELAY_MS, for one test
 
 enum { BAR_BTN_W = 34, BAR_BTN_H = 30, BAR_GAP = 4, ARROW_W = 22, CRUMB_PAD = 10, CRUMB_ICON_PX = 16 };
@@ -453,6 +455,8 @@ static void places_reload(void)
     if (app.ui.side_mode == SIDE_PLACES && app.ui.side.sel < app.places.n) keep = app.places.p[app.ui.side.sel];
     char bm[PATH_MAX];
     places_load(&scratch, &app.places, bookmarks_path(bm, sizeof bm), mountinfo_path());
+    arena_reset(&bma);
+    bm_parse(&bma, read_file(&bma, bm), &bmarks);   // the Bookmarks menu's (F7.5)
     space_ask(&app.places, app.cwd);
     isize sel = 0;
     for (int i = 0; i < app.places.n; i++) {
@@ -466,6 +470,39 @@ static void places_reload(void)
     ui_set(&app.ui.side, app.places.n, sel);
     app.ui.side.top = ui_clamp(top, 0, ui_max_top(&app.ui.side));
     ui_side_settle(&app.ui, 1);
+}
+
+// The menu's bookmark k: the k-th of the file's local ones (F7.5); NULL past them.
+static const Bookmark *bm_menu(int k)
+{
+    for (int i = 0; i < bmarks.n; i++)
+        if (bmarks.b[i].path[0] && k-- == 0) return &bmarks.b[i];
+    return NULL;
+}
+
+// A bookmark's name in the menu: its label, else its folder's.
+static Str bm_label(const Bookmark *b)
+{
+    return b->label.len ? b->label : strcmp(b->path, "/") == 0 ? S("/") : path_base(str_from_c(b->path));
+}
+
+// Bookmarks → Add Bookmark, Ctrl+D (F7.5): the folder shown at the end of the file, read again
+// first so a change Nemo made meanwhile stays; the places (and the menu) read again after.
+static void bookmark_add(void)
+{
+    char file[PATH_MAX];
+    bookmarks_path(file, sizeof file);
+    static Bookmarks now;
+    arena_reset(&bmwa);
+    bm_parse(&bmwa, read_file(&bmwa, file), &now);
+    Err err = { 0 };
+    if (!bm_add(&bmwa, &now, app.cwd, &err) || !bm_write(file, bm_format(&bmwa, &now), &err)) {
+        set_status(true, "No bookmark: %s", err.msg);
+        return;
+    }
+    watch_bookmarks();   // its folder may be new
+    places_reload();
+    set_status(false, "Bookmarked %.*s", STR_ARG(path_base(str_from_c(app.cwd))));
 }
 
 // The tree built again (tree mode only): opened down to the folder shown when `follow`, with the
@@ -1273,6 +1310,12 @@ static void act(UiAction a)
     case UA_UNDO: undo_last(); break;
     case UA_RELOAD: app.reloads_asked++, reload(); break;
     case UA_TRASH_VIEW: go_to(TRASH_URI, STR_EMPTY, 0); break;
+    case UA_ADD_BOOKMARK: bookmark_add(); break;
+    case UA_BOOKMARK: {
+        const Bookmark *b = bm_menu((int)a.index);
+        if (b) go_to(b->path, STR_EMPTY, 0);
+        break;
+    }
     case UA_ANSWER: job_answer((int)a.index, a.all); break;
     case UA_CANCEL_JOB: job_cancel((int)a.index); break;
     case UA_QUIT: app.quit = true; break;
@@ -1551,7 +1594,6 @@ static void drive_bar(int r, const Place *p, float w)
                                          .backgroundColor = drive_used_color(p) }) {}
     }
 }
-
 
 // The tree mode (F6): a row a folder, indented by its depth, with its open (▾) or closed (▸)
 // mark; the folder shown in the accent.
@@ -2295,7 +2337,7 @@ static void layout_menu(int m)
         for (int i = 0; i < UI_MENU[m].n; i++) marks |= UI_MENU_ITEM[UI_MENU[m].items[i]].mark != 0;
         for (int i = 0; i < UI_MENU[m].n; i++) {
             UiMenuItem it = UI_MENU[m].items[i];
-            if (!ui_menu_shown(&app.ui, it)) continue;
+            if (!ui_menu_shown(&app.ui, it) || (it == UM_SEP && !ui_menu_sep_shown(&app.ui, m, i))) continue;
             if (it == UM_SEP) {
                 CLAY(CLAY_IDI("menu-sep", i), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(MENU_SEP_H) }, .padding = { 8, 8, 4, 4 } } }) {
                     CLAY(CLAY_IDI("menu-line", i), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(1) } },
@@ -2315,7 +2357,8 @@ static void layout_menu(int m)
                             if (mk == 1) text(cz(UI_MENU_ITEM[it].mark == 'c' ? "\xE2\x9C\x93" : "\xE2\x80\xA2"), on ? cc(t->accent) : off);
                         }
                     }
-                    text(cz(UI_MENU_ITEM[it].label), on ? cc(t->fg) : off);
+                    const Bookmark *bk = it >= UM_BM_0 && it <= UM_BM_7 ? bm_menu(it - UM_BM_0) : NULL;
+                    text(bk ? fit(bm_label(bk), 360, true) : cz(UI_MENU_ITEM[it].label), on ? cc(t->fg) : off);
                 }
                 CLAY(CLAY_IDI("menu-gap", i), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(1) } } }) {}
                 if (UI_MENU_ITEM[it].key[0]) text(cz(UI_MENU_ITEM[it].key), on ? cc(t->fg_dim) : off);
@@ -3080,7 +3123,15 @@ static void menu_facts(void)
     u->can_up = !u->in_trash && strcmp(app.cwd, "/") != 0;
     u->can_paste = clip.ok || own.n > 0;
     u->shows_hidden = app.show_hidden;
+    u->bm_n = 0, u->bm_here = -1;
+    for (int i = 0; i < bmarks.n && u->bm_n < UI_MENU_BOOKMARKS; i++) {
+        if (!bmarks.b[i].path[0]) continue;
+        if (strcmp(bmarks.b[i].path, app.cwd) == 0) u->bm_here = u->bm_n;
+        u->bm_n++;
+    }
+    u->can_bookmark = !u->in_trash && !bmarks.full && bm_find(&bmarks, app.cwd) < 0;
 }
+
 
 static Clay_RenderCommandArray layout(int w, int h)
 {
@@ -3225,6 +3276,7 @@ static UiKey ui_key_of(int key, int mods)
     if (m == GLFW_MOD_ALT && key == GLFW_KEY_UP) return UK_PARENT;
     if (m == GLFW_MOD_ALT && key == GLFW_KEY_HOME) return UK_HOMEDIR;   // (F7.4, as Nemo)
     if (m == GLFW_MOD_ALT && key == GLFW_KEY_END) return UK_TRASH_VIEW;   // (Michael, 2026-10-27)
+    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_D) return UK_ADD_BOOKMARK;   // (F7.5, as Nemo)
     if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_R) return UK_RELOAD;
     if (m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT) && key == GLFW_KEY_I) return UK_INVERT;
     if (m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT) && key == GLFW_KEY_A) return UK_SELECT_MATCH;
@@ -3766,6 +3818,8 @@ int main(int argc, char **argv)
     arena_init(&owna, "clipboard", own_mem, sizeof own_mem);
     arena_init(&pastea, "paste", paste_mem, sizeof paste_mem);
     arena_init(&treea, "tree", tree_mem, sizeof tree_mem);
+    arena_init(&bma, "bookmarks", bm_mem, sizeof bm_mem);
+    arena_init(&bmwa, "bookmarks-write", bmw_mem, sizeof bmw_mem);
     arena_init(&doomeda, "delete", doomed_mem, sizeof doomed_mem);
     arena_init(&propsa, "properties", props_mem, sizeof props_mem);
     arena_init(&owa, "open with", ow_mem, sizeof ow_mem);

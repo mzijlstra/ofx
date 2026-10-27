@@ -22,7 +22,8 @@ static int menu_of_item(UiMenuItem it)
 static Ui menu_all_on(u8 *mark)
 {
     Ui u = menu_ui(4);
-    u.mark = mark, u.can_undo = u.can_back = u.can_forward = u.can_up = u.can_paste = true;
+    u.mark = mark, u.can_undo = u.can_back = u.can_forward = u.can_up = u.can_paste = u.can_bookmark = true;
+    u.bm_here = -1;
     u.grid = true, u.zoom = 64;
     ui_set_cols(&u.list, 2);
     memset(mark, 0, 4);

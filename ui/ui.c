@@ -71,6 +71,7 @@ typedef enum {
     UK_HOMEDIR,    // Alt+Home: home, as ~ (F7.4)
     UK_SELECT_MATCH,   // Ctrl+Shift+A: Select Items Matching, the find bar's select mode (F7.4)
     UK_TRASH_VIEW, // Alt+End: the trash view, as Alt+Home is home (Michael, 2026-10-27)
+    UK_ADD_BOOKMARK,   // Ctrl+D: the folder shown, bookmarked (F7.5)
 } UiKey;
 
 // The top bar's buttons (F4).
@@ -181,6 +182,8 @@ typedef enum {
     UA_RELOAD,      // the folder listed again (F7.4: a drive that sends no change events)
     UA_TRASH_VIEW,  // to the trash view (Go, F7.4)
     UA_DUPLICATE,   // the marked entries (or the cursor's) copied beside themselves (Edit, F7.4)
+    UA_ADD_BOOKMARK,   // the folder shown, added to the bookmarks file (F7.5)
+    UA_BOOKMARK,    // index: the menu's bookmark (0..UI_MENU_BOOKMARKS-1, gui/'s list of them) to go to
 } UiActionKind;
 
 typedef struct {
@@ -205,8 +208,12 @@ typedef enum {
     UM_RELOAD, UM_SIDE_PLACES, UM_SIDE_TREE, UM_SIDE_NONE, UM_HIDDEN, UM_SORT_NAME, UM_SORT_SIZE, UM_SORT_MTIME, UM_SORT_REVERSE,
     UM_ZOOM_IN, UM_ZOOM_OUT, UM_ZOOM_RESET, UM_VIEW_LIST, UM_VIEW_ICONS,
     UM_PARENT, UM_BACK, UM_FORWARD, UM_HOME, UM_TRASH_VIEW, UM_FIND, UM_LOCATION, UM_TERMINAL,
+    UM_ADD_BOOKMARK, UM_BM_0, UM_BM_1, UM_BM_2, UM_BM_3, UM_BM_4, UM_BM_5, UM_BM_6, UM_BM_7,
     UM_ITEMS
 } UiMenuItem;
+
+// The Bookmarks menu's: the first 8 of the file's, in its order (Michael, 2026-10-27).
+enum { UI_MENU_BOOKMARKS = 8 };
 
 // Each entry's label, its key as the menu shows it, and its name in a script's state line; the key
 // event it stands for (F7.4: picked, the entry runs that key, so the two can't differ; none: its
@@ -259,6 +266,12 @@ static const struct { const char *label, *key, *word; UiEvent ev; char mark; } U
     [UM_FIND] = { "Find in Folder\xE2\x80\xA6", "Ctrl+F", "find", { UK_FIND, 0 } },
     [UM_LOCATION] = { "Location\xE2\x80\xA6", "Ctrl+L", "location", { UK_LOCATION, 0 } },
     [UM_TERMINAL] = { "Terminal Here", "Alt+Enter", "terminal", { UK_TERMINAL, 0 } },
+    // Bookmarks (F7.5); a bookmark's label is gui/'s (the file's), marked when it is the folder shown
+    [UM_ADD_BOOKMARK] = { "Add Bookmark", "Ctrl+D", "add-bookmark", { UK_ADD_BOOKMARK, 0 } },
+    [UM_BM_0] = { "", "", "bm-0", .mark = 'r' }, [UM_BM_1] = { "", "", "bm-1", .mark = 'r' },
+    [UM_BM_2] = { "", "", "bm-2", .mark = 'r' }, [UM_BM_3] = { "", "", "bm-3", .mark = 'r' },
+    [UM_BM_4] = { "", "", "bm-4", .mark = 'r' }, [UM_BM_5] = { "", "", "bm-5", .mark = 'r' },
+    [UM_BM_6] = { "", "", "bm-6", .mark = 'r' }, [UM_BM_7] = { "", "", "bm-7", .mark = 'r' },
 };
 
 static const UiMenuItem UI_MENU_FILE[] = {
@@ -278,13 +291,17 @@ static const UiMenuItem UI_MENU_VIEW[] = {
 static const UiMenuItem UI_MENU_GO[] = {
     UM_PARENT, UM_BACK, UM_FORWARD, UM_SEP, UM_HOME, UM_TRASH_VIEW, UM_SEP, UM_FIND, UM_LOCATION, UM_TERMINAL,
 };
+static const UiMenuItem UI_MENU_BOOKMARKS_[] = {
+    UM_ADD_BOOKMARK, UM_SEP, UM_BM_0, UM_BM_1, UM_BM_2, UM_BM_3, UM_BM_4, UM_BM_5, UM_BM_6, UM_BM_7,
+};
 
-// The menus in the bar's order: a title, its Alt letter, its entries. Bookmarks and Help come next.
+// The menus in the bar's order: a title, its Alt letter, its entries. Help comes next.
 static const struct { const char *title; char letter; const UiMenuItem *items; int n; } UI_MENU[] = {
     { "File", 'f', UI_MENU_FILE, sizeof UI_MENU_FILE / sizeof UI_MENU_FILE[0] },
     { "Edit", 'e', UI_MENU_EDIT, sizeof UI_MENU_EDIT / sizeof UI_MENU_EDIT[0] },
     { "View", 'v', UI_MENU_VIEW, sizeof UI_MENU_VIEW / sizeof UI_MENU_VIEW[0] },
     { "Go", 'g', UI_MENU_GO, sizeof UI_MENU_GO / sizeof UI_MENU_GO[0] },
+    { "Bookmarks", 'b', UI_MENU_BOOKMARKS_, sizeof UI_MENU_BOOKMARKS_ / sizeof UI_MENU_BOOKMARKS_[0] },
 };
 enum { UI_MENUS = sizeof UI_MENU / sizeof UI_MENU[0] };
 
@@ -391,6 +408,11 @@ typedef struct {
     // files shown. And an entry picked whose key is still to run (ui_handle runs it next).
     bool   can_undo, can_back, can_forward, can_up, can_paste, shows_hidden;
     UiEvent menu_key;
+    // The Bookmarks menu (F7.5), from gui/ too: how many local bookmarks it lists (at most
+    // UI_MENU_BOOKMARKS), the one that is the folder shown (-1 none), and whether that folder can be
+    // bookmarked (not one already, not the trash view, the file not full).
+    int    bm_n, bm_here;
+    bool   can_bookmark;
     // The Properties panel (F7.2): up, its grid's place with the focus (0..8: owner read, write,
     // execute, then group's, others'), and whether gui/ lets its permissions change.
     bool   props;
@@ -1220,10 +1242,21 @@ static bool ui_jobs_event(Ui *u, const UiInput *in, UiEvent e)
 
 // ---- the menu bar (F7.1) -----------------------------------------------------------------------
 
-// Whether entry it is in its menu now: Move to Trash outside the trash view, Restore in it (F7.4).
+// Whether entry it is in its menu now: Move to Trash outside the trash view, Restore in it (F7.4); a
+// bookmark's place while there is one for it (F7.5).
 static bool ui_menu_shown(const Ui *u, UiMenuItem it)
 {
+    if (it >= UM_BM_0 && it <= UM_BM_7) return (int)(it - UM_BM_0) < u->bm_n;
     return it == UM_TRASH ? !u->in_trash : it == UM_RESTORE ? u->in_trash : true;
+}
+
+// Whether menu m's line at place i is drawn: not one with nothing shown after it (the Bookmarks
+// menu with no bookmarks).
+static bool ui_menu_sep_shown(const Ui *u, int m, int i)
+{
+    for (int k = i + 1; k < UI_MENU[m].n && UI_MENU[m].items[k] != UM_SEP; k++)
+        if (ui_menu_shown(u, UI_MENU[m].items[k])) return true;
+    return false;
 }
 
 // Whether entry it can be picked now. One that runs a key is greyed where that key would do
@@ -1255,6 +1288,8 @@ static bool ui_menu_enabled(const Ui *u, UiMenuItem it)
     case UM_FORWARD: return u->can_forward;
     case UM_HOME: case UM_TRASH_VIEW: case UM_FIND: case UM_LOCATION: return true;
     case UM_TERMINAL: return !u->in_trash;
+    case UM_ADD_BOOKMARK: return u->can_bookmark && !u->in_trash;
+    case UM_BM_0: case UM_BM_1: case UM_BM_2: case UM_BM_3: case UM_BM_4: case UM_BM_5: case UM_BM_6: case UM_BM_7: return true;
     default: return false;
     }
 }
@@ -1273,6 +1308,8 @@ static int ui_menu_mark(const Ui *u, UiMenuItem it)
     case UM_SORT_REVERSE: return u->sort.reverse;
     case UM_VIEW_LIST: return !u->grid;
     case UM_VIEW_ICONS: return u->grid;
+    case UM_BM_0: case UM_BM_1: case UM_BM_2: case UM_BM_3: case UM_BM_4: case UM_BM_5: case UM_BM_6: case UM_BM_7:
+        return u->bm_here == (int)(it - UM_BM_0);
     default: return -1;
     }
 }
@@ -1489,6 +1526,8 @@ static UiAction ui_menu_pick(Ui *u, UiMenuItem it)
         u->sort.key = it == UM_SORT_NAME ? SORT_NAME : it == UM_SORT_SIZE ? SORT_SIZE : SORT_MTIME;
         return (UiAction){ UA_SORT, 0, false };
     case UM_DUPLICATE: return (UiAction){ UA_DUPLICATE, 0, false };
+    case UM_BM_0: case UM_BM_1: case UM_BM_2: case UM_BM_3: case UM_BM_4: case UM_BM_5: case UM_BM_6: case UM_BM_7:
+        return (UiAction){ UA_BOOKMARK, it - UM_BM_0, false };
     case UM_NEW_TAB: return (UiAction){ UA_TAB_NEW, 0, false };
     case UM_NEW_WINDOW: return (UiAction){ UA_NEW_WINDOW, 0, false };
     case UM_NEW_FOLDER: return (UiAction){ UA_NEWFOLDER, 0, false };
@@ -2014,6 +2053,7 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         case UK_RELOAD: return (UiAction){ UA_RELOAD, 0, false };
         case UK_HOMEDIR: return (UiAction){ UA_HOMEDIR, 0, false };
         case UK_TRASH_VIEW: return (UiAction){ UA_TRASH_VIEW, 0, false };
+        case UK_ADD_BOOKMARK: return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : UA_ADD_BOOKMARK, 0, false };
         case UK_F2:
             if (l->n > 0 && !u->side_focus && u->in_trash) return (UiAction){ UA_NOT_IN_TRASH, 0, false };
             if (l->n > 0 && !u->side_focus) ui_edit_rename(u, names.at(names.ctx, l->sel), names.dir && names.dir(names.ctx, l->sel));

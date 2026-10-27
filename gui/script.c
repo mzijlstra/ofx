@@ -271,6 +271,19 @@ static void script_state(char *out, size_t cap)
     if (!menugrey[0]) snprintf(menugrey, sizeof menugrey, "-");
     if (!menuhid[0]) snprintf(menuhid, sizeof menuhid, "-");
     if (!menumarked[0]) snprintf(menumarked, sizeof menumarked, "-");
+    int menuseps = 0;   // the open menu's lines drawn (one before no bookmarks isn't, F7.5)
+    for (int i = 0; app.ui.menu_on && i < UI_MENU[app.ui.menu].n; i++)
+        menuseps += UI_MENU[app.ui.menu].items[i] == UM_SEP && Clay_GetElementData(CLAY_IDI("menu-sep", i)).found;
+    // The Bookmarks menu's (F7.5): their names as it lists them, '|' between, spaces as '_'.
+    char bmlist[1024] = "";
+    for (int k = 0; k < UI_MENU_BOOKMARKS; k++) {
+        const Bookmark *b = bm_menu(k);
+        if (!b) break;
+        size_t at = strlen(bmlist);
+        snprintf(bmlist + at, sizeof bmlist - at, "%s%.*s", at ? "|" : "", STR_ARG(bm_label(b)));
+    }
+    for (char *c = bmlist; *c; c++) *c = *c == ' ' ? '_' : *c;
+    if (!bmlist[0]) snprintf(bmlist, sizeof bmlist, "-");
     // The bottom bar as the last frame drew it lies inside the window (F7.1: under the menu bar's
     // 26 px the rest is as tall as before).
     Clay_ElementData fd = Clay_GetElementData(CLAY_ID("footer"));
@@ -349,7 +362,7 @@ static void script_state(char *out, size_t cap)
              "view=%s cols=%d cells=%d cellfirst=%td celllast=%td fulllines=%d celllines=%d cellcut=%d iconpx=%d icontex=%d iconresets=%d crumbfocus=%d tooltip=%s idlewoke=%s "
              "zoom=%d cellw=%d cellh=%d zoomshown=%d tipin=%d slots=%d "
              "previews=%d thumbsel=%s thumbbox=%s thumbbusy=%d thumbmade=%d thumbread=%d thumbfailed=%d thumbknown=%d thumbnone=%d thumbchanged=%d "
-             "thumbheld=%td thumbdropped=%d thumbresets=%d thumblocal=%d reloadasked=%d menu=%s menuat=%s menuoff=%s menugrey=%s menuhid=%s menumarked=%s menuhover=%d canwrite=%d windows=%d siderows=%d footerin=%d "
+             "thumbheld=%td thumbdropped=%d thumbresets=%d thumblocal=%d reloadasked=%d menuseps=%d bmlist=%s bmn=%d bmhere=%d canbm=%d menu=%s menuat=%s menuoff=%s menugrey=%s menuhid=%s menumarked=%s menuhover=%d canwrite=%d windows=%d siderows=%d footerin=%d "
              "props=%d propat=%d propcan=%d propn=%td propmode=%04o propfiles=%lld propdirs=%lld propbytes=%lld propdone=%d propcut=%d proplinks=%lld,%lld,%lld,%d propnlink=%llu proptype=%s proptypename=%s propbyname=%d propname=%s "
              "propwhere=%s propdrive=%s proplink=%s propcreated=%d propidx=%td "
              "ow=%d owfresh=%d owlist=%d owtext=%s own=%td owsel=%td owapp=%s owicon=%s owtex=%d owshown=%td owtype=%s owfiles=%td owrows=%d owtop=%td owopts=%s owbad=%d owdef=%d owdefcan=%d findopts=%s findbad=%d findselect=%d findn=%td findat=%td findtext=%s status=%s",
@@ -373,7 +386,7 @@ static void script_state(char *out, size_t cap)
              ui_zoom_px(&app.ui), cell_w(), cell_h(), Clay_GetElementData(CLAY_ID("zoom-track")).found, tipin, app.nslots,
              thumbs.drawn_last, thumbsel, thumbbox, thumbs_busy(), thumbs.got[TG_MADE], thumbs.got[TG_CACHED], thumbs.got[TG_FAILED],
              thumbs.got[TG_FAIL_KNOWN], thumbs.got[TG_NONE], thumbs.got[TG_CHANGED], thumbs.held, thumbs.evicted, thumbs.resets, app.thumb_local,
-             app.reloads_asked, app.ui.menu_on ? UI_MENU[app.ui.menu].title : "-", menuat, menuoff, menugrey, menuhid, menumarked, app.menu_title_hover, app.ui.can_write, windows,
+             app.reloads_asked, menuseps, bmlist, app.ui.bm_n, app.ui.bm_here, app.ui.can_bookmark, app.ui.menu_on ? UI_MENU[app.ui.menu].title : "-", menuat, menuoff, menugrey, menuhid, menumarked, app.menu_title_hover, app.ui.can_write, windows,
              app.ui.side.rows, footerin,
              app.ui.props, app.ui.prop_at, app.ui.prop_can, props.n, props.have ? (unsigned)(props.st.st_mode & 07777) : 0u,
              (long long)props.sum.files, (long long)props.sum.dirs, (long long)props.sum.bytes, props.done, props.sum.cut || props.cut,
@@ -428,7 +441,7 @@ static UiKey script_key(Str name)
         { "f10", UK_F10 }, { "ctrl-n", UK_NEW_WINDOW }, { "ctrl-i", UK_PROPERTIES }, { "alt-enter", UK_TERMINAL },
         { "ctrl-1", UK_VIEW_LIST }, { "ctrl-2", UK_VIEW_ICONS }, { "ctrl-left", UK_SIDE },
         { "ctrl-equal", UK_ZOOM_IN }, { "ctrl-minus", UK_ZOOM_OUT }, { "ctrl-0", UK_ZOOM_RESET },
-        { "ctrl-shift-i", UK_INVERT }, { "ctrl-shift-a", UK_SELECT_MATCH }, { "ctrl-r", UK_RELOAD }, { "alt-home", UK_HOMEDIR }, { "alt-end", UK_TRASH_VIEW },
+        { "ctrl-shift-i", UK_INVERT }, { "ctrl-shift-a", UK_SELECT_MATCH }, { "ctrl-r", UK_RELOAD }, { "alt-home", UK_HOMEDIR }, { "alt-end", UK_TRASH_VIEW }, { "ctrl-d", UK_ADD_BOOKMARK },
     };
     for (int i = 0; i < COUNT(KEYS); i++)
         if (str_eq(name, str_from_c(KEYS[i].name))) return KEYS[i].k;
