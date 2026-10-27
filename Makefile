@@ -120,8 +120,8 @@ SRC      = $(wildcard base/*.c base/*.h fs/*.c ui/*.c gui/*.c) build/version.h
 build/version.h: FORCE | build
 	@v="$$(git log -1 --format='%cd (%h' --date=format:%Y.%m.%d 2>/dev/null)"; \
 	if [ -z "$$v" ]; then v=unknown; else git diff --quiet HEAD 2>/dev/null || v="$$v+dirty"; v="$$v)"; fi; \
-	printf '#define OFX_VERSION "%s"\n' "$$v" > $@.tmp; \
-	cmp -s $@.tmp $@ && rm $@.tmp || mv $@.tmp $@
+	printf '#define OFX_VERSION "%s"\n' "$$v" > $@.$$$$.tmp; \
+	cmp -s $@.$$$$.tmp $@ && rm $@.$$$$.tmp || mv $@.$$$$.tmp $@
 FORCE:
 
 build/ofx: $(SRC) $(RL_OUT)/libraylib.a $(OFX_WL)/stamp Makefile | build
