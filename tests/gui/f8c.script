@@ -41,9 +41,24 @@ expect menu=folder menuhid=cut-it,copy-it,bm-rename,bm-up,bm-down,bm-remove,bm-e
 point-ui menu-item 1
 click-here
 expect menu=- tabs=2 tab=0
-key ctrl-tab
-key ctrl-w
-expect tabs=1
+# A tab's menu: the tab right-clicked shown; Move Tab Left; Close Other Tabs
+point-ui tab 1
+right-here
+expect menu=tab tab=1 menugrey=tab-right menuin=1
+shot ctx-tab.png
+point-ui menu-item 2
+click-here
+expect menu=- tab=0 tabdirs=home|tree
+point-ui tab 0
+right-here
+expect menu=tab menugrey=tab-left
+key esc
+point-ui tab 1
+right-here
+expect menu=tab tab=1 menugrey=tab-right
+point-ui menu-item 6
+click-here
+expect menu=- tabs=1 tabdirs=tree
 # Trash: gone to, not into; Empty Trash greyed while it is empty
 point-ui side-row 3
 right-here

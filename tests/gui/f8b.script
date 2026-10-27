@@ -54,7 +54,8 @@ point-ui menu-item 10
 click-here
 wait-for 2000 n=4 idx=2
 sh test "$(readlink "$OFX_DIR/Link to a.txt")" = "$OFX_DIR/a.txt"
-key ctrl-m
+# (Ctrl+M as the window gets it: M 77, Ctrl 2)
+raw-key 77 2
 wait-for 2000 n=5 undo=link
 key ctrl-z
 wait-for 2000 n=4

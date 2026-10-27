@@ -1619,6 +1619,7 @@ int main(void)
     test_ctx_folder_entries();
     test_links();
     test_ctx_folder_menu();
+    test_ctx_tab_menu();
     test_menu_mouse();
     test_close_all_keys();
     test_rename_select();

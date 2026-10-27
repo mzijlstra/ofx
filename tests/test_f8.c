@@ -370,3 +370,50 @@ static void test_ctx_folder_menu(void)
     ui_handle(&u, names, &in);
     CHECK(!u.menu_on);   // (a key not theirs gives the files the keys back, as before F8)
 }
+
+// F8 step 4: a tab's menu. A right press on a tab shows it and opens the menu; Move Tab Left and
+// Right run their keys (greyed at the ends), Close runs Ctrl+W, Close Other Tabs is its own.
+static void test_ctx_tab_menu(void)
+{
+    UiNames names = { name_at, NULL, dir_at };
+    Ui u = menu_ui(3);
+    u.tab_at = 0, u.tab_n = 3;
+    UiInput in = ui_input_none();
+    in.ctx_tab = 3;   // not there
+    ui_handle(&u, names, &in);
+    CHECK(!u.menu_on);
+    in = ui_input_none(), in.ctx_tab = 2;
+    CHECK(ui_input_acts(&in));
+    UiAction a = ui_handle(&u, names, &in);
+    CHECK(a.kind == UA_TAB_SHOW && a.index == 2 && u.menu_on && u.menu == UI_CTX_TAB);
+    u.tab_at = 2;   // (gui/ showed it)
+    CHECK(ui_menu_enabled(&u, UM_TAB_LEFT) && !ui_menu_enabled(&u, UM_TAB_RIGHT) && ui_menu_enabled(&u, UM_TAB_OTHERS) && ui_menu_enabled(&u, UM_CLOSE));
+    in = ui_input_none(), in.menu_item = menu_place(UI_CTX_TAB, UM_TAB_LEFT);
+    a = ui_handle(&u, names, &in);
+    CHECK(a.kind == UA_TAB_MOVE && a.index == -1 && !u.menu_on);
+    u.tab_at = 0, u.menu_on = true;
+    CHECK(!ui_menu_enabled(&u, UM_TAB_LEFT) && ui_menu_enabled(&u, UM_TAB_RIGHT));
+    in = ui_input_none(), in.menu_item = menu_place(UI_CTX_TAB, UM_TAB_RIGHT);
+    a = ui_handle(&u, names, &in);
+    CHECK(a.kind == UA_TAB_MOVE && a.index == 1);
+    u.menu_on = true;
+    in = ui_input_none(), in.menu_item = menu_place(UI_CTX_TAB, UM_TAB_OTHERS);
+    CHECK(ui_handle(&u, names, &in).kind == UA_TAB_OTHERS);
+    u.menu_on = true;
+    in = ui_input_none(), in.menu_item = menu_place(UI_CTX_TAB, UM_CLOSE);
+    a = ui_handle(&u, names, &in);
+    CHECK(a.kind == UA_TAB_CLOSE && a.index == -1);
+    u.menu_on = true;
+    in = ui_input_none(), in.menu_item = menu_place(UI_CTX_TAB, UM_NEW_TAB);
+    CHECK(ui_handle(&u, names, &in).kind == UA_TAB_NEW);
+    // One tab: no other to close.
+    u.tab_n = 1;
+    CHECK(!ui_menu_enabled(&u, UM_TAB_OTHERS) && !ui_menu_enabled(&u, UM_TAB_RIGHT));
+    // An edit line open closes as the menu opens (as the bar's menus do).
+    u.tab_n = 2;
+    menu_keys(&u, 1, UK_F2);
+    CHECK(u.editing);
+    in = ui_input_none(), in.ctx_tab = 1;
+    ui_handle(&u, names, &in);
+    CHECK(u.menu_on && !u.editing);
+}

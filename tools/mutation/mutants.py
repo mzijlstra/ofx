@@ -726,8 +726,8 @@ MUTANTS += [
     (U, "           in->zoom_wheel != 0 || in->zoom_to >= 0 ||", "           in->zoom_to >= 0 ||"),
     (U, "           in->zoom_wheel != 0 || in->zoom_to >= 0 ||", "           in->zoom_wheel != 0 ||"),
     (U, "                      .zoom_to = -1, .menu_title", "                      .zoom_to = 0, .menu_title"),
-    (U, ".menu_title = -1, .menu_item = -1, .ctx_row = -1, .ctx_side = -1, .ctx_crumb = -1, .prop_box", ".menu_title = 0, .menu_item = -1, .ctx_row = -1, .ctx_side = -1, .ctx_crumb = -1, .prop_box"),
-    (U, ".menu_title = -1, .menu_item = -1, .ctx_row = -1, .ctx_side = -1, .ctx_crumb = -1, .prop_box", ".menu_title = -1, .menu_item = 0, .ctx_row = -1, .ctx_side = -1, .ctx_crumb = -1, .prop_box"),
+    (U, ".menu_title = -1, .menu_item = -1, .ctx_row = -1, .ctx_side = -1, .ctx_crumb = -1, .ctx_tab = -1, .prop_box", ".menu_title = 0, .menu_item = -1, .ctx_row = -1, .ctx_side = -1, .ctx_crumb = -1, .ctx_tab = -1, .prop_box"),
+    (U, ".menu_title = -1, .menu_item = -1, .ctx_row = -1, .ctx_side = -1, .ctx_crumb = -1, .ctx_tab = -1, .prop_box", ".menu_title = -1, .menu_item = 0, .ctx_row = -1, .ctx_side = -1, .ctx_crumb = -1, .ctx_tab = -1, .prop_box"),
     (U, "    isize c = ui_cols(l), on = l->sel / c - l->top / c;", "    isize c = ui_cols(l), on = 0;"),
     (U, "    l->top = (l->sel / c - on) * c;   // out", "    l->top = l->top;   // out"),
     (ST, "            if (i == val.len && px > 0) s.zoom = px;", "            if (px > 0) s.zoom = px;"),
@@ -945,7 +945,7 @@ MUTANTS += [
     (U, "        if (!prompt && !u->menu_on && (e.key == UK_F10 ||", "        if (!u->menu_on && (e.key == UK_F10 ||"),
     (U, "        if (u->menu_on && !prompt) {\n            UiAction a;\n            if (ui_menu_event(u, e, &a)) {", "        if (u->menu_on && !prompt && false) {\n            UiAction a;\n            if (ui_menu_event(u, e, &a)) {"),
     (U, "        case UK_NEW_WINDOW: return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : UA_NEW_WINDOW, 0, false };", "        case UK_NEW_WINDOW: return (UiAction){ UA_NEW_WINDOW, 0, false };"),
-    (U, "|| in->menu_title >= 0 || in->menu_item >= 0 || in->menu_away || in->ctx_row >= 0 || in->ctx_here || in->ctx_side >= 0 || in->ctx_crumb >= 0 || in->prop_box", " || in->menu_title >= 0 || in->menu_item >= 0 || in->ctx_row >= 0 || in->ctx_here || in->ctx_side >= 0 || in->ctx_crumb >= 0 || in->prop_box"),
+    (U, "|| in->menu_title >= 0 || in->menu_item >= 0 || in->menu_away || in->ctx_row >= 0 || in->ctx_here || in->ctx_side >= 0 || in->ctx_crumb >= 0 || in->ctx_tab >= 0 || in->prop_box", " || in->menu_title >= 0 || in->menu_item >= 0 || in->ctx_row >= 0 || in->ctx_here || in->ctx_side >= 0 || in->ctx_crumb >= 0 || in->ctx_tab >= 0 || in->prop_box"),
     # Not a mutant: dropping O_EXCL in op_mkfile is inert without a race, as name_free picked a
     # name not there; kept so another program's file made in between is never truncated.
     (O, "        if (!name_free(dir, name, false, false, false, made, cap) || !path_put(p, sizeof p, dir, str_from_c(made)))\n            return err_set(err, \"no free name for %.*s\", STR_ARG(name)), false;\n        if (!ops_allowed(p, err)) return false;\n        int fd", "        if (!name_free(dir, name, false, false, false, made, cap) || !path_put(p, sizeof p, dir, str_from_c(made)))\n            return err_set(err, \"no free name for %.*s\", STR_ARG(name)), false;\n        int fd"),
@@ -1105,10 +1105,10 @@ MUTANTS += [
     (U, "        case UK_PROPERTIES: return ui_props_open(u);", ""),
     (U, "        case UK_TERMINAL: return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : UA_TERMINAL, 0, false };", "        case UK_TERMINAL: return (UiAction){ UA_TERMINAL, 0, false };"),
     (U, "    case UM_PROPERTIES: return ui_props_open(u);", ""),
-    (U, "|| in->menu_away || in->ctx_row >= 0 || in->ctx_here || in->ctx_side >= 0 || in->ctx_crumb >= 0 || in->prop_box >= 0 ||\n", "|| in->menu_away || in->ctx_row >= 0 || in->ctx_here || in->ctx_side >= 0 || in->ctx_crumb >= 0 ||\n"),
-    (U, ".menu_item = -1, .ctx_row = -1, .ctx_side = -1, .ctx_crumb = -1, .prop_box = -1, .ow_row = -1, .ow_drow = -1, .bmp_row = -1, .bmp_drow = -1 };", ".menu_item = -1, .ctx_row = -1, .ctx_side = -1, .ctx_crumb = -1, .prop_box = 0, .ow_row = -1, .ow_drow = -1 };"),
-    (U, ".menu_item = -1, .ctx_row = -1, .ctx_side = -1, .ctx_crumb = -1, .prop_box = -1, .ow_row = -1, .ow_drow = -1, .bmp_row = -1, .bmp_drow = -1 };", ".menu_item = -1, .ctx_row = -1, .ctx_side = -1, .ctx_crumb = -1, .prop_box = -1, .ow_row = 0, .ow_drow = -1 };"),
-    (U, ".menu_item = -1, .ctx_row = -1, .ctx_side = -1, .ctx_crumb = -1, .prop_box = -1, .ow_row = -1, .ow_drow = -1, .bmp_row = -1, .bmp_drow = -1 };", ".menu_item = -1, .ctx_row = -1, .ctx_side = -1, .ctx_crumb = -1, .prop_box = -1, .ow_row = -1, .ow_drow = 0 };"),
+    (U, "|| in->menu_away || in->ctx_row >= 0 || in->ctx_here || in->ctx_side >= 0 || in->ctx_crumb >= 0 || in->ctx_tab >= 0 || in->prop_box >= 0 ||\n", "|| in->menu_away || in->ctx_row >= 0 || in->ctx_here || in->ctx_side >= 0 || in->ctx_crumb >= 0 || in->ctx_tab >= 0 ||\n"),
+    (U, ".menu_item = -1, .ctx_row = -1, .ctx_side = -1, .ctx_crumb = -1, .ctx_tab = -1, .prop_box = -1, .ow_row = -1, .ow_drow = -1, .bmp_row = -1, .bmp_drow = -1 };", ".menu_item = -1, .ctx_row = -1, .ctx_side = -1, .ctx_crumb = -1, .ctx_tab = -1, .prop_box = 0, .ow_row = -1, .ow_drow = -1 };"),
+    (U, ".menu_item = -1, .ctx_row = -1, .ctx_side = -1, .ctx_crumb = -1, .ctx_tab = -1, .prop_box = -1, .ow_row = -1, .ow_drow = -1, .bmp_row = -1, .bmp_drow = -1 };", ".menu_item = -1, .ctx_row = -1, .ctx_side = -1, .ctx_crumb = -1, .ctx_tab = -1, .prop_box = -1, .ow_row = 0, .ow_drow = -1 };"),
+    (U, ".menu_item = -1, .ctx_row = -1, .ctx_side = -1, .ctx_crumb = -1, .ctx_tab = -1, .prop_box = -1, .ow_row = -1, .ow_drow = -1, .bmp_row = -1, .bmp_drow = -1 };", ".menu_item = -1, .ctx_row = -1, .ctx_side = -1, .ctx_crumb = -1, .ctx_tab = -1, .prop_box = -1, .ow_row = -1, .ow_drow = 0 };"),
     # ---- the files' cursor round the ends (Michael, 2026-10-25)
     (U, "        l->sel = by < 0 ? (l->sel == 0 ? l->n - 1 : l->sel - 1) : (l->sel == l->n - 1 ? 0 : l->sel + 1);", "        l->sel = by < 0 ? (l->sel == 0 ? 0 : l->sel - 1) : (l->sel == l->n - 1 ? 0 : l->sel + 1);"),
     (U, "        l->sel = by < 0 ? (l->sel == 0 ? l->n - 1 : l->sel - 1) : (l->sel == l->n - 1 ? 0 : l->sel + 1);", "        l->sel = by < 0 ? (l->sel == 0 ? l->n - 1 : l->sel - 1) : (l->sel == l->n - 1 ? l->sel : l->sel + 1);"),
@@ -1494,7 +1494,7 @@ MUTANTS += [
 ]
 # ---- F8 step 1: the files' right-click menus
 MUTANTS += [
-    (U, ".menu_item = -1, .ctx_row = -1, .ctx_side = -1, .ctx_crumb = -1, .prop_box = -1,", ".menu_item = -1, .ctx_row = 0, .ctx_side = -1, .ctx_crumb = -1, .prop_box = -1,"),
+    (U, ".menu_item = -1, .ctx_row = -1, .ctx_side = -1, .ctx_crumb = -1, .ctx_tab = -1, .prop_box = -1,", ".menu_item = -1, .ctx_row = 0, .ctx_side = -1, .ctx_crumb = -1, .ctx_tab = -1, .prop_box = -1,"),
     (U, "    if (u->menu >= UI_MENUS && it == UM_OPEN_TAB) return u->ctx_dir && !u->in_trash;", "    if (u->menu >= UI_MENUS && it == UM_OPEN_TAB) return u->ctx_dir;"),
     (U, "    if (u->menu >= UI_MENUS && it == UM_OPEN_TAB) return u->ctx_dir && !u->in_trash;", ""),
     (U, "    if (u->menu >= UI_MENUS && it == UM_RENAME) return u->marked <= 1;", ""),
@@ -1519,7 +1519,7 @@ MUTANTS += [
     (U, "        u->list.sel = row;\n        ui_ctx_open", "        ui_ctx_open"),
     (U, "    if (!prompt && in->ctx_row >= 0 && u->list.top + in->ctx_row < u->list.n) {", "    if (in->ctx_row >= 0 && u->list.top + in->ctx_row < u->list.n) {"),
     (U, "    if (!prompt && in->ctx_here) {\n        ui_mark_clear(u);", "    if (!prompt && in->ctx_here) {"),
-    (U, " || in->ctx_row >= 0 || in->ctx_here || in->ctx_side >= 0 || in->ctx_crumb >= 0 || in->prop_box >= 0 ||", " || in->prop_box >= 0 ||"),
+    (U, " || in->ctx_row >= 0 || in->ctx_here || in->ctx_side >= 0 || in->ctx_crumb >= 0 || in->ctx_tab >= 0 || in->prop_box >= 0 ||", " || in->prop_box >= 0 ||"),
     (U, "UK_CONTEXT && !u->editing && !(u->finding && u->find_keys)", "UK_CONTEXT && !(u->finding && u->find_keys)"),
     (U, "UK_CONTEXT && !u->editing && !(u->finding && u->find_keys) && !u->jobs_focus) {", "UK_CONTEXT && !u->editing && !u->jobs_focus) {"),
     (U, "            else if (!u->side_focus) ui_ctx_open(u, u->list.n > 0 ? UI_CTX_ENTRY : UI_CTX_HERE, names, true);", "            else if (!u->side_focus) ui_ctx_open(u, UI_CTX_ENTRY, names, true);"),
@@ -1583,5 +1583,15 @@ MUTANTS += [
     (U, "            else if (u->side_focus && u->side.n > 0 && !ui_side_head(u, u->side.sel)) ui_folder_open(u, u->side.sel, -1, true);", "            else if (u->side_focus && u->side.n > 0) ui_folder_open(u, u->side.sel, -1, true);"),
     (U, "            else if (!u->side_focus) ui_ctx_open(u, u->list.n > 0 ? UI_CTX_ENTRY : UI_CTX_HERE, names, true);", "            else ui_ctx_open(u, u->list.n > 0 ? UI_CTX_ENTRY : UI_CTX_HERE, names, true);"),
     (U, " && !u->editing && !(u->finding && u->find_keys) && !u->jobs_focus) {\n            if (u->crumb_focus)", " && !u->editing && !(u->finding && u->find_keys)) {\n            if (u->crumb_focus)"),
-    (U, " || in->ctx_side >= 0 || in->ctx_crumb >= 0 || in->prop_box >= 0 ||", " || in->prop_box >= 0 ||"),
+    (U, " || in->ctx_side >= 0 || in->ctx_crumb >= 0 || in->ctx_tab >= 0 || in->prop_box >= 0 ||", " || in->prop_box >= 0 ||"),
+]
+# ---- F8 step 4: a tab's menu
+MUTANTS += [
+    (U, "    case UM_TAB_LEFT: return u->tab_at > 0;", "    case UM_TAB_LEFT: return true;"),
+    (U, "    case UM_TAB_RIGHT: return u->tab_at < u->tab_n - 1;", "    case UM_TAB_RIGHT: return u->tab_at < u->tab_n;"),
+    (U, "    case UM_TAB_OTHERS: return u->tab_n > 1;", "    case UM_TAB_OTHERS: return true;"),
+    (U, "    case UM_TAB_OTHERS: return (UiAction){ UA_TAB_OTHERS, 0, false };", ""),
+    (U, "    if (!prompt && in->ctx_tab >= 0 && in->ctx_tab < u->tab_n) {", "    if (!prompt && in->ctx_tab >= 0) {"),
+    (U, "        return (UiAction){ UA_TAB_SHOW, in->ctx_tab, false };", "        return (UiAction){ UA_NONE, in->ctx_tab, false };"),
+    (U, " || in->ctx_tab >= 0 || in->prop_box >= 0 ||", " || in->prop_box >= 0 ||"),
 ]

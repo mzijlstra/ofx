@@ -737,6 +737,11 @@ button, `trash_any`). Its entries reach gui/ as `UA_FOLDER_DO` (`folder_do`), ex
 Bookmarks' own (on that line: `UA_BM_UP`, `UA_BM_DOWN`, `UA_BM_REMOVE`, the panel opened, renaming),
 Empty Trash's question and Properties (`UA_PROPS` index 2). `copy_targets` takes one path.
 
+**Step 4 built (2026-10-27): a tab.** `UI_CTX_TAB`: a right press on a tab shows it (`UA_TAB_SHOW`)
+and opens the menu on it, now the current one: New Tab, Move Tab Left and Right (their keys;
+greyed at the ends from `Ui.tab_at`, `tab_n`), Close (File's, Ctrl+W: "Close Tab" would need a second
+shortcut row for the same key), Close Other Tabs (`UA_TAB_OTHERS`, from the last).
+
 ## F6.4 design (2026-10-24)
 
 **Asked (Michael):** previews in the icon view, from the freedesktop thumbnail cache shared with

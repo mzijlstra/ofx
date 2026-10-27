@@ -1346,6 +1346,10 @@ static void act(UiAction a)
         break;
     }
     case UA_TAB_MOVE: ui_tabs_move(&tabbar, (int)a.index); break;
+    case UA_TAB_OTHERS:   // (F8) from the last, so each place stays right as the ones after it go
+        for (int i = tabbar.n - 1; i >= 0; i--)
+            if (i != tabbar.cur) tab_close(i);
+        break;
     case UA_TAB_BG_ROW: {
         char path[PATH_MAX];
         if (a.index < app.list.n && !app.ui.in_trash && join(path, sizeof path, app.cwd, app.list.e[a.index].name)) tab_open_bg(path);
@@ -3259,6 +3263,7 @@ static void menu_facts(void)
     char p[PATH_MAX];
     u->sel_link = e && (e->kind == K_LINK_FILE || e->kind == K_LINK_DIR);
     u->sel_bm = e && kind_is_dir(e->kind) && join(p, sizeof p, app.cwd, e->name) && bm_find(&bmarks, p) >= 0;
+    u->tab_at = tabbar.cur, u->tab_n = tabbar.n;   // (the tab menu's moves, F8)
     u->bm_total = bmarks.n, u->bm_more = 0, u->bm_more_at = -1;
     for (int i = 0, local = 0; i < bmarks.n; i++) {
         if (!bmarks.b[i].path[0] || local++ < UI_MENU_BOOKMARKS) continue;
@@ -3725,7 +3730,8 @@ static void right_at(UiInput *in, float x, float y)
     }
     if (modal_kind() != MODAL_NONE) return;
     app.ctx_x = x, app.ctx_y = y;
-    if (h.row >= 0) in->ctx_row = h.row;
+    if (h.tab >= 0) in->ctx_tab = h.tab;
+    else if (h.row >= 0) in->ctx_row = h.row;
     else if (h.side >= 0) in->ctx_side = h.side;
     else if (h.bar == UB_CRUMB) in->ctx_crumb = h.crumb;
     else if (in_box(CLAY_ID("list"), x, y)) in->ctx_here = true;

@@ -416,7 +416,7 @@ MUTANTS = [
     (G, '    if ((m == GLFW_MOD_SHIFT && key == GLFW_KEY_F10) || (m == 0 && key == GLFW_KEY_MENU)) return UK_CONTEXT;', '    if (m == GLFW_MOD_SHIFT && key == GLFW_KEY_F10) return UK_CONTEXT;', 'f8'),
     (G, '        if (app.ui.menu_on && app.ui.menu >= UI_MENUS) layout_menu(app.ui.menu);   // a right-click menu (F8)', '', 'f8'),
     (G, '    if (app.ui.menu_on) {\n        in->menu_away = true;\n        return;\n    }\n    if (modal_kind()', '    if (modal_kind()', 'f8'),
-    (G, '    if (h.row >= 0) in->ctx_row = h.row;', '    if (false) in->ctx_row = h.row;', 'f8'),
+    (G, '    else if (h.row >= 0) in->ctx_row = h.row;', '    else if (false) in->ctx_row = h.row;', 'f8'),
     (G, '    else if (in_box(CLAY_ID("list"), x, y)) in->ctx_here = true;', '    else in->ctx_here = true;', 'f8'),
     (G, '    else if (in_box(CLAY_ID("list"), x, y)) in->ctx_here = true;', '', 'f8'),
     (G, '        if (x + sz.x > w) x -= sz.x;', '', 'f8'),
@@ -466,6 +466,10 @@ MUTANTS = [
     (G, '    case UA_PROPS: props_open(a.index == 1 ? app.cwd : a.index == 2 ? app.ctx_path : NULL); break;', '    case UA_PROPS: props_open(a.index == 1 ? app.cwd : NULL); break;', 'f8'),
     (G, '    case UA_FOLDER_DO: folder_do((UiMenuItem)a.index); break;', '', 'f8'),
     (G, '        if (f.found) {   // under the sidebar row or path button (F8)', '        if (false) {   // under the sidebar row or path button (F8)', 'f8'),
+    # ---- F8 step 4: a tab's menu
+    (G, '    if (h.tab >= 0) in->ctx_tab = h.tab;\n    else if', '    if (false) in->ctx_tab = h.tab;\n    else if', 'f8'),
+    (G, '    u->tab_at = tabbar.cur, u->tab_n = tabbar.n;   // (the tab menu', '    u->tab_at = 0, u->tab_n = tabbar.n;   // (the tab menu', 'f8'),
+    (G, '            if (i != tabbar.cur) tab_close(i);', '            if (i != 0) tab_close(i);', 'f8'),
     # ---- quit doesn't wait for a hung drive (2026-10-26: no mutant was hang's or f6b's alone)
     (K, '    if (pthread_timedjoin_np(counts.thread, NULL, &until) != 0) pthread_detach(counts.thread);', '    pthread_join(counts.thread, NULL);', 'hang'),
     ('gui/space.c', '    if (pthread_timedjoin_np(space.thread, NULL, &until) != 0) pthread_detach(space.thread);', '    pthread_join(space.thread, NULL);', 'f6'),

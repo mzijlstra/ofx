@@ -134,6 +134,7 @@ typedef struct {
     int     ctx_row;
     bool    ctx_here;
     int     ctx_side, ctx_crumb;
+    int     ctx_tab;     // a tab (its place in the bar), -1 for none (F8)
     int     prop_box;    // a checkbox of the Properties panel's grid pressed (0..8, F7.2), -1 for none
     // Open With (F7.3): the apps gui/ lists, in its order (their names, which the filter
     // matches); a row pressed or double-clicked (its place on screen), the field pressed, a
@@ -205,6 +206,7 @@ typedef enum {
     UA_BM_RENAME,   // the field's Enter: Ui.bmp_text is its label (empty: none)
     UA_MAKE_LINK,   // a symbolic link "Link to <name>" beside each marked entry (or the cursor's) (F8)
     UA_FOLLOW,      // index: the entry, a link: to its target's folder, the target selected (F8)
+    UA_TAB_OTHERS,  // every tab but the current one closed (F8)
     UA_FOLDER_DO,   // index: a UiMenuItem of the folder menu, for the folder it opened on (Ui.ctx_side or ctx_crumb, F8)
 } UiActionKind;
 // A right-click menu's entry on a folder of the files (F8) acts on that folder, not the folder
@@ -236,7 +238,7 @@ typedef enum {
     UM_SHORTCUTS, UM_ABOUT,
     UM_OPEN_TAB, UM_EMPTY_TRASH, UM_HERE_PROPS, UM_OPEN_WINDOW, UM_PASTE_INTO, UM_TERMINAL_IN, UM_FOLLOW, UM_BOOKMARK_IT,
     UM_OPEN_IT, UM_CUT_IT, UM_COPY_IT, UM_BM_RENAME_IT, UM_BM_UP_IT, UM_BM_DOWN_IT, UM_BM_REMOVE_IT, UM_BM_EDIT_IT, UM_EJECT_IT,
-    UM_EMPTY_IT, UM_PROPS_IT,
+    UM_EMPTY_IT, UM_PROPS_IT, UM_TAB_LEFT, UM_TAB_RIGHT, UM_TAB_OTHERS,
     UM_ITEMS
 } UiMenuItem;
 
@@ -327,6 +329,10 @@ static const struct { const char *label, *key, *word; UiEvent ev; char mark; } U
     [UM_EJECT_IT] = { "Eject", "", "eject" },
     [UM_EMPTY_IT] = { "Empty Trash\xE2\x80\xA6", "", "empty-it" },
     [UM_PROPS_IT] = { "Properties\xE2\x80\xA6", "", "properties-it" },
+    // and on a tab
+    [UM_TAB_LEFT] = { "Move Tab Left", "Ctrl+Shift+PgUp", "tab-left", { UK_TAB_LEFT, 0 } },
+    [UM_TAB_RIGHT] = { "Move Tab Right", "Ctrl+Shift+PgDn", "tab-right", { UK_TAB_RIGHT, 0 } },
+    [UM_TAB_OTHERS] = { "Close Other Tabs", "", "tab-others" },
     [UM_BM_0] = { "", "", "bm-0", .mark = 'r' }, [UM_BM_1] = { "", "", "bm-1", .mark = 'r' },
     [UM_BM_2] = { "", "", "bm-2", .mark = 'r' }, [UM_BM_3] = { "", "", "bm-3", .mark = 'r' },
     [UM_BM_4] = { "", "", "bm-4", .mark = 'r' }, [UM_BM_5] = { "", "", "bm-5", .mark = 'r' },
@@ -367,6 +373,8 @@ static const UiMenuItem UI_MENU_CTX_FOLDER[] = {
     UM_OPEN_IT, UM_OPEN_TAB, UM_OPEN_WINDOW, UM_TERMINAL_IN, UM_SEP, UM_CUT_IT, UM_COPY_IT, UM_PASTE_INTO, UM_SEP, UM_BOOKMARK_IT,
     UM_BM_RENAME_IT, UM_BM_UP_IT, UM_BM_DOWN_IT, UM_BM_REMOVE_IT, UM_BM_EDIT_IT, UM_SEP, UM_EJECT_IT, UM_EMPTY_IT, UM_SEP, UM_PROPS_IT,
 };
+// A tab (the current one: a right press on another shows it first).
+static const UiMenuItem UI_MENU_CTX_TAB[] = { UM_NEW_TAB, UM_SEP, UM_TAB_LEFT, UM_TAB_RIGHT, UM_SEP, UM_CLOSE, UM_TAB_OTHERS };
 static const UiMenuItem UI_MENU_CTX_HERE[] = {
     UM_NEW_FOLDER, UM_NEW_FILE, UM_EMPTY_TRASH, UM_SEP, UM_PASTE, UM_SELECT_ALL, UM_SEP, UM_TERMINAL, UM_HIDDEN, UM_SEP,
     UM_ADD_BOOKMARK, UM_SEP, UM_HERE_PROPS,
@@ -384,9 +392,10 @@ static const struct { const char *title; char letter; const UiMenuItem *items; i
     { "entry", 0, UI_MENU_CTX_ENTRY, sizeof UI_MENU_CTX_ENTRY / sizeof UI_MENU_CTX_ENTRY[0] },
     { "here", 0, UI_MENU_CTX_HERE, sizeof UI_MENU_CTX_HERE / sizeof UI_MENU_CTX_HERE[0] },
     { "folder", 0, UI_MENU_CTX_FOLDER, sizeof UI_MENU_CTX_FOLDER / sizeof UI_MENU_CTX_FOLDER[0] },
+    { "tab", 0, UI_MENU_CTX_TAB, sizeof UI_MENU_CTX_TAB / sizeof UI_MENU_CTX_TAB[0] },
 };
 // The bar's menus come first, then the right-click ones.
-enum { UI_MENUS = 6, UI_CTX_ENTRY = UI_MENUS, UI_CTX_HERE, UI_CTX_FOLDER, UI_MENUS_ALL };
+enum { UI_MENUS = 6, UI_CTX_ENTRY = UI_MENUS, UI_CTX_HERE, UI_CTX_FOLDER, UI_CTX_TAB, UI_MENUS_ALL };
 _Static_assert(sizeof UI_MENU / sizeof UI_MENU[0] == UI_MENUS_ALL, "UI_MENU: the bar's menus, then the right-click ones");
 
 // ---- the Keyboard Shortcuts panel (F7.5, docs/plan.md "F7.5 decided") ----------------------------
@@ -441,7 +450,8 @@ static const struct { UiKeySection sec; const char *action, *key, *key2; } UI_KE
     { KS_TABS, "Close", "Ctrl+W", "" },
     { KS_TABS, "The next tab", "Ctrl+Tab", "Ctrl+PgDn" },
     { KS_TABS, "The previous tab", "Ctrl+Shift+Tab", "Ctrl+PgUp" },
-    { KS_TABS, "Move the tab", "Ctrl+Shift+PgUp", "Ctrl+Shift+PgDn" },
+    { KS_TABS, "Move Tab Left", "Ctrl+Shift+PgUp", "" },
+    { KS_TABS, "Move Tab Right", "Ctrl+Shift+PgDn", "" },
     { KS_TABS, "A tab by its place", "Alt+1 " "\xE2\x80\xA6" " Alt+9", "" },
     { KS_TABS, "Open in New Tab", "Middle click", "" },
     { KS_TABS, "Close All Windows", "Ctrl+Q", "" },
@@ -610,6 +620,8 @@ typedef struct {
     int    ctx_side, ctx_crumb;
     bool   ctx_trash, ctx_place, ctx_bmed, ctx_eject, ctx_full;
     int    ctx_bmk, ctx_bms;
+    // The tabs, from gui/ each frame (menu_facts): the current one's place, how many (F8's tab menu).
+    int    tab_at, tab_n;
     // The Bookmarks menu (F7.5), from gui/ too: how many local bookmarks it lists (at most
     // UI_MENU_BOOKMARKS), the one that is the folder shown (-1 none), and whether that folder can be
     // bookmarked (not one already, not the trash view, the file not full).
@@ -661,7 +673,7 @@ static UiInput ui_input_none(void)
 {
     return (UiInput){ .click = -1, .dclick = -1, .side_click = -1, .header = -1, .click_mods = 0, .bar = UB_NONE, .crumb = -1,
                       .tab_click = -1, .tab_close = -1, .mid_row = -1, .mid_side = -1, .mid_crumb = -1, .modal = 0, .job_x = -1, .side_mode = -1, .side_twisty = -1, .side_eject = -1,
-                      .zoom_to = -1, .menu_title = -1, .menu_item = -1, .ctx_row = -1, .ctx_side = -1, .ctx_crumb = -1, .prop_box = -1, .ow_row = -1, .ow_drow = -1, .bmp_row = -1, .bmp_drow = -1 };
+                      .zoom_to = -1, .menu_title = -1, .menu_item = -1, .ctx_row = -1, .ctx_side = -1, .ctx_crumb = -1, .ctx_tab = -1, .prop_box = -1, .ow_row = -1, .ow_drow = -1, .bmp_row = -1, .bmp_drow = -1 };
 }
 
 static isize ui_clamp(isize v, isize lo, isize hi)
@@ -789,7 +801,7 @@ static bool ui_input_acts(const UiInput *in)
     return in->nev > 0 || in->click >= 0 || in->dclick >= 0 || in->side_click >= 0 || in->header >= 0 || in->bar != UB_NONE ||
            in->tab_click >= 0 || in->tab_close >= 0 || in->mid_row >= 0 || in->mid_side >= 0 || in->mid_crumb >= 0 || in->modal > 0 ||
            in->backs > 0 || in->forwards > 0 || in->job_x >= 0 || in->side_mode >= 0 || in->side_twisty >= 0 || in->side_eject >= 0 ||
-           in->zoom_wheel != 0 || in->zoom_to >= 0 || in->menu_title >= 0 || in->menu_item >= 0 || in->menu_away || in->ctx_row >= 0 || in->ctx_here || in->ctx_side >= 0 || in->ctx_crumb >= 0 || in->prop_box >= 0 ||
+           in->zoom_wheel != 0 || in->zoom_to >= 0 || in->menu_title >= 0 || in->menu_item >= 0 || in->menu_away || in->ctx_row >= 0 || in->ctx_here || in->ctx_side >= 0 || in->ctx_crumb >= 0 || in->ctx_tab >= 0 || in->prop_box >= 0 ||
            in->ow_row >= 0 || in->ow_drow >= 0 || in->ow_field || in->toggle > 0 || in->find_x || in->find_field || in->find_step ||
            in->bmp_row >= 0 || in->bmp_drow >= 0 || in->bmp_btn || in->ow_wheel != 0;   // (a panel's wheel: Open With, Keyboard Shortcuts)
 }
@@ -1549,6 +1561,9 @@ static bool ui_menu_enabled(const Ui *u, UiMenuItem it)
     case UM_ADD_BOOKMARK: return u->can_bookmark && !u->in_trash;
     case UM_BM_0: case UM_BM_1: case UM_BM_2: case UM_BM_3: case UM_BM_4: case UM_BM_5: case UM_BM_6: case UM_BM_7: return true;
     case UM_EDIT_BOOKMARKS: case UM_BM_MORE: case UM_SHORTCUTS: case UM_ABOUT: return true;
+    case UM_TAB_LEFT: return u->tab_at > 0;
+    case UM_TAB_RIGHT: return u->tab_at < u->tab_n - 1;
+    case UM_TAB_OTHERS: return u->tab_n > 1;
     case UM_OPEN_TAB: case UM_EMPTY_TRASH: case UM_OPEN_WINDOW: case UM_TERMINAL_IN: case UM_FOLLOW: case UM_BOOKMARK_IT: return files;
     case UM_PASTE_INTO: return files && u->can_paste;
     case UM_HERE_PROPS: return true;
@@ -2001,6 +2016,7 @@ static UiAction ui_menu_pick(Ui *u, UiMenuItem it)
     case UM_OPEN_WITH: return ui_ow_open(u);
     case UM_ABOUT: return u->about = true, (UiAction){ UA_NONE, 0, false };
     case UM_OPEN_TAB: return (UiAction){ UA_TAB_BG_ROW, u->list.sel, false };
+    case UM_TAB_OTHERS: return (UiAction){ UA_TAB_OTHERS, 0, false };
     case UM_EMPTY_TRASH: return u->empty_asking = true, (UiAction){ UA_NONE, 0, false };
     case UM_HERE_PROPS: return u->props = true, u->prop_at = 0, (UiAction){ UA_PROPS, 1, false };   // (index 1: the folder shown)
     case UM_OPEN_WINDOW: return (UiAction){ UA_NEW_WINDOW, u->list.sel, true };
@@ -2254,6 +2270,11 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
     if (!prompt && in->ctx_crumb >= 0 && in->ctx_crumb < in->crumb_n) {
         ui_folder_open(u, -1, in->ctx_crumb, false);
         return (UiAction){ UA_NONE, 0, false };
+    }
+    // On a tab: its menu, the tab shown (gui/ shows it; the menu acts on the current one).
+    if (!prompt && in->ctx_tab >= 0 && in->ctx_tab < u->tab_n) {
+        ui_menu_open(u, UI_CTX_TAB, false);   // (it closes an edit line, as the bar's menus do)
+        return (UiAction){ UA_TAB_SHOW, in->ctx_tab, false };
     }
     // The Properties panel's pointer (F7.2): a checkbox takes the focus and flips; Close closes.
     if (u->props && !u->quit_asking && !u->full_told && in->prop_box >= 0 && in->prop_box < 9) {

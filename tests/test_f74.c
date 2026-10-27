@@ -50,6 +50,7 @@ static void test_menu_f74(void)
     for (int it = 1; it < UM_ITEMS; it++) {
         UiEvent ev = UI_MENU_ITEM[it].ev;
         if (!ev.key && !ev.ch) continue;
+        if (it >= UM_OPEN_TAB) continue;   // (a right-click menu's own: test_f8.c)
         for (int pointer = 0; pointer < 2; pointer++) {
             Ui a = menu_all_on(m1), b = menu_all_on(m2);
             a.list.sel = b.list.sel = 1;
