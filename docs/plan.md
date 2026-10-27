@@ -400,6 +400,15 @@ menu's 8 slots (`UM_BM_0`..`7`) show while there is a local bookmark for them, l
 the folder shown marked; the line above them hides with none (`ui_menu_sep_shown`). watch.c
 watches the file's folder (`bm_wd`); a change to `bookmarks` reads the places again.
 
+**Step 2 (2026-10-27): Edit Bookmarks**, a panel (`Ui.bmp`, gui/bookmarks.c) over the file's every
+line, a local one's name and path, another's label and URI: Delete removes, F2 renames in a field
+(empty: the folder's name shows), Alt+Up and Alt+Down move, Enter goes there (another scheme:
+ofx says it opens local folders only), Esc closes; buttons for each, a double click goes. Ctrl+B,
+Bookmarks → Edit Bookmarks…, and "N more in Edit Bookmarks…" (on the first not listed). Each change
+reads the file again and finds the line by its text and how many like it come before
+(`bm_locate`), so a change made elsewhere meanwhile isn't undone; the panel follows the watch's
+reloads, its cursor on the same line. A file past `BM_MAX` lines is left as it is.
+
 **F7.1 as built (2026-10-25):**
 - `ui/ui.c`: the menus as tables (`UI_MENU`, `UI_MENU_ITEM`: label, key, a word for the tests);
   `ui_menu_enabled`, `ui_menu_event` (the keys), `ui_menu_hover` (the pointer), the clicks in

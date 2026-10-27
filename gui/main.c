@@ -196,6 +196,7 @@ static struct {
     int       crumb_lo, crumb_hi;   // the ones shown in the last frame
     bool      crumb_arrows;
     int       modal_hover;  // the modal panel's button under the pointer (UI_MODAL_*), 0 for none
+    int       bmp_btn_hover;   // Edit Bookmarks' button under it (1..4), 0 for none (F7.5)
     bool      findx_hover;  // the find bar's × under it
     int       findstep_hover;   // its chevron under it: -1 the previous, 1 the next, 0 none
     UiBar     bar_hover;    // the top bar button under the pointer
@@ -455,8 +456,25 @@ static void places_reload(void)
     if (app.ui.side_mode == SIDE_PLACES && app.ui.side.sel < app.places.n) keep = app.places.p[app.ui.side.sel];
     char bm[PATH_MAX];
     places_load(&scratch, &app.places, bookmarks_path(bm, sizeof bm), mountinfo_path());
+    // The Bookmarks menu's (F7.5). With Edit Bookmarks up its cursor stays on its line (the same
+    // text), wherever a change made elsewhere moved it.
+    char keep_uri[PATH_MAX * 3], keep_label[256];
+    bool keeping = app.ui.bmp && app.ui.bmp_list.sel < bmarks.n;
+    if (keeping) {
+        snprintf(keep_uri, sizeof keep_uri, "%.*s", STR_ARG(bmarks.b[app.ui.bmp_list.sel].uri));
+        snprintf(keep_label, sizeof keep_label, "%.*s", STR_ARG(bmarks.b[app.ui.bmp_list.sel].label));
+    }
     arena_reset(&bma);
-    bm_parse(&bma, read_file(&bma, bm), &bmarks);   // the Bookmarks menu's (F7.5)
+    bm_parse(&bma, read_file(&bma, bm), &bmarks);
+    if (app.ui.bmp) {
+        int at = (int)app.ui.bmp_list.sel;
+        for (int i = 0; keeping && i < bmarks.n; i++)
+            if (str_eq(bmarks.b[i].uri, str_from_c(keep_uri)) && str_eq(bmarks.b[i].label, str_from_c(keep_label))) {
+                at = i;
+                break;
+            }
+        ui_set(&app.ui.bmp_list, bmarks.n, at >= bmarks.n ? bmarks.n - 1 : at);
+    }
     space_ask(&app.places, app.cwd);
     isize sel = 0;
     for (int i = 0; i < app.places.n; i++) {
@@ -1168,6 +1186,8 @@ static void crumb_go(int i)
     if (strcmp(path, app.cwd) != 0) go_to(path, str_from_c(below), 0);
 }
 
+static void bmp_act(UiAction a);   // Edit Bookmarks (gui/bookmarks.c, F7.5)
+
 static void act(UiAction a)
 {
     Err err;
@@ -1310,6 +1330,7 @@ static void act(UiAction a)
     case UA_UNDO: undo_last(); break;
     case UA_RELOAD: app.reloads_asked++, reload(); break;
     case UA_TRASH_VIEW: go_to(TRASH_URI, STR_EMPTY, 0); break;
+    case UA_BM_EDIT: case UA_BM_GO: case UA_BM_NAME: case UA_BM_REMOVE: case UA_BM_UP: case UA_BM_DOWN: case UA_BM_RENAME: bmp_act(a); break;
     case UA_ADD_BOOKMARK: bookmark_add(); break;
     case UA_BOOKMARK: {
         const Bookmark *b = bm_menu((int)a.index);
@@ -1540,12 +1561,14 @@ static int list_cells(void)
 
 // The list's rows and columns for the window as it is now.
 static int  ow_rows(int h);   // Open With (gui/openwith.c, F7.3)
+static int  bmp_rows(int h);  // Edit Bookmarks (gui/bookmarks.c, F7.5)
 
 static void list_fit(void)
 {
     ui_set_cols(&app.ui.list, list_cols(GetScreenWidth()));
     ui_resize(&app.ui.list, list_rows(GetScreenHeight()));
     ui_resize(&app.ui.ow_list, ow_rows(GetScreenHeight()));   // Open With's list (F7.3)
+    ui_resize(&app.ui.bmp_list, bmp_rows(GetScreenHeight()));   // Edit Bookmarks' (F7.5)
 }
 
 static int side_rows(int h)
@@ -2358,7 +2381,8 @@ static void layout_menu(int m)
                         }
                     }
                     const Bookmark *bk = it >= UM_BM_0 && it <= UM_BM_7 ? bm_menu(it - UM_BM_0) : NULL;
-                    text(bk ? fit(bm_label(bk), 360, true) : cz(UI_MENU_ITEM[it].label), on ? cc(t->fg) : off);
+                    if (it == UM_BM_MORE) text(cz(arena_sprintf(&frame, "%d more in Edit Bookmarks\xE2\x80\xA6", app.ui.bm_more)), on ? cc(t->fg) : off);
+                    else text(bk ? fit(bm_label(bk), 360, true) : cz(UI_MENU_ITEM[it].label), on ? cc(t->fg) : off);
                 }
                 CLAY(CLAY_IDI("menu-gap", i), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(1) } } }) {}
                 if (UI_MENU_ITEM[it].key[0]) text(cz(UI_MENU_ITEM[it].key), on ? cc(t->fg_dim) : off);
@@ -2392,7 +2416,7 @@ static void layout_menubar(void)
 
 // ---- the modal panels (F5.1) --------------------------------------------------------------------
 
-typedef enum { MODAL_NONE, MODAL_DELETE, MODAL_CLASH, MODAL_CANCEL, MODAL_QUIT, MODAL_FULL, MODAL_EMPTY, MODAL_PROPS, MODAL_OW } ModalKind;
+typedef enum { MODAL_NONE, MODAL_DELETE, MODAL_CLASH, MODAL_CANCEL, MODAL_QUIT, MODAL_FULL, MODAL_EMPTY, MODAL_PROPS, MODAL_OW, MODAL_BM } ModalKind;
 
 // The panel on top, in the order ui_handle takes their keys.
 static ModalKind modal_kind(void)
@@ -2405,6 +2429,7 @@ static ModalKind modal_kind(void)
     if (jobs.asking >= 0 && app.ui.asking) return MODAL_CLASH;
     if (app.ui.props) return MODAL_PROPS;   // under any question (F7.2)
     if (app.ui.ow) return MODAL_OW;         // likewise (F7.3)
+    if (app.ui.bmp) return MODAL_BM;        // Edit Bookmarks (F7.5)
     return MODAL_NONE;
 }
 
@@ -2830,6 +2855,7 @@ static void layout_props_panel(void)
 }
 
 #include "openwith.c"
+#include "bookmarks.c"
 
 // The panel over the window, the rest darkened but still readable (Michael's pick over a blur,
 // 2026-10-21).
@@ -2840,6 +2866,7 @@ static void layout_modal(ModalKind k, float w, float h)
                                       .floating = { .attachTo = CLAY_ATTACH_TO_ROOT, .zIndex = 10 } }) {}
     if (k == MODAL_PROPS) layout_props_panel();
     else if (k == MODAL_OW) layout_ow_panel();
+    else if (k == MODAL_BM) layout_bmp_panel();
     else layout_modal_panel(k);
 }
 
@@ -3130,6 +3157,11 @@ static void menu_facts(void)
         u->bm_n++;
     }
     u->can_bookmark = !u->in_trash && !bmarks.full && bm_find(&bmarks, app.cwd) < 0;
+    u->bm_total = bmarks.n, u->bm_more = 0, u->bm_more_at = -1;
+    for (int i = 0, local = 0; i < bmarks.n; i++) {
+        if (!bmarks.b[i].path[0] || local++ < UI_MENU_BOOKMARKS) continue;
+        if (u->bm_more++ == 0) u->bm_more_at = i;
+    }
 }
 
 
@@ -3186,6 +3218,10 @@ static Clay_RenderCommandArray layout(int w, int h)
             if (modal_kind() == MODAL_PROPS) {
                 text(fit(S("Properties: \xE2\x86\x90 \xE2\x86\x91 \xE2\x86\x93 \xE2\x86\x92 (h j k l) move \xC2\xB7 Space or Enter changes \xC2\xB7 Esc closes"), foot_w, false),
                      cc(t->fg_dim));
+            } else if (modal_kind() == MODAL_BM) {
+                text(fit(str_from_c(app.ui.bmp_naming ? "Rename: Enter renames (empty: the folder's name) \xC2\xB7 Esc keeps the name"
+                                             : "Bookmarks: \xE2\x86\x91 \xE2\x86\x93 (k j) move \xC2\xB7 Enter goes there \xC2\xB7 Delete removes \xC2\xB7 F2 renames \xC2\xB7 "
+                                               "Alt+\xE2\x86\x91 Alt+\xE2\x86\x93 move it \xC2\xB7 Esc closes"), foot_w, false), cc(t->fg_dim));
             } else if (modal_kind() == MODAL_OW) {
                 text(fit(S("Open With: type to filter \xC2\xB7 Tab or \xE2\x86\x93 the list \xC2\xB7 Enter opens \xC2\xB7 Esc closes \xC2\xB7 "
                            "Alt+C/W/R case, words, regex \xC2\xB7 Alt+D default"), foot_w, false), cc(t->fg_dim));
@@ -3277,6 +3313,8 @@ static UiKey ui_key_of(int key, int mods)
     if (m == GLFW_MOD_ALT && key == GLFW_KEY_HOME) return UK_HOMEDIR;   // (F7.4, as Nemo)
     if (m == GLFW_MOD_ALT && key == GLFW_KEY_END) return UK_TRASH_VIEW;   // (Michael, 2026-10-27)
     if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_D) return UK_ADD_BOOKMARK;   // (F7.5, as Nemo)
+    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_B) return UK_EDIT_BOOKMARKS;
+    if (m == GLFW_MOD_ALT && key == GLFW_KEY_DOWN) return UK_ALT_DOWN;   // (Edit Bookmarks' move down)
     if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_R) return UK_RELOAD;
     if (m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT) && key == GLFW_KEY_I) return UK_INVERT;
     if (m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT) && key == GLFW_KEY_A) return UK_SELECT_MATCH;
@@ -3426,6 +3464,8 @@ typedef struct {
     bool  ow_field;     // its field
     int   toggle;       // a toggle of its field or of the find line (1..3), 0 for none
     int   find_step;    // the find bar's chevrons: -1 the previous, 1 the next, 0 none
+    int   bmp_row;      // a row of Edit Bookmarks' list (on screen), -1 for none (F7.5)
+    int   bmp_btn;      // one of its buttons (1..4), 0 for none
 } Hit;
 
 static bool in_box(Clay_ElementId id, float x, float y)
@@ -3437,7 +3477,7 @@ static bool in_box(Clay_ElementId id, float x, float y)
 
 static Hit hit_at(float x, float y)
 {
-    Hit h = { -1, -1, -1, UB_NONE, -1, -1, -1, 0, -1, -1, -1, -1, false, -1, -1, -1, -1, false, false, false, 0, 0 };
+    Hit h = { -1, -1, -1, UB_NONE, -1, -1, -1, 0, -1, -1, -1, -1, false, -1, -1, -1, -1, false, false, false, 0, 0, -1, 0 };
     // The find bar's toggles only without a panel or a menu over them (a click on Properties' OK
     // above them flipped one, 2026-10-26); Open With's are its panel's.
     for (int k = 1; k <= 4 && !h.toggle && (app.ui.ow || (app.ui.finding && modal_kind() == MODAL_NONE && !app.ui.menu_on)); k++)
@@ -3464,6 +3504,10 @@ static Hit hit_at(float x, float y)
         for (int r = 0; modal_kind() == MODAL_OW && r < app.ui.ow_list.rows && h.ow_row < 0; r++)
             if (in_box(CLAY_IDI("ow-row", r), x, y)) h.ow_row = r;
         h.ow_field = modal_kind() == MODAL_OW && !h.toggle && in_box(CLAY_ID("ow-field"), x, y);
+        for (int r = 0; modal_kind() == MODAL_BM && r < app.ui.bmp_list.rows && h.bmp_row < 0; r++)
+            if (in_box(CLAY_IDI("bmp-row", r), x, y)) h.bmp_row = r;
+        for (int k = 1; modal_kind() == MODAL_BM && k <= 4 && !h.bmp_btn; k++)
+            if (in_box(CLAY_IDI("bmp-btn", k), x, y)) h.bmp_btn = k;
         return h;
     }
     if (app.ui.finding) {
@@ -3531,6 +3575,11 @@ static void press_at(UiInput *in, float x, float y, int mods)
         else in->ow_row = h.ow_row;
     }
     in->ow_field = h.ow_field;
+    if (h.bmp_row >= 0) {
+        if (ui_press(&app.ow_press, app.ui.bmp_list.top + h.bmp_row, now_ms()) == 2) in->bmp_drow = h.bmp_row;
+        else in->bmp_row = h.bmp_row;
+    }
+    in->bmp_btn = h.bmp_btn;
     in->toggle = h.toggle;
     in->find_x = h.find_x, in->find_field = h.find_field, in->find_step = h.find_step;
     in->job_x = h.job_x;
@@ -3609,12 +3658,14 @@ static bool hover_at(float x, float y)
     bool changed = h.row != app.hover || h.side != app.side_hover || h.bar != app.bar_hover || h.crumb != app.crumb_hover ||
                    h.tab != app.tab_hover || h.tab_x != app.tab_x_hover || h.mode != app.mode_hover || h.eject != app.eject_hover ||
                    h.modal != app.modal_hover || h.job_x != app.jobx_hover || h.zoom != app.zoom_hover || h.menu_title != app.menu_title_hover ||
+                   h.bmp_btn != app.bmp_btn_hover ||
                    h.find_x != app.findx_hover || h.find_step != app.findstep_hover;
     app.menu_title_hover = h.menu_title;
     changed |= ui_menu_hover(&app.ui, h.menu_title, h.menu_item);
     app.hover = h.row, app.side_hover = h.side, app.bar_hover = h.bar, app.crumb_hover = h.crumb;
     app.tab_hover = h.tab, app.tab_x_hover = h.tab_x, app.mode_hover = h.mode, app.eject_hover = h.eject;
     app.modal_hover = h.modal, app.jobx_hover = h.job_x, app.zoom_hover = h.zoom, app.findx_hover = h.find_x, app.findstep_hover = h.find_step;
+    app.bmp_btn_hover = h.bmp_btn;
     // Onto another icon button (or off one): its tooltip waits UI_TIP_MS, the timer wakes the loop.
     if (ui_tip_hover(&app.tip, tip_target(h), now_ms())) {
         changed = true;

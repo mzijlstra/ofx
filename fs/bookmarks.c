@@ -123,3 +123,47 @@ static bool bm_write(const char *file, Str text, Err *err)
     unlink(tmp);
     return false;
 }
+
+// ---- Edit Bookmarks' changes (F7.5) -----------------------------------------------------------
+
+static bool bm_same(const Bookmark *x, const Bookmark *y)
+{
+    return str_eq(x->uri, y->uri) && str_eq(x->label, y->label);
+}
+
+// The place in now (the file read again) of line i of was (what the panel showed): the same text,
+// as many like it before it; -1 when it is gone or now has fewer of them, the file changed.
+static int bm_locate(const Bookmarks *now, const Bookmarks *was, int i)
+{
+    if (i < 0 || i >= was->n) return -1;
+    int before = 0;
+    for (int k = 0; k < i; k++) before += bm_same(&was->b[k], &was->b[i]);
+    for (int k = 0; k < now->n; k++)
+        if (bm_same(&now->b[k], &was->b[i]) && before-- == 0) return k;
+    return -1;
+}
+
+static void bm_remove(Bookmarks *bm, int i)
+{
+    if (i < 0 || i >= bm->n) return;
+    memmove(&bm->b[i], &bm->b[i + 1], sizeof bm->b[0] * (size_t)(bm->n - i - 1));
+    bm->n--;
+}
+
+// Lines i and j swapped (a move up or down).
+static void bm_swap(Bookmarks *bm, int i, int j)
+{
+    if (i < 0 || j < 0 || i >= bm->n || j >= bm->n) return;
+    Bookmark t = bm->b[i];
+    bm->b[i] = bm->b[j], bm->b[j] = t;
+}
+
+// Line i's label, trimmed; empty for none (the folder's name shows). A newline can't be in one.
+static void bm_rename(Arena *a, Bookmarks *bm, int i, Str label)
+{
+    if (i < 0 || i >= bm->n) return;
+    for (isize k = 0; k < label.len; k++)
+        if (label.p[k] == '\n' || label.p[k] == '\r') label.len = k;
+    label = str_trim(label);
+    bm->b[i].label = (Str){ arena_cstr(a, label), label.len };
+}

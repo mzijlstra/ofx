@@ -50,6 +50,7 @@ puts its service file in `~/.local/share/dbus-1/services`), and it exits when id
 | `~`, Alt+Home | home |
 | Alt+End | the trash view |
 | Ctrl+D | bookmark the folder shown (in the GTK bookmarks file, shared with Nemo); the Bookmarks menu (Alt+B) lists the first 8 and goes there |
+| Ctrl+B | Edit Bookmarks: every line of the file; Up/Down (`k`/`j`) move, Enter goes there, Delete removes, F2 renames, Alt+Up/Alt+Down move it, Esc closes |
 | Space, Ctrl+A | select the entry (and move on), select all; Esc clears |
 | Shift and a move | the arrows, Home/End or `H`/`J`/`K`/`L` with Shift: everything the cursor passes over joins the selection (as Shift+click), in the list and the icon view |
 | F2 | rename, in the row, the name up to its extension selected (a folder's whole name): Enter renames, Esc cancels |

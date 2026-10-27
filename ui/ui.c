@@ -72,6 +72,8 @@ typedef enum {
     UK_SELECT_MATCH,   // Ctrl+Shift+A: Select Items Matching, the find bar's select mode (F7.4)
     UK_TRASH_VIEW, // Alt+End: the trash view, as Alt+Home is home (Michael, 2026-10-27)
     UK_ADD_BOOKMARK,   // Ctrl+D: the folder shown, bookmarked (F7.5)
+    UK_EDIT_BOOKMARKS, // Ctrl+B: the Edit Bookmarks panel (F7.5)
+    UK_ALT_DOWN,   // Alt+Down: in Edit Bookmarks a bookmark down (Alt+Up, UK_PARENT, up); elsewhere nothing
 } UiKey;
 
 // The top bar's buttons (F4).
@@ -136,6 +138,9 @@ typedef struct {
     int     toggle;      // 4: Open With's "Always open … with this app" box (F7.3.1)
     bool    find_x;      // the find bar's × pressed
     bool    find_field;  // its field pressed: the keys go there
+    // Edit Bookmarks (F7.5): a row pressed or double-clicked (its place on screen), -1 for none; a
+    // button pressed (1 Remove, 2 Rename, 3 Move Up, 4 Move Down), 0 for none.
+    int     bmp_row, bmp_drow, bmp_btn;
     int     find_step;   // its chevrons: -1 the previous match, 1 the next, 0 none
 } UiInput;
 
@@ -184,6 +189,12 @@ typedef enum {
     UA_DUPLICATE,   // the marked entries (or the cursor's) copied beside themselves (Edit, F7.4)
     UA_ADD_BOOKMARK,   // the folder shown, added to the bookmarks file (F7.5)
     UA_BOOKMARK,    // index: the menu's bookmark (0..UI_MENU_BOOKMARKS-1, gui/'s list of them) to go to
+    // Edit Bookmarks (F7.5); index: the line in the file
+    UA_BM_EDIT,     // the panel opened (Ui.bmp): gui/ reads the file again
+    UA_BM_GO,       // to that bookmark; the panel closed
+    UA_BM_REMOVE, UA_BM_UP, UA_BM_DOWN,
+    UA_BM_NAME,     // its rename field opened: gui/ puts its label there
+    UA_BM_RENAME,   // the field's Enter: Ui.bmp_text is its label (empty: none)
 } UiActionKind;
 
 typedef struct {
@@ -208,7 +219,7 @@ typedef enum {
     UM_RELOAD, UM_SIDE_PLACES, UM_SIDE_TREE, UM_SIDE_NONE, UM_HIDDEN, UM_SORT_NAME, UM_SORT_SIZE, UM_SORT_MTIME, UM_SORT_REVERSE,
     UM_ZOOM_IN, UM_ZOOM_OUT, UM_ZOOM_RESET, UM_VIEW_LIST, UM_VIEW_ICONS,
     UM_PARENT, UM_BACK, UM_FORWARD, UM_HOME, UM_TRASH_VIEW, UM_FIND, UM_LOCATION, UM_TERMINAL,
-    UM_ADD_BOOKMARK, UM_BM_0, UM_BM_1, UM_BM_2, UM_BM_3, UM_BM_4, UM_BM_5, UM_BM_6, UM_BM_7,
+    UM_ADD_BOOKMARK, UM_EDIT_BOOKMARKS, UM_BM_0, UM_BM_1, UM_BM_2, UM_BM_3, UM_BM_4, UM_BM_5, UM_BM_6, UM_BM_7, UM_BM_MORE,
     UM_ITEMS
 } UiMenuItem;
 
@@ -268,6 +279,8 @@ static const struct { const char *label, *key, *word; UiEvent ev; char mark; } U
     [UM_TERMINAL] = { "Terminal Here", "Alt+Enter", "terminal", { UK_TERMINAL, 0 } },
     // Bookmarks (F7.5); a bookmark's label is gui/'s (the file's), marked when it is the folder shown
     [UM_ADD_BOOKMARK] = { "Add Bookmark", "Ctrl+D", "add-bookmark", { UK_ADD_BOOKMARK, 0 } },
+    [UM_EDIT_BOOKMARKS] = { "Edit Bookmarks\xE2\x80\xA6", "Ctrl+B", "edit-bookmarks", { UK_EDIT_BOOKMARKS, 0 } },
+    [UM_BM_MORE] = { "", "", "bm-more" },   // "N more in Edit Bookmarks…" (gui/'s label): the panel, on the first not listed
     [UM_BM_0] = { "", "", "bm-0", .mark = 'r' }, [UM_BM_1] = { "", "", "bm-1", .mark = 'r' },
     [UM_BM_2] = { "", "", "bm-2", .mark = 'r' }, [UM_BM_3] = { "", "", "bm-3", .mark = 'r' },
     [UM_BM_4] = { "", "", "bm-4", .mark = 'r' }, [UM_BM_5] = { "", "", "bm-5", .mark = 'r' },
@@ -292,7 +305,7 @@ static const UiMenuItem UI_MENU_GO[] = {
     UM_PARENT, UM_BACK, UM_FORWARD, UM_SEP, UM_HOME, UM_TRASH_VIEW, UM_SEP, UM_FIND, UM_LOCATION, UM_TERMINAL,
 };
 static const UiMenuItem UI_MENU_BOOKMARKS_[] = {
-    UM_ADD_BOOKMARK, UM_SEP, UM_BM_0, UM_BM_1, UM_BM_2, UM_BM_3, UM_BM_4, UM_BM_5, UM_BM_6, UM_BM_7,
+    UM_ADD_BOOKMARK, UM_EDIT_BOOKMARKS, UM_SEP, UM_BM_0, UM_BM_1, UM_BM_2, UM_BM_3, UM_BM_4, UM_BM_5, UM_BM_6, UM_BM_7, UM_BM_MORE,
 };
 
 // The menus in the bar's order: a title, its Alt letter, its entries. Help comes next.
@@ -413,6 +426,15 @@ typedef struct {
     // bookmarked (not one already, not the trash view, the file not full).
     int    bm_n, bm_here;
     bool   can_bookmark;
+    int    bm_total;         // the file's lines (Edit Bookmarks lists them all)
+    int    bm_more, bm_more_at;   // the local bookmarks the menu doesn't list (0: none), the first one's line
+    // Edit Bookmarks (F7.5): up; its list (the file's lines); its rename field open, the text and
+    // the caret (bytes).
+    bool   bmp;
+    UiList bmp_list;
+    bool   bmp_naming;
+    char   bmp_text[256];
+    int    bmp_len, bmp_caret;
     // The Properties panel (F7.2): up, its grid's place with the focus (0..8: owner read, write,
     // execute, then group's, others'), and whether gui/ lets its permissions change.
     bool   props;
@@ -440,7 +462,7 @@ static UiInput ui_input_none(void)
 {
     return (UiInput){ .click = -1, .dclick = -1, .side_click = -1, .header = -1, .click_mods = 0, .bar = UB_NONE, .crumb = -1,
                       .tab_click = -1, .tab_close = -1, .mid_row = -1, .mid_side = -1, .mid_crumb = -1, .modal = 0, .job_x = -1, .side_mode = -1, .side_twisty = -1, .side_eject = -1,
-                      .zoom_to = -1, .menu_title = -1, .menu_item = -1, .prop_box = -1, .ow_row = -1, .ow_drow = -1 };
+                      .zoom_to = -1, .menu_title = -1, .menu_item = -1, .prop_box = -1, .ow_row = -1, .ow_drow = -1, .bmp_row = -1, .bmp_drow = -1 };
 }
 
 static isize ui_clamp(isize v, isize lo, isize hi)
@@ -569,7 +591,8 @@ static bool ui_input_acts(const UiInput *in)
            in->tab_click >= 0 || in->tab_close >= 0 || in->mid_row >= 0 || in->mid_side >= 0 || in->mid_crumb >= 0 || in->modal > 0 ||
            in->backs > 0 || in->forwards > 0 || in->job_x >= 0 || in->side_mode >= 0 || in->side_twisty >= 0 || in->side_eject >= 0 ||
            in->zoom_wheel != 0 || in->zoom_to >= 0 || in->menu_title >= 0 || in->menu_item >= 0 || in->menu_away || in->prop_box >= 0 ||
-           in->ow_row >= 0 || in->ow_drow >= 0 || in->ow_field || in->toggle > 0 || in->find_x || in->find_field || in->find_step;
+           in->ow_row >= 0 || in->ow_drow >= 0 || in->ow_field || in->toggle > 0 || in->find_x || in->find_field || in->find_step ||
+           in->bmp_row >= 0 || in->bmp_drow >= 0 || in->bmp_btn;
 }
 
 // Whether a status message gives way to the status line on input that acts (ui_input_acts): a
@@ -1247,6 +1270,7 @@ static bool ui_jobs_event(Ui *u, const UiInput *in, UiEvent e)
 static bool ui_menu_shown(const Ui *u, UiMenuItem it)
 {
     if (it >= UM_BM_0 && it <= UM_BM_7) return (int)(it - UM_BM_0) < u->bm_n;
+    if (it == UM_BM_MORE) return u->bm_more > 0;
     return it == UM_TRASH ? !u->in_trash : it == UM_RESTORE ? u->in_trash : true;
 }
 
@@ -1290,6 +1314,7 @@ static bool ui_menu_enabled(const Ui *u, UiMenuItem it)
     case UM_TERMINAL: return !u->in_trash;
     case UM_ADD_BOOKMARK: return u->can_bookmark && !u->in_trash;
     case UM_BM_0: case UM_BM_1: case UM_BM_2: case UM_BM_3: case UM_BM_4: case UM_BM_5: case UM_BM_6: case UM_BM_7: return true;
+    case UM_EDIT_BOOKMARKS: case UM_BM_MORE: return true;
     default: return false;
     }
 }
@@ -1509,6 +1534,108 @@ static UiAction ui_ow_event(Ui *u, UiEvent e, const UiInput *in)
     return (UiAction){ UA_NONE, 0, false };
 }
 
+// ---- Edit Bookmarks (F7.5) ---------------------------------------------------------------------
+
+// The panel opened on the file's line at (the first when out of range).
+static UiAction ui_bmp_open(Ui *u, int at)
+{
+    u->bmp = true, u->bmp_naming = false;
+    u->bmp_list = (UiList){ .rows = u->bmp_list.rows };
+    ui_set(&u->bmp_list, u->bm_total, at >= 0 && at < u->bm_total ? at : 0);
+    return (UiAction){ UA_BM_EDIT, 0, false };
+}
+
+// The rename field's character cp at the caret (dropped when it is full).
+static void ui_bmp_char(Ui *u, u32 cp)
+{
+    char b[4];
+    int n = ui_utf8(cp, b);
+    if (n == 0 || u->bmp_len + n >= (int)sizeof u->bmp_text) return;
+    memmove(u->bmp_text + u->bmp_caret + n, u->bmp_text + u->bmp_caret, (size_t)(u->bmp_len - u->bmp_caret));
+    memcpy(u->bmp_text + u->bmp_caret, b, (size_t)n);
+    u->bmp_len += n, u->bmp_caret += n;
+}
+
+// The field's caret place a code point before (dir -1) or after (1) at.
+static int ui_bmp_step(const Ui *u, int at, int dir)
+{
+    if (dir < 0) {
+        if (at == 0) return 0;
+        for (at--; at > 0 && ((unsigned char)u->bmp_text[at] & 0xC0) == 0x80;) at--;
+        return at;
+    }
+    if (at >= u->bmp_len) return u->bmp_len;
+    for (at++; at < u->bmp_len && ((unsigned char)u->bmp_text[at] & 0xC0) == 0x80;) at++;
+    return at;
+}
+
+static void ui_bmp_cut(Ui *u, int a, int b)
+{
+    memmove(u->bmp_text + a, u->bmp_text + b, (size_t)(u->bmp_len - b));
+    u->bmp_len -= b - a, u->bmp_caret = a;
+}
+
+// What one of the panel's buttons (or its key) asks for the line under the cursor: 1 Remove
+// (Delete), 2 Rename (F2), 3 Move Up (Alt+Up), 4 Move Down (Alt+Down); nothing past the ends.
+static UiAction ui_bmp_do(Ui *u, int what)
+{
+    UiList *l = &u->bmp_list;
+    if (l->n == 0) return (UiAction){ UA_NONE, 0, false };
+    switch (what) {
+    case 1: return (UiAction){ UA_BM_REMOVE, l->sel, false };
+    case 2: u->bmp_naming = true; return (UiAction){ UA_BM_NAME, l->sel, false };
+    case 3: return l->sel > 0 ? (UiAction){ UA_BM_UP, l->sel, false } : (UiAction){ UA_NONE, 0, false };
+    case 4: return l->sel < l->n - 1 ? (UiAction){ UA_BM_DOWN, l->sel, false } : (UiAction){ UA_NONE, 0, false };
+    default: return (UiAction){ UA_NONE, 0, false };
+    }
+}
+
+// A key while the panel is up; it takes every key, as Open With's. In the list: Up, Down, k, j,
+// Home, End, PgUp and PgDn move; Delete removes the bookmark, F2 renames it, Alt+Up and Alt+Down
+// move it; Enter goes there; Esc closes. In the rename field: typing and the caret keys; Enter
+// renames (an empty name: the folder's), Esc leaves the name as it was.
+static UiAction ui_bmp_event(Ui *u, UiEvent e)
+{
+    UiList *l = &u->bmp_list;
+    int page = l->rows > 1 ? l->rows - 1 : 1;
+    if (u->bmp_naming) {
+        switch (e.key) {
+        case UK_NONE: ui_bmp_char(u, e.ch); break;
+        case UK_BACKSPACE: if (u->bmp_caret > 0) ui_bmp_cut(u, ui_bmp_step(u, u->bmp_caret, -1), u->bmp_caret); break;
+        case UK_DELETE: if (u->bmp_caret < u->bmp_len) ui_bmp_cut(u, u->bmp_caret, ui_bmp_step(u, u->bmp_caret, 1)); break;
+        case UK_LEFT: case UK_SEL_LEFT: u->bmp_caret = ui_bmp_step(u, u->bmp_caret, -1); break;
+        case UK_RIGHT: case UK_SEL_RIGHT: u->bmp_caret = ui_bmp_step(u, u->bmp_caret, 1); break;
+        case UK_HOME: case UK_SEL_HOME: u->bmp_caret = 0; break;
+        case UK_END: case UK_SEL_END: u->bmp_caret = u->bmp_len; break;
+        case UK_ENTER: case UK_SHIFT_ENTER: u->bmp_naming = false; return (UiAction){ UA_BM_RENAME, l->sel, false };
+        case UK_ESC: u->bmp_naming = false; break;
+        default: break;
+        }
+        return (UiAction){ UA_NONE, 0, false };
+    }
+    if (e.key == UK_NONE && e.ch == 'j') e.key = UK_DOWN;
+    else if (e.key == UK_NONE && e.ch == 'k') e.key = UK_UP;
+    switch (e.key) {
+    case UK_DOWN: ui_move(l, 1); break;
+    case UK_UP: ui_move(l, -1); break;
+    case UK_HOME: ui_move(l, -l->n); break;
+    case UK_END: ui_move(l, l->n); break;
+    case UK_PAGEUP: ui_move(l, -page); break;
+    case UK_PAGEDOWN: ui_move(l, page); break;
+    case UK_DELETE: return ui_bmp_do(u, 1);
+    case UK_F2: return ui_bmp_do(u, 2);
+    case UK_PARENT: return ui_bmp_do(u, 3);
+    case UK_ALT_DOWN: return ui_bmp_do(u, 4);
+    case UK_ENTER: case UK_SHIFT_ENTER:
+        if (l->n == 0) break;
+        u->bmp = false;
+        return (UiAction){ UA_BM_GO, l->sel, false };
+    case UK_ESC: u->bmp = false; break;
+    default: break;
+    }
+    return (UiAction){ UA_NONE, 0, false };
+}
+
 // Entry it picked: the menu closes, and gui/ does what it says; one that stands for a key leaves
 // it in menu_key, for ui_handle to run as that key.
 static UiAction ui_menu_pick(Ui *u, UiMenuItem it)
@@ -1528,6 +1655,7 @@ static UiAction ui_menu_pick(Ui *u, UiMenuItem it)
     case UM_DUPLICATE: return (UiAction){ UA_DUPLICATE, 0, false };
     case UM_BM_0: case UM_BM_1: case UM_BM_2: case UM_BM_3: case UM_BM_4: case UM_BM_5: case UM_BM_6: case UM_BM_7:
         return (UiAction){ UA_BOOKMARK, it - UM_BM_0, false };
+    case UM_BM_MORE: return ui_bmp_open(u, u->bm_more_at);
     case UM_NEW_TAB: return (UiAction){ UA_TAB_NEW, 0, false };
     case UM_NEW_WINDOW: return (UiAction){ UA_NEW_WINDOW, 0, false };
     case UM_NEW_FOLDER: return (UiAction){ UA_NEWFOLDER, 0, false };
@@ -1687,7 +1815,7 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         return (UiAction){ in->modal == UI_MODAL_YES && u->in_trash ? UA_EMPTY_TRASH : UA_NONE, 0, false };
     }
     if (!u->in_trash) u->empty_asking = false;
-    bool prompt = u->asking || u->confirming || u->cancel_asking || u->quit_asking || u->full_told || u->empty_asking || u->props || u->ow;
+    bool prompt = u->asking || u->confirming || u->cancel_asking || u->quit_asking || u->full_told || u->empty_asking || u->props || u->ow || u->bmp;
     if (prompt) u->menu_on = false;
     // Open With (F7.3): filtered once gui/ has listed the apps; the pointer: a row takes the
     // cursor (a double click opens it), the field the keys, a toggle flips, Open and Cancel.
@@ -1711,6 +1839,16 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         if (in->modal == UI_MODAL_YES) return ui_ow_launch(u);
         if (in->modal == UI_MODAL_NO) return ui_ow_close(u), (UiAction){ UA_NONE, 0, false };
         if (in->ow_wheel) ui_scroll(&u->ow_list, in->ow_wheel);
+    } else if (u->bmp && !u->quit_asking && !u->full_told && !u->asking && !u->confirming) {
+        // Edit Bookmarks (F7.5): a row takes the cursor (a double click goes there), a button acts on
+        // it as its key does, Close closes; the rename field takes no press (its own keys only).
+        isize row = in->bmp_drow >= 0 ? in->bmp_drow : in->bmp_row;
+        if (row >= 0 && u->bmp_list.top + row < u->bmp_list.n) {
+            u->bmp_list.sel = u->bmp_list.top + row, u->bmp_naming = false;
+            if (in->bmp_drow >= 0) return u->bmp = false, (UiAction){ UA_BM_GO, u->bmp_list.sel, false };
+        }
+        if (in->bmp_btn >= 1 && in->bmp_btn <= 4 && !u->bmp_naming) return ui_bmp_do(u, in->bmp_btn);
+        if (in->modal == UI_MODAL_NO) return u->bmp = false, (UiAction){ UA_NONE, 0, false };
     } else if (!u->ow && !prompt && u->finding && (in->find_x || in->find_field || in->find_step)) {
         // A chevron steps with two matches or more (greyed under that) and leaves the keys where
         // they are.
@@ -1886,6 +2024,11 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
             if (a.kind != UA_NONE) return a;
             continue;
         }
+        if (u->bmp && !u->asking && !u->confirming) {
+            UiAction a = ui_bmp_event(u, e);
+            if (a.kind != UA_NONE) return a;
+            continue;
+        }
         if (u->editing && u->edit_path && !prompt && e.key == UK_CRUMBS) {   // from the location line: it closes
             ui_edit_close(u), ui_crumbs_focus(u, in);
             continue;
@@ -2054,6 +2197,7 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         case UK_HOMEDIR: return (UiAction){ UA_HOMEDIR, 0, false };
         case UK_TRASH_VIEW: return (UiAction){ UA_TRASH_VIEW, 0, false };
         case UK_ADD_BOOKMARK: return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : UA_ADD_BOOKMARK, 0, false };
+        case UK_EDIT_BOOKMARKS: return ui_bmp_open(u, 0);
         case UK_F2:
             if (l->n > 0 && !u->side_focus && u->in_trash) return (UiAction){ UA_NOT_IN_TRASH, 0, false };
             if (l->n > 0 && !u->side_focus) ui_edit_rename(u, names.at(names.ctx, l->sel), names.dir && names.dir(names.ctx, l->sel));

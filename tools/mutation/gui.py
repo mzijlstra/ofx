@@ -360,7 +360,7 @@ MUTANTS = [
     (G, '    dup.cut = false, dup.n = targets(&pastea, dup.path, CLIP_PATHS_MAX);', '    dup.cut = true, dup.n = targets(&pastea, dup.path, CLIP_PATHS_MAX);', 'f74'),
     (G, '        else duplicate();', '', 'f74'),
     # ---- F7.5: the Bookmarks menu
-    (G, '    bm_parse(&bma, read_file(&bma, bm), &bmarks);   // the Bookmarks menu\'s (F7.5)', '', 'f75'),
+    (G, '    arena_reset(&bma);\n    bm_parse(&bma, read_file(&bma, bm), &bmarks);', '    arena_reset(&bma);', 'f75'),
     (G, '        if (strcmp(bmarks.b[i].path, app.cwd) == 0) u->bm_here = u->bm_n;', '', 'f75'),
     (G, '        if (!bmarks.b[i].path[0]) continue;\n        if (strcmp(bmarks.b[i].path, app.cwd)', '        if (strcmp(bmarks.b[i].path, app.cwd)', 'f75'),
     (G, '    u->can_bookmark = !u->in_trash && !bmarks.full && bm_find(&bmarks, app.cwd) < 0;', '    u->can_bookmark = !u->in_trash && !bmarks.full;', 'f75'),
@@ -374,6 +374,28 @@ MUTANTS = [
     (G, ' || (it == UM_SEP && !ui_menu_sep_shown(&app.ui, m, i))) continue;', ') continue;', 'f74'),
     (W, '        if (e->wd == atomic_load(&watch.bm_wd) && e->len && strcmp(e->name, "bookmarks") == 0) *mounts = true;', '', 'f75'),
     (W, '    watch_bookmarks();\n    pthread_t t;', '    pthread_t t;', 'f75'),
+    # ---- F7.5: Edit Bookmarks
+    ('gui/bookmarks.c', '    if (now.full) {', '    if (false) {', 'f75'),
+    # Not a mutant: bmp_change's bm_locate for `i`; the panel shows the file as it is (a change
+    # reads it again), so only a race between the watch and a key tells; test_f75.c tests bm_locate.
+    ('gui/bookmarks.c', '        bm_swap(&now, j, other);', '', 'f75'),
+    ('gui/bookmarks.c', '        k = op == UA_BM_UP ? i - 1 : i + 1;', '', 'f75'),
+    ('gui/bookmarks.c', '        bm_remove(&now, j);', '', 'f75'),
+    ('gui/bookmarks.c', '        bm_rename(&bmwa, &now, j, (Str){ app.ui.bmp_text, app.ui.bmp_len });', '', 'f75'),
+    ('gui/bookmarks.c', '    places_reload();\n    bmp_refresh(k);', '    bmp_refresh(k);', 'f75'),
+    ('gui/bookmarks.c', '        if (bmarks.b[a.index].path[0]) go_to(bmarks.b[a.index].path, STR_EMPTY, 0);', '        if (true) go_to(bmarks.b[a.index].path, STR_EMPTY, 0);', 'f75'),
+    ('gui/bookmarks.c', '        app.ui.bmp_len = app.ui.bmp_caret = n;', '        app.ui.bmp_len = app.ui.bmp_caret = 0;', 'f75'),
+    ('gui/bookmarks.c', '    case UA_BM_REMOVE: case UA_BM_UP: case UA_BM_DOWN: case UA_BM_RENAME: bmp_change(a.kind, (int)a.index); break;', '', 'f75'),
+    (G, '    case UA_BM_EDIT: case UA_BM_GO: case UA_BM_NAME: case UA_BM_REMOVE: case UA_BM_UP: case UA_BM_DOWN: case UA_BM_RENAME: bmp_act(a); break;', '', 'f75'),
+    (G, '        if (u->bm_more++ == 0) u->bm_more_at = i;', '        u->bm_more++;', 'f75'),
+    (G, '        if (!bmarks.b[i].path[0] || local++ < UI_MENU_BOOKMARKS) continue;', '        if (local++ < UI_MENU_BOOKMARKS) continue;', 'f75'),
+    (G, '    if (app.ui.bmp) return MODAL_BM;        // Edit Bookmarks (F7.5)', '', 'f75'),
+    (G, '            if (in_box(CLAY_IDI("bmp-row", r), x, y)) h.bmp_row = r;', '', 'f75'),
+    (G, '        if (ui_press(&app.ow_press, app.ui.bmp_list.top + h.bmp_row, now_ms()) == 2) in->bmp_drow = h.bmp_row;', '        if (false) in->bmp_drow = h.bmp_row;', 'f75'),
+    (G, '    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_B) return UK_EDIT_BOOKMARKS;', '', 'f75'),
+    (G, '    if (m == GLFW_MOD_ALT && key == GLFW_KEY_DOWN) return UK_ALT_DOWN;   // (Edit Bookmarks\' move down)', '', 'f75'),
+    (G, '                at = i;\n                break;', '                break;', 'f75'),
+    # Not run: the bmp buttons' and the field's drawing, the hint (pixels); edit-bookmarks.png shows them.
     # ---- quit doesn't wait for a hung drive (2026-10-26: no mutant was hang's or f6b's alone)
     (K, '    if (pthread_timedjoin_np(counts.thread, NULL, &until) != 0) pthread_detach(counts.thread);', '    pthread_join(counts.thread, NULL);', 'hang'),
     ('gui/space.c', '    if (pthread_timedjoin_np(space.thread, NULL, &until) != 0) pthread_detach(space.thread);', '    pthread_join(space.thread, NULL);', 'f6'),

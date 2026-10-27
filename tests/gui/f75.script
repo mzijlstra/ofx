@@ -9,7 +9,7 @@ wait-for 2000 bmlist=Alpha|home|nowhere
 sh sed -i '/nowhere/d' "$OFX_ROOT/config/gtk-3.0/bookmarks"
 wait-for 2000 bmlist=Alpha|home
 key alt-b
-expect menu=Bookmarks menuat=add-bookmark menumarked=- menugrey=bm-2,bm-3,bm-4,bm-5,bm-6,bm-7 menuhid=bm-2,bm-3,bm-4,bm-5,bm-6,bm-7
+expect menu=Bookmarks menuat=add-bookmark menumarked=- menugrey=bm-2,bm-3,bm-4,bm-5,bm-6,bm-7,bm-more menuhid=bm-2,bm-3,bm-4,bm-5,bm-6,bm-7,bm-more
 shot menu-bookmarks.png
 # Add Bookmark: the folder shown at the end of the file, the others as they were
 key enter
@@ -17,9 +17,9 @@ wait-for 2000 bmlist=Alpha|home|tree bmhere=2 canbm=0
 expect status=Bookmarked tree
 sh grep -qx "file://$OFX_ROOT/home/tree" "$OFX_ROOT/config/gtk-3.0/bookmarks" && grep -qx "sftp://host/x Server" "$OFX_ROOT/config/gtk-3.0/bookmarks" && [ "$(wc -l < "$OFX_ROOT/config/gtk-3.0/bookmarks")" = 4 ]
 key alt-b
-expect menugrey=add-bookmark,bm-3,bm-4,bm-5,bm-6,bm-7 menumarked=bm-2
+expect menugrey=add-bookmark,bm-3,bm-4,bm-5,bm-6,bm-7,bm-more menumarked=bm-2
 # A bookmark by the pointer: there, marked
-point-ui menu-item 2
+point-ui menu-item 3
 click-here
 wait-for 2000 n=0 bmhere=0 canbm=0
 pointer-off
@@ -37,8 +37,78 @@ wait-for 2000 bmlist=Alpha|home|tree|b bmhere=3
 # A change from outside (Nemo's): shown at once; eight listed at most
 sh for d in c d e f g h; do printf 'file://%s/home/tree/%s\n' "$OFX_ROOT" "$d" >> "$OFX_ROOT/config/gtk-3.0/bookmarks"; done
 wait-for 2000 bmn=8 bmlist=Alpha|home|tree|b|c|d|e|f
+# ---- Edit Bookmarks (the file: Alpha, sftp, home, tree, b, c, d, e, f, g, h; the menu lists 8 of the
+# 10 local ones): "2 more…" opens the panel on the first not listed, g
 key alt-b
-expect menuhid=-
+expect menuhid=- bmmore=2
+shot menu-bookmarks-more.png
+key end
+expect menuat=bm-more
+key enter
+wait-for 2000 bmp=1 bmpn=11 bmpsel=9 modal=bookmarks
+shot edit-bookmarks.png
+# F2 renames it: the field holds its name; Enter writes the label
+key f2
+expect bmpnaming=1 bmptext=g
+key backspace
+type Gee
+key enter
+wait-for 2000 bmpnaming=0 bmpsel=9
+sh grep -qx "file://$OFX_ROOT/home/tree/g Gee" "$OFX_ROOT/config/gtk-3.0/bookmarks"
+# Alt+Up moves it up a line, Alt+Down (Down 264, Alt 4) back
+key alt-up
+wait-for 2000 bmpsel=8
+sh [ "$(sed -n 9p "$OFX_ROOT/config/gtk-3.0/bookmarks")" = "file://$OFX_ROOT/home/tree/g Gee" ]
+raw-key 264 4
+wait-for 2000 bmpsel=9
+sh [ "$(sed -n 10p "$OFX_ROOT/config/gtk-3.0/bookmarks")" = "file://$OFX_ROOT/home/tree/g Gee" ]
+# Delete removes it
+key delete
+wait-for 2000 bmpn=10 bmpsel=9
+sh ! grep -q "tree/g" "$OFX_ROOT/config/gtk-3.0/bookmarks" && [ "$(wc -l < "$OFX_ROOT/config/gtk-3.0/bookmarks")" = 10 ]
+# A line added at the top from outside while the panel is up: shown at once, the cursor on its line
+# still (h)
+sh sed -i "1i file:///outside" "$OFX_ROOT/config/gtk-3.0/bookmarks"
+wait-for 2000 bmpn=11 bmpsel=10
+# home removed from among them: the outside line kept, sftp kept
+key home
+keys down down down
+expect bmpsel=3
+key delete
+wait-for 2000 bmpn=10
+sh head -1 "$OFX_ROOT/config/gtk-3.0/bookmarks" | grep -qx "file:///outside" && grep -qx "sftp://host/x Server" "$OFX_ROOT/config/gtk-3.0/bookmarks" && ! grep -qx "file://$OFX_ROOT/home" "$OFX_ROOT/config/gtk-3.0/bookmarks"
+# The pointer: a row, a double click there goes; Close; Enter on one not local says so
+point-ui bmp-row 3
+click-here
+click-here
+wait-for 2000 bmp=0 n=2 bmhere=2
+key ctrl-b
+point-ui bmp-row 1
+click-here
+expect bmpsel=1
+point-ui modal-no
+click-here
+expect bmp=0
+pointer-off
+raw-key 66 2
+wait-for 2000 bmp=1 bmpsel=0
+keys down down
+key enter
+expect bmp=0 status=ofx opens local folders only: sftp://host/x
+# Enter on a local one goes there (outside, Alpha, sftp, tree: tree, the third local)
+key ctrl-b
+key home
+keys down down down
+key enter
+wait-for 2000 bmp=0 n=2 bmhere=2
+# A file past ofx's 256 lines: nothing added, nothing changed; its lines as they were
+sh for i in $(seq 300); do printf 'file:///many/%d\n' "$i"; done >> "$OFX_ROOT/config/gtk-3.0/bookmarks"
+wait-for 2000 bmn=8 canbm=0
+key ctrl-b
+wait-for 2000 bmp=1 bmpn=256
+key delete
+expect status=The bookmarks file has more than 256 lines: ofx leaves it as it is
+sh [ "$(wc -l < "$OFX_ROOT/config/gtk-3.0/bookmarks")" = 310 ]
 key esc
 # The trash view: nothing to bookmark
 key alt-end
