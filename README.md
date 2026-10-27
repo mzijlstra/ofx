@@ -31,6 +31,7 @@ puts its service file in `~/.local/share/dbus-1/services`), and it exits when id
 | Up/Down, `j`/`k` | move; past the first or the last, round to the other end (the icon view: Left/Right round the ends, Up/Down in the column) |
 | PgUp/PgDn | a page |
 | Home/End, `g`/`G` | first, last |
+| Shift+Enter | Open With Other Application: the apps for the selected files (or the cursor's); on a path button it opens a background tab, elsewhere it is Enter |
 | Enter | open: a folder is entered, a file goes to `gio open` (Nemo's way: the type from its name; a terminal app such as nvim in a terminal); an empty file, which gio can't type, to the default app for its name's type (`gio launch`); several selected files, each default app once with all of its files (folders among them stay) |
 | Backspace | up to the parent, the folder you left selected |
 | Alt+Left, Alt+Right | back and forward |
@@ -47,6 +48,7 @@ puts its service file in `~/.local/share/dbus-1/services`), and it exits when id
 | `t`, Alt+Enter | a terminal in this folder (`xdg-terminal-exec --dir`) |
 | Ctrl+I | Properties: size or a folder's contents (counted all the way down), location, drive, dates, owner, and the permissions as a grid: arrows (`h`/`j`/`k`/`l`) move, Space or Enter changes one at once (Ctrl+Z puts it back), Esc closes |
 | `~`, Alt+Home | home |
+| Alt+End | the trash view |
 | Space, Ctrl+A | select the entry (and move on), select all; Esc clears |
 | Shift and a move | the arrows, Home/End or `H`/`J`/`K`/`L` with Shift: everything the cursor passes over joins the selection (as Shift+click), in the list and the icon view |
 | F2 | rename, in the row, the name up to its extension selected (a folder's whole name): Enter renames, Esc cancels |

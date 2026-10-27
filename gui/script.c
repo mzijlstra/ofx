@@ -428,7 +428,7 @@ static UiKey script_key(Str name)
         { "f10", UK_F10 }, { "ctrl-n", UK_NEW_WINDOW }, { "ctrl-i", UK_PROPERTIES }, { "alt-enter", UK_TERMINAL },
         { "ctrl-1", UK_VIEW_LIST }, { "ctrl-2", UK_VIEW_ICONS }, { "ctrl-left", UK_SIDE },
         { "ctrl-equal", UK_ZOOM_IN }, { "ctrl-minus", UK_ZOOM_OUT }, { "ctrl-0", UK_ZOOM_RESET },
-        { "ctrl-shift-i", UK_INVERT }, { "ctrl-shift-a", UK_SELECT_MATCH }, { "ctrl-r", UK_RELOAD }, { "alt-home", UK_HOMEDIR },
+        { "ctrl-shift-i", UK_INVERT }, { "ctrl-shift-a", UK_SELECT_MATCH }, { "ctrl-r", UK_RELOAD }, { "alt-home", UK_HOMEDIR }, { "alt-end", UK_TRASH_VIEW },
     };
     for (int i = 0; i < COUNT(KEYS); i++)
         if (str_eq(name, str_from_c(KEYS[i].name))) return KEYS[i].k;

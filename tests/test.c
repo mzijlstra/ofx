@@ -1605,6 +1605,7 @@ int main(void)
     test_menu_enabled();
     test_menu_f74();
     test_select_match();
+    test_f74_keys();
     test_menu_mouse();
     test_close_all_keys();
     test_rename_select();

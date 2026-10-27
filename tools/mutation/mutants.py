@@ -1355,7 +1355,10 @@ MUTANTS += [
     (U, "        u->menu_key = UI_MENU_ITEM[it].ev;\n        return (UiAction){ UA_NONE, 0, false };", "        return (UiAction){ UA_NONE, 0, false };"),
     (U, "        u->sort.key = it == UM_SORT_NAME ? SORT_NAME : it == UM_SORT_SIZE ? SORT_SIZE : SORT_MTIME;", "        u->sort.key = it == UM_SORT_NAME ? SORT_NAME : SORT_MTIME;"),
     (U, "    case UM_SIDE_NONE: return ui_side_mode(u, SIDE_HIDDEN);", "    case UM_SIDE_NONE: return ui_side_mode(u, SIDE_TREE);"),
-    (U, "    case UM_TRASH_VIEW: return (UiAction){ UA_TRASH_VIEW, 0, false };", ""),
+    (U, "        case UK_TRASH_VIEW: return (UiAction){ UA_TRASH_VIEW, 0, false };", ""),
+    (U, "            if (!u->side_focus && l->n > 0 && shift_enter) return", "            if (!u->side_focus && l->n > 0 && false) return"),
+    (U, "return u->in_trash ? (UiAction){ UA_NOT_IN_TRASH, 0, false } : ui_ow_open(u);", "return ui_ow_open(u);"),
+    (U, "        bool shift_enter = e.key == UK_SHIFT_ENTER;", "        bool shift_enter = false;"),
     # Not a mutant: the `continue` after a menu's own key is inert, the empty menu_key it falls into
     # ({UK_NONE, 0}) is dropped by the characters' switch.
     (U, "                e = u->menu_key, u->menu_key = (UiEvent){ UK_NONE, 0 };   // an entry picked runs its key, here", "                e = u->menu_key;"),

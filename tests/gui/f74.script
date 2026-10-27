@@ -290,4 +290,12 @@ raw-key 82 2
 expect reloadasked=2
 raw-key 268 4
 wait-for 2000 n=1 sel=tree
+# Michael's keys (2026-10-27): Shift+Enter (Enter 257, Shift 1) Open With on the cursor's entry;
+# Alt+End (End 269, Alt 4) the trash view
+raw-key 257 1
+wait-for 2000 ow=1 modal=open-with owtype=inode/directory
+key esc
+expect ow=0
+raw-key 269 4
+wait-for 2000 trash=1
 quit

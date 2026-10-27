@@ -125,12 +125,13 @@ static void test_edit_select(void)
     edit_type(&u, names, "y");
     CHECK(u.edit_len == NAME_MAX && u.edit[NAME_MAX - 1] == 'y' && u.caret == NAME_MAX);
     ui_edit_close(&u);
-    // Outside an edit line Shift doesn't change a move or Enter: Shift+Left is Left (nothing in the
-    // list), Shift+Enter opens.
+    // Outside an edit line Shift doesn't change a move: Shift+Left is Left (nothing in the list).
+    // Shift+Enter in the files is Open With (Michael, 2026-10-27; test_f74.c).
     in = keys(1, UK_SEL_LEFT);
     CHECK(ui_handle(&u, names, &in).kind == UA_NONE);
     in = keys(1, UK_SHIFT_ENTER);
-    CHECK(ui_handle(&u, names, &in).kind == UA_OPEN);
+    CHECK(ui_handle(&u, names, &in).kind == UA_OPEN_WITH && u.ow);
+    ui_ow_close(&u);
     in = keys(1, UK_SEL_END);
     ui_handle(&u, names, &in);
     CHECK(u.list.sel == 19);

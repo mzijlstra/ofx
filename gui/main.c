@@ -3224,6 +3224,7 @@ static UiKey ui_key_of(int key, int mods)
     if (m == GLFW_MOD_ALT && key == GLFW_KEY_RIGHT) return UK_FORWARD;
     if (m == GLFW_MOD_ALT && key == GLFW_KEY_UP) return UK_PARENT;
     if (m == GLFW_MOD_ALT && key == GLFW_KEY_HOME) return UK_HOMEDIR;   // (F7.4, as Nemo)
+    if (m == GLFW_MOD_ALT && key == GLFW_KEY_END) return UK_TRASH_VIEW;   // (Michael, 2026-10-27)
     if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_R) return UK_RELOAD;
     if (m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT) && key == GLFW_KEY_I) return UK_INVERT;
     if (m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT) && key == GLFW_KEY_A) return UK_SELECT_MATCH;

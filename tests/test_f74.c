@@ -263,3 +263,42 @@ static void test_select_match(void)
     CHECK(!u.finding);
     ui_matcher_set(&u.find_m, STR_EMPTY, (UiMatchOpts){ 0 });
 }
+
+// Michael's keys (2026-10-27): Alt+End the trash view, as Alt+Home is home; Shift+Enter in the files
+// Open With, and Enter everywhere else it was (the sidebar, the find bar, a question).
+static void test_f74_keys(void)
+{
+    UiNames names = { name_at, NULL, NULL };
+    Ui u = menu_ui(3);
+    CHECK(menu_keys(&u, 1, UK_TRASH_VIEW).kind == UA_TRASH_VIEW);
+    CHECK(strcmp(UI_MENU_ITEM[UM_TRASH_VIEW].key, "Alt+End") == 0 && strcmp(UI_MENU_ITEM[UM_OPEN_WITH].key, "Shift+Enter") == 0);
+    // In the files: Open With, on the cursor's entry or the marked ones (the panel takes the targets).
+    UiAction a = menu_keys(&u, 1, UK_SHIFT_ENTER);
+    CHECK(a.kind == UA_OPEN_WITH && u.ow);
+    ui_ow_close(&u);
+    // The trash view: Open With doesn't work there, as from the menu.
+    u.in_trash = true;
+    CHECK(menu_keys(&u, 1, UK_SHIFT_ENTER).kind == UA_NOT_IN_TRASH && !u.ow);
+    u.in_trash = false;
+    // An empty folder: nothing.
+    Ui e = menu_ui(0);
+    CHECK(menu_keys(&e, 1, UK_SHIFT_ENTER).kind == UA_NONE && !e.ow);
+    // The sidebar with the keys: its Enter, the place.
+    u.side.rows = 5;
+    ui_set(&u.side, 3, 1);
+    u.side_focus = true;
+    a = menu_keys(&u, 1, UK_SHIFT_ENTER);
+    CHECK(a.kind == UA_PLACE && a.index == 1 && !u.ow);
+    u.side_focus = false;
+    // The find bar with the keys: Enter's, the keys back to the list, no panel.
+    UiInput in = chars("/a");
+    ui_handle(&u, names, &in);
+    CHECK(menu_keys(&u, 1, UK_SHIFT_ENTER).kind == UA_NONE && u.finding && !u.find_keys && !u.ow);
+    menu_keys(&u, 1, UK_ESC);
+    ui_find_close(&u);
+    // A question: Enter's answer (the delete question's yes).
+    u.confirming = true, u.confirm_n = 1;
+    a = menu_keys(&u, 1, UK_SHIFT_ENTER);
+    CHECK(a.kind == UA_DELETE && !u.confirming && !u.ow);
+    ui_matcher_set(&u.find_m, STR_EMPTY, (UiMatchOpts){ 0 });
+}

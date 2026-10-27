@@ -367,6 +367,11 @@ clipboard: `copy_here`, which Paste now goes through too, so the names are a pas
 (copy).txt", "a (copy 2).txt"), it runs as a copy job, and Ctrl+Z removes it. No key (Nemo has
 none). Greyed where Rename is.
 
+**Keys added after (Michael, 2026-10-27):** Alt+End goes to the trash view (as Alt+Home goes home;
+Go → Trash shows it). Shift+Enter in the files is Open With Other Application, on the marked
+entries or the cursor's (the trash view says no, as the menu greys it); on a path button it stays a
+background tab, and in the sidebar, the find bar, a question and the edit line it stays Enter.
+
 **F7.1 as built (2026-10-25):**
 - `ui/ui.c`: the menus as tables (`UI_MENU`, `UI_MENU_ITEM`: label, key, a word for the tests);
   `ui_menu_enabled`, `ui_menu_event` (the keys), `ui_menu_hover` (the pointer), the clicks in

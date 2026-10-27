@@ -354,6 +354,7 @@ MUTANTS = [
     (G, '            if (!ui_menu_shown(&app.ui, it)) continue;\n            if (it == UM_SEP) {', '            if (it == UM_SEP) {', 'f74'),
     # Left out: the marks' column and the ✓ / • drawn (pixels only); menu-view.png shows them.
     (G, '    if (m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT) && key == GLFW_KEY_A) return UK_SELECT_MATCH;', '', 'f74'),
+    (G, '    if (m == GLFW_MOD_ALT && key == GLFW_KEY_END) return UK_TRASH_VIEW;', '', 'f74'),
     # Left out: the bar's "Select" label and its footer hint (pixels only); select-match.png shows them.
     (G, '    if (dup.n > 0) copy_here(&dup);', '', 'f74'),
     (G, '    dup.cut = false, dup.n = targets(&pastea, dup.path, CLIP_PATHS_MAX);', '    dup.cut = true, dup.n = targets(&pastea, dup.path, CLIP_PATHS_MAX);', 'f74'),

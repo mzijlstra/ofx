@@ -49,7 +49,8 @@ typedef enum {
     UK_SEL_END,    // Shift+End
     UK_SEL_UP,     // Shift+Up: in the files the selection grows that way (Michael, 2026-10-26); elsewhere as Up
     UK_SEL_DOWN,   // Shift+Down
-    UK_SHIFT_ENTER,   // on a path button: a background tab; elsewhere as Enter
+    UK_SHIFT_ENTER,   // on a path button: a background tab; in the files Open With (Michael,
+                      // 2026-10-27); elsewhere as Enter
     UK_CRUMBS,     // Ctrl+K: the keyboard on the path buttons (F5.2)
     UK_JOBS,       // Ctrl+J: the keyboard on the job rows' × (F5.3)
     UK_QUIT,       // the window closed, or another window's Close All (F7.1)
@@ -69,6 +70,7 @@ typedef enum {
     UK_RELOAD,     // Ctrl+R: the folder listed again (F7.4)
     UK_HOMEDIR,    // Alt+Home: home, as ~ (F7.4)
     UK_SELECT_MATCH,   // Ctrl+Shift+A: Select Items Matching, the find bar's select mode (F7.4)
+    UK_TRASH_VIEW, // Alt+End: the trash view, as Alt+Home is home (Michael, 2026-10-27)
 } UiKey;
 
 // The top bar's buttons (F4).
@@ -216,7 +218,7 @@ static const struct { const char *label, *key, *word; UiEvent ev; char mark; } U
     [UM_NEW_FOLDER] = { "Create New Folder", "Ctrl+Shift+N", "new-folder" },
     [UM_NEW_FILE] = { "Create New Empty File", "", "new-file" },
     [UM_OPEN] = { "Open", "Enter", "open" },
-    [UM_OPEN_WITH] = { "Open With Other Application\xE2\x80\xA6", "", "open-with" },
+    [UM_OPEN_WITH] = { "Open With Other Application\xE2\x80\xA6", "Shift+Enter", "open-with" },   // (its own action: with the keys in the sidebar Shift+Enter is Enter there)
     [UM_PROPERTIES] = { "Properties\xE2\x80\xA6", "Ctrl+I", "properties" },
     [UM_CLOSE_ALL] = { "Close All Windows", "Ctrl+Q", "close-all" },
     [UM_CLOSE] = { "Close", "Ctrl+W", "close" },
@@ -253,7 +255,7 @@ static const struct { const char *label, *key, *word; UiEvent ev; char mark; } U
     [UM_BACK] = { "Back", "Alt+Left", "back", { UK_BACK, 0 } },
     [UM_FORWARD] = { "Forward", "Alt+Right", "forward", { UK_FORWARD, 0 } },
     [UM_HOME] = { "Home", "Alt+Home", "home", { UK_HOMEDIR, 0 } },
-    [UM_TRASH_VIEW] = { "Trash", "", "trash-view" },
+    [UM_TRASH_VIEW] = { "Trash", "Alt+End", "trash-view", { UK_TRASH_VIEW, 0 } },
     [UM_FIND] = { "Find in Folder\xE2\x80\xA6", "Ctrl+F", "find", { UK_FIND, 0 } },
     [UM_LOCATION] = { "Location\xE2\x80\xA6", "Ctrl+L", "location", { UK_LOCATION, 0 } },
     [UM_TERMINAL] = { "Terminal Here", "Alt+Enter", "terminal", { UK_TERMINAL, 0 } },
@@ -1486,7 +1488,6 @@ static UiAction ui_menu_pick(Ui *u, UiMenuItem it)
     case UM_SORT_NAME: case UM_SORT_SIZE: case UM_SORT_MTIME:
         u->sort.key = it == UM_SORT_NAME ? SORT_NAME : it == UM_SORT_SIZE ? SORT_SIZE : SORT_MTIME;
         return (UiAction){ UA_SORT, 0, false };
-    case UM_TRASH_VIEW: return (UiAction){ UA_TRASH_VIEW, 0, false };
     case UM_DUPLICATE: return (UiAction){ UA_DUPLICATE, 0, false };
     case UM_NEW_TAB: return (UiAction){ UA_TAB_NEW, 0, false };
     case UM_NEW_WINDOW: return (UiAction){ UA_NEW_WINDOW, 0, false };
@@ -1867,6 +1868,7 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         // files (arrows, Home, End, or H, J, K, L) it selects what the cursor passes over (below).
         bool shifted = e.key == UK_SEL_LEFT || e.key == UK_SEL_RIGHT || e.key == UK_SEL_HOME || e.key == UK_SEL_END ||
                        e.key == UK_SEL_UP || e.key == UK_SEL_DOWN;
+        bool shift_enter = e.key == UK_SHIFT_ENTER;   // Enter for the questions and the find bar; Open With in the files
         switch (e.key) {
         case UK_SEL_LEFT: e.key = UK_LEFT; break;
         case UK_SEL_RIGHT: e.key = UK_RIGHT; break;
@@ -1964,6 +1966,7 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         // (Michael, 2026-10-24): they only open and close the tree's folders.
         case UK_ENTER:
             if (u->side_focus && u->side.n > 0) return (UiAction){ UA_PLACE, u->side.sel, false };
+            if (!u->side_focus && l->n > 0 && shift_enter) return u->in_trash ? (UiAction){ UA_NOT_IN_TRASH, 0, false } : ui_ow_open(u);
             if (!u->side_focus && l->n > 0) return (UiAction){ UA_OPEN, l->sel, u->marked > 0 };   // all: the marked ones (F7.3)
             break;
         case UK_RIGHT:
@@ -2010,6 +2013,7 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
             break;
         case UK_RELOAD: return (UiAction){ UA_RELOAD, 0, false };
         case UK_HOMEDIR: return (UiAction){ UA_HOMEDIR, 0, false };
+        case UK_TRASH_VIEW: return (UiAction){ UA_TRASH_VIEW, 0, false };
         case UK_F2:
             if (l->n > 0 && !u->side_focus && u->in_trash) return (UiAction){ UA_NOT_IN_TRASH, 0, false };
             if (l->n > 0 && !u->side_focus) ui_edit_rename(u, names.at(names.ctx, l->sel), names.dir && names.dir(names.ctx, l->sel));
