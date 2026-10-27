@@ -240,3 +240,92 @@ static void test_bookmarks_edit(void)
     bm_remove(&was, 2), bm_remove(&was, 0), bm_remove(&was, 0);
     CHECK(was.n == 0 && str_eq(bm_format(a, &was), STR_EMPTY));
 }
+
+// Keyboard Shortcuts (F7.5): the table agrees with the menus; the panel's filter, keys, Help menu.
+static void test_shortcuts(void)
+{
+    // Every menu entry with a key has a row of its name with that key, so the two can't disagree.
+    for (int it = 1; it < UM_ITEMS; it++) {
+        if (!UI_MENU_ITEM[it].key[0]) continue;
+        bool found = false;
+        for (int r = 0; r < UI_KEYS_N && !found; r++)
+            found = strcmp(UI_KEYS[r].action, UI_MENU_ITEM[it].label) == 0 &&
+                    (strcmp(UI_KEYS[r].key, UI_MENU_ITEM[it].key) == 0 || strcmp(UI_KEYS[r].key2, UI_MENU_ITEM[it].key) == 0);
+        if (!found) fprintf(stderr, "no shortcut row for the menu's %s (%s)\n", UI_MENU_ITEM[it].label, UI_MENU_ITEM[it].key);
+        CHECK(found);
+    }
+    int per[KS_SECTIONS] = { 0 };
+    for (int r = 0; r < UI_KEYS_N; r++) {
+        CHECK(UI_KEYS[r].action[0] && UI_KEYS[r].key[0] && UI_KEYS[r].sec < KS_SECTIONS);
+        per[UI_KEYS[r].sec]++;
+    }
+    for (int s = 0; s < KS_SECTIONS; s++) CHECK(per[s] > 0 && UI_KEY_SECTION[s][0]);
+    // F1: every row under its heading; it takes every key (t starts no terminal, it filters).
+    Ui u = menu_ui(3);
+    u.keys_list.rows = 10;
+    CHECK(menu_keys(&u, 1, UK_SHORTCUTS).kind == UA_NONE && u.keys && u.keys_list.n == UI_KEYS_LINES);
+    CHECK(u.keys_line[0] == -1 - KS_MOVE && u.keys_line[1] == 0);
+    CHECK(menu_keys(&u, 1, 0x100 + 't').kind == UA_NONE && u.keys_len == 1 && u.keys);
+    menu_keys(&u, 1, UK_BACKSPACE);
+    CHECK(u.keys_len == 0 && u.keys_list.n == UI_KEYS_LINES);
+    // The filter: an action's words or a key, case folded; a section with nothing left out.
+    UiInput in = chars("alt+end");
+    ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in);
+    CHECK(u.keys_list.n == 2 && u.keys_line[0] == -1 - KS_MOVE && strcmp(UI_KEYS[u.keys_line[1]].action, "Trash") == 0);
+    while (u.keys_len) menu_keys(&u, 1, UK_BACKSPACE);
+    in = chars("TRASH");
+    ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in);
+    CHECK(u.keys_list.n == 4 && u.keys_line[2] == -1 - KS_CHANGE);   // Moving: Trash; Changing files: Move to Trash
+    while (u.keys_len) menu_keys(&u, 1, UK_BACKSPACE);
+    in = chars("zzqq");
+    ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in);
+    CHECK(u.keys_list.n == 0);
+    while (u.keys_len) menu_keys(&u, 1, UK_BACKSPACE);
+    in = ui_input_none();   // a character past ASCII (é, two bytes): Backspace takes both
+    in.ev[in.nev++] = (UiEvent){ UK_NONE, 0xE9 };
+    ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in);
+    CHECK(u.keys_len == 2);
+    menu_keys(&u, 1, UK_BACKSPACE);
+    CHECK(u.keys_len == 0);
+    // Scrolling: Down, End, Home; it stays inside.
+    menu_keys(&u, 1, UK_DOWN);
+    CHECK(u.keys_list.top == 1);
+    menu_keys(&u, 1, UK_END);
+    CHECK(u.keys_list.top == UI_KEYS_LINES - 10);
+    menu_keys(&u, 1, UK_PAGEUP);
+    CHECK(u.keys_list.top == UI_KEYS_LINES - 19);
+    menu_keys(&u, 1, UK_HOME);
+    CHECK(u.keys_list.top == 0);
+    in = ui_input_none(), in.ow_wheel = -3;   // the wheel, three notches down
+    ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in);
+    CHECK(u.keys_list.top == 3);
+    // Typing after a scroll: back at the top.
+    in = chars("a");
+    ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in);
+    CHECK(u.keys_list.top == 0 && u.keys_len == 1);
+    // Up, it is the only thing a press reaches: no menu, no row of the files.
+    u.list.sel = 0;
+    in = ui_input_none(), in.menu_title = 0;
+    ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in);
+    in = ui_input_none(), in.click = 2;
+    ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in);
+    CHECK(!u.menu_on && u.list.sel == 0 && u.keys);
+    // Esc, F1 and Close close it; opened again the filter is empty; Help → Keyboard Shortcuts opens it.
+    menu_keys(&u, 1, UK_ESC);
+    CHECK(!u.keys);
+    menu_keys(&u, 1, UK_SHORTCUTS);
+    CHECK(u.keys && u.keys_len == 0 && u.keys_list.n == UI_KEYS_LINES);
+    menu_keys(&u, 1, UK_ESC);
+    menu_keys(&u, 1, UK_SHORTCUTS);
+    menu_keys(&u, 1, UK_SHORTCUTS);
+    CHECK(!u.keys);
+    menu_keys(&u, 1, UK_SHORTCUTS);
+    in = ui_input_none(), in.modal = UI_MODAL_NO;
+    ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in);
+    CHECK(!u.keys);
+    int m = ui_menu_of('h');
+    CHECK(m == UI_MENUS - 1 && strcmp(UI_MENU[m].title, "Help") == 0 && UI_MENU[m].n == 1);
+    menu_keys(&u, 2, -'h', UK_ENTER);
+    CHECK(u.keys && !u.menu_on);
+    ui_keys_close(&u);
+}

@@ -409,6 +409,12 @@ reads the file again and finds the line by its text and how many like it come be
 (`bm_locate`), so a change made elsewhere meanwhile isn't undone; the panel follows the watch's
 reloads, its cursor on the same line. A file past `BM_MAX` lines is left as it is.
 
+**Step 3 (2026-10-27): Help**, one entry: Keyboard Shortcuts (F1, Ctrl+F1, Alt+H). ui/'s `UI_KEYS`
+(a section, an action, a key, a second key) in 13 sections; the panel (`Ui.keys`, gui/shortcuts.c)
+shows the rows the filter's text leaves (action or keys, case folded), each section's heading
+over its rows; a test makes every menu entry with a key have a row of its name and key. The
+script's `wheel` goes through `wheel_at` now, as the mouse's does, so a panel's list takes it.
+
 **F7.1 as built (2026-10-25):**
 - `ui/ui.c`: the menus as tables (`UI_MENU`, `UI_MENU_ITEM`: label, key, a word for the tests);
   `ui_menu_enabled`, `ui_menu_event` (the keys), `ui_menu_hover` (the pointer), the clicks in

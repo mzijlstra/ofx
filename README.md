@@ -68,7 +68,8 @@ puts its service file in `~/.local/share/dbus-1/services`), and it exits when id
 | Ctrl+Shift+PgUp, Ctrl+Shift+PgDn | move the tab left or right |
 | Ctrl+J, Ctrl+Down | the keys to the find bar when it is open, then to the job rows' ×: Up/Down (`k`/`j`) move, Enter asks to cancel that job; Ctrl+J again or Esc back to the list |
 | Ctrl+Q | close every ofx window (each asks first while its jobs run or wait) |
-| F10, Alt+F, Alt+E, Alt+V, Alt+G | the File, Edit, View and Go menus: Up/Down (`k`/`j`) move, Left/Right (`h`/`l`) the next menu, Enter picks, Esc closes; also by the pointer. Each entry does what its key does; what can't be done now is greyed, the current sidebar, sort and view marked |
+| F1, Ctrl+F1 | Keyboard Shortcuts: every key by where it works, type to filter, Esc closes (also Help, Alt+H) |
+| F10, Alt+F, Alt+E, Alt+V, Alt+G, Alt+B, Alt+H | the File, Edit, View, Go, Bookmarks and Help menus: Up/Down (`k`/`j`) move, Left/Right (`h`/`l`) the next menu, Enter picks, Esc closes; also by the pointer. Each entry does what its key does; what can't be done now is greyed, the current sidebar, sort and view marked |
 | Ctrl+Shift+A | Select Items Matching: the find bar as "Select", the same field and toggles; Enter makes the selection every match and closes it, Esc leaves the selection as it was |
 | Ctrl+Shift+I | invert the selection |
 | Ctrl+R | list the folder again (for a drive that sends no change events) |

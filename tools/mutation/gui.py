@@ -396,6 +396,12 @@ MUTANTS = [
     (G, '    if (m == GLFW_MOD_ALT && key == GLFW_KEY_DOWN) return UK_ALT_DOWN;   // (Edit Bookmarks\' move down)', '', 'f75'),
     (G, '                at = i;\n                break;', '                break;', 'f75'),
     # Not run: the bmp buttons' and the field's drawing, the hint (pixels); edit-bookmarks.png shows them.
+    # ---- F7.5: Keyboard Shortcuts
+    (G, '    if (app.ui.keys) return MODAL_KEYS;     // Keyboard Shortcuts (F7.5)', '', 'f75'),
+    (G, '    if ((m == 0 || m == GLFW_MOD_CONTROL) && key == GLFW_KEY_F1) return UK_SHORTCUTS;', '    if (m == 0 && key == GLFW_KEY_F1) return UK_SHORTCUTS;', 'f75'),
+    (G, '    if (app.ui.ow || app.ui.keys) return in->ow_wheel = notches, false;', '    if (app.ui.ow) return in->ow_wheel = notches, false;', 'f75'),
+    (G, '    ui_resize(&app.ui.keys_list, keys_rows(GetScreenHeight()));   // Keyboard Shortcuts\'', '', 'f75'),
+    # Left out: the panel's drawing (pixels); shortcuts.png shows it.
     # ---- quit doesn't wait for a hung drive (2026-10-26: no mutant was hang's or f6b's alone)
     (K, '    if (pthread_timedjoin_np(counts.thread, NULL, &until) != 0) pthread_detach(counts.thread);', '    pthread_join(counts.thread, NULL);', 'hang'),
     ('gui/space.c', '    if (pthread_timedjoin_np(space.thread, NULL, &until) != 0) pthread_detach(space.thread);', '    pthread_join(space.thread, NULL);', 'f6'),
@@ -489,7 +495,7 @@ def key(m):
     return hashlib.sha1('\0'.join(m[:3]).encode()).hexdigest()[:12]
 
 # The group of a script that failed: run.sh prints "== <script>: FAILED" or "<group>: FAILED".
-GROUP_OF = {'f6b': 'f6', 'f62b': 'f62', 'f62c': 'f62', 'f63b': 'f63', 'f63c': 'f63', 'f64b': 'f64', 'f64c': 'f64', 'f64d': 'f64', 'f7b': 'f7', 'f73b': 'f73', 'f73c': 'f73', 'f73d': 'f73'}
+GROUP_OF = {'f6b': 'f6', 'f62b': 'f62', 'f62c': 'f62', 'f63b': 'f63', 'f63c': 'f63', 'f64b': 'f64', 'f64c': 'f64', 'f64d': 'f64', 'f7b': 'f7', 'f73b': 'f73', 'f73c': 'f73', 'f73d': 'f73', 'f75b': 'f75'}
 
 # The tags as groups run.sh knows: a script's name (f7b, written before GROUP_OF had it) as its
 # group; anything else dropped, so a mutant never "survives" a group that runs nothing.

@@ -1562,6 +1562,7 @@ static int list_cells(void)
 // The list's rows and columns for the window as it is now.
 static int  ow_rows(int h);   // Open With (gui/openwith.c, F7.3)
 static int  bmp_rows(int h);  // Edit Bookmarks (gui/bookmarks.c, F7.5)
+static int  keys_rows(int h); // Keyboard Shortcuts (gui/shortcuts.c, F7.5)
 
 static void list_fit(void)
 {
@@ -1569,6 +1570,7 @@ static void list_fit(void)
     ui_resize(&app.ui.list, list_rows(GetScreenHeight()));
     ui_resize(&app.ui.ow_list, ow_rows(GetScreenHeight()));   // Open With's list (F7.3)
     ui_resize(&app.ui.bmp_list, bmp_rows(GetScreenHeight()));   // Edit Bookmarks' (F7.5)
+    ui_resize(&app.ui.keys_list, keys_rows(GetScreenHeight()));   // Keyboard Shortcuts'
 }
 
 static int side_rows(int h)
@@ -2416,7 +2418,7 @@ static void layout_menubar(void)
 
 // ---- the modal panels (F5.1) --------------------------------------------------------------------
 
-typedef enum { MODAL_NONE, MODAL_DELETE, MODAL_CLASH, MODAL_CANCEL, MODAL_QUIT, MODAL_FULL, MODAL_EMPTY, MODAL_PROPS, MODAL_OW, MODAL_BM } ModalKind;
+typedef enum { MODAL_NONE, MODAL_DELETE, MODAL_CLASH, MODAL_CANCEL, MODAL_QUIT, MODAL_FULL, MODAL_EMPTY, MODAL_PROPS, MODAL_OW, MODAL_BM, MODAL_KEYS } ModalKind;
 
 // The panel on top, in the order ui_handle takes their keys.
 static ModalKind modal_kind(void)
@@ -2430,6 +2432,7 @@ static ModalKind modal_kind(void)
     if (app.ui.props) return MODAL_PROPS;   // under any question (F7.2)
     if (app.ui.ow) return MODAL_OW;         // likewise (F7.3)
     if (app.ui.bmp) return MODAL_BM;        // Edit Bookmarks (F7.5)
+    if (app.ui.keys) return MODAL_KEYS;     // Keyboard Shortcuts (F7.5)
     return MODAL_NONE;
 }
 
@@ -2856,6 +2859,7 @@ static void layout_props_panel(void)
 
 #include "openwith.c"
 #include "bookmarks.c"
+#include "shortcuts.c"
 
 // The panel over the window, the rest darkened but still readable (Michael's pick over a blur,
 // 2026-10-21).
@@ -2867,6 +2871,7 @@ static void layout_modal(ModalKind k, float w, float h)
     if (k == MODAL_PROPS) layout_props_panel();
     else if (k == MODAL_OW) layout_ow_panel();
     else if (k == MODAL_BM) layout_bmp_panel();
+    else if (k == MODAL_KEYS) layout_keys_panel();
     else layout_modal_panel(k);
 }
 
@@ -3218,6 +3223,8 @@ static Clay_RenderCommandArray layout(int w, int h)
             if (modal_kind() == MODAL_PROPS) {
                 text(fit(S("Properties: \xE2\x86\x90 \xE2\x86\x91 \xE2\x86\x93 \xE2\x86\x92 (h j k l) move \xC2\xB7 Space or Enter changes \xC2\xB7 Esc closes"), foot_w, false),
                      cc(t->fg_dim));
+            } else if (modal_kind() == MODAL_KEYS) {
+                text(fit(S("Keyboard Shortcuts: type to filter \xC2\xB7 \xE2\x86\x91 \xE2\x86\x93 PgUp PgDn scroll \xC2\xB7 Esc or F1 closes"), foot_w, false), cc(t->fg_dim));
             } else if (modal_kind() == MODAL_BM) {
                 text(fit(str_from_c(app.ui.bmp_naming ? "Rename: Enter renames (empty: the folder's name) \xC2\xB7 Esc keeps the name"
                                              : "Bookmarks: \xE2\x86\x91 \xE2\x86\x93 (k j) move \xC2\xB7 Enter goes there \xC2\xB7 Delete removes \xC2\xB7 F2 renames \xC2\xB7 "
@@ -3314,6 +3321,7 @@ static UiKey ui_key_of(int key, int mods)
     if (m == GLFW_MOD_ALT && key == GLFW_KEY_END) return UK_TRASH_VIEW;   // (Michael, 2026-10-27)
     if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_D) return UK_ADD_BOOKMARK;   // (F7.5, as Nemo)
     if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_B) return UK_EDIT_BOOKMARKS;
+    if ((m == 0 || m == GLFW_MOD_CONTROL) && key == GLFW_KEY_F1) return UK_SHORTCUTS;   // (F7.5: F1 and Ctrl+F1, Nemo's two)
     if (m == GLFW_MOD_ALT && key == GLFW_KEY_DOWN) return UK_ALT_DOWN;   // (Edit Bookmarks' move down)
     if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_R) return UK_RELOAD;
     if (m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT) && key == GLFW_KEY_I) return UK_INVERT;
@@ -3608,7 +3616,7 @@ static float wheel_left;   // a touchpad's part of a notch, carried to the next 
 // sidebar scrolls by itself. True when the sidebar moved.
 static bool wheel_at(UiInput *in, float x, int notches, bool ctrl)
 {
-    if (app.ui.ow) return in->ow_wheel = notches, false;   // the panel's list (F7.3)
+    if (app.ui.ow || app.ui.keys) return in->ow_wheel = notches, false;   // the panel's list (F7.3; Keyboard Shortcuts', F7.5)
     if (x >= side_w() && ctrl) in->zoom_wheel = notches;
     else if (x >= side_w()) in->wheel = notches;
     else if (notches) return app.ui.side.top = ui_clamp(app.ui.side.top - notches, 0, ui_max_top(&app.ui.side)), true;

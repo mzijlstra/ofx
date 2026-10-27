@@ -1611,6 +1611,7 @@ int main(void)
     test_bookmarks_menu();
     test_bookmarks_panel();
     test_bookmarks_edit();
+    test_shortcuts();
     test_menu_mouse();
     test_close_all_keys();
     test_rename_select();

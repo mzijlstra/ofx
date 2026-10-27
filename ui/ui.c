@@ -74,6 +74,7 @@ typedef enum {
     UK_ADD_BOOKMARK,   // Ctrl+D: the folder shown, bookmarked (F7.5)
     UK_EDIT_BOOKMARKS, // Ctrl+B: the Edit Bookmarks panel (F7.5)
     UK_ALT_DOWN,   // Alt+Down: in Edit Bookmarks a bookmark down (Alt+Up, UK_PARENT, up); elsewhere nothing
+    UK_SHORTCUTS,  // F1, Ctrl+F1: the Keyboard Shortcuts panel (F7.5)
 } UiKey;
 
 // The top bar's buttons (F4).
@@ -220,6 +221,7 @@ typedef enum {
     UM_ZOOM_IN, UM_ZOOM_OUT, UM_ZOOM_RESET, UM_VIEW_LIST, UM_VIEW_ICONS,
     UM_PARENT, UM_BACK, UM_FORWARD, UM_HOME, UM_TRASH_VIEW, UM_FIND, UM_LOCATION, UM_TERMINAL,
     UM_ADD_BOOKMARK, UM_EDIT_BOOKMARKS, UM_BM_0, UM_BM_1, UM_BM_2, UM_BM_3, UM_BM_4, UM_BM_5, UM_BM_6, UM_BM_7, UM_BM_MORE,
+    UM_SHORTCUTS,
     UM_ITEMS
 } UiMenuItem;
 
@@ -280,7 +282,9 @@ static const struct { const char *label, *key, *word; UiEvent ev; char mark; } U
     // Bookmarks (F7.5); a bookmark's label is gui/'s (the file's), marked when it is the folder shown
     [UM_ADD_BOOKMARK] = { "Add Bookmark", "Ctrl+D", "add-bookmark", { UK_ADD_BOOKMARK, 0 } },
     [UM_EDIT_BOOKMARKS] = { "Edit Bookmarks\xE2\x80\xA6", "Ctrl+B", "edit-bookmarks", { UK_EDIT_BOOKMARKS, 0 } },
-    [UM_BM_MORE] = { "", "", "bm-more" },   // "N more in Edit Bookmarks…" (gui/'s label): the panel, on the first not listed
+    [UM_BM_MORE] = { "", "", "bm-more" },
+    // Help: no manual (Michael, 2026-10-27)
+    [UM_SHORTCUTS] = { "Keyboard Shortcuts", "F1", "shortcuts", { UK_SHORTCUTS, 0 } },   // "N more in Edit Bookmarks…" (gui/'s label): the panel, on the first not listed
     [UM_BM_0] = { "", "", "bm-0", .mark = 'r' }, [UM_BM_1] = { "", "", "bm-1", .mark = 'r' },
     [UM_BM_2] = { "", "", "bm-2", .mark = 'r' }, [UM_BM_3] = { "", "", "bm-3", .mark = 'r' },
     [UM_BM_4] = { "", "", "bm-4", .mark = 'r' }, [UM_BM_5] = { "", "", "bm-5", .mark = 'r' },
@@ -308,15 +312,121 @@ static const UiMenuItem UI_MENU_BOOKMARKS_[] = {
     UM_ADD_BOOKMARK, UM_EDIT_BOOKMARKS, UM_SEP, UM_BM_0, UM_BM_1, UM_BM_2, UM_BM_3, UM_BM_4, UM_BM_5, UM_BM_6, UM_BM_7, UM_BM_MORE,
 };
 
-// The menus in the bar's order: a title, its Alt letter, its entries. Help comes next.
+static const UiMenuItem UI_MENU_HELP[] = { UM_SHORTCUTS };
+
+// The menus in the bar's order: a title, its Alt letter, its entries.
 static const struct { const char *title; char letter; const UiMenuItem *items; int n; } UI_MENU[] = {
     { "File", 'f', UI_MENU_FILE, sizeof UI_MENU_FILE / sizeof UI_MENU_FILE[0] },
     { "Edit", 'e', UI_MENU_EDIT, sizeof UI_MENU_EDIT / sizeof UI_MENU_EDIT[0] },
     { "View", 'v', UI_MENU_VIEW, sizeof UI_MENU_VIEW / sizeof UI_MENU_VIEW[0] },
     { "Go", 'g', UI_MENU_GO, sizeof UI_MENU_GO / sizeof UI_MENU_GO[0] },
     { "Bookmarks", 'b', UI_MENU_BOOKMARKS_, sizeof UI_MENU_BOOKMARKS_ / sizeof UI_MENU_BOOKMARKS_[0] },
+    { "Help", 'h', UI_MENU_HELP, sizeof UI_MENU_HELP / sizeof UI_MENU_HELP[0] },
 };
 enum { UI_MENUS = sizeof UI_MENU / sizeof UI_MENU[0] };
+
+// ---- the Keyboard Shortcuts panel (F7.5, docs/plan.md "F7.5 decided") ----------------------------
+
+// Its sections, by where the keys work, and its rows: an action, its key, a second key ("" none).
+// A menu entry with a key has a row of the same name and key (test_f75.c checks).
+typedef enum {
+    KS_MOVE, KS_OPEN, KS_SELECT, KS_CHANGE, KS_TABS, KS_VIEW, KS_SIDE, KS_CRUMBS, KS_FIND, KS_EDIT, KS_JOBS, KS_OW, KS_BM,
+    KS_SECTIONS
+} UiKeySection;
+
+static const char *const UI_KEY_SECTION[KS_SECTIONS] = {
+    "Moving", "Opening", "Selecting", "Changing files", "Tabs and windows", "View", "The sidebar", "The path buttons (Ctrl+K)",
+    "The find bar", "The rename and location lines", "The job rows (Ctrl+J)", "Open With", "Edit Bookmarks",
+};
+
+static const struct { UiKeySection sec; const char *action, *key, *key2; } UI_KEYS[] = {
+    { KS_MOVE, "Up, down", "Up, Down", "k, j" },
+    { KS_MOVE, "A page up, down", "PgUp, PgDn", "" },
+    { KS_MOVE, "The first, the last", "Home, End", "g, G" },
+    { KS_MOVE, "Back", "Alt+Left", "Mouse back" },
+    { KS_MOVE, "Forward", "Alt+Right", "Mouse forward" },
+    { KS_MOVE, "Open Parent", "Alt+Up", "Backspace" },
+    { KS_MOVE, "Home", "Alt+Home", "~" },
+    { KS_MOVE, "Trash", "Alt+End", "" },
+    { KS_MOVE, "Location\xE2\x80\xA6", "Ctrl+L", "Ctrl+Right" },
+    { KS_OPEN, "Open", "Enter", "" },
+    { KS_OPEN, "Open With Other Application\xE2\x80\xA6", "Shift+Enter", "" },
+    { KS_OPEN, "Terminal Here", "Alt+Enter", "t" },
+    { KS_OPEN, "Properties\xE2\x80\xA6", "Ctrl+I", "" },
+    { KS_SELECT, "Select the entry, and on", "Space", "" },
+    { KS_SELECT, "Select while moving", "Shift+arrows", "H, J, K, L" },
+    { KS_SELECT, "Select All", "Ctrl+A", "" },
+    { KS_SELECT, "Select Items Matching\xE2\x80\xA6", "Ctrl+Shift+A", "" },
+    { KS_SELECT, "Invert Selection", "Ctrl+Shift+I", "" },
+    { KS_SELECT, "Clear the selection", "Esc", "" },
+    { KS_CHANGE, "Cut", "Ctrl+X", "" },
+    { KS_CHANGE, "Copy", "Ctrl+C", "" },
+    { KS_CHANGE, "Paste", "Ctrl+V", "" },
+    { KS_CHANGE, "Undo", "Ctrl+Z", "" },
+    { KS_CHANGE, "Rename\xE2\x80\xA6", "F2", "" },
+    { KS_CHANGE, "Create New Folder", "Ctrl+Shift+N", "" },
+    { KS_CHANGE, "Move to Trash", "Delete", "" },
+    { KS_CHANGE, "Delete\xE2\x80\xA6", "Shift+Delete", "" },
+    { KS_CHANGE, "Restore", "r", "" },
+    { KS_CHANGE, "Add Bookmark", "Ctrl+D", "" },
+    { KS_CHANGE, "Edit Bookmarks\xE2\x80\xA6", "Ctrl+B", "" },
+    { KS_CHANGE, "A clash: skip, replace, keep both", "s, r, k", "S, R, K the rest" },
+    { KS_TABS, "New Tab", "Ctrl+T", "" },
+    { KS_TABS, "New Window", "Ctrl+N", "" },
+    { KS_TABS, "Close", "Ctrl+W", "" },
+    { KS_TABS, "The next tab", "Ctrl+Tab", "Ctrl+PgDn" },
+    { KS_TABS, "The previous tab", "Ctrl+Shift+Tab", "Ctrl+PgUp" },
+    { KS_TABS, "Move the tab", "Ctrl+Shift+PgUp", "Ctrl+Shift+PgDn" },
+    { KS_TABS, "A tab by its place", "Alt+1 " "\xE2\x80\xA6" " Alt+9", "" },
+    { KS_TABS, "A folder in a tab behind", "Middle click", "" },
+    { KS_TABS, "Close All Windows", "Ctrl+Q", "" },
+    { KS_VIEW, "The menus", "F10", "Alt+F, E, V, G, B, H" },
+    { KS_VIEW, "Keyboard Shortcuts", "F1", "Ctrl+F1" },
+    { KS_VIEW, "Reload", "Ctrl+R", "" },
+    { KS_VIEW, "Show Hidden Files", "Ctrl+H", "." },
+    { KS_VIEW, "Sort by the next column", "s", "a column's header" },
+    { KS_VIEW, "Reverse Order", "S", "" },
+    { KS_VIEW, "List", "Ctrl+1", "" },
+    { KS_VIEW, "Icons", "Ctrl+2", "" },
+    { KS_VIEW, "Zoom In", "Ctrl+=", "Ctrl+wheel" },
+    { KS_VIEW, "Zoom Out", "Ctrl+-", "" },
+    { KS_VIEW, "Normal Size", "Ctrl+0", "" },
+    { KS_SIDE, "To the sidebar and back", "Tab", "Ctrl+Left" },
+    { KS_SIDE, "The sidebar's next mode", "F9", "Ctrl+S" },
+    { KS_SIDE, "Go there", "Enter", "" },
+    { KS_SIDE, "In the tree: close, open", "Left, Right", "h, l" },
+    { KS_CRUMBS, "To the path buttons", "Ctrl+K", "Ctrl+Up" },
+    { KS_CRUMBS, "The next button", "Left, Right", "h, l" },
+    { KS_CRUMBS, "Go there", "Enter", "" },
+    { KS_CRUMBS, "Open it in a tab behind", "Shift+Enter", "" },
+    { KS_CRUMBS, "Back to the files", "Esc", "" },
+    { KS_FIND, "Find in Folder\xE2\x80\xA6", "Ctrl+F", "/" },
+    { KS_FIND, "The previous, next match", "Up, Down", "the chevrons" },
+    { KS_FIND, "Keep it, the keys to the files", "Enter", "" },
+    { KS_FIND, "Close it", "Esc", "" },
+    { KS_FIND, "Find it again, back", "n, N", "" },
+    { KS_FIND, "Match case", "Alt+C", "" },
+    { KS_FIND, "Whole words", "Alt+W", "" },
+    { KS_FIND, "A regular expression", "Alt+R", "" },
+    { KS_EDIT, "Select", "Shift+Left, Right", "Shift+Home, End" },
+    { KS_EDIT, "All of it", "Ctrl+A", "" },
+    { KS_EDIT, "Copy, cut, paste text", "Ctrl+C, X, V", "" },
+    { KS_EDIT, "Done", "Enter", "" },
+    { KS_EDIT, "Leave it as it was", "Esc", "" },
+    { KS_JOBS, "To the job rows", "Ctrl+J", "Ctrl+Down" },
+    { KS_JOBS, "The next row", "Up, Down", "k, j" },
+    { KS_JOBS, "Cancel that job", "Enter", "its \xC3\x97" },
+    { KS_JOBS, "Back to the files", "Esc", "Ctrl+J" },
+    { KS_OW, "The field, the list", "Tab", "Down" },
+    { KS_OW, "Always open with this app", "Alt+D", "" },
+    { KS_OW, "Open", "Enter", "a double click" },
+    { KS_BM, "Remove", "Delete", "" },
+    { KS_BM, "Rename", "F2", "" },
+    { KS_BM, "Move it up, down", "Alt+Up, Alt+Down", "" },
+    { KS_BM, "Go there", "Enter", "a double click" },
+};
+enum { UI_KEYS_N = sizeof UI_KEYS / sizeof UI_KEYS[0], UI_KEYS_LINES = UI_KEYS_N + KS_SECTIONS };
+
 
 // The icon view's sizes (F6.3, Michael 2026-10-24): Yaru's 32 and 48, and its 256 scaled down
 // between them. The list doesn't zoom.
@@ -435,6 +545,14 @@ typedef struct {
     bool   bmp_naming;
     char   bmp_text[256];
     int    bmp_len, bmp_caret;
+    // Keyboard Shortcuts (F7.5): up; its filter's text; the lines it shows (a row of UI_KEYS, or
+    // -1 - a section for its heading), scrolled by keys_list.top.
+    bool   keys;
+    char   keys_text[64];
+    int    keys_len;
+    short  keys_line[UI_KEYS_LINES];
+    UiList keys_list;
+    UiMatcher keys_m;
     // The Properties panel (F7.2): up, its grid's place with the focus (0..8: owner read, write,
     // execute, then group's, others'), and whether gui/ lets its permissions change.
     bool   props;
@@ -1314,7 +1432,7 @@ static bool ui_menu_enabled(const Ui *u, UiMenuItem it)
     case UM_TERMINAL: return !u->in_trash;
     case UM_ADD_BOOKMARK: return u->can_bookmark && !u->in_trash;
     case UM_BM_0: case UM_BM_1: case UM_BM_2: case UM_BM_3: case UM_BM_4: case UM_BM_5: case UM_BM_6: case UM_BM_7: return true;
-    case UM_EDIT_BOOKMARKS: case UM_BM_MORE: return true;
+    case UM_EDIT_BOOKMARKS: case UM_BM_MORE: case UM_SHORTCUTS: return true;
     default: return false;
     }
 }
@@ -1532,6 +1650,70 @@ static UiAction ui_ow_event(Ui *u, UiEvent e, const UiInput *in)
     }
     if (u->ow_len != before || e.key == UK_NONE) ui_ow_filter(u, in);
     return (UiAction){ UA_NONE, 0, false };
+}
+
+// ---- Keyboard Shortcuts (F7.5) -------------------------------------------------------------------
+
+// The lines for the filter's text: each section's heading and its rows whose action or keys hold
+// the text (case folded); a section with none left out.
+static void ui_keys_filter(Ui *u)
+{
+    ui_matcher_set(&u->keys_m, (Str){ u->keys_text, u->keys_len }, (UiMatchOpts){ 0 });
+    int n = 0;
+    for (int s = 0; s < KS_SECTIONS; s++) {
+        int head = n;
+        u->keys_line[n++] = (short)(-1 - s);
+        for (int r = 0; r < UI_KEYS_N; r++)
+            if (UI_KEYS[r].sec == (UiKeySection)s && (!u->keys_len || ui_match(&u->keys_m, str_from_c(UI_KEYS[r].action)) ||
+                                                      ui_match(&u->keys_m, str_from_c(UI_KEYS[r].key)) || ui_match(&u->keys_m, str_from_c(UI_KEYS[r].key2))))
+                u->keys_line[n++] = (short)r;
+        if (n == head + 1) n = head;   // nothing under it
+    }
+    ui_set(&u->keys_list, n, 0);   // (its cursor on the first line: the top there too)
+}
+
+static UiAction ui_keys_open(Ui *u)
+{
+    u->keys = true, u->keys_len = 0;
+    u->keys_list = (UiList){ .rows = u->keys_list.rows };
+    ui_keys_filter(u);
+    return (UiAction){ UA_NONE, 0, false };
+}
+
+static void ui_keys_close(Ui *u)
+{
+    u->keys = false;
+    ui_matcher_set(&u->keys_m, STR_EMPTY, (UiMatchOpts){ 0 });
+}
+
+// A key while the panel is up; it takes every key. A character goes into the filter, Backspace
+// takes the last one back; Up, Down, PgUp, PgDn, Home and End scroll; Esc, F1 and Enter close.
+static void ui_keys_event(Ui *u, UiEvent e)
+{
+    UiList *l = &u->keys_list;
+    int page = l->rows > 1 ? l->rows - 1 : 1;
+    switch (e.key) {
+    case UK_NONE: {
+        char b[4];
+        int k = ui_utf8(e.ch, b);
+        if (k == 0 || u->keys_len + k >= (int)sizeof u->keys_text) break;
+        memcpy(u->keys_text + u->keys_len, b, (size_t)k), u->keys_len += k;
+        ui_keys_filter(u);
+        break;
+    }
+    case UK_BACKSPACE:
+        if (!u->keys_len) break;
+        do u->keys_len--;
+        while (u->keys_len > 0 && ((unsigned char)u->keys_text[u->keys_len] & 0xC0) == 0x80);
+        ui_keys_filter(u);
+        break;
+    case UK_UP: case UK_DOWN: ui_scroll(l, e.key == UK_UP ? 1 : -1); break;   // (as the wheel's notches: up is +)
+    case UK_PAGEUP: case UK_PAGEDOWN: ui_scroll(l, e.key == UK_PAGEUP ? page : -page); break;
+    case UK_HOME: ui_scroll(l, (int)l->n); break;
+    case UK_END: ui_scroll(l, (int)-l->n); break;
+    case UK_ESC: case UK_SHORTCUTS: case UK_ENTER: ui_keys_close(u); break;
+    default: break;
+    }
 }
 
 // ---- Edit Bookmarks (F7.5) ---------------------------------------------------------------------
@@ -1815,7 +1997,7 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         return (UiAction){ in->modal == UI_MODAL_YES && u->in_trash ? UA_EMPTY_TRASH : UA_NONE, 0, false };
     }
     if (!u->in_trash) u->empty_asking = false;
-    bool prompt = u->asking || u->confirming || u->cancel_asking || u->quit_asking || u->full_told || u->empty_asking || u->props || u->ow || u->bmp;
+    bool prompt = u->asking || u->confirming || u->cancel_asking || u->quit_asking || u->full_told || u->empty_asking || u->props || u->ow || u->bmp || u->keys;
     if (prompt) u->menu_on = false;
     // Open With (F7.3): filtered once gui/ has listed the apps; the pointer: a row takes the
     // cursor (a double click opens it), the field the keys, a toggle flips, Open and Cancel.
@@ -1849,6 +2031,10 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         }
         if (in->bmp_btn >= 1 && in->bmp_btn <= 4 && !u->bmp_naming) return ui_bmp_do(u, in->bmp_btn);
         if (in->modal == UI_MODAL_NO) return u->bmp = false, (UiAction){ UA_NONE, 0, false };
+    } else if (u->keys && !u->quit_asking && !u->full_told && !u->asking && !u->confirming) {
+        // Keyboard Shortcuts: Close closes; the wheel scrolls it.
+        if (in->modal == UI_MODAL_NO) return ui_keys_close(u), (UiAction){ UA_NONE, 0, false };
+        if (in->ow_wheel) ui_scroll(&u->keys_list, in->ow_wheel);
     } else if (!u->ow && !prompt && u->finding && (in->find_x || in->find_field || in->find_step)) {
         // A chevron steps with two matches or more (greyed under that) and leaves the keys where
         // they are.
@@ -2029,6 +2215,10 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
             if (a.kind != UA_NONE) return a;
             continue;
         }
+        if (u->keys && !u->asking && !u->confirming) {
+            ui_keys_event(u, e);
+            continue;
+        }
         if (u->editing && u->edit_path && !prompt && e.key == UK_CRUMBS) {   // from the location line: it closes
             ui_edit_close(u), ui_crumbs_focus(u, in);
             continue;
@@ -2198,6 +2388,7 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         case UK_TRASH_VIEW: return (UiAction){ UA_TRASH_VIEW, 0, false };
         case UK_ADD_BOOKMARK: return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : UA_ADD_BOOKMARK, 0, false };
         case UK_EDIT_BOOKMARKS: return ui_bmp_open(u, 0);
+        case UK_SHORTCUTS: return ui_keys_open(u);
         case UK_F2:
             if (l->n > 0 && !u->side_focus && u->in_trash) return (UiAction){ UA_NOT_IN_TRASH, 0, false };
             if (l->n > 0 && !u->side_focus) ui_edit_rename(u, names.at(names.ctx, l->sel), names.dir && names.dir(names.ctx, l->sel));
