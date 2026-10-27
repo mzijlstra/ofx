@@ -28,6 +28,8 @@ typedef struct {
     i64   size;      // the target's, for a symlink; 0 for a folder
     i64   mtime;     // seconds since the epoch; in the trash view, when it was trashed
     u32   mode;      // st_mode, of the target when there is one
+    u32   uid, gid;  // its owner and group, the target's as mode is (the list's Owner and Group)
+    Str   target;    // a symlink's, as readlink gives it (relative or not); empty for the rest
     const TrashItem *trash;   // the trash view's (F6, trash.c): where the item is; NULL elsewhere
 } Entry;
 
@@ -127,6 +129,18 @@ static Kind kind_of(int dirfd, const char *name, struct stat *st)
 
 // The entries of dir, sorted; dot-files counted in hidden, and left out unless show_hidden. False,
 // with the reason, when the folder can't be opened or the arena is full.
+// A symlink's target as it is written, into a; empty when it can't be read (or a is full).
+static Str link_target(Arena *a, int dirfd, const char *name)
+{
+    char buf[PATH_MAX];
+    ssize_t k = readlinkat(dirfd, name, buf, sizeof buf - 1);
+    if (k <= 0) return STR_EMPTY;
+    char *p = arena_try_push(a, k + 1, 1);
+    if (!p) return STR_EMPTY;
+    memcpy(p, buf, (size_t)k), p[k] = 0;
+    return (Str){ p, k };
+}
+
 static bool fs_list(Arena *a, const char *dir, bool show_hidden, Sort sort, Listing *out, Err *err)
 {
     *out = (Listing){ 0 };
@@ -163,12 +177,15 @@ static bool fs_list(Arena *a, const char *dir, bool show_hidden, Sort sort, List
             break;
         }
         memcpy(copy, nm, (size_t)len);
+        bool link = k == K_LINK_FILE || k == K_LINK_DIR || k == K_LINK_BROKEN;
         e[n++] = (Entry){
             .name = { copy, len },
             .kind = k,
             .size = kind_is_dir(k) || k == K_LINK_BROKEN ? 0 : (i64)st.st_size,
             .mtime = k == K_LINK_BROKEN ? 0 : (i64)st.st_mtim.tv_sec,
             .mode = k == K_LINK_BROKEN ? 0 : (u32)st.st_mode,
+            .uid = (u32)st.st_uid, .gid = (u32)st.st_gid,
+            .target = link ? link_target(a, fd, nm) : STR_EMPTY,
         };
     }
     closedir(d);

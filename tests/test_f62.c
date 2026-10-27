@@ -11,7 +11,7 @@ static void test_state_view(void)
     // No file: the list.
     CHECK(!state_load(&ta, path).icons);
     Err err;
-    State s = { SIDE_TREE, true, 0 };
+    State s = { SIDE_TREE, true, 0, false };
     CHECK(state_save(path, &s, &err));
     State r = state_load(&ta, path);
     CHECK(r.icons && r.side == SIDE_TREE);

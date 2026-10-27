@@ -680,6 +680,12 @@ Default and Recommended equal GIO's; GLib's rewrite of a copy adds the two lines
 
 ## F8 design (2026-10-27)
 
+**The list after F8 (Michael, 2026-10-27):** a link's target as written after its →, home as ~,
+cut with "…" (as the trash view's "from"); Owner, Group and Permissions columns after Modified (the
+target's for a link, `ui_perms`: ls's letters without the type), not sortable, on and off together
+from View → Show Permissions (checked; `perms=off` in the state file). Entry has uid, gid and the
+link's target (`link_target`); names cached by `id_name`.
+
 **F8 decided (Michael, 2026-10-27): every recommendation on the page**
 (https://claude.ai/artifact/QtvC5rGjd4bMTvTeSX3kCe, Nemo 6.6.4's right-click menus entry by entry),
 **except Q2:** no list of apps, just Open and Open With Other Application….

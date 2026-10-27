@@ -1643,6 +1643,7 @@ int main(void)
     test_links();
     test_ctx_folder_menu();
     test_ctx_tab_menu();
+    test_list_columns();
     test_menu_mouse();
     test_close_all_keys();
     test_rename_select();

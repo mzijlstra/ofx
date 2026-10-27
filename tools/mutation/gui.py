@@ -176,7 +176,7 @@ MUTANTS = [
     (G, "        if (rows != app.ui.list.rows) ui_resize(&app.ui.list, rows), dirty = true;\n", ""),
     (G, "    if (!app.ui.grid) return 1;\n    int c = (w", "    int c = (w"),
     (G, "        if (state_path(path, sizeof path) &&\n            !(a.kind == UA_ZOOM ?", "        if (false &&\n            !(a.kind == UA_ZOOM ?"),
-    (G, "        app.ui.side_mode = st.side, app.ui.grid = st.icons, app.ui.zoom = st.zoom;", "        app.ui.side_mode = st.side, app.ui.zoom = st.zoom;"),
+    (G, "        app.ui.side_mode = st.side, app.ui.grid = st.icons, app.ui.zoom = st.zoom,", "        app.ui.side_mode = st.side, app.ui.zoom = st.zoom,"),
     (G, "    if (m == GLFW_MOD_CONTROL && (key == GLFW_KEY_1 || key == GLFW_KEY_KP_1)) return UK_VIEW_LIST;", ""),
     (G, "    if (m == GLFW_MOD_CONTROL && (key == GLFW_KEY_2 || key == GLFW_KEY_KP_2)) return UK_VIEW_ICONS;", ""),
     (G, "    return app.ui.grid ? grid_px() : ICON_PX;", "    return ICON_PX;"),
@@ -202,7 +202,7 @@ MUTANTS = [
     (G, "    return w > CELL_W_MIN ? w : CELL_W_MIN;", "    return w;"),
     (G, "    return grid_px() + CELL_H_ROOM;", "    return 48 + CELL_H_ROOM;"),
     (G, "    return app.ui.grid ? grid_px() : ICON_PX;", "    return app.ui.grid ? 48 : ICON_PX;"),
-    (G, "        app.ui.side_mode = st.side, app.ui.grid = st.icons, app.ui.zoom = st.zoom;", "        app.ui.side_mode = st.side, app.ui.grid = st.icons;"),
+    (G, "        app.ui.side_mode = st.side, app.ui.grid = st.icons, app.ui.zoom = st.zoom,", "        app.ui.side_mode = st.side, app.ui.grid = st.icons, app.ui.zoom = 0,"),
     (G, "state_put(&scratch, path, \"zoom\", zoom, &err) :", "state_put(&scratch, path, \"view\", app.ui.grid ? \"icons\" : \"list\", &err) :"),
     (G, "        if (img.data && big > want) ImageResize(", "        if (0) ImageResize("),
     (G, "        if (app.zoomed) ui_refit(&app.ui.list, cols, rows), app.zoomed = false, dirty = true;\n", ""),
@@ -475,6 +475,10 @@ MUTANTS = [
     (G, '    if (app.ui.menu_on && app.ui.menu == UI_CTX_FOLDER && app.ui.ctx_crumb < 0) app.ui.menu_on = false;', '', 'f8'),
     (G, '    u->ctx_w = app.ctx_path[0] && access(app.ctx_path, W_OK) == 0;', '    u->ctx_w = false;', 'f8'),
     (G, '            app.ui.ctx_w = app.ui.ctx_dir && app.ui.list.sel < app.list.n && entry_path(app.ui.list.sel, e, sizeof e) && access(e, W_OK) == 0;', '            app.ui.ctx_w = false;', 'f8'),
+    # ---- the list's Owner, Group, Permissions and links' targets (2026-10-27). Not run: the cells
+    # and the target drawn (pixels: f8b's list-columns.png, list-no-perms.png show them)
+    (G, '        app.ui.side_mode = st.side, app.ui.grid = st.icons, app.ui.zoom = st.zoom, app.ui.perms_cols = !st.no_perms;', '        app.ui.side_mode = st.side, app.ui.grid = st.icons, app.ui.zoom = st.zoom, app.ui.perms_cols = true;', 'f8'),
+    (G, '        if (state_path(path, sizeof path) && !state_put(&scratch, path, "perms", app.ui.perms_cols ? "on" : "off", &err))', '        if (state_path(path, sizeof path) && !state_put(&scratch, path, "perms", "on", &err))', 'f8'),
     # ---- quit doesn't wait for a hung drive (2026-10-26: no mutant was hang's or f6b's alone)
     (K, '    if (pthread_timedjoin_np(counts.thread, NULL, &until) != 0) pthread_detach(counts.thread);', '    pthread_join(counts.thread, NULL);', 'hang'),
     ('gui/space.c', '    if (pthread_timedjoin_np(space.thread, NULL, &until) != 0) pthread_detach(space.thread);', '    pthread_join(space.thread, NULL);', 'f6'),
@@ -568,7 +572,7 @@ def key(m):
     return hashlib.sha1('\0'.join(m[:3]).encode()).hexdigest()[:12]
 
 # The group of a script that failed: run.sh prints "== <script>: FAILED" or "<group>: FAILED".
-GROUP_OF = {'f6b': 'f6', 'f62b': 'f62', 'f62c': 'f62', 'f63b': 'f63', 'f63c': 'f63', 'f64b': 'f64', 'f64c': 'f64', 'f64d': 'f64', 'f7b': 'f7', 'f73b': 'f73', 'f73c': 'f73', 'f73d': 'f73', 'f75b': 'f75', 'f8b': 'f8', 'f8c': 'f8'}
+GROUP_OF = {'f6b': 'f6', 'f62b': 'f62', 'f62c': 'f62', 'f63b': 'f63', 'f63c': 'f63', 'f64b': 'f64', 'f64c': 'f64', 'f64d': 'f64', 'f7b': 'f7', 'f73b': 'f73', 'f73c': 'f73', 'f73d': 'f73', 'f75b': 'f75', 'f8b': 'f8', 'f8c': 'f8', 'f8d': 'f8'}
 
 # The tags as groups run.sh knows: a script's name (f7b, written before GROUP_OF had it) as its
 # group; anything else dropped, so a mutant never "survives" a group that runs nothing.

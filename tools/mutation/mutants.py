@@ -1614,3 +1614,20 @@ MUTANTS += [
     (U, "u->ctx_eject = u->ctx_full = u->ctx_w = false;", "u->ctx_eject = u->ctx_full = false;"),
     (U, "    u->ctx_key = keys, u->ctx_w = false;   // (gui/ says, as it opens)", "    u->ctx_key = keys;   // (gui/ says, as it opens)"),
 ]
+# ---- the list's Owner, Group, Permissions (View → Show Permissions) and links' targets (2026-10-27).
+# Not mutants: `link ?` before link_target (a readlinkat per entry saved; on a non-link it fails and
+# gives empty anyway) and its `k <= 0` (a link that can't be read between the stat and it: a race).
+MUTANTS += [
+    (U, "    for (int k = 0; k < 9; k++) p[k] = mode & (0400u >> k) ? RWX[k % 3] : '-';", "    for (int k = 0; k < 9; k++) p[k] = mode & (0400u >> k) ? RWX[k % 3] : 'x';"),
+    (U, "    if (mode & 04000) p[2] = p[2] == 'x' ? 's' : 'S';", ""),
+    (U, "    if (mode & 02000) p[5] = p[5] == 'x' ? 's' : 'S';", "    if (mode & 02000) p[5] = 's';"),
+    (U, "    if (mode & 01000) p[8] = p[8] == 'x' ? 't' : 'T';", "    if (mode & 01000) p[8] = 't';"),
+    (U, "    if (!mode) {\n        snprintf(buf, cap, \"-\");\n        return;\n    }", ""),
+    (U, "    case UM_PERMS_COLS: return u->perms_cols;", "    case UM_PERMS_COLS: return 1;"),
+    (U, "    case UM_PERMS_COLS: return u->perms_cols = !u->perms_cols, (UiAction){ UA_PERMS_COLS, 0, false };", "    case UM_PERMS_COLS: return (UiAction){ UA_PERMS_COLS, 0, false };"),
+    (L, "            .uid = (u32)st.st_uid, .gid = (u32)st.st_gid,", "            .uid = 0, .gid = (u32)st.st_gid,"),
+    (L, "            .target = link ? link_target(a, fd, nm) : STR_EMPTY,", "            .target = STR_EMPTY,"),
+    (L, "    memcpy(p, buf, (size_t)k), p[k] = 0;", "    memcpy(p, buf, (size_t)k - 1), p[k] = 0;"),
+    (ST, "        if (str_eq(key, S(\"perms\"))) s.no_perms = str_eq(val, S(\"off\"));", ""),
+    (ST, "    if (s->no_perms) n += snprintf", "    if (false) n += snprintf"),
+]

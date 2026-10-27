@@ -15,7 +15,7 @@ static void test_state(void)
     CHECK(state_load(&ta, path).side == SIDE_PLACES);
     // Saved, its folder made: read back; no temporary file left.
     Err err;
-    State s = { SIDE_TREE, false, 0 };
+    State s = { SIDE_TREE, false, 0, false };
     CHECK(state_save(path, &s, &err));
     CHECK(state_load(&ta, path).side == SIDE_TREE);
     s.side = SIDE_HIDDEN;

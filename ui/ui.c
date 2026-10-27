@@ -207,6 +207,7 @@ typedef enum {
     UA_MAKE_LINK,   // a symbolic link "Link to <name>" beside each marked entry (or the cursor's) (F8)
     UA_FOLLOW,      // index: the entry, a link: to its target's folder, the target selected (F8)
     UA_TAB_OTHERS,  // every tab but the current one closed (F8)
+    UA_PERMS_COLS,  // the list's Owner, Group and Permissions shown or not (Ui.perms_cols): gui/ remembers it
     UA_FOLDER_DO,   // index: a UiMenuItem of the folder menu, for the folder it opened on (Ui.ctx_side or ctx_crumb, F8)
 } UiActionKind;
 // A right-click menu's entry on a folder of the files (F8) acts on that folder, not the folder
@@ -231,7 +232,7 @@ enum { UI_MODAL_YES = 1, UI_MODAL_NO, UI_MODAL_SKIP, UI_MODAL_REPLACE, UI_MODAL_
 typedef enum {
     UM_SEP, UM_NEW_TAB, UM_NEW_WINDOW, UM_NEW_FOLDER, UM_NEW_FILE, UM_OPEN, UM_OPEN_WITH, UM_PROPERTIES, UM_CLOSE_ALL, UM_CLOSE,
     UM_UNDO, UM_CUT, UM_COPY, UM_PASTE, UM_SELECT_ALL, UM_SELECT_MATCH, UM_INVERT, UM_DUPLICATE, UM_MAKE_LINK, UM_RENAME, UM_TRASH, UM_DELETE, UM_RESTORE,
-    UM_RELOAD, UM_SIDE_PLACES, UM_SIDE_TREE, UM_SIDE_NONE, UM_HIDDEN, UM_SORT_NAME, UM_SORT_SIZE, UM_SORT_MTIME, UM_SORT_REVERSE,
+    UM_RELOAD, UM_SIDE_PLACES, UM_SIDE_TREE, UM_SIDE_NONE, UM_HIDDEN, UM_PERMS_COLS, UM_SORT_NAME, UM_SORT_SIZE, UM_SORT_MTIME, UM_SORT_REVERSE,
     UM_ZOOM_IN, UM_ZOOM_OUT, UM_ZOOM_RESET, UM_VIEW_LIST, UM_VIEW_ICONS,
     UM_PARENT, UM_BACK, UM_FORWARD, UM_HOME, UM_TRASH_VIEW, UM_FIND, UM_LOCATION, UM_TERMINAL,
     UM_ADD_BOOKMARK, UM_EDIT_BOOKMARKS, UM_BM_0, UM_BM_1, UM_BM_2, UM_BM_3, UM_BM_4, UM_BM_5, UM_BM_6, UM_BM_7, UM_BM_MORE,
@@ -279,6 +280,7 @@ static const struct { const char *label, *key, *word; UiEvent ev; char mark; } U
     [UM_SIDE_TREE] = { "Tree Sidebar", "", "side-tree", .mark = 'r' },
     [UM_SIDE_NONE] = { "No Sidebar", "", "side-none", .mark = 'r' },
     [UM_HIDDEN] = { "Show Hidden Files", "Ctrl+H", "hidden", { UK_HIDDEN, 0 }, 'c' },
+    [UM_PERMS_COLS] = { "Show Permissions", "", "perms-cols", .mark = 'c' },   // the list's Owner, Group, Permissions (2026-10-27)
     [UM_SORT_NAME] = { "Sort by Name", "", "sort-name", .mark = 'r' },
     [UM_SORT_SIZE] = { "Sort by Size", "", "sort-size", .mark = 'r' },
     [UM_SORT_MTIME] = { "Sort by Modified", "", "sort-mtime", .mark = 'r' },
@@ -349,7 +351,7 @@ static const UiMenuItem UI_MENU_EDIT[] = {
     UM_TRASH, UM_RESTORE, UM_DELETE,
 };
 static const UiMenuItem UI_MENU_VIEW[] = {
-    UM_RELOAD, UM_SEP, UM_SIDE_PLACES, UM_SIDE_TREE, UM_SIDE_NONE, UM_SEP, UM_HIDDEN, UM_SEP,
+    UM_RELOAD, UM_SEP, UM_SIDE_PLACES, UM_SIDE_TREE, UM_SIDE_NONE, UM_SEP, UM_HIDDEN, UM_PERMS_COLS, UM_SEP,
     UM_SORT_NAME, UM_SORT_SIZE, UM_SORT_MTIME, UM_SORT_REVERSE, UM_SEP, UM_ZOOM_IN, UM_ZOOM_OUT, UM_ZOOM_RESET, UM_SEP,
     UM_VIEW_LIST, UM_VIEW_ICONS,
 };
@@ -606,6 +608,7 @@ typedef struct {
     // frame: an undo to make, history back and forward, a folder above, files to paste, hidden
     // files shown. And an entry picked whose key is still to run (ui_handle runs it next).
     bool   can_undo, can_back, can_forward, can_up, can_paste, shows_hidden;
+    bool   perms_cols;   // the list's Owner, Group and Permissions columns shown (gui/ reads it from the state)
     UiEvent menu_key;
     // A right-click menu (F8): its entry is one folder (Open in New Tab), and a key opened it (gui/
     // places it under the cursor, not at the pointer).
@@ -1548,7 +1551,7 @@ static bool ui_menu_enabled(const Ui *u, UiMenuItem it)
     case UM_SELECT_ALL: case UM_SELECT_MATCH: case UM_INVERT: return files;
     case UM_RENAME: case UM_DUPLICATE: case UM_MAKE_LINK: return here && !u->in_trash && u->can_write;
     case UM_TRASH: case UM_DELETE: case UM_RESTORE: return here;
-    case UM_RELOAD: case UM_SIDE_PLACES: case UM_SIDE_TREE: case UM_SIDE_NONE: case UM_HIDDEN: return true;
+    case UM_RELOAD: case UM_SIDE_PLACES: case UM_SIDE_TREE: case UM_SIDE_NONE: case UM_HIDDEN: case UM_PERMS_COLS: return true;
     case UM_SORT_NAME: case UM_SORT_SIZE: case UM_SORT_MTIME: case UM_SORT_REVERSE: return true;
     case UM_ZOOM_IN: return u->grid && ui_zoom_level(ui_zoom_px(u)) < UI_ZOOMS - 1;
     case UM_ZOOM_OUT: return u->grid && ui_zoom_level(ui_zoom_px(u)) > 0;
@@ -1580,6 +1583,7 @@ static int ui_menu_mark(const Ui *u, UiMenuItem it)
     case UM_SIDE_TREE: return u->side_mode == SIDE_TREE;
     case UM_SIDE_NONE: return u->side_mode == SIDE_HIDDEN;
     case UM_HIDDEN: return u->shows_hidden;
+    case UM_PERMS_COLS: return u->perms_cols;
     case UM_SORT_NAME: return u->sort.key == SORT_NAME;
     case UM_SORT_SIZE: return u->sort.key == SORT_SIZE;
     case UM_SORT_MTIME: return u->sort.key == SORT_MTIME;
@@ -2003,6 +2007,7 @@ static UiAction ui_menu_pick(Ui *u, UiMenuItem it)
         u->sort.key = it == UM_SORT_NAME ? SORT_NAME : it == UM_SORT_SIZE ? SORT_SIZE : SORT_MTIME;
         return (UiAction){ UA_SORT, 0, false };
     case UM_DUPLICATE: return (UiAction){ UA_DUPLICATE, 0, false };
+    case UM_PERMS_COLS: return u->perms_cols = !u->perms_cols, (UiAction){ UA_PERMS_COLS, 0, false };
     case UM_BM_0: case UM_BM_1: case UM_BM_2: case UM_BM_3: case UM_BM_4: case UM_BM_5: case UM_BM_6: case UM_BM_7:
         return (UiAction){ UA_BOOKMARK, it - UM_BM_0, false };
     case UM_BM_MORE: return ui_bmp_open(u, u->bm_more_at);
@@ -3060,6 +3065,25 @@ static int ui_wrap(Str s, float width, float dots, float (*adv)(u32), int most, 
 }
 
 // ---- display --------------------------------------------------------------------------------
+
+// A mode's permissions as ls prints them, without the type: "rwxr-xr-x"; s/S for set-user and
+// set-group IDs, t/T for the sticky bit (upper case: the x under it is off). "-" for mode 0 (a
+// broken link: nothing to read). The list's Permissions column (2026-10-27).
+static void ui_perms(char *buf, size_t cap, u32 mode)
+{
+    if (!mode) {
+        snprintf(buf, cap, "-");
+        return;
+    }
+    char p[10];
+    static const char RWX[] = "rwx";
+    for (int k = 0; k < 9; k++) p[k] = mode & (0400u >> k) ? RWX[k % 3] : '-';
+    if (mode & 04000) p[2] = p[2] == 'x' ? 's' : 'S';
+    if (mode & 02000) p[5] = p[5] == 'x' ? 's' : 'S';
+    if (mode & 01000) p[8] = p[8] == 'x' ? 't' : 'T';
+    p[9] = 0;
+    snprintf(buf, cap, "%s", p);
+}
 
 // A size as ls -h prints it, in binary units: "512 B", "4.0 KiB", "13 MiB", one decimal below 10.
 static void ui_size(char *buf, size_t cap, i64 size)

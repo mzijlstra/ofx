@@ -137,7 +137,7 @@ enum { TREE_STEP = 10, TRASH_BAR_H = 38 };
 enum { MENU_H = 26, MENU_TITLE_PAD = 10, MENU_ROW_H = 26, MENU_SEP_H = 9, MENU_W_MIN = 280 };
 enum { TAB_H = 30, TAB_X_W = 22, JOB_ROW_H = 40, JOB_WAIT_H = 22, MODE_BTN_W = 28, MODE_BTN_H = 22, MODE_GAP = 4, FIND_BAR_H = 36 };
 enum { FONT_PX = 15, ROW_H = 28, ICON_PX = 24, HEADER_H = 40, COLS_H = 26, FOOTER_H = 28, PAD = 12, SIZE_W = 90,
-       DATE_W = 100, SIDE_W = 200, SIDE_ROW_H = 28, SIDE_ICON_PX = 20, GAP = 10, ICONS_MAX = 512 };
+       DATE_W = 100, OWNER_W = 100, OWNER_PAD = 20, GROUP_W = 80, PERM_W = 84, SIDE_W = 200, SIDE_ROW_H = 28, SIDE_ICON_PX = 20, GAP = 10, ICONS_MAX = 512 };
 // The icon view (F6.2): a cell holds its icon (48 px at first, F6.3's zoom from 32 to 256) over two
 // lines of its name; the cursor's name in full, up to CELL_LINES_FULL lines, over the cells below it.
 enum { CELL_W_MIN = 112, CELL_W_ROOM = 64, CELL_H_ROOM = 56, CELL_PAD = 4, CELL_LINE_H = FONT_PX + 4, CELL_LINES_FULL = 8 };
@@ -1262,6 +1262,11 @@ static void act(UiAction a)
         if (state_path(path, sizeof path) && !state_put(&scratch, path, "sidebar", SIDE_MODE_NAMES[app.ui.side_mode], &err)) set_status(true, "%s", err.msg);
         break;
     }
+    case UA_PERMS_COLS: {   // remembered, the one key (as UA_VIEW)
+        char path[PATH_MAX];
+        if (state_path(path, sizeof path) && !state_put(&scratch, path, "perms", app.ui.perms_cols ? "on" : "off", &err)) set_status(true, "%s", err.msg);
+        break;
+    }
     case UA_ZOOM:     // F6.3: as the view, the cursor kept on its row at the refit (ui_refit)
     case UA_VIEW: {   // F6.2: remembered; the loop lays it out before the next frame
         if (a.kind == UA_ZOOM) app.zoomed = true;
@@ -1840,7 +1845,28 @@ static void layout_trash_bar(void)
     }
 }
 
-// The column headers: Name, Size, Modified, the sorted one with an arrow; a click sorts.
+// A user's or a group's name, cached (the list's Owner and Group, 2026-10-27): a getpwuid per row
+// and frame would be a passwd read each; the number when it has no name.
+static const char *id_name(bool group, u32 id)
+{
+    enum { IDS_MAX = 32 };
+    static struct { bool used, group; u32 id; char name[64]; } cache[IDS_MAX];
+    static int next;
+    for (int k = 0; k < IDS_MAX; k++)
+        if (cache[k].used && cache[k].group == group && cache[k].id == id) return cache[k].name;
+    int k = next++ % IDS_MAX;
+    cache[k].used = true, cache[k].group = group, cache[k].id = id;
+    char buf[4096];
+    struct passwd pw, *pwp = NULL;
+    struct group gr, *grp = NULL;
+    if (!group && getpwuid_r(id, &pw, buf, sizeof buf, &pwp) == 0 && pwp) snprintf(cache[k].name, sizeof cache[k].name, "%s", pw.pw_name);
+    else if (group && getgrgid_r(id, &gr, buf, sizeof buf, &grp) == 0 && grp) snprintf(cache[k].name, sizeof cache[k].name, "%s", gr.gr_name);
+    else snprintf(cache[k].name, sizeof cache[k].name, "%u", (unsigned)id);
+    return cache[k].name;
+}
+
+// The column headers: Name, Size, Modified, the sorted one with an arrow; a click sorts. Then Owner,
+// Group and Permissions, which don't sort (Michael, 2026-10-27).
 static void layout_cols(void)
 {
     Theme *t = &app.theme;
@@ -1860,6 +1886,14 @@ static void layout_cols(void)
                 text(label, on ? cc(t->fg) : cc(t->fg_dim));
             }
         }
+        static const struct { const char *id, *name; int w; } MORE[] = { { "col-owner", "Owner", OWNER_W }, { "col-group", "Group", GROUP_W },
+                                                                         { "col-perms", "Permissions", PERM_W } };
+        for (int k = 0; app.ui.perms_cols && k < COUNT(MORE); k++)
+            CLAY(Clay_GetElementId(cz(MORE[k].id)), { .layout = { .sizing = { CLAY_SIZING_FIXED(MORE[k].w), CLAY_SIZING_GROW(0) },
+                                                                  .padding = { k == 0 ? OWNER_PAD : 0, 0, 0, 0 },   // (clear of Modified, right-aligned)
+                                                                  .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } } }) {
+                text(cz(MORE[k].name), cc(t->fg_dim));
+            }
     }
 }
 
@@ -1930,6 +1964,15 @@ static void size_cell(isize i, char *size, size_t cap, bool ask)
     else if (app.count[i] == -1) snprintf(size, cap, "?");
 }
 
+// One of a row's Owner, Group, Permissions cells, pad on its left: s (copied into the frame arena: Clay reads the
+// text after layout_row has returned) cut to w.
+static void info_cell(Clay_ElementId id, const char *s, int w, int pad)
+{
+    CLAY(id, { .layout = { .sizing = { CLAY_SIZING_FIXED(w), CLAY_SIZING_FIT(0) }, .padding = { pad, 0, 0, 0 } }, .clip = { .horizontal = true } }) {
+        text(fit(str_from_c(arena_sprintf(&frame, "%s", s)), (float)(w - pad), false), cc(app.theme.fg_dim));
+    }
+}
+
 static void layout_row(int r, isize i, float w, i64 now)
 {
     const Entry *e = &app.list.e[i];
@@ -1942,7 +1985,8 @@ static void layout_row(int r, isize i, float w, i64 now)
     size_cell(i, size, sizeof size, true);
     if (e->mtime) ui_when(when, sizeof when, e->mtime, now);
     bool link = e->kind == K_LINK_DIR || e->kind == K_LINK_FILE || e->kind == K_LINK_BROKEN;
-    float name_w = w - side_w() - 2 * PAD - ICON_PX - 3 * GAP - SIZE_W - DATE_W - (link ? 16 : 0);
+    float perms_w = app.ui.perms_cols ? 3 * GAP + OWNER_W + GROUP_W + PERM_W : 0;   // (View → Show Permissions)
+    float name_w = w - side_w() - 2 * PAD - ICON_PX - 3 * GAP - SIZE_W - DATE_W - perms_w - (link ? 16 : 0);
     CLAY(CLAY_IDI("row", r), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(ROW_H) },
                                            .padding = { PAD, PAD, 0, 0 }, .childGap = GAP,
                                            .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
@@ -1955,6 +1999,14 @@ static void layout_row(int r, isize i, float w, i64 now)
             } else {
                 text(fit(e->name, name_w, false), e->kind == K_LINK_BROKEN ? cc(t->red) : marked ? cc(t->accent) : cc(t->fg));
                 if (link) text(cz("\xE2\x86\x92"), cc(t->fg_dim));   // →
+                if (link && e->target.len) {   // where it leads, as written, home as ~ (2026-10-27)
+                    char to[PATH_MAX];
+                    snprintf(to, sizeof to, "%.*s", STR_ARG(e->target));
+                    char shown[PATH_MAX + 1];
+                    ui_tilde(shown, sizeof shown, to, getenv("HOME"));
+                    float room = name_w - str_width(e->name) - 12;
+                    if (room > 40) text(fit(str_from_c(arena_sprintf(&frame, "%s", shown)), room, true), cc(t->fg_dim));
+                }
                 if (e->trash) {   // where it came from, home as ~
                     Str from = path_dir(str_from_c(e->trash->from));
                     const char *home = getenv("HOME");
@@ -1975,6 +2027,14 @@ static void layout_row(int r, isize i, float w, i64 now)
         CLAY(CLAY_IDI("date", r), { .layout = { .sizing = { CLAY_SIZING_FIXED(DATE_W), CLAY_SIZING_FIT(0) },
                                                 .childAlignment = { .x = CLAY_ALIGN_X_RIGHT } } }) {
             text(cz(arena_sprintf(&frame, "%s", when)), cc(t->fg_dim));
+        }
+        // Owner, Group, Permissions (2026-10-27): the target's for a link, as Size is.
+        if (app.ui.perms_cols) {
+            char perms[16];
+            ui_perms(perms, sizeof perms, e->mode);
+            info_cell(CLAY_IDI("owner", r), id_name(false, e->uid), OWNER_W, OWNER_PAD);
+            info_cell(CLAY_IDI("group", r), id_name(true, e->gid), GROUP_W, 0);
+            info_cell(CLAY_IDI("perms", r), perms, PERM_W, 0);
         }
     }
 }
@@ -4215,7 +4275,7 @@ int main(int argc, char **argv)
     char state_file[PATH_MAX];
     if (state_path(state_file, sizeof state_file)) {
         State st = state_load(&scratch, state_file);
-        app.ui.side_mode = st.side, app.ui.grid = st.icons, app.ui.zoom = st.zoom;
+        app.ui.side_mode = st.side, app.ui.grid = st.icons, app.ui.zoom = st.zoom, app.ui.perms_cols = !st.no_perms;
     }
     side_refresh();
     list_fit();

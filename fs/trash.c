@@ -394,6 +394,8 @@ static bool trash_list(Arena *a, const TrashDirs *d, bool show_hidden, Sort sort
                 .size = kind_is_dir(kd) || kd == K_LINK_BROKEN ? 0 : (i64)st.st_size,
                 .mtime = when,
                 .mode = kd == K_LINK_BROKEN ? 0 : (u32)st.st_mode,
+                .uid = (u32)st.st_uid, .gid = (u32)st.st_gid,
+                .target = kd == K_LINK_FILE || kd == K_LINK_DIR || kd == K_LINK_BROKEN ? link_target(a, ffd, item) : STR_EMPTY,
                 .trash = t,
             };
         }

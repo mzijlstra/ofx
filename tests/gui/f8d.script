@@ -1,0 +1,4 @@
+# The list's Owner, Group and Permissions as the state file says: run.sh writes "perms=off" first.
+settle
+expect permscols=0
+quit

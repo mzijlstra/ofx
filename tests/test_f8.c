@@ -424,3 +424,50 @@ static void test_ctx_tab_menu(void)
     ui_handle(&u, names, &in);
     CHECK(u.menu_on && !u.editing);
 }
+
+// The list's Owner, Group and Permissions, and a link's target after its arrow (2026-10-27).
+static void test_list_columns(void)
+{
+    char b[16];
+    struct { u32 mode; const char *want; } perms[] = {
+        { 0100644, "rw-r--r--" }, { 040755, "rwxr-xr-x" }, { 0100600, "rw-------" }, { 0104755, "rwsr-xr-x" }, { 0104644, "rwSr--r--" },
+        { 0102755, "rwxr-sr-x" }, { 0102745, "rwxr-Sr-x" }, { 041777, "rwxrwxrwt" }, { 041776, "rwxrwxrwT" }, { 0, "-" },
+    };
+    for (int k = 0; k < COUNT(perms); k++) {
+        ui_perms(b, sizeof b, perms[k].mode);
+        CHECK_STR(str_from_c(b), perms[k].want);
+    }
+    // A listing: each entry's owner and group (the target's for a link), a link's target as written.
+    arena_reset(&ta);
+    mkdirs(at("f8cols/sub"));
+    put(at("f8cols/a.txt"), "a");
+    CHECK(symlink("sub", at("f8cols/rel")) == 0 && symlink(at("f8cols/a.txt"), at("f8cols/abs")) == 0 && symlink("gone", at("f8cols/broken")) == 0);
+    Listing l;
+    Err err;
+    CHECK(fs_list(&ta, at("f8cols"), false, (Sort){ SORT_NAME, false }, &l, &err) && l.n == 5);
+    for (isize i = 0; i < l.n; i++) {
+        const Entry *e = &l.e[i];
+        CHECK(e->uid == (u32)getuid() && e->gid == (u32)getgid());
+        if (str_eq(e->name, S("rel"))) CHECK_STR(e->target, "sub");
+        else if (str_eq(e->name, S("abs"))) CHECK_STR(e->target, at("f8cols/a.txt"));
+        else if (str_eq(e->name, S("broken"))) CHECK(str_eq(e->target, S("gone")) && e->mode == 0);
+        else CHECK(e->target.len == 0);
+    }
+    // View → Show Permissions, remembered: "perms=off" leaves them out; anything else, or none, shows them.
+    char path[PATH_MAX];
+    snprintf(path, sizeof path, "%s", at("f8cols/state"));
+    Err e2;
+    CHECK(!state_load(&ta, path).no_perms);
+    CHECK(state_put(&ta, path, "perms", "off", &e2) && state_load(&ta, path).no_perms);
+    CHECK(state_put(&ta, path, "perms", "on", &e2) && !state_load(&ta, path).no_perms);
+    State st = { SIDE_PLACES, false, 0, true };
+    CHECK(state_save(path, &st, &e2) && strstr(read_file(&ta, path).p, "perms=off\n") && state_load(&ta, path).no_perms);
+    // The entry toggles it and asks gui/ to remember.
+    Ui u = menu_ui(2);
+    u.perms_cols = true;
+    CHECK(ui_menu_mark(&u, UM_PERMS_COLS) == 1 && ui_menu_enabled(&u, UM_PERMS_COLS));
+    u.menu_on = true, u.menu = 2;
+    UiInput in = ui_input_none();
+    in.menu_item = menu_place(2, UM_PERMS_COLS);
+    CHECK(ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in).kind == UA_PERMS_COLS && !u.perms_cols && ui_menu_mark(&u, UM_PERMS_COLS) == 0);
+}

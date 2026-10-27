@@ -2,7 +2,21 @@
 # (Ctrl+M) and its undo, Follow Link. The tree (run.sh): sub/ with inner.txt, a.txt, zlink ->
 # sub/inner.txt; the bookmarks file in the scratch config, none yet.
 settle
-expect n=3 sel=sub bmn=0
+expect n=3 sel=sub bmn=0 permscols=1
+# The list (2026-10-27): a link's target after its arrow; Owner, Group, Permissions
+shot list-columns.png
+# View → Show Permissions: off, remembered; on again
+key alt-v
+point-ui menu-item 7
+click-here
+expect menu=- permscols=0
+sh grep -qx "perms=off" "$OFX_ROOT/state/ofx/state"
+shot list-no-perms.png
+key alt-v
+point-ui menu-item 7
+click-here
+expect permscols=1
+sh grep -qx "perms=on" "$OFX_ROOT/state/ofx/state"
 # Open in New Window: ofx on that folder
 point-ui row 0
 right-here
