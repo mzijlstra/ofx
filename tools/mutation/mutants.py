@@ -1387,3 +1387,6 @@ MUTANTS += [
     (U, "    case UM_DUPLICATE: return (UiAction){ UA_DUPLICATE, 0, false };", ""),
     (U, "    case UM_RENAME: case UM_DUPLICATE: return here && !u->in_trash && u->can_write;", "    case UM_RENAME: case UM_DUPLICATE: return !u->in_trash && u->can_write;"),
 ]
+MUTANTS += [
+    (U, "    if (u->find_m.bad && u->find_len > 0) return;\n", ""),
+]

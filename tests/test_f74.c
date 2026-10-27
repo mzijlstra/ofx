@@ -226,6 +226,15 @@ static void test_select_match(void)
     menu_keys(&u, 1, UK_ENTER);
     CHECK(u.marked == 1 && mark[1]);
     u.find_opts.cased = false;
+    // A regular expression that doesn't compile: the selection stays, the bar too.
+    u.find_opts.regex = true;
+    menu_keys(&u, 1, UK_SELECT_MATCH);
+    in = chars("(");
+    ui_handle(&u, names, &in);
+    menu_keys(&u, 1, UK_ENTER);
+    CHECK(u.find_m.bad && u.finding && u.find_select && u.marked == 1 && mark[1]);
+    menu_keys(&u, 1, UK_ESC);
+    u.find_opts.regex = false;
     // No match: the selection empties (nothing matches).
     menu_keys(&u, 1, UK_SELECT_MATCH);
     in = chars("zz");

@@ -845,9 +845,11 @@ static void ui_mark(Ui *u, isize i, bool on);
 static void ui_mark_clear(Ui *u);
 
 // Select Items Matching's Enter (F7.4, as Nemo's): the selection becomes every name the text
-// matches, and the bar closes; with no text it only closes.
+// matches, and the bar closes; with no text it only closes. A regular expression that doesn't
+// compile matches nothing: the selection stays and so does the bar, its reason in red (reviewer-2).
 static void ui_find_select(Ui *u, UiNames names)
 {
+    if (u->find_m.bad && u->find_len > 0) return;
     if (u->find_len > 0) {
         ui_mark_clear(u);
         for (isize i = 0; i < u->list.n; i++)
