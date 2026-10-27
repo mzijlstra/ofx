@@ -337,7 +337,8 @@ static void test_shortcuts(void)
     CHECK(u.keys_list.top == UI_KEYS_LINES - 19);
     menu_keys(&u, 1, UK_HOME);
     CHECK(u.keys_list.top == 0);
-    in = ui_input_none(), in.ow_wheel = -3;   // the wheel, three notches down
+    in = ui_input_none(), in.ow_wheel = -3;   // the wheel, three notches down: it draws a frame (a live window waits on input that acts)
+    CHECK(ui_input_acts(&in));
     ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in);
     CHECK(u.keys_list.top == 3);
     // Typing after a scroll: back at the top.

@@ -710,7 +710,7 @@ static bool ui_input_acts(const UiInput *in)
            in->backs > 0 || in->forwards > 0 || in->job_x >= 0 || in->side_mode >= 0 || in->side_twisty >= 0 || in->side_eject >= 0 ||
            in->zoom_wheel != 0 || in->zoom_to >= 0 || in->menu_title >= 0 || in->menu_item >= 0 || in->menu_away || in->prop_box >= 0 ||
            in->ow_row >= 0 || in->ow_drow >= 0 || in->ow_field || in->toggle > 0 || in->find_x || in->find_field || in->find_step ||
-           in->bmp_row >= 0 || in->bmp_drow >= 0 || in->bmp_btn;
+           in->bmp_row >= 0 || in->bmp_drow >= 0 || in->bmp_btn || in->ow_wheel != 0;   // (a panel's wheel: Open With, Keyboard Shortcuts)
 }
 
 // Whether a status message gives way to the status line on input that acts (ui_input_acts): a
