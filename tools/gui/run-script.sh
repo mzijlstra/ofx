@@ -61,7 +61,10 @@ chmod +x "$T/fakes/udisksctl"
 if [ ! -d "$T/state" ]; then
     mkdir -p "$T/state/omarchy/current/theme"
     real=${XDG_STATE_HOME:-$HOME/.local/state}/omarchy/current/theme
-    cp "$real/colors.toml" "$real/icons.theme" "$T/state/omarchy/current/theme/" 2>/dev/null
+    # (a missing theme said up front: the window then has the default colours and no icons, and
+    # scripts that expect the theme's fail far from the cause; F8 review, 2026-10-27)
+    cp "$real/colors.toml" "$real/icons.theme" "$T/state/omarchy/current/theme/" 2>/dev/null ||
+        echo "run-script: no theme in $real (colors.toml, icons.theme): the defaults instead" >&2
 fi
 args=""
 script_env="OFX_GUI_SCRIPT=$sc"

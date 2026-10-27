@@ -117,7 +117,7 @@ static void fs_sort(Listing *l, Sort s)
 
 static Kind kind_of(int dirfd, const char *name, struct stat *st)
 {
-    if (fstatat(dirfd, name, st, AT_SYMLINK_NOFOLLOW) != 0) return K_OTHER;
+    if (fstatat(dirfd, name, st, AT_SYMLINK_NOFOLLOW) != 0) return *st = (struct stat){ 0 }, K_OTHER;   // (gone since readdir: nothing to show)
     if (S_ISLNK(st->st_mode)) {
         struct stat t;
         if (fstatat(dirfd, name, &t, 0) != 0) return K_LINK_BROKEN;
@@ -127,8 +127,6 @@ static Kind kind_of(int dirfd, const char *name, struct stat *st)
     return S_ISDIR(st->st_mode) ? K_DIR : S_ISREG(st->st_mode) ? K_FILE : K_OTHER;
 }
 
-// The entries of dir, sorted; dot-files counted in hidden, and left out unless show_hidden. False,
-// with the reason, when the folder can't be opened or the arena is full.
 // A symlink's target as it is written, into a; empty when it can't be read (or a is full).
 static Str link_target(Arena *a, int dirfd, const char *name)
 {
@@ -141,6 +139,8 @@ static Str link_target(Arena *a, int dirfd, const char *name)
     return (Str){ p, k };
 }
 
+// The entries of dir, sorted; dot-files counted in hidden, and left out unless show_hidden. False,
+// with the reason, when the folder can't be opened or the arena is full.
 static bool fs_list(Arena *a, const char *dir, bool show_hidden, Sort sort, Listing *out, Err *err)
 {
     *out = (Listing){ 0 };
