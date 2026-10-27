@@ -728,6 +728,15 @@ target selected. Make Link (`UK_MAKE_LINK`, Ctrl+M, also in Edit): `op_symlink` 
 "Link to <name>" (name_free's " (2)" before the extension), the absolute path; `UNDO_LINK` removes
 them while each is still a link to that path.
 
+**Step 3 built (2026-10-27): a folder elsewhere.** `UI_CTX_FOLDER` on a sidebar row (not a
+heading; the sidebar's cursor goes there, lit while the menu is up) or a path button, by a right
+press or Shift+F10 where the keys are (they stay there). `ui_folder_shown` and the folder branch of
+`ui_menu_enabled` decide from `Ui.ctx_*`, which gui/'s `ctx_facts` fills as it opens (the folder in
+`app.ctx_path`; Trash, a place, the bookmark's line by `bm_find`, a bookmark already, an eject
+button, `trash_any`). Its entries reach gui/ as `UA_FOLDER_DO` (`folder_do`), except Edit
+Bookmarks' own (on that line: `UA_BM_UP`, `UA_BM_DOWN`, `UA_BM_REMOVE`, the panel opened, renaming),
+Empty Trash's question and Properties (`UA_PROPS` index 2). `copy_targets` takes one path.
+
 ## F6.4 design (2026-10-24)
 
 **Asked (Michael):** previews in the icon view, from the freedesktop thumbnail cache shared with

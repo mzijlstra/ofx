@@ -125,7 +125,7 @@ static void test_ctx_keys(void)
     CHECK(u.menu_on && u.list.sel == 2 && !u.ctx_dir);
     menu_keys(&u, 1, UK_ESC);
     ui_mark(&u, 0, false);
-    // The sidebar has the keys: nothing (step 3 gives it its own).
+    // The sidebar has the keys, and no rows: nothing.
     u.side_focus = true;
     menu_keys(&u, 1, UK_CONTEXT);
     CHECK(!u.menu_on);
@@ -250,4 +250,123 @@ static void test_links(void)
     put(at("f8ln/m"), "");
     undo_begin(&un, UNDO_LINK), undo_add(&un, at("f8ln/a.txt"), at("f8ln/m"), NULL);
     CHECK(!undo_do(&un, &done, &err) && strstr(err.msg, "isn't that link now") && stat(at("f8ln/m"), &st) == 0);
+}
+
+// F8 step 3: a folder elsewhere's menu: a sidebar row (not a heading) or a path button, by a right
+// press or Shift+F10 where the keys are; what it shows for Trash, a place, a bookmark's row, a drive;
+// what its entries hand gui/ (UA_FOLDER_DO, or Edit Bookmarks' own on that line).
+static void test_ctx_folder_menu(void)
+{
+    static const u8 HEAD[] = { 1, 0, 0, 0, 1, 0 };   // Places, Home, Trash, a bookmark, Drives, /
+    UiNames names = { name_at, NULL, dir_at };
+    Ui u = menu_ui(3);
+    u.side_head = HEAD;
+    ui_resize(&u.side, 6), ui_set(&u.side, 6, 1);
+    // A heading: nothing. A row: its menu, the sidebar's cursor there, the keys where they were.
+    UiInput in = ui_input_none();
+    in.ctx_side = 0;
+    ui_handle(&u, names, &in);
+    CHECK(!u.menu_on);
+    in = ui_input_none(), in.ctx_side = 5;
+    CHECK(ui_input_acts(&in));
+    ui_handle(&u, names, &in);
+    CHECK(u.menu_on && u.menu == UI_CTX_FOLDER && u.ctx_side == 5 && u.ctx_crumb == -1 && u.side.sel == 5 && !u.side_focus && !u.ctx_key);
+    // As gui/ finds it: a place (no Cut or Copy), not a bookmark's row, no eject.
+    u.ctx_place = true, u.ctx_bms = 3;
+    CHECK(ui_menu_shown(&u, UM_OPEN_IT) && ui_menu_shown(&u, UM_OPEN_TAB) && ui_menu_shown(&u, UM_OPEN_WINDOW) && ui_menu_shown(&u, UM_TERMINAL_IN));
+    CHECK(!ui_menu_shown(&u, UM_CUT_IT) && !ui_menu_shown(&u, UM_COPY_IT) && ui_menu_shown(&u, UM_PASTE_INTO) && ui_menu_shown(&u, UM_BOOKMARK_IT));
+    CHECK(!ui_menu_shown(&u, UM_BM_RENAME_IT) && !ui_menu_shown(&u, UM_EJECT_IT) && !ui_menu_shown(&u, UM_EMPTY_IT) && ui_menu_shown(&u, UM_PROPS_IT));
+    CHECK(!ui_menu_shown(&u, UM_OPEN) && !ui_menu_shown(&u, UM_CUT) && !ui_menu_shown(&u, UM_FOLLOW));   // (the entry menu's)
+    CHECK(!ui_menu_enabled(&u, UM_PASTE_INTO));
+    u.can_paste = true;
+    CHECK(ui_menu_enabled(&u, UM_PASTE_INTO) && ui_menu_enabled(&u, UM_OPEN_WINDOW));
+    // Its entries go to gui/ for that folder.
+    UiMenuItem to_gui[] = { UM_OPEN_IT, UM_OPEN_TAB, UM_OPEN_WINDOW, UM_TERMINAL_IN, UM_PASTE_INTO, UM_BOOKMARK_IT };
+    for (int k = 0; k < COUNT(to_gui); k++) {
+        u.menu_on = true;
+        in = ui_input_none(), in.menu_item = menu_place(UI_CTX_FOLDER, to_gui[k]);
+        UiAction a = ui_handle(&u, names, &in);
+        CHECK(a.kind == UA_FOLDER_DO && a.index == to_gui[k] && !u.menu_on);
+    }
+    // A bookmark already: no Add Bookmark. A drive: Eject. Not a place (the tree): Cut and Copy.
+    u.menu_on = true;
+    u.ctx_bmed = true;
+    CHECK(!ui_menu_shown(&u, UM_BOOKMARK_IT));
+    u.ctx_eject = true;
+    CHECK(ui_menu_shown(&u, UM_EJECT_IT) && ui_menu_enabled(&u, UM_EJECT_IT));
+    u.ctx_place = false;
+    CHECK(ui_menu_shown(&u, UM_CUT_IT) && ui_menu_shown(&u, UM_COPY_IT));
+    in = ui_input_none(), in.menu_item = menu_place(UI_CTX_FOLDER, UM_COPY_IT);
+    CHECK(ui_handle(&u, names, &in).kind == UA_FOLDER_DO);
+    // Its Properties are that folder's (index 2).
+    u.menu_on = true;
+    in = ui_input_none(), in.menu_item = menu_place(UI_CTX_FOLDER, UM_PROPS_IT);
+    UiAction a = ui_handle(&u, names, &in);
+    CHECK(a.kind == UA_PROPS && a.index == 2 && u.props);
+    u.props = false;
+    // A bookmark's row (line 1 of 3): Edit Bookmarks' own on that line.
+    in = ui_input_none(), in.ctx_side = 3;
+    ui_handle(&u, names, &in);
+    CHECK(u.ctx_bmk == -1 && !u.ctx_place && !u.ctx_bmed && !u.ctx_eject);   // (reset as it opens, for gui/ to say)
+    u.ctx_place = true, u.ctx_bmk = 1, u.ctx_bms = 3, u.bm_total = 3;
+    UiMenuItem bm[] = { UM_BM_RENAME_IT, UM_BM_UP_IT, UM_BM_DOWN_IT, UM_BM_REMOVE_IT, UM_BM_EDIT_IT };
+    for (int k = 0; k < COUNT(bm); k++) CHECK(ui_menu_shown(&u, bm[k]) && ui_menu_enabled(&u, bm[k]));
+    struct { UiMenuItem it; UiActionKind kind; } line[] = { { UM_BM_UP_IT, UA_BM_UP }, { UM_BM_DOWN_IT, UA_BM_DOWN }, { UM_BM_REMOVE_IT, UA_BM_REMOVE } };
+    for (int k = 0; k < COUNT(line); k++) {
+        u.menu_on = true;
+        in = ui_input_none(), in.menu_item = menu_place(UI_CTX_FOLDER, line[k].it);
+        a = ui_handle(&u, names, &in);
+        CHECK(a.kind == line[k].kind && a.index == 1 && !u.bmp);
+    }
+    u.menu_on = true;
+    in = ui_input_none(), in.menu_item = menu_place(UI_CTX_FOLDER, UM_BM_EDIT_IT);
+    a = ui_handle(&u, names, &in);
+    CHECK(a.kind == UA_BM_EDIT && u.bmp && u.bmp_list.sel == 1 && !u.bmp_naming);
+    u.bmp = false, u.menu_on = true;
+    in = ui_input_none(), in.menu_item = menu_place(UI_CTX_FOLDER, UM_BM_RENAME_IT);
+    a = ui_handle(&u, names, &in);
+    CHECK(a.kind == UA_BM_NAME && a.index == 1 && u.bmp && u.bmp_list.sel == 1 && u.bmp_naming);
+    u.bmp = u.bmp_naming = false;
+    // The first line can't move up, the last can't move down.
+    u.ctx_bmk = 0;
+    CHECK(!ui_menu_enabled(&u, UM_BM_UP_IT) && ui_menu_enabled(&u, UM_BM_DOWN_IT));
+    u.ctx_bmk = 2;
+    CHECK(ui_menu_enabled(&u, UM_BM_UP_IT) && !ui_menu_enabled(&u, UM_BM_DOWN_IT));
+    // Trash: gone to, not into; Empty Trash, greyed when empty, asks.
+    u.ctx_bmk = -1, u.ctx_trash = true, u.ctx_eject = false, u.ctx_place = false;   // (its path button)
+    CHECK(ui_menu_shown(&u, UM_OPEN_IT) && ui_menu_shown(&u, UM_OPEN_TAB) && !ui_menu_shown(&u, UM_OPEN_WINDOW) && !ui_menu_shown(&u, UM_TERMINAL_IN));
+    CHECK(!ui_menu_shown(&u, UM_PASTE_INTO) && !ui_menu_shown(&u, UM_BOOKMARK_IT) && !ui_menu_shown(&u, UM_PROPS_IT) && !ui_menu_shown(&u, UM_CUT_IT));
+    CHECK(ui_menu_shown(&u, UM_EMPTY_IT) && !ui_menu_enabled(&u, UM_EMPTY_IT));
+    u.ctx_full = true, u.menu_on = true;
+    in = ui_input_none(), in.menu_item = menu_place(UI_CTX_FOLDER, UM_EMPTY_IT);
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.empty_asking && !u.menu_on);
+    u.empty_asking = false, u.ctx_trash = u.ctx_full = false;
+    // A path button: its menu, the sidebar's cursor left alone; one that isn't there: nothing.
+    in = ui_input_none(), in.ctx_crumb = 1, in.crumb_n = 3;
+    ui_handle(&u, names, &in);
+    CHECK(u.menu_on && u.menu == UI_CTX_FOLDER && u.ctx_crumb == 1 && u.ctx_side == -1 && u.side.sel == 3);
+    menu_keys(&u, 1, UK_ESC);
+    in = ui_input_none(), in.ctx_crumb = 3, in.crumb_n = 3;
+    ui_handle(&u, names, &in);
+    CHECK(!u.menu_on);
+    // By the keys: the sidebar's cursor's (not on a heading), the path button's; the keys stay there.
+    u.side_focus = true;
+    in = ui_input_none(), in.ev[in.nev++] = (UiEvent){ UK_CONTEXT, 0 };
+    ui_handle(&u, names, &in);
+    CHECK(u.menu_on && u.menu == UI_CTX_FOLDER && u.ctx_side == 3 && u.ctx_key && u.side_focus);
+    menu_keys(&u, 1, UK_ESC);
+    CHECK(!u.menu_on && u.side_focus);
+    u.side.sel = 4;   // (a heading, as a test can put it)
+    menu_keys(&u, 1, UK_CONTEXT);
+    CHECK(!u.menu_on);
+    u.side_focus = false, u.crumb_focus = true, u.crumb_at = 2;
+    in = ui_input_none(), in.crumb_n = 3, in.crumb_last = 2, in.ev[in.nev++] = (UiEvent){ UK_CONTEXT, 0 };
+    ui_handle(&u, names, &in);
+    CHECK(u.menu_on && u.menu == UI_CTX_FOLDER && u.ctx_crumb == 2 && u.ctx_side == -1 && u.crumb_focus);
+    menu_keys(&u, 1, UK_ESC);
+    // The job rows keep the key.
+    u.crumb_focus = false, u.jobs_focus = true;
+    in = ui_input_none(), in.job_n = 1, in.ev[in.nev++] = (UiEvent){ UK_CONTEXT, 0 };
+    ui_handle(&u, names, &in);
+    CHECK(!u.menu_on);   // (a key not theirs gives the files the keys back, as before F8)
 }

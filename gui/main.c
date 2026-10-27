@@ -226,6 +226,7 @@ static struct {
     int       menu_title_hover;   // the menu bar title under the pointer, -1 for none (F7.1)
     float     ctx_x, ctx_y;       // a right-click menu's top left (F8): where it opens, kept inside the window
     bool      ctx_placed;         // one is up and placed (ctx_place)
+    char      ctx_path[PATH_MAX]; // the folder a folder menu is on (ctx_facts)
     char      exe[PATH_MAX];      // this ofx's binary, for New Window (F7.1); "ofx" when unknown
     char      windows[PATH_MAX];  // the window registry's folder (fs/windows.c); "" for none
 } app = { .tip = { -1, 0, false, false }, .hover = -1, .side_hover = -1, .tab_hover = -1, .tab_x_hover = -1, .jobx_hover = -1, .mode_hover = -1, .eject_hover = -1, .menu_title_hover = -1 };
@@ -839,11 +840,12 @@ static void trash_restore_targets(void)
     reload();
 }
 
-static void copy_targets(bool cut)
+static void copy_targets(bool cut, const char *only)
 {
     own_gen++;
     arena_reset(&owna);
-    own.n = targets(&owna, own.path, CLIP_PATHS_MAX);
+    if (only) own.path[0] = arena_cstr(&owna, str_from_c(only)), own.n = 1;   // a folder's right-click menu's (F8)
+    else own.n = targets(&owna, own.path, CLIP_PATHS_MAX);
     own.cut = cut;
     if (own.n == 0) return;
     bool sys = clip_set(&own);
@@ -1041,7 +1043,8 @@ static void new_file(void)
 }
 
 static void close_others(bool quit);
-static void props_open(bool here);
+static void props_open(const char *path);
+static void folder_do(UiMenuItem it);
 static void props_chmod(int k);
 
 static void undo_last(void)
@@ -1324,7 +1327,7 @@ static void act(UiAction a)
             break;
         }
         if (a.kind == UA_TRASH) trash_targets();
-        else copy_targets(a.kind == UA_CUT);
+        else copy_targets(a.kind == UA_CUT, NULL);
         break;
     case UA_RENAME: rename_commit(); break;
     case UA_TAB_NEW: tab_open(app.cwd, sel_name(), true); break;
@@ -1375,7 +1378,7 @@ static void act(UiAction a)
         break;
     }
     case UA_CLOSE_ALL: close_others(a.all); break;
-    case UA_PROPS: props_open(a.index == 1); break;   // (1: the folder shown, F8)
+    case UA_PROPS: props_open(a.index == 1 ? app.cwd : a.index == 2 ? app.ctx_path : NULL); break;   // (F8: 1 the folder shown, 2 the folder menu's)
     case UA_CHMOD: props_chmod((int)a.index); break;
     case UA_OPEN_WITH: ow_open(); break;
     case UA_LAUNCH: ow_launch(a.index, a.all); break;
@@ -1390,6 +1393,7 @@ static void act(UiAction a)
         else make_link();
         break;
     case UA_FOLLOW: follow_link(a.index); break;
+    case UA_FOLDER_DO: folder_do((UiMenuItem)a.index); break;
     case UA_DUPLICATE:
         if (app.ui.marked > CLIP_PATHS_MAX) set_status(true, "%td selected: ofx takes at most %d at a time", app.ui.marked, CLIP_PATHS_MAX);
         else duplicate();
@@ -1692,6 +1696,13 @@ static void drive_bar(int r, const Place *p, float w)
     }
 }
 
+// Whether sidebar row i has a folder menu open on it (F8): lit as the cursor is, so the menu's
+// folder shows.
+static bool side_ctx(isize i)
+{
+    return app.ui.menu_on && app.ui.menu == UI_CTX_FOLDER && app.ui.ctx_crumb < 0 && app.ui.ctx_side == i;
+}
+
 // The tree mode (F6): a row a folder, indented by its depth, with its open (▾) or closed (▸)
 // mark; the folder shown in the accent.
 static void layout_tree(float h)
@@ -1705,7 +1716,7 @@ static void layout_tree(float h)
         for (int r = 0; r < sl->rows && sl->top + r < sl->n; r++) {
             int i = (int)(sl->top + r);
             const TreeRow *row = &tree.row[i];
-            bool cursor = app.ui.side_focus && i == sl->sel, here = str_eq(row->path, cwd), hover = r == app.side_hover;
+            bool cursor = (app.ui.side_focus && i == sl->sel) || side_ctx(i), here = str_eq(row->path, cwd), hover = r == app.side_hover;
             Clay_Color bg = cursor ? cc(t->selection) : hover ? cc(t->bg) : cc(t->bg_light);
             int indent = row->depth * TREE_STEP;   // deep names are cut short with "…"
             CLAY(CLAY_IDI("side-row", r), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(SIDE_ROW_H) },
@@ -1752,7 +1763,7 @@ static void layout_side(float h)
                 }
                 continue;
             }
-            bool cursor = app.ui.side_focus && i == sl->sel, here = i == app.place_cur, hover = r == app.side_hover;
+            bool cursor = (app.ui.side_focus && i == sl->sel) || side_ctx(i), here = i == app.place_cur, hover = r == app.side_hover;
             bool drive = place_is_drive(p->kind) && p->size > 0;
             Clay_Color bg = cursor ? cc(t->selection) : hover ? cc(t->bg) : cc(t->bg_light);
             // The free space; with the pointer over it, the used space (F6.1), each in its bar colour.
@@ -2725,13 +2736,15 @@ static void props_read(void)
 }
 
 // The panel opened (ui_props_open): the marked entries, or the cursor's; the folder itself when it
-// is empty, or here (the folder shown's menu, F8). A folder among them is counted all the way
-// down, on a local drive only.
-static void props_open(bool here)
+// is empty; or path (a right-click menu's, F8: the folder shown, or a folder elsewhere). A folder
+// among them is counted all the way down, on a local drive only.
+static void props_open(const char *path)
 {
     arena_reset(&propsa);
     props = (Props){ .idx = -1, .btime = -1 };
+    bool here = path != NULL;
     isize n = !here && app.have_list && app.list.n > 0 ? targets(&propsa, props_path, WALK_ROOTS_MAX) : 0;
+    if (here) props_path[0] = arena_cstr(&propsa, str_from_c(path)), n = 1;
     props.cut = !here && app.ui.marked > WALK_ROOTS_MAX;
     if (n == 0 && !app.ui.in_trash) props_path[0] = arena_cstr(&propsa, str_from_c(app.cwd)), n = 1;
     props.n = n;
@@ -3713,6 +3726,8 @@ static void right_at(UiInput *in, float x, float y)
     if (modal_kind() != MODAL_NONE) return;
     app.ctx_x = x, app.ctx_y = y;
     if (h.row >= 0) in->ctx_row = h.row;
+    else if (h.side >= 0) in->ctx_side = h.side;
+    else if (h.bar == UB_CRUMB) in->ctx_crumb = h.crumb;
     else if (in_box(CLAY_ID("list"), x, y)) in->ctx_here = true;
 }
 
@@ -3750,7 +3765,13 @@ static void ctx_place(void)
     if (app.ui.ctx_key) {
         Clay_ElementData r = Clay_GetElementData(CLAY_IDI("row", (int)(app.ui.list.sel - app.ui.list.top)));
         Clay_ElementData l = Clay_GetElementData(CLAY_ID("list"));
-        if (app.ui.menu == UI_CTX_ENTRY && r.found) {
+        Clay_ElementData f = app.ui.menu != UI_CTX_FOLDER ? (Clay_ElementData){ 0 }
+                             : app.ui.ctx_crumb >= 0 ? Clay_GetElementData(CLAY_IDI("crumb", app.ui.ctx_crumb))
+                                                     : Clay_GetElementData(CLAY_IDI("side-row", (int)(app.ui.ctx_side - app.ui.side.top)));
+        if (f.found) {   // under the sidebar row or path button (F8)
+            x = f.boundingBox.x + PAD, y = f.boundingBox.y + f.boundingBox.height;
+            if (y + sz.y > h) y = f.boundingBox.y - sz.y;
+        } else if (app.ui.menu == UI_CTX_ENTRY && r.found) {
             x = r.boundingBox.x + (app.ui.grid ? r.boundingBox.width / 2 : 2 * PAD + ICON_PX);
             y = r.boundingBox.y + r.boundingBox.height;
             if (y + sz.y > h) y = r.boundingBox.y - sz.y;
@@ -3764,6 +3785,74 @@ static void ctx_place(void)
     if (x + sz.x > w) x = w - sz.x;
     if (y + sz.y > h) y = h - sz.y;
     app.ctx_x = x < 0 ? 0 : x, app.ctx_y = y < 0 ? 0 : y;
+}
+
+// Whether any trash folder holds something (the folder menu's Empty Trash, F8).
+static bool trash_any(void)
+{
+    trash_scan();
+    for (int i = 0; i < trashd.n; i++) {
+        char files[PATH_MAX];
+        if (snprintf(files, sizeof files, "%s/files", trashd.dir[i]) >= (int)sizeof files) continue;
+        DIR *d = opendir(files);
+        if (!d) continue;
+        struct dirent *e;
+        bool any = false;
+        while (!any && (e = readdir(d))) any = strcmp(e->d_name, ".") != 0 && strcmp(e->d_name, "..") != 0;
+        closedir(d);
+        if (any) return true;
+    }
+    return false;
+}
+
+// A folder menu just opened (F8): its folder, and what ui/ shows for it (Ui.ctx_*): Trash; a place
+// (a bookmark's line in the file, a drive's eject); a bookmark of it already.
+static void ctx_facts(void)
+{
+    Ui *u = &app.ui;
+    char buf[PATH_MAX];
+    const char *p = u->ctx_crumb >= 0 && u->ctx_crumb < app.crumbs.n
+                        ? (snprintf(buf, sizeof buf, "%.*s", STR_ARG(ui_crumb_path(&app.crumbs, u->ctx_crumb))), buf)
+                        : side_path(u->ctx_side, buf, sizeof buf);
+    snprintf(app.ctx_path, sizeof app.ctx_path, "%s", p ? p : "");
+    u->ctx_trash = strcmp(app.ctx_path, TRASH_URI) == 0;
+    u->ctx_full = u->ctx_trash && trash_any();
+    u->ctx_bmed = bm_find(&bmarks, app.ctx_path) >= 0;
+    u->ctx_bms = bmarks.n;
+    if (u->ctx_crumb < 0 && u->side_mode == SIDE_PLACES && u->ctx_side >= 0 && u->ctx_side < app.places.n) {
+        const Place *pl = &app.places.p[u->ctx_side];
+        u->ctx_place = true;
+        u->ctx_eject = place_ejectable(pl);
+        if (pl->kind == PL_BOOKMARK) u->ctx_bmk = bm_find(&bmarks, pl->path);
+    }
+}
+
+// The folder menu's entry it (UA_FOLDER_DO, F8), for its folder: as the files' entries do for one of
+// theirs.
+static void folder_do(UiMenuItem it)
+{
+    const char *dir = app.ctx_path;
+    Err err = { 0 };
+    if (!dir[0]) return;
+    switch (it) {
+    case UM_OPEN_IT: go_to(dir, STR_EMPTY, 0); break;
+    case UM_OPEN_TAB: tab_open_bg(dir); break;
+    case UM_OPEN_WINDOW:
+        if (spawn_window(app.exe, dir, &err)) set_status(false, "New window on %s", dir);
+        else set_status(true, "%s", err.msg);
+        break;
+    case UM_TERMINAL_IN:
+        if (spawn_terminal(dir, &err)) set_status(false, "terminal in %s", dir);
+        else set_status(true, "%s", err.msg);
+        break;
+    case UM_CUT_IT: case UM_COPY_IT: copy_targets(it == UM_CUT_IT, dir); break;
+    case UM_PASTE_INTO: paste(dir); break;
+    case UM_BOOKMARK_IT: bookmark_add(dir); break;
+    case UM_EJECT_IT:
+        if (app.ui.ctx_side >= 0 && app.ui.ctx_side < app.places.n && place_ejectable(&app.places.p[app.ui.ctx_side])) eject_start(&app.places.p[app.ui.ctx_side]);
+        break;
+    default: break;
+    }
 }
 
 static float wheel_left;   // a touchpad's part of a notch, carried to the next frame
@@ -4216,6 +4305,7 @@ int main(int argc, char **argv)
         if (app.ui.ow) in.app_name = ow.names, in.app_n = ow.shown < UI_APPS_MAX ? ow.shown : UI_APPS_MAX;
         UiAction a = ui_handle(&app.ui, (UiNames){ list_name, NULL, list_dir }, &in);
         bool ctx_up = app.ui.menu_on && app.ui.menu >= UI_MENUS;   // a right-click menu opened: where (F8)
+        if (ctx_up && !app.ctx_placed && app.ui.menu == UI_CTX_FOLDER) ctx_facts();
         if (ctx_up && !app.ctx_placed) ctx_place();
         app.ctx_placed = ctx_up;
         if (!app.ui.ow && ow.icons_on) ow_drop();   // the panel closed: its icons go (F7.3)

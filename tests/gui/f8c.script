@@ -1,0 +1,101 @@
+# F8 step 3: a folder elsewhere's menu: a place (a bookmark, Home, Trash), a tree row, a path button,
+# by the pointer and by Shift+F10 where the keys are. The tree (run.sh): sub/, sub2/; the bookmarks
+# file in the scratch config: home/tree/sub "Sub", then home/tree/sub2. The sidebar: Places, Home,
+# Sub, sub2, Trash, Drives, File System.
+settle
+expect sides=^Places|Home|Sub|sub2|Trash|^Drives|File_System bmn=2
+# A heading: nothing
+point-ui side-row 0
+right-here
+expect menu=-
+# A bookmark's row: Edit Bookmarks' own; no Cut or Copy (a place), no Add Bookmark (one already)
+point-ui side-row 2
+right-here
+expect menu=folder menuhid=cut-it,copy-it,bookmark-it,eject,empty-it menugrey=cut-it,copy-it,paste-into,bookmark-it,bm-up,eject,empty-it menuin=1
+shot ctx-bookmark.png
+# Move Down: the file's order changes, the places follow
+point-ui menu-item 12
+click-here
+wait-for 2000 sides=^Places|Home|sub2|Sub|Trash|^Drives|File_System
+sh [ "$(head -1 "$OFX_ROOT/config/gtk-3.0/bookmarks")" = "file://$OFX_DIR/sub2" ]
+# Rename…: Edit Bookmarks on that line, its field open with the label
+point-ui side-row 3
+right-here
+point-ui menu-item 10
+click-here
+expect menu=- bmp=1 bmpsel=1 bmpnaming=1 bmptext=Sub
+key esc
+key esc
+expect bmp=0
+# Remove: the line goes
+point-ui side-row 2
+right-here
+point-ui menu-item 13
+click-here
+wait-for 2000 sides=^Places|Home|Sub|Trash|^Drives|File_System bmn=1
+sh ! grep -q "tree/sub2" "$OFX_ROOT/config/gtk-3.0/bookmarks"
+# Home: Open in New Tab, a tab behind on it; Add Bookmark there
+point-ui side-row 1
+right-here
+expect menu=folder menuhid=cut-it,copy-it,bm-rename,bm-up,bm-down,bm-remove,bm-edit,eject,empty-it
+point-ui menu-item 1
+click-here
+expect menu=- tabs=2 tab=0
+key ctrl-tab
+key ctrl-w
+expect tabs=1
+# Trash: gone to, not into; Empty Trash greyed while it is empty
+point-ui side-row 3
+right-here
+expect menu=folder menuhid=open-window,terminal-in,cut-it,copy-it,paste-into,bookmark-it,bm-rename,bm-up,bm-down,bm-remove,bm-edit,eject,properties-it
+expect menugrey=open-window,terminal-in,cut-it,copy-it,paste-into,bookmark-it,bm-rename,bm-up,bm-down,bm-remove,bm-edit,eject,empty-it,properties-it
+key esc
+# Something in the trash: Empty Trash asks
+key down
+key delete
+wait-for 2000 undo=trash n=1
+point-ui side-row 3
+right-here
+expect menugrey=open-window,terminal-in,cut-it,copy-it,paste-into,bookmark-it,bm-rename,bm-up,bm-down,bm-remove,bm-edit,eject,properties-it
+point-ui menu-item 17
+click-here
+expect menu=- modal=empty
+type n
+expect modal=-
+# A path button: its folder's Properties; Open in Terminal there
+point-ui crumb 0
+right-here
+expect menu=folder
+point-ui menu-item 19
+click-here
+expect menu=- props=1 propname=home
+key esc
+point-ui crumb 0
+right-here
+point-ui menu-item 3
+click-here
+sh grep -qx "uwsm-app -- xdg-terminal-exec --dir=$OFX_ROOT/home" "$OFX_ROOT/spawn.log"
+# The tree: a folder's Cut and Copy (not a place); Copy then Paste Into Folder from the files
+key f9
+wait-for 2000 sidemode=tree
+point-ui side-row 0
+right-here
+expect menu=folder menuhid=bm-rename,bm-up,bm-down,bm-remove,bm-edit,eject,empty-it
+point-ui menu-item 6
+click-here
+expect menu=- clip=1 cut=0
+# By the keys: the sidebar's cursor (Tab), the path buttons' (Ctrl+K); the keys stay there
+key tab
+expect sidefocus=1
+raw-key 299 1
+expect menu=folder menuat=open-it menuin=1
+key esc
+expect menu=- sidefocus=1
+key tab
+key ctrl-k
+expect crumbfocus=1
+raw-key 348 0
+expect menu=folder menuat=open-it
+key esc
+expect menu=- crumbfocus=1
+quit

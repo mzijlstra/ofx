@@ -424,7 +424,7 @@ MUTANTS = [
     (G, '    if (x + sz.x > w) x = w - sz.x;\n    if (y + sz.y > h) y = h - sz.y;', '', 'f8'),
     (G, '            y = r.boundingBox.y + r.boundingBox.height;', '            y = r.boundingBox.y;', 'f8'),
     (G, '        if (ctx_up && !app.ctx_placed) ctx_place();', '', 'f8'),
-    (G, '    case UA_PROPS: props_open(a.index == 1); break;', '    case UA_PROPS: props_open(false); break;', 'f8'),
+    (G, '    case UA_PROPS: props_open(a.index == 1 ? app.cwd : a.index == 2 ? app.ctx_path : NULL); break;', '    case UA_PROPS: props_open(a.index == 2 ? app.ctx_path : NULL); break;', 'f8'),
     (G, '    if (!here && app.have_list && app.list.n > 0 && n == 1)', '    if (app.have_list && app.list.n > 0 && n == 1)', 'f8'),
     # ---- F8 step 2: a folder's own entries, Make Link, Follow Link. Not run: make_link's messages
     # (the status line), its name-too-long branch (NAME_MAX names in a scratch tree); into_itself's
@@ -446,6 +446,26 @@ MUTANTS = [
     (G, '        else if (a.index < app.list.n && entry_path(a.index, bm, sizeof bm)) bookmark_add(bm);', '        else bookmark_add(app.cwd);', 'f8'),
     (G, '        else make_link();', '', 'f8'),
     (G, '    case UA_FOLLOW: follow_link(a.index); break;', '', 'f8'),
+    # ---- F8 step 3: a folder elsewhere's menu. Not run: the lit sidebar row (side_ctx, pixels;
+    # ctx-bookmark.png shows it), Eject (f8c has no removable drive; F6's eject_start is f6's).
+    (G, '    else if (h.side >= 0) in->ctx_side = h.side;', '', 'f8'),
+    (G, '    else if (h.bar == UB_CRUMB) in->ctx_crumb = h.crumb;', '', 'f8'),
+    (G, '        if (ctx_up && !app.ctx_placed && app.ui.menu == UI_CTX_FOLDER) ctx_facts();', '', 'f8'),
+    (G, '    u->ctx_trash = strcmp(app.ctx_path, TRASH_URI) == 0;', '    u->ctx_trash = false;', 'f8'),
+    (G, '    u->ctx_full = u->ctx_trash && trash_any();', '    u->ctx_full = u->ctx_trash;', 'f8'),
+    (G, '        while (!any && (e = readdir(d))) any = strcmp(e->d_name, ".") != 0 && strcmp(e->d_name, "..") != 0;', '        while (!any && (e = readdir(d))) any = true;', 'f8'),
+    (G, '    u->ctx_bmed = bm_find(&bmarks, app.ctx_path) >= 0;', '    u->ctx_bmed = false;', 'f8'),
+    (G, '    u->ctx_bms = bmarks.n;', '', 'f8'),
+    (G, '        u->ctx_place = true;\n', '', 'f8'),
+    (G, '        if (pl->kind == PL_BOOKMARK) u->ctx_bmk = bm_find(&bmarks, pl->path);', '', 'f8'),
+    (G, '    case UM_OPEN_IT: go_to(dir, STR_EMPTY, 0); break;', '', 'f8'),
+    (G, '    case UM_OPEN_TAB: tab_open_bg(dir); break;', '', 'f8'),
+    (G, '        if (spawn_terminal(dir, &err)) set_status(false, "terminal in %s", dir);', '        if (spawn_terminal(app.cwd, &err)) set_status(false, "terminal in %s", dir);', 'f8'),
+    (G, '    case UM_CUT_IT: case UM_COPY_IT: copy_targets(it == UM_CUT_IT, dir); break;', '    case UM_CUT_IT: case UM_COPY_IT: copy_targets(it == UM_CUT_IT, NULL); break;', 'f8'),
+    (G, '    if (only) own.path[0] = arena_cstr(&owna, str_from_c(only)), own.n = 1;', '    if (false) own.path[0] = arena_cstr(&owna, str_from_c(only)), own.n = 1;', 'f8'),
+    (G, '    case UA_PROPS: props_open(a.index == 1 ? app.cwd : a.index == 2 ? app.ctx_path : NULL); break;', '    case UA_PROPS: props_open(a.index == 1 ? app.cwd : NULL); break;', 'f8'),
+    (G, '    case UA_FOLDER_DO: folder_do((UiMenuItem)a.index); break;', '', 'f8'),
+    (G, '        if (f.found) {   // under the sidebar row or path button (F8)', '        if (false) {   // under the sidebar row or path button (F8)', 'f8'),
     # ---- quit doesn't wait for a hung drive (2026-10-26: no mutant was hang's or f6b's alone)
     (K, '    if (pthread_timedjoin_np(counts.thread, NULL, &until) != 0) pthread_detach(counts.thread);', '    pthread_join(counts.thread, NULL);', 'hang'),
     ('gui/space.c', '    if (pthread_timedjoin_np(space.thread, NULL, &until) != 0) pthread_detach(space.thread);', '    pthread_join(space.thread, NULL);', 'f6'),
@@ -539,7 +559,7 @@ def key(m):
     return hashlib.sha1('\0'.join(m[:3]).encode()).hexdigest()[:12]
 
 # The group of a script that failed: run.sh prints "== <script>: FAILED" or "<group>: FAILED".
-GROUP_OF = {'f6b': 'f6', 'f62b': 'f62', 'f62c': 'f62', 'f63b': 'f63', 'f63c': 'f63', 'f64b': 'f64', 'f64c': 'f64', 'f64d': 'f64', 'f7b': 'f7', 'f73b': 'f73', 'f73c': 'f73', 'f73d': 'f73', 'f75b': 'f75', 'f8b': 'f8'}
+GROUP_OF = {'f6b': 'f6', 'f62b': 'f62', 'f62c': 'f62', 'f63b': 'f63', 'f63c': 'f63', 'f64b': 'f64', 'f64c': 'f64', 'f64d': 'f64', 'f7b': 'f7', 'f73b': 'f73', 'f73c': 'f73', 'f73d': 'f73', 'f75b': 'f75', 'f8b': 'f8', 'f8c': 'f8'}
 
 # The tags as groups run.sh knows: a script's name (f7b, written before GROUP_OF had it) as its
 # group; anything else dropped, so a mutant never "survives" a group that runs nothing.

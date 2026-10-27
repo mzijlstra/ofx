@@ -129,9 +129,11 @@ typedef struct {
     int     menu_title;
     int     menu_item;
     bool    menu_away;
-    // A right press (F8): a list row (its place on screen), or the files' empty space.
+    // A right press (F8): a list row (its place on screen), or the files' empty space; a sidebar row
+    // (on screen), a path button (its index), each -1 for none.
     int     ctx_row;
     bool    ctx_here;
+    int     ctx_side, ctx_crumb;
     int     prop_box;    // a checkbox of the Properties panel's grid pressed (0..8, F7.2), -1 for none
     // Open With (F7.3): the apps gui/ lists, in its order (their names, which the filter
     // matches); a row pressed or double-clicked (its place on screen), the field pressed, a
@@ -203,6 +205,7 @@ typedef enum {
     UA_BM_RENAME,   // the field's Enter: Ui.bmp_text is its label (empty: none)
     UA_MAKE_LINK,   // a symbolic link "Link to <name>" beside each marked entry (or the cursor's) (F8)
     UA_FOLLOW,      // index: the entry, a link: to its target's folder, the target selected (F8)
+    UA_FOLDER_DO,   // index: a UiMenuItem of the folder menu, for the folder it opened on (Ui.ctx_side or ctx_crumb, F8)
 } UiActionKind;
 // A right-click menu's entry on a folder of the files (F8) acts on that folder, not the folder
 // shown: UA_NEW_WINDOW, UA_TERMINAL, UA_PASTE and UA_ADD_BOOKMARK with `all` set; index is the entry.
@@ -232,6 +235,8 @@ typedef enum {
     UM_ADD_BOOKMARK, UM_EDIT_BOOKMARKS, UM_BM_0, UM_BM_1, UM_BM_2, UM_BM_3, UM_BM_4, UM_BM_5, UM_BM_6, UM_BM_7, UM_BM_MORE,
     UM_SHORTCUTS, UM_ABOUT,
     UM_OPEN_TAB, UM_EMPTY_TRASH, UM_HERE_PROPS, UM_OPEN_WINDOW, UM_PASTE_INTO, UM_TERMINAL_IN, UM_FOLLOW, UM_BOOKMARK_IT,
+    UM_OPEN_IT, UM_CUT_IT, UM_COPY_IT, UM_BM_RENAME_IT, UM_BM_UP_IT, UM_BM_DOWN_IT, UM_BM_REMOVE_IT, UM_BM_EDIT_IT, UM_EJECT_IT,
+    UM_EMPTY_IT, UM_PROPS_IT,
     UM_ITEMS
 } UiMenuItem;
 
@@ -309,6 +314,19 @@ static const struct { const char *label, *key, *word; UiEvent ev; char mark; } U
     [UM_TERMINAL_IN] = { "Open in Terminal", "", "terminal-in" },
     [UM_FOLLOW] = { "Follow Link", "", "follow" },
     [UM_BOOKMARK_IT] = { "Add Bookmark", "", "bookmark-it" },
+    // and on a folder elsewhere (a sidebar row, a path button): that folder; a bookmark's own, as
+    // Edit Bookmarks has them; a drive's eject; the trash's emptying
+    [UM_OPEN_IT] = { "Open", "", "open-it" },
+    [UM_CUT_IT] = { "Cut", "", "cut-it" },
+    [UM_COPY_IT] = { "Copy", "", "copy-it" },
+    [UM_BM_RENAME_IT] = { "Rename\xE2\x80\xA6", "", "bm-rename" },
+    [UM_BM_UP_IT] = { "Move Up", "", "bm-up" },
+    [UM_BM_DOWN_IT] = { "Move Down", "", "bm-down" },
+    [UM_BM_REMOVE_IT] = { "Remove", "", "bm-remove" },
+    [UM_BM_EDIT_IT] = { "Edit Bookmarks\xE2\x80\xA6", "Ctrl+B", "bm-edit" },
+    [UM_EJECT_IT] = { "Eject", "", "eject" },
+    [UM_EMPTY_IT] = { "Empty Trash\xE2\x80\xA6", "", "empty-it" },
+    [UM_PROPS_IT] = { "Properties\xE2\x80\xA6", "", "properties-it" },
     [UM_BM_0] = { "", "", "bm-0", .mark = 'r' }, [UM_BM_1] = { "", "", "bm-1", .mark = 'r' },
     [UM_BM_2] = { "", "", "bm-2", .mark = 'r' }, [UM_BM_3] = { "", "", "bm-3", .mark = 'r' },
     [UM_BM_4] = { "", "", "bm-4", .mark = 'r' }, [UM_BM_5] = { "", "", "bm-5", .mark = 'r' },
@@ -344,6 +362,11 @@ static const UiMenuItem UI_MENU_CTX_ENTRY[] = {
     UM_MAKE_LINK, UM_RENAME, UM_SEP, UM_TERMINAL_IN, UM_FOLLOW, UM_BOOKMARK_IT, UM_SEP, UM_TRASH, UM_RESTORE, UM_DELETE, UM_SEP,
     UM_PROPERTIES,
 };
+// A folder elsewhere: a tree row, a path button, a place (Trash, a bookmark, a drive have their own).
+static const UiMenuItem UI_MENU_CTX_FOLDER[] = {
+    UM_OPEN_IT, UM_OPEN_TAB, UM_OPEN_WINDOW, UM_TERMINAL_IN, UM_SEP, UM_CUT_IT, UM_COPY_IT, UM_PASTE_INTO, UM_SEP, UM_BOOKMARK_IT,
+    UM_BM_RENAME_IT, UM_BM_UP_IT, UM_BM_DOWN_IT, UM_BM_REMOVE_IT, UM_BM_EDIT_IT, UM_SEP, UM_EJECT_IT, UM_EMPTY_IT, UM_SEP, UM_PROPS_IT,
+};
 static const UiMenuItem UI_MENU_CTX_HERE[] = {
     UM_NEW_FOLDER, UM_NEW_FILE, UM_EMPTY_TRASH, UM_SEP, UM_PASTE, UM_SELECT_ALL, UM_SEP, UM_TERMINAL, UM_HIDDEN, UM_SEP,
     UM_ADD_BOOKMARK, UM_SEP, UM_HERE_PROPS,
@@ -360,9 +383,10 @@ static const struct { const char *title; char letter; const UiMenuItem *items; i
     // The right-click menus (F8): no title in the bar, no letter; the title names them in a script
     { "entry", 0, UI_MENU_CTX_ENTRY, sizeof UI_MENU_CTX_ENTRY / sizeof UI_MENU_CTX_ENTRY[0] },
     { "here", 0, UI_MENU_CTX_HERE, sizeof UI_MENU_CTX_HERE / sizeof UI_MENU_CTX_HERE[0] },
+    { "folder", 0, UI_MENU_CTX_FOLDER, sizeof UI_MENU_CTX_FOLDER / sizeof UI_MENU_CTX_FOLDER[0] },
 };
 // The bar's menus come first, then the right-click ones.
-enum { UI_MENUS = 6, UI_CTX_ENTRY = UI_MENUS, UI_CTX_HERE, UI_MENUS_ALL };
+enum { UI_MENUS = 6, UI_CTX_ENTRY = UI_MENUS, UI_CTX_HERE, UI_CTX_FOLDER, UI_MENUS_ALL };
 _Static_assert(sizeof UI_MENU / sizeof UI_MENU[0] == UI_MENUS_ALL, "UI_MENU: the bar's menus, then the right-click ones");
 
 // ---- the Keyboard Shortcuts panel (F7.5, docs/plan.md "F7.5 decided") ----------------------------
@@ -579,6 +603,13 @@ typedef struct {
     // From gui/ each frame (menu_facts): the cursor's entry is a link that leads somewhere, and a
     // folder that is a bookmark already (F8).
     bool   sel_link, sel_bm;
+    // A folder elsewhere's menu (F8): the sidebar row (absolute) or path button it is on (the other
+    // -1); and from gui/ as it opens (ctx_facts): it is the trash, a place (no Cut or Copy: a bookmark
+    // isn't the folder to move), its bookmark's line in the file and how many lines (-1: not a
+    // bookmark's row), a bookmark already, a drive with an eject button, a trash with something in it.
+    int    ctx_side, ctx_crumb;
+    bool   ctx_trash, ctx_place, ctx_bmed, ctx_eject, ctx_full;
+    int    ctx_bmk, ctx_bms;
     // The Bookmarks menu (F7.5), from gui/ too: how many local bookmarks it lists (at most
     // UI_MENU_BOOKMARKS), the one that is the folder shown (-1 none), and whether that folder can be
     // bookmarked (not one already, not the trash view, the file not full).
@@ -630,7 +661,7 @@ static UiInput ui_input_none(void)
 {
     return (UiInput){ .click = -1, .dclick = -1, .side_click = -1, .header = -1, .click_mods = 0, .bar = UB_NONE, .crumb = -1,
                       .tab_click = -1, .tab_close = -1, .mid_row = -1, .mid_side = -1, .mid_crumb = -1, .modal = 0, .job_x = -1, .side_mode = -1, .side_twisty = -1, .side_eject = -1,
-                      .zoom_to = -1, .menu_title = -1, .menu_item = -1, .ctx_row = -1, .prop_box = -1, .ow_row = -1, .ow_drow = -1, .bmp_row = -1, .bmp_drow = -1 };
+                      .zoom_to = -1, .menu_title = -1, .menu_item = -1, .ctx_row = -1, .ctx_side = -1, .ctx_crumb = -1, .prop_box = -1, .ow_row = -1, .ow_drow = -1, .bmp_row = -1, .bmp_drow = -1 };
 }
 
 static isize ui_clamp(isize v, isize lo, isize hi)
@@ -758,7 +789,7 @@ static bool ui_input_acts(const UiInput *in)
     return in->nev > 0 || in->click >= 0 || in->dclick >= 0 || in->side_click >= 0 || in->header >= 0 || in->bar != UB_NONE ||
            in->tab_click >= 0 || in->tab_close >= 0 || in->mid_row >= 0 || in->mid_side >= 0 || in->mid_crumb >= 0 || in->modal > 0 ||
            in->backs > 0 || in->forwards > 0 || in->job_x >= 0 || in->side_mode >= 0 || in->side_twisty >= 0 || in->side_eject >= 0 ||
-           in->zoom_wheel != 0 || in->zoom_to >= 0 || in->menu_title >= 0 || in->menu_item >= 0 || in->menu_away || in->ctx_row >= 0 || in->ctx_here || in->prop_box >= 0 ||
+           in->zoom_wheel != 0 || in->zoom_to >= 0 || in->menu_title >= 0 || in->menu_item >= 0 || in->menu_away || in->ctx_row >= 0 || in->ctx_here || in->ctx_side >= 0 || in->ctx_crumb >= 0 || in->prop_box >= 0 ||
            in->ow_row >= 0 || in->ow_drow >= 0 || in->ow_field || in->toggle > 0 || in->find_x || in->find_field || in->find_step ||
            in->bmp_row >= 0 || in->bmp_drow >= 0 || in->bmp_btn || in->ow_wheel != 0;   // (a panel's wheel: Open With, Keyboard Shortcuts)
 }
@@ -1435,8 +1466,11 @@ static bool ui_jobs_event(Ui *u, const UiInput *in, UiEvent e)
 
 // Whether entry it is in its menu now: Move to Trash outside the trash view, Restore in it (F7.4); a
 // bookmark's place while there is one for it (F7.5).
+static bool ui_folder_shown(const Ui *u, UiMenuItem it);
+
 static bool ui_menu_shown(const Ui *u, UiMenuItem it)
 {
+    if (u->menu == UI_CTX_FOLDER) return ui_folder_shown(u, it);
     if (it >= UM_BM_0 && it <= UM_BM_7) return (int)(it - UM_BM_0) < u->bm_n;
     if (it == UM_BM_MORE) return u->bm_more > 0;
     // A right-click menu leaves out what doesn't fit its target (F8): a tab for a folder only, a
@@ -1449,6 +1483,22 @@ static bool ui_menu_shown(const Ui *u, UiMenuItem it)
     if (u->menu >= UI_MENUS && (it == UM_NEW_FOLDER || it == UM_NEW_FILE)) return !u->in_trash;
     if (it == UM_EMPTY_TRASH) return u->in_trash;
     return it == UM_TRASH ? !u->in_trash : it == UM_RESTORE ? u->in_trash : true;
+}
+
+// The folder menu's (F8): what fits that folder. Trash is gone to, not into; a place has no Cut or
+// Copy; a bookmark's row has Edit Bookmarks' own.
+static bool ui_folder_shown(const Ui *u, UiMenuItem it)
+{
+    switch (it) {
+    case UM_SEP: case UM_OPEN_IT: case UM_OPEN_TAB: return true;
+    case UM_OPEN_WINDOW: case UM_TERMINAL_IN: case UM_PASTE_INTO: case UM_PROPS_IT: return !u->ctx_trash;
+    case UM_CUT_IT: case UM_COPY_IT: return !u->ctx_trash && !u->ctx_place;
+    case UM_BOOKMARK_IT: return !u->ctx_trash && !u->ctx_bmed;
+    case UM_BM_RENAME_IT: case UM_BM_UP_IT: case UM_BM_DOWN_IT: case UM_BM_REMOVE_IT: case UM_BM_EDIT_IT: return u->ctx_bmk >= 0;
+    case UM_EJECT_IT: return u->ctx_eject;
+    case UM_EMPTY_IT: return u->ctx_trash;
+    default: return false;
+    }
 }
 
 // Whether menu m's line at place i is drawn: not one with nothing shown after it (the Bookmarks
@@ -1466,6 +1516,13 @@ static bool ui_menu_enabled(const Ui *u, UiMenuItem it)
 {
     bool files = u->list.n > 0, here = files && !u->side_focus;
     if (!ui_menu_shown(u, it)) return false;
+    if (u->menu == UI_CTX_FOLDER) {   // (F8) the rest are always there to pick
+        if (it == UM_PASTE_INTO) return u->can_paste;
+        if (it == UM_BM_UP_IT) return u->ctx_bmk > 0;
+        if (it == UM_BM_DOWN_IT) return u->ctx_bmk < u->ctx_bms - 1;
+        if (it == UM_EMPTY_IT) return u->ctx_full;
+        return true;
+    }
     switch (it) {
     case UM_NEW_TAB: case UM_CLOSE_ALL: case UM_CLOSE: case UM_PROPERTIES: return true;
     case UM_NEW_WINDOW: return !u->in_trash;   // ofx starts on a folder, not on the trash view
@@ -1548,6 +1605,16 @@ static void ui_ctx_open(Ui *u, int m, UiNames names, bool keys)
     u->ctx_dir = u->ctx_one && names.dir && names.dir(names.ctx, u->list.sel);
     u->ctx_key = keys;
     ui_menu_open(u, m, keys);
+}
+
+// The folder menu opened (F8) on sidebar row side or path button crumb (the other -1): what it is,
+// gui/ says as it opens. The keys stay where they were.
+static void ui_folder_open(Ui *u, isize side, int crumb, bool keys)
+{
+    u->ctx_side = (int)side, u->ctx_crumb = crumb, u->ctx_key = keys;
+    u->ctx_trash = u->ctx_place = u->ctx_bmed = u->ctx_eject = u->ctx_full = false;
+    u->ctx_bmk = -1, u->ctx_bms = 0;
+    ui_menu_open(u, UI_CTX_FOLDER, keys);
 }
 
 // The Properties panel opened, the focus on the grid's first box (F7.2).
@@ -1895,6 +1962,19 @@ static UiAction ui_bmp_event(Ui *u, UiEvent e)
 static UiAction ui_menu_pick(Ui *u, UiMenuItem it)
 {
     u->menu_on = false;
+    // The folder menu (F8): gui/ does each for that folder; ui/ keeps its panels and questions.
+    if (u->menu == UI_CTX_FOLDER) {
+        switch (it) {
+        case UM_BM_EDIT_IT: return ui_bmp_open(u, u->ctx_bmk);
+        case UM_BM_RENAME_IT: return ui_bmp_open(u, u->ctx_bmk), u->bmp_naming = true, (UiAction){ UA_BM_NAME, u->ctx_bmk, false };
+        case UM_BM_UP_IT: return (UiAction){ UA_BM_UP, u->ctx_bmk, false };
+        case UM_BM_DOWN_IT: return (UiAction){ UA_BM_DOWN, u->ctx_bmk, false };
+        case UM_BM_REMOVE_IT: return (UiAction){ UA_BM_REMOVE, u->ctx_bmk, false };
+        case UM_EMPTY_IT: return u->empty_asking = true, (UiAction){ UA_NONE, 0, false };
+        case UM_PROPS_IT: return u->props = true, u->prop_at = 0, (UiAction){ UA_PROPS, 2, false };   // (2: the folder menu's)
+        default: return (UiAction){ UA_FOLDER_DO, it, false };
+        }
+    }
     if (UI_MENU_ITEM[it].ev.key != UK_NONE || UI_MENU_ITEM[it].ev.ch) {
         u->menu_key = UI_MENU_ITEM[it].ev;
         return (UiAction){ UA_NONE, 0, false };
@@ -2164,6 +2244,17 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         ui_ctx_open(u, UI_CTX_HERE, names, false);
         return (UiAction){ UA_NONE, 0, false };
     }
+    // On a sidebar row (not a heading) or a path button: that folder's menu; the sidebar's cursor
+    // goes to its row.
+    if (!prompt && in->ctx_side >= 0 && u->side.top + in->ctx_side < u->side.n && !ui_side_head(u, u->side.top + in->ctx_side)) {
+        u->side.sel = u->side.top + in->ctx_side;
+        ui_folder_open(u, u->side.sel, -1, false);
+        return (UiAction){ UA_NONE, 0, false };
+    }
+    if (!prompt && in->ctx_crumb >= 0 && in->ctx_crumb < in->crumb_n) {
+        ui_folder_open(u, -1, in->ctx_crumb, false);
+        return (UiAction){ UA_NONE, 0, false };
+    }
     // The Properties panel's pointer (F7.2): a checkbox takes the focus and flips; Close closes.
     if (u->props && !u->quit_asking && !u->full_told && in->prop_box >= 0 && in->prop_box < 9) {
         u->prop_at = in->prop_box;
@@ -2292,10 +2383,12 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
             continue;
         }
         // Shift+F10 and the Menu key (F8): the cursor's menu, or the folder shown's in an empty one,
-        // while the files have the keys (an edit or find line keeps them).
-        if (!prompt && !u->menu_on && e.key == UK_CONTEXT && !u->side_focus && !u->crumb_focus && !u->jobs_focus && !u->editing &&
-            !(u->finding && u->find_keys)) {
-            ui_ctx_open(u, u->list.n > 0 ? UI_CTX_ENTRY : UI_CTX_HERE, names, true);
+        // while the files have the keys (an edit or find line keeps them); the sidebar's cursor's,
+        // or the path button's, while they have them.
+        if (!prompt && !u->menu_on && e.key == UK_CONTEXT && !u->editing && !(u->finding && u->find_keys) && !u->jobs_focus) {
+            if (u->crumb_focus) ui_folder_open(u, -1, u->crumb_at, true);
+            else if (u->side_focus && u->side.n > 0 && !ui_side_head(u, u->side.sel)) ui_folder_open(u, u->side.sel, -1, true);
+            else if (!u->side_focus) ui_ctx_open(u, u->list.n > 0 ? UI_CTX_ENTRY : UI_CTX_HERE, names, true);
             continue;
         }
         if (u->menu_on && !prompt) {
