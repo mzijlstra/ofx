@@ -75,6 +75,11 @@ root=$(cd "$(dirname "$0")/../.." && pwd)
 here=$(cd "$(dirname "$0")" && pwd)
 # Another window size: weston's output that much bigger, as 944x544 gives 936x516.
 if [ -n "${OFX_SCRIPT_SIZE:-}" ]; then
+    case $OFX_SCRIPT_SIZE in
+    *x*x* | x* | *x | *[!0-9x]*) echo "run-script: OFX_SCRIPT_SIZE is WxH, not '$OFX_SCRIPT_SIZE'" >&2; exit 2 ;;
+    *x*) ;;
+    *) echo "run-script: OFX_SCRIPT_SIZE is WxH, not '$OFX_SCRIPT_SIZE'" >&2; exit 2 ;;
+    esac
     sw=${OFX_SCRIPT_SIZE%x*}; sh_=${OFX_SCRIPT_SIZE#*x}
     export OFX_WESTON_SIZE="$((sw + 8))x$((sh_ + 28))"
 fi
