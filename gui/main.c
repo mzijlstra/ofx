@@ -1862,6 +1862,16 @@ static void layout_trash_bar(void)
     }
 }
 
+// Whether the list shows Owner, Group and Permissions: View → Show Permissions on, and Name keeps
+// NAME_MIN_W beside them in a window w wide (Michael, 2026-10-27: they give way on a narrow one).
+enum { NAME_MIN_W = 200 };
+
+static bool perms_shown(float w)
+{
+    float rest = w - side_w() - 2 * PAD - ICON_PX - 3 * GAP - SIZE_W - DATE_W;
+    return app.ui.perms_cols && rest - (3 * GAP + OWNER_W + GROUP_W + PERM_W) >= NAME_MIN_W;
+}
+
 // A user's or a group's name, cached (the list's Owner and Group, 2026-10-27): a getpwuid per row
 // and frame would be a passwd read each; the number when it has no name.
 static const char *id_name(bool group, u32 id)
@@ -1905,7 +1915,7 @@ static void layout_cols(void)
         }
         static const struct { const char *id, *name; int w; } MORE[] = { { "col-owner", "Owner", OWNER_W }, { "col-group", "Group", GROUP_W },
                                                                          { "col-perms", "Permissions", PERM_W } };
-        for (int k = 0; app.ui.perms_cols && k < COUNT(MORE); k++)
+        for (int k = 0; perms_shown((float)GetScreenWidth()) && k < COUNT(MORE); k++)
             CLAY(Clay_GetElementId(cz(MORE[k].id)), { .layout = { .sizing = { CLAY_SIZING_FIXED(MORE[k].w), CLAY_SIZING_GROW(0) },
                                                                   .padding = { k == 0 ? OWNER_PAD : 0, 0, 0, 0 },   // (clear of Modified, right-aligned)
                                                                   .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } } }) {
@@ -2002,7 +2012,8 @@ static void layout_row(int r, isize i, float w, i64 now)
     size_cell(i, size, sizeof size, true);
     if (e->mtime) ui_when(when, sizeof when, e->mtime, now);
     bool link = e->kind == K_LINK_DIR || e->kind == K_LINK_FILE || e->kind == K_LINK_BROKEN;
-    float perms_w = app.ui.perms_cols ? 3 * GAP + OWNER_W + GROUP_W + PERM_W : 0;   // (View → Show Permissions)
+    bool perms = perms_shown(w);
+    float perms_w = perms ? 3 * GAP + OWNER_W + GROUP_W + PERM_W : 0;   // (View → Show Permissions, room for Name)
     float name_w = w - side_w() - 2 * PAD - ICON_PX - 3 * GAP - SIZE_W - DATE_W - perms_w - (link ? 16 : 0);
     CLAY(CLAY_IDI("row", r), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(ROW_H) },
                                            .padding = { PAD, PAD, 0, 0 }, .childGap = GAP,
@@ -2046,12 +2057,12 @@ static void layout_row(int r, isize i, float w, i64 now)
             text(cz(arena_sprintf(&frame, "%s", when)), cc(t->fg_dim));
         }
         // Owner, Group, Permissions (2026-10-27): the target's for a link, as Size is.
-        if (app.ui.perms_cols) {
-            char perms[16];
-            ui_perms(perms, sizeof perms, e->mode);
+        if (perms) {
+            char perm_s[16];
+            ui_perms(perm_s, sizeof perm_s, e->mode);
             info_cell(CLAY_IDI("owner", r), id_name(false, e->uid), OWNER_W, OWNER_PAD);
             info_cell(CLAY_IDI("group", r), id_name(true, e->gid), GROUP_W, 0);
-            info_cell(CLAY_IDI("perms", r), perms, PERM_W, 0);
+            info_cell(CLAY_IDI("perms", r), perm_s, PERM_W, 0);
         }
     }
 }

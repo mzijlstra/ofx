@@ -479,6 +479,9 @@ MUTANTS = [
     # and the target drawn (pixels: f8b's list-columns.png, list-no-perms.png show them)
     (G, '        app.ui.side_mode = st.side, app.ui.grid = st.icons, app.ui.zoom = st.zoom, app.ui.perms_cols = !st.no_perms,', '        app.ui.side_mode = st.side, app.ui.grid = st.icons, app.ui.zoom = st.zoom, app.ui.perms_cols = true,', 'f8'),
     (G, '        if (state_path(path, sizeof path) && !state_put(&scratch, path, "perms", app.ui.perms_cols ? "on" : "off", &err))', '        if (state_path(path, sizeof path) && !state_put(&scratch, path, "perms", "on", &err))', 'f8'),
+    # ---- the three columns give way to a Name under 200 px (2026-10-27)
+    (G, '    return app.ui.perms_cols && rest - (3 * GAP + OWNER_W + GROUP_W + PERM_W) >= NAME_MIN_W;', '    return app.ui.perms_cols;', 'f8'),
+    (G, '    return app.ui.perms_cols && rest - (3 * GAP + OWNER_W + GROUP_W + PERM_W) >= NAME_MIN_W;', '    return rest - (3 * GAP + OWNER_W + GROUP_W + PERM_W) >= NAME_MIN_W;', 'f8'),
     # ---- View → Show Menu (2026-10-27). Not run: the note's drawing and footer hint (pixels:
     # f8b's menubar-hidden.png, menubar-float.png)
     (G, '    return !app.ui.bar_hidden || (app.ui.menu_on && app.ui.menu < UI_MENUS);', '    return !app.ui.bar_hidden;', 'f8'),
