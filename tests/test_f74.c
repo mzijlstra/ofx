@@ -41,7 +41,7 @@ static void test_menu_f74(void)
     for (int it = 1; it < UM_ITEMS; it++) {
         int n = 0;
         for (int m = 0; m < UI_MENUS; m++)
-            for (int i = 0; i < UI_MENU[m].n; i++) n += UI_MENU[m].items[i] == it;
+            for (int i = 0; i < UI_MENU[m].n; i++) n += (int)UI_MENU[m].items[i] == it;
         CHECK(n == 1);
     }
     // Each entry that stands for a key does what the key does, picked by Enter or by the pointer:
@@ -166,7 +166,7 @@ static void test_menu_f74(void)
     CHECK(u.menu_at == menu_place(1, UM_TRASH));
     u.in_trash = true;
     u.menu_at = menu_place(1, UM_SELECT_ALL);
-    menu_keys(&u, 2, UK_DOWN, UK_DOWN);   // Invert, then (Rename greyed) Restore
+    menu_keys(&u, 3, UK_DOWN, UK_DOWN, UK_DOWN);   // Select Items Matching, Invert, then (Rename greyed) Restore
     CHECK(u.menu_at == menu_place(1, UM_RESTORE));
     // The pointer can't pick one not shown, nor mark it.
     in = ui_input_none(), in.menu_item = menu_place(1, UM_TRASH);
@@ -182,4 +182,69 @@ static void test_menu_f74(void)
     menu_keys(&u, 1, UK_INVERT);
     CHECK(u.marked == 1 && m1[1]);
     CHECK(menu_keys(&u, 1, UK_RELOAD).kind == UA_RELOAD && menu_keys(&u, 1, UK_HOMEDIR).kind == UA_HOMEDIR);
+}
+
+// Select Items Matching (F7.4): the find bar's select mode. Enter makes the selection every match
+// (as Nemo's), and closes it; Esc and an empty Enter leave the selection as it was.
+static void test_select_match(void)
+{
+    UiNames names = { name_at, NULL, NULL };
+    static u8 mark[7];
+    Ui u = menu_ui(7);   // alpha Beta gamma.txt delta BETAMAX omega café
+    u.mark = mark, memset(mark, 0, sizeof mark);
+    ui_mark(&u, 0, true), ui_mark(&u, 5, true);
+    menu_keys(&u, 1, UK_SELECT_MATCH);
+    CHECK(u.finding && u.find_keys && u.find_select && u.marked == 2);
+    UiInput in = chars("ta");
+    ui_handle(&u, names, &in);
+    CHECK(u.list.sel == 1 && u.find_select);
+    menu_keys(&u, 1, UK_ENTER);
+    CHECK(!u.finding && !u.find_select && u.marked == 3 && mark[1] && mark[3] && mark[4] && !mark[0] && !mark[5]);
+    CHECK(u.last_len == 2);   // n and N find it again
+    // Esc: the selection as it was, the cursor back.
+    u.list.sel = 6;
+    menu_keys(&u, 1, UK_SELECT_MATCH);
+    in = chars("al");
+    ui_handle(&u, names, &in);
+    CHECK(u.list.sel == 0);
+    menu_keys(&u, 1, UK_ESC);
+    CHECK(!u.finding && !u.find_select && u.marked == 3 && u.list.sel == 6);
+    // An empty Enter only closes it.
+    menu_keys(&u, 2, UK_SELECT_MATCH, UK_ENTER);
+    CHECK(!u.finding && u.marked == 3);
+    // The toggles: case kept, "Beta" alone.
+    u.find_opts.cased = true;
+    menu_keys(&u, 1, UK_SELECT_MATCH);
+    in = chars("Beta");
+    ui_handle(&u, names, &in);
+    menu_keys(&u, 1, UK_ENTER);
+    CHECK(u.marked == 1 && mark[1]);
+    u.find_opts.cased = false;
+    // No match: the selection empties (nothing matches).
+    menu_keys(&u, 1, UK_SELECT_MATCH);
+    in = chars("zz");
+    ui_handle(&u, names, &in);
+    menu_keys(&u, 1, UK_ENTER);
+    CHECK(u.marked == 0 && !u.finding);
+    // A command leaves the bar and is the list's: the select bar closes rather than staying.
+    menu_keys(&u, 1, UK_SELECT_MATCH);
+    in = chars("a");
+    ui_handle(&u, names, &in);
+    CHECK(menu_keys(&u, 1, UK_TAB_NEW).kind == UA_TAB_NEW && !u.finding && !u.find_select);
+    // The menu opened over it closes it too.
+    menu_keys(&u, 1, UK_SELECT_MATCH);
+    menu_keys(&u, 1, -'e');
+    CHECK(u.menu_on && !u.finding && !u.find_select);
+    menu_keys(&u, 1, UK_ESC);
+    // A plain find after it is a plain find; with the find bar open, Ctrl+Shift+A makes it select.
+    menu_keys(&u, 1, UK_FIND);
+    CHECK(u.finding && !u.find_select);
+    menu_keys(&u, 1, UK_SELECT_MATCH);
+    CHECK(u.finding && u.find_select && u.find_len == 0);
+    menu_keys(&u, 1, UK_ESC);
+    // An empty folder: nothing to select from, no bar.
+    u = menu_ui(0);
+    menu_keys(&u, 1, UK_SELECT_MATCH);
+    CHECK(!u.finding);
+    ui_matcher_set(&u.find_m, STR_EMPTY, (UiMatchOpts){ 0 });
 }

@@ -177,7 +177,7 @@ MUTANTS += [
     (U, "            u->side_focus = u->side.n > 0;", "            u->side_focus = true;"),
     (U, "            else u->side_focus = false;\n", ""),
     (U, "            if (u->side_focus && u->side.n > 0) return (UiAction){ UA_PLACE, u->side.sel, false };", "            if (u->side_focus) return (UiAction){ UA_PLACE, u->side.sel, false };"),
-    (U, "u->finding = true, u->find_keys = true, u->find_miss = false, u->find_len = 0, u->find_from = u->list.sel, u->side_focus = false;", "u->finding = true, u->find_keys = true, u->find_miss = false, u->find_len = 0, u->find_from = u->list.sel;"),
+    (U, "u->finding = true, u->find_keys = true, u->find_miss = false, u->find_select = false, u->find_len = 0, u->find_from = u->list.sel, u->side_focus = false;", "u->finding = true, u->find_keys = true, u->find_miss = false, u->find_len = 0, u->find_from = u->list.sel;"),
     # ---- F2: history
     (U, "if (*n == UI_HISTORY_MAX) memmove(stack, stack + 1, sizeof *stack * (UI_HISTORY_MAX - 1)), (*n)--;", "if (*n == UI_HISTORY_MAX) (*n)--;"),
     (U, "    h->nfwd = 0;\n", ""),
@@ -1252,8 +1252,8 @@ MUTANTS += [
 ]
 # ---- the find bar (Michael, 2026-10-26)
 MUTANTS += [
-    (U, "    u->finding = false, u->find_keys = false, u->find_miss = false;", "    u->finding = false, u->find_miss = false;"),
-    (U, "    case UK_ENTER: case UK_SHIFT_ENTER: ui_find_leave(u); return true;", "    case UK_ENTER: case UK_SHIFT_ENTER: ui_find_close(u); return true;"),
+    (U, "    u->finding = false, u->find_keys = false, u->find_miss = false, u->find_select = false;", "    u->finding = false, u->find_miss = false, u->find_select = false;"),
+    (U, "        if (u->find_select) ui_find_select(u, names);\n        else ui_find_leave(u);", "        if (u->find_select) ui_find_select(u, names);\n        else ui_find_close(u);"),
     (U, "    case UK_UP: case UK_DOWN: ui_find_step(u, names, e.key == UK_UP ? -1 : 1); return true;", "    case UK_UP: case UK_DOWN: ui_find_step(u, names, 1); return true;"),
     (U, "    if (i >= 0) u->list.sel = i, ui_show_sel(&u->list);\n}\n\n// How many", "}\n\n// How many"),
     (U, "        if (in->job_n > 0) u->jobs_focus = true, u->job_at = 0;\n        return true;", "        return true;"),
@@ -1336,7 +1336,7 @@ MUTANTS += [
     (U, "    case UM_CUT: case UM_COPY: return here && !u->in_trash;", "    case UM_CUT: case UM_COPY: return here;"),
     (U, "    case UM_PASTE: return u->can_paste && u->can_write;", "    case UM_PASTE: return u->can_write;"),
     (U, "    case UM_PASTE: return u->can_paste && u->can_write;", "    case UM_PASTE: return u->can_paste;"),
-    (U, "    case UM_SELECT_ALL: case UM_INVERT: return files;", "    case UM_SELECT_ALL: case UM_INVERT: return true;"),
+    (U, "    case UM_SELECT_ALL: case UM_SELECT_MATCH: case UM_INVERT: return files;", "    case UM_SELECT_ALL: case UM_SELECT_MATCH: case UM_INVERT: return true;"),
     (U, "    case UM_RENAME: return here && !u->in_trash && u->can_write;", "    case UM_RENAME: return here && u->can_write;"),
     (U, "    case UM_RENAME: return here && !u->in_trash && u->can_write;", "    case UM_RENAME: return here && !u->in_trash;"),
     (U, "    case UM_TRASH: case UM_DELETE: case UM_RESTORE: return here;", "    case UM_TRASH: case UM_DELETE: case UM_RESTORE: return true;"),
@@ -1365,4 +1365,20 @@ MUTANTS += [
     (U, "            for (isize i = 0; i < l->n; i++) ui_mark(u, i, !ui_marked(u, i));", "            for (isize i = 0; i < l->n; i++) ui_mark(u, i, true);"),
     (U, "        case UK_RELOAD: return (UiAction){ UA_RELOAD, 0, false };", ""),
     (U, "        case UK_HOMEDIR: return (UiAction){ UA_HOMEDIR, 0, false };", ""),
+]
+# ---- F7.4: Select Items Matching
+MUTANTS += [
+    (U, "    u->finding = false, u->find_keys = false, u->find_miss = false, u->find_select = false;", "    u->finding = false, u->find_keys = false, u->find_miss = false;"),
+    (U, "    if (u->find_select) {\n        if (u->finding) ui_find_close(u);\n        return;\n    }\n", ""),
+    (U, "        if (u->finding) ui_find_close(u);\n        return;", "        return;"),
+    (U, "    if (u->find_len > 0) {\n        ui_mark_clear(u);", "    if (true) {\n        ui_mark_clear(u);"),
+    (U, "        ui_mark_clear(u);\n        for (isize i = 0; i < u->list.n; i++)\n            if (ui_match(", "        for (isize i = 0; i < u->list.n; i++)\n            if (ui_match("),
+    (U, "            if (ui_match(&u->find_m, names.at(names.ctx, i))) ui_mark(u, i, true);", "            ui_mark(u, i, true);"),
+    (U, "    ui_find_close(u);\n}\n\nstatic void ui_find_open", "}\n\nstatic void ui_find_open"),
+    # Not a mutant: ui_find_open's `find_select = false` is inert, a select bar always has the keys
+    # (leaving closes it) and takes / and Ctrl+F itself, so no find opens over one.
+    (U, "        if (u->find_select) ui_find_select(u, names);\n        else ui_find_leave(u);", "        ui_find_leave(u);"),
+    (U, "            if (l->n > 0) ui_find_open(u), u->find_select = true;", "            if (l->n > 0) ui_find_open(u);"),
+    (U, "            if (l->n > 0) ui_find_open(u), u->find_select = true;", "            ui_find_open(u), u->find_select = true;"),
+    (U, "    case UM_SELECT_ALL: case UM_SELECT_MATCH: case UM_INVERT: return files;", "    case UM_SELECT_ALL: case UM_INVERT: return files;"),
 ]

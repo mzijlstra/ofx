@@ -356,6 +356,12 @@ Ctrl+Shift+I, Ctrl+R (`UA_RELOAD`), Alt+Home; Go → Trash is `UA_TRASH_VIEW`. S
 `menugrey`, `menuhid` (what the last frame didn't draw), `menumarked`, `reloadasked`. Still to
 come: Select Items Matching (step 2), Duplicate (step 3).
 
+**Step 2 (2026-10-27): Select Items Matching** is the find bar with `Ui.find_select`: "Select" for
+"Find", the same field, toggles, count and chevrons; Enter makes the selection every match (as
+Nemo's dialog does: the old selection goes) and closes the bar, an empty Enter or Esc leaves the
+selection; any other way out closes it too, as it is there for one Enter. Ctrl+Shift+A, Ctrl+S
+staying the sidebar's.
+
 **F7.1 as built (2026-10-25):**
 - `ui/ui.c`: the menus as tables (`UI_MENU`, `UI_MENU_ITEM`: label, key, a word for the tests);
   `ui_menu_enabled`, `ui_menu_event` (the keys), `ui_menu_hover` (the pointer), the clicks in

@@ -2877,7 +2877,7 @@ static void layout_find_bar(void)
                                             .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
                                 .backgroundColor = cc(t->bg_light),
                                 .border = { .color = mix(t->fg_dim, t->bg_light, 0.45f), .width = { .top = 1 } } }) {
-        text(cz("Find"), cc(t->fg_dim));
+        text(cz(u->find_select ? "Select" : "Find"), cc(t->fg_dim));   // Select Items Matching (F7.4)
         CLAY(CLAY_ID("find-field"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(26) }, .padding = { 8, 3, 0, 0 }, .childGap = 6,
                                                   .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
                                       .backgroundColor = cc(t->bg), .border = { .color = edge, .width = CLAY_BORDER_OUTSIDE(1) } }) {
@@ -3135,6 +3135,9 @@ static Clay_RenderCommandArray layout(int w, int h)
             } else if (app.ui.jobs_focus) {
                 text(fit(S("Jobs: \xE2\x86\x91 \xE2\x86\x93 (k j) move \xC2\xB7 Enter cancels the marked job \xC2\xB7 Esc back to the list"), foot_w, false),
                      cc(t->fg_dim));
+            } else if (app.ui.finding && app.ui.find_keys && app.ui.find_select) {
+                text(fit(S("Select: Enter selects every match \xC2\xB7 Esc cancels \xC2\xB7 \xE2\x86\x91 \xE2\x86\x93 previous and next \xC2\xB7 "
+                           "Alt+C/W/R case, words, regex"), foot_w, false), cc(t->fg_dim));
             } else if (app.ui.finding && app.ui.find_keys) {
                 text(fit(S("Find: \xE2\x86\x91 \xE2\x86\x93 previous and next \xC2\xB7 Enter keeps \xC2\xB7 Esc closes \xC2\xB7 Ctrl+J the jobs \xC2\xB7 "
                            "Alt+C/W/R case, words, regex"), foot_w, false), cc(t->fg_dim));
@@ -3202,6 +3205,7 @@ static UiKey ui_key_of(int key, int mods)
     if (m == GLFW_MOD_ALT && key == GLFW_KEY_HOME) return UK_HOMEDIR;   // (F7.4, as Nemo)
     if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_R) return UK_RELOAD;
     if (m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT) && key == GLFW_KEY_I) return UK_INVERT;
+    if (m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT) && key == GLFW_KEY_A) return UK_SELECT_MATCH;
     if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_T) return UK_TAB_NEW;
     if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_N) return UK_NEW_WINDOW;
     if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_I) return UK_PROPERTIES;

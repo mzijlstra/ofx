@@ -353,6 +353,8 @@ MUTANTS = [
     (G, '    if (m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT) && key == GLFW_KEY_I) return UK_INVERT;', '', 'f74'),
     (G, '            if (!ui_menu_shown(&app.ui, it)) continue;\n            if (it == UM_SEP) {', '            if (it == UM_SEP) {', 'f74'),
     # Left out: the marks' column and the ✓ / • drawn (pixels only); menu-view.png shows them.
+    (G, '    if (m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT) && key == GLFW_KEY_A) return UK_SELECT_MATCH;', '', 'f74'),
+    # Left out: the bar's "Select" label and its footer hint (pixels only); select-match.png shows them.
     # ---- quit doesn't wait for a hung drive (2026-10-26: no mutant was hang's or f6b's alone)
     (K, '    if (pthread_timedjoin_np(counts.thread, NULL, &until) != 0) pthread_detach(counts.thread);', '    pthread_join(counts.thread, NULL);', 'hang'),
     ('gui/space.c', '    if (pthread_timedjoin_np(space.thread, NULL, &until) != 0) pthread_detach(space.thread);', '    pthread_join(space.thread, NULL);', 'f6'),

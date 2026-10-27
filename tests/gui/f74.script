@@ -16,10 +16,33 @@ expect menu=- marked=4
 point-ui menu-title 1
 click-here
 expect menu=Edit menuat=-
-point-ui menu-item 7
+point-ui menu-item 8
 click-here
 expect menu=- marked=0
+# Select Items Matching… by the pointer: the bar as "Select"; Enter selects every match and closes it
+point-ui menu-title 1
+click-here
+point-ui menu-item 7
+click-here
+expect menu=- finding=1 findkeys=1 findselect=1
 pointer-off
+type .txt
+expect findn=3 findtext=1_of_3 sel=a.txt
+shot select-match.png
+key enter
+expect finding=0 findselect=0 marked=3
+key esc
+expect marked=0
+# Ctrl+Shift+A as GLFW gives it (A 65, Ctrl and Shift 3); Esc leaves the selection as it was
+key space
+expect marked=1
+raw-key 65 3
+expect findselect=1
+type b
+key esc
+expect finding=0 marked=1
+key esc
+key home
 # Copy a.txt: Paste can be picked then
 key down
 expect sel=a.txt

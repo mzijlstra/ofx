@@ -68,6 +68,7 @@ typedef enum {
     UK_INVERT,     // Ctrl+Shift+I: the selection inverted (F7.4)
     UK_RELOAD,     // Ctrl+R: the folder listed again (F7.4)
     UK_HOMEDIR,    // Alt+Home: home, as ~ (F7.4)
+    UK_SELECT_MATCH,   // Ctrl+Shift+A: Select Items Matching, the find bar's select mode (F7.4)
 } UiKey;
 
 // The top bar's buttons (F4).
@@ -197,7 +198,7 @@ enum { UI_MODAL_YES = 1, UI_MODAL_NO, UI_MODAL_SKIP, UI_MODAL_REPLACE, UI_MODAL_
 // entries; UM_SEP is a line between groups.
 typedef enum {
     UM_SEP, UM_NEW_TAB, UM_NEW_WINDOW, UM_NEW_FOLDER, UM_NEW_FILE, UM_OPEN, UM_OPEN_WITH, UM_PROPERTIES, UM_CLOSE_ALL, UM_CLOSE,
-    UM_UNDO, UM_CUT, UM_COPY, UM_PASTE, UM_SELECT_ALL, UM_INVERT, UM_RENAME, UM_TRASH, UM_DELETE, UM_RESTORE,
+    UM_UNDO, UM_CUT, UM_COPY, UM_PASTE, UM_SELECT_ALL, UM_SELECT_MATCH, UM_INVERT, UM_RENAME, UM_TRASH, UM_DELETE, UM_RESTORE,
     UM_RELOAD, UM_SIDE_PLACES, UM_SIDE_TREE, UM_SIDE_NONE, UM_HIDDEN, UM_SORT_NAME, UM_SORT_SIZE, UM_SORT_MTIME, UM_SORT_REVERSE,
     UM_ZOOM_IN, UM_ZOOM_OUT, UM_ZOOM_RESET, UM_VIEW_LIST, UM_VIEW_ICONS,
     UM_PARENT, UM_BACK, UM_FORWARD, UM_HOME, UM_TRASH_VIEW, UM_FIND, UM_LOCATION, UM_TERMINAL,
@@ -224,6 +225,7 @@ static const struct { const char *label, *key, *word; UiEvent ev; char mark; } U
     [UM_COPY] = { "Copy", "Ctrl+C", "copy", { UK_COPY, 0 } },
     [UM_PASTE] = { "Paste", "Ctrl+V", "paste", { UK_PASTE, 0 } },
     [UM_SELECT_ALL] = { "Select All", "Ctrl+A", "select-all", { UK_ALL, 0 } },
+    [UM_SELECT_MATCH] = { "Select Items Matching\xE2\x80\xA6", "Ctrl+Shift+A", "select-match", { UK_SELECT_MATCH, 0 } },
     [UM_INVERT] = { "Invert Selection", "Ctrl+Shift+I", "invert", { UK_INVERT, 0 } },
     [UM_RENAME] = { "Rename\xE2\x80\xA6", "F2", "rename", { UK_F2, 0 } },
     [UM_TRASH] = { "Move to Trash", "Delete", "trash", { UK_DELETE, 0 } },
@@ -261,7 +263,7 @@ static const UiMenuItem UI_MENU_FILE[] = {
 };
 // Move to Trash shows outside the trash view, Restore in it (ui_menu_shown).
 static const UiMenuItem UI_MENU_EDIT[] = {
-    UM_UNDO, UM_SEP, UM_CUT, UM_COPY, UM_PASTE, UM_SEP, UM_SELECT_ALL, UM_INVERT, UM_SEP, UM_RENAME, UM_SEP,
+    UM_UNDO, UM_SEP, UM_CUT, UM_COPY, UM_PASTE, UM_SEP, UM_SELECT_ALL, UM_SELECT_MATCH, UM_INVERT, UM_SEP, UM_RENAME, UM_SEP,
     UM_TRASH, UM_RESTORE, UM_DELETE,
 };
 static const UiMenuItem UI_MENU_VIEW[] = {
@@ -329,6 +331,7 @@ typedef struct {
     const u8 *side_head;     // a byte per sidebar row, 1 for a heading (F6), never the cursor's; NULL: none
     bool   finding;          // the find bar is open (Michael, 2026-10-26: until Esc or its ×)
     bool   find_keys;        // and has the keys
+    bool   find_select;      // Select Items Matching (F7.4): Enter selects every match, and closes it
     bool   find_miss;        // its text matches nothing
     char   find[UI_FIND_MAX];
     int    find_len;
@@ -818,23 +821,42 @@ static isize ui_find_count(const Ui *u, UiNames names, isize *at)
     return n;
 }
 
+static void ui_find_close(Ui *u)
+{
+    u->finding = false, u->find_keys = false, u->find_miss = false, u->find_select = false;
+    if (u->find_len) memcpy(u->last, u->find, (size_t)u->find_len), u->last_len = u->find_len;
+}
+
 // The keys leave the find bar (Enter, a command, the menu, the edit line); it stays open, its text
-// kept for n and N.
+// kept for n and N. The select mode's bar closes: it is there for one Enter.
 static void ui_find_leave(Ui *u)
 {
+    if (u->find_select) {
+        if (u->finding) ui_find_close(u);
+        return;
+    }
     u->find_keys = false;
     if (u->find_len) memcpy(u->last, u->find, (size_t)u->find_len), u->last_len = u->find_len;
 }
 
-static void ui_find_close(Ui *u)
+static void ui_mark(Ui *u, isize i, bool on);
+static void ui_mark_clear(Ui *u);
+
+// Select Items Matching's Enter (F7.4, as Nemo's): the selection becomes every name the text
+// matches, and the bar closes; with no text it only closes.
+static void ui_find_select(Ui *u, UiNames names)
 {
-    u->finding = false, u->find_keys = false, u->find_miss = false;
-    if (u->find_len) memcpy(u->last, u->find, (size_t)u->find_len), u->last_len = u->find_len;
+    if (u->find_len > 0) {
+        ui_mark_clear(u);
+        for (isize i = 0; i < u->list.n; i++)
+            if (ui_match(&u->find_m, names.at(names.ctx, i))) ui_mark(u, i, true);
+    }
+    ui_find_close(u);
 }
 
 static void ui_find_open(Ui *u)
 {
-    u->finding = true, u->find_keys = true, u->find_miss = false, u->find_len = 0, u->find_from = u->list.sel, u->side_focus = false;
+    u->finding = true, u->find_keys = true, u->find_miss = false, u->find_select = false, u->find_len = 0, u->find_from = u->list.sel, u->side_focus = false;
     u->jobs_focus = false, u->crumb_focus = false;
     ui_matcher_set(&u->find_m, STR_EMPTY, u->find_opts);   // Up and Down in an empty bar find nothing (reviewer-2)
 }
@@ -1213,7 +1235,7 @@ static bool ui_menu_enabled(const Ui *u, UiMenuItem it)
     case UM_UNDO: return u->can_undo;
     case UM_CUT: case UM_COPY: return here && !u->in_trash;
     case UM_PASTE: return u->can_paste && u->can_write;
-    case UM_SELECT_ALL: case UM_INVERT: return files;
+    case UM_SELECT_ALL: case UM_SELECT_MATCH: case UM_INVERT: return files;
     case UM_RENAME: return here && !u->in_trash && u->can_write;
     case UM_TRASH: case UM_DELETE: case UM_RESTORE: return here;
     case UM_RELOAD: case UM_SIDE_PLACES: case UM_SIDE_TREE: case UM_SIDE_NONE: case UM_HIDDEN: return true;
@@ -1569,7 +1591,10 @@ static bool ui_find_event(Ui *u, UiNames names, UiEvent e, const UiInput *in)
     }
     switch (e.key) {
     case UK_BACKSPACE: ui_find_erase(u), ui_find_update(u, names); return true;
-    case UK_ENTER: case UK_SHIFT_ENTER: ui_find_leave(u); return true;
+    case UK_ENTER: case UK_SHIFT_ENTER:
+        if (u->find_select) ui_find_select(u, names);
+        else ui_find_leave(u);
+        return true;
     case UK_ESC:
         ui_find_close(u);
         u->list.sel = ui_find_back(u), ui_show_sel(&u->list);
@@ -1968,6 +1993,9 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         case UK_BACK: return (UiAction){ UA_BACK, 0, false };
         case UK_FORWARD: return (UiAction){ UA_FORWARD, 0, false };
         case UK_FIND: ui_find_open(u); break;
+        case UK_SELECT_MATCH:
+            if (l->n > 0) ui_find_open(u), u->find_select = true;
+            break;
         case UK_HIDDEN: return (UiAction){ UA_HIDDEN, 0, false };
         case UK_ALL:
             for (isize i = 0; i < l->n; i++) ui_mark(u, i, true);

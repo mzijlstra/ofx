@@ -352,7 +352,7 @@ static void script_state(char *out, size_t cap)
              "thumbheld=%td thumbdropped=%d thumbresets=%d thumblocal=%d reloadasked=%d menu=%s menuat=%s menuoff=%s menugrey=%s menuhid=%s menumarked=%s menuhover=%d canwrite=%d windows=%d siderows=%d footerin=%d "
              "props=%d propat=%d propcan=%d propn=%td propmode=%04o propfiles=%lld propdirs=%lld propbytes=%lld propdone=%d propcut=%d proplinks=%lld,%lld,%lld,%d propnlink=%llu proptype=%s proptypename=%s propbyname=%d propname=%s "
              "propwhere=%s propdrive=%s proplink=%s propcreated=%d propidx=%td "
-             "ow=%d owfresh=%d owlist=%d owtext=%s own=%td owsel=%td owapp=%s owicon=%s owtex=%d owshown=%td owtype=%s owfiles=%td owrows=%d owtop=%td owopts=%s owbad=%d owdef=%d owdefcan=%d findopts=%s findbad=%d findn=%td findat=%td findtext=%s status=%s",
+             "ow=%d owfresh=%d owlist=%d owtext=%s own=%td owsel=%td owapp=%s owicon=%s owtex=%d owshown=%td owtype=%s owfiles=%td owrows=%d owtop=%td owopts=%s owbad=%d owdef=%d owdefcan=%d findopts=%s findbad=%d findselect=%d findn=%td findat=%td findtext=%s status=%s",
              app.cwd, app.list.n, app.list.hidden, STR_ARG(sel), app.ui.list.sel, app.ui.list.top, app.ui.list.rows, app.hover,
              t->accent.r, t->accent.g, t->accent.b, t->bg.r, t->bg.g, t->bg.b, t->icons[0] ? t->icons : "-",
              app.icon_scale, GetScreenWidth(), GetScreenHeight(), app.reloads, app.themes, atomic_load(&watch.batches),
@@ -382,7 +382,7 @@ static void script_state(char *out, size_t cap)
              props.type[0] ? props.type : "-", proptypename, props.type_by_name, propname,
              propwhere, propdrive, proplink, props.btime >= 0, props.idx,
              app.ui.ow, app.ui.ow_fresh, app.ui.ow_in_list, owtext, app.ui.ow_list.n, app.ui.ow_list.sel, owapp, owicon, owtex, ow.shown, ow.type[0] ? ow.type : "-", ow.n,
-             app.ui.ow_list.rows, app.ui.ow_list.top, owopts, app.ui.ow_m.bad, app.ui.ow_def, app.ui.ow_def_can, findopts, app.ui.find_m.bad, findn, findat, findtext, app.status[0] ? app.status : "-");
+             app.ui.ow_list.rows, app.ui.ow_list.top, owopts, app.ui.ow_m.bad, app.ui.ow_def, app.ui.ow_def_can, findopts, app.ui.find_m.bad, app.ui.find_select, findn, findat, findtext, app.status[0] ? app.status : "-");
     frame_us_max = 0;
 }
 
@@ -428,7 +428,7 @@ static UiKey script_key(Str name)
         { "f10", UK_F10 }, { "ctrl-n", UK_NEW_WINDOW }, { "ctrl-i", UK_PROPERTIES }, { "alt-enter", UK_TERMINAL },
         { "ctrl-1", UK_VIEW_LIST }, { "ctrl-2", UK_VIEW_ICONS }, { "ctrl-left", UK_SIDE },
         { "ctrl-equal", UK_ZOOM_IN }, { "ctrl-minus", UK_ZOOM_OUT }, { "ctrl-0", UK_ZOOM_RESET },
-        { "ctrl-shift-i", UK_INVERT }, { "ctrl-r", UK_RELOAD }, { "alt-home", UK_HOMEDIR },
+        { "ctrl-shift-i", UK_INVERT }, { "ctrl-shift-a", UK_SELECT_MATCH }, { "ctrl-r", UK_RELOAD }, { "alt-home", UK_HOMEDIR },
     };
     for (int i = 0; i < COUNT(KEYS); i++)
         if (str_eq(name, str_from_c(KEYS[i].name))) return KEYS[i].k;
