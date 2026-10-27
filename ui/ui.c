@@ -75,6 +75,7 @@ typedef enum {
     UK_EDIT_BOOKMARKS, // Ctrl+B: the Edit Bookmarks panel (F7.5)
     UK_ALT_DOWN,   // Alt+Down: in Edit Bookmarks a bookmark down (Alt+Up, UK_PARENT, up); elsewhere nothing
     UK_SHORTCUTS,  // F1, Ctrl+F1: the Keyboard Shortcuts panel (F7.5)
+    UK_CONTEXT,    // Shift+F10, the Menu key: the right-click menu of the files' cursor, or of the folder shown (F8)
 } UiKey;
 
 // The top bar's buttons (F4).
@@ -127,6 +128,9 @@ typedef struct {
     int     menu_title;
     int     menu_item;
     bool    menu_away;
+    // A right press (F8): a list row (its place on screen), or the files' empty space.
+    int     ctx_row;
+    bool    ctx_here;
     int     prop_box;    // a checkbox of the Properties panel's grid pressed (0..8, F7.2), -1 for none
     // Open With (F7.3): the apps gui/ lists, in its order (their names, which the filter
     // matches); a row pressed or double-clicked (its place on screen), the field pressed, a
@@ -222,6 +226,7 @@ typedef enum {
     UM_PARENT, UM_BACK, UM_FORWARD, UM_HOME, UM_TRASH_VIEW, UM_FIND, UM_LOCATION, UM_TERMINAL,
     UM_ADD_BOOKMARK, UM_EDIT_BOOKMARKS, UM_BM_0, UM_BM_1, UM_BM_2, UM_BM_3, UM_BM_4, UM_BM_5, UM_BM_6, UM_BM_7, UM_BM_MORE,
     UM_SHORTCUTS, UM_ABOUT,
+    UM_OPEN_TAB, UM_EMPTY_TRASH, UM_HERE_PROPS,
     UM_ITEMS
 } UiMenuItem;
 
@@ -286,6 +291,11 @@ static const struct { const char *label, *key, *word; UiEvent ev; char mark; } U
     // Help: no manual (Michael, 2026-10-27)
     [UM_SHORTCUTS] = { "Keyboard Shortcuts", "F1", "shortcuts", { UK_SHORTCUTS, 0 } },   // "N more in Edit Bookmarks…" (gui/'s label): the panel, on the first not listed
     [UM_ABOUT] = { "About", "", "about" },
+    // The right-click menus' own (F8): a folder in a tab behind (its row's middle click); the trash
+    // view's Empty Trash; the folder shown's Properties, whatever is marked
+    [UM_OPEN_TAB] = { "Open in New Tab", "Middle click", "open-tab" },
+    [UM_EMPTY_TRASH] = { "Empty Trash\xE2\x80\xA6", "", "empty-trash" },
+    [UM_HERE_PROPS] = { "Properties\xE2\x80\xA6", "", "here-properties" },
     [UM_BM_0] = { "", "", "bm-0", .mark = 'r' }, [UM_BM_1] = { "", "", "bm-1", .mark = 'r' },
     [UM_BM_2] = { "", "", "bm-2", .mark = 'r' }, [UM_BM_3] = { "", "", "bm-3", .mark = 'r' },
     [UM_BM_4] = { "", "", "bm-4", .mark = 'r' }, [UM_BM_5] = { "", "", "bm-5", .mark = 'r' },
@@ -314,6 +324,16 @@ static const UiMenuItem UI_MENU_BOOKMARKS_[] = {
 };
 
 static const UiMenuItem UI_MENU_HELP[] = { UM_SHORTCUTS, UM_SEP, UM_ABOUT };
+// The right-click menus (F8, docs/plan.md "F8 design"): an entry of the files (the marks, or the
+// cursor's), and the files' empty space (the folder shown).
+static const UiMenuItem UI_MENU_CTX_ENTRY[] = {
+    UM_OPEN, UM_OPEN_TAB, UM_OPEN_WITH, UM_SEP, UM_CUT, UM_COPY, UM_DUPLICATE, UM_SEP, UM_RENAME, UM_SEP,
+    UM_TRASH, UM_RESTORE, UM_DELETE, UM_SEP, UM_PROPERTIES,
+};
+static const UiMenuItem UI_MENU_CTX_HERE[] = {
+    UM_NEW_FOLDER, UM_NEW_FILE, UM_EMPTY_TRASH, UM_SEP, UM_PASTE, UM_SELECT_ALL, UM_SEP, UM_TERMINAL, UM_HIDDEN, UM_SEP,
+    UM_ADD_BOOKMARK, UM_SEP, UM_HERE_PROPS,
+};
 
 // The menus in the bar's order: a title, its Alt letter, its entries.
 static const struct { const char *title; char letter; const UiMenuItem *items; int n; } UI_MENU[] = {
@@ -323,8 +343,13 @@ static const struct { const char *title; char letter; const UiMenuItem *items; i
     { "Go", 'g', UI_MENU_GO, sizeof UI_MENU_GO / sizeof UI_MENU_GO[0] },
     { "Bookmarks", 'b', UI_MENU_BOOKMARKS_, sizeof UI_MENU_BOOKMARKS_ / sizeof UI_MENU_BOOKMARKS_[0] },
     { "Help", 'h', UI_MENU_HELP, sizeof UI_MENU_HELP / sizeof UI_MENU_HELP[0] },
+    // The right-click menus (F8): no title in the bar, no letter; the title names them in a script
+    { "entry", 0, UI_MENU_CTX_ENTRY, sizeof UI_MENU_CTX_ENTRY / sizeof UI_MENU_CTX_ENTRY[0] },
+    { "here", 0, UI_MENU_CTX_HERE, sizeof UI_MENU_CTX_HERE / sizeof UI_MENU_CTX_HERE[0] },
 };
-enum { UI_MENUS = sizeof UI_MENU / sizeof UI_MENU[0] };
+// The bar's menus come first, then the right-click ones.
+enum { UI_MENUS = 6, UI_CTX_ENTRY = UI_MENUS, UI_CTX_HERE, UI_MENUS_ALL };
+_Static_assert(sizeof UI_MENU / sizeof UI_MENU[0] == UI_MENUS_ALL, "UI_MENU: the bar's menus, then the right-click ones");
 
 // ---- the Keyboard Shortcuts panel (F7.5, docs/plan.md "F7.5 decided") ----------------------------
 
@@ -379,9 +404,10 @@ static const struct { UiKeySection sec; const char *action, *key, *key2; } UI_KE
     { KS_TABS, "The previous tab", "Ctrl+Shift+Tab", "Ctrl+PgUp" },
     { KS_TABS, "Move the tab", "Ctrl+Shift+PgUp", "Ctrl+Shift+PgDn" },
     { KS_TABS, "A tab by its place", "Alt+1 " "\xE2\x80\xA6" " Alt+9", "" },
-    { KS_TABS, "A folder in a tab behind", "Middle click", "" },
+    { KS_TABS, "Open in New Tab", "Middle click", "" },
     { KS_TABS, "Close All Windows", "Ctrl+Q", "" },
     { KS_VIEW, "The menus", "F10", "Alt+F, E, V, G, B, H" },
+    { KS_VIEW, "The right-click menu", "Shift+F10", "Menu" },
     { KS_VIEW, "Keyboard Shortcuts", "F1", "Ctrl+F1" },
     { KS_VIEW, "Reload", "Ctrl+R", "" },
     { KS_VIEW, "Show Hidden Files", "Ctrl+H", "." },
@@ -532,6 +558,9 @@ typedef struct {
     // files shown. And an entry picked whose key is still to run (ui_handle runs it next).
     bool   can_undo, can_back, can_forward, can_up, can_paste, shows_hidden;
     UiEvent menu_key;
+    // A right-click menu (F8): its entry is one folder (Open in New Tab), and a key opened it (gui/
+    // places it under the cursor, not at the pointer).
+    bool   ctx_dir, ctx_key;
     // The Bookmarks menu (F7.5), from gui/ too: how many local bookmarks it lists (at most
     // UI_MENU_BOOKMARKS), the one that is the folder shown (-1 none), and whether that folder can be
     // bookmarked (not one already, not the trash view, the file not full).
@@ -583,7 +612,7 @@ static UiInput ui_input_none(void)
 {
     return (UiInput){ .click = -1, .dclick = -1, .side_click = -1, .header = -1, .click_mods = 0, .bar = UB_NONE, .crumb = -1,
                       .tab_click = -1, .tab_close = -1, .mid_row = -1, .mid_side = -1, .mid_crumb = -1, .modal = 0, .job_x = -1, .side_mode = -1, .side_twisty = -1, .side_eject = -1,
-                      .zoom_to = -1, .menu_title = -1, .menu_item = -1, .prop_box = -1, .ow_row = -1, .ow_drow = -1, .bmp_row = -1, .bmp_drow = -1 };
+                      .zoom_to = -1, .menu_title = -1, .menu_item = -1, .ctx_row = -1, .prop_box = -1, .ow_row = -1, .ow_drow = -1, .bmp_row = -1, .bmp_drow = -1 };
 }
 
 static isize ui_clamp(isize v, isize lo, isize hi)
@@ -711,7 +740,7 @@ static bool ui_input_acts(const UiInput *in)
     return in->nev > 0 || in->click >= 0 || in->dclick >= 0 || in->side_click >= 0 || in->header >= 0 || in->bar != UB_NONE ||
            in->tab_click >= 0 || in->tab_close >= 0 || in->mid_row >= 0 || in->mid_side >= 0 || in->mid_crumb >= 0 || in->modal > 0 ||
            in->backs > 0 || in->forwards > 0 || in->job_x >= 0 || in->side_mode >= 0 || in->side_twisty >= 0 || in->side_eject >= 0 ||
-           in->zoom_wheel != 0 || in->zoom_to >= 0 || in->menu_title >= 0 || in->menu_item >= 0 || in->menu_away || in->prop_box >= 0 ||
+           in->zoom_wheel != 0 || in->zoom_to >= 0 || in->menu_title >= 0 || in->menu_item >= 0 || in->menu_away || in->ctx_row >= 0 || in->ctx_here || in->prop_box >= 0 ||
            in->ow_row >= 0 || in->ow_drow >= 0 || in->ow_field || in->toggle > 0 || in->find_x || in->find_field || in->find_step ||
            in->bmp_row >= 0 || in->bmp_drow >= 0 || in->bmp_btn || in->ow_wheel != 0;   // (a panel's wheel: Open With, Keyboard Shortcuts)
 }
@@ -1392,6 +1421,12 @@ static bool ui_menu_shown(const Ui *u, UiMenuItem it)
 {
     if (it >= UM_BM_0 && it <= UM_BM_7) return (int)(it - UM_BM_0) < u->bm_n;
     if (it == UM_BM_MORE) return u->bm_more > 0;
+    // A right-click menu leaves out what doesn't fit its target (F8): a tab for a folder only, a
+    // rename for one entry, the new entries outside the trash view (Empty Trash in it).
+    if (u->menu >= UI_MENUS && it == UM_OPEN_TAB) return u->ctx_dir && !u->in_trash;
+    if (u->menu >= UI_MENUS && it == UM_RENAME) return u->marked <= 1;
+    if (u->menu >= UI_MENUS && (it == UM_NEW_FOLDER || it == UM_NEW_FILE)) return !u->in_trash;
+    if (it == UM_EMPTY_TRASH) return u->in_trash;
     return it == UM_TRASH ? !u->in_trash : it == UM_RESTORE ? u->in_trash : true;
 }
 
@@ -1436,6 +1471,8 @@ static bool ui_menu_enabled(const Ui *u, UiMenuItem it)
     case UM_ADD_BOOKMARK: return u->can_bookmark && !u->in_trash;
     case UM_BM_0: case UM_BM_1: case UM_BM_2: case UM_BM_3: case UM_BM_4: case UM_BM_5: case UM_BM_6: case UM_BM_7: return true;
     case UM_EDIT_BOOKMARKS: case UM_BM_MORE: case UM_SHORTCUTS: case UM_ABOUT: return true;
+    case UM_OPEN_TAB: case UM_EMPTY_TRASH: return files;
+    case UM_HERE_PROPS: return true;
     default: return false;
     }
 }
@@ -1479,6 +1516,16 @@ static void ui_menu_open(Ui *u, int m, bool keys)
     u->menu_on = true, u->menu = m;
     u->menu_at = keys ? ui_menu_next(u, -1, 1) : -1;
     ui_edit_close(u), ui_find_leave(u);
+}
+
+// A right-click menu m opened (F8): the files take the keys; keys: a key opened it.
+static void ui_ctx_open(Ui *u, int m, UiNames names, bool keys)
+{
+    u->side_focus = u->crumb_focus = u->jobs_focus = false;
+    bool one = u->marked == 0 || (u->marked == 1 && ui_marked(u, u->list.sel));
+    u->ctx_dir = one && u->list.n > 0 && names.dir && names.dir(names.ctx, u->list.sel);
+    u->ctx_key = keys;
+    ui_menu_open(u, m, keys);
 }
 
 // The Properties panel opened, the focus on the grid's first box (F7.2).
@@ -1851,6 +1898,9 @@ static UiAction ui_menu_pick(Ui *u, UiMenuItem it)
     case UM_PROPERTIES: return ui_props_open(u);
     case UM_OPEN_WITH: return ui_ow_open(u);
     case UM_ABOUT: return u->about = true, (UiAction){ UA_NONE, 0, false };
+    case UM_OPEN_TAB: return (UiAction){ UA_TAB_BG_ROW, u->list.sel, false };
+    case UM_EMPTY_TRASH: return u->empty_asking = true, (UiAction){ UA_NONE, 0, false };
+    case UM_HERE_PROPS: return u->props = true, u->prop_at = 0, (UiAction){ UA_PROPS, 1, false };   // (index 1: the folder shown)
     default: return (UiAction){ UA_NONE, 0, false };
     }
 }
@@ -1889,6 +1939,7 @@ static bool ui_menu_event(Ui *u, UiEvent e, UiAction *a)
     case UK_HOME: u->menu_at = ui_menu_next(u, -1, 1); return true;
     case UK_END: u->menu_at = ui_menu_next(u, 0, -1); return true;
     case UK_LEFT: case UK_SEL_LEFT: case UK_RIGHT: case UK_SEL_RIGHT: {
+        if (u->menu >= UI_MENUS) return true;   // a right-click menu has no neighbours (F8)
         int by = e.key == UK_LEFT || e.key == UK_SEL_LEFT ? -1 : 1;
         ui_menu_open(u, ((u->menu + by) % UI_MENUS + UI_MENUS) % UI_MENUS, true);
         return true;
@@ -1913,7 +1964,7 @@ static bool ui_menu_event(Ui *u, UiEvent e, UiAction *a)
 static bool ui_menu_hover(Ui *u, int title, int item)
 {
     if (!u->menu_on) return false;
-    if (title >= 0 && title < UI_MENUS && title != u->menu) {
+    if (title >= 0 && title < UI_MENUS && title != u->menu && u->menu < UI_MENUS) {   // (not from a right-click menu, F8)
         u->menu = title, u->menu_at = -1;
         return true;
     }
@@ -2071,6 +2122,21 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         // (an entry that stands for a key: the loop below runs it first)
     }
     if (u->menu_on && in->menu_away) return u->menu_on = false, (UiAction){ UA_NONE, 0, false };
+    // A right press (F8): on a row, its menu. An unmarked row becomes the only one (the marks clear,
+    // as Nemo and GTK do); a marked one keeps them, the cursor on it. On the files' empty space, the
+    // folder shown's menu, the marks cleared.
+    if (!prompt && in->ctx_row >= 0 && u->list.top + in->ctx_row < u->list.n) {
+        isize row = u->list.top + in->ctx_row;
+        if (!ui_marked(u, row)) ui_mark_clear(u);
+        u->list.sel = row;
+        ui_ctx_open(u, UI_CTX_ENTRY, names, false);
+        return (UiAction){ UA_NONE, 0, false };
+    }
+    if (!prompt && in->ctx_here) {
+        ui_mark_clear(u);
+        ui_ctx_open(u, UI_CTX_HERE, names, false);
+        return (UiAction){ UA_NONE, 0, false };
+    }
     // The Properties panel's pointer (F7.2): a checkbox takes the focus and flips; Close closes.
     if (u->props && !u->quit_asking && !u->full_told && in->prop_box >= 0 && in->prop_box < 9) {
         u->prop_at = in->prop_box;
@@ -2196,6 +2262,13 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         // open, its keys.
         if (!prompt && !u->menu_on && (e.key == UK_F10 || (e.key == UK_MENU && ui_menu_of(e.ch) >= 0))) {
             ui_menu_open(u, e.key == UK_F10 ? 0 : ui_menu_of(e.ch), true);
+            continue;
+        }
+        // Shift+F10 and the Menu key (F8): the cursor's menu, or the folder shown's in an empty one,
+        // while the files have the keys (an edit or find line keeps them).
+        if (!prompt && !u->menu_on && e.key == UK_CONTEXT && !u->side_focus && !u->crumb_focus && !u->jobs_focus && !u->editing &&
+            !(u->finding && u->find_keys)) {
+            ui_ctx_open(u, u->list.n > 0 ? UI_CTX_ENTRY : UI_CTX_HERE, names, true);
             continue;
         }
         if (u->menu_on && !prompt) {

@@ -1,0 +1,117 @@
+# F8 step 1: the right-click menus of the files: an entry's and the folder shown's, by the pointer and
+# by Shift+F10 / the Menu key, where they open, what they hide, and what their entries do. The tree
+# as f74's (run.sh): sub/, a.txt, b.txt, c.txt.
+settle
+expect n=4 sel=sub menu=-
+# An unmarked entry: the marks clear, the cursor goes there, its menu (no tab for a file)
+key down
+key space
+expect marked=1 sel=b.txt
+point-ui row 2
+right-here
+expect menu=entry sel=b.txt marked=0 menuat=- menuhid=open-tab,restore menuin=1
+shot ctx-entry.png
+# No neighbours: Left and Right do nothing; a bar title under the pointer doesn't take over
+key right
+expect menu=entry
+point-ui menu-title 1
+hover-here
+expect menu=entry
+pointer-off
+key esc
+expect menu=-
+# A marked entry keeps the marks; with several, no Rename
+key ctrl-a
+point-ui row 1
+right-here
+expect menu=entry sel=a.txt marked=4 menuhid=open-tab,rename,restore
+key esc
+key esc
+expect marked=0
+# A folder: Open in New Tab, the tab behind
+point-ui row 0
+right-here
+expect menu=entry sel=sub menuhid=restore
+point-ui menu-item 1
+click-here
+expect menu=- tabs=2 tab=0 tabdirs=tree|sub
+key ctrl-tab
+key ctrl-w
+expect tabs=1
+# Rename from the menu: the cursor's row in its edit line
+point-ui row 1
+right-here
+point-ui menu-item 8
+click-here
+expect menu=- editing=1 edit=a.txt
+key esc
+expect editing=0
+# A right press with a menu open only closes it
+point-ui row 2
+right-here
+expect menu=entry
+point-ui row 3
+right-here
+expect menu=- sel=b.txt
+# Shift+F10 (F10 299, Shift 1) and the Menu key (348): the cursor's menu by the keys, its first entry
+# marked; Enter opens; under the cursor's row
+raw-key 299 1
+expect menu=entry menuat=open menuin=1 menuclear=1
+shot ctx-key.png
+key esc
+raw-key 348 0
+expect menu=entry menuat=open
+key down
+expect menuat=open-with
+key esc
+# The folder shown's menu on the empty space: the marks clear; Properties is the folder's, whatever
+# the cursor; Select All
+key space
+point-ui list
+right-here
+expect menu=here marked=0 menuhid=empty-trash menugrey=empty-trash,paste menuin=1
+shot ctx-here.png
+point-ui menu-item 12
+click-here
+expect menu=- props=1 propname=tree
+key esc
+point-ui list
+right-here
+point-ui menu-item 5
+click-here
+expect menu=- marked=4
+key esc
+# Kept inside the window at its bottom right corner: flipped up and left of the pointer
+right-at 900 470
+expect menu=here menuin=1 menubox=607,216,298,252
+key esc
+# Show Hidden Files, checked when on
+point-ui list
+right-here
+point-ui menu-item 8
+click-here
+expect menu=- hidden=1
+point-ui list
+right-here
+expect menumarked=hidden
+key esc
+key ctrl-h
+# The trash view: no new folder or file there, Empty Trash; an entry's Restore, no Move to Trash
+key down
+key delete
+wait-for 2000 n=3 undo=trash
+raw-key 269 4
+wait-for 2000 trash=1 n=1
+point-ui list
+right-here
+expect menu=here menuhid=new-folder,new-file
+point-ui menu-item 2
+click-here
+expect menu=- modal=empty
+type n
+expect modal=-
+point-ui row 0
+right-here
+expect menu=entry menuhid=open-tab,trash
+key esc
+quit

@@ -44,6 +44,8 @@
 //                           in one frame, as the mouse's go (zoom_drag_at: the zoom slider's knob)
 //   middle-here             a middle press there (a folder into a background tab, a tab closed)
 //   middle <row>            a middle press on list row <row>
+//   right-here              a right press there (F8: an entry's menu, or the folder shown's on empty space)
+//   right-at <x> <y>        a right press at a point
 //   back, forward           the mouse's back and forward buttons
 //   raw-button <n>          GLFW's button n (1-8) pressed and released through main.c's callback
 //   raw-key <key> [mods]    GLFW key code <key> pressed through main.c's key callback, with GLFW's
@@ -272,6 +274,17 @@ static void script_state(char *out, size_t cap)
     if (!menugrey[0]) snprintf(menugrey, sizeof menugrey, "-");
     if (!menuhid[0]) snprintf(menuhid, sizeof menuhid, "-");
     if (!menumarked[0]) snprintf(menumarked, sizeof menumarked, "-");
+    // The open menu's box as the last frame drew it (F8: a right-click menu inside the window).
+    char menubox[64] = "-";
+    Clay_ElementData mb = Clay_GetElementData(CLAY_ID("menu"));
+    if (app.ui.menu_on && mb.found)
+        snprintf(menubox, sizeof menubox, "%.0f,%.0f,%.0f,%.0f", mb.boundingBox.x, mb.boundingBox.y, mb.boundingBox.width, mb.boundingBox.height);
+    int menuin = app.ui.menu_on && mb.found && mb.boundingBox.x >= 0 && mb.boundingBox.y >= 0 &&
+                 mb.boundingBox.x + mb.boundingBox.width <= (float)GetScreenWidth() && mb.boundingBox.y + mb.boundingBox.height <= (float)GetScreenHeight();
+    // And whether it leaves the cursor's row in sight (a right-click menu by the keys opens under it).
+    Clay_ElementData cr = Clay_GetElementData(CLAY_IDI("row", (int)(app.ui.list.sel - app.ui.list.top)));
+    int menuclear = app.ui.menu_on && mb.found && cr.found &&
+                    (mb.boundingBox.y >= cr.boundingBox.y + cr.boundingBox.height || mb.boundingBox.y + mb.boundingBox.height <= cr.boundingBox.y);
     int menuseps = 0;   // the open menu's lines drawn (one before no bookmarks isn't, F7.5)
     for (int i = 0; app.ui.menu_on && i < UI_MENU[app.ui.menu].n; i++)
         menuseps += UI_MENU[app.ui.menu].items[i] == UM_SEP && Clay_GetElementData(CLAY_IDI("menu-sep", i)).found;
@@ -374,7 +387,7 @@ static void script_state(char *out, size_t cap)
              "view=%s cols=%d cells=%d cellfirst=%td celllast=%td fulllines=%d celllines=%d cellcut=%d iconpx=%d icontex=%d iconresets=%d crumbfocus=%d tooltip=%s idlewoke=%s "
              "zoom=%d cellw=%d cellh=%d zoomshown=%d tipin=%d slots=%d "
              "previews=%d thumbsel=%s thumbbox=%s thumbbusy=%d thumbmade=%d thumbread=%d thumbfailed=%d thumbknown=%d thumbnone=%d thumbchanged=%d "
-             "thumbheld=%td thumbdropped=%d thumbresets=%d thumblocal=%d reloadasked=%d menuseps=%d bmlist=%s bmn=%d bmhere=%d canbm=%d bmmore=%d bmp=%d bmpn=%td bmpsel=%td bmpnaming=%d bmptext=%s keys=%d keysn=%td keystop=%td keysrows=%d keysfirst=%s menu=%s menuat=%s menuoff=%s menugrey=%s menuhid=%s menumarked=%s menuhover=%d canwrite=%d windows=%d siderows=%d footerin=%d "
+             "thumbheld=%td thumbdropped=%d thumbresets=%d thumblocal=%d reloadasked=%d menuseps=%d bmlist=%s bmn=%d bmhere=%d canbm=%d bmmore=%d bmp=%d bmpn=%td bmpsel=%td bmpnaming=%d bmptext=%s keys=%d keysn=%td keystop=%td keysrows=%d keysfirst=%s menu=%s menuat=%s menuoff=%s menugrey=%s menuhid=%s menumarked=%s menubox=%s menuin=%d menuclear=%d menuhover=%d canwrite=%d windows=%d siderows=%d footerin=%d "
              "props=%d propat=%d propcan=%d propn=%td propmode=%04o propfiles=%lld propdirs=%lld propbytes=%lld propdone=%d propcut=%d proplinks=%lld,%lld,%lld,%d propnlink=%llu proptype=%s proptypename=%s propbyname=%d propname=%s "
              "propwhere=%s propdrive=%s proplink=%s propcreated=%d propidx=%td "
              "ow=%d owfresh=%d owlist=%d owtext=%s own=%td owsel=%td owapp=%s owicon=%s owtex=%d owshown=%td owtype=%s owfiles=%td owrows=%d owtop=%td owopts=%s owbad=%d owdef=%d owdefcan=%d findopts=%s findbad=%d findselect=%d findn=%td findat=%td findtext=%s status=%s",
@@ -398,7 +411,7 @@ static void script_state(char *out, size_t cap)
              ui_zoom_px(&app.ui), cell_w(), cell_h(), Clay_GetElementData(CLAY_ID("zoom-track")).found, tipin, app.nslots,
              thumbs.drawn_last, thumbsel, thumbbox, thumbs_busy(), thumbs.got[TG_MADE], thumbs.got[TG_CACHED], thumbs.got[TG_FAILED],
              thumbs.got[TG_FAIL_KNOWN], thumbs.got[TG_NONE], thumbs.got[TG_CHANGED], thumbs.held, thumbs.evicted, thumbs.resets, app.thumb_local,
-             app.reloads_asked, menuseps, bmlist, app.ui.bm_n, app.ui.bm_here, app.ui.can_bookmark, app.ui.bm_more, app.ui.bmp, app.ui.bmp_list.n, app.ui.bmp_list.sel, app.ui.bmp_naming, bmptext, app.ui.keys, app.ui.keys_list.n, app.ui.keys_list.top, app.ui.keys_list.rows, keysfirst, app.ui.menu_on ? UI_MENU[app.ui.menu].title : "-", menuat, menuoff, menugrey, menuhid, menumarked, app.menu_title_hover, app.ui.can_write, windows,
+             app.reloads_asked, menuseps, bmlist, app.ui.bm_n, app.ui.bm_here, app.ui.can_bookmark, app.ui.bm_more, app.ui.bmp, app.ui.bmp_list.n, app.ui.bmp_list.sel, app.ui.bmp_naming, bmptext, app.ui.keys, app.ui.keys_list.n, app.ui.keys_list.top, app.ui.keys_list.rows, keysfirst, app.ui.menu_on ? UI_MENU[app.ui.menu].title : "-", menuat, menuoff, menugrey, menuhid, menumarked, menubox, menuin, menuclear, app.menu_title_hover, app.ui.can_write, windows,
              app.ui.side.rows, footerin,
              app.ui.props, app.ui.prop_at, app.ui.prop_can, props.n, props.have ? (unsigned)(props.st.st_mode & 07777) : 0u,
              (long long)props.sum.files, (long long)props.sum.dirs, (long long)props.sum.bytes, props.done, props.sum.cut || props.cut,
@@ -672,6 +685,12 @@ static bool script_input(UiInput *in)
             zoom_drag_at(in, script.px + (float)atoi(a), false);
         } else if (str_eq(cmd, S("middle-here"))) {
             middle_at(in, script.px, script.py);
+        } else if (str_eq(cmd, S("right-here"))) {
+            right_at(in, script.px, script.py);
+        } else if (str_eq(cmd, S("right-at"))) {
+            float x = 0, y = 0;
+            if (sscanf(a, "%f %f", &x, &y) != 2) script_fail("right-at <x> <y>");
+            else right_at(in, x, y);
         } else if (str_eq(cmd, S("middle"))) {
             in->mid_row = atoi(a);
         } else if (str_eq(cmd, S("back"))) {

@@ -709,6 +709,16 @@ Default and Recommended equal GIO's; GLib's rewrite of a copy adds the two lines
   as Root, Copy to / Move to, pins and favourites, templates, mount/start/stop/detect, Arrange
   Items (View has it), Open containing folder (no recursive search).
 
+**Step 1 built (2026-10-27): the files' two menus.** `UI_MENU` holds them after the bar's six
+(`UI_CTX_ENTRY`, `UI_CTX_HERE`; `UI_MENUS` stays the bar's count), so the panel, keys, greying and
+picking are the bar's code. Their own entries come after `UM_ABOUT` (Open in New Tab, Empty Trash…,
+the folder shown's Properties: `UA_PROPS` with index 1). `ui_menu_shown` leaves out what doesn't
+fit a right-click menu's target (`ctx_dir`: one folder, set as it opens). gui/: `right_at` (a
+right press; with a menu open it only closes it), `ctx_place` (at the pointer, flipped left or up
+where it wouldn't fit, or under the cursor's row by the keys; `menu_size` measures it before it is
+drawn), `layout_menu` floats it from the root. The script's `right-here`, `right-at`, `menubox`,
+`menuin`, `menuclear`.
+
 ## F6.4 design (2026-10-24)
 
 **Asked (Michael):** previews in the icon view, from the freedesktop thumbnail cache shared with

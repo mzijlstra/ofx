@@ -43,7 +43,7 @@ static void test_menu_f74(void)
         int n = 0;
         for (int m = 0; m < UI_MENUS; m++)
             for (int i = 0; i < UI_MENU[m].n; i++) n += (int)UI_MENU[m].items[i] == it;
-        CHECK(n == 1);
+        CHECK(n == (it >= UM_OPEN_TAB ? 0 : 1));   // (from UM_OPEN_TAB on, the right-click menus' own, F8)
     }
     // Each entry that stands for a key does what the key does, picked by Enter or by the pointer:
     // the same action and the same state after (marks, find, the rename line, the questions).

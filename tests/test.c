@@ -1525,6 +1525,7 @@ static void test_format(void)
 #include "test_f73.c"
 #include "test_f74.c"
 #include "test_f75.c"
+#include "test_f8.c"
 #include "test_fm1.c"
 
 int main(void)
@@ -1613,6 +1614,8 @@ int main(void)
     test_bookmarks_edit();
     test_shortcuts();
     test_about();
+    test_ctx_menus();
+    test_ctx_keys();
     test_menu_mouse();
     test_close_all_keys();
     test_rename_select();

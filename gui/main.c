@@ -224,6 +224,8 @@ static struct {
     bool      zoom_hover;   // the pointer over its track
     bool      thumb_local;  // the folder's drive is one ofx makes previews on (F6.4: not a network one)
     int       menu_title_hover;   // the menu bar title under the pointer, -1 for none (F7.1)
+    float     ctx_x, ctx_y;       // a right-click menu's top left (F8): where it opens, kept inside the window
+    bool      ctx_placed;         // one is up and placed (ctx_place)
     char      exe[PATH_MAX];      // this ofx's binary, for New Window (F7.1); "ofx" when unknown
     char      windows[PATH_MAX];  // the window registry's folder (fs/windows.c); "" for none
 } app = { .tip = { -1, 0, false, false }, .hover = -1, .side_hover = -1, .tab_hover = -1, .tab_x_hover = -1, .jobx_hover = -1, .mode_hover = -1, .eject_hover = -1, .menu_title_hover = -1 };
@@ -995,7 +997,7 @@ static void new_file(void)
 }
 
 static void close_others(bool quit);
-static void props_open(void);
+static void props_open(bool here);
 static void props_chmod(int k);
 
 static void undo_last(void)
@@ -1323,7 +1325,7 @@ static void act(UiAction a)
         else set_status(true, "%s", err.msg);
         break;
     case UA_CLOSE_ALL: close_others(a.all); break;
-    case UA_PROPS: props_open(); break;
+    case UA_PROPS: props_open(a.index == 1); break;   // (1: the folder shown, F8)
     case UA_CHMOD: props_chmod((int)a.index); break;
     case UA_OPEN_WITH: ow_open(); break;
     case UA_LAUNCH: ow_launch(a.index, a.all); break;
@@ -2357,12 +2359,15 @@ static void layout_menu(int m)
 {
     Theme *t = &app.theme;
     Clay_Color off = mix(t->fg_dim, t->bg_light, 0.45f);
+    // A bar menu hangs from its title; a right-click one floats where ctx_place put it (F8).
+    Clay_FloatingElementConfig where = m < UI_MENUS ? (Clay_FloatingElementConfig){ .attachTo = CLAY_ATTACH_TO_PARENT, .zIndex = 30, .offset = { 0, 2 },
+                                                                                  .attachPoints = { CLAY_ATTACH_POINT_LEFT_TOP, CLAY_ATTACH_POINT_LEFT_BOTTOM } }
+                                                 : (Clay_FloatingElementConfig){ .attachTo = CLAY_ATTACH_TO_ROOT, .zIndex = 30, .offset = { app.ctx_x, app.ctx_y } };
     CLAY(CLAY_ID("menu"), { .layout = { .sizing = { CLAY_SIZING_FIT(MENU_W_MIN, 0), CLAY_SIZING_FIT(0) }, .padding = { 4, 4, 4, 4 },
                                         .layoutDirection = CLAY_TOP_TO_BOTTOM },
                             .backgroundColor = cc(t->bg_light),
                             .border = { .color = mix(t->fg_dim, t->bg_light, 0.6f), .width = CLAY_BORDER_OUTSIDE(1) },
-                            .floating = { .attachTo = CLAY_ATTACH_TO_PARENT, .zIndex = 30, .offset = { 0, 2 },
-                                          .attachPoints = { CLAY_ATTACH_POINT_LEFT_TOP, CLAY_ATTACH_POINT_LEFT_BOTTOM } } }) {
+                            .floating = where }) {
         bool marks = false;
         for (int i = 0; i < UI_MENU[m].n; i++) marks |= UI_MENU_ITEM[UI_MENU[m].items[i]].mark != 0;
         for (int i = 0; i < UI_MENU[m].n; i++) {
@@ -2655,13 +2660,14 @@ static void props_read(void)
 }
 
 // The panel opened (ui_props_open): the marked entries, or the cursor's; the folder itself when it
-// is empty. A folder among them is counted all the way down, on a local drive only.
-static void props_open(void)
+// is empty, or here (the folder shown's menu, F8). A folder among them is counted all the way
+// down, on a local drive only.
+static void props_open(bool here)
 {
     arena_reset(&propsa);
     props = (Props){ .idx = -1, .btime = -1 };
-    isize n = app.have_list && app.list.n > 0 ? targets(&propsa, props_path, WALK_ROOTS_MAX) : 0;
-    props.cut = app.ui.marked > WALK_ROOTS_MAX;
+    isize n = !here && app.have_list && app.list.n > 0 ? targets(&propsa, props_path, WALK_ROOTS_MAX) : 0;
+    props.cut = !here && app.ui.marked > WALK_ROOTS_MAX;
     if (n == 0 && !app.ui.in_trash) props_path[0] = arena_cstr(&propsa, str_from_c(app.cwd)), n = 1;
     props.n = n;
     app.ui.prop_can = false;
@@ -2670,7 +2676,7 @@ static void props_open(void)
         snprintf(props.where, sizeof props.where, "-");
         return;
     }
-    if (app.have_list && app.list.n > 0 && n == 1)
+    if (!here && app.have_list && app.list.n > 0 && n == 1)
         for (isize i = 0; i < app.list.n; i++)
             if (app.ui.marked ? app.ui.mark[i] : i == app.ui.list.sel) props.idx = i;
     Str base = path_base(str_from_c(props_path[0])), dir = path_dir(str_from_c(props_path[0]));
@@ -3193,6 +3199,7 @@ static Clay_RenderCommandArray layout(int w, int h)
                             .backgroundColor = cc(t->bg) }) {
         float foot_w = (float)w - modes_w() - zoom_w() - 2 * PAD;   // the status part of the bottom bar
         layout_menubar();
+        if (app.ui.menu_on && app.ui.menu >= UI_MENUS) layout_menu(app.ui.menu);   // a right-click menu (F8)
         layout_bar((float)w);
         float body_h = (float)(h - MENU_H - HEADER_H - FOOTER_H);
         CLAY(CLAY_ID("body"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(body_h) } } }) {
@@ -3244,6 +3251,8 @@ static Clay_RenderCommandArray layout(int w, int h)
                            "Alt+C/W/R case, words, regex \xC2\xB7 Alt+D default"), foot_w, false), cc(t->fg_dim));
             } else if (modal_kind() != MODAL_NONE) {
                 text(cz("Answer the question above"), cc(t->fg_dim));
+            } else if (app.ui.menu_on && app.ui.menu >= UI_MENUS) {
+                text(fit(S("Menu: \xE2\x86\x91 \xE2\x86\x93 (k j) move \xC2\xB7 Enter picks \xC2\xB7 Esc closes"), foot_w, false), cc(t->fg_dim));
             } else if (app.ui.menu_on) {
                 text(fit(S("Menu: \xE2\x86\x91 \xE2\x86\x93 (k j) move \xC2\xB7 \xE2\x86\x90 \xE2\x86\x92 the next menu \xC2\xB7 Enter picks \xC2\xB7 Esc closes"), foot_w, false),
                      cc(t->fg_dim));
@@ -3391,6 +3400,7 @@ static UiKey ui_key_of(int key, int mods)
         if (key == GLFW_KEY_KP_DECIMAL) return UK_NONE;   // the keypad's . types a dot
         return m == GLFW_MOD_SHIFT ? UK_SHIFT_DELETE : m == 0 ? UK_DELETE : UK_NONE;
     }
+    if ((m == GLFW_MOD_SHIFT && key == GLFW_KEY_F10) || (m == 0 && key == GLFW_KEY_MENU)) return UK_CONTEXT;   // the right-click menu (F8, as GTK)
     if (m & (GLFW_MOD_CONTROL | GLFW_MOD_ALT | GLFW_MOD_SUPER)) return UK_NONE;
     switch (key) {
     case GLFW_KEY_UP: return UK_UP;
@@ -3620,6 +3630,70 @@ static void middle_at(UiInput *in, float x, float y)
     else if (h.bar == UB_CRUMB) in->mid_crumb = h.crumb;
 }
 
+// A right press at a point (F8): a row's menu, or the folder shown's on the files' empty space;
+// with a menu open it only closes it, as a left press elsewhere does. Where it opens: here.
+static void right_at(UiInput *in, float x, float y)
+{
+    Hit h = hit_at(x, y);
+    if (app.ui.menu_on) {
+        in->menu_away = true;
+        return;
+    }
+    if (modal_kind() != MODAL_NONE) return;
+    app.ctx_x = x, app.ctx_y = y;
+    if (h.row >= 0) in->ctx_row = h.row;
+    else if (in_box(CLAY_ID("list"), x, y)) in->ctx_here = true;
+}
+
+// A right-click menu's size as layout_menu draws it (F8), before it is drawn: its rows and lines,
+// the widest label and key (the gap between them, the marks' column), its padding.
+static Vector2 menu_size(int m)
+{
+    float label = 0, key = 0, hgt = 8;
+    bool marks = false;
+    for (int i = 0; i < UI_MENU[m].n; i++) {
+        UiMenuItem it = UI_MENU[m].items[i];
+        if (it == UM_SEP ? !ui_menu_sep_shown(&app.ui, m, i) : !ui_menu_shown(&app.ui, it)) continue;   // (as layout_menu leaves them out)
+        if (it == UM_SEP) {
+            hgt += MENU_SEP_H;
+            continue;
+        }
+        hgt += MENU_ROW_H;
+        marks |= UI_MENU_ITEM[it].mark != 0;
+        float lw = str_width(str_from_c(UI_MENU_ITEM[it].label)), kw = str_width(str_from_c(UI_MENU_ITEM[it].key));
+        if (lw > label) label = lw;
+        if (kw > key) key = kw;
+    }
+    float wid = 8 + 20 + (marks ? 20 : 0) + label + 32 + key + 2;
+    return (Vector2){ wid > MENU_W_MIN ? wid : MENU_W_MIN, hgt + 2 };
+}
+
+// A right-click menu just opened (F8): its top left. By the pointer, at the press, flipped left or
+// up where it would leave the window; by a key, under the cursor's entry (above it near the
+// bottom), or the files' top left with none drawn. Kept inside the window either way.
+static void ctx_place(void)
+{
+    Vector2 sz = menu_size(app.ui.menu);
+    float w = (float)GetScreenWidth(), h = (float)GetScreenHeight(), x = app.ctx_x, y = app.ctx_y;
+    if (app.ui.ctx_key) {
+        Clay_ElementData r = Clay_GetElementData(CLAY_IDI("row", (int)(app.ui.list.sel - app.ui.list.top)));
+        Clay_ElementData l = Clay_GetElementData(CLAY_ID("list"));
+        if (app.ui.menu == UI_CTX_ENTRY && r.found) {
+            x = r.boundingBox.x + (app.ui.grid ? r.boundingBox.width / 2 : 2 * PAD + ICON_PX);
+            y = r.boundingBox.y + r.boundingBox.height;
+            if (y + sz.y > h) y = r.boundingBox.y - sz.y;
+        } else if (l.found) {
+            x = l.boundingBox.x + PAD, y = l.boundingBox.y + PAD;
+        }
+    } else {
+        if (x + sz.x > w) x -= sz.x;
+        if (y + sz.y > h) y -= sz.y;
+    }
+    if (x + sz.x > w) x = w - sz.x;
+    if (y + sz.y > h) y = h - sz.y;
+    app.ctx_x = x < 0 ? 0 : x, app.ctx_y = y < 0 ? 0 : y;
+}
+
 static float wheel_left;   // a touchpad's part of a notch, carried to the next frame
 
 // The wheel's notches at x: the files scroll, or with Ctrl held their icons zoom (F6.3); the
@@ -3714,6 +3788,7 @@ static UiInput input_real(bool *seen)
         press_at(&in, m.x, m.y, mods);
     }
     if (IsMouseButtonPressed(MOUSE_BUTTON_MIDDLE)) middle_at(&in, m.x, m.y);
+    if (IsMouseButtonPressed(MOUSE_BUTTON_RIGHT)) right_at(&in, m.x, m.y);
     bool held = IsMouseButtonDown(MOUSE_BUTTON_LEFT);
     // Off the window the drag ends: Wayland's leave releases no button, and a compositor grab
     // (a keybind, a screenshot) can take the release (reviewer-2, F6.3 review).
@@ -4068,6 +4143,9 @@ int main(int argc, char **argv)
         bool was_editing = app.ui.editing, was_confirming = app.ui.confirming;
         if (app.ui.ow) in.app_name = ow.names, in.app_n = ow.shown < UI_APPS_MAX ? ow.shown : UI_APPS_MAX;
         UiAction a = ui_handle(&app.ui, (UiNames){ list_name, NULL, list_dir }, &in);
+        bool ctx_up = app.ui.menu_on && app.ui.menu >= UI_MENUS;   // a right-click menu opened: where (F8)
+        if (ctx_up && !app.ctx_placed) ctx_place();
+        app.ctx_placed = ctx_up;
         if (!app.ui.ow && ow.icons_on) ow_drop();   // the panel closed: its icons go (F7.3)
         if (app.ui.copied) text_copy((Str){ app.ui.copy, app.ui.copy_len }), app.ui.copied = false;
         // Shift+Delete and its y can come in one frame's input: the question opened and was answered

@@ -409,6 +409,23 @@ MUTANTS = [
     # ---- Help → About (2026-10-27); its drawing left out (pixels), about.png shows it
     (G, '    if (app.ui.about) return MODAL_ABOUT;', '', 'f75'),
     (G, '    else if (k == MODAL_ABOUT) layout_about_panel();', '', 'f75'),
+    # ---- F8 step 1: the files' right-click menus. Not run: input_real's right button (scripts press
+    # through right_at), the footer's hint (pixels); ctx-entry.png, ctx-key.png, ctx-here.png show them.
+    # Nor ctx_place's menu above the cursor's row: f8's four rows leave room under the last.
+    (G, '    if ((m == GLFW_MOD_SHIFT && key == GLFW_KEY_F10) || (m == 0 && key == GLFW_KEY_MENU)) return UK_CONTEXT;', '    if (m == 0 && key == GLFW_KEY_MENU) return UK_CONTEXT;', 'f8'),
+    (G, '    if ((m == GLFW_MOD_SHIFT && key == GLFW_KEY_F10) || (m == 0 && key == GLFW_KEY_MENU)) return UK_CONTEXT;', '    if (m == GLFW_MOD_SHIFT && key == GLFW_KEY_F10) return UK_CONTEXT;', 'f8'),
+    (G, '        if (app.ui.menu_on && app.ui.menu >= UI_MENUS) layout_menu(app.ui.menu);   // a right-click menu (F8)', '', 'f8'),
+    (G, '    if (app.ui.menu_on) {\n        in->menu_away = true;\n        return;\n    }\n    if (modal_kind()', '    if (modal_kind()', 'f8'),
+    (G, '    if (h.row >= 0) in->ctx_row = h.row;', '', 'f8'),
+    (G, '    else if (in_box(CLAY_ID("list"), x, y)) in->ctx_here = true;', '    else in->ctx_here = true;', 'f8'),
+    (G, '    else if (in_box(CLAY_ID("list"), x, y)) in->ctx_here = true;', '', 'f8'),
+    (G, '        if (x + sz.x > w) x -= sz.x;', '', 'f8'),
+    (G, '        if (y + sz.y > h) y -= sz.y;', '', 'f8'),
+    (G, '    if (x + sz.x > w) x = w - sz.x;\n    if (y + sz.y > h) y = h - sz.y;', '', 'f8'),
+    (G, '            y = r.boundingBox.y + r.boundingBox.height;', '            y = r.boundingBox.y;', 'f8'),
+    (G, '        if (ctx_up && !app.ctx_placed) ctx_place();', '', 'f8'),
+    (G, '    case UA_PROPS: props_open(a.index == 1); break;', '    case UA_PROPS: props_open(false); break;', 'f8'),
+    (G, '    if (!here && app.have_list && app.list.n > 0 && n == 1)', '    if (app.have_list && app.list.n > 0 && n == 1)', 'f8'),
     # ---- quit doesn't wait for a hung drive (2026-10-26: no mutant was hang's or f6b's alone)
     (K, '    if (pthread_timedjoin_np(counts.thread, NULL, &until) != 0) pthread_detach(counts.thread);', '    pthread_join(counts.thread, NULL);', 'hang'),
     ('gui/space.c', '    if (pthread_timedjoin_np(space.thread, NULL, &until) != 0) pthread_detach(space.thread);', '    pthread_join(space.thread, NULL);', 'f6'),
@@ -462,7 +479,7 @@ t_start = time.monotonic()
 # run.sh's groups, in its order: a mutant runs them one at a time and stops at the first that
 # kills it (Michael, 2026-10-25).
 GROUPS = ['browse', 'big', 'gone', 'watchgap', 'f2', 'f3', 'f4', 'f5', 'f52', 'f53', 'f54', 'f6', 'f62', 'f63', 'f64', 'f7',
-          'f72', 'f73', 'f74', 'f75', 'hang', 'guard3', 'guard']
+          'f72', 'f73', 'f74', 'f75', 'f8', 'hang', 'guard3', 'guard']
 run_text = open(os.path.join(root, 'tests/gui/run.sh')).read()
 assert re.findall(r'want ([a-z0-9]+)', run_text) == GROUPS, 'GROUPS in gui.py no longer match tests/gui/run.sh'
 
