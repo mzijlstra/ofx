@@ -182,6 +182,7 @@ static struct {
     int       icon_scale;   // the scale the cache holds icons for
     int       hover;        // the row under the pointer, -1 for none
     int       reloads, themes;
+    int       reloads_asked;   // Reload picked or Ctrl+R (F7.4): the tests count these apart from the watcher's
     int       lists;        // listings shown and sorts: the find bar's count is counted again
 
     // The edit line's entry: its name when the line opened, and whether it is a folder just made
@@ -1249,6 +1250,8 @@ static void act(UiAction a)
     case UA_LAUNCH: ow_launch(a.index, a.all); break;
     case UA_PASTE: paste(); break;
     case UA_UNDO: undo_last(); break;
+    case UA_RELOAD: app.reloads_asked++, reload(); break;
+    case UA_TRASH_VIEW: go_to(TRASH_URI, STR_EMPTY, 0); break;
     case UA_ANSWER: job_answer((int)a.index, a.all); break;
     case UA_CANCEL_JOB: job_cancel((int)a.index); break;
     case UA_QUIT: app.quit = true; break;
@@ -2255,6 +2258,8 @@ static void layout_tabs(float w)
 
 // Menu m's entries under its title: each label on the left and its key on the right, those that
 // can't be picked now dimmed, the marked one in the selection colour; lines between the groups.
+// A menu with checks or a group's dots keeps a column for them on the left (F7.4); an entry not
+// shown now (Restore outside the trash view) is left out.
 static void layout_menu(int m)
 {
     Theme *t = &app.theme;
@@ -2265,8 +2270,11 @@ static void layout_menu(int m)
                             .border = { .color = mix(t->fg_dim, t->bg_light, 0.6f), .width = CLAY_BORDER_OUTSIDE(1) },
                             .floating = { .attachTo = CLAY_ATTACH_TO_PARENT, .zIndex = 30, .offset = { 0, 2 },
                                           .attachPoints = { CLAY_ATTACH_POINT_LEFT_TOP, CLAY_ATTACH_POINT_LEFT_BOTTOM } } }) {
+        bool marks = false;
+        for (int i = 0; i < UI_MENU[m].n; i++) marks |= UI_MENU_ITEM[UI_MENU[m].items[i]].mark != 0;
         for (int i = 0; i < UI_MENU[m].n; i++) {
             UiMenuItem it = UI_MENU[m].items[i];
+            if (!ui_menu_shown(&app.ui, it)) continue;
             if (it == UM_SEP) {
                 CLAY(CLAY_IDI("menu-sep", i), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(MENU_SEP_H) }, .padding = { 8, 8, 4, 4 } } }) {
                     CLAY(CLAY_IDI("menu-line", i), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(1) } },
@@ -2278,7 +2286,16 @@ static void layout_menu(int m)
             CLAY(CLAY_IDI("menu-item", i), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(MENU_ROW_H) }, .padding = { 10, 10, 0, 0 },
                                                          .childGap = 32, .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
                                              .backgroundColor = at ? cc(t->selection) : cc(t->bg_light), .cornerRadius = CLAY_CORNER_RADIUS(3) }) {
-                text(cz(UI_MENU_ITEM[it].label), on ? cc(t->fg) : off);
+                CLAY(CLAY_IDI("menu-label", i), { .layout = { .childGap = 6, .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } } }) {
+                    if (marks) {
+                        int mk = ui_menu_mark(&app.ui, it);
+                        CLAY(CLAY_IDI("menu-mark", i), { .layout = { .sizing = { CLAY_SIZING_FIXED(14), CLAY_SIZING_FIT(0) } } }) {
+                            // ✓ for a check, • for the current one of a group
+                            if (mk == 1) text(cz(UI_MENU_ITEM[it].mark == 'c' ? "\xE2\x9C\x93" : "\xE2\x80\xA2"), on ? cc(t->accent) : off);
+                        }
+                    }
+                    text(cz(UI_MENU_ITEM[it].label), on ? cc(t->fg) : off);
+                }
                 CLAY(CLAY_IDI("menu-gap", i), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(1) } } }) {}
                 if (UI_MENU_ITEM[it].key[0]) text(cz(UI_MENU_ITEM[it].key), on ? cc(t->fg_dim) : off);
             }
@@ -3031,8 +3048,22 @@ static void layout_tip(int w)
     }
 }
 
+// What the Edit, View and Go menus grey or mark that only gui/ knows (F7.4): set at each layout,
+// which follows any change that alters it, before the next input. Paste: the system clipboard can't be read without asking it, so it
+// counts as holding files; without one, ofx's own copy does.
+static void menu_facts(void)
+{
+    Ui *u = &app.ui;
+    u->can_undo = undo.kind != UNDO_NONE && undo.n > 0;
+    u->can_back = hist.nback > 0, u->can_forward = hist.nfwd > 0;
+    u->can_up = !u->in_trash && strcmp(app.cwd, "/") != 0;
+    u->can_paste = clip.ok || own.n > 0;
+    u->shows_hidden = app.show_hidden;
+}
+
 static Clay_RenderCommandArray layout(int w, int h)
 {
+    menu_facts();
     arena_reset(&frame);
     arena_reset(&scratch);
     app.grid_cells = app.grid_full_lines = app.grid_hover_lines = 0, app.grid_hover_cut = false;
@@ -3168,6 +3199,9 @@ static UiKey ui_key_of(int key, int mods)
     if (m == GLFW_MOD_ALT && key == GLFW_KEY_LEFT) return UK_BACK;
     if (m == GLFW_MOD_ALT && key == GLFW_KEY_RIGHT) return UK_FORWARD;
     if (m == GLFW_MOD_ALT && key == GLFW_KEY_UP) return UK_PARENT;
+    if (m == GLFW_MOD_ALT && key == GLFW_KEY_HOME) return UK_HOMEDIR;   // (F7.4, as Nemo)
+    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_R) return UK_RELOAD;
+    if (m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT) && key == GLFW_KEY_I) return UK_INVERT;
     if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_T) return UK_TAB_NEW;
     if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_N) return UK_NEW_WINDOW;
     if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_I) return UK_PROPERTIES;
@@ -3336,7 +3370,7 @@ static Hit hit_at(float x, float y)
     // A menu open: its titles and its entries are all there is to hit (F7.1).
     if (app.ui.menu_on && modal_kind() == MODAL_NONE) {
         for (int i = 0; i < UI_MENU[app.ui.menu].n && h.menu_item < 0; i++)
-            if (UI_MENU[app.ui.menu].items[i] != UM_SEP && in_box(CLAY_IDI("menu-item", i), x, y)) h.menu_item = i;
+            if (UI_MENU[app.ui.menu].items[i] != UM_SEP && in_box(CLAY_IDI("menu-item", i), x, y)) h.menu_item = i;   // (one not shown has no box)
         return h;
     }
     if (modal_kind() != MODAL_NONE) {

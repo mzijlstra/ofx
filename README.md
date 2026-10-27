@@ -46,7 +46,7 @@ puts its service file in `~/.local/share/dbus-1/services`), and it exits when id
 | Ctrl+=, Ctrl+-, Ctrl+0 | in the icon view, the icons a size bigger, smaller, back to 48 px (also Ctrl+wheel, and the slider at the right of the bottom bar; remembered) |
 | `t`, Alt+Enter | a terminal in this folder (`xdg-terminal-exec --dir`) |
 | Ctrl+I | Properties: size or a folder's contents (counted all the way down), location, drive, dates, owner, and the permissions as a grid: arrows (`h`/`j`/`k`/`l`) move, Space or Enter changes one at once (Ctrl+Z puts it back), Esc closes |
-| `~` | home |
+| `~`, Alt+Home | home |
 | Space, Ctrl+A | select the entry (and move on), select all; Esc clears |
 | Shift and a move | the arrows, Home/End or `H`/`J`/`K`/`L` with Shift: everything the cursor passes over joins the selection (as Shift+click), in the list and the icon view |
 | F2 | rename, in the row, the name up to its extension selected (a folder's whole name): Enter renames, Esc cancels |
@@ -64,11 +64,13 @@ puts its service file in `~/.local/share/dbus-1/services`), and it exits when id
 | Ctrl+Shift+PgUp, Ctrl+Shift+PgDn | move the tab left or right |
 | Ctrl+J, Ctrl+Down | the keys to the find bar when it is open, then to the job rows' ×: Up/Down (`k`/`j`) move, Enter asks to cancel that job; Ctrl+J again or Esc back to the list |
 | Ctrl+Q | close every ofx window (each asks first while its jobs run or wait) |
-| F10, Alt+F | the File menu: Up/Down (`k`/`j`) move, Enter picks, Esc closes; also by the pointer |
+| F10, Alt+F, Alt+E, Alt+V, Alt+G | the File, Edit, View and Go menus: Up/Down (`k`/`j`) move, Left/Right (`h`/`l`) the next menu, Enter picks, Esc closes; also by the pointer. Each entry does what its key does; what can't be done now is greyed, the current sidebar, sort and view marked |
+| Ctrl+Shift+I | invert the selection |
+| Ctrl+R | list the folder again (for a drive that sends no change events) |
 | File, Open With Other Application… | the apps for the selected files (or the cursor's): the default, the recommended ones (they name the type), then the rest. Type to filter (any part of the name; Alt+C, Alt+W, Alt+R as in find), Tab or Down to the list, Up/Down (`k`/`j`) there, Enter opens all the files with it in one `gio launch`, Esc closes. Alt+D (or the box under the list): make it the default for the type too (`gio mime`, in `~/.config/mimeapps.list`; not for an empty file's type, nor for one `hyprland-mimeapps.list` sets) |
 
 The File menu also has Create New Empty File ("New file", named in the row, as a new folder is).
-Open With Other Application shows greyed: it comes with F7.3.
+View has the sidebar's modes and the sort column as entries of their own; Go has Trash.
 
 An action works on the selected entries, or on the cursor's when none is selected. Copies, moves
 and deletes for good run in the background, up to four at once, each with a row under the files:

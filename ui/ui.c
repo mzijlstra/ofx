@@ -65,6 +65,9 @@ typedef enum {
     UK_ZOOM_IN,    // Ctrl+= (Ctrl++, the keypad's +): the icon view's icons a size bigger (F6.3)
     UK_ZOOM_OUT,   // Ctrl+-
     UK_ZOOM_RESET, // Ctrl+0: the first size, 48 px
+    UK_INVERT,     // Ctrl+Shift+I: the selection inverted (F7.4)
+    UK_RELOAD,     // Ctrl+R: the folder listed again (F7.4)
+    UK_HOMEDIR,    // Alt+Home: home, as ~ (F7.4)
 } UiKey;
 
 // The top bar's buttons (F4).
@@ -172,6 +175,8 @@ typedef enum {
     UA_OPEN_WITH,   // the Open With panel opened (Ui.ow): gui/ lists the apps (F7.3)
     UA_LAUNCH,      // index: the app (its place in gui/'s list) to open the files with; all: made the
                     // type's default first (F7.3.1)
+    UA_RELOAD,      // the folder listed again (F7.4: a drive that sends no change events)
+    UA_TRASH_VIEW,  // to the trash view (Go, F7.4)
 } UiActionKind;
 
 typedef struct {
@@ -188,15 +193,21 @@ enum { UI_ANS_SKIP = 1, UI_ANS_REPLACE = 2, UI_ANS_KEEP = 3, UI_ANS_CANCEL = 4 }
 // The cancel, quit and queue-full panels (F5.3) use YES and NO, and OK.
 enum { UI_MODAL_YES = 1, UI_MODAL_NO, UI_MODAL_SKIP, UI_MODAL_REPLACE, UI_MODAL_KEEP, UI_MODAL_CANCEL, UI_MODAL_ALL, UI_MODAL_OK };
 
-// The menu bar (F7.1, docs/plan.md "F7 design"): its menus, each a list of entries; UM_SEP is a
-// line between groups.
+// The menu bar (F7.1, docs/plan.md "F7 design"; Edit, View and Go F7.4): its menus, each a list of
+// entries; UM_SEP is a line between groups.
 typedef enum {
     UM_SEP, UM_NEW_TAB, UM_NEW_WINDOW, UM_NEW_FOLDER, UM_NEW_FILE, UM_OPEN, UM_OPEN_WITH, UM_PROPERTIES, UM_CLOSE_ALL, UM_CLOSE,
+    UM_UNDO, UM_CUT, UM_COPY, UM_PASTE, UM_SELECT_ALL, UM_INVERT, UM_RENAME, UM_TRASH, UM_DELETE, UM_RESTORE,
+    UM_RELOAD, UM_SIDE_PLACES, UM_SIDE_TREE, UM_SIDE_NONE, UM_HIDDEN, UM_SORT_NAME, UM_SORT_SIZE, UM_SORT_MTIME, UM_SORT_REVERSE,
+    UM_ZOOM_IN, UM_ZOOM_OUT, UM_ZOOM_RESET, UM_VIEW_LIST, UM_VIEW_ICONS,
+    UM_PARENT, UM_BACK, UM_FORWARD, UM_HOME, UM_TRASH_VIEW, UM_FIND, UM_LOCATION, UM_TERMINAL,
     UM_ITEMS
 } UiMenuItem;
 
-// Each entry's label, its key as the menu shows it, and its name in a script's state line.
-static const struct { const char *label, *key, *word; } UI_MENU_ITEM[UM_ITEMS] = {
+// Each entry's label, its key as the menu shows it, and its name in a script's state line; the key
+// event it stands for (F7.4: picked, the entry runs that key, so the two can't differ; none: its
+// action in ui_menu_pick); and its mark: 'c' a check when on, 'r' one of a group, the one that is.
+static const struct { const char *label, *key, *word; UiEvent ev; char mark; } UI_MENU_ITEM[UM_ITEMS] = {
     [UM_SEP] = { "", "", "-" },
     [UM_NEW_TAB] = { "New Tab", "Ctrl+T", "new-tab" },
     [UM_NEW_WINDOW] = { "New Window", "Ctrl+N", "new-window" },
@@ -207,17 +218,67 @@ static const struct { const char *label, *key, *word; } UI_MENU_ITEM[UM_ITEMS] =
     [UM_PROPERTIES] = { "Properties\xE2\x80\xA6", "Ctrl+I", "properties" },
     [UM_CLOSE_ALL] = { "Close All Windows", "Ctrl+Q", "close-all" },
     [UM_CLOSE] = { "Close", "Ctrl+W", "close" },
+    // Edit
+    [UM_UNDO] = { "Undo", "Ctrl+Z", "undo", { UK_UNDO, 0 } },
+    [UM_CUT] = { "Cut", "Ctrl+X", "cut", { UK_CUT, 0 } },
+    [UM_COPY] = { "Copy", "Ctrl+C", "copy", { UK_COPY, 0 } },
+    [UM_PASTE] = { "Paste", "Ctrl+V", "paste", { UK_PASTE, 0 } },
+    [UM_SELECT_ALL] = { "Select All", "Ctrl+A", "select-all", { UK_ALL, 0 } },
+    [UM_INVERT] = { "Invert Selection", "Ctrl+Shift+I", "invert", { UK_INVERT, 0 } },
+    [UM_RENAME] = { "Rename\xE2\x80\xA6", "F2", "rename", { UK_F2, 0 } },
+    [UM_TRASH] = { "Move to Trash", "Delete", "trash", { UK_DELETE, 0 } },
+    [UM_DELETE] = { "Delete\xE2\x80\xA6", "Shift+Delete", "delete", { UK_SHIFT_DELETE, 0 } },
+    [UM_RESTORE] = { "Restore", "r", "restore", { UK_NONE, 'r' } },
+    // View
+    [UM_RELOAD] = { "Reload", "Ctrl+R", "reload", { UK_RELOAD, 0 } },
+    [UM_SIDE_PLACES] = { "Places Sidebar", "", "side-places", .mark = 'r' },
+    [UM_SIDE_TREE] = { "Tree Sidebar", "", "side-tree", .mark = 'r' },
+    [UM_SIDE_NONE] = { "No Sidebar", "", "side-none", .mark = 'r' },
+    [UM_HIDDEN] = { "Show Hidden Files", "Ctrl+H", "hidden", { UK_HIDDEN, 0 }, 'c' },
+    [UM_SORT_NAME] = { "Sort by Name", "", "sort-name", .mark = 'r' },
+    [UM_SORT_SIZE] = { "Sort by Size", "", "sort-size", .mark = 'r' },
+    [UM_SORT_MTIME] = { "Sort by Modified", "", "sort-mtime", .mark = 'r' },
+    [UM_SORT_REVERSE] = { "Reverse Order", "S", "sort-reverse", { UK_NONE, 'S' }, 'c' },
+    [UM_ZOOM_IN] = { "Zoom In", "Ctrl+=", "zoom-in", { UK_ZOOM_IN, 0 } },
+    [UM_ZOOM_OUT] = { "Zoom Out", "Ctrl+-", "zoom-out", { UK_ZOOM_OUT, 0 } },
+    [UM_ZOOM_RESET] = { "Normal Size", "Ctrl+0", "zoom-reset", { UK_ZOOM_RESET, 0 } },
+    [UM_VIEW_LIST] = { "List", "Ctrl+1", "view-list", { UK_VIEW_LIST, 0 }, 'r' },
+    [UM_VIEW_ICONS] = { "Icons", "Ctrl+2", "view-icons", { UK_VIEW_ICONS, 0 }, 'r' },
+    // Go
+    [UM_PARENT] = { "Open Parent", "Alt+Up", "parent", { UK_PARENT, 0 } },
+    [UM_BACK] = { "Back", "Alt+Left", "back", { UK_BACK, 0 } },
+    [UM_FORWARD] = { "Forward", "Alt+Right", "forward", { UK_FORWARD, 0 } },
+    [UM_HOME] = { "Home", "Alt+Home", "home", { UK_HOMEDIR, 0 } },
+    [UM_TRASH_VIEW] = { "Trash", "", "trash-view" },
+    [UM_FIND] = { "Find in Folder\xE2\x80\xA6", "Ctrl+F", "find", { UK_FIND, 0 } },
+    [UM_LOCATION] = { "Location\xE2\x80\xA6", "Ctrl+L", "location", { UK_LOCATION, 0 } },
+    [UM_TERMINAL] = { "Terminal Here", "Alt+Enter", "terminal", { UK_TERMINAL, 0 } },
 };
 
 static const UiMenuItem UI_MENU_FILE[] = {
     UM_NEW_TAB, UM_NEW_WINDOW, UM_NEW_FOLDER, UM_NEW_FILE, UM_SEP, UM_OPEN, UM_OPEN_WITH, UM_SEP, UM_PROPERTIES, UM_SEP,
     UM_CLOSE_ALL, UM_CLOSE,
 };
+// Move to Trash shows outside the trash view, Restore in it (ui_menu_shown).
+static const UiMenuItem UI_MENU_EDIT[] = {
+    UM_UNDO, UM_SEP, UM_CUT, UM_COPY, UM_PASTE, UM_SEP, UM_SELECT_ALL, UM_INVERT, UM_SEP, UM_RENAME, UM_SEP,
+    UM_TRASH, UM_RESTORE, UM_DELETE,
+};
+static const UiMenuItem UI_MENU_VIEW[] = {
+    UM_RELOAD, UM_SEP, UM_SIDE_PLACES, UM_SIDE_TREE, UM_SIDE_NONE, UM_SEP, UM_HIDDEN, UM_SEP,
+    UM_SORT_NAME, UM_SORT_SIZE, UM_SORT_MTIME, UM_SORT_REVERSE, UM_SEP, UM_ZOOM_IN, UM_ZOOM_OUT, UM_ZOOM_RESET, UM_SEP,
+    UM_VIEW_LIST, UM_VIEW_ICONS,
+};
+static const UiMenuItem UI_MENU_GO[] = {
+    UM_PARENT, UM_BACK, UM_FORWARD, UM_SEP, UM_HOME, UM_TRASH_VIEW, UM_SEP, UM_FIND, UM_LOCATION, UM_TERMINAL,
+};
 
-// The menus in the bar's order: a title, its Alt letter, its entries. F7.4 on adds Edit, View, Go,
-// Bookmarks and Help.
+// The menus in the bar's order: a title, its Alt letter, its entries. Bookmarks and Help come next.
 static const struct { const char *title; char letter; const UiMenuItem *items; int n; } UI_MENU[] = {
     { "File", 'f', UI_MENU_FILE, sizeof UI_MENU_FILE / sizeof UI_MENU_FILE[0] },
+    { "Edit", 'e', UI_MENU_EDIT, sizeof UI_MENU_EDIT / sizeof UI_MENU_EDIT[0] },
+    { "View", 'v', UI_MENU_VIEW, sizeof UI_MENU_VIEW / sizeof UI_MENU_VIEW[0] },
+    { "Go", 'g', UI_MENU_GO, sizeof UI_MENU_GO / sizeof UI_MENU_GO[0] },
 };
 enum { UI_MENUS = sizeof UI_MENU / sizeof UI_MENU[0] };
 
@@ -318,6 +379,11 @@ typedef struct {
     int    menu;
     int    menu_at;
     bool   can_write;
+    // What only gui/ knows, for the Edit, View and Go entries it greys or marks (F7.4), set each
+    // frame: an undo to make, history back and forward, a folder above, files to paste, hidden
+    // files shown. And an entry picked whose key is still to run (ui_handle runs it next).
+    bool   can_undo, can_back, can_forward, can_up, can_paste, shows_hidden;
+    UiEvent menu_key;
     // The Properties panel (F7.2): up, its grid's place with the focus (0..8: owner read, write,
     // execute, then group's, others'), and whether gui/ lets its permissions change.
     bool   props;
@@ -1126,16 +1192,60 @@ static bool ui_jobs_event(Ui *u, const UiInput *in, UiEvent e)
 
 // ---- the menu bar (F7.1) -----------------------------------------------------------------------
 
-// Whether entry it can be picked now.
+// Whether entry it is in its menu now: Move to Trash outside the trash view, Restore in it (F7.4).
+static bool ui_menu_shown(const Ui *u, UiMenuItem it)
+{
+    return it == UM_TRASH ? !u->in_trash : it == UM_RESTORE ? u->in_trash : true;
+}
+
+// Whether entry it can be picked now. One that runs a key is greyed where that key would do
+// nothing, or only say it can't (Copy in the trash view).
 static bool ui_menu_enabled(const Ui *u, UiMenuItem it)
 {
+    bool files = u->list.n > 0, here = files && !u->side_focus;
+    if (!ui_menu_shown(u, it)) return false;
     switch (it) {
     case UM_NEW_TAB: case UM_CLOSE_ALL: case UM_CLOSE: case UM_PROPERTIES: return true;
     case UM_NEW_WINDOW: return !u->in_trash;   // ofx starts on a folder, not on the trash view
     case UM_NEW_FOLDER: case UM_NEW_FILE: return !u->in_trash && u->can_write;
-    case UM_OPEN: return u->list.n > 0;
-    case UM_OPEN_WITH: return u->list.n > 0 && !u->in_trash;
+    case UM_OPEN: return files;
+    case UM_OPEN_WITH: return files && !u->in_trash;
+    case UM_UNDO: return u->can_undo;
+    case UM_CUT: case UM_COPY: return here && !u->in_trash;
+    case UM_PASTE: return u->can_paste && u->can_write;
+    case UM_SELECT_ALL: case UM_INVERT: return files;
+    case UM_RENAME: return here && !u->in_trash && u->can_write;
+    case UM_TRASH: case UM_DELETE: case UM_RESTORE: return here;
+    case UM_RELOAD: case UM_SIDE_PLACES: case UM_SIDE_TREE: case UM_SIDE_NONE: case UM_HIDDEN: return true;
+    case UM_SORT_NAME: case UM_SORT_SIZE: case UM_SORT_MTIME: case UM_SORT_REVERSE: return true;
+    case UM_ZOOM_IN: return u->grid && ui_zoom_level(ui_zoom_px(u)) < UI_ZOOMS - 1;
+    case UM_ZOOM_OUT: return u->grid && ui_zoom_level(ui_zoom_px(u)) > 0;
+    case UM_ZOOM_RESET: return u->grid && ui_zoom_px(u) != UI_ZOOM_DEFAULT;
+    case UM_VIEW_LIST: case UM_VIEW_ICONS: return true;
+    case UM_PARENT: return u->can_up;
+    case UM_BACK: return u->can_back;
+    case UM_FORWARD: return u->can_forward;
+    case UM_HOME: case UM_TRASH_VIEW: case UM_FIND: case UM_LOCATION: return true;
+    case UM_TERMINAL: return !u->in_trash;
     default: return false;
+    }
+}
+
+// Entry it's mark: -1 none, else whether it is on (a check checked, one of a group the current).
+static int ui_menu_mark(const Ui *u, UiMenuItem it)
+{
+    switch (it) {
+    case UM_SIDE_PLACES: return u->side_mode == SIDE_PLACES;
+    case UM_SIDE_TREE: return u->side_mode == SIDE_TREE;
+    case UM_SIDE_NONE: return u->side_mode == SIDE_HIDDEN;
+    case UM_HIDDEN: return u->shows_hidden;
+    case UM_SORT_NAME: return u->sort.key == SORT_NAME;
+    case UM_SORT_SIZE: return u->sort.key == SORT_SIZE;
+    case UM_SORT_MTIME: return u->sort.key == SORT_MTIME;
+    case UM_SORT_REVERSE: return u->sort.reverse;
+    case UM_VIEW_LIST: return !u->grid;
+    case UM_VIEW_ICONS: return u->grid;
+    default: return -1;
     }
 }
 
@@ -1334,11 +1444,23 @@ static UiAction ui_ow_event(Ui *u, UiEvent e, const UiInput *in)
     return (UiAction){ UA_NONE, 0, false };
 }
 
-// Entry it picked: the menu closes, and gui/ does what it says.
+// Entry it picked: the menu closes, and gui/ does what it says; one that stands for a key leaves
+// it in menu_key, for ui_handle to run as that key.
 static UiAction ui_menu_pick(Ui *u, UiMenuItem it)
 {
     u->menu_on = false;
+    if (UI_MENU_ITEM[it].ev.key != UK_NONE || UI_MENU_ITEM[it].ev.ch) {
+        u->menu_key = UI_MENU_ITEM[it].ev;
+        return (UiAction){ UA_NONE, 0, false };
+    }
     switch (it) {
+    case UM_SIDE_PLACES: return ui_side_mode(u, SIDE_PLACES);
+    case UM_SIDE_TREE: return ui_side_mode(u, SIDE_TREE);
+    case UM_SIDE_NONE: return ui_side_mode(u, SIDE_HIDDEN);
+    case UM_SORT_NAME: case UM_SORT_SIZE: case UM_SORT_MTIME:
+        u->sort.key = it == UM_SORT_NAME ? SORT_NAME : it == UM_SORT_SIZE ? SORT_SIZE : SORT_MTIME;
+        return (UiAction){ UA_SORT, 0, false };
+    case UM_TRASH_VIEW: return (UiAction){ UA_TRASH_VIEW, 0, false };
     case UM_NEW_TAB: return (UiAction){ UA_TAB_NEW, 0, false };
     case UM_NEW_WINDOW: return (UiAction){ UA_NEW_WINDOW, 0, false };
     case UM_NEW_FOLDER: return (UiAction){ UA_NEWFOLDER, 0, false };
@@ -1543,7 +1665,10 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
     }
     if (u->menu_on && in->menu_item >= 0 && in->menu_item < UI_MENU[u->menu].n) {
         UiMenuItem it = UI_MENU[u->menu].items[in->menu_item];
-        return ui_menu_enabled(u, it) ? ui_menu_pick(u, it) : (UiAction){ UA_NONE, 0, false };
+        if (!ui_menu_enabled(u, it)) return (UiAction){ UA_NONE, 0, false };
+        UiAction a = ui_menu_pick(u, it);
+        if (a.kind != UA_NONE || (!u->menu_key.key && !u->menu_key.ch)) return a;
+        // (an entry that stands for a key: the loop below runs it first)
     }
     if (u->menu_on && in->menu_away) return u->menu_on = false, (UiAction){ UA_NONE, 0, false };
     // The Properties panel's pointer (F7.2): a checkbox takes the focus and flips; Close closes.
@@ -1642,8 +1767,10 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
     if (!prompt && in->backs > 0) return (UiAction){ UA_BACK, 0, false };
     if (!prompt && in->forwards > 0) return (UiAction){ UA_FORWARD, 0, false };
     isize extend = -1;   // a Shift move's start, marked to the cursor once the move is done (ui_extend)
-    for (int k = 0; k < in->nev; k++, extend = ui_extend(u, extend)) {
-        UiEvent e = in->ev[k];
+    // An entry the pointer picked runs its key first (F7.4), then the frame's keys.
+    for (int k = u->menu_key.key || u->menu_key.ch ? -1 : 0; k < in->nev; k++, extend = ui_extend(u, extend)) {
+        UiEvent e = k < 0 ? u->menu_key : in->ev[k];
+        if (k < 0) u->menu_key = (UiEvent){ UK_NONE, 0 };
         // Ctrl+Q (F7.1): every window closes, this one as Ctrl+Q closed it before (below).
         if (e.key == UK_QUIT_ALL && !u->quit_asking) {
             u->menu_on = false;
@@ -1675,7 +1802,8 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
             UiAction a;
             if (ui_menu_event(u, e, &a)) {
                 if (a.kind != UA_NONE) return a;
-                continue;
+                if (!u->menu_key.key && !u->menu_key.ch) continue;
+                e = u->menu_key, u->menu_key = (UiEvent){ UK_NONE, 0 };   // an entry picked runs its key, here
             }
         }
         if (u->props && !u->asking && !u->confirming) {   // (quit, cancel and empty took their keys above)
@@ -1844,6 +1972,11 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         case UK_ALL:
             for (isize i = 0; i < l->n; i++) ui_mark(u, i, true);
             break;
+        case UK_INVERT:
+            for (isize i = 0; i < l->n; i++) ui_mark(u, i, !ui_marked(u, i));
+            break;
+        case UK_RELOAD: return (UiAction){ UA_RELOAD, 0, false };
+        case UK_HOMEDIR: return (UiAction){ UA_HOMEDIR, 0, false };
         case UK_F2:
             if (l->n > 0 && !u->side_focus && u->in_trash) return (UiAction){ UA_NOT_IN_TRASH, 0, false };
             if (l->n > 0 && !u->side_focus) ui_edit_rename(u, names.at(names.ctx, l->sel), names.dir && names.dir(names.ctx, l->sel));

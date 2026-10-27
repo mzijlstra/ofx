@@ -39,7 +39,7 @@ static void test_menu_keys(void)
 {
     // The table: every entry has a label and a word; File's Alt letter is f; the groups as decided.
     for (int it = 1; it < UM_ITEMS; it++) CHECK(UI_MENU_ITEM[it].label[0] && UI_MENU_ITEM[it].word[0]);
-    CHECK(UI_MENUS == 1 && strcmp(UI_MENU[0].title, "File") == 0 && ui_menu_of('f') == 0 && ui_menu_of('e') == -1);
+    CHECK(UI_MENUS == 4 && strcmp(UI_MENU[0].title, "File") == 0 && ui_menu_of('f') == 0 && ui_menu_of('e') == 1 && ui_menu_of('z') == -1);
     CHECK(UI_MENU[0].n == 12 && file_at(UM_NEW_TAB) == 0 && file_at(UM_CLOSE) == 11 && UI_MENU[0].items[4] == UM_SEP);
 
     // F10 opens File, its first entry marked; Down steps over a line and what can't be picked.
@@ -65,11 +65,16 @@ static void test_menu_keys(void)
     CHECK(u.menu_at == file_at(UM_NEW_TAB));
     menu_keys(&u, 1, UK_END);
     CHECK(u.menu_at == file_at(UM_CLOSE));
-    // Left and Right: the menu that way (one menu so far: File again, its first entry).
+    // Left and Right: the menu that way, round the bar (F7.4: Edit, then back), its first entry that
+    // can be picked marked.
     menu_keys(&u, 1, UK_RIGHT);
-    CHECK(u.menu_on && u.menu == 0 && u.menu_at == file_at(UM_NEW_TAB));
+    CHECK(u.menu_on && u.menu == 1 && u.menu_at == 2);   // Edit's Cut: no undo to make
     menu_keys(&u, 2, UK_DOWN, 0x100 + 'h');
-    CHECK(u.menu_on && u.menu_at == file_at(UM_NEW_TAB));
+    CHECK(u.menu_on && u.menu == 0 && u.menu_at == file_at(UM_NEW_TAB));
+    menu_keys(&u, 1, UK_LEFT);
+    CHECK(u.menu_on && u.menu == UI_MENUS - 1);
+    menu_keys(&u, 1, UK_RIGHT);
+    CHECK(u.menu == 0);
     // A typed character goes no further: t would start a terminal.
     CHECK(menu_keys(&u, 2, 0x100 + 't', 0x100 + '~').kind == UA_NONE && u.menu_on);
     // Esc, F10 and Alt+F close it; Alt+F opens it too, and an Alt letter with no menu does nothing.
@@ -154,7 +159,14 @@ static void test_menu_enabled(void)
     // trash; New Window not the trash; Open With an entry, not in the trash (F7.3).
     Ui u = menu_ui(3);
     bool want[UM_ITEMS] = { [UM_NEW_TAB] = true, [UM_NEW_WINDOW] = true, [UM_NEW_FOLDER] = true, [UM_NEW_FILE] = true,
-                            [UM_OPEN] = true, [UM_OPEN_WITH] = true, [UM_PROPERTIES] = true, [UM_CLOSE_ALL] = true, [UM_CLOSE] = true };
+                            [UM_OPEN] = true, [UM_OPEN_WITH] = true, [UM_PROPERTIES] = true, [UM_CLOSE_ALL] = true, [UM_CLOSE] = true,
+                            // F7.4 (test_f74.c has the rest): nothing to undo or paste, no history, at the top,
+                            // the list view, Restore only in the trash view
+                            [UM_CUT] = true, [UM_COPY] = true, [UM_SELECT_ALL] = true, [UM_INVERT] = true, [UM_RENAME] = true,
+                            [UM_TRASH] = true, [UM_DELETE] = true, [UM_RELOAD] = true, [UM_SIDE_PLACES] = true, [UM_SIDE_TREE] = true,
+                            [UM_SIDE_NONE] = true, [UM_HIDDEN] = true, [UM_SORT_NAME] = true, [UM_SORT_SIZE] = true, [UM_SORT_MTIME] = true,
+                            [UM_SORT_REVERSE] = true, [UM_VIEW_LIST] = true, [UM_VIEW_ICONS] = true, [UM_HOME] = true, [UM_TRASH_VIEW] = true,
+                            [UM_FIND] = true, [UM_LOCATION] = true, [UM_TERMINAL] = true };
     for (int it = 0; it < UM_ITEMS; it++) CHECK(ui_menu_enabled(&u, (UiMenuItem)it) == want[it]);
     u = menu_ui(0);
     CHECK(!ui_menu_enabled(&u, UM_OPEN) && !ui_menu_enabled(&u, UM_OPEN_WITH) && ui_menu_enabled(&u, UM_NEW_FILE));
@@ -184,7 +196,7 @@ static void test_menu_mouse(void)
     CHECK(ui_input_acts(&in));
     ui_handle(&u, names, &in);
     CHECK(!u.menu_on);
-    in.menu_title = 1;   // no such menu
+    in.menu_title = UI_MENUS;   // no such menu
     ui_handle(&u, names, &in);
     CHECK(!u.menu_on);
     // The pointer marks what can be picked, not a line or a greyed entry.

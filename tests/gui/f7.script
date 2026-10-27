@@ -28,6 +28,8 @@ expect menuat=new-tab
 key up
 expect menuat=close
 key right
+expect menu=Edit menuat=cut
+key left
 expect menu=File menuat=new-tab
 key esc
 expect menu=-

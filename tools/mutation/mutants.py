@@ -909,8 +909,8 @@ MUTANTS += [
     (U, "    case UM_NEW_WINDOW: return !u->in_trash;", "    case UM_NEW_WINDOW: return true;"),
     (U, "    case UM_NEW_FOLDER: case UM_NEW_FILE: return !u->in_trash && u->can_write;", "    case UM_NEW_FOLDER: case UM_NEW_FILE: return u->can_write;"),
     (U, "    case UM_NEW_FOLDER: case UM_NEW_FILE: return !u->in_trash && u->can_write;", "    case UM_NEW_FOLDER: case UM_NEW_FILE: return !u->in_trash;"),
-    (U, "    case UM_OPEN: return u->list.n > 0;", "    case UM_OPEN: return true;"),
-    (U, "    default: return false;\n    }\n}\n\n// The open menu's next entry", "    default: return true;\n    }\n}\n\n// The open menu's next entry"),
+    (U, "    case UM_OPEN: return files;", "    case UM_OPEN: return true;"),
+    (U, "    default: return false;\n    }\n}\n\n// Entry it's mark", "    default: return true;\n    }\n}\n\n// Entry it's mark"),
     (U, "        int i = ((at + dir * k) % n + n) % n;", "        int i = (at + dir * k) % n;"),
     # Not mutants while File is the only menu: `k < n` (no step round to the entry itself) and
     # `keys ? 0` (its first entry, New Tab) are equivalent, as New Tab, Close All and Close can
@@ -936,7 +936,7 @@ MUTANTS += [
     (U, "    if (!u->menu_on) return false;\n    if (title", "    if (title"),
     (U, "    if (prompt) u->menu_on = false;\n", ""),
     (U, "        if (u->menu_on && u->menu == in->menu_title) u->menu_on = false;", ""),
-    (U, "        return ui_menu_enabled(u, it) ? ui_menu_pick(u, it) : (UiAction){ UA_NONE, 0, false };", "        return ui_menu_pick(u, it);"),
+    (U, "        if (!ui_menu_enabled(u, it)) return (UiAction){ UA_NONE, 0, false };\n        UiAction a = ui_menu_pick(u, it);", "        UiAction a = ui_menu_pick(u, it);"),
     (U, "    if (u->menu_on && in->menu_away) return u->menu_on = false, (UiAction){ UA_NONE, 0, false };", "    if (u->menu_on && in->menu_away) u->menu_on = false;"),
     (U, "    if (!prompt && in->menu_title >= 0 && in->menu_title < UI_MENUS) {", "    if (in->menu_title >= 0 && in->menu_title < UI_MENUS) {"),
     (U, "            if (in->jobs_all > 0) u->quit_asking = true, u->cancel_asking = false;", ""),
@@ -1183,7 +1183,7 @@ MUTANTS += [
     (U, "    case UK_HOME: case UK_SEL_HOME: u->ow_caret = 0; break;", ""),
     (U, "    case UK_DOWN: if (l->n > 0) u->ow_in_list = true; break;", "    case UK_DOWN: u->ow_in_list = true; break;"),
     (U, "    if (u->ow_len != before || e.key == UK_NONE) ui_ow_filter(u, in);", ""),
-    (U, "    case UM_OPEN_WITH: return u->list.n > 0 && !u->in_trash;", "    case UM_OPEN_WITH: return u->list.n > 0;"),
+    (U, "    case UM_OPEN_WITH: return files && !u->in_trash;", "    case UM_OPEN_WITH: return files;"),
     (U, "    case UM_OPEN_WITH: return ui_ow_open(u);\n", ""),
     (U, "|| u->empty_asking || u->props || u->ow;\n    if (prompt)", "|| u->empty_asking || u->props;\n    if (prompt)"),
     (U, "    if (u->ow && u->ow_fresh && in->app_name) ui_ow_filter(u, in);", ""),
@@ -1303,7 +1303,7 @@ MUTANTS += [
 # ---- Shift and a move select (Michael, 2026-10-26)
 MUTANTS += [
     (U, "    if (from >= 0) ui_mark_range(u, from, u->list.sel);", "    if (from > 0) ui_mark_range(u, from, u->list.sel);"),
-    (U, "    for (int k = 0; k < in->nev; k++, extend = ui_extend(u, extend)) {", "    for (int k = 0; k < in->nev; k++) {"),
+    (U, "k < in->nev; k++, extend = ui_extend(u, extend)) {", "k < in->nev; k++) {"),
     (U, "e.key == UK_SEL_UP || e.key == UK_SEL_DOWN;\n", "false;\n"),
     (U, "        case UK_SEL_UP: e.key = UK_UP; break;\n", ""),
     (U, "        case UK_SEL_DOWN: e.key = UK_DOWN; break;\n", ""),
@@ -1325,4 +1325,44 @@ MUTANTS += [
 ]
 MUTANTS += [
     (FM1, "        for (size_t k = strlen(path); k > 1 && path[k - 1] == '/'; k--) path[k - 1] = 0;   // a/b/ is a/b\n", ""),
+]
+# ---- F7.4: the Edit, View and Go menus
+MUTANTS += [
+    (U, "    return it == UM_TRASH ? !u->in_trash : it == UM_RESTORE ? u->in_trash : true;", "    return it == UM_RESTORE ? u->in_trash : true;"),
+    (U, "    return it == UM_TRASH ? !u->in_trash : it == UM_RESTORE ? u->in_trash : true;", "    return it == UM_TRASH ? !u->in_trash : true;"),
+    (U, "    if (!ui_menu_shown(u, it)) return false;\n    switch (it) {\n    case UM_NEW_TAB", "    switch (it) {\n    case UM_NEW_TAB"),
+    (U, "    bool files = u->list.n > 0, here = files && !u->side_focus;", "    bool files = u->list.n > 0, here = files;"),
+    (U, "    case UM_UNDO: return u->can_undo;", "    case UM_UNDO: return true;"),
+    (U, "    case UM_CUT: case UM_COPY: return here && !u->in_trash;", "    case UM_CUT: case UM_COPY: return here;"),
+    (U, "    case UM_PASTE: return u->can_paste && u->can_write;", "    case UM_PASTE: return u->can_write;"),
+    (U, "    case UM_PASTE: return u->can_paste && u->can_write;", "    case UM_PASTE: return u->can_paste;"),
+    (U, "    case UM_SELECT_ALL: case UM_INVERT: return files;", "    case UM_SELECT_ALL: case UM_INVERT: return true;"),
+    (U, "    case UM_RENAME: return here && !u->in_trash && u->can_write;", "    case UM_RENAME: return here && u->can_write;"),
+    (U, "    case UM_RENAME: return here && !u->in_trash && u->can_write;", "    case UM_RENAME: return here && !u->in_trash;"),
+    (U, "    case UM_TRASH: case UM_DELETE: case UM_RESTORE: return here;", "    case UM_TRASH: case UM_DELETE: case UM_RESTORE: return true;"),
+    (U, "    case UM_ZOOM_IN: return u->grid && ui_zoom_level(ui_zoom_px(u)) < UI_ZOOMS - 1;", "    case UM_ZOOM_IN: return u->grid;"),
+    (U, "    case UM_ZOOM_OUT: return u->grid && ui_zoom_level(ui_zoom_px(u)) > 0;", "    case UM_ZOOM_OUT: return u->grid;"),
+    (U, "    case UM_ZOOM_RESET: return u->grid && ui_zoom_px(u) != UI_ZOOM_DEFAULT;", "    case UM_ZOOM_RESET: return u->grid;"),
+    (U, "    case UM_ZOOM_RESET: return u->grid && ui_zoom_px(u) != UI_ZOOM_DEFAULT;", "    case UM_ZOOM_RESET: return ui_zoom_px(u) != UI_ZOOM_DEFAULT;"),
+    (U, "    case UM_PARENT: return u->can_up;", "    case UM_PARENT: return true;"),
+    (U, "    case UM_BACK: return u->can_back;", "    case UM_BACK: return u->can_forward;"),
+    (U, "    case UM_FORWARD: return u->can_forward;", "    case UM_FORWARD: return u->can_back;"),
+    (U, "    case UM_TERMINAL: return !u->in_trash;", "    case UM_TERMINAL: return true;"),
+    (U, "    case UM_SIDE_TREE: return u->side_mode == SIDE_TREE;", "    case UM_SIDE_TREE: return u->side_mode == SIDE_PLACES;"),
+    (U, "    case UM_HIDDEN: return u->shows_hidden;", "    case UM_HIDDEN: return 0;"),
+    (U, "    case UM_SORT_REVERSE: return u->sort.reverse;", "    case UM_SORT_REVERSE: return 0;"),
+    (U, "    case UM_VIEW_LIST: return !u->grid;", "    case UM_VIEW_LIST: return u->grid;"),
+    (U, "        u->menu_key = UI_MENU_ITEM[it].ev;\n        return (UiAction){ UA_NONE, 0, false };", "        return (UiAction){ UA_NONE, 0, false };"),
+    (U, "        u->sort.key = it == UM_SORT_NAME ? SORT_NAME : it == UM_SORT_SIZE ? SORT_SIZE : SORT_MTIME;", "        u->sort.key = it == UM_SORT_NAME ? SORT_NAME : SORT_MTIME;"),
+    (U, "    case UM_SIDE_NONE: return ui_side_mode(u, SIDE_HIDDEN);", "    case UM_SIDE_NONE: return ui_side_mode(u, SIDE_TREE);"),
+    (U, "    case UM_TRASH_VIEW: return (UiAction){ UA_TRASH_VIEW, 0, false };", ""),
+    # Not a mutant: the `continue` after a menu's own key is inert, the empty menu_key it falls into
+    # ({UK_NONE, 0}) is dropped by the characters' switch.
+    (U, "                e = u->menu_key, u->menu_key = (UiEvent){ UK_NONE, 0 };   // an entry picked runs its key, here", "                e = u->menu_key;"),
+    (U, "        if (a.kind != UA_NONE || (!u->menu_key.key && !u->menu_key.ch)) return a;", "        return a;"),
+    (U, "    for (int k = u->menu_key.key || u->menu_key.ch ? -1 : 0; k < in->nev;", "    for (int k = 0; k < in->nev;"),
+    (U, "        if (k < 0) u->menu_key = (UiEvent){ UK_NONE, 0 };", ""),
+    (U, "            for (isize i = 0; i < l->n; i++) ui_mark(u, i, !ui_marked(u, i));", "            for (isize i = 0; i < l->n; i++) ui_mark(u, i, true);"),
+    (U, "        case UK_RELOAD: return (UiAction){ UA_RELOAD, 0, false };", ""),
+    (U, "        case UK_HOMEDIR: return (UiAction){ UA_HOMEDIR, 0, false };", ""),
 ]

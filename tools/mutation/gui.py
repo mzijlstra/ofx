@@ -239,7 +239,7 @@ MUTANTS = [
     (G, "        Texture2D *th = entry_thumb(i, true);", "        Texture2D *th = NULL;"),
     (G, "CLAY_SIZING_FIXED(th->width / s), CLAY_SIZING_FIXED(th->height / s)", "CLAY_SIZING_FIXED(px), CLAY_SIZING_FIXED(px)"),
     # ---- F7.1: the menu bar, New Window, Create New Empty File, Close All Windows
-    (G, "            if (UI_MENU[app.ui.menu].items[i] != UM_SEP && in_box(CLAY_IDI(\"menu-item\", i), x, y)) h.menu_item = i;\n        return h;", "            if (UI_MENU[app.ui.menu].items[i] != UM_SEP && in_box(CLAY_IDI(\"menu-item\", i), x, y)) h.menu_item = i;", 'f7'),
+    (G, "h.menu_item = i;   // (one not shown has no box)\n        return h;", "h.menu_item = i;   // (one not shown has no box)", 'f7'),
     (G, "        in->menu_away = h.menu_title < 0 && h.menu_item < 0;", "        in->menu_away = false;", 'f7'),
     (G, "    changed |= ui_menu_hover(&app.ui, h.menu_title, h.menu_item);", "", 'f7'),
     (G, "    app.menu_title_hover = h.menu_title;\n", "", 'f7'),
@@ -340,6 +340,19 @@ MUTANTS = [
     (G, '        h.find_x = in_box(CLAY_ID("find-x"), x, y);', '', 'f2'),
     (G, '        h.find_field = !h.toggle && !h.find_x && in_box(CLAY_ID("find-field"), x, y);', '', 'f2'),
     (G, '    in->find_x = h.find_x, in->find_field = h.find_field, in->find_step = h.find_step;', '', 'f2'),
+    # ---- F7.4: the Edit, View and Go menus
+    (G, '    u->can_undo = undo.kind != UNDO_NONE && undo.n > 0;', '    u->can_undo = false;', 'f74'),
+    (G, '    u->can_back = hist.nback > 0, u->can_forward = hist.nfwd > 0;', '    u->can_back = hist.nback > 0, u->can_forward = true;', 'f74'),
+    (G, '    u->can_up = !u->in_trash && strcmp(app.cwd, "/") != 0;', '    u->can_up = strcmp(app.cwd, "/") != 0;', 'f74'),
+    (G, '    u->can_paste = clip.ok || own.n > 0;', '    u->can_paste = clip.ok;', 'f74'),
+    (G, '    u->shows_hidden = app.show_hidden;', '', 'f74'),
+    (G, '    case UA_RELOAD: app.reloads_asked++, reload(); break;', '', 'f74'),
+    (G, '    case UA_TRASH_VIEW: go_to(TRASH_URI, STR_EMPTY, 0); break;', '', 'f74'),
+    (G, '    if (m == GLFW_MOD_ALT && key == GLFW_KEY_HOME) return UK_HOMEDIR;', '', 'f74'),
+    (G, '    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_R) return UK_RELOAD;', '', 'f74'),
+    (G, '    if (m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT) && key == GLFW_KEY_I) return UK_INVERT;', '', 'f74'),
+    (G, '            if (!ui_menu_shown(&app.ui, it)) continue;\n            if (it == UM_SEP) {', '            if (it == UM_SEP) {', 'f74'),
+    # Left out: the marks' column and the ✓ / • drawn (pixels only); menu-view.png shows them.
     # ---- quit doesn't wait for a hung drive (2026-10-26: no mutant was hang's or f6b's alone)
     (K, '    if (pthread_timedjoin_np(counts.thread, NULL, &until) != 0) pthread_detach(counts.thread);', '    pthread_join(counts.thread, NULL);', 'hang'),
     ('gui/space.c', '    if (pthread_timedjoin_np(space.thread, NULL, &until) != 0) pthread_detach(space.thread);', '    pthread_join(space.thread, NULL);', 'f6'),
@@ -393,7 +406,7 @@ t_start = time.monotonic()
 # run.sh's groups, in its order: a mutant runs them one at a time and stops at the first that
 # kills it (Michael, 2026-10-25).
 GROUPS = ['browse', 'big', 'gone', 'watchgap', 'f2', 'f3', 'f4', 'f5', 'f52', 'f53', 'f54', 'f6', 'f62', 'f63', 'f64', 'f7',
-          'f72', 'f73', 'hang', 'guard3', 'guard']
+          'f72', 'f73', 'f74', 'hang', 'guard3', 'guard']
 run_text = open(os.path.join(root, 'tests/gui/run.sh')).read()
 assert re.findall(r'want ([a-z0-9]+)', run_text) == GROUPS, 'GROUPS in gui.py no longer match tests/gui/run.sh'
 

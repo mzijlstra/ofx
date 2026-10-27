@@ -344,6 +344,18 @@ comparison with Nemo 6.6.4's menus, entry by entry: https://claude.ai/artifact/X
 - **Build:** check marks and one-of-a-group marks in a menu; entries that hide (not only grey);
   every entry runs its key's action through ui/.
 
+**F7.4 as built, step 1 (2026-10-27):** `UI_MENU_ITEM` gives each entry the key event it stands
+for and its mark ('c' a check, 'r' one of a group). Picked by Enter, the event takes the key's own
+path in `ui_handle` at once; picked by the pointer, it is left in `Ui.menu_key` and the frame's
+event loop runs it first. So an entry and its key can't do different things (test_f74.c checks
+every one both ways against the key on a fresh state). `ui_menu_shown` hides Move to Trash in the
+trash view and Restore outside it; `ui_menu_enabled` greys where the key would do nothing, with
+what only gui/ knows set at each layout (`menu_facts`: an undo, history, a folder above, Paste:
+the system clipboard counts as holding files, as it can't be read without asking it). New keys:
+Ctrl+Shift+I, Ctrl+R (`UA_RELOAD`), Alt+Home; Go → Trash is `UA_TRASH_VIEW`. Script words:
+`menugrey`, `menuhid` (what the last frame didn't draw), `menumarked`, `reloadasked`. Still to
+come: Select Items Matching (step 2), Duplicate (step 3).
+
 **F7.1 as built (2026-10-25):**
 - `ui/ui.c`: the menus as tables (`UI_MENU`, `UI_MENU_ITEM`: label, key, a word for the tests);
   `ui_menu_enabled`, `ui_menu_event` (the keys), `ui_menu_hover` (the pointer), the clicks in

@@ -1523,6 +1523,7 @@ static void test_format(void)
 #include "test_f7.c"
 #include "test_f72.c"
 #include "test_f73.c"
+#include "test_f74.c"
 #include "test_fm1.c"
 
 int main(void)
@@ -1602,6 +1603,7 @@ int main(void)
     test_clean_run();
     test_menu_keys();
     test_menu_enabled();
+    test_menu_f74();
     test_menu_mouse();
     test_close_all_keys();
     test_rename_select();
