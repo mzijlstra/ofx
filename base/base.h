@@ -26,7 +26,8 @@ typedef ptrdiff_t isize;
 // A pointer and a length. Never owned and not NUL-terminated; print with "%.*s", STR_ARG(s).
 typedef struct { const char *p; isize len; } Str;
 
-#define S(lit)     ((Str){ (lit), (isize)sizeof(lit) - 1 })
+// S() takes a string literal only ("" lit won't compile with a pointer, where sizeof would be its size).
+#define S(lit)     ((Str){ ("" lit), (isize)sizeof("" lit) - 1 })
 #define STR_EMPTY  ((Str){ "", 0 })   /* absent values: .p is never NULL, so "%.*s" is defined */
 #define STR_ARG(s) (int)(s).len, (s).p
 
