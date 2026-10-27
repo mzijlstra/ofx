@@ -11,6 +11,7 @@ typedef struct { u8 r, g, b; } Rgb;
 
 typedef struct {
     Rgb  bg, bg_light, fg, fg_dim, accent, selection, red;
+    Rgb  yellow, green, blue, cyan, magenta;   // the terminal's, as eza colours ls with them (a trial, 2026-10-27)
     char icons[128];   // the icon theme's name, "" without one
     int  ncolors;      // how many keys colors.toml gave: 0 means all fallbacks
 } Theme;
@@ -23,6 +24,11 @@ static const Theme THEME_DEFAULT = {
     .accent = { 0x7a, 0xa2, 0xf7 },
     .selection = { 0x29, 0x2e, 0x42 },
     .red = { 0xf7, 0x76, 0x8e },
+    .yellow = { 0xe0, 0xaf, 0x68 },
+    .green = { 0x9e, 0xce, 0x6a },
+    .blue = { 0x7a, 0xa2, 0xf7 },
+    .cyan = { 0x7d, 0xcf, 0xff },
+    .magenta = { 0xbb, 0x9a, 0xf7 },
 };
 
 // The theme directory, into buf.
@@ -62,6 +68,11 @@ static void theme_parse_colors(Theme *t, Str text)
         { "accent", offsetof(Theme, accent) },
         { "selection", offsetof(Theme, selection) },
         { "red", offsetof(Theme, red) },
+        { "yellow", offsetof(Theme, yellow) },
+        { "green", offsetof(Theme, green) },
+        { "blue", offsetof(Theme, blue) },
+        { "cyan", offsetof(Theme, cyan) },
+        { "magenta", offsetof(Theme, magenta) },
     };
     isize at = 0;
     for (Str line; next_line(text, &at, &line);) {

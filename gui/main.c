@@ -1991,12 +1991,54 @@ static void size_cell(isize i, char *size, size_t cap, bool ask)
     else if (app.count[i] == -1) snprintf(size, cap, "?");
 }
 
+// ---- ls's colours, as eza gives them (a trial, Michael 2026-10-27: his `ls` is eza, with no theme
+// of its own, so its built-in colours on the terminal's palette, which Omarchy sets from colors.toml)
+
+// A name's colour by its kind, as eza's: folders blue, links cyan, executables green, build files
+// (Makefile, README…) yellow; images and videos magenta, music cyan, archives red; the rest plain.
+static Clay_Color ls_name_colour(const Entry *e, isize i)
+{
+    Theme *t = &app.theme;
+    if (e->kind == K_LINK_BROKEN) return cc(t->red);
+    if (kind_is_dir(e->kind)) return e->kind == K_LINK_DIR ? cc(t->cyan) : cc(t->blue);
+    if (e->kind == K_LINK_FILE) return cc(t->cyan);
+    static const char *const BUILD[] = { "Makefile", "makefile", "GNUmakefile", "CMakeLists.txt", "meson.build", "build.gradle", "Cargo.toml",
+                                         "package.json", "Dockerfile", "Justfile", "justfile", "Rakefile", "BUILD", "configure" };
+    for (int k = 0; k < COUNT(BUILD); k++)
+        if (str_eq(e->name, str_from_c(BUILD[k]))) return cc(t->yellow);
+    if (str_starts_with(e->name, S("README")) || str_starts_with(e->name, S("readme"))) return cc(t->yellow);
+    if (e->mode & 0111) return cc(t->green);
+    Str type = entry_mime(i);
+    if (str_starts_with(type, S("image/")) || str_starts_with(type, S("video/"))) return cc(t->magenta);
+    if (str_starts_with(type, S("audio/"))) return cc(t->cyan);
+    static const char *const PACKED[] = { "application/zip", "application/x-tar", "application/gzip", "application/x-xz", "application/x-bzip2",
+                                          "application/zstd", "application/x-7z-compressed", "application/vnd.rar", "application/x-compressed-tar" };
+    for (int k = 0; k < COUNT(PACKED); k++)
+        if (str_eq(type, str_from_c(PACKED[k]))) return cc(t->red);
+    return cc(t->fg);
+}
+
+// A Permissions cell in eza's colours: r yellow, w red, x green, s/S/t/T magenta, - dim.
+static void ls_perms_cell(Clay_ElementId id, u32 mode, int w)
+{
+    Theme *t = &app.theme;
+    char p[16];
+    ui_perms(p, sizeof p, mode);
+    CLAY(id, { .layout = { .sizing = { CLAY_SIZING_FIXED(w), CLAY_SIZING_FIT(0) } }, .clip = { .horizontal = true } }) {
+        for (int k = 0; p[k]; k++) {
+            char c = p[k];
+            Clay_Color col = c == 'r' ? cc(t->yellow) : c == 'w' ? cc(t->red) : c == 'x' ? cc(t->green) : c == '-' ? mix(t->fg_dim, t->fg, 0.25f) : cc(t->magenta);
+            text(cz(arena_sprintf(&frame, "%c", c)), col);
+        }
+    }
+}
+
 // One of a row's Owner, Group, Permissions cells, pad on its left: s (copied into the frame arena: Clay reads the
 // text after layout_row has returned) cut to w.
-static void info_cell(Clay_ElementId id, const char *s, int w, int pad)
+static void info_cell(Clay_ElementId id, const char *s, int w, int pad, Clay_Color col)
 {
     CLAY(id, { .layout = { .sizing = { CLAY_SIZING_FIXED(w), CLAY_SIZING_FIT(0) }, .padding = { pad, 0, 0, 0 } }, .clip = { .horizontal = true } }) {
-        text(fit(str_from_c(arena_sprintf(&frame, "%s", s)), (float)(w - pad), false), cc(app.theme.fg_dim));
+        text(fit(str_from_c(arena_sprintf(&frame, "%s", s)), (float)(w - pad), false), col);
     }
 }
 
@@ -2025,7 +2067,7 @@ static void layout_row(int r, isize i, float w, i64 now)
             if (sel && app.ui.editing && !app.ui.edit_path) {
                 layout_edit(t, name_w);
             } else {
-                text(fit(e->name, name_w, false), e->kind == K_LINK_BROKEN ? cc(t->red) : marked ? cc(t->accent) : cc(t->fg));
+                text(fit(e->name, name_w, false), e->kind == K_LINK_BROKEN ? cc(t->red) : marked ? cc(t->accent) : sel ? cc(t->fg) : ls_name_colour(e, i));   // (the cursor's row plain: blue on the selection is faint)
                 if (link) text(cz("\xE2\x86\x92"), cc(t->fg_dim));   // →
                 if (link && e->target.len) {   // where it leads, as written, home as ~ (2026-10-27)
                     char to[PATH_MAX];
@@ -2050,19 +2092,18 @@ static void layout_row(int r, isize i, float w, i64 now)
         }
         CLAY(CLAY_IDI("size", r), { .layout = { .sizing = { CLAY_SIZING_FIXED(SIZE_W), CLAY_SIZING_FIT(0) },
                                                 .childAlignment = { .x = CLAY_ALIGN_X_RIGHT } } }) {
-            text(cz(arena_sprintf(&frame, "%s", size)), cc(t->fg_dim));
+            text(cz(arena_sprintf(&frame, "%s", size)), cc(t->green));   // (eza's)
         }
         CLAY(CLAY_IDI("date", r), { .layout = { .sizing = { CLAY_SIZING_FIXED(DATE_W), CLAY_SIZING_FIT(0) },
                                                 .childAlignment = { .x = CLAY_ALIGN_X_RIGHT } } }) {
-            text(cz(arena_sprintf(&frame, "%s", when)), cc(t->fg_dim));
+            text(cz(arena_sprintf(&frame, "%s", when)), cc(t->blue));   // (eza's)
         }
         // Owner, Group, Permissions (2026-10-27): the target's for a link, as Size is.
         if (perms) {
-            char perm_s[16];
-            ui_perms(perm_s, sizeof perm_s, e->mode);
-            info_cell(CLAY_IDI("owner", r), id_name(false, e->uid), OWNER_W, OWNER_PAD);
-            info_cell(CLAY_IDI("group", r), id_name(true, e->gid), GROUP_W, 0);
-            info_cell(CLAY_IDI("perms", r), perm_s, PERM_W, 0);
+            // (eza's: you and your group yellow, others plain)
+            info_cell(CLAY_IDI("owner", r), id_name(false, e->uid), OWNER_W, OWNER_PAD, e->uid == (u32)geteuid() ? cc(t->yellow) : cc(t->fg_dim));
+            info_cell(CLAY_IDI("group", r), id_name(true, e->gid), GROUP_W, 0, e->gid == (u32)getegid() ? cc(t->yellow) : cc(t->fg_dim));
+            ls_perms_cell(CLAY_IDI("perms", r), e->mode, PERM_W);
         }
     }
 }
