@@ -73,7 +73,7 @@ expect menu=here marked=0 menuhid=empty-trash menugrey=empty-trash,paste menuin=
 shot ctx-here.png
 point-ui menu-item 12
 click-here
-expect menu=- props=1 propname=tree
+expect menu=- props=1 propname=tree propidx=-1
 key esc
 point-ui list
 right-here
@@ -81,9 +81,20 @@ point-ui menu-item 5
 click-here
 expect menu=- marked=4
 key esc
+# Not on the bar: a right press there opens nothing
+point-ui nav-back
+right-here
+expect menu=-
+# By the keys in the icon view, on the last cell of a row: kept inside the window
+key ctrl-2
+key end
+raw-key 348 0
+expect menu=entry menuin=1 menuclear=1
+key esc
+key ctrl-1
 # Kept inside the window at its bottom right corner: flipped up and left of the pointer
 right-at 900 470
-expect menu=here menuin=1 menubox=607,216,298,252
+expect menu=here menuin=1 menubox=601,216,298,252
 key esc
 # Show Hidden Files, checked when on
 point-ui list

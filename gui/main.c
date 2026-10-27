@@ -3717,10 +3717,10 @@ static void right_at(UiInput *in, float x, float y)
 }
 
 // A right-click menu's size as layout_menu draws it (F8), before it is drawn: its rows and lines,
-// the widest label and key (the gap between them, the marks' column), its padding.
+// the widest label and key on one row (the gaps between them, the marks' column), its padding.
 static Vector2 menu_size(int m)
 {
-    float label = 0, key = 0, hgt = 8;
+    float row = 0, hgt = 8;
     bool marks = false;
     for (int i = 0; i < UI_MENU[m].n; i++) {
         UiMenuItem it = UI_MENU[m].items[i];
@@ -3731,11 +3731,12 @@ static Vector2 menu_size(int m)
         }
         hgt += MENU_ROW_H;
         marks |= UI_MENU_ITEM[it].mark != 0;
-        float lw = str_width(str_from_c(UI_MENU_ITEM[it].label)), kw = str_width(str_from_c(UI_MENU_ITEM[it].key));
-        if (lw > label) label = lw;
-        if (kw > key) key = kw;
+        float lw = str_width(str_from_c(UI_MENU_ITEM[it].label)) + str_width(str_from_c(UI_MENU_ITEM[it].key));
+        if (lw > row) row = lw;
     }
-    float wid = 8 + 20 + (marks ? 20 : 0) + label + 32 + key + 2;
+    // The menu's padding, an entry's, the marks' column and its gap, the widest label and key on one
+    // row, two gaps of 32 round the 1-pixel spring between them: as layout_menu lays them out.
+    float wid = 8 + 20 + (marks ? 14 + 6 : 0) + row + 2 * 32 + 1;
     return (Vector2){ wid > MENU_W_MIN ? wid : MENU_W_MIN, hgt + 2 };
 }
 

@@ -416,7 +416,7 @@ MUTANTS = [
     (G, '    if ((m == GLFW_MOD_SHIFT && key == GLFW_KEY_F10) || (m == 0 && key == GLFW_KEY_MENU)) return UK_CONTEXT;', '    if (m == GLFW_MOD_SHIFT && key == GLFW_KEY_F10) return UK_CONTEXT;', 'f8'),
     (G, '        if (app.ui.menu_on && app.ui.menu >= UI_MENUS) layout_menu(app.ui.menu);   // a right-click menu (F8)', '', 'f8'),
     (G, '    if (app.ui.menu_on) {\n        in->menu_away = true;\n        return;\n    }\n    if (modal_kind()', '    if (modal_kind()', 'f8'),
-    (G, '    if (h.row >= 0) in->ctx_row = h.row;', '', 'f8'),
+    (G, '    if (h.row >= 0) in->ctx_row = h.row;', '    if (false) in->ctx_row = h.row;', 'f8'),
     (G, '    else if (in_box(CLAY_ID("list"), x, y)) in->ctx_here = true;', '    else in->ctx_here = true;', 'f8'),
     (G, '    else if (in_box(CLAY_ID("list"), x, y)) in->ctx_here = true;', '', 'f8'),
     (G, '        if (x + sz.x > w) x -= sz.x;', '', 'f8'),
