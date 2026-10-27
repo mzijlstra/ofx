@@ -86,7 +86,7 @@ MUTANTS = [
     (G, "    if (h.tab >= 0) in->tab_close = h.tab;\n    else if (h.row >= 0)", "    if (h.row >= 0)"),
     (G, "    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_W) return UK_TAB_CLOSE;", ""),
     (G, "    if (action == GLFW_PRESS && m == GLFW_MOD_ALT && key >= GLFW_KEY_1 && key <= GLFW_KEY_9)", "    if (action == GLFW_PRESS && key >= GLFW_KEY_1 && key <= GLFW_KEY_9)"),
-    (G, "    return MENU_H + HEADER_H + (tabbar.n >= 2 ? TAB_H : 0);", "    return MENU_H + HEADER_H;"),
+    (G, "    return bar_h() + HEADER_H + (tabbar.n >= 2 ? TAB_H : 0);", "    return bar_h() + HEADER_H;"),
     (G, "    case UA_TAB_MOVE: ui_tabs_move(&tabbar, (int)a.index); break;", "    case UA_TAB_MOVE: break;"),
     # F5 review: the delete question's targets taken when it opens
     (G, "    isize k = 0;\n    for (isize i = 0; i < n; i++) {\n        r->item[k++] = (JobItem){ .src = arena_cstr(&r->arena, str_from_c(doomed.path[i])) };", "    isize k = 0;\n    char *late[CLIP_PATHS_MAX];\n    n = targets(&r->arena, late, CLIP_PATHS_MAX);\n    for (isize i = 0; i < n; i++) {\n        r->item[k++] = (JobItem){ .src = late[i] };"),
@@ -259,9 +259,9 @@ MUTANTS = [
     (G, "    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_N) return UK_NEW_WINDOW;", "", 'f7'),
     (G, "    case GLFW_KEY_F10: return m == 0 ? UK_F10 : UK_NONE;", "", 'f7'),
     (G, "key >= GLFW_KEY_A && key <= GLFW_KEY_Z) ev_push((UiEvent){ UK_MENU, (u32)('a' + key - GLFW_KEY_A) });", "key >= GLFW_KEY_A && key <= GLFW_KEY_Z) ev_push((UiEvent){ UK_MENU, (u32)('A' + key - GLFW_KEY_A) });", 'f7'),
-    (G, "        float body_h = (float)(h - MENU_H - HEADER_H - FOOTER_H);", "        float body_h = (float)(h - HEADER_H - FOOTER_H);", 'f7'),
-    (G, "    int r = (h - MENU_H - HEADER_H - FOOTER_H - PAD) / SIDE_ROW_H;", "    int r = (h - HEADER_H - FOOTER_H - PAD) / SIDE_ROW_H;", 'f7'),
-    (G, "        layout_menubar();\n", "", 'f7'),
+    (G, "        float body_h = (float)(h - bar_h() - HEADER_H - FOOTER_H);", "        float body_h = (float)(h - HEADER_H - FOOTER_H);", 'f7'),
+    (G, "    int r = (h - bar_h() - HEADER_H - FOOTER_H - PAD) / SIDE_ROW_H;", "    int r = (h - HEADER_H - FOOTER_H - PAD) / SIDE_ROW_H;", 'f7'),
+    (G, "        if (bar_shown()) layout_menubar();\n", "", 'f7'),
     (G, "                if (open) layout_menu(m);", "", 'f7'),
     (G, "    ui_edit_open_all(&app.ui, str_from_c(made));\n    snprintf(app.edit_from, sizeof app.edit_from, \"%s\", made);\n    app.edit_new = UNDO_MKDIR;", "    ui_edit_open(&app.ui, str_from_c(made));\n    snprintf(app.edit_from, sizeof app.edit_from, \"%s\", made);\n    app.edit_new = UNDO_MKDIR;", 'f3'),
     (G, "    ui_edit_open_all(&app.ui, str_from_c(made));\n    snprintf(app.edit_from, sizeof app.edit_from, \"%s\", made);\n    app.edit_new = UNDO_MKFILE;", "    ui_edit_open(&app.ui, str_from_c(made));\n    snprintf(app.edit_from, sizeof app.edit_from, \"%s\", made);\n    app.edit_new = UNDO_MKFILE;", 'f7'),
@@ -477,8 +477,15 @@ MUTANTS = [
     (G, '            app.ui.ctx_w = app.ui.ctx_dir && app.ui.list.sel < app.list.n && entry_path(app.ui.list.sel, e, sizeof e) && access(e, W_OK) == 0;', '            app.ui.ctx_w = false;', 'f8'),
     # ---- the list's Owner, Group, Permissions and links' targets (2026-10-27). Not run: the cells
     # and the target drawn (pixels: f8b's list-columns.png, list-no-perms.png show them)
-    (G, '        app.ui.side_mode = st.side, app.ui.grid = st.icons, app.ui.zoom = st.zoom, app.ui.perms_cols = !st.no_perms;', '        app.ui.side_mode = st.side, app.ui.grid = st.icons, app.ui.zoom = st.zoom, app.ui.perms_cols = true;', 'f8'),
+    (G, '        app.ui.side_mode = st.side, app.ui.grid = st.icons, app.ui.zoom = st.zoom, app.ui.perms_cols = !st.no_perms,', '        app.ui.side_mode = st.side, app.ui.grid = st.icons, app.ui.zoom = st.zoom, app.ui.perms_cols = true,', 'f8'),
     (G, '        if (state_path(path, sizeof path) && !state_put(&scratch, path, "perms", app.ui.perms_cols ? "on" : "off", &err))', '        if (state_path(path, sizeof path) && !state_put(&scratch, path, "perms", "on", &err))', 'f8'),
+    # ---- View → Show Menu (2026-10-27). Not run: the note's drawing and footer hint (pixels:
+    # f8b's menubar-hidden.png, menubar-float.png)
+    (G, '    return !app.ui.bar_hidden || (app.ui.menu_on && app.ui.menu < UI_MENUS);', '    return !app.ui.bar_hidden;', 'f8'),
+    (G, '    return !app.ui.bar_hidden || (app.ui.menu_on && app.ui.menu < UI_MENUS);', '    return true;', 'f8'),
+    (G, ', app.ui.perms_cols = !st.no_perms, app.ui.bar_hidden = st.no_bar;', ', app.ui.perms_cols = !st.no_perms;', 'f8'),
+    (G, '        if (state_path(path, sizeof path) && !state_put(&scratch, path, "menubar", app.ui.bar_hidden ? "off" : "on", &err))', '        if (state_path(path, sizeof path) && !state_put(&scratch, path, "menubar", "on", &err))', 'f8'),
+    (G, '    if (app.ui.bar_told) return MODAL_BAR;   // the menu bar just hidden (2026-10-27)', '', 'f8'),
     # ---- quit doesn't wait for a hung drive (2026-10-26: no mutant was hang's or f6b's alone)
     (K, '    if (pthread_timedjoin_np(counts.thread, NULL, &until) != 0) pthread_detach(counts.thread);', '    pthread_join(counts.thread, NULL);', 'hang'),
     ('gui/space.c', '    if (pthread_timedjoin_np(space.thread, NULL, &until) != 0) pthread_detach(space.thread);', '    pthread_join(space.thread, NULL);', 'f6'),

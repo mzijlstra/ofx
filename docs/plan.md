@@ -685,6 +685,10 @@ cut with "…" (as the trash view's "from"); Owner, Group and Permissions column
 target's for a link, `ui_perms`: ls's letters without the type), not sortable, on and off together
 from View → Show Permissions (checked; `perms=off` in the state file). Entry has uid, gid and the
 link's target (`link_target`); names cached by `id_name`.
+View → Show Menu (checked; `menubar=off`): hidden, the bar takes no room; F10 and Alt with a menu's
+letter still open its menus (not plain Alt: the fields use Alt with letters), and while one is open
+the bar shows, the window moving down for it (as Firefox's). Unchecking shows a note saying so
+(`Ui.bar_told`, `MODAL_BAR`); a start with it hidden shows none.
 
 **F8 decided (Michael, 2026-10-27): every recommendation on the page**
 (https://claude.ai/artifact/QtvC5rGjd4bMTvTeSX3kCe, Nemo 6.6.4's right-click menus entry by entry),

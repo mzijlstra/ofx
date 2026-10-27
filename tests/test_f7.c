@@ -169,7 +169,7 @@ static void test_menu_enabled(void)
                             [UM_SORT_REVERSE] = true, [UM_VIEW_LIST] = true, [UM_VIEW_ICONS] = true, [UM_HOME] = true, [UM_TRASH_VIEW] = true,
                             [UM_FIND] = true, [UM_LOCATION] = true, [UM_TERMINAL] = true, [UM_EDIT_BOOKMARKS] = true, [UM_SHORTCUTS] = true, [UM_ABOUT] = true,
                             [UM_OPEN_TAB] = true, [UM_HERE_PROPS] = true, [UM_MAKE_LINK] = true,
-                            [UM_PERMS_COLS] = true };
+                            [UM_PERMS_COLS] = true, [UM_SHOW_MENU] = true };
     for (int it = 0; it < UM_ITEMS; it++) CHECK(ui_menu_enabled(&u, (UiMenuItem)it) == want[it]);
     u = menu_ui(0);
     CHECK(!ui_menu_enabled(&u, UM_OPEN) && !ui_menu_enabled(&u, UM_OPEN_WITH) && ui_menu_enabled(&u, UM_NEW_FILE));
@@ -396,7 +396,7 @@ static void test_state_put(void)
     CHECK(state_put(&ta, path, "view", "icons", &err));
     CHECK_STR(read_file(&ta, path), "view=icons\n");
     // Two windows, each saving its own key: both kept (the whole State would undo the other's).
-    State a = { SIDE_PLACES, true, 0, false };
+    State a = { SIDE_PLACES, true, 0, false, false };
     CHECK(state_save(path, &a, &err));
     CHECK(state_put(&ta, path, "sidebar", "tree", &err));   // window B
     CHECK(state_put(&ta, path, "zoom", "96", &err));        // window A

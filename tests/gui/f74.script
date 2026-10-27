@@ -140,7 +140,7 @@ expect menugrey=undo,restore
 key esc
 # ---- View: the places sidebar, sorted by name, the list; the zoom only in the icon view
 key alt-v
-expect menu=View menuat=reload menumarked=side-places,perms-cols,sort-name,view-list menugrey=zoom-in,zoom-out,zoom-reset menuhid=-
+expect menu=View menuat=reload menumarked=side-places,perms-cols,show-menu,sort-name,view-list menugrey=zoom-in,zoom-out,zoom-reset menuhid=-
 shot menu-view.png
 key esc
 # Show Hidden Files (checked once on)
@@ -151,30 +151,30 @@ click-here
 wait-for 2000 shown=1 n=5
 point-ui menu-title 2
 click-here
-expect menumarked=side-places,hidden,perms-cols,sort-name,view-list
+expect menumarked=side-places,hidden,perms-cols,show-menu,sort-name,view-list
 point-ui menu-item 6
 click-here
 wait-for 2000 shown=0 n=4
 # Sort by Size, then Reverse Order; Sort by Name keeps the order reversed
 point-ui menu-title 2
 click-here
-point-ui menu-item 10
+point-ui menu-item 11
 click-here
 expect sort=size rev=0
 point-ui menu-title 2
 click-here
-point-ui menu-item 12
+point-ui menu-item 13
 click-here
 expect sort=size rev=1
 point-ui menu-title 2
 click-here
-point-ui menu-item 9
+point-ui menu-item 10
 click-here
 expect sort=name rev=1
 point-ui menu-title 2
 click-here
-expect menumarked=side-places,perms-cols,sort-name,sort-reverse,view-list
-point-ui menu-item 12
+expect menumarked=side-places,perms-cols,show-menu,sort-name,sort-reverse,view-list
+point-ui menu-item 13
 click-here
 expect rev=0
 # The sidebar's modes
@@ -196,24 +196,24 @@ expect sidemode=places
 # Icons; then the zoom: Normal Size greyed at 48 px, Zoom In makes it 64, Normal Size back
 point-ui menu-title 2
 click-here
-point-ui menu-item 19
+point-ui menu-item 20
 click-here
 expect view=icons
 point-ui menu-title 2
 click-here
-expect menumarked=side-places,perms-cols,sort-name,view-icons menugrey=zoom-reset
-point-ui menu-item 14
+expect menumarked=side-places,perms-cols,show-menu,sort-name,view-icons menugrey=zoom-reset
+point-ui menu-item 15
 click-here
 expect zoom=64
 point-ui menu-title 2
 click-here
 expect menugrey=-
-point-ui menu-item 16
+point-ui menu-item 17
 click-here
 expect zoom=48
 point-ui menu-title 2
 click-here
-point-ui menu-item 18
+point-ui menu-item 19
 click-here
 expect view=list
 pointer-off

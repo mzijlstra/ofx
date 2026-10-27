@@ -256,10 +256,22 @@ typedef struct {
 static Tab    tabs[UI_TABS_MAX];
 static UiTabs tabbar;
 
-// What is above the list: the top bar, and the tab bar over the files from two tabs on.
+// Whether the menu bar is drawn: unless it is hidden (View → Show Menu, 2026-10-27), and then while
+// one of its menus is open by its keys (the window below moves down for it, as Firefox's does).
+static bool bar_shown(void)
+{
+    return !app.ui.bar_hidden || (app.ui.menu_on && app.ui.menu < UI_MENUS);
+}
+
+static int bar_h(void)
+{
+    return bar_shown() ? MENU_H : 0;
+}
+
+// What is above the list: the menu bar, the top bar, and the tab bar over the files from two tabs on.
 static int top_h(void)
 {
-    return MENU_H + HEADER_H + (tabbar.n >= 2 ? TAB_H : 0);
+    return bar_h() + HEADER_H + (tabbar.n >= 2 ? TAB_H : 0);
 }
 
 // The sidebar's width: none when it is hidden (F6).
@@ -1262,6 +1274,11 @@ static void act(UiAction a)
         if (state_path(path, sizeof path) && !state_put(&scratch, path, "sidebar", SIDE_MODE_NAMES[app.ui.side_mode], &err)) set_status(true, "%s", err.msg);
         break;
     }
+    case UA_MENUBAR: {   // remembered, the one key (as UA_VIEW)
+        char path[PATH_MAX];
+        if (state_path(path, sizeof path) && !state_put(&scratch, path, "menubar", app.ui.bar_hidden ? "off" : "on", &err)) set_status(true, "%s", err.msg);
+        break;
+    }
     case UA_PERMS_COLS: {   // remembered, the one key (as UA_VIEW)
         char path[PATH_MAX];
         if (state_path(path, sizeof path) && !state_put(&scratch, path, "perms", app.ui.perms_cols ? "on" : "off", &err)) set_status(true, "%s", err.msg);
@@ -1664,7 +1681,7 @@ static void list_fit(void)
 
 static int side_rows(int h)
 {
-    int r = (h - MENU_H - HEADER_H - FOOTER_H - PAD) / SIDE_ROW_H;   // the tab bar isn't over the sidebar
+    int r = (h - bar_h() - HEADER_H - FOOTER_H - PAD) / SIDE_ROW_H;   // the tab bar isn't over the sidebar
     return r > 0 ? r : 0;
 }
 
@@ -2572,7 +2589,7 @@ static void layout_menubar(void)
 
 // ---- the modal panels (F5.1) --------------------------------------------------------------------
 
-typedef enum { MODAL_NONE, MODAL_DELETE, MODAL_CLASH, MODAL_CANCEL, MODAL_QUIT, MODAL_FULL, MODAL_EMPTY, MODAL_PROPS, MODAL_OW, MODAL_BM, MODAL_KEYS, MODAL_ABOUT } ModalKind;
+typedef enum { MODAL_NONE, MODAL_DELETE, MODAL_CLASH, MODAL_CANCEL, MODAL_QUIT, MODAL_FULL, MODAL_EMPTY, MODAL_PROPS, MODAL_OW, MODAL_BM, MODAL_KEYS, MODAL_ABOUT, MODAL_BAR } ModalKind;
 
 // The panel on top, in the order ui_handle takes their keys.
 static ModalKind modal_kind(void)
@@ -2588,6 +2605,7 @@ static ModalKind modal_kind(void)
     if (app.ui.bmp) return MODAL_BM;        // Edit Bookmarks (F7.5)
     if (app.ui.keys) return MODAL_KEYS;     // Keyboard Shortcuts (F7.5)
     if (app.ui.about) return MODAL_ABOUT;
+    if (app.ui.bar_told) return MODAL_BAR;   // the menu bar just hidden (2026-10-27)
     return MODAL_NONE;
 }
 
@@ -3032,6 +3050,7 @@ static void layout_modal(ModalKind k, float w, float h)
     else if (k == MODAL_BM) layout_bmp_panel();
     else if (k == MODAL_KEYS) layout_keys_panel();
     else if (k == MODAL_ABOUT) layout_about_panel();
+    else if (k == MODAL_BAR) layout_bar_panel();
     else layout_modal_panel(k);
 }
 
@@ -3350,10 +3369,10 @@ static Clay_RenderCommandArray layout(int w, int h)
     CLAY(CLAY_ID("root"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0) }, .layoutDirection = CLAY_TOP_TO_BOTTOM },
                             .backgroundColor = cc(t->bg) }) {
         float foot_w = (float)w - modes_w() - zoom_w() - 2 * PAD;   // the status part of the bottom bar
-        layout_menubar();
+        if (bar_shown()) layout_menubar();
         if (app.ui.menu_on && app.ui.menu >= UI_MENUS) layout_menu(app.ui.menu);   // a right-click menu (F8)
         layout_bar((float)w);
-        float body_h = (float)(h - MENU_H - HEADER_H - FOOTER_H);
+        float body_h = (float)(h - bar_h() - HEADER_H - FOOTER_H);
         CLAY(CLAY_ID("body"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(body_h) } } }) {
         if (app.ui.side_mode == SIDE_TREE) layout_tree(body_h);
         else if (side_w()) layout_side(body_h);
@@ -3390,6 +3409,8 @@ static Clay_RenderCommandArray layout(int w, int h)
             if (modal_kind() == MODAL_PROPS) {
                 text(fit(S("Properties: \xE2\x86\x90 \xE2\x86\x91 \xE2\x86\x93 \xE2\x86\x92 (h j k l) move \xC2\xB7 Space or Enter changes \xC2\xB7 Esc closes"), foot_w, false),
                      cc(t->fg_dim));
+            } else if (modal_kind() == MODAL_BAR) {
+                text(fit(S("Menu bar hidden: Enter or Esc closes this"), foot_w, false), cc(t->fg_dim));
             } else if (modal_kind() == MODAL_ABOUT) {
                 text(fit(S("About: Esc or Enter closes"), foot_w, false), cc(t->fg_dim));
             } else if (modal_kind() == MODAL_KEYS) {
@@ -4275,7 +4296,7 @@ int main(int argc, char **argv)
     char state_file[PATH_MAX];
     if (state_path(state_file, sizeof state_file)) {
         State st = state_load(&scratch, state_file);
-        app.ui.side_mode = st.side, app.ui.grid = st.icons, app.ui.zoom = st.zoom, app.ui.perms_cols = !st.no_perms;
+        app.ui.side_mode = st.side, app.ui.grid = st.icons, app.ui.zoom = st.zoom, app.ui.perms_cols = !st.no_perms, app.ui.bar_hidden = st.no_bar;
     }
     side_refresh();
     list_fit();

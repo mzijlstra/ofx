@@ -172,8 +172,8 @@ static void script_state(char *out, size_t cap)
     if (jobs.asking >= 0) snprintf(clashjob, sizeof clashjob, "%s", job_recs[jobs.asking].label);
     for (char *c = clashjob; *c; c++)
         if (*c == ' ') *c = '_';
-    static const char *const MODALS[] = { "-", "delete", "clash", "cancel", "quit", "full", "empty", "props", "open-with", "bookmarks", "shortcuts", "about" };
-    _Static_assert(sizeof MODALS / sizeof MODALS[0] == MODAL_ABOUT + 1, "a name for each panel");
+    static const char *const MODALS[] = { "-", "delete", "clash", "cancel", "quit", "full", "empty", "props", "open-with", "bookmarks", "shortcuts", "about", "menubar" };
+    _Static_assert(sizeof MODALS / sizeof MODALS[0] == MODAL_BAR + 1, "a name for each panel");
     // The path buttons' labels, '|' between; the cursor's folder count (- unknown, ? unreadable).
     char crumbs[2048] = "", cnt[32] = "-";
     for (int i = 0; i < app.crumbs.n; i++) {
@@ -388,7 +388,7 @@ static void script_state(char *out, size_t cap)
              "view=%s cols=%d cells=%d cellfirst=%td celllast=%td fulllines=%d celllines=%d cellcut=%d iconpx=%d icontex=%d iconresets=%d crumbfocus=%d tooltip=%s idlewoke=%s "
              "zoom=%d cellw=%d cellh=%d zoomshown=%d tipin=%d slots=%d "
              "previews=%d thumbsel=%s thumbbox=%s thumbbusy=%d thumbmade=%d thumbread=%d thumbfailed=%d thumbknown=%d thumbnone=%d thumbchanged=%d "
-             "thumbheld=%td thumbdropped=%d thumbresets=%d thumblocal=%d reloadasked=%d menuseps=%d bmlist=%s bmn=%d bmhere=%d canbm=%d bmmore=%d bmp=%d bmpn=%td bmpsel=%td bmpnaming=%d bmptext=%s keys=%d keysn=%td keystop=%td keysrows=%d keysfirst=%s menu=%s menuat=%s menuoff=%s menugrey=%s menuhid=%s menumarked=%s menubox=%s menuin=%d menuclear=%d permscols=%d menuhover=%d canwrite=%d windows=%d siderows=%d footerin=%d "
+             "thumbheld=%td thumbdropped=%d thumbresets=%d thumblocal=%d reloadasked=%d menuseps=%d bmlist=%s bmn=%d bmhere=%d canbm=%d bmmore=%d bmp=%d bmpn=%td bmpsel=%td bmpnaming=%d bmptext=%s keys=%d keysn=%td keystop=%td keysrows=%d keysfirst=%s menu=%s menuat=%s menuoff=%s menugrey=%s menuhid=%s menumarked=%s menubox=%s menuin=%d menuclear=%d permscols=%d barhidden=%d barshown=%d menuhover=%d canwrite=%d windows=%d siderows=%d footerin=%d "
              "props=%d propat=%d propcan=%d propn=%td propmode=%04o propfiles=%lld propdirs=%lld propbytes=%lld propdone=%d propcut=%d proplinks=%lld,%lld,%lld,%d propnlink=%llu proptype=%s proptypename=%s propbyname=%d propname=%s "
              "propwhere=%s propdrive=%s proplink=%s propcreated=%d propidx=%td "
              "ow=%d owfresh=%d owlist=%d owtext=%s own=%td owsel=%td owapp=%s owicon=%s owtex=%d owshown=%td owtype=%s owfiles=%td owrows=%d owtop=%td owopts=%s owbad=%d owdef=%d owdefcan=%d findopts=%s findbad=%d findselect=%d findn=%td findat=%td findtext=%s status=%s",
@@ -412,7 +412,7 @@ static void script_state(char *out, size_t cap)
              ui_zoom_px(&app.ui), cell_w(), cell_h(), Clay_GetElementData(CLAY_ID("zoom-track")).found, tipin, app.nslots,
              thumbs.drawn_last, thumbsel, thumbbox, thumbs_busy(), thumbs.got[TG_MADE], thumbs.got[TG_CACHED], thumbs.got[TG_FAILED],
              thumbs.got[TG_FAIL_KNOWN], thumbs.got[TG_NONE], thumbs.got[TG_CHANGED], thumbs.held, thumbs.evicted, thumbs.resets, app.thumb_local,
-             app.reloads_asked, menuseps, bmlist, app.ui.bm_n, app.ui.bm_here, app.ui.can_bookmark, app.ui.bm_more, app.ui.bmp, app.ui.bmp_list.n, app.ui.bmp_list.sel, app.ui.bmp_naming, bmptext, app.ui.keys, app.ui.keys_list.n, app.ui.keys_list.top, app.ui.keys_list.rows, keysfirst, app.ui.menu_on ? UI_MENU[app.ui.menu].title : "-", menuat, menuoff, menugrey, menuhid, menumarked, menubox, menuin, menuclear, app.ui.perms_cols, app.menu_title_hover, app.ui.can_write, windows,
+             app.reloads_asked, menuseps, bmlist, app.ui.bm_n, app.ui.bm_here, app.ui.can_bookmark, app.ui.bm_more, app.ui.bmp, app.ui.bmp_list.n, app.ui.bmp_list.sel, app.ui.bmp_naming, bmptext, app.ui.keys, app.ui.keys_list.n, app.ui.keys_list.top, app.ui.keys_list.rows, keysfirst, app.ui.menu_on ? UI_MENU[app.ui.menu].title : "-", menuat, menuoff, menugrey, menuhid, menumarked, menubox, menuin, menuclear, app.ui.perms_cols, app.ui.bar_hidden, bar_shown(), app.menu_title_hover, app.ui.can_write, windows,
              app.ui.side.rows, footerin,
              app.ui.props, app.ui.prop_at, app.ui.prop_can, props.n, props.have ? (unsigned)(props.st.st_mode & 07777) : 0u,
              (long long)props.sum.files, (long long)props.sum.dirs, (long long)props.sum.bytes, props.done, props.sum.cut || props.cut,

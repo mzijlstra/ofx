@@ -460,7 +460,7 @@ static void test_list_columns(void)
     CHECK(!state_load(&ta, path).no_perms);
     CHECK(state_put(&ta, path, "perms", "off", &e2) && state_load(&ta, path).no_perms);
     CHECK(state_put(&ta, path, "perms", "on", &e2) && !state_load(&ta, path).no_perms);
-    State st = { SIDE_PLACES, false, 0, true };
+    State st = { .side = SIDE_PLACES, .no_perms = true };
     CHECK(state_save(path, &st, &e2) && strstr(read_file(&ta, path).p, "perms=off\n") && state_load(&ta, path).no_perms);
     // The entry toggles it and asks gui/ to remember.
     Ui u = menu_ui(2);
@@ -470,4 +470,35 @@ static void test_list_columns(void)
     UiInput in = ui_input_none();
     in.menu_item = menu_place(2, UM_PERMS_COLS);
     CHECK(ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in).kind == UA_PERMS_COLS && !u.perms_cols && ui_menu_mark(&u, UM_PERMS_COLS) == 0);
+    // View → Show Menu (2026-10-27): unchecked, the bar hides and a note says how its menus still
+    // open; it takes every key, Enter, Esc or OK close it; checked again, no note.
+    CHECK(!state_load(&ta, path).no_bar);
+    CHECK(state_put(&ta, path, "menubar", "off", &e2) && state_load(&ta, path).no_bar);
+    st = (State){ .side = SIDE_PLACES, .no_bar = true };
+    CHECK(state_save(path, &st, &e2) && strstr(read_file(&ta, path).p, "menubar=off\n") && state_load(&ta, path).no_bar && !state_load(&ta, path).no_perms);
+    CHECK(ui_menu_mark(&u, UM_SHOW_MENU) == 1 && ui_menu_enabled(&u, UM_SHOW_MENU));
+    u.menu_on = true, u.menu = 2;
+    in = ui_input_none(), in.menu_item = menu_place(2, UM_SHOW_MENU);
+    CHECK(ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in).kind == UA_MENUBAR && u.bar_hidden && u.bar_told && ui_menu_mark(&u, UM_SHOW_MENU) == 0);
+    UiAction a = menu_keys(&u, 2, UK_DOWN, UK_DELETE);
+    CHECK(u.bar_told && a.kind == UA_NONE && u.list.sel == 0);
+    in = ui_input_none(), in.click = 1;   // nor any click under it
+    ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in);
+    CHECK(u.bar_told && u.list.sel == 0);
+    menu_keys(&u, 1, UK_ENTER);
+    CHECK(!u.bar_told);
+    u.bar_told = true;
+    menu_keys(&u, 1, UK_ESC);
+    CHECK(!u.bar_told);
+    u.bar_told = true;
+    in = ui_input_none(), in.modal = UI_MODAL_OK;
+    ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in);
+    CHECK(!u.bar_told);
+    // Hidden, F10 still opens the menus; Show Menu again: shown, no note.
+    menu_keys(&u, 1, UK_F10);
+    CHECK(u.menu_on && u.menu == 0);
+    menu_keys(&u, 1, UK_ESC);
+    u.menu_on = true, u.menu = 2;
+    in = ui_input_none(), in.menu_item = menu_place(2, UM_SHOW_MENU);
+    CHECK(ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in).kind == UA_MENUBAR && !u.bar_hidden && !u.bar_told);
 }

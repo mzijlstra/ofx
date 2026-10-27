@@ -17,6 +17,27 @@ point-ui menu-item 7
 click-here
 expect permscols=1
 sh grep -qx "perms=on" "$OFX_ROOT/state/ofx/state"
+# View → Show Menu: off, a note says how the menus still open; F10 floats the bar over the top
+# bar while a menu is open; remembered; back on from View
+expect barhidden=0
+key alt-v
+point-ui menu-item 8
+click-here
+expect menu=- barhidden=1 barshown=0 modal=menubar
+shot menubar-hidden.png
+key enter
+expect modal=-
+sh grep -qx "menubar=off" "$OFX_ROOT/state/ofx/state"
+key f10
+expect menu=File
+shot menubar-float.png
+key esc
+key alt-v
+expect menu=View menumarked=side-places,perms-cols,sort-name,view-list
+point-ui menu-item 8
+click-here
+expect menu=- barhidden=0 modal=-
+sh grep -qx "menubar=on" "$OFX_ROOT/state/ofx/state"
 # Open in New Window: ofx on that folder
 point-ui row 0
 right-here

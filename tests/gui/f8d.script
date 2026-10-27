@@ -1,4 +1,7 @@
-# The list's Owner, Group and Permissions as the state file says: run.sh writes "perms=off" first.
+# The list's Owner, Group and Permissions, and the menu bar, as the state file says: run.sh writes
+# "perms=off" and "menubar=off" first. No note at the start: it was told when it was hidden.
 settle
-expect permscols=0
+expect permscols=0 barhidden=1 barshown=0 modal=-
+key f10
+expect menu=File barshown=1
 quit
