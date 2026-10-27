@@ -119,7 +119,8 @@ fallback icon. No content sniffing in F1: a name with no match is `application/o
 For an icon name, size and scale: an exact directory match (Fixed, Scalable or Threshold sizes
 and Scale), else the closest size, theme by theme; PNG files only (raylib loads PNG; Yaru ships
 every size as PNG, so no SVG rasteriser is needed). Names for an entry, most specific first:
-the MIME type with `/` as `-`, its generic icon, `text-x-generic` or `application-x-generic`;
+the MIME type with `/` as `-`, its generic icon, `text-x-generic` or `application-x-generic`, then
+the same for its parents in `subclasses`, last `empty` (a blank page; Michael, 2026-10-27);
 folders `folder`, with `user-home`, `user-desktop` and `folder-<xdg dir>` for the XDG user
 directories (`~/.config/user-dirs.dirs`). Results cached by name; textures loaded on first draw.
 

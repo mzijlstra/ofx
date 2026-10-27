@@ -240,8 +240,11 @@ static void test_mime(void)
         "50:text/x-tiebreak-later:*.tb\n"
         "50:image/x-other-png:*.png\n");
     put(at("data1/mime/generic-icons"), "text/x-csrc:text-x-script\nimage/png:image-x-generic\n");
-    put(at("data2/mime/generic-icons"), "text/x-csrc:shadowed\n");
     put(at("data1/mime/icons"), "application/gzip:package-x-generic\n");
+    // A kind of a kind (the first parent kept, the user's dir first), and a loop.
+    put(at("data1/mime/subclasses"), "application/x-kid application/x-mom\napplication/x-loop application/x-loop\napplication/x-bare \n");
+    put(at("data2/mime/subclasses"), "application/x-kid application/x-shadow\napplication/x-mom application/x-gran\n");
+    put(at("data2/mime/generic-icons"), "text/x-csrc:shadowed\napplication/x-gran:x-office-document\n");
     env_set("XDG_DATA_HOME", at("data1"));
     env_set("XDG_DATA_DIRS", at("data2"));
     MimeDb db;
@@ -285,27 +288,47 @@ static void test_mime(void)
     CHECK_STR(mime_of(&ta, &db, &plain), "application/octet-stream");
     CHECK_STR(mime_of(&ta, &db, &c), "text/x-csrc");   // a glob beats the execute bit
 
-    Str names[5];
+    Str names[MIME_ICON_NAMES];
     isize n = mime_icon_names(&ta, &db, S("text/x-csrc"), names);
-    CHECK(n == 4);
+    CHECK(n == 5);
     CHECK_STR(names[0], "text-x-csrc");
     CHECK_STR(names[1], "text-x-script");
     CHECK_STR(names[2], "text-x-generic");
     CHECK_STR(names[3], "application-x-generic");
+    CHECK_STR(names[4], "empty");   // a blank page, last (2026-10-27)
     n = mime_icon_names(&ta, &db, S("application/gzip"), names);
-    CHECK(n == 3);
+    CHECK(n == 4);
     CHECK_STR(names[0], "package-x-generic");
     CHECK_STR(names[1], "application-gzip");
     CHECK_STR(names[2], "application-x-generic");
+    CHECK_STR(names[3], "empty");
     n = mime_icon_names(&ta, &db, S("inode/directory"), names);
-    CHECK(n == 3);
+    CHECK(n == 4);
     CHECK_STR(names[0], "inode-directory");
     CHECK_STR(names[1], "inode-x-generic");
     CHECK_STR(names[2], "application-x-generic");
+    // Up the subclasses after the type's own (2026-10-27): its parent's, the parent's parent's with
+    // its generic icon; then the blank page.
+    n = mime_icon_names(&ta, &db, S("application/x-kid"), names);
+    CHECK(n == 6);
+    CHECK_STR(names[0], "application-x-kid");
+    CHECK_STR(names[1], "application-x-generic");
+    CHECK_STR(names[2], "application-x-mom");
+    CHECK_STR(names[3], "application-x-gran");
+    CHECK_STR(names[4], "x-office-document");
+    CHECK_STR(names[5], "empty");
+    // A loop stops after MIME_PARENTS_MAX, within MIME_ICON_NAMES.
+    n = mime_icon_names(&ta, &db, S("application/x-loop"), names);
+    CHECK(n == 2 + MIME_PARENTS_MAX + 1 && n <= MIME_ICON_NAMES);
+    CHECK_STR(names[n - 2], "application-x-loop");
+    CHECK_STR(names[n - 1], "empty");
+    n = mime_icon_names(&ta, &db, S("application/x-bare"), names);   // (a line with no parent)
+    CHECK(n == 3);
+    CHECK_STR(names[1], "application-x-generic");
     // No generic icon in generic-icons (the system's has none for image/png): the media type's,
     // the spec's.
     n = mime_icon_names(&ta, &db, S("image/webp"), names);
-    CHECK(n == 3);
+    CHECK(n == 4);
     CHECK_STR(names[0], "image-webp");
     CHECK_STR(names[1], "image-x-generic");
     CHECK_STR(names[2], "application-x-generic");

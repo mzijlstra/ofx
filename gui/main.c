@@ -1510,7 +1510,7 @@ static IconSlot *icon_for_px(Str key, const Str *given, isize ngiven, int px)
     Str slot_key = px == ICON_PX ? key : str_from_c(arena_sprintf(&scratch, "%d:%.*s", px, STR_ARG(key)));
     if (strmap_get(&app.slot_of, slot_key, &k)) return arena_restore(&scratch, mark), &app.slot[k];
     if (app.nslots >= app.icons_max) return app.icons_missed = true, arena_restore(&scratch, mark), NULL;
-    Str names[6];
+    Str names[MIME_ICON_NAMES];
     isize n = given ? ngiven : mime_icon_names(&scratch, &app.mime_db, key, names);
     IconSlot *s = &app.slot[app.nslots];
     *s = (IconSlot){ .key = { arena_cstr(&icona, slot_key), slot_key.len } };

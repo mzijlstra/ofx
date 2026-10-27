@@ -49,10 +49,10 @@ MUTANTS = [
     (M, "if (best < 0 || glob_better(db, i, best, folded, best_folded)) best = i, best_folded = folded;", "if (best < 0) best = i, best_folded = folded;"),
     (M, "if (e->kind == K_LINK_BROKEN) return S(\"inode/symlink\");", ""),
     (M, "return (e->mode & 0111) ? S(\"application/x-executable\") : S(\"application/octet-stream\");", "return S(\"application/octet-stream\");"),
-    (M, "if (strmap_get(&db->icon, type, &i)) names[n++] = db->icon_of[i];", ""),
+    (M, "if (strmap_get(&db->icon, t, &i)) names[n++] = db->icon_of[i];", ""),
     (M, "if (*p == '/') *p = '-';", ""),
-    (M, "if (strmap_get(&db->generic, type, &i)) names[n++] = db->icon_of[i];", ""),
-    (M, "    names[n++] = str_from_c(arena_sprintf(a, \"%.*s-x-generic\", STR_ARG(media)));", "    names[n++] = S(\"text-x-generic\");"),
+    (M, "if (strmap_get(&db->generic, t, &i)) names[n++] = db->icon_of[i];", ""),
+    (M, "        if (up == 0) names[n++] = str_from_c(arena_sprintf(a, \"%.*s-x-generic\", STR_ARG(media)));", "        if (up == 0) names[n++] = S(\"text-x-generic\");"),
     # ---- icons
     (I, "in = line.len >= 2 && line.p[line.len - 1] == ']' && str_eq(str_cut(line, 1, line.len - 1), section);", "in = str_eq(str_cut(line, 1, line.len - 1), section);"),
     (I, "if (v.len == 0 || v.len > 9) return dflt;", "if (v.len == 0) return dflt;"),
@@ -813,7 +813,7 @@ MUTANTS += [
     (TH, '    im.format = PNG_FORMAT_RGBA;', '    im.format = PNG_FORMAT_BGRA;'),
     (TH, '    isize k = n < s->n - s->at ? n : s->n - s->at;', '    isize k = n;'),
     (M, '    if (!str_eq(media, S("application"))) names[n++] = S("application-x-generic");\n', ''),
-    (M, '    names[n++] = str_from_c(arena_sprintf(a, "%.*s-x-generic", STR_ARG(media)));\n', ''),
+    (M, '        if (up == 0) names[n++] = str_from_c(arena_sprintf(a, "%.*s-x-generic", STR_ARG(media)));\n', ''),
     # ---- F6.5: the thumbnail cache's cleanup
     (CL, "#define CLEAN_UNUSED_S (90 * 86400LL)", "#define CLEAN_UNUSED_S (88 * 86400LL)"),
     (CL, "#define CLEAN_UNUSED_S (90 * 86400LL)", "#define CLEAN_UNUSED_S (92 * 86400LL)"),
@@ -1594,4 +1594,16 @@ MUTANTS += [
     (U, "    if (!prompt && in->ctx_tab >= 0 && in->ctx_tab < u->tab_n) {", "    if (!prompt && in->ctx_tab >= 0) {"),
     (U, "        return (UiAction){ UA_TAB_SHOW, in->ctx_tab, false };", "        return (UiAction){ UA_NONE, in->ctx_tab, false };"),
     (U, " || in->ctx_tab >= 0 || in->prop_box >= 0 ||", " || in->prop_box >= 0 ||"),
+]
+# ---- icons up the subclasses, a blank page last (Michael, 2026-10-27)
+MUTANTS += [
+    (M, "        if (up == 0) names[n++] = str_from_c(arena_sprintf(a, \"%.*s-x-generic\", STR_ARG(media)));", "        names[n++] = str_from_c(arena_sprintf(a, \"%.*s-x-generic\", STR_ARG(media)));"),
+    (M, "        if (!strmap_get(&db->parent, t, &i)) break;", "        break;"),
+    (M, "    for (int up = 0; up <= MIME_PARENTS_MAX; up++) {", "    for (int up = 0; up <= MIME_PARENTS_MAX + 1; up++) {"),
+    (M, "        t = db->icon_of[i];\n", ""),
+    (M, "    names[n++] = S(\"empty\");\n", ""),
+    (M, "        if (strmap_get(&db->parent, type, &have)) continue;", ""),
+    (M, "        if (sp <= 0 || sp == line.len - 1 || db->nicons == MIME_GLOBS_MAX) continue;", "        if (sp <= 0 || db->nicons == MIME_GLOBS_MAX) continue;"),
+    (M, "        db->icon_of[db->nicons] = str_trim(str_cut(line, sp + 1, line.len));", "        db->icon_of[db->nicons] = str_cut(line, sp, line.len);"),
+    (M, "        mime_add_parents(db, read_file(a, arena_sprintf(a, \"%s/mime/subclasses\", dirs[k])));", ""),
 ]

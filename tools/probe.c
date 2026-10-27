@@ -32,7 +32,7 @@ int main(int argc, char **argv)
            (long long)(t1 - t0), (long long)(t2 - t1));
     for (isize i = 0; i < l.n; i++) {
         const Entry *e = &l.e[i];
-        Str type = mime_of(&a, &db, e), names[5];
+        Str type = mime_of(&a, &db, e), names[MIME_ICON_NAMES];
         isize n = 0;
         if (kind_is_dir(e->kind)) {
             Str special = user_dir_icon(&u, arena_sprintf(&a, "%s/%.*s", argv[1], STR_ARG(e->name)));

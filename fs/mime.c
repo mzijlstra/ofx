@@ -1,6 +1,6 @@
 // A file's MIME type from its name, by shared-mime-info's glob tables, and the icon names for it
-// (docs/plan.md, "MIME type"). Read once, from every XDG data dir's mime/: globs2, generic-icons
-// and icons.
+// (docs/plan.md, "MIME type"). Read once, from every XDG data dir's mime/: globs2, generic-icons,
+// icons and subclasses.
 //
 // globs2 lines are `weight:type:glob[:flags]`; the flag `cs` makes a glob case-sensitive. A name is
 // matched in three tiers, the first that matches wins, as xdgmime does: literal names
@@ -16,7 +16,9 @@
 #include <stdlib.h>
 #include <sys/stat.h>
 
-enum { MIME_GLOBS_MAX = 8192, MIME_DIRS_MAX = 16 };
+// MIME_ICON_NAMES: mime_icon_names's most (its own three, three each for MIME_PARENTS_MAX parents,
+// the media type's, application's, the blank page).
+enum { MIME_GLOBS_MAX = 8192, MIME_DIRS_MAX = 16, MIME_PARENTS_MAX = 4, MIME_ICON_NAMES = 3 + 3 * MIME_PARENTS_MAX + 3 };
 
 typedef struct {
     Str  type;
@@ -34,6 +36,7 @@ typedef struct {
     isize     nother;
     StrMap    generic;   // type -> its generic icon, in `icon_of`
     StrMap    icon;      // type -> its own icon name
+    StrMap    parent;    // type -> the type it is a kind of (subclasses: its first), in `icon_of` too
     Str      *icon_of;   // the values, by the maps' int
     isize     nicons;
 } MimeDb;
@@ -178,6 +181,21 @@ static void mime_add_icons(Arena *a, MimeDb *db, StrMap *m, Str text)
     }
 }
 
+// subclasses lines are `type parent`; a type's first parent is kept (the user's dir first).
+static void mime_add_parents(MimeDb *db, Str text)
+{
+    isize at = 0;
+    for (Str line; next_line(text, &at, &line);) {
+        isize sp = str_find(line, ' ');
+        if (sp <= 0 || sp == line.len - 1 || db->nicons == MIME_GLOBS_MAX) continue;
+        Str type = str_cut(line, 0, sp);
+        int have;
+        if (strmap_get(&db->parent, type, &have)) continue;
+        db->icon_of[db->nicons] = str_trim(str_cut(line, sp + 1, line.len));
+        strmap_put(&db->parent, type, (int)db->nicons++);
+    }
+}
+
 // The XDG data dirs, the user's first: $XDG_DATA_HOME (~/.local/share), then $XDG_DATA_DIRS
 // (/usr/local/share:/usr/share). Each into a as a C string.
 static isize data_dirs(Arena *a, const char **out, isize max)
@@ -208,12 +226,14 @@ static void mime_load(Arena *a, MimeDb *db)
     strmap_init(&db->suffix_ci, a, MIME_GLOBS_MAX);
     strmap_init(&db->generic, a, MIME_GLOBS_MAX);
     strmap_init(&db->icon, a, MIME_GLOBS_MAX);
+    strmap_init(&db->parent, a, MIME_GLOBS_MAX);
     const char *dirs[MIME_DIRS_MAX];
     isize nd = data_dirs(a, dirs, MIME_DIRS_MAX);
     for (isize k = 0; k < nd; k++) {
         mime_add_globs(a, db, read_file(a, arena_sprintf(a, "%s/mime/globs2", dirs[k])));
         mime_add_icons(a, db, &db->generic, read_file(a, arena_sprintf(a, "%s/mime/generic-icons", dirs[k])));
         mime_add_icons(a, db, &db->icon, read_file(a, arena_sprintf(a, "%s/mime/icons", dirs[k])));
+        mime_add_parents(db, read_file(a, arena_sprintf(a, "%s/mime/subclasses", dirs[k])));
     }
 }
 
@@ -269,25 +289,34 @@ static Str mime_of(Arena *scratch, const MimeDb *db, const Entry *e)
     return (e->mode & 0111) ? S("application/x-executable") : S("application/octet-stream");
 }
 
-// The icon names to try for a MIME type, most specific first, into names (at most 5); each one
-// into a. The theme lookup (icons.c) takes the first it has. Without a generic icon in
-// generic-icons, the spec's: the media type and "-x-generic" (image-x-generic: generic-icons names
-// none for image/png, and Yaru has no application-x-generic, so a PNG without a preview had no
-// icon at all, 2026-10-24).
+// The icon names to try for a MIME type, most specific first, into names (at most
+// MIME_ICON_NAMES); each one into a. The theme lookup (icons.c) takes the first it has: the spec's
+// first, the type's own, its generic icon in generic-icons, the media type and "-x-generic"
+// (image-x-generic: generic-icons names none for image/png, and Yaru has no application-x-generic,
+// so a PNG without a preview had no icon at all, 2026-10-24). Then the same for the types it is a
+// kind of, up the subclasses (Michael, 2026-10-27: *.tsx is Tiled's tileset, a kind of XML, which
+// Yaru has an icon for; text/* keeps text-x-generic first, *.ts as before); last a blank page, so
+// every file has one.
 static isize mime_icon_names(Arena *a, const MimeDb *db, Str type, Str *names)
 {
     isize n = 0;
     int i;
-    if (strmap_get(&db->icon, type, &i)) names[n++] = db->icon_of[i];
-    char *dashed = arena_cstr(a, type);
-    for (char *p = dashed; *p; p++)
-        if (*p == '/') *p = '-';
-    names[n++] = str_from_c(dashed);
-    if (strmap_get(&db->generic, type, &i)) names[n++] = db->icon_of[i];
     isize slash = str_find(type, '/');
     Str media = slash > 0 ? str_cut(type, 0, slash) : type;
-    names[n++] = str_from_c(arena_sprintf(a, "%.*s-x-generic", STR_ARG(media)));
+    Str t = type;
+    for (int up = 0; up <= MIME_PARENTS_MAX; up++) {
+        if (strmap_get(&db->icon, t, &i)) names[n++] = db->icon_of[i];
+        char *dashed = arena_cstr(a, t);
+        for (char *p = dashed; *p; p++)
+            if (*p == '/') *p = '-';
+        names[n++] = str_from_c(dashed);
+        if (strmap_get(&db->generic, t, &i)) names[n++] = db->icon_of[i];
+        if (up == 0) names[n++] = str_from_c(arena_sprintf(a, "%.*s-x-generic", STR_ARG(media)));
+        if (!strmap_get(&db->parent, t, &i)) break;
+        t = db->icon_of[i];
+    }
     if (!str_eq(media, S("application"))) names[n++] = S("application-x-generic");
+    names[n++] = S("empty");
     return n;
 }
 
