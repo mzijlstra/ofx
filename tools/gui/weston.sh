@@ -18,7 +18,9 @@ start)
     # one. --no-config: not his weston.ini (if any). The kiosk shell fills the output with the window:
     # 936x516 logical at scale 2: 936x490 as a Hyprland headless output tiled it before, and the menu
     # bar's 26 (F7.1), so everything under it has the room the scripts were written for.
-    env -u WAYLAND_DISPLAY -u WAYLAND_SOCKET -u DISPLAY weston --backend=headless --fake-seat --shell=kiosk --renderer=gl --width=944 --height=544 --scale=2 \
+    # OFX_WESTON_SIZE=WxH another output (run-script's OFX_SCRIPT_SIZE, the window 8 and 28 smaller).
+    size=${OFX_WESTON_SIZE:-944x544}
+    env -u WAYLAND_DISPLAY -u WAYLAND_SOCKET -u DISPLAY weston --backend=headless --fake-seat --shell=kiosk --renderer=gl --width="${size%x*}" --height="${size#*x}" --scale=2 \
         --socket="$sock" --idle-time=0 --no-config --log="$T/weston.log" >/dev/null 2>&1 &
     echo $! > "$T/weston.pid"
     for i in $(seq 50); do [ -S "$XDG_RUNTIME_DIR/$sock" ] && break; sleep 0.1; done

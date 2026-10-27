@@ -1274,6 +1274,11 @@ static void act(UiAction a)
         if (state_path(path, sizeof path) && !state_put(&scratch, path, "sidebar", SIDE_MODE_NAMES[app.ui.side_mode], &err)) set_status(true, "%s", err.msg);
         break;
     }
+    case UA_COLORS: {   // remembered, the one key (as UA_VIEW)
+        char path[PATH_MAX];
+        if (state_path(path, sizeof path) && !state_put(&scratch, path, "colors", app.ui.colors ? "on" : "off", &err)) set_status(true, "%s", err.msg);
+        break;
+    }
     case UA_MENUBAR: {   // remembered, the one key (as UA_VIEW)
         char path[PATH_MAX];
         if (state_path(path, sizeof path) && !state_put(&scratch, path, "menubar", app.ui.bar_hidden ? "off" : "on", &err)) set_status(true, "%s", err.msg);
@@ -1863,8 +1868,9 @@ static void layout_trash_bar(void)
 }
 
 // Whether the list shows Owner, Group and Permissions: View → Show Permissions on, and Name keeps
-// NAME_MIN_W beside them in a window w wide (Michael, 2026-10-27: they give way on a narrow one).
-enum { NAME_MIN_W = 200 };
+// NAME_MIN_W beside them in a window w wide (Michael, 2026-10-27: they give way on a narrow one,
+// and the status line says so).
+enum { NAME_MIN_W = 150 };   // (200 until Michael found it hid them beside a second window)
 
 static bool perms_shown(float w)
 {
@@ -2000,6 +2006,7 @@ static Clay_Color ls_name_colour(const Entry *e, isize i)
 {
     Theme *t = &app.theme;
     if (e->kind == K_LINK_BROKEN) return cc(t->red);
+    if (!app.ui.colors) return cc(t->fg);   // (View → Show Colors off)
     if (kind_is_dir(e->kind)) return e->kind == K_LINK_DIR ? cc(t->cyan) : cc(t->blue);
     if (e->kind == K_LINK_FILE) return cc(t->cyan);
     static const char *const BUILD[] = { "Makefile", "makefile", "GNUmakefile", "CMakeLists.txt", "meson.build", "build.gradle", "Cargo.toml",
@@ -2027,7 +2034,7 @@ static void ls_perms_cell(Clay_ElementId id, u32 mode, int w)
     CLAY(id, { .layout = { .sizing = { CLAY_SIZING_FIXED(w), CLAY_SIZING_FIT(0) } }, .clip = { .horizontal = true } }) {
         for (int k = 0; p[k]; k++) {
             char c = p[k];
-            Clay_Color col = c == 'r' ? cc(t->yellow) : c == 'w' ? cc(t->red) : c == 'x' ? cc(t->green) : c == '-' ? mix(t->fg_dim, t->fg, 0.25f) : cc(t->magenta);
+            Clay_Color col = !app.ui.colors ? cc(t->fg_dim) : c == 'r' ? cc(t->yellow) : c == 'w' ? cc(t->red) : c == 'x' ? cc(t->green) : c == '-' ? mix(t->fg_dim, t->fg, 0.25f) : cc(t->magenta);
             text(cz(arena_sprintf(&frame, "%c", c)), col);
         }
     }
@@ -2092,17 +2099,17 @@ static void layout_row(int r, isize i, float w, i64 now)
         }
         CLAY(CLAY_IDI("size", r), { .layout = { .sizing = { CLAY_SIZING_FIXED(SIZE_W), CLAY_SIZING_FIT(0) },
                                                 .childAlignment = { .x = CLAY_ALIGN_X_RIGHT } } }) {
-            text(cz(arena_sprintf(&frame, "%s", size)), cc(t->green));   // (eza's)
+            text(cz(arena_sprintf(&frame, "%s", size)), app.ui.colors ? cc(t->green) : cc(t->fg_dim));   // (eza's)
         }
         CLAY(CLAY_IDI("date", r), { .layout = { .sizing = { CLAY_SIZING_FIXED(DATE_W), CLAY_SIZING_FIT(0) },
                                                 .childAlignment = { .x = CLAY_ALIGN_X_RIGHT } } }) {
-            text(cz(arena_sprintf(&frame, "%s", when)), cc(t->blue));   // (eza's)
+            text(cz(arena_sprintf(&frame, "%s", when)), app.ui.colors ? cc(t->blue) : cc(t->fg_dim));   // (eza's)
         }
         // Owner, Group, Permissions (2026-10-27): the target's for a link, as Size is.
         if (perms) {
             // (eza's: you and your group yellow, others plain)
-            info_cell(CLAY_IDI("owner", r), id_name(false, e->uid), OWNER_W, OWNER_PAD, e->uid == (u32)geteuid() ? cc(t->yellow) : cc(t->fg_dim));
-            info_cell(CLAY_IDI("group", r), id_name(true, e->gid), GROUP_W, 0, e->gid == (u32)getegid() ? cc(t->yellow) : cc(t->fg_dim));
+            info_cell(CLAY_IDI("owner", r), id_name(false, e->uid), OWNER_W, OWNER_PAD, app.ui.colors && e->uid == (u32)geteuid() ? cc(t->yellow) : cc(t->fg_dim));
+            info_cell(CLAY_IDI("group", r), id_name(true, e->gid), GROUP_W, 0, app.ui.colors && e->gid == (u32)getegid() ? cc(t->yellow) : cc(t->fg_dim));
             ls_perms_cell(CLAY_IDI("perms", r), e->mode, PERM_W);
         }
     }
@@ -3284,7 +3291,8 @@ static void layout_modes(void)
 static void status_info(char *buf, size_t cap)
 {
     UiInfo in = { .n = app.list.n, .hidden = app.show_hidden ? 0 : app.list.hidden, .marked = app.ui.marked,
-                  .one_count = -1, .one_size = -1, .avail = app.cwd_avail };
+                  .one_count = -1, .one_size = -1, .avail = app.cwd_avail,
+                  .cramped = app.ui.perms_cols && !app.ui.grid && !perms_shown((float)GetScreenWidth()) };
     for (isize i = 0; app.ui.marked == 1 && i < app.list.n; i++) {
         if (!app.ui.mark[i]) continue;
         const Entry *e = &app.list.e[i];
@@ -4346,9 +4354,11 @@ int main(int argc, char **argv)
         app.windows[0] = 0;
     }
     char state_file[PATH_MAX];
+    app.ui.perms_cols = app.ui.colors = true;   // (on without a state file too)
     if (state_path(state_file, sizeof state_file)) {
         State st = state_load(&scratch, state_file);
-        app.ui.side_mode = st.side, app.ui.grid = st.icons, app.ui.zoom = st.zoom, app.ui.perms_cols = !st.no_perms, app.ui.bar_hidden = st.no_bar;
+        app.ui.side_mode = st.side, app.ui.grid = st.icons, app.ui.zoom = st.zoom, app.ui.perms_cols = !st.no_perms, app.ui.bar_hidden = st.no_bar,
+        app.ui.colors = !st.no_colors;
     }
     side_refresh();
     list_fit();

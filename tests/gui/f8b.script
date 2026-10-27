@@ -3,10 +3,10 @@
 # sub/inner.txt; the bookmarks file in the scratch config, none yet.
 settle
 expect n=3 sel=sub bmn=0 permscols=1
-# The list (2026-10-27): a link's target after its arrow; Owner, Group, Permissions, given way while
-# Name would have less than 200 px (the 936 px window with the sidebar), there without the sidebar
-expect permsshown=0
-shot list-narrow.png
+# The list (2026-10-27): a link's target after its arrow; Owner, Group, Permissions (room for them
+# in the 936 px window with the sidebar since the cutoff went to 150; f8e is narrower). The sidebar
+# off for the rest, as the shot was made.
+expect permsshown=1 permsnote=0
 key f9
 key f9
 wait-for 2000 sidemode=hidden permsshown=1
@@ -27,7 +27,7 @@ sh grep -qx "perms=on" "$OFX_ROOT/state/ofx/state"
 # bar while a menu is open; remembered; back on from View
 expect barhidden=0
 key alt-v
-point-ui menu-item 8
+point-ui menu-item 9
 click-here
 expect menu=- barhidden=1 barshown=0 modal=menubar
 shot menubar-hidden.png
@@ -39,8 +39,8 @@ expect menu=File
 shot menubar-float.png
 key esc
 key alt-v
-expect menu=View menumarked=side-none,perms-cols,sort-name,view-list
-point-ui menu-item 8
+expect menu=View menumarked=side-none,perms-cols,colors,sort-name,view-list
+point-ui menu-item 9
 click-here
 expect menu=- barhidden=0 modal=-
 sh grep -qx "menubar=on" "$OFX_ROOT/state/ofx/state"

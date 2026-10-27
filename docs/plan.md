@@ -685,6 +685,14 @@ cut with "…" (as the trash view's "from"); Owner, Group and Permissions column
 target's for a link, `ui_perms`: ls's letters without the type), not sortable, on and off together
 from View → Show Permissions (checked; `perms=off` in the state file). Entry has uid, gid and the
 link's target (`link_target`); names cached by `id_name`.
+The three columns give way while Name would have under 150 px (200 at first; Michael's window beside
+another app had none), and the status line then says "Permissions hidden: the window is too narrow".
+View → Show Colors (checked; `colors=off`): eza's built-in colours, which his `ls` uses (no eza theme
+of his own) on the terminal's palette, from colors.toml's yellow, green, blue, cyan, magenta:
+permissions r yellow, w red, x green, s/t magenta; owner and group yellow when his; size green, date
+blue; names by kind (folders blue, links cyan, executables green, build files yellow, images and
+video magenta, music cyan, archives red), the cursor's row plain. Tests can ask for another window
+size (run-script's `OFX_SCRIPT_SIZE`, weston's output to match).
 View → Show Menu (checked; `menubar=off`): hidden, the bar takes no room; F10 and Alt with a menu's
 letter still open its menus (not plain Alt: the fields use Alt with letters), and while one is open
 the bar shows, the window moving down for it (as Firefox's). Unchecking shows a note saying so

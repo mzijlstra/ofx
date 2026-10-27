@@ -1643,3 +1643,12 @@ MUTANTS += [
     (ST, "        if (str_eq(key, S(\"menubar\"))) s.no_bar = str_eq(val, S(\"off\"));", ""),
     (ST, "    if (s->no_bar) n += snprintf", "    if (false) n += snprintf"),
 ]
+# ---- View → Show Colors; the status line's note when the permissions give way (2026-10-27)
+MUTANTS += [
+    (U, "    case UM_COLORS: return u->colors;", "    case UM_COLORS: return 1;"),
+    (U, "    case UM_COLORS: return u->colors = !u->colors, (UiAction){ UA_COLORS, 0, false };", "    case UM_COLORS: return (UiAction){ UA_COLORS, 0, false };"),
+    (U, "    if (in->cramped && k < cap) snprintf", "    if (k < cap) snprintf"),
+    (U, "    if (in->cramped && k < cap) snprintf", "    if (false) snprintf"),
+    (ST, "        if (str_eq(key, S(\"colors\"))) s.no_colors = str_eq(val, S(\"off\"));", ""),
+    (ST, "    if (s->no_colors) n += snprintf", "    if (false) n += snprintf"),
+]

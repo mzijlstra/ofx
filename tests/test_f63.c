@@ -165,7 +165,7 @@ static void test_state_zoom(void)
     // No file: no size said.
     CHECK(state_load(&ta, path).zoom == 0);
     Err err;
-    State s = { SIDE_PLACES, true, 96, false, false };
+    State s = { SIDE_PLACES, true, 96, false, false, false };
     CHECK(state_save(path, &s, &err));
     State r = state_load(&ta, path);
     CHECK(r.icons && r.zoom == 96);

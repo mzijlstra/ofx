@@ -470,6 +470,26 @@ static void test_list_columns(void)
     UiInput in = ui_input_none();
     in.menu_item = menu_place(2, UM_PERMS_COLS);
     CHECK(ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in).kind == UA_PERMS_COLS && !u.perms_cols && ui_menu_mark(&u, UM_PERMS_COLS) == 0);
+    // View → Show Colors (2026-10-27): on unless "colors=off"; the entry toggles it.
+    CHECK(!state_load(&ta, path).no_colors);
+    CHECK(state_put(&ta, path, "colors", "off", &e2) && state_load(&ta, path).no_colors);
+    st = (State){ .side = SIDE_PLACES, .no_colors = true };
+    CHECK(state_save(path, &st, &e2) && strstr(read_file(&ta, path).p, "colors=off\n") && !state_load(&ta, path).no_bar);
+    u.colors = true, u.menu_on = true, u.menu = 2;
+    CHECK(ui_menu_mark(&u, UM_COLORS) == 1 && ui_menu_enabled(&u, UM_COLORS));
+    in = ui_input_none(), in.menu_item = menu_place(2, UM_COLORS);
+    CHECK(ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in).kind == UA_COLORS && !u.colors && ui_menu_mark(&u, UM_COLORS) == 0);
+    // The status line says when the permissions gave way for room, whatever else it says.
+    char sl[256];
+    UiInfo info = { .n = 3, .avail = -1, .cramped = true };
+    ui_status_info(sl, sizeof sl, &info);
+    CHECK_STR(str_from_c(sl), "3 items \xC2\xB7 Permissions hidden: the window is too narrow");
+    info.marked = 2;
+    ui_status_info(sl, sizeof sl, &info);
+    CHECK_STR(str_from_c(sl), "2 items selected \xC2\xB7 Permissions hidden: the window is too narrow");
+    info.cramped = false;
+    ui_status_info(sl, sizeof sl, &info);
+    CHECK_STR(str_from_c(sl), "2 items selected");
     // View → Show Menu (2026-10-27): unchecked, the bar hides and a note says how its menus still
     // open; it takes every key, Enter, Esc or OK close it; checked again, no note.
     CHECK(!state_load(&ta, path).no_bar);

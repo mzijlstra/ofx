@@ -12,6 +12,7 @@
 # - fakes for uwsm-app, gio, xdg-open, xdg-terminal-exec and udisksctl first on PATH, logging their
 #   arguments to <scratch-dir>/spawn.log: a test never opens a real file or terminal on Michael's
 #   screen, nor unmounts one of his drives;
+# - the window OFX_SCRIPT_SIZE big (WxH; 936x516 unless the caller says);
 # - XDG_STATE_HOME=<scratch-dir>/state, with a copy of Michael's current theme files (colors.toml,
 #   icons.theme) unless the caller made <scratch-dir>/state already: a theme test edits the copy;
 # - XDG_CONFIG_HOME=<scratch-dir>/config: the sidebar's GTK bookmarks and the XDG user dirs come
@@ -72,6 +73,11 @@ script_env="OFX_GUI_SCRIPT=$sc"
 for a in "$@"; do args="$args '$a'"; done
 root=$(cd "$(dirname "$0")/../.." && pwd)
 here=$(cd "$(dirname "$0")" && pwd)
+# Another window size: weston's output that much bigger, as 944x544 gives 936x516.
+if [ -n "${OFX_SCRIPT_SIZE:-}" ]; then
+    sw=${OFX_SCRIPT_SIZE%x*}; sh_=${OFX_SCRIPT_SIZE#*x}
+    export OFX_WESTON_SIZE="$((sw + 8))x$((sh_ + 28))"
+fi
 sock=$("$here/weston.sh" start "$T") || exit 1
 # Never Michael's display: the socket must be the one weston just made, and not his.
 case $sock in ofx-test-*) ;; *) echo "run-script: unexpected socket '$sock'" >&2; "$here/weston.sh" stop "$T"; exit 1 ;; esac
@@ -79,7 +85,7 @@ case $sock in ofx-test-*) ;; *) echo "run-script: unexpected socket '$sock'" >&2
 cat > "$T/launch.sh" <<EOS
 #!/bin/sh
 echo \$\$ > "$T/run.pid"
-exec env -u DISPLAY -u WAYLAND_SOCKET WAYLAND_DISPLAY="$sock" OFX_TEST_SIZE=936x516 OFX_TEST_WINDOWS="$T/windows" ${script_env} OFX_GUI_ROOT="$T" OFX_GUI_SHOTS="$T/shots" PATH="$T/fakes:\$PATH" XDG_STATE_HOME="$T/state" XDG_CONFIG_HOME="$T/config" XDG_DATA_HOME="$T/data" XDG_CACHE_HOME="$T/cache" \
+exec env -u DISPLAY -u WAYLAND_SOCKET WAYLAND_DISPLAY="$sock" OFX_TEST_SIZE=${OFX_SCRIPT_SIZE:-936x516} OFX_TEST_WINDOWS="$T/windows" ${script_env} OFX_GUI_ROOT="$T" OFX_GUI_SHOTS="$T/shots" PATH="$T/fakes:\$PATH" XDG_STATE_HOME="$T/state" XDG_CONFIG_HOME="$T/config" XDG_DATA_HOME="$T/data" XDG_CACHE_HOME="$T/cache" \
   LSAN_OPTIONS=suppressions=$root/gui/lsan.supp ASAN_OPTIONS=log_path="$T/asan" ${OFX_TEST_LEAK:+OFX_TEST_LEAK=1} ${OFX_GUI_FAIL_FAST:+OFX_GUI_FAIL_FAST=1} \
   ${OFX_TEST_WATCH_DELAY_MS:+OFX_TEST_WATCH_DELAY_MS=$OFX_TEST_WATCH_DELAY_MS} ${OFX_TEST_COPY_DELAY_MS:+OFX_TEST_COPY_DELAY_MS=$OFX_TEST_COPY_DELAY_MS} ${OFX_TEST_CROSS:+OFX_TEST_CROSS=1} ${OFX_TEST_HOME:+HOME=$OFX_TEST_HOME} ${OFX_TEST_COUNT_DELAY_MS:+OFX_TEST_COUNT_DELAY_MS=$OFX_TEST_COUNT_DELAY_MS} ${OFX_TEST_MOUNTINFO:+OFX_TEST_MOUNTINFO=$OFX_TEST_MOUNTINFO} ${OFX_TEST_MEDIA:+OFX_TEST_MEDIA=$OFX_TEST_MEDIA} ${OFX_TEST_SPACE_DELAY_MS:+OFX_TEST_SPACE_DELAY_MS=$OFX_TEST_SPACE_DELAY_MS} ${OFX_TEST_ICONS_MAX:+OFX_TEST_ICONS_MAX=$OFX_TEST_ICONS_MAX} ${OFX_TEST_THUMB_HELD_MAX:+OFX_TEST_THUMB_HELD_MAX=$OFX_TEST_THUMB_HELD_MAX} \
   "$bin" $args >"$T/out" 2>"$T/err"

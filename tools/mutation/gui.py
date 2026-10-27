@@ -482,11 +482,17 @@ MUTANTS = [
     # ---- the three columns give way to a Name under 200 px (2026-10-27)
     (G, '    return app.ui.perms_cols && rest - (3 * GAP + OWNER_W + GROUP_W + PERM_W) >= NAME_MIN_W;', '    return app.ui.perms_cols;', 'f8'),
     (G, '    return app.ui.perms_cols && rest - (3 * GAP + OWNER_W + GROUP_W + PERM_W) >= NAME_MIN_W;', '    return rest - (3 * GAP + OWNER_W + GROUP_W + PERM_W) >= NAME_MIN_W;', 'f8'),
+    # ---- View → Show Colors and the note (2026-10-27). Not run: the colours drawn (pixels:
+    # f8e's list-plain.png, f8b's list-columns.png)
+    (G, '        app.ui.colors = !st.no_colors;', '        app.ui.colors = true;', 'f8'),
+    (G, '        if (state_path(path, sizeof path) && !state_put(&scratch, path, "colors", app.ui.colors ? "on" : "off", &err))', '        if (state_path(path, sizeof path) && !state_put(&scratch, path, "colors", "on", &err))', 'f8'),
+    (G, '                  .cramped = app.ui.perms_cols && !app.ui.grid && !perms_shown((float)GetScreenWidth()) };', '                  .cramped = false };', 'f8'),
+    (G, '                  .cramped = app.ui.perms_cols && !app.ui.grid && !perms_shown((float)GetScreenWidth()) };', '                  .cramped = !perms_shown((float)GetScreenWidth()) };', 'f8'),
     # ---- View → Show Menu (2026-10-27). Not run: the note's drawing and footer hint (pixels:
     # f8b's menubar-hidden.png, menubar-float.png)
     (G, '    return !app.ui.bar_hidden || (app.ui.menu_on && app.ui.menu < UI_MENUS);', '    return !app.ui.bar_hidden;', 'f8'),
     (G, '    return !app.ui.bar_hidden || (app.ui.menu_on && app.ui.menu < UI_MENUS);', '    return true;', 'f8'),
-    (G, ', app.ui.perms_cols = !st.no_perms, app.ui.bar_hidden = st.no_bar;', ', app.ui.perms_cols = !st.no_perms;', 'f8'),
+    (G, ', app.ui.perms_cols = !st.no_perms, app.ui.bar_hidden = st.no_bar,', ', app.ui.perms_cols = !st.no_perms,', 'f8'),
     (G, '        if (state_path(path, sizeof path) && !state_put(&scratch, path, "menubar", app.ui.bar_hidden ? "off" : "on", &err))', '        if (state_path(path, sizeof path) && !state_put(&scratch, path, "menubar", "on", &err))', 'f8'),
     (G, '    if (app.ui.bar_told) return MODAL_BAR;   // the menu bar just hidden (2026-10-27)', '', 'f8'),
     # ---- quit doesn't wait for a hung drive (2026-10-26: no mutant was hang's or f6b's alone)
@@ -582,7 +588,7 @@ def key(m):
     return hashlib.sha1('\0'.join(m[:3]).encode()).hexdigest()[:12]
 
 # The group of a script that failed: run.sh prints "== <script>: FAILED" or "<group>: FAILED".
-GROUP_OF = {'f6b': 'f6', 'f62b': 'f62', 'f62c': 'f62', 'f63b': 'f63', 'f63c': 'f63', 'f64b': 'f64', 'f64c': 'f64', 'f64d': 'f64', 'f7b': 'f7', 'f73b': 'f73', 'f73c': 'f73', 'f73d': 'f73', 'f75b': 'f75', 'f8b': 'f8', 'f8c': 'f8', 'f8d': 'f8'}
+GROUP_OF = {'f6b': 'f6', 'f62b': 'f62', 'f62c': 'f62', 'f63b': 'f63', 'f63c': 'f63', 'f64b': 'f64', 'f64c': 'f64', 'f64d': 'f64', 'f7b': 'f7', 'f73b': 'f73', 'f73c': 'f73', 'f73d': 'f73', 'f75b': 'f75', 'f8b': 'f8', 'f8c': 'f8', 'f8d': 'f8', 'f8e': 'f8'}
 
 # The tags as groups run.sh knows: a script's name (f7b, written before GROUP_OF had it) as its
 # group; anything else dropped, so a mutant never "survives" a group that runs nothing.

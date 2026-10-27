@@ -1,0 +1,35 @@
+# The list's Owner, Group and Permissions in a 760 px window (run.sh: OFX_SCRIPT_SIZE): no room beside
+# a 150 px Name with the sidebar, so they give way and the status line says so; without the sidebar
+# they are there and it doesn't. View → Show Colors off and on, remembered.
+settle
+expect permscols=1 permsshown=0 permsnote=1
+shot list-cramped.png
+# No note in the icon view (no columns there), nor with Show Permissions off
+key ctrl-2
+expect permsnote=0
+key ctrl-1
+expect permsnote=1
+key alt-v
+point-ui menu-item 7
+click-here
+expect permscols=0 permsnote=0
+key alt-v
+point-ui menu-item 7
+click-here
+expect permscols=1 permsnote=1
+key f9
+key f9
+wait-for 2000 sidemode=hidden permsshown=1 permsnote=0
+key alt-v
+expect menumarked=side-none,perms-cols,colors,show-menu,sort-name,view-list
+point-ui menu-item 8
+click-here
+expect menu=- colors=0
+sh grep -qx "colors=off" "$OFX_ROOT/state/ofx/state"
+shot list-plain.png
+key alt-v
+point-ui menu-item 8
+click-here
+expect colors=1
+sh grep -qx "colors=on" "$OFX_ROOT/state/ofx/state"
+quit
