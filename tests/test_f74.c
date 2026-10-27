@@ -110,6 +110,9 @@ static void test_menu_f74(void)
     menu_keys(&u, 1, -'v');
     u.menu_at = menu_place(2, UM_SIDE_PLACES);
     CHECK(menu_keys(&u, 1, UK_ENTER).kind == UA_SIDE_MODE && u.side_mode == SIDE_PLACES);
+    menu_keys(&u, 1, -'e');
+    u.menu_at = menu_place(1, UM_DUPLICATE);
+    CHECK(menu_keys(&u, 1, UK_ENTER).kind == UA_DUPLICATE && !u.menu_on);
     menu_keys(&u, 1, -'g');
     u.menu_at = menu_place(3, UM_TRASH_VIEW);
     CHECK(menu_keys(&u, 1, UK_ENTER).kind == UA_TRASH_VIEW && !u.menu_on);
@@ -136,12 +139,14 @@ static void test_menu_f74(void)
     CHECK(!ui_menu_enabled(&u, UM_ZOOM_RESET) && !ui_menu_enabled(&u, UM_ZOOM_IN));
     u.zoom = 0;
     u.can_write = false;
-    CHECK(!ui_menu_enabled(&u, UM_PASTE) && !ui_menu_enabled(&u, UM_RENAME) && ui_menu_enabled(&u, UM_COPY));
+    CHECK(!ui_menu_enabled(&u, UM_PASTE) && !ui_menu_enabled(&u, UM_RENAME) && !ui_menu_enabled(&u, UM_DUPLICATE) && ui_menu_enabled(&u, UM_COPY));
     u.can_write = true, u.side_focus = true;
     CHECK(!ui_menu_enabled(&u, UM_CUT) && !ui_menu_enabled(&u, UM_COPY) && !ui_menu_enabled(&u, UM_RENAME) && !ui_menu_enabled(&u, UM_TRASH));
+    CHECK(!ui_menu_enabled(&u, UM_DUPLICATE));
     CHECK(ui_menu_enabled(&u, UM_SELECT_ALL) && ui_menu_enabled(&u, UM_INVERT));
     u = menu_ui(0);
     CHECK(!ui_menu_enabled(&u, UM_SELECT_ALL) && !ui_menu_enabled(&u, UM_INVERT) && !ui_menu_enabled(&u, UM_CUT) && !ui_menu_enabled(&u, UM_DELETE));
+    CHECK(!ui_menu_enabled(&u, UM_DUPLICATE));
     CHECK(ui_menu_enabled(&u, UM_RELOAD) && ui_menu_enabled(&u, UM_FIND) && ui_menu_enabled(&u, UM_HOME));
     u = menu_ui(3);
     u.grid = true;   // the first size: in only
@@ -156,6 +161,7 @@ static void test_menu_f74(void)
     u.in_trash = true;
     CHECK(!ui_menu_shown(&u, UM_TRASH) && !ui_menu_enabled(&u, UM_TRASH) && ui_menu_shown(&u, UM_RESTORE) && ui_menu_enabled(&u, UM_RESTORE));
     CHECK(!ui_menu_enabled(&u, UM_COPY) && !ui_menu_enabled(&u, UM_CUT) && !ui_menu_enabled(&u, UM_RENAME) && !ui_menu_enabled(&u, UM_TERMINAL));
+    CHECK(!ui_menu_enabled(&u, UM_DUPLICATE));
     CHECK(ui_menu_enabled(&u, UM_DELETE));
     // The keys step over what isn't shown: in the trash view from Rename past the line to Restore.
     menu_keys(&u, 1, -'e');

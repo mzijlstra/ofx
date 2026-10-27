@@ -162,7 +162,7 @@ static void test_menu_enabled(void)
                             [UM_OPEN] = true, [UM_OPEN_WITH] = true, [UM_PROPERTIES] = true, [UM_CLOSE_ALL] = true, [UM_CLOSE] = true,
                             // F7.4 (test_f74.c has the rest): nothing to undo or paste, no history, at the top,
                             // the list view, Restore only in the trash view
-                            [UM_CUT] = true, [UM_COPY] = true, [UM_SELECT_ALL] = true, [UM_SELECT_MATCH] = true, [UM_INVERT] = true, [UM_RENAME] = true,
+                            [UM_CUT] = true, [UM_COPY] = true, [UM_SELECT_ALL] = true, [UM_SELECT_MATCH] = true, [UM_INVERT] = true, [UM_DUPLICATE] = true, [UM_RENAME] = true,
                             [UM_TRASH] = true, [UM_DELETE] = true, [UM_RELOAD] = true, [UM_SIDE_PLACES] = true, [UM_SIDE_TREE] = true,
                             [UM_SIDE_NONE] = true, [UM_HIDDEN] = true, [UM_SORT_NAME] = true, [UM_SORT_SIZE] = true, [UM_SORT_MTIME] = true,
                             [UM_SORT_REVERSE] = true, [UM_VIEW_LIST] = true, [UM_VIEW_ICONS] = true, [UM_HOME] = true, [UM_TRASH_VIEW] = true,

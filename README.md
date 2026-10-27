@@ -71,7 +71,8 @@ puts its service file in `~/.local/share/dbus-1/services`), and it exits when id
 | File, Open With Other Application… | the apps for the selected files (or the cursor's): the default, the recommended ones (they name the type), then the rest. Type to filter (any part of the name; Alt+C, Alt+W, Alt+R as in find), Tab or Down to the list, Up/Down (`k`/`j`) there, Enter opens all the files with it in one `gio launch`, Esc closes. Alt+D (or the box under the list): make it the default for the type too (`gio mime`, in `~/.config/mimeapps.list`; not for an empty file's type, nor for one `hyprland-mimeapps.list` sets) |
 
 The File menu also has Create New Empty File ("New file", named in the row, as a new folder is).
-View has the sidebar's modes and the sort column as entries of their own; Go has Trash.
+Edit also has Duplicate (a copy beside each, "name (copy)", as a paste here makes; Ctrl+Z removes
+it). View has the sidebar's modes and the sort column as entries of their own; Go has Trash.
 
 An action works on the selected entries, or on the cursor's when none is selected. Copies, moves
 and deletes for good run in the background, up to four at once, each with a row under the files:

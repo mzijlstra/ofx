@@ -178,6 +178,7 @@ typedef enum {
                     // type's default first (F7.3.1)
     UA_RELOAD,      // the folder listed again (F7.4: a drive that sends no change events)
     UA_TRASH_VIEW,  // to the trash view (Go, F7.4)
+    UA_DUPLICATE,   // the marked entries (or the cursor's) copied beside themselves (Edit, F7.4)
 } UiActionKind;
 
 typedef struct {
@@ -198,7 +199,7 @@ enum { UI_MODAL_YES = 1, UI_MODAL_NO, UI_MODAL_SKIP, UI_MODAL_REPLACE, UI_MODAL_
 // entries; UM_SEP is a line between groups.
 typedef enum {
     UM_SEP, UM_NEW_TAB, UM_NEW_WINDOW, UM_NEW_FOLDER, UM_NEW_FILE, UM_OPEN, UM_OPEN_WITH, UM_PROPERTIES, UM_CLOSE_ALL, UM_CLOSE,
-    UM_UNDO, UM_CUT, UM_COPY, UM_PASTE, UM_SELECT_ALL, UM_SELECT_MATCH, UM_INVERT, UM_RENAME, UM_TRASH, UM_DELETE, UM_RESTORE,
+    UM_UNDO, UM_CUT, UM_COPY, UM_PASTE, UM_SELECT_ALL, UM_SELECT_MATCH, UM_INVERT, UM_DUPLICATE, UM_RENAME, UM_TRASH, UM_DELETE, UM_RESTORE,
     UM_RELOAD, UM_SIDE_PLACES, UM_SIDE_TREE, UM_SIDE_NONE, UM_HIDDEN, UM_SORT_NAME, UM_SORT_SIZE, UM_SORT_MTIME, UM_SORT_REVERSE,
     UM_ZOOM_IN, UM_ZOOM_OUT, UM_ZOOM_RESET, UM_VIEW_LIST, UM_VIEW_ICONS,
     UM_PARENT, UM_BACK, UM_FORWARD, UM_HOME, UM_TRASH_VIEW, UM_FIND, UM_LOCATION, UM_TERMINAL,
@@ -227,6 +228,7 @@ static const struct { const char *label, *key, *word; UiEvent ev; char mark; } U
     [UM_SELECT_ALL] = { "Select All", "Ctrl+A", "select-all", { UK_ALL, 0 } },
     [UM_SELECT_MATCH] = { "Select Items Matching\xE2\x80\xA6", "Ctrl+Shift+A", "select-match", { UK_SELECT_MATCH, 0 } },
     [UM_INVERT] = { "Invert Selection", "Ctrl+Shift+I", "invert", { UK_INVERT, 0 } },
+    [UM_DUPLICATE] = { "Duplicate", "", "duplicate" },
     [UM_RENAME] = { "Rename\xE2\x80\xA6", "F2", "rename", { UK_F2, 0 } },
     [UM_TRASH] = { "Move to Trash", "Delete", "trash", { UK_DELETE, 0 } },
     [UM_DELETE] = { "Delete\xE2\x80\xA6", "Shift+Delete", "delete", { UK_SHIFT_DELETE, 0 } },
@@ -263,7 +265,7 @@ static const UiMenuItem UI_MENU_FILE[] = {
 };
 // Move to Trash shows outside the trash view, Restore in it (ui_menu_shown).
 static const UiMenuItem UI_MENU_EDIT[] = {
-    UM_UNDO, UM_SEP, UM_CUT, UM_COPY, UM_PASTE, UM_SEP, UM_SELECT_ALL, UM_SELECT_MATCH, UM_INVERT, UM_SEP, UM_RENAME, UM_SEP,
+    UM_UNDO, UM_SEP, UM_CUT, UM_COPY, UM_PASTE, UM_SEP, UM_SELECT_ALL, UM_SELECT_MATCH, UM_INVERT, UM_SEP, UM_DUPLICATE, UM_RENAME, UM_SEP,
     UM_TRASH, UM_RESTORE, UM_DELETE,
 };
 static const UiMenuItem UI_MENU_VIEW[] = {
@@ -1236,7 +1238,7 @@ static bool ui_menu_enabled(const Ui *u, UiMenuItem it)
     case UM_CUT: case UM_COPY: return here && !u->in_trash;
     case UM_PASTE: return u->can_paste && u->can_write;
     case UM_SELECT_ALL: case UM_SELECT_MATCH: case UM_INVERT: return files;
-    case UM_RENAME: return here && !u->in_trash && u->can_write;
+    case UM_RENAME: case UM_DUPLICATE: return here && !u->in_trash && u->can_write;
     case UM_TRASH: case UM_DELETE: case UM_RESTORE: return here;
     case UM_RELOAD: case UM_SIDE_PLACES: case UM_SIDE_TREE: case UM_SIDE_NONE: case UM_HIDDEN: return true;
     case UM_SORT_NAME: case UM_SORT_SIZE: case UM_SORT_MTIME: case UM_SORT_REVERSE: return true;
@@ -1483,6 +1485,7 @@ static UiAction ui_menu_pick(Ui *u, UiMenuItem it)
         u->sort.key = it == UM_SORT_NAME ? SORT_NAME : it == UM_SORT_SIZE ? SORT_SIZE : SORT_MTIME;
         return (UiAction){ UA_SORT, 0, false };
     case UM_TRASH_VIEW: return (UiAction){ UA_TRASH_VIEW, 0, false };
+    case UM_DUPLICATE: return (UiAction){ UA_DUPLICATE, 0, false };
     case UM_NEW_TAB: return (UiAction){ UA_TAB_NEW, 0, false };
     case UM_NEW_WINDOW: return (UiAction){ UA_NEW_WINDOW, 0, false };
     case UM_NEW_FOLDER: return (UiAction){ UA_NEWFOLDER, 0, false };

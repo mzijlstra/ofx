@@ -362,6 +362,11 @@ Nemo's dialog does: the old selection goes) and closes the bar, an empty Enter o
 selection; any other way out closes it too, as it is there for one Enter. Ctrl+Shift+A, Ctrl+S
 staying the sidebar's.
 
+**Step 3 (2026-10-27): Duplicate** is a paste of the selection into its own folder without the
+clipboard: `copy_here`, which Paste now goes through too, so the names are a paste's ("a
+(copy).txt", "a (copy 2).txt"), it runs as a copy job, and Ctrl+Z removes it. No key (Nemo has
+none). Greyed where Rename is.
+
 **F7.1 as built (2026-10-25):**
 - `ui/ui.c`: the menus as tables (`UI_MENU`, `UI_MENU_ITEM`: label, key, a word for the tests);
   `ui_menu_enabled`, `ui_menu_event` (the keys), `ui_menu_hover` (the pointer), the clicks in

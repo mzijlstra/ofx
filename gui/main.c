@@ -799,13 +799,10 @@ static bool same_dir(const char *a, const char *b)
     return realpath(a, x) && realpath(b, y) && strcmp(x, y) == 0;
 }
 
-static void paste(void)
+// c's files copied (or, cut, moved) into this folder, as one job: here already, a copy gets a free
+// name ("a (copy).txt", "a (copy 2).txt"), and a cut one stays. Paste, and Duplicate (F7.4).
+static void copy_here(const ClipFiles *c)
 {
-    static ClipFiles theirs;
-    arena_reset(&pastea);
-    ClipFrom from = clip_get(&pastea, &theirs);
-    ClipFiles *c = from == CLIP_THEIRS ? &theirs : from == CLIP_OURS || !clip.ok ? &own : NULL;
-    if (!c || c->n == 0) { set_status(true, "The clipboard holds no files"); return; }
     JobRec *r = job_new();
     if (!r) return;
     isize n = 0, here = 0, self = 0, gone = 0;
@@ -844,6 +841,26 @@ static void paste(void)
     r->own_cut = c == &own && c->cut, r->own_gen = own_gen;
     job_submit(r, c->cut ? JOB_MOVE : JOB_COPY, n);
     if (self) set_status(true, "Skipped %td: a folder can't go into itself", self);
+}
+
+static void paste(void)
+{
+    static ClipFiles theirs;
+    arena_reset(&pastea);
+    ClipFrom from = clip_get(&pastea, &theirs);
+    ClipFiles *c = from == CLIP_THEIRS ? &theirs : from == CLIP_OURS || !clip.ok ? &own : NULL;
+    if (!c || c->n == 0) { set_status(true, "The clipboard holds no files"); return; }
+    copy_here(c);
+}
+
+// Edit → Duplicate (F7.4): the selected entries (or the cursor's) copied beside themselves as
+// "name (copy)", as a paste of them here makes; the clipboard isn't touched, Ctrl+Z removes them.
+static void duplicate(void)
+{
+    static ClipFiles dup;
+    arena_reset(&pastea);
+    dup.cut = false, dup.n = targets(&pastea, dup.path, CLIP_PATHS_MAX);
+    if (dup.n > 0) copy_here(&dup);
 }
 
 // An edit line's Ctrl+C or Ctrl+X (F5.2): its selection onto the clipboard as text, in place of
@@ -1249,6 +1266,10 @@ static void act(UiAction a)
     case UA_OPEN_WITH: ow_open(); break;
     case UA_LAUNCH: ow_launch(a.index, a.all); break;
     case UA_PASTE: paste(); break;
+    case UA_DUPLICATE:
+        if (app.ui.marked > CLIP_PATHS_MAX) set_status(true, "%td selected: ofx takes at most %d at a time", app.ui.marked, CLIP_PATHS_MAX);
+        else duplicate();
+        break;
     case UA_UNDO: undo_last(); break;
     case UA_RELOAD: app.reloads_asked++, reload(); break;
     case UA_TRASH_VIEW: go_to(TRASH_URI, STR_EMPTY, 0); break;

@@ -1337,8 +1337,8 @@ MUTANTS += [
     (U, "    case UM_PASTE: return u->can_paste && u->can_write;", "    case UM_PASTE: return u->can_write;"),
     (U, "    case UM_PASTE: return u->can_paste && u->can_write;", "    case UM_PASTE: return u->can_paste;"),
     (U, "    case UM_SELECT_ALL: case UM_SELECT_MATCH: case UM_INVERT: return files;", "    case UM_SELECT_ALL: case UM_SELECT_MATCH: case UM_INVERT: return true;"),
-    (U, "    case UM_RENAME: return here && !u->in_trash && u->can_write;", "    case UM_RENAME: return here && u->can_write;"),
-    (U, "    case UM_RENAME: return here && !u->in_trash && u->can_write;", "    case UM_RENAME: return here && !u->in_trash;"),
+    (U, "    case UM_RENAME: case UM_DUPLICATE: return here && !u->in_trash && u->can_write;", "    case UM_RENAME: case UM_DUPLICATE: return here && u->can_write;"),
+    (U, "    case UM_RENAME: case UM_DUPLICATE: return here && !u->in_trash && u->can_write;", "    case UM_RENAME: case UM_DUPLICATE: return here && !u->in_trash;"),
     (U, "    case UM_TRASH: case UM_DELETE: case UM_RESTORE: return here;", "    case UM_TRASH: case UM_DELETE: case UM_RESTORE: return true;"),
     (U, "    case UM_ZOOM_IN: return u->grid && ui_zoom_level(ui_zoom_px(u)) < UI_ZOOMS - 1;", "    case UM_ZOOM_IN: return u->grid;"),
     (U, "    case UM_ZOOM_OUT: return u->grid && ui_zoom_level(ui_zoom_px(u)) > 0;", "    case UM_ZOOM_OUT: return u->grid;"),
@@ -1381,4 +1381,9 @@ MUTANTS += [
     (U, "            if (l->n > 0) ui_find_open(u), u->find_select = true;", "            if (l->n > 0) ui_find_open(u);"),
     (U, "            if (l->n > 0) ui_find_open(u), u->find_select = true;", "            ui_find_open(u), u->find_select = true;"),
     (U, "    case UM_SELECT_ALL: case UM_SELECT_MATCH: case UM_INVERT: return files;", "    case UM_SELECT_ALL: case UM_INVERT: return files;"),
+]
+# ---- F7.4: Duplicate
+MUTANTS += [
+    (U, "    case UM_DUPLICATE: return (UiAction){ UA_DUPLICATE, 0, false };", ""),
+    (U, "    case UM_RENAME: case UM_DUPLICATE: return here && !u->in_trash && u->can_write;", "    case UM_RENAME: case UM_DUPLICATE: return !u->in_trash && u->can_write;"),
 ]

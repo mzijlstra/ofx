@@ -82,6 +82,46 @@ key enter
 expect confirming=1 menu=-
 key esc
 expect confirming=0 n=4
+# Duplicate: beside itself as "name (copy)", then "(copy 2)"; Ctrl+Z takes the last one away; two
+# selected, both; the clipboard as it was (a.txt, copied above)
+key end
+expect sel=c.txt
+point-ui menu-title 1
+click-here
+point-ui menu-item 10
+click-here
+wait-for 2000 n=5 undo=copy
+sh test -f "$OFX_DIR/c (copy).txt" && [ "$(cat "$OFX_DIR/c (copy).txt")" = c ]
+key end
+expect sel=c.txt
+point-ui menu-title 1
+click-here
+point-ui menu-item 10
+click-here
+wait-for 2000 n=6
+sh test -f "$OFX_DIR/c (copy 2).txt"
+key ctrl-z
+wait-for 2000 n=5
+sh test ! -e "$OFX_DIR/c (copy 2).txt" && rm "$OFX_DIR/c (copy).txt"
+wait-for 2000 n=4
+key home
+key down
+key space
+key space
+expect marked=2
+point-ui menu-title 1
+click-here
+point-ui menu-item 10
+click-here
+wait-for 2000 n=6
+sh test -f "$OFX_DIR/a (copy).txt" && test -f "$OFX_DIR/b (copy).txt"
+pointer-off
+key ctrl-z
+wait-for 2000 n=4
+key esc
+key alt-e
+expect menugrey=undo,restore
+key esc
 # ---- View: the places sidebar, sorted by name, the list; the zoom only in the icon view
 key alt-v
 expect menu=View menuat=reload menumarked=side-places,sort-name,view-list menugrey=zoom-in,zoom-out,zoom-reset menuhid=-
