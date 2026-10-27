@@ -27,7 +27,11 @@ static void bmp_change(UiActionKind op, int i)
     bookmarks_path(file, sizeof file);
     static Bookmarks now;
     arena_reset(&bmwa);
-    bm_parse(&bmwa, read_file(&bmwa, file), &now);
+    Err err = { 0 };
+    if (!bm_read(&bmwa, file, &now, &err)) {
+        set_status(true, "Bookmarks not changed: %s", err.msg);
+        return;
+    }
     if (now.full) {
         set_status(true, "The bookmarks file has more than %d lines: ofx leaves it as it is", BM_MAX);
         return;
@@ -55,8 +59,10 @@ static void bmp_change(UiActionKind op, int i)
     } else if (op == UA_BM_RENAME) {
         bm_rename(&bmwa, &now, j, (Str){ app.ui.bmp_text, app.ui.bmp_len });
     }
-    Err err = { 0 };
-    if (!bm_write(file, bm_format(&bmwa, &now), &err)) {
+    Str text = bm_format(&bmwa, &now);
+    bool ok = now.n == 0 || text.len > 0;
+    if (!ok) err_set(&err, "the bookmarks are too long to write");
+    if (!ok || !bm_write(file, text, &err)) {
         set_status(true, "Bookmarks not changed: %s", err.msg);
         return;
     }

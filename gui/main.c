@@ -456,23 +456,26 @@ static void places_reload(void)
     if (app.ui.side_mode == SIDE_PLACES && app.ui.side.sel < app.places.n) keep = app.places.p[app.ui.side.sel];
     char bm[PATH_MAX];
     places_load(&scratch, &app.places, bookmarks_path(bm, sizeof bm), mountinfo_path());
-    // The Bookmarks menu's (F7.5). With Edit Bookmarks up its cursor stays on its line (the same
-    // text), wherever a change made elsewhere moved it.
-    char keep_uri[PATH_MAX * 3], keep_label[256];
-    bool keeping = app.ui.bmp && app.ui.bmp_list.sel < bmarks.n;
-    if (keeping) {
-        snprintf(keep_uri, sizeof keep_uri, "%.*s", STR_ARG(bmarks.b[app.ui.bmp_list.sel].uri));
-        snprintf(keep_label, sizeof keep_label, "%.*s", STR_ARG(bmarks.b[app.ui.bmp_list.sel].label));
+    // The Bookmarks menu's (F7.5). With Edit Bookmarks up its cursor stays on its line, found
+    // again as a change finds it (bm_locate), wherever a change made elsewhere moved it; the lines
+    // as they were are copied into bmwa, which no change holds by now (they reload after writing).
+    static Bookmarks prev;
+    int bm_keep = -1;
+    if (app.ui.bmp && app.ui.bmp_list.sel < bmarks.n) {
+        arena_reset(&bmwa);
+        prev.n = bmarks.n, prev.full = bmarks.full;
+        for (int i = 0; i < bmarks.n; i++) {
+            prev.b[i] = bmarks.b[i];
+            prev.b[i].uri = (Str){ arena_cstr(&bmwa, bmarks.b[i].uri), bmarks.b[i].uri.len };
+            prev.b[i].label = (Str){ arena_cstr(&bmwa, bmarks.b[i].label), bmarks.b[i].label.len };
+        }
+        bm_keep = (int)app.ui.bmp_list.sel;
     }
     arena_reset(&bma);
     bm_parse(&bma, read_file(&bma, bm), &bmarks);
     if (app.ui.bmp) {
-        int at = (int)app.ui.bmp_list.sel;
-        for (int i = 0; keeping && i < bmarks.n; i++)
-            if (str_eq(bmarks.b[i].uri, str_from_c(keep_uri)) && str_eq(bmarks.b[i].label, str_from_c(keep_label))) {
-                at = i;
-                break;
-            }
+        int at = bm_keep >= 0 ? bm_locate(&bmarks, &prev, bm_keep) : -1;
+        if (at < 0) at = (int)app.ui.bmp_list.sel;
         ui_set(&app.ui.bmp_list, bmarks.n, at >= bmarks.n ? bmarks.n - 1 : at);
     }
     space_ask(&app.places, app.cwd);
@@ -512,9 +515,11 @@ static void bookmark_add(void)
     bookmarks_path(file, sizeof file);
     static Bookmarks now;
     arena_reset(&bmwa);
-    bm_parse(&bmwa, read_file(&bmwa, file), &now);
     Err err = { 0 };
-    if (!bm_add(&bmwa, &now, app.cwd, &err) || !bm_write(file, bm_format(&bmwa, &now), &err)) {
+    bool ok = bm_read(&bmwa, file, &now, &err) && bm_add(&bmwa, &now, app.cwd, &err);
+    Str text = ok ? bm_format(&bmwa, &now) : STR_EMPTY;
+    if (ok && !text.len) err_set(&err, "the bookmarks are too long to write"), ok = false;   // (n > 0 after an add)
+    if (!ok || !bm_write(file, text, &err)) {
         set_status(true, "No bookmark: %s", err.msg);
         return;
     }

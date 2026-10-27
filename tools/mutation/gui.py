@@ -366,7 +366,7 @@ MUTANTS = [
     (G, '    u->can_bookmark = !u->in_trash && !bmarks.full && bm_find(&bmarks, app.cwd) < 0;', '    u->can_bookmark = !u->in_trash && !bmarks.full;', 'f75'),
     (G, '        if (bmarks.b[i].path[0] && k-- == 0) return &bmarks.b[i];', '        if (k-- == 0) return &bmarks.b[i];', 'f75'),
     (G, '    return b->label.len ? b->label : strcmp(b->path, "/") == 0', '    return false ? b->label : strcmp(b->path, "/") == 0', 'f75'),
-    (G, '    bm_parse(&bmwa, read_file(&bmwa, file), &now);', '    now.n = 0;', 'f75'),
+    (G, '    bool ok = bm_read(&bmwa, file, &now, &err) && bm_add(', '    bool ok = (now.n = 0, true) && bm_add(', 'f75'),
     # Not a mutant: bookmark_add's places_reload, the watch reads them again 100 ms later; it is kept so
     # the menu is right at once.
     (G, '        if (b) go_to(b->path, STR_EMPTY, 0);', '', 'f75'),
@@ -394,8 +394,12 @@ MUTANTS = [
     (G, '        if (ui_press(&app.ow_press, app.ui.bmp_list.top + h.bmp_row, now_ms()) == 2) in->bmp_drow = h.bmp_row;', '        if (false) in->bmp_drow = h.bmp_row;', 'f75'),
     (G, '    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_B) return UK_EDIT_BOOKMARKS;', '', 'f75'),
     (G, '    if (m == GLFW_MOD_ALT && key == GLFW_KEY_DOWN) return UK_ALT_DOWN;   // (Edit Bookmarks\' move down)', '', 'f75'),
-    (G, '                at = i;\n                break;', '                break;', 'f75'),
+    (G, '        int at = bm_keep >= 0 ? bm_locate(&bmarks, &prev, bm_keep) : -1;', '        int at = -1;', 'f75'),
     # Not run: the bmp buttons' and the field's drawing, the hint (pixels); edit-bookmarks.png shows them.
+    # ---- F7.5: reviewer-2's MEDIUM, a bookmarks file not read whole
+    (G, '    bool ok = bm_read(&bmwa, file, &now, &err) && bm_add(', '    bool ok = (bm_read(&bmwa, file, &now, &err) || true) && bm_add(', 'f75'),
+    # Not run: bmp_change's bm_read refusal (with the file unreadable the panel lists no line to act
+    # on) and the empty-format refusals (an over-a-MiB file); test_f75.c covers bm_read and bm_format.
     # ---- F7.5: Keyboard Shortcuts
     (G, '    if (app.ui.keys) return MODAL_KEYS;     // Keyboard Shortcuts (F7.5)', '', 'f75'),
     (G, '    if ((m == 0 || m == GLFW_MOD_CONTROL) && key == GLFW_KEY_F1) return UK_SHORTCUTS;', '    if (m == 0 && key == GLFW_KEY_F1) return UK_SHORTCUTS;', 'f75'),

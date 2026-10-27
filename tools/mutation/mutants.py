@@ -1470,3 +1470,14 @@ MUTANTS += [
     (U, "        if (in->modal == UI_MODAL_NO) return ui_keys_close(u), (UiAction){ UA_NONE, 0, false };", ""),
     (U, "        if (in->ow_wheel) ui_scroll(&u->keys_list, in->ow_wheel);", ""),
 ]
+# ---- F7.5: reviewer-2's MEDIUM (a file not read whole) and Q2 (links)
+MUTANTS += [
+    (BMK, "    if (!text.len && (stat(file, &st) == 0 ? st.st_size > 0 : errno != ENOENT)) return", "    if (false) return"),
+    (BMK, "(stat(file, &st) == 0 ? st.st_size > 0 : errno != ENOENT)", "(stat(file, &st) == 0 ? st.st_size > 0 : false)"),
+    (BMK, "    if (lstat(file, &lst) == 0 && S_ISLNK(lst.st_mode)) {", "    if (false) {"),
+    (BMK, "        if (!realpath(file, real)) return err_set(err, \"%s: a link to nothing (%s)\", file, strerror(errno)), false;", "        if (!realpath(file, real)) return false;"),
+    (BMK, "    if (stat(file, &st) == 0 && S_ISREG(st.st_mode) && st.st_nlink > 1) {", "    if (false) {"),
+    # Not a mutant: bm_write's `S_ISREG` before the in-place write; without it a folder (nlink > 1)
+    # fails to open there instead of failing to be renamed over: false either way, nothing left.
+    (BMK, "        bool ok = bm_put(fd, text);\n        int e = errno;", "        bool ok = true;\n        int e = errno;"),
+]

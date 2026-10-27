@@ -1,8 +1,14 @@
 // F7.5's unit tests: the GTK bookmarks file read, changed and written (fs/bookmarks.c). Included by
 // test.c; every file under the run's root, the guard on it.
 
+static bool link_ok(const char *from, const char *to)
+{
+    return link(from, to) == 0;
+}
+
 static void test_bookmarks(void)
 {
+    char out[700];
     ops_guard(root);
     Arena *a = &ta;
     static Bookmarks bm;
@@ -66,8 +72,43 @@ static void test_bookmarks(void)
     chmod(dir, 0500);
     CHECK(!bm_write(file, S("file:///z\n"), &err) && str_eq(read_file(a, file), S("file:///x X\nfile:///y\n")));
     chmod(dir, 0700);
+    // Read for a change (reviewer-2, MEDIUM): a file there but not read whole (unreadable) is
+    // refused, so no change is written over it; one not there yet is read as empty.
+    chmod(file, 0000);
+    CHECK(!bm_read(a, file, &bm, &err) && strstr(err.msg, "can't be read"));
+    chmod(file, 0600);
+    CHECK(bm_read(a, file, &bm, &err) && bm.n == 2);
+    char none[700];
+    snprintf(none, sizeof none, "%s/none/bookmarks", dir);
+    CHECK(bm_read(a, none, &bm, &err) && bm.n == 0);
+    chmod(dir, 0000);   // its folder can't be searched: can't tell, refused
+    CHECK(!bm_read(a, file, &bm, &err));
+    chmod(dir, 0700);
+    // A format that doesn't fit its arena: empty (the callers refuse to write it).
+    static u8 small_mem[64];
+    Arena small;
+    arena_init(&small, "small", small_mem, sizeof small_mem);
+    static Bookmarks two;
+    bm_parse(a, S("file:///a/rather/long/path/that/fills/the/arena\nfile:///and/another/one/beside/it\n"), &two);
+    CHECK(str_eq(bm_format(&small, &two), STR_EMPTY));
+    // A link (dotfiles kept elsewhere): its target written, the link still a link; a file with two
+    // names: written in place, both see it.
+    char target[700], link[700];
+    snprintf(target, sizeof target, "%s/bm/real-bookmarks", root);
+    snprintf(link, sizeof link, "%s/bm/linked/bookmarks", root);
+    mkdirs(at("bm/linked"));
+    put(target, "file:///old\n");
+    CHECK(symlink(target, link) == 0);
+    CHECK(bm_write(link, S("file:///new\n"), &err));
+    struct stat lst;
+    CHECK(lstat(link, &lst) == 0 && S_ISLNK(lst.st_mode) && str_eq(read_file(a, target), S("file:///new\n")));
+    char other[700];
+    snprintf(other, sizeof other, "%s/bm/other-name", root);
+    CHECK(link_ok(target, other));
+    CHECK(bm_write(target, S("file:///both\n"), &err) && str_eq(read_file(a, other), S("file:///both\n")));
+    snprintf(out, sizeof out, "%s/bm/linked/dangling", root);
+    CHECK(symlink("/nonexistent/ofx-bm", out) == 0 && !bm_write(out, S("x\n"), &err) && strstr(err.msg, "link to nothing"));
     // The guard: a bookmarks file outside the root is refused before anything is made.
-    char out[600];
     snprintf(out, sizeof out, "%s/gtk-3.0/bookmarks", decoy);
     CHECK(!bm_write(out, S("file:///x\n"), &err) && strstr(err.msg, "outside"));
     snprintf(out, sizeof out, "%s/gtk-3.0", decoy);

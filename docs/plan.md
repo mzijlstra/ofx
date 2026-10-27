@@ -409,6 +409,12 @@ reads the file again and finds the line by its text and how many like it come be
 (`bm_locate`), so a change made elsewhere meanwhile isn't undone; the panel follows the watch's
 reloads, its cursor on the same line. A file past `BM_MAX` lines is left as it is.
 
+**reviewer-2 at e2f93ed:** MEDIUM, landed: a change wrote back over a file it couldn't read whole
+(unreadable: rewritten with the new line alone; too big for the arena: emptied). `bm_read` refuses
+a file that is there but read empty (or can't be told), and an empty format with lines is refused
+before writing. Q2, landed: as GLib, a symbolic link's target is written (the link kept) and a file
+with other names is written in place. Q4, landed: the panel follows its line with `bm_locate`.
+
 **Step 3 (2026-10-27): Help**, one entry: Keyboard Shortcuts (F1, Ctrl+F1, Alt+H). ui/'s `UI_KEYS`
 (a section, an action, a key, a second key) in 13 sections; the panel (`Ui.keys`, gui/shortcuts.c)
 shows the rows the filter's text leaves (action or keys, case folded), each section's heading

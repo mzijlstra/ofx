@@ -52,6 +52,17 @@ static void bm_parse(Arena *a, Str text, Bookmarks *out)
     }
 }
 
+// The file read for a change: false, saying why, when it is there but not read whole (unreadable,
+// too big for a), since a change written over it would drop its lines.
+static bool bm_read(Arena *a, const char *file, Bookmarks *out, Err *err)
+{
+    struct stat st;
+    Str text = read_file(a, file);
+    if (!text.len && (stat(file, &st) == 0 ? st.st_size > 0 : errno != ENOENT)) return err_set(err, "%s can't be read", file), false;
+    bm_parse(a, text, out);
+    return true;
+}
+
 // The place of path's bookmark, -1 for none.
 static int bm_find(const Bookmarks *bm, const char *path)
 {
@@ -93,28 +104,48 @@ static Str bm_format(Arena *a, const Bookmarks *bm)
     return (Str){ out, n };
 }
 
+// text written whole into fd; false when a write or the sync fails.
+static bool bm_put(int fd, Str text)
+{
+    for (isize at = 0; at < text.len;) {
+        ssize_t k = write(fd, text.p + at, (size_t)(text.len - at));
+        if (k <= 0) return false;
+        at += k;
+    }
+    return fsync(fd) == 0;
+}
+
 // text as the bookmarks file `file`: a new file beside it (its mode kept, 0644 for a first one),
-// synced, renamed over it; its folder made (0700, as GLib makes it) when there is none. Refused
-// outside OFX_GUI_ROOT when that is set (ops_allowed), as every write of ofx's.
+// synced, renamed over it; its folder made (0700, as GLib makes it) when there is none. As GLib
+// does (reviewer-2): a symbolic link's target is written, the link kept (dotfiles kept elsewhere);
+// a file with other names (st_nlink > 1) is written in place, so they see it too. Refused outside
+// OFX_GUI_ROOT when that is set (ops_allowed), as every write of ofx's.
 static bool bm_write(const char *file, Str text, Err *err)
 {
+    char real[PATH_MAX];
+    struct stat lst, st;
+    if (lstat(file, &lst) == 0 && S_ISLNK(lst.st_mode)) {
+        if (!realpath(file, real)) return err_set(err, "%s: a link to nothing (%s)", file, strerror(errno)), false;
+        file = real;
+    }
     if (!ops_allowed(file, err)) return false;
+    if (stat(file, &st) == 0 && S_ISREG(st.st_mode) && st.st_nlink > 1) {
+        int fd = open(file, O_WRONLY | O_TRUNC | O_CLOEXEC);
+        if (fd < 0) return err_set(err, "%s: %s", file, strerror(errno)), false;
+        bool ok = bm_put(fd, text);
+        int e = errno;
+        if (close(fd) != 0 || !ok) return err_set(err, "%s: %s", file, strerror(ok ? errno : e)), false;
+        return true;
+    }
     char dir[PATH_MAX], tmp[PATH_MAX];
     Str d = path_dir(str_from_c(file));
     snprintf(dir, sizeof dir, "%.*s", STR_ARG(d));
     if (mkdir(dir, 0700) != 0 && errno != EEXIST) return err_set(err, "%s: %s", dir, strerror(errno)), false;
     if (snprintf(tmp, sizeof tmp, "%s/.bookmarks.ofx-%d", dir, (int)getpid()) >= (int)sizeof tmp) return err_set(err, "the path is too long"), false;
-    struct stat st;
     mode_t mode = stat(file, &st) == 0 ? st.st_mode & 0777 : 0644;
     int fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC | O_NOFOLLOW, mode);
     if (fd < 0) return err_set(err, "%s: %s", tmp, strerror(errno)), false;
-    bool ok = fchmod(fd, mode) == 0;
-    for (isize at = 0; ok && at < text.len;) {
-        ssize_t k = write(fd, text.p + at, (size_t)(text.len - at));
-        if (k <= 0) ok = false;
-        else at += k;
-    }
-    ok = ok && fsync(fd) == 0;
+    bool ok = fchmod(fd, mode) == 0 && bm_put(fd, text);
     int e = errno;
     if (close(fd) != 0) ok = false;
     if (ok && rename(tmp, file) == 0) return true;

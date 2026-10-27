@@ -101,6 +101,18 @@ key home
 keys down down down
 key enter
 wait-for 2000 bmp=0 n=2 bmhere=2
+# A file ofx can't read (mode 000): neither Ctrl+D nor a change in the panel writes over it
+# (reviewer-2: it was rewritten with the new line alone); it stays as it was
+key alt-home
+wait-for 2000 n=1 canbm=1
+sh cp "$OFX_ROOT/config/gtk-3.0/bookmarks" "$OFX_ROOT/bm.before" && chmod 000 "$OFX_ROOT/config/gtk-3.0/bookmarks"
+key ctrl-d
+expect status=No bookmark: can't be read
+key ctrl-b
+wait-for 2000 bmp=1 bmpn=0
+key delete
+key esc
+sh chmod 644 "$OFX_ROOT/config/gtk-3.0/bookmarks" && cmp -s "$OFX_ROOT/bm.before" "$OFX_ROOT/config/gtk-3.0/bookmarks"
 # A file past ofx's 256 lines: nothing added, nothing changed; its lines as they were
 sh for i in $(seq 300); do printf 'file:///many/%d\n' "$i"; done >> "$OFX_ROOT/config/gtk-3.0/bookmarks"
 wait-for 2000 bmn=8 canbm=0
