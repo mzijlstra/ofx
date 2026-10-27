@@ -372,6 +372,25 @@ Go → Trash shows it). Shift+Enter in the files is Open With Other Application,
 entries or the cursor's (the trash view says no, as the menu greys it); on a path button it stays a
 background tab, and in the sidebar, the find bar, a question and the edit line it stays Enter.
 
+**F7.5 decided (Michael, 2026-10-27): the Bookmarks and Help menus.**
+- **Bookmarks:** Add Bookmark (Ctrl+D, Nemo's) adds the folder shown to the GTK bookmarks file
+  (`$XDG_CONFIG_HOME/gtk-3.0/bookmarks`, shared with Nemo and GTK's file choosers): ofx writes it
+  from now on, a whole new file renamed into place, read again just before so a change Nemo made
+  meanwhile is kept; lines ofx doesn't use (other schemes) kept as they are. Greyed for what can't be
+  bookmarked: the trash view, a folder already there. Edit Bookmarks… (Ctrl+B, Nemo's): a panel,
+  now, to rename, remove and reorder; F8's right-click menu reuses its actions. The menu lists the
+  first 8 bookmarks in the file's order (Michael: 8); with more, a last entry "N more in Edit
+  Bookmarks…" opens the panel (no "Top 8" heading: the order is his, not a ranking). ofx watches
+  the file, so Nemo's changes show at once.
+- **Help:** no manual (Nemo's All Topics is broken on his machine, and he never used one): a
+  Keyboard Shortcuts panel on F1 and Ctrl+F1, and the menu's entry. Sections by where the keys
+  work (moving, opening, selecting, changing files, tabs and windows, view, the sidebar, the path
+  buttons, the find bar, the edit and location lines, the job rows); each row the action, its key
+  and a second key where there is one; type to filter, as Open With. One table in ui/ for it, and
+  a test that every menu entry's key is in it under the same action.
+- Steps: 1 the Bookmarks menu, Add Bookmark, the watch; 2 the Edit Bookmarks panel; 3 the Help
+  menu and the shortcuts panel. F7 ends there: the `--full` GUI mutant run before its install.
+
 **F7.1 as built (2026-10-25):**
 - `ui/ui.c`: the menus as tables (`UI_MENU`, `UI_MENU_ITEM`: label, key, a word for the tests);
   `ui_menu_enabled`, `ui_menu_event` (the keys), `ui_menu_hover` (the pointer), the clicks in
