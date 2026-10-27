@@ -44,7 +44,7 @@ Omarchy's theme: the binary, the folder `tools/ofx`, the window's title and Wayl
 | F7.1.1 | An empty file opens with the default app for its name's type (gio types it `application/x-zerosize`); F2 selects a name up to its extension; a new name is selected whole | Below |
 | F7.2 | Properties: a panel with the file's details and permissions | Below |
 | F7.3 | Open With Other Application: a panel listing the apps for the file's type | Below |
-| F8 | Right-click menus, with "Open with" (the apps the freedesktop MIME lists name for the file's type) | |
+| F8 | Right-click menus: the selection, empty space, a folder elsewhere, a tab | Below |
 
 Each milestone ends in a reviewer-2 round, then Michael's go before `make install`.
 
@@ -676,6 +676,38 @@ Default and Recommended equal GIO's; GLib's rewrite of a copy adds the two lines
   index.theme files read again; start-up is back to about 51 ms), each app's texture when its row
   is first drawn, all of them dropped when it closes (`ow_drop`). SVG icons (theme, pixmaps/ or a
   path) are drawn with nanosvg, vendored; only for the apps, the files' icons stay PNG.
+
+## F8 design (2026-10-27)
+
+**F8 decided (Michael, 2026-10-27): every recommendation on the page**
+(https://claude.ai/artifact/QtvC5rGjd4bMTvTeSX3kCe, Nemo 6.6.4's right-click menus entry by entry),
+**except Q2:** no list of apps, just Open and Open With Other Application….
+- **The rules:** one menu per kind of target: the files' selection, empty space (the folder shown),
+  a folder elsewhere (a tree row, a path button, a place: the same entries wherever), a tab. Built
+  as the menu bar's: the same panel and keys, each entry runs its key's action and shows the key,
+  greyed when it can't act now, hidden when it doesn't fit the target; flat, no submenus. It opens
+  at the pointer, kept inside the window; from the keyboard under the cursor's row, place or path
+  button (Q8: Shift+F10 and the Menu key). Right-click a marked entry: the marks; an unmarked one
+  (Q3, as Nemo and GTK): the marks clear, the cursor goes there, the menu acts on it.
+- **An entry:** Open (a file and a folder alike, Q2), Open in New Tab (the tab behind, middle
+  click shown), Open in New Window (a folder; F7.1's New Window given it); Open With Other
+  Application… (Shift+Enter); Cut, Copy, Paste Into Folder (one folder, Q4), Duplicate; Make Link
+  (Q5: "Link to <name>" beside it, absolute target, undoable, Ctrl+M; in Edit too), Rename… (hidden
+  with several marked); Open in Terminal (a folder, Q6), Follow Link (a link: its target's folder,
+  the target selected, as --select; hidden when broken, Q7), Add Bookmark (a folder, hidden when
+  one already); Move to Trash / Delete… / Restore as in Edit; Properties….
+- **Empty space:** New Folder, New File (Empty Trash… instead in the trash view); Terminal Here;
+  Show Hidden Files (checked); Paste, Select All; Add Bookmark; Properties… of the folder shown,
+  whatever is marked.
+- **A folder elsewhere:** Open, Open in New Tab, Open in New Window, Open in Terminal; Cut, Copy (not
+  on a place), Paste Into Folder; Add Bookmark (hidden when one); on a bookmark Edit Bookmarks'
+  Rename…, Move Up, Move Down, Remove, then Edit Bookmarks…; Eject on a drive with the button;
+  Empty Trash… on Trash (greyed when empty); Properties… of that folder (Q10: the panel takes a path).
+  No trash or delete there: one click from the folder you're in, or one above it.
+- **A tab:** New Tab; Move Tab Left, Right (greyed at the ends); Close Tab, Close Other Tabs (Q9).
+- **Out:** the job rows and the text lines (Q1: later, if missed), Nemo's scripts and actions, Open
+  as Root, Copy to / Move to, pins and favourites, templates, mount/start/stop/detect, Arrange
+  Items (View has it), Open containing folder (no recursive search).
 
 ## F6.4 design (2026-10-24)
 
