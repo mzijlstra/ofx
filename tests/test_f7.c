@@ -167,7 +167,7 @@ static void test_menu_enabled(void)
                             [UM_TRASH] = true, [UM_DELETE] = true, [UM_RELOAD] = true, [UM_SIDE_PLACES] = true, [UM_SIDE_TREE] = true,
                             [UM_SIDE_NONE] = true, [UM_HIDDEN] = true, [UM_SORT_NAME] = true, [UM_SORT_SIZE] = true, [UM_SORT_MTIME] = true,
                             [UM_SORT_REVERSE] = true, [UM_VIEW_LIST] = true, [UM_VIEW_ICONS] = true, [UM_HOME] = true, [UM_TRASH_VIEW] = true,
-                            [UM_FIND] = true, [UM_LOCATION] = true, [UM_TERMINAL] = true, [UM_EDIT_BOOKMARKS] = true, [UM_SHORTCUTS] = true };
+                            [UM_FIND] = true, [UM_LOCATION] = true, [UM_TERMINAL] = true, [UM_EDIT_BOOKMARKS] = true, [UM_SHORTCUTS] = true, [UM_ABOUT] = true };
     for (int it = 0; it < UM_ITEMS; it++) CHECK(ui_menu_enabled(&u, (UiMenuItem)it) == want[it]);
     u = menu_ui(0);
     CHECK(!ui_menu_enabled(&u, UM_OPEN) && !ui_menu_enabled(&u, UM_OPEN_WITH) && ui_menu_enabled(&u, UM_NEW_FILE));

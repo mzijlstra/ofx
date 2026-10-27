@@ -69,6 +69,7 @@ puts its service file in `~/.local/share/dbus-1/services`), and it exits when id
 | Ctrl+J, Ctrl+Down | the keys to the find bar when it is open, then to the job rows' ×: Up/Down (`k`/`j`) move, Enter asks to cancel that job; Ctrl+J again or Esc back to the list |
 | Ctrl+Q | close every ofx window (each asks first while its jobs run or wait) |
 | F1, Ctrl+F1 | Keyboard Shortcuts: every key by where it works, type to filter, Esc closes (also Help, Alt+H) |
+| Help → About | the name, the build's version (`ofx --version` too: the last commit's date and hash, `+dirty` with changes), the license; Esc, Enter or Close close it |
 | F10, Alt+F, Alt+E, Alt+V, Alt+G, Alt+B, Alt+H | the File, Edit, View, Go, Bookmarks and Help menus: Up/Down (`k`/`j`) move, Left/Right (`h`/`l`) the next menu, Enter picks, Esc closes; also by the pointer. Each entry does what its key does; what can't be done now is greyed, the current sidebar, sort and view marked |
 | Ctrl+Shift+A | Select Items Matching: the find bar as "Select", the same field and toggles; Enter makes the selection every match and closes it, Esc leaves the selection as it was |
 | Ctrl+Shift+I | invert the selection |
@@ -164,6 +165,11 @@ Empty Trash deletes all of it after asking. Rename, paste and a new folder don't
   `text/uri-list` and plain paths. Without it the clipboard stays inside ofx.
 
 `docs/plan.md` has the plan and what is next.
+
+## License
+
+MIT (`LICENSE`). The vendored raylib, Clay and nanosvg are zlib-licensed (their own files under
+`vendor/`).
 
 ## Testing
 

@@ -366,8 +366,34 @@ static void test_shortcuts(void)
     ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in);
     CHECK(!u.keys);
     int m = ui_menu_of('h');
-    CHECK(m == UI_MENUS - 1 && strcmp(UI_MENU[m].title, "Help") == 0 && UI_MENU[m].n == 1);
+    CHECK(m == UI_MENUS - 1 && strcmp(UI_MENU[m].title, "Help") == 0 && UI_MENU[m].n == 3);
     menu_keys(&u, 2, -'h', UK_ENTER);
     CHECK(u.keys && !u.menu_on);
     ui_keys_close(&u);
+}
+
+// Help → About (2026-10-27): the last entry; up, it takes every key (none reaches the list), Esc
+// or Enter close it, and so does Close.
+static void test_about(void)
+{
+    Ui u = menu_ui(5);
+    CHECK(UI_MENU[UI_MENUS - 1].items[UI_MENU[UI_MENUS - 1].n - 1] == UM_ABOUT && ui_menu_enabled(&u, UM_ABOUT));
+    menu_keys(&u, 3, -'h', UK_UP, UK_ENTER);   // (Up from the first: round to the last)
+    CHECK(u.about && !u.menu_on);
+    UiAction a = menu_keys(&u, 4, UK_DOWN, 0x100 + 'j', UK_DELETE, UK_SHORTCUTS);
+    CHECK(u.about && a.kind == UA_NONE && u.list.sel == 0 && !u.keys);
+    UiInput in = ui_input_none();   // nor any click under it
+    in.click = 2, in.backs = 1;
+    CHECK(ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in).kind == UA_NONE && u.list.sel == 0 && u.about);
+    menu_keys(&u, 1, UK_ESC);
+    CHECK(!u.about);
+    menu_keys(&u, 3, -'h', UK_UP, UK_ENTER);
+    menu_keys(&u, 1, UK_ENTER);
+    CHECK(!u.about);
+    menu_keys(&u, 3, -'h', UK_UP, UK_ENTER);
+    in = ui_input_none();
+    in.modal = UI_MODAL_NO;
+    CHECK(ui_input_acts(&in));
+    ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in);
+    CHECK(!u.about);
 }

@@ -14,7 +14,7 @@ IMG_LIBS = -lturbojpeg -lwebp -lpng16 -lgif -lz
 
 PREFIX  ?= $(HOME)/.local
 
-.PHONY: all release test test-fm1 install clean
+.PHONY: all release test test-fm1 install clean FORCE
 
 all: build/ofx build/ofx-clean build/ofx-fm1
 
@@ -110,9 +110,19 @@ $(OFX_WL)/stamp: | build
 
 # -isystem: vendored and generated headers are not held to our warning flags. --wrap: see the
 # app id note in gui/main.c.
-VENDOR   = -isystem vendor/clay -isystem vendor/nanosvg -isystem $(RL) -isystem $(RL)/external/glfw/include -isystem $(OFX_WL) $(patsubst -I%,-isystem %,$(shell pkg-config --cflags freetype2))
+VENDOR   = -iquote build -isystem vendor/clay -isystem vendor/nanosvg -isystem $(RL) -isystem $(RL)/external/glfw/include -isystem $(OFX_WL) $(patsubst -I%,-isystem %,$(shell pkg-config --cflags freetype2))
 LINK     = -Wl,--wrap=glfwDefaultWindowHints $(GUI_LIBS)
-SRC      = $(wildcard base/*.c base/*.h fs/*.c ui/*.c gui/*.c)
+SRC      = $(wildcard base/*.c base/*.h fs/*.c ui/*.c gui/*.c) build/version.h
+
+# Help → About's version (2026-10-27): the last commit's date and short hash, +dirty with changes to
+# tracked files; "unknown" outside git (the GUI mutants' copies). Rewritten only when it changes, so
+# an unchanged tree doesn't rebuild.
+build/version.h: FORCE | build
+	@v="$$(git log -1 --format='%cd (%h' --date=format:%Y.%m.%d 2>/dev/null)"; \
+	if [ -z "$$v" ]; then v=unknown; else git diff --quiet HEAD 2>/dev/null || v="$$v+dirty"; v="$$v)"; fi; \
+	printf '#define OFX_VERSION "%s"\n' "$$v" > $@.tmp; \
+	cmp -s $@.tmp $@ && rm $@.tmp || mv $@.tmp $@
+FORCE:
 
 build/ofx: $(SRC) $(RL_OUT)/libraylib.a $(OFX_WL)/stamp Makefile | build
 	$(CC) $(CFLAGS) $(VENDOR) $(DEBUG) -o $@ gui/main.c $(LINK)

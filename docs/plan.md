@@ -421,6 +421,15 @@ shows the rows the filter's text leaves (action or keys, case folded), each sect
 over its rows; a test makes every menu entry with a key have a row of its name and key. The
 script's `wheel` goes through `wheel_at` now, as the mouse's does, so a panel's list takes it.
 
+**After F7 (Michael, 2026-10-27): Help → About** after all, under a line: "OFX" large, "Omarchy File
+Explorer", "By A.M.S. Zijlstra", the version, "MIT License", "Built with raylib, Clay and
+nanosvg", Close (gui/about.c, `Ui.about`). The version is the last commit's date and short hash,
+`+dirty` with changes to tracked files (build/version.h, written by make only when it changes;
+"unknown" without git, as in the GUI mutants' copies); `ofx --version` prints it. MIT as Omarchy
+is; who holds the copyright (his name, or his employer, for work on company time) is his to check.
+The wheel over a panel's list (Open With, Keyboard Shortcuts) drew nothing until the next input:
+`ow_wheel` is in `ui_input_acts` now (f4fced7).
+
 **F7.1 as built (2026-10-25):**
 - `ui/ui.c`: the menus as tables (`UI_MENU`, `UI_MENU_ITEM`: label, key, a word for the tests);
   `ui_menu_enabled`, `ui_menu_event` (the keys), `ui_menu_hover` (the pointer), the clicks in

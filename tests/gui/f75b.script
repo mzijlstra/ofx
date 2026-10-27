@@ -41,4 +41,31 @@ pointer-off
 key alt-h
 expect menu=Help menuat=shortcuts
 key esc
+# Help → About (2026-10-27): by the pointer; it takes every key (t: no terminal); Esc, Enter, Close
+point-ui menu-title 5
+click-here
+point-ui menu-item 2
+click-here
+expect modal=about menu=-
+shot about.png
+type t
+key down
+expect modal=about
+key esc
+expect modal=-
+key alt-h
+key up
+expect menuat=about
+key enter
+expect modal=about
+key enter
+expect modal=-
+key alt-h
+key up
+key enter
+point-ui modal-no
+click-here
+expect modal=-
+pointer-off
+sh ! grep -q xdg-terminal-exec "$OFX_ROOT/spawn.log" 2>/dev/null
 quit

@@ -2423,7 +2423,7 @@ static void layout_menubar(void)
 
 // ---- the modal panels (F5.1) --------------------------------------------------------------------
 
-typedef enum { MODAL_NONE, MODAL_DELETE, MODAL_CLASH, MODAL_CANCEL, MODAL_QUIT, MODAL_FULL, MODAL_EMPTY, MODAL_PROPS, MODAL_OW, MODAL_BM, MODAL_KEYS } ModalKind;
+typedef enum { MODAL_NONE, MODAL_DELETE, MODAL_CLASH, MODAL_CANCEL, MODAL_QUIT, MODAL_FULL, MODAL_EMPTY, MODAL_PROPS, MODAL_OW, MODAL_BM, MODAL_KEYS, MODAL_ABOUT } ModalKind;
 
 // The panel on top, in the order ui_handle takes their keys.
 static ModalKind modal_kind(void)
@@ -2438,6 +2438,7 @@ static ModalKind modal_kind(void)
     if (app.ui.ow) return MODAL_OW;         // likewise (F7.3)
     if (app.ui.bmp) return MODAL_BM;        // Edit Bookmarks (F7.5)
     if (app.ui.keys) return MODAL_KEYS;     // Keyboard Shortcuts (F7.5)
+    if (app.ui.about) return MODAL_ABOUT;
     return MODAL_NONE;
 }
 
@@ -2865,6 +2866,7 @@ static void layout_props_panel(void)
 #include "openwith.c"
 #include "bookmarks.c"
 #include "shortcuts.c"
+#include "about.c"
 
 // The panel over the window, the rest darkened but still readable (Michael's pick over a blur,
 // 2026-10-21).
@@ -2877,6 +2879,7 @@ static void layout_modal(ModalKind k, float w, float h)
     else if (k == MODAL_OW) layout_ow_panel();
     else if (k == MODAL_BM) layout_bmp_panel();
     else if (k == MODAL_KEYS) layout_keys_panel();
+    else if (k == MODAL_ABOUT) layout_about_panel();
     else layout_modal_panel(k);
 }
 
@@ -3228,6 +3231,8 @@ static Clay_RenderCommandArray layout(int w, int h)
             if (modal_kind() == MODAL_PROPS) {
                 text(fit(S("Properties: \xE2\x86\x90 \xE2\x86\x91 \xE2\x86\x93 \xE2\x86\x92 (h j k l) move \xC2\xB7 Space or Enter changes \xC2\xB7 Esc closes"), foot_w, false),
                      cc(t->fg_dim));
+            } else if (modal_kind() == MODAL_ABOUT) {
+                text(fit(S("About: Esc or Enter closes"), foot_w, false), cc(t->fg_dim));
             } else if (modal_kind() == MODAL_KEYS) {
                 text(fit(S("Keyboard Shortcuts: type to filter \xC2\xB7 \xE2\x86\x91 \xE2\x86\x93 PgUp PgDn scroll \xC2\xB7 Esc or F1 closes"), foot_w, false), cc(t->fg_dim));
             } else if (modal_kind() == MODAL_BM) {
@@ -3786,7 +3791,7 @@ static void theme_apply(void)
 
 static void usage(void)
 {
-    fprintf(stderr, "usage: ofx [--select] [PATH]\n"
+    fprintf(stderr, "usage: ofx [--select] [PATH] | --version\n"
                     "  A file explorer: the folder (default: the current one) as a list; on a file, its folder\n"
                     "  with it selected; --select: PATH's folder with PATH selected, a folder too.\n"
                     "  Enter, Right, l open; Backspace, Left, h up; j k, arrows, PgUp PgDn, Home End, g G move;\n"
@@ -3825,6 +3830,7 @@ int main(int argc, char **argv)
     bool selecting = false;
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) return usage(), 0;
+        if (strcmp(argv[i], "--version") == 0) return printf("ofx %s\n", OFX_VERSION), 0;
         if (strcmp(argv[i], "--select") == 0 && !selecting) {
             selecting = true;
             continue;

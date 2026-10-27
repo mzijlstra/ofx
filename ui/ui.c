@@ -221,7 +221,7 @@ typedef enum {
     UM_ZOOM_IN, UM_ZOOM_OUT, UM_ZOOM_RESET, UM_VIEW_LIST, UM_VIEW_ICONS,
     UM_PARENT, UM_BACK, UM_FORWARD, UM_HOME, UM_TRASH_VIEW, UM_FIND, UM_LOCATION, UM_TERMINAL,
     UM_ADD_BOOKMARK, UM_EDIT_BOOKMARKS, UM_BM_0, UM_BM_1, UM_BM_2, UM_BM_3, UM_BM_4, UM_BM_5, UM_BM_6, UM_BM_7, UM_BM_MORE,
-    UM_SHORTCUTS,
+    UM_SHORTCUTS, UM_ABOUT,
     UM_ITEMS
 } UiMenuItem;
 
@@ -285,6 +285,7 @@ static const struct { const char *label, *key, *word; UiEvent ev; char mark; } U
     [UM_BM_MORE] = { "", "", "bm-more" },
     // Help: no manual (Michael, 2026-10-27)
     [UM_SHORTCUTS] = { "Keyboard Shortcuts", "F1", "shortcuts", { UK_SHORTCUTS, 0 } },   // "N more in Edit Bookmarks…" (gui/'s label): the panel, on the first not listed
+    [UM_ABOUT] = { "About", "", "about" },
     [UM_BM_0] = { "", "", "bm-0", .mark = 'r' }, [UM_BM_1] = { "", "", "bm-1", .mark = 'r' },
     [UM_BM_2] = { "", "", "bm-2", .mark = 'r' }, [UM_BM_3] = { "", "", "bm-3", .mark = 'r' },
     [UM_BM_4] = { "", "", "bm-4", .mark = 'r' }, [UM_BM_5] = { "", "", "bm-5", .mark = 'r' },
@@ -312,7 +313,7 @@ static const UiMenuItem UI_MENU_BOOKMARKS_[] = {
     UM_ADD_BOOKMARK, UM_EDIT_BOOKMARKS, UM_SEP, UM_BM_0, UM_BM_1, UM_BM_2, UM_BM_3, UM_BM_4, UM_BM_5, UM_BM_6, UM_BM_7, UM_BM_MORE,
 };
 
-static const UiMenuItem UI_MENU_HELP[] = { UM_SHORTCUTS };
+static const UiMenuItem UI_MENU_HELP[] = { UM_SHORTCUTS, UM_SEP, UM_ABOUT };
 
 // The menus in the bar's order: a title, its Alt letter, its entries.
 static const struct { const char *title; char letter; const UiMenuItem *items; int n; } UI_MENU[] = {
@@ -553,6 +554,8 @@ typedef struct {
     short  keys_line[UI_KEYS_LINES];
     UiList keys_list;
     UiMatcher keys_m;
+    // About (Michael, 2026-10-27): up. gui/ draws it; Esc, Enter or Close close it.
+    bool   about;
     // The Properties panel (F7.2): up, its grid's place with the focus (0..8: owner read, write,
     // execute, then group's, others'), and whether gui/ lets its permissions change.
     bool   props;
@@ -1432,7 +1435,7 @@ static bool ui_menu_enabled(const Ui *u, UiMenuItem it)
     case UM_TERMINAL: return !u->in_trash;
     case UM_ADD_BOOKMARK: return u->can_bookmark && !u->in_trash;
     case UM_BM_0: case UM_BM_1: case UM_BM_2: case UM_BM_3: case UM_BM_4: case UM_BM_5: case UM_BM_6: case UM_BM_7: return true;
-    case UM_EDIT_BOOKMARKS: case UM_BM_MORE: case UM_SHORTCUTS: return true;
+    case UM_EDIT_BOOKMARKS: case UM_BM_MORE: case UM_SHORTCUTS: case UM_ABOUT: return true;
     default: return false;
     }
 }
@@ -1847,6 +1850,7 @@ static UiAction ui_menu_pick(Ui *u, UiMenuItem it)
     case UM_CLOSE: return (UiAction){ UA_TAB_CLOSE, -1, false };
     case UM_PROPERTIES: return ui_props_open(u);
     case UM_OPEN_WITH: return ui_ow_open(u);
+    case UM_ABOUT: return u->about = true, (UiAction){ UA_NONE, 0, false };
     default: return (UiAction){ UA_NONE, 0, false };
     }
 }
@@ -1997,7 +2001,7 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         return (UiAction){ in->modal == UI_MODAL_YES && u->in_trash ? UA_EMPTY_TRASH : UA_NONE, 0, false };
     }
     if (!u->in_trash) u->empty_asking = false;
-    bool prompt = u->asking || u->confirming || u->cancel_asking || u->quit_asking || u->full_told || u->empty_asking || u->props || u->ow || u->bmp || u->keys;
+    bool prompt = u->asking || u->confirming || u->cancel_asking || u->quit_asking || u->full_told || u->empty_asking || u->props || u->ow || u->bmp || u->keys || u->about;
     if (prompt) u->menu_on = false;
     // Open With (F7.3): filtered once gui/ has listed the apps; the pointer: a row takes the
     // cursor (a double click opens it), the field the keys, a toggle flips, Open and Cancel.
@@ -2035,6 +2039,8 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         // Keyboard Shortcuts: Close closes; the wheel scrolls it.
         if (in->modal == UI_MODAL_NO) return ui_keys_close(u), (UiAction){ UA_NONE, 0, false };
         if (in->ow_wheel) ui_scroll(&u->keys_list, in->ow_wheel);
+    } else if (u->about && !u->quit_asking && !u->full_told && !u->asking && !u->confirming) {
+        if (in->modal == UI_MODAL_NO) return u->about = false, (UiAction){ UA_NONE, 0, false };
     } else if (!u->ow && !prompt && u->finding && (in->find_x || in->find_field || in->find_step)) {
         // A chevron steps with two matches or more (greyed under that) and leaves the keys where
         // they are.
@@ -2217,6 +2223,10 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         }
         if (u->keys && !u->asking && !u->confirming) {
             ui_keys_event(u, e);
+            continue;
+        }
+        if (u->about && !u->asking && !u->confirming) {   // it takes every key: Esc and Enter close it
+            if (e.key == UK_ESC || e.key == UK_ENTER) u->about = false;
             continue;
         }
         if (u->editing && u->edit_path && !prompt && e.key == UK_CRUMBS) {   // from the location line: it closes

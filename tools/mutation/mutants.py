@@ -484,8 +484,8 @@ MUTANTS += [
     (U, "    if (u->full_told && (in->modal == UI_MODAL_OK || in->nev > 0)) {", "    if (u->full_told && in->nev > 0) {"),
     (U, "        return (UiAction){ in->modal == UI_MODAL_YES ? UA_QUIT : UA_NONE, 0, false };", "        return (UiAction){ UA_QUIT, 0, false };"),
     (U, "        return (UiAction){ in->modal == UI_MODAL_YES ? UA_CANCEL_JOB : UA_NONE, u->cancel_id, false };", "        return (UiAction){ UA_CANCEL_JOB, u->cancel_id, false };"),
-    (U, "    bool prompt = u->asking || u->confirming || u->cancel_asking || u->quit_asking || u->full_told || u->empty_asking || u->props || u->ow || u->bmp || u->keys;", "    bool prompt = u->asking || u->confirming || u->cancel_asking || u->quit_asking || u->empty_asking || u->props || u->ow;"),
-    (U, "    bool prompt = u->asking || u->confirming || u->cancel_asking || u->quit_asking || u->full_told || u->empty_asking || u->props || u->ow || u->bmp || u->keys;", "    bool prompt = u->asking || u->confirming || u->empty_asking || u->props || u->ow;"),
+    (U, "    bool prompt = u->asking || u->confirming || u->cancel_asking || u->quit_asking || u->full_told || u->empty_asking || u->props || u->ow || u->bmp || u->keys || u->about;", "    bool prompt = u->asking || u->confirming || u->cancel_asking || u->quit_asking || u->empty_asking || u->props || u->ow;"),
+    (U, "    bool prompt = u->asking || u->confirming || u->cancel_asking || u->quit_asking || u->full_told || u->empty_asking || u->props || u->ow || u->bmp || u->keys || u->about;", "    bool prompt = u->asking || u->confirming || u->empty_asking || u->props || u->ow;"),
     (U, "            if (in->jobs_all <= 0) return (UiAction){ UA_QUIT, 0, false };", "            if (in->job_n <= 0) return (UiAction){ UA_QUIT, 0, false };"),
     (U, "            u->quit_asking = true, u->cancel_asking = false;", "            u->quit_asking = true;"),
     (U, "            if (!answered) continue;\n            bool quit = u->quit_asking;", "            bool quit = u->quit_asking;"),
@@ -557,7 +557,7 @@ MUTANTS += [
     (U, "            case 't': return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : UA_TERMINAL, 0, false };", "            case 't': return (UiAction){ UA_TERMINAL, 0, false };"),
     (U, "        return (UiAction){ in->modal == UI_MODAL_YES && u->in_trash ? UA_EMPTY_TRASH : UA_NONE, 0, false };", "        return (UiAction){ in->modal == UI_MODAL_YES ? UA_EMPTY_TRASH : UA_NONE, 0, false };"),
     (U, "    if (!u->in_trash) u->empty_asking = false;\n", ""),
-    (U, " || u->full_told || u->empty_asking || u->props || u->ow || u->bmp || u->keys;", " || u->full_told || u->props || u->ow;"),
+    (U, " || u->full_told || u->empty_asking || u->props || u->ow || u->bmp || u->keys || u->about;", " || u->full_told || u->props || u->ow;"),
     (U, "        case UB_RESTORE: if (u->in_trash && l->n > 0) return", "        case UB_RESTORE: if (l->n > 0) return"),
     (U, "        case UB_EMPTY: if (u->in_trash) u->empty_asking = true; break;", "        case UB_EMPTY: u->empty_asking = true; break;"),
     (U, "            if (yes) return (UiAction){ UA_EMPTY_TRASH, 0, false };", "            return (UiAction){ UA_EMPTY_TRASH, 0, false };"),
@@ -1095,7 +1095,7 @@ MUTANTS += [
     (U, "    case UK_DOWN: if (row < 2) u->prop_at += 3; break;", "    case UK_DOWN: u->prop_at += 3; break;"),
     (U, "        if (u->prop_can) return (UiAction){ UA_CHMOD, u->prop_at, false };", "        return (UiAction){ UA_CHMOD, u->prop_at, false };"),
     (U, "    case UK_ESC: case UK_PROPERTIES: u->props = false; break;", "    case UK_ESC: u->props = false; break;"),
-    (U, "    bool prompt = u->asking || u->confirming || u->cancel_asking || u->quit_asking || u->full_told || u->empty_asking || u->props || u->ow || u->bmp || u->keys;", "    bool prompt = u->asking || u->confirming || u->cancel_asking || u->quit_asking || u->full_told || u->empty_asking || u->ow;"),
+    (U, "    bool prompt = u->asking || u->confirming || u->cancel_asking || u->quit_asking || u->full_told || u->empty_asking || u->props || u->ow || u->bmp || u->keys || u->about;", "    bool prompt = u->asking || u->confirming || u->cancel_asking || u->quit_asking || u->full_told || u->empty_asking || u->ow;"),
     (U, "    if (u->props && !u->quit_asking && !u->full_told && in->prop_box >= 0 && in->prop_box < 9) {", "    if (u->props && in->prop_box >= 0 && in->prop_box < 9) {"),
     (U, "        u->prop_at = in->prop_box;\n        return u->prop_can", "        return u->prop_can"),
     (U, "        return u->prop_can ? (UiAction){ UA_CHMOD, in->prop_box, false } : (UiAction){ UA_NONE, 0, false };", "        return (UiAction){ UA_CHMOD, in->prop_box, false };"),
@@ -1185,7 +1185,7 @@ MUTANTS += [
     (U, "    if (u->ow_len != before || e.key == UK_NONE) ui_ow_filter(u, in);", ""),
     (U, "    case UM_OPEN_WITH: return files && !u->in_trash;", "    case UM_OPEN_WITH: return files;"),
     (U, "    case UM_OPEN_WITH: return ui_ow_open(u);\n", ""),
-    (U, "|| u->empty_asking || u->props || u->ow || u->bmp || u->keys;\n    if (prompt)", "|| u->empty_asking || u->props;\n    if (prompt)"),
+    (U, "|| u->empty_asking || u->props || u->ow || u->bmp || u->keys || u->about;\n    if (prompt)", "|| u->empty_asking || u->props;\n    if (prompt)"),
     (U, "    if (u->ow && u->ow_fresh && in->app_name) ui_ow_filter(u, in);", ""),
     (U, "        if (in->ow_field) u->ow_in_list = false;", ""),
     (U, "            if (in->ow_drow >= 0) return ui_ow_launch(u);", ""),
@@ -1443,12 +1443,12 @@ MUTANTS += [
     (U, "    if (it == UM_BM_MORE) return u->bm_more > 0;", "    if (it == UM_BM_MORE) return true;"),
     (U, "    case UM_BM_MORE: return ui_bmp_open(u, u->bm_more_at);", "    case UM_BM_MORE: return ui_bmp_open(u, 0);"),
     (U, "        case UK_EDIT_BOOKMARKS: return ui_bmp_open(u, 0);", ""),
-    (U, "u->empty_asking || u->props || u->ow || u->bmp || u->keys;", "u->empty_asking || u->props || u->ow;"),
+    (U, "u->empty_asking || u->props || u->ow || u->bmp || u->keys || u->about;", "u->empty_asking || u->props || u->ow;"),
     (U, "            if (in->bmp_drow >= 0) return u->bmp = false, (UiAction){ UA_BM_GO, u->bmp_list.sel, false };", ""),
     (U, "        if (in->bmp_btn >= 1 && in->bmp_btn <= 4 && !u->bmp_naming) return ui_bmp_do(u, in->bmp_btn);", "        if (in->bmp_btn >= 1 && in->bmp_btn <= 4) return ui_bmp_do(u, in->bmp_btn);"),
     (U, "        if (in->modal == UI_MODAL_NO) return u->bmp = false, (UiAction){ UA_NONE, 0, false };\n    } else if (u->keys", "    } else if (u->keys"),
     (U, "        if (u->bmp && !u->asking && !u->confirming) {\n            UiAction a = ui_bmp_event(u, e);", "        if (false) {\n            UiAction a = ui_bmp_event(u, e);"),
-    (U, "in->bmp_row >= 0 || in->bmp_drow >= 0 || in->bmp_btn;", "in->bmp_row >= 0 || in->bmp_drow >= 0;"),
+    (U, "in->bmp_row >= 0 || in->bmp_drow >= 0 || in->bmp_btn || in->ow_wheel != 0;", "in->bmp_row >= 0 || in->bmp_drow >= 0 || in->ow_wheel != 0;"),
 ]
 # ---- F7.5: Keyboard Shortcuts
 MUTANTS += [
@@ -1465,7 +1465,7 @@ MUTANTS += [
     (U, "    case UK_END: ui_scroll(l, (int)-l->n); break;", ""),
     (U, "    case UK_ESC: case UK_SHORTCUTS: case UK_ENTER: ui_keys_close(u); break;", "    case UK_ESC: case UK_ENTER: ui_keys_close(u); break;"),
     (U, "        case UK_SHORTCUTS: return ui_keys_open(u);", ""),
-    (U, "u->props || u->ow || u->bmp || u->keys;\n    if (prompt)", "u->props || u->ow || u->bmp;\n    if (prompt)"),
+    (U, "u->props || u->ow || u->bmp || u->keys || u->about;\n    if (prompt)", "u->props || u->ow || u->bmp || u->about;\n    if (prompt)"),
     (U, "        if (u->keys && !u->asking && !u->confirming) {\n            ui_keys_event(u, e);", "        if (false) {\n            ui_keys_event(u, e);"),
     (U, "        if (in->modal == UI_MODAL_NO) return ui_keys_close(u), (UiAction){ UA_NONE, 0, false };", ""),
     (U, "        if (in->ow_wheel) ui_scroll(&u->keys_list, in->ow_wheel);", ""),
@@ -1480,4 +1480,15 @@ MUTANTS += [
     # Not a mutant: bm_write's `S_ISREG` before the in-place write; without it a folder (nlink > 1)
     # fails to open there instead of failing to be renamed over: false either way, nothing left.
     (BMK, "        bool ok = bm_put(fd, text);\n        int e = errno;", "        bool ok = true;\n        int e = errno;"),
+]
+# ---- Help → About (2026-10-27), and the wheel over a panel (f4fced7)
+MUTANTS += [
+    (U, "    case UM_ABOUT: return u->about = true, (UiAction){ UA_NONE, 0, false };", ""),
+    (U, "case UM_SHORTCUTS: case UM_ABOUT: return true;", "case UM_SHORTCUTS: return true;"),
+    (U, "u->props || u->ow || u->bmp || u->keys || u->about;\n    if (prompt)", "u->props || u->ow || u->bmp || u->keys;\n    if (prompt)"),
+    (U, "        if (in->modal == UI_MODAL_NO) return u->about = false, (UiAction){ UA_NONE, 0, false };", ""),
+    (U, "            if (e.key == UK_ESC || e.key == UK_ENTER) u->about = false;", "            if (e.key == UK_ESC) u->about = false;"),
+    (U, "            if (e.key == UK_ESC || e.key == UK_ENTER) u->about = false;", "            if (e.key == UK_ENTER) u->about = false;"),
+    (U, "            if (e.key == UK_ESC || e.key == UK_ENTER) u->about = false;\n            continue;", "            if (e.key == UK_ESC || e.key == UK_ENTER) u->about = false;"),
+    (U, " || in->bmp_btn || in->ow_wheel != 0;", " || in->bmp_btn;"),
 ]

@@ -169,8 +169,8 @@ static void script_state(char *out, size_t cap)
     if (jobs.asking >= 0) snprintf(clashjob, sizeof clashjob, "%s", job_recs[jobs.asking].label);
     for (char *c = clashjob; *c; c++)
         if (*c == ' ') *c = '_';
-    static const char *const MODALS[] = { "-", "delete", "clash", "cancel", "quit", "full", "empty", "props", "open-with", "bookmarks", "shortcuts" };
-    _Static_assert(sizeof MODALS / sizeof MODALS[0] == MODAL_KEYS + 1, "a name for each panel");
+    static const char *const MODALS[] = { "-", "delete", "clash", "cancel", "quit", "full", "empty", "props", "open-with", "bookmarks", "shortcuts", "about" };
+    _Static_assert(sizeof MODALS / sizeof MODALS[0] == MODAL_ABOUT + 1, "a name for each panel");
     // The path buttons' labels, '|' between; the cursor's folder count (- unknown, ? unreadable).
     char crumbs[2048] = "", cnt[32] = "-";
     for (int i = 0; i < app.crumbs.n; i++) {
