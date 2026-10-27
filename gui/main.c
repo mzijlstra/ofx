@@ -455,6 +455,10 @@ static bool go_to_in(const char *dir, Str select, isize fallback, bool stepping)
 // place, found by path and kind, else on the first row that isn't a heading.
 static void places_reload(void)
 {
+    // A folder menu open on a place was resolved against these places (ctx_facts: its row, its
+    // bookmark line); read again, they may be another's, so it closes (F8 review, 2026-10-27: Nemo
+    // adding a bookmark above made Remove take the wrong line).
+    if (app.ui.menu_on && app.ui.menu == UI_CTX_FOLDER && app.ui.ctx_crumb < 0) app.ui.menu_on = false;
     Place keep = { .kind = PL_HEAD };   // in the tree mode the cursor is a tree row's: none kept
     if (app.ui.side_mode == SIDE_PLACES && app.ui.side.sel < app.places.n) keep = app.places.p[app.ui.side.sel];
     char bm[PATH_MAX];
@@ -3821,6 +3825,7 @@ static void ctx_facts(void)
                         ? (snprintf(buf, sizeof buf, "%.*s", STR_ARG(ui_crumb_path(&app.crumbs, u->ctx_crumb))), buf)
                         : side_path(u->ctx_side, buf, sizeof buf);
     snprintf(app.ctx_path, sizeof app.ctx_path, "%s", p ? p : "");
+    u->ctx_w = app.ctx_path[0] && access(app.ctx_path, W_OK) == 0;
     u->ctx_trash = strcmp(app.ctx_path, TRASH_URI) == 0;
     u->ctx_full = u->ctx_trash && trash_any();
     u->ctx_bmed = bm_find(&bmarks, app.ctx_path) >= 0;
@@ -4312,6 +4317,10 @@ int main(int argc, char **argv)
         UiAction a = ui_handle(&app.ui, (UiNames){ list_name, NULL, list_dir }, &in);
         bool ctx_up = app.ui.menu_on && app.ui.menu >= UI_MENUS;   // a right-click menu opened: where (F8)
         if (ctx_up && !app.ctx_placed && app.ui.menu == UI_CTX_FOLDER) ctx_facts();
+        if (ctx_up && !app.ctx_placed && app.ui.menu == UI_CTX_ENTRY) {   // (Paste Into Folder: the cursor's, writable)
+            char e[PATH_MAX];
+            app.ui.ctx_w = app.ui.ctx_dir && app.ui.list.sel < app.list.n && entry_path(app.ui.list.sel, e, sizeof e) && access(e, W_OK) == 0;
+        }
         if (ctx_up && !app.ctx_placed) ctx_place();
         app.ctx_placed = ctx_up;
         if (!app.ui.ow && ow.icons_on) ow_drop();   // the panel closed: its icons go (F7.3)

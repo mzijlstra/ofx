@@ -1511,7 +1511,7 @@ MUTANTS += [
     (U, "    u->ctx_one = u->list.n > 0 && (u->marked == 0 || (u->marked == 1 && ui_marked(u, u->list.sel)));", "    u->ctx_one = u->list.n > 0 && u->marked <= 1;"),
     (U, "    u->ctx_one = u->list.n > 0 && (u->marked == 0 || (u->marked == 1 && ui_marked(u, u->list.sel)));", "    u->ctx_one = u->list.n > 0 && u->marked == 0;"),
     (U, "    u->ctx_one = u->list.n > 0 && (", "    u->ctx_one = ("),
-    (U, "    u->ctx_key = keys;\n", ""),
+    (U, "    u->ctx_key = keys, u->ctx_w = false;", "    u->ctx_w = false;"),
     (U, "        if (u->menu >= UI_MENUS) return true;   // a right-click menu has no neighbours (F8)", ""),
     (U, " && u->menu < UI_MENUS) {   // (not from a right-click menu, F8)", ") {   // (not from a right-click menu, F8)"),
     (U, "        if (!ui_marked(u, row)) ui_mark_clear(u);", ""),
@@ -1535,7 +1535,7 @@ MUTANTS += [
     (U, "    if (it == UM_FOLLOW) return u->ctx_one && u->sel_link && !u->in_trash;", "    if (it == UM_FOLLOW) return u->ctx_one && !u->in_trash;"),
     (U, "    if (it == UM_FOLLOW) return u->ctx_one && u->sel_link && !u->in_trash;", "    if (it == UM_FOLLOW) return u->ctx_one && u->sel_link;"),
     (U, "    case UM_RENAME: case UM_DUPLICATE: case UM_MAKE_LINK: return", "    case UM_RENAME: case UM_DUPLICATE: return"),
-    (U, "    case UM_PASTE_INTO: return files && u->can_paste;", "    case UM_PASTE_INTO: return files;"),
+    (U, "    case UM_PASTE_INTO: return files && u->can_paste && u->ctx_w;", "    case UM_PASTE_INTO: return files && u->ctx_w;"),
     (U, "    case UM_OPEN_WINDOW: return (UiAction){ UA_NEW_WINDOW, u->list.sel, true };", "    case UM_OPEN_WINDOW: return (UiAction){ UA_NEW_WINDOW, u->list.sel, false };"),
     (U, "    case UM_PASTE_INTO: return (UiAction){ UA_PASTE, u->list.sel, true };", "    case UM_PASTE_INTO: return (UiAction){ UA_PASTE, u->list.sel, false };"),
     (U, "    case UM_TERMINAL_IN: return (UiAction){ UA_TERMINAL, u->list.sel, true };", "    case UM_TERMINAL_IN: return (UiAction){ UA_TERMINAL, 0, true };"),
@@ -1562,7 +1562,7 @@ MUTANTS += [
     (U, "    case UM_EJECT_IT: return u->ctx_eject;", "    case UM_EJECT_IT: return true;"),
     (U, "    case UM_EMPTY_IT: return u->ctx_trash;", "    case UM_EMPTY_IT: return true;"),
     (U, "    case UM_SEP: case UM_OPEN_IT: case UM_OPEN_TAB: return true;", "    case UM_SEP: case UM_OPEN_TAB: return true;"),
-    (U, "        if (it == UM_PASTE_INTO) return u->can_paste;", ""),
+    (U, "        if (it == UM_PASTE_INTO) return u->can_paste && u->ctx_w;", ""),
     (U, "        if (it == UM_BM_UP_IT) return u->ctx_bmk > 0;", "        if (it == UM_BM_UP_IT) return u->ctx_bmk >= 0;"),
     (U, "        if (it == UM_BM_DOWN_IT) return u->ctx_bmk < u->ctx_bms - 1;", "        if (it == UM_BM_DOWN_IT) return u->ctx_bmk < u->ctx_bms;"),
     (U, "        if (it == UM_EMPTY_IT) return u->ctx_full;", ""),
@@ -1574,7 +1574,7 @@ MUTANTS += [
     (U, "        case UM_EMPTY_IT: return u->empty_asking = true, (UiAction){ UA_NONE, 0, false };", ""),
     (U, "        case UM_PROPS_IT: return u->props = true, u->prop_at = 0, (UiAction){ UA_PROPS, 2, false };", "        case UM_PROPS_IT: return u->props = true, u->prop_at = 0, (UiAction){ UA_PROPS, 0, false };"),
     (U, "    u->ctx_side = (int)side, u->ctx_crumb = crumb, u->ctx_key = keys;", "    u->ctx_side = (int)side, u->ctx_crumb = crumb;"),
-    (U, "    u->ctx_trash = u->ctx_place = u->ctx_bmed = u->ctx_eject = u->ctx_full = false;\n", ""),
+    (U, "    u->ctx_trash = u->ctx_place = u->ctx_bmed = u->ctx_eject = u->ctx_full = u->ctx_w = false;\n", "    u->ctx_w = false;\n"),
     (U, "    u->ctx_bmk = -1, u->ctx_bms = 0;\n", ""),
     (U, "    if (!prompt && in->ctx_side >= 0 && u->side.top + in->ctx_side < u->side.n && !ui_side_head(u, u->side.top + in->ctx_side)) {", "    if (!prompt && in->ctx_side >= 0 && u->side.top + in->ctx_side < u->side.n) {"),
     (U, "        u->side.sel = u->side.top + in->ctx_side;\n        ui_folder_open", "        ui_folder_open"),
@@ -1606,4 +1606,11 @@ MUTANTS += [
     (M, "        if (sp <= 0 || sp == line.len - 1 || db->nicons == MIME_GLOBS_MAX) continue;", "        if (sp <= 0 || db->nicons == MIME_GLOBS_MAX) continue;"),
     (M, "        db->icon_of[db->nicons] = str_trim(str_cut(line, sp + 1, line.len));", "        db->icon_of[db->nicons] = str_cut(line, sp, line.len);"),
     (M, "        mime_add_parents(db, read_file(a, arena_sprintf(a, \"%s/mime/subclasses\", dirs[k])));", ""),
+]
+# ---- F8 review: Paste Into Folder greyed on a folder that takes no new files
+MUTANTS += [
+    (U, "        if (it == UM_PASTE_INTO) return u->can_paste && u->ctx_w;", "        if (it == UM_PASTE_INTO) return u->can_paste;"),
+    (U, "    case UM_PASTE_INTO: return files && u->can_paste && u->ctx_w;", "    case UM_PASTE_INTO: return files && u->can_paste;"),
+    (U, "u->ctx_eject = u->ctx_full = u->ctx_w = false;", "u->ctx_eject = u->ctx_full = false;"),
+    (U, "    u->ctx_key = keys, u->ctx_w = false;   // (gui/ says, as it opens)", "    u->ctx_key = keys;   // (gui/ says, as it opens)"),
 ]

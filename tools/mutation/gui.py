@@ -470,6 +470,11 @@ MUTANTS = [
     (G, '    if (h.tab >= 0) in->ctx_tab = h.tab;\n    else if', '    if (false) in->ctx_tab = h.tab;\n    else if', 'f8'),
     (G, '    u->tab_at = tabbar.cur, u->tab_n = tabbar.n;   // (the tab menu', '    u->tab_at = 0, u->tab_n = tabbar.n;   // (the tab menu', 'f8'),
     (G, '            if (i != tabbar.cur) tab_close(i);', '            if (i != 0) tab_close(i);', 'f8'),
+    # ---- F8 review: a folder menu closes when the places are read again; Paste Into greyed when
+    # its folder takes no new files (f8c sees it open on one that does; ui/'s test sees it greyed)
+    (G, '    if (app.ui.menu_on && app.ui.menu == UI_CTX_FOLDER && app.ui.ctx_crumb < 0) app.ui.menu_on = false;', '', 'f8'),
+    (G, '    u->ctx_w = app.ctx_path[0] && access(app.ctx_path, W_OK) == 0;', '    u->ctx_w = false;', 'f8'),
+    (G, '            app.ui.ctx_w = app.ui.ctx_dir && app.ui.list.sel < app.list.n && entry_path(app.ui.list.sel, e, sizeof e) && access(e, W_OK) == 0;', '            app.ui.ctx_w = false;', 'f8'),
     # ---- quit doesn't wait for a hung drive (2026-10-26: no mutant was hang's or f6b's alone)
     (K, '    if (pthread_timedjoin_np(counts.thread, NULL, &until) != 0) pthread_detach(counts.thread);', '    pthread_join(counts.thread, NULL);', 'hang'),
     ('gui/space.c', '    if (pthread_timedjoin_np(space.thread, NULL, &until) != 0) pthread_detach(space.thread);', '    pthread_join(space.thread, NULL);', 'f6'),

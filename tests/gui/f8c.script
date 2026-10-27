@@ -13,6 +13,17 @@ point-ui side-row 2
 right-here
 expect menu=folder menuhid=cut-it,copy-it,bookmark-it,eject,empty-it menugrey=cut-it,copy-it,paste-into,bookmark-it,bm-up,eject,empty-it menuin=1
 shot ctx-bookmark.png
+key esc
+# Another writer changes the file under an open menu: it closes, its line read again would be another
+point-ui side-row 3
+right-here
+expect menu=folder
+sh sed -i "1i file://$OFX_DIR New" "$OFX_ROOT/config/gtk-3.0/bookmarks"
+wait-for 3000 bmn=3 menu=-
+sh sed -i 1d "$OFX_ROOT/config/gtk-3.0/bookmarks"
+wait-for 3000 bmn=2
+point-ui side-row 2
+right-here
 # Move Down: the file's order changes, the places follow
 point-ui menu-item 12
 click-here
@@ -110,6 +121,11 @@ click-here
 expect menu=- clip=1 cut=0
 key ctrl-v
 sh sleep 1; test ! -e "$OFX_DIR/sub (copy)"
+# With files copied, Paste Into Folder on a folder that takes them
+point-ui side-row 2
+right-here
+expect menu=folder menugrey=cut-it,copy-it,bookmark-it,bm-up,bm-down,eject,empty-it
+key esc
 # Open: there
 point-ui side-row 2
 right-here

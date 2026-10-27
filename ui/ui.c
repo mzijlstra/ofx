@@ -619,6 +619,7 @@ typedef struct {
     // bookmark's row), a bookmark already, a drive with an eject button, a trash with something in it.
     int    ctx_side, ctx_crumb;
     bool   ctx_trash, ctx_place, ctx_bmed, ctx_eject, ctx_full;
+    bool   ctx_w;   // the folder (either menu's, as it opens) takes new files: Paste Into Folder
     int    ctx_bmk, ctx_bms;
     // The tabs, from gui/ each frame (menu_facts): the current one's place, how many (F8's tab menu).
     int    tab_at, tab_n;
@@ -1529,7 +1530,7 @@ static bool ui_menu_enabled(const Ui *u, UiMenuItem it)
     bool files = u->list.n > 0, here = files && !u->side_focus;
     if (!ui_menu_shown(u, it)) return false;
     if (u->menu == UI_CTX_FOLDER) {   // (F8) the rest are always there to pick
-        if (it == UM_PASTE_INTO) return u->can_paste;
+        if (it == UM_PASTE_INTO) return u->can_paste && u->ctx_w;
         if (it == UM_BM_UP_IT) return u->ctx_bmk > 0;
         if (it == UM_BM_DOWN_IT) return u->ctx_bmk < u->ctx_bms - 1;
         if (it == UM_EMPTY_IT) return u->ctx_full;
@@ -1565,7 +1566,7 @@ static bool ui_menu_enabled(const Ui *u, UiMenuItem it)
     case UM_TAB_RIGHT: return u->tab_at < u->tab_n - 1;
     case UM_TAB_OTHERS: return u->tab_n > 1;
     case UM_OPEN_TAB: case UM_EMPTY_TRASH: case UM_OPEN_WINDOW: case UM_TERMINAL_IN: case UM_FOLLOW: case UM_BOOKMARK_IT: return files;
-    case UM_PASTE_INTO: return files && u->can_paste;
+    case UM_PASTE_INTO: return files && u->can_paste && u->ctx_w;
     case UM_HERE_PROPS: return true;
     default: return false;
     }
@@ -1618,7 +1619,7 @@ static void ui_ctx_open(Ui *u, int m, UiNames names, bool keys)
     u->side_focus = u->crumb_focus = u->jobs_focus = false;
     u->ctx_one = u->list.n > 0 && (u->marked == 0 || (u->marked == 1 && ui_marked(u, u->list.sel)));
     u->ctx_dir = u->ctx_one && names.dir && names.dir(names.ctx, u->list.sel);
-    u->ctx_key = keys;
+    u->ctx_key = keys, u->ctx_w = false;   // (gui/ says, as it opens)
     ui_menu_open(u, m, keys);
 }
 
@@ -1627,7 +1628,7 @@ static void ui_ctx_open(Ui *u, int m, UiNames names, bool keys)
 static void ui_folder_open(Ui *u, isize side, int crumb, bool keys)
 {
     u->ctx_side = (int)side, u->ctx_crumb = crumb, u->ctx_key = keys;
-    u->ctx_trash = u->ctx_place = u->ctx_bmed = u->ctx_eject = u->ctx_full = false;
+    u->ctx_trash = u->ctx_place = u->ctx_bmed = u->ctx_eject = u->ctx_full = u->ctx_w = false;
     u->ctx_bmk = -1, u->ctx_bms = 0;
     ui_menu_open(u, UI_CTX_FOLDER, keys);
 }

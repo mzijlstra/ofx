@@ -177,6 +177,8 @@ static void test_ctx_folder_entries(void)
     for (int k = 0; k < COUNT(on); k++) {
         in = ui_input_none(), in.ctx_row = 2;
         ui_handle(&u, names, &in);
+        CHECK(!u.ctx_w);   // (gui/ says, as it opens: writable)
+        u.ctx_w = true;
         CHECK(ui_menu_shown(&u, on[k].it) && ui_menu_enabled(&u, on[k].it));
         in = ui_input_none(), in.menu_item = menu_place(UI_CTX_ENTRY, on[k].it);
         a = ui_handle(&u, names, &in);
@@ -186,8 +188,11 @@ static void test_ctx_folder_entries(void)
     ui_handle(&u, names, &in);
     u.sel_bm = true;
     CHECK(!ui_menu_shown(&u, UM_BOOKMARK_IT));
-    u.sel_bm = false, u.can_paste = false;
+    u.sel_bm = false, u.can_paste = false, u.ctx_w = true;
     CHECK(ui_menu_shown(&u, UM_PASTE_INTO) && !ui_menu_enabled(&u, UM_PASTE_INTO));
+    u.can_paste = true, u.ctx_w = false;   // a folder that doesn't take new files (F8 review)
+    CHECK(!ui_menu_enabled(&u, UM_PASTE_INTO));
+    u.can_paste = false;
     // Several marked: none of the one-folder entries, nor Follow Link.
     ui_mark(&u, 1, true), ui_mark(&u, 2, true);
     u.sel_link = true;
@@ -279,6 +284,8 @@ static void test_ctx_folder_menu(void)
     CHECK(!ui_menu_shown(&u, UM_OPEN) && !ui_menu_shown(&u, UM_CUT) && !ui_menu_shown(&u, UM_FOLLOW));   // (the entry menu's)
     CHECK(!ui_menu_enabled(&u, UM_PASTE_INTO));
     u.can_paste = true;
+    CHECK(!ui_menu_enabled(&u, UM_PASTE_INTO) && !u.ctx_w);   // (not writable, until gui/ says)
+    u.ctx_w = true;
     CHECK(ui_menu_enabled(&u, UM_PASTE_INTO) && ui_menu_enabled(&u, UM_OPEN_WINDOW));
     // Its entries go to gui/ for that folder.
     UiMenuItem to_gui[] = { UM_OPEN_IT, UM_OPEN_TAB, UM_OPEN_WINDOW, UM_TERMINAL_IN, UM_PASTE_INTO, UM_BOOKMARK_IT };
@@ -307,7 +314,7 @@ static void test_ctx_folder_menu(void)
     // A bookmark's row (line 1 of 3): Edit Bookmarks' own on that line.
     in = ui_input_none(), in.ctx_side = 3;
     ui_handle(&u, names, &in);
-    CHECK(u.ctx_bmk == -1 && !u.ctx_place && !u.ctx_bmed && !u.ctx_eject);   // (reset as it opens, for gui/ to say)
+    CHECK(u.ctx_bmk == -1 && !u.ctx_place && !u.ctx_bmed && !u.ctx_eject && !u.ctx_w);   // (reset as it opens, for gui/ to say)
     u.ctx_place = true, u.ctx_bmk = 1, u.ctx_bms = 3, u.bm_total = 3;
     UiMenuItem bm[] = { UM_BM_RENAME_IT, UM_BM_UP_IT, UM_BM_DOWN_IT, UM_BM_REMOVE_IT, UM_BM_EDIT_IT };
     for (int k = 0; k < COUNT(bm); k++) CHECK(ui_menu_shown(&u, bm[k]) && ui_menu_enabled(&u, bm[k]));
