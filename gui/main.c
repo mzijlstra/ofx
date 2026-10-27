@@ -509,16 +509,17 @@ static Str bm_label(const Bookmark *b)
     return b->label.len ? b->label : strcmp(b->path, "/") == 0 ? S("/") : path_base(str_from_c(b->path));
 }
 
-// Bookmarks → Add Bookmark, Ctrl+D (F7.5): the folder shown at the end of the file, read again
-// first so a change Nemo made meanwhile stays; the places (and the menu) read again after.
-static void bookmark_add(void)
+// Bookmarks → Add Bookmark, Ctrl+D (F7.5): the folder shown (or dir, a folder's right-click menu,
+// F8) at the end of the file, read again first so a change Nemo made meanwhile stays; the places
+// (and the menu) read again after.
+static void bookmark_add(const char *dir)
 {
     char file[PATH_MAX];
     bookmarks_path(file, sizeof file);
     static Bookmarks now;
     arena_reset(&bmwa);
     Err err = { 0 };
-    bool ok = bm_read(&bmwa, file, &now, &err) && bm_add(&bmwa, &now, app.cwd, &err);
+    bool ok = bm_read(&bmwa, file, &now, &err) && bm_add(&bmwa, &now, dir, &err);
     Str text = ok ? bm_format(&bmwa, &now) : STR_EMPTY;
     if (ok && !text.len) err_set(&err, "the bookmarks are too long to write"), ok = false;   // (n > 0 after an add)
     if (!ok || !bm_write(file, text, &err)) {
@@ -527,7 +528,7 @@ static void bookmark_add(void)
     }
     watch_bookmarks();   // its folder may be new
     places_reload();
-    set_status(false, "Bookmarked %.*s", STR_ARG(path_base(str_from_c(app.cwd))));
+    set_status(false, "Bookmarked %.*s", STR_ARG(path_base(str_from_c(dir))));
 }
 
 // The tree built again (tree mode only): opened down to the folder shown when `follow`, with the
@@ -861,9 +862,10 @@ static bool same_dir(const char *a, const char *b)
     return realpath(a, x) && realpath(b, y) && strcmp(x, y) == 0;
 }
 
-// c's files copied (or, cut, moved) into this folder, as one job: here already, a copy gets a free
-// name ("a (copy).txt", "a (copy 2).txt"), and a cut one stays. Paste, and Duplicate (F7.4).
-static void copy_here(const ClipFiles *c)
+// c's files copied (or, cut, moved) into the folder dest, as one job: there already, a copy gets a
+// free name ("a (copy).txt", "a (copy 2).txt"), and a cut one stays. Paste (into this folder, or
+// into one of its folders, F8), and Duplicate (F7.4).
+static void copy_here(const ClipFiles *c, const char *dest)
 {
     JobRec *r = job_new();
     if (!r) return;
@@ -878,20 +880,20 @@ static void copy_here(const ClipFiles *c)
             gone++;
             continue;
         }
-        if (S_ISDIR(st.st_mode) && into_itself(src, app.cwd)) {
+        if (S_ISDIR(st.st_mode) && into_itself(src, dest)) {
             self++;
             continue;
         }
-        if (same_dir(sdir, app.cwd)) {
+        if (same_dir(sdir, dest)) {
             if (c->cut) {
                 here++;
                 continue;
             }
-            if (!name_free(app.cwd, base, S_ISDIR(st.st_mode), true, true, name, sizeof name)) continue;
+            if (!name_free(dest, base, S_ISDIR(st.st_mode), true, true, name, sizeof name)) continue;
         } else {
             snprintf(name, sizeof name, "%.*s", STR_ARG(base));
         }
-        if (!join(dst, sizeof dst, app.cwd, str_from_c(name))) continue;
+        if (!join(dst, sizeof dst, dest, str_from_c(name))) continue;
         r->item[n++] = (JobItem){ .src = arena_cstr(&r->arena, str_from_c(src)), .dst = arena_cstr(&r->arena, str_from_c(dst)) };
     }
     if (n == 0) {
@@ -905,14 +907,14 @@ static void copy_here(const ClipFiles *c)
     if (self) set_status(true, "Skipped %td: a folder can't go into itself", self);
 }
 
-static void paste(void)
+static void paste(const char *dest)
 {
     static ClipFiles theirs;
     arena_reset(&pastea);
     ClipFrom from = clip_get(&pastea, &theirs);
     ClipFiles *c = from == CLIP_THEIRS ? &theirs : from == CLIP_OURS || !clip.ok ? &own : NULL;
     if (!c || c->n == 0) { set_status(true, "The clipboard holds no files"); return; }
-    copy_here(c);
+    copy_here(c, dest);
 }
 
 // Edit → Duplicate (F7.4): the selected entries (or the cursor's) copied beside themselves as
@@ -922,7 +924,49 @@ static void duplicate(void)
     static ClipFiles dup;
     arena_reset(&pastea);
     dup.cut = false, dup.n = targets(&pastea, dup.path, CLIP_PATHS_MAX);
-    if (dup.n > 0) copy_here(&dup);
+    if (dup.n > 0) copy_here(&dup, app.cwd);
+}
+
+// Make Link, Ctrl+M (F8, as Nemo): beside each marked entry (or the cursor's) a symbolic link to its
+// full path, "Link to <name>" ("Link to a (2).txt" when taken); one undo removes them all, the
+// cursor on the last made.
+static void make_link(void)
+{
+    char *paths[CLIP_PATHS_MAX], made[NAME_MAX + 1] = "", p[PATH_MAX];
+    arena_reset(&pastea);
+    isize n = targets(&pastea, paths, CLIP_PATHS_MAX), done = 0;
+    Err err = { 0 };
+    for (isize i = 0; i < n; i++) {
+        char name[NAME_MAX + 8], one[NAME_MAX + 1];
+        Str base = path_base(str_from_c(paths[i]));
+        if (snprintf(name, sizeof name, "Link to %.*s", STR_ARG(base)) >= (int)sizeof name) {
+            err_set(&err, "the name is too long for a link to %.*s", STR_ARG(base));
+            continue;
+        }
+        if (!op_symlink(app.cwd, paths[i], str_from_c(name), one, sizeof one, &err) || !join(p, sizeof p, app.cwd, str_from_c(one))) continue;
+        if (done++ == 0) undo_gen++, undo_begin(&undo, UNDO_LINK);
+        undo_add(&undo, paths[i], p, NULL);
+        snprintf(made, sizeof made, "%s", one);
+    }
+    if (done < n) set_status(true, "%s", err.msg);
+    else if (done == 1) set_status(false, "Made %s", made);
+    else set_status(false, "Made %td links", done);
+    if (done) ui_mark_clear(&app.ui), go_to(app.cwd, str_from_c(made), app.ui.list.sel);
+}
+
+// Follow Link (F8): to the folder of what the link at entry i leads to, with it selected (every
+// link on the way followed, as --select's folder is).
+static void follow_link(isize i)
+{
+    char path[PATH_MAX], real[PATH_MAX], dir[PATH_MAX];
+    if (i >= app.list.n || !join(path, sizeof path, app.cwd, app.list.e[i].name)) return;
+    if (!realpath(path, real)) {
+        set_status(true, "%.*s leads nowhere: %s", STR_ARG(app.list.e[i].name), strerror(errno));
+        return;
+    }
+    Str d = path_dir(str_from_c(real)), base = path_base(str_from_c(real));
+    snprintf(dir, sizeof dir, "%.*s", STR_ARG(d.len ? d : S("/")));
+    go_to(dir, strcmp(real, "/") == 0 ? STR_EMPTY : base, 0);
 }
 
 // An edit line's Ctrl+C or Ctrl+X (F5.2): its selection onto the clipboard as text, in place of
@@ -1258,10 +1302,13 @@ static void act(UiAction a)
     }
     case UA_OPEN: a.all ? open_marked() : open_entry(a.index); break;
     case UA_PARENT: go_parent(); break;
-    case UA_TERMINAL:
-        if (spawn_terminal(app.cwd, &err)) set_status(false, "terminal in %s", app.cwd);
-        else set_status(true, "%s", err.msg);
+    case UA_TERMINAL: {   // all: in the folder entry index (its right-click menu, F8)
+        char in[PATH_MAX];
+        const char *dir = a.all ? (a.index < app.list.n && entry_path(a.index, in, sizeof in) ? in : NULL) : app.cwd;
+        if (dir && spawn_terminal(dir, &err)) set_status(false, "terminal in %s", dir);
+        else if (dir) set_status(true, "%s", err.msg);
         break;
+    }
     case UA_HOMEDIR: {
         const char *home = getenv("HOME");
         if (home && home[0]) go_to(home, STR_EMPTY, 0);
@@ -1320,16 +1367,29 @@ static void act(UiAction a)
     case UA_CRUMB_SHIFT: ui_crumbs_shift(&app.crumbs, app.crumb_lo, (int)a.index); break;
     case UA_NEWFOLDER: new_folder(); break;
     case UA_NEWFILE: new_file(); break;
-    case UA_NEW_WINDOW:
-        if (spawn_window(app.exe, app.cwd, &err)) set_status(false, "New window on %s", app.cwd);
-        else set_status(true, "%s", err.msg);
+    case UA_NEW_WINDOW: {   // all: on the folder entry index (F8)
+        char on[PATH_MAX];
+        const char *dir = a.all ? (a.index < app.list.n && entry_path(a.index, on, sizeof on) ? on : NULL) : app.cwd;
+        if (dir && spawn_window(app.exe, dir, &err)) set_status(false, "New window on %s", dir);
+        else if (dir) set_status(true, "%s", err.msg);
         break;
+    }
     case UA_CLOSE_ALL: close_others(a.all); break;
     case UA_PROPS: props_open(a.index == 1); break;   // (1: the folder shown, F8)
     case UA_CHMOD: props_chmod((int)a.index); break;
     case UA_OPEN_WITH: ow_open(); break;
     case UA_LAUNCH: ow_launch(a.index, a.all); break;
-    case UA_PASTE: paste(); break;
+    case UA_PASTE: {   // all: into the folder entry index (F8)
+        char into[PATH_MAX];
+        if (!a.all) paste(app.cwd);
+        else if (a.index < app.list.n && entry_path(a.index, into, sizeof into)) paste(into);
+        break;
+    }
+    case UA_MAKE_LINK:
+        if (app.ui.marked > CLIP_PATHS_MAX) set_status(true, "%td selected: ofx takes at most %d at a time", app.ui.marked, CLIP_PATHS_MAX);
+        else make_link();
+        break;
+    case UA_FOLLOW: follow_link(a.index); break;
     case UA_DUPLICATE:
         if (app.ui.marked > CLIP_PATHS_MAX) set_status(true, "%td selected: ofx takes at most %d at a time", app.ui.marked, CLIP_PATHS_MAX);
         else duplicate();
@@ -1338,7 +1398,12 @@ static void act(UiAction a)
     case UA_RELOAD: app.reloads_asked++, reload(); break;
     case UA_TRASH_VIEW: go_to(TRASH_URI, STR_EMPTY, 0); break;
     case UA_BM_EDIT: case UA_BM_GO: case UA_BM_NAME: case UA_BM_REMOVE: case UA_BM_UP: case UA_BM_DOWN: case UA_BM_RENAME: bmp_act(a); break;
-    case UA_ADD_BOOKMARK: bookmark_add(); break;
+    case UA_ADD_BOOKMARK: {   // all: the folder entry index (F8)
+        char bm[PATH_MAX];
+        if (!a.all) bookmark_add(app.cwd);
+        else if (a.index < app.list.n && entry_path(a.index, bm, sizeof bm)) bookmark_add(bm);
+        break;
+    }
     case UA_BOOKMARK: {
         const Bookmark *b = bm_menu((int)a.index);
         if (b) go_to(b->path, STR_EMPTY, 0);
@@ -3176,6 +3241,11 @@ static void menu_facts(void)
         u->bm_n++;
     }
     u->can_bookmark = !u->in_trash && !bmarks.full && bm_find(&bmarks, app.cwd) < 0;
+    // The cursor's entry (F8): a link that leads somewhere (Follow Link); a folder bookmarked already.
+    const Entry *e = app.have_list && u->list.n > 0 && u->list.sel < app.list.n ? &app.list.e[u->list.sel] : NULL;
+    char p[PATH_MAX];
+    u->sel_link = e && (e->kind == K_LINK_FILE || e->kind == K_LINK_DIR);
+    u->sel_bm = e && kind_is_dir(e->kind) && join(p, sizeof p, app.cwd, e->name) && bm_find(&bmarks, p) >= 0;
     u->bm_total = bmarks.n, u->bm_more = 0, u->bm_more_at = -1;
     for (int i = 0, local = 0; i < bmarks.n; i++) {
         if (!bmarks.b[i].path[0] || local++ < UI_MENU_BOOKMARKS) continue;
@@ -3392,6 +3462,7 @@ static UiKey ui_key_of(int key, int mods)
         case GLFW_KEY_X: return UK_CUT;
         case GLFW_KEY_V: return UK_PASTE;
         case GLFW_KEY_Z: return UK_UNDO;
+        case GLFW_KEY_M: return UK_MAKE_LINK;   // (F8, as Nemo)
         default: break;
         }
     }

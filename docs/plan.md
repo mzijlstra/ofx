@@ -719,6 +719,15 @@ where it wouldn't fit, or under the cursor's row by the keys; `menu_size` measur
 drawn), `layout_menu` floats it from the root. The script's `right-here`, `right-at`, `menubox`,
 `menuin`, `menuclear`.
 
+**Step 2 built (2026-10-27): the new commands.** On one folder of the files (`ctx_dir`): Open in
+New Window, Paste Into Folder, Open in Terminal, Add Bookmark (hidden when it is one, `sel_bm`
+from gui/); they reuse `UA_NEW_WINDOW`, `UA_PASTE`, `UA_TERMINAL`, `UA_ADD_BOOKMARK` with `all` set
+and the entry as index (`copy_here` and `bookmark_add` take the folder). Follow Link
+(`UA_FOLLOW`, on one entry gui/ says is a working link, `sel_link`): the target's folder, the
+target selected. Make Link (`UK_MAKE_LINK`, Ctrl+M, also in Edit): `op_symlink` beside each target,
+"Link to <name>" (name_free's " (2)" before the extension), the absolute path; `UNDO_LINK` removes
+them while each is still a link to that path.
+
 ## F6.4 design (2026-10-24)
 
 **Asked (Michael):** previews in the icon view, from the freedesktop thumbnail cache shared with

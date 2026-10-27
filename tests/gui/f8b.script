@@ -1,0 +1,69 @@
+# F8 step 2: a folder's own entries (a window, a terminal, a bookmark, a paste into it), Make Link
+# (Ctrl+M) and its undo, Follow Link. The tree (run.sh): sub/ with inner.txt, a.txt, zlink ->
+# sub/inner.txt; the bookmarks file in the scratch config, none yet.
+settle
+expect n=3 sel=sub bmn=0
+# Open in New Window: ofx on that folder
+point-ui row 0
+right-here
+expect menu=entry menuhid=follow,restore
+point-ui menu-item 2
+click-here
+expect menu=-
+sh grep -qx "uwsm-app -- /.*/ofx[^ /]* $OFX_DIR/sub" "$OFX_ROOT/spawn.log"
+# Open in Terminal: there, not in the folder shown
+point-ui row 0
+right-here
+point-ui menu-item 13
+click-here
+sh grep -qx "uwsm-app -- xdg-terminal-exec --dir=$OFX_DIR/sub" "$OFX_ROOT/spawn.log"
+# Add Bookmark: that folder; then it isn't offered again
+point-ui row 0
+right-here
+point-ui menu-item 15
+click-here
+wait-for 2000 bmn=1
+sh grep -qx "file://$OFX_DIR/sub" "$OFX_ROOT/config/gtk-3.0/bookmarks"
+point-ui row 0
+right-here
+expect menuhid=follow,bookmark-it,restore
+key esc
+# Paste Into Folder: a.txt copied into sub, not here
+key down
+key ctrl-c
+point-ui row 0
+right-here
+expect menugrey=follow,bookmark-it,restore
+point-ui menu-item 7
+click-here
+wait-for 3000 jobs=0 n=3
+sh test -f "$OFX_DIR/sub/a.txt" && test -f "$OFX_DIR/a.txt"
+# A folder into itself: refused
+key home
+key ctrl-c
+point-ui row 0
+right-here
+point-ui menu-item 7
+click-here
+sh test ! -e "$OFX_DIR/sub/sub"
+# Make Link: "Link to a.txt" beside it, selected, pointing at its full path; Ctrl+M on it again;
+# Ctrl+Z takes back the last
+point-ui row 1
+right-here
+point-ui menu-item 10
+click-here
+wait-for 2000 n=4 idx=2
+sh test "$(readlink "$OFX_DIR/Link to a.txt")" = "$OFX_DIR/a.txt"
+key ctrl-m
+wait-for 2000 n=5 undo=link
+key ctrl-z
+wait-for 2000 n=4
+sh test -L "$OFX_DIR/Link to a.txt" && test ! -e "$OFX_DIR/Link to Link to a.txt"
+# Follow Link: zlink's target's folder, the target selected
+point-ui row 3
+right-here
+expect menu=entry sel=zlink menuhid=open-tab,open-window,paste-into,terminal-in,bookmark-it,restore
+point-ui menu-item 14
+click-here
+wait-for 2000 crumbs=home|tree|sub sel=inner.txt
+quit

@@ -50,8 +50,8 @@ MUTANTS = [
     (G, "        if (app.ui.marked ? !app.ui.mark[i] : i != app.ui.list.sel) continue;\n        char p[PATH_MAX];", "        if (i != app.ui.list.sel) continue;\n        char p[PATH_MAX];"),
     (J, "            if (it->out != OUT_NEW) continue;", ""),
     (J, "    if (r->own_cut && !atomic_load(&j->cancel) && own_gen == r->own_gen) own.n = 0, clip_clear_own();", ""),
-    (G, "if (!name_free(app.cwd, base, S_ISDIR(st.st_mode), true, true, name, sizeof name)) continue;", "if (!name_free(app.cwd, base, S_ISDIR(st.st_mode), false, true, name, sizeof name)) continue;"),
-    (G, "        if (S_ISDIR(st.st_mode) && into_itself(src, app.cwd)) {", "        if (0) {"),
+    (G, "if (!name_free(dest, base, S_ISDIR(st.st_mode), true, true, name, sizeof name)) continue;", "if (!name_free(dest, base, S_ISDIR(st.st_mode), false, true, name, sizeof name)) continue;"),
+    (G, "        if (S_ISDIR(st.st_mode) && into_itself(src, dest)) {", "        if (0) {"),
     (G, "            if (c->cut) {\n                here++;", "            if (0) {\n                here++;"),
     (G, "        undo_begin(&undo, app.edit_new ? app.edit_new : UNDO_RENAME);", "        undo_begin(&undo, UNDO_RENAME);"),
     (G, "    if (back[0]) go_to(app.cwd, str_from_c(back), app.ui.list.sel);\n    else reload();", "    reload();"),
@@ -248,7 +248,7 @@ MUTANTS = [
     (G, "    app.edit_new = UNDO_MKFILE;", "    app.edit_new = UNDO_MKDIR;", 'f7'),
     (G, "    if (!op_mkfile(app.cwd, S(\"New file\"), made, sizeof made, &err))", "    if (!op_mkdir(app.cwd, S(\"New file\"), made, sizeof made, &err))", 'f7'),
     (G, "    case UA_NEWFILE: new_file(); break;", "    case UA_NEWFILE: new_folder(); break;", 'f7'),
-    (G, "        if (spawn_window(app.exe, app.cwd, &err))", "        if (spawn_window(\"ofx\", app.cwd, &err))", 'f7'),
+    (G, "        if (dir && spawn_window(app.exe, dir, &err))", "        if (dir && spawn_window(\"ofx\", dir, &err))", 'f7'),
     (G, "    if (app.windows[0]) win_signal_others(app.windows, getpid(), SIGUSR1);", "", 'f7'),
     (G, "    if (quit && jobs.nrun + jobs.nwait > 0) close_asked = true;", "", 'f7'),
     (G, "        if (sig == SIGUSR1) {", "        if (sig == SIGUSR2) {", 'f7'),
@@ -356,7 +356,7 @@ MUTANTS = [
     (G, '    if (m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT) && key == GLFW_KEY_A) return UK_SELECT_MATCH;', '', 'f74'),
     (G, '    if (m == GLFW_MOD_ALT && key == GLFW_KEY_END) return UK_TRASH_VIEW;', '', 'f74'),
     # Left out: the bar's "Select" label and its footer hint (pixels only); select-match.png shows them.
-    (G, '    if (dup.n > 0) copy_here(&dup);', '', 'f74'),
+    (G, '    if (dup.n > 0) copy_here(&dup, app.cwd);', '', 'f74'),
     (G, '    dup.cut = false, dup.n = targets(&pastea, dup.path, CLIP_PATHS_MAX);', '    dup.cut = true, dup.n = targets(&pastea, dup.path, CLIP_PATHS_MAX);', 'f74'),
     (G, '        else duplicate();', '', 'f74'),
     # ---- F7.5: the Bookmarks menu
@@ -426,6 +426,26 @@ MUTANTS = [
     (G, '        if (ctx_up && !app.ctx_placed) ctx_place();', '', 'f8'),
     (G, '    case UA_PROPS: props_open(a.index == 1); break;', '    case UA_PROPS: props_open(false); break;', 'f8'),
     (G, '    if (!here && app.have_list && app.list.n > 0 && n == 1)', '    if (app.have_list && app.list.n > 0 && n == 1)', 'f8'),
+    # ---- F8 step 2: a folder's own entries, Make Link, Follow Link. Not run: make_link's messages
+    # (the status line), its name-too-long branch (NAME_MAX names in a scratch tree); into_itself's
+    # dest (a mutant would copy a folder into itself without end; f8b checks the refusal).
+    (G, "        case GLFW_KEY_M: return UK_MAKE_LINK;   // (F8, as Nemo)", '', 'f8'),
+    (G, '    u->sel_link = e && (e->kind == K_LINK_FILE || e->kind == K_LINK_DIR);', '    u->sel_link = false;', 'f8'),
+    (G, '    u->sel_bm = e && kind_is_dir(e->kind) && join(p, sizeof p, app.cwd, e->name) && bm_find(&bmarks, p) >= 0;', '    u->sel_bm = false;', 'f8'),
+    (G, '    bool ok = bm_read(&bmwa, file, &now, &err) && bm_add(&bmwa, &now, dir, &err);', '    bool ok = bm_read(&bmwa, file, &now, &err) && bm_add(&bmwa, &now, app.cwd, &err);', 'f8'),
+    (G, '        if (same_dir(sdir, dest)) {', '        if (same_dir(sdir, app.cwd)) {', 'f8'),
+    (G, '        if (!join(dst, sizeof dst, dest, str_from_c(name))) continue;', '        if (!join(dst, sizeof dst, app.cwd, str_from_c(name))) continue;', 'f8'),
+    (G, '        if (!op_symlink(app.cwd, paths[i], str_from_c(name), one, sizeof one, &err)', '        if (!op_symlink(app.cwd, app.cwd, str_from_c(name), one, sizeof one, &err)', 'f8'),
+    (G, '        if (done++ == 0) undo_gen++, undo_begin(&undo, UNDO_LINK);', '        if (done++ == 0) undo_gen++;', 'f8'),
+    (G, '        undo_add(&undo, paths[i], p, NULL);\n', '', 'f8'),
+    (G, '    if (done) ui_mark_clear(&app.ui), go_to(app.cwd, str_from_c(made), app.ui.list.sel);', '    if (done) ui_mark_clear(&app.ui);', 'f8'),
+    (G, '    go_to(dir, strcmp(real, "/") == 0 ? STR_EMPTY : base, 0);', '    go_to(dir, STR_EMPTY, 0);', 'f8'),
+    (G, '        const char *dir = a.all ? (a.index < app.list.n && entry_path(a.index, in, sizeof in) ? in : NULL) : app.cwd;', '        const char *dir = app.cwd;', 'f8'),
+    (G, '        const char *dir = a.all ? (a.index < app.list.n && entry_path(a.index, on, sizeof on) ? on : NULL) : app.cwd;', '        const char *dir = app.cwd;', 'f8'),
+    (G, '        else if (a.index < app.list.n && entry_path(a.index, into, sizeof into)) paste(into);', '        else paste(app.cwd);', 'f8'),
+    (G, '        else if (a.index < app.list.n && entry_path(a.index, bm, sizeof bm)) bookmark_add(bm);', '        else bookmark_add(app.cwd);', 'f8'),
+    (G, '        else make_link();', '', 'f8'),
+    (G, '    case UA_FOLLOW: follow_link(a.index); break;', '', 'f8'),
     # ---- quit doesn't wait for a hung drive (2026-10-26: no mutant was hang's or f6b's alone)
     (K, '    if (pthread_timedjoin_np(counts.thread, NULL, &until) != 0) pthread_detach(counts.thread);', '    pthread_join(counts.thread, NULL);', 'hang'),
     ('gui/space.c', '    if (pthread_timedjoin_np(space.thread, NULL, &until) != 0) pthread_detach(space.thread);', '    pthread_join(space.thread, NULL);', 'f6'),
@@ -519,7 +539,7 @@ def key(m):
     return hashlib.sha1('\0'.join(m[:3]).encode()).hexdigest()[:12]
 
 # The group of a script that failed: run.sh prints "== <script>: FAILED" or "<group>: FAILED".
-GROUP_OF = {'f6b': 'f6', 'f62b': 'f62', 'f62c': 'f62', 'f63b': 'f63', 'f63c': 'f63', 'f64b': 'f64', 'f64c': 'f64', 'f64d': 'f64', 'f7b': 'f7', 'f73b': 'f73', 'f73c': 'f73', 'f73d': 'f73', 'f75b': 'f75'}
+GROUP_OF = {'f6b': 'f6', 'f62b': 'f62', 'f62c': 'f62', 'f63b': 'f63', 'f63c': 'f63', 'f64b': 'f64', 'f64c': 'f64', 'f64d': 'f64', 'f7b': 'f7', 'f73b': 'f73', 'f73c': 'f73', 'f73d': 'f73', 'f75b': 'f75', 'f8b': 'f8'}
 
 # The tags as groups run.sh knows: a script's name (f7b, written before GROUP_OF had it) as its
 # group; anything else dropped, so a mutant never "survives" a group that runs nothing.

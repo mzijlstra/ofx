@@ -171,6 +171,22 @@ static bool op_mkfile(const char *dir, Str name, char *made, size_t cap, Err *er
     return err_set(err, "no free name for %.*s", STR_ARG(name)), false;
 }
 
+// A symbolic link in dir to target (an absolute path), named name or name (2) and so on (before
+// its extension) when it is taken (Make Link, F8); *made gets the name.
+static bool op_symlink(const char *dir, const char *target, Str name, char *made, size_t cap, Err *err)
+{
+    if (!name_valid(name, err)) return false;
+    for (int tries = 0; tries < 5; tries++) {
+        char p[PATH_MAX];
+        if (!name_free(dir, name, false, false, false, made, cap) || !path_put(p, sizeof p, dir, str_from_c(made)))
+            return err_set(err, "no free name for %.*s", STR_ARG(name)), false;
+        if (!ops_allowed(p, err)) return false;
+        if (symlink(target, p) == 0) return true;
+        if (errno != EEXIST) return err_set(err, "%s: %s", p, strerror(errno)), false;
+    }
+    return err_set(err, "no free name for %.*s", STR_ARG(name)), false;
+}
+
 // ---- delete for good --------------------------------------------------------------------------
 
 enum { TREE_DEPTH_MAX = 256 };

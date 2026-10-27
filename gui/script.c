@@ -140,7 +140,8 @@ static void script_state(char *out, size_t cap)
     Theme *t = &app.theme;
     // The edit line's text, its spaces as '_' (the state line is words).
     static const char *const JOB_PHASES[] = { "scan", "run", "ask", "done" };
-    static const char *const UNDO_KINDS[] = { "-", "rename", "mkdir", "trash", "copy", "move", "mkfile", "chmod" };
+    static const char *const UNDO_KINDS[] = { "-", "rename", "mkdir", "trash", "copy", "move", "mkfile", "chmod", "link" };
+    _Static_assert(sizeof UNDO_KINDS / sizeof UNDO_KINDS[0] == UNDO_LINK + 1, "a name for each undo");
     char edit[NAME_MAX + 1];
     snprintf(edit, sizeof edit, "%.*s", app.ui.edit_len ? app.ui.edit_len : 1, app.ui.edit_len ? app.ui.edit : "-");
     for (char *c = edit; *c; c++)
@@ -456,7 +457,7 @@ static UiKey script_key(Str name)
         { "left", UK_LEFT }, { "backspace", UK_BACKSPACE }, { "esc", UK_ESC }, { "tab", UK_TAB },
         { "alt-left", UK_BACK }, { "alt-right", UK_FORWARD }, { "ctrl-f", UK_FIND }, { "ctrl-h", UK_HIDDEN },
         { "f2", UK_F2 }, { "f9", UK_F9 }, { "delete", UK_DELETE }, { "shift-delete", UK_SHIFT_DELETE }, { "ctrl-a", UK_ALL },
-        { "ctrl-c", UK_COPY }, { "ctrl-x", UK_CUT }, { "ctrl-v", UK_PASTE }, { "ctrl-z", UK_UNDO },
+        { "ctrl-c", UK_COPY }, { "ctrl-m", UK_MAKE_LINK }, { "ctrl-x", UK_CUT }, { "ctrl-v", UK_PASTE }, { "ctrl-z", UK_UNDO },
         { "ctrl-shift-n", UK_NEWFOLDER }, { "ctrl-l", UK_LOCATION }, { "alt-up", UK_PARENT },
         { "ctrl-t", UK_TAB_NEW }, { "ctrl-w", UK_TAB_CLOSE }, { "ctrl-tab", UK_TAB_NEXT }, { "ctrl-shift-tab", UK_TAB_PREV },
         { "ctrl-shift-pageup", UK_TAB_LEFT }, { "ctrl-shift-pagedown", UK_TAB_RIGHT },

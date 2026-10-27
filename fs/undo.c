@@ -1,4 +1,5 @@
-// One level of undo: the last rename, new folder, new file (F7.1), trash, copy or move (docs/plan.md, F3 "Undo").
+// One level of undo: the last rename, new folder, new file (F7.1), trash, copy, move or links made (F8)
+// (docs/plan.md, F3 "Undo").
 // Before it does anything it checks that things are as the action left them; if not, it does
 // nothing and says why. Delete for good can't be undone.
 
@@ -9,9 +10,9 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-typedef enum { UNDO_NONE, UNDO_RENAME, UNDO_MKDIR, UNDO_TRASH, UNDO_COPY, UNDO_MOVE, UNDO_MKFILE, UNDO_CHMOD } UndoKind;
+typedef enum { UNDO_NONE, UNDO_RENAME, UNDO_MKDIR, UNDO_TRASH, UNDO_COPY, UNDO_MOVE, UNDO_MKFILE, UNDO_CHMOD, UNDO_LINK } UndoKind;
 
-// rename, move: from was moved to to; new folder, new file, copy: to was made; a permission change
+// rename, move: from was moved to to; new folder, new file, copy: to was made; a link: to, pointing at from; a permission change
 // (F7.2): to's mode was info's first word (octal), the file then its device and inode (the rest),
 // so the undo never reaches another file put at that path since (reviewer-2, F7.2 review); trash: from went to file,
 // with its info.
@@ -63,7 +64,7 @@ static bool present(const char *path)
 // What the undo would do, in a few words ("rename", "trash of 3 items").
 static void undo_what(const Undo *u, char *out, size_t cap)
 {
-    static const char *const NAMES[] = { "nothing", "rename", "new folder", "trash", "copy", "move", "new file", "permission change" };
+    static const char *const NAMES[] = { "nothing", "rename", "new folder", "trash", "copy", "move", "new file", "permission change", "link" };
     if (u->n == 1 || u->kind == UNDO_RENAME || u->kind == UNDO_MKDIR || u->kind == UNDO_MKFILE || u->kind == UNDO_CHMOD) snprintf(out, cap, "%s", NAMES[u->kind]);
     else snprintf(out, cap, "%s of %td items", NAMES[u->kind], u->n);
 }
@@ -93,6 +94,12 @@ static bool undo_check(const Undo *u, Err *err)
             struct stat st;
             if (lstat(it->to, &st) != 0 || !S_ISREG(st.st_mode)) return err_set(err, "%s isn't a file now: can't undo", it->to), false;
             if (st.st_size != 0) return err_set(err, "%s isn't empty now: can't undo", it->to), false;
+        }
+        // A link made (F8) goes only while it is that link still: from is what it points at.
+        if (u->kind == UNDO_LINK) {
+            char at[PATH_MAX];
+            ssize_t k = readlink(it->to, at, sizeof at - 1);
+            if (k < 0 || !it->from || (at[k] = 0, strcmp(at, it->from) != 0)) return err_set(err, "%s isn't that link now: can't undo", it->to), false;
         }
         if ((u->kind == UNDO_RENAME || u->kind == UNDO_TRASH || u->kind == UNDO_MOVE) && present(it->from))
             return err_set(err, "%s is there again: can't undo", it->from), false;
@@ -137,6 +144,7 @@ static bool undo_do(Undo *u, isize *done, Err *err)
             one = op_chmod(it->to, (mode_t)strtol(it->info ? it->info : "", NULL, 8), &was, &e);
             break;
         }
+        case UNDO_LINK:
         case UNDO_MKFILE: one = ops_allowed(it->to, &e) && (unlink(it->to) == 0 || (err_set(&e, "%s: %s", it->to, strerror(errno)), false)); break;
         case UNDO_TRASH: {
             Trashed t = { 0 };

@@ -9,7 +9,7 @@ key space
 expect marked=1 sel=b.txt
 point-ui row 2
 right-here
-expect menu=entry sel=b.txt marked=0 menuat=- menuhid=open-tab,restore menuin=1
+expect menu=entry sel=b.txt marked=0 menuat=- menuhid=open-tab,open-window,paste-into,terminal-in,follow,bookmark-it,restore menuin=1
 shot ctx-entry.png
 # No neighbours: Left and Right do nothing; a bar title under the pointer doesn't take over
 key right
@@ -24,14 +24,14 @@ expect menu=-
 key ctrl-a
 point-ui row 1
 right-here
-expect menu=entry sel=a.txt marked=4 menuhid=open-tab,rename,restore
+expect menu=entry sel=a.txt marked=4 menuhid=open-tab,open-window,paste-into,rename,terminal-in,follow,bookmark-it,restore
 key esc
 key esc
 expect marked=0
 # A folder: Open in New Tab, the tab behind
 point-ui row 0
 right-here
-expect menu=entry sel=sub menuhid=restore
+expect menu=entry sel=sub menuhid=follow,restore
 point-ui menu-item 1
 click-here
 expect menu=- tabs=2 tab=0 tabdirs=tree|sub
@@ -41,7 +41,7 @@ expect tabs=1
 # Rename from the menu: the cursor's row in its edit line
 point-ui row 1
 right-here
-point-ui menu-item 8
+point-ui menu-item 11
 click-here
 expect menu=- editing=1 edit=a.txt
 key esc
@@ -112,6 +112,6 @@ type n
 expect modal=-
 point-ui row 0
 right-here
-expect menu=entry menuhid=open-tab,trash
+expect menu=entry menuhid=open-tab,open-window,paste-into,terminal-in,follow,bookmark-it,trash
 key esc
 quit
