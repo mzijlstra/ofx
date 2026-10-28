@@ -198,6 +198,24 @@ ui/ that nothing calls makes the test build warn.
   `frame.c` (tooltips, layout, draw), `input.c` (keys, hit_at, hover); the worker threads and the
   panels' own files (`openwith.c`, `bookmarks.c`, ...) as before.
 
+## At the end of each major milestone (Michael, 2026-10-28)
+
+Before the install of a major milestone's last step, beside the `--full` GUI mutant run:
+
+1. **A code-health review of the whole tree.** Why: features built one at a time leave
+   copy-paste, flags that can contradict, and dead code that no single step's review sees; the
+   first such review (after F9 step 2) found a modal-order disagreement, a focus bug, a trash-view
+   Up bug and 20 checks testing dead code.
+   - Read-only agents in parallel, one per area: gui/main.c and its files, ui/, fs/ with base/, and
+     the threads, tests and tooling. Each is asked for duplication, oversized functions, piles of
+     special cases, state that can contradict itself, dead code, stale comments, and (fs/) every
+     write going through the guard. Findings have file:line, a cost (HIGH, MEDIUM, LOW) and a size.
+   - Spot-check the main claims against the code before reporting.
+   - Michael gets one ranked summary and a proposed order. He picks what gets done before the next
+     milestone.
+2. **The cleanup it leads to:** each step its own commits and gates, like a feature (make test,
+   unit mutants, GUI suite, tagged GUI mutants), then to reviewer-2.
+
 ## Vendored code
 
 `vendor/`: Clay (`main` at e6cc369, `clay.h` and its licence) and raylib 6.0 (dbc56a8, `src/` and
