@@ -3,7 +3,7 @@
 # (tools/gui/run-script.sh):
 #   tests/gui/run.sh <scratch-dir> [binary] [group...]
 # The groups (one or more scripts on one tree): browse big gone watchgap f2 f3 f4 f5 f52 f53 f54
-# f6 (f6, f6b) f62 (f62, f62b, f62c) f63 (f63, f63b, f63c) f64 (f64, f64b, f64c, f64d) f7 (f7, f7b) f72 f73 (f73, f73b, f73c, f73d) f74 f75 (f75, f75b) f8 (f8, f8b, f8c, f8d, f8e) hang guard3 guard. Named ones only, or all of them; a group
+# f6 (f6, f6b) f62 (f62, f62b, f62c) f63 (f63, f63b, f63c) f64 (f64, f64b, f64c, f64d) f7 (f7, f7b) f72 f73 (f73, f73b, f73c, f73d) f74 f75 (f75, f75b) f8 (f8, f8b, f8c, f8d, f8e) f9 hang guard3 guard. Named ones only, or all of them; a group
 # that fails says "== <script>: FAILED" or "<group>: FAILED" (tools/mutation/gui.py reads it).
 set -u
 base=${1:?usage: run.sh <scratch-dir> [binary]}
@@ -266,6 +266,19 @@ T=$base/f8c; rm -rf "$T"; H=$T/home; mkdir -p "$H/tree/sub" "$H/tree/sub2" "$T/c
 printf 'file://%s/tree/sub Sub\nfile://%s/tree/sub2\n' "$H" "$H" > "$T/config/gtk-3.0/bookmarks"
 printf '1 0 0:1 / / rw - ext4 /dev/x rw\n' > "$T/mountinfo"
 echo "== f8c"; OFX_TEST_HOME="$H" OFX_TEST_MOUNTINFO="$T/mountinfo" "$here/../../tools/gui/run-script.sh" "$T" "$here/f8c.script" "$bin" "$H/tree" || failed f8c
+fi
+if want f9; then
+# F9 step 1: the search view. home/tree: names at three depths, two index.ts, a hidden folder and
+# file, .git and node_modules (left out), a link to a folder (not followed), and zz/ with 10,001
+# files (the limit).
+T=$base/f9; rm -rf "$T"; H=$T/home; mkdir -p "$H/tree/src/deep" "$H/tree/.hid" "$H/tree/.git" "$H/tree/node_modules" "$H/tree/docs" "$H/tree/zz"
+touch "$H/tree/a.ts" "$H/tree/b.txt" "$H/tree/src/c.ts" "$H/tree/src/index.ts" "$H/tree/src/deep/index.ts" "$H/tree/src/deep/d.TS" \
+      "$H/tree/.hid/e.ts" "$H/tree/.f.ts" "$H/tree/.git/g.ts" "$H/tree/node_modules/h.ts" "$H/tree/docs/notes.txt"
+printf x > "$H/tree/src/index.ts"; printf x > "$H/tree/src/deep/index.ts"   # (an empty file opens through its type's app)
+ln -s src "$H/tree/link"
+(cd "$H/tree/zz" && seq -f 'zz%05g' 0 10000 | xargs touch)
+printf '1 0 0:1 / / rw - ext4 /dev/x rw\n' > "$T/mountinfo"
+echo "== f9"; OFX_TEST_HOME="$H" OFX_TEST_MOUNTINFO="$T/mountinfo" "$here/../../tools/gui/run-script.sh" "$T" "$here/f9.script" "$bin" "$H/tree" || failed f9
 fi
 if want hang; then
 T=$base/hang; rm -rf "$T"; mkdir -p "$T/tree/stuck"

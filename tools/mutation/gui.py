@@ -32,7 +32,7 @@ MUTANTS = [
     (G, "    go_to(up, str_from_c(child_buf), 0);", "    go_to(up, STR_EMPTY, 0);"),
     (G, "    if (go_to(app.cwd, str_from_c(keep), app.ui.list.sel)) return;", "    if (go_to(app.cwd, STR_EMPTY, app.ui.list.sel)) return;"),
     (G, "        memmove(up, d.p, (size_t)d.len);\n        up[d.len] = 0;", "        snprintf(up, sizeof up, \"%.*s\", STR_ARG(d));"),
-    (G, "        atomic_store(&watch.list_ready, true);\n        glfwPostEmptyEvent();\n        SetWindowTitle", "        SetWindowTitle"),
+    (G, "        atomic_store(&watch.list_ready, true);\n        glfwPostEmptyEvent();\n        char shown", "        char shown"),
     (W, "static const u32 WATCH_DIR_MASK = IN_CREATE | ", "static const u32 WATCH_DIR_MASK = "),
     (W, "    if (rewatch) watch.theme_wd = inotify_add_watch(watch.fd, watch.theme, WATCH_THEME_MASK);", ""),
     (W, "        if (theme) atomic_store(&watch.theme_ready, true);", ""),
@@ -82,7 +82,7 @@ MUTANTS = [
     (G, "        go_up_from(t->dir);\n        if (there)", "        if (there)"),
     (G, "    if (tabbar.n == 1) {\n        app.quit = true;\n        return;\n    }", ""),
     (G, "    if (shown) tab_load();", ""),
-    (G, "    if (strcmp(path, TRASH_URI) != 0 && (stat(path, &st) != 0 || !S_ISDIR(st.st_mode))) {", "    if (strcmp(path, TRASH_URI) != 0 && stat(path, &st) != 0) {"),
+    (G, "    if (strcmp(path, TRASH_URI) != 0 && !is_search(path) && (stat(path, &st) != 0 || !S_ISDIR(st.st_mode))) {", "    if (strcmp(path, TRASH_URI) != 0 && !is_search(path) && stat(path, &st) != 0) {"),
     (G, "    if (h.tab >= 0) in->tab_close = h.tab;\n    else if (h.row >= 0)", "    if (h.row >= 0)"),
     (G, "    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_W) return UK_TAB_CLOSE;", ""),
     (G, "    if (action == GLFW_PRESS && m == GLFW_MOD_ALT && key >= GLFW_KEY_1 && key <= GLFW_KEY_9)", "    if (action == GLFW_PRESS && key >= GLFW_KEY_1 && key <= GLFW_KEY_9)"),
@@ -142,7 +142,7 @@ MUTANTS = [
     # F6
     (W, "        if (watch.mount_wd >= 0 && e->wd == watch.mount_wd) *mounts = true;\n", ""),
     (G, "        if (atomic_exchange(&watch.mounts_ready, false)) places_reload(), dirty = true;\n", ""),
-    (G, "    tree_refresh(!same, app.ui.side.sel);\n", "    tree_refresh(false, app.ui.side.sel);\n"),
+    (G, "    tree_refresh(!same && !in_search, app.ui.side.sel);\n", "    tree_refresh(false, app.ui.side.sel);\n"),
     (G, "    if (in_trash) trash_scan();\n", ""),
     (G, "        if (app.ui.in_trash && str_eq(path_base(files), S(\"files\")))\n            r->item[k++]", "        if (0)\n            r->item[k++]"),
     (G, "        job_submit(r, JOB_DELETE, k);\n        r->trash = JOB_TRASH_EMPTY;", "        r->trash = JOB_TRASH_EMPTY;"),
@@ -193,7 +193,7 @@ MUTANTS = [
     (G, "    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_RIGHT) return UK_LOCATION;\n", ""),
     (G, "    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_S) return UK_F9;\n", ""),
     # tooltips (Michael, 2026-10-24)
-    (G, "        timer_at(ui_tip_due(&app.tip));\n", ""),
+    (G, "        timer_at(wake_due());\n", ""),
     (G, "        if (ui_tip_tick(&app.tip, now_ms())) dirty = true;\n", ""),
     (G, "        if (ui_input_acts(&in) && ui_tip_act(&app.tip)) seen = true;   // a click or key: the tooltip goes\n", ""),
     (G, "        pthread_cond_timedwait(&timer.cv, &timer.mu, &ts);", "        pthread_cond_wait(&timer.cv, &timer.mu);"),
@@ -234,7 +234,7 @@ MUTANTS = [
     (TB, "    if (e->mtime != mtime && e->state != TS_ASKED) {", "    if (0) {"),
     (TB, "        if ((got == TG_CACHED || got == TG_MADE) && out.w <= THUMB_PX_MAX", "        if (got == TG_MADE && out.w <= THUMB_PX_MAX"),
     (TB, "                             .make = local && kind != TK_NONE && size <= THUMB_SRC_MAX, .px = px };", "                             .make = kind != TK_NONE && size <= THUMB_SRC_MAX, .px = px };"),
-    (G, "    app.thumb_local = thumb_local(read_file(&scratch, mountinfo_path()), dir);", "    app.thumb_local = true;"),
+    (G, "    app.thumb_local = thumb_local(read_file(&scratch, mountinfo_path()), in_search ? app.search_root : dir);", "    app.thumb_local = true;"),
     (G, "    for (isize i = ahead; i < ahead + (isize)app.ui.list.rows * cols && i < app.list.n; i++) entry_thumb(i, false);\n", ""),
     (G, "        Texture2D *th = entry_thumb(i, true);", "        Texture2D *th = NULL;"),
     (G, "CLAY_SIZING_FIXED(th->width / s), CLAY_SIZING_FIXED(th->height / s)", "CLAY_SIZING_FIXED(px), CLAY_SIZING_FIXED(px)"),
@@ -244,7 +244,7 @@ MUTANTS = [
     (G, "    changed |= ui_menu_hover(&app.ui, h.menu_title, h.menu_item);", "", 'f7'),
     (G, "    app.menu_title_hover = h.menu_title;\n", "", 'f7'),
     (G, "            if (in_box(CLAY_IDI(\"menu-title\", m), x, y)) h.menu_title = m;", "", 'f7'),
-    (G, "    app.ui.can_write = !in_trash && access(dir, W_OK) == 0;", "    app.ui.can_write = !in_trash;", 'f7'),
+    (G, "    app.ui.can_write = !in_trash && !in_search && access(dir, W_OK) == 0;", "    app.ui.can_write = !in_trash && !in_search;", 'f7'),
     (G, "    app.edit_new = UNDO_MKFILE;", "    app.edit_new = UNDO_MKDIR;", 'f7'),
     (G, "    if (!op_mkfile(app.cwd, S(\"New file\"), made, sizeof made, &err))", "    if (!op_mkdir(app.cwd, S(\"New file\"), made, sizeof made, &err))", 'f7'),
     (G, "    case UA_NEWFILE: new_file(); break;", "    case UA_NEWFILE: new_folder(); break;", 'f7'),
@@ -273,7 +273,7 @@ MUTANTS = [
     (G, '    app.ui.prop_can = !app.ui.in_trash && !props.broken && props.st.st_uid == geteuid();', '    app.ui.prop_can = !app.ui.in_trash && !props.broken;', 'f72'),
     (G, '        props.broken = stat(path, &props.st) != 0;', '        props.broken = false;', 'f72'),
     (G, '        props.link[k > 0 ? k : 0] = 0;', '        props.link[0] = 0;', 'f72'),
-    (G, '    if (n == 0 && !app.ui.in_trash) props_path[0] = arena_cstr(&propsa, str_from_c(app.cwd)), n = 1;', '', 'f72'),
+    (G, '    if (n == 0 && !app.ui.in_trash && !app.ui.in_search) props_path[0] = arena_cstr(&propsa, str_from_c(app.cwd)), n = 1;', '', 'f72'),
     (G, '    if (app.ui.in_trash) snprintf(props.where, sizeof props.where, "Trash");', '', 'f72'),
     # Not mutants: `n >= bn` in props_drive (mountinfo lists a drive before those mounted inside it,
     # so the last above is the longest); prop_can in props_chmod (ui/ sends no UA_CHMOD without it);
@@ -336,17 +336,17 @@ MUTANTS = [
     (G, '        case GLFW_KEY_DOWN: return UK_SEL_DOWN;', '', 'f2'),
     (G, ' || (stat(dir, &sst) == 0 && !S_ISDIR(sst.st_mode))) {', ') {', 'f73'),
     (G, '    if (!same) app.ui.find_from = app.ui.list.sel;', '', 'f2'),
-    (G, ' - (app.ui.finding ? FIND_BAR_H : 0);', ';', 'f2'),
+    (G, ' -\n               (app.ui.finding ? FIND_BAR_H : 0);', ';', 'f2'),
     (G, '        h.find_x = in_box(CLAY_ID("find-x"), x, y);', '', 'f2'),
     (G, '        h.find_field = !h.toggle && !h.find_x && in_box(CLAY_ID("find-field"), x, y);', '', 'f2'),
-    (G, '    in->find_x = h.find_x, in->find_field = h.find_field, in->find_step = h.find_step;', '', 'f2'),
+    (G, '    in->find_x = h.find_x, in->find_field = h.find_field, in->find_step = h.find_step, in->search_field = h.search_field;', '    in->search_field = h.search_field;', 'f2'),
     # ---- F7.4: the Edit, View and Go menus
     (G, '    u->can_undo = undo.kind != UNDO_NONE && undo.n > 0;', '    u->can_undo = false;', 'f74'),
     (G, '    u->can_back = hist.nback > 0, u->can_forward = hist.nfwd > 0;', '    u->can_back = hist.nback > 0, u->can_forward = true;', 'f74'),
-    (G, '    u->can_up = !u->in_trash && strcmp(app.cwd, "/") != 0;', '    u->can_up = strcmp(app.cwd, "/") != 0;', 'f74'),
+    (G, '    u->can_up = !u->in_trash && (u->in_search || strcmp(app.cwd, "/") != 0);', '    u->can_up = u->in_search || strcmp(app.cwd, "/") != 0;', 'f74'),
     (G, '    u->can_paste = clip.ok || own.n > 0;', '    u->can_paste = clip.ok;', 'f74'),
     (G, '    u->shows_hidden = app.show_hidden;', '', 'f74'),
-    (G, '    case UA_RELOAD: app.reloads_asked++, reload(); break;', '', 'f74'),
+    (G, '    case UA_RELOAD: app.reloads_asked++, app.ui.in_search ? search_again() : reload(); break;', '', 'f74'),
     (G, '    case UA_TRASH_VIEW: go_to(TRASH_URI, STR_EMPTY, 0); break;', '', 'f74'),
     (G, '    if (m == GLFW_MOD_ALT && key == GLFW_KEY_HOME) return UK_HOMEDIR;', '', 'f74'),
     (G, '    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_R) return UK_RELOAD;', '', 'f74'),
@@ -363,7 +363,7 @@ MUTANTS = [
     (G, '    arena_reset(&bma);\n    bm_parse(&bma, read_file(&bma, bm), &bmarks);', '    arena_reset(&bma);', 'f75'),
     (G, '        if (strcmp(bmarks.b[i].path, app.cwd) == 0) u->bm_here = u->bm_n;', '', 'f75'),
     (G, '        if (!bmarks.b[i].path[0]) continue;\n        if (strcmp(bmarks.b[i].path, app.cwd)', '        if (strcmp(bmarks.b[i].path, app.cwd)', 'f75'),
-    (G, '    u->can_bookmark = !u->in_trash && !bmarks.full && bm_find(&bmarks, app.cwd) < 0;', '    u->can_bookmark = !u->in_trash && !bmarks.full;', 'f75'),
+    (G, '    u->can_bookmark = !u->in_trash && !u->in_search && !bmarks.full && bm_find(&bmarks, app.cwd) < 0;', '    u->can_bookmark = !u->in_trash && !u->in_search && !bmarks.full;', 'f75'),
     (G, '        if (bmarks.b[i].path[0] && k-- == 0) return &bmarks.b[i];', '        if (k-- == 0) return &bmarks.b[i];', 'f75'),
     (G, '    return b->label.len ? b->label : strcmp(b->path, "/") == 0', '    return false ? b->label : strcmp(b->path, "/") == 0', 'f75'),
     (G, '    bool ok = bm_read(&bmwa, file, &now, &err) && bm_add(', '    bool ok = (now.n = 0, true) && bm_add(', 'f75'),
@@ -431,7 +431,7 @@ MUTANTS = [
     # dest (a mutant would copy a folder into itself without end; f8b checks the refusal).
     (G, "        case GLFW_KEY_M: return UK_MAKE_LINK;   // (F8, as Nemo)", '', 'f8'),
     (G, '    u->sel_link = e && (e->kind == K_LINK_FILE || e->kind == K_LINK_DIR);', '    u->sel_link = false;', 'f8'),
-    (G, '    u->sel_bm = e && kind_is_dir(e->kind) && join(p, sizeof p, app.cwd, e->name) && bm_find(&bmarks, p) >= 0;', '    u->sel_bm = false;', 'f8'),
+    (G, '    u->sel_bm = e && kind_is_dir(e->kind) && entry_path(u->list.sel, p, sizeof p) && bm_find(&bmarks, p) >= 0;', '    u->sel_bm = false;', 'f8'),
     (G, '    bool ok = bm_read(&bmwa, file, &now, &err) && bm_add(&bmwa, &now, dir, &err);', '    bool ok = bm_read(&bmwa, file, &now, &err) && bm_add(&bmwa, &now, app.cwd, &err);', 'f8'),
     (G, '        if (same_dir(sdir, dest)) {', '        if (same_dir(sdir, app.cwd)) {', 'f8'),
     (G, '        if (!join(dst, sizeof dst, dest, str_from_c(name))) continue;', '        if (!join(dst, sizeof dst, app.cwd, str_from_c(name))) continue;', 'f8'),
@@ -530,6 +530,37 @@ MUTANTS = [
     (G, '    for (int k = 1; k <= 4 && !h.toggle && (app.ui.ow || (app.ui.finding && modal_kind() == MODAL_NONE && !app.ui.menu_on)); k++)', '    for (int k = 1; k <= 3 && !h.toggle && (app.ui.ow || (app.ui.finding && modal_kind() == MODAL_NONE && !app.ui.menu_on)); k++)', 'f73'),
     # Left out: nsvgRasterize gone leaves a blank texture, which no state word sees (the pixels);
     # f73's ow-panel.png shows the SVG drawn.
+    # ---- F9 step 1: the search view (2026-10-28). Left out: what is only pixels (the tab's label,
+    # the rows' folder, the empty list's words; f9's shots show them), the walk left running after
+    # leaving a search (no state word sees it), the publishing pace (the scripts wait for the end).
+    (G, '    if (app.ui.in_search) {\n        char dir[PATH_MAX];', '    if (false) {\n        char dir[PATH_MAX];', 'f9'),
+    (G, '        return join(out, cap, e->dir.len ? dir : app.search_root, e->name);', '        return join(out, cap, app.search_root, e->name);', 'f9'),
+    (G, '    if (!search_is(r, text, app.ui.find_opts, app.show_hidden)) {', '    if (false) {', 'f9'),
+    (G, '    if (app.ui.in_search && !in_search) search_ask("", STR_EMPTY, app.ui.find_opts, false), app.search_due = 0;', '', 'f9'),
+    (G, '    fs_sort(l, app.ui.sort);\n    snprintf(app.search_root', '    snprintf(app.search_root', 'f9'),
+    (G, '    go_to_in(app.cwd, str_from_c(app.search_pick[0] ? app.search_pick : keep), app.ui.list.sel, true);', '    go_to_in(app.cwd, str_from_c(keep), app.ui.list.sel, true);', 'f9'),
+    (G, '    snprintf(app.cwd, sizeof app.cwd, "%s", uri);\n    app.search_pick[0] = 0;', '    app.search_pick[0] = 0;', 'f9'),
+    (G, '    if (!in_search) app.ui.search_keys = false;', '', 'f9'),
+    (G, '        app.ui.search_keys = text.len == 0, app.ui.search_edited = false, app.search_due = 0;', '        app.ui.search_keys = false, app.ui.search_edited = false, app.search_due = 0;', 'f9'),
+    (G, '        snprintf(app.search_pick, sizeof app.search_pick, "%.*s", STR_ARG(select));\n    }', '    }', 'f9'),
+    (G, '        if (search_uri(uri, sizeof uri, app.cwd, STR_EMPTY)) tab_open(uri, STR_EMPTY, true);', '        tab_open(app.cwd, STR_EMPTY, true);', 'f9'),
+    (G, '    case UA_NOT_IN_SEARCH: set_status(true, "Search results can\'t do that yet"); break;', '    case UA_NOT_IN_SEARCH: break;', 'f9'),
+    (G, ' - (app.ui.in_search ? SEARCH_BAR_H : 0) -', ' -', 'f9'),
+    (G, '        if (in_box(CLAY_IDI("toggle", TOGGLE_SEARCH + k), x, y)) h.toggle = k;', '', 'f9'),
+    (G, '    h.search_field = app.ui.in_search && !h.toggle && in_box(CLAY_ID("search-field"), x, y);', '', 'f9'),
+    (G, '        if (app.ui.in_search && search_take()) search_relist(), dirty = true;', '', 'f9'),
+    (G, '        if (app.search_due && now_ms() >= app.search_due) app.search_due = 0, search_retype(), dirty = true;', '        if (app.search_due) app.search_due = 0, search_retype(), dirty = true;', 'f9'),
+    (G, '    return !a ? b : !b ? a : a < b ? a : b;', '    return a;', 'f9'),
+    (G, '        if (app.ui.in_search) layout_search_bar();', '', 'f9'),
+    (G, '    else snprintf(buf, cap, "%td found%s%s", app.list.n, sep, skipped);', '    else snprintf(buf, cap, "%td found", app.list.n);', 'f9'),
+    (G, '    if (app.ui.in_search) {   // the folder searched (F9)\n        go_to(app.search_root, STR_EMPTY, 0);\n        return;\n    }', '', 'f9'),
+    (G, '        if (app.ui.search_edited) app.ui.search_edited = false, app.search_due = now_ms() + SEARCH_TYPE_MS, timer_at(wake_due());', '        if (app.ui.search_edited) app.ui.search_edited = false, app.search_due = now_ms() + SEARCH_TYPE_MS;', 'f9'),
+    ('gui/search.c', '    if (search_wrote == SEARCH_MAX) return false;', '', 'f9'),
+    ('gui/search.c', '    if (search_wrote == 0 || !str_eq(dir, search_dir_last)) {', '    if (search_wrote == 0) {', 'f9'),
+    ('gui/search.c', '    search_res[search_wrote++].dir = search_dir_last;', '    search_wrote++;', 'f9'),
+    ('gui/search.c', ' && search.hidden == hidden;', ';', 'f9'),
+    ('gui/search.c', 'search.opts.cased == o.cased && ', '', 'f9'),
+    ('gui/search.c', '    search.done = text.len == 0 || !search.started;', '    search.done = !search.started;', 'f9'),
 ]
 import concurrent.futures, queue, threading, time
 
@@ -555,7 +586,7 @@ t_start = time.monotonic()
 # run.sh's groups, in its order: a mutant runs them one at a time and stops at the first that
 # kills it (Michael, 2026-10-25).
 GROUPS = ['browse', 'big', 'gone', 'watchgap', 'f2', 'f3', 'f4', 'f5', 'f52', 'f53', 'f54', 'f6', 'f62', 'f63', 'f64', 'f7',
-          'f72', 'f73', 'f74', 'f75', 'f8', 'hang', 'guard3', 'guard']
+          'f72', 'f73', 'f74', 'f75', 'f8', 'f9', 'hang', 'guard3', 'guard']
 run_text = open(os.path.join(root, 'tests/gui/run.sh')).read()
 assert re.findall(r'want ([a-z0-9]+)', run_text) == GROUPS, 'GROUPS in gui.py no longer match tests/gui/run.sh'
 

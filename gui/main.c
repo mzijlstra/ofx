@@ -112,6 +112,7 @@ static void timer_stop(void)
 #include "thumbs.c"
 #include "space.c"
 #include "walk.c"
+#include "search.c"
 
 // ---- memory ---------------------------------------------------------------------------------
 
@@ -132,7 +133,7 @@ static Bookmarks bmarks;   // the bookmarks file's lines (F7.5), read with the p
 static int   watch_delay_ms;   // OFX_TEST_WATCH_DELAY_MS, for one test
 
 enum { BAR_BTN_W = 34, BAR_BTN_H = 30, BAR_GAP = 4, ARROW_W = 22, CRUMB_PAD = 10, CRUMB_ICON_PX = 16 };
-enum { TREE_STEP = 10, TRASH_BAR_H = 38 };
+enum { TREE_STEP = 10, TRASH_BAR_H = 38, SEARCH_BAR_H = 38 };
 // The menu bar (F7.1): a row of titles over the top bar; a menu's entries, its lines between groups.
 enum { MENU_H = 26, MENU_TITLE_PAD = 10, MENU_ROW_H = 26, MENU_SEP_H = 9, MENU_W_MIN = 280 };
 enum { TAB_H = 30, TAB_X_W = 22, JOB_ROW_H = 40, JOB_WAIT_H = 22, MODE_BTN_W = 28, MODE_BTN_H = 22, MODE_GAP = 4, FIND_BAR_H = 36 };
@@ -154,6 +155,15 @@ typedef struct {
 
 static struct {
     char      cwd[PATH_MAX];
+    // The search view (F9): the folder searched, what the walk left out so far and whether it ended,
+    // when the field's last change runs (0: none waiting), and the entry to put the cursor on when
+    // it comes (back to a search, the one left from).
+    char        search_root[PATH_MAX];
+    SearchSkips search_s;
+    bool        search_done;
+    i64         search_due;
+    char        search_pick[NAME_MAX + 1];
+    UiMatcher   search_m;     // its text as the walk matches it: a bad expression's reason, for the bar
     int       cur;          // lists[cur] holds the listing
     Listing   list;
     Str      *mime;         // per entry, filled as rows are drawn; .p NULL until then
@@ -349,19 +359,27 @@ static bool join(char *out, size_t cap, const char *dir, Str name)
     return n >= 0 && (size_t)n < cap;
 }
 
+// The cursor's entry as listing_find finds it: its name, in the search view its folder and name (F9;
+// empty when that is longer than a name, as the history keeps names).
 static Str sel_name(void)
 {
-    return app.have_list && app.ui.list.n > 0 ? app.list.e[app.ui.list.sel].name : STR_EMPTY;
+    static char key[NAME_MAX + 1];
+    return app.have_list && app.ui.list.n > 0 ? entry_key(&app.list.e[app.ui.list.sel], key, sizeof key) : STR_EMPTY;
 }
 
-// Entry i's file: in the folder shown, or in the trash view where the trash keeps it. False when
-// the path doesn't fit.
+// Entry i's file: in the folder shown, in the trash view where the trash keeps it, or in the search
+// view below the folder searched (F9). False when the path doesn't fit.
 static bool entry_path(isize i, char *out, size_t cap)
 {
     const Entry *e = &app.list.e[i];
     if (e->trash) {
         int n = snprintf(out, cap, "%s", e->trash->file);
         return n >= 0 && (size_t)n < cap;
+    }
+    if (app.ui.in_search) {
+        char dir[PATH_MAX];
+        if (e->dir.len && !join(dir, sizeof dir, app.search_root, e->dir)) return false;
+        return join(out, cap, e->dir.len ? dir : app.search_root, e->name);
     }
     return join(out, cap, app.cwd, e->name);
 }
@@ -381,6 +399,24 @@ static void trash_scan(void)
     trash_dirs(&trashd, mp, n);
 }
 
+// The search view's listing (F9): the matches so far, sorted. A search starts first when another
+// one runs or ran (entering the view always does: leaving it asked for none).
+static bool search_list(Arena *a, const char *uri, Listing *l, Err *err)
+{
+    Str root, text;
+    char r[PATH_MAX];
+    if (!search_parse(uri, &root, &text) || root.len >= PATH_MAX) return err_set(err, "Not a search"), false;
+    snprintf(r, sizeof r, "%.*s", STR_ARG(root));
+    if (!search_is(r, text, app.ui.find_opts, app.show_hidden)) {
+        search_ask(r, text, app.ui.find_opts, app.show_hidden);
+        ui_matcher_set(&app.search_m, text, app.ui.find_opts);
+    }
+    if (!search_copy(a, l, &app.search_s, &app.search_done)) return err_set(err, "%s: too many results for memory", r), false;
+    fs_sort(l, app.ui.sort);
+    snprintf(app.search_root, sizeof app.search_root, "%s", r);
+    return true;
+}
+
 // Shows dir, the cursor on the entry called `select` (else on row `fallback`). A move to another
 // folder goes in the history, unless it is the history's own (`stepping`). False, with the reason
 // in the status line, when dir can't be read: the old listing stays.
@@ -390,10 +426,11 @@ static bool go_to_in(const char *dir, Str select, isize fallback, bool stepping)
     arena_reset(&lists[next]);
     Listing l;
     Err err;
-    bool in_trash = strcmp(dir, TRASH_URI) == 0;
+    bool in_trash = strcmp(dir, TRASH_URI) == 0, in_search = is_search(dir), same = strcmp(dir, app.cwd) == 0;
     if (in_trash) trash_scan();
-    if (in_trash ? !trash_list(&lists[next], &trashd, app.show_hidden, app.ui.sort, &l, &err)
-                 : !fs_list(&lists[next], dir, app.show_hidden, app.ui.sort, &l, &err)) {
+    if (in_trash    ? !trash_list(&lists[next], &trashd, app.show_hidden, app.ui.sort, &l, &err)
+        : in_search ? !search_list(&lists[next], dir, &l, &err)
+                    : !fs_list(&lists[next], dir, app.show_hidden, app.ui.sort, &l, &err)) {
         if (!app.have_list) snprintf(app.error, sizeof app.error, "%s", err.msg);
         set_status(true, "%s", err.msg);
         return false;
@@ -408,24 +445,35 @@ static bool go_to_in(const char *dir, Str select, isize fallback, bool stepping)
         set_status(true, "%s: too many entries for memory", dir);
         return false;
     }
-    bool same = strcmp(dir, app.cwd) == 0;
     // The same folder again: the selection is kept by name.
     isize marked = 0;
     for (isize i = 0; same && app.have_list && app.ui.marked && i < app.list.n; i++) {
         if (!app.ui.mark[i]) continue;
-        isize k = listing_find(&l, app.list.e[i].name);
+        char key[PATH_MAX];
+        isize k = listing_find(&l, entry_key(&app.list.e[i], key, sizeof key));
         if (k >= 0 && !mark[k]) mark[k] = 1, marked++;
     }
     // The folder left, with its cursor, for Back: its name is still in the old listing's arena.
     if (!same && app.have_list && !stepping) hist_leave(&hist, app.cwd, sel_name());
     app.cur = next, app.list = l, app.mime = mime, app.have_list = true, app.error[0] = 0, app.lists++;
     app.ui.in_trash = in_trash;
-    app.ui.can_write = !in_trash && access(dir, W_OK) == 0;   // the File menu's Create entries (F7.1)
+    if (app.ui.in_search && !in_search) search_ask("", STR_EMPTY, app.ui.find_opts, false), app.search_due = 0;   // (out of it: the walk stops)
+    if (!in_search) app.ui.search_keys = false;
+    if (in_search && !same) {   // the field shows its text; empty, it has the keys
+        Str root, text;
+        search_parse(dir, &root, &text);
+        app.ui.search_len = (int)(text.len < UI_FIND_MAX ? text.len : UI_FIND_MAX);
+        memcpy(app.ui.search, text.p, (size_t)app.ui.search_len);
+        app.ui.search_keys = text.len == 0, app.ui.search_edited = false, app.search_due = 0;
+        snprintf(app.search_pick, sizeof app.search_pick, "%.*s", STR_ARG(select));
+    }
+    app.ui.in_search = in_search;
+    app.ui.can_write = !in_trash && !in_search && access(dir, W_OK) == 0;   // the File menu's Create entries (F7.1)
     for (isize i = 0; i < l.n; i++) count[i] = COUNT_UNKNOWN;
     app.count = count;
     count_new_listing();
     ArenaMark mi_mark = arena_mark(&scratch);
-    app.thumb_local = thumb_local(read_file(&scratch, mountinfo_path()), dir);
+    app.thumb_local = thumb_local(read_file(&scratch, mountinfo_path()), in_search ? app.search_root : dir);
     arena_restore(&scratch, mi_mark);
     ui_mark_set(&app.ui, mark);
     app.ui.marked = marked;
@@ -442,11 +490,13 @@ static bool go_to_in(const char *dir, Str select, isize fallback, bool stepping)
         // The trash view watches the home trash's info/ (a drive's trash changes from ofx reload it).
         char tinfo[PATH_MAX + 8] = "";
         if (in_trash && trash_home(tinfo, sizeof tinfo - 8)) strcat(tinfo, "/info");
-        watch_dir(in_trash ? tinfo : app.cwd);
+        watch_dir(in_trash ? tinfo : in_search ? NULL : app.cwd);   // (a search isn't watched: Ctrl+R runs it again)
         // A change between the listing and the watch made no event: list once more.
         atomic_store(&watch.list_ready, true);
         glfwPostEmptyEvent();
-        SetWindowTitle(in_trash ? "ofx: Trash" : TextFormat("ofx: %s", app.cwd));
+        char shown[PATH_MAX + 1];
+        ui_tilde(shown, sizeof shown, app.search_root, getenv("HOME"));
+        SetWindowTitle(in_trash ? "ofx: Trash" : in_search ? TextFormat("ofx: Search in %s", shown) : TextFormat("ofx: %s", app.cwd));
     }
     ui_set(&app.ui.list, l.n, sel);
     // The find bar stays open in another folder; Esc there goes back to where this one opened, not
@@ -456,11 +506,48 @@ static bool go_to_in(const char *dir, Str select, isize fallback, bool stepping)
     // another folder is entered, where a frame holds none of its slots, it fills again with what is
     // on screen. (A reload of the same folder shows the same icons.)
     if (!same && app.nslots >= app.icons_max) icons_reset(), app.icon_full_resets++;
-    tree_refresh(!same, app.ui.side.sel);
+    tree_refresh(!same && !in_search, app.ui.side.sel);
     // The drives' space moves with what changes on them; asked again with every listing.
     if (!same) app.cwd_avail = -1;
     space_ask(&app.places, app.cwd);
     return true;
+}
+
+// The search view's listing again, as more matches come (F9): the cursor stays on its entry, or
+// goes to the one to pick when that comes.
+static void search_relist(void)
+{
+    char keep[NAME_MAX + 1];
+    snprintf(keep, sizeof keep, "%.*s", STR_ARG(sel_name()));
+    go_to_in(app.cwd, str_from_c(app.search_pick[0] ? app.search_pick : keep), app.ui.list.sel, true);
+    if (app.search_done || (app.search_pick[0] && listing_find(&app.list, str_from_c(app.search_pick)) >= 0)) app.search_pick[0] = 0;
+}
+
+// The field's text, 150 ms after its last change (F9): searched for in place, the cursor on the
+// first match (not a move in the history).
+enum { SEARCH_TYPE_MS = 150 };
+
+static void search_retype(void)
+{
+    char uri[PATH_MAX];
+    if (!search_uri(uri, sizeof uri, app.search_root, (Str){ app.ui.search, app.ui.search_len })) {
+        set_status(true, "That search is too long");
+        return;
+    }
+    snprintf(app.cwd, sizeof app.cwd, "%s", uri);
+    app.search_pick[0] = 0;
+    go_to_in(app.cwd, STR_EMPTY, 0, true);
+}
+
+// Ctrl+R in the search view: the same search again.
+static void search_again(void)
+{
+    char keep[NAME_MAX + 1];
+    snprintf(keep, sizeof keep, "%.*s", STR_ARG(sel_name()));
+    snprintf(app.search_pick, sizeof app.search_pick, "%s", keep);
+    Str root, text;
+    if (search_parse(app.cwd, &root, &text)) search_ask(app.search_root, text, app.ui.find_opts, app.show_hidden);
+    search_relist();
 }
 
 // The places read again (at the start, a drive mounted or gone): the sidebar's cursor stays on its
@@ -625,6 +712,10 @@ static void go_up_from(const char *from)
 
 static void go_parent(void)
 {
+    if (app.ui.in_search) {   // the folder searched (F9)
+        go_to(app.search_root, STR_EMPTY, 0);
+        return;
+    }
     if (strcmp(app.cwd, "/") == 0) return;
     Str cwd = str_from_c(app.cwd), child = path_base(cwd), parent = path_dir(cwd);
     char child_buf[NAME_MAX + 1], up[PATH_MAX];
@@ -1191,7 +1282,7 @@ static void tab_open(const char *dir, Str sel, bool show)
 static void tab_open_bg(const char *path)
 {
     struct stat st;
-    if (strcmp(path, TRASH_URI) != 0 && (stat(path, &st) != 0 || !S_ISDIR(st.st_mode))) {
+    if (strcmp(path, TRASH_URI) != 0 && !is_search(path) && (stat(path, &st) != 0 || !S_ISDIR(st.st_mode))) {
         set_status(true, "%s isn't a folder", path_base(str_from_c(path)).p);
         return;
     }
@@ -1218,7 +1309,7 @@ static void location_go(void)
 {
     Str to;
     char path[PATH_MAX];
-    if (!ui_location(&scratch, (Str){ app.ui.edit, app.ui.edit_len }, app.cwd, getenv("HOME"), &to) || to.len >= PATH_MAX) {
+    if (!ui_location(&scratch, (Str){ app.ui.edit, app.ui.edit_len }, app.ui.in_search ? app.search_root : app.cwd, getenv("HOME"), &to) || to.len >= PATH_MAX) {
         set_status(true, "Not a folder: %.*s", app.ui.edit_len, app.ui.edit);
         return;
     }
@@ -1268,6 +1359,12 @@ static void act(UiAction a)
         break;
     case UA_EMPTY_TRASH: trash_empty(); break;
     case UA_NOT_IN_TRASH: set_status(true, "That doesn't work in the trash: restore it first"); break;
+    case UA_NOT_IN_SEARCH: set_status(true, "Search results can't do that yet"); break;
+    case UA_SEARCH: {   // below the folder shown, in a tab of its own (F9)
+        char uri[PATH_MAX];
+        if (search_uri(uri, sizeof uri, app.cwd, STR_EMPTY)) tab_open(uri, STR_EMPTY, true);
+        break;
+    }
     case UA_SIDE_MODE: {
         side_refresh();
         char path[PATH_MAX];
@@ -1388,7 +1485,7 @@ static void act(UiAction a)
         break;
     case UA_TAB_BG_ROW: {
         char path[PATH_MAX];
-        if (a.index < app.list.n && !app.ui.in_trash && join(path, sizeof path, app.cwd, app.list.e[a.index].name)) tab_open_bg(path);
+        if (a.index < app.list.n && !app.ui.in_trash && entry_path(a.index, path, sizeof path)) tab_open_bg(path);
         break;
     }
     case UA_TAB_BG_PLACE: {
@@ -1404,7 +1501,7 @@ static void act(UiAction a)
             tab_open_bg(path);
         }
         break;
-    case UA_LOCATION: ui_location_open(&app.ui, str_from_c(app.cwd)); break;
+    case UA_LOCATION: ui_location_open(&app.ui, str_from_c(app.ui.in_search ? app.search_root : app.cwd)); break;
     case UA_GO: location_go(); break;
     case UA_CRUMB: crumb_go((int)a.index); break;
     case UA_CRUMB_SHIFT: ui_crumbs_shift(&app.crumbs, app.crumb_lo, (int)a.index); break;
@@ -1439,7 +1536,7 @@ static void act(UiAction a)
         else duplicate();
         break;
     case UA_UNDO: undo_last(); break;
-    case UA_RELOAD: app.reloads_asked++, reload(); break;
+    case UA_RELOAD: app.reloads_asked++, app.ui.in_search ? search_again() : reload(); break;
     case UA_TRASH_VIEW: go_to(TRASH_URI, STR_EMPTY, 0); break;
     case UA_BM_EDIT: case UA_BM_GO: case UA_BM_NAME: case UA_BM_REMOVE: case UA_BM_UP: case UA_BM_DOWN: case UA_BM_RENAME: bmp_act(a); break;
     case UA_ADD_BOOKMARK: {   // all: the folder entry index (F8)
@@ -1595,7 +1692,7 @@ static IconSlot *entry_icon(isize i)
     Str names[2];
     isize n = 0;
     char path[PATH_MAX];
-    Str special = !e->trash && join(path, sizeof path, app.cwd, e->name) ? user_dir_icon(&app.user_dirs, path) : STR_EMPTY;
+    Str special = !e->trash && entry_path(i, path, sizeof path) ? user_dir_icon(&app.user_dirs, path) : STR_EMPTY;
     if (special.len) names[n++] = special;
     names[n++] = S("folder");
     return icon_for_px(names[0], names, n, px);
@@ -1607,7 +1704,7 @@ static Texture2D *entry_thumb(isize i, bool draw)
 {
     const Entry *e = &app.list.e[i];
     char path[PATH_MAX];
-    if (kind_is_dir(e->kind) || e->kind == K_LINK_BROKEN || e->trash || !join(path, sizeof path, app.cwd, e->name)) return NULL;
+    if (kind_is_dir(e->kind) || e->kind == K_LINK_BROKEN || e->trash || !entry_path(i, path, sizeof path)) return NULL;
     return thumb_for(path, e->mtime, e->size, thumb_kind(entry_mime(i)), app.thumb_local, grid_px() * app.icon_scale, draw);
 }
 
@@ -1656,7 +1753,8 @@ static int jobs_h(void)
 // The list's rows that fit, or the icon view's rows of cells (no column headers there).
 static int list_rows(int h)
 {
-    int room = h - top_h() - FOOTER_H - jobs_h() - (app.ui.in_trash ? TRASH_BAR_H : 0) - (app.ui.finding ? FIND_BAR_H : 0);
+    int room = h - top_h() - FOOTER_H - jobs_h() - (app.ui.in_trash ? TRASH_BAR_H : 0) - (app.ui.in_search ? SEARCH_BAR_H : 0) -
+               (app.ui.finding ? FIND_BAR_H : 0);
     int r = app.ui.grid ? (room - PAD) / cell_h() : (room - COLS_H) / ROW_H;
     return r > 0 ? r : 0;
 }
@@ -2107,6 +2205,10 @@ static void layout_row(int r, isize i, float w, i64 now)
                     float room = name_w - str_width(e->name) - 12;
                     if (room > 40) text(fit(str_from_c(arena_sprintf(&frame, "%s", shown)), room, true), cc(t->fg_dim));
                 }
+                if (e->dir.len) {   // the search view's (F9): its folder below the one searched
+                    float room = name_w - str_width(e->name) - 12;
+                    if (room > 40) text(fit(e->dir, room, true), cc(t->fg_dim));
+                }
             }
         }
         CLAY(CLAY_IDI("size", r), { .layout = { .sizing = { CLAY_SIZING_FIXED(SIZE_W), CLAY_SIZING_FIT(0) },
@@ -2528,7 +2630,7 @@ static void layout_zoom(void)
 static void layout_bar(float w)
 {
     Theme *t = &app.theme;
-    bool can_up = strcmp(app.cwd, "/") != 0;
+    bool can_up = app.ui.in_search || strcmp(app.cwd, "/") != 0;
     CLAY(CLAY_ID("header"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(HEADER_H) },
                                           .padding = { PAD / 2, PAD / 2, 0, 0 }, .childGap = BAR_GAP,
                                           .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
@@ -2561,7 +2663,10 @@ static void layout_tabs(float w)
         for (int i = 0; i < tabbar.n; i++) {
             bool cur = i == tabbar.cur, hover = app.tab_hover == i;
             const char *dir = cur ? app.cwd : tabs[tabbar.slot[i]].dir;
-            Str name = strcmp(dir, "/") == 0 ? S("/") : path_base(str_from_c(dir));
+            Str name = strcmp(dir, "/") == 0 ? S("/") : path_base(str_from_c(dir)), root, what;
+            if (search_parse(dir, &root, &what))   // a search (F9): what it looks for, and where
+                name = str_from_c(what.len ? arena_sprintf(&frame, "%.*s in %.*s", STR_ARG(what), STR_ARG(path_base(root)))
+                                           : arena_sprintf(&frame, "Search in %.*s", STR_ARG(root.len == 1 ? root : path_base(root))));
             CLAY(CLAY_IDI("tab", i), { .layout = { .sizing = { CLAY_SIZING_FIXED(each), CLAY_SIZING_FIXED(TAB_H) }, .padding = { PAD, 4, 0, 0 },
                                                    .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
                                        .backgroundColor = cur ? cc(t->bg) : hover ? mix(t->bg, t->bg_light, 0.5f) : cc(t->bg_light),
@@ -2903,7 +3008,7 @@ static void props_open(const char *path)
     isize n = !here && app.have_list && app.list.n > 0 ? targets(&propsa, props_path, WALK_ROOTS_MAX) : 0;
     if (here) props_path[0] = arena_cstr(&propsa, str_from_c(path)), n = 1;
     props.cut = !here && app.ui.marked > WALK_ROOTS_MAX;
-    if (n == 0 && !app.ui.in_trash) props_path[0] = arena_cstr(&propsa, str_from_c(app.cwd)), n = 1;
+    if (n == 0 && !app.ui.in_trash && !app.ui.in_search) props_path[0] = arena_cstr(&propsa, str_from_c(app.cwd)), n = 1;
     props.n = n;
     app.ui.prop_can = false;
     if (n == 0) {   // the trash view, empty
@@ -2930,7 +3035,7 @@ static void props_open(const char *path)
         mime_comment(&scratch, str_from_c(props.type), props.type_name, sizeof props.type_name);
     }
     if (app.ui.in_trash) snprintf(props.where, sizeof props.where, "Trash");
-    else ui_tilde(props.where, sizeof props.where, n == 1 ? d : app.cwd, getenv("HOME"));
+    else ui_tilde(props.where, sizeof props.where, n == 1 ? d : app.ui.in_search ? app.search_root : app.cwd, getenv("HOME"));
     snprintf(props.drive, sizeof props.drive, "%s", props_drive(props_path[0]));
     if (n == 1) props_read();
     // Counted all the way down, but not on a network drive (its reads can hang, F6.4).
@@ -3234,7 +3339,7 @@ static void layout_find_bar(void)
                 if (u->find_keys)
                     CLAY(CLAY_ID("caret"), { .layout = { .sizing = { CLAY_SIZING_FIXED(2), CLAY_SIZING_FIXED(FONT_PX + 2) } }, .backgroundColor = cc(t->accent) }) {}
             }
-            layout_toggles(u->find_opts);
+            layout_toggles(u->find_opts, 0);
         }
         // At least as wide as "88 of 88", so the chevrons don't move as the count grows.
         CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_FIT(str_width(S("88 of 88")), 0), CLAY_SIZING_FIT(0) }, .childAlignment = { .x = CLAY_ALIGN_X_RIGHT } } }) {
@@ -3252,6 +3357,37 @@ static void layout_find_bar(void)
                                   .backgroundColor = hover ? cc(t->bg) : (Clay_Color){ 0, 0, 0, 0 } }) {
             text(cz("\xC3\x97"), hover ? cc(t->red) : cc(t->fg_dim));   // ×
         }
+    }
+}
+
+// The search view's bar (F9): where it searches, its field (a caret while it has the keys) with
+// find's toggles, and a bad expression's reason.
+static void layout_search_bar(void)
+{
+    Theme *t = &app.theme;
+    Ui *u = &app.ui;
+    bool bad = app.search_m.bad && u->find_opts.regex && u->search_len;
+    Clay_Color edge = bad ? cc(t->red) : u->search_keys ? cc(t->accent) : mix(t->fg_dim, t->bg_light, 0.45f);
+    char where[PATH_MAX + 16];
+    ui_tilde(where, sizeof where, app.search_root, getenv("HOME"));
+    CLAY(CLAY_ID("search-bar"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(SEARCH_BAR_H) }, .padding = { PAD, PAD, 0, 0 }, .childGap = 10,
+                                              .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
+                                  .backgroundColor = cc(t->bg_light) }) {
+        CLAY(CLAY_ID("search-where"), { .layout = { .sizing = { CLAY_SIZING_FIT(0, 300), CLAY_SIZING_FIT(0) } }, .clip = { .horizontal = true } }) {
+            text(fit(str_from_c(arena_sprintf(&frame, "Search in %s", where)), 300, true), cc(t->fg_dim));
+        }
+        CLAY(CLAY_ID("search-field"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(26) }, .padding = { 8, 3, 0, 0 }, .childGap = 6,
+                                                    .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
+                                        .backgroundColor = cc(t->bg), .border = { .color = edge, .width = CLAY_BORDER_OUTSIDE(1) } }) {
+            CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
+                           .clip = { .horizontal = true } }) {
+                text(fit((Str){ u->search, u->search_len }, 400, true), cc(t->fg));
+                if (u->search_keys)
+                    CLAY(CLAY_ID("search-caret"), { .layout = { .sizing = { CLAY_SIZING_FIXED(2), CLAY_SIZING_FIXED(FONT_PX + 2) } }, .backgroundColor = cc(t->accent) }) {}
+            }
+            layout_toggles(u->find_opts, TOGGLE_SEARCH);
+        }
+        if (bad) text(fit(str_from_c(app.search_m.err), 240, false), cc(t->red));
     }
 }
 
@@ -3320,6 +3456,19 @@ static void status_info(char *buf, size_t cap)
     ui_status_info(buf, cap, &in);
 }
 
+// The search view's status line (F9) when nothing is marked: how many it found, while it searches or
+// when it is done, and what it left out.
+static void search_status(char *buf, size_t cap)
+{
+    char skipped[256];
+    search_skips_text(&app.search_s, skipped, sizeof skipped);
+    const char *sep = skipped[0] ? " \xC2\xB7 " : "";
+    if (!app.ui.search_len) snprintf(buf, cap, "A name, or part of one; * and ? as wildcards (*.ts)");
+    else if (!app.search_done) snprintf(buf, cap, "Searching\xE2\x80\xA6 %td found%s%s", app.list.n, sep, skipped);
+    else if (app.search_s.full) snprintf(buf, cap, "%td found, the most a search shows%s%s", app.list.n, sep, skipped);
+    else snprintf(buf, cap, "%td found%s%s", app.list.n, sep, skipped);
+}
+
 // The window, and the modal panel on top when one is up.
 // ---- tooltips (Michael, 2026-10-24) ------------------------------------------------------------
 //
@@ -3335,7 +3484,7 @@ static bool tip_of(int k, char *buf, size_t cap, Clay_ElementId *id)
     static const struct { UiBar b; const char *id, *text; } BAR[] = {
         { UB_BACK, "nav-back", "Back (Alt+Left)" }, { UB_FORWARD, "nav-fwd", "Forward (Alt+Right)" },
         { UB_UP, "nav-up", "Up to the parent (Backspace)" }, { UB_LOCATION, "loc-toggle", "Type a location (Ctrl+L)" },
-        { UB_SEARCH, "search", "Find (Ctrl+F)" }, { UB_LEFT, "crumb-left", "Earlier folders in the path" },
+        { UB_SEARCH, "search", "Search (Ctrl+Shift+F)" }, { UB_LEFT, "crumb-left", "Earlier folders in the path" },
         { UB_RIGHT, "crumb-right", "Later folders in the path" }, { UB_VIEW_LIST, "view-list", "List (Ctrl+1)" },
         { UB_VIEW_ICONS, "view-icons", "Icons (Ctrl+2)" }, { UB_ZOOM_OUT, "zoom-out", "Smaller icons (Ctrl+-)" },
         { UB_ZOOM_IN, "zoom-in", "Bigger icons (Ctrl+=)" },
@@ -3403,7 +3552,7 @@ static void menu_facts(void)
     Ui *u = &app.ui;
     u->can_undo = undo.kind != UNDO_NONE && undo.n > 0;
     u->can_back = hist.nback > 0, u->can_forward = hist.nfwd > 0;
-    u->can_up = !u->in_trash && strcmp(app.cwd, "/") != 0;
+    u->can_up = !u->in_trash && (u->in_search || strcmp(app.cwd, "/") != 0);   // (from a search: the folder searched, F9)
     u->can_paste = clip.ok || own.n > 0;
     u->shows_hidden = app.show_hidden;
     u->bm_n = 0, u->bm_here = -1;
@@ -3412,12 +3561,12 @@ static void menu_facts(void)
         if (strcmp(bmarks.b[i].path, app.cwd) == 0) u->bm_here = u->bm_n;
         u->bm_n++;
     }
-    u->can_bookmark = !u->in_trash && !bmarks.full && bm_find(&bmarks, app.cwd) < 0;
+    u->can_bookmark = !u->in_trash && !u->in_search && !bmarks.full && bm_find(&bmarks, app.cwd) < 0;
     // The cursor's entry (F8): a link that leads somewhere (Follow Link); a folder bookmarked already.
     const Entry *e = app.have_list && u->list.n > 0 && u->list.sel < app.list.n ? &app.list.e[u->list.sel] : NULL;
     char p[PATH_MAX];
     u->sel_link = e && (e->kind == K_LINK_FILE || e->kind == K_LINK_DIR);
-    u->sel_bm = e && kind_is_dir(e->kind) && join(p, sizeof p, app.cwd, e->name) && bm_find(&bmarks, p) >= 0;
+    u->sel_bm = e && kind_is_dir(e->kind) && entry_path(u->list.sel, p, sizeof p) && bm_find(&bmarks, p) >= 0;
     u->tab_at = tabbar.cur, u->tab_n = tabbar.n;   // (the tab menu's moves, F8)
     u->bm_total = bmarks.n, u->bm_more = 0, u->bm_more_at = -1;
     for (int i = 0, local = 0; i < bmarks.n; i++) {
@@ -3452,6 +3601,7 @@ static Clay_RenderCommandArray layout(int w, int h)
         // The tab bar over the files only, not the sidebar (Michael, 2026-10-21).
         if (tabbar.n >= 2) layout_tabs((float)(w - side_w()));
         if (app.ui.in_trash) layout_trash_bar();
+        if (app.ui.in_search) layout_search_bar();
         if (!app.ui.grid) layout_cols();
         CLAY(CLAY_ID("list"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0) }, .layoutDirection = CLAY_TOP_TO_BOTTOM,
                                             .padding = { 0, 0, app.ui.grid ? PAD : 0, 0 } },
@@ -3460,7 +3610,10 @@ static Clay_RenderCommandArray layout(int w, int h)
                 CLAY(CLAY_ID("error"), { .layout = { .padding = { PAD, PAD, PAD, PAD } } }) { text(cz(app.error), cc(t->red)); }
             } else if (app.list.n == 0) {
                 CLAY(CLAY_ID("empty"), { .layout = { .padding = { PAD, PAD, PAD, PAD } } }) {
-                    text(cz(app.list.hidden ? "Only hidden files" : "Empty folder"), cc(t->fg_dim));
+                    text(cz(app.ui.in_search ? (!app.ui.search_len ? "Type a name to search" : app.search_done ? "Nothing found" : "Searching\xE2\x80\xA6")
+                            : app.list.hidden  ? "Only hidden files"
+                                               : "Empty folder"),
+                         cc(t->fg_dim));
                 }
             }
             if (app.have_list && app.ui.grid) layout_grid();
@@ -3522,6 +3675,10 @@ static Clay_RenderCommandArray layout(int w, int h)
                            "Alt+C/W/R case, words, regex"), foot_w, false), cc(t->fg_dim));
             } else if (app.status[0]) {
                 text(fit(str_from_c(app.status), foot_w, false), app.status_bad ? cc(t->red) : cc(t->fg));
+            } else if (app.ui.in_search && !app.ui.marked) {
+                char info[512];
+                search_status(info, sizeof info);
+                text(fit(str_from_c(arena_sprintf(&frame, "%s", info)), foot_w, false), cc(t->fg_dim));
             } else {
                 char info[NAME_MAX + 64];
                 status_info(info, sizeof info);
@@ -3592,6 +3749,7 @@ static UiKey ui_key_of(int key, int mods)
     if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_G) return UK_GROUP_COL;
     if (m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT) && key == GLFW_KEY_I) return UK_INVERT;
     if (m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT) && key == GLFW_KEY_A) return UK_SELECT_MATCH;
+    if (m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT) && key == GLFW_KEY_F) return UK_SEARCH;
     if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_T) return UK_TAB_NEW;
     if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_N) return UK_NEW_WINDOW;
     if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_I) return UK_PROPERTIES;
@@ -3742,6 +3900,7 @@ typedef struct {
     int   find_step;    // the find bar's chevrons: -1 the previous, 1 the next, 0 none
     int   bmp_row;      // a row of Edit Bookmarks' list (on screen), -1 for none (F7.5)
     int   bmp_btn;      // one of its buttons (1..4), 0 for none
+    bool  search_field; // the search bar's field (F9)
 } Hit;
 
 static bool in_box(Clay_ElementId id, float x, float y)
@@ -3753,11 +3912,13 @@ static bool in_box(Clay_ElementId id, float x, float y)
 
 static Hit hit_at(float x, float y)
 {
-    Hit h = { -1, -1, -1, UB_NONE, -1, -1, -1, 0, -1, -1, -1, -1, false, -1, -1, -1, -1, false, false, false, 0, 0, -1, 0 };
+    Hit h = { -1, -1, -1, UB_NONE, -1, -1, -1, 0, -1, -1, -1, -1, false, -1, -1, -1, -1, false, false, false, 0, 0, -1, 0, false };
     // The find bar's toggles only without a panel or a menu over them (a click on Properties' OK
     // above them flipped one, 2026-10-26); Open With's are its panel's.
     for (int k = 1; k <= 4 && !h.toggle && (app.ui.ow || (app.ui.finding && modal_kind() == MODAL_NONE && !app.ui.menu_on)); k++)
         if (in_box(CLAY_IDI("toggle", k), x, y)) h.toggle = k;
+    for (int k = 1; k <= 3 && !h.toggle && app.ui.in_search && modal_kind() == MODAL_NONE && !app.ui.menu_on; k++)   // the search bar's (F9)
+        if (in_box(CLAY_IDI("toggle", TOGGLE_SEARCH + k), x, y)) h.toggle = k;
     if (modal_kind() == MODAL_NONE)
         for (int m = 0; m < UI_MENUS && h.menu_title < 0; m++)
             if (in_box(CLAY_IDI("menu-title", m), x, y)) h.menu_title = m;
@@ -3791,6 +3952,7 @@ static Hit hit_at(float x, float y)
         h.find_step = in_box(CLAY_ID("find-prev"), x, y) ? -1 : in_box(CLAY_ID("find-next"), x, y) ? 1 : 0;
         h.find_field = !h.toggle && !h.find_x && in_box(CLAY_ID("find-field"), x, y);
     }
+    h.search_field = app.ui.in_search && !h.toggle && in_box(CLAY_ID("search-field"), x, y);
     for (int i = 0; tabbar.n >= 2 && i < tabbar.n && h.tab < 0; i++) {
         if (in_box(CLAY_IDI("tab-x", i), x, y)) h.tab_x = h.tab = i;
         else if (in_box(CLAY_IDI("tab", i), x, y)) h.tab = i;
@@ -3857,7 +4019,7 @@ static void press_at(UiInput *in, float x, float y, int mods)
     }
     in->bmp_btn = h.bmp_btn;
     in->toggle = h.toggle;
-    in->find_x = h.find_x, in->find_field = h.find_field, in->find_step = h.find_step;
+    in->find_x = h.find_x, in->find_field = h.find_field, in->find_step = h.find_step, in->search_field = h.search_field;
     in->job_x = h.job_x;
     in->side_mode = h.mode;
     in->side_twisty = h.twisty;
@@ -4061,6 +4223,13 @@ static bool zoom_drag_at(UiInput *in, float x, bool held)
 
 static bool hover_at(float x, float y);
 
+// When the timer wakes the loop: a tooltip due, or the search field's text to search for (F9).
+static i64 wake_due(void)
+{
+    i64 a = ui_tip_due(&app.tip), b = app.search_due;
+    return !a ? b : !b ? a : a < b ? a : b;
+}
+
 // The hover highlights for the pointer where it is now, not where it last moved: none once it has
 // left the window (GLFW keeps its last position), and again after a frame that moved things under
 // a still pointer (a folder entered, the view or the size changed). Else a cell stayed lit that
@@ -4088,7 +4257,7 @@ static bool hover_at(float x, float y)
     // Onto another icon button (or off one): its tooltip waits UI_TIP_MS, the timer wakes the loop.
     if (ui_tip_hover(&app.tip, tip_target(h), now_ms())) {
         changed = true;
-        timer_at(ui_tip_due(&app.tip));
+        timer_at(wake_due());
     }
     return changed;
 }
@@ -4354,6 +4523,7 @@ int main(int argc, char **argv)
     if (counts.delay_ms < 0 || counts.delay_ms > 60000) counts.delay_ms = 0;
     count_start();
     walk_start();
+    search_start();
     thumbs_start();
     space_start();
     timer_start();
@@ -4452,6 +4622,8 @@ int main(int argc, char **argv)
         if (props.walking && walk_take(&props.sum, &props.done)) dirty = true;
         if (props.walking && !app.ui.props) walk_ask(NULL, 0), props.walking = false;   // the panel closed: the count stops
         if (thumbs_take()) dirty = true;
+        if (app.ui.in_search && search_take()) search_relist(), dirty = true;
+        if (app.search_due && now_ms() >= app.search_due) app.search_due = 0, search_retype(), dirty = true;
         bool seen;
         UiInput in = input_real(&seen);
         if (scripted) {
@@ -4490,6 +4662,8 @@ int main(int argc, char **argv)
         // F2 opened the edit line: on the cursor's entry, as it is named now.
         if (!was_editing && app.ui.editing && !app.ui.edit_path) snprintf(app.edit_from, sizeof app.edit_from, "%.*s", STR_ARG(sel_name())), app.edit_new = UNDO_NONE;
         if (a.kind != UA_NONE) act(a);
+        // The search field changed (F9): it is searched for 150 ms after the last change.
+        if (app.ui.search_edited) app.ui.search_edited = false, app.search_due = now_ms() + SEARCH_TYPE_MS, timer_at(wake_due());
         dirty |= seen;
     }
     if (scripted) script_end();
@@ -4498,7 +4672,9 @@ int main(int argc, char **argv)
     clip_quit();
     count_stop();
     walk_stop();
+    search_stop();
     ui_matcher_set(&app.ui.find_m, STR_EMPTY, app.ui.find_opts), ui_matcher_set(&app.ui.ow_m, STR_EMPTY, app.ui.ow_opts);   // (a compiled expression freed: LeakSanitizer)
+    ui_matcher_set(&app.search_m, STR_EMPTY, app.ui.find_opts);
     thumbs_stop();
     space_stop();
     timer_stop();

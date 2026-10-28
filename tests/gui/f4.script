@@ -107,12 +107,12 @@ expect locating=0
 key ctrl-l
 key ctrl-l
 expect locating=0
-# The search button opens the find line
+# The search button opens a search in a tab of its own (F9; the find line's until then)
 point-ui search
 click-here
-expect finding=1
-key esc
-expect finding=0
+wait-for 2000 search=1 tabs=2 finding=0
+key ctrl-w
+wait-for 2000 search=0 tabs=1
 # ---- above home: from /, home an ordinary folder; up at / does nothing
 key alt-up
 key alt-up

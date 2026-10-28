@@ -31,6 +31,7 @@ typedef struct {
     u32   uid, gid;  // its owner and group, the target's as mode is (the list's Owner and Group)
     Str   target;    // a symlink's, as readlink gives it (relative or not); empty for the rest
     const TrashItem *trash;   // the trash view's (F6, trash.c): where the item is; NULL elsewhere
+    Str   dir;       // the search view's (F9): its folder below the one searched ("" in that one)
 } Entry;
 
 typedef struct {
@@ -94,8 +95,8 @@ static int natural_cmp(Str a, Str b)
     return c < 0 ? -1 : c > 0 ? 1 : a.len < b.len ? -1 : a.len > b.len ? 1 : 0;
 }
 
-// Folders first, whichever way; then the key, reversed if asked; ties by name, so the order is
-// total and the same every time.
+// Folders first, whichever way; then the key, reversed if asked; ties by name, then by folder (the
+// search view's), so the order is total and the same every time.
 static int entry_cmp(const void *x, const void *y, void *ctx)
 {
     const Entry *a = x, *b = y;
@@ -105,6 +106,7 @@ static int entry_cmp(const void *x, const void *y, void *ctx)
     if (s->key == SORT_SIZE && a->size != b->size) c = a->size < b->size ? -1 : 1;
     else if (s->key == SORT_MTIME && a->mtime != b->mtime) c = a->mtime < b->mtime ? -1 : 1;
     if (c == 0) c = natural_cmp(a->name, b->name);
+    if (c == 0) c = natural_cmp(a->dir, b->dir);   // (the search view's names repeat, F9)
     return s->reverse ? -c : c;
 }
 
@@ -139,6 +141,29 @@ static Str link_target(Arena *a, int dirfd, const char *name)
     return (Str){ p, k };
 }
 
+// The entry nm in the folder fd, its name and a link's target in a; false when a is full. (fs_list's,
+// and the search view's walk's, F9.)
+static bool entry_read(Arena *a, int fd, const char *nm, Entry *out)
+{
+    struct stat st;
+    Kind k = kind_of(fd, nm, &st);
+    isize len = (isize)strlen(nm);
+    char *copy = arena_try_push(a, len + 1, 1);
+    if (!copy) return false;
+    memcpy(copy, nm, (size_t)len);
+    bool link = k == K_LINK_FILE || k == K_LINK_DIR || k == K_LINK_BROKEN;
+    *out = (Entry){
+        .name = { copy, len },
+        .kind = k,
+        .size = kind_is_dir(k) || k == K_LINK_BROKEN ? 0 : (i64)st.st_size,
+        .mtime = k == K_LINK_BROKEN ? 0 : (i64)st.st_mtim.tv_sec,
+        .mode = k == K_LINK_BROKEN ? 0 : (u32)st.st_mode,
+        .uid = (u32)st.st_uid, .gid = (u32)st.st_gid,
+        .target = link ? link_target(a, fd, nm) : STR_EMPTY,
+    };
+    return true;
+}
+
 // The entries of dir, sorted; dot-files counted in hidden, and left out unless show_hidden. False,
 // with the reason, when the folder can't be opened or the arena is full.
 static bool fs_list(Arena *a, const char *dir, bool show_hidden, Sort sort, Listing *out, Err *err)
@@ -168,25 +193,11 @@ static bool fs_list(Arena *a, const char *dir, bool show_hidden, Sort sort, List
             memcpy(grown, e, (size_t)n * sizeof *e);
             e = grown, cap *= 2;
         }
-        struct stat st;
-        Kind k = kind_of(fd, nm, &st);
-        isize len = (isize)strlen(nm);
-        char *copy = arena_try_push(a, len + 1, 1);
-        if (!copy) {
+        if (!entry_read(a, fd, nm, &e[n])) {
             ok = false;
             break;
         }
-        memcpy(copy, nm, (size_t)len);
-        bool link = k == K_LINK_FILE || k == K_LINK_DIR || k == K_LINK_BROKEN;
-        e[n++] = (Entry){
-            .name = { copy, len },
-            .kind = k,
-            .size = kind_is_dir(k) || k == K_LINK_BROKEN ? 0 : (i64)st.st_size,
-            .mtime = k == K_LINK_BROKEN ? 0 : (i64)st.st_mtim.tv_sec,
-            .mode = k == K_LINK_BROKEN ? 0 : (u32)st.st_mode,
-            .uid = (u32)st.st_uid, .gid = (u32)st.st_gid,
-            .target = link ? link_target(a, fd, nm) : STR_EMPTY,
-        };
+        n++;
     }
     closedir(d);
     if (!ok) return err_set(err, "%s: too many entries for memory", dir), false;
@@ -195,12 +206,21 @@ static bool fs_list(Arena *a, const char *dir, bool show_hidden, Sort sort, List
     return true;
 }
 
-// The index of name in l, or -1.
-static isize listing_find(const Listing *l, Str name)
+// The index in l of the entry key names (entry_key), or -1.
+static isize listing_find(const Listing *l, Str key)
 {
+    Str dir = path_dir(key), name = path_base(key);
     for (isize i = 0; i < l->n; i++)
-        if (str_eq(l->e[i].name, name)) return i;
+        if (str_eq(l->e[i].name, name) && str_eq(l->e[i].dir, dir)) return i;
     return -1;
+}
+
+// What names e in its listing, into buf: its name; in the search view (F9) its folder, '/' and its
+// name, as names repeat there (a name holds no '/'). Empty when it doesn't fit.
+static Str entry_key(const Entry *e, char *buf, size_t cap)
+{
+    int n = e->dir.len ? snprintf(buf, cap, "%.*s/%.*s", STR_ARG(e->dir), STR_ARG(e->name)) : snprintf(buf, cap, "%.*s", STR_ARG(e->name));
+    return n >= 0 && (size_t)n < cap ? (Str){ buf, n } : STR_EMPTY;
 }
 
 // How many entries folder path holds (dot-files only when hidden), for its Size cell; -1 when it

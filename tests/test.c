@@ -1549,6 +1549,7 @@ static void test_format(void)
 #include "test_f74.c"
 #include "test_f75.c"
 #include "test_f8.c"
+#include "test_f9.c"
 #include "test_fm1.c"
 
 int main(void)
@@ -1672,6 +1673,14 @@ int main(void)
     test_step_round();
     test_tilde();
     test_fm1();
+    test_search_uri();
+    test_search_walk();
+    test_search_match();
+    test_search_keys_find();
+    test_search_drives();
+    test_search_ui_keys();
+    test_search_ui_refused();
+    test_search_crumbs();
     char cmd[1600];
     snprintf(cmd, sizeof cmd, "chmod -R u+rwx '%s' && rm -rf '%s' '%s'", root, root, decoy);
     if (system(cmd) != 0) fprintf(stderr, "could not remove %s\n", root);

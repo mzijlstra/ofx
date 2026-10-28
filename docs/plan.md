@@ -707,6 +707,25 @@ without `.git` and `node_modules`, a 0.06 s walk warm):
   plain text only (a NUL in the first 8 KB means binary), files up to 16 MB. No helpers for PDF,
   Office, EPUB or tags.
 
+**Step 1 built (2026-10-28): the view by name.** The view's address is a path's stand-in,
+`search:<length>:<folder><text>` (`fs/search.c`), so tabs, history, Back and `go_to` carry a search
+as they carry a folder; `go_to_in` lists it through `search_list`, which asks for a new walk when
+the folder, text, toggles or hidden files differ from the one running (or the view is newly
+entered: a tab, Back), and copies the matches so far. The walk (`search_walk`, on
+`gui/search.c`'s thread, `du_walk`'s pattern) matches each name (`ui_search_match`: fnmatch for
+`*`/`?`, else find's matcher), enters folders by readdir's type, counts what it leaves out, and
+publishes at most every 100 ms; the main thread relists on each, the cursor kept by
+`entry_key` (folder/name: names repeat) or put on the one Back left from (`search_pick`). Typing
+marks the text changed; 150 ms later (`timer_at(wake_due())`, shared with the tooltips) the address
+is rewritten in place (no history) and the walk starts again. Calls made along the way: the
+magnifier, the find bar's until now, is Search's (as decided); a folder result opens in the same
+tab; a search tab shown again (a tab switch, Back) searches again, results aren't kept; a folder
+left out still matches by its own name (`node_modules` itself is found); same names sort by
+folder; what changes files on results (rename, trash, delete, paste, Make Link, New Folder, a
+terminal, a bookmark) says "Search results can't do that yet" until step 2; Copy, Cut, Open
+With and Properties work, through `entry_path`. Untested: the stat when readdir gives no type
+(DT_UNKNOWN), which tmpfs, ext4 and btrfs never do.
+
 **Steps:** 1. the view by name (a walk thread as Properties' `du_walk`, stopped by the next
 search; the tab, bar, toggles, results with folders, skips, limit, status); 2. working with
 results (actions on entries in other folders, Open Containing Folder, Ctrl+R, greying, Search in

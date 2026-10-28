@@ -5,6 +5,7 @@
 
 #include "../base/base.h"
 
+#include <fnmatch.h>
 #include <limits.h>
 #include <locale.h>
 #include <regex.h>
@@ -79,6 +80,7 @@ typedef enum {
     UK_CONTEXT,    // Shift+F10, the Menu key: the right-click menu of the files' cursor, or of the folder shown (F8)
     UK_PERMS_COLS, // Ctrl+P: View → Show Permissions (Michael, 2026-10-27: no printing in ofx)
     UK_GROUP_COL,  // Ctrl+G: View → Show Group (2026-10-27)
+    UK_SEARCH,     // Ctrl+Shift+F: a search below the folder shown, in a tab of its own (F9)
 } UiKey;
 
 // The top bar's buttons (F4).
@@ -149,6 +151,7 @@ typedef struct {
     int     toggle;      // 4: Open With's "Always open … with this app" box (F7.3.1)
     bool    find_x;      // the find bar's × pressed
     bool    find_field;  // its field pressed: the keys go there
+    bool    search_field;   // the search bar's field pressed (F9): the keys go there
     // Edit Bookmarks (F7.5): a row pressed or double-clicked (its place on screen), -1 for none; a
     // button pressed (1 Remove, 2 Rename, 3 Move Up, 4 Move Down), 0 for none.
     int     bmp_row, bmp_drow, bmp_btn;
@@ -214,6 +217,8 @@ typedef enum {
     UA_PERMS_COLS,  // the list's Owner and Permissions shown or not (Ui.perms_cols): gui/ remembers it
     UA_GROUP_COL,   // the list's Group beside them shown or not (Ui.group_col): gui/ remembers it
     UA_FOLDER_DO,   // index: a UiMenuItem of the folder menu, for the folder it opened on (Ui.ctx_side or ctx_crumb, F8)
+    UA_SEARCH,      // a search below the folder shown, in a new tab (F9)
+    UA_NOT_IN_SEARCH,   // something the search view's results can't do yet (F9 step 1; gui/ says so)
 } UiActionKind;
 // A right-click menu's entry on a folder of the files (F8) acts on that folder, not the folder
 // shown: UA_NEW_WINDOW, UA_TERMINAL, UA_PASTE and UA_ADD_BOOKMARK with `all` set; index is the entry.
@@ -239,7 +244,7 @@ typedef enum {
     UM_UNDO, UM_CUT, UM_COPY, UM_PASTE, UM_SELECT_ALL, UM_SELECT_MATCH, UM_INVERT, UM_DUPLICATE, UM_MAKE_LINK, UM_RENAME, UM_TRASH, UM_DELETE, UM_RESTORE,
     UM_RELOAD, UM_SIDE_PLACES, UM_SIDE_TREE, UM_SIDE_NONE, UM_HIDDEN, UM_PERMS_COLS, UM_GROUP_COL, UM_COLORS, UM_SHOW_MENU, UM_SORT_NAME, UM_SORT_SIZE, UM_SORT_MTIME, UM_SORT_REVERSE,
     UM_ZOOM_IN, UM_ZOOM_OUT, UM_ZOOM_RESET, UM_VIEW_LIST, UM_VIEW_ICONS,
-    UM_PARENT, UM_BACK, UM_FORWARD, UM_HOME, UM_TRASH_VIEW, UM_FIND, UM_LOCATION, UM_TERMINAL,
+    UM_PARENT, UM_BACK, UM_FORWARD, UM_HOME, UM_TRASH_VIEW, UM_FIND, UM_SEARCH, UM_LOCATION, UM_TERMINAL,
     UM_ADD_BOOKMARK, UM_EDIT_BOOKMARKS, UM_BM_0, UM_BM_1, UM_BM_2, UM_BM_3, UM_BM_4, UM_BM_5, UM_BM_6, UM_BM_7, UM_BM_MORE,
     UM_SHORTCUTS, UM_ABOUT,
     UM_OPEN_TAB, UM_EMPTY_TRASH, UM_HERE_PROPS, UM_OPEN_WINDOW, UM_PASTE_INTO, UM_TERMINAL_IN, UM_FOLLOW, UM_BOOKMARK_IT,
@@ -305,6 +310,7 @@ static const struct { const char *label, *key, *word; UiEvent ev; char mark; } U
     [UM_HOME] = { "Home", "Alt+Home", "home", { UK_HOMEDIR, 0 } },
     [UM_TRASH_VIEW] = { "Trash", "Alt+End", "trash-view", { UK_TRASH_VIEW, 0 } },
     [UM_FIND] = { "Find in Folder\xE2\x80\xA6", "Ctrl+F", "find", { UK_FIND, 0 } },
+    [UM_SEARCH] = { "Search\xE2\x80\xA6", "Ctrl+Shift+F", "search", { UK_SEARCH, 0 } },   // below the folder shown (F9)
     [UM_LOCATION] = { "Location\xE2\x80\xA6", "Ctrl+L", "location", { UK_LOCATION, 0 } },
     [UM_TERMINAL] = { "Terminal Here", "Alt+Enter", "terminal", { UK_TERMINAL, 0 } },
     // Bookmarks (F7.5); a bookmark's label is gui/'s (the file's), marked when it is the folder shown
@@ -364,7 +370,7 @@ static const UiMenuItem UI_MENU_VIEW[] = {
     UM_VIEW_LIST, UM_VIEW_ICONS,
 };
 static const UiMenuItem UI_MENU_GO[] = {
-    UM_PARENT, UM_BACK, UM_FORWARD, UM_SEP, UM_HOME, UM_TRASH_VIEW, UM_SEP, UM_FIND, UM_LOCATION, UM_TERMINAL,
+    UM_PARENT, UM_BACK, UM_FORWARD, UM_SEP, UM_HOME, UM_TRASH_VIEW, UM_SEP, UM_FIND, UM_SEARCH, UM_LOCATION, UM_TERMINAL,
 };
 static const UiMenuItem UI_MENU_BOOKMARKS_[] = {
     UM_ADD_BOOKMARK, UM_EDIT_BOOKMARKS, UM_SEP, UM_BM_0, UM_BM_1, UM_BM_2, UM_BM_3, UM_BM_4, UM_BM_5, UM_BM_6, UM_BM_7, UM_BM_MORE,
@@ -413,13 +419,13 @@ _Static_assert(sizeof UI_MENU / sizeof UI_MENU[0] == UI_MENUS_ALL, "UI_MENU: the
 // Its sections, by where the keys work, and its rows: an action, its key, a second key ("" none).
 // A menu entry with a key has a row of the same name and key (test_f75.c checks).
 typedef enum {
-    KS_MOVE, KS_OPEN, KS_SELECT, KS_CHANGE, KS_TABS, KS_VIEW, KS_SIDE, KS_CRUMBS, KS_FIND, KS_EDIT, KS_JOBS, KS_OW, KS_BM,
+    KS_MOVE, KS_OPEN, KS_SELECT, KS_CHANGE, KS_TABS, KS_VIEW, KS_SIDE, KS_CRUMBS, KS_FIND, KS_SEARCH, KS_EDIT, KS_JOBS, KS_OW, KS_BM,
     KS_SECTIONS
 } UiKeySection;
 
 static const char *const UI_KEY_SECTION[KS_SECTIONS] = {
     "Moving", "Opening", "Selecting", "Changing files", "Tabs and windows", "View", "The sidebar", "The path buttons (Ctrl+K)",
-    "The find bar", "The rename and location lines", "The job rows (Ctrl+J)", "Open With", "Edit Bookmarks",
+    "The find bar", "Search below the folder", "The rename and location lines", "The job rows (Ctrl+J)", "Open With", "Edit Bookmarks",
 };
 
 static const struct { UiKeySection sec; const char *action, *key, *key2; } UI_KEYS[] = {
@@ -496,6 +502,11 @@ static const struct { UiKeySection sec; const char *action, *key, *key2; } UI_KE
     { KS_FIND, "Match case", "Alt+C", "" },
     { KS_FIND, "Whole words", "Alt+W", "" },
     { KS_FIND, "A regular expression", "Alt+R", "" },
+    { KS_SEARCH, "Search\xE2\x80\xA6", "Ctrl+Shift+F", "the magnifier" },
+    { KS_SEARCH, "The keys to the results", "Enter", "Esc, Down" },
+    { KS_SEARCH, "Back to the search field", "Ctrl+Shift+F", "a click in it" },
+    { KS_SEARCH, "A wildcard over the whole name", "*, ?", "*.ts" },
+    { KS_SEARCH, "Match case, whole words, a regular expression", "Alt+C, W, R", "shared with find" },
     { KS_EDIT, "Select", "Shift+Left, Right", "Shift+Home, End" },
     { KS_EDIT, "All of it", "Ctrl+A", "" },
     { KS_EDIT, "Copy, cut, paste text", "Ctrl+C, X, V", "" },
@@ -608,6 +619,14 @@ typedef struct {
     // The trash view (F6): gui/ says when it is shown; "Empty the trash?" up.
     bool   in_trash;
     bool   empty_asking;
+    // The search view (F9): gui/ says when it is shown. Its field's text (find's toggles apply), and
+    // whether the field has the keys; search_edited when the text or a toggle changed (gui/ searches
+    // again 150 ms after the last change, and clears it).
+    bool   in_search;
+    bool   search_keys;
+    bool   search_edited;
+    char   search[UI_FIND_MAX];
+    int    search_len;
     // The menu bar (F7.1): a menu open, and its entry marked (-1: none, as a menu the pointer
     // opened). gui/ says whether the folder shown takes new files.
     bool   menu_on;
@@ -821,7 +840,7 @@ static bool ui_input_acts(const UiInput *in)
            in->tab_click >= 0 || in->tab_close >= 0 || in->mid_row >= 0 || in->mid_side >= 0 || in->mid_crumb >= 0 || in->modal > 0 ||
            in->backs > 0 || in->forwards > 0 || in->job_x >= 0 || in->side_mode >= 0 || in->side_twisty >= 0 || in->side_eject >= 0 ||
            in->zoom_wheel != 0 || in->zoom_to >= 0 || in->menu_title >= 0 || in->menu_item >= 0 || in->menu_away || in->ctx_row >= 0 || in->ctx_here || in->ctx_side >= 0 || in->ctx_crumb >= 0 || in->ctx_tab >= 0 || in->prop_box >= 0 ||
-           in->ow_row >= 0 || in->ow_drow >= 0 || in->ow_field || in->toggle > 0 || in->find_x || in->find_field || in->find_step ||
+           in->ow_row >= 0 || in->ow_drow >= 0 || in->ow_field || in->toggle > 0 || in->find_x || in->find_field || in->find_step || in->search_field ||
            in->bmp_row >= 0 || in->bmp_drow >= 0 || in->bmp_btn || in->ow_wheel != 0;   // (a panel's wheel: Open With, Keyboard Shortcuts)
 }
 
@@ -1027,6 +1046,27 @@ static bool ui_match(const UiMatcher *m, Str hay)
         if (!m->o.word || ui_whole(hay, i, end)) return true;
     }
     return false;
+}
+
+// Whether a search's text (F9) is a wildcard: a * or ? in it, the regular expression toggle off.
+static bool ui_wild(const UiMatcher *m)
+{
+    return !m->o.regex && (memchr(m->text, '*', (size_t)m->len) || memchr(m->text, '?', (size_t)m->len));
+}
+
+// Whether a search (F9) matches name: a wildcard over the whole name, as a shell's (`*.ts`, case
+// as the toggle says; whole words don't apply; a dot-file as any other, Show Hidden Files decides);
+// any other text as find matches it.
+static bool ui_search_match(const UiMatcher *m, Str name)
+{
+    if (!ui_wild(m)) return ui_match(m, name);
+    char buf[NAME_MAX + 1];
+    if (name.len > NAME_MAX) return false;
+    memcpy(buf, name.p, (size_t)name.len), buf[name.len] = 0;
+    locale_t was = ui_utf8_on();
+    bool hit = fnmatch(m->text, buf, (m->o.cased ? 0 : FNM_CASEFOLD)) == 0;
+    ui_utf8_off(was);
+    return hit;
 }
 
 // A toggle flipped (1 case, 2 whole word, 3 regular expression; 0 none).
@@ -1556,7 +1596,7 @@ static bool ui_menu_enabled(const Ui *u, UiMenuItem it)
     }
     switch (it) {
     case UM_NEW_TAB: case UM_CLOSE_ALL: case UM_CLOSE: case UM_PROPERTIES: return true;
-    case UM_NEW_WINDOW: return !u->in_trash;   // ofx starts on a folder, not on the trash view
+    case UM_NEW_WINDOW: return !u->in_trash && !u->in_search;   // ofx starts on a folder, not on the trash or search view
     case UM_NEW_FOLDER: case UM_NEW_FILE: return !u->in_trash && u->can_write;
     case UM_OPEN: return files;
     case UM_OPEN_WITH: return files && !u->in_trash;
@@ -1565,7 +1605,8 @@ static bool ui_menu_enabled(const Ui *u, UiMenuItem it)
     case UM_PASTE: return u->can_paste && u->can_write;
     case UM_SELECT_ALL: case UM_SELECT_MATCH: case UM_INVERT: return files;
     case UM_RENAME: case UM_DUPLICATE: case UM_MAKE_LINK: return here && !u->in_trash && u->can_write;
-    case UM_TRASH: case UM_DELETE: case UM_RESTORE: return here;
+    case UM_TRASH: case UM_DELETE: return here && !u->in_search;   // (the search view's: F9 step 2)
+    case UM_RESTORE: return here;
     case UM_RELOAD: case UM_SIDE_PLACES: case UM_SIDE_TREE: case UM_SIDE_NONE: case UM_HIDDEN: case UM_SHOW_MENU: return true;
     // The list's own (Michael, 2026-10-27): the icon view has no columns or colours; a group without
     // the permissions says little.
@@ -1580,8 +1621,9 @@ static bool ui_menu_enabled(const Ui *u, UiMenuItem it)
     case UM_BACK: return u->can_back;
     case UM_FORWARD: return u->can_forward;
     case UM_HOME: case UM_TRASH_VIEW: case UM_FIND: case UM_LOCATION: return true;
-    case UM_TERMINAL: return !u->in_trash;
-    case UM_ADD_BOOKMARK: return u->can_bookmark && !u->in_trash;
+    case UM_SEARCH: return !u->in_trash;
+    case UM_TERMINAL: return !u->in_trash && !u->in_search;
+    case UM_ADD_BOOKMARK: return u->can_bookmark && !u->in_trash && !u->in_search;
     case UM_BM_0: case UM_BM_1: case UM_BM_2: case UM_BM_3: case UM_BM_4: case UM_BM_5: case UM_BM_6: case UM_BM_7: return true;
     case UM_EDIT_BOOKMARKS: case UM_BM_MORE: case UM_SHORTCUTS: case UM_ABOUT: return true;
     case UM_TAB_LEFT: return u->tab_at > 0;
@@ -1589,7 +1631,7 @@ static bool ui_menu_enabled(const Ui *u, UiMenuItem it)
     case UM_TAB_OTHERS: return u->tab_n > 1;
     case UM_OPEN_TAB: case UM_EMPTY_TRASH: case UM_OPEN_WINDOW: case UM_TERMINAL_IN: case UM_FOLLOW: case UM_BOOKMARK_IT: return files;
     case UM_PASTE_INTO: return files && u->can_paste && u->ctx_w;
-    case UM_HERE_PROPS: return true;
+    case UM_HERE_PROPS: return !u->in_search;   // (a search is no folder)
     default: return false;
     }
 }
@@ -2138,6 +2180,55 @@ static Sort ui_sort_click(Sort s, SortKey k)
 // go to the previous and next match; Enter keeps the cursor there and gives the keys back to the
 // list (the bar stays); Esc closes the bar and puts the cursor back; Ctrl+J goes on to the job rows
 // (Michael, 2026-10-26). A command gives the keys back and is the list's.
+// ---- the search view's field (F9) -----------------------------------------------------------
+
+static void ui_search_char(Ui *u, u32 cp)
+{
+    char b[4];
+    int n = ui_utf8(cp, b);
+    if (n == 0 || u->search_len + n > UI_FIND_MAX) return;
+    memcpy(u->search + u->search_len, b, (size_t)n);
+    u->search_len += n, u->search_edited = true;
+}
+
+static void ui_search_erase(Ui *u)
+{
+    if (u->search_len == 0) return;
+    u->search_len--;
+    while (u->search_len > 0 && ((unsigned char)u->search[u->search_len] & 0xC0) == 0x80) u->search_len--;
+    u->search_edited = true;
+}
+
+// The field's keys: text, Backspace, find's toggles; Enter, Esc and Down give the keys to the
+// results; another command goes to them as well, and runs there (false; Ctrl+Shift+F gives them
+// back).
+static bool ui_search_event(Ui *u, UiEvent e)
+{
+    if (ui_toggle_key(e)) {
+        u->find_opts = ui_toggle(u->find_opts, ui_toggle_key(e)), u->search_edited = true;
+        return true;
+    }
+    if (e.key == UK_NONE) {
+        if (e.ch != '/') ui_search_char(u, e.ch);   // (can't be in a name)
+        return true;
+    }
+    switch (e.key) {
+    case UK_BACKSPACE: ui_search_erase(u); return true;
+    case UK_ENTER: case UK_SHIFT_ENTER: case UK_ESC: case UK_DOWN: u->search_keys = false; return true;
+    default: u->search_keys = false; return false;
+    }
+}
+
+// Ctrl+Shift+F, Go → Search…, the magnifier (F9): in the search view the keys go back to its
+// field; elsewhere gui/ opens a search below the folder shown in a new tab (the trash isn't one).
+static UiAction ui_search_open(Ui *u)
+{
+    if (!u->in_search) return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : UA_SEARCH, 0, false };
+    ui_edit_close(u);
+    u->search_keys = true, u->find_keys = false, u->side_focus = false, u->crumb_focus = false, u->jobs_focus = false;
+    return (UiAction){ UA_NONE, 0, false };
+}
+
 static bool ui_find_event(Ui *u, UiNames names, UiEvent e, const UiInput *in)
 {
     if (ui_toggle_key(e)) {   // Alt+C, Alt+W, Alt+R: a toggle
@@ -2255,9 +2346,13 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         } else if (in->find_x) ui_find_close(u);
         else ui_edit_close(u), u->find_keys = true, u->side_focus = false, u->crumb_focus = false, u->jobs_focus = false;   // (an open edit line would take the keys first: reviewer-2)
         return (UiAction){ UA_NONE, 0, false };
-    } else if (!u->ow && in->toggle >= 1 && in->toggle <= 3 && u->finding) {
-        u->find_opts = ui_toggle(u->find_opts, in->toggle);
-        ui_find_update(u, names);
+    } else if (!u->ow && in->toggle >= 1 && in->toggle <= 3 && (u->finding || u->in_search)) {
+        u->find_opts = ui_toggle(u->find_opts, in->toggle);   // (the search view's are find's, F9)
+        if (u->finding) ui_find_update(u, names);
+        if (u->in_search) u->search_edited = true;
+        return (UiAction){ UA_NONE, 0, false };
+    } else if (!prompt && u->in_search && in->search_field) {
+        ui_edit_close(u), u->search_keys = true, u->find_keys = false, u->side_focus = false, u->crumb_focus = false, u->jobs_focus = false;
         return (UiAction){ UA_NONE, 0, false };
     }
     // The menu bar (F7.1): a title opens its menu or closes it; while a menu is open a press on one
@@ -2370,11 +2465,9 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         case UB_LOCATION:
             if (u->editing && u->edit_path) return ui_edit_close(u), (UiAction){ UA_NONE, 0, false };
             return (UiAction){ UA_LOCATION, 0, false };
-        case UB_SEARCH:   // opens the find bar, or closes it
+        case UB_SEARCH:   // as Ctrl+Shift+F (F9; the find bar's until then)
             ui_edit_close(u);
-            if (u->finding) ui_find_close(u);
-            else ui_find_open(u);
-            return (UiAction){ UA_NONE, 0, false };
+            return ui_search_open(u);
         case UB_LEFT: return (UiAction){ UA_CRUMB_SHIFT, -1, false };
         case UB_RIGHT: return (UiAction){ UA_CRUMB_SHIFT, 1, false };
         case UB_CRUMB: ui_edit_close(u); return (UiAction){ UA_CRUMB, in->crumb, false };
@@ -2521,6 +2614,7 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
             if (a.kind != UA_NONE) return a;
             continue;
         }
+        if (u->in_search && u->search_keys && ui_search_event(u, e)) continue;
         if (u->finding && u->find_keys && ui_find_event(u, names, e, in)) continue;
         // H, J, K and L (Shift and h, j, k, l) as the Shift arrows: here, after the questions and the
         // find bar have taken their letters (K keeps all in a clash; text in the find bar).
@@ -2545,7 +2639,7 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
             case 'G': key = UK_END; break;
             case '/': key = UK_FIND; break;
             case '.': key = UK_HIDDEN; break;
-            case 't': return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : UA_TERMINAL, 0, false };
+            case 't': return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : u->in_search ? UA_NOT_IN_SEARCH : UA_TERMINAL, 0, false };
             case 'r':
                 if (u->in_trash && !u->side_focus && l->n > 0) return (UiAction){ UA_RESTORE, 0, false };
                 continue;
@@ -2651,27 +2745,30 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         case UK_RELOAD: return (UiAction){ UA_RELOAD, 0, false };
         case UK_HOMEDIR: return (UiAction){ UA_HOMEDIR, 0, false };
         case UK_TRASH_VIEW: return (UiAction){ UA_TRASH_VIEW, 0, false };
-        case UK_ADD_BOOKMARK: return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : UA_ADD_BOOKMARK, 0, false };
+        case UK_ADD_BOOKMARK: return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : u->in_search ? UA_NOT_IN_SEARCH : UA_ADD_BOOKMARK, 0, false };
         case UK_EDIT_BOOKMARKS: return ui_bmp_open(u, 0);
         case UK_SHORTCUTS: return ui_keys_open(u);
         case UK_F2:
             if (l->n > 0 && !u->side_focus && u->in_trash) return (UiAction){ UA_NOT_IN_TRASH, 0, false };
+            if (l->n > 0 && !u->side_focus && u->in_search) return (UiAction){ UA_NOT_IN_SEARCH, 0, false };
             if (l->n > 0 && !u->side_focus) ui_edit_rename(u, names.at(names.ctx, l->sel), names.dir && names.dir(names.ctx, l->sel));
             break;
         case UK_DELETE:
             // In the trash view Delete is for good, asked first.
+            if (l->n > 0 && !u->side_focus && u->in_search) return (UiAction){ UA_NOT_IN_SEARCH, 0, false };
             if (l->n > 0 && !u->side_focus && u->in_trash) u->confirming = true, u->confirm_n = u->marked ? u->marked : 1;
             else if (l->n > 0 && !u->side_focus) return (UiAction){ UA_TRASH, 0, false };
             break;
         case UK_SHIFT_DELETE:
+            if (l->n > 0 && !u->side_focus && u->in_search) return (UiAction){ UA_NOT_IN_SEARCH, 0, false };
             if (l->n > 0 && !u->side_focus) u->confirming = true, u->confirm_n = u->marked ? u->marked : 1;
             break;
         case UK_COPY: if (l->n > 0 && !u->side_focus) return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : UA_COPY, 0, false }; break;
-        case UK_MAKE_LINK: if (l->n > 0 && !u->side_focus) return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : UA_MAKE_LINK, 0, false }; break;
+        case UK_MAKE_LINK: if (l->n > 0 && !u->side_focus) return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : u->in_search ? UA_NOT_IN_SEARCH : UA_MAKE_LINK, 0, false }; break;
         case UK_CUT: if (l->n > 0 && !u->side_focus) return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : UA_CUT, 0, false }; break;
-        case UK_PASTE: return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : UA_PASTE, 0, false };
+        case UK_PASTE: return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : u->in_search ? UA_NOT_IN_SEARCH : UA_PASTE, 0, false };
         case UK_UNDO: return (UiAction){ UA_UNDO, 0, false };
-        case UK_NEWFOLDER: return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : UA_NEWFOLDER, 0, false };
+        case UK_NEWFOLDER: return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : u->in_search ? UA_NOT_IN_SEARCH : UA_NEWFOLDER, 0, false };
         case UK_LOCATION: return (UiAction){ UA_LOCATION, 0, false };
         case UK_CRUMBS: ui_crumbs_focus(u, in); break;
         case UK_JOBS:   // the find bar first when it is open, then the job rows (Michael, 2026-10-26)
@@ -2680,9 +2777,10 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
             break;
         case UK_PARENT: return (UiAction){ UA_PARENT, 0, false };
         case UK_TAB_NEW: return (UiAction){ UA_TAB_NEW, 0, false };
-        case UK_NEW_WINDOW: return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : UA_NEW_WINDOW, 0, false };
+        case UK_NEW_WINDOW: return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : u->in_search ? UA_NOT_IN_SEARCH : UA_NEW_WINDOW, 0, false };
         case UK_PROPERTIES: return ui_props_open(u);
-        case UK_TERMINAL: return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : UA_TERMINAL, 0, false };
+        case UK_TERMINAL: return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : u->in_search ? UA_NOT_IN_SEARCH : UA_TERMINAL, 0, false };
+        case UK_SEARCH: return ui_search_open(u);
         case UK_TAB_CLOSE: return (UiAction){ UA_TAB_CLOSE, -1, false };
         case UK_TAB_NEXT: return (UiAction){ UA_TAB_STEP, 1, false };
         case UK_TAB_PREV: return (UiAction){ UA_TAB_STEP, -1, false };
@@ -2727,8 +2825,8 @@ static bool ui_under(Str p, Str dir)
 static void ui_crumbs_set(UiCrumbs *c, const char *cwd, const char *home)
 {
     Str cw = str_from_c(cwd), h = str_from_c(home);
-    if (str_eq(cw, S(TRASH_URI))) {   // the trash view (F6): one button, "Trash"
-        snprintf(c->deep, sizeof c->deep, "%s", TRASH_URI);
+    if (str_eq(cw, S(TRASH_URI)) || is_search(cwd)) {   // the trash view (F6): one button, "Trash"; a search's (F9), "Search"
+        snprintf(c->deep, sizeof c->deep, "%s", cwd);
         c->seg[0] = (UiCrumb){ cw.len, false };
         c->n = 1, c->cur = 0, c->lo = -1;
         return;
@@ -2767,6 +2865,7 @@ static Str ui_crumb_label(const UiCrumbs *c, int i)
 {
     if (!c->seg[i].home && c->seg[i].end == 1) return S("/");
     if (str_eq(ui_crumb_path(c, i), S(TRASH_URI))) return S("Trash");
+    if (str_starts_with(ui_crumb_path(c, i), S(SEARCH_URI))) return S("Search");
     return path_base(ui_crumb_path(c, i));
 }
 

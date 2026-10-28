@@ -1,0 +1,104 @@
+# F9 step 1 (docs/plan.md "F9 design"): the search view. The tree (run.sh): a.ts, b.txt,
+# src/{c.ts, index.ts, deep/{index.ts, d.TS}}, docs/notes.txt, .hid/e.ts, .f.ts, .git/g.ts,
+# node_modules/h.ts, link -> src, zz/ with zz00000 .. zz10000.
+settle
+expect search=0 tabs=1 searchbar=0
+# Ctrl+Shift+F: a tab of its own, its field with the keys, nothing searched yet
+key ctrl-shift-f
+wait-for 2000 search=1 tabs=2 tab=1 searchkeys=1 n=0 searchtext=- searchbar=1
+shot search-empty.png
+# As you type: searched 150 ms after the last change; anywhere in the name, case ignored; .git,
+# node_modules, hidden files and the link to a folder left out, and said so
+type INDEX
+expect searchdue=1 n=0
+idle
+expect idlewoke=timer
+wait-for 3000 searchdue=0 searchdone=1 n=2
+expect idx=0 sel=index.ts seldir=src rows=11 searchinfo=2_found_·_skipped_1_node_modules,_3_hidden,_1_link_to_a_folder
+shot search-results.png
+# Enter: the keys to the results; there Enter opens the file, in its own folder
+key enter
+expect searchkeys=0
+point-ui search-field
+click-here
+expect searchkeys=1
+key enter
+expect searchkeys=0
+key down
+expect idx=1 sel=index.ts seldir=src/deep
+key enter
+sh grep -qx "uwsm-app -- gio open $OFX_DIR/src/deep/index.ts" "$OFX_ROOT/spawn.log"
+# A folder: entered in the same tab; Back is the search again (run again: a file made meanwhile is
+# there), the cursor on it when it comes (folders first: deep, node_modules, then the files)
+key ctrl-shift-f
+expect searchkeys=1
+keys backspace backspace backspace backspace backspace
+type de
+wait-for 3000 searchdone=1 n=4 idx=0 sel=deep seldir=src
+key enter
+key down
+expect idx=1 sel=node_modules seldir=-
+key enter
+wait-for 2000 search=0 back=1 n=1 searchbar=0
+sh touch "$OFX_ROOT/home/tree/src/dex.txt"
+key alt-left
+wait-for 3000 search=1 searchdone=1 n=5 idx=1 sel=node_modules searchtext=de searchkeys=0
+# A wildcard over the whole name, case ignored; Alt+C: case as typed
+key ctrl-shift-f
+keys backspace backspace
+type *.ts
+wait-for 3000 searchdone=1 n=5
+point-ui toggle 11
+click-here
+wait-for 3000 searchdone=1 n=4 findopts=c
+# Show Hidden Files: the hidden ones too, .git still not (from the field: the keys go to the results)
+key ctrl-h
+wait-for 3000 searchdone=1 n=6 shown=1 searchkeys=0
+expect searchinfo=6_found_·_skipped_1_.git,_1_node_modules,_1_link_to_a_folder
+key ctrl-h
+wait-for 3000 searchdone=1 n=4 shown=0
+key ctrl-shift-f
+key alt-c
+wait-for 3000 searchdone=1 n=5 findopts=-
+# A regular expression that doesn't compile: nothing, its reason in the bar
+key alt-r
+keys backspace backspace backspace backspace
+type (
+wait-for 3000 searchdone=1 searchbad=1 n=0
+shot search-bad.png
+key alt-r
+keys backspace
+# The limit: 10,000 shown, and said so
+type zz
+wait-for 8000 searchdone=1 searchfull=1 n=10000
+# What results can't do yet (F9 step 2) says so
+key enter
+key f2
+expect editing=0 status=Search
+key delete
+expect status=Search
+# Ctrl+R: searched again (no watching)
+key ctrl-shift-f
+keys backspace backspace
+type notes
+wait-for 3000 searchdone=1 n=1
+sh touch "$OFX_DIR/src/notes2.txt"
+key enter
+key ctrl-r
+wait-for 3000 searchdone=1 n=2
+# Alt+Up: the folder searched
+key alt-up
+wait-for 2000 search=0 searchbar=0 n=7
+# The magnifier and Go → Search…: a search tab each, on the folder shown
+point-ui search
+click-here
+wait-for 2000 search=1 tabs=3 tab=2 searchkeys=1
+key ctrl-w
+wait-for 2000 tabs=2 search=0 searchkeys=0
+key alt-g
+point-ui menu-item 8
+click-here
+wait-for 2000 search=1 tabs=3 searchkeys=1
+key ctrl-w
+wait-for 2000 tabs=2 search=0 searchkeys=0
+quit

@@ -147,7 +147,7 @@ point-ui search
 hover-here
 expect tooltip=-
 idle
-expect idlewoke=timer tooltip=Find_(Ctrl+F)
+expect idlewoke=timer tooltip=Search_(Ctrl+Shift+F)
 shot tip-search.png
 # Another button: gone at once, its own after the wait; a key takes it away while the pointer stays.
 point-ui view-icons

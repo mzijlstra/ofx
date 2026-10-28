@@ -262,13 +262,13 @@ key alt-e
 expect menuhid=trash
 key esc
 key alt-g
-expect menugrey=parent,forward,terminal
+expect menugrey=parent,forward,search,terminal
 key esc
 key alt-left
 wait-for 2000 trash=0 n=4
-# Find in Folder…, Location…, Terminal Here
+# Find in Folder…, Location…, Terminal Here (Search… between: f9.script)
 key alt-g
-keys up up up
+keys up up up up
 expect menuat=find
 key enter
 expect finding=1 findkeys=1 menu=-

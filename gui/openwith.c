@@ -191,12 +191,13 @@ static int ow_rows(int h)
     return r < 1 ? 1 : r > OW_ROWS_MAX ? OW_ROWS_MAX : r;
 }
 
-// A toggle (1 case, 2 whole word, 3 regular expression) as VS Code draws them: a small box, lit when on.
-static void ow_toggle(int k, bool on)
+// A toggle (1 case, 2 whole word, 3 regular expression) as VS Code draws them: a small box, lit when
+// on. Its id is "toggle" and k, plus base: the search bar's (F9) beside the find bar's.
+static void ow_toggle(int k, bool on, int base)
 {
     Theme *t = &app.theme;
     static const char *const LABEL[] = { "", "Aa", "ab", ".*" };
-    CLAY(CLAY_IDI("toggle", k), { .layout = { .sizing = { CLAY_SIZING_FIXED(28), CLAY_SIZING_FIXED(22) }, .layoutDirection = CLAY_TOP_TO_BOTTOM,
+    CLAY(CLAY_IDI("toggle", base + k), { .layout = { .sizing = { CLAY_SIZING_FIXED(28), CLAY_SIZING_FIXED(22) }, .layoutDirection = CLAY_TOP_TO_BOTTOM,
                                               .childAlignment = { CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER } },
                                   .backgroundColor = on ? mix(t->accent, t->bg, 0.35f) : cc(t->bg),
                                   .cornerRadius = CLAY_CORNER_RADIUS(3),
@@ -206,11 +207,14 @@ static void ow_toggle(int k, bool on)
     }
 }
 
-// The three toggles in a row (the find line's and the panel's field).
-static void layout_toggles(UiMatchOpts o)
+// The three toggles in a row (the find line's, the panel's field's, and with base TOGGLE_SEARCH
+// the search bar's).
+enum { TOGGLE_SEARCH = 10 };
+
+static void layout_toggles(UiMatchOpts o, int base)
 {
     CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_FIT(0), CLAY_SIZING_FIT(0) }, .childGap = 2, .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } } }) {
-        ow_toggle(1, o.cased), ow_toggle(2, o.word), ow_toggle(3, o.regex);
+        ow_toggle(1, o.cased, base), ow_toggle(2, o.word, base), ow_toggle(3, o.regex, base);
     }
 }
 
@@ -248,7 +252,7 @@ static void layout_ow_panel(void)
                     CLAY(CLAY_ID("ow-caret"), { .layout = { .sizing = { CLAY_SIZING_FIXED(2), CLAY_SIZING_FIXED(FONT_PX + 2) } }, .backgroundColor = cc(t->accent) }) {}
                 text(fit(after, OW_W - 200 - str_width(before), false), cc(t->fg));
             }
-            layout_toggles(u->ow_opts);
+            layout_toggles(u->ow_opts, 0);
         }
         if (bad) text(fit(str_from_c(u->ow_m.err), OW_W - 48, false), cc(t->red));
         // The list: a row an app, the cursor's lit (brighter with the keys there); the first of each

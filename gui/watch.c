@@ -46,7 +46,7 @@ static const u32 WATCH_DIR_MASK = IN_CREATE | IN_DELETE | IN_MOVED_FROM | IN_MOV
                                   IN_ATTRIB | IN_DELETE_SELF | IN_MOVE_SELF | IN_ONLYDIR;
 static const u32 WATCH_THEME_MASK = IN_CREATE | IN_DELETE | IN_MOVED_FROM | IN_MOVED_TO | IN_CLOSE_WRITE | IN_ONLYDIR;
 
-// The folder to watch now, in place of the last one.
+// The folder to watch now, in place of the last one; NULL: none (the search view, F9).
 static void watch_dir(const char *dir)
 {
     if (watch.fd < 0) return;
@@ -54,7 +54,7 @@ static void watch_dir(const char *dir)
     // The same directory may be watched for the theme too (inotify gives one wd per inode):
     // removing it would end that watch as well.
     if (old >= 0 && old != watch.theme_wd && old != watch.current_wd) inotify_rm_watch(watch.fd, old);
-    atomic_store(&watch.dir_wd, inotify_add_watch(watch.fd, dir, WATCH_DIR_MASK));
+    atomic_store(&watch.dir_wd, dir ? inotify_add_watch(watch.fd, dir, WATCH_DIR_MASK) : -1);
 }
 
 // The bookmarks file's folder, watched unless it is already (or there is none yet).

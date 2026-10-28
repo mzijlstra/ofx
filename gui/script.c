@@ -16,7 +16,7 @@
 //                           f10, alt-<letter> (a menu), ctrl-n, and close-window (the compositor's
 //                           close, as SIGUSR1 from another window's Close All); ctrl-q is Close All;
 //                           ctrl-i (Properties, F7.2), alt-enter (a terminal), ctrl-m (Make Link),
-//                           ctrl-p ctrl-g (Show Permissions, Show Group)
+//                           ctrl-p ctrl-g (Show Permissions, Show Group), ctrl-shift-f (Search, F9)
 //   char <c>                one typed character
 //   keys <word>...          keys and characters in one frame's input, as fast typing during a slow
 //                           frame gives them: each word a key name (as for `key`) or char:<c>
@@ -38,7 +38,7 @@
 //                           each frame as the mouse's is (hover_refresh)
 //   pointer-off             the pointer out of the window
 //   idle                    the window waits for events as it does unscripted, until a tooltip
-//                           waiting is due; a wake-up 3 s on stands in if nothing comes, and the
+//                           waiting is due (or the search field's text, F9); a wake-up 3 s on stands in if nothing comes, and the
 //                           state's idlewoke says which ended the wait (timer or fallback)
 //   click-here              a left press at the last point-ui
 //   drag-here <dx>          a left press there, the pointer <dx> px across and the button let go,
@@ -104,7 +104,7 @@ static void *idle_fallback_main(void *arg)
 // on the way; it sleeps again after each.
 static void script_idle(void)
 {
-    i64 due = ui_tip_due(&app.tip);
+    i64 due = wake_due();
     atomic_store(&idle_fallback, false);
     pthread_t th;
     pthread_create(&th, NULL, idle_fallback_main, NULL);
@@ -238,10 +238,22 @@ static void script_state(char *out, size_t cap)
     status_info(info, sizeof info);
     for (char *c = info; *c; c++)
         if (*c == ' ') *c = '_';
+    // The search view (F9): its field's text and its status line, spaces as '_'; the cursor's folder
+    // below the one searched ("-": that one, or not a search).
+    char searchtext[UI_FIND_MAX + 1], searchinfo[512], seldir[PATH_MAX];
+    snprintf(searchtext, sizeof searchtext, "%.*s", app.ui.search_len ? app.ui.search_len : 1, app.ui.search_len ? app.ui.search : "-");
+    if (app.ui.in_search) search_status(searchinfo, sizeof searchinfo);
+    else snprintf(searchinfo, sizeof searchinfo, "-");
+    const Entry *se = app.have_list && app.ui.list.n > 0 ? &app.list.e[app.ui.list.sel] : NULL;
+    snprintf(seldir, sizeof seldir, "%.*s", se && se->dir.len ? (int)se->dir.len : 1, se && se->dir.len ? se->dir.p : "-");
+    for (char *c = searchtext; *c; c++)
+        if (*c == ' ') *c = '_';
+    for (char *c = searchinfo; *c; c++)
+        if (*c == ' ') *c = '_';
     // The cursor's preview, as its texture's size (F6.4).
     char thumbsel[32] = "-";
     char tpath[PATH_MAX];
-    if (app.have_list && app.ui.list.n > 0 && join(tpath, sizeof tpath, app.cwd, app.list.e[app.ui.list.sel].name)) {
+    if (app.have_list && app.ui.list.n > 0 && entry_path(app.ui.list.sel, tpath, sizeof tpath)) {
         Texture2D *tt = thumb_peek(tpath, grid_px() * app.icon_scale);
         if (tt) snprintf(thumbsel, sizeof thumbsel, "%dx%d", tt->width, tt->height);
     }
@@ -392,7 +404,8 @@ static void script_state(char *out, size_t cap)
              "thumbheld=%td thumbdropped=%d thumbresets=%d thumblocal=%d reloadasked=%d menuseps=%d bmlist=%s bmn=%d bmhere=%d canbm=%d bmmore=%d bmp=%d bmpn=%td bmpsel=%td bmpnaming=%d bmptext=%s keys=%d keysn=%td keystop=%td keysrows=%d keysfirst=%s menu=%s menuat=%s menuoff=%s menugrey=%s menuhid=%s menumarked=%s menubox=%s menuin=%d menuclear=%d permscols=%d permsshown=%d permsnote=%d groupcol=%d groupdrawn=%d colors=%d barhidden=%d barshown=%d menuhover=%d canwrite=%d windows=%d siderows=%d footerin=%d "
              "props=%d propat=%d propcan=%d propn=%td propmode=%04o propfiles=%lld propdirs=%lld propbytes=%lld propdone=%d propcut=%d proplinks=%lld,%lld,%lld,%d propnlink=%llu proptype=%s proptypename=%s propbyname=%d propname=%s "
              "propwhere=%s propdrive=%s proplink=%s propcreated=%d propidx=%td "
-             "ow=%d owfresh=%d owlist=%d owtext=%s own=%td owsel=%td owapp=%s owicon=%s owtex=%d owshown=%td owtype=%s owfiles=%td owrows=%d owtop=%td owopts=%s owbad=%d owdef=%d owdefcan=%d findopts=%s findbad=%d findselect=%d findn=%td findat=%td findtext=%s status=%s",
+             "ow=%d owfresh=%d owlist=%d owtext=%s own=%td owsel=%td owapp=%s owicon=%s owtex=%d owshown=%td owtype=%s owfiles=%td owrows=%d owtop=%td owopts=%s owbad=%d owdef=%d owdefcan=%d findopts=%s findbad=%d findselect=%d findn=%td findat=%td findtext=%s "
+             "search=%d searchkeys=%d searchtext=%s searchdone=%d searchfull=%d searchdue=%d searchbad=%d searchbar=%d seldir=%s searchinfo=%s status=%s",
              app.cwd, app.list.n, app.list.hidden, STR_ARG(sel), app.ui.list.sel, app.ui.list.top, app.ui.list.rows, app.hover,
              t->accent.r, t->accent.g, t->accent.b, t->bg.r, t->bg.g, t->bg.b, t->icons[0] ? t->icons : "-",
              app.icon_scale, GetScreenWidth(), GetScreenHeight(), app.reloads, app.themes, atomic_load(&watch.batches),
@@ -423,7 +436,9 @@ static void script_state(char *out, size_t cap)
              props.type[0] ? props.type : "-", proptypename, props.type_by_name, propname,
              propwhere, propdrive, proplink, props.btime >= 0, props.idx,
              app.ui.ow, app.ui.ow_fresh, app.ui.ow_in_list, owtext, app.ui.ow_list.n, app.ui.ow_list.sel, owapp, owicon, owtex, ow.shown, ow.type[0] ? ow.type : "-", ow.n,
-             app.ui.ow_list.rows, app.ui.ow_list.top, owopts, app.ui.ow_m.bad, app.ui.ow_def, app.ui.ow_def_can, findopts, app.ui.find_m.bad, app.ui.find_select, findn, findat, findtext, app.status[0] ? app.status : "-");
+             app.ui.ow_list.rows, app.ui.ow_list.top, owopts, app.ui.ow_m.bad, app.ui.ow_def, app.ui.ow_def_can, findopts, app.ui.find_m.bad, app.ui.find_select, findn, findat, findtext,
+             app.ui.in_search, app.ui.search_keys, searchtext, app.search_done, app.search_s.full, app.search_due != 0, app.search_m.bad,
+             (int)Clay_GetElementData(CLAY_ID("search-bar")).found, seldir, searchinfo, app.status[0] ? app.status : "-");
     frame_us_max = 0;
 }
 
@@ -469,7 +484,7 @@ static UiKey script_key(Str name)
         { "f10", UK_F10 }, { "ctrl-n", UK_NEW_WINDOW }, { "ctrl-i", UK_PROPERTIES }, { "alt-enter", UK_TERMINAL },
         { "ctrl-1", UK_VIEW_LIST }, { "ctrl-2", UK_VIEW_ICONS }, { "ctrl-left", UK_SIDE },
         { "ctrl-equal", UK_ZOOM_IN }, { "ctrl-minus", UK_ZOOM_OUT }, { "ctrl-0", UK_ZOOM_RESET },
-        { "ctrl-shift-i", UK_INVERT }, { "ctrl-shift-a", UK_SELECT_MATCH }, { "ctrl-r", UK_RELOAD }, { "alt-home", UK_HOMEDIR }, { "alt-end", UK_TRASH_VIEW }, { "ctrl-d", UK_ADD_BOOKMARK }, { "ctrl-b", UK_EDIT_BOOKMARKS }, { "f1", UK_SHORTCUTS }, { "alt-down", UK_ALT_DOWN },
+        { "ctrl-shift-f", UK_SEARCH }, { "ctrl-shift-i", UK_INVERT }, { "ctrl-shift-a", UK_SELECT_MATCH }, { "ctrl-r", UK_RELOAD }, { "alt-home", UK_HOMEDIR }, { "alt-end", UK_TRASH_VIEW }, { "ctrl-d", UK_ADD_BOOKMARK }, { "ctrl-b", UK_EDIT_BOOKMARKS }, { "f1", UK_SHORTCUTS }, { "alt-down", UK_ALT_DOWN },
     };
     for (int i = 0; i < COUNT(KEYS); i++)
         if (str_eq(name, str_from_c(KEYS[i].name))) return KEYS[i].k;
@@ -508,9 +523,10 @@ static void script_sh(Str cmd)
         script_fail("sh skipped after a failure: %.*s", STR_ARG(cmd));
         return;
     }
-    // The trash view (F6) has no folder of its own: the home trash's stands in for it.
+    // The trash view (F6) has no folder of its own: the home trash's stands in for it; the search
+    // view's (F9) is the folder searched.
     char shown[PATH_MAX];
-    if (!app.ui.in_trash || !trash_home(shown, sizeof shown)) snprintf(shown, sizeof shown, "%s", app.cwd);
+    if (!app.ui.in_trash || !trash_home(shown, sizeof shown)) snprintf(shown, sizeof shown, "%s", app.ui.in_search ? app.search_root : app.cwd);
     if (!script_under(shown, root)) {
         script_fail("sh refused: %s is not under OFX_GUI_ROOT (%s)", shown, root ? root : "unset");
         return;

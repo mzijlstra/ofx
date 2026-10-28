@@ -13,6 +13,7 @@
 #include "clip.c"
 #include "job.c"
 #include "props.c"
+#include "search.c"
 #include "undo.c"
 #include "jobq.c"
 #include "state.c"

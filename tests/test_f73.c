@@ -773,13 +773,9 @@ static void test_find_bar(void)
     CHECK(!u.finding && !u.find_keys && u.list.sel == 5);
     ui_handle(&u, names, &in);   // closed: nothing
     CHECK(!u.finding);
-    // The search button opens it (taking the keys from the job rows) and closes it.
-    u.jobs_focus = true;
+    // The magnifier is the search's since F9 (2026-10-28), not the find bar's.
     in = ui_input_none(), in.bar = UB_SEARCH, in.job_n = 1;
-    ui_handle(&u, names, &in);
-    CHECK(u.finding && u.find_keys && u.find_len == 0 && !u.jobs_focus);
-    ui_handle(&u, names, &in);
-    CHECK(!u.finding);
+    CHECK(ui_handle(&u, names, &in).kind == UA_SEARCH && !u.finding);
     // / with the bar open but not its keys: a new find, from the cursor.
     in = chars("/gam");
     ui_handle(&u, names, &in);

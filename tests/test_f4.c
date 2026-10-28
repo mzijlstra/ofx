@@ -161,10 +161,8 @@ static void test_ui_f4(void)
     in = ui_input_none(), in.bar = UB_CRUMB, in.crumb = 3;
     UiAction a = ui_handle(&u, names, &in);
     CHECK(a.kind == UA_CRUMB && a.index == 3);
-    in = ui_input_none(), in.bar = UB_SEARCH;
-    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.finding);
-    in = keys(1, UK_ESC);
-    ui_handle(&u, names, &in);
+    in = ui_input_none(), in.bar = UB_SEARCH;   // a search below the folder since F9
+    CHECK(ui_handle(&u, names, &in).kind == UA_SEARCH && !u.finding);
     // Not while a prompt waits.
     u.confirming = true;
     in = ui_input_none(), in.bar = UB_BACK;
