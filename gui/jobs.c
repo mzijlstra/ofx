@@ -332,8 +332,10 @@ static bool jobs_poll(void)
         finished = true;
     }
     if (finished) jobs_schedule();
-    // One clash at a time, the earliest job's first, and only when no other panel is up.
-    bool other = app.ui.confirming || app.ui.cancel_asking || app.ui.quit_asking || app.ui.full_told;
+    // One clash at a time, the earliest job's first, and only when no question above it in ui/'s
+    // order is up (a clash shows over the panels).
+    UiOnTop on = ui_on_top(&app.ui);
+    bool other = on != UI_ON_NONE && on < UI_ON_CLASH;
     if (!app.ui.asking && !other) {
         pthread_mutex_lock(&jobs.mu);
         for (int i = 0; i < jobs.nrun && jobs.asking < 0; i++) {

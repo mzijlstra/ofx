@@ -666,12 +666,20 @@ static void test_line_active(void)
     CHECK(ui_line_active(&u, &l) && l.b == u.edit);
     u.keys = true;
     CHECK(ui_line_active(&u, &l) && l.b == u.keys_text);
+    // Only the panel on top counts (ui_on_top): Edit Bookmarks over Shortcuts, not naming, has none.
     u.bmp = true;
-    CHECK(ui_line_active(&u, &l) && l.b == u.keys_text);
+    CHECK(!ui_line_active(&u, NULL));
     u.bmp_naming = true;
     CHECK(ui_line_active(&u, &l) && l.b == u.bmp_text);
     u.ow = true, u.ow_in_list = true;
-    CHECK(ui_line_active(&u, &l) && l.b == u.bmp_text);
+    CHECK(!ui_line_active(&u, NULL));
     u.ow_in_list = false;
     CHECK(ui_line_active(&u, &l) && l.b == u.ow_text);
+    // A question over a field: none, so a Ctrl+V reads no clipboard (reviewer-2, 2026-10-28).
+    u.ow = u.bmp = u.keys = false;
+    CHECK(ui_line_active(&u, &l) && l.b == u.edit);
+    u.confirming = true;
+    CHECK(!ui_line_active(&u, NULL));
+    u.confirming = false, u.props = true;
+    CHECK(!ui_line_active(&u, NULL));
 }

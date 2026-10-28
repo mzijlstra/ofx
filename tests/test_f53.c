@@ -346,8 +346,51 @@ static void test_quit_full(void)
     u.full_told = false;
 }
 
+// One order for what is on top (ui_on_top, 2026-10-28): before, the keys took a clash before the
+// delete question, and the pointer and gui/ the delete question first. With both up, y, Enter and
+// the panel's Yes all answer the delete question; Esc too, not the clash.
+static void test_on_top(void)
+{
+    Ui u = { 0 };
+    UiNames names = { name_at, NULL, NULL };
+    u.list.n = 3, u.list.rows = 3;
+    CHECK(ui_on_top(&u) == UI_ON_NONE);
+    u.props = u.ow = u.bmp = u.keys = u.about = u.bar_told = true;
+    CHECK(ui_on_top(&u) == UI_ON_PROPS);
+    u.asking = true;
+    CHECK(ui_on_top(&u) == UI_ON_CLASH);
+    u.empty_asking = true;
+    CHECK(ui_on_top(&u) == UI_ON_EMPTY);
+    u.confirming = true;
+    CHECK(ui_on_top(&u) == UI_ON_DELETE);
+    u.cancel_asking = true;
+    CHECK(ui_on_top(&u) == UI_ON_CANCEL);
+    u.quit_asking = true;
+    CHECK(ui_on_top(&u) == UI_ON_QUIT);
+    u.full_told = true;
+    CHECK(ui_on_top(&u) == UI_ON_FULL);
+    u = (Ui){ 0 }, u.list.n = 3, u.list.rows = 3, u.in_trash = true;
+    u.asking = u.confirming = true;
+    UiInput in = chars("y");
+    CHECK(ui_handle(&u, names, &in).kind == UA_DELETE && !u.confirming && u.asking);
+    u.confirming = true;
+    in = keys(1, UK_ESC);
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && !u.confirming && u.asking);
+    u.confirming = true;
+    in = ui_input_none(), in.modal = UI_MODAL_YES;
+    CHECK(ui_handle(&u, names, &in).kind == UA_DELETE && !u.confirming && u.asking);
+    // Properties under a clash: its checkboxes and OK wait.
+    u.props = true, u.prop_can = true;
+    in = ui_input_none(), in.prop_box = 3;
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.prop_at != 3);
+    in = ui_input_none(), in.modal = UI_MODAL_OK;
+    ui_handle(&u, names, &in);
+    CHECK(u.props && u.asking);
+}
+
 static void test_ui_f53(void)
 {
+    test_on_top();
     test_jobq();
     test_draw_due();
     test_jobline();

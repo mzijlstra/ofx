@@ -128,7 +128,7 @@ MUTANTS = [
     (G, "    int room = h - top_h() - FOOTER_H - jobs_h() - (app.ui.in_trash", "    int room = h - top_h() - FOOTER_H - (app.ui.in_trash"),
     (G, "        if (in_box(CLAY_IDI(\"job-x\", i), x, y)) h.job_x = i;", ""),
     (G, "    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_J) return UK_JOBS;\n", ""),
-    (G, "    if (app.ui.cancel_asking) return MODAL_CANCEL;", ""),
+    (G, "    case UI_ON_CANCEL: return MODAL_CANCEL;\n", ""),
     (G, "        for (int k = 0; k < jobs.nrun; k++) in.job_id[k] = job_recs[jobs.run[k]].id;", ""),
     # F5.3 review fixes. Not run: the refusals in rename, new folder and undo (the same
     # jobs_refuse as trash's), and the timed join at quit (it needs a worker stuck in a hung mount).
@@ -286,7 +286,7 @@ MUTANTS = [
     (G, '    props_read();\n    set_status(false,', '    set_status(false,', 'f72'),
     (G, '            if (in_box(CLAY_IDI("prop-box", k), x, y)) h.prop_box = k;', '', 'f72'),
     (G, '    in->prop_box = h.prop_box;\n', '', 'f72'),
-    (G, '    if (app.ui.props) return MODAL_PROPS;   // under any question (F7.2)', '', 'f72'),
+    (G, '    case UI_ON_PROPS: return MODAL_PROPS;\n', '', 'f72'),
     (G, '    case UA_CHMOD: props_chmod((int)a.index); break;', '', 'f72'),
     (G, '    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_I) return UK_PROPERTIES;', '', 'f72'),
     (G, '    if (m == GLFW_MOD_ALT && (key == GLFW_KEY_ENTER || key == GLFW_KEY_KP_ENTER)) return UK_TERMINAL;', '', 'f72'),
@@ -310,7 +310,7 @@ MUTANTS = [
     (G, '    case UA_OPEN: a.all ? open_marked() : open_entry(a.index); break;', '    case UA_OPEN: open_entry(a.index); break;', 'f73'),
     (G, '    case UA_OPEN_WITH: ow_open(); break;', '', 'f73'),
     (G, '    case UA_LAUNCH: ow_launch(a.index, a.all); break;', '', 'f73'),
-    (G, '    if (app.ui.ow) return MODAL_OW;         // likewise (F7.3)', '', 'f73'),
+    (G, '    case UI_ON_OW: return MODAL_OW;\n', '', 'f73'),
     (G, '            if (in_box(CLAY_IDI("ow-row", r), x, y)) h.ow_row = r;', '', 'f73'),
     (G, '        h.ow_field = modal_kind() == MODAL_OW && !h.toggle && in_box(CLAY_ID("ow-field"), x, y);', '', 'f73'),
     (G, '        if (in_box(CLAY_IDI("toggle", k), x, y)) h.toggle = k;', '', 'f73'),
@@ -388,7 +388,7 @@ MUTANTS = [
     (G, '    case UA_BM_EDIT: case UA_BM_GO: case UA_BM_NAME: case UA_BM_REMOVE: case UA_BM_UP: case UA_BM_DOWN: case UA_BM_RENAME: bmp_act(a); break;', '', 'f75'),
     (G, '        if (u->bm_more++ == 0) u->bm_more_at = i;', '        u->bm_more++;', 'f75'),
     (G, '        if (!bmarks.b[i].path[0] || local++ < UI_MENU_BOOKMARKS) continue;', '        if (local++ < UI_MENU_BOOKMARKS) continue;', 'f75'),
-    (G, '    if (app.ui.bmp) return MODAL_BM;        // Edit Bookmarks (F7.5)', '', 'f75'),
+    (G, '    case UI_ON_BM: return MODAL_BM;\n', '', 'f75'),
     (G, '            if (in_box(CLAY_IDI("bmp-row", r), x, y)) h.bmp_row = r;', '', 'f75'),
     (G, '        if (ui_press(&app.ow_press, app.ui.bmp_list.top + h.bmp_row, now_ms()) == 2) in->bmp_drow = h.bmp_row;', '        if (false) in->bmp_drow = h.bmp_row;', 'f75'),
     (G, '    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_B) return UK_EDIT_BOOKMARKS;', '', 'f75'),
@@ -400,13 +400,13 @@ MUTANTS = [
     # Not run: bmp_change's bm_read refusal (with the file unreadable the panel lists no line to act
     # on) and the empty-format refusals (an over-a-MiB file); test_f75.c covers bm_read and bm_format.
     # ---- F7.5: Keyboard Shortcuts
-    (G, '    if (app.ui.keys) return MODAL_KEYS;     // Keyboard Shortcuts (F7.5)', '', 'f75'),
+    (G, '    case UI_ON_KEYS: return MODAL_KEYS;\n', '', 'f75'),
     (G, '    if ((m == 0 || m == GLFW_MOD_CONTROL) && key == GLFW_KEY_F1) return UK_SHORTCUTS;', '    if (m == 0 && key == GLFW_KEY_F1) return UK_SHORTCUTS;', 'f75'),
     (G, '    if (app.ui.ow || app.ui.keys) return in->ow_wheel = notches, false;', '    if (app.ui.ow) return in->ow_wheel = notches, false;', 'f75'),
     (G, '    ui_resize(&app.ui.keys_list, keys_rows(GetScreenHeight()));   // Keyboard Shortcuts\'', '', 'f75'),
     # Left out: the panel's drawing (pixels); shortcuts.png shows it.
     # ---- Help → About (2026-10-27); its drawing left out (pixels), about.png shows it
-    (G, '    if (app.ui.about) return MODAL_ABOUT;', '', 'f75'),
+    (G, '    case UI_ON_ABOUT: return MODAL_ABOUT;\n', '', 'f75'),
     (G, '    else if (k == MODAL_ABOUT) layout_about_panel();', '', 'f75'),
     # ---- F8 step 1: the files' right-click menus. Not run: input_real's right button (scripts press
     # through right_at), the footer's hint (pixels); ctx-entry.png, ctx-key.png, ctx-here.png show them.
@@ -493,7 +493,7 @@ MUTANTS = [
     (G, '    return !app.ui.bar_hidden || (app.ui.menu_on && app.ui.menu < UI_MENUS);', '    return true;', 'f8'),
     (G, ', app.ui.perms_cols = !st.no_perms, app.ui.bar_hidden = st.no_bar,', ', app.ui.perms_cols = !st.no_perms,', 'f8'),
     (G, '        if (state_path(path, sizeof path) && !state_put(&scratch, path, "menubar", app.ui.bar_hidden ? "off" : "on", &err))', '        if (state_path(path, sizeof path) && !state_put(&scratch, path, "menubar", "on", &err))', 'f8'),
-    (G, '    if (app.ui.bar_told) return MODAL_BAR;   // the menu bar just hidden (2026-10-27)', '', 'f8'),
+    (G, '    case UI_ON_BAR: return MODAL_BAR;\n', '', 'f8'),
     # ---- View → Show Group, Ctrl+P, Ctrl+G (2026-10-27). Not run: the key chords' GLFW mapping
     # (scripts send ui/'s keys); the cells drawn (pixels: f8b's list-group.png)
     (G, '        app.ui.colors = !st.no_colors, app.ui.group_col = st.group;', '        app.ui.colors = !st.no_colors;', 'f8'),

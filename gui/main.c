@@ -2802,21 +2802,24 @@ static void layout_menubar(void)
 
 typedef enum { MODAL_NONE, MODAL_DELETE, MODAL_CLASH, MODAL_CANCEL, MODAL_QUIT, MODAL_FULL, MODAL_EMPTY, MODAL_PROPS, MODAL_OW, MODAL_BM, MODAL_KEYS, MODAL_ABOUT, MODAL_BAR } ModalKind;
 
-// The panel on top, in the order ui_handle takes their keys.
+// The panel on top, as ui_on_top has it.
 static ModalKind modal_kind(void)
 {
-    if (app.ui.full_told) return MODAL_FULL;
-    if (app.ui.quit_asking) return MODAL_QUIT;
-    if (app.ui.cancel_asking) return MODAL_CANCEL;
-    if (app.ui.confirming) return MODAL_DELETE;
-    if (app.ui.empty_asking) return MODAL_EMPTY;
-    if (jobs.asking >= 0 && app.ui.asking) return MODAL_CLASH;
-    if (app.ui.props) return MODAL_PROPS;   // under any question (F7.2)
-    if (app.ui.ow) return MODAL_OW;         // likewise (F7.3)
-    if (app.ui.bmp) return MODAL_BM;        // Edit Bookmarks (F7.5)
-    if (app.ui.keys) return MODAL_KEYS;     // Keyboard Shortcuts (F7.5)
-    if (app.ui.about) return MODAL_ABOUT;
-    if (app.ui.bar_told) return MODAL_BAR;   // the menu bar just hidden (2026-10-27)
+    switch (ui_on_top(&app.ui)) {   // (ui/'s order, which takes the keys)
+    case UI_ON_FULL: return MODAL_FULL;
+    case UI_ON_QUIT: return MODAL_QUIT;
+    case UI_ON_CANCEL: return MODAL_CANCEL;
+    case UI_ON_DELETE: return MODAL_DELETE;
+    case UI_ON_EMPTY: return MODAL_EMPTY;
+    case UI_ON_CLASH: return jobs.asking >= 0 ? MODAL_CLASH : MODAL_NONE;
+    case UI_ON_PROPS: return MODAL_PROPS;
+    case UI_ON_OW: return MODAL_OW;
+    case UI_ON_BM: return MODAL_BM;
+    case UI_ON_KEYS: return MODAL_KEYS;
+    case UI_ON_ABOUT: return MODAL_ABOUT;
+    case UI_ON_BAR: return MODAL_BAR;
+    case UI_ON_NONE: break;
+    }
     return MODAL_NONE;
 }
 
