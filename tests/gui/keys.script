@@ -1,0 +1,55 @@
+# Keys typed through the compositor, in the test sway (tools/gui/sway.sh, OFX_COMPOSITOR=sway):
+# vkbd (tools/gui/vkbd.c) sends a US keyboard's evdev keycodes, and GLFW and ui_key_of make of them
+# what they make of a user's (2026-10-28). The other scripts send ui/'s keys and skip that step.
+# Each `vkbd … &` runs beside the window, which answers its keyboard while it types. The tree
+# (run.sh): adir/inner.txt, bdir/, a.txt, "my-file name.txt" (folders first). The state shows a
+# space as _.
+settle
+user-keys
+expect n=4 sel=adir
+# ---- characters: j moves down (vim's keys), / opens find, Escape leaves it where it was, Enter
+# keeps what it found and gives the keys back to the list
+sh vkbd j &
+wait-for 3000 sel=bdir
+sh vkbd slash text:my &
+wait-for 3000 finding=1 find=my sel=my-file
+sh vkbd escape &
+wait-for 3000 finding=0 sel=bdir
+sh vkbd slash text:my return &
+wait-for 3000 findkeys=0 sel=my-file
+# ---- the rename line's words: dots, dashes and spaces split them
+sh vkbd f2 end &
+wait-for 3000 editing=1 caret=16
+sh vkbd ctrl+left &
+wait-for 3000 caret=13
+sh vkbd ctrl+left ctrl+left &
+wait-for 3000 caret=3
+sh vkbd ctrl+shift+right &
+wait-for 3000 esel=3-7 caret=7
+sh vkbd ctrl+right ctrl+backspace &
+wait-for 3000 esel=8-8 caret=8 edit=my-file_.txt
+sh vkbd home ctrl+delete &
+wait-for 3000 caret=0 edit=-file_.txt
+sh vkbd escape &
+wait-for 3000 editing=0
+# ---- outside a field: Ctrl+Left the sidebar, Ctrl+Right (from the list) the location line
+sh vkbd ctrl+left &
+wait-for 3000 sidefocus=1
+sh vkbd ctrl+right &
+wait-for 3000 sidefocus=0
+sh vkbd ctrl+right &
+wait-for 3000 editing=1 locating=1
+sh vkbd ctrl+l &
+wait-for 3000 editing=0
+# ---- Ctrl+Shift+F searches; Ctrl+Enter on a result opens its folder with it selected
+sh vkbd ctrl+shift+f text:inner &
+wait-for 3000 search=1 searchtext=inner searchdue=0 searchdone=1 n=1
+sh vkbd down ctrl+return &
+wait-for 3000 search=0 sel=inner.txt
+sh test "$OFX_DIR" = "$OFX_ROOT/tree/adir"
+# ---- Alt+Enter: a terminal here (the fake's log)
+# (no state word says a terminal ran: vkbd's 150 ms and the key's frame, well inside 1.5 s)
+sh vkbd alt+return &
+sleep 1500
+sh grep -q "xdg-terminal-exec --dir=$OFX_ROOT/tree/adir" "$OFX_ROOT/spawn.log"
+quit

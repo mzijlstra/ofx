@@ -597,6 +597,15 @@ MUTANTS = [
     ('gui/clipboard.c', "strcmp(mime, CLIP_MIME_TEXT[1]) == 0) p = clip.payload[CLIP_FMT_TEXT];", "strcmp(mime, CLIP_MIME_TEXT[1]) == 0) {}", 'clip'),
     ('gui/clipboard.c', "    bool gnome = types & OFFER_GNOME;", "    bool gnome = false;", 'clip'),
     ('gui/clipboard.c', "    if (!(types & (OFFER_UTF8 | OFFER_TEXT))) {", "    if (true) {", 'clip'),
+    # Keys through the compositor (keys, in the test sway with vkbd, 2026-10-28): the mappings no
+    # other script reaches, and the scripted window's door for them.
+    (G, "    if (m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT) && key == GLFW_KEY_F) return UK_SEARCH;\n", "", 'keys'),
+    (G, "    if (m == GLFW_MOD_CONTROL && (key == GLFW_KEY_ENTER || key == GLFW_KEY_KP_ENTER)) return UK_CONTAINING;", "    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_KP_ENTER) return UK_CONTAINING;", 'keys'),
+    (G, "    if (m == GLFW_MOD_ALT && (key == GLFW_KEY_ENTER || key == GLFW_KEY_KP_ENTER)) return UK_TERMINAL;", "    if (m == GLFW_MOD_ALT && key == GLFW_KEY_KP_ENTER) return UK_TERMINAL;", 'keys'),
+    (G, "    if (m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT) && key == GLFW_KEY_RIGHT) return UK_SEL_WORD_RIGHT;\n", "", 'keys'),
+    (G, "    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_BACKSPACE) return UK_WORD_BACKSPACE;\n", "", 'keys'),
+    (G, "    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_DELETE) return UK_WORD_DELETE;\n", "", 'keys'),
+    (G, "                memcpy(in.ev, real.ev, sizeof *real.ev * (size_t)real.nev);\n                in.nev = real.nev;", "                memcpy(in.ev, real.ev, sizeof *real.ev * (size_t)real.nev);", 'keys'),
 ]
 import concurrent.futures, queue, threading, time
 
@@ -622,7 +631,7 @@ t_start = time.monotonic()
 # run.sh's groups, in its order: a mutant runs them one at a time and stops at the first that
 # kills it (Michael, 2026-10-25).
 GROUPS = ['browse', 'big', 'gone', 'watchgap', 'f2', 'f3', 'f4', 'f5', 'f52', 'f53', 'f54', 'f6', 'f62', 'f63', 'f64', 'f7',
-          'f72', 'f73', 'f74', 'f75', 'f8', 'f9', 'clip', 'hang', 'guard3', 'guard']
+          'f72', 'f73', 'f74', 'f75', 'f8', 'f9', 'clip', 'keys', 'hang', 'guard3', 'guard']
 run_text = open(os.path.join(root, 'tests/gui/run.sh')).read()
 assert re.findall(r'want ([a-z0-9]+)', run_text) == GROUPS, 'GROUPS in gui.py no longer match tests/gui/run.sh'
 
@@ -634,12 +643,15 @@ for m in MUTANTS:
 
 # Each worker its own copy of the repo and its own build; the scripts run from the copy, so the
 # repo can be edited meanwhile.
+# vkbd (the test sway's keyboard, run-script.sh puts it on PATH) is built once here; no mutant touches it.
+subprocess.run(['make', '-s', '-C', root, 'build/vkbd'], check=True)
 def make_work(w):
     work = os.path.join(scratch, f'gui-mut-src-{w}')
     shutil.rmtree(work, ignore_errors=True)
     shutil.copytree(root, work, ignore=shutil.ignore_patterns('.git', 'build'))
     os.makedirs(os.path.join(work, 'build'))
     os.symlink(os.path.join(root, 'build', 'raylib'), os.path.join(work, 'build', 'raylib'))
+    os.symlink(os.path.join(root, 'build', 'vkbd'), os.path.join(work, 'build', 'vkbd'))
     return work
 works = [make_work(w) for w in range(jobs)]
 for f, old, new, *_ in MUTANTS:

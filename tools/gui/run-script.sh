@@ -60,6 +60,12 @@ echo "udisksctl \$*" >> "$T/spawn.log"
 if [ "\$1" = "\$(cat "$T/udisks-fail" 2>/dev/null)" ]; then echo "Error \$1: target is busy" >&2; exit 1; fi
 EOS
 chmod +x "$T/fakes/udisksctl"
+# vkbd (tools/gui/vkbd.c), the scripts' keyboard in the test sway: `make build/vkbd` first.
+root=$(cd "$(dirname "$0")/../.." && pwd)
+if [ "${OFX_COMPOSITOR:-weston}" = sway ]; then
+    [ -x "$root/build/vkbd" ] || { echo "run-script: no $root/build/vkbd (make build/vkbd)" >&2; exit 1; }
+    ln -sf "$root/build/vkbd" "$T/fakes/vkbd"
+fi
 if [ ! -d "$T/state" ]; then
     mkdir -p "$T/state/omarchy/current/theme"
     real=${XDG_STATE_HOME:-$HOME/.local/state}/omarchy/current/theme
@@ -72,7 +78,6 @@ args=""
 script_env="OFX_GUI_SCRIPT=$sc"
 [ "$sc" = - ] && script_env=""
 for a in "$@"; do args="$args '$a'"; done
-root=$(cd "$(dirname "$0")/../.." && pwd)
 here=$(cd "$(dirname "$0")" && pwd)
 # Another window size: weston's output that much bigger, as 944x544 gives 936x516.
 if [ -n "${OFX_SCRIPT_SIZE:-}" ]; then
@@ -96,7 +101,7 @@ cat > "$T/launch.sh" <<EOS
 #!/bin/sh
 echo \$\$ > "$T/run.pid"
 exec env -u DISPLAY -u WAYLAND_SOCKET WAYLAND_DISPLAY="$sock" OFX_TEST_SIZE=${OFX_SCRIPT_SIZE:-936x516} OFX_TEST_WINDOWS="$T/windows" ${script_env} OFX_GUI_ROOT="$T" OFX_GUI_SHOTS="$T/shots" PATH="$T/fakes:\$PATH" XDG_STATE_HOME="$T/state" XDG_CONFIG_HOME="$T/config" XDG_DATA_HOME="$T/data" XDG_CACHE_HOME="$T/cache" \
-  LSAN_OPTIONS=suppressions=$root/gui/lsan.supp ASAN_OPTIONS=log_path="$T/asan" ${OFX_TEST_LEAK:+OFX_TEST_LEAK=1} ${OFX_GUI_FAIL_FAST:+OFX_GUI_FAIL_FAST=1} \
+  LSAN_OPTIONS=suppressions=$root/gui/lsan.supp ASAN_OPTIONS=log_path="$T/asan" ${OFX_TEST_LEAK:+OFX_TEST_LEAK=1} ${OFX_GUI_FAIL_FAST:+OFX_GUI_FAIL_FAST=1} ${OFX_GUI_DEBUG:+OFX_GUI_DEBUG=1} \
   ${OFX_TEST_WATCH_DELAY_MS:+OFX_TEST_WATCH_DELAY_MS=$OFX_TEST_WATCH_DELAY_MS} ${OFX_TEST_COPY_DELAY_MS:+OFX_TEST_COPY_DELAY_MS=$OFX_TEST_COPY_DELAY_MS} ${OFX_TEST_CROSS:+OFX_TEST_CROSS=1} ${OFX_TEST_HOME:+HOME=$OFX_TEST_HOME} ${OFX_TEST_COUNT_DELAY_MS:+OFX_TEST_COUNT_DELAY_MS=$OFX_TEST_COUNT_DELAY_MS} ${OFX_TEST_MOUNTINFO:+OFX_TEST_MOUNTINFO=$OFX_TEST_MOUNTINFO} ${OFX_TEST_MEDIA:+OFX_TEST_MEDIA=$OFX_TEST_MEDIA} ${OFX_TEST_SPACE_DELAY_MS:+OFX_TEST_SPACE_DELAY_MS=$OFX_TEST_SPACE_DELAY_MS} ${OFX_TEST_ICONS_MAX:+OFX_TEST_ICONS_MAX=$OFX_TEST_ICONS_MAX} ${OFX_TEST_THUMB_HELD_MAX:+OFX_TEST_THUMB_HELD_MAX=$OFX_TEST_THUMB_HELD_MAX} \
   "$bin" $args >"$T/out" 2>"$T/err"
 EOS

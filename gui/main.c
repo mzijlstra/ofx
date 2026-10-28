@@ -4678,7 +4678,12 @@ int main(int argc, char **argv)
         bool seen;
         UiInput in = input_real(&seen);
         if (scripted) {
-            in = ui_input_none();   // the user's input does not reach a scripted window (Ctrl+Q still quits)
+            UiInput real = in;
+            in = ui_input_none();   // the user's input does not reach a scripted window (Ctrl+Q still quits),
+            if (script.user_keys) {   // but after `user-keys` the keyboard's does (wtype in the test sway, 2026-10-28)
+                memcpy(in.ev, real.ev, sizeof *real.ev * (size_t)real.nev);
+                in.nev = real.nev;
+            }
             if (!script_input(&in)) break;
             seen = true;
         }

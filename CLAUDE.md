@@ -150,13 +150,21 @@ its own object compiled once a run with nanosvg's (`gui/vendor.c`), 1.1 s a muta
   take the other 8x28). 516 is 490 plus F7.1's menu bar, so under the bar every script has the
   room it was written for. `--width`/`--height` are logical pixels.
 - **The test sway** (`tools/gui/sway.sh`, 2026-10-28), for what weston lacks: ext-data-control (the
-  `clip` group) and, next, virtual keyboards (`wtype`). `OFX_COMPOSITOR=sway` makes run-script.sh
+  `clip` group) and virtual keyboards (the `keys` group). `OFX_COMPOSITOR=sway` makes run-script.sh
   use it. Headless (`WLR_BACKENDS=headless`, `WLR_LIBINPUT_NO_DEVICES=1`), `-c` a config written in
   the scratch dir (never `~/.config/sway`), its IPC socket in the scratch dir (`SWAYSOCK`), no
   XWayland. It names its own socket (`wayland-N`, the first free; `wayland-1` is Michael's
   Hyprland), so the config's `exec` writes it down and run-script checks it isn't this session's
   display. The output is 936x516 logical at scale 2: sway draws no decorations, so the tiled
   window is the output, the same size as in weston. weston stays the main suite.
+- **Typed keys** (`keys`): `vkbd` (`tools/gui/vkbd.c`, `make build/vkbd`; run-script.sh puts it on
+  the window's PATH) types through a virtual keyboard with a US keymap and real evdev keycodes.
+  Not wtype: it sends a keymap of its own with made-up keycodes, and GLFW names keys by keycode,
+  so wtype's `b` came as Escape. A script says `user-keys` first (a scripted window drops the
+  compositor's input otherwise) and runs `sh vkbd … &`: in the background, as the window answers
+  nothing while a `sh` line waits. vkbd refuses unless WAYLAND_DISPLAY is the test sway's
+  (`$OFX_GUI_ROOT/sway.socket`, its pid a sway): run against Michael's Hyprland it would type into
+  his focused window.
 - `run-script.sh` checks the socket is the one weston made before launching, takes the pid from the
   launch script, and stops weston after the run. For an unscripted run (`-`), kill the pid, then
   `tools/gui/weston.sh stop <scratch>`.

@@ -18,6 +18,13 @@ PREFIX  ?= $(HOME)/.local
 
 all: build/ofx build/ofx-clean build/ofx-fm1
 
+# The GUI scripts' keyboard in the test sway (tools/gui/vkbd.c, 2026-10-28).
+VKBD_XML = tools/gui/virtual-keyboard-unstable-v1.xml
+build/vkbd: tools/gui/vkbd.c $(VKBD_XML) Makefile | build
+	wayland-scanner client-header $(VKBD_XML) build/virtual-keyboard-unstable-v1-client-protocol.h
+	wayland-scanner private-code $(VKBD_XML) build/virtual-keyboard-unstable-v1-protocol.c
+	$(CC) $(CFLAGS) -Ibuild -o $@ tools/gui/vkbd.c build/virtual-keyboard-unstable-v1-protocol.c $(shell pkg-config --cflags --libs wayland-client xkbcommon)
+
 build/ofx-probe: tools/probe.c $(wildcard base/*.c base/*.h fs/*.c) | build
 	$(CC) $(CFLAGS) $(IMG_INC) $(DEBUG) -o $@ tools/probe.c $(IMG_LIBS) -lm
 

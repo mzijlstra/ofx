@@ -3,7 +3,7 @@
 # (tools/gui/run-script.sh):
 #   tests/gui/run.sh <scratch-dir> [binary] [group...]
 # The groups (one or more scripts on one tree): browse big gone watchgap f2 f3 f4 f5 f52 f53 f54
-# f6 (f6, f6b) f62 (f62, f62b, f62c) f63 (f63, f63b, f63c) f64 (f64, f64b, f64c, f64d) f7 (f7, f7b) f72 f73 (f73, f73b, f73c, f73d) f74 f75 (f75, f75b) f8 (f8, f8b, f8c, f8d, f8e) f9 clip (in sway) hang guard3 guard. Named ones only, or all of them; a group
+# f6 (f6, f6b) f62 (f62, f62b, f62c) f63 (f63, f63b, f63c) f64 (f64, f64b, f64c, f64d) f7 (f7, f7b) f72 f73 (f73, f73b, f73c, f73d) f74 f75 (f75, f75b) f8 (f8, f8b, f8c, f8d, f8e) f9 clip keys (both in sway) hang guard3 guard. Named ones only, or all of them; a group
 # that fails says "== <script>: FAILED" or "<group>: FAILED" (tools/mutation/gui.py reads it).
 set -u
 base=${1:?usage: run.sh <scratch-dir> [binary]}
@@ -287,6 +287,14 @@ if want clip; then
 # Due in 30 s, not 120: a window stuck on the clipboard's lock runs out the limit.
 T=$base/clip; tree "$T"; rm -f "$T/tree/.hidden" "$T/tree/b2.txt" "$T/tree/b10.txt"; touch "$T/tree/b.txt"
 echo "== clip"; RUN_SCRIPT_LIMIT=30 OFX_COMPOSITOR=sway "$here/../../tools/gui/run-script.sh" "$T" "$here/clip.script" "$bin" "$T/tree" || failed clip
+fi
+if want keys; then
+# Keys through the compositor (tools/gui/vkbd.c in the test sway, 2026-10-28): GLFW's keycodes and
+# ui_key_of, which the other scripts' ui/ keys skip.
+T=$base/keys; rm -rf "$T"; mkdir -p "$T/tree/adir" "$T/tree/bdir"; touch "$T/tree/a.txt" "$T/tree/my-file name.txt" "$T/tree/adir/inner.txt"
+# vkbd's guard first: another display (no test sway's socket file) is refused before it connects.
+if WAYLAND_DISPLAY=ofx-no-such OFX_GUI_ROOT="$T" "$here/../../build/vkbd" b 2>/dev/null; then echo "keys: vkbd typed outside the test sway"; failed keys; fi
+echo "== keys"; RUN_SCRIPT_LIMIT=60 OFX_COMPOSITOR=sway "$here/../../tools/gui/run-script.sh" "$T" "$here/keys.script" "$bin" "$T/tree" || failed keys
 fi
 if want hang; then
 T=$base/hang; rm -rf "$T"; mkdir -p "$T/tree/stuck"

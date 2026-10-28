@@ -54,6 +54,9 @@
 //   raw-button <n>          GLFW's button n (1-8) pressed and released through main.c's callback
 //   raw-key <key> [mods]    GLFW key code <key> pressed through main.c's key callback, with GLFW's
 //                           mod bits (1 Shift, 2 Ctrl, 4 Alt): what ui_key_of makes of it
+//   user-keys               from here on the compositor's keyboard reaches the window too, keys
+//                           and characters through GLFW's callbacks as a user's: `sh wtype …` in
+//                           the test sway (tools/gui/sway.sh; weston has no virtual keyboard)
 //   clip-text <text>        the rest of the line onto GLFW's clipboard as another program's copy
 //                           would put it, \n a line break (weston has no data-control)
 //   shot <file.png>         the next drawn frame; a relative path goes under OFX_GUI_SHOTS
@@ -85,6 +88,7 @@ static struct {
     float px, py;        // the last point-ui
     bool  pointing;      // the pointer rests there (hover-here), until pointer-off
     Str   typing;        // what is left of a `type` longer than a frame's events
+    bool  user_keys;     // the keyboard's keys and characters reach the window (`user-keys`)
 } script;
 
 static u8 script_mem[KiB(256)];
@@ -711,6 +715,8 @@ static bool script_input(UiInput *in)
         } else if (str_eq(cmd, S("pointer-off"))) {
             script.pointing = false;
             hover_refresh(false, script.px, script.py);   // GLFW keeps the last position
+        } else if (str_eq(cmd, S("user-keys"))) {
+            script.user_keys = true;
         } else if (str_eq(cmd, S("idle"))) {
             script_idle();
         } else if (str_eq(cmd, S("click-here"))) {
