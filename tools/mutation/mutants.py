@@ -364,7 +364,7 @@ MUTANTS += [
 # ---- F5.1: the modal panels
 MUTANTS += [
     (U, '    if (on == UI_ON_DELETE && yes_no) return u->confirming', '    if (yes_no) return u->confirming'),
-    (U, 'u->confirming = false, (UiAction){ yes ? UA_DELETE : UA_NONE, 0, false };', 'u->confirming = false, (UiAction){ UA_DELETE, 0, false };'),
+    (U, 'u->confirming = false, (UiAction){ said_yes ? UA_DELETE : UA_NONE, 0, false };', 'u->confirming = false, (UiAction){ UA_DELETE, 0, false };'),
     (U, '    if (on == UI_ON_CLASH && in->modal == UI_MODAL_ALL) u->ask_all = !u->ask_all;\n', ''),
     (U, "        return (UiAction){ UA_ANSWER, a, a != UI_ANS_CANCEL && u->ask_all };", "        return (UiAction){ UA_ANSWER, a, false };"),
     (U, "    return (UiAction){ UA_ANSWER, a, (e.ch >= 'A' && e.ch <= 'Z') || u->ask_all };", "    return (UiAction){ UA_ANSWER, a, e.ch >= 'A' && e.ch <= 'Z' };"),
@@ -475,8 +475,8 @@ MUTANTS += [
     # the panels
     (U, 'if (in->modal == UI_MODAL_OK || in->nev > 0) return u->full_told', 'if (in->modal == UI_MODAL_OK) return u->full_told'),
     (U, 'if (in->modal == UI_MODAL_OK || in->nev > 0) return u->full_told', 'if (in->nev > 0) return u->full_told'),
-    (U, '(UiAction){ yes ? UA_QUIT : UA_NONE, 0, false }', '(UiAction){ UA_QUIT, 0, false }'),
-    (U, 'yes ? UA_CANCEL_JOB : UA_NONE', 'UA_CANCEL_JOB'),
+    (U, '(UiAction){ said_yes ? UA_QUIT : UA_NONE, 0, false }', '(UiAction){ UA_QUIT, 0, false }'),
+    (U, 'said_yes ? UA_CANCEL_JOB : UA_NONE', 'UA_CANCEL_JOB'),
     # ui_on_top (2026-10-28): each question or panel left out of the order
     (U, '    if (u->full_told) return UI_ON_FULL;\n', ''),
     (U, '    if (u->quit_asking) return UI_ON_QUIT;\n', ''),
@@ -560,7 +560,7 @@ MUTANTS += [
     (U, "return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : UA_COPY, 0, false };", "return (UiAction){ UA_COPY, 0, false };"),
     (U, "        case UK_PASTE: return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : u->in_search ? UA_NOT_IN_SEARCH : UA_PASTE, 0, false };", "        case UK_PASTE: return (UiAction){ u->in_search ? UA_NOT_IN_SEARCH : UA_PASTE, 0, false };"),
     (U, "            case 't': return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : UA_TERMINAL, 0, false };", "            case 't': return (UiAction){ UA_TERMINAL, 0, false };"),
-    (U, 'yes && u->in_trash ? UA_EMPTY_TRASH', 'yes ? UA_EMPTY_TRASH'),
+    (U, 'said_yes && u->in_trash ? UA_EMPTY_TRASH', 'said_yes ? UA_EMPTY_TRASH'),
     (U, "    if (!u->in_trash) u->empty_asking = false;\n", ""),
     (U, "        case UB_RESTORE: if (u->in_trash && l->n > 0) return", "        case UB_RESTORE: if (l->n > 0) return"),
     (U, "        case UB_EMPTY: if (u->in_trash) u->empty_asking = true; break;", "        case UB_EMPTY: u->empty_asking = true; break;"),

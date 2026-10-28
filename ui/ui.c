@@ -2343,19 +2343,19 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
             u->quit_asking = true, u->cancel_asking = false;
         }
     // The panels F5.3 adds: the queue full (any key or OK), quit, cancel a job; and Empty Trash.
-    bool yes_no = in->modal == UI_MODAL_YES || in->modal == UI_MODAL_NO, yes = in->modal == UI_MODAL_YES;
+    bool yes_no = in->modal == UI_MODAL_YES || in->modal == UI_MODAL_NO, said_yes = in->modal == UI_MODAL_YES;
     switch (ui_on_top(u)) {
     case UI_ON_FULL:
         if (in->modal == UI_MODAL_OK || in->nev > 0) return u->full_told = false, (UiAction){ UA_NONE, 0, false };
         break;
     case UI_ON_QUIT:
-        if (yes_no) return u->quit_asking = false, (UiAction){ yes ? UA_QUIT : UA_NONE, 0, false };
+        if (yes_no) return u->quit_asking = false, (UiAction){ said_yes ? UA_QUIT : UA_NONE, 0, false };
         break;
     case UI_ON_CANCEL:
-        if (yes_no) return u->cancel_asking = false, (UiAction){ yes ? UA_CANCEL_JOB : UA_NONE, u->cancel_id, false };
+        if (yes_no) return u->cancel_asking = false, (UiAction){ said_yes ? UA_CANCEL_JOB : UA_NONE, u->cancel_id, false };
         break;
     case UI_ON_EMPTY:
-        if (yes_no) return u->empty_asking = false, (UiAction){ yes && u->in_trash ? UA_EMPTY_TRASH : UA_NONE, 0, false };
+        if (yes_no) return u->empty_asking = false, (UiAction){ said_yes && u->in_trash ? UA_EMPTY_TRASH : UA_NONE, 0, false };
         break;
     default: break;
     }
@@ -2489,7 +2489,7 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
     if (clicked) ui_unfocus(u, UI_FOCUS_JOBS);
     if (u->focus == UI_FOCUS_CRUMBS && u->crumb_at >= in->crumb_n) u->crumb_at = in->crumb_n - 1;
     // A modal panel's buttons: as the keys they stand for.
-    if (on == UI_ON_DELETE && yes_no) return u->confirming = false, (UiAction){ yes ? UA_DELETE : UA_NONE, 0, false };
+    if (on == UI_ON_DELETE && yes_no) return u->confirming = false, (UiAction){ said_yes ? UA_DELETE : UA_NONE, 0, false };
     if (on == UI_ON_CLASH && in->modal == UI_MODAL_ALL) u->ask_all = !u->ask_all;
     if (on == UI_ON_CLASH && in->modal >= UI_MODAL_SKIP && in->modal <= UI_MODAL_CANCEL) {
         static const int ANSWER[] = { UI_ANS_SKIP, UI_ANS_REPLACE, UI_ANS_KEEP, UI_ANS_CANCEL };
