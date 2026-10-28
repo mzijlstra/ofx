@@ -355,7 +355,11 @@ static ClipFrom clip_get(Arena *a, ClipFiles *c)
     unsigned types = i >= 0 ? clip.offers[i].types & (OFFER_GNOME | OFFER_URIS) : 0;
     bool gnome = types & OFFER_GNOME;
     Str got;
-    if (!types || !clip_receive(a, i, gnome ? CLIP_MIME_GNOME : CLIP_MIME_URIS, &got)) return CLIP_NONE;
+    if (!types) {   // (left held, the next paste or clipboard change hung the window: 2026-10-28)
+        pthread_mutex_unlock(&clip.mu);
+        return CLIP_NONE;
+    }
+    if (!clip_receive(a, i, gnome ? CLIP_MIME_GNOME : CLIP_MIME_URIS, &got)) return CLIP_NONE;   // (it released the lock)
     return clip_parse(a, got, gnome, c) ? CLIP_THEIRS : CLIP_NONE;
 }
 
