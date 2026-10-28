@@ -33,15 +33,26 @@ xwayland disable
 focus_follows_mouse no
 exec sh -c 'printf %s "\$WAYLAND_DISPLAY" > "$T/sway.socket.tmp" && mv "$T/sway.socket.tmp" "$T/sway.socket"'
 EOS
+    before=$(cd "$XDG_RUNTIME_DIR" && ls -d wayland-[0-9]* 2>/dev/null | grep -v '\.lock$')
     env -u WAYLAND_DISPLAY -u WAYLAND_SOCKET -u DISPLAY -u SWAYSOCK -u I3SOCK -u HYPRLAND_INSTANCE_SIGNATURE \
         WLR_BACKENDS=headless WLR_LIBINPUT_NO_DEVICES=1 SWAYSOCK="$T/sway.ipc" XDG_CONFIG_HOME="$T/sway-xdg" \
         sway -c "$T/sway.config" >"$T/sway.log" 2>&1 &
     echo $! > "$T/sway.pid"
-    for i in $(seq 50); do [ -s "$T/sway.socket" ] && break; sleep 0.1; done
+    for i in $(seq 100); do [ -s "$T/sway.socket" ] && break; sleep 0.1; done
     sock=$(cat "$T/sway.socket" 2>/dev/null)
     if [ -z "$sock" ] || [ ! -S "$XDG_RUNTIME_DIR/$sock" ]; then
-        echo "sway.sh: no socket after 5 s; see $T/sway.log" >&2
-        kill "$(cat "$T/sway.pid")" 2>/dev/null; rm -f "$T/sway.pid"; exit 1
+        echo "sway.sh: no socket after 10 s; see $T/sway.log" >&2
+        p=$(cat "$T/sway.pid")
+        kill "$p" 2>/dev/null
+        for i in $(seq 20); do kill -0 "$p" 2>/dev/null || break; sleep 0.1; done
+        # A sway stopped while starting may have made its socket without writing its name down:
+        # one that wasn't there before and whose lock no one holds is its (2026-10-28).
+        for s in $(cd "$XDG_RUNTIME_DIR" && ls -d wayland-[0-9]* 2>/dev/null | grep -v '\.lock$'); do
+            case " $(echo $before) " in *" $s "*) continue ;; esac
+            [ "$s" != "${WAYLAND_DISPLAY:-}" ] && [ -e "$XDG_RUNTIME_DIR/$s.lock" ] && flock -n "$XDG_RUNTIME_DIR/$s.lock" true &&
+                rm -f "$XDG_RUNTIME_DIR/$s" "$XDG_RUNTIME_DIR/$s.lock"
+        done
+        rm -f "$T/sway.pid"; exit 1
     fi
     echo "$sock"
     ;;
