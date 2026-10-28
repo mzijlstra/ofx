@@ -22,7 +22,7 @@ static void layout_about_panel(void)
         text(cz("MIT License"), cc(t->fg_dim));
         text(cz("Built with raylib, Clay and nanosvg"), cc(t->fg_dim));
         CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_FIT(0), CLAY_SIZING_FIXED(8) } } }) {}
-        modal_button("modal-no", UI_MODAL_NO, "Close", true, false);
+        modal_button(UI_MODAL_NO, "Close", true, false);
     }
 }
 
@@ -44,7 +44,7 @@ static void layout_bar_panel(void)
         text(cz("View \xE2\x86\x92 Show Menu brings it back."), cc(t->fg_dim));
         CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .padding = { 0, 0, 8, 0 },
                                    .childAlignment = { .x = CLAY_ALIGN_X_RIGHT } } }) {
-            modal_button("modal-ok", UI_MODAL_OK, "OK", true, false);
+            modal_button(UI_MODAL_OK, "OK", true, false);
         }
     }
 }

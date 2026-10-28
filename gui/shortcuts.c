@@ -17,7 +17,7 @@ static void keycap(const char *k)
     if (!k[0]) return;
     CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_FIT(0), CLAY_SIZING_FIXED(20) }, .padding = { 6, 6, 0, 0 }, .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
                    .backgroundColor = cc(t->bg), .cornerRadius = CLAY_CORNER_RADIUS(3),
-                   .border = { .color = mix(t->fg_dim, t->bg_light, 0.45f), .width = CLAY_BORDER_OUTSIDE(1) } }) {
+                   .border = { .color = rule_color(), .width = CLAY_BORDER_OUTSIDE(1) } }) {
         text(cz(k), cc(t->fg));
     }
 }
@@ -76,7 +76,7 @@ static void layout_keys_panel(void)
             }
         }
         CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .padding = { 0, 0, 4, 0 }, .childAlignment = { .x = CLAY_ALIGN_X_RIGHT } } }) {
-            modal_button("modal-no", UI_MODAL_NO, "Close", true, false);
+            modal_button(UI_MODAL_NO, "Close", true, false);
         }
     }
 }

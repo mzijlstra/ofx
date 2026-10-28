@@ -509,6 +509,8 @@ static void test_trash_view(void)
         CHECK(path_put(po, sizeof po, "/", S("a")) && strcmp(po, "/a") == 0);
         CHECK(path_put(po, sizeof po, "/d", S("a")) && strcmp(po, "/d/a") == 0);
         CHECK(!path_put(po, 8, "/dir", S("abc")) && path_put(po, 9, "/dir", S("abc")));
+        CHECK(path_parent(po, sizeof po, "/d/a") && strcmp(po, "/d") == 0 && path_parent(po, sizeof po, "/a") && strcmp(po, "/") == 0);
+        CHECK(!path_parent(po, 4, "/dir/a") && path_parent(po, 5, "/dir/a"));
         CHECK(strcmp(trash_rel("/m/x/y", "/m"), "x/y") == 0 && strcmp(trash_rel("/x/y", "/"), "x/y") == 0);
         CHECK(strcmp(trash_rel("/x/y", ""), "/x/y") == 0 && strcmp(trash_rel("/n/y", "/m"), "/n/y") == 0);
         Str type, src;

@@ -99,12 +99,12 @@ static void bmp_act(UiAction a)
 static void bmp_button(int k, const char *label, bool on)
 {
     Theme *t = &app.theme;
-    bool hover = on && app.bmp_btn_hover == k;
+    bool hover = on && app.hov.bmp_btn == k;
     CLAY(CLAY_IDI("bmp-btn", k), { .layout = { .sizing = { CLAY_SIZING_FIT(0), CLAY_SIZING_FIXED(32) }, .padding = { 14, 14, 0, 0 },
                                                .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
                                    .backgroundColor = hover ? cc(t->bg) : cc(t->bg_light),
-                                   .border = { .color = mix(t->fg_dim, t->bg_light, 0.45f), .width = CLAY_BORDER_OUTSIDE(1) } }) {
-        text(cz(label), on ? cc(t->fg) : mix(t->fg_dim, t->bg_light, 0.45f));
+                                   .border = { .color = rule_color(), .width = CLAY_BORDER_OUTSIDE(1) } }) {
+        text(cz(label), on ? cc(t->fg) : rule_color());
     }
 }
 
@@ -159,7 +159,7 @@ static void layout_bmp_panel(void)
             bmp_button(3, "Move Up", any && l->sel > 0);
             bmp_button(4, "Move Down", any && l->sel < l->n - 1);
             CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) } } }) {}
-            modal_button("modal-no", UI_MODAL_NO, "Close", true, false);
+            modal_button(UI_MODAL_NO, "Close", true, false);
         }
     }
 }

@@ -170,6 +170,31 @@ typedef struct {
     char       file[PATH_MAX];
 } IconSlot;
 
+// What a point of the window is over (hit_at): for a press, and for the hover highlights.
+typedef struct {
+    int   row, side, header;
+    UiBar bar;     // a top bar button
+    int   crumb;   // UB_CRUMB: which path button
+    int   tab, tab_x;   // a tab, or its ×
+    int   modal;        // a modal panel's button (UI_MODAL_*), 0 for none
+    int   job_x;        // a job row's ×, -1 for none
+    int   mode;         // a sidebar mode button (a SideMode), -1 for none
+    int   twisty;       // a tree row's open/close mark, -1 for none
+    int   eject;        // a drive's eject button, -1 for none
+    bool  zoom;         // the zoom slider's track (F6.3)
+    int   menu_title;   // a menu bar title, -1 for none (F7.1)
+    int   menu_item;    // an entry of the open menu (its place), -1 for none
+    int   prop_box;     // a checkbox of the Properties panel's grid, -1 for none (F7.2)
+    int   ow_row;       // a row of Open With's list (on screen), -1 for none (F7.3)
+    bool  find_x, find_field;   // the find bar's × and its field
+    bool  ow_field;     // its field
+    int   toggle;       // a toggle of its field or of the find line (1..3), 0 for none
+    int   find_step;    // the find bar's chevrons: -1 the previous, 1 the next, 0 none
+    int   bmp_row;      // a row of Edit Bookmarks' list (on screen), -1 for none (F7.5)
+    int   bmp_btn;      // one of its buttons (1..4), 0 for none
+    bool  search_field; // the search bar's field (F9)
+} Hit;
+
 static struct {
     char      cwd[PATH_MAX];
     // The search view (F9): the folder searched, what the walk left out so far and whether it ended,
@@ -189,13 +214,12 @@ static struct {
     char      error[sizeof(Err)];   // why the folder could not be read
     Ui        ui;           // the list's and sidebar's cursors, find, the sort
     UiPress   press;
-    UiPress   ow_press;   // Open With's rows (F7.3)
+    UiPress   panel_press;   // a panel list's rows: Open With's (F7.3) or Edit Bookmarks' (F7.5), never both up
     bool      show_hidden;
     Places    places;
     u8        place_head[PLACES_MAX];   // 1 for a heading row (app.ui.side_head)
     int       place_cur;    // the place holding cwd, -1 for none
     i64       cwd_avail;    // the free space on cwd's drive, -1 unknown
-    int       side_hover;   // the sidebar row under the pointer, -1 for none
     char      status[600];
     bool      status_bad;
     i64       status_at;
@@ -209,7 +233,7 @@ static struct {
     int       nslots;
     StrMap    slot_of;
     int       icon_scale;   // the scale the cache holds icons for
-    int       hover;        // the row under the pointer, -1 for none
+    Hit       hov;          // what the pointer is over (hover_at), for the highlights; -1 or 0 for nothing
     int       reloads, themes;
     int       reloads_asked;   // Reload picked or Ctrl+R (F7.4): the tests count these apart from the watcher's
     int       lists;        // listings shown and sorts: the find bar's count is counted again
@@ -223,17 +247,7 @@ static struct {
     UiCrumbs  crumbs;       // the top bar's path buttons
     int       crumb_lo, crumb_hi;   // the ones shown in the last frame
     bool      crumb_arrows;
-    int       modal_hover;  // the modal panel's button under the pointer (UI_MODAL_*), 0 for none
-    int       bmp_btn_hover;   // Edit Bookmarks' button under it (1..4), 0 for none (F7.5)
-    bool      findx_hover;  // the find bar's × under it
-    int       findstep_hover;   // its chevron under it: -1 the previous, 1 the next, 0 none
-    UiBar     bar_hover;    // the top bar button under the pointer
-    int       crumb_hover;
-    int       tab_hover, tab_x_hover;   // the tab, and the tab's ×, under the pointer; -1 for none
     int       copy_delay_ms;   // OFX_TEST_COPY_DELAY_MS
-    int       jobx_hover;      // the job row whose × is under the pointer, -1 for none
-    int       mode_hover;      // the sidebar mode button under the pointer (a SideMode), -1 for none
-    int       eject_hover;     // the sidebar row whose eject button is under the pointer, -1 for none
     char      text_copied[PATH_MAX];   // the last text an edit line put on the clipboard (F5.2)
     char      hover_num[32];   // the number drawn on the drive row under the pointer (F6.1), for the tests
     // What the last frame's icon view drew, for the tests (F6.2): its cells, the cursor's name's
@@ -249,15 +263,15 @@ static struct {
     UiTip     tip;          // the tooltip of the icon button under the pointer (Michael, 2026-10-24)
     bool      zoomed;       // the icon size changed: the next refit keeps the cursor's row (ui_refit)
     bool      zoom_drag;    // the zoom slider's knob held (F6.3)
-    bool      zoom_hover;   // the pointer over its track
     bool      thumb_local;  // the folder's drive is one ofx makes previews on (F6.4: not a network one)
-    int       menu_title_hover;   // the menu bar title under the pointer, -1 for none (F7.1)
     float     ctx_x, ctx_y;       // a right-click menu's top left (F8): where it opens, kept inside the window
     bool      ctx_placed;         // one is up and placed (ctx_place)
     char      ctx_path[PATH_MAX]; // the folder a folder menu is on (ctx_facts)
     char      exe[PATH_MAX];      // this ofx's binary, for New Window (F7.1); "ofx" when unknown
     char      windows[PATH_MAX];  // the window registry's folder (fs/windows.c); "" for none
-} app = { .tip = { -1, 0, false, false }, .hover = -1, .side_hover = -1, .tab_hover = -1, .tab_x_hover = -1, .jobx_hover = -1, .mode_hover = -1, .eject_hover = -1, .menu_title_hover = -1 };
+} app = { .tip = { -1, 0, false, false },
+        .hov = { .row = -1, .side = -1, .header = -1, .bar = UB_NONE, .crumb = -1, .tab = -1, .tab_x = -1, .job_x = -1, .mode = -1, .twisty = -1,
+                 .eject = -1, .menu_title = -1, .menu_item = -1, .prop_box = -1, .ow_row = -1, .bmp_row = -1 } };
 
 static UiHistory hist;
 static Tree      tree;     // the sidebar's tree mode (F6)
@@ -370,6 +384,12 @@ void __wrap_glfwDefaultWindowHints(void)
 
 // ---- the folder -----------------------------------------------------------------------------
 
+// The folder shown: in the search view, the folder searched (F9).
+static const char *here_dir(void)
+{
+    return app.ui.in_search ? app.search_root : app.cwd;
+}
+
 // The cursor's entry as listing_find finds it: its name, in the search view its folder and name (F9).
 static Str sel_name(void)
 {
@@ -392,6 +412,14 @@ static bool entry_path(isize i, char *out, size_t cap)
         return path_put(out, cap, e->dir.len ? dir : app.search_root, e->name);
     }
     return path_put(out, cap, app.cwd, e->name);
+}
+
+// The folder an action is on: (all) folder entry index's, from its right-click menu (F8), else the
+// folder shown; NULL when that entry is gone. buf holds an entry's path.
+static const char *act_dir(UiAction a, char *buf, size_t cap)
+{
+    if (!a.all) return here_dir();
+    return a.index < app.list.n && entry_path(a.index, buf, cap) ? buf : NULL;
 }
 
 static void tree_refresh(bool follow, int fallback);
@@ -731,10 +759,10 @@ static void go_parent(void)
         return;
     }
     if (strcmp(app.cwd, "/") == 0) return;
-    Str cwd = str_from_c(app.cwd), child = path_base(cwd), parent = path_dir(cwd);
+    Str child = path_base(str_from_c(app.cwd));
     char child_buf[NAME_MAX + 1], up[PATH_MAX];
     snprintf(child_buf, sizeof child_buf, "%.*s", STR_ARG(child));
-    snprintf(up, sizeof up, "%.*s", STR_ARG(parent.len ? parent : S("/")));
+    path_parent(up, sizeof up, app.cwd);
     go_to(up, str_from_c(child_buf), 0);
 }
 
@@ -827,7 +855,23 @@ static const char *items(isize n)
 }
 
 #include "jobs.c"
+
+// A new undo record of kind k: a job still running from before no longer writes its own over it.
+static void undo_start(UndoKind k)
+{
+    undo_gen++;
+    undo_begin(&undo, k);
+}
 #include "eject.c"
+
+// "Trashed a.txt", "Trashed 3 items" or "Trashed 2 of 3: why" (verb, ok of n done, one the name
+// when it is the only one).
+static void say_done(const char *verb, isize ok, isize n, const char *one, const char *why)
+{
+    if (ok == n && n == 1) set_status(false, "%s %s", verb, one);
+    else if (ok == n) set_status(false, "%s %td items", verb, n);
+    else set_status(true, "%s %td of %td: %s", verb, ok, n, why);
+}
 
 static void trash_targets(void)
 {
@@ -837,17 +881,14 @@ static void trash_targets(void)
     for (isize i = 0; i < n; i++)
         if (jobs_refuse(paths[i])) return;
     Err err, first = { "" };
-    undo_gen++;
-    undo_begin(&undo, UNDO_TRASH);
+    undo_start(UNDO_TRASH);
     for (isize i = 0; i < n; i++) {
         Trashed t;
         if (trash_put(paths[i], &t, &err)) undo_add(&undo, t.from, t.file, t.info), ok++;
         else if (!first.msg[0]) first = err;
     }
     if (ok == 0) undo_clear(&undo);
-    if (ok == n && n == 1) set_status(false, "Trashed %s", path_base(str_from_c(paths[0])).p);
-    else if (ok == n) set_status(false, "Trashed %td items", n);
-    else set_status(true, "Trashed %td of %td: %s", ok, n, first.msg);
+    say_done("Trashed", ok, n, path_base(str_from_c(paths[0])).p, first.msg);
     ui_mark_clear(&app.ui);
     reload();
 }
@@ -863,14 +904,21 @@ static struct {
 static u8    doomed_mem[MiB(2)];
 static Arena doomeda;
 
+// More marked than one action holds (CLIP_PATHS_MAX): said, and true; it would quietly do part.
+static bool too_many_marked(void)
+{
+    if (app.ui.marked <= CLIP_PATHS_MAX) return false;
+    set_status(true, "%td selected: ofx takes at most %d at a time", app.ui.marked, CLIP_PATHS_MAX);
+    return true;
+}
+
 // The question just opened (and maybe was answered in the same frame): its targets taken now, and
 // its count made theirs; none when it may delete nothing (then Yes deletes nothing).
 static void delete_ask(void)
 {
     doomed.n = 0;
-    if (app.ui.marked > CLIP_PATHS_MAX) {
+    if (too_many_marked()) {
         app.ui.confirming = false;
-        set_status(true, "%td selected: ofx takes at most %d at a time", app.ui.marked, CLIP_PATHS_MAX);
         return;
     }
     if (app.ui.in_trash && app.ui.marked > CLIP_PATHS_MAX / 2) {   // each goes with its .trashinfo
@@ -955,9 +1003,7 @@ static void trash_restore_targets(void)
         else if (!first.msg[0]) first = err;
     }
     if (n == 0) return;
-    if (ok == n && n == 1) set_status(false, "Restored %s", name);
-    else if (ok == n) set_status(false, "Restored %td items", n);
-    else set_status(true, "Restored %td of %td: %s", ok, n, first.msg[0] ? first.msg : "a job is using it");
+    say_done("Restored", ok, n, name, first.msg[0] ? first.msg : "a job is using it");
     reload();
 }
 
@@ -995,9 +1041,9 @@ static void copy_here(const ClipFiles *c, const char *into)
     isize n = 0, here = 0, self = 0, gone = 0;
     for (isize i = 0; i < c->n && n < CLIP_PATHS_MAX; i++) {
         const char *src = c->path[i];
-        Str base = path_base(str_from_c(src)), sd = path_dir(str_from_c(src));
+        Str base = path_base(str_from_c(src));
         char sdir[PATH_MAX], name[NAME_MAX + 1], dst[PATH_MAX];
-        snprintf(sdir, sizeof sdir, "%.*s", STR_ARG(sd.len ? sd : S("/")));
+        path_parent(sdir, sizeof sdir, src);
         const char *dest = into ? into : sdir;
         struct stat st;
         if (lstat(src, &st) != 0) {
@@ -1067,11 +1113,10 @@ static void make_link(void)
             err_set(&err, "the name is too long for a link to %.*s", STR_ARG(base));
             continue;
         }
-        Str d = path_dir(str_from_c(paths[i]));   // (beside it: a search result's own folder, F9)
         char in[PATH_MAX];
-        snprintf(in, sizeof in, "%.*s", STR_ARG(d.len ? d : S("/")));
+        path_parent(in, sizeof in, paths[i]);   // (beside it: a search result's own folder, F9)
         if (!op_symlink(in, paths[i], str_from_c(name), one, sizeof one, &err) || !path_put(p, sizeof p, in, str_from_c(one))) continue;
-        if (done++ == 0) undo_gen++, undo_begin(&undo, UNDO_LINK);
+        if (done++ == 0) undo_start(UNDO_LINK);
         undo_add(&undo, paths[i], p, NULL);
         snprintf(made, sizeof made, "%s", one);
     }
@@ -1091,8 +1136,8 @@ static void follow_link(isize i)
         set_status(true, "%.*s leads nowhere: %s", STR_ARG(app.list.e[i].name), strerror(errno));
         return;
     }
-    Str d = path_dir(str_from_c(real)), base = path_base(str_from_c(real));
-    snprintf(dir, sizeof dir, "%.*s", STR_ARG(d.len ? d : S("/")));
+    Str base = path_base(str_from_c(real));
+    path_parent(dir, sizeof dir, real);
     go_to(dir, strcmp(real, "/") == 0 ? STR_EMPTY : base, 0);
 }
 
@@ -1137,8 +1182,7 @@ static void rename_commit(void)
     else snprintf(keep, sizeof keep, "%.*s", STR_ARG(to));
     if (path_put(a, sizeof a, in, from) && path_put(b, sizeof b, in, to)) {
         // A folder just made stays a "new folder" for undo, whatever its name now.
-        undo_gen++;
-        undo_begin(&undo, app.edit_new ? app.edit_new : UNDO_RENAME);
+        undo_start(app.edit_new ? app.edit_new : UNDO_RENAME);
         undo_add(&undo, app.edit_new ? NULL : a, b, NULL);
     }
     ui_edit_close(&app.ui);
@@ -1147,31 +1191,24 @@ static void rename_commit(void)
     go_to(app.cwd, str_from_c(keep), app.ui.list.sel);
 }
 
-static void new_folder(void)
+// A new folder "New folder", or (file) an empty file "New file" (F7.1): made, its name in the row
+// to edit at once, all of it selected; a name taken gets a number. Ctrl+Z removes it.
+static void new_made(bool file)
 {
     char made[NAME_MAX + 1], p[PATH_MAX];
     Err err;
-    if (!op_mkdir(app.cwd, S("New folder"), made, sizeof made, &err)) { set_status(true, "%s", err.msg); return; }
-    if (path_put(p, sizeof p, app.cwd, str_from_c(made))) undo_gen++, undo_begin(&undo, UNDO_MKDIR), undo_add(&undo, NULL, p, NULL);
+    UndoKind kind = file ? UNDO_MKFILE : UNDO_MKDIR;
+    bool ok = file ? op_mkfile(app.cwd, S("New file"), made, sizeof made, &err) : op_mkdir(app.cwd, S("New folder"), made, sizeof made, &err);
+    if (!ok) {
+        set_status(true, "%s", err.msg);
+        return;
+    }
+    if (path_put(p, sizeof p, app.cwd, str_from_c(made))) undo_start(kind), undo_add(&undo, NULL, p, NULL);
     ui_mark_clear(&app.ui);
     go_to(app.cwd, str_from_c(made), app.ui.list.sel);
     ui_edit_open_all(&app.ui, str_from_c(made));
     snprintf(app.edit_from, sizeof app.edit_from, "%s", made), snprintf(app.edit_dir, sizeof app.edit_dir, "%s", app.cwd);
-    app.edit_new = UNDO_MKDIR;
-}
-
-// An empty file "New file", named in the row as a new folder is (F7.1).
-static void new_file(void)
-{
-    char made[NAME_MAX + 1], p[PATH_MAX];
-    Err err;
-    if (!op_mkfile(app.cwd, S("New file"), made, sizeof made, &err)) { set_status(true, "%s", err.msg); return; }
-    if (path_put(p, sizeof p, app.cwd, str_from_c(made))) undo_gen++, undo_begin(&undo, UNDO_MKFILE), undo_add(&undo, NULL, p, NULL);
-    ui_mark_clear(&app.ui);
-    go_to(app.cwd, str_from_c(made), app.ui.list.sel);
-    ui_edit_open_all(&app.ui, str_from_c(made));
-    snprintf(app.edit_from, sizeof app.edit_from, "%s", made), snprintf(app.edit_dir, sizeof app.edit_dir, "%s", app.cwd);
-    app.edit_new = UNDO_MKFILE;
+    app.edit_new = kind;
 }
 
 static void close_others(bool quit);
@@ -1203,9 +1240,9 @@ static void undo_last(void)
     // What comes back here gets the cursor: a renamed, trashed or moved entry.
     char back[NAME_MAX + 1] = "";
     if (undo.n && undo.it[0].from && (undo.kind == UNDO_RENAME || undo.kind == UNDO_TRASH || undo.kind == UNDO_MOVE)) {
-        Str f = str_from_c(undo.it[0].from), d = path_dir(f);
+        Str f = str_from_c(undo.it[0].from);
         char dir[PATH_MAX];
-        snprintf(dir, sizeof dir, "%.*s", STR_ARG(d.len ? d : S("/")));
+        path_parent(dir, sizeof dir, undo.it[0].from);
         if (same_dir(dir, app.cwd)) snprintf(back, sizeof back, "%.*s", STR_ARG(path_base(f)));
     }
     isize done;
@@ -1338,8 +1375,8 @@ static void edit_opened(void)
     char path[PATH_MAX];
     snprintf(app.edit_from, sizeof app.edit_from, "%.*s", e ? (int)e->name.len : 0, e ? e->name.p : "");
     app.edit_new = UNDO_NONE;
-    Str d = e && entry_path(app.ui.list.sel, path, sizeof path) ? path_dir(str_from_c(path)) : str_from_c(app.cwd);
-    snprintf(app.edit_dir, sizeof app.edit_dir, "%.*s", STR_ARG(d.len ? d : S("/")));
+    if (e && entry_path(app.ui.list.sel, path, sizeof path)) path_parent(app.edit_dir, sizeof app.edit_dir, path);
+    else snprintf(app.edit_dir, sizeof app.edit_dir, "%s", app.cwd);
 }
 
 // The location line's Enter: there, if it is a folder; else the line stays open with the reason.
@@ -1347,7 +1384,7 @@ static void location_go(void)
 {
     Str to;
     char path[PATH_MAX];
-    if (!ui_location(&scratch, (Str){ app.ui.edit, app.ui.edit_len }, app.ui.in_search ? app.search_root : app.cwd, getenv("HOME"), &to) || to.len >= PATH_MAX) {
+    if (!ui_location(&scratch, (Str){ app.ui.edit, app.ui.edit_len }, here_dir(), getenv("HOME"), &to) || to.len >= PATH_MAX) {
         set_status(true, "Not a folder: %.*s", app.ui.edit_len, app.ui.edit);
         return;
     }
@@ -1361,9 +1398,8 @@ static void location_go(void)
     Str select = STR_EMPTY;
     char dir[PATH_MAX];
     if (!S_ISDIR(st.st_mode)) {
-        Str d = path_dir(str_from_c(path));
         select = path_base(str_from_c(path));
-        snprintf(dir, sizeof dir, "%.*s", STR_ARG(d.len ? d : S("/")));
+        path_parent(dir, sizeof dir, path);
     } else {
         snprintf(dir, sizeof dir, "%s", path);
     }
@@ -1387,6 +1423,30 @@ static void crumb_go(int i)
 
 static void bmp_act(UiAction a);   // Edit Bookmarks (gui/bookmarks.c, F7.5)
 
+// What the actions and a folder's menu (folder_do) both do on a folder: a search below it in a tab
+// of its own (F9), a terminal there, another window on it; the status says how it went. NULL: none.
+static void search_in(const char *dir)
+{
+    char uri[PATH_MAX];
+    if (dir && search_uri(uri, sizeof uri, dir, STR_EMPTY)) tab_open(uri, STR_EMPTY, true);
+}
+
+static void terminal_in(const char *dir)
+{
+    Err err = { 0 };
+    if (!dir) return;
+    if (spawn_terminal(dir, &err)) set_status(false, "terminal in %s", dir);
+    else set_status(true, "%s", err.msg);
+}
+
+static void window_on(const char *dir)
+{
+    Err err = { 0 };
+    if (!dir) return;
+    if (spawn_window(app.exe, dir, &err)) set_status(false, "New window on %s", dir);
+    else set_status(true, "%s", err.msg);
+}
+
 static void act(UiAction a)
 {
     Err err;
@@ -1398,17 +1458,15 @@ static void act(UiAction a)
     case UA_EMPTY_TRASH: trash_empty(); break;
     case UA_NOT_IN_TRASH: set_status(true, "That doesn't work in the trash: restore it first"); break;
     case UA_NOT_IN_SEARCH: set_status(true, "A search isn't a folder: that works in one"); break;
-    case UA_SEARCH: {   // below the folder shown, or (all) a folder entry's, in a tab of its own (F9)
-        char uri[PATH_MAX], in[PATH_MAX];
-        const char *dir = a.all ? (a.index < app.list.n && entry_path(a.index, in, sizeof in) ? in : NULL) : app.cwd;
-        if (dir && search_uri(uri, sizeof uri, dir, STR_EMPTY)) tab_open(uri, STR_EMPTY, true);
+    case UA_SEARCH: {   // below the folder shown, or (all) a folder entry's (F9)
+        char in[PATH_MAX];
+        search_in(act_dir(a, in, sizeof in));
         break;
     }
     case UA_CONTAINING: {   // a result's folder, it selected (F9)
         char path[PATH_MAX], dir[PATH_MAX];
         if (a.index >= app.list.n || !entry_path(a.index, path, sizeof path)) break;
-        Str d = path_dir(str_from_c(path));
-        snprintf(dir, sizeof dir, "%.*s", STR_ARG(d.len ? d : S("/")));
+        path_parent(dir, sizeof dir, path);
         go_to(dir, app.list.e[a.index].name, 0);
         break;
     }
@@ -1487,9 +1545,7 @@ static void act(UiAction a)
     case UA_PARENT: go_parent(); break;
     case UA_TERMINAL: {   // all: in the folder entry index (its right-click menu, F8)
         char in[PATH_MAX];
-        const char *dir = a.all ? (a.index < app.list.n && entry_path(a.index, in, sizeof in) ? in : NULL) : app.ui.in_search ? app.search_root : app.cwd;
-        if (dir && spawn_terminal(dir, &err)) set_status(false, "terminal in %s", dir);
-        else if (dir) set_status(true, "%s", err.msg);
+        terminal_in(act_dir(a, in, sizeof in));
         break;
     }
     case UA_HOMEDIR: {
@@ -1501,11 +1557,7 @@ static void act(UiAction a)
     case UA_TRASH:
     case UA_COPY:
     case UA_CUT:
-        // One action holds CLIP_PATHS_MAX paths: more would quietly do part of the selection.
-        if (app.ui.marked > CLIP_PATHS_MAX) {
-            set_status(true, "%td selected: ofx takes at most %d at a time", app.ui.marked, CLIP_PATHS_MAX);
-            break;
-        }
+        if (too_many_marked()) break;
         if (a.kind == UA_TRASH) trash_targets();
         else copy_targets(a.kind == UA_CUT, NULL);
         break;
@@ -1548,17 +1600,15 @@ static void act(UiAction a)
             tab_open_bg(path);
         }
         break;
-    case UA_LOCATION: ui_location_open(&app.ui, str_from_c(app.ui.in_search ? app.search_root : app.cwd)); break;
+    case UA_LOCATION: ui_location_open(&app.ui, str_from_c(here_dir())); break;
     case UA_GO: location_go(); break;
     case UA_CRUMB: crumb_go((int)a.index); break;
     case UA_CRUMB_SHIFT: ui_crumbs_shift(&app.crumbs, app.crumb_lo, (int)a.index); break;
-    case UA_NEWFOLDER: new_folder(); break;
-    case UA_NEWFILE: new_file(); break;
+    case UA_NEWFOLDER: new_made(false); break;
+    case UA_NEWFILE: new_made(true); break;
     case UA_NEW_WINDOW: {   // all: on the folder entry index (F8)
         char on[PATH_MAX];
-        const char *dir = a.all ? (a.index < app.list.n && entry_path(a.index, on, sizeof on) ? on : NULL) : app.ui.in_search ? app.search_root : app.cwd;
-        if (dir && spawn_window(app.exe, dir, &err)) set_status(false, "New window on %s", dir);
-        else if (dir) set_status(true, "%s", err.msg);
+        window_on(act_dir(a, on, sizeof on));
         break;
     }
     case UA_CLOSE_ALL: close_others(a.all); break;
@@ -1573,14 +1623,12 @@ static void act(UiAction a)
         break;
     }
     case UA_MAKE_LINK:
-        if (app.ui.marked > CLIP_PATHS_MAX) set_status(true, "%td selected: ofx takes at most %d at a time", app.ui.marked, CLIP_PATHS_MAX);
-        else make_link();
+        if (!too_many_marked()) make_link();
         break;
     case UA_FOLLOW: follow_link(a.index); break;
     case UA_FOLDER_DO: folder_do((UiMenuItem)a.index); break;
     case UA_DUPLICATE:
-        if (app.ui.marked > CLIP_PATHS_MAX) set_status(true, "%td selected: ofx takes at most %d at a time", app.ui.marked, CLIP_PATHS_MAX);
-        else duplicate();
+        if (!too_many_marked()) duplicate();
         break;
     case UA_UNDO: undo_last(); break;
     case UA_RELOAD: app.reloads_asked++, app.ui.in_search ? search_again() : reload(); break;
@@ -1852,6 +1900,14 @@ static Clay_Color mix(Rgb a, Rgb b, float t)
     return (Clay_Color){ a.r * t + b.r * (1 - t), a.g * t + b.g * (1 - t), a.b * t + b.b * (1 - t), 255 };
 }
 
+// The theme's colour for a rule or an idle field's frame, and no colour at all.
+static Clay_Color rule_color(void)
+{
+    return mix(app.theme.fg_dim, app.theme.bg_light, 0.45f);
+}
+
+static const Clay_Color NO_COLOR = { 0, 0, 0, 0 };
+
 // How full a drive is, 0..1.
 static float drive_used(const Place *p)
 {
@@ -1901,7 +1957,7 @@ static void layout_tree(float h)
         for (int r = 0; r < sl->rows && sl->top + r < sl->n; r++) {
             int i = (int)(sl->top + r);
             const TreeRow *row = &tree.row[i];
-            bool cursor = (app.ui.focus == UI_FOCUS_SIDE && i == sl->sel) || side_ctx(i), here = str_eq(row->path, cwd), hover = r == app.side_hover;
+            bool cursor = (app.ui.focus == UI_FOCUS_SIDE && i == sl->sel) || side_ctx(i), here = str_eq(row->path, cwd), hover = r == app.hov.side;
             Clay_Color bg = cursor ? cc(t->selection) : hover ? cc(t->bg) : cc(t->bg_light);
             int indent = row->depth * TREE_STEP;   // deep names are cut short with "…"
             CLAY(CLAY_IDI("side-row", r), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(SIDE_ROW_H) },
@@ -1948,7 +2004,7 @@ static void layout_side(float h)
                 }
                 continue;
             }
-            bool cursor = (app.ui.focus == UI_FOCUS_SIDE && i == sl->sel) || side_ctx(i), here = i == app.place_cur, hover = r == app.side_hover;
+            bool cursor = (app.ui.focus == UI_FOCUS_SIDE && i == sl->sel) || side_ctx(i), here = i == app.place_cur, hover = r == app.hov.side;
             bool drive = place_is_drive(p->kind) && p->size > 0;
             Clay_Color bg = cursor ? cc(t->selection) : hover ? cc(t->bg) : cc(t->bg_light);
             // The free space; with the pointer over it, the used space (F6.1), each in its bar colour.
@@ -1963,10 +2019,10 @@ static void layout_side(float h)
                                             .backgroundColor = bg,
                                             .border = { .color = cc(t->accent), .width = { .left = cursor ? 3 : 0 } } }) {
                 if (hover && place_ejectable(p)) {   // in the icon's place while the pointer is over it
-                    bool on = app.eject_hover == r;
+                    bool on = app.hov.eject == r;
                     CLAY(CLAY_IDI("side-eject", r), { .layout = { .sizing = { CLAY_SIZING_FIXED(SIDE_ICON_PX), CLAY_SIZING_FIXED(SIDE_ICON_PX) },
                                                                   .childAlignment = { .x = CLAY_ALIGN_X_CENTER, .y = CLAY_ALIGN_Y_CENTER } },
-                                                      .backgroundColor = on ? cc(t->bg_light) : (Clay_Color){ 0, 0, 0, 0 },
+                                                      .backgroundColor = on ? cc(t->bg_light) : NO_COLOR,
                                                       .cornerRadius = CLAY_CORNER_RADIUS(3),
                                                       .border = { .color = on ? cc(t->accent) : mix(t->fg_dim, t->bg, 0.5f), .width = CLAY_BORDER_OUTSIDE(1) } }) {
                         text(cz("\xE2\x8F\x8F"), on ? cc(t->accent) : cc(t->fg));   // ⏏
@@ -1991,14 +2047,29 @@ static void layout_side(float h)
 }
 
 // The trash view's bar over the columns (F6): what it is, Restore and Empty Trash.
-static void trash_button(const char *id, UiBar b, const char *label, bool danger)
+// Each top bar and footer button's element id, by UiBar: the code that draws one, its tooltip and
+// the hit test read it here (2026-10-28: each spelled them out, and a typo in one gave a button that
+// draws but can't be clicked).
+static const char *const BAR_IDS[] = {
+    [UB_BACK] = "nav-back",          [UB_FORWARD] = "nav-fwd",       [UB_UP] = "nav-up",         [UB_LOCATION] = "loc-toggle",
+    [UB_SEARCH] = "search",          [UB_LEFT] = "crumb-left",       [UB_RIGHT] = "crumb-right", [UB_RESTORE] = "trash-restore",
+    [UB_EMPTY] = "trash-empty",      [UB_VIEW_LIST] = "view-list",   [UB_VIEW_ICONS] = "view-icons",
+    [UB_ZOOM_OUT] = "zoom-out",      [UB_ZOOM_IN] = "zoom-in",
+};
+
+static Clay_ElementId bar_id(UiBar b)
+{
+    return Clay_GetElementId(cz(BAR_IDS[b]));
+}
+
+static void trash_button(UiBar b, const char *label, bool danger)
 {
     Theme *t = &app.theme;
-    bool hover = app.bar_hover == b;
-    CLAY(Clay_GetElementId(cz(id)), { .layout = { .sizing = { CLAY_SIZING_FIT(0), CLAY_SIZING_FIXED(26) }, .padding = { 12, 12, 0, 0 },
+    bool hover = app.hov.bar == b;
+    CLAY(bar_id(b), { .layout = { .sizing = { CLAY_SIZING_FIT(0), CLAY_SIZING_FIXED(26) }, .padding = { 12, 12, 0, 0 },
                                                   .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
                                       .backgroundColor = hover ? cc(t->bg) : cc(t->bg_light),
-                                      .border = { .color = danger ? cc(t->red) : mix(t->fg_dim, t->bg_light, 0.45f), .width = CLAY_BORDER_OUTSIDE(1) } }) {
+                                      .border = { .color = danger ? cc(t->red) : rule_color(), .width = CLAY_BORDER_OUTSIDE(1) } }) {
         text(cz(label), danger && hover ? cc(t->red) : cc(t->fg));
     }
 }
@@ -2012,8 +2083,8 @@ static void layout_trash_bar(void)
         text(cz("Trash"), cc(t->fg));
         text(cz("Restore puts the marked items back where they came from"), cc(t->fg_dim));
         CLAY(CLAY_ID("trash-gap"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(1) } } }) {}
-        if (app.list.n > 0) trash_button("trash-restore", UB_RESTORE, "Restore", false);
-        if (app.list.n > 0 || app.list.hidden > 0) trash_button("trash-empty", UB_EMPTY, "Empty Trash", true);
+        if (app.list.n > 0) trash_button(UB_RESTORE, "Restore", false);
+        if (app.list.n > 0 || app.list.hidden > 0) trash_button(UB_EMPTY, "Empty Trash", true);
     }
 }
 
@@ -2054,13 +2125,16 @@ static const char *id_name(bool group, u32 id)
     return cache[k].name;
 }
 
+// The column headers' element ids, by SortKey: drawn and hit-tested by the same.
+static const char *const COL_IDS[SORT_KEYS] = { "col-name", "col-size", "col-date" };
+
 // The column headers: Name, Size, Modified, the sorted one with an arrow; a click sorts. Then Owner,
 // Group (when shown) and Permissions, which don't sort (Michael, 2026-10-27).
+
 static void layout_cols(void)
 {
     Theme *t = &app.theme;
     const char *const NAMES[SORT_KEYS] = { "Name", "Size", app.ui.in_trash ? "Deleted" : "Modified" };
-    static const char *const IDS[SORT_KEYS] = { "col-name", "col-size", "col-date" };
     CLAY(CLAY_ID("cols"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(COLS_H) },
                                         .padding = { PAD + ICON_PX + GAP, PAD, 0, 0 }, .childGap = GAP,
                                         .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
@@ -2070,7 +2144,7 @@ static void layout_cols(void)
             Clay_String label = cz(arena_sprintf(&frame, "%s%s", NAMES[k], !on ? "" : app.ui.sort.reverse ? " \xE2\x96\xBC" : " \xE2\x96\xB2"));
             Clay_Sizing size = k == SORT_NAME ? (Clay_Sizing){ CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0) }
                              : (Clay_Sizing){ CLAY_SIZING_FIXED(k == SORT_SIZE ? SIZE_W : DATE_W), CLAY_SIZING_GROW(0) };
-            CLAY(Clay_GetElementId(cz(IDS[k])), { .layout = { .sizing = size, .childAlignment = { .x = k == SORT_NAME ? CLAY_ALIGN_X_LEFT : CLAY_ALIGN_X_RIGHT,
+            CLAY(Clay_GetElementId(cz(COL_IDS[k])), { .layout = { .sizing = size, .childAlignment = { .x = k == SORT_NAME ? CLAY_ALIGN_X_LEFT : CLAY_ALIGN_X_RIGHT,
                                                                                                     .y = CLAY_ALIGN_Y_CENTER } } }) {
                 text(label, on ? cc(t->fg) : cc(t->fg_dim));
             }
@@ -2211,7 +2285,7 @@ static void layout_row(int r, isize i, float w, i64 now)
 {
     const Entry *e = &app.list.e[i];
     Theme *t = &app.theme;
-    bool sel = i == app.ui.list.sel, hover = r == app.hover, marked = ui_marked(&app.ui, i);
+    bool sel = i == app.ui.list.sel, hover = r == app.hov.row, marked = ui_marked(&app.ui, i);
     // Marked rows: the accent mixed into the background; the cursor keeps the selection colour.
     Clay_Color bg = sel ? cc(t->selection) : marked ? mix(t->accent, t->bg, 0.28f) : hover ? cc(t->bg_light) : cc(t->bg);
     IconSlot *icon = entry_icon(i);
@@ -2242,13 +2316,9 @@ static void layout_row(int r, isize i, float w, i64 now)
                     if (room > 40) text(fit(str_from_c(arena_sprintf(&frame, "%s", shown)), room, true), cc(t->fg_dim));
                 }
                 if (e->trash) {   // where it came from, home as ~
-                    Str from = path_dir(str_from_c(e->trash->from));
-                    const char *home = getenv("HOME");
-                    Str h = str_from_c(home ? home : "");
-                    char shown[PATH_MAX];
-                    if (h.len > 1 && str_starts_with(from, h) && (from.len == h.len || from.p[h.len] == '/'))
-                        snprintf(shown, sizeof shown, "~%.*s", STR_ARG(str_cut(from, h.len, from.len)));
-                    else snprintf(shown, sizeof shown, "%.*s", STR_ARG(from.len ? from : S("/")));
+                    char from[PATH_MAX], shown[PATH_MAX + 2];
+                    path_parent(from, sizeof from, e->trash->from);
+                    ui_tilde(shown, sizeof shown, from, getenv("HOME"));
                     float room = name_w - str_width(e->name) - 12;
                     if (room > 40) text(fit(str_from_c(arena_sprintf(&frame, "%s", shown)), room, true), cc(t->fg_dim));
                 }
@@ -2303,9 +2373,9 @@ static void layout_cell(int k, isize i)
 {
     const Entry *e = &app.list.e[i];
     Theme *t = &app.theme;
-    bool sel = i == app.ui.list.sel, hover = k == app.hover, marked = ui_marked(&app.ui, i);
+    bool sel = i == app.ui.list.sel, hover = k == app.hov.row, marked = ui_marked(&app.ui, i);
     Clay_Color fg = e->kind == K_LINK_BROKEN ? cc(t->red) : marked ? cc(t->accent) : cc(t->fg);
-    Clay_Color bg = marked ? mix(t->accent, t->bg, 0.28f) : hover ? cc(t->bg_light) : (Clay_Color){ 0, 0, 0, 0 };
+    Clay_Color bg = marked ? mix(t->accent, t->bg, 0.28f) : hover ? cc(t->bg_light) : NO_COLOR;
     int cw = cell_w(), px = grid_px();
     float name_w = (float)(cw - 2 * CELL_PAD);
     CLAY(CLAY_IDI("row", k), { .layout = { .sizing = { CLAY_SIZING_FIXED(cw), CLAY_SIZING_FIXED(cell_h()) }, .padding = { CELL_PAD, CELL_PAD, 6, CELL_PAD },
@@ -2490,11 +2560,12 @@ static Clay_Color dim_color(void)
 
 // A top bar button: a chevron, an icon from the theme, or a glyph from the UI font. Dimmed when it
 // can't act.
-static void bar_button(Clay_ElementId id, UiBar which, int chev, const char *glyph, IconSlot *icon, bool enabled, float w)
+static void bar_button(UiBar which, int chev, const char *glyph, IconSlot *icon, bool enabled, float w)
 {
     Theme *t = &app.theme;
-    bool hover = enabled && app.bar_hover == which;
+    bool hover = enabled && app.hov.bar == which;
     Clay_Color fg = enabled ? cc(t->fg) : dim_color();
+    Clay_ElementId id = bar_id(which);
     CLAY(id, { .layout = { .sizing = { CLAY_SIZING_FIXED(w), CLAY_SIZING_FIXED(BAR_BTN_H) },
                            .childAlignment = { .x = CLAY_ALIGN_X_CENTER, .y = CLAY_ALIGN_Y_CENTER } },
                .backgroundColor = hover ? cc(t->bg) : cc(t->bg_light) }) {
@@ -2523,12 +2594,12 @@ static void layout_crumbs(float room)
     app.crumb_arrows = ui_crumbs_window(c, wd, room, ARROW_W, &lo, &hi);
     app.crumb_lo = lo, app.crumb_hi = hi;
     // One outlined group, a line between the buttons, so they read as one path (Michael, 2026-10-20).
-    Clay_Color line = mix(t->fg_dim, t->bg_light, 0.45f);
+    Clay_Color line = rule_color();
     CLAY(CLAY_ID("crumb-group"), { .layout = { .sizing = { CLAY_SIZING_FIT(0), CLAY_SIZING_FIXED(BAR_BTN_H) } },
                                    .border = { .color = line, .width = { 1, 1, 1, 1, 1 } } }) {
-    if (app.crumb_arrows) bar_button(CLAY_ID("crumb-left"), UB_LEFT, CHEV_LEFT, NULL, NULL, lo > 0, ARROW_W);
+    if (app.crumb_arrows) bar_button(UB_LEFT, CHEV_LEFT, NULL, NULL, lo > 0, ARROW_W);
     for (int i = lo; i < hi; i++) {
-        bool cur = i == c->cur, hover = app.bar_hover == UB_CRUMB && app.crumb_hover == i;
+        bool cur = i == c->cur, hover = app.hov.bar == UB_CRUMB && app.hov.crumb == i;
         bool keyed = app.ui.focus == UI_FOCUS_CRUMBS && app.ui.crumb_at == i;   // Ctrl+K's mark: an accent outline
         CLAY(CLAY_IDI("crumb", i), { .layout = { .sizing = { CLAY_SIZING_FIT(0), CLAY_SIZING_FIXED(BAR_BTN_H) }, .padding = { CRUMB_PAD, CRUMB_PAD, 0, 0 },
                                                  .childGap = 6, .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
@@ -2540,7 +2611,7 @@ static void layout_crumbs(float room)
             text(fit(label, most > 20 ? most : 20, false), cur ? cc(t->accent) : i > c->cur ? cc(t->fg_dim) : cc(t->fg));
         }
     }
-    if (app.crumb_arrows) bar_button(CLAY_ID("crumb-right"), UB_RIGHT, CHEV_RIGHT, NULL, NULL, hi < c->n, ARROW_W);
+    if (app.crumb_arrows) bar_button(UB_RIGHT, CHEV_RIGHT, NULL, NULL, hi < c->n, ARROW_W);
     }
 }
 
@@ -2558,10 +2629,11 @@ static void layout_location(float room)
 }
 
 // The location and search buttons, drawn (draw_tool), marked in the accent while theirs is open.
-static void tool_button(const char *id, UiBar which, ToolDir pic, bool on)
+static void tool_button(UiBar which, ToolDir pic, bool on)
 {
+    const char *id = BAR_IDS[which];
     Theme *t = &app.theme;
-    bool hover = app.bar_hover == which;
+    bool hover = app.hov.bar == which;
     ToolDraw *d = arena_new(&frame, ToolDraw, 1);
     *d = (ToolDraw){ CUSTOM_TOOL, pic, on ? cc(t->accent) : hover ? cc(t->fg) : cc(t->fg_dim) };
     CLAY(Clay_GetElementId(cz(id)), { .layout = { .sizing = { CLAY_SIZING_FIXED(BAR_BTN_W), CLAY_SIZING_FIXED(BAR_BTN_H) },
@@ -2593,10 +2665,11 @@ static void view_picture(bool icons, Clay_Color c)
 }
 
 // The list and icon buttons, the view shown marked in the accent.
-static void view_button(const char *id, UiBar which, bool icons)
+static void view_button(UiBar which, bool icons)
 {
+    const char *id = BAR_IDS[which];
     Theme *t = &app.theme;
-    bool on = app.ui.grid == icons, hover = app.bar_hover == which;
+    bool on = app.ui.grid == icons, hover = app.hov.bar == which;
     CLAY(Clay_GetElementId(cz(id)), { .layout = { .sizing = { CLAY_SIZING_FIXED(BAR_BTN_W), CLAY_SIZING_FIXED(BAR_BTN_H) },
                                                   .childAlignment = { .x = CLAY_ALIGN_X_CENTER, .y = CLAY_ALIGN_Y_CENTER } },
                                       .backgroundColor = on ? mix(t->accent, t->bg_light, 0.25f) : hover ? cc(t->bg) : cc(t->bg_light) }) {
@@ -2629,14 +2702,15 @@ static int zoom_level_at(float x)
 }
 
 // The minus or the plus, drawn; dim at its end of the sizes.
-static void zoom_button(const char *id, UiBar which, bool plus, bool enabled)
+static void zoom_button(UiBar which, bool plus, bool enabled)
 {
+    const char *id = BAR_IDS[which];
     Theme *t = &app.theme;
-    bool hover = enabled && app.bar_hover == which;
+    bool hover = enabled && app.hov.bar == which;
     Clay_Color c = !enabled ? dim_color() : hover ? cc(t->fg) : cc(t->fg_dim);
     CLAY(Clay_GetElementId(cz(id)), { .layout = { .sizing = { CLAY_SIZING_FIXED(ZOOM_BTN_W), CLAY_SIZING_FIXED(MODE_BTN_H) },
                                                   .childAlignment = { .x = CLAY_ALIGN_X_CENTER, .y = CLAY_ALIGN_Y_CENTER } },
-                                      .backgroundColor = hover ? cc(t->bg) : (Clay_Color){ 0, 0, 0, 0 }, .cornerRadius = CLAY_CORNER_RADIUS(3) }) {
+                                      .backgroundColor = hover ? cc(t->bg) : NO_COLOR, .cornerRadius = CLAY_CORNER_RADIUS(3) }) {
         CLAY(Clay_GetElementId(cz(arena_sprintf(&frame, "%s-bar", id))), { .layout = { .sizing = { CLAY_SIZING_FIXED(10), CLAY_SIZING_FIXED(2) } },
                                                                              .backgroundColor = c }) {
             if (plus)
@@ -2652,10 +2726,10 @@ static void layout_zoom(void)
 {
     Theme *t = &app.theme;
     int k = ui_zoom_level(app.ui.zoom);
-    Clay_Color line = mix(t->fg_dim, t->bg_light, 0.45f);
+    Clay_Color line = rule_color();
     CLAY(CLAY_ID("zoom"), { .layout = { .sizing = { CLAY_SIZING_FIT(0), CLAY_SIZING_GROW(0) }, .padding = { PAD, 0, 0, 0 }, .childGap = 4,
                                         .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } } }) {
-        zoom_button("zoom-out", UB_ZOOM_OUT, false, k > 0);
+        zoom_button(UB_ZOOM_OUT, false, k > 0);
         CLAY(CLAY_ID("zoom-track"), { .layout = { .sizing = { CLAY_SIZING_FIXED(ZOOM_TRACK_W), CLAY_SIZING_FIXED(MODE_BTN_H) } } }) {
             CLAY(CLAY_ID("zoom-line"), { .layout = { .sizing = { CLAY_SIZING_FIXED(ZOOM_TRACK_W - ZOOM_KNOB_W), CLAY_SIZING_FIXED(2) } }, .backgroundColor = line,
                                          .floating = { .attachTo = CLAY_ATTACH_TO_PARENT, .zIndex = 1,
@@ -2664,13 +2738,13 @@ static void layout_zoom(void)
                 CLAY(CLAY_IDI("zoom-notch", j), { .layout = { .sizing = { CLAY_SIZING_FIXED(2), CLAY_SIZING_FIXED(8) } }, .backgroundColor = line,
                                                   .floating = { .attachTo = CLAY_ATTACH_TO_PARENT, .zIndex = 1, .offset = { zoom_x(j) - 1, 0 },
                                                                 .attachPoints = { CLAY_ATTACH_POINT_LEFT_CENTER, CLAY_ATTACH_POINT_LEFT_CENTER } } }) {}
-            bool lit = app.zoom_hover || app.zoom_drag;
+            bool lit = app.hov.zoom || app.zoom_drag;
             CLAY(CLAY_ID("zoom-knob"), { .layout = { .sizing = { CLAY_SIZING_FIXED(ZOOM_KNOB_W), CLAY_SIZING_FIXED(14) } },
                                          .backgroundColor = lit ? cc(t->fg) : cc(t->accent), .cornerRadius = CLAY_CORNER_RADIUS(3),
                                          .floating = { .attachTo = CLAY_ATTACH_TO_PARENT, .zIndex = 2, .offset = { zoom_x(k) - ZOOM_KNOB_W / 2.0f, 0 },
                                                        .attachPoints = { CLAY_ATTACH_POINT_LEFT_CENTER, CLAY_ATTACH_POINT_LEFT_CENTER } } }) {}
         }
-        zoom_button("zoom-in", UB_ZOOM_IN, true, k < UI_ZOOMS - 1);
+        zoom_button(UB_ZOOM_IN, true, k < UI_ZOOMS - 1);
     }
 }
 
@@ -2682,9 +2756,9 @@ static void layout_bar(float w)
                                           .padding = { PAD / 2, PAD / 2, 0, 0 }, .childGap = BAR_GAP,
                                           .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
                               .backgroundColor = cc(t->bg_light) }) {
-        bar_button(CLAY_ID("nav-back"), UB_BACK, CHEV_LEFT, NULL, NULL, hist.nback > 0, BAR_BTN_W);
-        bar_button(CLAY_ID("nav-fwd"), UB_FORWARD, CHEV_RIGHT, NULL, NULL, hist.nfwd > 0, BAR_BTN_W);
-        bar_button(CLAY_ID("nav-up"), UB_UP, CHEV_UP, NULL, NULL, can_up, BAR_BTN_W);
+        bar_button(UB_BACK, CHEV_LEFT, NULL, NULL, hist.nback > 0, BAR_BTN_W);
+        bar_button(UB_FORWARD, CHEV_RIGHT, NULL, NULL, hist.nfwd > 0, BAR_BTN_W);
+        bar_button(UB_UP, CHEV_UP, NULL, NULL, can_up, BAR_BTN_W);
         float room = w - PAD - 7 * BAR_BTN_W - 9 * BAR_GAP - 2 * PAD;
         CLAY(CLAY_ID("crumbs"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(BAR_BTN_H) }, .padding = { PAD / 2, 0, 0, 0 },
                                               .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
@@ -2692,10 +2766,10 @@ static void layout_bar(float w)
             if (app.ui.focus == UI_FOCUS_EDIT && app.ui.edit_path) layout_location(room);
             else layout_crumbs(room);
         }
-        tool_button("loc-toggle", UB_LOCATION, TOOL_PENCIL, app.ui.focus == UI_FOCUS_EDIT && app.ui.edit_path);
-        tool_button("search", UB_SEARCH, TOOL_SEARCH, app.ui.finding);
-        view_button("view-list", UB_VIEW_LIST, false);
-        view_button("view-icons", UB_VIEW_ICONS, true);
+        tool_button(UB_LOCATION, TOOL_PENCIL, app.ui.focus == UI_FOCUS_EDIT && app.ui.edit_path);
+        tool_button(UB_SEARCH, TOOL_SEARCH, app.ui.finding);
+        view_button(UB_VIEW_LIST, false);
+        view_button(UB_VIEW_ICONS, true);
     }
 }
 
@@ -2706,9 +2780,9 @@ static void layout_tabs(float w)
     float each = (w - PAD) / (float)tabbar.n;
     CLAY(CLAY_ID("tabs"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(TAB_H) }, .padding = { PAD / 2, PAD / 2, 0, 0 } },
                             .backgroundColor = cc(t->bg_light),
-                            .border = { .color = mix(t->fg_dim, t->bg_light, 0.45f), .width = { .bottom = 1 } } }) {
+                            .border = { .color = rule_color(), .width = { .bottom = 1 } } }) {
         for (int i = 0; i < tabbar.n; i++) {
-            bool cur = i == tabbar.cur, hover = app.tab_hover == i;
+            bool cur = i == tabbar.cur, hover = app.hov.tab == i;
             const char *dir = cur ? app.cwd : tabs[tabbar.slot[i]].dir;
             Str name = strcmp(dir, "/") == 0 ? S("/") : path_base(str_from_c(dir)), root, what;
             if (search_parse(dir, &root, &what))   // a search (F9): what it looks for, and where
@@ -2717,12 +2791,12 @@ static void layout_tabs(float w)
             CLAY(CLAY_IDI("tab", i), { .layout = { .sizing = { CLAY_SIZING_FIXED(each), CLAY_SIZING_FIXED(TAB_H) }, .padding = { PAD, 4, 0, 0 },
                                                    .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
                                        .backgroundColor = cur ? cc(t->bg) : hover ? mix(t->bg, t->bg_light, 0.5f) : cc(t->bg_light),
-                                       .border = { .color = cur ? cc(t->accent) : mix(t->fg_dim, t->bg_light, 0.45f),
+                                       .border = { .color = cur ? cc(t->accent) : rule_color(),
                                                    .width = { .right = 1, .bottom = cur ? 2 : 0 } } }) {
                 CLAY(CLAY_IDI("tab-name", i), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) } } }) {
                     text(fit(name, each - PAD - TAB_X_W - 12, false), cur ? cc(t->fg) : cc(t->fg_dim));
                 }
-                bool xhover = app.tab_x_hover == i;
+                bool xhover = app.hov.tab_x == i;
                 CLAY(CLAY_IDI("tab-x", i), { .layout = { .sizing = { CLAY_SIZING_FIXED(TAB_X_W), CLAY_SIZING_FIXED(TAB_X_W) },
                                                          .childAlignment = { .x = CLAY_ALIGN_X_CENTER, .y = CLAY_ALIGN_Y_CENTER } },
                                              .backgroundColor = xhover ? cc(t->bg_light) : (cur ? cc(t->bg) : hover ? mix(t->bg, t->bg_light, 0.5f) : cc(t->bg_light)) }) {
@@ -2742,7 +2816,7 @@ static void layout_tabs(float w)
 static void layout_menu(int m)
 {
     Theme *t = &app.theme;
-    Clay_Color off = mix(t->fg_dim, t->bg_light, 0.45f);
+    Clay_Color off = rule_color();
     // A bar menu hangs from its title; a right-click one floats where ctx_place put it (F8).
     Clay_FloatingElementConfig where = m < UI_MENUS ? (Clay_FloatingElementConfig){ .attachTo = CLAY_ATTACH_TO_PARENT, .zIndex = 30, .offset = { 0, 2 },
                                                                                   .attachPoints = { CLAY_ATTACH_POINT_LEFT_TOP, CLAY_ATTACH_POINT_LEFT_BOTTOM } }
@@ -2797,7 +2871,7 @@ static void layout_menubar(void)
                                .backgroundColor = cc(t->bg_light),
                                .border = { .color = mix(t->fg_dim, t->bg_light, 0.2f), .width = { .bottom = 1 } } }) {
         for (int m = 0; m < UI_MENUS; m++) {
-            bool open = app.ui.menu_on && app.ui.menu == m, hover = app.menu_title_hover == m;
+            bool open = app.ui.menu_on && app.ui.menu == m, hover = app.hov.menu_title == m;
             CLAY(CLAY_IDI("menu-title", m), { .layout = { .sizing = { CLAY_SIZING_FIT(0), CLAY_SIZING_FIXED(MENU_H - 4) },
                                                           .padding = { MENU_TITLE_PAD, MENU_TITLE_PAD, 0, 0 },
                                                           .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
@@ -2843,16 +2917,23 @@ static JobRec *job_by_id(int id)
 }
 
 // A panel's button; the main one (Enter's) filled, in red when it destroys something.
-static void modal_button(const char *id, int which, const char *label, bool main_one, bool danger)
+// A panel's buttons' element ids, by UI_MODAL_*: drawn and hit-tested by the same (2026-10-28).
+// modal-all is the clash panel's "same for the rest" row.
+static const char *const MODAL_IDS[] = {
+    [UI_MODAL_YES] = "modal-yes",       [UI_MODAL_NO] = "modal-no",         [UI_MODAL_SKIP] = "modal-skip", [UI_MODAL_REPLACE] = "modal-replace",
+    [UI_MODAL_KEEP] = "modal-keep",     [UI_MODAL_CANCEL] = "modal-cancel", [UI_MODAL_ALL] = "modal-all",   [UI_MODAL_OK] = "modal-ok",
+};
+
+static void modal_button(int which, const char *label, bool main_one, bool danger)
 {
     Theme *t = &app.theme;
-    bool hover = app.modal_hover == which;
+    bool hover = app.hov.modal == which;
     Rgb fill = danger ? t->red : t->accent;
     Clay_Color bg = main_one ? (hover ? mix(fill, t->bg_light, 0.85f) : cc(fill)) : hover ? cc(t->bg) : cc(t->bg_light);
-    CLAY(Clay_GetElementId(cz(id)), { .layout = { .sizing = { CLAY_SIZING_FIT(0), CLAY_SIZING_FIXED(32) }, .padding = { 16, 16, 0, 0 },
+    CLAY(Clay_GetElementId(cz(MODAL_IDS[which])), { .layout = { .sizing = { CLAY_SIZING_FIT(0), CLAY_SIZING_FIXED(32) }, .padding = { 16, 16, 0, 0 },
                                                   .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
                                       .backgroundColor = bg,
-                                      .border = { .color = main_one ? cc(fill) : mix(t->fg_dim, t->bg_light, 0.45f), .width = CLAY_BORDER_OUTSIDE(1) } }) {
+                                      .border = { .color = main_one ? cc(fill) : rule_color(), .width = CLAY_BORDER_OUTSIDE(1) } }) {
         text(cz(label), main_one ? cc(t->bg) : cc(t->fg));
     }
 }
@@ -2891,10 +2972,10 @@ static void layout_modal_panel(ModalKind k)
             CLAY(CLAY_ID("modal-buttons"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .childGap = 10,
                                                          .childAlignment = { .x = CLAY_ALIGN_X_RIGHT }, .padding = { 0, 0, 8, 0 } } }) {
                 if (k == MODAL_FULL) {
-                    modal_button("modal-ok", UI_MODAL_OK, "OK", true, false);
+                    modal_button(UI_MODAL_OK, "OK", true, false);
                 } else {
-                    modal_button("modal-no", UI_MODAL_NO, k == MODAL_QUIT ? "Stay" : "Keep going", false, false);
-                    modal_button("modal-yes", UI_MODAL_YES, k == MODAL_QUIT ? "Quit" : "Cancel job", true, true);
+                    modal_button(UI_MODAL_NO, k == MODAL_QUIT ? "Stay" : "Keep going", false, false);
+                    modal_button(UI_MODAL_YES, k == MODAL_QUIT ? "Quit" : "Cancel job", true, true);
                 }
             }
         } else if (k == MODAL_EMPTY) {
@@ -2905,8 +2986,8 @@ static void layout_modal_panel(ModalKind k)
             text(cz("Enter or y empties it \xC2\xB7 n or Esc cancels"), cc(t->fg_dim));
             CLAY(CLAY_ID("modal-buttons"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .childGap = 10,
                                                          .childAlignment = { .x = CLAY_ALIGN_X_RIGHT }, .padding = { 0, 0, 8, 0 } } }) {
-                modal_button("modal-no", UI_MODAL_NO, "Cancel", false, false);
-                modal_button("modal-yes", UI_MODAL_YES, "Empty Trash", true, true);
+                modal_button(UI_MODAL_NO, "Cancel", false, false);
+                modal_button(UI_MODAL_YES, "Empty Trash", true, true);
             }
         } else if (k == MODAL_DELETE) {
             text(cz(arena_sprintf(&frame, "Delete %td %s for good?", app.ui.confirm_n, items(app.ui.confirm_n))), cc(t->fg));
@@ -2919,8 +3000,8 @@ static void layout_modal_panel(ModalKind k)
             text(cz("Enter or y deletes \xC2\xB7 n or Esc cancels"), cc(t->fg_dim));
             CLAY(CLAY_ID("modal-buttons"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .childGap = 10,
                                                          .childAlignment = { .x = CLAY_ALIGN_X_RIGHT }, .padding = { 0, 0, 8, 0 } } }) {
-                modal_button("modal-no", UI_MODAL_NO, "Cancel", false, false);
-                modal_button("modal-yes", UI_MODAL_YES, "Delete", true, true);
+                modal_button(UI_MODAL_NO, "Cancel", false, false);
+                modal_button(UI_MODAL_YES, "Delete", true, true);
             }
         } else {
             // r->clash is safe to read here without jobs.mu: asking is set only after jobs_poll saw
@@ -2931,21 +3012,21 @@ static void layout_modal_panel(ModalKind k)
             Str in_dir = path_base(dir.len ? dir : S("/"));
             text(fit(str_from_c(arena_sprintf(&frame, "%.*s already exists in %.*s", STR_ARG(name), STR_ARG(in_dir))), 430, false), cc(t->fg));
             text(cz(r->clash_dirs ? "Merge the folders, keep both, or skip it?" : "Replace it, keep both, or skip it?"), cc(t->fg_dim));
-            CLAY(CLAY_ID("modal-all"), { .layout = { .childGap = 8, .childAlignment = { .y = CLAY_ALIGN_Y_CENTER }, .padding = { 0, 0, 4, 4 } } }) {
+            CLAY(Clay_GetElementId(cz(MODAL_IDS[UI_MODAL_ALL])), { .layout = { .childGap = 8, .childAlignment = { .y = CLAY_ALIGN_Y_CENTER }, .padding = { 0, 0, 4, 4 } } }) {
                 CLAY(CLAY_ID("modal-all-box"), { .layout = { .sizing = { CLAY_SIZING_FIXED(16), CLAY_SIZING_FIXED(16) } },
                                                  .backgroundColor = app.ui.ask_all ? cc(t->accent) : cc(t->bg),
                                                  .border = { .color = cc(t->fg_dim), .width = CLAY_BORDER_OUTSIDE(1) } }) {}
-                text(cz("Do the same for the rest"), app.modal_hover == UI_MODAL_ALL ? cc(t->fg) : cc(t->fg_dim));
+                text(cz("Do the same for the rest"), app.hov.modal == UI_MODAL_ALL ? cc(t->fg) : cc(t->fg_dim));
             }
             text(cz(r->clash_dirs ? "s skip \xC2\xB7 r merge \xC2\xB7 k keep both \xC2\xB7 Shift: for the rest \xC2\xB7 Esc cancels"
                                     : "s skip \xC2\xB7 r replace \xC2\xB7 k keep both \xC2\xB7 Shift: for the rest \xC2\xB7 Esc cancels"),
                  cc(t->fg_dim));
             CLAY(CLAY_ID("modal-buttons"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .childGap = 10,
                                                          .childAlignment = { .x = CLAY_ALIGN_X_RIGHT }, .padding = { 0, 0, 8, 0 } } }) {
-                modal_button("modal-cancel", UI_MODAL_CANCEL, "Cancel", false, false);
-                modal_button("modal-skip", UI_MODAL_SKIP, "Skip", false, false);
-                modal_button("modal-keep", UI_MODAL_KEEP, "Keep both", false, false);
-                modal_button("modal-replace", UI_MODAL_REPLACE, r->clash_dirs ? "Merge" : "Replace", false, false);   // no default: Enter doesn't answer
+                modal_button(UI_MODAL_CANCEL, "Cancel", false, false);
+                modal_button(UI_MODAL_SKIP, "Skip", false, false);
+                modal_button(UI_MODAL_KEEP, "Keep both", false, false);
+                modal_button(UI_MODAL_REPLACE, r->clash_dirs ? "Merge" : "Replace", false, false);   // no default: Enter doesn't answer
             }
         }
     }
@@ -3033,13 +3114,8 @@ static void props_read(void)
     struct statx sx;
     if (statx(AT_FDCWD, path, props.broken ? AT_SYMLINK_NOFOLLOW : 0, STATX_BTIME, &sx) == 0 && (sx.stx_mask & STATX_BTIME))
         props.btime = (i64)sx.stx_btime.tv_sec;
-    char buf[1024];
-    struct passwd pw, *pwp = NULL;
-    struct group gr, *grp = NULL;
-    if (getpwuid_r(props.st.st_uid, &pw, buf, sizeof buf, &pwp) == 0 && pwp) snprintf(props.owner, sizeof props.owner, "%s", pw.pw_name);
-    else snprintf(props.owner, sizeof props.owner, "%u", (unsigned)props.st.st_uid);
-    if (getgrgid_r(props.st.st_gid, &gr, buf, sizeof buf, &grp) == 0 && grp) snprintf(props.group, sizeof props.group, "%s", gr.gr_name);
-    else snprintf(props.group, sizeof props.group, "%u", (unsigned)props.st.st_gid);
+    snprintf(props.owner, sizeof props.owner, "%s", id_name(false, props.st.st_uid));   // (the list's columns' names, cached)
+    snprintf(props.group, sizeof props.group, "%s", id_name(true, props.st.st_gid));
     // Its permissions change only when it is Michael's, not in the trash, and there (one entry:
     // props_read is only for one).
     app.ui.prop_can = !app.ui.in_trash && !props.broken && props.st.st_uid == geteuid();
@@ -3067,9 +3143,9 @@ static void props_open(const char *path)
     if (!here && app.have_list && app.list.n > 0 && n == 1)
         for (isize i = 0; i < app.list.n; i++)
             if (app.ui.marked ? app.ui.mark[i] : i == app.ui.list.sel) props.idx = i;
-    Str base = path_base(str_from_c(props_path[0])), dir = path_dir(str_from_c(props_path[0]));
+    Str base = path_base(str_from_c(props_path[0]));
     char d[PATH_MAX];
-    snprintf(d, sizeof d, "%.*s", STR_ARG(dir.len ? dir : S("/")));
+    path_parent(d, sizeof d, props_path[0]);
     if (n == 1) {
         snprintf(props.name, sizeof props.name, "%.*s", STR_ARG(base.len ? base : S("/")));
         if (app.ui.in_trash && props.idx >= 0) snprintf(props.name, sizeof props.name, "%.*s", STR_ARG(app.list.e[props.idx].name));
@@ -3083,7 +3159,7 @@ static void props_open(const char *path)
         mime_comment(&scratch, str_from_c(props.type), props.type_name, sizeof props.type_name);
     }
     if (app.ui.in_trash) snprintf(props.where, sizeof props.where, "Trash");
-    else ui_tilde(props.where, sizeof props.where, n == 1 ? d : app.ui.in_search ? app.search_root : app.cwd, getenv("HOME"));
+    else ui_tilde(props.where, sizeof props.where, n == 1 ? d : here_dir(), getenv("HOME"));
     snprintf(props.drive, sizeof props.drive, "%s", props_drive(props_path[0]));
     if (n == 1) props_read();
     // Counted all the way down, but not on a network drive (its reads can hang, F6.4).
@@ -3116,7 +3192,7 @@ static void props_chmod(int k)
     }
     char was[64];   // the old mode, and the file's device and inode (UNDO_CHMOD)
     snprintf(was, sizeof was, "%o %llu %llu", (unsigned)old, (unsigned long long)props.st.st_dev, (unsigned long long)props.st.st_ino);
-    undo_gen++, undo_begin(&undo, UNDO_CHMOD), undo_add(&undo, NULL, props_path[0], was);
+    undo_start(UNDO_CHMOD), undo_add(&undo, NULL, props_path[0], was);
     props_read();
     set_status(false, "%s: %04o", props.name, (unsigned)(props.st.st_mode & 07777));
 }
@@ -3214,7 +3290,7 @@ static void layout_props_panel(void)
                 }
                 // The permissions: the octal number, then the grid; greyed when they can't change.
                 bool can = app.ui.prop_can;
-                Clay_Color off = mix(t->fg_dim, t->bg_light, 0.45f);
+                Clay_Color off = rule_color();
                 CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .childGap = 12, .padding = { 0, 0, 8, 0 } } }) {
                     CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_FIXED(96), CLAY_SIZING_FIT(0) } } }) { text(cz("Permissions"), cc(t->fg_dim)); }
                     text(cz(arena_sprintf(&frame, "%04o%s", (unsigned)(props.st.st_mode & 07777), can ? "" : app.ui.in_trash ? "  (in the trash)" : "  (not yours to change)")), cc(t->fg));
@@ -3252,7 +3328,7 @@ static void layout_props_panel(void)
         }
         CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .padding = { 0, 0, 10, 0 },
                                    .childAlignment = { .x = CLAY_ALIGN_X_RIGHT } } }) {
-            modal_button("modal-ok", UI_MODAL_OK, "Close", true, false);
+            modal_button(UI_MODAL_OK, "Close", true, false);
         }
     }
 }
@@ -3291,13 +3367,13 @@ static void layout_jobs(void)
         if (done > 1) done = 1;
         LineDraw *d = arena_new(&frame, LineDraw, 1);
         *d = (LineDraw){ CUSTOM_LINE, bt > 0 && j->kind != JOB_DELETE ? &r->line : NULL, done, cc(t->accent), mix(t->accent, t->bg_light, 0.2f) };
-        bool keyed = app.ui.focus == UI_FOCUS_JOBS && app.ui.job_at == i, hover = app.jobx_hover == i;
+        bool keyed = app.ui.focus == UI_FOCUS_JOBS && app.ui.job_at == i, hover = app.hov.job_x == i;
         char speed[32] = "";
         if (d->line) jobq_speed(speed, sizeof speed, r->line.now);
         const char *pct = atomic_load(&j->phase) == JP_SCAN ? "counting\xE2\x80\xA6" : arena_sprintf(&frame, "%d%%", (int)(done * 100));
         CLAY(CLAY_IDI("job-row", i), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(JOB_ROW_H) } },
                                        .backgroundColor = cc(t->bg_light),
-                                       .border = { .color = mix(t->fg_dim, t->bg_light, 0.45f), .width = { .top = 1 } } }) {
+                                       .border = { .color = rule_color(), .width = { .top = 1 } } }) {
             CLAY(CLAY_IDI("job-line", i), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0) }, .padding = { PAD, 8, 0, 0 }, .childGap = 12,
                                                         .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
                                             .custom = { .customData = d } }) {
@@ -3307,7 +3383,7 @@ static void layout_jobs(void)
                 if (speed[0]) text(cz(arena_sprintf(&frame, "%s", speed)), cc(t->fg));
                 CLAY(CLAY_IDI("job-x", i), { .layout = { .sizing = { CLAY_SIZING_FIXED(26), CLAY_SIZING_FIXED(26) },
                                                          .childAlignment = { .x = CLAY_ALIGN_X_CENTER, .y = CLAY_ALIGN_Y_CENTER } },
-                                             .backgroundColor = hover ? cc(t->bg) : (Clay_Color){ 0, 0, 0, 0 },
+                                             .backgroundColor = hover ? cc(t->bg) : NO_COLOR,
                                              .border = { .color = cc(t->accent), .width = { keyed * 2, keyed * 2, keyed * 2, keyed * 2, 0 } } }) {
                     text(cz("\xC3\x97"), hover || keyed ? cc(t->red) : cc(t->fg_dim));   // ×
                 }
@@ -3354,10 +3430,32 @@ static const char *find_label(isize n, isize at, char *buf, size_t cap)
 static void find_chevron(Clay_ElementId id, ChevronDir dir, int step, bool on)
 {
     Theme *t = &app.theme;
-    bool hover = on && app.findstep_hover == step;
+    bool hover = on && app.hov.find_step == step;
     CLAY(id, { .layout = { .sizing = { CLAY_SIZING_FIXED(26), CLAY_SIZING_FIXED(26) }, .childAlignment = { .x = CLAY_ALIGN_X_CENTER, .y = CLAY_ALIGN_Y_CENTER } },
-               .backgroundColor = hover ? cc(t->bg) : (Clay_Color){ 0, 0, 0, 0 } }) {
+               .backgroundColor = hover ? cc(t->bg) : NO_COLOR }) {
         chevron(Clay_GetElementId(cz(arena_sprintf(&frame, "%.*s-icon", (int)id.stringId.length, id.stringId.chars))), dir, on ? cc(t->fg) : dim_color());
+    }
+}
+
+// A bar's field, find's or the search view's (name: "find", "search"): its frame red when the
+// expression is bad, the accent while it has the keys; its text drawn as the edit line draws (a
+// caret and the selection) while it has them, cut to fit otherwise; the toggles at its end.
+static void bar_field(const char *name, bool keys, bool bad, UiLine line, Str shown, Clay_Color fg, int toggles)
+{
+    Theme *t = &app.theme;
+    Clay_Color edge = bad ? cc(t->red) : keys ? cc(t->accent) : rule_color();
+    Clay_ElementId field = Clay_GetElementId(cz(arena_sprintf(&frame, "%s-field", name)));
+    CLAY(field, { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(26) }, .padding = { 8, 3, 0, 0 }, .childGap = 6,
+                              .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
+                  .backgroundColor = cc(t->bg), .border = { .color = edge, .width = CLAY_BORDER_OUTSIDE(1) } }) {
+        Clay_ElementData fd = Clay_GetElementData(field);
+        float room = fd.found && fd.boundingBox.width > 140 ? fd.boundingBox.width - 110 : 400;
+        CLAY(Clay_GetElementId(cz(arena_sprintf(&frame, "%s-text", name))),
+             { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } }, .clip = { .horizontal = true } }) {
+            if (keys) edit_text(name, room, line, fg);
+            else text(fit(shown, room, true), fg);
+        }
+        layout_toggles(app.ui.find_opts, toggles);
     }
 }
 
@@ -3371,27 +3469,12 @@ static void layout_find_bar(void)
     Ui *u = &app.ui;
     isize at, n = find_count(&at);
     bool bad = u->find_m.bad && u->find_opts.regex && u->find_len;
-    Clay_Color edge = bad ? cc(t->red) : u->focus == UI_FOCUS_FIND ? cc(t->accent) : mix(t->fg_dim, t->bg_light, 0.45f);
     CLAY(CLAY_ID("find-bar"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(FIND_BAR_H) }, .padding = { PAD, 8, 0, 0 }, .childGap = 10,
                                             .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
                                 .backgroundColor = cc(t->bg_light),
-                                .border = { .color = mix(t->fg_dim, t->bg_light, 0.45f), .width = { .top = 1 } } }) {
+                                .border = { .color = rule_color(), .width = { .top = 1 } } }) {
         text(cz(u->find_select ? "Select" : "Find"), cc(t->fg_dim));   // Select Items Matching (F7.4)
-        CLAY(CLAY_ID("find-field"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(26) }, .padding = { 8, 3, 0, 0 }, .childGap = 6,
-                                                  .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
-                                      .backgroundColor = cc(t->bg), .border = { .color = edge, .width = CLAY_BORDER_OUTSIDE(1) } }) {
-            // As the edit line draws, its caret and selection, while it has the keys (2026-10-28); red
-            // text when nothing matches.
-            Clay_ElementData fd = Clay_GetElementData(CLAY_ID("find-field"));
-            float room = fd.found && fd.boundingBox.width > 140 ? fd.boundingBox.width - 110 : 400;
-            Clay_Color fg = u->find_miss ? cc(t->red) : cc(t->fg);
-            CLAY(CLAY_ID("find-text"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
-                                         .clip = { .horizontal = true } }) {
-                if (u->focus == UI_FOCUS_FIND) edit_text("find", room, ui_find_line(u), fg);
-                else text(fit((Str){ u->find, u->find_len }, room, true), fg);
-            }
-            layout_toggles(u->find_opts, 0);
-        }
+        bar_field("find", u->focus == UI_FOCUS_FIND, bad, ui_find_line(u), (Str){ u->find, u->find_len }, u->find_miss ? cc(t->red) : cc(t->fg), 0);   // (red text: no match)
         // At least as wide as "88 of 88", so the chevrons don't move as the count grows.
         CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_FIT(str_width(S("88 of 88")), 0), CLAY_SIZING_FIT(0) }, .childAlignment = { .x = CLAY_ALIGN_X_RIGHT } } }) {
             if (bad) text(fit(str_from_c(u->find_m.err), 240, false), cc(t->red));
@@ -3402,10 +3485,10 @@ static void layout_find_bar(void)
             find_chevron(CLAY_ID("find-prev"), CHEV_UP, -1, n >= 2);
             find_chevron(CLAY_ID("find-next"), CHEV_DOWN, 1, n >= 2);
         }
-        bool hover = app.findx_hover;
+        bool hover = app.hov.find_x;
         CLAY(CLAY_ID("find-x"), { .layout = { .sizing = { CLAY_SIZING_FIXED(26), CLAY_SIZING_FIXED(26) },
                                               .childAlignment = { .x = CLAY_ALIGN_X_CENTER, .y = CLAY_ALIGN_Y_CENTER } },
-                                  .backgroundColor = hover ? cc(t->bg) : (Clay_Color){ 0, 0, 0, 0 } }) {
+                                  .backgroundColor = hover ? cc(t->bg) : NO_COLOR }) {
             text(cz("\xC3\x97"), hover ? cc(t->red) : cc(t->fg_dim));   // ×
         }
     }
@@ -3418,7 +3501,6 @@ static void layout_search_bar(void)
     Theme *t = &app.theme;
     Ui *u = &app.ui;
     bool bad = app.search_m.bad && u->find_opts.regex && u->search_len;
-    Clay_Color edge = bad ? cc(t->red) : u->focus == UI_FOCUS_SEARCH ? cc(t->accent) : mix(t->fg_dim, t->bg_light, 0.45f);
     char where[PATH_MAX + 16];
     ui_tilde(where, sizeof where, app.search_root, getenv("HOME"));
     CLAY(CLAY_ID("search-bar"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(SEARCH_BAR_H) }, .padding = { PAD, PAD, 0, 0 }, .childGap = 10,
@@ -3427,19 +3509,7 @@ static void layout_search_bar(void)
         CLAY(CLAY_ID("search-where"), { .layout = { .sizing = { CLAY_SIZING_FIT(0, 300), CLAY_SIZING_FIT(0) } }, .clip = { .horizontal = true } }) {
             text(fit(str_from_c(arena_sprintf(&frame, "Search in %s", where)), 300, true), cc(t->fg_dim));
         }
-        CLAY(CLAY_ID("search-field"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(26) }, .padding = { 8, 3, 0, 0 }, .childGap = 6,
-                                                    .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
-                                        .backgroundColor = cc(t->bg), .border = { .color = edge, .width = CLAY_BORDER_OUTSIDE(1) } }) {
-            // As the edit line draws, its caret and selection, while it has the keys (2026-10-28).
-            Clay_ElementData fd = Clay_GetElementData(CLAY_ID("search-field"));
-            float room = fd.found && fd.boundingBox.width > 140 ? fd.boundingBox.width - 110 : 400;
-            CLAY(CLAY_ID("search-text"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
-                                           .clip = { .horizontal = true } }) {
-                if (u->focus == UI_FOCUS_SEARCH) edit_text("search", room, ui_search_line(u), cc(t->fg));
-                else text(fit((Str){ u->search, u->search_len }, room, true), cc(t->fg));
-            }
-            layout_toggles(u->find_opts, TOGGLE_SEARCH);
-        }
+        bar_field("search", u->focus == UI_FOCUS_SEARCH, bad, ui_search_line(u), (Str){ u->search, u->search_len }, cc(t->fg), TOGGLE_SEARCH);
         if (bad) text(fit(str_from_c(app.search_m.err), 240, false), cc(t->red));
     }
 }
@@ -3476,10 +3546,10 @@ static void layout_modes(void)
     CLAY(CLAY_ID("modes"), { .layout = { .sizing = { CLAY_SIZING_FIXED(modes_w()), CLAY_SIZING_GROW(0) }, .padding = { PAD, PAD, 0, 0 },
                                          .childGap = MODE_GAP, .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } } }) {
         for (int k = 0; k < SIDE_MODES; k++) {
-            bool on = app.ui.side_mode == (SideMode)k, hover = app.mode_hover == k;
+            bool on = app.ui.side_mode == (SideMode)k, hover = app.hov.mode == k;
             CLAY(CLAY_IDI("mode", k), { .layout = { .sizing = { CLAY_SIZING_FIXED(MODE_BTN_W), CLAY_SIZING_FIXED(MODE_BTN_H) },
                                                     .childAlignment = { .x = CLAY_ALIGN_X_CENTER, .y = CLAY_ALIGN_Y_CENTER } },
-                                        .backgroundColor = on ? mix(t->accent, t->bg_light, 0.25f) : hover ? cc(t->bg) : (Clay_Color){ 0, 0, 0, 0 },
+                                        .backgroundColor = on ? mix(t->accent, t->bg_light, 0.25f) : hover ? cc(t->bg) : NO_COLOR,
                                         .cornerRadius = CLAY_CORNER_RADIUS(3) }) {
                 mode_picture(k, on ? cc(t->accent) : hover ? cc(t->fg) : cc(t->fg_dim));
             }
@@ -3534,13 +3604,11 @@ enum { TIP_BAR = 100, TIP_MODE = 200, TIP_EJECT = 300, TIP_TAB_X = 400, TIP_ZOOM
 // Target k's text, and the element it hangs from; false for none (gone since).
 static bool tip_of(int k, char *buf, size_t cap, Clay_ElementId *id)
 {
-    static const struct { UiBar b; const char *id, *text; } BAR[] = {
-        { UB_BACK, "nav-back", "Back (Alt+Left)" }, { UB_FORWARD, "nav-fwd", "Forward (Alt+Right)" },
-        { UB_UP, "nav-up", "Up to the parent (Backspace)" }, { UB_LOCATION, "loc-toggle", "Type a location (Ctrl+L)" },
-        { UB_SEARCH, "search", "Search (Ctrl+Shift+F)" }, { UB_LEFT, "crumb-left", "Earlier folders in the path" },
-        { UB_RIGHT, "crumb-right", "Later folders in the path" }, { UB_VIEW_LIST, "view-list", "List (Ctrl+1)" },
-        { UB_VIEW_ICONS, "view-icons", "Icons (Ctrl+2)" }, { UB_ZOOM_OUT, "zoom-out", "Smaller icons (Ctrl+-)" },
-        { UB_ZOOM_IN, "zoom-in", "Bigger icons (Ctrl+=)" },
+    static const struct { UiBar b; const char *text; } BAR[] = {
+        { UB_BACK, "Back (Alt+Left)" }, { UB_FORWARD, "Forward (Alt+Right)" }, { UB_UP, "Up to the parent (Backspace)" },
+        { UB_LOCATION, "Type a location (Ctrl+L)" }, { UB_SEARCH, "Search (Ctrl+Shift+F)" }, { UB_LEFT, "Earlier folders in the path" },
+        { UB_RIGHT, "Later folders in the path" }, { UB_VIEW_LIST, "List (Ctrl+1)" }, { UB_VIEW_ICONS, "Icons (Ctrl+2)" },
+        { UB_ZOOM_OUT, "Smaller icons (Ctrl+-)" }, { UB_ZOOM_IN, "Bigger icons (Ctrl+=)" },
     };
     static const char *const MODES[SIDE_MODES] = { "Places (F9)", "Tree (F9)", "No sidebar (F9)" };
     if (k >= TIP_FIND) {
@@ -3566,7 +3634,7 @@ static bool tip_of(int k, char *buf, size_t cap, Clay_ElementId *id)
         return snprintf(buf, cap, "%s", MODES[k - TIP_MODE]) > 0;
     }
     for (int j = 0; j < COUNT(BAR); j++)
-        if (TIP_BAR + (int)BAR[j].b == k) return *id = Clay_GetElementId(cz(BAR[j].id)), snprintf(buf, cap, "%s", BAR[j].text) > 0;
+        if (TIP_BAR + (int)BAR[j].b == k) return *id = bar_id(BAR[j].b), snprintf(buf, cap, "%s", BAR[j].text) > 0;
     return false;
 }
 
@@ -3628,7 +3696,7 @@ static void menu_facts(void)
     }
 }
 
-
+// The window, and the modal panel on top when one is up.
 static Clay_RenderCommandArray layout(int w, int h)
 {
     menu_facts();
@@ -3937,29 +4005,6 @@ static void on_button(GLFWwindow *w, int button, int action, int mods)
 
 // What is under a point of the last frame drawn: a list row, a sidebar row, or a column header
 // (each -1 when not).
-typedef struct {
-    int   row, side, header;
-    UiBar bar;     // a top bar button
-    int   crumb;   // UB_CRUMB: which path button
-    int   tab, tab_x;   // a tab, or its ×
-    int   modal;        // a modal panel's button (UI_MODAL_*), 0 for none
-    int   job_x;        // a job row's ×, -1 for none
-    int   mode;         // a sidebar mode button (a SideMode), -1 for none
-    int   twisty;       // a tree row's open/close mark, -1 for none
-    int   eject;        // a drive's eject button, -1 for none
-    bool  zoom;         // the zoom slider's track (F6.3)
-    int   menu_title;   // a menu bar title, -1 for none (F7.1)
-    int   menu_item;    // an entry of the open menu (its place), -1 for none
-    int   prop_box;     // a checkbox of the Properties panel's grid, -1 for none (F7.2)
-    int   ow_row;       // a row of Open With's list (on screen), -1 for none (F7.3)
-    bool  find_x, find_field;   // the find bar's × and its field
-    bool  ow_field;     // its field
-    int   toggle;       // a toggle of its field or of the find line (1..3), 0 for none
-    int   find_step;    // the find bar's chevrons: -1 the previous, 1 the next, 0 none
-    int   bmp_row;      // a row of Edit Bookmarks' list (on screen), -1 for none (F7.5)
-    int   bmp_btn;      // one of its buttons (1..4), 0 for none
-    bool  search_field; // the search bar's field (F9)
-} Hit;
 
 static bool in_box(Clay_ElementId id, float x, float y)
 {
@@ -3970,7 +4015,9 @@ static bool in_box(Clay_ElementId id, float x, float y)
 
 static Hit hit_at(float x, float y)
 {
-    Hit h = { -1, -1, -1, UB_NONE, -1, -1, -1, 0, -1, -1, -1, -1, false, -1, -1, -1, -1, false, false, false, 0, 0, -1, 0, false };
+    // (by name: a field added or moved shifted every value after it, 2026-10-28; the rest 0 or false)
+    Hit h = { .row = -1, .side = -1, .header = -1, .bar = UB_NONE, .crumb = -1, .tab = -1, .tab_x = -1, .job_x = -1, .mode = -1, .twisty = -1,
+              .eject = -1, .menu_title = -1, .menu_item = -1, .prop_box = -1, .ow_row = -1, .bmp_row = -1 };
     // The find bar's toggles, or Open With's (its panel's); ui_handle drops a find or search bar's
     // under a panel or a menu (a click on Properties' OK above them flipped one, 2026-10-26).
     for (int k = 1; k <= 4 && !h.toggle && (app.ui.ow || app.ui.finding); k++)
@@ -3988,12 +4035,8 @@ static Hit hit_at(float x, float y)
     }
     if (modal_kind() != MODAL_NONE) {
         // A panel is up: its buttons are all there is to hit.
-        static const struct { const char *id; int b; } MB[] = {
-            { "modal-yes", UI_MODAL_YES }, { "modal-no", UI_MODAL_NO }, { "modal-skip", UI_MODAL_SKIP }, { "modal-replace", UI_MODAL_REPLACE },
-            { "modal-keep", UI_MODAL_KEEP }, { "modal-cancel", UI_MODAL_CANCEL }, { "modal-all", UI_MODAL_ALL }, { "modal-ok", UI_MODAL_OK },
-        };
-        for (int k = 0; k < COUNT(MB) && !h.modal; k++)
-            if (in_box(Clay_GetElementId(cz(MB[k].id)), x, y)) h.modal = MB[k].b;
+        for (int b = 1; b < COUNT(MODAL_IDS) && !h.modal; b++)
+            if (in_box(Clay_GetElementId(cz(MODAL_IDS[b])), x, y)) h.modal = b;
         for (int k = 0; modal_kind() == MODAL_PROPS && k < 9 && h.prop_box < 0; k++)
             if (in_box(CLAY_IDI("prop-box", k), x, y)) h.prop_box = k;
         for (int r = 0; modal_kind() == MODAL_OW && r < app.ui.ow_list.rows && h.ow_row < 0; r++)
@@ -4015,14 +4058,8 @@ static Hit hit_at(float x, float y)
         if (in_box(CLAY_IDI("tab-x", i), x, y)) h.tab_x = h.tab = i;
         else if (in_box(CLAY_IDI("tab", i), x, y)) h.tab = i;
     }
-    static const struct { const char *id; UiBar b; } BAR[] = {
-        { "nav-back", UB_BACK }, { "nav-fwd", UB_FORWARD }, { "nav-up", UB_UP }, { "loc-toggle", UB_LOCATION },
-        { "search", UB_SEARCH }, { "crumb-left", UB_LEFT }, { "crumb-right", UB_RIGHT },
-        { "trash-restore", UB_RESTORE }, { "trash-empty", UB_EMPTY }, { "view-list", UB_VIEW_LIST }, { "view-icons", UB_VIEW_ICONS },
-        { "zoom-out", UB_ZOOM_OUT }, { "zoom-in", UB_ZOOM_IN },
-    };
-    for (int k = 0; k < COUNT(BAR) && h.bar == UB_NONE; k++)
-        if (in_box(Clay_GetElementId(cz(BAR[k].id)), x, y)) h.bar = BAR[k].b;
+    for (int b = 0; b < COUNT(BAR_IDS) && h.bar == UB_NONE; b++)
+        if (BAR_IDS[b] && in_box(bar_id((UiBar)b), x, y)) h.bar = (UiBar)b;
     for (int i = app.crumb_lo; h.bar == UB_NONE && i < app.crumb_hi; i++)
         if (in_box(CLAY_IDI("crumb", i), x, y)) h.bar = UB_CRUMB, h.crumb = i;
     // The cursor's full name in the icon view lies over the cells below it; a press there is the
@@ -4039,9 +4076,8 @@ static Hit hit_at(float x, float y)
     for (int k = 0; k < SIDE_MODES && h.mode < 0; k++)
         if (in_box(CLAY_IDI("mode", k), x, y)) h.mode = k;
     h.zoom = in_box(CLAY_ID("zoom-track"), x, y);   // only drawn in the icon view
-    static const char *const IDS[SORT_KEYS] = { "col-name", "col-size", "col-date" };
     for (int k = 0; k < SORT_KEYS && h.header < 0; k++)
-        if (in_box(Clay_GetElementId(cz(IDS[k])), x, y)) h.header = k;
+        if (in_box(Clay_GetElementId(cz(COL_IDS[k])), x, y)) h.header = k;
     return h;
 }
 
@@ -4067,12 +4103,12 @@ static void press_at(UiInput *in, float x, float y, int mods)
     in->modal = h.modal;
     in->prop_box = h.prop_box;
     if (h.ow_row >= 0) {
-        if (ui_press(&app.ow_press, app.ui.ow_list.top + h.ow_row, now_ms()) == 2) in->ow_drow = h.ow_row;
+        if (ui_press(&app.panel_press, app.ui.ow_list.top + h.ow_row, now_ms()) == 2) in->ow_drow = h.ow_row;
         else in->ow_row = h.ow_row;
     }
     in->ow_field = h.ow_field;
     if (h.bmp_row >= 0) {
-        if (ui_press(&app.ow_press, app.ui.bmp_list.top + h.bmp_row, now_ms()) == 2) in->bmp_drow = h.bmp_row;
+        if (ui_press(&app.panel_press, app.ui.bmp_list.top + h.bmp_row, now_ms()) == 2) in->bmp_drow = h.bmp_row;
         else in->bmp_row = h.bmp_row;
     }
     in->bmp_btn = h.bmp_btn;
@@ -4219,24 +4255,13 @@ static void ctx_facts(void)
 static void folder_do(UiMenuItem it)
 {
     const char *dir = app.ctx_path;
-    Err err = { 0 };
     if (!dir[0]) return;
     switch (it) {
     case UM_OPEN_IT: go_to(dir, STR_EMPTY, 0); break;
     case UM_OPEN_TAB: tab_open_bg(dir); break;
-    case UM_SEARCH_IN: {   // below it, in a tab of its own (F9)
-        char uri[PATH_MAX];
-        if (search_uri(uri, sizeof uri, dir, STR_EMPTY)) tab_open(uri, STR_EMPTY, true);
-        break;
-    }
-    case UM_OPEN_WINDOW:
-        if (spawn_window(app.exe, dir, &err)) set_status(false, "New window on %s", dir);
-        else set_status(true, "%s", err.msg);
-        break;
-    case UM_TERMINAL_IN:
-        if (spawn_terminal(dir, &err)) set_status(false, "terminal in %s", dir);
-        else set_status(true, "%s", err.msg);
-        break;
+    case UM_SEARCH_IN: search_in(dir); break;
+    case UM_OPEN_WINDOW: window_on(dir); break;
+    case UM_TERMINAL_IN: terminal_in(dir); break;
     case UM_CUT_IT: case UM_COPY_IT: copy_targets(it == UM_CUT_IT, dir); break;
     case UM_PASTE_INTO: paste(dir); break;
     case UM_BOOKMARK_IT: bookmark_add(dir); break;
@@ -4306,18 +4331,13 @@ static bool hover_refresh(bool on, float x, float y)
 // What is under the pointer at x, y, for the hover highlights: true when any changed.
 static bool hover_at(float x, float y)
 {
-    Hit h = hit_at(x, y);
-    bool changed = h.row != app.hover || h.side != app.side_hover || h.bar != app.bar_hover || h.crumb != app.crumb_hover ||
-                   h.tab != app.tab_hover || h.tab_x != app.tab_x_hover || h.mode != app.mode_hover || h.eject != app.eject_hover ||
-                   h.modal != app.modal_hover || h.job_x != app.jobx_hover || h.zoom != app.zoom_hover || h.menu_title != app.menu_title_hover ||
-                   h.bmp_btn != app.bmp_btn_hover ||
-                   h.find_x != app.findx_hover || h.find_step != app.findstep_hover;
-    app.menu_title_hover = h.menu_title;
+    Hit h = hit_at(x, y), o = app.hov;
+    // (what is drawn lit; a menu's entries are ui_menu_hover's)
+    bool changed = h.row != o.row || h.side != o.side || h.bar != o.bar || h.crumb != o.crumb || h.tab != o.tab || h.tab_x != o.tab_x ||
+                   h.mode != o.mode || h.eject != o.eject || h.modal != o.modal || h.job_x != o.job_x || h.zoom != o.zoom ||
+                   h.menu_title != o.menu_title || h.bmp_btn != o.bmp_btn || h.find_x != o.find_x || h.find_step != o.find_step;
+    app.hov = h;
     changed |= ui_menu_hover(&app.ui, h.menu_title, h.menu_item);
-    app.hover = h.row, app.side_hover = h.side, app.bar_hover = h.bar, app.crumb_hover = h.crumb;
-    app.tab_hover = h.tab, app.tab_x_hover = h.tab_x, app.mode_hover = h.mode, app.eject_hover = h.eject;
-    app.modal_hover = h.modal, app.jobx_hover = h.job_x, app.zoom_hover = h.zoom, app.findx_hover = h.find_x, app.findstep_hover = h.find_step;
-    app.bmp_btn_hover = h.bmp_btn;
     // Onto another icon button (or off one): its tooltip waits UI_TIP_MS, the timer wakes the loop.
     if (ui_tip_hover(&app.tip, tip_target(h), now_ms())) {
         changed = true;
@@ -4612,7 +4632,7 @@ int main(int argc, char **argv)
     side_refresh();
     list_fit();
     ui_resize(&app.ui.side, side_rows(GetScreenHeight()));
-    app.press.row = -1, app.ow_press.row = -1;
+    app.press.row = -1, app.panel_press.row = -1;
     // Started on a file (a desktop entry's %f, xdg-open on a file's folder), or with --select
     // (ShowItems): its folder, it selected.
     struct stat sst;

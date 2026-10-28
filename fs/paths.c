@@ -30,6 +30,14 @@ static bool path_put(char *out, size_t cap, const char *dir, Str name)
     return n >= 0 && (size_t)n < cap;
 }
 
+// path's folder into out ("/" for one at the top); false when it doesn't fit.
+static bool path_parent(char *out, size_t cap, const char *path)
+{
+    Str d = path_dir(str_from_c(path));
+    int n = snprintf(out, cap, "%.*s", STR_ARG(d.len ? d : S("/")));
+    return n >= 0 && (size_t)n < cap;
+}
+
 // An XDG base folder's sub: $var/sub when var is absolute (a relative one is ignored, as the spec
 // says), else $HOME/fallback/sub (".local/share" and the like); false without either, or when it
 // would not fit.

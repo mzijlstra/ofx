@@ -228,7 +228,7 @@ static void script_state(char *out, size_t cap)
     // The number drawn there, said as which it is: worked out here apart from the layout's.
     char hovernum[64] = "-";
     int ejectbtn = 0;
-    isize hi = app.side_hover >= 0 ? app.ui.side.top + app.side_hover : -1;
+    isize hi = app.hov.side >= 0 ? app.ui.side.top + app.hov.side : -1;
     if (app.ui.side_mode == SIDE_PLACES && hi >= 0 && hi < app.places.n && app.hover_num[0]) {
         const Place *hp = &app.places.p[hi];
         char used[32], avail[32];
@@ -419,7 +419,7 @@ static void script_state(char *out, size_t cap)
              "propwhere=%s propdrive=%s proplink=%s propcreated=%d propidx=%td "
              "ow=%d owfresh=%d owlist=%d owtext=%s own=%td owsel=%td owapp=%s owicon=%s owtex=%d owshown=%td owtype=%s owfiles=%td owrows=%d owtop=%td owopts=%s owbad=%d owdef=%d owdefcan=%d findopts=%s findbad=%d findselect=%d findn=%td findat=%td findtext=%s "
              "search=%d searchkeys=%d searchtext=%s searchdone=%d searchfull=%d searchdue=%d searchbad=%d searchbar=%d searchsel=%d-%d searchcaret=%d findsel=%d-%d findcaret=%d seldir=%s searchinfo=%s spawned=%d status=%s",
-             app.cwd, app.list.n, app.list.hidden, STR_ARG(sel), app.ui.list.sel, app.ui.list.top, app.ui.list.rows, app.hover,
+             app.cwd, app.list.n, app.list.hidden, STR_ARG(sel), app.ui.list.sel, app.ui.list.top, app.ui.list.rows, app.hov.row,
              t->accent.r, t->accent.g, t->accent.b, t->bg.r, t->bg.g, t->bg.b, t->icons[0] ? t->icons : "-",
              app.icon_scale, GetScreenWidth(), GetScreenHeight(), app.reloads, app.themes, atomic_load(&watch.batches),
              (double)frame_us_max / 1000.0, icon, app.show_hidden,
@@ -434,13 +434,13 @@ static void script_state(char *out, size_t cap)
              app.ui.focus == UI_FOCUS_EDIT && app.ui.edit_path, cnt, slo, shi, app.ui.caret, copied, keyed,
              jobs.nrun, jobs.nwait, joblabels, jobkey, oldest ? oldest->line.reached : 0, oldest && oldest->line.now > 0, clashjob,
              sides[0] ? sides : "-", spaced, SIDE_MODES_W[app.ui.side_mode], app.ui.side_mode == SIDE_TREE ? tree.n : 0, treecur,
-             app.ui.side.sel - app.ui.side.top, treehere, app.ui.in_trash, app.side_hover, hovernum, ejectbtn, app.cwd_avail >= 0, info,
+             app.ui.side.sel - app.ui.side.top, treehere, app.ui.in_trash, app.hov.side, hovernum, ejectbtn, app.cwd_avail >= 0, info,
              app.ui.grid ? "icons" : "list", (int)ui_cols(&app.ui.list), app.grid_cells, app.grid_first, app.grid_last, app.grid_full_lines, app.grid_hover_lines, app.grid_hover_cut, entry_px(), icontex, app.icon_full_resets, app.ui.focus == UI_FOCUS_CRUMBS, tipword, idle_woke,
              ui_zoom_px(&app.ui), cell_w(), cell_h(), Clay_GetElementData(CLAY_ID("zoom-track")).found, tipin, app.nslots,
              thumbs.drawn_last, thumbsel, thumbbox, thumbs_busy(), thumbs.got[TG_MADE], thumbs.got[TG_CACHED], thumbs.got[TG_FAILED],
              thumbs.got[TG_FAIL_KNOWN], thumbs.got[TG_NONE], thumbs.got[TG_CHANGED], thumbs.held, thumbs.evicted, thumbs.resets, app.thumb_local,
              app.reloads_asked, menuseps, bmlist, app.ui.bm_n, app.ui.bm_here, app.ui.can_bookmark, app.ui.bm_more, app.ui.bmp, app.ui.bmp_list.n, app.ui.bmp_list.sel, app.ui.bmp_naming, bmptext, app.ui.keys, app.ui.keys_list.n, app.ui.keys_list.top, app.ui.keys_list.rows, keysfirst, app.ui.menu_on ? UI_MENU[app.ui.menu].title : "-", menuat, menuoff, menugrey, menuhid, menumarked, menubox, menuin, menuclear, app.ui.perms_cols, perms_shown((float)GetScreenWidth()), (int)(strstr(info, "Permissions_hidden") != NULL), app.ui.group_col,
-             (int)Clay_GetElementData(CLAY_ID("col-group")).found + (int)Clay_GetElementData(CLAY_IDI("group", 0)).found, app.ui.colors, app.ui.bar_hidden, bar_shown(), app.menu_title_hover, app.ui.can_write, windows,
+             (int)Clay_GetElementData(CLAY_ID("col-group")).found + (int)Clay_GetElementData(CLAY_IDI("group", 0)).found, app.ui.colors, app.ui.bar_hidden, bar_shown(), app.hov.menu_title, app.ui.can_write, windows,
              app.ui.side.rows, footerin,
              app.ui.props, app.ui.prop_at, app.ui.prop_can, props.n, props.have ? (unsigned)(props.st.st_mode & 07777) : 0u,
              (long long)props.sum.files, (long long)props.sum.dirs, (long long)props.sum.bytes, props.done, props.sum.cut || props.cut,
@@ -544,7 +544,7 @@ static void script_sh(Str cmd)
     // The trash view (F6) has no folder of its own: the home trash's stands in for it; the search
     // view's (F9) is the folder searched.
     char shown[PATH_MAX];
-    if (!app.ui.in_trash || !trash_home(shown, sizeof shown)) snprintf(shown, sizeof shown, "%s", app.ui.in_search ? app.search_root : app.cwd);
+    if (!app.ui.in_trash || !trash_home(shown, sizeof shown)) snprintf(shown, sizeof shown, "%s", here_dir());
     if (!script_under(shown, root)) {
         script_fail("sh refused: %s is not under OFX_GUI_ROOT (%s)", shown, root ? root : "unset");
         return;

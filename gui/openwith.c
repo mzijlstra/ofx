@@ -238,7 +238,7 @@ static void layout_ow_panel(void)
         }
         // The field: its text and caret, the toggles at its right end; red when the expression is bad.
         bool bad = u->ow_m.bad;
-        Clay_Color edge = bad ? cc(t->red) : !u->ow_in_list ? cc(t->accent) : mix(t->fg_dim, t->bg_light, 0.45f);
+        Clay_Color edge = bad ? cc(t->red) : !u->ow_in_list ? cc(t->accent) : rule_color();
         CLAY(CLAY_ID("ow-field"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(32) }, .padding = { 8, 4, 0, 0 }, .childGap = 6,
                                                 .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
                                     .backgroundColor = cc(t->bg),
@@ -279,7 +279,7 @@ static void layout_ow_panel(void)
         }
         // Set as default (F7.3.1): a box, Alt+D; greyed with the reason when it can't be.
         bool can = u->ow_def_can, on = can && u->ow_def;
-        Clay_Color off = mix(t->fg_dim, t->bg_light, 0.45f);
+        Clay_Color off = rule_color();
         CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .childGap = 10, .padding = { 8, 0, 4, 0 },
                                    .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } } }) {
             CLAY(CLAY_IDI("toggle", 4), { .layout = { .sizing = { CLAY_SIZING_FIXED(18), CLAY_SIZING_FIXED(18) }, .childAlignment = { CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER } },
@@ -292,8 +292,8 @@ static void layout_ow_panel(void)
         }
         CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .padding = { 0, 0, 6, 0 }, .childGap = 10,
                                    .childAlignment = { .x = CLAY_ALIGN_X_RIGHT } } }) {
-            modal_button("modal-no", UI_MODAL_NO, "Cancel", false, false);
-            modal_button("modal-yes", UI_MODAL_YES, "Open", true, false);
+            modal_button(UI_MODAL_NO, "Cancel", false, false);
+            modal_button(UI_MODAL_YES, "Open", true, false);
         }
     }
 }
