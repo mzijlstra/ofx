@@ -433,7 +433,7 @@ MUTANTS = [
     (G, '    u->sel_bm = e && kind_is_dir(e->kind) && entry_path(u->list.sel, p, sizeof p) && bm_find(&bmarks, p) >= 0;', '    u->sel_bm = false;', 'f8'),
     (G, '    bool ok = bm_read(&bmwa, file, &now, &err) && bm_add(&bmwa, &now, dir, &err);', '    bool ok = bm_read(&bmwa, file, &now, &err) && bm_add(&bmwa, &now, app.cwd, &err);', 'f8'),
     (G, '        if (same_dir(sdir, dest)) {', '        if (same_dir(sdir, app.cwd)) {', 'f8'),
-    (G, '        if (!join(dst, sizeof dst, dest, str_from_c(name))) continue;', '        if (!join(dst, sizeof dst, app.cwd, str_from_c(name))) continue;', 'f8'),
+    (G, '        if (!path_put(dst, sizeof dst, dest, str_from_c(name))) continue;', '        if (!path_put(dst, sizeof dst, app.cwd, str_from_c(name))) continue;', 'f8'),
     (G, '        if (!op_symlink(in, paths[i], str_from_c(name), one, sizeof one, &err)', '        if (!op_symlink(in, in, str_from_c(name), one, sizeof one, &err)', 'f8'),
     (G, '        if (done++ == 0) undo_gen++, undo_begin(&undo, UNDO_LINK);', '        if (done++ == 0) undo_gen++;', 'f8'),
     (G, '        undo_add(&undo, paths[i], p, NULL);\n', '', 'f8'),
@@ -533,7 +533,7 @@ MUTANTS = [
     # the rows' folder, the empty list's words; f9's shots show them), the walk left running after
     # leaving a search (no state word sees it), the publishing pace (the scripts wait for the end).
     (G, '    if (app.ui.in_search) {\n        char dir[PATH_MAX];', '    if (false) {\n        char dir[PATH_MAX];', 'f9'),
-    (G, '        return join(out, cap, e->dir.len ? dir : app.search_root, e->name);', '        return join(out, cap, app.search_root, e->name);', 'f9'),
+    (G, '        return path_put(out, cap, e->dir.len ? dir : app.search_root, e->name);', '        return path_put(out, cap, app.search_root, e->name);', 'f9'),
     (G, '    if (!search_is(r, text, app.ui.find_opts, app.show_hidden)) {', '    if (false) {', 'f9'),
     (G, '    if (app.ui.in_search && !in_search) search_ask("", STR_EMPTY, app.ui.find_opts, false), app.search_due = 0;', '', 'f9'),
     (G, '    fs_sort(l, app.ui.sort);\n    snprintf(app.search_root', '    snprintf(app.search_root', 'f9'),
@@ -578,7 +578,7 @@ MUTANTS = [
     (G, '    if (rel.len) snprintf(keep, sizeof keep, "%.*s/%.*s", STR_ARG(rel), STR_ARG(to));', '    if (false) {}', 'f9'),
     (G, '    Str d = e && entry_path(app.ui.list.sel, path, sizeof path) ? path_dir(str_from_c(path)) : str_from_c(app.cwd);', '    Str d = str_from_c(app.cwd);', 'f9'),
     (G, '    snprintf(app.edit_from, sizeof app.edit_from, "%.*s", e ? (int)e->name.len : 0, e ? e->name.p : "");', '    snprintf(app.edit_from, sizeof app.edit_from, "%.*s", STR_ARG(sel_name()));', 'f9'),
-    (G, '        if (!op_symlink(in, paths[i], str_from_c(name), one, sizeof one, &err) || !join(p, sizeof p, in, str_from_c(one))) continue;', '        if (!op_symlink(app.cwd, paths[i], str_from_c(name), one, sizeof one, &err) || !join(p, sizeof p, app.cwd, str_from_c(one))) continue;', 'f9'),
+    (G, '        if (!op_symlink(in, paths[i], str_from_c(name), one, sizeof one, &err) || !path_put(p, sizeof p, in, str_from_c(one))) continue;', '        if (!op_symlink(app.cwd, paths[i], str_from_c(name), one, sizeof one, &err) || !path_put(p, sizeof p, app.cwd, str_from_c(one))) continue;', 'f9'),
     (G, '        const char *dest = into ? into : sdir;', '        const char *dest = into ? into : app.cwd;', 'f9'),
     (G, ': NULL) : app.ui.in_search ? app.search_root : app.cwd;\n        if (dir && spawn_terminal', ': NULL) : app.cwd;\n        if (dir && spawn_terminal', 'f9'),
     (G, '        const char *dir = a.all ? (a.index < app.list.n && entry_path(a.index, in, sizeof in) ? in : NULL) : app.cwd;\n        if (dir && search_uri', '        const char *dir = app.cwd;\n        if (dir && search_uri', 'f9'),

@@ -35,7 +35,7 @@ static void fm1_plan(Fm1Call c, const char *const *uris, isize n, Fm1Plan *out)
     for (isize i = 0; i < n; i++) {
         char path[PATH_MAX];
         struct stat st;
-        if (!clean_uri_path(uris[i], path, sizeof path) || stat(path, &st) != 0) {
+        if (!file_uri_path(str_from_c(uris[i]), path, sizeof path) || stat(path, &st) != 0) {
             out->skipped++;
             continue;
         }

@@ -17,32 +17,19 @@
 // another drive (a unit test can't mount one).
 static const char *trash_test_topdir;
 
-// s percent-encoded as a URI path: unreserved bytes and '/' kept, the rest as %XX.
-static bool percent_encode(Str s, char *out, size_t cap)
+// A trashed file's Path=: res as it is in the home trash (top ""), relative to top in a drive's
+// own ("/" as top: without the first '/').
+static const char *trash_rel(const char *res, const char *top)
 {
-    static const char HEX[] = "0123456789ABCDEF";
-    size_t n = 0;
-    for (isize i = 0; i < s.len; i++) {
-        unsigned char c = (unsigned char)s.p[i];
-        bool keep = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '.' ||
-                    c == '_' || c == '~' || c == '/';
-        if (n + (keep ? 1 : 3) >= cap) return false;
-        if (keep) out[n++] = (char)c;
-        else out[n++] = '%', out[n++] = HEX[c >> 4], out[n++] = HEX[c & 15];
-    }
-    out[n] = 0;
-    return true;
+    if (!top[0]) return res;
+    if (strcmp(top, "/") == 0) return res + 1;
+    return path_below(res, top) ? res + strlen(top) + 1 : res;
 }
 
 // The home trash's folder: $XDG_DATA_HOME/Trash, else ~/.local/share/Trash.
 static bool trash_home(char *out, size_t cap)
 {
-    const char *x = getenv("XDG_DATA_HOME"), *home = getenv("HOME");
-    int n;
-    if (x && x[0] == '/') n = snprintf(out, cap, "%s/Trash", x);
-    else if (home && home[0]) n = snprintf(out, cap, "%s/.local/share/Trash", home);
-    else return false;
-    return n >= 0 && (size_t)n < cap;
+    return xdg_dir(out, cap, "XDG_DATA_HOME", ".local/share", "Trash");
 }
 
 // The device of path, or of the nearest folder above it that exists.
@@ -77,17 +64,7 @@ static void topdir_of(const char *dir, dev_t dev, char *out, size_t cap)
 // mkdir -p for the trash's own folders, 0700.
 static bool mkdir_private(const char *path, Err *err)
 {
-    char p[PATH_MAX];
-    snprintf(p, sizeof p, "%s", path);
-    for (char *s = p + 1;; s++) {
-        if (*s == '/' || *s == 0) {
-            char c = *s;
-            *s = 0;
-            if (mkdir(p, 0700) != 0 && errno != EEXIST) return err_set(err, "%s: %s", p, strerror(errno)), false;
-            *s = c;
-            if (!c) break;
-        }
-    }
+    if (!mkdir_p(path, 0700, true, err)) return false;
     struct stat st;
     if (lstat(path, &st) != 0 || !S_ISDIR(st.st_mode)) return err_set(err, "%s isn't a folder", path), false;
     return true;
@@ -149,12 +126,9 @@ static bool trash_put(const char *path, Trashed *t, Err *err)
         return err_set(err, "%s: the path is too long", trash), false;
     if (!ops_allowed(files, err) || !mkdir_private(files, err) || !mkdir_private(info, err)) return false;
 
-    // Path=: absolute in the home trash, relative to the top dir in a drive's own.
-    const char *shown = res;
-    size_t tl = strlen(top);
-    if (top[0] && strncmp(res, top, tl) == 0 && (res[tl] == '/' || strcmp(top, "/") == 0)) shown = res + (strcmp(top, "/") == 0 ? 1 : tl + 1);
+    const char *shown = trash_rel(res, top);
     char enc[PATH_MAX * 3];
-    if (!percent_encode(str_from_c(shown), enc, sizeof enc)) return err_set(err, "%s: the path is too long", path), false;
+    if (!percent_encode(str_from_c(shown), "/", enc, sizeof enc)) return err_set(err, "%s: the path is too long", path), false;
     char date[32];
     time_t now = time(NULL);
     struct tm tm;
@@ -291,13 +265,6 @@ static bool trash_path_climbs(const char *path)
     return false;
 }
 
-// Whether path is top or under it ("/" holds everything).
-static bool trash_under(const char *path, const char *top)
-{
-    size_t n = strlen(top);
-    return strcmp(top, "/") == 0 || (strncmp(path, top, n) == 0 && (path[n] == '/' || path[n] == 0));
-}
-
 // A .trashinfo's Path (decoded, made absolute against top) and DeletionDate (local time, 0 when
 // missing or unreadable); false when it has no usable Path. In a drive's trash (top set) the Path
 // must stay on that drive: no ".." part, and an absolute one under top.
@@ -317,7 +284,7 @@ static bool trash_info_parse(Str text, const char *top, char *from, size_t cap, 
             char dec[PATH_MAX];
             if (!percent_decode(str_cut(line, 5, line.len), dec, sizeof dec) || !dec[0] || trash_path_climbs(dec)) continue;
             int n;
-            if (dec[0] == '/' && top[0] && !trash_under(dec, top)) continue;
+            if (dec[0] == '/' && top[0] && !path_within(dec, top)) continue;
             if (dec[0] == '/') n = snprintf(from, cap, "%s", dec);
             else if (top[0]) n = snprintf(from, cap, "%s%s%s", top, strcmp(top, "/") == 0 ? "" : "/", dec);
             else continue;   // relative in the home trash: nowhere to put it
@@ -415,28 +382,20 @@ static bool trash_restore_item(const TrashItem *t, Err *err)
     // on a stick could point the restore at the home folder).
     if (t->top && t->top[0]) {
         char res[PATH_MAX], top[PATH_MAX];
-        if (!realpath(t->top, top) || !ops_resolve(t->from, res, sizeof res) || !trash_under(res, top))
+        if (!realpath(t->top, top) || !ops_resolve(t->from, res, sizeof res) || !path_within(res, top))
             return err_set(err, "%s: its trash says it came from outside its drive: not restored", t->from), false;
     }
+    // (t's paths can be longer than PATH_MAX: cut short, the rename and unlink below would act on
+    // another file; 2026-10-28)
     Trashed tr;
-    snprintf(tr.file, sizeof tr.file, "%s", t->file);
-    snprintf(tr.info, sizeof tr.info, "%s", t->info);
-    snprintf(tr.from, sizeof tr.from, "%s", t->from);
+    if (snprintf(tr.file, sizeof tr.file, "%s", t->file) >= (int)sizeof tr.file || snprintf(tr.info, sizeof tr.info, "%s", t->info) >= (int)sizeof tr.info ||
+        snprintf(tr.from, sizeof tr.from, "%s", t->from) >= (int)sizeof tr.from)
+        return err_set(err, "%s: the path is too long", t->from), false;
     Str dir = path_dir(str_from_c(t->from));
     char d[PATH_MAX];
     snprintf(d, sizeof d, "%.*s", STR_ARG(dir.len ? dir : S("/")));
     struct stat st;
-    if (stat(d, &st) != 0) {
-        if (!ops_allowed(d, err)) return false;
-        for (char *s = d + 1;; s++) {
-            if (*s != '/' && *s != 0) continue;
-            char c = *s;
-            *s = 0;
-            if (mkdir(d, 0755) != 0 && errno != EEXIST) return err_set(err, "%s: %s", d, strerror(errno)), false;
-            *s = c;
-            if (!c) break;
-        }
-    }
+    if (stat(d, &st) != 0 && (!ops_allowed(d, err) || !mkdir_p(d, 0755, true, err))) return false;
     return trash_restore(&tr, err);
 }
 

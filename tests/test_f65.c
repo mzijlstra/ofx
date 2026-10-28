@@ -66,23 +66,23 @@ static void test_clean_names(void)
     CHECK(!clean_temp_name(".ofxx1-2.png") && !clean_temp_name(".ofx1-2.png"));
 
     char p[PATH_MAX];
-    CHECK(clean_uri_path("file:///a%20b/%C3%A9%2f%7E", p, sizeof p));
+    CHECK(file_uri_path(S("file:///a%20b/%C3%A9%2f%7E"), p, sizeof p));
     CHECK_STR(str_from_c(p), "/a b/\xc3\xa9/~");
-    CHECK(clean_uri_path("file:///x/A-z_0.9", p, sizeof p));
+    CHECK(file_uri_path(S("file:///x/A-z_0.9"), p, sizeof p));
     CHECK_STR(str_from_c(p), "/x/A-z_0.9");
-    CHECK(!clean_uri_path("trash:///a", p, sizeof p) && !clean_uri_path("file://host/a", p, sizeof p));
-    CHECK(!clean_uri_path("file:///a%00b", p, sizeof p) && !clean_uri_path("file:///a%2", p, sizeof p));
-    CHECK(!clean_uri_path("file:///a%g0", p, sizeof p) && !clean_uri_path("file:///a%0g", p, sizeof p));
-    CHECK(!clean_uri_path("file:///a%1g", p, sizeof p) && !clean_uri_path("file:///a%1G", p, sizeof p));
-    CHECK(!clean_uri_path("file:///a%", p, sizeof p) && !clean_uri_path("http:///a", p, sizeof p));
+    CHECK(!file_uri_path(S("trash:///a"), p, sizeof p) && !file_uri_path(S("file://host/a"), p, sizeof p));
+    CHECK(!file_uri_path(S("file:///a%00b"), p, sizeof p) && !file_uri_path(S("file:///a%2"), p, sizeof p));
+    CHECK(!file_uri_path(S("file:///a%g0"), p, sizeof p) && !file_uri_path(S("file:///a%0g"), p, sizeof p));
+    CHECK(!file_uri_path(S("file:///a%1g"), p, sizeof p) && !file_uri_path(S("file:///a%1G"), p, sizeof p));
+    CHECK(!file_uri_path(S("file:///a%"), p, sizeof p) && !file_uri_path(S("http:///a"), p, sizeof p));
     // Too small: refused, never cut.
-    CHECK(!clean_uri_path("file:///abc", p, 4) && clean_uri_path("file:///abc", p, 5));
+    CHECK(!file_uri_path(S("file:///abc"), p, 4) && file_uri_path(S("file:///abc"), p, 5));
     // Its round trip with thumb_uri, for every byte but NUL.
     char path[300], uri[PATH_MAX * 3];
     path[0] = '/';
     for (int i = 1; i < 256; i++) path[i] = (char)i;
     path[256] = 0;
-    CHECK(thumb_uri(path, uri, sizeof uri) && clean_uri_path(uri, p, sizeof p) && strcmp(p, path) == 0);
+    CHECK(thumb_uri(path, uri, sizeof uri) && file_uri_path(str_from_c(uri), p, sizeof p) && strcmp(p, path) == 0);
 
     Str mi = S("1 0 0:1 / / rw - ext4 a rw\n"
                "2 1 0:2 / /mnt/sd rw - ext4 b rw\n"

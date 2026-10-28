@@ -463,8 +463,7 @@ static bool into_itself(const char *src, const char *dst_dir)
 {
     char s[PATH_MAX], d[PATH_MAX];
     if (!realpath(src, s) || !realpath(dst_dir, d)) return false;
-    size_t n = strlen(s);
-    return strncmp(d, s, n) == 0 && (d[n] == 0 || d[n] == '/' || strcmp(s, "/") == 0);
+    return path_within(d, s);
 }
 
 // The parent folder of path opened, and its last part into name.

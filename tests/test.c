@@ -1413,6 +1413,9 @@ static void test_places(void)
     CHECK(percent_decode(S("a%41b"), buf, sizeof buf) && strcmp(buf, "aAb") == 0);
     CHECK(!percent_decode(S("abcdefgh"), buf, sizeof buf));   // too long for 8 with its 0
     CHECK(percent_decode(S("abcdefg"), buf, sizeof buf));
+    CHECK(!percent_decode(S("a%00b"), buf, sizeof buf));   // a NUL would end the path early (2026-10-28)
+    CHECK(file_uri_path(S("file://localhost/a%20b"), buf, sizeof buf) && strcmp(buf, "/a b") == 0);
+    CHECK(!file_uri_path(S("file://host/a"), buf, sizeof buf) && !file_uri_path(S("file:a"), buf, sizeof buf));
     CHECK(octal_decode(S("a\\040b\\134"), buf, sizeof buf) && strcmp(buf, "a b\\") == 0);
     CHECK(octal_decode(S("a\\09"), buf, sizeof buf) && strcmp(buf, "a\\09") == 0);   // not octal: kept
     CHECK(octal_decode(S("\\04"), buf, sizeof buf) && strcmp(buf, "\\04") == 0);      // cut off: kept

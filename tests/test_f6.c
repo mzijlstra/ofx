@@ -506,10 +506,51 @@ static void test_trash_view(void)
     snprintf(ok_from, sizeof ok_from, "%s", at("tv/drive/new/deep/folder"));
     TrashItem on = { l.e[0].trash->file, l.e[0].trash->info, ok_from, top };
     CHECK(trash_restore_item(&on, &err) && there(at("tv/drive/new/deep/folder")));
-    // The trash_path_climbs and trash_under edges.
+    // The trash_path_climbs and path_within edges.
     CHECK(trash_path_climbs("..") && trash_path_climbs("/a/..") && trash_path_climbs("a/../b") && !trash_path_climbs("a/..b/c"));
     CHECK(!trash_path_climbs("...") && !trash_path_climbs("/a/b/") && !trash_path_climbs("") && !trash_path_climbs("x/.a/y"));
-    CHECK(trash_under("/m/x", "/m") && trash_under("/m", "/m") && !trash_under("/mx", "/m") && trash_under("/anything", "/"));
+    CHECK(path_within("/m/x", "/m") && path_within("/m", "/m") && !path_within("/mx", "/m") && path_within("/anything", "/"));
+    CHECK(path_below("/m/x", "/m") && !path_below("/m", "/m") && !path_below("/m/", "/m") && !path_below("/mx", "/m") && !path_below("/x", "/"));
+    // fs/paths.c's helpers (2026-10-28).
+    {
+        char out[16];
+        CHECK(path_put(out, sizeof out, "/", S("a")) && strcmp(out, "/a") == 0);
+        CHECK(path_put(out, sizeof out, "/d", S("a")) && strcmp(out, "/d/a") == 0);
+        CHECK(!path_put(out, 8, "/dir", S("abc")) && path_put(out, 9, "/dir", S("abc")));
+        CHECK(strcmp(trash_rel("/m/x/y", "/m"), "x/y") == 0 && strcmp(trash_rel("/x/y", "/"), "x/y") == 0);
+        CHECK(strcmp(trash_rel("/x/y", ""), "/x/y") == 0 && strcmp(trash_rel("/n/y", "/m"), "/n/y") == 0);
+        Str type, src;
+        char mp[64];
+        CHECK(mountinfo_line(S("40 22 179:1 / /mnt/a\\040b rw shared:20 - exfat /dev/mmc rw"), mp, sizeof mp, &type, &src));
+        CHECK(strcmp(mp, "/mnt/a b") == 0 && str_eq(type, S("exfat")) && str_eq(src, S("/dev/mmc")));
+        CHECK(!mountinfo_line(S("40 22 179:1 /"), mp, sizeof mp, &type, &src) && !mountinfo_line(S("40 22 179:1 / "), mp, sizeof mp, &type, &src));
+        CHECK(mountinfo_line(S("40 22 179:1 / /m rw"), mp, sizeof mp, &type, &src) && strcmp(mp, "/m") == 0 && !type.len && !src.len);
+        // mkdir -p stops at a folder it can't make in, whole or not.
+        char d[PATH_MAX], deep[PATH_MAX];
+        snprintf(d, sizeof d, "%s/ro", root);
+        CHECK(mkdir(d, 0500) == 0);
+        snprintf(deep, sizeof deep, "%s/a/b/c", d);
+        Err e = { 0 };
+        CHECK(!mkdir_p(deep, 0700, false, &e) && !mkdir_p(deep, 0700, true, &e));
+        snprintf(deep, sizeof deep, "%s/w/x/y", root);
+        CHECK(mkdir_p(deep, 0700, false, &e) && access(deep, F_OK) != 0 && mkdir_p(deep, 0700, true, &e) && access(deep, F_OK) == 0);
+        chmod(d, 0700);
+        // No HOME and no XDG_STATE_HOME: no theme folder, not "/.local/…".
+        char t[PATH_MAX];
+        memset(t, 'x', sizeof t);
+        env_set("XDG_STATE_HOME", NULL), env_set("HOME", NULL);
+        CHECK(theme_dir(t, sizeof t)[0] == 0);
+        env_restore();
+    }
+    // A trashed item whose file path is longer than PATH_MAX is refused, not cut short and renamed
+    // as another file (2026-10-28).
+    {
+        static char longf[PATH_MAX + 64];
+        memset(longf, 'x', sizeof longf - 1), longf[0] = '/';
+        TrashItem t = { longf, "/i.trashinfo", "/f", "" };
+        Err e = { 0 };
+        CHECK(!trash_restore_item(&t, &e) && strstr(e.msg, "too long"));
+    }
     // What is left: abs, and the dot-file.
     CHECK(trash_list(&ta, &d, false, (Sort){ SORT_NAME, false }, &l, &err) && l.n == 1 && str_eq(l.e[0].name, S("abs")));
     // No trash at all.

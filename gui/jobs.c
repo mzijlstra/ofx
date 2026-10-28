@@ -300,7 +300,7 @@ static void job_finish(JobRec *r)
             Str d = path_dir(str_from_c(it->dst));
             char dir[PATH_MAX], made[PATH_MAX];
             snprintf(dir, sizeof dir, "%.*s", STR_ARG(d.len ? d : S("/")));
-            if (join(made, sizeof made, dir, str_from_c(it->final))) undo_add(&undo, j->kind == JOB_MOVE ? it->src : NULL, made, NULL);
+            if (path_put(made, sizeof made, dir, str_from_c(it->final))) undo_add(&undo, j->kind == JOB_MOVE ? it->src : NULL, made, NULL);
         }
         if (undo.n == 0) undo_clear(&undo);
     }

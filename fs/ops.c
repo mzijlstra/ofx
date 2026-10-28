@@ -59,21 +59,13 @@ static bool ops_allowed(const char *path, Err *err)
 {
     if (!ops_root[0]) return true;
     char r[PATH_MAX];
-    size_t n = strlen(ops_root);
-    if (ops_resolve(path, r, sizeof r) && strncmp(r, ops_root, n) == 0 && r[n] == '/') return true;
+    if (ops_resolve(path, r, sizeof r) && path_below(r, ops_root)) return true;
     ops_refusals++;
     fprintf(stderr, "ofx: guard: refused a write to %s (outside %s)\n", path, ops_root);
     return err_set(err, "%s: outside the test folder, refused", path), false;
 }
 
 // ---- names ------------------------------------------------------------------------------------
-
-// dir/name into out; false when it would not fit (a cut path could name another file).
-static bool path_put(char *out, size_t cap, const char *dir, Str name)
-{
-    int n = snprintf(out, cap, "%s%s%.*s", dir, strcmp(dir, "/") == 0 ? "" : "/", STR_ARG(name));
-    return n >= 0 && (size_t)n < cap;
-}
 
 // A name a file can have: not empty, no '/', not "." or "..", at most NAME_MAX bytes.
 static bool name_valid(Str name, Err *err)
@@ -260,11 +252,7 @@ static bool delete_tree(const char *path, isize *count, Err *err)
 // The user's own mimeapps.list, where a default is set: $XDG_CONFIG_HOME's, else ~/.config's.
 static bool apps_user_list(char *out, size_t cap)
 {
-    const char *ch = getenv("XDG_CONFIG_HOME"), *home = getenv("HOME");
-    int n = ch && ch[0] == '/' ? snprintf(out, cap, "%s/mimeapps.list", ch)
-          : home && home[0]   ? snprintf(out, cap, "%s/.config/mimeapps.list", home)
-                              : -1;
-    return n > 0 && (size_t)n < cap;
+    return xdg_dir(out, cap, "XDG_CONFIG_HOME", ".config", "mimeapps.list");
 }
 
 // A list read before the user's own that sets a default for type (or an alias of it), whose

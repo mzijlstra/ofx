@@ -127,18 +127,9 @@ static void md5_hex(const void *data, size_t n, char out[33])
 // 2026-10-24). False when it would not fit.
 static bool thumb_uri(const char *path, char *out, size_t cap)
 {
-    static const char hex[] = "0123456789ABCDEF";
     if (cap < 8) return false;
-    size_t o = (size_t)snprintf(out, cap, "file://");
-    for (const u8 *p = (const u8 *)path; *p; p++) {
-        u8 c = *p;
-        bool keep = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || strchr("-._~!$&'()*+,=@:/", c);
-        if (o + (keep ? 1 : 3) >= cap) return false;
-        if (keep) out[o++] = (char)c;
-        else out[o++] = '%', out[o++] = hex[c >> 4], out[o++] = hex[c & 15];
-    }
-    out[o] = 0;
-    return true;
+    memcpy(out, "file://", 7);
+    return percent_encode(str_from_c(path), "!$&'()*+,=@:/", out + 7, cap - 7);
 }
 
 // The cache's folders: a preview of up to 128 px is in normal, 256 large, 512 x-large, 1024 xx-large.
@@ -156,10 +147,7 @@ static int thumb_level(int px)
 // absolute is ignored, as the spec says).
 static bool thumb_root(char *out, size_t cap)
 {
-    const char *x = getenv("XDG_CACHE_HOME"), *home = getenv("HOME");
-    int n = x && x[0] == '/' ? snprintf(out, cap, "%s/thumbnails", x)
-          : home && home[0] == '/' ? snprintf(out, cap, "%s/.cache/thumbnails", home) : -1;
-    return n > 0 && (size_t)n < cap;
+    return xdg_dir(out, cap, "XDG_CACHE_HOME", ".cache", "thumbnails");
 }
 
 // <root>/<dir>/<md5 of uri>.png
@@ -313,19 +301,6 @@ static Str thumb_read(Arena *a, const char *path, isize max, struct stat *st)
     return s;
 }
 
-// Each folder of path's up to its last '/', made with 0700 (the spec's mode) where missing.
-static bool mkdirs_for(const char *path)
-{
-    char d[PATH_MAX];
-    snprintf(d, sizeof d, "%s", path);
-    for (char *s = d + 1; (s = strchr(s, '/')); s++) {
-        *s = 0;
-        if (mkdir(d, 0700) != 0 && errno != EEXIST) return false;
-        *s = '/';
-    }
-    return true;
-}
-
 // png written to file through a temporary file in its folder, renamed over it, so another program
 // never reads half of one. Every write asks the test guard first (ops.c).
 static bool thumb_write(const char *file, Str png)
@@ -335,7 +310,7 @@ static bool thumb_write(const char *file, Str png)
     char tmp[PATH_MAX];
     Str dir = path_dir(str_from_c(file));
     int n = snprintf(tmp, sizeof tmp, "%.*s/.ofx-%d-%d.png", STR_ARG(dir), (int)getpid(), atomic_fetch_add(&seq, 1));
-    if (n < 0 || (size_t)n >= sizeof tmp || !ops_allowed(file, &err) || !mkdirs_for(file)) return false;
+    if (n < 0 || (size_t)n >= sizeof tmp || !ops_allowed(file, &err) || !mkdir_p(file, 0700, false, &err)) return false;   // (0700: the spec's mode)
     int fd = open(tmp, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0600);
     if (fd < 0) return false;
     isize at = 0;
@@ -588,23 +563,11 @@ static bool thumb_local(Str mountinfo, const char *path)
     isize at = 0, best = -1;
     char type[64] = "";
     for (Str line; next_line(mountinfo, &at, &line);) {
-        Str f = line;
-        for (int k = 0; k < 4; k++) {
-            isize sp = str_find(f, ' ');
-            f = sp < 0 ? STR_EMPTY : str_cut(f, sp + 1, f.len);
-        }
-        isize sp = str_find(f, ' ');
         char mp[PATH_MAX];
-        if (sp <= 0 || !octal_decode(str_cut(f, 0, sp), mp, sizeof mp)) continue;
+        Str t, src;
+        if (!mountinfo_line(line, mp, sizeof mp, &t, &src)) continue;
         size_t n = strlen(mp);
-        bool above = strcmp(mp, "/") == 0 || (strncmp(path, mp, n) == 0 && (path[n] == '/' || path[n] == 0));
-        isize dash = -1;
-        for (isize i = 0; dash < 0 && i + 3 <= line.len; i++)
-            if (memcmp(line.p + i, " - ", 3) == 0) dash = i;
-        if (!above || (isize)n < best || dash < 0) continue;   // a later mount on the same point wins
-        Str t = str_cut(line, dash + 3, line.len);
-        isize e = str_find(t, ' ');
-        if (e >= 0) t = str_cut(t, 0, e);
+        if (!path_within(path, mp) || (isize)n < best || !t.len) continue;   // a later mount on the same point wins
         snprintf(type, sizeof type, "%.*s", STR_ARG(t));
         best = (isize)n;
     }
@@ -640,8 +603,7 @@ typedef enum {
 static ThumbGot thumb_get(Arena *a, const ThumbAsk *q, Img *out)
 {
     char uri[sizeof ((ThumbMeta *)0)->uri], file[PATH_MAX], fail[PATH_MAX];
-    size_t rn = strlen(q->root);
-    if (strncmp(q->path, q->root, rn) == 0 && q->path[rn] == '/') return TG_NONE;   // the cache's own files (the spec)
+    if (path_below(q->path, q->root)) return TG_NONE;   // the cache's own files (the spec)
     int level = thumb_level(q->px), side = 128 << level;
     if (!thumb_uri(q->path, uri, sizeof uri) || !thumb_file(q->root, thumb_dirs[level], uri, file, sizeof file)) return TG_NONE;
     struct stat st;

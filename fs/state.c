@@ -31,12 +31,7 @@ typedef struct {
 // $XDG_STATE_HOME/ofx/state, else ~/.local/state/ofx/state; false when neither is set.
 static bool state_path(char *out, size_t cap)
 {
-    const char *x = getenv("XDG_STATE_HOME"), *home = getenv("HOME");
-    int n;
-    if (x && x[0] == '/') n = snprintf(out, cap, "%s/ofx/state", x);
-    else if (home && home[0]) n = snprintf(out, cap, "%s/.local/state/ofx/state", home);
-    else return false;
-    return n >= 0 && (size_t)n < cap;
+    return xdg_dir(out, cap, "XDG_STATE_HOME", ".local/state", "ofx/state");
 }
 
 // The state in file path; the defaults for what it doesn't say (or no file at all).

@@ -46,8 +46,7 @@ static void bm_parse(Arena *a, Str text, Bookmarks *out)
         b->uri = (Str){ arena_cstr(a, uri), uri.len };
         b->label = (Str){ arena_cstr(a, label), label.len };
         b->path[0] = 0;
-        if (!str_starts_with(uri, S("file://")) || !percent_decode(str_cut(uri, 7, uri.len), b->path, sizeof b->path) || b->path[0] != '/')
-            b->path[0] = 0;
+        if (!file_uri_path(uri, b->path, sizeof b->path)) b->path[0] = 0;
         for (size_t n = strlen(b->path); n > 1 && b->path[n - 1] == '/';) b->path[--n] = 0;
     }
 }

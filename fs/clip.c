@@ -45,7 +45,7 @@ static Str clip_payload(Arena *a, const ClipFiles *c, ClipFormat f)
             continue;
         }
         char enc[PATH_MAX * 3];
-        if (!percent_encode(str_from_c(c->path[i]), enc, sizeof enc)) ok = false;
+        if (!percent_encode(str_from_c(c->path[i]), "/", enc, sizeof enc)) ok = false;
         else if (f == CLIP_FMT_GNOME) PUT("\nfile://%s", enc);
         else PUT("file://%s\r\n", enc);
     }
@@ -77,12 +77,8 @@ static bool clip_parse(Arena *a, Str text, bool gnome, ClipFiles *c)
             return false;
         }
         if (line.len == 0 || line.p[0] == '#') continue;
-        Str rest;
-        if (str_starts_with(line, S("file:///"))) rest = str_cut(line, 7, line.len);
-        else if (str_starts_with(line, S("file://localhost/"))) rest = str_cut(line, 16, line.len);
-        else continue;
         char path[PATH_MAX];
-        if (!percent_decode(rest, path, sizeof path) || c->n == CLIP_PATHS_MAX) continue;
+        if (!file_uri_path(line, path, sizeof path) || c->n == CLIP_PATHS_MAX) continue;
         c->path[c->n++] = arena_cstr(a, str_from_c(path));
     }
     return c->n > 0;

@@ -73,31 +73,6 @@ static bool clean_temp_name(const char *n)
     return strcmp(p, "png") == 0;
 }
 
-// A file:// URI back to its path: "file:///" then %XX escapes; false for another scheme, a host,
-// a NUL, or a bad escape.
-static bool clean_uri_path(const char *uri, char *out, size_t cap)
-{
-    if (strncmp(uri, "file:///", 8) != 0) return false;
-    size_t o = 0;
-    for (const char *p = uri + 7; *p; p++) {
-        int c = (unsigned char)*p;
-        if (c == '%') {
-            int v = 0;
-            for (int k = 1; k <= 2; k++) {
-                int h = p[k];
-                if (!h) return false;   // cut short: p[2] would be past the end
-                v = v * 16 + (h >= '0' && h <= '9' ? h - '0' : h >= 'a' && h <= 'f' ? h - 'a' + 10 : h >= 'A' && h <= 'F' ? h - 'A' + 10 : -256);
-            }
-            if (v <= 0) return false;
-            c = v, p += 2;
-        }
-        if (o + 1 >= cap) return false;
-        out[o++] = (char)c;
-    }
-    out[o] = 0;
-    return true;
-}
-
 // The mount list, parsed once a run: clean_real looks up every prefix of every preview's path, and
 // reading mountinfo's text for each (about 66,000 times on Michael's cache) made a run 4-5 times
 // slower (reviewer-2, 2026-10-25). far is thumb_local's verdict on the mount point itself: the same
@@ -120,14 +95,9 @@ static CleanMounts clean_mounts(Arena *a, Str mountinfo)
     CleanMounts ms = { arena_new(a, CleanMount, lines + 1), 0 };
     at = 0;
     for (Str line; next_line(mountinfo, &at, &line);) {
-        Str f = line;
-        for (int k = 0; k < 4; k++) {
-            isize sp = str_find(f, ' ');
-            f = sp < 0 ? STR_EMPTY : str_cut(f, sp + 1, f.len);
-        }
-        isize sp = str_find(f, ' ');
         char mp[PATH_MAX];
-        if (sp <= 0 || !octal_decode(str_cut(f, 0, sp), mp, sizeof mp)) continue;
+        Str type, src;
+        if (!mountinfo_line(line, mp, sizeof mp, &type, &src)) continue;
         ms.m[ms.n++] = (CleanMount){ arena_sprintf(a, "%s", mp), strlen(mp), !thumb_local(mountinfo, mp) };
     }
     return ms;
@@ -141,8 +111,7 @@ static bool clean_local(const CleanMounts *ms, const char *path)
     bool far = false;
     for (isize i = 0; i < ms->n; i++) {
         const CleanMount *m = &ms->m[i];
-        bool above = strcmp(m->mp, "/") == 0 || (strncmp(path, m->mp, m->n) == 0 && (path[m->n] == '/' || path[m->n] == 0));
-        if (above && (isize)m->n >= best) best = (isize)m->n, far = m->far;
+        if (path_within(path, m->mp) && (isize)m->n >= best) best = (isize)m->n, far = m->far;
     }
     return !far;
 }
@@ -233,7 +202,7 @@ static CleanRule clean_judge(Arena *a, const CleanMounts *ms, int dfd, const cha
         for (ssize_t got; n < st.st_size && (got = read(fd, p + n, (size_t)(st.st_size - n))) > 0;) n += got;
         char path[PATH_MAX], real[PATH_MAX];
         struct stat f;
-        if (n == st.st_size && png_meta((Str){ p, n }, m) && m->has_uri && clean_uri_path(m->uri, path, sizeof path) &&
+        if (n == st.st_size && png_meta((Str){ p, n }, m) && m->has_uri && file_uri_path(str_from_c(m->uri), path, sizeof path) &&
             clean_real(ms, path, real, sizeof real) && !clean_absent_drive(ms, real)) {
             // stat, not lstat: a link's preview carries its target's MTime and Size (kind_of follows
             // it), so the link itself would be stale on every run (reviewer-2, 2026-10-25).

@@ -31,42 +31,6 @@ typedef struct {
     int   n;
 } Places;
 
-// s with %XX decoded into out; false when it doesn't fit, or a % isn't followed by two hex digits.
-static bool percent_decode(Str s, char *out, size_t cap)
-{
-    size_t o = 0;
-    for (isize i = 0; i < s.len; i++) {
-        char c = s.p[i];
-        if (c == '%') {
-            int h = i + 2 < s.len ? hex_digit(s.p[i + 1]) : -1, l = i + 2 < s.len ? hex_digit(s.p[i + 2]) : -1;
-            if (h < 0 || l < 0) return false;
-            c = (char)(h * 16 + l), i += 2;
-        }
-        if (o + 1 >= cap) return false;
-        out[o++] = c;
-    }
-    out[o] = 0;
-    return true;
-}
-
-// mountinfo writes a space, tab, newline and backslash in a path as \040, \011, \012 and \134.
-static bool octal_decode(Str s, char *out, size_t cap)
-{
-    size_t o = 0;
-    for (isize i = 0; i < s.len; i++) {
-        char c = s.p[i];
-        if (c == '\\' && i + 3 < s.len && s.p[i + 1] >= '0' && s.p[i + 1] <= '3' && s.p[i + 2] >= '0' &&
-            s.p[i + 2] <= '7' && s.p[i + 3] >= '0' && s.p[i + 3] <= '7') {
-            c = (char)((s.p[i + 1] - '0') * 64 + (s.p[i + 2] - '0') * 8 + (s.p[i + 3] - '0'));
-            i += 3;
-        }
-        if (o + 1 >= cap) return false;
-        out[o++] = c;
-    }
-    out[o] = 0;
-    return true;
-}
-
 static bool place_is_drive(PlaceKind k)
 {
     return k == PL_ROOT || k == PL_MOUNT || k == PL_REMOVABLE;
@@ -112,11 +76,10 @@ static void places_add_bookmarks(Places *pl, Str text)
     isize at = 0;
     for (Str line; next_line(text, &at, &line);) {
         line = str_trim(line);
-        if (!str_starts_with(line, S("file://"))) continue;
         isize sp = str_find(line, ' ');
         Str uri = sp < 0 ? line : str_cut(line, 0, sp), label = sp < 0 ? STR_EMPTY : str_trim(str_cut(line, sp + 1, line.len));
         char path[PATH_MAX];
-        if (!percent_decode(str_cut(uri, 7, uri.len), path, sizeof path) || path[0] != '/') continue;
+        if (!file_uri_path(uri, path, sizeof path)) continue;
         for (size_t n = strlen(path); n > 1 && path[n - 1] == '/';) path[--n] = 0;
         places_add(pl, PL_BOOKMARK, path, label);
     }
@@ -126,40 +89,21 @@ static void places_add_bookmarks(Places *pl, Str text)
 // can't mount a USB stick, nor write under /run/media). gui/ sets it from OFX_TEST_MEDIA.
 static char places_test_media[PATH_MAX];
 
-static bool under(const char *path, const char *dir)
-{
-    size_t n = strlen(dir);
-    return strncmp(path, dir, n) == 0 && path[n] == '/' && path[n + 1];
-}
 
 // mountinfo's fifth field is the mount point: `/`, and anything under /mnt, /media or /run/media.
 static void places_add_mounts(Places *pl, Str text)
 {
     isize at = 0;
     for (Str line; next_line(text, &at, &line);) {
-        Str f = line;
-        for (int k = 0; k < 4; k++) {
-            isize sp = str_find(f, ' ');
-            f = sp < 0 ? STR_EMPTY : str_cut(f, sp + 1, f.len);
-        }
-        isize sp = str_find(f, ' ');
         char mp[PATH_MAX];
-        if (sp <= 0 || !octal_decode(str_cut(f, 0, sp), mp, sizeof mp)) continue;
+        Str type, src;
+        if (!mountinfo_line(line, mp, sizeof mp, &type, &src)) continue;
         int before = pl->n;
         if (strcmp(mp, "/") == 0) places_add(pl, PL_ROOT, mp, S("File System"));
-        else if (under(mp, "/run/media") || under(mp, "/media") || (places_test_media[0] && under(mp, places_test_media)))
+        else if (path_below(mp, "/run/media") || path_below(mp, "/media") || (places_test_media[0] && path_below(mp, places_test_media)))
             places_add(pl, PL_REMOVABLE, mp, STR_EMPTY);
-        else if (under(mp, "/mnt")) places_add(pl, PL_MOUNT, mp, STR_EMPTY);
-        // The source: the second field after the " - " that ends the optional fields.
-        isize dash = -1;
-        for (isize i = 0; dash < 0 && i + 3 <= line.len; i++)
-            if (memcmp(line.p + i, " - ", 3) == 0) dash = i;
-        if (pl->n == before || dash < 0) continue;
-        Str rest = str_cut(line, dash + 3, line.len);
-        isize s1 = str_find(rest, ' ');
-        Str src = s1 < 0 ? STR_EMPTY : str_cut(rest, s1 + 1, rest.len);
-        isize s2 = str_find(src, ' ');
-        if (s2 >= 0) src = str_cut(src, 0, s2);
+        else if (path_below(mp, "/mnt")) places_add(pl, PL_MOUNT, mp, STR_EMPTY);
+        if (pl->n == before) continue;
         Place *p = &pl->p[pl->n - 1];
         if (!octal_decode(src, p->dev, sizeof p->dev)) p->dev[0] = 0;
     }
@@ -217,9 +161,7 @@ static void places_load(Arena *scratch, Places *pl, const char *bookmarks, const
 // $XDG_CONFIG_HOME/gtk-3.0/bookmarks, ~/.config by default; into buf.
 static const char *bookmarks_path(char *buf, size_t cap)
 {
-    const char *cfg = getenv("XDG_CONFIG_HOME"), *home = getenv("HOME");
-    if (cfg && cfg[0]) snprintf(buf, cap, "%s/gtk-3.0/bookmarks", cfg);
-    else snprintf(buf, cap, "%s/.config/gtk-3.0/bookmarks", home ? home : "");
+    if (!xdg_dir(buf, cap, "XDG_CONFIG_HOME", ".config", "gtk-3.0/bookmarks")) buf[0] = 0;
     return buf;
 }
 
@@ -234,8 +176,7 @@ static int places_current(const Places *pl, const char *path)
         if (pl->p[i].kind == PL_HEAD || pl->p[i].kind == PL_TRASH) continue;
         const char *p = pl->p[i].path;
         size_t n = strlen(p);
-        bool in = strcmp(p, "/") == 0 || (strncmp(path, p, n) == 0 && (path[n] == 0 || path[n] == '/'));
-        if (in && (best < 0 || n > best_n)) best = i, best_n = n;
+        if (path_within(path, p) && (best < 0 || n > best_n)) best = i, best_n = n;
     }
     return best;
 }

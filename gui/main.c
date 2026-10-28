@@ -353,13 +353,6 @@ void __wrap_glfwDefaultWindowHints(void)
 
 // ---- the folder -----------------------------------------------------------------------------
 
-// dir/name into out; false when it would not fit (a cut path could name another file).
-static bool join(char *out, size_t cap, const char *dir, Str name)
-{
-    int n = snprintf(out, cap, "%s%s%.*s", dir, strcmp(dir, "/") == 0 ? "" : "/", STR_ARG(name));
-    return n >= 0 && (size_t)n < cap;
-}
-
 // The cursor's entry as listing_find finds it: its name, in the search view its folder and name (F9).
 static Str sel_name(void)
 {
@@ -378,10 +371,10 @@ static bool entry_path(isize i, char *out, size_t cap)
     }
     if (app.ui.in_search) {
         char dir[PATH_MAX];
-        if (e->dir.len && !join(dir, sizeof dir, app.search_root, e->dir)) return false;
-        return join(out, cap, e->dir.len ? dir : app.search_root, e->name);
+        if (e->dir.len && !path_put(dir, sizeof dir, app.search_root, e->dir)) return false;
+        return path_put(out, cap, e->dir.len ? dir : app.search_root, e->name);
     }
-    return join(out, cap, app.cwd, e->name);
+    return path_put(out, cap, app.cwd, e->name);
 }
 
 static void tree_refresh(bool follow, int fallback);
@@ -1007,7 +1000,7 @@ static void copy_here(const ClipFiles *c, const char *into)
         } else {
             snprintf(name, sizeof name, "%.*s", STR_ARG(base));
         }
-        if (!join(dst, sizeof dst, dest, str_from_c(name))) continue;
+        if (!path_put(dst, sizeof dst, dest, str_from_c(name))) continue;
         r->item[n++] = (JobItem){ .src = arena_cstr(&r->arena, str_from_c(src)), .dst = arena_cstr(&r->arena, str_from_c(dst)) };
     }
     if (n == 0) {
@@ -1060,7 +1053,7 @@ static void make_link(void)
         Str d = path_dir(str_from_c(paths[i]));   // (beside it: a search result's own folder, F9)
         char in[PATH_MAX];
         snprintf(in, sizeof in, "%.*s", STR_ARG(d.len ? d : S("/")));
-        if (!op_symlink(in, paths[i], str_from_c(name), one, sizeof one, &err) || !join(p, sizeof p, in, str_from_c(one))) continue;
+        if (!op_symlink(in, paths[i], str_from_c(name), one, sizeof one, &err) || !path_put(p, sizeof p, in, str_from_c(one))) continue;
         if (done++ == 0) undo_gen++, undo_begin(&undo, UNDO_LINK);
         undo_add(&undo, paths[i], p, NULL);
         snprintf(made, sizeof made, "%s", one);
@@ -1114,8 +1107,8 @@ static void rename_commit(void)
     if (str_eq(to, from)) { ui_edit_close(&app.ui); return; }
     const char *in = app.edit_dir;
     char was[PATH_MAX], will[PATH_MAX];
-    if (join(was, sizeof was, in, from) && jobs_refuse(was)) return;
-    if (join(will, sizeof will, in, to) && jobs_refuse(will)) return;
+    if (path_put(was, sizeof was, in, from) && jobs_refuse(was)) return;
+    if (path_put(will, sizeof will, in, to) && jobs_refuse(will)) return;
     Err err;
     if (!op_rename(in, from, to, &err)) { set_status(true, "%s", err.msg); return; }
     // The cursor stays on it: by its new name, in a search its folder's too, where the result takes
@@ -1125,7 +1118,7 @@ static void rename_commit(void)
     if (app.ui.in_search) search_rename(key, to);
     if (rel.len) snprintf(keep, sizeof keep, "%.*s/%.*s", STR_ARG(rel), STR_ARG(to));
     else snprintf(keep, sizeof keep, "%.*s", STR_ARG(to));
-    if (join(a, sizeof a, in, from) && join(b, sizeof b, in, to)) {
+    if (path_put(a, sizeof a, in, from) && path_put(b, sizeof b, in, to)) {
         // A folder just made stays a "new folder" for undo, whatever its name now.
         undo_gen++;
         undo_begin(&undo, app.edit_new ? app.edit_new : UNDO_RENAME);
@@ -1142,7 +1135,7 @@ static void new_folder(void)
     char made[NAME_MAX + 1], p[PATH_MAX];
     Err err;
     if (!op_mkdir(app.cwd, S("New folder"), made, sizeof made, &err)) { set_status(true, "%s", err.msg); return; }
-    if (join(p, sizeof p, app.cwd, str_from_c(made))) undo_gen++, undo_begin(&undo, UNDO_MKDIR), undo_add(&undo, NULL, p, NULL);
+    if (path_put(p, sizeof p, app.cwd, str_from_c(made))) undo_gen++, undo_begin(&undo, UNDO_MKDIR), undo_add(&undo, NULL, p, NULL);
     ui_mark_clear(&app.ui);
     go_to(app.cwd, str_from_c(made), app.ui.list.sel);
     ui_edit_open_all(&app.ui, str_from_c(made));
@@ -1156,7 +1149,7 @@ static void new_file(void)
     char made[NAME_MAX + 1], p[PATH_MAX];
     Err err;
     if (!op_mkfile(app.cwd, S("New file"), made, sizeof made, &err)) { set_status(true, "%s", err.msg); return; }
-    if (join(p, sizeof p, app.cwd, str_from_c(made))) undo_gen++, undo_begin(&undo, UNDO_MKFILE), undo_add(&undo, NULL, p, NULL);
+    if (path_put(p, sizeof p, app.cwd, str_from_c(made))) undo_gen++, undo_begin(&undo, UNDO_MKFILE), undo_add(&undo, NULL, p, NULL);
     ui_mark_clear(&app.ui);
     go_to(app.cwd, str_from_c(made), app.ui.list.sel);
     ui_edit_open_all(&app.ui, str_from_c(made));
@@ -3000,9 +2993,7 @@ static const char *props_drive(const char *path)
     for (int i = 0; i < app.places.n; i++) {
         const Place *p = &app.places.p[i];
         size_t n = strlen(p->path);
-        if (!place_is_drive(p->kind) || !n) continue;
-        bool above = strcmp(p->path, "/") == 0 || (strncmp(path, p->path, n) == 0 && (path[n] == '/' || path[n] == 0));
-        if (above && n >= bn) best = i, bn = n;
+        if (place_is_drive(p->kind) && n && path_within(path, p->path) && n >= bn) best = i, bn = n;
     }
     return best >= 0 ? app.places.p[best].label : "-";
 }

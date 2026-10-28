@@ -34,15 +34,8 @@ static const Theme THEME_DEFAULT = {
 // The theme directory, into buf.
 static const char *theme_dir(char *buf, size_t cap)
 {
-    const char *state = getenv("XDG_STATE_HOME"), *home = getenv("HOME");
-    if (state && state[0]) snprintf(buf, cap, "%s/omarchy/current/theme", state);
-    else snprintf(buf, cap, "%s/.local/state/omarchy/current/theme", home ? home : "");
+    if (!xdg_dir(buf, cap, "XDG_STATE_HOME", ".local/state", "omarchy/current/theme")) buf[0] = 0;
     return buf;
-}
-
-static int hex_digit(char c)
-{
-    return c >= '0' && c <= '9' ? c - '0' : c >= 'a' && c <= 'f' ? c - 'a' + 10 : c >= 'A' && c <= 'F' ? c - 'A' + 10 : -1;
 }
 
 // "#rrggbb", quoted or not.
@@ -136,14 +129,14 @@ static void user_dirs_load(Arena *scratch, UserDirs *u)
         { "XDG_PICTURES_DIR", "folder-pictures" },   { "XDG_VIDEOS_DIR", "folder-videos" },
     };
     *u = (UserDirs){ 0 };
-    const char *home = getenv("HOME"), *cfg = getenv("XDG_CONFIG_HOME");
+    const char *home = getenv("HOME");
     if (!home || !home[0]) return;
     snprintf(u->d[0].path, sizeof u->d[0].path, "%s", home);
     u->d[0].icon = S("user-home");
     u->n = 1;
     ArenaMark mark = arena_mark(scratch);
-    Str text = read_file(scratch, cfg && cfg[0] ? arena_sprintf(scratch, "%s/user-dirs.dirs", cfg)
-                                                : arena_sprintf(scratch, "%s/.config/user-dirs.dirs", home));
+    char dirs[PATH_MAX];
+    Str text = xdg_dir(dirs, sizeof dirs, "XDG_CONFIG_HOME", ".config", "user-dirs.dirs") ? read_file(scratch, dirs) : STR_EMPTY;
     isize at = 0;
     for (Str line; next_line(text, &at, &line);) {
         isize eq = str_find(line, '=');
