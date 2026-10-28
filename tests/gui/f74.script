@@ -20,13 +20,13 @@ expect menu=- marked=4
 point-ui menu-title 1
 click-here
 expect menu=Edit menuat=-
-point-ui menu-item 8
+point-menu invert
 click-here
 expect menu=- marked=0
 # Select Items Matching… by the pointer: the bar as "Select"; Enter selects every match and closes it
 point-ui menu-title 1
 click-here
-point-ui menu-item 7
+point-menu select-match
 click-here
 expect menu=- finding=1 findkeys=1 findselect=1
 pointer-off
@@ -104,7 +104,7 @@ key end
 expect sel=c.txt
 point-ui menu-title 1
 click-here
-point-ui menu-item 10
+point-menu duplicate
 click-here
 wait-for 2000 n=5 undo=copy
 sh test -f "$OFX_DIR/c (copy).txt" && [ "$(cat "$OFX_DIR/c (copy).txt")" = c ]
@@ -112,7 +112,7 @@ key end
 expect sel=c.txt
 point-ui menu-title 1
 click-here
-point-ui menu-item 10
+point-menu duplicate
 click-here
 wait-for 2000 n=6
 sh test -f "$OFX_DIR/c (copy 2).txt"
@@ -127,7 +127,7 @@ key space
 expect marked=2
 point-ui menu-title 1
 click-here
-point-ui menu-item 10
+point-menu duplicate
 click-here
 wait-for 2000 n=6
 sh test -f "$OFX_DIR/a (copy).txt" && test -f "$OFX_DIR/b (copy).txt"
@@ -146,75 +146,75 @@ key esc
 # Show Hidden Files (checked once on)
 point-ui menu-title 2
 click-here
-point-ui menu-item 6
+point-menu hidden
 click-here
 wait-for 2000 shown=1 n=5
 point-ui menu-title 2
 click-here
 expect menumarked=side-places,hidden,perms-cols,colors,show-menu,sort-name,view-list
-point-ui menu-item 6
+point-menu hidden
 click-here
 wait-for 2000 shown=0 n=4
 # Sort by Size, then Reverse Order; Sort by Name keeps the order reversed
 point-ui menu-title 2
 click-here
-point-ui menu-item 13
+point-menu sort-size
 click-here
 expect sort=size rev=0
 point-ui menu-title 2
 click-here
-point-ui menu-item 15
+point-menu sort-reverse
 click-here
 expect sort=size rev=1
 point-ui menu-title 2
 click-here
-point-ui menu-item 12
+point-menu sort-name
 click-here
 expect sort=name rev=1
 point-ui menu-title 2
 click-here
 expect menumarked=side-places,perms-cols,colors,show-menu,sort-name,sort-reverse,view-list
-point-ui menu-item 15
+point-menu sort-reverse
 click-here
 expect rev=0
 # The sidebar's modes
 point-ui menu-title 2
 click-here
-point-ui menu-item 3
+point-menu side-tree
 click-here
 expect sidemode=tree
 point-ui menu-title 2
 click-here
-point-ui menu-item 4
+point-menu side-none
 click-here
 expect sidemode=hidden
 point-ui menu-title 2
 click-here
-point-ui menu-item 2
+point-menu side-places
 click-here
 expect sidemode=places
 # Icons; then the zoom: Normal Size greyed at 48 px, Zoom In makes it 64, Normal Size back
 point-ui menu-title 2
 click-here
-point-ui menu-item 22
+point-menu view-icons
 click-here
 expect view=icons
 # (the list's Show Permissions, Show Group and Show Colors greyed among icons, Michael 2026-10-27)
 point-ui menu-title 2
 click-here
 expect menumarked=side-places,perms-cols,colors,show-menu,sort-name,view-icons menugrey=perms-cols,group-col,colors,zoom-reset
-point-ui menu-item 17
+point-menu zoom-in
 click-here
 expect zoom=64
 point-ui menu-title 2
 click-here
 expect menugrey=perms-cols,group-col,colors
-point-ui menu-item 19
+point-menu zoom-reset
 click-here
 expect zoom=48
 point-ui menu-title 2
 click-here
-point-ui menu-item 21
+point-menu view-list
 click-here
 expect view=list
 pointer-off
@@ -238,7 +238,7 @@ wait-for 2000 n=4 sel=c.txt
 point-ui menu-title 3
 click-here
 expect menugrey=back
-point-ui menu-item 2
+point-menu forward
 click-here
 wait-for 2000 n=1 sel=tree
 key alt-left
@@ -246,7 +246,7 @@ wait-for 2000 n=4
 key end
 point-ui menu-title 3
 click-here
-point-ui menu-item 4
+point-menu home
 click-here
 wait-for 2000 n=1 sel=tree
 key alt-left
@@ -254,7 +254,7 @@ wait-for 2000 n=4
 # Trash: the trash view; there Edit hides Move to Trash and shows Restore, Go greys the terminal
 point-ui menu-title 3
 click-here
-point-ui menu-item 5
+point-menu trash-view
 click-here
 wait-for 2000 trash=1
 pointer-off

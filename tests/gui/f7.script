@@ -83,7 +83,7 @@ shot pointer-menu.png
 click-here
 expect menu=-
 click-here
-point-ui menu-item 1
+point-menu new-window
 hover-here
 expect menuat=new-window
 # A press anywhere else only closes it: the row isn't selected.
@@ -109,7 +109,7 @@ key enter
 expect sel=a.txt
 point-ui menu-title 0
 click-here
-point-ui menu-item 5
+point-menu open
 click-here
 expect menu=-
 pointer-off
@@ -140,7 +140,7 @@ key f10
 keys down down
 expect menuat=open
 # A greyed entry: not marked by the pointer, and a press on it leaves the menu open.
-point-ui menu-item 2
+point-menu new-folder
 hover-here
 expect menuat=open
 click-here

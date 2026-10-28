@@ -726,6 +726,20 @@ terminal, a bookmark) says "Search results can't do that yet" until step 2; Copy
 With and Properties work, through `entry_path`. Untested: the stat when readdir gives no type
 (DT_UNKNOWN), which tmpfs, ext4 and btrfs never do.
 
+**Step 2 built (2026-10-28): working with results.** What changes files acts in each result's own
+folder: rename (`edit_opened` keeps the folder, `edit_dir`; the result takes the new name in place,
+`search_rename`), Make Link (beside each target), Duplicate (`copy_here(…, NULL)`: each beside
+itself, one job). Trash and Delete are allowed. After any change `reload` prunes the results whose
+file is gone (`search_prune`, an lstat each, marks kept beside the walk's array, which only the main
+thread touches below the published count), so an undo brings one back; the walk isn't rerun.
+Open Containing Folder (`UM_CONTAINING`, Ctrl+Enter, a result's menu, the search view only) goes
+to its folder with it selected. Search in Folder… (`UM_SEARCH_IN`) in an entry's menu on a folder
+(not in the trash) and in the folder menu (not on Trash). A terminal and a new window open on the
+folder searched; Paste, New Folder and Add Bookmark say a search isn't a folder. The scripts pick
+menu entries by word now (`point-menu`), so a new entry doesn't renumber them. Calls made: an
+undone rename leaves the result's new name gone until Ctrl+R, rather than tracking it back; a new
+link or copy isn't added to the results.
+
 **Steps:** 1. the view by name (a walk thread as Properties' `du_walk`, stopped by the next
 search; the tab, bar, toggles, results with folders, skips, limit, status); 2. working with
 results (actions on entries in other folders, Open Containing Folder, Ctrl+R, greying, Search in

@@ -81,6 +81,7 @@ typedef enum {
     UK_PERMS_COLS, // Ctrl+P: View → Show Permissions (Michael, 2026-10-27: no printing in ofx)
     UK_GROUP_COL,  // Ctrl+G: View → Show Group (2026-10-27)
     UK_SEARCH,     // Ctrl+Shift+F: a search below the folder shown, in a tab of its own (F9)
+    UK_CONTAINING, // Ctrl+Enter: in the search view, the cursor's entry's folder, it selected (F9)
 } UiKey;
 
 // The top bar's buttons (F4).
@@ -217,8 +218,9 @@ typedef enum {
     UA_PERMS_COLS,  // the list's Owner and Permissions shown or not (Ui.perms_cols): gui/ remembers it
     UA_GROUP_COL,   // the list's Group beside them shown or not (Ui.group_col): gui/ remembers it
     UA_FOLDER_DO,   // index: a UiMenuItem of the folder menu, for the folder it opened on (Ui.ctx_side or ctx_crumb, F8)
-    UA_SEARCH,      // a search below the folder shown, in a new tab (F9)
-    UA_NOT_IN_SEARCH,   // something the search view's results can't do yet (F9 step 1; gui/ says so)
+    UA_SEARCH,      // a search below the folder shown (all: below the folder entry index), in a new tab (F9)
+    UA_NOT_IN_SEARCH,   // something the search view can't do: paste, a new folder, a bookmark of it (F9; gui/ says so)
+    UA_CONTAINING,  // index: a search result: its folder, it selected (F9)
 } UiActionKind;
 // A right-click menu's entry on a folder of the files (F8) acts on that folder, not the folder
 // shown: UA_NEW_WINDOW, UA_TERMINAL, UA_PASTE and UA_ADD_BOOKMARK with `all` set; index is the entry.
@@ -248,6 +250,7 @@ typedef enum {
     UM_ADD_BOOKMARK, UM_EDIT_BOOKMARKS, UM_BM_0, UM_BM_1, UM_BM_2, UM_BM_3, UM_BM_4, UM_BM_5, UM_BM_6, UM_BM_7, UM_BM_MORE,
     UM_SHORTCUTS, UM_ABOUT,
     UM_OPEN_TAB, UM_EMPTY_TRASH, UM_HERE_PROPS, UM_OPEN_WINDOW, UM_PASTE_INTO, UM_TERMINAL_IN, UM_FOLLOW, UM_BOOKMARK_IT,
+    UM_CONTAINING, UM_SEARCH_IN,
     UM_OPEN_IT, UM_CUT_IT, UM_COPY_IT, UM_BM_RENAME_IT, UM_BM_UP_IT, UM_BM_DOWN_IT, UM_BM_REMOVE_IT, UM_BM_EDIT_IT, UM_EJECT_IT,
     UM_EMPTY_IT, UM_PROPS_IT, UM_TAB_LEFT, UM_TAB_RIGHT, UM_TAB_OTHERS,
     UM_ITEMS
@@ -331,6 +334,9 @@ static const struct { const char *label, *key, *word; UiEvent ev; char mark; } U
     [UM_PASTE_INTO] = { "Paste Into Folder", "", "paste-into" },
     [UM_TERMINAL_IN] = { "Open in Terminal", "", "terminal-in" },
     [UM_FOLLOW] = { "Follow Link", "", "follow" },
+    // the search view's (F9): a result's folder, it selected; and a folder searched below
+    [UM_CONTAINING] = { "Open Containing Folder", "Ctrl+Enter", "containing", { UK_CONTAINING, 0 } },
+    [UM_SEARCH_IN] = { "Search in Folder\xE2\x80\xA6", "", "search-in" },
     [UM_BOOKMARK_IT] = { "Add Bookmark", "", "bookmark-it" },
     // and on a folder elsewhere (a sidebar row, a path button): that folder; a bookmark's own, as
     // Edit Bookmarks has them; a drive's eject; the trash's emptying
@@ -380,13 +386,13 @@ static const UiMenuItem UI_MENU_HELP[] = { UM_SHORTCUTS, UM_SEP, UM_ABOUT };
 // The right-click menus (F8, docs/plan.md "F8 design"): an entry of the files (the marks, or the
 // cursor's), and the files' empty space (the folder shown).
 static const UiMenuItem UI_MENU_CTX_ENTRY[] = {
-    UM_OPEN, UM_OPEN_TAB, UM_OPEN_WINDOW, UM_OPEN_WITH, UM_SEP, UM_CUT, UM_COPY, UM_PASTE_INTO, UM_DUPLICATE, UM_SEP,
-    UM_MAKE_LINK, UM_RENAME, UM_SEP, UM_TERMINAL_IN, UM_FOLLOW, UM_BOOKMARK_IT, UM_SEP, UM_TRASH, UM_RESTORE, UM_DELETE, UM_SEP,
+    UM_OPEN, UM_CONTAINING, UM_OPEN_TAB, UM_OPEN_WINDOW, UM_OPEN_WITH, UM_SEP, UM_CUT, UM_COPY, UM_PASTE_INTO, UM_DUPLICATE, UM_SEP,
+    UM_MAKE_LINK, UM_RENAME, UM_SEP, UM_TERMINAL_IN, UM_SEARCH_IN, UM_FOLLOW, UM_BOOKMARK_IT, UM_SEP, UM_TRASH, UM_RESTORE, UM_DELETE, UM_SEP,
     UM_PROPERTIES,
 };
 // A folder elsewhere: a tree row, a path button, a place (Trash, a bookmark, a drive have their own).
 static const UiMenuItem UI_MENU_CTX_FOLDER[] = {
-    UM_OPEN_IT, UM_OPEN_TAB, UM_OPEN_WINDOW, UM_TERMINAL_IN, UM_SEP, UM_CUT_IT, UM_COPY_IT, UM_PASTE_INTO, UM_SEP, UM_BOOKMARK_IT,
+    UM_OPEN_IT, UM_OPEN_TAB, UM_OPEN_WINDOW, UM_TERMINAL_IN, UM_SEARCH_IN, UM_SEP, UM_CUT_IT, UM_COPY_IT, UM_PASTE_INTO, UM_SEP, UM_BOOKMARK_IT,
     UM_BM_RENAME_IT, UM_BM_UP_IT, UM_BM_DOWN_IT, UM_BM_REMOVE_IT, UM_BM_EDIT_IT, UM_SEP, UM_EJECT_IT, UM_EMPTY_IT, UM_SEP, UM_PROPS_IT,
 };
 // A tab (the current one: a right press on another shows it first).
@@ -503,6 +509,7 @@ static const struct { UiKeySection sec; const char *action, *key, *key2; } UI_KE
     { KS_FIND, "Whole words", "Alt+W", "" },
     { KS_FIND, "A regular expression", "Alt+R", "" },
     { KS_SEARCH, "Search\xE2\x80\xA6", "Ctrl+Shift+F", "the magnifier" },
+    { KS_SEARCH, "Open Containing Folder", "Ctrl+Enter", "" },
     { KS_SEARCH, "The keys to the results", "Enter", "Esc, Down" },
     { KS_SEARCH, "Back to the search field", "Ctrl+Shift+F", "a click in it" },
     { KS_SEARCH, "A wildcard over the whole name", "*, ?", "*.ts" },
@@ -1548,7 +1555,8 @@ static bool ui_menu_shown(const Ui *u, UiMenuItem it)
     // rename for one entry, the new entries outside the trash view (Empty Trash in it).
     if (u->menu >= UI_MENUS && it == UM_OPEN_TAB) return u->ctx_dir && !u->in_trash;
     if (u->menu >= UI_MENUS && it == UM_RENAME) return u->marked <= 1;
-    if (it == UM_OPEN_WINDOW || it == UM_PASTE_INTO || it == UM_TERMINAL_IN) return u->ctx_dir && !u->in_trash;
+    if (it == UM_OPEN_WINDOW || it == UM_PASTE_INTO || it == UM_TERMINAL_IN || it == UM_SEARCH_IN) return u->ctx_dir && !u->in_trash;
+    if (it == UM_CONTAINING) return u->in_search;
     if (it == UM_BOOKMARK_IT) return u->ctx_dir && !u->in_trash && !u->sel_bm;
     if (it == UM_FOLLOW) return u->ctx_one && u->sel_link && !u->in_trash;
     if (u->menu >= UI_MENUS && (it == UM_NEW_FOLDER || it == UM_NEW_FILE)) return !u->in_trash;
@@ -1562,7 +1570,7 @@ static bool ui_folder_shown(const Ui *u, UiMenuItem it)
 {
     switch (it) {
     case UM_SEP: case UM_OPEN_IT: case UM_OPEN_TAB: return true;
-    case UM_OPEN_WINDOW: case UM_TERMINAL_IN: case UM_PASTE_INTO: case UM_PROPS_IT: return !u->ctx_trash;
+    case UM_OPEN_WINDOW: case UM_TERMINAL_IN: case UM_SEARCH_IN: case UM_PASTE_INTO: case UM_PROPS_IT: return !u->ctx_trash;
     case UM_CUT_IT: case UM_COPY_IT: return !u->ctx_trash && !u->ctx_place;
     case UM_BOOKMARK_IT: return !u->ctx_trash && !u->ctx_bmed;
     case UM_BM_RENAME_IT: case UM_BM_UP_IT: case UM_BM_DOWN_IT: case UM_BM_REMOVE_IT: case UM_BM_EDIT_IT: return u->ctx_bmk >= 0;
@@ -1596,7 +1604,7 @@ static bool ui_menu_enabled(const Ui *u, UiMenuItem it)
     }
     switch (it) {
     case UM_NEW_TAB: case UM_CLOSE_ALL: case UM_CLOSE: case UM_PROPERTIES: return true;
-    case UM_NEW_WINDOW: return !u->in_trash && !u->in_search;   // ofx starts on a folder, not on the trash or search view
+    case UM_NEW_WINDOW: return !u->in_trash;   // ofx starts on a folder, not on the trash view (from a search: the folder searched)
     case UM_NEW_FOLDER: case UM_NEW_FILE: return !u->in_trash && u->can_write;
     case UM_OPEN: return files;
     case UM_OPEN_WITH: return files && !u->in_trash;
@@ -1604,8 +1612,8 @@ static bool ui_menu_enabled(const Ui *u, UiMenuItem it)
     case UM_CUT: case UM_COPY: return here && !u->in_trash;
     case UM_PASTE: return u->can_paste && u->can_write;
     case UM_SELECT_ALL: case UM_SELECT_MATCH: case UM_INVERT: return files;
-    case UM_RENAME: case UM_DUPLICATE: case UM_MAKE_LINK: return here && !u->in_trash && u->can_write;
-    case UM_TRASH: case UM_DELETE: return here && !u->in_search;   // (the search view's: F9 step 2)
+    case UM_RENAME: case UM_DUPLICATE: case UM_MAKE_LINK: return here && !u->in_trash && (u->can_write || u->in_search);   // (a result's own folder: F9)
+    case UM_TRASH: case UM_DELETE: return here;
     case UM_RESTORE: return here;
     case UM_RELOAD: case UM_SIDE_PLACES: case UM_SIDE_TREE: case UM_SIDE_NONE: case UM_HIDDEN: case UM_SHOW_MENU: return true;
     // The list's own (Michael, 2026-10-27): the icon view has no columns or colours; a group without
@@ -1622,14 +1630,15 @@ static bool ui_menu_enabled(const Ui *u, UiMenuItem it)
     case UM_FORWARD: return u->can_forward;
     case UM_HOME: case UM_TRASH_VIEW: case UM_FIND: case UM_LOCATION: return true;
     case UM_SEARCH: return !u->in_trash;
-    case UM_TERMINAL: return !u->in_trash && !u->in_search;
+    case UM_TERMINAL: return !u->in_trash;
     case UM_ADD_BOOKMARK: return u->can_bookmark && !u->in_trash && !u->in_search;
     case UM_BM_0: case UM_BM_1: case UM_BM_2: case UM_BM_3: case UM_BM_4: case UM_BM_5: case UM_BM_6: case UM_BM_7: return true;
     case UM_EDIT_BOOKMARKS: case UM_BM_MORE: case UM_SHORTCUTS: case UM_ABOUT: return true;
     case UM_TAB_LEFT: return u->tab_at > 0;
     case UM_TAB_RIGHT: return u->tab_at < u->tab_n - 1;
     case UM_TAB_OTHERS: return u->tab_n > 1;
-    case UM_OPEN_TAB: case UM_EMPTY_TRASH: case UM_OPEN_WINDOW: case UM_TERMINAL_IN: case UM_FOLLOW: case UM_BOOKMARK_IT: return files;
+    case UM_OPEN_TAB: case UM_EMPTY_TRASH: case UM_OPEN_WINDOW: case UM_TERMINAL_IN: case UM_SEARCH_IN: case UM_FOLLOW: case UM_BOOKMARK_IT: return files;
+    case UM_CONTAINING: return true;   // (on a result's menu only)
     case UM_PASTE_INTO: return files && u->can_paste && u->ctx_w;
     case UM_HERE_PROPS: return !u->in_search;   // (a search is no folder)
     default: return false;
@@ -2095,6 +2104,7 @@ static UiAction ui_menu_pick(Ui *u, UiMenuItem it)
     case UM_TERMINAL_IN: return (UiAction){ UA_TERMINAL, u->list.sel, true };
     case UM_BOOKMARK_IT: return (UiAction){ UA_ADD_BOOKMARK, u->list.sel, true };
     case UM_FOLLOW: return (UiAction){ UA_FOLLOW, u->list.sel, false };
+    case UM_SEARCH_IN: return (UiAction){ UA_SEARCH, u->list.sel, true };   // (all: below the folder entry index)
     default: return (UiAction){ UA_NONE, 0, false };
     }
 }
@@ -2639,7 +2649,7 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
             case 'G': key = UK_END; break;
             case '/': key = UK_FIND; break;
             case '.': key = UK_HIDDEN; break;
-            case 't': return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : u->in_search ? UA_NOT_IN_SEARCH : UA_TERMINAL, 0, false };
+            case 't': return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : UA_TERMINAL, 0, false };
             case 'r':
                 if (u->in_trash && !u->side_focus && l->n > 0) return (UiAction){ UA_RESTORE, 0, false };
                 continue;
@@ -2750,21 +2760,18 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         case UK_SHORTCUTS: return ui_keys_open(u);
         case UK_F2:
             if (l->n > 0 && !u->side_focus && u->in_trash) return (UiAction){ UA_NOT_IN_TRASH, 0, false };
-            if (l->n > 0 && !u->side_focus && u->in_search) return (UiAction){ UA_NOT_IN_SEARCH, 0, false };
             if (l->n > 0 && !u->side_focus) ui_edit_rename(u, names.at(names.ctx, l->sel), names.dir && names.dir(names.ctx, l->sel));
             break;
         case UK_DELETE:
             // In the trash view Delete is for good, asked first.
-            if (l->n > 0 && !u->side_focus && u->in_search) return (UiAction){ UA_NOT_IN_SEARCH, 0, false };
             if (l->n > 0 && !u->side_focus && u->in_trash) u->confirming = true, u->confirm_n = u->marked ? u->marked : 1;
             else if (l->n > 0 && !u->side_focus) return (UiAction){ UA_TRASH, 0, false };
             break;
         case UK_SHIFT_DELETE:
-            if (l->n > 0 && !u->side_focus && u->in_search) return (UiAction){ UA_NOT_IN_SEARCH, 0, false };
             if (l->n > 0 && !u->side_focus) u->confirming = true, u->confirm_n = u->marked ? u->marked : 1;
             break;
         case UK_COPY: if (l->n > 0 && !u->side_focus) return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : UA_COPY, 0, false }; break;
-        case UK_MAKE_LINK: if (l->n > 0 && !u->side_focus) return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : u->in_search ? UA_NOT_IN_SEARCH : UA_MAKE_LINK, 0, false }; break;
+        case UK_MAKE_LINK: if (l->n > 0 && !u->side_focus) return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : UA_MAKE_LINK, 0, false }; break;
         case UK_CUT: if (l->n > 0 && !u->side_focus) return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : UA_CUT, 0, false }; break;
         case UK_PASTE: return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : u->in_search ? UA_NOT_IN_SEARCH : UA_PASTE, 0, false };
         case UK_UNDO: return (UiAction){ UA_UNDO, 0, false };
@@ -2777,10 +2784,13 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
             break;
         case UK_PARENT: return (UiAction){ UA_PARENT, 0, false };
         case UK_TAB_NEW: return (UiAction){ UA_TAB_NEW, 0, false };
-        case UK_NEW_WINDOW: return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : u->in_search ? UA_NOT_IN_SEARCH : UA_NEW_WINDOW, 0, false };
+        case UK_NEW_WINDOW: return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : UA_NEW_WINDOW, 0, false };
         case UK_PROPERTIES: return ui_props_open(u);
-        case UK_TERMINAL: return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : u->in_search ? UA_NOT_IN_SEARCH : UA_TERMINAL, 0, false };
+        case UK_TERMINAL: return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : UA_TERMINAL, 0, false };
         case UK_SEARCH: return ui_search_open(u);
+        case UK_CONTAINING:   // (the search view's: elsewhere every entry is in the folder shown)
+            if (u->in_search && !u->side_focus && l->n > 0) return (UiAction){ UA_CONTAINING, l->sel, false };
+            break;
         case UK_TAB_CLOSE: return (UiAction){ UA_TAB_CLOSE, -1, false };
         case UK_TAB_NEXT: return (UiAction){ UA_TAB_STEP, 1, false };
         case UK_TAB_PREV: return (UiAction){ UA_TAB_STEP, -1, false };

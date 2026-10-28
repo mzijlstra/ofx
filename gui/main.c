@@ -200,6 +200,7 @@ static struct {
     // The edit line's entry: its name when the line opened, and whether it is a folder just made
     // or file (Esc keeps "New folder"; the undo removes it whatever it is called by then).
     char      edit_from[NAME_MAX + 1];
+    char      edit_dir[PATH_MAX];   // the folder it is in: the one shown, or a search result's (F9)
     UndoKind  edit_new;     // UNDO_MKDIR, UNDO_MKFILE (F7.1) for one just made, else UNDO_NONE
     bool      clip_told;    // "the clipboard stays inside ofx" said once
     UiCrumbs  crumbs;       // the top bar's path buttons
@@ -684,6 +685,7 @@ static void go_up_from(const char *from);
 static void reload(void)
 {
     app.reloads++;
+    if (app.ui.in_search) search_prune(app.search_root);   // (what went since: trashed, deleted, moved, F9)
     char keep[PATH_MAX] = "";
     snprintf(keep, sizeof keep, "%.*s", STR_ARG(sel_name()));
     if (go_to(app.cwd, str_from_c(keep), app.ui.list.sel)) return;
@@ -973,7 +975,7 @@ static bool same_dir(const char *a, const char *b)
 // c's files copied (or, cut, moved) into the folder dest, as one job: there already, a copy gets a
 // free name ("a (copy).txt", "a (copy 2).txt"), and a cut one stays. Paste (into this folder, or
 // into one of its folders, F8), and Duplicate (F7.4).
-static void copy_here(const ClipFiles *c, const char *dest)
+static void copy_here(const ClipFiles *c, const char *into)
 {
     JobRec *r = job_new();
     if (!r) return;
@@ -983,6 +985,7 @@ static void copy_here(const ClipFiles *c, const char *dest)
         Str base = path_base(str_from_c(src)), sd = path_dir(str_from_c(src));
         char sdir[PATH_MAX], name[NAME_MAX + 1], dst[PATH_MAX];
         snprintf(sdir, sizeof sdir, "%.*s", STR_ARG(sd.len ? sd : S("/")));
+        const char *dest = into ? into : sdir;
         struct stat st;
         if (lstat(src, &st) != 0) {
             gone++;
@@ -1032,7 +1035,7 @@ static void duplicate(void)
     static ClipFiles dup;
     arena_reset(&pastea);
     dup.cut = false, dup.n = targets(&pastea, dup.path, CLIP_PATHS_MAX);
-    if (dup.n > 0) copy_here(&dup, app.cwd);
+    if (dup.n > 0) copy_here(&dup, NULL);   // (each beside itself: a search's are in many folders, F9)
 }
 
 // Make Link, Ctrl+M (F8, as Nemo): beside each marked entry (or the cursor's) a symbolic link to its
@@ -1051,7 +1054,10 @@ static void make_link(void)
             err_set(&err, "the name is too long for a link to %.*s", STR_ARG(base));
             continue;
         }
-        if (!op_symlink(app.cwd, paths[i], str_from_c(name), one, sizeof one, &err) || !join(p, sizeof p, app.cwd, str_from_c(one))) continue;
+        Str d = path_dir(str_from_c(paths[i]));   // (beside it: a search result's own folder, F9)
+        char in[PATH_MAX];
+        snprintf(in, sizeof in, "%.*s", STR_ARG(d.len ? d : S("/")));
+        if (!op_symlink(in, paths[i], str_from_c(name), one, sizeof one, &err) || !join(p, sizeof p, in, str_from_c(one))) continue;
         if (done++ == 0) undo_gen++, undo_begin(&undo, UNDO_LINK);
         undo_add(&undo, paths[i], p, NULL);
         snprintf(made, sizeof made, "%s", one);
@@ -1059,7 +1065,7 @@ static void make_link(void)
     if (done < n) set_status(true, "%s", err.msg);
     else if (done == 1) set_status(false, "Made %s", made);
     else set_status(false, "Made %td links", done);
-    if (done) ui_mark_clear(&app.ui), go_to(app.cwd, str_from_c(made), app.ui.list.sel);
+    if (done) ui_mark_clear(&app.ui), go_to(app.cwd, app.ui.in_search ? sel_name() : str_from_c(made), app.ui.list.sel);
 }
 
 // Follow Link (F8): to the folder of what the link at entry i leads to, with it selected (every
@@ -1103,21 +1109,27 @@ static void rename_commit(void)
 {
     Str to = { app.ui.edit, app.ui.edit_len }, from = str_from_c(app.edit_from);
     if (str_eq(to, from)) { ui_edit_close(&app.ui); return; }
+    const char *in = app.edit_dir;
     char was[PATH_MAX], will[PATH_MAX];
-    if (join(was, sizeof was, app.cwd, from) && jobs_refuse(was)) return;
-    if (join(will, sizeof will, app.cwd, to) && jobs_refuse(will)) return;
+    if (join(was, sizeof was, in, from) && jobs_refuse(was)) return;
+    if (join(will, sizeof will, in, to) && jobs_refuse(will)) return;
     Err err;
-    if (!op_rename(app.cwd, from, to, &err)) { set_status(true, "%s", err.msg); return; }
-    char a[PATH_MAX], b[PATH_MAX], keep[NAME_MAX + 1];
-    snprintf(keep, sizeof keep, "%.*s", STR_ARG(to));
-    if (join(a, sizeof a, app.cwd, from) && join(b, sizeof b, app.cwd, to)) {
+    if (!op_rename(in, from, to, &err)) { set_status(true, "%s", err.msg); return; }
+    // The cursor stays on it: by its new name, in a search its folder's too, where the result takes
+    // the new name in place (F9).
+    char a[PATH_MAX], b[PATH_MAX], keep[PATH_MAX];
+    Str key = sel_name(), rel = path_dir(key);
+    if (app.ui.in_search) search_rename(key, to);
+    if (rel.len) snprintf(keep, sizeof keep, "%.*s/%.*s", STR_ARG(rel), STR_ARG(to));
+    else snprintf(keep, sizeof keep, "%.*s", STR_ARG(to));
+    if (join(a, sizeof a, in, from) && join(b, sizeof b, in, to)) {
         // A folder just made stays a "new folder" for undo, whatever its name now.
         undo_gen++;
         undo_begin(&undo, app.edit_new ? app.edit_new : UNDO_RENAME);
         undo_add(&undo, app.edit_new ? NULL : a, b, NULL);
     }
     ui_edit_close(&app.ui);
-    set_status(false, "Renamed %s to %s", app.edit_from, keep);
+    set_status(false, "Renamed %s to %.*s", app.edit_from, STR_ARG(to));
     go_to(app.cwd, str_from_c(keep), app.ui.list.sel);
 }
 
@@ -1130,7 +1142,7 @@ static void new_folder(void)
     ui_mark_clear(&app.ui);
     go_to(app.cwd, str_from_c(made), app.ui.list.sel);
     ui_edit_open_all(&app.ui, str_from_c(made));
-    snprintf(app.edit_from, sizeof app.edit_from, "%s", made);
+    snprintf(app.edit_from, sizeof app.edit_from, "%s", made), snprintf(app.edit_dir, sizeof app.edit_dir, "%s", app.cwd);
     app.edit_new = UNDO_MKDIR;
 }
 
@@ -1144,7 +1156,7 @@ static void new_file(void)
     ui_mark_clear(&app.ui);
     go_to(app.cwd, str_from_c(made), app.ui.list.sel);
     ui_edit_open_all(&app.ui, str_from_c(made));
-    snprintf(app.edit_from, sizeof app.edit_from, "%s", made);
+    snprintf(app.edit_from, sizeof app.edit_from, "%s", made), snprintf(app.edit_dir, sizeof app.edit_dir, "%s", app.cwd);
     app.edit_new = UNDO_MKFILE;
 }
 
@@ -1304,6 +1316,18 @@ static void tab_close(int at)
     if (shown) tab_load();
 }
 
+// F2 opened the edit line: on the cursor's entry, as it is named now, in its folder (a search
+// result's own, F9).
+static void edit_opened(void)
+{
+    const Entry *e = app.have_list && app.ui.list.n > 0 ? &app.list.e[app.ui.list.sel] : NULL;
+    char path[PATH_MAX];
+    snprintf(app.edit_from, sizeof app.edit_from, "%.*s", e ? (int)e->name.len : 0, e ? e->name.p : "");
+    app.edit_new = UNDO_NONE;
+    Str d = e && entry_path(app.ui.list.sel, path, sizeof path) ? path_dir(str_from_c(path)) : str_from_c(app.cwd);
+    snprintf(app.edit_dir, sizeof app.edit_dir, "%.*s", STR_ARG(d.len ? d : S("/")));
+}
+
 // The location line's Enter: there, if it is a folder; else the line stays open with the reason.
 static void location_go(void)
 {
@@ -1359,10 +1383,19 @@ static void act(UiAction a)
         break;
     case UA_EMPTY_TRASH: trash_empty(); break;
     case UA_NOT_IN_TRASH: set_status(true, "That doesn't work in the trash: restore it first"); break;
-    case UA_NOT_IN_SEARCH: set_status(true, "Search results can't do that yet"); break;
-    case UA_SEARCH: {   // below the folder shown, in a tab of its own (F9)
-        char uri[PATH_MAX];
-        if (search_uri(uri, sizeof uri, app.cwd, STR_EMPTY)) tab_open(uri, STR_EMPTY, true);
+    case UA_NOT_IN_SEARCH: set_status(true, "A search isn't a folder: that works in one"); break;
+    case UA_SEARCH: {   // below the folder shown, or (all) a folder entry's, in a tab of its own (F9)
+        char uri[PATH_MAX], in[PATH_MAX];
+        const char *dir = a.all ? (a.index < app.list.n && entry_path(a.index, in, sizeof in) ? in : NULL) : app.cwd;
+        if (dir && search_uri(uri, sizeof uri, dir, STR_EMPTY)) tab_open(uri, STR_EMPTY, true);
+        break;
+    }
+    case UA_CONTAINING: {   // a result's folder, it selected (F9)
+        char path[PATH_MAX], dir[PATH_MAX];
+        if (a.index >= app.list.n || !entry_path(a.index, path, sizeof path)) break;
+        Str d = path_dir(str_from_c(path));
+        snprintf(dir, sizeof dir, "%.*s", STR_ARG(d.len ? d : S("/")));
+        go_to(dir, app.list.e[a.index].name, 0);
         break;
     }
     case UA_SIDE_MODE: {
@@ -1440,7 +1473,7 @@ static void act(UiAction a)
     case UA_PARENT: go_parent(); break;
     case UA_TERMINAL: {   // all: in the folder entry index (its right-click menu, F8)
         char in[PATH_MAX];
-        const char *dir = a.all ? (a.index < app.list.n && entry_path(a.index, in, sizeof in) ? in : NULL) : app.cwd;
+        const char *dir = a.all ? (a.index < app.list.n && entry_path(a.index, in, sizeof in) ? in : NULL) : app.ui.in_search ? app.search_root : app.cwd;
         if (dir && spawn_terminal(dir, &err)) set_status(false, "terminal in %s", dir);
         else if (dir) set_status(true, "%s", err.msg);
         break;
@@ -1509,7 +1542,7 @@ static void act(UiAction a)
     case UA_NEWFILE: new_file(); break;
     case UA_NEW_WINDOW: {   // all: on the folder entry index (F8)
         char on[PATH_MAX];
-        const char *dir = a.all ? (a.index < app.list.n && entry_path(a.index, on, sizeof on) ? on : NULL) : app.cwd;
+        const char *dir = a.all ? (a.index < app.list.n && entry_path(a.index, on, sizeof on) ? on : NULL) : app.ui.in_search ? app.search_root : app.cwd;
         if (dir && spawn_window(app.exe, dir, &err)) set_status(false, "New window on %s", dir);
         else if (dir) set_status(true, "%s", err.msg);
         break;
@@ -3754,6 +3787,7 @@ static UiKey ui_key_of(int key, int mods)
     if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_N) return UK_NEW_WINDOW;
     if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_I) return UK_PROPERTIES;
     if (m == GLFW_MOD_ALT && (key == GLFW_KEY_ENTER || key == GLFW_KEY_KP_ENTER)) return UK_TERMINAL;
+    if (m == GLFW_MOD_CONTROL && (key == GLFW_KEY_ENTER || key == GLFW_KEY_KP_ENTER)) return UK_CONTAINING;
     if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_W) return UK_TAB_CLOSE;
     if ((m == GLFW_MOD_CONTROL && key == GLFW_KEY_TAB) || (m == GLFW_MOD_CONTROL && key == GLFW_KEY_PAGE_DOWN)) return UK_TAB_NEXT;
     if ((m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT) && key == GLFW_KEY_TAB) || (m == GLFW_MOD_CONTROL && key == GLFW_KEY_PAGE_UP)) return UK_TAB_PREV;
@@ -4165,6 +4199,11 @@ static void folder_do(UiMenuItem it)
     switch (it) {
     case UM_OPEN_IT: go_to(dir, STR_EMPTY, 0); break;
     case UM_OPEN_TAB: tab_open_bg(dir); break;
+    case UM_SEARCH_IN: {   // below it, in a tab of its own (F9)
+        char uri[PATH_MAX];
+        if (search_uri(uri, sizeof uri, dir, STR_EMPTY)) tab_open(uri, STR_EMPTY, true);
+        break;
+    }
     case UM_OPEN_WINDOW:
         if (spawn_window(app.exe, dir, &err)) set_status(false, "New window on %s", dir);
         else set_status(true, "%s", err.msg);
@@ -4660,7 +4699,7 @@ int main(int argc, char **argv)
         // new question always starts from no targets.
         if (!was_confirming && (app.ui.confirming || a.kind == UA_DELETE)) delete_ask();
         // F2 opened the edit line: on the cursor's entry, as it is named now.
-        if (!was_editing && app.ui.editing && !app.ui.edit_path) snprintf(app.edit_from, sizeof app.edit_from, "%.*s", STR_ARG(sel_name())), app.edit_new = UNDO_NONE;
+        if (!was_editing && app.ui.editing && !app.ui.edit_path) edit_opened();
         if (a.kind != UA_NONE) act(a);
         // The search field changed (F9): it is searched for 150 ms after the last change.
         if (app.ui.search_edited) app.ui.search_edited = false, app.search_due = now_ms() + SEARCH_TYPE_MS, timer_at(wake_due());

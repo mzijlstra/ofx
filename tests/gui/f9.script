@@ -35,7 +35,7 @@ key ctrl-shift-f
 expect searchkeys=1
 keys backspace backspace backspace backspace backspace
 type de
-wait-for 3000 searchdone=1 n=4 idx=0 sel=deep seldir=src
+wait-for 3000 searchdue=0 searchdone=1 n=4 idx=0 sel=deep seldir=src
 key enter
 key down
 expect idx=1 sel=node_modules seldir=-
@@ -48,7 +48,7 @@ wait-for 3000 search=1 searchdone=1 n=5 idx=1 sel=node_modules searchtext=de sea
 key ctrl-shift-f
 keys backspace backspace
 type *.ts
-wait-for 3000 searchdone=1 n=5
+wait-for 3000 searchdue=0 searchdone=1 n=5
 point-ui toggle 11
 click-here
 wait-for 3000 searchdone=1 n=4 findopts=c
@@ -65,25 +65,108 @@ wait-for 3000 searchdone=1 n=5 findopts=-
 key alt-r
 keys backspace backspace backspace backspace
 type (
-wait-for 3000 searchdone=1 searchbad=1 n=0
+wait-for 3000 searchdue=0 searchdone=1 searchbad=1 n=0
 shot search-bad.png
 key alt-r
 keys backspace
 # The limit: 10,000 shown, and said so
 type zz
-wait-for 8000 searchdone=1 searchfull=1 n=10000
-# What results can't do yet (F9 step 2) says so
+wait-for 8000 searchdue=0 searchdone=1 searchfull=1 n=10000
+# Working with results (step 2, 2026-10-28), each in its own folder. Rename: there, the row
+# taking the new name in place, the cursor on it
+key ctrl-shift-f
+keys backspace backspace backspace backspace backspace backspace backspace backspace backspace backspace backspace backspace
+type c.ts
+wait-for 3000 searchdue=0 searchdone=1 n=1 sel=c.ts seldir=src
 key enter
 key f2
-expect editing=0 status=Search
+key home
+type re-
+key enter
+wait-for 2000 editing=0 n=1 sel=re-c.ts seldir=src
+sh test -f "$OFX_DIR/src/re-c.ts" && test ! -e "$OFX_DIR/src/c.ts"
+# Undo: renamed back, so the result's name is gone (no watching); Ctrl+R finds it again
+key ctrl-z
+wait-for 2000 n=0
+sh test -f "$OFX_DIR/src/c.ts"
+key ctrl-r
+wait-for 3000 searchdone=1 n=1 sel=c.ts
+# Make Link and Duplicate: beside it, in its folder
+key ctrl-m
+wait-for 2000 status=Made
+sh test -L "$OFX_DIR/src/Link to c.ts"
+key alt-e
+point-menu duplicate
+click-here
+wait-for 3000 jobs=0 n=1
+sh sleep 0.3; ls "$OFX_DIR/src" | grep -q "^c (copy)"
+# Trash: it leaves the list; Ctrl+Z brings it back
 key delete
-expect status=Search
+wait-for 2000 n=0 status=Trashed
+sh test ! -e "$OFX_DIR/src/c.ts"
+key ctrl-z
+wait-for 2000 n=1 sel=c.ts
+# Open Containing Folder (Ctrl+Enter): its folder, it selected; Back is the search, run again
+# (Link to c.ts found now)
+key ctrl-enter
+wait-for 2000 search=0 crumbs=home|tree|src sel=c.ts
+key alt-left
+wait-for 3000 search=1 searchdone=1 n=2
+# Terminal Here: in the folder searched; a paste or a new folder: not in a search
+key alt-enter
+sh grep -qx "uwsm-app -- xdg-terminal-exec --dir=$OFX_DIR" "$OFX_ROOT/spawn.log"
+key ctrl-shift-n
+expect status=A
+key ctrl-v
+expect status=A
+# The same name in two folders: only the one renamed changes, the cursor following it to its row
+key ctrl-shift-f
+keys backspace backspace backspace backspace backspace backspace backspace backspace backspace backspace backspace backspace
+type index
+wait-for 3000 searchdue=0 searchdone=1 n=2
+key enter
+key down
+expect idx=1 seldir=src/deep
+key f2
+key home
+type a-
+key enter
+wait-for 2000 editing=0 n=2 idx=0 sel=a-index.ts seldir=src/deep
+key down
+expect idx=1 sel=index.ts seldir=src
+key ctrl-z
+wait-for 2000 n=1 sel=index.ts
+# Delete for good, asked first: gone from the list and the disk
+key ctrl-shift-f
+keys backspace backspace backspace backspace backspace backspace backspace backspace backspace backspace backspace backspace
+type Link to
+wait-for 3000 searchdue=0 searchdone=1 n=1 seldir=src
+key enter
+key shift-delete
+expect confirming=1
+char y
+wait-for 3000 n=0 confirming=0
+sh test ! -e "$OFX_DIR/src/Link to c.ts"
+# Search in Folder…, on a folder result: a search below it, in a tab of its own
+key ctrl-shift-f
+keys backspace backspace backspace backspace backspace backspace backspace backspace backspace backspace backspace backspace
+type src
+wait-for 3000 searchdue=0 searchdone=1 n=1 sel=src
+key enter
+point-ui row 0
+right-here
+expect menu=entry
+point-menu search-in
+click-here
+wait-for 2000 search=1 tabs=3 searchkeys=1 searchtext=-
+key ctrl-w
+wait-for 2000 tabs=2 search=1
 # A result whose folder and name are longer than a name keeps the cursor as more come (Ctrl+R
 # here; reviewer-2, 2026-10-28: it went to the row, another file)
 key ctrl-shift-f
-keys backspace backspace
+keys backspace backspace backspace backspace backspace backspace backspace backspace backspace backspace backspace backspace
 type m?.txt
-wait-for 3000 searchdone=1 n=1 sel=m2.txt
+wait-for 3000 searchdue=0 searchdone=1 n=1 sel=m2.txt
 sh touch "$OFX_DIR/m1.txt"
 key enter
 key ctrl-r
@@ -92,7 +175,7 @@ wait-for 3000 searchdone=1 n=2 idx=1 sel=m2.txt
 key ctrl-shift-f
 keys backspace backspace backspace backspace backspace backspace
 type notes
-wait-for 3000 searchdone=1 n=1
+wait-for 3000 searchdue=0 searchdone=1 n=1
 sh touch "$OFX_DIR/src/notes2.txt"
 key enter
 key ctrl-r
@@ -101,12 +184,12 @@ wait-for 3000 searchdone=1 n=2
 key ctrl-shift-f
 keys backspace backspace backspace backspace backspace
 type clink
-wait-for 3000 searchdone=1 n=1 sel=clink seldir=docs
+wait-for 3000 searchdue=0 searchdone=1 n=1 sel=clink seldir=docs
 key enter
 point-ui row 0
 right-here
 expect menu=entry sel=clink
-point-ui menu-item 14
+point-menu follow
 click-here
 wait-for 2000 search=0 crumbs=home|tree|src sel=c.ts
 key alt-left
@@ -121,7 +204,7 @@ wait-for 2000 search=1 tabs=3 tab=2 searchkeys=1
 key ctrl-w
 wait-for 2000 tabs=2 search=0 searchkeys=0
 key alt-g
-point-ui menu-item 8
+point-menu search
 click-here
 wait-for 2000 search=1 tabs=3 searchkeys=1
 key ctrl-w

@@ -19,7 +19,7 @@ sh grep -qx "file://$OFX_ROOT/home/tree" "$OFX_ROOT/config/gtk-3.0/bookmarks" &&
 key alt-b
 expect menugrey=add-bookmark,bm-3,bm-4,bm-5,bm-6,bm-7,bm-more menumarked=bm-2
 # A bookmark by the pointer: there, marked
-point-ui menu-item 3
+point-menu bm-0
 click-here
 wait-for 2000 n=0 bmhere=0 canbm=0
 pointer-off

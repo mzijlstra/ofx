@@ -16,7 +16,7 @@
 //                           f10, alt-<letter> (a menu), ctrl-n, and close-window (the compositor's
 //                           close, as SIGUSR1 from another window's Close All); ctrl-q is Close All;
 //                           ctrl-i (Properties, F7.2), alt-enter (a terminal), ctrl-m (Make Link),
-//                           ctrl-p ctrl-g (Show Permissions, Show Group), ctrl-shift-f (Search, F9)
+//                           ctrl-p ctrl-g (Show Permissions, Show Group), ctrl-shift-f (Search, F9), ctrl-enter (Open Containing Folder)
 //   char <c>                one typed character
 //   keys <word>...          keys and characters in one frame's input, as fast typing during a slow
 //                           frame gives them: each word a key name (as for `key`) or char:<c>
@@ -33,6 +33,8 @@
 //                           mouse's is (rows, sidebar rows, headers)
 //   point-ui <id> [k]       the point at the middle of a Clay element (k: its CLAY_IDI index),
 //                           printed as "point: x y" and kept for click-here
+//   point-menu <word>       the same for the open menu's entry named <word> in the state's menu
+//                           lists (follow, search-in): a new entry doesn't renumber the scripts
 //   hover-here              the pointer to the last point-ui (the hover highlights, a drive's
 //                           eject button, a button's tooltip); it rests there, hit again after
 //                           each frame as the mouse's is (hover_refresh)
@@ -273,7 +275,7 @@ static void script_state(char *out, size_t cap)
     if (!menuoff[0]) snprintf(menuoff, sizeof menuoff, "-");
     // The open menu's entries (F7.4): those that can't be picked, those the last frame didn't draw,
     // those marked.
-    char menugrey[512] = "", menuhid[128] = "", menumarked[256] = "";
+    char menugrey[512] = "", menuhid[512] = "", menumarked[256] = "";
     for (int i = 0; app.ui.menu_on && i < UI_MENU[app.ui.menu].n; i++) {
         UiMenuItem it = UI_MENU[app.ui.menu].items[i];
         if (it == UM_SEP) continue;
@@ -484,7 +486,7 @@ static UiKey script_key(Str name)
         { "f10", UK_F10 }, { "ctrl-n", UK_NEW_WINDOW }, { "ctrl-i", UK_PROPERTIES }, { "alt-enter", UK_TERMINAL },
         { "ctrl-1", UK_VIEW_LIST }, { "ctrl-2", UK_VIEW_ICONS }, { "ctrl-left", UK_SIDE },
         { "ctrl-equal", UK_ZOOM_IN }, { "ctrl-minus", UK_ZOOM_OUT }, { "ctrl-0", UK_ZOOM_RESET },
-        { "ctrl-shift-f", UK_SEARCH }, { "ctrl-shift-i", UK_INVERT }, { "ctrl-shift-a", UK_SELECT_MATCH }, { "ctrl-r", UK_RELOAD }, { "alt-home", UK_HOMEDIR }, { "alt-end", UK_TRASH_VIEW }, { "ctrl-d", UK_ADD_BOOKMARK }, { "ctrl-b", UK_EDIT_BOOKMARKS }, { "f1", UK_SHORTCUTS }, { "alt-down", UK_ALT_DOWN },
+        { "ctrl-shift-f", UK_SEARCH }, { "ctrl-enter", UK_CONTAINING }, { "ctrl-shift-i", UK_INVERT }, { "ctrl-shift-a", UK_SELECT_MATCH }, { "ctrl-r", UK_RELOAD }, { "alt-home", UK_HOMEDIR }, { "alt-end", UK_TRASH_VIEW }, { "ctrl-d", UK_ADD_BOOKMARK }, { "ctrl-b", UK_EDIT_BOOKMARKS }, { "f1", UK_SHORTCUTS }, { "alt-down", UK_ALT_DOWN },
     };
     for (int i = 0; i < COUNT(KEYS); i++)
         if (str_eq(name, str_from_c(KEYS[i].name))) return KEYS[i].k;
@@ -686,6 +688,15 @@ static bool script_input(UiInput *in)
             if (sscanf(a, "%199s %d", id, &k) >= 1)
                 d = Clay_GetElementData(k >= 0 ? Clay_GetElementIdWithIndex(cz(id), (uint32_t)k) : Clay_GetElementId(cz(id)));
             if (!d.found) script_fail("point-ui: no element %s", a);
+            script.px = d.boundingBox.x + d.boundingBox.width / 2, script.py = d.boundingBox.y + d.boundingBox.height / 2;
+            printf("point: %.0f %.0f\n", script.px, script.py);
+        } else if (str_eq(cmd, S("point-menu"))) {   // as point-ui, the open menu's entry by its word
+            int k = -1;
+            for (int i = 0; app.ui.menu_on && i < UI_MENU[app.ui.menu].n; i++)
+                if (strcmp(UI_MENU_ITEM[UI_MENU[app.ui.menu].items[i]].word, a) == 0) k = i;
+            Clay_ElementData d = { 0 };
+            if (k >= 0) d = Clay_GetElementData(Clay_GetElementIdWithIndex(cz("menu-item"), (uint32_t)k));
+            if (!d.found) script_fail("point-menu: no %s in the menu open", a);
             script.px = d.boundingBox.x + d.boundingBox.width / 2, script.py = d.boundingBox.y + d.boundingBox.height / 2;
             printf("point: %.0f %.0f\n", script.px, script.py);
         } else if (str_eq(cmd, S("hover-here"))) {

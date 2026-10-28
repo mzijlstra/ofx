@@ -13,11 +13,11 @@ expect permsnote=0
 key ctrl-1
 expect permsnote=1
 key alt-v
-point-ui menu-item 7
+point-menu perms-cols
 click-here
 expect permscols=0 permsnote=0
 key alt-v
-point-ui menu-item 7
+point-menu perms-cols
 click-here
 expect permscols=1 permsnote=1
 key f9
@@ -25,13 +25,13 @@ key f9
 wait-for 2000 sidemode=hidden permsshown=1 permsnote=0
 key alt-v
 expect menumarked=side-none,perms-cols,group-col,colors,show-menu,sort-name,view-list
-point-ui menu-item 9
+point-menu colors
 click-here
 expect menu=- colors=0
 sh grep -qx "colors=off" "$OFX_ROOT/state/ofx/state"
 shot list-plain.png
 key alt-v
-point-ui menu-item 9
+point-menu colors
 click-here
 expect colors=1
 sh grep -qx "colors=on" "$OFX_ROOT/state/ofx/state"

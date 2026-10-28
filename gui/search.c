@@ -30,6 +30,12 @@ static struct {
 static Entry search_res[SEARCH_MAX];
 static u8    search_mem[MiB(8)];
 static Arena search_arena;
+// The main thread's changes to what was published (step 2): results whose file went (trashed,
+// deleted, moved: search_prune), and new names (search_rename), in an arena of their own. Only the
+// main thread touches them, and only entries below n, which the walk is done with.
+static u8    search_gone[SEARCH_MAX];
+static u8    search_edit_mem[KiB(256)];
+static Arena search_edits;
 // The thread's own: its copy of the request, its matcher, how many results it wrote, the last
 // folder it copied (results come a folder at a time), when it last published.
 static char      search_root[PATH_MAX];
@@ -110,6 +116,7 @@ static void *search_loop(void *arg)
 static void search_start(void)
 {
     arena_init(&search_arena, "search", search_mem, sizeof search_mem);
+    arena_init(&search_edits, "search edits", search_edit_mem, sizeof search_edit_mem);
     (void)ui_utf8_locale();   // made here, before the thread's matcher shares it
     search.started = pthread_create(&search.thread, NULL, search_loop, NULL) == 0;
 }
@@ -134,6 +141,7 @@ static void search_ask(const char *root, Str text, UiMatchOpts o, bool hidden)
     memcpy(search.text, text.p, (size_t)search.text_len), search.text[search.text_len] = 0;
     search.opts = o, search.hidden = hidden;
     search.res_gen = gen, search.n = 0, search.s = (SearchSkips){ 0 }, search.fresh = true;
+    memset(search_gone, 0, sizeof search_gone), arena_reset(&search_edits);
     search.done = text.len == 0 || !search.started;
     search.asked = !search.done;
     pthread_cond_signal(&search.cv);
@@ -160,13 +168,59 @@ static bool search_copy(Arena *a, Listing *out, SearchSkips *s, bool *done)
     *s = search.s, *done = search.done;
     Entry *e = arena_try_new(a, Entry, n + 1);
     bool ok = e != NULL;
+    isize k = 0;
     for (isize i = 0; ok && i < n; i++) {
+        if (search_gone[i]) continue;
         const Entry *r = &search_res[i];
-        e[i] = *r;
-        e[i].name = search_str(a, r->name, &ok), e[i].dir = search_str(a, r->dir, &ok), e[i].target = search_str(a, r->target, &ok);
+        e[k] = *r;
+        e[k].name = search_str(a, r->name, &ok), e[k].dir = search_str(a, r->dir, &ok), e[k].target = search_str(a, r->target, &ok);
+        k++;
     }
     pthread_mutex_unlock(&search.mu);
-    if (ok) out->e = e, out->n = n;
+    if (ok) out->e = e, out->n = k;
+    return ok;
+}
+
+// Result i's file below root, into out; false when it doesn't fit.
+static bool search_res_path(isize i, const char *root, char *out, size_t cap)
+{
+    const Entry *r = &search_res[i];
+    int n = r->dir.len ? snprintf(out, cap, "%s%s%.*s/%.*s", root, strcmp(root, "/") == 0 ? "" : "/", STR_ARG(r->dir), STR_ARG(r->name))
+                       : snprintf(out, cap, "%s%s%.*s", root, strcmp(root, "/") == 0 ? "" : "/", STR_ARG(r->name));
+    return n >= 0 && (size_t)n < cap;
+}
+
+// After a change (step 2, from reload): the results whose file is gone left out, those back again
+// (an undo) shown again; no watching, so this is when they go.
+static void search_prune(const char *root)
+{
+    pthread_mutex_lock(&search.mu);
+    isize n = search.res_gen == atomic_load(&search.gen) ? search.n : 0;
+    for (isize i = 0; i < n; i++) {
+        char p[PATH_MAX];
+        struct stat st;
+        search_gone[i] = search_res_path(i, root, p, sizeof p) && lstat(p, &st) != 0;
+    }
+    pthread_mutex_unlock(&search.mu);
+}
+
+// The result key names (entry_key: folder/name) renamed to name (step 2: the list shows the new
+// name, its row kept); false when it isn't one or there is no room.
+static bool search_rename(Str key, Str name)
+{
+    Str dir = path_dir(key), was = path_base(key);
+    bool ok = false;
+    pthread_mutex_lock(&search.mu);
+    isize n = search.res_gen == atomic_load(&search.gen) ? search.n : 0;
+    for (isize i = 0; i < n && !ok; i++) {
+        Entry *r = &search_res[i];
+        if (search_gone[i] || !str_eq(r->name, was) || !str_eq(r->dir, dir)) continue;
+        char *p = arena_try_push(&search_edits, name.len + 1, 1);
+        if (!p) break;
+        memcpy(p, name.p, (size_t)name.len), p[name.len] = 0;
+        r->name = (Str){ p, name.len }, ok = true;
+    }
+    pthread_mutex_unlock(&search.mu);
     return ok;
 }
 

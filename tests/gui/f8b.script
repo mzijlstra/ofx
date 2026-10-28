@@ -13,13 +13,13 @@ wait-for 2000 sidemode=hidden permsshown=1
 shot list-columns.png
 # View → Show Permissions: off, remembered; on again
 key alt-v
-point-ui menu-item 7
+point-menu perms-cols
 click-here
 expect menu=- permscols=0 permsshown=0
 sh grep -qx "perms=off" "$OFX_ROOT/state/ofx/state"
 shot list-no-perms.png
 key alt-v
-point-ui menu-item 7
+point-menu perms-cols
 click-here
 expect permscols=1
 sh grep -qx "perms=on" "$OFX_ROOT/state/ofx/state"
@@ -42,7 +42,7 @@ key ctrl-p
 expect permscols=1 groupdrawn=2
 key alt-v
 expect menumarked=side-none,perms-cols,group-col,colors,show-menu,sort-name,view-list
-point-ui menu-item 8
+point-menu group-col
 click-here
 expect menu=- groupcol=0 groupdrawn=0
 sh grep -qx "group=off" "$OFX_ROOT/state/ofx/state"
@@ -50,7 +50,7 @@ sh grep -qx "group=off" "$OFX_ROOT/state/ofx/state"
 # bar while a menu is open; remembered; back on from View
 expect barhidden=0
 key alt-v
-point-ui menu-item 10
+point-menu show-menu
 click-here
 expect menu=- barhidden=1 barshown=0 modal=menubar
 shot menubar-hidden.png
@@ -63,42 +63,42 @@ shot menubar-float.png
 key esc
 key alt-v
 expect menu=View menumarked=side-none,perms-cols,colors,sort-name,view-list
-point-ui menu-item 10
+point-menu show-menu
 click-here
 expect menu=- barhidden=0 modal=-
 sh grep -qx "menubar=on" "$OFX_ROOT/state/ofx/state"
 # Open in New Window: ofx on that folder
 point-ui row 0
 right-here
-expect menu=entry menuhid=follow,restore
-point-ui menu-item 2
+expect menu=entry menuhid=containing,follow,restore
+point-menu open-window
 click-here
 expect menu=-
 sh grep -qx "uwsm-app -- /.*/ofx[^ /]* $OFX_DIR/sub" "$OFX_ROOT/spawn.log"
 # Open in Terminal: there, not in the folder shown
 point-ui row 0
 right-here
-point-ui menu-item 13
+point-menu terminal-in
 click-here
 sh grep -qx "uwsm-app -- xdg-terminal-exec --dir=$OFX_DIR/sub" "$OFX_ROOT/spawn.log"
 # Add Bookmark: that folder; then it isn't offered again
 point-ui row 0
 right-here
-point-ui menu-item 15
+point-menu bookmark-it
 click-here
 wait-for 2000 bmn=1
 sh grep -qx "file://$OFX_DIR/sub" "$OFX_ROOT/config/gtk-3.0/bookmarks"
 point-ui row 0
 right-here
-expect menuhid=follow,bookmark-it,restore
+expect menuhid=containing,follow,bookmark-it,restore
 key esc
 # Paste Into Folder: a.txt copied into sub, not here
 key down
 key ctrl-c
 point-ui row 0
 right-here
-expect menugrey=follow,bookmark-it,restore
-point-ui menu-item 7
+expect menugrey=containing,follow,bookmark-it,restore
+point-menu paste-into
 click-here
 wait-for 3000 jobs=0 n=3
 sh test -f "$OFX_DIR/sub/a.txt" && test -f "$OFX_DIR/a.txt"
@@ -107,14 +107,14 @@ key home
 key ctrl-c
 point-ui row 0
 right-here
-point-ui menu-item 7
+point-menu paste-into
 click-here
 sh test ! -e "$OFX_DIR/sub/sub"
 # Make Link: "Link to a.txt" beside it, selected, pointing at its full path; Ctrl+M on it again;
 # Ctrl+Z takes back the last
 point-ui row 1
 right-here
-point-ui menu-item 10
+point-menu make-link
 click-here
 wait-for 2000 n=4 idx=2
 sh test "$(readlink "$OFX_DIR/Link to a.txt")" = "$OFX_DIR/a.txt"
@@ -127,8 +127,8 @@ sh test -L "$OFX_DIR/Link to a.txt" && test ! -e "$OFX_DIR/Link to Link to a.txt
 # Follow Link: zlink's target's folder, the target selected
 point-ui row 3
 right-here
-expect menu=entry sel=zlink menuhid=open-tab,open-window,paste-into,terminal-in,bookmark-it,restore
-point-ui menu-item 14
+expect menu=entry sel=zlink menuhid=containing,open-tab,open-window,paste-into,terminal-in,search-in,bookmark-it,restore
+point-menu follow
 click-here
 wait-for 2000 crumbs=home|tree|sub sel=inner.txt
 quit

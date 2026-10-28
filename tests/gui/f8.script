@@ -9,7 +9,7 @@ key space
 expect marked=1 sel=b.txt
 point-ui row 2
 right-here
-expect menu=entry sel=b.txt marked=0 menuat=- menuhid=open-tab,open-window,paste-into,terminal-in,follow,bookmark-it,restore menuin=1
+expect menu=entry sel=b.txt marked=0 menuat=- menuhid=containing,open-tab,open-window,paste-into,terminal-in,search-in,follow,bookmark-it,restore menuin=1
 shot ctx-entry.png
 # No neighbours: Left and Right do nothing; a bar title under the pointer doesn't take over
 key right
@@ -24,15 +24,15 @@ expect menu=-
 key ctrl-a
 point-ui row 1
 right-here
-expect menu=entry sel=a.txt marked=4 menuhid=open-tab,open-window,paste-into,rename,terminal-in,follow,bookmark-it,restore
+expect menu=entry sel=a.txt marked=4 menuhid=containing,open-tab,open-window,paste-into,rename,terminal-in,search-in,follow,bookmark-it,restore
 key esc
 key esc
 expect marked=0
 # A folder: Open in New Tab, the tab behind
 point-ui row 0
 right-here
-expect menu=entry sel=sub menuhid=follow,restore
-point-ui menu-item 1
+expect menu=entry sel=sub menuhid=containing,follow,restore
+point-menu open-tab
 click-here
 expect menu=- tabs=2 tab=0 tabdirs=tree|sub
 key ctrl-tab
@@ -41,7 +41,7 @@ expect tabs=1
 # Rename from the menu: the cursor's row in its edit line
 point-ui row 1
 right-here
-point-ui menu-item 11
+point-menu rename
 click-here
 expect menu=- editing=1 edit=a.txt
 key esc
@@ -71,13 +71,13 @@ point-ui list
 right-here
 expect menu=here marked=0 menuhid=empty-trash menugrey=empty-trash,paste menuin=1
 shot ctx-here.png
-point-ui menu-item 12
+point-menu here-properties
 click-here
 expect menu=- props=1 propname=tree propidx=-1
 key esc
 point-ui list
 right-here
-point-ui menu-item 5
+point-menu select-all
 click-here
 expect menu=- marked=4
 key esc
@@ -99,7 +99,7 @@ key esc
 # Show Hidden Files, checked when on
 point-ui list
 right-here
-point-ui menu-item 8
+point-menu hidden
 click-here
 expect menu=- hidden=1
 point-ui list
@@ -116,13 +116,13 @@ wait-for 2000 trash=1 n=1
 point-ui list
 right-here
 expect menu=here menuhid=new-folder,new-file
-point-ui menu-item 2
+point-menu empty-trash
 click-here
 expect menu=- modal=empty
 type n
 expect modal=-
 point-ui row 0
 right-here
-expect menu=entry menuhid=open-tab,open-window,paste-into,terminal-in,follow,bookmark-it,trash
+expect menu=entry menuhid=containing,open-tab,open-window,paste-into,terminal-in,search-in,follow,bookmark-it,trash
 key esc
 quit

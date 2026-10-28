@@ -554,7 +554,7 @@ MUTANTS += [
     (U, "            if (l->n > 0 && !u->side_focus && u->in_trash) return (UiAction){ UA_NOT_IN_TRASH, 0, false };", ""),
     (U, "return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : UA_COPY, 0, false };", "return (UiAction){ UA_COPY, 0, false };"),
     (U, "        case UK_PASTE: return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : u->in_search ? UA_NOT_IN_SEARCH : UA_PASTE, 0, false };", "        case UK_PASTE: return (UiAction){ u->in_search ? UA_NOT_IN_SEARCH : UA_PASTE, 0, false };"),
-    (U, "            case 't': return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : u->in_search ? UA_NOT_IN_SEARCH : UA_TERMINAL, 0, false };", "            case 't': return (UiAction){ u->in_search ? UA_NOT_IN_SEARCH : UA_TERMINAL, 0, false };"),
+    (U, "            case 't': return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : UA_TERMINAL, 0, false };", "            case 't': return (UiAction){ UA_TERMINAL, 0, false };"),
     (U, "        return (UiAction){ in->modal == UI_MODAL_YES && u->in_trash ? UA_EMPTY_TRASH : UA_NONE, 0, false };", "        return (UiAction){ in->modal == UI_MODAL_YES ? UA_EMPTY_TRASH : UA_NONE, 0, false };"),
     (U, "    if (!u->in_trash) u->empty_asking = false;\n", ""),
     (U, " || u->full_told || u->empty_asking || u->props || u->ow || u->bmp || u->keys || u->about || u->bar_told;", " || u->full_told || u->props || u->ow;"),
@@ -906,7 +906,7 @@ MUTANTS += [
 W = 'fs/windows.c'
 MUTANTS += [
     (U, "    case UM_NEW_TAB: case UM_CLOSE_ALL: case UM_CLOSE: case UM_PROPERTIES: return true;", "    case UM_NEW_TAB: case UM_CLOSE_ALL: case UM_CLOSE: return true;"),
-    (U, "    case UM_NEW_WINDOW: return !u->in_trash && !u->in_search;", "    case UM_NEW_WINDOW: return !u->in_search;"),
+    (U, '    case UM_NEW_WINDOW: return !u->in_trash;', '    case UM_NEW_WINDOW: return true;'),
     (U, "    case UM_NEW_FOLDER: case UM_NEW_FILE: return !u->in_trash && u->can_write;", "    case UM_NEW_FOLDER: case UM_NEW_FILE: return u->can_write;"),
     (U, "    case UM_NEW_FOLDER: case UM_NEW_FILE: return !u->in_trash && u->can_write;", "    case UM_NEW_FOLDER: case UM_NEW_FILE: return !u->in_trash;"),
     (U, "    case UM_OPEN: return files;", "    case UM_OPEN: return true;"),
@@ -944,7 +944,7 @@ MUTANTS += [
     (U, "        if (e.key == UK_QUIT_ALL && !u->quit_asking) {", "        if (e.key == UK_QUIT_ALL) {"),
     (U, "        if (!prompt && !u->menu_on && (e.key == UK_F10 ||", "        if (!u->menu_on && (e.key == UK_F10 ||"),
     (U, "        if (u->menu_on && !prompt) {\n            UiAction a;\n            if (ui_menu_event(u, e, &a)) {", "        if (u->menu_on && !prompt && false) {\n            UiAction a;\n            if (ui_menu_event(u, e, &a)) {"),
-    (U, "        case UK_NEW_WINDOW: return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : u->in_search ? UA_NOT_IN_SEARCH : UA_NEW_WINDOW, 0, false };", "        case UK_NEW_WINDOW: return (UiAction){ u->in_search ? UA_NOT_IN_SEARCH : UA_NEW_WINDOW, 0, false };"),
+    (U, '        case UK_NEW_WINDOW: return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : UA_NEW_WINDOW, 0, false };', '        case UK_NEW_WINDOW: return (UiAction){ UA_NEW_WINDOW, 0, false };'),
     (U, "|| in->menu_title >= 0 || in->menu_item >= 0 || in->menu_away || in->ctx_row >= 0 || in->ctx_here || in->ctx_side >= 0 || in->ctx_crumb >= 0 || in->ctx_tab >= 0 || in->prop_box", " || in->menu_title >= 0 || in->menu_item >= 0 || in->ctx_row >= 0 || in->ctx_here || in->ctx_side >= 0 || in->ctx_crumb >= 0 || in->ctx_tab >= 0 || in->prop_box"),
     # Not a mutant: dropping O_EXCL in op_mkfile is inert without a race, as name_free picked a
     # name not there; kept so another program's file made in between is never truncated.
@@ -1103,7 +1103,7 @@ MUTANTS += [
     (U, "        if (u->props && !u->asking && !u->confirming) {", "        if (u->props && !u->confirming) {"),
     (U, "        if (u->props && !u->asking && !u->confirming) {", "        if (u->props && !u->asking) {"),
     (U, "        case UK_PROPERTIES: return ui_props_open(u);", ""),
-    (U, "        case UK_TERMINAL: return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : u->in_search ? UA_NOT_IN_SEARCH : UA_TERMINAL, 0, false };", "        case UK_TERMINAL: return (UiAction){ u->in_search ? UA_NOT_IN_SEARCH : UA_TERMINAL, 0, false };"),
+    (U, '        case UK_TERMINAL: return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : UA_TERMINAL, 0, false };', '        case UK_TERMINAL: return (UiAction){ UA_TERMINAL, 0, false };'),
     (U, "    case UM_PROPERTIES: return ui_props_open(u);", ""),
     (U, "|| in->menu_away || in->ctx_row >= 0 || in->ctx_here || in->ctx_side >= 0 || in->ctx_crumb >= 0 || in->ctx_tab >= 0 || in->prop_box >= 0 ||\n", "|| in->menu_away || in->ctx_row >= 0 || in->ctx_here || in->ctx_side >= 0 || in->ctx_crumb >= 0 || in->ctx_tab >= 0 ||\n"),
     (U, ".menu_item = -1, .ctx_row = -1, .ctx_side = -1, .ctx_crumb = -1, .ctx_tab = -1, .prop_box = -1, .ow_row = -1, .ow_drow = -1, .bmp_row = -1, .bmp_drow = -1 };", ".menu_item = -1, .ctx_row = -1, .ctx_side = -1, .ctx_crumb = -1, .ctx_tab = -1, .prop_box = 0, .ow_row = -1, .ow_drow = -1 };"),
@@ -1337,9 +1337,9 @@ MUTANTS += [
     (U, "    case UM_PASTE: return u->can_paste && u->can_write;", "    case UM_PASTE: return u->can_write;"),
     (U, "    case UM_PASTE: return u->can_paste && u->can_write;", "    case UM_PASTE: return u->can_paste;"),
     (U, "    case UM_SELECT_ALL: case UM_SELECT_MATCH: case UM_INVERT: return files;", "    case UM_SELECT_ALL: case UM_SELECT_MATCH: case UM_INVERT: return true;"),
-    (U, "    case UM_RENAME: case UM_DUPLICATE: case UM_MAKE_LINK: return here && !u->in_trash && u->can_write;", "    case UM_RENAME: case UM_DUPLICATE: case UM_MAKE_LINK: return here && u->can_write;"),
-    (U, "    case UM_RENAME: case UM_DUPLICATE: case UM_MAKE_LINK: return here && !u->in_trash && u->can_write;", "    case UM_RENAME: case UM_DUPLICATE: case UM_MAKE_LINK: return here && !u->in_trash;"),
-    (U, "    case UM_TRASH: case UM_DELETE: return here && !u->in_search;", "    case UM_TRASH: case UM_DELETE: return !u->in_search;"),
+    (U, '    case UM_RENAME: case UM_DUPLICATE: case UM_MAKE_LINK: return here && !u->in_trash && (u->can_write || u->in_search);', '    case UM_RENAME: case UM_DUPLICATE: case UM_MAKE_LINK: return here && (u->can_write || u->in_search);'),
+    (U, '    case UM_RENAME: case UM_DUPLICATE: case UM_MAKE_LINK: return here && !u->in_trash && (u->can_write || u->in_search);', '    case UM_RENAME: case UM_DUPLICATE: case UM_MAKE_LINK: return here && !u->in_trash;'),
+    (U, '    case UM_TRASH: case UM_DELETE: return here;', '    case UM_TRASH: case UM_DELETE: return true;'),
     (U, "    case UM_RESTORE: return here;", "    case UM_RESTORE: return true;"),
     (U, "    case UM_ZOOM_IN: return u->grid && ui_zoom_level(ui_zoom_px(u)) < UI_ZOOMS - 1;", "    case UM_ZOOM_IN: return u->grid;"),
     (U, "    case UM_ZOOM_OUT: return u->grid && ui_zoom_level(ui_zoom_px(u)) > 0;", "    case UM_ZOOM_OUT: return u->grid;"),
@@ -1348,7 +1348,7 @@ MUTANTS += [
     (U, "    case UM_PARENT: return u->can_up;", "    case UM_PARENT: return true;"),
     (U, "    case UM_BACK: return u->can_back;", "    case UM_BACK: return u->can_forward;"),
     (U, "    case UM_FORWARD: return u->can_forward;", "    case UM_FORWARD: return u->can_back;"),
-    (U, "    case UM_TERMINAL: return !u->in_trash && !u->in_search;", "    case UM_TERMINAL: return !u->in_search;"),
+    (U, '    case UM_TERMINAL: return !u->in_trash;', '    case UM_TERMINAL: return true;'),
     (U, "    case UM_SIDE_TREE: return u->side_mode == SIDE_TREE;", "    case UM_SIDE_TREE: return u->side_mode == SIDE_PLACES;"),
     (U, "    case UM_HIDDEN: return u->shows_hidden;", "    case UM_HIDDEN: return 0;"),
     (U, "    case UM_SORT_REVERSE: return u->sort.reverse;", "    case UM_SORT_REVERSE: return 0;"),
@@ -1389,7 +1389,7 @@ MUTANTS += [
 # ---- F7.4: Duplicate
 MUTANTS += [
     (U, "    case UM_DUPLICATE: return (UiAction){ UA_DUPLICATE, 0, false };", ""),
-    (U, "    case UM_RENAME: case UM_DUPLICATE: case UM_MAKE_LINK: return here && !u->in_trash && u->can_write;", "    case UM_RENAME: case UM_DUPLICATE: return !u->in_trash && u->can_write;"),
+    (U, '    case UM_RENAME: case UM_DUPLICATE: case UM_MAKE_LINK: return here && !u->in_trash && (u->can_write || u->in_search);', '    case UM_RENAME: case UM_DUPLICATE: case UM_MAKE_LINK: return !u->in_trash && (u->can_write || u->in_search);'),
 ]
 MUTANTS += [
     (U, "    if (u->find_m.bad && u->find_len > 0) return;\n", ""),
@@ -1528,8 +1528,8 @@ MUTANTS += [
 ]
 # ---- F8 step 2: a folder's own entries, Follow Link, Make Link and its undo
 MUTANTS += [
-    (U, "    if (it == UM_OPEN_WINDOW || it == UM_PASTE_INTO || it == UM_TERMINAL_IN) return u->ctx_dir && !u->in_trash;", "    if (it == UM_OPEN_WINDOW || it == UM_PASTE_INTO || it == UM_TERMINAL_IN) return u->ctx_dir;"),
-    (U, "    if (it == UM_OPEN_WINDOW || it == UM_PASTE_INTO || it == UM_TERMINAL_IN) return u->ctx_dir && !u->in_trash;", "    if (it == UM_OPEN_WINDOW || it == UM_PASTE_INTO || it == UM_TERMINAL_IN) return !u->in_trash;"),
+    (U, '|| it == UM_SEARCH_IN) return u->ctx_dir && !u->in_trash;', '|| it == UM_SEARCH_IN) return u->ctx_dir;'),
+    (U, '|| it == UM_SEARCH_IN) return u->ctx_dir && !u->in_trash;', '|| it == UM_SEARCH_IN) return !u->in_trash;'),
     (U, "    if (it == UM_BOOKMARK_IT) return u->ctx_dir && !u->in_trash && !u->sel_bm;", "    if (it == UM_BOOKMARK_IT) return u->ctx_dir && !u->in_trash;"),
     (U, "    if (it == UM_BOOKMARK_IT) return u->ctx_dir && !u->in_trash && !u->sel_bm;", "    if (it == UM_BOOKMARK_IT) return u->ctx_dir && !u->sel_bm;"),
     (U, "    if (it == UM_FOLLOW) return u->ctx_one && u->sel_link && !u->in_trash;", "    if (it == UM_FOLLOW) return u->sel_link && !u->in_trash;"),
@@ -1542,8 +1542,8 @@ MUTANTS += [
     (U, "    case UM_TERMINAL_IN: return (UiAction){ UA_TERMINAL, u->list.sel, true };", "    case UM_TERMINAL_IN: return (UiAction){ UA_TERMINAL, 0, true };"),
     (U, "    case UM_BOOKMARK_IT: return (UiAction){ UA_ADD_BOOKMARK, u->list.sel, true };", "    case UM_BOOKMARK_IT: return (UiAction){ UA_ADD_BOOKMARK, u->list.sel, false };"),
     (U, "    case UM_FOLLOW: return (UiAction){ UA_FOLLOW, u->list.sel, false };", ""),
-    (U, "        case UK_MAKE_LINK: if (l->n > 0 && !u->side_focus) return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : u->in_search ? UA_NOT_IN_SEARCH : UA_MAKE_LINK, 0, false }; break;", ""),
-    (U, "        case UK_MAKE_LINK: if (l->n > 0 && !u->side_focus) return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : u->in_search ? UA_NOT_IN_SEARCH : UA_MAKE_LINK, 0, false }; break;", "        case UK_MAKE_LINK: if (l->n > 0 && !u->side_focus) return (UiAction){ u->in_search ? UA_NOT_IN_SEARCH : UA_MAKE_LINK, 0, false }; break;"),
+    (U, '        case UK_MAKE_LINK: if (l->n > 0 && !u->side_focus) return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : UA_MAKE_LINK, 0, false }; break;', ''),
+    (U, '        case UK_MAKE_LINK: if (l->n > 0 && !u->side_focus) return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : UA_MAKE_LINK, 0, false }; break;', '        case UK_MAKE_LINK: if (l->n > 0 && !u->side_focus) return (UiAction){ UA_MAKE_LINK, 0, false }; break;'),
     (O, "        if (symlink(target, p) == 0) return true;", "        if (symlink(target, p) == 0) return false;"),
     (O, "        if (!name_free(dir, name, false, false, false, made, cap) || !path_put(p, sizeof p, dir, str_from_c(made)))\n            return err_set(err, \"no free name for %.*s\", STR_ARG(name)), false;\n        if (!ops_allowed(p, err)) return false;\n        if (symlink", "        if (!name_free(dir, name, false, false, false, made, cap) || !path_put(p, sizeof p, dir, str_from_c(made)))\n            return err_set(err, \"no free name for %.*s\", STR_ARG(name)), false;\n        if (symlink"),
     (O, "    if (!name_valid(name, err)) return false;\n    for (int tries = 0; tries < 5; tries++) {\n        char p[PATH_MAX];\n        if (!name_free(dir, name, false, false, false, made, cap) || !path_put(p, sizeof p, dir, str_from_c(made)))\n            return err_set(err, \"no free name for %.*s\", STR_ARG(name)), false;\n        if (!ops_allowed(p, err)) return false;\n        if (symlink", "    for (int tries = 0; tries < 5; tries++) {\n        char p[PATH_MAX];\n        if (!name_free(dir, name, false, false, false, made, cap) || !path_put(p, sizeof p, dir, str_from_c(made)))\n            return err_set(err, \"no free name for %.*s\", STR_ARG(name)), false;\n        if (!ops_allowed(p, err)) return false;\n        if (symlink"),
@@ -1554,7 +1554,7 @@ MUTANTS += [
 # ---- F8 step 3: a folder elsewhere's menu
 MUTANTS += [
     (U, "    if (u->menu == UI_CTX_FOLDER) return ui_folder_shown(u, it);", ""),
-    (U, "    case UM_OPEN_WINDOW: case UM_TERMINAL_IN: case UM_PASTE_INTO: case UM_PROPS_IT: return !u->ctx_trash;", "    case UM_OPEN_WINDOW: case UM_TERMINAL_IN: case UM_PASTE_INTO: case UM_PROPS_IT: return true;"),
+    (U, '    case UM_OPEN_WINDOW: case UM_TERMINAL_IN: case UM_SEARCH_IN: case UM_PASTE_INTO: case UM_PROPS_IT: return !u->ctx_trash;', '    case UM_OPEN_WINDOW: case UM_TERMINAL_IN: case UM_SEARCH_IN: case UM_PASTE_INTO: case UM_PROPS_IT: return true;'),
     (U, "    case UM_CUT_IT: case UM_COPY_IT: return !u->ctx_trash && !u->ctx_place;", "    case UM_CUT_IT: case UM_COPY_IT: return !u->ctx_trash;"),
     (U, "    case UM_CUT_IT: case UM_COPY_IT: return !u->ctx_trash && !u->ctx_place;", "    case UM_CUT_IT: case UM_COPY_IT: return !u->ctx_place;"),
     (U, "    case UM_BOOKMARK_IT: return !u->ctx_trash && !u->ctx_bmed;", "    case UM_BOOKMARK_IT: return !u->ctx_trash;"),
@@ -1746,20 +1746,10 @@ MUTANTS += [
     (U, "    [UM_SEARCH] = { \"Search\\xE2\\x80\\xA6\", \"Ctrl+Shift+F\", \"search\", { UK_SEARCH, 0 } },", "    [UM_SEARCH] = { \"Search\\xE2\\x80\\xA6\", \"Ctrl+Shift+F\", \"search\", { UK_NONE, 0 } },"),
     (U, "UM_SEP, UM_FIND, UM_SEARCH, UM_LOCATION, UM_TERMINAL,\n};", "UM_SEP, UM_FIND, UM_LOCATION, UM_TERMINAL,\n};"),
     # what the results can't do yet, and the menus
-    (U, "            case 't': return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : u->in_search ? UA_NOT_IN_SEARCH : UA_TERMINAL, 0, false };", "            case 't': return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : UA_TERMINAL, 0, false };"),
     (U, "        case UK_ADD_BOOKMARK: return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : u->in_search ? UA_NOT_IN_SEARCH : UA_ADD_BOOKMARK, 0, false };", "        case UK_ADD_BOOKMARK: return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : UA_ADD_BOOKMARK, 0, false };"),
-    (U, "            if (l->n > 0 && !u->side_focus && u->in_search) return (UiAction){ UA_NOT_IN_SEARCH, 0, false };\n            if (l->n > 0 && !u->side_focus) ui_edit_rename", "            if (l->n > 0 && !u->side_focus) ui_edit_rename"),
-    (U, "            if (l->n > 0 && !u->side_focus && u->in_search) return (UiAction){ UA_NOT_IN_SEARCH, 0, false };\n            if (l->n > 0 && !u->side_focus && u->in_trash) u->confirming", "            if (l->n > 0 && !u->side_focus && u->in_trash) u->confirming"),
-    (U, "            if (l->n > 0 && !u->side_focus && u->in_search) return (UiAction){ UA_NOT_IN_SEARCH, 0, false };\n            if (l->n > 0 && !u->side_focus) u->confirming", "            if (l->n > 0 && !u->side_focus) u->confirming"),
-    (U, "UA_NOT_IN_TRASH : u->in_search ? UA_NOT_IN_SEARCH : UA_MAKE_LINK", "UA_NOT_IN_TRASH : UA_MAKE_LINK"),
     (U, "UA_NOT_IN_TRASH : u->in_search ? UA_NOT_IN_SEARCH : UA_PASTE", "UA_NOT_IN_TRASH : UA_PASTE"),
     (U, "UA_NOT_IN_TRASH : u->in_search ? UA_NOT_IN_SEARCH : UA_NEWFOLDER", "UA_NOT_IN_TRASH : UA_NEWFOLDER"),
-    (U, "UA_NOT_IN_TRASH : u->in_search ? UA_NOT_IN_SEARCH : UA_NEW_WINDOW", "UA_NOT_IN_TRASH : UA_NEW_WINDOW"),
-    (U, "UA_NOT_IN_TRASH : u->in_search ? UA_NOT_IN_SEARCH : UA_TERMINAL, 0, false };\n        case UK_SEARCH", "UA_NOT_IN_TRASH : UA_TERMINAL, 0, false };\n        case UK_SEARCH"),
-    (U, "    case UM_NEW_WINDOW: return !u->in_trash && !u->in_search;", "    case UM_NEW_WINDOW: return !u->in_trash;"),
-    (U, "    case UM_TRASH: case UM_DELETE: return here && !u->in_search;", "    case UM_TRASH: case UM_DELETE: return here;"),
     (U, "    case UM_SEARCH: return !u->in_trash;", "    case UM_SEARCH: return true;"),
-    (U, "    case UM_TERMINAL: return !u->in_trash && !u->in_search;", "    case UM_TERMINAL: return !u->in_trash;"),
     (U, "    case UM_ADD_BOOKMARK: return u->can_bookmark && !u->in_trash && !u->in_search;", "    case UM_ADD_BOOKMARK: return u->can_bookmark && !u->in_trash;"),
     (U, "    case UM_HERE_PROPS: return !u->in_search;", "    case UM_HERE_PROPS: return true;"),
     (U, "    if (str_eq(cw, S(TRASH_URI)) || is_search(cwd)) {", "    if (str_eq(cw, S(TRASH_URI))) {"),
@@ -1767,3 +1757,18 @@ MUTANTS += [
     (U, "sel.len < (isize)sizeof stack[*n].sel ? (int)sel.len : 0, sel.p ? sel.p : \"\");", "(int)sel.len, sel.p ? sel.p : \"\");"),
     (U, "sel.len < (isize)sizeof stack[*n].sel ? (int)sel.len : 0, sel.p ? sel.p : \"\");", "sel.len <= (isize)sizeof stack[*n].sel ? (int)sel.len : 0, sel.p ? sel.p : \"\");"),
 ]
+# ---- F9 step 2: working with results (2026-10-28)
+MUTANTS += [
+    (U, "    if (it == UM_CONTAINING) return u->in_search;", "    if (it == UM_CONTAINING) return true;"),
+    (U, "    [UM_CONTAINING] = { \"Open Containing Folder\", \"Ctrl+Enter\", \"containing\", { UK_CONTAINING, 0 } },", "    [UM_CONTAINING] = { \"Open Containing Folder\", \"Ctrl+Enter\", \"containing\", { UK_NONE, 0 } },"),
+    (U, "            if (u->in_search && !u->side_focus && l->n > 0) return (UiAction){ UA_CONTAINING, l->sel, false };", "            if (!u->side_focus && l->n > 0) return (UiAction){ UA_CONTAINING, l->sel, false };"),
+    (U, "            if (u->in_search && !u->side_focus && l->n > 0) return (UiAction){ UA_CONTAINING, l->sel, false };", "            if (u->in_search && l->n > 0) return (UiAction){ UA_CONTAINING, l->sel, false };"),
+    (U, "            if (u->in_search && !u->side_focus && l->n > 0) return (UiAction){ UA_CONTAINING, l->sel, false };", "            if (u->in_search && !u->side_focus && l->n > 0) return (UiAction){ UA_CONTAINING, 0, false };"),
+    (U, "    case UM_SEARCH_IN: return (UiAction){ UA_SEARCH, u->list.sel, true };", "    case UM_SEARCH_IN: return (UiAction){ UA_SEARCH, u->list.sel, false };"),
+    (U, "    case UM_OPEN_WINDOW: case UM_TERMINAL_IN: case UM_SEARCH_IN: case UM_PASTE_INTO: case UM_PROPS_IT: return !u->ctx_trash;", "    case UM_OPEN_WINDOW: case UM_TERMINAL_IN: case UM_PASTE_INTO: case UM_PROPS_IT: return !u->ctx_trash;"),
+    (U, "    UM_OPEN, UM_CONTAINING, UM_OPEN_TAB,", "    UM_OPEN, UM_OPEN_TAB,"),
+    (U, "UM_TERMINAL_IN, UM_SEARCH_IN, UM_FOLLOW,", "UM_TERMINAL_IN, UM_FOLLOW,"),
+    (U, "    case UM_RENAME: case UM_DUPLICATE: case UM_MAKE_LINK: return here && !u->in_trash && (u->can_write || u->in_search);", "    case UM_RENAME: case UM_DUPLICATE: case UM_MAKE_LINK: return here && !u->in_trash && u->can_write;"),
+    (U, "        case UK_CONTAINING:   // (the search view's: elsewhere every entry is in the folder shown)", "        case UK_CONTAINING + 1000:"),
+]
+

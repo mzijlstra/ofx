@@ -305,34 +305,78 @@ static void test_search_ui_refused(void)
 {
     static u8 mark[5];
     UiNames names = { name_at, NULL, dir_at };
-    // What the results can't do yet (F9 step 2) says so; what works through the entries' own
-    // paths stays (open, copy, cut, Properties, a folder's tab).
+    // Step 2 (2026-10-28): what the list does works on results, each in its own folder; what needs
+    // a folder shown says no: a paste, a new folder, a bookmark of it.
     Ui u = menu_ui(5);
     u.mark = mark, u.in_search = true, u.can_write = false;
-    const UiKey NO[] = { UK_F2, UK_DELETE, UK_SHIFT_DELETE, UK_MAKE_LINK, UK_PASTE, UK_NEWFOLDER, UK_NEW_WINDOW, UK_TERMINAL, UK_ADD_BOOKMARK };
-    for (int k = 0; k < COUNT(NO); k++) {
-        CHECK(menu_keys(&u, 1, NO[k]).kind == UA_NOT_IN_SEARCH);
-        CHECK(!u.editing && !u.confirming);
-    }
+    const UiKey NO[] = { UK_PASTE, UK_NEWFOLDER, UK_ADD_BOOKMARK };
+    for (int k = 0; k < COUNT(NO); k++) CHECK(menu_keys(&u, 1, NO[k]).kind == UA_NOT_IN_SEARCH);
+    const struct { UiKey k; UiActionKind a; } YES[] = {
+        { UK_DELETE, UA_TRASH }, { UK_MAKE_LINK, UA_MAKE_LINK }, { UK_NEW_WINDOW, UA_NEW_WINDOW }, { UK_TERMINAL, UA_TERMINAL },
+        { UK_ENTER, UA_OPEN }, { UK_COPY, UA_COPY }, { UK_CUT, UA_CUT }, { UK_PARENT, UA_PARENT }, { UK_TAB_NEW, UA_TAB_NEW },
+    };
+    for (int k = 0; k < COUNT(YES); k++) CHECK(menu_keys(&u, 1, YES[k].k).kind == YES[k].a);
     UiInput in = chars("t");
-    CHECK(ui_handle(&u, names, &in).kind == UA_NOT_IN_SEARCH);
-    CHECK(menu_keys(&u, 1, UK_ENTER).kind == UA_OPEN && menu_keys(&u, 1, UK_COPY).kind == UA_COPY && menu_keys(&u, 1, UK_CUT).kind == UA_CUT);
-    CHECK(menu_keys(&u, 1, UK_PARENT).kind == UA_PARENT && menu_keys(&u, 1, UK_TAB_NEW).kind == UA_TAB_NEW);
-    // The menus grey them.
-    const UiMenuItem GREY[] = { UM_NEW_WINDOW, UM_NEW_FOLDER, UM_NEW_FILE, UM_PASTE, UM_RENAME, UM_DUPLICATE, UM_MAKE_LINK, UM_TRASH, UM_DELETE,
-                                UM_TERMINAL, UM_ADD_BOOKMARK };
+    CHECK(ui_handle(&u, names, &in).kind == UA_TERMINAL);
+    menu_keys(&u, 1, UK_F2);
+    CHECK(u.editing);
+    menu_keys(&u, 1, UK_ESC);
+    menu_keys(&u, 1, UK_SHIFT_DELETE);
+    CHECK(u.confirming && u.confirm_n == 1);
+    u.confirming = false;
+    // Ctrl+Enter: the cursor's result's folder; outside a search, nothing (every entry is here).
+    u.list.sel = 3;
+    UiAction a = menu_keys(&u, 1, UK_CONTAINING);
+    CHECK(a.kind == UA_CONTAINING && a.index == 3);
+    u.side_focus = true;
+    CHECK(menu_keys(&u, 1, UK_CONTAINING).kind == UA_NONE);
+    u.side_focus = false;
+    // The menus: those three greyed; the rest there, Rename, Duplicate and Make Link whatever the
+    // folder shown (each result's own folder decides).
     u.can_bookmark = true;
+    const UiMenuItem GREY[] = { UM_NEW_FOLDER, UM_NEW_FILE, UM_PASTE, UM_ADD_BOOKMARK };
     for (int k = 0; k < COUNT(GREY); k++) CHECK(!ui_menu_enabled(&u, GREY[k]));
-    CHECK(ui_menu_enabled(&u, UM_OPEN) && ui_menu_enabled(&u, UM_COPY) && ui_menu_enabled(&u, UM_CUT) && ui_menu_enabled(&u, UM_SEARCH));
+    const UiMenuItem ON[] = { UM_NEW_WINDOW, UM_RENAME, UM_DUPLICATE, UM_MAKE_LINK, UM_TRASH, UM_DELETE, UM_TERMINAL, UM_OPEN, UM_COPY, UM_CUT, UM_SEARCH };
+    for (int k = 0; k < COUNT(ON); k++) CHECK(ui_menu_enabled(&u, ON[k]));
+    // A result's menu: Open Containing Folder; on a folder, Search in Folder…, a search below it.
+    in = ui_input_none(), in.ctx_row = 3;
+    ui_handle(&u, names, &in);
+    CHECK(u.menu_on && u.menu == UI_CTX_ENTRY && ui_menu_shown(&u, UM_CONTAINING) && ui_menu_enabled(&u, UM_CONTAINING) && !ui_menu_shown(&u, UM_SEARCH_IN));
+    in = ui_input_none(), in.menu_item = menu_place(UI_CTX_ENTRY, UM_CONTAINING);
+    a = ui_handle(&u, names, &in);
+    CHECK(a.kind == UA_CONTAINING && a.index == 3 && !u.menu_on);
+    in = ui_input_none(), in.ctx_row = 2;   // (dir_at: row 2 is a folder)
+    ui_handle(&u, names, &in);
+    CHECK(u.ctx_dir && ui_menu_shown(&u, UM_SEARCH_IN) && ui_menu_enabled(&u, UM_SEARCH_IN));
+    in = ui_input_none(), in.menu_item = menu_place(UI_CTX_ENTRY, UM_SEARCH_IN);
+    a = ui_handle(&u, names, &in);
+    CHECK(a.kind == UA_SEARCH && a.all && a.index == 2);
     // The empty space's menu: no Properties of a folder shown (a search isn't one).
     in = ui_input_none(), in.ctx_here = true;
     ui_handle(&u, names, &in);
     CHECK(u.menu_on && u.menu == UI_CTX_HERE && !ui_menu_enabled(&u, UM_HERE_PROPS));
     menu_keys(&u, 1, UK_ESC);
-    // Outside it, as before.
+    // Outside it: no Open Containing Folder; Search in Folder… on a folder still; the rest as before.
     u.in_search = false, u.can_write = true, u.can_paste = true;
+    in = ui_input_none(), in.ctx_row = 2;
+    ui_handle(&u, names, &in);
+    CHECK(!ui_menu_shown(&u, UM_CONTAINING) && ui_menu_shown(&u, UM_SEARCH_IN));
+    menu_keys(&u, 1, UK_ESC);
+    CHECK(menu_keys(&u, 1, UK_CONTAINING).kind == UA_NONE);
     for (int k = 0; k < COUNT(GREY); k++) CHECK(ui_menu_enabled(&u, GREY[k]));
-    CHECK(menu_keys(&u, 1, UK_NEWFOLDER).kind == UA_NEWFOLDER && menu_keys(&u, 1, UK_TERMINAL).kind == UA_TERMINAL);
+    CHECK(menu_keys(&u, 1, UK_NEWFOLDER).kind == UA_NEWFOLDER && menu_keys(&u, 1, UK_PASTE).kind == UA_PASTE);
+    // The trash view: no Search in Folder… on its folders (they're in the trash).
+    u.in_trash = true;
+    in = ui_input_none(), in.ctx_row = 2;
+    ui_handle(&u, names, &in);
+    CHECK(!ui_menu_shown(&u, UM_SEARCH_IN));
+    menu_keys(&u, 1, UK_ESC);
+    // A folder elsewhere (a sidebar row, a path button): Search in Folder…, not on Trash.
+    u.in_trash = false;
+    u.menu = UI_CTX_FOLDER;
+    CHECK(ui_menu_shown(&u, UM_SEARCH_IN) && ui_menu_enabled(&u, UM_SEARCH_IN));
+    u.ctx_trash = true;
+    CHECK(!ui_menu_shown(&u, UM_SEARCH_IN));
     // Restore, split from them: the trash view's, with the files' cursor.
     u = menu_ui(5);
     u.in_trash = true;
