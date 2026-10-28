@@ -45,6 +45,23 @@ static void wake_main(void)
     pthread_mutex_unlock(&wake_mu);
 }
 
+// ms from now, for join_by.
+static struct timespec deadline_in(int ms)
+{
+    struct timespec t;
+    clock_gettime(CLOCK_REALTIME, &t);
+    t.tv_nsec += (long)ms * 1000000L;
+    t.tv_sec += t.tv_nsec / 1000000000L, t.tv_nsec %= 1000000000L;
+    return t;
+}
+
+// A worker told to stop, joined by until; one that isn't done by then (stuck in a hung mount, say)
+// is left to finish on its own.
+static void join_by(pthread_t t, const struct timespec *until)
+{
+    if (pthread_timedjoin_np(t, NULL, until) != 0) pthread_detach(t);
+}
+
 // A wake-up at a time to come: the main loop sleeps until an event, so a tooltip's delay needs a
 // thread that sleeps until then and wakes it (Michael, 2026-10-24).
 static struct {

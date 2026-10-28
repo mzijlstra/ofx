@@ -12,6 +12,7 @@
 
 #include <fcntl.h>
 #include <poll.h>
+#include <stdatomic.h>
 
 enum { CLIP_OFFERS = 8, CLIP_READ_MAX = MiB(1), CLIP_WAIT_MS = 1000 };
 enum { OFFER_GNOME = 1, OFFER_URIS = 2, OFFER_TEXT = 4, OFFER_UTF8 = 8 };
@@ -23,8 +24,9 @@ static struct {
     struct wl_seat                     *seat;
     struct ext_data_control_manager_v1 *mgr;
     struct ext_data_control_device_v1  *dev;
-    bool      ok;          // the protocol is there: the system clipboard works
+    atomic_bool ok;        // the protocol is there: the system clipboard works (the thread clears it)
     pthread_t thread;
+    bool      started;     // thread is running (an unstarted pthread_t is no value to test)
     int       wake[2];     // a pipe that ends the thread
     pthread_mutex_t mu;
 
@@ -217,8 +219,9 @@ static bool clip_init(void)
     ext_data_control_device_v1_add_listener(clip.dev, &device_listener, NULL);
     wl_display_roundtrip(clip.dpy);   // the current selection
     if (pipe2(clip.wake, O_CLOEXEC) != 0) return false;
-    clip.ok = pthread_create(&clip.thread, NULL, clip_loop, NULL) == 0;
-    return clip.ok;
+    clip.started = pthread_create(&clip.thread, NULL, clip_loop, NULL) == 0;
+    clip.ok = clip.started;
+    return clip.started;
 }
 
 static void clip_quit(void)
@@ -226,7 +229,7 @@ static void clip_quit(void)
     if (!clip.dpy) return;
     if (clip.wake[1] >= 0) {
         write(clip.wake[1], "q", 1);
-        if (clip.ok || clip.thread) pthread_join(clip.thread, NULL);
+        if (clip.started) pthread_join(clip.thread, NULL);
     }
     if (clip.src) ext_data_control_source_v1_destroy(clip.src);
     for (int i = 0; i < CLIP_OFFERS; i++)

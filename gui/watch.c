@@ -26,7 +26,7 @@ enum { WATCH_QUIET_MS = 100, WATCH_MAX_MS = 1000 };
 static struct {
     int         fd;
     atomic_int  dir_wd;        // the open folder's watch, -1 for none
-    int         theme_wd, current_wd;
+    atomic_int  theme_wd, current_wd;   // the thread sets them; watch_dir reads them (2026-10-28: plain ints)
     int         mount_fd, mount_wd;  // the mountinfo file polled, or the test's watched; -1 for none
     atomic_int  bm_wd;         // the bookmarks file's folder, -1 for none (F7.5)
     char        current[PATH_MAX];   // $XDG_STATE_HOME/omarchy/current
@@ -53,7 +53,7 @@ static void watch_dir(const char *dir)
     int old = atomic_exchange(&watch.dir_wd, -1);
     // The same directory may be watched for the theme too (inotify gives one wd per inode):
     // removing it would end that watch as well.
-    if (old >= 0 && old != watch.theme_wd && old != watch.current_wd) inotify_rm_watch(watch.fd, old);
+    if (old >= 0 && old != atomic_load(&watch.theme_wd) && old != atomic_load(&watch.current_wd)) inotify_rm_watch(watch.fd, old);
     atomic_store(&watch.dir_wd, dir ? inotify_add_watch(watch.fd, dir, WATCH_DIR_MASK) : -1);
 }
 
@@ -70,8 +70,8 @@ static void watch_bookmarks(void)
 
 static void watch_theme_dirs(void)
 {
-    watch.current_wd = inotify_add_watch(watch.fd, watch.current, WATCH_THEME_MASK);
-    watch.theme_wd = inotify_add_watch(watch.fd, watch.theme, WATCH_THEME_MASK);
+    atomic_store(&watch.current_wd, inotify_add_watch(watch.fd, watch.current, WATCH_THEME_MASK));
+    atomic_store(&watch.theme_wd, inotify_add_watch(watch.fd, watch.theme, WATCH_THEME_MASK));
 }
 
 // Reads what is waiting: which flags it calls for.
@@ -90,11 +90,11 @@ static void watch_read(bool *list, bool *theme, bool *mounts)
         if (watch.mount_wd >= 0 && e->wd == watch.mount_wd) *mounts = true;
         if (e->wd == atomic_load(&watch.bm_wd) && e->len && strcmp(e->name, "bookmarks") == 0) *mounts = true;   // the places again (F7.5)
         if (e->wd == atomic_load(&watch.dir_wd)) *list = true;
-        if (e->wd == watch.theme_wd && !(e->mask & IN_IGNORED)) *theme = true;
-        if (e->wd == watch.current_wd) *theme = true, rewatch = true;
+        if (e->wd == atomic_load(&watch.theme_wd) && !(e->mask & IN_IGNORED)) *theme = true;
+        if (e->wd == atomic_load(&watch.current_wd)) *theme = true, rewatch = true;
     }
     // The theme directory replaced, or made after ofx started: watch the new one.
-    if (rewatch) watch.theme_wd = inotify_add_watch(watch.fd, watch.theme, WATCH_THEME_MASK);
+    if (rewatch) atomic_store(&watch.theme_wd, inotify_add_watch(watch.fd, watch.theme, WATCH_THEME_MASK));
 }
 
 // One poll of inotify and the mountinfo file, for at most ms (-1: no limit): the flags it raises.

@@ -128,12 +128,9 @@ static void thumbs_stop(void)
     thumbs.quit = true;
     pthread_cond_broadcast(&thumbs.cv);
     pthread_mutex_unlock(&thumbs.mu);
-    struct timespec until;
-    clock_gettime(CLOCK_REALTIME, &until);
-    until.tv_nsec += 200 * 1000000L;
-    if (until.tv_nsec >= 1000000000L) until.tv_sec++, until.tv_nsec -= 1000000000L;
+    struct timespec until = deadline_in(200);
     for (int i = 0; i < THUMB_WORKERS; i++)
-        if (thumbs.started[i] && pthread_timedjoin_np(thumbs.th[i], NULL, &until) != 0) pthread_detach(thumbs.th[i]);
+        if (thumbs.started[i]) join_by(thumbs.th[i], &until);
     for (int i = 0; i < thumbs.n; i++)
         if (thumbs.e[i].state == TS_SHOWN) UnloadTexture(thumbs.e[i].tex), thumbs.e[i].state = TS_NONE;
 }

@@ -49,7 +49,7 @@ static void search_publish(SearchWalk *w, bool done)
     pthread_mutex_lock(&search.mu);
     if (w->mine == atomic_load(&search.gen)) {
         search.n = search_wrote, search.s = w->s, search.done = done, search.fresh = true;
-        if (!search.quit) glfwPostEmptyEvent();
+        if (!search.quit) wake_main();
     }
     pthread_mutex_unlock(&search.mu);
     search_pub_at = now_ms();
@@ -243,9 +243,6 @@ static void search_stop(void)
     atomic_fetch_add(&search.gen, 1);
     pthread_cond_broadcast(&search.cv);
     pthread_mutex_unlock(&search.mu);
-    struct timespec until;
-    clock_gettime(CLOCK_REALTIME, &until);
-    until.tv_nsec += 200 * 1000000L;
-    if (until.tv_nsec >= 1000000000L) until.tv_sec++, until.tv_nsec -= 1000000000L;
-    if (pthread_timedjoin_np(search.thread, NULL, &until) != 0) pthread_detach(search.thread);
+    struct timespec until = deadline_in(200);
+    join_by(search.thread, &until);
 }

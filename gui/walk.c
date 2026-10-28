@@ -23,12 +23,18 @@ static struct {
 static char    walk_roots[WALK_ROOTS_MAX][PATH_MAX];   // the thread's copy of the roots
 static DuInode walk_inodes[DU_INODES];                 // the linked files the walk has seen
 
+// The sums so far, every DU_TICK entries; the window woken for them at most every
+// WALK_WAKE_MS, as search.c and jobs.c do (each wake draws a frame; 2026-10-28).
+enum { WALK_WAKE_MS = 100 };
+
 static void walk_tick(void *ctx, const DuSum *s)
 {
+    static i64 woke;   // (the walk thread's own)
     u32 gen = (u32)(uintptr_t)ctx;
     pthread_mutex_lock(&walk.mu);
     if (gen == atomic_load(&walk.gen)) walk.sum = *s, walk.sum_gen = gen, walk.fresh = true;
-    if (!walk.quit) glfwPostEmptyEvent();
+    i64 now = now_ms();
+    if (!walk.quit && now - woke >= WALK_WAKE_MS) wake_main(), woke = now;
     pthread_mutex_unlock(&walk.mu);
 }
 
@@ -52,7 +58,7 @@ static void *walk_loop(void *arg)
         bool whole = du_walk(&w, roots, n, &s);
         pthread_mutex_lock(&walk.mu);
         if (whole && gen == atomic_load(&walk.gen)) walk.sum = s, walk.sum_gen = gen, walk.done = walk.fresh = true;
-        if (!walk.quit) glfwPostEmptyEvent();
+        if (!walk.quit) wake_main();
     }
     pthread_mutex_unlock(&walk.mu);
     return NULL;
@@ -96,9 +102,6 @@ static void walk_stop(void)
     atomic_fetch_add(&walk.gen, 1);
     pthread_cond_broadcast(&walk.cv);
     pthread_mutex_unlock(&walk.mu);
-    struct timespec until;
-    clock_gettime(CLOCK_REALTIME, &until);
-    until.tv_nsec += 200 * 1000000L;
-    if (until.tv_nsec >= 1000000000L) until.tv_sec++, until.tv_nsec -= 1000000000L;
-    if (pthread_timedjoin_np(walk.thread, NULL, &until) != 0) pthread_detach(walk.thread);
+    struct timespec until = deadline_in(200);
+    join_by(walk.thread, &until);
 }

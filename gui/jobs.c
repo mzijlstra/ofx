@@ -358,12 +358,8 @@ static void jobs_stop(void)
 {
     jobs.nwait = 0;
     for (int i = 0; i < jobs.nrun; i++) job_cancel(job_recs[jobs.run[i]].id);
-    struct timespec until;
-    clock_gettime(CLOCK_REALTIME, &until);
-    until.tv_nsec += 500 * 1000000L;
-    if (until.tv_nsec >= 1000000000L) until.tv_sec++, until.tv_nsec -= 1000000000L;
-    for (int i = 0; i < jobs.nrun; i++)
-        if (pthread_timedjoin_np(job_recs[jobs.run[i]].thread, NULL, &until) != 0) pthread_detach(job_recs[jobs.run[i]].thread);
+    struct timespec until = deadline_in(500);
+    for (int i = 0; i < jobs.nrun; i++) join_by(job_recs[jobs.run[i]].thread, &until);
     jobs.nrun = 0;
 }
 

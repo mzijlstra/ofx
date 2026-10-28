@@ -64,11 +64,8 @@ static void space_stop(void)
     space.quit = true;
     pthread_cond_broadcast(&space.cv);
     pthread_mutex_unlock(&space.mu);
-    struct timespec until;
-    clock_gettime(CLOCK_REALTIME, &until);
-    until.tv_nsec += 200 * 1000000L;
-    if (until.tv_nsec >= 1000000000L) until.tv_sec++, until.tv_nsec -= 1000000000L;
-    if (pthread_timedjoin_np(space.thread, NULL, &until) != 0) pthread_detach(space.thread);
+    struct timespec until = deadline_in(200);
+    join_by(space.thread, &until);
 }
 
 // The space of each drive in pl and of cwd, asked for.

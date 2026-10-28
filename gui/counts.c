@@ -44,7 +44,7 @@ static void *count_loop(void *arg)
         pthread_mutex_lock(&counts.mu);
         if (gen == counts.gen) counts.res[counts.sn++] = (CountAnswer){ gen, idx, n };
         // Not after quit: the window and GLFW may be gone by the time a stuck count comes back.
-        if (!counts.quit) glfwPostEmptyEvent();
+        if (!counts.quit) wake_main();
     }
     pthread_mutex_unlock(&counts.mu);
     return NULL;
@@ -65,11 +65,8 @@ static void count_stop(void)
     counts.quit = true;
     pthread_cond_broadcast(&counts.cv);
     pthread_mutex_unlock(&counts.mu);
-    struct timespec until;
-    clock_gettime(CLOCK_REALTIME, &until);
-    until.tv_nsec += 200 * 1000000L;
-    if (until.tv_nsec >= 1000000000L) until.tv_sec++, until.tv_nsec -= 1000000000L;
-    if (pthread_timedjoin_np(counts.thread, NULL, &until) != 0) pthread_detach(counts.thread);
+    struct timespec until = deadline_in(200);
+    join_by(counts.thread, &until);
 }
 
 // A new listing: what was asked for the old one is dropped, and its answers with it.

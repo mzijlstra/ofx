@@ -93,16 +93,20 @@ static struct {
 
 static u8 script_mem[KiB(256)];
 
-// `idle`'s stand-in wake-up: 3 s on, should the timer never come.
+// `idle`'s stand-in wake-up: 3 s on, should the timer never come. Each idle has its own number,
+// so a stand-in left over from an earlier one (two idles within 3 s) doesn't end this one, and it
+// wakes the window through wake_main, which is quiet once the window is closing (2026-10-28).
 static atomic_bool idle_fallback;
+static atomic_int  idle_gen;
 static const char *idle_woke = "-";
 
 static void *idle_fallback_main(void *arg)
 {
-    (void)arg;
+    int gen = (int)(intptr_t)arg;
     nanosleep(&(struct timespec){ 3, 0 }, NULL);
+    if (atomic_load(&idle_gen) != gen) return NULL;
     atomic_store(&idle_fallback, true);
-    glfwPostEmptyEvent();
+    wake_main();
     return NULL;
 }
 
@@ -113,13 +117,15 @@ static void script_idle(void)
 {
     i64 due = wake_due();
     atomic_store(&idle_fallback, false);
+    int gen = atomic_fetch_add(&idle_gen, 1) + 1;
     pthread_t th;
-    pthread_create(&th, NULL, idle_fallback_main, NULL);
+    pthread_create(&th, NULL, idle_fallback_main, (void *)(intptr_t)gen);
     pthread_detach(th);
     EnableEventWaiting();
     while (due && now_ms() < due && !atomic_load(&idle_fallback)) PollInputEvents();
     DisableEventWaiting();
     idle_woke = !due ? "nothing" : atomic_load(&idle_fallback) ? "fallback" : "timer";
+    atomic_fetch_add(&idle_gen, 1);   // (this idle's stand-in, still asleep, now does nothing)
 }
 
 static bool script_open(const char *path)

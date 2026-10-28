@@ -34,7 +34,7 @@ MUTANTS = [
     (G, "        memmove(up, d.p, (size_t)d.len);\n        up[d.len] = 0;", "        snprintf(up, sizeof up, \"%.*s\", STR_ARG(d));"),
     (G, "        atomic_store(&watch.list_ready, true);\n        glfwPostEmptyEvent();\n        char shown", "        char shown"),
     (W, "static const u32 WATCH_DIR_MASK = IN_CREATE | ", "static const u32 WATCH_DIR_MASK = "),
-    (W, "    if (rewatch) watch.theme_wd = inotify_add_watch(watch.fd, watch.theme, WATCH_THEME_MASK);", ""),
+    (W, "    if (rewatch) atomic_store(&watch.theme_wd, inotify_add_watch(watch.fd, watch.theme, WATCH_THEME_MASK));", ""),
     (W, "        if (theme) atomic_store(&watch.theme_ready, true);", ""),
     # F2
     (G, "    if (!same && app.have_list && !stepping) hist_leave(&hist, app.cwd, sel_name());\n", ""),
@@ -135,8 +135,8 @@ MUTANTS = [
     (J, "    if (undo_gen != r->undo_gen) {", "    if (0) {"),
     (G, "    for (isize i = 0; i < n; i++)\n        if (jobs_refuse(paths[i])) return;\n", ""),
     # F5.4: a theme switch as omarchy-theme-set makes it
-    (W, "        if (e->wd == watch.current_wd) *theme = true, rewatch = true;", "        if (e->wd == watch.current_wd) rewatch = true;"),
-    (W, "        if (e->wd == watch.theme_wd && !(e->mask & IN_IGNORED)) *theme = true;", ""),
+    (W, "        if (e->wd == atomic_load(&watch.current_wd)) *theme = true, rewatch = true;", "        if (e->wd == atomic_load(&watch.current_wd)) rewatch = true;"),
+    (W, "        if (e->wd == atomic_load(&watch.theme_wd) && !(e->mask & IN_IGNORED)) *theme = true;", ""),
     (G, "    app.theme = theme_load(&scratch);\n    icons_reset();", "    app.theme = theme_load(&scratch);"),
     # F6
     (W, "        if (watch.mount_wd >= 0 && e->wd == watch.mount_wd) *mounts = true;\n", ""),
@@ -502,8 +502,8 @@ MUTANTS = [
     (G, '            if (k == 1 && !app.ui.group_col) continue;', '', 'f8'),
     (G, '            if (app.ui.group_col) info_cell(CLAY_IDI("group", r)', '            info_cell(CLAY_IDI("group", r)', 'f8'),
     # ---- quit doesn't wait for a hung drive (2026-10-26: no mutant was hang's or f6b's alone)
-    (K, '    if (pthread_timedjoin_np(counts.thread, NULL, &until) != 0) pthread_detach(counts.thread);', '    pthread_join(counts.thread, NULL);', 'hang'),
-    ('gui/space.c', '    if (pthread_timedjoin_np(space.thread, NULL, &until) != 0) pthread_detach(space.thread);', '    pthread_join(space.thread, NULL);', 'f6'),
+    (G, '    if (pthread_timedjoin_np(t, NULL, until) != 0) pthread_detach(t);', '    pthread_join(t, NULL);', 'hang'),   # (join_by: every worker's stop)
+    ('gui/script.c', '    if (atomic_load(&idle_gen) != gen) return NULL;\n', '', 'f2 f63'),
     # ---- --select (FileManager1's ShowItems, 2026-10-26)
     (G, '    if ((selecting && strcmp(dir, "/") != 0) || (stat(', '    if ((stat(', 'f73'),
     (G, '    if (selecting ? !select_path(start, dir, sizeof dir) : !realpath(', '    if (!realpath(', 'f73'),
@@ -540,7 +540,7 @@ MUTANTS = [
     (G, '    go_to_in(app.cwd, str_from_c(app.search_pick[0] ? app.search_pick : keep), app.ui.list.sel, true);', '    go_to_in(app.cwd, str_from_c(keep), app.ui.list.sel, true);', 'f9'),
     (G, '    snprintf(app.cwd, sizeof app.cwd, "%s", uri);\n    app.search_pick[0] = 0;', '    app.search_pick[0] = 0;', 'f9'),
     (G, '    if (!in_search) ui_unfocus(&app.ui, UI_FOCUS_SEARCH);', '', 'f9'),
-    (G, '        if (text.len == 0) app.ui.focus = UI_FOCUS_SEARCH;\n', '', 'f9'),
+    (G, '        if (text.len == 0) app.ui.focus = UI_FOCUS_SEARCH;', '        if (false) app.ui.focus = UI_FOCUS_SEARCH;', 'f9'),
     (G, '        snprintf(app.search_pick, sizeof app.search_pick, "%.*s", STR_ARG(select));\n    }', '    }', 'f9'),
     (G, '        if (dir && search_uri(uri, sizeof uri, dir, STR_EMPTY)) tab_open(uri, STR_EMPTY, true);', '        if (dir) tab_open(dir, STR_EMPTY, true);', 'f9'),
     (G, '    case UA_NOT_IN_SEARCH: set_status(true, "A search isn\'t a folder: that works in one"); break;', '    case UA_NOT_IN_SEARCH: break;', 'f9'),
