@@ -299,14 +299,15 @@ T=$base/keys; rm -rf "$T"; mkdir -p "$T/tree/adir" "$T/tree/bdir"; touch "$T/tre
 G=$T/guard; mkdir -p "$G/bin"; vk=$here/../../build/vkbd
 if WAYLAND_DISPLAY=ofx-no-such OFX_GUI_ROOT="$G" "$vk" b 2>/dev/null; then echo "keys: vkbd typed with no test sway"; failed keys; fi
 if gs=$("$here/../../tools/gui/sway.sh" start "$G"); then
-    real=$(cat "$G/sway.pid")
-    if WAYLAND_SOCKET=99 WAYLAND_DISPLAY="$gs" OFX_GUI_ROOT="$G" "$vk" b 2>/dev/null; then echo "keys: vkbd took WAYLAND_SOCKET"; failed keys; fi
+    real=$(cat "$G/sway.pid") bad=""   # (failed only after the stop: under OFX_GUI_FAIL_FAST it exits)
+    if WAYLAND_SOCKET=99 WAYLAND_DISPLAY="$gs" OFX_GUI_ROOT="$G" "$vk" b 2>/dev/null; then bad="took WAYLAND_SOCKET"; fi
     cp /usr/bin/sleep "$G/bin/sway"; "$G/bin/sway" 30 & fake=$!
     echo "$fake" > "$G/sway.pid"
-    if WAYLAND_DISPLAY="$gs" OFX_GUI_ROOT="$G" "$vk" b 2>/dev/null; then echo "keys: vkbd typed into a sway sway.pid doesn't name"; failed keys; fi
+    if WAYLAND_DISPLAY="$gs" OFX_GUI_ROOT="$G" "$vk" b 2>/dev/null; then bad="typed into a sway sway.pid doesn't name"; fi
     kill "$fake"; echo "$real" > "$G/sway.pid"
-    WAYLAND_DISPLAY="$gs" OFX_GUI_ROOT="$G" "$vk" b || { echo "keys: vkbd refused the test sway itself"; failed keys; }
+    WAYLAND_DISPLAY="$gs" OFX_GUI_ROOT="$G" "$vk" b || bad="refused the test sway itself"
     "$here/../../tools/gui/sway.sh" stop "$G"
+    [ -z "$bad" ] || { echo "keys: vkbd $bad"; failed keys; }
 else
     failed keys
 fi
