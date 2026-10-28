@@ -5,6 +5,13 @@
 #include "../fs/fs.c"
 #include "../ui/ui.c"
 
+// The edit line opened on a name, the caret at its end (the tests' way in; ofx opens it with
+// ui_edit_rename and ui_edit_new).
+static void ui_edit_open(Ui *u, Str text)
+{
+    ui_edit_start(u, text, false);
+}
+
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -1362,26 +1369,6 @@ static void test_places(void)
     env_set("HOME", "/home/m");
     places_load(&ta, &pl, at("places/none"), at("places/mountinfo"));
     CHECK(pl.n == 10 && pl.p[2].kind == PL_TRASH && pl.p[4].kind == PL_ROOT && strcmp(pl.p[4].label, "File System") == 0);
-    // A drive's space: none read yet; a drive that is there has a size and room up to it; one
-    // that is gone has none, and that is a change.
-    CHECK(pl.p[4].size == 0 && pl.p[5].size == 0);
-    snprintf(pl.p[5].path, sizeof pl.p[5].path, "%s", at("places"));
-    snprintf(pl.p[6].path, sizeof pl.p[6].path, "%s", at("places/gone"));
-    pl.p[6].size = pl.p[6].avail = 1;
-    snprintf(pl.p[1].path, sizeof pl.p[1].path, "%s", at("places"));   // Home: not a drive, not read
-    CHECK(places_space(&pl));
-    CHECK(pl.p[5].size > 0 && pl.p[5].avail > 0 && pl.p[5].avail <= pl.p[5].size);
-    CHECK(pl.p[6].size == 0 && pl.p[6].avail == 0 && pl.p[1].size == 0);
-    pl.n = 7;
-    for (int i = 0; i < 5; i++) pl.p[i].kind = PL_HEAD;
-    pl.p[5].kind = pl.p[6].kind = PL_HOME;   // nothing a drive: nothing read, nothing changed
-    pl.p[6].size = 5;
-    CHECK(!places_space(&pl) && pl.p[6].size == 5);
-    pl.p[6].kind = PL_MOUNT;   // gone, its size 0 already: no change either
-    pl.p[6].size = pl.p[6].avail = 0;
-    CHECK(!places_space(&pl));
-    pl.p[6].avail = 3;         // the free space alone changed
-    CHECK(places_space(&pl));
     env_restore();
     // No HOME: no Home place, the headings and Trash.
     env_set("HOME", NULL);

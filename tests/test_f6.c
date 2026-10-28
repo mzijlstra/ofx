@@ -15,11 +15,9 @@ static void test_state(void)
     CHECK(state_load(&ta, path).side == SIDE_PLACES);
     // Saved, its folder made: read back; no temporary file left.
     Err err;
-    State s = { SIDE_TREE, false, 0, false, false, false };
-    CHECK(state_save(path, &s, &err));
+    CHECK(state_put(&ta, path, "sidebar", "tree", &err));
     CHECK(state_load(&ta, path).side == SIDE_TREE);
-    s.side = SIDE_HIDDEN;
-    CHECK(state_save(path, &s, &err) && state_load(&ta, path).side == SIDE_HIDDEN);
+    CHECK(state_put(&ta, path, "sidebar", "hidden", &err) && state_load(&ta, path).side == SIDE_HIDDEN);
     char tmp[PATH_MAX + 32];
     snprintf(tmp, sizeof tmp, "%s.%d.tmp", path, (int)getpid());
     CHECK(access(tmp, F_OK) != 0);
@@ -32,20 +30,15 @@ static void test_state(void)
     CHECK(state_load(&ta, path).side == SIDE_PLACES);
     put(path, "sidebar=hidden");   // no newline at the end
     CHECK(state_load(&ta, path).side == SIDE_HIDDEN);
-    // An out of range mode is saved as places.
-    s.side = SIDE_MODES;
-    CHECK(state_save(path, &s, &err) && state_load(&ta, path).side == SIDE_PLACES);
     // A write that fails (no room: the file size limit at 0): the save fails, the old file stays,
     // no temporary file is left.
-    s.side = SIDE_TREE;
-    CHECK(state_save(path, &s, &err));
+    CHECK(state_put(&ta, path, "sidebar", "tree", &err));
     struct rlimit was;
     getrlimit(RLIMIT_FSIZE, &was);
     signal(SIGXFSZ, SIG_IGN);
     struct rlimit none = { 0, was.rlim_max };
     setrlimit(RLIMIT_FSIZE, &none);
-    s.side = SIDE_HIDDEN;
-    bool wrote = state_save(path, &s, &err);
+    bool wrote = state_put(&ta, path, "sidebar", "hidden", &err);
     setrlimit(RLIMIT_FSIZE, &was);
     signal(SIGXFSZ, SIG_DFL);
     CHECK(!wrote && strstr(err.msg, "cannot write it"));
@@ -55,12 +48,11 @@ static void test_state(void)
     env_set("XDG_STATE_HOME", at("state-blocked"));
     put(at("state-blocked/ofx"), "a file, not a folder");
     CHECK(state_path(path, sizeof path));
-    s.side = SIDE_TREE;
-    CHECK(!state_save(path, &s, &err) && err.msg[0]);
+    CHECK(!state_put(&ta, path, "sidebar", "tree", &err) && err.msg[0]);
     env_restore();
     // Outside the guard's folder: refused.
     snprintf(path, sizeof path, "%s/state", decoy);
-    CHECK(!state_save(path, &s, &err) && strstr(err.msg, "outside the test folder"));
+    CHECK(!state_put(&ta, path, "sidebar", "tree", &err) && strstr(err.msg, "outside the test folder"));
     CHECK(access(path, F_OK) != 0);
     // No XDG_STATE_HOME: under HOME; a relative one is ignored; neither: no path.
     env_set("XDG_STATE_HOME", NULL);
@@ -513,43 +505,53 @@ static void test_trash_view(void)
     CHECK(path_below("/m/x", "/m") && !path_below("/m", "/m") && !path_below("/m/", "/m") && !path_below("/mx", "/m") && !path_below("/x", "/"));
     // fs/paths.c's helpers (2026-10-28).
     {
-        char out[16];
-        CHECK(path_put(out, sizeof out, "/", S("a")) && strcmp(out, "/a") == 0);
-        CHECK(path_put(out, sizeof out, "/d", S("a")) && strcmp(out, "/d/a") == 0);
-        CHECK(!path_put(out, 8, "/dir", S("abc")) && path_put(out, 9, "/dir", S("abc")));
+        char po[16];
+        CHECK(path_put(po, sizeof po, "/", S("a")) && strcmp(po, "/a") == 0);
+        CHECK(path_put(po, sizeof po, "/d", S("a")) && strcmp(po, "/d/a") == 0);
+        CHECK(!path_put(po, 8, "/dir", S("abc")) && path_put(po, 9, "/dir", S("abc")));
         CHECK(strcmp(trash_rel("/m/x/y", "/m"), "x/y") == 0 && strcmp(trash_rel("/x/y", "/"), "x/y") == 0);
         CHECK(strcmp(trash_rel("/x/y", ""), "/x/y") == 0 && strcmp(trash_rel("/n/y", "/m"), "/n/y") == 0);
         Str type, src;
-        char mp[64];
-        CHECK(mountinfo_line(S("40 22 179:1 / /mnt/a\\040b rw shared:20 - exfat /dev/mmc rw"), mp, sizeof mp, &type, &src));
-        CHECK(strcmp(mp, "/mnt/a b") == 0 && str_eq(type, S("exfat")) && str_eq(src, S("/dev/mmc")));
-        CHECK(!mountinfo_line(S("40 22 179:1 /"), mp, sizeof mp, &type, &src) && !mountinfo_line(S("40 22 179:1 / "), mp, sizeof mp, &type, &src));
-        CHECK(mountinfo_line(S("40 22 179:1 / /m rw"), mp, sizeof mp, &type, &src) && strcmp(mp, "/m") == 0 && !type.len && !src.len);
+        char mpt[64];
+        CHECK(mountinfo_line(S("40 22 179:1 / /mnt/a\\040b rw shared:20 - exfat /dev/mmc rw"), mpt, sizeof mpt, &type, &src));
+        CHECK(strcmp(mpt, "/mnt/a b") == 0 && str_eq(type, S("exfat")) && str_eq(src, S("/dev/mmc")));
+        CHECK(!mountinfo_line(S("40 22 179:1 /"), mpt, sizeof mpt, &type, &src) && !mountinfo_line(S("40 22 179:1 / "), mpt, sizeof mpt, &type, &src));
+        CHECK(mountinfo_line(S("40 22 179:1 / /m rw"), mpt, sizeof mpt, &type, &src) && strcmp(mpt, "/m") == 0 && !type.len && !src.len);
         // mkdir -p stops at a folder it can't make in, whole or not.
-        char d[PATH_MAX], deep[PATH_MAX];
-        snprintf(d, sizeof d, "%s/ro", root);
-        CHECK(mkdir(d, 0500) == 0);
-        snprintf(deep, sizeof deep, "%s/a/b/c", d);
+        char ro[PATH_MAX], deep[PATH_MAX + 16];
+        snprintf(ro, sizeof ro, "%s/ro", root);
+        CHECK(mkdir(ro, 0500) == 0);
+        snprintf(deep, sizeof deep, "%s/a/b/c", ro);
         Err e = { 0 };
         CHECK(!mkdir_p(deep, 0700, false, &e) && !mkdir_p(deep, 0700, true, &e));
         snprintf(deep, sizeof deep, "%s/w/x/y", root);
         CHECK(mkdir_p(deep, 0700, false, &e) && access(deep, F_OK) != 0 && mkdir_p(deep, 0700, true, &e) && access(deep, F_OK) == 0);
-        chmod(d, 0700);
+        chmod(ro, 0700);
         // No HOME and no XDG_STATE_HOME: no theme folder, not "/.local/…".
-        char t[PATH_MAX];
-        memset(t, 'x', sizeof t);
+        char th[PATH_MAX];
+        memset(th, 'x', sizeof th);
         env_set("XDG_STATE_HOME", NULL), env_set("HOME", NULL);
-        CHECK(theme_dir(t, sizeof t)[0] == 0);
+        CHECK(theme_dir(th, sizeof th)[0] == 0);
         env_restore();
+    }
+    // A drive's size and room (gui/space.c asks off the main thread); none for a folder not there.
+    {
+        i64 size = 0, avail = 0;
+        fs_space(root, &size, &avail);
+        CHECK(size > 0 && avail > 0 && avail <= size);
+        char gone[PATH_MAX + 8];
+        snprintf(gone, sizeof gone, "%s/gone", root);
+        fs_space(gone, &size, &avail);
+        CHECK(size == 0 && avail == 0);
     }
     // A trashed item whose file path is longer than PATH_MAX is refused, not cut short and renamed
     // as another file (2026-10-28).
     {
         static char longf[PATH_MAX + 64];
         memset(longf, 'x', sizeof longf - 1), longf[0] = '/';
-        TrashItem t = { longf, "/i.trashinfo", "/f", "" };
+        TrashItem ti = { longf, "/i.trashinfo", "/f", "" };
         Err e = { 0 };
-        CHECK(!trash_restore_item(&t, &e) && strstr(e.msg, "too long"));
+        CHECK(!trash_restore_item(&ti, &e) && strstr(e.msg, "too long"));
     }
     // What is left: abs, and the dot-file.
     CHECK(trash_list(&ta, &d, false, (Sort){ SORT_NAME, false }, &l, &err) && l.n == 1 && str_eq(l.e[0].name, S("abs")));

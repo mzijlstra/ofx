@@ -22,7 +22,7 @@ typedef struct {
     char      path[PATH_MAX];   // "" for a heading
     char      label[256];
     PlaceKind kind;
-    i64       size, avail;      // a drive's, in bytes (places_space); size 0 when unknown
+    i64       size, avail;      // a drive's, in bytes (gui/space.c reads them); size 0 when unknown
     char      dev[256];         // a drive's source in mountinfo (/dev/sdd1), "" when it has none
 } Place;
 
@@ -121,25 +121,6 @@ static void fs_space(const char *path, i64 *size, i64 *avail)
     }
     *size = (i64)v.f_blocks * (i64)v.f_frsize;
     *avail = (i64)v.f_bavail * (i64)v.f_frsize;
-}
-
-static void place_space(Place *p)
-{
-    fs_space(p->path, &p->size, &p->avail);
-}
-
-// Every drive's space read again; true when any changed.
-static bool places_space(Places *pl)
-{
-    bool changed = false;
-    for (int i = 0; i < pl->n; i++) {
-        Place *p = &pl->p[i];
-        if (!place_is_drive(p->kind)) continue;
-        i64 size = p->size, avail = p->avail;
-        place_space(p);
-        changed |= p->size != size || p->avail != avail;
-    }
-    return changed;
 }
 
 // The Places section (Home, the bookmarks file, Trash) and the Drives section (the mountinfo

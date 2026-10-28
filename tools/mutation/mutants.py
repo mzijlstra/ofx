@@ -508,8 +508,6 @@ MUTANTS += [
     (PL, "        if (place_is_drive(pl->p[i].kind) == place_is_drive(kind) && strcmp(pl->p[i].path, path) == 0) return true;", "        if (strcmp(pl->p[i].path, path) == 0) return true;"),
     (PL, "    places_add(pl, PL_TRASH, TRASH_URI, S(\"Trash\"));\n", ""),
     (PL, "    places_head(pl, \"Drives\");\n", ""),
-    (PL, "        if (!place_is_drive(p->kind)) continue;\n        i64 size", "        i64 size"),
-    (PL, "        changed |= p->size != size || p->avail != avail;", "        changed |= p->size != size;"),
     (PL, "        if (pl->p[i].kind == PL_TRASH && strcmp(path, TRASH_URI) == 0) return i;\n", ""),
     (PL, "        if (pl->p[i].kind == PL_HEAD || pl->p[i].kind == PL_TRASH) continue;\n", ""),
     (PL, "    case PL_TRASH: names[n++] = S(\"user-trash\"); break;\n", ""),
@@ -549,7 +547,6 @@ MUTANTS += [
     (ST, "        if (!str_eq(key, S(\"sidebar\"))) continue;\n", ""),
     (ST, "Str key = str_trim(str_cut(line, 0, eq)), val = str_trim(str_cut(line, eq + 1, line.len));", "Str key = str_trim(str_cut(line, 0, eq)), val = str_cut(line, eq + 1, line.len);"),
     (ST, "    if (!ops_allowed(path, err)) return false;\n    Str d", "    Str d"),
-    (ST, "SIDE_MODE_NAMES[s->side < SIDE_MODES ? s->side : SIDE_PLACES]", "SIDE_MODE_NAMES[s->side < SIDE_MODES ? s->side : SIDE_TREE]"),
     (ST, "    if (!ok || rename(tmp, path) != 0) {", "    if (rename(tmp, path) != 0) {"),
     (TR, "    tree_open(t, S(\"/\"));\n", ""),
     (TR, "    if (de->d_type != DT_LNK && de->d_type != DT_UNKNOWN) return false;", "    if (de->d_type != DT_UNKNOWN) return false;"),
@@ -634,7 +631,6 @@ MUTANTS += [
 MUTANTS += [
     (ST, "            if (str_eq(val, S(\"icons\"))) s.icons = true;", "            if (str_eq(val, S(\"icons\"))) s.icons = false;"),
     (ST, "            else if (str_eq(val, S(\"list\"))) s.icons = false;\n", ""),
-    (ST, "                     s->icons ? \"icons\" : \"list\");", "                     \"list\");"),
     (U, "    return l->cols > 1 ? l->cols : 1;", "    return 1;"),
     (U, "all = (l->n + c - 1) / c;", "all = l->n / c;"),
     (U, "    return all > rows ? (all - rows) * c : 0;", "    return all > rows ? all - rows : 0;"),
@@ -707,7 +703,6 @@ MUTANTS += [
     (I, "    int hi = d->type == IT_FIXED ? d->size : d->type == IT_SCALABLE ? d->max : d->size + d->threshold;", "    int hi = d->size;"),
     (I, "        if (!best || (best_short && !short_) || (best_short == short_ && dist < best_d)) best", "        if (!best || dist < best_d) best"),
     (I, "        if (!best || (best_short && !short_) || (best_short == short_ && dist < best_d)) best", "        if (!best || (best_short && !short_) || dist < best_d) best"),
-    (ST, "    if (s->zoom > 0) n += snprintf(", "    if (s->zoom >= 0) n += snprintf("),
 ]
 # ---- files open with gio, as Nemo does (Michael, 2026-10-24)
 MUTANTS += [
@@ -1568,7 +1563,6 @@ MUTANTS += [
     (L, "        .target = link ? link_target(a, fd, nm) : STR_EMPTY,", "        .target = STR_EMPTY,"),
     (L, "    memcpy(p, buf, (size_t)k), p[k] = 0;", "    memcpy(p, buf, (size_t)k - 1), p[k] = 0;"),
     (ST, "        if (str_eq(key, S(\"perms\"))) s.no_perms = str_eq(val, S(\"off\"));", ""),
-    (ST, "    if (s->no_perms) n += snprintf", "    if (false) n += snprintf"),
 ]
 # ---- View → Show Group, Ctrl+P, Ctrl+G (2026-10-27)
 MUTANTS += [
@@ -1584,7 +1578,6 @@ MUTANTS += [
     (U, "UM_HIDDEN, UM_PERMS_COLS, UM_GROUP_COL, UM_COLORS, UM_SHOW_MENU, UM_SEP,", "UM_HIDDEN, UM_PERMS_COLS, UM_COLORS, UM_SHOW_MENU, UM_SEP,"),
     (ST, "        if (str_eq(key, S(\"group\"))) s.group = str_eq(val, S(\"on\"));", ""),
     (ST, "        if (str_eq(key, S(\"group\"))) s.group = str_eq(val, S(\"on\"));", "        if (str_eq(key, S(\"group\"))) s.group = true;"),
-    (ST, "    if (s->group) n += snprintf", "    if (false) n += snprintf"),
 ]
 # ---- View → Show Menu (2026-10-27)
 MUTANTS += [
@@ -1594,7 +1587,6 @@ MUTANTS += [
     (U, "        if (in->modal == UI_MODAL_OK) return u->bar_told = false, (UiAction){ UA_NONE, 0, false };", ""),
     (U, '*(on == UI_ON_ABOUT ? &u->about : &u->bar_told) = false;', 'u->about = false;'),
     (ST, "        if (str_eq(key, S(\"menubar\"))) s.no_bar = str_eq(val, S(\"off\"));", ""),
-    (ST, "    if (s->no_bar) n += snprintf", "    if (false) n += snprintf"),
 ]
 # ---- View → Show Colors; the status line's note when the permissions give way (2026-10-27)
 MUTANTS += [
@@ -1603,7 +1595,6 @@ MUTANTS += [
     (U, "    if (in->cramped && k < cap) snprintf", "    if (k < cap) snprintf"),
     (U, "    if (in->cramped && k < cap) snprintf", "    if (false) snprintf"),
     (ST, "        if (str_eq(key, S(\"colors\"))) s.no_colors = str_eq(val, S(\"off\"));", ""),
-    (ST, "    if (s->no_colors) n += snprintf", "    if (false) n += snprintf"),
 ]
 # ---- F9 step 1: the search view (2026-10-28)
 SR = 'fs/search.c'

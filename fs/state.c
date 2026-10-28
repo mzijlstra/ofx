@@ -90,20 +90,6 @@ static bool state_write(const char *path, const char *body, isize n, Err *err)
     return true;
 }
 
-// All of s into file path.
-static bool state_save(const char *path, const State *s, Err *err)
-{
-    char body[128];
-    int n = snprintf(body, sizeof body, "sidebar=%s\nview=%s\n", SIDE_MODE_NAMES[s->side < SIDE_MODES ? s->side : SIDE_PLACES],
-                     s->icons ? "icons" : "list");
-    if (s->zoom > 0) n += snprintf(body + n, sizeof body - (size_t)n, "zoom=%d\n", s->zoom);
-    if (s->no_perms) n += snprintf(body + n, sizeof body - (size_t)n, "perms=off\n");
-    if (s->no_bar) n += snprintf(body + n, sizeof body - (size_t)n, "menubar=off\n");
-    if (s->no_colors) n += snprintf(body + n, sizeof body - (size_t)n, "colors=off\n");
-    if (s->group) n += snprintf(body + n, sizeof body - (size_t)n, "group=on\n");
-    return state_write(path, body, n, err);
-}
-
 // One key's value into file path, the rest of it as it is now (F7.1): each window is its own
 // process (New Window), so a save of the whole State would put back what another window changed
 // since this one read the file. The file is read again here, the key's line replaced (or added),

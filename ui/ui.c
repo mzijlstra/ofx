@@ -1331,12 +1331,6 @@ static void ui_edit_start(Ui *u, Str text, bool path)
     u->focus = UI_FOCUS_EDIT;   // (the search field's keys too: they stayed before, 2026-10-28)
 }
 
-// The edit line opened on a name, the caret at its end.
-static void ui_edit_open(Ui *u, Str text)
-{
-    ui_edit_start(u, text, false);
-}
-
 // The edit line opened on a name just made (a new folder or file), all of it selected, so typing
 // replaces it (Michael, 2026-10-25).
 static void ui_edit_open_all(Ui *u, Str text)

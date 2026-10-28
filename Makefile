@@ -41,8 +41,11 @@ build/ofx-fm1: tools/fm1.c $(wildcard base/*.c base/*.h fs/*.c) | build
 build/release/ofx-fm1: tools/fm1.c $(wildcard base/*.c base/*.h fs/*.c) | build/release
 	$(CC) $(CFLAGS) $(IMG_INC) $(RELEASE) -o $@ tools/fm1.c $(IMG_LIBS) -lsystemd -lm
 
+# The tests warn of a function nothing calls: they take in every fs/ and ui/ function, so one unused
+# there is dead (2026-10-28: state_save had 20 checks on code ofx no longer ran). The binaries can't:
+# each takes in all of fs/ and uses part of it.
 build/test: $(wildcard tests/*.c) $(wildcard base/*.c base/*.h fs/*.c ui/*.c) | build
-	$(CC) $(CFLAGS) $(IMG_INC) $(DEBUG) -o $@ tests/test.c $(IMG_LIBS) -lm
+	$(CC) $(CFLAGS) -Wunused-function $(IMG_INC) $(DEBUG) -o $@ tests/test.c $(IMG_LIBS) -lm
 
 test: build/test
 	./build/test

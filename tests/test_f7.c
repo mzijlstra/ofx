@@ -396,8 +396,7 @@ static void test_state_put(void)
     CHECK(state_put(&ta, path, "view", "icons", &err));
     CHECK_STR(read_file(&ta, path), "view=icons\n");
     // Two windows, each saving its own key: both kept (the whole State would undo the other's).
-    State a = { SIDE_PLACES, true, 0, false, false, false };
-    CHECK(state_save(path, &a, &err));
+    put(path, "sidebar=places\nview=icons\n");
     CHECK(state_put(&ta, path, "sidebar", "tree", &err));   // window B
     CHECK(state_put(&ta, path, "zoom", "96", &err));        // window A
     State s = state_load(&ta, path);
@@ -441,6 +440,10 @@ static void test_spawn_window(void)
     CHECK(!spawn_window(at("bin7b/none"), "/d", &err) && strstr(err.msg, "is not installed"));
     put(at("bin7b/noexec"), "#!/bin/sh\n");
     CHECK(!spawn_window(at("bin7b/noexec"), "/d", &err));
+    // FileManager1's ShowItems: --select and the path (2026-10-28: only the D-Bus test ran it).
+    unlink(at("spawn7b.log"));
+    CHECK(spawn_window_select(at("bin7b/myofx"), "/d/f.txt", &err));
+    CHECK(wait_file(at("spawn7b.log"), out, sizeof out) && strncmp(out, "myofx --select /d/f.txt sid=", 28) == 0);
     env_restore();
 }
 

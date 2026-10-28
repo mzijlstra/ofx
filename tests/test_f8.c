@@ -460,8 +460,6 @@ static void test_list_columns(void)
     CHECK(!state_load(&ta, path).no_perms);
     CHECK(state_put(&ta, path, "perms", "off", &e2) && state_load(&ta, path).no_perms);
     CHECK(state_put(&ta, path, "perms", "on", &e2) && !state_load(&ta, path).no_perms);
-    State st = { .side = SIDE_PLACES, .no_perms = true };
-    CHECK(state_save(path, &st, &e2) && strstr(read_file(&ta, path).p, "perms=off\n") && state_load(&ta, path).no_perms);
     // The entry toggles it and asks gui/ to remember.
     Ui u = menu_ui(2);
     u.perms_cols = true;
@@ -480,10 +478,6 @@ static void test_list_columns(void)
     CHECK(!state_load(&ta, path).group);
     CHECK(state_put(&ta, path, "group", "on", &e2) && state_load(&ta, path).group);
     CHECK(state_put(&ta, path, "group", "off", &e2) && !state_load(&ta, path).group);
-    st = (State){ .side = SIDE_PLACES, .group = true };
-    CHECK(state_save(path, &st, &e2) && strstr(read_file(&ta, path).p, "group=on\n") && state_load(&ta, path).group && !state_load(&ta, path).no_perms);
-    st.group = false;
-    CHECK(state_save(path, &st, &e2) && !strstr(read_file(&ta, path).p, "group=") && !state_load(&ta, path).group);
     CHECK(!ui_menu_enabled(&u, UM_GROUP_COL) && ui_menu_mark(&u, UM_GROUP_COL) == 0);
     CHECK(menu_keys(&u, 1, UK_GROUP_COL).kind == UA_NONE && !u.group_col);
     u.perms_cols = true;
@@ -508,8 +502,6 @@ static void test_list_columns(void)
     // View → Show Colors (2026-10-27): on unless "colors=off"; the entry toggles it.
     CHECK(!state_load(&ta, path).no_colors);
     CHECK(state_put(&ta, path, "colors", "off", &e2) && state_load(&ta, path).no_colors);
-    st = (State){ .side = SIDE_PLACES, .no_colors = true };
-    CHECK(state_save(path, &st, &e2) && strstr(read_file(&ta, path).p, "colors=off\n") && !state_load(&ta, path).no_bar);
     u.colors = true, u.menu_on = true, u.menu = 2;
     CHECK(ui_menu_mark(&u, UM_COLORS) == 1 && ui_menu_enabled(&u, UM_COLORS));
     in = ui_input_none(), in.menu_item = menu_place(2, UM_COLORS);
@@ -529,8 +521,6 @@ static void test_list_columns(void)
     // open; it takes every key, Enter, Esc or OK close it; checked again, no note.
     CHECK(!state_load(&ta, path).no_bar);
     CHECK(state_put(&ta, path, "menubar", "off", &e2) && state_load(&ta, path).no_bar);
-    st = (State){ .side = SIDE_PLACES, .no_bar = true };
-    CHECK(state_save(path, &st, &e2) && strstr(read_file(&ta, path).p, "menubar=off\n") && state_load(&ta, path).no_bar && !state_load(&ta, path).no_perms);
     CHECK(ui_menu_mark(&u, UM_SHOW_MENU) == 1 && ui_menu_enabled(&u, UM_SHOW_MENU));
     u.menu_on = true, u.menu = 2;
     in = ui_input_none(), in.menu_item = menu_place(2, UM_SHOW_MENU);

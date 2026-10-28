@@ -165,14 +165,10 @@ static void test_state_zoom(void)
     // No file: no size said.
     CHECK(state_load(&ta, path).zoom == 0);
     Err err;
-    State s = { SIDE_PLACES, true, 96, false, false, false };
-    CHECK(state_save(path, &s, &err));
+    CHECK(state_put(&ta, path, "sidebar", "places", &err) && state_put(&ta, path, "view", "icons", &err) && state_put(&ta, path, "zoom", "96", &err));
     State r = state_load(&ta, path);
     CHECK(r.icons && r.zoom == 96);
     CHECK(strcmp(read_file(&ta, path).p, "sidebar=places\nview=icons\nzoom=96\n") == 0);
-    // None said, none written.
-    s.zoom = 0;
-    CHECK(state_save(path, &s, &err) && strcmp(read_file(&ta, path).p, "sidebar=places\nview=icons\n") == 0);
     // Digits only, four at most, more than 0; the last one said wins.
     static const struct { const char *text; int zoom; } Z[] = {
         { "zoom=256\n", 256 }, { "zoom = 32", 32 }, { "zoom=64\nzoom=128\n", 128 }, { "zoom=\n", 0 }, { "zoom=0\n", 0 },

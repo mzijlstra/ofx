@@ -11,13 +11,11 @@ static void test_state_view(void)
     // No file: the list.
     CHECK(!state_load(&ta, path).icons);
     Err err;
-    State s = { SIDE_TREE, true, 0, false, false, false };
-    CHECK(state_save(path, &s, &err));
+    CHECK(state_put(&ta, path, "sidebar", "tree", &err) && state_put(&ta, path, "view", "icons", &err));
     State r = state_load(&ta, path);
     CHECK(r.icons && r.side == SIDE_TREE);
     CHECK(strcmp(read_file(&ta, path).p, "sidebar=tree\nview=icons\n") == 0);
-    s.icons = false;
-    CHECK(state_save(path, &s, &err) && !state_load(&ta, path).icons);
+    CHECK(state_put(&ta, path, "view", "list", &err) && !state_load(&ta, path).icons);
     // Either word, the last one winning; an unknown one is left out.
     put(path, "view=icons\nview=grid\n");
     CHECK(state_load(&ta, path).icons);

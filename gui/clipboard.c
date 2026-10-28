@@ -302,13 +302,6 @@ static void clip_clear_own(void)
     wl_display_flush(clip.dpy);
 }
 
-static bool clip_ours(void)
-{
-    pthread_mutex_lock(&clip.mu);
-    bool ours = clip.src != NULL;
-    pthread_mutex_unlock(&clip.mu);
-    return ours;
-}
 
 typedef enum { CLIP_NONE, CLIP_OURS, CLIP_THEIRS } ClipFrom;
 
