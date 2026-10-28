@@ -36,6 +36,7 @@ puts its service file in `~/.local/share/dbus-1/services`), and it exits when id
 | Backspace | up to the parent, the folder you left selected |
 | Alt+Left, Alt+Right | back and forward |
 | Alt+Up | up to the parent |
+| In any text field (rename, location, find, search, Open With, Edit Bookmarks, Keyboard Shortcuts) | Left/Right, Home/End move; Shift selects; Ctrl+Left/Right a word, Ctrl+Shift+Left/Right select a word; Backspace/Delete, Ctrl+Backspace/Ctrl+Delete a word; Ctrl+A all of it; Ctrl+C, X, V the clipboard (outside a field Ctrl+Left is the sidebar, Ctrl+Right the location line) |
 | Ctrl+L, Ctrl+Right | type a location: all of it selected, so typing replaces it; `~` is home, a relative path starts here; a file's path opens its folder with the file selected |
 | Ctrl+K, Ctrl+Up | the keys to the path buttons: Left/Right (`h`/`l`), Home/End move, Enter goes there, Shift+Enter opens it in a background tab, Esc back to the list |
 | `/`, Ctrl+F | find, in a bar over the job rows: type to jump (the bar counts the matches: "2 of 5"; its field edits as the rename line does: a caret, Shift to select, Ctrl+A its text, Ctrl+C, X, V), Up/Down or its chevrons the previous and next match, Enter keeps (the bar stays, the keys go back to the list), Esc closes it and goes back, its × closes it; then `n`/`N` again. Alt+C match case, Alt+W whole words, Alt+R a regular expression (the toggles in the bar too; kept for the next find) |

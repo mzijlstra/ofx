@@ -404,9 +404,9 @@ static void test_ow_keys(void)
     // A full field drops what doesn't fit.
     ui_ow_open(&u);
     ow_keys(&u, 0);
-    for (int k = 0; k < UI_FIND_MAX + 3; k++) ui_ow_char(&u, 'x');
+    for (int k = 0; k < UI_FIND_MAX + 3; k++) ui_line_key(&u, ui_ow_line(&u), (UiEvent){ UK_NONE, 'x' }, STR_EMPTY);
     CHECK(u.ow_len == UI_FIND_MAX);
-    ui_ow_char(&u, 0xE9);
+    ui_line_key(&u, ui_ow_line(&u), (UiEvent){ UK_NONE, 0xE9 }, STR_EMPTY);
     CHECK(u.ow_len == UI_FIND_MAX);
     ui_ow_close(&u);
 }

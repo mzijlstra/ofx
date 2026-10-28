@@ -106,7 +106,7 @@ MUTANTS = [
     (G, "    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_K) return UK_CRUMBS;\n", ""),
     (G, "    if (app.ui.crumb_focus) ui_crumbs_show(c, wd, room, ARROW_W, app.ui.crumb_at);\n", ""),
     (G, "        in.crumb_n = app.crumbs.n, in.crumb_last = app.crumb_hi - 1;", "        in.crumb_n = app.crumbs.n, in.crumb_last = app.crumb_hi;"),
-    (G, "        if (pasting && (app.ui.editing || (app.ui.in_search && app.ui.search_keys) || (app.ui.finding && app.ui.find_keys))) in.paste = text_paste();   // (the search field's and the find bar's too)\n", ''),
+    (G, '        if (pasting && ui_line_active(&app.ui, NULL)) in.paste = text_paste();   // (whichever text field has the keys)\n', ''),
     (G, "        if (app.ui.copied) text_copy((Str){ app.ui.copy, app.ui.copy_len }), app.ui.copied = false;", "        app.ui.copied = false;"),
     (G, "    if (!clip_set_text(t)) SetClipboardText(app.text_copied);\n    own.n = 0;", "    if (!clip_set_text(t)) SetClipboardText(app.text_copied);"),
     (G, "    if (own.n > 0) return clip_payload(&pastea, &own, CLIP_FMT_TEXT);\n", ""),
@@ -187,10 +187,10 @@ MUTANTS = [
     (G, "            if (app.have_list && app.ui.grid) layout_grid();\n", ""),
     (G, "    if (strmap_get(&app.slot_of, slot_key, &k))", "    if (strmap_get(&app.slot_of, key, &k))"),
     # F6.2 keys (Michael, 2026-10-24): Ctrl and an arrow, Ctrl+S
-    (G, "    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_LEFT) return UK_SIDE;\n", ""),
+    (G, '    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_LEFT) return UK_WORD_LEFT;', '    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_LEFT) return UK_NONE;'),
     (G, "    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_UP) return UK_CRUMBS;\n", ""),
     (G, "    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_DOWN) return UK_JOBS;\n", ""),
-    (G, "    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_RIGHT) return UK_LOCATION;\n", ""),
+    (G, '    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_RIGHT) return UK_WORD_RIGHT;', '    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_RIGHT) return UK_NONE;'),
     (G, "    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_S) return UK_F9;\n", ""),
     # tooltips (Michael, 2026-10-24)
     (G, "        timer_at(wake_due());\n", ""),
@@ -384,7 +384,7 @@ MUTANTS = [
     ('gui/bookmarks.c', '        bm_rename(&bmwa, &now, j, (Str){ app.ui.bmp_text, app.ui.bmp_len });', '', 'f75'),
     ('gui/bookmarks.c', '    places_reload();\n    bmp_refresh(k);', '    bmp_refresh(k);', 'f75'),
     ('gui/bookmarks.c', '        if (bmarks.b[a.index].path[0]) go_to(bmarks.b[a.index].path, STR_EMPTY, 0);', '        if (true) go_to(bmarks.b[a.index].path, STR_EMPTY, 0);', 'f75'),
-    ('gui/bookmarks.c', '        app.ui.bmp_len = app.ui.bmp_caret = n;', '        app.ui.bmp_len = app.ui.bmp_caret = 0;', 'f75'),
+    ('gui/bookmarks.c', '        app.ui.bmp_len = app.ui.bmp_caret = app.ui.bmp_anchor = n;', '        app.ui.bmp_len = app.ui.bmp_caret = app.ui.bmp_anchor = 0;', 'f75'),
     ('gui/bookmarks.c', '    case UA_BM_REMOVE: case UA_BM_UP: case UA_BM_DOWN: case UA_BM_RENAME: bmp_change(a.kind, (int)a.index); break;', '', 'f75'),
     (G, '    case UA_BM_EDIT: case UA_BM_GO: case UA_BM_NAME: case UA_BM_REMOVE: case UA_BM_UP: case UA_BM_DOWN: case UA_BM_RENAME: bmp_act(a); break;', '', 'f75'),
     (G, '        if (u->bm_more++ == 0) u->bm_more_at = i;', '        u->bm_more++;', 'f75'),
@@ -567,8 +567,6 @@ MUTANTS = [
     # ---- F9 step 2: working with results (2026-10-28). Left out: Ctrl+Enter's GLFW mapping (scripts
     # send ui/'s keys).
     (G, '    if (p && is_search(p)) p = app.search_root;', '', 'f9'),
-    (G, '        if (pasting && (app.ui.editing || (app.ui.in_search && app.ui.search_keys) || (app.ui.finding && app.ui.find_keys))) in.paste = text_paste();', '        if (pasting && (app.ui.editing || (app.ui.finding && app.ui.find_keys))) in.paste = text_paste();', 'f9'),
-    (G, '        if (pasting && (app.ui.editing || (app.ui.in_search && app.ui.search_keys) || (app.ui.finding && app.ui.find_keys))) in.paste = text_paste();', '        if (pasting && (app.ui.editing || (app.ui.in_search && app.ui.search_keys))) in.paste = text_paste();', 'f9'),
     (G, '        app.ui.search_caret = app.ui.search_anchor = app.ui.search_len;', '', 'f9'),
     (G, '    if (app.ui.in_search) search_prune(app.search_root);   // (a folder renamed', '    if (false) search_prune(app.search_root);   // (a folder renamed', 'f9'),
     (G, '    if (app.ui.in_search) search_prune(app.search_root);   // (what went since', '    // (what went since', 'f9'),

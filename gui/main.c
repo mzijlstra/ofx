@@ -3805,10 +3805,14 @@ static UiKey ui_key_of(int key, int mods)
     if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_J) return UK_JOBS;
     // Ctrl and an arrow: the keys to the part of the window that way (Michael, 2026-10-24); Ctrl+S
     // the sidebar's next mode, as F9.
-    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_LEFT) return UK_SIDE;
+    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_LEFT) return UK_WORD_LEFT;   // (outside a text field: UK_SIDE)
+    if (m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT) && key == GLFW_KEY_LEFT) return UK_SEL_WORD_LEFT;
+    if (m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT) && key == GLFW_KEY_RIGHT) return UK_SEL_WORD_RIGHT;
+    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_BACKSPACE) return UK_WORD_BACKSPACE;
+    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_DELETE) return UK_WORD_DELETE;
     if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_UP) return UK_CRUMBS;
     if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_DOWN) return UK_JOBS;
-    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_RIGHT) return UK_LOCATION;
+    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_RIGHT) return UK_WORD_RIGHT;   // (outside a text field: UK_LOCATION)
     if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_S) return UK_F9;
     // The views in the top bar's order, list first (Michael, 2026-10-24; Nemo has them the other way).
     if (m == GLFW_MOD_CONTROL && (key == GLFW_KEY_1 || key == GLFW_KEY_KP_1)) return UK_VIEW_LIST;
@@ -4682,10 +4686,10 @@ int main(int argc, char **argv)
         in.job_n = jobs.nrun, in.jobs_all = jobs.nrun + jobs.nwait;
         for (int k = 0; k < jobs.nrun; k++) in.job_id[k] = job_recs[jobs.run[k]].id;
         if (close_asked && in.nev < UI_EVENTS_MAX) in.ev[in.nev++] = (UiEvent){ UK_QUIT, 0 }, close_asked = false, seen = true;
-        // A Ctrl+V in an edit line reads the clipboard first, and only then.
+        // A Ctrl+V in a text field reads the clipboard first, and only then.
         bool pasting = false;
         for (int k = 0; k < in.nev; k++) pasting |= in.ev[k].key == UK_PASTE;
-        if (pasting && (app.ui.editing || (app.ui.in_search && app.ui.search_keys) || (app.ui.finding && app.ui.find_keys))) in.paste = text_paste();   // (the search field's and the find bar's too)
+        if (pasting && ui_line_active(&app.ui, NULL)) in.paste = text_paste();   // (whichever text field has the keys)
         // A message stays until the next key or click; an error at least a second.
         if (ui_input_acts(&in) && ui_status_clears(app.status_bad, app.status_at, now_ms())) app.status[0] = 0;
         if (ui_input_acts(&in) && ui_tip_act(&app.tip)) seen = true;   // a click or key: the tooltip goes

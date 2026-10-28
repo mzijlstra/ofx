@@ -82,6 +82,11 @@ typedef enum {
     UK_GROUP_COL,  // Ctrl+G: View → Show Group (2026-10-27)
     UK_SEARCH,     // Ctrl+Shift+F: a search below the folder shown, in a tab of its own (F9)
     UK_CONTAINING, // Ctrl+Enter: in the search view, the cursor's entry's folder, it selected (F9)
+    // In a text field a word at a time (Michael, 2026-10-28): Ctrl+Left and Ctrl+Right move (elsewhere
+    // they are the sidebar's keys, UK_SIDE, and the location line, UK_LOCATION), Ctrl+Shift+Left and
+    // Ctrl+Shift+Right select, Ctrl+Backspace and Ctrl+Delete delete; outside a field the last four do
+    // nothing.
+    UK_WORD_LEFT, UK_WORD_RIGHT, UK_SEL_WORD_LEFT, UK_SEL_WORD_RIGHT, UK_WORD_BACKSPACE, UK_WORD_DELETE,
 } UiKey;
 
 // The top bar's buttons (F4).
@@ -431,7 +436,7 @@ typedef enum {
 
 static const char *const UI_KEY_SECTION[KS_SECTIONS] = {
     "Moving", "Opening", "Selecting", "Changing files", "Tabs and windows", "View", "The sidebar", "The path buttons (Ctrl+K)",
-    "The find bar", "Search below the folder", "The rename and location lines", "The job rows (Ctrl+J)", "Open With", "Edit Bookmarks",
+    "The find bar", "Search below the folder", "Text fields (rename, location, find, search, filters)", "The job rows (Ctrl+J)", "Open With", "Edit Bookmarks",
 };
 
 static const struct { UiKeySection sec; const char *action, *key, *key2; } UI_KEYS[] = {
@@ -515,6 +520,9 @@ static const struct { UiKeySection sec; const char *action, *key, *key2; } UI_KE
     { KS_SEARCH, "A wildcard over the whole name", "*, ?", "*.ts" },
     { KS_SEARCH, "Match case, whole words, a regular expression", "Alt+C, W, R", "shared with find" },
     { KS_EDIT, "Select", "Shift+Left, Right", "Shift+Home, End" },
+    { KS_EDIT, "A word left, right", "Ctrl+Left, Right", "" },
+    { KS_EDIT, "Select a word", "Ctrl+Shift+Left, Right", "" },
+    { KS_EDIT, "Delete a word", "Ctrl+Backspace", "Ctrl+Delete" },
     { KS_EDIT, "All of it", "Ctrl+A", "" },
     { KS_EDIT, "Copy, cut, paste text", "Ctrl+C, X, V", "" },
     { KS_EDIT, "Done", "Enter", "" },
@@ -680,12 +688,12 @@ typedef struct {
     UiList bmp_list;
     bool   bmp_naming;
     char   bmp_text[256];
-    int    bmp_len, bmp_caret;
+    int    bmp_len, bmp_caret, bmp_anchor;
     // Keyboard Shortcuts (F7.5): up; its filter's text; the lines it shows (a row of UI_KEYS, or
     // -1 - a section for its heading), scrolled by keys_list.top.
     bool   keys;
     char   keys_text[64];
-    int    keys_len;
+    int    keys_len, keys_caret, keys_anchor;
     short  keys_line[UI_KEYS_LINES];
     UiList keys_list;
     UiMatcher keys_m;
@@ -703,7 +711,7 @@ typedef struct {
     bool   ow_in_list;
     bool   ow_fresh;
     char   ow_text[UI_FIND_MAX];
-    int    ow_len, ow_caret;
+    int    ow_len, ow_caret, ow_anchor;
     UiMatchOpts ow_opts;
     UiMatcher   ow_m;
     UiList ow_list;
@@ -1333,6 +1341,21 @@ static UiLine ui_edit_line(Ui *u)
     return (UiLine){ u->edit, &u->edit_len, &u->caret, &u->anchor, ui_edit_max(u), u->edit_path };
 }
 
+static UiLine ui_ow_line(Ui *u)
+{
+    return (UiLine){ u->ow_text, &u->ow_len, &u->ow_caret, &u->ow_anchor, UI_FIND_MAX, true };
+}
+
+static UiLine ui_bmp_line(Ui *u)
+{
+    return (UiLine){ u->bmp_text, &u->bmp_len, &u->bmp_caret, &u->bmp_anchor, (int)sizeof u->bmp_text - 1, true };
+}
+
+static UiLine ui_keys_line(Ui *u)
+{
+    return (UiLine){ u->keys_text, &u->keys_len, &u->keys_caret, &u->keys_anchor, (int)sizeof u->keys_text - 1, true };
+}
+
 static UiLine ui_find_line(Ui *u)
 {
     return (UiLine){ u->find, &u->find_len, &u->find_caret, &u->find_anchor, UI_FIND_MAX, false };
@@ -1425,9 +1448,22 @@ static void ui_line_paste(UiLine l, Str text)
     if (n > 0) ui_line_put(l, b, n);
 }
 
-// The keys that edit a line: text, the moves (with Shift the selection grows), Ctrl+A, Backspace,
-// Delete, Ctrl+C, Ctrl+X, Ctrl+V. False for any other key (the line's owner decides).
-static bool ui_line_key(Ui *u, UiLine l, UiEvent e, Str paste)
+// A word's edges for Ctrl and the arrows (2026-10-28): from at, back over what isn't a word (spaces,
+// dots, dashes) and then over the word to its start (dir -1); or on over what isn't one and then the
+// word to its end (1). A word is ui_word_byte's: letters, digits, '_', anything past ASCII.
+static int ui_line_word(UiLine l, int at, int dir)
+{
+    if (dir < 0) {
+        while (at > 0 && !ui_word_byte((unsigned char)l.b[at - 1])) at--;
+        while (at > 0 && ui_word_byte((unsigned char)l.b[at - 1])) at--;
+        return at;
+    }
+    while (at < *l.len && !ui_word_byte((unsigned char)l.b[at])) at++;
+    while (at < *l.len && ui_word_byte((unsigned char)l.b[at])) at++;
+    return at;
+}
+
+static bool ui_line_do(Ui *u, UiLine l, UiEvent e, Str paste)
 {
     if (e.key == UK_NONE) {
         char b[4];
@@ -1441,16 +1477,23 @@ static bool ui_line_key(Ui *u, UiLine l, UiEvent e, Str paste)
     // A move ends the selection; Left and Right from one land at its ends.
     case UK_LEFT: *l.caret = *l.anchor = lo < hi ? lo : ui_line_back(l, *l.caret); return true;
     case UK_RIGHT: *l.caret = *l.anchor = lo < hi ? hi : ui_line_fwd(l, *l.caret); return true;
+    case UK_WORD_LEFT: *l.caret = *l.anchor = ui_line_word(l, *l.caret, -1); return true;
+    case UK_WORD_RIGHT: *l.caret = *l.anchor = ui_line_word(l, *l.caret, 1); return true;
     case UK_HOME: *l.caret = *l.anchor = 0; return true;
     case UK_END: *l.caret = *l.anchor = *l.len; return true;
     // With Shift the caret moves and the anchor stays.
     case UK_SEL_LEFT: *l.caret = ui_line_back(l, *l.caret); return true;
     case UK_SEL_RIGHT: *l.caret = ui_line_fwd(l, *l.caret); return true;
+    case UK_SEL_WORD_LEFT: *l.caret = ui_line_word(l, *l.caret, -1); return true;
+    case UK_SEL_WORD_RIGHT: *l.caret = ui_line_word(l, *l.caret, 1); return true;
     case UK_SEL_HOME: *l.caret = 0; return true;
     case UK_SEL_END: *l.caret = *l.len; return true;
     case UK_ALL: *l.anchor = 0, *l.caret = *l.len; return true;
+    // Backspace and Delete take the selection, else a character (Ctrl: a word) that way.
     case UK_BACKSPACE: ui_line_cut(l, lo < hi ? lo : ui_line_back(l, *l.caret), lo < hi ? hi : *l.caret); return true;
     case UK_DELETE: ui_line_cut(l, lo < hi ? lo : *l.caret, lo < hi ? hi : ui_line_fwd(l, *l.caret)); return true;
+    case UK_WORD_BACKSPACE: ui_line_cut(l, lo < hi ? lo : ui_line_word(l, *l.caret, -1), lo < hi ? hi : *l.caret); return true;
+    case UK_WORD_DELETE: ui_line_cut(l, lo < hi ? lo : *l.caret, lo < hi ? hi : ui_line_word(l, *l.caret, 1)); return true;
     case UK_COPY: ui_line_copy(u, l); return true;
     case UK_CUT:
         if (ui_line_copy(u, l)) ui_line_cut(l, lo, hi);
@@ -1458,6 +1501,40 @@ static bool ui_line_key(Ui *u, UiLine l, UiEvent e, Str paste)
     case UK_PASTE: ui_line_paste(l, paste); return true;
     default: return false;
     }
+}
+
+// What a key did to a line: nothing (not its key), moved the caret or the selection, or changed the
+// text (its owner filters or searches again on that).
+typedef enum { UI_LINE_NOT, UI_LINE_MOVED, UI_LINE_CHANGED } UiLineHit;
+
+// The keys that edit a line: text, the moves (with Shift the selection grows; with Ctrl a word at a
+// time), Ctrl+A, Backspace, Delete, Ctrl+C, Ctrl+X, Ctrl+V. The caret and the anchor are put back
+// inside the text first: its owner may have set a shorter one (a search's address, a bookmark's
+// label).
+static UiLineHit ui_line_key(Ui *u, UiLine l, UiEvent e, Str paste)
+{
+    *l.caret = (int)ui_clamp(*l.caret, 0, *l.len), *l.anchor = (int)ui_clamp(*l.anchor, 0, *l.len);
+    char was[PATH_MAX];
+    int was_len = *l.len;
+    memcpy(was, l.b, (size_t)was_len);
+    if (!ui_line_do(u, l, e, paste)) return UI_LINE_NOT;
+    return *l.len != was_len || memcmp(was, l.b, (size_t)was_len) != 0 ? UI_LINE_CHANGED : UI_LINE_MOVED;
+}
+
+// The line that has the keys now, in ui_handle's order (a panel's field before the rest): into *out
+// when given; false when none has. gui/ reads the clipboard for a Ctrl+V only then.
+static bool ui_line_active(Ui *u, UiLine *out)
+{
+    UiLine l;
+    if (u->ow && !u->ow_in_list) l = ui_ow_line(u);
+    else if (u->bmp && u->bmp_naming) l = ui_bmp_line(u);
+    else if (u->keys) l = ui_keys_line(u);
+    else if (u->editing) l = ui_edit_line(u);
+    else if (u->in_search && u->search_keys) l = ui_search_line(u);
+    else if (u->finding && u->find_keys) l = ui_find_line(u);
+    else return false;
+    if (out) *out = l;
+    return true;
 }
 
 // A key or character in the edit line: an action for gui/ (UA_RENAME or UA_GO on Enter) or UA_NONE.
@@ -1774,7 +1851,7 @@ static UiAction ui_props_event(Ui *u, UiEvent e)
 // The panel opened: the field empty with the keys, the toggles as last time; gui/ lists the apps.
 static UiAction ui_ow_open(Ui *u)
 {
-    u->ow = true, u->ow_in_list = false, u->ow_fresh = true, u->ow_len = u->ow_caret = 0, u->ow_def = false;
+    u->ow = true, u->ow_in_list = false, u->ow_fresh = true, u->ow_len = u->ow_caret = u->ow_anchor = 0, u->ow_def = false;
     u->ow_list = (UiList){ .rows = u->ow_list.rows };
     return (UiAction){ UA_OPEN_WITH, 0, false };
 }
@@ -1796,39 +1873,6 @@ static void ui_ow_filter(Ui *u, const UiInput *in)
     u->ow_fresh = false;
 }
 
-// A character into the field at the caret (dropped when it is full).
-static void ui_ow_char(Ui *u, u32 cp)
-{
-    char b[4];
-    int n = ui_utf8(cp, b);
-    if (n == 0 || u->ow_len + n > UI_FIND_MAX) return;
-    memmove(u->ow_text + u->ow_caret + n, u->ow_text + u->ow_caret, (size_t)(u->ow_len - u->ow_caret));
-    memcpy(u->ow_text + u->ow_caret, b, (size_t)n);
-    u->ow_len += n, u->ow_caret += n;
-}
-
-// The caret's place a code point before (dir -1) or after (1) at.
-static int ui_ow_step(const Ui *u, int at, int dir)
-{
-    if (dir < 0) {
-        if (at == 0) return 0;
-        at--;
-        while (at > 0 && ((unsigned char)u->ow_text[at] & 0xC0) == 0x80) at--;
-        return at;
-    }
-    if (at >= u->ow_len) return u->ow_len;
-    at++;
-    while (at < u->ow_len && ((unsigned char)u->ow_text[at] & 0xC0) == 0x80) at++;
-    return at;
-}
-
-// The field's text from a to b (a < b) removed.
-static void ui_ow_cut(Ui *u, int a, int b)
-{
-    memmove(u->ow_text + a, u->ow_text + b, (size_t)(u->ow_len - b));
-    u->ow_len -= b - a, u->ow_caret = a;
-}
-
 // The app under the cursor launched, when the filter shows any.
 static UiAction ui_ow_launch(Ui *u)
 {
@@ -1842,7 +1886,8 @@ static UiAction ui_ow_launch(Ui *u)
 // A key while the panel is up; it takes every key (Michael, 2026-10-26). Tab moves between the
 // field and the list. In the field typing, Backspace, Delete, Left, Right, Home and End edit, Down
 // goes to the list; in the list Up, Down, k, j, Home, End, PgUp and PgDn move, Up on the first
-// row goes to the field, another character goes to the field and is typed there. Enter opens the
+// row goes to the field, another character goes to the field and is typed there. The field edits as
+// the rename line does (2026-10-28). Enter opens the
 // app under the cursor, Esc closes, Alt+C, Alt+W and Alt+R flip the toggles, Alt+D the box that
 // makes it the default (F7.3.1).
 static UiAction ui_ow_event(Ui *u, UiEvent e, const UiInput *in)
@@ -1879,30 +1924,20 @@ static UiAction ui_ow_event(Ui *u, UiEvent e, const UiInput *in)
         case UK_PAGEDOWN: ui_move(l, page); break;
         case UK_NONE:
             if (ui_utf8(e.ch, (char[4]){ 0 }) == 0) break;
-            u->ow_in_list = false, u->ow_caret = u->ow_len;
-            ui_ow_char(u, e.ch), ui_ow_filter(u, in);
+            u->ow_in_list = false, u->ow_caret = u->ow_anchor = u->ow_len;
+            if (ui_line_key(u, ui_ow_line(u), e, in->paste) == UI_LINE_CHANGED) ui_ow_filter(u, in);
             break;
         case UK_BACKSPACE:
-            u->ow_in_list = false, u->ow_caret = u->ow_len;
-            if (u->ow_len) ui_ow_cut(u, ui_ow_step(u, u->ow_len, -1), u->ow_len), ui_ow_filter(u, in);
+            u->ow_in_list = false, u->ow_caret = u->ow_anchor = u->ow_len;
+            if (ui_line_key(u, ui_ow_line(u), e, in->paste) == UI_LINE_CHANGED) ui_ow_filter(u, in);
             break;
         default: break;
         }
         return (UiAction){ UA_NONE, 0, false };
     }
-    int before = u->ow_len;
-    switch (e.key) {
-    case UK_NONE: ui_ow_char(u, e.ch); break;
-    case UK_BACKSPACE: if (u->ow_caret > 0) ui_ow_cut(u, ui_ow_step(u, u->ow_caret, -1), u->ow_caret); break;
-    case UK_DELETE: if (u->ow_caret < u->ow_len) ui_ow_cut(u, u->ow_caret, ui_ow_step(u, u->ow_caret, 1)); break;
-    case UK_LEFT: case UK_SEL_LEFT: u->ow_caret = ui_ow_step(u, u->ow_caret, -1); break;
-    case UK_RIGHT: case UK_SEL_RIGHT: u->ow_caret = ui_ow_step(u, u->ow_caret, 1); break;
-    case UK_HOME: case UK_SEL_HOME: u->ow_caret = 0; break;
-    case UK_END: case UK_SEL_END: u->ow_caret = u->ow_len; break;
-    case UK_DOWN: if (l->n > 0) u->ow_in_list = true; break;
-    default: break;
-    }
-    if (u->ow_len != before || e.key == UK_NONE) ui_ow_filter(u, in);
+    UiLineHit h = ui_line_key(u, ui_ow_line(u), e, in->paste);
+    if (h == UI_LINE_CHANGED) ui_ow_filter(u, in);
+    else if (!h && e.key == UK_DOWN && l->n > 0) u->ow_in_list = true;
     return (UiAction){ UA_NONE, 0, false };
 }
 
@@ -1928,7 +1963,7 @@ static void ui_keys_filter(Ui *u)
 
 static UiAction ui_keys_open(Ui *u)
 {
-    u->keys = true, u->keys_len = 0;
+    u->keys = true, u->keys_len = u->keys_caret = u->keys_anchor = 0;
     u->keys_list = (UiList){ .rows = u->keys_list.rows };
     ui_keys_filter(u);
     return (UiAction){ UA_NONE, 0, false };
@@ -1940,33 +1975,22 @@ static void ui_keys_close(Ui *u)
     ui_matcher_set(&u->keys_m, STR_EMPTY, (UiMatchOpts){ 0 });
 }
 
-// A key while the panel is up; it takes every key. A character goes into the filter, Backspace
-// takes the last one back; Up, Down, PgUp, PgDn, Home and End scroll; Esc, F1 and Enter close.
-static void ui_keys_event(Ui *u, UiEvent e)
+// A key while the panel is up; it takes every key. Up, Down, PgUp, PgDn, Home and End scroll; Esc,
+// F1 and Enter close; the rest edit the filter as the rename line does (2026-10-28), each change
+// filtering again.
+static void ui_keys_event(Ui *u, UiEvent e, Str paste)
 {
     UiList *l = &u->keys_list;
     int page = l->rows > 1 ? l->rows - 1 : 1;
     switch (e.key) {
-    case UK_NONE: {
-        char b[4];
-        int k = ui_utf8(e.ch, b);
-        if (k == 0 || u->keys_len + k >= (int)sizeof u->keys_text) break;
-        memcpy(u->keys_text + u->keys_len, b, (size_t)k), u->keys_len += k;
-        ui_keys_filter(u);
-        break;
-    }
-    case UK_BACKSPACE:
-        if (!u->keys_len) break;
-        do u->keys_len--;
-        while (u->keys_len > 0 && ((unsigned char)u->keys_text[u->keys_len] & 0xC0) == 0x80);
-        ui_keys_filter(u);
-        break;
     case UK_UP: case UK_DOWN: ui_scroll(l, e.key == UK_UP ? 1 : -1); break;   // (as the wheel's notches: up is +)
     case UK_PAGEUP: case UK_PAGEDOWN: ui_scroll(l, e.key == UK_PAGEUP ? page : -page); break;
     case UK_HOME: ui_scroll(l, (int)l->n); break;
     case UK_END: ui_scroll(l, (int)-l->n); break;
     case UK_ESC: case UK_SHORTCUTS: case UK_ENTER: ui_keys_close(u); break;
-    default: break;
+    default:
+        if (ui_line_key(u, ui_keys_line(u), e, paste) == UI_LINE_CHANGED) ui_keys_filter(u);
+        break;
     }
 }
 
@@ -1979,36 +2003,6 @@ static UiAction ui_bmp_open(Ui *u, int at)
     u->bmp_list = (UiList){ .rows = u->bmp_list.rows };
     ui_set(&u->bmp_list, u->bm_total, at >= 0 && at < u->bm_total ? at : 0);
     return (UiAction){ UA_BM_EDIT, 0, false };
-}
-
-// The rename field's character cp at the caret (dropped when it is full).
-static void ui_bmp_char(Ui *u, u32 cp)
-{
-    char b[4];
-    int n = ui_utf8(cp, b);
-    if (n == 0 || u->bmp_len + n >= (int)sizeof u->bmp_text) return;
-    memmove(u->bmp_text + u->bmp_caret + n, u->bmp_text + u->bmp_caret, (size_t)(u->bmp_len - u->bmp_caret));
-    memcpy(u->bmp_text + u->bmp_caret, b, (size_t)n);
-    u->bmp_len += n, u->bmp_caret += n;
-}
-
-// The field's caret place a code point before (dir -1) or after (1) at.
-static int ui_bmp_step(const Ui *u, int at, int dir)
-{
-    if (dir < 0) {
-        if (at == 0) return 0;
-        for (at--; at > 0 && ((unsigned char)u->bmp_text[at] & 0xC0) == 0x80;) at--;
-        return at;
-    }
-    if (at >= u->bmp_len) return u->bmp_len;
-    for (at++; at < u->bmp_len && ((unsigned char)u->bmp_text[at] & 0xC0) == 0x80;) at++;
-    return at;
-}
-
-static void ui_bmp_cut(Ui *u, int a, int b)
-{
-    memmove(u->bmp_text + a, u->bmp_text + b, (size_t)(u->bmp_len - b));
-    u->bmp_len -= b - a, u->bmp_caret = a;
 }
 
 // What one of the panel's buttons (or its key) asks for the line under the cursor: 1 Remove
@@ -2028,21 +2022,15 @@ static UiAction ui_bmp_do(Ui *u, int what)
 
 // A key while the panel is up; it takes every key, as Open With's. In the list: Up, Down, k, j,
 // Home, End, PgUp and PgDn move; Delete removes the bookmark, F2 renames it, Alt+Up and Alt+Down
-// move it; Enter goes there; Esc closes. In the rename field: typing and the caret keys; Enter
-// renames (an empty name: the folder's), Esc leaves the name as it was.
-static UiAction ui_bmp_event(Ui *u, UiEvent e)
+// move it; Enter goes there; Esc closes. In the rename field: it edits as the rename line does
+// (2026-10-28); Enter renames (an empty name: the folder's), Esc leaves the name as it was.
+static UiAction ui_bmp_event(Ui *u, UiEvent e, Str paste)
 {
     UiList *l = &u->bmp_list;
     int page = l->rows > 1 ? l->rows - 1 : 1;
     if (u->bmp_naming) {
+        if (ui_line_key(u, ui_bmp_line(u), e, paste)) return (UiAction){ UA_NONE, 0, false };
         switch (e.key) {
-        case UK_NONE: ui_bmp_char(u, e.ch); break;
-        case UK_BACKSPACE: if (u->bmp_caret > 0) ui_bmp_cut(u, ui_bmp_step(u, u->bmp_caret, -1), u->bmp_caret); break;
-        case UK_DELETE: if (u->bmp_caret < u->bmp_len) ui_bmp_cut(u, u->bmp_caret, ui_bmp_step(u, u->bmp_caret, 1)); break;
-        case UK_LEFT: case UK_SEL_LEFT: u->bmp_caret = ui_bmp_step(u, u->bmp_caret, -1); break;
-        case UK_RIGHT: case UK_SEL_RIGHT: u->bmp_caret = ui_bmp_step(u, u->bmp_caret, 1); break;
-        case UK_HOME: case UK_SEL_HOME: u->bmp_caret = 0; break;
-        case UK_END: case UK_SEL_END: u->bmp_caret = u->bmp_len; break;
         case UK_ENTER: case UK_SHIFT_ENTER: u->bmp_naming = false; return (UiAction){ UA_BM_RENAME, l->sel, false };
         case UK_ESC: u->bmp_naming = false; break;
         default: break;
@@ -2225,18 +2213,12 @@ static bool ui_search_event(Ui *u, UiEvent e, Str paste)
         return true;
     }
     UiLine l = ui_search_line(u);
-    // (gui/ sets the text from a search's address: the caret kept inside it)
-    u->search_caret = (int)ui_clamp(u->search_caret, 0, u->search_len), u->search_anchor = (int)ui_clamp(u->search_anchor, 0, u->search_len);
-    char was[UI_FIND_MAX];
-    int was_len = u->search_len;
-    memcpy(was, u->search, (size_t)was_len);
     int lo, hi;   // (Ctrl+C, Ctrl+X with no text selected: the cursor's result, as before the field edited)
     ui_line_sel(l, &lo, &hi);
     if ((e.key == UK_COPY || e.key == UK_CUT) && lo == hi) return u->search_keys = false, false;
-    if (ui_line_key(u, l, e, paste)) {
-        if (u->search_len != was_len || memcmp(was, u->search, (size_t)was_len) != 0) u->search_edited = true;
-        return true;
-    }
+    UiLineHit h = ui_line_key(u, l, e, paste);
+    if (h == UI_LINE_CHANGED) u->search_edited = true;
+    if (h) return true;
     switch (e.key) {
     case UK_ENTER: case UK_SHIFT_ENTER: case UK_ESC: case UK_DOWN: u->search_keys = false; return true;
     default: u->search_keys = false; return false;
@@ -2264,19 +2246,14 @@ static bool ui_find_event(Ui *u, UiNames names, UiEvent e, const UiInput *in)
         ui_find_update(u, names);
         return true;
     }
-    u->find_caret = (int)ui_clamp(u->find_caret, 0, u->find_len), u->find_anchor = (int)ui_clamp(u->find_anchor, 0, u->find_len);
-    char was[UI_FIND_MAX];
-    int was_len = u->find_len;
-    memcpy(was, u->find, (size_t)was_len);
     // Ctrl+C and Ctrl+X with no text selected copy or cut the file found, as before the bar edited:
     // typing a name and copying it is what the bar is for.
     int lo, hi;
     ui_line_sel(ui_find_line(u), &lo, &hi);
     if ((e.key == UK_COPY || e.key == UK_CUT) && lo == hi) return ui_find_leave(u), false;
-    if (ui_line_key(u, ui_find_line(u), e, in->paste)) {
-        if (u->find_len != was_len || memcmp(was, u->find, (size_t)was_len) != 0) ui_find_update(u, names);
-        return true;
-    }
+    UiLineHit h = ui_line_key(u, ui_find_line(u), e, in->paste);
+    if (h == UI_LINE_CHANGED) ui_find_update(u, names);
+    if (h) return true;
     switch (e.key) {
     case UK_ENTER: case UK_SHIFT_ENTER:
         if (u->find_select) ui_find_select(u, names);
@@ -2589,12 +2566,12 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
             continue;
         }
         if (u->bmp && !u->asking && !u->confirming) {
-            UiAction a = ui_bmp_event(u, e);
+            UiAction a = ui_bmp_event(u, e, in->paste);
             if (a.kind != UA_NONE) return a;
             continue;
         }
         if (u->keys && !u->asking && !u->confirming) {
-            ui_keys_event(u, e);
+            ui_keys_event(u, e, in->paste);
             continue;
         }
         if (u->about && !u->asking && !u->confirming) {   // it takes every key: Esc and Enter close it
@@ -2741,6 +2718,7 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         case UK_F9: return ui_side_mode(u, (SideMode)((u->side_mode + 1) % SIDE_MODES));
         case UK_TAB:
         case UK_SIDE:
+        case UK_WORD_LEFT:   // (Ctrl+Left: a word in a text field, the sidebar here)
             // Tab goes to the sidebar and back, Ctrl+Left there; a hidden one shows as places
             // (gui/ lists them for the mode, the cursor off a heading).
             if (key == UK_TAB && u->side_focus) {
@@ -2803,7 +2781,7 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         case UK_PASTE: return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : u->in_search ? UA_NOT_IN_SEARCH : UA_PASTE, 0, false };
         case UK_UNDO: return (UiAction){ UA_UNDO, 0, false };
         case UK_NEWFOLDER: return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : u->in_search ? UA_NOT_IN_SEARCH : UA_NEWFOLDER, 0, false };
-        case UK_LOCATION: return (UiAction){ UA_LOCATION, 0, false };
+        case UK_LOCATION: case UK_WORD_RIGHT: return (UiAction){ UA_LOCATION, 0, false };   // (Ctrl+Right too, outside a text field)
         case UK_CRUMBS: ui_crumbs_focus(u, in); break;
         case UK_JOBS:   // the find bar first when it is open, then the job rows (Michael, 2026-10-26)
             if (u->finding) u->find_keys = true, u->crumb_focus = false, u->side_focus = false;

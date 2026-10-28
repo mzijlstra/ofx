@@ -133,7 +133,10 @@ key esc
 expect crumbfocus=0 crumbkey=-
 raw-key 262 2
 expect locating=1
+# (in the line Ctrl+Right is a word now, 2026-10-28: it stays open; Ctrl+L closes it)
 raw-key 262 2
+expect locating=1
+key ctrl-l
 expect locating=0
 # Find works in the grid: the cursor goes there, the scroll follows.
 type /very

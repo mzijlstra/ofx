@@ -590,3 +590,88 @@ static void test_field_copy_fallthrough(void)
     u.search_keys = true;
     CHECK(menu_keys(&u, 2, UK_ALL, UK_COPY).kind == UA_NONE && u.search_keys && u.copied && u.copy_len == 2);
 }
+
+// A word at a time in a text field (Michael, 2026-10-28): Ctrl+Left and Right move to a word's
+// start and end, Ctrl+Shift selects, Ctrl+Backspace and Ctrl+Delete delete; spaces, dots and dashes
+// end a word, letters past ASCII don't. Outside a field Ctrl+Left and Right keep their old meanings.
+static void test_line_words(void)
+{
+    Ui u = { 0 };
+    char b[64] = "my-file name.tär";
+    int len = (int)strlen(b), caret = len, anchor = len;
+    UiLine l = { b, &len, &caret, &anchor, 63, false };
+    UiEvent wl = { UK_WORD_LEFT, 0 }, wr = { UK_WORD_RIGHT, 0 };
+    CHECK(ui_line_key(&u, l, wl, STR_EMPTY) == UI_LINE_MOVED && caret == 13 && anchor == 13);   // tär (ä a word's)
+    ui_line_key(&u, l, wl, STR_EMPTY);
+    CHECK(caret == 8);   // name
+    ui_line_key(&u, l, wl, STR_EMPTY), ui_line_key(&u, l, wl, STR_EMPTY);
+    CHECK(caret == 0);
+    CHECK(ui_line_key(&u, l, wl, STR_EMPTY) == UI_LINE_MOVED && caret == 0);   // (at the start: stays)
+    ui_line_key(&u, l, wr, STR_EMPTY);
+    CHECK(caret == 2);   // my|
+    ui_line_key(&u, l, wr, STR_EMPTY);
+    CHECK(caret == 7);   // file|
+    // Ctrl+Shift: the anchor stays.
+    ui_line_key(&u, l, (UiEvent){ UK_SEL_WORD_RIGHT, 0 }, STR_EMPTY);
+    CHECK(anchor == 7 && caret == 12);
+    ui_line_key(&u, l, (UiEvent){ UK_SEL_WORD_LEFT, 0 }, STR_EMPTY), ui_line_key(&u, l, (UiEvent){ UK_SEL_WORD_LEFT, 0 }, STR_EMPTY);
+    CHECK(anchor == 7 && caret == 3);
+    // Ctrl+Backspace, Ctrl+Delete: a word that way, or the selection.
+    caret = anchor = 12;
+    CHECK(ui_line_key(&u, l, (UiEvent){ UK_WORD_BACKSPACE, 0 }, STR_EMPTY) == UI_LINE_CHANGED && len == 13 && memcmp(b, "my-file .tär", 13) == 0 && caret == 8);
+    ui_line_key(&u, l, (UiEvent){ UK_WORD_DELETE, 0 }, STR_EMPTY);
+    CHECK(len == 8 && memcmp(b, "my-file ", 8) == 0 && caret == 8);
+    caret = 0, anchor = 1;   // a selection: it goes, not the word
+    ui_line_key(&u, l, (UiEvent){ UK_WORD_DELETE, 0 }, STR_EMPTY);
+    CHECK(len == 7 && memcmp(b, "y-file ", 7) == 0);
+    caret = 6, anchor = 5;
+    ui_line_key(&u, l, (UiEvent){ UK_WORD_BACKSPACE, 0 }, STR_EMPTY);
+    CHECK(len == 6 && memcmp(b, "y-fil ", 6) == 0);
+    caret = 0, anchor = 1;
+    ui_line_key(&u, l, (UiEvent){ UK_DELETE, 0 }, STR_EMPTY);
+    CHECK(len == 5 && memcmp(b, "-fil ", 5) == 0);
+    caret = anchor = 5;
+    ui_line_key(&u, l, (UiEvent){ UK_WORD_BACKSPACE, 0 }, STR_EMPTY);
+    CHECK(len == 1 && b[0] == '-');
+    // In the list: Ctrl+Left is the sidebar's, Ctrl+Right the location line; the rest nothing.
+    Ui v = menu_ui(3);
+    v.side.n = 3;
+    CHECK(menu_keys(&v, 1, UK_WORD_LEFT).kind == UA_NONE && v.side_focus);
+    v.side_focus = false;
+    CHECK(menu_keys(&v, 1, UK_WORD_RIGHT).kind == UA_LOCATION);
+    CHECK(menu_keys(&v, 4, UK_SEL_WORD_LEFT, UK_SEL_WORD_RIGHT, UK_WORD_BACKSPACE, UK_WORD_DELETE).kind == UA_NONE && v.marked == 0 && v.list.sel == 0);
+    // In the rename line, Ctrl+Right is a word, not the location line's.
+    ui_edit_rename(&v, S("a b.txt"), false);
+    v.caret = v.anchor = 0;
+    CHECK(menu_keys(&v, 1, UK_WORD_RIGHT).kind == UA_NONE && v.editing && v.caret == 1);
+    ui_edit_close(&v);
+}
+
+// Which field has the keys, for gui/'s clipboard read: a panel's field first, then the edit line,
+// the search field, the find bar; none in the list, a panel's list, a bookmark not being renamed.
+static void test_line_active(void)
+{
+    Ui u = { 0 };
+    UiLine l;
+    CHECK(!ui_line_active(&u, NULL));
+    u.finding = true;
+    CHECK(!ui_line_active(&u, NULL));
+    u.find_keys = true;
+    CHECK(ui_line_active(&u, &l) && l.b == u.find);
+    u.in_search = true;
+    CHECK(ui_line_active(&u, &l) && l.b == u.find);
+    u.search_keys = true;
+    CHECK(ui_line_active(&u, &l) && l.b == u.search);
+    u.editing = true;
+    CHECK(ui_line_active(&u, &l) && l.b == u.edit);
+    u.keys = true;
+    CHECK(ui_line_active(&u, &l) && l.b == u.keys_text);
+    u.bmp = true;
+    CHECK(ui_line_active(&u, &l) && l.b == u.keys_text);
+    u.bmp_naming = true;
+    CHECK(ui_line_active(&u, &l) && l.b == u.bmp_text);
+    u.ow = true, u.ow_in_list = true;
+    CHECK(ui_line_active(&u, &l) && l.b == u.bmp_text);
+    u.ow_in_list = false;
+    CHECK(ui_line_active(&u, &l) && l.b == u.ow_text);
+}

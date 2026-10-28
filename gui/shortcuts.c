@@ -40,9 +40,12 @@ static void layout_keys_panel(void)
                                                       .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
                                           .backgroundColor = cc(t->bg), .border = { .color = cc(t->accent), .width = CLAY_BORDER_OUTSIDE(1) },
                                           .clip = { .horizontal = true } }) {
-                if (!u->keys_len) text(cz("Type to filter"), cc(t->fg_dim));
-                else text(fit((Str){ u->keys_text, u->keys_len }, KEYS_W - 300, true), cc(t->fg));
-                CLAY(CLAY_ID("keys-caret"), { .layout = { .sizing = { CLAY_SIZING_FIXED(2), CLAY_SIZING_FIXED(FONT_PX + 2) } }, .backgroundColor = cc(t->accent) }) {}
+                if (!u->keys_len) {
+                    text(cz("Type to filter"), cc(t->fg_dim));
+                    CLAY(CLAY_ID("keys-caret"), { .layout = { .sizing = { CLAY_SIZING_FIXED(2), CLAY_SIZING_FIXED(FONT_PX + 2) } }, .backgroundColor = cc(t->accent) }) {}
+                } else {
+                    edit_text("keys", KEYS_W - 300, ui_keys_line(u), cc(t->fg));   // (as the edit line draws, 2026-10-28)
+                }
             }
         }
         CLAY(CLAY_ID("keys-list"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(l->rows * KEYS_ROW_H) }, .layoutDirection = CLAY_TOP_TO_BOTTOM },

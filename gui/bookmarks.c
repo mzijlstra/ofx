@@ -86,7 +86,7 @@ static void bmp_act(UiAction a)
                                    : STR_EMPTY;
         int n = s.len < (isize)sizeof app.ui.bmp_text - 1 ? (int)s.len : (int)sizeof app.ui.bmp_text - 1;
         memcpy(app.ui.bmp_text, s.p, (size_t)n);
-        app.ui.bmp_len = app.ui.bmp_caret = n;
+        app.ui.bmp_len = app.ui.bmp_caret = app.ui.bmp_anchor = n;
         break;
     }
     case UA_BM_REMOVE: case UA_BM_UP: case UA_BM_DOWN: case UA_BM_RENAME: bmp_change(a.kind, (int)a.index); break;
@@ -139,10 +139,7 @@ static void layout_bmp_panel(void)
                                                                  .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
                                                      .backgroundColor = cc(t->bg), .border = { .color = cc(t->accent), .width = CLAY_BORDER_OUTSIDE(1) },
                                                      .clip = { .horizontal = true } }) {
-                            Str before = { u->bmp_text, u->bmp_caret }, after = { u->bmp_text + u->bmp_caret, u->bmp_len - u->bmp_caret };
-                            text(fit(before, 200, true), cc(t->fg));
-                            CLAY(CLAY_ID("bmp-caret"), { .layout = { .sizing = { CLAY_SIZING_FIXED(2), CLAY_SIZING_FIXED(FONT_PX + 2) } }, .backgroundColor = cc(t->accent) }) {}
-                            text(fit(after, 200 - str_width(before), false), cc(t->fg));
+                            edit_text("bmp", 220, ui_bmp_line(u), cc(t->fg));   // (as the edit line draws, 2026-10-28)
                         }
                     } else {
                         CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_FIXED(240), CLAY_SIZING_FIT(0) } }, .clip = { .horizontal = true } }) {

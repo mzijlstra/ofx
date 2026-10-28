@@ -189,7 +189,7 @@ static void test_bookmarks_panel(void)
     menu_keys(&u, 1, 0x100 + 'k');
     a = menu_keys(&u, 1, UK_F2);
     CHECK(a.kind == UA_BM_NAME && a.index == 3 && u.bmp_naming);
-    memcpy(u.bmp_text, "Docs", 4), u.bmp_len = u.bmp_caret = 4;
+    memcpy(u.bmp_text, "Docs", 4), u.bmp_len = u.bmp_caret = u.bmp_anchor = 4;
     menu_keys(&u, 4, UK_BACKSPACE, UK_HOME, 0x100 + 'M', 0x100 + 'j');
     CHECK(u.bmp_len == 5 && memcmp(u.bmp_text, "MjDoc", 5) == 0 && u.bmp_list.sel == 3);   // j is text here
     a = menu_keys(&u, 1, UK_ENTER);

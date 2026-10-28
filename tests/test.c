@@ -1688,6 +1688,8 @@ int main(void)
     test_search_field_edit();
     test_find_field_edit();
     test_field_copy_fallthrough();
+    test_line_words();
+    test_line_active();
     char cmd[1600];
     snprintf(cmd, sizeof cmd, "chmod -R u+rwx '%s' && rm -rf '%s' '%s'", root, root, decoy);
     if (system(cmd) != 0) fprintf(stderr, "could not remove %s\n", root);

@@ -1160,14 +1160,14 @@ MUTANTS += [
     (U, "    if (l->n == 0 || m->len == 0) return -1;", "    if (l->n == 0) return -1;"),
     (U, "    ui_matcher_set(&u->find_m, (Str){ u->last, u->last_len }, u->find_opts);\n", ""),
     (U, "        u->find_opts = ui_toggle(u->find_opts, ui_toggle_key(e));\n        ui_find_update(u, names);", "        u->find_opts = ui_toggle(u->find_opts, ui_toggle_key(e));"),
-    (U, "    u->ow = true, u->ow_in_list = false, u->ow_fresh = true, u->ow_len = u->ow_caret = 0, u->ow_def = false;", "    u->ow = true, u->ow_in_list = false, u->ow_fresh = true, u->ow_def = false;"),
+    (U, '    u->ow = true, u->ow_in_list = false, u->ow_fresh = true, u->ow_len = u->ow_caret = u->ow_anchor = 0, u->ow_def = false;', '    u->ow = true, u->ow_in_list = false, u->ow_fresh = true, u->ow_def = false;'),
     (U, "    u->ow_list = (UiList){ .rows = u->ow_list.rows };", ""),
     (U, "    ui_matcher_set(&u->ow_m, STR_EMPTY, u->ow_opts);   // (a compiled expression freed)", ""),
     (U, "        if (ui_match(&u->ow_m, in->app_name[i])) u->ow_idx[n++] = i;", "        u->ow_idx[n++] = i;"),
     (U, "    u->ow_list.n = n, u->ow_list.sel = 0, u->ow_list.top = 0;", "    u->ow_list.n = n;"),
-    (U, "    if (n == 0 || u->ow_len + n > UI_FIND_MAX) return;\n    memmove", "    if (n == 0) return;\n    memmove"),
-    (U, "        while (at > 0 && ((unsigned char)u->ow_text[at] & 0xC0) == 0x80) at--;", ""),
-    (U, "    while (at < u->ow_len && ((unsigned char)u->ow_text[at] & 0xC0) == 0x80) at++;", ""),
+
+
+
     (U, "    if (u->ow_list.n == 0) return (UiAction){ UA_NONE, 0, false };\n    isize app", "    isize app"),
     (U, "    case UK_TAB: u->ow_in_list = !u->ow_in_list; return (UiAction){ UA_NONE, 0, false };", ""),
     (U, "        if (e.key == UK_NONE && e.ch == 'j') e.key = UK_DOWN;", ""),
@@ -1176,11 +1176,11 @@ MUTANTS += [
     (U, "        case UK_HOME: ui_move(l, -l->n); break;\n        case UK_END: ui_move(l, l->n); break;", "        case UK_END: ui_move(l, l->n); break;"),
     (U, "        case UK_PAGEUP: ui_move(l, -page); break;\n        case UK_PAGEDOWN:", "        case UK_PAGEDOWN:"),
     (U, "            if (ui_utf8(e.ch, (char[4]){ 0 }) == 0) break;\n", ""),
-    (U, "            u->ow_in_list = false, u->ow_caret = u->ow_len;\n            ui_ow_char(u, e.ch), ui_ow_filter(u, in);", "            u->ow_in_list = false;\n            ui_ow_char(u, e.ch), ui_ow_filter(u, in);"),
-    (U, "    case UK_DELETE: if (u->ow_caret < u->ow_len) ui_ow_cut(u, u->ow_caret, ui_ow_step(u, u->ow_caret, 1)); break;", ""),
-    (U, "    case UK_HOME: case UK_SEL_HOME: u->ow_caret = 0; break;", ""),
-    (U, "    case UK_DOWN: if (l->n > 0) u->ow_in_list = true; break;", "    case UK_DOWN: u->ow_in_list = true; break;"),
-    (U, "    if (u->ow_len != before || e.key == UK_NONE) ui_ow_filter(u, in);", ""),
+    (U, '            u->ow_in_list = false, u->ow_caret = u->ow_anchor = u->ow_len;\n            if (ui_line_key(u, ui_ow_line(u), e, in->paste) == UI_LINE_CHANGED) ui_ow_filter(u, in);\n            break;\n        case UK_BACKSPACE:', '            u->ow_in_list = false;\n            if (ui_line_key(u, ui_ow_line(u), e, in->paste) == UI_LINE_CHANGED) ui_ow_filter(u, in);\n            break;\n        case UK_BACKSPACE:'),
+
+
+    (U, '    else if (!h && e.key == UK_DOWN && l->n > 0) u->ow_in_list = true;', '    else if (!h && e.key == UK_DOWN) u->ow_in_list = true;'),
+    (U, '    if (h == UI_LINE_CHANGED) ui_ow_filter(u, in);\n    else if', '    if (false) ui_ow_filter(u, in);\n    else if'),
     (U, "    case UM_OPEN_WITH: return files && !u->in_trash;", "    case UM_OPEN_WITH: return files;"),
     (U, "    case UM_OPEN_WITH: return ui_ow_open(u);\n", ""),
     (U, "|| u->empty_asking || u->props || u->ow || u->bmp || u->keys || u->about || u->bar_told;\n    if (prompt)", "|| u->empty_asking || u->props;\n    if (prompt)"),
@@ -1245,7 +1245,7 @@ MUTANTS += [
     (O, "        return err_set(err, \"%s\", out[0] ? out : \"gio didn't set it\"), false;", "        return err_set(err, \"gio didn't set it\"), false;"),
     (U, "    if (e.key == UK_MENU && e.ch == 'd') {\n        if (u->ow_def_can) u->ow_def = !u->ow_def;", "    if (e.key == UK_MENU && e.ch == 'd') {\n        u->ow_def = !u->ow_def;"),
     (U, "    bool def = u->ow_def && u->ow_def_can;", "    bool def = u->ow_def;"),
-    (U, "u->ow_len = u->ow_caret = 0, u->ow_def = false;", "u->ow_len = u->ow_caret = 0;"),
+    (U, 'u->ow_len = u->ow_caret = u->ow_anchor = 0, u->ow_def = false;', 'u->ow_len = u->ow_caret = u->ow_anchor = 0;'),
     (U, "        if (in->toggle == 4) {\n            if (u->ow_def_can) u->ow_def = !u->ow_def;", "        if (in->toggle == 4) {\n            u->ow_def = !u->ow_def;"),
 ]
 # ---- the find bar (Michael, 2026-10-26)
@@ -1433,7 +1433,7 @@ MUTANTS += [
     (U, "    if (l->n == 0) return (UiAction){ UA_NONE, 0, false };\n    switch (what) {", "    switch (what) {"),
     (U, "        case UK_ENTER: case UK_SHIFT_ENTER: u->bmp_naming = false; return (UiAction){ UA_BM_RENAME, l->sel, false };", "        case UK_ENTER: case UK_SHIFT_ENTER: u->bmp_naming = false; break;"),
     (U, "        case UK_ESC: u->bmp_naming = false; break;", "        case UK_ESC: u->bmp_naming = false, u->bmp = false; break;"),
-    (U, "        case UK_NONE: ui_bmp_char(u, e.ch); break;", ""),
+
     (U, "    case UK_PARENT: return ui_bmp_do(u, 3);", ""),
     (U, "    case UK_ALT_DOWN: return ui_bmp_do(u, 4);", ""),
     (U, "    case UK_DELETE: return ui_bmp_do(u, 1);", ""),
@@ -1446,7 +1446,7 @@ MUTANTS += [
     (U, "            if (in->bmp_drow >= 0) return u->bmp = false, (UiAction){ UA_BM_GO, u->bmp_list.sel, false };", ""),
     (U, "        if (in->bmp_btn >= 1 && in->bmp_btn <= 4 && !u->bmp_naming) return ui_bmp_do(u, in->bmp_btn);", "        if (in->bmp_btn >= 1 && in->bmp_btn <= 4) return ui_bmp_do(u, in->bmp_btn);"),
     (U, "        if (in->modal == UI_MODAL_NO) return u->bmp = false, (UiAction){ UA_NONE, 0, false };\n    } else if (u->keys", "    } else if (u->keys"),
-    (U, "        if (u->bmp && !u->asking && !u->confirming) {\n            UiAction a = ui_bmp_event(u, e);", "        if (false) {\n            UiAction a = ui_bmp_event(u, e);"),
+    (U, '        if (u->bmp && !u->asking && !u->confirming) {\n            UiAction a = ui_bmp_event(u, e, in->paste);', '        if (false) {\n            UiAction a = ui_bmp_event(u, e, in->paste);'),
     (U, "in->bmp_row >= 0 || in->bmp_drow >= 0 || in->bmp_btn || in->ow_wheel != 0;", "in->bmp_row >= 0 || in->bmp_drow >= 0 || in->ow_wheel != 0;"),
 ]
 # ---- F7.5: Keyboard Shortcuts
@@ -1457,15 +1457,15 @@ MUTANTS += [
     (U, "        u->keys_line[n++] = (short)(-1 - s);", "        u->keys_line[n++] = (short)(-1);"),
     (U, "            if (UI_KEYS[r].sec == (UiKeySection)s && (!u->keys_len || ui_match(&u->keys_m, str_from_c(UI_KEYS[r].action)) ||", "            if (UI_KEYS[r].sec == (UiKeySection)s && (!u->keys_len || false ||"),
     (U, "                                                      ui_match(&u->keys_m, str_from_c(UI_KEYS[r].key)) || ui_match(&u->keys_m, str_from_c(UI_KEYS[r].key2))))", "                                                      ui_match(&u->keys_m, str_from_c(UI_KEYS[r].key2))))"),
-    (U, "    u->keys = true, u->keys_len = 0;", "    u->keys = true;"),
-    (U, "        memcpy(u->keys_text + u->keys_len, b, (size_t)k), u->keys_len += k;\n        ui_keys_filter(u);", "        memcpy(u->keys_text + u->keys_len, b, (size_t)k), u->keys_len += k;"),
-    (U, "        while (u->keys_len > 0 && ((unsigned char)u->keys_text[u->keys_len] & 0xC0) == 0x80);", "        while (false);"),
+    (U, '    u->keys = true, u->keys_len = u->keys_caret = u->keys_anchor = 0;', '    u->keys = true;'),
+
+
     (U, "    case UK_UP: case UK_DOWN: ui_scroll(l, e.key == UK_UP ? 1 : -1); break;", "    case UK_UP: case UK_DOWN: ui_scroll(l, 1); break;"),
     (U, "    case UK_END: ui_scroll(l, (int)-l->n); break;", ""),
     (U, "    case UK_ESC: case UK_SHORTCUTS: case UK_ENTER: ui_keys_close(u); break;", "    case UK_ESC: case UK_ENTER: ui_keys_close(u); break;"),
     (U, "        case UK_SHORTCUTS: return ui_keys_open(u);", ""),
     (U, "u->props || u->ow || u->bmp || u->keys || u->about || u->bar_told;\n    if (prompt)", "u->props || u->ow || u->bmp || u->about;\n    if (prompt)"),
-    (U, "        if (u->keys && !u->asking && !u->confirming) {\n            ui_keys_event(u, e);", "        if (false) {\n            ui_keys_event(u, e);"),
+    (U, '        if (u->keys && !u->asking && !u->confirming) {\n            ui_keys_event(u, e, in->paste);', '        if (false) {\n            ui_keys_event(u, e, in->paste);'),
     (U, "        if (in->modal == UI_MODAL_NO) return ui_keys_close(u), (UiAction){ UA_NONE, 0, false };", ""),
     (U, "        if (in->ow_wheel) ui_scroll(&u->keys_list, in->ow_wheel);", ""),
 ]
@@ -1764,18 +1764,18 @@ MUTANTS += [
 ]
 # ---- the search field edits as the rename line does (Michael, 2026-10-28)
 MUTANTS += [
-    (U, "        if (u->search_len != was_len || memcmp(was, u->search, (size_t)was_len) != 0) u->search_edited = true;", "        u->search_edited = true;"),
-    (U, "        if (u->search_len != was_len || memcmp(was, u->search, (size_t)was_len) != 0) u->search_edited = true;", "        if (u->search_len != was_len) u->search_edited = true;"),
-    (U, "    u->search_caret = (int)ui_clamp(u->search_caret, 0, u->search_len), u->search_anchor = (int)ui_clamp(u->search_anchor, 0, u->search_len);", ""),
+
+
+
     (U, "    return (UiLine){ u->search, &u->search_len, &u->search_caret, &u->search_anchor, UI_FIND_MAX, false };", "    return (UiLine){ u->search, &u->search_len, &u->search_caret, &u->search_anchor, UI_FIND_MAX, true };"),
     (U, "        if (u->in_search && u->search_keys && !prompt && ui_search_event(u, e, in->paste)) continue;", "        if (u->in_search && u->search_keys && ui_search_event(u, e, in->paste)) continue;"),
     (U, "        if (u->in_search && u->search_keys && !prompt && ui_search_event(u, e, in->paste)) continue;", "        if (u->in_search && u->search_keys && !prompt && ui_search_event(u, e, STR_EMPTY)) continue;"),
 ]
 # ---- the find bar's field on the shared line (Michael, 2026-10-28)
 MUTANTS += [
-    (U, "        if (u->find_len != was_len || memcmp(was, u->find, (size_t)was_len) != 0) ui_find_update(u, names);", "        if (u->find_len != was_len) ui_find_update(u, names);"),
-    (U, "        if (u->find_len != was_len || memcmp(was, u->find, (size_t)was_len) != 0) ui_find_update(u, names);", ""),
-    (U, "    u->find_caret = (int)ui_clamp(u->find_caret, 0, u->find_len), u->find_anchor = (int)ui_clamp(u->find_anchor, 0, u->find_len);", ""),
+
+
+
     (U, "    return (UiLine){ u->find, &u->find_len, &u->find_caret, &u->find_anchor, UI_FIND_MAX, false };", "    return (UiLine){ u->find, &u->find_len, &u->find_caret, &u->find_anchor, UI_FIND_MAX, true };"),
     (U, "        if (u->finding && u->find_keys && !prompt && ui_find_event(u, names, e, in)) continue;", "        if (u->finding && u->find_keys && ui_find_event(u, names, e, in)) continue;"),
 ]
@@ -1787,5 +1787,33 @@ MUTANTS += [
     (U, "    if ((e.key == UK_COPY || e.key == UK_CUT) && lo == hi) return ui_find_leave(u), false;", ""),
     (U, "    if ((e.key == UK_COPY || e.key == UK_CUT) && lo == hi) return ui_find_leave(u), false;", "    if (e.key == UK_CUT && lo == hi) return ui_find_leave(u), false;"),
     (U, "    if ((e.key == UK_COPY || e.key == UK_CUT) && lo == hi) return ui_find_leave(u), false;", "    if ((e.key == UK_COPY || e.key == UK_CUT)) return ui_find_leave(u), false;"),
+]
+# ---- the text fields on one line editor, and words (2026-10-28)
+MUTANTS += [
+    (U, "        while (at > 0 && !ui_word_byte((unsigned char)l.b[at - 1])) at--;", ""),
+    (U, "        while (at > 0 && ui_word_byte((unsigned char)l.b[at - 1])) at--;", ""),
+    (U, "    while (at < *l.len && !ui_word_byte((unsigned char)l.b[at])) at++;", ""),
+    (U, "    while (at < *l.len && ui_word_byte((unsigned char)l.b[at])) at++;\n    return at;", "    return at;"),
+    (U, "    case UK_WORD_LEFT: *l.caret = *l.anchor = ui_line_word(l, *l.caret, -1); return true;", "    case UK_WORD_LEFT: *l.caret = ui_line_word(l, *l.caret, -1); return true;"),
+    (U, "    case UK_WORD_RIGHT: *l.caret = *l.anchor = ui_line_word(l, *l.caret, 1); return true;", "    case UK_WORD_RIGHT: *l.caret = *l.anchor = ui_line_fwd(l, *l.caret); return true;"),
+    (U, "    case UK_SEL_WORD_LEFT: *l.caret = ui_line_word(l, *l.caret, -1); return true;", "    case UK_SEL_WORD_LEFT: *l.caret = *l.anchor = ui_line_word(l, *l.caret, -1); return true;"),
+    (U, "    case UK_SEL_WORD_RIGHT: *l.caret = ui_line_word(l, *l.caret, 1); return true;", ""),
+    (U, "    case UK_WORD_BACKSPACE: ui_line_cut(l, lo < hi ? lo : ui_line_word(l, *l.caret, -1), lo < hi ? hi : *l.caret); return true;", "    case UK_WORD_BACKSPACE: ui_line_cut(l, ui_line_word(l, *l.caret, -1), *l.caret); return true;"),
+    (U, "    case UK_WORD_DELETE: ui_line_cut(l, lo < hi ? lo : *l.caret, lo < hi ? hi : ui_line_word(l, *l.caret, 1)); return true;", "    case UK_WORD_DELETE: ui_line_cut(l, *l.caret, ui_line_word(l, *l.caret, 1)); return true;"),
+    (U, "    *l.caret = (int)ui_clamp(*l.caret, 0, *l.len), *l.anchor = (int)ui_clamp(*l.anchor, 0, *l.len);", ""),
+    (U, "    return *l.len != was_len || memcmp(was, l.b, (size_t)was_len) != 0 ? UI_LINE_CHANGED : UI_LINE_MOVED;", "    return *l.len != was_len ? UI_LINE_CHANGED : UI_LINE_MOVED;"),
+    (U, "    return *l.len != was_len || memcmp(was, l.b, (size_t)was_len) != 0 ? UI_LINE_CHANGED : UI_LINE_MOVED;", "    return UI_LINE_CHANGED;"),
+    (U, "    if (u->ow && !u->ow_in_list) l = ui_ow_line(u);", "    if (u->ow) l = ui_ow_line(u);"),
+    (U, "    else if (u->bmp && u->bmp_naming) l = ui_bmp_line(u);", "    else if (u->bmp) l = ui_bmp_line(u);"),
+    (U, "    else if (u->keys) l = ui_keys_line(u);", ""),
+    (U, "    else if (u->editing) l = ui_edit_line(u);", ""),
+    (U, "    else if (u->in_search && u->search_keys) l = ui_search_line(u);", "    else if (u->in_search) l = ui_search_line(u);"),
+    (U, "    else if (u->finding && u->find_keys) l = ui_find_line(u);", "    else if (u->finding) l = ui_find_line(u);"),
+    (U, "    if (h == UI_LINE_CHANGED) u->search_edited = true;", "    if (h) u->search_edited = true;"),
+    (U, "    if (h == UI_LINE_CHANGED) ui_find_update(u, names);", ""),
+    (U, "        if (ui_line_key(u, ui_keys_line(u), e, paste) == UI_LINE_CHANGED) ui_keys_filter(u);", "        ui_line_key(u, ui_keys_line(u), e, paste);"),
+    (U, "        if (ui_line_key(u, ui_bmp_line(u), e, paste)) return (UiAction){ UA_NONE, 0, false };", ""),
+    (U, "        case UK_WORD_LEFT:   // (Ctrl+Left: a word in a text field, the sidebar here)", ""),
+    (U, "        case UK_LOCATION: case UK_WORD_RIGHT: return (UiAction){ UA_LOCATION, 0, false };", "        case UK_LOCATION: return (UiAction){ UA_LOCATION, 0, false };"),
 ]
 

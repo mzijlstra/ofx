@@ -12,7 +12,8 @@
 //                           ctrl-h ctrl-a ctrl-c ctrl-x ctrl-v ctrl-z ctrl-shift-n ctrl-l alt-up
 //                           ctrl-t ctrl-w ctrl-tab ctrl-shift-tab ctrl-shift-pageup ctrl-shift-pagedown,
 //                           shift-left shift-right shift-home shift-end shift-enter ctrl-k ctrl-j ctrl-q,
-//                           ctrl-1 ctrl-2 ctrl-left, ctrl-equal ctrl-minus ctrl-0, and alt-1 .. alt-9;
+//                           ctrl-1 ctrl-2 ctrl-left ctrl-right (a word in a field), ctrl-shift-left ctrl-shift-right,
+//                           ctrl-backspace ctrl-delete, ctrl-equal ctrl-minus ctrl-0, and alt-1 .. alt-9;
 //                           f10, alt-<letter> (a menu), ctrl-n, and close-window (the compositor's
 //                           close, as SIGUSR1 from another window's Close All); ctrl-q is Close All;
 //                           ctrl-i (Properties, F7.2), alt-enter (a terminal), ctrl-m (Make Link),
@@ -488,7 +489,8 @@ static UiKey script_key(Str name)
         { "shift-up", UK_SEL_UP }, { "shift-down", UK_SEL_DOWN },
         { "shift-enter", UK_SHIFT_ENTER }, { "ctrl-k", UK_CRUMBS }, { "ctrl-j", UK_JOBS }, { "ctrl-q", UK_QUIT_ALL }, { "close-window", UK_QUIT },
         { "f10", UK_F10 }, { "ctrl-n", UK_NEW_WINDOW }, { "ctrl-i", UK_PROPERTIES }, { "alt-enter", UK_TERMINAL },
-        { "ctrl-1", UK_VIEW_LIST }, { "ctrl-2", UK_VIEW_ICONS }, { "ctrl-left", UK_SIDE },
+        { "ctrl-1", UK_VIEW_LIST }, { "ctrl-2", UK_VIEW_ICONS }, { "ctrl-left", UK_WORD_LEFT }, { "ctrl-right", UK_WORD_RIGHT },
+        { "ctrl-shift-left", UK_SEL_WORD_LEFT }, { "ctrl-shift-right", UK_SEL_WORD_RIGHT }, { "ctrl-backspace", UK_WORD_BACKSPACE }, { "ctrl-delete", UK_WORD_DELETE },
         { "ctrl-equal", UK_ZOOM_IN }, { "ctrl-minus", UK_ZOOM_OUT }, { "ctrl-0", UK_ZOOM_RESET },
         { "ctrl-shift-f", UK_SEARCH }, { "ctrl-enter", UK_CONTAINING }, { "ctrl-shift-i", UK_INVERT }, { "ctrl-shift-a", UK_SELECT_MATCH }, { "ctrl-r", UK_RELOAD }, { "alt-home", UK_HOMEDIR }, { "alt-end", UK_TRASH_VIEW }, { "ctrl-d", UK_ADD_BOOKMARK }, { "ctrl-b", UK_EDIT_BOOKMARKS }, { "f1", UK_SHORTCUTS }, { "alt-down", UK_ALT_DOWN },
     };
