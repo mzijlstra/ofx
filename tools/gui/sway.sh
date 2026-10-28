@@ -47,8 +47,17 @@ EOS
     ;;
 stop)
     # Only that pid if it is still a sway: a stale file could name some other process by now.
-    p=$(cat "$T/sway.pid" 2>/dev/null)
+    p=$(cat "$T/sway.pid" 2>/dev/null) sock=$(cat "$T/sway.socket" 2>/dev/null)
     [ -n "$p" ] && [ "$(cat "/proc/$p/comm" 2>/dev/null)" = sway ] && kill "$p" 2>/dev/null
+    # A sway killed hard (a run stopped by SIGKILL) leaves its socket and lock behind: once it is
+    # gone, they go too (2026-10-28: three were left; reviewer-2). Only a wayland-N it wrote down,
+    # and never this session's display.
+    for i in $(seq 20); do [ -n "$p" ] && kill -0 "$p" 2>/dev/null || break; sleep 0.1; done
+    case $sock in
+    wayland-[0-9]*) if [ "$sock" != "${WAYLAND_DISPLAY:-}" ] && ! { [ -n "$p" ] && kill -0 "$p" 2>/dev/null; }; then
+                        rm -f "$XDG_RUNTIME_DIR/$sock" "$XDG_RUNTIME_DIR/$sock.lock"
+                    fi ;;
+    esac
     rm -f "$T/sway.pid" "$T/sway.socket"
     ;;
 *) echo "usage: sway.sh start|stop <scratch-dir>" >&2; exit 2 ;;
