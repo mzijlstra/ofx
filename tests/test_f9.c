@@ -550,3 +550,43 @@ static void test_find_field_edit(void)
     CHECK(!u.confirming && u.find_len == 2);
     ui_matcher_set(&u.find_m, STR_EMPTY, u.find_opts);
 }
+
+// Ctrl+C and Ctrl+X in either field with no text selected go to the list: the file found (or the
+// result) copied or cut, as before the fields edited (reviewer-2, 2026-10-28); with text selected,
+// the text.
+static void test_field_copy_fallthrough(void)
+{
+    UiNames names = { name_at, NULL, NULL };
+    Ui u = { 0 };
+    u.list.rows = 10;
+    ui_set(&u.list, COUNT(find_names), 0);
+    for (int k = 0; k < 2; k++) {
+        UiKey key = k ? UK_CUT : UK_COPY;
+        UiActionKind want = k ? UA_CUT : UA_COPY;
+        ui_find_open(&u);
+        UiInput in = chars("bet");
+        ui_handle(&u, names, &in);
+        u.copied = false;
+        CHECK(menu_keys(&u, 1, key).kind == want && !u.find_keys && u.finding && !u.copied && u.find_len == 3);
+        ui_find_close(&u);
+        ui_find_open(&u);
+        in = chars("bet");
+        ui_handle(&u, names, &in);
+        CHECK(menu_keys(&u, 2, UK_ALL, key).kind == UA_NONE && u.find_keys && u.copied && u.copy_len == 3);
+        ui_find_close(&u);
+    }
+    ui_matcher_set(&u.find_m, STR_EMPTY, u.find_opts);
+    // The search field likewise.
+    u = (Ui){ 0 };
+    u.list.rows = 10;
+    ui_set(&u.list, 3, 0);
+    u.in_search = true, u.search_keys = true;
+    UiInput in = chars("ab");
+    ui_handle(&u, names, &in);
+    u.copied = false;
+    CHECK(menu_keys(&u, 1, UK_COPY).kind == UA_COPY && !u.search_keys && !u.copied);
+    u.search_keys = true;
+    CHECK(menu_keys(&u, 1, UK_CUT).kind == UA_CUT && !u.search_keys && u.search_len == 2);
+    u.search_keys = true;
+    CHECK(menu_keys(&u, 2, UK_ALL, UK_COPY).kind == UA_NONE && u.search_keys && u.copied && u.copy_len == 2);
+}

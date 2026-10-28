@@ -1779,3 +1779,13 @@ MUTANTS += [
     (U, "    return (UiLine){ u->find, &u->find_len, &u->find_caret, &u->find_anchor, UI_FIND_MAX, false };", "    return (UiLine){ u->find, &u->find_len, &u->find_caret, &u->find_anchor, UI_FIND_MAX, true };"),
     (U, "        if (u->finding && u->find_keys && !prompt && ui_find_event(u, names, e, in)) continue;", "        if (u->finding && u->find_keys && ui_find_event(u, names, e, in)) continue;"),
 ]
+# ---- Ctrl+C, Ctrl+X with nothing selected in the fields: the list's (reviewer-2, 2026-10-28)
+MUTANTS += [
+    (U, "    if ((e.key == UK_COPY || e.key == UK_CUT) && lo == hi) return u->search_keys = false, false;", ""),
+    (U, "    if ((e.key == UK_COPY || e.key == UK_CUT) && lo == hi) return u->search_keys = false, false;", "    if (e.key == UK_COPY && lo == hi) return u->search_keys = false, false;"),
+    (U, "    if ((e.key == UK_COPY || e.key == UK_CUT) && lo == hi) return u->search_keys = false, false;", "    if ((e.key == UK_COPY || e.key == UK_CUT)) return u->search_keys = false, false;"),
+    (U, "    if ((e.key == UK_COPY || e.key == UK_CUT) && lo == hi) return ui_find_leave(u), false;", ""),
+    (U, "    if ((e.key == UK_COPY || e.key == UK_CUT) && lo == hi) return ui_find_leave(u), false;", "    if (e.key == UK_CUT && lo == hi) return ui_find_leave(u), false;"),
+    (U, "    if ((e.key == UK_COPY || e.key == UK_CUT) && lo == hi) return ui_find_leave(u), false;", "    if ((e.key == UK_COPY || e.key == UK_CUT)) return ui_find_leave(u), false;"),
+]
+

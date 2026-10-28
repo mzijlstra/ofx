@@ -2230,6 +2230,9 @@ static bool ui_search_event(Ui *u, UiEvent e, Str paste)
     char was[UI_FIND_MAX];
     int was_len = u->search_len;
     memcpy(was, u->search, (size_t)was_len);
+    int lo, hi;   // (Ctrl+C, Ctrl+X with no text selected: the cursor's result, as before the field edited)
+    ui_line_sel(l, &lo, &hi);
+    if ((e.key == UK_COPY || e.key == UK_CUT) && lo == hi) return u->search_keys = false, false;
     if (ui_line_key(u, l, e, paste)) {
         if (u->search_len != was_len || memcmp(was, u->search, (size_t)was_len) != 0) u->search_edited = true;
         return true;
@@ -2265,6 +2268,11 @@ static bool ui_find_event(Ui *u, UiNames names, UiEvent e, const UiInput *in)
     char was[UI_FIND_MAX];
     int was_len = u->find_len;
     memcpy(was, u->find, (size_t)was_len);
+    // Ctrl+C and Ctrl+X with no text selected copy or cut the file found, as before the bar edited:
+    // typing a name and copying it is what the bar is for.
+    int lo, hi;
+    ui_line_sel(ui_find_line(u), &lo, &hi);
+    if ((e.key == UK_COPY || e.key == UK_CUT) && lo == hi) return ui_find_leave(u), false;
     if (ui_line_key(u, ui_find_line(u), e, in->paste)) {
         if (u->find_len != was_len || memcmp(was, u->find, (size_t)was_len) != 0) ui_find_update(u, names);
         return true;
