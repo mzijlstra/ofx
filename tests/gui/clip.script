@@ -1,0 +1,64 @@
+# The system clipboard through ext-data-control (gui/clipboard.c), in the test sway
+# (tools/gui/sway.sh, OFX_COMPOSITOR=sway; weston has none). wl-copy and wl-paste stand in for the
+# other programs: they reach this sway, as the window's WAYLAND_DISPLAY is its socket. The tree
+# (run.sh): adir/inner.txt, bdir/, a.txt, b.txt (folders first).
+settle
+expect sysclip=1 n=4
+# ---- another program's text, then Ctrl+V twice in the list: the second used to hang the window,
+# the lock kept after the first (2026-10-28)
+sh printf hello | wl-copy
+key ctrl-v
+expect status=The clipboard holds no files
+key ctrl-v
+wait 3
+expect status=The clipboard holds no files n=4
+# ---- the same text into the find bar and the rename line
+key ctrl-f
+key ctrl-v
+expect finding=1 find=hello
+key esc
+key end
+key up
+expect sel=a.txt
+key f2
+key ctrl-a
+key ctrl-v
+expect editing=1 edit=hello
+key esc
+# ---- the rename line's text out: Ctrl+C on its selection
+key f2
+key ctrl-a
+key ctrl-c
+key esc
+sh test "$(wl-paste -n)" = a.txt
+# ---- files out: Ctrl+C, then Ctrl+X, each read back in the three types other programs ask for
+key ctrl-c
+expect status=Copied a.txt
+sh test "$(wl-paste -n -t text/uri-list)" = "$(printf 'file://%s/a.txt\r' "$OFX_DIR")"
+sh test "$(wl-paste -n -t x-special/gnome-copied-files)" = "$(printf 'copy\nfile://%s/a.txt' "$OFX_DIR")"
+sh test "$(wl-paste -n -t text/plain)" = "$OFX_DIR/a.txt"
+key down
+expect sel=b.txt
+key ctrl-x
+expect status=Cut b.txt
+sh test "$(wl-paste -n -t x-special/gnome-copied-files)" = "$(printf 'cut\nfile://%s/b.txt' "$OFX_DIR")"
+# ---- another program's text replaces ours: Ctrl+V pastes nothing
+sh printf again | wl-copy
+key ctrl-v
+expect status=The clipboard holds no files n=4
+# ---- another program's files in: a copy (uri-list) here, then a cut (GNOME's) into bdir
+sh printf 'file://%s/adir/inner.txt\r\n' "$OFX_DIR" | wl-copy -t text/uri-list
+key ctrl-v
+wait-for 3000 n=5 job=-
+sh test -f "$OFX_DIR/inner.txt" && test -f "$OFX_DIR/adir/inner.txt"
+sh printf 'cut\nfile://%s/b.txt' "$OFX_DIR" | wl-copy -t x-special/gnome-copied-files
+key home
+expect sel=adir
+key down
+expect sel=bdir
+key enter
+wait-for 2000 n=0
+key ctrl-v
+wait-for 3000 n=1 job=-
+sh test -f "$OFX_DIR/b.txt" && test ! -e "$OFX_DIR/../b.txt"
+quit

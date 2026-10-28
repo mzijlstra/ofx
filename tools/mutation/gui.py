@@ -98,9 +98,8 @@ MUTANTS = [
     # Not run: hit_at's early return while a panel is up; ui_handle drops every other click during a
     # prompt anyway, so leaving it out changes nothing a test can see.
     (J, "        if (jobs.asking >= 0) app.ui.asking = true, app.ui.ask_all = false;", "        if (jobs.asking >= 0) app.ui.asking = true;"),
-    # F5.2: the edit lines' text clipboard, the path buttons by keyboard. Not run: clipboard.c's
-    # data-control text (clip_set_text, clip_get_text, clip_get's "our text holds no files"):
-    # weston has no data-control, so it is the live check's.
+    # F5.2: the edit lines' text clipboard, the path buttons by keyboard. clipboard.c's
+    # data-control text: with the clipboard's own, at the end (clip, in the test sway).
     (G, "        case GLFW_KEY_LEFT: return UK_SEL_LEFT;\n", ""),
     (G, "        case GLFW_KEY_KP_ENTER: return UK_SHIFT_ENTER;\n", ""),
     (G, "    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_K) return UK_CRUMBS;\n", ""),
@@ -586,6 +585,18 @@ MUTANTS = [
     (G, '        go_to(dir, app.list.e[a.index].name, 0);', '        go_to(dir, STR_EMPTY, 0);', 'f9'),
     (G, '        snprintf(dir, sizeof dir, "%.*s", STR_ARG(d.len ? d : S("/")));\n        go_to(dir, app.list.e[a.index].name, 0);', '        snprintf(dir, sizeof dir, "%s", app.search_root);\n        go_to(dir, app.list.e[a.index].name, 0);', 'f9'),
     (G, '    char keep[PATH_MAX];\n    snprintf(keep, sizeof keep, "%.*s", STR_ARG(sel_name()));\n    snprintf(app.search_pick', '    char keep[NAME_MAX + 1];\n    snprintf(keep, sizeof keep, "%.*s", STR_ARG(sel_name()));\n    snprintf(app.search_pick', 'f9'),
+    # The system clipboard (gui/clipboard.c), run since 2026-10-28 in the test sway (clip): the lock
+    # clip_get kept, the types read and offered, what each type serves, and another program's text.
+    ('gui/clipboard.c', "    if (!types) {   // (left held, the next paste or clipboard change hung the window: 2026-10-28)\n        pthread_mutex_unlock(&clip.mu);\n", "    if (!types) {   // (left held, the next paste or clipboard change hung the window: 2026-10-28)\n", 'clip'),
+    ('gui/clipboard.c', "    if (i >= 0 && strcmp(mime, CLIP_MIME_GNOME) == 0) clip.offers[i].types |= OFFER_GNOME;\n", "", 'clip'),
+    ('gui/clipboard.c', "    if (i >= 0 && strcmp(mime, CLIP_MIME_URIS) == 0) clip.offers[i].types |= OFFER_URIS;\n", "", 'clip'),
+    ('gui/clipboard.c', "    if (files) ext_data_control_source_v1_offer(clip.src, CLIP_MIME_GNOME);\n", "", 'clip'),
+    ('gui/clipboard.c', "    if (files) ext_data_control_source_v1_offer(clip.src, CLIP_MIME_URIS);\n", "", 'clip'),
+    ('gui/clipboard.c', "    ext_data_control_source_v1_offer(clip.src, CLIP_MIME_TEXT[1]);\n", "", 'clip'),
+    ('gui/clipboard.c', "    if (strcmp(mime, CLIP_MIME_GNOME) == 0) p = clip.payload[CLIP_FMT_GNOME];", "    if (strcmp(mime, CLIP_MIME_GNOME) == 0) p = clip.payload[CLIP_FMT_URIS];", 'clip'),
+    ('gui/clipboard.c', "strcmp(mime, CLIP_MIME_TEXT[1]) == 0) p = clip.payload[CLIP_FMT_TEXT];", "strcmp(mime, CLIP_MIME_TEXT[1]) == 0) {}", 'clip'),
+    ('gui/clipboard.c', "    bool gnome = types & OFFER_GNOME;", "    bool gnome = false;", 'clip'),
+    ('gui/clipboard.c', "    if (!(types & (OFFER_UTF8 | OFFER_TEXT))) {", "    if (true) {", 'clip'),
 ]
 import concurrent.futures, queue, threading, time
 
@@ -611,7 +622,7 @@ t_start = time.monotonic()
 # run.sh's groups, in its order: a mutant runs them one at a time and stops at the first that
 # kills it (Michael, 2026-10-25).
 GROUPS = ['browse', 'big', 'gone', 'watchgap', 'f2', 'f3', 'f4', 'f5', 'f52', 'f53', 'f54', 'f6', 'f62', 'f63', 'f64', 'f7',
-          'f72', 'f73', 'f74', 'f75', 'f8', 'f9', 'hang', 'guard3', 'guard']
+          'f72', 'f73', 'f74', 'f75', 'f8', 'f9', 'clip', 'hang', 'guard3', 'guard']
 run_text = open(os.path.join(root, 'tests/gui/run.sh')).read()
 assert re.findall(r'want ([a-z0-9]+)', run_text) == GROUPS, 'GROUPS in gui.py no longer match tests/gui/run.sh'
 

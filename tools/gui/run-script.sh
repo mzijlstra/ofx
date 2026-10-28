@@ -1,12 +1,13 @@
 #!/bin/sh
 # Runs one scripted ofx window (OFX_GUI_SCRIPT, gui/script.c) in a private headless weston
-# (tools/gui/weston.sh), started for the run and stopped after it. Nothing reaches Michael's
+# (tools/gui/weston.sh, or tools/gui/sway.sh with OFX_COMPOSITOR=sway), started for the run and
+# stopped after it. Nothing reaches Michael's
 # screen or his Hyprland: the window's WAYLAND_DISPLAY is weston's socket, checked before launch.
 #
 #   tools/gui/run-script.sh <scratch-dir> <script> <binary> <args...>
 #
 # A script of "-" runs the window unscripted, waiting for events as for a user; the caller ends it
-# with kill (pid in <scratch-dir>/run.pid) and then `tools/gui/weston.sh stop <scratch-dir>`.
+# with kill (pid in <scratch-dir>/run.pid) and then `tools/gui/weston.sh stop <scratch-dir>` (or sway.sh).
 #
 # Everything the window gets is set here:
 # - fakes for uwsm-app, gio, xdg-open, xdg-terminal-exec and udisksctl first on PATH, logging their
@@ -81,12 +82,16 @@ if [ -n "${OFX_SCRIPT_SIZE:-}" ]; then
     *) echo "run-script: OFX_SCRIPT_SIZE is WxH, not '$OFX_SCRIPT_SIZE'" >&2; exit 2 ;;
     esac
     sw=${OFX_SCRIPT_SIZE%x*}; sh_=${OFX_SCRIPT_SIZE#*x}
-    export OFX_WESTON_SIZE="$((sw + 8))x$((sh_ + 28))"
+    export OFX_WESTON_SIZE="$((sw + 8))x$((sh_ + 28))" OFX_SWAY_SIZE="$OFX_SCRIPT_SIZE"
 fi
-sock=$("$here/weston.sh" start "$T") || exit 1
-# Never Michael's display: the socket must be the one weston just made, and not his.
-case $sock in ofx-test-*) ;; *) echo "run-script: unexpected socket '$sock'" >&2; "$here/weston.sh" stop "$T"; exit 1 ;; esac
-[ "$sock" != "${WAYLAND_DISPLAY:-}" ] || { echo "run-script: weston's socket is this session's display" >&2; "$here/weston.sh" stop "$T"; exit 1; }
+# OFX_COMPOSITOR=sway: the test sway (tools/gui/sway.sh) instead, for the system clipboard and
+# typed input (2026-10-28); weston otherwise.
+comp=${OFX_COMPOSITOR:-weston}
+case $comp in weston | sway) ;; *) echo "run-script: OFX_COMPOSITOR is weston or sway, not '$comp'" >&2; exit 2 ;; esac
+sock=$("$here/$comp.sh" start "$T") || exit 1
+# Never Michael's display: the socket must be the one the compositor just made, and not his.
+case $comp:$sock in weston:ofx-test-* | sway:wayland-[0-9]*) ;; *) echo "run-script: unexpected socket '$sock'" >&2; "$here/$comp.sh" stop "$T"; exit 1 ;; esac
+[ "$sock" != "${WAYLAND_DISPLAY:-}" ] || { echo "run-script: $comp's socket is this session's display" >&2; "$here/$comp.sh" stop "$T"; exit 1; }
 cat > "$T/launch.sh" <<EOS
 #!/bin/sh
 echo \$\$ > "$T/run.pid"
@@ -105,8 +110,11 @@ limit=${RUN_SCRIPT_LIMIT:-120}
 if [ "$sc" != - ]; then
     for i in $(seq $((limit * 5))); do kill -0 "$pid" 2>/dev/null || break; sleep 0.2; done
     if kill -0 "$pid" 2>/dev/null; then echo "still running after $limit s, killing $pid"; kill "$pid"; sleep 1; bad=1; fi
+    # A window stuck on a lock never runs its SIGTERM exit: it outlived the run (clip.script on the
+    # unfixed clip_get, 2026-10-28).
+    if kill -0 "$pid" 2>/dev/null; then echo "$pid ignored SIGTERM, SIGKILL"; kill -9 "$pid"; sleep 0.2; fi
     t_gone=$(date +%s.%N)
-    "$here/weston.sh" stop "$T"
+    "$here/$comp.sh" stop "$T"
     # Where a slow run's time went (2026-10-26, f6b's quit late under load): seconds from the
     # launch to the script's end (its out file last written) and to the window's process gone, and
     # weston's stop after it. run.sh's timed groups print it when they fail.

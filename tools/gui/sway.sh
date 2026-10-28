@@ -1,0 +1,53 @@
+#!/bin/sh
+# A second private headless compositor for GUI tests: sway on wlroots' headless backend. weston
+# (tools/gui/weston.sh) stays the main one; sway is here for what weston lacks: ext-data-control
+# (the system clipboard, gui/clipboard.c) and virtual keyboards (wtype, input through GLFW).
+# Added 2026-10-28. Nothing it shows reaches Michael's screen, and nothing in it touches his
+# Hyprland: its own Wayland socket and IPC socket, and -c a config written here, so ~/.config/sway
+# is never read.
+#
+#   tools/gui/sway.sh start <scratch-dir>   prints the socket name; pid in <scratch-dir>/sway.pid
+#   tools/gui/sway.sh stop <scratch-dir>
+#
+# The IPC socket is <scratch-dir>/sway.ipc (SWAYSOCK for swaymsg). The output is 936x516 logical
+# at scale 2, the window's size in weston (sway draws no decorations, so the tiled window is the
+# output), or OFX_SWAY_SIZE=WxH.
+set -u
+cmd=${1:?start|stop} T=${2:?scratch dir}
+case $T in /?*) ;; *) echo "sway.sh: the scratch dir must be an absolute path" >&2; exit 1 ;; esac
+mkdir -p "$T"
+case $cmd in
+start)
+    rm -f "$T/sway.socket" "$T/sway.ipc"
+    size=${OFX_SWAY_SIZE:-936x516}
+    # sway picks its own socket name (wayland-N, the first free): the config's exec, a child of
+    # this sway, writes it down. No bar, no borders, no background or nag helpers, no XWayland; the
+    # window fills the output as in weston's kiosk shell.
+    cat > "$T/sway.config" <<EOS
+output HEADLESS-1 resolution $size scale 2
+default_border none
+default_floating_border none
+swaybg_command -
+swaynag_command -
+xwayland disable
+focus_follows_mouse no
+exec sh -c 'printf %s "\$WAYLAND_DISPLAY" > "$T/sway.socket.tmp" && mv "$T/sway.socket.tmp" "$T/sway.socket"'
+EOS
+    env -u WAYLAND_DISPLAY -u WAYLAND_SOCKET -u DISPLAY -u SWAYSOCK -u I3SOCK -u HYPRLAND_INSTANCE_SIGNATURE \
+        WLR_BACKENDS=headless WLR_LIBINPUT_NO_DEVICES=1 SWAYSOCK="$T/sway.ipc" XDG_CONFIG_HOME="$T/sway-xdg" \
+        sway -c "$T/sway.config" >"$T/sway.log" 2>&1 &
+    echo $! > "$T/sway.pid"
+    for i in $(seq 50); do [ -s "$T/sway.socket" ] && break; sleep 0.1; done
+    sock=$(cat "$T/sway.socket" 2>/dev/null)
+    if [ -z "$sock" ] || [ ! -S "$XDG_RUNTIME_DIR/$sock" ]; then
+        echo "sway.sh: no socket after 5 s; see $T/sway.log" >&2
+        kill "$(cat "$T/sway.pid")" 2>/dev/null; rm -f "$T/sway.pid"; exit 1
+    fi
+    echo "$sock"
+    ;;
+stop)
+    [ -f "$T/sway.pid" ] && kill "$(cat "$T/sway.pid")" 2>/dev/null
+    rm -f "$T/sway.pid" "$T/sway.socket"
+    ;;
+*) echo "usage: sway.sh start|stop <scratch-dir>" >&2; exit 2 ;;
+esac

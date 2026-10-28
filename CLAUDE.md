@@ -57,8 +57,11 @@ rules shared by every tool here.
   `/mnt/sd` that is `/mnt/sd/.Trash-1000`, shared with Nemo). `run-script.sh` points
   `XDG_DATA_HOME` at `<scratch>/data`; the unit tests set it to their root.
 - **The clipboard:** ofx sets the system clipboard through `ext-data-control-v1` on Ctrl+C or
-  Ctrl+X, in the list and in the edit lines (text, F5.2), which replaces Michael's clipboard. weston has no data-control, so no test touches it;
-  the one live check (copy in ofx, paste in Nemo and a terminal, and back) needs his go first.
+  Ctrl+X, in the list and in the edit lines (text, F5.2), which replaces Michael's clipboard. weston has no data-control; the
+  `clip` group runs in the test sway (below), whose clipboard is its own, with `wl-copy` and
+  `wl-paste` as the other program (a `sh` line's WAYLAND_DISPLAY is the window's, so they reach
+  that sway). Never run them in a test without that socket: they would read and replace his. A
+  live check against his real clipboard (copy in ofx, paste in Nemo and a terminal) needs his go first.
 - The scripts' `sh` lines make and change files: point them at scratch folders only, never his
   home or a work repo.
 - **Close All Windows** (F7.1, Ctrl+Q) sends SIGUSR1 to every ofx window in the registry,
@@ -146,10 +149,19 @@ its own object compiled once a run with nanosvg's (`gui/vendor.c`), 1.1 s a muta
   `OFX_TEST_SIZE=936x516` (the kiosk shell rejects a larger first frame; GLFW's own decorations
   take the other 8x28). 516 is 490 plus F7.1's menu bar, so under the bar every script has the
   room it was written for. `--width`/`--height` are logical pixels.
+- **The test sway** (`tools/gui/sway.sh`, 2026-10-28), for what weston lacks: ext-data-control (the
+  `clip` group) and, next, virtual keyboards (`wtype`). `OFX_COMPOSITOR=sway` makes run-script.sh
+  use it. Headless (`WLR_BACKENDS=headless`, `WLR_LIBINPUT_NO_DEVICES=1`), `-c` a config written in
+  the scratch dir (never `~/.config/sway`), its IPC socket in the scratch dir (`SWAYSOCK`), no
+  XWayland. It names its own socket (`wayland-N`, the first free; `wayland-1` is Michael's
+  Hyprland), so the config's `exec` writes it down and run-script checks it isn't this session's
+  display. The output is 936x516 logical at scale 2: sway draws no decorations, so the tiled
+  window is the output, the same size as in weston. weston stays the main suite.
 - `run-script.sh` checks the socket is the one weston made before launching, takes the pid from the
   launch script, and stops weston after the run. For an unscripted run (`-`), kill the pid, then
   `tools/gui/weston.sh stop <scratch>`.
 - Close a window with SIGTERM (`kill <pid>`; ofx exits through main, so LeakSanitizer runs).
+  run-script.sh follows with SIGKILL when a window is stuck on a lock and outlives the SIGTERM.
 - `OFX_TEST_LEAK=1` plants a 4 KiB leak: the control that shows LeakSanitizer reports arrive.
 - `OFX_GUI_DEBUG=1` logs every key, character and mouse button event.
 - `OFX_TEST_CROSS=1` makes a move copy as across drives (a slow move with the delay below).
