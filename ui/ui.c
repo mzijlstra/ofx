@@ -3014,7 +3014,8 @@ static void hist_put(UiPlace *stack, int *n, const char *dir, Str sel)
 {
     if (*n == UI_HISTORY_MAX) memmove(stack, stack + 1, sizeof *stack * (UI_HISTORY_MAX - 1)), (*n)--;   // the oldest goes
     snprintf(stack[*n].dir, sizeof stack[*n].dir, "%s", dir);
-    snprintf(stack[*n].sel, sizeof stack[*n].sel, "%.*s", STR_ARG(sel));
+    // (a search's folder/name too long for it: none, not a cut one naming another entry, F9)
+    snprintf(stack[*n].sel, sizeof stack[*n].sel, "%.*s", sel.len < (isize)sizeof stack[*n].sel ? (int)sel.len : 0, sel.p ? sel.p : "");
     (*n)++;
 }
 

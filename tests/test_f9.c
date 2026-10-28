@@ -351,3 +351,25 @@ static void test_search_crumbs(void)
     ui_crumbs_set(&c, "/home/m/code", "/home/m");   // off it again: a path's buttons
     CHECK(c.n == 2 && str_eq(ui_crumb_label(&c, 1), S("code")));
 }
+
+// A search's folder/name longer than the history keeps: none kept, not a cut one that could name
+// another entry (reviewer-2, 2026-10-28).
+static void test_search_hist_keys(void)
+{
+    static UiHistory h;
+    char key[400];
+    memset(key, 'x', 300), memcpy(key + 300, "/m2.txt", 8);
+    hist_leave(&h, "search:2:/a", str_from_c(key));
+    hist_leave(&h, "/b", S("dir/name"));
+    CHECK(h.nback == 2 && h.back[0].sel[0] == 0 && strcmp(h.back[1].sel, "dir/name") == 0);
+    char fits[NAME_MAX + 1];
+    memset(fits, 'y', NAME_MAX), fits[NAME_MAX] = 0;
+    hist_leave(&h, "/c", str_from_c(fits));
+    CHECK(strlen(h.back[2].sel) == NAME_MAX);
+    hist_leave(&h, "/d", STR_EMPTY);
+    CHECK(h.back[3].sel[0] == 0);
+    char over[NAME_MAX + 2];   // one byte too long
+    memset(over, 'z', NAME_MAX + 1), over[NAME_MAX + 1] = 0;
+    hist_leave(&h, "/e", str_from_c(over));
+    CHECK(h.back[4].sel[0] == 0);
+}

@@ -561,6 +561,10 @@ MUTANTS = [
     ('gui/search.c', ' && search.hidden == hidden;', ';', 'f9'),
     ('gui/search.c', 'search.opts.cased == o.cased && ', '', 'f9'),
     ('gui/search.c', '    search.done = text.len == 0 || !search.started;', '    search.done = !search.started;', 'f9'),
+    # the review's two LOWs (reviewer-2, 2026-10-28)
+    (G, '    if (i >= app.list.n || !entry_path(i, path, sizeof path)) return;', '    if (i >= app.list.n || !join(path, sizeof path, app.cwd, app.list.e[i].name)) return;', 'f9'),
+    (G, '    static char key[PATH_MAX];\n    return app.have_list', '    static char key[NAME_MAX + 1];\n    return app.have_list', 'f9'),
+    (G, '    char keep[PATH_MAX];\n    snprintf(keep, sizeof keep, "%.*s", STR_ARG(sel_name()));\n    snprintf(app.search_pick', '    char keep[NAME_MAX + 1];\n    snprintf(keep, sizeof keep, "%.*s", STR_ARG(sel_name()));\n    snprintf(app.search_pick', 'f9'),
 ]
 import concurrent.futures, queue, threading, time
 

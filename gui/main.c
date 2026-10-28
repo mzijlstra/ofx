@@ -162,7 +162,7 @@ static struct {
     SearchSkips search_s;
     bool        search_done;
     i64         search_due;
-    char        search_pick[NAME_MAX + 1];
+    char        search_pick[PATH_MAX];
     UiMatcher   search_m;     // its text as the walk matches it: a bad expression's reason, for the bar
     int       cur;          // lists[cur] holds the listing
     Listing   list;
@@ -359,11 +359,10 @@ static bool join(char *out, size_t cap, const char *dir, Str name)
     return n >= 0 && (size_t)n < cap;
 }
 
-// The cursor's entry as listing_find finds it: its name, in the search view its folder and name (F9;
-// empty when that is longer than a name, as the history keeps names).
+// The cursor's entry as listing_find finds it: its name, in the search view its folder and name (F9).
 static Str sel_name(void)
 {
-    static char key[NAME_MAX + 1];
+    static char key[PATH_MAX];
     return app.have_list && app.ui.list.n > 0 ? entry_key(&app.list.e[app.ui.list.sel], key, sizeof key) : STR_EMPTY;
 }
 
@@ -517,7 +516,7 @@ static bool go_to_in(const char *dir, Str select, isize fallback, bool stepping)
 // goes to the one to pick when that comes.
 static void search_relist(void)
 {
-    char keep[NAME_MAX + 1];
+    char keep[PATH_MAX];
     snprintf(keep, sizeof keep, "%.*s", STR_ARG(sel_name()));
     go_to_in(app.cwd, str_from_c(app.search_pick[0] ? app.search_pick : keep), app.ui.list.sel, true);
     if (app.search_done || (app.search_pick[0] && listing_find(&app.list, str_from_c(app.search_pick)) >= 0)) app.search_pick[0] = 0;
@@ -542,7 +541,7 @@ static void search_retype(void)
 // Ctrl+R in the search view: the same search again.
 static void search_again(void)
 {
-    char keep[NAME_MAX + 1];
+    char keep[PATH_MAX];
     snprintf(keep, sizeof keep, "%.*s", STR_ARG(sel_name()));
     snprintf(app.search_pick, sizeof app.search_pick, "%s", keep);
     Str root, text;
@@ -685,7 +684,7 @@ static void go_up_from(const char *from);
 static void reload(void)
 {
     app.reloads++;
-    char keep[NAME_MAX + 1] = "";
+    char keep[PATH_MAX] = "";
     snprintf(keep, sizeof keep, "%.*s", STR_ARG(sel_name()));
     if (go_to(app.cwd, str_from_c(keep), app.ui.list.sel)) return;
     go_up_from(app.cwd);
@@ -780,7 +779,7 @@ static void hist_go(int dir)
 // The listing in a new order, the cursor kept on its entry. The MIME types, cached by row, go.
 static void resort(void)
 {
-    char keep[NAME_MAX + 1];
+    char keep[PATH_MAX];
     snprintf(keep, sizeof keep, "%.*s", STR_ARG(sel_name()));
     fs_sort(&app.list, app.ui.sort);
     app.lists++;
@@ -1068,7 +1067,7 @@ static void make_link(void)
 static void follow_link(isize i)
 {
     char path[PATH_MAX], real[PATH_MAX], dir[PATH_MAX];
-    if (i >= app.list.n || !join(path, sizeof path, app.cwd, app.list.e[i].name)) return;
+    if (i >= app.list.n || !entry_path(i, path, sizeof path)) return;
     if (!realpath(path, real)) {
         set_status(true, "%.*s leads nowhere: %s", STR_ARG(app.list.e[i].name), strerror(errno));
         return;
@@ -1203,7 +1202,8 @@ static void tab_save(void)
     Tab *t = &tabs[tabbar.slot[tabbar.cur]];
     t->used = true;
     snprintf(t->dir, sizeof t->dir, "%s", app.cwd);
-    snprintf(t->sel, sizeof t->sel, "%.*s", STR_ARG(sel_name()));
+    Str key = sel_name();   // (a search's key too long for it: none, not a cut one naming another entry)
+    snprintf(t->sel, sizeof t->sel, "%.*s", key.len < (isize)sizeof t->sel ? (int)key.len : 0, key.p ? key.p : "");
     t->row = app.ui.list.sel, t->top = app.ui.list.top;
     t->hist = hist, t->crumbs = app.crumbs;
     memcpy(t->last, app.ui.last, sizeof t->last), t->last_len = app.ui.last_len;
@@ -1407,7 +1407,7 @@ static void act(UiAction a)
     case UA_FORWARD: hist_go(1); break;
     case UA_HIDDEN: {
         app.show_hidden = !app.show_hidden;
-        char keep[NAME_MAX + 1];
+        char keep[PATH_MAX];
         snprintf(keep, sizeof keep, "%.*s", STR_ARG(sel_name()));
         go_to(app.cwd, str_from_c(keep), 0);
         break;

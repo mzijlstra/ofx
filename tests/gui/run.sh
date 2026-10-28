@@ -269,13 +269,15 @@ echo "== f8c"; OFX_TEST_HOME="$H" OFX_TEST_MOUNTINFO="$T/mountinfo" "$here/../..
 fi
 if want f9; then
 # F9 step 1: the search view. home/tree: names at three depths, two index.ts, a hidden folder and
-# file, .git and node_modules (left out), a link to a folder (not followed), and zz/ with 10,001
-# files (the limit).
+# file, .git and node_modules (left out), a link to a folder (not followed), a link to a file,
+# a file 262 bytes below, and zz/ with 10,001 files (the limit).
 T=$base/f9; rm -rf "$T"; H=$T/home; mkdir -p "$H/tree/src/deep" "$H/tree/.hid" "$H/tree/.git" "$H/tree/node_modules" "$H/tree/docs" "$H/tree/zz"
 touch "$H/tree/a.ts" "$H/tree/b.txt" "$H/tree/src/c.ts" "$H/tree/src/index.ts" "$H/tree/src/deep/index.ts" "$H/tree/src/deep/d.TS" \
       "$H/tree/.hid/e.ts" "$H/tree/.f.ts" "$H/tree/.git/g.ts" "$H/tree/node_modules/h.ts" "$H/tree/docs/notes.txt"
 printf x > "$H/tree/src/index.ts"; printf x > "$H/tree/src/deep/index.ts"   # (an empty file opens through its type's app)
-ln -s src "$H/tree/link"
+ln -s src "$H/tree/link"; ln -s ../src/c.ts "$H/tree/docs/clink"
+# A result whose folder and name, as the cursor keeps it, are longer than a name (reviewer-2, 2026-10-28)
+L="$H/tree/long/$(printf 'x%.0s' $(seq 250))"; mkdir -p "$L"; printf x > "$L/m2.txt"
 (cd "$H/tree/zz" && seq -f 'zz%05g' 0 10000 | xargs touch)
 printf '1 0 0:1 / / rw - ext4 /dev/x rw\n' > "$T/mountinfo"
 echo "== f9"; OFX_TEST_HOME="$H" OFX_TEST_MOUNTINFO="$T/mountinfo" "$here/../../tools/gui/run-script.sh" "$T" "$here/f9.script" "$bin" "$H/tree" || failed f9

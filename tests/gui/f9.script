@@ -1,6 +1,7 @@
 # F9 step 1 (docs/plan.md "F9 design"): the search view. The tree (run.sh): a.ts, b.txt,
 # src/{c.ts, index.ts, deep/{index.ts, d.TS}}, docs/notes.txt, .hid/e.ts, .f.ts, .git/g.ts,
-# node_modules/h.ts, link -> src, zz/ with zz00000 .. zz10000.
+# node_modules/h.ts, link -> src, docs/clink -> ../src/c.ts, long/<250 x>/m2.txt, zz/ with
+# zz00000 .. zz10000.
 settle
 expect search=0 tabs=1 searchbar=0
 # Ctrl+Shift+F: a tab of its own, its field with the keys, nothing searched yet
@@ -77,18 +78,42 @@ key f2
 expect editing=0 status=Search
 key delete
 expect status=Search
-# Ctrl+R: searched again (no watching)
+# A result whose folder and name are longer than a name keeps the cursor as more come (Ctrl+R
+# here; reviewer-2, 2026-10-28: it went to the row, another file)
 key ctrl-shift-f
 keys backspace backspace
+type m?.txt
+wait-for 3000 searchdone=1 n=1 sel=m2.txt
+sh touch "$OFX_DIR/m1.txt"
+key enter
+key ctrl-r
+wait-for 3000 searchdone=1 n=2 idx=1 sel=m2.txt
+# Ctrl+R: searched again (no watching)
+key ctrl-shift-f
+keys backspace backspace backspace backspace backspace backspace
 type notes
 wait-for 3000 searchdone=1 n=1
 sh touch "$OFX_DIR/src/notes2.txt"
 key enter
 key ctrl-r
 wait-for 3000 searchdone=1 n=2
+# Follow Link on a result: its target's folder, the target selected (reviewer-2, 2026-10-28)
+key ctrl-shift-f
+keys backspace backspace backspace backspace backspace
+type clink
+wait-for 3000 searchdone=1 n=1 sel=clink seldir=docs
+key enter
+point-ui row 0
+right-here
+expect menu=entry sel=clink
+point-ui menu-item 14
+click-here
+wait-for 2000 search=0 crumbs=home|tree|src sel=c.ts
+key alt-left
+wait-for 3000 search=1 searchdone=1 n=1 sel=clink
 # Alt+Up: the folder searched
 key alt-up
-wait-for 2000 search=0 searchbar=0 n=7
+wait-for 2000 search=0 searchbar=0 n=9
 # The magnifier and Go → Search…: a search tab each, on the folder shown
 point-ui search
 click-here

@@ -1764,4 +1764,6 @@ MUTANTS += [
     (U, "    case UM_HERE_PROPS: return !u->in_search;", "    case UM_HERE_PROPS: return true;"),
     (U, "    if (str_eq(cw, S(TRASH_URI)) || is_search(cwd)) {", "    if (str_eq(cw, S(TRASH_URI))) {"),
     (U, "    if (str_starts_with(ui_crumb_path(c, i), S(SEARCH_URI))) return S(\"Search\");", ""),
+    (U, "sel.len < (isize)sizeof stack[*n].sel ? (int)sel.len : 0, sel.p ? sel.p : \"\");", "(int)sel.len, sel.p ? sel.p : \"\");"),
+    (U, "sel.len < (isize)sizeof stack[*n].sel ? (int)sel.len : 0, sel.p ? sel.p : \"\");", "sel.len <= (isize)sizeof stack[*n].sel ? (int)sel.len : 0, sel.p ? sel.p : \"\");"),
 ]
