@@ -17,6 +17,24 @@ expect idlewoke=timer
 wait-for 3000 searchdue=0 searchdone=1 n=2
 expect idx=0 sel=index.ts seldir=src rows=11 searchinfo=2_found_·_skipped_1_node_modules,_3_hidden,_1_link_to_a_folder
 shot search-results.png
+# The field edits as the rename line does (Michael, 2026-10-28): Ctrl+A selects its text, not the
+# results, and typing replaces it; Ctrl+V pastes the clipboard's first line; Home moves the caret
+key ctrl-a
+expect searchsel=0-5 marked=0
+type deep
+wait-for 3000 searchdue=0 searchdone=1 searchtext=deep n=1
+clip-text src/IND\nsecond line
+key ctrl-a
+key ctrl-v
+wait-for 3000 searchdue=0 searchdone=1 searchtext=srcIND n=0 searchcaret=6
+key home
+expect searchcaret=0 searchsel=0-0
+shot search-field.png
+keys backspace
+key end
+keys backspace backspace backspace backspace backspace backspace
+type INDEX
+wait-for 3000 searchdue=0 searchdone=1 n=2 idx=0
 # Enter: the keys to the results; there Enter opens the file, in its own folder
 key enter
 expect searchkeys=0

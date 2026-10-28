@@ -633,7 +633,7 @@ typedef struct {
     bool   search_keys;
     bool   search_edited;
     char   search[UI_FIND_MAX];
-    int    search_len;
+    int    search_len, search_caret, search_anchor;   // (bytes; the selection between them, as the edit line's)
     // The menu bar (F7.1): a menu open, and its entry marked (-1: none, as a menu the pointer
     // opened). gui/ says whether the folder shown takes new files.
     bool   menu_on;
@@ -1336,113 +1336,148 @@ static void ui_edit_close(Ui *u)
     u->editing = false;
 }
 
-// The selection, [*lo, *hi): empty when the anchor is at the caret.
-static void ui_edit_sel(const Ui *u, int *lo, int *hi)
+// A line of text being edited (F5.2): the rename and location lines' (u->edit) and, since F9, the
+// search field's. Its bytes and at most how many, the caret and the selection's other end (bytes),
+// and whether a '/' may go in (the location line's paths).
+typedef struct {
+    char *b;
+    int  *len, *caret, *anchor;
+    int   max;
+    bool  slash;
+} UiLine;
+
+static UiLine ui_edit_line(Ui *u)
 {
-    *lo = u->anchor < u->caret ? u->anchor : u->caret;
-    *hi = u->anchor < u->caret ? u->caret : u->anchor;
+    return (UiLine){ u->edit, &u->edit_len, &u->caret, &u->anchor, ui_edit_max(u), u->edit_path };
 }
 
-static int ui_edit_back(const Ui *u, int at)
+static UiLine ui_search_line(Ui *u)
+{
+    return (UiLine){ u->search, &u->search_len, &u->search_caret, &u->search_anchor, UI_FIND_MAX, false };
+}
+
+// The selection, [*lo, *hi): empty when the anchor is at the caret.
+static void ui_line_sel(UiLine l, int *lo, int *hi)
+{
+    *lo = *l.anchor < *l.caret ? *l.anchor : *l.caret;
+    *hi = *l.anchor < *l.caret ? *l.caret : *l.anchor;
+}
+
+static void ui_edit_sel(const Ui *u, int *lo, int *hi)
+{
+    ui_line_sel(ui_edit_line((Ui *)u), lo, hi);
+}
+
+static int ui_line_back(UiLine l, int at)
 {
     if (at <= 0) return 0;
     at--;
-    while (at > 0 && ((unsigned char)u->edit[at] & 0xC0) == 0x80) at--;
+    while (at > 0 && ((unsigned char)l.b[at] & 0xC0) == 0x80) at--;
     return at;
 }
 
-static int ui_edit_fwd(const Ui *u, int at)
+static int ui_line_fwd(UiLine l, int at)
 {
-    if (at >= u->edit_len) return u->edit_len;
+    if (at >= *l.len) return *l.len;
     at++;
-    while (at < u->edit_len && ((unsigned char)u->edit[at] & 0xC0) == 0x80) at++;
+    while (at < *l.len && ((unsigned char)l.b[at] & 0xC0) == 0x80) at++;
     return at;
 }
 
-// Bytes [from, to) of the edit line removed, the caret where they were.
-static void ui_edit_cut(Ui *u, int from, int to)
+// Bytes [from, to) removed, the caret where they were.
+static void ui_line_cut(UiLine l, int from, int to)
 {
-    memmove(u->edit + from, u->edit + to, (size_t)(u->edit_len - to));
-    u->edit_len -= to - from;
-    u->caret = u->anchor = from;
+    memmove(l.b + from, l.b + to, (size_t)(*l.len - to));
+    *l.len -= to - from;
+    *l.caret = *l.anchor = from;
 }
 
 // Bytes b[0..n) in place of the selection, the caret after them; false (nothing changed) when they
 // don't fit.
-static bool ui_edit_put(Ui *u, const char *b, int n)
+static bool ui_line_put(UiLine l, const char *b, int n)
 {
     int lo, hi;
-    ui_edit_sel(u, &lo, &hi);
-    if (u->edit_len - (hi - lo) + n > ui_edit_max(u)) return false;
-    ui_edit_cut(u, lo, hi);
-    memmove(u->edit + u->caret + n, u->edit + u->caret, (size_t)(u->edit_len - u->caret));
-    memcpy(u->edit + u->caret, b, (size_t)n);
-    u->edit_len += n, u->caret += n, u->anchor = u->caret;
+    ui_line_sel(l, &lo, &hi);
+    if (*l.len - (hi - lo) + n > l.max) return false;
+    ui_line_cut(l, lo, hi);
+    memmove(l.b + *l.caret + n, l.b + *l.caret, (size_t)(*l.len - *l.caret));
+    memcpy(l.b + *l.caret, b, (size_t)n);
+    *l.len += n, *l.caret += n, *l.anchor = *l.caret;
     return true;
 }
 
 // The selection onto u->copy for gui/'s clipboard; nothing selected: nothing.
-static bool ui_edit_copy(Ui *u)
+static bool ui_line_copy(Ui *u, UiLine l)
 {
     int lo, hi;
-    ui_edit_sel(u, &lo, &hi);
+    ui_line_sel(l, &lo, &hi);
     if (lo == hi) return false;
-    memcpy(u->copy, u->edit + lo, (size_t)(hi - lo));
+    memcpy(u->copy, l.b + lo, (size_t)(hi - lo));
     u->copy_len = hi - lo, u->copied = true;
     return true;
 }
 
-// Ctrl+V: the clipboard's first line over the selection; in a name line without the characters a
-// name can't hold ('/'), and never a control character. What doesn't fit is left off, whole
-// characters only.
-static void ui_edit_paste(Ui *u, Str text)
+// Ctrl+V: the clipboard's first line over the selection; without the characters a name can't
+// hold ('/') unless the line takes them, and never a control character. What doesn't fit is left
+// off, whole characters only.
+static void ui_line_paste(UiLine l, Str text)
 {
     char b[PATH_MAX];
     int n = 0, lo, hi;
-    ui_edit_sel(u, &lo, &hi);
-    int room = ui_edit_max(u) - (u->edit_len - (hi - lo));
+    ui_line_sel(l, &lo, &hi);
+    int room = l.max - (*l.len - (hi - lo));
     for (isize i = 0; i < text.len && text.p[i] != '\n' && text.p[i] != '\r';) {
         unsigned char c = (unsigned char)text.p[i];
         isize e = i + 1;
         while (e < text.len && ((unsigned char)text.p[e] & 0xC0) == 0x80) e++;
-        bool drop = c < 0x20 || c == 0x7F || (c == '/' && !u->edit_path);
+        bool drop = c < 0x20 || c == 0x7F || (c == '/' && !l.slash);
         if (n + (e - i) > room) break;   // a dropped one is a byte: none fits after it either
         if (!drop) memcpy(b + n, text.p + i, (size_t)(e - i)), n += (int)(e - i);
         i = e;
     }
-    if (n > 0) ui_edit_put(u, b, n);
+    if (n > 0) ui_line_put(l, b, n);
+}
+
+// The keys that edit a line: text, the moves (with Shift the selection grows), Ctrl+A, Backspace,
+// Delete, Ctrl+C, Ctrl+X, Ctrl+V. False for any other key (the line's owner decides).
+static bool ui_line_key(Ui *u, UiLine l, UiEvent e, Str paste)
+{
+    if (e.key == UK_NONE) {
+        char b[4];
+        int n = ui_utf8(e.ch, b);
+        if (n > 0 && (e.ch != '/' || l.slash)) ui_line_put(l, b, n);
+        return true;
+    }
+    int lo, hi;
+    ui_line_sel(l, &lo, &hi);
+    switch (e.key) {
+    // A move ends the selection; Left and Right from one land at its ends.
+    case UK_LEFT: *l.caret = *l.anchor = lo < hi ? lo : ui_line_back(l, *l.caret); return true;
+    case UK_RIGHT: *l.caret = *l.anchor = lo < hi ? hi : ui_line_fwd(l, *l.caret); return true;
+    case UK_HOME: *l.caret = *l.anchor = 0; return true;
+    case UK_END: *l.caret = *l.anchor = *l.len; return true;
+    // With Shift the caret moves and the anchor stays.
+    case UK_SEL_LEFT: *l.caret = ui_line_back(l, *l.caret); return true;
+    case UK_SEL_RIGHT: *l.caret = ui_line_fwd(l, *l.caret); return true;
+    case UK_SEL_HOME: *l.caret = 0; return true;
+    case UK_SEL_END: *l.caret = *l.len; return true;
+    case UK_ALL: *l.anchor = 0, *l.caret = *l.len; return true;
+    case UK_BACKSPACE: ui_line_cut(l, lo < hi ? lo : ui_line_back(l, *l.caret), lo < hi ? hi : *l.caret); return true;
+    case UK_DELETE: ui_line_cut(l, lo < hi ? lo : *l.caret, lo < hi ? hi : ui_line_fwd(l, *l.caret)); return true;
+    case UK_COPY: ui_line_copy(u, l); return true;
+    case UK_CUT:
+        if (ui_line_copy(u, l)) ui_line_cut(l, lo, hi);
+        return true;
+    case UK_PASTE: ui_line_paste(l, paste); return true;
+    default: return false;
+    }
 }
 
 // A key or character in the edit line: an action for gui/ (UA_RENAME or UA_GO on Enter) or UA_NONE.
 static UiAction ui_edit_event(Ui *u, UiEvent e, Str paste)
 {
-    if (e.key == UK_NONE) {
-        char b[4];
-        int n = ui_utf8(e.ch, b);
-        if (n > 0 && (e.ch != '/' || u->edit_path)) ui_edit_put(u, b, n);
-        return (UiAction){ UA_NONE, 0, false };
-    }
-    int lo, hi;
-    ui_edit_sel(u, &lo, &hi);
+    if (ui_line_key(u, ui_edit_line(u), e, paste)) return (UiAction){ UA_NONE, 0, false };
     switch (e.key) {
-    // A move ends the selection; Left and Right from one land at its ends.
-    case UK_LEFT: u->caret = u->anchor = lo < hi ? lo : ui_edit_back(u, u->caret); break;
-    case UK_RIGHT: u->caret = u->anchor = lo < hi ? hi : ui_edit_fwd(u, u->caret); break;
-    case UK_HOME: u->caret = u->anchor = 0; break;
-    case UK_END: u->caret = u->anchor = u->edit_len; break;
-    // With Shift the caret moves and the anchor stays.
-    case UK_SEL_LEFT: u->caret = ui_edit_back(u, u->caret); break;
-    case UK_SEL_RIGHT: u->caret = ui_edit_fwd(u, u->caret); break;
-    case UK_SEL_HOME: u->caret = 0; break;
-    case UK_SEL_END: u->caret = u->edit_len; break;
-    case UK_ALL: u->anchor = 0, u->caret = u->edit_len; break;
-    case UK_BACKSPACE: ui_edit_cut(u, lo < hi ? lo : ui_edit_back(u, u->caret), lo < hi ? hi : u->caret); break;
-    case UK_DELETE: ui_edit_cut(u, lo < hi ? lo : u->caret, lo < hi ? hi : ui_edit_fwd(u, u->caret)); break;
-    case UK_COPY: ui_edit_copy(u); break;
-    case UK_CUT:
-        if (ui_edit_copy(u)) ui_edit_cut(u, lo, hi);
-        break;
-    case UK_PASTE: ui_edit_paste(u, paste); break;
     case UK_ENTER:
     case UK_SHIFT_ENTER: return (UiAction){ u->edit_path ? UA_GO : UA_RENAME, 0, false };
     case UK_ESC: ui_edit_close(u); break;
@@ -2192,38 +2227,27 @@ static Sort ui_sort_click(Sort s, SortKey k)
 // (Michael, 2026-10-26). A command gives the keys back and is the list's.
 // ---- the search view's field (F9) -----------------------------------------------------------
 
-static void ui_search_char(Ui *u, u32 cp)
-{
-    char b[4];
-    int n = ui_utf8(cp, b);
-    if (n == 0 || u->search_len + n > UI_FIND_MAX) return;
-    memcpy(u->search + u->search_len, b, (size_t)n);
-    u->search_len += n, u->search_edited = true;
-}
-
-static void ui_search_erase(Ui *u)
-{
-    if (u->search_len == 0) return;
-    u->search_len--;
-    while (u->search_len > 0 && ((unsigned char)u->search[u->search_len] & 0xC0) == 0x80) u->search_len--;
-    u->search_edited = true;
-}
-
-// The field's keys: text, Backspace, find's toggles; Enter, Esc and Down give the keys to the
-// results; another command goes to them as well, and runs there (false; Ctrl+Shift+F gives them
-// back).
-static bool ui_search_event(Ui *u, UiEvent e)
+// The field's keys: it edits as the rename line does (a caret, Shift to select, Ctrl+A, Ctrl+C, X,
+// V: Michael, 2026-10-28), plus find's toggles, each change marked; Enter, Esc and Down give the
+// keys to the results; another command goes to them as well, and runs there (false; Ctrl+Shift+F
+// gives them back).
+static bool ui_search_event(Ui *u, UiEvent e, Str paste)
 {
     if (ui_toggle_key(e)) {
         u->find_opts = ui_toggle(u->find_opts, ui_toggle_key(e)), u->search_edited = true;
         return true;
     }
-    if (e.key == UK_NONE) {
-        if (e.ch != '/') ui_search_char(u, e.ch);   // (can't be in a name)
+    UiLine l = ui_search_line(u);
+    // (gui/ sets the text from a search's address: the caret kept inside it)
+    u->search_caret = (int)ui_clamp(u->search_caret, 0, u->search_len), u->search_anchor = (int)ui_clamp(u->search_anchor, 0, u->search_len);
+    char was[UI_FIND_MAX];
+    int was_len = u->search_len;
+    memcpy(was, u->search, (size_t)was_len);
+    if (ui_line_key(u, l, e, paste)) {
+        if (u->search_len != was_len || memcmp(was, u->search, (size_t)was_len) != 0) u->search_edited = true;
         return true;
     }
     switch (e.key) {
-    case UK_BACKSPACE: ui_search_erase(u); return true;
     case UK_ENTER: case UK_SHIFT_ENTER: case UK_ESC: case UK_DOWN: u->search_keys = false; return true;
     default: u->search_keys = false; return false;
     }
@@ -2590,6 +2614,8 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
             if (a.kind != UA_NONE) return a;
             continue;
         }
+        // The search field (F9) before Shift is taken off the moves: it selects with them.
+        if (u->in_search && u->search_keys && !prompt && ui_search_event(u, e, in->paste)) continue;
         if (u->crumb_focus && !prompt) {
             UiAction a;
             if (ui_crumbs_event(u, in, e, &a)) {
@@ -2624,7 +2650,6 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
             if (a.kind != UA_NONE) return a;
             continue;
         }
-        if (u->in_search && u->search_keys && ui_search_event(u, e)) continue;
         if (u->finding && u->find_keys && ui_find_event(u, names, e, in)) continue;
         // H, J, K and L (Shift and h, j, k, l) as the Shift arrows: here, after the questions and the
         // find bar have taken their letters (K keeps all in a clash; text in the find bar).

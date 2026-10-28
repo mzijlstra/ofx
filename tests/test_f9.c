@@ -417,3 +417,76 @@ static void test_search_hist_keys(void)
     hist_leave(&h, "/e", str_from_c(over));
     CHECK(h.back[4].sel[0] == 0);
 }
+
+// The search field edits as the rename line does (Michael, 2026-10-28): Ctrl+A selects its text, not
+// the results; typing replaces the selection; Ctrl+V pastes (its first line, no '/'); Ctrl+C copies;
+// Left, Home, Delete edit there.
+static void test_search_field_edit(void)
+{
+    static u8 mark[5];
+    UiNames names = { name_at, NULL, dir_at };
+    Ui u = menu_ui(5);
+    u.mark = mark, u.in_search = true, u.search_keys = true;
+    UiInput in = chars("index");
+    ui_handle(&u, names, &in);
+    CHECK(u.search_len == 5 && u.search_caret == 5 && u.search_anchor == 5);
+    u.search_edited = false;
+    menu_keys(&u, 1, UK_ALL);
+    CHECK(u.marked == 0 && u.search_anchor == 0 && u.search_caret == 5 && !u.search_edited);
+    in = chars("ts");
+    ui_handle(&u, names, &in);
+    CHECK(u.search_len == 2 && memcmp(u.search, "ts", 2) == 0 && u.search_edited);
+    // Text of the same length pasted over the selection is a change too.
+    u.search_edited = false;
+    menu_keys(&u, 1, UK_ALL);
+    in = keys(1, UK_PASTE);
+    in.paste = S("zz");
+    ui_handle(&u, names, &in);
+    CHECK(memcmp(u.search, "zz", 2) == 0 && u.search_len == 2 && u.search_edited);
+    menu_keys(&u, 1, UK_ALL);
+    in = chars("ts");
+    ui_handle(&u, names, &in);
+    // Ctrl+V at the caret: the first line, '/' left out.
+    u.search_edited = false;
+    in = keys(1, UK_PASTE);
+    in.paste = S("a/b\nsecond");
+    ui_handle(&u, names, &in);
+    CHECK(u.search_len == 4 && memcmp(u.search, "tsab", 4) == 0 && u.search_edited && u.search_keys);
+    // Home, Delete; Left, Shift+End, Ctrl+C: the selection copied, the text as it was.
+    u.search_edited = false;
+    menu_keys(&u, 2, UK_HOME, UK_DELETE);
+    CHECK(u.search_len == 3 && memcmp(u.search, "sab", 3) == 0 && u.search_caret == 0 && u.search_edited);
+    u.search_edited = false;
+    menu_keys(&u, 3, UK_RIGHT, UK_SEL_END, UK_COPY);
+    CHECK(u.copied && u.copy_len == 2 && memcmp(u.copy, "ab", 2) == 0 && u.search_len == 3 && !u.search_edited);
+    u.copied = false;
+    // Ctrl+X: copied and gone.
+    menu_keys(&u, 1, UK_CUT);
+    CHECK(u.copied && u.search_len == 1 && u.search_edited);
+    // A move that changes nothing isn't a change; nor is a paste with nothing that fits.
+    u.search_edited = false;
+    menu_keys(&u, 2, UK_LEFT, UK_END);
+    in = keys(1, UK_PASTE);
+    in.paste = S("///");
+    ui_handle(&u, names, &in);
+    CHECK(!u.search_edited && u.search_len == 1);
+    // A caret past the text (gui/ set a shorter one) is put back inside it first.
+    u.search_caret = u.search_anchor = 40;
+    in = chars("z");
+    ui_handle(&u, names, &in);
+    CHECK(u.search_len == 2 && u.search[1] == 'z');
+    // A question up takes the keys before the field (Shift+Delete from the results, then n).
+    u.search_keys = false;
+    menu_keys(&u, 1, UK_SHIFT_DELETE);
+    CHECK(u.confirming);
+    u.search_keys = true;
+    int len = u.search_len;
+    in = chars("n");
+    ui_handle(&u, names, &in);
+    CHECK(!u.confirming && u.search_len == len);
+    // In the results, Ctrl+A is the list's again: every result selected.
+    menu_keys(&u, 1, UK_ENTER);
+    CHECK(!u.search_keys);
+    menu_keys(&u, 1, UK_ALL);
+    CHECK(u.marked == 5);
+}
