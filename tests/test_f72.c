@@ -280,7 +280,7 @@ static void test_props_keys(void)
     // Alt+Enter: a terminal, as t; not in the trash view.
     u = menu_ui(3);
     CHECK(props_keys(&u, 1, UK_TERMINAL).kind == UA_TERMINAL);
-    u.in_trash = true;
+    u.view = UI_VIEW_TRASH;
     CHECK(props_keys(&u, 1, UK_TERMINAL).kind == UA_NOT_IN_TRASH);
 }
 

@@ -39,7 +39,7 @@ static int jobs_h(void)
 // The list's rows that fit, or the icon view's rows of cells (no column headers there).
 static int list_rows(int h)
 {
-    int room = h - top_h() - FOOTER_H - jobs_h() - (app.ui.in_trash ? TRASH_BAR_H : 0) - (app.ui.in_search ? SEARCH_BAR_H : 0) -
+    int room = h - top_h() - FOOTER_H - jobs_h() - VIEWS[app.ui.view].bar_h -
                (app.ui.finding ? FIND_BAR_H : 0);
     int r = app.ui.grid ? (room - PAD) / cell_h() : (room - COLS_H) / ROW_H;
     return r > 0 ? r : 0;
@@ -325,7 +325,7 @@ static const char *const COL_IDS[SORT_KEYS] = { "col-name", "col-size", "col-dat
 static void layout_cols(void)
 {
     Theme *t = &app.theme;
-    const char *const NAMES[SORT_KEYS] = { "Name", "Size", app.ui.in_trash ? "Deleted" : "Modified" };
+    const char *const NAMES[SORT_KEYS] = { "Name", "Size", VIEWS[app.ui.view].date_col };
     CLAY(CLAY_ID("cols"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(COLS_H) },
                                         .padding = { PAD + ICON_PX + GAP, PAD, 0, 0 }, .childGap = GAP,
                                         .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },

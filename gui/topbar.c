@@ -310,7 +310,7 @@ static void layout_zoom(void)
 static void layout_bar(float w)
 {
     Theme *t = &app.theme;
-    bool can_up = app.ui.in_search || strcmp(app.cwd, "/") != 0;
+    bool can_up = view_can_up();
     CLAY(CLAY_ID("header"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(HEADER_H) },
                                           .padding = { PAD / 2, PAD / 2, 0, 0 }, .childGap = BAR_GAP,
                                           .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },

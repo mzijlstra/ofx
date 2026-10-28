@@ -13,15 +13,15 @@ static bool ui_menu_shown(const Ui *u, UiMenuItem it)
     if (it == UM_BM_MORE) return u->bm_more > 0;
     // A right-click menu leaves out what doesn't fit its target (F8): a tab for a folder only, a
     // rename for one entry, the new entries outside the trash view (Empty Trash in it).
-    if (u->menu >= UI_MENUS && it == UM_OPEN_TAB) return u->ctx_dir && !u->in_trash;
+    if (u->menu >= UI_MENUS && it == UM_OPEN_TAB) return u->ctx_dir && u->view != UI_VIEW_TRASH;
     if (u->menu >= UI_MENUS && it == UM_RENAME) return u->marked <= 1;
-    if (it == UM_OPEN_WINDOW || it == UM_PASTE_INTO || it == UM_TERMINAL_IN || it == UM_SEARCH_IN) return u->ctx_dir && !u->in_trash;
-    if (it == UM_CONTAINING) return u->in_search;
-    if (it == UM_BOOKMARK_IT) return u->ctx_dir && !u->in_trash && !u->sel_bm;
-    if (it == UM_FOLLOW) return u->ctx_one && u->sel_link && !u->in_trash;
-    if (u->menu >= UI_MENUS && (it == UM_NEW_FOLDER || it == UM_NEW_FILE)) return !u->in_trash;
-    if (it == UM_EMPTY_TRASH) return u->in_trash;
-    return it == UM_TRASH ? !u->in_trash : it == UM_RESTORE ? u->in_trash : true;
+    if (it == UM_OPEN_WINDOW || it == UM_PASTE_INTO || it == UM_TERMINAL_IN || it == UM_SEARCH_IN) return u->ctx_dir && u->view != UI_VIEW_TRASH;
+    if (it == UM_CONTAINING) return ui_view_allows(u->view, UA_CONTAINING);
+    if (it == UM_BOOKMARK_IT) return u->ctx_dir && u->view != UI_VIEW_TRASH && !u->sel_bm;
+    if (it == UM_FOLLOW) return u->ctx_one && u->sel_link && u->view != UI_VIEW_TRASH;
+    if (u->menu >= UI_MENUS && (it == UM_NEW_FOLDER || it == UM_NEW_FILE)) return u->view != UI_VIEW_TRASH;
+    if (it == UM_EMPTY_TRASH) return ui_view_allows(u->view, UA_EMPTY_TRASH);
+    return it == UM_TRASH ? u->view != UI_VIEW_TRASH : it == UM_RESTORE ? ui_view_allows(u->view, UA_RESTORE) : true;
 }
 
 // The folder menu's (F8): what fits that folder. Trash is gone to, not into; a place has no Cut or
@@ -64,15 +64,15 @@ static bool ui_menu_enabled(const Ui *u, UiMenuItem it)
     }
     switch (it) {
     case UM_NEW_TAB: case UM_CLOSE_ALL: case UM_CLOSE: case UM_PROPERTIES: return true;
-    case UM_NEW_WINDOW: return !u->in_trash;   // ofx starts on a folder, not on the trash view (from a search: the folder searched)
-    case UM_NEW_FOLDER: case UM_NEW_FILE: return !u->in_trash && u->can_write;
+    case UM_NEW_WINDOW: return ui_view_allows(u->view, UA_NEW_WINDOW);   // ofx starts on a folder, not on the trash view (from a search: the folder searched)
+    case UM_NEW_FOLDER: case UM_NEW_FILE: return u->view != UI_VIEW_TRASH && u->can_write;
     case UM_OPEN: return files;
-    case UM_OPEN_WITH: return files && !u->in_trash;
+    case UM_OPEN_WITH: return files && u->view != UI_VIEW_TRASH;
     case UM_UNDO: return u->can_undo;
-    case UM_CUT: case UM_COPY: return here && !u->in_trash;
+    case UM_CUT: case UM_COPY: return here && ui_view_allows(u->view, UA_COPY);
     case UM_PASTE: return u->can_paste && u->can_write;
     case UM_SELECT_ALL: case UM_SELECT_MATCH: case UM_INVERT: return files;
-    case UM_RENAME: case UM_DUPLICATE: case UM_MAKE_LINK: return here && !u->in_trash && (u->can_write || u->in_search);   // (a result's own folder: F9)
+    case UM_RENAME: case UM_DUPLICATE: case UM_MAKE_LINK: return here && u->view != UI_VIEW_TRASH && (u->can_write || u->view == UI_VIEW_SEARCH);   // (a result's own folder: F9)
     case UM_TRASH: case UM_DELETE: return here;
     case UM_RESTORE: return here;
     case UM_RELOAD: case UM_SIDE_PLACES: case UM_SIDE_TREE: case UM_SIDE_NONE: case UM_HIDDEN: case UM_SHOW_MENU: return true;
@@ -89,9 +89,9 @@ static bool ui_menu_enabled(const Ui *u, UiMenuItem it)
     case UM_BACK: return u->can_back;
     case UM_FORWARD: return u->can_forward;
     case UM_HOME: case UM_TRASH_VIEW: case UM_FIND: case UM_LOCATION: return true;
-    case UM_SEARCH: return !u->in_trash;
-    case UM_TERMINAL: return !u->in_trash;
-    case UM_ADD_BOOKMARK: return u->can_bookmark && !u->in_trash && !u->in_search;
+    case UM_SEARCH: return ui_view_allows(u->view, UA_SEARCH);
+    case UM_TERMINAL: return ui_view_allows(u->view, UA_TERMINAL);
+    case UM_ADD_BOOKMARK: return u->can_bookmark && ui_view_allows(u->view, UA_ADD_BOOKMARK);
     case UM_BM_0: case UM_BM_1: case UM_BM_2: case UM_BM_3: case UM_BM_4: case UM_BM_5: case UM_BM_6: case UM_BM_7: return true;
     case UM_EDIT_BOOKMARKS: case UM_BM_MORE: case UM_SHORTCUTS: case UM_ABOUT: return true;
     case UM_TAB_LEFT: return u->tab_at > 0;
@@ -100,7 +100,7 @@ static bool ui_menu_enabled(const Ui *u, UiMenuItem it)
     case UM_OPEN_TAB: case UM_EMPTY_TRASH: case UM_OPEN_WINDOW: case UM_TERMINAL_IN: case UM_SEARCH_IN: case UM_FOLLOW: case UM_BOOKMARK_IT: return files;
     case UM_CONTAINING: return true;   // (on a result's menu only)
     case UM_PASTE_INTO: return files && u->can_paste && u->ctx_w;
-    case UM_HERE_PROPS: return !u->in_search;   // (a search is no folder)
+    case UM_HERE_PROPS: return u->view != UI_VIEW_SEARCH;   // (a search is no folder)
     default: return false;
     }
 }

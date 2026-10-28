@@ -108,7 +108,7 @@ static void test_zoom_mouse(void)
     in = ui_input_none();
     in.zoom_wheel = -1;
     CHECK(ui_input_acts(&in));
-    u.empty_asking = true, u.in_trash = true;
+    u.empty_asking = true, u.view = UI_VIEW_TRASH;
     in = ui_input_none();
     in.zoom_to = 3;
     a = zoom_by(&u, in);
@@ -117,7 +117,7 @@ static void test_zoom_mouse(void)
     in.zoom_wheel = 1;
     a = zoom_by(&u, in);
     CHECK(a.kind == UA_NONE && u.zoom == 32);
-    u.empty_asking = false, u.in_trash = false;
+    u.empty_asking = false, u.view = UI_VIEW_FOLDER;
 }
 
 static void test_zoom_refit(void)

@@ -109,6 +109,9 @@ key enter
 expect trash=1 n=2 sel=adir crumbs=Trash here=Trash
 key esc
 expect sidefocus=0
+# No folder above the trash view: Backspace stays (2026-10-28: it went to "trash:", an error)
+key backspace
+expect trash=1 crumbs=Trash status=-
 # Another program trashes a file: the view follows the home trash
 sh printf x > "$OFX_ROOT/data/Trash/files/other.txt" && printf '[Trash Info]\nPath=/elsewhere/other.txt\nDeletionDate=2026-01-02T03:04:05\n' > "$OFX_ROOT/data/Trash/info/other.txt.trashinfo"
 wait-for 3000 n=3

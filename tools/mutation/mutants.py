@@ -153,7 +153,7 @@ MUTANTS += [
     ('ui/handle.c', "return s.key == k ? (Sort){ k, !s.reverse } : (Sort){ k, false };", "return (Sort){ k, !s.reverse };"),
     ('ui/handle.c', "if (!prompt && in->header >= 0 && in->header < SORT_KEYS) {", "if (!prompt && in->header >= 0) {"),
     ('ui/handle.c', "if (!prompt && in->side_click >= 0 && u->side.top + in->side_click < u->side.n) {", "if (!prompt && in->side_click >= 0) {"),
-    ('ui/handle.c', '        l->sel = row, ui_unfocus(u, UI_FOCUS_SIDE);\n        ui_show_sel(l);', '        l->sel = row;\n        ui_show_sel(l);'),
+    ('ui/handle.c', '        l->sel = row, ui_unfocus(u, UI_FOCUS_SIDE), ui_unfocus(u, UI_FOCUS_FIND);   // (the find bar', '        l->sel = row, ui_unfocus(u, UI_FOCUS_FIND);   // (the find bar'),
     ('ui/handle.c', "    if (!prompt && in->forwards > 0) return (UiAction){ UA_FORWARD, 0, false };\n", ""),
     ('ui/handle.c', 'UiList *m = u->focus == UI_FOCUS_SIDE ? &u->side : l;', 'UiList *m = l;'),
     ('ui/handle.c', "case 's': u->sort = (Sort){ (SortKey)((u->sort.key + 1) % SORT_KEYS), false }; return (UiAction){ UA_SORT, 0, false };", "case 's': u->sort = (Sort){ (SortKey)((u->sort.key + 1) % SORT_KEYS), u->sort.reverse }; return (UiAction){ UA_SORT, 0, false };"),
@@ -532,16 +532,13 @@ MUTANTS += [
     ('ui/handle.c', '            if (u->focus == UI_FOCUS_SIDE && u->side.n > 0 && u->side_mode == SIDE_TREE) return (UiAction){ UA_TREE_RIGHT', '            if (u->focus == UI_FOCUS_SIDE && u->side.n > 0) return (UiAction){ UA_TREE_RIGHT'),
     ('ui/handle.c', "    if (!prompt && in->side_twisty >= 0 && u->side_mode == SIDE_TREE && u->side.top", "    if (!prompt && in->side_twisty >= 0 && u->side.top"),
     ('ui/handle.c', '            if (u->focus == UI_FOCUS_SIDE && u->side.n > 0 && u->side_mode == SIDE_TREE) return (UiAction){ UA_TREE_LEFT', '            if (u->focus == UI_FOCUS_SIDE && u->side.n > 0) return (UiAction){ UA_TREE_LEFT'),
-    ('ui/handle.c', '                if (u->in_trash && u->focus != UI_FOCUS_SIDE && l->n > 0) return (UiAction){ UA_RESTORE, 0, false };', '                if (u->focus != UI_FOCUS_SIDE && l->n > 0) return (UiAction){ UA_RESTORE, 0, false };'),
-    ('ui/handle.c', '            if (l->n > 0 && u->focus != UI_FOCUS_SIDE && u->in_trash) u->confirming = true,', '            if (0) u->confirming = true,'),
-    ('ui/handle.c', '            if (l->n > 0 && u->focus != UI_FOCUS_SIDE && u->in_trash) return (UiAction){ UA_NOT_IN_TRASH, 0, false };', ''),
-    ('ui/handle.c', "return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : UA_COPY, 0, false };", "return (UiAction){ UA_COPY, 0, false };"),
-    ('ui/handle.c', "        case UK_PASTE: return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : u->in_search ? UA_NOT_IN_SEARCH : UA_PASTE, 0, false };", "        case UK_PASTE: return (UiAction){ u->in_search ? UA_NOT_IN_SEARCH : UA_PASTE, 0, false };"),
-    ('ui/handle.c', "            case 't': return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : UA_TERMINAL, 0, false };", "            case 't': return (UiAction){ UA_TERMINAL, 0, false };"),
-    ('ui/handle.c', 'said_yes && u->in_trash ? UA_EMPTY_TRASH', 'said_yes ? UA_EMPTY_TRASH'),
-    ('ui/handle.c', "    if (!u->in_trash) u->empty_asking = false;\n", ""),
-    ('ui/handle.c', "        case UB_RESTORE: if (u->in_trash && l->n > 0) return", "        case UB_RESTORE: if (l->n > 0) return"),
-    ('ui/handle.c', "        case UB_EMPTY: if (u->in_trash) u->empty_asking = true; break;", "        case UB_EMPTY: u->empty_asking = true; break;"),
+    ('ui/handle.c', '                if (u->view == UI_VIEW_TRASH && u->focus != UI_FOCUS_SIDE && l->n > 0) return (UiAction){ UA_RESTORE, 0, false };', '                if (u->focus != UI_FOCUS_SIDE && l->n > 0) return (UiAction){ UA_RESTORE, 0, false };'),
+    ('ui/handle.c', '            if (l->n > 0 && u->focus != UI_FOCUS_SIDE && u->view == UI_VIEW_TRASH) u->confirming = true,', '            if (0) u->confirming = true,'),
+    ('ui/handle.c', '            if (l->n > 0 && u->focus != UI_FOCUS_SIDE && u->view == UI_VIEW_TRASH) return (UiAction){ UA_NOT_IN_TRASH, 0, false };', ''),
+    ('ui/handle.c', 'said_yes && u->view == UI_VIEW_TRASH ? UA_EMPTY_TRASH', 'said_yes ? UA_EMPTY_TRASH'),
+    ('ui/handle.c', '    if (u->view != UI_VIEW_TRASH) u->empty_asking = false;\n', ''),
+    ('ui/handle.c', '        case UB_RESTORE: if (u->view == UI_VIEW_TRASH && l->n > 0) return', '        case UB_RESTORE: if (l->n > 0) return'),
+    ('ui/handle.c', '        case UB_EMPTY: if (u->view == UI_VIEW_TRASH) u->empty_asking = true; break;', '        case UB_EMPTY: u->empty_asking = true; break;'),
     ('ui/handle.c', "            if (yes) return (UiAction){ UA_EMPTY_TRASH, 0, false };", "            return (UiAction){ UA_EMPTY_TRASH, 0, false };"),
     ('ui/helpers.c', "    if (str_eq(ui_crumb_path(c, i), S(TRASH_URI))) return S(\"Trash\");\n", ""),
     (ST, "        if (!str_eq(key, S(\"sidebar\"))) continue;\n", ""),
@@ -848,9 +845,8 @@ MUTANTS += [
 W = 'fs/windows.c'
 MUTANTS += [
     ('ui/menus.c', "    case UM_NEW_TAB: case UM_CLOSE_ALL: case UM_CLOSE: case UM_PROPERTIES: return true;", "    case UM_NEW_TAB: case UM_CLOSE_ALL: case UM_CLOSE: return true;"),
-    ('ui/menus.c', '    case UM_NEW_WINDOW: return !u->in_trash;', '    case UM_NEW_WINDOW: return true;'),
-    ('ui/menus.c', "    case UM_NEW_FOLDER: case UM_NEW_FILE: return !u->in_trash && u->can_write;", "    case UM_NEW_FOLDER: case UM_NEW_FILE: return u->can_write;"),
-    ('ui/menus.c', "    case UM_NEW_FOLDER: case UM_NEW_FILE: return !u->in_trash && u->can_write;", "    case UM_NEW_FOLDER: case UM_NEW_FILE: return !u->in_trash;"),
+    ('ui/menus.c', '    case UM_NEW_FOLDER: case UM_NEW_FILE: return u->view != UI_VIEW_TRASH && u->can_write;', '    case UM_NEW_FOLDER: case UM_NEW_FILE: return u->can_write;'),
+    ('ui/menus.c', '    case UM_NEW_FOLDER: case UM_NEW_FILE: return u->view != UI_VIEW_TRASH && u->can_write;', '    case UM_NEW_FOLDER: case UM_NEW_FILE: return u->view != UI_VIEW_TRASH;'),
     ('ui/menus.c', "    case UM_OPEN: return files;", "    case UM_OPEN: return true;"),
     ('ui/menus.c', "    default: return false;\n    }\n}\n\n// Entry it's mark", "    default: return true;\n    }\n}\n\n// Entry it's mark"),
     ('ui/menus.c', "        int i = ((at + dir * k) % n + n) % n;", "        int i = (at + dir * k) % n;"),
@@ -886,7 +882,6 @@ MUTANTS += [
     ('ui/handle.c', "        if (e.key == UK_QUIT_ALL && !u->quit_asking) {", "        if (e.key == UK_QUIT_ALL) {"),
     ('ui/handle.c', "        if (!prompt && !u->menu_on && (e.key == UK_F10 ||", "        if (!u->menu_on && (e.key == UK_F10 ||"),
     ('ui/handle.c', "        if (u->menu_on && !prompt) {\n            UiAction a;\n            if (ui_menu_event(u, e, &a)) {", "        if (u->menu_on && !prompt && false) {\n            UiAction a;\n            if (ui_menu_event(u, e, &a)) {"),
-    ('ui/handle.c', '        case UK_NEW_WINDOW: return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : UA_NEW_WINDOW, 0, false };', '        case UK_NEW_WINDOW: return (UiAction){ UA_NEW_WINDOW, 0, false };'),
     ('ui/cursor.c', "|| in->menu_title >= 0 || in->menu_item >= 0 || in->menu_away || in->ctx_row >= 0 || in->ctx_here || in->ctx_side >= 0 || in->ctx_crumb >= 0 || in->ctx_tab >= 0 || in->prop_box", " || in->menu_title >= 0 || in->menu_item >= 0 || in->ctx_row >= 0 || in->ctx_here || in->ctx_side >= 0 || in->ctx_crumb >= 0 || in->ctx_tab >= 0 || in->prop_box"),
     # Not a mutant: dropping O_EXCL in op_mkfile is inert without a race, as name_free picked a
     # name not there; kept so another program's file made in between is never truncated.
@@ -1043,7 +1038,6 @@ MUTANTS += [
     ('ui/handle.c', '    if (on == UI_ON_PROPS && in->modal == UI_MODAL_OK) return u->props = false, (UiAction){ UA_NONE, 0, false };\n', ''),
     ('ui/handle.c', '        if (on == UI_ON_PROPS) {\n            UiAction a = ui_props_event', '        if (u->props) {\n            UiAction a = ui_props_event'),
     ('ui/handle.c', "        case UK_PROPERTIES: return ui_props_open(u);", ""),
-    ('ui/handle.c', '        case UK_TERMINAL: return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : UA_TERMINAL, 0, false };', '        case UK_TERMINAL: return (UiAction){ UA_TERMINAL, 0, false };'),
     ('ui/panels.c', "    case UM_PROPERTIES: return ui_props_open(u);", ""),
     ('ui/cursor.c', "|| in->menu_away || in->ctx_row >= 0 || in->ctx_here || in->ctx_side >= 0 || in->ctx_crumb >= 0 || in->ctx_tab >= 0 || in->prop_box >= 0 ||\n", "|| in->menu_away || in->ctx_row >= 0 || in->ctx_here || in->ctx_side >= 0 || in->ctx_crumb >= 0 || in->ctx_tab >= 0 ||\n"),
     (U, ".menu_item = -1, .ctx_row = -1, .ctx_side = -1, .ctx_crumb = -1, .ctx_tab = -1, .prop_box = -1, .ow_row = -1, .ow_drow = -1, .bmp_row = -1, .bmp_drow = -1 };", ".menu_item = -1, .ctx_row = -1, .ctx_side = -1, .ctx_crumb = -1, .ctx_tab = -1, .prop_box = 0, .ow_row = -1, .ow_drow = -1 };"),
@@ -1123,7 +1117,7 @@ MUTANTS += [
 
     ('ui/panels.c', '    else if (!h && e.key == UK_DOWN && l->n > 0) u->ow_in_list = true;', '    else if (!h && e.key == UK_DOWN) u->ow_in_list = true;'),
     ('ui/panels.c', '    if (h == UI_LINE_CHANGED) ui_ow_filter(u, in);\n    else if', '    if (false) ui_ow_filter(u, in);\n    else if'),
-    ('ui/menus.c', "    case UM_OPEN_WITH: return files && !u->in_trash;", "    case UM_OPEN_WITH: return files;"),
+    ('ui/menus.c', '    case UM_OPEN_WITH: return files && u->view != UI_VIEW_TRASH;', '    case UM_OPEN_WITH: return files;'),
     ('ui/panels.c', "    case UM_OPEN_WITH: return ui_ow_open(u);\n", ""),
     ('ui/handle.c', "    if (u->ow && u->ow_fresh && in->app_name) ui_ow_filter(u, in);", ""),
     ('ui/handle.c', "        if (in->ow_field) u->ow_in_list = false;", ""),
@@ -1264,17 +1258,14 @@ MUTANTS += [
 ]
 # ---- F7.4: the Edit, View and Go menus
 MUTANTS += [
-    ('ui/menus.c', "    return it == UM_TRASH ? !u->in_trash : it == UM_RESTORE ? u->in_trash : true;", "    return it == UM_RESTORE ? u->in_trash : true;"),
-    ('ui/menus.c', "    return it == UM_TRASH ? !u->in_trash : it == UM_RESTORE ? u->in_trash : true;", "    return it == UM_TRASH ? !u->in_trash : true;"),
     ('ui/menus.c', "    if (!ui_menu_shown(u, it)) return false;\n    if (u->menu == UI_CTX_FOLDER)", "    if (u->menu == UI_CTX_FOLDER)"),
     ('ui/menus.c', '    bool files = u->list.n > 0, here = files && u->focus != UI_FOCUS_SIDE;', '    bool files = u->list.n > 0, here = files;'),
     ('ui/menus.c', "    case UM_UNDO: return u->can_undo;", "    case UM_UNDO: return true;"),
-    ('ui/menus.c', "    case UM_CUT: case UM_COPY: return here && !u->in_trash;", "    case UM_CUT: case UM_COPY: return here;"),
     ('ui/menus.c', "    case UM_PASTE: return u->can_paste && u->can_write;", "    case UM_PASTE: return u->can_write;"),
     ('ui/menus.c', "    case UM_PASTE: return u->can_paste && u->can_write;", "    case UM_PASTE: return u->can_paste;"),
     ('ui/menus.c', "    case UM_SELECT_ALL: case UM_SELECT_MATCH: case UM_INVERT: return files;", "    case UM_SELECT_ALL: case UM_SELECT_MATCH: case UM_INVERT: return true;"),
-    ('ui/menus.c', '    case UM_RENAME: case UM_DUPLICATE: case UM_MAKE_LINK: return here && !u->in_trash && (u->can_write || u->in_search);', '    case UM_RENAME: case UM_DUPLICATE: case UM_MAKE_LINK: return here && (u->can_write || u->in_search);'),
-    ('ui/menus.c', '    case UM_RENAME: case UM_DUPLICATE: case UM_MAKE_LINK: return here && !u->in_trash && (u->can_write || u->in_search);', '    case UM_RENAME: case UM_DUPLICATE: case UM_MAKE_LINK: return here && !u->in_trash;'),
+    ('ui/menus.c', '    case UM_RENAME: case UM_DUPLICATE: case UM_MAKE_LINK: return here && u->view != UI_VIEW_TRASH && (u->can_write || u->view == UI_VIEW_SEARCH);', '    case UM_RENAME: case UM_DUPLICATE: case UM_MAKE_LINK: return here && (u->can_write || u->view == UI_VIEW_SEARCH);'),
+    ('ui/menus.c', '    case UM_RENAME: case UM_DUPLICATE: case UM_MAKE_LINK: return here && u->view != UI_VIEW_TRASH && (u->can_write || u->view == UI_VIEW_SEARCH);', '    case UM_RENAME: case UM_DUPLICATE: case UM_MAKE_LINK: return here && u->view != UI_VIEW_TRASH;'),
     ('ui/menus.c', '    case UM_TRASH: case UM_DELETE: return here;', '    case UM_TRASH: case UM_DELETE: return true;'),
     ('ui/menus.c', "    case UM_RESTORE: return here;", "    case UM_RESTORE: return true;"),
     ('ui/menus.c', "    case UM_ZOOM_IN: return u->grid && ui_zoom_level(ui_zoom_px(u)) < UI_ZOOMS - 1;", "    case UM_ZOOM_IN: return u->grid;"),
@@ -1284,7 +1275,6 @@ MUTANTS += [
     ('ui/menus.c', "    case UM_PARENT: return u->can_up;", "    case UM_PARENT: return true;"),
     ('ui/menus.c', "    case UM_BACK: return u->can_back;", "    case UM_BACK: return u->can_forward;"),
     ('ui/menus.c', "    case UM_FORWARD: return u->can_forward;", "    case UM_FORWARD: return u->can_back;"),
-    ('ui/menus.c', '    case UM_TERMINAL: return !u->in_trash;', '    case UM_TERMINAL: return true;'),
     ('ui/menus.c', "    case UM_SIDE_TREE: return u->side_mode == SIDE_TREE;", "    case UM_SIDE_TREE: return u->side_mode == SIDE_PLACES;"),
     ('ui/menus.c', "    case UM_HIDDEN: return u->shows_hidden;", "    case UM_HIDDEN: return 0;"),
     ('ui/menus.c', "    case UM_SORT_REVERSE: return u->sort.reverse;", "    case UM_SORT_REVERSE: return 0;"),
@@ -1294,7 +1284,7 @@ MUTANTS += [
     ('ui/panels.c', "    case UM_SIDE_NONE: return ui_side_mode(u, SIDE_HIDDEN);", "    case UM_SIDE_NONE: return ui_side_mode(u, SIDE_TREE);"),
     ('ui/handle.c', "        case UK_TRASH_VIEW: return (UiAction){ UA_TRASH_VIEW, 0, false };", ""),
     ('ui/handle.c', '            if (u->focus != UI_FOCUS_SIDE && l->n > 0 && shift_enter) return', '            if (u->focus != UI_FOCUS_SIDE && l->n > 0 && false) return'),
-    ('ui/handle.c', "return u->in_trash ? (UiAction){ UA_NOT_IN_TRASH, 0, false } : ui_ow_open(u);", "return ui_ow_open(u);"),
+    ('ui/handle.c', 'return u->view == UI_VIEW_TRASH ? (UiAction){ UA_NOT_IN_TRASH, 0, false } : ui_ow_open(u);', 'return ui_ow_open(u);'),
     ('ui/handle.c', "        bool shift_enter = e.key == UK_SHIFT_ENTER;", "        bool shift_enter = false;"),
     # Not a mutant: the `continue` after a menu's own key is inert, the empty menu_key it falls into
     # ({UK_NONE, 0}) is dropped by the characters' switch.
@@ -1325,7 +1315,7 @@ MUTANTS += [
 # ---- F7.4: Duplicate
 MUTANTS += [
     ('ui/panels.c', "    case UM_DUPLICATE: return (UiAction){ UA_DUPLICATE, 0, false };", ""),
-    ('ui/menus.c', '    case UM_RENAME: case UM_DUPLICATE: case UM_MAKE_LINK: return here && !u->in_trash && (u->can_write || u->in_search);', '    case UM_RENAME: case UM_DUPLICATE: case UM_MAKE_LINK: return !u->in_trash && (u->can_write || u->in_search);'),
+    ('ui/menus.c', '    case UM_RENAME: case UM_DUPLICATE: case UM_MAKE_LINK: return here && u->view != UI_VIEW_TRASH && (u->can_write || u->view == UI_VIEW_SEARCH);', '    case UM_RENAME: case UM_DUPLICATE: case UM_MAKE_LINK: return u->view != UI_VIEW_TRASH && (u->can_write || u->view == UI_VIEW_SEARCH);'),
 ]
 MUTANTS += [
     ('ui/find.c', "    if (u->find_m.bad && u->find_len > 0) return;\n", ""),
@@ -1347,10 +1337,8 @@ MUTANTS += [
     (BMK, "    unlink(tmp);\n    return false;", "    return false;"),
     ('ui/menus.c', "    if (it >= UM_BM_0 && it <= UM_BM_7) return (int)(it - UM_BM_0) < u->bm_n;", "    if (it >= UM_BM_0 && it <= UM_BM_7) return (int)(it - UM_BM_0) <= u->bm_n;"),
     ('ui/menus.c', "        if (ui_menu_shown(u, UI_MENU[m].items[k])) return true;\n    return false;", "        if (ui_menu_shown(u, UI_MENU[m].items[k])) return true;\n    return true;"),
-    ('ui/menus.c', "    case UM_ADD_BOOKMARK: return u->can_bookmark && !u->in_trash && !u->in_search;", "    case UM_ADD_BOOKMARK: return !u->in_trash && !u->in_search;"),
     ('ui/menus.c', "        return u->bm_here == (int)(it - UM_BM_0);", "        return 0;"),
     ('ui/panels.c', "        return (UiAction){ UA_BOOKMARK, it - UM_BM_0, false };", "        return (UiAction){ UA_BOOKMARK, 0, false };"),
-    ('ui/handle.c', "        case UK_ADD_BOOKMARK: return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : u->in_search ? UA_NOT_IN_SEARCH : UA_ADD_BOOKMARK, 0, false };", "        case UK_ADD_BOOKMARK: return (UiAction){ u->in_search ? UA_NOT_IN_SEARCH : UA_ADD_BOOKMARK, 0, false };"),
 ]
 # ---- F7.5: Edit Bookmarks
 MUTANTS += [
@@ -1428,15 +1416,14 @@ MUTANTS += [
 # ---- F8 step 1: the files' right-click menus
 MUTANTS += [
     (U, ".menu_item = -1, .ctx_row = -1, .ctx_side = -1, .ctx_crumb = -1, .ctx_tab = -1, .prop_box = -1,", ".menu_item = -1, .ctx_row = 0, .ctx_side = -1, .ctx_crumb = -1, .ctx_tab = -1, .prop_box = -1,"),
-    ('ui/menus.c', "    if (u->menu >= UI_MENUS && it == UM_OPEN_TAB) return u->ctx_dir && !u->in_trash;", "    if (u->menu >= UI_MENUS && it == UM_OPEN_TAB) return u->ctx_dir;"),
-    ('ui/menus.c', "    if (u->menu >= UI_MENUS && it == UM_OPEN_TAB) return u->ctx_dir && !u->in_trash;", ""),
+    ('ui/menus.c', '    if (u->menu >= UI_MENUS && it == UM_OPEN_TAB) return u->ctx_dir && u->view != UI_VIEW_TRASH;', '    if (u->menu >= UI_MENUS && it == UM_OPEN_TAB) return u->ctx_dir;'),
+    ('ui/menus.c', '    if (u->menu >= UI_MENUS && it == UM_OPEN_TAB) return u->ctx_dir && u->view != UI_VIEW_TRASH;', ''),
     ('ui/menus.c', "    if (u->menu >= UI_MENUS && it == UM_RENAME) return u->marked <= 1;", ""),
     ('ui/menus.c', "    if (u->menu >= UI_MENUS && it == UM_RENAME) return u->marked <= 1;", "    if (u->menu >= UI_MENUS && it == UM_RENAME) return u->marked < 1;"),
-    ('ui/menus.c', "    if (u->menu >= UI_MENUS && (it == UM_NEW_FOLDER || it == UM_NEW_FILE)) return !u->in_trash;", ""),
-    ('ui/menus.c', "    if (u->menu >= UI_MENUS && (it == UM_NEW_FOLDER || it == UM_NEW_FILE)) return !u->in_trash;", "    if (it == UM_NEW_FOLDER || it == UM_NEW_FILE) return !u->in_trash;"),
-    ('ui/menus.c', "    if (it == UM_EMPTY_TRASH) return u->in_trash;\n", ""),
+    ('ui/menus.c', '    if (u->menu >= UI_MENUS && (it == UM_NEW_FOLDER || it == UM_NEW_FILE)) return u->view != UI_VIEW_TRASH;', ''),
+    ('ui/menus.c', '    if (u->menu >= UI_MENUS && (it == UM_NEW_FOLDER || it == UM_NEW_FILE)) return u->view != UI_VIEW_TRASH;', '    if (it == UM_NEW_FOLDER || it == UM_NEW_FILE) return u->view != UI_VIEW_TRASH;'),
     ('ui/menus.c', "    case UM_OPEN_TAB: case UM_EMPTY_TRASH: case UM_OPEN_WINDOW:", "    case UM_OPEN_TAB: case UM_EMPTY_TRASH: return true;\n    case UM_OPEN_WINDOW:"),
-    ('ui/menus.c', "    case UM_HERE_PROPS: return !u->in_search;   // (a search is no folder)\n", ""),
+    ('ui/menus.c', '    case UM_HERE_PROPS: return u->view != UI_VIEW_SEARCH;   // (a search is no folder)\n', ''),
     ('ui/panels.c', "    case UM_OPEN_TAB: return (UiAction){ UA_TAB_BG_ROW, u->list.sel, false };", ""),
     ('ui/panels.c', "    case UM_EMPTY_TRASH: return u->empty_asking = true, (UiAction){ UA_NONE, 0, false };", ""),
     ('ui/panels.c', "    case UM_HERE_PROPS: return u->props = true, u->prop_at = 0, (UiAction){ UA_PROPS, 1, false };", "    case UM_HERE_PROPS: return ui_props_open(u);"),
@@ -1460,13 +1447,13 @@ MUTANTS += [
 ]
 # ---- F8 step 2: a folder's own entries, Follow Link, Make Link and its undo
 MUTANTS += [
-    ('ui/menus.c', '|| it == UM_SEARCH_IN) return u->ctx_dir && !u->in_trash;', '|| it == UM_SEARCH_IN) return u->ctx_dir;'),
-    ('ui/menus.c', '|| it == UM_SEARCH_IN) return u->ctx_dir && !u->in_trash;', '|| it == UM_SEARCH_IN) return !u->in_trash;'),
-    ('ui/menus.c', "    if (it == UM_BOOKMARK_IT) return u->ctx_dir && !u->in_trash && !u->sel_bm;", "    if (it == UM_BOOKMARK_IT) return u->ctx_dir && !u->in_trash;"),
-    ('ui/menus.c', "    if (it == UM_BOOKMARK_IT) return u->ctx_dir && !u->in_trash && !u->sel_bm;", "    if (it == UM_BOOKMARK_IT) return u->ctx_dir && !u->sel_bm;"),
-    ('ui/menus.c', "    if (it == UM_FOLLOW) return u->ctx_one && u->sel_link && !u->in_trash;", "    if (it == UM_FOLLOW) return u->sel_link && !u->in_trash;"),
-    ('ui/menus.c', "    if (it == UM_FOLLOW) return u->ctx_one && u->sel_link && !u->in_trash;", "    if (it == UM_FOLLOW) return u->ctx_one && !u->in_trash;"),
-    ('ui/menus.c', "    if (it == UM_FOLLOW) return u->ctx_one && u->sel_link && !u->in_trash;", "    if (it == UM_FOLLOW) return u->ctx_one && u->sel_link;"),
+    ('ui/menus.c', '|| it == UM_SEARCH_IN) return u->ctx_dir && u->view != UI_VIEW_TRASH;', '|| it == UM_SEARCH_IN) return u->ctx_dir;'),
+    ('ui/menus.c', '|| it == UM_SEARCH_IN) return u->ctx_dir && u->view != UI_VIEW_TRASH;', '|| it == UM_SEARCH_IN) return u->view != UI_VIEW_TRASH;'),
+    ('ui/menus.c', '    if (it == UM_BOOKMARK_IT) return u->ctx_dir && u->view != UI_VIEW_TRASH && !u->sel_bm;', '    if (it == UM_BOOKMARK_IT) return u->ctx_dir && u->view != UI_VIEW_TRASH;'),
+    ('ui/menus.c', '    if (it == UM_BOOKMARK_IT) return u->ctx_dir && u->view != UI_VIEW_TRASH && !u->sel_bm;', '    if (it == UM_BOOKMARK_IT) return u->ctx_dir && !u->sel_bm;'),
+    ('ui/menus.c', '    if (it == UM_FOLLOW) return u->ctx_one && u->sel_link && u->view != UI_VIEW_TRASH;', '    if (it == UM_FOLLOW) return u->sel_link && u->view != UI_VIEW_TRASH;'),
+    ('ui/menus.c', '    if (it == UM_FOLLOW) return u->ctx_one && u->sel_link && u->view != UI_VIEW_TRASH;', '    if (it == UM_FOLLOW) return u->ctx_one && u->view != UI_VIEW_TRASH;'),
+    ('ui/menus.c', '    if (it == UM_FOLLOW) return u->ctx_one && u->sel_link && u->view != UI_VIEW_TRASH;', '    if (it == UM_FOLLOW) return u->ctx_one && u->sel_link;'),
     ('ui/menus.c', "    case UM_RENAME: case UM_DUPLICATE: case UM_MAKE_LINK: return", "    case UM_RENAME: case UM_DUPLICATE: return"),
     ('ui/menus.c', "    case UM_PASTE_INTO: return files && u->can_paste && u->ctx_w;", "    case UM_PASTE_INTO: return files && u->ctx_w;"),
     ('ui/panels.c', "    case UM_OPEN_WINDOW: return (UiAction){ UA_NEW_WINDOW, u->list.sel, true };", "    case UM_OPEN_WINDOW: return (UiAction){ UA_NEW_WINDOW, u->list.sel, false };"),
@@ -1474,8 +1461,6 @@ MUTANTS += [
     ('ui/panels.c', "    case UM_TERMINAL_IN: return (UiAction){ UA_TERMINAL, u->list.sel, true };", "    case UM_TERMINAL_IN: return (UiAction){ UA_TERMINAL, 0, true };"),
     ('ui/panels.c', "    case UM_BOOKMARK_IT: return (UiAction){ UA_ADD_BOOKMARK, u->list.sel, true };", "    case UM_BOOKMARK_IT: return (UiAction){ UA_ADD_BOOKMARK, u->list.sel, false };"),
     ('ui/panels.c', "    case UM_FOLLOW: return (UiAction){ UA_FOLLOW, u->list.sel, false };", ""),
-    ('ui/handle.c', '        case UK_MAKE_LINK: if (l->n > 0 && u->focus != UI_FOCUS_SIDE) return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : UA_MAKE_LINK, 0, false }; break;', ''),
-    ('ui/handle.c', '        case UK_MAKE_LINK: if (l->n > 0 && u->focus != UI_FOCUS_SIDE) return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : UA_MAKE_LINK, 0, false }; break;', '        case UK_MAKE_LINK: if (l->n > 0 && u->focus != UI_FOCUS_SIDE) return (UiAction){ UA_MAKE_LINK, 0, false }; break;'),
     (O, "        if (symlink(target, p) == 0) return true;", "        if (symlink(target, p) == 0) return false;"),
     (O, "        if (!name_free(dir, name, false, false, false, made, cap) || !path_put(p, sizeof p, dir, str_from_c(made)))\n            return err_set(err, \"no free name for %.*s\", STR_ARG(name)), false;\n        if (!ops_allowed(p, err)) return false;\n        if (symlink", "        if (!name_free(dir, name, false, false, false, made, cap) || !path_put(p, sizeof p, dir, str_from_c(made)))\n            return err_set(err, \"no free name for %.*s\", STR_ARG(name)), false;\n        if (symlink"),
     (O, "    if (!name_valid(name, err)) return false;\n    for (int tries = 0; tries < 5; tries++) {\n        char p[PATH_MAX];\n        if (!name_free(dir, name, false, false, false, made, cap) || !path_put(p, sizeof p, dir, str_from_c(made)))\n            return err_set(err, \"no free name for %.*s\", STR_ARG(name)), false;\n        if (!ops_allowed(p, err)) return false;\n        if (symlink", "    for (int tries = 0; tries < 5; tries++) {\n        char p[PATH_MAX];\n        if (!name_free(dir, name, false, false, false, made, cap) || !path_put(p, sizeof p, dir, str_from_c(made)))\n            return err_set(err, \"no free name for %.*s\", STR_ARG(name)), false;\n        if (!ops_allowed(p, err)) return false;\n        if (symlink"),
@@ -1653,11 +1638,10 @@ MUTANTS += [
     ('ui/handle.c', '    case UK_ENTER: case UK_SHIFT_ENTER: case UK_ESC: case UK_DOWN: u->focus = UI_FOCUS_LIST; return true;', '    case UK_ENTER: case UK_SHIFT_ENTER: case UK_ESC: u->focus = UI_FOCUS_LIST; return true;'),
     ('ui/handle.c', '    case UK_ENTER: case UK_SHIFT_ENTER: case UK_ESC: case UK_DOWN: u->focus = UI_FOCUS_LIST; return true;', '    case UK_ENTER: case UK_SHIFT_ENTER: case UK_ESC: case UK_DOWN: return true;'),
     ('ui/handle.c', 'u->focus = UI_FOCUS_LIST; return true;\n    default: u->focus = UI_FOCUS_LIST; return false;\n    }\n}\n\n// Ctrl+Shift+F', 'u->focus = UI_FOCUS_LIST; return true;\n    default: return false;\n    }\n}\n\n// Ctrl+Shift+F'),
-    ('ui/handle.c', "    if (!u->in_search) return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : UA_SEARCH, 0, false };", "    if (!u->in_search) return (UiAction){ UA_SEARCH, 0, false };"),
-    ('ui/handle.c', '    } else if (!prompt && !u->menu_on && in->toggle >= 1 && in->toggle <= 3 && (u->finding || u->in_search)) {', '    } else if (!prompt && !u->menu_on && in->toggle >= 1 && in->toggle <= 3 && u->finding) {'),
+    ('ui/handle.c', '    } else if (!prompt && !u->menu_on && in->toggle >= 1 && in->toggle <= 3 && (u->finding || u->view == UI_VIEW_SEARCH)) {', '    } else if (!prompt && !u->menu_on && in->toggle >= 1 && in->toggle <= 3 && u->finding) {'),
     ('ui/handle.c', '    } else if (!prompt && !u->menu_on && in->toggle', '    } else if (!prompt && in->toggle'),
-    ('ui/handle.c', "        if (u->in_search) u->search_edited = true;\n        return", "        return"),
-    ('ui/handle.c', "    } else if (!prompt && u->in_search && in->search_field) {", "    } else if (u->in_search && in->search_field) {"),
+    ('ui/handle.c', '        if (u->view == UI_VIEW_SEARCH) u->search_edited = true;\n        return', '        return'),
+    ('ui/handle.c', '    } else if (!prompt && u->view == UI_VIEW_SEARCH && in->search_field) {', '    } else if (u->view == UI_VIEW_SEARCH && in->search_field) {'),
     ('ui/handle.c', '        u->focus = UI_FOCUS_SEARCH;\n        return (UiAction){ UA_NONE, 0, false };\n    }\n    // The menu bar', '        return (UiAction){ UA_NONE, 0, false };\n    }\n    // The menu bar'),
     ('ui/cursor.c', " in->find_step || in->search_field ||", " in->find_step ||"),
     ('ui/handle.c', "            return ui_search_open(u);", "            return (UiAction){ UA_NONE, 0, false };"),
@@ -1665,12 +1649,7 @@ MUTANTS += [
     (U, "    [UM_SEARCH] = { \"Search\\xE2\\x80\\xA6\", \"Ctrl+Shift+F\", \"search\", { UK_SEARCH, 0 } },", "    [UM_SEARCH] = { \"Search\\xE2\\x80\\xA6\", \"Ctrl+Shift+F\", \"search\", { UK_NONE, 0 } },"),
     (U, "UM_SEP, UM_FIND, UM_SEARCH, UM_LOCATION, UM_TERMINAL,\n};", "UM_SEP, UM_FIND, UM_LOCATION, UM_TERMINAL,\n};"),
     # what the results can't do yet, and the menus
-    ('ui/handle.c', "        case UK_ADD_BOOKMARK: return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : u->in_search ? UA_NOT_IN_SEARCH : UA_ADD_BOOKMARK, 0, false };", "        case UK_ADD_BOOKMARK: return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : UA_ADD_BOOKMARK, 0, false };"),
-    ('ui/handle.c', "UA_NOT_IN_TRASH : u->in_search ? UA_NOT_IN_SEARCH : UA_PASTE", "UA_NOT_IN_TRASH : UA_PASTE"),
-    ('ui/handle.c', "UA_NOT_IN_TRASH : u->in_search ? UA_NOT_IN_SEARCH : UA_NEWFOLDER", "UA_NOT_IN_TRASH : UA_NEWFOLDER"),
-    ('ui/menus.c', "    case UM_SEARCH: return !u->in_trash;", "    case UM_SEARCH: return true;"),
-    ('ui/menus.c', "    case UM_ADD_BOOKMARK: return u->can_bookmark && !u->in_trash && !u->in_search;", "    case UM_ADD_BOOKMARK: return u->can_bookmark && !u->in_trash;"),
-    ('ui/menus.c', "    case UM_HERE_PROPS: return !u->in_search;", "    case UM_HERE_PROPS: return true;"),
+    ('ui/menus.c', '    case UM_HERE_PROPS: return u->view != UI_VIEW_SEARCH;', '    case UM_HERE_PROPS: return true;'),
     ('ui/helpers.c', "    if (str_eq(cw, S(TRASH_URI)) || is_search(cwd)) {", "    if (str_eq(cw, S(TRASH_URI))) {"),
     ('ui/helpers.c', "    if (str_starts_with(ui_crumb_path(c, i), S(SEARCH_URI))) return S(\"Search\");", ""),
     ('ui/helpers.c', "sel.len < (isize)sizeof stack[*n].sel ? (int)sel.len : 0, sel.p ? sel.p : \"\");", "(int)sel.len, sel.p ? sel.p : \"\");"),
@@ -1678,16 +1657,15 @@ MUTANTS += [
 ]
 # ---- F9 step 2: working with results (2026-10-28)
 MUTANTS += [
-    ('ui/menus.c', "    if (it == UM_CONTAINING) return u->in_search;", "    if (it == UM_CONTAINING) return true;"),
     (U, "    [UM_CONTAINING] = { \"Open Containing Folder\", \"Ctrl+Enter\", \"containing\", { UK_CONTAINING, 0 } },", "    [UM_CONTAINING] = { \"Open Containing Folder\", \"Ctrl+Enter\", \"containing\", { UK_NONE, 0 } },"),
-    ('ui/handle.c', '            if (u->in_search && u->focus != UI_FOCUS_SIDE && l->n > 0) return (UiAction){ UA_CONTAINING, l->sel, false };', '            if (u->focus != UI_FOCUS_SIDE && l->n > 0) return (UiAction){ UA_CONTAINING, l->sel, false };'),
-    ('ui/handle.c', '            if (u->in_search && u->focus != UI_FOCUS_SIDE && l->n > 0) return (UiAction){ UA_CONTAINING, l->sel, false };', '            if (u->in_search && l->n > 0) return (UiAction){ UA_CONTAINING, l->sel, false };'),
-    ('ui/handle.c', '            if (u->in_search && u->focus != UI_FOCUS_SIDE && l->n > 0) return (UiAction){ UA_CONTAINING, l->sel, false };', '            if (u->in_search && u->focus != UI_FOCUS_SIDE && l->n > 0) return (UiAction){ UA_CONTAINING, 0, false };'),
+    ('ui/handle.c', '            if (u->view == UI_VIEW_SEARCH && u->focus != UI_FOCUS_SIDE && l->n > 0) return (UiAction){ UA_CONTAINING, l->sel, false };', '            if (u->focus != UI_FOCUS_SIDE && l->n > 0) return (UiAction){ UA_CONTAINING, l->sel, false };'),
+    ('ui/handle.c', '            if (u->view == UI_VIEW_SEARCH && u->focus != UI_FOCUS_SIDE && l->n > 0) return (UiAction){ UA_CONTAINING, l->sel, false };', '            if (u->view == UI_VIEW_SEARCH && l->n > 0) return (UiAction){ UA_CONTAINING, l->sel, false };'),
+    ('ui/handle.c', '            if (u->view == UI_VIEW_SEARCH && u->focus != UI_FOCUS_SIDE && l->n > 0) return (UiAction){ UA_CONTAINING, l->sel, false };', '            if (u->view == UI_VIEW_SEARCH && u->focus != UI_FOCUS_SIDE && l->n > 0) return (UiAction){ UA_CONTAINING, 0, false };'),
     ('ui/panels.c', "    case UM_SEARCH_IN: return (UiAction){ UA_SEARCH, u->list.sel, true };", "    case UM_SEARCH_IN: return (UiAction){ UA_SEARCH, u->list.sel, false };"),
     ('ui/menus.c', "    case UM_OPEN_WINDOW: case UM_TERMINAL_IN: case UM_SEARCH_IN: case UM_PASTE_INTO: case UM_PROPS_IT: return !u->ctx_trash;", "    case UM_OPEN_WINDOW: case UM_TERMINAL_IN: case UM_PASTE_INTO: case UM_PROPS_IT: return !u->ctx_trash;"),
     (U, "    UM_OPEN, UM_CONTAINING, UM_OPEN_TAB,", "    UM_OPEN, UM_OPEN_TAB,"),
     (U, "UM_TERMINAL_IN, UM_SEARCH_IN, UM_FOLLOW,", "UM_TERMINAL_IN, UM_FOLLOW,"),
-    ('ui/menus.c', "    case UM_RENAME: case UM_DUPLICATE: case UM_MAKE_LINK: return here && !u->in_trash && (u->can_write || u->in_search);", "    case UM_RENAME: case UM_DUPLICATE: case UM_MAKE_LINK: return here && !u->in_trash && u->can_write;"),
+    ('ui/menus.c', '    case UM_RENAME: case UM_DUPLICATE: case UM_MAKE_LINK: return here && u->view != UI_VIEW_TRASH && (u->can_write || u->view == UI_VIEW_SEARCH);', '    case UM_RENAME: case UM_DUPLICATE: case UM_MAKE_LINK: return here && u->view != UI_VIEW_TRASH && u->can_write;'),
     ('ui/handle.c', "        case UK_CONTAINING:   // (the search view's: elsewhere every entry is in the folder shown)", "        case UK_CONTAINING + 1000:"),
 ]
 # ---- the search field edits as the rename line does (Michael, 2026-10-28)
@@ -1696,8 +1674,8 @@ MUTANTS += [
 
 
     ('ui/edit.c', "    return (UiLine){ u->search, &u->search_len, &u->search_caret, &u->search_anchor, UI_FIND_MAX, false };", "    return (UiLine){ u->search, &u->search_len, &u->search_caret, &u->search_anchor, UI_FIND_MAX, true };"),
-    ('ui/handle.c', '        if (u->focus == UI_FOCUS_SEARCH && u->in_search && !prompt && ui_search_event(u, e, in->paste)) continue;', '        if (u->focus == UI_FOCUS_SEARCH && u->in_search && ui_search_event(u, e, in->paste)) continue;'),
-    ('ui/handle.c', '        if (u->focus == UI_FOCUS_SEARCH && u->in_search && !prompt && ui_search_event(u, e, in->paste)) continue;', '        if (u->focus == UI_FOCUS_SEARCH && u->in_search && !prompt && ui_search_event(u, e, STR_EMPTY)) continue;'),
+    ('ui/handle.c', '        if (u->focus == UI_FOCUS_SEARCH && u->view == UI_VIEW_SEARCH && !prompt && ui_search_event(u, e, in->paste)) continue;', '        if (u->focus == UI_FOCUS_SEARCH && u->view == UI_VIEW_SEARCH && ui_search_event(u, e, in->paste)) continue;'),
+    ('ui/handle.c', '        if (u->focus == UI_FOCUS_SEARCH && u->view == UI_VIEW_SEARCH && !prompt && ui_search_event(u, e, in->paste)) continue;', '        if (u->focus == UI_FOCUS_SEARCH && u->view == UI_VIEW_SEARCH && !prompt && ui_search_event(u, e, STR_EMPTY)) continue;'),
 ]
 # ---- the find bar's field on the shared line (Michael, 2026-10-28)
 MUTANTS += [
@@ -1735,7 +1713,7 @@ MUTANTS += [
     ('ui/edit.c', '    else if (on == UI_ON_BM && u->bmp_naming) l = ui_bmp_line(u);', '    else if (on == UI_ON_BM) l = ui_bmp_line(u);'),
     ('ui/edit.c', '    else if (on == UI_ON_KEYS) l = ui_keys_line(u);\n', ''),
     ('ui/edit.c', '    else if (u->focus == UI_FOCUS_EDIT) l = ui_edit_line(u);', ''),
-    ('ui/edit.c', '    else if (u->focus == UI_FOCUS_SEARCH && u->in_search) l = ui_search_line(u);', '    else if (u->in_search) l = ui_search_line(u);'),
+    ('ui/edit.c', '    else if (u->focus == UI_FOCUS_SEARCH && u->view == UI_VIEW_SEARCH) l = ui_search_line(u);', '    else if (u->view == UI_VIEW_SEARCH) l = ui_search_line(u);'),
     ('ui/edit.c', '    else if (u->focus == UI_FOCUS_FIND && u->finding) l = ui_find_line(u);', '    else if (u->finding) l = ui_find_line(u);'),
     ('ui/handle.c', "    if (h == UI_LINE_CHANGED) u->search_edited = true;", "    if (h) u->search_edited = true;"),
     ('ui/handle.c', "    if (h == UI_LINE_CHANGED) ui_find_update(u, names);", ""),
@@ -1806,4 +1784,38 @@ MUTANTS += [
     ('fs/fm1.c', '        if (!file_uri_path(str_from_c(uris[i]), path, sizeof path) || stat(path, &st) != 0) {', '        if (!file_uri_path(str_from_c(uris[i]), path, sizeof path)) {'),
     ('fs/bookmarks.c', '        if (!file_uri_path(uri, b->path, sizeof b->path)) b->path[0] = 0;', ''),
     ('fs/theme.c', '    if (!xdg_dir(buf, cap, "XDG_STATE_HOME", ".local/state", "omarchy/current/theme")) buf[0] = 0;', '    xdg_dir(buf, cap, "XDG_STATE_HOME", ".local/state", "omarchy/current/theme");'),
+]
+
+# One view value and what each view allows (ui_view_allows, 2026-10-28): the table, its callers in the keys and the menus.
+MUTANTS += [
+    ('ui/ui.c', '    case UA_COPY: case UA_CUT: case UA_MAKE_LINK: case UA_TERMINAL: case UA_NEW_WINDOW: case UA_SEARCH: return v != UI_VIEW_TRASH;', '    case UA_COPY: case UA_CUT: case UA_MAKE_LINK: case UA_TERMINAL: case UA_NEW_WINDOW: case UA_SEARCH: return true;'),
+    ('ui/ui.c', 'case UA_COPY: case UA_CUT: case UA_MAKE_LINK:', 'case UA_CUT: case UA_MAKE_LINK:'),
+    ('ui/ui.c', 'case UA_TERMINAL: case UA_NEW_WINDOW: case UA_SEARCH: return', 'case UA_NEW_WINDOW: case UA_SEARCH: return'),
+    ('ui/ui.c', '    case UA_PASTE: case UA_NEWFOLDER: case UA_ADD_BOOKMARK: return v == UI_VIEW_FOLDER;', '    case UA_PASTE: case UA_NEWFOLDER: case UA_ADD_BOOKMARK: return v != UI_VIEW_TRASH;'),
+    ('ui/ui.c', '    case UA_PASTE: case UA_NEWFOLDER: case UA_ADD_BOOKMARK: return', '    case UA_PASTE: case UA_ADD_BOOKMARK: return'),
+    ('ui/ui.c', '    case UA_RESTORE: case UA_EMPTY_TRASH: return v == UI_VIEW_TRASH;\n', ''),
+    ('ui/ui.c', '    case UA_CONTAINING: return v == UI_VIEW_SEARCH;\n', ''),
+    ('ui/ui.c', '    if (ui_view_allows(u->view, a.kind)) return a;', '    return a;'),
+    ('ui/ui.c', '{ u->view == UI_VIEW_TRASH ? UA_NOT_IN_TRASH : UA_NOT_IN_SEARCH, 0, false };', '{ UA_NOT_IN_TRASH, 0, false };'),
+    ('ui/handle.c', '    if (u->view != UI_VIEW_SEARCH) return ui_view_act(u, (UiAction){ UA_SEARCH, 0, false });', '    if (u->view != UI_VIEW_SEARCH) return (UiAction){ UA_SEARCH, 0, false };'),
+    ('ui/handle.c', "            case 't': return ui_view_act(u, (UiAction){ UA_TERMINAL, 0, false });", "            case 't': return (UiAction){ UA_TERMINAL, 0, false };"),
+    ('ui/handle.c', '        case UK_ADD_BOOKMARK: return ui_view_act(u, (UiAction){ UA_ADD_BOOKMARK, 0, false });', '        case UK_ADD_BOOKMARK: return (UiAction){ UA_ADD_BOOKMARK, 0, false };'),
+    ('ui/handle.c', 'return ui_view_act(u, (UiAction){ UA_COPY, 0, false }); break;', 'return (UiAction){ UA_COPY, 0, false }; break;'),
+    ('ui/handle.c', 'return ui_view_act(u, (UiAction){ UA_MAKE_LINK, 0, false }); break;', 'return (UiAction){ UA_MAKE_LINK, 0, false }; break;'),
+    ('ui/handle.c', 'return ui_view_act(u, (UiAction){ UA_CUT, 0, false }); break;', 'return (UiAction){ UA_CUT, 0, false }; break;'),
+    ('ui/handle.c', '        case UK_PASTE: return ui_view_act(u, (UiAction){ UA_PASTE, 0, false });', '        case UK_PASTE: return (UiAction){ UA_PASTE, 0, false };'),
+    ('ui/handle.c', '        case UK_NEWFOLDER: return ui_view_act(u, (UiAction){ UA_NEWFOLDER, 0, false });', '        case UK_NEWFOLDER: return (UiAction){ UA_NEWFOLDER, 0, false };'),
+    ('ui/handle.c', '        case UK_NEW_WINDOW: return ui_view_act(u, (UiAction){ UA_NEW_WINDOW, 0, false });', '        case UK_NEW_WINDOW: return (UiAction){ UA_NEW_WINDOW, 0, false };'),
+    ('ui/handle.c', '        case UK_TERMINAL: return ui_view_act(u, (UiAction){ UA_TERMINAL, 0, false });', '        case UK_TERMINAL: return (UiAction){ UA_TERMINAL, 0, false };'),
+    ('ui/menus.c', '    if (it == UM_CONTAINING) return ui_view_allows(u->view, UA_CONTAINING);', '    if (it == UM_CONTAINING) return true;'),
+    ('ui/menus.c', '    if (it == UM_EMPTY_TRASH) return ui_view_allows(u->view, UA_EMPTY_TRASH);\n', ''),
+    ('ui/menus.c', 'it == UM_RESTORE ? ui_view_allows(u->view, UA_RESTORE) : true;', 'it == UM_RESTORE ? true : true;'),
+    ('ui/menus.c', 'return it == UM_TRASH ? u->view != UI_VIEW_TRASH : it', 'return it == UM_TRASH ? true : it'),
+    ('ui/menus.c', '    case UM_NEW_WINDOW: return ui_view_allows(u->view, UA_NEW_WINDOW);', '    case UM_NEW_WINDOW: return true;'),
+    ('ui/menus.c', '    case UM_CUT: case UM_COPY: return here && ui_view_allows(u->view, UA_COPY);', '    case UM_CUT: case UM_COPY: return here;'),
+    ('ui/menus.c', '    case UM_SEARCH: return ui_view_allows(u->view, UA_SEARCH);', '    case UM_SEARCH: return true;'),
+    ('ui/menus.c', '    case UM_TERMINAL: return ui_view_allows(u->view, UA_TERMINAL);', '    case UM_TERMINAL: return true;'),
+    ('ui/menus.c', '    case UM_ADD_BOOKMARK: return u->can_bookmark && ui_view_allows(u->view, UA_ADD_BOOKMARK);', '    case UM_ADD_BOOKMARK: return ui_view_allows(u->view, UA_ADD_BOOKMARK);'),
+    ('ui/menus.c', '    case UM_ADD_BOOKMARK: return u->can_bookmark && ui_view_allows(u->view, UA_ADD_BOOKMARK);', '    case UM_ADD_BOOKMARK: return u->can_bookmark;'),
+    ('ui/handle.c', 'ui_unfocus(u, UI_FOCUS_SIDE), ui_unfocus(u, UI_FOCUS_FIND);   // (the find bar', 'ui_unfocus(u, UI_FOCUS_SIDE);   // (the find bar'),
 ]

@@ -128,9 +128,9 @@ static void test_bookmarks_menu(void)
     CHECK(!ui_menu_sep_shown(&u, m, 2) && !ui_menu_enabled(&u, UM_ADD_BOOKMARK) && !ui_menu_shown(&u, UM_BM_MORE));
     u.can_bookmark = true;
     CHECK(ui_menu_enabled(&u, UM_ADD_BOOKMARK));
-    u.in_trash = true;
+    u.view = UI_VIEW_TRASH;
     CHECK(!ui_menu_enabled(&u, UM_ADD_BOOKMARK) && menu_keys(&u, 1, UK_ADD_BOOKMARK).kind == UA_NOT_IN_TRASH);
-    u.in_trash = false;
+    u.view = UI_VIEW_FOLDER;
     CHECK(menu_keys(&u, 1, UK_ADD_BOOKMARK).kind == UA_ADD_BOOKMARK);
     // Three: three slots and the line; the second is the folder shown.
     u.bm_n = 3, u.bm_here = 1;

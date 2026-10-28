@@ -580,6 +580,10 @@ typedef struct {
     char        err[128];
 } UiMatcher;
 
+// Which listing is shown. One value (2026-10-28: in_trash and in_search before, two flags tested
+// apart at about 250 places, which could both be set).
+typedef enum { UI_VIEW_FOLDER, UI_VIEW_TRASH, UI_VIEW_SEARCH } UiView;
+
 // Who has the keys: the files' list unless one of the others took them. One value, so two can't
 // at once (2026-10-28: six flags before, kept apart by hand; opening the location line from the
 // search view left the search field holding the keys too).
@@ -640,13 +644,11 @@ typedef struct {
     int    cancel_id;
     bool   quit_asking;
     bool   full_told;
-    // The trash view (F6): gui/ says when it is shown; "Empty the trash?" up.
-    bool   in_trash;
-    bool   empty_asking;
-    // The search view (F9): gui/ says when it is shown. Its field's text (find's toggles apply), and
-    // search_edited when the text or a toggle changed (gui/ searches again 150 ms after the last
-    // change, and clears it).
-    bool   in_search;
+    // The listing shown: a folder, the trash view (F6) or a search's results (F9); gui/ says which.
+    UiView view;
+    bool   empty_asking;     // "Empty the trash?" up
+    // The search view's field's text (find's toggles apply), and search_edited when the text or a
+    // toggle changed (gui/ searches again 150 ms after the last change, and clears it).
     bool   search_edited;
     char   search[UI_FIND_MAX];
     int    search_len, search_caret, search_anchor;   // (bytes; the selection between them, as the edit line's)
@@ -749,6 +751,28 @@ typedef enum {
     UI_ON_ABOUT,
     UI_ON_BAR,      // bar_told: the menu bar just hidden
 } UiOnTop;
+
+// Whether an action works in view v. The trash view holds files that are nowhere yet: what would
+// open, copy, link or make from them, or go from there, waits until they are restored. A search's
+// results are in many folders: what needs one folder to put something in (paste, a new folder, a
+// bookmark of it) doesn't work there (F9). Restoring and emptying are the trash view's own.
+static bool ui_view_allows(UiView v, UiActionKind k)
+{
+    switch (k) {
+    case UA_COPY: case UA_CUT: case UA_MAKE_LINK: case UA_TERMINAL: case UA_NEW_WINDOW: case UA_SEARCH: return v != UI_VIEW_TRASH;
+    case UA_PASTE: case UA_NEWFOLDER: case UA_ADD_BOOKMARK: return v == UI_VIEW_FOLDER;
+    case UA_RESTORE: case UA_EMPTY_TRASH: return v == UI_VIEW_TRASH;
+    case UA_CONTAINING: return v == UI_VIEW_SEARCH;
+    default: return true;
+    }
+}
+
+// a, or why the view shown refuses it (gui/ says so in the status line).
+static UiAction ui_view_act(const Ui *u, UiAction a)
+{
+    if (ui_view_allows(u->view, a.kind)) return a;
+    return (UiAction){ u->view == UI_VIEW_TRASH ? UA_NOT_IN_TRASH : UA_NOT_IN_SEARCH, 0, false };
+}
 
 // f gives the keys back to the list, if it has them.
 static void ui_unfocus(Ui *u, UiFocus f)

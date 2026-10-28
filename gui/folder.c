@@ -6,7 +6,7 @@
 // The folder shown: in the search view, the folder searched (F9).
 static const char *here_dir(void)
 {
-    return app.ui.in_search ? app.search_root : app.cwd;
+    return app.ui.view == UI_VIEW_SEARCH ? app.search_root : app.cwd;
 }
 
 // The cursor's entry as listing_find finds it: its name, in the search view its folder and name (F9).
@@ -25,7 +25,7 @@ static bool entry_path(isize i, char *out, size_t cap)
         int n = snprintf(out, cap, "%s", e->trash->file);
         return n >= 0 && (size_t)n < cap;
     }
-    if (app.ui.in_search) {
+    if (app.ui.view == UI_VIEW_SEARCH) {
         char dir[PATH_MAX];
         if (e->dir.len && !path_put(dir, sizeof dir, app.search_root, e->dir)) return false;
         return path_put(out, cap, e->dir.len ? dir : app.search_root, e->name);
@@ -74,6 +74,66 @@ static bool search_list(Arena *a, const char *uri, Listing *l, Err *err)
     return true;
 }
 
+// ---- the views (2026-10-28) -------------------------------------------------------------------
+//
+// What differs between a folder, the trash view (F6) and a search's results (F9), asked here rather
+// than by testing the view at each place: how one is listed and watched, its title, its bar, its
+// date column, where Up goes, what can be put in it.
+
+static const struct {
+    const char *date_col;   // the date column's header
+    int         bar_h;      // its bar under the top bar: the trash's buttons, the search field
+} VIEWS[] = {
+    [UI_VIEW_FOLDER] = { "Modified", 0 },
+    [UI_VIEW_TRASH] = { "Deleted", TRASH_BAR_H },
+    [UI_VIEW_SEARCH] = { "Modified", SEARCH_BAR_H },
+};
+
+static UiView view_of(const char *dir)
+{
+    return strcmp(dir, TRASH_URI) == 0 ? UI_VIEW_TRASH : is_search(dir) ? UI_VIEW_SEARCH : UI_VIEW_FOLDER;
+}
+
+static bool view_list(UiView v, Arena *a, const char *dir, Listing *l, Err *err)
+{
+    switch (v) {
+    case UI_VIEW_TRASH: trash_scan(); return trash_list(a, &trashd, app.show_hidden, app.ui.sort, l, err);
+    case UI_VIEW_SEARCH: return search_list(a, dir, l, err);
+    case UI_VIEW_FOLDER: break;
+    }
+    return fs_list(a, dir, app.show_hidden, app.ui.sort, l, err);
+}
+
+// What a view's changes come in by: the folder, the home trash's info/ for the trash view (a
+// drive's trash changes from ofx reload it), nothing for a search (Ctrl+R runs it again).
+static void view_watch(UiView v)
+{
+    char tinfo[PATH_MAX + 8] = "";
+    if (v == UI_VIEW_TRASH && trash_home(tinfo, sizeof tinfo - 8)) strcat(tinfo, "/info");
+    watch_dir(v == UI_VIEW_TRASH ? tinfo : v == UI_VIEW_SEARCH ? NULL : app.cwd);
+}
+
+static void view_title(UiView v)
+{
+    char shown[PATH_MAX + 1];
+    ui_tilde(shown, sizeof shown, app.search_root, getenv("HOME"));
+    SetWindowTitle(v == UI_VIEW_TRASH ? "ofx: Trash" : v == UI_VIEW_SEARCH ? TextFormat("ofx: Search in %s", shown) : TextFormat("ofx: %s", app.cwd));
+}
+
+// Whether Up goes somewhere: from a search to the folder searched, from a folder but "/" to the one
+// above; the trash view has no folder above (2026-10-28: its Up button and Backspace went to
+// "trash:", which isn't one).
+static bool view_can_up(void)
+{
+    return app.ui.view == UI_VIEW_SEARCH || (app.ui.view == UI_VIEW_FOLDER && strcmp(app.cwd, "/") != 0);
+}
+
+// After a change ofx made: in a search, the results whose file went are left out (no watch there).
+static void view_changed(void)
+{
+    if (app.ui.view == UI_VIEW_SEARCH) search_prune(app.search_root);
+}
+
 // Shows dir, the cursor on the entry called `select` (else on row `fallback`). A move to another
 // folder goes in the history, unless it is the history's own (`stepping`). False, with the reason
 // in the status line, when dir can't be read: the old listing stays.
@@ -83,11 +143,9 @@ static bool go_to_in(const char *dir, Str select, isize fallback, bool stepping)
     arena_reset(&lists[next]);
     Listing l;
     Err err;
-    bool in_trash = strcmp(dir, TRASH_URI) == 0, in_search = is_search(dir), same = strcmp(dir, app.cwd) == 0;
-    if (in_trash) trash_scan();
-    if (in_trash    ? !trash_list(&lists[next], &trashd, app.show_hidden, app.ui.sort, &l, &err)
-        : in_search ? !search_list(&lists[next], dir, &l, &err)
-                    : !fs_list(&lists[next], dir, app.show_hidden, app.ui.sort, &l, &err)) {
+    UiView view = view_of(dir);
+    bool same = strcmp(dir, app.cwd) == 0;
+    if (!view_list(view, &lists[next], dir, &l, &err)) {
         if (!app.have_list) snprintf(app.error, sizeof app.error, "%s", err.msg);
         set_status(true, "%s", err.msg);
         return false;
@@ -113,10 +171,9 @@ static bool go_to_in(const char *dir, Str select, isize fallback, bool stepping)
     // The folder left, with its cursor, for Back: its name is still in the old listing's arena.
     if (!same && app.have_list && !stepping) hist_leave(&hist, app.cwd, sel_name());
     app.cur = next, app.list = l, app.mime = mime, app.have_list = true, app.error[0] = 0, app.lists++;
-    app.ui.in_trash = in_trash;
-    if (app.ui.in_search && !in_search) search_ask("", STR_EMPTY, app.ui.find_opts, false), app.search_due = 0;   // (out of it: the walk stops)
-    if (!in_search) ui_unfocus(&app.ui, UI_FOCUS_SEARCH);
-    if (in_search && !same) {   // the field shows its text; empty, it has the keys
+    if (app.ui.view == UI_VIEW_SEARCH && view != UI_VIEW_SEARCH) search_ask("", STR_EMPTY, app.ui.find_opts, false), app.search_due = 0;   // (out of it: the walk stops)
+    if (view != UI_VIEW_SEARCH) ui_unfocus(&app.ui, UI_FOCUS_SEARCH);
+    if (view == UI_VIEW_SEARCH && !same) {   // the field shows its text; empty, it has the keys
         Str root, text;
         search_parse(dir, &root, &text);
         app.ui.search_len = (int)(text.len < UI_FIND_MAX ? text.len : UI_FIND_MAX);
@@ -127,13 +184,13 @@ static bool go_to_in(const char *dir, Str select, isize fallback, bool stepping)
         app.ui.search_edited = false, app.search_due = 0;
         snprintf(app.search_pick, sizeof app.search_pick, "%.*s", STR_ARG(select));
     }
-    app.ui.in_search = in_search;
-    app.ui.can_write = !in_trash && !in_search && access(dir, W_OK) == 0;   // the File menu's Create entries (F7.1)
+    app.ui.view = view;
+    app.ui.can_write = view == UI_VIEW_FOLDER && access(dir, W_OK) == 0;   // the File menu's Create entries (F7.1)
     for (isize i = 0; i < l.n; i++) count[i] = COUNT_UNKNOWN;
     app.count = count;
     count_new_listing();
     ArenaMark mi_mark = arena_mark(&scratch);
-    app.thumb_local = thumb_local(read_file(&scratch, mountinfo_path()), in_search ? app.search_root : dir);
+    app.thumb_local = thumb_local(read_file(&scratch, mountinfo_path()), view == UI_VIEW_SEARCH ? app.search_root : dir);   // (not here_dir: cwd is still the last one's)
     arena_restore(&scratch, mi_mark);
     ui_mark_set(&app.ui, mark);
     app.ui.marked = marked;
@@ -147,16 +204,11 @@ static bool go_to_in(const char *dir, Str select, isize fallback, bool stepping)
         // OFX_TEST_WATCH_DELAY_MS widens the gap between the listing and the watch, so
         // tests/gui/watchgap.script can put a change in it.
         if (watch_delay_ms > 0) nanosleep(&(struct timespec){ watch_delay_ms / 1000, (watch_delay_ms % 1000) * 1000000L }, NULL);
-        // The trash view watches the home trash's info/ (a drive's trash changes from ofx reload it).
-        char tinfo[PATH_MAX + 8] = "";
-        if (in_trash && trash_home(tinfo, sizeof tinfo - 8)) strcat(tinfo, "/info");
-        watch_dir(in_trash ? tinfo : in_search ? NULL : app.cwd);   // (a search isn't watched: Ctrl+R runs it again)
+        view_watch(view);
         // A change between the listing and the watch made no event: list once more.
         atomic_store(&watch.list_ready, true);
         glfwPostEmptyEvent();
-        char shown[PATH_MAX + 1];
-        ui_tilde(shown, sizeof shown, app.search_root, getenv("HOME"));
-        SetWindowTitle(in_trash ? "ofx: Trash" : in_search ? TextFormat("ofx: Search in %s", shown) : TextFormat("ofx: %s", app.cwd));
+        view_title(view);
     }
     ui_set(&app.ui.list, l.n, sel);
     // The find bar stays open in another folder; Esc there goes back to where this one opened, not
@@ -166,7 +218,7 @@ static bool go_to_in(const char *dir, Str select, isize fallback, bool stepping)
     // another folder is entered, where a frame holds none of its slots, it fills again with what is
     // on screen. (A reload of the same folder shows the same icons.)
     if (!same && app.nslots >= app.icons_max) icons_reset(), app.icon_full_resets++;
-    tree_refresh(!same && !in_search, app.ui.side.sel);
+    tree_refresh(!same && view != UI_VIEW_SEARCH, app.ui.side.sel);
     // The drives' space moves with what changes on them; asked again with every listing.
     if (!same) app.cwd_avail = -1;
     space_ask(&app.places, app.cwd);
@@ -345,7 +397,7 @@ static void go_up_from(const char *from);
 static void reload(void)
 {
     app.reloads++;
-    if (app.ui.in_search) search_prune(app.search_root);   // (what went since: trashed, deleted, moved, F9)
+    view_changed();   // (what went since: trashed, deleted, moved, F9)
     char keep[PATH_MAX] = "";
     snprintf(keep, sizeof keep, "%.*s", STR_ARG(sel_name()));
     if (go_to(app.cwd, str_from_c(keep), app.ui.list.sel)) return;
@@ -373,11 +425,11 @@ static void go_up_from(const char *from)
 
 static void go_parent(void)
 {
-    if (app.ui.in_search) {   // the folder searched (F9)
+    if (!view_can_up()) return;
+    if (app.ui.view == UI_VIEW_SEARCH) {   // the folder searched (F9)
         go_to(app.search_root, STR_EMPTY, 0);
         return;
     }
-    if (strcmp(app.cwd, "/") == 0) return;
     Str child = path_base(str_from_c(app.cwd));
     char child_buf[NAME_MAX + 1], up[PATH_MAX];
     snprintf(child_buf, sizeof child_buf, "%.*s", STR_ARG(child));

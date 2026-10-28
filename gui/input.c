@@ -198,7 +198,7 @@ static Hit hit_at(float x, float y)
     // under a panel or a menu (a click on Properties' OK above them flipped one, 2026-10-26).
     for (int k = 1; k <= 4 && !h.toggle && (app.ui.ow || app.ui.finding); k++)
         if (in_box(CLAY_IDI("toggle", k), x, y)) h.toggle = k;
-    for (int k = 1; k <= 3 && !h.toggle && app.ui.in_search; k++)   // the search bar's (F9)
+    for (int k = 1; k <= 3 && !h.toggle && app.ui.view == UI_VIEW_SEARCH; k++)   // the search bar's (F9)
         if (in_box(CLAY_IDI("toggle", TOGGLE_SEARCH + k), x, y)) h.toggle = k;
     if (modal_kind() == MODAL_NONE)
         for (int m = 0; m < UI_MENUS && h.menu_title < 0; m++)
@@ -229,7 +229,7 @@ static Hit hit_at(float x, float y)
         h.find_step = in_box(CLAY_ID("find-prev"), x, y) ? -1 : in_box(CLAY_ID("find-next"), x, y) ? 1 : 0;
         h.find_field = !h.toggle && !h.find_x && in_box(CLAY_ID("find-field"), x, y);
     }
-    h.search_field = app.ui.in_search && !h.toggle && in_box(CLAY_ID("search-field"), x, y);
+    h.search_field = app.ui.view == UI_VIEW_SEARCH && !h.toggle && in_box(CLAY_ID("search-field"), x, y);
     for (int i = 0; tabbar.n >= 2 && i < tabbar.n && h.tab < 0; i++) {
         if (in_box(CLAY_IDI("tab-x", i), x, y)) h.tab_x = h.tab = i;
         else if (in_box(CLAY_IDI("tab", i), x, y)) h.tab = i;

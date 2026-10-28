@@ -54,7 +54,7 @@ static void test_menu_f74(void)
         for (int pointer = 0; pointer < 2; pointer++) {
             Ui a = menu_all_on(m1), b = menu_all_on(m2);
             a.list.sel = b.list.sel = 1;
-            a.in_trash = b.in_trash = it == UM_RESTORE;   // shown in the trash view only
+            a.view = b.view = it == UM_RESTORE ? UI_VIEW_TRASH : UI_VIEW_FOLDER;   // shown in the trash view only
             if (it == UM_PERMS_COLS || it == UM_GROUP_COL) a.grid = b.grid = false;   // the list's own (greyed among icons)
             UiInput in = ui_input_none();
             in.ev[in.nev++] = ev;
@@ -162,7 +162,7 @@ static void test_menu_f74(void)
     // The trash view: Move to Trash gone, Restore there; Copy, Cut, Rename and the terminal greyed.
     u = menu_ui(3);
     CHECK(ui_menu_shown(&u, UM_TRASH) && !ui_menu_shown(&u, UM_RESTORE) && !ui_menu_enabled(&u, UM_RESTORE));
-    u.in_trash = true;
+    u.view = UI_VIEW_TRASH;
     CHECK(!ui_menu_shown(&u, UM_TRASH) && !ui_menu_enabled(&u, UM_TRASH) && ui_menu_shown(&u, UM_RESTORE) && ui_menu_enabled(&u, UM_RESTORE));
     CHECK(!ui_menu_enabled(&u, UM_COPY) && !ui_menu_enabled(&u, UM_CUT) && !ui_menu_enabled(&u, UM_RENAME) && !ui_menu_enabled(&u, UM_TERMINAL));
     CHECK(!ui_menu_enabled(&u, UM_DUPLICATE));
@@ -171,10 +171,10 @@ static void test_menu_f74(void)
     menu_keys(&u, 1, -'e');
     u.menu_at = menu_place(1, UM_RENAME);
     u.can_write = true;
-    u.in_trash = false;
+    u.view = UI_VIEW_FOLDER;
     menu_keys(&u, 1, UK_DOWN);
     CHECK(u.menu_at == menu_place(1, UM_TRASH));
-    u.in_trash = true;
+    u.view = UI_VIEW_TRASH;
     u.menu_at = menu_place(1, UM_SELECT_ALL);
     menu_keys(&u, 3, UK_DOWN, UK_DOWN, UK_DOWN);   // Select Items Matching, Invert, then (Rename greyed) Restore
     CHECK(u.menu_at == menu_place(1, UM_RESTORE));
@@ -281,9 +281,9 @@ static void test_f74_keys(void)
     CHECK(a.kind == UA_OPEN_WITH && u.ow);
     ui_ow_close(&u);
     // The trash view: Open With doesn't work there, as from the menu.
-    u.in_trash = true;
+    u.view = UI_VIEW_TRASH;
     CHECK(menu_keys(&u, 1, UK_SHIFT_ENTER).kind == UA_NOT_IN_TRASH && !u.ow);
-    u.in_trash = false;
+    u.view = UI_VIEW_FOLDER;
     // An empty folder: nothing.
     Ui e = menu_ui(0);
     CHECK(menu_keys(&e, 1, UK_SHIFT_ENTER).kind == UA_NONE && !e.ow);

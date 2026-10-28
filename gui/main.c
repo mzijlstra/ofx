@@ -701,7 +701,7 @@ int main(int argc, char **argv)
         if (props.walking && walk_take(&props.sum, &props.done)) dirty = true;
         if (props.walking && !app.ui.props) walk_ask(NULL, 0), props.walking = false;   // the panel closed: the count stops
         if (thumbs_take()) dirty = true;
-        if (app.ui.in_search && search_take()) search_relist(), dirty = true;
+        if (app.ui.view == UI_VIEW_SEARCH && search_take()) search_relist(), dirty = true;
         if (app.search_due && now_ms() >= app.search_due) app.search_due = 0, search_retype(), dirty = true;
         bool seen;
         UiInput in = input_real(&seen);

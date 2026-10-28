@@ -88,13 +88,13 @@ static void delete_ask(void)
         app.ui.confirming = false;
         return;
     }
-    if (app.ui.in_trash && app.ui.marked > CLIP_PATHS_MAX / 2) {   // each goes with its .trashinfo
+    if (app.ui.view == UI_VIEW_TRASH && app.ui.marked > CLIP_PATHS_MAX / 2) {   // each goes with its .trashinfo
         app.ui.confirming = false;
         set_status(true, "%td selected: ofx deletes at most %d at a time from the trash", app.ui.marked, CLIP_PATHS_MAX / 2);
         return;
     }
     arena_reset(&doomeda);
-    doomed.n = targets(&doomeda, doomed.path, app.ui.in_trash ? CLIP_PATHS_MAX / 2 : CLIP_PATHS_MAX);
+    doomed.n = targets(&doomeda, doomed.path, app.ui.view == UI_VIEW_TRASH ? CLIP_PATHS_MAX / 2 : CLIP_PATHS_MAX);
     app.ui.confirm_n = doomed.n;
     if (doomed.n == 0) app.ui.confirming = false;
 }
@@ -110,7 +110,7 @@ static void delete_targets(void)
         r->item[k++] = (JobItem){ .src = arena_cstr(&r->arena, str_from_c(doomed.path[i])) };
         // In the trash view, each item's .trashinfo after it: <trash>/files/NAME has <trash>/info/NAME.trashinfo.
         Str f = str_from_c(doomed.path[i]), files = path_dir(f), top = path_dir(files);
-        if (app.ui.in_trash && str_eq(path_base(files), S("files")))
+        if (app.ui.view == UI_VIEW_TRASH && str_eq(path_base(files), S("files")))
             r->item[k++] = (JobItem){ .src = arena_sprintf(&r->arena, "%.*s/info/%.*s.trashinfo", STR_ARG(top), STR_ARG(path_base(f))), .after_ok = true };
     }
     bool pairs = k > n;
@@ -290,7 +290,7 @@ static void make_link(void)
     if (done < n) set_status(true, "%s", err.msg);
     else if (done == 1) set_status(false, "Made %s", made);
     else set_status(false, "Made %td links", done);
-    if (done) ui_mark_clear(&app.ui), go_to(app.cwd, app.ui.in_search ? sel_name() : str_from_c(made), app.ui.list.sel);
+    if (done) ui_mark_clear(&app.ui), go_to(app.cwd, app.ui.view == UI_VIEW_SEARCH ? sel_name() : str_from_c(made), app.ui.list.sel);
 }
 
 // Follow Link (F8): to the folder of what the link at entry i leads to, with it selected (every
@@ -344,7 +344,7 @@ static void rename_commit(void)
     // the new name in place (F9).
     char a[PATH_MAX], b[PATH_MAX], keep[PATH_MAX];
     Str key = sel_name(), rel = path_dir(key);
-    if (app.ui.in_search) search_rename(key, to);
+    if (app.ui.view == UI_VIEW_SEARCH) search_rename(key, to);
     if (rel.len) snprintf(keep, sizeof keep, "%.*s/%.*s", STR_ARG(rel), STR_ARG(to));
     else snprintf(keep, sizeof keep, "%.*s", STR_ARG(to));
     if (path_put(a, sizeof a, in, from) && path_put(b, sizeof b, in, to)) {
@@ -354,7 +354,7 @@ static void rename_commit(void)
     }
     ui_edit_close(&app.ui);
     set_status(false, "Renamed %s to %.*s", app.edit_from, STR_ARG(to));
-    if (app.ui.in_search) search_prune(app.search_root);   // (a folder renamed: the results below it are gone)
+    view_changed();   // (a folder renamed: the results below it are gone)
     go_to(app.cwd, str_from_c(keep), app.ui.list.sel);
 }
 
@@ -751,7 +751,7 @@ static void act(UiAction a)
         break;
     case UA_TAB_BG_ROW: {
         char path[PATH_MAX];
-        if (a.index < app.list.n && !app.ui.in_trash && entry_path(a.index, path, sizeof path)) tab_open_bg(path);
+        if (a.index < app.list.n && app.ui.view != UI_VIEW_TRASH && entry_path(a.index, path, sizeof path)) tab_open_bg(path);
         break;
     }
     case UA_TAB_BG_PLACE: {
@@ -798,7 +798,7 @@ static void act(UiAction a)
         if (!too_many_marked()) duplicate();
         break;
     case UA_UNDO: undo_last(); break;
-    case UA_RELOAD: app.reloads_asked++, app.ui.in_search ? search_again() : reload(); break;
+    case UA_RELOAD: app.reloads_asked++, app.ui.view == UI_VIEW_SEARCH ? search_again() : reload(); break;   // (a search isn't watched)
     case UA_TRASH_VIEW: go_to(TRASH_URI, STR_EMPTY, 0); break;
     case UA_BM_EDIT: case UA_BM_GO: case UA_BM_NAME: case UA_BM_REMOVE: case UA_BM_UP: case UA_BM_DOWN: case UA_BM_RENAME: bmp_act(a); break;
     case UA_ADD_BOOKMARK: {   // all: the folder entry index (F8)

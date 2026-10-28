@@ -578,7 +578,7 @@ static void test_trash_keys(void)
     UiNames names = { name_at, NULL, NULL };
     ui_resize(&u.list, 10), ui_resize(&u.side, 5);
     ui_set(&u.list, 5, 1), ui_set(&u.side, 5, 0);
-    u.in_trash = true;
+    u.view = UI_VIEW_TRASH;
     // r restores; Delete asks first, as Shift+Delete does.
     UiInput in = chars("r");
     CHECK(ui_handle(&u, names, &in).kind == UA_RESTORE);
@@ -617,7 +617,7 @@ static void test_trash_keys(void)
     in.modal = UI_MODAL_YES;
     CHECK(ui_handle(&u, names, &in).kind == UA_EMPTY_TRASH);
     // Left the trash view meanwhile: the panel goes, Yes empties nothing.
-    u.empty_asking = true, u.in_trash = false;
+    u.empty_asking = true, u.view = UI_VIEW_FOLDER;
     in = ui_input_none(), in.modal = UI_MODAL_YES;
     CHECK(ui_handle(&u, names, &in).kind == UA_NONE && !u.empty_asking);
     u.empty_asking = true;
@@ -636,7 +636,7 @@ static void test_trash_keys(void)
     in = keys(1, UK_COPY);
     CHECK(ui_handle(&u, names, &in).kind == UA_COPY);
     // An empty trash: nothing to restore.
-    u.in_trash = true;
+    u.view = UI_VIEW_TRASH;
     ui_set(&u.list, 0, 0);
     in = chars("r");
     CHECK(ui_handle(&u, names, &in).kind == UA_NONE);

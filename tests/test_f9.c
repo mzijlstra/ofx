@@ -231,13 +231,13 @@ static void test_search_ui_keys(void)
     in = ui_input_none(), in.menu_item = menu_place(3, UM_SEARCH);
     ui_menu_open(&u, 3, false);
     CHECK(ui_menu_enabled(&u, UM_SEARCH) && ui_handle(&u, names, &in).kind == UA_SEARCH);
-    u.in_trash = true;
+    u.view = UI_VIEW_TRASH;
     CHECK(!ui_menu_enabled(&u, UM_SEARCH) && menu_keys(&u, 1, UK_SEARCH).kind == UA_NOT_IN_TRASH);
-    u.in_trash = false;
+    u.view = UI_VIEW_FOLDER;
 
     // The search view, its field with the keys (gui/ gives them when it opens empty): text and
     // Backspace change it, '/' doesn't go in; each change is marked for gui/.
-    u.in_search = true, u.focus = UI_FOCUS_SEARCH;
+    u.view = UI_VIEW_SEARCH, u.focus = UI_FOCUS_SEARCH;
     in = chars("a/b");
     in.ev[in.nev++] = (UiEvent){ UK_NONE, 0xE9 };   // é
     CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.search_len == 4 && memcmp(u.search, "ab\xC3\xA9", 4) == 0 && u.search_edited);
@@ -292,7 +292,7 @@ static void test_search_ui_keys(void)
     ui_handle(&u, names, &in);
     CHECK(u.list.sel == 1 && u.search_len == 1);
     // A toggle press outside the search view, the find bar closed: nothing.
-    u.in_search = false;
+    u.view = UI_VIEW_FOLDER;
     in = ui_input_none(), in.toggle = 1;
     ui_handle(&u, names, &in);
     CHECK(!u.find_opts.cased && !u.search_edited);
@@ -308,7 +308,7 @@ static void test_search_ui_refused(void)
     // Step 2 (2026-10-28): what the list does works on results, each in its own folder; what needs
     // a folder shown says no: a paste, a new folder, a bookmark of it.
     Ui u = menu_ui(5);
-    u.mark = mark, u.in_search = true, u.can_write = false;
+    u.mark = mark, u.view = UI_VIEW_SEARCH, u.can_write = false;
     const UiKey NO[] = { UK_PASTE, UK_NEWFOLDER, UK_ADD_BOOKMARK };
     for (int k = 0; k < COUNT(NO); k++) CHECK(menu_keys(&u, 1, NO[k]).kind == UA_NOT_IN_SEARCH);
     const struct { UiKey k; UiActionKind a; } YES[] = {
@@ -357,7 +357,7 @@ static void test_search_ui_refused(void)
     CHECK(u.menu_on && u.menu == UI_CTX_HERE && !ui_menu_enabled(&u, UM_HERE_PROPS));
     menu_keys(&u, 1, UK_ESC);
     // Outside it: no Open Containing Folder; Search in Folder… on a folder still; the rest as before.
-    u.in_search = false, u.can_write = true, u.can_paste = true;
+    u.view = UI_VIEW_FOLDER, u.can_write = true, u.can_paste = true;
     in = ui_input_none(), in.ctx_row = 2;
     ui_handle(&u, names, &in);
     CHECK(!ui_menu_shown(&u, UM_CONTAINING) && ui_menu_shown(&u, UM_SEARCH_IN));
@@ -366,20 +366,20 @@ static void test_search_ui_refused(void)
     for (int k = 0; k < COUNT(GREY); k++) CHECK(ui_menu_enabled(&u, GREY[k]));
     CHECK(menu_keys(&u, 1, UK_NEWFOLDER).kind == UA_NEWFOLDER && menu_keys(&u, 1, UK_PASTE).kind == UA_PASTE);
     // The trash view: no Search in Folder… on its folders (they're in the trash).
-    u.in_trash = true;
+    u.view = UI_VIEW_TRASH;
     in = ui_input_none(), in.ctx_row = 2;
     ui_handle(&u, names, &in);
     CHECK(!ui_menu_shown(&u, UM_SEARCH_IN));
     menu_keys(&u, 1, UK_ESC);
     // A folder elsewhere (a sidebar row, a path button): Search in Folder…, not on Trash.
-    u.in_trash = false;
+    u.view = UI_VIEW_FOLDER;
     u.menu = UI_CTX_FOLDER;
     CHECK(ui_menu_shown(&u, UM_SEARCH_IN) && ui_menu_enabled(&u, UM_SEARCH_IN));
     u.ctx_trash = true;
     CHECK(!ui_menu_shown(&u, UM_SEARCH_IN));
     // Restore, split from them: the trash view's, with the files' cursor.
     u = menu_ui(5);
-    u.in_trash = true;
+    u.view = UI_VIEW_TRASH;
     CHECK(ui_menu_enabled(&u, UM_RESTORE));
     u.focus = UI_FOCUS_SIDE;
     CHECK(!ui_menu_enabled(&u, UM_RESTORE));
@@ -426,7 +426,7 @@ static void test_search_field_edit(void)
     static u8 mark[5];
     UiNames names = { name_at, NULL, dir_at };
     Ui u = menu_ui(5);
-    u.mark = mark, u.in_search = true, u.focus = UI_FOCUS_SEARCH;
+    u.mark = mark, u.view = UI_VIEW_SEARCH, u.focus = UI_FOCUS_SEARCH;
     UiInput in = chars("index");
     ui_handle(&u, names, &in);
     CHECK(u.search_len == 5 && u.search_caret == 5 && u.search_anchor == 5);
@@ -580,7 +580,7 @@ static void test_field_copy_fallthrough(void)
     u = (Ui){ 0 };
     u.list.rows = 10;
     ui_set(&u.list, 3, 0);
-    u.in_search = true, u.focus = UI_FOCUS_SEARCH;
+    u.view = UI_VIEW_SEARCH, u.focus = UI_FOCUS_SEARCH;
     UiInput in = chars("ab");
     ui_handle(&u, names, &in);
     u.copied = false;
@@ -658,7 +658,7 @@ static void test_line_active(void)
     CHECK(!ui_line_active(&u, NULL));
     u.focus = UI_FOCUS_FIND;
     CHECK(ui_line_active(&u, &l) && l.b == u.find);
-    u.in_search = true;
+    u.view = UI_VIEW_SEARCH;
     CHECK(ui_line_active(&u, &l) && l.b == u.find);
     u.focus = UI_FOCUS_SEARCH;
     CHECK(ui_line_active(&u, &l) && l.b == u.search);
@@ -679,13 +679,23 @@ static void test_line_active(void)
     // its field, which kept them too before; Esc gives them to the list, not back to the field.
     {
         Ui w = { 0 };
-        w.in_search = true, w.focus = UI_FOCUS_SEARCH;
+        w.view = UI_VIEW_SEARCH, w.focus = UI_FOCUS_SEARCH;
         ui_location_open(&w, S("/tmp"));
         UiLine wl;
         CHECK(w.focus == UI_FOCUS_EDIT && ui_line_active(&w, &wl) && wl.b == w.edit);
         UiInput esc = keys(1, UK_ESC);
         ui_handle(&w, (UiNames){ name_at, NULL, NULL }, &esc);
         CHECK(w.focus == UI_FOCUS_LIST && !ui_line_active(&w, NULL));
+    }
+    // A click on a row takes the keys from the find bar, which stays open (as GTK's type-ahead
+    // goes on a click; reviewer-2, 2026-10-28): Delete then is the list's.
+    {
+        Ui w = { 0 };
+        w.list.n = 3, w.list.rows = 3, w.finding = true, w.focus = UI_FOCUS_FIND;
+        UiInput c = ui_input_none();
+        c.click = 1;
+        ui_handle(&w, (UiNames){ name_at, NULL, NULL }, &c);
+        CHECK(w.finding && w.focus == UI_FOCUS_LIST && w.list.sel == 1);
     }
     // Find opened again from the list while Select Items Matching's bar is up: a plain find.
     {

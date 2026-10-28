@@ -235,7 +235,7 @@ static void props_read(void)
     snprintf(props.group, sizeof props.group, "%s", id_name(true, props.st.st_gid));
     // Its permissions change only when it is Michael's, not in the trash, and there (one entry:
     // props_read is only for one).
-    app.ui.prop_can = !app.ui.in_trash && !props.broken && props.st.st_uid == geteuid();
+    app.ui.prop_can = app.ui.view != UI_VIEW_TRASH && !props.broken && props.st.st_uid == geteuid();
 }
 
 // The panel opened (ui_props_open): the marked entries, or the cursor's; the folder itself when it
@@ -249,7 +249,7 @@ static void props_open(const char *path)
     isize n = !here && app.have_list && app.list.n > 0 ? targets(&propsa, props_path, WALK_ROOTS_MAX) : 0;
     if (here) props_path[0] = arena_cstr(&propsa, str_from_c(path)), n = 1;
     props.cut = !here && app.ui.marked > WALK_ROOTS_MAX;
-    if (n == 0 && !app.ui.in_trash && !app.ui.in_search) props_path[0] = arena_cstr(&propsa, str_from_c(app.cwd)), n = 1;
+    if (n == 0 && app.ui.view != UI_VIEW_TRASH && app.ui.view != UI_VIEW_SEARCH) props_path[0] = arena_cstr(&propsa, str_from_c(app.cwd)), n = 1;
     props.n = n;
     app.ui.prop_can = false;
     if (n == 0) {   // the trash view, empty
@@ -265,7 +265,7 @@ static void props_open(const char *path)
     path_parent(d, sizeof d, props_path[0]);
     if (n == 1) {
         snprintf(props.name, sizeof props.name, "%.*s", STR_ARG(base.len ? base : S("/")));
-        if (app.ui.in_trash && props.idx >= 0) snprintf(props.name, sizeof props.name, "%.*s", STR_ARG(app.list.e[props.idx].name));
+        if (app.ui.view == UI_VIEW_TRASH && props.idx >= 0) snprintf(props.name, sizeof props.name, "%.*s", STR_ARG(app.list.e[props.idx].name));
         // The type gio opens it as, its content read (Michael, 2026-10-26); on a network drive,
         // whose reads can hang (F6.4), or when gio doesn't say, the name's.
         props.type_by_name = !app.thumb_local || !spawn_gio_type(props_path[0], props.type, sizeof props.type, 1000);
@@ -275,7 +275,7 @@ static void props_open(const char *path)
         }
         mime_comment(&scratch, str_from_c(props.type), props.type_name, sizeof props.type_name);
     }
-    if (app.ui.in_trash) snprintf(props.where, sizeof props.where, "Trash");
+    if (app.ui.view == UI_VIEW_TRASH) snprintf(props.where, sizeof props.where, "Trash");
     else ui_tilde(props.where, sizeof props.where, n == 1 ? d : here_dir(), getenv("HOME"));
     snprintf(props.drive, sizeof props.drive, "%s", props_drive(props_path[0]));
     if (n == 1) props_read();
@@ -366,7 +366,7 @@ static void layout_props_panel(void)
                 float sc = 48.0f / (float)(th->width > th->height ? th->width : th->height);
                 CLAY(CLAY_ID("props-thumb"), { .layout = { .sizing = { CLAY_SIZING_FIXED(th->width * sc), CLAY_SIZING_FIXED(th->height * sc) } }, .image = { .imageData = th } }) {}
             } else {
-                IconSlot *ic = props.idx >= 0 ? entry_icon(props.idx) : named_icon(app.ui.in_trash ? "user-trash" : "folder");
+                IconSlot *ic = props.idx >= 0 ? entry_icon(props.idx) : named_icon(app.ui.view == UI_VIEW_TRASH ? "user-trash" : "folder");
                 icon_box(CLAY_ID("props-icon"), ic, 48);
             }
             const char *title = props.n == 1 ? props.name : arena_sprintf(&frame, "%td selected%s", props.n, props.cut ? " (the first counted)" : "");
@@ -410,7 +410,7 @@ static void layout_props_panel(void)
                 Clay_Color off = rule_color();
                 CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .childGap = 12, .padding = { 0, 0, 8, 0 } } }) {
                     CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_FIXED(96), CLAY_SIZING_FIT(0) } } }) { text(cz("Permissions"), cc(t->fg_dim)); }
-                    text(cz(arena_sprintf(&frame, "%04o%s", (unsigned)(props.st.st_mode & 07777), can ? "" : app.ui.in_trash ? "  (in the trash)" : "  (not yours to change)")), cc(t->fg));
+                    text(cz(arena_sprintf(&frame, "%04o%s", (unsigned)(props.st.st_mode & 07777), can ? "" : app.ui.view == UI_VIEW_TRASH ? "  (in the trash)" : "  (not yours to change)")), cc(t->fg));
                 }
                 static const char *const WHO[] = { "Owner", "Group", "Others" }, *const WHAT[] = { "Read", "Write", "Execute" };
                 CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .padding = { 108, 0, 0, 0 } } }) {

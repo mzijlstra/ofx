@@ -312,7 +312,7 @@ static bool ui_line_active(Ui *u, UiLine *out)
     else if (on == UI_ON_KEYS) l = ui_keys_line(u);
     else if (on != UI_ON_NONE) return false;   // (a question, or a panel without a field)
     else if (u->focus == UI_FOCUS_EDIT) l = ui_edit_line(u);
-    else if (u->focus == UI_FOCUS_SEARCH && u->in_search) l = ui_search_line(u);
+    else if (u->focus == UI_FOCUS_SEARCH && u->view == UI_VIEW_SEARCH) l = ui_search_line(u);
     else if (u->focus == UI_FOCUS_FIND && u->finding) l = ui_find_line(u);
     else return false;
     if (out) *out = l;

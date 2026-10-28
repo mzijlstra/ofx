@@ -38,7 +38,7 @@ static bool ui_search_event(Ui *u, UiEvent e, Str paste)
 // field; elsewhere gui/ opens a search below the folder shown in a new tab (the trash isn't one).
 static UiAction ui_search_open(Ui *u)
 {
-    if (!u->in_search) return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : UA_SEARCH, 0, false };
+    if (u->view != UI_VIEW_SEARCH) return ui_view_act(u, (UiAction){ UA_SEARCH, 0, false });
     ui_edit_close(u);
     u->focus = UI_FOCUS_SEARCH;
     return (UiAction){ UA_NONE, 0, false };
@@ -110,11 +110,11 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         if (yes_no) return u->cancel_asking = false, (UiAction){ said_yes ? UA_CANCEL_JOB : UA_NONE, u->cancel_id, false };
         break;
     case UI_ON_EMPTY:
-        if (yes_no) return u->empty_asking = false, (UiAction){ said_yes && u->in_trash ? UA_EMPTY_TRASH : UA_NONE, 0, false };
+        if (yes_no) return u->empty_asking = false, (UiAction){ said_yes && u->view == UI_VIEW_TRASH ? UA_EMPTY_TRASH : UA_NONE, 0, false };
         break;
     default: break;
     }
-    if (!u->in_trash) u->empty_asking = false;
+    if (u->view != UI_VIEW_TRASH) u->empty_asking = false;
     UiOnTop on = ui_on_top(u);
     bool prompt = on != UI_ON_NONE;
     if (prompt) u->menu_on = false;
@@ -167,12 +167,12 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         } else if (in->find_x) ui_find_close(u);
         else u->focus = UI_FOCUS_FIND;   // (the edit line, if open, closes with it)
         return (UiAction){ UA_NONE, 0, false };
-    } else if (!prompt && !u->menu_on && in->toggle >= 1 && in->toggle <= 3 && (u->finding || u->in_search)) {
+    } else if (!prompt && !u->menu_on && in->toggle >= 1 && in->toggle <= 3 && (u->finding || u->view == UI_VIEW_SEARCH)) {
         u->find_opts = ui_toggle(u->find_opts, in->toggle);   // (the search view's are find's, F9)
         if (u->finding) ui_find_update(u, names);
-        if (u->in_search) u->search_edited = true;
+        if (u->view == UI_VIEW_SEARCH) u->search_edited = true;
         return (UiAction){ UA_NONE, 0, false };
-    } else if (!prompt && u->in_search && in->search_field) {
+    } else if (!prompt && u->view == UI_VIEW_SEARCH && in->search_field) {
         u->focus = UI_FOCUS_SEARCH;
         return (UiAction){ UA_NONE, 0, false };
     }
@@ -289,8 +289,8 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         case UB_LEFT: return (UiAction){ UA_CRUMB_SHIFT, -1, false };
         case UB_RIGHT: return (UiAction){ UA_CRUMB_SHIFT, 1, false };
         case UB_CRUMB: ui_edit_close(u); return (UiAction){ UA_CRUMB, in->crumb, false };
-        case UB_RESTORE: if (u->in_trash && l->n > 0) return (UiAction){ UA_RESTORE, 0, false }; break;
-        case UB_EMPTY: if (u->in_trash) u->empty_asking = true; break;
+        case UB_RESTORE: if (u->view == UI_VIEW_TRASH && l->n > 0) return (UiAction){ UA_RESTORE, 0, false }; break;
+        case UB_EMPTY: if (u->view == UI_VIEW_TRASH) u->empty_asking = true; break;
         case UB_VIEW_LIST: return ui_view(u, false);
         case UB_VIEW_ICONS: return ui_view(u, true);
         case UB_ZOOM_OUT: return ui_zoom(u, ui_zoom_level(u->zoom) - 1);
@@ -303,11 +303,11 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         ui_edit_close(u);
         if (in->click_mods & UI_MOD_SHIFT) ui_mark_range(u, l->sel, row);
         else if (in->click_mods & UI_MOD_CTRL) ui_mark(u, row, !ui_marked(u, row));
-        l->sel = row, ui_unfocus(u, UI_FOCUS_SIDE);
+        l->sel = row, ui_unfocus(u, UI_FOCUS_SIDE), ui_unfocus(u, UI_FOCUS_FIND);   // (the find bar stays open; reviewer-2, 2026-10-28)
         ui_show_sel(l);
     }
     if (!prompt && in->dclick >= 0 && l->top + in->dclick < l->n) {
-        l->sel = l->top + in->dclick, ui_unfocus(u, UI_FOCUS_SIDE);
+        l->sel = l->top + in->dclick, ui_unfocus(u, UI_FOCUS_SIDE), ui_unfocus(u, UI_FOCUS_FIND);
         ui_edit_close(u);
         return (UiAction){ UA_OPEN, l->sel, false };
     }
@@ -396,7 +396,7 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
             continue;
         }
         // The search field (F9) before Shift is taken off the moves: it selects with them.
-        if (u->focus == UI_FOCUS_SEARCH && u->in_search && !prompt && ui_search_event(u, e, in->paste)) continue;
+        if (u->focus == UI_FOCUS_SEARCH && u->view == UI_VIEW_SEARCH && !prompt && ui_search_event(u, e, in->paste)) continue;
         // The find bar's likewise (2026-10-28), after the questions: a clash or the delete question
         // takes its keys first.
         if (u->focus == UI_FOCUS_FIND && u->finding && !prompt && ui_find_event(u, names, e, in)) continue;
@@ -457,9 +457,9 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
             case 'G': key = UK_END; break;
             case '/': key = UK_FIND; break;
             case '.': key = UK_HIDDEN; break;
-            case 't': return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : UA_TERMINAL, 0, false };
+            case 't': return ui_view_act(u, (UiAction){ UA_TERMINAL, 0, false });
             case 'r':
-                if (u->in_trash && u->focus != UI_FOCUS_SIDE && l->n > 0) return (UiAction){ UA_RESTORE, 0, false };
+                if (u->view == UI_VIEW_TRASH && u->focus != UI_FOCUS_SIDE && l->n > 0) return (UiAction){ UA_RESTORE, 0, false };
                 continue;
             case '~': return (UiAction){ UA_HOMEDIR, 0, false };
             case 's': u->sort = (Sort){ (SortKey)((u->sort.key + 1) % SORT_KEYS), false }; return (UiAction){ UA_SORT, 0, false };
@@ -509,7 +509,7 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         // (Michael, 2026-10-24): they only open and close the tree's folders.
         case UK_ENTER:
             if (u->focus == UI_FOCUS_SIDE && u->side.n > 0) return (UiAction){ UA_PLACE, u->side.sel, false };
-            if (u->focus != UI_FOCUS_SIDE && l->n > 0 && shift_enter) return u->in_trash ? (UiAction){ UA_NOT_IN_TRASH, 0, false } : ui_ow_open(u);
+            if (u->focus != UI_FOCUS_SIDE && l->n > 0 && shift_enter) return u->view == UI_VIEW_TRASH ? (UiAction){ UA_NOT_IN_TRASH, 0, false } : ui_ow_open(u);
             if (u->focus != UI_FOCUS_SIDE && l->n > 0) return (UiAction){ UA_OPEN, l->sel, u->marked > 0 };   // all: the marked ones (F7.3)
             break;
         case UK_RIGHT:
@@ -564,27 +564,27 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         case UK_RELOAD: return (UiAction){ UA_RELOAD, 0, false };
         case UK_HOMEDIR: return (UiAction){ UA_HOMEDIR, 0, false };
         case UK_TRASH_VIEW: return (UiAction){ UA_TRASH_VIEW, 0, false };
-        case UK_ADD_BOOKMARK: return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : u->in_search ? UA_NOT_IN_SEARCH : UA_ADD_BOOKMARK, 0, false };
+        case UK_ADD_BOOKMARK: return ui_view_act(u, (UiAction){ UA_ADD_BOOKMARK, 0, false });
         case UK_EDIT_BOOKMARKS: return ui_bmp_open(u, 0);
         case UK_SHORTCUTS: return ui_keys_open(u);
         case UK_F2:
-            if (l->n > 0 && u->focus != UI_FOCUS_SIDE && u->in_trash) return (UiAction){ UA_NOT_IN_TRASH, 0, false };
+            if (l->n > 0 && u->focus != UI_FOCUS_SIDE && u->view == UI_VIEW_TRASH) return (UiAction){ UA_NOT_IN_TRASH, 0, false };
             if (l->n > 0 && u->focus != UI_FOCUS_SIDE) ui_edit_rename(u, names.at(names.ctx, l->sel), names.dir && names.dir(names.ctx, l->sel));
             break;
         case UK_DELETE:
             // In the trash view Delete is for good, asked first.
-            if (l->n > 0 && u->focus != UI_FOCUS_SIDE && u->in_trash) u->confirming = true, u->confirm_n = u->marked ? u->marked : 1;
+            if (l->n > 0 && u->focus != UI_FOCUS_SIDE && u->view == UI_VIEW_TRASH) u->confirming = true, u->confirm_n = u->marked ? u->marked : 1;
             else if (l->n > 0 && u->focus != UI_FOCUS_SIDE) return (UiAction){ UA_TRASH, 0, false };
             break;
         case UK_SHIFT_DELETE:
             if (l->n > 0 && u->focus != UI_FOCUS_SIDE) u->confirming = true, u->confirm_n = u->marked ? u->marked : 1;
             break;
-        case UK_COPY: if (l->n > 0 && u->focus != UI_FOCUS_SIDE) return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : UA_COPY, 0, false }; break;
-        case UK_MAKE_LINK: if (l->n > 0 && u->focus != UI_FOCUS_SIDE) return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : UA_MAKE_LINK, 0, false }; break;
-        case UK_CUT: if (l->n > 0 && u->focus != UI_FOCUS_SIDE) return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : UA_CUT, 0, false }; break;
-        case UK_PASTE: return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : u->in_search ? UA_NOT_IN_SEARCH : UA_PASTE, 0, false };
+        case UK_COPY: if (l->n > 0 && u->focus != UI_FOCUS_SIDE) return ui_view_act(u, (UiAction){ UA_COPY, 0, false }); break;
+        case UK_MAKE_LINK: if (l->n > 0 && u->focus != UI_FOCUS_SIDE) return ui_view_act(u, (UiAction){ UA_MAKE_LINK, 0, false }); break;
+        case UK_CUT: if (l->n > 0 && u->focus != UI_FOCUS_SIDE) return ui_view_act(u, (UiAction){ UA_CUT, 0, false }); break;
+        case UK_PASTE: return ui_view_act(u, (UiAction){ UA_PASTE, 0, false });
         case UK_UNDO: return (UiAction){ UA_UNDO, 0, false };
-        case UK_NEWFOLDER: return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : u->in_search ? UA_NOT_IN_SEARCH : UA_NEWFOLDER, 0, false };
+        case UK_NEWFOLDER: return ui_view_act(u, (UiAction){ UA_NEWFOLDER, 0, false });
         case UK_LOCATION: case UK_WORD_RIGHT: return (UiAction){ UA_LOCATION, 0, false };   // (Ctrl+Right too, outside a text field)
         case UK_CRUMBS: ui_crumbs_focus(u, in); break;
         case UK_JOBS:   // the find bar first when it is open, then the job rows (Michael, 2026-10-26)
@@ -593,12 +593,12 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
             break;
         case UK_PARENT: return (UiAction){ UA_PARENT, 0, false };
         case UK_TAB_NEW: return (UiAction){ UA_TAB_NEW, 0, false };
-        case UK_NEW_WINDOW: return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : UA_NEW_WINDOW, 0, false };
+        case UK_NEW_WINDOW: return ui_view_act(u, (UiAction){ UA_NEW_WINDOW, 0, false });
         case UK_PROPERTIES: return ui_props_open(u);
-        case UK_TERMINAL: return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : UA_TERMINAL, 0, false };
+        case UK_TERMINAL: return ui_view_act(u, (UiAction){ UA_TERMINAL, 0, false });
         case UK_SEARCH: return ui_search_open(u);
         case UK_CONTAINING:   // (the search view's: elsewhere every entry is in the folder shown)
-            if (u->in_search && u->focus != UI_FOCUS_SIDE && l->n > 0) return (UiAction){ UA_CONTAINING, l->sel, false };
+            if (u->view == UI_VIEW_SEARCH && u->focus != UI_FOCUS_SIDE && l->n > 0) return (UiAction){ UA_CONTAINING, l->sel, false };
             break;
         case UK_TAB_CLOSE: return (UiAction){ UA_TAB_CLOSE, -1, false };
         case UK_TAB_NEXT: return (UiAction){ UA_TAB_STEP, 1, false };

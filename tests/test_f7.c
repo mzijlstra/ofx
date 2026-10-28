@@ -111,7 +111,7 @@ static void test_menu_keys(void)
     }
     // One that can't be picked (Open With in the trash view): Enter does nothing, the menu stays.
     u = menu_ui(3);
-    u.in_trash = true;
+    u.view = UI_VIEW_TRASH;
     menu_keys(&u, 1, UK_F10);
     u.menu_at = file_at(UM_OPEN_WITH);
     CHECK(menu_keys(&u, 1, UK_ENTER).kind == UA_NONE && u.menu_on);
@@ -143,14 +143,14 @@ static void test_menu_keys(void)
     CHECK(!u.menu_on);
     u.confirming = false;
     menu_keys(&u, 1, UK_F10);
-    u.empty_asking = true, u.in_trash = true;
+    u.empty_asking = true, u.view = UI_VIEW_TRASH;
     menu_keys(&u, 1, UK_DOWN);
     CHECK(!u.menu_on);
 
     // Ctrl+N; in the trash view it says no.
     u = menu_ui(3);
     CHECK(menu_keys(&u, 1, UK_NEW_WINDOW).kind == UA_NEW_WINDOW);
-    u.in_trash = true;
+    u.view = UI_VIEW_TRASH;
     CHECK(menu_keys(&u, 1, UK_NEW_WINDOW).kind == UA_NOT_IN_TRASH);
 }
 
@@ -177,13 +177,13 @@ static void test_menu_enabled(void)
     u.can_write = false;
     CHECK(!ui_menu_enabled(&u, UM_NEW_FOLDER) && !ui_menu_enabled(&u, UM_NEW_FILE) && ui_menu_enabled(&u, UM_NEW_WINDOW));
     u = menu_ui(3);
-    u.in_trash = true;
+    u.view = UI_VIEW_TRASH;
     CHECK(!ui_menu_enabled(&u, UM_NEW_FOLDER) && !ui_menu_enabled(&u, UM_NEW_FILE) && !ui_menu_enabled(&u, UM_NEW_WINDOW));
     CHECK(!ui_menu_enabled(&u, UM_OPEN_WITH));
     CHECK(ui_menu_enabled(&u, UM_OPEN) && ui_menu_enabled(&u, UM_CLOSE) && ui_menu_enabled(&u, UM_NEW_TAB));
     // Opened by a key with nothing at the top to pick: the first that can be.
     u = menu_ui(0);
-    u.in_trash = true;
+    u.view = UI_VIEW_TRASH;
     menu_keys(&u, 1, UK_F10);
     CHECK(u.menu_at == file_at(UM_NEW_TAB));
 }
@@ -207,9 +207,9 @@ static void test_menu_mouse(void)
     ui_handle(&u, names, &in);
     CHECK(ui_menu_hover(&u, -1, file_at(UM_NEW_FILE)) && u.menu_at == file_at(UM_NEW_FILE));
     CHECK(!ui_menu_hover(&u, -1, file_at(UM_NEW_FILE)));   // no change
-    u.in_trash = true;   // Open With greyed there
+    u.view = UI_VIEW_TRASH;   // Open With greyed there
     CHECK(!ui_menu_hover(&u, -1, file_at(UM_OPEN_WITH)) && u.menu_at == file_at(UM_NEW_FILE));
-    u.in_trash = false;
+    u.view = UI_VIEW_FOLDER;
     CHECK(!ui_menu_hover(&u, -1, 4) && !ui_menu_hover(&u, -1, -1) && !ui_menu_hover(&u, -1, 99));
     CHECK(!ui_menu_hover(&u, 0, -1));   // its own title
     CHECK(ui_menu_hover(&u, -1, 0) && u.menu_at == 0);
@@ -218,9 +218,9 @@ static void test_menu_mouse(void)
     CHECK(!ui_menu_hover(&closed, 0, 0) && !closed.menu_on && closed.menu_at == -1);
     // A press on an entry picks it; on one greyed nothing happens and the menu stays.
     in = ui_input_none(), in.menu_item = file_at(UM_OPEN_WITH);
-    u.in_trash = true;
+    u.view = UI_VIEW_TRASH;
     CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.menu_on);
-    u.in_trash = false;
+    u.view = UI_VIEW_FOLDER;
     in.menu_item = 99;
     CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.menu_on);
     in.menu_item = file_at(UM_NEW_FOLDER);

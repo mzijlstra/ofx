@@ -80,7 +80,7 @@ static void menu_facts(void)
     Ui *u = &app.ui;
     u->can_undo = undo.kind != UNDO_NONE && undo.n > 0;
     u->can_back = hist.nback > 0, u->can_forward = hist.nfwd > 0;
-    u->can_up = !u->in_trash && (u->in_search || strcmp(app.cwd, "/") != 0);   // (from a search: the folder searched, F9)
+    u->can_up = view_can_up();
     u->can_paste = clip.ok || own.n > 0;
     u->shows_hidden = app.show_hidden;
     u->bm_n = 0, u->bm_here = -1;
@@ -89,7 +89,7 @@ static void menu_facts(void)
         if (strcmp(bmarks.b[i].path, app.cwd) == 0) u->bm_here = u->bm_n;
         u->bm_n++;
     }
-    u->can_bookmark = !u->in_trash && !u->in_search && !bmarks.full && bm_find(&bmarks, app.cwd) < 0;
+    u->can_bookmark = u->view == UI_VIEW_FOLDER && !bmarks.full && bm_find(&bmarks, app.cwd) < 0;
     // The cursor's entry (F8): a link that leads somewhere (Follow Link); a folder bookmarked already.
     const Entry *e = app.have_list && u->list.n > 0 && u->list.sel < app.list.n ? &app.list.e[u->list.sel] : NULL;
     char p[PATH_MAX];
@@ -128,8 +128,8 @@ static Clay_RenderCommandArray layout(int w, int h)
         CLAY(CLAY_ID("main"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0) }, .layoutDirection = CLAY_TOP_TO_BOTTOM } }) {
         // The tab bar over the files only, not the sidebar (Michael, 2026-10-21).
         if (tabbar.n >= 2) layout_tabs((float)(w - side_w()));
-        if (app.ui.in_trash) layout_trash_bar();
-        if (app.ui.in_search) layout_search_bar();
+        if (app.ui.view == UI_VIEW_TRASH) layout_trash_bar();
+        if (app.ui.view == UI_VIEW_SEARCH) layout_search_bar();
         if (!app.ui.grid) layout_cols();
         CLAY(CLAY_ID("list"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0) }, .layoutDirection = CLAY_TOP_TO_BOTTOM,
                                             .padding = { 0, 0, app.ui.grid ? PAD : 0, 0 } },
@@ -138,7 +138,7 @@ static Clay_RenderCommandArray layout(int w, int h)
                 CLAY(CLAY_ID("error"), { .layout = { .padding = { PAD, PAD, PAD, PAD } } }) { text(cz(app.error), cc(t->red)); }
             } else if (app.list.n == 0) {
                 CLAY(CLAY_ID("empty"), { .layout = { .padding = { PAD, PAD, PAD, PAD } } }) {
-                    text(cz(app.ui.in_search ? (!app.ui.search_len ? "Type a name to search" : app.search_done ? "Nothing found" : "Searching\xE2\x80\xA6")
+                    text(cz(app.ui.view == UI_VIEW_SEARCH ? (!app.ui.search_len ? "Type a name to search" : app.search_done ? "Nothing found" : "Searching\xE2\x80\xA6")
                             : app.list.hidden  ? "Only hidden files"
                                                : "Empty folder"),
                          cc(t->fg_dim));
@@ -203,7 +203,7 @@ static Clay_RenderCommandArray layout(int w, int h)
                            "Alt+C/W/R case, words, regex"), foot_w, false), cc(t->fg_dim));
             } else if (app.status[0]) {
                 text(fit(str_from_c(app.status), foot_w, false), app.status_bad ? cc(t->red) : cc(t->fg));
-            } else if (app.ui.in_search && !app.ui.marked) {
+            } else if (app.ui.view == UI_VIEW_SEARCH && !app.ui.marked) {
                 char info[512];
                 search_status(info, sizeof info);
                 text(fit(str_from_c(arena_sprintf(&frame, "%s", info)), foot_w, false), cc(t->fg_dim));

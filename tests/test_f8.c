@@ -69,7 +69,7 @@ static void test_ctx_menus(void)
     u.props = false;
     // The trash view: no new folder or file, Empty Trash (it asks); an entry's Restore, no Move to
     // Trash and no tab.
-    u.in_trash = true;
+    u.view = UI_VIEW_TRASH;
     in = ui_input_none(), in.ctx_here = true;
     ui_handle(&u, names, &in);
     CHECK(!ui_menu_shown(&u, UM_NEW_FOLDER) && !ui_menu_shown(&u, UM_NEW_FILE) && ui_menu_shown(&u, UM_EMPTY_TRASH) && ui_menu_enabled(&u, UM_EMPTY_TRASH));
@@ -77,7 +77,7 @@ static void test_ctx_menus(void)
     CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.empty_asking && !u.menu_on);
     u.empty_asking = false;
     Ui none = menu_ui(0);   // an empty trash: Empty Trash greyed
-    none.in_trash = true;
+    none.view = UI_VIEW_TRASH;
     in = ui_input_none(), in.ctx_here = true;
     ui_handle(&none, names, &in);
     CHECK(none.menu_on && ui_menu_shown(&none, UM_EMPTY_TRASH) && !ui_menu_enabled(&none, UM_EMPTY_TRASH));
@@ -85,11 +85,11 @@ static void test_ctx_menus(void)
     ui_handle(&u, names, &in);
     CHECK(!ui_menu_shown(&u, UM_OPEN_TAB) && !ui_menu_shown(&u, UM_TRASH) && ui_menu_shown(&u, UM_RESTORE));
     menu_keys(&u, 1, UK_ESC);
-    u.in_trash = false;
+    u.view = UI_VIEW_FOLDER;
     // In the bar's menus New Folder stays, greyed where it can't (Empty Trash isn't there).
-    u.in_trash = true, u.menu = 0;
+    u.view = UI_VIEW_TRASH, u.menu = 0;
     CHECK(ui_menu_shown(&u, UM_NEW_FOLDER) && !ui_menu_enabled(&u, UM_NEW_FOLDER));
-    u.in_trash = false;
+    u.view = UI_VIEW_FOLDER;
 }
 
 // Every entry a folder: one asked about where there is none says yes.
@@ -204,14 +204,14 @@ static void test_ctx_folder_entries(void)
     CHECK(ui_handle(&u, names, &in).kind == UA_MAKE_LINK && u.marked == 2);
     ui_mark_clear(&u);
     // The trash view: none of them, Ctrl+M says it doesn't work there.
-    u.in_trash = true;
+    u.view = UI_VIEW_TRASH;
     in = ui_input_none(), in.ctx_row = 2;
     ui_handle(&u, names, &in);
     for (int k = 0; k < COUNT(one); k++) CHECK(!ui_menu_shown(&u, one[k]));
     CHECK(!ui_menu_enabled(&u, UM_MAKE_LINK));
     menu_keys(&u, 1, UK_ESC);
     CHECK(menu_keys(&u, 1, UK_MAKE_LINK).kind == UA_NOT_IN_TRASH);
-    u.in_trash = false;
+    u.view = UI_VIEW_FOLDER;
     // Edit has Make Link after Duplicate.
     CHECK(menu_place(1, UM_MAKE_LINK) == menu_place(1, UM_DUPLICATE) + 1);
 }

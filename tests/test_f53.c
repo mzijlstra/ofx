@@ -369,7 +369,7 @@ static void test_on_top(void)
     CHECK(ui_on_top(&u) == UI_ON_QUIT);
     u.full_told = true;
     CHECK(ui_on_top(&u) == UI_ON_FULL);
-    u = (Ui){ 0 }, u.list.n = 3, u.list.rows = 3, u.in_trash = true;
+    u = (Ui){ 0 }, u.list.n = 3, u.list.rows = 3, u.view = UI_VIEW_TRASH;
     u.asking = u.confirming = true;
     UiInput in = chars("y");
     CHECK(ui_handle(&u, names, &in).kind == UA_DELETE && !u.confirming && u.asking);
@@ -399,9 +399,27 @@ static void test_on_top(void)
     CHECK(u.find_opts.cased == true);
 }
 
+// One table says what each view refuses (ui_view_allows, 2026-10-28), for the keys and the menus.
+static void test_view_allows(void)
+{
+    static const UiActionKind ALL[] = { UA_COPY, UA_CUT, UA_MAKE_LINK, UA_TERMINAL, UA_NEW_WINDOW, UA_SEARCH, UA_PASTE, UA_NEWFOLDER, UA_ADD_BOOKMARK, UA_RESTORE, UA_EMPTY_TRASH, UA_CONTAINING, UA_OPEN };
+    // folder, trash, search
+    static const bool OK[][3] = { { 1, 0, 1 }, { 1, 0, 1 }, { 1, 0, 1 }, { 1, 0, 1 }, { 1, 0, 1 }, { 1, 0, 1 }, { 1, 0, 0 },
+                                  { 1, 0, 0 }, { 1, 0, 0 }, { 0, 1, 0 }, { 0, 1, 0 }, { 0, 0, 1 }, { 1, 1, 1 } };
+    for (int i = 0; i < COUNT(ALL); i++)
+        for (int v = 0; v < 3; v++) CHECK(ui_view_allows((UiView)v, ALL[i]) == OK[i][v]);
+    Ui u = { 0 };
+    u.view = UI_VIEW_TRASH;
+    CHECK(ui_view_act(&u, (UiAction){ UA_PASTE, 0, false }).kind == UA_NOT_IN_TRASH);
+    u.view = UI_VIEW_SEARCH;
+    CHECK(ui_view_act(&u, (UiAction){ UA_PASTE, 0, false }).kind == UA_NOT_IN_SEARCH);
+    CHECK(ui_view_act(&u, (UiAction){ UA_COPY, 3, true }).kind == UA_COPY && ui_view_act(&u, (UiAction){ UA_COPY, 3, true }).index == 3);
+}
+
 static void test_ui_f53(void)
 {
     test_on_top();
+    test_view_allows();
     test_jobq();
     test_draw_due();
     test_jobline();

@@ -255,7 +255,7 @@ static void script_state(char *out, size_t cap)
     // below the one searched ("-": that one, or not a search).
     char searchtext[UI_FIND_MAX + 1], searchinfo[512], seldir[PATH_MAX];
     snprintf(searchtext, sizeof searchtext, "%.*s", app.ui.search_len ? app.ui.search_len : 1, app.ui.search_len ? app.ui.search : "-");
-    if (app.ui.in_search) search_status(searchinfo, sizeof searchinfo);
+    if (app.ui.view == UI_VIEW_SEARCH) search_status(searchinfo, sizeof searchinfo);
     else snprintf(searchinfo, sizeof searchinfo, "-");
     const Entry *se = app.have_list && app.ui.list.n > 0 ? &app.list.e[app.ui.list.sel] : NULL;
     snprintf(seldir, sizeof seldir, "%.*s", se && se->dir.len ? (int)se->dir.len : 1, se && se->dir.len ? se->dir.p : "-");
@@ -434,7 +434,7 @@ static void script_state(char *out, size_t cap)
              app.ui.focus == UI_FOCUS_EDIT && app.ui.edit_path, cnt, slo, shi, app.ui.caret, copied, keyed,
              jobs.nrun, jobs.nwait, joblabels, jobkey, oldest ? oldest->line.reached : 0, oldest && oldest->line.now > 0, clashjob,
              sides[0] ? sides : "-", spaced, SIDE_MODES_W[app.ui.side_mode], app.ui.side_mode == SIDE_TREE ? tree.n : 0, treecur,
-             app.ui.side.sel - app.ui.side.top, treehere, app.ui.in_trash, app.hov.side, hovernum, ejectbtn, app.cwd_avail >= 0, info,
+             app.ui.side.sel - app.ui.side.top, treehere, app.ui.view == UI_VIEW_TRASH, app.hov.side, hovernum, ejectbtn, app.cwd_avail >= 0, info,
              app.ui.grid ? "icons" : "list", (int)ui_cols(&app.ui.list), app.grid_cells, app.grid_first, app.grid_last, app.grid_full_lines, app.grid_hover_lines, app.grid_hover_cut, entry_px(), icontex, app.icon_full_resets, app.ui.focus == UI_FOCUS_CRUMBS, tipword, idle_woke,
              ui_zoom_px(&app.ui), cell_w(), cell_h(), Clay_GetElementData(CLAY_ID("zoom-track")).found, tipin, app.nslots,
              thumbs.drawn_last, thumbsel, thumbbox, thumbs_busy(), thumbs.got[TG_MADE], thumbs.got[TG_CACHED], thumbs.got[TG_FAILED],
@@ -450,7 +450,7 @@ static void script_state(char *out, size_t cap)
              propwhere, propdrive, proplink, props.btime >= 0, props.idx,
              app.ui.ow, app.ui.ow_fresh, app.ui.ow_in_list, owtext, app.ui.ow_list.n, app.ui.ow_list.sel, owapp, owicon, owtex, ow.shown, ow.type[0] ? ow.type : "-", ow.n,
              app.ui.ow_list.rows, app.ui.ow_list.top, owopts, app.ui.ow_m.bad, app.ui.ow_def, app.ui.ow_def_can, findopts, app.ui.find_m.bad, app.ui.find_select, findn, findat, findtext,
-             app.ui.in_search, app.ui.focus == UI_FOCUS_SEARCH, searchtext, app.search_done, app.search_s.full, app.search_due != 0, app.search_m.bad,
+             app.ui.view == UI_VIEW_SEARCH, app.ui.focus == UI_FOCUS_SEARCH, searchtext, app.search_done, app.search_s.full, app.search_due != 0, app.search_m.bad,
              (int)Clay_GetElementData(CLAY_ID("search-bar")).found,
              app.ui.search_anchor < app.ui.search_caret ? app.ui.search_anchor : app.ui.search_caret,
              app.ui.search_anchor < app.ui.search_caret ? app.ui.search_caret : app.ui.search_anchor, app.ui.search_caret,
@@ -544,7 +544,7 @@ static void script_sh(Str cmd)
     // The trash view (F6) has no folder of its own: the home trash's stands in for it; the search
     // view's (F9) is the folder searched.
     char shown[PATH_MAX];
-    if (!app.ui.in_trash || !trash_home(shown, sizeof shown)) snprintf(shown, sizeof shown, "%s", here_dir());
+    if (app.ui.view != UI_VIEW_TRASH || !trash_home(shown, sizeof shown)) snprintf(shown, sizeof shown, "%s", here_dir());
     if (!script_under(shown, root)) {
         script_fail("sh refused: %s is not under OFX_GUI_ROOT (%s)", shown, root ? root : "unset");
         return;
