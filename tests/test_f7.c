@@ -314,15 +314,15 @@ static void test_rename_select(void)
     in.ev[in.nev++] = (UiEvent){ UK_F2, 0 };
     u.list.sel = 2;
     ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in);
-    CHECK((u.focus == UI_FOCUS_EDIT) && u.anchor == 0 && u.caret == 5);   // "gamma" of gamma.txt
+    CHECK((u.focus == UI_FOCUS_EDIT) && u.edit.anchor == 0 && u.edit.caret == 5);   // "gamma" of gamma.txt
     ui_edit_close(&u);
     ui_handle(&u, (UiNames){ name_at, NULL, dir_at }, &in);
-    CHECK((u.focus == UI_FOCUS_EDIT) && u.anchor == 0 && u.caret == 9);   // a folder: all of it
+    CHECK((u.focus == UI_FOCUS_EDIT) && u.edit.anchor == 0 && u.edit.caret == 9);   // a folder: all of it
     ui_edit_close(&u);
     // Typing replaces the name and keeps the extension.
     ui_edit_rename(&u, S("test.txt"), false);
     ui_edit_event(&u, (UiEvent){ UK_NONE, 'n' }, STR_EMPTY);
-    CHECK(u.edit_len == 5 && memcmp(u.edit, "n.txt", 5) == 0 && u.caret == 1);
+    CHECK(u.edit.len == 5 && memcmp(u.edit.b, "n.txt", 5) == 0 && u.edit.caret == 1);
 }
 
 static void test_new_file(void)
@@ -333,12 +333,12 @@ static void test_new_file(void)
     ui_edit_open_all(&u, S("New file"));
     int lo, hi;
     ui_edit_sel(&u, &lo, &hi);
-    CHECK((u.focus == UI_FOCUS_EDIT) && lo == 0 && hi == 8 && u.caret == 8);
+    CHECK((u.focus == UI_FOCUS_EDIT) && lo == 0 && hi == 8 && u.edit.caret == 8);
     ui_edit_event(&u, (UiEvent){ UK_NONE, 'x' }, STR_EMPTY);
-    CHECK(u.edit_len == 1 && u.edit[0] == 'x');
+    CHECK(u.edit.len == 1 && u.edit.b[0] == 'x');
     ui_edit_open(&u, S("a.txt"));
     ui_edit_sel(&u, &lo, &hi);
-    CHECK(lo == hi && u.caret == 5);
+    CHECK(lo == hi && u.edit.caret == 5);
 
     arena_reset(&ta);
     ops_guard(root);

@@ -189,9 +189,9 @@ static void test_bookmarks_panel(void)
     menu_keys(&u, 1, 0x100 + 'k');
     a = menu_keys(&u, 1, UK_F2);
     CHECK(a.kind == UA_BM_NAME && a.index == 3 && u.bmp_naming);
-    memcpy(u.bmp_text, "Docs", 4), u.bmp_len = u.bmp_caret = u.bmp_anchor = 4;
+    memcpy(u.bmp_name.b, "Docs", 4), u.bmp_name.len = u.bmp_name.caret = u.bmp_name.anchor = 4;
     menu_keys(&u, 4, UK_BACKSPACE, UK_HOME, 0x100 + 'M', 0x100 + 'j');
-    CHECK(u.bmp_len == 5 && memcmp(u.bmp_text, "MjDoc", 5) == 0 && u.bmp_list.sel == 3);   // j is text here
+    CHECK(u.bmp_name.len == 5 && memcmp(u.bmp_name.b, "MjDoc", 5) == 0 && u.bmp_list.sel == 3);   // j is text here
     a = menu_keys(&u, 1, UK_ENTER);
     CHECK(a.kind == UA_BM_RENAME && a.index == 3 && !u.bmp_naming && u.bmp);
     menu_keys(&u, 1, UK_F2);   // (a key that asks gui/ for something ends the frame's keys)
@@ -306,28 +306,28 @@ static void test_shortcuts(void)
     u.keys_list.rows = 10;
     CHECK(menu_keys(&u, 1, UK_SHORTCUTS).kind == UA_NONE && u.keys && u.keys_list.n == UI_KEYS_LINES);
     CHECK(u.keys_line[0] == -1 - KS_MOVE && u.keys_line[1] == 0);
-    CHECK(menu_keys(&u, 1, 0x100 + 't').kind == UA_NONE && u.keys_len == 1 && u.keys);
+    CHECK(menu_keys(&u, 1, 0x100 + 't').kind == UA_NONE && u.keys_filter.len == 1 && u.keys);
     menu_keys(&u, 1, UK_BACKSPACE);
-    CHECK(u.keys_len == 0 && u.keys_list.n == UI_KEYS_LINES);
+    CHECK(u.keys_filter.len == 0 && u.keys_list.n == UI_KEYS_LINES);
     // The filter: an action's words or a key, case folded; a section with nothing left out.
     UiInput in = chars("alt+end");
     ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in);
     CHECK(u.keys_list.n == 2 && u.keys_line[0] == -1 - KS_MOVE && strcmp(UI_KEYS[u.keys_line[1]].action, "Trash") == 0);
-    while (u.keys_len) menu_keys(&u, 1, UK_BACKSPACE);
+    while (u.keys_filter.len) menu_keys(&u, 1, UK_BACKSPACE);
     in = chars("TRASH");
     ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in);
     CHECK(u.keys_list.n == 4 && u.keys_line[2] == -1 - KS_CHANGE);   // Moving: Trash; Changing files: Move to Trash
-    while (u.keys_len) menu_keys(&u, 1, UK_BACKSPACE);
+    while (u.keys_filter.len) menu_keys(&u, 1, UK_BACKSPACE);
     in = chars("zzqq");
     ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in);
     CHECK(u.keys_list.n == 0);
-    while (u.keys_len) menu_keys(&u, 1, UK_BACKSPACE);
+    while (u.keys_filter.len) menu_keys(&u, 1, UK_BACKSPACE);
     in = ui_input_none();   // a character past ASCII (é, two bytes): Backspace takes both
     in.ev[in.nev++] = (UiEvent){ UK_NONE, 0xE9 };
     ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in);
-    CHECK(u.keys_len == 2);
+    CHECK(u.keys_filter.len == 2);
     menu_keys(&u, 1, UK_BACKSPACE);
-    CHECK(u.keys_len == 0);
+    CHECK(u.keys_filter.len == 0);
     // Scrolling: Down, End, Home; it stays inside.
     menu_keys(&u, 1, UK_DOWN);
     CHECK(u.keys_list.top == 1);
@@ -344,7 +344,7 @@ static void test_shortcuts(void)
     // Typing after a scroll: back at the top.
     in = chars("a");
     ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in);
-    CHECK(u.keys_list.top == 0 && u.keys_len == 1);
+    CHECK(u.keys_list.top == 0 && u.keys_filter.len == 1);
     // Up, it is the only thing a press reaches: no menu, no row of the files.
     u.list.sel = 0;
     in = ui_input_none(), in.menu_title = 0;
@@ -356,7 +356,7 @@ static void test_shortcuts(void)
     menu_keys(&u, 1, UK_ESC);
     CHECK(!u.keys);
     menu_keys(&u, 1, UK_SHORTCUTS);
-    CHECK(u.keys && u.keys_len == 0 && u.keys_list.n == UI_KEYS_LINES);
+    CHECK(u.keys && u.keys_filter.len == 0 && u.keys_list.n == UI_KEYS_LINES);
     menu_keys(&u, 1, UK_ESC);
     menu_keys(&u, 1, UK_SHORTCUTS);
     menu_keys(&u, 1, UK_SHORTCUTS);

@@ -369,10 +369,10 @@ MUTANTS = [
     ('gui/bookmarks.c', '        bm_swap(&now, j, other);', '', 'f75'),
     ('gui/bookmarks.c', '        k = op == UA_BM_UP ? i - 1 : i + 1;', '', 'f75'),
     ('gui/bookmarks.c', '        bm_remove(&now, j);', '', 'f75'),
-    ('gui/bookmarks.c', '        bm_rename(&bmwa, &now, j, (Str){ app.ui.bmp_text, app.ui.bmp_len });', '', 'f75'),
+    ('gui/bookmarks.c', '        bm_rename(&bmwa, &now, j, (Str){ app.ui.bmp_name.b, app.ui.bmp_name.len });', '', 'f75'),
     ('gui/bookmarks.c', '    places_reload();\n    bmp_refresh(k);', '    bmp_refresh(k);', 'f75'),
     ('gui/bookmarks.c', '        if (bmarks.b[a.index].path[0]) go_to(bmarks.b[a.index].path, STR_EMPTY, 0);', '        if (true) go_to(bmarks.b[a.index].path, STR_EMPTY, 0);', 'f75'),
-    ('gui/bookmarks.c', '        app.ui.bmp_len = app.ui.bmp_caret = app.ui.bmp_anchor = n;', '        app.ui.bmp_len = app.ui.bmp_caret = app.ui.bmp_anchor = 0;', 'f75'),
+    ('gui/bookmarks.c', '        ui_line_set(ui_bmp_line(&app.ui), s);\n', '', 'f75'),
     ('gui/bookmarks.c', '    case UA_BM_REMOVE: case UA_BM_UP: case UA_BM_DOWN: case UA_BM_RENAME: bmp_change(a.kind, (int)a.index); break;', '', 'f75'),
     ('gui/actions.c', '    case UA_BM_EDIT: case UA_BM_GO: case UA_BM_NAME: case UA_BM_REMOVE: case UA_BM_UP: case UA_BM_DOWN: case UA_BM_RENAME: bmp_act(a); break;', '', 'f75'),
     ('gui/frame.c', '        if (u->bm_more++ == 0) u->bm_more_at = i;', '        u->bm_more++;', 'f75'),
@@ -503,7 +503,7 @@ MUTANTS = [
     ('gui/footer.c', 'c.lists != app.lists || c.sel != app.ui.list.sel || c.len', 'c.lists != app.lists || c.len', 'f2'),
     ('gui/footer.c', 'c.len != m->len || memcmp(c.text, m->text, (size_t)m->len) ||', 'c.len != m->len ||', 'f2'),
     ('gui/input.c', '    if (h.find_step) return TIP_FIND + (h.find_step > 0);', '', 'f2'),
-    ('gui/footer.c', 'c.finding != app.ui.finding || c.find_len != app.ui.find_len || ', '', 'f2'),
+    ('gui/footer.c', 'c.finding != app.ui.finding || c.find_len != app.ui.find.len || ', '', 'f2'),
     ('gui/frame.c', '"Previous match (Up)" : "Next match (Down)"', '"Next match (Down)" : "Next match (Down)"', 'f2'),
     ('gui/input.c', '(app.ui.ow || app.ui.finding); k++)', '(app.ui.ow); k++)', 'f72'),   # (the guard is ui_handle's since 2026-10-28)
     ('gui/actions.c', '    ui_find_close(&app.ui);   // (a tab\'s own find isn\'t kept)', '', 'f2'),
@@ -552,7 +552,7 @@ MUTANTS = [
     # ---- F9 step 2: working with results (2026-10-28). Left out: Ctrl+Enter's GLFW mapping (scripts
     # send ui/'s keys).
     ('gui/input.c', '    if (p && is_search(p)) p = app.search_root;', '', 'f9'),
-    ('gui/folder.c', '        app.ui.search_caret = app.ui.search_anchor = app.ui.search_len;', '', 'f9'),
+    ('gui/folder.c', '        ui_line_set(ui_search_line(&app.ui), text);\n', '', 'f9'),
     ('gui/search.c', '        search_gone[i] = search_res_path(i, root, p, sizeof p) && lstat(p, &st) != 0;', '        search_gone[i] = lstat(p, &st) != 0;', 'f9'),
     ('gui/search.c', '        if (search_gone[i]) continue;\n        const Entry *r', '        const Entry *r', 'f9'),
     ('gui/search.c', '    memset(search_gone, 0, sizeof search_gone), arena_reset(&search_edits);', '    arena_reset(&search_edits);', 'f9'),

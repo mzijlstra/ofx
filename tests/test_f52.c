@@ -7,9 +7,9 @@ static void edit_check(const Ui *u, const char *want, int lo, int hi, int caret)
     int l, h;
     ui_edit_sel(u, &l, &h);
     checks++;
-    if (u->edit_len != (int)strlen(want) || memcmp(u->edit, want, (size_t)u->edit_len) != 0 || l != lo || h != hi || u->caret != caret) {
+    if (u->edit.len != (int)strlen(want) || memcmp(u->edit.b, want, (size_t)u->edit.len) != 0 || l != lo || h != hi || u->edit.caret != caret) {
         failures++;
-        fprintf(stderr, "edit: got \"%.*s\" sel %d-%d caret %d, want \"%s\" sel %d-%d caret %d\n", u->edit_len, u->edit, l, h, u->caret,
+        fprintf(stderr, "edit: got \"%.*s\" sel %d-%d caret %d, want \"%s\" sel %d-%d caret %d\n", u->edit.len, u->edit.b, l, h, u->edit.caret,
                 want, lo, hi, caret);
     }
 }
@@ -117,13 +117,13 @@ static void test_edit_select(void)
     memset(full, 'x', NAME_MAX), full[NAME_MAX] = 0;
     ui_edit_open(&u, str_from_c(full));
     edit_type(&u, names, "y");
-    CHECK(u.edit_len == NAME_MAX && u.edit[NAME_MAX - 1] == 'x');
+    CHECK(u.edit.len == NAME_MAX && u.edit.b[NAME_MAX - 1] == 'x');
     edit_keys(&u, names, 1, UK_SEL_LEFT);
     in = ui_input_none(), in.ev[in.nev++] = (UiEvent){ UK_NONE, 0xE9 };   // é: two bytes over one
     ui_handle(&u, names, &in);
-    CHECK(u.edit_len == NAME_MAX && u.anchor == NAME_MAX && u.caret == NAME_MAX - 1);
+    CHECK(u.edit.len == NAME_MAX && u.edit.anchor == NAME_MAX && u.edit.caret == NAME_MAX - 1);
     edit_type(&u, names, "y");
-    CHECK(u.edit_len == NAME_MAX && u.edit[NAME_MAX - 1] == 'y' && u.caret == NAME_MAX);
+    CHECK(u.edit.len == NAME_MAX && u.edit.b[NAME_MAX - 1] == 'y' && u.edit.caret == NAME_MAX);
     ui_edit_close(&u);
     // Outside an edit line Shift doesn't change a move: Shift+Left is Left (nothing in the list).
     // Shift+Enter in the files is Open With (Michael, 2026-10-27; test_f74.c).
@@ -216,12 +216,12 @@ static void test_edit_clipboard(void)
     memset(full, 'x', NAME_MAX - 3), full[NAME_MAX - 3] = 0;
     ui_edit_open(&u, str_from_c(full));
     edit_paste(&u, names, S("ab\xC3\xA9" "cd"));   // room for 3 bytes: "ab", then é doesn't fit
-    CHECK(u.edit_len == NAME_MAX - 1 && memcmp(u.edit + NAME_MAX - 3, "ab", 2) == 0 && u.caret == NAME_MAX - 1);
+    CHECK(u.edit.len == NAME_MAX - 1 && memcmp(u.edit.b + NAME_MAX - 3, "ab", 2) == 0 && u.edit.caret == NAME_MAX - 1);
     edit_paste(&u, names, S("/c"));   // a dropped character doesn't take room
-    CHECK(u.edit_len == NAME_MAX && u.edit[NAME_MAX - 1] == 'c');
+    CHECK(u.edit.len == NAME_MAX && u.edit.b[NAME_MAX - 1] == 'c');
     edit_keys(&u, names, 2, UK_SEL_LEFT, UK_SEL_LEFT);
     edit_paste(&u, names, S("\xC3\xA9z"));   // two selected bytes make room for é
-    CHECK(u.edit_len == NAME_MAX && memcmp(u.edit + NAME_MAX - 2, "\xC3\xA9", 2) == 0);
+    CHECK(u.edit.len == NAME_MAX && memcmp(u.edit.b + NAME_MAX - 2, "\xC3\xA9", 2) == 0);
     ui_edit_close(&u);
     // Outside an edit line Ctrl+C, X and V are still the files'.
     UiInput in = keys(1, UK_COPY);

@@ -176,9 +176,7 @@ static bool go_to_in(const char *dir, Str select, isize fallback, bool stepping)
     if (view == UI_VIEW_SEARCH && !same) {   // the field shows its text; empty, it has the keys
         Str root, text;
         search_parse(dir, &root, &text);
-        app.ui.search_len = (int)(text.len < UI_FIND_MAX ? text.len : UI_FIND_MAX);
-        memcpy(app.ui.search, text.p, (size_t)app.ui.search_len);
-        app.ui.search_caret = app.ui.search_anchor = app.ui.search_len;
+        ui_line_set(ui_search_line(&app.ui), text);
         if (text.len == 0) app.ui.focus = UI_FOCUS_SEARCH;
         else ui_unfocus(&app.ui, UI_FOCUS_SEARCH);
         app.ui.search_edited = false, app.search_due = 0;
@@ -242,7 +240,7 @@ enum { SEARCH_TYPE_MS = 150 };
 static void search_retype(void)
 {
     char uri[PATH_MAX];
-    if (!search_uri(uri, sizeof uri, app.search_root, (Str){ app.ui.search, app.ui.search_len })) {
+    if (!search_uri(uri, sizeof uri, app.search_root, (Str){ app.ui.search.b, app.ui.search.len })) {
         set_status(true, "That search is too long");
         return;
     }

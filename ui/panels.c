@@ -5,7 +5,7 @@
 // The panel opened: the field empty with the keys, the toggles as last time; gui/ lists the apps.
 static UiAction ui_ow_open(Ui *u)
 {
-    u->ow = true, u->ow_in_list = false, u->ow_fresh = true, u->ow_len = u->ow_caret = u->ow_anchor = 0, u->ow_def = false;
+    u->ow = true, u->ow_in_list = false, u->ow_fresh = true, UI_TEXT_CLEAR(u->ow_filter), u->ow_def = false;
     u->ow_list = (UiList){ .rows = u->ow_list.rows };
     return (UiAction){ UA_OPEN_WITH, 0, false };
 }
@@ -19,7 +19,7 @@ static void ui_ow_close(Ui *u)
 // The apps the field's text matches, in gui/'s order; the cursor on the first.
 static void ui_ow_filter(Ui *u, const UiInput *in)
 {
-    ui_matcher_set(&u->ow_m, (Str){ u->ow_text, u->ow_len }, u->ow_opts);
+    ui_matcher_set(&u->ow_m, (Str){ u->ow_filter.b, u->ow_filter.len }, u->ow_opts);
     isize n = 0;
     for (isize i = 0; i < in->app_n && n < UI_APPS_MAX; i++)
         if (ui_match(&u->ow_m, in->app_name[i])) u->ow_idx[n++] = i;
@@ -77,12 +77,9 @@ static UiAction ui_ow_event(Ui *u, UiEvent e, const UiInput *in)
         case UK_PAGEUP: ui_move(l, -page); break;
         case UK_PAGEDOWN: ui_move(l, page); break;
         case UK_NONE:
-            if (ui_utf8(e.ch, (char[4]){ 0 }) == 0) break;
-            u->ow_in_list = false, u->ow_caret = u->ow_anchor = u->ow_len;
-            if (ui_line_key(u, ui_ow_line(u), e, in->paste) == UI_LINE_CHANGED) ui_ow_filter(u, in);
-            break;
-        case UK_BACKSPACE:
-            u->ow_in_list = false, u->ow_caret = u->ow_anchor = u->ow_len;
+        case UK_BACKSPACE:   // typing (a character there is) in the list: the field's end, then typed there
+            if (e.key == UK_NONE && ui_utf8(e.ch, (char[4]){ 0 }) == 0) break;
+            u->ow_in_list = false, u->ow_filter.caret = u->ow_filter.anchor = u->ow_filter.len;
             if (ui_line_key(u, ui_ow_line(u), e, in->paste) == UI_LINE_CHANGED) ui_ow_filter(u, in);
             break;
         default: break;
@@ -101,13 +98,13 @@ static UiAction ui_ow_event(Ui *u, UiEvent e, const UiInput *in)
 // the text (case folded); a section with none left out.
 static void ui_keys_filter(Ui *u)
 {
-    ui_matcher_set(&u->keys_m, (Str){ u->keys_text, u->keys_len }, (UiMatchOpts){ 0 });
+    ui_matcher_set(&u->keys_m, (Str){ u->keys_filter.b, u->keys_filter.len }, (UiMatchOpts){ 0 });
     int n = 0;
     for (int s = 0; s < KS_SECTIONS; s++) {
         int head = n;
         u->keys_line[n++] = (short)(-1 - s);
         for (int r = 0; r < UI_KEYS_N; r++)
-            if (UI_KEYS[r].sec == (UiKeySection)s && (!u->keys_len || ui_match(&u->keys_m, str_from_c(UI_KEYS[r].action)) ||
+            if (UI_KEYS[r].sec == (UiKeySection)s && (!u->keys_filter.len || ui_match(&u->keys_m, str_from_c(UI_KEYS[r].action)) ||
                                                       ui_match(&u->keys_m, str_from_c(UI_KEYS[r].key)) || ui_match(&u->keys_m, str_from_c(UI_KEYS[r].key2))))
                 u->keys_line[n++] = (short)r;
         if (n == head + 1) n = head;   // nothing under it
@@ -117,7 +114,7 @@ static void ui_keys_filter(Ui *u)
 
 static UiAction ui_keys_open(Ui *u)
 {
-    u->keys = true, u->keys_len = u->keys_caret = u->keys_anchor = 0;
+    u->keys = true, UI_TEXT_CLEAR(u->keys_filter);
     u->keys_list = (UiList){ .rows = u->keys_list.rows };
     ui_keys_filter(u);
     return (UiAction){ UA_NONE, 0, false };

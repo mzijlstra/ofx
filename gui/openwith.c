@@ -246,9 +246,9 @@ static void layout_ow_panel(void)
             CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
                            .clip = { .horizontal = true } }) {
                 // As the edit line draws while it has the keys (2026-10-28); with them in the list, the text.
-                if (u->ow_len == 0 && u->ow_in_list) text(cz("Type to filter"), cc(t->fg_dim));
+                if (u->ow_filter.len == 0 && u->ow_in_list) text(cz("Type to filter"), cc(t->fg_dim));
                 if (!u->ow_in_list) edit_text("ow", OW_W - 200, ui_ow_line(u), cc(t->fg));
-                else text(fit((Str){ u->ow_text, u->ow_len }, OW_W - 200, true), cc(t->fg));
+                else text(fit((Str){ u->ow_filter.b, u->ow_filter.len }, OW_W - 200, true), cc(t->fg));
             }
             layout_toggles(u->ow_opts, 0);
         }

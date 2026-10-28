@@ -138,7 +138,7 @@ static Clay_RenderCommandArray layout(int w, int h)
                 CLAY(CLAY_ID("error"), { .layout = { .padding = { PAD, PAD, PAD, PAD } } }) { text(cz(app.error), cc(t->red)); }
             } else if (app.list.n == 0) {
                 CLAY(CLAY_ID("empty"), { .layout = { .padding = { PAD, PAD, PAD, PAD } } }) {
-                    text(cz(app.ui.view == UI_VIEW_SEARCH ? (!app.ui.search_len ? "Type a name to search" : app.search_done ? "Nothing found" : "Searching\xE2\x80\xA6")
+                    text(cz(app.ui.view == UI_VIEW_SEARCH ? (!app.ui.search.len ? "Type a name to search" : app.search_done ? "Nothing found" : "Searching\xE2\x80\xA6")
                             : app.list.hidden  ? "Only hidden files"
                                                : "Empty folder"),
                          cc(t->fg_dim));

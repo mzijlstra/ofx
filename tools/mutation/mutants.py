@@ -144,7 +144,7 @@ MUTANTS += [
     ('ui/find.c', "isize i = ((from + dir * k) % l->n + l->n) % l->n;", "isize i = (from + dir * k) % l->n;"),
     ('ui/find.c', "u->find_miss = text.len > 0 && i < 0;", "u->find_miss = i < 0;"),
     ('ui/find.c', "u->list.sel = i >= 0 ? i : ui_find_back(u);", "u->list.sel = i >= 0 ? i : u->list.sel;"),
-    ('ui/find.c', '        return;\n    }\n    ui_unfocus(u, UI_FOCUS_FIND);\n    if (u->find_len) memcpy(u->last, u->find, (size_t)u->find_len), u->last_len = u->find_len;', '        return;\n    }\n    ui_unfocus(u, UI_FOCUS_FIND);'),
+    ('ui/find.c', '        return;\n    }\n    ui_unfocus(u, UI_FOCUS_FIND);\n    if (u->find.len) memcpy(u->last, u->find.b, (size_t)u->find.len), u->last_len = u->find.len;', '        return;\n    }\n    ui_unfocus(u, UI_FOCUS_FIND);'),
     ('ui/find.c', "    if (cp < 0x20 || cp == 0x7F || cp > 0x10FFFF) return 0;", "    if (cp < 0x20) return 0;"),
     ('ui/find.c', "    ui_matcher_set(&u->find_m, (Str){ u->last, u->last_len }, u->find_opts);\n    isize i = ui_find_at(&u->list, names, &u->find_m, u->list.sel + dir, dir);", "    ui_matcher_set(&u->find_m, (Str){ u->last, u->last_len }, u->find_opts);\n    isize i = ui_find_at(&u->list, names, &u->find_m, u->list.sel, dir);"),
     ('ui/handle.c', "        u->list.sel = ui_find_back(u), ui_show_sel(&u->list);\n        return true;", "        return true;"),
@@ -160,7 +160,7 @@ MUTANTS += [
     ('ui/handle.c', '            u->focus = u->side.n > 0 ? UI_FOCUS_SIDE : UI_FOCUS_LIST;', '            u->focus = UI_FOCUS_SIDE;'),
     ('ui/handle.c', '            else ui_unfocus(u, UI_FOCUS_SIDE);\n', ''),
     ('ui/handle.c', '            if (u->focus == UI_FOCUS_SIDE && u->side.n > 0) return (UiAction){ UA_PLACE, u->side.sel, false };', '            if (u->focus == UI_FOCUS_SIDE) return (UiAction){ UA_PLACE, u->side.sel, false };'),
-    ('ui/find.c', 'u->finding = true, u->find_miss = false, u->find_select = false, u->find_len', 'u->finding = true, u->find_miss = false, u->find_len'),
+    ('ui/find.c', 'u->find_miss = false, u->find_select = false, UI_TEXT_CLEAR(u->find)', 'u->find_miss = false, UI_TEXT_CLEAR(u->find)'),
     # ---- F2: history
     ('ui/helpers.c', "if (*n == UI_HISTORY_MAX) memmove(stack, stack + 1, sizeof *stack * (UI_HISTORY_MAX - 1)), (*n)--;", "if (*n == UI_HISTORY_MAX) (*n)--;"),
     ('ui/helpers.c', "    h->nfwd = 0;\n", ""),
@@ -305,8 +305,8 @@ MUTANTS += [
     ('ui/helpers.c', "        while (text.len && text.p[0] == '/') text = str_cut(text, 1, text.len);", ""),
     ('ui/helpers.c', "    text = str_trim(text);\n    if (text.len == 0) return false;", "    if (text.len == 0) return false;"),
     ('ui/helpers.c', "        if (!home || home[0] != '/') return false;", ""),
-    ('ui/edit.c', "u->anchor = path ? 0 : (int)n;", "u->anchor = (int)n;"),
-    ('ui/edit.c', "u->anchor = path ? 0 : (int)n;", "u->anchor = 0;"),
+    ('ui/edit.c', 'u->edit.anchor = path ? 0 : (int)n;', 'u->edit.anchor = (int)n;'),
+    ('ui/edit.c', 'u->edit.anchor = path ? 0 : (int)n;', 'u->edit.anchor = 0;'),
     ('ui/edit.c', "(e.ch != '/' || l.slash)", "(e.ch != '/')"),
     ('ui/edit.c', "    return u->edit_path ? PATH_MAX - 1 : NAME_MAX;", "    return NAME_MAX;"),
     ('ui/edit.c', "    case UK_SHIFT_ENTER: return (UiAction){ u->edit_path ? UA_GO : UA_RENAME, 0, false };", "    case UK_SHIFT_ENTER: return (UiAction){ UA_RENAME, 0, false };"),
@@ -925,14 +925,14 @@ MUTANTS += [
     ('ui/handle.c', "    for (int k = 0; k < in->nev && !u->quit_asking; k++)\n        if (in->ev[k].key == UK_QUIT) {", "    for (int k = 0; k < 0; k++)\n        if (in->ev[k].key == UK_QUIT) {"),
     ('ui/handle.c', "            if (in->jobs_all <= 0) return (UiAction){ UA_QUIT, 0, false };\n            u->quit_asking = true, u->cancel_asking = false;\n        }\n    // The panels", "            if (in->jobs_all < 0) return (UiAction){ UA_QUIT, 0, false };\n            u->quit_asking = true, u->cancel_asking = false;\n        }\n    // The panels"),
     ('ui/handle.c', "            u->quit_asking = true, u->cancel_asking = false;\n        }\n    // The panels", "            u->quit_asking = true;\n        }\n    // The panels"),
-    ('ui/edit.c', "    ui_edit_start(u, text, false);\n    u->anchor = 0;", "    ui_edit_start(u, text, false);"),
+    ('ui/edit.c', '    ui_edit_start(u, text, false);\n    u->edit.anchor = 0;', '    ui_edit_start(u, text, false);'),
     ('ui/edit.c', "    if (dot <= 1) return (int)name.len;", "    if (dot < 1) return (int)name.len;"),
     ('ui/edit.c', "    if (dot <= 1) return (int)name.len;", ""),
     ('ui/edit.c', "    if (dot > 4 && memcmp(name.p + dot - 4, \".tar\", 4) == 0) dot -= 4;", ""),
     ('ui/edit.c', "    if (dot > 4 && memcmp(name.p + dot - 4, \".tar\", 4) == 0) dot -= 4;", "    if (dot >= 4 && memcmp(name.p + dot - 4, \".tar\", 4) == 0) dot -= 4;"),
     ('ui/edit.c', "    while (dot > 0 && name.p[dot - 1] != '.') dot--;", "    while (dot > 0 && name.p[dot - 1] != '.') dot -= 2;"),
-    ('ui/edit.c', "    if (!dir) u->caret = ui_name_stem((Str){ u->edit, u->edit_len });", ""),
-    ('ui/edit.c', "    u->anchor = 0;\n    if (!dir)", "    if (!dir)"),
+    ('ui/edit.c', '    if (!dir) u->edit.caret = ui_name_stem((Str){ u->edit.b, u->edit.len });', ''),
+    ('ui/edit.c', '    u->edit.anchor = 0;\n    if (!dir)', '    if (!dir)'),
     ('ui/handle.c', "names.dir && names.dir(names.ctx, l->sel));", "false);"),
     # ---- F7.1.1: the default app for a type
 ]
@@ -1096,7 +1096,7 @@ MUTANTS += [
     ('ui/find.c', "    if (l->n == 0 || m->len == 0) return -1;", "    if (l->n == 0) return -1;"),
     ('ui/find.c', "    ui_matcher_set(&u->find_m, (Str){ u->last, u->last_len }, u->find_opts);\n", ""),
     ('ui/handle.c', "        u->find_opts = ui_toggle(u->find_opts, ui_toggle_key(e));\n        ui_find_update(u, names);", "        u->find_opts = ui_toggle(u->find_opts, ui_toggle_key(e));"),
-    ('ui/panels.c', '    u->ow = true, u->ow_in_list = false, u->ow_fresh = true, u->ow_len = u->ow_caret = u->ow_anchor = 0, u->ow_def = false;', '    u->ow = true, u->ow_in_list = false, u->ow_fresh = true, u->ow_def = false;'),
+    ('ui/panels.c', 'u->ow_fresh = true, UI_TEXT_CLEAR(u->ow_filter), u->ow_def = false;', 'u->ow_fresh = true, u->ow_def = false;'),
     ('ui/panels.c', "    u->ow_list = (UiList){ .rows = u->ow_list.rows };", ""),
     ('ui/panels.c', "    ui_matcher_set(&u->ow_m, STR_EMPTY, u->ow_opts);   // (a compiled expression freed)", ""),
     ('ui/panels.c', "        if (ui_match(&u->ow_m, in->app_name[i])) u->ow_idx[n++] = i;", "        u->ow_idx[n++] = i;"),
@@ -1111,8 +1111,8 @@ MUTANTS += [
     ('ui/panels.c', "            if (l->sel == 0) u->ow_in_list = false;\n            else ui_move(l, -1);", "            ui_move(l, -1);"),
     ('ui/panels.c', "        case UK_HOME: ui_move(l, -l->n); break;\n        case UK_END: ui_move(l, l->n); break;", "        case UK_END: ui_move(l, l->n); break;"),
     ('ui/panels.c', "        case UK_PAGEUP: ui_move(l, -page); break;\n        case UK_PAGEDOWN:", "        case UK_PAGEDOWN:"),
-    ('ui/panels.c', "            if (ui_utf8(e.ch, (char[4]){ 0 }) == 0) break;\n", ""),
-    ('ui/panels.c', '            u->ow_in_list = false, u->ow_caret = u->ow_anchor = u->ow_len;\n            if (ui_line_key(u, ui_ow_line(u), e, in->paste) == UI_LINE_CHANGED) ui_ow_filter(u, in);\n            break;\n        case UK_BACKSPACE:', '            u->ow_in_list = false;\n            if (ui_line_key(u, ui_ow_line(u), e, in->paste) == UI_LINE_CHANGED) ui_ow_filter(u, in);\n            break;\n        case UK_BACKSPACE:'),
+    ('ui/panels.c', '            if (e.key == UK_NONE && ui_utf8(e.ch, (char[4]){ 0 }) == 0) break;\n', ''),
+    ('ui/panels.c', '            u->ow_in_list = false, u->ow_filter.caret = u->ow_filter.anchor = u->ow_filter.len;\n', '            u->ow_in_list = false;\n'),
 
 
     ('ui/panels.c', '    else if (!h && e.key == UK_DOWN && l->n > 0) u->ow_in_list = true;', '    else if (!h && e.key == UK_DOWN) u->ow_in_list = true;'),
@@ -1179,7 +1179,7 @@ MUTANTS += [
     (O, "        return err_set(err, \"%s\", out[0] ? out : \"gio didn't set it\"), false;", "        return err_set(err, \"gio didn't set it\"), false;"),
     ('ui/panels.c', "    if (e.key == UK_MENU && e.ch == 'd') {\n        if (u->ow_def_can) u->ow_def = !u->ow_def;", "    if (e.key == UK_MENU && e.ch == 'd') {\n        u->ow_def = !u->ow_def;"),
     ('ui/panels.c', "    bool def = u->ow_def && u->ow_def_can;", "    bool def = u->ow_def;"),
-    ('ui/panels.c', 'u->ow_len = u->ow_caret = u->ow_anchor = 0, u->ow_def = false;', 'u->ow_len = u->ow_caret = u->ow_anchor = 0;'),
+    ('ui/panels.c', 'UI_TEXT_CLEAR(u->ow_filter), u->ow_def = false;', 'UI_TEXT_CLEAR(u->ow_filter);'),
     ('ui/handle.c', "        if (in->toggle == 4) {\n            if (u->ow_def_can) u->ow_def = !u->ow_def;", "        if (in->toggle == 4) {\n            u->ow_def = !u->ow_def;"),
 ]
 # ---- the find bar (Michael, 2026-10-26)
@@ -1216,8 +1216,8 @@ MUTANTS += [
 ]
 # ---- the find bar's count and chevrons (Michael, 2026-10-26)
 MUTANTS += [
-    ('ui/find.c', "    if (!u->finding || u->find_len == 0 || u->find_m.len == 0) return 0;", "    if (u->find_len == 0 || u->find_m.len == 0) return 0;"),
-    ('ui/find.c', "    if (!u->finding || u->find_len == 0 || u->find_m.len == 0) return 0;", "    if (!u->finding || u->find_m.len == 0) return 0;"),
+    ('ui/find.c', '    if (!u->finding || u->find.len == 0 || u->find_m.len == 0) return 0;', '    if (u->find.len == 0 || u->find_m.len == 0) return 0;'),
+    ('ui/find.c', '    if (!u->finding || u->find.len == 0 || u->find_m.len == 0) return 0;', '    if (!u->finding || u->find_m.len == 0) return 0;'),
     ('ui/find.c', "        if (i == u->list.sel) *at = n;", "        *at = n;"),
     ('ui/find.c', "        n++;\n        if (i == u->list.sel)", "        if (i == u->list.sel)"),
     ('ui/handle.c', "            if (ui_find_count(u, names, &at) >= 2) ui_find_step(", "            if (ui_find_count(u, names, &at) >= 1) ui_find_step("),
@@ -1301,7 +1301,7 @@ MUTANTS += [
     ('ui/find.c', '    u->finding = false, u->find_miss = false, u->find_select = false;\n', '    u->finding = false, u->find_miss = false;\n'),
     ('ui/find.c', "    if (u->find_select) {\n        if (u->finding) ui_find_close(u);\n        return;\n    }\n", ""),
     ('ui/find.c', "        if (u->finding) ui_find_close(u);\n        return;", "        return;"),
-    ('ui/find.c', "    if (u->find_len > 0) {\n        ui_mark_clear(u);", "    if (true) {\n        ui_mark_clear(u);"),
+    ('ui/find.c', '    if (u->find.len > 0) {\n        ui_mark_clear(u);', '    if (true) {\n        ui_mark_clear(u);'),
     ('ui/find.c', "        ui_mark_clear(u);\n        for (isize i = 0; i < u->list.n; i++)\n            if (ui_match(", "        for (isize i = 0; i < u->list.n; i++)\n            if (ui_match("),
     ('ui/find.c', "            if (ui_match(&u->find_m, names.at(names.ctx, i))) ui_mark(u, i, true);", "            ui_mark(u, i, true);"),
     ('ui/find.c', "    ui_find_close(u);\n}\n\nstatic void ui_find_open", "}\n\nstatic void ui_find_open"),
@@ -1318,7 +1318,7 @@ MUTANTS += [
     ('ui/menus.c', '    case UM_RENAME: case UM_DUPLICATE: case UM_MAKE_LINK: return here && u->view != UI_VIEW_TRASH && (u->can_write || u->view == UI_VIEW_SEARCH);', '    case UM_RENAME: case UM_DUPLICATE: case UM_MAKE_LINK: return u->view != UI_VIEW_TRASH && (u->can_write || u->view == UI_VIEW_SEARCH);'),
 ]
 MUTANTS += [
-    ('ui/find.c', "    if (u->find_m.bad && u->find_len > 0) return;\n", ""),
+    ('ui/find.c', '    if (u->find_m.bad && u->find.len > 0) return;\n', ''),
 ]
 # ---- F7.5: the bookmarks file, the Bookmarks menu
 BMK = 'fs/bookmarks.c'
@@ -1379,9 +1379,9 @@ MUTANTS += [
     (U, '    { KS_CHANGE, "Add Bookmark", "Ctrl+D", "" },\n', ''),
     ('ui/panels.c', '        if (n == head + 1) n = head;   // nothing under it', ''),
     ('ui/panels.c', "        u->keys_line[n++] = (short)(-1 - s);", "        u->keys_line[n++] = (short)(-1);"),
-    ('ui/panels.c', "            if (UI_KEYS[r].sec == (UiKeySection)s && (!u->keys_len || ui_match(&u->keys_m, str_from_c(UI_KEYS[r].action)) ||", "            if (UI_KEYS[r].sec == (UiKeySection)s && (!u->keys_len || false ||"),
+    ('ui/panels.c', '            if (UI_KEYS[r].sec == (UiKeySection)s && (!u->keys_filter.len || ui_match(&u->keys_m, str_from_c(UI_KEYS[r].action)) ||', '            if (UI_KEYS[r].sec == (UiKeySection)s && (!u->keys_filter.len || false ||'),
     ('ui/panels.c', "                                                      ui_match(&u->keys_m, str_from_c(UI_KEYS[r].key)) || ui_match(&u->keys_m, str_from_c(UI_KEYS[r].key2))))", "                                                      ui_match(&u->keys_m, str_from_c(UI_KEYS[r].key2))))"),
-    ('ui/panels.c', '    u->keys = true, u->keys_len = u->keys_caret = u->keys_anchor = 0;', '    u->keys = true;'),
+    ('ui/panels.c', '    u->keys = true, UI_TEXT_CLEAR(u->keys_filter);', '    u->keys = true;'),
 
 
     ('ui/panels.c', "    case UK_UP: case UK_DOWN: ui_scroll(l, e.key == UK_UP ? 1 : -1); break;", "    case UK_UP: case UK_DOWN: ui_scroll(l, 1); break;"),
@@ -1673,7 +1673,7 @@ MUTANTS += [
 
 
 
-    ('ui/edit.c', "    return (UiLine){ u->search, &u->search_len, &u->search_caret, &u->search_anchor, UI_FIND_MAX, false };", "    return (UiLine){ u->search, &u->search_len, &u->search_caret, &u->search_anchor, UI_FIND_MAX, true };"),
+    ('ui/edit.c', '    return UI_TEXT_LINE(u->search, false);', '    return UI_TEXT_LINE(u->search, true);'),
     ('ui/handle.c', '        if (u->focus == UI_FOCUS_SEARCH && u->view == UI_VIEW_SEARCH && !prompt && ui_search_event(u, e, in->paste)) continue;', '        if (u->focus == UI_FOCUS_SEARCH && u->view == UI_VIEW_SEARCH && ui_search_event(u, e, in->paste)) continue;'),
     ('ui/handle.c', '        if (u->focus == UI_FOCUS_SEARCH && u->view == UI_VIEW_SEARCH && !prompt && ui_search_event(u, e, in->paste)) continue;', '        if (u->focus == UI_FOCUS_SEARCH && u->view == UI_VIEW_SEARCH && !prompt && ui_search_event(u, e, STR_EMPTY)) continue;'),
 ]
@@ -1682,17 +1682,16 @@ MUTANTS += [
 
 
 
-    ('ui/edit.c', "    return (UiLine){ u->find, &u->find_len, &u->find_caret, &u->find_anchor, UI_FIND_MAX, false };", "    return (UiLine){ u->find, &u->find_len, &u->find_caret, &u->find_anchor, UI_FIND_MAX, true };"),
+    ('ui/edit.c', '    return UI_TEXT_LINE(u->find, false);', '    return UI_TEXT_LINE(u->find, true);'),
     ('ui/handle.c', '        if (u->focus == UI_FOCUS_FIND && u->finding && !prompt && ui_find_event(u, names, e, in)) continue;', '        if (u->focus == UI_FOCUS_FIND && u->finding && ui_find_event(u, names, e, in)) continue;'),
 ]
 # ---- Ctrl+C, Ctrl+X with nothing selected in the fields: the list's (reviewer-2, 2026-10-28)
 MUTANTS += [
-    ('ui/handle.c', '    if ((e.key == UK_COPY || e.key == UK_CUT) && lo == hi) return u->focus = UI_FOCUS_LIST, false;', ''),
-    ('ui/handle.c', '    if ((e.key == UK_COPY || e.key == UK_CUT) && lo == hi) return u->focus = UI_FOCUS_LIST, false;', '    if (e.key == UK_COPY && lo == hi) return u->focus = UI_FOCUS_LIST, false;'),
-    ('ui/handle.c', '    if ((e.key == UK_COPY || e.key == UK_CUT) && lo == hi) return u->focus = UI_FOCUS_LIST, false;', '    if ((e.key == UK_COPY || e.key == UK_CUT)) return u->focus = UI_FOCUS_LIST, false;'),
-    ('ui/handle.c', "    if ((e.key == UK_COPY || e.key == UK_CUT) && lo == hi) return ui_find_leave(u), false;", ""),
-    ('ui/handle.c', "    if ((e.key == UK_COPY || e.key == UK_CUT) && lo == hi) return ui_find_leave(u), false;", "    if (e.key == UK_CUT && lo == hi) return ui_find_leave(u), false;"),
-    ('ui/handle.c', "    if ((e.key == UK_COPY || e.key == UK_CUT) && lo == hi) return ui_find_leave(u), false;", "    if ((e.key == UK_COPY || e.key == UK_CUT)) return ui_find_leave(u), false;"),
+    ('ui/handle.c', "    if (ui_line_copies_nothing(l, e)) return u->focus = UI_FOCUS_LIST, false;   // (the cursor's result)\n", ''),
+    ('ui/edit.c', '    return (e.key == UK_COPY || e.key == UK_CUT) && lo == hi;', '    return e.key == UK_COPY && lo == hi;'),
+    ('ui/edit.c', '    return (e.key == UK_COPY || e.key == UK_CUT) && lo == hi;', '    return (e.key == UK_COPY || e.key == UK_CUT);'),
+    ('ui/handle.c', '    if (ui_line_copies_nothing(ui_find_line(u), e)) return ui_find_leave(u), false;\n', ''),
+    ('ui/edit.c', '    return (e.key == UK_COPY || e.key == UK_CUT) && lo == hi;', '    return (e.key == UK_CUT) && lo == hi;'),
 ]
 # ---- the text fields on one line editor, and words (2026-10-28)
 MUTANTS += [
@@ -1819,4 +1818,6 @@ MUTANTS += [
     ('ui/menus.c', '    case UM_ADD_BOOKMARK: return u->can_bookmark && ui_view_allows(u->view, UA_ADD_BOOKMARK);', '    case UM_ADD_BOOKMARK: return ui_view_allows(u->view, UA_ADD_BOOKMARK);'),
     ('ui/menus.c', '    case UM_ADD_BOOKMARK: return u->can_bookmark && ui_view_allows(u->view, UA_ADD_BOOKMARK);', '    case UM_ADD_BOOKMARK: return u->can_bookmark;'),
     ('ui/handle.c', 'ui_unfocus(u, UI_FOCUS_SIDE), ui_unfocus(u, UI_FOCUS_FIND);   // (the find bar', 'ui_unfocus(u, UI_FOCUS_SIDE);   // (the find bar'),
+    ('ui/edit.c', '    int n = s.len < l.max ? (int)s.len : l.max;', '    int n = (int)s.len;'),
+    ('ui/edit.c', '    *l.len = *l.caret = *l.anchor = n;', '    *l.len = *l.caret = n;'),
 ]

@@ -332,7 +332,7 @@ static Str text_paste(void)
 
 static void rename_commit(void)
 {
-    Str to = { app.ui.edit, app.ui.edit_len }, from = str_from_c(app.edit_from);
+    Str to = { app.ui.edit.b, app.ui.edit.len }, from = str_from_c(app.edit_from);
     if (str_eq(to, from)) { ui_edit_close(&app.ui); return; }
     const char *in = app.edit_dir;
     char was[PATH_MAX], will[PATH_MAX];
@@ -551,8 +551,8 @@ static void location_go(void)
 {
     Str to;
     char path[PATH_MAX];
-    if (!ui_location(&scratch, (Str){ app.ui.edit, app.ui.edit_len }, here_dir(), getenv("HOME"), &to) || to.len >= PATH_MAX) {
-        set_status(true, "Not a folder: %.*s", app.ui.edit_len, app.ui.edit);
+    if (!ui_location(&scratch, (Str){ app.ui.edit.b, app.ui.edit.len }, here_dir(), getenv("HOME"), &to) || to.len >= PATH_MAX) {
+        set_status(true, "Not a folder: %.*s", app.ui.edit.len, app.ui.edit.b);
         return;
     }
     snprintf(path, sizeof path, "%.*s", STR_ARG(to));

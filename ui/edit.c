@@ -59,8 +59,8 @@ static void ui_edit_start(Ui *u, Str text, bool path)
 {
     u->edit_path = path;
     isize max = ui_edit_max(u), n = text.len < max ? text.len : max;
-    memcpy(u->edit, text.p, (size_t)n);
-    u->edit_len = (int)n, u->caret = (int)n, u->anchor = path ? 0 : (int)n;
+    memcpy(u->edit.b, text.p, (size_t)n);
+    u->edit.len = (int)n, u->edit.caret = (int)n, u->edit.anchor = path ? 0 : (int)n;
     ui_find_leave(u);
     u->focus = UI_FOCUS_EDIT;   // (the search field's keys too: they stayed before, 2026-10-28)
 }
@@ -70,7 +70,7 @@ static void ui_edit_start(Ui *u, Str text, bool path)
 static void ui_edit_open_all(Ui *u, Str text)
 {
     ui_edit_start(u, text, false);
-    u->anchor = 0;
+    u->edit.anchor = 0;
 }
 
 // Where a file name's extension starts, as F2 selects the rest (Michael, 2026-10-25): at its last
@@ -90,8 +90,8 @@ static int ui_name_stem(Str name)
 static void ui_edit_rename(Ui *u, Str name, bool dir)
 {
     ui_edit_start(u, name, false);
-    u->anchor = 0;
-    if (!dir) u->caret = ui_name_stem((Str){ u->edit, u->edit_len });
+    u->edit.anchor = 0;
+    if (!dir) u->edit.caret = ui_name_stem((Str){ u->edit.b, u->edit.len });
 }
 
 // The location line opened on a path, all of it selected, as browsers and Nemo do: typing a new one
@@ -106,9 +106,10 @@ static void ui_edit_close(Ui *u)
     ui_unfocus(u, UI_FOCUS_EDIT);
 }
 
-// A line of text being edited (F5.2): the rename and location lines' (u->edit) and, since F9, the
-// search field's. Its bytes and at most how many, the caret and the selection's other end (bytes),
-// and whether a '/' may go in (the location line's paths).
+// A line of text being edited, every text field's one editor (F5.2; all seven since 2026-10-28):
+// the rename and location lines, the find bar, the search field, Open With's filter, Edit Bookmarks'
+// name and Keyboard Shortcuts' filter. Its bytes and at most how many, the caret and the
+// selection's other end (bytes), and whether a '/' may go in (all but a name's and find's).
 typedef struct {
     char *b;
     int  *len, *caret, *anchor;
@@ -116,34 +117,36 @@ typedef struct {
     bool  slash;
 } UiLine;
 
+#define UI_TEXT_LINE(t, slash) ((UiLine){ (t).b, &(t).len, &(t).caret, &(t).anchor, (int)sizeof (t).b - 1, (slash) })
+
 static UiLine ui_edit_line(Ui *u)
 {
-    return (UiLine){ u->edit, &u->edit_len, &u->caret, &u->anchor, ui_edit_max(u), u->edit_path };
+    return (UiLine){ u->edit.b, &u->edit.len, &u->edit.caret, &u->edit.anchor, ui_edit_max(u), u->edit_path };
 }
 
 static UiLine ui_ow_line(Ui *u)
 {
-    return (UiLine){ u->ow_text, &u->ow_len, &u->ow_caret, &u->ow_anchor, UI_FIND_MAX, true };
+    return UI_TEXT_LINE(u->ow_filter, true);
 }
 
 static UiLine ui_bmp_line(Ui *u)
 {
-    return (UiLine){ u->bmp_text, &u->bmp_len, &u->bmp_caret, &u->bmp_anchor, (int)sizeof u->bmp_text - 1, true };
+    return UI_TEXT_LINE(u->bmp_name, true);
 }
 
 static UiLine ui_keys_line(Ui *u)
 {
-    return (UiLine){ u->keys_text, &u->keys_len, &u->keys_caret, &u->keys_anchor, (int)sizeof u->keys_text - 1, true };
+    return UI_TEXT_LINE(u->keys_filter, true);
 }
 
 static UiLine ui_find_line(Ui *u)
 {
-    return (UiLine){ u->find, &u->find_len, &u->find_caret, &u->find_anchor, UI_FIND_MAX, false };
+    return UI_TEXT_LINE(u->find, false);
 }
 
 static UiLine ui_search_line(Ui *u)
 {
-    return (UiLine){ u->search, &u->search_len, &u->search_caret, &u->search_anchor, UI_FIND_MAX, false };
+    return UI_TEXT_LINE(u->search, false);
 }
 
 // The selection, [*lo, *hi): empty when the anchor is at the caret.
@@ -153,9 +156,19 @@ static void ui_line_sel(UiLine l, int *lo, int *hi)
     *hi = *l.anchor < *l.caret ? *l.caret : *l.anchor;
 }
 
-static void ui_edit_sel(const Ui *u, int *lo, int *hi)
+static void ui_edit_sel(const Ui *u, int *lo, int *hi)   // (the edit line's, for the state line and the tests)
 {
-    ui_line_sel(ui_edit_line((Ui *)u), lo, hi);
+    int a = u->edit.anchor, c = u->edit.caret;
+    *lo = a < c ? a : c, *hi = a < c ? c : a;
+}
+
+// Ctrl+C or Ctrl+X with no text selected: not the field's. The find bar and the search field give
+// it to the list, which copies the file (as before they edited, 2026-10-28).
+static bool ui_line_copies_nothing(UiLine l, UiEvent e)
+{
+    int lo, hi;
+    ui_line_sel(l, &lo, &hi);
+    return (e.key == UK_COPY || e.key == UK_CUT) && lo == hi;
 }
 
 static int ui_line_back(UiLine l, int at)
@@ -184,6 +197,15 @@ static void ui_line_cut(UiLine l, int from, int to)
 
 // Bytes b[0..n) in place of the selection, the caret after them; false (nothing changed) when they
 // don't fit.
+// The field's text set to s, as much as it holds, the caret at its end, nothing selected: a
+// search's text from its address, a bookmark's label to rename (gui/ sets them; 2026-10-28).
+static void ui_line_set(UiLine l, Str s)
+{
+    int n = s.len < l.max ? (int)s.len : l.max;
+    memcpy(l.b, s.p, (size_t)n);
+    *l.len = *l.caret = *l.anchor = n;
+}
+
 static bool ui_line_put(UiLine l, const char *b, int n)
 {
     int lo, hi;

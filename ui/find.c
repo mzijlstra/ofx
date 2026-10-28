@@ -24,7 +24,7 @@ static isize ui_find_back(const Ui *u)
 // or back there when the text is empty.
 static void ui_find_update(Ui *u, UiNames names)
 {
-    Str text = { u->find, u->find_len };
+    Str text = { u->find.b, u->find.len };
     ui_matcher_set(&u->find_m, text, u->find_opts);
     isize i = ui_find_at(&u->list, names, &u->find_m, u->find_from, 1);
     u->find_miss = text.len > 0 && i < 0;
@@ -45,7 +45,7 @@ static void ui_find_step(Ui *u, UiNames names, int dir)
 static isize ui_find_count(const Ui *u, UiNames names, isize *at)
 {
     *at = 0;
-    if (!u->finding || u->find_len == 0 || u->find_m.len == 0) return 0;
+    if (!u->finding || u->find.len == 0 || u->find_m.len == 0) return 0;
     isize n = 0;
     for (isize i = 0; i < u->list.n; i++) {
         if (!ui_match(&u->find_m, names.at(names.ctx, i))) continue;
@@ -59,7 +59,7 @@ static void ui_find_close(Ui *u)
 {
     u->finding = false, u->find_miss = false, u->find_select = false;
     ui_unfocus(u, UI_FOCUS_FIND);
-    if (u->find_len) memcpy(u->last, u->find, (size_t)u->find_len), u->last_len = u->find_len;
+    if (u->find.len) memcpy(u->last, u->find.b, (size_t)u->find.len), u->last_len = u->find.len;
 }
 
 // The keys leave the find bar (Enter, a command, the menu, the edit line); it stays open, its text
@@ -71,7 +71,7 @@ static void ui_find_leave(Ui *u)
         return;
     }
     ui_unfocus(u, UI_FOCUS_FIND);
-    if (u->find_len) memcpy(u->last, u->find, (size_t)u->find_len), u->last_len = u->find_len;
+    if (u->find.len) memcpy(u->last, u->find.b, (size_t)u->find.len), u->last_len = u->find.len;
 }
 
 static void ui_mark(Ui *u, isize i, bool on);
@@ -82,8 +82,8 @@ static void ui_mark_clear(Ui *u);
 // compile matches nothing: the selection stays and so does the bar, its reason in red (reviewer-2).
 static void ui_find_select(Ui *u, UiNames names)
 {
-    if (u->find_m.bad && u->find_len > 0) return;
-    if (u->find_len > 0) {
+    if (u->find_m.bad && u->find.len > 0) return;
+    if (u->find.len > 0) {
         ui_mark_clear(u);
         for (isize i = 0; i < u->list.n; i++)
             if (ui_match(&u->find_m, names.at(names.ctx, i))) ui_mark(u, i, true);
@@ -93,7 +93,7 @@ static void ui_find_select(Ui *u, UiNames names)
 
 static void ui_find_open(Ui *u)
 {
-    u->finding = true, u->find_miss = false, u->find_select = false, u->find_len = u->find_caret = u->find_anchor = 0, u->find_from = u->list.sel;
+    u->finding = true, u->find_miss = false, u->find_select = false, UI_TEXT_CLEAR(u->find), u->find_from = u->list.sel;
     u->focus = UI_FOCUS_FIND;
     ui_matcher_set(&u->find_m, STR_EMPTY, u->find_opts);   // Up and Down in an empty bar find nothing (reviewer-2)
 }

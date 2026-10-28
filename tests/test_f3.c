@@ -974,33 +974,33 @@ static void test_ui_f3(void)
     ui_handle(&u, names, &in);
     in = keys(1, UK_F2);
     CHECK(ui_handle(&u, names, &in).kind == UA_NONE && (u.focus == UI_FOCUS_EDIT));
-    CHECK(u.edit_len == 5 && memcmp(u.edit, "alpha", 5) == 0 && u.caret == 5 && u.anchor == 0);
+    CHECK(u.edit.len == 5 && memcmp(u.edit.b, "alpha", 5) == 0 && u.edit.caret == 5 && u.edit.anchor == 0);
     in = keys(1, UK_END);
     ui_handle(&u, names, &in);
-    CHECK(u.caret == 5 && u.anchor == 5);
+    CHECK(u.edit.caret == 5 && u.edit.anchor == 5);
     // Letters edit, they don't move or act (j, t, Space, '/').
     in = chars("jt /");
     CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.list.sel == 0);
-    CHECK(u.edit_len == 8 && memcmp(u.edit, "alphajt ", 8) == 0);
+    CHECK(u.edit.len == 8 && memcmp(u.edit.b, "alphajt ", 8) == 0);
     in = keys(3, UK_BACKSPACE, UK_LEFT, UK_LEFT);
     ui_handle(&u, names, &in);
-    CHECK(u.edit_len == 7 && u.caret == 5);
+    CHECK(u.edit.len == 7 && u.edit.caret == 5);
     in = keys(1, UK_DELETE);
     ui_handle(&u, names, &in);
-    CHECK(u.edit_len == 6 && memcmp(u.edit, "alphat", 6) == 0 && u.caret == 5);
+    CHECK(u.edit.len == 6 && memcmp(u.edit.b, "alphat", 6) == 0 && u.edit.caret == 5);
     in = keys(1, UK_HOME);
     ui_handle(&u, names, &in);
     in = chars("X");
     ui_handle(&u, names, &in);
-    CHECK(memcmp(u.edit, "Xalphat", 7) == 0 && u.caret == 1);
+    CHECK(memcmp(u.edit.b, "Xalphat", 7) == 0 && u.edit.caret == 1);
     in = keys(2, UK_END, UK_RIGHT);
     ui_handle(&u, names, &in);
-    CHECK(u.caret == 7);
+    CHECK(u.edit.caret == 7);
     in = keys(1, UK_DELETE);   // nothing after the caret
     ui_handle(&u, names, &in);
-    CHECK(u.edit_len == 7);
+    CHECK(u.edit.len == 7);
     in = keys(8, UK_HOME, UK_LEFT, UK_BACKSPACE, UK_UP, UK_DOWN, UK_TAB, UK_PAGEDOWN, UK_COPY);
-    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.caret == 0 && u.edit_len == 7 && u.list.sel == 0 && u.focus != UI_FOCUS_SIDE);
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.edit.caret == 0 && u.edit.len == 7 && u.list.sel == 0 && u.focus != UI_FOCUS_SIDE);
     // UTF-8: one code point at a time.
     in = keys(1, UK_END);
     ui_handle(&u, names, &in);
@@ -1008,22 +1008,22 @@ static void test_ui_f3(void)
     in.ev[in.nev++] = (UiEvent){ UK_NONE, 0xE9 };
     in.ev[in.nev++] = (UiEvent){ UK_NONE, 0x1F600 };
     ui_handle(&u, names, &in);
-    CHECK(u.edit_len == 7 + 2 + 4 && u.caret == 13);
+    CHECK(u.edit.len == 7 + 2 + 4 && u.edit.caret == 13);
     in = keys(1, UK_LEFT);
     ui_handle(&u, names, &in);
-    CHECK(u.caret == 9);
+    CHECK(u.edit.caret == 9);
     in = keys(1, UK_BACKSPACE);
     ui_handle(&u, names, &in);
-    CHECK(u.edit_len == 11 && u.caret == 7 && (unsigned char)u.edit[7] == 0xF0);
+    CHECK(u.edit.len == 11 && u.edit.caret == 7 && (unsigned char)u.edit.b[7] == 0xF0);
     in = keys(1, UK_DELETE);
     ui_handle(&u, names, &in);
-    CHECK(u.edit_len == 7);
+    CHECK(u.edit.len == 7);
     // Controls are dropped; the line holds NAME_MAX bytes at most.
     in = ev1(UK_NONE, 0x7F);
     ui_handle(&u, names, &in);
     in = ev1(UK_NONE, 0x09);
     ui_handle(&u, names, &in);
-    CHECK(u.edit_len == 7);
+    CHECK(u.edit.len == 7);
     // Enter asks gui/ to rename; the line stays open until gui/ closes it.
     in = keys(1, UK_ENTER);
     CHECK(ui_handle(&u, names, &in).kind == UA_RENAME && (u.focus == UI_FOCUS_EDIT));
@@ -1048,7 +1048,7 @@ static void test_ui_f3(void)
     in.ev[in.nev++] = (UiEvent){ UK_NONE, 'b' };
     in.ev[in.nev++] = (UiEvent){ UK_NONE, 'c' };
     ui_handle(&u, names, &in);
-    CHECK(u.edit_len == NAME_MAX && u.edit[NAME_MAX - 1] == 'b');
+    CHECK(u.edit.len == NAME_MAX && u.edit.b[NAME_MAX - 1] == 'b');
     ui_edit_close(&u);
     // F2 closes find; the find line doesn't take F2's edit keys after.
     in = chars("/al");

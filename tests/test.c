@@ -971,7 +971,7 @@ static void test_find(void)
     CHECK(u.find_miss && u.list.sel == 0);
     in = keys(1, UK_BACKSPACE);
     ui_handle(&u, names, &in);
-    CHECK(!u.find_miss && u.list.sel == 4 && u.find_len == 5);
+    CHECK(!u.find_miss && u.list.sel == 4 && u.find.len == 5);
     in = keys(1, UK_ENTER);   // keeps the cursor, gives the keys back (the bar stays), remembers the text
     ui_handle(&u, names, &in);
     CHECK(u.finding && u.focus != UI_FOCUS_FIND && u.list.sel == 4 && u.last_len == 5);
@@ -1010,23 +1010,23 @@ static void test_find(void)
     // Ctrl+F opens it too; a typed "/" and Ctrl+F inside it do nothing; UTF-8 text and its erase.
     in = keys(1, UK_FIND);
     ui_handle(&u, names, &in);
-    CHECK(u.finding && u.find_len == 0 && u.find_from == 4);
+    CHECK(u.finding && u.find.len == 0 && u.find_from == 4);
     in = chars("/");
     ui_handle(&u, names, &in);
-    CHECK(u.finding && u.find_len == 0);
+    CHECK(u.finding && u.find.len == 0);
     in = keys(1, UK_FIND);
     ui_handle(&u, names, &in);
     CHECK(u.finding);
     in = ui_input_none();
     in.ev[in.nev++] = (UiEvent){ UK_NONE, 0xE9 };   // é
     ui_handle(&u, names, &in);
-    CHECK(u.find_len == 2 && u.list.sel == 6);
+    CHECK(u.find.len == 2 && u.list.sel == 6);
     in = keys(1, UK_BACKSPACE);
     ui_handle(&u, names, &in);
-    CHECK(u.find_len == 0 && u.list.sel == 4 && !u.find_miss);   // empty: back where it began, no miss
+    CHECK(u.find.len == 0 && u.list.sel == 4 && !u.find_miss);   // empty: back where it began, no miss
     in = keys(1, UK_BACKSPACE);                  // empty: nothing to erase
     ui_handle(&u, names, &in);
-    CHECK(u.find_len == 0 && u.finding);
+    CHECK(u.find.len == 0 && u.finding);
     // Control characters are not text; a 4-byte one is.
     in = ui_input_none();
     in.ev[in.nev++] = (UiEvent){ UK_NONE, 0x7F };
@@ -1034,12 +1034,12 @@ static void test_find(void)
     in.ev[in.nev++] = (UiEvent){ UK_NONE, 0x1F600 };
     in.ev[in.nev++] = (UiEvent){ UK_NONE, 0x110000 };
     ui_handle(&u, names, &in);
-    CHECK(u.find_len == 4 && memcmp(u.find, "\xF0\x9F\x98\x80", 4) == 0);
+    CHECK(u.find.len == 4 && memcmp(u.find.b, "\xF0\x9F\x98\x80", 4) == 0);
     in = ui_input_none();
     in.ev[in.nev++] = (UiEvent){ UK_NONE, 0x20AC };   // €, 3 bytes
     in.ev[in.nev++] = (UiEvent){ UK_NONE, 0x3B1 };    // α, 2 bytes
     ui_handle(&u, names, &in);
-    CHECK(u.find_len == 9 && memcmp(u.find + 4, "\xE2\x82\xAC\xCE\xB1", 5) == 0);
+    CHECK(u.find.len == 9 && memcmp(u.find.b + 4, "\xE2\x82\xAC\xCE\xB1", 5) == 0);
     // A command gives the keys back and is the list's, keeping the text for n; the bar stays. (Home
     // edits the field since 2026-10-28: PgUp here.)
     isize was_sel = u.list.sel;
@@ -1049,10 +1049,10 @@ static void test_find(void)
     // A full line drops what doesn't fit.
     ui_find_open(&u);
     for (int k = 0; k < UI_FIND_MAX + 10; k++) in = chars("x"), ui_handle(&u, names, &in);
-    CHECK(u.find_len == UI_FIND_MAX);
+    CHECK(u.find.len == UI_FIND_MAX);
     in = ui_input_none(), in.ev[in.nev++] = (UiEvent){ UK_NONE, 0xE9 };
     ui_handle(&u, names, &in);
-    CHECK(u.find_len == UI_FIND_MAX);
+    CHECK(u.find.len == UI_FIND_MAX);
     ui_find_close(&u);
     // Nothing to search: no match, no crash.
     UiMatcher fm = { 0 };

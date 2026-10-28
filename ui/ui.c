@@ -580,6 +580,12 @@ typedef struct {
     char        err[128];
 } UiMatcher;
 
+// A text field's text (2026-10-28: four loose variables a field before): its bytes, how many, the
+// caret and the selection's other end (bytes; the selection is between them). n bytes hold at
+// most n - 1 and a 0 after them; UI_TEXT_LINE is the editor's view of one (edit.c).
+#define UI_TEXT(n) struct { char b[n]; int len, caret, anchor; }
+#define UI_TEXT_CLEAR(t) ((t).len = (t).caret = (t).anchor = 0)
+
 // Which listing is shown. One value (2026-10-28: in_trash and in_search before, two flags tested
 // apart at about 250 places, which could both be set).
 typedef enum { UI_VIEW_FOLDER, UI_VIEW_TRASH, UI_VIEW_SEARCH } UiView;
@@ -607,8 +613,7 @@ typedef struct {
     bool   finding;          // the find bar is open (Michael, 2026-10-26: until Esc or its ×)
     bool   find_select;      // Select Items Matching (F7.4): Enter selects every match, and closes it
     bool   find_miss;        // its text matches nothing
-    char   find[UI_FIND_MAX];
-    int    find_len, find_caret, find_anchor;   // (bytes; the selection between them, as the edit line's)
+    UI_TEXT(UI_FIND_MAX + 1) find;
     isize  find_from;        // the cursor when the find line opened
     char   last[UI_FIND_MAX];   // the last text found, for n and N
     int    last_len;
@@ -623,9 +628,7 @@ typedef struct {
     // The edit line: a rename (a new folder is made at once and renamed with it), or the top bar's
     // location line (F4), which holds a path. Open while focus is UI_FOCUS_EDIT.
     bool   edit_path;        // the location line
-    char   edit[PATH_MAX];
-    int    edit_len, caret;  // bytes
-    int    anchor;           // the selection's other end (F5.2): selected between it and the caret
+    UI_TEXT(PATH_MAX) edit;  // (its own most: a name's or a path's, ui_edit_max)
     // A Ctrl+C or Ctrl+X in the edit line: the text gui/ puts on the clipboard, then clears copied.
     bool   copied;
     char   copy[PATH_MAX];
@@ -650,8 +653,7 @@ typedef struct {
     // The search view's field's text (find's toggles apply), and search_edited when the text or a
     // toggle changed (gui/ searches again 150 ms after the last change, and clears it).
     bool   search_edited;
-    char   search[UI_FIND_MAX];
-    int    search_len, search_caret, search_anchor;   // (bytes; the selection between them, as the edit line's)
+    UI_TEXT(UI_FIND_MAX + 1) search;
     // The menu bar (F7.1): a menu open, and its entry marked (-1: none, as a menu the pointer
     // opened). gui/ says whether the folder shown takes new files.
     bool   menu_on;
@@ -697,13 +699,11 @@ typedef struct {
     bool   bmp;
     UiList bmp_list;
     bool   bmp_naming;
-    char   bmp_text[256];
-    int    bmp_len, bmp_caret, bmp_anchor;
+    UI_TEXT(256) bmp_name;
     // Keyboard Shortcuts (F7.5): up; its filter's text; the lines it shows (a row of UI_KEYS, or
     // -1 - a section for its heading), scrolled by keys_list.top.
     bool   keys;
-    char   keys_text[64];
-    int    keys_len, keys_caret, keys_anchor;
+    UI_TEXT(64) keys_filter;
     short  keys_line[UI_KEYS_LINES];
     UiList keys_list;
     UiMatcher keys_m;
@@ -720,8 +720,7 @@ typedef struct {
     bool   ow;
     bool   ow_in_list;
     bool   ow_fresh;
-    char   ow_text[UI_FIND_MAX];
-    int    ow_len, ow_caret, ow_anchor;
+    UI_TEXT(UI_FIND_MAX + 1) ow_filter;
     UiMatchOpts ow_opts;
     UiMatcher   ow_m;
     UiList ow_list;

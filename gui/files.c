@@ -586,7 +586,7 @@ static void layout_cell(int k, isize i)
         }
         if (sel && app.ui.focus == UI_FOCUS_EDIT && !app.ui.edit_path) {
             // As wide as the name and a little, from a cell's width to two cells'.
-            float ew = str_width((Str){ app.ui.edit, app.ui.edit_len }) + 24;
+            float ew = str_width((Str){ app.ui.edit.b, app.ui.edit.len }) + 24;
             ew = ew < cw ? cw : ew > 2 * cw ? 2 * cw : ew;
             CLAY(CLAY_ID("cell-edit"), { .layout = { .sizing = { CLAY_SIZING_FIXED(ew), CLAY_SIZING_FIT(0) } },
                                          .floating = { .attachTo = CLAY_ATTACH_TO_PARENT, .zIndex = 3, .offset = { 0, 6 + (float)px + 4 },

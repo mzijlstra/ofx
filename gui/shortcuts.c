@@ -40,7 +40,7 @@ static void layout_keys_panel(void)
                                                       .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
                                           .backgroundColor = cc(t->bg), .border = { .color = cc(t->accent), .width = CLAY_BORDER_OUTSIDE(1) },
                                           .clip = { .horizontal = true } }) {
-                if (!u->keys_len) {
+                if (!u->keys_filter.len) {
                     text(cz("Type to filter"), cc(t->fg_dim));
                     CLAY(CLAY_ID("keys-caret"), { .layout = { .sizing = { CLAY_SIZING_FIXED(2), CLAY_SIZING_FIXED(FONT_PX + 2) } }, .backgroundColor = cc(t->accent) }) {}
                 } else {

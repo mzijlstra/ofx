@@ -57,7 +57,7 @@ static void bmp_change(UiActionKind op, int i)
     } else if (op == UA_BM_REMOVE) {
         bm_remove(&now, j);
     } else if (op == UA_BM_RENAME) {
-        bm_rename(&bmwa, &now, j, (Str){ app.ui.bmp_text, app.ui.bmp_len });
+        bm_rename(&bmwa, &now, j, (Str){ app.ui.bmp_name.b, app.ui.bmp_name.len });
     }
     Str text = bm_format(&bmwa, &now);
     bool ok = now.n == 0 || text.len > 0;
@@ -84,9 +84,7 @@ static void bmp_act(UiAction a)
         // The field starts with its label, or the folder's name, all of it; the caret at its end.
         Str s = a.index < bmarks.n ? (bmarks.b[a.index].label.len || !bmarks.b[a.index].path[0] ? bmarks.b[a.index].label : bm_label(&bmarks.b[a.index]))
                                    : STR_EMPTY;
-        int n = s.len < (isize)sizeof app.ui.bmp_text - 1 ? (int)s.len : (int)sizeof app.ui.bmp_text - 1;
-        memcpy(app.ui.bmp_text, s.p, (size_t)n);
-        app.ui.bmp_len = app.ui.bmp_caret = app.ui.bmp_anchor = n;
+        ui_line_set(ui_bmp_line(&app.ui), s);
         break;
     }
     case UA_BM_REMOVE: case UA_BM_UP: case UA_BM_DOWN: case UA_BM_RENAME: bmp_change(a.kind, (int)a.index); break;

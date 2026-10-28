@@ -176,30 +176,30 @@ static void test_ui_f4(void)
 
     // The location line: all selected as it opens; typing replaces it, Backspace clears it.
     ui_location_open(&u, S("/home/m/code"));
-    CHECK((u.focus == UI_FOCUS_EDIT) && u.edit_path && u.anchor == 0 && u.caret == 12);
+    CHECK((u.focus == UI_FOCUS_EDIT) && u.edit_path && u.edit.anchor == 0 && u.edit.caret == 12);
     in = chars("/tmp");
     ui_handle(&u, names, &in);
-    CHECK(u.edit_len == 4 && memcmp(u.edit, "/tmp", 4) == 0 && u.anchor == 4);   // '/' allowed in a path
+    CHECK(u.edit.len == 4 && memcmp(u.edit.b, "/tmp", 4) == 0 && u.edit.anchor == 4);   // '/' allowed in a path
     in = keys(1, UK_ENTER);
     CHECK(ui_handle(&u, names, &in).kind == UA_GO && (u.focus == UI_FOCUS_EDIT));
     ui_location_open(&u, S("/home/m"));
     in = keys(1, UK_BACKSPACE);
     ui_handle(&u, names, &in);
-    CHECK(u.edit_len == 0 && (u.focus == UI_FOCUS_EDIT));
+    CHECK(u.edit.len == 0 && (u.focus == UI_FOCUS_EDIT));
     ui_location_open(&u, S("/home/m"));
     in = keys(1, UK_DELETE);
     ui_handle(&u, names, &in);
-    CHECK(u.edit_len == 0);
+    CHECK(u.edit.len == 0);
     // A move of the caret keeps it, and ends the selection.
     ui_location_open(&u, S("/home/m"));
     in = keys(1, UK_END);
     ui_handle(&u, names, &in);
     in = chars("/x");
     ui_handle(&u, names, &in);
-    CHECK(u.edit_len == 9 && memcmp(u.edit, "/home/m/x", 9) == 0);
+    CHECK(u.edit.len == 9 && memcmp(u.edit.b, "/home/m/x", 9) == 0);
     in = keys(1, UK_HOME);
     ui_handle(&u, names, &in);
-    CHECK(u.caret == 0);
+    CHECK(u.edit.caret == 0);
     // Ctrl+L or the toggle closes it; Esc too.
     in = keys(1, UK_LOCATION);
     ui_handle(&u, names, &in);
@@ -215,13 +215,13 @@ static void test_ui_f4(void)
     char longp[600];
     memset(longp, 'p', sizeof longp - 1), longp[sizeof longp - 1] = 0;
     ui_location_open(&u, str_from_c(longp));
-    CHECK(u.edit_len == 599);
+    CHECK(u.edit.len == 599);
     ui_edit_close(&u);
     ui_edit_open(&u, S("name"));
-    CHECK(!u.edit_path && u.anchor == 4);
+    CHECK(!u.edit_path && u.edit.anchor == 4);
     in = chars("/");
     ui_handle(&u, names, &in);
-    CHECK(u.edit_len == 4);
+    CHECK(u.edit.len == 4);
     in = keys(1, UK_LOCATION);   // Ctrl+L doesn't close a rename
     ui_handle(&u, names, &in);
     CHECK((u.focus == UI_FOCUS_EDIT));

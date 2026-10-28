@@ -259,7 +259,7 @@ static void test_select_match(void)
     menu_keys(&u, 1, UK_FIND);
     CHECK(u.finding && !u.find_select);
     menu_keys(&u, 1, UK_SELECT_MATCH);
-    CHECK(u.finding && u.find_select && u.find_len == 0);
+    CHECK(u.finding && u.find_select && u.find.len == 0);
     menu_keys(&u, 1, UK_ESC);
     // An empty folder: nothing to select from, no bar.
     u = menu_ui(0);

@@ -55,10 +55,10 @@ static isize find_count(isize *at)
 {
     static struct { int lists; isize sel, n, at; UiMatchOpts o; int len, find_len; char text[UI_FIND_MAX + 1]; bool valid, finding; } c;
     const UiMatcher *m = &app.ui.find_m;
-    if (!c.valid || c.finding != app.ui.finding || c.find_len != app.ui.find_len || c.lists != app.lists || c.sel != app.ui.list.sel || c.len != m->len || memcmp(c.text, m->text, (size_t)m->len) ||
+    if (!c.valid || c.finding != app.ui.finding || c.find_len != app.ui.find.len || c.lists != app.lists || c.sel != app.ui.list.sel || c.len != m->len || memcmp(c.text, m->text, (size_t)m->len) ||
         c.o.cased != m->o.cased || c.o.word != m->o.word || c.o.regex != m->o.regex) {
         c.n = ui_find_count(&app.ui, (UiNames){ list_name, NULL, list_dir }, &c.at);
-        c.finding = app.ui.finding, c.find_len = app.ui.find_len, c.lists = app.lists, c.sel = app.ui.list.sel, c.len = m->len, c.o = m->o, c.valid = true;
+        c.finding = app.ui.finding, c.find_len = app.ui.find.len, c.lists = app.lists, c.sel = app.ui.list.sel, c.len = m->len, c.o = m->o, c.valid = true;
         memcpy(c.text, m->text, (size_t)m->len);
     }
     *at = c.at;
@@ -115,13 +115,13 @@ static void layout_find_bar(void)
     Theme *t = &app.theme;
     Ui *u = &app.ui;
     isize at, n = find_count(&at);
-    bool bad = u->find_m.bad && u->find_opts.regex && u->find_len;
+    bool bad = u->find_m.bad && u->find_opts.regex && u->find.len;
     CLAY(CLAY_ID("find-bar"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(FIND_BAR_H) }, .padding = { PAD, 8, 0, 0 }, .childGap = 10,
                                             .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
                                 .backgroundColor = cc(t->bg_light),
                                 .border = { .color = rule_color(), .width = { .top = 1 } } }) {
         text(cz(u->find_select ? "Select" : "Find"), cc(t->fg_dim));   // Select Items Matching (F7.4)
-        bar_field("find", u->focus == UI_FOCUS_FIND, bad, ui_find_line(u), (Str){ u->find, u->find_len }, u->find_miss ? cc(t->red) : cc(t->fg), 0);   // (red text: no match)
+        bar_field("find", u->focus == UI_FOCUS_FIND, bad, ui_find_line(u), (Str){ u->find.b, u->find.len }, u->find_miss ? cc(t->red) : cc(t->fg), 0);   // (red text: no match)
         // At least as wide as "88 of 88", so the chevrons don't move as the count grows.
         CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_FIT(str_width(S("88 of 88")), 0), CLAY_SIZING_FIT(0) }, .childAlignment = { .x = CLAY_ALIGN_X_RIGHT } } }) {
             if (bad) text(fit(str_from_c(u->find_m.err), 240, false), cc(t->red));
@@ -147,7 +147,7 @@ static void layout_search_bar(void)
 {
     Theme *t = &app.theme;
     Ui *u = &app.ui;
-    bool bad = app.search_m.bad && u->find_opts.regex && u->search_len;
+    bool bad = app.search_m.bad && u->find_opts.regex && u->search.len;
     char where[PATH_MAX + 16];
     ui_tilde(where, sizeof where, app.search_root, getenv("HOME"));
     CLAY(CLAY_ID("search-bar"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(SEARCH_BAR_H) }, .padding = { PAD, PAD, 0, 0 }, .childGap = 10,
@@ -156,7 +156,7 @@ static void layout_search_bar(void)
         CLAY(CLAY_ID("search-where"), { .layout = { .sizing = { CLAY_SIZING_FIT(0, 300), CLAY_SIZING_FIT(0) } }, .clip = { .horizontal = true } }) {
             text(fit(str_from_c(arena_sprintf(&frame, "Search in %s", where)), 300, true), cc(t->fg_dim));
         }
-        bar_field("search", u->focus == UI_FOCUS_SEARCH, bad, ui_search_line(u), (Str){ u->search, u->search_len }, cc(t->fg), TOGGLE_SEARCH);
+        bar_field("search", u->focus == UI_FOCUS_SEARCH, bad, ui_search_line(u), (Str){ u->search.b, u->search.len }, cc(t->fg), TOGGLE_SEARCH);
         if (bad) text(fit(str_from_c(app.search_m.err), 240, false), cc(t->red));
     }
 }
@@ -233,7 +233,7 @@ static void search_status(char *buf, size_t cap)
     char skipped[256];
     search_skips_text(&app.search_s, skipped, sizeof skipped);
     const char *sep = skipped[0] ? " \xC2\xB7 " : "";
-    if (!app.ui.search_len) snprintf(buf, cap, "A name, or part of one; * and ? as wildcards (*.ts)");
+    if (!app.ui.search.len) snprintf(buf, cap, "A name, or part of one; * and ? as wildcards (*.ts)");
     else if (!app.search_done) snprintf(buf, cap, "Searching\xE2\x80\xA6 %td found%s%s", app.list.n, sep, skipped);
     else if (app.search_s.full) snprintf(buf, cap, "%td found, the most a search shows%s%s", app.list.n, sep, skipped);
     else snprintf(buf, cap, "%td found%s%s", app.list.n, sep, skipped);

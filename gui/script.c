@@ -157,7 +157,7 @@ static void script_state(char *out, size_t cap)
     static const char *const UNDO_KINDS[] = { "-", "rename", "mkdir", "trash", "copy", "move", "mkfile", "chmod", "link" };
     _Static_assert(sizeof UNDO_KINDS / sizeof UNDO_KINDS[0] == UNDO_LINK + 1, "a name for each undo");
     char edit[NAME_MAX + 1];
-    snprintf(edit, sizeof edit, "%.*s", app.ui.edit_len ? app.ui.edit_len : 1, app.ui.edit_len ? app.ui.edit : "-");
+    snprintf(edit, sizeof edit, "%.*s", app.ui.edit.len ? app.ui.edit.len : 1, app.ui.edit.len ? app.ui.edit.b : "-");
     for (char *c = edit; *c; c++)
         if (*c == ' ') *c = '_';
     // The edit line's selection and caret (bytes), the text it last copied, the path buttons'
@@ -254,7 +254,7 @@ static void script_state(char *out, size_t cap)
     // The search view (F9): its field's text and its status line, spaces as '_'; the cursor's folder
     // below the one searched ("-": that one, or not a search).
     char searchtext[UI_FIND_MAX + 1], searchinfo[512], seldir[PATH_MAX];
-    snprintf(searchtext, sizeof searchtext, "%.*s", app.ui.search_len ? app.ui.search_len : 1, app.ui.search_len ? app.ui.search : "-");
+    snprintf(searchtext, sizeof searchtext, "%.*s", app.ui.search.len ? app.ui.search.len : 1, app.ui.search.len ? app.ui.search.b : "-");
     if (app.ui.view == UI_VIEW_SEARCH) search_status(searchinfo, sizeof searchinfo);
     else snprintf(searchinfo, sizeof searchinfo, "-");
     const Entry *se = app.have_list && app.ui.list.n > 0 ? &app.list.e[app.ui.list.sel] : NULL;
@@ -334,7 +334,7 @@ static void script_state(char *out, size_t cap)
     }
     for (char *c = keysfirst; *c; c++) *c = *c == ' ' ? '_' : *c;
     char bmptext[300];   // Edit Bookmarks' rename field (spaces '_'; "-" empty)
-    snprintf(bmptext, sizeof bmptext, "%.*s", app.ui.bmp_len ? app.ui.bmp_len : 1, app.ui.bmp_len ? app.ui.bmp_text : "-");
+    snprintf(bmptext, sizeof bmptext, "%.*s", app.ui.bmp_name.len ? app.ui.bmp_name.len : 1, app.ui.bmp_name.len ? app.ui.bmp_name.b : "-");
     for (char *c = bmptext; *c; c++) *c = *c == ' ' ? '_' : *c;
     // The bottom bar as the last frame drew it lies inside the window (F7.1: under the menu bar's
     // 26 px the rest is as tall as before).
@@ -351,7 +351,7 @@ static void script_state(char *out, size_t cap)
     // Open With (F7.3): its field's text (spaces '_'), the app under the cursor (its desktop id),
     // and the toggles as letters (c, w, r; "-" none), the panel's and find's.
     char owtext[UI_FIND_MAX + 1], owapp[NAME_MAX + 1], owopts[4], findopts[4];
-    snprintf(owtext, sizeof owtext, "%.*s", app.ui.ow_len ? app.ui.ow_len : 1, app.ui.ow_len ? app.ui.ow_text : "-");
+    snprintf(owtext, sizeof owtext, "%.*s", app.ui.ow_filter.len ? app.ui.ow_filter.len : 1, app.ui.ow_filter.len ? app.ui.ow_filter.b : "-");
     for (char *c = owtext; *c; c++)
         if (*c == ' ') *c = '_';
     isize owsel = app.ui.ow && app.ui.ow_list.n > 0 ? app.ui.ow_idx[app.ui.ow_list.sel] : -1;
@@ -424,14 +424,14 @@ static void script_state(char *out, size_t cap)
              app.icon_scale, GetScreenWidth(), GetScreenHeight(), app.reloads, app.themes, atomic_load(&watch.batches),
              (double)frame_us_max / 1000.0, icon, app.show_hidden,
              app.ui.sort.key == SORT_NAME ? "name" : app.ui.sort.key == SORT_SIZE ? "size" : "mtime", app.ui.sort.reverse,
-             app.ui.finding, app.ui.focus == UI_FOCUS_FIND, app.ui.find_miss, app.ui.find_len ? app.ui.find_len : 1, app.ui.find_len ? app.ui.find : "-",
+             app.ui.finding, app.ui.focus == UI_FOCUS_FIND, app.ui.find_miss, app.ui.find.len ? app.ui.find.len : 1, app.ui.find.len ? app.ui.find.b : "-",
              app.ui.last_len ? app.ui.last_len : 1, app.ui.last_len ? app.ui.last : "-", app.ui.side.sel, app.ui.focus == UI_FOCUS_SIDE,
              app.ui.side_mode == SIDE_PLACES && app.ui.side.sel < app.places.n ? app.places.p[app.ui.side.sel].label : "-", app.place_cur >= 0 ? app.places.p[app.place_cur].label : "-",
              hist.nback, hist.nfwd, app.ui.marked, app.ui.focus == UI_FOCUS_EDIT, edit, app.ui.confirming, app.ui.asking,
              !oldest ? "-" : JOB_PHASES[atomic_load(&oldest->j.phase)], oldest ? atomic_load(&oldest->j.files_done) : 0LL,
              oldest ? atomic_load(&oldest->j.files_total) : 0LL,
              UNDO_KINDS[undo.kind], own.n, own.cut, clip.ok, MODALS[modal_kind()], app.ui.ask_all, tabbar.n, tabbar.cur, tabdirs, sizecell, crumbs, app.crumbs.seg[0].home ? 0 : -1, app.crumbs.cur, app.crumb_lo, app.crumb_hi, app.crumb_arrows,
-             app.ui.focus == UI_FOCUS_EDIT && app.ui.edit_path, cnt, slo, shi, app.ui.caret, copied, keyed,
+             app.ui.focus == UI_FOCUS_EDIT && app.ui.edit_path, cnt, slo, shi, app.ui.edit.caret, copied, keyed,
              jobs.nrun, jobs.nwait, joblabels, jobkey, oldest ? oldest->line.reached : 0, oldest && oldest->line.now > 0, clashjob,
              sides[0] ? sides : "-", spaced, SIDE_MODES_W[app.ui.side_mode], app.ui.side_mode == SIDE_TREE ? tree.n : 0, treecur,
              app.ui.side.sel - app.ui.side.top, treehere, app.ui.view == UI_VIEW_TRASH, app.hov.side, hovernum, ejectbtn, app.cwd_avail >= 0, info,
@@ -452,10 +452,10 @@ static void script_state(char *out, size_t cap)
              app.ui.ow_list.rows, app.ui.ow_list.top, owopts, app.ui.ow_m.bad, app.ui.ow_def, app.ui.ow_def_can, findopts, app.ui.find_m.bad, app.ui.find_select, findn, findat, findtext,
              app.ui.view == UI_VIEW_SEARCH, app.ui.focus == UI_FOCUS_SEARCH, searchtext, app.search_done, app.search_s.full, app.search_due != 0, app.search_m.bad,
              (int)Clay_GetElementData(CLAY_ID("search-bar")).found,
-             app.ui.search_anchor < app.ui.search_caret ? app.ui.search_anchor : app.ui.search_caret,
-             app.ui.search_anchor < app.ui.search_caret ? app.ui.search_caret : app.ui.search_anchor, app.ui.search_caret,
-             app.ui.find_anchor < app.ui.find_caret ? app.ui.find_anchor : app.ui.find_caret,
-             app.ui.find_anchor < app.ui.find_caret ? app.ui.find_caret : app.ui.find_anchor, app.ui.find_caret, seldir, searchinfo, spawn_started, app.status[0] ? app.status : "-");
+             app.ui.search.anchor < app.ui.search.caret ? app.ui.search.anchor : app.ui.search.caret,
+             app.ui.search.anchor < app.ui.search.caret ? app.ui.search.caret : app.ui.search.anchor, app.ui.search.caret,
+             app.ui.find.anchor < app.ui.find.caret ? app.ui.find.anchor : app.ui.find.caret,
+             app.ui.find.anchor < app.ui.find.caret ? app.ui.find.caret : app.ui.find.anchor, app.ui.find.caret, seldir, searchinfo, spawn_started, app.status[0] ? app.status : "-");
     frame_us_max = 0;
 }
 

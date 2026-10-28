@@ -22,9 +22,7 @@ static bool ui_search_event(Ui *u, UiEvent e, Str paste)
         return true;
     }
     UiLine l = ui_search_line(u);
-    int lo, hi;   // (Ctrl+C, Ctrl+X with no text selected: the cursor's result, as before the field edited)
-    ui_line_sel(l, &lo, &hi);
-    if ((e.key == UK_COPY || e.key == UK_CUT) && lo == hi) return u->focus = UI_FOCUS_LIST, false;
+    if (ui_line_copies_nothing(l, e)) return u->focus = UI_FOCUS_LIST, false;   // (the cursor's result)
     UiLineHit h = ui_line_key(u, l, e, paste);
     if (h == UI_LINE_CHANGED) u->search_edited = true;
     if (h) return true;
@@ -55,11 +53,8 @@ static bool ui_find_event(Ui *u, UiNames names, UiEvent e, const UiInput *in)
         ui_find_update(u, names);
         return true;
     }
-    // Ctrl+C and Ctrl+X with no text selected copy or cut the file found, as before the bar edited:
-    // typing a name and copying it is what the bar is for.
-    int lo, hi;
-    ui_line_sel(ui_find_line(u), &lo, &hi);
-    if ((e.key == UK_COPY || e.key == UK_CUT) && lo == hi) return ui_find_leave(u), false;
+    // (the file found: typing a name and copying it is what the bar is for)
+    if (ui_line_copies_nothing(ui_find_line(u), e)) return ui_find_leave(u), false;
     UiLineHit h = ui_line_key(u, ui_find_line(u), e, in->paste);
     if (h == UI_LINE_CHANGED) ui_find_update(u, names);
     if (h) return true;
