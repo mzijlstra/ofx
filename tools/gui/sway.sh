@@ -54,8 +54,11 @@ stop)
     # and never this session's display.
     for i in $(seq 20); do [ -n "$p" ] && kill -0 "$p" 2>/dev/null || break; sleep 0.1; done
     case $sock in
-    wayland-[0-9]*) if [ "$sock" != "${WAYLAND_DISPLAY:-}" ] && ! { [ -n "$p" ] && kill -0 "$p" 2>/dev/null; }; then
-                        rm -f "$XDG_RUNTIME_DIR/$sock" "$XDG_RUNTIME_DIR/$sock.lock"
+    # Stale only when no compositor holds its lock, libwayland's own rule: a live one (Michael's
+    # Hyprland included) always does, whatever sway.socket or WAYLAND_DISPLAY say.
+    wayland-[0-9]*) l="$XDG_RUNTIME_DIR/$sock.lock"
+                    if [ "$sock" != "${WAYLAND_DISPLAY:-}" ] && [ -e "$l" ] && flock -n "$l" true; then
+                        rm -f "$XDG_RUNTIME_DIR/$sock" "$l"
                     fi ;;
     esac
     rm -f "$T/sway.pid" "$T/sway.socket"
