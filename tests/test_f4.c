@@ -176,16 +176,16 @@ static void test_ui_f4(void)
 
     // The location line: all selected as it opens; typing replaces it, Backspace clears it.
     ui_location_open(&u, S("/home/m/code"));
-    CHECK(u.editing && u.edit_path && u.anchor == 0 && u.caret == 12);
+    CHECK((u.focus == UI_FOCUS_EDIT) && u.edit_path && u.anchor == 0 && u.caret == 12);
     in = chars("/tmp");
     ui_handle(&u, names, &in);
     CHECK(u.edit_len == 4 && memcmp(u.edit, "/tmp", 4) == 0 && u.anchor == 4);   // '/' allowed in a path
     in = keys(1, UK_ENTER);
-    CHECK(ui_handle(&u, names, &in).kind == UA_GO && u.editing);
+    CHECK(ui_handle(&u, names, &in).kind == UA_GO && (u.focus == UI_FOCUS_EDIT));
     ui_location_open(&u, S("/home/m"));
     in = keys(1, UK_BACKSPACE);
     ui_handle(&u, names, &in);
-    CHECK(u.edit_len == 0 && u.editing);
+    CHECK(u.edit_len == 0 && (u.focus == UI_FOCUS_EDIT));
     ui_location_open(&u, S("/home/m"));
     in = keys(1, UK_DELETE);
     ui_handle(&u, names, &in);
@@ -203,14 +203,14 @@ static void test_ui_f4(void)
     // Ctrl+L or the toggle closes it; Esc too.
     in = keys(1, UK_LOCATION);
     ui_handle(&u, names, &in);
-    CHECK(!u.editing);
+    CHECK(u.focus != UI_FOCUS_EDIT);
     ui_location_open(&u, S("/a"));
     in = ui_input_none(), in.bar = UB_LOCATION;
-    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && !u.editing);
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.focus != UI_FOCUS_EDIT);
     ui_location_open(&u, S("/a"));
     in = keys(1, UK_ESC);
     ui_handle(&u, names, &in);
-    CHECK(!u.editing);
+    CHECK(u.focus != UI_FOCUS_EDIT);
     // A path longer than a name fits; a rename still stops at NAME_MAX and refuses '/'.
     char longp[600];
     memset(longp, 'p', sizeof longp - 1), longp[sizeof longp - 1] = 0;
@@ -224,12 +224,12 @@ static void test_ui_f4(void)
     CHECK(u.edit_len == 4);
     in = keys(1, UK_LOCATION);   // Ctrl+L doesn't close a rename
     ui_handle(&u, names, &in);
-    CHECK(u.editing);
+    CHECK((u.focus == UI_FOCUS_EDIT));
     in = keys(1, UK_ENTER);
     CHECK(ui_handle(&u, names, &in).kind == UA_RENAME);
     ui_edit_close(&u);
     // A bar click closes a rename (back, up, a path button).
     ui_edit_open(&u, S("name"));
     in = ui_input_none(), in.bar = UB_UP;
-    CHECK(ui_handle(&u, names, &in).kind == UA_PARENT && !u.editing);
+    CHECK(ui_handle(&u, names, &in).kind == UA_PARENT && u.focus != UI_FOCUS_EDIT);
 }

@@ -147,24 +147,24 @@ static void test_side_modes(void)
     // them back.
     in = keys(1, UK_TAB);
     a = ui_handle(&u, names, &in);
-    CHECK(a.kind == UA_SIDE_MODE && a.index == SIDE_PLACES && u.side_mode == SIDE_PLACES && u.side_focus);
+    CHECK(a.kind == UA_SIDE_MODE && a.index == SIDE_PLACES && u.side_mode == SIDE_PLACES && (u.focus == UI_FOCUS_SIDE));
     in = keys(1, UK_TAB);
     ui_handle(&u, names, &in);
-    CHECK(!u.side_focus && u.side_mode == SIDE_PLACES);
+    CHECK(u.focus != UI_FOCUS_SIDE && u.side_mode == SIDE_PLACES);
     // Ctrl+Left goes there and stays; from hidden as Tab does.
     in = keys(2, UK_SIDE, UK_SIDE);
-    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.side_focus);
-    u.side_mode = SIDE_HIDDEN, u.side_focus = false;
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && (u.focus == UI_FOCUS_SIDE));
+    u.side_mode = SIDE_HIDDEN, ui_unfocus(&u, UI_FOCUS_SIDE);
     in = keys(1, UK_SIDE);
     a = ui_handle(&u, names, &in);
-    CHECK(a.kind == UA_SIDE_MODE && a.index == SIDE_PLACES && u.side_focus);
+    CHECK(a.kind == UA_SIDE_MODE && a.index == SIDE_PLACES && (u.focus == UI_FOCUS_SIDE));
     // Hiding it takes the keys from it.
     in = keys(2, UK_F9, UK_F9);
     ui_handle(&u, names, &in);   // the first F9 returns: tree, keys still on it
-    CHECK(u.side_mode == SIDE_TREE && u.side_focus);
+    CHECK(u.side_mode == SIDE_TREE && (u.focus == UI_FOCUS_SIDE));
     in = keys(1, UK_F9);
     ui_handle(&u, names, &in);
-    CHECK(u.side_mode == SIDE_HIDDEN && !u.side_focus);
+    CHECK(u.side_mode == SIDE_HIDDEN && u.focus != UI_FOCUS_SIDE);
     // A mode button clicked.
     in = ui_input_none();
     in.side_mode = SIDE_TREE;
@@ -324,7 +324,7 @@ static void test_tree_keys(void)
     UiNames names = { name_at, NULL, NULL };
     ui_resize(&u.list, 10), ui_resize(&u.side, 5);
     ui_set(&u.list, 5, 0), ui_set(&u.side, 8, 3);
-    u.side_mode = SIDE_TREE, u.side_focus = true;
+    u.side_mode = SIDE_TREE, u.focus = UI_FOCUS_SIDE;
     UiInput in = keys(1, UK_LEFT);
     UiAction a = ui_handle(&u, names, &in);
     CHECK(a.kind == UA_TREE_LEFT && a.index == 3);
@@ -357,11 +357,11 @@ static void test_tree_keys(void)
     in.side_twisty = 1;
     CHECK(ui_handle(&u, names, &in).kind == UA_NONE);
     // The keys in the list, in the tree mode too: Left and Right do nothing.
-    u.side_mode = SIDE_TREE, u.side_focus = false;
+    u.side_mode = SIDE_TREE, ui_unfocus(&u, UI_FOCUS_SIDE);
     in = keys(2, UK_LEFT, UK_RIGHT);
     CHECK(ui_handle(&u, names, &in).kind == UA_NONE);
     // An empty tree: nothing for Left or Right.
-    u.side_focus = true;
+    u.focus = UI_FOCUS_SIDE;
     ui_set(&u.side, 0, 0);
     in = keys(1, UK_LEFT);
     CHECK(ui_handle(&u, names, &in).kind == UA_NONE);
@@ -545,7 +545,7 @@ static void test_trash_keys(void)
     UiKey refused[] = { UK_F2, UK_COPY, UK_CUT, UK_PASTE, UK_NEWFOLDER };
     for (int k = 0; k < COUNT(refused); k++) {
         in = keys(1, refused[k]);
-        CHECK(ui_handle(&u, names, &in).kind == UA_NOT_IN_TRASH && !u.editing);
+        CHECK(ui_handle(&u, names, &in).kind == UA_NOT_IN_TRASH && u.focus != UI_FOCUS_EDIT);
     }
     in = chars("t");
     CHECK(ui_handle(&u, names, &in).kind == UA_NOT_IN_TRASH);

@@ -247,10 +247,10 @@ static void test_crumb_keys(void)
     UiInput in = keys(1, UK_CRUMBS);
     in.crumb_n = 0;
     ui_handle(&u, names, &in);
-    CHECK(!u.crumb_focus);   // no buttons: nothing
+    CHECK(u.focus != UI_FOCUS_CRUMBS);   // no buttons: nothing
     // Ctrl+K: the rightmost shown marked.
     in = keys(1, UK_CRUMBS), in.crumb_n = 5, in.crumb_last = 3;
-    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.crumb_focus && u.crumb_at == 3);
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && (u.focus == UI_FOCUS_CRUMBS) && u.crumb_at == 3);
     // Left, Right, Home, End (with Shift as without), the ends kept.
     static const struct { UiKey k; int at; } MOVES[] = {
         { UK_LEFT, 2 }, { UK_LEFT, 1 }, { UK_LEFT, 0 }, { UK_LEFT, 0 }, { UK_RIGHT, 1 }, { UK_END, 4 }, { UK_RIGHT, 4 },
@@ -258,55 +258,55 @@ static void test_crumb_keys(void)
     };
     for (int i = 0; i < COUNT(MOVES); i++) {
         in = keys(1, MOVES[i].k), in.crumb_n = 5, in.crumb_last = 3;
-        CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.crumb_focus);
+        CHECK(ui_handle(&u, names, &in).kind == UA_NONE && (u.focus == UI_FOCUS_CRUMBS));
         CHECK(u.crumb_at == MOVES[i].at);
     }
     // h and l as Left and Right.
     in = chars("l"), in.crumb_n = 5, in.crumb_last = 3;
     ui_handle(&u, names, &in);
-    CHECK(u.crumb_focus && u.crumb_at == 1);
+    CHECK((u.focus == UI_FOCUS_CRUMBS) && u.crumb_at == 1);
     in = chars("lhh"), in.crumb_n = 5, in.crumb_last = 3;
     ui_handle(&u, names, &in);
-    CHECK(u.crumb_focus && u.crumb_at == 0);
+    CHECK((u.focus == UI_FOCUS_CRUMBS) && u.crumb_at == 0);
     in = chars("h"), in.crumb_n = 5, in.crumb_last = 3;   // at the start: stays
     ui_handle(&u, names, &in);
-    CHECK(u.crumb_focus && u.crumb_at == 0);
+    CHECK((u.focus == UI_FOCUS_CRUMBS) && u.crumb_at == 0);
     CHECK(u.list.sel == 3);   // the list's cursor didn't move
     // Shift+Enter: a background tab, the keyboard staying; Enter goes and gives it back.
     in = keys(1, UK_SEL_RIGHT), in.crumb_n = 5, in.crumb_last = 3;
     ui_handle(&u, names, &in);
     in = keys(1, UK_SHIFT_ENTER), in.crumb_n = 5, in.crumb_last = 3;
     UiAction a = ui_handle(&u, names, &in);
-    CHECK(a.kind == UA_TAB_BG_CRUMB && a.index == 1 && u.crumb_focus);
+    CHECK(a.kind == UA_TAB_BG_CRUMB && a.index == 1 && (u.focus == UI_FOCUS_CRUMBS));
     in = keys(1, UK_ENTER), in.crumb_n = 5, in.crumb_last = 3;
     a = ui_handle(&u, names, &in);
-    CHECK(a.kind == UA_CRUMB && a.index == 1 && !u.crumb_focus);
+    CHECK(a.kind == UA_CRUMB && a.index == 1 && u.focus != UI_FOCUS_CRUMBS);
     // Esc and Tab give it back and do nothing else (the selection kept, the sidebar not taken).
     static u8 mark[20];
     u.mark = mark, ui_mark(&u, 2, true);
     in = keys(2, UK_CRUMBS, UK_ESC), in.crumb_n = 5, in.crumb_last = 3;
-    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && !u.crumb_focus && u.marked == 1);
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.focus != UI_FOCUS_CRUMBS && u.marked == 1);
     ui_mark_clear(&u), u.mark = NULL;
     in = keys(2, UK_CRUMBS, UK_TAB), in.crumb_n = 5, in.crumb_last = 3;
     ui_handle(&u, names, &in);
-    CHECK(!u.crumb_focus && !u.side_focus);
+    CHECK(u.focus != UI_FOCUS_CRUMBS && u.focus != UI_FOCUS_SIDE);
     // Any other key gives it back and is the list's.
     in = keys(2, UK_CRUMBS, UK_DOWN), in.crumb_n = 5, in.crumb_last = 3;
     ui_handle(&u, names, &in);
-    CHECK(!u.crumb_focus && u.list.sel == 4);
+    CHECK(u.focus != UI_FOCUS_CRUMBS && u.list.sel == 4);
     in = keys(1, UK_CRUMBS), in.crumb_n = 5, in.crumb_last = 3;
     ui_handle(&u, names, &in);
     in = chars("j"), in.crumb_n = 5, in.crumb_last = 3;
     ui_handle(&u, names, &in);
-    CHECK(!u.crumb_focus && u.list.sel == 5);
+    CHECK(u.focus != UI_FOCUS_CRUMBS && u.list.sel == 5);
     in = keys(2, UK_CRUMBS, UK_BACKSPACE), in.crumb_n = 5, in.crumb_last = 3;
-    CHECK(ui_handle(&u, names, &in).kind == UA_PARENT && !u.crumb_focus);
+    CHECK(ui_handle(&u, names, &in).kind == UA_PARENT && u.focus != UI_FOCUS_CRUMBS);
     // A click anywhere gives it back: a row, the bar, a tab, a middle click.
     static const int CLICKS = 10;
     for (int c = 0; c < CLICKS; c++) {
         in = keys(1, UK_CRUMBS), in.crumb_n = 5, in.crumb_last = 3;
         ui_handle(&u, names, &in);
-        CHECK(u.crumb_focus);
+        CHECK((u.focus == UI_FOCUS_CRUMBS));
         in = ui_input_none(), in.crumb_n = 5, in.crumb_last = 3;
         switch (c) {
         case 0: in.click = 1; break;
@@ -321,65 +321,65 @@ static void test_crumb_keys(void)
         case 9: in.mid_crumb = 0; break;
         }
         ui_handle(&u, names, &in);
-        CHECK(!u.crumb_focus);
+        CHECK(u.focus != UI_FOCUS_CRUMBS);
     }
     // Without a click it stays; the buttons gone (another folder, fewer of them) move the mark.
     in = keys(1, UK_CRUMBS), in.crumb_n = 5, in.crumb_last = 4;
     ui_handle(&u, names, &in);
     in = ui_input_none(), in.crumb_n = 5;
     ui_handle(&u, names, &in);
-    CHECK(u.crumb_focus && u.crumb_at == 4);
+    CHECK((u.focus == UI_FOCUS_CRUMBS) && u.crumb_at == 4);
     in = ui_input_none(), in.crumb_n = 2;
     ui_handle(&u, names, &in);
-    CHECK(u.crumb_focus && u.crumb_at == 1);
+    CHECK((u.focus == UI_FOCUS_CRUMBS) && u.crumb_at == 1);
     in = ui_input_none(), in.crumb_n = 0;
     ui_handle(&u, names, &in);
-    CHECK(!u.crumb_focus);
+    CHECK(u.focus != UI_FOCUS_CRUMBS);
     // The rightmost shown out of range: the last there is (or the first).
     in = keys(1, UK_CRUMBS), in.crumb_n = 3, in.crumb_last = 7;
     ui_handle(&u, names, &in);
     CHECK(u.crumb_at == 2);
     in = keys(2, UK_ESC, UK_CRUMBS), in.crumb_n = 3, in.crumb_last = -1;
     ui_handle(&u, names, &in);
-    CHECK(u.crumb_focus && u.crumb_at == 0);
+    CHECK((u.focus == UI_FOCUS_CRUMBS) && u.crumb_at == 0);
     // From the location line: it closes, the buttons take the keyboard; a rename keeps Ctrl+K out.
     ui_location_open(&u, S("/a/b"));
     in = keys(1, UK_CRUMBS), in.crumb_n = 3, in.crumb_last = 2;
     ui_handle(&u, names, &in);
-    CHECK(!u.editing && u.crumb_focus && u.crumb_at == 2);
+    CHECK(u.focus != UI_FOCUS_EDIT && (u.focus == UI_FOCUS_CRUMBS) && u.crumb_at == 2);
     in = keys(1, UK_ESC), in.crumb_n = 3;
     ui_handle(&u, names, &in);
     ui_edit_open(&u, S("name"));
     in = keys(1, UK_CRUMBS), in.crumb_n = 3, in.crumb_last = 2;
     ui_handle(&u, names, &in);
-    CHECK(u.editing && !u.crumb_focus);
+    CHECK((u.focus == UI_FOCUS_EDIT) && u.focus != UI_FOCUS_CRUMBS);
     ui_edit_close(&u);
     // Opening an edit line or the find line takes the keyboard from them.
     in = keys(2, UK_CRUMBS, UK_F2), in.crumb_n = 3, in.crumb_last = 2;
     ui_handle(&u, names, &in);
-    CHECK(u.editing && !u.crumb_focus);
+    CHECK((u.focus == UI_FOCUS_EDIT) && u.focus != UI_FOCUS_CRUMBS);
     ui_edit_close(&u);
     in = keys(1, UK_CRUMBS), in.crumb_n = 3, in.crumb_last = 2;
     ui_handle(&u, names, &in);
     ui_location_open(&u, S("/x"));
-    CHECK(!u.crumb_focus);
+    CHECK(u.focus != UI_FOCUS_CRUMBS);
     ui_edit_close(&u);
     in = keys(2, UK_CRUMBS, UK_FIND), in.crumb_n = 3, in.crumb_last = 2;
     ui_handle(&u, names, &in);
-    CHECK(u.finding && !u.crumb_focus);
+    CHECK(u.finding && u.focus != UI_FOCUS_CRUMBS);
     in = keys(1, UK_ESC);
     ui_handle(&u, names, &in);
     // From the find bar Ctrl+K takes the keys to the path buttons; the bar stays.
     in = keys(2, UK_FIND, UK_CRUMBS), in.crumb_n = 3, in.crumb_last = 2;
     ui_handle(&u, names, &in);
-    CHECK(u.finding && !u.find_keys && u.crumb_focus);
+    CHECK(u.finding && u.focus != UI_FOCUS_FIND && (u.focus == UI_FOCUS_CRUMBS));
     in = keys(1, UK_ESC), in.crumb_n = 3;
     ui_handle(&u, names, &in);
     // From the sidebar's keyboard: the buttons take it.
-    u.side_focus = true;
+    u.focus = UI_FOCUS_SIDE;
     in = keys(1, UK_CRUMBS), in.crumb_n = 3, in.crumb_last = 2;
     ui_handle(&u, names, &in);
-    CHECK(u.crumb_focus && !u.side_focus);
+    CHECK((u.focus == UI_FOCUS_CRUMBS) && u.focus != UI_FOCUS_SIDE);
     in = keys(1, UK_ESC), in.crumb_n = 3;
     ui_handle(&u, names, &in);
     // A prompt keeps the keys: Ctrl+K does nothing while the delete question is up, the location
@@ -388,12 +388,12 @@ static void test_crumb_keys(void)
     u.confirming = true;
     in = keys(1, UK_CRUMBS), in.crumb_n = 3, in.crumb_last = 2;
     ui_handle(&u, names, &in);
-    CHECK(u.editing && !u.crumb_focus && u.confirming);
+    CHECK((u.focus == UI_FOCUS_EDIT) && u.focus != UI_FOCUS_CRUMBS && u.confirming);
     ui_edit_close(&u);
     u.confirming = true;
     in = keys(1, UK_CRUMBS), in.crumb_n = 3, in.crumb_last = 2;
     ui_handle(&u, names, &in);
-    CHECK(!u.crumb_focus && u.confirming);
+    CHECK(u.focus != UI_FOCUS_CRUMBS && u.confirming);
     u.confirming = false;
     in = keys(1, UK_CRUMBS), in.crumb_n = 3, in.crumb_last = 2;
     ui_handle(&u, names, &in);

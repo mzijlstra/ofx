@@ -59,7 +59,7 @@ MUTANTS = [
     (G, "    if (m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT) && key == GLFW_KEY_N) return UK_NEWFOLDER;", ""),
     (J, "        if (jobs.asking >= 0) app.ui.asking = true, app.ui.ask_all = false;", ""),
     (G, "    ops_guard(getenv(\"OFX_GUI_ROOT\"));", ""),
-    (G, '        if (!was_editing && app.ui.editing && !app.ui.edit_path) edit_opened();', ''),
+    (G, '        if (!was_editing && app.ui.focus == UI_FOCUS_EDIT && !app.ui.edit_path) edit_opened();', ''),
     # F4
     (G, "    if (i + 1 < c->n) snprintf(below, sizeof below, \"%.*s\", STR_ARG(ui_crumb_label(c, i + 1)));", ""),
     (G, "    // The counts are by row too: asked again in the new order.\n    for (isize i = 0; i < app.list.n; i++) app.count[i] = COUNT_UNKNOWN;", "    // The counts are by row too: asked again in the new order."),
@@ -103,7 +103,7 @@ MUTANTS = [
     (G, "        case GLFW_KEY_LEFT: return UK_SEL_LEFT;\n", ""),
     (G, "        case GLFW_KEY_KP_ENTER: return UK_SHIFT_ENTER;\n", ""),
     (G, "    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_K) return UK_CRUMBS;\n", ""),
-    (G, "    if (app.ui.crumb_focus) ui_crumbs_show(c, wd, room, ARROW_W, app.ui.crumb_at);\n", ""),
+    (G, "    if (app.ui.focus == UI_FOCUS_CRUMBS) ui_crumbs_show(c, wd, room, ARROW_W, app.ui.crumb_at);\n", ""),
     (G, "        in.crumb_n = app.crumbs.n, in.crumb_last = app.crumb_hi - 1;", "        in.crumb_n = app.crumbs.n, in.crumb_last = app.crumb_hi;"),
     (G, '        if (pasting && ui_line_active(&app.ui, NULL)) in.paste = text_paste();   // (whichever text field has the keys)\n', ''),
     (G, "        if (app.ui.copied) text_copy((Str){ app.ui.copy, app.ui.copy_len }), app.ui.copied = false;", "        app.ui.copied = false;"),
@@ -516,7 +516,7 @@ MUTANTS = [
     (G, '    if (h.find_step) return TIP_FIND + (h.find_step > 0);', '', 'f2'),
     (G, 'c.finding != app.ui.finding || c.find_len != app.ui.find_len || ', '', 'f2'),
     (G, '"Previous match (Up)" : "Next match (Down)"', '"Next match (Down)" : "Next match (Down)"', 'f2'),
-    (G, '(app.ui.ow || (app.ui.finding && modal_kind() == MODAL_NONE && !app.ui.menu_on))', '(app.ui.ow || app.ui.finding)', 'f72'),
+    (G, '(app.ui.ow || app.ui.finding); k++)', '(app.ui.ow); k++)', 'f72'),   # (the guard is ui_handle's since 2026-10-28)
     (G, '    ui_find_close(&app.ui);   // (a tab\'s own find isn\'t kept)', '', 'f2'),
     # ---- F7.3.1: Set as default
     (OW, '    if (strcmp(ow.type, "application/x-zerosize") == 0) snprintf(', '    if (false) snprintf(', 'f73'),
@@ -526,7 +526,7 @@ MUTANTS = [
     (OW, '    if (set && !op_set_default(&scratch, str_from_c(ow.type), id, &err)) {', '    if (false) {', 'f73'),
     (OW, '    if (set) set_status(false, "opened %s with %.*s, the default for %s now"', '    if (false) set_status(false, "opened %s with %.*s, the default for %s now"', 'f73'),
     (G, '    case UA_LAUNCH: ow_launch(a.index, a.all); break;', '    case UA_LAUNCH: ow_launch(a.index, false); break;', 'f73'),
-    (G, '    for (int k = 1; k <= 4 && !h.toggle && (app.ui.ow || (app.ui.finding && modal_kind() == MODAL_NONE && !app.ui.menu_on)); k++)', '    for (int k = 1; k <= 3 && !h.toggle && (app.ui.ow || (app.ui.finding && modal_kind() == MODAL_NONE && !app.ui.menu_on)); k++)', 'f73'),
+    (G, '    for (int k = 1; k <= 4 && !h.toggle && (app.ui.ow || app.ui.finding); k++)', '    for (int k = 1; k <= 3 && !h.toggle && (app.ui.ow || app.ui.finding); k++)', 'f73'),
     # Left out: nsvgRasterize gone leaves a blank texture, which no state word sees (the pixels);
     # f73's ow-panel.png shows the SVG drawn.
     # ---- F9 step 1: the search view (2026-10-28). Left out: what is only pixels (the tab's label,
@@ -539,8 +539,8 @@ MUTANTS = [
     (G, '    fs_sort(l, app.ui.sort);\n    snprintf(app.search_root', '    snprintf(app.search_root', 'f9'),
     (G, '    go_to_in(app.cwd, str_from_c(app.search_pick[0] ? app.search_pick : keep), app.ui.list.sel, true);', '    go_to_in(app.cwd, str_from_c(keep), app.ui.list.sel, true);', 'f9'),
     (G, '    snprintf(app.cwd, sizeof app.cwd, "%s", uri);\n    app.search_pick[0] = 0;', '    app.search_pick[0] = 0;', 'f9'),
-    (G, '    if (!in_search) app.ui.search_keys = false;', '', 'f9'),
-    (G, '        app.ui.search_keys = text.len == 0, app.ui.search_edited = false, app.search_due = 0;', '        app.ui.search_keys = false, app.ui.search_edited = false, app.search_due = 0;', 'f9'),
+    (G, '    if (!in_search) ui_unfocus(&app.ui, UI_FOCUS_SEARCH);', '', 'f9'),
+    (G, '        if (text.len == 0) app.ui.focus = UI_FOCUS_SEARCH;\n', '', 'f9'),
     (G, '        snprintf(app.search_pick, sizeof app.search_pick, "%.*s", STR_ARG(select));\n    }', '    }', 'f9'),
     (G, '        if (dir && search_uri(uri, sizeof uri, dir, STR_EMPTY)) tab_open(uri, STR_EMPTY, true);', '        if (dir) tab_open(dir, STR_EMPTY, true);', 'f9'),
     (G, '    case UA_NOT_IN_SEARCH: set_status(true, "A search isn\'t a folder: that works in one"); break;', '    case UA_NOT_IN_SEARCH: break;', 'f9'),

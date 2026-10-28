@@ -580,15 +580,27 @@ typedef struct {
     char        err[128];
 } UiMatcher;
 
+// Who has the keys: the files' list unless one of the others took them. One value, so two can't
+// at once (2026-10-28: six flags before, kept apart by hand; opening the location line from the
+// search view left the search field holding the keys too).
+typedef enum {
+    UI_FOCUS_LIST,
+    UI_FOCUS_SIDE,     // the sidebar's cursor
+    UI_FOCUS_CRUMBS,   // the path buttons (Ctrl+K, F5.2), crumb_at marked
+    UI_FOCUS_JOBS,     // the job rows' × (Ctrl+J, F5.3), job_at marked
+    UI_FOCUS_FIND,     // the find bar's field (while finding)
+    UI_FOCUS_SEARCH,   // the search field (in the search view, F9)
+    UI_FOCUS_EDIT,     // the edit line: a rename or the location line; it is open while it has them
+} UiFocus;
+
 typedef struct {
     UiList list, side;
     SideMode side_mode;      // places, tree or hidden (F6)
     bool   grid;             // the files as icons in a grid, not the list (F6.2)
     int    zoom;             // the icon view's icon size in px, one of UI_ZOOM_PX; 0: UI_ZOOM_DEFAULT (F6.3)
-    bool   side_focus;       // the keys move the sidebar's cursor
+    UiFocus focus;           // who has the keys
     const u8 *side_head;     // a byte per sidebar row, 1 for a heading (F6), never the cursor's; NULL: none
     bool   finding;          // the find bar is open (Michael, 2026-10-26: until Esc or its ×)
-    bool   find_keys;        // and has the keys
     bool   find_select;      // Select Items Matching (F7.4): Enter selects every match, and closes it
     bool   find_miss;        // its text matches nothing
     char   find[UI_FIND_MAX];
@@ -605,8 +617,7 @@ typedef struct {
     u8    *mark;
     isize  marked;           // how many are set
     // The edit line: a rename (a new folder is made at once and renamed with it), or the top bar's
-    // location line (F4), which holds a path.
-    bool   editing;
+    // location line (F4), which holds a path. Open while focus is UI_FOCUS_EDIT.
     bool   edit_path;        // the location line
     char   edit[PATH_MAX];
     int    edit_len, caret;  // bytes
@@ -616,7 +627,6 @@ typedef struct {
     char   copy[PATH_MAX];
     int    copy_len;
     // The keyboard on the path buttons (Ctrl+K, F5.2): the one marked.
-    bool   crumb_focus;
     int    crumb_at;
     // The prompts and the job: gui/ says when one runs, and when it asks about a clash.
     bool   confirming;       // "Delete … for good? Y/n"
@@ -625,7 +635,6 @@ typedef struct {
     bool   ask_all;          // its "same for the rest" box (the capitals too)
     // The job rows (F5.3): the keyboard on their × (Ctrl+J), the row marked; "Cancel this job?"
     // about job cancel_id; "Quit and cancel them?"; "No more jobs can be queued".
-    bool   jobs_focus;
     int    job_at;
     bool   cancel_asking;
     int    cancel_id;
@@ -635,10 +644,9 @@ typedef struct {
     bool   in_trash;
     bool   empty_asking;
     // The search view (F9): gui/ says when it is shown. Its field's text (find's toggles apply), and
-    // whether the field has the keys; search_edited when the text or a toggle changed (gui/ searches
-    // again 150 ms after the last change, and clears it).
+    // search_edited when the text or a toggle changed (gui/ searches again 150 ms after the last
+    // change, and clears it).
     bool   in_search;
-    bool   search_keys;
     bool   search_edited;
     char   search[UI_FIND_MAX];
     int    search_len, search_caret, search_anchor;   // (bytes; the selection between them, as the edit line's)
@@ -741,6 +749,12 @@ typedef enum {
     UI_ON_ABOUT,
     UI_ON_BAR,      // bar_told: the menu bar just hidden
 } UiOnTop;
+
+// f gives the keys back to the list, if it has them.
+static void ui_unfocus(Ui *u, UiFocus f)
+{
+    if (u->focus == f) u->focus = UI_FOCUS_LIST;
+}
 
 static UiOnTop ui_on_top(const Ui *u)
 {
@@ -910,7 +924,7 @@ static bool ui_status_clears(bool bad, i64 at_ms, i64 now_ms)
 static UiAction ui_side_mode(Ui *u, SideMode m)
 {
     u->side_mode = m;
-    if (m == SIDE_HIDDEN) u->side_focus = false;
+    if (m == SIDE_HIDDEN) ui_unfocus(u, UI_FOCUS_SIDE);
     return (UiAction){ UA_SIDE_MODE, m, false };
 }
 
@@ -1194,7 +1208,8 @@ static isize ui_find_count(const Ui *u, UiNames names, isize *at)
 
 static void ui_find_close(Ui *u)
 {
-    u->finding = false, u->find_keys = false, u->find_miss = false, u->find_select = false;
+    u->finding = false, u->find_miss = false, u->find_select = false;
+    ui_unfocus(u, UI_FOCUS_FIND);
     if (u->find_len) memcpy(u->last, u->find, (size_t)u->find_len), u->last_len = u->find_len;
 }
 
@@ -1206,7 +1221,7 @@ static void ui_find_leave(Ui *u)
         if (u->finding) ui_find_close(u);
         return;
     }
-    u->find_keys = false;
+    ui_unfocus(u, UI_FOCUS_FIND);
     if (u->find_len) memcpy(u->last, u->find, (size_t)u->find_len), u->last_len = u->find_len;
 }
 
@@ -1229,8 +1244,8 @@ static void ui_find_select(Ui *u, UiNames names)
 
 static void ui_find_open(Ui *u)
 {
-    u->finding = true, u->find_keys = true, u->find_miss = false, u->find_select = false, u->find_len = u->find_caret = u->find_anchor = 0, u->find_from = u->list.sel, u->side_focus = false;
-    u->jobs_focus = false, u->crumb_focus = false;
+    u->finding = true, u->find_miss = false, u->find_select = false, u->find_len = u->find_caret = u->find_anchor = 0, u->find_from = u->list.sel;
+    u->focus = UI_FOCUS_FIND;
     ui_matcher_set(&u->find_m, STR_EMPTY, u->find_opts);   // Up and Down in an empty bar find nothing (reviewer-2)
 }
 
@@ -1313,7 +1328,7 @@ static void ui_edit_start(Ui *u, Str text, bool path)
     memcpy(u->edit, text.p, (size_t)n);
     u->edit_len = (int)n, u->caret = (int)n, u->anchor = path ? 0 : (int)n;
     ui_find_leave(u);
-    u->editing = true, u->side_focus = false, u->crumb_focus = false, u->jobs_focus = false;
+    u->focus = UI_FOCUS_EDIT;   // (the search field's keys too: they stayed before, 2026-10-28)
 }
 
 // The edit line opened on a name, the caret at its end.
@@ -1360,7 +1375,7 @@ static void ui_location_open(Ui *u, Str path)
 
 static void ui_edit_close(Ui *u)
 {
-    u->editing = false;
+    ui_unfocus(u, UI_FOCUS_EDIT);
 }
 
 // A line of text being edited (F5.2): the rename and location lines' (u->edit) and, since F9, the
@@ -1568,9 +1583,9 @@ static bool ui_line_active(Ui *u, UiLine *out)
     else if (on == UI_ON_BM && u->bmp_naming) l = ui_bmp_line(u);
     else if (on == UI_ON_KEYS) l = ui_keys_line(u);
     else if (on != UI_ON_NONE) return false;   // (a question, or a panel without a field)
-    else if (u->editing) l = ui_edit_line(u);
-    else if (u->in_search && u->search_keys) l = ui_search_line(u);
-    else if (u->finding && u->find_keys) l = ui_find_line(u);
+    else if (u->focus == UI_FOCUS_EDIT) l = ui_edit_line(u);
+    else if (u->focus == UI_FOCUS_SEARCH && u->in_search) l = ui_search_line(u);
+    else if (u->focus == UI_FOCUS_FIND && u->finding) l = ui_find_line(u);
     else return false;
     if (out) *out = l;
     return true;
@@ -1598,7 +1613,7 @@ static UiAction ui_edit_event(Ui *u, UiEvent e, Str paste)
 static void ui_crumbs_focus(Ui *u, const UiInput *in)
 {
     if (in->crumb_n <= 0) return;
-    u->crumb_focus = true, u->side_focus = false;   // the job rows' keyboard went with the key
+    u->focus = UI_FOCUS_CRUMBS;
     u->crumb_at = in->crumb_last < 0 ? 0 : in->crumb_last >= in->crumb_n ? in->crumb_n - 1 : in->crumb_last;
 }
 
@@ -1615,11 +1630,11 @@ static bool ui_crumbs_event(Ui *u, const UiInput *in, UiEvent e, UiAction *a)
     case UK_RIGHT: case UK_SEL_RIGHT: if (u->crumb_at < in->crumb_n - 1) u->crumb_at++; return true;
     case UK_HOME: case UK_SEL_HOME: u->crumb_at = 0; return true;
     case UK_END: case UK_SEL_END: u->crumb_at = in->crumb_n - 1; return true;
-    case UK_ENTER: u->crumb_focus = false, *a = (UiAction){ UA_CRUMB, u->crumb_at, false }; return true;
+    case UK_ENTER: u->focus = UI_FOCUS_LIST, *a = (UiAction){ UA_CRUMB, u->crumb_at, false }; return true;
     case UK_SHIFT_ENTER: *a = (UiAction){ UA_TAB_BG_CRUMB, u->crumb_at, false }; return true;
     case UK_CRUMBS: return true;
-    case UK_ESC: case UK_TAB: u->crumb_focus = false; return true;
-    default: u->crumb_focus = false; return false;
+    case UK_ESC: case UK_TAB: u->focus = UI_FOCUS_LIST; return true;
+    default: u->focus = UI_FOCUS_LIST; return false;
     }
 }
 
@@ -1672,9 +1687,9 @@ static bool ui_jobs_event(Ui *u, const UiInput *in, UiEvent e)
     case UK_UP: if (u->job_at > 0) u->job_at--; return true;
     case UK_DOWN: if (u->job_at < in->job_n - 1) u->job_at++; return true;
     case UK_ENTER: u->cancel_asking = true, u->cancel_id = in->job_id[u->job_at]; return true;
-    case UK_JOBS: u->jobs_focus = false; return true;   // the third Ctrl+J: back to the list (list, find bar, jobs)
-    case UK_ESC: case UK_TAB: u->jobs_focus = false; return true;
-    default: u->jobs_focus = false; return false;
+    case UK_JOBS: u->focus = UI_FOCUS_LIST; return true;   // the third Ctrl+J: back to the list (list, find bar, jobs)
+    case UK_ESC: case UK_TAB: u->focus = UI_FOCUS_LIST; return true;
+    default: u->focus = UI_FOCUS_LIST; return false;
     }
 }
 
@@ -1731,7 +1746,7 @@ static bool ui_menu_sep_shown(const Ui *u, int m, int i)
 // nothing, or only say it can't (Copy in the trash view).
 static bool ui_menu_enabled(const Ui *u, UiMenuItem it)
 {
-    bool files = u->list.n > 0, here = files && !u->side_focus;
+    bool files = u->list.n > 0, here = files && u->focus != UI_FOCUS_SIDE;
     if (!ui_menu_shown(u, it)) return false;
     if (u->menu == UI_CTX_FOLDER) {   // (F8) the rest are always there to pick
         if (it == UM_PASTE_INTO) return u->can_paste && u->ctx_w;
@@ -1831,7 +1846,7 @@ static void ui_menu_open(Ui *u, int m, bool keys)
 // A right-click menu m opened (F8): the files take the keys; keys: a key opened it.
 static void ui_ctx_open(Ui *u, int m, UiNames names, bool keys)
 {
-    u->side_focus = u->crumb_focus = u->jobs_focus = false;
+    ui_unfocus(u, UI_FOCUS_SIDE), ui_unfocus(u, UI_FOCUS_CRUMBS), ui_unfocus(u, UI_FOCUS_JOBS);
     u->ctx_one = u->list.n > 0 && (u->marked == 0 || (u->marked == 1 && ui_marked(u, u->list.sel)));
     u->ctx_dir = u->ctx_one && names.dir && names.dir(names.ctx, u->list.sel);
     u->ctx_key = keys, u->ctx_w = false;   // (gui/ says, as it opens)
@@ -2254,13 +2269,13 @@ static bool ui_search_event(Ui *u, UiEvent e, Str paste)
     UiLine l = ui_search_line(u);
     int lo, hi;   // (Ctrl+C, Ctrl+X with no text selected: the cursor's result, as before the field edited)
     ui_line_sel(l, &lo, &hi);
-    if ((e.key == UK_COPY || e.key == UK_CUT) && lo == hi) return u->search_keys = false, false;
+    if ((e.key == UK_COPY || e.key == UK_CUT) && lo == hi) return u->focus = UI_FOCUS_LIST, false;
     UiLineHit h = ui_line_key(u, l, e, paste);
     if (h == UI_LINE_CHANGED) u->search_edited = true;
     if (h) return true;
     switch (e.key) {
-    case UK_ENTER: case UK_SHIFT_ENTER: case UK_ESC: case UK_DOWN: u->search_keys = false; return true;
-    default: u->search_keys = false; return false;
+    case UK_ENTER: case UK_SHIFT_ENTER: case UK_ESC: case UK_DOWN: u->focus = UI_FOCUS_LIST; return true;
+    default: u->focus = UI_FOCUS_LIST; return false;
     }
 }
 
@@ -2270,7 +2285,7 @@ static UiAction ui_search_open(Ui *u)
 {
     if (!u->in_search) return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : UA_SEARCH, 0, false };
     ui_edit_close(u);
-    u->search_keys = true, u->find_keys = false, u->side_focus = false, u->crumb_focus = false, u->jobs_focus = false;
+    u->focus = UI_FOCUS_SEARCH;
     return (UiAction){ UA_NONE, 0, false };
 }
 
@@ -2305,7 +2320,7 @@ static bool ui_find_event(Ui *u, UiNames names, UiEvent e, const UiInput *in)
     case UK_UP: case UK_DOWN: case UK_SEL_UP: case UK_SEL_DOWN: ui_find_step(u, names, e.key == UK_UP || e.key == UK_SEL_UP ? -1 : 1); return true;
     case UK_JOBS:
         ui_find_leave(u);
-        if (in->job_n > 0) u->jobs_focus = true, u->job_at = 0;
+        if (in->job_n > 0) u->focus = UI_FOCUS_JOBS, u->job_at = 0;
         return true;
     case UK_FIND: return true;
     default: ui_find_leave(u); return false;   // a command: the keys go back to the list, which does it
@@ -2395,15 +2410,15 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         if (in->find_step) {
             if (ui_find_count(u, names, &at) >= 2) ui_find_step(u, names, in->find_step > 0 ? 1 : -1);
         } else if (in->find_x) ui_find_close(u);
-        else ui_edit_close(u), u->find_keys = true, u->side_focus = false, u->crumb_focus = false, u->jobs_focus = false;   // (an open edit line would take the keys first: reviewer-2)
+        else u->focus = UI_FOCUS_FIND;   // (the edit line, if open, closes with it)
         return (UiAction){ UA_NONE, 0, false };
-    } else if (!prompt && in->toggle >= 1 && in->toggle <= 3 && (u->finding || u->in_search)) {
+    } else if (!prompt && !u->menu_on && in->toggle >= 1 && in->toggle <= 3 && (u->finding || u->in_search)) {
         u->find_opts = ui_toggle(u->find_opts, in->toggle);   // (the search view's are find's, F9)
         if (u->finding) ui_find_update(u, names);
         if (u->in_search) u->search_edited = true;
         return (UiAction){ UA_NONE, 0, false };
     } else if (!prompt && u->in_search && in->search_field) {
-        ui_edit_close(u), u->search_keys = true, u->find_keys = false, u->side_focus = false, u->crumb_focus = false, u->jobs_focus = false;
+        u->focus = UI_FOCUS_SEARCH;
         return (UiAction){ UA_NONE, 0, false };
     }
     // The menu bar (F7.1): a title opens its menu or closes it; while a menu is open a press on one
@@ -2462,7 +2477,7 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
     // The job rows: the mark kept on a row there is; none left, no keyboard there.
     if (u->job_at >= in->job_n) u->job_at = in->job_n - 1;
     if (u->job_at < 0) u->job_at = 0;
-    if (in->job_n <= 0) u->jobs_focus = false;
+    if (in->job_n <= 0) ui_unfocus(u, UI_FOCUS_JOBS);
     if (!prompt && in->job_x >= 0 && in->job_x < in->job_n) {
         u->cancel_asking = true, u->cancel_id = in->job_id[in->job_x];
         return (UiAction){ UA_NONE, 0, false };
@@ -2470,9 +2485,9 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
     // A click anywhere gives the path buttons' keyboard back; so does their going.
     bool clicked = in->click >= 0 || in->dclick >= 0 || in->side_click >= 0 || in->header >= 0 || in->bar != UB_NONE ||
                    in->tab_click >= 0 || in->tab_close >= 0 || in->mid_row >= 0 || in->mid_side >= 0 || in->mid_crumb >= 0;
-    if (clicked || in->crumb_n <= 0) u->crumb_focus = false;
-    if (clicked) u->jobs_focus = false;
-    if (u->crumb_focus && u->crumb_at >= in->crumb_n) u->crumb_at = in->crumb_n - 1;
+    if (clicked || in->crumb_n <= 0) ui_unfocus(u, UI_FOCUS_CRUMBS);
+    if (clicked) ui_unfocus(u, UI_FOCUS_JOBS);
+    if (u->focus == UI_FOCUS_CRUMBS && u->crumb_at >= in->crumb_n) u->crumb_at = in->crumb_n - 1;
     // A modal panel's buttons: as the keys they stand for.
     if (on == UI_ON_DELETE && yes_no) return u->confirming = false, (UiAction){ yes ? UA_DELETE : UA_NONE, 0, false };
     if (on == UI_ON_CLASH && in->modal == UI_MODAL_ALL) u->ask_all = !u->ask_all;
@@ -2511,7 +2526,7 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         case UB_FORWARD: ui_edit_close(u); return (UiAction){ UA_FORWARD, 0, false };
         case UB_UP: ui_edit_close(u); return (UiAction){ UA_PARENT, 0, false };
         case UB_LOCATION:
-            if (u->editing && u->edit_path) return ui_edit_close(u), (UiAction){ UA_NONE, 0, false };
+            if (u->focus == UI_FOCUS_EDIT && u->edit_path) return ui_edit_close(u), (UiAction){ UA_NONE, 0, false };
             return (UiAction){ UA_LOCATION, 0, false };
         case UB_SEARCH:   // as Ctrl+Shift+F (F9; the find bar's until then)
             ui_edit_close(u);
@@ -2533,11 +2548,11 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         ui_edit_close(u);
         if (in->click_mods & UI_MOD_SHIFT) ui_mark_range(u, l->sel, row);
         else if (in->click_mods & UI_MOD_CTRL) ui_mark(u, row, !ui_marked(u, row));
-        l->sel = row, u->side_focus = false;
+        l->sel = row, ui_unfocus(u, UI_FOCUS_SIDE);
         ui_show_sel(l);
     }
     if (!prompt && in->dclick >= 0 && l->top + in->dclick < l->n) {
-        l->sel = l->top + in->dclick, u->side_focus = false;
+        l->sel = l->top + in->dclick, ui_unfocus(u, UI_FOCUS_SIDE);
         ui_edit_close(u);
         return (UiAction){ UA_OPEN, l->sel, false };
     }
@@ -2579,10 +2594,10 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         // Shift+F10 and the Menu key (F8): the cursor's menu, or the folder shown's in an empty one,
         // while the files have the keys (an edit or find line keeps them); the sidebar's cursor's,
         // or the path button's, while they have them.
-        if (!prompt && !u->menu_on && e.key == UK_CONTEXT && !u->editing && !(u->finding && u->find_keys) && !u->jobs_focus) {
-            if (u->crumb_focus) ui_folder_open(u, -1, u->crumb_at, true);
-            else if (u->side_focus && u->side.n > 0 && !ui_side_head(u, u->side.sel)) ui_folder_open(u, u->side.sel, -1, true);
-            else if (!u->side_focus) ui_ctx_open(u, u->list.n > 0 ? UI_CTX_ENTRY : UI_CTX_HERE, names, true);
+        if (!prompt && !u->menu_on && e.key == UK_CONTEXT && u->focus != UI_FOCUS_EDIT && !(u->focus == UI_FOCUS_FIND && u->finding) && u->focus != UI_FOCUS_JOBS) {
+            if (u->focus == UI_FOCUS_CRUMBS) ui_folder_open(u, -1, u->crumb_at, true);
+            else if (u->focus == UI_FOCUS_SIDE && u->side.n > 0 && !ui_side_head(u, u->side.sel)) ui_folder_open(u, u->side.sel, -1, true);
+            else if (u->focus != UI_FOCUS_SIDE) ui_ctx_open(u, u->list.n > 0 ? UI_CTX_ENTRY : UI_CTX_HERE, names, true);
             continue;
         }
         if (u->menu_on && !prompt) {
@@ -2616,28 +2631,28 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
             if (e.key == UK_ESC || e.key == UK_ENTER) *(on == UI_ON_ABOUT ? &u->about : &u->bar_told) = false;
             continue;
         }
-        if (u->editing && u->edit_path && !prompt && e.key == UK_CRUMBS) {   // from the location line: it closes
-            ui_edit_close(u), ui_crumbs_focus(u, in);
+        if (u->focus == UI_FOCUS_EDIT && u->edit_path && !prompt && e.key == UK_CRUMBS) {   // from the location line: it closes
+            ui_crumbs_focus(u, in);   // (no path buttons: the line stays)
             continue;
         }
-        if (u->editing && !prompt) {
+        if (u->focus == UI_FOCUS_EDIT && !prompt) {
             UiAction a = ui_edit_event(u, e, in->paste);
             if (a.kind != UA_NONE) return a;
             continue;
         }
         // The search field (F9) before Shift is taken off the moves: it selects with them.
-        if (u->in_search && u->search_keys && !prompt && ui_search_event(u, e, in->paste)) continue;
+        if (u->focus == UI_FOCUS_SEARCH && u->in_search && !prompt && ui_search_event(u, e, in->paste)) continue;
         // The find bar's likewise (2026-10-28), after the questions: a clash or the delete question
         // takes its keys first.
-        if (u->finding && u->find_keys && !prompt && ui_find_event(u, names, e, in)) continue;
-        if (u->crumb_focus && !prompt) {
+        if (u->focus == UI_FOCUS_FIND && u->finding && !prompt && ui_find_event(u, names, e, in)) continue;
+        if (u->focus == UI_FOCUS_CRUMBS && !prompt) {
             UiAction a;
             if (ui_crumbs_event(u, in, e, &a)) {
                 if (a.kind != UA_NONE) return a;
                 continue;
             }
         }
-        if (u->jobs_focus && !prompt && ui_jobs_event(u, in, e)) continue;   // before a clash's keys
+        if (u->focus == UI_FOCUS_JOBS && !prompt && ui_jobs_event(u, in, e)) continue;   // before a clash's keys
         // Outside an edit line and the path buttons, Shift doesn't change Enter; with a move in the
         // files (arrows, Home, End, or H, J, K, L) it selects what the cursor passes over (below).
         bool shifted = e.key == UK_SEL_LEFT || e.key == UK_SEL_RIGHT || e.key == UK_SEL_HOME || e.key == UK_SEL_END ||
@@ -2670,10 +2685,10 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
             shifted = true;
             e = (UiEvent){ e.ch == 'H' ? UK_LEFT : e.ch == 'J' ? UK_DOWN : e.ch == 'K' ? UK_UP : UK_RIGHT, 0 };
         }
-        if (shifted && !u->side_focus) extend = l->sel;
+        if (shifted && u->focus != UI_FOCUS_SIDE) extend = l->sel;
         // The keys and letters that move a cursor: the sidebar's when it has the keyboard. In the
         // icon view, Up and Down move a row and Left and Right a cell (F6.2).
-        UiList *m = u->side_focus ? &u->side : l;
+        UiList *m = u->focus == UI_FOCUS_SIDE ? &u->side : l;
         isize page = m->rows > 1 ? m->rows - 1 : 1;
         bool grid = u->grid && m == l;
         UiKey key = e.key;
@@ -2689,7 +2704,7 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
             case '.': key = UK_HIDDEN; break;
             case 't': return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : UA_TERMINAL, 0, false };
             case 'r':
-                if (u->in_trash && !u->side_focus && l->n > 0) return (UiAction){ UA_RESTORE, 0, false };
+                if (u->in_trash && u->focus != UI_FOCUS_SIDE && l->n > 0) return (UiAction){ UA_RESTORE, 0, false };
                 continue;
             case '~': return (UiAction){ UA_HOMEDIR, 0, false };
             case 's': u->sort = (Sort){ (SortKey)((u->sort.key + 1) % SORT_KEYS), false }; return (UiAction){ UA_SORT, 0, false };
@@ -2698,7 +2713,7 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
             case 'N': ui_find_again(u, names, -1); continue;
             case ' ':
                 // Space marks the entry under the cursor, or unmarks it, and moves on.
-                if (!u->side_focus && l->n > 0) ui_mark(u, l->sel, !ui_marked(u, l->sel)), ui_move(l, 1);
+                if (u->focus != UI_FOCUS_SIDE && l->n > 0) ui_mark(u, l->sel, !ui_marked(u, l->sel)), ui_move(l, 1);
                 continue;
             default: continue;
             }
@@ -2738,15 +2753,15 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         // Enter opens and Backspace goes up; Left and Right don't, in the list or the icon view
         // (Michael, 2026-10-24): they only open and close the tree's folders.
         case UK_ENTER:
-            if (u->side_focus && u->side.n > 0) return (UiAction){ UA_PLACE, u->side.sel, false };
-            if (!u->side_focus && l->n > 0 && shift_enter) return u->in_trash ? (UiAction){ UA_NOT_IN_TRASH, 0, false } : ui_ow_open(u);
-            if (!u->side_focus && l->n > 0) return (UiAction){ UA_OPEN, l->sel, u->marked > 0 };   // all: the marked ones (F7.3)
+            if (u->focus == UI_FOCUS_SIDE && u->side.n > 0) return (UiAction){ UA_PLACE, u->side.sel, false };
+            if (u->focus != UI_FOCUS_SIDE && l->n > 0 && shift_enter) return u->in_trash ? (UiAction){ UA_NOT_IN_TRASH, 0, false } : ui_ow_open(u);
+            if (u->focus != UI_FOCUS_SIDE && l->n > 0) return (UiAction){ UA_OPEN, l->sel, u->marked > 0 };   // all: the marked ones (F7.3)
             break;
         case UK_RIGHT:
-            if (u->side_focus && u->side.n > 0 && u->side_mode == SIDE_TREE) return (UiAction){ UA_TREE_RIGHT, u->side.sel, false };
+            if (u->focus == UI_FOCUS_SIDE && u->side.n > 0 && u->side_mode == SIDE_TREE) return (UiAction){ UA_TREE_RIGHT, u->side.sel, false };
             break;
         case UK_LEFT:
-            if (u->side_focus && u->side.n > 0 && u->side_mode == SIDE_TREE) return (UiAction){ UA_TREE_LEFT, u->side.sel, false };
+            if (u->focus == UI_FOCUS_SIDE && u->side.n > 0 && u->side_mode == SIDE_TREE) return (UiAction){ UA_TREE_LEFT, u->side.sel, false };
             break;
         case UK_BACKSPACE: return (UiAction){ UA_PARENT, 0, false };
         case UK_F9: return ui_side_mode(u, (SideMode)((u->side_mode + 1) % SIDE_MODES));
@@ -2755,22 +2770,22 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         case UK_WORD_LEFT:   // (Ctrl+Left: a word in a text field, the sidebar here)
             // Tab goes to the sidebar and back, Ctrl+Left there; a hidden one shows as places
             // (gui/ lists them for the mode, the cursor off a heading).
-            if (key == UK_TAB && u->side_focus) {
-                u->side_focus = false;
+            if (key == UK_TAB && u->focus == UI_FOCUS_SIDE) {
+                u->focus = UI_FOCUS_LIST;
                 break;
             }
             if (u->side_mode == SIDE_HIDDEN) {
                 UiAction a = ui_side_mode(u, SIDE_PLACES);
-                u->side_focus = true;
+                u->focus = UI_FOCUS_SIDE;
                 return a;
             }
-            u->side_focus = u->side.n > 0;
-            if (u->side_focus) ui_side_settle(u, 1);
+            u->focus = u->side.n > 0 ? UI_FOCUS_SIDE : UI_FOCUS_LIST;
+            if (u->focus == UI_FOCUS_SIDE) ui_side_settle(u, 1);
             break;
         case UK_ESC:
             // The selection, then the sidebar's keyboard (a job is cancelled from its row, F5.3).
             if (u->marked) ui_mark_clear(u);
-            else u->side_focus = false;
+            else ui_unfocus(u, UI_FOCUS_SIDE);
             break;
         case UK_BACK: return (UiAction){ UA_BACK, 0, false };
         case UK_FORWARD: return (UiAction){ UA_FORWARD, 0, false };
@@ -2798,28 +2813,28 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         case UK_EDIT_BOOKMARKS: return ui_bmp_open(u, 0);
         case UK_SHORTCUTS: return ui_keys_open(u);
         case UK_F2:
-            if (l->n > 0 && !u->side_focus && u->in_trash) return (UiAction){ UA_NOT_IN_TRASH, 0, false };
-            if (l->n > 0 && !u->side_focus) ui_edit_rename(u, names.at(names.ctx, l->sel), names.dir && names.dir(names.ctx, l->sel));
+            if (l->n > 0 && u->focus != UI_FOCUS_SIDE && u->in_trash) return (UiAction){ UA_NOT_IN_TRASH, 0, false };
+            if (l->n > 0 && u->focus != UI_FOCUS_SIDE) ui_edit_rename(u, names.at(names.ctx, l->sel), names.dir && names.dir(names.ctx, l->sel));
             break;
         case UK_DELETE:
             // In the trash view Delete is for good, asked first.
-            if (l->n > 0 && !u->side_focus && u->in_trash) u->confirming = true, u->confirm_n = u->marked ? u->marked : 1;
-            else if (l->n > 0 && !u->side_focus) return (UiAction){ UA_TRASH, 0, false };
+            if (l->n > 0 && u->focus != UI_FOCUS_SIDE && u->in_trash) u->confirming = true, u->confirm_n = u->marked ? u->marked : 1;
+            else if (l->n > 0 && u->focus != UI_FOCUS_SIDE) return (UiAction){ UA_TRASH, 0, false };
             break;
         case UK_SHIFT_DELETE:
-            if (l->n > 0 && !u->side_focus) u->confirming = true, u->confirm_n = u->marked ? u->marked : 1;
+            if (l->n > 0 && u->focus != UI_FOCUS_SIDE) u->confirming = true, u->confirm_n = u->marked ? u->marked : 1;
             break;
-        case UK_COPY: if (l->n > 0 && !u->side_focus) return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : UA_COPY, 0, false }; break;
-        case UK_MAKE_LINK: if (l->n > 0 && !u->side_focus) return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : UA_MAKE_LINK, 0, false }; break;
-        case UK_CUT: if (l->n > 0 && !u->side_focus) return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : UA_CUT, 0, false }; break;
+        case UK_COPY: if (l->n > 0 && u->focus != UI_FOCUS_SIDE) return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : UA_COPY, 0, false }; break;
+        case UK_MAKE_LINK: if (l->n > 0 && u->focus != UI_FOCUS_SIDE) return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : UA_MAKE_LINK, 0, false }; break;
+        case UK_CUT: if (l->n > 0 && u->focus != UI_FOCUS_SIDE) return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : UA_CUT, 0, false }; break;
         case UK_PASTE: return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : u->in_search ? UA_NOT_IN_SEARCH : UA_PASTE, 0, false };
         case UK_UNDO: return (UiAction){ UA_UNDO, 0, false };
         case UK_NEWFOLDER: return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : u->in_search ? UA_NOT_IN_SEARCH : UA_NEWFOLDER, 0, false };
         case UK_LOCATION: case UK_WORD_RIGHT: return (UiAction){ UA_LOCATION, 0, false };   // (Ctrl+Right too, outside a text field)
         case UK_CRUMBS: ui_crumbs_focus(u, in); break;
         case UK_JOBS:   // the find bar first when it is open, then the job rows (Michael, 2026-10-26)
-            if (u->finding) u->find_keys = true, u->crumb_focus = false, u->side_focus = false;
-            else if (in->job_n > 0) u->jobs_focus = true, u->job_at = 0, u->crumb_focus = false, u->side_focus = false;
+            if (u->finding) u->focus = UI_FOCUS_FIND;
+            else if (in->job_n > 0) u->focus = UI_FOCUS_JOBS, u->job_at = 0;
             break;
         case UK_PARENT: return (UiAction){ UA_PARENT, 0, false };
         case UK_TAB_NEW: return (UiAction){ UA_TAB_NEW, 0, false };
@@ -2828,7 +2843,7 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         case UK_TERMINAL: return (UiAction){ u->in_trash ? UA_NOT_IN_TRASH : UA_TERMINAL, 0, false };
         case UK_SEARCH: return ui_search_open(u);
         case UK_CONTAINING:   // (the search view's: elsewhere every entry is in the folder shown)
-            if (u->in_search && !u->side_focus && l->n > 0) return (UiAction){ UA_CONTAINING, l->sel, false };
+            if (u->in_search && u->focus != UI_FOCUS_SIDE && l->n > 0) return (UiAction){ UA_CONTAINING, l->sel, false };
             break;
         case UK_TAB_CLOSE: return (UiAction){ UA_TAB_CLOSE, -1, false };
         case UK_TAB_NEXT: return (UiAction){ UA_TAB_STEP, 1, false };

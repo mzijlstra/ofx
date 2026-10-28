@@ -162,7 +162,7 @@ static void script_state(char *out, size_t cap)
     snprintf(copied, sizeof copied, "%.*s", NAME_MAX, app.text_copied[0] ? app.text_copied : "-");
     for (char *c = copied; *c; c++)
         if (*c == ' ') *c = '_';
-    if (app.ui.crumb_focus) snprintf(keyed, sizeof keyed, "%d", app.ui.crumb_at);
+    if (app.ui.focus == UI_FOCUS_CRUMBS) snprintf(keyed, sizeof keyed, "%d", app.ui.crumb_at);
     // The jobs (F5.3): the oldest running one for job= and done=; the rows' labels, '|' between,
     // spaces as '_'; the marked row; the first row's line (points reached) and whether it has a
     // speed.
@@ -175,7 +175,7 @@ static void script_state(char *out, size_t cap)
     for (char *c = joblabels; *c; c++)
         if (*c == ' ') *c = '_';
     if (!joblabels[0]) snprintf(joblabels, sizeof joblabels, "-");
-    if (app.ui.jobs_focus) snprintf(jobkey, sizeof jobkey, "%d", app.ui.job_at);
+    if (app.ui.focus == UI_FOCUS_JOBS) snprintf(jobkey, sizeof jobkey, "%d", app.ui.job_at);
     char clashjob[256] = "-";   // the job the clash panel names
     if (jobs.asking >= 0) snprintf(clashjob, sizeof clashjob, "%s", job_recs[jobs.asking].label);
     for (char *c = clashjob; *c; c++)
@@ -418,18 +418,18 @@ static void script_state(char *out, size_t cap)
              app.icon_scale, GetScreenWidth(), GetScreenHeight(), app.reloads, app.themes, atomic_load(&watch.batches),
              (double)frame_us_max / 1000.0, icon, app.show_hidden,
              app.ui.sort.key == SORT_NAME ? "name" : app.ui.sort.key == SORT_SIZE ? "size" : "mtime", app.ui.sort.reverse,
-             app.ui.finding, app.ui.find_keys, app.ui.find_miss, app.ui.find_len ? app.ui.find_len : 1, app.ui.find_len ? app.ui.find : "-",
-             app.ui.last_len ? app.ui.last_len : 1, app.ui.last_len ? app.ui.last : "-", app.ui.side.sel, app.ui.side_focus,
+             app.ui.finding, app.ui.focus == UI_FOCUS_FIND, app.ui.find_miss, app.ui.find_len ? app.ui.find_len : 1, app.ui.find_len ? app.ui.find : "-",
+             app.ui.last_len ? app.ui.last_len : 1, app.ui.last_len ? app.ui.last : "-", app.ui.side.sel, app.ui.focus == UI_FOCUS_SIDE,
              app.ui.side_mode == SIDE_PLACES && app.ui.side.sel < app.places.n ? app.places.p[app.ui.side.sel].label : "-", app.place_cur >= 0 ? app.places.p[app.place_cur].label : "-",
-             hist.nback, hist.nfwd, app.ui.marked, app.ui.editing, edit, app.ui.confirming, app.ui.asking,
+             hist.nback, hist.nfwd, app.ui.marked, app.ui.focus == UI_FOCUS_EDIT, edit, app.ui.confirming, app.ui.asking,
              !oldest ? "-" : JOB_PHASES[atomic_load(&oldest->j.phase)], oldest ? atomic_load(&oldest->j.files_done) : 0LL,
              oldest ? atomic_load(&oldest->j.files_total) : 0LL,
              UNDO_KINDS[undo.kind], own.n, own.cut, clip.ok, MODALS[modal_kind()], app.ui.ask_all, tabbar.n, tabbar.cur, tabdirs, sizecell, crumbs, app.crumbs.seg[0].home ? 0 : -1, app.crumbs.cur, app.crumb_lo, app.crumb_hi, app.crumb_arrows,
-             app.ui.editing && app.ui.edit_path, cnt, slo, shi, app.ui.caret, copied, keyed,
+             app.ui.focus == UI_FOCUS_EDIT && app.ui.edit_path, cnt, slo, shi, app.ui.caret, copied, keyed,
              jobs.nrun, jobs.nwait, joblabels, jobkey, oldest ? oldest->line.reached : 0, oldest && oldest->line.now > 0, clashjob,
              sides[0] ? sides : "-", spaced, SIDE_MODES_W[app.ui.side_mode], app.ui.side_mode == SIDE_TREE ? tree.n : 0, treecur,
              app.ui.side.sel - app.ui.side.top, treehere, app.ui.in_trash, app.side_hover, hovernum, ejectbtn, app.cwd_avail >= 0, info,
-             app.ui.grid ? "icons" : "list", (int)ui_cols(&app.ui.list), app.grid_cells, app.grid_first, app.grid_last, app.grid_full_lines, app.grid_hover_lines, app.grid_hover_cut, entry_px(), icontex, app.icon_full_resets, app.ui.crumb_focus, tipword, idle_woke,
+             app.ui.grid ? "icons" : "list", (int)ui_cols(&app.ui.list), app.grid_cells, app.grid_first, app.grid_last, app.grid_full_lines, app.grid_hover_lines, app.grid_hover_cut, entry_px(), icontex, app.icon_full_resets, app.ui.focus == UI_FOCUS_CRUMBS, tipword, idle_woke,
              ui_zoom_px(&app.ui), cell_w(), cell_h(), Clay_GetElementData(CLAY_ID("zoom-track")).found, tipin, app.nslots,
              thumbs.drawn_last, thumbsel, thumbbox, thumbs_busy(), thumbs.got[TG_MADE], thumbs.got[TG_CACHED], thumbs.got[TG_FAILED],
              thumbs.got[TG_FAIL_KNOWN], thumbs.got[TG_NONE], thumbs.got[TG_CHANGED], thumbs.held, thumbs.evicted, thumbs.resets, app.thumb_local,
@@ -444,7 +444,7 @@ static void script_state(char *out, size_t cap)
              propwhere, propdrive, proplink, props.btime >= 0, props.idx,
              app.ui.ow, app.ui.ow_fresh, app.ui.ow_in_list, owtext, app.ui.ow_list.n, app.ui.ow_list.sel, owapp, owicon, owtex, ow.shown, ow.type[0] ? ow.type : "-", ow.n,
              app.ui.ow_list.rows, app.ui.ow_list.top, owopts, app.ui.ow_m.bad, app.ui.ow_def, app.ui.ow_def_can, findopts, app.ui.find_m.bad, app.ui.find_select, findn, findat, findtext,
-             app.ui.in_search, app.ui.search_keys, searchtext, app.search_done, app.search_s.full, app.search_due != 0, app.search_m.bad,
+             app.ui.in_search, app.ui.focus == UI_FOCUS_SEARCH, searchtext, app.search_done, app.search_s.full, app.search_due != 0, app.search_m.bad,
              (int)Clay_GetElementData(CLAY_ID("search-bar")).found,
              app.ui.search_anchor < app.ui.search_caret ? app.ui.search_anchor : app.ui.search_caret,
              app.ui.search_anchor < app.ui.search_caret ? app.ui.search_caret : app.ui.search_anchor, app.ui.search_caret,

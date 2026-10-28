@@ -106,7 +106,7 @@ static void test_grid_keys(void)
     u.list.sel = 7;
     in = keys(2, UK_TAB, UK_DOWN);
     ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in);
-    CHECK(u.side_focus && u.side.sel == 1 && u.list.sel == 7);
+    CHECK((u.focus == UI_FOCUS_SIDE) && u.side.sel == 1 && u.list.sel == 7);
     // In the list Down moves one; Left and Right do nothing there either (Michael, 2026-10-24).
     grid(&u, 23, 5, 3, 7);
     u.grid = false, ui_set_cols(&u.list, 1);

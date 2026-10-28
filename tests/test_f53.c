@@ -170,10 +170,10 @@ static void test_job_keys(void)
     ui_set(&u.side, 3, 0);
     // No rows: Ctrl+J does nothing.
     job_keys(&u, names, job_input(0, 0), 1, UK_JOBS);
-    CHECK(!u.jobs_focus);
+    CHECK(u.focus != UI_FOCUS_JOBS);
     // Ctrl+J: the top row marked; Down, Up, j, k move it, the ends kept; the list doesn't move.
     job_keys(&u, names, job_input(3, 3), 1, UK_JOBS);
-    CHECK(u.jobs_focus && u.job_at == 0);
+    CHECK((u.focus == UI_FOCUS_JOBS) && u.job_at == 0);
     job_keys(&u, names, job_input(3, 3), 1, UK_DOWN);
     CHECK(u.job_at == 1);
     UiInput in = job_input(3, 3);
@@ -184,11 +184,11 @@ static void test_job_keys(void)
     ui_handle(&u, names, &in);
     CHECK(u.job_at == 1);
     job_keys(&u, names, job_input(3, 3), 2, UK_UP, UK_JOBS);   // Ctrl+J again: back to the list (F7.3 find bar order)
-    CHECK(u.job_at == 0 && !u.jobs_focus && u.list.sel == 3);
+    CHECK(u.job_at == 0 && u.focus != UI_FOCUS_JOBS && u.list.sel == 3);
     job_keys(&u, names, job_input(3, 3), 2, UK_JOBS, UK_DOWN);
-    CHECK(u.job_at == 1 && u.jobs_focus);
+    CHECK(u.job_at == 1 && (u.focus == UI_FOCUS_JOBS));
     job_keys(&u, names, job_input(3, 3), 2, UK_ESC, UK_JOBS);   // given back and taken again: the top row
-    CHECK(u.job_at == 0 && u.jobs_focus);
+    CHECK(u.job_at == 0 && (u.focus == UI_FOCUS_JOBS));
     job_keys(&u, names, job_input(3, 3), 2, UK_UP, UK_ENTER);   // at the top already: the top row's job
     CHECK(u.job_at == 0 && u.cancel_asking && u.cancel_id == 10);
     u.cancel_asking = false;
@@ -196,7 +196,7 @@ static void test_job_keys(void)
     job_keys(&u, names, job_input(3, 3), 2, UK_DOWN, UK_ENTER);
     CHECK(u.cancel_asking && u.cancel_id == 11);
     job_keys(&u, names, job_input(3, 3), 1, UK_ESC);
-    CHECK(!u.cancel_asking && u.jobs_focus);
+    CHECK(!u.cancel_asking && (u.focus == UI_FOCUS_JOBS));
     job_keys(&u, names, job_input(3, 3), 1, UK_ENTER);
     in = job_input(3, 3), in.ev[in.nev++] = (UiEvent){ UK_DOWN, 0 };   // other keys: ignored while asked
     CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.cancel_asking && u.job_at == 1);
@@ -223,36 +223,36 @@ static void test_job_keys(void)
     CHECK(u.job_at == 2);
     in = job_input(1, 1);
     ui_handle(&u, names, &in);
-    CHECK(u.jobs_focus && u.job_at == 0);
+    CHECK((u.focus == UI_FOCUS_JOBS) && u.job_at == 0);
     in = job_input(0, 0);
     ui_handle(&u, names, &in);
-    CHECK(!u.jobs_focus);
+    CHECK(u.focus != UI_FOCUS_JOBS);
     // Esc and Tab give the keyboard back and do nothing else; another key is the list's.
     job_keys(&u, names, job_input(2, 2), 2, UK_JOBS, UK_ESC);
-    CHECK(!u.jobs_focus);
+    CHECK(u.focus != UI_FOCUS_JOBS);
     job_keys(&u, names, job_input(2, 2), 2, UK_JOBS, UK_TAB);
-    CHECK(!u.jobs_focus && !u.side_focus);
+    CHECK(u.focus != UI_FOCUS_JOBS && u.focus != UI_FOCUS_SIDE);
     job_keys(&u, names, job_input(2, 2), 2, UK_JOBS, UK_PAGEDOWN);
-    CHECK(!u.jobs_focus && u.list.sel == 7);
+    CHECK(u.focus != UI_FOCUS_JOBS && u.list.sel == 7);
     // A click gives it back.
     job_keys(&u, names, job_input(2, 2), 1, UK_JOBS);
     in = job_input(2, 2), in.click = 0;
     ui_handle(&u, names, &in);
-    CHECK(!u.jobs_focus);
+    CHECK(u.focus != UI_FOCUS_JOBS);
     // Ctrl+K and an edit line take it; Ctrl+J takes it from the path buttons and the sidebar.
     job_keys(&u, names, job_input(2, 2), 1, UK_JOBS);
     in = job_input(2, 2), in.ev[in.nev++] = (UiEvent){ UK_CRUMBS, 0 }, in.crumb_n = 3, in.crumb_last = 2;
     ui_handle(&u, names, &in);
-    CHECK(!u.jobs_focus && u.crumb_focus);
+    CHECK(u.focus != UI_FOCUS_JOBS && (u.focus == UI_FOCUS_CRUMBS));
     in = job_input(2, 2), in.ev[in.nev++] = (UiEvent){ UK_JOBS, 0 }, in.crumb_n = 3;
     ui_handle(&u, names, &in);
-    CHECK(u.jobs_focus && !u.crumb_focus);
+    CHECK((u.focus == UI_FOCUS_JOBS) && u.focus != UI_FOCUS_CRUMBS);
     ui_edit_open(&u, S("x"));
-    CHECK(!u.jobs_focus);
+    CHECK(u.focus != UI_FOCUS_JOBS);
     ui_edit_close(&u);
-    u.side_focus = true;
+    u.focus = UI_FOCUS_SIDE;
     job_keys(&u, names, job_input(2, 2), 1, UK_JOBS);
-    CHECK(u.jobs_focus && !u.side_focus);
+    CHECK((u.focus == UI_FOCUS_JOBS) && u.focus != UI_FOCUS_SIDE);
     job_keys(&u, names, job_input(2, 2), 1, UK_ESC);
     // A row's × clicked asks about that job; not while another panel is up, not past the rows.
     in = job_input(2, 2), in.job_x = 1;
@@ -272,13 +272,13 @@ static void test_job_keys(void)
     // A clash panel up: the job keys wait, with the rows' keyboard or without.
     u.asking = true;
     job_keys(&u, names, job_input(2, 2), 1, UK_JOBS);
-    CHECK(!u.jobs_focus && u.asking);
+    CHECK(u.focus != UI_FOCUS_JOBS && u.asking);
     u.asking = false;
     job_keys(&u, names, job_input(2, 2), 1, UK_JOBS);
     u.asking = true;
     job_keys(&u, names, job_input(2, 2), 2, UK_DOWN, UK_ENTER);
     CHECK(u.job_at == 0 && !u.cancel_asking && u.asking);
-    u.asking = false, u.jobs_focus = false;
+    u.asking = false, ui_unfocus(&u, UI_FOCUS_JOBS);
 }
 
 static void test_quit_full(void)
@@ -386,6 +386,17 @@ static void test_on_top(void)
     in = ui_input_none(), in.modal = UI_MODAL_OK;
     ui_handle(&u, names, &in);
     CHECK(u.props && u.asking);
+    // The find bar's toggles under a panel or a menu: nothing (gui/ reports the hit; ui/ decides).
+    u = (Ui){ 0 }, u.list.n = 3, u.list.rows = 3, u.finding = true, u.props = true;
+    in = ui_input_none(), in.toggle = 1;
+    ui_handle(&u, names, &in);
+    CHECK(u.find_opts.cased == false);
+    u.props = false, u.menu_on = true;
+    ui_handle(&u, names, &in);
+    CHECK(u.find_opts.cased == false);
+    u.menu_on = false;
+    ui_handle(&u, names, &in);
+    CHECK(u.find_opts.cased == true);
 }
 
 static void test_ui_f53(void)

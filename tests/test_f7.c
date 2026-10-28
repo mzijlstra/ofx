@@ -92,7 +92,7 @@ static void test_menu_keys(void)
     u.side.rows = 10;
     ui_set(&u.side, 3, 0);
     menu_keys(&u, 2, -'f', UK_TAB);
-    CHECK(!u.menu_on && !u.side_focus);   // Tab only closes it, the sidebar not reached
+    CHECK(!u.menu_on && u.focus != UI_FOCUS_SIDE);   // Tab only closes it, the sidebar not reached
 
     // Enter picks: each entry's action, the menu closed.
     static const struct { UiMenuItem it; UiActionKind a; isize index; } PICK[] = {
@@ -131,11 +131,11 @@ static void test_menu_keys(void)
     u = menu_ui(3);
     ui_edit_open(&u, S("a.txt"));
     menu_keys(&u, 1, UK_F10);
-    CHECK(u.menu_on && !u.editing);
+    CHECK(u.menu_on && u.focus != UI_FOCUS_EDIT);
     menu_keys(&u, 2, UK_ESC, UK_FIND);
     CHECK(u.finding);
     menu_keys(&u, 1, -'f');
-    CHECK(u.menu_on && u.finding && !u.find_keys);   // the bar stays, its keys go to the menu
+    CHECK(u.menu_on && u.finding && u.focus != UI_FOCUS_FIND);   // the bar stays, its keys go to the menu
     // A question up: no menu, and one open closes.
     u = menu_ui(3);
     u.confirming = true;
@@ -314,10 +314,10 @@ static void test_rename_select(void)
     in.ev[in.nev++] = (UiEvent){ UK_F2, 0 };
     u.list.sel = 2;
     ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in);
-    CHECK(u.editing && u.anchor == 0 && u.caret == 5);   // "gamma" of gamma.txt
+    CHECK((u.focus == UI_FOCUS_EDIT) && u.anchor == 0 && u.caret == 5);   // "gamma" of gamma.txt
     ui_edit_close(&u);
     ui_handle(&u, (UiNames){ name_at, NULL, dir_at }, &in);
-    CHECK(u.editing && u.anchor == 0 && u.caret == 9);   // a folder: all of it
+    CHECK((u.focus == UI_FOCUS_EDIT) && u.anchor == 0 && u.caret == 9);   // a folder: all of it
     ui_edit_close(&u);
     // Typing replaces the name and keeps the extension.
     ui_edit_rename(&u, S("test.txt"), false);
@@ -333,7 +333,7 @@ static void test_new_file(void)
     ui_edit_open_all(&u, S("New file"));
     int lo, hi;
     ui_edit_sel(&u, &lo, &hi);
-    CHECK(u.editing && lo == 0 && hi == 8 && u.caret == 8);
+    CHECK((u.focus == UI_FOCUS_EDIT) && lo == 0 && hi == 8 && u.caret == 8);
     ui_edit_event(&u, (UiEvent){ UK_NONE, 'x' }, STR_EMPTY);
     CHECK(u.edit_len == 1 && u.edit[0] == 'x');
     ui_edit_open(&u, S("a.txt"));

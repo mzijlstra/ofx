@@ -458,14 +458,16 @@ static bool go_to_in(const char *dir, Str select, isize fallback, bool stepping)
     app.cur = next, app.list = l, app.mime = mime, app.have_list = true, app.error[0] = 0, app.lists++;
     app.ui.in_trash = in_trash;
     if (app.ui.in_search && !in_search) search_ask("", STR_EMPTY, app.ui.find_opts, false), app.search_due = 0;   // (out of it: the walk stops)
-    if (!in_search) app.ui.search_keys = false;
+    if (!in_search) ui_unfocus(&app.ui, UI_FOCUS_SEARCH);
     if (in_search && !same) {   // the field shows its text; empty, it has the keys
         Str root, text;
         search_parse(dir, &root, &text);
         app.ui.search_len = (int)(text.len < UI_FIND_MAX ? text.len : UI_FIND_MAX);
         memcpy(app.ui.search, text.p, (size_t)app.ui.search_len);
         app.ui.search_caret = app.ui.search_anchor = app.ui.search_len;
-        app.ui.search_keys = text.len == 0, app.ui.search_edited = false, app.search_due = 0;
+        if (text.len == 0) app.ui.focus = UI_FOCUS_SEARCH;
+        else ui_unfocus(&app.ui, UI_FOCUS_SEARCH);
+        app.ui.search_edited = false, app.search_due = 0;
         snprintf(app.search_pick, sizeof app.search_pick, "%.*s", STR_ARG(select));
     }
     app.ui.in_search = in_search;
@@ -1889,7 +1891,7 @@ static void layout_tree(float h)
         for (int r = 0; r < sl->rows && sl->top + r < sl->n; r++) {
             int i = (int)(sl->top + r);
             const TreeRow *row = &tree.row[i];
-            bool cursor = (app.ui.side_focus && i == sl->sel) || side_ctx(i), here = str_eq(row->path, cwd), hover = r == app.side_hover;
+            bool cursor = (app.ui.focus == UI_FOCUS_SIDE && i == sl->sel) || side_ctx(i), here = str_eq(row->path, cwd), hover = r == app.side_hover;
             Clay_Color bg = cursor ? cc(t->selection) : hover ? cc(t->bg) : cc(t->bg_light);
             int indent = row->depth * TREE_STEP;   // deep names are cut short with "…"
             CLAY(CLAY_IDI("side-row", r), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(SIDE_ROW_H) },
@@ -1936,7 +1938,7 @@ static void layout_side(float h)
                 }
                 continue;
             }
-            bool cursor = (app.ui.side_focus && i == sl->sel) || side_ctx(i), here = i == app.place_cur, hover = r == app.side_hover;
+            bool cursor = (app.ui.focus == UI_FOCUS_SIDE && i == sl->sel) || side_ctx(i), here = i == app.place_cur, hover = r == app.side_hover;
             bool drive = place_is_drive(p->kind) && p->size > 0;
             Clay_Color bg = cursor ? cc(t->selection) : hover ? cc(t->bg) : cc(t->bg_light);
             // The free space; with the pointer over it, the used space (F6.1), each in its bar colour.
@@ -2213,10 +2215,10 @@ static void layout_row(int r, isize i, float w, i64 now)
                                            .padding = { PAD, PAD, 0, 0 }, .childGap = GAP,
                                            .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
                                .backgroundColor = bg,
-                               .border = { .color = cc(t->accent), .width = { .left = sel && !app.ui.side_focus ? 3 : 0 } } }) {
+                               .border = { .color = cc(t->accent), .width = { .left = sel && app.ui.focus != UI_FOCUS_SIDE ? 3 : 0 } } }) {
         icon_box(CLAY_IDI("icon", r), icon, ICON_PX);
         CLAY(CLAY_IDI("name", r), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .childGap = 6 } }) {
-            if (sel && app.ui.editing && !app.ui.edit_path) {
+            if (sel && app.ui.focus == UI_FOCUS_EDIT && !app.ui.edit_path) {
                 layout_edit(t, name_w);
             } else {
                 text(fit(e->name, name_w, false), e->kind == K_LINK_BROKEN ? cc(t->red) : marked ? cc(t->accent) : sel ? cc(t->fg) : ls_name_colour(e, i));   // (the cursor's row plain: blue on the selection is faint)
@@ -2311,7 +2313,7 @@ static void layout_cell(int k, isize i)
         } else {
             icon_box(CLAY_IDI("icon", k), entry_icon(i), px);
         }
-        if (sel && app.ui.editing && !app.ui.edit_path) {
+        if (sel && app.ui.focus == UI_FOCUS_EDIT && !app.ui.edit_path) {
             // As wide as the name and a little, from a cell's width to two cells'.
             float ew = str_width((Str){ app.ui.edit, app.ui.edit_len }) + 24;
             ew = ew < cw ? cw : ew > 2 * cw ? 2 * cw : ew;
@@ -2507,7 +2509,7 @@ static void layout_crumbs(float room)
     float wd[UI_CRUMBS_MAX];
     for (int i = 0; i < c->n; i++) wd[i] = crumb_width(i);
     int lo, hi;
-    if (app.ui.crumb_focus) ui_crumbs_show(c, wd, room, ARROW_W, app.ui.crumb_at);
+    if (app.ui.focus == UI_FOCUS_CRUMBS) ui_crumbs_show(c, wd, room, ARROW_W, app.ui.crumb_at);
     app.crumb_arrows = ui_crumbs_window(c, wd, room, ARROW_W, &lo, &hi);
     app.crumb_lo = lo, app.crumb_hi = hi;
     // One outlined group, a line between the buttons, so they read as one path (Michael, 2026-10-20).
@@ -2517,7 +2519,7 @@ static void layout_crumbs(float room)
     if (app.crumb_arrows) bar_button(CLAY_ID("crumb-left"), UB_LEFT, CHEV_LEFT, NULL, NULL, lo > 0, ARROW_W);
     for (int i = lo; i < hi; i++) {
         bool cur = i == c->cur, hover = app.bar_hover == UB_CRUMB && app.crumb_hover == i;
-        bool keyed = app.ui.crumb_focus && app.ui.crumb_at == i;   // Ctrl+K's mark: an accent outline
+        bool keyed = app.ui.focus == UI_FOCUS_CRUMBS && app.ui.crumb_at == i;   // Ctrl+K's mark: an accent outline
         CLAY(CLAY_IDI("crumb", i), { .layout = { .sizing = { CLAY_SIZING_FIT(0), CLAY_SIZING_FIXED(BAR_BTN_H) }, .padding = { CRUMB_PAD, CRUMB_PAD, 0, 0 },
                                                  .childGap = 6, .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
                                      .backgroundColor = cur ? cc(t->selection) : hover ? cc(t->bg) : cc(t->bg_light),
@@ -2677,10 +2679,10 @@ static void layout_bar(float w)
         CLAY(CLAY_ID("crumbs"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(BAR_BTN_H) }, .padding = { PAD / 2, 0, 0, 0 },
                                               .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
                                   .clip = { .horizontal = true } }) {
-            if (app.ui.editing && app.ui.edit_path) layout_location(room);
+            if (app.ui.focus == UI_FOCUS_EDIT && app.ui.edit_path) layout_location(room);
             else layout_crumbs(room);
         }
-        tool_button("loc-toggle", UB_LOCATION, TOOL_PENCIL, app.ui.editing && app.ui.edit_path);
+        tool_button("loc-toggle", UB_LOCATION, TOOL_PENCIL, app.ui.focus == UI_FOCUS_EDIT && app.ui.edit_path);
         tool_button("search", UB_SEARCH, TOOL_SEARCH, app.ui.finding);
         view_button("view-list", UB_VIEW_LIST, false);
         view_button("view-icons", UB_VIEW_ICONS, true);
@@ -3281,7 +3283,7 @@ static void layout_jobs(void)
         if (done > 1) done = 1;
         LineDraw *d = arena_new(&frame, LineDraw, 1);
         *d = (LineDraw){ CUSTOM_LINE, bt > 0 && j->kind != JOB_DELETE ? &r->line : NULL, done, cc(t->accent), mix(t->accent, t->bg_light, 0.2f) };
-        bool keyed = app.ui.jobs_focus && app.ui.job_at == i, hover = app.jobx_hover == i;
+        bool keyed = app.ui.focus == UI_FOCUS_JOBS && app.ui.job_at == i, hover = app.jobx_hover == i;
         char speed[32] = "";
         if (d->line) jobq_speed(speed, sizeof speed, r->line.now);
         const char *pct = atomic_load(&j->phase) == JP_SCAN ? "counting\xE2\x80\xA6" : arena_sprintf(&frame, "%d%%", (int)(done * 100));
@@ -3361,7 +3363,7 @@ static void layout_find_bar(void)
     Ui *u = &app.ui;
     isize at, n = find_count(&at);
     bool bad = u->find_m.bad && u->find_opts.regex && u->find_len;
-    Clay_Color edge = bad ? cc(t->red) : u->find_keys ? cc(t->accent) : mix(t->fg_dim, t->bg_light, 0.45f);
+    Clay_Color edge = bad ? cc(t->red) : u->focus == UI_FOCUS_FIND ? cc(t->accent) : mix(t->fg_dim, t->bg_light, 0.45f);
     CLAY(CLAY_ID("find-bar"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(FIND_BAR_H) }, .padding = { PAD, 8, 0, 0 }, .childGap = 10,
                                             .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
                                 .backgroundColor = cc(t->bg_light),
@@ -3377,7 +3379,7 @@ static void layout_find_bar(void)
             Clay_Color fg = u->find_miss ? cc(t->red) : cc(t->fg);
             CLAY(CLAY_ID("find-text"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
                                          .clip = { .horizontal = true } }) {
-                if (u->find_keys) edit_text("find", room, ui_find_line(u), fg);
+                if (u->focus == UI_FOCUS_FIND) edit_text("find", room, ui_find_line(u), fg);
                 else text(fit((Str){ u->find, u->find_len }, room, true), fg);
             }
             layout_toggles(u->find_opts, 0);
@@ -3408,7 +3410,7 @@ static void layout_search_bar(void)
     Theme *t = &app.theme;
     Ui *u = &app.ui;
     bool bad = app.search_m.bad && u->find_opts.regex && u->search_len;
-    Clay_Color edge = bad ? cc(t->red) : u->search_keys ? cc(t->accent) : mix(t->fg_dim, t->bg_light, 0.45f);
+    Clay_Color edge = bad ? cc(t->red) : u->focus == UI_FOCUS_SEARCH ? cc(t->accent) : mix(t->fg_dim, t->bg_light, 0.45f);
     char where[PATH_MAX + 16];
     ui_tilde(where, sizeof where, app.search_root, getenv("HOME"));
     CLAY(CLAY_ID("search-bar"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(SEARCH_BAR_H) }, .padding = { PAD, PAD, 0, 0 }, .childGap = 10,
@@ -3425,7 +3427,7 @@ static void layout_search_bar(void)
             float room = fd.found && fd.boundingBox.width > 140 ? fd.boundingBox.width - 110 : 400;
             CLAY(CLAY_ID("search-text"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
                                            .clip = { .horizontal = true } }) {
-                if (u->search_keys) edit_text("search", room, ui_search_line(u), cc(t->fg));
+                if (u->focus == UI_FOCUS_SEARCH) edit_text("search", room, ui_search_line(u), cc(t->fg));
                 else text(fit((Str){ u->search, u->search_len }, room, true), cc(t->fg));
             }
             layout_toggles(u->find_opts, TOGGLE_SEARCH);
@@ -3697,23 +3699,23 @@ static Clay_RenderCommandArray layout(int w, int h)
             } else if (app.ui.menu_on) {
                 text(fit(S("Menu: \xE2\x86\x91 \xE2\x86\x93 (k j) move \xC2\xB7 \xE2\x86\x90 \xE2\x86\x92 the next menu \xC2\xB7 Enter picks \xC2\xB7 Esc closes"), foot_w, false),
                      cc(t->fg_dim));
-            } else if (app.ui.crumb_focus) {
+            } else if (app.ui.focus == UI_FOCUS_CRUMBS) {
                 text(fit(S("Path: \xE2\x86\x90 \xE2\x86\x92 (h l) move \xC2\xB7 Enter goes there \xC2\xB7 Shift+Enter in a new tab \xC2\xB7 Esc back to the list"), foot_w, false),
                      cc(t->fg_dim));
-            } else if (app.ui.editing && app.ui.edit_path) {
+            } else if (app.ui.focus == UI_FOCUS_EDIT && app.ui.edit_path) {
                 text(cz("Go to: Enter goes there \xC2\xB7 Esc cancels \xC2\xB7 ~ is home, a relative path starts here"), cc(t->fg_dim));
-            } else if (app.ui.editing) {
+            } else if (app.ui.focus == UI_FOCUS_EDIT) {
                 text(cz(app.edit_new == UNDO_MKDIR  ? "New folder: Enter keeps the name \xC2\xB7 Esc keeps \"New folder\""
                         : app.edit_new == UNDO_MKFILE ? "New file: Enter keeps the name \xC2\xB7 Esc keeps \"New file\""
                                                       : "Rename: Enter renames \xC2\xB7 Esc cancels"),
                      cc(t->fg_dim));
-            } else if (app.ui.jobs_focus) {
+            } else if (app.ui.focus == UI_FOCUS_JOBS) {
                 text(fit(S("Jobs: \xE2\x86\x91 \xE2\x86\x93 (k j) move \xC2\xB7 Enter cancels the marked job \xC2\xB7 Esc back to the list"), foot_w, false),
                      cc(t->fg_dim));
-            } else if (app.ui.finding && app.ui.find_keys && app.ui.find_select) {
+            } else if (app.ui.finding && app.ui.focus == UI_FOCUS_FIND && app.ui.find_select) {
                 text(fit(S("Select: Enter selects every match \xC2\xB7 Esc cancels \xC2\xB7 \xE2\x86\x91 \xE2\x86\x93 previous and next \xC2\xB7 "
                            "Alt+C/W/R case, words, regex"), foot_w, false), cc(t->fg_dim));
-            } else if (app.ui.finding && app.ui.find_keys) {
+            } else if (app.ui.finding && app.ui.focus == UI_FOCUS_FIND) {
                 text(fit(S("Find: \xE2\x86\x91 \xE2\x86\x93 previous and next \xC2\xB7 Enter keeps \xC2\xB7 Esc closes \xC2\xB7 Ctrl+J the jobs \xC2\xB7 "
                            "Alt+C/W/R case, words, regex"), foot_w, false), cc(t->fg_dim));
             } else if (app.status[0]) {
@@ -3961,11 +3963,11 @@ static bool in_box(Clay_ElementId id, float x, float y)
 static Hit hit_at(float x, float y)
 {
     Hit h = { -1, -1, -1, UB_NONE, -1, -1, -1, 0, -1, -1, -1, -1, false, -1, -1, -1, -1, false, false, false, 0, 0, -1, 0, false };
-    // The find bar's toggles only without a panel or a menu over them (a click on Properties' OK
-    // above them flipped one, 2026-10-26); Open With's are its panel's.
-    for (int k = 1; k <= 4 && !h.toggle && (app.ui.ow || (app.ui.finding && modal_kind() == MODAL_NONE && !app.ui.menu_on)); k++)
+    // The find bar's toggles, or Open With's (its panel's); ui_handle drops a find or search bar's
+    // under a panel or a menu (a click on Properties' OK above them flipped one, 2026-10-26).
+    for (int k = 1; k <= 4 && !h.toggle && (app.ui.ow || app.ui.finding); k++)
         if (in_box(CLAY_IDI("toggle", k), x, y)) h.toggle = k;
-    for (int k = 1; k <= 3 && !h.toggle && app.ui.in_search && modal_kind() == MODAL_NONE && !app.ui.menu_on; k++)   // the search bar's (F9)
+    for (int k = 1; k <= 3 && !h.toggle && app.ui.in_search; k++)   // the search bar's (F9)
         if (in_box(CLAY_IDI("toggle", TOGGLE_SEARCH + k), x, y)) h.toggle = k;
     if (modal_kind() == MODAL_NONE)
         for (int m = 0; m < UI_MENUS && h.menu_title < 0; m++)
@@ -4701,7 +4703,7 @@ int main(int argc, char **argv)
         // A message stays until the next key or click; an error at least a second.
         if (ui_input_acts(&in) && ui_status_clears(app.status_bad, app.status_at, now_ms())) app.status[0] = 0;
         if (ui_input_acts(&in) && ui_tip_act(&app.tip)) seen = true;   // a click or key: the tooltip goes
-        bool was_editing = app.ui.editing, was_confirming = app.ui.confirming;
+        bool was_editing = app.ui.focus == UI_FOCUS_EDIT, was_confirming = app.ui.confirming;
         if (app.ui.ow) in.app_name = ow.names, in.app_n = ow.shown < UI_APPS_MAX ? ow.shown : UI_APPS_MAX;
         UiAction a = ui_handle(&app.ui, (UiNames){ list_name, NULL, list_dir }, &in);
         bool ctx_up = app.ui.menu_on && app.ui.menu >= UI_MENUS;   // a right-click menu opened: where (F8)
@@ -4719,7 +4721,7 @@ int main(int argc, char **argv)
         // new question always starts from no targets.
         if (!was_confirming && (app.ui.confirming || a.kind == UA_DELETE)) delete_ask();
         // F2 opened the edit line: on the cursor's entry, as it is named now.
-        if (!was_editing && app.ui.editing && !app.ui.edit_path) edit_opened();
+        if (!was_editing && app.ui.focus == UI_FOCUS_EDIT && !app.ui.edit_path) edit_opened();
         if (a.kind != UA_NONE) act(a);
         // The search field changed (F9): it is searched for 150 ms after the last change.
         if (app.ui.search_edited) app.ui.search_edited = false, app.search_due = now_ms() + SEARCH_TYPE_MS, timer_at(wake_due());

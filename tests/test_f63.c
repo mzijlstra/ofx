@@ -51,8 +51,8 @@ static void test_zoom_keys(void)
     // The cursor stays; so does the sidebar's keyboard.
     CHECK(u.list.sel == 7);
     a = zoom_by(&u, keys(2, UK_TAB, UK_ZOOM_IN));
-    CHECK(a.kind == UA_ZOOM && u.zoom == 96 && u.side_focus);
-    u.side_focus = false;
+    CHECK(a.kind == UA_ZOOM && u.zoom == 96 && (u.focus == UI_FOCUS_SIDE));
+    ui_unfocus(&u, UI_FOCUS_SIDE);
     // The list doesn't zoom.
     u.grid = false, ui_set_cols(&u.list, 1);
     a = zoom_by(&u, keys(1, UK_ZOOM_IN));

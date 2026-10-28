@@ -136,7 +136,7 @@ static void test_find_toggles(void)
     in = ui_input_none();
     in.ev[in.nev++] = (UiEvent){ UK_MENU, 'f' };
     ui_handle(&u, names, &in);
-    CHECK(u.finding && !u.find_keys && u.menu_on);
+    CHECK(u.finding && u.focus != UI_FOCUS_FIND && u.menu_on);
     // n after a find closed empty: the last text found, not the empty one.
     ui_matcher_set(&u.find_m, STR_EMPTY, (UiMatchOpts){ 0 });   // (regfree)
     u = (Ui){ 0 };
@@ -647,7 +647,7 @@ static void test_find_count(void)
     in = ui_input_none(), in.find_step = 1;
     CHECK(ui_input_acts(&in));
     ui_handle(&u, names, &in);
-    CHECK(u.list.sel == 3 && u.find_keys && ui_find_count(&u, names, &at) == 3 && at == 2);
+    CHECK(u.list.sel == 3 && (u.focus == UI_FOCUS_FIND) && ui_find_count(&u, names, &at) == 3 && at == 2);
     ui_handle(&u, names, &in);
     ui_handle(&u, names, &in);
     CHECK(u.list.sel == 1);   // round
@@ -661,7 +661,7 @@ static void test_find_count(void)
     CHECK(ui_find_count(&u, names, &at) == 3 && at == 0);
     in = ui_input_none(), in.find_step = 1;
     ui_handle(&u, names, &in);
-    CHECK(u.list.sel == 1 && !u.find_keys && u.finding);
+    CHECK(u.list.sel == 1 && u.focus != UI_FOCUS_FIND && u.finding);
     // One match: the chevrons do nothing, the cursor stays off it.
     in = chars("/gam");
     ui_handle(&u, names, &in);
@@ -722,55 +722,55 @@ static void test_find_bar(void)
     // Up and Down in the bar: the previous and next match, round the ends; the bar keeps the keys.
     UiInput in = chars("/ta");
     ui_handle(&u, names, &in);
-    CHECK(u.list.sel == 1 && u.find_keys);
+    CHECK(u.list.sel == 1 && (u.focus == UI_FOCUS_FIND));
     in = keys(1, UK_DOWN);
     ui_handle(&u, names, &in);
-    CHECK(u.list.sel == 3 && u.find_keys && u.finding);
+    CHECK(u.list.sel == 3 && (u.focus == UI_FOCUS_FIND) && u.finding);
     ui_handle(&u, names, &in);
     CHECK(u.list.sel == 4);
     ui_handle(&u, names, &in);
     CHECK(u.list.sel == 1);   // round
     in = keys(1, UK_UP);
     ui_handle(&u, names, &in);
-    CHECK(u.list.sel == 4 && u.find_keys);
+    CHECK(u.list.sel == 4 && (u.focus == UI_FOCUS_FIND));
     in = chars("zz");   // no match: Up and Down stay
     ui_handle(&u, names, &in);
     in = keys(2, UK_DOWN, UK_UP);
     ui_handle(&u, names, &in);
-    CHECK(u.find_miss && u.list.sel == 0 && u.find_keys);
+    CHECK(u.find_miss && u.list.sel == 0 && (u.focus == UI_FOCUS_FIND));
     in = keys(2, UK_BACKSPACE, UK_BACKSPACE);
     ui_handle(&u, names, &in);
     // Enter: the keys back to the list, the bar open; a letter is the list's then (j moves).
     in = keys(1, UK_ENTER);
     ui_handle(&u, names, &in);
-    CHECK(u.finding && !u.find_keys && u.list.sel == 1);
+    CHECK(u.finding && u.focus != UI_FOCUS_FIND && u.list.sel == 1);
     in = chars("j");
     ui_handle(&u, names, &in);
     CHECK(u.list.sel == 2 && u.find_len == 2);
     // Ctrl+J: list, bar, job rows, list; without jobs the bar's Ctrl+J goes back to the list.
     in = keys(1, UK_JOBS), in.job_n = 2, in.job_id[0] = 7, in.job_id[1] = 8;
     ui_handle(&u, names, &in);
-    CHECK(u.find_keys && !u.jobs_focus);
+    CHECK((u.focus == UI_FOCUS_FIND) && u.focus != UI_FOCUS_JOBS);
     ui_handle(&u, names, &in);
-    CHECK(!u.find_keys && u.jobs_focus && u.job_at == 0 && u.finding);
+    CHECK(u.focus != UI_FOCUS_FIND && (u.focus == UI_FOCUS_JOBS) && u.job_at == 0 && u.finding);
     ui_handle(&u, names, &in);
-    CHECK(!u.find_keys && !u.jobs_focus);
+    CHECK(u.focus != UI_FOCUS_FIND && u.focus != UI_FOCUS_JOBS);
     in = keys(2, UK_JOBS, UK_JOBS);   // no jobs
     ui_handle(&u, names, &in);
-    CHECK(!u.find_keys && !u.jobs_focus && u.finding);
+    CHECK(u.focus != UI_FOCUS_FIND && u.focus != UI_FOCUS_JOBS && u.finding);
     // The pointer: the field takes the keys (from the sidebar too), × closes, keeping the cursor.
-    u.side_focus = true;
+    u.focus = UI_FOCUS_SIDE;
     in = ui_input_none(), in.find_field = true;
     CHECK(ui_input_acts(&in));
     ui_handle(&u, names, &in);
-    CHECK(u.find_keys && !u.side_focus);
+    CHECK((u.focus == UI_FOCUS_FIND) && u.focus != UI_FOCUS_SIDE);
     in = keys(1, UK_ENTER);
     ui_handle(&u, names, &in);
     u.list.sel = 5;
     in = ui_input_none(), in.find_x = true;
     CHECK(ui_input_acts(&in));
     ui_handle(&u, names, &in);
-    CHECK(!u.finding && !u.find_keys && u.list.sel == 5);
+    CHECK(!u.finding && u.focus != UI_FOCUS_FIND && u.list.sel == 5);
     ui_handle(&u, names, &in);   // closed: nothing
     CHECK(!u.finding);
     // The magnifier is the search's since F9 (2026-10-28), not the find bar's.
@@ -784,11 +784,11 @@ static void test_find_bar(void)
     u.list.sel = 6;
     in = chars("/al");
     ui_handle(&u, names, &in);
-    CHECK(u.find_keys && u.find_len == 2 && u.find_from == 6 && u.list.sel == 0);
+    CHECK((u.focus == UI_FOCUS_FIND) && u.find_len == 2 && u.find_from == 6 && u.list.sel == 0);
     // Esc in the bar: closed, the cursor where the find began.
     in = keys(1, UK_ESC);
     ui_handle(&u, names, &in);
-    CHECK(!u.finding && !u.find_keys && u.list.sel == 6);
+    CHECK(!u.finding && u.focus != UI_FOCUS_FIND && u.list.sel == 6);
     // Listed again with fewer entries meanwhile: Esc goes to the last one there is.
     in = chars("/a");
     ui_handle(&u, names, &in);
@@ -819,13 +819,13 @@ static void test_find_bar(void)
     ui_handle(&u, names, &in);
     in = keys(2, UK_ENTER, UK_F2);
     ui_handle(&u, names, &in);
-    CHECK(u.editing && u.finding && !u.find_keys);
+    CHECK((u.focus == UI_FOCUS_EDIT) && u.finding && u.focus != UI_FOCUS_FIND);
     in = ui_input_none(), in.find_field = true;
     ui_handle(&u, names, &in);
-    CHECK(!u.editing && u.find_keys);
+    CHECK(u.focus != UI_FOCUS_EDIT && (u.focus == UI_FOCUS_FIND));
     in = chars("l");
     ui_handle(&u, names, &in);
-    CHECK(u.find_len == 2 && !u.editing);
+    CHECK(u.find_len == 2 && u.focus != UI_FOCUS_EDIT);
     in = keys(1, UK_ESC);
     ui_handle(&u, names, &in);
     // Under a question its pointer does nothing.
@@ -924,18 +924,18 @@ static void test_shift_select(void)
     ui_mark_clear(&u);
     u.side.rows = 5;
     ui_set(&u.side, 4, 0);
-    u.side_focus = true;
+    u.focus = UI_FOCUS_SIDE;
     in = keys(1, UK_SEL_DOWN);
     ui_handle(&u, names, &in);
     CHECK(u.side.sel == 1 && u.marked == 0);
-    u.side_focus = false;
+    ui_unfocus(&u, UI_FOCUS_SIDE);
     // In the find bar: Shift+Down is Down (the next match), uppercase letters are text.
     ui_set(&u.list, COUNT(find_names), 0);
     in = chars("/a");
     ui_handle(&u, names, &in);
     in = keys(1, UK_SEL_DOWN);
     ui_handle(&u, names, &in);
-    CHECK(u.marked == 0 && u.find_keys && u.list.sel == 1);
+    CHECK(u.marked == 0 && (u.focus == UI_FOCUS_FIND) && u.list.sel == 1);
     in = chars("J");
     ui_handle(&u, names, &in);
     CHECK(u.find_len == 2 && u.marked == 0);

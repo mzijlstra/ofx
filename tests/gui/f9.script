@@ -268,4 +268,10 @@ expect findcaret=0 findsel=0-0
 shot find-field.png
 key esc
 expect finding=0
+# Out of the search view by a click while its field has the keys: the keys are the list's there
+# (2026-10-28: nothing checked it; the state said searchkeys=1 in a folder)
+key ctrl-shift-f
+wait-for 2000 search=1 searchkeys=1
+press-side 1
+wait-for 2000 search=0 searchkeys=0 place=Home
 quit

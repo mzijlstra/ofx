@@ -237,7 +237,7 @@ static void test_search_ui_keys(void)
 
     // The search view, its field with the keys (gui/ gives them when it opens empty): text and
     // Backspace change it, '/' doesn't go in; each change is marked for gui/.
-    u.in_search = true, u.search_keys = true;
+    u.in_search = true, u.focus = UI_FOCUS_SEARCH;
     in = chars("a/b");
     in.ev[in.nev++] = (UiEvent){ UK_NONE, 0xE9 };   // é
     CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.search_len == 4 && memcmp(u.search, "ab\xC3\xA9", 4) == 0 && u.search_edited);
@@ -269,24 +269,24 @@ static void test_search_ui_keys(void)
     // them back.
     for (int k = 0; k < 4; k++) {
         UiKey key = (UiKey[]){ UK_ENTER, UK_SHIFT_ENTER, UK_ESC, UK_DOWN }[k];
-        u.search_keys = true;
-        CHECK(menu_keys(&u, 1, key).kind == UA_NONE && !u.search_keys && u.list.sel == 0);
+        u.focus = UI_FOCUS_SEARCH;
+        CHECK(menu_keys(&u, 1, key).kind == UA_NONE && u.focus != UI_FOCUS_SEARCH && u.list.sel == 0);
     }
-    u.side_focus = true;
-    CHECK(menu_keys(&u, 1, UK_SEARCH).kind == UA_NONE && u.search_keys && !u.side_focus);
-    CHECK(menu_keys(&u, 1, UK_SEARCH).kind == UA_NONE && u.search_keys);
-    u.search_keys = false;
+    u.focus = UI_FOCUS_SIDE;
+    CHECK(menu_keys(&u, 1, UK_SEARCH).kind == UA_NONE && (u.focus == UI_FOCUS_SEARCH) && u.focus != UI_FOCUS_SIDE);
+    CHECK(menu_keys(&u, 1, UK_SEARCH).kind == UA_NONE && (u.focus == UI_FOCUS_SEARCH));
+    ui_unfocus(&u, UI_FOCUS_SEARCH);
     in = ui_input_none(), in.search_field = true;
-    CHECK(ui_input_acts(&in) && ui_handle(&u, names, &in).kind == UA_NONE && u.search_keys);
+    CHECK(ui_input_acts(&in) && ui_handle(&u, names, &in).kind == UA_NONE && (u.focus == UI_FOCUS_SEARCH));
     in = ui_input_none(), in.search_field = true, in.bar = UB_BACK;
-    u.search_keys = false, u.confirming = true;   // not under a question
+    ui_unfocus(&u, UI_FOCUS_SEARCH), u.confirming = true;   // not under a question
     ui_handle(&u, names, &in);
-    CHECK(!u.search_keys);
-    u.confirming = false, u.search_keys = true;
+    CHECK(u.focus != UI_FOCUS_SEARCH);
+    u.confirming = false, u.focus = UI_FOCUS_SEARCH;
     // Another command leaves the field and runs in the results.
-    CHECK(menu_keys(&u, 1, UK_RELOAD).kind == UA_RELOAD && !u.search_keys);
-    u.search_keys = true;
-    CHECK(menu_keys(&u, 1, UK_HIDDEN).kind == UA_HIDDEN && !u.search_keys && !u.search_edited);
+    CHECK(menu_keys(&u, 1, UK_RELOAD).kind == UA_RELOAD && u.focus != UI_FOCUS_SEARCH);
+    u.focus = UI_FOCUS_SEARCH;
+    CHECK(menu_keys(&u, 1, UK_HIDDEN).kind == UA_HIDDEN && u.focus != UI_FOCUS_SEARCH && !u.search_edited);
     // In the results: the letters are the list's again.
     in = chars("j");
     ui_handle(&u, names, &in);
@@ -298,7 +298,7 @@ static void test_search_ui_keys(void)
     CHECK(!u.find_opts.cased && !u.search_edited);
     in = ui_input_none(), in.search_field = true;
     ui_handle(&u, names, &in);
-    CHECK(!u.search_keys);
+    CHECK(u.focus != UI_FOCUS_SEARCH);
 }
 
 static void test_search_ui_refused(void)
@@ -319,7 +319,7 @@ static void test_search_ui_refused(void)
     UiInput in = chars("t");
     CHECK(ui_handle(&u, names, &in).kind == UA_TERMINAL);
     menu_keys(&u, 1, UK_F2);
-    CHECK(u.editing);
+    CHECK((u.focus == UI_FOCUS_EDIT));
     menu_keys(&u, 1, UK_ESC);
     menu_keys(&u, 1, UK_SHIFT_DELETE);
     CHECK(u.confirming && u.confirm_n == 1);
@@ -328,9 +328,9 @@ static void test_search_ui_refused(void)
     u.list.sel = 3;
     UiAction a = menu_keys(&u, 1, UK_CONTAINING);
     CHECK(a.kind == UA_CONTAINING && a.index == 3);
-    u.side_focus = true;
+    u.focus = UI_FOCUS_SIDE;
     CHECK(menu_keys(&u, 1, UK_CONTAINING).kind == UA_NONE);
-    u.side_focus = false;
+    ui_unfocus(&u, UI_FOCUS_SIDE);
     // The menus: those three greyed; the rest there, Rename, Duplicate and Make Link whatever the
     // folder shown (each result's own folder decides).
     u.can_bookmark = true;
@@ -381,7 +381,7 @@ static void test_search_ui_refused(void)
     u = menu_ui(5);
     u.in_trash = true;
     CHECK(ui_menu_enabled(&u, UM_RESTORE));
-    u.side_focus = true;
+    u.focus = UI_FOCUS_SIDE;
     CHECK(!ui_menu_enabled(&u, UM_RESTORE));
 }
 
@@ -426,7 +426,7 @@ static void test_search_field_edit(void)
     static u8 mark[5];
     UiNames names = { name_at, NULL, dir_at };
     Ui u = menu_ui(5);
-    u.mark = mark, u.in_search = true, u.search_keys = true;
+    u.mark = mark, u.in_search = true, u.focus = UI_FOCUS_SEARCH;
     UiInput in = chars("index");
     ui_handle(&u, names, &in);
     CHECK(u.search_len == 5 && u.search_caret == 5 && u.search_anchor == 5);
@@ -451,7 +451,7 @@ static void test_search_field_edit(void)
     in = keys(1, UK_PASTE);
     in.paste = S("a/b\nsecond");
     ui_handle(&u, names, &in);
-    CHECK(u.search_len == 4 && memcmp(u.search, "tsab", 4) == 0 && u.search_edited && u.search_keys);
+    CHECK(u.search_len == 4 && memcmp(u.search, "tsab", 4) == 0 && u.search_edited && (u.focus == UI_FOCUS_SEARCH));
     // Home, Delete; Left, Shift+End, Ctrl+C: the selection copied, the text as it was.
     u.search_edited = false;
     menu_keys(&u, 2, UK_HOME, UK_DELETE);
@@ -476,17 +476,17 @@ static void test_search_field_edit(void)
     ui_handle(&u, names, &in);
     CHECK(u.search_len == 2 && u.search[1] == 'z');
     // A question up takes the keys before the field (Shift+Delete from the results, then n).
-    u.search_keys = false;
+    ui_unfocus(&u, UI_FOCUS_SEARCH);
     menu_keys(&u, 1, UK_SHIFT_DELETE);
     CHECK(u.confirming);
-    u.search_keys = true;
+    u.focus = UI_FOCUS_SEARCH;
     int len = u.search_len;
     in = chars("n");
     ui_handle(&u, names, &in);
     CHECK(!u.confirming && u.search_len == len);
     // In the results, Ctrl+A is the list's again: every result selected.
     menu_keys(&u, 1, UK_ENTER);
-    CHECK(!u.search_keys);
+    CHECK(u.focus != UI_FOCUS_SEARCH);
     menu_keys(&u, 1, UK_ALL);
     CHECK(u.marked == 5);
 }
@@ -507,7 +507,7 @@ static void test_find_field_edit(void)
     CHECK(u.find_len == 3 && u.find_caret == 3 && !u.find_miss);
     // Ctrl+A selects the text, not the files; Ctrl+V pastes over it (first line, no '/').
     menu_keys(&u, 1, UK_ALL);
-    CHECK(u.find_anchor == 0 && u.find_caret == 3 && u.marked == 0 && u.finding && u.find_keys);
+    CHECK(u.find_anchor == 0 && u.find_caret == 3 && u.marked == 0 && u.finding && (u.focus == UI_FOCUS_FIND));
     in = keys(1, UK_PASTE);
     in.paste = S("zz/q\nx");
     ui_handle(&u, names, &in);
@@ -527,7 +527,7 @@ static void test_find_field_edit(void)
     // A move changes nothing: the cursor stays where the match put it.
     isize sel = u.list.sel;
     menu_keys(&u, 2, UK_HOME, UK_END);
-    CHECK(u.list.sel == sel && u.find_keys);
+    CHECK(u.list.sel == sel && (u.focus == UI_FOCUS_FIND));
     // Up and Down, with Shift too, step through the matches and keep the keys.
     menu_keys(&u, 1, UK_ALL);
     in = chars("m");   // gamma.txt, BETAMAX, omega
@@ -535,9 +535,9 @@ static void test_find_field_edit(void)
     isize first = u.list.sel;
     CHECK(ui_find_count(&u, names, &at) == 3);
     menu_keys(&u, 1, UK_SEL_DOWN);
-    CHECK(u.find_keys && u.list.sel != first);
+    CHECK((u.focus == UI_FOCUS_FIND) && u.list.sel != first);
     menu_keys(&u, 1, UK_SEL_UP);
-    CHECK(u.list.sel == first && u.find_keys);
+    CHECK(u.list.sel == first && (u.focus == UI_FOCUS_FIND));
     // A caret past the text (the field set from outside) is put back inside first.
     u.find_caret = u.find_anchor = 90;
     in = chars("x");
@@ -567,12 +567,12 @@ static void test_field_copy_fallthrough(void)
         UiInput in = chars("bet");
         ui_handle(&u, names, &in);
         u.copied = false;
-        CHECK(menu_keys(&u, 1, key).kind == want && !u.find_keys && u.finding && !u.copied && u.find_len == 3);
+        CHECK(menu_keys(&u, 1, key).kind == want && u.focus != UI_FOCUS_FIND && u.finding && !u.copied && u.find_len == 3);
         ui_find_close(&u);
         ui_find_open(&u);
         in = chars("bet");
         ui_handle(&u, names, &in);
-        CHECK(menu_keys(&u, 2, UK_ALL, key).kind == UA_NONE && u.find_keys && u.copied && u.copy_len == 3);
+        CHECK(menu_keys(&u, 2, UK_ALL, key).kind == UA_NONE && (u.focus == UI_FOCUS_FIND) && u.copied && u.copy_len == 3);
         ui_find_close(&u);
     }
     ui_matcher_set(&u.find_m, STR_EMPTY, u.find_opts);
@@ -580,15 +580,15 @@ static void test_field_copy_fallthrough(void)
     u = (Ui){ 0 };
     u.list.rows = 10;
     ui_set(&u.list, 3, 0);
-    u.in_search = true, u.search_keys = true;
+    u.in_search = true, u.focus = UI_FOCUS_SEARCH;
     UiInput in = chars("ab");
     ui_handle(&u, names, &in);
     u.copied = false;
-    CHECK(menu_keys(&u, 1, UK_COPY).kind == UA_COPY && !u.search_keys && !u.copied);
-    u.search_keys = true;
-    CHECK(menu_keys(&u, 1, UK_CUT).kind == UA_CUT && !u.search_keys && u.search_len == 2);
-    u.search_keys = true;
-    CHECK(menu_keys(&u, 2, UK_ALL, UK_COPY).kind == UA_NONE && u.search_keys && u.copied && u.copy_len == 2);
+    CHECK(menu_keys(&u, 1, UK_COPY).kind == UA_COPY && u.focus != UI_FOCUS_SEARCH && !u.copied);
+    u.focus = UI_FOCUS_SEARCH;
+    CHECK(menu_keys(&u, 1, UK_CUT).kind == UA_CUT && u.focus != UI_FOCUS_SEARCH && u.search_len == 2);
+    u.focus = UI_FOCUS_SEARCH;
+    CHECK(menu_keys(&u, 2, UK_ALL, UK_COPY).kind == UA_NONE && (u.focus == UI_FOCUS_SEARCH) && u.copied && u.copy_len == 2);
 }
 
 // A word at a time in a text field (Michael, 2026-10-28): Ctrl+Left and Right move to a word's
@@ -636,14 +636,14 @@ static void test_line_words(void)
     // In the list: Ctrl+Left is the sidebar's, Ctrl+Right the location line; the rest nothing.
     Ui v = menu_ui(3);
     v.side.n = 3;
-    CHECK(menu_keys(&v, 1, UK_WORD_LEFT).kind == UA_NONE && v.side_focus);
-    v.side_focus = false;
+    CHECK(menu_keys(&v, 1, UK_WORD_LEFT).kind == UA_NONE && (v.focus == UI_FOCUS_SIDE));
+    ui_unfocus(&v, UI_FOCUS_SIDE);
     CHECK(menu_keys(&v, 1, UK_WORD_RIGHT).kind == UA_LOCATION);
     CHECK(menu_keys(&v, 4, UK_SEL_WORD_LEFT, UK_SEL_WORD_RIGHT, UK_WORD_BACKSPACE, UK_WORD_DELETE).kind == UA_NONE && v.marked == 0 && v.list.sel == 0);
     // In the rename line, Ctrl+Right is a word, not the location line's.
     ui_edit_rename(&v, S("a b.txt"), false);
     v.caret = v.anchor = 0;
-    CHECK(menu_keys(&v, 1, UK_WORD_RIGHT).kind == UA_NONE && v.editing && v.caret == 1);
+    CHECK(menu_keys(&v, 1, UK_WORD_RIGHT).kind == UA_NONE && (v.focus == UI_FOCUS_EDIT) && v.caret == 1);
     ui_edit_close(&v);
 }
 
@@ -656,13 +656,13 @@ static void test_line_active(void)
     CHECK(!ui_line_active(&u, NULL));
     u.finding = true;
     CHECK(!ui_line_active(&u, NULL));
-    u.find_keys = true;
+    u.focus = UI_FOCUS_FIND;
     CHECK(ui_line_active(&u, &l) && l.b == u.find);
     u.in_search = true;
     CHECK(ui_line_active(&u, &l) && l.b == u.find);
-    u.search_keys = true;
+    u.focus = UI_FOCUS_SEARCH;
     CHECK(ui_line_active(&u, &l) && l.b == u.search);
-    u.editing = true;
+    u.focus = UI_FOCUS_EDIT;
     CHECK(ui_line_active(&u, &l) && l.b == u.edit);
     u.keys = true;
     CHECK(ui_line_active(&u, &l) && l.b == u.keys_text);
@@ -675,6 +675,26 @@ static void test_line_active(void)
     CHECK(!ui_line_active(&u, NULL));
     u.ow_in_list = false;
     CHECK(ui_line_active(&u, &l) && l.b == u.ow_text);
+    // One focus (2026-10-28): the location line opened from the search view takes the keys from
+    // its field, which kept them too before; Esc gives them to the list, not back to the field.
+    {
+        Ui w = { 0 };
+        w.in_search = true, w.focus = UI_FOCUS_SEARCH;
+        ui_location_open(&w, S("/tmp"));
+        UiLine wl;
+        CHECK(w.focus == UI_FOCUS_EDIT && ui_line_active(&w, &wl) && wl.b == w.edit);
+        UiInput esc = keys(1, UK_ESC);
+        ui_handle(&w, (UiNames){ name_at, NULL, NULL }, &esc);
+        CHECK(w.focus == UI_FOCUS_LIST && !ui_line_active(&w, NULL));
+    }
+    // Find opened again from the list while Select Items Matching's bar is up: a plain find.
+    {
+        Ui w = { 0 };
+        w.list.n = 2, w.list.rows = 2, w.finding = true, w.find_select = true;
+        UiInput slash = chars("/");
+        ui_handle(&w, (UiNames){ name_at, NULL, NULL }, &slash);
+        CHECK(w.finding && w.focus == UI_FOCUS_FIND && !w.find_select);
+    }
     // A question over a field: none, so a Ctrl+V reads no clipboard (reviewer-2, 2026-10-28).
     u.ow = u.bmp = u.keys = false;
     CHECK(ui_line_active(&u, &l) && l.b == u.edit);

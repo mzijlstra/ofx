@@ -119,7 +119,7 @@ static void test_ui_f5(void)
     ui_edit_open(&u, S("x"));
     in = ui_input_none(), in.tab_click = 0;
     ui_handle(&u, names, &in);
-    CHECK(!u.editing);
+    CHECK(u.focus != UI_FOCUS_EDIT);
     u.confirming = true;
     in = ui_input_none(), in.tab_click = 0, in.mid_row = 0;
     CHECK(ui_handle(&u, names, &in).kind == UA_NONE);
@@ -131,7 +131,7 @@ static void test_ui_f5(void)
     // Nor while editing: the keys belong to the line.
     ui_edit_open(&u, S("x"));
     in = keys(2, UK_TAB_NEW, UK_TAB_CLOSE);
-    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.editing);
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && (u.focus == UI_FOCUS_EDIT));
     ui_edit_close(&u);
 }
 

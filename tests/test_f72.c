@@ -249,9 +249,9 @@ static void test_props_keys(void)
     // The menu's entry, from a rename: the edit line closes (Ctrl+I there is the line's, as any key).
     u = menu_ui(3);
     ui_edit_open(&u, S("a.txt"));
-    CHECK(props_keys(&u, 1, UK_PROPERTIES).kind == UA_NONE && u.editing && !u.props);
+    CHECK(props_keys(&u, 1, UK_PROPERTIES).kind == UA_NONE && (u.focus == UI_FOCUS_EDIT) && !u.props);
     menu_keys(&u, 1, UK_F10);
-    CHECK(!u.editing);
+    CHECK(u.focus != UI_FOCUS_EDIT);
     u.menu_at = file_at(UM_PROPERTIES);
     CHECK(menu_keys(&u, 1, UK_ENTER).kind == UA_PROPS && u.props && !u.menu_on);
     // The pointer: a box takes the focus and flips; a greyed one only the focus; Close closes.
@@ -327,7 +327,7 @@ static void test_step_round(void)
     // The sidebar doesn't go round.
     u.side.rows = 10;
     ui_set(&u.side, 3, 0);
-    u.side_focus = true;
+    u.focus = UI_FOCUS_SIDE;
     props_keys(&u, 1, UK_UP);
     CHECK(u.side.sel == 0);
     u.side.sel = 2;

@@ -967,7 +967,7 @@ static void test_find(void)
     CHECK(!u.find_miss && u.list.sel == 4 && u.find_len == 5);
     in = keys(1, UK_ENTER);   // keeps the cursor, gives the keys back (the bar stays), remembers the text
     ui_handle(&u, names, &in);
-    CHECK(u.finding && !u.find_keys && u.list.sel == 4 && u.last_len == 5);
+    CHECK(u.finding && u.focus != UI_FOCUS_FIND && u.list.sel == 4 && u.last_len == 5);
     // n wraps to the next match of "betam" (only BETAMAX: stays), N likewise.
     in = chars("n");
     ui_handle(&u, names, &in);
@@ -1038,7 +1038,7 @@ static void test_find(void)
     isize was_sel = u.list.sel;
     in = keys(1, UK_PAGEUP);
     ui_handle(&u, names, &in);
-    CHECK(u.finding && !u.find_keys && (u.list.sel < was_sel || was_sel == 0) && u.last_len == 9);
+    CHECK(u.finding && u.focus != UI_FOCUS_FIND && (u.list.sel < was_sel || was_sel == 0) && u.last_len == 9);
     // A full line drops what doesn't fit.
     ui_find_open(&u);
     for (int k = 0; k < UI_FIND_MAX + 10; k++) in = chars("x"), ui_handle(&u, names, &in);
@@ -1114,7 +1114,7 @@ static void test_side(void)
     // Tab gives the sidebar the keys; moves go to it; Enter goes to the place.
     UiInput in = keys(1, UK_TAB);
     ui_handle(&u, names, &in);
-    CHECK(u.side_focus);
+    CHECK((u.focus == UI_FOCUS_SIDE));
     in = chars("jj");
     ui_handle(&u, names, &in);
     CHECK(u.side.sel == 2 && u.list.sel == 3);
@@ -1128,14 +1128,14 @@ static void test_side(void)
     UiAction a = ui_handle(&u, names, &in);
     CHECK(a.kind == UA_PLACE && a.index == 2);
     in = chars("l");   // Right and l don't go to a place: Enter does
-    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.side_focus);
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && (u.focus == UI_FOCUS_SIDE));
     // Tab and Esc give the keys back.
     in = keys(1, UK_TAB);
     ui_handle(&u, names, &in);
-    CHECK(!u.side_focus);
+    CHECK(u.focus != UI_FOCUS_SIDE);
     in = keys(2, UK_TAB, UK_ESC);
     ui_handle(&u, names, &in);
-    CHECK(!u.side_focus);
+    CHECK(u.focus != UI_FOCUS_SIDE);
     // A click in the sidebar goes there; a click in the list takes the keys back.
     in = ui_input_none();
     in.side_click = 1;
@@ -1143,27 +1143,27 @@ static void test_side(void)
     CHECK(a.kind == UA_PLACE && a.index == 3 && u.side.sel == 3);   // top is 2
     in.side_click = 4;   // past the end
     CHECK(ui_handle(&u, names, &in).kind == UA_NONE);
-    u.side_focus = true;
+    u.focus = UI_FOCUS_SIDE;
     in = ui_input_none();
     in.click = 0;
     ui_handle(&u, names, &in);
-    CHECK(!u.side_focus);
-    u.side_focus = true;
+    CHECK(u.focus != UI_FOCUS_SIDE);
+    u.focus = UI_FOCUS_SIDE;
     in = ui_input_none();
     in.dclick = 1;
-    CHECK(ui_handle(&u, names, &in).kind == UA_OPEN && !u.side_focus);
+    CHECK(ui_handle(&u, names, &in).kind == UA_OPEN && u.focus != UI_FOCUS_SIDE);
     // Find takes the keys from the sidebar.
-    u.side_focus = true;
+    u.focus = UI_FOCUS_SIDE;
     in = chars("/");
     ui_handle(&u, names, &in);
-    CHECK(u.finding && !u.side_focus);
+    CHECK(u.finding && u.focus != UI_FOCUS_SIDE);
     // No places: Tab keeps the keys in the list.
     ui_find_close(&u);
     ui_set(&u.side, 0, 0);
     in = keys(1, UK_TAB);
     ui_handle(&u, names, &in);
-    CHECK(!u.side_focus);
-    u.side_focus = true;   // and Enter in an empty sidebar does nothing
+    CHECK(u.focus != UI_FOCUS_SIDE);
+    u.focus = UI_FOCUS_SIDE;   // and Enter in an empty sidebar does nothing
     in = keys(1, UK_ENTER);
     CHECK(ui_handle(&u, names, &in).kind == UA_NONE);
 }
@@ -1181,7 +1181,7 @@ static void test_side_heads(void)
     ui_set(&u.list, 5, 0), ui_set(&u.side, 6, 0);
     UiInput in = keys(1, UK_TAB);   // the keys to the sidebar: off the first heading
     ui_handle(&u, names, &in);
-    CHECK(u.side_focus && u.side.sel == 1 && u.side.top == 0);
+    CHECK((u.focus == UI_FOCUS_SIDE) && u.side.sel == 1 && u.side.top == 0);
     in = keys(2, UK_DOWN, UK_DOWN);   // over Drives to /
     ui_handle(&u, names, &in);
     CHECK(u.side.sel == 4 && u.side.top == 2);
@@ -1229,7 +1229,7 @@ static void test_side_heads(void)
     static const u8 TAIL[] = { 0, 0, 1, 1 };
     u.side_head = TAIL;
     ui_set(&u.side, 4, 1);
-    u.side_focus = true;
+    u.focus = UI_FOCUS_SIDE;
     in = keys(1, UK_DOWN);
     ui_handle(&u, names, &in);
     CHECK(u.side.sel == 1);

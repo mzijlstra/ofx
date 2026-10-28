@@ -31,10 +31,10 @@ static void test_ctx_menus(void)
     UiAction a = ui_handle(&u, names, &in);
     CHECK(a.kind == UA_TAB_BG_ROW && a.index == 2 && !u.menu_on);
     // A right press takes the keys from the sidebar.
-    u.side_focus = true;
+    u.focus = UI_FOCUS_SIDE;
     in = ui_input_none(), in.ctx_row = 0;
     ui_handle(&u, names, &in);
-    CHECK(u.menu_on && !u.side_focus);
+    CHECK(u.menu_on && u.focus != UI_FOCUS_SIDE);
     menu_keys(&u, 1, UK_ESC);
     // A marked row keeps the marks, the cursor on it; with two, no Rename and no tab. Cut runs
     // Ctrl+X, on the marks.
@@ -126,19 +126,19 @@ static void test_ctx_keys(void)
     menu_keys(&u, 1, UK_ESC);
     ui_mark(&u, 0, false);
     // The sidebar has the keys, and no rows: nothing.
-    u.side_focus = true;
+    u.focus = UI_FOCUS_SIDE;
     menu_keys(&u, 1, UK_CONTEXT);
     CHECK(!u.menu_on);
-    u.side_focus = false;
+    ui_unfocus(&u, UI_FOCUS_SIDE);
     // An edit line keeps the key.
     menu_keys(&u, 1, UK_F2);
-    CHECK(u.editing);
+    CHECK((u.focus == UI_FOCUS_EDIT));
     menu_keys(&u, 1, UK_CONTEXT);
-    CHECK(!u.menu_on && u.editing);
+    CHECK(!u.menu_on && (u.focus == UI_FOCUS_EDIT));
     menu_keys(&u, 1, UK_ESC);
     // The find line with the keys too.
     menu_keys(&u, 1, UK_FIND);
-    CHECK(u.finding && u.find_keys);
+    CHECK(u.finding && (u.focus == UI_FOCUS_FIND));
     menu_keys(&u, 1, UK_CONTEXT);
     CHECK(!u.menu_on);
     menu_keys(&u, 1, UK_ESC);
@@ -275,7 +275,7 @@ static void test_ctx_folder_menu(void)
     in = ui_input_none(), in.ctx_side = 5;
     CHECK(ui_input_acts(&in));
     ui_handle(&u, names, &in);
-    CHECK(u.menu_on && u.menu == UI_CTX_FOLDER && u.ctx_side == 5 && u.ctx_crumb == -1 && u.side.sel == 5 && !u.side_focus && !u.ctx_key);
+    CHECK(u.menu_on && u.menu == UI_CTX_FOLDER && u.ctx_side == 5 && u.ctx_crumb == -1 && u.side.sel == 5 && u.focus != UI_FOCUS_SIDE && !u.ctx_key);
     // As gui/ finds it: a place (no Cut or Copy), not a bookmark's row, no eject.
     u.ctx_place = true, u.ctx_bms = 3;
     CHECK(ui_menu_shown(&u, UM_OPEN_IT) && ui_menu_shown(&u, UM_OPEN_TAB) && ui_menu_shown(&u, UM_OPEN_WINDOW) && ui_menu_shown(&u, UM_TERMINAL_IN));
@@ -357,22 +357,22 @@ static void test_ctx_folder_menu(void)
     ui_handle(&u, names, &in);
     CHECK(!u.menu_on);
     // By the keys: the sidebar's cursor's (not on a heading), the path button's; the keys stay there.
-    u.side_focus = true;
+    u.focus = UI_FOCUS_SIDE;
     in = ui_input_none(), in.ev[in.nev++] = (UiEvent){ UK_CONTEXT, 0 };
     ui_handle(&u, names, &in);
-    CHECK(u.menu_on && u.menu == UI_CTX_FOLDER && u.ctx_side == 3 && u.ctx_key && u.side_focus);
+    CHECK(u.menu_on && u.menu == UI_CTX_FOLDER && u.ctx_side == 3 && u.ctx_key && (u.focus == UI_FOCUS_SIDE));
     menu_keys(&u, 1, UK_ESC);
-    CHECK(!u.menu_on && u.side_focus);
+    CHECK(!u.menu_on && (u.focus == UI_FOCUS_SIDE));
     u.side.sel = 4;   // (a heading, as a test can put it)
     menu_keys(&u, 1, UK_CONTEXT);
     CHECK(!u.menu_on);
-    u.side_focus = false, u.crumb_focus = true, u.crumb_at = 2;
+    ui_unfocus(&u, UI_FOCUS_SIDE), u.focus = UI_FOCUS_CRUMBS, u.crumb_at = 2;
     in = ui_input_none(), in.crumb_n = 3, in.crumb_last = 2, in.ev[in.nev++] = (UiEvent){ UK_CONTEXT, 0 };
     ui_handle(&u, names, &in);
-    CHECK(u.menu_on && u.menu == UI_CTX_FOLDER && u.ctx_crumb == 2 && u.ctx_side == -1 && u.crumb_focus);
+    CHECK(u.menu_on && u.menu == UI_CTX_FOLDER && u.ctx_crumb == 2 && u.ctx_side == -1 && (u.focus == UI_FOCUS_CRUMBS));
     menu_keys(&u, 1, UK_ESC);
     // The job rows keep the key.
-    u.crumb_focus = false, u.jobs_focus = true;
+    ui_unfocus(&u, UI_FOCUS_CRUMBS), u.focus = UI_FOCUS_JOBS;
     in = ui_input_none(), in.job_n = 1, in.ev[in.nev++] = (UiEvent){ UK_CONTEXT, 0 };
     ui_handle(&u, names, &in);
     CHECK(!u.menu_on);   // (a key not theirs gives the files the keys back, as before F8)
@@ -419,10 +419,10 @@ static void test_ctx_tab_menu(void)
     // An edit line open closes as the menu opens (as the bar's menus do).
     u.tab_n = 2;
     menu_keys(&u, 1, UK_F2);
-    CHECK(u.editing);
+    CHECK((u.focus == UI_FOCUS_EDIT));
     in = ui_input_none(), in.ctx_tab = 1;
     ui_handle(&u, names, &in);
-    CHECK(u.menu_on && !u.editing);
+    CHECK(u.menu_on && u.focus != UI_FOCUS_EDIT);
 }
 
 // The list's Owner, Group and Permissions, and a link's target after its arrow (2026-10-27).
@@ -472,9 +472,9 @@ static void test_list_columns(void)
     CHECK(ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in).kind == UA_PERMS_COLS && !u.perms_cols && ui_menu_mark(&u, UM_PERMS_COLS) == 0);
     // Ctrl+P toggles it too (Michael, 2026-10-27), from the files and from the sidebar.
     CHECK(menu_keys(&u, 1, UK_PERMS_COLS).kind == UA_PERMS_COLS && u.perms_cols);
-    u.side_focus = true;
+    u.focus = UI_FOCUS_SIDE;
     CHECK(menu_keys(&u, 1, UK_PERMS_COLS).kind == UA_PERMS_COLS && !u.perms_cols);
-    u.side_focus = false;
+    ui_unfocus(&u, UI_FOCUS_SIDE);
     // View → Show Group, Ctrl+G (2026-10-27): off unless "group=on"; greyed, and the key does
     // nothing, while Show Permissions is off.
     CHECK(!state_load(&ta, path).group);

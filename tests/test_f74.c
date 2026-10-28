@@ -72,7 +72,7 @@ static void test_menu_f74(void)
                 ma = menu_keys(&b, 1, UK_ENTER);
             }
             CHECK(ka.kind == ma.kind && ka.index == ma.index && ka.all == ma.all && !b.menu_on);
-            CHECK(a.marked == b.marked && memcmp(m1, m2, 4) == 0 && a.finding == b.finding && a.editing == b.editing &&
+            CHECK(a.marked == b.marked && memcmp(m1, m2, 4) == 0 && a.finding == b.finding && a.focus == b.focus &&
                   a.confirming == b.confirming && a.sort.key == b.sort.key && a.sort.reverse == b.sort.reverse && a.list.sel == b.list.sel &&
                   a.perms_cols == b.perms_cols && a.group_col == b.group_col);
             CHECK(!b.menu_key.key && !b.menu_key.ch);   // run once
@@ -144,7 +144,7 @@ static void test_menu_f74(void)
     u.zoom = 0;
     u.can_write = false;
     CHECK(!ui_menu_enabled(&u, UM_PASTE) && !ui_menu_enabled(&u, UM_RENAME) && !ui_menu_enabled(&u, UM_DUPLICATE) && ui_menu_enabled(&u, UM_COPY));
-    u.can_write = true, u.side_focus = true;
+    u.can_write = true, u.focus = UI_FOCUS_SIDE;
     CHECK(!ui_menu_enabled(&u, UM_CUT) && !ui_menu_enabled(&u, UM_COPY) && !ui_menu_enabled(&u, UM_RENAME) && !ui_menu_enabled(&u, UM_TRASH));
     CHECK(!ui_menu_enabled(&u, UM_DUPLICATE));
     CHECK(ui_menu_enabled(&u, UM_SELECT_ALL) && ui_menu_enabled(&u, UM_INVERT));
@@ -204,7 +204,7 @@ static void test_select_match(void)
     u.mark = mark, memset(mark, 0, sizeof mark);
     ui_mark(&u, 0, true), ui_mark(&u, 5, true);
     menu_keys(&u, 1, UK_SELECT_MATCH);
-    CHECK(u.finding && u.find_keys && u.find_select && u.marked == 2);
+    CHECK(u.finding && (u.focus == UI_FOCUS_FIND) && u.find_select && u.marked == 2);
     UiInput in = chars("ta");
     ui_handle(&u, names, &in);
     CHECK(u.list.sel == 1 && u.find_select);
@@ -290,14 +290,14 @@ static void test_f74_keys(void)
     // The sidebar with the keys: its Enter, the place.
     u.side.rows = 5;
     ui_set(&u.side, 3, 1);
-    u.side_focus = true;
+    u.focus = UI_FOCUS_SIDE;
     a = menu_keys(&u, 1, UK_SHIFT_ENTER);
     CHECK(a.kind == UA_PLACE && a.index == 1 && !u.ow);
-    u.side_focus = false;
+    ui_unfocus(&u, UI_FOCUS_SIDE);
     // The find bar with the keys: Enter's, the keys back to the list, no panel.
     UiInput in = chars("/a");
     ui_handle(&u, names, &in);
-    CHECK(menu_keys(&u, 1, UK_SHIFT_ENTER).kind == UA_NONE && u.finding && !u.find_keys && !u.ow);
+    CHECK(menu_keys(&u, 1, UK_SHIFT_ENTER).kind == UA_NONE && u.finding && u.focus != UI_FOCUS_FIND && !u.ow);
     menu_keys(&u, 1, UK_ESC);
     ui_find_close(&u);
     // A question: Enter's answer (the delete question's yes).

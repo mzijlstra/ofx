@@ -878,17 +878,17 @@ static void test_ui_f3(void)
     CHECK(ui_handle(&u, names, &in).kind == UA_NEWFOLDER);
     // Not with the sidebar's keyboard.
     ui_set(&u.side, 3, 0);
-    u.side_focus = true;
+    u.focus = UI_FOCUS_SIDE;
     in = keys(4, UK_DELETE, UK_COPY, UK_CUT, UK_F2);
-    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && !u.editing);
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.focus != UI_FOCUS_EDIT);
     in = keys(1, UK_SHIFT_DELETE);
     ui_handle(&u, names, &in);
     CHECK(!u.confirming);
-    u.side_focus = false;
+    ui_unfocus(&u, UI_FOCUS_SIDE);
     // Nothing to act on in an empty folder (paste still can).
     ui_set(&u.list, 0, 0);
     in = keys(5, UK_DELETE, UK_COPY, UK_CUT, UK_SHIFT_DELETE, UK_F2);
-    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && !u.confirming && !u.editing);
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && !u.confirming && u.focus != UI_FOCUS_EDIT);
     in = keys(1, UK_PASTE);
     CHECK(ui_handle(&u, names, &in).kind == UA_PASTE);
     ui_set(&u.list, 20, 0);
@@ -898,7 +898,7 @@ static void test_ui_f3(void)
     in = keys(1, UK_SHIFT_DELETE);
     CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.confirming && u.confirm_n == 2);
     in = keys(3, UK_DOWN, UK_DELETE, UK_TAB);
-    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.confirming && u.list.sel == 0 && !u.side_focus);
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.confirming && u.list.sel == 0 && u.focus != UI_FOCUS_SIDE);
     in = chars("jx");
     CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.confirming && u.list.sel == 0);
     in = keys(1, UK_ENTER);
@@ -973,7 +973,7 @@ static void test_ui_f3(void)
     in = keys(1, UK_HOME);
     ui_handle(&u, names, &in);
     in = keys(1, UK_F2);
-    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.editing);
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && (u.focus == UI_FOCUS_EDIT));
     CHECK(u.edit_len == 5 && memcmp(u.edit, "alpha", 5) == 0 && u.caret == 5 && u.anchor == 0);
     in = keys(1, UK_END);
     ui_handle(&u, names, &in);
@@ -1000,7 +1000,7 @@ static void test_ui_f3(void)
     ui_handle(&u, names, &in);
     CHECK(u.edit_len == 7);
     in = keys(8, UK_HOME, UK_LEFT, UK_BACKSPACE, UK_UP, UK_DOWN, UK_TAB, UK_PAGEDOWN, UK_COPY);
-    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.caret == 0 && u.edit_len == 7 && u.list.sel == 0 && !u.side_focus);
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.caret == 0 && u.edit_len == 7 && u.list.sel == 0 && u.focus != UI_FOCUS_SIDE);
     // UTF-8: one code point at a time.
     in = keys(1, UK_END);
     ui_handle(&u, names, &in);
@@ -1026,19 +1026,19 @@ static void test_ui_f3(void)
     CHECK(u.edit_len == 7);
     // Enter asks gui/ to rename; the line stays open until gui/ closes it.
     in = keys(1, UK_ENTER);
-    CHECK(ui_handle(&u, names, &in).kind == UA_RENAME && u.editing);
+    CHECK(ui_handle(&u, names, &in).kind == UA_RENAME && (u.focus == UI_FOCUS_EDIT));
     ui_edit_close(&u);
     // Esc closes it, with nothing asked.
     in = keys(1, UK_F2);
     ui_handle(&u, names, &in);
     in = keys(1, UK_ESC);
-    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && !u.editing);
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.focus != UI_FOCUS_EDIT);
     // A click closes it.
     in = keys(1, UK_F2);
     ui_handle(&u, names, &in);
     in = ui_input_none(), in.click = 1;
     ui_handle(&u, names, &in);
-    CHECK(!u.editing && u.list.sel == 1);
+    CHECK(u.focus != UI_FOCUS_EDIT && u.list.sel == 1);
     // Full.
     char big[NAME_MAX + 1];
     memset(big, 'a', NAME_MAX - 1);
@@ -1056,6 +1056,6 @@ static void test_ui_f3(void)
     CHECK(u.finding);
     in = keys(1, UK_F2);
     ui_handle(&u, names, &in);
-    CHECK(u.finding && !u.find_keys && u.editing);   // the bar stays, the keys go to the edit line
+    CHECK(u.finding && u.focus != UI_FOCUS_FIND && (u.focus == UI_FOCUS_EDIT));   // the bar stays, the keys go to the edit line
     ui_edit_close(&u);
 }
