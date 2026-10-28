@@ -196,12 +196,12 @@ static void search_prune(const char *root)
 {
     pthread_mutex_lock(&search.mu);
     isize n = search.res_gen == atomic_load(&search.gen) ? search.n : 0;
-    for (isize i = 0; i < n; i++) {
+    pthread_mutex_unlock(&search.mu);
+    for (isize i = 0; i < n; i++) {   // (below n the walk is done: no lock needed, reviewer-2)
         char p[PATH_MAX];
         struct stat st;
         search_gone[i] = search_res_path(i, root, p, sizeof p) && lstat(p, &st) != 0;
     }
-    pthread_mutex_unlock(&search.mu);
 }
 
 // The result key names (entry_key: folder/name) renamed to name (step 2: the list shows the new

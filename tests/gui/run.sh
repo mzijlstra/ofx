@@ -271,7 +271,7 @@ if want f9; then
 # F9 step 1: the search view. home/tree: names at three depths, two index.ts, a hidden folder and
 # file, .git and node_modules (left out), a link to a folder (not followed), a link to a file,
 # a file 262 bytes below, and zz/ with 10,001 files (the limit).
-T=$base/f9; rm -rf "$T"; H=$T/home; mkdir -p "$H/tree/src/deep" "$H/tree/.hid" "$H/tree/.git" "$H/tree/node_modules" "$H/tree/docs" "$H/tree/zz"
+T=$base/f9; rm -rf "$T"; H=$T/home; mkdir -p "$T/config/gtk-3.0" "$H/tree/src/deep" "$H/tree/.hid" "$H/tree/.git" "$H/tree/node_modules" "$H/tree/docs" "$H/tree/zz"
 touch "$H/tree/a.ts" "$H/tree/b.txt" "$H/tree/src/c.ts" "$H/tree/src/index.ts" "$H/tree/src/deep/index.ts" "$H/tree/src/deep/d.TS" \
       "$H/tree/.hid/e.ts" "$H/tree/.f.ts" "$H/tree/.git/g.ts" "$H/tree/node_modules/h.ts" "$H/tree/docs/notes.txt"
 printf x > "$H/tree/src/index.ts"; printf x > "$H/tree/src/deep/index.ts"   # (an empty file opens through its type's app)

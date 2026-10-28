@@ -1130,6 +1130,7 @@ static void rename_commit(void)
     }
     ui_edit_close(&app.ui);
     set_status(false, "Renamed %s to %.*s", app.edit_from, STR_ARG(to));
+    if (app.ui.in_search) search_prune(app.search_root);   // (a folder renamed: the results below it are gone)
     go_to(app.cwd, str_from_c(keep), app.ui.list.sel);
 }
 
@@ -4175,6 +4176,7 @@ static void ctx_facts(void)
     const char *p = u->ctx_crumb >= 0 && u->ctx_crumb < app.crumbs.n
                         ? (snprintf(buf, sizeof buf, "%.*s", STR_ARG(ui_crumb_path(&app.crumbs, u->ctx_crumb))), buf)
                         : side_path(u->ctx_side, buf, sizeof buf);
+    if (p && is_search(p)) p = app.search_root;   // the "Search" button's: the folder searched (F9), never its address
     snprintf(app.ctx_path, sizeof app.ctx_path, "%s", p ? p : "");
     u->ctx_w = app.ctx_path[0] && access(app.ctx_path, W_OK) == 0;
     u->ctx_trash = strcmp(app.ctx_path, TRASH_URI) == 0;

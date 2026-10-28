@@ -566,7 +566,9 @@ MUTANTS = [
     (G, '    static char key[PATH_MAX];\n    return app.have_list', '    static char key[NAME_MAX + 1];\n    return app.have_list', 'f9'),
     # ---- F9 step 2: working with results (2026-10-28). Left out: Ctrl+Enter's GLFW mapping (scripts
     # send ui/'s keys).
-    (G, '    if (app.ui.in_search) search_prune(app.search_root);', '', 'f9'),
+    (G, '    if (p && is_search(p)) p = app.search_root;', '', 'f9'),
+    (G, '    if (app.ui.in_search) search_prune(app.search_root);   // (a folder renamed', '    if (false) search_prune(app.search_root);   // (a folder renamed', 'f9'),
+    (G, '    if (app.ui.in_search) search_prune(app.search_root);   // (what went since', '    // (what went since', 'f9'),
     ('gui/search.c', '        search_gone[i] = search_res_path(i, root, p, sizeof p) && lstat(p, &st) != 0;', '        search_gone[i] = lstat(p, &st) != 0;', 'f9'),
     ('gui/search.c', '        if (search_gone[i]) continue;\n        const Entry *r', '        const Entry *r', 'f9'),
     ('gui/search.c', '    memset(search_gone, 0, sizeof search_gone), arena_reset(&search_edits);', '    arena_reset(&search_edits);', 'f9'),
