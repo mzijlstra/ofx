@@ -414,6 +414,8 @@ static void test_view_allows(void)
     u.view = UI_VIEW_SEARCH;
     CHECK(ui_view_act(&u, (UiAction){ UA_PASTE, 0, false }).kind == UA_NOT_IN_SEARCH);
     CHECK(ui_view_act(&u, (UiAction){ UA_COPY, 3, true }).kind == UA_COPY && ui_view_act(&u, (UiAction){ UA_COPY, 3, true }).index == 3);
+    u.view = UI_VIEW_FOLDER;   // what only the trash view does: refused in a folder, without a word
+    CHECK(ui_view_act(&u, (UiAction){ UA_RESTORE, 0, false }).kind == UA_NONE);
 }
 
 static void test_ui_f53(void)

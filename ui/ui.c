@@ -771,7 +771,7 @@ static bool ui_view_allows(UiView v, UiActionKind k)
 static UiAction ui_view_act(const Ui *u, UiAction a)
 {
     if (ui_view_allows(u->view, a.kind)) return a;
-    return (UiAction){ u->view == UI_VIEW_TRASH ? UA_NOT_IN_TRASH : UA_NOT_IN_SEARCH, 0, false };
+    return (UiAction){ u->view == UI_VIEW_TRASH ? UA_NOT_IN_TRASH : u->view == UI_VIEW_SEARCH ? UA_NOT_IN_SEARCH : UA_NONE, 0, false };   // (a folder's: nothing to say)
 }
 
 // f gives the keys back to the list, if it has them.
