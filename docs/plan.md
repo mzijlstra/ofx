@@ -433,11 +433,11 @@ The wheel over a panel's list (Open With, Keyboard Shortcuts) drew nothing until
 `ow_wheel` is in `ui_input_acts` now (f4fced7).
 
 **F7.1 as built (2026-10-25):**
-- `ui/ui.c`: the menus as tables (`UI_MENU`, `UI_MENU_ITEM`: label, key, a word for the tests);
+- `ui/ui.c` (`ui/menus.c` since 2026-10-28): the menus as tables (`UI_MENU`, `UI_MENU_ITEM`: label, key, a word for the tests);
   `ui_menu_enabled`, `ui_menu_event` (the keys), `ui_menu_hover` (the pointer), the clicks in
   `ui_handle`. A menu open takes the typed characters (`t` would start a terminal behind it) and
   Tab; any other key closes it and does what it does (Ctrl+T opens a tab). A question up closes
-  it. `gui/main.c` draws the bar (26 px, `MENU_H`) and the menu as a floating panel under its
+  it. `gui/main.c` (`gui/topbar.c` since 2026-10-28) draws the bar (26 px, `MENU_H`) and the menu as a floating panel under its
   title; with a menu open, hit tests see only the titles and the entries, and a press anywhere
   else only closes it.
 - Two changes from the design above: **New Window is greyed in the trash view** (ofx starts on a
@@ -527,7 +527,7 @@ process, one window), one page; only for showing a file's properties and changin
   512 entries), `op_chmod` (the 0777 part, special bits kept; the guard on the real path, so a link
   can't reach outside the test tree), `perm_bit`. `fs/undo.c` `UNDO_CHMOD` (the old mode, octal).
 - `gui/walk.c`: one walk thread, as counts.c's (a generation per walk, the panel closing stops it,
-  never joined when stuck); `gui/main.c` the panel (`props_open`, `props_read`, `props_chmod`,
+  never joined when stuck); `gui/main.c` (`gui/panels.c` since 2026-10-28) the panel (`props_open`, `props_read`, `props_chmod`,
   `layout_props_panel`); `ui/ui.c` `ui_props_open`, `ui_props_event`, the clicks. A clash or delete
   question over the panel takes its keys; quit and the queue-full note as everywhere.
 - Ctrl+I in the rename or location line is the line's (as every key there); the menu closes those
@@ -638,7 +638,7 @@ drawn (a 10 MB one took 1.4 s at 48 px on the main thread; real icons are a few 
 Default and Recommended equal GIO's; GLib's rewrite of a copy adds the two lines only.
 
 **F7.3 as built (2026-10-26):**
-- `ui/ui.c`: one matcher (`UiMatcher`, `ui_match`) for find and the filter: case folded or as
+- `ui/ui.c` (`ui/match.c` since 2026-10-28): one matcher (`UiMatcher`, `ui_match`) for find and the filter: case folded or as
   typed, whole words (no letter, digit, `_` or byte past ASCII on either side; with a regular
   expression each match is tried until one stands alone), POSIX extended expressions (`regcomp`;
   a bad one matches nothing and its reason shows in red). Find's toggles live in the find line

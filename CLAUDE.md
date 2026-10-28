@@ -181,6 +181,23 @@ its own object compiled once a run with nanosvg's (`gui/vendor.c`), 1.1 s a muta
 - The script language is at the top of `gui/script.c`. Start every script with `settle`; check
   the `state` line rather than screenshots where you can.
 
+## Where the code is (2026-10-28)
+
+One unity build per binary: gui/main.c includes base/, fs/ (fs/fs.c) and ui/ (ui/ui.c), then its own
+files in order. ui/ is raylib-free and unit-tested (tests/test.c includes it); a function in fs/ or
+ui/ that nothing calls makes the test build warn.
+
+- `fs/`: the file system side; `fs/paths.c` holds the path helpers every other file uses
+  (path_within, path_below, path_put, path_parent, xdg_dir, mkdir_p, the URI and mountinfo codecs).
+- `ui/ui.c`: the types (Ui, UiInput, UiAction, UiFocus, UiOnTop) and tables, then `cursor.c`
+  (lists), `match.c`, `find.c`, `edit.c` (UiLine), `prompts.c`, `menus.c`, `panels.c`, `handle.c`
+  (ui_handle), `helpers.c` (path buttons, location, tabs, history, timing, text fit).
+- `gui/main.c`: memory, the app state, signals, main(); then `folder.c` (go_to, history, places),
+  `actions.c` (act, changing files), `icons.c`, `files.c` (the list and sidebar drawn), `topbar.c`,
+  `panels.c` (modal panels, Properties), `footer.c` (job rows, find and search bars, status),
+  `frame.c` (tooltips, layout, draw), `input.c` (keys, hit_at, hover); the worker threads and the
+  panels' own files (`openwith.c`, `bookmarks.c`, ...) as before.
+
 ## Vendored code
 
 `vendor/`: Clay (`main` at e6cc369, `clay.h` and its licence) and raylib 6.0 (dbc56a8, `src/` and

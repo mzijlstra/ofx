@@ -1,0 +1,454 @@
+// The folder shown: going to one (a listing, the search view, the trash view), its history, the
+// places and the tree in the sidebar, reloads. Included by main.c.
+
+// ---- the folder -----------------------------------------------------------------------------
+
+// The folder shown: in the search view, the folder searched (F9).
+static const char *here_dir(void)
+{
+    return app.ui.in_search ? app.search_root : app.cwd;
+}
+
+// The cursor's entry as listing_find finds it: its name, in the search view its folder and name (F9).
+static Str sel_name(void)
+{
+    static char key[PATH_MAX];
+    return app.have_list && app.ui.list.n > 0 ? entry_key(&app.list.e[app.ui.list.sel], key, sizeof key) : STR_EMPTY;
+}
+
+// Entry i's file: in the folder shown, in the trash view where the trash keeps it, or in the search
+// view below the folder searched (F9). False when the path doesn't fit.
+static bool entry_path(isize i, char *out, size_t cap)
+{
+    const Entry *e = &app.list.e[i];
+    if (e->trash) {
+        int n = snprintf(out, cap, "%s", e->trash->file);
+        return n >= 0 && (size_t)n < cap;
+    }
+    if (app.ui.in_search) {
+        char dir[PATH_MAX];
+        if (e->dir.len && !path_put(dir, sizeof dir, app.search_root, e->dir)) return false;
+        return path_put(out, cap, e->dir.len ? dir : app.search_root, e->name);
+    }
+    return path_put(out, cap, app.cwd, e->name);
+}
+
+// The folder an action is on: (all) folder entry index's, from its right-click menu (F8), else the
+// folder shown; NULL when that entry is gone. buf holds an entry's path.
+static const char *act_dir(UiAction a, char *buf, size_t cap)
+{
+    if (!a.all) return here_dir();
+    return a.index < app.list.n && entry_path(a.index, buf, cap) ? buf : NULL;
+}
+
+static void tree_refresh(bool follow, int fallback);
+static void icons_reset(void);
+
+static TrashDirs trashd;   // the trash folders the trash view shows (F6)
+
+// The trash folders there are now: the home trash, and each drive's.
+static void trash_scan(void)
+{
+    const char *mp[PLACES_MAX];
+    int n = 0;
+    for (int i = 0; i < app.places.n; i++)
+        if (place_is_drive(app.places.p[i].kind)) mp[n++] = app.places.p[i].path;
+    trash_dirs(&trashd, mp, n);
+}
+
+// The search view's listing (F9): the matches so far, sorted. A search starts first when another
+// one runs or ran (entering the view always does: leaving it asked for none).
+static bool search_list(Arena *a, const char *uri, Listing *l, Err *err)
+{
+    Str root, text;
+    char r[PATH_MAX];
+    if (!search_parse(uri, &root, &text) || root.len >= PATH_MAX) return err_set(err, "Not a search"), false;
+    snprintf(r, sizeof r, "%.*s", STR_ARG(root));
+    if (!search_is(r, text, app.ui.find_opts, app.show_hidden)) {
+        search_ask(r, text, app.ui.find_opts, app.show_hidden);
+        ui_matcher_set(&app.search_m, text, app.ui.find_opts);
+    }
+    if (!search_copy(a, l, &app.search_s, &app.search_done)) return err_set(err, "%s: too many results for memory", r), false;
+    fs_sort(l, app.ui.sort);
+    snprintf(app.search_root, sizeof app.search_root, "%s", r);
+    return true;
+}
+
+// Shows dir, the cursor on the entry called `select` (else on row `fallback`). A move to another
+// folder goes in the history, unless it is the history's own (`stepping`). False, with the reason
+// in the status line, when dir can't be read: the old listing stays.
+static bool go_to_in(const char *dir, Str select, isize fallback, bool stepping)
+{
+    int next = app.have_list ? 1 - app.cur : app.cur;
+    arena_reset(&lists[next]);
+    Listing l;
+    Err err;
+    bool in_trash = strcmp(dir, TRASH_URI) == 0, in_search = is_search(dir), same = strcmp(dir, app.cwd) == 0;
+    if (in_trash) trash_scan();
+    if (in_trash    ? !trash_list(&lists[next], &trashd, app.show_hidden, app.ui.sort, &l, &err)
+        : in_search ? !search_list(&lists[next], dir, &l, &err)
+                    : !fs_list(&lists[next], dir, app.show_hidden, app.ui.sort, &l, &err)) {
+        if (!app.have_list) snprintf(app.error, sizeof app.error, "%s", err.msg);
+        set_status(true, "%s", err.msg);
+        return false;
+    }
+    // The name to select lives in the old listing: find it before that arena is reused.
+    isize sel = select.len ? listing_find(&l, select) : -1;
+    if (sel < 0) sel = fallback;
+    Str *mime = arena_try_new(&lists[next], Str, l.n + 1);
+    u8 *mark = arena_try_new(&lists[next], u8, l.n + 1);
+    isize *count = arena_try_new(&lists[next], isize, l.n + 1);
+    if (!mime || !mark || !count) {
+        set_status(true, "%s: too many entries for memory", dir);
+        return false;
+    }
+    // The same folder again: the selection is kept by name.
+    isize marked = 0;
+    for (isize i = 0; same && app.have_list && app.ui.marked && i < app.list.n; i++) {
+        if (!app.ui.mark[i]) continue;
+        char key[PATH_MAX];
+        isize k = listing_find(&l, entry_key(&app.list.e[i], key, sizeof key));
+        if (k >= 0 && !mark[k]) mark[k] = 1, marked++;
+    }
+    // The folder left, with its cursor, for Back: its name is still in the old listing's arena.
+    if (!same && app.have_list && !stepping) hist_leave(&hist, app.cwd, sel_name());
+    app.cur = next, app.list = l, app.mime = mime, app.have_list = true, app.error[0] = 0, app.lists++;
+    app.ui.in_trash = in_trash;
+    if (app.ui.in_search && !in_search) search_ask("", STR_EMPTY, app.ui.find_opts, false), app.search_due = 0;   // (out of it: the walk stops)
+    if (!in_search) ui_unfocus(&app.ui, UI_FOCUS_SEARCH);
+    if (in_search && !same) {   // the field shows its text; empty, it has the keys
+        Str root, text;
+        search_parse(dir, &root, &text);
+        app.ui.search_len = (int)(text.len < UI_FIND_MAX ? text.len : UI_FIND_MAX);
+        memcpy(app.ui.search, text.p, (size_t)app.ui.search_len);
+        app.ui.search_caret = app.ui.search_anchor = app.ui.search_len;
+        if (text.len == 0) app.ui.focus = UI_FOCUS_SEARCH;
+        else ui_unfocus(&app.ui, UI_FOCUS_SEARCH);
+        app.ui.search_edited = false, app.search_due = 0;
+        snprintf(app.search_pick, sizeof app.search_pick, "%.*s", STR_ARG(select));
+    }
+    app.ui.in_search = in_search;
+    app.ui.can_write = !in_trash && !in_search && access(dir, W_OK) == 0;   // the File menu's Create entries (F7.1)
+    for (isize i = 0; i < l.n; i++) count[i] = COUNT_UNKNOWN;
+    app.count = count;
+    count_new_listing();
+    ArenaMark mi_mark = arena_mark(&scratch);
+    app.thumb_local = thumb_local(read_file(&scratch, mountinfo_path()), in_search ? app.search_root : dir);
+    arena_restore(&scratch, mi_mark);
+    ui_mark_set(&app.ui, mark);
+    app.ui.marked = marked;
+    if (!same) ui_edit_close(&app.ui);
+    if (!same) {
+        snprintf(app.cwd, sizeof app.cwd, "%s", dir);
+        ui_crumbs_set(&app.crumbs, app.cwd, getenv("HOME"));
+        app.status[0] = 0;   // what happened in the last folder
+        app.ui.list.top = 0;
+        app.place_cur = places_current(&app.places, app.cwd);
+        // OFX_TEST_WATCH_DELAY_MS widens the gap between the listing and the watch, so
+        // tests/gui/watchgap.script can put a change in it.
+        if (watch_delay_ms > 0) nanosleep(&(struct timespec){ watch_delay_ms / 1000, (watch_delay_ms % 1000) * 1000000L }, NULL);
+        // The trash view watches the home trash's info/ (a drive's trash changes from ofx reload it).
+        char tinfo[PATH_MAX + 8] = "";
+        if (in_trash && trash_home(tinfo, sizeof tinfo - 8)) strcat(tinfo, "/info");
+        watch_dir(in_trash ? tinfo : in_search ? NULL : app.cwd);   // (a search isn't watched: Ctrl+R runs it again)
+        // A change between the listing and the watch made no event: list once more.
+        atomic_store(&watch.list_ready, true);
+        glfwPostEmptyEvent();
+        char shown[PATH_MAX + 1];
+        ui_tilde(shown, sizeof shown, app.search_root, getenv("HOME"));
+        SetWindowTitle(in_trash ? "ofx: Trash" : in_search ? TextFormat("ofx: Search in %s", shown) : TextFormat("ofx: %s", app.cwd));
+    }
+    ui_set(&app.ui.list, l.n, sel);
+    // The find bar stays open in another folder; Esc there goes back to where this one opened, not
+    // to a place in the last one's list.
+    if (!same) app.ui.find_from = app.ui.list.sel;
+    // A full icon cache would leave every icon not in it blank until a theme change: emptied as
+    // another folder is entered, where a frame holds none of its slots, it fills again with what is
+    // on screen. (A reload of the same folder shows the same icons.)
+    if (!same && app.nslots >= app.icons_max) icons_reset(), app.icon_full_resets++;
+    tree_refresh(!same && !in_search, app.ui.side.sel);
+    // The drives' space moves with what changes on them; asked again with every listing.
+    if (!same) app.cwd_avail = -1;
+    space_ask(&app.places, app.cwd);
+    return true;
+}
+
+// The search view's listing again, as more matches come (F9): the cursor stays on its entry, or
+// goes to the one to pick when that comes.
+static void search_relist(void)
+{
+    char keep[PATH_MAX];
+    snprintf(keep, sizeof keep, "%.*s", STR_ARG(sel_name()));
+    go_to_in(app.cwd, str_from_c(app.search_pick[0] ? app.search_pick : keep), app.ui.list.sel, true);
+    if (app.search_done || (app.search_pick[0] && listing_find(&app.list, str_from_c(app.search_pick)) >= 0)) app.search_pick[0] = 0;
+}
+
+// The field's text, 150 ms after its last change (F9): searched for in place, the cursor on the
+// first match (not a move in the history).
+enum { SEARCH_TYPE_MS = 150 };
+
+static void search_retype(void)
+{
+    char uri[PATH_MAX];
+    if (!search_uri(uri, sizeof uri, app.search_root, (Str){ app.ui.search, app.ui.search_len })) {
+        set_status(true, "That search is too long");
+        return;
+    }
+    snprintf(app.cwd, sizeof app.cwd, "%s", uri);
+    app.search_pick[0] = 0;
+    go_to_in(app.cwd, STR_EMPTY, 0, true);
+}
+
+// Ctrl+R in the search view: the same search again.
+static void search_again(void)
+{
+    char keep[PATH_MAX];
+    snprintf(keep, sizeof keep, "%.*s", STR_ARG(sel_name()));
+    snprintf(app.search_pick, sizeof app.search_pick, "%s", keep);
+    Str root, text;
+    if (search_parse(app.cwd, &root, &text)) search_ask(app.search_root, text, app.ui.find_opts, app.show_hidden);
+    search_relist();
+}
+
+// The places read again (at the start, a drive mounted or gone): the sidebar's cursor stays on its
+// place, found by path and kind, else on the first row that isn't a heading.
+static void places_reload(void)
+{
+    // A folder menu open on a place was resolved against these places (ctx_facts: its row, its
+    // bookmark line); read again, they may be another's, so it closes (F8 review, 2026-10-27: Nemo
+    // adding a bookmark above made Remove take the wrong line).
+    if (app.ui.menu_on && app.ui.menu == UI_CTX_FOLDER && app.ui.ctx_crumb < 0) app.ui.menu_on = false;
+    Place keep = { .kind = PL_HEAD };   // in the tree mode the cursor is a tree row's: none kept
+    if (app.ui.side_mode == SIDE_PLACES && app.ui.side.sel < app.places.n) keep = app.places.p[app.ui.side.sel];
+    char bm[PATH_MAX];
+    places_load(&scratch, &app.places, bookmarks_path(bm, sizeof bm), mountinfo_path());
+    // The Bookmarks menu's (F7.5). With Edit Bookmarks up its cursor stays on its line, found
+    // again as a change finds it (bm_locate), wherever a change made elsewhere moved it; the lines
+    // as they were are copied into bmwa, which no change holds by now (they reload after writing).
+    static Bookmarks prev;
+    int bm_keep = -1;
+    if (app.ui.bmp && app.ui.bmp_list.sel < bmarks.n) {
+        arena_reset(&bmwa);
+        prev.n = bmarks.n, prev.full = bmarks.full;
+        for (int i = 0; i < bmarks.n; i++) {
+            prev.b[i] = bmarks.b[i];
+            prev.b[i].uri = (Str){ arena_cstr(&bmwa, bmarks.b[i].uri), bmarks.b[i].uri.len };
+            prev.b[i].label = (Str){ arena_cstr(&bmwa, bmarks.b[i].label), bmarks.b[i].label.len };
+        }
+        bm_keep = (int)app.ui.bmp_list.sel;
+    }
+    arena_reset(&bma);
+    bm_parse(&bma, read_file(&bma, bm), &bmarks);
+    if (app.ui.bmp) {
+        int at = bm_keep >= 0 ? bm_locate(&bmarks, &prev, bm_keep) : -1;
+        if (at < 0) at = (int)app.ui.bmp_list.sel;
+        ui_set(&app.ui.bmp_list, bmarks.n, at >= bmarks.n ? bmarks.n - 1 : at);
+    }
+    space_ask(&app.places, app.cwd);
+    isize sel = 0;
+    for (int i = 0; i < app.places.n; i++) {
+        app.place_head[i] = app.places.p[i].kind == PL_HEAD;
+        if (keep.kind != PL_HEAD && app.places.p[i].kind == keep.kind && strcmp(app.places.p[i].path, keep.path) == 0) sel = i;
+    }
+    app.place_cur = places_current(&app.places, app.cwd);
+    if (app.ui.side_mode != SIDE_PLACES) return;
+    app.ui.side_head = app.place_head;
+    isize top = app.ui.side.top;
+    ui_set(&app.ui.side, app.places.n, sel);
+    app.ui.side.top = ui_clamp(top, 0, ui_max_top(&app.ui.side));
+    ui_side_settle(&app.ui, 1);
+}
+
+// The menu's bookmark k: the k-th of the file's local ones (F7.5); NULL past them.
+static const Bookmark *bm_menu(int k)
+{
+    for (int i = 0; i < bmarks.n; i++)
+        if (bmarks.b[i].path[0] && k-- == 0) return &bmarks.b[i];
+    return NULL;
+}
+
+// A bookmark's name in the menu: its label, else its folder's.
+static Str bm_label(const Bookmark *b)
+{
+    return b->label.len ? b->label : strcmp(b->path, "/") == 0 ? S("/") : path_base(str_from_c(b->path));
+}
+
+// Bookmarks → Add Bookmark, Ctrl+D (F7.5): the folder shown (or dir, a folder's right-click menu,
+// F8) at the end of the file, read again first so a change Nemo made meanwhile stays; the places
+// (and the menu) read again after.
+static void bookmark_add(const char *dir)
+{
+    char file[PATH_MAX];
+    bookmarks_path(file, sizeof file);
+    static Bookmarks now;
+    arena_reset(&bmwa);
+    Err err = { 0 };
+    bool ok = bm_read(&bmwa, file, &now, &err) && bm_add(&bmwa, &now, dir, &err);
+    Str text = ok ? bm_format(&bmwa, &now) : STR_EMPTY;
+    if (ok && !text.len) err_set(&err, "the bookmarks are too long to write"), ok = false;   // (n > 0 after an add)
+    if (!ok || !bm_write(file, text, &err)) {
+        set_status(true, "No bookmark: %s", err.msg);
+        return;
+    }
+    watch_bookmarks();   // its folder may be new
+    places_reload();
+    set_status(false, "Bookmarked %.*s", STR_ARG(path_base(str_from_c(dir))));
+}
+
+// The tree built again (tree mode only): opened down to the folder shown when `follow`, with the
+// cursor on its row; else the cursor stays on its folder, or on the row `fallback`.
+static void tree_refresh(bool follow, int fallback)
+{
+    if (app.ui.side_mode != SIDE_TREE) return;
+    char keep[PATH_MAX] = "";
+    if (!follow && app.ui.side.sel < tree.n) snprintf(keep, sizeof keep, "%.*s", STR_ARG(tree.row[app.ui.side.sel].path));
+    if (follow) tree_follow(&tree, app.cwd);
+    arena_reset(&treea);
+    tree_build(&treea, &tree, S("/"), app.show_hidden);
+    int sel = tree_find(&tree, str_from_c(follow ? app.cwd : keep));
+    if (sel < 0) sel = fallback < tree.n ? fallback : 0;
+    app.ui.side_head = NULL;
+    isize top = app.ui.side.top;
+    ui_set(&app.ui.side, tree.n, sel);
+    if (!follow) app.ui.side.top = ui_clamp(top, 0, ui_max_top(&app.ui.side)), ui_show_sel(&app.ui.side);
+}
+
+// The sidebar after a change of mode: the places' rows, or the tree's opened to the folder shown.
+static void side_refresh(void)
+{
+    app.ui.side.top = 0;
+    if (app.ui.side_mode == SIDE_PLACES) places_reload();
+    else if (app.ui.side_mode == SIDE_TREE) tree_refresh(true, 0);
+}
+
+// The folder of sidebar row i: a place's, or a tree row's; NULL for a heading or none.
+static const char *side_path(isize i, char *buf, size_t cap)
+{
+    if (app.ui.side_mode == SIDE_TREE) {
+        if (i < 0 || i >= tree.n) return NULL;
+        snprintf(buf, cap, "%.*s", STR_ARG(tree.row[i].path));
+        return buf;
+    }
+    if (i < 0 || i >= app.places.n || app.places.p[i].kind == PL_HEAD) return NULL;
+    return app.places.p[i].path;
+}
+
+static bool go_to(const char *dir, Str select, isize fallback)
+{
+    return go_to_in(dir, select, fallback, false);
+}
+
+static void go_up_from(const char *from);
+
+// The folder again (a change on disk): the cursor stays on its name, or on its row when that name
+// is gone. A folder that is gone itself gives way to the nearest one above that is there.
+static void reload(void)
+{
+    app.reloads++;
+    if (app.ui.in_search) search_prune(app.search_root);   // (what went since: trashed, deleted, moved, F9)
+    char keep[PATH_MAX] = "";
+    snprintf(keep, sizeof keep, "%.*s", STR_ARG(sel_name()));
+    if (go_to(app.cwd, str_from_c(keep), app.ui.list.sel)) return;
+    go_up_from(app.cwd);
+}
+
+// Folder `from` is gone: the nearest folder above it that is there, with a word in the status line.
+static void go_up_from(const char *from)
+{
+    char gone[PATH_MAX], up[PATH_MAX];
+    snprintf(gone, sizeof gone, "%s", from);
+    snprintf(up, sizeof up, "%s", from);
+    while (strcmp(up, "/") != 0) {
+        // Cut in place: snprintf from up into up would copy a buffer onto itself.
+        Str d = path_dir(str_from_c(up));
+        if (d.len == 0) d = S("/");
+        memmove(up, d.p, (size_t)d.len);
+        up[d.len] = 0;
+        if (go_to(up, STR_EMPTY, 0)) {
+            set_status(true, "%s is gone", gone);
+            return;
+        }
+    }
+}
+
+static void go_parent(void)
+{
+    if (app.ui.in_search) {   // the folder searched (F9)
+        go_to(app.search_root, STR_EMPTY, 0);
+        return;
+    }
+    if (strcmp(app.cwd, "/") == 0) return;
+    Str child = path_base(str_from_c(app.cwd));
+    char child_buf[NAME_MAX + 1], up[PATH_MAX];
+    snprintf(child_buf, sizeof child_buf, "%.*s", STR_ARG(child));
+    path_parent(up, sizeof up, app.cwd);
+    go_to(up, str_from_c(child_buf), 0);
+}
+
+static Str entry_mime(isize i);
+static void ow_open(void);   // Open With (gui/openwith.c, F7.3)
+static void ow_launch(isize i, bool def);
+static void open_marked(void);
+
+static void open_entry(isize i)
+{
+    const Entry *e = &app.list.e[i];
+    char path[PATH_MAX];
+    if (!entry_path(i, path, sizeof path)) {
+        set_status(true, "%.*s: the path is too long", STR_ARG(e->name));
+        return;
+    }
+    if (kind_is_dir(e->kind) && e->trash) {   // the trash view: a file opens, a folder doesn't
+        set_status(true, "%.*s is in the trash: restore it to open it", STR_ARG(e->name));
+        return;
+    }
+    if (kind_is_dir(e->kind)) {
+        go_to(path, STR_EMPTY, 0);
+        return;
+    }
+    if (e->kind == K_LINK_BROKEN) {
+        set_status(true, "%.*s is a broken link", STR_ARG(e->name));
+        return;
+    }
+    Err err;
+    // An empty file: gio types it application/x-zerosize, for which no app is set, and refuses it.
+    // Its name's type's default app instead (F7.1.1); none, and gio open says why.
+    char desktop[PATH_MAX];
+    if (e->size == 0 && (e->kind == K_FILE || e->kind == K_LINK_FILE) && apps_default(&scratch, entry_mime(i), desktop, sizeof desktop)) {
+        if (spawn_launch(desktop, path, &err)) set_status(false, "opened %.*s", STR_ARG(e->name));
+        else set_status(true, "%s", err.msg);
+        return;
+    }
+    if (spawn_open(path, &err)) set_status(false, "opened %.*s", STR_ARG(e->name));
+    else set_status(true, "%s", err.msg);
+}
+
+// Back (-1) or forward (1) through the history. A folder there that is gone now is dropped and
+// the next one tried, with a word in the status line.
+static void hist_go(int dir)
+{
+    UiPlace to;
+    char cur[PATH_MAX], cur_sel[NAME_MAX + 1];
+    snprintf(cur, sizeof cur, "%s", app.cwd);
+    snprintf(cur_sel, sizeof cur_sel, "%.*s", STR_ARG(sel_name()));
+    while (hist_step(&hist, dir, cur, str_from_c(cur_sel), &to)) {
+        if (go_to_in(to.dir, str_from_c(to.sel), 0, true)) return;
+        hist_unstep(&hist, dir);
+        set_status(true, "%s is gone: skipped", to.dir);
+    }
+}
+
+// The listing in a new order, the cursor kept on its entry. The MIME types, cached by row, go.
+static void resort(void)
+{
+    char keep[PATH_MAX];
+    snprintf(keep, sizeof keep, "%.*s", STR_ARG(sel_name()));
+    fs_sort(&app.list, app.ui.sort);
+    app.lists++;
+    memset(app.mime, 0, sizeof *app.mime * (size_t)app.list.n);
+    // The counts are by row too: asked again in the new order.
+    for (isize i = 0; i < app.list.n; i++) app.count[i] = COUNT_UNKNOWN;
+    count_new_listing();
+    isize sel = listing_find(&app.list, str_from_c(keep));
+    ui_set(&app.ui.list, app.list.n, sel >= 0 ? sel : 0);
+}

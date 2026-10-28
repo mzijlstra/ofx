@@ -1,0 +1,87 @@
+// The path buttons by keyboard (Ctrl+K, F5.2), the yes/no questions and the job rows' keys (F5.3). Included by ui.c.
+
+// ---- the path buttons by keyboard (F5.2) -------------------------------------------------------
+
+// Ctrl+K: the keyboard on the path buttons, the rightmost shown marked (none there: nothing).
+static void ui_crumbs_focus(Ui *u, const UiInput *in)
+{
+    if (in->crumb_n <= 0) return;
+    u->focus = UI_FOCUS_CRUMBS;
+    u->crumb_at = in->crumb_last < 0 ? 0 : in->crumb_last >= in->crumb_n ? in->crumb_n - 1 : in->crumb_last;
+}
+
+// A key while the path buttons have the keyboard (h and l as Left and Right): true when it was
+// theirs (*a: what gui/ does).
+// Any other key gives the keyboard back to the list and is the list's.
+static bool ui_crumbs_event(Ui *u, const UiInput *in, UiEvent e, UiAction *a)
+{
+    *a = (UiAction){ UA_NONE, 0, false };
+    if (e.key == UK_NONE && e.ch == 'h') e.key = UK_LEFT;    // as in the list (Michael, 2026-10-21)
+    if (e.key == UK_NONE && e.ch == 'l') e.key = UK_RIGHT;
+    switch (e.key) {
+    case UK_LEFT: case UK_SEL_LEFT: if (u->crumb_at > 0) u->crumb_at--; return true;
+    case UK_RIGHT: case UK_SEL_RIGHT: if (u->crumb_at < in->crumb_n - 1) u->crumb_at++; return true;
+    case UK_HOME: case UK_SEL_HOME: u->crumb_at = 0; return true;
+    case UK_END: case UK_SEL_END: u->crumb_at = in->crumb_n - 1; return true;
+    case UK_ENTER: u->focus = UI_FOCUS_LIST, *a = (UiAction){ UA_CRUMB, u->crumb_at, false }; return true;
+    case UK_SHIFT_ENTER: *a = (UiAction){ UA_TAB_BG_CRUMB, u->crumb_at, false }; return true;
+    case UK_CRUMBS: return true;
+    case UK_ESC: case UK_TAB: u->focus = UI_FOCUS_LIST; return true;
+    default: u->focus = UI_FOCUS_LIST; return false;
+    }
+}
+
+// ---- the prompts -------------------------------------------------------------------------------
+
+// A yes-or-no question (delete for good, cancel a job, quit with jobs): Enter and y say yes, n and Esc no; *answered
+// when either.
+static bool ui_yes_no(UiEvent e, bool *answered)
+{
+    bool yes = e.key == UK_ENTER || (e.key == UK_NONE && (e.ch == 'y' || e.ch == 'Y'));
+    bool no = e.key == UK_ESC || (e.key == UK_NONE && (e.ch == 'n' || e.ch == 'N'));
+    *answered = yes || no;
+    return yes;
+}
+
+// A key or character while "Delete … for good? Y/n" is up: Enter and y go ahead, n and Esc don't,
+// the rest is ignored.
+static UiAction ui_confirm_event(Ui *u, UiEvent e)
+{
+    bool answered, yes = ui_yes_no(e, &answered);
+    if (answered) u->confirming = false;
+    return (UiAction){ yes ? UA_DELETE : UA_NONE, 0, false };
+}
+
+// A key or character while a clash waits: s skip, r replace (a folder: merge), k keep both, the
+// capitals for all the rest; Esc cancels the job.
+static UiAction ui_ask_event(Ui *u, UiEvent e)
+{
+    if (e.key == UK_ESC) return u->asking = false, (UiAction){ UA_ANSWER, UI_ANS_CANCEL, false };
+    if (e.key != UK_NONE) return (UiAction){ UA_NONE, 0, false };
+    int a = 0;
+    switch (e.ch) {
+    case 's': case 'S': a = UI_ANS_SKIP; break;
+    case 'r': case 'R': a = UI_ANS_REPLACE; break;
+    case 'k': case 'K': a = UI_ANS_KEEP; break;
+    default: return (UiAction){ UA_NONE, 0, false };
+    }
+    u->asking = false;
+    return (UiAction){ UA_ANSWER, a, (e.ch >= 'A' && e.ch <= 'Z') || u->ask_all };
+}
+
+// The job rows by keyboard: true when the key was theirs (*a: what gui/ does). Up, Down, k and j
+// move the mark, Enter asks to cancel the marked job; any other key gives the keyboard back to the
+// list and is the list's.
+static bool ui_jobs_event(Ui *u, const UiInput *in, UiEvent e)
+{
+    if (e.key == UK_NONE && e.ch == 'k') e.key = UK_UP;
+    if (e.key == UK_NONE && e.ch == 'j') e.key = UK_DOWN;
+    switch (e.key) {
+    case UK_UP: if (u->job_at > 0) u->job_at--; return true;
+    case UK_DOWN: if (u->job_at < in->job_n - 1) u->job_at++; return true;
+    case UK_ENTER: u->cancel_asking = true, u->cancel_id = in->job_id[u->job_at]; return true;
+    case UK_JOBS: u->focus = UI_FOCUS_LIST; return true;   // the third Ctrl+J: back to the list (list, find bar, jobs)
+    case UK_ESC: case UK_TAB: u->focus = UI_FOCUS_LIST; return true;
+    default: u->focus = UI_FOCUS_LIST; return false;
+    }
+}

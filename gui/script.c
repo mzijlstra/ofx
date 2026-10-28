@@ -51,8 +51,8 @@
 //   right-here              a right press there (F8: an entry's menu, or the folder shown's on empty space)
 //   right-at <x> <y>        a right press at a point
 //   back, forward           the mouse's back and forward buttons
-//   raw-button <n>          GLFW's button n (1-8) pressed and released through main.c's callback
-//   raw-key <key> [mods]    GLFW key code <key> pressed through main.c's key callback, with GLFW's
+//   raw-button <n>          GLFW's button n (1-8) pressed and released through input.c's callback
+//   raw-key <key> [mods]    GLFW key code <key> pressed through input.c's key callback, with GLFW's
 //                           mod bits (1 Shift, 2 Ctrl, 4 Alt): what ui_key_of makes of it
 //   user-keys               from here on the compositor's keyboard reaches the window too, keys
 //                           and characters through GLFW's callbacks as a user's: `sh wtype …` in
