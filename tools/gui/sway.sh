@@ -46,7 +46,9 @@ EOS
     echo "$sock"
     ;;
 stop)
-    [ -f "$T/sway.pid" ] && kill "$(cat "$T/sway.pid")" 2>/dev/null
+    # Only that pid if it is still a sway: a stale file could name some other process by now.
+    p=$(cat "$T/sway.pid" 2>/dev/null)
+    [ -n "$p" ] && [ "$(cat "/proc/$p/comm" 2>/dev/null)" = sway ] && kill "$p" 2>/dev/null
     rm -f "$T/sway.pid" "$T/sway.socket"
     ;;
 *) echo "usage: sway.sh start|stop <scratch-dir>" >&2; exit 2 ;;

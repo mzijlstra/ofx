@@ -40,6 +40,8 @@ static bool on_path(const char *prog)
     return false;
 }
 
+static int spawn_started;   // programs started, for the GUI scripts' state line (spawned=)
+
 // Runs argv (argv[0] looked up on PATH) detached. False, with the reason, when it can't start.
 static bool spawn_detached(char *const *argv, Err *err)
 {
@@ -60,6 +62,7 @@ static bool spawn_detached(char *const *argv, Err *err)
     posix_spawn_file_actions_destroy(&fa);
     posix_spawnattr_destroy(&attr);
     if (rc != 0) return err_set(err, "%s: %s", argv[0], strerror(rc)), false;
+    spawn_started++;
     return true;
 }
 

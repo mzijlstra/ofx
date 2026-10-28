@@ -29,7 +29,9 @@ start)
     echo "$sock"
     ;;
 stop)
-    [ -f "$T/weston.pid" ] && kill "$(cat "$T/weston.pid")" 2>/dev/null
+    # Only that pid if it is still a weston: a stale file could name some other process by now.
+    p=$(cat "$T/weston.pid" 2>/dev/null)
+    [ -n "$p" ] && [ "$(cat "/proc/$p/comm" 2>/dev/null)" = weston ] && kill "$p" 2>/dev/null
     rm -f "$T/weston.pid" "$T/weston.socket"
     ;;
 *) echo "usage: weston.sh start|stop <scratch-dir>" >&2; exit 2 ;;

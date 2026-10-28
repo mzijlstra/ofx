@@ -16,6 +16,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
+#include <sys/socket.h>
 #include <time.h>
 #include <unistd.h>
 #include <wayland-client.h>
@@ -87,6 +88,7 @@ static struct zwp_virtual_keyboard_v1 *kb;
 static struct xkb_state *xs;
 static struct wl_display *dpy;
 static uint32_t ms;
+static int sway_pid;   // the test sway's, from $OFX_GUI_ROOT/sway.pid (refused)
 
 static void pause_ms(int n)
 {
@@ -119,6 +121,8 @@ static const char *refused(void)
 {
     const char *root = getenv("OFX_GUI_ROOT"), *wd = getenv("WAYLAND_DISPLAY");
     if (!root || !root[0] || !wd || !wd[0]) return "OFX_GUI_ROOT and WAYLAND_DISPLAY must be set";
+    // libwayland connects to an inherited WAYLAND_SOCKET before it reads WAYLAND_DISPLAY.
+    if (getenv("WAYLAND_SOCKET")) return "WAYLAND_SOCKET is set: the display checked here wouldn't be the one used";
     char path[4096], sock[256] = "", comm[64] = "";
     int pid = 0;
     snprintf(path, sizeof path, "%s/sway.socket", root);
@@ -131,6 +135,7 @@ static const char *refused(void)
     if (pid <= 0 || !(f = fopen(path, "r"))) return "no test sway running ($OFX_GUI_ROOT/sway.pid)";
     fscanf(f, "%63s", comm), fclose(f);
     if (strcmp(comm, "sway") != 0) return "$OFX_GUI_ROOT/sway.pid is not a sway";
+    sway_pid = pid;
     return NULL;
 }
 
@@ -160,6 +165,11 @@ int main(int argc, char **argv)
         }
     }
     if (!(dpy = wl_display_connect(NULL))) return fprintf(stderr, "vkbd: no display\n"), 1;
+    // The socket's other end must be that sway itself, not whatever WAYLAND_DISPLAY names.
+    struct ucred cr;
+    socklen_t crlen = sizeof cr;
+    if (getsockopt(wl_display_get_fd(dpy), SOL_SOCKET, SO_PEERCRED, &cr, &crlen) != 0 || cr.pid != sway_pid)
+        return fprintf(stderr, "vkbd: refused: the display isn't served by the test sway (pid %d)\n", sway_pid), 1;
     struct wl_registry *reg = wl_display_get_registry(dpy);
     wl_registry_add_listener(reg, &registry_listener, NULL);
     wl_display_roundtrip(dpy);

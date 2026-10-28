@@ -47,9 +47,9 @@ wait-for 3000 search=1 searchtext=inner searchdue=0 searchdone=1 n=1
 sh vkbd down ctrl+return &
 wait-for 3000 search=0 sel=inner.txt
 sh test "$OFX_DIR" = "$OFX_ROOT/tree/adir"
-# ---- Alt+Enter: a terminal here (the fake's log)
-# (no state word says a terminal ran: vkbd's 150 ms and the key's frame, well inside 1.5 s)
+# ---- Alt+Enter: a terminal here (the fake's log, which it writes in its own time)
+expect spawned=0
 sh vkbd alt+return &
-sleep 1500
-sh grep -q "xdg-terminal-exec --dir=$OFX_ROOT/tree/adir" "$OFX_ROOT/spawn.log"
+wait-for 3000 spawned=1
+sh for i in $(seq 20); do grep -q "xdg-terminal-exec --dir=$OFX_ROOT/tree/adir" "$OFX_ROOT/spawn.log" && exit 0; sleep 0.1; done; exit 1
 quit

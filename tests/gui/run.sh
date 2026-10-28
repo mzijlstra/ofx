@@ -292,8 +292,24 @@ if want keys; then
 # Keys through the compositor (tools/gui/vkbd.c in the test sway, 2026-10-28): GLFW's keycodes and
 # ui_key_of, which the other scripts' ui/ keys skip.
 T=$base/keys; rm -rf "$T"; mkdir -p "$T/tree/adir" "$T/tree/bdir"; touch "$T/tree/a.txt" "$T/tree/my-file name.txt" "$T/tree/adir/inner.txt"
-# vkbd's guard first: another display (no test sway's socket file) is refused before it connects.
-if WAYLAND_DISPLAY=ofx-no-such OFX_GUI_ROOT="$T" "$here/../../build/vkbd" b 2>/dev/null; then echo "keys: vkbd typed outside the test sway"; failed keys; fi
+# vkbd's guard first: it types only into the sway OFX_GUI_ROOT names, as the kernel sees the socket's
+# other end (reviewer-2, 2026-10-28). Refused: a display with no test sway's socket file; an
+# inherited WAYLAND_SOCKET; a real test sway's socket while sway.pid names another process called
+# sway (a copied sleep). The real pid then types, so the refusals aren't for some other reason.
+G=$T/guard; mkdir -p "$G/bin"; vk=$here/../../build/vkbd
+if WAYLAND_DISPLAY=ofx-no-such OFX_GUI_ROOT="$G" "$vk" b 2>/dev/null; then echo "keys: vkbd typed with no test sway"; failed keys; fi
+if gs=$("$here/../../tools/gui/sway.sh" start "$G"); then
+    real=$(cat "$G/sway.pid")
+    if WAYLAND_SOCKET=99 WAYLAND_DISPLAY="$gs" OFX_GUI_ROOT="$G" "$vk" b 2>/dev/null; then echo "keys: vkbd took WAYLAND_SOCKET"; failed keys; fi
+    cp /usr/bin/sleep "$G/bin/sway"; "$G/bin/sway" 30 & fake=$!
+    echo "$fake" > "$G/sway.pid"
+    if WAYLAND_DISPLAY="$gs" OFX_GUI_ROOT="$G" "$vk" b 2>/dev/null; then echo "keys: vkbd typed into a sway sway.pid doesn't name"; failed keys; fi
+    kill "$fake"; echo "$real" > "$G/sway.pid"
+    WAYLAND_DISPLAY="$gs" OFX_GUI_ROOT="$G" "$vk" b || { echo "keys: vkbd refused the test sway itself"; failed keys; }
+    "$here/../../tools/gui/sway.sh" stop "$G"
+else
+    failed keys
+fi
 echo "== keys"; RUN_SCRIPT_LIMIT=60 OFX_COMPOSITOR=sway "$here/../../tools/gui/run-script.sh" "$T" "$here/keys.script" "$bin" "$T/tree" || failed keys
 fi
 if want hang; then
