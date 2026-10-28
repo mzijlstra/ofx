@@ -106,7 +106,7 @@ MUTANTS = [
     (G, "    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_K) return UK_CRUMBS;\n", ""),
     (G, "    if (app.ui.crumb_focus) ui_crumbs_show(c, wd, room, ARROW_W, app.ui.crumb_at);\n", ""),
     (G, "        in.crumb_n = app.crumbs.n, in.crumb_last = app.crumb_hi - 1;", "        in.crumb_n = app.crumbs.n, in.crumb_last = app.crumb_hi;"),
-    (G, "        if (pasting && (app.ui.editing || (app.ui.in_search && app.ui.search_keys))) in.paste = text_paste();   // (and the search field's, F9)\n", ""),
+    (G, "        if (pasting && (app.ui.editing || (app.ui.in_search && app.ui.search_keys) || (app.ui.finding && app.ui.find_keys))) in.paste = text_paste();   // (the search field's and the find bar's too)\n", ''),
     (G, "        if (app.ui.copied) text_copy((Str){ app.ui.copy, app.ui.copy_len }), app.ui.copied = false;", "        app.ui.copied = false;"),
     (G, "    if (!clip_set_text(t)) SetClipboardText(app.text_copied);\n    own.n = 0;", "    if (!clip_set_text(t)) SetClipboardText(app.text_copied);"),
     (G, "    if (own.n > 0) return clip_payload(&pastea, &own, CLIP_FMT_TEXT);\n", ""),
@@ -567,7 +567,8 @@ MUTANTS = [
     # ---- F9 step 2: working with results (2026-10-28). Left out: Ctrl+Enter's GLFW mapping (scripts
     # send ui/'s keys).
     (G, '    if (p && is_search(p)) p = app.search_root;', '', 'f9'),
-    (G, '        if (pasting && (app.ui.editing || (app.ui.in_search && app.ui.search_keys))) in.paste = text_paste();', '        if (pasting && app.ui.editing) in.paste = text_paste();', 'f9'),
+    (G, '        if (pasting && (app.ui.editing || (app.ui.in_search && app.ui.search_keys) || (app.ui.finding && app.ui.find_keys))) in.paste = text_paste();', '        if (pasting && (app.ui.editing || (app.ui.finding && app.ui.find_keys))) in.paste = text_paste();', 'f9'),
+    (G, '        if (pasting && (app.ui.editing || (app.ui.in_search && app.ui.search_keys) || (app.ui.finding && app.ui.find_keys))) in.paste = text_paste();', '        if (pasting && (app.ui.editing || (app.ui.in_search && app.ui.search_keys))) in.paste = text_paste();', 'f9'),
     (G, '        app.ui.search_caret = app.ui.search_anchor = app.ui.search_len;', '', 'f9'),
     (G, '    if (app.ui.in_search) search_prune(app.search_root);   // (a folder renamed', '    if (false) search_prune(app.search_root);   // (a folder renamed', 'f9'),
     (G, '    if (app.ui.in_search) search_prune(app.search_root);   // (what went since', '    // (what went since', 'f9'),

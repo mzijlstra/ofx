@@ -584,7 +584,7 @@ typedef struct {
     bool   find_select;      // Select Items Matching (F7.4): Enter selects every match, and closes it
     bool   find_miss;        // its text matches nothing
     char   find[UI_FIND_MAX];
-    int    find_len;
+    int    find_len, find_caret, find_anchor;   // (bytes; the selection between them, as the edit line's)
     isize  find_from;        // the cursor when the find line opened
     char   last[UI_FIND_MAX];   // the last text found, for n and N
     int    last_len;
@@ -1184,7 +1184,7 @@ static void ui_find_select(Ui *u, UiNames names)
 
 static void ui_find_open(Ui *u)
 {
-    u->finding = true, u->find_keys = true, u->find_miss = false, u->find_select = false, u->find_len = 0, u->find_from = u->list.sel, u->side_focus = false;
+    u->finding = true, u->find_keys = true, u->find_miss = false, u->find_select = false, u->find_len = u->find_caret = u->find_anchor = 0, u->find_from = u->list.sel, u->side_focus = false;
     u->jobs_focus = false, u->crumb_focus = false;
     ui_matcher_set(&u->find_m, STR_EMPTY, u->find_opts);   // Up and Down in an empty bar find nothing (reviewer-2)
 }
@@ -1197,24 +1197,6 @@ static int ui_utf8(u32 cp, char b[4])
          : cp < 0x800 ? (b[0] = (char)(0xC0 | cp >> 6), b[1] = (char)(0x80 | (cp & 0x3F)), 2)
          : cp < 0x10000 ? (b[0] = (char)(0xE0 | cp >> 12), b[1] = (char)(0x80 | (cp >> 6 & 0x3F)), b[2] = (char)(0x80 | (cp & 0x3F)), 3)
          : (b[0] = (char)(0xF0 | cp >> 18), b[1] = (char)(0x80 | (cp >> 12 & 0x3F)), b[2] = (char)(0x80 | (cp >> 6 & 0x3F)), b[3] = (char)(0x80 | (cp & 0x3F)), 4);
-}
-
-// A character typed into the find line, as UTF-8; it is dropped when the line is full.
-static void ui_find_char(Ui *u, u32 cp)
-{
-    char b[4];
-    int n = ui_utf8(cp, b);
-    if (n == 0 || u->find_len + n > UI_FIND_MAX) return;
-    memcpy(u->find + u->find_len, b, (size_t)n);
-    u->find_len += n;
-}
-
-// Backspace in the find line: its last code point goes.
-static void ui_find_erase(Ui *u)
-{
-    if (u->find_len == 0) return;
-    u->find_len--;
-    while (u->find_len > 0 && ((unsigned char)u->find[u->find_len] & 0xC0) == 0x80) u->find_len--;
 }
 
 // n and N: the next or previous match of the last text, from the cursor.
@@ -1349,6 +1331,11 @@ typedef struct {
 static UiLine ui_edit_line(Ui *u)
 {
     return (UiLine){ u->edit, &u->edit_len, &u->caret, &u->anchor, ui_edit_max(u), u->edit_path };
+}
+
+static UiLine ui_find_line(Ui *u)
+{
+    return (UiLine){ u->find, &u->find_len, &u->find_caret, &u->find_anchor, UI_FIND_MAX, false };
 }
 
 static UiLine ui_search_line(Ui *u)
@@ -2263,6 +2250,10 @@ static UiAction ui_search_open(Ui *u)
     return (UiAction){ UA_NONE, 0, false };
 }
 
+// The find bar's keys: its field edits as the rename line does (a caret, Shift to select, Ctrl+A,
+// C, X, V: Michael, 2026-10-28; no '/', which can't be in a name), each change found again; the
+// toggles; Up and Down the previous and next match; Enter keeps (or, selecting, selects), Esc
+// closes. Another command goes to the list (false).
 static bool ui_find_event(Ui *u, UiNames names, UiEvent e, const UiInput *in)
 {
     if (ui_toggle_key(e)) {   // Alt+C, Alt+W, Alt+R: a toggle
@@ -2270,14 +2261,15 @@ static bool ui_find_event(Ui *u, UiNames names, UiEvent e, const UiInput *in)
         ui_find_update(u, names);
         return true;
     }
-    if (e.key == UK_NONE) {
-        if (e.ch == '/') return true;   // can't be in a name
-        ui_find_char(u, e.ch);
-        ui_find_update(u, names);
+    u->find_caret = (int)ui_clamp(u->find_caret, 0, u->find_len), u->find_anchor = (int)ui_clamp(u->find_anchor, 0, u->find_len);
+    char was[UI_FIND_MAX];
+    int was_len = u->find_len;
+    memcpy(was, u->find, (size_t)was_len);
+    if (ui_line_key(u, ui_find_line(u), e, in->paste)) {
+        if (u->find_len != was_len || memcmp(was, u->find, (size_t)was_len) != 0) ui_find_update(u, names);
         return true;
     }
     switch (e.key) {
-    case UK_BACKSPACE: ui_find_erase(u), ui_find_update(u, names); return true;
     case UK_ENTER: case UK_SHIFT_ENTER:
         if (u->find_select) ui_find_select(u, names);
         else ui_find_leave(u);
@@ -2286,7 +2278,7 @@ static bool ui_find_event(Ui *u, UiNames names, UiEvent e, const UiInput *in)
         ui_find_close(u);
         u->list.sel = ui_find_back(u), ui_show_sel(&u->list);
         return true;
-    case UK_UP: case UK_DOWN: ui_find_step(u, names, e.key == UK_UP ? -1 : 1); return true;
+    case UK_UP: case UK_DOWN: case UK_SEL_UP: case UK_SEL_DOWN: ui_find_step(u, names, e.key == UK_UP || e.key == UK_SEL_UP ? -1 : 1); return true;
     case UK_JOBS:
         ui_find_leave(u);
         if (in->job_n > 0) u->jobs_focus = true, u->job_at = 0;
@@ -2616,6 +2608,9 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         }
         // The search field (F9) before Shift is taken off the moves: it selects with them.
         if (u->in_search && u->search_keys && !prompt && ui_search_event(u, e, in->paste)) continue;
+        // The find bar's likewise (2026-10-28), after the questions: a clash or the delete question
+        // takes its keys first.
+        if (u->finding && u->find_keys && !prompt && ui_find_event(u, names, e, in)) continue;
         if (u->crumb_focus && !prompt) {
             UiAction a;
             if (ui_crumbs_event(u, in, e, &a)) {
@@ -2650,7 +2645,6 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
             if (a.kind != UA_NONE) return a;
             continue;
         }
-        if (u->finding && u->find_keys && ui_find_event(u, names, e, in)) continue;
         // H, J, K and L (Shift and h, j, k, l) as the Shift arrows: here, after the questions and the
         // find bar have taken their letters (K keeps all in a clash; text in the find bar).
         if (e.key == UK_NONE && (e.ch == 'H' || e.ch == 'J' || e.ch == 'K' || e.ch == 'L')) {

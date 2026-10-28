@@ -161,9 +161,7 @@ MUTANTS += [
     (U, "u->list.sel = i >= 0 ? i : ui_find_back(u);", "u->list.sel = i >= 0 ? i : u->list.sel;"),
     (U, "    u->find_keys = false;\n    if (u->find_len) memcpy(u->last, u->find, (size_t)u->find_len), u->last_len = u->find_len;", "    u->find_keys = false;"),
     (U, "    if (cp < 0x20 || cp == 0x7F || cp > 0x10FFFF) return 0;", "    if (cp < 0x20) return 0;"),
-    (U, "while (u->find_len > 0 && ((unsigned char)u->find[u->find_len] & 0xC0) == 0x80) u->find_len--;", ""),
     (U, "    ui_matcher_set(&u->find_m, (Str){ u->last, u->last_len }, u->find_opts);\n    isize i = ui_find_at(&u->list, names, &u->find_m, u->list.sel + dir, dir);", "    ui_matcher_set(&u->find_m, (Str){ u->last, u->last_len }, u->find_opts);\n    isize i = ui_find_at(&u->list, names, &u->find_m, u->list.sel, dir);"),
-    (U, "        if (e.ch == '/') return true;   // can't be in a name\n", ""),
     (U, "        u->list.sel = ui_find_back(u), ui_show_sel(&u->list);\n        return true;", "        return true;"),
     (U, "    default: ui_find_leave(u); return false;   // a command", "    default: ui_find_leave(u); return true;   // a command"),
     # ---- F2: input
@@ -177,7 +175,7 @@ MUTANTS += [
     (U, "            u->side_focus = u->side.n > 0;", "            u->side_focus = true;"),
     (U, "            else u->side_focus = false;\n", ""),
     (U, "            if (u->side_focus && u->side.n > 0) return (UiAction){ UA_PLACE, u->side.sel, false };", "            if (u->side_focus) return (UiAction){ UA_PLACE, u->side.sel, false };"),
-    (U, "u->finding = true, u->find_keys = true, u->find_miss = false, u->find_select = false, u->find_len = 0, u->find_from = u->list.sel, u->side_focus = false;", "u->finding = true, u->find_keys = true, u->find_miss = false, u->find_len = 0, u->find_from = u->list.sel;"),
+    (U, 'u->finding = true, u->find_keys = true, u->find_miss = false, u->find_select = false, u->find_len = u->find_caret = u->find_anchor = 0, u->find_from = u->list.sel, u->side_focus = false;', 'u->finding = true, u->find_keys = true, u->find_miss = false, u->find_len = u->find_caret = u->find_anchor = 0, u->find_from = u->list.sel;'),
     # ---- F2: history
     (U, "if (*n == UI_HISTORY_MAX) memmove(stack, stack + 1, sizeof *stack * (UI_HISTORY_MAX - 1)), (*n)--;", "if (*n == UI_HISTORY_MAX) (*n)--;"),
     (U, "    h->nfwd = 0;\n", ""),
@@ -1254,12 +1252,12 @@ MUTANTS += [
 MUTANTS += [
     (U, "    u->finding = false, u->find_keys = false, u->find_miss = false, u->find_select = false;", "    u->finding = false, u->find_miss = false, u->find_select = false;"),
     (U, "        if (u->find_select) ui_find_select(u, names);\n        else ui_find_leave(u);", "        if (u->find_select) ui_find_select(u, names);\n        else ui_find_close(u);"),
-    (U, "    case UK_UP: case UK_DOWN: ui_find_step(u, names, e.key == UK_UP ? -1 : 1); return true;", "    case UK_UP: case UK_DOWN: ui_find_step(u, names, 1); return true;"),
+    (U, '    case UK_UP: case UK_DOWN: case UK_SEL_UP: case UK_SEL_DOWN: ui_find_step(u, names, e.key == UK_UP || e.key == UK_SEL_UP ? -1 : 1); return true;', '    case UK_UP: case UK_DOWN: case UK_SEL_UP: case UK_SEL_DOWN: ui_find_step(u, names, e.key == UK_UP ? -1 : 1); return true;'),
     (U, "    if (i >= 0) u->list.sel = i, ui_show_sel(&u->list);\n}\n\n// How many", "}\n\n// How many"),
     (U, "        if (in->job_n > 0) u->jobs_focus = true, u->job_at = 0;\n        return true;", "        return true;"),
     (U, "    case UK_JOBS:\n        ui_find_leave(u);", "    case UK_JOBS:\n        ui_find_close(u);"),
     (U, "            if (u->finding) u->find_keys = true, u->crumb_focus = false, u->side_focus = false;", "            if (false) u->find_keys = true, u->crumb_focus = false, u->side_focus = false;"),
-    (U, "        if (u->finding && u->find_keys && ui_find_event(u, names, e, in)) continue;", "        if (u->finding && ui_find_event(u, names, e, in)) continue;"),
+    (U, '        if (u->finding && u->find_keys && !prompt && ui_find_event(u, names, e, in)) continue;', '        if (u->finding && !prompt && ui_find_event(u, names, e, in)) continue;'),
     # (the magnifier's find bar toggle: the search's since F9, 2026-10-28)
     (U, "        } else if (in->find_x) ui_find_close(u);", "        } else if (in->find_x) ui_find_leave(u);"),
     (U, "        else ui_edit_close(u), u->find_keys = true, u->side_focus = false,", "        else ui_edit_close(u), u->side_focus = false,"),
@@ -1773,4 +1771,11 @@ MUTANTS += [
     (U, "        if (u->in_search && u->search_keys && !prompt && ui_search_event(u, e, in->paste)) continue;", "        if (u->in_search && u->search_keys && ui_search_event(u, e, in->paste)) continue;"),
     (U, "        if (u->in_search && u->search_keys && !prompt && ui_search_event(u, e, in->paste)) continue;", "        if (u->in_search && u->search_keys && !prompt && ui_search_event(u, e, STR_EMPTY)) continue;"),
 ]
-
+# ---- the find bar's field on the shared line (Michael, 2026-10-28)
+MUTANTS += [
+    (U, "        if (u->find_len != was_len || memcmp(was, u->find, (size_t)was_len) != 0) ui_find_update(u, names);", "        if (u->find_len != was_len) ui_find_update(u, names);"),
+    (U, "        if (u->find_len != was_len || memcmp(was, u->find, (size_t)was_len) != 0) ui_find_update(u, names);", ""),
+    (U, "    u->find_caret = (int)ui_clamp(u->find_caret, 0, u->find_len), u->find_anchor = (int)ui_clamp(u->find_anchor, 0, u->find_len);", ""),
+    (U, "    return (UiLine){ u->find, &u->find_len, &u->find_caret, &u->find_anchor, UI_FIND_MAX, false };", "    return (UiLine){ u->find, &u->find_len, &u->find_caret, &u->find_anchor, UI_FIND_MAX, true };"),
+    (U, "        if (u->finding && u->find_keys && !prompt && ui_find_event(u, names, e, in)) continue;", "        if (u->finding && u->find_keys && ui_find_event(u, names, e, in)) continue;"),
+]

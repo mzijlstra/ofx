@@ -490,3 +490,63 @@ static void test_search_field_edit(void)
     menu_keys(&u, 1, UK_ALL);
     CHECK(u.marked == 5);
 }
+
+// The find bar's field edits as the rename line does too (Michael, 2026-10-28), each change found
+// again; Up and Down (Shift too) still step through the matches.
+static void test_find_field_edit(void)
+{
+    UiNames names = { name_at, NULL, NULL };
+    Ui u = { 0 };
+    u.list.rows = 10;
+    ui_set(&u.list, COUNT(find_names), 0);
+    ui_find_open(&u);
+    CHECK(u.find_caret == 0 && u.find_anchor == 0);
+    UiInput in = chars("gam");
+    ui_handle(&u, names, &in);
+    isize at = u.list.sel;
+    CHECK(u.find_len == 3 && u.find_caret == 3 && !u.find_miss);
+    // Ctrl+A selects the text, not the files; Ctrl+V pastes over it (first line, no '/').
+    menu_keys(&u, 1, UK_ALL);
+    CHECK(u.find_anchor == 0 && u.find_caret == 3 && u.marked == 0 && u.finding && u.find_keys);
+    in = keys(1, UK_PASTE);
+    in.paste = S("zz/q\nx");
+    ui_handle(&u, names, &in);
+    CHECK(u.find_len == 3 && memcmp(u.find, "zzq", 3) == 0 && u.find_miss);
+    // Home, Delete: found again; Left, Shift+End, Ctrl+X: copied and gone, found again.
+    menu_keys(&u, 2, UK_HOME, UK_DELETE);
+    CHECK(u.find_len == 2 && u.find_caret == 0 && memcmp(u.find, "zq", 2) == 0);
+    in = keys(1, UK_ALL);
+    ui_handle(&u, names, &in);
+    in = keys(1, UK_PASTE);
+    in.paste = S("gam");
+    ui_handle(&u, names, &in);
+    CHECK(!u.find_miss && u.list.sel == at);
+    menu_keys(&u, 3, UK_LEFT, UK_SEL_END, UK_CUT);
+    CHECK(u.copied && u.copy_len == 1 && u.copy[0] == 'm' && u.find_len == 2);
+    u.copied = false;
+    // A move changes nothing: the cursor stays where the match put it.
+    isize sel = u.list.sel;
+    menu_keys(&u, 2, UK_HOME, UK_END);
+    CHECK(u.list.sel == sel && u.find_keys);
+    // Up and Down, with Shift too, step through the matches and keep the keys.
+    menu_keys(&u, 1, UK_ALL);
+    in = chars("m");   // gamma.txt, BETAMAX, omega
+    ui_handle(&u, names, &in);
+    isize first = u.list.sel;
+    CHECK(ui_find_count(&u, names, &at) == 3);
+    menu_keys(&u, 1, UK_SEL_DOWN);
+    CHECK(u.find_keys && u.list.sel != first);
+    menu_keys(&u, 1, UK_SEL_UP);
+    CHECK(u.list.sel == first && u.find_keys);
+    // A caret past the text (the field set from outside) is put back inside first.
+    u.find_caret = u.find_anchor = 90;
+    in = chars("x");
+    ui_handle(&u, names, &in);
+    CHECK(u.find_len == 2 && u.find[1] == 'x');
+    // A question takes the keys first.
+    u.confirming = true, u.confirm_n = 1;
+    in = chars("n");
+    ui_handle(&u, names, &in);
+    CHECK(!u.confirming && u.find_len == 2);
+    ui_matcher_set(&u.find_m, STR_EMPTY, u.find_opts);
+}

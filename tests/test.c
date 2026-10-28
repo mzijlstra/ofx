@@ -1033,15 +1033,18 @@ static void test_find(void)
     in.ev[in.nev++] = (UiEvent){ UK_NONE, 0x3B1 };    // α, 2 bytes
     ui_handle(&u, names, &in);
     CHECK(u.find_len == 9 && memcmp(u.find + 4, "\xE2\x82\xAC\xCE\xB1", 5) == 0);
-    // A command gives the keys back and is the list's, keeping the text for n; the bar stays.
-    in = keys(1, UK_HOME);
+    // A command gives the keys back and is the list's, keeping the text for n; the bar stays. (Home
+    // edits the field since 2026-10-28: PgUp here.)
+    isize was_sel = u.list.sel;
+    in = keys(1, UK_PAGEUP);
     ui_handle(&u, names, &in);
-    CHECK(u.finding && !u.find_keys && u.list.sel == 0 && u.last_len == 9);
+    CHECK(u.finding && !u.find_keys && (u.list.sel < was_sel || was_sel == 0) && u.last_len == 9);
     // A full line drops what doesn't fit.
     ui_find_open(&u);
-    for (int k = 0; k < UI_FIND_MAX + 10; k++) ui_find_char(&u, 'x');
+    for (int k = 0; k < UI_FIND_MAX + 10; k++) in = chars("x"), ui_handle(&u, names, &in);
     CHECK(u.find_len == UI_FIND_MAX);
-    ui_find_char(&u, 0xE9);
+    in = ui_input_none(), in.ev[in.nev++] = (UiEvent){ UK_NONE, 0xE9 };
+    ui_handle(&u, names, &in);
     CHECK(u.find_len == UI_FIND_MAX);
     ui_find_close(&u);
     // Nothing to search: no match, no crash.
@@ -1683,6 +1686,7 @@ int main(void)
     test_search_crumbs();
     test_search_hist_keys();
     test_search_field_edit();
+    test_find_field_edit();
     char cmd[1600];
     snprintf(cmd, sizeof cmd, "chmod -R u+rwx '%s' && rm -rf '%s' '%s'", root, root, decoy);
     if (system(cmd) != 0) fprintf(stderr, "could not remove %s\n", root);

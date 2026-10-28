@@ -2079,21 +2079,21 @@ static void layout_cols(void)
 // A run of the edit line's text: at most `most` wide (cut with "…" from the end, or from its
 // start with keep_end), on the accent half mixed in when selected (the row under a rename has the
 // selection colour already).
-static void edit_run(Clay_ElementId sel_id, Str s, bool sel, float most, bool keep_end)
+static void edit_run(Clay_ElementId sel_id, Str s, bool sel, float most, bool keep_end, Clay_Color fg)
 {
     Theme *t = &app.theme;
     if (!s.len || most < 1) return;
     Clay_String txt = fit(s, most, keep_end);
-    if (!sel) { text(txt, cc(t->fg)); return; }
+    if (!sel) { text(txt, fg); return; }
     CLAY(sel_id, { .layout = { .sizing = { CLAY_SIZING_FIT(0), CLAY_SIZING_FIXED(FONT_PX + 6) }, .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
                    .backgroundColor = mix(t->accent, t->bg, 0.45f) }) {
-        text(txt, cc(t->fg));
+        text(txt, fg);
     }
 }
 
 // The edit line's text in `room`: the selection marked (F5.2) and the caret at its place, kept in
 // view (the text after it gets half the room at most, the ends cut with "…").
-static void edit_text(const char *id, float room, UiLine line)
+static void edit_text(const char *id, float room, UiLine line, Clay_Color fg)
 {
     Theme *t = &app.theme;
     Str ed = { line.b, *line.len };
@@ -2109,12 +2109,12 @@ static void edit_text(const char *id, float room, UiLine line)
     float right = room - (lw < left ? lw : left);
     float v1 = str_width(r1) < right ? str_width(r1) : right, v2 = right - v1;
     Clay_ElementId sel = Clay_GetElementId(cz(arena_sprintf(&frame, "%s-sel", id)));
-    edit_run(sel, l1, false, w1, true);
-    edit_run(sel, l2, true, w2, true);
+    edit_run(sel, l1, false, w1, true, fg);
+    edit_run(sel, l2, true, w2, true, fg);
     CLAY(Clay_GetElementId(cz(arena_sprintf(&frame, "%s-caret", id))), { .layout = { .sizing = { CLAY_SIZING_FIXED(2), CLAY_SIZING_FIXED(FONT_PX + 2) } },
                                                                           .backgroundColor = cc(t->accent) }) {}
-    edit_run(sel, r1, true, v1, false);
-    edit_run(sel, r2, false, v2, false);
+    edit_run(sel, r1, true, v1, false, fg);
+    edit_run(sel, r2, false, v2, false, fg);
 }
 
 // The edit line in place of the name.
@@ -2124,7 +2124,7 @@ static void layout_edit(Theme *t, float room)
                                         .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
                             .clip = { .horizontal = true },
                             .backgroundColor = cc(t->bg), .border = { .color = cc(t->accent), .width = CLAY_BORDER_ALL(1) } }) {
-        edit_text("edit", room - 12, ui_edit_line(&app.ui));
+        edit_text("edit", room - 12, ui_edit_line(&app.ui), cc(t->fg));
     }
 }
 
@@ -2541,7 +2541,7 @@ static void layout_location(float room)
                                             .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
                                 .clip = { .horizontal = true },
                                 .backgroundColor = cc(t->bg), .border = { .color = cc(t->accent), .width = CLAY_BORDER_ALL(1) } }) {
-        edit_text("location", room - 24, ui_edit_line(&app.ui));
+        edit_text("location", room - 24, ui_edit_line(&app.ui), cc(app.theme.fg));
     }
 }
 
@@ -3367,12 +3367,15 @@ static void layout_find_bar(void)
         CLAY(CLAY_ID("find-field"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(26) }, .padding = { 8, 3, 0, 0 }, .childGap = 6,
                                                   .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
                                       .backgroundColor = cc(t->bg), .border = { .color = edge, .width = CLAY_BORDER_OUTSIDE(1) } }) {
-            CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
-                           .clip = { .horizontal = true } }) {
-                Str f = { u->find, u->find_len };
-                text(fit(f, 400, true), u->find_miss ? cc(t->red) : cc(t->fg));
-                if (u->find_keys)
-                    CLAY(CLAY_ID("caret"), { .layout = { .sizing = { CLAY_SIZING_FIXED(2), CLAY_SIZING_FIXED(FONT_PX + 2) } }, .backgroundColor = cc(t->accent) }) {}
+            // As the edit line draws, its caret and selection, while it has the keys (2026-10-28); red
+            // text when nothing matches.
+            Clay_ElementData fd = Clay_GetElementData(CLAY_ID("find-field"));
+            float room = fd.found && fd.boundingBox.width > 140 ? fd.boundingBox.width - 110 : 400;
+            Clay_Color fg = u->find_miss ? cc(t->red) : cc(t->fg);
+            CLAY(CLAY_ID("find-text"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
+                                         .clip = { .horizontal = true } }) {
+                if (u->find_keys) edit_text("find", room, ui_find_line(u), fg);
+                else text(fit((Str){ u->find, u->find_len }, room, true), fg);
             }
             layout_toggles(u->find_opts, 0);
         }
@@ -3419,7 +3422,7 @@ static void layout_search_bar(void)
             float room = fd.found && fd.boundingBox.width > 140 ? fd.boundingBox.width - 110 : 400;
             CLAY(CLAY_ID("search-text"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
                                            .clip = { .horizontal = true } }) {
-                if (u->search_keys) edit_text("search", room, ui_search_line(u));
+                if (u->search_keys) edit_text("search", room, ui_search_line(u), cc(t->fg));
                 else text(fit((Str){ u->search, u->search_len }, room, true), cc(t->fg));
             }
             layout_toggles(u->find_opts, TOGGLE_SEARCH);
@@ -4682,7 +4685,7 @@ int main(int argc, char **argv)
         // A Ctrl+V in an edit line reads the clipboard first, and only then.
         bool pasting = false;
         for (int k = 0; k < in.nev; k++) pasting |= in.ev[k].key == UK_PASTE;
-        if (pasting && (app.ui.editing || (app.ui.in_search && app.ui.search_keys))) in.paste = text_paste();   // (and the search field's, F9)
+        if (pasting && (app.ui.editing || (app.ui.in_search && app.ui.search_keys) || (app.ui.finding && app.ui.find_keys))) in.paste = text_paste();   // (the search field's and the find bar's too)
         // A message stays until the next key or click; an error at least a second.
         if (ui_input_acts(&in) && ui_status_clears(app.status_bad, app.status_at, now_ms())) app.status[0] = 0;
         if (ui_input_acts(&in) && ui_tip_act(&app.tip)) seen = true;   // a click or key: the tooltip goes

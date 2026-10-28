@@ -253,4 +253,19 @@ click-here
 wait-for 2000 search=1 tabs=3 searchkeys=1
 key ctrl-w
 wait-for 2000 tabs=2 search=0 searchkeys=0
+# The find bar edits as the rename line does (Michael, 2026-10-28): Ctrl+A selects its text, not
+# the files; Ctrl+V pastes the clipboard's first line; Home moves the caret
+key ctrl-f
+type do
+expect finding=1 findkeys=1 sel=docs
+key ctrl-a
+expect findsel=0-2 marked=0 findkeys=1
+clip-text sr\nsecond line
+key ctrl-v
+expect find=sr sel=src findcaret=2 findkeys=1
+key home
+expect findcaret=0 findsel=0-0
+shot find-field.png
+key esc
+expect finding=0
 quit
