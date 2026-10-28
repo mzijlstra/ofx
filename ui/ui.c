@@ -214,7 +214,7 @@ typedef enum {
     UA_BM_GO,       // to that bookmark; the panel closed
     UA_BM_REMOVE, UA_BM_UP, UA_BM_DOWN,
     UA_BM_NAME,     // its rename field opened: gui/ puts its label there
-    UA_BM_RENAME,   // the field's Enter: Ui.bmp_text is its label (empty: none)
+    UA_BM_RENAME,   // the field's Enter: Ui.bmp_name is its label (empty: none)
     UA_MAKE_LINK,   // a symbolic link "Link to <name>" beside each marked entry (or the cursor's) (F8)
     UA_FOLLOW,      // index: the entry, a link: to its target's folder, the target selected (F8)
     UA_TAB_OTHERS,  // every tab but the current one closed (F8)
@@ -582,7 +582,8 @@ typedef struct {
 
 // A text field's text (2026-10-28: four loose variables a field before): its bytes, how many, the
 // caret and the selection's other end (bytes; the selection is between them). n bytes hold at
-// most n - 1 and a 0 after them; UI_TEXT_LINE is the editor's view of one (edit.c).
+// most n - 1 (no 0 is written after them: read it as b and len); UI_TEXT_LINE is the editor's view
+// of one (edit.c).
 #define UI_TEXT(n) struct { char b[n]; int len, caret, anchor; }
 #define UI_TEXT_CLEAR(t) ((t).len = (t).caret = (t).anchor = 0)
 
