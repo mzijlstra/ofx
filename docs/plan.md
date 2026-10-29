@@ -45,7 +45,7 @@ Omarchy's theme: the binary, the folder `tools/ofx`, the window's title and Wayl
 | F7.2 | Properties: a panel with the file's details and permissions | Below |
 | F7.3 | Open With Other Application: a panel listing the apps for the file's type | Below |
 | F8 | Right-click menus: the selection, empty space, a folder elsewhere, a tab | Below |
-| F9 | Search below the folder: names as you type in a tab of its own, then working with results, then (turned on per search) inside files | Below |
+| F9 | Search below the folder: names as you type in a tab of its own, then working with results, then (turned on per search) inside files, then Open at Line | Below |
 
 Each milestone ends in a reviewer-2 round, then Michael's go before `make install`.
 
@@ -740,10 +740,39 @@ menu entries by word now (`point-menu`), so a new entry doesn't renumber them. C
 undone rename leaves the result's new name gone until Ctrl+R, rather than tracking it back; a new
 link or copy isn't added to the results.
 
+**Steps 3 and 4 decided (Michael, 2026-10-29,** https://claude.ai/artifact/UeUQHW7V2z1VRHFDsUjypP;
+measured, read only: a code folder's 137 k files, 329 MB of text, 61 s from the card and 0.63 s
+once cached; home 16 MB, 0.12 s cached):
+- **Q1:** an "In files" button in the bar (Alt+I) shows a second field, "Containing", under the
+  name field; a result matches both (the name field narrows which files are read; empty: every
+  file). Off: the field hides and the search is by name again. Tab moves between the fields.
+- **Q2:** a set of toggles per field (case, whole word, regular expression); Alt+C, Alt+W, Alt+R act
+  on the field with the keys. A regular expression matches within a line; `*` and `?` are wildcards
+  in the name field only.
+- **Q3:** a result shows, after its folder, the first matching line's number and the line cut around
+  the match (the match in the accent colour), and "+N" when more lines match. One row per file.
+- **Q4:** as you type, as names: 150 ms after the last key, the old walk stopped, results as found.
+- **Q5:** links to files aren't read (as `grep -r`, `rg`), counted in the status line.
+- **Q6:** Enter opens a result with its default app (step 3); Open at Line is step 4.
+- **Decided without asking, agreed:** files read in 64 KB pieces (no 16 MB buffer; a match across two
+  pieces counts); `O_NOATIME` where allowed; regular files only (a FIFO would block); UTF-16 counts
+  as binary (its NULs); the status line adds "skipped N binary, N over 16 MB"; at most 10,000
+  results.
+- **Step 4, Open at Line:** in Omarchy's default editor (`~/.local/state/omarchy/defaults/editor`,
+  as `omarchy default editor` sets it; else `$EDITOR`, else nvim), named in the entry ("Open at
+  Line in Neovim"), on content results only. Recipes, one per editor: a name, terminal yes or no,
+  and a command with `{file}`, `{line}`, `{col}` (characters), each filled in within one argument,
+  no shell. Built in for the usual editors (Omarchy's list and more, each checked against its own
+  docs); `~/.config/ofx/editors` adds or replaces them by name, and a recipe's program may be a
+  script (the escape hatch: an nvim already running, `--remote`). Terminal editors start through
+  `omarchy-launch-tui`, others through `uwsm-app`. The file stays its own until ofx.conf is
+  designed, which may take it in. No loadable code.
+
 **Steps:** 1. the view by name (a walk thread as Properties' `du_walk`, stopped by the next
 search; the tab, bar, toggles, results with folders, skips, limit, status); 2. working with
 results (actions on entries in other folders, Open Containing Folder, Ctrl+R, greying, Search in
-Folder…); 3. inside files. Each with tests, mutants and a reviewer-2 round before install.
+Folder…); 3. inside files; 4. Open at Line. Each with tests, mutants and a reviewer-2 round before
+install.
 
 ## F8 design (2026-10-27)
 
