@@ -407,7 +407,7 @@ MUTANTS += [
     ('ui/handle.c', "        case UK_SEL_HOME: e.key = UK_HOME; break;\n", ""),
     ('ui/handle.c', "        case UK_SEL_END: e.key = UK_END; break;\n", ""),
     ('ui/handle.c', "        case UK_SHIFT_ENTER: e.key = UK_ENTER; break;\n", ""),
-    ('ui/handle.c', "        case UK_CRUMBS: ui_crumbs_focus(u, in); break;\n", ""),
+    ('ui/handle.c', '            else ui_crumbs_focus(u, in);\n            break;', '            else {}\n            break;'),
     ('ui/helpers.c', "    if (at < lo) c->lo = at;\n", ""),
     ('ui/helpers.c', "    while (at >= hi && lo < at) hi = ui_crumbs_fit(w, c->n, room - 2 * arrow, ++lo), c->lo = lo;", "    while (at >= hi && lo < at) hi = ui_crumbs_fit(w, c->n, room, ++lo), c->lo = lo;"),
     ('ui/helpers.c', "    while (at >= hi && lo < at) hi = ui_crumbs_fit(w, c->n, room - 2 * arrow, ++lo), c->lo = lo;", "    while (at > hi && lo < at) hi = ui_crumbs_fit(w, c->n, room - 2 * arrow, ++lo), c->lo = lo;"),
@@ -1637,11 +1637,11 @@ MUTANTS += [
     ('ui/handle.c', '        *o = ui_toggle(*o, ui_toggle_key(e)), u->search_edited = true;', '        *o = ui_toggle(*o, ui_toggle_key(e));'),
     ('ui/handle.c', '    case UK_ENTER: case UK_SHIFT_ENTER: case UK_ESC: case UK_DOWN: u->focus = UI_FOCUS_LIST; return true;', '    case UK_ENTER: case UK_SHIFT_ENTER: case UK_ESC: u->focus = UI_FOCUS_LIST; return true;'),
     ('ui/handle.c', '    case UK_ENTER: case UK_SHIFT_ENTER: case UK_ESC: case UK_DOWN: u->focus = UI_FOCUS_LIST; return true;', '    case UK_ENTER: case UK_SHIFT_ENTER: case UK_ESC: case UK_DOWN: return true;'),
-    ('ui/handle.c', 'u->focus = UI_FOCUS_LIST; return true;\n    default: u->focus = UI_FOCUS_LIST; return false;\n    }\n}\n\n// Ctrl+Shift+F', 'u->focus = UI_FOCUS_LIST; return true;\n    default: return false;\n    }\n}\n\n// Ctrl+Shift+F'),
+    ('ui/handle.c', '    default: u->focus = UI_FOCUS_LIST; return false;\n    }\n}\n\n// The keys back to', '    default: return false;\n    }\n}\n\n// The keys back to'),
     ('ui/handle.c', '    } else if (!prompt && !u->menu_on && in->toggle >= 1 && in->toggle <= 3 && (u->finding || u->view == UI_VIEW_SEARCH)) {', '    } else if (!prompt && !u->menu_on && in->toggle >= 1 && in->toggle <= 3 && u->finding) {'),
     ('ui/handle.c', '    } else if (!prompt && !u->menu_on && in->toggle', '    } else if (!prompt && in->toggle'),
     ('ui/handle.c', '        if (u->view == UI_VIEW_SEARCH) u->search_edited = true;\n        return', '        return'),
-    ('ui/handle.c', '    } else if (!prompt && u->view == UI_VIEW_SEARCH && in->search_field) {', '    } else if (u->view == UI_VIEW_SEARCH && in->search_field) {'),
+    ('ui/handle.c', '    } else if (!prompt && !u->menu_on && u->view == UI_VIEW_SEARCH && in->search_field) {', '    } else if (!u->menu_on && u->view == UI_VIEW_SEARCH && in->search_field) {'),
     ('ui/handle.c', '        u->focus = UI_FOCUS_SEARCH;\n        return (UiAction){ UA_NONE, 0, false };\n    } else if (!prompt && !u->menu_on && u->view == UI_VIEW_SEARCH && (in->inside_btn', '        return (UiAction){ UA_NONE, 0, false };\n    } else if (!prompt && !u->menu_on && u->view == UI_VIEW_SEARCH && (in->inside_btn'),
     ('ui/cursor.c', " in->find_step || in->search_field ||", " in->find_step ||"),
     ('ui/handle.c', "            return ui_search_open(u);", "            return (UiAction){ UA_NONE, 0, false };"),
@@ -1675,8 +1675,8 @@ MUTANTS += [
 
 
     ('ui/edit.c', '    return UI_TEXT_LINE(u->search, false);', '    return UI_TEXT_LINE(u->search, true);'),
-    ('ui/handle.c', 'u->view == UI_VIEW_SEARCH && !prompt &&\n            ui_search_event(u, e, in->paste))', 'u->view == UI_VIEW_SEARCH &&\n            ui_search_event(u, e, in->paste))'),
-    ('ui/handle.c', 'u->view == UI_VIEW_SEARCH && !prompt &&\n            ui_search_event(u, e, in->paste))', 'u->view == UI_VIEW_SEARCH && !prompt &&\n            ui_search_event(u, e, STR_EMPTY))'),
+    ('ui/handle.c', 'u->view == UI_VIEW_SEARCH && !prompt &&\n            ui_search_event(u, e, in))', 'u->view == UI_VIEW_SEARCH &&\n            ui_search_event(u, e, in))'),
+    ('ui/handle.c', '    UiLineHit h = ui_line_key(u, l, e, in->paste);\n    if (h == UI_LINE_CHANGED) u->search_edited = true;', '    UiLineHit h = ui_line_key(u, l, e, STR_EMPTY);\n    if (h == UI_LINE_CHANGED) u->search_edited = true;'),
 ]
 # ---- the find bar's field on the shared line (Michael, 2026-10-28)
 MUTANTS += [
@@ -1872,7 +1872,7 @@ MUTANTS += [
     (SR, '    if (w->found(w->ctx, (Str){ w->rel, w->rel_len }, str_from_c(nm), dirfd(d), &hit)) return true;\n    w->s.full = true;', '    if (w->found(w->ctx, (Str){ w->rel, w->rel_len }, str_from_c(nm), dirfd(d), &hit)) return true;'),
     (SR, '            if (w->line) go = search_inside(w, d, nm, t);', '            if (false) go = search_inside(w, d, nm, t);'),
     (SR, '    SEARCH_PART(s->binary, "binary", "binary")', ''),
-    (SR, '    SEARCH_PART(s->big, "over 16 MB", "over 16 MB")', ''),
+    (SR, '    SEARCH_PART(s->big, big, big)', ''),
     (SR, '    SEARCH_PART(s->file_links, "link to a file", "links to files")', '    SEARCH_PART(s->file_links, "link to a file", "link to a file")'),
     (SR, '    SEARCH_PART(s->unread_files, "unreadable file", "unreadable files")', ''),
     # the matcher's spans and its quick starts
@@ -1952,4 +1952,17 @@ MUTANTS += [
     ('ui/handle.c', '            if (u->view == UI_VIEW_SEARCH && u->focus != UI_FOCUS_SIDE && l->n > 0) return (UiAction){ UA_OPEN_LINE, l->sel, false };', '            if (u->view == UI_VIEW_SEARCH && u->focus != UI_FOCUS_SIDE) return (UiAction){ UA_OPEN_LINE, l->sel, false };'),
     ('ui/menus.c', '    if (it == UM_OPEN_LINE) return u->ctx_one && u->sel_hit;', '    if (it == UM_OPEN_LINE) return u->sel_hit;'),
     ('ui/menus.c', '    if (it == UM_OPEN_LINE) return u->ctx_one && u->sel_hit;', '    if (it == UM_OPEN_LINE) return u->ctx_one;'),
+]
+
+# ---- after F9: the lighter milestone review's fixes, and Ctrl+K to the search field (2026-10-29)
+MUTANTS += [
+    ('ui/handle.c', '    u->focus = u->search_inside && u->search_was_inside ? UI_FOCUS_INSIDE : UI_FOCUS_SEARCH;', '    u->focus = u->search_was_inside ? UI_FOCUS_INSIDE : UI_FOCUS_SEARCH;'),
+    ('ui/handle.c', '    u->focus = u->search_inside && u->search_was_inside ? UI_FOCUS_INSIDE : UI_FOCUS_SEARCH;', '    u->focus = u->search_inside ? UI_FOCUS_INSIDE : UI_FOCUS_SEARCH;'),
+    ('ui/handle.c', '    u->search_was_inside = inside;\n', ''),
+    ('ui/handle.c', '    if (e.key == UK_CRUMBS) return u->focus = UI_FOCUS_LIST, ui_crumbs_focus(u, in), true;', ''),
+    ('ui/handle.c', '    if (e.key == UK_CRUMBS) return u->focus = UI_FOCUS_LIST, ui_crumbs_focus(u, in), true;', '    if (e.key == UK_CRUMBS) return ui_crumbs_focus(u, in), true;'),
+    ('ui/handle.c', '            if (u->view == UI_VIEW_SEARCH) ui_search_back(u);\n            else ui_crumbs_focus(u, in);', '            ui_crumbs_focus(u, in);'),
+    ('ui/handle.c', '    ui_edit_close(u);\n    ui_search_back(u);', '    ui_edit_close(u);\n    u->focus = UI_FOCUS_SEARCH;'),
+    ('ui/handle.c', '    } else if (!prompt && !u->menu_on && u->view == UI_VIEW_SEARCH && in->search_field) {', '    } else if (!prompt && u->view == UI_VIEW_SEARCH && in->search_field) {'),
+    (SR, '    snprintf(big, sizeof big, "over %d MB", SEARCH_FILE_MAX_MB);', '    snprintf(big, sizeof big, "over %d MB", 1);'),
 ]

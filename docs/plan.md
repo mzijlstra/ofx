@@ -784,6 +784,13 @@ link to a file isn't read even when its name matches, and folders aren't results
 with "In files" on and nothing in "Containing" it searches by name, so the results don't blank as
 it turns on; a regular expression's `^` in a later piece of a long line matches that piece's start.
 
+**Left as is after F9's review (Michael, 2026-10-29):** a search's address holds its folder, its
+name text and its text inside, not its toggles (case, whole word, regular expression; the name's
+are find's) nor "In files" on with nothing in Containing. So Back, a tab switch or a new window
+search again with the toggles as they are now, and "In files" turned on with nothing typed is off
+again there. Both as find has always kept its toggles; recording them would mean an address
+format for options, for little.
+
 **Step 4 built (2026-10-29): Open at Line.** Ctrl+Shift+Enter, and "Open at Line in <editor>" in a
 result's menu when one result found inside files is under it (`sel_hit`). `fs/editors.c`: the
 editor is Omarchy's default (`$XDG_STATE_HOME/omarchy/defaults/editor`, as ofx reads Omarchy's

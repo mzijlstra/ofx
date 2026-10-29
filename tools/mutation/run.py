@@ -90,19 +90,8 @@ def run(work, cc='clang'):
         t.wait()
     return 'pass' if code == 0 else 'fail'
 
-# A tree removed whole: a test killed half way leaves its unreadable folders (test_f65's `locked`),
-# which rmtree alone can't empty (132 runs' copies stayed in /tmp by 2026-10-29).
-def rmtree(path):
-    for d, dirs, _ in os.walk(path):
-        for x in dirs:
-            p = os.path.join(d, x)
-            if os.path.islink(p):   # (chmod follows a link: its target may be anywhere; reviewer-2, 2026-10-29)
-                continue
-            try:
-                os.chmod(p, 0o700)
-            except OSError:
-                pass
-    shutil.rmtree(path, ignore_errors=True)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from common import rmtree
 
 free = Queue()
 for work in workers:

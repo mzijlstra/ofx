@@ -197,7 +197,7 @@ typedef struct {
     // "In files" button.
     bool  inside_field;
     int   inside_toggle;
-    bool  search_inside;
+    bool  inside_btn;
 } Hit;
 
 static struct {

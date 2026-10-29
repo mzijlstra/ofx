@@ -33,7 +33,7 @@ enum {
     // piece at a time, each starting with the last SEARCH_OVERLAP bytes of the one before, so a match
     // across two pieces is found while it is shorter than that (any plain text: the field holds
     // UI_FIND_MAX bytes; a regular expression can match more, and then only within a piece).
-    SEARCH_FILE_MAX = 16 << 20, SEARCH_HEAD = 8192, SEARCH_CHUNK = 64 << 10, SEARCH_OVERLAP = 1024,
+    SEARCH_FILE_MAX_MB = 16, SEARCH_FILE_MAX = SEARCH_FILE_MAX_MB << 20, SEARCH_HEAD = 8192, SEARCH_CHUNK = 64 << 10, SEARCH_OVERLAP = 1024,
     SEARCH_BUF = SEARCH_CHUNK + SEARCH_OVERLAP,
     SEARCH_SNIP = 160, SEARCH_SNIP_BEFORE = 40,   // a hit's line: at most this, from this before the match
 };
@@ -293,7 +293,7 @@ static bool search_dir(SearchWalk *w, int fd, int depth)
         struct stat st;
         if (t == DT_UNKNOWN) {
             if (fstatat(dirfd(d), nm, &st, AT_SYMLINK_NOFOLLOW) != 0) continue;
-            t = S_ISDIR(st.st_mode) ? DT_DIR : S_ISLNK(st.st_mode) ? DT_LNK : S_ISREG(st.st_mode) ? DT_REG : DT_FIFO;
+            t = S_ISDIR(st.st_mode) ? DT_DIR : S_ISLNK(st.st_mode) ? DT_LNK : S_ISREG(st.st_mode) ? DT_REG : DT_UNKNOWN;   // (else: none of the three, read or entered)
         }
         if (w->match(w->ctx, name)) {
             if (w->line) go = search_inside(w, d, nm, t);
@@ -367,7 +367,9 @@ static void search_skips_text(const SearchSkips *s, char *out, size_t cap)
     SEARCH_PART(s->links, "link to a folder", "links to folders")
     SEARCH_PART(s->unread, "unreadable folder", "unreadable folders")
     SEARCH_PART(s->binary, "binary", "binary")
-    SEARCH_PART(s->big, "over 16 MB", "over 16 MB")
+    char big[24];
+    snprintf(big, sizeof big, "over %d MB", SEARCH_FILE_MAX_MB);
+    SEARCH_PART(s->big, big, big)
     SEARCH_PART(s->file_links, "link to a file", "links to files")
     SEARCH_PART(s->unread_files, "unreadable file", "unreadable files")
 #undef SEARCH_PART

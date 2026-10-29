@@ -699,19 +699,8 @@ for f, old, new, *_ in MUTANTS:
     n = open(os.path.join(works[0], f)).read().count(old)
     assert n == 1, (f, old, n)
 
-# A tree removed whole: a mutant that fails f6 half way leaves its read-only folders (`locked`),
-# which rmtree alone can't empty (two such trees stayed behind on 2026-10-24).
-def rmtree(path):
-    for d, dirs, _ in os.walk(path):
-        for x in dirs:
-            p = os.path.join(d, x)
-            if os.path.islink(p):   # (chmod follows a link: its target may be anywhere; reviewer-2, 2026-10-29)
-                continue
-            try:
-                os.chmod(p, 0o700)
-            except OSError:
-                pass
-    shutil.rmtree(path, ignore_errors=True)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from common import rmtree
 
 # A mutant's tag key: its file and texts, so a mutant edited is a new one, untagged.
 def key(m):

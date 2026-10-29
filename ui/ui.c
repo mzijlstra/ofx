@@ -508,7 +508,7 @@ static const struct { UiKeySection sec; const char *action, *key, *key2; } UI_KE
     { KS_SIDE, "The sidebar's next mode", "F9", "Ctrl+S" },
     { KS_SIDE, "Go there", "Enter", "" },
     { KS_SIDE, "In the tree: close, open", "Left, Right", "h, l" },
-    { KS_CRUMBS, "To the path buttons", "Ctrl+K", "Ctrl+Up" },
+    { KS_CRUMBS, "To the path buttons", "Ctrl+K", "Ctrl+Up; in a search, the search field first" },
     { KS_CRUMBS, "The next button", "Left, Right", "h, l" },
     { KS_CRUMBS, "Go there", "Enter", "" },
     { KS_CRUMBS, "Open it in a tab behind", "Shift+Enter", "" },
@@ -527,7 +527,9 @@ static const struct { UiKeySection sec; const char *action, *key, *key2; } UI_KE
     { KS_SEARCH, "The keys to the results", "Enter", "Esc, Down" },
     { KS_SEARCH, "Back to the search field", "Ctrl+Shift+F", "a click in it" },
     { KS_SEARCH, "A wildcard over the whole name", "*, ?", "*.ts" },
-    { KS_SEARCH, "Match case, whole words, a regular expression", "Alt+C, W, R", "shared with find" },
+    { KS_SEARCH, "Match case, whole words, a regular expression", "Alt+C, W, R", "the name's shared with find; Containing's its own" },
+    { KS_SEARCH, "In files: a Containing field too", "Alt+I", "the In files button" },
+    { KS_SEARCH, "The other field, in files", "Tab", "" },
     { KS_EDIT, "Select", "Shift+Left, Right", "Shift+Home, End" },
     { KS_EDIT, "A word left, right", "Ctrl+Left, Right", "" },
     { KS_EDIT, "Select a word", "Ctrl+Shift+Left, Right", "" },
@@ -670,6 +672,7 @@ typedef struct {
     bool   search_inside;
     UI_TEXT(UI_FIND_MAX + 1) inside;
     UiMatchOpts inside_opts;
+    bool   search_was_inside;   // "Containing" had the keys last: Ctrl+K and Ctrl+Shift+F go back there
     // The menu bar (F7.1): a menu open, and its entry marked (-1: none, as a menu the pointer
     // opened). gui/ says whether the folder shown takes new files.
     bool   menu_on;

@@ -234,7 +234,7 @@ static Hit hit_at(float x, float y)
     }
     h.search_field = app.ui.view == UI_VIEW_SEARCH && !h.toggle && in_box(CLAY_ID("search-field"), x, y);
     h.inside_field = app.ui.view == UI_VIEW_SEARCH && app.ui.search_inside && !h.inside_toggle && in_box(CLAY_ID("inside-field"), x, y);
-    h.search_inside = app.ui.view == UI_VIEW_SEARCH && in_box(CLAY_ID("search-inside"), x, y);
+    h.inside_btn = app.ui.view == UI_VIEW_SEARCH && in_box(CLAY_ID("search-inside"), x, y);
     for (int i = 0; tabbar.n >= 2 && i < tabbar.n && h.tab < 0; i++) {
         if (in_box(CLAY_IDI("tab-x", i), x, y)) h.tab_x = h.tab = i;
         else if (in_box(CLAY_IDI("tab", i), x, y)) h.tab = i;
@@ -295,7 +295,7 @@ static void press_at(UiInput *in, float x, float y, int mods)
     in->bmp_btn = h.bmp_btn;
     in->toggle = h.toggle;
     in->find_x = h.find_x, in->find_field = h.find_field, in->find_step = h.find_step, in->search_field = h.search_field;
-    in->inside_field = h.inside_field, in->inside_toggle = h.inside_toggle, in->inside_btn = h.search_inside;
+    in->inside_field = h.inside_field, in->inside_toggle = h.inside_toggle, in->inside_btn = h.inside_btn;
     in->job_x = h.job_x;
     in->side_mode = h.mode;
     in->side_twisty = h.twisty;

@@ -20,6 +20,9 @@ shot inside-results.png
 # Open at Line (step 4): Omarchy's default editor, nvim here, in a terminal as omarchy-launch-tui
 # runs it, at the match's line and column (characters)
 sh mkdir -p "$OFX_ROOT/state/omarchy/defaults" && echo nvim > "$OFX_ROOT/state/omarchy/defaults/editor"
+# (a fake nvim, so the check that it is installed doesn't depend on this machine's; uwsm-app's
+# fake starts nothing either way)
+sh printf '#!/bin/sh\n' > "$OFX_ROOT/fakes/nvim" && chmod +x "$OFX_ROOT/fakes/nvim"
 key ctrl-shift-enter
 wait-for 2000 spawned=1
 expect statusbad=0

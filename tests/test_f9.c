@@ -461,6 +461,46 @@ static void test_search_inside_keys(void)
     in = ui_input_none(), in.ev[in.nev++] = (UiEvent){ UK_MENU, 'i' };
     ui_handle(&u, names, &in);
     CHECK(u.search_inside);
+    // Ctrl+K (and Ctrl+Up) from the results: back to the field the keys were in last; again from
+    // there, on to the path buttons (Michael, 2026-10-29, as Ctrl+J goes to the find bar, then on).
+    u.view = UI_VIEW_SEARCH, u.search_inside = true, u.focus = UI_FOCUS_INSIDE;
+    in = chars("x");
+    ui_handle(&u, names, &in);
+    u.focus = UI_FOCUS_LIST;
+    CHECK(menu_keys(&u, 1, UK_CRUMBS).kind == UA_NONE && u.focus == UI_FOCUS_INSIDE);
+    in = ui_input_none(), in.crumb_n = 2, in.crumb_last = 1;
+    in.ev[in.nev++] = (UiEvent){ UK_CRUMBS, 0 };
+    ui_handle(&u, names, &in);
+    CHECK(u.focus == UI_FOCUS_CRUMBS && u.crumb_at == 1);
+    u.focus = UI_FOCUS_SEARCH;
+    in = chars("y");
+    ui_handle(&u, names, &in);
+    u.focus = UI_FOCUS_LIST;
+    CHECK(menu_keys(&u, 1, UK_CRUMBS).kind == UA_NONE && u.focus == UI_FOCUS_SEARCH);
+    CHECK(menu_keys(&u, 1, UK_CRUMBS).kind == UA_NONE && u.focus == UI_FOCUS_LIST);   // (no path buttons: the list)
+    // Containing last, but "In files" off since: the name's field.
+    u.search_was_inside = true, u.search_inside = false, u.focus = UI_FOCUS_LIST;
+    CHECK(menu_keys(&u, 1, UK_CRUMBS).kind == UA_NONE && u.focus == UI_FOCUS_SEARCH);
+    // Ctrl+Shift+F likewise.
+    u.search_inside = true, u.search_was_inside = true, u.focus = UI_FOCUS_LIST;
+    CHECK(menu_keys(&u, 1, UK_SEARCH).kind == UA_NONE && u.focus == UI_FOCUS_INSIDE);
+    // Outside a search: the path buttons straight away.
+    u.view = UI_VIEW_FOLDER, u.focus = UI_FOCUS_LIST;
+    in = ui_input_none(), in.crumb_n = 2, in.crumb_last = 0;
+    in.ev[in.nev++] = (UiEvent){ UK_CRUMBS, 0 };
+    ui_handle(&u, names, &in);
+    CHECK(u.focus == UI_FOCUS_CRUMBS);
+    u.focus = UI_FOCUS_LIST, u.search_was_inside = false;
+    // Under an open menu a press on either field is the menu's (it closes), not the field's.
+    u.view = UI_VIEW_SEARCH, u.search_inside = true, u.focus = UI_FOCUS_LIST, u.menu_on = true, u.menu = 0;
+    in = ui_input_none(), in.search_field = true;
+    ui_handle(&u, names, &in);
+    CHECK(u.focus == UI_FOCUS_LIST);
+    u.menu_on = true;
+    in = ui_input_none(), in.inside_field = true;
+    ui_handle(&u, names, &in);
+    CHECK(u.focus == UI_FOCUS_LIST);
+    u.menu_on = false;
     // The field's and the toggles' presses while it is off: nothing.
     u.view = UI_VIEW_SEARCH, u.search_inside = false, u.focus = UI_FOCUS_LIST;
     in = ui_input_none(), in.inside_field = true, in.inside_toggle = 2;

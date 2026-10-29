@@ -25,18 +25,20 @@ static void ui_search_inside(Ui *u, bool on)
 // name's are find's), each change marked; Tab goes to the other field while both show; Enter, Esc
 // and Down give the keys to the results; another command goes to them as well, and runs there
 // (false; Ctrl+Shift+F gives them back).
-static bool ui_search_event(Ui *u, UiEvent e, Str paste)
+static bool ui_search_event(Ui *u, UiEvent e, const UiInput *in)
 {
     bool inside = u->focus == UI_FOCUS_INSIDE;
+    u->search_was_inside = inside;
     if (ui_toggle_key(e)) {
         UiMatchOpts *o = inside ? &u->inside_opts : &u->find_opts;
         *o = ui_toggle(*o, ui_toggle_key(e)), u->search_edited = true;
         return true;
     }
     if (e.key == UK_TAB && u->search_inside) return u->focus = inside ? UI_FOCUS_SEARCH : UI_FOCUS_INSIDE, true;
+    if (e.key == UK_CRUMBS) return u->focus = UI_FOCUS_LIST, ui_crumbs_focus(u, in), true;   // (Ctrl+K again: on to the path buttons, as Ctrl+J from the find bar goes on to the jobs)
     UiLine l = inside ? ui_inside_line(u) : ui_search_line(u);
     if (ui_line_copies_nothing(l, e)) return u->focus = UI_FOCUS_LIST, false;   // (the cursor's result)
-    UiLineHit h = ui_line_key(u, l, e, paste);
+    UiLineHit h = ui_line_key(u, l, e, in->paste);
     if (h == UI_LINE_CHANGED) u->search_edited = true;
     if (h) return true;
     switch (e.key) {
@@ -45,13 +47,20 @@ static bool ui_search_event(Ui *u, UiEvent e, Str paste)
     }
 }
 
+// The keys back to the search view's field they were in last: "Containing" while it shows, else
+// the name's (Michael, 2026-10-29: Ctrl+K and Ctrl+Up as Ctrl+J and Ctrl+Down go to the find bar).
+static void ui_search_back(Ui *u)
+{
+    u->focus = u->search_inside && u->search_was_inside ? UI_FOCUS_INSIDE : UI_FOCUS_SEARCH;
+}
+
 // Ctrl+Shift+F, Go → Search…, the magnifier (F9): in the search view the keys go back to its
 // field; elsewhere gui/ opens a search below the folder shown in a new tab (the trash isn't one).
 static UiAction ui_search_open(Ui *u)
 {
     if (u->view != UI_VIEW_SEARCH) return ui_view_act(u, (UiAction){ UA_SEARCH, 0, false });
     ui_edit_close(u);
-    u->focus = UI_FOCUS_SEARCH;
+    ui_search_back(u);
     return (UiAction){ UA_NONE, 0, false };
 }
 
@@ -180,7 +189,7 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         if (u->finding) ui_find_update(u, names);
         if (u->view == UI_VIEW_SEARCH) u->search_edited = true;
         return (UiAction){ UA_NONE, 0, false };
-    } else if (!prompt && u->view == UI_VIEW_SEARCH && in->search_field) {
+    } else if (!prompt && !u->menu_on && u->view == UI_VIEW_SEARCH && in->search_field) {
         u->focus = UI_FOCUS_SEARCH;
         return (UiAction){ UA_NONE, 0, false };
     } else if (!prompt && !u->menu_on && u->view == UI_VIEW_SEARCH && (in->inside_btn || (u->search_inside && (in->inside_field || in->inside_toggle > 0)))) {
@@ -415,7 +424,7 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
             continue;
         }
         if ((u->focus == UI_FOCUS_SEARCH || (u->focus == UI_FOCUS_INSIDE && u->search_inside)) && u->view == UI_VIEW_SEARCH && !prompt &&
-            ui_search_event(u, e, in->paste))
+            ui_search_event(u, e, in))
             continue;
         // The find bar's likewise (2026-10-28), after the questions: a clash or the delete question
         // takes its keys first.
@@ -606,7 +615,10 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         case UK_UNDO: return (UiAction){ UA_UNDO, 0, false };
         case UK_NEWFOLDER: return ui_view_act(u, (UiAction){ UA_NEWFOLDER, 0, false });
         case UK_LOCATION: case UK_WORD_RIGHT: return (UiAction){ UA_LOCATION, 0, false };   // (Ctrl+Right too, outside a text field)
-        case UK_CRUMBS: ui_crumbs_focus(u, in); break;
+        case UK_CRUMBS:   // in a search, its field first (then on to the path buttons from there)
+            if (u->view == UI_VIEW_SEARCH) ui_search_back(u);
+            else ui_crumbs_focus(u, in);
+            break;
         case UK_JOBS:   // the find bar first when it is open, then the job rows (Michael, 2026-10-26)
             if (u->finding) u->focus = UI_FOCUS_FIND;
             else if (in->job_n > 0) u->focus = UI_FOCUS_JOBS, u->job_at = 0;

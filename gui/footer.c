@@ -84,7 +84,7 @@ static void find_chevron(Clay_ElementId id, ChevronDir dir, int step, bool on)
     }
 }
 
-// A bar's field, find's or the search view's (name: "find", "search"): its frame red when the
+// A bar's field, find's or the search view's (name: "find", "search", "inside" for Containing): its frame red when the
 // expression is bad, the accent while it has the keys; its text drawn as the edit line draws (a
 // caret and the selection) while it has them, cut to fit otherwise; the toggles at its end.
 static void bar_field(const char *name, bool keys, bool bad, UiLine line, Str shown, Clay_Color fg, UiMatchOpts o, int toggles)
@@ -145,7 +145,7 @@ static void layout_find_bar(void)
 static void search_inside_btn(void)
 {
     Theme *t = &app.theme;
-    bool on = app.ui.search_inside, hover = app.hov.search_inside;
+    bool on = app.ui.search_inside, hover = app.hov.inside_btn;
     CLAY(CLAY_ID("search-inside"), { .layout = { .sizing = { CLAY_SIZING_FIT(0), CLAY_SIZING_FIXED(26) }, .padding = { 10, 10, 0, 0 },
                                                  .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
                                      .backgroundColor = on ? cc(t->bg) : hover ? mix(t->bg, t->bg_light, 0.5f) : NO_COLOR,
