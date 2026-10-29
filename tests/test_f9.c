@@ -440,9 +440,9 @@ static void test_search_inside_keys(void)
     in = ui_input_none(), in.inside_btn = true;
     CHECK(ui_input_acts(&in) && ui_handle(&u, names, &in).kind == UA_NONE && u.search_inside && u.focus == UI_FOCUS_INSIDE && u.search_edited);
     u.focus = UI_FOCUS_LIST, u.search_edited = false;
-    in = ui_input_none(), in.inside_field = true;
+    in = ui_input_none(), in.field = UI_FIELD_INSIDE;
     CHECK(ui_input_acts(&in) && ui_handle(&u, names, &in).kind == UA_NONE && u.focus == UI_FOCUS_INSIDE && !u.search_edited);
-    in = ui_input_none(), in.inside_toggle = 3;
+    in = ui_input_none(), in.field = UI_FIELD_INSIDE, in.field_toggle = 3;
     CHECK(ui_input_acts(&in) && ui_handle(&u, names, &in).kind == UA_NONE && u.inside_opts.regex && !u.find_opts.regex && u.search_edited);
     // The button again: off.
     in = ui_input_none(), in.inside_btn = true;
@@ -451,7 +451,7 @@ static void test_search_inside_keys(void)
     u.search_inside = true;
     // Not under a menu, and not outside the search view.
     u.inside_opts = (UiMatchOpts){ 0 }, u.menu_on = true;
-    in = ui_input_none(), in.inside_toggle = 1;
+    in = ui_input_none(), in.field = UI_FIELD_INSIDE, in.field_toggle = 1;
     ui_handle(&u, names, &in);
     CHECK(!u.inside_opts.cased);
     u.menu_on = false, u.view = UI_VIEW_FOLDER;
@@ -493,17 +493,21 @@ static void test_search_inside_keys(void)
     u.focus = UI_FOCUS_LIST, u.search_was_inside = false;
     // Under an open menu a press on either field is the menu's (it closes), not the field's.
     u.view = UI_VIEW_SEARCH, u.search_inside = true, u.focus = UI_FOCUS_LIST, u.menu_on = true, u.menu = 0;
-    in = ui_input_none(), in.search_field = true;
+    in = ui_input_none(), in.field = UI_FIELD_SEARCH;
     ui_handle(&u, names, &in);
     CHECK(u.focus == UI_FOCUS_LIST);
     u.menu_on = true;
-    in = ui_input_none(), in.inside_field = true;
+    in = ui_input_none(), in.field = UI_FIELD_INSIDE;
     ui_handle(&u, names, &in);
     CHECK(u.focus == UI_FOCUS_LIST);
+    u.menu_on = true;
+    in = ui_input_none(), in.inside_btn = true;
+    ui_handle(&u, names, &in);
+    CHECK(u.search_inside);   // (the button too)
     u.menu_on = false;
     // The field's and the toggles' presses while it is off: nothing.
     u.view = UI_VIEW_SEARCH, u.search_inside = false, u.focus = UI_FOCUS_LIST;
-    in = ui_input_none(), in.inside_field = true, in.inside_toggle = 2;
+    in = ui_input_none(), in.field = UI_FIELD_INSIDE, in.field_toggle = 2;
     ui_handle(&u, names, &in);
     CHECK(u.focus == UI_FOCUS_LIST && !u.inside_opts.word);
 }
@@ -582,7 +586,7 @@ static void test_search_ui_keys(void)
     ui_handle(&u, names, &in);
     CHECK(u.find_opts.cased && u.search_edited && !u.menu_on);
     u.search_edited = false;
-    in = ui_input_none(), in.toggle = 3;
+    in = ui_input_none(), in.field = UI_FIELD_SEARCH, in.field_toggle = 3;
     CHECK(ui_input_acts(&in) && ui_handle(&u, names, &in).kind == UA_NONE && u.find_opts.regex && u.search_edited);
     u.find_opts = (UiMatchOpts){ 0 }, u.search_edited = false;
     // Enter, Esc and Down give the keys to the results; Ctrl+Shift+F and a press on the field take
@@ -596,9 +600,9 @@ static void test_search_ui_keys(void)
     CHECK(menu_keys(&u, 1, UK_SEARCH).kind == UA_NONE && (u.focus == UI_FOCUS_SEARCH) && u.focus != UI_FOCUS_SIDE);
     CHECK(menu_keys(&u, 1, UK_SEARCH).kind == UA_NONE && (u.focus == UI_FOCUS_SEARCH));
     ui_unfocus(&u, UI_FOCUS_SEARCH);
-    in = ui_input_none(), in.search_field = true;
+    in = ui_input_none(), in.field = UI_FIELD_SEARCH;
     CHECK(ui_input_acts(&in) && ui_handle(&u, names, &in).kind == UA_NONE && (u.focus == UI_FOCUS_SEARCH));
-    in = ui_input_none(), in.search_field = true, in.bar = UB_BACK;
+    in = ui_input_none(), in.field = UI_FIELD_SEARCH, in.bar = UB_BACK;
     ui_unfocus(&u, UI_FOCUS_SEARCH), u.confirming = true;   // not under a question
     ui_handle(&u, names, &in);
     CHECK(u.focus != UI_FOCUS_SEARCH);
@@ -613,10 +617,10 @@ static void test_search_ui_keys(void)
     CHECK(u.list.sel == 1 && u.search.len == 1);
     // A toggle press outside the search view, the find bar closed: nothing.
     u.view = UI_VIEW_FOLDER;
-    in = ui_input_none(), in.toggle = 1;
+    in = ui_input_none(), in.field = UI_FIELD_SEARCH, in.field_toggle = 1;
     ui_handle(&u, names, &in);
     CHECK(!u.find_opts.cased && !u.search_edited);
-    in = ui_input_none(), in.search_field = true;
+    in = ui_input_none(), in.field = UI_FIELD_SEARCH;
     ui_handle(&u, names, &in);
     CHECK(u.focus != UI_FOCUS_SEARCH);
 }

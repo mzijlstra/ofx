@@ -11,6 +11,24 @@ static Sort ui_sort_click(Sort s, SortKey k)
 
 // ---- the search view's field (F9) -----------------------------------------------------------
 
+// The text bars' fields (UiField): when each is there, its toggles, the focus that is its.
+static const UiFocus UI_FIELD_FOCUS[UI_FIELDS] = { UI_FOCUS_FIND, UI_FOCUS_SEARCH, UI_FOCUS_INSIDE };
+
+static bool ui_field_shown(const Ui *u, UiField f)
+{
+    switch (f) {
+    case UI_FIELD_FIND: return u->finding;
+    case UI_FIELD_SEARCH: return u->view == UI_VIEW_SEARCH;
+    case UI_FIELD_INSIDE: return u->view == UI_VIEW_SEARCH && u->search_inside;
+    default: return false;
+    }
+}
+
+static UiMatchOpts *ui_field_opts(Ui *u, UiField f)
+{
+    return f == UI_FIELD_INSIDE ? &u->inside_opts : &u->find_opts;
+}
+
 // "In files" on or off (F9 step 3): on, the "Containing" field takes the keys; off, they go back to
 // the name's from it.
 static void ui_search_inside(Ui *u, bool on)
@@ -175,27 +193,26 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         if (in->modal == UI_MODAL_NO) return u->about = false, (UiAction){ UA_NONE, 0, false };
     } else if (on == UI_ON_BAR) {
         if (in->modal == UI_MODAL_OK) return u->bar_told = false, (UiAction){ UA_NONE, 0, false };
-    } else if (!prompt && u->finding && (in->find_x || in->find_field || in->find_step)) {
+    } else if (!prompt && u->finding && (in->find_x || in->find_step)) {
         // A chevron steps with two matches or more (greyed under that) and leaves the keys where
         // they are.
         isize at;
         if (in->find_step) {
             if (ui_find_count(u, names, &at) >= 2) ui_find_step(u, names, in->find_step > 0 ? 1 : -1);
-        } else if (in->find_x) ui_find_close(u);
-        else u->focus = UI_FOCUS_FIND;   // (the edit line, if open, closes with it)
+        } else ui_find_close(u);
         return (UiAction){ UA_NONE, 0, false };
-    } else if (!prompt && !u->menu_on && in->toggle >= 1 && in->toggle <= 3 && (u->finding || u->view == UI_VIEW_SEARCH)) {
-        u->find_opts = ui_toggle(u->find_opts, in->toggle);   // (the search view's are find's, F9)
-        if (u->finding) ui_find_update(u, names);
-        if (u->view == UI_VIEW_SEARCH) u->search_edited = true;
+    } else if (!prompt && !u->menu_on && in->field >= 0 && in->field < UI_FIELDS && ui_field_shown(u, (UiField)in->field)) {
+        // A text bar's field takes the keys (the edit line, if open, closes with it); a toggle
+        // flips its field's (the name's are find's): find matches again, a search runs again.
+        if (in->field_toggle >= 1 && in->field_toggle <= 3) {
+            UiMatchOpts *o = ui_field_opts(u, (UiField)in->field);
+            *o = ui_toggle(*o, in->field_toggle);
+            if (u->finding) ui_find_update(u, names);   // (Containing's change nothing there)
+            if (u->view == UI_VIEW_SEARCH) u->search_edited = true;
+        } else u->focus = UI_FIELD_FOCUS[in->field];
         return (UiAction){ UA_NONE, 0, false };
-    } else if (!prompt && !u->menu_on && u->view == UI_VIEW_SEARCH && in->search_field) {
-        u->focus = UI_FOCUS_SEARCH;
-        return (UiAction){ UA_NONE, 0, false };
-    } else if (!prompt && !u->menu_on && u->view == UI_VIEW_SEARCH && (in->inside_btn || (u->search_inside && (in->inside_field || in->inside_toggle > 0)))) {
-        if (in->inside_btn) ui_search_inside(u, !u->search_inside);
-        else if (in->inside_toggle >= 1 && in->inside_toggle <= 3) u->inside_opts = ui_toggle(u->inside_opts, in->inside_toggle), u->search_edited = true;
-        else u->focus = UI_FOCUS_INSIDE;
+    } else if (!prompt && !u->menu_on && u->view == UI_VIEW_SEARCH && in->inside_btn) {
+        ui_search_inside(u, !u->search_inside);
         return (UiAction){ UA_NONE, 0, false };
     }
     // The menu bar (F7.1): a title opens its menu or closes it; while a menu is open a press on one

@@ -329,8 +329,8 @@ MUTANTS = [
     ('gui/folder.c', '    if (!same) app.ui.find_from = app.ui.list.sel;', '', 'f2'),
     ('gui/files.c', ' -\n               (app.ui.finding ? FIND_BAR_H : 0);', ';', 'f2'),
     ('gui/input.c', '        h.find_x = in_box(CLAY_ID("find-x"), x, y);', '', 'f2'),
-    ('gui/input.c', '        h.find_field = !h.toggle && !h.find_x && in_box(CLAY_ID("find-field"), x, y);', '', 'f2'),
-    ('gui/input.c', '    in->find_x = h.find_x, in->find_field = h.find_field, in->find_step = h.find_step, in->search_field = h.search_field;', '    in->search_field = h.search_field;', 'f2'),
+    ('gui/input.c', '        if (h.field < 0 && in_box(Clay_GetElementId(cz(FIELD_IDS[f].id)), x, y)) h.field = f;', '', 'f2'),
+    ('gui/input.c', '    in->find_x = h.find_x, in->find_step = h.find_step;', '    in->find_step = h.find_step;', 'f2'),
     # ---- F7.4: the Edit, View and Go menus
     ('gui/frame.c', '    u->can_undo = undo.kind != UNDO_NONE && undo.n > 0;', '    u->can_undo = false;', 'f74'),
     ('gui/frame.c', '    u->can_back = hist.nback > 0, u->can_forward = hist.nfwd > 0;', '    u->can_back = hist.nback > 0, u->can_forward = true;', 'f74'),
@@ -506,7 +506,7 @@ MUTANTS = [
     ('gui/input.c', '    if (h.find_step) return TIP_FIND + (h.find_step > 0);', '', 'f2'),
     ('gui/footer.c', 'c.finding != app.ui.finding || c.find_len != app.ui.find.len || ', '', 'f2'),
     ('gui/frame.c', '"Previous match (Up)" : "Next match (Down)"', '"Next match (Down)" : "Next match (Down)"', 'f2'),
-    ('gui/input.c', '(app.ui.ow || app.ui.finding); k++)', '(app.ui.ow); k++)', 'f72'),   # (the guard is ui_handle's since 2026-10-28)
+    ('gui/input.c', '            if (in_box(CLAY_IDI("toggle", FIELD_IDS[f].toggles + k), x, y)) h.field = f, h.field_toggle = k;', '', 'f72'),   # (the guard is ui_handle's since 2026-10-28)
     ('gui/actions.c', '    ui_find_close(&app.ui);   // (a tab\'s own find isn\'t kept)', '', 'f2'),
     # ---- F7.3.1: Set as default
     (OW, '    if (strcmp(ow.type, "application/x-zerosize") == 0) snprintf(', '    if (false) snprintf(', 'f73'),
@@ -516,7 +516,7 @@ MUTANTS = [
     (OW, '    if (set && !op_set_default(&scratch, str_from_c(ow.type), id, &err)) {', '    if (false) {', 'f73'),
     (OW, '    if (set) set_status(false, "opened %s with %.*s, the default for %s now"', '    if (false) set_status(false, "opened %s with %.*s, the default for %s now"', 'f73'),
     ('gui/actions.c', '    case UA_LAUNCH: ow_launch(a.index, a.all); break;', '    case UA_LAUNCH: ow_launch(a.index, false); break;', 'f73'),
-    ('gui/input.c', '    for (int k = 1; k <= 4 && !h.toggle && (app.ui.ow || app.ui.finding); k++)', '    for (int k = 1; k <= 3 && !h.toggle && (app.ui.ow || app.ui.finding); k++)', 'f73'),
+    ('gui/input.c', '    for (int k = 1; k <= 4 && !h.toggle && app.ui.ow; k++)', '    for (int k = 1; k <= 3 && !h.toggle && app.ui.ow; k++)', 'f73'),
     # Left out: nsvgRasterize gone leaves a blank texture, which no state word sees (the pixels);
     # f73's ow-panel.png shows the SVG drawn.
     # ---- F9 step 1: the search view (2026-10-28). Left out: what is only pixels (the tab's label,
@@ -532,8 +532,8 @@ MUTANTS = [
     ('gui/folder.c', '        snprintf(app.search_pick, sizeof app.search_pick, "%.*s", STR_ARG(select));\n    }', '    }', 'f9'),
     ('gui/actions.c', '    if (dir && search_uri(uri, sizeof uri, dir, STR_EMPTY, STR_EMPTY)) tab_open(uri, STR_EMPTY, true);', '    if (dir) tab_open(dir, STR_EMPTY, true);', 'f9'),
     ('gui/actions.c', '    case UA_NOT_IN_SEARCH: set_status(true, "A search isn\'t a folder: that works in one"); break;', '    case UA_NOT_IN_SEARCH: break;', 'f9'),
-    ('gui/input.c', '        if (in_box(CLAY_IDI("toggle", TOGGLE_SEARCH + k), x, y)) h.toggle = k;', '', 'f9'),
-    ('gui/input.c', '    h.search_field = app.ui.view == UI_VIEW_SEARCH && !h.toggle && in_box(CLAY_ID("search-field"), x, y);', '', 'f9'),
+    ('gui/input.c', '    [UI_FIELD_SEARCH] = { "search-field", TOGGLE_SEARCH },', '    [UI_FIELD_SEARCH] = { "search-field", 0 },', 'f9'),
+    ('gui/input.c', '    [UI_FIELD_SEARCH] = { "search-field", TOGGLE_SEARCH },', '    [UI_FIELD_SEARCH] = { "inside-field", TOGGLE_SEARCH },', 'f9'),
     ('gui/main.c', '        if (app.ui.view == UI_VIEW_SEARCH && search_take()) search_relist(), dirty = true;', '', 'f9'),
     (G, '        if (app.search_due && now_ms() >= app.search_due) app.search_due = 0, search_retype(), dirty = true;', '        if (app.search_due) app.search_due = 0, search_retype(), dirty = true;', 'f9'),
     ('gui/input.c', '    return !a ? b : !b ? a : a < b ? a : b;', '    return a;', 'f9'),
@@ -633,10 +633,10 @@ MUTANTS = [
     ('gui/footer.c', '    bool inside = app.ui.search_inside && app.ui.inside.len;', '    bool inside = false;', 'f9'),
     ('gui/footer.c', '        snprintf(buf, cap, app.ui.search_inside ? "Text to look for', '        snprintf(buf, cap, false ? "Text to look for', 'f9'),
     ('gui/files.c', '                    layout_hit(r, e->hit, room - (dir ? dw + 6 : 0));', '', 'f9'),
-    ('gui/input.c', '    h.search_inside = app.ui.view == UI_VIEW_SEARCH && in_box(CLAY_ID("search-inside"), x, y);', '', 'f9'),
-    ('gui/input.c', '    h.inside_field = app.ui.view == UI_VIEW_SEARCH && app.ui.search_inside && !h.inside_toggle && in_box(CLAY_ID("inside-field"), x, y);', '', 'f9'),
-    ('gui/input.c', '        if (in_box(CLAY_IDI("toggle", TOGGLE_INSIDE + k), x, y)) h.inside_toggle = k;', '', 'f9'),
-    ('gui/input.c', '    in->inside_field = h.inside_field, in->inside_toggle = h.inside_toggle, in->inside_btn = h.search_inside;', '', 'f9'),
+    ('gui/input.c', '    h.inside_btn = app.ui.view == UI_VIEW_SEARCH && in_box(CLAY_ID("search-inside"), x, y);', '', 'f9'),
+    ('gui/input.c', '    [UI_FIELD_INSIDE] = { "inside-field", TOGGLE_INSIDE },', '    [UI_FIELD_INSIDE] = { "search-field", TOGGLE_INSIDE },', 'f9'),
+    ('gui/input.c', '    [UI_FIELD_INSIDE] = { "inside-field", TOGGLE_INSIDE },', '    [UI_FIELD_INSIDE] = { "inside-field", TOGGLE_SEARCH },', 'f9'),
+    ('gui/input.c', '    in->field = h.field, in->field_toggle = h.field_toggle, in->inside_btn = h.inside_btn;', '    in->field = h.field, in->field_toggle = h.field_toggle;', 'f9'),
     # F9 step 4: Open at Line (2026-10-29). Not run: the menu entry's label and the width it adds to
     # the menu (drawn only; the shot open-line-menu.png shows them), and editor_now's once-a-second
     # cache for that label (a run can't tell a read from a cached one).

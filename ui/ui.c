@@ -149,7 +149,7 @@ typedef struct {
     int     prop_box;    // a checkbox of the Properties panel's grid pressed (0..8, F7.2), -1 for none
     // Open With (F7.3): the apps gui/ lists, in its order (their names, which the filter
     // matches); a row pressed or double-clicked (its place on screen), the field pressed, a
-    // toggle pressed (1 case, 2 whole word, 3 regular expression; for find too), each -1 or 0 for none.
+    // toggle pressed (1 case, 2 whole word, 3 regular expression), each -1 or 0 for none.
     const Str *app_name;
     isize   app_n;
     int     ow_row, ow_drow;
@@ -157,13 +157,10 @@ typedef struct {
     int     ow_wheel;    // notches over its list, as wheel
     int     toggle;      // 4: Open With's "Always open … with this app" box (F7.3.1)
     bool    find_x;      // the find bar's × pressed
-    bool    find_field;  // its field pressed: the keys go there
-    bool    search_field;   // the search bar's field pressed (F9): the keys go there
-    // Inside files (F9 step 3): the "Containing" field pressed, one of its toggles (1-3, 0 none), the
-    // "In files" button.
-    bool    inside_field;
-    int     inside_toggle;
-    bool    inside_btn;
+    // A text bar's field pressed (UiField: the find bar's, the search's name and Containing; -1
+    // none), or with field_toggle one of its toggles (1 case, 2 whole word, 3 regular expression).
+    int     field, field_toggle;
+    bool    inside_btn;  // the search bar's "In files" (F9 step 3)
     // Edit Bookmarks (F7.5): a row pressed or double-clicked (its place on screen), -1 for none; a
     // button pressed (1 Remove, 2 Rename, 3 Move Up, 4 Move Down), 0 for none.
     int     bmp_row, bmp_drow, bmp_btn;
@@ -605,6 +602,10 @@ typedef enum { UI_VIEW_FOLDER, UI_VIEW_TRASH, UI_VIEW_SEARCH } UiView;
 // Who has the keys: the files' list unless one of the others took them. One value, so two can't
 // at once (2026-10-28: six flags before, kept apart by hand; opening the location line from the
 // search view left the search field holding the keys too).
+// The text bars' fields (F9's review, 2026-10-29: one table for what was three of each): the find
+// bar's, the search's name and its Containing. ui_field_shown says when each is there.
+typedef enum { UI_FIELD_FIND, UI_FIELD_SEARCH, UI_FIELD_INSIDE, UI_FIELDS } UiField;
+
 typedef enum {
     UI_FOCUS_LIST,
     UI_FOCUS_SIDE,     // the sidebar's cursor
@@ -819,7 +820,8 @@ static UiInput ui_input_none(void)
 {
     return (UiInput){ .click = -1, .dclick = -1, .side_click = -1, .header = -1, .click_mods = 0, .bar = UB_NONE, .crumb = -1,
                       .tab_click = -1, .tab_close = -1, .mid_row = -1, .mid_side = -1, .mid_crumb = -1, .modal = 0, .job_x = -1, .side_mode = -1, .side_twisty = -1, .side_eject = -1,
-                      .zoom_to = -1, .menu_title = -1, .menu_item = -1, .ctx_row = -1, .ctx_side = -1, .ctx_crumb = -1, .ctx_tab = -1, .prop_box = -1, .ow_row = -1, .ow_drow = -1, .bmp_row = -1, .bmp_drow = -1 };
+                      .zoom_to = -1, .menu_title = -1, .menu_item = -1, .ctx_row = -1, .ctx_side = -1, .ctx_crumb = -1, .ctx_tab = -1, .prop_box = -1, .ow_row = -1, .ow_drow = -1, .bmp_row = -1, .bmp_drow = -1,
+                      .field = -1 };
 }
 
 #include "cursor.c"

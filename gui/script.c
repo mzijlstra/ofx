@@ -140,6 +140,16 @@ static bool script_open(const char *path)
     return true;
 }
 
+// A word of the state line: s, "-" when it is empty, spaces as '_' (the line is split at spaces;
+// F9's review, 2026-10-29: this was written out at each word). Into out; returns out.
+static char *state_word(char *out, size_t cap, Str s)
+{
+    snprintf(out, cap, "%.*s", s.len ? (int)s.len : 1, s.len ? s.p : "-");
+    for (char *c = out; *c; c++)
+        if (*c == ' ') *c = '_';
+    return out;
+}
+
 static void script_state(char *out, size_t cap)
 {
     const char *icon = "-";
@@ -157,17 +167,13 @@ static void script_state(char *out, size_t cap)
     static const char *const UNDO_KINDS[] = { "-", "rename", "mkdir", "trash", "copy", "move", "mkfile", "chmod", "link" };
     _Static_assert(sizeof UNDO_KINDS / sizeof UNDO_KINDS[0] == UNDO_LINK + 1, "a name for each undo");
     char edit[NAME_MAX + 1];
-    snprintf(edit, sizeof edit, "%.*s", app.ui.edit.len ? app.ui.edit.len : 1, app.ui.edit.len ? app.ui.edit.b : "-");
-    for (char *c = edit; *c; c++)
-        if (*c == ' ') *c = '_';
+    state_word(edit, sizeof edit, (Str){ app.ui.edit.b, app.ui.edit.len });
     // The edit line's selection and caret (bytes), the text it last copied, the path buttons'
     // keyboard mark (- when they don't have it).
     int slo, shi;
     ui_edit_sel(&app.ui, &slo, &shi);
     char copied[NAME_MAX + 1], keyed[16] = "-";
-    snprintf(copied, sizeof copied, "%.*s", NAME_MAX, app.text_copied[0] ? app.text_copied : "-");
-    for (char *c = copied; *c; c++)
-        if (*c == ' ') *c = '_';
+    state_word(copied, sizeof copied, str_from_c(app.text_copied));
     if (app.ui.focus == UI_FOCUS_CRUMBS) snprintf(keyed, sizeof keyed, "%d", app.ui.crumb_at);
     // The jobs (F5.3): the oldest running one for job= and done=; the rows' labels, '|' between,
     // spaces as '_'; the marked row; the first row's line (points reached) and whether it has a
@@ -183,9 +189,7 @@ static void script_state(char *out, size_t cap)
     if (!joblabels[0]) snprintf(joblabels, sizeof joblabels, "-");
     if (app.ui.focus == UI_FOCUS_JOBS) snprintf(jobkey, sizeof jobkey, "%d", app.ui.job_at);
     char clashjob[256] = "-";   // the job the clash panel names
-    if (jobs.asking >= 0) snprintf(clashjob, sizeof clashjob, "%s", job_recs[jobs.asking].label);
-    for (char *c = clashjob; *c; c++)
-        if (*c == ' ') *c = '_';
+    if (jobs.asking >= 0) state_word(clashjob, sizeof clashjob, str_from_c(job_recs[jobs.asking].label));
     static const char *const MODALS[] = { "-", "delete", "clash", "cancel", "quit", "full", "empty", "props", "open-with", "bookmarks", "shortcuts", "about", "menubar" };
     _Static_assert(sizeof MODALS / sizeof MODALS[0] == MODAL_BAR + 1, "a name for each panel");
     // The path buttons' labels, '|' between; the cursor's folder count (- unknown, ? unreadable).
@@ -254,27 +258,20 @@ static void script_state(char *out, size_t cap)
     // The search view (F9): its field's text and its status line, spaces as '_'; the cursor's folder
     // below the one searched ("-": that one, or not a search).
     char searchtext[UI_FIND_MAX + 1], searchinfo[512], seldir[PATH_MAX];
-    snprintf(searchtext, sizeof searchtext, "%.*s", app.ui.search.len ? app.ui.search.len : 1, app.ui.search.len ? app.ui.search.b : "-");
-    if (app.ui.view == UI_VIEW_SEARCH) search_status(searchinfo, sizeof searchinfo);
-    else snprintf(searchinfo, sizeof searchinfo, "-");
+    state_word(searchtext, sizeof searchtext, (Str){ app.ui.search.b, app.ui.search.len });
+    char info_s[512] = "";
+    if (app.ui.view == UI_VIEW_SEARCH) search_status(info_s, sizeof info_s);
+    state_word(searchinfo, sizeof searchinfo, str_from_c(info_s));
     const Entry *se = app.have_list && app.ui.list.n > 0 ? &app.list.e[app.ui.list.sel] : NULL;
-    snprintf(seldir, sizeof seldir, "%.*s", se && se->dir.len ? (int)se->dir.len : 1, se && se->dir.len ? se->dir.p : "-");
-    for (char *c = searchtext; *c; c++)
-        if (*c == ' ') *c = '_';
-    for (char *c = searchinfo; *c; c++)
-        if (*c == ' ') *c = '_';
+    snprintf(seldir, sizeof seldir, "%.*s", se && se->dir.len ? (int)se->dir.len : 1, se && se->dir.len ? se->dir.p : "-");   // (its spaces kept, as before)
     // Inside files (F9 step 3): the "Containing" field's text, and where the cursor's result
     // matched: line:column+more lines, the match, and whether its row drew it.
     char insidetext[UI_FIND_MAX + 1], hit[64] = "-", hitmatch[SEARCH_SNIP + 1] = "-";
-    snprintf(insidetext, sizeof insidetext, "%.*s", app.ui.inside.len ? app.ui.inside.len : 1, app.ui.inside.len ? app.ui.inside.b : "-");
+    state_word(insidetext, sizeof insidetext, (Str){ app.ui.inside.b, app.ui.inside.len });
     if (se && se->hit) {
         snprintf(hit, sizeof hit, "%lld:%lld+%lld", (long long)se->hit->line, (long long)se->hit->col, (long long)se->hit->more);
-        snprintf(hitmatch, sizeof hitmatch, "%.*s", se->hit->len ? (int)se->hit->len : 1, se->hit->len ? se->hit->text.p + se->hit->at : "-");
+        state_word(hitmatch, sizeof hitmatch, (Str){ se->hit->text.p + se->hit->at, se->hit->len });
     }
-    for (char *c = insidetext; *c; c++)
-        if (*c == ' ') *c = '_';
-    for (char *c = hitmatch; *c; c++)
-        if (*c == ' ') *c = '_';
     int hitdrawn = se ? Clay_GetElementData(CLAY_IDI("hit", (int)(app.ui.list.sel - app.ui.list.top))).found : 0;
     // The cursor's preview, as its texture's size (F6.4).
     char thumbsel[32] = "-";
@@ -347,26 +344,19 @@ static void script_state(char *out, size_t cap)
     }
     for (char *c = keysfirst; *c; c++) *c = *c == ' ' ? '_' : *c;
     char bmptext[300];   // Edit Bookmarks' rename field (spaces '_'; "-" empty)
-    snprintf(bmptext, sizeof bmptext, "%.*s", app.ui.bmp_name.len ? app.ui.bmp_name.len : 1, app.ui.bmp_name.len ? app.ui.bmp_name.b : "-");
-    for (char *c = bmptext; *c; c++) *c = *c == ' ' ? '_' : *c;
+    state_word(bmptext, sizeof bmptext, (Str){ app.ui.bmp_name.b, app.ui.bmp_name.len });
     // The bottom bar as the last frame drew it lies inside the window (F7.1: under the menu bar's
     // 26 px the rest is as tall as before).
     Clay_ElementData fd = Clay_GetElementData(CLAY_ID("footer"));
     int footerin = fd.found && fd.boundingBox.y + fd.boundingBox.height <= (float)GetScreenHeight() + 0.5f;
     char propname[NAME_MAX + 1];   // the Properties panel's name, spaces as '_'
-    snprintf(propname, sizeof propname, "%s", props.name[0] ? props.name : "-");
-    for (char *c = propname; *c; c++)
-        if (*c == ' ') *c = '_';
+    state_word(propname, sizeof propname, str_from_c(props.name));
     char proptypename[128];   // its type in words, spaces as '_'
-    snprintf(proptypename, sizeof proptypename, "%s", props.type_name[0] ? props.type_name : "-");
-    for (char *c = proptypename; *c; c++)
-        if (*c == ' ') *c = '_';
+    state_word(proptypename, sizeof proptypename, str_from_c(props.type_name));
     // Open With (F7.3): its field's text (spaces '_'), the app under the cursor (its desktop id),
     // and the toggles as letters (c, w, r; "-" none), the panel's and find's.
     char owtext[UI_FIND_MAX + 1], owapp[NAME_MAX + 1], owopts[4], findopts[4], insideopts[4];
-    snprintf(owtext, sizeof owtext, "%.*s", app.ui.ow_filter.len ? app.ui.ow_filter.len : 1, app.ui.ow_filter.len ? app.ui.ow_filter.b : "-");
-    for (char *c = owtext; *c; c++)
-        if (*c == ' ') *c = '_';
+    state_word(owtext, sizeof owtext, (Str){ app.ui.ow_filter.b, app.ui.ow_filter.len });
     isize owsel = app.ui.ow && app.ui.ow_list.n > 0 ? app.ui.ow_idx[app.ui.ow_list.sel] : -1;
     snprintf(owapp, sizeof owapp, "%.*s", owsel >= 0 ? (int)ow.apps.a[owsel].id.len : 1, owsel >= 0 ? ow.apps.a[owsel].id.p : "-");
     // The icon drawn for that app: its file's name ("-" none).

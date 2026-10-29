@@ -190,19 +190,25 @@ static bool in_box(Clay_ElementId id, float x, float y)
            y < d.boundingBox.y + d.boundingBox.height;
 }
 
+// The text bars' fields as layout_* draws them (bar_field's name, "-field"), and their toggles' base
+// (layout_toggles): a field a row, as UiField counts them.
+static const struct {
+    const char *id;
+    int         toggles;
+} FIELD_IDS[UI_FIELDS] = {
+    [UI_FIELD_FIND] = { "find-field", 0 },
+    [UI_FIELD_SEARCH] = { "search-field", TOGGLE_SEARCH },
+    [UI_FIELD_INSIDE] = { "inside-field", TOGGLE_INSIDE },
+};
+
 static Hit hit_at(float x, float y)
 {
     // (by name: a field added or moved shifted every value after it, 2026-10-28; the rest 0 or false)
     Hit h = { .row = -1, .side = -1, .header = -1, .bar = UB_NONE, .crumb = -1, .tab = -1, .tab_x = -1, .job_x = -1, .mode = -1, .twisty = -1,
-              .eject = -1, .menu_title = -1, .menu_item = -1, .prop_box = -1, .ow_row = -1, .bmp_row = -1 };
-    // The find bar's toggles, or Open With's (its panel's); ui_handle drops a find or search bar's
-    // under a panel or a menu (a click on Properties' OK above them flipped one, 2026-10-26).
-    for (int k = 1; k <= 4 && !h.toggle && (app.ui.ow || app.ui.finding); k++)
+              .eject = -1, .menu_title = -1, .menu_item = -1, .prop_box = -1, .ow_row = -1, .bmp_row = -1, .field = -1 };
+    // Open With's toggles (its panel's)
+    for (int k = 1; k <= 4 && !h.toggle && app.ui.ow; k++)
         if (in_box(CLAY_IDI("toggle", k), x, y)) h.toggle = k;
-    for (int k = 1; k <= 3 && !h.toggle && app.ui.view == UI_VIEW_SEARCH; k++)   // the search bar's (F9)
-        if (in_box(CLAY_IDI("toggle", TOGGLE_SEARCH + k), x, y)) h.toggle = k;
-    for (int k = 1; k <= 3 && !h.inside_toggle && app.ui.view == UI_VIEW_SEARCH && app.ui.search_inside; k++)   // its "Containing" field's (step 3)
-        if (in_box(CLAY_IDI("toggle", TOGGLE_INSIDE + k), x, y)) h.inside_toggle = k;
     if (modal_kind() == MODAL_NONE)
         for (int m = 0; m < UI_MENUS && h.menu_title < 0; m++)
             if (in_box(CLAY_IDI("menu-title", m), x, y)) h.menu_title = m;
@@ -230,10 +236,15 @@ static Hit hit_at(float x, float y)
     if (app.ui.finding) {
         h.find_x = in_box(CLAY_ID("find-x"), x, y);
         h.find_step = in_box(CLAY_ID("find-prev"), x, y) ? -1 : in_box(CLAY_ID("find-next"), x, y) ? 1 : 0;
-        h.find_field = !h.toggle && !h.find_x && in_box(CLAY_ID("find-field"), x, y);
     }
-    h.search_field = app.ui.view == UI_VIEW_SEARCH && !h.toggle && in_box(CLAY_ID("search-field"), x, y);
-    h.inside_field = app.ui.view == UI_VIEW_SEARCH && app.ui.search_inside && !h.inside_toggle && in_box(CLAY_ID("inside-field"), x, y);
+    // The text bars' fields (UiField) and their toggles, each where its bar shows (below a panel or
+    // a menu, none: a click on Properties' OK above a toggle flipped it, 2026-10-26).
+    for (int f = 0; f < UI_FIELDS && h.field < 0; f++) {
+        if (!ui_field_shown(&app.ui, (UiField)f)) continue;
+        for (int k = 1; k <= 3 && !h.field_toggle; k++)
+            if (in_box(CLAY_IDI("toggle", FIELD_IDS[f].toggles + k), x, y)) h.field = f, h.field_toggle = k;
+        if (h.field < 0 && in_box(Clay_GetElementId(cz(FIELD_IDS[f].id)), x, y)) h.field = f;
+    }
     h.inside_btn = app.ui.view == UI_VIEW_SEARCH && in_box(CLAY_ID("search-inside"), x, y);
     for (int i = 0; tabbar.n >= 2 && i < tabbar.n && h.tab < 0; i++) {
         if (in_box(CLAY_IDI("tab-x", i), x, y)) h.tab_x = h.tab = i;
@@ -294,8 +305,8 @@ static void press_at(UiInput *in, float x, float y, int mods)
     }
     in->bmp_btn = h.bmp_btn;
     in->toggle = h.toggle;
-    in->find_x = h.find_x, in->find_field = h.find_field, in->find_step = h.find_step, in->search_field = h.search_field;
-    in->inside_field = h.inside_field, in->inside_toggle = h.inside_toggle, in->inside_btn = h.inside_btn;
+    in->find_x = h.find_x, in->find_step = h.find_step;
+    in->field = h.field, in->field_toggle = h.field_toggle, in->inside_btn = h.inside_btn;
     in->job_x = h.job_x;
     in->side_mode = h.mode;
     in->side_twisty = h.twisty;

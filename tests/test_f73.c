@@ -461,10 +461,10 @@ static void test_ow_mouse(void)
     UiInput f = chars("/beta");
     ui_set(&u.list, COUNT(find_names), 0);
     ui_handle(&u, names, &f);
-    f = ui_input_none(), f.toggle = 1;
+    f = ui_input_none(), f.field = UI_FIELD_FIND, f.field_toggle = 1;
     ui_handle(&u, names, &f);
     CHECK(u.find_opts.cased && u.find_miss && u.finding);
-    f = ui_input_none(), f.toggle = 1;
+    f = ui_input_none(), f.field = UI_FIELD_FIND, f.field_toggle = 1;
     ui_handle(&u, names, &f);
     CHECK(!u.find_opts.cased && !u.find_miss);
     ui_find_close(&u);
@@ -760,7 +760,7 @@ static void test_find_bar(void)
     CHECK(u.focus != UI_FOCUS_FIND && u.focus != UI_FOCUS_JOBS && u.finding);
     // The pointer: the field takes the keys (from the sidebar too), × closes, keeping the cursor.
     u.focus = UI_FOCUS_SIDE;
-    in = ui_input_none(), in.find_field = true;
+    in = ui_input_none(), in.field = UI_FIELD_FIND;
     CHECK(ui_input_acts(&in));
     ui_handle(&u, names, &in);
     CHECK((u.focus == UI_FOCUS_FIND) && u.focus != UI_FOCUS_SIDE);
@@ -820,7 +820,7 @@ static void test_find_bar(void)
     in = keys(2, UK_ENTER, UK_F2);
     ui_handle(&u, names, &in);
     CHECK((u.focus == UI_FOCUS_EDIT) && u.finding && u.focus != UI_FOCUS_FIND);
-    in = ui_input_none(), in.find_field = true;
+    in = ui_input_none(), in.field = UI_FIELD_FIND;
     ui_handle(&u, names, &in);
     CHECK(u.focus != UI_FOCUS_EDIT && (u.focus == UI_FOCUS_FIND));
     in = chars("l");

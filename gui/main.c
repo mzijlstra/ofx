@@ -186,18 +186,15 @@ typedef struct {
     int   menu_item;    // an entry of the open menu (its place), -1 for none
     int   prop_box;     // a checkbox of the Properties panel's grid, -1 for none (F7.2)
     int   ow_row;       // a row of Open With's list (on screen), -1 for none (F7.3)
-    bool  find_x, find_field;   // the find bar's × and its field
+    bool  find_x;       // the find bar's ×
     bool  ow_field;     // its field
-    int   toggle;       // a toggle of its field or of the find line (1..3), 0 for none
+    int   toggle;       // a toggle of its field (1..4: the 4th "Always open … with this app"), 0 for none
     int   find_step;    // the find bar's chevrons: -1 the previous, 1 the next, 0 none
     int   bmp_row;      // a row of Edit Bookmarks' list (on screen), -1 for none (F7.5)
     int   bmp_btn;      // one of its buttons (1..4), 0 for none
-    bool  search_field; // the search bar's field (F9)
-    // Inside files (F9 step 3): the "Containing" field, one of its toggles (1..3, 0 none), the
-    // "In files" button.
-    bool  inside_field;
-    int   inside_toggle;
-    bool  inside_btn;
+    int   field;        // a text bar's field (UiField), -1 for none; with field_toggle one of its toggles (1..3)
+    int   field_toggle;
+    bool  inside_btn;   // the search bar's "In files" (F9 step 3)
 } Hit;
 
 static struct {

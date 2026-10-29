@@ -388,7 +388,7 @@ static void test_on_top(void)
     CHECK(u.props && u.asking);
     // The find bar's toggles under a panel or a menu: nothing (gui/ reports the hit; ui/ decides).
     u = (Ui){ 0 }, u.list.n = 3, u.list.rows = 3, u.finding = true, u.props = true;
-    in = ui_input_none(), in.toggle = 1;
+    in = ui_input_none(), in.field = UI_FIELD_FIND, in.field_toggle = 1;
     ui_handle(&u, names, &in);
     CHECK(u.find_opts.cased == false);
     u.props = false, u.menu_on = true;
