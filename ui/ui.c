@@ -82,6 +82,7 @@ typedef enum {
     UK_GROUP_COL,  // Ctrl+G: View → Show Group (2026-10-27)
     UK_SEARCH,     // Ctrl+Shift+F: a search below the folder shown, in a tab of its own (F9)
     UK_CONTAINING, // Ctrl+Enter: in the search view, the cursor's entry's folder, it selected (F9)
+    UK_OPEN_LINE,  // Ctrl+Shift+Enter: a result found inside files, in the editor at its line (F9 step 4)
     // In a text field a word at a time (Michael, 2026-10-28): Ctrl+Left and Ctrl+Right move (elsewhere
     // they are the sidebar's keys, UK_SIDE, and the location line, UK_LOCATION), Ctrl+Shift+Left and
     // Ctrl+Shift+Right select, Ctrl+Backspace and Ctrl+Delete delete; outside a field the last four do
@@ -231,6 +232,7 @@ typedef enum {
     UA_SEARCH,      // a search below the folder shown (all: below the folder entry index), in a new tab (F9)
     UA_NOT_IN_SEARCH,   // something the search view can't do: paste, a new folder, a bookmark of it (F9; gui/ says so)
     UA_CONTAINING,  // index: a search result: its folder, it selected (F9)
+    UA_OPEN_LINE,   // index: a search result found inside files: in the editor at its line (F9 step 4; gui/ says when it has none)
 } UiActionKind;
 // A right-click menu's entry on a folder of the files (F8) acts on that folder, not the folder
 // shown: UA_NEW_WINDOW, UA_TERMINAL, UA_PASTE and UA_ADD_BOOKMARK with `all` set; index is the entry.
@@ -260,7 +262,7 @@ typedef enum {
     UM_ADD_BOOKMARK, UM_EDIT_BOOKMARKS, UM_BM_0, UM_BM_1, UM_BM_2, UM_BM_3, UM_BM_4, UM_BM_5, UM_BM_6, UM_BM_7, UM_BM_MORE,
     UM_SHORTCUTS, UM_ABOUT,
     UM_OPEN_TAB, UM_EMPTY_TRASH, UM_HERE_PROPS, UM_OPEN_WINDOW, UM_PASTE_INTO, UM_TERMINAL_IN, UM_FOLLOW, UM_BOOKMARK_IT,
-    UM_CONTAINING, UM_SEARCH_IN,
+    UM_CONTAINING, UM_OPEN_LINE, UM_SEARCH_IN,
     UM_OPEN_IT, UM_CUT_IT, UM_COPY_IT, UM_BM_RENAME_IT, UM_BM_UP_IT, UM_BM_DOWN_IT, UM_BM_REMOVE_IT, UM_BM_EDIT_IT, UM_EJECT_IT,
     UM_EMPTY_IT, UM_PROPS_IT, UM_TAB_LEFT, UM_TAB_RIGHT, UM_TAB_OTHERS,
     UM_ITEMS
@@ -346,6 +348,7 @@ static const struct { const char *label, *key, *word; UiEvent ev; char mark; } U
     [UM_FOLLOW] = { "Follow Link", "", "follow" },
     // the search view's (F9): a result's folder, it selected; and a folder searched below
     [UM_CONTAINING] = { "Open Containing Folder", "Ctrl+Enter", "containing", { UK_CONTAINING, 0 } },
+    [UM_OPEN_LINE] = { "Open at Line", "Ctrl+Shift+Enter", "open-line", { UK_OPEN_LINE, 0 } },   // gui/ adds "in <editor>" (F9 step 4)
     [UM_SEARCH_IN] = { "Search in Folder\xE2\x80\xA6", "", "search-in" },
     [UM_BOOKMARK_IT] = { "Add Bookmark", "", "bookmark-it" },
     // and on a folder elsewhere (a sidebar row, a path button): that folder; a bookmark's own, as
@@ -396,7 +399,7 @@ static const UiMenuItem UI_MENU_HELP[] = { UM_SHORTCUTS, UM_SEP, UM_ABOUT };
 // The right-click menus (F8, docs/plan.md "F8 design"): an entry of the files (the marks, or the
 // cursor's), and the files' empty space (the folder shown).
 static const UiMenuItem UI_MENU_CTX_ENTRY[] = {
-    UM_OPEN, UM_CONTAINING, UM_OPEN_TAB, UM_OPEN_WINDOW, UM_OPEN_WITH, UM_SEP, UM_CUT, UM_COPY, UM_PASTE_INTO, UM_DUPLICATE, UM_SEP,
+    UM_OPEN, UM_CONTAINING, UM_OPEN_LINE, UM_OPEN_TAB, UM_OPEN_WINDOW, UM_OPEN_WITH, UM_SEP, UM_CUT, UM_COPY, UM_PASTE_INTO, UM_DUPLICATE, UM_SEP,
     UM_MAKE_LINK, UM_RENAME, UM_SEP, UM_TERMINAL_IN, UM_SEARCH_IN, UM_FOLLOW, UM_BOOKMARK_IT, UM_SEP, UM_TRASH, UM_RESTORE, UM_DELETE, UM_SEP,
     UM_PROPERTIES,
 };
@@ -520,6 +523,7 @@ static const struct { UiKeySection sec; const char *action, *key, *key2; } UI_KE
     { KS_FIND, "A regular expression", "Alt+R", "" },
     { KS_SEARCH, "Search\xE2\x80\xA6", "Ctrl+Shift+F", "the magnifier" },
     { KS_SEARCH, "Open Containing Folder", "Ctrl+Enter", "" },
+    { KS_SEARCH, "Open at Line", "Ctrl+Shift+Enter", "a result found inside files, in the editor" },
     { KS_SEARCH, "The keys to the results", "Enter", "Esc, Down" },
     { KS_SEARCH, "Back to the search field", "Ctrl+Shift+F", "a click in it" },
     { KS_SEARCH, "A wildcard over the whole name", "*, ?", "*.ts" },
@@ -686,9 +690,9 @@ typedef struct {
     // A right-click menu (F8): its entry is one folder (Open in New Tab), and a key opened it (gui/
     // places it under the cursor, not at the pointer).
     bool   ctx_dir, ctx_key, ctx_one;
-    // From gui/ each frame (menu_facts): the cursor's entry is a link that leads somewhere, and a
-    // folder that is a bookmark already (F8).
-    bool   sel_link, sel_bm;
+    // From gui/ each frame (menu_facts): the cursor's entry is a link that leads somewhere, a
+    // folder that is a bookmark already (F8), a result found inside files (F9 step 4: it has a line).
+    bool   sel_link, sel_bm, sel_hit;
     // A folder elsewhere's menu (F8): the sidebar row (absolute) or path button it is on (the other
     // -1); and from gui/ as it opens (ctx_facts): it is the trash, a place (no Cut or Copy: a bookmark
     // isn't the folder to move), its bookmark's line in the file and how many lines (-1: not a

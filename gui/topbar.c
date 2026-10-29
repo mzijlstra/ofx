@@ -412,6 +412,7 @@ static void layout_menu(int m)
                     }
                     const Bookmark *bk = it >= UM_BM_0 && it <= UM_BM_7 ? bm_menu(it - UM_BM_0) : NULL;
                     if (it == UM_BM_MORE) text(cz(arena_sprintf(&frame, "%d more in Edit Bookmarks\xE2\x80\xA6", app.ui.bm_more)), on ? cc(t->fg) : off);
+                    else if (it == UM_OPEN_LINE) text(cs(open_line_label()), on ? cc(t->fg) : off);   // (the editor's name: F9 step 4)
                     else text(bk ? fit(bm_label(bk), 360, true) : cz(UI_MENU_ITEM[it].label), on ? cc(t->fg) : off);
                 }
                 CLAY(CLAY_IDI("menu-gap", i), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(1) } } }) {}

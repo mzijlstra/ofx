@@ -620,6 +620,9 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         case UK_CONTAINING:   // (the search view's: elsewhere every entry is in the folder shown)
             if (u->view == UI_VIEW_SEARCH && u->focus != UI_FOCUS_SIDE && l->n > 0) return (UiAction){ UA_CONTAINING, l->sel, false };
             break;
+        case UK_OPEN_LINE:   // (F9 step 4: gui/ says so when the result has no line)
+            if (u->view == UI_VIEW_SEARCH && u->focus != UI_FOCUS_SIDE && l->n > 0) return (UiAction){ UA_OPEN_LINE, l->sel, false };
+            break;
         case UK_TAB_CLOSE: return (UiAction){ UA_TAB_CLOSE, -1, false };
         case UK_TAB_NEXT: return (UiAction){ UA_TAB_STEP, 1, false };
         case UK_TAB_PREV: return (UiAction){ UA_TAB_STEP, -1, false };

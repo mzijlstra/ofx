@@ -8,6 +8,7 @@
 #include "theme.c"
 #include "places.c"
 #include "spawn.c"
+#include "editors.c"
 #include "apps.c"
 #include "ops.c"
 #include "trash.c"

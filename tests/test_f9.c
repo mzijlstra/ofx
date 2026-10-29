@@ -1006,3 +1006,135 @@ static void test_line_active(void)
     u.confirming = false, u.props = true;
     CHECK(!ui_line_active(&u, NULL));
 }
+
+// F9 step 4: Open at Line's editors. The built-in recipes, the user's file (adds, replaces, says its
+// first bad line), the default (Omarchy's state file, $EDITOR, nvim), the command filled in, and
+// the launch: through uwsm-app, a terminal editor in a terminal.
+static void test_editors(void)
+{
+    char buf[512];
+    const char *argv[EDITOR_WORDS + 2];
+    const Editor *e = editor_find(NULL, "nvim");
+    CHECK(e && e->term && strcmp(e->label, "Neovim") == 0);
+    int n = e ? editor_argv(e, "/a b/x.ts", 12, 5, buf, sizeof buf, argv, COUNT(argv)) : -1;
+    CHECK(n == 3 && strcmp(argv[0], "nvim") == 0 && strcmp(argv[1], "+call setcursorcharpos(12,5)") == 0 && strcmp(argv[2], "/a b/x.ts") == 0 && !argv[3]);
+    e = editor_find(NULL, "code");
+    n = e ? editor_argv(e, "/a b/x.ts", 12, 5, buf, sizeof buf, argv, COUNT(argv)) : -1;
+    CHECK(e && !e->term && n == 3 && strcmp(argv[1], "--goto") == 0 && strcmp(argv[2], "/a b/x.ts:12:5") == 0);
+    CHECK(!editor_find(NULL, "notepad") && !editor_find(NULL, ""));
+    // Each built-in runs its own name, takes the file and the line, and has a label.
+    for (isize i = 0; i < COUNT(EDITORS); i++) {
+        bool file = false, line = false;
+        for (int k = 0; EDITORS[i].argv[k]; k++) file |= strstr(EDITORS[i].argv[k], "{file}") != NULL, line |= strstr(EDITORS[i].argv[k], "{line}") != NULL;
+        CHECK(strcmp(EDITORS[i].argv[0], EDITORS[i].name) == 0 && file && line && EDITORS[i].label[0]);
+    }
+    // Too small a buffer, or too few words for the file and the NULL.
+    e = editor_find(NULL, "nvim");
+    CHECK(editor_argv(e, "/a b/x.ts", 12, 5, buf, 20, argv, COUNT(argv)) == -1);
+    CHECK(editor_argv(e, "/a b/x.ts", 12, 5, buf, sizeof buf, argv, 3) == -1);
+
+    // The user's file: comments and blank lines skipped; a word in quotes; ~/ the home folder; a
+    // recipe without {file} gets it last; one by a built-in's name replaces it; the first bad line said.
+    env_set("HOME", "/home/t");
+    Editors u;
+    editors_parse(&ta, S("# mine\n\n  mine no ~/bin/ed \"--at {line}:{col}\" {file}\nnvim yes nvim +{line}\nbad maybe x y\nshort yes\nq no \"open\nok yes ok {file}\nnocmd no\n"), &u);
+    CHECK(u.n == 3 && u.bad == 5);
+    e = editor_find(&u, "mine");
+    n = e ? editor_argv(e, "/x.ts", 7, 2, buf, sizeof buf, argv, COUNT(argv)) : -1;
+    CHECK(e && !e->term && n == 3 && strcmp(argv[0], "/home/t/bin/ed") == 0 && strcmp(argv[1], "--at 7:2") == 0 && strcmp(argv[2], "/x.ts") == 0);
+    CHECK(e && strcmp(e->label, "mine") == 0);
+    e = editor_find(&u, "nvim");
+    n = e ? editor_argv(e, "/x.ts", 7, 2, buf, sizeof buf, argv, COUNT(argv)) : -1;
+    CHECK(e && e->term && n == 3 && strcmp(argv[1], "+7") == 0 && strcmp(argv[2], "/x.ts") == 0);
+    CHECK(editor_find(&u, "ok") && editor_find(&u, "ok")->term && !editor_find(&u, "bad") && !editor_find(&u, "short") && !editor_find(&u, "q") && !editor_find(&u, "nocmd"));
+    editors_parse(&ta, STR_EMPTY, &u);
+    CHECK(u.n == 0 && u.bad == 0);
+    char many[2048] = "x no";
+    for (int i = 0; i < EDITOR_WORDS + 2; i++) strcat(many, " w");
+    editors_parse(&ta, str_from_c(many), &u);
+    CHECK(u.n == 0 && u.bad == 1);   // more words than a recipe holds
+    char path[PATH_MAX];
+    env_set("XDG_CONFIG_HOME", at("cfg94"));
+    CHECK(editors_path(path, sizeof path) && strcmp(path, at("cfg94/ofx/editors")) == 0);
+
+    // The default: Omarchy's state file, then $EDITOR's program, then nvim.
+    char name[EDITOR_NAME_MAX];
+    env_set("XDG_STATE_HOME", at("st94"));
+    put(at("st94/omarchy/defaults/editor"), "  zeditor  \nmore\n");
+    env_set("EDITOR", "/usr/bin/vim -p");
+    editor_default(&ta, name, sizeof name);
+    CHECK(strcmp(name, "zeditor") == 0);
+    unlink(at("st94/omarchy/defaults/editor"));
+    editor_default(&ta, name, sizeof name);
+    CHECK(strcmp(name, "vim") == 0);
+    env_set("EDITOR", "");
+    editor_default(&ta, name, sizeof name);
+    CHECK(strcmp(name, "nvim") == 0);
+
+    // The launch: through uwsm-app; nvim in a terminal as omarchy-launch-tui runs it; code as it is;
+    // an editor that isn't there says so.
+    char out[2048];
+    Err err;
+    mkdirs(at("bin94"));
+    fake(at("bin94"), "uwsm-app", at("spawn94.log"));
+    fake(at("bin94"), "nvim", at("nvim94.log"));
+    fake(at("bin94"), "code", at("code94.log"));
+    env_set("PATH", at("bin94"));
+    e = editor_find(NULL, "nvim");
+    n = editor_argv(e, "/a b/x.ts", 12, 5, buf, sizeof buf, argv, COUNT(argv));
+    CHECK(editor_open(e, argv, n, &err));
+    CHECK(wait_file(at("spawn94.log"), out, sizeof out) &&
+          strncmp(out, "uwsm-app -- xdg-terminal-exec --app-id=org.omarchy.nvim -e nvim +call setcursorcharpos(12,5) /a b/x.ts sid=", 106) == 0);
+    unlink(at("spawn94.log"));
+    e = editor_find(NULL, "code");
+    n = editor_argv(e, "/a b/x.ts", 12, 5, buf, sizeof buf, argv, COUNT(argv));
+    CHECK(editor_open(e, argv, n, &err));
+    CHECK(wait_file(at("spawn94.log"), out, sizeof out) && strncmp(out, "uwsm-app -- code --goto /a b/x.ts:12:5 sid=", 43) == 0);
+    unlink(at("spawn94.log"));
+    e = editor_find(NULL, "helix");
+    n = editor_argv(e, "/x.ts", 1, 1, buf, sizeof buf, argv, COUNT(argv));
+    CHECK(!editor_open(e, argv, n, &err) && strcmp(err.msg, "Helix isn't installed (helix)") == 0 && access(at("spawn94.log"), F_OK) != 0);
+    // A program by its path: there or not.
+    put(at("bin94/ed"), "#!/bin/sh\n"), chmod(at("bin94/ed"), 0755);
+    editors_parse(&ta, str_from_c(arena_sprintf(&ta, "p no %s {file}\nq no %s/none {file}\n", at("bin94/ed"), at("bin94"))), &u);
+    n = editor_argv(editor_find(&u, "p"), "/x.ts", 1, 1, buf, sizeof buf, argv, COUNT(argv));
+    CHECK(editor_open(editor_find(&u, "p"), argv, n, &err));
+    CHECK(wait_file(at("spawn94.log"), out, sizeof out) && strstr(out, "bin94/ed /x.ts sid="));
+    n = editor_argv(editor_find(&u, "q"), "/x.ts", 1, 1, buf, sizeof buf, argv, COUNT(argv));
+    CHECK(!editor_open(editor_find(&u, "q"), argv, n, &err) && strstr(err.msg, "isn't installed"));
+    env_restore();
+}
+
+// Open at Line's key and menu entry (F9 step 4): Ctrl+Shift+Enter and the entry on a result found
+// inside files (sel_hit, gui/'s); not in a folder, nor from the sidebar or an empty list.
+static void test_open_line_keys(void)
+{
+    static u8 mark[5];
+    UiNames names = { name_at, NULL, dir_at };
+    Ui u = menu_ui(5);
+    u.mark = mark, u.view = UI_VIEW_SEARCH, u.list.sel = 3;
+    UiAction a = menu_keys(&u, 1, UK_OPEN_LINE);
+    CHECK(a.kind == UA_OPEN_LINE && a.index == 3);
+    u.focus = UI_FOCUS_SIDE;
+    CHECK(menu_keys(&u, 1, UK_OPEN_LINE).kind != UA_OPEN_LINE);
+    u.focus = UI_FOCUS_LIST, u.view = UI_VIEW_FOLDER;
+    CHECK(menu_keys(&u, 1, UK_OPEN_LINE).kind == UA_NONE);
+    u.view = UI_VIEW_SEARCH, u.list.n = 0;
+    CHECK(menu_keys(&u, 1, UK_OPEN_LINE).kind == UA_NONE);
+    u.list.n = 5;
+    // The entry: on one result with a line; picking it opens that one.
+    UiInput in = ui_input_none();
+    in.ctx_row = 1;
+    ui_handle(&u, names, &in);
+    CHECK(u.menu_on && u.menu == UI_CTX_ENTRY && u.ctx_one && !ui_menu_shown(&u, UM_OPEN_LINE));
+    u.sel_hit = true;
+    CHECK(ui_menu_shown(&u, UM_OPEN_LINE) && ui_menu_enabled(&u, UM_OPEN_LINE));
+    in = ui_input_none(), in.menu_item = menu_place(UI_CTX_ENTRY, UM_OPEN_LINE);
+    a = ui_handle(&u, names, &in);
+    CHECK(a.kind == UA_OPEN_LINE && a.index == 1 && !u.menu_on);
+    // Several marked: not one result, so no line.
+    ui_mark(&u, 0, true), ui_mark(&u, 2, true);
+    in = ui_input_none(), in.ctx_row = 0;
+    ui_handle(&u, names, &in);
+    CHECK(u.menu_on && !u.ctx_one && !ui_menu_shown(&u, UM_OPEN_LINE));
+}

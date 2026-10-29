@@ -44,6 +44,9 @@ wait-for 3000 editing=0
 # ---- Ctrl+Shift+F searches; Ctrl+Enter on a result opens its folder with it selected
 sh vkbd ctrl+shift+f text:inner &
 wait-for 3000 search=1 searchtext=inner searchdue=0 searchdone=1 n=1
+# Ctrl+Shift+Enter (F9 step 4): Open at Line; a result by name has no line, and says so
+sh vkbd down ctrl+shift+return &
+wait-for 3000 statusbad=1 search=1
 sh vkbd down ctrl+return &
 wait-for 3000 search=0 sel=inner.txt
 sh test "$OFX_DIR" = "$OFX_ROOT/tree/adir"

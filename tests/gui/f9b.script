@@ -17,6 +17,42 @@ expect idx=0 sel=app.ts seldir=src hit=2:16+1 hitmatch=useState hitdrawn=1 insid
 # The bar's second row takes a row of the list; a search isn't a folder to bookmark
 expect rows=10 canbm=0
 shot inside-results.png
+# Open at Line (step 4): Omarchy's default editor, nvim here, in a terminal as omarchy-launch-tui
+# runs it, at the match's line and column (characters)
+sh mkdir -p "$OFX_ROOT/state/omarchy/defaults" && echo nvim > "$OFX_ROOT/state/omarchy/defaults/editor"
+key ctrl-shift-enter
+wait-for 2000 spawned=1
+expect statusbad=0
+sh grep -qx "uwsm-app -- xdg-terminal-exec --app-id=org.omarchy.nvim -e nvim +call setcursorcharpos(2,16) $OFX_DIR/src/app.ts" "$OFX_ROOT/spawn.log"
+# The result's menu has it, by the editor's name
+point-ui row 0
+right-here
+expect menu=entry menuhid=open-tab,open-window,paste-into,terminal-in,search-in,follow,bookmark-it,restore
+shot open-line-menu.png
+point-menu open-line
+click-here
+wait-for 2000 spawned=2 menu=-
+# A recipe of the user's replaces the built-in one; the file's bad line is said
+sh mkdir -p "$OFX_ROOT/config/ofx" && printf '# mine\nmine no /usr/bin/true "--at {line}:{col}" {file}\nbroken\n' > "$OFX_ROOT/config/ofx/editors" && echo mine > "$OFX_ROOT/state/omarchy/defaults/editor"
+key ctrl-shift-enter
+wait-for 2000 spawned=3 statusbad=1
+sh grep -qx "uwsm-app -- /usr/bin/true --at 2:16 $OFX_DIR/src/app.ts" "$OFX_ROOT/spawn.log"
+# An editor without a recipe: said, nothing started
+sh echo notepad > "$OFX_ROOT/state/omarchy/defaults/editor"
+sleep 1100
+key up
+expect statusbad=0
+key ctrl-shift-enter
+wait-for 2000 statusbad=1
+expect spawned=3
+# A recipe whose program isn't there: said, nothing started
+sh printf 'gone no /nonexistent/ed {file}\n' > "$OFX_ROOT/config/ofx/editors" && echo gone > "$OFX_ROOT/state/omarchy/defaults/editor"
+sleep 1100
+key up
+expect statusbad=0
+key ctrl-shift-enter
+wait-for 2000 statusbad=1
+expect spawned=3
 # Up and Back with an empty name: the results again, the keys in them
 key enter
 key alt-up
@@ -71,6 +107,10 @@ sh grep -qx "uwsm-app -- gio open $OFX_DIR/src/app.ts" "$OFX_ROOT/spawn.log"
 # Alt+I from the results: off, a search by name again (the link matches by its name)
 key alt-i
 wait-for 3000 inside=0 insiderow=0 searchdue=0 searchdone=1 n=3 hit=- rows=11
+# Open at Line on a result by name: it has no line, and says so (an editor with a recipe again)
+sh echo nvim > "$OFX_ROOT/state/omarchy/defaults/editor"
+key ctrl-shift-enter
+wait-for 2000 statusbad=1
 # The button: on again, the text it had, searched inside again
 point-ui search-inside
 click-here

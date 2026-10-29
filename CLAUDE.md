@@ -99,6 +99,10 @@ rules shared by every tool here.
   starts uses that bus (`DBUS_STARTER_ADDRESS`). `make install` writes
   `~/.local/share/dbus-1/services/org.freedesktop.FileManager1.service` and reloads his bus's
   config: his go, as every install.
+- **Open at Line** (F9 step 4) starts Omarchy's default editor on a file, through `uwsm-app` (the
+  fake in a test): a terminal one in a new terminal. It reads `$XDG_STATE_HOME/omarchy/defaults/editor`
+  and `$XDG_CONFIG_HOME/ofx/editors`, both under the scratch dir in a test (run-script.sh), so f9b
+  writes its own. Never test it with a real `uwsm-app` on PATH: it would open his editor.
 - **A window that stops answering** pops Hyprland's "terminate?" dialog on his screen, even on the
   headless output. The script's `sh` runs under `timeout 5` for that reason; keep everything a
   script waits for short.
@@ -189,7 +193,9 @@ files in order. ui/ is raylib-free and unit-tested (tests/test.c includes it); a
 ui/ that nothing calls makes the test build warn.
 
 - `fs/`: the file system side; `fs/paths.c` holds the path helpers every other file uses
-  (path_within, path_below, path_put, path_parent, xdg_dir, mkdir_p, the URI and mountinfo codecs).
+  (path_within, path_below, path_put, path_parent, xdg_dir, mkdir_p, the URI and mountinfo codecs);
+  `fs/search.c` the search's address and walk, inside files too; `fs/editors.c` Open at Line's
+  recipes.
 - `ui/ui.c`: the types (Ui, UiInput, UiAction, UiFocus, UiOnTop) and tables, then `cursor.c`
   (lists), `match.c`, `find.c`, `edit.c` (UiLine), `prompts.c`, `menus.c`, `panels.c`, `handle.c`
   (ui_handle), `helpers.c` (path buttons, location, tabs, history, timing, text fit).

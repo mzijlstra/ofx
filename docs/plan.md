@@ -784,6 +784,22 @@ link to a file isn't read even when its name matches, and folders aren't results
 with "In files" on and nothing in "Containing" it searches by name, so the results don't blank as
 it turns on; a regular expression's `^` in a later piece of a long line matches that piece's start.
 
+**Step 4 built (2026-10-29): Open at Line.** Ctrl+Shift+Enter, and "Open at Line in <editor>" in a
+result's menu when one result found inside files is under it (`sel_hit`). `fs/editors.c`: the
+editor is Omarchy's default (`$XDG_STATE_HOME/omarchy/defaults/editor`, as ofx reads Omarchy's
+theme from there; else `$EDITOR`'s program; else nvim). Its recipe comes from
+`$XDG_CONFIG_HOME/ofx/editors` (`name yes|no command…`, "quotes" around a word with spaces, `~/` the
+home folder, # comments; a bad line skipped and named in the status line), else the built-in ones:
+nvim and vim (`+call setcursorcharpos(L,C)`: characters, as ofx counts; `cursor()` counts bytes and
+landed two short after "éé"), helix and hx, micro, nano, kak (in a terminal); emacs, code, codium,
+cursor (`--goto f:L:C`), zeditor and zed, sublime_text and subl. A recipe without `{file}` gets the
+file as its last word. A terminal editor runs as Omarchy's `omarchy-launch-tui` runs one
+(`xdg-terminal-exec --app-id=org.omarchy.<program> -e …`), the rest as they are, all through
+`uwsm-app`. The file and the default are read again each time it opens, and for the menu's label
+at most once a second. Calls made: double click and Enter still open with the file's app; a result
+by name says it has no line; no recipe, or a program that isn't there, is said in the status line
+and nothing starts.
+
 **Steps:** 1. the view by name (a walk thread as Properties' `du_walk`, stopped by the next
 search; the tab, bar, toggles, results with folders, skips, limit, status); 2. working with
 results (actions on entries in other folders, Open Containing Folder, Ctrl+R, greying, Search in

@@ -70,7 +70,7 @@ sh grep -qx "menubar=on" "$OFX_ROOT/state/ofx/state"
 # Open in New Window: ofx on that folder
 point-ui row 0
 right-here
-expect menu=entry menuhid=containing,follow,restore
+expect menu=entry menuhid=containing,open-line,follow,restore
 point-menu open-window
 click-here
 expect menu=-
@@ -90,14 +90,14 @@ wait-for 2000 bmn=1
 sh grep -qx "file://$OFX_DIR/sub" "$OFX_ROOT/config/gtk-3.0/bookmarks"
 point-ui row 0
 right-here
-expect menuhid=containing,follow,bookmark-it,restore
+expect menuhid=containing,open-line,follow,bookmark-it,restore
 key esc
 # Paste Into Folder: a.txt copied into sub, not here
 key down
 key ctrl-c
 point-ui row 0
 right-here
-expect menugrey=containing,follow,bookmark-it,restore
+expect menugrey=containing,open-line,follow,bookmark-it,restore
 point-menu paste-into
 click-here
 wait-for 3000 jobs=0 n=3
@@ -127,7 +127,7 @@ sh test -L "$OFX_DIR/Link to a.txt" && test ! -e "$OFX_DIR/Link to Link to a.txt
 # Follow Link: zlink's target's folder, the target selected
 point-ui row 3
 right-here
-expect menu=entry sel=zlink menuhid=containing,open-tab,open-window,paste-into,terminal-in,search-in,bookmark-it,restore
+expect menu=entry sel=zlink menuhid=containing,open-line,open-tab,open-window,paste-into,terminal-in,search-in,bookmark-it,restore
 point-menu follow
 click-here
 wait-for 2000 crumbs=home|tree|sub sel=inner.txt

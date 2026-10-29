@@ -614,6 +614,65 @@ static void window_on(const char *dir)
     else set_status(true, "%s", err.msg);
 }
 
+// ---- Open at Line (F9 step 4) -----------------------------------------------------------------
+
+// The editor Open at Line uses (fs/editors.c): the default's name, its recipe (NULL: none), the
+// editors file's recipes and its first bad line. Read again at most once a second (the result's
+// menu asks each frame it is open), and always as it opens.
+static struct {
+    i64           at;
+    Editors       user;
+    char          name[EDITOR_NAME_MAX];
+    const Editor *e;
+    u8            mem[KiB(64)];
+    Arena         a;
+} editors;
+
+static const Editor *editor_now(bool again)
+{
+    i64 now = now_ms();
+    if (!again && editors.at && now - editors.at < 1000) return editors.e;
+    editors.at = now;
+    arena_init(&editors.a, "editors", editors.mem, sizeof editors.mem);
+    char path[PATH_MAX];
+    editors_parse(&editors.a, editors_path(path, sizeof path) ? read_file(&editors.a, path) : STR_EMPTY, &editors.user);
+    editor_default(&editors.a, editors.name, sizeof editors.name);
+    return editors.e = editor_find(&editors.user, editors.name);
+}
+
+// The result's menu entry: "Open at Line in Neovim", the editor's name when it has no recipe.
+static Str open_line_label(void)
+{
+    const Editor *e = editor_now(false);
+    return str_from_c(arena_sprintf(&frame, "Open at Line in %s", e ? e->label : editors.name));
+}
+
+// Result i in the editor at the line it matched on (F9 step 4); the status line says why not.
+static void open_at_line(isize i)
+{
+    const Entry *en = i >= 0 && i < app.list.n ? &app.list.e[i] : NULL;
+    if (!en || !en->hit) {
+        set_status(true, "Only a result found inside files has a line: In files (Alt+I)");
+        return;
+    }
+    char path[PATH_MAX], ep[PATH_MAX], shown[PATH_MAX + 1];
+    if (!entry_path(i, path, sizeof path)) return;
+    const Editor *e = editor_now(true);
+    if (!editors_path(ep, sizeof ep)) snprintf(ep, sizeof ep, "~/.config/ofx/editors");
+    ui_tilde(shown, sizeof shown, ep, getenv("HOME"));
+    if (!e) {
+        set_status(true, "No Open at Line recipe for %s: add one to %s", editors.name, shown);
+        return;
+    }
+    char buf[EDITOR_ARGS_MAX];
+    const char *argv[EDITOR_WORDS + 2];
+    Err err;
+    int n = editor_argv(e, path, en->hit->line, en->hit->col, buf, sizeof buf, argv, COUNT(argv));
+    if (n < 0) set_status(true, "%s's command is too long for that file", e->label);
+    else if (!editor_open(e, argv, n, &err)) set_status(true, "%s", err.msg);
+    else if (editors.user.bad) set_status(true, "%s: line %d isn't a recipe (a name, yes or no, then the command)", shown, editors.user.bad);
+}
+
 static void act(UiAction a)
 {
     Err err;
@@ -630,6 +689,7 @@ static void act(UiAction a)
         search_in(act_dir(a, in, sizeof in));
         break;
     }
+    case UA_OPEN_LINE: open_at_line(a.index); break;
     case UA_CONTAINING: {   // a result's folder, it selected (F9)
         char path[PATH_MAX], dir[PATH_MAX];
         if (a.index >= app.list.n || !entry_path(a.index, path, sizeof path)) break;

@@ -52,6 +52,7 @@ static UiKey ui_key_of(int key, int mods)
     if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_I) return UK_PROPERTIES;
     if (m == GLFW_MOD_ALT && (key == GLFW_KEY_ENTER || key == GLFW_KEY_KP_ENTER)) return UK_TERMINAL;
     if (m == GLFW_MOD_CONTROL && (key == GLFW_KEY_ENTER || key == GLFW_KEY_KP_ENTER)) return UK_CONTAINING;
+    if (m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT) && (key == GLFW_KEY_ENTER || key == GLFW_KEY_KP_ENTER)) return UK_OPEN_LINE;
     if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_W) return UK_TAB_CLOSE;
     if ((m == GLFW_MOD_CONTROL && key == GLFW_KEY_TAB) || (m == GLFW_MOD_CONTROL && key == GLFW_KEY_PAGE_DOWN)) return UK_TAB_NEXT;
     if ((m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT) && key == GLFW_KEY_TAB) || (m == GLFW_MOD_CONTROL && key == GLFW_KEY_PAGE_UP)) return UK_TAB_PREV;
@@ -348,7 +349,7 @@ static Vector2 menu_size(int m)
         }
         hgt += MENU_ROW_H;
         marks |= UI_MENU_ITEM[it].mark != 0;
-        float lw = str_width(str_from_c(UI_MENU_ITEM[it].label)) + str_width(str_from_c(UI_MENU_ITEM[it].key));
+        float lw = str_width(it == UM_OPEN_LINE ? open_line_label() : str_from_c(UI_MENU_ITEM[it].label)) + str_width(str_from_c(UI_MENU_ITEM[it].key));
         if (lw > row) row = lw;
     }
     // The menu's padding, an entry's, the marks' column and its gap, the widest label and key on one

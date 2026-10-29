@@ -1663,7 +1663,8 @@ MUTANTS += [
     ('ui/handle.c', '            if (u->view == UI_VIEW_SEARCH && u->focus != UI_FOCUS_SIDE && l->n > 0) return (UiAction){ UA_CONTAINING, l->sel, false };', '            if (u->view == UI_VIEW_SEARCH && u->focus != UI_FOCUS_SIDE && l->n > 0) return (UiAction){ UA_CONTAINING, 0, false };'),
     ('ui/panels.c', "    case UM_SEARCH_IN: return (UiAction){ UA_SEARCH, u->list.sel, true };", "    case UM_SEARCH_IN: return (UiAction){ UA_SEARCH, u->list.sel, false };"),
     ('ui/menus.c', "    case UM_OPEN_WINDOW: case UM_TERMINAL_IN: case UM_SEARCH_IN: case UM_PASTE_INTO: case UM_PROPS_IT: return !u->ctx_trash;", "    case UM_OPEN_WINDOW: case UM_TERMINAL_IN: case UM_PASTE_INTO: case UM_PROPS_IT: return !u->ctx_trash;"),
-    (U, "    UM_OPEN, UM_CONTAINING, UM_OPEN_TAB,", "    UM_OPEN, UM_OPEN_TAB,"),
+    (U, "    UM_OPEN, UM_CONTAINING, UM_OPEN_LINE, UM_OPEN_TAB,", "    UM_OPEN, UM_OPEN_LINE, UM_OPEN_TAB,"),
+    (U, "    UM_OPEN, UM_CONTAINING, UM_OPEN_LINE, UM_OPEN_TAB,", "    UM_OPEN, UM_CONTAINING, UM_OPEN_TAB,"),
     (U, "UM_TERMINAL_IN, UM_SEARCH_IN, UM_FOLLOW,", "UM_TERMINAL_IN, UM_FOLLOW,"),
     ('ui/menus.c', '    case UM_RENAME: case UM_DUPLICATE: case UM_MAKE_LINK: return here && u->view != UI_VIEW_TRASH && (u->can_write || u->view == UI_VIEW_SEARCH);', '    case UM_RENAME: case UM_DUPLICATE: case UM_MAKE_LINK: return here && u->view != UI_VIEW_TRASH && u->can_write;'),
     ('ui/handle.c', "        case UK_CONTAINING:   // (the search view's: elsewhere every entry is in the folder shown)", "        case UK_CONTAINING + 1000:"),
@@ -1899,4 +1900,56 @@ MUTANTS += [
     ('ui/edit.c', '    else if (u->focus == UI_FOCUS_INSIDE && u->view == UI_VIEW_SEARCH && u->search_inside) l = ui_inside_line(u);', ''),
     ('ui/edit.c', '    else if (u->focus == UI_FOCUS_INSIDE && u->view == UI_VIEW_SEARCH && u->search_inside) l = ui_inside_line(u);', '    else if (u->focus == UI_FOCUS_INSIDE && u->view == UI_VIEW_SEARCH) l = ui_inside_line(u);'),
     ('ui/cursor.c', '           in->inside_field || in->inside_toggle > 0 || in->inside_btn ||\n', ''),
+]
+
+# ---- F9 step 4: Open at Line (2026-10-29)
+ED = 'fs/editors.c'
+MUTANTS += [
+    # the built-in recipes (the test checks each runs its name, with {file} and {line})
+    (ED, '"+call setcursorcharpos({line},{col})", "{file}" } },\n    { "vim"', '"+call cursor({line},{col})", "{file}" } },\n    { "vim"'),
+    (ED, '{ "nvim", "Neovim", true,', '{ "nvim", "Neovim", false,'),
+    (ED, '{ "code", "VS Code", false, { "code", "--goto", "{file}:{line}:{col}" } },', '{ "code", "VS Code", false, { "code", "{file}:{line}:{col}" } },'),
+    # the user's file
+    (ED, "        while (i < line.len && (line.p[i] == ' ' || line.p[i] == '\\t')) i++;\n        if (i == line.len) break;", "        if (i == line.len) break;"),
+    (ED, '        if (n == cap) return -1;', ''),
+    (ED, "            if (line.p[i] == '\"') quoted = !quoted;", "            if (false) quoted = !quoted;"),
+    (ED, '        if (quoted) return -1;', ''),
+    (ED, "        if (line.len == 0 || line.p[0] == '#') continue;", "        if (line.len == 0) continue;"),
+    (ED, '        bool term = n >= 3 && strcmp(w[1], "yes") == 0;', '        bool term = n >= 3;'),
+    (ED, '        if (n < 3 || (!term && strcmp(w[1], "no") != 0) ||', '        if (n < 3 ||'),
+    (ED, '        if (n < 3 || (!term', '        if (n < 2 || (!term'),
+    (ED, '            if (!out->bad) out->bad = no;', '            out->bad = no;'),
+    (ED, '        for (int k = 2; k < n; k++) ed->argv[k - 2] = w[k];', '        for (int k = 1; k < n; k++) ed->argv[k - 1] = w[k];'),
+    (ED, '        at = e + 1, no++;', '        at = e + 1;'),
+    # the default
+    (ED, '        name = str_trim(str_cut(f, 0, e));\n    }', '        name = str_cut(f, 0, e);\n    }'),
+    (ED, '    if (name.len == 0 && env) {', '    if (env) {'),
+    (ED, "        while (e < s.len && s.p[e] != ' ' && s.p[e] != '\\t') e++;\n        name = str_cut(s, 0, e);", '        name = s;'),
+    (ED, '    name = path_base(name);', ''),
+    (ED, '    if (name.len == 0 || name.len >= (isize)cap) name = S("nvim");', '    if (name.len >= (isize)cap) name = S("nvim");'),
+    # finding one
+    (ED, '    for (int i = 0; user && i < user->n; i++)\n        if (strcmp(user->e[i].name, name) == 0) return &user->e[i];', ''),
+    # the command filled in
+    (ED, '        if (n >= words - 2) return -1;   // (room for the file, and the NULL)', ''),
+    (ED, "        if (w[0] == '~' && w[1] == '/' && home && home[0] == '/') {", '        if (false) {'),
+    (ED, '            m = (size_t)r, w++;', '            m = (size_t)r;'),
+    (ED, '            if (strncmp(p, "{file}", 6) == 0) put = file, skip = 6, has_file = true;', '            if (strncmp(p, "{file}", 6) == 0) put = file, skip = 6;'),
+    (ED, '            else if (strncmp(p, "{line}", 6) == 0) snprintf(num, sizeof num, "%lld", (long long)line), put = num, skip = 6;', ''),
+    (ED, '            else if (strncmp(p, "{col}", 5) == 0) snprintf(num, sizeof num, "%lld", (long long)col), put = num, skip = 5;', ''),
+    (ED, '            if (at + m + len + 1 > cap) return -1;', ''),
+    (ED, '        at += m + 1;', '        at += m;'),
+    (ED, '    if (!has_file) {', '    if (false) {'),
+    (ED, '    argv[n] = NULL;\n    return n;', '    return n;'),
+    # the launch
+    (ED, "    if (strchr(prog, '/') ? access(prog, X_OK) != 0 : !on_path(prog)) return err_set(err, \"%s isn't installed (%s)\", e->label, prog), false;", ''),
+    (ED, "    if (strchr(prog, '/') ? access(prog, X_OK) != 0 : !on_path(prog))", "    if (!on_path(prog))"),
+    (ED, '    if (!e->term) return spawn_app(argv, n, err);', ''),
+    (ED, '    const char *cmd[EDITOR_WORDS + 4] = { "xdg-terminal-exec", id, "-e" };', '    const char *cmd[EDITOR_WORDS + 4] = { "xdg-terminal-exec", id };'),
+    (ED, '    int k = 3;', '    int k = 2;'),
+    # ui/: the key, the entry
+    ('ui/handle.c', '            if (u->view == UI_VIEW_SEARCH && u->focus != UI_FOCUS_SIDE && l->n > 0) return (UiAction){ UA_OPEN_LINE, l->sel, false };', '            if (u->focus != UI_FOCUS_SIDE && l->n > 0) return (UiAction){ UA_OPEN_LINE, l->sel, false };'),
+    ('ui/handle.c', '            if (u->view == UI_VIEW_SEARCH && u->focus != UI_FOCUS_SIDE && l->n > 0) return (UiAction){ UA_OPEN_LINE, l->sel, false };', '            if (u->view == UI_VIEW_SEARCH && l->n > 0) return (UiAction){ UA_OPEN_LINE, l->sel, false };'),
+    ('ui/handle.c', '            if (u->view == UI_VIEW_SEARCH && u->focus != UI_FOCUS_SIDE && l->n > 0) return (UiAction){ UA_OPEN_LINE, l->sel, false };', '            if (u->view == UI_VIEW_SEARCH && u->focus != UI_FOCUS_SIDE) return (UiAction){ UA_OPEN_LINE, l->sel, false };'),
+    ('ui/menus.c', '    if (it == UM_OPEN_LINE) return u->ctx_one && u->sel_hit;', '    if (it == UM_OPEN_LINE) return u->sel_hit;'),
+    ('ui/menus.c', '    if (it == UM_OPEN_LINE) return u->ctx_one && u->sel_hit;', '    if (it == UM_OPEN_LINE) return u->ctx_one;'),
 ]

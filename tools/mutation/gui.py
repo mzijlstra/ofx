@@ -637,6 +637,18 @@ MUTANTS = [
     ('gui/input.c', '    h.inside_field = app.ui.view == UI_VIEW_SEARCH && app.ui.search_inside && !h.inside_toggle && in_box(CLAY_ID("inside-field"), x, y);', '', 'f9'),
     ('gui/input.c', '        if (in_box(CLAY_IDI("toggle", TOGGLE_INSIDE + k), x, y)) h.inside_toggle = k;', '', 'f9'),
     ('gui/input.c', '    in->inside_field = h.inside_field, in->inside_toggle = h.inside_toggle, in->inside_btn = h.search_inside;', '', 'f9'),
+    # F9 step 4: Open at Line (2026-10-29). Not run: the menu entry's label and the width it adds to
+    # the menu (drawn only; the shot open-line-menu.png shows them), and editor_now's once-a-second
+    # cache for that label (a run can't tell a read from a cached one).
+    ('gui/actions.c', '    case UA_OPEN_LINE: open_at_line(a.index); break;\n', '', 'f9'),
+    ('gui/actions.c', '    if (!en || !en->hit) {', '    if (!en) {', 'f9'),
+    ('gui/actions.c', '    if (!e) {\n        set_status(true, "No Open at Line recipe', '    if (false) {\n        set_status(true, "No Open at Line recipe', 'f9'),
+    ('gui/actions.c', '    else if (!editor_open(e, argv, n, &err)) set_status(true, "%s", err.msg);', '    else if (!editor_open(e, argv, n, &err)) {}', 'f9'),
+    ('gui/actions.c', '    else if (editors.user.bad) set_status(true, "%s: line %d isn', '    else if (false) set_status(true, "%s: line %d isn', 'f9'),
+    ('gui/actions.c', '    int n = editor_argv(e, path, en->hit->line, en->hit->col, buf, sizeof buf, argv, COUNT(argv));', '    int n = editor_argv(e, path, en->hit->line, 1, buf, sizeof buf, argv, COUNT(argv));', 'f9'),
+    ('gui/actions.c', '    editors_parse(&editors.a, editors_path(path, sizeof path) ? read_file(&editors.a, path) : STR_EMPTY, &editors.user);', '    editors_parse(&editors.a, STR_EMPTY, &editors.user);', 'f9'),
+    ('gui/frame.c', '    u->sel_hit = e && e->hit;   // (F9 step 4: Open at Line)', '', 'f9'),
+    ('gui/input.c', '    if (m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT) && (key == GLFW_KEY_ENTER || key == GLFW_KEY_KP_ENTER)) return UK_OPEN_LINE;', '', 'keys'),
 ]
 import concurrent.futures, queue, threading, time
 

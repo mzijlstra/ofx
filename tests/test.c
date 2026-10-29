@@ -1671,6 +1671,8 @@ int main(void)
     test_search_inside();
     test_search_inside_keys();
     test_match_span();
+    test_editors();
+    test_open_line_keys();
     test_search_match();
     test_search_keys_find();
     test_search_drives();

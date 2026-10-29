@@ -17,6 +17,7 @@ static bool ui_menu_shown(const Ui *u, UiMenuItem it)
     if (u->menu >= UI_MENUS && it == UM_RENAME) return u->marked <= 1;
     if (it == UM_OPEN_WINDOW || it == UM_PASTE_INTO || it == UM_TERMINAL_IN || it == UM_SEARCH_IN) return u->ctx_dir && u->view != UI_VIEW_TRASH;
     if (it == UM_CONTAINING) return ui_view_allows(u->view, UA_CONTAINING);
+    if (it == UM_OPEN_LINE) return u->ctx_one && u->sel_hit;   // (one result found inside files)
     if (it == UM_BOOKMARK_IT) return u->ctx_dir && u->view != UI_VIEW_TRASH && !u->sel_bm;
     if (it == UM_FOLLOW) return u->ctx_one && u->sel_link && u->view != UI_VIEW_TRASH;
     if (u->menu >= UI_MENUS && (it == UM_NEW_FOLDER || it == UM_NEW_FILE)) return u->view != UI_VIEW_TRASH;
@@ -98,7 +99,7 @@ static bool ui_menu_enabled(const Ui *u, UiMenuItem it)
     case UM_TAB_RIGHT: return u->tab_at < u->tab_n - 1;
     case UM_TAB_OTHERS: return u->tab_n > 1;
     case UM_OPEN_TAB: case UM_EMPTY_TRASH: case UM_OPEN_WINDOW: case UM_TERMINAL_IN: case UM_SEARCH_IN: case UM_FOLLOW: case UM_BOOKMARK_IT: return files;
-    case UM_CONTAINING: return true;   // (on a result's menu only)
+    case UM_CONTAINING: case UM_OPEN_LINE: return true;   // (on a result's menu only)
     case UM_PASTE_INTO: return files && u->can_paste && u->ctx_w;
     case UM_HERE_PROPS: return u->view != UI_VIEW_SEARCH;   // (a search is no folder)
     default: return false;
