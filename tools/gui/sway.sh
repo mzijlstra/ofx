@@ -41,7 +41,8 @@ EOS
     for i in $(seq 100); do [ -s "$T/sway.socket" ] && break; sleep 0.1; done
     sock=$(cat "$T/sway.socket" 2>/dev/null)
     if [ -z "$sock" ] || [ ! -S "$XDG_RUNTIME_DIR/$sock" ]; then
-        echo "sway.sh: no socket after 10 s; see $T/sway.log" >&2
+        echo "sway.sh: no socket after 10 s; see $T/sway.log, which ends:" >&2
+        tail -n 5 "$T/sway.log" >&2
         p=$(cat "$T/sway.pid")
         kill "$p" 2>/dev/null
         for i in $(seq 20); do kill -0 "$p" 2>/dev/null || break; sleep 0.1; done

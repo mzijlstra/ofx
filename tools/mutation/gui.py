@@ -825,8 +825,9 @@ def one(i):
         for g in order:
             r = run_groups(work, os.path.join(scratch, f'gm{i}'), [g])
             ran += 1
-            if unstarted(r):
+            if unstarted(r):   # (its output kept: why it didn't start is not known yet)
                 lost = g
+                open(os.path.join(scratch, f'unstarted-{i}-{g}.log'), 'w').write(r.stdout + r.stderr)
                 break
             if r.returncode != 0:
                 killer, out = (failed_groups(r.stdout) or [g])[0], r.stdout
@@ -838,7 +839,8 @@ def one(i):
         with lock:
             if lost:
                 unrun.append(i)
-                print(f'#{i} NOT TESTED: {lost}\'s compositor never started [{ran} of {len(order)} groups] {f}: {old.strip()[:60]!r}', flush=True)
+                print(f'#{i} NOT TESTED: {lost}\'s compositor never started [{ran} of {len(order)} groups] {f}: {old.strip()[:60]!r} '
+                      f'(its output: {scratch}/unstarted-{i}-{lost}.log)', flush=True)
                 return
             if killer and killer not in tagged:
                 tags[k] = [killer]
