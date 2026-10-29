@@ -17,7 +17,7 @@ clang's 1.45 s, but has no sanitizers. So every mutant runs first under tcc; wha
 is killed. Only the rest (survivors, and mutants tcc can't build: it may refuse valid C) run again
 under clang with ASan and UBSan, where a sanitizer may still catch them. --clang-only skips tcc.
 """
-import os, shutil, subprocess, sys, tempfile, time, importlib.util
+import os, shutil, signal, subprocess, sys, tempfile, time, importlib.util
 from concurrent.futures import ThreadPoolExecutor
 from queue import Queue
 
@@ -75,9 +75,31 @@ def run(work, cc='clang'):
         return 'build-fail'
     env = dict(os.environ, TMPDIR=os.path.join(work, 'tmp'))
     # 10 s: the tests take 0.5-0.7 s, and a mutant that hangs them (#172 waited 120 s here, holding
-    # up a whole pass) is killed by the timeout either way.
-    t = subprocess.run([exe], cwd=work, capture_output=True, timeout=10, env=env)   # bytes: a mutant may print anything
-    return 'pass' if t.returncode == 0 else 'fail'
+    # up a whole pass) is killed by the timeout either way. In its own process group, killed whole
+    # afterwards: a test killed or crashed early leaves the children it forks (test_f7's paused
+    # ones) behind, 264 of them by 2026-10-29.
+    t = subprocess.Popen([exe], cwd=work, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env,
+                         start_new_session=True)
+    try:
+        code = t.wait(timeout=10)
+    finally:
+        try:
+            os.killpg(t.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        t.wait()
+    return 'pass' if code == 0 else 'fail'
+
+# A tree removed whole: a test killed half way leaves its unreadable folders (test_f65's `locked`),
+# which rmtree alone can't empty (132 runs' copies stayed in /tmp by 2026-10-29).
+def rmtree(path):
+    for d, dirs, _ in os.walk(path):
+        for x in dirs:
+            try:
+                os.chmod(os.path.join(d, x), 0o700)
+            except OSError:
+                pass
+    shutil.rmtree(path, ignore_errors=True)
 
 free = Queue()
 for work in workers:
@@ -129,6 +151,6 @@ try:
             results += got
             print(f'{cc}: {len(got)} run in {time.time() - t0:.0f} s', flush=True)
 finally:
-    shutil.rmtree(top, ignore_errors=True)   # an interrupted run too
+    rmtree(top)   # an interrupted run too
 survivors = sorted(i for i, r in results if r == 'pass')
 print(f'{len(mutants)} mutants, {len(survivors)} survived: {survivors}')
