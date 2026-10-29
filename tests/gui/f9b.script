@@ -13,7 +13,9 @@ expect searchinfo=Text_to_look_for_inside_files;_the_name_field_narrows_which_(*
 type useState
 wait-for 3000 searchdue=0 searchdone=1 n=3
 expect searchinfo=3_found_in_4_files_·_skipped_1_binary,_1_over_16_MB,_1_link_to_a_file
-expect idx=0 sel=app.ts seldir=src hit=2:16+1 hitmatch=useState hitdrawn=1 insidetext=useState
+expect idx=0 sel=app.ts seldir=src hit=2:16+1 hitmatch=useState hitdrawn=1 insidetext=useState datecol=Modified
+# The bar's second row takes a row of the list; a search isn't a folder to bookmark
+expect rows=10 canbm=0
 shot inside-results.png
 # Up and Back with an empty name: the results again, the keys in them
 key enter
@@ -68,7 +70,7 @@ key enter
 sh grep -qx "uwsm-app -- gio open $OFX_DIR/src/app.ts" "$OFX_ROOT/spawn.log"
 # Alt+I from the results: off, a search by name again (the link matches by its name)
 key alt-i
-wait-for 3000 inside=0 insiderow=0 searchdue=0 searchdone=1 n=3 hit=-
+wait-for 3000 inside=0 insiderow=0 searchdue=0 searchdone=1 n=3 hit=- rows=11
 # The button: on again, the text it had, searched inside again
 point-ui search-inside
 click-here

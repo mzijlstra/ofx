@@ -106,7 +106,7 @@ wait-for 2000 n=3
 key tab
 expect place=Trash
 key enter
-expect trash=1 n=2 sel=adir crumbs=Trash here=Trash
+expect trash=1 n=2 sel=adir crumbs=Trash here=Trash datecol=Deleted
 key esc
 expect sidefocus=0
 # No folder above the trash view: Backspace stays (2026-10-28: it went to "trash:", an error)

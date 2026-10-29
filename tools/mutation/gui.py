@@ -602,8 +602,9 @@ MUTANTS = [
     ('gui/folder.c', '    [UI_VIEW_TRASH] = { "Deleted", TRASH_BAR_H },', '    [UI_VIEW_TRASH] = { "Modified", TRASH_BAR_H },', 'f6'),
     ('gui/folder.c', '    [UI_VIEW_SEARCH] = { "Modified", SEARCH_BAR_H },', '    [UI_VIEW_SEARCH] = { "Modified", 0 },', 'f9'),
     ('gui/folder.c', '    if (app.ui.view == UI_VIEW_SEARCH && view != UI_VIEW_SEARCH) search_ask(', '    if (false) search_ask(', 'f9'),
-    ('gui/folder.c', '    app.ui.can_write = view == UI_VIEW_FOLDER && access(dir, W_OK) == 0;', '    app.ui.can_write = access(dir, W_OK) == 0;', 'f9'),
-    ('gui/folder.c', 'tree_refresh(!same && view != UI_VIEW_SEARCH, app.ui.side.sel);', 'tree_refresh(!same, app.ui.side.sel);', 'f9'),
+    # (not can_write's view == UI_VIEW_FOLDER: access() fails on "trash:" and a search's address anyway)
+    # (not tree_refresh's view != UI_VIEW_SEARCH: tree_follow skips an address without a '/' first,
+    # and the row it keeps by index is the one it keeps by path; 2026-10-29)
     ('gui/folder.c', '    if (!view_can_up()) return;\n', '', 'f6'),
     ('gui/frame.c', '    u->can_bookmark = u->view == UI_VIEW_FOLDER && !bmarks.full', '    u->can_bookmark = !bmarks.full', 'f9'),
     ('gui/actions.c', '    view_changed();   // (a folder renamed: the results below it are gone)\n', '', 'f9'),
@@ -721,12 +722,24 @@ def failed_groups(out):
             g.append(GROUP_OF.get(m[1], m[1]))
     return g
 
+# A compositor that didn't start (weston.sh's or sway.sh's "no socket after"): the script never ran,
+# so that failure says nothing about the build. (2026-10-29: five mutants counted as killed by keys,
+# with no expectation failed, that no group kills; a start timed out under load is the likely
+# cause, as the stale wayland-N sockets of 2026-10-28.)
+def unstarted(r):
+    return r.returncode != 0 and re.search(r'(weston|sway)\.sh: no socket after', r.stdout + r.stderr) is not None
+
 # A mutant's run stops at its first failure (OFX_GUI_FAIL_FAST, run.sh and script.c), the base's
-# never: it must pass everything.
+# never: it must pass everything. A group whose compositor didn't start runs again, three times in
+# all; unstarted(r) says when it never did.
 def run_groups(work, base, groups, fast=True, binary='build/ofx-mut'):
     env = dict(os.environ, OFX_GUI_FAIL_FAST='1') if fast else {k: v for k, v in os.environ.items() if k != 'OFX_GUI_FAIL_FAST'}
-    return subprocess.run([os.path.join(work, 'tests/gui/run.sh'), base, os.path.join(work, binary)] + groups,
-                          capture_output=True, text=True, env=env)
+    for _ in range(3):
+        r = subprocess.run([os.path.join(work, 'tests/gui/run.sh'), base, os.path.join(work, binary)] + groups,
+                           capture_output=True, text=True, env=env)
+        if not unstarted(r):
+            break
+    return r
 
 # The unmutated build in each worker, kept as build/ofx-base for the base's groups (a mutant's build
 # replaces build/ofx-mut).
@@ -774,7 +787,7 @@ free_works = queue.Queue()
 for w in works:
     free_works.put(w)
 lock = threading.Lock()
-survivors, unbuilt, retagged, stopped = [], [], [], False
+survivors, unbuilt, retagged, stopped, unrun = [], [], [], False, []
 base_left = list(GROUPS)
 
 # One mutant in a free worker: its groups one run.sh at a time, until one kills it: its tags, its
@@ -808,10 +821,13 @@ def one(i):
         tagged = tags.get(k, [])
         hint = m[3].split() if len(m) == 4 else []
         order = list(dict.fromkeys(tagged + hint + GROUPS))
-        killer, out, ran = None, '', 0
+        killer, out, ran, lost = None, '', 0, None
         for g in order:
             r = run_groups(work, os.path.join(scratch, f'gm{i}'), [g])
             ran += 1
+            if unstarted(r):
+                lost = g
+                break
             if r.returncode != 0:
                 killer, out = (failed_groups(r.stdout) or [g])[0], r.stdout
                 break
@@ -820,6 +836,10 @@ def one(i):
         fails = [l for l in out.splitlines() if l.startswith('script:') and not l.startswith('script: 0 of')]
         took = time.monotonic() - t0
         with lock:
+            if lost:
+                unrun.append(i)
+                print(f'#{i} NOT TESTED: {lost}\'s compositor never started [{ran} of {len(order)} groups] {f}: {old.strip()[:60]!r}', flush=True)
+                return
             if killer and killer not in tagged:
                 tags[k] = [killer]
                 retagged.append(i)
@@ -857,7 +877,7 @@ for w in works:
     shutil.rmtree(w, ignore_errors=True)
 # What didn't run is said, so a summary never reads 0 for mutants that weren't tested (reviewer-2,
 # F7.1.1 review).
-untested = sorted(unbuilt) + (['the rest: out of disk'] if stopped else [])
+untested = sorted(unbuilt + unrun) + (['the rest: out of disk'] if stopped else [])
 print(f'{len(todo)} GUI mutants, {len(survivors)} survived: {sorted(survivors)}' + (f'; NOT TESTED: {untested}' if untested else ''))
 print(f'time: {t_end - t_start:.0f} s, {jobs} at once (the base done at {t_base - t_start:.0f} s)')
 if untested:

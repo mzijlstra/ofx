@@ -106,6 +106,15 @@ point-ui find-next
 hover-here
 idle
 expect tooltip=Next_match_(Down) tipin=1
+# The last idle's 3 s stand-in, still asleep, doesn't end the next one (2026-10-28): this one spans it
+point-ui row 0
+hover-here
+sleep 2100
+point-ui find-prev
+hover-here
+expect tooltip=-
+idle
+expect idlewoke=timer tooltip=Previous_match_(Up)
 shot find-chevrons.png
 char n
 expect find=an findn=1 sel=Banana.txt
