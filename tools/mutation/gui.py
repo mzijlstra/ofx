@@ -2,25 +2,23 @@
 """GUI mutants: each applied to a scratch copy of the repo, built, and run through
 tests/gui/run.sh, each script in its own headless weston (CLAUDE.md, "Testing the GUI").
 
-    tools/mutation/gui.py <scratch-dir> [index,...] [--full] [--jobs N]
+    tools/mutation/gui.py <scratch-dir> [index,...] [--jobs N]
 
-The whole GUI suite takes about 90 s, so each mutant runs only the script groups that killed it
-before (its tags, in gui-tags.txt): a grid mutant runs f62, not the copy jobs' f53. Groups run one
+The whole GUI suite takes about 90 s, so each mutant runs the script groups that killed it before
+first (its tags, in gui-tags.txt): a grid mutant runs f62, not the copy jobs' f53. Groups run one
 at a time and a mutant stops at the first that kills it (Michael, 2026-10-25), and within a group
 at its first failure (OFX_GUI_FAIL_FAST: the script ends there, run.sh skips the group's other
-scripts; 2026-10-26, a run 1591 s to 881 s: every wait-for after a failure ran out its time). A mutant with no
-tags (new, or its text changed) tries its hint first (a fourth field, `'f7'`), then the rest; the
-group that kills it becomes its tag. --jobs N (6 by default) runs N mutants at once, each in its
+scripts; 2026-10-26, a run 1591 s to 881 s: every wait-for after a failure ran out its time). A mutant its tags
+don't kill (new, its text changed, or the tests moved) tries its hint (a fourth field, `'f7'`),
+then the rest; the group that kills it becomes its tag, and the summary names it as retagged.
+Until 2026-10-29 that fallback was --full's, run only before a major milestone's last install, and a
+tagged run called a mutant its tags missed a survivor; since the first-kill stop it costs nothing
+when the tags kill (Michael, 2026-10-29: 484 mutants in 1358 s either way). --jobs N (6 by default) runs N mutants at once, each in its
 own copy of the repo (6 is as fast as 8, 2026-10-25). The unmutated build runs the whole suite
 once, its groups the first tasks in the same pool, so under the mutants' load while they start: a
 script that fails there stops the run and throws its results away, instead of killing mutants it
 doesn't see (until 2026-10-26 it ran in all N workers before any mutant: 30% of a run). Mutants that didn't build, or
-weren't run for want of disk, are named in the summary and fail the run. --full lifts the tags-only limit and writes the tags again: a mutant still runs its tags first and
-stops at the first kill, but one they no longer kill goes on through every other group (a tagged run
-calls it a survivor). Before installing the last step of a major milestone (F6 to F7; Michael,
-2026-10-24); the installs between run the tagged mutants. Since the first-kill stop it costs about
-what a tagged run does: 484 mutants in 1358 s on 2026-10-29 (4.5 h before, every mutant on the
-whole suite).
+weren't run for want of disk, are named in the summary and fail the run.
 The unmutated build always runs the whole suite (GUI_BASE_ONLY=1: only that).
 
 Everything runs from the scratch copy, scripts included, so the repo can be edited meanwhile.
@@ -615,12 +613,10 @@ MUTANTS = [
 import concurrent.futures, queue, threading, time
 
 args = sys.argv[1:]
-full = '--full' in args
 jobs = 6   # the time levels off there: 46 mutants on a quiet machine took 414-451 s at 6, 411-419 at 8, 442 at 10, 477 at 12, CPU 43-62% (2026-10-26)
 if '--jobs' in args:
     jobs = int(args[args.index('--jobs') + 1])
     del args[args.index('--jobs'):args.index('--jobs') + 2]
-args = [a for a in args if a != '--full']
 if len(args) not in (1, 2) or any(a.startswith('-') for a in args):
     sys.exit(__doc__.strip())   # an unknown flag isn't taken for the scratch folder
 scratch = args[0]
@@ -751,12 +747,11 @@ free_works = queue.Queue()
 for w in works:
     free_works.put(w)
 lock = threading.Lock()
-survivors, unbuilt, retagged, stopped = [], [], 0, False
+survivors, unbuilt, retagged, stopped = [], [], [], False
 base_left = list(GROUPS)
 
-# One mutant in a free worker: its groups one run.sh at a time, until one kills it. Tagged (and
-# not --full): its tags only. Else its hint and its old tags first, then the rest of the groups;
-# the group that kills it becomes its tag.
+# One mutant in a free worker: its groups one run.sh at a time, until one kills it: its tags, its
+# hint, then the rest of the groups. The group that kills it becomes its tag.
 def one(i):
     global retagged, stopped
     m = MUTANTS[i]
@@ -783,9 +778,9 @@ def one(i):
             with lock:
                 unbuilt.append(i)
             return
-        tagged = tags.get(k, []) if not full else []
+        tagged = tags.get(k, [])
         hint = m[3].split() if len(m) == 4 else []
-        order = tagged or list(dict.fromkeys(hint + tags.get(k, []) + GROUPS))
+        order = list(dict.fromkeys(tagged + hint + GROUPS))
         killer, out, ran = None, '', 0
         for g in order:
             r = run_groups(work, os.path.join(scratch, f'gm{i}'), [g])
@@ -798,9 +793,9 @@ def one(i):
         fails = [l for l in out.splitlines() if l.startswith('script:') and not l.startswith('script: 0 of')]
         took = time.monotonic() - t0
         with lock:
-            if killer and not tagged:
+            if killer and killer not in tagged:
                 tags[k] = [killer]
-                retagged += 1
+                retagged.append(i)
             if not killer:
                 survivors.append(i)
             how = f'killed by {killer}' if killer else 'SURVIVED'
@@ -830,7 +825,7 @@ if retagged:
         for k in sorted(tags):
             if k in live and tags[k] != ['all']:
                 out.write(f'{k} {" ".join(tags[k])}\n')
-    print(f'{retagged} mutants tagged in {tags_path}')
+    print(f'{len(retagged)} mutants tagged in {tags_path}: {sorted(retagged)}')
 for w in works:
     shutil.rmtree(w, ignore_errors=True)
 # What didn't run is said, so a summary never reads 0 for mutants that weren't tested (reviewer-2,

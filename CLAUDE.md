@@ -113,7 +113,7 @@ his Hyprland: no output, no workspace, no dock script, no hyprctl at all.
 ```sh
 tests/gui/run.sh <absolute scratch>          # every script, each in its own weston
 tools/gui/run-script.sh <absolute scratch> tests/gui/<script> "$PWD/build/ofx" <folder>   # one
-tools/mutation/gui.py <absolute scratch> [--full]   # the GUI mutants (each on its tagged groups)
+tools/mutation/gui.py <absolute scratch>   # the GUI mutants (each on its tagged groups first)
 tests/gui/run.sh <absolute scratch> "$PWD/build/ofx" f62 f6   # some groups only
 ```
 
@@ -128,17 +128,17 @@ nothing: when deleting a statement would leave an `else` without its `if`, empty
 The GUI mutants' time is mostly the 86 s GUI suite, not the build. So each runs only the `run.sh`
 groups that killed it on a whole-suite run (`tools/mutation/gui-tags.txt`, written by `gui.py`):
 164 mutants in 71 min, against about 4 h on the whole suite each; and since 2026-10-26 a mutant stops at its first failure (`OFX_GUI_FAIL_FAST`: the script ends, run.sh skips the group's other scripts), 290 mutants in 881 s against 1591, and with the base in the pool (below) 671 s. Since 2026-10-25 (Michael): a
-mutant runs its groups one at a time and stops at the first kill; a new or changed one tries its
-hint (a fourth field naming the group, as `'f7'`) and then the rest, and the killing group becomes
-its tag; and `--jobs N` (6 by default: on a quiet machine 8 is no faster and 10 or 12 slower, 2026-10-26) runs N at once, each worker in its own copy. The
+mutant runs its groups one at a time and stops at the first kill; one its tags don't kill (new,
+changed, or the tests moved) tries its hint (a fourth field naming the group, as `'f7'`) and then
+the rest, and the killing group becomes its tag (the summary lists the retagged); and `--jobs N` (6 by default: on a quiet machine 8 is no faster and 10 or 12 slower, 2026-10-26) runs N at once, each worker in its own copy. The
 unmutated suite runs once, its groups the first tasks in the same pool, under the mutants' load (Michael,
 2026-10-26; before, in all N workers before any mutant): a script that fails there stops the run and
 throws its results away. They build `build/ofx-mut`: clang with ASan and UBSan, Clay's code in
 its own object compiled once a run with nanosvg's (`gui/vendor.c`), 1.1 s a mutant against gcc's 3.5 s (Michael,
-2026-10-24; tcc has no ASan, so not there). `--full` lets a mutant its tags no longer kill go on
-through every other group (still stopping at the first kill, so 484 mutants in 23 min on
-2026-10-29; 4.5 h when it ran every mutant on the whole suite), only before installing the last step of a major milestone, as F6 to F7 (Michael,
-2026-10-24); the installs between run the tagged mutants. `gui.py` runs from its scratch copy, scripts included, so editing
+2026-10-24; tcc has no ASan, so not there). There is no `--full` any more (Michael, 2026-10-29):
+it was that fallback, kept for a major milestone's last install while it meant every mutant on the
+whole suite (4.5 h); with the first-kill stop it cost what a tagged run does (484 mutants in 23 min),
+so every run does it. `gui.py` runs from its scratch copy, scripts included, so editing
 `tests/gui` during a run is safe now.
 
 - **Why not a Hyprland headless output any more:** a new output takes a workspace Hyprland picks,
@@ -201,7 +201,7 @@ ui/ that nothing calls makes the test build warn.
 
 ## At the end of each major milestone (Michael, 2026-10-28)
 
-The code-health review in `../CLAUDE.md`, beside the `--full` GUI mutant run. ofx's areas, one
+The code-health review in `../CLAUDE.md`, before the milestone's last install. ofx's areas, one
 agent each: gui/main.c and its files; ui/; fs/ with base/ (every write through `ops_allowed`); the
 worker threads, tests and tooling. The first one (after F9 step 2) found a modal-order
 disagreement, a focus bug, a trash-view Up bug and 20 checks testing dead code; its cleanup was
