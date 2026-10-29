@@ -31,7 +31,8 @@ enum {
     SEARCH_MAX = 10000, SEARCH_DEPTH_MAX = 256, SEARCH_TICK = 512,
     // Inside files (step 3): read in pieces of SEARCH_CHUNK; a line longer than that is matched a
     // piece at a time, each starting with the last SEARCH_OVERLAP bytes of the one before, so a match
-    // across two pieces is found.
+    // across two pieces is found while it is shorter than that (any plain text: the field holds
+    // UI_FIND_MAX bytes; a regular expression can match more, and then only within a piece).
     SEARCH_FILE_MAX = 16 << 20, SEARCH_HEAD = 8192, SEARCH_CHUNK = 64 << 10, SEARCH_OVERLAP = 1024,
     SEARCH_BUF = SEARCH_CHUNK + SEARCH_OVERLAP,
     SEARCH_SNIP = 160, SEARCH_SNIP_BEFORE = 40,   // a hit's line: at most this, from this before the match
