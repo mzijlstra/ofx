@@ -175,16 +175,18 @@ expect sel=adir back=0
 forward
 expect sel=in-a.txt
 key backspace
-# The sidebar: Tab, j, Enter; a press; a real click on a row.
+# The sidebar: Tab (File System, the first row), j over the Places header to Home, j, Enter; a press; a real click on a row.
 key tab
-expect sidefocus=1
+expect sidefocus=1 side=1
 char j
-expect side=2 place=Bee
+expect side=3 place=Home
+char j
+expect side=4 place=Bee
 key enter
 expect sel=in-b.txt here=Bee
-press-side 3
+press-side 5
 expect sel=adir here=Tree
-point-ui side-row 2
+point-ui side-row 4
 click-here
 expect sel=in-b.txt here=Bee
 key esc

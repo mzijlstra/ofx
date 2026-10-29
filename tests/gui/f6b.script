@@ -9,7 +9,7 @@ expect sidemode=tree treehere=1
 sh grep -qx sidebar=tree "$OFX_ROOT/state/ofx/state"
 point-ui mode 0
 click-here
-expect sidemode=places sides=^Places|Home|Bee|Trash|^Drives|File_System spaced=0
+expect sidemode=places sides=^Drives|File_System|^Places|Home|Bee|Trash spaced=0
 key down
 expect sel=a.txt
 quit

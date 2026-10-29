@@ -25,7 +25,8 @@
 # - OFX_TEST_SPACE_DELAY_MS, when set, is passed on: each drive space answer that much later;
 # - OFX_TEST_MEDIA, when set, is passed on: mounts under it count as removable drives;
 # - OFX_TEST_ICONS_MAX, when set, is passed on: an icon cache of that many slots (a full cache);
-# - OFX_TEST_MOUNTINFO, when set, is passed on: the mount list read instead of /proc/self/mountinfo;
+# - OFX_TEST_MOUNTINFO, when set, is passed on: the mount list read instead of /proc/self/mountinfo
+#   (unset: one with only /, written in the scratch dir);
 # - OFX_TEST_HOME, when set, becomes the window's HOME (a scratch home for the path buttons' test);
 # - OFX_GUI_SHOTS=<scratch-dir>/shots for the script's shots, OFX_GUI_ROOT=<scratch-dir> for its
 #   sh guard and ofx's own (fs/ops.c: no write outside it).
@@ -82,6 +83,13 @@ if [ ! -d "$T/state" ]; then
 fi
 args=""
 script_env="OFX_GUI_SCRIPT=$sc"
+# The mount list: the run's own, else one with only / (2026-10-29: the sidebar lists the drives
+# first, so a machine's own drives moved every place a script counts to; and Michael's drives, and
+# their trash, stay out of every run).
+if [ -z "${OFX_TEST_MOUNTINFO:-}" ]; then
+    printf '1 0 0:1 / / rw - ext4 /dev/x rw\n' > "$T/mountinfo-root"
+    OFX_TEST_MOUNTINFO="$T/mountinfo-root"
+fi
 [ "$sc" = - ] && script_env=""
 for a in "$@"; do args="$args '$a'"; done
 here=$(cd "$(dirname "$0")" && pwd)

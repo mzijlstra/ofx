@@ -1122,7 +1122,8 @@ across the window, its left part the sidebar's, its right part the status. Decis
   `$XDG_STATE_HOME/ofx/state`, which ofx writes. The XDG split; Michael agreed (2026-10-22).
 
 **As built (2026-10-23), the calls made along the way:**
-- The headings *Places* and *Drives* are rows of their own; the cursor steps over them, a click
+- The headings *Places* and *Drives* are rows of their own (*Drives* first since 2026-10-29,
+  Michael: many bookmarks pushed the drives down); the cursor steps over them, a click
   on one does nothing. A drive's free space is on the right of its row, the fullness bar under
   its name, red from 90% full. The mounts come live from `/proc/self/mountinfo`'s POLLPRI
   (proc(5)); a drive's space is read again with every listing (no timer: idle stays idle).
