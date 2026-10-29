@@ -79,7 +79,7 @@ stop)
     esac
     # Its IPC folder: only one of ours by name (a stale sway.ipcdir could name anything).
     d=$(cat "$T/sway.ipcdir" 2>/dev/null)
-    case $d in /tmp/ofx-sway-??????) rm -rf "$d" ;; esac
+    case $d in /tmp/ofx-sway-[A-Za-z0-9][A-Za-z0-9][A-Za-z0-9][A-Za-z0-9][A-Za-z0-9][A-Za-z0-9]) rm -rf "$d" ;; esac   # (mktemp's names; ? would let a / through)
     rm -f "$T/sway.pid" "$T/sway.socket" "$T/sway.ipcdir"
     ;;
 *) echo "usage: sway.sh start|stop <scratch-dir>" >&2; exit 2 ;;
