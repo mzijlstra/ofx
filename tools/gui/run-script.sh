@@ -44,8 +44,14 @@ if [ "$sc" != - ]; then
     [ -f "$sc" ] || { echo "run-script: no script $sc" >&2; exit 1; }
     sc=$(cd "$(dirname "$sc")" && pwd)/$(basename "$sc")
 fi
+# Each also writes its words one by one, in brackets, to spawn-args.log: spawn.log joins them with
+# spaces, so a word with a space in it can't be told from two (reviewer-2, 2026-10-29).
 for f in uwsm-app gio xdg-open xdg-terminal-exec; do   # xdg-open: ofx's opener before gio
-    printf '#!/bin/sh\necho "%s $*" >> "%s/spawn.log"\n' "$f" "$T" > "$T/fakes/$f"
+    cat > "$T/fakes/$f" <<EOS
+#!/bin/sh
+echo "$f \$*" >> "$T/spawn.log"
+{ printf '%s' "$f"; for a do printf ' [%s]' "\$a"; done; echo; } >> "$T/spawn-args.log"
+EOS
     chmod +x "$T/fakes/$f"
 done
 # gio info (the Properties panel's MIME type) only reads: the real gio answers it, unlogged.

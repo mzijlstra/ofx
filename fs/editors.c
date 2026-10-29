@@ -189,6 +189,9 @@ static int editor_argv(const Editor *e, const char *file, i64 line, i64 col, cha
 // Opens with e: argv (editor_argv's, n words) through uwsm-app as every launch (spawn_app); a
 // terminal editor in a terminal, as Omarchy's omarchy-launch-tui runs one (`xdg-terminal-exec
 // --app-id=org.omarchy.<program> -e …`). False, with the reason, when its program isn't there.
+// Each word stays one word as far as the terminal: uwsm-app and xdg-terminal-exec pass them on as
+// they are, and foot (Omarchy's) runs -e's without a shell. A terminal whose -e joins them into a
+// shell line would split a path with a space (reviewer-2, 2026-10-29).
 static bool editor_open(const Editor *e, const char *const *argv, int n, Err *err)
 {
     const char *prog = argv[0];

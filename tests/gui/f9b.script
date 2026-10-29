@@ -24,6 +24,8 @@ key ctrl-shift-enter
 wait-for 2000 spawned=1
 expect statusbad=0
 sh grep -qx "uwsm-app -- xdg-terminal-exec --app-id=org.omarchy.nvim -e nvim +call setcursorcharpos(2,16) $OFX_DIR/src/app.ts" "$OFX_ROOT/spawn.log"
+# word by word: the path (with its space) and nvim's command one word each
+sh grep -qxF "uwsm-app [--] [xdg-terminal-exec] [--app-id=org.omarchy.nvim] [-e] [nvim] [+call setcursorcharpos(2,16)] [$OFX_DIR/src/app.ts]" "$OFX_ROOT/spawn-args.log"
 # The result's menu has it, by the editor's name
 point-ui row 0
 right-here

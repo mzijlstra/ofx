@@ -281,15 +281,15 @@ L="$H/tree/long/$(printf 'x%.0s' $(seq 250))"; mkdir -p "$L"; printf x > "$L/m2.
 (cd "$H/tree/zz" && seq -f 'zz%05g' 0 10000 | xargs touch)
 printf '1 0 0:1 / / rw - ext4 /dev/x rw\n' > "$T/mountinfo"
 echo "== f9"; OFX_TEST_HOME="$H" OFX_TEST_MOUNTINFO="$T/mountinfo" "$here/../../tools/gui/run-script.sh" "$T" "$here/f9.script" "$bin" "$H/tree" || failed f9
-# F9 step 3: inside files. tree: two .ts files and a .js with useState, a binary with it, a 17 MB
+# F9 step 3: inside files. "my tree" (a space in every path, for Open at Line's words): two .ts files and a .js with useState, a binary with it, a 17 MB
 # file, a link to a file, and a file without it.
-T=$base/f9b; rm -rf "$T"; H=$T/home; mkdir -p "$T/config/gtk-3.0" "$H/tree/src" "$H/tree/docs"
-printf 'import x\nconst [a, b] = useState(0)\n  useState again\n' > "$H/tree/src/app.ts"
-printf 'useState here\n' > "$H/tree/src/other.js"; printf 'const USESTATE = 1\n' > "$H/tree/src/Upper.ts"
-printf 'useState\0' > "$H/tree/bin.dat"; truncate -s 17M "$H/tree/big.txt"; printf 'nothing\n' > "$H/tree/docs/readme.md"
-ln -s src/app.ts "$H/tree/link.ts"
+T=$base/f9b; rm -rf "$T"; H=$T/home; mkdir -p "$T/config/gtk-3.0" "$H/my tree/src" "$H/my tree/docs"
+printf 'import x\nconst [a, b] = useState(0)\n  useState again\n' > "$H/my tree/src/app.ts"
+printf 'useState here\n' > "$H/my tree/src/other.js"; printf 'const USESTATE = 1\n' > "$H/my tree/src/Upper.ts"
+printf 'useState\0' > "$H/my tree/bin.dat"; truncate -s 17M "$H/my tree/big.txt"; printf 'nothing\n' > "$H/my tree/docs/readme.md"
+ln -s src/app.ts "$H/my tree/link.ts"
 printf '1 0 0:1 / / rw - ext4 /dev/x rw\n' > "$T/mountinfo"
-echo "== f9b"; OFX_TEST_HOME="$H" OFX_TEST_MOUNTINFO="$T/mountinfo" "$here/../../tools/gui/run-script.sh" "$T" "$here/f9b.script" "$bin" "$H/tree" || failed f9b
+echo "== f9b"; OFX_TEST_HOME="$H" OFX_TEST_MOUNTINFO="$T/mountinfo" "$here/../../tools/gui/run-script.sh" "$T" "$here/f9b.script" "$bin" "$H/my tree" || failed f9b
 fi
 if want clip; then
 # The system clipboard, in the test sway (tools/gui/sway.sh: weston has no data-control, 2026-10-28).
