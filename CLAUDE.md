@@ -135,8 +135,9 @@ unmutated suite runs once, its groups the first tasks in the same pool, under th
 2026-10-26; before, in all N workers before any mutant): a script that fails there stops the run and
 throws its results away. They build `build/ofx-mut`: clang with ASan and UBSan, Clay's code in
 its own object compiled once a run with nanosvg's (`gui/vendor.c`), 1.1 s a mutant against gcc's 3.5 s (Michael,
-2026-10-24; tcc has no ASan, so not there). `--full` reruns every mutant past its tags (about
-4.5 h before these changes), only before installing the last step of a major milestone, as F6 to F7 (Michael,
+2026-10-24; tcc has no ASan, so not there). `--full` lets a mutant its tags no longer kill go on
+through every other group (still stopping at the first kill, so 484 mutants in 23 min on
+2026-10-29; 4.5 h when it ran every mutant on the whole suite), only before installing the last step of a major milestone, as F6 to F7 (Michael,
 2026-10-24); the installs between run the tagged mutants. `gui.py` runs from its scratch copy, scripts included, so editing
 `tests/gui` during a run is safe now.
 

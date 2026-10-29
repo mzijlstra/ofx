@@ -15,9 +15,12 @@ own copy of the repo (6 is as fast as 8, 2026-10-25). The unmutated build runs t
 once, its groups the first tasks in the same pool, so under the mutants' load while they start: a
 script that fails there stops the run and throws its results away, instead of killing mutants it
 doesn't see (until 2026-10-26 it ran in all N workers before any mutant: 30% of a run). Mutants that didn't build, or
-weren't run for want of disk, are named in the summary and fail the run. --full runs every mutant on the whole suite and writes the tags again: before installing the
-last step of a major milestone (F6 to F7), since a narrow run can't see a mutant break something its
-tags don't cover; the installs between run the tagged mutants (Michael, 2026-10-24).
+weren't run for want of disk, are named in the summary and fail the run. --full lifts the tags-only limit and writes the tags again: a mutant still runs its tags first and
+stops at the first kill, but one they no longer kill goes on through every other group (a tagged run
+calls it a survivor). Before installing the last step of a major milestone (F6 to F7; Michael,
+2026-10-24); the installs between run the tagged mutants. Since the first-kill stop it costs about
+what a tagged run does: 484 mutants in 1358 s on 2026-10-29 (4.5 h before, every mutant on the
+whole suite).
 The unmutated build always runs the whole suite (GUI_BASE_ONLY=1: only that).
 
 Everything runs from the scratch copy, scripts included, so the repo can be edited meanwhile.
