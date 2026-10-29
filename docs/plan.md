@@ -6,8 +6,9 @@ raylib on native Wayland). It replaces Nemo, which idles at about 5% CPU, and Na
 had no "terminal here". The concept, with what is in and out of scope, is the doc "File explorer
 concept" (https://claude.ai/code/artifact/8d990266-71ea-4d0e-a109-a8f3a71807ba).
 
-Out for good: drag and drop (Michael doesn't drag files), the "Save as" portal dialogs, network
-shares, archives. ("Open with" was here until 2026-10-24, when Michael moved it into F8.)
+Out for good: the "Save as" portal dialogs, archives. ("Open with" was here until 2026-10-24, when
+Michael moved it into F8; drag and drop and network shares until 2026-10-29, when he moved them to
+the later list.)
 
 **Name (2026-10-22, Michael):** fx became **ofx**, Omarchy File eXplorer, for its close ties to
 Omarchy's theme: the binary, the folder `tools/ofx`, the window's title and Wayland app id, the
@@ -84,9 +85,13 @@ his word: Nemo's compact view and its icon size slider.
   mutants first. On a quiet machine 46 mutants took about 410 s at 6, 8, 10 or 12 workers alike,
   CPU 42-63%: the time is the unmutated suite at the start plus the slowest mutants at the end,
   not the processor. The order by each tag group's time in the baseline is the first thing to try.
-- Open With (Michael, 2026-10-26: not worth it yet, he can't notice the delay): keep the theme's
-  app-folder list (0.7 MiB) after the first open, so a later open skips its ~34 ms; the icons
-  themselves would still go when the panel closes.
+- Open With: the theme's app-folder list is kept since bcefb00 (2026-10-29), read again when the
+  theme's name changes. Not yet: a theme edited in place under the same name keeps the old icons
+  until a restart (reviewer-2, 2026-10-29).
+- Drag and drop (Michael, 2026-10-29): inside ofx first (the list, the sidebar, the tabs), then
+  with other programs.
+- Network shares (Michael, 2026-10-29): Samba and NFS. Needs machines to test against, and the
+  counting in a separate process above, so a dead mount can't hang ofx.
 - Not wanted: Nemo's built-in terminal (`t`, a terminal here, covers it).
 
 **Thumbnails, a rule from Nemo (2026-10-20):** Nemo looped at up to 45% CPU on one file

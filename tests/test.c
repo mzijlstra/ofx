@@ -1143,6 +1143,27 @@ static void test_side(void)
     in = keys(2, UK_TAB, UK_ESC);
     ui_handle(&u, names, &in);
     CHECK(u.focus != UI_FOCUS_SIDE);
+    // Tab puts the cursor on the folder shown's row (gui/'s side_here), else on the first row
+    // (Michael, 2026-10-29), whatever it was on before.
+    u.side_here = 5;
+    in = keys(1, UK_TAB);
+    ui_handle(&u, names, &in);
+    CHECK(u.focus == UI_FOCUS_SIDE && u.side.sel == 5 && u.side.top == 2);
+    u.side_here = -1;
+    in = keys(2, UK_TAB, UK_TAB);
+    ui_handle(&u, names, &in);
+    CHECK(u.focus == UI_FOCUS_SIDE && u.side.sel == 0 && u.side.top == 0);
+    u.side_here = 6;   // past the end: the first row
+    in = keys(2, UK_TAB, UK_TAB);
+    ui_handle(&u, names, &in);
+    CHECK(u.side.sel == 0);
+    u.side_here = 2;
+    in = keys(3, UK_TAB, UK_TAB, UK_END);
+    ui_handle(&u, names, &in);
+    CHECK(u.side.sel == 5 && u.side.top == 2);
+    in = keys(1, UK_ESC);
+    ui_handle(&u, names, &in);
+    CHECK(u.focus != UI_FOCUS_SIDE);
     // A click in the sidebar goes there; a click in the list takes the keys back.
     in = ui_input_none();
     in.side_click = 1;

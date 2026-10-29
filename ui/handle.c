@@ -580,8 +580,10 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
                 u->focus = UI_FOCUS_SIDE;
                 return a;
             }
+            // The cursor on the folder shown's row, else the first row (Michael, 2026-10-29: with the
+            // drives first, the first row is File System, not Home).
             u->focus = u->side.n > 0 ? UI_FOCUS_SIDE : UI_FOCUS_LIST;
-            if (u->focus == UI_FOCUS_SIDE) ui_side_settle(u, 1);
+            if (u->focus == UI_FOCUS_SIDE) u->side.sel = u->side_here > 0 && u->side_here < u->side.n ? u->side_here : 0, ui_side_settle(u, 1);
             break;
         case UK_ESC:
             // The selection, then the sidebar's keyboard (a job is cancelled from its row, F5.3).

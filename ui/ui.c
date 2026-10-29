@@ -697,6 +697,9 @@ typedef struct {
     // From gui/ each frame (menu_facts): the cursor's entry is a link that leads somewhere, a
     // folder that is a bookmark already (F8), a result found inside files (F9 step 4: it has a line).
     bool   sel_link, sel_bm, sel_hit;
+    // From gui/ each frame: the sidebar row of the folder shown (its place, or its tree row), where
+    // Tab puts the cursor; -1 for none (Michael, 2026-10-29).
+    isize  side_here;
     // A folder elsewhere's menu (F8): the sidebar row (absolute) or path button it is on (the other
     // -1); and from gui/ as it opens (ctx_facts): it is the trash, a place (no Cut or Copy: a bookmark
     // isn't the folder to move), its bookmark's line in the file and how many lines (-1: not a

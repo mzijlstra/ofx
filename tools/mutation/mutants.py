@@ -516,7 +516,7 @@ MUTANTS += [
     ('ui/cursor.c', "    if (s->top == s->sel && ui_side_head(u, s->sel - 1)) s->top--;\n", ""),
     ('ui/handle.c', "    if (!prompt && in->side_click >= 0 && ui_side_head(u, u->side.top + in->side_click)) return (UiAction){ UA_NONE, 0, false };\n", ""),
     ('ui/handle.c', " && !ui_side_head(u, u->side.top + in->mid_side)) return", ") return"),
-    ('ui/handle.c', '            if (u->focus == UI_FOCUS_SIDE) ui_side_settle(u, 1);\n', ''),
+    ('ui/handle.c', ' ? u->side_here : 0, ui_side_settle(u, 1);', ' ? u->side_here : 0;'),
     ('ui/handle.c', "        case UK_F9: return ui_side_mode(u, (SideMode)((u->side_mode + 1) % SIDE_MODES));", "        case UK_F9: return ui_side_mode(u, (SideMode)((u->side_mode + 1) % 2));"),
     ('ui/cursor.c', '    if (m == SIDE_HIDDEN) ui_unfocus(u, UI_FOCUS_SIDE);\n', ''),
     ('ui/handle.c', "    if (!prompt && in->side_mode >= 0 && in->side_mode < SIDE_MODES) return", "    if (!prompt && in->side_mode >= 0) return"),
@@ -1981,4 +1981,14 @@ MUTANTS += [
     # Not a mutant: ` || (n == best_n)`, the later of a tie: a drive is never later than a place now,
     # and two of a kind are one place; the check keeps the rule apart from the order.
     (PL, 'if (place_is_drive(pl->p[i].kind) == place_is_drive(kind) && strcmp(pl->p[i].path, path) == 0) return true;', 'if (pl->p[i].kind == kind && strcmp(pl->p[i].path, path) == 0) return true;'),
+]
+
+# ---- Tab on the folder shown's sidebar row (Michael, 2026-10-29)
+SH = '            if (u->focus == UI_FOCUS_SIDE) u->side.sel = u->side_here > 0 && u->side_here < u->side.n ? u->side_here : 0, ui_side_settle(u, 1);'
+MUTANTS += [
+    ('ui/handle.c', SH, '            if (u->focus == UI_FOCUS_SIDE) ui_side_settle(u, 1);'),
+    ('ui/handle.c', SH, SH.replace('u->side_here > 0 && u->side_here < u->side.n ? u->side_here : 0', '0')),
+    ('ui/handle.c', SH, SH.replace(' && u->side_here < u->side.n', '')),
+    ('ui/handle.c', SH, SH.replace('u->side_here > 0 && ', '')),
+    # Not a mutant: `u->side_here >= 0` (row 0 and the first row settle the same).
 ]
