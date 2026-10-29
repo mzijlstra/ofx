@@ -149,6 +149,11 @@ static UiLine ui_search_line(Ui *u)
     return UI_TEXT_LINE(u->search, false);
 }
 
+static UiLine ui_inside_line(Ui *u)
+{
+    return UI_TEXT_LINE(u->inside, false);
+}
+
 // The selection, [*lo, *hi): empty when the anchor is at the caret.
 static void ui_line_sel(UiLine l, int *lo, int *hi)
 {
@@ -335,6 +340,7 @@ static bool ui_line_active(Ui *u, UiLine *out)
     else if (on != UI_ON_NONE) return false;   // (a question, or a panel without a field)
     else if (u->focus == UI_FOCUS_EDIT) l = ui_edit_line(u);
     else if (u->focus == UI_FOCUS_SEARCH && u->view == UI_VIEW_SEARCH) l = ui_search_line(u);
+    else if (u->focus == UI_FOCUS_INSIDE && u->view == UI_VIEW_SEARCH && u->search_inside) l = ui_inside_line(u);
     else if (u->focus == UI_FOCUS_FIND && u->finding) l = ui_find_line(u);
     else return false;
     if (out) *out = l;

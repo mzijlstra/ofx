@@ -595,7 +595,7 @@ static void bmp_act(UiAction a);   // Edit Bookmarks (gui/bookmarks.c, F7.5)
 static void search_in(const char *dir)
 {
     char uri[PATH_MAX];
-    if (dir && search_uri(uri, sizeof uri, dir, STR_EMPTY)) tab_open(uri, STR_EMPTY, true);
+    if (dir && search_uri(uri, sizeof uri, dir, STR_EMPTY, STR_EMPTY)) tab_open(uri, STR_EMPTY, true);
 }
 
 static void terminal_in(const char *dir)

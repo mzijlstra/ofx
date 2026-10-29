@@ -87,7 +87,7 @@ static void find_chevron(Clay_ElementId id, ChevronDir dir, int step, bool on)
 // A bar's field, find's or the search view's (name: "find", "search"): its frame red when the
 // expression is bad, the accent while it has the keys; its text drawn as the edit line draws (a
 // caret and the selection) while it has them, cut to fit otherwise; the toggles at its end.
-static void bar_field(const char *name, bool keys, bool bad, UiLine line, Str shown, Clay_Color fg, int toggles)
+static void bar_field(const char *name, bool keys, bool bad, UiLine line, Str shown, Clay_Color fg, UiMatchOpts o, int toggles)
 {
     Theme *t = &app.theme;
     Clay_Color edge = bad ? cc(t->red) : keys ? cc(t->accent) : rule_color();
@@ -102,7 +102,7 @@ static void bar_field(const char *name, bool keys, bool bad, UiLine line, Str sh
             if (keys) edit_text(name, room, line, fg);
             else text(fit(shown, room, true), fg);
         }
-        layout_toggles(app.ui.find_opts, toggles);
+        layout_toggles(o, toggles);
     }
 }
 
@@ -121,7 +121,7 @@ static void layout_find_bar(void)
                                 .backgroundColor = cc(t->bg_light),
                                 .border = { .color = rule_color(), .width = { .top = 1 } } }) {
         text(cz(u->find_select ? "Select" : "Find"), cc(t->fg_dim));   // Select Items Matching (F7.4)
-        bar_field("find", u->focus == UI_FOCUS_FIND, bad, ui_find_line(u), (Str){ u->find.b, u->find.len }, u->find_miss ? cc(t->red) : cc(t->fg), 0);   // (red text: no match)
+        bar_field("find", u->focus == UI_FOCUS_FIND, bad, ui_find_line(u), (Str){ u->find.b, u->find.len }, u->find_miss ? cc(t->red) : cc(t->fg), u->find_opts, 0);   // (red text: no match)
         // At least as wide as "88 of 88", so the chevrons don't move as the count grows.
         CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_FIT(str_width(S("88 of 88")), 0), CLAY_SIZING_FIT(0) }, .childAlignment = { .x = CLAY_ALIGN_X_RIGHT } } }) {
             if (bad) text(fit(str_from_c(u->find_m.err), 240, false), cc(t->red));
@@ -141,23 +141,54 @@ static void layout_find_bar(void)
     }
 }
 
+// The "In files" button (F9 step 3): lit while on.
+static void search_inside_btn(void)
+{
+    Theme *t = &app.theme;
+    bool on = app.ui.search_inside, hover = app.hov.search_inside;
+    CLAY(CLAY_ID("search-inside"), { .layout = { .sizing = { CLAY_SIZING_FIT(0), CLAY_SIZING_FIXED(26) }, .padding = { 10, 10, 0, 0 },
+                                                 .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
+                                     .backgroundColor = on ? cc(t->bg) : hover ? mix(t->bg, t->bg_light, 0.5f) : NO_COLOR,
+                                     .border = { .color = on ? cc(t->accent) : rule_color(), .width = CLAY_BORDER_OUTSIDE(1) } }) {
+        text(cz("In files"), on ? cc(t->accent) : cc(t->fg_dim));
+    }
+}
+
 // The search view's bar (F9): where it searches, its field (a caret while it has the keys) with
-// find's toggles, and a bad expression's reason.
+// find's toggles, a bad expression's reason, and "In files"; inside files (step 3) a second row,
+// "Containing", with its field and toggles. The labels share a width, so the fields line up.
 static void layout_search_bar(void)
 {
     Theme *t = &app.theme;
     Ui *u = &app.ui;
     bool bad = app.search_m.bad && u->find_opts.regex && u->search.len;
+    bool ibad = app.search_im.bad && u->inside_opts.regex && u->inside.len;
     char where[PATH_MAX + 16];
     ui_tilde(where, sizeof where, app.search_root, getenv("HOME"));
-    CLAY(CLAY_ID("search-bar"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(SEARCH_BAR_H) }, .padding = { PAD, PAD, 0, 0 }, .childGap = 10,
-                                              .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
+    Str all = str_from_c(arena_sprintf(&frame, "Search in %s", where));
+    float lw = str_width(all) < 300 ? str_width(all) : 300;
+    if (lw < str_width(S("Containing"))) lw = str_width(S("Containing"));
+    CLAY(CLAY_ID("search-bar"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(view_bar_h()) }, .padding = { PAD, PAD, 6, 6 },
+                                              .layoutDirection = CLAY_TOP_TO_BOTTOM, .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
                                   .backgroundColor = cc(t->bg_light) }) {
-        CLAY(CLAY_ID("search-where"), { .layout = { .sizing = { CLAY_SIZING_FIT(0, 300), CLAY_SIZING_FIT(0) } }, .clip = { .horizontal = true } }) {
-            text(fit(str_from_c(arena_sprintf(&frame, "Search in %s", where)), 300, true), cc(t->fg_dim));
+        CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(26) }, .childGap = 10, .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } } }) {
+            CLAY(CLAY_ID("search-where"), { .layout = { .sizing = { CLAY_SIZING_FIXED(lw), CLAY_SIZING_FIT(0) } }, .clip = { .horizontal = true } }) {
+                text(fit(all, 300, true), cc(t->fg_dim));
+            }
+            bar_field("search", u->focus == UI_FOCUS_SEARCH, bad, ui_search_line(u), (Str){ u->search.b, u->search.len }, cc(t->fg), u->find_opts, TOGGLE_SEARCH);
+            if (bad) text(fit(str_from_c(app.search_m.err), 240, false), cc(t->red));
+            search_inside_btn();
         }
-        bar_field("search", u->focus == UI_FOCUS_SEARCH, bad, ui_search_line(u), (Str){ u->search.b, u->search.len }, cc(t->fg), TOGGLE_SEARCH);
-        if (bad) text(fit(str_from_c(app.search_m.err), 240, false), cc(t->red));
+        if (u->search_inside) {
+            CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(26) }, .childGap = 10, .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } } }) {
+                CLAY(CLAY_ID("inside-label"), { .layout = { .sizing = { CLAY_SIZING_FIXED(lw), CLAY_SIZING_FIT(0) } } }) { text(cz("Containing"), cc(t->fg_dim)); }
+                bar_field("inside", u->focus == UI_FOCUS_INSIDE, ibad, ui_inside_line(u), (Str){ u->inside.b, u->inside.len }, cc(t->fg), u->inside_opts, TOGGLE_INSIDE);
+                if (ibad) text(fit(str_from_c(app.search_im.err), 240, false), cc(t->red));
+                // (as wide as "In files" above, as the last frame laid it out, so both fields end together)
+                Clay_ElementData b = Clay_GetElementData(CLAY_ID("search-inside"));
+                CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_FIXED(b.found ? b.boundingBox.width : str_width(S("In files")) + 20), CLAY_SIZING_FIT(0) } } }) {}
+            }
+        }
     }
 }
 
@@ -230,13 +261,17 @@ static void status_info(char *buf, size_t cap)
 // when it is done, and what it left out.
 static void search_status(char *buf, size_t cap)
 {
-    char skipped[256];
+    char skipped[400];
     search_skips_text(&app.search_s, skipped, sizeof skipped);
     const char *sep = skipped[0] ? " \xC2\xB7 " : "";
-    if (!app.ui.search.len) snprintf(buf, cap, "A name, or part of one; * and ? as wildcards (*.ts)");
-    else if (!app.search_done) snprintf(buf, cap, "Searching\xE2\x80\xA6 %td found%s%s", app.list.n, sep, skipped);
-    else if (app.search_s.full) snprintf(buf, cap, "%td found, the most a search shows%s%s", app.list.n, sep, skipped);
-    else snprintf(buf, cap, "%td found%s%s", app.list.n, sep, skipped);
+    // Inside files (step 3): how many files it read, as well.
+    bool inside = app.ui.search_inside && app.ui.inside.len;
+    char *read = inside ? arena_sprintf(&frame, " in %lld file%s", (long long)app.search_s.files, app.search_s.files == 1 ? "" : "s") : "";
+    if (!inside && !app.ui.search.len)
+        snprintf(buf, cap, app.ui.search_inside ? "Text to look for inside files; the name field narrows which (*.ts)" : "A name, or part of one; * and ? as wildcards (*.ts)");
+    else if (!app.search_done) snprintf(buf, cap, "Searching\xE2\x80\xA6 %td found%s%s%s", app.list.n, read, sep, skipped);
+    else if (app.search_s.full) snprintf(buf, cap, "%td found, the most a search shows%s%s%s", app.list.n, read, sep, skipped);
+    else snprintf(buf, cap, "%td found%s%s%s", app.list.n, read, sep, skipped);
 }
 
 // The window, and the modal panel on top when one is up.

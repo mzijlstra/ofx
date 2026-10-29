@@ -158,6 +158,11 @@ typedef struct {
     bool    find_x;      // the find bar's × pressed
     bool    find_field;  // its field pressed: the keys go there
     bool    search_field;   // the search bar's field pressed (F9): the keys go there
+    // Inside files (F9 step 3): the "Containing" field pressed, one of its toggles (1-3, 0 none), the
+    // "In files" button.
+    bool    inside_field;
+    int     inside_toggle;
+    bool    inside_btn;
     // Edit Bookmarks (F7.5): a row pressed or double-clicked (its place on screen), -1 for none; a
     // button pressed (1 Remove, 2 Rename, 3 Move Up, 4 Move Down), 0 for none.
     int     bmp_row, bmp_drow, bmp_btn;
@@ -601,6 +606,7 @@ typedef enum {
     UI_FOCUS_JOBS,     // the job rows' × (Ctrl+J, F5.3), job_at marked
     UI_FOCUS_FIND,     // the find bar's field (while finding)
     UI_FOCUS_SEARCH,   // the search field (in the search view, F9)
+    UI_FOCUS_INSIDE,   // its "Containing" field (searching inside files, F9 step 3)
     UI_FOCUS_EDIT,     // the edit line: a rename or the location line; it is open while it has them
 } UiFocus;
 
@@ -655,6 +661,11 @@ typedef struct {
     // toggle changed (gui/ searches again 150 ms after the last change, and clears it).
     bool   search_edited;
     UI_TEXT(UI_FIND_MAX + 1) search;
+    // Inside files (F9 step 3, Michael 2026-10-29): "In files" on, the "Containing" field shown
+    // under the name's, with toggles of its own.
+    bool   search_inside;
+    UI_TEXT(UI_FIND_MAX + 1) inside;
+    UiMatchOpts inside_opts;
     // The menu bar (F7.1): a menu open, and its entry marked (-1: none, as a menu the pointer
     // opened). gui/ says whether the folder shown takes new files.
     bool   menu_on;

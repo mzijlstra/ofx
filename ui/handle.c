@@ -11,17 +11,30 @@ static Sort ui_sort_click(Sort s, SortKey k)
 
 // ---- the search view's field (F9) -----------------------------------------------------------
 
-// The field's keys: it edits as the rename line does (a caret, Shift to select, Ctrl+A, Ctrl+C, X,
-// V: Michael, 2026-10-28), plus find's toggles, each change marked; Enter, Esc and Down give the
-// keys to the results; another command goes to them as well, and runs there (false; Ctrl+Shift+F
-// gives them back).
+// "In files" on or off (F9 step 3): on, the "Containing" field takes the keys; off, they go back to
+// the name's from it.
+static void ui_search_inside(Ui *u, bool on)
+{
+    u->search_inside = on, u->search_edited = true;
+    if (on) u->focus = UI_FOCUS_INSIDE;
+    else if (u->focus == UI_FOCUS_INSIDE) u->focus = UI_FOCUS_SEARCH;
+}
+
+// The fields' keys (the name's, and "Containing" inside files): each edits as the rename line does
+// (a caret, Shift to select, Ctrl+A, Ctrl+C, X, V: Michael, 2026-10-28), plus its own toggles (the
+// name's are find's), each change marked; Tab goes to the other field while both show; Enter, Esc
+// and Down give the keys to the results; another command goes to them as well, and runs there
+// (false; Ctrl+Shift+F gives them back).
 static bool ui_search_event(Ui *u, UiEvent e, Str paste)
 {
+    bool inside = u->focus == UI_FOCUS_INSIDE;
     if (ui_toggle_key(e)) {
-        u->find_opts = ui_toggle(u->find_opts, ui_toggle_key(e)), u->search_edited = true;
+        UiMatchOpts *o = inside ? &u->inside_opts : &u->find_opts;
+        *o = ui_toggle(*o, ui_toggle_key(e)), u->search_edited = true;
         return true;
     }
-    UiLine l = ui_search_line(u);
+    if (e.key == UK_TAB && u->search_inside) return u->focus = inside ? UI_FOCUS_SEARCH : UI_FOCUS_INSIDE, true;
+    UiLine l = inside ? ui_inside_line(u) : ui_search_line(u);
     if (ui_line_copies_nothing(l, e)) return u->focus = UI_FOCUS_LIST, false;   // (the cursor's result)
     UiLineHit h = ui_line_key(u, l, e, paste);
     if (h == UI_LINE_CHANGED) u->search_edited = true;
@@ -169,6 +182,11 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         return (UiAction){ UA_NONE, 0, false };
     } else if (!prompt && u->view == UI_VIEW_SEARCH && in->search_field) {
         u->focus = UI_FOCUS_SEARCH;
+        return (UiAction){ UA_NONE, 0, false };
+    } else if (!prompt && !u->menu_on && u->view == UI_VIEW_SEARCH && (in->inside_btn || (u->search_inside && (in->inside_field || in->inside_toggle > 0)))) {
+        if (in->inside_btn) ui_search_inside(u, !u->search_inside);
+        else if (in->inside_toggle >= 1 && in->inside_toggle <= 3) u->inside_opts = ui_toggle(u->inside_opts, in->inside_toggle), u->search_edited = true;
+        else u->focus = UI_FOCUS_INSIDE;
         return (UiAction){ UA_NONE, 0, false };
     }
     // The menu bar (F7.1): a title opens its menu or closes it; while a menu is open a press on one
@@ -391,7 +409,14 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
             continue;
         }
         // The search field (F9) before Shift is taken off the moves: it selects with them.
-        if (u->focus == UI_FOCUS_SEARCH && u->view == UI_VIEW_SEARCH && !prompt && ui_search_event(u, e, in->paste)) continue;
+        // Alt+I (F9 step 3): inside files or not, wherever the keys are in the search view.
+        if (u->view == UI_VIEW_SEARCH && !prompt && e.key == UK_MENU && e.ch == 'i') {
+            ui_search_inside(u, !u->search_inside);
+            continue;
+        }
+        if ((u->focus == UI_FOCUS_SEARCH || (u->focus == UI_FOCUS_INSIDE && u->search_inside)) && u->view == UI_VIEW_SEARCH && !prompt &&
+            ui_search_event(u, e, in->paste))
+            continue;
         // The find bar's likewise (2026-10-28), after the questions: a clash or the delete question
         // takes its keys first.
         if (u->focus == UI_FOCUS_FIND && u->finding && !prompt && ui_find_event(u, names, e, in)) continue;

@@ -263,6 +263,19 @@ static void script_state(char *out, size_t cap)
         if (*c == ' ') *c = '_';
     for (char *c = searchinfo; *c; c++)
         if (*c == ' ') *c = '_';
+    // Inside files (F9 step 3): the "Containing" field's text, and where the cursor's result
+    // matched: line:column+more lines, the match, and whether its row drew it.
+    char insidetext[UI_FIND_MAX + 1], hit[64] = "-", hitmatch[SEARCH_SNIP + 1] = "-";
+    snprintf(insidetext, sizeof insidetext, "%.*s", app.ui.inside.len ? app.ui.inside.len : 1, app.ui.inside.len ? app.ui.inside.b : "-");
+    if (se && se->hit) {
+        snprintf(hit, sizeof hit, "%lld:%lld+%lld", (long long)se->hit->line, (long long)se->hit->col, (long long)se->hit->more);
+        snprintf(hitmatch, sizeof hitmatch, "%.*s", se->hit->len ? (int)se->hit->len : 1, se->hit->len ? se->hit->text.p + se->hit->at : "-");
+    }
+    for (char *c = insidetext; *c; c++)
+        if (*c == ' ') *c = '_';
+    for (char *c = hitmatch; *c; c++)
+        if (*c == ' ') *c = '_';
+    int hitdrawn = se ? Clay_GetElementData(CLAY_IDI("hit", (int)(app.ui.list.sel - app.ui.list.top))).found : 0;
     // The cursor's preview, as its texture's size (F6.4).
     char thumbsel[32] = "-";
     char tpath[PATH_MAX];
@@ -350,7 +363,7 @@ static void script_state(char *out, size_t cap)
         if (*c == ' ') *c = '_';
     // Open With (F7.3): its field's text (spaces '_'), the app under the cursor (its desktop id),
     // and the toggles as letters (c, w, r; "-" none), the panel's and find's.
-    char owtext[UI_FIND_MAX + 1], owapp[NAME_MAX + 1], owopts[4], findopts[4];
+    char owtext[UI_FIND_MAX + 1], owapp[NAME_MAX + 1], owopts[4], findopts[4], insideopts[4];
     snprintf(owtext, sizeof owtext, "%.*s", app.ui.ow_filter.len ? app.ui.ow_filter.len : 1, app.ui.ow_filter.len ? app.ui.ow_filter.b : "-");
     for (char *c = owtext; *c; c++)
         if (*c == ' ') *c = '_';
@@ -364,9 +377,9 @@ static void script_state(char *out, size_t cap)
     }
     int owtex = 0;   // the panel's icon textures held (none once it closed)
     for (isize i = 0; i < UI_APPS_MAX; i++) owtex += ow.icon[i].tex.id != 0;
-    UiMatchOpts mo[2] = { app.ui.ow_opts, app.ui.find_opts };
-    char *mout[2] = { owopts, findopts };
-    for (int k = 0; k < 2; k++) {
+    UiMatchOpts mo[3] = { app.ui.ow_opts, app.ui.find_opts, app.ui.inside_opts };
+    char *mout[3] = { owopts, findopts, insideopts };
+    for (int k = 0; k < 3; k++) {
         int n = 0;
         if (mo[k].cased) mout[k][n++] = 'c';
         if (mo[k].word) mout[k][n++] = 'w';
@@ -418,7 +431,7 @@ static void script_state(char *out, size_t cap)
              "props=%d propat=%d propcan=%d propn=%td propmode=%04o propfiles=%lld propdirs=%lld propbytes=%lld propdone=%d propcut=%d proplinks=%lld,%lld,%lld,%d propnlink=%llu proptype=%s proptypename=%s propbyname=%d propname=%s "
              "propwhere=%s propdrive=%s proplink=%s propcreated=%d propidx=%td "
              "ow=%d owfresh=%d owlist=%d owtext=%s own=%td owsel=%td owapp=%s owicon=%s owtex=%d owshown=%td owtype=%s owfiles=%td owrows=%d owtop=%td owopts=%s owbad=%d owdef=%d owdefcan=%d findopts=%s findbad=%d findselect=%d findn=%td findat=%td findtext=%s "
-             "search=%d searchkeys=%d searchtext=%s searchdone=%d searchfull=%d searchdue=%d searchbad=%d searchbar=%d searchsel=%d-%d searchcaret=%d findsel=%d-%d findcaret=%d seldir=%s searchinfo=%s spawned=%d status=%s",
+             "search=%d searchkeys=%d searchtext=%s searchdone=%d searchfull=%d searchdue=%d searchbad=%d searchbar=%d searchsel=%d-%d searchcaret=%d findsel=%d-%d findcaret=%d seldir=%s searchinfo=%s inside=%d insidekeys=%d insidetext=%s insideopts=%s insidebad=%d insiderow=%d hit=%s hitmatch=%s hitdrawn=%d spawned=%d status=%s",
              app.cwd, app.list.n, app.list.hidden, STR_ARG(sel), app.ui.list.sel, app.ui.list.top, app.ui.list.rows, app.hov.row,
              t->accent.r, t->accent.g, t->accent.b, t->bg.r, t->bg.g, t->bg.b, t->icons[0] ? t->icons : "-",
              app.icon_scale, GetScreenWidth(), GetScreenHeight(), app.reloads, app.themes, atomic_load(&watch.batches),
@@ -455,7 +468,9 @@ static void script_state(char *out, size_t cap)
              app.ui.search.anchor < app.ui.search.caret ? app.ui.search.anchor : app.ui.search.caret,
              app.ui.search.anchor < app.ui.search.caret ? app.ui.search.caret : app.ui.search.anchor, app.ui.search.caret,
              app.ui.find.anchor < app.ui.find.caret ? app.ui.find.anchor : app.ui.find.caret,
-             app.ui.find.anchor < app.ui.find.caret ? app.ui.find.caret : app.ui.find.anchor, app.ui.find.caret, seldir, searchinfo, spawn_started, app.status[0] ? app.status : "-");
+             app.ui.find.anchor < app.ui.find.caret ? app.ui.find.caret : app.ui.find.anchor, app.ui.find.caret, seldir, searchinfo,
+             app.ui.search_inside, app.ui.focus == UI_FOCUS_INSIDE, insidetext, insideopts, app.search_im.bad,
+             (int)Clay_GetElementData(CLAY_ID("inside-field")).found, hit, hitmatch, hitdrawn, spawn_started, app.status[0] ? app.status : "-");
     frame_us_max = 0;
 }
 

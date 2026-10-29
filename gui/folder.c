@@ -56,17 +56,26 @@ static void trash_scan(void)
     trash_dirs(&trashd, mp, n);
 }
 
+// The search an address names, with the toggles and hidden files as they are now (root: its
+// folder, copied out).
+static SearchQuery search_query(Str text, Str inside, const char *root)
+{
+    return (SearchQuery){ .root = root, .text = text, .inside = inside, .o = app.ui.find_opts, .io = app.ui.inside_opts, .hidden = app.show_hidden };
+}
+
 // The search view's listing (F9): the matches so far, sorted. A search starts first when another
 // one runs or ran (entering the view always does: leaving it asked for none).
 static bool search_list(Arena *a, const char *uri, Listing *l, Err *err)
 {
-    Str root, text;
+    Str root, text, inside;
     char r[PATH_MAX];
-    if (!search_parse(uri, &root, &text) || root.len >= PATH_MAX) return err_set(err, "Not a search"), false;
+    if (!search_parse(uri, &root, &text, &inside) || root.len >= PATH_MAX) return err_set(err, "Not a search"), false;
     snprintf(r, sizeof r, "%.*s", STR_ARG(root));
-    if (!search_is(r, text, app.ui.find_opts, app.show_hidden)) {
-        search_ask(r, text, app.ui.find_opts, app.show_hidden);
+    SearchQuery q = search_query(text, inside, r);
+    if (!search_is(q)) {
+        search_ask(q);
         ui_matcher_set(&app.search_m, text, app.ui.find_opts);
+        ui_matcher_set(&app.search_im, inside, app.ui.inside_opts);
     }
     if (!search_copy(a, l, &app.search_s, &app.search_done)) return err_set(err, "%s: too many results for memory", r), false;
     fs_sort(l, app.ui.sort);
@@ -88,6 +97,12 @@ static const struct {
     [UI_VIEW_TRASH] = { "Deleted", TRASH_BAR_H },
     [UI_VIEW_SEARCH] = { "Modified", SEARCH_BAR_H },
 };
+
+// The view's bar's height: the search's grows by its "Containing" row inside files (step 3).
+static int view_bar_h(void)
+{
+    return VIEWS[app.ui.view].bar_h + (app.ui.view == UI_VIEW_SEARCH && app.ui.search_inside ? SEARCH_ROW_H : 0);
+}
 
 static UiView view_of(const char *dir)
 {
@@ -171,14 +186,16 @@ static bool go_to_in(const char *dir, Str select, isize fallback, bool stepping)
     // The folder left, with its cursor, for Back: its name is still in the old listing's arena.
     if (!same && app.have_list && !stepping) hist_leave(&hist, app.cwd, sel_name());
     app.cur = next, app.list = l, app.mime = mime, app.have_list = true, app.error[0] = 0, app.lists++;
-    if (app.ui.view == UI_VIEW_SEARCH && view != UI_VIEW_SEARCH) search_ask("", STR_EMPTY, app.ui.find_opts, false), app.search_due = 0;   // (out of it: the walk stops)
-    if (view != UI_VIEW_SEARCH) ui_unfocus(&app.ui, UI_FOCUS_SEARCH);
-    if (view == UI_VIEW_SEARCH && !same) {   // the field shows its text; empty, it has the keys
-        Str root, text;
-        search_parse(dir, &root, &text);
+    if (app.ui.view == UI_VIEW_SEARCH && view != UI_VIEW_SEARCH) search_ask((SearchQuery){ .root = "" }), app.search_due = 0;   // (out of it: the walk stops)
+    if (view != UI_VIEW_SEARCH) ui_unfocus(&app.ui, UI_FOCUS_SEARCH), ui_unfocus(&app.ui, UI_FOCUS_INSIDE);
+    if (view == UI_VIEW_SEARCH && !same) {   // the fields show their text; empty, the first has the keys
+        Str root, text, inside;
+        search_parse(dir, &root, &text, &inside);
         ui_line_set(ui_search_line(&app.ui), text);
-        if (text.len == 0) app.ui.focus = UI_FOCUS_SEARCH;
-        else ui_unfocus(&app.ui, UI_FOCUS_SEARCH);
+        ui_line_set(ui_inside_line(&app.ui), inside);
+        app.ui.search_inside = inside.len > 0;   // (step 3: the address says whether it searched inside)
+        if (text.len == 0 && inside.len == 0) app.ui.focus = UI_FOCUS_SEARCH;
+        else ui_unfocus(&app.ui, UI_FOCUS_SEARCH), ui_unfocus(&app.ui, UI_FOCUS_INSIDE);
         app.ui.search_edited = false, app.search_due = 0;
         snprintf(app.search_pick, sizeof app.search_pick, "%.*s", STR_ARG(select));
     }
@@ -240,7 +257,8 @@ enum { SEARCH_TYPE_MS = 150 };
 static void search_retype(void)
 {
     char uri[PATH_MAX];
-    if (!search_uri(uri, sizeof uri, app.search_root, (Str){ app.ui.search.b, app.ui.search.len })) {
+    Str inside = app.ui.search_inside ? (Str){ app.ui.inside.b, app.ui.inside.len } : STR_EMPTY;
+    if (!search_uri(uri, sizeof uri, app.search_root, (Str){ app.ui.search.b, app.ui.search.len }, inside)) {
         set_status(true, "That search is too long");
         return;
     }
@@ -255,8 +273,8 @@ static void search_again(void)
     char keep[PATH_MAX];
     snprintf(keep, sizeof keep, "%.*s", STR_ARG(sel_name()));
     snprintf(app.search_pick, sizeof app.search_pick, "%s", keep);
-    Str root, text;
-    if (search_parse(app.cwd, &root, &text)) search_ask(app.search_root, text, app.ui.find_opts, app.show_hidden);
+    Str root, text, inside;
+    if (search_parse(app.cwd, &root, &text, &inside)) search_ask(search_query(text, inside, app.search_root));
     search_relist();
 }
 

@@ -3,7 +3,7 @@
 # (tools/gui/run-script.sh):
 #   tests/gui/run.sh <scratch-dir> [binary] [group...]
 # The groups (one or more scripts on one tree): browse big gone watchgap f2 f3 f4 f5 f52 f53 f54
-# f6 (f6, f6b) f62 (f62, f62b, f62c) f63 (f63, f63b, f63c) f64 (f64, f64b, f64c, f64d) f7 (f7, f7b) f72 f73 (f73, f73b, f73c, f73d) f74 f75 (f75, f75b) f8 (f8, f8b, f8c, f8d, f8e) f9 clip keys (both in sway) hang guard3 guard. Named ones only, or all of them; a group
+# f6 (f6, f6b) f62 (f62, f62b, f62c) f63 (f63, f63b, f63c) f64 (f64, f64b, f64c, f64d) f7 (f7, f7b) f72 f73 (f73, f73b, f73c, f73d) f74 f75 (f75, f75b) f8 (f8, f8b, f8c, f8d, f8e) f9 (f9, f9b) clip keys (both in sway) hang guard3 guard. Named ones only, or all of them; a group
 # that fails says "== <script>: FAILED" or "<group>: FAILED" (tools/mutation/gui.py reads it).
 set -u
 base=${1:?usage: run.sh <scratch-dir> [binary]}
@@ -281,6 +281,15 @@ L="$H/tree/long/$(printf 'x%.0s' $(seq 250))"; mkdir -p "$L"; printf x > "$L/m2.
 (cd "$H/tree/zz" && seq -f 'zz%05g' 0 10000 | xargs touch)
 printf '1 0 0:1 / / rw - ext4 /dev/x rw\n' > "$T/mountinfo"
 echo "== f9"; OFX_TEST_HOME="$H" OFX_TEST_MOUNTINFO="$T/mountinfo" "$here/../../tools/gui/run-script.sh" "$T" "$here/f9.script" "$bin" "$H/tree" || failed f9
+# F9 step 3: inside files. tree: two .ts files and a .js with useState, a binary with it, a 17 MB
+# file, a link to a file, and a file without it.
+T=$base/f9b; rm -rf "$T"; H=$T/home; mkdir -p "$T/config/gtk-3.0" "$H/tree/src" "$H/tree/docs"
+printf 'import x\nconst [a, b] = useState(0)\n  useState again\n' > "$H/tree/src/app.ts"
+printf 'useState here\n' > "$H/tree/src/other.js"; printf 'const USESTATE = 1\n' > "$H/tree/src/Upper.ts"
+printf 'useState\0' > "$H/tree/bin.dat"; truncate -s 17M "$H/tree/big.txt"; printf 'nothing\n' > "$H/tree/docs/readme.md"
+ln -s src/app.ts "$H/tree/link.ts"
+printf '1 0 0:1 / / rw - ext4 /dev/x rw\n' > "$T/mountinfo"
+echo "== f9b"; OFX_TEST_HOME="$H" OFX_TEST_MOUNTINFO="$T/mountinfo" "$here/../../tools/gui/run-script.sh" "$T" "$here/f9b.script" "$bin" "$H/tree" || failed f9b
 fi
 if want clip; then
 # The system clipboard, in the test sway (tools/gui/sway.sh: weston has no data-control, 2026-10-28).

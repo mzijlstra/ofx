@@ -57,19 +57,19 @@ static bool ui_whole(Str hay, isize from, isize to)
 // boundary to a boundary that it matches in full. The longest match from a start may run past a
 // boundary a shorter one stops at (`-*-` in "--_ ", reviewer-2, F7.3 review), so each span is
 // tried: the leftmost-longest match within it is all of it exactly when the span matches. ^ and $
-// keep meaning the name's start and end (NOTBOL, NOTEOL inside it).
-static bool ui_match_re(const UiMatcher *m, Str hay)
+// keep meaning the name's start and end (NOTBOL, NOTEOL inside it). *at, *end: where it matched.
+static bool ui_match_re(const UiMatcher *m, Str hay, isize *at, isize *end)
 {
     regmatch_t all = { .rm_so = 0, .rm_eo = (regoff_t)hay.len };
     if (regexec(&m->re, hay.p ? hay.p : "", 1, &all, REG_STARTEND) != 0) return false;
-    if (!m->o.word) return true;
+    if (!m->o.word) return *at = all.rm_so, *end = all.rm_eo, true;
     for (isize from = 0; from <= hay.len; from++) {
         if (from > 0 && ui_word_byte((unsigned char)hay.p[from - 1])) continue;
         for (isize to = hay.len; to >= from; to--) {
             if (to < hay.len && ui_word_byte((unsigned char)hay.p[to])) continue;
             regmatch_t pm = { .rm_so = 0, .rm_eo = (regoff_t)(to - from) };
             int flags = REG_STARTEND | (from > 0 ? REG_NOTBOL : 0) | (to < hay.len ? REG_NOTEOL : 0);
-            if (regexec(&m->re, hay.p ? hay.p + from : "", 1, &pm, flags) == 0 && pm.rm_so == 0 && pm.rm_eo == to - from) return true;
+            if (regexec(&m->re, hay.p ? hay.p + from : "", 1, &pm, flags) == 0 && pm.rm_so == 0 && pm.rm_eo == to - from) return *at = from, *end = to, true;
         }
     }
     return false;
@@ -98,29 +98,44 @@ static bool ui_folded_at(const UiMatcher *m, Str hay, isize i, isize *end)
     return true;
 }
 
-// Whether hay matches m. An empty text matches everything; a bad expression nothing.
-static bool ui_match(const UiMatcher *m, Str hay)
+// Whether hay matches m, the first match at [*from, *to) (a line searched inside files, F9 step 3,
+// shows it). An empty text matches everything, there at 0; a bad expression nothing.
+static bool ui_match_span(const UiMatcher *m, Str hay, isize *from, isize *to)
 {
-    if (m->len == 0) return true;
+    if (m->len == 0) return *from = *to = 0, true;
     if (m->o.regex) {
         if (!m->re_on) return false;
         locale_t was = ui_utf8_on();
-        bool hit = ui_match_re(m, hay);
+        bool hit = ui_match_re(m, hay, from, to);
         ui_utf8_off(was);
         return hit;
     }
+    // Inside files (F9 step 3) this runs over every line read: a start is looked for first, by
+    // memmem with case, and without by its first byte when that is ASCII (a byte past ASCII may still
+    // fold to it, as K's Kelvin sign, so those go through the whole comparison).
+    unsigned char first = (unsigned char)m->text[0];
+    bool quick = first < 0x80;
     for (isize i = 0; i < hay.len; i++) {
-        if (((unsigned char)hay.p[i] & 0xC0) == 0x80) continue;   // a match starts at a character
         isize end = i;
         if (m->o.cased) {
-            if (i + m->len > hay.len || memcmp(hay.p + i, m->text, (size_t)m->len) != 0) continue;
-            end = i + m->len;
-        } else if (!ui_folded_at(m, hay, i, &end)) {
-            continue;
+            const char *p = memmem(hay.p + i, (size_t)(hay.len - i), m->text, (size_t)m->len);
+            if (!p) break;
+            i = p - hay.p, end = i + m->len;   // (at a character: m->text starts with one)
+        } else {
+            unsigned char c = (unsigned char)hay.p[i];
+            if ((c & 0xC0) == 0x80) continue;   // a match starts at a character
+            if (quick && c < 0x80 && fold(c) != fold(first)) continue;
+            if (!ui_folded_at(m, hay, i, &end)) continue;
         }
-        if (!m->o.word || ui_whole(hay, i, end)) return true;
+        if (!m->o.word || ui_whole(hay, i, end)) return *from = i, *to = end, true;
     }
     return false;
+}
+
+static bool ui_match(const UiMatcher *m, Str hay)
+{
+    isize at, end;
+    return ui_match_span(m, hay, &at, &end);
 }
 
 // Whether a search's text (F9) is a wildcard: a * or ? in it, the regular expression toggle off.

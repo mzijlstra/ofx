@@ -208,8 +208,8 @@ static void ow_toggle(int k, bool on, int base)
 }
 
 // The three toggles in a row (the find line's, the panel's field's, and with base TOGGLE_SEARCH
-// the search bar's).
-enum { TOGGLE_SEARCH = 10 };
+// the search bar's, TOGGLE_INSIDE its "Containing" field's).
+enum { TOGGLE_SEARCH = 10, TOGGLE_INSIDE = 20 };
 
 static void layout_toggles(UiMatchOpts o, int base)
 {

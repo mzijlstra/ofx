@@ -343,8 +343,9 @@ static void layout_tabs(float w)
         for (int i = 0; i < tabbar.n; i++) {
             bool cur = i == tabbar.cur, hover = app.hov.tab == i;
             const char *dir = cur ? app.cwd : tabs[tabbar.slot[i]].dir;
-            Str name = strcmp(dir, "/") == 0 ? S("/") : path_base(str_from_c(dir)), root, what;
-            if (search_parse(dir, &root, &what))   // a search (F9): what it looks for, and where
+            Str name = strcmp(dir, "/") == 0 ? S("/") : path_base(str_from_c(dir)), root, what, inside;
+            if (search_parse(dir, &root, &what, &inside) && inside.len) what = inside;   // (inside files, step 3: the text looked for there)
+            if (is_search(dir))   // a search (F9): what it looks for, and where
                 name = str_from_c(what.len ? arena_sprintf(&frame, "%.*s in %.*s", STR_ARG(what), STR_ARG(path_base(root)))
                                            : arena_sprintf(&frame, "Search in %.*s", STR_ARG(root.len == 1 ? root : path_base(root))));
             CLAY(CLAY_IDI("tab", i), { .layout = { .sizing = { CLAY_SIZING_FIXED(each), CLAY_SIZING_FIXED(TAB_H) }, .padding = { PAD, 4, 0, 0 },

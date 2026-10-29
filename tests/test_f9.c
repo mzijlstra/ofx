@@ -5,33 +5,52 @@
 static void test_search_uri(void)
 {
     char u[256];
-    Str r, t;
-    CHECK(search_uri(u, sizeof u, "/home/m/code", S("a:1")));
+    Str r, t, in;
+    CHECK(search_uri(u, sizeof u, "/home/m/code", S("a:1"), STR_EMPTY));
     CHECK(strcmp(u, "search:12:/home/m/code" "a:1") == 0 && is_search(u));
-    CHECK(search_parse(u, &r, &t));
+    CHECK(search_parse(u, &r, &t, &in));
     CHECK_STR(r, "/home/m/code");
     CHECK_STR(t, "a:1");
     // Empty text; a folder with digits and ':' in it.
-    CHECK(search_uri(u, sizeof u, "/a:2", STR_EMPTY) && search_parse(u, &r, &t));
+    CHECK(search_uri(u, sizeof u, "/a:2", STR_EMPTY, STR_EMPTY) && search_parse(u, &r, &t, &in));
     CHECK_STR(r, "/a:2");
     CHECK(t.len == 0);
     // Too small a buffer.
-    CHECK(!search_uri(u, 10, "/home/m/code", S("x")));
+    CHECK(!search_uri(u, 10, "/home/m/code", S("x"), STR_EMPTY));
     // Not addresses.
-    CHECK(!is_search("/search:1:/") && !search_parse("/home", &r, &t));
-    CHECK(!search_parse("search:", &r, &t) && !search_parse("search:x:/a", &r, &t) && !search_parse("search:2/a", &r, &t));
-    CHECK(!search_parse("search:9:/a", &r, &t));   // shorter than it says
-    CHECK(!search_parse("search:0:", &r, &t) && !search_parse("search:2:ab", &r, &t));   // not a path
-    CHECK(!search_parse("search:99999:/a", &r, &t));
-    CHECK(!search_parse("search:9999999999999999999999999:/a", &r, &t));   // (no overflow)
-    CHECK(!search_parse("search:2x/a", &r, &t) && !search_parse("search:", &r, &t));
+    CHECK(!is_search("/search:1:/") && !search_parse("/home", &r, &t, &in));
+    CHECK(!search_parse("search:", &r, &t, &in) && !search_parse("search:x:/a", &r, &t, &in) && !search_parse("search:2/a", &r, &t, &in));
+    CHECK(!search_parse("search:9:/a", &r, &t, &in));   // shorter than it says
+    CHECK(!search_parse("search:0:", &r, &t, &in) && !search_parse("search:2:ab", &r, &t, &in));   // not a path
+    CHECK(!search_parse("search:99999:/a", &r, &t, &in));
+    CHECK(!search_parse("search:9999999999999999999999999:/a", &r, &t, &in));   // (no overflow)
+    CHECK(!search_parse("search:2x/a", &r, &t, &in) && !search_parse("search:", &r, &t, &in));
     CHECK(!is_search("search") && !is_search("search/x") && !is_search("Search:2:/a"));
+    // Inside files (step 3): the name's length after the folder's, the text inside last.
+    CHECK(search_uri(u, sizeof u, "/a:2", S("*.ts"), S("use:x")));
+    CHECK(strcmp(u, "search:4,4:/a:2*.tsuse:x") == 0 && search_parse(u, &r, &t, &in));
+    CHECK_STR(r, "/a:2");
+    CHECK_STR(t, "*.ts");
+    CHECK_STR(in, "use:x");
+    CHECK(search_uri(u, sizeof u, "/a", STR_EMPTY, S("x")) && strcmp(u, "search:2,0:/ax") == 0 && search_parse(u, &r, &t, &in));
+    CHECK(t.len == 0);
+    CHECK_STR(in, "x");
+    CHECK(search_parse("search:2:/ax", &r, &t, &in) && in.len == 0);   // by name: nothing inside
+    CHECK(!search_uri(u, 18, "/a", S("b"), S("cdefg")));
+    CHECK(!search_parse("search:2,1:/ax", &r, &t, &in));    // nothing inside: written without the ','
+    CHECK(!search_parse("search:2,2:/ax", &r, &t, &in));    // the name runs past the end
+    CHECK(!search_parse("search:2,:/ax", &r, &t, &in) && !search_parse("search:2,x:/ax", &r, &t, &in));
+    CHECK(!search_parse("search:,1:/ax", &r, &t, &in) && !search_parse("search:2,99999:/ax", &r, &t, &in));
 }
 
 static struct {
     char  got[32][128];
     int   n, room;
     UiMatcher m;
+    SearchHit hit[32];        // inside files (step 3): each one's, its text copied to text[]
+    char      text[32][SEARCH_SNIP + 1];
+    const char *needle;       // what a line must hold (sw_line), case as written
+    atomic_uint *bump;        // moved on by a match (a new search meanwhile)
 } sw;
 
 static bool sw_match(void *ctx, Str name)
@@ -40,28 +59,179 @@ static bool sw_match(void *ctx, Str name)
     return ui_search_match(&sw.m, name);
 }
 
-static bool sw_found(void *ctx, Str dir, Str name, int fd)
+static bool sw_found(void *ctx, Str dir, Str name, int fd, const SearchHit *hit)
 {
     (void)ctx;
     struct stat st;
     CHECK(fstatat(fd, name.p, &st, AT_SYMLINK_NOFOLLOW) == 0);   // fd is the folder it is in
     if (sw.n == sw.room || sw.n == 32) return false;
+    CHECK((hit != NULL) == (sw.needle != NULL));
+    if (hit) {
+        sw.hit[sw.n] = *hit;
+        snprintf(sw.text[sw.n], sizeof sw.text[0], "%.*s", STR_ARG(hit->text));
+    }
     snprintf(sw.got[sw.n++], sizeof sw.got[0], "%.*s|%.*s", STR_ARG(dir), STR_ARG(name));
     return true;
 }
 
-static bool sw_has(const char *want)
+static int sw_at(const char *want)
 {
     for (int i = 0; i < sw.n; i++)
-        if (strcmp(sw.got[i], want) == 0) return true;
-    return false;
+        if (strcmp(sw.got[i], want) == 0) return i;
+    return -1;
+}
+
+static bool sw_has(const char *want)
+{
+    return sw_at(want) >= 0;
+}
+
+// Inside files: a line matches when it holds sw.needle (fs/ is tested apart from ui/'s matcher).
+static bool sw_line(void *ctx, Str line, isize *from, isize *to)
+{
+    (void)ctx;
+    const char *p = memmem(line.p, (size_t)line.len, sw.needle, strlen(sw.needle));
+    if (!p) return false;
+    *from = p - line.p, *to = *from + (isize)strlen(sw.needle);
+    if (sw.bump) atomic_fetch_add(sw.bump, 1);
+    return true;
 }
 
 static SearchWalk sw_walk(const char *text, UiMatchOpts o, bool hidden)
 {
     ui_matcher_set(&sw.m, str_from_c(text), o);
-    sw.n = 0, sw.room = 32;
+    sw.n = 0, sw.room = 32, sw.needle = NULL;
     return (SearchWalk){ .hidden = hidden, .match = sw_match, .found = sw_found };
+}
+
+// A walk inside files for needle, below files whose names match name.
+static SearchWalk sw_inside(const char *name, const char *needle)
+{
+    static char buf[SEARCH_BUF];
+    SearchWalk w = sw_walk(name, (UiMatchOpts){ 0 }, false);
+    sw.needle = needle, w.line = sw_line, w.buf = buf;
+    return w;
+}
+
+static void test_search_inside(void)
+{
+    char r[300];   // (at's buffers turn over)
+    snprintf(r, sizeof r, "%s", at("f9i"));
+    put(at("f9i/a.txt"), "one\n  needle here\nnope\nwith needle again\n");
+    put(at("f9i/sub/b.txt"), "\xC3\xA9\xC3\xA9 needle\r\n");   // a column in characters; CRLF
+    put(at("f9i/c.md"), "needle");                                 // a name that doesn't match isn't read
+    put(at("f9i/tab.txt"), "a\tneedle");                           // control characters as spaces; no last newline
+    put(at("f9i/none.txt"), "nothing\n");
+    put(at("f9i/empty.txt"), "");
+    mkdirs(at("f9i/needle.txt"));                                  // a folder isn't a result inside files
+    CHECK(symlink("a.txt", at("f9i/link.txt")) == 0);              // not followed, counted
+    CHECK(mkfifo(at("f9i/fifo.txt"), 0600) == 0);                  // not opened (it would block)
+    SearchWalk w = sw_inside("*.txt", "needle");
+    CHECK(search_walk(&w, r));
+    CHECK(sw.n == 3 && sw_has("|a.txt") && sw_has("sub|b.txt") && sw_has("|tab.txt"));
+    int k = sw_at("|a.txt");
+    CHECK(k >= 0 && sw.hit[k].line == 2 && sw.hit[k].col == 3 && sw.hit[k].more == 1);
+    CHECK(k >= 0 && strcmp(sw.text[k], "needle here") == 0 && sw.hit[k].at == 0 && sw.hit[k].len == 6 && !sw.hit[k].cut);   // (the indent left out)
+    k = sw_at("sub|b.txt");
+    CHECK(k >= 0 && sw.hit[k].line == 1 && sw.hit[k].col == 4 && sw.hit[k].more == 0 && strcmp(sw.text[k], "\xC3\xA9\xC3\xA9 needle") == 0);
+    CHECK(k >= 0 && sw.hit[k].at == 5);
+    k = sw_at("|tab.txt");
+    CHECK(k >= 0 && strcmp(sw.text[k], "a needle") == 0 && sw.hit[k].at == 2);
+    CHECK(w.s.files == 5 && w.s.file_links == 1 && w.s.binary == 0 && w.s.big == 0 && w.s.unread_files == 0);   // a, b, tab, none, empty (needle.txt is a folder)
+
+    // Binary: a NUL in the first 8 KB; past them, text.
+    char head[SEARCH_HEAD + 16];
+    memset(head, 'x', sizeof head);
+    memcpy(head + 100, "needle", 6);
+    head[SEARCH_HEAD - 1] = 0;
+    put_bytes(at("f9b/bin.txt"), head, sizeof head);
+    head[SEARCH_HEAD - 1] = 'x', head[SEARCH_HEAD] = 0;
+    put_bytes(at("f9b/text.txt"), head, sizeof head);
+    w = sw_inside("*", "needle");
+    CHECK(search_walk(&w, at("f9b")) && sw.n == 1 && sw_has("|text.txt") && w.s.binary == 1);
+    // Over 16 MB isn't read; 16 MB is (sparse: its NULs come after the first 8 KB).
+    int fd = open(at("f9b/max.txt"), O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    CHECK(fd >= 0 && write(fd, head, SEARCH_HEAD) == SEARCH_HEAD && ftruncate(fd, SEARCH_FILE_MAX) == 0);
+    close(fd);
+    fd = open(at("f9b/big.txt"), O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    CHECK(fd >= 0 && write(fd, head, SEARCH_HEAD) == SEARCH_HEAD && ftruncate(fd, SEARCH_FILE_MAX + 1) == 0);
+    close(fd);
+    w = sw_inside("*", "needle");
+    CHECK(search_walk(&w, at("f9b")) && sw.n == 2 && sw_has("|max.txt") && w.s.big == 1);
+    char line[200];
+    search_skips_text(&w.s, line, sizeof line);
+    CHECK(strcmp(line, "skipped 1 binary, 1 over 16 MB") == 0);
+
+    // A line longer than the buffer: a match across two pieces is found, its column counted
+    // through them; a second match further on the same line counts the line once.
+    static char lng[3 * SEARCH_BUF];
+    memset(lng, 'y', sizeof lng);
+    memcpy(lng, "top\n", 4);
+    isize cross = 4 + SEARCH_BUF - 3;   // "needle" from 3 bytes before the first piece's end (the line's start, 4, at the front)
+    memcpy(lng + cross, "needle", 6);
+    memcpy(lng + 2 * SEARCH_BUF, "needle", 6);
+    memcpy(lng + sizeof lng - 8, "\nneedle", 8);
+    put_bytes(at("f9l/long.txt"), lng, sizeof lng);
+    w = sw_inside("*", "needle");
+    CHECK(search_walk(&w, at("f9l")) && sw.n == 1);
+    CHECK(sw.n == 1 && sw.hit[0].line == 2 && sw.hit[0].col == cross - 4 + 1 && sw.hit[0].more == 1 && sw.hit[0].cut);
+    CHECK(sw.n == 1 && sw.hit[0].text.len == SEARCH_SNIP && sw.hit[0].at == SEARCH_SNIP_BEFORE && sw.hit[0].len == 6);
+    // Past the first piece, the column still counts characters before it (é is two bytes).
+    memset(lng, 'y', sizeof lng);
+    for (isize i = 0; i + 1 < SEARCH_CHUNK; i += 2) lng[i] = (char)0xC3, lng[i + 1] = (char)0xA9;
+    memcpy(lng + SEARCH_BUF + 100, "needle", 6);
+    put_bytes(at("f9l/long.txt"), lng, SEARCH_BUF + 200);
+    w = sw_inside("*", "needle");
+    CHECK(search_walk(&w, at("f9l")) && sw.n == 1 && sw.hit[0].line == 1 && sw.hit[0].col == SEARCH_CHUNK / 2 + (SEARCH_BUF - SEARCH_CHUNK) + 100 + 1);
+
+    // The line after a long one counts its column from its own start.
+    memset(lng, 'y', 2 * SEARCH_BUF);
+    memcpy(lng + 2 * SEARCH_BUF, "\nab needle", 10);
+    put_bytes(at("f9l/long.txt"), lng, 2 * SEARCH_BUF + 10);
+    w = sw_inside("*", "needle");
+    CHECK(search_walk(&w, at("f9l")) && sw.n == 1 && sw.hit[0].line == 2 && sw.hit[0].col == 4);
+    // The line's start cut in a character: the text starts at the next one.
+    char mb[200] = "x";   // then 40 € (three bytes each): 40 before the match is inside one
+    for (int i = 0; i < 40; i++) memcpy(mb + 1 + 3 * i, "\xE2\x82\xAC", 3);
+    memcpy(mb + 121, "needle", 7);
+    put(at("f9m/mb.txt"), mb);
+    w = sw_inside("*", "needle");
+    CHECK(search_walk(&w, at("f9m")) && sw.n == 1 && sw.hit[0].at == 121 - 82 && memcmp(sw.text[0], "\xE2\x82\xAC", 3) == 0 && sw.hit[0].cut);
+    // A new search while a file is read stops there, its match not kept (the line callback moves the
+    // generation; the file goes on past its first piece).
+    memset(lng, 'z', 2 * SEARCH_BUF);
+    memcpy(lng, "needle\n", 7);
+    for (isize i = 100; i < 2 * SEARCH_BUF; i += 100) lng[i] = '\n';
+    put_bytes(at("f9s/stop.txt"), lng, 2 * SEARCH_BUF);
+    atomic_uint moving = 1;
+    w = sw_inside("*", "needle");
+    w.gen = &moving, w.mine = 1, sw.bump = &moving;
+    CHECK(!search_walk(&w, at("f9s")) && sw.n == 0 && !w.s.full);
+    sw.bump = NULL;
+    // Read without touching its access time (relatime would: it is older than the change).
+    struct timespec t2[2] = { { 1000, 0 }, { 0, UTIME_OMIT } };
+    CHECK(utimensat(AT_FDCWD, at("f9i/a.txt"), t2, 0) == 0);
+    w = sw_inside("a.txt", "needle");
+    CHECK(search_walk(&w, r) && sw.n == 1);
+    struct stat st;
+    CHECK(stat(at("f9i/a.txt"), &st) == 0 && st.st_atim.tv_sec == 1000);
+    // A file it can't open.
+    chmod(at("f9i/none.txt"), 0);
+    w = sw_inside("none.txt", "needle");
+    CHECK(search_walk(&w, r) && w.s.unread_files == (geteuid() == 0 ? 0 : 1));
+    chmod(at("f9i/none.txt"), 0644);
+    // Full, and stopped.
+    w = sw_inside("*.txt", "needle");
+    sw.room = 1;
+    CHECK(!search_walk(&w, r) && w.s.full && sw.n == 1);
+    atomic_uint gen = 2;
+    w = sw_inside("*.txt", "needle");
+    w.gen = &gen, w.mine = 1;
+    CHECK(!search_walk(&w, r) && sw.n == 0 && !w.s.full);
+    SearchSkips more = { .file_links = 2, .unread_files = 2 };
+    search_skips_text(&more, line, sizeof line);
+    CHECK(strcmp(line, "skipped 2 links to files, 2 unreadable files") == 0);
+    ui_matcher_set(&sw.m, STR_EMPTY, (UiMatchOpts){ 0 });
 }
 
 static void test_search_walk(void)
@@ -215,6 +385,116 @@ static void test_search_drives(void)
     fd = open(at("f9d"), O_RDONLY | O_DIRECTORY);
     CHECK(search_dir(&w, fd, SEARCH_DEPTH_MAX + 1) && w.s.unread == 1 && sw.n == 0);
     ui_matcher_set(&sw.m, STR_EMPTY, (UiMatchOpts){ 0 });
+}
+
+// Inside files (F9 step 3): "In files" (Alt+I, the button) shows "Containing" with the keys; Tab
+// goes between the fields; each has its own toggles (Michael, 2026-10-29); a press on the field or
+// its toggles; off, the keys go back to the name's.
+static void test_search_inside_keys(void)
+{
+    static u8 mark[5];
+    UiNames names = { name_at, NULL, dir_at };
+    Ui u = menu_ui(5);
+    u.mark = mark, u.view = UI_VIEW_SEARCH, u.focus = UI_FOCUS_SEARCH;
+    UiInput in = ui_input_none();
+    in.ev[in.nev++] = (UiEvent){ UK_MENU, 'i' };
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.search_inside && u.focus == UI_FOCUS_INSIDE && u.search_edited && !u.menu_on);
+    u.search_edited = false;
+    in = chars("use");
+    ui_handle(&u, names, &in);
+    CHECK(u.inside.len == 3 && memcmp(u.inside.b, "use", 3) == 0 && u.search.len == 0 && u.search_edited);
+    UiLine l;
+    CHECK(ui_line_active(&u, &l) && l.b == u.inside.b);   // (the clipboard's keys act on it)
+    // Its toggles are its own; the name field's are find's.
+    u.search_edited = false;
+    in = ui_input_none(), in.ev[in.nev++] = (UiEvent){ UK_MENU, 'c' };
+    ui_handle(&u, names, &in);
+    CHECK(u.inside_opts.cased && !u.find_opts.cased && u.search_edited);
+    CHECK(menu_keys(&u, 1, UK_TAB).kind == UA_NONE && u.focus == UI_FOCUS_SEARCH);
+    in = ui_input_none(), in.ev[in.nev++] = (UiEvent){ UK_MENU, 'w' };
+    ui_handle(&u, names, &in);
+    CHECK(u.find_opts.word && !u.inside_opts.word);
+    in = chars("*.ts");
+    ui_handle(&u, names, &in);
+    CHECK(u.search.len == 4 && u.inside.len == 3);
+    CHECK(menu_keys(&u, 1, UK_TAB).kind == UA_NONE && u.focus == UI_FOCUS_INSIDE);
+    // Enter gives the keys to the results; Alt+I there turns it off and on again.
+    CHECK(menu_keys(&u, 1, UK_ENTER).kind == UA_NONE && u.focus == UI_FOCUS_LIST);
+    u.search_edited = false;
+    in = ui_input_none(), in.ev[in.nev++] = (UiEvent){ UK_MENU, 'i' };
+    ui_handle(&u, names, &in);
+    CHECK(!u.search_inside && u.focus == UI_FOCUS_LIST && u.search_edited && u.inside.len == 3);
+    // Off from its field: the keys go to the name's, and Tab there goes on as before (the sidebar).
+    u.search_inside = true, u.focus = UI_FOCUS_INSIDE;
+    in = ui_input_none(), in.ev[in.nev++] = (UiEvent){ UK_MENU, 'i' };
+    ui_handle(&u, names, &in);
+    CHECK(!u.search_inside && u.focus == UI_FOCUS_SEARCH);
+    CHECK(menu_keys(&u, 1, UK_TAB).kind == UA_NONE && u.focus != UI_FOCUS_INSIDE && u.focus != UI_FOCUS_SEARCH);
+    // Off, the field takes no keys even if it had them.
+    u.focus = UI_FOCUS_INSIDE;
+    in = chars("j");
+    ui_handle(&u, names, &in);
+    CHECK(u.inside.len == 3 && !ui_line_active(&u, NULL));
+    // The pointer: the button, the field, a toggle.
+    u.focus = UI_FOCUS_LIST, u.search_edited = false;
+    in = ui_input_none(), in.inside_btn = true;
+    CHECK(ui_input_acts(&in) && ui_handle(&u, names, &in).kind == UA_NONE && u.search_inside && u.focus == UI_FOCUS_INSIDE && u.search_edited);
+    u.focus = UI_FOCUS_LIST, u.search_edited = false;
+    in = ui_input_none(), in.inside_field = true;
+    CHECK(ui_input_acts(&in) && ui_handle(&u, names, &in).kind == UA_NONE && u.focus == UI_FOCUS_INSIDE && !u.search_edited);
+    in = ui_input_none(), in.inside_toggle = 3;
+    CHECK(ui_input_acts(&in) && ui_handle(&u, names, &in).kind == UA_NONE && u.inside_opts.regex && !u.find_opts.regex && u.search_edited);
+    // The button again: off.
+    in = ui_input_none(), in.inside_btn = true;
+    ui_handle(&u, names, &in);
+    CHECK(!u.search_inside);
+    u.search_inside = true;
+    // Not under a menu, and not outside the search view.
+    u.inside_opts = (UiMatchOpts){ 0 }, u.menu_on = true;
+    in = ui_input_none(), in.inside_toggle = 1;
+    ui_handle(&u, names, &in);
+    CHECK(!u.inside_opts.cased);
+    u.menu_on = false, u.view = UI_VIEW_FOLDER;
+    in = ui_input_none(), in.inside_btn = true;
+    ui_handle(&u, names, &in);
+    CHECK(u.search_inside);
+    in = ui_input_none(), in.ev[in.nev++] = (UiEvent){ UK_MENU, 'i' };
+    ui_handle(&u, names, &in);
+    CHECK(u.search_inside);
+    // The field's and the toggles' presses while it is off: nothing.
+    u.view = UI_VIEW_SEARCH, u.search_inside = false, u.focus = UI_FOCUS_LIST;
+    in = ui_input_none(), in.inside_field = true, in.inside_toggle = 2;
+    ui_handle(&u, names, &in);
+    CHECK(u.focus == UI_FOCUS_LIST && !u.inside_opts.word);
+}
+
+// Where a match is (a line searched inside files shows it, F9 step 3): plain, with case, folded,
+// whole words, a regular expression.
+static void test_match_span(void)
+{
+    UiMatcher m = { 0 };
+    isize a, b;
+    ui_matcher_set(&m, S("ab"), (UiMatchOpts){ 0 });
+    CHECK(ui_match_span(&m, S("xxAB ab"), &a, &b) && a == 2 && b == 4);
+    ui_matcher_set(&m, S("ab"), (UiMatchOpts){ .cased = true });
+    CHECK(ui_match_span(&m, S("xxAB ab"), &a, &b) && a == 5 && b == 7);
+    ui_matcher_set(&m, S("ab"), (UiMatchOpts){ .cased = true, .word = true });
+    CHECK(ui_match_span(&m, S("xab ab"), &a, &b) && a == 4 && b == 6);   // the first isn't a word
+    CHECK(!ui_match_span(&m, S("abc"), &a, &b));
+    ui_matcher_set(&m, S("\xC3\xA9t\xC3\xA9"), (UiMatchOpts){ 0 });   // été: folded past ASCII, bytes of another length
+    CHECK(ui_match_span(&m, S("L'\xC3\x89T\xC3\x89!"), &a, &b) && a == 2 && b == 7);
+    // A character past ASCII that folds to an ASCII letter still matches it (the Kelvin sign is k),
+    // either way round.
+    ui_matcher_set(&m, S("k"), (UiMatchOpts){ 0 });
+    CHECK(ui_match_span(&m, S("x\xE2\x84\xAA"), &a, &b) && a == 1 && b == 4);
+    ui_matcher_set(&m, S("\xE2\x84\xAA"), (UiMatchOpts){ 0 });
+    CHECK(ui_match_span(&m, S("xk"), &a, &b) && a == 1 && b == 2);
+    ui_matcher_set(&m, S("b+c"), (UiMatchOpts){ .regex = true });
+    CHECK(ui_match_span(&m, S("abbbcd"), &a, &b) && a == 1 && b == 5);
+    ui_matcher_set(&m, S("b+"), (UiMatchOpts){ .regex = true, .word = true });
+    CHECK(ui_match_span(&m, S("abb bb"), &a, &b) && a == 4 && b == 6);
+    ui_matcher_set(&m, STR_EMPTY, (UiMatchOpts){ 0 });
+    CHECK(ui_match_span(&m, S("x"), &a, &b) && a == 0 && b == 0);
 }
 
 static void test_search_ui_keys(void)
@@ -389,7 +669,7 @@ static void test_search_crumbs(void)
 {
     UiCrumbs c = { 0 };
     char u[128];
-    CHECK(search_uri(u, sizeof u, "/home/m/code", S("x")));
+    CHECK(search_uri(u, sizeof u, "/home/m/code", S("x"), STR_EMPTY));
     ui_crumbs_set(&c, u, "/home/m");
     CHECK(c.n == 1 && c.cur == 0 && str_eq(ui_crumb_label(&c, 0), S("Search")) && str_eq(ui_crumb_path(&c, 0), str_from_c(u)));
     ui_crumbs_set(&c, "/home/m/code", "/home/m");   // off it again: a path's buttons

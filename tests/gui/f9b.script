@@ -1,0 +1,86 @@
+# F9 step 3 (docs/plan.md "Steps 3 and 4 decided"): searching inside files. The tree (run.sh):
+# src/app.ts (useState on lines 2 and 3), src/other.js (useState), src/Upper.ts (USESTATE), bin.dat
+# (useState and a NUL), big.txt (17 MB), link.ts -> src/app.ts, docs/readme.md (nothing).
+settle
+key ctrl-shift-f
+wait-for 2000 search=1 searchkeys=1 inside=0 insiderow=0
+# Alt+I: "Containing" under the name field, with the keys; nothing yet to look for
+key alt-i
+expect inside=1 insidekeys=1 searchkeys=0
+wait-for 2000 insiderow=1
+expect searchinfo=Text_to_look_for_inside_files;_the_name_field_narrows_which_(*.ts)
+# An empty name: every file read. The binary, the big one and the link to a file left out, and said so
+type useState
+wait-for 3000 searchdue=0 searchdone=1 n=3
+expect searchinfo=3_found_in_4_files_·_skipped_1_binary,_1_over_16_MB,_1_link_to_a_file
+expect idx=0 sel=app.ts seldir=src hit=2:16+1 hitmatch=useState hitdrawn=1 insidetext=useState
+shot inside-results.png
+# Up and Back with an empty name: the results again, the keys in them
+key enter
+key alt-up
+wait-for 2000 search=0
+key alt-left
+wait-for 3000 search=1 inside=1 insidetext=useState searchtext=- searchkeys=0 insidekeys=0 searchdone=1 n=3
+point-ui inside-field
+click-here
+expect insidekeys=1
+# Tab: the name field; a wildcard there narrows which files are read
+key tab
+expect searchkeys=1 insidekeys=0
+type *.ts
+wait-for 3000 searchdue=0 searchdone=1 n=2 searchtext=*.ts
+expect searchinfo=2_found_in_2_files_·_skipped_1_link_to_a_file
+# Each field has its own toggles (Michael, 2026-10-29): Alt+C in the name field is find's
+key alt-c
+expect findopts=c insideopts=-
+key tab
+expect insidekeys=1
+key alt-c
+expect findopts=c insideopts=c
+wait-for 3000 searchdue=0 searchdone=1 n=1 sel=app.ts
+key alt-c
+key tab
+key alt-c
+wait-for 3000 searchdue=0 searchdone=1 findopts=- insideopts=- n=2
+# Its toggles by the pointer too
+point-ui toggle 21
+click-here
+wait-for 3000 insideopts=c searchdue=0 searchdone=1 n=1
+click-here
+wait-for 3000 insideopts=- searchdue=0 searchdone=1 n=2
+# A regular expression matches within a line; a bad one says why
+key tab
+key alt-r
+keys backspace backspace backspace backspace backspace backspace backspace backspace
+type use(
+wait-for 3000 searchdue=0 insidebad=1
+keys backspace
+type [A-Z]tate[(]
+wait-for 3000 searchdue=0 searchdone=1 insidebad=0 n=1 hitmatch=useState(
+key alt-r
+key ctrl-a
+type useState
+wait-for 3000 searchdue=0 searchdone=1 n=2 idx=0 sel=app.ts
+# Enter: the keys to the results; there Enter opens the file with its app (Q6: Open at Line is step 4)
+key enter
+expect insidekeys=0 searchkeys=0
+key enter
+sh grep -qx "uwsm-app -- gio open $OFX_DIR/src/app.ts" "$OFX_ROOT/spawn.log"
+# Alt+I from the results: off, a search by name again (the link matches by its name)
+key alt-i
+wait-for 3000 inside=0 insiderow=0 searchdue=0 searchdone=1 n=3 hit=-
+# The button: on again, the text it had, searched inside again
+point-ui search-inside
+click-here
+wait-for 3000 inside=1 insidekeys=1 insidetext=useState searchdue=0 searchdone=1 n=2
+# Up to the folder searched, and Back: the address keeps the text inside, and searches it again
+key enter
+key alt-up
+wait-for 2000 search=0 searchbar=0
+key alt-left
+wait-for 3000 search=1 inside=1 insiderow=1 insidetext=useState searchtext=*.ts searchdone=1 n=2
+# A new search from a folder starts by name, its fields empty
+key alt-up
+wait-for 2000 search=0
+key ctrl-shift-f
+wait-for 2000 search=1 tabs=3 inside=0 insiderow=0 insidetext=- searchtext=- searchkeys=1

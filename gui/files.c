@@ -39,7 +39,7 @@ static int jobs_h(void)
 // The list's rows that fit, or the icon view's rows of cells (no column headers there).
 static int list_rows(int h)
 {
-    int room = h - top_h() - FOOTER_H - jobs_h() - VIEWS[app.ui.view].bar_h -
+    int room = h - top_h() - FOOTER_H - jobs_h() - view_bar_h() -
                (app.ui.finding ? FIND_BAR_H : 0);
     int r = app.ui.grid ? (room - PAD) / cell_h() : (room - COLS_H) / ROW_H;
     return r > 0 ? r : 0;
@@ -472,6 +472,35 @@ static void info_cell(Clay_ElementId id, const char *s, int w, int pad, Clay_Col
     }
 }
 
+// Where a file searched inside matched (F9 step 3), in room px after its folder: the line's number,
+// the line around the match with the match in the accent colour, "+N" for the other lines that
+// match. The match is shown whole when it fits.
+static void layout_hit(int r, const SearchHit *h, float room)
+{
+    Theme *t = &app.theme;
+    Str num = str_from_c(arena_sprintf(&frame, "%lld:", (long long)h->line));
+    Str more = h->more ? str_from_c(arena_sprintf(&frame, "+%lld", (long long)h->more)) : STR_EMPTY;
+    room -= str_width(num) + 6 + (more.len ? str_width(more) + 6 : 0);
+    if (room < 60) return;
+    Str pre = { h->text.p, h->at }, mt = { h->text.p + h->at, h->len }, post = { mt.p + mt.len, h->text.len - h->at - h->len };
+    float mw = str_width(mt) < room ? str_width(mt) : room, left = room - mw;
+    // Before the match: what is left after the rest of the line, but at least a third, and no more
+    // than it takes ("…" first when the line's start is left out).
+    Str before = h->cut ? str_from_c(arena_sprintf(&frame, "\xE2\x80\xA6%.*s", STR_ARG(pre))) : pre;
+    float prew = left - str_width(post);
+    if (prew < left / 3) prew = left / 3;
+    if (prew > str_width(before)) prew = str_width(before);
+    CLAY(CLAY_IDI("hit", r), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .childGap = 6 } }) {
+        text(cs(num), cc(t->fg_dim));
+        CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_FIT(0, room), CLAY_SIZING_FIT(0) } }, .clip = { .horizontal = true } }) {
+            if (before.len && prew > 0) text(fit(before, prew, true), cc(t->fg_dim));
+            text(fit(mt, mw, false), cc(t->accent));
+            if (post.len && left - prew > 8) text(fit(post, left - prew, false), cc(t->fg_dim));
+        }
+        if (more.len) text(cs(more), cc(t->fg_dim));
+    }
+}
+
 static void layout_row(int r, isize i, float w, i64 now)
 {
     const Entry *e = &app.list.e[i];
@@ -513,9 +542,16 @@ static void layout_row(int r, isize i, float w, i64 now)
                     float room = name_w - str_width(e->name) - 12;
                     if (room > 40) text(fit(str_from_c(arena_sprintf(&frame, "%s", shown)), room, true), cc(t->fg_dim));
                 }
-                if (e->dir.len) {   // the search view's (F9): its folder below the one searched
+                if (e->dir.len && !e->hit) {   // the search view's (F9): its folder below the one searched
                     float room = name_w - str_width(e->name) - 12;
                     if (room > 40) text(fit(e->dir, room, true), cc(t->fg_dim));
+                }
+                if (e->hit) {   // inside files (step 3): the folder gets at most a third, the line the rest
+                    float room = name_w - str_width(e->name) - 12, dw = e->dir.len ? str_width(e->dir) : 0;
+                    if (dw > room / 3) dw = room / 3;
+                    bool dir = e->dir.len && (dw == str_width(e->dir) || dw > 40);   // (whole, or cut to something readable)
+                    if (dir) text(fit(e->dir, dw, true), cc(t->fg_dim));
+                    layout_hit(r, e->hit, room - (dir ? dw + 6 : 0));
                 }
             }
         }

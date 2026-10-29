@@ -768,6 +768,22 @@ once cached; home 16 MB, 0.12 s cached):
   `omarchy-launch-tui`, others through `uwsm-app`. The file stays its own until ofx.conf is
   designed, which may take it in. No loadable code.
 
+**Step 3 built (2026-10-29): inside files.** The address carries the text inside after the name's
+length (`search:<folder len>,<name len>:<folder><name><inside>`), so Back, tabs and history keep
+it; "In files" is on in a search view exactly when its address has text inside. The walk
+(`search_inside`, `search_read` in `fs/search.c`) reads each regular file whose name matches, in
+64 KB pieces with lines put together across them; a line longer than the buffer is matched a piece
+at a time, each piece starting with the last 1 KB of the one before. Each line goes to the
+"Containing" matcher (`ui_match_span`: find's matcher, now saying where it matched); the first
+match is kept as a `SearchHit` on the result's `Entry` (line, column in characters, "+N" more
+lines, the line cut to 160 bytes from 40 before the match, its indent dropped and control characters
+as spaces). The row shows it after the folder, which gets at most a third of the room. The matcher
+got faster for this: `memmem` to the next start with case, a first-byte check without (1.94 s to
+1.07 s over a code folder cached; with case 0.75 s; a regular expression 2.5 s). Calls made: a
+link to a file isn't read even when its name matches, and folders aren't results inside files;
+with "In files" on and nothing in "Containing" it searches by name, so the results don't blank as
+it turns on; a regular expression's `^` in a later piece of a long line matches that piece's start.
+
 **Steps:** 1. the view by name (a walk thread as Properties' `du_walk`, stopped by the next
 search; the tab, bar, toggles, results with folders, skips, limit, status); 2. working with
 results (actions on entries in other folders, Open Containing Folder, Ctrl+R, greying, Search in

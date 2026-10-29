@@ -1668,6 +1668,9 @@ int main(void)
     test_fm1();
     test_search_uri();
     test_search_walk();
+    test_search_inside();
+    test_search_inside_keys();
+    test_match_span();
     test_search_match();
     test_search_keys_find();
     test_search_drives();

@@ -22,6 +22,18 @@ typedef enum {
 
 typedef struct TrashItem TrashItem;
 
+// A file's first matching line, searched inside (F9 step 3): its number and the match's column
+// (from 1, in characters), how many more lines match, and the line cut around the match (control
+// characters as spaces) with the match at [at, at + len).
+typedef struct {
+    i64   line;
+    i64   col;
+    i64   more;
+    Str   text;
+    isize at, len;
+    bool  cut;   // text starts after the line's start
+} SearchHit;
+
 typedef struct {
     Str   name;
     Kind  kind;
@@ -32,6 +44,7 @@ typedef struct {
     Str   target;    // a symlink's, as readlink gives it (relative or not); empty for the rest
     const TrashItem *trash;   // the trash view's (F6, trash.c): where the item is; NULL elsewhere
     Str   dir;       // the search view's (F9): its folder below the one searched ("" in that one)
+    const SearchHit *hit;   // the search view's inside files (F9 step 3): where it matched; NULL elsewhere
 } Entry;
 
 typedef struct {

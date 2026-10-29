@@ -7,6 +7,15 @@
 
 enum { SEARCH_PUBLISH_MS = 100 };   // the list grows at most this often while the walk runs
 
+// What a search looks for: below root, names matching text with o, and inside files (step 3; empty:
+// names only) lines matching inside with io; hidden files or not.
+typedef struct {
+    const char *root;
+    Str         text, inside;
+    UiMatchOpts o, io;
+    bool        hidden;
+} SearchQuery;
+
 static struct {
     pthread_t       thread;
     bool            started, quit;
@@ -16,9 +25,9 @@ static struct {
     bool            asked;    // a walk for gen waits to start
     // The request, written by the main thread.
     char            root[PATH_MAX];
-    char            text[UI_FIND_MAX + 1];
-    int             text_len;
-    UiMatchOpts     opts;
+    char            text[UI_FIND_MAX + 1], inside[UI_FIND_MAX + 1];
+    int             text_len, inside_len;
+    UiMatchOpts     opts, inside_opts;
     bool            hidden;
     // What res_gen's walk has published: search_res[0, n), what it left out so far, whether it ended.
     u32             res_gen;
@@ -36,10 +45,12 @@ static Arena search_arena;
 static u8    search_gone[SEARCH_MAX];
 static u8    search_edit_mem[KiB(256)];
 static Arena search_edits;
-// The thread's own: its copy of the request, its matcher, how many results it wrote, the last
-// folder it copied (results come a folder at a time), when it last published.
+// The thread's own: its copy of the request, its matchers (names, lines inside files), the buffer it
+// reads files into, how many results it wrote, the last folder it copied (results come a folder at
+// a time), when it last published.
 static char      search_root[PATH_MAX];
-static UiMatcher search_m;
+static UiMatcher search_m, search_im;
+static char      search_buf[SEARCH_BUF];
 static isize     search_wrote;
 static Str       search_dir_last;
 static i64       search_pub_at;
@@ -61,7 +72,24 @@ static bool search_match_cb(void *ctx, Str name)
     return ui_search_match(&search_m, name);
 }
 
-static bool search_found_cb(void *ctx, Str dir, Str name, int fd)
+static bool search_line_cb(void *ctx, Str line, isize *from, isize *to)
+{
+    (void)ctx;
+    return ui_match_span(&search_im, line, from, to);
+}
+
+// A hit copied into the arena, its text with it; NULL when there is no room.
+static const SearchHit *search_hit_copy(Arena *a, const SearchHit *hit)
+{
+    SearchHit *h = arena_try_new(a, SearchHit, 1);
+    char *p = h ? arena_try_push(a, hit->text.len + 1, 1) : NULL;
+    if (!p) return NULL;
+    memcpy(p, hit->text.p, (size_t)hit->text.len), p[hit->text.len] = 0;
+    *h = *hit, h->text = (Str){ p, hit->text.len };
+    return h;
+}
+
+static bool search_found_cb(void *ctx, Str dir, Str name, int fd, const SearchHit *hit)
 {
     SearchWalk *w = ctx;
     if (search_wrote == SEARCH_MAX) return false;
@@ -72,6 +100,7 @@ static bool search_found_cb(void *ctx, Str dir, Str name, int fd)
         search_dir_last = (Str){ p, dir.len };
     }
     if (!entry_read(&search_arena, fd, name.p, &search_res[search_wrote])) return false;
+    if (hit && !(search_res[search_wrote].hit = search_hit_copy(&search_arena, hit))) return false;
     search_res[search_wrote++].dir = search_dir_last;
     if (now_ms() - search_pub_at >= SEARCH_PUBLISH_MS) search_publish(w, false);
     return true;
@@ -92,8 +121,9 @@ static void *search_loop(void *arg)
         if (search.quit) break;
         u32 gen = atomic_load(&search.gen);
         memcpy(search_root, search.root, sizeof search_root);
-        Str text = { search.text, search.text_len };
+        Str text = { search.text, search.text_len }, inside = { search.inside, search.inside_len };
         ui_matcher_set(&search_m, text, search.opts);
+        ui_matcher_set(&search_im, inside, search.inside_opts);
         bool hidden = search.hidden;
         search.asked = false;
         search.res_gen = gen, search.n = 0, search.s = (SearchSkips){ 0 }, search.done = false;
@@ -103,6 +133,7 @@ static void *search_loop(void *arg)
         search_wrote = 0, search_dir_last = STR_EMPTY, search_pub_at = now_ms();
         SearchWalk w = { .gen = &search.gen, .mine = gen, .hidden = hidden, .match = search_match_cb,
                          .found = search_found_cb, .tick = search_tick_cb };
+        if (inside.len) w.line = search_line_cb, w.buf = search_buf;
         w.ctx = &w;
         search_walk(&w, search_root);
         search_publish(&w, true);   // (stopped: another generation, nothing published)
@@ -110,6 +141,7 @@ static void *search_loop(void *arg)
     }
     pthread_mutex_unlock(&search.mu);
     ui_matcher_set(&search_m, STR_EMPTY, (UiMatchOpts){ 0 });   // (a compiled expression freed)
+    ui_matcher_set(&search_im, STR_EMPTY, (UiMatchOpts){ 0 });
     return NULL;
 }
 
@@ -121,28 +153,44 @@ static void search_start(void)
     search.started = pthread_create(&search.thread, NULL, search_loop, NULL) == 0;
 }
 
-// Whether the search running (or done) is for this root, text, toggles and hidden files.
-static bool search_is(const char *root, Str text, UiMatchOpts o, bool hidden)
+static bool search_opts_eq(UiMatchOpts a, UiMatchOpts b)
+{
+    return a.cased == b.cased && a.word == b.word && a.regex == b.regex;
+}
+
+// Whether the search running (or done) is q (the toggles inside files only count with text there).
+static bool search_is(SearchQuery q)
 {
     pthread_mutex_lock(&search.mu);
-    bool same = strcmp(search.root, root) == 0 && str_eq((Str){ search.text, search.text_len }, text) &&
-                search.opts.cased == o.cased && search.opts.word == o.word && search.opts.regex == o.regex && search.hidden == hidden;
+    bool same = strcmp(search.root, q.root) == 0 && str_eq((Str){ search.text, search.text_len }, q.text) &&
+                search_opts_eq(search.opts, q.o) && search.hidden == q.hidden && str_eq((Str){ search.inside, search.inside_len }, q.inside) &&
+                (!q.inside.len || search_opts_eq(search.inside_opts, q.io));
     pthread_mutex_unlock(&search.mu);
     return same;
 }
 
-// A new search below root, the old one stopped; empty text only stops it (and finds nothing).
-static void search_ask(const char *root, Str text, UiMatchOpts o, bool hidden)
+// t, at most UI_FIND_MAX bytes, into buf; its length.
+static int search_text_put(char *buf, Str t)
+{
+    int n = (int)(t.len < UI_FIND_MAX ? t.len : UI_FIND_MAX);
+    if (n) memcpy(buf, t.p, (size_t)n);   // (STR_EMPTY's p is NULL)
+    buf[n] = 0;
+    return n;
+}
+
+// A new search, the old one stopped; with neither text nor text inside files it only stops it (and
+// finds nothing).
+static void search_ask(SearchQuery q)
 {
     pthread_mutex_lock(&search.mu);
     u32 gen = atomic_fetch_add(&search.gen, 1) + 1;
-    snprintf(search.root, sizeof search.root, "%s", root);
-    search.text_len = (int)(text.len < UI_FIND_MAX ? text.len : UI_FIND_MAX);
-    memcpy(search.text, text.p, (size_t)search.text_len), search.text[search.text_len] = 0;
-    search.opts = o, search.hidden = hidden;
+    snprintf(search.root, sizeof search.root, "%s", q.root);
+    search.text_len = search_text_put(search.text, q.text);
+    search.inside_len = search_text_put(search.inside, q.inside);
+    search.opts = q.o, search.inside_opts = q.io, search.hidden = q.hidden;
     search.res_gen = gen, search.n = 0, search.s = (SearchSkips){ 0 }, search.fresh = true;
     memset(search_gone, 0, sizeof search_gone), arena_reset(&search_edits);
-    search.done = text.len == 0 || !search.started;
+    search.done = (q.text.len == 0 && q.inside.len == 0) || !search.started;
     search.asked = !search.done;
     pthread_cond_signal(&search.cv);
     pthread_mutex_unlock(&search.mu);
@@ -174,6 +222,7 @@ static bool search_copy(Arena *a, Listing *out, SearchSkips *s, bool *done)
         const Entry *r = &search_res[i];
         e[k] = *r;
         e[k].name = search_str(a, r->name, &ok), e[k].dir = search_str(a, r->dir, &ok), e[k].target = search_str(a, r->target, &ok);
+        if (ok && r->hit) ok = (e[k].hit = search_hit_copy(a, r->hit)) != NULL;
         k++;
     }
     pthread_mutex_unlock(&search.mu);

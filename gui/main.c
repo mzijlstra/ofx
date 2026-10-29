@@ -150,7 +150,7 @@ static Bookmarks bmarks;   // the bookmarks file's lines (F7.5), read with the p
 static int   watch_delay_ms;   // OFX_TEST_WATCH_DELAY_MS, for one test
 
 enum { BAR_BTN_W = 34, BAR_BTN_H = 30, BAR_GAP = 4, ARROW_W = 22, CRUMB_PAD = 10, CRUMB_ICON_PX = 16 };
-enum { TREE_STEP = 10, TRASH_BAR_H = 38, SEARCH_BAR_H = 38 };
+enum { TREE_STEP = 10, TRASH_BAR_H = 38, SEARCH_BAR_H = 38, SEARCH_ROW_H = 32 };   // (SEARCH_ROW_H: "Containing", F9 step 3)
 // The menu bar (F7.1): a row of titles over the top bar; a menu's entries, its lines between groups.
 enum { MENU_H = 26, MENU_TITLE_PAD = 10, MENU_ROW_H = 26, MENU_SEP_H = 9, MENU_W_MIN = 280 };
 enum { TAB_H = 30, TAB_X_W = 22, JOB_ROW_H = 40, JOB_WAIT_H = 22, MODE_BTN_W = 28, MODE_BTN_H = 22, MODE_GAP = 4, FIND_BAR_H = 36 };
@@ -193,6 +193,11 @@ typedef struct {
     int   bmp_row;      // a row of Edit Bookmarks' list (on screen), -1 for none (F7.5)
     int   bmp_btn;      // one of its buttons (1..4), 0 for none
     bool  search_field; // the search bar's field (F9)
+    // Inside files (F9 step 3): the "Containing" field, one of its toggles (1..3, 0 none), the
+    // "In files" button.
+    bool  inside_field;
+    int   inside_toggle;
+    bool  search_inside;
 } Hit;
 
 static struct {
@@ -206,6 +211,7 @@ static struct {
     i64         search_due;
     char        search_pick[PATH_MAX];
     UiMatcher   search_m;     // its text as the walk matches it: a bad expression's reason, for the bar
+    UiMatcher   search_im;    // likewise the text inside files (step 3)
     int       cur;          // lists[cur] holds the listing
     Listing   list;
     Str      *mime;         // per entry, filled as rows are drawn; .p NULL until then
@@ -759,6 +765,7 @@ int main(int argc, char **argv)
     search_stop();
     ui_matcher_set(&app.ui.find_m, STR_EMPTY, app.ui.find_opts), ui_matcher_set(&app.ui.ow_m, STR_EMPTY, app.ui.ow_opts);   // (a compiled expression freed: LeakSanitizer)
     ui_matcher_set(&app.search_m, STR_EMPTY, app.ui.find_opts);
+    ui_matcher_set(&app.search_im, STR_EMPTY, app.ui.inside_opts);
     thumbs_stop();
     space_stop();
     timer_stop();

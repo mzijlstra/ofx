@@ -524,13 +524,13 @@ MUTANTS = [
     # leaving a search (no state word sees it), the publishing pace (the scripts wait for the end).
     ('gui/folder.c', '    if (app.ui.view == UI_VIEW_SEARCH) {\n        char dir[PATH_MAX];', '    if (false) {\n        char dir[PATH_MAX];', 'f9'),
     ('gui/folder.c', '        return path_put(out, cap, e->dir.len ? dir : app.search_root, e->name);', '        return path_put(out, cap, app.search_root, e->name);', 'f9'),
-    ('gui/folder.c', '    if (!search_is(r, text, app.ui.find_opts, app.show_hidden)) {', '    if (false) {', 'f9'),
+    ('gui/folder.c', '    if (!search_is(q)) {', '    if (false) {', 'f9'),
     ('gui/folder.c', '    fs_sort(l, app.ui.sort);\n    snprintf(app.search_root', '    snprintf(app.search_root', 'f9'),
     ('gui/folder.c', '    go_to_in(app.cwd, str_from_c(app.search_pick[0] ? app.search_pick : keep), app.ui.list.sel, true);', '    go_to_in(app.cwd, str_from_c(keep), app.ui.list.sel, true);', 'f9'),
     ('gui/folder.c', '    snprintf(app.cwd, sizeof app.cwd, "%s", uri);\n    app.search_pick[0] = 0;', '    app.search_pick[0] = 0;', 'f9'),
-    ('gui/folder.c', '        if (text.len == 0) app.ui.focus = UI_FOCUS_SEARCH;', '        if (false) app.ui.focus = UI_FOCUS_SEARCH;', 'f9'),
+    ('gui/folder.c', '        if (text.len == 0 && inside.len == 0) app.ui.focus = UI_FOCUS_SEARCH;', '        if (false) app.ui.focus = UI_FOCUS_SEARCH;', 'f9'),
     ('gui/folder.c', '        snprintf(app.search_pick, sizeof app.search_pick, "%.*s", STR_ARG(select));\n    }', '    }', 'f9'),
-    ('gui/actions.c', '    if (dir && search_uri(uri, sizeof uri, dir, STR_EMPTY)) tab_open(uri, STR_EMPTY, true);', '    if (dir) tab_open(dir, STR_EMPTY, true);', 'f9'),
+    ('gui/actions.c', '    if (dir && search_uri(uri, sizeof uri, dir, STR_EMPTY, STR_EMPTY)) tab_open(uri, STR_EMPTY, true);', '    if (dir) tab_open(dir, STR_EMPTY, true);', 'f9'),
     ('gui/actions.c', '    case UA_NOT_IN_SEARCH: set_status(true, "A search isn\'t a folder: that works in one"); break;', '    case UA_NOT_IN_SEARCH: break;', 'f9'),
     ('gui/input.c', '        if (in_box(CLAY_IDI("toggle", TOGGLE_SEARCH + k), x, y)) h.toggle = k;', '', 'f9'),
     ('gui/input.c', '    h.search_field = app.ui.view == UI_VIEW_SEARCH && !h.toggle && in_box(CLAY_ID("search-field"), x, y);', '', 'f9'),
@@ -538,15 +538,15 @@ MUTANTS = [
     (G, '        if (app.search_due && now_ms() >= app.search_due) app.search_due = 0, search_retype(), dirty = true;', '        if (app.search_due) app.search_due = 0, search_retype(), dirty = true;', 'f9'),
     ('gui/input.c', '    return !a ? b : !b ? a : a < b ? a : b;', '    return a;', 'f9'),
     ('gui/frame.c', '        if (app.ui.view == UI_VIEW_SEARCH) layout_search_bar();', '', 'f9'),
-    ('gui/footer.c', '    else snprintf(buf, cap, "%td found%s%s", app.list.n, sep, skipped);', '    else snprintf(buf, cap, "%td found", app.list.n);', 'f9'),
+    ('gui/footer.c', '    else snprintf(buf, cap, "%td found%s%s%s", app.list.n, read, sep, skipped);', '    else snprintf(buf, cap, "%td found", app.list.n);', 'f9'),
     ('gui/folder.c', '    if (app.ui.view == UI_VIEW_SEARCH) {   // the folder searched (F9)\n        go_to(app.search_root, STR_EMPTY, 0);\n        return;\n    }', '', 'f9'),
     (G, '        if (app.ui.search_edited) app.ui.search_edited = false, app.search_due = now_ms() + SEARCH_TYPE_MS, timer_at(wake_due());', '        if (app.ui.search_edited) app.ui.search_edited = false, app.search_due = now_ms() + SEARCH_TYPE_MS;', 'f9'),
     ('gui/search.c', '    if (search_wrote == SEARCH_MAX) return false;', '', 'f9'),
     ('gui/search.c', '    if (search_wrote == 0 || !str_eq(dir, search_dir_last)) {', '    if (search_wrote == 0) {', 'f9'),
     ('gui/search.c', '    search_res[search_wrote++].dir = search_dir_last;', '    search_wrote++;', 'f9'),
-    ('gui/search.c', ' && search.hidden == hidden;', ';', 'f9'),
-    ('gui/search.c', 'search.opts.cased == o.cased && ', '', 'f9'),
-    ('gui/search.c', '    search.done = text.len == 0 || !search.started;', '    search.done = !search.started;', 'f9'),
+    ('gui/search.c', ' && search.hidden == q.hidden && ', ' && ', 'f9'),
+    ('gui/search.c', 'search_opts_eq(search.opts, q.o) && ', '', 'f9'),
+    ('gui/search.c', '    search.done = (q.text.len == 0 && q.inside.len == 0) || !search.started;', '    search.done = !search.started;', 'f9'),
     # the review's two LOWs (reviewer-2, 2026-10-28)
     ('gui/actions.c', '    if (i >= app.list.n || !entry_path(i, path, sizeof path)) return;', '    if (i >= app.list.n || !path_put(path, sizeof path, app.cwd, app.list.e[i].name)) return;', 'f9'),
     ('gui/folder.c', '    static char key[PATH_MAX];\n    return app.have_list', '    static char key[NAME_MAX + 1];\n    return app.have_list', 'f9'),
@@ -607,8 +607,35 @@ MUTANTS = [
     ('gui/folder.c', '    if (!view_can_up()) return;\n', '', 'f6'),
     ('gui/frame.c', '    u->can_bookmark = u->view == UI_VIEW_FOLDER && !bmarks.full', '    u->can_bookmark = !bmarks.full', 'f9'),
     ('gui/actions.c', '    view_changed();   // (a folder renamed: the results below it are gone)\n', '', 'f9'),
-    ('gui/files.c', ' - VIEWS[app.ui.view].bar_h -', ' -', 'f6'),
+    ('gui/files.c', ' - view_bar_h() -', ' -', 'f6'),
     ('gui/folder.c', 'view == UI_VIEW_SEARCH ? app.search_root : dir);   // (not here_dir', 'here_dir());   // (not here_dir', 'f64'),
+    # F9 step 3: inside files (2026-10-29). Not run: search_copy's copy of a hit (as of the names
+    # beside it, it only matters when a new search resets the walk's arena under a listing still
+    # shown); the tab's name (not in the state line); the matchers freed at quit; the red frame of
+    # a bad expression inside (drawn only; insidebad is the matcher's); Ctrl+R's text inside (the
+    # relist after it asks again from the address).
+    ('gui/search.c', '        if (inside.len) w.line = search_line_cb, w.buf = search_buf;', '', 'f9'),
+    ('gui/search.c', '    if (hit && !(search_res[search_wrote].hit = search_hit_copy(&search_arena, hit))) return false;', '', 'f9'),
+    ('gui/search.c', '    return ui_match_span(&search_im, line, from, to);', '    return ui_match_span(&search_m, line, from, to);', 'f9'),
+    ('gui/search.c', ' && str_eq((Str){ search.inside, search.inside_len }, q.inside) &&', ' &&', 'f9'),
+    ('gui/search.c', '                (!q.inside.len || search_opts_eq(search.inside_opts, q.io));', '                true;', 'f9'),
+    ('gui/search.c', '    search.inside_len = search_text_put(search.inside, q.inside);', '', 'f9'),
+    ('gui/search.c', '    search.opts = q.o, search.inside_opts = q.io, search.hidden = q.hidden;', '    search.opts = q.o, search.hidden = q.hidden;', 'f9'),
+    ('gui/search.c', '    search.done = (q.text.len == 0 && q.inside.len == 0) || !search.started;', '    search.done = q.text.len == 0 || !search.started;', 'f9'),
+    ('gui/folder.c', ', .io = app.ui.inside_opts, .hidden', ', .hidden', 'f9'),
+    ('gui/folder.c', '        ui_line_set(ui_inside_line(&app.ui), inside);\n', '', 'f9'),
+    ('gui/folder.c', '        app.ui.search_inside = inside.len > 0;', '', 'f9'),
+    ('gui/folder.c', '        if (text.len == 0 && inside.len == 0) app.ui.focus = UI_FOCUS_SEARCH;', '        if (text.len == 0) app.ui.focus = UI_FOCUS_SEARCH;', 'f9'),
+    ('gui/folder.c', '    Str inside = app.ui.search_inside ? (Str){ app.ui.inside.b, app.ui.inside.len } : STR_EMPTY;', '    Str inside = (Str){ app.ui.inside.b, app.ui.inside.len };', 'f9'),
+    ('gui/folder.c', '    return VIEWS[app.ui.view].bar_h + (app.ui.view == UI_VIEW_SEARCH && app.ui.search_inside ? SEARCH_ROW_H : 0);', '    return VIEWS[app.ui.view].bar_h;', 'f9'),
+    ('gui/footer.c', '        if (u->search_inside) {\n            CLAY_AUTO_ID', '        if (false) {\n            CLAY_AUTO_ID', 'f9'),
+    ('gui/footer.c', '    bool inside = app.ui.search_inside && app.ui.inside.len;', '    bool inside = false;', 'f9'),
+    ('gui/footer.c', '        snprintf(buf, cap, app.ui.search_inside ? "Text to look for', '        snprintf(buf, cap, false ? "Text to look for', 'f9'),
+    ('gui/files.c', '                    layout_hit(r, e->hit, room - (dir ? dw + 6 : 0));', '', 'f9'),
+    ('gui/input.c', '    h.search_inside = app.ui.view == UI_VIEW_SEARCH && in_box(CLAY_ID("search-inside"), x, y);', '', 'f9'),
+    ('gui/input.c', '    h.inside_field = app.ui.view == UI_VIEW_SEARCH && app.ui.search_inside && !h.inside_toggle && in_box(CLAY_ID("inside-field"), x, y);', '', 'f9'),
+    ('gui/input.c', '        if (in_box(CLAY_IDI("toggle", TOGGLE_INSIDE + k), x, y)) h.inside_toggle = k;', '', 'f9'),
+    ('gui/input.c', '    in->inside_field = h.inside_field, in->inside_toggle = h.inside_toggle, in->inside_btn = h.search_inside;', '', 'f9'),
 ]
 import concurrent.futures, queue, threading, time
 
@@ -675,7 +702,7 @@ def key(m):
     return hashlib.sha1('\0'.join(m[:3]).encode()).hexdigest()[:12]
 
 # The group of a script that failed: run.sh prints "== <script>: FAILED" or "<group>: FAILED".
-GROUP_OF = {'f6b': 'f6', 'f62b': 'f62', 'f62c': 'f62', 'f63b': 'f63', 'f63c': 'f63', 'f64b': 'f64', 'f64c': 'f64', 'f64d': 'f64', 'f7b': 'f7', 'f73b': 'f73', 'f73c': 'f73', 'f73d': 'f73', 'f75b': 'f75', 'f8b': 'f8', 'f8c': 'f8', 'f8d': 'f8', 'f8e': 'f8'}
+GROUP_OF = {'f6b': 'f6', 'f62b': 'f62', 'f62c': 'f62', 'f63b': 'f63', 'f63c': 'f63', 'f64b': 'f64', 'f64c': 'f64', 'f64d': 'f64', 'f7b': 'f7', 'f73b': 'f73', 'f73c': 'f73', 'f73d': 'f73', 'f75b': 'f75', 'f8b': 'f8', 'f8c': 'f8', 'f8d': 'f8', 'f8e': 'f8', 'f9b': 'f9'}
 
 # The tags as groups run.sh knows: a script's name (f7b, written before GROUP_OF had it) as its
 # group; anything else dropped, so a mutant never "survives" a group that runs nothing.
