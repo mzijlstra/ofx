@@ -4,11 +4,28 @@
 # place (never Michael's own theme, and never omarchy-theme-set itself).
 settle
 expect sel=adir
+# Open With's app icons: the theme's app folders read at its first open, kept for the next
+# (Michael, 2026-10-29); read again below once the icon theme is another
+expect owreads=0
+key end
+key shift-enter
+wait-for 2000 ow=1 owreads=1
+key esc
+key shift-enter
+wait-for 2000 ow=1 owreads=1
+key esc
+expect ow=0
+key home
 # ---- a switch: new colours and a new icon theme
 sh C="$OFX_ROOT/state/omarchy/current"; rm -rf "$C/next-theme"; mkdir "$C/next-theme" && printf 'accent = "#112233"\nbackground = "#0a0b0c"\nforeground = "#d0d1d2"\n' > "$C/next-theme/colors.toml" && echo Yaru-blue > "$C/next-theme/icons.theme" && rm -rf "$C/theme" && mv "$C/next-theme" "$C/theme"
 wait-for 3000 accent=#112233 bg=#0a0b0c icons=Yaru-blue
 wait-for 2000 icon=/usr/share/icons/Yaru-blue/24x24@2x/places/folder.png
 shot theme-blue.png
+key end
+key shift-enter
+wait-for 2000 ow=1 owreads=2
+key esc
+key home
 # ---- two switches back to back: the second one shows
 sh C="$OFX_ROOT/state/omarchy/current"; for t in 1 2; do rm -rf "$C/next-theme"; mkdir "$C/next-theme"; if [ $t = 1 ]; then a=#334455 i=Yaru-olive; else a=#445566 i=Yaru-red; fi; printf 'accent = "%s"\nbackground = "#1b1c1d"\n' "$a" > "$C/next-theme/colors.toml"; echo $i > "$C/next-theme/icons.theme"; rm -rf "$C/theme"; mv "$C/next-theme" "$C/theme"; done
 wait-for 3000 accent=#445566 bg=#1b1c1d icons=Yaru-red

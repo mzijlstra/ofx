@@ -6,6 +6,12 @@ enum { OW_ROWS_MAX = 10, OW_ROW_H = 30, OW_W = 560 };
 
 static u8    ow_mem[MiB(16)];
 static Arena owa;
+// The theme's app folders, for the apps' icons (Michael, 2026-10-29: about 0.7 MiB, ~34 ms an
+// open): read at the first open and kept, read again when the icon theme is another one.
+static u8    ow_idb_mem[MiB(8)];   // (Yaru-wartybrown's took 734 KiB)
+static Arena owia;
+static char  ow_idb_theme[256];
+static int   ow_idb_reads;   // (the scripts' owreads=)
 
 static struct {
     Apps   apps;
@@ -16,9 +22,8 @@ static struct {
     char   type[128];             // the first one's MIME type, as gio has it
     char   what[NAME_MAX + 32];   // "notes.txt", "3 files"
     char   def_why[PATH_MAX + 64];   // why the type's default can't be set here, "" when it can (F7.3.1)
-    // The apps' icons (Michael, 2026-10-26: only while the panel is up): the theme's app folders
-    // read when it opens (in owa), each app's texture when its row is first drawn, all dropped
-    // when it closes.
+    // The apps' icons (Michael, 2026-10-26: only while the panel is up): each app's texture when its
+    // row is first drawn, all dropped when it closes; the theme's app folders are kept (owia).
     IconDb   idb;
     IconSlot icon[UI_APPS_MAX];
     bool     icon_tried[UI_APPS_MAX];
@@ -56,7 +61,12 @@ static void ow_open(void)
     if (ow.n == 1) snprintf(ow.what, sizeof ow.what, "%.*s", STR_ARG(path_base(str_from_c(ow.paths[0]))));
     else snprintf(ow.what, sizeof ow.what, "%td items", ow.n);
     apps_all(&owa, &ow.apps);
-    icon_load_apps(&owa, &ow.idb, str_from_c(app.theme.icons));
+    if (!ow_idb_reads || strcmp(ow_idb_theme, app.theme.icons) != 0) {
+        arena_reset(&owia);
+        icon_load_apps(&owia, &ow.idb, str_from_c(app.theme.icons));
+        snprintf(ow_idb_theme, sizeof ow_idb_theme, "%s", app.theme.icons);
+        ow_idb_reads++;
+    }
     ow.icons_on = true;
     ow.shown = apps_rank(&owa, &ow.apps, str_from_c(ow.type));
     // Set as default (F7.3.1, Michael 2026-10-26): not for an empty file's type, which every empty

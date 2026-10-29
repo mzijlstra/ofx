@@ -547,6 +547,7 @@ int main(int argc, char **argv)
     arena_init(&doomeda, "delete", doomed_mem, sizeof doomed_mem);
     arena_init(&propsa, "properties", props_mem, sizeof props_mem);
     arena_init(&owa, "open with", ow_mem, sizeof ow_mem);
+    arena_init(&owia, "open with icons", ow_idb_mem, sizeof ow_idb_mem);
     undo.arena = &undoa;
     uint32_t need = Clay_MinMemorySize();
     if ((size_t)need > sizeof clay_mem) {
