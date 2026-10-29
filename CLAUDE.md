@@ -153,7 +153,7 @@ so every run does it. `gui.py` runs from its scratch copy, scripts included, so 
 - **The test sway** (`tools/gui/sway.sh`, 2026-10-28), for what weston lacks: ext-data-control (the
   `clip` group) and virtual keyboards (the `keys` group). `OFX_COMPOSITOR=sway` makes run-script.sh
   use it. Headless (`WLR_BACKENDS=headless`, `WLR_LIBINPUT_NO_DEVICES=1`), `-c` a config written in
-  the scratch dir (never `~/.config/sway`), its IPC socket in the scratch dir (`SWAYSOCK`), no
+  the scratch dir (never `~/.config/sway`), its IPC socket in a folder of its own under /tmp (`SWAYSOCK`: a long scratch path is past a socket's 107 bytes, and sway crashed, 2026-10-29), no
   XWayland. It names its own socket (`wayland-N`, the first free; `wayland-1` is Michael's
   Hyprland), so the config's `exec` writes it down and run-script checks it isn't this session's
   display. The output is 936x516 logical at scale 2: sway draws no decorations, so the tiled
