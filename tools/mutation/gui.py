@@ -232,7 +232,7 @@ MUTANTS = [
     ('gui/files.c', "        Texture2D *th = entry_thumb(i, true);", "        Texture2D *th = NULL;"),
     ('gui/files.c', "CLAY_SIZING_FIXED(th->width / s), CLAY_SIZING_FIXED(th->height / s)", "CLAY_SIZING_FIXED(px), CLAY_SIZING_FIXED(px)"),
     # ---- F7.1: the menu bar, New Window, Create New Empty File, Close All Windows
-    ('gui/input.c', "h.menu_item = i;   // (one not shown has no box)\n        return h;", "h.menu_item = i;   // (one not shown has no box)", 'f7'),
+    ('gui/input.c', "    if (app.ui.menu_on && modal_kind() == MODAL_NONE) return h;\n", "", 'f7'),
     ('gui/input.c', "        in->menu_away = h.menu_title < 0 && h.menu_item < 0;", "        in->menu_away = false;", 'f7'),
     ('gui/input.c', "    changed |= ui_menu_hover(&app.ui, h.menu_title, h.menu_item);", "", 'f7'),
     ('gui/input.c', '    app.hov = h;\n', '', 'f7'),
@@ -650,6 +650,8 @@ MUTANTS = [
     ('gui/frame.c', '    u->sel_hit = e && e->hit;   // (F9 step 4: Open at Line)', '', 'f9'),
     ('gui/input.c', '    if (m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT) && (key == GLFW_KEY_ENTER || key == GLFW_KEY_KP_ENTER)) return UK_OPEN_LINE;', '', 'keys'),
     ('gui/folder.c', '        app.ui.search_was_inside = false;   // (another search', '        // (another search', 'f9'),
+    # Drives at the top (2026-10-29): an open menu's entry over a menu title is the entry's
+    ('gui/input.c', '        for (int m = 0; m < UI_MENUS && h.menu_title < 0 && h.menu_item < 0; m++)', '        for (int m = 0; m < UI_MENUS && h.menu_title < 0; m++)', 'f8'),
 ]
 import concurrent.futures, queue, threading, time
 

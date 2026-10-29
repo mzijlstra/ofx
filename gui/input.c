@@ -209,15 +209,16 @@ static Hit hit_at(float x, float y)
     // Open With's toggles (its panel's)
     for (int k = 1; k <= 4 && !h.toggle && app.ui.ow; k++)
         if (in_box(CLAY_IDI("toggle", k), x, y)) h.toggle = k;
-    if (modal_kind() == MODAL_NONE)
-        for (int m = 0; m < UI_MENUS && h.menu_title < 0; m++)
-            if (in_box(CLAY_IDI("menu-title", m), x, y)) h.menu_title = m;
-    // A menu open: its titles and its entries are all there is to hit (F7.1).
-    if (app.ui.menu_on && modal_kind() == MODAL_NONE) {
+    // A menu open: its titles and its entries are all there is to hit (F7.1). The entries first: a
+    // long context menu on a low row is moved up over the menu bar, and a press on its top entry
+    // opened the title under it (2026-10-29, Open on a bookmark below the drives).
+    if (app.ui.menu_on && modal_kind() == MODAL_NONE)
         for (int i = 0; i < UI_MENU[app.ui.menu].n && h.menu_item < 0; i++)
             if (UI_MENU[app.ui.menu].items[i] != UM_SEP && in_box(CLAY_IDI("menu-item", i), x, y)) h.menu_item = i;   // (one not shown has no box)
-        return h;
-    }
+    if (modal_kind() == MODAL_NONE)
+        for (int m = 0; m < UI_MENUS && h.menu_title < 0 && h.menu_item < 0; m++)
+            if (in_box(CLAY_IDI("menu-title", m), x, y)) h.menu_title = m;
+    if (app.ui.menu_on && modal_kind() == MODAL_NONE) return h;
     if (modal_kind() != MODAL_NONE) {
         // A panel is up: its buttons are all there is to hit.
         for (int b = 1; b < COUNT(MODAL_IDS) && !h.modal; b++)
