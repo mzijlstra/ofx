@@ -1885,7 +1885,7 @@ MUTANTS += [
     ('ui/handle.c', '    u->search_inside = on, u->search_edited = true;', '    u->search_inside = on;'),
     ('ui/handle.c', '        UiMatchOpts *o = inside ? &u->inside_opts : &u->find_opts;', '        UiMatchOpts *o = &u->find_opts;'),
     ('ui/handle.c', '    if (e.key == UK_TAB && u->search_inside) return', '    if (e.key == UK_TAB) return'),
-    ('ui/handle.c', '    if (e.key == UK_TAB && u->search_inside) return u->focus = inside ? UI_FOCUS_SEARCH : UI_FOCUS_INSIDE, true;', '    if (e.key == UK_TAB && u->search_inside) return u->focus = UI_FOCUS_INSIDE, true;'),
+    ('ui/handle.c', '    if (e.key == UK_TAB && u->search_inside) return u->focus = inside ? UI_FOCUS_SEARCH : UI_FOCUS_INSIDE,', '    if (e.key == UK_TAB && u->search_inside) return u->focus = UI_FOCUS_INSIDE,'),
     ('ui/handle.c', '    UiLine l = inside ? ui_inside_line(u) : ui_search_line(u);', '    UiLine l = ui_search_line(u);'),
     ('ui/handle.c', "        if (u->view == UI_VIEW_SEARCH && !prompt && e.key == UK_MENU && e.ch == 'i') {", "        if (u->view == UI_VIEW_SEARCH && !prompt && e.key == UK_MENU && e.ch == 'x') {"),
     ('ui/handle.c', "        if (u->view == UI_VIEW_SEARCH && !prompt && e.key == UK_MENU && e.ch == 'i') {", "        if (!prompt && e.key == UK_MENU && e.ch == 'i') {"),
@@ -1968,4 +1968,7 @@ MUTANTS += [
     ('ui/handle.c', ' && in->field < UI_FIELDS && ui_field_shown(u, (UiField)in->field)) {', ' && in->field < UI_FIELDS) {'),
     ('ui/handle.c', '    case UI_FIELD_FIND: return u->finding;', '    case UI_FIELD_FIND: return true;'),
     ('ui/handle.c', '            if (u->finding) ui_find_update(u, names);', ''),
+]
+MUTANTS += [
+    ('ui/handle.c', ', u->search_was_inside = !inside, true;', ', true;'),
 ]

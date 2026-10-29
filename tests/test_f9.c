@@ -478,6 +478,12 @@ static void test_search_inside_keys(void)
     u.focus = UI_FOCUS_LIST;
     CHECK(menu_keys(&u, 1, UK_CRUMBS).kind == UA_NONE && u.focus == UI_FOCUS_SEARCH);
     CHECK(menu_keys(&u, 1, UK_CRUMBS).kind == UA_NONE && u.focus == UI_FOCUS_LIST);   // (no path buttons: the list)
+    // Tab moves where Ctrl+K goes back to: from Containing to the name's, a result clicked, Ctrl+K.
+    u.focus = UI_FOCUS_INSIDE;
+    CHECK(menu_keys(&u, 1, UK_TAB).kind == UA_NONE && u.focus == UI_FOCUS_SEARCH && !u.search_was_inside);
+    u.focus = UI_FOCUS_LIST;
+    CHECK(menu_keys(&u, 1, UK_CRUMBS).kind == UA_NONE && u.focus == UI_FOCUS_SEARCH);
+    CHECK(menu_keys(&u, 1, UK_TAB).kind == UA_NONE && u.focus == UI_FOCUS_INSIDE && u.search_was_inside);
     // Containing last, but "In files" off since: the name's field.
     u.search_was_inside = true, u.search_inside = false, u.focus = UI_FOCUS_LIST;
     CHECK(menu_keys(&u, 1, UK_CRUMBS).kind == UA_NONE && u.focus == UI_FOCUS_SEARCH);

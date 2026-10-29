@@ -194,6 +194,7 @@ static bool go_to_in(const char *dir, Str select, isize fallback, bool stepping)
         ui_line_set(ui_search_line(&app.ui), text);
         ui_line_set(ui_inside_line(&app.ui), inside);
         app.ui.search_inside = inside.len > 0;   // (step 3: the address says whether it searched inside)
+        app.ui.search_was_inside = false;   // (another search's field doesn't carry over: reviewer-2, 2026-10-29)
         if (text.len == 0 && inside.len == 0) app.ui.focus = UI_FOCUS_SEARCH;
         else ui_unfocus(&app.ui, UI_FOCUS_SEARCH), ui_unfocus(&app.ui, UI_FOCUS_INSIDE);
         app.ui.search_edited = false, app.search_due = 0;

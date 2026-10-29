@@ -649,6 +649,7 @@ MUTANTS = [
     ('gui/actions.c', '    editors_parse(&editors.a, editors_path(path, sizeof path) ? read_file(&editors.a, path) : STR_EMPTY, &editors.user);', '    editors_parse(&editors.a, STR_EMPTY, &editors.user);', 'f9'),
     ('gui/frame.c', '    u->sel_hit = e && e->hit;   // (F9 step 4: Open at Line)', '', 'f9'),
     ('gui/input.c', '    if (m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT) && (key == GLFW_KEY_ENTER || key == GLFW_KEY_KP_ENTER)) return UK_OPEN_LINE;', '', 'keys'),
+    ('gui/folder.c', '        app.ui.search_was_inside = false;   // (another search', '        // (another search', 'f9'),
 ]
 import concurrent.futures, queue, threading, time
 

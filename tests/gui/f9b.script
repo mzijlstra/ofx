@@ -120,12 +120,17 @@ wait-for 2000 statusbad=1
 point-ui search-inside
 click-here
 wait-for 3000 inside=1 insidekeys=1 insidetext=useState searchdue=0 searchdone=1 n=2
-# Up to the folder searched, and Back: the address keeps the text inside, and searches it again
+# Up to the folder searched, and Back: the address keeps the text inside, and searches it again;
+# the field the keys were in last there is forgotten (reviewer-2, 2026-10-29): Ctrl+K, the name's
+key end
 key enter
 key alt-up
 wait-for 2000 search=0 searchbar=0
 key alt-left
 wait-for 3000 search=1 inside=1 insiderow=1 insidetext=useState searchtext=*.ts searchdone=1 n=2
+key ctrl-k
+expect searchkeys=1 insidekeys=0
+key enter
 # A new search from a folder starts by name, its fields empty
 key alt-up
 wait-for 2000 search=0

@@ -52,7 +52,7 @@ static bool ui_search_event(Ui *u, UiEvent e, const UiInput *in)
         *o = ui_toggle(*o, ui_toggle_key(e)), u->search_edited = true;
         return true;
     }
-    if (e.key == UK_TAB && u->search_inside) return u->focus = inside ? UI_FOCUS_SEARCH : UI_FOCUS_INSIDE, true;
+    if (e.key == UK_TAB && u->search_inside) return u->focus = inside ? UI_FOCUS_SEARCH : UI_FOCUS_INSIDE, u->search_was_inside = !inside, true;
     if (e.key == UK_CRUMBS) return u->focus = UI_FOCUS_LIST, ui_crumbs_focus(u, in), true;   // (Ctrl+K again: on to the path buttons, as Ctrl+J from the find bar goes on to the jobs)
     UiLine l = inside ? ui_inside_line(u) : ui_search_line(u);
     if (ui_line_copies_nothing(l, e)) return u->focus = UI_FOCUS_LIST, false;   // (the cursor's result)
