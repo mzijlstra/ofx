@@ -95,8 +95,11 @@ def run(work, cc='clang'):
 def rmtree(path):
     for d, dirs, _ in os.walk(path):
         for x in dirs:
+            p = os.path.join(d, x)
+            if os.path.islink(p):   # (chmod follows a link: its target may be anywhere; reviewer-2, 2026-10-29)
+                continue
             try:
-                os.chmod(os.path.join(d, x), 0o700)
+                os.chmod(p, 0o700)
             except OSError:
                 pass
     shutil.rmtree(path, ignore_errors=True)

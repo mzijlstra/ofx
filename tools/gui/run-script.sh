@@ -107,6 +107,7 @@ exec env -u DISPLAY -u WAYLAND_SOCKET WAYLAND_DISPLAY="$sock" OFX_TEST_SIZE=${OF
 EOS
 chmod +x "$T/launch.sh"
 t_launch=$(date +%s.%N)
+echo "run-script: the window launched"   # (tools/mutation/gui.py: a failure before this line tested nothing)
 setsid "$T/launch.sh" </dev/null >/dev/null 2>&1 &
 for i in $(seq 50); do [ -s "$T/run.pid" ] && break; sleep 0.2; done
 pid=$(cat "$T/run.pid")

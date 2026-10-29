@@ -692,8 +692,11 @@ for f, old, new, *_ in MUTANTS:
 def rmtree(path):
     for d, dirs, _ in os.walk(path):
         for x in dirs:
+            p = os.path.join(d, x)
+            if os.path.islink(p):   # (chmod follows a link: its target may be anywhere; reviewer-2, 2026-10-29)
+                continue
             try:
-                os.chmod(os.path.join(d, x), 0o700)
+                os.chmod(p, 0o700)
             except OSError:
                 pass
     shutil.rmtree(path, ignore_errors=True)
@@ -722,12 +725,19 @@ def failed_groups(out):
             g.append(GROUP_OF.get(m[1], m[1]))
     return g
 
-# A compositor that didn't start (weston.sh's or sway.sh's "no socket after"): the script never ran,
-# so that failure says nothing about the build. (2026-10-29: five mutants counted as killed by keys,
-# with no expectation failed, that no group kills; a start timed out under load is the likely
-# cause, as the stale wayland-N sockets of 2026-10-28.)
+# A script that failed before its window launched (run-script prints RUN_LAUNCHED as it does: a
+# compositor that didn't start, the socket checks): it never ran, so that failure says nothing about
+# the build. (2026-10-29: five mutants counted as killed by keys, with no expectation failed, that
+# no group kills; a start timed out under load is the likely cause, as the stale wayland-N sockets
+# of 2026-10-28. reviewer-2's marker, rather than one message to look for.)
+RUN_LAUNCHED = 'run-script: the window launched'
+
 def unstarted(r):
-    return r.returncode != 0 and re.search(r'(weston|sway)\.sh: no socket after', r.stdout + r.stderr) is not None
+    if r.returncode == 0:
+        return False
+    heads = [k for k, l in enumerate(r.stdout.splitlines()) if re.fullmatch(r'== [a-z0-9]+', l)]
+    last = r.stdout.splitlines()[heads[-1]:] if heads else r.stdout.splitlines()
+    return RUN_LAUNCHED not in last
 
 # A mutant's run stops at its first failure (OFX_GUI_FAIL_FAST, run.sh and script.c), the base's
 # never: it must pass everything. A group whose compositor didn't start runs again, three times in
