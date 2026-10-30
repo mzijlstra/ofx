@@ -1,36 +1,36 @@
 # F8 step 3: a folder elsewhere's menu: a place (a bookmark, Home, Trash), a tree row, a path button,
 # by the pointer and by Shift+F10 where the keys are. The tree (run.sh): sub/, sub2/; the bookmarks
-# file in the scratch config: home/tree/sub "Sub", then home/tree/sub2. The sidebar: Drives,
-# File System, Places, Home, Sub, sub2, Trash.
+# file in the scratch config: home/tree/sub "Sub", then home/tree/sub2. The sidebar: Places,
+# Home, Sub, sub2, Trash, Drives, File System.
 settle
-expect sides=^Drives|File_System|^Places|Home|Sub|sub2|Trash bmn=2
+expect sides=^Places|Home|Sub|sub2|Trash|^Drives|File_System bmn=2
 # A heading: nothing
 point-ui side-row 0
 right-here
 expect menu=-
 # A bookmark's row: Edit Bookmarks' own; no Cut or Copy (a place), no Add Bookmark (one already)
-point-ui side-row 4
+point-ui side-row 2
 right-here
 expect menu=folder menuhid=cut-it,copy-it,bookmark-it,eject,empty-it menugrey=cut-it,copy-it,paste-into,bookmark-it,bm-up,eject,empty-it menuin=1
 shot ctx-bookmark.png
 key esc
 # Another writer changes the file under an open menu: it closes, its line read again would be another
-point-ui side-row 5
+point-ui side-row 3
 right-here
 expect menu=folder
 sh sed -i "1i file://$OFX_DIR New" "$OFX_ROOT/config/gtk-3.0/bookmarks"
 wait-for 3000 bmn=3 menu=-
 sh sed -i 1d "$OFX_ROOT/config/gtk-3.0/bookmarks"
 wait-for 3000 bmn=2
-point-ui side-row 4
+point-ui side-row 2
 right-here
 # Move Down: the file's order changes, the places follow
 point-menu bm-down
 click-here
-wait-for 2000 sides=^Drives|File_System|^Places|Home|sub2|Sub|Trash
+wait-for 2000 sides=^Places|Home|sub2|Sub|Trash|^Drives|File_System
 sh [ "$(head -1 "$OFX_ROOT/config/gtk-3.0/bookmarks")" = "file://$OFX_DIR/sub2" ]
 # Rename…: Edit Bookmarks on that line, its field open with the label
-point-ui side-row 5
+point-ui side-row 3
 right-here
 point-menu bm-rename
 click-here
@@ -39,14 +39,14 @@ key esc
 key esc
 expect bmp=0
 # Remove: the line goes
-point-ui side-row 4
+point-ui side-row 2
 right-here
 point-menu bm-remove
 click-here
-wait-for 2000 sides=^Drives|File_System|^Places|Home|Sub|Trash bmn=1
+wait-for 2000 sides=^Places|Home|Sub|Trash|^Drives|File_System bmn=1
 sh ! grep -q "tree/sub2" "$OFX_ROOT/config/gtk-3.0/bookmarks"
 # Home: Open in New Tab, a tab behind on it; Add Bookmark there
-point-ui side-row 3
+point-ui side-row 1
 right-here
 expect menu=folder menuhid=cut-it,copy-it,bm-rename,bm-up,bm-down,bm-remove,bm-edit,eject,empty-it
 point-menu open-tab
@@ -71,7 +71,7 @@ point-menu tab-others
 click-here
 expect menu=- tabs=1 tabdirs=tree
 # Trash: gone to, not into; Empty Trash greyed while it is empty
-point-ui side-row 5
+point-ui side-row 3
 right-here
 expect menu=folder menuhid=open-window,terminal-in,search-in,cut-it,copy-it,paste-into,bookmark-it,bm-rename,bm-up,bm-down,bm-remove,bm-edit,eject,properties-it
 expect menugrey=open-window,terminal-in,search-in,cut-it,copy-it,paste-into,bookmark-it,bm-rename,bm-up,bm-down,bm-remove,bm-edit,eject,empty-it,properties-it
@@ -80,7 +80,7 @@ key esc
 key down
 key delete
 wait-for 2000 undo=trash n=1
-point-ui side-row 5
+point-ui side-row 3
 right-here
 expect menugrey=open-window,terminal-in,search-in,cut-it,copy-it,paste-into,bookmark-it,bm-rename,bm-up,bm-down,bm-remove,bm-edit,eject,properties-it
 point-menu empty-it
@@ -122,28 +122,40 @@ expect menu=- clip=1 cut=0
 key ctrl-v
 sh sleep 1; test ! -e "$OFX_DIR/sub (copy)"
 # With files copied, Paste Into Folder on a folder that takes them
-point-ui side-row 4
+point-ui side-row 2
 right-here
 expect menu=folder menugrey=cut-it,copy-it,bookmark-it,bm-up,bm-down,eject,empty-it
 key esc
 # Open: there
-point-ui side-row 4
+point-ui side-row 2
 right-here
 point-menu open-it
 click-here
 wait-for 2000 crumbs=home|tree|sub
 key alt-left
 wait-for 2000 crumb=1
-# By the keys: the sidebar's cursor (Tab), the path buttons' (Ctrl+K); the keys stay there
+# Three bookmarks more push Sub down, and its long menu is moved up over the menu bar: a press on
+# its top entry is the entry's, not the title's under it (2026-10-29)
+sh sed -i "1i file://$OFX_ROOT A\nfile://$OFX_DIR B\nfile://$OFX_DIR/sub2 C" "$OFX_ROOT/config/gtk-3.0/bookmarks"
+wait-for 3000 bmn=4 sides=^Places|Home|A|B|C|Sub|Trash|^Drives|File_System
+point-ui side-row 5
+right-here
+expect menu=folder
+point-menu open-it
+click-here
+wait-for 2000 crumbs=home|tree|sub menu=-
+key alt-left
+wait-for 2000 crumb=1
+sh sed -i 1,3d "$OFX_ROOT/config/gtk-3.0/bookmarks"
+wait-for 3000 bmn=1 sides=^Places|Home|Sub|Trash|^Drives|File_System
+# By the keys: the sidebar's cursor (Tab, on Home: the place shown), the path buttons' (Ctrl+K);
+# the keys stay there
 key tab
-key home
-expect sidefocus=1 side=1
-char j
-expect side=3 place=Home
+expect sidefocus=1 side=1 place=Home
 raw-key 299 1
 expect menu=folder menuat=open-it menuin=1
 # (under the cursor's sidebar row: Home)
-expect menubox=12,184,280,243
+expect menubox=12,128,280,243
 key esc
 expect menu=- sidefocus=1
 key tab

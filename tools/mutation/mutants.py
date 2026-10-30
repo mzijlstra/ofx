@@ -1762,7 +1762,7 @@ MUTANTS += [
     ('fs/places.c', ' || path_below(mp, "/media") ||', ' ||'),
     ('fs/places.c', ' || (places_test_media[0] && path_below(mp, places_test_media)))', ')'),
     ('fs/places.c', '        if (pl->n == before) continue;\n', ''),
-    ('fs/places.c', 'if (path_within(path, p) && (best < 0 || n > best_n || (n == best_n && !place_is_drive(pl->p[i].kind)))) best = i, best_n = n;', 'if (path_within(path, p) && best < 0) best = i, best_n = n;'),
+    ('fs/places.c', 'if (path_within(path, p) && (best < 0 || n > best_n)) best = i, best_n = n;', 'if (path_within(path, p) && best < 0) best = i, best_n = n;'),
     ('fs/places.c', '        if (!file_uri_path(uri, path, sizeof path)) continue;', '        file_uri_path(uri, path, sizeof path);'),
     ('fs/thumb.c', '    if (path_below(q->path, q->root)) return TG_NONE;', '    if (0) return TG_NONE;'),
     ('fs/thumb.c', '        if (!path_within(path, mp) || (isize)n < best || !t.len) continue;', '        if (!path_within(path, mp) || (isize)n <= best || !t.len) continue;'),
@@ -1973,14 +1973,12 @@ MUTANTS += [
     ('ui/handle.c', ', u->search_was_inside = !inside, true;', ', true;'),
 ]
 
-# ---- drives at the top of the sidebar (Michael, 2026-10-29): the order, a place before its drive
+# ---- the places, then the drives (2026-10-30: back from a day with the drives on top)
 MUTANTS += [
-    (PL, '    places_head(pl, "Drives");\n    places_add_mounts(pl, read_file(scratch, mountinfo));\n    places_head(pl, "Places");\n', '    places_head(pl, "Places");\n'),
-    (PL, '    places_add(pl, PL_TRASH, TRASH_URI, S("Trash"));\n    arena_restore', '    places_add(pl, PL_TRASH, TRASH_URI, S("Trash"));\n    places_head(pl, "Drives");\n    places_add_mounts(pl, read_file(scratch, mountinfo));\n    arena_restore'),
-    (PL, ' || (n == best_n && !place_is_drive(pl->p[i].kind))', ''),
-    # Not a mutant: ` || (n == best_n)`, the later of a tie: a drive is never later than a place now,
-    # and two of a kind are one place; the check keeps the rule apart from the order.
+    (PL, '    places_add(pl, PL_TRASH, TRASH_URI, S("Trash"));\n    places_head(pl, "Drives");\n    places_add_mounts(pl, read_file(scratch, mountinfo));\n', '    places_add(pl, PL_TRASH, TRASH_URI, S("Trash"));\n'),
+    (PL, '    ArenaMark mark = arena_mark(scratch);\n    places_head(pl, "Places");', '    ArenaMark mark = arena_mark(scratch);\n    places_head(pl, "Drives");\n    places_add_mounts(pl, read_file(scratch, mountinfo));\n    places_head(pl, "Places");'),
     (PL, 'if (place_is_drive(pl->p[i].kind) == place_is_drive(kind) && strcmp(pl->p[i].path, path) == 0) return true;', 'if (pl->p[i].kind == kind && strcmp(pl->p[i].path, path) == 0) return true;'),
+    (PL, '(best < 0 || n > best_n)) best = i', '(best < 0 || n >= best_n)) best = i'),
 ]
 
 # ---- Tab on the folder shown's sidebar row (Michael, 2026-10-29)

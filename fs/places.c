@@ -123,21 +123,22 @@ static void fs_space(const char *path, i64 *size, i64 *avail)
     *avail = (i64)v.f_bavail * (i64)v.f_frsize;
 }
 
-// The Drives section (the mountinfo file) and the Places section (Home, the bookmarks file,
-// Trash), each under its heading: the drives first, as there are few of them and bookmarks may be
-// many (Michael, 2026-10-29: they were pushed down). scratch holds only the files' text. No
-// drive's space yet.
+// The Places section (Home, the bookmarks file, Trash) and the Drives section (the mountinfo
+// file), each under its heading; scratch holds only the files' text. No drive's space yet. The
+// places first, as in Nemo and the GTK file chooser: the drives went on top for a day and came
+// back down (Michael, 2026-10-30: the places are where he goes most, and drives that come and go
+// change the rows below his bookmarks, not above them).
 static void places_load(Arena *scratch, Places *pl, const char *bookmarks, const char *mountinfo)
 {
     pl->n = 0;
     ArenaMark mark = arena_mark(scratch);
-    places_head(pl, "Drives");
-    places_add_mounts(pl, read_file(scratch, mountinfo));
     places_head(pl, "Places");
     const char *home = getenv("HOME");
     if (home && home[0]) places_add(pl, PL_HOME, home, S("Home"));
     places_add_bookmarks(pl, read_file(scratch, bookmarks));
     places_add(pl, PL_TRASH, TRASH_URI, S("Trash"));
+    places_head(pl, "Drives");
+    places_add_mounts(pl, read_file(scratch, mountinfo));
     arena_restore(scratch, mark);
 }
 
@@ -148,9 +149,9 @@ static const char *bookmarks_path(char *buf, size_t cap)
     return buf;
 }
 
-// The place holding path: the longest one that is path or a folder above it, of two the same the
-// one that isn't a drive (a bookmark before its drive, though the drives are listed first; two of
-// a kind at one folder are one place, places_has); Trash for the trash view; -1 for none.
+// The place holding path: the longest one that is path or a folder above it, the first of two the
+// same (a bookmark before its drive: the places are listed first; two of a kind at one folder are
+// one place, places_has); Trash for the trash view; -1 for none.
 static int places_current(const Places *pl, const char *path)
 {
     int best = -1;
@@ -160,7 +161,7 @@ static int places_current(const Places *pl, const char *path)
         if (pl->p[i].kind == PL_HEAD || pl->p[i].kind == PL_TRASH) continue;
         const char *p = pl->p[i].path;
         size_t n = strlen(p);
-        if (path_within(path, p) && (best < 0 || n > best_n || (n == best_n && !place_is_drive(pl->p[i].kind)))) best = i, best_n = n;
+        if (path_within(path, p) && (best < 0 || n > best_n)) best = i, best_n = n;
     }
     return best;
 }

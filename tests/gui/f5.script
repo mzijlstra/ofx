@@ -85,7 +85,7 @@ middle 0
 point-ui crumb 0
 middle-here
 expect tabs=4 tab=0 tabdirs=tree|home|adir|bdir
-point-ui side-row 3
+point-ui side-row 1
 middle-here
 expect tabs=5 tab=0 tabdirs=tree|home|home|adir|bdir
 # A file: not a folder

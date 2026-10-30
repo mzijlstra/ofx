@@ -1343,10 +1343,10 @@ static void test_places(void)
     Places pl;
     places_load(&ta, &pl, at("places/bookmarks"), at("places/mountinfo"));
     const char *want[][2] = {
-        { "", "Drives" }, { "/", "File System" }, { "/mnt/sd", "sd" }, { "/run/media/m/USB Stick", "USB Stick" },
-        { "/media/cd", "cd" }, { "/media/nosrc", "nosrc" }, { "/media/esc", "esc" }, { "", "Places" }, { "/home/m", "Home" },
-        { "/home/m/Pictures", "Pictures" }, { "/home/m/My Docs", "My Docs" }, { "/home/m/Downloads", "Downloads" }, { "/", "/" },
-        { TRASH_URI, "Trash" },
+        { "", "Places" }, { "/home/m", "Home" }, { "/home/m/Pictures", "Pictures" }, { "/home/m/My Docs", "My Docs" },
+        { "/home/m/Downloads", "Downloads" }, { "/", "/" }, { TRASH_URI, "Trash" }, { "", "Drives" }, { "/", "File System" },
+        { "/mnt/sd", "sd" }, { "/run/media/m/USB Stick", "USB Stick" }, { "/media/cd", "cd" }, { "/media/nosrc", "nosrc" },
+        { "/media/esc", "esc" },
     };
     CHECK(pl.n == COUNT(want));
     for (int i = 0; i < pl.n && i < COUNT(want); i++) {
@@ -1354,31 +1354,31 @@ static void test_places(void)
             fprintf(stderr, "place %d: %s (%s)\n", i, pl.p[i].path, pl.p[i].label);
         CHECK(strcmp(pl.p[i].path, want[i][0]) == 0 && strcmp(pl.p[i].label, want[i][1]) == 0);
     }
-    CHECK(pl.p[7].kind == PL_HEAD && pl.p[8].kind == PL_HOME && pl.p[9].kind == PL_BOOKMARK && pl.p[12].kind == PL_BOOKMARK);
-    CHECK(pl.p[13].kind == PL_TRASH && pl.p[0].kind == PL_HEAD && pl.p[1].kind == PL_ROOT);   // "/" as a bookmark and as a drive
-    CHECK(pl.p[2].kind == PL_MOUNT && pl.p[3].kind == PL_REMOVABLE && pl.p[4].kind == PL_REMOVABLE);
+    CHECK(pl.p[0].kind == PL_HEAD && pl.p[1].kind == PL_HOME && pl.p[2].kind == PL_BOOKMARK && pl.p[5].kind == PL_BOOKMARK);
+    CHECK(pl.p[6].kind == PL_TRASH && pl.p[7].kind == PL_HEAD && pl.p[8].kind == PL_ROOT);   // "/" as a bookmark and as a drive
+    CHECK(pl.p[9].kind == PL_MOUNT && pl.p[10].kind == PL_REMOVABLE && pl.p[11].kind == PL_REMOVABLE);
     // Each drive's source (F6.1, for eject): after the " - " that ends the optional fields.
-    CHECK(strcmp(pl.p[1].dev, "/dev/mapper/root") == 0 && strcmp(pl.p[2].dev, "/dev/mapper/sd") == 0);
-    CHECK(strcmp(pl.p[3].dev, "/dev/sdb1") == 0 && strcmp(pl.p[4].dev, "/dev/sr0") == 0 && pl.p[12].dev[0] == 0);
-    CHECK(pl.p[5].dev[0] == 0 && strcmp(pl.p[6].dev, "/dev/a b") == 0);
-    CHECK(place_ejectable(&pl.p[3]) && place_ejectable(&pl.p[4]) && !place_ejectable(&pl.p[5]));
-    CHECK(!place_ejectable(&pl.p[2]) && !place_ejectable(&pl.p[1]));   // /mnt/sd and /: not removable
+    CHECK(strcmp(pl.p[8].dev, "/dev/mapper/root") == 0 && strcmp(pl.p[9].dev, "/dev/mapper/sd") == 0);
+    CHECK(strcmp(pl.p[10].dev, "/dev/sdb1") == 0 && strcmp(pl.p[11].dev, "/dev/sr0") == 0 && pl.p[5].dev[0] == 0);
+    CHECK(pl.p[12].dev[0] == 0 && strcmp(pl.p[13].dev, "/dev/a b") == 0);
+    CHECK(place_ejectable(&pl.p[10]) && place_ejectable(&pl.p[11]) && !place_ejectable(&pl.p[12]));
+    CHECK(!place_ejectable(&pl.p[9]) && !place_ejectable(&pl.p[8]));   // /mnt/sd and /: not removable
     Place fuse = { .kind = PL_REMOVABLE };
     snprintf(fuse.dev, sizeof fuse.dev, "sshfs#host:/x");
     CHECK(!place_ejectable(&fuse));
-    CHECK(places_current(&pl, "/home/m/Pictures/2026") == 9);
-    CHECK(places_current(&pl, "/home/m/Picturesque") == 8);   // a prefix that isn't a folder above
-    CHECK(places_current(&pl, "/home/m") == 8);
-    CHECK(places_current(&pl, "/etc") == 12);                  // the bookmark before the drive (listed first)
-    CHECK(places_current(&pl, "/mnt/sd/Downloads") == 2);
-    CHECK(places_current(&pl, TRASH_URI) == 13);
+    CHECK(places_current(&pl, "/home/m/Pictures/2026") == 2);
+    CHECK(places_current(&pl, "/home/m/Picturesque") == 1);   // a prefix that isn't a folder above
+    CHECK(places_current(&pl, "/home/m") == 1);
+    CHECK(places_current(&pl, "/etc") == 5);                  // the bookmark before the drive
+    CHECK(places_current(&pl, "/mnt/sd/Downloads") == 9);
+    CHECK(places_current(&pl, TRASH_URI) == 6);
     // The tests' media folder: mounts under it removable, the folder itself not.
     snprintf(places_test_media, sizeof places_test_media, "/scratch/media");
     put(at("places/mi2"), "1 1 0:1 / /scratch/media/STICK rw - vfat /dev/sdq1 rw\n2 1 0:1 / /scratch/media rw - tmpfs t rw\n"
                           "3 1 0:1 / /scratch/other rw - vfat /dev/sdq2 rw\n");
     places_load(&ta, &pl, at("places/none"), at("places/mi2"));
     places_test_media[0] = 0;
-    CHECK(pl.n == 5 && pl.p[1].kind == PL_REMOVABLE && strcmp(pl.p[1].path, "/scratch/media/STICK") == 0 && place_ejectable(&pl.p[1]));
+    CHECK(pl.n == 5 && pl.p[4].kind == PL_REMOVABLE && strcmp(pl.p[4].path, "/scratch/media/STICK") == 0 && place_ejectable(&pl.p[4]));
     env_restore();
     // The real mountinfo, through procfs: "/" is in it.
     env_set("HOME", "/home/m");
@@ -1387,21 +1387,21 @@ static void test_places(void)
     for (int i = 0; i < pl.n; i++) root_seen |= pl.p[i].kind == PL_ROOT;
     CHECK(root_seen);
     env_restore();
-    // Without bookmarks: "/" from mountinfo as File System first, then home and Trash.
+    // Without bookmarks: home, Trash, then "/" from mountinfo as File System.
     env_set("HOME", "/home/m");
     places_load(&ta, &pl, at("places/none"), at("places/mountinfo"));
-    CHECK(pl.n == 10 && pl.p[9].kind == PL_TRASH && pl.p[1].kind == PL_ROOT && strcmp(pl.p[1].label, "File System") == 0);
+    CHECK(pl.n == 10 && pl.p[2].kind == PL_TRASH && pl.p[4].kind == PL_ROOT && strcmp(pl.p[4].label, "File System") == 0);
     env_restore();
     // No HOME: no Home place, the headings and Trash.
     env_set("HOME", NULL);
     places_load(&ta, &pl, at("places/none"), at("places/none"));
-    CHECK(pl.n == 3 && pl.p[2].kind == PL_TRASH && places_current(&pl, "/x") == -1);
+    CHECK(pl.n == 3 && pl.p[1].kind == PL_TRASH && places_current(&pl, "/x") == -1);
     env_restore();
     // A bookmark to Home: one place, Home (places_current's tie is only ever a drive and a place).
     env_set("HOME", "/home/m");
     put(at("places/bm2"), "file:///home/m Me\n");
     places_load(&ta, &pl, at("places/bm2"), at("places/none"));
-    CHECK(pl.n == 4 && pl.p[2].kind == PL_HOME && places_current(&pl, "/home/m/x") == 2);
+    CHECK(pl.n == 4 && pl.p[1].kind == PL_HOME && places_current(&pl, "/home/m/x") == 1);
     env_restore();
     // Icons.
     UserDirs ud = { 0 };

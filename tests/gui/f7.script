@@ -149,10 +149,10 @@ pointer-off
 key esc
 # ---- the trash view: no Create, no New Window; Open with nothing in it neither
 key backspace
-press-side 4
+press-side 2
 wait-for 2000 trash=1 canwrite=0 menuoff=new-window,new-folder,new-file,open,open-with
 key ctrl-n
-press-side 3
+press-side 1
 wait-for 2000 trash=0
 sh [ "$(grep -c "uwsm-app -- /.*/ofx" "$OFX_ROOT/spawn.log")" = 2 ]
 # ---- a question up: no menu

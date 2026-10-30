@@ -177,14 +177,14 @@ expect sel=in-a.txt
 key backspace
 # The sidebar: Tab (onto Tree, the place shown), k, Enter; a press; a real click on a row.
 key tab
-expect sidefocus=1 side=5 place=Tree
+expect sidefocus=1 side=3 place=Tree
 char k
-expect side=4 place=Bee
+expect side=2 place=Bee
 key enter
 expect sel=in-b.txt here=Bee
-press-side 5
+press-side 3
 expect sel=adir here=Tree
-point-ui side-row 4
+point-ui side-row 2
 click-here
 expect sel=in-b.txt here=Bee
 key esc

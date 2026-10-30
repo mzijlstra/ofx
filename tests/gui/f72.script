@@ -169,7 +169,7 @@ type run.sh
 key enter
 key delete
 wait-for 2000 n=7
-press-side 4
+press-side 2
 wait-for 2000 trash=1 n=1
 key ctrl-i
 wait-for 2000 propcan=0 propname=run.sh propwhere=Trash
