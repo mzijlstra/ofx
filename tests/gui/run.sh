@@ -110,10 +110,10 @@ fi
 if want usb; then
 # Unmounted drives (2026-10-30): a block device folder and a udev database of the run's own (the
 # script adds and removes drives in them), mounted by run-script's fake udisksctl under media/.
-T=$base/usb; rm -rf "$T"; mkdir -p "$T/tree/adir" "$T/sys" "$T/udevdb" "$T/media"
+T=$base/usb; rm -rf "$T"; mkdir -p "$T/tree/adir" "$T/sys" "$T/udevdb" "$T/media" "$T/home"
 touch "$T/tree/a.txt"
 printf '33 1 0:31 / / rw - btrfs /dev/x rw\n' > "$T/mountinfo"
-echo "== usb"; OFX_TEST_MEDIA="$T/media" OFX_TEST_MOUNTINFO="$T/mountinfo" OFX_TEST_SYSBLOCK="$T/sys" OFX_TEST_UDEV="$T/udevdb" "$here/../../tools/gui/run-script.sh" "$T" "$here/usb.script" "$bin" "$T/tree" || failed usb
+echo "== usb"; OFX_TEST_HOME="$T/home" OFX_TEST_MEDIA="$T/media" OFX_TEST_MOUNTINFO="$T/mountinfo" OFX_TEST_SYSBLOCK="$T/sys" OFX_TEST_UDEV="$T/udevdb" "$here/../../tools/gui/run-script.sh" "$T" "$here/usb.script" "$bin" "$T/tree" || failed usb
 fi
 if want f62; then
 # F6.2: the icon view, then f62b on the same tree: the view came back from the state file.

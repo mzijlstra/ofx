@@ -21,6 +21,7 @@
 0c09782580c9 f72
 0c0a5b1ec8ab f6
 0c4b71ff457b f5
+0cf3ee68f4ef usb
 0d54fbf9f834 f8
 0d6ff5bbda7b browse
 0dcd11ffc89f f73
@@ -377,6 +378,7 @@ b16c1bb57deb f74
 b1752222e0b7 clip
 b1a5a6a062ab f6
 b1a7054af6b3 f8
+b1c9cfd75f66 usb
 b2030cae52fc f52
 b207cb6a2631 f75
 b22ce5de0c3a f74

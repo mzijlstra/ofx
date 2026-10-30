@@ -610,6 +610,8 @@ MUTANTS = [
     ('gui/eject.c', '        else set_status(false, "%s is unmounted", ej.label);', '', 'usb'),
     ('gui/eject.c', '        if (r == EJECT_FAILED) set_status(true, "Can\'t unmount %s: %s"', '        if (false) set_status(true, "Can\'t unmount %s: %s"', 'usb'),
     ('gui/input.c', '        if (ctx_pl && place_ejectable(ctx_pl)) (it == UM_EJECT_IT ? eject_start : unmount_start)(ctx_pl);', '        if (ctx_pl && place_ejectable(ctx_pl)) eject_start(ctx_pl);', 'usb'),
+    ('gui/eject.c', ' && path_within(here_dir(), ej.path) && home && home[0]) go_to(home, STR_EMPTY, 0);', ' && false) go_to(home, STR_EMPTY, 0);', 'usb'),
+    ('gui/eject.c', 'if (op != DRIVE_MOUNT && r != EJECT_FAILED && path_within', 'if (op != DRIVE_MOUNT && path_within', 'usb'),
     ('gui/eject.c', '        else if (go_to(at, STR_EMPTY, 0)) set_status(false, "Mounted %s", ej.label);', '        else set_status(false, "Mounted %s", ej.label);', 'usb'),
     ('gui/eject.c', '        if (!mounted) set_status(true, "Can\'t mount %s: %s"', '        if (false) set_status(true, "Can\'t mount %s: %s"', 'usb'),
     ('gui/script.c', ' : p->kind == PL_UNMOUNTED ? "~" : ""', ' : ""', 'usb'),

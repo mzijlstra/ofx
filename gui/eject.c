@@ -18,7 +18,7 @@ static struct {
     pthread_mutex_t mu;
     bool            busy, ready;
     DriveOp         op;
-    char            dev[256], label[256];
+    char            dev[256], label[256], path[PATH_MAX];   // path: where it is mounted (eject, unmount)
     EjectResult     result;
     bool            mounted;              // a mount's result, with where
     char            at[PATH_MAX];
@@ -73,6 +73,7 @@ static bool drive_start(const Place *p, DriveOp op)
     if (!ops_program_allowed("udisksctl", &gerr)) return set_status(true, "%s", gerr.msg), false;
     snprintf(ej.dev, sizeof ej.dev, "%s", p->dev);
     snprintf(ej.label, sizeof ej.label, "%s", p->label);
+    snprintf(ej.path, sizeof ej.path, "%s", p->path);
     ej.busy = true, ej.ready = false, ej.op = op;
     pthread_t t;
     if (pthread_create(&t, NULL, eject_thread, NULL) != 0) {
@@ -114,6 +115,11 @@ static bool eject_take(void)
     if (got) ej.ready = false, ej.busy = false;
     pthread_mutex_unlock(&ej.mu);
     if (!got) return false;
+    // Unmounted (or ejected) while its folder is shown: Home first, then the message, so the
+    // window never sits on a folder that has gone (Michael, 2026-10-30: ofx landed in
+    // /run/media/<user> with the message cleared; Nemo crashes there).
+    const char *home = getenv("HOME");
+    if (op != DRIVE_MOUNT && r != EJECT_FAILED && path_within(here_dir(), ej.path) && home && home[0]) go_to(home, STR_EMPTY, 0);
     if (op == DRIVE_UNMOUNT) {
         if (r == EJECT_FAILED) set_status(true, "Can't unmount %s: %s", ej.label, why[0] ? why : "no reason given");
         else set_status(false, "%s is unmounted", ej.label);

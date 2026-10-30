@@ -36,9 +36,10 @@ expect status=Mounted MY STICK
 wait-for 3000 sides=^Places|Home|Trash|^Drives|File_System|MY_STICK|~1.0_GB_Drive here=MY STICK
 sh test "$OFX_DIR" = "$OFX_ROOT/media/MY STICK"
 shot usb-mounted.png
-# Unmount in its menu (2026-10-30): unmounted, not powered off; the row is a drive to mount again
+# Unmount in its menu (2026-10-30): unmounted, not powered off; the row is a drive to mount again.
+# Its folder was the one shown: Home first, then the message (the fake removes the mount point, as
+# udisks does).
 sh touch "$OFX_ROOT/udisks-unmount-drops"
-key alt-left
 point-ui side-row 5
 right-here
 expect menu=folder
@@ -47,13 +48,15 @@ sh echo unmount > "$OFX_ROOT/udisks-fail"
 click-here
 wait-for 3000 status=Can't
 expect status=Can't unmount MY STICK: Error unmount: target is busy
+sh test "$OFX_DIR" = "$OFX_ROOT/media/MY STICK"
 sh rm "$OFX_ROOT/udisks-fail"
 point-ui side-row 5
 right-here
 point-menu unmount-it
 click-here
 wait-for 3000 status=MY
-expect status=MY STICK is unmounted
+expect status=MY STICK is unmounted here=Home
+sh test "$OFX_DIR" = "$OFX_ROOT/home" && test ! -e "$OFX_ROOT/media/MY STICK"
 wait-for 3000 sides=^Places|Home|Trash|^Drives|File_System|~1.0_GB_Drive|~MY_STICK
 sh grep -qx "udisksctl unmount -b /dev/sdz1" "$OFX_ROOT/spawn.log" && ! grep -q "power-off" "$OFX_ROOT/spawn.log"
 sh rm "$OFX_ROOT/udisks-unmount-drops"

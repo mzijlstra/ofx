@@ -47,6 +47,7 @@ Omarchy's theme: the binary, the folder `tools/ofx`, the window's title and Wayl
 | F7.3 | Open With Other Application: a panel listing the apps for the file's type | Below |
 | F8 | Right-click menus: the selection, empty space, a folder elsewhere, a tab | Below |
 | F9 | Search below the folder: names as you type in a tab of its own, then working with results, then (turned on per search) inside files, then Open at Line | Below |
+| F10 | `ofx.conf`: the options you set, in one commented file ofx reads and watches; Edit → Preferences… | Below |
 
 Each milestone ends in a reviewer-2 round, then Michael's go before `make install`.
 
@@ -55,7 +56,12 @@ Nemo: menus, a top bar, tabs, sidebar modes in the bottom bar), in the order F4 
 his word: Nemo's compact view and its icon size slider.
 
 **Later, wanted eventually, not scheduled:**
-- The view (list or icons) per folder, as Nemo keeps it (F6.2 keeps one for all folders).
+- The view (list or icons) and the icon size per folder (Michael, 2026-10-30). ofx.conf sets the
+  default (`view = list`, `zoom = 48`). The state file keeps only the folders you changed from it,
+  not every folder opened, as Nemo does. When the default in ofx.conf changes, those per-folder
+  choices are wiped, since they were made against the old default. ofx says so: a comment above
+  the option in ofx.conf, and the status line when it happens. F6.2 keeps one view for all folders
+  until then.
 - Previews of videos and PDFs through the system's thumbnailers (`/usr/share/thumbnailers`), after F6.4.
 - Git status per file (`git status --porcelain=v2 -z` off the main thread, a mark per row).
 - USB drives (from the concept doc): unmounted drives in the sidebar, a click mounts them with
@@ -687,6 +693,43 @@ Default and Recommended equal GIO's; GLib's rewrite of a copy adds the two lines
   index.theme files read again; start-up is back to about 51 ms), each app's texture when its row
   is first drawn, all of them dropped when it closes (`ow_drop`). SVG icons (theme, pixmaps/ or a
   path) are drawn with nanosvg, vendored; only for the apps, the files' icons stay PNG.
+
+## F10 design (2026-10-30)
+
+The questions page: https://claude.ai/artifact/76BUMjBEBC5uEp33fLDZaj. Michael took every
+recommendation (2026-10-30), and added two things.
+
+- **The split stays:** `$XDG_CONFIG_HOME/ofx/ofx.conf` is what you set, and ofx only reads it.
+  `$XDG_STATE_HOME/ofx/state` is what ofx remembers by itself (sidebar, view, zoom, menubar, perms,
+  group: the View toggles), and ofx writes it. Michael asked about the menu bar, since a hidden one
+  is the hardest to find again. It stays in state, because a View toggle that wrote ofx.conf would
+  give two answers. ofx.conf's comments say where it went and that Alt or F10 shows it.
+- **Q1, format:** flat `key = value`, `#` comments, a key repeated for a list (as Ghostty's).
+- **Q2, the options:**
+  - `previews` and `preview-max-size`;
+  - `clean`, `clean-orphans`, `clean-unused-days` and `clean-cap` (ofx-clean reads the same file);
+  - `date-format` (`short`, `long`, `iso`, or a strftime pattern);
+  - `search-skip` (a list; yours replaces the default `.git`, `node_modules`);
+  - `editor` lines (Q4).
+  - Your own key bindings stay on the later list.
+- **Q3:** applied at once. The file's folder is watched, as the bookmarks file's is.
+- **Q4:** the editors file folds into ofx.conf as `editor = name yes|no command…` lines. An existing
+  `~/.config/ofx/editors` is still read, and the status line says once that its lines can move.
+- **Q5:** Edit → Preferences… opens ofx.conf in Omarchy's default editor (as Open at Line starts
+  it). If the file isn't there, ofx first writes it with every option commented out at its default.
+  That is the only write, and only on that click.
+- **Q6:** a line ofx can't read, or an unknown key, is skipped. The rest applies, and the status
+  line names the line and what it wanted.
+- **Comments, as php.ini's (Michael):** every option gets a comment block in the written file: what
+  it does, the values it takes, its default, an example. Enough that a person or an agent reading
+  the file needs nothing else. Each option's help lives in one table in the code. The written file
+  and the README's option list come from it, and a test checks that every key ofx reads has its
+  help.
+- **Decided without asking:**
+  - sizes take `B`, `KiB`, `MiB` and `GiB` (and `KB`, `MB`, `GB`);
+  - on/off takes `on`/`off`, `yes`/`no`, `true`/`false`;
+  - the last of a key set twice wins, but list keys add up;
+  - tests already point `XDG_CONFIG_HOME` at their scratch folder.
 
 ## F9 design (2026-10-27)
 
