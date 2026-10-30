@@ -191,9 +191,14 @@ static void places_add_unmounted(Arena *scratch, Places *pl, const char *sysbloc
     enum { NAMES_MAX = 256 };   // (loop, zram and dm devices too; only the names are kept here)
     static char names[NAMES_MAX][64];
     int nn = 0;
+    // Never a drive to mount, and there may be hundreds (loop devices): left out before the count,
+    // so they can't crowd out the drives (reviewer-2, 2026-10-30: 300 loops hid all four).
+    static const char *const NOT[] = { "loop", "ram", "zram", "dm-", "md", "nbd" };
     for (struct dirent *e; nn < NAMES_MAX && (e = readdir(d));) {
         size_t len = strlen(e->d_name);
-        if (e->d_name[0] != '.' && len < sizeof names[0]) memcpy(names[nn++], e->d_name, len + 1);
+        bool skip = e->d_name[0] == '.' || len >= sizeof names[0];
+        for (int k = 0; k < COUNT(NOT) && !skip; k++) skip = strncmp(e->d_name, NOT[k], strlen(NOT[k])) == 0;
+        if (!skip) memcpy(names[nn++], e->d_name, len + 1);
     }
     closedir(d);
     qsort(names, (size_t)nn, sizeof names[0], (int (*)(const void *, const void *))strcmp);   // sda1 before sdb1

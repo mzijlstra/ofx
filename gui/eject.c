@@ -6,6 +6,9 @@
 // it names opens. Included by main.c.
 
 enum { EJECT_TIMEOUT_MS = 60000 };   // a USB stick's cache written out takes seconds, not a minute
+// A mount may wait on polkit's password prompt, and a timeout doesn't cancel it (udisksd mounts when
+// the answer comes, with no folder opened): five minutes (reviewer-2, 2026-10-30).
+enum { MOUNT_TIMEOUT_MS = 300000 };
 
 static struct {
     pthread_mutex_t mu;
@@ -30,10 +33,11 @@ static void *eject_thread(void *arg)
     EjectResult r = EJECT_FAILED;
     bool late, mounted = false;
     at[0] = 0;
-    if (!spawn_capture((char *const *)argv, out, sizeof out, EJECT_TIMEOUT_MS, &late, &err)) snprintf(why, sizeof why, "%s", err.msg);
+    int limit = ej.mount ? MOUNT_TIMEOUT_MS : EJECT_TIMEOUT_MS;
+    if (!spawn_capture((char *const *)argv, out, sizeof out, limit, &late, &err)) snprintf(why, sizeof why, "%s", err.msg);
     else if (ej.mount) mounted = mount_result(str_from_c(out), at, sizeof at, why, sizeof why);
     else r = eject_result(str_from_c(out), why, sizeof why);
-    if (late) snprintf(why, sizeof why, "udisksctl gave no answer in %d s", EJECT_TIMEOUT_MS / 1000), mounted = false;
+    if (late) snprintf(why, sizeof why, "udisksctl gave no answer in %d s", limit / 1000), mounted = false;
     pthread_mutex_lock(&ej.mu);
     ej.result = r, ej.mounted = mounted, ej.ready = true;
     snprintf(ej.at, sizeof ej.at, "%s", at);
@@ -66,6 +70,8 @@ static bool drive_start(const Place *p, bool mount)
         return false;
     }
     if (!mount && jobs_refuse(p->path)) return false;   // a job of ours writes there: it says so
+    Err gerr;
+    if (!ops_program_allowed("udisksctl", &gerr)) return set_status(true, "%s", gerr.msg), false;
     snprintf(ej.dev, sizeof ej.dev, "%s", p->dev);
     snprintf(ej.label, sizeof ej.label, "%s", p->label);
     ej.busy = true, ej.ready = false, ej.mount = mount;

@@ -92,7 +92,7 @@ MUTANTS = [
     (T, "else if (val.len && val.p[0] == '/') snprintf(path, sizeof path, \"%.*s\", STR_ARG(val));", ""),
     (T, "if (strcmp(path, home) == 0 || u->n == COUNT(u->d)) continue;", "if (u->n == COUNT(u->d)) continue;"),
     # ---- spawn
-    (P, "if (e > at && snprintf(full, sizeof full, \"%.*s/%s\", (int)(e - at), p.p + at, prog) < (int)sizeof full &&\n            access(full, X_OK) == 0)", "if (e > at && snprintf(full, sizeof full, \"%.*s/%s\", (int)(e - at), p.p + at, prog) < (int)sizeof full &&\n            access(full, F_OK) == 0)"),
+    (P, "if (e > at && snprintf(out, cap, \"%.*s/%s\", (int)(e - at), p.p + at, prog) < (int)cap && access(out, X_OK) == 0) return true;", "if (e > at && snprintf(out, cap, \"%.*s/%s\", (int)(e - at), p.p + at, prog) < (int)cap && access(out, F_OK) == 0) return true;"),
     (P, "posix_spawnattr_setflags(&attr, POSIX_SPAWN_SETSID | POSIX_SPAWN_SETSIGMASK);\n    posix_spawn_file_actions_init(&fa);\n    posix_spawn_file_actions_addopen(&fa, 0, \"/dev/null\", O_RDONLY, 0);\n    posix_spawn_file_actions_addopen(&fa, 1,", "posix_spawnattr_setflags(&attr, POSIX_SPAWN_SETSIGMASK);\n    posix_spawn_file_actions_init(&fa);\n    posix_spawn_file_actions_addopen(&fa, 0, \"/dev/null\", O_RDONLY, 0);\n    posix_spawn_file_actions_addopen(&fa, 1,"),
     (P, "if (on_path(\"uwsm-app\")) argv[k++] = \"uwsm-app\", argv[k++] = \"--\";", ""),
     (P, "    if (strchr(argv[0], '/') ? access(argv[0], X_OK) != 0 : !on_path(argv[0])) return err_set(err, \"%s is not installed\", argv[0]), false;\n", ""),
@@ -180,7 +180,7 @@ MUTANTS += [
 O, T, C, J, N = 'fs/ops.c', 'fs/trash.c', 'fs/clip.c', 'fs/job.c', 'fs/undo.c'
 MUTANTS += [
     # the guard
-    (O, "    if (!ops_root[0]) return true;", "    return true;"),
+    (O, "    if (!ops_root[0]) return true;\n    char r[PATH_MAX];", "    return true;\n    char r[PATH_MAX];"),
     (O, '        snprintf(ops_root, sizeof ops_root, "/nonexistent/ofx-guard");', "        ops_root[0] = 0;"),
     (O, '        if (str_eq(str_cut(rest, i, e), S(".."))) return false;', ""),
     # names
@@ -2029,9 +2029,18 @@ MUTANTS += [
     (PL, '    if (sysblock && udev) places_add_unmounted(scratch, pl, sysblock, udev, mi);\n', ''),
     (PL, '    if (sysblock && udev) places_add_unmounted', '    if (udev) places_add_unmounted'),
     (PL, ' || pl->p[i].kind == PL_TRASH || pl->p[i].kind == PL_UNMOUNTED) continue;', ' || pl->p[i].kind == PL_TRASH) continue;'),
-    (SP, '            if (p.len > 1 && p.p[p.len - 1] == \'.\') p.len--;\n', ''),
+    # (the trailing-dot strip of 01f20c3: replaced by a stat check below, reviewer-2 2026-10-30)
     (SP, "            if (p.len && p.p[0] == '/' && (size_t)p.len < atcap)", "            if (p.len && (size_t)p.len < atcap)"),
     (SP, "            if (p.len && p.p[0] == '/' && (size_t)p.len < atcap)", "            if (p.len && p.p[0] == '/')"),
     (SP, '        if (line.len && !why[0]) snprintf(why, whycap, "%.*s", STR_ARG(line));\n    }\n    return false;', '    }\n    return false;'),
     ('ui/menus.c', '    if (u->ctx_unmounted) return it == UM_MOUNT_IT;   // no folder yet (2026-10-30)\n', ''),
+]
+MUTANTS += [
+    # reviewer-2's LOWs on 01f20c3 (2026-10-30)
+    (PL, '        for (int k = 0; k < COUNT(NOT) && !skip; k++) skip = strncmp(e->d_name, NOT[k], strlen(NOT[k])) == 0;\n', ''),
+    (SP, "                if (n > 1 && at[n - 1] == '.' && stat(at, &st) != 0) {", "                if (n > 1 && at[n - 1] == '.') {"),
+    (SP, "                    if (stat(at, &st) != 0 || !S_ISDIR(st.st_mode)) at[n - 1] = '.';", ''),
+    ('fs/ops.c', '    if (path_find(prog, full, sizeof full) && realpath(full, r) && path_below(r, ops_root)) return true;', '    if (path_find(prog, full, sizeof full) && path_below(full, ops_root)) return true;'),
+    ('fs/ops.c', '    if (path_find(prog, full, sizeof full) && realpath(full, r) && path_below(r, ops_root)) return true;', '    if (path_find(prog, full, sizeof full)) return true;'),
+    ('fs/ops.c', '    if (!ops_root[0]) return true;\n    char full[PATH_MAX], r[PATH_MAX];', '    char full[PATH_MAX], r[PATH_MAX];'),
 ]

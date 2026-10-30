@@ -87,7 +87,21 @@ static void test_ops(void)
     CHECK(!ops_allowed(at("ops/x"), &err));
     ops_guard(NULL);
     CHECK(ops_allowed(out_at("anything"), &err));
+    CHECK(ops_program_allowed("sh", &err) && ops_program_allowed("no-such-prog-ofx", &err));   // no guard: any program (it fails to start later if missing)
     ops_guard(root);
+
+    // A program, as PATH finds it (udisksctl, 2026-10-30): with the guard on, only one under the
+    // root; a link in the root to one outside is outside.
+    mkdirs(at("ops/bin"));
+    put(at("ops/bin/fakeprog"), "#!/bin/sh\n");
+    chmod(at("ops/bin/fakeprog"), 0755);
+    symlink("/bin/sh", at("ops/bin/outprog"));
+    char pathv[PATH_MAX * 2];
+    snprintf(pathv, sizeof pathv, "%s:%s", at("ops/bin"), getenv("PATH"));
+    env_set("PATH", pathv);
+    CHECK(ops_program_allowed("fakeprog", &err) && !ops_program_allowed("outprog", &err) && strstr(err.msg, "outprog isn't a test's own"));
+    CHECK(!ops_program_allowed("sh", &err) && !ops_program_allowed("no-such-prog-ofx", &err));
+    env_restore();
 
     CHECK(name_valid(S("a.txt"), &err));
     CHECK(!name_valid(S(""), &err));

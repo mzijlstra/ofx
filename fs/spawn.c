@@ -23,21 +23,25 @@ static void spawn_init(void)
     sigaction(SIGCHLD, &sa, NULL);
 }
 
-// Whether prog is an executable file in a PATH directory.
-static bool on_path(const char *prog)
+// The first executable file named prog in a PATH directory, into out; false when there is none.
+static bool path_find(const char *prog, char *out, size_t cap)
 {
     const char *path = getenv("PATH");
     Str p = str_from_c(path ? path : "");
     for (isize at = 0; at <= p.len;) {
         isize e = at;
         while (e < p.len && p.p[e] != ':') e++;
-        char full[4096];
-        if (e > at && snprintf(full, sizeof full, "%.*s/%s", (int)(e - at), p.p + at, prog) < (int)sizeof full &&
-            access(full, X_OK) == 0)
-            return true;
+        if (e > at && snprintf(out, cap, "%.*s/%s", (int)(e - at), p.p + at, prog) < (int)cap && access(out, X_OK) == 0) return true;
         at = e + 1;
     }
     return false;
+}
+
+// Whether prog is an executable file in a PATH directory.
+static bool on_path(const char *prog)
+{
+    char full[4096];
+    return path_find(prog, full, sizeof full);
 }
 
 static int spawn_started;   // programs started, for the GUI scripts' state line (spawned=)
@@ -229,8 +233,7 @@ static void mount_argv(const char *dev, const char **argv)
 }
 
 // What mount_argv's output says: true with the folder in at, from "Mounted /dev/sdb1 at
-// /run/media/m/STICK" (a trailing '.' in older udisks dropped); else false with the first line in
-// why ("" when there is none).
+// /run/media/m/STICK"; else false with the first line in why ("" when there is none).
 static bool mount_result(Str out, char *at, size_t atcap, char *why, size_t whycap)
 {
     at[0] = why[0] = 0;
@@ -241,8 +244,18 @@ static bool mount_result(Str out, char *at, size_t atcap, char *why, size_t whyc
         isize a = m ? m - line.p : -1;
         if (str_starts_with(line, S("Mounted ")) && a > 0) {
             Str p = str_cut(line, a + 4, line.len);
-            if (p.len > 1 && p.p[p.len - 1] == '.') p.len--;
-            if (p.len && p.p[0] == '/' && (size_t)p.len < atcap) return snprintf(at, atcap, "%.*s", STR_ARG(p)), true;
+            if (p.len && p.p[0] == '/' && (size_t)p.len < atcap) {
+                snprintf(at, atcap, "%.*s", STR_ARG(p));
+                // Older udisks ended the line with '.'; 2.11 doesn't, and a label may end in one
+                // ("BACKUP."): dropped only when the folder is there without it, not with it.
+                struct stat st;
+                size_t n = strlen(at);
+                if (n > 1 && at[n - 1] == '.' && stat(at, &st) != 0) {
+                    at[n - 1] = 0;
+                    if (stat(at, &st) != 0 || !S_ISDIR(st.st_mode)) at[n - 1] = '.';
+                }
+                return true;
+            }
         }
         if (line.len && !why[0]) snprintf(why, whycap, "%.*s", STR_ARG(line));
     }

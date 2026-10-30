@@ -1348,6 +1348,10 @@ static void test_unmounted(Places *pl)
     put(at("blk/sys/sdw/removable"), "1\n"), put(at("blk/sys/sdw/dev"), "8:160\n"), put(at("blk/sys/sdw/size"), "2000000\n");
     put(at("blk/udev/b8:160"), "E:ID_FS_USAGE=filesystem\nE:ID_FS_LABEL_ENC=WHOLE\n");
     put(at("blk/mountinfo"), "1 0 0:1 / / rw - ext4 /dev/x rw\n2 1 8:65 / /boot rw - vfat /dev/sde1 rw\n");
+    // Hundreds of loop devices (and ram, zram, dm, md, nbd) never crowd the drives out
+    // (reviewer-2, 2026-10-30: 300 loops hid all four).
+    for (int k = 0; k < 300; k++) mkdirs(at("blk/sys/loop%d", k));
+    mkdirs(at("blk/sys/ram0")), mkdirs(at("blk/sys/zram0")), mkdirs(at("blk/sys/dm-0")), mkdirs(at("blk/sys/md0")), mkdirs(at("blk/sys/nbd0"));
     env_set("HOME", "/home/m");
     places_load(&ta, pl, at("places/none"), at("blk/mountinfo"), at("blk/sys"), at("blk/udev"));
     const char *want[][3] = { { "/dev/sdb1", "MY STICK" }, { "/dev/sdc1", "32 GB Drive" }, { "/dev/sdi1", "1.0 GB Drive" }, { "/dev/sdw", "WHOLE" } };

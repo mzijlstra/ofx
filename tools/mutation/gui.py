@@ -608,6 +608,8 @@ MUTANTS = [
     ('gui/eject.c', '        else if (go_to(at, STR_EMPTY, 0)) set_status(false, "Mounted %s", ej.label);', '        else set_status(false, "Mounted %s", ej.label);', 'usb'),
     ('gui/eject.c', '        if (!mounted) set_status(true, "Can\'t mount %s: %s"', '        if (false) set_status(true, "Can\'t mount %s: %s"', 'usb'),
     ('gui/script.c', ' : p->kind == PL_UNMOUNTED ? "~" : ""', ' : ""', 'usb'),
+    # Not run (2026-10-30): drive_start's ops_program_allowed (a script can't change the window's
+    # PATH to a udisksctl outside the root; the unit test has it), and the mount's longer limit.
     ('gui/folder.c', '    if (v == UI_VIEW_TRASH && trash_home(tinfo, sizeof tinfo - 8)) strcat(tinfo, "/info");\n', '', 'f6'),
     ('gui/folder.c', '    return app.ui.view == UI_VIEW_SEARCH || (app.ui.view == UI_VIEW_FOLDER && strcmp(app.cwd, "/") != 0);', '    return app.ui.view == UI_VIEW_SEARCH || strcmp(app.cwd, "/") != 0;', 'f6'),
     ('gui/folder.c', '    return app.ui.view == UI_VIEW_SEARCH || (app.ui.view == UI_VIEW_FOLDER && strcmp(app.cwd, "/") != 0);', '    return app.ui.view == UI_VIEW_FOLDER && strcmp(app.cwd, "/") != 0;', 'f9'),

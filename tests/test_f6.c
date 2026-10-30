@@ -803,7 +803,19 @@ static void test_eject(void)
     CHECK(strcmp(argv[0], "udisksctl") == 0 && strcmp(argv[1], "mount") == 0 && strcmp(argv[2], "-b") == 0 && strcmp(argv[3], "/dev/sd x1") == 0 && !argv[4]);
     char mat[64];
     CHECK(mount_result(S("Mounted /dev/sdb1 at /run/media/m/MY STICK\n"), mat, sizeof mat, why, sizeof why) && strcmp(mat, "/run/media/m/MY STICK") == 0);
-    CHECK(mount_result(S("Mounted /dev/sdb1 at /run/media/m/OLD.\n"), mat, sizeof mat, why, sizeof why) && strcmp(mat, "/run/media/m/OLD") == 0);   // older udisks
+    // A trailing '.' (older udisks): dropped only when the folder is there without it, not with it
+    // (2.11 prints none, and "BACKUP." is a label; reviewer-2, 2026-10-30).
+    char pat[PATH_MAX], line[PATH_MAX + 64];
+    mkdirs(at("mnt/OLD")), mkdirs(at("mnt/BACKUP."));
+    snprintf(line, sizeof line, "Mounted /dev/sdb1 at %s.\n", at("mnt/OLD"));
+    CHECK(mount_result(str_from_c(line), pat, sizeof pat, why, sizeof why) && strcmp(pat, at("mnt/OLD")) == 0);
+    snprintf(line, sizeof line, "Mounted /dev/sdb1 at %s\n", at("mnt/BACKUP."));
+    CHECK(mount_result(str_from_c(line), pat, sizeof pat, why, sizeof why) && strcmp(pat, at("mnt/BACKUP.")) == 0);
+    mkdirs(at("mnt/BOTH.")), mkdirs(at("mnt/BOTH"));   // both there: the one it said
+    snprintf(line, sizeof line, "Mounted /dev/sdb1 at %s\n", at("mnt/BOTH."));
+    CHECK(mount_result(str_from_c(line), pat, sizeof pat, why, sizeof why) && strcmp(pat, at("mnt/BOTH.")) == 0);
+    snprintf(line, sizeof line, "Mounted /dev/sdb1 at %s\n", at("mnt/GONE."));   // neither there: as said
+    CHECK(mount_result(str_from_c(line), pat, sizeof pat, why, sizeof why) && strcmp(pat, at("mnt/GONE.")) == 0);
     CHECK(!mount_result(S("Error mounting /dev/sdb1: wrong fs type\n"), mat, sizeof mat, why, sizeof why) && !mat[0] && strcmp(why, "Error mounting /dev/sdb1: wrong fs type") == 0);
     CHECK(!mount_result(S("Mounted /dev/sdb1 at relative\n"), mat, sizeof mat, why, sizeof why));   // not a folder
     CHECK(!mount_result(S("Mounted /dev/sdb1 at /a/very/long/folder/name/that/does/not/fit/in/sixty-four/bytes/x\n"), mat, sizeof mat, why, sizeof why));
