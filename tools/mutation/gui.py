@@ -139,7 +139,7 @@ MUTANTS = [
     (G, "    app.theme = theme_load(&scratch);\n    icons_reset();", "    app.theme = theme_load(&scratch);"),
     # F6
     (W, "        if (watch.mount_wd >= 0 && e->wd == watch.mount_wd) *mounts = true;\n", ""),
-    (G, "        if (atomic_exchange(&watch.mounts_ready, false)) places_reload(), dirty = true;\n", ""),
+    (G, "        if (atomic_exchange(&watch.mounts_ready, false)) places_reload(), trash_state(), dirty = true;\n", ""),
     ('gui/actions.c', '        if (app.ui.view == UI_VIEW_TRASH && str_eq(path_base(files), S("files")))\n            r->item[k++]', '        if (0)\n            r->item[k++]'),
     ('gui/actions.c', "        job_submit(r, JOB_DELETE, k);\n        r->trash = JOB_TRASH_EMPTY;", "        r->trash = JOB_TRASH_EMPTY;"),
     ('gui/actions.c', "    case UA_RESTORE: trash_restore_targets(); break;\n", ""),
@@ -442,7 +442,7 @@ MUTANTS = [
     (G, '        if (ctx_up && !app.ctx_placed && app.ui.menu == UI_CTX_FOLDER) ctx_facts();', '', 'f8'),
     ('gui/input.c', '    u->ctx_trash = strcmp(app.ctx_path, TRASH_URI) == 0;', '    u->ctx_trash = false;', 'f8'),
     ('gui/input.c', '    u->ctx_full = u->ctx_trash && trash_any();', '    u->ctx_full = u->ctx_trash;', 'f8'),
-    ('gui/input.c', '        while (!any && (e = readdir(d))) any = strcmp(e->d_name, ".") != 0 && strcmp(e->d_name, "..") != 0;', '        while (!any && (e = readdir(d))) any = true;', 'f8'),
+    ('gui/folder.c', '        while (!any && (e = readdir(d))) any = strcmp(e->d_name, ".") != 0 && strcmp(e->d_name, "..") != 0;', '        while (!any && (e = readdir(d))) any = true;', 'f8'),
     ('gui/input.c', '    u->ctx_bmed = bm_find(&bmarks, app.ctx_path) >= 0;', '    u->ctx_bmed = false;', 'f8'),
     ('gui/input.c', '    u->ctx_bms = bmarks.n;', '', 'f8'),
     ('gui/input.c', '        u->ctx_place = true;\n', '', 'f8'),
@@ -594,7 +594,8 @@ MUTANTS = [
     # The views in gui/folder.c (2026-10-28): listing, watching, Up, what changes prune, the table.
     ('gui/folder.c', '    return strcmp(dir, TRASH_URI) == 0 ? UI_VIEW_TRASH : is_search(dir)', '    return is_search(dir)', 'f6'),
     ('gui/folder.c', 'is_search(dir) ? UI_VIEW_SEARCH : UI_VIEW_FOLDER;', 'UI_VIEW_FOLDER;', 'f9'),
-    ('gui/folder.c', '    case UI_VIEW_TRASH: trash_scan(); return', '    case UI_VIEW_TRASH: return', 'f6'),
+    ('gui/folder.c', '    case UI_VIEW_TRASH: trash_state(); return', '    case UI_VIEW_TRASH: return', 'f6'),
+    ('gui/folder.c', '    case UI_VIEW_TRASH: trash_state(); return', '    case UI_VIEW_TRASH: trash_scan(); return', 'f6'),
     ('gui/folder.c', '    if (v == UI_VIEW_TRASH && trash_home(tinfo, sizeof tinfo - 8)) strcat(tinfo, "/info");\n', '', 'f6'),
     ('gui/folder.c', '    return app.ui.view == UI_VIEW_SEARCH || (app.ui.view == UI_VIEW_FOLDER && strcmp(app.cwd, "/") != 0);', '    return app.ui.view == UI_VIEW_SEARCH || strcmp(app.cwd, "/") != 0;', 'f6'),
     ('gui/folder.c', '    return app.ui.view == UI_VIEW_SEARCH || (app.ui.view == UI_VIEW_FOLDER && strcmp(app.cwd, "/") != 0);', '    return app.ui.view == UI_VIEW_FOLDER && strcmp(app.cwd, "/") != 0;', 'f9'),
@@ -656,6 +657,17 @@ MUTANTS = [
     ('gui/frame.c', '    u->side_here = u->side_mode == SIDE_PLACES ? app.place_cur : ', '    u->side_here = u->side_mode == SIDE_PLACES ? -1 : ', 'f2'),
     ('gui/frame.c', ' : u->side_mode == SIDE_TREE ? tree_find_near(&tree, str_from_c(app.cwd)) : -1;', ' : -1;', 'f6'),
     ('gui/frame.c', ' : u->side_mode == SIDE_TREE ? tree_find_near(&tree, str_from_c(app.cwd)) : -1;', ' : u->side_mode == SIDE_TREE ? tree_find(&tree, str_from_c(app.cwd)) : -1;', 'f6'),
+    # The Trash place's icon full or empty (2026-10-30). Not run: trash_state at the start (each
+    # script starts with an empty trash), and after a job (the trash folder's watch sees what a
+    # job does there as well).
+    ('gui/icons.c', 'place_icon_names(&app.places.p[i], &app.user_dirs, app.trash_full, names);', 'place_icon_names(&app.places.p[i], &app.user_dirs, false, names);', 'f6'),
+    ('gui/main.c', '        if (atomic_exchange(&watch.trash_ready, false) && trash_state()) dirty = true;\n', '', 'f6'),
+    ('gui/main.c', 'places_reload(), trash_state(), dirty = true;', 'places_reload(), dirty = true;', 'f6'),
+    ('gui/watch.c', '        if (!(e->mask & IN_IGNORED) && watch_is_trash(e->wd)) *trash = true;\n', '', 'f6'),
+    ('gui/watch.c', ' && old != atomic_load(&watch.current_wd) && !watch_is_trash(old)) inotify_rm_watch', ' && old != atomic_load(&watch.current_wd)) inotify_rm_watch', 'f6'),
+    ('gui/watch.c', '        if (old > 0 && old != atomic_load(&watch.dir_wd)) inotify_rm_watch(watch.fd, old);', '        if (old > 0) inotify_rm_watch(watch.fd, old);', 'f6'),
+    ('gui/folder.c', '    bool full = trash_any();\n    watch_trashes(&trashd);', '    bool full = trash_any();', 'f6'),
+    ('gui/actions.c', '    ui_mark_clear(&app.ui);\n    trash_state();\n    reload();', '    ui_mark_clear(&app.ui);\n    reload();', 'f6'),
 ]
 import concurrent.futures, queue, threading, time
 

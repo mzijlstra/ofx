@@ -12,6 +12,10 @@
 // to `bookmarks` there reads the places again, as a mount does (mounts_ready), so a bookmark Nemo
 // adds shows at once. A folder made after ofx started (its first bookmark) is watched then.
 //
+// The trash folders' files/ (2026-10-30): a change there (ofx's or another program's) raises
+// trash_ready, and the main thread looks again whether any holds something (the Trash place's icon).
+// The main thread arms them (watch_trashes) whenever it reads the trash folders again.
+//
 // The main thread points the folder watch at a new folder (watch_dir); the thread owns the theme
 // watches. inotify's calls are safe from both threads. A batch ends 100 ms after its last event,
 // and never more than a second after its first, so a file being written all the time (a download)
@@ -31,7 +35,8 @@ static struct {
     atomic_int  bm_wd;         // the bookmarks file's folder, -1 for none (F7.5)
     char        current[PATH_MAX];   // $XDG_STATE_HOME/omarchy/current
     char        theme[PATH_MAX + 8]; // .../current/theme
-    atomic_bool list_ready, theme_ready, mounts_ready;
+    atomic_int  trash_wd[TRASH_DIRS_MAX];   // each trash folder's files/, 0 for none (inotify's start at 1)
+    atomic_bool list_ready, theme_ready, mounts_ready, trash_ready;
     atomic_int  batches;       // how many batches it raised, for the tests' state line
 } watch = { .fd = -1, .dir_wd = -1, .theme_wd = -1, .current_wd = -1, .mount_fd = -1, .mount_wd = -1, .bm_wd = -1 };
 
@@ -46,14 +51,22 @@ static const u32 WATCH_DIR_MASK = IN_CREATE | IN_DELETE | IN_MOVED_FROM | IN_MOV
                                   IN_ATTRIB | IN_DELETE_SELF | IN_MOVE_SELF | IN_ONLYDIR;
 static const u32 WATCH_THEME_MASK = IN_CREATE | IN_DELETE | IN_MOVED_FROM | IN_MOVED_TO | IN_CLOSE_WRITE | IN_ONLYDIR;
 
+// Whether wd is a trash folder's watch.
+static bool watch_is_trash(int wd)
+{
+    for (int i = 0; i < TRASH_DIRS_MAX; i++)
+        if (wd > 0 && atomic_load(&watch.trash_wd[i]) == wd) return true;
+    return false;
+}
+
 // The folder to watch now, in place of the last one; NULL: none (the search view, F9).
 static void watch_dir(const char *dir)
 {
     if (watch.fd < 0) return;
     int old = atomic_exchange(&watch.dir_wd, -1);
-    // The same directory may be watched for the theme too (inotify gives one wd per inode):
-    // removing it would end that watch as well.
-    if (old >= 0 && old != atomic_load(&watch.theme_wd) && old != atomic_load(&watch.current_wd)) inotify_rm_watch(watch.fd, old);
+    // The same directory may be watched for the theme or as a trash too (inotify gives one wd per
+    // inode): removing it would end that watch as well.
+    if (old >= 0 && old != atomic_load(&watch.theme_wd) && old != atomic_load(&watch.current_wd) && !watch_is_trash(old)) inotify_rm_watch(watch.fd, old);
     atomic_store(&watch.dir_wd, dir ? inotify_add_watch(watch.fd, dir, WATCH_DIR_MASK) : -1);
 }
 
@@ -68,6 +81,22 @@ static void watch_bookmarks(void)
     atomic_store(&watch.bm_wd, inotify_add_watch(watch.fd, d, IN_CREATE | IN_DELETE | IN_MOVED_FROM | IN_MOVED_TO | IN_CLOSE_WRITE | IN_ONLYDIR));
 }
 
+// The trash folders' files/ to watch now, in place of the last ones.
+static void watch_trashes(const TrashDirs *d)
+{
+    if (watch.fd < 0) return;
+    for (int i = 0; i < TRASH_DIRS_MAX; i++) {
+        int old = atomic_exchange(&watch.trash_wd[i], 0);
+        if (old > 0 && old != atomic_load(&watch.dir_wd)) inotify_rm_watch(watch.fd, old);
+    }
+    for (int i = 0; i < d->n; i++) {
+        char files[PATH_MAX + 8];
+        snprintf(files, sizeof files, "%s/files", d->dir[i]);
+        int wd = inotify_add_watch(watch.fd, files, IN_CREATE | IN_DELETE | IN_MOVED_FROM | IN_MOVED_TO | IN_ONLYDIR);
+        atomic_store(&watch.trash_wd[i], wd > 0 ? wd : 0);
+    }
+}
+
 static void watch_theme_dirs(void)
 {
     atomic_store(&watch.current_wd, inotify_add_watch(watch.fd, watch.current, WATCH_THEME_MASK));
@@ -75,7 +104,7 @@ static void watch_theme_dirs(void)
 }
 
 // Reads what is waiting: which flags it calls for.
-static void watch_read(bool *list, bool *theme, bool *mounts)
+static void watch_read(bool *list, bool *theme, bool *mounts, bool *trash)
 {
     _Alignas(struct inotify_event) char buf[16384];
     ssize_t len = read(watch.fd, buf, sizeof buf);
@@ -84,12 +113,13 @@ static void watch_read(bool *list, bool *theme, bool *mounts)
         const struct inotify_event *e = (const struct inotify_event *)(buf + at);
         at += (ssize_t)(sizeof *e + e->len);
         if (e->mask & IN_Q_OVERFLOW) {
-            *list = *theme = *mounts = true;
+            *list = *theme = *mounts = *trash = true;
             continue;
         }
         if (watch.mount_wd >= 0 && e->wd == watch.mount_wd) *mounts = true;
         if (e->wd == atomic_load(&watch.bm_wd) && e->len && strcmp(e->name, "bookmarks") == 0) *mounts = true;   // the places again (F7.5)
         if (e->wd == atomic_load(&watch.dir_wd)) *list = true;
+        if (!(e->mask & IN_IGNORED) && watch_is_trash(e->wd)) *trash = true;
         if (e->wd == atomic_load(&watch.theme_wd) && !(e->mask & IN_IGNORED)) *theme = true;
         if (e->wd == atomic_load(&watch.current_wd)) *theme = true, rewatch = true;
     }
@@ -98,11 +128,11 @@ static void watch_read(bool *list, bool *theme, bool *mounts)
 }
 
 // One poll of inotify and the mountinfo file, for at most ms (-1: no limit): the flags it raises.
-static void watch_poll(int ms, bool *list, bool *theme, bool *mounts)
+static void watch_poll(int ms, bool *list, bool *theme, bool *mounts, bool *trash)
 {
     struct pollfd p[2] = { { watch.fd, POLLIN, 0 }, { watch.mount_fd, POLLPRI, 0 } };
     if (poll(p, 2, ms) <= 0) return;
-    if (p[0].revents & POLLIN) watch_read(list, theme, mounts);
+    if (p[0].revents & POLLIN) watch_read(list, theme, mounts, trash);
     if (p[1].revents & (POLLPRI | POLLERR)) *mounts = true;
 }
 
@@ -113,19 +143,20 @@ static void *watch_thread(void *arg)
     // main.c's signal_waiter.
     watch_theme_dirs();
     for (;;) {
-        bool list = false, theme = false, mounts = false;
-        watch_poll(-1, &list, &theme, &mounts);
-        if (!list && !theme && !mounts) continue;
+        bool list = false, theme = false, mounts = false, trash = false;
+        watch_poll(-1, &list, &theme, &mounts, &trash);
+        if (!list && !theme && !mounts && !trash) continue;
         i64 first = now_ms(), last = first;
         for (i64 now; (now = now_ms()) < ui_batch_due(first, last, WATCH_QUIET_MS, WATCH_MAX_MS);) {
-            bool l2 = false, t2 = false, m2 = false;
-            watch_poll((int)(ui_batch_due(first, last, WATCH_QUIET_MS, WATCH_MAX_MS) - now), &l2, &t2, &m2);
-            if (l2 || t2 || m2) last = now_ms();
-            list |= l2, theme |= t2, mounts |= m2;
+            bool l2 = false, t2 = false, m2 = false, r2 = false;
+            watch_poll((int)(ui_batch_due(first, last, WATCH_QUIET_MS, WATCH_MAX_MS) - now), &l2, &t2, &m2, &r2);
+            if (l2 || t2 || m2 || r2) last = now_ms();
+            list |= l2, theme |= t2, mounts |= m2, trash |= r2;
         }
         if (list) atomic_store(&watch.list_ready, true);
         if (theme) atomic_store(&watch.theme_ready, true);
         if (mounts) atomic_store(&watch.mounts_ready, true);
+        if (trash) atomic_store(&watch.trash_ready, true);
         atomic_fetch_add(&watch.batches, 1);
         wake_main();
     }

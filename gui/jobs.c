@@ -328,6 +328,7 @@ static bool jobs_poll(void)
         memmove(jobs.run + i, jobs.run + i + 1, sizeof *jobs.run * (size_t)(jobs.nrun - i - 1));
         jobs.nrun--;
         job_finish(r);
+        trash_state();   // (a delete in the trash view, Empty Trash, a move into a trash folder)
         r->id = 0;
         finished = true;
     }

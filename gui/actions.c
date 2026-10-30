@@ -57,6 +57,7 @@ static void trash_targets(void)
     if (ok == 0) undo_clear(&undo);
     say_done("Trashed", ok, n, path_base(str_from_c(paths[0])).p, first.msg);
     ui_mark_clear(&app.ui);
+    trash_state();
     reload();
 }
 

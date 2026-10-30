@@ -469,7 +469,8 @@ static void test_icons(void)
     CHECK(strcmp(FIND(48, 1, S("a-place")), at("icons/hicolor/48x48/places/a-place.png")) == 0);
     CHECK(strcmp(FIND(48, 1, S("an-app")), "") == 0);          // Applications: not read at start
     CHECK(db.t[2].ndirs == 2);
-    CHECK(icon_context_used(S("Mimetypes"), false) && !icon_context_used(S("Status"), false) && icon_context_used(STR_EMPTY, false));
+    CHECK(icon_context_used(S("Mimetypes"), false) && !icon_context_used(S("Emotes"), false) && icon_context_used(STR_EMPTY, false));
+    CHECK(icon_context_used(S("Status"), false));   // user-trash-full (2026-10-30)
     CHECK(!icon_context_used(S("Apps"), false) && !icon_context_used(S("Applications"), false));
     // The apps' own, apart (Open With, F7.3): only Apps folders, an SVG too, a PNG before an SVG.
     CHECK(icon_context_used(S("Apps"), true) && icon_context_used(S("Applications"), true) && !icon_context_used(S("Places"), true));
@@ -1410,18 +1411,22 @@ static void test_places(void)
     Str names[4];
     Place p = { .kind = PL_BOOKMARK };
     snprintf(p.path, sizeof p.path, "/home/m/Pictures");
-    CHECK(place_icon_names(&p, &ud, names) == 2 && str_eq(names[0], S("folder-pictures")) && str_eq(names[1], S("folder")));
+    CHECK(place_icon_names(&p, &ud, false, names) == 2 && str_eq(names[0], S("folder-pictures")) && str_eq(names[1], S("folder")));
     p.kind = PL_REMOVABLE;
-    CHECK(place_icon_names(&p, &ud, names) == 3 && str_eq(names[0], S("drive-removable-media")) && str_eq(names[1], S("drive-harddisk")));
+    CHECK(place_icon_names(&p, &ud, false, names) == 3 && str_eq(names[0], S("drive-removable-media")) && str_eq(names[1], S("drive-harddisk")));
     p.kind = PL_ROOT;
-    CHECK(place_icon_names(&p, &ud, names) == 2 && str_eq(names[0], S("drive-harddisk")));
+    CHECK(place_icon_names(&p, &ud, false, names) == 2 && str_eq(names[0], S("drive-harddisk")));
     p.kind = PL_MOUNT;
-    CHECK(place_icon_names(&p, &ud, names) == 2 && str_eq(names[0], S("drive-harddisk")));
+    CHECK(place_icon_names(&p, &ud, false, names) == 2 && str_eq(names[0], S("drive-harddisk")));
     p.kind = PL_TRASH;
-    CHECK(place_icon_names(&p, &ud, names) == 2 && str_eq(names[0], S("user-trash")));
+    CHECK(place_icon_names(&p, &ud, false, names) == 2 && str_eq(names[0], S("user-trash")));
+    CHECK(place_icon_names(&p, &ud, true, names) == 3 && str_eq(names[0], S("user-trash-full")) && str_eq(names[1], S("user-trash")));
+    p.kind = PL_MOUNT;   // full is the Trash place's alone
+    CHECK(place_icon_names(&p, &ud, true, names) == 2 && str_eq(names[0], S("drive-harddisk")));
+    p.kind = PL_TRASH;
     snprintf(p.path, sizeof p.path, "/elsewhere");
     p.kind = PL_BOOKMARK;
-    CHECK(place_icon_names(&p, &ud, names) == 1 && str_eq(names[0], S("folder")));
+    CHECK(place_icon_names(&p, &ud, false, names) == 1 && str_eq(names[0], S("folder")));
     // The decoders.
     char buf[8];
     CHECK(percent_decode(S("a%41b"), buf, sizeof buf) && strcmp(buf, "aAb") == 0);

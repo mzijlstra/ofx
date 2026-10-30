@@ -510,7 +510,7 @@ MUTANTS += [
     (PL, "    places_head(pl, \"Drives\");\n", ""),
     (PL, "        if (pl->p[i].kind == PL_TRASH && strcmp(path, TRASH_URI) == 0) return i;\n", ""),
     (PL, "        if (pl->p[i].kind == PL_HEAD || pl->p[i].kind == PL_TRASH) continue;\n", ""),
-    (PL, "    case PL_TRASH: names[n++] = S(\"user-trash\"); break;\n", ""),
+    (PL, "        names[n++] = S(\"user-trash\");\n        break;\n", "        break;\n"),
     (PL, "    *size = (i64)v.f_blocks * (i64)v.f_frsize;", "    *size = 0;"),
     ('ui/cursor.c', "    while (ui_side_head(u, i)) i += dir;", "    if (ui_side_head(u, i)) i += dir;"),
     ('ui/cursor.c', "    if (s->top == s->sel && ui_side_head(u, s->sel - 1)) s->top--;\n", ""),
@@ -1998,4 +1998,10 @@ MUTANTS += [
     ('fs/tree.c', '        if (i >= 0 || path.len <= 1) return i;', '        if (i >= 0 || path.len <= 2) return i;'),
     ('fs/tree.c', '        path = up.len ? up : S("/");', '        path = up;'),
     ('fs/tree.c', '        int i = tree_find(t, path);\n        if (i >= 0 || path.len <= 1) return i;', '        int i = tree_find(t, path);\n        return i;'),
+]
+MUTANTS += [
+    # the Trash place's icon, full or empty (2026-10-30)
+    (PL, '        if (trash_full) names[n++] = S("user-trash-full");\n', ''),
+    (PL, '        if (trash_full) names[n++] = S("user-trash-full");\n', '        names[n++] = S("user-trash-full");\n'),
+    ('fs/icons.c', ' || str_eq(context, S("Status"));', ';'),
 ]

@@ -122,14 +122,15 @@ static bool icon_scan(Arena *a, const char *dir, StrMap *m, bool svg)
 }
 
 // ofx asks only for folder, drive and file icons, which themes keep under Places, Devices and
-// MimeTypes, and the top bar's search (edit-find, under Actions); hicolor's 600-odd app
-// directories would take most of the start-up. A directory that names no context is read too.
+// MimeTypes, the top bar's search (edit-find, under Actions), and the full trash (user-trash-full,
+// under Status as the spec has it: 54 folders more in Yaru, 3 ms and 99 KiB, 2026-10-30); hicolor's
+// 600-odd app directories would take most of the start-up. A directory that names no context is read too.
 // The apps' own (Apps) are read apart, when Open With opens (icon_load_apps, Michael 2026-10-26).
 static bool icon_context_used(Str context, bool apps)
 {
     if (apps) return str_eq(context, S("Apps")) || str_eq(context, S("Applications"));
     return context.len == 0 || str_eq(context, S("Places")) || str_eq(context, S("MimeTypes")) ||
-           str_eq(context, S("Mimetypes")) || str_eq(context, S("Devices")) || str_eq(context, S("Actions"));
+           str_eq(context, S("Mimetypes")) || str_eq(context, S("Devices")) || str_eq(context, S("Actions")) || str_eq(context, S("Status"));
 }
 
 static bool icon_has_theme(const IconDb *db, Str name)

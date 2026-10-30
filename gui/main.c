@@ -222,6 +222,7 @@ static struct {
     Places    places;
     u8        place_head[PLACES_MAX];   // 1 for a heading row (app.ui.side_head)
     int       place_cur;    // the place holding cwd, -1 for none
+    bool      trash_full;   // any trash folder holds something (trash_state): the Trash place's icon
     i64       cwd_avail;    // the free space on cwd's drive, -1 unknown
     char      status[600];
     bool      status_bad;
@@ -611,6 +612,7 @@ int main(int argc, char **argv)
     space_start();
     timer_start();
     places_reload();
+    trash_state();
     // New Window starts this binary (F7.1); one replaced since it started reads "… (deleted)".
     ssize_t xn = readlink("/proc/self/exe", app.exe, sizeof app.exe - 1);
     app.exe[xn > 0 ? xn : 0] = 0;
@@ -697,7 +699,8 @@ int main(int argc, char **argv)
         if (atomic_exchange(&close_signal, false)) close_asked = true;
         if (atomic_exchange(&watch.theme_ready, false)) theme_apply(), app.themes++, dirty = true;
         if (atomic_exchange(&watch.list_ready, false)) reload(), dirty = true;
-        if (atomic_exchange(&watch.mounts_ready, false)) places_reload(), dirty = true;
+        if (atomic_exchange(&watch.mounts_ready, false)) places_reload(), trash_state(), dirty = true;
+        if (atomic_exchange(&watch.trash_ready, false) && trash_state()) dirty = true;
         dirty |= jobs_poll();
         if (app.have_list && count_take(app.count, app.list.n)) dirty = true;
         if (space_take(&app.places, app.cwd, &app.cwd_avail)) dirty = true;

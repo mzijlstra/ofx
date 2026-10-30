@@ -154,6 +154,6 @@ static Texture2D *entry_thumb(isize i, bool draw)
 static IconSlot *place_icon(int i)
 {
     Str names[4];
-    isize n = place_icon_names(&app.places.p[i], &app.user_dirs, names);
+    isize n = place_icon_names(&app.places.p[i], &app.user_dirs, app.trash_full, names);
     return icon_for(names[0], names, n);
 }

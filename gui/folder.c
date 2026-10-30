@@ -56,6 +56,38 @@ static void trash_scan(void)
     trash_dirs(&trashd, mp, n);
 }
 
+// Whether any trash folder holds something (the folder menu's Empty Trash, F8).
+static bool trash_any(void)
+{
+    trash_scan();
+    for (int i = 0; i < trashd.n; i++) {
+        char files[PATH_MAX];
+        if (snprintf(files, sizeof files, "%s/files", trashd.dir[i]) >= (int)sizeof files) continue;
+        DIR *d = opendir(files);
+        if (!d) continue;
+        struct dirent *e;
+        bool any = false;
+        while (!any && (e = readdir(d))) any = strcmp(e->d_name, ".") != 0 && strcmp(e->d_name, "..") != 0;
+        closedir(d);
+        if (any) return true;
+    }
+    return false;
+}
+
+// The Trash place's icon, full or empty (2026-10-30): looked at again at the start, when the mounts
+// change, when the trash view lists (a trash folder made on a drive already mounted has no watch
+// yet), after ofx's own trashing and jobs (the first one makes the home trash's info/), and when a
+// trash folder's watch says something changed there; the watches follow the folders found. True
+// when it changed.
+static bool trash_state(void)
+{
+    bool full = trash_any();
+    watch_trashes(&trashd);
+    bool changed = full != app.trash_full;
+    app.trash_full = full;
+    return changed;
+}
+
 // The search an address names, with the toggles and hidden files as they are now (root: its
 // folder, copied out).
 static SearchQuery search_query(Str text, Str inside, const char *root)
@@ -112,7 +144,7 @@ static UiView view_of(const char *dir)
 static bool view_list(UiView v, Arena *a, const char *dir, Listing *l, Err *err)
 {
     switch (v) {
-    case UI_VIEW_TRASH: trash_scan(); return trash_list(a, &trashd, app.show_hidden, app.ui.sort, l, err);
+    case UI_VIEW_TRASH: trash_state(); return trash_list(a, &trashd, app.show_hidden, app.ui.sort, l, err);
     case UI_VIEW_SEARCH: return search_list(a, dir, l, err);
     case UI_VIEW_FOLDER: break;
     }

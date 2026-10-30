@@ -402,24 +402,6 @@ static void ctx_place(void)
     app.ctx_x = x < 0 ? 0 : x, app.ctx_y = y < 0 ? 0 : y;
 }
 
-// Whether any trash folder holds something (the folder menu's Empty Trash, F8).
-static bool trash_any(void)
-{
-    trash_scan();
-    for (int i = 0; i < trashd.n; i++) {
-        char files[PATH_MAX];
-        if (snprintf(files, sizeof files, "%s/files", trashd.dir[i]) >= (int)sizeof files) continue;
-        DIR *d = opendir(files);
-        if (!d) continue;
-        struct dirent *e;
-        bool any = false;
-        while (!any && (e = readdir(d))) any = strcmp(e->d_name, ".") != 0 && strcmp(e->d_name, "..") != 0;
-        closedir(d);
-        if (any) return true;
-    }
-    return false;
-}
-
 // A folder menu just opened (F8): its folder, and what ui/ shows for it (Ui.ctx_*): Trash; a place
 // (a bookmark's line in the file, a drive's eject); a bookmark of it already.
 static void ctx_facts(void)

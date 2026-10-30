@@ -165,15 +165,18 @@ static int places_current(const Places *pl, const char *path)
     return best;
 }
 
-// The icon names for a place, most specific first.
-static isize place_icon_names(const Place *p, const UserDirs *u, Str *names)
+// The icon names for a place, most specific first (at most 3).
+static isize place_icon_names(const Place *p, const UserDirs *u, bool trash_full, Str *names)
 {
     isize n = 0;
     switch (p->kind) {
     case PL_ROOT:
     case PL_MOUNT: names[n++] = S("drive-harddisk"); break;
     case PL_REMOVABLE: names[n++] = S("drive-removable-media"), names[n++] = S("drive-harddisk"); break;
-    case PL_TRASH: names[n++] = S("user-trash"); break;
+    case PL_TRASH:   // full: when any trash folder holds something (2026-10-30)
+        if (trash_full) names[n++] = S("user-trash-full");
+        names[n++] = S("user-trash");
+        break;
     default: {
         Str special = user_dir_icon(u, p->path);
         if (special.len) names[n++] = special;
