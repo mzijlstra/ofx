@@ -29,7 +29,7 @@ static void test_conf(void)
         if (c.preview_max != sizes[k].n || c.bad) fprintf(stderr, "size %s: %lld\n", sizes[k].v, (long long)c.preview_max);
         CHECK(c.preview_max == sizes[k].n && !c.bad);
     }
-    const char *notsize[] = { "MiB", "10 mb", "1.5 GiB", "-1", "10 MiBs", "" };
+    const char *notsize[] = { "MiB", "10 mb", "1.5 GiB", "-1", "10 MiBs", "", "100000000000000 GiB", "9000000000 GiB" };
     for (int k = 0; k < COUNT(notsize); k++) {
         char line[64];
         snprintf(line, sizeof line, "preview-max-size = %s", notsize[k]);

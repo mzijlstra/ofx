@@ -310,11 +310,20 @@ static float date_w(void)
     static float cached;
     if (f == app.conf.date && strcmp(pattern, app.conf.date_pattern) == 0) return cached;
     f = app.conf.date, snprintf(pattern, sizeof pattern, "%s", app.conf.date_pattern);
-    char buf[96];
-    struct tm wide = { .tm_year = 2088 - 1900, .tm_mon = 7, .tm_mday = 28, .tm_hour = 20, .tm_min = 48, .tm_sec = 48, .tm_isdst = -1 };
-    ui_when(buf, sizeof buf, (i64)mktime(&wide), (i64)mktime(&wide), app.conf.date, app.conf.date_pattern);
-    float w = str_width(str_from_c(buf)) + 4;
-    return cached = w > DATE_W ? w : DATE_W;
+    // Wide digits (8s) on a Saturday in August, and Wednesday in September: the C locale's widest
+    // day and month names, for a pattern with %A or %B (reviewer-2, 2026-10-30).
+    static const struct tm WIDE[] = { { .tm_year = 2088 - 1900, .tm_mon = 7, .tm_mday = 28, .tm_hour = 20, .tm_min = 48, .tm_sec = 48, .tm_isdst = -1 },
+                                      { .tm_year = 2088 - 1900, .tm_mon = 8, .tm_mday = 29, .tm_hour = 20, .tm_min = 48, .tm_sec = 48, .tm_isdst = -1 } };
+    float w = DATE_W;
+    for (int k = 0; k < COUNT(WIDE); k++) {
+        char buf[96];
+        struct tm t = WIDE[k];
+        i64 at = (i64)mktime(&t);
+        ui_when(buf, sizeof buf, at, at, app.conf.date, app.conf.date_pattern);
+        float bw = str_width(str_from_c(buf)) + 4;
+        if (bw > w) w = bw;
+    }
+    return cached = w;
 }
 
 static bool perms_shown(float w)

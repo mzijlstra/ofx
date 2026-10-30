@@ -2062,7 +2062,7 @@ MUTANTS += [
     (CF, '{ "KiB", (i64)1 << 10 }', '{ "KiB", 1000 }'),
     (CF, '{ "MiB", (i64)1 << 20 }', '{ "MiB", 1000000 }'),
     (CF, '{ "GB", 1000000000 }', '{ "GB", (i64)1 << 30 }'),
-    (CF, '        if (str_eq(unit, str_from_c(UNITS[k].u))) return *out = n * UNITS[k].mul, true;', '        if (str_eq(unit, str_from_c(UNITS[k].u))) return *out = n, true;'),
+    (CF, 'return n <= INT64_MAX / UNITS[k].mul && (*out = n * UNITS[k].mul, true);', 'return n <= INT64_MAX / UNITS[k].mul && (*out = n, true);'),
     (CF, '    if (str_eq(v, S("on")) || str_eq(v, S("yes")) || str_eq(v, S("true"))) return *out = true, true;', '    if (str_eq(v, S("on")) || str_eq(v, S("yes"))) return *out = true, true;'),
     (CF, '    if (str_eq(v, S("off")) || str_eq(v, S("no")) || str_eq(v, S("false"))) return *out = false, true;', '    if (str_eq(v, S("off")) || str_eq(v, S("no"))) return *out = false, true;'),
     (CF, '    *c = (Conf){ .previews = true, .preview_max = (i64)10 << 20, .date = DATE_SHORT };', '    *c = (Conf){ .previews = true, .preview_max = (i64)10 << 20, .date = DATE_LONG };'),
@@ -2089,4 +2089,8 @@ MUTANTS += [
     ('fs/search.c', '    if (!names) names = &SEARCH_SKIP_DEFAULT;', '    names = &SEARCH_SKIP_DEFAULT;'),
     ('ui/panels.c', '    case UM_PREFERENCES: return (UiAction){ UA_PREFERENCES, 0, false };\n', ''),
     ('fs/thumb.c', '    Str src = thumb_read(a, q->path, q->src_max, &st);', '    Str src = thumb_read(a, q->path, THUMB_SRC_MAX, &st);'),
+]
+MUTANTS += [
+    # reviewer-2's LOWs on ab1ad1d (2026-10-30)
+    (CF, 'return n <= INT64_MAX / UNITS[k].mul && (*out = n * UNITS[k].mul, true);', 'return (*out = n * UNITS[k].mul, true);'),
 ]

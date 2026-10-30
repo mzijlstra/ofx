@@ -95,7 +95,7 @@ static bool conf_size(Str v, i64 *out)
         { "KB", 1000 }, { "MB", 1000000 }, { "GB", 1000000000 },
     };
     for (int k = 0; k < COUNT(UNITS); k++)
-        if (str_eq(unit, str_from_c(UNITS[k].u))) return *out = n * UNITS[k].mul, true;
+        if (str_eq(unit, str_from_c(UNITS[k].u))) return n <= INT64_MAX / UNITS[k].mul && (*out = n * UNITS[k].mul, true);   // (reviewer-2: 10^14 GiB overflowed)
     return false;
 }
 
