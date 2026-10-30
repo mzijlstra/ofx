@@ -73,7 +73,10 @@ his word: Nemo's compact view and its icon size slider.
   outlive its window. Only a child process that does the counting decouples a dead mount fully.
 - Remember the open tabs across a restart (F5 doesn't).
 - A resizable sidebar (the tree's deep levels get little room at 200 px).
-- The Trash place's icon full or empty; watching the drives' trashes too.
+- The Trash place's icon full or empty: done (c621bf7, d99f180, 2026-10-30), every trash's files/
+  watched. Not yet: a trash folder that appears from outside (another program's very first trash,
+  or one moved back) is seen at the next look (a mount change, the trash view, ofx's own trash),
+  as nothing watches Trash/ itself (reviewer-2, 2026-10-30: left as is).
 - Options in `ofx.conf` (Michael, 2026-10-24): previews on or off; the largest image ofx makes a
   preview of (`max_image_size_to_preview`, 10 MiB in F6.4); F6.5's cleanup (on, orphans, the days
   unused, the cap); the menu bar hidden until Alt or F10 (F7, 2026-10-25).
