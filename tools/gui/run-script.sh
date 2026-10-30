@@ -27,6 +27,9 @@
 # - OFX_TEST_ICONS_MAX, when set, is passed on: an icon cache of that many slots (a full cache);
 # - OFX_TEST_MOUNTINFO, when set, is passed on: the mount list read instead of /proc/self/mountinfo
 #   (unset: one with only /, written in the scratch dir);
+# - OFX_TEST_SYSBLOCK and OFX_TEST_UDEV, when set, are passed on: the block devices and udev's
+#   database read for unmounted drives (unset: empty folders in the scratch dir, so no run lists,
+#   or could mount, one of Michael's; ofx itself reads none under OFX_GUI_ROOT without them);
 # - OFX_TEST_HOME, when set, becomes the window's HOME (a scratch home for the path buttons' test);
 # - OFX_GUI_SHOTS=<scratch-dir>/shots for the script's shots, OFX_GUI_ROOT=<scratch-dir> for its
 #   sh guard and ofx's own (fs/ops.c: no write outside it).
@@ -61,10 +64,19 @@ real_gio=$(command -v gio)
 # so it writes the scratch mimeapps.list only.
 printf '#!/bin/sh\nif [ "$1" = info ]; then exec %s "$@"; fi\necho "gio $*" >> "%s/spawn.log"\nif [ "$1" = mime ]; then exec %s "$@"; fi\n' "$real_gio" "$T" "$real_gio" > "$T/fakes/gio"
 # udisksctl (eject, F6.1): logs too, and fails the step named in <scratch-dir>/udisks-fail.
+# Mount (2026-10-30): makes <scratch-dir>/media/<name> (the name in <scratch-dir>/udisks-mount-as,
+# else the device's), adds it to the window's mount list (OFX_TEST_MOUNTINFO) and says where, as
+# udisks does.
 cat > "$T/fakes/udisksctl" <<EOS
 #!/bin/sh
 echo "udisksctl \$*" >> "$T/spawn.log"
 if [ "\$1" = "\$(cat "$T/udisks-fail" 2>/dev/null)" ]; then echo "Error \$1: target is busy" >&2; exit 1; fi
+if [ "\$1" = mount ]; then
+    name=\$(cat "$T/udisks-mount-as" 2>/dev/null || basename "\$3")
+    mp=\$(printf %s "$T/media/\$name" | sed 's/ /\\\\040/g')   # (mountinfo's octal escape)
+    mkdir -p "$T/media/\$name" && printf '60 1 8:99 / %s rw - vfat %s rw\\n' "\$mp" "\$3" >> "\$OFX_TEST_MOUNTINFO"
+    echo "Mounted \$3 at $T/media/\$name"
+fi
 EOS
 chmod +x "$T/fakes/udisksctl"
 # vkbd (tools/gui/vkbd.c), the scripts' keyboard in the test sway: `make build/vkbd` first.
@@ -83,13 +95,15 @@ if [ ! -d "$T/state" ]; then
 fi
 args=""
 script_env="OFX_GUI_SCRIPT=$sc"
-# The mount list: the run's own, else one with only / (2026-10-29: the sidebar lists the drives
-# first, so a machine's own drives moved every place a script counts to; and Michael's drives, and
-# their trash, stay out of every run).
+# The mount list: the run's own, else one with only / (2026-10-29: a machine's own drives moved
+# every place a script counts to; and Michael's drives, and their trash, stay out of every run).
 if [ -z "${OFX_TEST_MOUNTINFO:-}" ]; then
     printf '1 0 0:1 / / rw - ext4 /dev/x rw\n' > "$T/mountinfo-root"
     OFX_TEST_MOUNTINFO="$T/mountinfo-root"
 fi
+# The block devices and udev's database (unmounted drives, 2026-10-30): the run's own, else empty.
+[ -n "${OFX_TEST_SYSBLOCK:-}" ] || { mkdir -p "$T/sysblock"; OFX_TEST_SYSBLOCK="$T/sysblock"; }
+[ -n "${OFX_TEST_UDEV:-}" ] || { mkdir -p "$T/udev"; OFX_TEST_UDEV="$T/udev"; }
 [ "$sc" = - ] && script_env=""
 for a in "$@"; do args="$args '$a'"; done
 here=$(cd "$(dirname "$0")" && pwd)
@@ -116,7 +130,7 @@ cat > "$T/launch.sh" <<EOS
 echo \$\$ > "$T/run.pid"
 exec env -u DISPLAY -u WAYLAND_SOCKET WAYLAND_DISPLAY="$sock" OFX_TEST_SIZE=${OFX_SCRIPT_SIZE:-936x516} OFX_TEST_WINDOWS="$T/windows" ${script_env} OFX_GUI_ROOT="$T" OFX_GUI_SHOTS="$T/shots" PATH="$T/fakes:\$PATH" XDG_STATE_HOME="$T/state" XDG_CONFIG_HOME="$T/config" XDG_DATA_HOME="$T/data" XDG_CACHE_HOME="$T/cache" \
   LSAN_OPTIONS=suppressions=$root/gui/lsan.supp ASAN_OPTIONS=log_path="$T/asan" ${OFX_TEST_LEAK:+OFX_TEST_LEAK=1} ${OFX_GUI_FAIL_FAST:+OFX_GUI_FAIL_FAST=1} ${OFX_GUI_DEBUG:+OFX_GUI_DEBUG=1} \
-  ${OFX_TEST_WATCH_DELAY_MS:+OFX_TEST_WATCH_DELAY_MS=$OFX_TEST_WATCH_DELAY_MS} ${OFX_TEST_COPY_DELAY_MS:+OFX_TEST_COPY_DELAY_MS=$OFX_TEST_COPY_DELAY_MS} ${OFX_TEST_CROSS:+OFX_TEST_CROSS=1} ${OFX_TEST_HOME:+HOME=$OFX_TEST_HOME} ${OFX_TEST_COUNT_DELAY_MS:+OFX_TEST_COUNT_DELAY_MS=$OFX_TEST_COUNT_DELAY_MS} ${OFX_TEST_MOUNTINFO:+OFX_TEST_MOUNTINFO=$OFX_TEST_MOUNTINFO} ${OFX_TEST_MEDIA:+OFX_TEST_MEDIA=$OFX_TEST_MEDIA} ${OFX_TEST_SPACE_DELAY_MS:+OFX_TEST_SPACE_DELAY_MS=$OFX_TEST_SPACE_DELAY_MS} ${OFX_TEST_ICONS_MAX:+OFX_TEST_ICONS_MAX=$OFX_TEST_ICONS_MAX} ${OFX_TEST_THUMB_HELD_MAX:+OFX_TEST_THUMB_HELD_MAX=$OFX_TEST_THUMB_HELD_MAX} \
+  ${OFX_TEST_WATCH_DELAY_MS:+OFX_TEST_WATCH_DELAY_MS=$OFX_TEST_WATCH_DELAY_MS} ${OFX_TEST_COPY_DELAY_MS:+OFX_TEST_COPY_DELAY_MS=$OFX_TEST_COPY_DELAY_MS} ${OFX_TEST_CROSS:+OFX_TEST_CROSS=1} ${OFX_TEST_HOME:+HOME=$OFX_TEST_HOME} ${OFX_TEST_COUNT_DELAY_MS:+OFX_TEST_COUNT_DELAY_MS=$OFX_TEST_COUNT_DELAY_MS} ${OFX_TEST_MOUNTINFO:+OFX_TEST_MOUNTINFO=$OFX_TEST_MOUNTINFO} OFX_TEST_SYSBLOCK=$OFX_TEST_SYSBLOCK OFX_TEST_UDEV=$OFX_TEST_UDEV ${OFX_TEST_MEDIA:+OFX_TEST_MEDIA=$OFX_TEST_MEDIA} ${OFX_TEST_SPACE_DELAY_MS:+OFX_TEST_SPACE_DELAY_MS=$OFX_TEST_SPACE_DELAY_MS} ${OFX_TEST_ICONS_MAX:+OFX_TEST_ICONS_MAX=$OFX_TEST_ICONS_MAX} ${OFX_TEST_THUMB_HELD_MAX:+OFX_TEST_THUMB_HELD_MAX=$OFX_TEST_THUMB_HELD_MAX} \
   "$bin" $args >"$T/out" 2>"$T/err"
 EOS
 chmod +x "$T/launch.sh"

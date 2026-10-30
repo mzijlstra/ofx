@@ -32,6 +32,13 @@ rules shared by every tool here.
 - **Eject** (F6.1) runs `udisksctl unmount` and `power-off` on a removable drive: a test with the
   real udisksctl would unmount and power off his USB drive. `run-script.sh` puts a logging fake
   first on PATH (it fails the step named in `<scratch>/udisks-fail`); the unit test makes its own.
+- **Mount** (2026-10-30) lists unmounted removable drives from `/sys/class/block` and
+  `/run/udev/data`, and a click runs `udisksctl mount -b <dev>`: a test with the real folders and
+  the real udisksctl would mount Michael's drive. `run-script.sh` sets `OFX_TEST_SYSBLOCK` and
+  `OFX_TEST_UDEV` to scratch folders (empty unless the run makes its own, as the `usb` group does),
+  its udisksctl fake "mounts" under `<scratch>/media` by writing the test mount list, and with the
+  guard on (`OFX_GUI_ROOT`) ofx reads neither real folder without them. Reading them is harmless;
+  never test a mount against the real ones.
 - **The state file** (F6): ofx writes the sidebar's mode, the view (F6.2) and the icon size (F6.3) to
   `$XDG_STATE_HOME/ofx/state`; `run-script.sh` points that at `<scratch>/state`, so a test never
   changes his.

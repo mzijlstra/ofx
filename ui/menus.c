@@ -29,6 +29,7 @@ static bool ui_menu_shown(const Ui *u, UiMenuItem it)
 // Copy; a bookmark's row has Edit Bookmarks' own.
 static bool ui_folder_shown(const Ui *u, UiMenuItem it)
 {
+    if (u->ctx_unmounted) return it == UM_MOUNT_IT;   // no folder yet (2026-10-30)
     switch (it) {
     case UM_SEP: case UM_OPEN_IT: case UM_OPEN_TAB: return true;
     case UM_OPEN_WINDOW: case UM_TERMINAL_IN: case UM_SEARCH_IN: case UM_PASTE_INTO: case UM_PROPS_IT: return !u->ctx_trash;
@@ -166,7 +167,7 @@ static void ui_ctx_open(Ui *u, int m, UiNames names, bool keys)
 static void ui_folder_open(Ui *u, isize side, int crumb, bool keys)
 {
     u->ctx_side = (int)side, u->ctx_crumb = crumb, u->ctx_key = keys;
-    u->ctx_trash = u->ctx_place = u->ctx_bmed = u->ctx_eject = u->ctx_full = u->ctx_w = false;
+    u->ctx_trash = u->ctx_place = u->ctx_bmed = u->ctx_eject = u->ctx_full = u->ctx_w = u->ctx_unmounted = false;
     u->ctx_bmk = -1, u->ctx_bms = 0;
     ui_menu_open(u, UI_CTX_FOLDER, keys);
 }

@@ -261,7 +261,7 @@ typedef enum {
     UM_OPEN_TAB, UM_EMPTY_TRASH, UM_HERE_PROPS, UM_OPEN_WINDOW, UM_PASTE_INTO, UM_TERMINAL_IN, UM_FOLLOW, UM_BOOKMARK_IT,
     UM_CONTAINING, UM_OPEN_LINE, UM_SEARCH_IN,
     UM_OPEN_IT, UM_CUT_IT, UM_COPY_IT, UM_BM_RENAME_IT, UM_BM_UP_IT, UM_BM_DOWN_IT, UM_BM_REMOVE_IT, UM_BM_EDIT_IT, UM_EJECT_IT,
-    UM_EMPTY_IT, UM_PROPS_IT, UM_TAB_LEFT, UM_TAB_RIGHT, UM_TAB_OTHERS,
+    UM_MOUNT_IT, UM_EMPTY_IT, UM_PROPS_IT, UM_TAB_LEFT, UM_TAB_RIGHT, UM_TAB_OTHERS,
     UM_ITEMS
 } UiMenuItem;
 
@@ -359,6 +359,7 @@ static const struct { const char *label, *key, *word; UiEvent ev; char mark; } U
     [UM_BM_REMOVE_IT] = { "Remove", "", "bm-remove" },
     [UM_BM_EDIT_IT] = { "Edit Bookmarks\xE2\x80\xA6", "Ctrl+B", "bm-edit" },
     [UM_EJECT_IT] = { "Eject", "", "eject" },
+    [UM_MOUNT_IT] = { "Mount", "", "mount-it" },
     [UM_EMPTY_IT] = { "Empty Trash\xE2\x80\xA6", "", "empty-it" },
     [UM_PROPS_IT] = { "Properties\xE2\x80\xA6", "", "properties-it" },
     // and on a tab
@@ -403,7 +404,7 @@ static const UiMenuItem UI_MENU_CTX_ENTRY[] = {
 // A folder elsewhere: a tree row, a path button, a place (Trash, a bookmark, a drive have their own).
 static const UiMenuItem UI_MENU_CTX_FOLDER[] = {
     UM_OPEN_IT, UM_OPEN_TAB, UM_OPEN_WINDOW, UM_TERMINAL_IN, UM_SEARCH_IN, UM_SEP, UM_CUT_IT, UM_COPY_IT, UM_PASTE_INTO, UM_SEP, UM_BOOKMARK_IT,
-    UM_BM_RENAME_IT, UM_BM_UP_IT, UM_BM_DOWN_IT, UM_BM_REMOVE_IT, UM_BM_EDIT_IT, UM_SEP, UM_EJECT_IT, UM_EMPTY_IT, UM_SEP, UM_PROPS_IT,
+    UM_BM_RENAME_IT, UM_BM_UP_IT, UM_BM_DOWN_IT, UM_BM_REMOVE_IT, UM_BM_EDIT_IT, UM_SEP, UM_EJECT_IT, UM_MOUNT_IT, UM_EMPTY_IT, UM_SEP, UM_PROPS_IT,
 };
 // A tab (the current one: a right press on another shows it first).
 static const UiMenuItem UI_MENU_CTX_TAB[] = { UM_NEW_TAB, UM_SEP, UM_TAB_LEFT, UM_TAB_RIGHT, UM_SEP, UM_CLOSE, UM_TAB_OTHERS };
@@ -706,6 +707,7 @@ typedef struct {
     // bookmark's row), a bookmark already, a drive with an eject button, a trash with something in it.
     int    ctx_side, ctx_crumb;
     bool   ctx_trash, ctx_place, ctx_bmed, ctx_eject, ctx_full;
+    bool   ctx_unmounted;   // a drive not mounted yet (2026-10-30): Mount is all its menu has
     bool   ctx_w;   // the folder (either menu's, as it opens) takes new files: Paste Into Folder
     int    ctx_bmk, ctx_bms;
     // The tabs, from gui/ each frame (menu_facts): the current one's place, how many (F8's tab menu).

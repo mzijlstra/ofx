@@ -220,6 +220,35 @@ static void eject_argv(const char *dev, const char **argv)
     argv[3] = "sh", argv[4] = dev, argv[5] = NULL;
 }
 
+// Mount (2026-10-30): an unmounted drive's row runs `udisksctl mount -b <dev>`, which mounts it under
+// /run/media/$USER and says where. polkit lets the session's user mount a removable drive, or
+// asks through the desktop's agent.
+static void mount_argv(const char *dev, const char **argv)
+{
+    argv[0] = "udisksctl", argv[1] = "mount", argv[2] = "-b", argv[3] = dev, argv[4] = NULL;
+}
+
+// What mount_argv's output says: true with the folder in at, from "Mounted /dev/sdb1 at
+// /run/media/m/STICK" (a trailing '.' in older udisks dropped); else false with the first line in
+// why ("" when there is none).
+static bool mount_result(Str out, char *at, size_t atcap, char *why, size_t whycap)
+{
+    at[0] = why[0] = 0;
+    isize k = 0;
+    for (Str line; next_line(out, &k, &line);) {
+        line = str_trim(line);
+        const char *m = line.len ? memmem(line.p, (size_t)line.len, " at ", 4) : NULL;
+        isize a = m ? m - line.p : -1;
+        if (str_starts_with(line, S("Mounted ")) && a > 0) {
+            Str p = str_cut(line, a + 4, line.len);
+            if (p.len > 1 && p.p[p.len - 1] == '.') p.len--;
+            if (p.len && p.p[0] == '/' && (size_t)p.len < atcap) return snprintf(at, atcap, "%.*s", STR_ARG(p)), true;
+        }
+        if (line.len && !why[0]) snprintf(why, whycap, "%.*s", STR_ARG(line));
+    }
+    return false;
+}
+
 typedef enum { EJECT_FAILED, EJECT_UNMOUNTED, EJECT_DONE } EjectResult;
 
 // What eject_argv's output says: ejected, unmounted only, or neither; *why gets the first line

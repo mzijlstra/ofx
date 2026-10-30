@@ -750,6 +750,8 @@ static void act(UiAction a)
         char buf[PATH_MAX];
         const char *p = side_path(a.index, buf, sizeof buf);
         if (p) go_to(p, STR_EMPTY, 0);
+        else if (app.ui.side_mode == SIDE_PLACES && a.index >= 0 && a.index < app.places.n && app.places.p[a.index].kind == PL_UNMOUNTED)
+            mount_start(&app.places.p[a.index]);   // a drive not mounted yet: mounted, then opened (2026-10-30)
         break;
     }
     case UA_TREE_LEFT:

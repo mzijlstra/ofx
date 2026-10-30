@@ -59,7 +59,8 @@ his word: Nemo's compact view and its icon size slider.
 - Previews of videos and PDFs through the system's thumbnailers (`/usr/share/thumbnailers`), after F6.4.
 - Git status per file (`git status --porcelain=v2 -z` off the main thread, a mark per row).
 - USB drives (from the concept doc): unmounted drives in the sidebar, a click mounts them with
-  `udisksctl mount` (eject came in F6.1).
+  `udisksctl mount`: done 2026-10-30 (eject came in F6.1). Not yet: an encrypted drive (LUKS),
+  which needs a passphrase to unlock first; unmounted internal partitions (not listed on purpose).
 - A panel with the keys (F6 took the key list out of the status line).
 - A key that copies the cursor's path as text (Ctrl+C already puts files on the clipboard, F3).
 - Keybindings the user sets (Michael, 2026-10-24: the keys are reaching personal preference).

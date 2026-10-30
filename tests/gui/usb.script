@@ -1,0 +1,52 @@
+# Unmounted drives (2026-10-30): a removable one with a file system shows dimmed under Drives as
+# its label (~ in the state's sides), else its size; a click, Enter or its menu's Mount runs
+# `udisksctl mount` (run-script's fake: under media/, added to the mount list), and its folder
+# opens; an encrypted one isn't listed; one pulled out goes. run.sh: $OFX_ROOT/sys stands in for
+# /sys/class/block, $OFX_ROOT/udevdb for /run/udev/data.
+settle
+expect sides=^Places|Home|Trash|^Drives|File_System
+# Plugged in: the kernel's folder first, then udev's file (its watch reads the places again)
+sh d="$OFX_ROOT/sys" && mkdir -p "$d/sdz/sdz1/holders" && echo 1 > "$d/sdz/removable" && echo 8:250 > "$d/sdz/sdz1/dev" && echo 62500000 > "$d/sdz/sdz1/size" && ln -s sdz/sdz1 "$d/sdz1"
+sh printf 'E:ID_FS_USAGE=filesystem\nE:ID_FS_TYPE=vfat\nE:ID_FS_LABEL_ENC=MY\\x20STICK\n' > "$OFX_ROOT/udevdb/b8:250"
+wait-for 3000 sides=^Places|Home|Trash|^Drives|File_System|~MY_STICK
+shot usb-unmounted.png
+# An encrypted one (unlocking asks a passphrase: later) and one without a label
+sh d="$OFX_ROOT/sys" && mkdir -p "$d/sdy/sdy1/holders" "$d/sdx/sdx1/holders" && echo 1 > "$d/sdy/removable" && echo 1 > "$d/sdx/removable" && echo 8:240 > "$d/sdy/sdy1/dev" && echo 8:230 > "$d/sdx/sdx1/dev" && echo 62500000 > "$d/sdy/sdy1/size" && echo 2000000 > "$d/sdx/sdx1/size" && ln -s sdy/sdy1 "$d/sdy1" && ln -s sdx/sdx1 "$d/sdx1"
+sh printf 'E:ID_FS_USAGE=crypto\nE:ID_FS_TYPE=crypto_LUKS\n' > "$OFX_ROOT/udevdb/b8:240" && printf 'E:ID_FS_USAGE=filesystem\n' > "$OFX_ROOT/udevdb/b8:230"
+wait-for 3000 sides=^Places|Home|Trash|^Drives|File_System|~1.0_GB_Drive|~MY_STICK
+# No folder yet: a middle click opens no tab
+point-ui side-row 6
+middle-here
+expect tabs=1
+# Its menu: Mount alone; it fails, and says why
+right-here
+expect menu=folder
+point-menu mount-it
+sh echo mount > "$OFX_ROOT/udisks-fail"
+click-here
+wait-for 3000 status=Can't
+expect status=Can't mount MY STICK: Error mount: target is busy
+sh rm "$OFX_ROOT/udisks-fail"
+sh grep -qx "udisksctl mount -b /dev/sdz1" "$OFX_ROOT/spawn.log"
+# A click: mounted, the drive's folder opens, and the row is the mounted drive's now
+sh echo "MY STICK" > "$OFX_ROOT/udisks-mount-as"
+press-side 6
+wait-for 3000 status=Mounted
+expect status=Mounted MY STICK
+wait-for 3000 sides=^Places|Home|Trash|^Drives|File_System|MY_STICK|~1.0_GB_Drive here=MY STICK
+sh test "$OFX_DIR" = "$OFX_ROOT/media/MY STICK"
+shot usb-mounted.png
+# By the keys: Tab, End (the drive without a label), Enter
+sh echo NOLABEL > "$OFX_ROOT/udisks-mount-as"
+key tab
+key end
+expect sidefocus=1 place=1.0 GB Drive
+key enter
+wait-for 3000 status=Mounted
+sh test "$OFX_DIR" = "$OFX_ROOT/media/NOLABEL"
+key esc
+# Pulled out before it was mounted: it goes
+sh rm "$OFX_ROOT/udevdb/b8:240" "$OFX_ROOT/udevdb/b8:250" "$OFX_ROOT/udevdb/b8:230"
+sh printf x > "$OFX_ROOT/udevdb/b8:1"
+wait-for 3000 sides=^Places|Home|Trash|^Drives|File_System|MY_STICK|NOLABEL
+quit

@@ -139,7 +139,7 @@ MUTANTS += [
     (PL, "if (label.len == 0) label = strcmp(path, \"/\") == 0 ? S(\"/\") : path_base(str_from_c(path));", ""),
     (PL, "for (size_t n = strlen(path); n > 1 && path[n - 1] == '/';) path[--n] = 0;", ""),
     (PL, "if (home && home[0]) places_add(pl, PL_HOME, home, S(\"Home\"));", ""),
-    (PL, "case PL_REMOVABLE: names[n++] = S(\"drive-removable-media\"), names[n++] = S(\"drive-harddisk\"); break;", "case PL_REMOVABLE: names[n++] = S(\"drive-harddisk\"); break;"),
+    (PL, "    case PL_UNMOUNTED: names[n++] = S(\"drive-removable-media\"), names[n++] = S(\"drive-harddisk\"); break;", "    case PL_UNMOUNTED: names[n++] = S(\"drive-harddisk\"); break;"),
     # ---- F2: find
     ('ui/find.c', "isize i = ((from + dir * k) % l->n + l->n) % l->n;", "isize i = (from + dir * k) % l->n;"),
     ('ui/find.c', "u->find_miss = text.len > 0 && i < 0;", "u->find_miss = i < 0;"),
@@ -509,7 +509,7 @@ MUTANTS += [
     (PL, "    places_add(pl, PL_TRASH, TRASH_URI, S(\"Trash\"));\n", ""),
     (PL, "    places_head(pl, \"Drives\");\n", ""),
     (PL, "        if (pl->p[i].kind == PL_TRASH && strcmp(path, TRASH_URI) == 0) return i;\n", ""),
-    (PL, "        if (pl->p[i].kind == PL_HEAD || pl->p[i].kind == PL_TRASH) continue;\n", ""),
+    (PL, "        if (pl->p[i].kind == PL_HEAD || pl->p[i].kind == PL_TRASH || pl->p[i].kind == PL_UNMOUNTED) continue;\n", ""),
     (PL, "        names[n++] = S(\"user-trash\");\n        break;\n", "        break;\n"),
     (PL, "    *size = (i64)v.f_blocks * (i64)v.f_frsize;", "    *size = 0;"),
     ('ui/cursor.c', "    while (ui_side_head(u, i)) i += dir;", "    if (ui_side_head(u, i)) i += dir;"),
@@ -1492,7 +1492,7 @@ MUTANTS += [
     ('ui/panels.c', "        case UM_EMPTY_IT: return u->empty_asking = true, (UiAction){ UA_NONE, 0, false };", ""),
     ('ui/panels.c', "        case UM_PROPS_IT: return u->props = true, u->prop_at = 0, (UiAction){ UA_PROPS, 2, false };", "        case UM_PROPS_IT: return u->props = true, u->prop_at = 0, (UiAction){ UA_PROPS, 0, false };"),
     ('ui/menus.c', "    u->ctx_side = (int)side, u->ctx_crumb = crumb, u->ctx_key = keys;", "    u->ctx_side = (int)side, u->ctx_crumb = crumb;"),
-    ('ui/menus.c', "    u->ctx_trash = u->ctx_place = u->ctx_bmed = u->ctx_eject = u->ctx_full = u->ctx_w = false;\n", "    u->ctx_w = false;\n"),
+    ('ui/menus.c', "    u->ctx_trash = u->ctx_place = u->ctx_bmed = u->ctx_eject = u->ctx_full = u->ctx_w = u->ctx_unmounted = false;\n", "    u->ctx_w = u->ctx_unmounted = false;\n"),
     ('ui/menus.c', "    u->ctx_bmk = -1, u->ctx_bms = 0;\n", ""),
     ('ui/handle.c', "    if (!prompt && in->ctx_side >= 0 && u->side.top + in->ctx_side < u->side.n && !ui_side_head(u, u->side.top + in->ctx_side)) {", "    if (!prompt && in->ctx_side >= 0 && u->side.top + in->ctx_side < u->side.n) {"),
     ('ui/handle.c', "        u->side.sel = u->side.top + in->ctx_side;\n        ui_folder_open", "        ui_folder_open"),
@@ -1529,7 +1529,7 @@ MUTANTS += [
 MUTANTS += [
     ('ui/menus.c', "        if (it == UM_PASTE_INTO) return u->can_paste && u->ctx_w;", "        if (it == UM_PASTE_INTO) return u->can_paste;"),
     ('ui/menus.c', "    case UM_PASTE_INTO: return files && u->can_paste && u->ctx_w;", "    case UM_PASTE_INTO: return files && u->can_paste;"),
-    ('ui/menus.c', "u->ctx_eject = u->ctx_full = u->ctx_w = false;", "u->ctx_eject = u->ctx_full = false;"),
+    ('ui/menus.c', "u->ctx_eject = u->ctx_full = u->ctx_w = u->ctx_unmounted = false;", "u->ctx_eject = u->ctx_full = u->ctx_unmounted = false;"),
     ('ui/menus.c', "    u->ctx_key = keys, u->ctx_w = false;   // (gui/ says, as it opens)", "    u->ctx_key = keys;   // (gui/ says, as it opens)"),
 ]
 # ---- the list's Owner, Group, Permissions (View → Show Permissions) and links' targets (2026-10-27).
@@ -1975,7 +1975,7 @@ MUTANTS += [
 
 # ---- the places, then the drives (2026-10-30: back from a day with the drives on top)
 MUTANTS += [
-    (PL, '    places_add(pl, PL_TRASH, TRASH_URI, S("Trash"));\n    places_head(pl, "Drives");\n    places_add_mounts(pl, read_file(scratch, mountinfo));\n', '    places_add(pl, PL_TRASH, TRASH_URI, S("Trash"));\n'),
+    (PL, '    places_head(pl, "Drives");\n    Str mi = read_file(scratch, mountinfo);\n    places_add_mounts(pl, mi);\n', '    Str mi = read_file(scratch, mountinfo);\n'),
     (PL, '    ArenaMark mark = arena_mark(scratch);\n    places_head(pl, "Places");', '    ArenaMark mark = arena_mark(scratch);\n    places_head(pl, "Drives");\n    places_add_mounts(pl, read_file(scratch, mountinfo));\n    places_head(pl, "Places");'),
     (PL, 'if (place_is_drive(pl->p[i].kind) == place_is_drive(kind) && strcmp(pl->p[i].path, path) == 0) return true;', 'if (pl->p[i].kind == kind && strcmp(pl->p[i].path, path) == 0) return true;'),
     (PL, '(best < 0 || n > best_n)) best = i', '(best < 0 || n >= best_n)) best = i'),
@@ -2002,4 +2002,36 @@ MUTANTS += [
     (PL, '        if (trash_full) names[n++] = S("user-trash-full");\n', ''),
     (PL, '        if (trash_full) names[n++] = S("user-trash-full");\n', '        names[n++] = S("user-trash-full");\n'),
     ('fs/icons.c', ' || str_eq(context, S("Status"));', ';'),
+]
+
+# ---- unmounted drives, mounted by a click (2026-10-30)
+SP = 'fs/spawn.c'
+MUTANTS += [
+    (PL, '        if (o + 1 >= cap) return false;\n        out[o++] = c;\n    }\n    out[o] = 0;\n    return true;\n}\n\n// A small sysfs', '        out[o++] = c;\n    }\n    out[o] = 0;\n    return true;\n}\n\n// A small sysfs'),
+    (PL, "s.p[i + 1] == 'x' && (hi", "(hi"),
+    (PL, '            c = (char)(hi * 16 + lo), i += 3;', '            c = (char)(hi * 16 + lo), i += 2;'),
+    (PL, " && line.p[2 + kn] == '=')", ")"),
+    (PL, '    while (empty && (e = readdir(d))) empty = strcmp(e->d_name, ".") == 0 || strcmp(e->d_name, "..") == 0;', '    while (empty && (e = readdir(d))) empty = strcmp(e->d_name, ".") == 0;'),
+    (PL, ' && octal_decode(source, src, sizeof src) && strcmp(src, dev) == 0)', ' && octal_decode(source, src, sizeof src))'),
+    (PL, '    qsort(names, (size_t)nn, sizeof names[0], (int (*)(const void *, const void *))strcmp);   // sda1 before sdb1\n', ''),
+    (PL, 'i64 size = sectors.len ? strtoll(arena_cstr(scratch, sectors), NULL, 10) * 512 : 0;', 'i64 size = sectors.len ? strtoll(arena_cstr(scratch, sectors), NULL, 10) : 0;'),
+    (PL, 'str_eq(sys_line(scratch, sysblock, name, "removable"), S("1")) || ', ''),
+    (PL, ' || str_eq(sys_line(scratch, sysblock, name, "../removable"), S("1"))', ''),
+    (PL, ' ||\n                         str_eq(udev_get(data, "ID_BUS"), S("usb"));', ';'),
+    (PL, 'bool wanted = size > 0 && ', 'bool wanted = '),
+    (PL, '&& str_eq(udev_get(data, "ID_FS_USAGE"), S("filesystem")) ', ''),
+    (PL, ' && !str_eq(udev_get(data, "UDISKS_IGNORE"), S("1"))', ''),
+    (PL, '                      removable && dir_empty(path) && !mounted_dev(mountinfo, dev);', '                      removable && !mounted_dev(mountinfo, dev);'),
+    (PL, '                      removable && dir_empty(path) && !mounted_dev(mountinfo, dev);', '                      removable && dir_empty(path);'),
+    (PL, '                      removable && dir_empty(path) && !mounted_dev(mountinfo, dev);', '                      dir_empty(path) && !mounted_dev(mountinfo, dev);'),
+    (PL, 'if (wanted && !udev_unescape(udev_get(data, "ID_FS_LABEL_ENC"), label, sizeof label)) label[0] = 0;', 'if (wanted && !udev_unescape(udev_get(data, "ID_FS_LABEL"), label, sizeof label)) label[0] = 0;'),
+    (PL, 'size >= 10000000000 ? "%.0f GB Drive" : "%.1f GB Drive"', '"%.0f GB Drive"'),
+    (PL, '    if (sysblock && udev) places_add_unmounted(scratch, pl, sysblock, udev, mi);\n', ''),
+    (PL, '    if (sysblock && udev) places_add_unmounted', '    if (udev) places_add_unmounted'),
+    (PL, ' || pl->p[i].kind == PL_TRASH || pl->p[i].kind == PL_UNMOUNTED) continue;', ' || pl->p[i].kind == PL_TRASH) continue;'),
+    (SP, '            if (p.len > 1 && p.p[p.len - 1] == \'.\') p.len--;\n', ''),
+    (SP, "            if (p.len && p.p[0] == '/' && (size_t)p.len < atcap)", "            if (p.len && (size_t)p.len < atcap)"),
+    (SP, "            if (p.len && p.p[0] == '/' && (size_t)p.len < atcap)", "            if (p.len && p.p[0] == '/')"),
+    (SP, '        if (line.len && !why[0]) snprintf(why, whycap, "%.*s", STR_ARG(line));\n    }\n    return false;', '    }\n    return false;'),
+    ('ui/menus.c', '    if (u->ctx_unmounted) return it == UM_MOUNT_IT;   // no folder yet (2026-10-30)\n', ''),
 ]

@@ -1313,6 +1313,63 @@ static void test_history(void)
     CHECK(h.nback == UI_HISTORY_MAX && strcmp(h.back[0].dir, "/d5") == 0 && strcmp(h.back[UI_HISTORY_MAX - 1].dir, "/d68") == 0);
 }
 
+// A partition as /sys/class/block has it (its folder inside its disk's, a link to it beside), and
+// its udev database file.
+static void fake_part(const char *disk, const char *part, int minor, const char *removable, const char *sectors, const char *udev, bool held)
+{
+    mkdirs(at("blk/sys/%s/%s/holders", disk, part));
+    put(at("blk/sys/%s/removable", disk), removable);
+    char devno[16];
+    snprintf(devno, sizeof devno, "8:%d\n", minor);
+    put(at("blk/sys/%s/%s/dev", disk, part), devno);
+    put(at("blk/sys/%s/%s/size", disk, part), sectors);
+    if (held) put(at("blk/sys/%s/%s/holders/dm-0", disk, part), "");
+    char link[PATH_MAX];
+    snprintf(link, sizeof link, "%s/%s", disk, part);
+    CHECK(symlink(link, at("blk/sys/%s", part)) == 0);
+    put(at("blk/udev/b8:%d", minor), udev);
+}
+
+// Unmounted drives (2026-10-30): which are listed, by what name, after the mounted ones.
+static void test_unmounted(Places *pl)
+{
+    const char *fs = "E:ID_FS_USAGE=filesystem\nE:ID_FS_TYPE=vfat\n";
+    fake_part("sdb", "sdb1", 17, "1\n", "62500000\n", "E:ID_FS_USAGE=filesystem\nE:ID_FS_LABEL_ENC=MY\\x20STICK\nE:ID_FS_LABEL=MY_STICK\n", false);
+    fake_part("sdc", "sdc1", 33, "0\n", "62500000\n", "E:ID_BUS=usb\nE:ID_FS_USAGE=filesystem\n", false);   // USB: removable
+    fake_part("sdd", "sdd1", 49, "1\n", "62500000\n", "E:ID_FS_USAGE=crypto\nE:ID_FS_TYPE=crypto_LUKS\n", false);   // encrypted: later
+    fake_part("sde", "sde1", 65, "1\n", "62500000\n", fs, false);   // mounted
+    fake_part("sdf", "sdf1", 81, "1\n", "62500000\n", fs, true);    // a device mapper on it
+    fake_part("sdg", "sdg1", 97, "1\n", "62500000\n", "E:ID_FS_USAGE=filesystem\nE:UDISKS_IGNORE=1\n", false);
+    fake_part("sdh", "sdh1", 113, "1\n", "0\n", fs, false);          // an empty card slot
+    fake_part("sdi", "sdi1", 129, "1\n", "2000000\n", fs, false);    // 1 GB, no label
+    fake_part("nvme", "nvme1", 145, "0\n", "62500000\n", fs, false); // internal
+    // A whole disk with a file system on it (no partition table): its own removable.
+    mkdirs(at("blk/sys/sdw/holders"));
+    put(at("blk/sys/sdw/removable"), "1\n"), put(at("blk/sys/sdw/dev"), "8:160\n"), put(at("blk/sys/sdw/size"), "2000000\n");
+    put(at("blk/udev/b8:160"), "E:ID_FS_USAGE=filesystem\nE:ID_FS_LABEL_ENC=WHOLE\n");
+    put(at("blk/mountinfo"), "1 0 0:1 / / rw - ext4 /dev/x rw\n2 1 8:65 / /boot rw - vfat /dev/sde1 rw\n");
+    env_set("HOME", "/home/m");
+    places_load(&ta, pl, at("places/none"), at("blk/mountinfo"), at("blk/sys"), at("blk/udev"));
+    const char *want[][3] = { { "/dev/sdb1", "MY STICK" }, { "/dev/sdc1", "32 GB Drive" }, { "/dev/sdi1", "1.0 GB Drive" }, { "/dev/sdw", "WHOLE" } };
+    CHECK(pl->n == 5 + COUNT(want) && pl->p[4].kind == PL_ROOT);
+    for (int i = 0; i < COUNT(want) && 5 + i < pl->n; i++) {
+        const Place *p = &pl->p[5 + i];
+        if (strcmp(p->path, want[i][0]) != 0 || strcmp(p->label, want[i][1]) != 0) fprintf(stderr, "unmounted %d: %s (%s)\n", i, p->path, p->label);
+        CHECK(p->kind == PL_UNMOUNTED && strcmp(p->path, want[i][0]) == 0 && strcmp(p->dev, want[i][0]) == 0 && strcmp(p->label, want[i][1]) == 0);
+    }
+    CHECK(pl->p[5].size == 62500000LL * 512 && !place_is_drive(PL_UNMOUNTED) && !place_ejectable(&pl->p[5]));
+    CHECK(places_current(pl, "/dev/sdb1") == 4);   // File System, never the unmounted drive (not a folder)
+    // udev's file: a key whole (not ID_FS_TYPE_X for ID_FS_TYPE); \\xNN only, and only what fits.
+    CHECK(str_eq(udev_get(S("E:ID_FS_TYPE_X=no\nE:ID_FS_TYPE=vfat\n"), "ID_FS_TYPE"), S("vfat")) && !udev_get(S("E:ID_BUS\n"), "ID_BUS").len);
+    char lb[8];
+    CHECK(udev_unescape(S("a\\x41\\y41"), lb, sizeof lb) && strcmp(lb, "aA\\y41") == 0);
+    CHECK(!udev_unescape(S("12345678"), lb, sizeof lb) && udev_unescape(S("1234567"), lb, sizeof lb));
+    // No folders given (the guard's way in a test without its own): none.
+    places_load(&ta, pl, at("places/none"), at("blk/mountinfo"), NULL, at("blk/udev"));
+    CHECK(pl->n == 5);
+    env_restore();
+}
+
 static void test_places(void)
 {
     arena_reset(&ta);
@@ -1341,7 +1398,7 @@ static void test_places(void)
         "45 short\n");
     env_set("HOME", "/home/m");
     Places pl;
-    places_load(&ta, &pl, at("places/bookmarks"), at("places/mountinfo"));
+    places_load(&ta, &pl, at("places/bookmarks"), at("places/mountinfo"), NULL, NULL);
     const char *want[][2] = {
         { "", "Places" }, { "/home/m", "Home" }, { "/home/m/Pictures", "Pictures" }, { "/home/m/My Docs", "My Docs" },
         { "/home/m/Downloads", "Downloads" }, { "/", "/" }, { TRASH_URI, "Trash" }, { "", "Drives" }, { "/", "File System" },
@@ -1376,33 +1433,34 @@ static void test_places(void)
     snprintf(places_test_media, sizeof places_test_media, "/scratch/media");
     put(at("places/mi2"), "1 1 0:1 / /scratch/media/STICK rw - vfat /dev/sdq1 rw\n2 1 0:1 / /scratch/media rw - tmpfs t rw\n"
                           "3 1 0:1 / /scratch/other rw - vfat /dev/sdq2 rw\n");
-    places_load(&ta, &pl, at("places/none"), at("places/mi2"));
+    places_load(&ta, &pl, at("places/none"), at("places/mi2"), NULL, NULL);
     places_test_media[0] = 0;
     CHECK(pl.n == 5 && pl.p[4].kind == PL_REMOVABLE && strcmp(pl.p[4].path, "/scratch/media/STICK") == 0 && place_ejectable(&pl.p[4]));
     env_restore();
     // The real mountinfo, through procfs: "/" is in it.
     env_set("HOME", "/home/m");
-    places_load(&ta, &pl, at("places/none"), "/proc/self/mountinfo");
+    places_load(&ta, &pl, at("places/none"), "/proc/self/mountinfo", NULL, NULL);
     bool root_seen = false;
     for (int i = 0; i < pl.n; i++) root_seen |= pl.p[i].kind == PL_ROOT;
     CHECK(root_seen);
     env_restore();
     // Without bookmarks: home, Trash, then "/" from mountinfo as File System.
     env_set("HOME", "/home/m");
-    places_load(&ta, &pl, at("places/none"), at("places/mountinfo"));
+    places_load(&ta, &pl, at("places/none"), at("places/mountinfo"), NULL, NULL);
     CHECK(pl.n == 10 && pl.p[2].kind == PL_TRASH && pl.p[4].kind == PL_ROOT && strcmp(pl.p[4].label, "File System") == 0);
     env_restore();
     // No HOME: no Home place, the headings and Trash.
     env_set("HOME", NULL);
-    places_load(&ta, &pl, at("places/none"), at("places/none"));
+    places_load(&ta, &pl, at("places/none"), at("places/none"), NULL, NULL);
     CHECK(pl.n == 3 && pl.p[1].kind == PL_TRASH && places_current(&pl, "/x") == -1);
     env_restore();
     // A bookmark to Home: one place, Home (places_current's tie is only ever a drive and a place).
     env_set("HOME", "/home/m");
     put(at("places/bm2"), "file:///home/m Me\n");
-    places_load(&ta, &pl, at("places/bm2"), at("places/none"));
+    places_load(&ta, &pl, at("places/bm2"), at("places/none"), NULL, NULL);
     CHECK(pl.n == 4 && pl.p[1].kind == PL_HOME && places_current(&pl, "/home/m/x") == 1);
     env_restore();
+    test_unmounted(&pl);
     // Icons.
     UserDirs ud = { 0 };
     snprintf(ud.d[0].path, sizeof ud.d[0].path, "/home/m/Pictures");

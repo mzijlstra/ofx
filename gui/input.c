@@ -422,6 +422,7 @@ static void ctx_facts(void)
         const Place *pl = &app.places.p[u->ctx_side];
         u->ctx_place = true;
         u->ctx_eject = place_ejectable(pl);
+        u->ctx_unmounted = pl->kind == PL_UNMOUNTED;
         if (pl->kind == PL_BOOKMARK) u->ctx_bmk = bm_find(&bmarks, pl->path);
     }
 }
@@ -431,6 +432,8 @@ static void ctx_facts(void)
 static void folder_do(UiMenuItem it)
 {
     const char *dir = app.ctx_path;
+    const Place *ctx_pl = app.ui.ctx_side >= 0 && app.ui.ctx_side < app.places.n ? &app.places.p[app.ui.ctx_side] : NULL;
+    if (it == UM_MOUNT_IT && ctx_pl && ctx_pl->kind == PL_UNMOUNTED) mount_start(ctx_pl);   // (no folder yet: before the check below)
     if (!dir[0]) return;
     switch (it) {
     case UM_OPEN_IT: go_to(dir, STR_EMPTY, 0); break;

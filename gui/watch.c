@@ -8,6 +8,9 @@
 // which raises mounts_ready at once. OFX_TEST_MOUNTINFO names a file to read instead, for the
 // tests (a test can't mount anything): an inotify watch on it stands in for the poll.
 //
+// udev's database (2026-10-30): a file there for each device it has set up, written as a drive is
+// plugged in and removed as it goes; a block device's reads the places again, as a mount does.
+//
 // The bookmarks file (F7.5): its folder is watched (writers rename a new file over it), and a change
 // to `bookmarks` there reads the places again, as a mount does (mounts_ready), so a bookmark Nemo
 // adds shows at once. A folder made after ofx started (its first bookmark) is watched then.
@@ -36,15 +39,32 @@ static struct {
     char        current[PATH_MAX];   // $XDG_STATE_HOME/omarchy/current
     char        theme[PATH_MAX + 8]; // .../current/theme
     atomic_int  trash_wd[TRASH_DIRS_MAX];   // each trash folder's files/, 0 for none (inotify's start at 1)
+    int         udev_wd;       // udev's database folder: a drive plugged in or pulled (2026-10-30)
     atomic_bool list_ready, theme_ready, mounts_ready, trash_ready;
     atomic_int  batches;       // how many batches it raised, for the tests' state line
-} watch = { .fd = -1, .dir_wd = -1, .theme_wd = -1, .current_wd = -1, .mount_fd = -1, .mount_wd = -1, .bm_wd = -1 };
+} watch = { .fd = -1, .dir_wd = -1, .theme_wd = -1, .current_wd = -1, .mount_fd = -1, .mount_wd = -1, .bm_wd = -1, .udev_wd = -1 };
 
 // The mount list ofx reads: /proc/self/mountinfo, or the tests' OFX_TEST_MOUNTINFO.
 static const char *mountinfo_path(void)
 {
     const char *t = getenv("OFX_TEST_MOUNTINFO");
     return t && t[0] ? t : "/proc/self/mountinfo";
+}
+
+// The block devices and udev's database (unmounted drives, 2026-10-30): /sys/class/block and
+// /run/udev/data, or the tests' OFX_TEST_SYSBLOCK and OFX_TEST_UDEV. With the guard on
+// (OFX_GUI_ROOT, every test run) and no test folder, none: a test never lists Michael's drives,
+// so it can never mount one.
+static const char *sysblock_path(void)
+{
+    const char *t = getenv("OFX_TEST_SYSBLOCK");
+    return t && t[0] ? t : getenv("OFX_GUI_ROOT") ? NULL : "/sys/class/block";
+}
+
+static const char *udev_path(void)
+{
+    const char *t = getenv("OFX_TEST_UDEV");
+    return t && t[0] ? t : getenv("OFX_GUI_ROOT") ? NULL : "/run/udev/data";
 }
 
 static const u32 WATCH_DIR_MASK = IN_CREATE | IN_DELETE | IN_MOVED_FROM | IN_MOVED_TO | IN_CLOSE_WRITE | IN_MODIFY |
@@ -126,6 +146,7 @@ static void watch_read(bool *list, bool *theme, bool *mounts, bool *trash)
         if (watch.mount_wd >= 0 && e->wd == watch.mount_wd) *mounts = true;
         if (e->wd == atomic_load(&watch.bm_wd) && e->len && strcmp(e->name, "bookmarks") == 0) *mounts = true;   // the places again (F7.5)
         if (e->wd == atomic_load(&watch.dir_wd)) *list = true;
+        if (e->wd == watch.udev_wd && e->len && e->name[0] == 'b') *mounts = true;   // a block device's (b8:17), not the rest udev keeps
         if (!(e->mask & IN_IGNORED) && watch_is_trash(e->wd)) *trash = true;
         if (e->wd == atomic_load(&watch.theme_wd) && !(e->mask & IN_IGNORED)) *theme = true;
         if (e->wd == atomic_load(&watch.current_wd)) *theme = true, rewatch = true;
@@ -183,6 +204,8 @@ static bool watch_start(void)
     if (strcmp(mi, "/proc/self/mountinfo") == 0) watch.mount_fd = open(mi, O_RDONLY | O_CLOEXEC);
     else watch.mount_wd = inotify_add_watch(watch.fd, mi, IN_CLOSE_WRITE | IN_MODIFY | IN_MOVE_SELF | IN_DELETE_SELF);
     watch_bookmarks();
+    const char *udev = udev_path();
+    if (udev) watch.udev_wd = inotify_add_watch(watch.fd, udev, IN_CREATE | IN_DELETE | IN_MOVED_TO | IN_CLOSE_WRITE | IN_ONLYDIR);
     pthread_t t;
     if (pthread_create(&t, NULL, watch_thread, NULL) != 0) return false;
     pthread_detach(t);

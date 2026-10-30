@@ -43,7 +43,7 @@ MUTANTS = [
     ('gui/input.c', "        if (in_box(CLAY_IDI(\"side-row\", r), x, y)) h.side = r;", "        if (0) h.side = r;"),
     ('gui/input.c', '        if (in_box(Clay_GetElementId(cz(COL_IDS[k])), x, y)) h.header = k;', ''),
     ('gui/input.c', "(button == GLFW_MOUSE_BUTTON_5 || button == GLFW_MOUSE_BUTTON_6)) mouse_forwards++;", "(button == GLFW_MOUSE_BUTTON_6)) mouse_forwards++;"),
-    ('gui/actions.c', "        if (p) go_to(p, STR_EMPTY, 0);", ""),
+    ('gui/actions.c', "        if (p) go_to(p, STR_EMPTY, 0);", "        if (false) {}"),
     ('gui/folder.c', "        hist_unstep(&hist, dir);\n", ""),
     # F3
     ('gui/folder.c', "        if (k >= 0 && !mark[k]) mark[k] = 1, marked++;", ""),
@@ -160,7 +160,7 @@ MUTANTS = [
     ('gui/files.c', "                if (hover && place_ejectable(p)) {", "                if (0) {"),
     ('gui/input.c', "    if (h.side >= 0 && app.ui.side_mode == SIDE_PLACES && in_box(CLAY_IDI(\"side-eject\", h.side), x, y)) h.eject = h.side;", ""),
     (G, "        if (eject_take()) dirty = true;", ""),
-    ('gui/eject.c', "    if (jobs_refuse(p->path)) return false;   // a job of ours writes there: it says so", ""),
+    ('gui/eject.c', "    if (!mount && jobs_refuse(p->path)) return false;   // a job of ours writes there: it says so", ""),
     (G, "    if (chdir(\"/\") != 0) fprintf(stderr, \"ofx: chdir /: %s\\n\", strerror(errno));", ""),
     # F6.2: the icon view
     ('gui/files.c', "    int c = (w - side_w() - 2 * PAD) / cell_w();", "    int c = (w - 2 * PAD) / cell_w();"),
@@ -362,7 +362,7 @@ MUTANTS = [
     ('gui/input.c', '    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_D) return UK_ADD_BOOKMARK;   // (F7.5, as Nemo)', '', 'f75'),
     ('gui/topbar.c', ' || (it == UM_SEP && !ui_menu_sep_shown(&app.ui, m, i))) continue;', ') continue;', 'f74'),
     (W, '        if (e->wd == atomic_load(&watch.bm_wd) && e->len && strcmp(e->name, "bookmarks") == 0) *mounts = true;', '', 'f75'),
-    (W, '    watch_bookmarks();\n    pthread_t t;', '    pthread_t t;', 'f75'),
+    (W, '    watch_bookmarks();\n    const char *udev = udev_path();', '    const char *udev = udev_path();', 'f75'),
     # ---- F7.5: Edit Bookmarks
     ('gui/bookmarks.c', '    if (now.full) {', '    if (false) {', 'f75'),
     # Not a mutant: bmp_change's bm_locate for `i`; the panel shows the file as it is (a change
@@ -596,6 +596,18 @@ MUTANTS = [
     ('gui/folder.c', 'is_search(dir) ? UI_VIEW_SEARCH : UI_VIEW_FOLDER;', 'UI_VIEW_FOLDER;', 'f9'),
     ('gui/folder.c', '    case UI_VIEW_TRASH: trash_state(); return', '    case UI_VIEW_TRASH: return', 'f6'),
     ('gui/folder.c', '    case UI_VIEW_TRASH: trash_state(); return', '    case UI_VIEW_TRASH: trash_scan(); return', 'f6'),
+    # Unmounted drives, mounted by a click (2026-10-30). Not run: the dimmed label (drawn only; the
+    # shot usb-unmounted.png shows it), and the guard's NULL folders (no test runs without its own).
+    ('gui/watch.c', "        if (e->wd == watch.udev_wd && e->len && e->name[0] == 'b') *mounts = true;", '', 'usb'),
+    ('gui/watch.c', "        if (e->wd == watch.udev_wd && e->len && e->name[0] == 'b') *mounts = true;", "        if (e->wd == watch.udev_wd && e->len && e->name[0] == 'c') *mounts = true;", 'usb'),
+    ('gui/folder.c', ' || app.places.p[i].kind == PL_UNMOUNTED) return NULL;', ') return NULL;', 'usb'),
+    ('gui/actions.c', '            mount_start(&app.places.p[a.index]);   // a drive not mounted yet', '            {}   // a drive not mounted yet', 'usb'),
+    ('gui/input.c', '    if (it == UM_MOUNT_IT && ctx_pl && ctx_pl->kind == PL_UNMOUNTED) mount_start(ctx_pl);', '', 'usb'),
+    ('gui/input.c', '        u->ctx_unmounted = pl->kind == PL_UNMOUNTED;\n', '', 'usb'),
+    ('gui/eject.c', '    if (ej.mount) mount_argv(ej.dev, argv);\n    else eject_argv', '    eject_argv', 'usb'),
+    ('gui/eject.c', '        else if (go_to(at, STR_EMPTY, 0)) set_status(false, "Mounted %s", ej.label);', '        else set_status(false, "Mounted %s", ej.label);', 'usb'),
+    ('gui/eject.c', '        if (!mounted) set_status(true, "Can\'t mount %s: %s"', '        if (false) set_status(true, "Can\'t mount %s: %s"', 'usb'),
+    ('gui/script.c', ' : p->kind == PL_UNMOUNTED ? "~" : ""', ' : ""', 'usb'),
     ('gui/folder.c', '    if (v == UI_VIEW_TRASH && trash_home(tinfo, sizeof tinfo - 8)) strcat(tinfo, "/info");\n', '', 'f6'),
     ('gui/folder.c', '    return app.ui.view == UI_VIEW_SEARCH || (app.ui.view == UI_VIEW_FOLDER && strcmp(app.cwd, "/") != 0);', '    return app.ui.view == UI_VIEW_SEARCH || strcmp(app.cwd, "/") != 0;', 'f6'),
     ('gui/folder.c', '    return app.ui.view == UI_VIEW_SEARCH || (app.ui.view == UI_VIEW_FOLDER && strcmp(app.cwd, "/") != 0);', '    return app.ui.view == UI_VIEW_FOLDER && strcmp(app.cwd, "/") != 0;', 'f9'),
@@ -692,7 +704,7 @@ t_start = time.monotonic()
 
 # run.sh's groups, in its order: a mutant runs them one at a time and stops at the first that
 # kills it (Michael, 2026-10-25).
-GROUPS = ['browse', 'big', 'gone', 'watchgap', 'f2', 'f3', 'f4', 'f5', 'f52', 'f53', 'f54', 'f6', 'f62', 'f63', 'f64', 'f7',
+GROUPS = ['browse', 'big', 'gone', 'watchgap', 'f2', 'f3', 'f4', 'f5', 'f52', 'f53', 'f54', 'f6', 'usb', 'f62', 'f63', 'f64', 'f7',
           'f72', 'f73', 'f74', 'f75', 'f8', 'f9', 'clip', 'keys', 'hang', 'guard3', 'guard']
 run_text = open(os.path.join(root, 'tests/gui/run.sh')).read()
 assert re.findall(r'want ([a-z0-9]+)', run_text) == GROUPS, 'GROUPS in gui.py no longer match tests/gui/run.sh'

@@ -322,7 +322,7 @@ static void places_reload(void)
     Place keep = { .kind = PL_HEAD };   // in the tree mode the cursor is a tree row's: none kept
     if (app.ui.side_mode == SIDE_PLACES && app.ui.side.sel < app.places.n) keep = app.places.p[app.ui.side.sel];
     char bm[PATH_MAX];
-    places_load(&scratch, &app.places, bookmarks_path(bm, sizeof bm), mountinfo_path());
+    places_load(&scratch, &app.places, bookmarks_path(bm, sizeof bm), mountinfo_path(), sysblock_path(), udev_path());
     // The Bookmarks menu's (F7.5). With Edit Bookmarks up its cursor stays on its line, found
     // again as a change finds it (bm_locate), wherever a change made elsewhere moved it; the lines
     // as they were are copied into bmwa, which no change holds by now (they reload after writing).
@@ -430,7 +430,7 @@ static const char *side_path(isize i, char *buf, size_t cap)
         snprintf(buf, cap, "%.*s", STR_ARG(tree.row[i].path));
         return buf;
     }
-    if (i < 0 || i >= app.places.n || app.places.p[i].kind == PL_HEAD) return NULL;
+    if (i < 0 || i >= app.places.n || app.places.p[i].kind == PL_HEAD || app.places.p[i].kind == PL_UNMOUNTED) return NULL;   // (a device: no folder to open in a tab)
     return app.places.p[i].path;
 }
 

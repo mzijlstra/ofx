@@ -16,7 +16,9 @@ enum { PLACES_MAX = 64 };
 // one (gio and Nemo name it the same).
 #define TRASH_URI "trash:///"
 
-typedef enum { PL_HEAD, PL_HOME, PL_BOOKMARK, PL_TRASH, PL_ROOT, PL_MOUNT, PL_REMOVABLE } PlaceKind;
+// PL_UNMOUNTED: a removable drive not mounted yet (2026-10-30), its path and dev the device's
+// (/dev/sdb1); a click mounts it. Not a drive for place_is_drive: it has no folder yet.
+typedef enum { PL_HEAD, PL_HOME, PL_BOOKMARK, PL_TRASH, PL_ROOT, PL_MOUNT, PL_REMOVABLE, PL_UNMOUNTED } PlaceKind;
 
 typedef struct {
     char      path[PATH_MAX];   // "" for a heading
@@ -109,6 +111,117 @@ static void places_add_mounts(Places *pl, Str text)
     }
 }
 
+// ---- unmounted drives (2026-10-30) ----------------------------------------------------------
+// The kernel lists the block devices in /sys/class/block (a partition's folder inside its disk's,
+// so `<part>/../removable` is the disk's); udev's database, /run/udev/data/b<major>:<minor>, has
+// each one's file system (ID_FS_USAGE, ID_FS_TYPE, ID_FS_LABEL_ENC), its bus, and UDISKS_IGNORE.
+// No program runs. gui/ passes test folders for both (OFX_TEST_SYSBLOCK, OFX_TEST_UDEV).
+
+// A udev database line's value, "E:KEY=value"; STR_EMPTY when the key isn't there.
+static Str udev_get(Str data, const char *key)
+{
+    isize at = 0, kn = (isize)strlen(key);
+    for (Str line; next_line(data, &at, &line);)
+        if (line.len > kn + 3 && memcmp(line.p, "E:", 2) == 0 && memcmp(line.p + 2, key, (size_t)kn) == 0 && line.p[2 + kn] == '=')
+            return str_cut(line, kn + 3, line.len);
+    return STR_EMPTY;
+}
+
+// udev's \xNN escapes (a label's spaces, its slashes), into out; false when it doesn't fit.
+static bool udev_unescape(Str s, char *out, size_t cap)
+{
+    size_t o = 0;
+    for (isize i = 0; i < s.len; i++) {
+        char c = s.p[i];
+        int hi, lo;
+        if (c == '\\' && i + 3 < s.len && s.p[i + 1] == 'x' && (hi = hex_digit(s.p[i + 2])) >= 0 && (lo = hex_digit(s.p[i + 3])) >= 0)
+            c = (char)(hi * 16 + lo), i += 3;
+        if (o + 1 >= cap) return false;
+        out[o++] = c;
+    }
+    out[o] = 0;
+    return true;
+}
+
+// A small sysfs file's first line, trimmed; STR_EMPTY when it can't be read.
+static Str sys_line(Arena *a, const char *dir, const char *name, const char *file)
+{
+    char path[PATH_MAX];
+    if (snprintf(path, sizeof path, "%s/%s/%s", dir, name, file) >= (int)sizeof path) return STR_EMPTY;
+    Str s = read_file(a, path);
+    isize at = 0;
+    Str line = STR_EMPTY;
+    next_line(s, &at, &line);
+    return str_trim(line);
+}
+
+// Whether a folder has nothing in it but . and .. (or isn't there).
+static bool dir_empty(const char *path)
+{
+    DIR *d = opendir(path);
+    if (!d) return true;
+    struct dirent *e;
+    bool empty = true;
+    while (empty && (e = readdir(d))) empty = strcmp(e->d_name, ".") == 0 || strcmp(e->d_name, "..") == 0;
+    closedir(d);
+    return empty;
+}
+
+// Whether dev is the source of any mount in the mountinfo text (all of them, shown or not: /boot).
+static bool mounted_dev(Str mountinfo, const char *dev)
+{
+    isize at = 0;
+    for (Str line; next_line(mountinfo, &at, &line);) {
+        char mp[PATH_MAX], src[256];
+        Str type, source;
+        if (mountinfo_line(line, mp, sizeof mp, &type, &source) && octal_decode(source, src, sizeof src) && strcmp(src, dev) == 0)
+            return true;
+    }
+    return false;
+}
+
+// The drives a click could mount: a file system on it (not an encrypted one: unlocking asks a
+// passphrase, later), not empty, not mounted, nothing on top of it (a device mapper's), not one
+// udisks is told to ignore, and removable or on USB (no unmounted internal partitions). Named by
+// their label, else their size.
+static void places_add_unmounted(Arena *scratch, Places *pl, const char *sysblock, const char *udev, Str mountinfo)
+{
+    DIR *d = opendir(sysblock);
+    if (!d) return;
+    enum { NAMES_MAX = 256 };   // (loop, zram and dm devices too; only the names are kept here)
+    static char names[NAMES_MAX][64];
+    int nn = 0;
+    for (struct dirent *e; nn < NAMES_MAX && (e = readdir(d));) {
+        size_t len = strlen(e->d_name);
+        if (e->d_name[0] != '.' && len < sizeof names[0]) memcpy(names[nn++], e->d_name, len + 1);
+    }
+    closedir(d);
+    qsort(names, (size_t)nn, sizeof names[0], (int (*)(const void *, const void *))strcmp);   // sda1 before sdb1
+    for (int i = 0; i < nn && pl->n < PLACES_MAX; i++) {
+        ArenaMark mark = arena_mark(scratch);
+        const char *name = names[i];
+        Str devno = sys_line(scratch, sysblock, name, "dev"), sectors = sys_line(scratch, sysblock, name, "size");
+        char path[PATH_MAX], dev[256];
+        snprintf(dev, sizeof dev, "/dev/%s", name);
+        i64 size = sectors.len ? strtoll(arena_cstr(scratch, sectors), NULL, 10) * 512 : 0;
+        Str data = STR_EMPTY;
+        if (devno.len && snprintf(path, sizeof path, "%s/b%.*s", udev, STR_ARG(devno)) < (int)sizeof path) data = read_file(scratch, path);
+        snprintf(path, sizeof path, "%s/%s/holders", sysblock, name);
+        bool removable = str_eq(sys_line(scratch, sysblock, name, "removable"), S("1")) || str_eq(sys_line(scratch, sysblock, name, "../removable"), S("1")) ||
+                         str_eq(udev_get(data, "ID_BUS"), S("usb"));
+        bool wanted = size > 0 && str_eq(udev_get(data, "ID_FS_USAGE"), S("filesystem")) && !str_eq(udev_get(data, "UDISKS_IGNORE"), S("1")) &&
+                      removable && dir_empty(path) && !mounted_dev(mountinfo, dev);
+        char label[256] = "";
+        if (wanted && !udev_unescape(udev_get(data, "ID_FS_LABEL_ENC"), label, sizeof label)) label[0] = 0;
+        arena_restore(scratch, mark);
+        if (!wanted) continue;
+        if (!label[0]) snprintf(label, sizeof label, size >= 10000000000 ? "%.0f GB Drive" : "%.1f GB Drive", (double)size / 1e9);
+        places_add(pl, PL_UNMOUNTED, dev, str_from_c(label));
+        Place *p = &pl->p[pl->n - 1];
+        if (p->kind == PL_UNMOUNTED && strcmp(p->path, dev) == 0) snprintf(p->dev, sizeof p->dev, "%s", dev), p->size = size;
+    }
+}
+
 // The size and free space (what an unprivileged user may still write) of the drive holding path,
 // by statvfs; both 0 when it can't be read. It can block on a hung mount: gui/ calls it off the
 // main thread (space.c).
@@ -128,7 +241,8 @@ static void fs_space(const char *path, i64 *size, i64 *avail)
 // places first, as in Nemo and the GTK file chooser: the drives went on top for a day and came
 // back down (Michael, 2026-10-30: the places are where he goes most, and drives that come and go
 // change the rows below his bookmarks, not above them).
-static void places_load(Arena *scratch, Places *pl, const char *bookmarks, const char *mountinfo)
+// The drives a click could mount come last (sysblock and udev: NULL for none).
+static void places_load(Arena *scratch, Places *pl, const char *bookmarks, const char *mountinfo, const char *sysblock, const char *udev)
 {
     pl->n = 0;
     ArenaMark mark = arena_mark(scratch);
@@ -138,7 +252,9 @@ static void places_load(Arena *scratch, Places *pl, const char *bookmarks, const
     places_add_bookmarks(pl, read_file(scratch, bookmarks));
     places_add(pl, PL_TRASH, TRASH_URI, S("Trash"));
     places_head(pl, "Drives");
-    places_add_mounts(pl, read_file(scratch, mountinfo));
+    Str mi = read_file(scratch, mountinfo);
+    places_add_mounts(pl, mi);
+    if (sysblock && udev) places_add_unmounted(scratch, pl, sysblock, udev, mi);
     arena_restore(scratch, mark);
 }
 
@@ -158,7 +274,7 @@ static int places_current(const Places *pl, const char *path)
     size_t best_n = 0;
     for (int i = 0; i < pl->n; i++) {
         if (pl->p[i].kind == PL_TRASH && strcmp(path, TRASH_URI) == 0) return i;
-        if (pl->p[i].kind == PL_HEAD || pl->p[i].kind == PL_TRASH) continue;
+        if (pl->p[i].kind == PL_HEAD || pl->p[i].kind == PL_TRASH || pl->p[i].kind == PL_UNMOUNTED) continue;
         const char *p = pl->p[i].path;
         size_t n = strlen(p);
         if (path_within(path, p) && (best < 0 || n > best_n)) best = i, best_n = n;
@@ -173,7 +289,8 @@ static isize place_icon_names(const Place *p, const UserDirs *u, bool trash_full
     switch (p->kind) {
     case PL_ROOT:
     case PL_MOUNT: names[n++] = S("drive-harddisk"); break;
-    case PL_REMOVABLE: names[n++] = S("drive-removable-media"), names[n++] = S("drive-harddisk"); break;
+    case PL_REMOVABLE:
+    case PL_UNMOUNTED: names[n++] = S("drive-removable-media"), names[n++] = S("drive-harddisk"); break;
     case PL_TRASH:   // full: when any trash folder holds something (2026-10-30)
         if (trash_full) names[n++] = S("user-trash-full");
         names[n++] = S("user-trash");

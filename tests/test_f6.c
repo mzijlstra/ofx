@@ -798,6 +798,16 @@ static void test_eject(void)
     CHECK(eject_result(S("OFX-EJECTED\n"), why, sizeof why) == EJECT_FAILED);   // never without the unmount
     CHECK(eject_result(S("  OFX-UNMOUNTED \nOFX-EJECTED"), why, sizeof why) == EJECT_DONE);
     CHECK(eject_result(S("\nfirst\nsecond\nOFX-UNMOUNTED\n"), why, sizeof why) == EJECT_UNMOUNTED && strcmp(why, "first") == 0);
+    // Mount (2026-10-30): its command, and where it says the drive went.
+    mount_argv("/dev/sd x1", argv);
+    CHECK(strcmp(argv[0], "udisksctl") == 0 && strcmp(argv[1], "mount") == 0 && strcmp(argv[2], "-b") == 0 && strcmp(argv[3], "/dev/sd x1") == 0 && !argv[4]);
+    char mat[64];
+    CHECK(mount_result(S("Mounted /dev/sdb1 at /run/media/m/MY STICK\n"), mat, sizeof mat, why, sizeof why) && strcmp(mat, "/run/media/m/MY STICK") == 0);
+    CHECK(mount_result(S("Mounted /dev/sdb1 at /run/media/m/OLD.\n"), mat, sizeof mat, why, sizeof why) && strcmp(mat, "/run/media/m/OLD") == 0);   // older udisks
+    CHECK(!mount_result(S("Error mounting /dev/sdb1: wrong fs type\n"), mat, sizeof mat, why, sizeof why) && !mat[0] && strcmp(why, "Error mounting /dev/sdb1: wrong fs type") == 0);
+    CHECK(!mount_result(S("Mounted /dev/sdb1 at relative\n"), mat, sizeof mat, why, sizeof why));   // not a folder
+    CHECK(!mount_result(S("Mounted /dev/sdb1 at /a/very/long/folder/name/that/does/not/fit/in/sixty-four/bytes/x\n"), mat, sizeof mat, why, sizeof why));
+    CHECK(!mount_result(S(""), mat, sizeof mat, why, sizeof why) && !why[0]);
 }
 
 static void test_eject_keys(void)

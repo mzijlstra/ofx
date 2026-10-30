@@ -212,7 +212,8 @@ static void script_state(char *out, size_t cap)
     for (int i = 0; i < app.places.n; i++) {
         const Place *p = &app.places.p[i];
         size_t k = strlen(sides);
-        snprintf(sides + k, sizeof sides - k, "%s%s%s", i ? "|" : "", p->kind == PL_HEAD ? "^" : "", p->label);
+        // (^ a heading; ~ a drive not mounted yet, 2026-10-30)
+        snprintf(sides + k, sizeof sides - k, "%s%s%s", i ? "|" : "", p->kind == PL_HEAD ? "^" : p->kind == PL_UNMOUNTED ? "~" : "", p->label);
         spaced += place_is_drive(p->kind) && p->size > 0;
     }
     for (char *c = sides; *c; c++)

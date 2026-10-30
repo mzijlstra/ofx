@@ -148,7 +148,8 @@ or F9 (remembered in `~/.local/state/ofx/state`):
 - **places**: under *Places*, Home, your GTK bookmarks (`~/.config/gtk-3.0/bookmarks`, the ones
   Nemo shows) and Trash; under *Drives*, `/` and what is mounted under `/mnt`, `/media` and
   `/run/media`, each with its free space and a bar of how full it is (with the pointer over it,
-  its used space). A drive mounted or unmounted shows at once; a removable one shows an eject
+  its used space). A USB drive plugged in but not mounted shows dimmed, by its label or its size:
+  a click (or Enter, or Mount in its menu) mounts it (`udisksctl mount`) and opens it. A drive mounted or unmounted shows at once; a removable one shows an eject
   button in its icon's place under the pointer (`udisksctl unmount`, then `power-off`).
 - **tree**: the folders from `/`, opened down to the one shown.
 - **hidden**: no sidebar.
