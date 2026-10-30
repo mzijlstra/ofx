@@ -50,10 +50,16 @@ wait-for 3000 status=Can't
 expect status=Can't unmount MY STICK: Error unmount: target is busy
 sh test "$OFX_DIR" = "$OFX_ROOT/media/MY STICK"
 sh rm "$OFX_ROOT/udisks-fail"
+# (udisksctl answers a second after the mount list changed, as with eject's power-off: the window is
+# Home before the answer, never in media/; reviewer-2, 2026-10-30)
+sh touch "$OFX_ROOT/udisks-slow"
 point-ui side-row 5
 right-here
 point-menu unmount-it
 click-here
+wait-for 3000 here=Home
+sh test "$OFX_DIR" = "$OFX_ROOT/home"
+sh rm "$OFX_ROOT/udisks-slow"
 wait-for 3000 status=MY
 expect status=MY STICK is unmounted here=Home
 sh test "$OFX_DIR" = "$OFX_ROOT/home" && test ! -e "$OFX_ROOT/media/MY STICK"

@@ -321,6 +321,13 @@ static void places_reload(void)
     if (app.ui.menu_on && app.ui.menu == UI_CTX_FOLDER && app.ui.ctx_crumb < 0) app.ui.menu_on = false;
     Place keep = { .kind = PL_HEAD };   // in the tree mode the cursor is a tree row's: none kept
     if (app.ui.side_mode == SIDE_PLACES && app.ui.side.sel < app.places.n) keep = app.places.p[app.ui.side.sel];
+    // The drive the folder shown is on (not /), to see whether it is still there after.
+    char was[PATH_MAX] = "";
+    for (int i = 0; i < app.places.n; i++) {
+        const Place *p = &app.places.p[i];
+        if (place_is_drive(p->kind) && p->kind != PL_ROOT && path_within(here_dir(), p->path) && strlen(p->path) > strlen(was))
+            snprintf(was, sizeof was, "%s", p->path);
+    }
     char bm[PATH_MAX];
     places_load(&scratch, &app.places, bookmarks_path(bm, sizeof bm), mountinfo_path(), sysblock_path(), udev_path());
     // The Bookmarks menu's (F7.5). With Edit Bookmarks up its cursor stays on its line, found
@@ -352,6 +359,12 @@ static void places_reload(void)
         if (keep.kind != PL_HEAD && app.places.p[i].kind == keep.kind && strcmp(app.places.p[i].path, keep.path) == 0) sel = i;
     }
     app.place_cur = places_current(&app.places, app.cwd);
+    // That drive gone (unmounted, ejected, pulled out): Home, when the main loop next comes round
+    // (reviewer-2 and Michael, 2026-10-30: the folder's own watch reached the gone-folder fallback
+    // first, /run/media/<user>; Nemo crashes there). Whatever removed it, and before udisksctl answers.
+    bool still = !was[0];
+    for (int i = 0; i < app.places.n && !still; i++) still = place_is_drive(app.places.p[i].kind) && strcmp(app.places.p[i].path, was) == 0;
+    if (!still) app.drive_gone = true;
     if (app.ui.side_mode != SIDE_PLACES) return;
     app.ui.side_head = app.place_head;
     isize top = app.ui.side.top;

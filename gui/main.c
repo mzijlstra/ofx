@@ -223,6 +223,7 @@ static struct {
     u8        place_head[PLACES_MAX];   // 1 for a heading row (app.ui.side_head)
     int       place_cur;    // the place holding cwd, -1 for none
     bool      trash_full;   // any trash folder holds something (trash_state): the Trash place's icon
+    bool      drive_gone;   // the drive the folder shown was on left the mount list (places_reload): Home
     i64       cwd_avail;    // the free space on cwd's drive, -1 unknown
     char      status[600];
     bool      status_bad;
@@ -698,8 +699,16 @@ int main(int argc, char **argv)
         PollInputEvents();   // waits for input, or for watch.c's wake-up
         if (atomic_exchange(&close_signal, false)) close_asked = true;
         if (atomic_exchange(&watch.theme_ready, false)) theme_apply(), app.themes++, dirty = true;
-        if (atomic_exchange(&watch.list_ready, false)) reload(), dirty = true;
+        // The mounts before the folder: a drive unmounted and its folder removed come in one batch,
+        // and the folder's going would move ofx to the folder above before the drive's going sends it
+        // Home (2026-10-30).
         if (atomic_exchange(&watch.mounts_ready, false)) places_reload(), trash_state(), dirty = true;
+        if (app.drive_gone) {
+            const char *home = getenv("HOME");
+            app.drive_gone = false;
+            if (home && home[0]) go_to(home, STR_EMPTY, 0), dirty = true;
+        }
+        if (atomic_exchange(&watch.list_ready, false)) reload(), dirty = true;
         if (atomic_exchange(&watch.trash_ready, false) && trash_state()) dirty = true;
         dirty |= jobs_poll();
         if (app.have_list && count_take(app.count, app.list.n)) dirty = true;

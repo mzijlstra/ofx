@@ -612,6 +612,8 @@ MUTANTS = [
     ('gui/input.c', '        if (ctx_pl && place_ejectable(ctx_pl)) (it == UM_EJECT_IT ? eject_start : unmount_start)(ctx_pl);', '        if (ctx_pl && place_ejectable(ctx_pl)) eject_start(ctx_pl);', 'usb'),
     ('gui/eject.c', ' && path_within(here_dir(), ej.path) && home && home[0]) go_to(home, STR_EMPTY, 0);', ' && false) go_to(home, STR_EMPTY, 0);', 'usb'),
     ('gui/eject.c', 'if (op != DRIVE_MOUNT && r != EJECT_FAILED && path_within', 'if (op != DRIVE_MOUNT && path_within', 'usb'),
+    ('gui/folder.c', '    if (!still) app.drive_gone = true;\n', '', 'usb'),
+    ('gui/main.c', '        if (atomic_exchange(&watch.mounts_ready, false)) places_reload(), trash_state(), dirty = true;\n        if (app.drive_gone) {', '        if (atomic_exchange(&watch.list_ready, false)) reload(), dirty = true;\n        if (atomic_exchange(&watch.mounts_ready, false)) places_reload(), trash_state(), dirty = true;\n        if (app.drive_gone) {', 'usb'),
     ('gui/eject.c', '        else if (go_to(at, STR_EMPTY, 0)) set_status(false, "Mounted %s", ej.label);', '        else set_status(false, "Mounted %s", ej.label);', 'usb'),
     ('gui/eject.c', '        if (!mounted) set_status(true, "Can\'t mount %s: %s"', '        if (false) set_status(true, "Can\'t mount %s: %s"', 'usb'),
     ('gui/script.c', ' : p->kind == PL_UNMOUNTED ? "~" : ""', ' : ""', 'usb'),

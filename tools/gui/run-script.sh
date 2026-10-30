@@ -75,8 +75,9 @@ if [ "\$1" = "\$(cat "$T/udisks-fail" 2>/dev/null)" ]; then echo "Error \$1: tar
 # there (the usb group's; f6 keeps its drive mounted through eject).
 if [ "\$1" = unmount ] && [ -e "$T/udisks-unmount-drops" ]; then
     mp=\$(grep " \$3 rw\\\$" "\$OFX_TEST_MOUNTINFO" | awk '{print \$5}' | sed 's/\\\\040/ /g')
-    grep -v " \$3 rw\\\$" "\$OFX_TEST_MOUNTINFO" > "\$OFX_TEST_MOUNTINFO.new"; mv "\$OFX_TEST_MOUNTINFO.new" "\$OFX_TEST_MOUNTINFO"
+    grep -v " \$3 rw\\\$" "\$OFX_TEST_MOUNTINFO" > "\$OFX_TEST_MOUNTINFO.new"; cat "\$OFX_TEST_MOUNTINFO.new" > "\$OFX_TEST_MOUNTINFO"   # (in place: the window's watch is on its inode)
     [ -n "\$mp" ] && rmdir "\$mp"   # (udisks removes the folder it made)
+    [ -e "$T/udisks-slow" ] && sleep 1   # (an answer that comes after the mount watch, as eject's)
 fi
 if [ "\$1" = mount ]; then
     name=\$(cat "$T/udisks-mount-as" 2>/dev/null || basename "\$3")
