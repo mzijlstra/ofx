@@ -1368,6 +1368,18 @@ static void test_unmounted(Places *pl)
     char lb[8];
     CHECK(udev_unescape(S("a\\x41\\y41"), lb, sizeof lb) && strcmp(lb, "aA\\y41") == 0);
     CHECK(!udev_unescape(S("12345678"), lb, sizeof lb) && udev_unescape(S("1234567"), lb, sizeof lb));
+    // The real /sys (read only): its files say 4096 bytes and hold a few, and every block device
+    // there has a dev "major:minor" (2026-10-30: read_file gave nothing for them).
+    DIR *sd = opendir("/sys/class/block");
+    struct dirent *se;
+    char sname[256] = "";
+    while (sd && !sname[0] && (se = readdir(sd)))
+        if (se->d_name[0] != '.') snprintf(sname, sizeof sname, "%s", se->d_name);
+    if (sd) closedir(sd);
+    if (sname[0]) {
+        Str sdev = sys_line(&ta, "/sys/class/block", sname, "dev");
+        CHECK(sdev.len >= 3 && str_find(sdev, ':') > 0);
+    }
     // No folders given (the guard's way in a test without its own): none.
     places_load(&ta, pl, at("places/none"), at("blk/mountinfo"), NULL, at("blk/udev"));
     CHECK(pl->n == 5);

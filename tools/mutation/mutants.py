@@ -2044,3 +2044,8 @@ MUTANTS += [
     ('fs/ops.c', '    if (path_find(prog, full, sizeof full) && realpath(full, r) && path_below(r, ops_root)) return true;', '    if (path_find(prog, full, sizeof full)) return true;'),
     ('fs/ops.c', '    if (!ops_root[0]) return true;\n    char full[PATH_MAX], r[PATH_MAX];', '    char full[PATH_MAX], r[PATH_MAX];'),
 ]
+MUTANTS += [
+    # sysfs's 4096-byte sizes (2026-10-30): read_file in sys_line's place gives nothing
+    (PL, '    int fd = open(path, O_RDONLY | O_CLOEXEC);\n    if (fd < 0) return STR_EMPTY;\n    ssize_t n = read(fd, buf, sizeof buf - 1);\n    close(fd);\n    if (n <= 0) return STR_EMPTY;\n    isize at = 0;\n    Str line = STR_EMPTY;\n    next_line((Str){ buf, n }, &at, &line);',
+         '    (void)buf;\n    isize at = 0;\n    Str line = STR_EMPTY;\n    next_line(read_file(a, path), &at, &line);'),
+]

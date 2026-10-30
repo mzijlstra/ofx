@@ -143,16 +143,24 @@ static bool udev_unescape(Str s, char *out, size_t cap)
     return true;
 }
 
-// A small sysfs file's first line, trimmed; STR_EMPTY when it can't be read.
+// A small sysfs file's first line, trimmed; STR_EMPTY when it can't be read. Read here, not by
+// read_file: sysfs says every file is 4096 bytes long, and read_file takes a shorter read for a
+// file that changed, and gives nothing (2026-10-30: every drive's dev and size came back empty on
+// Michael's machine; the tests' own files have their true sizes).
 static Str sys_line(Arena *a, const char *dir, const char *name, const char *file)
 {
-    char path[PATH_MAX];
+    char path[PATH_MAX], buf[256];
     if (snprintf(path, sizeof path, "%s/%s/%s", dir, name, file) >= (int)sizeof path) return STR_EMPTY;
-    Str s = read_file(a, path);
+    int fd = open(path, O_RDONLY | O_CLOEXEC);
+    if (fd < 0) return STR_EMPTY;
+    ssize_t n = read(fd, buf, sizeof buf - 1);
+    close(fd);
+    if (n <= 0) return STR_EMPTY;
     isize at = 0;
     Str line = STR_EMPTY;
-    next_line(s, &at, &line);
-    return str_trim(line);
+    next_line((Str){ buf, n }, &at, &line);
+    line = str_trim(line);
+    return (Str){ arena_cstr(a, line), line.len };
 }
 
 // Whether a folder has nothing in it but . and .. (or isn't there).
