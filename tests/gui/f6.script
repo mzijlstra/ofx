@@ -199,6 +199,15 @@ char h
 expect treecur=tree:0
 char h
 expect treecur=f6:1
+# f6 closed: the folder shown (tree) has no row; Tab's cursor goes to the nearest folder above
+# it that has one (Michael, 2026-10-30)
+char h
+expect treecur=f6:0
+key esc
+key tab
+expect sidefocus=1 treecur=f6:0
+char l
+expect treecur=f6:1
 key enter
 expect treecur=f6:1 treehere=1
 # A drive mounted while the tree shows, its cursor on a row past the 64th (many/zz, after 70

@@ -143,6 +143,18 @@ static int tree_find(const Tree *t, Str path)
     return -1;
 }
 
+// The row of path, or of the nearest folder above it that has one (a folder inside one closed, a
+// hidden one with hidden files off: Tab's cursor, Michael 2026-10-30); -1 when none has.
+static int tree_find_near(const Tree *t, Str path)
+{
+    for (;;) {
+        int i = tree_find(t, path);
+        if (i >= 0 || path.len <= 1) return i;
+        Str up = path_dir(path);
+        path = up.len ? up : S("/");
+    }
+}
+
 // The row above row i at one depth less (its folder's), -1 for the root.
 static int tree_parent(const Tree *t, int i)
 {

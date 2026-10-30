@@ -654,7 +654,8 @@ MUTANTS = [
     ('gui/input.c', '        for (int m = 0; m < UI_MENUS && h.menu_title < 0 && h.menu_item < 0; m++)', '        for (int m = 0; m < UI_MENUS && h.menu_title < 0; m++)', 'f8'),
     # Tab on the folder shown's row (2026-10-29)
     ('gui/frame.c', '    u->side_here = u->side_mode == SIDE_PLACES ? app.place_cur : ', '    u->side_here = u->side_mode == SIDE_PLACES ? -1 : ', 'f2'),
-    ('gui/frame.c', ' : u->side_mode == SIDE_TREE ? tree_find(&tree, str_from_c(app.cwd)) : -1;', ' : -1;', 'f6'),
+    ('gui/frame.c', ' : u->side_mode == SIDE_TREE ? tree_find_near(&tree, str_from_c(app.cwd)) : -1;', ' : -1;', 'f6'),
+    ('gui/frame.c', ' : u->side_mode == SIDE_TREE ? tree_find_near(&tree, str_from_c(app.cwd)) : -1;', ' : u->side_mode == SIDE_TREE ? tree_find(&tree, str_from_c(app.cwd)) : -1;', 'f6'),
 ]
 import concurrent.futures, queue, threading, time
 

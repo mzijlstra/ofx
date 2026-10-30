@@ -1992,3 +1992,10 @@ MUTANTS += [
     ('ui/handle.c', SH, SH.replace('u->side_here > 0 && ', '')),
     # Not a mutant: `u->side_here >= 0` (row 0 and the first row settle the same).
 ]
+MUTANTS += [
+    # the nearest folder above with a row (Michael, 2026-10-30)
+    ('fs/tree.c', '        if (i >= 0 || path.len <= 1) return i;', '        if (i >= 0) return i;\n        if (path.len <= 1) return 0;'),
+    ('fs/tree.c', '        if (i >= 0 || path.len <= 1) return i;', '        if (i >= 0 || path.len <= 2) return i;'),
+    ('fs/tree.c', '        path = up.len ? up : S("/");', '        path = up;'),
+    ('fs/tree.c', '        int i = tree_find(t, path);\n        if (i >= 0 || path.len <= 1) return i;', '        int i = tree_find(t, path);\n        return i;'),
+]

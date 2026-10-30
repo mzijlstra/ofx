@@ -95,7 +95,7 @@ static void menu_facts(void)
     char p[PATH_MAX];
     u->sel_link = e && (e->kind == K_LINK_FILE || e->kind == K_LINK_DIR);
     u->sel_hit = e && e->hit;   // (F9 step 4: Open at Line)
-    u->side_here = u->side_mode == SIDE_PLACES ? app.place_cur : u->side_mode == SIDE_TREE ? tree_find(&tree, str_from_c(app.cwd)) : -1;
+    u->side_here = u->side_mode == SIDE_PLACES ? app.place_cur : u->side_mode == SIDE_TREE ? tree_find_near(&tree, str_from_c(app.cwd)) : -1;
     u->sel_bm = e && kind_is_dir(e->kind) && entry_path(u->list.sel, p, sizeof p) && bm_find(&bmarks, p) >= 0;
     u->tab_at = tabbar.cur, u->tab_n = tabbar.n;   // (the tab menu's moves, F8)
     u->bm_total = bmarks.n, u->bm_more = 0, u->bm_more_at = -1;

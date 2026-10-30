@@ -229,6 +229,13 @@ static void test_tree(void)
     }
     CHECK(t.row[0].open && t.row[3].open && !t.row[2].open && !t.row[4].open);
     CHECK(tree_find(&t, str_from_c(at("tree/top/b10/deep"))) == 4 && tree_find(&t, str_from_c(at("tree/top/nope"))) == -1);
+    // The nearest folder above with a row: b2 is closed, so its inner one gives b2's; outside the
+    // tree's root, none (the root here isn't /).
+    CHECK(tree_find_near(&t, str_from_c(at("tree/top/b2/x/y"))) == 2 && tree_find_near(&t, str_from_c(at("tree/top/b10/deep"))) == 4);
+    CHECK(tree_find_near(&t, str_from_c(at("tree/elsewhere"))) == -1 && tree_find_near(&t, S("search:3,0:/x")) == -1);
+    static Tree slash;
+    slash = (Tree){ .n = 2, .row = { { .path = S("/"), .name = S("/") }, { .path = S("/usr"), .name = S("usr"), .depth = 1 } } };
+    CHECK(tree_find_near(&slash, S("/home/m")) == 0 && tree_find_near(&slash, S("/a")) == 0 && tree_find_near(&slash, S("/usr/lib")) == 1 && tree_find_near(&slash, S("/")) == 0);
     CHECK(str_eq(t.row[5].path, str_from_c(at("tree/top/link"))));
     // Dot-folders when hidden files are shown.
     tree_build(&ta, &t, top, true);
