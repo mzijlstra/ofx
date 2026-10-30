@@ -415,7 +415,7 @@ static void ctx_facts(void)
     snprintf(app.ctx_path, sizeof app.ctx_path, "%s", p ? p : "");
     u->ctx_w = app.ctx_path[0] && access(app.ctx_path, W_OK) == 0;
     u->ctx_trash = strcmp(app.ctx_path, TRASH_URI) == 0;
-    u->ctx_full = u->ctx_trash && trash_any();
+    u->ctx_full = u->ctx_trash && (trash_scan(), trash_any());
     u->ctx_bmed = bm_find(&bmarks, app.ctx_path) >= 0;
     u->ctx_bms = bmarks.n;
     if (u->ctx_crumb < 0 && u->side_mode == SIDE_PLACES && u->ctx_side >= 0 && u->ctx_side < app.places.n) {

@@ -81,19 +81,26 @@ static void watch_bookmarks(void)
     atomic_store(&watch.bm_wd, inotify_add_watch(watch.fd, d, IN_CREATE | IN_DELETE | IN_MOVED_FROM | IN_MOVED_TO | IN_CLOSE_WRITE | IN_ONLYDIR));
 }
 
-// The trash folders' files/ to watch now, in place of the last ones.
+// The trash folders' files/ to watch now, in place of the last ones: the new ones added first, so
+// none goes unwatched in between, then the old ones no longer wanted removed. IN_MASK_ADD: a files/
+// that is also the open folder has one wd, and a plain add would replace the folder's mask with
+// this smaller one (reviewer-2, 2026-10-30: a file written there no longer showed its size).
 static void watch_trashes(const TrashDirs *d)
 {
     if (watch.fd < 0) return;
-    for (int i = 0; i < TRASH_DIRS_MAX; i++) {
-        int old = atomic_exchange(&watch.trash_wd[i], 0);
-        if (old > 0 && old != atomic_load(&watch.dir_wd)) inotify_rm_watch(watch.fd, old);
-    }
-    for (int i = 0; i < d->n; i++) {
+    int now[TRASH_DIRS_MAX] = { 0 }, old[TRASH_DIRS_MAX];
+    for (int i = 0; i < d->n && i < TRASH_DIRS_MAX; i++) {
         char files[PATH_MAX + 8];
         snprintf(files, sizeof files, "%s/files", d->dir[i]);
-        int wd = inotify_add_watch(watch.fd, files, IN_CREATE | IN_DELETE | IN_MOVED_FROM | IN_MOVED_TO | IN_ONLYDIR);
-        atomic_store(&watch.trash_wd[i], wd > 0 ? wd : 0);
+        int wd = inotify_add_watch(watch.fd, files, IN_CREATE | IN_DELETE | IN_MOVED_FROM | IN_MOVED_TO | IN_DELETE_SELF | IN_MOVE_SELF |
+                                                    IN_ONLYDIR | IN_MASK_ADD);
+        now[i] = wd > 0 ? wd : 0;
+    }
+    for (int i = 0; i < TRASH_DIRS_MAX; i++) old[i] = atomic_exchange(&watch.trash_wd[i], now[i]);
+    for (int i = 0; i < TRASH_DIRS_MAX; i++) {
+        bool kept = false;
+        for (int k = 0; k < TRASH_DIRS_MAX; k++) kept |= old[i] == now[k];
+        if (old[i] > 0 && !kept && old[i] != atomic_load(&watch.dir_wd)) inotify_rm_watch(watch.fd, old[i]);
     }
 }
 

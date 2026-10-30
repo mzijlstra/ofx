@@ -441,7 +441,7 @@ MUTANTS = [
     ('gui/input.c', '    else if (h.bar == UB_CRUMB) in->ctx_crumb = h.crumb;', '', 'f8'),
     (G, '        if (ctx_up && !app.ctx_placed && app.ui.menu == UI_CTX_FOLDER) ctx_facts();', '', 'f8'),
     ('gui/input.c', '    u->ctx_trash = strcmp(app.ctx_path, TRASH_URI) == 0;', '    u->ctx_trash = false;', 'f8'),
-    ('gui/input.c', '    u->ctx_full = u->ctx_trash && trash_any();', '    u->ctx_full = u->ctx_trash;', 'f8'),
+    ('gui/input.c', '    u->ctx_full = u->ctx_trash && (trash_scan(), trash_any());', '    u->ctx_full = u->ctx_trash;', 'f8'),
     ('gui/folder.c', '        while (!any && (e = readdir(d))) any = strcmp(e->d_name, ".") != 0 && strcmp(e->d_name, "..") != 0;', '        while (!any && (e = readdir(d))) any = true;', 'f8'),
     ('gui/input.c', '    u->ctx_bmed = bm_find(&bmarks, app.ctx_path) >= 0;', '    u->ctx_bmed = false;', 'f8'),
     ('gui/input.c', '    u->ctx_bms = bmarks.n;', '', 'f8'),
@@ -665,8 +665,10 @@ MUTANTS = [
     ('gui/main.c', 'places_reload(), trash_state(), dirty = true;', 'places_reload(), dirty = true;', 'f6'),
     ('gui/watch.c', '        if (!(e->mask & IN_IGNORED) && watch_is_trash(e->wd)) *trash = true;\n', '', 'f6'),
     ('gui/watch.c', ' && old != atomic_load(&watch.current_wd) && !watch_is_trash(old)) inotify_rm_watch', ' && old != atomic_load(&watch.current_wd)) inotify_rm_watch', 'f6'),
-    ('gui/watch.c', '        if (old > 0 && old != atomic_load(&watch.dir_wd)) inotify_rm_watch(watch.fd, old);', '        if (old > 0) inotify_rm_watch(watch.fd, old);', 'f6'),
-    ('gui/folder.c', '    bool full = trash_any();\n    watch_trashes(&trashd);', '    bool full = trash_any();', 'f6'),
+    ('gui/watch.c', '        if (old[i] > 0 && !kept && old[i] != atomic_load(&watch.dir_wd)) inotify_rm_watch(watch.fd, old[i]);', '        if (old[i] > 0 && !kept) inotify_rm_watch(watch.fd, old[i]);', 'f6'),
+    ('gui/folder.c', '    watch_trashes(&trashd);   // armed before', '    // armed before', 'f6'),
+    ('gui/watch.c', ' | IN_DELETE_SELF | IN_MOVE_SELF |\n                                                    IN_ONLYDIR | IN_MASK_ADD);', ' | IN_DELETE_SELF | IN_MOVE_SELF |\n                                                    IN_ONLYDIR);', 'f6'),
+    ('gui/watch.c', '        if (old[i] > 0 && !kept && old[i] != atomic_load(&watch.dir_wd)) inotify_rm_watch(watch.fd, old[i]);', '        if (old[i] > 0 && old[i] != atomic_load(&watch.dir_wd)) inotify_rm_watch(watch.fd, old[i]);', 'f6'),
     ('gui/actions.c', '    ui_mark_clear(&app.ui);\n    trash_state();\n    reload();', '    ui_mark_clear(&app.ui);\n    reload();', 'f6'),
 ]
 import concurrent.futures, queue, threading, time

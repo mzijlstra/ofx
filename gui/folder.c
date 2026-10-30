@@ -56,10 +56,9 @@ static void trash_scan(void)
     trash_dirs(&trashd, mp, n);
 }
 
-// Whether any trash folder holds something (the folder menu's Empty Trash, F8).
+// Whether any trash folder trash_scan found holds something (the folder menu's Empty Trash, F8).
 static bool trash_any(void)
 {
-    trash_scan();
     for (int i = 0; i < trashd.n; i++) {
         char files[PATH_MAX];
         if (snprintf(files, sizeof files, "%s/files", trashd.dir[i]) >= (int)sizeof files) continue;
@@ -81,8 +80,9 @@ static bool trash_any(void)
 // when it changed.
 static bool trash_state(void)
 {
+    trash_scan();
+    watch_trashes(&trashd);   // armed before the look, so a change after it is an event (reviewer-2)
     bool full = trash_any();
-    watch_trashes(&trashd);
     bool changed = full != app.trash_full;
     app.trash_full = full;
     return changed;
