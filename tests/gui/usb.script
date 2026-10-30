@@ -51,7 +51,16 @@ expect status=Can't unmount MY STICK: Error unmount: target is busy
 sh test "$OFX_DIR" = "$OFX_ROOT/media/MY STICK"
 sh rm "$OFX_ROOT/udisks-fail"
 # (udisksctl answers a second after the mount list changed, as with eject's power-off: the window is
-# Home before the answer, never in media/; reviewer-2, 2026-10-30)
+# Home before the answer, never in media/; reviewer-2, 2026-10-30). A second tab on the drive,
+# behind: Home too (Michael, 2026-10-30); a third, on another drive's folder, stays.
+key ctrl-t
+key ctrl-t
+key ctrl-l
+type ../../tree
+key enter
+wait-for 2000 tab=2 tabdirs=MY STICK|MY STICK|tree
+key alt-1
+expect tabs=3 tab=0
 sh touch "$OFX_ROOT/udisks-slow"
 point-ui side-row 5
 right-here
@@ -61,8 +70,16 @@ wait-for 3000 here=Home
 sh test "$OFX_DIR" = "$OFX_ROOT/home"
 sh rm "$OFX_ROOT/udisks-slow"
 wait-for 3000 status=MY
-expect status=MY STICK is unmounted here=Home
+expect status=MY STICK is unmounted here=Home tabdirs=home|home|tree
 sh test "$OFX_DIR" = "$OFX_ROOT/home" && test ! -e "$OFX_ROOT/media/MY STICK"
+key alt-2
+wait-for 2000 tab=1 here=Home
+sh test "$OFX_DIR" = "$OFX_ROOT/home"
+key ctrl-w
+key alt-2
+wait-for 2000 tab=1 tabdirs=home|tree
+key ctrl-w
+expect tabs=1 tabdirs=home
 wait-for 3000 sides=^Places|Home|Trash|^Drives|File_System|~1.0_GB_Drive|~MY_STICK
 sh grep -qx "udisksctl unmount -b /dev/sdz1" "$OFX_ROOT/spawn.log" && ! grep -q "power-off" "$OFX_ROOT/spawn.log"
 sh rm "$OFX_ROOT/udisks-unmount-drops"

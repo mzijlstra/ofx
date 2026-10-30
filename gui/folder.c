@@ -314,6 +314,25 @@ static void search_again(void)
 
 // The places read again (at the start, a drive mounted or gone): the sidebar's cursor stays on its
 // place, found by path and kind, else on the first row that isn't a heading.
+// The tabs behind whose folder (or search) is on the drive at mp, which has gone: Home, their
+// cursor at the top. The tab shown is the main loop's (app.drive_gone); its slot here is written
+// over by tab_save when another tab is shown, so it needs no exception.
+static void drive_gone_tabs(const char *mp)
+{
+    const char *home = getenv("HOME");
+    for (int i = 0; home && home[0] && i < tabbar.n; i++) {
+        Tab *t = &tabs[tabbar.slot[i]];
+        Str root, text, inside;
+        char r[PATH_MAX];
+        const char *dir = t->dir;
+        if (is_search(dir) && search_parse(dir, &root, &text, &inside) && root.len < PATH_MAX)
+            snprintf(r, sizeof r, "%.*s", STR_ARG(root)), dir = r;
+        if (!t->used || !path_within(dir, mp)) continue;
+        snprintf(t->dir, sizeof t->dir, "%s", home);
+        t->sel[0] = 0, t->row = 0, t->top = 0, t->marks_len = 0;
+    }
+}
+
 static void places_reload(void)
 {
     // A folder menu open on a place was resolved against these places (ctx_facts: its row, its
@@ -322,13 +341,11 @@ static void places_reload(void)
     if (app.ui.menu_on && app.ui.menu == UI_CTX_FOLDER && app.ui.ctx_crumb < 0) app.ui.menu_on = false;
     Place keep = { .kind = PL_HEAD };   // in the tree mode the cursor is a tree row's: none kept
     if (app.ui.side_mode == SIDE_PLACES && app.ui.side.sel < app.places.n) keep = app.places.p[app.ui.side.sel];
-    // The drive the folder shown is on (not /), to see whether it is still there after.
-    char was[PATH_MAX] = "";
-    for (int i = 0; i < app.places.n; i++) {
-        const Place *p = &app.places.p[i];
-        if (place_is_drive(p->kind) && p->kind != PL_ROOT && path_within(here_dir(), p->path) && strlen(p->path) > strlen(was))
-            snprintf(was, sizeof was, "%s", p->path);
-    }
+    // The drives (not /), to see which are still there after.
+    static char was[PLACES_MAX][PATH_MAX];
+    int nwas = 0;
+    for (int i = 0; i < app.places.n; i++)
+        if (place_is_drive(app.places.p[i].kind) && app.places.p[i].kind != PL_ROOT) snprintf(was[nwas++], PATH_MAX, "%s", app.places.p[i].path);
     char bm[PATH_MAX];
     places_load(&scratch, &app.places, bookmarks_path(bm, sizeof bm), mountinfo_path(), sysblock_path(), udev_path());
     // The Bookmarks menu's (F7.5). With Edit Bookmarks up its cursor stays on its line, found
@@ -360,12 +377,17 @@ static void places_reload(void)
         if (keep.kind != PL_HEAD && app.places.p[i].kind == keep.kind && strcmp(app.places.p[i].path, keep.path) == 0) sel = i;
     }
     app.place_cur = places_current(&app.places, app.cwd);
-    // That drive gone (unmounted, ejected, pulled out): Home, when the main loop next comes round
-    // (reviewer-2 and Michael, 2026-10-30: the folder's own watch reached the gone-folder fallback
-    // first, /run/media/<user>; Nemo crashes there). Whatever removed it, and before udisksctl answers.
-    bool still = !was[0];
-    for (int i = 0; i < app.places.n && !still; i++) still = place_is_drive(app.places.p[i].kind) && strcmp(app.places.p[i].path, was) == 0;
-    if (!still) app.drive_gone = true;
+    // A drive gone (unmounted, ejected, pulled out), whatever removed it and before udisksctl
+    // answers: the tab shown, on it, goes Home when the main loop next comes round (reviewer-2 and
+    // Michael, 2026-10-30: the folder's own watch reached the gone-folder fallback first,
+    // /run/media/<user>; Nemo crashes there), and so does every tab behind on it (Michael).
+    for (int k = 0; k < nwas; k++) {
+        bool still = false;
+        for (int i = 0; i < app.places.n && !still; i++) still = place_is_drive(app.places.p[i].kind) && strcmp(app.places.p[i].path, was[k]) == 0;
+        if (still) continue;
+        if (path_within(here_dir(), was[k])) app.drive_gone = true;
+        drive_gone_tabs(was[k]);
+    }
     if (app.ui.side_mode != SIDE_PLACES) return;
     app.ui.side_head = app.place_head;
     isize top = app.ui.side.top;

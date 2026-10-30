@@ -610,7 +610,9 @@ MUTANTS = [
     ('gui/eject.c', '        else set_status(false, "%s is unmounted", ej.label);', '', 'usb'),
     ('gui/eject.c', '        if (r == EJECT_FAILED) set_status(true, "Can\'t unmount %s: %s"', '        if (false) set_status(true, "Can\'t unmount %s: %s"', 'usb'),
     ('gui/input.c', '        if (ctx_pl && place_ejectable(ctx_pl)) (it == UM_EJECT_IT ? eject_start : unmount_start)(ctx_pl);', '        if (ctx_pl && place_ejectable(ctx_pl)) eject_start(ctx_pl);', 'usb'),
-    ('gui/folder.c', '    if (!still) app.drive_gone = true;\n', '', 'usb'),
+    ('gui/folder.c', '        if (path_within(here_dir(), was[k])) app.drive_gone = true;\n', '', 'usb'),
+    ('gui/folder.c', '        drive_gone_tabs(was[k]);\n', '', 'usb'),
+    ('gui/folder.c', '        if (!t->used || !path_within(dir, mp)) continue;', '        if (!t->used) continue;', 'usb'),
     # F10 step 1: ofx.conf (2026-10-30). Not run: conf_shown's ~ (drawn into the status, which a
     # script matches only as statusbad), and prefs_open's spawn_open fallback (a script always has
     # the fake nvim recipe).
