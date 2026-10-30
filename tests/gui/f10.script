@@ -1,0 +1,67 @@
+# F10 step 1 (docs/plan.md "F10 design"): ofx.conf. run.sh: tree/a.txt (dated 2025-01-02 03:04:05),
+# tree/z.png, tree/target/x.txt, tree/node_modules/x.txt; no ofx.conf yet. Edit → Preferences… writes it,
+# commented, and opens it in the editor; a change from outside applies at once: the dates, the
+# search's skip list, the previews; a line it can't read is said and skipped.
+settle
+key end
+key up
+expect conf=on:10485760:short:.git+node_modules confbad=0 sel=a.txt seldate=2025-01-02
+# Preferences: written (every option commented out), then opened at its first line in Omarchy's
+# default editor (a fake nvim, as f9b's)
+sh mkdir -p "$OFX_ROOT/state/omarchy/defaults" && echo nvim > "$OFX_ROOT/state/omarchy/defaults/editor"
+sh printf '#!/bin/sh\n' > "$OFX_ROOT/fakes/nvim" && chmod +x "$OFX_ROOT/fakes/nvim"
+point-ui menu-title 1
+click-here
+expect menu=Edit
+point-menu preferences
+click-here
+expect menu=-
+sh test -f "$OFX_ROOT/config/ofx/ofx.conf" && grep -qx "#date-format = short" "$OFX_ROOT/config/ofx/ofx.conf" && grep -q "Show Menu brings it back" "$OFX_ROOT/config/ofx/ofx.conf"
+sh for i in $(seq 20); do grep -qx "uwsm-app -- xdg-terminal-exec --app-id=org.omarchy.nvim -e nvim +call setcursorcharpos(1,1) $OFX_ROOT/config/ofx/ofx.conf" "$OFX_ROOT/spawn.log" && exit 0; sleep 0.1; done; exit 1
+expect conf=on:10485760:short:.git+node_modules confbad=0
+# Changed in the editor (here from outside): applied at once, the bad line said
+sh printf 'date-format = iso\nsearch-skip = target\npreviews = off\npreview-max-size = 2 MiB\nbogus\n' > "$OFX_ROOT/config/ofx/ofx.conf"
+wait-for 3000 conf=off:2097152:iso:target confbad=5 seldate=2025-01-02T03:04:05 statusbad=1
+shot conf-applied.png
+# (the date column as wide as the format's dates: they never run into the Owner column)
+expect datecolw=133
+# A pattern of its own
+sh printf 'date-format = %%d.%%m.%%Y\n' > "$OFX_ROOT/config/ofx/ofx.conf"
+wait-for 3000 conf=on:10485760:pattern:.git+node_modules confbad=0 seldate=02.01.2025
+# The search's skip list: target left out, node_modules entered now
+sh printf 'search-skip = target\n' > "$OFX_ROOT/config/ofx/ofx.conf"
+wait-for 3000 conf=on:10485760:short:target
+key ctrl-shift-f
+type x.txt
+wait-for 3000 searchdue=0 searchdone=1 n=1 seldir=node_modules
+expect searchinfo=1_found_·_skipped_1_target
+# changed while the search shows: it searches again with the new list
+sh printf 'search-skip = .git\n' > "$OFX_ROOT/config/ofx/ofx.conf"
+wait-for 3000 conf=on:10485760:short:.git searchdone=1 n=2
+sh printf 'search-skip = target\n' > "$OFX_ROOT/config/ofx/ofx.conf"
+wait-for 3000 searchdone=1 n=1
+key esc
+key alt-up
+# The previews (the icon view, z.png): none made past preview-max-size; made under it; with
+# previews = off, none drawn
+sh printf 'preview-max-size = 100\n' > "$OFX_ROOT/config/ofx/ofx.conf"
+wait-for 3000 conf=on:100:short:.git+node_modules
+key ctrl-2
+wait-for 3000 view=icons thumbbusy=0
+expect thumbmade=0 previews=0
+sh : > "$OFX_ROOT/config/ofx/ofx.conf"
+wait-for 3000 conf=on:10485760:short:.git+node_modules thumbmade=1 previews=1
+sh printf 'previews = off\n' > "$OFX_ROOT/config/ofx/ofx.conf"
+wait-for 3000 conf=off:10485760:short:.git+node_modules previews=0
+# (and stays so: nothing asked again, nothing drawn)
+sh sleep 1
+wait-for 3000 thumbbusy=0
+expect previews=0 thumbread=0
+key ctrl-1
+# Preferences again: the file there is opened, never replaced
+point-ui menu-title 1
+click-here
+point-menu preferences
+click-here
+sh test "$(cat "$OFX_ROOT/config/ofx/ofx.conf")" = "previews = off"
+quit

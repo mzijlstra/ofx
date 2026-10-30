@@ -28,6 +28,7 @@ typedef struct {
     ThumbKind kind;
     bool      make;
     int       px;
+    i64       src_max;   // the largest file it may make one of (ofx.conf's preview-max-size, F10)
     char      path[PATH_MAX];
 } ThumbReq;
 
@@ -60,6 +61,8 @@ static struct {
     int        got[TG_CHANGED + 1];   // answers taken, by kind, for the tests
     int        drawn_last, drawn_now;   // previews drawn in the last frame, and in this one
     int        resets, evicted;
+    bool       off;        // ofx.conf's previews = off (F10): none made or read
+    i64        src_max;    // ofx.conf's preview-max-size
 
     // Shared, under mu.
     pthread_t       th[THUMB_WORKERS];
@@ -87,7 +90,8 @@ static void *thumb_loop(void *arg)
         pthread_mutex_unlock(&thumbs.mu);
         arena_reset(&a);
         Img out = { 0 };
-        ThumbAsk q = { .path = r.path, .mtime = r.mtime, .size = r.size, .kind = r.kind, .make = r.make, .px = r.px, .root = thumbs.root };
+        ThumbAsk q = { .path = r.path, .mtime = r.mtime, .size = r.size, .kind = r.kind, .make = r.make, .px = r.px, .root = thumbs.root,
+                       .src_max = r.src_max };
         ThumbGot got = thumb_get(&a, &q, &out);
         isize used = a.used;
         pthread_mutex_lock(&thumbs.mu);
@@ -169,7 +173,7 @@ static void thumbs_frame(void)
 // is one ofx makes previews on. draw: a cell on screen (else a page ahead: asked, not counted).
 static Texture2D *thumb_for(const char *path, i64 mtime, i64 size, ThumbKind kind, bool local, int px, bool draw)
 {
-    if (!thumbs.root[0] || thumbs.full) return NULL;
+    if (!thumbs.root[0] || thumbs.full || thumbs.off) return NULL;
     if (px > THUMB_PX_MAX) px = THUMB_PX_MAX;
     char key[PATH_MAX + 16];
     int kn = snprintf(key, sizeof key, "%d:%s", px, path), k;
@@ -196,7 +200,7 @@ static Texture2D *thumb_for(const char *path, i64 mtime, i64 size, ThumbKind kin
         if (thumbs.rn < THUMB_QUEUE) {
             ThumbReq *r = &thumbs.req[(thumbs.rhead + thumbs.rn++) % THUMB_QUEUE];
             *r = (ThumbReq){ .gen = thumbs.gen, .entry = k, .mtime = mtime, .size = size, .kind = kind,
-                             .make = local && kind != TK_NONE && size <= THUMB_SRC_MAX, .px = px };
+                             .make = local && kind != TK_NONE && size <= thumbs.src_max, .px = px, .src_max = thumbs.src_max };
             snprintf(r->path, sizeof r->path, "%s", path);
             e->state = TS_ASKED;
             pthread_cond_signal(&thumbs.cv);

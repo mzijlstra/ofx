@@ -262,7 +262,7 @@ static void status_info(char *buf, size_t cap)
 static void search_status(char *buf, size_t cap)
 {
     char skipped[400];
-    search_skips_text(&app.search_s, skipped, sizeof skipped);
+    search_skips_text(&app.search_s, &app.skips_shown, skipped, sizeof skipped);
     const char *sep = skipped[0] ? " \xC2\xB7 " : "";
     // Inside files (step 3): how many files it read, as well.
     bool inside = app.ui.search_inside && app.ui.inside.len;

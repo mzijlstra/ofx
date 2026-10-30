@@ -40,8 +40,8 @@
 #include "external/stb_image_resize2.h"
 #undef STB_IMAGE_RESIZE_IMPLEMENTATION
 
-// THUMB_SRC_MAX: the largest file ofx makes a preview of (Michael, 2026-10-24; an option in
-// ofx.conf later). THUMB_PIXELS_MAX: a PNG or GIF is decoded whole, four bytes a pixel, so a
+// THUMB_SRC_MAX: the largest file ofx makes a preview of by default (Michael, 2026-10-24); ofx.conf's
+// preview-max-size sets it (F10), each ask carrying its own (ThumbAsk.src_max). THUMB_PIXELS_MAX: a PNG or GIF is decoded whole, four bytes a pixel, so a
 // small file of a huge image is refused before it takes more than 160 MiB of the worker's arena. THUMB_CACHED_MAX: a cached
 // preview bigger than this isn't one (an xx-large is 1024 px, about 3 MiB).
 enum { THUMB_SRC_MAX = MiB(10), THUMB_PIXELS_MAX = 40000000, THUMB_CACHED_MAX = MiB(8), THUMB_LEVELS = 4 };
@@ -584,9 +584,10 @@ typedef struct {
     const char *path;   // absolute
     i64         mtime, size;   // as the listing read them
     ThumbKind   kind;   // TK_NONE: shown only when another program made it
-    bool        make;   // on a local drive and within THUMB_SRC_MAX: ofx may make it
+    bool        make;   // on a local drive and within src_max: ofx may make it
     int         px;     // the device pixels its longer side is drawn at
     const char *root;   // the cache (thumb_root)
+    i64         src_max;   // the largest file read to make one (ofx.conf's preview-max-size, F10)
 } ThumbAsk;
 
 typedef enum {
@@ -614,7 +615,7 @@ static ThumbGot thumb_get(Arena *a, const ThumbAsk *q, Img *out)
     Str f = thumb_read(a, fail, THUMB_CACHED_MAX, &st);
     if (f.len && png_meta(f, &m) && thumb_fresh(&m, uri, q->mtime, q->size)) return TG_FAIL_KNOWN;
     st = (struct stat){ 0 };
-    Str src = thumb_read(a, q->path, THUMB_SRC_MAX, &st);
+    Str src = thumb_read(a, q->path, q->src_max, &st);
     bool empty = S_ISREG(st.st_mode) && st.st_size == 0;   // read, and nothing in it
     if (!src.len && !empty) return TG_NONE;   // gone, unreadable, or grown past the limit
     if (st.st_mtim.tv_sec != q->mtime || st.st_size != q->size) return TG_CHANGED;

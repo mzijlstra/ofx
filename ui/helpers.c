@@ -490,12 +490,19 @@ static void ui_status_base(char *buf, size_t cap, const UiInfo *in)
     if (k > 0 && in->avail >= 0 && (size_t)k < cap) ui_size(size, sizeof size, in->avail), snprintf(buf + k, cap - (size_t)k, ", %s free", size);
 }
 
-static void ui_when(char *buf, size_t cap, i64 mtime, i64 now)
+// A file's date as the list shows it, in ofx.conf's date-format (F10): short (the time today, the
+// day this year, the date before), long, iso, or its own strftime pattern. "?" when it doesn't fit.
+static void ui_when(char *buf, size_t cap, i64 mtime, i64 now, DateFormat f, const char *pattern)
 {
     time_t t = (time_t)mtime, n = (time_t)now;
     struct tm tm, tn;
     localtime_r(&t, &tm);
     localtime_r(&n, &tn);
+    if (f != DATE_SHORT) {
+        const char *p = f == DATE_LONG ? "%Y-%m-%d %H:%M" : f == DATE_ISO ? "%Y-%m-%dT%H:%M:%S" : pattern;
+        if (!strftime(buf, cap, p, &tm)) snprintf(buf, cap, "?");
+        return;
+    }
     if (tm.tm_year == tn.tm_year && tm.tm_yday == tn.tm_yday) strftime(buf, cap, "%H:%M", &tm);
     else if (tm.tm_year == tn.tm_year) strftime(buf, cap, "%b %e", &tm);
     else strftime(buf, cap, "%Y-%m-%d", &tm);

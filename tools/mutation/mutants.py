@@ -1406,7 +1406,7 @@ MUTANTS += [
 # ---- Help → About (2026-10-27), and the wheel over a panel (f4fced7)
 MUTANTS += [
     ('ui/panels.c', "    case UM_ABOUT: return u->about = true, (UiAction){ UA_NONE, 0, false };", ""),
-    ('ui/menus.c', "case UM_SHORTCUTS: case UM_ABOUT: return true;", "case UM_SHORTCUTS: return true;"),
+    ('ui/menus.c', "case UM_SHORTCUTS: case UM_ABOUT: case UM_PREFERENCES: return true;", "case UM_SHORTCUTS: case UM_PREFERENCES: return true;"),
     ('ui/handle.c', "        if (in->modal == UI_MODAL_NO) return u->about = false, (UiAction){ UA_NONE, 0, false };", ""),
     ('ui/handle.c', '            if (e.key == UK_ESC || e.key == UK_ENTER) *(on == UI_ON_ABOUT', '            if (e.key == UK_ESC) *(on == UI_ON_ABOUT'),
     ('ui/handle.c', '            if (e.key == UK_ESC || e.key == UK_ENTER) *(on == UI_ON_ABOUT', '            if (e.key == UK_ENTER) *(on == UI_ON_ABOUT'),
@@ -1593,7 +1593,7 @@ MUTANTS += [
     (SR, "    if (*p++ != ':' || (isize)strnlen(p, (size_t)len) < len || len == 0 || p[0] != '/') return false;", "    if ((isize)strnlen(++p, (size_t)len) < len || len == 0 || p[0] != '/') return false;"),
     (SR, '    if (tlen < 0) return *text = rest, *inside = STR_EMPTY, true;', '    if (tlen < 0) return *text = (Str){ rest.p - 1, rest.len + 1 }, *inside = STR_EMPTY, true;'),
     (SR, "    return w->gen && atomic_load(w->gen) != w->mine;", "    return false;"),
-    (SR, "        if (strcmp(name, SEARCH_SKIP[k]) == 0) return k;", ""),
+    (SR, "        if (strcmp(name, l->name[k]) == 0) return k;", ""),
     (SR, "    if (depth > SEARCH_DEPTH_MAX) return close(fd), w->s.unread++, true;", ""),
     (SR, "    w->s.folders++;", ""),
     (SR, "        if (nm[0] == '.' && !w->hidden) {", "        if (nm[0] == '.') {"),
@@ -1615,8 +1615,8 @@ MUTANTS += [
     (SR, "        if (sub < 0) w->s.unread++;", "        if (sub < 0) {}"),
     (SR, "        w->rel_len = was, w->rel[was] = 0;", ""),
     (SR, "        w->s.unread++;\n        if (w->tick) w->tick(w->ctx, &w->s);\n        return true;", "        if (w->tick) w->tick(w->ctx, &w->s);\n        return true;"),
-    (SR, "    SEARCH_PART(s->skip[0], \".git\", \".git\")", ""),
-    (SR, "    SEARCH_PART(s->skip[1], \"node_modules\", \"node_modules\")", ""),
+    (SR, "    for (int i = 0; i < names->n; i++) SEARCH_PART(s->skip[i], names->name[i], names->name[i])", ""),
+    (SR, "    for (int i = 0; i < names->n; i++) SEARCH_PART(s->skip[i], names->name[i], names->name[i])", "    for (int i = 1; i < names->n; i++) SEARCH_PART(s->skip[i], names->name[i], names->name[i])"),
     (SR, "    SEARCH_PART(s->hidden, \"hidden\", \"hidden\")", ""),
     (SR, "    SEARCH_PART(s->drives, \"other drive\", \"other drives\")", "    SEARCH_PART(s->drives, \"other drives\", \"other drives\")"),
     (SR, "    SEARCH_PART(s->links, \"link to a folder\", \"links to folders\")", "    SEARCH_PART(s->links, \"links to folders\", \"links to folders\")"),
@@ -2053,4 +2053,40 @@ MUTANTS += [
     # Unmount (2026-10-30)
     (SP, '"udisksctl unmount -b \\"$1\\" && echo OFX-UNMOUNTED";', '"udisksctl unmount -b \\"$1\\" && echo OFX-UNMOUNTED && udisksctl power-off -b \\"$1\\"";'),
     ('ui/menus.c', '    case UM_EJECT_IT: case UM_UNMOUNT_IT: return u->ctx_eject;', '    case UM_EJECT_IT: return u->ctx_eject;'),
+]
+
+# ---- F10 step 1: ofx.conf (2026-10-30)
+CF = 'fs/conf.c'
+MUTANTS += [
+    (CF, '    if (i == 0 || (i < v.len && is_digit(v.p[i]))) return false;', '    if (i < v.len && is_digit(v.p[i])) return false;'),
+    (CF, '{ "KiB", (i64)1 << 10 }', '{ "KiB", 1000 }'),
+    (CF, '{ "MiB", (i64)1 << 20 }', '{ "MiB", 1000000 }'),
+    (CF, '{ "GB", 1000000000 }', '{ "GB", (i64)1 << 30 }'),
+    (CF, '        if (str_eq(unit, str_from_c(UNITS[k].u))) return *out = n * UNITS[k].mul, true;', '        if (str_eq(unit, str_from_c(UNITS[k].u))) return *out = n, true;'),
+    (CF, '    if (str_eq(v, S("on")) || str_eq(v, S("yes")) || str_eq(v, S("true"))) return *out = true, true;', '    if (str_eq(v, S("on")) || str_eq(v, S("yes"))) return *out = true, true;'),
+    (CF, '    if (str_eq(v, S("off")) || str_eq(v, S("no")) || str_eq(v, S("false"))) return *out = false, true;', '    if (str_eq(v, S("off")) || str_eq(v, S("no"))) return *out = false, true;'),
+    (CF, '    *c = (Conf){ .previews = true, .preview_max = (i64)10 << 20, .date = DATE_SHORT };', '    *c = (Conf){ .previews = true, .preview_max = (i64)10 << 20, .date = DATE_LONG };'),
+    (CF, '    c->nskip = 2;', '    c->nskip = 1;'),
+    (CF, '        if (str_find(v, \'%\') < 0 || v.len >= CONF_DATE_MAX) return false;', '        if (v.len >= CONF_DATE_MAX) return false;'),
+    (CF, " || str_find(v, '/') >= 0", ''),
+    (CF, ' || str_eq(v, S(".")) || str_eq(v, S(".."))', ''),
+    (CF, '        if (!*listed) c->nskip = 0, *listed = true;', '        *listed = true;'),
+    (CF, '        if (!*listed) c->nskip = 0, *listed = true;', '        c->nskip = 0, *listed = true;'),
+    (CF, '        if (c->nskip == CONF_SKIP_MAX) return false;\n', ''),
+    (CF, '        if (line.len == 0 || line.p[0] == \'#\') continue;\n        isize eq', '        if (line.len == 0) continue;\n        isize eq'),
+    # Not a mutant: `eq >= 0 &&` dropped (without an = the value is empty, which no option takes).
+    (CF, '        if (c->bad) continue;\n', ''),
+    (CF, '        int k = snprintf(out + *at, cap - *at, n ? "# %.*s\\n" : "#\\n", n, p);', '        int k = snprintf(out + *at, cap - *at, "# %.*s\\n", n, p);'),
+    (CF, '            while (o->kind == CK_NAMES && e < def.len && def.p[e] != \' \') e++;', '            while (o->kind == CK_NAMES && e < def.len) e++;'),
+    (CF, '    return at < cap ? at : cap - 1;', '    return at;'),
+    (CF, '    if (lstat(path, &st) == 0) return true;\n', ''),
+    (CF, '    if (!ops_allowed(path, err)) return false;\n    Str dir', '    Str dir'),
+    (CF, '    if (!mkdir_p(d, 0700, true, err)) return false;\n', ''),
+    ('ui/helpers.c', '    if (f != DATE_SHORT) {', '    if (f == DATE_PATTERN) {'),
+    ('ui/helpers.c', '        if (!strftime(buf, cap, p, &tm)) snprintf(buf, cap, "?");', '        strftime(buf, cap, p, &tm);'),
+    ('ui/helpers.c', 'f == DATE_ISO ? "%Y-%m-%dT%H:%M:%S" : pattern;', 'f == DATE_ISO ? "%Y-%m-%d %H:%M:%S" : pattern;'),
+    ('fs/search.c', '    const SearchSkipList *l = w->skips ? w->skips : &SEARCH_SKIP_DEFAULT;', '    const SearchSkipList *l = &SEARCH_SKIP_DEFAULT;'),
+    ('fs/search.c', '    if (!names) names = &SEARCH_SKIP_DEFAULT;', '    names = &SEARCH_SKIP_DEFAULT;'),
+    ('ui/panels.c', '    case UM_PREFERENCES: return (UiAction){ UA_PREFERENCES, 0, false };\n', ''),
+    ('fs/thumb.c', '    Str src = thumb_read(a, q->path, q->src_max, &st);', '    Str src = thumb_read(a, q->path, THUMB_SRC_MAX, &st);'),
 ]

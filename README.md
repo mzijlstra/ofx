@@ -165,6 +165,60 @@ each entry with the folder it came from and when it was trashed. Restore (or `r`
 selected entries back, making their folder again if it is gone; Delete deletes them for good;
 Empty Trash deletes all of it after asking. Rename, paste and a new folder don't work there.
 
+## Options: ofx.conf
+
+The options you set are in `~/.config/ofx/ofx.conf` (`$XDG_CONFIG_HOME`). Edit → Preferences…
+opens it in your editor, and writes it first if it isn't there, as below: every option with what
+it does, commented out at its default. ofx applies a change as soon as you save. What you toggle
+in the View menu isn't set here: ofx remembers it in `~/.local/state/ofx/state`.
+
+<!-- ofx.conf: written by `build/ofx-probe --conf`; make test checks this copy -->
+```ini
+# ofx.conf: the options you set for ofx (the Omarchy file explorer).
+#
+# ofx reads this file when it starts and again whenever you save it: every open
+# window applies a change at once. ofx never writes it, except to make it
+# (Edit > Preferences..., when it isn't there).
+#
+# One option a line, `key = value`; # starts a comment. A line ofx can't read is
+# skipped, the rest applies, and the status line says which line and why.
+# Below, every option at its default, commented out: remove the # to change one.
+#
+# Not set here: what you toggle in the View menu (the sidebar's mode, list or
+# icons, the icon size, the menu bar, the Owner, Group and Permissions columns)
+# is remembered by ofx itself, in ~/.local/state/ofx/state. With the menu bar
+# hidden, its menus still open with F10, or Alt and a menu's letter (Alt+V for
+# View), and View > Show Menu brings it back.
+
+# Previews of images in the icon view, in place of their file type's icon.
+# on or off. Off, ofx makes and reads no previews at all (the cache, shared
+# with Nemo, is left as it is).
+#previews = on
+
+# The largest image file ofx makes a preview of; a larger one shows its file
+# type's icon. A size: B, KiB, MiB, GiB (or KB, MB, GB, in 1000s).
+# Example: preview-max-size = 50 MiB
+#preview-max-size = 10 MiB
+
+# How the list shows a file's date (Modified, or Deleted in the trash).
+#   short   14:03 today, Oct 20 this year, 2025-10-20 before
+#   long    2026-10-20 14:03, always
+#   iso     2026-10-20T14:03:05, always
+# or a strftime pattern with a %, as `date` takes: date-format = %d-%m-%Y %H:%M
+#date-format = short
+
+# Folders a search (Ctrl+Shift+F) never goes into, by name, wherever they are;
+# the status line counts each one it skipped. One name a line; your lines
+# replace this default list, so repeat .git and node_modules to keep them.
+# Example:
+#   search-skip = .git
+#   search-skip = node_modules
+#   search-skip = target
+#search-skip = .git
+#search-skip = node_modules
+```
+<!-- ofx.conf end -->
+
 ## Where things come from
 
 - Colours: `~/.local/state/omarchy/current/theme/colors.toml` (`$XDG_STATE_HOME`), Tokyo Night for

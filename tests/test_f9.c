@@ -159,7 +159,7 @@ static void test_search_inside(void)
     w = sw_inside("*", "needle");
     CHECK(search_walk(&w, at("f9b")) && sw.n == 2 && sw_has("|max.txt") && w.s.big == 1);
     char line[200];
-    search_skips_text(&w.s, line, sizeof line);
+    search_skips_text(&w.s, NULL, line, sizeof line);
     CHECK(strcmp(line, "skipped 1 binary, 1 over 16 MB") == 0);
 
     // A line longer than the buffer: a match across two pieces is found, its column counted
@@ -229,7 +229,7 @@ static void test_search_inside(void)
     w.gen = &gen, w.mine = 1;
     CHECK(!search_walk(&w, r) && sw.n == 0 && !w.s.full);
     SearchSkips more = { .file_links = 2, .unread_files = 2 };
-    search_skips_text(&more, line, sizeof line);
+    search_skips_text(&more, NULL, line, sizeof line);
     CHECK(strcmp(line, "skipped 2 links to files, 2 unreadable files") == 0);
     ui_matcher_set(&sw.m, STR_EMPTY, (UiMatchOpts){ 0 });
 }
@@ -258,7 +258,7 @@ static void test_search_walk(void)
     CHECK(w.s.hidden == 3 && w.s.skip[0] == 0 && w.s.skip[1] == 2 && w.s.links == 1 && w.s.unread == 0 && !w.s.full);
     CHECK(w.s.folders == 3);   // f9, sub, sub/deep
     char line[200];
-    search_skips_text(&w.s, line, sizeof line);
+    search_skips_text(&w.s, NULL, line, sizeof line);
     CHECK(strcmp(line, "skipped 2 node_modules, 3 hidden, 1 link to a folder") == 0);
     // Case as typed.
     w = sw_walk("*.TS", (UiMatchOpts){ .cased = true }, false);
@@ -268,7 +268,7 @@ static void test_search_walk(void)
     CHECK(search_walk(&w, root9));
     CHECK(sw.n == 6 && sw_has(".hid|e.ts") && sw_has("|.f.ts") && !sw_has(".git|g.ts"));
     CHECK(w.s.hidden == 0 && w.s.skip[0] == 1 && w.s.skip[1] == 2);
-    search_skips_text(&w.s, line, sizeof line);
+    search_skips_text(&w.s, NULL, line, sizeof line);
     CHECK(strcmp(line, "skipped 1 .git, 2 node_modules, 1 link to a folder") == 0);
     // A folder left out still matches by its own name; text without a wildcard matches anywhere in it.
     w = sw_walk("MODULE", (UiMatchOpts){ 0 }, false);
@@ -293,19 +293,19 @@ static void test_search_walk(void)
     chmod(at("f9/shut"), 0);
     w = sw_walk("*.ts", (UiMatchOpts){ 0 }, false);
     CHECK(search_walk(&w, root9) && w.s.unread == (geteuid() == 0 ? 0 : 1));
-    search_skips_text(&w.s, line, sizeof line);
+    search_skips_text(&w.s, NULL, line, sizeof line);
     CHECK(geteuid() == 0 || strstr(line, ", 1 unreadable folder"));
     chmod(at("f9/shut"), 0700);
     w = sw_walk("*.ts", (UiMatchOpts){ 0 }, false);
     CHECK(search_walk(&w, at("f9/gone")) && w.s.unread == 1 && sw.n == 0);
     // Nothing left out: no line.
     SearchSkips none = { .folders = 4 };
-    search_skips_text(&none, line, sizeof line);
+    search_skips_text(&none, NULL, line, sizeof line);
     CHECK(line[0] == 0);
     SearchSkips many = { .drives = 2, .links = 2, .unread = 2 };
-    search_skips_text(&many, line, sizeof line);
+    search_skips_text(&many, NULL, line, sizeof line);
     CHECK(strcmp(line, "skipped 2 other drives, 2 links to folders, 2 unreadable folders") == 0);
-    search_skips_text(&many, line, 12);   // cut, ended
+    search_skips_text(&many, NULL, line, 12);   // cut, ended
     CHECK(strlen(line) == 11);
     ui_matcher_set(&sw.m, STR_EMPTY, (UiMatchOpts){ 0 });
 }
@@ -378,7 +378,7 @@ static void test_search_drives(void)
     CHECK(fd >= 0 && search_dir(&w, fd, 1));
     CHECK(w.s.drives == 1 && sw.n == 2 && sw_has("|sub") && sw_has("|y.ts"));
     char line[100];
-    search_skips_text(&w.s, line, sizeof line);
+    search_skips_text(&w.s, NULL, line, sizeof line);
     CHECK(strcmp(line, "skipped 1 other drive") == 0);
     // Too deep: counted as not read.
     w = sw_walk("*", (UiMatchOpts){ 0 }, false);

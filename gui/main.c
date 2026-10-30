@@ -224,6 +224,8 @@ static struct {
     int       place_cur;    // the place holding cwd, -1 for none
     bool      trash_full;   // any trash folder holds something (trash_state): the Trash place's icon
     bool      drive_gone;   // the drive the folder shown was on left the mount list (places_reload): Home
+    Conf      conf;         // ofx.conf as last read (F10, prefs.c)
+    SearchSkipList skips, skips_shown;   // its search-skip, and the list the search shown walked with
     i64       cwd_avail;    // the free space on cwd's drive, -1 unknown
     char      status[600];
     bool      status_bad;
@@ -389,6 +391,7 @@ void __wrap_glfwDefaultWindowHints(void)
 
 #include "folder.c"
 #include "actions.c"
+#include "prefs.c"
 #include "icons.c"
 #include "files.c"
 #include "topbar.c"
@@ -614,6 +617,7 @@ int main(int argc, char **argv)
     timer_start();
     places_reload();
     trash_state();
+    conf_apply();   // (F10: after thumbs_start, which its preview settings reach)
     // New Window starts this binary (F7.1); one replaced since it started reads "… (deleted)".
     ssize_t xn = readlink("/proc/self/exe", app.exe, sizeof app.exe - 1);
     app.exe[xn > 0 ? xn : 0] = 0;
@@ -709,6 +713,7 @@ int main(int argc, char **argv)
             if (home && home[0]) go_to(home, STR_EMPTY, 0), dirty = true;
         }
         if (atomic_exchange(&watch.list_ready, false)) reload(), dirty = true;
+        if (atomic_exchange(&watch.conf_ready, false)) conf_apply(), reload(), dirty = true;   // (the dates, a search's skips)
         if (atomic_exchange(&watch.trash_ready, false) && trash_state()) dirty = true;
         dirty |= jobs_poll();
         if (app.have_list && count_take(app.count, app.list.n)) dirty = true;

@@ -291,9 +291,35 @@ static float perms_w(void)
 // one, and the status line says so).
 enum { NAME_MIN_W = 150 };   // (200 until Michael found it hid them beside a second window)
 
+// Entry e's date as the list shows it, in ofx.conf's date-format (F10; "" without one). The list
+// and the scripts' state line both take it from here.
+static void entry_when(const Entry *e, i64 now, char *buf, size_t cap)
+{
+    buf[0] = 0;
+    if (e->mtime) ui_when(buf, cap, e->mtime, now, app.conf.date, app.conf.date_pattern);
+}
+
+// The date column's width: DATE_W for the short dates; for ofx.conf's longer ones (F10), a wide
+// date in that format measured, so "2026-10-20T14:03:05" doesn't run into the Owner column
+// (2026-10-30, a shot of f10 showed it did).
+static float date_w(void)
+{
+    if (app.conf.date == DATE_SHORT) return DATE_W;
+    static DateFormat f = DATE_SHORT;   // (measured once a format: each row asks every frame)
+    static char pattern[CONF_DATE_MAX];
+    static float cached;
+    if (f == app.conf.date && strcmp(pattern, app.conf.date_pattern) == 0) return cached;
+    f = app.conf.date, snprintf(pattern, sizeof pattern, "%s", app.conf.date_pattern);
+    char buf[96];
+    struct tm wide = { .tm_year = 2088 - 1900, .tm_mon = 7, .tm_mday = 28, .tm_hour = 20, .tm_min = 48, .tm_sec = 48, .tm_isdst = -1 };
+    ui_when(buf, sizeof buf, (i64)mktime(&wide), (i64)mktime(&wide), app.conf.date, app.conf.date_pattern);
+    float w = str_width(str_from_c(buf)) + 4;
+    return cached = w > DATE_W ? w : DATE_W;
+}
+
 static bool perms_shown(float w)
 {
-    float rest = w - side_w() - 2 * PAD - ICON_PX - 3 * GAP - SIZE_W - DATE_W;
+    float rest = w - side_w() - 2 * PAD - ICON_PX - 3 * GAP - SIZE_W - date_w();
     return app.ui.perms_cols && rest - perms_w() >= NAME_MIN_W;
 }
 
@@ -335,7 +361,7 @@ static void layout_cols(void)
             bool on = app.ui.sort.key == (SortKey)k;
             Clay_String label = cz(arena_sprintf(&frame, "%s%s", NAMES[k], !on ? "" : app.ui.sort.reverse ? " \xE2\x96\xBC" : " \xE2\x96\xB2"));
             Clay_Sizing size = k == SORT_NAME ? (Clay_Sizing){ CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0) }
-                             : (Clay_Sizing){ CLAY_SIZING_FIXED(k == SORT_SIZE ? SIZE_W : DATE_W), CLAY_SIZING_GROW(0) };
+                             : (Clay_Sizing){ CLAY_SIZING_FIXED(k == SORT_SIZE ? SIZE_W : date_w()), CLAY_SIZING_GROW(0) };
             CLAY(Clay_GetElementId(cz(COL_IDS[k])), { .layout = { .sizing = size, .childAlignment = { .x = k == SORT_NAME ? CLAY_ALIGN_X_LEFT : CLAY_ALIGN_X_RIGHT,
                                                                                                     .y = CLAY_ALIGN_Y_CENTER } } }) {
                 text(label, on ? cc(t->fg) : cc(t->fg_dim));
@@ -510,12 +536,12 @@ static void layout_row(int r, isize i, float w, i64 now)
     // Marked rows: the accent mixed into the background; the cursor keeps the selection colour.
     Clay_Color bg = sel ? cc(t->selection) : marked ? mix(t->accent, t->bg, 0.28f) : hover ? cc(t->bg_light) : cc(t->bg);
     IconSlot *icon = entry_icon(i);
-    char size[32] = "", when[32] = "";
+    char size[32] = "", when[96];
     size_cell(i, size, sizeof size, true);
-    if (e->mtime) ui_when(when, sizeof when, e->mtime, now);
+    entry_when(e, now, when, sizeof when);
     bool link = e->kind == K_LINK_DIR || e->kind == K_LINK_FILE || e->kind == K_LINK_BROKEN;
     bool perms = perms_shown(w);
-    float name_w = w - side_w() - 2 * PAD - ICON_PX - 3 * GAP - SIZE_W - DATE_W - (perms ? perms_w() : 0) - (link ? 16 : 0);
+    float name_w = w - side_w() - 2 * PAD - ICON_PX - 3 * GAP - SIZE_W - date_w() - (perms ? perms_w() : 0) - (link ? 16 : 0);
     CLAY(CLAY_IDI("row", r), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(ROW_H) },
                                            .padding = { PAD, PAD, 0, 0 }, .childGap = GAP,
                                            .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
@@ -560,7 +586,7 @@ static void layout_row(int r, isize i, float w, i64 now)
                                                 .childAlignment = { .x = CLAY_ALIGN_X_RIGHT } } }) {
             text(cz(arena_sprintf(&frame, "%s", size)), app.ui.colors ? cc(t->green) : cc(t->fg_dim));   // (eza's)
         }
-        CLAY(CLAY_IDI("date", r), { .layout = { .sizing = { CLAY_SIZING_FIXED(DATE_W), CLAY_SIZING_FIT(0) },
+        CLAY(CLAY_IDI("date", r), { .layout = { .sizing = { CLAY_SIZING_FIXED(date_w()), CLAY_SIZING_FIT(0) },
                                                 .childAlignment = { .x = CLAY_ALIGN_X_RIGHT } } }) {
             text(cz(arena_sprintf(&frame, "%s", when)), app.ui.colors ? cc(t->blue) : cc(t->fg_dim));   // (eza's)
         }

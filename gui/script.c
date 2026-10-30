@@ -314,6 +314,16 @@ static void script_state(char *out, size_t cap)
     if (!menumarked[0]) snprintf(menumarked, sizeof menumarked, "-");
     // The open menu's box as the last frame drew it (F8: a right-click menu inside the window).
     // The Trash place's icon by its name (2026-10-30: full or empty)
+    // ofx.conf as last read (F10): previews:max:date:skips (+ between), the first line it skipped,
+    // and the cursor's entry's date as the list shows it.
+    static const char *const DATES[] = { "short", "long", "iso", "pattern" };
+    char confw[CONF_SKIP_MAX * CONF_NAME_MAX + 96], seldate[96], datew[96];
+    int cw = snprintf(confw, sizeof confw, "%s:%lld:%s:", app.conf.previews ? "on" : "off", (long long)app.conf.preview_max, DATES[app.conf.date]);
+    for (int k = 0; k < app.skips.n && cw > 0 && (size_t)cw < sizeof confw; k++)
+        cw += snprintf(confw + cw, sizeof confw - (size_t)cw, "%s%s", k ? "+" : "", app.skips.name[k]);
+    datew[0] = 0;
+    if (app.have_list && app.ui.list.sel < app.list.n) entry_when(&app.list.e[app.ui.list.sel], (i64)time(NULL), datew, sizeof datew);
+    state_word(seldate, sizeof seldate, str_from_c(datew));
     const char *trashicon = "-";
     for (int i = 0; i < app.places.n; i++) {
         IconSlot *ic = app.places.p[i].kind == PL_TRASH ? place_icon(i) : NULL;
@@ -428,7 +438,7 @@ static void script_state(char *out, size_t cap)
              "props=%d propat=%d propcan=%d propn=%td propmode=%04o propfiles=%lld propdirs=%lld propbytes=%lld propdone=%d propcut=%d proplinks=%lld,%lld,%lld,%d propnlink=%llu proptype=%s proptypename=%s propbyname=%d propname=%s "
              "propwhere=%s propdrive=%s proplink=%s propcreated=%d propidx=%td "
              "ow=%d owfresh=%d owlist=%d owtext=%s own=%td owsel=%td owapp=%s owicon=%s owtex=%d owshown=%td owtype=%s owfiles=%td owrows=%d owtop=%td owopts=%s owbad=%d owdef=%d owdefcan=%d findopts=%s findbad=%d findselect=%d findn=%td findat=%td findtext=%s "
-             "search=%d searchkeys=%d searchtext=%s searchdone=%d searchfull=%d searchdue=%d searchbad=%d searchbar=%d searchsel=%d-%d searchcaret=%d findsel=%d-%d findcaret=%d seldir=%s searchinfo=%s inside=%d insidekeys=%d insidetext=%s insideopts=%s insidebad=%d insiderow=%d hit=%s hitmatch=%s hitdrawn=%d datecol=%s owreads=%d trashfull=%d trashicon=%s spawned=%d statusbad=%d status=%s",
+             "search=%d searchkeys=%d searchtext=%s searchdone=%d searchfull=%d searchdue=%d searchbad=%d searchbar=%d searchsel=%d-%d searchcaret=%d findsel=%d-%d findcaret=%d seldir=%s searchinfo=%s inside=%d insidekeys=%d insidetext=%s insideopts=%s insidebad=%d insiderow=%d hit=%s hitmatch=%s hitdrawn=%d datecol=%s datecolw=%.0f owreads=%d conf=%s confbad=%d seldate=%s trashfull=%d trashicon=%s spawned=%d statusbad=%d status=%s",
              app.cwd, app.list.n, app.list.hidden, STR_ARG(sel), app.ui.list.sel, app.ui.list.top, app.ui.list.rows, app.hov.row,
              t->accent.r, t->accent.g, t->accent.b, t->bg.r, t->bg.g, t->bg.b, t->icons[0] ? t->icons : "-",
              app.icon_scale, GetScreenWidth(), GetScreenHeight(), app.reloads, app.themes, atomic_load(&watch.batches),
@@ -467,7 +477,7 @@ static void script_state(char *out, size_t cap)
              app.ui.find.anchor < app.ui.find.caret ? app.ui.find.anchor : app.ui.find.caret,
              app.ui.find.anchor < app.ui.find.caret ? app.ui.find.caret : app.ui.find.anchor, app.ui.find.caret, seldir, searchinfo,
              app.ui.search_inside, app.ui.focus == UI_FOCUS_INSIDE, insidetext, insideopts, app.search_im.bad,
-             (int)Clay_GetElementData(CLAY_ID("inside-field")).found, hit, hitmatch, hitdrawn, VIEWS[app.ui.view].date_col, ow_idb_reads, app.trash_full, trashicon, spawn_started, app.status[0] && app.status_bad, app.status[0] ? app.status : "-");
+             (int)Clay_GetElementData(CLAY_ID("inside-field")).found, hit, hitmatch, hitdrawn, VIEWS[app.ui.view].date_col, date_w(), ow_idb_reads, confw, app.conf.bad, seldate, app.trash_full, trashicon, spawn_started, app.status[0] && app.status_bad, app.status[0] ? app.status : "-");
     frame_us_max = 0;
 }
 

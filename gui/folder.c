@@ -92,7 +92,8 @@ static bool trash_state(void)
 // folder, copied out).
 static SearchQuery search_query(Str text, Str inside, const char *root)
 {
-    return (SearchQuery){ .root = root, .text = text, .inside = inside, .o = app.ui.find_opts, .io = app.ui.inside_opts, .hidden = app.show_hidden };
+    return (SearchQuery){ .root = root, .text = text, .inside = inside, .o = app.ui.find_opts, .io = app.ui.inside_opts, .hidden = app.show_hidden,
+                          .skips = &app.skips };
 }
 
 // The search view's listing (F9): the matches so far, sorted. A search starts first when another
@@ -105,7 +106,7 @@ static bool search_list(Arena *a, const char *uri, Listing *l, Err *err)
     snprintf(r, sizeof r, "%.*s", STR_ARG(root));
     SearchQuery q = search_query(text, inside, r);
     if (!search_is(q)) {
-        search_ask(q);
+        search_ask(q), app.skips_shown = app.skips;
         ui_matcher_set(&app.search_m, text, app.ui.find_opts);
         ui_matcher_set(&app.search_im, inside, app.ui.inside_opts);
     }
@@ -307,7 +308,7 @@ static void search_again(void)
     snprintf(keep, sizeof keep, "%.*s", STR_ARG(sel_name()));
     snprintf(app.search_pick, sizeof app.search_pick, "%s", keep);
     Str root, text, inside;
-    if (search_parse(app.cwd, &root, &text, &inside)) search_ask(search_query(text, inside, app.search_root));
+    if (search_parse(app.cwd, &root, &text, &inside)) search_ask(search_query(text, inside, app.search_root)), app.skips_shown = app.skips;
     search_relist();
 }
 

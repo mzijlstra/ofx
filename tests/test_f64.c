@@ -336,7 +336,7 @@ static void test_thumb_decode(void)
 // The ask for path at px, as gui/thumbs.c makes it.
 static ThumbAsk ask(const char *path, ThumbKind k, int px, const char *cache)
 {
-    return (ThumbAsk){ .path = path, .mtime = mtime_of(path), .size = size_of(path), .kind = k, .make = true, .px = px, .root = cache };
+    return (ThumbAsk){ .path = path, .mtime = mtime_of(path), .size = size_of(path), .kind = k, .make = true, .px = px, .root = cache, .src_max = THUMB_SRC_MAX };
 }
 
 static bool cached_fresh(Arena *a, const char *cache, const char *dir, const char *path, int *w, int *h)
@@ -454,7 +454,7 @@ static void test_thumb_get(void)
     // Gone, or unreadable: the icon, no fail entry.
     char gone[PATH_MAX];
     snprintf(gone, sizeof gone, "%s", at("f64/pics/gone.png"));
-    q = (ThumbAsk){ .path = gone, .mtime = 5, .size = 5, .kind = TK_PNG, .make = true, .px = 48, .root = cache };
+    q = (ThumbAsk){ .path = gone, .mtime = 5, .size = 5, .kind = TK_PNG, .make = true, .px = 48, .root = cache, .src_max = THUMB_SRC_MAX };
     CHECK(thumb_get(&a, &q, &out) == TG_NONE && !cached_fresh(&a, cache, "fail/ofx", gone, &w, &h));
     // The cache's own files get none.
     thumb_uri(p, uri, sizeof uri);

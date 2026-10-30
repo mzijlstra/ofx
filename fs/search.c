@@ -1,7 +1,7 @@
 // Search below a folder (F9, docs/plan.md "F9 design"): the view's address, and the walk that finds
 // the names, run on gui/search.c's thread. It goes depth first from the folder searched and stays
 // on its drive; it enters no link, no hidden folder unless View → Show Hidden Files, and none of
-// SEARCH_SKIP (Michael, 2026-10-27: a fixed list until ofx.conf). A folder it doesn't enter still
+// the skip list (ofx.conf's search-skip, F10; .git and node_modules by default). A folder it doesn't enter still
 // matches by its own name. It counts what it left out, for the status line, and stops at
 // SEARCH_MAX matches or when the generation moves (a new search), as du_walk.
 //
@@ -38,8 +38,14 @@ enum {
     SEARCH_SNIP = 160, SEARCH_SNIP_BEFORE = 40,   // a hit's line: at most this, from this before the match
 };
 
-static const char *const SEARCH_SKIP[] = { ".git", "node_modules" };
-enum { SEARCH_SKIPS = 2 };
+// The folders a search never enters, by name (ofx.conf's search-skip, F10): each walk is given its
+// own copy, so a change to the file mid-search doesn't reach a walk under way.
+typedef struct {
+    char name[CONF_SKIP_MAX][CONF_NAME_MAX];
+    int  n;
+} SearchSkipList;
+
+static const SearchSkipList SEARCH_SKIP_DEFAULT = { { ".git", "node_modules" }, 2 };
 
 static bool is_search(const char *dir)
 {
@@ -88,7 +94,7 @@ static bool search_parse(const char *uri, Str *root, Str *text, Str *inside)
 
 // What the walk left out (none of it searched inside), for the status line.
 typedef struct {
-    i64  skip[SEARCH_SKIPS];   // folders named in SEARCH_SKIP
+    i64  skip[CONF_SKIP_MAX];  // folders named in the skip list, by its order
     i64  hidden;               // dot-files and dot-folders (View → Show Hidden Files off)
     i64  drives;               // folders where another drive is mounted
     i64  links;                // links to folders
@@ -107,6 +113,7 @@ typedef struct {
     const atomic_uint *gen;    // the walk stops when this moves off mine
     u32                mine;
     bool               hidden; // dot-files searched and their folders entered
+    const SearchSkipList *skips;  // NULL: SEARCH_SKIP_DEFAULT
     bool             (*match)(void *ctx, Str name);
     // Inside files (step 3; NULL: names only): whether a line (or a piece of a long one) matches,
     // where in it; buf has SEARCH_BUF bytes to read into.
@@ -131,10 +138,11 @@ static bool search_stopped(const SearchWalk *w)
     return w->gen && atomic_load(w->gen) != w->mine;
 }
 
-static int search_skip_of(const char *name)
+static int search_skip_of(const SearchWalk *w, const char *name)
 {
-    for (int k = 0; k < SEARCH_SKIPS; k++)
-        if (strcmp(name, SEARCH_SKIP[k]) == 0) return k;
+    const SearchSkipList *l = w->skips ? w->skips : &SEARCH_SKIP_DEFAULT;
+    for (int k = 0; k < l->n; k++)
+        if (strcmp(name, l->name[k]) == 0) return k;
     return -1;
 }
 
@@ -302,7 +310,7 @@ static bool search_dir(SearchWalk *w, int fd, int depth)
         }
         if (t == DT_LNK && fstatat(dirfd(d), nm, &st, 0) == 0 && S_ISDIR(st.st_mode)) w->s.links++;
         if (t != DT_DIR) continue;
-        int k = search_skip_of(nm);
+        int k = search_skip_of(w, nm);
         if (k >= 0) {
             w->s.skip[k]++;
             continue;
@@ -348,9 +356,10 @@ static bool search_walk(SearchWalk *w, const char *root)
 }
 
 // What the walk left out, for the status line ("skipped 3 .git, 1 link to a folder"); empty when
-// nothing was.
-static void search_skips_text(const SearchSkips *s, char *out, size_t cap)
+// nothing was. names: the skip list it walked with (NULL: the default).
+static void search_skips_text(const SearchSkips *s, const SearchSkipList *names, char *out, size_t cap)
 {
+    if (!names) names = &SEARCH_SKIP_DEFAULT;
     out[0] = 0;
     size_t at = 0;
     const char *sep = "skipped ";
@@ -360,8 +369,7 @@ static void search_skips_text(const SearchSkips *s, char *out, size_t cap)
         if (k > 0) at += (size_t)k;   /* (past cap: cut, and nothing more) */                                \
         sep = ", ";                                                                                         \
     }
-    SEARCH_PART(s->skip[0], ".git", ".git")
-    SEARCH_PART(s->skip[1], "node_modules", "node_modules")
+    for (int i = 0; i < names->n; i++) SEARCH_PART(s->skip[i], names->name[i], names->name[i])
     SEARCH_PART(s->hidden, "hidden", "hidden")
     SEARCH_PART(s->drives, "other drive", "other drives")
     SEARCH_PART(s->links, "link to a folder", "links to folders")

@@ -57,6 +57,7 @@ for w in range(jobs):
     for d in ('base', 'fs', 'ui', 'tests'):
         shutil.copytree(os.path.join(root, d), os.path.join(work, d))
     shutil.copy(os.path.join(root, 'Makefile'), work)
+    shutil.copy(os.path.join(root, 'README.md'), work)   # (its ofx.conf copy is checked, F10)
     os.symlink(os.path.join(root, 'vendor'), os.path.join(work, 'vendor'))   # stb_image_resize2 (fs/thumb.c), never mutated
     os.makedirs(os.path.join(work, 'tmp'))
     workers.append(work)

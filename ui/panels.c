@@ -256,6 +256,7 @@ static UiAction ui_menu_pick(Ui *u, UiMenuItem it)
     case UM_PROPERTIES: return ui_props_open(u);
     case UM_OPEN_WITH: return ui_ow_open(u);
     case UM_ABOUT: return u->about = true, (UiAction){ UA_NONE, 0, false };
+    case UM_PREFERENCES: return (UiAction){ UA_PREFERENCES, 0, false };
     case UM_OPEN_TAB: return (UiAction){ UA_TAB_BG_ROW, u->list.sel, false };
     case UM_TAB_OTHERS: return (UiAction){ UA_TAB_OTHERS, 0, false };
     case UM_EMPTY_TRASH: return u->empty_asking = true, (UiAction){ UA_NONE, 0, false };

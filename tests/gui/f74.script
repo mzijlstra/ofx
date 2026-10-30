@@ -71,7 +71,7 @@ expect menugrey=undo,restore
 key esc
 # Rename… opens the row's edit line
 key alt-e
-keys up up up
+keys up up up up
 expect menuat=rename
 key enter
 expect editing=1 menu=-
@@ -81,7 +81,7 @@ expect editing=0
 key end
 expect sel=c.txt
 key alt-e
-keys up up
+keys up up up
 expect menuat=trash
 key enter
 wait-for 2000 n=3 undo=trash
@@ -92,7 +92,7 @@ wait-for 2000 n=4 sel=c.txt
 key esc
 # Delete… asks first; No keeps it
 key alt-e
-key up
+keys up up
 expect menuat=delete
 key enter
 expect confirming=1 menu=-

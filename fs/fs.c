@@ -3,6 +3,7 @@
 // after base.
 #include "paths.c"
 #include "list.c"
+#include "conf.c"
 #include "mime.c"
 #include "icons.c"
 #include "theme.c"

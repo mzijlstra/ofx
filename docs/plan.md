@@ -703,7 +703,8 @@ recommendation (2026-10-30), and added two things.
   `$XDG_STATE_HOME/ofx/state` is what ofx remembers by itself (sidebar, view, zoom, menubar, perms,
   group: the View toggles), and ofx writes it. Michael asked about the menu bar, since a hidden one
   is the hardest to find again. It stays in state, because a View toggle that wrote ofx.conf would
-  give two answers. ofx.conf's comments say where it went and that Alt or F10 shows it.
+  give two answers. ofx.conf's comments say where it went: its menus still open with F10 or
+  Alt+letter, and View → Show Menu brings it back.
 - **Q1, format:** flat `key = value`, `#` comments, a key repeated for a list (as Ghostty's).
 - **Q2, the options:**
   - `previews` and `preview-max-size`;

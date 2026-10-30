@@ -223,6 +223,7 @@ typedef enum {
     UA_TAB_OTHERS,  // every tab but the current one closed (F8)
     UA_COLORS,      // the list's colours on or off (Ui.colors): gui/ remembers it
     UA_MENUBAR,     // the menu bar hidden or shown (Ui.bar_hidden): gui/ remembers it
+    UA_PREFERENCES, // ofx.conf in the editor, written first when there is none (F10)
     UA_PERMS_COLS,  // the list's Owner and Permissions shown or not (Ui.perms_cols): gui/ remembers it
     UA_GROUP_COL,   // the list's Group beside them shown or not (Ui.group_col): gui/ remembers it
     UA_FOLDER_DO,   // index: a UiMenuItem of the folder menu, for the folder it opened on (Ui.ctx_side or ctx_crumb, F8)
@@ -257,7 +258,7 @@ typedef enum {
     UM_ZOOM_IN, UM_ZOOM_OUT, UM_ZOOM_RESET, UM_VIEW_LIST, UM_VIEW_ICONS,
     UM_PARENT, UM_BACK, UM_FORWARD, UM_HOME, UM_TRASH_VIEW, UM_FIND, UM_SEARCH, UM_LOCATION, UM_TERMINAL,
     UM_ADD_BOOKMARK, UM_EDIT_BOOKMARKS, UM_BM_0, UM_BM_1, UM_BM_2, UM_BM_3, UM_BM_4, UM_BM_5, UM_BM_6, UM_BM_7, UM_BM_MORE,
-    UM_SHORTCUTS, UM_ABOUT,
+    UM_SHORTCUTS, UM_ABOUT, UM_PREFERENCES,
     UM_OPEN_TAB, UM_EMPTY_TRASH, UM_HERE_PROPS, UM_OPEN_WINDOW, UM_PASTE_INTO, UM_TERMINAL_IN, UM_FOLLOW, UM_BOOKMARK_IT,
     UM_CONTAINING, UM_OPEN_LINE, UM_SEARCH_IN,
     UM_OPEN_IT, UM_CUT_IT, UM_COPY_IT, UM_BM_RENAME_IT, UM_BM_UP_IT, UM_BM_DOWN_IT, UM_BM_REMOVE_IT, UM_BM_EDIT_IT, UM_EJECT_IT,
@@ -332,6 +333,7 @@ static const struct { const char *label, *key, *word; UiEvent ev; char mark; } U
     // Help: no manual (Michael, 2026-10-27)
     [UM_SHORTCUTS] = { "Keyboard Shortcuts", "F1", "shortcuts", { UK_SHORTCUTS, 0 } },   // "N more in Edit Bookmarks…" (gui/'s label): the panel, on the first not listed
     [UM_ABOUT] = { "About", "", "about" },
+    [UM_PREFERENCES] = { "Preferences\xE2\x80\xA6", "", "preferences" },   // (ofx.conf, F10)
     // The right-click menus' own (F8): a folder in a tab behind (its row's middle click); the trash
     // view's Empty Trash; the folder shown's Properties, whatever is marked
     [UM_OPEN_TAB] = { "Open in New Tab", "Middle click", "open-tab" },
@@ -380,7 +382,7 @@ static const UiMenuItem UI_MENU_FILE[] = {
 // Move to Trash shows outside the trash view, Restore in it (ui_menu_shown).
 static const UiMenuItem UI_MENU_EDIT[] = {
     UM_UNDO, UM_SEP, UM_CUT, UM_COPY, UM_PASTE, UM_SEP, UM_SELECT_ALL, UM_SELECT_MATCH, UM_INVERT, UM_SEP, UM_DUPLICATE, UM_MAKE_LINK, UM_RENAME, UM_SEP,
-    UM_TRASH, UM_RESTORE, UM_DELETE,
+    UM_TRASH, UM_RESTORE, UM_DELETE, UM_SEP, UM_PREFERENCES,
 };
 static const UiMenuItem UI_MENU_VIEW[] = {
     UM_RELOAD, UM_SEP, UM_SIDE_PLACES, UM_SIDE_TREE, UM_SIDE_NONE, UM_SEP, UM_HIDDEN, UM_PERMS_COLS, UM_GROUP_COL, UM_COLORS, UM_SHOW_MENU, UM_SEP,

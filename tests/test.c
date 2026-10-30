@@ -1618,16 +1618,26 @@ static void test_format(void)
     env_set("TZ", "UTC");
     tzset();
     i64 now = 1792483200;   // 2026-10-20 08:00 UTC
-    ui_when(buf, sizeof buf, now - 3600, now);
+    ui_when(buf, sizeof buf, now - 3600, now, DATE_SHORT, "");
     CHECK(strcmp(buf, "07:00") == 0);
-    ui_when(buf, sizeof buf, now - 9 * 3600, now);   // yesterday 23:00
+    ui_when(buf, sizeof buf, now - 9 * 3600, now, DATE_SHORT, "");   // yesterday 23:00
     CHECK(strcmp(buf, "Oct 19") == 0);
-    ui_when(buf, sizeof buf, 1767225600, now);       // 2026-01-01
+    ui_when(buf, sizeof buf, 1767225600, now, DATE_SHORT, "");       // 2026-01-01
     CHECK(strcmp(buf, "Jan  1") == 0);
-    ui_when(buf, sizeof buf, now - 365 * 86400 - 3600, now);   // the same day a year ago
+    ui_when(buf, sizeof buf, now - 365 * 86400 - 3600, now, DATE_SHORT, "");   // the same day a year ago
     CHECK(strcmp(buf, "2025-10-20") == 0);
-    ui_when(buf, sizeof buf, 1767225599, now);       // 2025-12-31 23:59:59
+    ui_when(buf, sizeof buf, 1767225599, now, DATE_SHORT, "");       // 2025-12-31 23:59:59
     CHECK(strcmp(buf, "2025-12-31") == 0);
+    // ofx.conf's other date formats (F10): the same whatever the day.
+    ui_when(buf, sizeof buf, now - 3600, now, DATE_LONG, "");
+    CHECK(strcmp(buf, "2026-10-20 07:00") == 0);
+    ui_when(buf, sizeof buf, 1767225599, now, DATE_ISO, "");
+    CHECK(strcmp(buf, "2025-12-31T23:59:59") == 0);
+    ui_when(buf, sizeof buf, now - 3600, now, DATE_PATTERN, "%d.%m.%y");
+    CHECK(strcmp(buf, "20.10.26") == 0);
+    char tiny[4];
+    ui_when(tiny, sizeof tiny, now, now, DATE_LONG, "");   // doesn't fit: ?
+    CHECK(strcmp(tiny, "?") == 0);
     env_restore();
     tzset();
 }
@@ -1649,6 +1659,7 @@ static void test_format(void)
 #include "test_f75.c"
 #include "test_f8.c"
 #include "test_f9.c"
+#include "test_f10.c"
 #include "test_fm1.c"
 
 int main(void)
@@ -1778,6 +1789,9 @@ int main(void)
     test_search_inside_keys();
     test_match_span();
     test_editors();
+    test_conf();
+    test_conf_skips();
+    test_conf_preview_max();
     test_open_line_keys();
     test_search_match();
     test_search_keys_find();

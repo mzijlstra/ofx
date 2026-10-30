@@ -1,5 +1,6 @@
 // ofx-probe DIR [SIZE SCALE]: the listing as ofx sees it, one line per entry (kind, MIME type, icon
 // file), from the real MIME database, icon theme and Omarchy theme. No window: fs/ only.
+// ofx-probe --conf: the ofx.conf Preferences writes (F10), for the README's copy.
 #include "../base/base.c"
 #include "../fs/fs.c"
 
@@ -10,7 +11,12 @@ static u8 mem[MiB(64)];
 
 int main(int argc, char **argv)
 {
-    if (argc != 2 && argc != 4) return fprintf(stderr, "usage: ofx-probe DIR [SIZE SCALE]\n"), 2;
+    if (argc == 2 && strcmp(argv[1], "--conf") == 0) {
+        static char text[16384];
+        fwrite(text, 1, conf_default_text(text, sizeof text), stdout);
+        return 0;
+    }
+    if (argc != 2 && argc != 4) return fprintf(stderr, "usage: ofx-probe DIR [SIZE SCALE] | --conf\n"), 2;
     int size = argc == 4 ? atoi(argv[2]) : 24, scale = argc == 4 ? atoi(argv[3]) : 2;
     Arena a;
     arena_init(&a, "probe", mem, sizeof mem);

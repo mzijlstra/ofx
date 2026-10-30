@@ -227,7 +227,7 @@ MUTANTS = [
     (TB, "    while (thumbs.held > thumbs.held_max) {", "    while (0) {"),
     (TB, "    if (e->mtime != mtime && e->state != TS_ASKED) {", "    if (0) {"),
     (TB, "        if ((got == TG_CACHED || got == TG_MADE) && out.w <= THUMB_PX_MAX", "        if (got == TG_MADE && out.w <= THUMB_PX_MAX"),
-    (TB, "                             .make = local && kind != TK_NONE && size <= THUMB_SRC_MAX, .px = px };", "                             .make = kind != TK_NONE && size <= THUMB_SRC_MAX, .px = px };"),
+    (TB, "                             .make = local && kind != TK_NONE && size <= thumbs.src_max, .px = px, .src_max = thumbs.src_max };", "                             .make = kind != TK_NONE && size <= thumbs.src_max, .px = px, .src_max = thumbs.src_max };"),
     ('gui/files.c', "    for (isize i = ahead; i < ahead + (isize)app.ui.list.rows * cols && i < app.list.n; i++) entry_thumb(i, false);\n", ""),
     ('gui/files.c', "        Texture2D *th = entry_thumb(i, true);", "        Texture2D *th = NULL;"),
     ('gui/files.c', "CLAY_SIZING_FIXED(th->width / s), CLAY_SIZING_FIXED(th->height / s)", "CLAY_SIZING_FIXED(px), CLAY_SIZING_FIXED(px)"),
@@ -362,7 +362,7 @@ MUTANTS = [
     ('gui/input.c', '    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_D) return UK_ADD_BOOKMARK;   // (F7.5, as Nemo)', '', 'f75'),
     ('gui/topbar.c', ' || (it == UM_SEP && !ui_menu_sep_shown(&app.ui, m, i))) continue;', ') continue;', 'f74'),
     (W, '        if (e->wd == atomic_load(&watch.bm_wd) && e->len && strcmp(e->name, "bookmarks") == 0) *mounts = true;', '', 'f75'),
-    (W, '    watch_bookmarks();\n    const char *udev = udev_path();', '    const char *udev = udev_path();', 'f75'),
+    (W, '    watch_bookmarks();\n    watch_conf();', '    watch_conf();', 'f75'),
     # ---- F7.5: Edit Bookmarks
     ('gui/bookmarks.c', '    if (now.full) {', '    if (false) {', 'f75'),
     # Not a mutant: bmp_change's bm_locate for `i`; the panel shows the file as it is (a change
@@ -611,6 +611,30 @@ MUTANTS = [
     ('gui/eject.c', '        if (r == EJECT_FAILED) set_status(true, "Can\'t unmount %s: %s"', '        if (false) set_status(true, "Can\'t unmount %s: %s"', 'usb'),
     ('gui/input.c', '        if (ctx_pl && place_ejectable(ctx_pl)) (it == UM_EJECT_IT ? eject_start : unmount_start)(ctx_pl);', '        if (ctx_pl && place_ejectable(ctx_pl)) eject_start(ctx_pl);', 'usb'),
     ('gui/folder.c', '    if (!still) app.drive_gone = true;\n', '', 'usb'),
+    # F10 step 1: ofx.conf (2026-10-30). Not run: conf_shown's ~ (drawn into the status, which a
+    # script matches only as statusbad), and prefs_open's spawn_open fallback (a script always has
+    # the fake nvim recipe).
+    ('gui/main.c', '    conf_apply();   // (F10', '    // (F10', 'f10'),
+    ('gui/main.c', '        if (atomic_exchange(&watch.conf_ready, false)) conf_apply(), reload(), dirty = true;', '        if (atomic_exchange(&watch.conf_ready, false)) dirty = true;', 'f10'),
+    ('gui/main.c', '        if (atomic_exchange(&watch.conf_ready, false)) conf_apply(), reload(), dirty = true;', '        if (atomic_exchange(&watch.conf_ready, false)) conf_apply(), dirty = true;', 'f10'),
+    ('gui/watch.c', '        if (e->wd == atomic_load(&watch.conf_wd) && e->len && strcmp(e->name, "ofx.conf") == 0) *conf = true;', '', 'f10'),
+    ('gui/watch.c', '    watch_bookmarks();\n    watch_conf();', '    watch_bookmarks();', 'f10'),
+    ('gui/prefs.c', '    watch_conf();   // (its folder may be new)\n', '', 'f10'),
+    ('gui/prefs.c', '    if (!conf_create(path, &err)) {', '    if (false) {', 'f10'),
+    ('gui/prefs.c', '    thumbs.off = !c.previews, thumbs.src_max = c.preview_max;', '    thumbs.src_max = c.preview_max;', 'f10'),
+    ('gui/prefs.c', '    thumbs.off = !c.previews, thumbs.src_max = c.preview_max;', '    thumbs.off = !c.previews, thumbs.src_max = THUMB_SRC_MAX;', 'f10'),
+    ('gui/prefs.c', '    if (previews) thumbs_reset();', '', 'f10'),
+    ('gui/prefs.c', '    if (c.bad) {', '    if (false) {', 'f10'),
+    ('gui/prefs.c', '    for (int k = 0; k < c.nskip; k++) memcpy(app.skips.name[k], c.skip[k], sizeof app.skips.name[k]);', '', 'f10'),
+    ('gui/prefs.c', '    int n = e ? editor_argv(e, path, 1, 1, buf', '    int n = e ? editor_argv(e, path, 2, 1, buf', 'f10'),
+    ('gui/thumbs.c', ' || thumbs.full || thumbs.off) return NULL;', ' || thumbs.full) return NULL;', 'f10'),
+    # Not a mutant: the request's src_max as THUMB_SRC_MAX (its make flag has the limit already; the
+    # worker's own guards a file grown between the listing and the read).
+    ('gui/folder.c', '                          .skips = &app.skips };', '                          .skips = NULL };', 'f10'),
+    ('gui/folder.c', '        search_ask(q), app.skips_shown = app.skips;', '        search_ask(q);', 'f10'),
+    ('gui/files.c', '    if (e->mtime) ui_when(buf, cap, e->mtime, now, app.conf.date, app.conf.date_pattern);', '    if (e->mtime) ui_when(buf, cap, e->mtime, now, DATE_SHORT, "");', 'f10'),
+    ('gui/files.c', '    if (app.conf.date == DATE_SHORT) return DATE_W;\n    static', '    return DATE_W;\n    static', 'f10'),
+    ('gui/actions.c', '    case UA_PREFERENCES: prefs_open(); break;\n', '', 'f10'),
     ('gui/main.c', '        if (atomic_exchange(&watch.mounts_ready, false)) places_reload(), trash_state(), dirty = true;\n        if (app.drive_gone) {', '        if (atomic_exchange(&watch.list_ready, false)) reload(), dirty = true;\n        if (atomic_exchange(&watch.mounts_ready, false)) places_reload(), trash_state(), dirty = true;\n        if (app.drive_gone) {', 'usb'),
     ('gui/eject.c', '        else if (go_to(at, STR_EMPTY, 0)) set_status(false, "Mounted %s", ej.label);', '        else set_status(false, "Mounted %s", ej.label);', 'usb'),
     ('gui/eject.c', '        if (!mounted) set_status(true, "Can\'t mount %s: %s"', '        if (false) set_status(true, "Can\'t mount %s: %s"', 'usb'),
@@ -641,7 +665,7 @@ MUTANTS = [
     ('gui/search.c', '    if (hit && !(search_res[search_wrote].hit = search_hit_copy(&search_arena, hit))) return false;', '', 'f9'),
     ('gui/search.c', '    return ui_match_span(&search_im, line, from, to);', '    return ui_match_span(&search_m, line, from, to);', 'f9'),
     ('gui/search.c', ' && str_eq((Str){ search.inside, search.inside_len }, q.inside) &&', ' &&', 'f9'),
-    ('gui/search.c', '                (!q.inside.len || search_opts_eq(search.inside_opts, q.io));', '                true;', 'f9'),
+    ('gui/search.c', '                (!q.inside.len || search_opts_eq(search.inside_opts, q.io)) &&', '                true &&', 'f9'),
     ('gui/search.c', '    search.inside_len = search_text_put(search.inside, q.inside);', '', 'f9'),
     ('gui/search.c', '    search.opts = q.o, search.inside_opts = q.io, search.hidden = q.hidden;', '    search.opts = q.o, search.hidden = q.hidden;', 'f9'),
     ('gui/search.c', '    search.done = (q.text.len == 0 && q.inside.len == 0) || !search.started;', '    search.done = q.text.len == 0 || !search.started;', 'f9'),
@@ -713,7 +737,7 @@ t_start = time.monotonic()
 
 # run.sh's groups, in its order: a mutant runs them one at a time and stops at the first that
 # kills it (Michael, 2026-10-25).
-GROUPS = ['browse', 'big', 'gone', 'watchgap', 'f2', 'f3', 'f4', 'f5', 'f52', 'f53', 'f54', 'f6', 'usb', 'f62', 'f63', 'f64', 'f7',
+GROUPS = ['browse', 'big', 'gone', 'watchgap', 'f2', 'f3', 'f4', 'f5', 'f52', 'f53', 'f54', 'f6', 'usb', 'f10', 'f62', 'f63', 'f64', 'f7',
           'f72', 'f73', 'f74', 'f75', 'f8', 'f9', 'clip', 'keys', 'hang', 'guard3', 'guard']
 run_text = open(os.path.join(root, 'tests/gui/run.sh')).read()
 assert re.findall(r'want ([a-z0-9]+)', run_text) == GROUPS, 'GROUPS in gui.py no longer match tests/gui/run.sh'
@@ -749,7 +773,7 @@ def key(m):
     return hashlib.sha1('\0'.join(m[:3]).encode()).hexdigest()[:12]
 
 # The group of a script that failed: run.sh prints "== <script>: FAILED" or "<group>: FAILED".
-GROUP_OF = {'f6b': 'f6', 'f62b': 'f62', 'f62c': 'f62', 'f63b': 'f63', 'f63c': 'f63', 'f64b': 'f64', 'f64c': 'f64', 'f64d': 'f64', 'f7b': 'f7', 'f73b': 'f73', 'f73c': 'f73', 'f73d': 'f73', 'f75b': 'f75', 'f8b': 'f8', 'f8c': 'f8', 'f8d': 'f8', 'f8e': 'f8', 'f9b': 'f9'}
+GROUP_OF = {'f6b': 'f6', 'f62b': 'f62', 'f62c': 'f62', 'f63b': 'f63', 'f63c': 'f63', 'f64b': 'f64', 'f64c': 'f64', 'f64d': 'f64', 'f7b': 'f7', 'f73b': 'f73', 'f73c': 'f73', 'f73d': 'f73', 'f75b': 'f75', 'f8b': 'f8', 'f8c': 'f8', 'f8d': 'f8', 'f8e': 'f8', 'f9b': 'f9', 'f10b': 'f10'}
 
 # The tags as groups run.sh knows: a script's name (f7b, written before GROUP_OF had it) as its
 # group; anything else dropped, so a mutant never "survives" a group that runs nothing.

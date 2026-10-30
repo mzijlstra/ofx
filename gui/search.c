@@ -10,10 +10,11 @@ enum { SEARCH_PUBLISH_MS = 100 };   // the list grows at most this often while t
 // What a search looks for: below root, names matching text with o, and inside files (step 3; empty:
 // names only) lines matching inside with io; hidden files or not.
 typedef struct {
-    const char *root;
-    Str         text, inside;
-    UiMatchOpts o, io;
-    bool        hidden;
+    const char           *root;
+    Str                   text, inside;
+    UiMatchOpts           o, io;
+    bool                  hidden;
+    const SearchSkipList *skips;   // the folders never entered (ofx.conf, F10); NULL: the default
 } SearchQuery;
 
 static struct {
@@ -29,6 +30,7 @@ static struct {
     int             text_len, inside_len;
     UiMatchOpts     opts, inside_opts;
     bool            hidden;
+    SearchSkipList  skips;
     // What res_gen's walk has published: search_res[0, n), what it left out so far, whether it ended.
     u32             res_gen;
     isize           n;
@@ -49,6 +51,7 @@ static Arena search_edits;
 // reads files into, how many results it wrote, the last folder it copied (results come a folder at
 // a time), when it last published.
 static char      search_root[PATH_MAX];
+static SearchSkipList search_skips_mine;
 static UiMatcher search_m, search_im;
 static char      search_buf[SEARCH_BUF];
 static isize     search_wrote;
@@ -125,13 +128,14 @@ static void *search_loop(void *arg)
         ui_matcher_set(&search_m, text, search.opts);
         ui_matcher_set(&search_im, inside, search.inside_opts);
         bool hidden = search.hidden;
+        search_skips_mine = search.skips;
         search.asked = false;
         search.res_gen = gen, search.n = 0, search.s = (SearchSkips){ 0 }, search.done = false;
         pthread_mutex_unlock(&search.mu);
         // Nothing of the last walk is read any more (n is 0 for this generation).
         arena_reset(&search_arena);
         search_wrote = 0, search_dir_last = STR_EMPTY, search_pub_at = now_ms();
-        SearchWalk w = { .gen = &search.gen, .mine = gen, .hidden = hidden, .match = search_match_cb,
+        SearchWalk w = { .gen = &search.gen, .mine = gen, .hidden = hidden, .skips = &search_skips_mine, .match = search_match_cb,
                          .found = search_found_cb, .tick = search_tick_cb };
         if (inside.len) w.line = search_line_cb, w.buf = search_buf;
         w.ctx = &w;
@@ -164,7 +168,8 @@ static bool search_is(SearchQuery q)
     pthread_mutex_lock(&search.mu);
     bool same = strcmp(search.root, q.root) == 0 && str_eq((Str){ search.text, search.text_len }, q.text) &&
                 search_opts_eq(search.opts, q.o) && search.hidden == q.hidden && str_eq((Str){ search.inside, search.inside_len }, q.inside) &&
-                (!q.inside.len || search_opts_eq(search.inside_opts, q.io));
+                (!q.inside.len || search_opts_eq(search.inside_opts, q.io)) &&
+                memcmp(&search.skips, q.skips ? q.skips : &SEARCH_SKIP_DEFAULT, sizeof search.skips) == 0;
     pthread_mutex_unlock(&search.mu);
     return same;
 }
@@ -188,6 +193,7 @@ static void search_ask(SearchQuery q)
     search.text_len = search_text_put(search.text, q.text);
     search.inside_len = search_text_put(search.inside, q.inside);
     search.opts = q.o, search.inside_opts = q.io, search.hidden = q.hidden;
+    search.skips = q.skips ? *q.skips : SEARCH_SKIP_DEFAULT;
     search.res_gen = gen, search.n = 0, search.s = (SearchSkips){ 0 }, search.fresh = true;
     memset(search_gone, 0, sizeof search_gone), arena_reset(&search_edits);
     search.done = (q.text.len == 0 && q.inside.len == 0) || !search.started;

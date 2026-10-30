@@ -674,6 +674,8 @@ static void open_at_line(isize i)
     else if (editors.user.bad) set_status(true, "%s: line %d isn't a recipe (a name, yes or no, then the command)", shown, editors.user.bad);
 }
 
+static void prefs_open(void);   // (prefs.c, after: it uses editor_now)
+
 static void act(UiAction a)
 {
     Err err;
@@ -691,6 +693,7 @@ static void act(UiAction a)
         break;
     }
     case UA_OPEN_LINE: open_at_line(a.index); break;
+    case UA_PREFERENCES: prefs_open(); break;
     case UA_CONTAINING: {   // a result's folder, it selected (F9)
         char path[PATH_MAX], dir[PATH_MAX];
         if (a.index >= app.list.n || !entry_path(a.index, path, sizeof path)) break;
