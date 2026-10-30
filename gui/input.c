@@ -445,7 +445,8 @@ static void folder_do(UiMenuItem it)
     case UM_PASTE_INTO: paste(dir); break;
     case UM_BOOKMARK_IT: bookmark_add(dir); break;
     case UM_EJECT_IT:
-        if (app.ui.ctx_side >= 0 && app.ui.ctx_side < app.places.n && place_ejectable(&app.places.p[app.ui.ctx_side])) eject_start(&app.places.p[app.ui.ctx_side]);
+    case UM_UNMOUNT_IT:
+        if (ctx_pl && place_ejectable(ctx_pl)) (it == UM_EJECT_IT ? eject_start : unmount_start)(ctx_pl);
         break;
     default: break;
     }

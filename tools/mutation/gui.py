@@ -160,7 +160,7 @@ MUTANTS = [
     ('gui/files.c', "                if (hover && place_ejectable(p)) {", "                if (0) {"),
     ('gui/input.c', "    if (h.side >= 0 && app.ui.side_mode == SIDE_PLACES && in_box(CLAY_IDI(\"side-eject\", h.side), x, y)) h.eject = h.side;", ""),
     (G, "        if (eject_take()) dirty = true;", ""),
-    ('gui/eject.c', "    if (!mount && jobs_refuse(p->path)) return false;   // a job of ours writes there: it says so", ""),
+    ('gui/eject.c', "    if (op != DRIVE_MOUNT && jobs_refuse(p->path)) return false;   // a job of ours writes there: it says so", ""),
     (G, "    if (chdir(\"/\") != 0) fprintf(stderr, \"ofx: chdir /: %s\\n\", strerror(errno));", ""),
     # F6.2: the icon view
     ('gui/files.c', "    int c = (w - side_w() - 2 * PAD) / cell_w();", "    int c = (w - 2 * PAD) / cell_w();"),
@@ -604,7 +604,12 @@ MUTANTS = [
     ('gui/actions.c', '            mount_start(&app.places.p[a.index]);   // a drive not mounted yet', '            {}   // a drive not mounted yet', 'usb'),
     ('gui/input.c', '    if (it == UM_MOUNT_IT && ctx_pl && ctx_pl->kind == PL_UNMOUNTED) mount_start(ctx_pl);', '', 'usb'),
     ('gui/input.c', '        u->ctx_unmounted = pl->kind == PL_UNMOUNTED;\n', '', 'usb'),
-    ('gui/eject.c', '    if (ej.mount) mount_argv(ej.dev, argv);\n    else eject_argv', '    eject_argv', 'usb'),
+    ('gui/eject.c', '    if (ej.op == DRIVE_MOUNT) mount_argv(ej.dev, argv);\n    else if', '    if (false) mount_argv(ej.dev, argv);\n    else if', 'usb'),
+    # Unmount (2026-10-30)
+    ('gui/eject.c', '    else if (ej.op == DRIVE_UNMOUNT) unmount_argv(ej.dev, argv);\n', '', 'usb'),
+    ('gui/eject.c', '        else set_status(false, "%s is unmounted", ej.label);', '', 'usb'),
+    ('gui/eject.c', '        if (r == EJECT_FAILED) set_status(true, "Can\'t unmount %s: %s"', '        if (false) set_status(true, "Can\'t unmount %s: %s"', 'usb'),
+    ('gui/input.c', '        if (ctx_pl && place_ejectable(ctx_pl)) (it == UM_EJECT_IT ? eject_start : unmount_start)(ctx_pl);', '        if (ctx_pl && place_ejectable(ctx_pl)) eject_start(ctx_pl);', 'usb'),
     ('gui/eject.c', '        else if (go_to(at, STR_EMPTY, 0)) set_status(false, "Mounted %s", ej.label);', '        else set_status(false, "Mounted %s", ej.label);', 'usb'),
     ('gui/eject.c', '        if (!mounted) set_status(true, "Can\'t mount %s: %s"', '        if (false) set_status(true, "Can\'t mount %s: %s"', 'usb'),
     ('gui/script.c', ' : p->kind == PL_UNMOUNTED ? "~" : ""', ' : ""', 'usb'),

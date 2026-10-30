@@ -788,6 +788,13 @@ static void test_eject(void)
     env_set("EJ_FAIL", "power-off");
     CHECK(spawn_capture((char *const *)argv, big, sizeof big, 5000, &late, &err) && eject_result(str_from_c(big), why, sizeof why) == EJECT_UNMOUNTED);
     CHECK(strstr(why, "power-off: target is busy"));
+    // Unmount (2026-10-30): the unmount alone, never the power-off.
+    unmount_argv("/dev/sd x1", argv);
+    put(at("ej/log"), "");
+    env_set("EJ_FAIL", "power-off");
+    CHECK(spawn_capture((char *const *)argv, big, sizeof big, 5000, &late, &err) && eject_result(str_from_c(big), why, sizeof why) == EJECT_UNMOUNTED);
+    CHECK(strcmp(slurp(at("ej/log")), "unmount -b /dev/sd x1\n") == 0);
+    eject_argv("/dev/sd x1", argv);
     env_set("EJ_FAIL", "unmount");
     put(at("ej/log"), "");
     CHECK(spawn_capture((char *const *)argv, big, sizeof big, 5000, &late, &err) && eject_result(str_from_c(big), why, sizeof why) == EJECT_FAILED);

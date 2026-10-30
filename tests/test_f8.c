@@ -301,9 +301,14 @@ static void test_ctx_folder_menu(void)
     CHECK(!ui_menu_shown(&u, UM_BOOKMARK_IT));
     u.ctx_eject = true;
     CHECK(ui_menu_shown(&u, UM_EJECT_IT) && ui_menu_enabled(&u, UM_EJECT_IT) && !ui_menu_shown(&u, UM_MOUNT_IT));
+    CHECK(ui_menu_shown(&u, UM_UNMOUNT_IT) && ui_menu_enabled(&u, UM_UNMOUNT_IT));   // (2026-10-30)
+    in = ui_input_none(), in.menu_item = menu_place(UI_CTX_FOLDER, UM_UNMOUNT_IT);
+    CHECK(ui_handle(&u, names, &in).kind == UA_FOLDER_DO && !u.menu_on);
+    u.menu_on = true;
     // A drive not mounted yet (2026-10-30): Mount alone.
     u.ctx_unmounted = true;
     CHECK(ui_menu_shown(&u, UM_MOUNT_IT) && ui_menu_enabled(&u, UM_MOUNT_IT) && !ui_menu_shown(&u, UM_OPEN_IT) && !ui_menu_shown(&u, UM_EJECT_IT));
+    CHECK(!ui_menu_shown(&u, UM_UNMOUNT_IT));
     CHECK(!ui_menu_shown(&u, UM_PROPS_IT) && !ui_menu_shown(&u, UM_OPEN_TAB));
     in = ui_input_none(), in.menu_item = menu_place(UI_CTX_FOLDER, UM_MOUNT_IT);
     CHECK(ui_handle(&u, names, &in).kind == UA_FOLDER_DO);

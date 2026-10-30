@@ -262,6 +262,14 @@ static bool mount_result(Str out, char *at, size_t atcap, char *why, size_t whyc
     return false;
 }
 
+// Unmount (2026-10-30): eject without the power-off, the drive left there to mount again; its
+// output read as eject's (EJECT_UNMOUNTED is all it can reach).
+static void unmount_argv(const char *dev, const char **argv)
+{
+    argv[0] = "sh", argv[1] = "-c", argv[2] = "udisksctl unmount -b \"$1\" && echo OFX-UNMOUNTED";
+    argv[3] = "sh", argv[4] = dev, argv[5] = NULL;
+}
+
 typedef enum { EJECT_FAILED, EJECT_UNMOUNTED, EJECT_DONE } EjectResult;
 
 // What eject_argv's output says: ejected, unmounted only, or neither; *why gets the first line

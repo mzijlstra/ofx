@@ -71,6 +71,11 @@ cat > "$T/fakes/udisksctl" <<EOS
 #!/bin/sh
 echo "udisksctl \$*" >> "$T/spawn.log"
 if [ "\$1" = "\$(cat "$T/udisks-fail" 2>/dev/null)" ]; then echo "Error \$1: target is busy" >&2; exit 1; fi
+# Unmount drops the device's line from the mount list when <scratch-dir>/udisks-unmount-drops is
+# there (the usb group's; f6 keeps its drive mounted through eject).
+if [ "\$1" = unmount ] && [ -e "$T/udisks-unmount-drops" ]; then
+    grep -v " \$3 rw\\\$" "\$OFX_TEST_MOUNTINFO" > "\$OFX_TEST_MOUNTINFO.new"; mv "\$OFX_TEST_MOUNTINFO.new" "\$OFX_TEST_MOUNTINFO"
+fi
 if [ "\$1" = mount ]; then
     name=\$(cat "$T/udisks-mount-as" 2>/dev/null || basename "\$3")
     mp=\$(printf %s "$T/media/\$name" | sed 's/ /\\\\040/g')   # (mountinfo's octal escape)

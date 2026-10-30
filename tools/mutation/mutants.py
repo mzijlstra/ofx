@@ -1477,7 +1477,7 @@ MUTANTS += [
     ('ui/menus.c', "    case UM_BOOKMARK_IT: return !u->ctx_trash && !u->ctx_bmed;", "    case UM_BOOKMARK_IT: return !u->ctx_trash;"),
     ('ui/menus.c', "    case UM_BOOKMARK_IT: return !u->ctx_trash && !u->ctx_bmed;", "    case UM_BOOKMARK_IT: return !u->ctx_bmed;"),
     ('ui/menus.c', " case UM_BM_EDIT_IT: return u->ctx_bmk >= 0;", " case UM_BM_EDIT_IT: return u->ctx_bmk > 0;"),
-    ('ui/menus.c', "    case UM_EJECT_IT: return u->ctx_eject;", "    case UM_EJECT_IT: return true;"),
+    ('ui/menus.c', "    case UM_EJECT_IT: case UM_UNMOUNT_IT: return u->ctx_eject;", "    case UM_EJECT_IT: case UM_UNMOUNT_IT: return true;"),
     ('ui/menus.c', "    case UM_EMPTY_IT: return u->ctx_trash;", "    case UM_EMPTY_IT: return true;"),
     ('ui/menus.c', "    case UM_SEP: case UM_OPEN_IT: case UM_OPEN_TAB: return true;", "    case UM_SEP: case UM_OPEN_TAB: return true;"),
     ('ui/menus.c', "        if (it == UM_PASTE_INTO) return u->can_paste && u->ctx_w;", ""),
@@ -2048,4 +2048,9 @@ MUTANTS += [
     # sysfs's 4096-byte sizes (2026-10-30): read_file in sys_line's place gives nothing
     (PL, '    int fd = open(path, O_RDONLY | O_CLOEXEC);\n    if (fd < 0) return STR_EMPTY;\n    ssize_t n = read(fd, buf, sizeof buf - 1);\n    close(fd);\n    if (n <= 0) return STR_EMPTY;\n    isize at = 0;\n    Str line = STR_EMPTY;\n    next_line((Str){ buf, n }, &at, &line);',
          '    (void)buf;\n    isize at = 0;\n    Str line = STR_EMPTY;\n    next_line(read_file(a, path), &at, &line);'),
+]
+MUTANTS += [
+    # Unmount (2026-10-30)
+    (SP, '"udisksctl unmount -b \\"$1\\" && echo OFX-UNMOUNTED";', '"udisksctl unmount -b \\"$1\\" && echo OFX-UNMOUNTED && udisksctl power-off -b \\"$1\\"";'),
+    ('ui/menus.c', '    case UM_EJECT_IT: case UM_UNMOUNT_IT: return u->ctx_eject;', '    case UM_EJECT_IT: return u->ctx_eject;'),
 ]
