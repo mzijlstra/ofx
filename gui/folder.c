@@ -306,8 +306,6 @@ static void search_again(void)
     search_relist();
 }
 
-// The places read again (at the start, a drive mounted or gone): the sidebar's cursor stays on its
-// place, found by path and kind, else on the first row that isn't a heading.
 // The tabs behind whose folder (or search) is on the drive at mp, which has gone: Home, their
 // cursor at the top. The tab shown is the main loop's (app.drive_gone); its slot here is written
 // over by tab_save when another tab is shown, so it needs no exception.
@@ -327,6 +325,27 @@ static void drive_gone_tabs(const char *mp)
     }
 }
 
+// The drives in was (nwas, as they were before the places were read again) that have gone, whatever
+// removed them (unmounted, ejected, pulled out) and before udisksctl answers: the tab shown, on one,
+// goes Home when the main loop next comes round (reviewer-2 and Michael, 2026-10-30: the folder's
+// own watch reached the gone-folder fallback first, /run/media/<user>; Nemo crashes there), and so
+// does every tab behind on it (Michael). A list with no / is a mount list read that failed
+// (read_file's empty answer), not every drive gone at once: no tab moves for it (2026-11-01).
+static void drive_gone_check(char (*was)[PATH_MAX], int nwas)
+{
+    bool read = false;
+    for (int i = 0; i < app.places.n && !read; i++) read = app.places.p[i].kind == PL_ROOT;
+    for (int k = 0; read && k < nwas; k++) {
+        bool still = false;
+        for (int i = 0; i < app.places.n && !still; i++) still = place_is_drive(app.places.p[i].kind) && strcmp(app.places.p[i].path, was[k]) == 0;
+        if (still) continue;
+        if (path_within(here_dir(), was[k])) app.drive_gone = true;
+        drive_gone_tabs(was[k]);
+    }
+}
+
+// The places read again (at the start, a drive mounted or gone): the sidebar's cursor stays on its
+// place, found by path and kind, else on the first row that isn't a heading; drive_gone_check.
 static void places_reload(void)
 {
     // A folder menu open on a place was resolved against these places (ctx_facts: its row, its
@@ -371,21 +390,7 @@ static void places_reload(void)
         if (keep.kind != PL_HEAD && app.places.p[i].kind == keep.kind && strcmp(app.places.p[i].path, keep.path) == 0) sel = i;
     }
     app.place_cur = places_current(&app.places, app.cwd);
-    // A drive gone (unmounted, ejected, pulled out), whatever removed it and before udisksctl
-    // answers: the tab shown, on it, goes Home when the main loop next comes round (reviewer-2 and
-    // Michael, 2026-10-30: the folder's own watch reached the gone-folder fallback first,
-    // /run/media/<user>; Nemo crashes there), and so does every tab behind on it (Michael).
-    // A list with no / is a mount list read that failed (read_file's empty answer), not every drive
-    // gone at once: no tab moves for it (2026-11-01).
-    bool read = false;
-    for (int i = 0; i < app.places.n && !read; i++) read = app.places.p[i].kind == PL_ROOT;
-    for (int k = 0; read && k < nwas; k++) {
-        bool still = false;
-        for (int i = 0; i < app.places.n && !still; i++) still = place_is_drive(app.places.p[i].kind) && strcmp(app.places.p[i].path, was[k]) == 0;
-        if (still) continue;
-        if (path_within(here_dir(), was[k])) app.drive_gone = true;
-        drive_gone_tabs(was[k]);
-    }
+    drive_gone_check(was, nwas);
     if (app.ui.side_mode != SIDE_PLACES) return;
     app.ui.side_head = app.place_head;
     isize top = app.ui.side.top;

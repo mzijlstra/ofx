@@ -312,8 +312,6 @@ static void script_state(char *out, size_t cap)
     if (!menugrey[0]) snprintf(menugrey, sizeof menugrey, "-");
     if (!menuhid[0]) snprintf(menuhid, sizeof menuhid, "-");
     if (!menumarked[0]) snprintf(menumarked, sizeof menumarked, "-");
-    // The open menu's box as the last frame drew it (F8: a right-click menu inside the window).
-    // The Trash place's icon by its name (2026-10-30: full or empty)
     // ofx.conf as last read (F10): previews:max:date:skips (+ between), the first line it skipped,
     // and the cursor's entry's date as the list shows it.
     static const char *const DATES[] = { "short", "long", "iso", "pattern" };
@@ -324,11 +322,13 @@ static void script_state(char *out, size_t cap)
     datew[0] = 0;
     if (app.have_list && app.ui.list.sel < app.list.n) entry_when(&app.list.e[app.ui.list.sel], (i64)time(NULL), datew, sizeof datew);
     state_word(seldate, sizeof seldate, str_from_c(datew));
+    // The Trash place's icon by its name (2026-10-30: full or empty).
     const char *trashicon = "-";
     for (int i = 0; i < app.places.n; i++) {
         IconSlot *ic = app.places.p[i].kind == PL_TRASH ? place_icon(i) : NULL;
         if (ic) trashicon = ic->key.p;
     }
+    // The open menu's box as the last frame drew it (F8: a right-click menu inside the window).
     char menubox[64] = "-";
     Clay_ElementData mb = Clay_GetElementData(CLAY_ID("menu"));
     if (app.ui.menu_on && mb.found)

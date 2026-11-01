@@ -2,13 +2,13 @@
 // $XDG_CONFIG_HOME/ofx/ofx.conf. ofx writes it only when it isn't there, at the start (and on Edit →
 // Preferences…), so from then on what applies is whatever the file says: a list is exactly its
 // lines, none meaning an empty list (Michael, 2026-11-01). Only when there is no file to read (it
-// couldn't be made) do the built-in defaults apply, conf_defaults. What ofx remembers by itself
+// couldn't be made, or went) do the built-in defaults apply, conf_defaults. What ofx remembers by itself
 // stays in the state file (state.c).
 //
 // One `key = value` a line, `#` a comment, a key repeated for a list (as Ghostty's). A line ofx
 // can't read, or a key it doesn't know, is skipped and the rest applies; the first such line is
-// kept for the status line. Every option's help is in CONF_OPTS: the file Preferences writes and
-// the README's option list are made from it (conf_default_text), so neither can drift from what
+// kept for the status line. Every option's help is in CONF_OPTS: the file ofx writes and the
+// README's option list are made from it (conf_default_text), so neither can drift from what
 // conf_parse reads.
 
 #include "../base/base.h"

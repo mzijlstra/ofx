@@ -84,9 +84,6 @@ his word: Nemo's compact view and its icon size slider.
   watched. Not yet: a trash folder that appears from outside (another program's very first trash,
   or one moved back) is seen at the next look (a mount change, the trash view, ofx's own trash),
   as nothing watches Trash/ itself (reviewer-2, 2026-10-30: left as is).
-- Options in `ofx.conf` (Michael, 2026-10-24): previews on or off; the largest image ofx makes a
-  preview of (`max_image_size_to_preview`, 10 MiB in F6.4); F6.5's cleanup (on, orphans, the days
-  unused, the cap); the menu bar hidden until Alt or F10 (F7, 2026-10-25).
 - Properties (F7.2): "apply to everything inside" a folder, its permissions set on the files and
   folders under it (Michael, 2026-10-25: later).
 - Cache cleanup (Michael, 2026-10-24): orphans, age and a cap are F6.5. Still later: clearing the
@@ -238,7 +235,7 @@ page (on, orphans on, 90 days, 1 GiB); it is F6.5.
    reads the list, then enables it (`systemctl --user enable --now ofx-clean.timer`). "Manage the
    cache" is the timer being on until the settings page has the switch.
 6. **Defaults:** constants in `fs/clean.c` (orphans on, 90 days, 1 GiB); the settings page and
-   `ofx.conf` set them later.
+   `ofx.conf` set them later (done in F10 step 2: the clean options; the defaults now in fs/conf.c).
 
 **Tests:** unit tests (`tests/test_f65.c`) on a scratch cache with fixture previews made by
 `thumb_put`: fresh, orphan, file in a deleted folder, stale mtime, a path under a drive not
@@ -290,7 +287,7 @@ mostly the freedesktop MIME plumbing (`.desktop` files, `mimeinfo.cache`, parent
 
 **Decided for F7.1 (Michael, 2026-10-25):**
 - **The menu bar** is always shown, one row above the top bar. Hiding it until Alt or F10 is an
-  `ofx.conf` option (later list).
+  `ofx.conf` option (later list; F10 kept it in state instead: View → Show Menu).
 - **Keys:** F10 opens File; Alt+F, Alt+E, Alt+V, Alt+G, Alt+B, Alt+H open their menu; Up/Down
   (`k`/`j`) move, Left/Right go to the next menu, Enter picks, Esc closes; with a menu open, the
   pointer over another title opens that one. Each entry shows its key at the right.
@@ -354,7 +351,7 @@ comparison with Nemo 6.6.4's menus, entry by entry: https://claude.ai/artifact/X
   No Sidebar (marked, F9); Show Hidden Files (checked); Sort by Name, Size, Modified (marked),
   Reverse Order (checked); Zoom In, Zoom Out, Normal Size (icon view only); List (Ctrl+1), Icons
   (Ctrl+2), marked. Out: Stop, toolbar and statusbar toggles, extra pane, reset view, thumbnails
-  toggle, the other sort keys, manual layout, compact view. The menu bar's hide stays with ofx.conf.
+  toggle, the other sort keys, manual layout, compact view. The menu bar's hide is View → Show Menu, kept in state (F10 design).
 - **Go:** Open Parent, Back, Forward; Home (Alt+Home added beside `~`); Trash; Find in Folder…,
   Location…, Terminal Here. Out: Computer, Templates, Network, Same Location as Other Pane.
 - **Keys kept:** Alt+Enter stays the terminal (Properties is Ctrl+I); Ctrl+1/Ctrl+2 as ofx has them.
