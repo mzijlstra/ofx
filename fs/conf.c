@@ -51,38 +51,39 @@ typedef struct {
 
 typedef enum { CK_BOOL, CK_SIZE, CK_DATE, CK_NAMES, CK_EDITOR, CK_DAYS } ConfKind;
 
-// Each option: its key, kind, default as written in the file ("": none, the help has an example),
-// and its help (lines, each made a comment). The help says what it does, what it takes, and an
-// example where one helps.
+// Each option: its key, kind, its field in Conf, default as written in the file ("": none, the help
+// has an example), and its help (lines, each made a comment). The help says what it does, what it
+// takes, and an example where one helps.
 typedef struct {
     const char *key;
     ConfKind    kind;
+    size_t      at;     // offsetof(Conf, …): conf_set writes there by kind
     const char *def;
     const char *help;
 } ConfOpt;
 
 static const ConfOpt CONF_OPTS[] = {
-    { "previews", CK_BOOL, "on",
+    { "previews", CK_BOOL, offsetof(Conf, previews), "on",
       "Previews of images in the icon view, in place of their file type's icon.\n"
       "on or off. Off, ofx makes and reads no previews at all (the cache, shared\n"
       "with Nemo, is left as it is)." },
-    { "preview-max-size", CK_SIZE, "10 MiB",
+    { "preview-max-size", CK_SIZE, offsetof(Conf, preview_max), "10 MiB",
       "The largest image file ofx makes a preview of; a larger one shows its file\n"
       "type's icon. A size: B, KiB, MiB, GiB (or KB, MB, GB, in 1000s).\n"
       "Example: preview-max-size = 50 MiB" },
-    { "date-format", CK_DATE, "short",
+    { "date-format", CK_DATE, offsetof(Conf, date), "short",
       "How the list shows a file's date (Modified, or Deleted in the trash).\n"
       "  short   14:03 today, Oct 20 this year, 2025-10-20 before\n"
       "  long    2026-10-20 14:03, always\n"
       "  iso     2026-10-20T14:03:05, always\n"
       "or a strftime pattern with a %, as `date` takes: date-format = %d-%m-%Y %H:%M" },
-    { "search-skip", CK_NAMES, ".git node_modules",
+    { "search-skip", CK_NAMES, offsetof(Conf, skip), ".git node_modules",
       "Folders a search (Ctrl+Shift+F) never goes into, by name, wherever they are;\n"
       "the status line counts each one it skipped. One name a line, and the list is\n"
       "exactly these lines: add one to skip a folder (search-skip = target), remove\n"
       "one to search inside it. With no search-skip line at all, a search goes into\n"
       "every folder." },
-    { "editor", CK_EDITOR, "",
+    { "editor", CK_EDITOR, offsetof(Conf, editor), "",
       "How Open at Line (Ctrl+Shift+Enter on a result found inside files) starts an\n"
       "editor at that line. It uses Omarchy's default editor (`omarchy default\n"
       "editor`, else $EDITOR), and ofx knows how to start nvim, vim, helix, hx,\n"
@@ -96,21 +97,21 @@ static const ConfOpt CONF_OPTS[] = {
       "            {line} and {col} (characters, from 1) are filled in, and the file\n"
       "            is added at the end when no word has {file}\n"
       "Example: editor = nvim yes nvim +{line} {file}" },
-    { "clean", CK_BOOL, "on",
+    { "clean", CK_BOOL, offsetof(Conf, clean), "on",
       "Whether ofx-clean cleans the previews' cache (~/.cache/thumbnails, shared with\n"
       "Nemo) at all, by the three clean- options below. on or off. ofx-clean runs\n"
       "daily from a systemd timer, installed but not on until you turn it on:\n"
       "  systemctl --user enable --now ofx-clean.timer\n"
       "`ofx-clean --dry-run` lists what it would delete, and deletes nothing." },
-    { "clean-orphans", CK_BOOL, "on",
+    { "clean-orphans", CK_BOOL, offsetof(Conf, clean_orphans), "on",
       "ofx-clean deletes the preview of a file that is gone, or has changed since\n"
       "(the next look makes a new one). A file on a drive that isn't plugged in, or\n"
       "on a network mount, keeps its previews. on or off." },
-    { "clean-unused-days", CK_DAYS, "90",
+    { "clean-unused-days", CK_DAYS, offsetof(Conf, clean_unused_days), "90",
       "ofx-clean deletes a preview no program has read for this many days (by its\n"
       "access time). A whole number of days; 0: never for this.\n"
       "Example: clean-unused-days = 30" },
-    { "clean-cap", CK_SIZE, "1 GiB",
+    { "clean-cap", CK_SIZE, offsetof(Conf, clean_cap), "1 GiB",
       "The size ofx-clean keeps the cache under: past it, the least recently read\n"
       "previews go first. A size, as preview-max-size takes; 0: no cap." },
 };
@@ -177,33 +178,31 @@ static void conf_defaults(Conf *c)
 // One value for opt k into c; false when it isn't one opt k takes.
 static bool conf_set(Conf *c, int k, Str v)
 {
-    const char *key = CONF_OPTS[k].key;
-    if (strcmp(key, "previews") == 0) return conf_bool(v, &c->previews);
-    if (strcmp(key, "preview-max-size") == 0) return conf_size(v, &c->preview_max);
-    if (strcmp(key, "date-format") == 0) {
+    void *f = (char *)c + CONF_OPTS[k].at;
+    switch (CONF_OPTS[k].kind) {
+    case CK_BOOL: return conf_bool(v, f);
+    case CK_SIZE: return conf_size(v, f);
+    case CK_DAYS: {
+        i64 n = 0;
+        for (isize i = 0; i < v.len; i++)
+            if (!is_digit(v.p[i]) || (n = n * 10 + (v.p[i] - '0')) > CONF_DAYS_MAX) return false;
+        return v.len && (*(i64 *)f = n, true);
+    }
+    case CK_DATE:   // (date, and date_pattern for a pattern)
         if (str_eq(v, S("short"))) return c->date = DATE_SHORT, true;
         if (str_eq(v, S("long"))) return c->date = DATE_LONG, true;
         if (str_eq(v, S("iso"))) return c->date = DATE_ISO, true;
         if (str_find(v, '%') < 0 || v.len >= CONF_DATE_MAX) return false;
         snprintf(c->date_pattern, sizeof c->date_pattern, "%.*s", STR_ARG(v));
         return c->date = DATE_PATTERN, true;
-    }
-    if (strcmp(key, "search-skip") == 0) {
+    case CK_NAMES: {
+        SearchSkipList *l = f;
         if (!v.len || v.len >= CONF_NAME_MAX || str_find(v, '/') >= 0 || str_eq(v, S(".")) || str_eq(v, S(".."))) return false;
-        if (c->skip.n == CONF_SKIP_MAX) return false;
-        snprintf(c->skip.name[c->skip.n++], CONF_NAME_MAX, "%.*s", STR_ARG(v));
+        if (l->n == CONF_SKIP_MAX) return false;
+        snprintf(l->name[l->n++], CONF_NAME_MAX, "%.*s", STR_ARG(v));
         return true;
     }
-    if (strcmp(key, "clean") == 0) return conf_bool(v, &c->clean);
-    if (strcmp(key, "clean-orphans") == 0) return conf_bool(v, &c->clean_orphans);
-    if (strcmp(key, "clean-cap") == 0) return conf_size(v, &c->clean_cap);
-    if (strcmp(key, "clean-unused-days") == 0) {
-        i64 n = 0;
-        for (isize i = 0; i < v.len; i++)
-            if (!is_digit(v.p[i]) || (n = n * 10 + (v.p[i] - '0')) > CONF_DAYS_MAX) return false;
-        return v.len && (c->clean_unused_days = n, true);
-    }
-    if (strcmp(key, "editor") == 0) {   // (read as the editors file reads a recipe: one, no bad line)
+    case CK_EDITOR: {   // (editor and neditor; read as the editors file reads a recipe: one, no bad line)
         static u8 mem[KiB(16)];
         static Editors one;
         Arena a;
@@ -213,6 +212,7 @@ static bool conf_set(Conf *c, int k, Str v)
         if (one.n != 1) return false;
         snprintf(c->editor[c->neditor++], CONF_LINE_MAX, "%.*s", STR_ARG(v));
         return true;
+    }
     }
     return false;
 }
@@ -224,11 +224,9 @@ static void conf_parse(Str text, Conf *c)
     conf_defaults(c);
     c->skip.n = 0;
     int no = 0;
-    for (isize at = 0; at < text.len;) {
-        isize e = at;
-        while (e < text.len && text.p[e] != '\n') e++;
-        Str line = str_trim(str_cut(text, at, e));
-        at = e + 1, no++;
+    isize at = 0;
+    for (Str line; next_line(text, &at, &line);) {
+        line = str_trim(line), no++;
         if (line.len == 0 || line.p[0] == '#') continue;
         isize eq = str_find(line, '=');
         Str key = eq < 0 ? line : str_trim(str_cut(line, 0, eq)), val = eq < 0 ? STR_EMPTY : str_trim(str_cut(line, eq + 1, line.len));
@@ -312,10 +310,8 @@ static bool conf_create(const char *path, Err *err)
     struct stat st;
     if (lstat(path, &st) == 0) return true;
     if (!ops_allowed(path, err)) return false;
-    Str dir = path_dir(str_from_c(path));
     char d[PATH_MAX];
-    snprintf(d, sizeof d, "%.*s", STR_ARG(dir));
-    if (!mkdir_p(d, 0700, true, err)) return false;
+    if (!path_parent(d, sizeof d, path) || !mkdir_p(d, 0700, true, err)) return false;
     static char text[16384];
     size_t n = conf_default_text(text, sizeof text);
     int fd = open(path, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC | O_NOFOLLOW, 0644);

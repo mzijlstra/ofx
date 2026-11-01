@@ -86,11 +86,9 @@ static int editor_words(Arena *a, Str line, const char **w, int cap)
 static void editors_add(Arena *a, Str text, Editors *out)
 {
     int no = 0;
-    for (isize at = 0; at < text.len;) {
-        isize e = at;
-        while (e < text.len && text.p[e] != '\n') e++;
-        Str line = str_trim(str_cut(text, at, e));
-        at = e + 1, no++;
+    isize at = 0;
+    for (Str line; next_line(text, &at, &line);) {
+        line = str_trim(line), no++;
         if (line.len == 0 || line.p[0] == '#') continue;
         const char *w[EDITOR_WORDS + 2];
         int n = editor_words(a, line, w, COUNT(w) - 1);

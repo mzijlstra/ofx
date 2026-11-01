@@ -58,17 +58,14 @@ static const char *mountinfo_path(void)
 // /run/udev/data, or the tests' OFX_TEST_SYSBLOCK and OFX_TEST_UDEV. With the guard on
 // (OFX_GUI_ROOT, every test run) and no test folder, none: a test never lists Michael's drives,
 // so it can never mount one.
-static const char *sysblock_path(void)
+static const char *test_or_real(const char *var, const char *real)
 {
-    const char *t = getenv("OFX_TEST_SYSBLOCK");
-    return t && t[0] ? t : getenv("OFX_GUI_ROOT") ? NULL : "/sys/class/block";
+    const char *t = getenv(var);
+    return t && t[0] ? t : getenv("OFX_GUI_ROOT") ? NULL : real;
 }
 
-static const char *udev_path(void)
-{
-    const char *t = getenv("OFX_TEST_UDEV");
-    return t && t[0] ? t : getenv("OFX_GUI_ROOT") ? NULL : "/run/udev/data";
-}
+static const char *sysblock_path(void) { return test_or_real("OFX_TEST_SYSBLOCK", "/sys/class/block"); }
+static const char *udev_path(void) { return test_or_real("OFX_TEST_UDEV", "/run/udev/data"); }
 
 static const u32 WATCH_DIR_MASK = IN_CREATE | IN_DELETE | IN_MOVED_FROM | IN_MOVED_TO | IN_CLOSE_WRITE | IN_MODIFY |
                                   IN_ATTRIB | IN_DELETE_SELF | IN_MOVE_SELF | IN_ONLYDIR;
@@ -102,15 +99,20 @@ static void watch_dir(const char *dir)
     atomic_store(&watch.dir_wd, dir ? inotify_add_watch(watch.fd, dir, WATCH_DIR_MASK | IN_MASK_ADD) : -1);
 }
 
-// The bookmarks file's folder, watched unless it is already (or there is none yet).
+// A file's folder into *wd, watched unless it is already (or there is none yet: -1, and its
+// IN_IGNORED, watch_read, sets -1 again when it goes). For the bookmarks file and ofx.conf.
+static void watch_file_dir(atomic_int *wd, const char *file)
+{
+    char d[PATH_MAX];
+    if (watch.fd < 0 || atomic_load(wd) >= 0 || !file || !path_parent(d, sizeof d, file)) return;
+    atomic_store(wd, inotify_add_watch(watch.fd, d, IN_CREATE | IN_DELETE | IN_MOVED_FROM | IN_MOVED_TO | IN_CLOSE_WRITE | IN_ONLYDIR | IN_MASK_ADD));
+}
+
+// The bookmarks file's folder (F7.5).
 static void watch_bookmarks(void)
 {
-    if (watch.fd < 0 || atomic_load(&watch.bm_wd) >= 0) return;
     char file[PATH_MAX];
-    Str dir = path_dir(str_from_c(bookmarks_path(file, sizeof file)));
-    char d[PATH_MAX];
-    snprintf(d, sizeof d, "%.*s", STR_ARG(dir));
-    atomic_store(&watch.bm_wd, inotify_add_watch(watch.fd, d, IN_CREATE | IN_DELETE | IN_MOVED_FROM | IN_MOVED_TO | IN_CLOSE_WRITE | IN_ONLYDIR | IN_MASK_ADD));
+    watch_file_dir(&watch.bm_wd, bookmarks_path(file, sizeof file));
 }
 
 // The trash folders' files/ to watch now, in place of the last ones: the new ones added first, so
@@ -136,15 +138,11 @@ static void watch_trashes(const TrashDirs *d)
     }
 }
 
-// ofx.conf's folder, watched unless it is already (or there is none: conf_start couldn't make it;
-// Preferences tries again, F10).
+// ofx.conf's folder (F10; none when conf_start couldn't make it: Preferences tries again).
 static void watch_conf(void)
 {
-    char file[PATH_MAX], d[PATH_MAX];
-    if (watch.fd < 0 || atomic_load(&watch.conf_wd) >= 0 || !conf_path(file, sizeof file)) return;
-    Str dir = path_dir(str_from_c(file));
-    snprintf(d, sizeof d, "%.*s", STR_ARG(dir));
-    atomic_store(&watch.conf_wd, inotify_add_watch(watch.fd, d, IN_CREATE | IN_DELETE | IN_MOVED_FROM | IN_MOVED_TO | IN_CLOSE_WRITE | IN_ONLYDIR | IN_MASK_ADD));
+    char file[PATH_MAX];
+    watch_file_dir(&watch.conf_wd, conf_path(file, sizeof file) ? file : NULL);
 }
 
 static void watch_theme_dirs(void)

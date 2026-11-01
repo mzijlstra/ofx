@@ -621,6 +621,8 @@ MUTANTS = [
     ('gui/main.c', '        if (atomic_exchange(&watch.conf_ready, false)) conf_apply(), reload(), dirty = true;', '        if (atomic_exchange(&watch.conf_ready, false)) conf_apply(), dirty = true;', 'f10'),
     ('gui/watch.c', '        if (e->wd == atomic_load(&watch.conf_wd) && e->len && strcmp(e->name, "ofx.conf") == 0) *conf = true;', '', 'f10'),
     ('gui/watch.c', '    watch_bookmarks();\n    watch_conf();', '    watch_bookmarks();', 'f10'),
+    ('gui/watch.c', '    watch_file_dir(&watch.conf_wd, conf_path(file, sizeof file) ? file : NULL);', '', 'f10'),
+    ('gui/watch.c', '    watch_file_dir(&watch.bm_wd, bookmarks_path(file, sizeof file));', '', 'f75'),
     ('gui/prefs.c', '    watch_conf();   // (its folder may be new)\n', '', 'f10'),
     ('gui/prefs.c', '    if (!conf_create(path, &err)) {', '    if (false) {', 'f10'),
     ('gui/prefs.c', '    if (conf_path(path, sizeof path) && !conf_create(path, &err)) set_status', '    if (false) set_status', 'f10'),

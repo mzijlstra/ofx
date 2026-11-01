@@ -137,8 +137,7 @@ static bool bm_write(const char *file, Str text, Err *err)
         return true;
     }
     char dir[PATH_MAX], tmp[PATH_MAX];
-    Str d = path_dir(str_from_c(file));
-    snprintf(dir, sizeof dir, "%.*s", STR_ARG(d));
+    if (!path_parent(dir, sizeof dir, file)) return err_set(err, "the path is too long"), false;
     if (mkdir(dir, 0700) != 0 && errno != EEXIST) return err_set(err, "%s: %s", dir, strerror(errno)), false;
     if (snprintf(tmp, sizeof tmp, "%s/.bookmarks.ofx-%d", dir, (int)getpid()) >= (int)sizeof tmp) return err_set(err, "the path is too long"), false;
     mode_t mode = stat(file, &st) == 0 ? st.st_mode & 0777 : 0644;

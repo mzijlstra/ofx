@@ -1,4 +1,5 @@
 # tools/mutation/gui.py: each GUI mutant (its key) and the run.sh group that killed it
+00c9cee2302c f10
 00fc74142af6 f52
 011ef05e147d f63
 02d80a798aae f9
@@ -16,6 +17,7 @@
 088976b6c2f3 usb
 0ac33bd4c46b f7
 0b08191db0a3 f75
+0b6ecec1249e f75
 0ba75f00199e browse
 0bc273e6b378 f6
 0c09782580c9 f72
