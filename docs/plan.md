@@ -48,6 +48,7 @@ Omarchy's theme: the binary, the folder `tools/ofx`, the window's title and Wayl
 | F8 | Right-click menus: the selection, empty space, a folder elsewhere, a tab | Below |
 | F9 | Search below the folder: names as you type in a tab of its own, then working with results, then (turned on per search) inside files, then Open at Line | Below |
 | F10 | `ofx.conf`: the options you set, in one commented file ofx reads and watches; Edit → Preferences… | Below |
+| F11 | What ofx remembers: view, zoom and sort per folder, Show Hidden, the cursor per folder, the tree's open folders, Reopen Closed Tab, and the tabs across a restart (an option) | Below |
 
 Each milestone ends in a reviewer-2 round, then Michael's go before `make install`.
 
@@ -56,12 +57,7 @@ Nemo: menus, a top bar, tabs, sidebar modes in the bottom bar), in the order F4 
 his word: Nemo's compact view and its icon size slider.
 
 **Later, wanted eventually, not scheduled:**
-- The view (list or icons) and the icon size per folder (Michael, 2026-10-30). ofx.conf sets the
-  default (`view = list`, `zoom = 48`). The state file keeps only the folders you changed from it,
-  not every folder opened, as Nemo does. When the default in ofx.conf changes, those per-folder
-  choices are wiped, since they were made against the old default. ofx says so: a comment above
-  the option in ofx.conf, and the status line when it happens. F6.2 keeps one view for all folders
-  until then.
+- The view (list or icons) and the icon size per folder: F11 (2026-11-01).
 - Previews of videos and PDFs through the system's thumbnailers (`/usr/share/thumbnailers`), after F6.4.
 - Git status per file (`git status --porcelain=v2 -z` off the main thread, a mark per row).
 - USB drives (from the concept doc): unmounted drives in the sidebar, a click mounts them with
@@ -78,7 +74,7 @@ his word: Nemo's compact view and its icon size slider.
 - Counting in a separate process (reviewer-2, F4 review): a readdir on a hard NFS mount that
   hangs sits in D state, which no thread exit can reap, so ofx's process (its Wayland socket) can
   outlive its window. Only a child process that does the counting decouples a dead mount fully.
-- Remember the open tabs across a restart (F5 doesn't).
+- Remember the open tabs across a restart: F11 (2026-11-01).
 - A resizable sidebar (the tree's deep levels get little room at 200 px).
 - The Trash place's icon full or empty: done (c621bf7, d99f180, 2026-10-30), every trash's files/
   watched. Not yet: a trash folder that appears from outside (another program's very first trash,
@@ -690,6 +686,53 @@ Default and Recommended equal GIO's; GLib's rewrite of a copy adds the two lines
   index.theme files read again; start-up is back to about 51 ms), each app's texture when its row
   is first drawn, all of them dropped when it closes (`ow_drop`). SVG icons (theme, pixmaps/ or a
   path) are drawn with nanosvg, vendored; only for the apps, the files' icons stay PNG.
+
+## F11 design (2026-11-01)
+
+What ofx remembers by itself. Michael chose the scope (2026-11-01): per-folder view and zoom (his
+2026-10-30 rule), the tabs across a restart as an option, and the five things ofx forgot that I
+listed: sort, Show Hidden, the tree's open folders, Reopen Closed Tab, the cursor per folder.
+
+**Decided (Michael, 2026-11-01):**
+- **Per folder:** the view (list or icons), the icon size, the sort key and Reverse Order.
+  ofx.conf sets each default: `view`, `zoom`, `sort`, `sort-reverse`. The state file keeps only
+  the folders you changed from the default, not every folder opened. When a default in ofx.conf
+  changes, the folders' choices for it are wiped, since they were made against the old default;
+  ofx says so in the status line, and the option's comment in ofx.conf says it will.
+- **Show Hidden Files:** one setting for every folder, remembered in the state file.
+- **The cursor per folder:** a folder opened again after a restart puts the cursor on the entry it
+  was on.
+- **The tree sidebar's open folders:** remembered.
+- **Reopen Closed Tab** (Ctrl+Shift+T, as in browsers).
+- **The tabs across a restart:** an option, `restore-tabs` in ofx.conf (off by default, as in
+  browsers); the tabs themselves in the state file. Per tab, its folder (its view follows the
+  folder). After Ctrl+Q (Close All Windows), the next start opens the last window closed, with a
+  modal asking whether to restore all the windows.
+- **Housekeeping inside ofx, not ofx-clean:** the state file already has writers (every window,
+  key by key), and a second one from a timer could lose a window's change. The folders' entries
+  are small; each save keeps the most recently used 1000 and drops a folder that is gone, but not
+  one on a drive that isn't there now or on a network mount (ofx-clean's rule, shared).
+
+**Decided without asking (say if any is wrong):**
+- **Per field:** a default changed wipes only that field (a new `sort` default leaves the folders'
+  views alone). A choice set back to the default is dropped from the folder's entry.
+- **The old global keys** (`view=`, `zoom=` in the state file) are no longer read: ofx.conf's
+  defaults replace them. Michael's state has `zoom=32`: `zoom = 32` in ofx.conf keeps it.
+- **The cursor** is kept for each folder opened (it can't be "changed from a default"), so those
+  entries are the ones the 1000 cap is for.
+- **Which window's tabs:** closing one window while others stay forgets its tabs (as browsers do,
+  but for Reopen Closed Tab in that window's own session); closing the last one keeps them; Ctrl+Q
+  keeps every window's.
+- **Started on a folder:** the restored tabs come back, and a folder asked for (xdg-open, Show in
+  folder, `ofx <folder>`) opens as one more tab, shown. Started on `$HOME`, as SUPER+SHIFT+F does,
+  counts as a plain start: no extra tab.
+- **Reopen Closed Tab** keeps the last 16 closed tabs of this window, in this session.
+
+**The steps:**
+1. Per-folder view, zoom and sort (ofx.conf defaults, the wipe), Show Hidden, the cursor per folder,
+   the housekeeping.
+2. The tree's open folders; Reopen Closed Tab.
+3. The tabs across a restart (`restore-tabs`), with the Ctrl+Q modal.
 
 ## F10 design (2026-10-30)
 
