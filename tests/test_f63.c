@@ -162,24 +162,15 @@ static void test_state_zoom(void)
     char path[PATH_MAX];
     env_set("XDG_STATE_HOME", at("state63"));
     CHECK(state_path(path, sizeof path));
-    // No file: no size said.
-    CHECK(state_load(&ta, path).zoom == 0);
+    // F11: the zoom is per folder now; folderdefaults= says which ofx.conf defaults the folders'
+    // choices were made against: kept as written, when it fits.
+    CHECK(state_load(&ta, path).folder_defaults[0] == 0);
     Err err;
-    CHECK(state_put(&ta, path, "sidebar", "places", &err) && state_put(&ta, path, "view", "icons", &err) && state_put(&ta, path, "zoom", "96", &err));
-    State r = state_load(&ta, path);
-    CHECK(r.icons && r.zoom == 96);
-    CHECK(strcmp(read_file(&ta, path).p, "sidebar=places\nview=icons\nzoom=96\n") == 0);
-    // Digits only, four at most, more than 0; the last one said wins.
-    static const struct { const char *text; int zoom; } Z[] = {
-        { "zoom=256\n", 256 }, { "zoom = 32", 32 }, { "zoom=64\nzoom=128\n", 128 }, { "zoom=\n", 0 }, { "zoom=0\n", 0 },
-        { "zoom=-48\n", 0 }, { "zoom=4x\n", 0 }, { "zoom=12345\n", 0 }, { "zoom=9999\n", 9999 }, { "zoom=96\nzoom=x\n", 96 },
-        { "zom=96\n", 0 }, { "zoom 96\n", 0 }, { "zoom=96\nzoom=0\n", 96 }, { "zoom=96\nzoom=\n", 96 }, { "zoom=x4\n", 0 },
-    };
-    for (int k = 0; k < COUNT(Z); k++) {
-        put(path, Z[k].text);
-        checks++;
-        int got = state_load(&ta, path).zoom;
-        if (got != Z[k].zoom) failures++, fprintf(stderr, "state zoom for '%s': %d\n", Z[k].text, got);
-    }
+    CHECK(state_put(&ta, path, "folderdefaults", "icons 64 size on", &err));
+    CHECK(strcmp(state_load(&ta, path).folder_defaults, "icons 64 size on") == 0);
+    char big[200];
+    snprintf(big, sizeof big, "folderdefaults=%0*d\n", 100, 0);
+    put(path, big);
+    CHECK(state_load(&ta, path).folder_defaults[0] == 0);
     env_restore();
 }

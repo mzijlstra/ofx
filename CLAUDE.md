@@ -39,9 +39,10 @@ rules shared by every tool here.
   its udisksctl fake "mounts" under `<scratch>/media` by writing the test mount list, and with the
   guard on (`OFX_GUI_ROOT`) ofx reads neither real folder without them. Reading them is harmless;
   never test a mount against the real ones.
-- **The state file** (F6): ofx writes the sidebar's mode, the view (F6.2) and the icon size (F6.3) to
+- **The state file** (F6, F11): ofx writes the sidebar's mode, the View toggles, Show Hidden, and
+  per folder its view, icon size, sort and cursor (every folder a window opens, at the quit) to
   `$XDG_STATE_HOME/ofx/state`; `run-script.sh` points that at `<scratch>/state`, so a test never
-  changes his.
+  changes his. Its housekeeping `stat`s the folders it holds on a write: his if it were his file.
 - **The thumbnail cache** (F6.4): ofx reads and writes previews in `$XDG_CACHE_HOME/thumbnails`,
   which is Michael's `~/.cache/thumbnails`, shared with Nemo (and where Nemo's stale-preview loop
   came from, 2026-10-20). `run-script.sh` points `XDG_CACHE_HOME` at `<scratch>/cache`, and the

@@ -120,8 +120,9 @@ zoom), wrapped to two lines and cut with
 "…"; the cursor's name shows in full, over the cells below. Left/Right (`h`/`l`) move a cell and run
 on across the rows (in the list they do nothing), Up/Down (`k`/`j`) a row, PgUp/PgDn a page of rows,
 Home/End the first and last; Enter opens and Backspace goes up. Sort, find, the selection, rename,
-tabs and the rest work as in the list; size and date are in the status line. The view is one for
-every folder, remembered beside the sidebar's mode, and so is the size.
+tabs and the rest work as in the list; size and date are in the status line. The view and the size
+are each folder's own once you change them (F11), remembered; ofx.conf's `view` and `zoom` are the
+default for the rest.
 
 Previews, in the icon view: PNG, JPEG (turned as its EXIF says), GIF and WebP files show their
 picture in the icon's place, its shape kept, made on two threads while the window stays live. They
@@ -176,6 +177,13 @@ the file is what applies. Edit → Preferences… opens it in your editor. ofx a
 as you save. What you toggle
 in the View menu isn't set here: ofx remembers it in `~/.local/state/ofx/state`.
 
+What ofx remembers by itself (F11): a folder's own view, icon size, sort and Reverse Order once you
+change them from ofx.conf's defaults (`view`, `zoom`, `sort`, `sort-reverse`), the entry the cursor
+was on in each folder you open, and Show Hidden Files. A new default in ofx.conf forgets the
+folders' choices for it, and the status line says how many. The state file keeps the 1000 folders
+opened most recently, and drops a folder that is gone (one on a drive that isn't plugged in, or on
+a network mount, stays).
+
 <!-- ofx.conf: written by `build/ofx-probe --conf`; make test checks this copy -->
 ```ini
 # ofx.conf: the options you set for ofx (the Omarchy file explorer).
@@ -191,11 +199,32 @@ in the View menu isn't set here: ofx remembers it in `~/.local/state/ofx/state`.
 # A list (search-skip) is written out instead, one line a name, since it is
 # exactly the lines it has here: removing them all makes it empty.
 #
-# Not set here: what you toggle in the View menu (the sidebar's mode, list or
-# icons, the icon size, the menu bar, the Owner, Group and Permissions columns)
-# is remembered by ofx itself, in ~/.local/state/ofx/state. With the menu bar
+# Not set here: what you toggle in the View menu (the sidebar's mode, a folder's
+# own view, icon size and sort, Show Hidden Files, the menu bar, the columns) is
+# remembered by ofx itself, in ~/.local/state/ofx/state. With the menu bar
 # hidden, its menus still open with F10, or Alt and a menu's letter (Alt+V for
 # View), and View > Show Menu brings it back.
+
+# How a folder shows its files: list, or icons. View > List (Ctrl+1) and
+# Icons (Ctrl+2) change it for the folder shown, and ofx remembers that
+# folder's choice. Change this default and those choices are forgotten (they
+# were made against the old one): every folder follows the new default, and
+# the status line says how many folders had their own.
+#view = list
+
+# The icon view's icon size, in pixels: 32, 48, 64, 96, 128 or 256. Zoom In and
+# Out (Ctrl+=, Ctrl+-) change it for the folder shown, remembered, and a new
+# default here forgets those, as for view.
+#zoom = 48
+
+# The order files are listed in: name, size or modified (newest last). The
+# View menu and the column headers change it for the folder shown,
+# remembered, and a new default here forgets those, as for view.
+#sort = name
+
+# The order reversed (View > Reverse Order, Shift+S): on or off. Per folder,
+# as sort.
+#sort-reverse = off
 
 # Previews of images in the icon view, in place of their file type's icon.
 # on or off. Off, ofx makes and reads no previews at all (the cache, shared

@@ -77,7 +77,9 @@ expect previews=5
 key home
 expect sel=far
 key enter
-wait-for 5000 thumblocal=0 thumbbusy=0
+wait-for 5000 view=list thumblocal=0
+key ctrl-2
+wait-for 5000 view=icons thumbbusy=0
 wait 2
 expect previews=0 thumbmade=11 thumbnone=5
 sh test ! -e "$OFX_ROOT/cache/thumbnails/normal/$(printf 'file://%s' "$OFX_DIR/x.png" | md5sum | cut -c1-32).png"

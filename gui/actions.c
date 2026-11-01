@@ -742,24 +742,21 @@ static void act(UiAction a)
     case UA_VIEW: {   // F6.2: remembered; the loop lays it out before the next frame
         if (a.kind == UA_ZOOM) app.zoomed = true;
         app.icons_reset_armed = true;   // the other size's icons may not fit beside these
-        // Only the key that changed: another window may have changed the others (F7.1).
-        char path[PATH_MAX], zoom[16];
-        snprintf(zoom, sizeof zoom, "%d", app.ui.zoom > 0 ? app.ui.zoom : UI_ZOOM_DEFAULT);
-        if (state_path(path, sizeof path) &&
-            !(a.kind == UA_ZOOM ? state_put(&scratch, path, "zoom", zoom, &err) : state_put(&scratch, path, "view", app.ui.grid ? "icons" : "list", &err)))
-            set_status(true, "%s", err.msg);
+        remember_view(a.kind == UA_ZOOM ? FP_ZOOM : FP_VIEW);   // (the folder shown's own, F11)
         break;
     }
     case UA_BACK: hist_go(-1); break;
     case UA_FORWARD: hist_go(1); break;
     case UA_HIDDEN: {
         app.show_hidden = !app.show_hidden;
+        char sp[PATH_MAX];
+        if (state_path(sp, sizeof sp) && !state_put(&scratch, sp, "hidden", app.show_hidden ? "on" : "off", &err)) set_status(true, "%s", err.msg);   // (F11)
         char keep[PATH_MAX];
         snprintf(keep, sizeof keep, "%.*s", STR_ARG(sel_name()));
         go_to(app.cwd, str_from_c(keep), 0);
         break;
     }
-    case UA_SORT: resort(); break;
+    case UA_SORT: resort(), remember_view(FP_SORT | FP_REV); break;   // (F11)
     case UA_PLACE: {
         char buf[PATH_MAX];
         const char *p = side_path(a.index, buf, sizeof buf);

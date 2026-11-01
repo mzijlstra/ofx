@@ -8,22 +8,22 @@ static void test_state_view(void)
     char path[PATH_MAX];
     env_set("XDG_STATE_HOME", at("state62"));
     CHECK(state_path(path, sizeof path));
-    // No file: the list.
-    CHECK(!state_load(&ta, path).icons);
+    // F11: Show Hidden Files (hidden=); the view is per folder now (fs/folders.c). No file: off.
+    CHECK(!state_load(&ta, path).hidden);
     Err err;
-    CHECK(state_put(&ta, path, "sidebar", "tree", &err) && state_put(&ta, path, "view", "icons", &err));
+    CHECK(state_put(&ta, path, "sidebar", "tree", &err) && state_put(&ta, path, "hidden", "on", &err));
     State r = state_load(&ta, path);
-    CHECK(r.icons && r.side == SIDE_TREE);
-    CHECK(strcmp(read_file(&ta, path).p, "sidebar=tree\nview=icons\n") == 0);
-    CHECK(state_put(&ta, path, "view", "list", &err) && !state_load(&ta, path).icons);
-    // Either word, the last one winning; an unknown one is left out.
-    put(path, "view=icons\nview=grid\n");
-    CHECK(state_load(&ta, path).icons);
-    put(path, "view = icons\nview=list\n");
-    CHECK(!state_load(&ta, path).icons);
-    put(path, "sidebar=hidden\nview=icons");
+    CHECK(r.hidden && r.side == SIDE_TREE);
+    CHECK(strcmp(read_file(&ta, path).p, "sidebar=tree\nhidden=on\n") == 0);
+    CHECK(state_put(&ta, path, "hidden", "off", &err) && !state_load(&ta, path).hidden);
+    // The last one wins; an unknown word is off; the old view= and zoom= are no longer read.
+    put(path, "hidden=on\nhidden=maybe\n");
+    CHECK(!state_load(&ta, path).hidden);
+    put(path, "hidden = on\nview=icons\nzoom=96\n");
+    CHECK(state_load(&ta, path).hidden);
+    put(path, "sidebar=hidden\nhidden=on");
     r = state_load(&ta, path);
-    CHECK(r.icons && r.side == SIDE_HIDDEN);
+    CHECK(r.hidden && r.side == SIDE_HIDDEN);
     env_restore();
 }
 

@@ -30,8 +30,13 @@ static void conf_apply(void)
     conf_load(&scratch, &c);
     static bool once;   // (the first read: nothing asked under the old values yet)
     bool previews = once && (c.previews != app.conf.previews || c.preview_max != app.conf.preview_max);
+    bool views = once && (c.icons != app.conf.icons || c.zoom != app.conf.zoom || c.sort != app.conf.sort || c.sort_rev != app.conf.sort_rev);
     once = true;
     app.conf = c;
+    if (views) {   // (F11: the folders' choices against the old defaults forgotten; the folder shown again)
+        remember_defaults();
+        if (fold_view_of(app.ui.view)) remember_apply(app.cwd);
+    }
     thumbs.off = !c.previews, thumbs.src_max = c.preview_max;
     if (previews) thumbs_reset();   // (asked again, under the new limit, or not at all)
     if (c.bad) {

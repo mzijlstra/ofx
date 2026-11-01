@@ -64,7 +64,9 @@ wait-for 2000 crumbs=home|tree|adir crumb=2 locating=0
 key ctrl-l
 key ctrl-v
 key enter
-wait-for 2000 crumb=1 sel=adir locating=0
+wait-for 2000 crumb=1 locating=0
+key home
+expect sel=adir
 # Pasted over part of it: the selection only
 key ctrl-l
 key end

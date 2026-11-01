@@ -187,7 +187,19 @@ static bool go_to_in(const char *dir, Str select, isize fallback, bool stepping)
     Err err;
     UiView view = view_of(dir);
     bool same = strcmp(dir, app.cwd) == 0;
+    // Another folder (F11): the one left keeps its cursor; this one's own view, size and sort, its
+    // remembered cursor when none is asked for. All as they were if it can't be listed.
+    bool grid = app.ui.grid;
+    int zoom = app.ui.zoom;
+    Sort sort = app.ui.sort;
+    if (!same && app.have_list && fold_view_of(app.ui.view)) remember_cursor(app.cwd, sel_name());
+    if (!same && fold_view_of(view)) {
+        remember_apply(dir);
+        const char *kept = remember_sel(dir);
+        if (!select.len && fallback == 0 && kept) select = str_from_c(kept);
+    }
     if (!view_list(view, &lists[next], dir, &l, &err)) {
+        app.ui.grid = grid, app.ui.zoom = zoom, app.ui.sort = sort;
         if (!app.have_list) snprintf(app.error, sizeof app.error, "%s", err.msg);
         set_status(true, "%s", err.msg);
         return false;

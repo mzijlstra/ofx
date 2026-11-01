@@ -8,7 +8,7 @@ raw-key 50 2
 expect view=icons cols=6 rows=3 cells=18 cellfirst=0 celllast=17 iconpx=48 idx=0 top=0
 # Its own texture, not the list's stretched: 48 px at the test's scale 2.
 expect icontex=96
-sh grep -qx view=icons "$OFX_ROOT/state/ofx/state"
+sh grep -q "^folder $OFX_DIR [0-9]* icons " "$OFX_ROOT/state/ofx/state"   # (the folder's own, F11)
 # Left and Right a cell, Up and Down a row; the scroll a row at a time.
 key right
 expect idx=1
@@ -86,9 +86,9 @@ expect marked=0
 # Enter and a double click open; Backspace goes up, back onto the folder left.
 key home
 key enter
-expect sel=inner.txt view=icons
+expect sel=inner.txt view=list
 key backspace
-expect sel=adir
+expect sel=adir view=icons
 press 1
 press 1
 expect sel=bin.txt
@@ -110,7 +110,7 @@ expect editing=0 sel=f01
 # The list again: the cursor stays, one entry a row (Ctrl+1 through the callback); and back.
 raw-key 49 2
 expect view=list cols=1 idx=3 iconpx=24
-sh grep -qx view=list "$OFX_ROOT/state/ofx/state"
+sh grep -q "^folder $OFX_DIR [0-9]* - " "$OFX_ROOT/state/ofx/state"   # (the default again: unset)
 key ctrl-2
 expect view=icons cols=6 idx=3
 # The sidebar hidden: 8 columns in the wider room, then 6 again (F9: tree, hidden, places).

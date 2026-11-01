@@ -1,0 +1,84 @@
+# F11 step 1 (docs/plan.md "F11 design"): what ofx remembers per folder. run.sh: tree/sub1/{x,y}.txt,
+# tree/sub2/{a,b,c}.txt, tree/top.txt; no state file. A folder's view, icon size and sort are its own
+# once changed, written to the state file at once; the cursor's entry is kept as a folder is left;
+# Show Hidden is one setting; a new default in ofx.conf forgets the folders' choices for it.
+settle
+expect view=list sort=name rev=0 zoom=48 sel=sub1 shown=0
+# sub1 as icons, then bigger: its own; tree keeps the list
+key enter
+wait-for 2000 sel=x.txt
+key ctrl-2
+expect view=icons
+key ctrl-equal
+expect zoom=64
+sh grep -q "^folder $OFX_DIR [0-9]* icons 64 - - -$" "$OFX_ROOT/state/ofx/state"
+key alt-up
+wait-for 2000 sel=sub1 view=list
+key enter
+wait-for 2000 view=icons zoom=64
+key ctrl-1
+expect view=list
+key ctrl-2
+expect view=icons
+key alt-up
+wait-for 2000 sel=sub1 view=list
+# tree by size (s), reversed (S): its own; sub2 by name; back in tree, by size again
+char s
+char S
+expect sort=size rev=1
+key home
+expect sel=sub2
+key enter
+wait-for 2000 sort=name rev=0
+# sub2's cursor on b.txt, left: kept, there when it is opened again
+key down
+expect sel=b.txt
+key alt-up
+wait-for 2000 sort=size rev=1 sel=sub2
+key enter
+wait-for 2000 sel=b.txt sort=name
+key alt-up
+wait-for 2000 sel=sub2
+# Show Hidden: remembered (hidden=on)
+key ctrl-h
+wait-for 2000 shown=1
+sh grep -qx "hidden=on" "$OFX_ROOT/state/ofx/state"
+# Back to the default: unset in the folder's entry (which keeps its cursor)
+char s
+char s
+expect sort=name rev=0
+sh grep -q "^folder $OFX_DIR [0-9]* - - - - [^-]" "$OFX_ROOT/state/ofx/state"
+char s
+expect sort=size
+# A new default in ofx.conf: the folders' choices for it forgotten, said; the others kept
+sh printf 'sort = modified\n' >> "$OFX_ROOT/config/ofx/ofx.conf"
+wait-for 3000 sort=mtime rev=0 status=ofx.conf's
+expect status=ofx.conf's default sort changed: 1 folder had its own, forgotten
+sh grep -qx "folderdefaults=list 48 modified off" "$OFX_ROOT/state/ofx/state"
+key home
+expect sel=sub1
+key enter
+wait-for 2000 view=icons zoom=64 sort=mtime
+# A search shows its results in the view it had (no folder of its own)
+key ctrl-shift-f
+wait-for 2000 search=1 view=icons
+key esc
+key ctrl-w
+wait-for 2000 search=0 view=icons sel=x.txt
+# The trash view is a folder of its own: as icons, remembered
+key alt-end
+wait-for 2000 trash=1 view=list
+key ctrl-2
+expect view=icons
+key alt-left
+wait-for 2000 trash=0 view=icons
+key alt-end
+wait-for 2000 trash=1 view=icons
+key alt-left
+wait-for 2000 trash=0
+# The state file f11's run.sh started with (no folderdefaults=, as before F11): its folder line kept
+sh grep -q "^folder $OFX_ROOT 1 icons - - - -$" "$OFX_ROOT/state/ofx/state"
+# The cursor at the quit, kept (f11b)
+key end
+expect sel=y.txt
+quit

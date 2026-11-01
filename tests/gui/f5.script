@@ -45,13 +45,14 @@ expect sel=f35 top=32
 key ctrl-tab
 key ctrl-tab
 expect sel=f35 top=32 marked=0
-# ---- sort and hidden files belong to the window
+# ---- the sort belongs to the folder (F11): bdir keeps its own; tree's back to the default
 char S
-key ctrl-tab
 expect sort=name rev=1
-char S
-expect rev=0
 key ctrl-tab
+expect sort=name rev=0
+key ctrl-tab
+expect rev=1
+char S
 expect rev=0
 # ---- Alt+N, Ctrl+PgUp/Down through the key callback, moving a tab
 key alt-2

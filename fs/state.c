@@ -1,7 +1,8 @@
-// What ofx remembers by itself across a restart (docs/plan.md, F6 "Remembered"): the sidebar's
-// mode, the files' view (list or icons, F6.2) and the icon view's size (F6.3), in $XDG_STATE_HOME/ofx/state (~/.local/state by
-// default), which ofx writes. Options Michael sets go in $XDG_CONFIG_HOME/ofx/ofx.conf, which ofx
-// only reads (none yet).
+// What ofx remembers by itself across a restart (docs/plan.md, F6 "Remembered", F11), in
+// $XDG_STATE_HOME/ofx/state (~/.local/state by default), which ofx writes: the sidebar's mode, the
+// View menu's toggles, Show Hidden Files, and per folder its view, icon size, sort and cursor
+// (fs/folders.c's "folder …" lines). Options Michael sets go in $XDG_CONFIG_HOME/ofx/ofx.conf
+// (fs/conf.c), which ofx only writes when it isn't there.
 //
 // One `key=value` a line; a key ofx doesn't know, or a value it doesn't, is left out.
 
@@ -20,8 +21,8 @@ static const char *const SIDE_MODE_NAMES[SIDE_MODES] = { "places", "tree", "hidd
 
 typedef struct {
     SideMode side;
-    bool     icons;   // the files as icons, not the list (F6.2)
-    int      zoom;    // the icon view's icon size in px (F6.3); 0: not said, the default
+    bool     hidden;     // Show Hidden Files (F11): "hidden=on"
+    char     folder_defaults[64];   // ofx.conf's view defaults the folders' choices were made against (F11)
     bool     no_bar;     // the menu bar hidden (2026-10-27): "menubar=off"
     bool     no_perms;   // the list's Owner and Permissions columns left out (2026-10-27): "perms=off"
     bool     group;      // and Group shown between them (2026-10-27, off by default as eza's): "group=on"
@@ -37,7 +38,7 @@ static bool state_path(char *out, size_t cap)
 // The state in file path; the defaults for what it doesn't say (or no file at all).
 static State state_load(Arena *scratch, const char *path)
 {
-    State s = { SIDE_PLACES, false, 0, false, false, false, false };
+    State s = { .side = SIDE_PLACES };
     ArenaMark mark = arena_mark(scratch);
     Str text = read_file(scratch, path);
     isize at = 0;
@@ -46,16 +47,8 @@ static State state_load(Arena *scratch, const char *path)
         isize eq = str_find(line, '=');
         if (eq < 0) continue;
         Str key = str_trim(str_cut(line, 0, eq)), val = str_trim(str_cut(line, eq + 1, line.len));
-        if (str_eq(key, S("view"))) {
-            if (str_eq(val, S("icons"))) s.icons = true;
-            else if (str_eq(val, S("list"))) s.icons = false;
-        }
-        if (str_eq(key, S("zoom")) && val.len <= 4) {
-            int px = 0;
-            isize i = 0;
-            while (i < val.len && is_digit(val.p[i])) px = px * 10 + (val.p[i++] - '0');
-            if (i == val.len && px > 0) s.zoom = px;
-        }
+        if (str_eq(key, S("hidden"))) s.hidden = str_eq(val, S("on"));
+        if (str_eq(key, S("folderdefaults")) && val.len < (isize)sizeof s.folder_defaults) snprintf(s.folder_defaults, sizeof s.folder_defaults, "%.*s", STR_ARG(val));
         if (str_eq(key, S("perms"))) s.no_perms = str_eq(val, S("off"));
         if (str_eq(key, S("menubar"))) s.no_bar = str_eq(val, S("off"));
         if (str_eq(key, S("colors"))) s.no_colors = str_eq(val, S("off"));

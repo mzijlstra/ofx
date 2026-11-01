@@ -389,6 +389,7 @@ void __wrap_glfwDefaultWindowHints(void)
     glfwWindowHintString(GLFW_WAYLAND_APP_ID, "ofx");
 }
 
+#include "remember.c"
 #include "folder.c"
 #include "actions.c"
 #include "prefs.c"
@@ -633,9 +634,10 @@ int main(int argc, char **argv)
     app.ui.perms_cols = app.ui.colors = true;   // (on without a state file too)
     if (state_path(state_file, sizeof state_file)) {
         State st = state_load(&scratch, state_file);
-        app.ui.side_mode = st.side, app.ui.grid = st.icons, app.ui.zoom = st.zoom, app.ui.perms_cols = !st.no_perms, app.ui.bar_hidden = st.no_bar,
-        app.ui.colors = !st.no_colors, app.ui.group_col = st.group;
+        app.ui.side_mode = st.side, app.ui.perms_cols = !st.no_perms, app.ui.bar_hidden = st.no_bar,
+        app.ui.colors = !st.no_colors, app.ui.group_col = st.group, app.show_hidden = st.hidden;
     }
+    remember_defaults();   // (F11: the folders' table, after ofx.conf, which has their defaults)
     side_refresh();
     list_fit();
     ui_resize(&app.ui.side, side_rows(GetScreenHeight()));
@@ -773,6 +775,8 @@ int main(int argc, char **argv)
         dirty |= seen;
     }
     if (scripted) script_end();
+    if (fold_view_of(app.ui.view) && app.have_list) remember_cursor(app.cwd, sel_name());   // (F11)
+    if (rem.dirty) remember_write();
     if (app.windows[0]) win_unregister(app.windows, getpid());
     jobs_stop();
     clip_quit();

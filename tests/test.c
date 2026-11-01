@@ -1660,6 +1660,7 @@ static void test_format(void)
 #include "test_f8.c"
 #include "test_f9.c"
 #include "test_f10.c"
+#include "test_f11.c"
 #include "test_fm1.c"
 
 int main(void)
@@ -1793,6 +1794,8 @@ int main(void)
     test_conf_skips();
     test_conf_preview_max();
     test_conf_step2();
+    test_folders();
+    test_conf_views();
     test_open_line_keys();
     test_search_match();
     test_search_keys_find();

@@ -3,7 +3,7 @@
 # (tools/gui/run-script.sh):
 #   tests/gui/run.sh <scratch-dir> [binary] [group...]
 # The groups (one or more scripts on one tree): browse big gone watchgap f2 f3 f4 f5 f52 f53 f54
-# f6 (f6, f6b) usb f62 (f62, f62b, f62c) f63 (f63, f63b, f63c) f64 (f64, f64b, f64c, f64d) f7 (f7, f7b) f72 f73 (f73, f73b, f73c, f73d) f74 f75 (f75, f75b) f8 (f8, f8b, f8c, f8d, f8e) f9 (f9, f9b) f10 (f10, f10b, f10c, f10d) clip keys (both in sway) hang guard3 guard. Named ones only, or all of them; a group
+# f6 (f6, f6b) usb f62 (f62, f62b, f62c) f63 (f63, f63b, f63c) f64 (f64, f64b, f64c, f64d) f7 (f7, f7b) f72 f73 (f73, f73b, f73c, f73d) f74 f75 (f75, f75b) f8 (f8, f8b, f8c, f8d, f8e) f9 (f9, f9b) f10 (f10, f10b, f10c, f10d) f11 (f11, f11b) clip keys (both in sway) hang guard3 guard. Named ones only, or all of them; a group
 # that fails says "== <script>: FAILED" or "<group>: FAILED" (tools/mutation/gui.py reads it).
 set -u
 base=${1:?usage: run.sh <scratch-dir> [binary]}
@@ -114,6 +114,17 @@ T=$base/usb; rm -rf "$T"; mkdir -p "$T/tree/adir" "$T/sys" "$T/udevdb" "$T/media
 touch "$T/tree/a.txt"
 printf '33 1 0:31 / / rw - btrfs /dev/x rw\n' > "$T/mountinfo"
 echo "== usb"; OFX_TEST_HOME="$T/home" OFX_TEST_MEDIA="$T/media" OFX_TEST_MOUNTINFO="$T/mountinfo" OFX_TEST_SYSBLOCK="$T/sys" OFX_TEST_UDEV="$T/udevdb" "$here/../../tools/gui/run-script.sh" "$T" "$here/usb.script" "$bin" "$T/tree" || failed usb
+fi
+if want f11; then
+# F11: what ofx remembers per folder, in the run's own state and config folders (run-script's).
+T=$base/f11; rm -rf "$T"; mkdir -p "$T/tree/sub1" "$T/tree/sub2"
+touch "$T/tree/sub1/x.txt" "$T/tree/sub1/y.txt" "$T/tree/sub2/a.txt" "$T/tree/sub2/b.txt" "$T/tree/sub2/c.txt" "$T/tree/.hid"
+echo top > "$T/tree/top.txt"
+touch -d 2019-01-01 "$T/tree/.hid"; touch -d 2020-01-01 "$T/tree/sub1"; touch -d 2021-01-01 "$T/tree/sub2"; touch -d 2022-01-01 "$T/tree/top.txt"   # (the modified order: sub1, sub2; .hid, top.txt)
+printf '1 0 0:1 / / rw - ext4 /dev/x rw\n' > "$T/mountinfo"
+mkdir -p "$T/state/ofx" && printf 'sidebar=places\nfolder %s 1 icons - - - -\n' "$T" > "$T/state/ofx/state"   # (as before F11: no folderdefaults=)
+echo "== f11"; OFX_TEST_MOUNTINFO="$T/mountinfo" "$here/../../tools/gui/run-script.sh" "$T" "$here/f11.script" "$bin" "$T/tree" || failed f11
+echo "== f11b"; OFX_TEST_MOUNTINFO="$T/mountinfo" "$here/../../tools/gui/run-script.sh" "$T" "$here/f11b.script" "$bin" "$T/tree" || failed f11b
 fi
 if want f10; then
 # F10 step 1: ofx.conf, made at the start in the run's own config folder (run-script's).

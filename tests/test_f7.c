@@ -400,7 +400,7 @@ static void test_state_put(void)
     CHECK(state_put(&ta, path, "sidebar", "tree", &err));   // window B
     CHECK(state_put(&ta, path, "zoom", "96", &err));        // window A
     State s = state_load(&ta, path);
-    CHECK(s.side == SIDE_TREE && s.icons && s.zoom == 96);
+    CHECK(s.side == SIDE_TREE);
     CHECK_STR(read_file(&ta, path), "sidebar=tree\nview=icons\nzoom=96\n");
     // A key ofx doesn't know is kept; one said twice is said once; spaces around = are its key.
     put(path, "future=1\n view = list\nview=list\n\nsidebar=hidden");

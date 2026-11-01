@@ -24,5 +24,6 @@
 #include "thumb.c"
 #include "bookmarks.c"
 #include "clean.c"
+#include "folders.c"   // (after clean.c: its drive rules)
 #include "fm1.c"
 #include "windows.c"

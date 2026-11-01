@@ -1,0 +1,19 @@
+# F11, after f11.script on the same tree: a restart remembers tree's cursor (sub1, where f11 left it),
+# sub1's icons at 64, sub2's cursor, Show Hidden, and ofx.conf's sort = modified with nothing more to
+# forget.
+settle
+expect view=list sort=mtime shown=1 statusbad=0 status=- sel=sub1
+key enter
+wait-for 2000 view=icons zoom=64 sort=mtime sel=y.txt
+key alt-up
+wait-for 2000 sel=sub1 view=list
+key down
+expect sel=sub2
+key enter
+wait-for 2000 sel=b.txt view=list
+# ofx.conf's view = icons: a folder without a view of its own follows it; sub1's own (icons) was
+# made against the list, so it is forgotten, as are the trash view's and run.sh's, said
+sh printf 'view = icons\n' >> "$OFX_ROOT/config/ofx/ofx.conf"
+wait-for 3000 view=icons status=ofx.conf's
+expect status=ofx.conf's default view changed: 3 folders had their own, forgotten
+quit

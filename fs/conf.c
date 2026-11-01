@@ -33,8 +33,14 @@ static const SearchSkipList SEARCH_SKIP_DEFAULT = { { ".git", "node_modules" }, 
 #define CONF_PREVIEW_MAX ((i64)10 << 20)   // preview-max-size (Michael, 2026-10-24)
 #define CLEAN_UNUSED_S   (90 * 86400LL)    // clean-unused-days, in seconds (F6.5, Michael, 2026-10-25)
 #define CLEAN_CAP        ((i64)1 << 30)    // clean-cap
+#define CONF_ZOOM        48                // zoom (F6.3's UI_ZOOM_DEFAULT; test_conf ties them)
+static const int CONF_ZOOMS[] = { 32, 48, 64, 96, 128, 256 };   // the icon view's sizes (ui/'s UI_ZOOM_PX)
 
 typedef struct {
+    bool       icons;                             // view: a folder's default view the icon view (F11)
+    int        zoom;                              // its default icon size, one of CONF_ZOOMS
+    int        sort;                              // the default sort key, a SortKey
+    bool       sort_rev;                          // and Reverse Order
     bool       previews;                          // previews in the icon view (F6.4)
     i64        preview_max;                       // the largest image previewed, in bytes
     DateFormat date;
@@ -49,7 +55,7 @@ typedef struct {
     char       why[CONF_WHY_MAX];
 } Conf;
 
-typedef enum { CK_BOOL, CK_SIZE, CK_DATE, CK_NAMES, CK_EDITOR, CK_DAYS } ConfKind;
+typedef enum { CK_BOOL, CK_SIZE, CK_DATE, CK_NAMES, CK_EDITOR, CK_DAYS, CK_VIEW, CK_ZOOM, CK_SORT } ConfKind;
 
 // Each option: its key, kind, its field in Conf, default as written in the file ("": none, the help
 // has an example), and its help (lines, each made a comment). The help says what it does, what it
@@ -63,6 +69,23 @@ typedef struct {
 } ConfOpt;
 
 static const ConfOpt CONF_OPTS[] = {
+    { "view", CK_VIEW, offsetof(Conf, icons), "list",
+      "How a folder shows its files: list, or icons. View > List (Ctrl+1) and\n"
+      "Icons (Ctrl+2) change it for the folder shown, and ofx remembers that\n"
+      "folder's choice. Change this default and those choices are forgotten (they\n"
+      "were made against the old one): every folder follows the new default, and\n"
+      "the status line says how many folders had their own." },
+    { "zoom", CK_ZOOM, offsetof(Conf, zoom), "48",
+      "The icon view's icon size, in pixels: 32, 48, 64, 96, 128 or 256. Zoom In and\n"
+      "Out (Ctrl+=, Ctrl+-) change it for the folder shown, remembered, and a new\n"
+      "default here forgets those, as for view." },
+    { "sort", CK_SORT, offsetof(Conf, sort), "name",
+      "The order files are listed in: name, size or modified (newest last). The\n"
+      "View menu and the column headers change it for the folder shown,\n"
+      "remembered, and a new default here forgets those, as for view." },
+    { "sort-reverse", CK_BOOL, offsetof(Conf, sort_rev), "off",
+      "The order reversed (View > Reverse Order, Shift+S): on or off. Per folder,\n"
+      "as sort." },
     { "previews", CK_BOOL, offsetof(Conf, previews), "on",
       "Previews of images in the icon view, in place of their file type's icon.\n"
       "on or off. Off, ofx makes and reads no previews at all (the cache, shared\n"
@@ -130,9 +153,9 @@ static const char CONF_HEAD[] =
     "A list (search-skip) is written out instead, one line a name, since it is\n"
     "exactly the lines it has here: removing them all makes it empty.\n"
     "\n"
-    "Not set here: what you toggle in the View menu (the sidebar's mode, list or\n"
-    "icons, the icon size, the menu bar, the Owner, Group and Permissions columns)\n"
-    "is remembered by ofx itself, in ~/.local/state/ofx/state. With the menu bar\n"
+    "Not set here: what you toggle in the View menu (the sidebar's mode, a folder's\n"
+    "own view, icon size and sort, Show Hidden Files, the menu bar, the columns) is\n"
+    "remembered by ofx itself, in ~/.local/state/ofx/state. With the menu bar\n"
     "hidden, its menus still open with F10, or Alt and a menu's letter (Alt+V for\n"
     "View), and View > Show Menu brings it back.";
 
@@ -164,14 +187,15 @@ static bool conf_bool(Str v, bool *out)
 static const char *const CONF_WANTS[] = {
     [CK_BOOL] = "on or off", [CK_SIZE] = "a size like 10 MiB", [CK_DATE] = "short, long, iso or a pattern with %",
     [CK_NAMES] = "a folder name, without a /", [CK_EDITOR] = "a name, yes or no, then the command",
-    [CK_DAYS] = "a whole number of days",
+    [CK_DAYS] = "a whole number of days", [CK_VIEW] = "list or icons", [CK_ZOOM] = "32, 48, 64, 96, 128 or 256",
+    [CK_SORT] = "name, size or modified",
 };
 
 // The built-in defaults: all of them with no file to read; under a file, what it doesn't set (but
 // the list, which is the file's lines).
 static void conf_defaults(Conf *c)
 {
-    *c = (Conf){ .previews = true, .preview_max = CONF_PREVIEW_MAX, .date = DATE_SHORT, .skip = SEARCH_SKIP_DEFAULT, .clean = true,
+    *c = (Conf){ .zoom = CONF_ZOOM, .sort = SORT_NAME, .previews = true, .preview_max = CONF_PREVIEW_MAX, .date = DATE_SHORT, .skip = SEARCH_SKIP_DEFAULT, .clean = true,
                  .clean_orphans = true, .clean_unused_days = CLEAN_UNUSED_S / 86400, .clean_cap = CLEAN_CAP };
 }
 
@@ -187,6 +211,22 @@ static bool conf_set(Conf *c, int k, Str v)
         for (isize i = 0; i < v.len; i++)
             if (!is_digit(v.p[i]) || (n = n * 10 + (v.p[i] - '0')) > CONF_DAYS_MAX) return false;
         return v.len && (*(i64 *)f = n, true);
+    }
+    case CK_VIEW:
+        if (str_eq(v, S("list")) || str_eq(v, S("icons"))) return *(bool *)f = str_eq(v, S("icons")), true;
+        return false;
+    case CK_ZOOM: {
+        i64 n = 0;
+        for (isize i = 0; i < v.len && n <= 256; i++) n = is_digit(v.p[i]) ? n * 10 + (v.p[i] - '0') : 999;
+        for (int i = 0; i < COUNT(CONF_ZOOMS); i++)   // (empty: 0, none of them)
+            if (n == CONF_ZOOMS[i]) return *(int *)f = (int)n, true;
+        return false;
+    }
+    case CK_SORT: {
+        static const char *const SORTS[SORT_KEYS] = { "name", "size", "modified" };
+        for (int i = 0; i < SORT_KEYS; i++)
+            if (str_eq(v, str_from_c(SORTS[i]))) return *(int *)f = i, true;
+        return false;
     }
     case CK_DATE:   // (date, and date_pattern for a pattern)
         if (str_eq(v, S("short"))) return c->date = DATE_SHORT, true;

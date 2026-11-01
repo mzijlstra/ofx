@@ -626,8 +626,6 @@ MUTANTS += [
 ]
 # ---- F6.2: the icon view's state word, cursor, scroll and names
 MUTANTS += [
-    (ST, "            if (str_eq(val, S(\"icons\"))) s.icons = true;", "            if (str_eq(val, S(\"icons\"))) s.icons = false;"),
-    (ST, "            else if (str_eq(val, S(\"list\"))) s.icons = false;\n", ""),
     ('ui/cursor.c', "    return l->cols > 1 ? l->cols : 1;", "    return 1;"),
     ('ui/cursor.c', "all = (l->n + c - 1) / c;", "all = l->n / c;"),
     ('ui/cursor.c', "    return all > rows ? (all - rows) * c : 0;", "    return all > rows ? all - rows : 0;"),
@@ -693,9 +691,6 @@ MUTANTS += [
     (U, ".menu_title = -1, .menu_item = -1, .ctx_row = -1, .ctx_side = -1, .ctx_crumb = -1, .ctx_tab = -1, .prop_box", ".menu_title = -1, .menu_item = 0, .ctx_row = -1, .ctx_side = -1, .ctx_crumb = -1, .ctx_tab = -1, .prop_box"),
     ('ui/cursor.c', "    isize c = ui_cols(l), on = l->sel / c - l->top / c;", "    isize c = ui_cols(l), on = 0;"),
     ('ui/cursor.c', "    l->top = (l->sel / c - on) * c;   // out", "    l->top = l->top;   // out"),
-    (ST, "            if (i == val.len && px > 0) s.zoom = px;", "            if (px > 0) s.zoom = px;"),
-    (ST, "            if (i == val.len && px > 0) s.zoom = px;", "            if (i == val.len) s.zoom = px;"),
-    (ST, "        if (str_eq(key, S(\"zoom\")) && val.len <= 4) {", "        if (str_eq(key, S(\"zoom\"))) {"),
     (I, "    return hi * d->scale < size * scale;", "    return hi * d->scale <= size * scale;"),
     (I, "    int hi = d->type == IT_FIXED ? d->size : d->type == IT_SCALABLE ? d->max : d->size + d->threshold;", "    int hi = d->size;"),
     (I, "        if (!best || (best_short && !short_) || (best_short == short_ && dist < best_d)) best", "        if (!best || dist < best_d) best"),
@@ -2065,7 +2060,7 @@ MUTANTS += [
     (CF, 'return n <= INT64_MAX / UNITS[k].mul && (*out = n * UNITS[k].mul, true);', 'return n <= INT64_MAX / UNITS[k].mul && (*out = n, true);'),
     (CF, '    if (str_eq(v, S("on")) || str_eq(v, S("yes")) || str_eq(v, S("true"))) return *out = true, true;', '    if (str_eq(v, S("on")) || str_eq(v, S("yes"))) return *out = true, true;'),
     (CF, '    if (str_eq(v, S("off")) || str_eq(v, S("no")) || str_eq(v, S("false"))) return *out = false, true;', '    if (str_eq(v, S("off")) || str_eq(v, S("no"))) return *out = false, true;'),
-    (CF, '    *c = (Conf){ .previews = true, .preview_max = CONF_PREVIEW_MAX, .date = DATE_SHORT,', '    *c = (Conf){ .previews = true, .preview_max = CONF_PREVIEW_MAX, .date = DATE_LONG,'),
+    (CF, '.preview_max = CONF_PREVIEW_MAX, .date = DATE_SHORT,', '.preview_max = CONF_PREVIEW_MAX, .date = DATE_LONG,'),
     (CF, '#define CONF_PREVIEW_MAX ((i64)10 << 20)', '#define CONF_PREVIEW_MAX ((i64)10 << 19)'),
     (CF, '#define CLEAN_CAP        ((i64)1 << 30)', '#define CLEAN_CAP        ((i64)1 << 29)'),
     (CF, 'static const SearchSkipList SEARCH_SKIP_DEFAULT = { { ".git", "node_modules" }, 2 };', 'static const SearchSkipList SEARCH_SKIP_DEFAULT = { { ".git", "node_modules" }, 1 };'),
@@ -2135,4 +2130,43 @@ MUTANTS += [
     # F10 review step 4: every launch through the test guard (2026-11-01)
     ('fs/spawn.c', '    if (!ops_program_allowed(argv[0], err)) return false;\n', ''),
     ('fs/ops.c', "    bool found = strchr(prog, '/') ? snprintf(full, sizeof full, \"%s\", prog) < (int)sizeof full : path_find(prog, full, sizeof full);", '    bool found = path_find(prog, full, sizeof full);'),
+]
+# ---- F11 step 1: per-folder view, zoom, sort; Show Hidden; the cursor; housekeeping (2026-11-01)
+FO = 'fs/folders.c'
+MUTANTS += [
+    (FO, " || (path[0] != '/' && strcmp(path, TRASH_URI) != 0)) continue;", ') continue;'),
+    (FO, " || (path[0] != '/' && strcmp(path, TRASH_URI) != 0)) continue;", " || path[0] != '/') continue;"),
+    (FO, "        if (!w[6].len || !percent_decode(w[0], path, sizeof path) ||", "        if (!percent_decode(w[0], path, sizeof path) ||"),
+    (FO, '        if (str_eq(w[2], S("icons"))) f->view = 1;', '        if (str_eq(w[2], S("icons"))) f->view = 0;'),
+    (FO, '        if (str_eq(w[5], S("on"))) f->rev = 1;', '        if (str_eq(w[5], S("on"))) f->rev = 0;'),
+    (FO, '        if (str_eq(w[5], S("off"))) f->rev = 0;\n', ''),
+    (FO, " && sel[0] && !strchr(sel, '/')) f->sel", ' && sel[0]) f->sel'),
+    (FO, "        if (!is_digit(w.p[i]) || (n = n * 10 + (w.p[i] - '0')) > max) return -1;", "        if ((n = n * 10 + (w.p[i] - '0')) > max) return -1;"),
+    (FO, '    return f->view >= 0 || f->zoom > 0 || f->sort >= 0 || f->rev >= 0 || f->sel;', '    return f->view >= 0 || f->zoom > 0 || f->sort >= 0 || f->rev >= 0;'),
+    (FO, '    return f->view >= 0 || f->zoom > 0 || f->sort >= 0 || f->rev >= 0 || f->sel;', '    return f->view >= 0 || f->zoom > 0 || f->sort >= 0 || f->sel;'),
+    (FO, ' || !clean_real(ms, path, real, sizeof real) || clean_absent_drive(ms, real)) return false;', ' || !clean_real(ms, path, real, sizeof real)) return false;'),
+    (FO, "    if (path[0] != '/' || !clean_real(ms, path, real, sizeof real) ||", "    if (path[0] != '/' ||"),
+    (FO, "    if (path[0] != '/' || !clean_real(", "    if (!clean_real("),
+    (FO, '    return stat(path, &st) != 0 && (errno == ENOENT || errno == ENOTDIR);', '    return stat(path, &st) != 0;'),
+    (FO, '    return a < b ? 1 : a > b ? -1 : 0;   // the most recent first', '    return a < b ? -1 : a > b ? 1 : 0;   // the most recent first'),
+    (FO, '        if (folder_says(&t->f[i]) && !(ms && folder_gone(ms, t->f[i].path))) t->f[k++] = t->f[i];', '        if (!(ms && folder_gone(ms, t->f[i].path))) t->f[k++] = t->f[i];'),
+    (FO, '        if (folder_says(&t->f[i]) && !(ms && folder_gone(ms, t->f[i].path))) t->f[k++] = t->f[i];', '        if (folder_says(&t->f[i])) t->f[k++] = t->f[i];'),
+    (FO, '    if (t->n > FOLDERS_MAX) {', '    if (t->n > FOLDERS_MAX + 1) {'),
+    # Not a mutant: `if (!m->changed) continue;` dropped (an unchanged entry merges no field; one the
+    # file lacks is made empty and tidied out).
+
+    (FO, '        if (m->changed & FP_VIEW) f->view = m->view;\n', ''),
+    (FO, '        if (m->changed & FP_SORT) f->sort = m->sort;\n', ''),
+    (FO, '        if (m->changed & FP_SEL) f->sel = m->sel ? folder_str(a, str_from_c(m->sel)) : NULL;\n', ''),
+    (FO, '        if ((m->changed & FP_AT) && m->at > f->at) f->at = m->at;', '        if (m->changed & FP_AT) f->at = m->at;'),
+    (FO, '        if (line.len && !str_starts_with(line, S("folder "))) memcpy', '        if (line.len) memcpy'),
+    (FO, '    *mine = t;\n', ''),
+    (FO, '        if (mask & FP_VIEW) f->view = -1;\n', ''),
+    (FO, '        f->changed |= mask, n++;', '        n++;'),
+    (FO, '        if (!had) continue;\n', ''),
+    (CF, "        if (str_eq(v, S(\"list\")) || str_eq(v, S(\"icons\"))) return *(bool *)f = str_eq(v, S(\"icons\")), true;", "        if (str_eq(v, S(\"list\")) || str_eq(v, S(\"icons\"))) return *(bool *)f = true, true;"),
+    (CF, '            if (n == CONF_ZOOMS[i]) return *(int *)f = (int)n, true;', '            if (n >= 32) return *(int *)f = (int)n, true;'),
+    (CF, '    *c = (Conf){ .zoom = CONF_ZOOM, .sort = SORT_NAME,', '    *c = (Conf){ .zoom = 64, .sort = SORT_NAME,'),
+    ('fs/state.c', '        if (str_eq(key, S("hidden"))) s.hidden = str_eq(val, S("on"));\n', ''),
+    ('fs/state.c', '        if (str_eq(key, S("folderdefaults")) && val.len < (isize)sizeof s.folder_defaults)', '        if (str_eq(key, S("folderdefaults")))'),
 ]

@@ -2,6 +2,7 @@
 # fills it; each listing after that empties it, so icons come back rather than staying blank.
 settle
 expect iconresets=0
+key home
 key enter
 expect iconresets=1 sel=inner.txt
 key backspace

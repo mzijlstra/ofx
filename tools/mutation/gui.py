@@ -169,8 +169,6 @@ MUTANTS = [
     ('gui/folder.c', "    if (!same && app.nslots >= app.icons_max) icons_reset(), app.icon_full_resets++;\n", ""),
     (G, "        if (rows != app.ui.list.rows) ui_resize(&app.ui.list, rows), dirty = true;\n", ""),
     ('gui/files.c', "    if (!app.ui.grid) return 1;\n    int c = (w", "    int c = (w"),
-    ('gui/actions.c', "        if (state_path(path, sizeof path) &&\n            !(a.kind == UA_ZOOM ?", "        if (false &&\n            !(a.kind == UA_ZOOM ?"),
-    (G, "        app.ui.side_mode = st.side, app.ui.grid = st.icons, app.ui.zoom = st.zoom,", "        app.ui.side_mode = st.side, app.ui.zoom = st.zoom,"),
     ('gui/input.c', "    if (m == GLFW_MOD_CONTROL && (key == GLFW_KEY_1 || key == GLFW_KEY_KP_1)) return UK_VIEW_LIST;", ""),
     ('gui/input.c', "    if (m == GLFW_MOD_CONTROL && (key == GLFW_KEY_2 || key == GLFW_KEY_KP_2)) return UK_VIEW_ICONS;", ""),
     ('gui/icons.c', "    return app.ui.grid ? grid_px() : ICON_PX;", "    return ICON_PX;"),
@@ -196,8 +194,6 @@ MUTANTS = [
     ('gui/icons.c', "    return w > CELL_W_MIN ? w : CELL_W_MIN;", "    return w;"),
     ('gui/icons.c', "    return grid_px() + CELL_H_ROOM;", "    return 48 + CELL_H_ROOM;"),
     ('gui/icons.c', "    return app.ui.grid ? grid_px() : ICON_PX;", "    return app.ui.grid ? 48 : ICON_PX;"),
-    (G, "        app.ui.side_mode = st.side, app.ui.grid = st.icons, app.ui.zoom = st.zoom,", "        app.ui.side_mode = st.side, app.ui.grid = st.icons, app.ui.zoom = 0,"),
-    ('gui/actions.c', "state_put(&scratch, path, \"zoom\", zoom, &err) :", "state_put(&scratch, path, \"view\", app.ui.grid ? \"icons\" : \"list\", &err) :"),
     ('gui/icons.c', "        if (img.data && big > want) ImageResize(", "        if (0) ImageResize("),
     (G, "        if (app.zoomed) ui_refit(&app.ui.list, cols, rows), app.zoomed = false, dirty = true;\n", ""),
     ('gui/actions.c', "        if (a.kind == UA_ZOOM) app.zoomed = true;\n", ""),
@@ -466,7 +462,7 @@ MUTANTS = [
     (G, '            app.ui.ctx_w = app.ui.ctx_dir && app.ui.list.sel < app.list.n && entry_path(app.ui.list.sel, e, sizeof e) && access(e, W_OK) == 0;', '            app.ui.ctx_w = false;', 'f8'),
     # ---- the list's Owner, Group, Permissions and links' targets (2026-10-27). Not run: the cells
     # and the target drawn (pixels: f8b's list-columns.png, list-no-perms.png show them)
-    (G, '        app.ui.side_mode = st.side, app.ui.grid = st.icons, app.ui.zoom = st.zoom, app.ui.perms_cols = !st.no_perms,', '        app.ui.side_mode = st.side, app.ui.grid = st.icons, app.ui.zoom = st.zoom, app.ui.perms_cols = true,', 'f8'),
+    (G, '        app.ui.side_mode = st.side, app.ui.perms_cols = !st.no_perms,', '        app.ui.side_mode = st.side, app.ui.perms_cols = true,', 'f8'),
     ('gui/actions.c', '        if (state_path(path, sizeof path) && !state_put(&scratch, path, "perms", app.ui.perms_cols ? "on" : "off", &err))', '        if (state_path(path, sizeof path) && !state_put(&scratch, path, "perms", "on", &err))', 'f8'),
     # ---- the three columns give way to a Name under 200 px (2026-10-27)
     ('gui/files.c', '    return app.ui.perms_cols && rest - perms_w() >= NAME_MIN_W;', '    return app.ui.perms_cols;', 'f8'),
@@ -486,7 +482,7 @@ MUTANTS = [
     ('gui/panels.c', '    case UI_ON_BAR: return MODAL_BAR;\n', '', 'f8'),
     # ---- View → Show Group, Ctrl+P, Ctrl+G (2026-10-27). Not run: the key chords' GLFW mapping
     # (scripts send ui/'s keys); the cells drawn (pixels: f8b's list-group.png)
-    (G, '        app.ui.colors = !st.no_colors, app.ui.group_col = st.group;', '        app.ui.colors = !st.no_colors;', 'f8'),
+    (G, '        app.ui.colors = !st.no_colors, app.ui.group_col = st.group, app.show_hidden = st.hidden;', '        app.ui.colors = !st.no_colors, app.show_hidden = st.hidden;', 'f8'),
     ('gui/actions.c', '        if (state_path(path, sizeof path) && !state_put(&scratch, path, "group", app.ui.group_col ? "on" : "off", &err))', '        if (state_path(path, sizeof path) && !state_put(&scratch, path, "group", "on", &err))', 'f8'),
     ('gui/files.c', '    return app.ui.group_col ? 3 * GAP + OWNER_W + GROUP_W + PERM_W : 2 * GAP + OWNER_W + PERM_W;', '    return 3 * GAP + OWNER_W + GROUP_W + PERM_W;', 'f8'),
     ('gui/files.c', '            if (k == 1 && !app.ui.group_col) continue;', '', 'f8'),
@@ -641,6 +637,31 @@ MUTANTS = [
     ('gui/folder.c', '                          .skips = &app.conf.skip };', '                          .skips = &SEARCH_SKIP_DEFAULT };', 'f10'),
     ('gui/search.c', '    *s = search.s, *names = search.skips, *done = search.done;', '    *s = search.s, *done = search.done;', 'f10'),
     ('gui/folder.c', 'search_ask((SearchQuery){ .root = "", .skips = &app.conf.skip })', 'search_ask((SearchQuery){ .root = "" })', 'f4'),
+    # F11 step 1 (2026-11-01)
+    ('gui/folder.c', '    if (!same && app.have_list && fold_view_of(app.ui.view)) remember_cursor(app.cwd, sel_name());\n', '', 'f11'),
+    ('gui/folder.c', '        remember_apply(dir);\n', '', 'f11'),
+    ('gui/folder.c', '        if (!select.len && fallback == 0 && kept) select = str_from_c(kept);', '', 'f11'),
+    ('gui/folder.c', '        app.ui.grid = grid, app.ui.zoom = zoom, app.ui.sort = sort;\n        if (!app.have_list)', '        if (!app.have_list)', 'f11'),
+    ('gui/remember.c', '    return v == UI_VIEW_FOLDER || v == UI_VIEW_TRASH;', '    return v != UI_VIEW_TRASH;', 'f11'),
+    ('gui/remember.c', '    bool grid = f && f->view >= 0 ? f->view == 1 : app.conf.icons;', '    bool grid = f && f->view >= 0 ? f->view == 1 : false;', 'f11'),
+    ('gui/remember.c', '    int zoom = f && f->zoom > 0 ? f->zoom : app.conf.zoom;', '    int zoom = app.conf.zoom;', 'f11'),
+    ('gui/remember.c', '    if (grid != app.ui.grid || zoom != ui_zoom_px(&app.ui)) app.icons_reset_armed = true, app.zoomed = true;', '', 'f63'),
+    ('gui/remember.c', '    if (mask & FP_VIEW) f->view = app.ui.grid == app.conf.icons ? -1 : app.ui.grid;', '    if (mask & FP_VIEW) f->view = app.ui.grid;', 'f62'),
+    ('gui/remember.c', '    if (mask & FP_SORT) f->sort = (int)app.ui.sort.key == app.conf.sort ? -1 : (int)app.ui.sort.key;', '    if (mask & FP_SORT) f->sort = (int)app.ui.sort.key;', 'f11'),
+    ('gui/remember.c', '    if (mask & FP_REV) f->rev = app.ui.sort.reverse == app.conf.sort_rev ? -1 : app.ui.sort.reverse;', '    if (mask & FP_REV) f->rev = app.ui.sort.reverse;', 'f11'),
+    ('gui/remember.c', '    if (rem.a[rem.cur].used > (isize)sizeof rem.mem[0] / 2) remember_write();', '', 'f11'),
+    ('gui/remember.c', '    if (st.folder_defaults[0]) {', '    if (true) {', 'f11'),
+    ('gui/remember.c', '        mask |= strcmp(sort, FOLDER_SORTS[app.conf.sort]) ? FP_SORT : 0;', '', 'f11'),
+    ('gui/remember.c', '    int n = mask ? folders_wipe(&rem.t, mask) : 0;', '    int n = 0;', 'f11'),
+    ('gui/remember.c', '    if (!state_put(&scratch, path, "folderdefaults", now, &err))', '    if (false)', 'f11'),
+    ('gui/main.c', '    remember_defaults();   // (F11', '    // (F11', 'f11'),
+    ('gui/main.c', '    if (fold_view_of(app.ui.view) && app.have_list) remember_cursor(app.cwd, sel_name());   // (F11)', '', 'f11'),
+    ('gui/main.c', '    if (rem.dirty) remember_write();\n    if (app.windows[0])', '    if (app.windows[0])', 'f11'),
+    ('gui/actions.c', '        remember_view(a.kind == UA_ZOOM ? FP_ZOOM : FP_VIEW);', '        remember_view(FP_VIEW);', 'f11'),
+    ('gui/actions.c', '    case UA_SORT: resort(), remember_view(FP_SORT | FP_REV); break;', '    case UA_SORT: resort(); break;', 'f11'),
+    ('gui/actions.c', '        if (state_path(sp, sizeof sp) && !state_put(&scratch, sp, "hidden", app.show_hidden ? "on" : "off", &err))', '        if (false)', 'f11'),
+    ('gui/prefs.c', '        remember_defaults();\n        if (fold_view_of', '        if (fold_view_of', 'f11'),
+    ('gui/prefs.c', '        if (fold_view_of(app.ui.view)) remember_apply(app.cwd);', '', 'f11'),
     ('gui/files.c', '    if (e->mtime) ui_when(buf, cap, e->mtime, now, app.conf.date, app.conf.date_pattern);', '    if (e->mtime) ui_when(buf, cap, e->mtime, now, DATE_SHORT, "");', 'f10'),
     ('gui/files.c', '    if (app.conf.date == DATE_SHORT) return DATE_W;\n    static', '    return DATE_W;\n    static', 'f10'),
     ('gui/files.c', '    for (int k = 0; k < COUNT(WIDE); k++) {', '    for (int k = 0; k < 1; k++) {', 'f10'),
@@ -755,7 +776,7 @@ t_start = time.monotonic()
 
 # run.sh's groups, in its order: a mutant runs them one at a time and stops at the first that
 # kills it (Michael, 2026-10-25).
-GROUPS = ['browse', 'big', 'gone', 'watchgap', 'f2', 'f3', 'f4', 'f5', 'f52', 'f53', 'f54', 'f6', 'usb', 'f10', 'f62', 'f63', 'f64', 'f7',
+GROUPS = ['browse', 'big', 'gone', 'watchgap', 'f2', 'f3', 'f4', 'f5', 'f52', 'f53', 'f54', 'f6', 'usb', 'f11', 'f10', 'f62', 'f63', 'f64', 'f7',
           'f72', 'f73', 'f74', 'f75', 'f8', 'f9', 'clip', 'keys', 'hang', 'guard3', 'guard']
 run_text = open(os.path.join(root, 'tests/gui/run.sh')).read()
 assert re.findall(r'want ([a-z0-9]+)', run_text) == GROUPS, 'GROUPS in gui.py no longer match tests/gui/run.sh'
@@ -791,7 +812,7 @@ def key(m):
     return hashlib.sha1('\0'.join(m[:3]).encode()).hexdigest()[:12]
 
 # The group of a script that failed: run.sh prints "== <script>: FAILED" or "<group>: FAILED".
-GROUP_OF = {'f6b': 'f6', 'f62b': 'f62', 'f62c': 'f62', 'f63b': 'f63', 'f63c': 'f63', 'f64b': 'f64', 'f64c': 'f64', 'f64d': 'f64', 'f7b': 'f7', 'f73b': 'f73', 'f73c': 'f73', 'f73d': 'f73', 'f75b': 'f75', 'f8b': 'f8', 'f8c': 'f8', 'f8d': 'f8', 'f8e': 'f8', 'f9b': 'f9', 'f10b': 'f10', 'f10c': 'f10', 'f10d': 'f10'}
+GROUP_OF = {'f6b': 'f6', 'f62b': 'f62', 'f62c': 'f62', 'f63b': 'f63', 'f63c': 'f63', 'f64b': 'f64', 'f64c': 'f64', 'f64d': 'f64', 'f7b': 'f7', 'f73b': 'f73', 'f73c': 'f73', 'f73d': 'f73', 'f75b': 'f75', 'f8b': 'f8', 'f8c': 'f8', 'f8d': 'f8', 'f8e': 'f8', 'f9b': 'f9', 'f10b': 'f10', 'f10c': 'f10', 'f10d': 'f10', 'f11b': 'f11'}
 
 # The tags as groups run.sh knows: a script's name (f7b, written before GROUP_OF had it) as its
 # group; anything else dropped, so a mutant never "survives" a group that runs nothing.
