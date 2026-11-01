@@ -68,4 +68,12 @@ click-here
 expect modal=-
 pointer-off
 sh ! grep -q xdg-terminal-exec "$OFX_ROOT/spawn.log" 2>/dev/null
+# The bookmarks' folder removed while ofx runs (its watch ends: IN_IGNORED), then made again by ofx's
+# own Add Bookmark: watched again, so an edit from outside shows (reviewer-2, 2026-11-01)
+sh rm -rf "$OFX_ROOT/config/gtk-3.0"
+wait-for 2000 bmn=0
+key ctrl-d
+wait-for 2000 bmn=1
+sh printf 'file:///nowhere\n' >> "$OFX_ROOT/config/gtk-3.0/bookmarks"
+wait-for 2000 bmn=2
 quit
