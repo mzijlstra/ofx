@@ -699,7 +699,8 @@ Default and Recommended equal GIO's; GLib's rewrite of a copy adds the two lines
 The questions page: https://claude.ai/artifact/76BUMjBEBC5uEp33fLDZaj. Michael took every
 recommendation (2026-10-30), and added two things.
 
-- **The split stays:** `$XDG_CONFIG_HOME/ofx/ofx.conf` is what you set, and ofx only reads it.
+- **The split stays:** `$XDG_CONFIG_HOME/ofx/ofx.conf` is what you set, and ofx never changes it
+  (it writes it only when it isn't there: Q5, as changed 2026-11-01).
   `$XDG_STATE_HOME/ofx/state` is what ofx remembers by itself (sidebar, view, zoom, menubar, perms,
   group: the View toggles), and ofx writes it. Michael asked about the menu bar, since a hidden one
   is the hardest to find again. It stays in state, because a View toggle that wrote ofx.conf would
@@ -710,7 +711,7 @@ recommendation (2026-10-30), and added two things.
   - `previews` and `preview-max-size`;
   - `clean`, `clean-orphans`, `clean-unused-days` and `clean-cap` (ofx-clean reads the same file);
   - `date-format` (`short`, `long`, `iso`, or a strftime pattern);
-  - `search-skip` (a list; yours replaces the default `.git`, `node_modules`);
+  - `search-skip` (a list: exactly the file's lines, none meaning nothing skipped; see Q5);
   - `editor` lines (Q4).
   - Your own key bindings stay on the later list.
 - **Q3:** applied at once. The file's folder is watched, as the bookmarks file's is.
@@ -718,7 +719,14 @@ recommendation (2026-10-30), and added two things.
   `~/.config/ofx/editors` is still read, and the status line says once that its lines can move.
 - **Q5:** Edit → Preferences… opens ofx.conf in Omarchy's default editor (as Open at Line starts
   it). If the file isn't there, ofx first writes it with every option commented out at its default.
-  That is the only write, and only on that click.
+- **Q5, changed (Michael, 2026-11-01):** ofx writes the file at every start when it isn't there,
+  not only on Preferences, "so we can after that always go with whatever the config file says".
+  The written file has live `search-skip = .git` and `search-skip = node_modules` lines; the list
+  is exactly the file's lines, so removing both skips nothing, and the comments say so. The other
+  options stay commented out and keep their built-in default when the file doesn't set them. Only
+  when there is no file to read (it couldn't be made, or was removed while ofx runs) do all the
+  built-in defaults apply, the list included; a failed write at the start is said in the status
+  line. Only the GUI writes it; ofx-clean (step 2) only reads.
 - **Q6:** a line ofx can't read, or an unknown key, is skipped. The rest applies, and the status
   line names the line and what it wanted.
 - **Comments, as php.ini's (Michael):** every option gets a comment block in the written file: what

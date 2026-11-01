@@ -110,11 +110,12 @@ rules shared by every tool here.
   fake in a test): a terminal one in a new terminal. It reads `$XDG_STATE_HOME/omarchy/defaults/editor`
   and `$XDG_CONFIG_HOME/ofx/editors`, both under the scratch dir in a test (run-script.sh), so f9b
   writes its own. Never test it with a real `uwsm-app` on PATH: it would open his editor.
-- **ofx.conf** (F10): ofx reads `$XDG_CONFIG_HOME/ofx/ofx.conf` and watches its folder, and Edit →
-  Preferences… writes it (only when it isn't there) and opens it in his editor: with his
-  `XDG_CONFIG_HOME` that is `~/.config/ofx/ofx.conf`, his file. run-script.sh points
-  `XDG_CONFIG_HOME` at `<scratch>/config`, so f10 makes and edits its own, and the editor is a fake
-  through the fake uwsm-app. Never test against his file.
+- **ofx.conf** (F10): ofx reads `$XDG_CONFIG_HOME/ofx/ofx.conf` and watches its folder. Every GUI
+  start writes it when it isn't there (2026-11-01), and Edit → Preferences… opens it in his editor:
+  with his `XDG_CONFIG_HOME` that is `~/.config/ofx/ofx.conf`, his file. So any raylib binary
+  started without run-script's env would write his file. run-script.sh points `XDG_CONFIG_HOME` at
+  `<scratch>/config`, so every script makes its own, and the editor is a fake through the fake
+  uwsm-app. Never test against his file.
 - **A window that stops answering** pops Hyprland's "terminate?" dialog on his screen, even on the
   headless output. The script's `sh` runs under `timeout 5` for that reason; keep everything a
   script waits for short.

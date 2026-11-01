@@ -1,6 +1,6 @@
 // F10 step 1 (docs/plan.md "F10 design"): ofx.conf's parser (values, lists, bad lines), the file
-// Preferences writes (every option's help in it, and read back as the defaults), and that every
-// option has its help. Included by test.c after test_f9.c.
+// ofx writes (every option's help in it, and read back as the defaults), and that every option has
+// its help. Included by test.c after test_f9.c.
 
 // Whether two parsed files say the same (field by field: padding isn't compared).
 static bool conf_same(const Conf *a, const Conf *b)
@@ -14,9 +14,12 @@ static bool conf_same(const Conf *a, const Conf *b)
 static void test_conf(void)
 {
     Conf c;
-    conf_parse(STR_EMPTY, &c);
+    // No file: the built-in defaults. An empty file: the same, but no list (it is the file's lines).
+    conf_defaults(&c);
     CHECK(c.previews && c.preview_max == (i64)10 << 20 && c.date == DATE_SHORT && !c.bad);
     CHECK(c.nskip == 2 && strcmp(c.skip[0], ".git") == 0 && strcmp(c.skip[1], "node_modules") == 0);
+    conf_parse(STR_EMPTY, &c);
+    CHECK(c.previews && c.preview_max == (i64)10 << 20 && c.date == DATE_SHORT && !c.bad && c.nskip == 0);
     // Values: on/off words, sizes with and without a space and unit, the dates.
     conf_parse(S("# a comment\n\n  previews = no\npreview-max-size=50 MiB\ndate-format = long\n"), &c);
     CHECK(!c.previews && c.preview_max == (i64)50 << 20 && c.date == DATE_LONG && !c.bad);
@@ -46,7 +49,7 @@ static void test_conf(void)
     CHECK(c.date == DATE_PATTERN && strcmp(c.date_pattern, "%d-%m-%Y %H:%M") == 0);
     conf_parse(S("date-format = weekly\n"), &c);
     CHECK(c.date == DATE_SHORT && c.bad == 1 && strstr(c.why, "date-format wants short, long, iso"));
-    // The list: the file's first line replaces the default, later ones add; a bad name is skipped.
+    // The list: the file's lines, in order; a bad name is skipped.
     conf_parse(S("search-skip = target\nsearch-skip = .git\nsearch-skip = a/b\nsearch-skip = ..\n"), &c);
     CHECK(c.nskip == 2 && strcmp(c.skip[0], "target") == 0 && strcmp(c.skip[1], ".git") == 0 && c.bad == 3);
     char many[CONF_SKIP_MAX * 24 + 64] = "";
@@ -60,18 +63,19 @@ static void test_conf(void)
     CHECK(c.bad == 2 && strcmp(c.why, "no option nosuch") == 0);
     conf_parse(S("previews = maybe"), &c);   // no newline at the end
     CHECK(c.bad == 1 && strcmp(c.why, "previews wants on or off") == 0 && c.previews);
-    // The file Preferences writes: every option's help and default in it, all commented out, so
-    // it reads back as the defaults with no bad line.
+    // The file ofx writes: every option's help and default in it, commented out but the list's
+    // lines, so it reads back as the defaults with no bad line.
     static char text[16384];
     size_t n = conf_default_text(text, sizeof text);
     CHECK(n > 0 && n < sizeof text - 1 && strlen(text) == n);
     for (int k = 0; k < COUNT(CONF_OPTS); k++) {
         CHECK(CONF_OPTS[k].help[0] && CONF_OPTS[k].def[0]);
         char line[96];
-        snprintf(line, sizeof line, "\n#%s = ", CONF_OPTS[k].key);
+        snprintf(line, sizeof line, "\n%s%s = ", CONF_OPTS[k].kind == CK_NAMES ? "" : "#", CONF_OPTS[k].key);
         CHECK(strstr(text, line) != NULL);
     }
-    CHECK(strstr(text, "#search-skip = .git\n#search-skip = node_modules\n") && strstr(text, "View > Show Menu brings it back"));
+    CHECK(strstr(text, "\nsearch-skip = .git\nsearch-skip = node_modules\n") && strstr(text, "View > Show Menu brings it back"));
+    CHECK(strstr(text, "With no search-skip line at all, a search goes into\n# every folder."));
     conf_parse(str_from_c(text), &c);
     Conf d;
     conf_defaults(&d);
@@ -84,7 +88,18 @@ static void test_conf(void)
     on[o] = 0;
     conf_parse(str_from_c(on), &c);
     CHECK(!c.bad && conf_same(&c, &d));
-    // Preferences' file: made with its folder, read back as the defaults; an existing one (or a
+    // Its search-skip lines removed (Michael, 2026-11-01): nothing skipped; one of them, the other.
+    static char cut[16384];
+    snprintf(cut, sizeof cut, "%s", text);
+    char *g = strstr(cut, "\nsearch-skip = .git\n");
+    memmove(g + 1, g + 20, strlen(g + 20) + 1);
+    conf_parse(str_from_c(cut), &c);
+    CHECK(!c.bad && c.nskip == 1 && strcmp(c.skip[0], "node_modules") == 0);
+    g = strstr(cut, "\nsearch-skip = node_modules\n");
+    memmove(g + 1, g + 28, strlen(g + 28) + 1);
+    conf_parse(str_from_c(cut), &c);
+    CHECK(!c.bad && c.nskip == 0 && c.previews && c.date == DATE_SHORT);
+    // ofx's file: made with its folder, read back as the defaults; an existing one (or a
     // link) never replaced; outside the guard's root, refused.
     Err err;
     CHECK(conf_create(at("cf/ofx/ofx.conf"), &err));

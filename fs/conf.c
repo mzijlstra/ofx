@@ -1,6 +1,9 @@
 // ofx.conf (F10, docs/plan.md "F10 design"): the options Michael sets, in
-// $XDG_CONFIG_HOME/ofx/ofx.conf, which ofx only reads (Edit → Preferences… writes it once, when it
-// isn't there, on that click). What ofx remembers by itself stays in the state file (state.c).
+// $XDG_CONFIG_HOME/ofx/ofx.conf. ofx writes it only when it isn't there, at the start (and on Edit →
+// Preferences…), so from then on what applies is whatever the file says: a list is exactly its
+// lines, none meaning an empty list (Michael, 2026-11-01). Only when there is no file to read (it
+// couldn't be made) do the built-in defaults apply, conf_defaults. What ofx remembers by itself
+// stays in the state file (state.c).
 //
 // One `key = value` a line, `#` a comment, a key repeated for a list (as Ghostty's). A line ofx
 // can't read, or a key it doesn't know, is skipped and the rest applies; the first such line is
@@ -57,24 +60,24 @@ static const ConfOpt CONF_OPTS[] = {
       "or a strftime pattern with a %, as `date` takes: date-format = %d-%m-%Y %H:%M" },
     { "search-skip", CK_NAMES, ".git node_modules",
       "Folders a search (Ctrl+Shift+F) never goes into, by name, wherever they are;\n"
-      "the status line counts each one it skipped. One name a line; your lines\n"
-      "replace this default list, so repeat .git and node_modules to keep them.\n"
-      "Example:\n"
-      "  search-skip = .git\n"
-      "  search-skip = node_modules\n"
-      "  search-skip = target" },
+      "the status line counts each one it skipped. One name a line, and the list is\n"
+      "exactly these lines: add one to skip a folder (search-skip = target), remove\n"
+      "one to search inside it. With no search-skip line at all, a search goes into\n"
+      "every folder." },
 };
 
 static const char CONF_HEAD[] =
     "ofx.conf: the options you set for ofx (the Omarchy file explorer).\n"
     "\n"
     "ofx reads this file when it starts and again whenever you save it: every open\n"
-    "window applies a change at once. ofx never writes it, except to make it\n"
-    "(Edit > Preferences..., when it isn't there).\n"
+    "window applies a change at once. ofx never changes it: it only writes it, as\n"
+    "you see it here, when it isn't there (when ofx starts, or Edit > Preferences...).\n"
     "\n"
     "One option a line, `key = value`; # starts a comment. A line ofx can't read is\n"
     "skipped, the rest applies, and the status line says which line and why.\n"
     "Below, every option at its default, commented out: remove the # to change one.\n"
+    "A list (search-skip) is written out instead, one line a name, since it is\n"
+    "exactly the lines it has here: removing them all makes it empty.\n"
     "\n"
     "Not set here: what you toggle in the View menu (the sidebar's mode, list or\n"
     "icons, the icon size, the menu bar, the Owner, Group and Permissions columns)\n"
@@ -112,6 +115,8 @@ static const char *const CONF_WANTS[] = {
     [CK_NAMES] = "a folder name, without a /",
 };
 
+// The built-in defaults: all of them with no file to read; under a file, what it doesn't set (but
+// the list, which is the file's lines).
 static void conf_defaults(Conf *c)
 {
     *c = (Conf){ .previews = true, .preview_max = (i64)10 << 20, .date = DATE_SHORT };
@@ -119,9 +124,8 @@ static void conf_defaults(Conf *c)
     c->nskip = 2;
 }
 
-// One value for opt k into c; false when it isn't one opt k takes. *listed: this file's first
-// search-skip line has emptied the default list.
-static bool conf_set(Conf *c, int k, Str v, bool *listed)
+// One value for opt k into c; false when it isn't one opt k takes.
+static bool conf_set(Conf *c, int k, Str v)
 {
     const char *key = CONF_OPTS[k].key;
     if (strcmp(key, "previews") == 0) return conf_bool(v, &c->previews);
@@ -136,7 +140,6 @@ static bool conf_set(Conf *c, int k, Str v, bool *listed)
     }
     if (strcmp(key, "search-skip") == 0) {
         if (!v.len || v.len >= CONF_NAME_MAX || str_find(v, '/') >= 0 || str_eq(v, S(".")) || str_eq(v, S(".."))) return false;
-        if (!*listed) c->nskip = 0, *listed = true;
         if (c->nskip == CONF_SKIP_MAX) return false;
         snprintf(c->skip[c->nskip++], CONF_NAME_MAX, "%.*s", STR_ARG(v));
         return true;
@@ -144,11 +147,11 @@ static bool conf_set(Conf *c, int k, Str v, bool *listed)
     return false;
 }
 
-// text's options over the defaults into c.
+// The file's text into c: its options over the defaults, its search-skip lines alone the list.
 static void conf_parse(Str text, Conf *c)
 {
     conf_defaults(c);
-    bool listed = false;
+    c->nskip = 0;
     int no = 0;
     for (isize at = 0; at < text.len;) {
         isize e = at;
@@ -161,7 +164,7 @@ static void conf_parse(Str text, Conf *c)
         int k = -1;
         for (int i = 0; i < COUNT(CONF_OPTS) && k < 0; i++)
             if (str_eq(key, str_from_c(CONF_OPTS[i].key))) k = i;
-        if (eq >= 0 && k >= 0 && conf_set(c, k, val, &listed)) continue;
+        if (eq >= 0 && k >= 0 && conf_set(c, k, val)) continue;
         if (c->bad) continue;
         c->bad = no;
         if (eq < 0) snprintf(c->why, sizeof c->why, "not a key = value line");
@@ -182,8 +185,9 @@ static void conf_comment(char *out, size_t cap, size_t *at, const char *text)
     }
 }
 
-// The file Preferences writes when there is none: the head, then each option's help and its default
-// commented out (a list's default a line per name). Its length; cut at cap.
+// The file ofx writes when there is none: the head, then each option's help and its default
+// commented out, but a list's default written out, a line per name (the file's lines are the
+// list). Its length; cut at cap.
 static size_t conf_default_text(char *out, size_t cap)
 {
     size_t at = 0;
@@ -198,7 +202,7 @@ static size_t conf_default_text(char *out, size_t cap)
         for (isize i = 0; i < def.len && at < cap;) {   // (a list's names, one a line)
             isize e = o->kind == CK_NAMES ? i : def.len;
             while (o->kind == CK_NAMES && e < def.len && def.p[e] != ' ') e++;
-            n = snprintf(out + at, cap - at, "#%s = %.*s\n", o->key, (int)(e - i), def.p + i);
+            n = snprintf(out + at, cap - at, "%s%s = %.*s\n", o->kind == CK_NAMES ? "" : "#", o->key, (int)(e - i), def.p + i);
             if (n > 0) at += (size_t)n;
             i = e + 1;
         }
@@ -214,8 +218,9 @@ static bool conf_path(char *out, size_t cap)
 
 static bool ops_allowed(const char *path, Err *err);
 
-// The file Preferences writes, at path, when there is none: its folder made, never one replaced (an
-// existing file, or a link, is left as it is: true, nothing written). Through the test guard.
+// The file ofx writes, at path, when there is none (at the start, and on Preferences): its folder
+// made, never one replaced (an existing file, or a link, is left as it is: true, nothing written).
+// Through the test guard.
 static bool conf_create(const char *path, Err *err)
 {
     struct stat st;

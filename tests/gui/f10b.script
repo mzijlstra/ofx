@@ -1,8 +1,9 @@
 # F10 step 1, after f10.script on the same scratch tree: ofx.conf there at the start (f10 left
-# "previews = off" in it) is read, and its folder watched from the start, not only once
-# Preferences makes it.
+# "previews = off" in it, no search-skip line) is read as it is, never written over, and its folder
+# watched from the start.
 settle
-expect conf=off:10485760:short:.git+node_modules confbad=0
-sh printf 'previews = on\ndate-format = long\n' > "$OFX_ROOT/config/ofx/ofx.conf"
-wait-for 3000 conf=on:10485760:long:.git+node_modules
+expect conf=off:10485760:short: confbad=0
+sh test "$(cat "$OFX_ROOT/config/ofx/ofx.conf")" = "previews = off"
+sh printf 'previews = on\ndate-format = long\nsearch-skip = target\n' > "$OFX_ROOT/config/ofx/ofx.conf"
+wait-for 3000 conf=on:10485760:long:target
 quit

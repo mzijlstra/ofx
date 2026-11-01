@@ -602,6 +602,7 @@ int main(int argc, char **argv)
     mime_load(&data, &app.mime_db);
     user_dirs_load(&data, &app.user_dirs);
     theme_apply();
+    conf_start();   // (F10: before watch_start, which watches the file's folder)
     if (!watch_start()) set_status(true, "inotify is unavailable: no live refresh");
     clip_init();   // false: the clipboard stays inside ofx
     // OFX_TEST_COUNT_DELAY_MS: each count takes that much longer, so a test can change the listing

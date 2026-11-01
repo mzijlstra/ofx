@@ -1,13 +1,20 @@
 # F10 step 1 (docs/plan.md "F10 design"): ofx.conf. run.sh: tree/a.txt (dated 2025-01-02 03:04:05),
-# tree/z.png, tree/target/x.txt, tree/node_modules/x.txt; no ofx.conf yet. Edit → Preferences… writes it,
-# commented, and opens it in the editor; a change from outside applies at once: the dates, the
-# search's skip list, the previews; a line it can't read is said and skipped.
+# tree/z.png, tree/target/x.txt, tree/node_modules/x.txt; no ofx.conf yet. ofx writes it at the start,
+# commented but the search-skip lines; Edit → Preferences… opens it in the editor (writing it again
+# when it went); a change from outside applies at once: the dates, the search's skip list (exactly
+# the file's lines), the previews; a line it can't read is said and skipped.
 settle
 key end
 key up
-expect conf=on:10485760:short:.git+node_modules confbad=0 sel=a.txt seldate=2025-01-02
-# Preferences: written (every option commented out), then opened at its first line in Omarchy's
-# default editor (a fake nvim, as f9b's)
+expect conf=on:10485760:short:.git+node_modules confbad=0 sel=a.txt seldate=2025-01-02 statusbad=0
+sh grep -qx "#date-format = short" "$OFX_ROOT/config/ofx/ofx.conf" && grep -qx "search-skip = .git" "$OFX_ROOT/config/ofx/ofx.conf" && grep -qx "search-skip = node_modules" "$OFX_ROOT/config/ofx/ofx.conf"
+# Gone while ofx runs: the built-in defaults (the same list, not none)
+sh printf 'date-format = long\n' > "$OFX_ROOT/config/ofx/ofx.conf"
+wait-for 3000 conf=on:10485760:long: seldate=2025-01-02_03:04
+sh rm "$OFX_ROOT/config/ofx/ofx.conf"
+wait-for 3000 conf=on:10485760:short:.git+node_modules
+# Preferences: written again (every option commented out but the list), then opened at its first
+# line in Omarchy's default editor (a fake nvim, as f9b's)
 sh mkdir -p "$OFX_ROOT/state/omarchy/defaults" && echo nvim > "$OFX_ROOT/state/omarchy/defaults/editor"
 sh printf '#!/bin/sh\n' > "$OFX_ROOT/fakes/nvim" && chmod +x "$OFX_ROOT/fakes/nvim"
 point-ui menu-title 1
@@ -27,7 +34,7 @@ shot conf-applied.png
 expect datecolw=133
 # A pattern of its own
 sh printf 'date-format = %%d.%%m.%%Y\n' > "$OFX_ROOT/config/ofx/ofx.conf"
-wait-for 3000 conf=on:10485760:pattern:.git+node_modules confbad=0 seldate=02.01.2025
+wait-for 3000 conf=on:10485760:pattern: confbad=0 seldate=02.01.2025
 # names: the column as wide as the widest (Wednesday, September; reviewer-2)
 sh printf 'date-format = %%A %%B\n' > "$OFX_ROOT/config/ofx/ofx.conf"
 wait-for 3000 seldate=Thursday_January datecolw=144
@@ -43,19 +50,23 @@ sh printf 'search-skip = .git\n' > "$OFX_ROOT/config/ofx/ofx.conf"
 wait-for 3000 conf=on:10485760:short:.git searchdone=1 n=2
 sh printf 'search-skip = target\n' > "$OFX_ROOT/config/ofx/ofx.conf"
 wait-for 3000 searchdone=1 n=1
+# no search-skip line at all: nothing skipped (Michael, 2026-11-01)
+sh printf 'previews = on\n' > "$OFX_ROOT/config/ofx/ofx.conf"
+wait-for 3000 conf=on:10485760:short: searchdone=1 n=2
+expect searchinfo=2_found
 key esc
 key alt-up
 # The previews (the icon view, z.png): none made past preview-max-size; made under it; with
 # previews = off, none drawn
 sh printf 'preview-max-size = 100\n' > "$OFX_ROOT/config/ofx/ofx.conf"
-wait-for 3000 conf=on:100:short:.git+node_modules
+wait-for 3000 conf=on:100:short:
 key ctrl-2
 wait-for 3000 view=icons thumbbusy=0
 expect thumbmade=0 previews=0
 sh : > "$OFX_ROOT/config/ofx/ofx.conf"
-wait-for 3000 conf=on:10485760:short:.git+node_modules thumbmade=1 previews=1
+wait-for 3000 conf=on:10485760:short: thumbmade=1 previews=1
 sh printf 'previews = off\n' > "$OFX_ROOT/config/ofx/ofx.conf"
-wait-for 3000 conf=off:10485760:short:.git+node_modules previews=0
+wait-for 3000 conf=off:10485760:short: previews=0
 # (and stays so: nothing asked again, nothing drawn)
 sh sleep 1
 wait-for 3000 thumbbusy=0

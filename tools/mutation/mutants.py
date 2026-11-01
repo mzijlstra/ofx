@@ -2070,8 +2070,6 @@ MUTANTS += [
     (CF, '        if (str_find(v, \'%\') < 0 || v.len >= CONF_DATE_MAX) return false;', '        if (v.len >= CONF_DATE_MAX) return false;'),
     (CF, " || str_find(v, '/') >= 0", ''),
     (CF, ' || str_eq(v, S(".")) || str_eq(v, S(".."))', ''),
-    (CF, '        if (!*listed) c->nskip = 0, *listed = true;', '        *listed = true;'),
-    (CF, '        if (!*listed) c->nskip = 0, *listed = true;', '        c->nskip = 0, *listed = true;'),
     (CF, '        if (c->nskip == CONF_SKIP_MAX) return false;\n', ''),
     (CF, '        if (line.len == 0 || line.p[0] == \'#\') continue;\n        isize eq', '        if (line.len == 0) continue;\n        isize eq'),
     # Not a mutant: `eq >= 0 &&` dropped (without an = the value is empty, which no option takes).
@@ -2093,4 +2091,9 @@ MUTANTS += [
 MUTANTS += [
     # reviewer-2's LOWs on ab1ad1d (2026-10-30)
     (CF, 'return n <= INT64_MAX / UNITS[k].mul && (*out = n * UNITS[k].mul, true);', 'return (*out = n * UNITS[k].mul, true);'),
+]
+MUTANTS += [
+    # search-skip is exactly the file's lines; the file written with them (Michael, 2026-11-01)
+    (CF, '    conf_defaults(c);\n    c->nskip = 0;', '    conf_defaults(c);'),
+    (CF, 'o->kind == CK_NAMES ? "" : "#", o->key', '"#", o->key'),
 ]

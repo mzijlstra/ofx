@@ -167,9 +167,11 @@ Empty Trash deletes all of it after asking. Rename, paste and a new folder don't
 
 ## Options: ofx.conf
 
-The options you set are in `~/.config/ofx/ofx.conf` (`$XDG_CONFIG_HOME`). Edit → Preferences…
-opens it in your editor, and writes it first if it isn't there, as below: every option with what
-it does, commented out at its default. ofx applies a change as soon as you save. What you toggle
+The options you set are in `~/.config/ofx/ofx.conf` (`$XDG_CONFIG_HOME`). ofx writes it when it
+starts and it isn't there, as below: every option with what it does, commented out at its default,
+and the search-skip list written out, since that list is exactly the file's lines. From then on
+the file is what applies. Edit → Preferences… opens it in your editor. ofx applies a change as soon
+as you save. What you toggle
 in the View menu isn't set here: ofx remembers it in `~/.local/state/ofx/state`.
 
 <!-- ofx.conf: written by `build/ofx-probe --conf`; make test checks this copy -->
@@ -177,12 +179,14 @@ in the View menu isn't set here: ofx remembers it in `~/.local/state/ofx/state`.
 # ofx.conf: the options you set for ofx (the Omarchy file explorer).
 #
 # ofx reads this file when it starts and again whenever you save it: every open
-# window applies a change at once. ofx never writes it, except to make it
-# (Edit > Preferences..., when it isn't there).
+# window applies a change at once. ofx never changes it: it only writes it, as
+# you see it here, when it isn't there (when ofx starts, or Edit > Preferences...).
 #
 # One option a line, `key = value`; # starts a comment. A line ofx can't read is
 # skipped, the rest applies, and the status line says which line and why.
 # Below, every option at its default, commented out: remove the # to change one.
+# A list (search-skip) is written out instead, one line a name, since it is
+# exactly the lines it has here: removing them all makes it empty.
 #
 # Not set here: what you toggle in the View menu (the sidebar's mode, list or
 # icons, the icon size, the menu bar, the Owner, Group and Permissions columns)
@@ -208,14 +212,12 @@ in the View menu isn't set here: ofx remembers it in `~/.local/state/ofx/state`.
 #date-format = short
 
 # Folders a search (Ctrl+Shift+F) never goes into, by name, wherever they are;
-# the status line counts each one it skipped. One name a line; your lines
-# replace this default list, so repeat .git and node_modules to keep them.
-# Example:
-#   search-skip = .git
-#   search-skip = node_modules
-#   search-skip = target
-#search-skip = .git
-#search-skip = node_modules
+# the status line counts each one it skipped. One name a line, and the list is
+# exactly these lines: add one to skip a folder (search-skip = target), remove
+# one to search inside it. With no search-skip line at all, a search goes into
+# every folder.
+search-skip = .git
+search-skip = node_modules
 ```
 <!-- ofx.conf end -->
 

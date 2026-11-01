@@ -623,6 +623,10 @@ MUTANTS = [
     ('gui/watch.c', '    watch_bookmarks();\n    watch_conf();', '    watch_bookmarks();', 'f10'),
     ('gui/prefs.c', '    watch_conf();   // (its folder may be new)\n', '', 'f10'),
     ('gui/prefs.c', '    if (!conf_create(path, &err)) {', '    if (false) {', 'f10'),
+    ('gui/prefs.c', '    if (conf_path(path, sizeof path) && !conf_create(path, &err)) set_status', '    if (false) set_status', 'f10'),
+    ('gui/main.c', '    conf_start();   // (F10', '    // (F10', 'f10'),
+    ('gui/prefs.c', '        conf_parse(read_file(&scratch, path), &c);\n    else conf_defaults(&c);', '        conf_parse(read_file(&scratch, path), &c);\n    else conf_parse(STR_EMPTY, &c);', 'f10'),
+    ('gui/folder.c', '        if (app.cwd[0]) app.status[0] = 0;', '        app.status[0] = 0;', 'f10'),
     ('gui/prefs.c', '    thumbs.off = !c.previews, thumbs.src_max = c.preview_max;', '    thumbs.src_max = c.preview_max;', 'f10'),
     ('gui/prefs.c', '    thumbs.off = !c.previews, thumbs.src_max = c.preview_max;', '    thumbs.off = !c.previews, thumbs.src_max = THUMB_SRC_MAX;', 'f10'),
     ('gui/prefs.c', '    if (previews) thumbs_reset();', '', 'f10'),
@@ -776,7 +780,7 @@ def key(m):
     return hashlib.sha1('\0'.join(m[:3]).encode()).hexdigest()[:12]
 
 # The group of a script that failed: run.sh prints "== <script>: FAILED" or "<group>: FAILED".
-GROUP_OF = {'f6b': 'f6', 'f62b': 'f62', 'f62c': 'f62', 'f63b': 'f63', 'f63c': 'f63', 'f64b': 'f64', 'f64c': 'f64', 'f64d': 'f64', 'f7b': 'f7', 'f73b': 'f73', 'f73c': 'f73', 'f73d': 'f73', 'f75b': 'f75', 'f8b': 'f8', 'f8c': 'f8', 'f8d': 'f8', 'f8e': 'f8', 'f9b': 'f9', 'f10b': 'f10'}
+GROUP_OF = {'f6b': 'f6', 'f62b': 'f62', 'f62c': 'f62', 'f63b': 'f63', 'f63c': 'f63', 'f64b': 'f64', 'f64c': 'f64', 'f64d': 'f64', 'f7b': 'f7', 'f73b': 'f73', 'f73c': 'f73', 'f73d': 'f73', 'f75b': 'f75', 'f8b': 'f8', 'f8c': 'f8', 'f8d': 'f8', 'f8e': 'f8', 'f9b': 'f9', 'f10b': 'f10', 'f10c': 'f10'}
 
 # The tags as groups run.sh knows: a script's name (f7b, written before GROUP_OF had it) as its
 # group; anything else dropped, so a mutant never "survives" a group that runs nothing.

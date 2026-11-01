@@ -245,9 +245,9 @@ static bool go_to_in(const char *dir, Str select, isize fallback, bool stepping)
     app.ui.marked = marked;
     if (!same) ui_edit_close(&app.ui);
     if (!same) {
+        if (app.cwd[0]) app.status[0] = 0;   // what happened in the last folder (not at the start: what it said stays)
         snprintf(app.cwd, sizeof app.cwd, "%s", dir);
         ui_crumbs_set(&app.crumbs, app.cwd, getenv("HOME"));
-        app.status[0] = 0;   // what happened in the last folder
         app.ui.list.top = 0;
         app.place_cur = places_current(&app.places, app.cwd);
         // OFX_TEST_WATCH_DELAY_MS widens the gap between the listing and the watch, so

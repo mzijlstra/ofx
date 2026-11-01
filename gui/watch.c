@@ -127,7 +127,8 @@ static void watch_trashes(const TrashDirs *d)
     }
 }
 
-// ofx.conf's folder, watched unless it is already (or there is none yet: Preferences makes it, F10).
+// ofx.conf's folder, watched unless it is already (or there is none: conf_start couldn't make it;
+// Preferences tries again, F10).
 static void watch_conf(void)
 {
     char file[PATH_MAX], d[PATH_MAX];
