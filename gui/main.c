@@ -225,7 +225,7 @@ static struct {
     bool      trash_full;   // any trash folder holds something (trash_state): the Trash place's icon
     bool      drive_gone;   // the drive the folder shown was on left the mount list (places_reload): Home
     Conf      conf;         // ofx.conf as last read (F10, prefs.c)
-    SearchSkipList skips, skips_shown;   // its search-skip, and the list the search shown walked with
+    SearchSkipList skips_shown;   // the list the search shown walks with (search_copy)
     i64       cwd_avail;    // the free space on cwd's drive, -1 unknown
     char      status[600];
     bool      status_bad;

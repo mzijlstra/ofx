@@ -38,15 +38,6 @@ enum {
     SEARCH_SNIP = 160, SEARCH_SNIP_BEFORE = 40,   // a hit's line: at most this, from this before the match
 };
 
-// The folders a search never enters, by name (ofx.conf's search-skip, F10): each walk is given its
-// own copy, so a change to the file mid-search doesn't reach a walk under way.
-typedef struct {
-    char name[CONF_SKIP_MAX][CONF_NAME_MAX];
-    int  n;
-} SearchSkipList;
-
-static const SearchSkipList SEARCH_SKIP_DEFAULT = { { ".git", "node_modules" }, 2 };
-
 static bool is_search(const char *dir)
 {
     return strncmp(dir, SEARCH_URI, sizeof SEARCH_URI - 1) == 0;
@@ -113,7 +104,7 @@ typedef struct {
     const atomic_uint *gen;    // the walk stops when this moves off mine
     u32                mine;
     bool               hidden; // dot-files searched and their folders entered
-    const SearchSkipList *skips;  // NULL: SEARCH_SKIP_DEFAULT
+    const SearchSkipList *skips;  // the folders never entered (ofx.conf's search-skip, fs/conf.c)
     bool             (*match)(void *ctx, Str name);
     // Inside files (step 3; NULL: names only): whether a line (or a piece of a long one) matches,
     // where in it; buf has SEARCH_BUF bytes to read into.
@@ -140,7 +131,7 @@ static bool search_stopped(const SearchWalk *w)
 
 static int search_skip_of(const SearchWalk *w, const char *name)
 {
-    const SearchSkipList *l = w->skips ? w->skips : &SEARCH_SKIP_DEFAULT;
+    const SearchSkipList *l = w->skips;
     for (int k = 0; k < l->n; k++)
         if (strcmp(name, l->name[k]) == 0) return k;
     return -1;
@@ -359,7 +350,6 @@ static bool search_walk(SearchWalk *w, const char *root)
 // nothing was. names: the skip list it walked with (NULL: the default).
 static void search_skips_text(const SearchSkips *s, const SearchSkipList *names, char *out, size_t cap)
 {
-    if (!names) names = &SEARCH_SKIP_DEFAULT;
     out[0] = 0;
     size_t at = 0;
     const char *sep = "skipped ";

@@ -56,19 +56,13 @@ static void trash_scan(void)
     trash_dirs(&trashd, mp, n);
 }
 
-// Whether any trash folder trash_scan found holds something (the folder menu's Empty Trash, F8).
+// Whether any trash folder trash_scan found holds something (trash_state's, for the Trash icon and
+// the folder menu's Empty Trash).
 static bool trash_any(void)
 {
     for (int i = 0; i < trashd.n; i++) {
         char files[PATH_MAX];
-        if (snprintf(files, sizeof files, "%s/files", trashd.dir[i]) >= (int)sizeof files) continue;
-        DIR *d = opendir(files);
-        if (!d) continue;
-        struct dirent *e;
-        bool any = false;
-        while (!any && (e = readdir(d))) any = strcmp(e->d_name, ".") != 0 && strcmp(e->d_name, "..") != 0;
-        closedir(d);
-        if (any) return true;
+        if (snprintf(files, sizeof files, "%s/files", trashd.dir[i]) < (int)sizeof files && !dir_empty(files)) return true;
     }
     return false;
 }
@@ -93,7 +87,7 @@ static bool trash_state(void)
 static SearchQuery search_query(Str text, Str inside, const char *root)
 {
     return (SearchQuery){ .root = root, .text = text, .inside = inside, .o = app.ui.find_opts, .io = app.ui.inside_opts, .hidden = app.show_hidden,
-                          .skips = &app.skips };
+                          .skips = &app.conf.skip };
 }
 
 // The search view's listing (F9): the matches so far, sorted. A search starts first when another
@@ -106,11 +100,11 @@ static bool search_list(Arena *a, const char *uri, Listing *l, Err *err)
     snprintf(r, sizeof r, "%.*s", STR_ARG(root));
     SearchQuery q = search_query(text, inside, r);
     if (!search_is(q)) {
-        search_ask(q), app.skips_shown = app.skips;
+        search_ask(q);
         ui_matcher_set(&app.search_m, text, app.ui.find_opts);
         ui_matcher_set(&app.search_im, inside, app.ui.inside_opts);
     }
-    if (!search_copy(a, l, &app.search_s, &app.search_done)) return err_set(err, "%s: too many results for memory", r), false;
+    if (!search_copy(a, l, &app.search_s, &app.skips_shown, &app.search_done)) return err_set(err, "%s: too many results for memory", r), false;
     fs_sort(l, app.ui.sort);
     snprintf(app.search_root, sizeof app.search_root, "%s", r);
     return true;
@@ -219,7 +213,7 @@ static bool go_to_in(const char *dir, Str select, isize fallback, bool stepping)
     // The folder left, with its cursor, for Back: its name is still in the old listing's arena.
     if (!same && app.have_list && !stepping) hist_leave(&hist, app.cwd, sel_name());
     app.cur = next, app.list = l, app.mime = mime, app.have_list = true, app.error[0] = 0, app.lists++;
-    if (app.ui.view == UI_VIEW_SEARCH && view != UI_VIEW_SEARCH) search_ask((SearchQuery){ .root = "" }), app.search_due = 0;   // (out of it: the walk stops)
+    if (app.ui.view == UI_VIEW_SEARCH && view != UI_VIEW_SEARCH) search_ask((SearchQuery){ .root = "", .skips = &app.conf.skip }), app.search_due = 0;   // (out of it: the walk stops)
     if (view != UI_VIEW_SEARCH) ui_unfocus(&app.ui, UI_FOCUS_SEARCH), ui_unfocus(&app.ui, UI_FOCUS_INSIDE);
     if (view == UI_VIEW_SEARCH && !same) {   // the fields show their text; empty, the first has the keys
         Str root, text, inside;
@@ -308,7 +302,7 @@ static void search_again(void)
     snprintf(keep, sizeof keep, "%.*s", STR_ARG(sel_name()));
     snprintf(app.search_pick, sizeof app.search_pick, "%s", keep);
     Str root, text, inside;
-    if (search_parse(app.cwd, &root, &text, &inside)) search_ask(search_query(text, inside, app.search_root)), app.skips_shown = app.skips;
+    if (search_parse(app.cwd, &root, &text, &inside)) search_ask(search_query(text, inside, app.search_root));
     search_relist();
 }
 

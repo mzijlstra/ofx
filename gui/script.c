@@ -319,8 +319,8 @@ static void script_state(char *out, size_t cap)
     static const char *const DATES[] = { "short", "long", "iso", "pattern" };
     char confw[CONF_SKIP_MAX * CONF_NAME_MAX + 96], seldate[96], datew[96];
     int cw = snprintf(confw, sizeof confw, "%s:%lld:%s:", app.conf.previews ? "on" : "off", (long long)app.conf.preview_max, DATES[app.conf.date]);
-    for (int k = 0; k < app.skips.n && cw > 0 && (size_t)cw < sizeof confw; k++)
-        cw += snprintf(confw + cw, sizeof confw - (size_t)cw, "%s%s", k ? "+" : "", app.skips.name[k]);
+    for (int k = 0; k < app.conf.skip.n && cw > 0 && (size_t)cw < sizeof confw; k++)
+        cw += snprintf(confw + cw, sizeof confw - (size_t)cw, "%s%s", k ? "+" : "", app.conf.skip.name[k]);
     datew[0] = 0;
     if (app.have_list && app.ui.list.sel < app.list.n) entry_when(&app.list.e[app.ui.list.sel], (i64)time(NULL), datew, sizeof datew);
     state_word(seldate, sizeof seldate, str_from_c(datew));

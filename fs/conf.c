@@ -21,13 +21,25 @@ enum { CONF_SKIP_MAX = 32, CONF_NAME_MAX = 64, CONF_DATE_MAX = 64, CONF_WHY_MAX 
 
 typedef enum { DATE_SHORT, DATE_LONG, DATE_ISO, DATE_PATTERN } DateFormat;
 
+// The folders a search never enters, by name (search-skip, F9 and F10): each walk is given its own
+// copy (fs/search.c), so a change to the file mid-search doesn't reach a walk under way.
+typedef struct {
+    char name[CONF_SKIP_MAX][CONF_NAME_MAX];
+    int  n;
+} SearchSkipList;
+
+// The built-in defaults, each said once here; CONF_OPTS' text says the same (test_conf ties them).
+static const SearchSkipList SEARCH_SKIP_DEFAULT = { { ".git", "node_modules" }, 2 };
+#define CONF_PREVIEW_MAX ((i64)10 << 20)   // preview-max-size (Michael, 2026-10-24)
+#define CLEAN_UNUSED_S   (90 * 86400LL)    // clean-unused-days, in seconds (F6.5, Michael, 2026-10-25)
+#define CLEAN_CAP        ((i64)1 << 30)    // clean-cap
+
 typedef struct {
     bool       previews;                          // previews in the icon view (F6.4)
     i64        preview_max;                       // the largest image previewed, in bytes
     DateFormat date;
     char       date_pattern[CONF_DATE_MAX];       // DATE_PATTERN's strftime pattern
-    char       skip[CONF_SKIP_MAX][CONF_NAME_MAX];   // folders a search never enters (F9)
-    int        nskip;
+    SearchSkipList skip;                          // search-skip
     char       editor[EDITORS_USER][CONF_LINE_MAX];  // Open at Line's recipes (F9 step 4), as written
     int        neditor;
     bool       clean, clean_orphans;              // ofx-clean (F6.5): at all; previews of files gone or changed
@@ -158,10 +170,8 @@ static const char *const CONF_WANTS[] = {
 // the list, which is the file's lines).
 static void conf_defaults(Conf *c)
 {
-    *c = (Conf){ .previews = true, .preview_max = (i64)10 << 20, .date = DATE_SHORT, .clean = true, .clean_orphans = true,
-                 .clean_unused_days = 90, .clean_cap = (i64)1 << 30 };
-    snprintf(c->skip[0], CONF_NAME_MAX, ".git"), snprintf(c->skip[1], CONF_NAME_MAX, "node_modules");
-    c->nskip = 2;
+    *c = (Conf){ .previews = true, .preview_max = CONF_PREVIEW_MAX, .date = DATE_SHORT, .skip = SEARCH_SKIP_DEFAULT, .clean = true,
+                 .clean_orphans = true, .clean_unused_days = CLEAN_UNUSED_S / 86400, .clean_cap = CLEAN_CAP };
 }
 
 // One value for opt k into c; false when it isn't one opt k takes.
@@ -180,8 +190,8 @@ static bool conf_set(Conf *c, int k, Str v)
     }
     if (strcmp(key, "search-skip") == 0) {
         if (!v.len || v.len >= CONF_NAME_MAX || str_find(v, '/') >= 0 || str_eq(v, S(".")) || str_eq(v, S(".."))) return false;
-        if (c->nskip == CONF_SKIP_MAX) return false;
-        snprintf(c->skip[c->nskip++], CONF_NAME_MAX, "%.*s", STR_ARG(v));
+        if (c->skip.n == CONF_SKIP_MAX) return false;
+        snprintf(c->skip.name[c->skip.n++], CONF_NAME_MAX, "%.*s", STR_ARG(v));
         return true;
     }
     if (strcmp(key, "clean") == 0) return conf_bool(v, &c->clean);
@@ -212,7 +222,7 @@ static bool conf_set(Conf *c, int k, Str v)
 static void conf_parse(Str text, Conf *c)
 {
     conf_defaults(c);
-    c->nskip = 0;
+    c->skip.n = 0;
     int no = 0;
     for (isize at = 0; at < text.len;) {
         isize e = at;

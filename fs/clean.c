@@ -2,9 +2,9 @@
 // systemd user timer. Nothing else cleans ~/.cache/thumbnails here (Nemo doesn't), and on
 // 2026-10-25 258 MiB of its 362 were previews of files that are gone.
 //
-// Three rules, in order: a preview not read for CLEAN_UNUSED_S goes (its atime); a preview whose
-// file is gone or has changed goes (its Thumb::URI and Thumb::MTime); then, while the cache is over
-// CLEAN_CAP, the least recently read go. ofx.conf's clean options (F10) set or turn off each. Only the cache's own names are looked at, in its size
+// Three rules, in order (ofx.conf's clean options, F10, set or turn off each): a preview not read
+// for clean-unused-days goes (its atime); a preview whose file is gone or has changed goes (its
+// Thumb::URI and Thumb::MTime); then, while the cache is over clean-cap, the least recently read go. Only the cache's own names are looked at, in its size
 // folders and fail/<program>/, never followed through a link, and each delete asks the test guard
 // (ops.c) first.
 //
@@ -20,9 +20,6 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-// The defaults (as ofx.conf's: clean-unused-days, clean-cap).
-#define CLEAN_UNUSED_S (90 * 86400LL)
-#define CLEAN_CAP      ((i64)1 << 30)
 #define CLEAN_TMP_S    86400LL   // ofx's own temporary file, left by a crash, after a day
 
 typedef enum { CR_KEEP, CR_TEMP, CR_UNUSED, CR_ORPHAN, CR_STALE, CR_CAP, CR_N } CleanRule;

@@ -766,8 +766,8 @@ MUTANTS += [
     (M, '    if (!str_eq(media, S("application"))) names[n++] = S("application-x-generic");\n', ''),
     (M, '        if (up == 0) names[n++] = str_from_c(arena_sprintf(a, "%.*s-x-generic", STR_ARG(media)));\n', ''),
     # ---- F6.5: the thumbnail cache's cleanup
-    (CL, "#define CLEAN_UNUSED_S (90 * 86400LL)", "#define CLEAN_UNUSED_S (88 * 86400LL)"),
-    (CL, "#define CLEAN_UNUSED_S (90 * 86400LL)", "#define CLEAN_UNUSED_S (92 * 86400LL)"),
+    ("fs/conf.c", "#define CLEAN_UNUSED_S   (90 * 86400LL)", "#define CLEAN_UNUSED_S   (88 * 86400LL)"),
+    ("fs/conf.c", "#define CLEAN_UNUSED_S   (90 * 86400LL)", "#define CLEAN_UNUSED_S   (92 * 86400LL)"),
     (CL, "#define CLEAN_TMP_S    86400LL", "#define CLEAN_TMP_S    (3 * 86400LL)"),
     (CL, "        if (!((n[i] >= '0' && n[i] <= '9') || (n[i] >= 'a' && n[i] <= 'f'))) return false;", "        if (!((n[i] >= '0' && n[i] <= '9') || (n[i] >= 'a' && n[i] <= 'g'))) return false;"),
     (CL, "        if (!((n[i] >= '0' && n[i] <= '9') || (n[i] >= 'a' && n[i] <= 'f'))) return false;", "        if (!((n[i] >= '0' && n[i] <= ':') || (n[i] >= 'a' && n[i] <= 'f'))) return false;"),
@@ -2065,12 +2065,14 @@ MUTANTS += [
     (CF, 'return n <= INT64_MAX / UNITS[k].mul && (*out = n * UNITS[k].mul, true);', 'return n <= INT64_MAX / UNITS[k].mul && (*out = n, true);'),
     (CF, '    if (str_eq(v, S("on")) || str_eq(v, S("yes")) || str_eq(v, S("true"))) return *out = true, true;', '    if (str_eq(v, S("on")) || str_eq(v, S("yes"))) return *out = true, true;'),
     (CF, '    if (str_eq(v, S("off")) || str_eq(v, S("no")) || str_eq(v, S("false"))) return *out = false, true;', '    if (str_eq(v, S("off")) || str_eq(v, S("no"))) return *out = false, true;'),
-    (CF, '    *c = (Conf){ .previews = true, .preview_max = (i64)10 << 20, .date = DATE_SHORT, .clean = true,', '    *c = (Conf){ .previews = true, .preview_max = (i64)10 << 20, .date = DATE_LONG, .clean = true,'),
-    (CF, '    c->nskip = 2;', '    c->nskip = 1;'),
+    (CF, '    *c = (Conf){ .previews = true, .preview_max = CONF_PREVIEW_MAX, .date = DATE_SHORT,', '    *c = (Conf){ .previews = true, .preview_max = CONF_PREVIEW_MAX, .date = DATE_LONG,'),
+    (CF, '#define CONF_PREVIEW_MAX ((i64)10 << 20)', '#define CONF_PREVIEW_MAX ((i64)10 << 19)'),
+    (CF, '#define CLEAN_CAP        ((i64)1 << 30)', '#define CLEAN_CAP        ((i64)1 << 29)'),
+    (CF, 'static const SearchSkipList SEARCH_SKIP_DEFAULT = { { ".git", "node_modules" }, 2 };', 'static const SearchSkipList SEARCH_SKIP_DEFAULT = { { ".git", "node_modules" }, 1 };'),
     (CF, '        if (str_find(v, \'%\') < 0 || v.len >= CONF_DATE_MAX) return false;', '        if (v.len >= CONF_DATE_MAX) return false;'),
     (CF, " || str_find(v, '/') >= 0", ''),
     (CF, ' || str_eq(v, S(".")) || str_eq(v, S(".."))', ''),
-    (CF, '        if (c->nskip == CONF_SKIP_MAX) return false;\n', ''),
+    (CF, '        if (c->skip.n == CONF_SKIP_MAX) return false;\n', ''),
     (CF, '        if (line.len == 0 || line.p[0] == \'#\') continue;\n        isize eq', '        if (line.len == 0) continue;\n        isize eq'),
     # Not a mutant: `eq >= 0 &&` dropped (without an = the value is empty, which no option takes).
     (CF, '        if (c->bad) continue;\n', ''),
@@ -2083,8 +2085,7 @@ MUTANTS += [
     ('ui/helpers.c', '    if (f != DATE_SHORT) {', '    if (f == DATE_PATTERN) {'),
     ('ui/helpers.c', '        if (!strftime(buf, cap, p, &tm)) snprintf(buf, cap, "?");', '        strftime(buf, cap, p, &tm);'),
     ('ui/helpers.c', 'f == DATE_ISO ? "%Y-%m-%dT%H:%M:%S" : pattern;', 'f == DATE_ISO ? "%Y-%m-%d %H:%M:%S" : pattern;'),
-    ('fs/search.c', '    const SearchSkipList *l = w->skips ? w->skips : &SEARCH_SKIP_DEFAULT;', '    const SearchSkipList *l = &SEARCH_SKIP_DEFAULT;'),
-    ('fs/search.c', '    if (!names) names = &SEARCH_SKIP_DEFAULT;', '    names = &SEARCH_SKIP_DEFAULT;'),
+    ('fs/search.c', '    const SearchSkipList *l = w->skips;', '    const SearchSkipList *l = &SEARCH_SKIP_DEFAULT;'),
     ('ui/panels.c', '    case UM_PREFERENCES: return (UiAction){ UA_PREFERENCES, 0, false };\n', ''),
     ('fs/thumb.c', '    Str src = thumb_read(a, q->path, q->src_max, &st);', '    Str src = thumb_read(a, q->path, THUMB_SRC_MAX, &st);'),
 ]
@@ -2094,15 +2095,15 @@ MUTANTS += [
 ]
 MUTANTS += [
     # search-skip is exactly the file's lines; the file written with them (Michael, 2026-11-01)
-    (CF, '    conf_defaults(c);\n    c->nskip = 0;', '    conf_defaults(c);'),
+    (CF, '    conf_defaults(c);\n    c->skip.n = 0;', '    conf_defaults(c);'),
     (CF, 'o->kind == CK_NAMES ? "" : "#", o->key', '"#", o->key'),
 ]
 MUTANTS += [
     # F10 step 2: ofx-clean's options, the editor lines, conf_load (2026-11-01)
-    (CF, '.clean = true, .clean_orphans = true,', '.clean = false, .clean_orphans = true,'),
-    (CF, '.clean = true, .clean_orphans = true,', '.clean = true, .clean_orphans = false,'),
-    (CF, '.clean_unused_days = 90,', '.clean_unused_days = 91,'),
-    (CF, '.clean_cap = (i64)1 << 30 };', '.clean_cap = (i64)1 << 29 };'),
+    (CF, '.skip = SEARCH_SKIP_DEFAULT, .clean = true,', '.skip = SEARCH_SKIP_DEFAULT, .clean = false,'),
+    (CF, '                 .clean_orphans = true,', '                 .clean_orphans = false,'),
+    (CF, '.clean_unused_days = CLEAN_UNUSED_S / 86400,', '.clean_unused_days = CLEAN_UNUSED_S / 86400 + 1,'),
+    (CF, '.clean_cap = CLEAN_CAP };', '.clean_cap = CLEAN_CAP / 2 };'),
     (CF, '    if (strcmp(key, "clean") == 0) return conf_bool(v, &c->clean);\n', ''),
     (CF, '    if (strcmp(key, "clean-orphans") == 0) return conf_bool(v, &c->clean_orphans);\n', ''),
     (CF, '    if (strcmp(key, "clean-cap") == 0) return conf_size(v, &c->clean_cap);\n', ''),

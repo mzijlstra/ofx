@@ -32,8 +32,6 @@ static void conf_apply(void)
     bool previews = once && (c.previews != app.conf.previews || c.preview_max != app.conf.preview_max);
     once = true;
     app.conf = c;
-    app.skips = (SearchSkipList){ .n = c.nskip };
-    for (int k = 0; k < c.nskip; k++) memcpy(app.skips.name[k], c.skip[k], sizeof app.skips.name[k]);
     thumbs.off = !c.previews, thumbs.src_max = c.preview_max;
     if (previews) thumbs_reset();   // (asked again, under the new limit, or not at all)
     if (c.bad) {

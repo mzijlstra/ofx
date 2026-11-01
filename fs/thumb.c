@@ -40,11 +40,11 @@
 #include "external/stb_image_resize2.h"
 #undef STB_IMAGE_RESIZE_IMPLEMENTATION
 
-// THUMB_SRC_MAX: the largest file ofx makes a preview of by default (Michael, 2026-10-24); ofx.conf's
-// preview-max-size sets it (F10), each ask carrying its own (ThumbAsk.src_max). THUMB_PIXELS_MAX: a PNG or GIF is decoded whole, four bytes a pixel, so a
+// The largest file ofx makes a preview of is ofx.conf's preview-max-size (F10, its default
+// CONF_PREVIEW_MAX), each ask carrying its own (ThumbAsk.src_max). THUMB_PIXELS_MAX: a PNG or GIF is decoded whole, four bytes a pixel, so a
 // small file of a huge image is refused before it takes more than 160 MiB of the worker's arena. THUMB_CACHED_MAX: a cached
 // preview bigger than this isn't one (an xx-large is 1024 px, about 3 MiB).
-enum { THUMB_SRC_MAX = MiB(10), THUMB_PIXELS_MAX = 40000000, THUMB_CACHED_MAX = MiB(8), THUMB_LEVELS = 4 };
+enum { THUMB_PIXELS_MAX = 40000000, THUMB_CACHED_MAX = MiB(8), THUMB_LEVELS = 4 };
 
 typedef struct { u8 *px; int w, h; } Img;   // RGBA, rows packed
 

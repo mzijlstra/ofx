@@ -323,12 +323,12 @@ static void test_thumb_decode(void)
         for (int i = 0; same && i < 6; i++) same = r.px[i * 4] == want[o][i] && r.px[i * 4 + 3] == want[o][i];
         CHECK(same);
     }
-    // The reads' limit: a file over it isn't read (THUMB_SRC_MAX for a source).
+    // The reads' limit: a file over it isn't read (CONF_PREVIEW_MAX for a source).
     const char *big = at("f64/big.bin");
     put(big, "");
-    CHECK(truncate(big, THUMB_SRC_MAX + 1) == 0);
+    CHECK(truncate(big, CONF_PREVIEW_MAX + 1) == 0);
     struct stat st;
-    CHECK(thumb_read(&a, big, THUMB_SRC_MAX, &st).len == 0 && st.st_size == THUMB_SRC_MAX + 1);
+    CHECK(thumb_read(&a, big, CONF_PREVIEW_MAX, &st).len == 0 && st.st_size == CONF_PREVIEW_MAX + 1);
     CHECK(truncate(big, 100) == 0);
     CHECK(thumb_read(&a, big, 100, &st).len == 100 && thumb_read(&a, big, 99, &st).len == 0);
 }
@@ -336,7 +336,7 @@ static void test_thumb_decode(void)
 // The ask for path at px, as gui/thumbs.c makes it.
 static ThumbAsk ask(const char *path, ThumbKind k, int px, const char *cache)
 {
-    return (ThumbAsk){ .path = path, .mtime = mtime_of(path), .size = size_of(path), .kind = k, .make = true, .px = px, .root = cache, .src_max = THUMB_SRC_MAX };
+    return (ThumbAsk){ .path = path, .mtime = mtime_of(path), .size = size_of(path), .kind = k, .make = true, .px = px, .root = cache, .src_max = CONF_PREVIEW_MAX };
 }
 
 static bool cached_fresh(Arena *a, const char *cache, const char *dir, const char *path, int *w, int *h)
@@ -454,7 +454,7 @@ static void test_thumb_get(void)
     // Gone, or unreadable: the icon, no fail entry.
     char gone[PATH_MAX];
     snprintf(gone, sizeof gone, "%s", at("f64/pics/gone.png"));
-    q = (ThumbAsk){ .path = gone, .mtime = 5, .size = 5, .kind = TK_PNG, .make = true, .px = 48, .root = cache, .src_max = THUMB_SRC_MAX };
+    q = (ThumbAsk){ .path = gone, .mtime = 5, .size = 5, .kind = TK_PNG, .make = true, .px = 48, .root = cache, .src_max = CONF_PREVIEW_MAX };
     CHECK(thumb_get(&a, &q, &out) == TG_NONE && !cached_fresh(&a, cache, "fail/ofx", gone, &w, &h));
     // The cache's own files get none.
     thumb_uri(p, uri, sizeof uri);

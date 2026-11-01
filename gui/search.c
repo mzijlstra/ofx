@@ -14,7 +14,7 @@ typedef struct {
     Str                   text, inside;
     UiMatchOpts           o, io;
     bool                  hidden;
-    const SearchSkipList *skips;   // the folders never entered (ofx.conf, F10); NULL: the default
+    const SearchSkipList *skips;   // the folders never entered (ofx.conf, F10)
 } SearchQuery;
 
 static struct {
@@ -169,7 +169,7 @@ static bool search_is(SearchQuery q)
     bool same = strcmp(search.root, q.root) == 0 && str_eq((Str){ search.text, search.text_len }, q.text) &&
                 search_opts_eq(search.opts, q.o) && search.hidden == q.hidden && str_eq((Str){ search.inside, search.inside_len }, q.inside) &&
                 (!q.inside.len || search_opts_eq(search.inside_opts, q.io)) &&
-                memcmp(&search.skips, q.skips ? q.skips : &SEARCH_SKIP_DEFAULT, sizeof search.skips) == 0;
+                memcmp(&search.skips, q.skips, sizeof search.skips) == 0;
     pthread_mutex_unlock(&search.mu);
     return same;
 }
@@ -193,7 +193,7 @@ static void search_ask(SearchQuery q)
     search.text_len = search_text_put(search.text, q.text);
     search.inside_len = search_text_put(search.inside, q.inside);
     search.opts = q.o, search.inside_opts = q.io, search.hidden = q.hidden;
-    search.skips = q.skips ? *q.skips : SEARCH_SKIP_DEFAULT;
+    search.skips = *q.skips;
     search.res_gen = gen, search.n = 0, search.s = (SearchSkips){ 0 }, search.fresh = true;
     memset(search_gone, 0, sizeof search_gone), arena_reset(&search_edits);
     search.done = (q.text.len == 0 && q.inside.len == 0) || !search.started;
@@ -212,14 +212,14 @@ static Str search_str(Arena *a, Str s, bool *ok)
     return (Str){ p, s.len };
 }
 
-// The matches so far into out, copied into a (unsorted); *s what the walk left out, *done whether it
-// ended. False when a is full.
-static bool search_copy(Arena *a, Listing *out, SearchSkips *s, bool *done)
+// The matches so far into out, copied into a (unsorted); *s what the walk left out, *names the list
+// it skips by, *done whether it ended. False when a is full.
+static bool search_copy(Arena *a, Listing *out, SearchSkips *s, SearchSkipList *names, bool *done)
 {
     *out = (Listing){ 0 };
     pthread_mutex_lock(&search.mu);
     isize n = search.res_gen == atomic_load(&search.gen) ? search.n : 0;
-    *s = search.s, *done = search.done;
+    *s = search.s, *names = search.skips, *done = search.done;
     Entry *e = arena_try_new(a, Entry, n + 1);
     bool ok = e != NULL;
     isize k = 0;

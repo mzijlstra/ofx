@@ -6,8 +6,8 @@
 static bool conf_same(const Conf *a, const Conf *b)
 {
     bool same = a->previews == b->previews && a->preview_max == b->preview_max && a->date == b->date &&
-                strcmp(a->date_pattern, b->date_pattern) == 0 && a->nskip == b->nskip && a->bad == b->bad;
-    for (int k = 0; same && k < a->nskip; k++) same = strcmp(a->skip[k], b->skip[k]) == 0;
+                strcmp(a->date_pattern, b->date_pattern) == 0 && a->skip.n == b->skip.n && a->bad == b->bad;
+    for (int k = 0; same && k < a->skip.n; k++) same = strcmp(a->skip.name[k], b->skip.name[k]) == 0;
     return same;
 }
 
@@ -17,9 +17,9 @@ static void test_conf(void)
     // No file: the built-in defaults. An empty file: the same, but no list (it is the file's lines).
     conf_defaults(&c);
     CHECK(c.previews && c.preview_max == (i64)10 << 20 && c.date == DATE_SHORT && !c.bad);
-    CHECK(c.nskip == 2 && strcmp(c.skip[0], ".git") == 0 && strcmp(c.skip[1], "node_modules") == 0);
+    CHECK(c.skip.n == 2 && strcmp(c.skip.name[0], ".git") == 0 && strcmp(c.skip.name[1], "node_modules") == 0);
     conf_parse(STR_EMPTY, &c);
-    CHECK(c.previews && c.preview_max == (i64)10 << 20 && c.date == DATE_SHORT && !c.bad && c.nskip == 0);
+    CHECK(c.previews && c.preview_max == (i64)10 << 20 && c.date == DATE_SHORT && !c.bad && c.skip.n == 0);
     // Values: on/off words, sizes with and without a space and unit, the dates.
     conf_parse(S("# a comment\n\n  previews = no\npreview-max-size=50 MiB\ndate-format = long\n"), &c);
     CHECK(!c.previews && c.preview_max == (i64)50 << 20 && c.date == DATE_LONG && !c.bad);
@@ -51,11 +51,11 @@ static void test_conf(void)
     CHECK(c.date == DATE_SHORT && c.bad == 1 && strstr(c.why, "date-format wants short, long, iso"));
     // The list: the file's lines, in order; a bad name is skipped.
     conf_parse(S("search-skip = target\nsearch-skip = .git\nsearch-skip = a/b\nsearch-skip = ..\n"), &c);
-    CHECK(c.nskip == 2 && strcmp(c.skip[0], "target") == 0 && strcmp(c.skip[1], ".git") == 0 && c.bad == 3);
+    CHECK(c.skip.n == 2 && strcmp(c.skip.name[0], "target") == 0 && strcmp(c.skip.name[1], ".git") == 0 && c.bad == 3);
     char many[CONF_SKIP_MAX * 24 + 64] = "";
     for (int k = 0; k <= CONF_SKIP_MAX; k++) snprintf(many + strlen(many), sizeof many - strlen(many), "search-skip = d%d\n", k);
     conf_parse(str_from_c(many), &c);
-    CHECK(c.nskip == CONF_SKIP_MAX && c.bad == CONF_SKIP_MAX + 1);
+    CHECK(c.skip.n == CONF_SKIP_MAX && c.bad == CONF_SKIP_MAX + 1);
     // Bad lines: the first is kept, with why; the rest still apply; the last of a key wins.
     conf_parse(S("previews\nnosuch = 1\npreviews = off\npreviews = on\n"), &c);
     CHECK(c.bad == 1 && strcmp(c.why, "not a key = value line") == 0 && c.previews);
@@ -96,11 +96,11 @@ static void test_conf(void)
     char *g = strstr(cut, "\nsearch-skip = .git\n");
     memmove(g + 1, g + 20, strlen(g + 20) + 1);
     conf_parse(str_from_c(cut), &c);
-    CHECK(!c.bad && c.nskip == 1 && strcmp(c.skip[0], "node_modules") == 0);
+    CHECK(!c.bad && c.skip.n == 1 && strcmp(c.skip.name[0], "node_modules") == 0);
     g = strstr(cut, "\nsearch-skip = node_modules\n");
     memmove(g + 1, g + 28, strlen(g + 28) + 1);
     conf_parse(str_from_c(cut), &c);
-    CHECK(!c.bad && c.nskip == 0 && c.previews && c.date == DATE_SHORT);
+    CHECK(!c.bad && c.skip.n == 0 && c.previews && c.date == DATE_SHORT);
     // ofx's file: made with its folder, read back as the defaults; an existing one (or a
     // link) never replaced; outside the guard's root, refused.
     Err err;
@@ -151,7 +151,7 @@ static void test_conf_skips(void)
     char line[200];
     search_skips_text(&w.s, &l, line, sizeof line);
     CHECK(strcmp(line, "skipped 1 target, 1 .git") == 0);
-    search_skips_text(&w.s, NULL, line, sizeof line);   // the default list's names
+    search_skips_text(&w.s, &SEARCH_SKIP_DEFAULT, line, sizeof line);   // the default list's names
     CHECK(strcmp(line, "skipped 1 .git, 1 node_modules") == 0);
     // Edit → Preferences… goes to gui/ (UA_PREFERENCES).
     Ui u = menu_ui(3);
@@ -249,11 +249,11 @@ static void test_conf_step2(void)
     CHECK(u.n == 3 && u.bad == 3 && e && !e->term && strcmp(e->argv[0], "mynvim") == 0 && editor_find(&u, "other"));
     // conf_load: no file, the built-in defaults (the list too); a file, parsed; a folder there, none.
     env_set("XDG_CONFIG_HOME", at("f10l"));
-    CHECK(!conf_load(&ta, &c) && c.nskip == 2 && c.clean_cap == (i64)1 << 30);
+    CHECK(!conf_load(&ta, &c) && c.skip.n == 2 && c.clean_cap == (i64)1 << 30);
     put(at("f10l/ofx/ofx.conf"), "clean = off\n");
-    CHECK(conf_load(&ta, &c) && !c.clean && c.nskip == 0);
+    CHECK(conf_load(&ta, &c) && !c.clean && c.skip.n == 0);
     unlink(at("f10l/ofx/ofx.conf"));
     CHECK(mkdir(at("f10l/ofx/ofx.conf"), 0700) == 0);
-    CHECK(!conf_load(&ta, &c) && c.clean && c.nskip == 2);
+    CHECK(!conf_load(&ta, &c) && c.clean && c.skip.n == 2);
     env_restore();
 }
