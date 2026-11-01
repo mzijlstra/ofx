@@ -1,0 +1,16 @@
+# F10, after f10c on the same scratch tree: ofx.conf's whole folder removed while ofx runs (its
+# watch ends, IN_IGNORED); Preferences makes it again and watches the new folder, so an edit
+# applies (reviewer-2, 2026-11-01).
+settle
+expect conf=on:10485760:iso: confbad=0
+sh rm -rf "$OFX_ROOT/config/ofx"
+wait-for 3000 conf=on:10485760:short:.git+node_modules
+point-ui menu-title 1
+click-here
+point-menu preferences
+click-here
+expect menu=-
+sh grep -qx "search-skip = .git" "$OFX_ROOT/config/ofx/ofx.conf"
+sh printf 'date-format = long\n' > "$OFX_ROOT/config/ofx/ofx.conf"
+wait-for 3000 conf=on:10485760:long:
+quit

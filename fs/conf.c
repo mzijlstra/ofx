@@ -236,6 +236,10 @@ static bool conf_create(const char *path, Err *err)
     if (fd < 0) return errno == EEXIST || (err_set(err, "%s: %s", path, strerror(errno)), false);
     bool ok = write(fd, text, n) == (ssize_t)n;
     int e = errno;
-    if (close(fd) != 0 || !ok) return err_set(err, "%s: %s", path, strerror(ok ? errno : e)), false;
+    if (close(fd) != 0 || !ok) {
+        e = ok ? errno : e;
+        unlink(path);   // (ours, O_EXCL: a cut file would never be written again)
+        return err_set(err, "%s: %s", path, strerror(e)), false;
+    }
     return true;
 }

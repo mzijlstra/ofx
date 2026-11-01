@@ -163,6 +163,7 @@ static void watch_read(bool *list, bool *theme, bool *mounts, bool *trash, bool 
         if (e->wd == watch.udev_wd && e->len && e->name[0] == 'b') *mounts = true;   // a block device's (b8:17), not the rest udev keeps
         if (!(e->mask & IN_IGNORED) && watch_is_trash(e->wd)) *trash = true;
         if (e->wd == atomic_load(&watch.conf_wd) && e->len && strcmp(e->name, "ofx.conf") == 0) *conf = true;   // (F10)
+        if (e->wd == atomic_load(&watch.conf_wd) && (e->mask & IN_IGNORED)) atomic_store(&watch.conf_wd, -1);   // (its folder gone: Preferences watches the new one, reviewer-2 2026-11-01)
         if (e->wd == atomic_load(&watch.theme_wd) && !(e->mask & IN_IGNORED)) *theme = true;
         if (e->wd == atomic_load(&watch.current_wd)) *theme = true, rewatch = true;
     }
