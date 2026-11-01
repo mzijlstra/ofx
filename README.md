@@ -141,7 +141,8 @@ at the dry run:
 
 ```sh
 systemctl --user enable --now ofx-clean.timer
-journalctl --user -u ofx-clean   # one line a day: what went, and the MiB freed and kept
+journalctl --user -t ofx-clean   # one line a day: what went, and the MiB freed and kept
+                                 # (-t: a run this short ends before journald tags its line with the unit, so -u can miss it)
 ```
 
 The sidebar, in one of three modes, picked with the three buttons at the left of the bottom bar
