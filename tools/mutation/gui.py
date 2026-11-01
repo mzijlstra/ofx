@@ -34,7 +34,7 @@ MUTANTS = [
     ('gui/folder.c', "    if (go_to(app.cwd, str_from_c(keep), app.ui.list.sel)) return;", "    if (go_to(app.cwd, STR_EMPTY, app.ui.list.sel)) return;"),
     ('gui/folder.c', "        memmove(up, d.p, (size_t)d.len);\n        up[d.len] = 0;", "        snprintf(up, sizeof up, \"%.*s\", STR_ARG(d));"),
     (W, "static const u32 WATCH_DIR_MASK = IN_CREATE | ", "static const u32 WATCH_DIR_MASK = "),
-    (W, "    if (rewatch) atomic_store(&watch.theme_wd, inotify_add_watch(watch.fd, watch.theme, WATCH_THEME_MASK));", ""),
+    (W, "    if (rewatch) atomic_store(&watch.theme_wd, inotify_add_watch(watch.fd, watch.theme, WATCH_THEME_MASK | IN_MASK_ADD));", ""),
     (W, "        if (theme) atomic_store(&watch.theme_ready, true);", ""),
     # F2
     ('gui/folder.c', "    if (!same && app.have_list && !stepping) hist_leave(&hist, app.cwd, sel_name());\n", ""),
@@ -722,11 +722,13 @@ MUTANTS = [
     ('gui/main.c', '        if (atomic_exchange(&watch.trash_ready, false) && trash_state()) dirty = true;\n', '', 'f6'),
     ('gui/main.c', 'places_reload(), trash_state(), dirty = true;', 'places_reload(), dirty = true;', 'f6'),
     ('gui/watch.c', '        if (!(e->mask & IN_IGNORED) && watch_is_trash(e->wd)) *trash = true;\n', '', 'f6'),
-    ('gui/watch.c', ' && old != atomic_load(&watch.current_wd) && !watch_is_trash(old)) inotify_rm_watch', ' && old != atomic_load(&watch.current_wd)) inotify_rm_watch', 'f6'),
-    ('gui/watch.c', '        if (old[i] > 0 && !kept && old[i] != atomic_load(&watch.dir_wd)) inotify_rm_watch(watch.fd, old[i]);', '        if (old[i] > 0 && !kept) inotify_rm_watch(watch.fd, old[i]);', 'f6'),
+    ('gui/watch.c', '    if (old >= 0 && !watch_fixed(old) && !watch_is_trash(old)) inotify_rm_watch', '    if (old >= 0 && !watch_fixed(old)) inotify_rm_watch', 'f6'),
+    ('gui/watch.c', '    if (old >= 0 && !watch_fixed(old) && !watch_is_trash(old)) inotify_rm_watch', '    if (old >= 0 && !watch_is_trash(old)) inotify_rm_watch', 'f10'),
+    ('gui/folder.c', '    for (int k = 0; read && k < nwas; k++) {', '    for (int k = 0; k < nwas; k++) {', 'usb'),
+    ('gui/watch.c', '        if (old[i] > 0 && !kept && old[i] != atomic_load(&watch.dir_wd) && !watch_fixed(old[i])) inotify_rm_watch(watch.fd, old[i]);', '        if (old[i] > 0 && !kept && !watch_fixed(old[i])) inotify_rm_watch(watch.fd, old[i]);', 'f6'),
     ('gui/folder.c', '    watch_trashes(&trashd);   // armed before', '    // armed before', 'f6'),
     ('gui/watch.c', ' | IN_DELETE_SELF | IN_MOVE_SELF |\n                                                    IN_ONLYDIR | IN_MASK_ADD);', ' | IN_DELETE_SELF | IN_MOVE_SELF |\n                                                    IN_ONLYDIR);', 'f6'),
-    ('gui/watch.c', '        if (old[i] > 0 && !kept && old[i] != atomic_load(&watch.dir_wd)) inotify_rm_watch(watch.fd, old[i]);', '        if (old[i] > 0 && old[i] != atomic_load(&watch.dir_wd)) inotify_rm_watch(watch.fd, old[i]);', 'f6'),
+    ('gui/watch.c', '        if (old[i] > 0 && !kept && old[i] != atomic_load(&watch.dir_wd) && !watch_fixed(old[i])) inotify_rm_watch(watch.fd, old[i]);', '        if (old[i] > 0 && old[i] != atomic_load(&watch.dir_wd) && !watch_fixed(old[i])) inotify_rm_watch(watch.fd, old[i]);', 'f6'),
     ('gui/actions.c', '    ui_mark_clear(&app.ui);\n    trash_state();\n    reload();', '    ui_mark_clear(&app.ui);\n    reload();', 'f6'),
 ]
 import concurrent.futures, queue, threading, time

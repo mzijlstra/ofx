@@ -13,4 +13,14 @@ expect menu=-
 sh grep -qx "search-skip = .git" "$OFX_ROOT/config/ofx/ofx.conf"
 sh printf 'date-format = long\n' > "$OFX_ROOT/config/ofx/ofx.conf"
 wait-for 3000 conf=on:10485760:long:
+# Into ofx.conf's folder (run.sh's cfg, a link to it) and out: its watch is the folder's too, and
+# leaving must not end it (2026-11-01)
+key home
+expect sel=cfg
+key enter
+wait-for 2000 n=1 sel=ofx.conf
+key alt-left
+wait-for 2000 sel=cfg
+sh printf 'date-format = iso\n' > "$OFX_ROOT/config/ofx/ofx.conf"
+wait-for 3000 conf=on:10485760:iso:
 quit

@@ -381,7 +381,11 @@ static void places_reload(void)
     // answers: the tab shown, on it, goes Home when the main loop next comes round (reviewer-2 and
     // Michael, 2026-10-30: the folder's own watch reached the gone-folder fallback first,
     // /run/media/<user>; Nemo crashes there), and so does every tab behind on it (Michael).
-    for (int k = 0; k < nwas; k++) {
+    // A list with no / is a mount list read that failed (read_file's empty answer), not every drive
+    // gone at once: no tab moves for it (2026-11-01).
+    bool read = false;
+    for (int i = 0; i < app.places.n && !read; i++) read = app.places.p[i].kind == PL_ROOT;
+    for (int k = 0; read && k < nwas; k++) {
         bool still = false;
         for (int i = 0; i < app.places.n && !still; i++) still = place_is_drive(app.places.p[i].kind) && strcmp(app.places.p[i].path, was[k]) == 0;
         if (still) continue;

@@ -82,15 +82,24 @@ static bool watch_is_trash(int wd)
     return false;
 }
 
-// The folder to watch now, in place of the last one; NULL: none (the search view, F9).
+// Whether wd is one of the fixed watches (the theme, ofx.conf's and the bookmarks' folders, udev's,
+// the mount list): inotify gives one wd per inode, so the open folder's or a trash's may be one of
+// them, and removing it would end that one too (2026-11-01: leaving ~/.config/ofx stopped ofx.conf
+// edits applying).
+static bool watch_fixed(int wd)
+{
+    return wd == atomic_load(&watch.theme_wd) || wd == atomic_load(&watch.current_wd) || wd == atomic_load(&watch.conf_wd) ||
+           wd == atomic_load(&watch.bm_wd) || wd == watch.udev_wd || wd == watch.mount_wd;
+}
+
+// The folder to watch now, in place of the last one; NULL: none (the search view, F9). IN_MASK_ADD,
+// as the others: a plain add on a folder one of them watches would replace its mask.
 static void watch_dir(const char *dir)
 {
     if (watch.fd < 0) return;
     int old = atomic_exchange(&watch.dir_wd, -1);
-    // The same directory may be watched for the theme or as a trash too (inotify gives one wd per
-    // inode): removing it would end that watch as well.
-    if (old >= 0 && old != atomic_load(&watch.theme_wd) && old != atomic_load(&watch.current_wd) && !watch_is_trash(old)) inotify_rm_watch(watch.fd, old);
-    atomic_store(&watch.dir_wd, dir ? inotify_add_watch(watch.fd, dir, WATCH_DIR_MASK) : -1);
+    if (old >= 0 && !watch_fixed(old) && !watch_is_trash(old)) inotify_rm_watch(watch.fd, old);
+    atomic_store(&watch.dir_wd, dir ? inotify_add_watch(watch.fd, dir, WATCH_DIR_MASK | IN_MASK_ADD) : -1);
 }
 
 // The bookmarks file's folder, watched unless it is already (or there is none yet).
@@ -101,7 +110,7 @@ static void watch_bookmarks(void)
     Str dir = path_dir(str_from_c(bookmarks_path(file, sizeof file)));
     char d[PATH_MAX];
     snprintf(d, sizeof d, "%.*s", STR_ARG(dir));
-    atomic_store(&watch.bm_wd, inotify_add_watch(watch.fd, d, IN_CREATE | IN_DELETE | IN_MOVED_FROM | IN_MOVED_TO | IN_CLOSE_WRITE | IN_ONLYDIR));
+    atomic_store(&watch.bm_wd, inotify_add_watch(watch.fd, d, IN_CREATE | IN_DELETE | IN_MOVED_FROM | IN_MOVED_TO | IN_CLOSE_WRITE | IN_ONLYDIR | IN_MASK_ADD));
 }
 
 // The trash folders' files/ to watch now, in place of the last ones: the new ones added first, so
@@ -123,7 +132,7 @@ static void watch_trashes(const TrashDirs *d)
     for (int i = 0; i < TRASH_DIRS_MAX; i++) {
         bool kept = false;
         for (int k = 0; k < TRASH_DIRS_MAX; k++) kept |= old[i] == now[k];
-        if (old[i] > 0 && !kept && old[i] != atomic_load(&watch.dir_wd)) inotify_rm_watch(watch.fd, old[i]);
+        if (old[i] > 0 && !kept && old[i] != atomic_load(&watch.dir_wd) && !watch_fixed(old[i])) inotify_rm_watch(watch.fd, old[i]);
     }
 }
 
@@ -135,13 +144,13 @@ static void watch_conf(void)
     if (watch.fd < 0 || atomic_load(&watch.conf_wd) >= 0 || !conf_path(file, sizeof file)) return;
     Str dir = path_dir(str_from_c(file));
     snprintf(d, sizeof d, "%.*s", STR_ARG(dir));
-    atomic_store(&watch.conf_wd, inotify_add_watch(watch.fd, d, IN_CREATE | IN_DELETE | IN_MOVED_FROM | IN_MOVED_TO | IN_CLOSE_WRITE | IN_ONLYDIR));
+    atomic_store(&watch.conf_wd, inotify_add_watch(watch.fd, d, IN_CREATE | IN_DELETE | IN_MOVED_FROM | IN_MOVED_TO | IN_CLOSE_WRITE | IN_ONLYDIR | IN_MASK_ADD));
 }
 
 static void watch_theme_dirs(void)
 {
-    atomic_store(&watch.current_wd, inotify_add_watch(watch.fd, watch.current, WATCH_THEME_MASK));
-    atomic_store(&watch.theme_wd, inotify_add_watch(watch.fd, watch.theme, WATCH_THEME_MASK));
+    atomic_store(&watch.current_wd, inotify_add_watch(watch.fd, watch.current, WATCH_THEME_MASK | IN_MASK_ADD));
+    atomic_store(&watch.theme_wd, inotify_add_watch(watch.fd, watch.theme, WATCH_THEME_MASK | IN_MASK_ADD));
 }
 
 // Reads what is waiting: which flags it calls for.
@@ -159,6 +168,7 @@ static void watch_read(bool *list, bool *theme, bool *mounts, bool *trash, bool 
         }
         if (watch.mount_wd >= 0 && e->wd == watch.mount_wd) *mounts = true;
         if (e->wd == atomic_load(&watch.bm_wd) && e->len && strcmp(e->name, "bookmarks") == 0) *mounts = true;   // the places again (F7.5)
+        if (e->wd == atomic_load(&watch.bm_wd) && (e->mask & IN_IGNORED)) atomic_store(&watch.bm_wd, -1);   // (its folder gone: watch_bookmarks arms the new one)
         if (e->wd == atomic_load(&watch.dir_wd)) *list = true;
         if (e->wd == watch.udev_wd && e->len && e->name[0] == 'b') *mounts = true;   // a block device's (b8:17), not the rest udev keeps
         if (!(e->mask & IN_IGNORED) && watch_is_trash(e->wd)) *trash = true;
@@ -168,7 +178,7 @@ static void watch_read(bool *list, bool *theme, bool *mounts, bool *trash, bool 
         if (e->wd == atomic_load(&watch.current_wd)) *theme = true, rewatch = true;
     }
     // The theme directory replaced, or made after ofx started: watch the new one.
-    if (rewatch) atomic_store(&watch.theme_wd, inotify_add_watch(watch.fd, watch.theme, WATCH_THEME_MASK));
+    if (rewatch) atomic_store(&watch.theme_wd, inotify_add_watch(watch.fd, watch.theme, WATCH_THEME_MASK | IN_MASK_ADD));
 }
 
 // One poll of inotify and the mountinfo file, for at most ms (-1: no limit): the flags it raises.
@@ -223,7 +233,7 @@ static bool watch_start(void)
     watch_bookmarks();
     watch_conf();
     const char *udev = udev_path();
-    if (udev) watch.udev_wd = inotify_add_watch(watch.fd, udev, IN_CREATE | IN_DELETE | IN_MOVED_TO | IN_CLOSE_WRITE | IN_ONLYDIR);
+    if (udev) watch.udev_wd = inotify_add_watch(watch.fd, udev, IN_CREATE | IN_DELETE | IN_MOVED_TO | IN_CLOSE_WRITE | IN_ONLYDIR | IN_MASK_ADD);
     pthread_t t;
     if (pthread_create(&t, NULL, watch_thread, NULL) != 0) return false;
     pthread_detach(t);

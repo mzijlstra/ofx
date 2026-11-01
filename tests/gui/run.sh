@@ -125,6 +125,7 @@ echo "== f10"; OFX_TEST_MOUNTINFO="$T/mountinfo" "$here/../../tools/gui/run-scri
 echo "== f10b"; OFX_TEST_MOUNTINFO="$T/mountinfo" "$here/../../tools/gui/run-script.sh" "$T" "$here/f10b.script" "$bin" "$T/tree" || failed f10b
 rm -rf "$T/config/ofx" && echo x > "$T/config/ofx"
 echo "== f10c"; OFX_TEST_MOUNTINFO="$T/mountinfo" "$here/../../tools/gui/run-script.sh" "$T" "$here/f10c.script" "$bin" "$T/tree" || failed f10c
+ln -s "$T/config/ofx" "$T/tree/cfg"
 echo "== f10d"; OFX_TEST_MOUNTINFO="$T/mountinfo" "$here/../../tools/gui/run-script.sh" "$T" "$here/f10d.script" "$bin" "$T/tree" || failed f10d
 fi
 if want f62; then

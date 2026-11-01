@@ -36,6 +36,13 @@ expect status=Mounted MY STICK
 wait-for 3000 sides=^Places|Home|Trash|^Drives|File_System|MY_STICK|~1.0_GB_Drive here=MY STICK
 sh test "$OFX_DIR" = "$OFX_ROOT/media/MY STICK"
 shot usb-mounted.png
+# A mount list read that fails (read_file's empty answer) isn't every drive gone: nothing goes Home
+# (2026-11-01)
+sh cp "$OFX_ROOT/mountinfo" "$OFX_ROOT/mountinfo.keep" && : > "$OFX_ROOT/mountinfo"
+sleep 500
+sh test "$OFX_DIR" = "$OFX_ROOT/media/MY STICK"
+sh cat "$OFX_ROOT/mountinfo.keep" > "$OFX_ROOT/mountinfo" && rm "$OFX_ROOT/mountinfo.keep"
+wait-for 3000 sides=^Places|Home|Trash|^Drives|File_System|MY_STICK|~1.0_GB_Drive here=MY STICK
 # Unmount in its menu (2026-10-30): unmounted, not powered off; the row is a drive to mount again.
 # Its folder was the one shown: Home first, then the message (the fake removes the mount point, as
 # udisks does).
