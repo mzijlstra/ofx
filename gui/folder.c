@@ -455,7 +455,7 @@ static void tree_remember(void)
     char path[PATH_MAX];
     Err err;
     ArenaMark mark = arena_mark(&scratch);
-    size_t cap = (size_t)tree.nopen * PATH_MAX * 3 + 1;
+    size_t cap = tree_open_cap(&tree);   // (not nopen × PATH_MAX × 3: 128 open would pass the scratch arena; reviewer-2, 2026-11-01)
     char *text = arena_try_push(&scratch, (isize)cap, 1);
     if (text && tree_open_text(&tree, text, cap) && state_path(path, sizeof path) && !state_put(&scratch, path, "tree", text, &err)) set_status(true, "%s", err.msg);
     arena_restore(&scratch, mark);

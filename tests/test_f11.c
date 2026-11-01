@@ -162,6 +162,18 @@ static void test_tree_remember(void)
     CHECK(u.nopen == 3 && strcmp(u.open[1], "/home/m/a b") == 0 && strcmp(u.open[2], "/x") == 0);
     t.nopen = 0;
     CHECK(tree_open_text(&t, text, sizeof text) && text[0] == 0);
+    // 128 open, long and full of escapes: the room asked is enough, a byte less isn't.
+    t.nopen = 0;
+    for (int i = 0; i < TREE_OPEN_MAX; i++) {
+        char p[200];
+        snprintf(p, sizeof p, "/a b/%03d/%0150d", i, 0);
+        tree_open(&t, str_from_c(p));
+    }
+    size_t cap = tree_open_cap(&t);
+    char *buf = arena_push(&ta, (isize)cap, 1);
+    CHECK(t.nopen == TREE_OPEN_MAX && cap < KiB(64) && tree_open_text(&t, buf, cap) && strlen(buf) < cap);
+    t.nopen = 1;
+    CHECK(tree_open_cap(&t) == 1 + 3 * strlen(t.open[0]) + 1 && tree_open_text(&t, buf, strlen(t.open[0]) + 3));
     // A key's value, the last one said; none.
     ops_guard(root);
     put(at("f11t/state"), "a=1\ntree = / /x\ntree=/y\n");

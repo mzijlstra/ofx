@@ -70,6 +70,14 @@ static bool tree_open_text(const Tree *t, char *out, size_t cap)
     return true;
 }
 
+// The room tree_open_text needs: each path at most 3 bytes a byte (%XX), a space after, the NUL.
+static size_t tree_open_cap(const Tree *t)
+{
+    size_t cap = 1;
+    for (int i = 0; i < t->nopen; i++) cap += 3 * strlen(t->open[i]) + 1;
+    return cap;
+}
+
 // tree='s folders opened in t (an absolute path each; others left out).
 static void tree_open_load(Tree *t, Str text)
 {

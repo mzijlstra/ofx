@@ -2187,3 +2187,8 @@ MUTANTS += [
     ('fs/folders.c', '    if (!state_read(a, path, &text, err)) return state_unlock(lock), false;', '    state_read(a, path, &text, err);'),
     ('fs/thumb.c', '"lustre", "fuse", "autofs" };', '"lustre", "fuse" };'),
 ]
+MUTANTS += [
+    # reviewer-2's LOW on f3092a0: tree='s room from the paths themselves
+    ('fs/tree.c', '    for (int i = 0; i < t->nopen; i++) cap += 3 * strlen(t->open[i]) + 1;', '    for (int i = 0; i < t->nopen; i++) cap += strlen(t->open[i]) + 1;'),
+    ('fs/tree.c', '    for (int i = 0; i < t->nopen; i++) cap += 3 * strlen(t->open[i]) + 1;', '    for (int i = 0; i < t->nopen; i++) cap += 3 * strlen(t->open[i]);'),
+]
