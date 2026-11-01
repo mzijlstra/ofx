@@ -101,6 +101,12 @@ static void test_ops(void)
     env_set("PATH", pathv);
     CHECK(ops_program_allowed("fakeprog", &err) && !ops_program_allowed("outprog", &err) && strstr(err.msg, "outprog isn't a test's own"));
     CHECK(!ops_program_allowed("sh", &err) && !ops_program_allowed("no-such-prog-ofx", &err));
+    CHECK(ops_program_allowed(at("ops/bin/fakeprog"), &err) && !ops_program_allowed("/bin/sh", &err));   // by path, as given
+    // Every launch asks it (spawn_detached, F10 review): the fake starts, sh doesn't.
+    int started = spawn_started;
+    char *fake[] = { "fakeprog", NULL }, *real[] = { "sh", "-c", "exit 0", NULL }, *byp[] = { "/bin/sh", NULL };
+    CHECK(spawn_detached(fake, &err) && spawn_started == started + 1);
+    CHECK(!spawn_detached(real, &err) && strstr(err.msg, "sh isn't a test's own") && !spawn_detached(byp, &err) && spawn_started == started + 1);
     env_restore();
 
     CHECK(name_valid(S("a.txt"), &err));

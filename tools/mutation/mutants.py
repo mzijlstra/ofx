@@ -2040,8 +2040,8 @@ MUTANTS += [
     (PL, '        for (int k = 0; k < COUNT(NOT) && !skip; k++) skip = strncmp(e->d_name, NOT[k], strlen(NOT[k])) == 0;\n', ''),
     (SP, "                if (n > 1 && at[n - 1] == '.' && stat(at, &st) != 0) {", "                if (n > 1 && at[n - 1] == '.') {"),
     (SP, "                    if (stat(at, &st) != 0 || !S_ISDIR(st.st_mode)) at[n - 1] = '.';", ''),
-    ('fs/ops.c', '    if (path_find(prog, full, sizeof full) && realpath(full, r) && path_below(r, ops_root)) return true;', '    if (path_find(prog, full, sizeof full) && path_below(full, ops_root)) return true;'),
-    ('fs/ops.c', '    if (path_find(prog, full, sizeof full) && realpath(full, r) && path_below(r, ops_root)) return true;', '    if (path_find(prog, full, sizeof full)) return true;'),
+    ('fs/ops.c', '    if (found && realpath(full, r) && path_below(r, ops_root)) return true;', '    if (found && path_below(full, ops_root)) return true;'),
+    ('fs/ops.c', '    if (found && realpath(full, r) && path_below(r, ops_root)) return true;', '    if (found) return true;'),
     ('fs/ops.c', '    if (!ops_root[0]) return true;\n    char full[PATH_MAX], r[PATH_MAX];', '    char full[PATH_MAX], r[PATH_MAX];'),
 ]
 MUTANTS += [
@@ -2130,4 +2130,9 @@ MUTANTS += [
     # reviewer-2's LOW on 87570e6: a word pushes its own bytes, not the rest of its line
     ('fs/editors.c', '        char *out = arena_try_push(a, len + 1, 1);', '        char *out = arena_try_push(a, line.len - i + 1, 1);'),
     # Not a mutant: `else len++` as `len++` (quotes counted too: two bytes more pushed, nothing seen).
+]
+MUTANTS += [
+    # F10 review step 4: every launch through the test guard (2026-11-01)
+    ('fs/spawn.c', '    if (!ops_program_allowed(argv[0], err)) return false;\n', ''),
+    ('fs/ops.c', "    bool found = strchr(prog, '/') ? snprintf(full, sizeof full, \"%s\", prog) < (int)sizeof full : path_find(prog, full, sizeof full);", '    bool found = path_find(prog, full, sizeof full);'),
 ]

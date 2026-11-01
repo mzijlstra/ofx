@@ -54,14 +54,16 @@ static bool ops_resolve(const char *path, char *out, size_t cap)
     return n >= 0 && (size_t)n < cap;
 }
 
-// Whether prog, as PATH finds it, may run (2026-10-30, reviewer-2): with the guard on, only one under
-// its folder (a test's fake), so a test whose PATH lost its fakes never runs the real udisksctl on
-// Michael's drives. Without the guard, any.
+// Whether prog, as PATH finds it (or as given, with a /), may run (2026-10-30, reviewer-2): with the
+// guard on, only one under its folder (a test's fake), so a test whose PATH lost its fakes never
+// runs the real udisksctl on Michael's drives, nor any program ofx starts (spawn_detached). Without
+// the guard, any.
 static bool ops_program_allowed(const char *prog, Err *err)
 {
     if (!ops_root[0]) return true;
     char full[PATH_MAX], r[PATH_MAX];
-    if (path_find(prog, full, sizeof full) && realpath(full, r) && path_below(r, ops_root)) return true;
+    bool found = strchr(prog, '/') ? snprintf(full, sizeof full, "%s", prog) < (int)sizeof full : path_find(prog, full, sizeof full);
+    if (found && realpath(full, r) && path_below(r, ops_root)) return true;
     snprintf(err->msg, sizeof err->msg, "%.64s isn't a test's own (outside %.300s): not run", prog, ops_root);
     return false;
 }

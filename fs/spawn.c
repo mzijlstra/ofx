@@ -46,9 +46,14 @@ static bool on_path(const char *prog)
 
 static int spawn_started;   // programs started, for the GUI scripts' state line (spawned=)
 
-// Runs argv (argv[0] looked up on PATH) detached. False, with the reason, when it can't start.
+static bool ops_program_allowed(const char *prog, Err *err);
+
+// Runs argv (argv[0] looked up on PATH) detached. False, with the reason, when it can't start, or
+// when the test guard refuses it: with the guard on only a test's own fake runs (uwsm-app, which
+// every launch goes through; F10 review, 2026-11-01: without it on PATH an editor would start).
 static bool spawn_detached(char *const *argv, Err *err)
 {
+    if (!ops_program_allowed(argv[0], err)) return false;
     posix_spawnattr_t attr;
     posix_spawn_file_actions_t fa;
     posix_spawnattr_init(&attr);
