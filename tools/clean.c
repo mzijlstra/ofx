@@ -1,6 +1,8 @@
 // ofx-clean [--dry-run]: the thumbnail cache's cleanup (F6.5, fs/clean.c), run daily by
-// ofx-clean.timer. One summary line for the journal; --dry-run lists each file it would delete and
-// deletes nothing. No window: fs/ only. OFX_TEST_MOUNTINFO names another mount list (the tests').
+// ofx-clean.timer, by ofx.conf's clean options (F10; it reads the file, never writes it: without
+// one, the built-in defaults). One summary line for the journal; --dry-run lists each file it would
+// delete and deletes nothing. No window: fs/ only. OFX_TEST_MOUNTINFO names another mount list (the
+// tests').
 #include "../base/base.c"
 #include "../fs/fs.c"
 
@@ -27,9 +29,16 @@ int main(int argc, char **argv)
     char root[PATH_MAX];
     if (!thumb_root(root, sizeof root)) return fprintf(stderr, "ofx-clean: no cache folder (HOME unset)\n"), 1;
     ops_guard(getenv("OFX_GUI_ROOT"));
+    Conf c;
+    char cp[PATH_MAX];
+    if (!conf_path(cp, sizeof cp)) snprintf(cp, sizeof cp, "ofx.conf");
+    conf_load(&a, &c);
+    if (c.bad) fprintf(stderr, "ofx-clean: %s line %d skipped: %s\n", cp, c.bad, c.why);
+    if (!c.clean) return printf("ofx-clean: off (clean = off in %s)\n", cp), 0;
     const char *mi = getenv("OFX_TEST_MOUNTINFO");
     Str mountinfo = read_file(&a, mi && mi[0] ? mi : "/proc/self/mountinfo");
-    CleanOpts o = { .now = (i64)time(NULL), .cap = CLEAN_CAP, .dry = dry, .say = dry ? say : NULL };
+    CleanOpts o = { .now = (i64)time(NULL), .dry = dry, .say = dry ? say : NULL };
+    clean_opts_conf(&c, &o);
     CleanStats s;
     clean_run(&a, root, mountinfo, &o, &s);
     i64 gone = 0;

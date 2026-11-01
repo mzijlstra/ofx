@@ -1,7 +1,7 @@
 // Open at Line (F9 step 4, docs/plan.md "Steps 3 and 4 decided"): which editor opens a search
 // result at its line, and how. Omarchy's default editor (as `omarchy default editor` sets it), else
-// $EDITOR's program, else nvim; its recipe from $XDG_CONFIG_HOME/ofx/editors when that names it,
-// else the built-in ones. A recipe is a command, word by word, with {file}, {line} and {col}
+// $EDITOR's program, else nvim; its recipe from ofx.conf's editor lines (F10) or the older
+// $XDG_CONFIG_HOME/ofx/editors when they name it, else the built-in ones. A recipe is a command, word by word, with {file}, {line} and {col}
 // (characters, from 1) filled in within each word, never through a shell, and whether it runs in a
 // terminal. No loadable code: a recipe's program may be a script (Michael, 2026-10-29).
 
@@ -76,10 +76,9 @@ static int editor_words(Arena *a, Str line, const char **w, int cap)
     return n;
 }
 
-// text's recipes into out (none and no bad line when it is empty).
-static void editors_parse(Arena *a, Str text, Editors *out)
+// text's recipes added to out; out->bad, when it has none yet, the first line of text that isn't one.
+static void editors_add(Arena *a, Str text, Editors *out)
 {
-    *out = (Editors){ 0 };
     int no = 0;
     for (isize at = 0; at < text.len;) {
         isize e = at;
@@ -100,7 +99,15 @@ static void editors_parse(Arena *a, Str text, Editors *out)
     }
 }
 
-// The editors file: $XDG_CONFIG_HOME/ofx/editors, ~/.config/ofx/editors without it.
+// text's recipes into out (none and no bad line when it is empty).
+static void editors_parse(Arena *a, Str text, Editors *out)
+{
+    *out = (Editors){ 0 };
+    editors_add(a, text, out);
+}
+
+// The editors file: $XDG_CONFIG_HOME/ofx/editors, ~/.config/ofx/editors without it. Still read
+// after ofx.conf's editor lines, which replace it (F10).
 static bool editors_path(char *out, size_t cap)
 {
     return xdg_dir(out, cap, "XDG_CONFIG_HOME", ".config", "ofx/editors");

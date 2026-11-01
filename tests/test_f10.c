@@ -69,13 +69,15 @@ static void test_conf(void)
     size_t n = conf_default_text(text, sizeof text);
     CHECK(n > 0 && n < sizeof text - 1 && strlen(text) == n);
     for (int k = 0; k < COUNT(CONF_OPTS); k++) {
-        CHECK(CONF_OPTS[k].help[0] && CONF_OPTS[k].def[0]);
+        CHECK(CONF_OPTS[k].help[0]);
+        if (!CONF_OPTS[k].def[0]) continue;   // (editor: no default, its help has an example)
         char line[96];
         snprintf(line, sizeof line, "\n%s%s = ", CONF_OPTS[k].kind == CK_NAMES ? "" : "#", CONF_OPTS[k].key);
         CHECK(strstr(text, line) != NULL);
     }
     CHECK(strstr(text, "\nsearch-skip = .git\nsearch-skip = node_modules\n") && strstr(text, "View > Show Menu brings it back"));
     CHECK(strstr(text, "With no search-skip line at all, a search goes into\n# every folder."));
+    CHECK(!strstr(text, "\neditor =") && !strstr(text, "\n#editor =") && strstr(text, "\n# Example: editor = nvim yes nvim +{line} {file}\n"));
     conf_parse(str_from_c(text), &c);
     Conf d;
     conf_defaults(&d);
@@ -178,4 +180,59 @@ static void test_conf_preview_max(void)
     CHECK(thumb_get(&a, &q, &out) == TG_NONE);
     q.src_max = png.len;
     CHECK(thumb_get(&a, &q, &out) == TG_MADE);
+}
+
+// F10 step 2: ofx-clean's options (into its rules) and the editor lines (as recipes, before the
+// editors file's), and conf_load (the file, else the built-in defaults).
+static void test_conf_step2(void)
+{
+    static Conf c;
+    conf_defaults(&c);
+    CHECK(c.clean && c.clean_orphans && c.clean_unused_days == 90 && c.clean_cap == (i64)1 << 30 && c.neditor == 0);
+    CleanOpts o = { 0 };
+    clean_opts_conf(&c, &o);
+    CHECK(o.unused_s == CLEAN_UNUSED_S && o.unused_s == 90 * 86400LL && o.orphans && o.cap == CLEAN_CAP);
+    conf_parse(S("clean = off\nclean-orphans = no\nclean-unused-days = 0\nclean-cap = 0\n"), &c);
+    CHECK(!c.clean && !c.clean_orphans && c.clean_unused_days == 0 && c.clean_cap == 0 && !c.bad);
+    clean_opts_conf(&c, &o);
+    CHECK(o.unused_s == 0 && !o.orphans && o.cap == 0);
+    conf_parse(S("clean-unused-days = 36500\nclean-cap = 500 MiB\n"), &c);
+    CHECK(c.clean_unused_days == 36500 && c.clean_cap == (i64)500 << 20 && !c.bad);
+    const char *notdays[] = { "-1", "1.5", "36501", "", "30 days", "99999999999999999999" };
+    for (int k = 0; k < COUNT(notdays); k++) {
+        char line[64];
+        snprintf(line, sizeof line, "clean-unused-days = %s", notdays[k]);
+        conf_parse(str_from_c(line), &c);
+        CHECK(c.bad == 1 && c.clean_unused_days == 90 && strcmp(c.why, "clean-unused-days wants a whole number of days") == 0);
+    }
+    // Editor lines: kept as written, each a recipe the editors file would take; a bad one skipped.
+    conf_parse(S("editor = mine no ~/bin/ed \"--at {line}\" {file}\neditor = x maybe y\neditor = short yes\neditor = q no \"open\neditor = nvim yes nvim +{line}\n"), &c);
+    CHECK(c.neditor == 2 && strcmp(c.editor[0], "mine no ~/bin/ed \"--at {line}\" {file}") == 0 && strcmp(c.editor[1], "nvim yes nvim +{line}") == 0);
+    CHECK(c.bad == 2 && strcmp(c.why, "editor wants a name, yes or no, then the command") == 0);
+    char many[EDITORS_USER * 24 + 64] = "", longline[CONF_LINE_MAX + 32];
+    for (int k = 0; k <= EDITORS_USER; k++) snprintf(many + strlen(many), sizeof many - strlen(many), "editor = e%d no e\n", k);
+    conf_parse(str_from_c(many), &c);
+    CHECK(c.neditor == EDITORS_USER && c.bad == EDITORS_USER + 1);
+    snprintf(longline, sizeof longline, "editor = l no %0*d", CONF_LINE_MAX - 5, 0);   // a value of CONF_LINE_MAX
+    conf_parse(str_from_c(longline), &c);
+    CHECK(c.neditor == 0 && c.bad == 1);
+    longline[strlen(longline) - 1] = 0;   // one shorter: kept
+    conf_parse(str_from_c(longline), &c);
+    CHECK(c.neditor == 1 && !c.bad);
+    // As Open at Line reads them: ofx.conf's lines first, then the editors file's; the first wins.
+    conf_parse(S("editor = nvim no mynvim {file}\n"), &c);
+    Editors u = { 0 };
+    for (int k = 0; k < c.neditor; k++) editors_add(&ta, str_from_c(c.editor[k]), &u);
+    editors_add(&ta, S("nvim yes filenvim {file}\nother no oth {file}\nbad\n"), &u);
+    const Editor *e = editor_find(&u, "nvim");
+    CHECK(u.n == 3 && u.bad == 3 && e && !e->term && strcmp(e->argv[0], "mynvim") == 0 && editor_find(&u, "other"));
+    // conf_load: no file, the built-in defaults (the list too); a file, parsed; a folder there, none.
+    env_set("XDG_CONFIG_HOME", at("f10l"));
+    CHECK(!conf_load(&ta, &c) && c.nskip == 2 && c.clean_cap == (i64)1 << 30);
+    put(at("f10l/ofx/ofx.conf"), "clean = off\n");
+    CHECK(conf_load(&ta, &c) && !c.clean && c.nskip == 0);
+    unlink(at("f10l/ofx/ofx.conf"));
+    CHECK(mkdir(at("f10l/ofx/ofx.conf"), 0700) == 0);
+    CHECK(!conf_load(&ta, &c) && c.clean && c.nskip == 2);
+    env_restore();
 }

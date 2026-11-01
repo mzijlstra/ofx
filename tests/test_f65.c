@@ -316,8 +316,13 @@ static void test_clean_run(void)
 
     // A dry run: each said, nothing deleted, no atime touched.
     Said s = { 0 };
-    CleanOpts o = { .now = now, .cap = CLEAN_CAP, .dry = true, .say = said, .ctx = &s };
     CleanStats st;
+    // ofx.conf's clean-unused-days = 0 and clean-orphans = off (F10): only the temp file would go.
+    CleanOpts o = { .now = now, .unused_s = 0, .orphans = false, .cap = CLEAN_CAP, .dry = true, .say = said, .ctx = &s };
+    clean_run(&a, cache, str_from_c(mi), &o, &st);
+    CHECK(st.n[CR_ORPHAN] + st.n[CR_STALE] + st.n[CR_UNUSED] == 0 && st.n[CR_TEMP] == 1 && st.n[CR_KEEP] == 23);
+    memset(&s, 0, sizeof s);
+    o.unused_s = CLEAN_UNUSED_S, o.orphans = true;
     clean_run(&a, cache, str_from_c(mi), &o, &st);
     CHECK(st.n[CR_ORPHAN] == 6 && st.n[CR_STALE] == 2 && st.n[CR_UNUSED] == 2 && st.n[CR_TEMP] == 1 && st.n[CR_CAP] == 0);
     CHECK(s.n[CR_ORPHAN] == 6 && s.n[CR_STALE] == 2 && s.n[CR_UNUSED] == 2 && s.n[CR_TEMP] == 1 && s.n[CR_KEEP] == 0);
@@ -366,6 +371,10 @@ static void test_clean_run(void)
     clean_run(&a, capc, str_from_c(mi), &o, &st);
     CHECK(st.n[CR_CAP] == 2 && st.bytes[CR_CAP] == 2 * one && st.n[CR_KEEP] == 2 && st.bytes[CR_KEEP] == 2 * one);
     CHECK(!exists(c[0]) && !exists(c[1]) && exists(c[2]) && exists(c[3]));
+    o.cap = 0;   // clean-cap = 0: no cap
+    clean_run(&a, capc, str_from_c(mi), &o, &st);
+    CHECK(st.n[CR_CAP] == 0 && exists(c[2]) && exists(c[3]));
+    o.cap = 2 * one;
     clean_run(&a, capc, str_from_c(mi), &o, &st);   // exactly at the cap: nothing goes
     CHECK(st.n[CR_CAP] == 0 && exists(c[2]) && exists(c[3]));
     o.cap = 2 * one - 1;   // one byte over: one more goes

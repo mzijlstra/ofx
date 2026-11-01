@@ -22,17 +22,12 @@ static void conf_start(void)
 }
 
 // ofx.conf read again and applied; a line it couldn't read said in the status line. With no file to
-// read (it couldn't be made, or went since), the built-in defaults.
+// read (it couldn't be made, or went since), the built-in defaults. Open at Line reads its editor
+// lines from app.conf (editor_now).
 static void conf_apply(void)
 {
-    char path[PATH_MAX];
-    struct stat st;
-    ArenaMark mark = arena_mark(&scratch);
-    Conf c;
-    if (conf_path(path, sizeof path) && stat(path, &st) == 0 && S_ISREG(st.st_mode) && access(path, R_OK) == 0)
-        conf_parse(read_file(&scratch, path), &c);
-    else conf_defaults(&c);
-    arena_restore(&scratch, mark);
+    static Conf c;   // (18 KiB: the editor lines)
+    conf_load(&scratch, &c);
     static bool once;   // (the first read: nothing asked under the old values yet)
     bool previews = once && (c.previews != app.conf.previews || c.preview_max != app.conf.preview_max);
     once = true;

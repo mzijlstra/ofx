@@ -51,7 +51,10 @@ rules shared by every tool here.
   that is set. Michael runs it (his `--dry-run` first, then the timer he enables), not a test.
   Try it on a copy only: copy with `O_NOATIME` (a plain `cp` resets the access times the 90-day
   rule reads, on his whole cache), set `XDG_CACHE_HOME` and `OFX_GUI_ROOT` to the copy's folder.
-  The unit tests make their own caches under the root. `make install` writes
+  The unit tests make their own caches under the root. It reads ofx.conf's clean options (F10),
+  his `~/.config/ofx/ofx.conf` without `XDG_CONFIG_HOME`; `tests/clean/run.sh` (in `make test`)
+  points `HOME`, `XDG_CACHE_HOME` and `XDG_CONFIG_HOME` into its own scratch folder, guard on.
+  `make install` writes
   `~/.config/systemd/user/ofx-clean.{service,timer}` and runs `systemctl --user daemon-reload`;
   only Michael enables the timer.
 - **ofx changes files since F3:** rename, new folder, trash, delete for good, copy and move. Every
@@ -108,8 +111,8 @@ rules shared by every tool here.
   config: his go, as every install.
 - **Open at Line** (F9 step 4) starts Omarchy's default editor on a file, through `uwsm-app` (the
   fake in a test): a terminal one in a new terminal. It reads `$XDG_STATE_HOME/omarchy/defaults/editor`
-  and `$XDG_CONFIG_HOME/ofx/editors`, both under the scratch dir in a test (run-script.sh), so f9b
-  writes its own. Never test it with a real `uwsm-app` on PATH: it would open his editor.
+  `$XDG_CONFIG_HOME/ofx/ofx.conf`'s editor lines and the older `$XDG_CONFIG_HOME/ofx/editors`, all
+  under the scratch dir in a test (run-script.sh), so f9b writes its own. Never test it with a real `uwsm-app` on PATH: it would open his editor.
 - **ofx.conf** (F10): ofx reads `$XDG_CONFIG_HOME/ofx/ofx.conf` and watches its folder. Every GUI
   start writes it when it isn't there (2026-11-01), and Edit → Preferences… opens it in his editor:
   with his `XDG_CONFIG_HOME` that is `~/.config/ofx/ofx.conf`, his file. So any raylib binary

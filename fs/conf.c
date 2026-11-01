@@ -17,7 +17,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-enum { CONF_SKIP_MAX = 32, CONF_NAME_MAX = 64, CONF_DATE_MAX = 64, CONF_WHY_MAX = 200 };
+enum { CONF_SKIP_MAX = 32, CONF_NAME_MAX = 64, CONF_DATE_MAX = 64, CONF_WHY_MAX = 200, CONF_LINE_MAX = 512, CONF_DAYS_MAX = 36500 };
 
 typedef enum { DATE_SHORT, DATE_LONG, DATE_ISO, DATE_PATTERN } DateFormat;
 
@@ -28,14 +28,20 @@ typedef struct {
     char       date_pattern[CONF_DATE_MAX];       // DATE_PATTERN's strftime pattern
     char       skip[CONF_SKIP_MAX][CONF_NAME_MAX];   // folders a search never enters (F9)
     int        nskip;
+    char       editor[EDITORS_USER][CONF_LINE_MAX];  // Open at Line's recipes (F9 step 4), as written
+    int        neditor;
+    bool       clean, clean_orphans;              // ofx-clean (F6.5): at all; previews of files gone or changed
+    i64        clean_unused_days;                 // 0: never for this
+    i64        clean_cap;                         // bytes; 0: no cap
     int        bad;                               // the first line skipped (0: none), and why
     char       why[CONF_WHY_MAX];
 } Conf;
 
-typedef enum { CK_BOOL, CK_SIZE, CK_DATE, CK_NAMES } ConfKind;
+typedef enum { CK_BOOL, CK_SIZE, CK_DATE, CK_NAMES, CK_EDITOR, CK_DAYS } ConfKind;
 
-// Each option: its key, kind, default as written in the file, and its help (lines, each made a
-// comment). The help says what it does, what it takes, and an example where one helps.
+// Each option: its key, kind, default as written in the file ("": none, the help has an example),
+// and its help (lines, each made a comment). The help says what it does, what it takes, and an
+// example where one helps.
 typedef struct {
     const char *key;
     ConfKind    kind;
@@ -64,14 +70,46 @@ static const ConfOpt CONF_OPTS[] = {
       "exactly these lines: add one to skip a folder (search-skip = target), remove\n"
       "one to search inside it. With no search-skip line at all, a search goes into\n"
       "every folder." },
+    { "editor", CK_EDITOR, "",
+      "How Open at Line (Ctrl+Shift+Enter on a result found inside files) starts an\n"
+      "editor at that line. It uses Omarchy's default editor (`omarchy default\n"
+      "editor`, else $EDITOR), and ofx knows how to start nvim, vim, helix, hx,\n"
+      "micro, nano, kak, emacs, code, codium, cursor, zeditor, zed, sublime_text and\n"
+      "subl. A line here adds another, or changes one of those; none by default.\n"
+      "One editor a line: editor = name terminal command...\n"
+      "  name      the editor's name, as Omarchy's default (or $EDITOR's program)\n"
+      "  terminal  yes: in a new terminal; no: a window of its own\n"
+      "  command   its words, split at spaces; \"double quotes\" around a word with\n"
+      "            a space; ~/ at a word's start is your home folder; {file},\n"
+      "            {line} and {col} (characters, from 1) are filled in, and the file\n"
+      "            is added at the end when no word has {file}\n"
+      "Example: editor = nvim yes nvim +{line} {file}" },
+    { "clean", CK_BOOL, "on",
+      "Whether ofx-clean cleans the previews' cache (~/.cache/thumbnails, shared with\n"
+      "Nemo) at all, by the three clean- options below. on or off. ofx-clean runs\n"
+      "daily from a systemd timer, installed but not on until you turn it on:\n"
+      "  systemctl --user enable --now ofx-clean.timer\n"
+      "`ofx-clean --dry-run` lists what it would delete, and deletes nothing." },
+    { "clean-orphans", CK_BOOL, "on",
+      "ofx-clean deletes the preview of a file that is gone, or has changed since\n"
+      "(the next look makes a new one). A file on a drive that isn't plugged in, or\n"
+      "on a network mount, keeps its previews. on or off." },
+    { "clean-unused-days", CK_DAYS, "90",
+      "ofx-clean deletes a preview no program has read for this many days (by its\n"
+      "access time). A whole number of days; 0: never for this.\n"
+      "Example: clean-unused-days = 30" },
+    { "clean-cap", CK_SIZE, "1 GiB",
+      "The size ofx-clean keeps the cache under: past it, the least recently read\n"
+      "previews go first. A size, as preview-max-size takes; 0: no cap." },
 };
 
 static const char CONF_HEAD[] =
     "ofx.conf: the options you set for ofx (the Omarchy file explorer).\n"
     "\n"
     "ofx reads this file when it starts and again whenever you save it: every open\n"
-    "window applies a change at once. ofx never changes it: it only writes it, as\n"
-    "you see it here, when it isn't there (when ofx starts, or Edit > Preferences...).\n"
+    "window applies a change at once (ofx-clean reads it each time it runs). ofx\n"
+    "never changes it: it only writes it, as you see it here, when it isn't there\n"
+    "(when ofx starts, or Edit > Preferences...).\n"
     "\n"
     "One option a line, `key = value`; # starts a comment. A line ofx can't read is\n"
     "skipped, the rest applies, and the status line says which line and why.\n"
@@ -112,14 +150,16 @@ static bool conf_bool(Str v, bool *out)
 // What each kind wants, for the status line.
 static const char *const CONF_WANTS[] = {
     [CK_BOOL] = "on or off", [CK_SIZE] = "a size like 10 MiB", [CK_DATE] = "short, long, iso or a pattern with %",
-    [CK_NAMES] = "a folder name, without a /",
+    [CK_NAMES] = "a folder name, without a /", [CK_EDITOR] = "a name, yes or no, then the command",
+    [CK_DAYS] = "a whole number of days",
 };
 
 // The built-in defaults: all of them with no file to read; under a file, what it doesn't set (but
 // the list, which is the file's lines).
 static void conf_defaults(Conf *c)
 {
-    *c = (Conf){ .previews = true, .preview_max = (i64)10 << 20, .date = DATE_SHORT };
+    *c = (Conf){ .previews = true, .preview_max = (i64)10 << 20, .date = DATE_SHORT, .clean = true, .clean_orphans = true,
+                 .clean_unused_days = 90, .clean_cap = (i64)1 << 30 };
     snprintf(c->skip[0], CONF_NAME_MAX, ".git"), snprintf(c->skip[1], CONF_NAME_MAX, "node_modules");
     c->nskip = 2;
 }
@@ -144,10 +184,31 @@ static bool conf_set(Conf *c, int k, Str v)
         snprintf(c->skip[c->nskip++], CONF_NAME_MAX, "%.*s", STR_ARG(v));
         return true;
     }
+    if (strcmp(key, "clean") == 0) return conf_bool(v, &c->clean);
+    if (strcmp(key, "clean-orphans") == 0) return conf_bool(v, &c->clean_orphans);
+    if (strcmp(key, "clean-cap") == 0) return conf_size(v, &c->clean_cap);
+    if (strcmp(key, "clean-unused-days") == 0) {
+        i64 n = 0;
+        for (isize i = 0; i < v.len; i++)
+            if (!is_digit(v.p[i]) || (n = n * 10 + (v.p[i] - '0')) > CONF_DAYS_MAX) return false;
+        return v.len && (c->clean_unused_days = n, true);
+    }
+    if (strcmp(key, "editor") == 0) {   // (read as the editors file reads a recipe: one, no bad line)
+        static u8 mem[KiB(16)];
+        static Editors one;
+        Arena a;
+        arena_init(&a, "conf-editor", mem, sizeof mem);
+        if (v.len >= CONF_LINE_MAX || c->neditor == EDITORS_USER) return false;
+        editors_parse(&a, v, &one);
+        if (one.n != 1) return false;
+        snprintf(c->editor[c->neditor++], CONF_LINE_MAX, "%.*s", STR_ARG(v));
+        return true;
+    }
     return false;
 }
 
-// The file's text into c: its options over the defaults, its search-skip lines alone the list.
+// The file's text into c: its options over the defaults, its search-skip lines alone the list (and
+// its editor lines, which have no default).
 static void conf_parse(Str text, Conf *c)
 {
     conf_defaults(c);
@@ -187,7 +248,7 @@ static void conf_comment(char *out, size_t cap, size_t *at, const char *text)
 
 // The file ofx writes when there is none: the head, then each option's help and its default
 // commented out, but a list's default written out, a line per name (the file's lines are the
-// list). Its length; cut at cap.
+// list); an option with no default, its help alone. Its length; cut at cap.
 static size_t conf_default_text(char *out, size_t cap)
 {
     size_t at = 0;
@@ -214,6 +275,21 @@ static size_t conf_default_text(char *out, size_t cap)
 static bool conf_path(char *out, size_t cap)
 {
     return xdg_dir(out, cap, "XDG_CONFIG_HOME", ".config", "ofx/ofx.conf");
+}
+
+// ofx.conf as it is now into c: parsed when it is a file that can be read, else the built-in
+// defaults (false: no file). The GUI and ofx-clean both read it this way; its text is in a only
+// for the parse.
+static bool conf_load(Arena *a, Conf *c)
+{
+    char path[PATH_MAX];
+    struct stat st;
+    bool there = conf_path(path, sizeof path) && stat(path, &st) == 0 && S_ISREG(st.st_mode) && access(path, R_OK) == 0;
+    ArenaMark mark = arena_mark(a);
+    if (there) conf_parse(read_file(a, path), c);
+    else conf_defaults(c);
+    arena_restore(a, mark);
+    return there;
 }
 
 static bool ops_allowed(const char *path, Err *err);

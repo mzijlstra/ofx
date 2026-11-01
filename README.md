@@ -42,7 +42,7 @@ puts its service file in `~/.local/share/dbus-1/services`), and it exits when id
 | `/`, Ctrl+F | find, in a bar over the job rows: type to jump (the bar counts the matches: "2 of 5"; its field edits as the rename line does: a caret, Shift to select, Ctrl+A its text, Ctrl+C, X, V), Up/Down or its chevrons the previous and next match, Enter keeps (the bar stays, the keys go back to the list), Esc closes it and goes back, its × closes it; then `n`/`N` again. Alt+C match case, Alt+W whole words, Alt+R a regular expression (the toggles in the bar too; kept for the next find) |
 | Ctrl+Shift+F, the top bar's magnifier, Go → Search… | search below the folder shown, in a tab of its own: type a name, or part of one (`*` and `?` make it a wildcard over the whole name: `*.ts`); 150 ms after the last key the results come in, each with its folder after it, dim. The field edits as the rename line does (a caret, Shift to select, Ctrl+A its text, Ctrl+C, Ctrl+X, Ctrl+V the clipboard's first line). Enter, Esc or Down give the keys to the results; Ctrl+Shift+F or a click on the field gives them back. Find's Alt+C, Alt+W and Alt+R apply. Left out, and named in the status line: `.git`, `node_modules`, hidden files (as Show Hidden Files), other drives, links to folders; at most 10,000 results. Enter opens a result, a folder in the same tab (Back is the search again); Ctrl+Enter (Open Containing Folder, in a result's menu too) goes to its folder with it selected; Alt+Up goes to the folder searched. What the list does works on results, each in its own folder (rename, trash, delete, Make Link, Duplicate); a result whose file goes leaves the list, and an undo brings it back; nothing is watched, so Ctrl+R searches again. A terminal or a new window opens on the folder searched; Paste, New Folder and Add Bookmark don't (a search isn't a folder). Search in Folder… in a folder's right-click menu (in the list, the sidebar, the path) searches below it |
 | In a search, Alt+I or "In files" | search inside files too: a "Containing" field under the name's, with its own Alt+C, Alt+W, Alt+R (a regular expression matches within a line). The name field narrows which files are read (empty: all of them). Each result shows its first matching line's number and the line around the match, lit, and "+N" for the other lines that match. Plain text only: a file with a NUL in its first 8 KB counts as binary, files over 16 MB and links to files aren't read; the status line says how many files it read and what it left out |
-| Ctrl+Shift+F… then Ctrl+Shift+Enter, or "Open at Line" in a result's menu | a result found inside files in your editor at its line and column: Omarchy's default editor (`omarchy default editor`), else `$EDITOR`'s program, else nvim; a terminal editor in a terminal. Built in: nvim, vim, helix, hx, micro, nano, kak, emacs, code, codium, cursor, zeditor, zed, sublime_text, subl. Others, or your own way of opening (a script, say, that hands the file to an nvim already running), go in `~/.config/ofx/editors`, one a line: `name yes\|no command…`, yes for a terminal editor, the command's words with `{file}`, `{line}` and `{col}` (characters) filled in, "quotes" around a word with spaces, `~/` the home folder. One by a built-in's name replaces it; `$EDITOR`'s flags aren't kept (give that editor a recipe) |
+| Ctrl+Shift+F… then Ctrl+Shift+Enter, or "Open at Line" in a result's menu | a result found inside files in your editor at its line and column: Omarchy's default editor (`omarchy default editor`), else `$EDITOR`'s program, else nvim; a terminal editor in a terminal. Built in: nvim, vim, helix, hx, micro, nano, kak, emacs, code, codium, cursor, zeditor, zed, sublime_text, subl. Others, or your own way of opening (a script, say, that hands the file to an nvim already running), go in ofx.conf (Edit → Preferences…), one a line: `editor = name yes\|no command…` (the older `~/.config/ofx/editors`, the same lines without `editor =`, is still read after them), yes for a terminal editor, the command's words with `{file}`, `{line}` and `{col}` (characters) filled in, "quotes" around a word with spaces, `~/` the home folder. One by a built-in's name replaces it; `$EDITOR`'s flags aren't kept (give that editor a recipe) |
 | `.`, Ctrl+H | hidden files on and off |
 | Ctrl+P, Ctrl+G | View → Show Permissions, View → Show Group |
 | `s`, `S` | sort by the next column (name, size, modified), reverse |
@@ -133,7 +133,8 @@ icons.
 
 The cache's cleanup, `ofx-clean` (nothing else cleans it, Nemo neither): a preview not read for 90
 days goes; so does one whose file is gone or has changed (kept: files on a network drive or on a
-drive not mounted now); then, while the cache is over 1 GiB, the least recently read go. It reads
+drive not mounted now); then, while the cache is over 1 GiB, the least recently read go. ofx.conf's
+`clean`, `clean-orphans`, `clean-unused-days` and `clean-cap` change or turn off each (below). It reads
 the previews without changing their access times. `ofx-clean --dry-run` lists what would go and
 deletes nothing. `make install` puts in a daily systemd user timer but leaves it off; after a look
 at the dry run:
@@ -179,8 +180,9 @@ in the View menu isn't set here: ofx remembers it in `~/.local/state/ofx/state`.
 # ofx.conf: the options you set for ofx (the Omarchy file explorer).
 #
 # ofx reads this file when it starts and again whenever you save it: every open
-# window applies a change at once. ofx never changes it: it only writes it, as
-# you see it here, when it isn't there (when ofx starts, or Edit > Preferences...).
+# window applies a change at once (ofx-clean reads it each time it runs). ofx
+# never changes it: it only writes it, as you see it here, when it isn't there
+# (when ofx starts, or Edit > Preferences...).
 #
 # One option a line, `key = value`; # starts a comment. A line ofx can't read is
 # skipped, the rest applies, and the status line says which line and why.
@@ -218,6 +220,41 @@ in the View menu isn't set here: ofx remembers it in `~/.local/state/ofx/state`.
 # every folder.
 search-skip = .git
 search-skip = node_modules
+
+# How Open at Line (Ctrl+Shift+Enter on a result found inside files) starts an
+# editor at that line. It uses Omarchy's default editor (`omarchy default
+# editor`, else $EDITOR), and ofx knows how to start nvim, vim, helix, hx,
+# micro, nano, kak, emacs, code, codium, cursor, zeditor, zed, sublime_text and
+# subl. A line here adds another, or changes one of those; none by default.
+# One editor a line: editor = name terminal command...
+#   name      the editor's name, as Omarchy's default (or $EDITOR's program)
+#   terminal  yes: in a new terminal; no: a window of its own
+#   command   its words, split at spaces; "double quotes" around a word with
+#             a space; ~/ at a word's start is your home folder; {file},
+#             {line} and {col} (characters, from 1) are filled in, and the file
+#             is added at the end when no word has {file}
+# Example: editor = nvim yes nvim +{line} {file}
+
+# Whether ofx-clean cleans the previews' cache (~/.cache/thumbnails, shared with
+# Nemo) at all, by the three clean- options below. on or off. ofx-clean runs
+# daily from a systemd timer, installed but not on until you turn it on:
+#   systemctl --user enable --now ofx-clean.timer
+# `ofx-clean --dry-run` lists what it would delete, and deletes nothing.
+#clean = on
+
+# ofx-clean deletes the preview of a file that is gone, or has changed since
+# (the next look makes a new one). A file on a drive that isn't plugged in, or
+# on a network mount, keeps its previews. on or off.
+#clean-orphans = on
+
+# ofx-clean deletes a preview no program has read for this many days (by its
+# access time). A whole number of days; 0: never for this.
+# Example: clean-unused-days = 30
+#clean-unused-days = 90
+
+# The size ofx-clean keeps the cache under: past it, the least recently read
+# previews go first. A size, as preview-max-size takes; 0: no cap.
+#clean-cap = 1 GiB
 ```
 <!-- ofx.conf end -->
 

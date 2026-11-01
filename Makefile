@@ -47,8 +47,10 @@ build/release/ofx-fm1: tools/fm1.c $(wildcard base/*.c base/*.h fs/*.c) | build/
 build/test: $(wildcard tests/*.c) $(wildcard base/*.c base/*.h fs/*.c ui/*.c) | build
 	$(CC) $(CFLAGS) -Wunused-function $(IMG_INC) $(DEBUG) -o $@ tests/test.c $(IMG_LIBS) -lm
 
-test: build/test
+# Then ofx-clean as its timer runs it, reading ofx.conf (a scratch cache and config, the guard on).
+test: build/test build/ofx-clean
 	./build/test
+	tests/clean/run.sh "$(CURDIR)/build/ofx-clean"
 
 # ofx-fm1 on a private bus (dbus-run-session, its own config: only the test's service folder),
 # with fakes for uwsm-app and ofx: no call reaches Michael's bus, no window opens.

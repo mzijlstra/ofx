@@ -1792,6 +1792,7 @@ int main(void)
     test_conf();
     test_conf_skips();
     test_conf_preview_max();
+    test_conf_step2();
     test_open_line_keys();
     test_search_match();
     test_search_keys_find();

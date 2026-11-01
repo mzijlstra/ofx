@@ -58,6 +58,20 @@ expect statusbad=0
 key ctrl-shift-enter
 wait-for 2000 statusbad=1
 expect spawned=3
+# ofx.conf's editor lines (F10 step 2) come before the editors file's: its "gone" starts now; that
+# the file's lines can move is said once a run
+sh printf 'editor = gone no /usr/bin/true "--conf {line}" {file}\n' >> "$OFX_ROOT/config/ofx/ofx.conf"
+sleep 1100
+key up
+expect statusbad=0
+key ctrl-shift-enter
+wait-for 2000 spawned=4
+sh grep -qx "uwsm-app -- /usr/bin/true --conf 2 $OFX_DIR/src/app.ts" "$OFX_ROOT/spawn.log"
+expect statusbad=0 still works; its lines can move editor = <line>
+key up
+key ctrl-shift-enter
+wait-for 2000 spawned=5
+expect status=-
 # Up and Back with an empty name: the results again, the keys in them
 key enter
 key alt-up

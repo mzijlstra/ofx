@@ -4,7 +4,7 @@
 //
 // Three rules, in order: a preview not read for CLEAN_UNUSED_S goes (its atime); a preview whose
 // file is gone or has changed goes (its Thumb::URI and Thumb::MTime); then, while the cache is over
-// CLEAN_CAP, the least recently read go. Only the cache's own names are looked at, in its size
+// CLEAN_CAP, the least recently read go. ofx.conf's clean options (F10) set or turn off each. Only the cache's own names are looked at, in its size
 // folders and fail/<program>/, never followed through a link, and each delete asks the test guard
 // (ops.c) first.
 //
@@ -20,7 +20,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-// Fixed until the settings page (Michael, 2026-10-25).
+// The defaults (as ofx.conf's: clean-unused-days, clean-cap).
 #define CLEAN_UNUSED_S (90 * 86400LL)
 #define CLEAN_CAP      ((i64)1 << 30)
 #define CLEAN_TMP_S    86400LL   // ofx's own temporary file, left by a crash, after a day
@@ -30,12 +30,20 @@ typedef enum { CR_KEEP, CR_TEMP, CR_UNUSED, CR_ORPHAN, CR_STALE, CR_CAP, CR_N } 
 static const char *const clean_rule_names[CR_N] = { "kept", "temp", "unused", "orphan", "stale", "cap" };
 
 typedef struct {
-    i64  now;    // seconds
-    i64  cap;    // bytes; CLEAN_CAP but in the tests
+    i64  now;       // seconds
+    i64  unused_s;  // the first rule's age; 0: off
+    bool orphans;   // the second rule
+    i64  cap;       // bytes; 0: no cap
     bool dry;    // list, delete nothing
     void (*say)(void *ctx, CleanRule r, const char *path, i64 size);   // each delete (or would-be one)
     void *ctx;
 } CleanOpts;
+
+// ofx.conf's clean options into o's rules (clean itself is ofx-clean's to check).
+static void clean_opts_conf(const Conf *c, CleanOpts *o)
+{
+    o->unused_s = c->clean_unused_days * 86400, o->orphans = c->clean_orphans, o->cap = c->clean_cap;
+}
 
 typedef struct {
     isize n[CR_N];
@@ -295,8 +303,8 @@ static void clean_run(Arena *a, const char *root, Str mountinfo, const CleanOpts
     for (isize i = 0; i < nf; i++) {
         CleanFile *f = &files[i];
         CleanRule r = f->temp ? (o->now - f->mtime > CLEAN_TMP_S ? CR_TEMP : CR_KEEP)
-                    : o->now - f->atime > CLEAN_UNUSED_S ? CR_UNUSED
-                    : clean_judge(a, &ms, fds[f->dir], f->name);
+                    : o->unused_s > 0 && o->now - f->atime > o->unused_s ? CR_UNUSED
+                    : o->orphans ? clean_judge(a, &ms, fds[f->dir], f->name) : CR_KEEP;
         if (r != CR_KEEP) {
             clean_drop(o, s, dirs, fds, f, r);
             continue;
@@ -305,7 +313,7 @@ static void clean_run(Arena *a, const char *root, Str mountinfo, const CleanOpts
     }
 
     // The cap: the least recently read first.
-    if (total > o->cap) {
+    if (o->cap > 0 && total > o->cap) {
         qsort(files, (size_t)kept, sizeof *files, clean_by_atime);
         for (isize i = 0; i < kept && total > o->cap; i++) {
             isize before = s->n[CR_CAP];

@@ -3,13 +3,13 @@
 // after base.
 #include "paths.c"
 #include "list.c"
-#include "conf.c"
 #include "mime.c"
 #include "icons.c"
 #include "theme.c"
 #include "places.c"
 #include "spawn.c"
 #include "editors.c"
+#include "conf.c"     // (after editors.c: an editor line is checked as a recipe)
 #include "apps.c"
 #include "ops.c"
 #include "trash.c"

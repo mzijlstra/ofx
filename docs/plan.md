@@ -727,6 +727,12 @@ recommendation (2026-10-30), and added two things.
   when there is no file to read (it couldn't be made, or was removed while ofx runs) do all the
   built-in defaults apply, the list included; a failed write at the start is said in the status
   line. Only the GUI writes it; ofx-clean (step 2) only reads.
+- **Step 2 (2026-11-01):** `editor` lines and the four `clean` options. An editor line is checked
+  as the editors file checks a recipe; ofx.conf's come before the old file's, which is still read,
+  and the status line says once a run that its lines can move. `editor` has no default, so the
+  written file has its help and an example only. ofx-clean reads the file through `conf_load` (the
+  built-in defaults without one; a bad line on stderr; never writes it); `clean = off` stops it, 0
+  turns off the days rule or the cap. `tests/clean/run.sh` runs the binary in `make test`.
 - **Q6:** a line ofx can't read, or an unknown key, is skipped. The rest applies, and the status
   line names the line and what it wanted.
 - **Comments, as php.ini's (Michael):** every option gets a comment block in the written file: what

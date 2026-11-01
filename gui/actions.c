@@ -615,14 +615,19 @@ static void window_on(const char *dir)
     else set_status(true, "%s", err.msg);
 }
 
+static void conf_shown(char *out, size_t cap);   // (prefs.c, after)
+
 // ---- Open at Line (F9 step 4) -----------------------------------------------------------------
 
 // The editor Open at Line uses (fs/editors.c): the default's name, its recipe (NULL: none), the
-// editors file's recipes and its first bad line. Read again at most once a second (the result's
-// menu asks each frame it is open), and always as it opens.
+// recipes of ofx.conf's editor lines then of the older editors file, and that file's first bad line
+// and how many it still has. Read again at most once a second (the result's menu asks each frame
+// it is open), and always as it opens.
 static struct {
     i64           at;
     Editors       user;
+    int           old;     // recipes from the editors file
+    bool          told;    // that they can move to ofx.conf, said once a run
     char          name[EDITOR_NAME_MAX];
     const Editor *e;
     u8            mem[KiB(64)];
@@ -636,7 +641,11 @@ static const Editor *editor_now(bool again)
     editors.at = now;
     arena_init(&editors.a, "editors", editors.mem, sizeof editors.mem);
     char path[PATH_MAX];
-    editors_parse(&editors.a, editors_path(path, sizeof path) ? read_file(&editors.a, path) : STR_EMPTY, &editors.user);
+    editors.user = (Editors){ 0 };
+    for (int k = 0; k < app.conf.neditor; k++) editors_add(&editors.a, str_from_c(app.conf.editor[k]), &editors.user);
+    int mine = editors.user.n;
+    editors_add(&editors.a, editors_path(path, sizeof path) ? read_file(&editors.a, path) : STR_EMPTY, &editors.user);
+    editors.old = editors.user.n - mine;
     editor_default(&editors.a, editors.name, sizeof editors.name);
     return editors.e = editor_find(&editors.user, editors.name);
 }
@@ -656,13 +665,14 @@ static void open_at_line(isize i)
         set_status(true, "Only a result found inside files has a line: In files (Alt+I)");
         return;
     }
-    char path[PATH_MAX], ep[PATH_MAX], shown[PATH_MAX + 1];
+    char path[PATH_MAX], ep[PATH_MAX], shown[PATH_MAX + 1], conf[PATH_MAX + 1];
     if (!entry_path(i, path, sizeof path)) return;
     const Editor *e = editor_now(true);
     if (!editors_path(ep, sizeof ep)) snprintf(ep, sizeof ep, "~/.config/ofx/editors");
     ui_tilde(shown, sizeof shown, ep, getenv("HOME"));
+    conf_shown(conf, sizeof conf);
     if (!e) {
-        set_status(true, "No Open at Line recipe for %s: add one to %s", editors.name, shown);
+        set_status(true, "No Open at Line recipe for %s: add an editor line to %s (Edit > Preferences...)", editors.name, conf);
         return;
     }
     char buf[EDITOR_ARGS_MAX];
@@ -672,6 +682,7 @@ static void open_at_line(isize i)
     if (n < 0) set_status(true, "%s's command is too long for that file", e->label);
     else if (!editor_open(e, argv, n, &err)) set_status(true, "%s", err.msg);
     else if (editors.user.bad) set_status(true, "%s: line %d isn't a recipe (a name, yes or no, then the command)", shown, editors.user.bad);
+    else if (editors.old && !editors.told) editors.told = true, set_status(false, "%s still works; its lines can move to %s, each as editor = <line>", shown, conf);
 }
 
 static void prefs_open(void);   // (prefs.c, after: it uses editor_now)

@@ -810,7 +810,7 @@ MUTANTS += [
     (CL, "fstatat(fds[i], d->d_name, &st, AT_SYMLINK_NOFOLLOW) != 0 || !S_ISREG(st.st_mode)) continue;", "fstatat(fds[i], d->d_name, &st, 0) != 0 || !S_ISREG(st.st_mode)) continue;"),
     (CL, "fstatat(fds[i], d->d_name, &st, AT_SYMLINK_NOFOLLOW) != 0 || !S_ISREG(st.st_mode)) continue;", "fstatat(fds[i], d->d_name, &st, AT_SYMLINK_NOFOLLOW) != 0) continue;"),
     (CL, "        CleanRule r = f->temp ? (o->now - f->mtime > CLEAN_TMP_S ? CR_TEMP : CR_KEEP)", "        CleanRule r = f->temp ? (o->now - f->atime > CLEAN_TMP_S ? CR_TEMP : CR_KEEP)"),
-    (CL, "                    : o->now - f->atime > CLEAN_UNUSED_S ? CR_UNUSED", "                    : o->now - f->mtime > CLEAN_UNUSED_S ? CR_UNUSED"),
+    (CL, "                    : o->unused_s > 0 && o->now - f->atime > o->unused_s ? CR_UNUSED", "                    : o->unused_s > 0 && o->now - f->mtime > o->unused_s ? CR_UNUSED"),
     (CL, "        files[kept++] = *f, total += f->size;", "        files[kept++] = *f;"),
     # Not a mutant: `total >= o->cap` on the outer test is equivalent, the loop's own test deletes
     # nothing at exactly the cap (tested).
@@ -2065,7 +2065,7 @@ MUTANTS += [
     (CF, 'return n <= INT64_MAX / UNITS[k].mul && (*out = n * UNITS[k].mul, true);', 'return n <= INT64_MAX / UNITS[k].mul && (*out = n, true);'),
     (CF, '    if (str_eq(v, S("on")) || str_eq(v, S("yes")) || str_eq(v, S("true"))) return *out = true, true;', '    if (str_eq(v, S("on")) || str_eq(v, S("yes"))) return *out = true, true;'),
     (CF, '    if (str_eq(v, S("off")) || str_eq(v, S("no")) || str_eq(v, S("false"))) return *out = false, true;', '    if (str_eq(v, S("off")) || str_eq(v, S("no"))) return *out = false, true;'),
-    (CF, '    *c = (Conf){ .previews = true, .preview_max = (i64)10 << 20, .date = DATE_SHORT };', '    *c = (Conf){ .previews = true, .preview_max = (i64)10 << 20, .date = DATE_LONG };'),
+    (CF, '    *c = (Conf){ .previews = true, .preview_max = (i64)10 << 20, .date = DATE_SHORT, .clean = true,', '    *c = (Conf){ .previews = true, .preview_max = (i64)10 << 20, .date = DATE_LONG, .clean = true,'),
     (CF, '    c->nskip = 2;', '    c->nskip = 1;'),
     (CF, '        if (str_find(v, \'%\') < 0 || v.len >= CONF_DATE_MAX) return false;', '        if (v.len >= CONF_DATE_MAX) return false;'),
     (CF, " || str_find(v, '/') >= 0", ''),
@@ -2096,4 +2096,29 @@ MUTANTS += [
     # search-skip is exactly the file's lines; the file written with them (Michael, 2026-11-01)
     (CF, '    conf_defaults(c);\n    c->nskip = 0;', '    conf_defaults(c);'),
     (CF, 'o->kind == CK_NAMES ? "" : "#", o->key', '"#", o->key'),
+]
+MUTANTS += [
+    # F10 step 2: ofx-clean's options, the editor lines, conf_load (2026-11-01)
+    (CF, '.clean = true, .clean_orphans = true,', '.clean = false, .clean_orphans = true,'),
+    (CF, '.clean = true, .clean_orphans = true,', '.clean = true, .clean_orphans = false,'),
+    (CF, '.clean_unused_days = 90,', '.clean_unused_days = 91,'),
+    (CF, '.clean_cap = (i64)1 << 30 };', '.clean_cap = (i64)1 << 29 };'),
+    (CF, '    if (strcmp(key, "clean") == 0) return conf_bool(v, &c->clean);\n', ''),
+    (CF, '    if (strcmp(key, "clean-orphans") == 0) return conf_bool(v, &c->clean_orphans);\n', ''),
+    (CF, '    if (strcmp(key, "clean-cap") == 0) return conf_size(v, &c->clean_cap);\n', ''),
+    (CF, "            if (!is_digit(v.p[i]) || (n = n * 10 + (v.p[i] - '0')) > CONF_DAYS_MAX) return false;", "            if ((n = n * 10 + (v.p[i] - '0')) > CONF_DAYS_MAX) return false;"),
+    (CF, "            if (!is_digit(v.p[i]) || (n = n * 10 + (v.p[i] - '0')) > CONF_DAYS_MAX) return false;", "            if (!is_digit(v.p[i]) || (n = n * 10 + (v.p[i] - '0')) > CONF_DAYS_MAX + 1) return false;"),
+    (CF, '        return v.len && (c->clean_unused_days = n, true);', '        return (c->clean_unused_days = n, true);'),
+    (CF, '        if (v.len >= CONF_LINE_MAX || c->neditor == EDITORS_USER) return false;', '        if (v.len > CONF_LINE_MAX || c->neditor == EDITORS_USER) return false;'),
+    (CF, '        if (v.len >= CONF_LINE_MAX || c->neditor == EDITORS_USER) return false;', '        if (v.len >= CONF_LINE_MAX) return false;'),
+    (CF, '        if (one.n != 1) return false;\n', ''),
+    (CF, '    if (there) conf_parse(read_file(a, path), c);\n    else conf_defaults(c);', '    if (there) conf_parse(read_file(a, path), c);\n    else conf_parse(STR_EMPTY, c);'),
+    (CF, ' && S_ISREG(st.st_mode) && access(path, R_OK) == 0;', ' && access(path, R_OK) == 0;'),
+    (CL, '    o->unused_s = c->clean_unused_days * 86400, o->orphans = c->clean_orphans, o->cap = c->clean_cap;', '    o->unused_s = c->clean_unused_days * 86400, o->orphans = true, o->cap = c->clean_cap;'),
+    (CL, '    o->unused_s = c->clean_unused_days * 86400, o->orphans = c->clean_orphans, o->cap = c->clean_cap;', '    o->unused_s = c->clean_unused_days * 86400, o->orphans = c->clean_orphans, o->cap = CLEAN_CAP;'),
+    (CL, '    o->unused_s = c->clean_unused_days * 86400, o->orphans = c->clean_orphans, o->cap = c->clean_cap;', '    o->unused_s = CLEAN_UNUSED_S, o->orphans = c->clean_orphans, o->cap = c->clean_cap;'),
+    (CL, '                    : o->unused_s > 0 && o->now - f->atime > o->unused_s ? CR_UNUSED', '                    : o->now - f->atime > o->unused_s ? CR_UNUSED'),
+    (CL, '                    : o->orphans ? clean_judge(a, &ms, fds[f->dir], f->name) : CR_KEEP;', '                    : clean_judge(a, &ms, fds[f->dir], f->name);'),
+    (CL, '    if (o->cap > 0 && total > o->cap) {', '    if (total > o->cap) {'),
+    ('fs/editors.c', '    *out = (Editors){ 0 };\n    editors_add', '    editors_add'),
 ]
