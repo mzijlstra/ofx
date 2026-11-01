@@ -168,3 +168,91 @@ static void test_tree_remember(void)
     CHECK(str_eq(state_value(&ta, at("f11t/state"), "tree"), S("/y")) && state_value(&ta, at("f11t/state"), "b").len == 0);
     ops_guard(NULL);
 }
+
+// reviewer-2's LOWs on F11 step 1 (2026-11-01): a state file that can't be read whole isn't written
+// over; writers at once (Ctrl+Q) lose nothing under the lock; autofs is a far mount.
+static void test_state_writers(void)
+{
+    ops_guard(root);
+    char path[PATH_MAX];
+    snprintf(path, sizeof path, "%s", at("f11w/state"));
+    static char big[8192];
+    memset(big, 'x', sizeof big - 2), big[sizeof big - 2] = '\n', big[sizeof big - 1] = 0;
+    put(path, big);
+    static u8 small_mem[4096];
+    Arena small;
+    arena_init(&small, "state-small", small_mem, sizeof small_mem);
+    Err err;
+    CHECK(!state_put(&small, path, "hidden", "on", &err) && strstr(err.msg, "couldn't read it whole"));
+    static Folders w;
+    folders_parse(&small, STR_EMPTY, &w);
+    FolderPrefs *p = folders_get(&small, &w, "/run/media/m/S/a");
+    p->view = 1, p->changed = FP_VIEW;
+    arena_init(&small, "state-small", small_mem, sizeof small_mem);
+    CHECK(!folders_write(&small, path, &w, NULL, &err) && strstr(err.msg, "couldn't read it whole"));
+    CHECK(strcmp(read_file(&ta, path).p, big) == 0);
+    // Three writers at once, 40 entries each, one write each: all 120 there.
+    unlink(path);
+    pid_t kids[3];
+    for (int k = 0; k < 3; k++) {
+        if ((kids[k] = fork()) == 0) {
+            static u8 mem[2][MiB(1)];
+            Arena a[2];
+            for (int i = 0; i < 2; i++) arena_init(&a[i], "writer", mem[i], sizeof mem[i]);
+            static Folders t;
+            folders_parse(&a[0], STR_EMPTY, &t);
+            for (int i = 0; i < 40; i++) {
+                char d[64];
+                snprintf(d, sizeof d, "/run/media/m/S/%d-%d", k, i);
+                FolderPrefs *f = folders_get(&a[0], &t, d);
+                f->sel = "x", f->at = 1, f->changed = FP_SEL | FP_AT;
+                Err e;
+                arena_reset(&a[1]);
+                if (!folders_write(&a[1], path, &t, NULL, &e)) _exit(1);
+                Arena swap = a[0];
+                a[0] = a[1], a[1] = swap;
+            }
+            _exit(0);
+        }
+    }
+    int fails = 0;
+    for (int k = 0; k < 3; k++) {
+        int st;
+        waitpid(kids[k], &st, 0);
+        fails += !(WIFEXITED(st) && WEXITSTATUS(st) == 0);
+    }
+    folders_parse(&ta, read_file(&ta, path), &w);
+    if (w.n != 120) fprintf(stderr, "writers at once: %d of 120 kept\n", w.n);
+    CHECK(fails == 0 && w.n == 120);
+    // And state_put's: three writers, 30 keys each, all 90 there (the folders kept too).
+    for (int k = 0; k < 3; k++) {
+        if ((kids[k] = fork()) == 0) {
+            static u8 mem[MiB(1)];
+            Arena a;
+            arena_init(&a, "putter", mem, sizeof mem);
+            for (int i = 0; i < 30; i++) {
+                char key[32];
+                Err e;
+                snprintf(key, sizeof key, "k%d-%d", k, i);
+                arena_reset(&a);
+                if (!state_put(&a, path, key, "1", &e)) _exit(1);
+            }
+            _exit(0);
+        }
+    }
+    for (int k = 0; k < 3; k++) {
+        int st;
+        waitpid(kids[k], &st, 0);
+        fails += !(WIFEXITED(st) && WEXITSTATUS(st) == 0);
+    }
+    Str all = read_file(&ta, path);
+    int keys = 0;
+    for (isize i = 0; i + 1 < all.len; i++) keys += all.p[i] == '\n' && all.p[i + 1] == 'k';
+    keys += all.len && all.p[0] == 'k';
+    folders_parse(&ta, all, &w);
+    if (keys != 90) fprintf(stderr, "state_put at once: %d of 90 kept\n", keys);
+    CHECK(fails == 0 && keys == 90 && w.n == 120);
+    ops_guard(NULL);
+    // autofs: a look under it mounts what it stands for.
+    CHECK(!thumb_local(S("1 0 0:1 / / rw - ext4 a rw\n2 1 0:2 / /net rw - autofs b rw\n"), "/net/nas/x"));
+}

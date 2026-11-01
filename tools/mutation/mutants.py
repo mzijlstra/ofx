@@ -2160,7 +2160,7 @@ MUTANTS += [
     (FO, '        if (m->changed & FP_SEL) f->sel = m->sel ? folder_str(a, str_from_c(m->sel)) : NULL;\n', ''),
     (FO, '        if ((m->changed & FP_AT) && m->at > f->at) f->at = m->at;', '        if (m->changed & FP_AT) f->at = m->at;'),
     (FO, '        if (line.len && !str_starts_with(line, S("folder "))) memcpy', '        if (line.len) memcpy'),
-    (FO, '    *mine = t;\n', ''),
+    (FO, '    if (ok) *mine = t;', '    (void)0;'),
     (FO, '        if (mask & FP_VIEW) f->view = -1;\n', ''),
     (FO, '        f->changed |= mask, n++;', '        n++;'),
     (FO, '        if (!had) continue;\n', ''),
@@ -2177,4 +2177,13 @@ MUTANTS += [
     ('fs/tree.c', "        if (at > b && percent_decode(str_cut(text, b, at), p, sizeof p) && p[0] == '/') tree_open(t, str_from_c(p));", "        if (at > b && percent_decode(str_cut(text, b, at), p, sizeof p)) tree_open(t, str_from_c(p));"),
     ('fs/tree.c', "        while (at < text.len && text.p[at] == ' ') at++;\n        isize b", '        isize b'),
     ('fs/state.c', '        if (eq >= 0 && str_eq(str_trim(str_cut(line, 0, eq)), k)) v = str_trim(str_cut(line, eq + 1, line.len));', '        if (eq >= 0 && str_eq(str_trim(str_cut(line, 0, eq)), k) && !v.len) v = str_trim(str_cut(line, eq + 1, line.len));'),
+]
+# reviewer-2's LOWs on F11 step 1 (2026-11-01): a partial read not written over; the lock; autofs
+MUTANTS += [
+    ('fs/state.c', '    if (text->len == 0 && stat(path, &st) == 0 && st.st_size > 0) return err_set', '    if (false) return err_set'),
+    ('fs/state.c', '    if (fd >= 0 && flock(fd, LOCK_EX) != 0) close(fd), fd = -1;', '    if (fd >= 0 && 0) close(fd), fd = -1;'),
+    ('fs/state.c', '    int lock = state_lock(path);\n    if (!state_read(scratch, path, &text, err))', '    int lock = -1;\n    if (!state_read(scratch, path, &text, err))'),
+    ('fs/folders.c', '    int lock = state_lock(path);', '    int lock = -1;'),
+    ('fs/folders.c', '    if (!state_read(a, path, &text, err)) return state_unlock(lock), false;', '    state_read(a, path, &text, err);'),
+    ('fs/thumb.c', '"lustre", "fuse", "autofs" };', '"lustre", "fuse" };'),
 ]

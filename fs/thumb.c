@@ -555,11 +555,12 @@ static bool thumb_make(Arena *a, ThumbKind k, Str src, int side, Img *out)
 
 // Whether ofx makes previews on the drive holding path, by mountinfo (the mount with the longest
 // mount point above it): not on network file systems or FUSE ones (fuse.sshfs, fuse.gvfsd-fuse),
-// whose reads can hang a worker; fuseblk, a local disk (NTFS), isn't "fuse" nor "fuse.*". Unknown:
-// local.
+// whose reads can hang a worker; fuseblk, a local disk (NTFS), isn't "fuse" nor "fuse.*"; autofs, as
+// a look under it mounts what it stands for (a NAS that is down blocks it; reviewer-2, 2026-11-01).
+// Unknown: local.
 static bool thumb_local(Str mountinfo, const char *path)
 {
-    static const char *const far[] = { "nfs", "nfs4", "cifs", "smb3", "smbfs", "9p", "ceph", "afs", "glusterfs", "davfs", "lustre", "fuse" };
+    static const char *const far[] = { "nfs", "nfs4", "cifs", "smb3", "smbfs", "9p", "ceph", "afs", "glusterfs", "davfs", "lustre", "fuse", "autofs" };
     isize at = 0, best = -1;
     char type[64] = "";
     for (Str line; next_line(mountinfo, &at, &line);) {

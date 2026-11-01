@@ -13,6 +13,8 @@
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/file.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 typedef enum { SIDE_PLACES, SIDE_TREE, SIDE_HIDDEN, SIDE_MODES } SideMode;
@@ -95,6 +97,38 @@ static bool state_write(const char *path, const char *body, isize n, Err *err)
     return true;
 }
 
+// The state file's text into *text, in a: empty when there is no file. False, said, when there is one
+// but it couldn't be read whole (too big for a): a write from what was read would lose the rest
+// (reviewer-2, 2026-11-01).
+static bool state_read(Arena *a, const char *path, Str *text, Err *err)
+{
+    struct stat st;
+    *text = read_file(a, path);
+    if (text->len == 0 && stat(path, &st) == 0 && st.st_size > 0) return err_set(err, "%s: couldn't read it whole, so not written", path), false;
+    return true;
+}
+
+// The state file's lock, held from the read to the rename by each writer (state_put, folders_write):
+// with Ctrl+Q every window writes at once, and a write from an old read loses another's change
+// (reviewer-2, 2026-11-01: 3 at once lost 112 of 600). A file of its own, <state>.lock: the rename
+// replaces the state file's inode. The fd to close, -1 when it can't be had (then written unlocked).
+static int state_lock(const char *path)
+{
+    char lock[PATH_MAX + 8], dir[PATH_MAX];
+    Err err;
+    if (snprintf(lock, sizeof lock, "%s.lock", path) >= (int)sizeof lock || !ops_allowed(lock, &err) || !path_parent(dir, sizeof dir, path) ||
+        !mkdir_private(dir, &err))
+        return -1;
+    int fd = open(lock, O_RDWR | O_CREAT | O_CLOEXEC | O_NOFOLLOW, 0600);
+    if (fd >= 0 && flock(fd, LOCK_EX) != 0) close(fd), fd = -1;
+    return fd;
+}
+
+static void state_unlock(int fd)
+{
+    if (fd >= 0) close(fd);
+}
+
 // One key's value into file path, the rest of it as it is now (F7.1): each window is its own
 // process (New Window), so a save of the whole State would put back what another window changed
 // since this one read the file. The file is read again here, the key's line replaced (or added),
@@ -102,10 +136,12 @@ static bool state_write(const char *path, const char *body, isize n, Err *err)
 static bool state_put(Arena *scratch, const char *path, const char *key, const char *value, Err *err)
 {
     ArenaMark mark = arena_mark(scratch);
-    Str text = read_file(scratch, path), k = str_from_c(key);
+    Str text, k = str_from_c(key);
+    int lock = state_lock(path);
+    if (!state_read(scratch, path, &text, err)) return state_unlock(lock), arena_restore(scratch, mark), false;
     isize cap = text.len + (isize)strlen(key) + (isize)strlen(value) + 4;
     char *body = arena_try_push(scratch, cap, 1);
-    if (!body) return arena_restore(scratch, mark), err_set(err, "%s: too big", path), false;
+    if (!body) return state_unlock(lock), arena_restore(scratch, mark), err_set(err, "%s: too big", path), false;
     isize n = 0, at = 0;
     bool put = false;
     for (Str line; next_line(text, &at, &line);) {
@@ -117,6 +153,7 @@ static bool state_put(Arena *scratch, const char *path, const char *key, const c
     }
     if (!put) n += snprintf(body + n, (size_t)(cap - n), "%s=%s\n", key, value);
     bool ok = state_write(path, body, n, err);
+    state_unlock(lock);
     arena_restore(scratch, mark);
     return ok;
 }

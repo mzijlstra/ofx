@@ -175,7 +175,9 @@ static int folders_tidy(Folders *t, const CleanMounts *ms)
 // list, for the housekeeping (NULL: no folder judged gone).
 static bool folders_write(Arena *a, const char *path, Folders *mine, const CleanMounts *ms, Err *err)
 {
-    Str text = read_file(a, path);
+    Str text;
+    int lock = state_lock(path);
+    if (!state_read(a, path, &text, err)) return state_unlock(lock), false;
     static Folders t;
     folders_parse(a, text, &t);
     for (int i = 0; i < mine->n; i++) {
@@ -194,14 +196,15 @@ static bool folders_write(Arena *a, const char *path, Folders *mine, const Clean
     isize cap = text.len + 64;
     for (int i = 0; i < t.n; i++) cap += 3 * (isize)(strlen(t.f[i].path) + (t.f[i].sel ? strlen(t.f[i].sel) : 0)) + 80;
     char *body = arena_try_push(a, cap, 1);
-    if (!body) return err_set(err, "%s: too big", path), false;
+    if (!body) return state_unlock(lock), err_set(err, "%s: too big", path), false;
     isize n = 0, at = 0;
     for (Str line; next_line(text, &at, &line);)
         if (line.len && !str_starts_with(line, S("folder "))) memcpy(body + n, line.p, (size_t)line.len), n += line.len, body[n++] = '\n';
     for (int i = 0; i < t.n; i++) n += folder_line(&t.f[i], body + n, (size_t)(cap - n));
-    if (!state_write(path, body, n, err)) return false;
-    *mine = t;
-    return true;
+    bool ok = state_write(path, body, n, err);
+    state_unlock(lock);
+    if (ok) *mine = t;
+    return ok;
 }
 
 // Every entry's fields in mask (FP_VIEW and so on) unset, marked changed: a default in ofx.conf
