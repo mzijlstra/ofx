@@ -1,0 +1,6 @@
+# F11 step 3, after f11i: another window open (a stand-in run.sh doesn't make: a sleep that ignores
+# SIGUSR1, 20 s at most, in the window registry). Close All (Ctrl+Q) keeps this window's tabs though one stays.
+settle
+sh ( trap '' USR1; exec sleep 20 ) >/dev/null 2>&1 & p=$!; echo $p > "$OFX_ROOT/other.pid"; t=$(sed 's/.*) //' /proc/$p/stat | cut -d' ' -f20); printf '%s\n' "$t" > "$OFX_ROOT/windows/$p"
+sh cp "$OFX_ROOT/run.pid" "$OFX_ROOT/f11j.pid"
+key ctrl-q

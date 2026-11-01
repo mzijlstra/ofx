@@ -41,6 +41,7 @@ typedef struct {
     int        zoom;                              // its default icon size, one of CONF_ZOOMS
     int        sort;                              // the default sort key, a SortKey
     bool       sort_rev;                          // and Reverse Order
+    bool       restore_tabs;                      // the tabs across a restart (F11 step 3)
     bool       previews;                          // previews in the icon view (F6.4)
     i64        preview_max;                       // the largest image previewed, in bytes
     DateFormat date;
@@ -86,6 +87,13 @@ static const ConfOpt CONF_OPTS[] = {
     { "sort-reverse", CK_BOOL, offsetof(Conf, sort_rev), "off",
       "The order reversed (View > Reverse Order, Shift+S): on or off. Per folder,\n"
       "as sort." },
+    { "restore-tabs", CK_BOOL, offsetof(Conf, restore_tabs), "off",
+      "The tabs ofx had open, back when it starts again, as in a web browser: on or\n"
+      "off. Closing the last window keeps its tabs; closing one window of several\n"
+      "forgets its. After File > Close All Windows (Ctrl+Q), the next start opens\n"
+      "the window closed last and asks whether to bring back the others. Started on\n"
+      "a folder other than your home (Show in folder, ofx <folder>), it opens as\n"
+      "one more tab." },
     { "previews", CK_BOOL, offsetof(Conf, previews), "on",
       "Previews of images in the icon view, in place of their file type's icon.\n"
       "on or off. Off, ofx makes and reads no previews at all (the cache, shared\n"

@@ -3,7 +3,7 @@
 
 // ---- the modal panels (F5.1) --------------------------------------------------------------------
 
-typedef enum { MODAL_NONE, MODAL_DELETE, MODAL_CLASH, MODAL_CANCEL, MODAL_QUIT, MODAL_FULL, MODAL_EMPTY, MODAL_PROPS, MODAL_OW, MODAL_BM, MODAL_KEYS, MODAL_ABOUT, MODAL_BAR } ModalKind;
+typedef enum { MODAL_NONE, MODAL_DELETE, MODAL_CLASH, MODAL_CANCEL, MODAL_QUIT, MODAL_FULL, MODAL_EMPTY, MODAL_PROPS, MODAL_OW, MODAL_BM, MODAL_KEYS, MODAL_ABOUT, MODAL_BAR, MODAL_RESTORE } ModalKind;
 
 // The panel on top, as ui_on_top has it.
 static ModalKind modal_kind(void)
@@ -14,6 +14,7 @@ static ModalKind modal_kind(void)
     case UI_ON_CANCEL: return MODAL_CANCEL;
     case UI_ON_DELETE: return MODAL_DELETE;
     case UI_ON_EMPTY: return MODAL_EMPTY;
+    case UI_ON_RESTORE: return MODAL_RESTORE;
     case UI_ON_CLASH: return jobs.asking >= 0 ? MODAL_CLASH : MODAL_NONE;
     case UI_ON_PROPS: return MODAL_PROPS;
     case UI_ON_OW: return MODAL_OW;
@@ -94,6 +95,16 @@ static void layout_modal_panel(ModalKind k)
                     modal_button(UI_MODAL_NO, k == MODAL_QUIT ? "Stay" : "Keep going", false, false);
                     modal_button(UI_MODAL_YES, k == MODAL_QUIT ? "Quit" : "Cancel job", true, true);
                 }
+            }
+        } else if (k == MODAL_RESTORE) {   // (F11 step 3)
+            int n = app.ui.restore_n;
+            text(cz(n == 1 ? "Bring back the other window?" : arena_sprintf(&frame, "Bring back the other %d windows?", n)), cc(t->fg));
+            text(fit(str_from_c(n == 1 ? "Close All (Ctrl+Q) closed it, with its tabs." : "Close All (Ctrl+Q) closed them, with their tabs."), 430, false), cc(t->fg_dim));
+            text(cz(n == 1 ? "Enter or y brings it back \xC2\xB7 n or Esc forgets it" : "Enter or y brings them back \xC2\xB7 n or Esc forgets them"), cc(t->fg_dim));
+            CLAY(CLAY_ID("modal-buttons"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .childGap = 10,
+                                                         .childAlignment = { .x = CLAY_ALIGN_X_RIGHT }, .padding = { 0, 0, 8, 0 } } }) {
+                modal_button(UI_MODAL_NO, n == 1 ? "Forget it" : "Forget them", false, false);
+                modal_button(UI_MODAL_YES, "Bring back", true, true);
             }
         } else if (k == MODAL_EMPTY) {
             isize all = app.list.n + (app.show_hidden ? 0 : app.list.hidden);

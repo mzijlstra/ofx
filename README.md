@@ -185,6 +185,12 @@ folders' choices for it, and the status line says how many. The state file keeps
 opened most recently, and drops a folder that is gone (one on a drive that isn't plugged in, or on
 a network mount, stays).
 
+With `restore-tabs = on` in ofx.conf, the tabs come back too, as in a web browser: closing the last
+window keeps its tabs (each tab's folder; its view and cursor are the folder's), closing one window
+of several forgets its. After File → Close All Windows (Ctrl+Q), the next start opens the window
+closed last and asks whether to bring back the others, each in a window of its own. Started on a
+folder other than your home (Show in folder, `ofx <folder>`), that folder opens as one more tab.
+
 <!-- ofx.conf: written by `build/ofx-probe --conf`; make test checks this copy -->
 ```ini
 # ofx.conf: the options you set for ofx (the Omarchy file explorer).
@@ -226,6 +232,14 @@ a network mount, stays).
 # The order reversed (View > Reverse Order, Shift+S): on or off. Per folder,
 # as sort.
 #sort-reverse = off
+
+# The tabs ofx had open, back when it starts again, as in a web browser: on or
+# off. Closing the last window keeps its tabs; closing one window of several
+# forgets its. After File > Close All Windows (Ctrl+Q), the next start opens
+# the window closed last and asks whether to bring back the others. Started on
+# a folder other than your home (Show in folder, ofx <folder>), it opens as
+# one more tab.
+#restore-tabs = off
 
 # Previews of images in the icon view, in place of their file type's icon.
 # on or off. Off, ofx makes and reads no previews at all (the cache, shared

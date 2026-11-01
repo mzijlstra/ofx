@@ -190,8 +190,8 @@ static void script_state(char *out, size_t cap)
     if (app.ui.focus == UI_FOCUS_JOBS) snprintf(jobkey, sizeof jobkey, "%d", app.ui.job_at);
     char clashjob[256] = "-";   // the job the clash panel names
     if (jobs.asking >= 0) state_word(clashjob, sizeof clashjob, str_from_c(job_recs[jobs.asking].label));
-    static const char *const MODALS[] = { "-", "delete", "clash", "cancel", "quit", "full", "empty", "props", "open-with", "bookmarks", "shortcuts", "about", "menubar" };
-    _Static_assert(sizeof MODALS / sizeof MODALS[0] == MODAL_BAR + 1, "a name for each panel");
+    static const char *const MODALS[] = { "-", "delete", "clash", "cancel", "quit", "full", "empty", "props", "open-with", "bookmarks", "shortcuts", "about", "menubar", "restore" };
+    _Static_assert(sizeof MODALS / sizeof MODALS[0] == MODAL_RESTORE + 1, "a name for each panel");
     // The path buttons' labels, '|' between; the cursor's folder count (- unknown, ? unreadable).
     char crumbs[2048] = "", cnt[32] = "-";
     for (int i = 0; i < app.crumbs.n; i++) {

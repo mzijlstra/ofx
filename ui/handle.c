@@ -147,6 +147,9 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
     case UI_ON_EMPTY:
         if (yes_no) return u->empty_asking = false, (UiAction){ said_yes && u->view == UI_VIEW_TRASH ? UA_EMPTY_TRASH : UA_NONE, 0, false };
         break;
+    case UI_ON_RESTORE:
+        if (yes_no) return u->restore_n = 0, (UiAction){ UA_RESTORE_WINDOWS, 0, said_yes };
+        break;
     default: break;
     }
     if (u->view != UI_VIEW_TRASH) u->empty_asking = false;
@@ -378,6 +381,12 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
             u->empty_asking = false;
             if (yes) return (UiAction){ UA_EMPTY_TRASH, 0, false };
             continue;
+        }
+        if (on == UI_ON_RESTORE) {
+            bool answered, yes = ui_yes_no(e, &answered);
+            if (!answered) continue;
+            u->restore_n = 0;
+            return (UiAction){ UA_RESTORE_WINDOWS, 0, yes };
         }
         // The menu bar's keys (F7.1): F10 the first menu, Alt and a letter its menu; under a menu
         // open, its keys.

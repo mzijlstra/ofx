@@ -1,0 +1,4 @@
+# F11 step 3, after f11k: the stand-in window ended.
+settle
+sh kill "$(cat "$OFX_ROOT/other.pid")" && rm "$OFX_ROOT/windows/$(cat "$OFX_ROOT/other.pid")"
+quit

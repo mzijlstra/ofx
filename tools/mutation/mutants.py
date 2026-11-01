@@ -2192,3 +2192,25 @@ MUTANTS += [
     ('fs/tree.c', '    for (int i = 0; i < t->nopen; i++) cap += 3 * strlen(t->open[i]) + 1;', '    for (int i = 0; i < t->nopen; i++) cap += strlen(t->open[i]) + 1;'),
     ('fs/tree.c', '    for (int i = 0; i < t->nopen; i++) cap += 3 * strlen(t->open[i]) + 1;', '    for (int i = 0; i < t->nopen; i++) cap += 3 * strlen(t->open[i]);'),
 ]
+# ---- F11 step 3: the window lines (fs/session.c), restore-tabs, the question in ui/ (2026-11-01)
+SE = 'fs/session.c'
+MUTANTS += [
+    (SE, '    if (id <= 0 || when < 0 || shown < 0) return false;', '    if (id <= 0 || when < 0) return false;'),
+    (SE, '    if (id <= 0 || when < 0 || shown < 0) return false;', '    if (when < 0 || shown < 0) return false;'),
+    (SE, "        if (!percent_decode(d, p, sizeof p) || (p[0] != '/' && !str_starts_with(str_from_c(p), S(\"trash:\"))", "        if (!percent_decode(d, p, sizeof p) || (p[0] != '/' && !str_starts_with(str_from_c(p), S(\"search:\"))"),
+    (SE, '    if (w->shown >= w->n) w->shown = 0;\n', ''),
+    (SE, '    return w->n > 0;', '    return true;'),
+    # Not a mutant: percent_encode's false ignored in session_line (a folder cut short there leaves k
+    # past cap - 1, which the check after the loop refuses).
+    (SE, '    if (k <= 0 || (size_t)k + 1 >= cap) return 0;', '    if (k <= 0) return 0;'),
+    (SE, ' && session_parse_line(a, l, &w) && w.id == id)) continue;', ')) continue;'),
+    (SE, '    if (line) memcpy(body + n, line, strlen(line)), n += (isize)strlen(line);', '    (void)line;'),
+    (SE, '            if (id ? all[n].id == id : pick < 0 || all[n].at > all[pick].at) pick = n;', '            if (id ? all[n].id == id : pick < 0) pick = n;'),
+    (SE, '            if (id ? all[n].id == id : pick < 0 || all[n].at > all[pick].at) pick = n;', '            if (pick < 0 || all[n].at > all[pick].at) pick = n;'),
+    (SE, '        if (i != pick) rest[(*nrest)++] = all[i].id;', '        rest[(*nrest)++] = all[i].id;'),
+    (SE, '        if (l.len && !str_starts_with(l, str_from_c(line))) memcpy', '        if (l.len) memcpy'),
+    (CF, '{ "restore-tabs", CK_BOOL, offsetof(Conf, restore_tabs), "off",', '{ "restore-tabs", CK_BOOL, offsetof(Conf, sort_rev), "off",'),
+    ('ui/ui.c', '    if (u->restore_n > 0) return UI_ON_RESTORE;\n', ''),
+    ('ui/handle.c', '        if (yes_no) return u->restore_n = 0, (UiAction){ UA_RESTORE_WINDOWS, 0, said_yes };', '        if (yes_no) return u->restore_n = 0, (UiAction){ UA_RESTORE_WINDOWS, 0, true };'),
+    ('ui/handle.c', '            return (UiAction){ UA_RESTORE_WINDOWS, 0, yes };', '            return (UiAction){ UA_RESTORE_WINDOWS, 0, true };'),
+]

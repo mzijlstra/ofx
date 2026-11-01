@@ -223,6 +223,7 @@ typedef enum {
     UA_FOLLOW,      // index: the entry, a link: to its target's folder, the target selected (F8)
     UA_TAB_OTHERS,  // every tab but the current one closed (F8)
     UA_TAB_REOPEN,  // the tab closed last, open again (F11)
+    UA_RESTORE_WINDOWS,  // all: yes, the other windows back; no, forgotten (F11 step 3)
     UA_COLORS,      // the list's colours on or off (Ui.colors): gui/ remembers it
     UA_MENUBAR,     // the menu bar hidden or shown (Ui.bar_hidden): gui/ remembers it
     UA_PREFERENCES, // ofx.conf in the editor, written first when there is none (F10)
@@ -672,6 +673,7 @@ typedef struct {
     // The listing shown: a folder, the trash view (F6) or a search's results (F9); gui/ says which.
     UiView view;
     bool   empty_asking;     // "Empty the trash?" up
+    int    restore_n;        // "Bring back the N other windows?" up (F11 step 3): their number, 0 none
     // The search view's field's text (find's toggles apply), and search_edited when the text or a
     // toggle changed (gui/ searches again 150 ms after the last change, and clears it).
     bool   search_edited;
@@ -775,6 +777,7 @@ typedef enum {
     UI_ON_CANCEL,   // cancel_asking: a job's ×
     UI_ON_DELETE,   // confirming: delete for good
     UI_ON_EMPTY,    // empty_asking: Empty Trash
+    UI_ON_RESTORE,  // restore_n: the other windows after Close All (F11)
     UI_ON_CLASH,    // asking: a job waits for a clash answer
     UI_ON_PROPS,
     UI_ON_OW,
@@ -819,6 +822,7 @@ static UiOnTop ui_on_top(const Ui *u)
     if (u->cancel_asking) return UI_ON_CANCEL;
     if (u->confirming) return UI_ON_DELETE;
     if (u->empty_asking) return UI_ON_EMPTY;
+    if (u->restore_n > 0) return UI_ON_RESTORE;
     if (u->asking) return UI_ON_CLASH;
     if (u->props) return UI_ON_PROPS;
     if (u->ow) return UI_ON_OW;

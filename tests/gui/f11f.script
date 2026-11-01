@@ -1,0 +1,6 @@
+# F11 step 3, after f11e: the tabs back (sub1 shown, as it was), no question (one window). Then
+# Close All (Ctrl+Q): its tabs kept beside the other window line run.sh adds after.
+settle
+expect tabs=2 tab=1 tabdirs=tree|sub1 modal=- status=-
+sh grep -q "^window " "$OFX_ROOT/state/ofx/state" && exit 1 || exit 0
+key ctrl-q

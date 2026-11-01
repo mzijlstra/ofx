@@ -392,6 +392,7 @@ void __wrap_glfwDefaultWindowHints(void)
 #include "remember.c"
 #include "folder.c"
 #include "actions.c"
+#include "restore.c"
 #include "prefs.c"
 #include "icons.c"
 #include "files.c"
@@ -436,6 +437,7 @@ static void *signal_waiter(void *arg)
 static void close_others(bool quit)
 {
     if (app.windows[0]) win_signal_others(app.windows, getpid(), SIGUSR1);
+    closing_all = true;
     if (quit && jobs.nrun + jobs.nwait > 0) close_asked = true;
     else if (quit) app.quit = true;
 }
@@ -488,8 +490,14 @@ int main(int argc, char **argv)
 {
     const char *start = NULL;
     bool selecting = false;
+    long restore_id = 0;   // --restore <id>: another window's tabs after Close All (F11 step 3; ofx starts these itself)
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) return usage(), 0;
+        if (strcmp(argv[i], "--restore") == 0 && i + 1 < argc && !restore_id) {
+            restore_id = strtol(argv[++i], NULL, 10);
+            if (restore_id <= 0) return usage(), 2;
+            continue;
+        }
         if (strcmp(argv[i], "--version") == 0) return printf("ofx %s\n", OFX_VERSION), 0;
         if (strcmp(argv[i], "--select") == 0 && !selecting) {
             selecting = true;
@@ -663,6 +671,10 @@ int main(int argc, char **argv)
     if (!app.have_list) snprintf(app.cwd, sizeof app.cwd, "%s", dir);
     tabs[0].used = true;
     ui_tabs_open(&tabbar, 0, true);
+    // F11 step 3: the tabs from the last time, the folder asked a tab more unless it is home.
+    char home_real[PATH_MAX];
+    const char *h = getenv("HOME");
+    restore_start(restore_id, !selecting && (!start || (h && realpath(h, home_real) && strcmp(home_real, dir) == 0)));
 
     const char *script_path = getenv("OFX_GUI_SCRIPT");
     bool scripted = script_path && script_path[0];
@@ -709,7 +721,7 @@ int main(int argc, char **argv)
             if (app.icons_missed && app.icons_reset_armed) dirty = true, glfwPostEmptyEvent();   // emptied and drawn again at once
         }
         PollInputEvents();   // waits for input, or for watch.c's wake-up
-        if (atomic_exchange(&close_signal, false)) close_asked = true;
+        if (atomic_exchange(&close_signal, false)) close_asked = true, closing_all = true;
         if (atomic_exchange(&watch.theme_ready, false)) theme_apply(), app.themes++, dirty = true;
         // The mounts before the folder: a drive unmounted and its folder removed come in one batch,
         // and the folder's going would move ofx to the folder above before the drive's going sends it
@@ -780,6 +792,7 @@ int main(int argc, char **argv)
         dirty |= seen;
     }
     if (scripted) script_end();
+    restore_save();   // (F11 step 3: before the cursor's write below, which tab_save's listing doesn't touch)
     if (fold_view_of(app.ui.view) && app.have_list) remember_cursor(app.cwd, sel_name());   // (F11)
     if (rem.dirty) remember_write();
     if (app.windows[0]) win_unregister(app.windows, getpid());

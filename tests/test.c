@@ -1798,6 +1798,8 @@ int main(void)
     test_conf_views();
     test_tree_remember();
     test_state_writers();
+    test_session();
+    test_restore_question();
     test_open_line_keys();
     test_search_match();
     test_search_keys_find();

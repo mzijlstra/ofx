@@ -120,6 +120,10 @@ rules shared by every tool here.
   started without run-script's env would write his file. run-script.sh points `XDG_CONFIG_HOME` at
   `<scratch>/config`, so every script makes its own, and the editor is a fake through the fake
   uwsm-app. Never test against his file.
+- **The tabs across a restart** (F11 step 3): with `restore-tabs` on, a start's "Bring back" starts
+  `ofx --restore <id>` through `uwsm-app` (the fake in a test: logged, nothing started). f11j stands
+  in for a second window with a `sleep 20` that ignores SIGUSR1, in the run's own window registry
+  (`OFX_TEST_WINDOWS`); f11l and run.sh end it.
 - **A window that stops answering** pops Hyprland's "terminate?" dialog on his screen, even on the
   headless output. The script's `sh` runs under `timeout 5` for that reason; keep everything a
   script waits for short.

@@ -268,3 +268,78 @@ static void test_state_writers(void)
     // autofs: a look under it mounts what it stands for.
     CHECK(!thumb_local(S("1 0 0:1 / / rw - ext4 a rw\n2 1 0:2 / /net rw - autofs b rw\n"), "/net/nas/x"));
 }
+
+// F11 step 3: the window lines (fs/session.c): written, read back, the newest taken, one by id, the
+// rest left; a last window's line alone, Close All's beside the others.
+static void test_session(void)
+{
+    ops_guard(root);
+    char path[PATH_MAX], line[PATH_MAX * 4];
+    snprintf(path, sizeof path, "%s", at("f11s/state"));
+    const char *dirs[] = { "/home/m/a b", "trash:///", "/x" };
+    CHECK(session_line(77, 500, 2, dirs, 3, line, sizeof line) > 0 && strcmp(line, "window 77 500 2 /home/m/a%20b trash:/// /x\n") == 0);
+    CHECK(session_line(77, 500, 2, dirs, 3, line, 20) == 0);
+    SessionWin w;
+    CHECK(session_parse_line(&ta, S("window 77 500 2 /home/m/a%20b trash:/// /x relative"), &w) && w.id == 77 && w.at == 500 && w.shown == 2 && w.n == 3 &&
+          strcmp(w.dir[0], "/home/m/a b") == 0 && strcmp(w.dir[1], "trash:///") == 0);
+    CHECK(!session_parse_line(&ta, S("window 0 500 0 /x"), &w) && !session_parse_line(&ta, S("window 7 500 0"), &w) && !session_parse_line(&ta, S("folder /x"), &w));
+    CHECK(session_parse_line(&ta, S("window 7 1 9 /x"), &w) && w.shown == 0);   // (a tab past the end: the first)
+    CHECK(!session_parse_line(&ta, S("window 7 1 99 /x"), &w));   // (past any window's tabs: not ofx's)
+    // Cut: a line that doesn't fit is none, never one with a folder left out or cut short.
+    int full = session_line(77, 500, 2, dirs, 3, line, sizeof line);
+    CHECK(full > 0 && session_line(77, 500, 2, dirs, 3, line, (size_t)full) == 0 && session_line(77, 500, 2, dirs, 3, line, (size_t)full - 6) == 0);
+    CHECK(session_line(77, 500, 2, dirs, 3, line, (size_t)full + 1) == full);
+    // A window's line put: beside the others (one not yet taken stays), the other lines kept.
+    put(path, "sidebar=tree\nwindow 5 10 0 /old\nfolder /x 1 list - - - -\n");
+    Err err;
+    session_line(9, 20, 0, dirs, 1, line, sizeof line);
+    CHECK(session_put(&ta, path, 9, line, &err));
+    CHECK(strcmp(read_file(&ta, path).p, "sidebar=tree\nwindow 5 10 0 /old\nfolder /x 1 list - - - -\nwindow 9 20 0 /home/m/a%20b\n") == 0);
+    CHECK(session_put(&ta, path, 5, NULL, &err));
+    // Close All: one line each; the same window again replaces its own.
+    session_line(11, 30, 1, dirs + 1, 2, line, sizeof line);
+    CHECK(session_put(&ta, path, 11, line, &err) && session_put(&ta, path, 11, line, &err));
+    CHECK(strcmp(read_file(&ta, path).p, "sidebar=tree\nfolder /x 1 list - - - -\nwindow 9 20 0 /home/m/a%20b\nwindow 11 30 1 trash:/// /x\n") == 0);
+    // By id, the older one (9) of two; put back.
+    long rest[4];
+    int nrest;
+    CHECK(session_take(&ta, path, 9, &w, rest, 4, &nrest, &err) && w.id == 9 && nrest == 1 && rest[0] == 11);
+    session_line(9, 20, 0, dirs, 1, line, sizeof line);
+    CHECK(session_put(&ta, path, 9, line, &err));
+    put(path, "sidebar=tree\nfolder /x 1 list - - - -\nwindow 9 20 0 /home/m/a%20b\nwindow 11 30 1 trash:/// /x\n");   // (the newest not first)
+    // The newest taken (11), 9 left; then 9 by id; then none.
+    CHECK(session_take(&ta, path, 0, &w, rest, 4, &nrest, &err) && w.id == 11 && w.shown == 1 && w.n == 2 && nrest == 1 && rest[0] == 9);
+    CHECK(strstr(read_file(&ta, path).p, "window 11 ") == NULL);
+    CHECK(session_take(&ta, path, 9, &w, rest, 4, &nrest, &err) && w.id == 9 && nrest == 0);
+    CHECK(!session_take(&ta, path, 0, &w, rest, 4, &nrest, &err) && strcmp(read_file(&ta, path).p, "sidebar=tree\nfolder /x 1 list - - - -\n") == 0);
+    // A line forgotten (No): only it.
+    put(path, "window 3 1 0 /a\nwindow 4 2 0 /b\n");
+    CHECK(session_put(&ta, path, 3, NULL, &err) && strcmp(read_file(&ta, path).p, "window 4 2 0 /b\n") == 0);
+    ops_guard(NULL);
+}
+
+// The question after Close All (F11 step 3): on top while restore_n is set; y or Yes says all, n,
+// Esc or No not; restore-tabs read.
+static void test_restore_question(void)
+{
+    Ui u = menu_ui(3);
+    UiNames names = { name_at, NULL, NULL };
+    u.restore_n = 2;
+    CHECK(ui_on_top(&u) == UI_ON_RESTORE);
+    UiInput in = chars("y");
+    UiAction a = ui_handle(&u, names, &in);
+    CHECK(a.kind == UA_RESTORE_WINDOWS && a.all && u.restore_n == 0 && ui_on_top(&u) == UI_ON_NONE);
+    u.restore_n = 2, in = chars("n"), a = ui_handle(&u, names, &in);
+    CHECK(a.kind == UA_RESTORE_WINDOWS && !a.all && u.restore_n == 0);
+    u.restore_n = 1, in = keys(1, UK_ESC), a = ui_handle(&u, names, &in);
+    CHECK(a.kind == UA_RESTORE_WINDOWS && !a.all && u.restore_n == 0);
+    u.restore_n = 1, in = ui_input_none(), in.modal = UI_MODAL_YES, a = ui_handle(&u, names, &in);
+    CHECK(a.kind == UA_RESTORE_WINDOWS && a.all && u.restore_n == 0);
+    u.restore_n = 1, in = ui_input_none(), in.modal = UI_MODAL_NO, a = ui_handle(&u, names, &in);
+    CHECK(a.kind == UA_RESTORE_WINDOWS && !a.all);
+    static Conf c;
+    conf_parse(S("restore-tabs = on\n"), &c);
+    CHECK(c.restore_tabs && !c.sort_rev && !c.bad);
+    conf_defaults(&c);
+    CHECK(!c.restore_tabs);
+}

@@ -1,0 +1,5 @@
+# F11 step 3, after f11j (run.sh checked its tabs were kept by its Close All): this window closed as
+# one of two (the stand-in still open) keeps none (run.sh checks).
+settle
+sh cp "$OFX_ROOT/run.pid" "$OFX_ROOT/f11k.pid"
+key close-window

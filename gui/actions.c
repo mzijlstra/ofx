@@ -697,6 +697,7 @@ static void open_at_line(isize i)
 }
 
 static void prefs_open(void);   // (prefs.c, after: it uses editor_now)
+static void restore_others(bool yes);   // (restore.c, after: it uses the tabs)
 
 static void act(UiAction a)
 {
@@ -831,6 +832,7 @@ static void act(UiAction a)
         break;
     }
     case UA_TAB_MOVE: ui_tabs_move(&tabbar, (int)a.index); break;
+    case UA_RESTORE_WINDOWS: restore_others(a.all); break;   // (F11 step 3)
     case UA_TAB_REOPEN:   // (F11) open again, shown
         if (closed_tabs.n > 0) closed_tabs.n--, tab_open(closed_tabs.dir[closed_tabs.n], STR_EMPTY, true);
         else set_status(false, "No closed tab to open again");

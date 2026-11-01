@@ -1,0 +1,10 @@
+# F11 step 3, after f11d with run.sh's restore-tabs = on and HOME = tree: a plain start finds no tabs
+# kept; two tabs (tree, sub1), the second shown; the window closed, the last one: its tabs kept.
+settle
+expect tabs=1 modal=-
+key ctrl-t
+key home
+expect sel=sub1
+key enter
+wait-for 2000 tabs=2 tab=1 tabdirs=tree|sub1
+quit

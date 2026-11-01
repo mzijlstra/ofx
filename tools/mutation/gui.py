@@ -240,7 +240,7 @@ MUTANTS = [
     (G, "    if (app.windows[0]) win_signal_others(app.windows, getpid(), SIGUSR1);", "", 'f7'),
     (G, "    if (quit && jobs.nrun + jobs.nwait > 0) close_asked = true;", "", 'f7'),
     (G, "        if (sig == SIGUSR1) {", "        if (sig == SIGUSR2) {", 'f7'),
-    (G, "        if (atomic_exchange(&close_signal, false)) close_asked = true;", "", 'f7'),
+    (G, "        if (atomic_exchange(&close_signal, false)) close_asked = true, closing_all = true;", "", 'f7'),
     (G, "    if (win_dir(app.windows, sizeof app.windows) && !win_register(app.windows, getpid(), &werr)) {", "    if (win_dir(app.windows, sizeof app.windows) && false) {", 'f7'),
     (G, "    if (app.windows[0]) win_unregister(app.windows, getpid());", "", 'f7'),
     (G, "    sigaddset(&quit_signals, SIGUSR1);", "", 'f7'),
@@ -669,6 +669,24 @@ MUTANTS = [
     ('gui/actions.c', '        if (closed_tabs.n > 0) closed_tabs.n--, tab_open(', '        if (closed_tabs.n > 0) tab_open(', 'f11'),
     ('gui/frame.c', '    u->can_reopen = closed_tabs.n > 0;   // (F11)', '    u->can_reopen = true;', 'f11'),
     ('gui/input.c', '    if (m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT) && key == GLFW_KEY_T) return UK_TAB_REOPEN;   // (F11)\n', '', 'keys'),
+    # F11 step 3: the tabs across a restart (2026-11-01)
+    ('gui/restore.c', '    if (others > 0 && !closing_all) return;', '    if (others > 0) return;', 'f11'),
+    ('gui/restore.c', '    if (!app.conf.restore_tabs || !state_path(path, sizeof path)) return;\n    int others', '    if (!state_path(path, sizeof path)) return;\n    int others', 'f11'),
+    ('gui/restore.c', '    for (int i = 0; i < tabbar.n && n < SESSION_TABS; i++) dir[n++] = tabs[tabbar.slot[i]].dir;', '    dir[n++] = tabs[tabbar.slot[0]].dir;', 'f11'),
+    ('gui/restore.c', '    tab_save();\n', '', 'f11'),
+    ('gui/restore.c', 'session_line((long)getpid(), (i64)time(NULL), tabbar.cur, dir,', 'session_line((long)getpid(), (i64)time(NULL), 0, dir,', 'f11'),
+    ('gui/restore.c', '    if (plain) go_to(w.dir[0], STR_EMPTY, 0);', '    go_to(w.dir[0], STR_EMPTY, 0);', 'f11'),
+    ('gui/restore.c', '    for (int i = plain ? 1 : 0; i < w.n; i++)', '    for (int i = 1; i < w.n; i++)', 'f11'),
+    ('gui/restore.c', '    if (plain) tab_show(w.shown);', '', 'f11'),
+    ('gui/restore.c', '    app.status[0] = 0;   // (not', '    // (not', 'f11'),
+    ('gui/restore.c', '    if (!id && restore.n > 0) app.ui.restore_n = restore.n;', '    if (restore.n > 0) app.ui.restore_n = restore.n;', 'f11'),
+    ('gui/restore.c', '        const char *cmd[] = { app.exe, "--restore", id };', '        const char *cmd[] = { app.exe, id };', 'f11'),
+    ('gui/restore.c', "        if (yes ? !spawn_app(cmd, COUNT(cmd), &err) : state_path(path, sizeof path) && !session_put", "        if (yes ? !spawn_app(cmd, COUNT(cmd), &err) : false && !session_put", 'f11'),
+    ('gui/main.c', '    closing_all = true;\n    if (quit && jobs.nrun', '    if (quit && jobs.nrun', 'f11'),
+    ('gui/main.c', '    restore_save();   // (F11 step 3', '    // (F11 step 3', 'f11'),
+    ('gui/main.c', "    restore_start(restore_id, !selecting && (!start || (h && realpath(h, home_real) && strcmp(home_real, dir) == 0)));", "    restore_start(restore_id, !selecting && !start);", 'f11'),
+    ('gui/main.c', '            restore_id = strtol(argv[++i], NULL, 10);', '            restore_id = 0, i++;', 'f11'),
+    ('gui/actions.c', '    case UA_RESTORE_WINDOWS: restore_others(a.all); break;   // (F11 step 3)', '    case UA_RESTORE_WINDOWS: break;', 'f11'),
     ('gui/files.c', '    if (e->mtime) ui_when(buf, cap, e->mtime, now, app.conf.date, app.conf.date_pattern);', '    if (e->mtime) ui_when(buf, cap, e->mtime, now, DATE_SHORT, "");', 'f10'),
     ('gui/files.c', '    if (app.conf.date == DATE_SHORT) return DATE_W;\n    static', '    return DATE_W;\n    static', 'f10'),
     ('gui/files.c', '    for (int k = 0; k < COUNT(WIDE); k++) {', '    for (int k = 0; k < 1; k++) {', 'f10'),
@@ -819,7 +837,7 @@ def key(m):
     return hashlib.sha1('\0'.join(m[:3]).encode()).hexdigest()[:12]
 
 # The group of a script that failed: run.sh prints "== <script>: FAILED" or "<group>: FAILED".
-GROUP_OF = {'f6b': 'f6', 'f62b': 'f62', 'f62c': 'f62', 'f63b': 'f63', 'f63c': 'f63', 'f64b': 'f64', 'f64c': 'f64', 'f64d': 'f64', 'f7b': 'f7', 'f73b': 'f73', 'f73c': 'f73', 'f73d': 'f73', 'f75b': 'f75', 'f8b': 'f8', 'f8c': 'f8', 'f8d': 'f8', 'f8e': 'f8', 'f9b': 'f9', 'f10b': 'f10', 'f10c': 'f10', 'f10d': 'f10', 'f11b': 'f11', 'f11c': 'f11', 'f11d': 'f11'}
+GROUP_OF = {'f6b': 'f6', 'f62b': 'f62', 'f62c': 'f62', 'f63b': 'f63', 'f63c': 'f63', 'f64b': 'f64', 'f64c': 'f64', 'f64d': 'f64', 'f7b': 'f7', 'f73b': 'f73', 'f73c': 'f73', 'f73d': 'f73', 'f75b': 'f75', 'f8b': 'f8', 'f8c': 'f8', 'f8d': 'f8', 'f8e': 'f8', 'f9b': 'f9', 'f10b': 'f10', 'f10c': 'f10', 'f10d': 'f10', 'f11b': 'f11', 'f11c': 'f11', 'f11d': 'f11', 'f11e': 'f11', 'f11f': 'f11', 'f11g': 'f11', 'f11h': 'f11', 'f11i': 'f11', 'f11j': 'f11', 'f11k': 'f11', 'f11l': 'f11'}
 
 # The tags as groups run.sh knows: a script's name (f7b, written before GROUP_OF had it) as its
 # group; anything else dropped, so a mutant never "survives" a group that runs nothing.

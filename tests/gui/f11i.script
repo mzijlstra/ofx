@@ -1,0 +1,9 @@
+# F11 step 3: started on a folder other than home (sub1): it is shown, the tabs kept (sub2, from
+# f11h's close) behind it. Then No to the question for run.sh's two lines: forgotten.
+settle
+expect tabs=2 tab=0 tabdirs=sub1|sub2 modal=restore
+type n
+expect modal=-
+sh ! grep -q "^window " "$OFX_ROOT/state/ofx/state"
+key ctrl-w
+quit
