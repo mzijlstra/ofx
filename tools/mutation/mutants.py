@@ -2122,3 +2122,8 @@ MUTANTS += [
     (CL, '    if (o->cap > 0 && total > o->cap) {', '    if (total > o->cap) {'),
     ('fs/editors.c', '    *out = (Editors){ 0 };\n    editors_add', '    editors_add'),
 ]
+MUTANTS += [
+    # reviewer-2's LOW on 87570e6: a word pushes its own bytes, not the rest of its line
+    ('fs/editors.c', '        char *out = arena_try_push(a, len + 1, 1);', '        char *out = arena_try_push(a, line.len - i + 1, 1);'),
+    # Not a mutant: `else len++` as `len++` (quotes counted too: two bytes more pushed, nothing seen).
+]

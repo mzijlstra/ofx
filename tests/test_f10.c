@@ -219,6 +219,27 @@ static void test_conf_step2(void)
     longline[strlen(longline) - 1] = 0;   // one shorter: kept
     conf_parse(str_from_c(longline), &c);
     CHECK(c.neditor == 1 && !c.bad);
+    // 32 lines of 511 bytes, 17 words each, fit the GUI's 64 KiB arena (editor_now's): each word
+    // takes its own bytes, not the rest of its line (reviewer-2, 2026-11-01).
+    {
+        static char big[EDITORS_USER * (CONF_LINE_MAX + 16)];
+        size_t at = 0;
+        for (int k = 0; k < EDITORS_USER; k++) {
+            char line[CONF_LINE_MAX];
+            int m = snprintf(line, sizeof line, "e%02d no", k);
+            for (int w = 0; w < 14; w++) m += snprintf(line + m, sizeof line - (size_t)m, " %030d", 0);
+            snprintf(line + m, sizeof line - (size_t)m, " %0*d", CONF_LINE_MAX - 2 - m, 0);   // the 15th: to 511 bytes
+            at += (size_t)snprintf(big + at, sizeof big - at, "editor = %s\n", line);
+        }
+        conf_parse(str_from_c(big), &c);
+        CHECK(c.neditor == EDITORS_USER && !c.bad && strlen(c.editor[0]) == CONF_LINE_MAX - 1);
+        static u8 mem[KiB(64)];
+        Arena ga;
+        arena_init(&ga, "editors-64k", mem, sizeof mem);
+        Editors g = { 0 };
+        for (int k = 0; k < c.neditor; k++) editors_add(&ga, str_from_c(c.editor[k]), &g);
+        CHECK(g.n == EDITORS_USER && !g.bad && g.e[31].argv[14] && !g.e[31].argv[15]);
+    }
     // As Open at Line reads them: ofx.conf's lines first, then the editors file's; the first wins.
     conf_parse(S("editor = nvim no mynvim {file}\n"), &c);
     Editors u = { 0 };

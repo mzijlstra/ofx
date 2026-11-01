@@ -61,10 +61,16 @@ static int editor_words(Arena *a, Str line, const char **w, int cap)
         while (i < line.len && (line.p[i] == ' ' || line.p[i] == '\t')) i++;
         if (i == line.len) break;
         if (n == cap) return -1;
-        char *out = arena_try_push(a, line.len - i + 1, 1);
+        isize len = 0;   // (the word's bytes first, quotes out: only those pushed, reviewer-2 2026-11-01)
+        bool quoted = false;
+        for (isize j = i; j < line.len && (quoted || (line.p[j] != ' ' && line.p[j] != '\t')); j++) {
+            if (line.p[j] == '"') quoted = !quoted;
+            else len++;
+        }
+        char *out = arena_try_push(a, len + 1, 1);
         if (!out) return -1;
         isize k = 0;
-        bool quoted = false;
+        quoted = false;
         for (; i < line.len && (quoted || (line.p[i] != ' ' && line.p[i] != '\t')); i++) {
             if (line.p[i] == '"') quoted = !quoted;
             else out[k++] = line.p[i];
