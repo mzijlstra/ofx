@@ -521,6 +521,14 @@ static void tab_open_bg(const char *path)
 }
 
 // The tab at place `at` (-1: the one on screen) closed; the last one closes ofx.
+// The tabs closed in this session, the last at the end, for Reopen Closed Tab (F11, Ctrl+Shift+T):
+// each one's folder (its cursor is the folder's, remembered: remember.c).
+enum { CLOSED_TABS_MAX = 16 };
+static struct {
+    char dir[CLOSED_TABS_MAX][PATH_MAX];
+    int  n;
+} closed_tabs;
+
 static void tab_close(int at)
 {
     if (at < 0) at = tabbar.cur;
@@ -530,6 +538,9 @@ static void tab_close(int at)
         return;
     }
     bool shown = at == tabbar.cur;
+    if (closed_tabs.n == CLOSED_TABS_MAX)   // (the oldest goes)
+        memmove(closed_tabs.dir[0], closed_tabs.dir[1], sizeof closed_tabs.dir[0] * (CLOSED_TABS_MAX - 1)), closed_tabs.n--;
+    snprintf(closed_tabs.dir[closed_tabs.n++], PATH_MAX, "%s", shown ? app.cwd : tabs[tabbar.slot[at]].dir);   // (the tab shown lives in app)
     int slot = ui_tabs_close(&tabbar, at);
     if (slot >= 0) tabs[slot].used = false;
     if (shown) tab_load();
@@ -778,6 +789,7 @@ static void act(UiAction a)
         TreeRow *r = &tree.row[a.index];
         if (r->open) tree_close(&tree, r->path);
         else tree_open(&tree, r->path);
+        tree_remember();   // (F11)
         // The cursor stays on its folder; one hidden by the close goes to the closed folder.
         tree_refresh(false, (int)a.index);
         break;
@@ -819,6 +831,10 @@ static void act(UiAction a)
         break;
     }
     case UA_TAB_MOVE: ui_tabs_move(&tabbar, (int)a.index); break;
+    case UA_TAB_REOPEN:   // (F11) open again, shown
+        if (closed_tabs.n > 0) closed_tabs.n--, tab_open(closed_tabs.dir[closed_tabs.n], STR_EMPTY, true);
+        else set_status(false, "No closed tab to open again");
+        break;
     case UA_TAB_OTHERS:   // (F8) from the last, so each place stays right as the ones after it go
         for (int i = tabbar.n - 1; i >= 0; i--)
             if (i != tabbar.cur) tab_close(i);

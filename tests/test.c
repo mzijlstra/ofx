@@ -1796,6 +1796,7 @@ int main(void)
     test_conf_step2();
     test_folders();
     test_conf_views();
+    test_tree_remember();
     test_open_line_keys();
     test_search_match();
     test_search_keys_find();

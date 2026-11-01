@@ -2170,3 +2170,11 @@ MUTANTS += [
     ('fs/state.c', '        if (str_eq(key, S("hidden"))) s.hidden = str_eq(val, S("on"));\n', ''),
     ('fs/state.c', '        if (str_eq(key, S("folderdefaults")) && val.len < (isize)sizeof s.folder_defaults)', '        if (str_eq(key, S("folderdefaults")))'),
 ]
+# ---- F11 step 2: the tree's open folders (tree=), state_value (2026-11-01)
+MUTANTS += [
+    ('fs/tree.c', "        if (i && n + 1 < cap) out[n++] = ' ', out[n] = 0;", "        if (n + 1 < cap) out[n++] = ' ', out[n] = 0;"),
+    ('fs/tree.c', '        if (!percent_encode(str_from_c(t->open[i]), "/", out + n, cap - n)) return false;', '        percent_encode(str_from_c(t->open[i]), "/", out + n, cap - n);'),
+    ('fs/tree.c', "        if (at > b && percent_decode(str_cut(text, b, at), p, sizeof p) && p[0] == '/') tree_open(t, str_from_c(p));", "        if (at > b && percent_decode(str_cut(text, b, at), p, sizeof p)) tree_open(t, str_from_c(p));"),
+    ('fs/tree.c', "        while (at < text.len && text.p[at] == ' ') at++;\n        isize b", '        isize b'),
+    ('fs/state.c', '        if (eq >= 0 && str_eq(str_trim(str_cut(line, 0, eq)), k)) v = str_trim(str_cut(line, eq + 1, line.len));', '        if (eq >= 0 && str_eq(str_trim(str_cut(line, 0, eq)), k) && !v.len) v = str_trim(str_cut(line, eq + 1, line.len));'),
+]

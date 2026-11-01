@@ -61,6 +61,18 @@ static State state_load(Arena *scratch, const char *path)
     return s;
 }
 
+// key's value in file path, in a; STR_EMPTY when it isn't there (F11: tree=, too long for State).
+static Str state_value(Arena *a, const char *path, const char *key)
+{
+    Str text = read_file(a, path), k = str_from_c(key), v = STR_EMPTY;
+    isize at = 0;
+    for (Str line; next_line(text, &at, &line);) {
+        isize eq = str_find(line, '=');
+        if (eq >= 0 && str_eq(str_trim(str_cut(line, 0, eq)), k)) v = str_trim(str_cut(line, eq + 1, line.len));
+    }
+    return v;
+}
+
 // body (n bytes) as file path, its folder made first: written beside it and renamed over it, so a
 // crash leaves the old file or the new, never half of one.
 static bool state_write(const char *path, const char *body, isize n, Err *err)

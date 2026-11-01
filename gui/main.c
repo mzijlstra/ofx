@@ -638,6 +638,11 @@ int main(int argc, char **argv)
         app.ui.colors = !st.no_colors, app.ui.group_col = st.group, app.show_hidden = st.hidden;
     }
     remember_defaults();   // (F11: the folders' table, after ofx.conf, which has their defaults)
+    if (state_path(state_file, sizeof state_file)) {   // (F11: the tree's open folders)
+        ArenaMark mark = arena_mark(&scratch);
+        tree_open_load(&tree, state_value(&scratch, state_file, "tree"));
+        arena_restore(&scratch, mark);
+    }
     side_refresh();
     list_fit();
     ui_resize(&app.ui.side, side_rows(GetScreenHeight()));

@@ -643,6 +643,7 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
             break;
         case UK_PARENT: return (UiAction){ UA_PARENT, 0, false };
         case UK_TAB_NEW: return (UiAction){ UA_TAB_NEW, 0, false };
+        case UK_TAB_REOPEN: return (UiAction){ UA_TAB_REOPEN, 0, false };
         case UK_NEW_WINDOW: return ui_view_act(u, (UiAction){ UA_NEW_WINDOW, 0, false });
         case UK_PROPERTIES: return ui_props_open(u);
         case UK_TERMINAL: return ui_view_act(u, (UiAction){ UA_TERMINAL, 0, false });

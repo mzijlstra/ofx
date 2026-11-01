@@ -259,6 +259,7 @@ static UiAction ui_menu_pick(Ui *u, UiMenuItem it)
     case UM_PREFERENCES: return (UiAction){ UA_PREFERENCES, 0, false };
     case UM_OPEN_TAB: return (UiAction){ UA_TAB_BG_ROW, u->list.sel, false };
     case UM_TAB_OTHERS: return (UiAction){ UA_TAB_OTHERS, 0, false };
+    case UM_TAB_REOPEN: return (UiAction){ UA_TAB_REOPEN, 0, false };
     case UM_EMPTY_TRASH: return u->empty_asking = true, (UiAction){ UA_NONE, 0, false };
     case UM_HERE_PROPS: return u->props = true, u->prop_at = 0, (UiAction){ UA_PROPS, 1, false };   // (index 1: the folder shown)
     case UM_OPEN_WINDOW: return (UiAction){ UA_NEW_WINDOW, u->list.sel, true };

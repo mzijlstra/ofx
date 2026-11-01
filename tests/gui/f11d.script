@@ -1,0 +1,4 @@
+# F11 step 2, after f11c: a restart; the sidebar's tree mode and its open folder came back.
+settle
+expect sidemode=tree treecur=tree:1
+quit

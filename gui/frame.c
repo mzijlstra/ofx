@@ -80,6 +80,7 @@ static void menu_facts(void)
     Ui *u = &app.ui;
     u->can_undo = undo.kind != UNDO_NONE && undo.n > 0;
     u->can_back = hist.nback > 0, u->can_forward = hist.nfwd > 0;
+    u->can_reopen = closed_tabs.n > 0;   // (F11)
     u->can_up = view_can_up();
     u->can_paste = clip.ok || own.n > 0;
     u->shows_hidden = app.show_hidden;

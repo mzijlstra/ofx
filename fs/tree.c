@@ -56,6 +56,33 @@ static void tree_close(Tree *t, Str path)
     t->nopen--;
 }
 
+// The folders open, as the state file's tree= keeps them (F11): each %-encoded, a space between, into
+// out; false when they don't fit (cap).
+static bool tree_open_text(const Tree *t, char *out, size_t cap)
+{
+    size_t n = 0;
+    out[0] = 0;
+    for (int i = 0; i < t->nopen; i++) {
+        if (i && n + 1 < cap) out[n++] = ' ', out[n] = 0;
+        if (!percent_encode(str_from_c(t->open[i]), "/", out + n, cap - n)) return false;
+        n += strlen(out + n);
+    }
+    return true;
+}
+
+// tree='s folders opened in t (an absolute path each; others left out).
+static void tree_open_load(Tree *t, Str text)
+{
+    isize at = 0;
+    while (at < text.len) {
+        while (at < text.len && text.p[at] == ' ') at++;
+        isize b = at;
+        while (at < text.len && text.p[at] != ' ') at++;
+        char p[PATH_MAX];
+        if (at > b && percent_decode(str_cut(text, b, at), p, sizeof p) && p[0] == '/') tree_open(t, str_from_c(p));
+    }
+}
+
 // The folders above dir (an absolute path) open, / first, so dir is a row of the next build.
 static void tree_follow(Tree *t, const char *dir)
 {

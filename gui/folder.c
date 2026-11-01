@@ -449,6 +449,18 @@ static void bookmark_add(const char *dir)
 
 // The tree built again (tree mode only): opened down to the folder shown when `follow`, with the
 // cursor on its row; else the cursor stays on its folder, or on the row `fallback`.
+// The tree's open folders into the state file (tree=, F11), as they are now.
+static void tree_remember(void)
+{
+    char path[PATH_MAX];
+    Err err;
+    ArenaMark mark = arena_mark(&scratch);
+    size_t cap = (size_t)tree.nopen * PATH_MAX * 3 + 1;
+    char *text = arena_try_push(&scratch, (isize)cap, 1);
+    if (text && tree_open_text(&tree, text, cap) && state_path(path, sizeof path) && !state_put(&scratch, path, "tree", text, &err)) set_status(true, "%s", err.msg);
+    arena_restore(&scratch, mark);
+}
+
 static void tree_refresh(bool follow, int fallback)
 {
     if (app.ui.side_mode != SIDE_TREE) return;

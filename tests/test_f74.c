@@ -22,7 +22,7 @@ static int menu_of_item(UiMenuItem it)
 static Ui menu_all_on(u8 *mark)
 {
     Ui u = menu_ui(4);
-    u.mark = mark, u.can_undo = u.can_back = u.can_forward = u.can_up = u.can_paste = u.can_bookmark = true;
+    u.mark = mark, u.can_undo = u.can_back = u.can_forward = u.can_up = u.can_paste = u.can_bookmark = u.can_reopen = true;
     u.bm_here = -1, u.perms_cols = true;   // (Show Group is greyed without it)
     u.grid = true, u.zoom = 64;
     ui_set_cols(&u.list, 2);

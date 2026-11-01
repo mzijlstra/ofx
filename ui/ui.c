@@ -37,6 +37,7 @@ typedef enum {
     UK_LOCATION,   // Ctrl+L
     UK_PARENT,     // Alt+Up
     UK_TAB_NEW,    // Ctrl+T
+    UK_TAB_REOPEN, // Ctrl+Shift+T (F11)
     UK_NEW_WINDOW, // Ctrl+N (F7.1)
     UK_TAB_CLOSE,  // Ctrl+W
     UK_TAB_NEXT,   // Ctrl+Tab, Ctrl+PgDn
@@ -221,6 +222,7 @@ typedef enum {
     UA_MAKE_LINK,   // a symbolic link "Link to <name>" beside each marked entry (or the cursor's) (F8)
     UA_FOLLOW,      // index: the entry, a link: to its target's folder, the target selected (F8)
     UA_TAB_OTHERS,  // every tab but the current one closed (F8)
+    UA_TAB_REOPEN,  // the tab closed last, open again (F11)
     UA_COLORS,      // the list's colours on or off (Ui.colors): gui/ remembers it
     UA_MENUBAR,     // the menu bar hidden or shown (Ui.bar_hidden): gui/ remembers it
     UA_PREFERENCES, // ofx.conf in the editor, written first when there is none (F10)
@@ -252,7 +254,7 @@ enum { UI_MODAL_YES = 1, UI_MODAL_NO, UI_MODAL_SKIP, UI_MODAL_REPLACE, UI_MODAL_
 // The menu bar (F7.1, docs/plan.md "F7 design"; Edit, View and Go F7.4): its menus, each a list of
 // entries; UM_SEP is a line between groups.
 typedef enum {
-    UM_SEP, UM_NEW_TAB, UM_NEW_WINDOW, UM_NEW_FOLDER, UM_NEW_FILE, UM_OPEN, UM_OPEN_WITH, UM_PROPERTIES, UM_CLOSE_ALL, UM_CLOSE,
+    UM_SEP, UM_NEW_TAB, UM_TAB_REOPEN, UM_NEW_WINDOW, UM_NEW_FOLDER, UM_NEW_FILE, UM_OPEN, UM_OPEN_WITH, UM_PROPERTIES, UM_CLOSE_ALL, UM_CLOSE,
     UM_UNDO, UM_CUT, UM_COPY, UM_PASTE, UM_SELECT_ALL, UM_SELECT_MATCH, UM_INVERT, UM_DUPLICATE, UM_MAKE_LINK, UM_RENAME, UM_TRASH, UM_DELETE, UM_RESTORE,
     UM_RELOAD, UM_SIDE_PLACES, UM_SIDE_TREE, UM_SIDE_NONE, UM_HIDDEN, UM_PERMS_COLS, UM_GROUP_COL, UM_COLORS, UM_SHOW_MENU, UM_SORT_NAME, UM_SORT_SIZE, UM_SORT_MTIME, UM_SORT_REVERSE,
     UM_ZOOM_IN, UM_ZOOM_OUT, UM_ZOOM_RESET, UM_VIEW_LIST, UM_VIEW_ICONS,
@@ -369,6 +371,7 @@ static const struct { const char *label, *key, *word; UiEvent ev; char mark; } U
     [UM_TAB_LEFT] = { "Move Tab Left", "Ctrl+Shift+PgUp", "tab-left", { UK_TAB_LEFT, 0 } },
     [UM_TAB_RIGHT] = { "Move Tab Right", "Ctrl+Shift+PgDn", "tab-right", { UK_TAB_RIGHT, 0 } },
     [UM_TAB_OTHERS] = { "Close Other Tabs", "", "tab-others" },
+    [UM_TAB_REOPEN] = { "Reopen Closed Tab", "Ctrl+Shift+T", "reopen-tab", { UK_TAB_REOPEN, 0 } },
     [UM_BM_0] = { "", "", "bm-0", .mark = 'r' }, [UM_BM_1] = { "", "", "bm-1", .mark = 'r' },
     [UM_BM_2] = { "", "", "bm-2", .mark = 'r' }, [UM_BM_3] = { "", "", "bm-3", .mark = 'r' },
     [UM_BM_4] = { "", "", "bm-4", .mark = 'r' }, [UM_BM_5] = { "", "", "bm-5", .mark = 'r' },
@@ -376,7 +379,7 @@ static const struct { const char *label, *key, *word; UiEvent ev; char mark; } U
 };
 
 static const UiMenuItem UI_MENU_FILE[] = {
-    UM_NEW_TAB, UM_NEW_WINDOW, UM_NEW_FOLDER, UM_NEW_FILE, UM_SEP, UM_OPEN, UM_OPEN_WITH, UM_SEP, UM_PROPERTIES, UM_SEP,
+    UM_NEW_TAB, UM_TAB_REOPEN, UM_NEW_WINDOW, UM_NEW_FOLDER, UM_NEW_FILE, UM_SEP, UM_OPEN, UM_OPEN_WITH, UM_SEP, UM_PROPERTIES, UM_SEP,
     UM_CLOSE_ALL, UM_CLOSE,
 };
 // Move to Trash shows outside the trash view, Restore in it (ui_menu_shown).
@@ -410,7 +413,7 @@ static const UiMenuItem UI_MENU_CTX_FOLDER[] = {
     UM_BM_RENAME_IT, UM_BM_UP_IT, UM_BM_DOWN_IT, UM_BM_REMOVE_IT, UM_BM_EDIT_IT, UM_SEP, UM_UNMOUNT_IT, UM_EJECT_IT, UM_MOUNT_IT, UM_EMPTY_IT, UM_SEP, UM_PROPS_IT,
 };
 // A tab (the current one: a right press on another shows it first).
-static const UiMenuItem UI_MENU_CTX_TAB[] = { UM_NEW_TAB, UM_SEP, UM_TAB_LEFT, UM_TAB_RIGHT, UM_SEP, UM_CLOSE, UM_TAB_OTHERS };
+static const UiMenuItem UI_MENU_CTX_TAB[] = { UM_NEW_TAB, UM_TAB_REOPEN, UM_SEP, UM_TAB_LEFT, UM_TAB_RIGHT, UM_SEP, UM_CLOSE, UM_TAB_OTHERS };
 static const UiMenuItem UI_MENU_CTX_HERE[] = {
     UM_NEW_FOLDER, UM_NEW_FILE, UM_EMPTY_TRASH, UM_SEP, UM_PASTE, UM_SELECT_ALL, UM_SEP, UM_TERMINAL, UM_HIDDEN, UM_SEP,
     UM_ADD_BOOKMARK, UM_SEP, UM_HERE_PROPS,
@@ -482,6 +485,7 @@ static const struct { UiKeySection sec; const char *action, *key, *key2; } UI_KE
     { KS_CHANGE, "Edit Bookmarks\xE2\x80\xA6", "Ctrl+B", "" },
     { KS_CHANGE, "A clash: skip, replace, keep both", "s, r, k", "S, R, K the rest" },
     { KS_TABS, "New Tab", "Ctrl+T", "" },
+    { KS_TABS, "Reopen Closed Tab", "Ctrl+Shift+T", "" },
     { KS_TABS, "New Window", "Ctrl+N", "" },
     { KS_TABS, "Close", "Ctrl+W", "" },
     { KS_TABS, "The next tab", "Ctrl+Tab", "Ctrl+PgDn" },
@@ -715,6 +719,7 @@ typedef struct {
     int    ctx_bmk, ctx_bms;
     // The tabs, from gui/ each frame (menu_facts): the current one's place, how many (F8's tab menu).
     int    tab_at, tab_n;
+    bool   can_reopen;      // a tab closed in this session to open again (F11)
     // The Bookmarks menu (F7.5), from gui/ too: how many local bookmarks it lists (at most
     // UI_MENU_BOOKMARKS), the one that is the folder shown (-1 none), and whether that folder can be
     // bookmarked (not one already, not the trash view, the file not full).

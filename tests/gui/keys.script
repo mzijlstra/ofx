@@ -50,6 +50,16 @@ wait-for 3000 statusbad=1 search=1
 sh vkbd down ctrl+return &
 wait-for 3000 search=0 sel=inner.txt
 sh test "$OFX_DIR" = "$OFX_ROOT/tree/adir"
+# ---- Ctrl+Shift+T (F11): the tab closed last, open again (the search above left a tab: two now)
+expect tabs=2
+key ctrl-t
+expect tabs=3
+key ctrl-w
+expect tabs=2
+sh vkbd ctrl+shift+t &
+wait-for 3000 tabs=3
+key ctrl-w
+expect tabs=2
 # ---- Alt+Enter: a terminal here (the fake's log, which it writes in its own time)
 expect spawned=0
 sh vkbd alt+return &

@@ -55,18 +55,18 @@ expect menu=- tabs=2 tab=0
 # A tab's menu: the tab right-clicked shown; Move Tab Left; Close Other Tabs
 point-ui tab 1
 right-here
-expect menu=tab tab=1 menugrey=tab-right menuin=1
+expect menu=tab tab=1 menugrey=reopen-tab,tab-right menuin=1
 shot ctx-tab.png
 point-menu tab-left
 click-here
 expect menu=- tab=0 tabdirs=home|tree
 point-ui tab 0
 right-here
-expect menu=tab menugrey=tab-left
+expect menu=tab menugrey=reopen-tab,tab-left
 key esc
 point-ui tab 1
 right-here
-expect menu=tab tab=1 menugrey=tab-right
+expect menu=tab tab=1 menugrey=reopen-tab,tab-right
 point-menu tab-others
 click-here
 expect menu=- tabs=1 tabdirs=tree

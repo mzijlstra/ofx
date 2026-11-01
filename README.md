@@ -67,6 +67,7 @@ puts its service file in `~/.local/share/dbus-1/services`), and it exits when id
 | Ctrl+C, Ctrl+X, Ctrl+V | copy, cut, paste; Nemo and terminals paste what ofx copied, ofx what Nemo copied |
 | Ctrl+Z | undo the last rename, new folder, new file (while it is still empty), trash, copy or move |
 | Ctrl+T, Ctrl+W | a new tab on this folder, close the tab (the last one closes the window) |
+| Ctrl+Shift+T | the tab closed last, open again (the last 16 of this window; also in the File menu and a tab's right-click menu) |
 | Ctrl+N | a new window on this folder: another ofx, through `uwsm-app` |
 | Ctrl+Tab, Ctrl+Shift+Tab | the next and previous tab (Ctrl+PgDn, Ctrl+PgUp too) |
 | Alt+1 … Alt+9 | a tab by place, Alt+9 the last |
@@ -179,7 +180,7 @@ in the View menu isn't set here: ofx remembers it in `~/.local/state/ofx/state`.
 
 What ofx remembers by itself (F11): a folder's own view, icon size, sort and Reverse Order once you
 change them from ofx.conf's defaults (`view`, `zoom`, `sort`, `sort-reverse`), the entry the cursor
-was on in each folder you open, and Show Hidden Files. A new default in ofx.conf forgets the
+was on in each folder you open, Show Hidden Files, and the folders open in the sidebar's tree. A new default in ofx.conf forgets the
 folders' choices for it, and the status line says how many. The state file keeps the 1000 folders
 opened most recently, and drops a folder that is gone (one on a drive that isn't plugged in, or on
 a network mount, stays).

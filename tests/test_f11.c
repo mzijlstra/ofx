@@ -79,7 +79,7 @@ static void test_folders(void)
     // An entry with only Reverse Order, or only a cursor, says something: kept; so is the trash view's. One the file has as
     // newer keeps its time when an older window changes a field. One whose folder can't be looked at
     // (EACCES) isn't gone.
-    char locked[PATH_MAX], hidden[PATH_MAX];
+    char locked[PATH_MAX], hidden[PATH_MAX + 8];
     snprintf(locked, sizeof locked, "%s", at("f11/locked")), snprintf(hidden, sizeof hidden, "%s/in", locked);
     mkdirs(hidden);
     snprintf(want, sizeof want, "folder %s 5 - - - on -\nfolder %s 900 - - - - b\nfolder %s 1 list - - - -\nfolder %s 3 - - - - c\nfolder trash%%3A/// 4 icons - - - -\n", d1, d2, hidden, root);
@@ -145,4 +145,26 @@ static void test_conf_views(void)
     // The sizes are the icon view's (ui/'s), and the default is its default.
     CHECK(COUNT(CONF_ZOOMS) == UI_ZOOMS && CONF_ZOOM == UI_ZOOM_DEFAULT);
     for (int i = 0; i < UI_ZOOMS; i++) CHECK(CONF_ZOOMS[i] == UI_ZOOM_PX[i]);
+}
+
+// F11 step 2: the tree's open folders as the state file's tree= keeps them, and state_value.
+static void test_tree_remember(void)
+{
+    static Tree t;
+    t.nopen = 0;
+    tree_open(&t, S("/")), tree_open(&t, S("/home/m/a b")), tree_open(&t, S("/x"));
+    char text[256];
+    CHECK(tree_open_text(&t, text, sizeof text) && strcmp(text, "/ /home/m/a%20b /x") == 0);
+    CHECK(!tree_open_text(&t, text, 8));
+    static Tree u;
+    u.nopen = 0;
+    tree_open_load(&u, S("  / /home/m/a%20b relative /x %zz  "));
+    CHECK(u.nopen == 3 && strcmp(u.open[1], "/home/m/a b") == 0 && strcmp(u.open[2], "/x") == 0);
+    t.nopen = 0;
+    CHECK(tree_open_text(&t, text, sizeof text) && text[0] == 0);
+    // A key's value, the last one said; none.
+    ops_guard(root);
+    put(at("f11t/state"), "a=1\ntree = / /x\ntree=/y\n");
+    CHECK(str_eq(state_value(&ta, at("f11t/state"), "tree"), S("/y")) && state_value(&ta, at("f11t/state"), "b").len == 0);
+    ops_guard(NULL);
 }

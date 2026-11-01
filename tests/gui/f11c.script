@@ -1,0 +1,35 @@
+# F11 step 2, after f11b on the same tree: Reopen Closed Tab (Ctrl+Shift+T), and the tree's open
+# folders remembered (f11d reads them after a restart).
+settle
+# Reopen Closed Tab: greyed with none closed
+key alt-f
+expect menu=File menugrey=reopen-tab
+key esc
+key ctrl-t
+expect tabs=2 tab=1
+key down
+expect sel=sub2
+key enter
+wait-for 2000 sel=b.txt
+key home
+expect sel=a.txt
+key ctrl-w
+wait-for 2000 tabs=1
+key alt-f
+expect menugrey=-
+key esc
+key ctrl-shift-t
+wait-for 2000 tabs=2 tab=1 sel=a.txt
+sh test "$OFX_DIR" = "$OFX_ROOT/tree/sub2"
+key ctrl-shift-t
+expect tabs=2 status=No closed tab to open again
+key ctrl-w
+wait-for 2000 tabs=1
+# The tree: F9; tree opened (l on its row), remembered (tree=)
+key f9
+expect sidemode=tree treecur=tree:0
+key tab
+char l
+expect treecur=tree:1
+sh grep -q "^tree=.*$OFX_ROOT/tree\( \|$\)" "$OFX_ROOT/state/ofx/state"
+quit
