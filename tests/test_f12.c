@@ -496,3 +496,89 @@ static void test_clear_question(void)
     ui_handle(&u, names, &in);
     CHECK(!u.clear_asking);
 }
+
+// ---- git status per file (F12 step 5) ---------------------------------------------------------
+
+// git status --porcelain=v2 -z --ignored --branch at a repository's top, as a scratch repo gave it
+// (2026-11-02): a.txt modified, src/b.txt renamed to src/b2.txt (staged), src/new.txt added,
+// newdir/ and src/deep/untracked.txt untracked, debug.log and ign/ ignored; plus a conflict and a
+// modified file in the index only.
+static const char GIT_OUT[] =
+    "# branch.oid 23aeba1e8e7abd522ec35165879b1f056a482afa\0# branch.head master\0# branch.upstream origin/master\0# branch.ab +2 -1\0"
+    "1 .M N... 100644 100644 100644 7898192261 7898192261 a.txt\0"
+    "2 R. N... 100644 100644 100644 6178079822 6178079822 R100 src/b2.txt\0src/b.txt\0"
+    "1 A. N... 000000 100644 100644 0000000000 3e75765 src/new.txt\0"
+    "1 M. N... 100644 100644 100644 1111111111 2222222222 src/deep/staged mod.txt\0"
+    "u UU N... 100644 100644 100644 100644 aaaa bbbb cccc lib/both.c\0"
+    "? newdir/\0? src/deep/untracked.txt\0! debug.log\0! ign/\0";
+
+static void test_git_parse(void)
+{
+    Arena a;
+    arena_init(&a, "git test", thumbers_test_mem, sizeof thumbers_test_mem);
+    static GitStat g;
+    CHECK(git_parse(&a, (Str){ GIT_OUT, sizeof GIT_OUT - 1 }, &g));
+    CHECK(strcmp(g.head, "master") == 0 && strncmp(g.oid, "23aeba1e", 8) == 0 && g.has_ab && g.ahead == 2 && g.behind == 1);
+    CHECK(g.changed == 7 && !g.cut);   // (the ignored two aside)
+    // Files at the top, and the letters.
+    CHECK(git_state(&g, S(""), S("a.txt"), false) == GS_MODIFIED && git_letter(GS_MODIFIED) == 'M');
+    CHECK(git_state(&g, S(""), S("debug.log"), false) == GS_IGNORED && git_letter(GS_IGNORED) == 0);
+    CHECK(git_state(&g, S(""), S("README"), false) == GS_NONE && git_letter(GS_NONE) == 0);
+    CHECK(git_state(&g, S(""), S("newdir"), true) == GS_UNTRACKED && git_letter(GS_UNTRACKED) == 'U');
+    CHECK(git_state(&g, S(""), S("ign"), true) == GS_IGNORED);
+    // A folder: the most urgent under it (src: renamed, added, modified in the index, untracked).
+    CHECK(git_state(&g, S(""), S("src"), true) == GS_MODIFIED && git_state(&g, S("src"), S("deep"), true) == GS_MODIFIED);
+    CHECK(git_state(&g, S(""), S("lib"), true) == GS_CONFLICT && git_letter(GS_CONFLICT) == '!');
+    CHECK(git_state(&g, S(""), S("src"), false) == GS_NONE);   // (as a file: nothing of its own)
+    // In src: the rename by its new name (the old one isn't listed), the added file.
+    CHECK(git_state(&g, S("src"), S("b2.txt"), false) == GS_RENAMED && git_letter(GS_RENAMED) == 'R');
+    CHECK(git_state(&g, S("src"), S("b.txt"), false) == GS_NONE);
+    CHECK(git_state(&g, S("src"), S("new.txt"), false) == GS_STAGED && git_letter(GS_STAGED) == 'A');
+    CHECK(git_state(&g, S("src/deep"), S("staged mod.txt"), false) == GS_MODIFIED && git_state(&g, S("src/deep"), S("untracked.txt"), false) == GS_UNTRACKED);
+    // Ignored: in ign/ and below, everything; not elsewhere.
+    CHECK(git_ignored_at(&g, S("ign")) && git_ignored_at(&g, S("ign/x/y")) && !git_ignored_at(&g, S("")) && !git_ignored_at(&g, S("src")));
+    CHECK(!git_ignored_at(&g, S("igno")));
+    // Detached, no upstream; a record of another kind, a short one, a cut one: skipped.
+    static const char OUT2[] = "# branch.oid abc\0# branch.head (detached)\0x what\0? \0" "1 .M N... 100644\0";
+    CHECK(git_parse(&a, (Str){ OUT2, sizeof OUT2 - 1 }, &g));
+    CHECK(g.head[0] == 0 && strcmp(g.oid, "abc") == 0 && !g.has_ab && g.changed == 0);
+}
+
+// The repository's top: the nearest folder with a .git (a folder, or a worktree's file), itself
+// too; none outside one, nor inside .git.
+static void test_git_top(void)
+{
+    char top[PATH_MAX], want[PATH_MAX];
+    mkdirs(at("f12/repo/.git/objects"));
+    mkdirs(at("f12/repo/src/deep"));
+    put(at("f12/wt/.git"), "gitdir: ../repo/.git/worktrees/wt\n");
+    mkdirs(at("f12/wt/sub"));
+    mkdirs(at("f12/plain/sub"));
+    CHECK(realpath(at("f12/repo"), want) && git_top(at("f12/repo/src/deep"), top, sizeof top) && strcmp(top, want) == 0);
+    CHECK(git_top(at("f12/repo"), top, sizeof top) && strcmp(top, want) == 0);
+    CHECK(realpath(at("f12/wt"), want) && git_top(at("f12/wt/sub"), top, sizeof top) && strcmp(top, want) == 0);
+    CHECK(!git_top(at("f12/repo/.git/objects"), top, sizeof top) && !git_top(at("f12/repo/.git"), top, sizeof top));
+    CHECK(!git_top(at("f12/nope"), top, sizeof top));
+    CHECK(!git_top(at("f12/plain/sub"), top, sizeof top) || strncmp(top, root, strlen(root)) != 0);   // (the test root isn't in a repo; a /tmp above it might be)
+}
+
+// spawn_piped: the child's output on the pipe, to its end; the guard runs only a test's own.
+static void test_spawn_piped(void)
+{
+    ops_guard(root);
+    char prog[PATH_MAX];
+    snprintf(prog, sizeof prog, "%s", at("f12/bin/say"));
+    put_exec(prog, "#!/bin/sh\necho one\necho two \"$1\"\n");
+    char *argv[] = { prog, "x", NULL };
+    int fd = -1;
+    Err err;
+    CHECK(spawn_piped(argv, &fd, &err) && fd >= 0);
+    char buf[64] = "";
+    isize n = 0;
+    for (ssize_t k; fd >= 0 && (k = read(fd, buf + n, sizeof buf - 1 - (size_t)n)) > 0;) n += k;
+    if (fd >= 0) close(fd);
+    buf[n] = 0;
+    CHECK(strcmp(buf, "one\ntwo x\n") == 0);
+    char *out[] = { "true", NULL };
+    CHECK(!spawn_piped(out, &fd, &err) && strstr(err.msg, "not run"));
+}

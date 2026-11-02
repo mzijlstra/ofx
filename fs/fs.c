@@ -22,6 +22,7 @@
 #include "jobq.c"
 #include "state.c"
 #include "tree.c"
+#include "git.c"
 #include "thumbers.c"   // (before thumb.c: it runs them)
 #include "thumb.c"
 #include "bookmarks.c"
