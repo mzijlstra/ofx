@@ -613,7 +613,7 @@ typedef struct {
 
 // The panel up, under the questions (ui_on_top): Properties, Open With, Edit Bookmarks, Keyboard
 // Shortcuts, About, and the note that the menu bar is hidden; UI_PANEL_NONE for none.
-typedef enum { UI_PANEL_NONE, UI_PANEL_PROPS, UI_PANEL_OW, UI_PANEL_BM, UI_PANEL_KEYS, UI_PANEL_ABOUT, UI_PANEL_BAR } UiPanel;
+typedef enum { UI_PANEL_NONE, UI_PANEL_PROPS, UI_PANEL_OW, UI_PANEL_BM, UI_PANEL_KEYS, UI_PANEL_ABOUT, UI_PANEL_BAR, UI_PANELS } UiPanel;
 
 // Which listing is shown. One value (2026-10-28: in_trash and in_search before, two flags tested
 // apart at about 250 places, which could both be set).
@@ -834,6 +834,7 @@ static UiOnTop ui_on_top(const Ui *u)
     static const UiOnTop OF_PANEL[] = { [UI_PANEL_NONE] = UI_ON_NONE, [UI_PANEL_PROPS] = UI_ON_PROPS, [UI_PANEL_OW] = UI_ON_OW,
                                          [UI_PANEL_BM] = UI_ON_BM, [UI_PANEL_KEYS] = UI_ON_KEYS, [UI_PANEL_ABOUT] = UI_ON_ABOUT,
                                          [UI_PANEL_BAR] = UI_ON_BAR };
+    _Static_assert(COUNT(OF_PANEL) == UI_PANELS, "every panel has its UiOnTop: a new one at the end without its entry would read past the table");
     return OF_PANEL[u->panel];
 }
 
