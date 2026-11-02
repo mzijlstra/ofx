@@ -49,6 +49,7 @@ Omarchy's theme: the binary, the folder `tools/ofx`, the window's title and Wayl
 | F9 | Search below the folder: names as you type in a tab of its own, then working with results, then (turned on per search) inside files, then Open at Line | Below |
 | F10 | `ofx.conf`: the options you set, in one commented file ofx reads and watches; Edit → Preferences… | Below |
 | F11 | What ofx remembers: view, zoom and sort per folder, Show Hidden, the cursor per folder, the tree's open folders, Reopen Closed Tab, and the tabs across a restart (an option) | Below |
+| F12 | The F11 review's leftovers, `shift-select`, previews through the system's thumbnailers, Clear Previews, git status per file with a branch button | Below |
 
 Each milestone ends in a reviewer-2 round, then Michael's go before `make install`.
 
@@ -686,6 +687,49 @@ Default and Recommended equal GIO's; GLib's rewrite of a copy adds the two lines
   index.theme files read again; start-up is back to about 51 ms), each app's texture when its row
   is first drawn, all of them dropped when it closes (`ow_drop`). SVG icons (theme, pixmaps/ or a
   path) are drawn with nanosvg, vendored; only for the apps, the files' icons stay PNG.
+
+## F12 design (2026-11-02, Michael)
+
+Mock-ups: https://claude.ai/artifact/7FJ1PBr2C68Ui479opArUv (the two git styles; Michael chose
+vs-code's as the only one). Steps, each with its own reviewer-2 round:
+
+1. **The F11 review's leftovers:** Ctrl+V with a menu open pasted into the search field (the menu
+   closes the edit and find lines only); the quit stops each worker against its own 200 ms
+   deadline in turn (about 2.5 s with one hung mount under all of them): one shared deadline;
+   `timer_start` ignores `pthread_create`'s result and `timer_stop` joins a thread that may not
+   exist.
+2. **`shift-select = range | add`** (ofx.conf). `range`, the default, is Nemo's and GTK's: the
+   anchor is where the last plain move or click left the cursor; Shift and a move, or a
+   Shift+click, mark exactly anchor..cursor and replace the other marks (moving back shrinks it);
+   Ctrl+Shift+click adds a range. `add` is the behaviour before F12 (everything the cursor passes
+   over joins the marks, Shift+click adds a range): Michael's own setting.
+3. **`preview-thumbnailers = on`** (ofx.conf, default on; Michael turns it off): previews for what
+   ofx can't decode itself through the system's thumbnailers (`/usr/share/thumbnailers/*.thumbnailer`:
+   ffmpegthumbnailer for video, evince and papers for PDF, gsf-office, glycin, xournalpp), each
+   run with the file and an output path, its PNG read back into the shared cache. They run
+   outside programs on whatever is browsed (a reason to turn it off); in tests, fakes behind the
+   guard, as uwsm-app and gio.
+4. **Clear Previews:** `ofx-clean --all` deletes every preview (its guarded delete code), and View →
+   Clear Previews… asks "Delete all N previews (X MB)?" with "Other programs that use the preview
+   cache (Nautilus, Nemo, GNOME apps) lose theirs too, and make them again as they need them.", the
+   count from a walk on a thread as it opens, Delete in red. On yes: `ofx-clean --all` in the
+   background, ofx's held previews dropped, the visible ones made again.
+5. **Git status per file:** `git-status = on | off` (default on), one style, VS Code's:
+   - a changed file's name takes the git colour (it overrides the type colour, View → Show
+     Colors); unchanged files keep theirs; ignored files are dimmed; a letter at the right (`M`
+     modified, `A` staged, `U` untracked, `!` conflicted, `R` renamed); a folder takes the most
+     urgent state of what it holds (conflicted, modified, staged, untracked) as a dot; the icon
+     view tints the label and puts a dot on the icon's corner; colours from the theme's palette;
+   - `git status --porcelain=v2 -z --ignored` off the main thread with a time limit, again when
+     the folder or `.git/index` changes; nothing outside a repo (one look for `.git` above);
+   - the footer says "6 changed" in a repo;
+   - **the branch** as a button after the path buttons, with ahead/behind (`master ↑2 ↓1`), a
+     detached HEAD as its short id. Its menu: the 8 most recently checked-out local branches
+     (git's reflog, filled up by commit date), the current one marked. First the button and menu,
+     then switching as its own step: `git switch <branch>` only (no `-f`, stash or paths), git's
+     own refusal said in the status line; the folder reloads, or goes up to the nearest one that
+     still exists. ofx's first write to a repo: through the test guard, a fake git on scratch
+     repos in tests, never a work repo.
 
 ## F11 design (2026-11-01)
 
