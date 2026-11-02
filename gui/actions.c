@@ -696,12 +696,20 @@ static void open_at_line(isize i)
     else if (editors.old && !editors.told) editors.told = true, set_status(false, "%s still works; its lines can move to %s, each as editor = <line>", shown, conf);
 }
 
+// One key of the state file put (its value; another window's keys left alone: state_put), a failure
+// said in the status line.
+static void state_key(const char *key, const char *value)
+{
+    char path[PATH_MAX];
+    Err err;
+    if (state_path(path, sizeof path) && !state_put(&scratch, path, key, value, &err)) set_status(true, "%s", err.msg);
+}
+
 static void prefs_open(void);   // (prefs.c, after: it uses editor_now)
 static void restore_others(bool yes);   // (restore.c, after: it uses the tabs)
 
 static void act(UiAction a)
 {
-    Err err;
     switch (a.kind) {
     case UA_RESTORE: trash_restore_targets(); break;
     case UA_EJECT:
@@ -726,28 +734,23 @@ static void act(UiAction a)
     }
     case UA_SIDE_MODE: {
         side_refresh();
-        char path[PATH_MAX];
-        if (state_path(path, sizeof path) && !state_put(&scratch, path, "sidebar", SIDE_MODE_NAMES[app.ui.side_mode], &err)) set_status(true, "%s", err.msg);
+        state_key("sidebar", SIDE_MODE_NAMES[app.ui.side_mode]);
         break;
     }
     case UA_COLORS: {   // remembered, the one key (as UA_VIEW)
-        char path[PATH_MAX];
-        if (state_path(path, sizeof path) && !state_put(&scratch, path, "colors", app.ui.colors ? "on" : "off", &err)) set_status(true, "%s", err.msg);
+        state_key("colors", app.ui.colors ? "on" : "off");
         break;
     }
     case UA_MENUBAR: {   // remembered, the one key (as UA_VIEW)
-        char path[PATH_MAX];
-        if (state_path(path, sizeof path) && !state_put(&scratch, path, "menubar", app.ui.bar_hidden ? "off" : "on", &err)) set_status(true, "%s", err.msg);
+        state_key("menubar", app.ui.bar_hidden ? "off" : "on");
         break;
     }
     case UA_PERMS_COLS: {   // remembered, the one key (as UA_VIEW)
-        char path[PATH_MAX];
-        if (state_path(path, sizeof path) && !state_put(&scratch, path, "perms", app.ui.perms_cols ? "on" : "off", &err)) set_status(true, "%s", err.msg);
+        state_key("perms", app.ui.perms_cols ? "on" : "off");
         break;
     }
     case UA_GROUP_COL: {
-        char path[PATH_MAX];
-        if (state_path(path, sizeof path) && !state_put(&scratch, path, "group", app.ui.group_col ? "on" : "off", &err)) set_status(true, "%s", err.msg);
+        state_key("group", app.ui.group_col ? "on" : "off");
         break;
     }
     case UA_ZOOM:     // F6.3: as the view, the cursor kept on its row at the refit (ui_refit)
@@ -761,8 +764,7 @@ static void act(UiAction a)
     case UA_FORWARD: hist_go(1); break;
     case UA_HIDDEN: {
         app.show_hidden = !app.show_hidden;
-        char sp[PATH_MAX];
-        if (state_path(sp, sizeof sp) && !state_put(&scratch, sp, "hidden", app.show_hidden ? "on" : "off", &err)) set_status(true, "%s", err.msg);   // (F11)
+        state_key("hidden", app.show_hidden ? "on" : "off");   // (F11)
         char keep[PATH_MAX];
         snprintf(keep, sizeof keep, "%.*s", STR_ARG(sel_name()));
         go_to(app.cwd, str_from_c(keep), 0);

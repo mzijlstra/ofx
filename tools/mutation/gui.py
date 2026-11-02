@@ -144,7 +144,7 @@ MUTANTS = [
     ('gui/actions.c', "        job_submit(r, JOB_DELETE, k);\n        r->trash = JOB_TRASH_EMPTY;", "        r->trash = JOB_TRASH_EMPTY;"),
     ('gui/actions.c', "    case UA_RESTORE: trash_restore_targets(); break;\n", ""),
     (G, "        if (ui_input_acts(&in) && ui_status_clears(app.status_bad, app.status_at, now_ms())) app.status[0] = 0;", ""),
-    ('gui/actions.c', "        if (state_path(path, sizeof path) && !state_put(&scratch, path, \"sidebar\", SIDE_MODE_NAMES[app.ui.side_mode], &err)) set_status(true, \"%s\", err.msg);\n", ""),
+    ('gui/actions.c', '        state_key("sidebar", SIDE_MODE_NAMES[app.ui.side_mode]);\n', ''),
     (G, "    if (state_path(state_file, sizeof state_file)) {\n        State st", "    if (0) {\n        State st"),
     ('gui/actions.c', "    case UA_SIDE_MODE: {\n        side_refresh();", "    case UA_SIDE_MODE: {"),
     ('gui/input.c', "        if (in_box(CLAY_IDI(\"mode\", k), x, y)) h.mode = k;", "        if (0) h.mode = k;"),
@@ -463,14 +463,14 @@ MUTANTS = [
     # ---- the list's Owner, Group, Permissions and links' targets (2026-10-27). Not run: the cells
     # and the target drawn (pixels: f8b's list-columns.png, list-no-perms.png show them)
     (G, '        app.ui.side_mode = st.side, app.ui.perms_cols = !st.no_perms,', '        app.ui.side_mode = st.side, app.ui.perms_cols = true,', 'f8'),
-    ('gui/actions.c', '        if (state_path(path, sizeof path) && !state_put(&scratch, path, "perms", app.ui.perms_cols ? "on" : "off", &err))', '        if (state_path(path, sizeof path) && !state_put(&scratch, path, "perms", "on", &err))', 'f8'),
+    ('gui/actions.c', '        state_key("perms", app.ui.perms_cols ? "on" : "off");', '        state_key("perms", "on");', 'f8'),
     # ---- the three columns give way to a Name under 200 px (2026-10-27)
     ('gui/files.c', '    return app.ui.perms_cols && rest - perms_w() >= NAME_MIN_W;', '    return app.ui.perms_cols;', 'f8'),
     ('gui/files.c', '    return app.ui.perms_cols && rest - perms_w() >= NAME_MIN_W;', '    return rest - perms_w() >= NAME_MIN_W;', 'f8'),
     # ---- View → Show Colors and the note (2026-10-27). Not run: the colours drawn (pixels:
     # f8e's list-plain.png, f8b's list-columns.png)
     (G, '        app.ui.colors = !st.no_colors,', '        app.ui.colors = true,', 'f8'),
-    ('gui/actions.c', '        if (state_path(path, sizeof path) && !state_put(&scratch, path, "colors", app.ui.colors ? "on" : "off", &err))', '        if (state_path(path, sizeof path) && !state_put(&scratch, path, "colors", "on", &err))', 'f8'),
+    ('gui/actions.c', '        state_key("colors", app.ui.colors ? "on" : "off");', '        state_key("colors", "on");', 'f8'),
     ('gui/footer.c', '                  .cramped = app.ui.perms_cols && !app.ui.grid && !perms_shown((float)GetScreenWidth()) };', '                  .cramped = false };', 'f8'),
     ('gui/footer.c', '                  .cramped = app.ui.perms_cols && !app.ui.grid && !perms_shown((float)GetScreenWidth()) };', '                  .cramped = !perms_shown((float)GetScreenWidth()) };', 'f8'),
     # ---- View → Show Menu (2026-10-27). Not run: the note's drawing and footer hint (pixels:
@@ -478,12 +478,12 @@ MUTANTS = [
     (G, '    return !app.ui.bar_hidden || (app.ui.menu_on && app.ui.menu < UI_MENUS);', '    return !app.ui.bar_hidden;', 'f8'),
     (G, '    return !app.ui.bar_hidden || (app.ui.menu_on && app.ui.menu < UI_MENUS);', '    return true;', 'f8'),
     (G, ', app.ui.perms_cols = !st.no_perms, app.ui.bar_hidden = st.no_bar,', ', app.ui.perms_cols = !st.no_perms,', 'f8'),
-    ('gui/actions.c', '        if (state_path(path, sizeof path) && !state_put(&scratch, path, "menubar", app.ui.bar_hidden ? "off" : "on", &err))', '        if (state_path(path, sizeof path) && !state_put(&scratch, path, "menubar", "on", &err))', 'f8'),
+    ('gui/actions.c', '        state_key("menubar", app.ui.bar_hidden ? "off" : "on");', '        state_key("menubar", "on");', 'f8'),
     ('gui/panels.c', '    case UI_ON_BAR: return MODAL_BAR;\n', '', 'f8'),
     # ---- View → Show Group, Ctrl+P, Ctrl+G (2026-10-27). Not run: the key chords' GLFW mapping
     # (scripts send ui/'s keys); the cells drawn (pixels: f8b's list-group.png)
     (G, '        app.ui.colors = !st.no_colors, app.ui.group_col = st.group, app.show_hidden = st.hidden;', '        app.ui.colors = !st.no_colors, app.show_hidden = st.hidden;', 'f8'),
-    ('gui/actions.c', '        if (state_path(path, sizeof path) && !state_put(&scratch, path, "group", app.ui.group_col ? "on" : "off", &err))', '        if (state_path(path, sizeof path) && !state_put(&scratch, path, "group", "on", &err))', 'f8'),
+    ('gui/actions.c', '        state_key("group", app.ui.group_col ? "on" : "off");', '        state_key("group", "on");', 'f8'),
     ('gui/files.c', '    return app.ui.group_col ? 3 * GAP + OWNER_W + GROUP_W + PERM_W : 2 * GAP + OWNER_W + PERM_W;', '    return 3 * GAP + OWNER_W + GROUP_W + PERM_W;', 'f8'),
     ('gui/files.c', '            if (k == 1 && !app.ui.group_col) continue;', '', 'f8'),
     ('gui/files.c', '            if (app.ui.group_col) info_cell(CLAY_IDI("group", r)', '            info_cell(CLAY_IDI("group", r)', 'f8'),
@@ -651,7 +651,7 @@ MUTANTS = [
     ('gui/remember.c', '    if (mask & FP_REV) f->rev = app.ui.sort.reverse == app.conf.sort_rev ? -1 : app.ui.sort.reverse;', '    if (mask & FP_REV) f->rev = app.ui.sort.reverse;', 'f11'),
     ('gui/remember.c', '    if (rem.a[rem.cur].used > (isize)sizeof rem.mem[0] / 2) remember_write();', '', 'f11'),
     ('gui/remember.c', '    if (st.folder_defaults[0]) {', '    if (true) {', 'f11'),
-    ('gui/remember.c', '        mask |= strcmp(sort, FOLDER_SORTS[app.conf.sort]) ? FP_SORT : 0;', '', 'f11'),
+    ('gui/remember.c', '        mask |= strcmp(sort, SORT_NAMES[app.conf.sort]) ? FP_SORT : 0;', '', 'f11'),
     ('gui/remember.c', '    int n = mask ? folders_wipe(&rem.t, mask) : 0;', '    int n = 0;', 'f11'),
     ('gui/remember.c', '    if (!state_put(&scratch, path, "folderdefaults", now, &err))', '    if (false)', 'f11'),
     ('gui/main.c', '    remember_defaults();   // (F11', '    // (F11', 'f11'),
@@ -659,7 +659,7 @@ MUTANTS = [
     ('gui/main.c', '    if (rem.dirty) remember_write();\n    if (app.windows[0])', '    if (app.windows[0])', 'f11'),
     ('gui/actions.c', '        remember_view(a.kind == UA_ZOOM ? FP_ZOOM : FP_VIEW);', '        remember_view(FP_VIEW);', 'f11'),
     ('gui/actions.c', '    case UA_SORT: resort(), remember_view(FP_SORT | FP_REV); break;', '    case UA_SORT: resort(); break;', 'f11'),
-    ('gui/actions.c', '        if (state_path(sp, sizeof sp) && !state_put(&scratch, sp, "hidden", app.show_hidden ? "on" : "off", &err))', '        if (false)', 'f11'),
+    ('gui/actions.c', '        state_key("hidden", app.show_hidden ? "on" : "off");', '', 'f11'),
     ('gui/prefs.c', '        remember_defaults();\n        if (fold_view_of', '        if (fold_view_of', 'f11'),
     ('gui/prefs.c', '        if (fold_view_of(app.ui.view)) remember_apply(app.cwd);', '', 'f11'),
     # F11 step 2: Reopen Closed Tab, the tree's open folders (2026-11-01)
@@ -673,7 +673,7 @@ MUTANTS = [
     # F11 step 3: the tabs across a restart (2026-11-01)
     ('gui/restore.c', '    if (!app.conf.restore_tabs || (others > 0 && !closing_all)) {', '    if (!app.conf.restore_tabs || others > 0) {', 'f11'),
     ('gui/restore.c', '    if (!app.conf.restore_tabs || (others > 0 && !closing_all)) {', '    if ((others > 0 && !closing_all)) {', 'f11'),
-    ('gui/restore.c', ' dir[n++] = i == tabbar.cur ? app.cwd : tabs[tabbar.slot[i]].dir;', ' dir[n++] = tabs[tabbar.slot[i]].dir;', 'f11'),
+    ('gui/restore.c', '    return i == tabbar.cur ? app.cwd : tabs[tabbar.slot[i]].dir;', '    return tabs[tabbar.slot[i]].dir;', 'f11'),
     ('gui/restore.c', 'session_line((long)getpid(), (i64)time(NULL), tabbar.cur, live', 'session_line((long)getpid(), (i64)time(NULL), 0, live', 'f11'),
     ('gui/restore.c', '        if (plain) go_to_in(w.dir[0], STR_EMPTY, 0, true);', '        go_to_in(w.dir[0], STR_EMPTY, 0, true);', 'f11'),
     ('gui/restore.c', '        if (plain) go_to_in(w.dir[0], STR_EMPTY, 0, true);', '        if (plain) go_to_in(w.dir[0], STR_EMPTY, 0, false);', 'f11'),

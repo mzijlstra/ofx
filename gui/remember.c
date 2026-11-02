@@ -115,7 +115,7 @@ static i64 remember_tick(i64 now)
 // ofx.conf's view defaults as the state file's folderdefaults= says them: "list 48 name off".
 static void remember_stamp(char *out, size_t cap)
 {
-    snprintf(out, cap, "%s %d %s %s", app.conf.icons ? "icons" : "list", app.conf.zoom, FOLDER_SORTS[app.conf.sort], app.conf.sort_rev ? "on" : "off");
+    snprintf(out, cap, "%s %d %s %s", app.conf.icons ? "icons" : "list", app.conf.zoom, SORT_NAMES[app.conf.sort], app.conf.sort_rev ? "on" : "off");
 }
 
 // At the start and when ofx.conf changes: a default that differs from the one the folders' choices
@@ -138,7 +138,7 @@ static void remember_defaults(void)
         sscanf(st.folder_defaults, "%15s %d %15s %7s", view, &zoom, sort, rev);
         mask |= strcmp(view, app.conf.icons ? "icons" : "list") ? FP_VIEW : 0;
         mask |= zoom != app.conf.zoom ? FP_ZOOM : 0;
-        mask |= strcmp(sort, FOLDER_SORTS[app.conf.sort]) ? FP_SORT : 0;
+        mask |= strcmp(sort, SORT_NAMES[app.conf.sort]) ? FP_SORT : 0;
         mask |= strcmp(rev, app.conf.sort_rev ? "on" : "off") ? FP_REV : 0;
     }
     int n = mask ? folders_wipe(&rem.t, mask) : 0;

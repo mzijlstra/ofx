@@ -114,10 +114,8 @@ static bool undo_is_job(const Undo *u)
     if (job_test_cross) return true;
     for (isize i = 0; i < u->n; i++) {
         dev_t a, b;
-        Str d = path_dir(str_from_c(u->it[i].from));
         char from_dir[PATH_MAX];
-        snprintf(from_dir, sizeof from_dir, "%.*s", STR_ARG(d.len ? d : S("/")));
-        if (dev_of(from_dir, &a) && dev_of(u->it[i].to, &b) && a != b) return true;
+        if (path_parent(from_dir, sizeof from_dir, u->it[i].from) && dev_of(from_dir, &a) && dev_of(u->it[i].to, &b) && a != b) return true;
     }
     return false;
 }

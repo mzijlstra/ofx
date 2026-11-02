@@ -37,10 +37,8 @@ typedef struct {
 typedef struct {
     FolderPrefs f[FOLDERS_ROOM];
     int         n;
-    bool        full;   // more lines than FOLDERS_ROOM: the rest left out
 } Folders;
 
-static const char *const FOLDER_SORTS[SORT_KEYS] = { "name", "size", "modified" };
 
 // s copied into a, NUL-ended; NULL when a is full (a folder past it is left out, never a crash).
 static const char *folder_str(Arena *a, Str s)
@@ -90,28 +88,24 @@ static bool folder_line_read(Str line, Str *w, char *path, size_t cap)
 
 static void folders_parse(Arena *a, Str text, Folders *t)
 {
-    t->n = 0, t->full = false;
+    t->n = 0;
     isize at = 0;
     for (Str line; next_line(text, &at, &line);) {
         Str w[7];
         char path[PATH_MAX], sel[NAME_MAX * 3 + 1];
         if (!folder_line_read(line, w, path, sizeof path) || folders_find(t, path) >= 0) continue;   // (a folder said twice: its first line, F11 review)
-        if (t->n == FOLDERS_ROOM) {
-            t->full = true;
-            continue;
-        }
+        if (t->n == FOLDERS_ROOM) continue;   // (the rest left out: folders_tidy keeps FOLDERS_MAX)
         FolderPrefs *f = &t->f[t->n];
         i64 when = folder_num(w[1], INT64_MAX / 2), zoom = folder_num(w[3], 4096);
         *f = (FolderPrefs){ .at = when < 0 ? 0 : when, .view = -1, .zoom = (int)(zoom < 0 ? 0 : zoom), .sort = -1, .rev = -1 };
         if (str_eq(w[2], S("list"))) f->view = 0;
         if (str_eq(w[2], S("icons"))) f->view = 1;
         for (int s = 0; s < SORT_KEYS; s++)
-            if (str_eq(w[4], str_from_c(FOLDER_SORTS[s]))) f->sort = s;
+            if (str_eq(w[4], str_from_c(SORT_NAMES[s]))) f->sort = s;
         if (str_eq(w[5], S("on"))) f->rev = 1;
         if (str_eq(w[5], S("off"))) f->rev = 0;
         if (!str_eq(w[6], S("-")) && percent_decode(w[6], sel, sizeof sel) && sel[0] && !strchr(sel, '/')) f->sel = folder_str(a, str_from_c(sel));
-        if ((f->path = folder_str(a, str_from_c(path)))) t->n++;
-        else t->full = true;
+        if ((f->path = folder_str(a, str_from_c(path)))) t->n++;   // (else the arena's full: left out)
     }
 }
 
@@ -143,7 +137,7 @@ static int folder_line(const FolderPrefs *f, char *out, size_t cap)
     else if (!percent_encode(str_from_c(f->sel), "", sel, sizeof sel)) return 0;
     if (f->zoom > 0) snprintf(zoom, sizeof zoom, "%d", f->zoom);
     int n = snprintf(out, cap, "folder %s %lld %s %s %s %s %s\n", path, (long long)f->at, f->view < 0 ? "-" : f->view ? "icons" : "list", zoom,
-                     f->sort < 0 ? "-" : FOLDER_SORTS[(int)f->sort], f->rev < 0 ? "-" : f->rev ? "on" : "off", sel);
+                     f->sort < 0 ? "-" : SORT_NAMES[(int)f->sort], f->rev < 0 ? "-" : f->rev ? "on" : "off", sel);
     return n > 0 && (size_t)n < cap ? n : 0;
 }
 
@@ -223,7 +217,11 @@ static isize folders_write_tail(void *ctx, char *out, isize cap)
 {
     (void)ctx;
     isize n = 0;
-    for (int i = 0; i < folders_new.n; i++) n += folder_line(&folders_new.f[i], out + n, (size_t)(cap - n));
+    for (int i = 0; i < folders_new.n; i++) {
+        int k = folder_line(&folders_new.f[i], out + n, (size_t)(cap - n));
+        if (!k) return -1;   // (a folder line is never empty: 0 is one that doesn't fit)
+        n += k;
+    }
     return n;
 }
 

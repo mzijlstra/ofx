@@ -201,7 +201,7 @@ static void script_state(char *out, size_t cap)
     // The tabs' folder names in order, '|' between (the current one from app.cwd).
     char tabdirs[1024] = "";
     for (int i = 0; i < tabbar.n; i++) {
-        const char *d = i == tabbar.cur ? app.cwd : tabs[tabbar.slot[i]].dir;
+        const char *d = tab_dir(i);
         size_t k = strlen(tabdirs);
         snprintf(tabdirs + k, sizeof tabdirs - k, "%s%.*s", i ? "|" : "", STR_ARG(strcmp(d, "/") == 0 ? S("/") : path_base(str_from_c(d))));
     }

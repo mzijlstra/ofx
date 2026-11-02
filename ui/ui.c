@@ -64,7 +64,6 @@ typedef enum {
     UK_F9,         // the sidebar's next mode (F6)
     UK_VIEW_ICONS, // Ctrl+2: the files as icons (F6.2)
     UK_VIEW_LIST,  // Ctrl+1: the files as the list
-    UK_SIDE,       // Ctrl+Left: the keys to the sidebar (Tab goes there and back)
     UK_ZOOM_IN,    // Ctrl+= (Ctrl++, the keypad's +): the icon view's icons a size bigger (F6.3)
     UK_ZOOM_OUT,   // Ctrl+-
     UK_ZOOM_RESET, // Ctrl+0: the first size, 48 px
@@ -85,7 +84,7 @@ typedef enum {
     UK_CONTAINING, // Ctrl+Enter: in the search view, the cursor's entry's folder, it selected (F9)
     UK_OPEN_LINE,  // Ctrl+Shift+Enter: a result found inside files, in the editor at its line (F9 step 4)
     // In a text field a word at a time (Michael, 2026-10-28): Ctrl+Left and Ctrl+Right move (elsewhere
-    // they are the sidebar's keys, UK_SIDE, and the location line, UK_LOCATION), Ctrl+Shift+Left and
+    // they are the sidebar's keys and the location line, UK_LOCATION), Ctrl+Shift+Left and
     // Ctrl+Shift+Right select, Ctrl+Backspace and Ctrl+Delete delete; outside a field the last four do
     // nothing.
     UK_WORD_LEFT, UK_WORD_RIGHT, UK_SEL_WORD_LEFT, UK_SEL_WORD_RIGHT, UK_WORD_BACKSPACE, UK_WORD_DELETE,

@@ -143,7 +143,7 @@ static void state_unlock(int fd)
 typedef struct {
     bool  (*prepare)(void *ctx, Arena *a, Str text, isize *room, Err *err);   // false: no write (err said, or nothing to do)
     bool  (*keep)(void *ctx, Str text, Str line, Str *out);                   // false: dropped; *out (line) may be replaced
-    isize (*tail)(void *ctx, char *out, isize cap);                           // what goes at the end: its length
+    isize (*tail)(void *ctx, char *out, isize cap);                           // what goes at the end: its length, -1 when it doesn't fit
     void  *ctx;
     bool   nosync;   // written without the sync (a window's live tab line, every 2 s: session_edit)
 } StateEdit;
@@ -160,11 +160,15 @@ static bool state_rewrite(Arena *a, const char *path, const StateEdit *e, Err *e
     for (Str line; ok && next_line(text, &at, &line);) {
         Str out = line;
         if (!line.len || (e->keep && !e->keep(e->ctx, text, line, &out))) continue;
-        if (n + out.len + 1 > text.len + room + 2) break;   // (a replacement past its room: never written over the end)
+        if (n + out.len + 1 > text.len + room + 2) {   // (a replacement past its room: no write, never a file cut short)
+            err_set(err, "%s: too big", path), ok = false;
+            break;
+        }
         memcpy(body + n, out.p, (size_t)out.len), n += out.len, body[n++] = '\n';
     }
-    if (ok && e->tail) n += e->tail(e->ctx, body + n, text.len + room + 2 - n);
-    ok = ok && state_write(path, body, n, !e->nosync, err);
+    isize t = ok && e->tail ? e->tail(e->ctx, body + n, text.len + room + 2 - n) : 0;
+    if (t < 0) err_set(err, "%s: too big", path), ok = false;   // (the new lines past their room: the same)
+    ok = ok && state_write(path, body, n + t, !e->nosync, err);
     state_unlock(lock);
     return ok;
 }
@@ -200,7 +204,8 @@ static bool state_put_keep(void *ctx, Str text, Str line, Str *out)
 static isize state_put_tail(void *ctx, char *out, isize cap)
 {
     StatePut *p = ctx;
-    if (p->put || p->line.len + 1 > cap) return 0;
+    if (p->put) return 0;
+    if (p->line.len + 1 > cap) return -1;
     memcpy(out, p->line.p, (size_t)p->line.len), out[p->line.len] = '\n';
     return p->line.len + 1;
 }

@@ -197,6 +197,12 @@ typedef struct {
     bool  inside_btn;   // the search bar's "In files" (F9 step 3)
 } Hit;
 
+// Under nothing: the start of hit_at, and the hover before the first frame (F11 review: two copies
+// had drifted, the hover's without .field).
+#define HIT_NONE                                                                                                   \
+    { .row = -1, .side = -1, .header = -1, .bar = UB_NONE, .crumb = -1, .tab = -1, .tab_x = -1, .job_x = -1, .mode = -1, \
+      .twisty = -1, .eject = -1, .menu_title = -1, .menu_item = -1, .prop_box = -1, .ow_row = -1, .bmp_row = -1, .field = -1 }
+
 static struct {
     char      cwd[PATH_MAX];
     // The search view (F9): the folder searched, what the walk left out so far and whether it ended,
@@ -278,8 +284,7 @@ static struct {
     char      exe[PATH_MAX];      // this ofx's binary, for New Window (F7.1); "ofx" when unknown
     char      windows[PATH_MAX];  // the window registry's folder (fs/windows.c); "" for none
 } app = { .tip = { -1, 0, false, false },
-        .hov = { .row = -1, .side = -1, .header = -1, .bar = UB_NONE, .crumb = -1, .tab = -1, .tab_x = -1, .job_x = -1, .mode = -1, .twisty = -1,
-                 .eject = -1, .menu_title = -1, .menu_item = -1, .prop_box = -1, .ow_row = -1, .bmp_row = -1 } };
+        .hov = HIT_NONE };
 
 static UiHistory hist;
 static Tree      tree;     // the sidebar's tree mode (F6)
@@ -487,6 +492,14 @@ static bool select_path(const char *start, char *out, size_t cap)
     return lstat(out, &st) == 0;
 }
 
+// A test knob: name's value when it is a number from lo to hi, else none (def).
+static int env_int(const char *name, int def, int lo, int hi)
+{
+    const char *v = getenv(name);
+    int n = v && v[0] ? atoi(v) : def;
+    return n < lo || n > hi ? def : n;
+}
+
 int main(int argc, char **argv)
 {
     const char *start = NULL;
@@ -526,18 +539,12 @@ int main(int argc, char **argv)
     spawn_init();
     // OFX_TEST_LEAK=1 leaks one block on purpose: the control that shows LeakSanitizer reports
     // from this binary at all.
-    const char *delay = getenv("OFX_TEST_WATCH_DELAY_MS");
-    watch_delay_ms = delay ? atoi(delay) : 0;
-    if (watch_delay_ms < 0 || watch_delay_ms > 1000) watch_delay_ms = 0;   // a window must never stall long
+    watch_delay_ms = env_int("OFX_TEST_WATCH_DELAY_MS", 0, 0, 1000);   // a window must never stall long
     // OFX_TEST_COPY_DELAY_MS: a sleep per copied block, so a test sees the progress (capped short:
     // a job never stalls the window, but a test must not run long).
     // OFX_TEST_ICONS_MAX: a smaller icon cache, so a test can fill it.
-    const char *imax = getenv("OFX_TEST_ICONS_MAX");
-    app.icons_max = imax ? atoi(imax) : ICONS_MAX;
-    if (app.icons_max < 1 || app.icons_max > ICONS_MAX) app.icons_max = ICONS_MAX;
-    const char *cdelay = getenv("OFX_TEST_COPY_DELAY_MS");
-    app.copy_delay_ms = cdelay ? atoi(cdelay) : 0;
-    if (app.copy_delay_ms < 0 || app.copy_delay_ms > 500) app.copy_delay_ms = 0;
+    app.icons_max = env_int("OFX_TEST_ICONS_MAX", ICONS_MAX, 1, ICONS_MAX);
+    app.copy_delay_ms = env_int("OFX_TEST_COPY_DELAY_MS", 0, 0, 500);
     // OFX_TEST_CROSS=1: a move copies as across drives, so a test can see a move run (F5.2).
     if (getenv("OFX_TEST_CROSS")) job_test_cross = true;
     // The test guard: with OFX_GUI_ROOT set (the GUI tests), no write outside it.
@@ -617,9 +624,7 @@ int main(int argc, char **argv)
     clip_init();   // false: the clipboard stays inside ofx
     // OFX_TEST_COUNT_DELAY_MS: each count takes that much longer, so a test can change the listing
     // while answers for the old one are on their way, or (60 s) stand in for a hung mount at quit.
-    const char *kdelay = getenv("OFX_TEST_COUNT_DELAY_MS");
-    counts.delay_ms = kdelay ? atoi(kdelay) : 0;
-    if (counts.delay_ms < 0 || counts.delay_ms > 60000) counts.delay_ms = 0;
+    counts.delay_ms = env_int("OFX_TEST_COUNT_DELAY_MS", 0, 0, 60000);
     count_start();
     walk_start();
     search_start();

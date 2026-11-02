@@ -55,11 +55,17 @@ static isize ui_find_count(const Ui *u, UiNames names, isize *at)
     return n;
 }
 
+// The keys off the bar, its text kept for n and N.
+static void ui_find_keep(Ui *u)
+{
+    ui_unfocus(u, UI_FOCUS_FIND);
+    if (u->find.len) memcpy(u->last, u->find.b, (size_t)u->find.len), u->last_len = u->find.len;
+}
+
 static void ui_find_close(Ui *u)
 {
     u->finding = false, u->find_miss = false, u->find_select = false;
-    ui_unfocus(u, UI_FOCUS_FIND);
-    if (u->find.len) memcpy(u->last, u->find.b, (size_t)u->find.len), u->last_len = u->find.len;
+    ui_find_keep(u);
 }
 
 // The keys leave the find bar (Enter, a command, the menu, the edit line); it stays open, its text
@@ -70,8 +76,7 @@ static void ui_find_leave(Ui *u)
         if (u->finding) ui_find_close(u);
         return;
     }
-    ui_unfocus(u, UI_FOCUS_FIND);
-    if (u->find.len) memcpy(u->last, u->find.b, (size_t)u->find.len), u->last_len = u->find.len;
+    ui_find_keep(u);
 }
 
 static void ui_mark(Ui *u, isize i, bool on);
@@ -112,6 +117,5 @@ static int ui_utf8(u32 cp, char b[4])
 static void ui_find_again(Ui *u, UiNames names, int dir)
 {
     ui_matcher_set(&u->find_m, (Str){ u->last, u->last_len }, u->find_opts);
-    isize i = ui_find_at(&u->list, names, &u->find_m, u->list.sel + dir, dir);
-    if (i >= 0) u->list.sel = i, ui_show_sel(&u->list);
+    ui_find_step(u, names, dir);
 }

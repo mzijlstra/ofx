@@ -17,23 +17,38 @@ static struct {
     i64         due;                     // the write waiting, 0 none
 } restore;
 
+// Each entry point below (restore_write, _save, _start, _off, _others) is its _in function between an
+// arena mark and its reset: what it read and wrote on the scratch arena given back (a state file of
+// 420 KiB, twice, would fill it).
+
+// Tab i's folder: the tab shown's is app's (its slot is written only as another is shown).
+static const char *tab_dir(int i)
+{
+    return i == tabbar.cur ? app.cwd : tabs[tabbar.slot[i]].dir;
+}
+
+_Static_assert((int)SESSION_TABS == (int)UI_TABS_MAX, "a window's line holds every tab it can have");
+
 // This window's tabs (the one shown as app has it) as its line, live or closed, into out; its length,
 // 0 when it doesn't fit.
 static int restore_line(bool live, char *out, size_t cap)
 {
     const char *dir[SESSION_TABS];
     int n = 0;
-    for (int i = 0; i < tabbar.n && n < SESSION_TABS; i++) dir[n++] = i == tabbar.cur ? app.cwd : tabs[tabbar.slot[i]].dir;
+    for (int i = 0; i < tabbar.n && n < SESSION_TABS; i++) dir[n++] = tab_dir(i);
     return session_line((long)getpid(), (i64)time(NULL), tabbar.cur, live && restore.have_me ? &restore.me : NULL, dir, n, out, cap);
 }
 
+enum { RESTORE_HEAD = 160 };   // a line's words before its folders: id, time, shown, how
+
 // The room this window's line needs: its fields, each tab's folder %-encoded (3 bytes a byte at
-// most) and a space (reviewer-2, 2026-11-02: SESSION_TABS × PATH_MAX × 3 on the scratch arena left
+// most) and a space (F11 review, 2026-11-02: SESSION_TABS × PATH_MAX × 3 on the scratch arena left
 // a state file over 330 KiB no room to be read).
+
 static size_t restore_cap(void)
 {
-    size_t cap = 160;
-    for (int i = 0; i < tabbar.n && i < SESSION_TABS; i++) cap += 3 * strlen(i == tabbar.cur ? app.cwd : tabs[tabbar.slot[i]].dir) + 1;
+    size_t cap = RESTORE_HEAD;
+    for (int i = 0; i < tabbar.n && i < SESSION_TABS; i++) cap += 3 * strlen(tab_dir(i)) + 1;
     return cap;
 }
 
@@ -68,7 +83,7 @@ static void restore_write_in(void)
 
 static void restore_write(void)
 {
-    ArenaMark mark = arena_mark(&scratch);   // (what it read and wrote there given back: a state file of 420 KiB, twice, would fill it)
+    ArenaMark mark = arena_mark(&scratch);
     restore_write_in();
     arena_restore(&scratch, mark);
 }
@@ -80,7 +95,7 @@ static i64 restore_tick(i64 now)
     if (!app.conf.restore_tabs || !restore.have_me) return 0;
     if (restore.due && now >= restore.due) restore_write();
     if (restore.due) return restore.due;
-    static char line[SESSION_TABS * PATH_MAX * 3 + 96];   // (as restore_write's: the same tabs fit both)
+    static char line[RESTORE_HEAD + SESSION_TABS * (PATH_MAX * 3 + 1)];   // (restore_cap's rule at its most: the same tabs fit both)
     u64 tail = restore_line(true, line, sizeof line) ? restore_tail(line) : 0;
     if (tail && tail != restore.last) restore.due = now + write_delay_ms();
     return restore.due;
@@ -107,7 +122,7 @@ static void restore_save_in(void)
 
 static void restore_save(void)
 {
-    ArenaMark mark = arena_mark(&scratch);   // (what it read and wrote there given back: a state file of 420 KiB, twice, would fill it)
+    ArenaMark mark = arena_mark(&scratch);
     restore_save_in();
     arena_restore(&scratch, mark);
 }
@@ -144,14 +159,14 @@ static void restore_start_in(long id, bool plain)
 
 static void restore_start(long id, bool plain)
 {
-    ArenaMark mark = arena_mark(&scratch);   // (what it read and wrote there given back: a state file of 420 KiB, twice, would fill it)
+    ArenaMark mark = arena_mark(&scratch);
     restore_start_in(id, plain);
     arena_restore(&scratch, mark);
     restore_write();   // (this window's own line at once, after what the take read is given back)
 }
 
 // restore-tabs turned off while this window runs: its line out at once, so a crash later doesn't
-// leave one a start long after (the option on again) would bring back (reviewer-2, 2026-11-02).
+// leave one a start long after (the option on again) would bring back (F11 review, 2026-11-02).
 static void restore_off_in(void)
 {
     char path[PATH_MAX];
@@ -162,7 +177,7 @@ static void restore_off_in(void)
 
 static void restore_off(void)
 {
-    ArenaMark mark = arena_mark(&scratch);   // (what it read and wrote there given back: a state file of 420 KiB, twice, would fill it)
+    ArenaMark mark = arena_mark(&scratch);
     restore_off_in();
     arena_restore(&scratch, mark);
 }
@@ -185,7 +200,7 @@ static void restore_others_in(bool yes)
 
 static void restore_others(bool yes)
 {
-    ArenaMark mark = arena_mark(&scratch);   // (what it read and wrote there given back: a state file of 420 KiB, twice, would fill it)
+    ArenaMark mark = arena_mark(&scratch);
     restore_others_in(yes);
     arena_restore(&scratch, mark);
 }

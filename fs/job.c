@@ -267,10 +267,8 @@ static bool copy_into(Job *j, int sdir, const char *sname, int ddir, const char 
         }
         if (a == ANS_KEEP) {
             // The folder of where, for name_free.
-            Str w = str_from_c(j->where), parent = path_dir(w);
             char pd[PATH_MAX];
-            snprintf(pd, sizeof pd, "%.*s", STR_ARG(parent.len ? parent : S("/")));
-            if (!name_free(pd, str_from_c(dname), S_ISDIR(st.st_mode), false, true, keep, sizeof keep))
+            if (!path_parent(pd, sizeof pd, j->where) || !name_free(pd, str_from_c(dname), S_ISDIR(st.st_mode), false, true, keep, sizeof keep))
                 return job_error(j, "%s: no free name", j->where), false;
             dname = keep;
         } else if (S_ISDIR(st.st_mode) != S_ISDIR(dt.st_mode)) {
@@ -351,8 +349,7 @@ static bool copy_into(Job *j, int sdir, const char *sname, int ddir, const char 
             job_error(j, "%s: %s", j->where, strerror(errno));
             ok = false;
         }
-        if (!ok && dfd >= 0 && !fresh) unlinkat(ddir, part, 0);
-        if (!ok && dfd >= 0 && fresh) unlinkat(ddir, part, 0);
+        if (!ok && dfd >= 0) unlinkat(ddir, part, 0);
     } else {
         job_note(j, "%s: not a file, folder or link: skipped", j->where);
         atomic_fetch_add(&j->files_done, 1);
@@ -434,10 +431,8 @@ static bool move_into(Job *j, int sdir, const char *sname, int ddir, const char 
         return job_note(j, "%s: skipped", j->where), true;
     }
     if (a == ANS_KEEP) {
-        Str parent = path_dir(str_from_c(j->where));
         char pd[PATH_MAX], keep[NAME_MAX + 1];
-        snprintf(pd, sizeof pd, "%.*s", STR_ARG(parent.len ? parent : S("/")));
-        if (!name_free(pd, str_from_c(dname), S_ISDIR(st.st_mode), false, true, keep, sizeof keep))
+        if (!path_parent(pd, sizeof pd, j->where) || !name_free(pd, str_from_c(dname), S_ISDIR(st.st_mode), false, true, keep, sizeof keep))
             return job_error(j, "%s: no free name", j->where), false;
         if (renameat2(sdir, sname, ddir, keep, RENAME_NOREPLACE) != 0) return job_error(j, "%s: %s", j->where, strerror(errno)), false;
         atomic_fetch_add(&j->files_done, 1);
@@ -469,10 +464,9 @@ static bool into_itself(const char *src, const char *dst_dir)
 // The parent folder of path opened, and its last part into name.
 static int open_parent(const char *path, char *name, size_t cap)
 {
-    Str p = str_from_c(path), dir = path_dir(p);
     char d[PATH_MAX];
-    snprintf(d, sizeof d, "%.*s", STR_ARG(dir.len ? dir : S("/")));
-    snprintf(name, cap, "%.*s", STR_ARG(path_base(p)));
+    if (!path_parent(d, sizeof d, path)) return errno = ENAMETOOLONG, -1;
+    snprintf(name, cap, "%.*s", STR_ARG(path_base(str_from_c(path))));
     return open(d, O_RDONLY | O_DIRECTORY);
 }
 

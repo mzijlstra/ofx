@@ -96,7 +96,7 @@ static bool session_parse_line(Arena *a, Str line, SessionWin *w)
     }
     for (Str d; w->n < SESSION_TABS && (d = folder_word(line, &at)).len;) {
         char p[PATH_MAX];
-        if (!percent_decode(d, p, sizeof p) || (p[0] != '/' && !str_starts_with(str_from_c(p), S("trash:")) && !str_starts_with(str_from_c(p), S("search:")))) continue;
+        if (!percent_decode(d, p, sizeof p) || (p[0] != '/' && !str_starts_with(str_from_c(p), S(TRASH_URI)) && !str_starts_with(str_from_c(p), S(SEARCH_URI)))) continue;
         const char *s = a ? folder_str(a, str_from_c(p)) : "";
         if (s) w->dir[w->n++] = a ? s : NULL;
     }
@@ -174,7 +174,7 @@ static isize session_edit_tail(void *ctx, char *out, isize cap)
 {
     SessionEdit *e = ctx;
     isize n = e->line ? (isize)strlen(e->line) : 0;
-    if (n > cap) return 0;
+    if (n > cap) return -1;
     memcpy(out, e->line ? e->line : "", (size_t)n);
     return n;
 }

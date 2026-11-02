@@ -139,6 +139,26 @@ static const char *refused(void)
     return NULL;
 }
 
+// A chord's key code, its modifiers' codes into mods (four at most) and their count into *n; -1 when
+// it names a key or a modifier there isn't (said on stderr).
+static int chord_parse(const char *arg, int mods[4], int *n)
+{
+    char buf[128];
+    snprintf(buf, sizeof buf, "%s", arg);
+    char *last = strrchr(buf, '+');
+    int code = key_code(last ? last + 1 : buf);
+    *n = 0;
+    if (code < 0) return fprintf(stderr, "vkbd: no key '%s'\n", arg), -1;
+    if (!last) return code;
+    *last = 0;
+    for (char *m = strtok(buf, "+"); m; m = strtok(NULL, "+")) {
+        int k = !strcmp(m, "ctrl") ? KEY_LEFTCTRL : !strcmp(m, "shift") ? KEY_LEFTSHIFT : !strcmp(m, "alt") ? KEY_LEFTALT : !strcmp(m, "super") ? KEY_LEFTMETA : -1;
+        if (*n == 4 || k < 0) return fprintf(stderr, "vkbd: no modifier '%s' (four at most)\n", m), -1;
+        mods[(*n)++] = k;
+    }
+    return code;
+}
+
 int main(int argc, char **argv)
 {
     if (argc < 2) return fprintf(stderr, "usage: vkbd <chord|text:chars>...\n"), 2;
@@ -152,17 +172,8 @@ int main(int argc, char **argv)
                 if (char_code(*c, &shift) < 0) return fprintf(stderr, "vkbd: no key for '%c'\n", *c), 2;
             continue;
         }
-        char buf[128];
-        snprintf(buf, sizeof buf, "%s", argv[i]);
-        char *last = strrchr(buf, '+');
-        if (key_code(last ? last + 1 : buf) < 0) return fprintf(stderr, "vkbd: no key '%s'\n", argv[i]), 2;
-        if (last) {
-            *last = 0;
-            int n = 0;
-            for (char *m = strtok(buf, "+"); m; m = strtok(NULL, "+"), n++)
-                if (n == 4 || (strcmp(m, "ctrl") && strcmp(m, "shift") && strcmp(m, "alt") && strcmp(m, "super")))
-                    return fprintf(stderr, "vkbd: no modifier '%s' (four at most)\n", m), 2;
-        }
+        int mods[4], n;
+        if (chord_parse(argv[i], mods, &n) < 0) return 2;
     }
     if (!(dpy = wl_display_connect(NULL))) return fprintf(stderr, "vkbd: no display\n"), 1;
     // The socket's other end must be that sway itself, not whatever WAYLAND_DISPLAY names.
@@ -199,15 +210,7 @@ int main(int argc, char **argv)
             }
             continue;
         }
-        char buf[128];
-        snprintf(buf, sizeof buf, "%s", argv[i]);
-        char *last = strrchr(buf, '+');
-        int code = key_code(last ? last + 1 : buf), mods[4], n = 0;
-        if (last) {
-            *last = 0;
-            for (char *m = strtok(buf, "+"); m; m = strtok(NULL, "+"))
-                mods[n++] = !strcmp(m, "ctrl") ? KEY_LEFTCTRL : !strcmp(m, "shift") ? KEY_LEFTSHIFT : !strcmp(m, "alt") ? KEY_LEFTALT : KEY_LEFTMETA;
-        }
+        int mods[4], n, code = chord_parse(argv[i], mods, &n);
         chord(mods, n, code);
     }
     wl_display_roundtrip(dpy);

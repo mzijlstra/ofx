@@ -231,9 +231,8 @@ static bool conf_set(Conf *c, int k, Str v)
         return false;
     }
     case CK_SORT: {
-        static const char *const SORTS[SORT_KEYS] = { "name", "size", "modified" };
         for (int i = 0; i < SORT_KEYS; i++)
-            if (str_eq(v, str_from_c(SORTS[i]))) return *(int *)f = i, true;
+            if (str_eq(v, str_from_c(SORT_NAMES[i]))) return *(int *)f = i, true;
         return false;
     }
     case CK_DATE:   // (date, and date_pattern for a pattern)

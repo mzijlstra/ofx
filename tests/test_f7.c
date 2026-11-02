@@ -609,13 +609,7 @@ static void test_windows(void)
 
 static void app_file(const char *rel, const char *text)
 {
-    char p[1300];
-    snprintf(p, sizeof p, "%s", at("f7apps/%s", rel));
-    char d[1300];
-    snprintf(d, sizeof d, "%s", p);
-    *strrchr(d, '/') = 0;
-    mkdirs(d);
-    put(p, text);
+    put(at("f7apps/%s", rel), text);   // (put makes the folders)
 }
 
 // The default app for type as apps_default finds it: its file's path from f7apps/, or "-".

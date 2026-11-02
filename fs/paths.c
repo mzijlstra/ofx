@@ -67,6 +67,16 @@ static bool mkdir_p(const char *path, mode_t mode, bool whole, Err *err)
     return true;
 }
 
+// mkdir -p for a folder of ofx's own (the trash's, the state's, the window registry), 0700, and
+// a folder at the end (not a link to one).
+static bool mkdir_private(const char *path, Err *err)
+{
+    if (!mkdir_p(path, 0700, true, err)) return false;
+    struct stat st;
+    if (lstat(path, &st) != 0 || !S_ISDIR(st.st_mode)) return err_set(err, "%s isn't a folder", path), false;
+    return true;
+}
+
 static int hex_digit(char c)
 {
     return c >= '0' && c <= '9' ? c - '0' : c >= 'a' && c <= 'f' ? c - 'a' + 10 : c >= 'A' && c <= 'F' ? c - 'A' + 10 : -1;

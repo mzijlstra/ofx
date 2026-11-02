@@ -175,13 +175,7 @@ static const char *rank_of(const Apps *apps, const char *id, isize *place)
 
 static void app73(const char *rel, const char *text)
 {
-    char p[1300];
-    snprintf(p, sizeof p, "%s", at("f73apps/%s", rel));
-    char d[1300];
-    snprintf(d, sizeof d, "%s", p);
-    *strrchr(d, '/') = 0;
-    mkdirs(d);
-    put(p, text);
+    put(at("f73apps/%s", rel), text);   // (put makes the folders)
 }
 
 static void test_apps_rank(void)

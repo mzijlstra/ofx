@@ -53,21 +53,10 @@ static void topdir_of(const char *dir, dev_t dev, char *out, size_t cap)
     snprintf(out, cap, "%s", dir);
     while (strcmp(out, "/") != 0) {
         char up[PATH_MAX];
-        Str d = path_dir(str_from_c(out));
-        snprintf(up, sizeof up, "%.*s", STR_ARG(d.len ? d : S("/")));
         struct stat st;
-        if (stat(up, &st) != 0 || st.st_dev != dev) return;
+        if (!path_parent(up, sizeof up, out) || stat(up, &st) != 0 || st.st_dev != dev) return;
         snprintf(out, cap, "%s", up);
     }
-}
-
-// mkdir -p for the trash's own folders, 0700.
-static bool mkdir_private(const char *path, Err *err)
-{
-    if (!mkdir_p(path, 0700, true, err)) return false;
-    struct stat st;
-    if (lstat(path, &st) != 0 || !S_ISDIR(st.st_mode)) return err_set(err, "%s isn't a folder", path), false;
-    return true;
 }
 
 // Where a trashed file is: its file, its .trashinfo, and the place it came from.
@@ -118,9 +107,9 @@ static bool trash_put(const char *path, Trashed *t, Err *err)
     if (!ops_resolve(path, res, sizeof res)) return err_set(err, "%s: %s", path, strerror(errno)), false;
     struct stat st;
     if (lstat(res, &st) != 0) return err_set(err, "%s: %s", path, strerror(errno)), false;
-    Str dir = path_dir(str_from_c(res)), base = path_base(str_from_c(res));
+    Str base = path_base(str_from_c(res));
     char d[PATH_MAX];
-    snprintf(d, sizeof d, "%.*s", STR_ARG(dir.len ? dir : S("/")));
+    if (!path_parent(d, sizeof d, res)) return err_set(err, "%s: the path is too long", res), false;
     if (!trash_for(d, trash, sizeof trash, top, sizeof top, err)) return false;
     if (snprintf(files, sizeof files, "%s/files", trash) >= (int)sizeof files || snprintf(info, sizeof info, "%s/info", trash) >= (int)sizeof info)
         return err_set(err, "%s: the path is too long", trash), false;
@@ -392,9 +381,8 @@ static bool trash_restore_item(const TrashItem *t, Err *err)
     if (snprintf(tr.file, sizeof tr.file, "%s", t->file) >= (int)sizeof tr.file || snprintf(tr.info, sizeof tr.info, "%s", t->info) >= (int)sizeof tr.info ||
         snprintf(tr.from, sizeof tr.from, "%s", t->from) >= (int)sizeof tr.from)
         return err_set(err, "%s: the path is too long", t->from), false;
-    Str dir = path_dir(str_from_c(t->from));
     char d[PATH_MAX];
-    snprintf(d, sizeof d, "%.*s", STR_ARG(dir.len ? dir : S("/")));
+    if (!path_parent(d, sizeof d, t->from)) return err_set(err, "%s: the path is too long", t->from), false;
     struct stat st;
     if (stat(d, &st) != 0 && (!ops_allowed(d, err) || !mkdir_p(d, 0755, true, err))) return false;
     return trash_restore(&tr, err);

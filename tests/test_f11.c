@@ -14,7 +14,7 @@ static void test_folders(void)
     folders_parse(&a[0], S("sidebar=tree\nfolder /home/m/a%20b 100 icons 64 modified on x%20y.txt\nfolder /home/m/c 7 - - - - -\nfolder /r 1 list - - off -\n"
                            "folder relative 1 list - - - -\nfolder /short 1 list\nfolder /home/m/d x grid 4097 age maybe a%2Fb\nfolder trash%3A/// 2 icons - - - -\n"),
                   &t);
-    CHECK(t.n == 5 && !t.full && t.f[2].rev == 0 && t.f[2].view == 0 && folder_says(&t.f[2]));
+    CHECK(t.n == 5 && t.f[2].rev == 0 && t.f[2].view == 0 && folder_says(&t.f[2]));
     CHECK(strcmp(t.f[4].path, TRASH_URI) == 0 && t.f[4].view == 1);   // (the trash view's)
     char tl[96];
     CHECK(folder_line(&t.f[4], tl, sizeof tl) > 0 && strcmp(tl, "folder trash%3A/// 2 icons - - - -\n") == 0);
@@ -100,7 +100,7 @@ static void test_folders(void)
     for (int i = 0; i < FOLDERS_MAX + 10; i++) m += (size_t)snprintf(many + m, sizeof many - m, "folder /run/media/m/S/%d %d list - - - -\n", i, i + 1);
     put(path, many);
     folders_parse(&a[0], read_file(&a[0], path), &w);
-    CHECK(w.n == FOLDERS_MAX + 10 && !w.full);
+    CHECK(w.n == FOLDERS_MAX + 10);
     w.f[0].changed = FP_SEL, w.f[0].sel = "x";   // (an old one changed: still the oldest, gone)
     CHECK(folders_write(&a[1], path, &w, &ms, &err));
     CHECK(w.n == FOLDERS_MAX && folders_find(&w, "/run/media/m/S/9") < 0 && folders_find(&w, "/run/media/m/S/10") >= 0 &&
@@ -114,7 +114,7 @@ static void test_folders(void)
     m = 0;
     for (int i = 0; i < FOLDERS_ROOM + 1; i++) m += (size_t)snprintf(many + m, sizeof many - m, "folder /x/%d 1 list - - - -\n", i);
     folders_parse(&a[0], str_from_c(many), &w);
-    CHECK(w.n == FOLDERS_ROOM && w.full && !folders_get(&a[0], &w, "/another"));
+    CHECK(w.n == FOLDERS_ROOM && !folders_get(&a[0], &w, "/another"));
 
     // The wipe: only the fields asked, each entry that had one counted and marked.
     folders_parse(&a[0], S("folder /a 1 icons 64 size on -\nfolder /b 1 - 96 - - x\nfolder /c 1 - - - - y\n"), &w);
@@ -445,6 +445,46 @@ static void test_review_fs(void)
     int lines = 0;
     for (isize i = 0; i < text.len; i++) lines += text.p[i] == '\n';
     CHECK(lines == SESSION_KEEP && strstr(text.p, "window 2000 ") && strstr(text.p, "window 1079 ") && !strstr(text.p, "window 1072 "));
+    ops_guard(NULL);
+}
+
+// A writer whose lines pass the room it asked: a replacement (keep) or the new lines (tail).
+static bool rw_prepare(void *ctx, Arena *a, Str text, isize *room, Err *err)
+{
+    (void)ctx, (void)a, (void)text, (void)err;
+    *room = 0;
+    return true;
+}
+static bool rw_keep(void *ctx, Str text, Str line, Str *out)
+{
+    (void)text, (void)line;
+    if (*(int *)ctx == 1) *out = S("a line far longer than the file's own, past the room asked for it");
+    return true;
+}
+static isize rw_tail(void *ctx, char *out, isize cap)
+{
+    (void)out;
+    return *(int *)ctx == 2 ? -1 : *(int *)ctx == 3 ? (cap >= 2 ? (out[0] = 'z', out[1] = '\n', 2) : -1) : 0;
+}
+
+// Past its room, state_rewrite writes nothing and says so, never a file cut short (F11 review,
+// 2026-11-02: the loop broke off and the tail dropped its line, both "succeeding").
+static void test_state_rewrite_room(void)
+{
+    ops_guard(root);
+    char path[PATH_MAX];
+    snprintf(path, sizeof path, "%s", at("f11rr/state"));
+    mkdirs(at("f11rr"));
+    put(path, "a=1\nb=2\n");
+    Err err;
+    for (int how = 1; how <= 2; how++) {
+        StateEdit e = { rw_prepare, rw_keep, rw_tail, &how, false };
+        CHECK(!state_rewrite(&ta, path, &e, &err) && strstr(err.msg, "too big"));
+        CHECK(strcmp(read_file(&ta, path).p, "a=1\nb=2\n") == 0);
+    }
+    int fits = 3;   // (the control: a tail that fits is written)
+    StateEdit e = { rw_prepare, rw_keep, rw_tail, &fits, false };
+    CHECK(state_rewrite(&ta, path, &e, &err) && strcmp(read_file(&ta, path).p, "a=1\nb=2\nz\n") == 0);
     ops_guard(NULL);
 }
 

@@ -54,6 +54,7 @@ typedef struct {
 } Listing;
 
 typedef enum { SORT_NAME, SORT_SIZE, SORT_MTIME, SORT_KEYS } SortKey;
+static const char *const SORT_NAMES[SORT_KEYS] = { "name", "size", "modified" };   // as ofx.conf and the state file say them
 
 typedef struct {
     SortKey key;

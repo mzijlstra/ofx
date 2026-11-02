@@ -297,10 +297,8 @@ static void job_finish(JobRec *r)
         for (isize i = 0; i < j->n; i++) {
             JobItem *it = &j->item[i];
             if (it->out != OUT_NEW) continue;
-            Str d = path_dir(str_from_c(it->dst));
             char dir[PATH_MAX], made[PATH_MAX];
-            snprintf(dir, sizeof dir, "%.*s", STR_ARG(d.len ? d : S("/")));
-            if (path_put(made, sizeof made, dir, str_from_c(it->final))) undo_add(&undo, j->kind == JOB_MOVE ? it->src : NULL, made, NULL);
+            if (path_parent(dir, sizeof dir, it->dst) && path_put(made, sizeof made, dir, str_from_c(it->final))) undo_add(&undo, j->kind == JOB_MOVE ? it->src : NULL, made, NULL);
         }
         if (undo.n == 0) undo_clear(&undo);
     }

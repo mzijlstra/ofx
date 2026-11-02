@@ -144,9 +144,9 @@ MUTANTS += [
     ('ui/find.c', "isize i = ((from + dir * k) % l->n + l->n) % l->n;", "isize i = (from + dir * k) % l->n;"),
     ('ui/find.c', "u->find_miss = text.len > 0 && i < 0;", "u->find_miss = i < 0;"),
     ('ui/find.c', "u->list.sel = i >= 0 ? i : ui_find_back(u);", "u->list.sel = i >= 0 ? i : u->list.sel;"),
-    ('ui/find.c', '        return;\n    }\n    ui_unfocus(u, UI_FOCUS_FIND);\n    if (u->find.len) memcpy(u->last, u->find.b, (size_t)u->find.len), u->last_len = u->find.len;', '        return;\n    }\n    ui_unfocus(u, UI_FOCUS_FIND);'),
+    ('ui/find.c', '    ui_unfocus(u, UI_FOCUS_FIND);\n    if (u->find.len) memcpy(u->last, u->find.b, (size_t)u->find.len), u->last_len = u->find.len;', '    ui_unfocus(u, UI_FOCUS_FIND);'),
     ('ui/find.c', "    if (cp < 0x20 || cp == 0x7F || cp > 0x10FFFF) return 0;", "    if (cp < 0x20) return 0;"),
-    ('ui/find.c', "    ui_matcher_set(&u->find_m, (Str){ u->last, u->last_len }, u->find_opts);\n    isize i = ui_find_at(&u->list, names, &u->find_m, u->list.sel + dir, dir);", "    ui_matcher_set(&u->find_m, (Str){ u->last, u->last_len }, u->find_opts);\n    isize i = ui_find_at(&u->list, names, &u->find_m, u->list.sel, dir);"),
+    ('ui/find.c', '    isize i = ui_find_at(&u->list, names, &u->find_m, u->list.sel + dir, dir);', '    isize i = ui_find_at(&u->list, names, &u->find_m, u->list.sel, dir);'),
     ('ui/handle.c', "        u->list.sel = ui_find_back(u), ui_show_sel(&u->list);\n        return true;", "        return true;"),
     ('ui/handle.c', "    default: ui_find_leave(u); return false;   // a command", "    default: ui_find_leave(u); return true;   // a command"),
     # ---- F2: input
@@ -204,7 +204,7 @@ MUTANTS += [
     (O, "    (*count)++;\n    return true;\n}", "    return true;\n}"),
     # the trash
     (T, "        *slash = 0;\n    }\n}", "        return false;\n    }\n}"),
-    (T, "        if (stat(up, &st) != 0 || st.st_dev != dev) return;", "        if (stat(up, &st) != 0) return;"),
+    (T, '|| stat(up, &st) != 0 || st.st_dev != dev) return;', '|| stat(up, &st) != 0) return;'),
     (T, "dev_of(dir, &fd) && hd == fd) {", "dev_of(dir, &fd) && hd != fd) {"),
     (T, "S_ISDIR(st.st_mode) && (st.st_mode & S_ISVTX)) {", "S_ISDIR(st.st_mode)) {"),
     (T, "    if (lstat(admin, &st) == 0", "    if (stat(admin, &st) == 0"),
@@ -226,7 +226,7 @@ MUTANTS += [
     (J, "                fchmod(dfd, st.st_mode & 07777);\n                futimens(dfd, (struct timespec[2]){ st.st_atim, st.st_mtim });", "                futimens(dfd, (struct timespec[2]){ st.st_atim, st.st_mtim });"),
     (J, "                fchmod(dfd, st.st_mode & 07777);\n                futimens(dfd, (struct timespec[2]){ st.st_atim, st.st_mtim });", "                fchmod(dfd, st.st_mode & 07777);"),
     (J, "    if (fresh) snprintf(part, sizeof part, \"%s\", dname);\n    else part_name(part, sizeof part, dname);\n    bool ok = true;", "    snprintf(part, sizeof part, \"%s\", dname);\n    bool ok = true;"),
-    (J, "        if (!ok && dfd >= 0 && !fresh) unlinkat(ddir, part, 0);", ""),
+    (J, '        if (!ok && dfd >= 0) unlinkat(ddir, part, 0);', ""),
     (J, "int r = replace ? renameat(ddir, part, ddir, dname) : renameat2(ddir, part, ddir, dname, RENAME_NOREPLACE);", "int r = renameat2(ddir, part, ddir, dname, RENAME_NOREPLACE);"),
     (J, "            dname = keep;\n", ""),
     (J, "        } else if (S_ISDIR(st.st_mode) != S_ISDIR(dt.st_mode)) {", "        } else if (0) {"),
@@ -256,7 +256,7 @@ MUTANTS += [
     (N, '            if (lstat(it->to, &st) != 0 || !S_ISDIR(st.st_mode)) return', '            if (0) return'),
     (N, "        if ((u->kind == UNDO_RENAME || u->kind == UNDO_TRASH || u->kind == UNDO_MOVE) && present(it->from))", "        if (0)"),
     (N, "    undo_clear(u);\n    return ok;", "    return ok;"),
-    (N, "        if (dev_of(from_dir, &a) && dev_of(u->it[i].to, &b) && a != b) return true;", "        if (dev_of(from_dir, &a) && dev_of(u->it[i].to, &b) && a == b) return true;"),
+    (N, 'dev_of(from_dir, &a) && dev_of(u->it[i].to, &b) && a != b) return true;', 'dev_of(from_dir, &a) && dev_of(u->it[i].to, &b) && a == b) return true;'),
     (N, "    if (u->n == 1 || u->kind == UNDO_RENAME || u->kind == UNDO_MKDIR || u->kind == UNDO_MKFILE || u->kind == UNDO_CHMOD)", "    if (u->kind == UNDO_RENAME || u->kind == UNDO_MKDIR || u->kind == UNDO_MKFILE || u->kind == UNDO_CHMOD)"),
     (N, "        if (one) (*done)++;", "        if (one) {}"),
     (N, "            one = trash_put(it->to, &t, &e);   // copies go to the trash, never for good", "            isize k = 0;\n            one = delete_tree(it->to, &k, &e), (void)t;"),
@@ -1174,7 +1174,7 @@ MUTANTS += [
 ]
 # ---- the find bar (Michael, 2026-10-26)
 MUTANTS += [
-    ('ui/find.c', '    u->finding = false, u->find_miss = false, u->find_select = false;\n    ui_unfocus(u, UI_FOCUS_FIND);\n', '    u->finding = false, u->find_miss = false, u->find_select = false;\n'),
+    ('ui/find.c', 'static void ui_find_keep(Ui *u)\n{\n    ui_unfocus(u, UI_FOCUS_FIND);\n', 'static void ui_find_keep(Ui *u)\n{\n'),
     ('ui/handle.c', "        if (u->find_select) ui_find_select(u, names);\n        else ui_find_leave(u);", "        if (u->find_select) ui_find_select(u, names);\n        else ui_find_close(u);"),
     ('ui/handle.c', '    case UK_UP: case UK_DOWN: case UK_SEL_UP: case UK_SEL_DOWN: ui_find_step(u, names, e.key == UK_UP || e.key == UK_SEL_UP ? -1 : 1); return true;', '    case UK_UP: case UK_DOWN: case UK_SEL_UP: case UK_SEL_DOWN: ui_find_step(u, names, e.key == UK_UP ? -1 : 1); return true;'),
     ('ui/find.c', "    if (i >= 0) u->list.sel = i, ui_show_sel(&u->list);\n}\n\n// How many", "}\n\n// How many"),
@@ -1769,7 +1769,7 @@ MUTANTS += [
     ('fs/trash.c', '    if (snprintf(tr.file, sizeof tr.file, "%s", t->file) >= (int)sizeof tr.file ||', '    if (snprintf(tr.file, sizeof tr.file, "%s", t->file) < 0 ||'),
     ('fs/trash.c', "            if (dec[0] == '/' && top[0] && !path_within(dec, top)) continue;\n", ''),
     ('fs/trash.c', ' || !ops_resolve(t->from, res, sizeof res) || !path_within(res, top))', ' || !ops_resolve(t->from, res, sizeof res))'),
-    ('fs/trash.c', '    if (!mkdir_p(path, 0700, true, err)) return false;\n', ''),
+    ('fs/paths.c', '    if (!mkdir_p(path, 0700, true, err)) return false;\n', ''),
     ('fs/fm1.c', '        if (!file_uri_path(str_from_c(uris[i]), path, sizeof path) || stat(path, &st) != 0) {', '        if (!file_uri_path(str_from_c(uris[i]), path, sizeof path)) {'),
     ('fs/bookmarks.c', '        if (!file_uri_path(uri, b->path, sizeof b->path)) b->path[0] = 0;', ''),
     ('fs/theme.c', '    if (!xdg_dir(buf, cap, "XDG_STATE_HOME", ".local/state", "omarchy/current/theme")) buf[0] = 0;', '    xdg_dir(buf, cap, "XDG_STATE_HOME", ".local/state", "omarchy/current/theme");'),
@@ -2185,7 +2185,7 @@ SE = 'fs/session.c'
 MUTANTS += [
     (SE, '    if (id <= 0 || when < 0 || shown < 0) return false;', '    if (id <= 0 || when < 0) return false;'),
     (SE, '    if (id <= 0 || when < 0 || shown < 0) return false;', '    if (when < 0 || shown < 0) return false;'),
-    (SE, "        if (!percent_decode(d, p, sizeof p) || (p[0] != '/' && !str_starts_with(str_from_c(p), S(\"trash:\"))", "        if (!percent_decode(d, p, sizeof p) || (p[0] != '/' && !str_starts_with(str_from_c(p), S(\"search:\"))"),
+    (SE, '!str_starts_with(str_from_c(p), S(TRASH_URI))', '!str_starts_with(str_from_c(p), S(SEARCH_URI))'),
     (SE, '    if (w->shown >= w->n) w->shown = 0;\n', ''),
     (SE, '    return w->n > 0;', '    return true;'),
     # Not a mutant: percent_encode's false ignored in session_line (a folder cut short there leaves k
@@ -2232,10 +2232,15 @@ MUTANTS += [
     ('fs/state.c', '    bool ok = state_read(a, path, &text, err) && (!e->prepare || e->prepare(e->ctx, a, text, &room, err));', '    bool ok = state_read(a, path, &text, err);'),
     ('fs/state.c', '    int lock = state_lock(path);\n    bool ok = state_read(a', '    int lock = -1;\n    bool ok = state_read(a'),
     ('fs/state.c', '        if (!line.len || (e->keep && !e->keep(e->ctx, text, line, &out))) continue;', '        if (!line.len) continue;'),
-    ('fs/state.c', '    if (ok && e->tail) n += e->tail(e->ctx, body + n, text.len + room + 2 - n);', ''),
+    ('fs/state.c', '    isize t = ok && e->tail ? e->tail(e->ctx, body + n, text.len + room + 2 - n) : 0;', '    isize t = 0;'),
     ('fs/state.c', '    if (p->put) return false;   // (a key said twice: once)', '    if (p->put) return true;'),
     ('fs/state.c', '    if (eq < 0 || !str_eq(str_trim(str_cut(line, 0, eq)), p->key)) return true;', '    if (eq < 0 || !str_starts_with(line, p->key)) return true;'),
-    ('fs/state.c', '    if (p->put || p->line.len + 1 > cap) return 0;', '    if (p->line.len + 1 > cap) return 0;'),
+    ('fs/state.c', '    if (p->put) return 0;\n    if (p->line.len + 1 > cap)', '    if (p->line.len + 1 > cap)'),
+    # F11 milestone cleanup, step 4: a rewrite past its room fails (2026-11-02)
+    ('fs/state.c', '            err_set(err, "%s: too big", path), ok = false;\n            break;', '            break;'),
+    ('fs/state.c', '    if (t < 0) err_set(err, "%s: too big", path), ok = false;', ''),
+    # Not mutants: the three tails' -1 (state_put's, session_edit's, folders_write's): each writer's
+    # room covers its own tail, so no test can reach it; the check above is tested with a tail of its own.
     # Not mutants: state_write's fsync dropped, and session_edit's live writes synced too (only a power
     # cut, or a stall behind a big write, shows either); session_edit_tail's room check (its room is
     # that line's: never short).

@@ -575,7 +575,6 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         case UK_BACKSPACE: return (UiAction){ UA_PARENT, 0, false };
         case UK_F9: return ui_side_mode(u, (SideMode)((u->side_mode + 1) % SIDE_MODES));
         case UK_TAB:
-        case UK_SIDE:
         case UK_WORD_LEFT:   // (Ctrl+Left: a word in a text field, the sidebar here)
             // Tab goes to the sidebar and back, Ctrl+Left there; a hidden one shows as places
             // (gui/ lists them for the mode, the cursor off a heading).

@@ -144,10 +144,10 @@ static void test_side_modes(void)
     ui_handle(&u, names, &in);
     CHECK(u.focus != UI_FOCUS_SIDE && u.side_mode == SIDE_PLACES);
     // Ctrl+Left goes there and stays; from hidden as Tab does.
-    in = keys(2, UK_SIDE, UK_SIDE);
+    in = keys(2, UK_WORD_LEFT, UK_WORD_LEFT);
     CHECK(ui_handle(&u, names, &in).kind == UA_NONE && (u.focus == UI_FOCUS_SIDE));
     u.side_mode = SIDE_HIDDEN, ui_unfocus(&u, UI_FOCUS_SIDE);
-    in = keys(1, UK_SIDE);
+    in = keys(1, UK_WORD_LEFT);
     a = ui_handle(&u, names, &in);
     CHECK(a.kind == UA_SIDE_MODE && a.index == SIDE_PLACES && (u.focus == UI_FOCUS_SIDE));
     // Hiding it takes the keys from it.

@@ -64,7 +64,7 @@ static UiKey ui_key_of(int key, int mods)
     if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_J) return UK_JOBS;
     // Ctrl and an arrow: the keys to the part of the window that way (Michael, 2026-10-24); Ctrl+S
     // the sidebar's next mode, as F9.
-    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_LEFT) return UK_WORD_LEFT;   // (outside a text field: UK_SIDE)
+    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_LEFT) return UK_WORD_LEFT;   // (outside a text field: the sidebar)
     if (m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT) && key == GLFW_KEY_LEFT) return UK_SEL_WORD_LEFT;
     if (m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT) && key == GLFW_KEY_RIGHT) return UK_SEL_WORD_RIGHT;
     if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_BACKSPACE) return UK_WORD_BACKSPACE;
@@ -205,8 +205,7 @@ static const struct {
 static Hit hit_at(float x, float y)
 {
     // (by name: a field added or moved shifted every value after it, 2026-10-28; the rest 0 or false)
-    Hit h = { .row = -1, .side = -1, .header = -1, .bar = UB_NONE, .crumb = -1, .tab = -1, .tab_x = -1, .job_x = -1, .mode = -1, .twisty = -1,
-              .eject = -1, .menu_title = -1, .menu_item = -1, .prop_box = -1, .ow_row = -1, .bmp_row = -1, .field = -1 };
+    Hit h = HIT_NONE;
     // Open With's toggles (its panel's)
     for (int k = 1; k <= 4 && !h.toggle && app.ui.ow; k++)
         if (in_box(CLAY_IDI("toggle", k), x, y)) h.toggle = k;
