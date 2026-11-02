@@ -111,10 +111,10 @@ static const ConfOpt CONF_OPTS[] = {
     { "preview-thumbnailers", CK_BOOL, offsetof(Conf, thumbnailers), "on",
       "Previews of videos, PDFs, office documents and the other types the\n"
       "programs in /usr/share/thumbnailers know, made by those programs (as Nemo\n"
-      "and Nautilus make theirs, in the same cache): on or off. Each runs in a\n"
-      "sandbox (bubblewrap, when it is installed) that sees only the file, for 10\n"
-      "seconds at most. Off, ofx still shows those previews when another program\n"
-      "made them." },
+      "and Nautilus make theirs, in the same cache): on or off. Each runs in\n"
+      "bubblewrap's sandbox, which sees only the file, for 10 seconds at most;\n"
+      "without bubblewrap installed (bwrap), none runs. Off, ofx still shows those\n"
+      "previews when another program made them." },
     { "preview-max-size", CK_SIZE, offsetof(Conf, preview_max), "10 MiB",
       "The largest image file ofx makes a preview of; a larger one shows its file\n"
       "type's icon. A size: B, KiB, MiB, GiB (or KB, MB, GB, in 1000s).\n"

@@ -2318,8 +2318,8 @@ MUTANTS += [
     ('fs/thumbers.c', '    case \'%\': return "%";\n', ''),
     ('fs/thumbers.c', "            if (*p != '%') { len++; continue; }", "            if (*p != '%') { continue; }"),
     ('fs/thumbers.c', '    if (!ops_program_allowed(argv[0], &err)) return TR_NOT_RUN;\n', ''),
-    ('fs/thumbers.c', '    if (thumb_sandbox && path_find("bwrap", bw, sizeof bw)) {', '    if (path_find("bwrap", bw, sizeof bw)) {'),
-    ('fs/thumbers.c', '    if (thumb_sandbox && path_find("bwrap", bw, sizeof bw)) {', '    if (false && path_find("bwrap", bw, sizeof bw)) {'),
+    ('fs/thumbers.c', '    if (thumb_sandbox) {\n        if (!path_find', '    if (true) {\n        if (!path_find'),
+    ('fs/thumbers.c', '    if (thumb_sandbox) {\n        if (!path_find', '    if (false) {\n        if (!path_find'),
     ('fs/thumbers.c', '        if (!path_below(prog, "/usr")) av[n++] = "--ro-bind", av[n++] = prog, av[n++] = prog;', '        if (false) av[n++] = "--ro-bind", av[n++] = prog, av[n++] = prog;'),
     ('fs/thumbers.c', '        setpgid(0, 0);\n', ''),
     ('fs/thumbers.c', '    if (r <= 0) {\n        kill(-pid, SIGKILL);', '    if (r < 0) {\n        kill(-pid, SIGKILL);'),
@@ -2352,4 +2352,5 @@ MUTANTS += [
     ('fs/clean.c', "        if (p == d || p - d > 10 || *p != (part ? 0 : '-')) return false;", "        if (p == d || *p != (part ? 0 : '-')) return false;"),
     ('fs/clean.c', "        if (p == d || p - d > 10 || *p != (part ? 0 : '-')) return false;", "        if (p - d > 10 || *p != (part ? 0 : '-')) return false;"),
     ('fs/clean.c', '    if (strncmp(n, ".ofx-run-", 9) != 0) return false;\n', ''),
+    ('fs/thumbers.c', '        if (!path_find("bwrap", bw, sizeof bw)) return TR_NOT_RUN;\n', ''),
 ]

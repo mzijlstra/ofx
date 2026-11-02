@@ -133,9 +133,10 @@ ones ofx made. A file over 10 MiB, or on a network or FUSE drive, gets none made
 decode gets an entry in `fail/ofx/` and isn't tried again until it changes. The list view keeps its
 icons. Videos, PDFs, office documents and the other types a program in `/usr/share/thumbnailers`
 knows (ffmpegthumbnailer, evince, papers, gsf-office, glycin, ...) get theirs from that program, as
-in Nemo and Nautilus (`preview-thumbnailers = on`, the default): in bubblewrap when it is installed
-(`bwrap`, which sees only `/usr`, the file and a folder of its own to write in, with no network),
-for 10 seconds at most, with no size limit, since the program reads only what it needs.
+in Nemo and Nautilus (`preview-thumbnailers = on`, the default): in bubblewrap (`bwrap`, which
+sees only `/usr`, the file and a folder of its own to write in, with no network; without it
+installed, none runs), for 10 seconds at most, with no size limit, since the program reads only
+what it needs.
 
 The cache's cleanup, `ofx-clean` (nothing else cleans it, Nemo neither): a preview not read for 90
 days goes; so does one whose file is gone or has changed (kept: files on a network drive or on a
@@ -265,10 +266,10 @@ folder other than your home (Show in folder, `ofx <folder>`), that folder opens 
 
 # Previews of videos, PDFs, office documents and the other types the
 # programs in /usr/share/thumbnailers know, made by those programs (as Nemo
-# and Nautilus make theirs, in the same cache): on or off. Each runs in a
-# sandbox (bubblewrap, when it is installed) that sees only the file, for 10
-# seconds at most. Off, ofx still shows those previews when another program
-# made them.
+# and Nautilus make theirs, in the same cache): on or off. Each runs in
+# bubblewrap's sandbox, which sees only the file, for 10 seconds at most;
+# without bubblewrap installed (bwrap), none runs. Off, ofx still shows those
+# previews when another program made them.
 #preview-thumbnailers = on
 
 # The largest image file ofx makes a preview of; a larger one shows its file

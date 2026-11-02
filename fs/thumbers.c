@@ -4,8 +4,8 @@
 // .thumbnailer files in every XDG data dir's thumbnailers/ say (the user's own first; a type's
 // first one wins). Its PNG goes into the cache as ofx's own (thumb.c), so Nemo and Nautilus read it.
 //
-// A video or a PDF from a download is parsed by ffmpeg or poppler, so each runs in bubblewrap when
-// it is installed, as GNOME's do (Nemo's don't): /usr read only, the one file it reads, a folder of
+// A video or a PDF from a download is parsed by ffmpeg or poppler, so each runs in bubblewrap, as
+// GNOME's do (Nemo's don't), and without bubblewrap installed none runs (Michael, 2026-11-02): /usr read only, the one file it reads, a folder of
 // its own to write in, and no network, no other processes, nothing of the home folder, no terminal
 // (a session of its own), and of ofx's environment only PATH, LANG, LC_ALL and HOME (a token in it
 // could leave through the PNG; F12 step 3 review). It has THUMB_RUN_MS; then it is killed (with
@@ -40,7 +40,7 @@ typedef struct {
 } Thumbers;
 
 static int thumb_run_ms = THUMB_RUN_MS;   // (OFX_TEST_THUMB_RUN_MS, gui/: a test's hung fake killed sooner)
-static bool thumb_sandbox = true;         // (OFX_TEST_SANDBOX=off, gui/: the run without bubblewrap)
+static bool thumb_sandbox = true;         // (false: run as they are; a test's only, OFX_TEST_SANDBOX=off under the guard)
 
 static int thumbers_name_cmp(const void *a, const void *b) { return strcmp(*(char *const *)a, *(char *const *)b); }
 
@@ -163,8 +163,8 @@ static int thumbers_argv(Arena *a, const char *exec, const char *path, const cha
 
 typedef enum { TR_NOT_RUN, TR_ENDED, TR_KILLED } ThumbRun;
 
-// argv run on in, writing in dir only: in bubblewrap when there is one (thumb_sandbox), else as it
-// is, with /dev/null for its input and output, no blocked signals, the environment above, in a
+// argv run on in, writing in dir only: in bubblewrap (TR_NOT_RUN without it), or as it is when a
+// test turned thumb_sandbox off; with /dev/null for its input and output, no blocked signals, the environment above, in a
 // process group of its own, and killed if the worker thread that started it goes (ofx's end).
 // TR_ENDED when it ended within thumb_run_ms; else TR_KILLED, with its group, and what it wrote
 // doesn't count. Whether it made a PNG is the caller's to see.
@@ -187,7 +187,8 @@ static ThumbRun thumb_run(const char *const *argv, const char *in, const char *d
     envp[ne] = NULL;
     const char *av[THUMB_ARGS_MAX + 64];
     int n = 0;
-    if (thumb_sandbox && path_find("bwrap", bw, sizeof bw)) {
+    if (thumb_sandbox) {
+        if (!path_find("bwrap", bw, sizeof bw)) return TR_NOT_RUN;
         static const char *const box[] = {
             "--ro-bind", "/usr", "/usr", "--ro-bind-try", "/etc/ld.so.cache", "/etc/ld.so.cache",
             "--ro-bind-try", "/etc/fonts", "/etc/fonts", "--ro-bind-try", "/var/cache/fontconfig", "/var/cache/fontconfig",   // (without them a PDF's fonts are scanned each run: 570 ms against 63)

@@ -356,6 +356,14 @@ static void test_thumb_exec(void)
     q = ask(clip[5], TK_EXEC, 48, cache), q.exec = exec;
     CHECK(thumb_get(&a, &q, &out) == TG_MADE);
     thumb_sandbox = true;
+    // Without bubblewrap on PATH: not run at all (nothing made, nothing written).
+    snprintf(exec, sizeof exec, "%s/copy %%i %%o %%s", bin);
+    set_mtime(clip[3], 1700000300);
+    q = ask(clip[3], TK_EXEC, 48, cache), q.exec = exec;
+    env_set("PATH", bin);
+    CHECK(thumb_get(&a, &q, &out) == TG_NONE);
+    env_restore();
+    CHECK(thumb_get(&a, &q, &out) == TG_MADE);
     // A program outside the test's folder isn't run under the guard (nor counted as failed).
     q = ask(clip[2], TK_EXEC, 96, cache), q.exec = "cp %i %o";
     set_mtime(clip[2], 1700000200), q.mtime = 1700000200;
