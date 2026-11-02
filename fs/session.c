@@ -15,7 +15,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-enum { SESSION_TABS = 32, SESSION_WINDOWS = 64 };
+enum { SESSION_TABS = 32, SESSION_WINDOWS = 64 };   // (WINDOWS: the ids a start hands back at most)
 
 typedef struct {
     long        id;
@@ -60,20 +60,42 @@ static int session_line(long id, i64 at, int shown, const char *const *dir, int 
     return k;
 }
 
-// The state file's window lines changed, under its lock: id's line taken out, line (or nothing: NULL)
-// put at the end; every other line kept.
+// Window lines in a file: at most SESSION_KEEP, the newest by their closing time (reviewer-2,
+// 2026-11-01: a question left unanswered each day, then Close All, piled up 80 of them).
+enum { SESSION_KEEP = 8 };
+
+// Whether window line l (closed at `at`) is among the newest SESSION_KEEP of text's window lines,
+// counting extra (closed at extra_at) as one more when it is set.
+static bool session_kept(Arena *a, Str text, i64 at, isize self, bool extra, i64 extra_at)
+{
+    int newer = extra && extra_at >= at;   // (the new line goes last: on a tie it is the newer)
+    isize p = 0;
+    for (Str l; next_line(text, &p, &l);) {
+        SessionWin w;
+        isize here = (isize)(l.p - text.p);
+        if (here != self && session_parse_line(a, l, &w) && (w.at > at || (w.at == at && here > self))) newer++;
+    }
+    return newer < SESSION_KEEP;
+}
+
+// The state file's window lines changed, under its lock: line put at the end (a window writes its
+// own once, as it closes), or (NULL) id's lines forgotten; the window lines past the newest
+// SESSION_KEEP dropped; every other line kept.
 static bool session_put(Arena *a, const char *path, long id, const char *line, Err *err)
 {
     Str text;
     int lock = state_lock(path);
     if (!state_read(a, path, &text, err)) return state_unlock(lock), false;
+    SessionWin mine;
+    bool extra = line && session_parse_line(a, str_cut(str_from_c(line), 0, (isize)strlen(line) - 1), &mine);
     isize cap = text.len + (line ? (isize)strlen(line) : 0) + 2;
     char *body = arena_try_push(a, cap, 1);
     if (!body) return state_unlock(lock), err_set(err, "%s: too big", path), false;
     isize n = 0, at = 0;
     for (Str l; next_line(text, &at, &l);) {
         SessionWin w;
-        if (!l.len || (str_starts_with(l, S("window ")) && session_parse_line(a, l, &w) && w.id == id)) continue;
+        if (!l.len) continue;
+        if (session_parse_line(a, l, &w) && ((!line && w.id == id) || !session_kept(a, text, w.at, (isize)(l.p - text.p), extra, extra ? mine.at : 0))) continue;
         memcpy(body + n, l.p, (size_t)l.len), n += l.len, body[n++] = '\n';
     }
     if (line) memcpy(body + n, line, strlen(line)), n += (isize)strlen(line);
@@ -82,37 +104,34 @@ static bool session_put(Arena *a, const char *path, long id, const char *line, E
     return ok;
 }
 
-// A window's line taken from the state file, under its lock: id's, or (id 0) the newest. Into *w (its
-// folders in a); the ids of the window lines left, in the file's order, into rest (*nrest, at most
-// cap).
-// False when there is none to take.
+// A window's line taken from the state file, under its lock: id's, or (id 0) the newest of all. Into
+// *w (its folders in a); the ids of the window lines left, in the file's order, into rest (*nrest, at
+// most cap). False when there is none to take. Only the line taken goes (by its id and time: pids
+// come round again after a reboot).
 static bool session_take(Arena *a, const char *path, long id, SessionWin *w, long *rest, int cap, int *nrest, Err *err)
 {
     Str text;
     *nrest = 0;
     int lock = state_lock(path);
     if (!state_read(a, path, &text, err)) return state_unlock(lock), false;
-    static SessionWin all[SESSION_WINDOWS];
-    int n = 0, pick = -1;
-    isize at = 0;
-    for (Str l; next_line(text, &at, &l) && n < SESSION_WINDOWS;)
-        if (session_parse_line(a, l, &all[n])) {
-            if (id ? all[n].id == id : pick < 0 || all[n].at > all[pick].at) pick = n;
-            n++;
-        }
-    if (pick < 0) return state_unlock(lock), false;
-    *w = all[pick];
-    for (int i = 0; i < n && *nrest < cap; i++)
-        if (i != pick) rest[(*nrest)++] = all[i].id;
-    char line[64];
-    snprintf(line, sizeof line, "window %ld ", w->id);
-    isize cap2 = text.len + 1;
-    char *body = arena_try_push(a, cap2, 1);
+    bool found = false;
+    isize pick = -1, at = 0;
+    for (Str l; next_line(text, &at, &l);) {
+        SessionWin c;
+        if (session_parse_line(a, l, &c) && (id ? c.id == id && (!found || c.at > w->at) : !found || c.at > w->at))
+            *w = c, found = true, pick = (isize)(l.p - text.p);
+    }
+    if (!found) return state_unlock(lock), false;
+    char *body = arena_try_push(a, text.len + 1, 1);
     if (!body) return state_unlock(lock), err_set(err, "%s: too big", path), false;
     isize m = 0;
     at = 0;
-    for (Str l; next_line(text, &at, &l);)
-        if (l.len && !str_starts_with(l, str_from_c(line))) memcpy(body + m, l.p, (size_t)l.len), m += l.len, body[m++] = '\n';
+    for (Str l; next_line(text, &at, &l);) {
+        SessionWin c;
+        if (!l.len || (isize)(l.p - text.p) == pick) continue;
+        if (*nrest < cap && session_parse_line(a, l, &c)) rest[(*nrest)++] = c.id;
+        memcpy(body + m, l.p, (size_t)l.len), m += l.len, body[m++] = '\n';
+    }
     bool ok = state_write(path, body, m, err);
     state_unlock(lock);
     return ok;

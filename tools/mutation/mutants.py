@@ -2203,12 +2203,22 @@ MUTANTS += [
     # Not a mutant: percent_encode's false ignored in session_line (a folder cut short there leaves k
     # past cap - 1, which the check after the loop refuses).
     (SE, '    if (k <= 0 || (size_t)k + 1 >= cap) return 0;', '    if (k <= 0) return 0;'),
-    (SE, ' && session_parse_line(a, l, &w) && w.id == id)) continue;', ')) continue;'),
+    (SE, ' && ((!line && w.id == id) || !session_kept(', ' && ((!line) || !session_kept('),
+    (SE, ' && ((!line && w.id == id) || !session_kept(', ' && ((false) || !session_kept('),
+    (SE, '    return newer < SESSION_KEEP;', '    return newer <= SESSION_KEEP;'),
+    (SE, '    int newer = extra && extra_at >= at;', '    int newer = 0;'),
+    (SE, '    int newer = extra && extra_at >= at;', '    int newer = extra && extra_at > at;'),
+    (SE, ' && (w.at > at || (w.at == at && here > self))) newer++;', ' && w.at > at) newer++;'),
+    (SE, '(id ? c.id == id && (!found || c.at > w->at) : !found || c.at > w->at)', '(id ? c.id == id : !found || c.at > w->at)'),
+    (SE, '(id ? c.id == id && (!found || c.at > w->at) : !found || c.at > w->at)', '(id ? c.id == id && (!found || c.at > w->at) : !found)'),
+    (SE, '(id ? c.id == id && (!found || c.at > w->at) : !found || c.at > w->at)', '(!found || c.at > w->at)'),
+    (SE, '        if (!l.len || (isize)(l.p - text.p) == pick) continue;', '        if (!l.len) continue;'),
+    (SE, '        if (*nrest < cap && session_parse_line(a, l, &c)) rest[(*nrest)++] = c.id;', '        if (session_parse_line(a, l, &c)) rest[(*nrest)++] = c.id;'),
     (SE, '    if (line) memcpy(body + n, line, strlen(line)), n += (isize)strlen(line);', '    (void)line;'),
-    (SE, '            if (id ? all[n].id == id : pick < 0 || all[n].at > all[pick].at) pick = n;', '            if (id ? all[n].id == id : pick < 0) pick = n;'),
-    (SE, '            if (id ? all[n].id == id : pick < 0 || all[n].at > all[pick].at) pick = n;', '            if (pick < 0 || all[n].at > all[pick].at) pick = n;'),
-    (SE, '        if (i != pick) rest[(*nrest)++] = all[i].id;', '        rest[(*nrest)++] = all[i].id;'),
-    (SE, '        if (l.len && !str_starts_with(l, str_from_c(line))) memcpy', '        if (l.len) memcpy'),
+
+
+
+
     (CF, '{ "restore-tabs", CK_BOOL, offsetof(Conf, restore_tabs), "off",', '{ "restore-tabs", CK_BOOL, offsetof(Conf, sort_rev), "off",'),
     ('ui/ui.c', '    if (u->restore_n > 0) return UI_ON_RESTORE;\n', ''),
     ('ui/handle.c', '        if (yes_no) return u->restore_n = 0, (UiAction){ UA_RESTORE_WINDOWS, 0, said_yes };', '        if (yes_no) return u->restore_n = 0, (UiAction){ UA_RESTORE_WINDOWS, 0, true };'),

@@ -296,9 +296,9 @@ static void test_session(void)
     CHECK(session_put(&ta, path, 9, line, &err));
     CHECK(strcmp(read_file(&ta, path).p, "sidebar=tree\nwindow 5 10 0 /old\nfolder /x 1 list - - - -\nwindow 9 20 0 /home/m/a%20b\n") == 0);
     CHECK(session_put(&ta, path, 5, NULL, &err));
-    // Close All: one line each; the same window again replaces its own.
+    // Close All: one line each.
     session_line(11, 30, 1, dirs + 1, 2, line, sizeof line);
-    CHECK(session_put(&ta, path, 11, line, &err) && session_put(&ta, path, 11, line, &err));
+    CHECK(session_put(&ta, path, 11, line, &err));
     CHECK(strcmp(read_file(&ta, path).p, "sidebar=tree\nfolder /x 1 list - - - -\nwindow 9 20 0 /home/m/a%20b\nwindow 11 30 1 trash:/// /x\n") == 0);
     // By id, the older one (9) of two; put back.
     long rest[4];
@@ -312,6 +312,36 @@ static void test_session(void)
     CHECK(strstr(read_file(&ta, path).p, "window 11 ") == NULL);
     CHECK(session_take(&ta, path, 9, &w, rest, 4, &nrest, &err) && w.id == 9 && nrest == 0);
     CHECK(!session_take(&ta, path, 0, &w, rest, 4, &nrest, &err) && strcmp(read_file(&ta, path).p, "sidebar=tree\nfolder /x 1 list - - - -\n") == 0);
+    // At most SESSION_KEEP window lines, the newest (reviewer-2, 2026-11-01: 80 piled up): 12 put,
+    // the 8 newest left, the newest of all taken (not one of the first lines read), 7 left; an old
+    // pid again (after a reboot) doesn't put over the line it had.
+    put(path, "sidebar=tree\n");
+    for (int i = 1; i <= 12; i++) {
+        session_line(100 + i, i, 0, dirs, 1, line, sizeof line);
+        CHECK(session_put(&ta, path, 100 + i, line, &err));
+    }
+    Str text = read_file(&ta, path);
+    int lines = 0;
+    for (isize i = 0; i < text.len; i++) lines += text.p[i] == '\n';
+    CHECK(lines == 1 + SESSION_KEEP && !strstr(text.p, "window 104 ") && strstr(text.p, "window 105 ") && strstr(text.p, "window 112 "));
+    session_line(112, 50, 0, dirs + 2, 1, line, sizeof line);   // (pid 112 again, later; 105, the oldest, goes)
+    CHECK(session_put(&ta, path, 112, line, &err) && strstr(read_file(&ta, path).p, "window 112 12 ") && strstr(read_file(&ta, path).p, "window 112 50 ") &&
+          !strstr(read_file(&ta, path).p, "window 105 "));
+    CHECK(session_take(&ta, path, 0, &w, rest, 4, &nrest, &err) && w.id == 112 && w.at == 50 && nrest == 4);
+    CHECK(strstr(read_file(&ta, path).p, "window 112 12 ") != NULL);   // (the older 112's line stays)
+    CHECK(session_take(&ta, path, 112, &w, rest, 4, &nrest, &err) && w.at == 12);
+    // The same closing time for all: still SESSION_KEEP kept, the later ones in the file.
+    put(path, "");
+    for (int i = 1; i <= SESSION_KEEP + 1; i++) {
+        session_line(200 + i, 7, 0, dirs, 1, line, sizeof line);
+        CHECK(session_put(&ta, path, 200 + i, line, &err));
+    }
+    text = read_file(&ta, path), lines = 0;
+    for (isize i = 0; i < text.len; i++) lines += text.p[i] == '\n';
+    CHECK(lines == SESSION_KEEP && !strstr(text.p, "window 201 ") && strstr(text.p, "window 209 "));
+    // Two lines of one id: by id, the newer.
+    put(path, "window 7 9 0 /b\nwindow 7 3 0 /a\n");   // (the newer first)
+    CHECK(session_take(&ta, path, 7, &w, rest, 4, &nrest, &err) && w.at == 9 && strcmp(read_file(&ta, path).p, "window 7 3 0 /a\n") == 0);
     // A line forgotten (No): only it.
     put(path, "window 3 1 0 /a\nwindow 4 2 0 /b\n");
     CHECK(session_put(&ta, path, 3, NULL, &err) && strcmp(read_file(&ta, path).p, "window 4 2 0 /b\n") == 0);
