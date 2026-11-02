@@ -489,6 +489,9 @@ MUTANTS = [
     ('gui/files.c', '            if (app.ui.group_col) info_cell(CLAY_IDI("group", r)', '            info_cell(CLAY_IDI("group", r)', 'f8'),
     # ---- quit doesn't wait for a hung drive (2026-10-26: no mutant was hang's or f6b's alone)
     (G, '    if (pthread_timedjoin_np(t, NULL, until) != 0) pthread_detach(t);', '    pthread_join(t, NULL);', 'hang'),   # (join_by: every worker's stop)
+    # ---- the quit tells every worker first (F12): the clipboard's join waits for its telling, a copy for its cancel
+    (G, '    jobs_quit(), clip_quit(), count_quit(),', '    jobs_quit(), count_quit(),', 'clip'),
+    (G, '    jobs_quit(), clip_quit(), count_quit(),', '    clip_quit(), count_quit(),', 'f53'),
     ('gui/script.c', '    if (atomic_load(&idle_gen) != gen) return NULL;\n', '', 'f2 f63'),
     # ---- --select (FileManager1's ShowItems, 2026-10-26)
     (G, '    if ((selecting && strcmp(dir, "/") != 0) || (stat(', '    if ((stat(', 'f73'),

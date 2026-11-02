@@ -45,6 +45,8 @@ static void wake_main(void)
     pthread_mutex_unlock(&wake_mu);
 }
 
+enum { QUIT_WAIT_MS = 200, QUIT_JOBS_MS = 500 };   // (quit_workers)
+
 // ms from now, for join_by.
 static struct timespec deadline_in(int ms)
 {
@@ -70,6 +72,7 @@ static struct {
     i64             due;   // now_ms() time; 0 for none
     bool            quit;
     pthread_t       th;
+    bool            started;
 } timer = { .mu = PTHREAD_MUTEX_INITIALIZER };
 
 static void *timer_main(void *arg)
@@ -102,7 +105,7 @@ static void timer_start(void)
     pthread_condattr_setclock(&ca, CLOCK_MONOTONIC);
     pthread_cond_init(&timer.cv, &ca);
     pthread_condattr_destroy(&ca);
-    pthread_create(&timer.th, NULL, timer_main, NULL);
+    timer.started = pthread_create(&timer.th, NULL, timer_main, NULL) == 0;   // (without it, no tooltip waits for its delay)
 }
 
 // A wake-up at due (now_ms() time); 0 cancels it.
@@ -120,7 +123,7 @@ static void timer_stop(void)
     timer.quit = true;
     pthread_cond_signal(&timer.cv);
     pthread_mutex_unlock(&timer.mu);
-    pthread_join(timer.th, NULL);
+    if (timer.started) pthread_join(timer.th, NULL);
 }
 
 #include "watch.c"
@@ -455,6 +458,20 @@ static void theme_apply(void)
 }
 
 #include "script.c"
+
+// Quitting: every worker told to stop first, so they wind down together, then joined by deadlines
+// from that one moment: 200 ms, and half a second for the jobs (a cancelled copy removes its part
+// file). A hung mount under all of them costs the longest once; before, each stop told and waited
+// in turn, 500 + 5 × 200 ms (F11 review). The clipboard's thread is told with them and joined last
+// (clip_close).
+static void quit_workers(void)
+{
+    jobs_quit(), clip_quit(), count_quit(), walk_quit(), search_quit(), thumbs_quit(), space_quit();
+    struct timespec until = deadline_in(QUIT_WAIT_MS), jobs_until = deadline_in(QUIT_JOBS_MS);
+    count_join(&until), walk_join(&until), search_join(&until), thumbs_join(&until), space_join(&until);
+    jobs_join(&jobs_until);
+    clip_close();
+}
 
 static void usage(void)
 {
@@ -811,16 +828,10 @@ int main(int argc, char **argv)
     if (fold_view_of(app.ui.view) && app.have_list) remember_cursor(app.cwd, sel_name());   // (F11)
     if (rem.dirty) remember_write();
     if (app.windows[0]) win_unregister(app.windows, getpid());
-    jobs_stop();
-    clip_quit();
-    count_stop();
-    walk_stop();
-    search_stop();
+    quit_workers();
     ui_matcher_set(&app.ui.find_m, STR_EMPTY, app.ui.find_opts), ui_matcher_set(&app.ui.ow_m, STR_EMPTY, app.ui.ow_opts);   // (a compiled expression freed: LeakSanitizer)
     ui_matcher_set(&app.search_m, STR_EMPTY, app.ui.find_opts);
     ui_matcher_set(&app.search_im, STR_EMPTY, app.ui.inside_opts);
-    thumbs_stop();
-    space_stop();
     timer_stop();
     for (int i = 0; i < app.nslots; i++)
         if (app.slot[i].tex.id) UnloadTexture(app.slot[i].tex);

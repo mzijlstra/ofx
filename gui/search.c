@@ -289,8 +289,9 @@ static bool search_take(void)
     return came;
 }
 
-// At quit, as walk_stop: told to stop, 200 ms, then left to the process's end if stuck.
-static void search_stop(void)
+// At quit, as walk_quit and walk_join: told to stop, joined by until, else left to the process's
+// end.
+static void search_quit(void)
 {
     if (!search.started) return;
     pthread_mutex_lock(&search.mu);
@@ -298,6 +299,9 @@ static void search_stop(void)
     atomic_fetch_add(&search.gen, 1);
     pthread_cond_broadcast(&search.cv);
     pthread_mutex_unlock(&search.mu);
-    struct timespec until = deadline_in(200);
-    join_by(search.thread, &until);
+}
+
+static void search_join(const struct timespec *until)
+{
+    if (search.started) join_by(search.thread, until);
 }

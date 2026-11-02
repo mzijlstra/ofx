@@ -225,13 +225,18 @@ static bool clip_init(void)
     return clip.started;
 }
 
+// At quit: the thread told to stop, with the other workers (quit_workers).
 static void clip_quit(void)
 {
+    if (clip.dpy && clip.wake[1] >= 0) write(clip.wake[1], "q", 1);
+}
+
+// Then joined, with no deadline: its longest wait is a reader's second (on_send), and the objects
+// it dispatches for go after it.
+static void clip_close(void)
+{
     if (!clip.dpy) return;
-    if (clip.wake[1] >= 0) {
-        write(clip.wake[1], "q", 1);
-        if (clip.started) pthread_join(clip.thread, NULL);
-    }
+    if (clip.wake[1] >= 0 && clip.started) pthread_join(clip.thread, NULL);
     if (clip.src) ext_data_control_source_v1_destroy(clip.src);
     for (int i = 0; i < CLIP_OFFERS; i++)
         if (clip.offers[i].offer) ext_data_control_offer_v1_destroy(clip.offers[i].offer);

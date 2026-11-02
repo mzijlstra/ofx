@@ -55,18 +55,21 @@ static void count_start(void)
     counts.started = pthread_create(&counts.thread, NULL, count_loop, NULL) == 0;
 }
 
-// At quit: the thread is told to stop and given 200 ms. A count stuck in the kernel (a hung network
-// mount) must not keep ofx from exiting, so it is then left to the process's end, never joined
-// (F4 review, 2026-10-20).
-static void count_stop(void)
+// At quit: the thread is told to stop, then joined by until (quit_workers). A count stuck in the
+// kernel (a hung network mount) must not keep ofx from exiting, so it is then left to the
+// process's end, never joined (F4 review, 2026-10-20).
+static void count_quit(void)
 {
     if (!counts.started) return;
     pthread_mutex_lock(&counts.mu);
     counts.quit = true;
     pthread_cond_broadcast(&counts.cv);
     pthread_mutex_unlock(&counts.mu);
-    struct timespec until = deadline_in(200);
-    join_by(counts.thread, &until);
+}
+
+static void count_join(const struct timespec *until)
+{
+    if (counts.started) join_by(counts.thread, until);
 }
 
 // A new listing: what was asked for the old one is dropped, and its answers with it.

@@ -350,15 +350,18 @@ static bool jobs_poll(void)
     return jobq_draw_due(finished || gone || (jobs.asking >= 0) != asked, now, &jobs.last_draw);
 }
 
-// Quitting: the running jobs cancelled and waited for half a second in all, the waiting ones
-// dropped. A worker stuck in a hung mount is left behind (detached), as count_stop does; its part
-// file stays.
-static void jobs_stop(void)
+// Quitting: the running jobs cancelled, the waiting ones dropped.
+static void jobs_quit(void)
 {
     jobs.nwait = 0;
     for (int i = 0; i < jobs.nrun; i++) job_cancel(job_recs[jobs.run[i]].id);
-    struct timespec until = deadline_in(500);
-    for (int i = 0; i < jobs.nrun; i++) join_by(job_recs[jobs.run[i]].thread, &until);
+}
+
+// Then waited for until (quit_workers). A worker stuck in a hung mount is left behind (detached);
+// its part file stays.
+static void jobs_join(const struct timespec *until)
+{
+    for (int i = 0; i < jobs.nrun; i++) join_by(job_recs[jobs.run[i]].thread, until);
     jobs.nrun = 0;
 }
 

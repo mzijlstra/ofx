@@ -56,16 +56,20 @@ static void space_start(void)
     space.started = pthread_create(&space.thread, NULL, space_loop, NULL) == 0;
 }
 
-// At quit: as count_stop, 200 ms, then left to the process's end (a statvfs stuck in the kernel).
-static void space_stop(void)
+// At quit, as count_quit and count_join: told, joined by until, else left to the process's end (a
+// statvfs stuck in the kernel).
+static void space_quit(void)
 {
     if (!space.started) return;
     pthread_mutex_lock(&space.mu);
     space.quit = true;
     pthread_cond_broadcast(&space.cv);
     pthread_mutex_unlock(&space.mu);
-    struct timespec until = deadline_in(200);
-    join_by(space.thread, &until);
+}
+
+static void space_join(const struct timespec *until)
+{
+    if (space.started) join_by(space.thread, until);
 }
 
 // The space of each drive in pl and of cwd, asked for.

@@ -124,17 +124,20 @@ static void thumbs_start(void)
     for (int i = 0; i < THUMB_WORKERS; i++) thumbs.started[i] = pthread_create(&thumbs.th[i], NULL, thumb_loop, (void *)(intptr_t)i) == 0;
 }
 
-// At quit, as count_stop: 200 ms for the workers, then a stuck one (a hung drive) is left to the
-// process's end.
-static void thumbs_stop(void)
+// At quit, as count_quit and count_join: the workers told, joined by until, and a stuck one (a hung
+// drive) left to the process's end; then the textures go.
+static void thumbs_quit(void)
 {
     pthread_mutex_lock(&thumbs.mu);
     thumbs.quit = true;
     pthread_cond_broadcast(&thumbs.cv);
     pthread_mutex_unlock(&thumbs.mu);
-    struct timespec until = deadline_in(200);
+}
+
+static void thumbs_join(const struct timespec *until)
+{
     for (int i = 0; i < THUMB_WORKERS; i++)
-        if (thumbs.started[i]) join_by(thumbs.th[i], &until);
+        if (thumbs.started[i]) join_by(thumbs.th[i], until);
     for (int i = 0; i < thumbs.n; i++)
         if (thumbs.e[i].state == TS_SHOWN) UnloadTexture(thumbs.e[i].tex), thumbs.e[i].state = TS_NONE;
 }

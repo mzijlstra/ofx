@@ -93,8 +93,9 @@ static bool walk_take(DuSum *s, bool *done)
     return came;
 }
 
-// At quit, as count_stop: told to stop, 200 ms, then left to the process's end if stuck.
-static void walk_stop(void)
+// At quit, as count_quit and count_join: told to stop, joined by until, else left to the
+// process's end.
+static void walk_quit(void)
 {
     if (!walk.started) return;
     pthread_mutex_lock(&walk.mu);
@@ -102,6 +103,9 @@ static void walk_stop(void)
     atomic_fetch_add(&walk.gen, 1);
     pthread_cond_broadcast(&walk.cv);
     pthread_mutex_unlock(&walk.mu);
-    struct timespec until = deadline_in(200);
-    join_by(walk.thread, &until);
+}
+
+static void walk_join(const struct timespec *until)
+{
+    if (walk.started) join_by(walk.thread, until);
 }
