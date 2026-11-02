@@ -770,7 +770,8 @@ int main(int argc, char **argv)
         if (props.walking && walk_take(&props.sum, &props.done)) dirty = true;
         if (props.walking && app.ui.panel != UI_PANEL_PROPS) walk_ask(NULL, 0), props.walking = false;   // the panel closed: the count stops
         if (clear_poll()) dirty = true;
-        if (atomic_exchange(&watch.git_ready, false) && fold_view_of(app.ui.view)) git_ask(app.cwd);   // (its index or HEAD changed: F12)
+        if (atomic_exchange(&watch.git_ready, false) && fold_view_of(app.ui.view)) git_ask_soon();   // (its index or HEAD changed: F12)
+        git_poll();
         if (git_take()) dirty = true;
         if (thumbs_take()) dirty = true;
         if (app.ui.view == UI_VIEW_SEARCH && search_take()) search_relist(), dirty = true;

@@ -146,6 +146,8 @@ the icon, and the footer's "N changed". It is asked again when the folder change
 repository's index or HEAD (a commit or a switch from a terminal). git runs in bubblewrap, which
 sees the repository read only and writes nothing (and `--no-optional-locks`, `core.fsmonitor=false`),
 so a program a repository's own config names can't reach the rest; without bubblewrap there is none.
+In a git-lfs repository the LFS filter can't write in the sandbox, so its files may show as changed.
+The folder shown is asked again at most once a second while files in it keep changing.
 
 The cache's cleanup, `ofx-clean` (nothing else cleans it, Nemo neither): a preview not read for 90
 days goes; so does one whose file is gone or has changed (kept: files on a network drive or on a

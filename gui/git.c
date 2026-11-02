@@ -27,6 +27,7 @@ static struct {
     GitSlot         slot[2];
     int             shown;            // the window's (main thread's)
     int             ready;            // a fresh answer's slot, -1 none
+    i64             last, due;        // the main thread's: when it last asked, and an ask put off to then (0: none)
 } git = { .mu = PTHREAD_MUTEX_INITIALIZER, .cv = PTHREAD_COND_INITIALIZER, .shown = 0, .ready = -1 };
 
 static void *git_loop(void *arg)
@@ -36,9 +37,10 @@ static void *git_loop(void *arg)
     for (;;) {
         while (!git.quit && !git.asked) pthread_cond_wait(&git.cv, &git.mu);
         if (git.quit) break;
+        // (ready is -1 here: the ask that set asked cleared it, and an answer is published only when
+        // no ask came since its own; F12 step 5a review)
         u32 gen = git.gen;
         int s = 1 - git.shown;
-        if (git.ready == s) git.ready = -1;   // (an answer not taken yet: this one replaces it)
         GitSlot *g = &git.slot[s];
         snprintf(g->dir, sizeof g->dir, "%s", git.want);
         git.asked = false;
@@ -69,11 +71,36 @@ static void git_start(void)
 // Git status for folder dir asked for (NULL, or git-status off: none, at once).
 static void git_ask(const char *dir)
 {
+    git.last = now_ms(), git.due = 0;
     pthread_mutex_lock(&git.mu);
     git.gen++, git.ready = -1;
     if (dir && app.conf.git_status && git.started) snprintf(git.want, sizeof git.want, "%s", dir), git.asked = true, pthread_cond_signal(&git.cv);
     else git.slot[git.shown].repo = false;   // (nothing shown until an answer)
     pthread_mutex_unlock(&git.mu);
+}
+
+static i64 wake_due(void);
+
+// The folder shown asked again after a change in it or its repository: at once when the last ask is
+// a second old, else then (F12 step 5a review: a folder a build writes in asked a git status per
+// batch; on a 30k-file repo each was 310-340 ms). Going to a folder asks at once (git_ask). Also at
+// once outside a repository, or with git-status off: no git runs then, and a timer put off for it
+// would wake the window before a tooltip's.
+enum { GIT_ASK_GAP_MS = 1000 };
+static void git_ask_soon(void)
+{
+    char top[PATH_MAX];
+    bool none = !app.conf.git_status || !git_top(app.cwd, top, sizeof top);   // (a realpath and a few lstats)
+    i64 now = now_ms();
+    if (none || now - git.last >= GIT_ASK_GAP_MS) git_ask(app.cwd);
+    else if (!git.due) git.due = git.last + GIT_ASK_GAP_MS, timer_at(wake_due());
+}
+
+// Each frame: an ask put off, made when due; then the timer set for what else waits (one timer: a
+// tooltip's would be lost).
+static void git_poll(void)
+{
+    if (git.due && now_ms() >= git.due) git_ask(app.cwd), timer_at(wake_due());
 }
 
 // The window's answer: NULL outside a repository (or none yet). Its folder from the top in *rel.

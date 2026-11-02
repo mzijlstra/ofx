@@ -265,6 +265,10 @@ static void script_state(char *out, size_t cap)
             if (*c == ' ') *c = '_';
     char info[NAME_MAX + 64];
     status_info(info, sizeof info);
+    // The footer's git part (" · N changed"), as drawn: the free space before it varies (F12 step 5a review).
+    char infogit[64] = "-";
+    const char *dotp = strstr(info, "\xC2\xB7 ");
+    if (dotp && strstr(dotp, "changed")) state_word(infogit, sizeof infogit, str_from_c(dotp + 3));
     for (char *c = info; *c; c++)
         if (*c == ' ') *c = '_';
     // The search view (F9): its field's text and its status line, spaces as '_'; the cursor's folder
@@ -449,7 +453,7 @@ static void script_state(char *out, size_t cap)
              "props=%d propat=%d propcan=%d propn=%td propmode=%04o propfiles=%lld propdirs=%lld propbytes=%lld propdone=%d propcut=%d proplinks=%lld,%lld,%lld,%d propnlink=%llu proptype=%s proptypename=%s propbyname=%d propname=%s "
              "propwhere=%s propdrive=%s proplink=%s propcreated=%d propidx=%td "
              "ow=%d owfresh=%d owlist=%d owtext=%s own=%td owsel=%td owapp=%s owicon=%s owtex=%d owshown=%td owtype=%s owfiles=%td owrows=%d owtop=%td owopts=%s owbad=%d owdef=%d owdefcan=%d findopts=%s findbad=%d findselect=%d findn=%td findat=%td findtext=%s "
-             "search=%d searchkeys=%d searchtext=%s searchdone=%d searchfull=%d searchdue=%d searchbad=%d searchbar=%d searchsel=%d-%d searchcaret=%d findsel=%d-%d findcaret=%d seldir=%s searchinfo=%s inside=%d insidekeys=%d insidetext=%s insideopts=%s insidebad=%d insiderow=%d hit=%s hitmatch=%s hitdrawn=%d datecol=%s datecolw=%.0f owreads=%d conf=%s confbad=%d seldate=%s trashfull=%d trashicon=%s spawned=%d closingall=%d closedtabs=%d emptyn=%td shiftsel=%s clearn=%lld clearing=%d gitshown=%d gitsel=%s gitn=%td gitnamecol=%s gitcells=%d statusbad=%d status=%s",
+             "search=%d searchkeys=%d searchtext=%s searchdone=%d searchfull=%d searchdue=%d searchbad=%d searchbar=%d searchsel=%d-%d searchcaret=%d findsel=%d-%d findcaret=%d seldir=%s searchinfo=%s inside=%d insidekeys=%d insidetext=%s insideopts=%s insidebad=%d insiderow=%d hit=%s hitmatch=%s hitdrawn=%d datecol=%s datecolw=%.0f owreads=%d conf=%s confbad=%d seldate=%s trashfull=%d trashicon=%s spawned=%d closingall=%d closedtabs=%d emptyn=%td shiftsel=%s clearn=%lld clearing=%d gitshown=%d gitsel=%s gitn=%td gitnamecol=%s gitcells=%d infogit=%s gitdue=%d statusbad=%d status=%s",
              app.cwd, app.list.n, app.list.hidden, STR_ARG(sel), app.ui.list.sel, app.ui.list.top, app.ui.list.rows, app.hov.row,
              t->accent.r, t->accent.g, t->accent.b, t->bg.r, t->bg.g, t->bg.b, t->icons[0] ? t->icons : "-",
              app.icon_scale, GetScreenWidth(), GetScreenHeight(), app.reloads, app.themes, atomic_load(&watch.batches),
@@ -488,7 +492,7 @@ static void script_state(char *out, size_t cap)
              app.ui.find.anchor < app.ui.find.caret ? app.ui.find.anchor : app.ui.find.caret,
              app.ui.find.anchor < app.ui.find.caret ? app.ui.find.caret : app.ui.find.anchor, app.ui.find.caret, seldir, searchinfo,
              app.ui.search_inside, app.ui.focus == UI_FOCUS_INSIDE, insidetext, insideopts, app.search_im.bad,
-             (int)Clay_GetElementData(CLAY_ID("inside-field")).found, hit, hitmatch, hitdrawn, VIEWS[app.ui.view].date_col, date_w(), ow_idb_reads, confw, app.conf.bad, seldate, app.trash_full, trashicon, spawn_started, closing_all, closed_tabs.n, app.empty_n, app.ui.shift_add ? "add" : "range", clear.counted ? (long long)clear.sum.files : -1LL, clear.running, git_shown() != NULL, GIT_WORDS[app.have_list && app.list.n ? entry_git(app.ui.list.sel) : GS_NONE], git_shown() ? git_shown()->g.changed : (isize)0, gitnamecol, gitcells, app.status[0] && app.status_bad, app.status[0] ? app.status : "-");
+             (int)Clay_GetElementData(CLAY_ID("inside-field")).found, hit, hitmatch, hitdrawn, VIEWS[app.ui.view].date_col, date_w(), ow_idb_reads, confw, app.conf.bad, seldate, app.trash_full, trashicon, spawn_started, closing_all, closed_tabs.n, app.empty_n, app.ui.shift_add ? "add" : "range", clear.counted ? (long long)clear.sum.files : -1LL, clear.running, git_shown() != NULL, GIT_WORDS[app.have_list && app.list.n ? entry_git(app.ui.list.sel) : GS_NONE], git_shown() ? git_shown()->g.changed : (isize)0, gitnamecol, gitcells, infogit, git.due != 0, app.status[0] && app.status_bad, app.status[0] ? app.status : "-");
     frame_us_max = 0;
 }
 

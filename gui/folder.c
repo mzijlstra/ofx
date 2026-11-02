@@ -284,7 +284,11 @@ static bool go_to_in(const char *dir, Str select, isize fallback, bool stepping)
         view_title(view);
     }
     ui_set(&app.ui.list, l.n, sel);
-    git_ask(view == UI_VIEW_FOLDER ? app.cwd : NULL);   // (each listing: a change in the folder may be git's too; F12)
+    // Each listing asks git (a change in the folder may be git's too; F12): a new folder at once, the
+    // same one again at most once a second.
+    if (view != UI_VIEW_FOLDER) git_ask(NULL);
+    else if (!same) git_ask(app.cwd);
+    else git_ask_soon();
     // The find bar stays open in another folder; Esc there goes back to where this one opened, not
     // to a place in the last one's list.
     if (!same) app.ui.find_from = app.ui.list.sel;

@@ -15,13 +15,21 @@ key down
 expect sel=kept.txt gitsel=- gitnamecol=type
 key down
 expect sel=x.log gitsel=ignored
-expect info=6_items_(2_hidden),_38_GiB_free_·_3_changed
+expect infogit=3_changed
 shot git-list.png
 # A change in the folder: asked again with its listing.
 sh printf 'k2\n' > "$OFX_DIR/kept.txt"
 wait-for 3000 gitn=4
 key up
 expect sel=kept.txt gitsel=modified
+# Changes in a row: asked again at most once a second, the rest put off (and the last still asked).
+sh for i in 1 2 3 4 5; do echo "k$i" > "$OFX_DIR/kept.txt"; sleep 0.15; done
+wait-for 3000 gitdue=1
+sh printf 'k\n' > "$OFX_DIR/kept.txt"
+# The window asleep meanwhile: the timer wakes it for the ask put off.
+idle
+expect idlewoke=timer
+wait-for 3000 gitn=3
 # A commit from elsewhere: its index changes, asked again (the folder's files didn't change).
 sh cd "$OFX_DIR" && GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null git -c user.name=t -c user.email=t@t commit -qam two
 wait-for 3000 gitn=1 gitsel=- gitcells=1

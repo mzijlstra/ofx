@@ -495,9 +495,10 @@ static bool hover_at(float x, float y);
 // state write waiting (a folder's view, remember.c; this window's tabs, restore.c; F11).
 static i64 wake_due(void)
 {
-    i64 a = ui_tip_due(&app.tip), b = app.search_due, c = !restore.due ? rem.due : !rem.due ? restore.due : restore.due < rem.due ? restore.due : rem.due;
-    i64 ab = !a ? b : !b ? a : a < b ? a : b;
-    return !ab ? c : !c ? ab : ab < c ? ab : c;
+    i64 d[] = { ui_tip_due(&app.tip), app.search_due, rem.due, restore.due, git.due }, due = 0;   // (the soonest, 0: none)
+    for (int k = 0; k < COUNT(d); k++)
+        if (d[k] && (!due || d[k] < due)) due = d[k];
+    return due;
 }
 
 // The hover highlights for the pointer where it is now, not where it last moved: none once it has
