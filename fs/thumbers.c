@@ -4,14 +4,11 @@
 // .thumbnailer files in every XDG data dir's thumbnailers/ say (the user's own first; a type's
 // first one wins). Its PNG goes into the cache as ofx's own (thumb.c), so Nemo and Nautilus read it.
 //
-// A video or a PDF from a download is parsed by ffmpeg or poppler, so each runs in bubblewrap, as
-// GNOME's do (Nemo's don't), and without bubblewrap installed none runs (Michael, 2026-11-02): /usr read only, the one file it reads, a folder of
-// its own to write in, and no network, no other processes, nothing of the home folder, no terminal
-// (a session of its own), and of ofx's environment only PATH, LANG, LC_ALL and HOME (a token in it
-// could leave through the PNG; F12 step 3 review). It has THUMB_RUN_MS; then it is killed (with
-// whatever it started) and nothing is written: a big file under load may make it next time. One
-// that ends without a PNG counts as failed, so it isn't tried again until the file changes (the
-// rule from Nemo's loop).
+// A video or a PDF from a download is parsed by ffmpeg or poppler, so each runs in bubblewrap
+// (sandbox.c), as GNOME's do (Nemo's don't); without bubblewrap installed none runs (Michael,
+// 2026-11-02). It has THUMB_RUN_MS; then it is killed and nothing is written: a big file under load
+// may make it next time. One that ends without a PNG counts as failed, so it isn't tried again
+// until the file changes (the rule from Nemo's loop).
 //
 // With the test guard on (OFX_GUI_ROOT), only OFX_TEST_THUMBNAILERS's files are read (none
 // without it), and ops_program_allowed runs only a test's own program.
@@ -19,12 +16,6 @@
 #include "../base/base.h"
 
 #include <dirent.h>
-#include <errno.h>
-#include <fcntl.h>
-#include <poll.h>
-#include <signal.h>
-#include <sys/prctl.h>
-#include <sys/syscall.h>
 #include <unistd.h>
 
 enum { THUMBERS_MAX = 64, THUMBER_TYPES_MAX = 2048, THUMBER_EXEC_MAX = 512, THUMBER_TYPE_MAX = 128, THUMBER_FILES_MAX = 256,
@@ -40,7 +31,6 @@ typedef struct {
 } Thumbers;
 
 static int thumb_run_ms = THUMB_RUN_MS;   // (OFX_TEST_THUMB_RUN_MS, gui/: a test's hung fake killed sooner)
-static bool thumb_sandbox = true;         // (false: run as they are; a test's only, OFX_TEST_SANDBOX=off under the guard)
 
 static int thumbers_name_cmp(const void *a, const void *b) { return strcmp(*(char *const *)a, *(char *const *)b); }
 
@@ -161,76 +151,10 @@ static int thumbers_argv(Arena *a, const char *exec, const char *path, const cha
     return n;
 }
 
-typedef enum { TR_NOT_RUN, TR_ENDED, TR_KILLED } ThumbRun;
-
-// argv run on in, writing in dir only: in bubblewrap (TR_NOT_RUN without it), or as it is when a
-// test turned thumb_sandbox off; with /dev/null for its input and output, no blocked signals, the environment above, in a
-// process group of its own, and killed if the worker thread that started it goes (ofx's end).
-// TR_ENDED when it ended within thumb_run_ms; else TR_KILLED, with its group, and what it wrote
-// doesn't count. Whether it made a PNG is the caller's to see.
-static ThumbRun thumb_run(const char *const *argv, const char *in, const char *dir)
+// argv run on in, writing in dir only (sandbox.c), for thumb_run_ms. Whether it made a PNG is the
+// caller's to see.
+static BoxRun thumb_run(const char *const *argv, const char *in, const char *dir)
 {
-    Err err;
-    char prog[PATH_MAX], bw[PATH_MAX];
-    if (!ops_program_allowed(argv[0], &err)) return TR_NOT_RUN;
-    if (!(argv[0][0] == '/' ? snprintf(prog, sizeof prog, "%s", argv[0]) < (int)sizeof prog : path_find(argv[0], prog, sizeof prog))) return TR_NOT_RUN;
-    // The environment, bubblewrap's and so the program's: these of ofx's, and GIO_USE_VFS=local (a %u
-    // URI read without gvfs).
-    static const char *const keep[] = { "PATH", "LANG", "LC_ALL", "HOME", "GIO_USE_VFS" };
-    char ebuf[COUNT(keep)][PATH_MAX];
-    const char *envp[COUNT(keep) + 1];
-    int ne = 0;
-    for (int i = 0; i < COUNT(keep); i++) {
-        const char *v = i == COUNT(keep) - 1 ? "local" : getenv(keep[i]);
-        if (v && snprintf(ebuf[ne], sizeof ebuf[ne], "%s=%s", keep[i], v) < (int)sizeof ebuf[ne]) envp[ne] = ebuf[ne], ne++;
-    }
-    envp[ne] = NULL;
-    const char *av[THUMB_ARGS_MAX + 64];
-    int n = 0;
-    if (thumb_sandbox) {
-        if (!path_find("bwrap", bw, sizeof bw)) return TR_NOT_RUN;
-        static const char *const box[] = {
-            "--ro-bind", "/usr", "/usr", "--ro-bind-try", "/etc/ld.so.cache", "/etc/ld.so.cache",
-            "--ro-bind-try", "/etc/fonts", "/etc/fonts", "--ro-bind-try", "/var/cache/fontconfig", "/var/cache/fontconfig",   // (without them a PDF's fonts are scanned each run: 570 ms against 63)
-            "--symlink", "usr/lib", "/lib", "--symlink", "usr/lib", "/lib64", "--symlink", "usr/bin", "/bin", "--symlink", "usr/bin", "/sbin",
-            "--proc", "/proc", "--dev", "/dev", "--chdir", "/", "--unshare-all", "--die-with-parent", "--new-session",
-        };
-        av[n++] = bw;
-        for (int i = 0; i < COUNT(box); i++) av[n++] = box[i];
-        av[n++] = "--ro-bind", av[n++] = in, av[n++] = in, av[n++] = "--bind", av[n++] = dir, av[n++] = dir;
-        if (!path_below(prog, "/usr")) av[n++] = "--ro-bind", av[n++] = prog, av[n++] = prog;   // (a program of its own: ~/.local/bin, a test's fake)
-        av[n++] = "--";
-    }
-    av[n++] = prog;
-    for (int k = 1; argv[k] && n < COUNT(av) - 1; k++) av[n++] = argv[k];
-    av[n] = NULL;
-    sigset_t none;
-    sigemptyset(&none);
-    pid_t pid = fork();
-    if (pid < 0) return TR_NOT_RUN;
-    if (pid == 0) {   // (only what is safe after a fork in threads, up to the exec)
-        sigprocmask(SIG_SETMASK, &none, NULL);
-        prctl(PR_SET_PDEATHSIG, SIGKILL);
-        setpgid(0, 0);
-        int nul = open("/dev/null", O_RDWR | O_CLOEXEC);
-        if (nul >= 0) dup2(nul, 0), dup2(nul, 1), dup2(nul, 2);
-        execve(av[0], (char *const *)av, (char *const *)envp);
-        _exit(127);
-    }
-    // ofx's children are reaped by the kernel (spawn_init): the pidfd says when it is gone.
-    int pfd = (int)syscall(SYS_pidfd_open, pid, 0);
-    if (pfd < 0) {   // gone already; else it can't be watched (no fd left): killed, nothing kept
-        if (errno == ESRCH) return TR_ENDED;
-        kill(-pid, SIGKILL);
-        return TR_KILLED;
-    }
-    struct pollfd p = { .fd = pfd, .events = POLLIN };
-    int r;
-    while ((r = poll(&p, 1, thumb_run_ms)) < 0 && errno == EINTR) {}
-    if (r <= 0) {
-        kill(-pid, SIGKILL);   // (its group: bubblewrap and all in its sandbox, or what the program started)
-        poll(&p, 1, 1000);
-    }
-    close(pfd);
-    return r > 0 ? TR_ENDED : TR_KILLED;
+    BoxJob j = { .argv = argv, .ro = { in }, .rw = dir, .ms = thumb_run_ms };
+    return box_run(&j);
 }

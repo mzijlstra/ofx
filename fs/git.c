@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/stat.h>
+#include <string.h>
 
 // By urgency: a folder takes the highest of what it holds (an ignored file doesn't count there).
 typedef enum { GS_NONE, GS_IGNORED, GS_UNTRACKED, GS_STAGED, GS_RENAMED, GS_MODIFIED, GS_CONFLICT, GS_N } GitState;
@@ -22,7 +23,7 @@ static char git_letter(GitState s)
     return s >= 0 && s < GS_N ? L[s] : 0;
 }
 
-enum { GIT_ENTRIES_MAX = 1 << 16, GIT_HEAD_MAX = 256 };
+enum { GIT_ENTRIES_MAX = 1 << 14, GIT_HEAD_MAX = 256 };   // (16,384 changes: their tables, 2.5 MiB a slot)
 
 typedef struct {
     StrMap of;       // a path from the top (no trailing /) to its own GitState: a file, or a folder git names whole
@@ -153,4 +154,68 @@ static GitState git_state(const GitStat *g, Str rel, Str name, bool dir)
     strmap_get(&g->of, k, &own);
     if (dir) strmap_get(&g->under, k, &under);
     return (GitState)(own > under ? own : under);
+}
+
+// ---- running it (in bubblewrap: sandbox.c) -------------------------------------------------------
+
+enum { GIT_RUN_MS = 3000, GIT_OUT_MAX = MiB(16) };
+static int git_run_ms = GIT_RUN_MS;   // (OFX_TEST_GIT_RUN_MS, gui/)
+
+// The folder a worktree's or a submodule's .git file names ("gitdir: …"; its index and HEAD are
+// there), resolved, into out; "" when top's .git is a folder, or the file can't be read.
+static void git_linked(const char *top, char *out, size_t cap)
+{
+    out[0] = 0;
+    char g[PATH_MAX + 8], line[PATH_MAX + 16], at[2 * PATH_MAX + 2], r[PATH_MAX];
+    snprintf(g, sizeof g, "%s/.git", top);
+    FILE *f = fopen(g, "re");
+    if (!f) return;
+    bool ok = fgets(line, sizeof line, f) && strncmp(line, "gitdir: ", 8) == 0;
+    fclose(f);
+    if (!ok) return;
+    line[strcspn(line, "\n")] = 0;
+    const char *to = line + 8;
+    snprintf(at, sizeof at, "%s%s%s", to[0] == '/' ? "" : top, to[0] == '/' ? "" : "/", to);
+    if (realpath(at, r)) snprintf(out, cap, "%s", r);
+}
+
+// The repository folder a .git file leads into, up to its .git, into out ("" for a .git folder):
+// bound too, as its objects are there.
+static void git_common(const char *top, char *out, size_t cap)
+{
+    git_linked(top, out, cap);
+    char *dot = strstr(out, "/.git/");
+    if (dot) dot[5] = 0;   // (…/.git/worktrees/wt, …/.git/modules/sub: the .git above)
+}
+
+// Where top's index and HEAD are, into out: its .git folder, or the one its .git file names. What
+// gui/ watches, to ask again when they change (a commit, an add, a switch elsewhere).
+static void git_gitdir(const char *top, char *out, size_t cap)
+{
+    git_linked(top, out, cap);
+    if (!out[0]) snprintf(out, cap, "%s/.git", top);
+}
+
+// git status for folder dir (resolved) in repository top, read into g; git's output is put in a,
+// which must outlive g. git is the program (a test's own under the guard). False when it didn't run,
+// ran out of time, or said nothing (not a repository after all).
+//   --no-optional-locks: it doesn't write the index (the sandbox lets it write nothing anyway).
+//   core.fsmonitor=false: a repository's own config doesn't start a program each time.
+static bool git_status(Arena *a, const char *git, const char *dir, const char *top, GitStat *g)
+{
+    const char *argv[] = { git, "--no-optional-locks", "-c", "core.fsmonitor=false", "status", "--porcelain=v2", "-z", "--ignored", "--branch", "--", ".", NULL };
+    char common[PATH_MAX], home_conf[PATH_MAX], xdg_conf[PATH_MAX];
+    const char *home = getenv("HOME"), *xdg = getenv("XDG_CONFIG_HOME");
+    git_common(top, common, sizeof common);
+    snprintf(home_conf, sizeof home_conf, "%s/.gitconfig", home ? home : "/nonexistent");
+    if (xdg && xdg[0]) snprintf(xdg_conf, sizeof xdg_conf, "%s/git", xdg);
+    else snprintf(xdg_conf, sizeof xdg_conf, "%s/.config/git", home ? home : "/nonexistent");
+    BoxJob j = { .argv = argv, .ro = { top, home_conf, xdg_conf, "/etc/gitconfig" }, .cwd = dir, .ms = git_run_ms };
+    if (common[0]) j.ro[4] = common;
+    isize len = 0;
+    j.out = arena_try_push(a, GIT_OUT_MAX, 1), j.cap = GIT_OUT_MAX, j.len = &len;
+    if (!j.out || box_run(&j) != BOX_ENDED || len == 0) return false;
+    if (!git_parse(a, (Str){ j.out, len }, g)) return false;
+    if (len == GIT_OUT_MAX) g->cut = true;
+    return true;
 }

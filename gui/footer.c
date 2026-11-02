@@ -241,7 +241,8 @@ static void status_info(char *buf, size_t cap)
 {
     UiInfo in = { .n = app.list.n, .hidden = app.show_hidden ? 0 : app.list.hidden, .marked = app.ui.marked,
                   .one_count = -1, .one_size = -1, .avail = app.cwd_avail,
-                  .cramped = app.ui.perms_cols && !app.ui.grid && !perms_shown((float)GetScreenWidth()) };
+                  .cramped = app.ui.perms_cols && !app.ui.grid && !perms_shown((float)GetScreenWidth()),
+                  .changed = git_shown() ? git_shown()->g.changed : 0 };
     for (isize i = 0; app.ui.marked == 1 && i < app.list.n; i++) {
         if (!app.ui.mark[i]) continue;
         const Entry *e = &app.list.e[i];

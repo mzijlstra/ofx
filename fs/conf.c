@@ -43,6 +43,7 @@ typedef struct {
     bool       sort_rev;                          // and Reverse Order
     bool       restore_tabs;                      // the tabs across a restart (F11 step 3)
     bool       shift_add;                         // shift-select = add (F12; range: false)
+    bool       git_status;                        // git-status (F12 step 5)
     bool       previews;                          // previews in the icon view (F6.4)
     bool       thumbnailers;                      // and the system's thumbnailers for them (F12)
     i64        preview_max;                       // the largest image previewed, in bytes
@@ -108,6 +109,15 @@ static const ConfOpt CONF_OPTS[] = {
       "Previews of images in the icon view, in place of their file type's icon.\n"
       "on or off. Off, ofx makes and reads no previews at all (the cache, shared\n"
       "with Nemo, is left as it is)." },
+    { "git-status", CK_BOOL, offsetof(Conf, git_status), "on",
+      "In a git repository, each file's state as VS Code shows it: a changed\n"
+      "file's name in the colour of its change (over its type's colour), a letter\n"
+      "at the row's end (M modified, A added, U untracked, R renamed, ! in\n"
+      "conflict), a folder's dot for the most urgent change in it, ignored files\n"
+      "dimmed, and the footer counts the changes. on or off. git runs in\n"
+      "bubblewrap's sandbox, which sees the repository read only, so nothing a\n"
+      "repository's own config names can reach the rest; without bubblewrap\n"
+      "installed (bwrap), none is shown." },
     { "preview-thumbnailers", CK_BOOL, offsetof(Conf, thumbnailers), "on",
       "Previews of videos, PDFs, office documents and the other types the\n"
       "programs in /usr/share/thumbnailers know, made by those programs (as Nemo\n"
@@ -220,7 +230,7 @@ static const char *const CONF_WANTS[] = {
 // the list, which is the file's lines).
 static void conf_defaults(Conf *c)
 {
-    *c = (Conf){ .zoom = CONF_ZOOM, .sort = SORT_NAME, .previews = true, .thumbnailers = true, .preview_max = CONF_PREVIEW_MAX, .date = DATE_SHORT, .skip = SEARCH_SKIP_DEFAULT, .clean = true,
+    *c = (Conf){ .zoom = CONF_ZOOM, .sort = SORT_NAME, .previews = true, .thumbnailers = true, .git_status = true, .preview_max = CONF_PREVIEW_MAX, .date = DATE_SHORT, .skip = SEARCH_SKIP_DEFAULT, .clean = true,
                  .clean_orphans = true, .clean_unused_days = CLEAN_UNUSED_S / 86400, .clean_cap = CLEAN_CAP };
 }
 

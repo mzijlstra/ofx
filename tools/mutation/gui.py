@@ -472,8 +472,8 @@ MUTANTS = [
     # f8e's list-plain.png, f8b's list-columns.png)
     (G, '        app.ui.colors = !st.no_colors,', '        app.ui.colors = true,', 'f8'),
     ('gui/actions.c', '        state_key("colors", app.ui.colors ? "on" : "off");', '        state_key("colors", "on");', 'f8'),
-    ('gui/footer.c', '                  .cramped = app.ui.perms_cols && !app.ui.grid && !perms_shown((float)GetScreenWidth()) };', '                  .cramped = false };', 'f8'),
-    ('gui/footer.c', '                  .cramped = app.ui.perms_cols && !app.ui.grid && !perms_shown((float)GetScreenWidth()) };', '                  .cramped = !perms_shown((float)GetScreenWidth()) };', 'f8'),
+    ('gui/footer.c', '                  .cramped = app.ui.perms_cols && !app.ui.grid && !perms_shown((float)GetScreenWidth()),', '                  .cramped = false,', 'f8'),
+    ('gui/footer.c', '                  .cramped = app.ui.perms_cols && !app.ui.grid && !perms_shown((float)GetScreenWidth()),', '                  .cramped = !perms_shown((float)GetScreenWidth()),', 'f8'),
     # ---- View → Show Menu (2026-10-27). Not run: the note's drawing and footer hint (pixels:
     # f8b's menubar-hidden.png, menubar-float.png)
     (G, '    return !app.ui.bar_hidden || (app.ui.menu_on && app.ui.menu < UI_MENUS);', '    return !app.ui.bar_hidden;', 'f8'),
@@ -490,6 +490,18 @@ MUTANTS = [
     ('gui/files.c', '            if (app.ui.group_col) info_cell(CLAY_IDI("group", r)', '            info_cell(CLAY_IDI("group", r)', 'f8'),
     # ---- quit doesn't wait for a hung drive (2026-10-26: no mutant was hang's or f6b's alone)
     (G, '    if (pthread_timedjoin_np(t, NULL, until) != 0) pthread_detach(t);', '    pthread_join(t, NULL);', 'hang'),   # (join_by: every worker's stop)
+    # ---- git status per file (F12 step 5)
+    ('gui/git.c', '    if (dir && app.conf.git_status && git.started)', '    if (dir && git.started)', 'f12g'),
+    ('gui/git.c', '    return g->repo && strcmp(g->dir, app.cwd) == 0 ? g : NULL;', '    return g->repo ? g : NULL;', 'f12g'),
+    ('gui/git.c', '    watch_git(git.slot[s].repo ? git.slot[s].gitdir : NULL);\n', '', 'f12g'),
+    ('gui/git.c', '    if (g->ignored) return GS_IGNORED;\n', '', 'f12g'),
+    ('gui/git.c', '        if (git.ready == s) git.ready = -1;   // (an answer not taken yet: this one replaces it)\n', '', 'f12g'),
+    ('gui/folder.c', "    git_ask(view == UI_VIEW_FOLDER ? app.cwd : NULL);   // (each listing: a change in the folder may be git's too; F12)\n", '', 'f12g'),
+    ('gui/main.c', '        if (atomic_exchange(&watch.git_ready, false) && fold_view_of(app.ui.view)) git_ask(app.cwd);   // (its index or HEAD changed: F12)\n', '', 'f12g'),
+    ('gui/watch.c', 'strcmp(e->name, "index") == 0 || strcmp(e->name, "HEAD") == 0', 'strcmp(e->name, "HEAD") == 0', 'f12g'),
+    ('gui/files.c', ' : sel ? cc(t->fg) : gs != GS_NONE ? git_colour(gs) : ls_name_colour(e, i);', ' : sel ? cc(t->fg) : ls_name_colour(e, i);', 'f12g'),
+    ('gui/files.c', '        if (in_git) git_cell(r, i, gs);\n', '', 'f12g'),
+    ('gui/footer.c', '                  .changed = git_shown() ? git_shown()->g.changed : 0 };', '                  .changed = 0 };', 'f12g'),
     # ---- Clear Previews (F12 step 4): counted, run, its end taken
     ('gui/clear.c', '        if (thumbs.root[0]) walk_ask(roots, 1);', '        if (false) walk_ask(roots, 1);', 'f12'),
     ('gui/clear.c', '    if (clear.counting && !app.ui.clear_asking) walk_ask(NULL, 0), clear.counting = false;\n', '', 'f12'),

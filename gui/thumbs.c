@@ -128,7 +128,7 @@ static void thumbs_start(Arena *scratch)   // (scratch: for reading the thumbnai
     // the guard only: the run without bubblewrap.
     thumb_run_ms = env_int("OFX_TEST_THUMB_RUN_MS", THUMB_RUN_MS, 1, THUMB_RUN_MS);
     const char *sb = getenv("OFX_TEST_SANDBOX");
-    thumb_sandbox = !(ops_root[0] && sb && strcmp(sb, "off") == 0);
+    box_sandbox = !(ops_root[0] && sb && strcmp(sb, "off") == 0);
     thumbers_load(scratch, &thumbers);
     for (int i = 0; i < THUMB_WORKERS; i++) thumbs.started[i] = pthread_create(&thumbs.th[i], NULL, thumb_loop, (void *)(intptr_t)i) == 0;
 }

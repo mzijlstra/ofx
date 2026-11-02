@@ -60,6 +60,15 @@ rules shared by every tool here.
   does run for real in the tests: it sees only `/usr` (read only), the test's file and its own run
   folder, so it can't reach his files. The fakes that hang sleep 19.<pid> s (f12) or 3.<pid> s
   (unit; each run's own, as pgrep sees every run at once), never f11j's `sleep 20`.
+- **git status** (F12 step 5): in a folder inside a repository, ofx runs `git --no-optional-locks -c
+  core.fsmonitor=false status --porcelain=v2 -z --ignored --branch -- .` there, in bubblewrap
+  (fs/sandbox.c): the repository, its git config files and `/usr` read only, nothing writable, so
+  what a repository's own config names (a filter) can't reach the rest; git doesn't write its index.
+  On Michael's repos that is a read; the work repos are his too, but read only (`../CLAUDE.md`): a
+  window showing one reads it, as a terminal's `git status` would, never more. Under the guard ofx
+  runs only a test's own git (f12g puts a wrapper among the fakes, before /usr/bin/git; the unit
+  tests their own), on scratch repositories made with `GIT_CONFIG_GLOBAL=/dev/null`, and HOME is
+  the run's, so no config of his comes in.
 - **ofx-clean deletes previews** (F6.5) in `$XDG_CACHE_HOME/thumbnails`, which is his cache unless
   that is set. Michael runs it (his `--dry-run` first, then the timer he enables), not a test.
   **View → Clear Previews…** (F12 step 4) runs `ofx-clean --all`: every preview in that cache, his
@@ -238,7 +247,8 @@ ui/ that nothing calls makes the test build warn.
   `fs/search.c` the search's address and walk, inside files too; `fs/editors.c` Open at Line's
   recipes; `fs/conf.c` ofx.conf (its options table, parser, written default, `conf_load`);
   `fs/places.c` the sidebar's places, unmounted drives too; `fs/clean.c` ofx-clean's rules;
-  `fs/thumbers.c` the system's thumbnailers (F12: read, filled in, run in bubblewrap);
+  `fs/sandbox.c` bubblewrap's runs (F12: the thumbnailers' and git's); `fs/thumbers.c` the system's
+  thumbnailers; `fs/git.c` git status read into each entry's state;
   `fs/state.c` the state file (its lock, `state_rewrite`, the one way every writer changes it),
   `fs/folders.c` its per-folder lines, `fs/session.c` its window lines (F11).
 - `ui/ui.c`: the types (Ui, UiInput, UiAction, UiFocus, UiOnTop) and tables, then `cursor.c`

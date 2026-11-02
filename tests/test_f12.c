@@ -321,10 +321,10 @@ static void test_thumb_exec(void)
     CHECK(thumb_get(&a, &q, &out) == TG_FAILED);
     // Without bubblewrap too (its group); and one that wrote its PNG first doesn't count.
     snprintf(exec, sizeof exec, "%s/hang %%i %%o", bin);
-    thumb_sandbox = false;
+    box_sandbox = false;
     q = ask(clip[6], TK_EXEC, 48, cache), q.exec = exec;
     CHECK(thumb_get(&a, &q, &out) == TG_NONE && !sleeping(hang));
-    thumb_sandbox = true;
+    box_sandbox = true;
     snprintf(exec, sizeof exec, "%s/slow %%i %%o", bin);
     q = ask(clip[7], TK_EXEC, 48, cache), q.exec = exec;
     CHECK(thumb_get(&a, &q, &out) == TG_NONE && !sleeping(slow));
@@ -334,10 +334,10 @@ static void test_thumb_exec(void)
     snprintf(exec, sizeof exec, "%s/env %%i %%o", bin);
     q = ask(clip[9], TK_EXEC, 48, cache), q.exec = exec;
     CHECK(thumb_get(&a, &q, &out) == TG_MADE);
-    thumb_sandbox = false;
+    box_sandbox = false;
     q = ask(clip[10], TK_EXEC, 48, cache), q.exec = exec;
     CHECK(thumb_get(&a, &q, &out) == TG_MADE);
-    thumb_sandbox = true;
+    box_sandbox = true;
     env_restore();
     // In bubblewrap it sees only the file it was given; without, everything (OFX_TEST_SANDBOX=off).
     snprintf(exec, sizeof exec, "%s/peek %%i %%o", bin);
@@ -352,10 +352,10 @@ static void test_thumb_exec(void)
     } else {
         fprintf(stderr, "test_thumb_exec: no bwrap here, the sandbox untested\n");
     }
-    thumb_sandbox = false;
+    box_sandbox = false;
     q = ask(clip[5], TK_EXEC, 48, cache), q.exec = exec;
     CHECK(thumb_get(&a, &q, &out) == TG_MADE);
-    thumb_sandbox = true;
+    box_sandbox = true;
     // Without bubblewrap on PATH: not run at all (nothing made, nothing written).
     snprintf(exec, sizeof exec, "%s/copy %%i %%o %%s", bin);
     set_mtime(clip[3], 1700000300);
@@ -378,12 +378,12 @@ static void test_thumb_exec(void)
     put_exec(at("f12/bin/gone"), "#!/bin/sh\nrm -rf \"$(dirname \"$2\")\"\n");
     snprintf(exec, sizeof exec, "%s/gone %%i %%o", bin);
     set_mtime(clip[4], 1700000400);
-    thumb_sandbox = false;   // (in bubblewrap the folder is a mount point there)
+    box_sandbox = false;   // (in bubblewrap the folder is a mount point there)
     q = ask(clip[4], TK_EXEC, 48, cache), q.exec = exec;
     CHECK(thumb_get(&a, &q, &out) == TG_NONE);
     snprintf(exec, sizeof exec, "%s/none %%i %%o", bin);
     CHECK(thumb_get(&a, &q, &out) == TG_FAILED);   // (no fail entry from the first)
-    thumb_sandbox = true;
+    box_sandbox = true;
     // A file that is gone: nothing. A cache outside the test's folder: refused, nothing made there.
     snprintf(exec, sizeof exec, "%s/copy %%i %%o %%s", bin);
     q = ask(clip[8], TK_EXEC, 48, cache), q.exec = exec;
@@ -510,7 +510,8 @@ static const char GIT_OUT[] =
     "1 A. N... 000000 100644 100644 0000000000 3e75765 src/new.txt\0"
     "1 M. N... 100644 100644 100644 1111111111 2222222222 src/deep/staged mod.txt\0"
     "u UU N... 100644 100644 100644 100644 aaaa bbbb cccc lib/both.c\0"
-    "? newdir/\0? src/deep/untracked.txt\0! debug.log\0! ign/\0";
+    "2 R. N... 100644 100644 100644 1111 1111 R100 renamed.txt\0? odd old name\0"   // (an old path that looks like a record)
+    "? newdir/\0? src/deep/untracked.txt\0! debug.log\0! ign/\0! docs/old/x.log\0";
 
 static void test_git_parse(void)
 {
@@ -519,7 +520,8 @@ static void test_git_parse(void)
     static GitStat g;
     CHECK(git_parse(&a, (Str){ GIT_OUT, sizeof GIT_OUT - 1 }, &g));
     CHECK(strcmp(g.head, "master") == 0 && strncmp(g.oid, "23aeba1e", 8) == 0 && g.has_ab && g.ahead == 2 && g.behind == 1);
-    CHECK(g.changed == 7 && !g.cut);   // (the ignored two aside)
+    CHECK(g.changed == 8 && !g.cut);   // (the ignored three aside)
+    CHECK(git_state(&g, S(""), S("renamed.txt"), false) == GS_RENAMED && git_state(&g, S(""), S("odd old name"), false) == GS_NONE);
     // Files at the top, and the letters.
     CHECK(git_state(&g, S(""), S("a.txt"), false) == GS_MODIFIED && git_letter(GS_MODIFIED) == 'M');
     CHECK(git_state(&g, S(""), S("debug.log"), false) == GS_IGNORED && git_letter(GS_IGNORED) == 0);
@@ -537,7 +539,10 @@ static void test_git_parse(void)
     CHECK(git_state(&g, S("src/deep"), S("staged mod.txt"), false) == GS_MODIFIED && git_state(&g, S("src/deep"), S("untracked.txt"), false) == GS_UNTRACKED);
     // Ignored: in ign/ and below, everything; not elsewhere.
     CHECK(git_ignored_at(&g, S("ign")) && git_ignored_at(&g, S("ign/x/y")) && !git_ignored_at(&g, S("")) && !git_ignored_at(&g, S("src")));
-    CHECK(!git_ignored_at(&g, S("igno")));
+    CHECK(!git_ignored_at(&g, S("igno")) && !git_ignored_at(&g, S("newdir")));   // (a folder git names whole, untracked)
+    // A folder holding only an ignored file isn't ignored itself, nor marked.
+    CHECK(git_state(&g, S(""), S("docs"), true) == GS_NONE && git_state(&g, S("docs"), S("old"), true) == GS_NONE && !git_ignored_at(&g, S("docs/old")));
+    CHECK(git_state(&g, S("docs/old"), S("x.log"), false) == GS_IGNORED);
     // Detached, no upstream; a record of another kind, a short one, a cut one: skipped.
     static const char OUT2[] = "# branch.oid abc\0# branch.head (detached)\0x what\0? \0" "1 .M N... 100644\0";
     CHECK(git_parse(&a, (Str){ OUT2, sizeof OUT2 - 1 }, &g));
@@ -581,4 +586,125 @@ static void test_spawn_piped(void)
     CHECK(strcmp(buf, "one\ntwo x\n") == 0);
     char *out[] = { "true", NULL };
     CHECK(!spawn_piped(out, &fd, &err) && strstr(err.msg, "not run"));
+}
+
+// A shell line in dir, with git's own config files out of it (only the repository's counts).
+static int sh_in(const char *dir, const char *line)
+{
+    char cmd[4 * PATH_MAX];
+    snprintf(cmd, sizeof cmd, "cd '%s' && GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null HOME='%s' %s > /dev/null 2>&1", dir, root, line);
+    return system(cmd);
+}
+
+// git_status on scratch repositories, the real git behind a test's own wrapper (the guard), in
+// bubblewrap: the states as git gives them; a repository's fsmonitor doesn't run; its clean filter
+// runs but can't write outside (it can without the sandbox: the filter does run); a worktree's
+// repository is reached; out of time, none.
+// git_status into a fresh arena each time (its output takes GIT_OUT_MAX of it, as gui/git.c's
+// slot does).
+static bool gs_run(Arena *a, const char *git, const char *dir, const char *top, GitStat *g)
+{
+    arena_reset(a);
+    return git_status(a, git, dir, top, g);
+}
+
+static void test_git_status(void)
+{
+    Arena a;
+    arena_init(&a, "git status test", thumbers_test_mem, sizeof thumbers_test_mem);
+    ops_guard(root);
+    env_set("HOME", root), env_set("XDG_CONFIG_HOME", at("f12/xdg"));
+    char repo[PATH_MAX], git[PATH_MAX], top[PATH_MAX], sub[PATH_MAX];
+    snprintf(repo, sizeof repo, "%s", at("f12/gs/repo"));
+    snprintf(git, sizeof git, "%s", at("f12/bin/git"));
+    put_exec(git, "#!/bin/sh\nexec /usr/bin/git \"$@\"\n");
+    mkdirs(repo);
+    CHECK(sh_in(repo, "git init -q -b main . && git -c user.name=t -c user.email=t@t commit -q --allow-empty -m 0") == 0);
+    put(at("f12/gs/repo/kept.txt"), "k\n"), put(at("f12/gs/repo/src/b.txt"), "b\n"), put(at("f12/gs/repo/.gitignore"), "*.log\n");
+    CHECK(sh_in(repo, "git add -A && git -c user.name=t -c user.email=t@t commit -q -m 1") == 0);
+    put(at("f12/gs/repo/kept.txt"), "k2\n"), put(at("f12/gs/repo/src/new.txt"), "n\n"), put(at("f12/gs/repo/x.log"), "l\n");
+    CHECK(sh_in(repo, "git add src/new.txt") == 0);
+    // A repository config that would run programs: an fsmonitor, a clean filter writing outside.
+    char pwned[PATH_MAX], cfg[3 * PATH_MAX];
+    snprintf(pwned, sizeof pwned, "%s", at("f12/gs/pwned"));
+    snprintf(cfg, sizeof cfg, "git config core.fsmonitor 'touch %s.fsmonitor' && git config filter.evil.clean 'sh -c \"echo x > %s; cat\"'", pwned, pwned);
+    CHECK(sh_in(repo, cfg) == 0);
+    put(at("f12/gs/repo/.gitattributes"), "*.txt filter=evil\n");
+    static GitStat g;
+    CHECK(git_top(repo, top, sizeof top));
+    CHECK(realpath(at("f12/gs/repo/src"), sub) && gs_run(&a, git, sub, top, &g));
+    CHECK(strcmp(g.head, "main") == 0 && git_state(&g, S("src"), S("new.txt"), false) == GS_STAGED && git_state(&g, S("src"), S("b.txt"), false) == GS_NONE);
+    CHECK(gs_run(&a, git, top, top, &g));
+    CHECK(git_state(&g, S(""), S("kept.txt"), false) == GS_MODIFIED && git_state(&g, S(""), S("x.log"), false) == GS_IGNORED && git_state(&g, S(""), S("src"), true) == GS_STAGED);
+    CHECK(git_state(&g, S(""), S(".gitattributes"), false) == GS_UNTRACKED);
+    char fsm[PATH_MAX + 16];
+    snprintf(fsm, sizeof fsm, "%s.fsmonitor", pwned);
+    CHECK(access(fsm, F_OK) != 0 && access(pwned, F_OK) != 0);
+    // The filter runs: without the sandbox it writes there (kept.txt touched so git reads it again);
+    // the fsmonitor doesn't, and the index isn't written (--no-optional-locks).
+    box_sandbox = false;
+    set_mtime(at("f12/gs/repo/kept.txt"), 1700000500);
+    struct stat ix0, ix1;
+    CHECK(stat(at("f12/gs/repo/.git/index"), &ix0) == 0);
+    CHECK(gs_run(&a, git, top, top, &g) && access(pwned, F_OK) == 0 && access(fsm, F_OK) != 0);
+    CHECK(stat(at("f12/gs/repo/.git/index"), &ix1) == 0 && ix1.st_mtim.tv_sec == ix0.st_mtim.tv_sec && ix1.st_mtim.tv_nsec == ix0.st_mtim.tv_nsec && ix1.st_ino == ix0.st_ino);
+    box_sandbox = true;
+    unlink(pwned);
+    set_mtime(at("f12/gs/repo/kept.txt"), 1700000600);
+    CHECK(gs_run(&a, git, top, top, &g) && access(pwned, F_OK) != 0);
+    // A worktree: its .git a file; the repository's .git found and read.
+    char wt[PATH_MAX], common[PATH_MAX], want[PATH_MAX];
+    snprintf(wt, sizeof wt, "%s", at("f12/gs/wt"));
+    CHECK(sh_in(repo, "git config --unset core.fsmonitor; git config --unset filter.evil.clean; rm .gitattributes; git worktree add -q ../wt -b other") == 0);
+    put(at("f12/gs/wt/w.txt"), "w\n");
+    CHECK(git_top(wt, top, sizeof top));
+    git_common(top, common, sizeof common);
+    CHECK(realpath(at("f12/gs/repo/.git"), want) && strcmp(common, want) == 0);
+    CHECK(gs_run(&a, git, top, top, &g) && strcmp(g.head, "other") == 0 && git_state(&g, S(""), S("w.txt"), false) == GS_UNTRACKED);
+    CHECK(git_top(repo, top, sizeof top) && (git_common(top, common, sizeof common), common[0] == 0));
+    // Out of time: none.
+    put_exec(git, "#!/bin/sh\nsleep 2.5\n");
+    git_run_ms = 100;
+    CHECK(!gs_run(&a, git, top, top, &g));
+    git_run_ms = GIT_RUN_MS;
+    // Says nothing (not a repository, git failed): none.
+    put_exec(git, "#!/bin/sh\nexit 128\n");
+    CHECK(!gs_run(&a, git, top, top, &g));
+    env_restore(), env_restore();
+}
+
+// The footer in a repository: the changes after the free space (F12 step 5); none said without.
+static void test_git_footer(void)
+{
+    char buf[128];
+    UiInfo in = { .n = 5, .avail = 38LL << 30, .one_count = -1, .one_size = -1, .changed = 6 };
+    ui_status_info(buf, sizeof buf, &in);
+    CHECK(strcmp(buf, "5 items, 38 GiB free \xC2\xB7 6 changed") == 0);
+    in.avail = -1;
+    ui_status_info(buf, sizeof buf, &in);
+    CHECK(strcmp(buf, "5 items \xC2\xB7 6 changed") == 0);
+    in.changed = 0;
+    ui_status_info(buf, sizeof buf, &in);
+    CHECK(strcmp(buf, "5 items") == 0);
+}
+
+// box_run's end is the program's and its output's: one that exits leaving something it started
+// holding its output open past the time is killed, with its group (as run, not in bubblewrap, whose
+// namespace ends with it).
+static void test_box_output_end(void)
+{
+    ops_guard(root);
+    char prog[PATH_MAX], tail[32], text[256];
+    snprintf(prog, sizeof prog, "%s", at("f12/bin/leave"));
+    snprintf(tail, sizeof tail, "3.%06d3", (int)getpid());
+    snprintf(text, sizeof text, "#!/bin/sh\necho started\nsleep %s &\nexit 0\n", tail);
+    put_exec(prog, text);
+    const char *argv[] = { prog, NULL };
+    char out[64];
+    isize len = 0;
+    BoxJob j = { .argv = argv, .ms = 200, .out = out, .cap = sizeof out, .len = &len };
+    box_sandbox = false;
+    CHECK(box_run(&j) == BOX_KILLED && !sleeping(tail));
+    CHECK(len == 0 || (len == 8 && memcmp(out, "started\n", 8) == 0));   // (under load the shell may not have said it within the 200 ms)
+    box_sandbox = true;
 }

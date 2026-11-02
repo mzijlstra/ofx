@@ -39,13 +39,14 @@ static struct {
     int         mount_fd, mount_wd;  // the mountinfo file polled, or the test's watched; -1 for none
     atomic_int  bm_wd;         // the bookmarks file's folder, -1 for none (F7.5)
     atomic_int  conf_wd;       // ofx.conf's folder, -1 for none (F10)
+    atomic_int  git_wd;        // the shown repository's git folder: its index and HEAD (F12), -1 for none
     char        current[PATH_MAX];   // $XDG_STATE_HOME/omarchy/current
     char        theme[PATH_MAX + 8]; // .../current/theme
     atomic_int  trash_wd[TRASH_DIRS_MAX];   // each trash folder's files/, 0 for none (inotify's start at 1)
     int         udev_wd;       // udev's database folder: a drive plugged in or pulled (2026-10-30)
-    atomic_bool list_ready, theme_ready, mounts_ready, trash_ready, conf_ready;
+    atomic_bool list_ready, theme_ready, mounts_ready, trash_ready, conf_ready, git_ready;
     atomic_int  batches;       // how many batches it raised, for the tests' state line
-} watch = { .fd = -1, .dir_wd = -1, .theme_wd = -1, .current_wd = -1, .mount_fd = -1, .mount_wd = -1, .bm_wd = -1, .udev_wd = -1, .conf_wd = -1 };
+} watch = { .fd = -1, .dir_wd = -1, .theme_wd = -1, .current_wd = -1, .mount_fd = -1, .mount_wd = -1, .bm_wd = -1, .udev_wd = -1, .conf_wd = -1, .git_wd = -1 };
 
 // The mount list ofx reads: /proc/self/mountinfo, or the tests' OFX_TEST_MOUNTINFO.
 static const char *mountinfo_path(void)
@@ -86,7 +87,7 @@ static bool watch_is_trash(int wd)
 static bool watch_fixed(int wd)
 {
     return wd == atomic_load(&watch.theme_wd) || wd == atomic_load(&watch.current_wd) || wd == atomic_load(&watch.conf_wd) ||
-           wd == atomic_load(&watch.bm_wd) || wd == watch.udev_wd || wd == watch.mount_wd;
+           wd == atomic_load(&watch.bm_wd) || wd == watch.udev_wd || wd == watch.mount_wd || wd == atomic_load(&watch.git_wd);
 }
 
 // The folder to watch now, in place of the last one; NULL: none (the search view, F9). IN_MASK_ADD,
@@ -145,6 +146,18 @@ static void watch_conf(void)
     watch_file_dir(&watch.conf_wd, conf_path(file, sizeof file) ? file : NULL);
 }
 
+// The shown repository's git folder (F12), in place of the last one; NULL none. Its index and HEAD
+// are written by a rename into place (git's lock files), so IN_MOVED_TO; git status itself writes
+// neither (--no-optional-locks), so no answer asks for another.
+static void watch_git(const char *gitdir)
+{
+    if (watch.fd < 0) return;
+    int old = atomic_exchange(&watch.git_wd, -1);
+    int wd = gitdir ? inotify_add_watch(watch.fd, gitdir, IN_MOVED_TO | IN_CLOSE_WRITE | IN_CREATE | IN_DELETE | IN_ONLYDIR | IN_MASK_ADD) : -1;
+    atomic_store(&watch.git_wd, wd);
+    if (old >= 0 && old != wd && !watch_fixed(old) && !watch_is_trash(old) && old != atomic_load(&watch.dir_wd)) inotify_rm_watch(watch.fd, old);
+}
+
 static void watch_theme_dirs(void)
 {
     atomic_store(&watch.current_wd, inotify_add_watch(watch.fd, watch.current, WATCH_THEME_MASK | IN_MASK_ADD));
@@ -168,6 +181,8 @@ static void watch_read(bool *list, bool *theme, bool *mounts, bool *trash, bool 
         if (e->wd == atomic_load(&watch.bm_wd) && e->len && strcmp(e->name, "bookmarks") == 0) *mounts = true;   // the places again (F7.5)
         if (e->wd == atomic_load(&watch.bm_wd) && (e->mask & IN_IGNORED)) atomic_store(&watch.bm_wd, -1);   // (its folder gone: watch_bookmarks arms the new one)
         if (e->wd == atomic_load(&watch.dir_wd)) *list = true;
+        if (e->wd == atomic_load(&watch.git_wd) && e->len && (strcmp(e->name, "index") == 0 || strcmp(e->name, "HEAD") == 0))
+            atomic_store(&watch.git_ready, true), wake_main();   // (F12: git_ask merges a burst of them)
         if (e->wd == watch.udev_wd && e->len && e->name[0] == 'b') *mounts = true;   // a block device's (b8:17), not the rest udev keeps
         if (!(e->mask & IN_IGNORED) && watch_is_trash(e->wd)) *trash = true;
         if (e->wd == atomic_load(&watch.conf_wd) && e->len && strcmp(e->name, "ofx.conf") == 0) *conf = true;   // (F10)

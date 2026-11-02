@@ -1,0 +1,57 @@
+# F12 step 5: git status in the list. run.sh's repository: a.txt modified, src/new.txt added (src
+# shows it), newdir/ untracked, x.log and build/ ignored, kept.txt and src/b.txt unchanged. Folders
+# first.
+settle
+wait-for 5000 gitshown=1 gitn=3
+key home
+expect sel=build gitsel=ignored gitnamecol=git
+key down
+expect sel=newdir gitsel=untracked gitnamecol=git gitcells=3
+key down
+expect sel=src gitsel=staged
+key down
+expect sel=a.txt gitsel=modified gitnamecol=git
+key down
+expect sel=kept.txt gitsel=- gitnamecol=type
+key down
+expect sel=x.log gitsel=ignored
+expect info=6_items_(2_hidden),_38_GiB_free_·_3_changed
+shot git-list.png
+# A change in the folder: asked again with its listing.
+sh printf 'k2\n' > "$OFX_DIR/kept.txt"
+wait-for 3000 gitn=4
+key up
+expect sel=kept.txt gitsel=modified
+# A commit from elsewhere: its index changes, asked again (the folder's files didn't change).
+sh cd "$OFX_DIR" && GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null git -c user.name=t -c user.email=t@t commit -qam two
+wait-for 3000 gitn=1 gitsel=- gitcells=1
+# Into an ignored folder: all of it ignored (git names the folder only).
+key home
+key enter
+wait-for 3000 sel=out.o gitshown=1 gitsel=ignored gitn=0
+key backspace
+# Into src with a slow git (half a second): until its answer, the last folder's isn't shown here.
+sh printf '#!/bin/sh\nsleep 0.5\nexec /usr/bin/git "$@"\n' > "$OFX_ROOT/fakes/git"
+wait-for 3000 sel=build
+key down
+key down
+key enter
+expect sel=b.txt gitshown=0
+wait-for 3000 gitshown=1 gitn=0 gitsel=-
+key backspace
+# The icon view: the labels tinted, a dot on each changed one's icon.
+key ctrl-2
+wait-for 3000 view=icons gitshown=1
+shot git-icons.png
+key ctrl-1
+# Outside the repository: none.
+key backspace
+wait-for 3000 sel=repo gitshown=0 gitn=0
+key enter
+wait-for 3000 gitshown=1
+# git-status = off (ofx.conf): none; on again: back.
+sh printf 'git-status = off\n' >> "$OFX_ROOT/config/ofx/ofx.conf"
+wait-for 3000 gitshown=0
+sh sed -i 's/^git-status = off$/git-status = on/' "$OFX_ROOT/config/ofx/ofx.conf"
+wait-for 3000 gitshown=1
+quit

@@ -1827,6 +1827,9 @@ int main(void)
     test_git_parse();
     test_git_top();
     test_spawn_piped();
+    test_git_status();
+    test_git_footer();
+    test_box_output_end();
     char cmd[1600];
     snprintf(cmd, sizeof cmd, "chmod -R u+rwx '%s' && rm -rf '%s' '%s'", root, root, decoy);
     if (system(cmd) != 0) fprintf(stderr, "could not remove %s\n", root);

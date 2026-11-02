@@ -451,6 +451,18 @@ printf 'x' > "$T/cache/thumbnails/large/0123456789abcdef0123456789abcdef.png"
 printf 'y' > "$T/cache/thumbnails/fail/ofx/0123456789abcdef0123456789abcdee.png"
 rs f12b OFX_TEST_THUMB_RUN_MS=500 OFX_TEST_THUMBNAILERS="$T/thumbnailers" -- "$T/tree"
 fi
+if want f12g; then
+# F12 step 5: git status, on a scratch repository made here (git's own config files out of it), the
+# real git behind a wrapper among the fakes (the guard runs no program outside the run's folder), in
+# bubblewrap as always. HOME is the run's: no config of Michael's comes in.
+T=$base/f12g; rm -rf "$T"; mkdir -p "$T/tree/repo/src" "$T/fakes"
+printf '#!/bin/sh\nexec /usr/bin/git "$@"\n' > "$T/fakes/git"; chmod +x "$T/fakes/git"
+( cd "$T/tree/repo" && export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null &&
+  git init -q -b main . && printf 'a\n' > a.txt && printf 'k\n' > kept.txt && printf '*.log\nbuild/\n' > .gitignore && printf 'b\n' > src/b.txt &&
+  git add -A && git -c user.name=t -c user.email=t@t commit -qm one &&
+  printf 'a2\n' >> a.txt && printf 'n\n' > src/new.txt && git add src/new.txt && mkdir newdir build && printf 'u\n' > newdir/u && printf 'l\n' > x.log && printf 'o\n' > build/out.o ) || failed f12g
+rs f12g -- "$T/tree/repo"
+fi
 if want hang; then
 T=$base/hang; rm -rf "$T"; mkdir -p "$T/tree/stuck"
 echo "== hang"

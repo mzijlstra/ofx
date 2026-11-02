@@ -172,6 +172,7 @@ enum { FONT_PX = 15, ROW_H = 28, ICON_PX = 24, HEADER_H = 40, COLS_H = 26, FOOTE
 enum { CELL_W_MIN = 112, CELL_W_ROOM = 64, CELL_H_ROOM = 56, CELL_PAD = 4, CELL_LINE_H = FONT_PX + 4, CELL_LINES_FULL = 8 };
 // The footer's zoom slider (F6.3): a minus, a track with a notch a size, a plus.
 enum { ZOOM_BTN_W = 22, ZOOM_TRACK_W = 84, ZOOM_KNOB_W = 10 };
+enum { GIT_W = 16 };   // the git letter's column, at a row's end, in a repository (F12)
 
 // ---- state ----------------------------------------------------------------------------------
 
@@ -406,6 +407,7 @@ void __wrap_glfwDefaultWindowHints(void)
     glfwWindowHintString(GLFW_WAYLAND_APP_ID, "ofx");
 }
 
+#include "git.c"       // (before folder.c, which asks it)
 #include "remember.c"
 #include "folder.c"
 #include "clear.c"     // (before actions.c, which runs it)
@@ -475,9 +477,9 @@ static void theme_apply(void)
 // (clip_close).
 static void quit_workers(void)
 {
-    jobs_quit(), clip_quit(), count_quit(), walk_quit(), search_quit(), thumbs_quit(), space_quit();
+    jobs_quit(), clip_quit(), count_quit(), walk_quit(), search_quit(), thumbs_quit(), space_quit(), git_quit();
     struct timespec until = deadline_in(QUIT_WAIT_MS), jobs_until = deadline_in(QUIT_JOBS_MS);
-    count_join(&until), walk_join(&until), search_join(&until), thumbs_join(&until), space_join(&until);
+    count_join(&until), walk_join(&until), search_join(&until), thumbs_join(&until), space_join(&until), git_join(&until);
     jobs_join(&jobs_until), clear_join(&until);
     clip_close();
 }
@@ -648,6 +650,7 @@ int main(int argc, char **argv)
     walk_start();
     search_start();
     thumbs_start(&scratch);
+    git_start();
     space_start();
     timer_start();
     places_reload();
@@ -767,6 +770,8 @@ int main(int argc, char **argv)
         if (props.walking && walk_take(&props.sum, &props.done)) dirty = true;
         if (props.walking && app.ui.panel != UI_PANEL_PROPS) walk_ask(NULL, 0), props.walking = false;   // the panel closed: the count stops
         if (clear_poll()) dirty = true;
+        if (atomic_exchange(&watch.git_ready, false) && fold_view_of(app.ui.view)) git_ask(app.cwd);   // (its index or HEAD changed: F12)
+        if (git_take()) dirty = true;
         if (thumbs_take()) dirty = true;
         if (app.ui.view == UI_VIEW_SEARCH && search_take()) search_relist(), dirty = true;
         if (app.search_due && now_ms() >= app.search_due) app.search_due = 0, search_retype(), dirty = true;

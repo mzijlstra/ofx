@@ -22,6 +22,7 @@
 #include "jobq.c"
 #include "state.c"
 #include "tree.c"
+#include "sandbox.c"   // (before git.c and thumbers.c: they run in it)
 #include "git.c"
 #include "thumbers.c"   // (before thumb.c: it runs them)
 #include "thumb.c"

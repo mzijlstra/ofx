@@ -620,9 +620,9 @@ static ThumbGot thumb_exec(Arena *a, const ThumbAsk *q, const char *uri, int sid
     ThumbGot got = TG_FAILED;   // (an Exec line that won't fill in: a failure too)
     struct stat st;
     if (thumbers_argv(a, q->exec, q->path, uri, out, side, argv, COUNT(argv)) > 0) {
-        ThumbRun r = thumb_run(argv, q->path, dir);
-        Str png = r == TR_ENDED ? thumb_read(a, out, THUMB_CACHED_MAX, &st, O_NOFOLLOW) : STR_EMPTY;
-        got = r != TR_ENDED ? TG_NONE : png.len && png_decode(a, png, side, t) ? TG_MADE : TG_FAILED;
+        BoxRun r = thumb_run(argv, q->path, dir);
+        Str png = r == BOX_ENDED ? thumb_read(a, out, THUMB_CACHED_MAX, &st, O_NOFOLLOW) : STR_EMPTY;
+        got = r != BOX_ENDED ? TG_NONE : png.len && png_decode(a, png, side, t) ? TG_MADE : TG_FAILED;
         if (got == TG_FAILED && !png.len && access(dir, F_OK) != 0) got = TG_NONE;   // (its folder went meanwhile: Clear Previews, not the file's fault; F12 step 4 review)
     }
     DIR *d = opendir(dir);   // (whatever it left: its own temporary files too)

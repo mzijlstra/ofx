@@ -456,6 +456,7 @@ typedef struct {
     i64   one_size;      //   a file's size (< 0 none: a broken link, a device)
     i64   avail;         // the drive's free space, < 0 unknown
     bool  cramped;       // Show Permissions on, but the window has no room for them: said (2026-10-27)
+    isize changed;       // in a git repository, the changes under the folder (F12 step 5); 0: none said
 } UiInfo;
 
 static void ui_status_base(char *buf, size_t cap, const UiInfo *in);
@@ -485,7 +486,8 @@ static void ui_status_base(char *buf, size_t cap, const UiInfo *in)
     }
     int k = snprintf(buf, cap, "%td item%s", in->n, in->n == 1 ? "" : "s");
     if (k > 0 && in->hidden && (size_t)k < cap) k += snprintf(buf + k, cap - (size_t)k, " (%td hidden)", in->hidden);
-    if (k > 0 && in->avail >= 0 && (size_t)k < cap) ui_size(size, sizeof size, in->avail), snprintf(buf + k, cap - (size_t)k, ", %s free", size);
+    if (k > 0 && in->avail >= 0 && (size_t)k < cap) ui_size(size, sizeof size, in->avail), k += snprintf(buf + k, cap - (size_t)k, ", %s free", size);
+    if (k > 0 && in->changed > 0 && (size_t)k < cap) snprintf(buf + k, cap - (size_t)k, " \xC2\xB7 %td changed", in->changed);
 }
 
 // A file's date as the list shows it, in ofx.conf's date-format (F10): short (the time today, the

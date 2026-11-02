@@ -386,6 +386,7 @@ static void layout_cols(void)
                 text(cz(MORE[k].name), cc(t->fg_dim));
             }
         }
+        if (git_shown()) CLAY(CLAY_ID("col-git"), { .layout = { .sizing = { CLAY_SIZING_FIXED(GIT_W), CLAY_SIZING_GROW(0) } } }) {}   // (over the letters)
     }
 }
 
@@ -484,6 +485,32 @@ static Clay_Color ls_name_colour(const Entry *e, isize i)
     return cc(t->fg);
 }
 
+// ---- git status (F12 step 5, gui/git.c) -----------------------------------------------------------
+
+// A git state's colour, VS Code's on the theme's palette: modified yellow, added and untracked
+// green, renamed cyan, a conflict red; ignored dimmed.
+static Clay_Color git_colour(GitState s)
+{
+    Theme *t = &app.theme;
+    switch (s) {
+    case GS_MODIFIED: return cc(t->yellow);
+    case GS_STAGED: case GS_UNTRACKED: return cc(t->green);
+    case GS_RENAMED: return cc(t->cyan);
+    case GS_CONFLICT: return cc(t->red);
+    default: return cc(t->fg_dim);
+    }
+}
+
+// The git column's cell for entry i (state s): its letter, or for a folder a dot (VS Code's).
+static void git_cell(int r, isize i, GitState s)
+{
+    bool dir = app.list.e[i].kind == K_DIR;
+    char c = git_letter(s);
+    CLAY(CLAY_IDI("git", r), { .layout = { .sizing = { CLAY_SIZING_FIXED(GIT_W), CLAY_SIZING_FIT(0) }, .childAlignment = { .x = CLAY_ALIGN_X_RIGHT } } }) {
+        if (c) CLAY(CLAY_IDI("git-mark", r), {}) { text(cz(dir ? "\xE2\x97\x8F" : arena_sprintf(&frame, "%c", c)), git_colour(s)); }   // ● for a folder
+    }
+}
+
 // A Permissions cell in eza's colours: r yellow, w red, x green, s/S/t/T magenta, - dim.
 static void ls_perms_cell(Clay_ElementId id, u32 mode, int w)
 {
@@ -537,6 +564,15 @@ static void layout_hit(int r, const SearchHit *h, float room)
     }
 }
 
+// A row's name colour: the cursor's row plain (blue on the selection is faint), marked the accent; a
+// git change's over the type's, ignored dimmed (F12); else the type's.
+static Clay_Color row_name_colour(isize i, bool sel, bool marked, GitState gs)
+{
+    Theme *t = &app.theme;
+    const Entry *e = &app.list.e[i];
+    return e->kind == K_LINK_BROKEN ? cc(t->red) : marked ? cc(t->accent) : sel ? cc(t->fg) : gs != GS_NONE ? git_colour(gs) : ls_name_colour(e, i);
+}
+
 static void layout_row(int r, isize i, float w, i64 now)
 {
     const Entry *e = &app.list.e[i];
@@ -549,8 +585,9 @@ static void layout_row(int r, isize i, float w, i64 now)
     size_cell(i, size, sizeof size, true);
     entry_when(e, now, when, sizeof when);
     bool link = e->kind == K_LINK_DIR || e->kind == K_LINK_FILE || e->kind == K_LINK_BROKEN;
-    bool perms = perms_shown(w);
-    float name_w = w - side_w() - 2 * PAD - ICON_PX - 3 * GAP - SIZE_W - date_w() - (perms ? perms_w() : 0) - (link ? 16 : 0);
+    bool perms = perms_shown(w), in_git = git_shown() != NULL;
+    GitState gs = entry_git(i);
+    float name_w = w - side_w() - 2 * PAD - ICON_PX - 3 * GAP - SIZE_W - date_w() - (perms ? perms_w() : 0) - (link ? 16 : 0) - (in_git ? GIT_W + GAP : 0);
     CLAY(CLAY_IDI("row", r), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(ROW_H) },
                                            .padding = { PAD, PAD, 0, 0 }, .childGap = GAP,
                                            .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
@@ -561,7 +598,7 @@ static void layout_row(int r, isize i, float w, i64 now)
             if (sel && app.ui.focus == UI_FOCUS_EDIT && !app.ui.edit_path) {
                 layout_edit(t, name_w);
             } else {
-                text(fit(e->name, name_w, false), e->kind == K_LINK_BROKEN ? cc(t->red) : marked ? cc(t->accent) : sel ? cc(t->fg) : ls_name_colour(e, i));   // (the cursor's row plain: blue on the selection is faint)
+                text(fit(e->name, name_w, false), row_name_colour(i, sel, marked, gs));
                 if (link) text(cz("\xE2\x86\x92"), cc(t->fg_dim));   // →
                 if (link && e->target.len) {   // where it leads, as written, home as ~ (2026-10-27)
                     char to[PATH_MAX];
@@ -606,6 +643,7 @@ static void layout_row(int r, isize i, float w, i64 now)
             if (app.ui.group_col) info_cell(CLAY_IDI("group", r), id_name(true, e->gid), GROUP_W, 0, app.ui.colors && e->gid == (u32)getegid() ? cc(t->yellow) : cc(t->fg_dim));
             ls_perms_cell(CLAY_IDI("perms", r), e->mode, PERM_W);
         }
+        if (in_git) git_cell(r, i, gs);
     }
 }
 
@@ -637,7 +675,8 @@ static void layout_cell(int k, isize i)
     const Entry *e = &app.list.e[i];
     Theme *t = &app.theme;
     bool sel = i == app.ui.list.sel, hover = k == app.hov.row, marked = ui_marked(&app.ui, i);
-    Clay_Color fg = e->kind == K_LINK_BROKEN ? cc(t->red) : marked ? cc(t->accent) : cc(t->fg);
+    GitState gs = entry_git(i);   // (F12: the label tinted, a dot on the icon's corner)
+    Clay_Color fg = e->kind == K_LINK_BROKEN ? cc(t->red) : marked ? cc(t->accent) : gs != GS_NONE ? git_colour(gs) : cc(t->fg);
     Clay_Color bg = marked ? mix(t->accent, t->bg, 0.28f) : hover ? cc(t->bg_light) : NO_COLOR;
     int cw = cell_w(), px = grid_px();
     float name_w = (float)(cw - 2 * CELL_PAD);
@@ -655,6 +694,12 @@ static void layout_cell(int k, isize i)
             }
         } else {
             icon_box(CLAY_IDI("icon", k), entry_icon(i), px);
+        }
+        if (gs > GS_IGNORED) {   // (the list's ● on the icon's corner: the renderer draws no round boxes)
+            CLAY(CLAY_IDI("git-dot", k), { .floating = { .attachTo = CLAY_ATTACH_TO_ELEMENT_WITH_ID, .parentId = CLAY_IDI("icon", k).id, .zIndex = 2,
+                                                         .offset = { 4, -6 }, .attachPoints = { CLAY_ATTACH_POINT_RIGHT_TOP, CLAY_ATTACH_POINT_RIGHT_TOP } } }) {
+                text(cz("\xE2\x97\x8F"), git_colour(gs));
+            }
         }
         if (sel && app.ui.focus == UI_FOCUS_EDIT && !app.ui.edit_path) {
             // As wide as the name and a little, from a cell's width to two cells'.

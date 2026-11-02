@@ -138,6 +138,15 @@ sees only `/usr`, the file and a folder of its own to write in, with no network;
 installed, none runs), for 10 seconds at most, with no size limit, since the program reads only
 what it needs.
 
+Git status, in a git repository (`git-status = on`, the default), as VS Code shows it: a changed
+file's name in its change's colour (over its type's: modified yellow, added and untracked green,
+renamed cyan, a conflict red), a letter at the row's end (`M`, `A`, `U`, `R`, `!`), a dot on a folder
+for the most urgent change in it, ignored files dimmed, the icon view's labels tinted with a dot on
+the icon, and the footer's "N changed". It is asked again when the folder changes, or the
+repository's index or HEAD (a commit or a switch from a terminal). git runs in bubblewrap, which
+sees the repository read only and writes nothing (and `--no-optional-locks`, `core.fsmonitor=false`),
+so a program a repository's own config names can't reach the rest; without bubblewrap there is none.
+
 The cache's cleanup, `ofx-clean` (nothing else cleans it, Nemo neither): a preview not read for 90
 days goes; so does one whose file is gone or has changed (kept: files on a network drive or on a
 drive not mounted now); then, while the cache is over 1 GiB, the least recently read go. ofx.conf's
@@ -266,6 +275,16 @@ folder other than your home (Show in folder, `ofx <folder>`), that folder opens 
 # on or off. Off, ofx makes and reads no previews at all (the cache, shared
 # with Nemo, is left as it is).
 #previews = on
+
+# In a git repository, each file's state as VS Code shows it: a changed
+# file's name in the colour of its change (over its type's colour), a letter
+# at the row's end (M modified, A added, U untracked, R renamed, ! in
+# conflict), a folder's dot for the most urgent change in it, ignored files
+# dimmed, and the footer counts the changes. on or off. git runs in
+# bubblewrap's sandbox, which sees the repository read only, so nothing a
+# repository's own config names can reach the rest; without bubblewrap
+# installed (bwrap), none is shown.
+#git-status = on
 
 # Previews of videos, PDFs, office documents and the other types the
 # programs in /usr/share/thumbnailers know, made by those programs (as Nemo
