@@ -173,39 +173,134 @@ static void ui_folder_open(Ui *u, isize side, int crumb, bool keys)
     ui_menu_open(u, UI_CTX_FOLDER, keys);
 }
 
-// The Properties panel opened, the focus on the grid's first box (F7.2).
-static UiAction ui_props_open(Ui *u)
-{
-    u->panel = UI_PANEL_PROPS, u->prop_at = 0;   // (the menu closed the edit and find lines; Ctrl+I in them is theirs)
-    return (UiAction){ UA_PROPS, UI_PROPS_MARKED, false };
-}
+// ---- an entry picked, the menus' keys and the pointer -------------------------------------------
 
-// A key while the Properties panel is up; it takes every key (a panel). Arrows and h, j, k, l move
-// the focus in the 3 by 3 grid (stopping at its edges), Space or Enter flips that permission when
-// gui/ allows it, Esc or Ctrl+I closes the panel.
-static UiAction ui_props_event(Ui *u, UiEvent e)
+// Entry it picked: the menu closes, and gui/ does what it says; one that stands for a key leaves
+// it in menu_key, for ui_handle to run as that key.
+static UiAction ui_menu_pick(Ui *u, UiMenuItem it)
 {
-    if (e.key == UK_NONE) {
-        switch (e.ch) {
-        case 'h': e.key = UK_LEFT; break;
-        case 'j': e.key = UK_DOWN; break;
-        case 'k': e.key = UK_UP; break;
-        case 'l': e.key = UK_RIGHT; break;
-        case ' ': e.key = UK_ENTER; break;
-        default: break;
+    u->menu_on = false;
+    // The folder menu (F8): gui/ does each for that folder; ui/ keeps its panels and questions.
+    if (u->menu == UI_CTX_FOLDER) {
+        switch (it) {
+        case UM_BM_EDIT_IT: return ui_bmp_open(u, u->ctx_bmk);
+        case UM_BM_RENAME_IT: return ui_bmp_open(u, u->ctx_bmk), u->bmp_naming = true, (UiAction){ UA_BM_NAME, u->ctx_bmk, false };
+        case UM_BM_UP_IT: return (UiAction){ UA_BM_UP, u->ctx_bmk, false };
+        case UM_BM_DOWN_IT: return (UiAction){ UA_BM_DOWN, u->ctx_bmk, false };
+        case UM_BM_REMOVE_IT: return (UiAction){ UA_BM_REMOVE, u->ctx_bmk, false };
+        case UM_EMPTY_IT: return u->empty_asking = true, (UiAction){ UA_NONE, 0, false };
+        case UM_PROPS_IT: return u->panel = UI_PANEL_PROPS, u->prop_at = 0, (UiAction){ UA_PROPS, UI_PROPS_CTX, false };
+        default: return (UiAction){ UA_FOLDER_DO, it, false };
         }
     }
-    int row = u->prop_at / 3, col = u->prop_at % 3;
-    switch (e.key) {
-    case UK_LEFT: case UK_SEL_LEFT: if (col > 0) u->prop_at--; break;
-    case UK_RIGHT: case UK_SEL_RIGHT: if (col < 2) u->prop_at++; break;
-    case UK_UP: if (row > 0) u->prop_at -= 3; break;
-    case UK_DOWN: if (row < 2) u->prop_at += 3; break;
-    case UK_ENTER: case UK_SHIFT_ENTER:
-        if (u->prop_can) return (UiAction){ UA_CHMOD, u->prop_at, false };
-        break;
-    case UK_ESC: case UK_PROPERTIES: ui_panel_close(u, UI_PANEL_PROPS); break;
-    default: break;
+    if (UI_MENU_ITEM[it].ev.key != UK_NONE || UI_MENU_ITEM[it].ev.ch) {
+        u->menu_key = UI_MENU_ITEM[it].ev;
+        return (UiAction){ UA_NONE, 0, false };
     }
-    return (UiAction){ UA_NONE, 0, false };
+    switch (it) {
+    case UM_SIDE_PLACES: return ui_side_mode(u, SIDE_PLACES);
+    case UM_SIDE_TREE: return ui_side_mode(u, SIDE_TREE);
+    case UM_SIDE_NONE: return ui_side_mode(u, SIDE_HIDDEN);
+    case UM_SORT_NAME: case UM_SORT_SIZE: case UM_SORT_MTIME:
+        u->sort.key = it == UM_SORT_NAME ? SORT_NAME : it == UM_SORT_SIZE ? SORT_SIZE : SORT_MTIME;
+        return (UiAction){ UA_SORT, 0, false };
+    case UM_DUPLICATE: return (UiAction){ UA_DUPLICATE, 0, false };
+    case UM_COLORS: return u->colors = !u->colors, (UiAction){ UA_COLORS, 0, false };
+    case UM_SHOW_MENU: return u->bar_hidden = !u->bar_hidden, u->panel = u->bar_hidden ? UI_PANEL_BAR : UI_PANEL_NONE,   // (a menu was open: no panel is)
+                             (UiAction){ UA_MENUBAR, 0, false };
+    case UM_BM_0: case UM_BM_1: case UM_BM_2: case UM_BM_3: case UM_BM_4: case UM_BM_5: case UM_BM_6: case UM_BM_7:
+        return (UiAction){ UA_BOOKMARK, it - UM_BM_0, false };
+    case UM_BM_MORE: return ui_bmp_open(u, u->bm_more_at);
+    case UM_NEW_TAB: return (UiAction){ UA_TAB_NEW, 0, false };
+    case UM_NEW_WINDOW: return (UiAction){ UA_NEW_WINDOW, 0, false };
+    case UM_NEW_FOLDER: return (UiAction){ UA_NEWFOLDER, 0, false };
+    case UM_NEW_FILE: return (UiAction){ UA_NEWFILE, 0, false };
+    case UM_OPEN: return (UiAction){ UA_OPEN, u->list.sel, u->marked > 0 };
+    case UM_CLOSE_ALL: return (UiAction){ UA_CLOSE_ALL, 0, true };   // gui/ asks first with jobs (close_others)
+    case UM_CLOSE: return (UiAction){ UA_TAB_CLOSE, -1, false };
+    case UM_PROPERTIES: return ui_props_open(u);
+    case UM_OPEN_WITH: return ui_ow_open(u);
+    case UM_ABOUT: return u->panel = UI_PANEL_ABOUT, (UiAction){ UA_NONE, 0, false };
+    case UM_PREFERENCES: return (UiAction){ UA_PREFERENCES, 0, false };
+    case UM_OPEN_TAB: return (UiAction){ UA_TAB_BG_ROW, u->list.sel, false };
+    case UM_TAB_OTHERS: return (UiAction){ UA_TAB_OTHERS, 0, false };
+    case UM_TAB_REOPEN: return (UiAction){ UA_TAB_REOPEN, 0, false };
+    case UM_EMPTY_TRASH: return u->empty_asking = true, (UiAction){ UA_NONE, 0, false };
+    case UM_HERE_PROPS: return u->panel = UI_PANEL_PROPS, u->prop_at = 0, (UiAction){ UA_PROPS, UI_PROPS_HERE, false };
+    case UM_OPEN_WINDOW: return (UiAction){ UA_NEW_WINDOW, u->list.sel, true };
+    case UM_PASTE_INTO: return (UiAction){ UA_PASTE, u->list.sel, true };
+    case UM_TERMINAL_IN: return (UiAction){ UA_TERMINAL, u->list.sel, true };
+    case UM_BOOKMARK_IT: return (UiAction){ UA_ADD_BOOKMARK, u->list.sel, true };
+    case UM_FOLLOW: return (UiAction){ UA_FOLLOW, u->list.sel, false };
+    case UM_SEARCH_IN: return (UiAction){ UA_SEARCH, u->list.sel, true };   // (all: below the folder entry index)
+    default: return (UiAction){ UA_NONE, 0, false };
+    }
+}
+
+// The menu whose Alt letter is ch, -1 for none.
+static int ui_menu_of(u32 ch)
+{
+    for (int m = 0; m < UI_MENUS; m++)
+        if ((u32)UI_MENU[m].letter == ch) return m;
+    return -1;
+}
+
+// A key while a menu is open: true when it was the menu's (*a: what gui/ does). Up, Down, k and j
+// move the mark over what can be picked, round the end; Left, Right, h and l go to the menu that
+// way; Enter picks; Esc and F10 close it, as its own Alt letter does. A typed character goes no
+// further (t would start a terminal behind the menu). Any other key closes the menu and is the
+// list's (a shortcut does what it does).
+static bool ui_menu_event(Ui *u, UiEvent e, UiAction *a)
+{
+    *a = (UiAction){ UA_NONE, 0, false };
+    if (e.key == UK_NONE) {
+        switch (e.ch) {
+        case 'j': e.key = UK_DOWN; break;
+        case 'k': e.key = UK_UP; break;
+        case 'h': e.key = UK_LEFT; break;
+        case 'l': e.key = UK_RIGHT; break;
+        default: return true;
+        }
+    }
+    switch (e.key) {
+    case UK_DOWN: case UK_UP: {
+        int at = ui_menu_next(u, u->menu_at < 0 && e.key == UK_UP ? 0 : u->menu_at, e.key == UK_DOWN ? 1 : -1);
+        u->menu_at = at;
+        return true;
+    }
+    case UK_HOME: u->menu_at = ui_menu_next(u, -1, 1); return true;
+    case UK_END: u->menu_at = ui_menu_next(u, 0, -1); return true;
+    case UK_LEFT: case UK_SEL_LEFT: case UK_RIGHT: case UK_SEL_RIGHT: {
+        if (u->menu >= UI_MENUS) return true;   // a right-click menu has no neighbours (F8)
+        int by = e.key == UK_LEFT || e.key == UK_SEL_LEFT ? -1 : 1;
+        ui_menu_open(u, ((u->menu + by) % UI_MENUS + UI_MENUS) % UI_MENUS, true);
+        return true;
+    }
+    case UK_ENTER: case UK_SHIFT_ENTER:
+        if (u->menu_at >= 0 && ui_menu_enabled(u, UI_MENU[u->menu].items[u->menu_at])) *a = ui_menu_pick(u, UI_MENU[u->menu].items[u->menu_at]);
+        return true;
+    case UK_ESC: case UK_F10: case UK_TAB: u->menu_on = false; return true;
+    case UK_MENU: {
+        int m = ui_menu_of(e.ch);
+        if (m == u->menu) u->menu_on = false;
+        else if (m >= 0) ui_menu_open(u, m, true);
+        return true;
+    }
+    default: u->menu_on = false; return false;
+    }
+}
+
+// The pointer over the menu bar (F7.1): over another menu's title while one is open, that menu
+// opens (nothing marked); over an entry, it is marked if it can be picked. True when anything
+// changed.
+static bool ui_menu_hover(Ui *u, int title, int item)
+{
+    if (!u->menu_on) return false;
+    if (title >= 0 && title < UI_MENUS && title != u->menu && u->menu < UI_MENUS) {   // (not from a right-click menu, F8)
+        u->menu = title, u->menu_at = -1;
+        return true;
+    }
+    if (item < 0 || item >= UI_MENU[u->menu].n || !ui_menu_enabled(u, UI_MENU[u->menu].items[item]) || item == u->menu_at) return false;
+    u->menu_at = item;
+    return true;
 }

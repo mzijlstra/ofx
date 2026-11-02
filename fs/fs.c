@@ -11,8 +11,8 @@
 #include "spawn.c"
 #include "editors.c"
 #include "conf.c"     // (after editors.c: an editor line is checked as a recipe)
-#include "apps.c"
 #include "ops.c"
+#include "apps.c"     // (after ops.c: Set as default writes through ops_allowed)
 #include "trash.c"
 #include "clip.c"
 #include "job.c"

@@ -1,7 +1,8 @@
 // The default app for a MIME type, as the freedesktop MIME apps spec has it (F7.1.1, docs/plan.md):
 // gio types an empty file by its content, application/x-zerosize, for which nothing is set, so
 // `gio open` refuses it; ofx finds the app for the type its name gives and launches that
-// (Michael, 2026-10-25). F7.3's Open With reads the same lists.
+// (Michael, 2026-10-25). F7.3's Open With reads the same lists, and Set as default (F7.3.1, at the
+// end) writes the user's.
 //
 // The lists (read with icons.c's ini_get), most preferred first: in $XDG_CONFIG_HOME, each $XDG_CONFIG_DIRS, then each data dir's
 // applications/ ($XDG_DATA_HOME first), `<desktop>-mimeapps.list` (each of $XDG_CURRENT_DESKTOP,
@@ -367,4 +368,72 @@ static isize apps_rank(Arena *a, Apps *apps, Str type)
     arena_restore(a, mark);
     qsort(apps->a, (size_t)apps->n, sizeof *apps->a, apps_order);
     return shown;
+}
+
+// ---- the default app for a type (F7.3.1) ------------------------------------------------------
+
+// The user's own mimeapps.list, where a default is set: $XDG_CONFIG_HOME's, else ~/.config's.
+static bool apps_user_list(char *out, size_t cap)
+{
+    return xdg_dir(out, cap, "XDG_CONFIG_HOME", ".config", "mimeapps.list");
+}
+
+// A list read before the user's own that sets a default for type (or an alias of it), whose
+// setting a change in the user's list wouldn't override (Omarchy's hyprland-mimeapps.list): its
+// path into out. False when none does.
+static bool apps_shadowed(Arena *a, Str type, char *out, size_t cap)
+{
+    ArenaMark mark = arena_mark(a);
+    char mine[PATH_MAX];
+    const char *lists[APPS_LISTS_MAX];
+    isize nl = apps_user_list(mine, sizeof mine) ? apps_lists(a, lists, APPS_LISTS_MAX) : 0;
+    Str names[APPS_TYPES_MAX];
+    isize nn = apps_names(a, &type, names, APPS_TYPES_MAX);
+    bool found = false;
+    for (isize k = 0; k < nl && !found && strcmp(lists[k], mine) != 0; k++) {
+        Str text = read_file(a, lists[k]);
+        for (isize j = 0; j < nn && !found; j++)
+            if (ini_get(text, S("Default Applications"), names[j]).len) found = true, snprintf(out, cap, "%s", lists[k]);
+    }
+    arena_restore(a, mark);
+    return found;
+}
+
+// The first app the user's list sets as type's default, into out ("" none).
+static void apps_user_default(Arena *a, const char *list, Str type, char *out, size_t cap)
+{
+    ArenaMark mark = arena_mark(a);
+    Str v = ini_get(read_file(a, list), S("Default Applications"), type);
+    isize semi = str_find(v, ';');
+    if (semi >= 0) v = str_cut(v, 0, semi);
+    snprintf(out, cap, "%.*s", STR_ARG(str_trim(v)));
+    arena_restore(a, mark);
+}
+
+// app (a desktop id) made type's default in the user's list, by `gio mime` (what Nemo's "Set as
+// default" does: GLib writes [Default Applications] and adds it to [Added Associations]). No undo
+// (Michael, 2026-10-26). False with the reason when the guard refuses it, gio doesn't run, or the
+// list doesn't say so after.
+static bool op_set_default(Arena *a, Str type, const char *app, Err *err)
+{
+    // The canonical name, not an alias gio info may give (.p12, .p7b): a list's canonical key would
+    // win over the alias's, so setting the alias would do nothing while the check said done
+    // (F7.3.1 review).
+    Str names[APPS_TYPES_MAX];
+    apps_names(a, &type, names, APPS_TYPES_MAX);
+    char list[PATH_MAX];
+    if (!apps_user_list(list, sizeof list)) return err_set(err, "no home folder to keep the default in"), false;
+    if (!ops_allowed(list, err)) return false;
+    char t[256], out[1024];
+    snprintf(t, sizeof t, "%.*s", STR_ARG(type));
+    char *argv[] = { "gio", "mime", "--", t, (char *)app, NULL };
+    bool late = false;
+    if (!spawn_capture(NULL, argv, out, sizeof out, 3000, &late, err)) return false;
+    char now[NAME_MAX + 1];
+    apps_user_default(a, list, type, now, sizeof now);
+    if (late || strcmp(now, app) != 0) {
+        out[strcspn(out, "\n")] = 0;
+        return err_set(err, "%s", out[0] ? out : "gio didn't set it"), false;
+    }
+    return true;
 }

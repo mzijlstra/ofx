@@ -103,16 +103,6 @@ static void ui_find_open(Ui *u)
     ui_matcher_set(&u->find_m, STR_EMPTY, u->find_opts);   // Up and Down in an empty bar find nothing (a review)
 }
 
-// cp as UTF-8 into b: its length, or 0 for a control character or no code point at all.
-static int ui_utf8(u32 cp, char b[4])
-{
-    if (cp < 0x20 || cp == 0x7F || cp > 0x10FFFF) return 0;
-    return cp < 0x80 ? (b[0] = (char)cp, 1)
-         : cp < 0x800 ? (b[0] = (char)(0xC0 | cp >> 6), b[1] = (char)(0x80 | (cp & 0x3F)), 2)
-         : cp < 0x10000 ? (b[0] = (char)(0xE0 | cp >> 12), b[1] = (char)(0x80 | (cp >> 6 & 0x3F)), b[2] = (char)(0x80 | (cp & 0x3F)), 3)
-         : (b[0] = (char)(0xF0 | cp >> 18), b[1] = (char)(0x80 | (cp >> 12 & 0x3F)), b[2] = (char)(0x80 | (cp >> 6 & 0x3F)), b[3] = (char)(0x80 | (cp & 0x3F)), 4);
-}
-
 // n and N: the next or previous match of the last text, from the cursor.
 static void ui_find_again(Ui *u, UiNames names, int dir)
 {

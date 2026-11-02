@@ -838,6 +838,16 @@ static UiOnTop ui_on_top(const Ui *u)
     return OF_PANEL[u->panel];
 }
 
+// cp as UTF-8 into b: its length, or 0 for a control character or no code point at all.
+static int ui_utf8(u32 cp, char b[4])
+{
+    if (cp < 0x20 || cp == 0x7F || cp > 0x10FFFF) return 0;
+    return cp < 0x80 ? (b[0] = (char)cp, 1)
+         : cp < 0x800 ? (b[0] = (char)(0xC0 | cp >> 6), b[1] = (char)(0x80 | (cp & 0x3F)), 2)
+         : cp < 0x10000 ? (b[0] = (char)(0xE0 | cp >> 12), b[1] = (char)(0x80 | (cp >> 6 & 0x3F)), b[2] = (char)(0x80 | (cp & 0x3F)), 3)
+         : (b[0] = (char)(0xF0 | cp >> 18), b[1] = (char)(0x80 | (cp >> 12 & 0x3F)), b[2] = (char)(0x80 | (cp >> 6 & 0x3F)), b[3] = (char)(0x80 | (cp & 0x3F)), 4);
+}
+
 // Panel p closed, if it is the one up.
 static void ui_panel_close(Ui *u, UiPanel p)
 {
@@ -857,7 +867,7 @@ static UiInput ui_input_none(void)
 #include "find.c"
 #include "edit.c"
 #include "prompts.c"
-#include "menus.c"
 #include "panels.c"
+#include "menus.c"
 #include "handle.c"
 #include "helpers.c"
