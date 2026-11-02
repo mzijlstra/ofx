@@ -148,7 +148,7 @@ static Texture2D *entry_thumb(isize i, bool draw)
     const Entry *e = &app.list.e[i];
     char path[PATH_MAX];
     if (kind_is_dir(e->kind) || e->kind == K_LINK_BROKEN || e->trash || !entry_path(i, path, sizeof path)) return NULL;
-    return thumb_for(path, e->mtime, e->size, thumb_kind(entry_mime(i)), app.thumb_local, grid_px() * app.icon_scale, draw);
+    return thumb_for(path, e->mtime, e->size, entry_mime(i), app.thumb_local, grid_px() * app.icon_scale, draw);
 }
 
 static IconSlot *place_icon(int i)

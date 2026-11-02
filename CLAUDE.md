@@ -51,6 +51,15 @@ rules shared by every tool here.
   came from, 2026-10-20). `run-script.sh` points `XDG_CACHE_HOME` at `<scratch>/cache`, and the
   unit tests give thumb_get a cache in their root, so no test reads or writes his. Never delete or
   rewrite anything in his cache to test.
+- **Thumbnailers** (F12 step 3): with `preview-thumbnailers` on, the icon view runs the programs the
+  data dirs' `thumbnailers/*.thumbnailer` name (ffmpegthumbnailer, evince-thumbnailer, ...) on the
+  files it shows, writing their PNG into the cache above. With the guard on (`OFX_GUI_ROOT`) ofx
+  reads only `OFX_TEST_THUMBNAILERS`'s files, and runs only a program inside the guard's root
+  (`ops_program_allowed`). run-script.sh sets it to `<scratch>/thumbnailers` (empty unless the run
+  makes fakes there, as f12 does), and the unit tests make their own. bubblewrap (`/usr/bin/bwrap`)
+  does run for real in the tests: it sees only `/usr` (read only), the test's file and its own run
+  folder, so it can't reach his files. The fakes that hang sleep 19 s (f12) or 3 s (unit), so they
+  can't be confused with f11j's `sleep 20` stand-ins.
 - **ofx-clean deletes previews** (F6.5) in `$XDG_CACHE_HOME/thumbnails`, which is his cache unless
   that is set. Michael runs it (his `--dry-run` first, then the timer he enables), not a test.
   Try it on a copy only: copy with `O_NOATIME` (a plain `cp` resets the access times the 90-day
@@ -224,6 +233,7 @@ ui/ that nothing calls makes the test build warn.
   `fs/search.c` the search's address and walk, inside files too; `fs/editors.c` Open at Line's
   recipes; `fs/conf.c` ofx.conf (its options table, parser, written default, `conf_load`);
   `fs/places.c` the sidebar's places, unmounted drives too; `fs/clean.c` ofx-clean's rules;
+  `fs/thumbers.c` the system's thumbnailers (F12: read, filled in, run in bubblewrap);
   `fs/state.c` the state file (its lock, `state_rewrite`, the one way every writer changes it),
   `fs/folders.c` its per-folder lines, `fs/session.c` its window lines (F11).
 - `ui/ui.c`: the types (Ui, UiInput, UiAction, UiFocus, UiOnTop) and tables, then `cursor.c`

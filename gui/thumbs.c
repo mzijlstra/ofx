@@ -26,6 +26,7 @@ typedef struct {
     int       entry;
     i64       mtime, size;
     ThumbKind kind;
+    const char *exec;    // TK_EXEC: its thumbnailer's Exec line, in thumbers (loaded once, at the start)
     bool      make;
     int       px;
     i64       src_max;   // the largest file it may make one of (ofx.conf's preview-max-size, F10)
@@ -42,6 +43,7 @@ typedef struct {
 } ThumbDone;
 
 static u8 thumb_entry_mem[MiB(4)];                       // the entries' keys
+static Thumbers thumbers;                                 // the system's thumbnailers (F12; read at the start)
 // Each worker's, reset per preview: a 40 MP PNG decodes whole into 160 MiB of it. Pages past the
 // first THUMB_WORK_KEEP are handed back after a preview that used them, so a big one doesn't
 // stay resident.
@@ -62,6 +64,7 @@ static struct {
     int        drawn_last, drawn_now;   // previews drawn in the last frame, and in this one
     int        resets, evicted;
     bool       off;        // ofx.conf's previews = off (F10): none made or read
+    bool       exec_on;    // ofx.conf's preview-thumbnailers (F12)
     i64        src_max;    // ofx.conf's preview-max-size
 
     // Shared, under mu.
@@ -90,7 +93,7 @@ static void *thumb_loop(void *arg)
         pthread_mutex_unlock(&thumbs.mu);
         arena_reset(&a);
         Img out = { 0 };
-        ThumbAsk q = { .path = r.path, .mtime = r.mtime, .size = r.size, .kind = r.kind, .make = r.make, .px = r.px, .root = thumbs.root,
+        ThumbAsk q = { .path = r.path, .mtime = r.mtime, .size = r.size, .kind = r.kind, .exec = r.exec, .make = r.make, .px = r.px, .root = thumbs.root,
                        .src_max = r.src_max };
         ThumbGot got = thumb_get(&a, &q, &out);
         isize used = a.used;
@@ -113,7 +116,7 @@ static void *thumb_loop(void *arg)
     return NULL;
 }
 
-static void thumbs_start(void)
+static void thumbs_start(Arena *scratch)   // (scratch: for reading the thumbnailers)
 {
     if (!thumb_root(thumbs.root, sizeof thumbs.root)) thumbs.root[0] = 0;
     arena_init(&thumbs.arena, "thumbs", thumb_entry_mem, sizeof thumb_entry_mem);
@@ -121,6 +124,12 @@ static void thumbs_start(void)
     // OFX_TEST_THUMB_HELD_MAX: fewer texture bytes, so a test sees previews dropped and asked again.
     const char *m = getenv("OFX_TEST_THUMB_HELD_MAX");
     thumbs.held_max = m && atoi(m) > 0 ? atoi(m) : THUMB_HELD_MAX;
+    // OFX_TEST_THUMB_RUN_MS: a test's hung fake thumbnailer killed sooner; OFX_TEST_SANDBOX=off: the
+    // run without bubblewrap.
+    thumb_run_ms = env_int("OFX_TEST_THUMB_RUN_MS", THUMB_RUN_MS, 1, THUMB_RUN_MS);
+    const char *sb = getenv("OFX_TEST_SANDBOX");
+    thumb_sandbox = !(sb && strcmp(sb, "off") == 0);
+    thumbers_load(scratch, &thumbers);
     for (int i = 0; i < THUMB_WORKERS; i++) thumbs.started[i] = pthread_create(&thumbs.th[i], NULL, thumb_loop, (void *)(intptr_t)i) == 0;
 }
 
@@ -171,10 +180,10 @@ static void thumbs_frame(void)
     pthread_mutex_unlock(&thumbs.mu);
 }
 
-// The preview of the file at path (mtime, size, its MIME type's kind) drawn at px device pixels:
-// the texture when there is one, else NULL, and asked for when not known yet. local: its drive
-// is one ofx makes previews on. draw: a cell on screen (else a page ahead: asked, not counted).
-static Texture2D *thumb_for(const char *path, i64 mtime, i64 size, ThumbKind kind, bool local, int px, bool draw)
+// The preview of the file at path (mtime, size, its MIME type) drawn at px device pixels: the
+// texture when there is one, else NULL, and asked for when not known yet. local: its drive is one
+// ofx makes previews on. draw: a cell on screen (else a page ahead: asked, not counted).
+static Texture2D *thumb_for(const char *path, i64 mtime, i64 size, Str mime, bool local, int px, bool draw)
 {
     if (!thumbs.root[0] || thumbs.full || thumbs.off) return NULL;
     if (px > THUMB_PX_MAX) px = THUMB_PX_MAX;
@@ -198,12 +207,19 @@ static Texture2D *thumb_for(const char *path, i64 mtime, i64 size, ThumbKind kin
     // it, have it dropped, and ask again, a read every frame.
     // A page ahead asks only for the types ofx makes: another type's preview is only read, and
     // that is quick enough when its cell comes (F6.4 review).
+    // Its kind only now, asking (a thumbnailer is looked up in a table of hundreds of types).
+    ThumbKind kind = TK_NONE;
+    const char *exec = NULL;
+    if (e->state == TS_UNKNOWN || (draw && e->state == TS_DROPPED)) {
+        kind = thumb_kind(mime);
+        if (kind == TK_NONE && thumbs.exec_on && (exec = thumbers_find(&thumbers, mime))) kind = TK_EXEC;
+    }
     if ((e->state == TS_UNKNOWN && (draw || kind != TK_NONE)) || (draw && e->state == TS_DROPPED)) {
         pthread_mutex_lock(&thumbs.mu);
         if (thumbs.rn < THUMB_QUEUE) {
             ThumbReq *r = &thumbs.req[(thumbs.rhead + thumbs.rn++) % THUMB_QUEUE];
-            *r = (ThumbReq){ .gen = thumbs.gen, .entry = k, .mtime = mtime, .size = size, .kind = kind,
-                             .make = local && kind != TK_NONE && size <= thumbs.src_max, .px = px, .src_max = thumbs.src_max };
+            *r = (ThumbReq){ .gen = thumbs.gen, .entry = k, .mtime = mtime, .size = size, .kind = kind, .exec = exec,
+                             .make = local && kind != TK_NONE && (kind == TK_EXEC || size <= thumbs.src_max), .px = px, .src_max = thumbs.src_max };
             snprintf(r->path, sizeof r->path, "%s", path);
             e->state = TS_ASKED;
             pthread_cond_signal(&thumbs.cv);

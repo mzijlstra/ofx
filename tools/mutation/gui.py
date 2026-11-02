@@ -223,7 +223,8 @@ MUTANTS = [
     (TB, "    while (thumbs.held > thumbs.held_max) {", "    while (0) {"),
     (TB, "    if (e->mtime != mtime && e->state != TS_ASKED) {", "    if (0) {"),
     (TB, "        if ((got == TG_CACHED || got == TG_MADE) && out.w <= THUMB_PX_MAX", "        if (got == TG_MADE && out.w <= THUMB_PX_MAX"),
-    (TB, "                             .make = local && kind != TK_NONE && size <= thumbs.src_max, .px = px, .src_max = thumbs.src_max };", "                             .make = kind != TK_NONE && size <= thumbs.src_max, .px = px, .src_max = thumbs.src_max };"),
+    (TB, '                             .make = local && kind != TK_NONE && (kind == TK_EXEC || size <= thumbs.src_max), .px = px, .src_max = thumbs.src_max };', '                             .make = kind != TK_NONE && (kind == TK_EXEC || size <= thumbs.src_max), .px = px, .src_max = thumbs.src_max };'),
+    (TB, '                             .make = local && kind != TK_NONE && (kind == TK_EXEC || size <= thumbs.src_max), .px = px, .src_max = thumbs.src_max };', '                             .make = local && kind != TK_NONE && size <= thumbs.src_max, .px = px, .src_max = thumbs.src_max };', 'f12'),
     ('gui/files.c', "    for (isize i = ahead; i < ahead + (isize)app.ui.list.rows * cols && i < app.list.n; i++) entry_thumb(i, false);\n", ""),
     ('gui/files.c', "        Texture2D *th = entry_thumb(i, true);", "        Texture2D *th = NULL;"),
     ('gui/files.c', "CLAY_SIZING_FIXED(th->width / s), CLAY_SIZING_FIXED(th->height / s)", "CLAY_SIZING_FIXED(px), CLAY_SIZING_FIXED(px)"),
@@ -489,6 +490,13 @@ MUTANTS = [
     ('gui/files.c', '            if (app.ui.group_col) info_cell(CLAY_IDI("group", r)', '            info_cell(CLAY_IDI("group", r)', 'f8'),
     # ---- quit doesn't wait for a hung drive (2026-10-26: no mutant was hang's or f6b's alone)
     (G, '    if (pthread_timedjoin_np(t, NULL, until) != 0) pthread_detach(t);', '    pthread_join(t, NULL);', 'hang'),   # (join_by: every worker's stop)
+    # ---- the system's thumbnailers (F12 step 3): asked for, and ofx.conf's line
+    ('gui/thumbs.c', '        if (kind == TK_NONE && thumbs.exec_on && (exec = thumbers_find(&thumbers, mime))) kind = TK_EXEC;', '        if (kind == TK_NONE && (exec = thumbers_find(&thumbers, mime))) kind = TK_EXEC;', 'f12'),
+    ('gui/thumbs.c', '        if (kind == TK_NONE && thumbs.exec_on && (exec = thumbers_find(&thumbers, mime))) kind = TK_EXEC;', '        if (kind == TK_NONE && thumbs.exec_on && (exec = thumbers_find(&thumbers, mime))) kind = TK_NONE;', 'f12'),
+    ('gui/thumbs.c', '    thumbers_load(scratch, &thumbers);\n', '', 'f12'),
+    ('gui/thumbs.c', '.kind = r.kind, .exec = r.exec, .make', '.kind = r.kind, .make', 'f12'),
+    ('gui/prefs.c', ' || c.thumbnailers != app.conf.thumbnailers);', ');', 'f12'),
+    ('gui/prefs.c', 'thumbs.exec_on = c.thumbnailers;', 'thumbs.exec_on = true;', 'f12'),
     # ---- shift-select (F12): ofx.conf's line reaches the window; a scripted press holds both keys
     ('gui/prefs.c', '    app.ui.shift_add = c.shift_add;\n', '', 'f62'),
     ('gui/script.c', '(strstr(a, "ctrl") ? UI_MOD_CTRL : 0) | (strstr(a, "shift") ? UI_MOD_SHIFT : 0)', 'strstr(a, "ctrl") ? UI_MOD_CTRL : strstr(a, "shift") ? UI_MOD_SHIFT : 0', 'f62'),
@@ -632,8 +640,8 @@ MUTANTS = [
     ('gui/main.c', '    conf_start();   // (F10', '    // (F10', 'f10'),
     ('gui/watch.c', '        if (e->wd == atomic_load(&watch.conf_wd) && (e->mask & IN_IGNORED)) atomic_store(&watch.conf_wd, -1);', '', 'f10'),
     ('gui/folder.c', '        if (app.cwd[0]) app.status[0] = 0;', '        app.status[0] = 0;', 'f10'),
-    ('gui/prefs.c', '    thumbs.off = !c.previews, thumbs.src_max = c.preview_max;', '    thumbs.src_max = c.preview_max;', 'f10'),
-    ('gui/prefs.c', '    thumbs.off = !c.previews, thumbs.src_max = c.preview_max;', '    thumbs.off = !c.previews, thumbs.src_max = CONF_PREVIEW_MAX;', 'f10'),
+    ('gui/prefs.c', '    thumbs.off = !c.previews, thumbs.src_max = c.preview_max, thumbs.exec_on = c.thumbnailers;', '    thumbs.src_max = c.preview_max, thumbs.exec_on = c.thumbnailers;', 'f10'),
+    ('gui/prefs.c', '    thumbs.off = !c.previews, thumbs.src_max = c.preview_max, thumbs.exec_on = c.thumbnailers;', '    thumbs.off = !c.previews, thumbs.src_max = CONF_PREVIEW_MAX, thumbs.exec_on = c.thumbnailers;', 'f10'),
     ('gui/prefs.c', '    if (previews) thumbs_reset();', '', 'f10'),
     ('gui/prefs.c', '    if (c.bad) {', '    if (false) {', 'f10'),
     ('gui/prefs.c', '    int n = e ? editor_argv(e, path, 1, 1, buf', '    int n = e ? editor_argv(e, path, 2, 1, buf', 'f10'),

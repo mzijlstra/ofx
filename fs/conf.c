@@ -44,6 +44,7 @@ typedef struct {
     bool       restore_tabs;                      // the tabs across a restart (F11 step 3)
     bool       shift_add;                         // shift-select = add (F12; range: false)
     bool       previews;                          // previews in the icon view (F6.4)
+    bool       thumbnailers;                      // and the system's thumbnailers for them (F12)
     i64        preview_max;                       // the largest image previewed, in bytes
     DateFormat date;
     char       date_pattern[CONF_DATE_MAX];       // DATE_PATTERN's strftime pattern
@@ -107,6 +108,13 @@ static const ConfOpt CONF_OPTS[] = {
       "Previews of images in the icon view, in place of their file type's icon.\n"
       "on or off. Off, ofx makes and reads no previews at all (the cache, shared\n"
       "with Nemo, is left as it is)." },
+    { "preview-thumbnailers", CK_BOOL, offsetof(Conf, thumbnailers), "on",
+      "Previews of videos, PDFs, office documents and the other types the\n"
+      "programs in /usr/share/thumbnailers know, made by those programs (as Nemo\n"
+      "and Nautilus make theirs, in the same cache): on or off. Each runs in a\n"
+      "sandbox (bubblewrap, when it is installed) that sees only the file, for 10\n"
+      "seconds at most. Off, ofx still shows those previews when another program\n"
+      "made them." },
     { "preview-max-size", CK_SIZE, offsetof(Conf, preview_max), "10 MiB",
       "The largest image file ofx makes a preview of; a larger one shows its file\n"
       "type's icon. A size: B, KiB, MiB, GiB (or KB, MB, GB, in 1000s).\n"
@@ -212,7 +220,7 @@ static const char *const CONF_WANTS[] = {
 // the list, which is the file's lines).
 static void conf_defaults(Conf *c)
 {
-    *c = (Conf){ .zoom = CONF_ZOOM, .sort = SORT_NAME, .previews = true, .preview_max = CONF_PREVIEW_MAX, .date = DATE_SHORT, .skip = SEARCH_SKIP_DEFAULT, .clean = true,
+    *c = (Conf){ .zoom = CONF_ZOOM, .sort = SORT_NAME, .previews = true, .thumbnailers = true, .preview_max = CONF_PREVIEW_MAX, .date = DATE_SHORT, .skip = SEARCH_SKIP_DEFAULT, .clean = true,
                  .clean_orphans = true, .clean_unused_days = CLEAN_UNUSED_S / 86400, .clean_cap = CLEAN_CAP };
 }
 

@@ -45,6 +45,14 @@ static void wake_main(void)
     pthread_mutex_unlock(&wake_mu);
 }
 
+// A test knob: name's value when it is a number from lo to hi, else none (def).
+static int env_int(const char *name, int def, int lo, int hi)
+{
+    const char *v = getenv(name);
+    int n = v && v[0] ? atoi(v) : def;
+    return n < lo || n > hi ? def : n;
+}
+
 enum { QUIT_WAIT_MS = 200, QUIT_JOBS_MS = 500 };   // (quit_workers)
 
 // ms from now, for join_by.
@@ -510,14 +518,6 @@ static bool select_path(const char *start, char *out, size_t cap)
     return lstat(out, &st) == 0;
 }
 
-// A test knob: name's value when it is a number from lo to hi, else none (def).
-static int env_int(const char *name, int def, int lo, int hi)
-{
-    const char *v = getenv(name);
-    int n = v && v[0] ? atoi(v) : def;
-    return n < lo || n > hi ? def : n;
-}
-
 int main(int argc, char **argv)
 {
     const char *start = NULL;
@@ -646,7 +646,7 @@ int main(int argc, char **argv)
     count_start();
     walk_start();
     search_start();
-    thumbs_start();
+    thumbs_start(&scratch);
     space_start();
     timer_start();
     places_reload();

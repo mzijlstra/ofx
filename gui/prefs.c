@@ -29,7 +29,7 @@ static void conf_apply(void)
     static Conf c;   // (18 KiB: the editor lines)
     conf_load(&scratch, &c);
     static bool once;   // (the first read: nothing asked under the old values yet)
-    bool previews = once && (c.previews != app.conf.previews || c.preview_max != app.conf.preview_max);
+    bool previews = once && (c.previews != app.conf.previews || c.preview_max != app.conf.preview_max || c.thumbnailers != app.conf.thumbnailers);
     bool off = once && app.conf.restore_tabs && !c.restore_tabs;   // (F11 step 3b: this window's line out)
     bool views = once && (c.icons != app.conf.icons || c.zoom != app.conf.zoom || c.sort != app.conf.sort || c.sort_rev != app.conf.sort_rev);
     once = true;
@@ -39,7 +39,7 @@ static void conf_apply(void)
         remember_defaults();
         if (fold_view_of(app.ui.view)) remember_apply(app.cwd);
     }
-    thumbs.off = !c.previews, thumbs.src_max = c.preview_max;
+    thumbs.off = !c.previews, thumbs.src_max = c.preview_max, thumbs.exec_on = c.thumbnailers;
     app.ui.shift_add = c.shift_add;
     if (previews) thumbs_reset();   // (asked again, under the new limit, or not at all)
     if (c.bad) {

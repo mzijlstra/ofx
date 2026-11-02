@@ -6,7 +6,7 @@
 # printed whole, in order, once all are done; clip and keys share one (each starts a sway, which
 # takes the first free wayland-N).
 # The groups (one or more scripts on one tree): browse big gone watchgap f2 f3 f4 f5 f52 f53 f54
-# f6 (f6, f6b) usb f62 (f62, f62b, f62c) f63 (f63, f63b, f63c) f64 (f64, f64b, f64c, f64d) f7 (f7, f7b) f72 f73 (f73, f73b, f73c, f73d) f74 f75 (f75, f75b) f8 (f8, f8b, f8c, f8d, f8e) f9 (f9, f9b) f10 (f10, f10b, f10c, f10d) f11 (f11, f11b, f11c, f11d, f11e, f11f, f11g, f11h, f11i, f11j, f11k, f11l, f11m, f11n, f11o, f11p, f11q, f11r, f11s) clip keys (both in sway) hang guard3 guard. Named ones only, or all of them; a group
+# f6 (f6, f6b) usb f62 (f62, f62b, f62c) f63 (f63, f63b, f63c) f64 (f64, f64b, f64c, f64d) f7 (f7, f7b) f72 f73 (f73, f73b, f73c, f73d) f74 f75 (f75, f75b) f8 (f8, f8b, f8c, f8d, f8e) f9 (f9, f9b) f10 (f10, f10b, f10c, f10d) f11 (f11, f11b, f11c, f11d, f11e, f11f, f11g, f11h, f11i, f11j, f11k, f11l, f11m, f11n, f11o, f11p, f11q, f11r, f11s) f12 clip keys (both in sway) hang guard3 guard. Named ones only, or all of them; a group
 # that fails says "== <script>: FAILED" or "<group>: FAILED" (tools/mutation/gui.py reads it).
 set -u
 par=1
@@ -426,6 +426,21 @@ else
     failed keys
 fi
 rs keys RUN_SCRIPT_LIMIT=60 OFX_COMPOSITOR=sway -- "$T/tree"
+fi
+if want f12; then
+# F12 step 3: previews by thumbnailers, the run's own fakes (run-script.sh: the window reads no
+# other .thumbnailer files): copy makes a video's (they are PNGs, talk.mp4 with 11 MiB after it:
+# past preview-max-size, which a thumbnailer doesn't go by), hang never finishes (killed after
+# OFX_TEST_THUMB_RUN_MS), each in bubblewrap as the real ones would be.
+T=$base/f12; rm -rf "$T"; mkdir -p "$T/tree" "$T/thumbnailers" "$T/tbin"
+cp "$here/f64/wide.png" "$T/tree/clip.mp4"; cp "$here/f64/wide.png" "$T/tree/doc.pdf"
+cp "$here/f64/wide.png" "$T/tree/talk.mp4"; head -c 11534336 /dev/zero >> "$T/tree/talk.mp4"
+echo hi > "$T/tree/readme.txt"
+printf '#!/bin/sh\nhead -c %d "$1" > "$2"\n' "$(stat -c %s "$here/f64/wide.png")" > "$T/tbin/copy"; printf '#!/bin/sh\nsleep 19\n' > "$T/tbin/hang"; chmod +x "$T/tbin/copy" "$T/tbin/hang"
+printf '[Thumbnailer Entry]\nExec=%s %%i %%o\nMimeType=video/mp4;\n' "$T/tbin/copy" > "$T/thumbnailers/copy.thumbnailer"
+printf '[Thumbnailer Entry]\nExec=%s %%i %%o\nMimeType=application/pdf;\n' "$T/tbin/hang" > "$T/thumbnailers/hang.thumbnailer"
+rs f12 OFX_TEST_THUMB_RUN_MS=500 OFX_TEST_THUMBNAILERS="$T/thumbnailers" -- "$T/tree"
+if pgrep -f "[s]leep 19" > /dev/null; then echo "f12: FAILED: a hung thumbnailer outlived the window"; pkill -f "[s]leep 19"; fail=1; fi
 fi
 if want hang; then
 T=$base/hang; rm -rf "$T"; mkdir -p "$T/tree/stuck"

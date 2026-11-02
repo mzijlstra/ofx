@@ -1,8 +1,9 @@
 // Previews (F6.4, docs/plan.md "F6.4 design"): the freedesktop thumbnail cache, read and written as
 // its spec has it, so Nemo uses what ofx makes and ofx what Nemo made. A file's preview is
 // `<root>/<size>/<md5 of its URI>.png`, fresh while its Thumb::MTime (and Thumb::Size, when there)
-// match the file's. ofx makes them of PNG, JPEG, GIF and WebP; of any other type it shows one only
-// when the cache has it fresh.
+// match the file's. ofx makes them of PNG, JPEG, GIF and WebP; of another type with a thumbnailer
+// installed it runs that (thumbers.c, F12; ofx.conf's preview-thumbnailers); of any other it shows
+// one only when the cache has it fresh.
 //
 // The rule from Nemo's loop (docs/plan.md, 2026-10-20): one directory for one drawn size, checked
 // and written there only; a failure is written to fail/ofx/ and not tried again until the file
@@ -48,7 +49,7 @@ enum { THUMB_PIXELS_MAX = 40000000, THUMB_CACHED_MAX = MiB(8), THUMB_LEVELS = 4 
 
 typedef struct { u8 *px; int w, h; } Img;   // RGBA, rows packed
 
-typedef enum { TK_NONE, TK_PNG, TK_JPEG, TK_GIF, TK_WEBP } ThumbKind;
+typedef enum { TK_NONE, TK_PNG, TK_JPEG, TK_GIF, TK_WEBP, TK_EXEC } ThumbKind;   // TK_EXEC: by a thumbnailer (thumbers.c)
 
 // The types ofx makes previews of; TK_NONE for any other.
 static ThumbKind thumb_kind(Str mime)
@@ -285,9 +286,10 @@ static bool png_encode(Arena *a, Img im, const char *uri, i64 mtime, i64 size, S
 
 // A regular file of at most max bytes, whole, into the arena, and its stat; STR_EMPTY otherwise.
 // O_NONBLOCK: a FIFO at the path must not block the open (then it isn't regular, and is refused).
-static Str thumb_read(Arena *a, const char *path, isize max, struct stat *st)
+// flags: more for open (O_NOFOLLOW for a thumbnailer's PNG: a link it left there isn't read).
+static Str thumb_read(Arena *a, const char *path, isize max, struct stat *st, int flags)
 {
-    int fd = open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
+    int fd = open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC | flags);
     if (fd < 0) return STR_EMPTY;
     Str s = STR_EMPTY;
     char *p;
@@ -585,6 +587,7 @@ typedef struct {
     const char *path;   // absolute
     i64         mtime, size;   // as the listing read them
     ThumbKind   kind;   // TK_NONE: shown only when another program made it
+    const char *exec;   // TK_EXEC: its thumbnailer's Exec line (thumbers_find)
     bool        make;   // on a local drive and within src_max: ofx may make it
     int         px;     // the device pixels its longer side is drawn at
     const char *root;   // the cache (thumb_root)
@@ -600,6 +603,33 @@ typedef enum {
     TG_CHANGED,     // the file changed since the listing: its next listing asks again
 } ThumbGot;
 
+// The preview of q's file by its thumbnailer, side px at most, into t: run in a folder of its own
+// in the cache (<root>/.ofx-run-<pid>-<n>, emptied and gone after), its PNG read back. False when it
+// made none, or none in time.
+static bool thumb_exec(Arena *a, const ThumbAsk *q, const char *uri, int side, Img *t)
+{
+    static atomic_int seq;
+    Err err;
+    char dir[PATH_MAX], out[PATH_MAX];
+    if (snprintf(dir, sizeof dir, "%s/.ofx-run-%d-%d", q->root, (int)getpid(), atomic_fetch_add(&seq, 1)) >= (int)sizeof dir ||
+        snprintf(out, sizeof out, "%s/out.png", dir) >= (int)sizeof out)
+        return false;
+    if (!ops_allowed(dir, &err) || !mkdir_p(dir, 0700, false, &err) || mkdir(dir, 0700) != 0) return false;
+    const char *argv[THUMB_ARGS_MAX + 1];
+    bool ok = false;
+    struct stat st;
+    if (thumbers_argv(a, q->exec, q->path, uri, out, side, argv, COUNT(argv)) > 0 && thumb_run(argv, q->path, dir)) {
+        Str png = thumb_read(a, out, THUMB_CACHED_MAX, &st, O_NOFOLLOW);
+        ok = png.len && png_decode(a, png, side, t);
+    }
+    DIR *d = opendir(dir);   // (whatever it left: its own temporary files too)
+    for (struct dirent *de; d && (de = readdir(d));)
+        if (strcmp(de->d_name, ".") != 0 && strcmp(de->d_name, "..") != 0) unlinkat(dirfd(d), de->d_name, 0);
+    if (d) closedir(d);
+    rmdir(dir);
+    return ok;
+}
+
 // The preview for q, drawn size, into the arena (out: when TG_CACHED or TG_MADE). Reads only the
 // one directory q->px picks; writes there, or to fail/ofx/.
 static ThumbGot thumb_get(Arena *a, const ThumbAsk *q, Img *out)
@@ -610,19 +640,27 @@ static ThumbGot thumb_get(Arena *a, const ThumbAsk *q, Img *out)
     if (!thumb_uri(q->path, uri, sizeof uri) || !thumb_file(q->root, thumb_dirs[level], uri, file, sizeof file)) return TG_NONE;
     struct stat st;
     ThumbMeta m;
-    Str c = thumb_read(a, file, THUMB_CACHED_MAX, &st);
+    Str c = thumb_read(a, file, THUMB_CACHED_MAX, &st, 0);
     if (c.len && png_meta(c, &m) && thumb_fresh(&m, uri, q->mtime, q->size) && png_decode(a, c, q->px, out)) return TG_CACHED;
     if (q->kind == TK_NONE || !q->make || !thumb_file(q->root, "fail/ofx", uri, fail, sizeof fail)) return TG_NONE;
-    Str f = thumb_read(a, fail, THUMB_CACHED_MAX, &st);
+    Str f = thumb_read(a, fail, THUMB_CACHED_MAX, &st, 0);
     if (f.len && png_meta(f, &m) && thumb_fresh(&m, uri, q->mtime, q->size)) return TG_FAIL_KNOWN;
     st = (struct stat){ 0 };
-    Str src = thumb_read(a, q->path, q->src_max, &st);
-    bool empty = S_ISREG(st.st_mode) && st.st_size == 0;   // read, and nothing in it
-    if (!src.len && !empty) return TG_NONE;   // gone, unreadable, or grown past the limit
-    if (st.st_mtim.tv_sec != q->mtime || st.st_size != q->size) return TG_CHANGED;
     Img t;
+    bool made;
+    if (q->kind == TK_EXEC) {   // (the thumbnailer reads the file itself, so no preview-max-size)
+        if (stat(q->path, &st) != 0 || !S_ISREG(st.st_mode)) return TG_NONE;
+        if (st.st_mtim.tv_sec != q->mtime || st.st_size != q->size) return TG_CHANGED;
+        made = thumb_exec(a, q, uri, side, &t);
+    } else {
+        Str src = thumb_read(a, q->path, q->src_max, &st, 0);
+        bool empty = S_ISREG(st.st_mode) && st.st_size == 0;   // read, and nothing in it
+        if (!src.len && !empty) return TG_NONE;   // gone, unreadable, or grown past the limit
+        if (st.st_mtim.tv_sec != q->mtime || st.st_size != q->size) return TG_CHANGED;
+        made = !empty && thumb_make(a, q->kind, src, side, &t);
+    }
     Str png;
-    if (empty || !thumb_make(a, q->kind, src, side, &t)) {
+    if (!made) {
         u8 clear[4] = { 0 };
         if (png_encode(a, (Img){ clear, 1, 1 }, uri, q->mtime, q->size, &png)) thumb_write(fail, png);
         return TG_FAILED;

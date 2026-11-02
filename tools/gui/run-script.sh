@@ -22,6 +22,9 @@
 # - XDG_CACHE_HOME=<scratch-dir>/cache: the previews' thumbnail cache (F6.4), never his
 #   ~/.cache/thumbnails, which Nemo shares;
 # - OFX_TEST_THUMB_HELD_MAX, when set, is passed on: the previews' texture bytes held (eviction);
+# - OFX_TEST_THUMBNAILERS, else <scratch-dir>/thumbnailers (empty unless the run makes fakes there):
+#   the only .thumbnailer files the window reads (F12; never the system's real ones, under the
+#   guard); OFX_TEST_THUMB_RUN_MS and OFX_TEST_SANDBOX, when set, are passed on;
 # - OFX_TEST_SPACE_DELAY_MS, when set, is passed on: each drive space answer that much later;
 # - OFX_TEST_MEDIA, when set, is passed on: mounts under it count as removable drives;
 # - OFX_TEST_ICONS_MAX, when set, is passed on: an icon cache of that many slots (a full cache);
@@ -111,6 +114,7 @@ if [ -z "${OFX_TEST_MOUNTINFO:-}" ]; then
 fi
 # The block devices and udev's database (unmounted drives, 2026-10-30): the run's own, else empty.
 [ -n "${OFX_TEST_SYSBLOCK:-}" ] || { mkdir -p "$T/sysblock"; OFX_TEST_SYSBLOCK="$T/sysblock"; }
+[ -n "${OFX_TEST_THUMBNAILERS:-}" ] || { mkdir -p "$T/thumbnailers"; OFX_TEST_THUMBNAILERS="$T/thumbnailers"; }
 [ -n "${OFX_TEST_UDEV:-}" ] || { mkdir -p "$T/udev"; OFX_TEST_UDEV="$T/udev"; }
 # HOME: the run's own, else <scratch>/home (F11 review, 2026-11-02: Michael's was the default, read
 # by the Home place and by a drive's going; a script had to remember to say otherwise).
@@ -149,6 +153,7 @@ echo \$\$ > "$T/run.pid"
 exec env -u DISPLAY -u WAYLAND_SOCKET WAYLAND_DISPLAY="$sock" OFX_TEST_SIZE=${OFX_SCRIPT_SIZE:-936x516} OFX_TEST_WINDOWS="$T/windows" ${script_env} OFX_GUI_ROOT="$T" OFX_GUI_SHOTS="$T/shots" PATH="$T/fakes:\$PATH" XDG_STATE_HOME="$T/state" XDG_CONFIG_HOME="$T/config" XDG_DATA_HOME="$T/data" XDG_CACHE_HOME="$T/cache" \
   LSAN_OPTIONS=suppressions=$root/gui/lsan.supp ASAN_OPTIONS=log_path="$T/asan" ${OFX_TEST_LEAK:+OFX_TEST_LEAK=1} ${OFX_GUI_FAIL_FAST:+OFX_GUI_FAIL_FAST=1} ${OFX_GUI_DEBUG:+OFX_GUI_DEBUG=1} \
   ${OFX_TEST_WATCH_DELAY_MS:+OFX_TEST_WATCH_DELAY_MS=$OFX_TEST_WATCH_DELAY_MS} ${OFX_TEST_COPY_DELAY_MS:+OFX_TEST_COPY_DELAY_MS=$OFX_TEST_COPY_DELAY_MS} ${OFX_TEST_CROSS:+OFX_TEST_CROSS=1} OFX_TEST_WRITE_MS=${OFX_TEST_WRITE_MS:-100} HOME=$OFX_TEST_HOME ${OFX_TEST_COUNT_DELAY_MS:+OFX_TEST_COUNT_DELAY_MS=$OFX_TEST_COUNT_DELAY_MS} ${OFX_TEST_MOUNTINFO:+OFX_TEST_MOUNTINFO=$OFX_TEST_MOUNTINFO} OFX_TEST_SYSBLOCK=$OFX_TEST_SYSBLOCK OFX_TEST_UDEV=$OFX_TEST_UDEV ${OFX_TEST_MEDIA:+OFX_TEST_MEDIA=$OFX_TEST_MEDIA} ${OFX_TEST_SPACE_DELAY_MS:+OFX_TEST_SPACE_DELAY_MS=$OFX_TEST_SPACE_DELAY_MS} ${OFX_TEST_ICONS_MAX:+OFX_TEST_ICONS_MAX=$OFX_TEST_ICONS_MAX} ${OFX_TEST_THUMB_HELD_MAX:+OFX_TEST_THUMB_HELD_MAX=$OFX_TEST_THUMB_HELD_MAX} \
+  OFX_TEST_THUMBNAILERS=$OFX_TEST_THUMBNAILERS ${OFX_TEST_THUMB_RUN_MS:+OFX_TEST_THUMB_RUN_MS=$OFX_TEST_THUMB_RUN_MS} ${OFX_TEST_SANDBOX:+OFX_TEST_SANDBOX=$OFX_TEST_SANDBOX} \
   "$bin" $args >"$T/out" 2>"$T/err"
 EOS
 chmod +x "$T/launch.sh"
