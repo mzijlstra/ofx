@@ -269,7 +269,7 @@ MUTANTS += [
     ('ui/handle.c', "        if (in->click_mods & UI_MOD_SHIFT) ui_mark_range(u, l->sel, row);", "        if (in->click_mods & UI_MOD_SHIFT) ui_mark(u, row, true);"),
     ('ui/handle.c', "        else if (in->click_mods & UI_MOD_CTRL) ui_mark(u, row, !ui_marked(u, row));", "        else if (in->click_mods & UI_MOD_CTRL) ui_mark(u, row, true);"),
     ('ui/handle.c', "    if (!prompt && in->click >= 0 && l->top + in->click < l->n) {", "    if (in->click >= 0 && l->top + in->click < l->n) {"),
-    ('ui/prompts.c', "    bool yes = e.key == UK_ENTER || (e.key == UK_NONE", "    bool yes = (e.key == UK_NONE"),
+    ('ui/prompts.c', '    bool yes = e.key == UK_ENTER || e.key == UK_SHIFT_ENTER || (e.key == UK_NONE', '    bool yes = e.key == UK_SHIFT_ENTER || (e.key == UK_NONE'),
     ('ui/prompts.c', "(e.key == UK_NONE && (e.ch == 'n' || e.ch == 'N'));", "(e.key == UK_NONE && e.ch == 'N');"),
     ('ui/handle.c', '            if (l->n > 0 && u->focus != UI_FOCUS_SIDE) u->confirming = true, u->confirm_n = u->marked ? u->marked : 1;', '            if (l->n > 0 && u->focus != UI_FOCUS_SIDE) u->confirming = true, u->confirm_n = 1;'),
     ('ui/prompts.c', "return (UiAction){ UA_ANSWER, a, (e.ch >= 'A' && e.ch <= 'Z') || u->ask_all };", "return (UiAction){ UA_ANSWER, a, u->ask_all };"),
@@ -343,8 +343,8 @@ MUTANTS += [
 ]
 # ---- F5.1: the modal panels
 MUTANTS += [
-    ('ui/handle.c', '    if (on == UI_ON_DELETE && yes_no) return u->confirming', '    if (yes_no) return u->confirming'),
-    ('ui/handle.c', 'u->confirming = false, (UiAction){ said_yes ? UA_DELETE : UA_NONE, 0, false };', 'u->confirming = false, (UiAction){ UA_DELETE, 0, false };'),
+    ('ui/handle.c', 'case UI_ON_CANCEL: case UI_ON_DELETE: case UI_ON_EMPTY:', 'case UI_ON_CANCEL: case UI_ON_EMPTY:'),
+    ('ui/prompts.c', 'u->confirming = false; return (UiAction){ yes ? UA_DELETE : UA_NONE, 0, false };', 'u->confirming = false; return (UiAction){ UA_DELETE, 0, false };'),
     ('ui/handle.c', '    if (on == UI_ON_CLASH && in->modal == UI_MODAL_ALL) u->ask_all = !u->ask_all;\n', ''),
     ('ui/handle.c', "        return (UiAction){ UA_ANSWER, a, a != UI_ANS_CANCEL && u->ask_all };", "        return (UiAction){ UA_ANSWER, a, false };"),
     ('ui/prompts.c', "    return (UiAction){ UA_ANSWER, a, (e.ch >= 'A' && e.ch <= 'Z') || u->ask_all };", "    return (UiAction){ UA_ANSWER, a, e.ch >= 'A' && e.ch <= 'Z' };"),
@@ -455,8 +455,8 @@ MUTANTS += [
     # the panels
     ('ui/handle.c', 'if (in->modal == UI_MODAL_OK || in->nev > 0) return u->full_told', 'if (in->modal == UI_MODAL_OK) return u->full_told'),
     ('ui/handle.c', 'if (in->modal == UI_MODAL_OK || in->nev > 0) return u->full_told', 'if (in->nev > 0) return u->full_told'),
-    ('ui/handle.c', '(UiAction){ said_yes ? UA_QUIT : UA_NONE, 0, false }', '(UiAction){ UA_QUIT, 0, false }'),
-    ('ui/handle.c', 'said_yes ? UA_CANCEL_JOB : UA_NONE', 'UA_CANCEL_JOB'),
+    ('ui/prompts.c', 'return (UiAction){ yes ? UA_QUIT : UA_NONE, 0, false };', 'return (UiAction){ UA_QUIT, 0, false };'),
+    ('ui/prompts.c', 'yes ? UA_CANCEL_JOB : UA_NONE', 'UA_CANCEL_JOB'),
     # ui_on_top (2026-10-28): each question or panel left out of the order
     (U, '    if (u->full_told) return UI_ON_FULL;\n', ''),
     (U, '    if (u->quit_asking) return UI_ON_QUIT;\n', ''),
@@ -464,19 +464,19 @@ MUTANTS += [
     (U, '    if (u->confirming) return UI_ON_DELETE;\n', ''),
     (U, '    if (u->empty_asking) return UI_ON_EMPTY;\n', ''),
     (U, '    if (u->asking) return UI_ON_CLASH;\n', ''),
-    (U, '    if (u->props) return UI_ON_PROPS;\n', ''),
-    (U, '    if (u->ow) return UI_ON_OW;\n', ''),
-    (U, '    if (u->bmp) return UI_ON_BM;\n', ''),
-    (U, '    if (u->keys) return UI_ON_KEYS;\n', ''),
-    (U, '    if (u->about) return UI_ON_ABOUT;\n', ''),
-    (U, '    if (u->bar_told) return UI_ON_BAR;\n', ''),
+    ('ui/ui.c', '[UI_PANEL_PROPS] = UI_ON_PROPS', '[UI_PANEL_PROPS] = UI_ON_NONE'),
+    ('ui/ui.c', '[UI_PANEL_OW] = UI_ON_OW', '[UI_PANEL_OW] = UI_ON_NONE'),
+    ('ui/ui.c', '[UI_PANEL_BM] = UI_ON_BM', '[UI_PANEL_BM] = UI_ON_NONE'),
+    ('ui/ui.c', '[UI_PANEL_KEYS] = UI_ON_KEYS', '[UI_PANEL_KEYS] = UI_ON_NONE'),
+    ('ui/ui.c', '[UI_PANEL_ABOUT] = UI_ON_ABOUT', '[UI_PANEL_ABOUT] = UI_ON_NONE'),
+    ('ui/ui.c', '[UI_PANEL_BAR] = UI_ON_BAR', '[UI_PANEL_BAR] = UI_ON_NONE'),
     ('ui/edit.c', '    else if (on != UI_ON_NONE) return false;   // (a question, or a panel without a field)\n', ''),
     ('ui/handle.c', '        on = ui_on_top(u), prompt = on != UI_ON_NONE;   // (an earlier key may have opened or closed one)\n', ''),
     ('ui/handle.c', "            if (in->jobs_all <= 0) return (UiAction){ UA_QUIT, 0, false };", "            if (in->job_n <= 0) return (UiAction){ UA_QUIT, 0, false };"),
     ('ui/handle.c', "            u->quit_asking = true, u->cancel_asking = false;", "            u->quit_asking = true;"),
-    ('ui/handle.c', "            if (!answered) continue;\n            bool quit = u->quit_asking;", "            bool quit = u->quit_asking;"),
-    ('ui/handle.c', "            if (yes) return (UiAction){ quit ? UA_QUIT : UA_CANCEL_JOB, quit ? 0 : u->cancel_id, false };", "            return (UiAction){ quit ? UA_QUIT : UA_CANCEL_JOB, quit ? 0 : u->cancel_id, false };"),
-    ('ui/prompts.c', "    bool yes = e.key == UK_ENTER || (e.key == UK_NONE && (e.ch == 'y' || e.ch == 'Y'));\n    bool no = e.key == UK_ESC || (e.key == UK_NONE && (e.ch == 'n' || e.ch == 'N'));\n    *answered", "    bool yes = e.key == UK_NONE && (e.ch == 'y' || e.ch == 'Y');\n    bool no = e.key == UK_ESC || (e.key == UK_NONE && (e.ch == 'n' || e.ch == 'N'));\n    *answered"),
+    ('ui/handle.c', '            if (!answered) continue;\n            UiAction a = ui_answer(u, on, yes);', '            UiAction a = ui_answer(u, on, yes);'),
+    ('ui/prompts.c', '    case UI_ON_QUIT: u->quit_asking = false; return', '    case UI_ON_QUIT: return'),
+    ('ui/prompts.c', 'e.key == UK_ENTER || e.key == UK_SHIFT_ENTER ||', 'e.key == UK_ENTER ||'),
     ('ui/prompts.c', "    bool no = e.key == UK_ESC || (e.key == UK_NONE && (e.ch == 'n' || e.ch == 'N'));\n    *answered", "    bool no = e.key == UK_NONE && (e.ch == 'n' || e.ch == 'N');\n    *answered"),
 ]
 MUTANTS += [
@@ -535,10 +535,10 @@ MUTANTS += [
     ('ui/handle.c', '                if (u->view == UI_VIEW_TRASH && u->focus != UI_FOCUS_SIDE && l->n > 0) return (UiAction){ UA_RESTORE, 0, false };', '                if (u->focus != UI_FOCUS_SIDE && l->n > 0) return (UiAction){ UA_RESTORE, 0, false };'),
     ('ui/handle.c', '            if (l->n > 0 && u->focus != UI_FOCUS_SIDE && u->view == UI_VIEW_TRASH) u->confirming = true,', '            if (0) u->confirming = true,'),
     ('ui/handle.c', '            if (l->n > 0 && u->focus != UI_FOCUS_SIDE && u->view == UI_VIEW_TRASH) return (UiAction){ UA_NOT_IN_TRASH, 0, false };', ''),
-    ('ui/handle.c', '(UiAction){ said_yes ? UA_EMPTY_TRASH : UA_NONE, 0, false };   // (from any view', '(UiAction){ UA_EMPTY_TRASH, 0, false };   // (from any view'),
+    ('ui/prompts.c', 'yes ? UA_EMPTY_TRASH : UA_NONE', 'UA_EMPTY_TRASH'),
     ('ui/handle.c', '        case UB_RESTORE: if (u->view == UI_VIEW_TRASH && l->n > 0) return', '        case UB_RESTORE: if (l->n > 0) return'),
     ('ui/handle.c', '        case UB_EMPTY: if (u->view == UI_VIEW_TRASH) u->empty_asking = true; break;', '        case UB_EMPTY: u->empty_asking = true; break;'),
-    ('ui/handle.c', "            if (yes) return (UiAction){ UA_EMPTY_TRASH, 0, false };", "            return (UiAction){ UA_EMPTY_TRASH, 0, false };"),
+    ('ui/handle.c', '            UiAction a = ui_answer(u, on, yes);\n            if (a.kind != UA_NONE) return a;\n            continue;', '            UiAction a = ui_answer(u, on, yes);\n            if (a.kind != UA_NONE) return a;'),
     ('ui/helpers.c', "    if (str_eq(ui_crumb_path(c, i), S(TRASH_URI))) return S(\"Trash\");\n", ""),
     (ST, "        if (!str_eq(key, S(\"sidebar\"))) continue;\n", ""),
     (ST, "Str key = str_trim(str_cut(line, 0, eq)), val = str_trim(str_cut(line, eq + 1, line.len));", "Str key = str_trim(str_cut(line, 0, eq)), val = str_cut(line, eq + 1, line.len);"),
@@ -1012,7 +1012,7 @@ MUTANTS += [
     (PR, "    *old = st.st_mode & 07777;", "    *old = st.st_mode & 0777;"),
     (N, "            one = op_chmod(it->to, (mode_t)strtol(it->info ? it->info : \"\", NULL, 8), &was, &e);", "            one = true;"),
     # Not a mutant: UNDO_CHMOD in undo_what's list is inert, its record always one item.
-    ('ui/menus.c', "    u->props = true, u->prop_at = 0;", "    u->props = true;"),
+    ('ui/menus.c', "    u->panel = UI_PANEL_PROPS, u->prop_at = 0;", "    u->panel = UI_PANEL_PROPS;"),
     ('ui/menus.c', "        case ' ': e.key = UK_ENTER; break;", ""),
     ('ui/menus.c', "        case 'h': e.key = UK_LEFT; break;\n        case 'j': e.key = UK_DOWN; break;", "        case 'j': e.key = UK_DOWN; break;"),
     ('ui/menus.c', "        case 'l': e.key = UK_RIGHT; break;\n        case ' ':", "        case ' ':"),
@@ -1021,12 +1021,12 @@ MUTANTS += [
     ('ui/menus.c', "    case UK_UP: if (row > 0) u->prop_at -= 3; break;", "    case UK_UP: if (row >= 0) u->prop_at -= 3; break;"),
     ('ui/menus.c', "    case UK_DOWN: if (row < 2) u->prop_at += 3; break;", "    case UK_DOWN: u->prop_at += 3; break;"),
     ('ui/menus.c', "        if (u->prop_can) return (UiAction){ UA_CHMOD, u->prop_at, false };", "        return (UiAction){ UA_CHMOD, u->prop_at, false };"),
-    ('ui/menus.c', "    case UK_ESC: case UK_PROPERTIES: u->props = false; break;", "    case UK_ESC: u->props = false; break;"),
-    ('ui/handle.c', '    if (on == UI_ON_PROPS && in->prop_box >= 0', '    if (u->props && in->prop_box >= 0'),
+    ('ui/menus.c', "    case UK_ESC: case UK_PROPERTIES: ui_panel_close(u, UI_PANEL_PROPS); break;", "    case UK_ESC: ui_panel_close(u, UI_PANEL_PROPS); break;"),
+    ('ui/handle.c', '    if (on == UI_ON_PROPS && in->prop_box >= 0', '    if (u->panel == UI_PANEL_PROPS && in->prop_box >= 0'),
     ('ui/handle.c', "        u->prop_at = in->prop_box;\n        return u->prop_can", "        return u->prop_can"),
     ('ui/handle.c', "        return u->prop_can ? (UiAction){ UA_CHMOD, in->prop_box, false } : (UiAction){ UA_NONE, 0, false };", "        return (UiAction){ UA_CHMOD, in->prop_box, false };"),
-    ('ui/handle.c', '    if (on == UI_ON_PROPS && in->modal == UI_MODAL_OK) return u->props = false, (UiAction){ UA_NONE, 0, false };\n', ''),
-    ('ui/handle.c', '        if (on == UI_ON_PROPS) {\n            UiAction a = ui_props_event', '        if (u->props) {\n            UiAction a = ui_props_event'),
+    ('ui/handle.c', '    if (on == UI_ON_PROPS && in->modal == UI_MODAL_OK) return ui_panel_close(u, UI_PANEL_PROPS), (UiAction){ UA_NONE, 0, false };\n', ''),
+    ('ui/handle.c', '        if (on == UI_ON_PROPS) {\n            UiAction a = ui_props_event', '        if (u->panel == UI_PANEL_PROPS) {\n            UiAction a = ui_props_event'),
     ('ui/handle.c', "        case UK_PROPERTIES: return ui_props_open(u);", ""),
     ('ui/panels.c', "    case UM_PROPERTIES: return ui_props_open(u);", ""),
     ('ui/cursor.c', "|| in->menu_away || in->ctx_row >= 0 || in->ctx_here || in->ctx_side >= 0 || in->ctx_crumb >= 0 || in->ctx_tab >= 0 || in->prop_box >= 0 ||\n", "|| in->menu_away || in->ctx_row >= 0 || in->ctx_here || in->ctx_side >= 0 || in->ctx_crumb >= 0 || in->ctx_tab >= 0 ||\n"),
@@ -1078,10 +1078,10 @@ MUTANTS += [
     ('ui/match.c', '== 0 && pm.rm_so == 0 && pm.rm_eo == to - from) return *at = from, *end = to, true;', '== 0 && pm.rm_so == 0) return *at = from, *end = to, true;'),
     ('ui/match.c', '== 0 && pm.rm_so == 0 && pm.rm_eo == to - from) return *at = from, *end = to, true;', '== 0 && pm.rm_eo == to - from) return *at = from, *end = to, true;'),
     ('ui/match.c', "        for (isize to = hay.len; to >= from; to--) {", "        for (isize to = hay.len; to > from; to--) {"),
-    ('ui/match.c', "    if (which == 1) o.cased = !o.cased;", ""),
-    ('ui/match.c', "    if (which == 2) o.word = !o.word;", ""),
-    ('ui/match.c', "    if (which == 3) o.regex = !o.regex;", ""),
-    ('ui/match.c', "    return e.ch == 'c' ? 1 : e.ch == 'w' ? 2 : e.ch == 'r' ? 3 : 0;", "    return e.ch == 'c' ? 1 : e.ch == 'w' ? 2 : 3;"),
+    ('ui/match.c', '    if (which == UI_TOGGLE_CASE) o.cased = !o.cased;', ''),
+    ('ui/match.c', '    if (which == UI_TOGGLE_WORD) o.word = !o.word;', ''),
+    ('ui/match.c', '    if (which == UI_TOGGLE_REGEX) o.regex = !o.regex;', ''),
+    ('ui/match.c', "e.ch == 'w' ? UI_TOGGLE_WORD : e.ch == 'r' ? UI_TOGGLE_REGEX : 0;", "e.ch == 'w' ? UI_TOGGLE_WORD : UI_TOGGLE_REGEX;"),
     ('ui/match.c', "    if (e.key != UK_MENU) return 0;\n", ""),
     ('ui/find.c', "    if (l->n == 0 || m->len == 0) return -1;", "    if (l->n == 0) return -1;"),
     ('ui/find.c', "    ui_matcher_set(&u->find_m, (Str){ u->last, u->last_len }, u->find_opts);\n", ""),
@@ -1109,13 +1109,13 @@ MUTANTS += [
     ('ui/panels.c', '    if (h == UI_LINE_CHANGED) ui_ow_filter(u, in);\n    else if', '    if (false) ui_ow_filter(u, in);\n    else if'),
     ('ui/menus.c', '    case UM_OPEN_WITH: return files && u->view != UI_VIEW_TRASH;', '    case UM_OPEN_WITH: return files;'),
     ('ui/panels.c', "    case UM_OPEN_WITH: return ui_ow_open(u);\n", ""),
-    ('ui/handle.c', "    if (u->ow && u->ow_fresh && in->app_name) ui_ow_filter(u, in);", ""),
+    ('ui/handle.c', "    if (u->panel == UI_PANEL_OW && u->ow_fresh && in->app_name) ui_ow_filter(u, in);", ""),
     ('ui/handle.c', "        if (in->ow_field) u->ow_in_list = false;", ""),
     ('ui/handle.c', "            if (in->ow_drow >= 0) return ui_ow_launch(u);", ""),
     ('ui/handle.c', "        if (in->modal == UI_MODAL_YES) return ui_ow_launch(u);", ""),
     ('ui/handle.c', "        if (in->modal == UI_MODAL_NO) return ui_ow_close(u), (UiAction){ UA_NONE, 0, false };", ""),
     ('ui/handle.c', "        if (in->ow_wheel) ui_scroll(&u->ow_list, in->ow_wheel);", ""),
-    ('ui/handle.c', '    if (on == UI_ON_OW) {\n        if (in->toggle == 4) {', '    if (u->ow) {\n        if (in->toggle == 4) {'),
+    ('ui/handle.c', '    if (on == UI_ON_OW) {\n        if (in->toggle == UI_TOGGLE_ALWAYS) {', '    if (u->panel == UI_PANEL_OW) {\n        if (in->toggle == UI_TOGGLE_ALWAYS) {'),
     ('ui/handle.c', '            if (u->focus != UI_FOCUS_SIDE && l->n > 0) return (UiAction){ UA_OPEN, l->sel, u->marked > 0 };', '            if (u->focus != UI_FOCUS_SIDE && l->n > 0) return (UiAction){ UA_OPEN, l->sel, false };'),
     ('ui/cursor.c', "           in->ow_row >= 0 || in->ow_drow >= 0 || in->ow_field || in->toggle > 0 || in->find_x ||", "           in->ow_row >= 0 || in->ow_drow >= 0 || in->find_x ||"),
     (AP, "        if (e->d_name[0] == '.') continue;\n        char *path", "        char *path"),
@@ -1170,7 +1170,7 @@ MUTANTS += [
     ('ui/panels.c', "    if (e.key == UK_MENU && e.ch == 'd') {\n        if (u->ow_def_can) u->ow_def = !u->ow_def;", "    if (e.key == UK_MENU && e.ch == 'd') {\n        u->ow_def = !u->ow_def;"),
     ('ui/panels.c', "    bool def = u->ow_def && u->ow_def_can;", "    bool def = u->ow_def;"),
     ('ui/panels.c', 'UI_TEXT_CLEAR(u->ow_filter), u->ow_def = false;', 'UI_TEXT_CLEAR(u->ow_filter);'),
-    ('ui/handle.c', "        if (in->toggle == 4) {\n            if (u->ow_def_can) u->ow_def = !u->ow_def;", "        if (in->toggle == 4) {\n            u->ow_def = !u->ow_def;"),
+    ('ui/handle.c', '        if (in->toggle == UI_TOGGLE_ALWAYS) {\n            if (u->ow_def_can) u->ow_def = !u->ow_def;', '        if (in->toggle == UI_TOGGLE_ALWAYS) {\n            u->ow_def = !u->ow_def;'),
 ]
 # ---- the find bar (Michael, 2026-10-26)
 MUTANTS += [
@@ -1341,25 +1341,25 @@ MUTANTS += [
     (BMK, "        if (label.p[k] == '\\n' || label.p[k] == '\\r') label.len = k;", ""),
     (BMK, "    label = str_trim(label);\n    bm->b[i].label", "    bm->b[i].label"),
     ('ui/panels.c', "    ui_set(&u->bmp_list, u->bm_total, at >= 0 && at < u->bm_total ? at : 0);", "    ui_set(&u->bmp_list, u->bm_total, 0);"),
-    ('ui/panels.c', "    case 1: return (UiAction){ UA_BM_REMOVE, l->sel, false };", "    case 1: return (UiAction){ UA_NONE, 0, false };"),
-    ('ui/panels.c', "    case 2: u->bmp_naming = true; return (UiAction){ UA_BM_NAME, l->sel, false };", "    case 2: return (UiAction){ UA_BM_NAME, l->sel, false };"),
-    ('ui/panels.c', "    case 3: return l->sel > 0 ?", "    case 3: return l->sel >= 0 ?"),
-    ('ui/panels.c', "    case 4: return l->sel < l->n - 1 ?", "    case 4: return l->sel < l->n ?"),
+    ('ui/panels.c', '    case UI_BMP_REMOVE: return (UiAction){ UA_BM_REMOVE, l->sel, false };', '    case UI_BMP_REMOVE: return (UiAction){ UA_NONE, 0, false };'),
+    ('ui/panels.c', '    case UI_BMP_RENAME: u->bmp_naming = true; return', '    case UI_BMP_RENAME: return'),
+    ('ui/panels.c', '    case UI_BMP_UP: return l->sel > 0 ?', '    case UI_BMP_UP: return l->sel >= 0 ?'),
+    ('ui/panels.c', '    case UI_BMP_DOWN: return l->sel < l->n - 1 ?', '    case UI_BMP_DOWN: return l->sel < l->n ?'),
     ('ui/panels.c', "    if (l->n == 0) return (UiAction){ UA_NONE, 0, false };\n    switch (what) {", "    switch (what) {"),
     ('ui/panels.c', "        case UK_ENTER: case UK_SHIFT_ENTER: u->bmp_naming = false; return (UiAction){ UA_BM_RENAME, l->sel, false };", "        case UK_ENTER: case UK_SHIFT_ENTER: u->bmp_naming = false; break;"),
-    ('ui/panels.c', "        case UK_ESC: u->bmp_naming = false; break;", "        case UK_ESC: u->bmp_naming = false, u->bmp = false; break;"),
+    ('ui/panels.c', "        case UK_ESC: u->bmp_naming = false; break;", "        case UK_ESC: u->bmp_naming = false, ui_panel_close(u, UI_PANEL_BM); break;"),
 
-    ('ui/panels.c', "    case UK_PARENT: return ui_bmp_do(u, 3);", ""),
-    ('ui/panels.c', "    case UK_ALT_DOWN: return ui_bmp_do(u, 4);", ""),
-    ('ui/panels.c', "    case UK_DELETE: return ui_bmp_do(u, 1);", ""),
-    ('ui/panels.c', "        if (l->n == 0) break;\n        u->bmp = false;\n        return (UiAction){ UA_BM_GO, l->sel, false };", "        u->bmp = false;\n        return (UiAction){ UA_BM_GO, l->sel, false };"),
-    ('ui/panels.c', "    case UK_ESC: u->bmp = false; break;\n    default: break;\n    }\n    return (UiAction){ UA_NONE, 0, false };\n}", "    default: break;\n    }\n    return (UiAction){ UA_NONE, 0, false };\n}"),
+    ('ui/panels.c', '    case UK_PARENT: return ui_bmp_do(u, UI_BMP_UP);', ''),
+    ('ui/panels.c', '    case UK_ALT_DOWN: return ui_bmp_do(u, UI_BMP_DOWN);', ''),
+    ('ui/panels.c', '    case UK_DELETE: return ui_bmp_do(u, UI_BMP_REMOVE);', ''),
+    ('ui/panels.c', "        if (l->n == 0) break;\n        ui_panel_close(u, UI_PANEL_BM);\n        return (UiAction){ UA_BM_GO, l->sel, false };", "        ui_panel_close(u, UI_PANEL_BM);\n        return (UiAction){ UA_BM_GO, l->sel, false };"),
+    ('ui/panels.c', "    case UK_ESC: ui_panel_close(u, UI_PANEL_BM); break;\n    default: break;\n    }\n    return (UiAction){ UA_NONE, 0, false };\n}", "    default: break;\n    }\n    return (UiAction){ UA_NONE, 0, false };\n}"),
     ('ui/menus.c', "    if (it == UM_BM_MORE) return u->bm_more > 0;", "    if (it == UM_BM_MORE) return true;"),
     ('ui/panels.c', "    case UM_BM_MORE: return ui_bmp_open(u, u->bm_more_at);", "    case UM_BM_MORE: return ui_bmp_open(u, 0);"),
     ('ui/handle.c', "        case UK_EDIT_BOOKMARKS: return ui_bmp_open(u, 0);", ""),
-    ('ui/handle.c', "            if (in->bmp_drow >= 0) return u->bmp = false, (UiAction){ UA_BM_GO, u->bmp_list.sel, false };", ""),
-    ('ui/handle.c', "        if (in->bmp_btn >= 1 && in->bmp_btn <= 4 && !u->bmp_naming) return ui_bmp_do(u, in->bmp_btn);", "        if (in->bmp_btn >= 1 && in->bmp_btn <= 4) return ui_bmp_do(u, in->bmp_btn);"),
-    ('ui/handle.c', '        if (in->modal == UI_MODAL_NO) return u->bmp = false, (UiAction){ UA_NONE, 0, false };\n    } else if (on == UI_ON_KEYS', '    } else if (on == UI_ON_KEYS'),
+    ('ui/handle.c', "            if (in->bmp_drow >= 0) return ui_panel_close(u, UI_PANEL_BM), (UiAction){ UA_BM_GO, u->bmp_list.sel, false };", ""),
+    ('ui/handle.c', '        if (in->bmp_btn >= 1 && in->bmp_btn <= UI_BMP_BTNS && !u->bmp_naming)', '        if (in->bmp_btn >= 1 && in->bmp_btn <= UI_BMP_BTNS)'),
+    ('ui/handle.c', '        if (in->modal == UI_MODAL_NO) return ui_panel_close(u, UI_PANEL_BM), (UiAction){ UA_NONE, 0, false };\n    } else if (on == UI_ON_KEYS', '    } else if (on == UI_ON_KEYS'),
     ('ui/handle.c', '        if (on == UI_ON_BM) {\n            UiAction a = ui_bmp_event', '        if (false) {\n            UiAction a = ui_bmp_event'),
     ('ui/cursor.c', "in->bmp_row >= 0 || in->bmp_drow >= 0 || in->bmp_btn || in->ow_wheel != 0;", "in->bmp_row >= 0 || in->bmp_drow >= 0 || in->ow_wheel != 0;"),
 ]
@@ -1371,7 +1371,7 @@ MUTANTS += [
     ('ui/panels.c', "        u->keys_line[n++] = (short)(-1 - s);", "        u->keys_line[n++] = (short)(-1);"),
     ('ui/panels.c', '            if (UI_KEYS[r].sec == (UiKeySection)s && (!u->keys_filter.len || ui_match(&u->keys_m, str_from_c(UI_KEYS[r].action)) ||', '            if (UI_KEYS[r].sec == (UiKeySection)s && (!u->keys_filter.len || false ||'),
     ('ui/panels.c', "                                                      ui_match(&u->keys_m, str_from_c(UI_KEYS[r].key)) || ui_match(&u->keys_m, str_from_c(UI_KEYS[r].key2))))", "                                                      ui_match(&u->keys_m, str_from_c(UI_KEYS[r].key2))))"),
-    ('ui/panels.c', '    u->keys = true, UI_TEXT_CLEAR(u->keys_filter);', '    u->keys = true;'),
+    ('ui/panels.c', '    u->panel = UI_PANEL_KEYS, UI_TEXT_CLEAR(u->keys_filter);', '    u->panel = UI_PANEL_KEYS;'),
 
 
     ('ui/panels.c', "    case UK_UP: case UK_DOWN: ui_scroll(l, e.key == UK_UP ? 1 : -1); break;", "    case UK_UP: case UK_DOWN: ui_scroll(l, 1); break;"),
@@ -1395,12 +1395,12 @@ MUTANTS += [
 ]
 # ---- Help → About (2026-10-27), and the wheel over a panel (f4fced7)
 MUTANTS += [
-    ('ui/panels.c', "    case UM_ABOUT: return u->about = true, (UiAction){ UA_NONE, 0, false };", ""),
+    ('ui/panels.c', "    case UM_ABOUT: return u->panel = UI_PANEL_ABOUT, (UiAction){ UA_NONE, 0, false };", ""),
     ('ui/menus.c', "case UM_SHORTCUTS: case UM_ABOUT: case UM_PREFERENCES: return true;", "case UM_SHORTCUTS: case UM_PREFERENCES: return true;"),
-    ('ui/handle.c', "        if (in->modal == UI_MODAL_NO) return u->about = false, (UiAction){ UA_NONE, 0, false };", ""),
-    ('ui/handle.c', '            if (e.key == UK_ESC || e.key == UK_ENTER) *(on == UI_ON_ABOUT', '            if (e.key == UK_ESC) *(on == UI_ON_ABOUT'),
-    ('ui/handle.c', '            if (e.key == UK_ESC || e.key == UK_ENTER) *(on == UI_ON_ABOUT', '            if (e.key == UK_ENTER) *(on == UI_ON_ABOUT'),
-    ('ui/handle.c', '&u->bar_told) = false;\n            continue;', '&u->bar_told) = false;'),
+    ('ui/handle.c', "        if (in->modal == UI_MODAL_NO) return ui_panel_close(u, UI_PANEL_ABOUT), (UiAction){ UA_NONE, 0, false };", ""),
+    ('ui/handle.c', '            if (e.key == UK_ESC || e.key == UK_ENTER) u->panel = UI_PANEL_NONE;', '            if (e.key == UK_ENTER) u->panel = UI_PANEL_NONE;'),
+    ('ui/handle.c', '            if (e.key == UK_ESC || e.key == UK_ENTER) u->panel = UI_PANEL_NONE;', '            if (e.key == UK_ESC) u->panel = UI_PANEL_NONE;'),
+    ('ui/handle.c', 'u->panel = UI_PANEL_NONE;\n            continue;', 'u->panel = UI_PANEL_NONE;'),
     ('ui/cursor.c', " || in->bmp_btn || in->ow_wheel != 0;", " || in->bmp_btn;"),
 ]
 # ---- F8 step 1: the files' right-click menus
@@ -1416,7 +1416,7 @@ MUTANTS += [
     ('ui/menus.c', '    case UM_HERE_PROPS: return u->view != UI_VIEW_SEARCH;   // (a search is no folder)\n', ''),
     ('ui/panels.c', "    case UM_OPEN_TAB: return (UiAction){ UA_TAB_BG_ROW, u->list.sel, false };", ""),
     ('ui/panels.c', "    case UM_EMPTY_TRASH: return u->empty_asking = true, (UiAction){ UA_NONE, 0, false };", ""),
-    ('ui/panels.c', "    case UM_HERE_PROPS: return u->props = true, u->prop_at = 0, (UiAction){ UA_PROPS, 1, false };", "    case UM_HERE_PROPS: return ui_props_open(u);"),
+    ('ui/panels.c', '    case UM_HERE_PROPS: return u->panel = UI_PANEL_PROPS, u->prop_at = 0, (UiAction){ UA_PROPS, UI_PROPS_HERE, false };', '    case UM_HERE_PROPS: return ui_props_open(u);'),
     ('ui/menus.c', '    ui_unfocus(u, UI_FOCUS_SIDE), ui_unfocus(u, UI_FOCUS_CRUMBS), ui_unfocus(u, UI_FOCUS_JOBS);\n    u->ctx_one', '    u->ctx_one'),
     ('ui/menus.c', "    u->ctx_one = u->list.n > 0 && (u->marked == 0 || (u->marked == 1 && ui_marked(u, u->list.sel)));", "    u->ctx_one = u->list.n > 0 && u->marked <= 1;"),
     ('ui/menus.c', "    u->ctx_one = u->list.n > 0 && (u->marked == 0 || (u->marked == 1 && ui_marked(u, u->list.sel)));", "    u->ctx_one = u->list.n > 0 && u->marked == 0;"),
@@ -1480,7 +1480,7 @@ MUTANTS += [
     ('ui/panels.c', "        case UM_BM_DOWN_IT: return (UiAction){ UA_BM_DOWN, u->ctx_bmk, false };", ""),
     ('ui/panels.c', "        case UM_BM_REMOVE_IT: return (UiAction){ UA_BM_REMOVE, u->ctx_bmk, false };", "        case UM_BM_REMOVE_IT: return (UiAction){ UA_BM_REMOVE, 0, false };"),
     ('ui/panels.c', "        case UM_EMPTY_IT: return u->empty_asking = true, (UiAction){ UA_NONE, 0, false };", ""),
-    ('ui/panels.c', "        case UM_PROPS_IT: return u->props = true, u->prop_at = 0, (UiAction){ UA_PROPS, 2, false };", "        case UM_PROPS_IT: return u->props = true, u->prop_at = 0, (UiAction){ UA_PROPS, 0, false };"),
+    ('ui/panels.c', '(UiAction){ UA_PROPS, UI_PROPS_CTX, false };', '(UiAction){ UA_PROPS, UI_PROPS_MARKED, false };'),
     ('ui/menus.c', "    u->ctx_side = (int)side, u->ctx_crumb = crumb, u->ctx_key = keys;", "    u->ctx_side = (int)side, u->ctx_crumb = crumb;"),
     ('ui/menus.c', "    u->ctx_trash = u->ctx_place = u->ctx_bmed = u->ctx_eject = u->ctx_full = u->ctx_w = u->ctx_unmounted = false;\n", "    u->ctx_w = u->ctx_unmounted = false;\n"),
     ('ui/menus.c', "    u->ctx_bmk = -1, u->ctx_bms = 0;\n", ""),
@@ -1557,10 +1557,10 @@ MUTANTS += [
 # ---- View → Show Menu (2026-10-27)
 MUTANTS += [
     ('ui/menus.c', "    case UM_SHOW_MENU: return !u->bar_hidden;", "    case UM_SHOW_MENU: return 1;"),
-    ('ui/panels.c', "    case UM_SHOW_MENU: return u->bar_hidden = !u->bar_hidden, u->bar_told = u->bar_hidden,", "    case UM_SHOW_MENU: return u->bar_hidden = !u->bar_hidden, u->bar_told = true,"),
-    ('ui/panels.c', "    case UM_SHOW_MENU: return u->bar_hidden = !u->bar_hidden, u->bar_told = u->bar_hidden,", "    case UM_SHOW_MENU: return u->bar_told = u->bar_hidden,"),
-    ('ui/handle.c', "        if (in->modal == UI_MODAL_OK) return u->bar_told = false, (UiAction){ UA_NONE, 0, false };", ""),
-    ('ui/handle.c', '*(on == UI_ON_ABOUT ? &u->about : &u->bar_told) = false;', 'u->about = false;'),
+    ('ui/panels.c', 'u->panel = u->bar_hidden ? UI_PANEL_BAR : UI_PANEL_NONE,', 'u->panel = UI_PANEL_BAR,'),
+    ('ui/panels.c', 'return u->bar_hidden = !u->bar_hidden, u->panel =', 'return u->panel ='),
+    ('ui/handle.c', "        if (in->modal == UI_MODAL_OK) return ui_panel_close(u, UI_PANEL_BAR), (UiAction){ UA_NONE, 0, false };", ""),
+    ('ui/handle.c', '            if (e.key == UK_ESC || e.key == UK_ENTER) u->panel = UI_PANEL_NONE;', '            if (e.key == UK_ESC || e.key == UK_ENTER) ui_panel_close(u, UI_PANEL_ABOUT);'),
     (ST, "        if (str_eq(key, S(\"menubar\"))) s.no_bar = str_eq(val, S(\"off\"));", ""),
 ]
 # ---- View → Show Colors; the status line's note when the permissions give way (2026-10-27)
@@ -2208,8 +2208,8 @@ MUTANTS += [
 
     (CF, '{ "restore-tabs", CK_BOOL, offsetof(Conf, restore_tabs), "off",', '{ "restore-tabs", CK_BOOL, offsetof(Conf, sort_rev), "off",'),
     ('ui/ui.c', '    if (u->restore_n > 0) return UI_ON_RESTORE;\n', ''),
-    ('ui/handle.c', '        if (yes_no) return u->restore_n = 0, (UiAction){ UA_RESTORE_WINDOWS, 0, said_yes };', '        if (yes_no) return u->restore_n = 0, (UiAction){ UA_RESTORE_WINDOWS, 0, true };'),
-    ('ui/handle.c', '            return (UiAction){ UA_RESTORE_WINDOWS, 0, yes };', '            return (UiAction){ UA_RESTORE_WINDOWS, 0, true };'),
+    ('ui/prompts.c', 'u->restore_n = 0; return (UiAction){ UA_RESTORE_WINDOWS, 0, yes };', 'u->restore_n = 0; return (UiAction){ UA_RESTORE_WINDOWS, 0, true };'),
+    ('ui/prompts.c', ' || on == UI_ON_RESTORE;', ';'),
 ]
 MUTANTS += [
     # F11 milestone review, step 1 (2026-11-02)
@@ -2239,6 +2239,8 @@ MUTANTS += [
     # F11 milestone cleanup, step 4: a rewrite past its room fails (2026-11-02)
     ('fs/state.c', '            err_set(err, "%s: too big", path), ok = false;\n            break;', '            break;'),
     ('fs/state.c', '    if (t < 0) err_set(err, "%s: too big", path), ok = false;', ''),
+    # F11 milestone cleanup, step 7: one panel at most (2026-11-02)
+    ('ui/ui.c', '    if (u->panel == p) u->panel = UI_PANEL_NONE;', '    u->panel = UI_PANEL_NONE;'),
     # Not mutants: the three tails' -1 (state_put's, session_edit's, folders_write's): each writer's
     # room covers its own tail, so no test can reach it; the check above is tested with a tail of its own.
     # Not mutants: state_write's fsync dropped, and session_edit's live writes synced too (only a power

@@ -201,7 +201,7 @@ static int ow_rows(int h)
     return r < 1 ? 1 : r > OW_ROWS_MAX ? OW_ROWS_MAX : r;
 }
 
-// A toggle (1 case, 2 whole word, 3 regular expression) as VS Code draws them: a small box, lit when
+// A toggle (UI_TOGGLE_*) as VS Code draws them: a small box, lit when
 // on. Its id is "toggle" and k, plus base: the search bar's (F9) beside the find bar's.
 static void ow_toggle(int k, bool on, int base)
 {
@@ -224,7 +224,7 @@ enum { TOGGLE_SEARCH = 10, TOGGLE_INSIDE = 20 };
 static void layout_toggles(UiMatchOpts o, int base)
 {
     CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_FIT(0), CLAY_SIZING_FIT(0) }, .childGap = 2, .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } } }) {
-        ow_toggle(1, o.cased, base), ow_toggle(2, o.word, base), ow_toggle(3, o.regex, base);
+        ow_toggle(UI_TOGGLE_CASE, o.cased, base), ow_toggle(UI_TOGGLE_WORD, o.word, base), ow_toggle(UI_TOGGLE_REGEX, o.regex, base);
     }
 }
 
@@ -292,7 +292,7 @@ static void layout_ow_panel(void)
         Clay_Color off = rule_color();
         CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .childGap = 10, .padding = { 8, 0, 4, 0 },
                                    .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } } }) {
-            CLAY(CLAY_IDI("toggle", 4), { .layout = { .sizing = { CLAY_SIZING_FIXED(18), CLAY_SIZING_FIXED(18) }, .childAlignment = { CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER } },
+            CLAY(CLAY_IDI("toggle", UI_TOGGLE_ALWAYS), { .layout = { .sizing = { CLAY_SIZING_FIXED(18), CLAY_SIZING_FIXED(18) }, .childAlignment = { CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER } },
                                           .backgroundColor = on ? cc(t->accent) : cc(t->bg), .cornerRadius = CLAY_CORNER_RADIUS(3),
                                           .border = { .color = can ? cc(t->fg_dim) : off, .width = CLAY_BORDER_OUTSIDE(1) } }) {
                 if (on) text(cz("\xE2\x9C\x93"), cc(t->bg));   // ✓

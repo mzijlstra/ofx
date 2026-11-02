@@ -29,7 +29,8 @@ if [ "$par" -gt 1 ]; then
         jobs="$jobs $g"
     done
     mkdir -p "$base/.par"
-    printf '%s\n' $jobs | xargs -P "$par" -I{} sh -c 'j=$1; "$2" "$3" "$4" $(echo "$j" | tr + " ") > "$3/.par/$j.out" 2>&1; echo $? > "$3/.par/$j.rc"' sh {} "$0" "$base" "$bin"
+    # f11 starts first (the longest, 19 scripts: last, it set the time); the output keeps run.sh's order.
+    { printf '%s\n' $jobs | grep -x f11; printf '%s\n' $jobs | grep -vx f11; } | xargs -P "$par" -I{} sh -c 'j=$1; "$2" "$3" "$4" $(echo "$j" | tr + " ") > "$3/.par/$j.out" 2>&1; echo $? > "$3/.par/$j.rc"' sh {} "$0" "$base" "$bin"
     for j in $jobs; do
         cat "$base/.par/$j.out"
         [ "$(cat "$base/.par/$j.rc" 2>/dev/null)" = 0 ] || { echo "$j: FAILED (exit $(cat "$base/.par/$j.rc" 2>/dev/null))"; fail=1; }

@@ -206,7 +206,7 @@ static Hit hit_at(float x, float y)
     // (by name: a field added or moved shifted every value after it, 2026-10-28; the rest 0 or false)
     Hit h = HIT_NONE;
     // Open With's toggles (its panel's)
-    for (int k = 1; k <= 4 && !h.toggle && app.ui.ow; k++)
+    for (int k = 1; k <= UI_TOGGLE_ALWAYS && !h.toggle && app.ui.panel == UI_PANEL_OW; k++)
         if (in_box(CLAY_IDI("toggle", k), x, y)) h.toggle = k;
     // A menu open: its titles and its entries are all there is to hit (F7.1). The entries first: a
     // long context menu on a low row is moved up over the menu bar, and a press on its top entry
@@ -229,7 +229,7 @@ static Hit hit_at(float x, float y)
         h.ow_field = modal_kind() == MODAL_OW && !h.toggle && in_box(CLAY_ID("ow-field"), x, y);
         for (int r = 0; modal_kind() == MODAL_BM && r < app.ui.bmp_list.rows && h.bmp_row < 0; r++)
             if (in_box(CLAY_IDI("bmp-row", r), x, y)) h.bmp_row = r;
-        for (int k = 1; modal_kind() == MODAL_BM && k <= 4 && !h.bmp_btn; k++)
+        for (int k = 1; modal_kind() == MODAL_BM && k <= UI_BMP_BTNS && !h.bmp_btn; k++)
             if (in_box(CLAY_IDI("bmp-btn", k), x, y)) h.bmp_btn = k;
         return h;
     }
@@ -241,7 +241,7 @@ static Hit hit_at(float x, float y)
     // a menu, none: a click on Properties' OK above a toggle flipped it, 2026-10-26).
     for (int f = 0; f < UI_FIELDS && h.field < 0; f++) {
         if (!ui_field_shown(&app.ui, (UiField)f)) continue;
-        for (int k = 1; k <= 3 && !h.field_toggle; k++)
+        for (int k = 1; k <= UI_TOGGLES && !h.field_toggle; k++)
             if (in_box(CLAY_IDI("toggle", FIELD_IDS[f].toggles + k), x, y)) h.field = f, h.field_toggle = k;
         if (h.field < 0 && in_box(Clay_GetElementId(cz(FIELD_IDS[f].id)), x, y)) h.field = f;
     }
@@ -457,7 +457,7 @@ static float wheel_left;   // a touchpad's part of a notch, carried to the next 
 // sidebar scrolls by itself. True when the sidebar moved.
 static bool wheel_at(UiInput *in, float x, int notches, bool ctrl)
 {
-    if (app.ui.ow || app.ui.keys) return in->ow_wheel = notches, false;   // the panel's list (F7.3; Keyboard Shortcuts', F7.5)
+    if (app.ui.panel == UI_PANEL_OW || app.ui.panel == UI_PANEL_KEYS) return in->ow_wheel = notches, false;   // the panel's list (F7.3; Keyboard Shortcuts', F7.5)
     if (x >= side_w() && ctrl) in->zoom_wheel = notches;
     else if (x >= side_w()) in->wheel = notches;
     else if (notches) return app.ui.side.top = ui_clamp(app.ui.side.top - notches, 0, ui_max_top(&app.ui.side)), true;

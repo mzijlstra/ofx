@@ -61,12 +61,12 @@ static void test_ctx_menus(void)
     CHECK(UI_MENU[UI_CTX_HERE].items[last] == UM_HERE_PROPS);
     in = ui_input_none(), in.menu_item = last;
     a = ui_handle(&u, names, &in);
-    CHECK(a.kind == UA_PROPS && a.index == 1 && u.props && !u.menu_on);
+    CHECK(a.kind == UA_PROPS && a.index == 1 && u.panel == UI_PANEL_PROPS && !u.menu_on);
     // A panel up: no right-click menu.
     in = ui_input_none(), in.ctx_row = 0;
     ui_handle(&u, names, &in);
     CHECK(!u.menu_on);
-    u.props = false;
+    ui_panel_close(&u, UI_PANEL_PROPS);
     // The trash view: no new folder or file, Empty Trash (it asks); an entry's Restore, no Move to
     // Trash and no tab.
     u.view = UI_VIEW_TRASH;
@@ -321,8 +321,8 @@ static void test_ctx_folder_menu(void)
     u.menu_on = true;
     in = ui_input_none(), in.menu_item = menu_place(UI_CTX_FOLDER, UM_PROPS_IT);
     UiAction a = ui_handle(&u, names, &in);
-    CHECK(a.kind == UA_PROPS && a.index == 2 && u.props);
-    u.props = false;
+    CHECK(a.kind == UA_PROPS && a.index == 2 && u.panel == UI_PANEL_PROPS);
+    ui_panel_close(&u, UI_PANEL_PROPS);
     // A bookmark's row (line 1 of 3): Edit Bookmarks' own on that line.
     in = ui_input_none(), in.ctx_side = 3;
     ui_handle(&u, names, &in);
@@ -335,17 +335,17 @@ static void test_ctx_folder_menu(void)
         u.menu_on = true;
         in = ui_input_none(), in.menu_item = menu_place(UI_CTX_FOLDER, line[k].it);
         a = ui_handle(&u, names, &in);
-        CHECK(a.kind == line[k].kind && a.index == 1 && !u.bmp);
+        CHECK(a.kind == line[k].kind && a.index == 1 && u.panel != UI_PANEL_BM);
     }
     u.menu_on = true;
     in = ui_input_none(), in.menu_item = menu_place(UI_CTX_FOLDER, UM_BM_EDIT_IT);
     a = ui_handle(&u, names, &in);
-    CHECK(a.kind == UA_BM_EDIT && u.bmp && u.bmp_list.sel == 1 && !u.bmp_naming);
-    u.bmp = false, u.menu_on = true;
+    CHECK(a.kind == UA_BM_EDIT && u.panel == UI_PANEL_BM && u.bmp_list.sel == 1 && !u.bmp_naming);
+    ui_panel_close(&u, UI_PANEL_BM), u.menu_on = true;
     in = ui_input_none(), in.menu_item = menu_place(UI_CTX_FOLDER, UM_BM_RENAME_IT);
     a = ui_handle(&u, names, &in);
-    CHECK(a.kind == UA_BM_NAME && a.index == 1 && u.bmp && u.bmp_list.sel == 1 && u.bmp_naming);
-    u.bmp = u.bmp_naming = false;
+    CHECK(a.kind == UA_BM_NAME && a.index == 1 && u.panel == UI_PANEL_BM && u.bmp_list.sel == 1 && u.bmp_naming);
+    ui_panel_close(&u, UI_PANEL_BM), u.bmp_naming = false;
     // The first line can't move up, the last can't move down.
     u.ctx_bmk = 0;
     CHECK(!ui_menu_enabled(&u, UM_BM_UP_IT) && ui_menu_enabled(&u, UM_BM_DOWN_IT));
@@ -545,26 +545,26 @@ static void test_list_columns(void)
     CHECK(ui_menu_mark(&u, UM_SHOW_MENU) == 1 && ui_menu_enabled(&u, UM_SHOW_MENU));
     u.menu_on = true, u.menu = 2;
     in = ui_input_none(), in.menu_item = menu_place(2, UM_SHOW_MENU);
-    CHECK(ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in).kind == UA_MENUBAR && u.bar_hidden && u.bar_told && ui_menu_mark(&u, UM_SHOW_MENU) == 0);
+    CHECK(ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in).kind == UA_MENUBAR && u.bar_hidden && u.panel == UI_PANEL_BAR && ui_menu_mark(&u, UM_SHOW_MENU) == 0);
     UiAction a = menu_keys(&u, 2, UK_DOWN, UK_DELETE);
-    CHECK(u.bar_told && a.kind == UA_NONE && u.list.sel == 0);
+    CHECK(u.panel == UI_PANEL_BAR && a.kind == UA_NONE && u.list.sel == 0);
     in = ui_input_none(), in.click = 1;   // nor any click under it
     ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in);
-    CHECK(u.bar_told && u.list.sel == 0);
+    CHECK(u.panel == UI_PANEL_BAR && u.list.sel == 0);
     menu_keys(&u, 1, UK_ENTER);
-    CHECK(!u.bar_told);
-    u.bar_told = true;
+    CHECK(u.panel != UI_PANEL_BAR);
+    u.panel = UI_PANEL_BAR;
     menu_keys(&u, 1, UK_ESC);
-    CHECK(!u.bar_told);
-    u.bar_told = true;
+    CHECK(u.panel != UI_PANEL_BAR);
+    u.panel = UI_PANEL_BAR;
     in = ui_input_none(), in.modal = UI_MODAL_OK;
     ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in);
-    CHECK(!u.bar_told);
+    CHECK(u.panel != UI_PANEL_BAR);
     // Hidden, F10 still opens the menus; Show Menu again: shown, no note.
     menu_keys(&u, 1, UK_F10);
     CHECK(u.menu_on && u.menu == 0);
     menu_keys(&u, 1, UK_ESC);
     u.menu_on = true, u.menu = 2;
     in = ui_input_none(), in.menu_item = menu_place(2, UM_SHOW_MENU);
-    CHECK(ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in).kind == UA_MENUBAR && !u.bar_hidden && !u.bar_told);
+    CHECK(ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in).kind == UA_MENUBAR && !u.bar_hidden && u.panel != UI_PANEL_BAR);
 }

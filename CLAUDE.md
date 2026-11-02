@@ -142,7 +142,7 @@ his Hyprland: no output, no workspace, no dock script, no hyprctl at all.
 
 ```sh
 tests/gui/run.sh <absolute scratch>          # every script, each in its own weston
-tests/gui/run.sh -j 6 <absolute scratch>     # the same, 6 groups at once: 54 s against 215 (2026-11-02)
+tests/gui/run.sh -j 6 <absolute scratch>     # the same, 6 groups at once: 48 s against 215 (2026-11-02)
 tools/gui/run-script.sh <absolute scratch> tests/gui/<script> "$PWD/build/ofx" <folder>   # one
 tools/mutation/gui.py <absolute scratch>   # the GUI mutants (each on its tagged groups first)
 tests/gui/run.sh <absolute scratch> "$PWD/build/ofx" f62 f6   # some groups only

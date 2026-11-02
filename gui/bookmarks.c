@@ -92,7 +92,7 @@ static void bmp_act(UiAction a)
     }
 }
 
-// One of the panel's buttons (1 Remove, 2 Rename, 3 Move Up, 4 Move Down): lit under the pointer,
+// One of the panel's buttons (UI_BMP_*): lit under the pointer,
 // dimmed when it can't act now.
 static void bmp_button(int k, const char *label, bool on)
 {
@@ -152,10 +152,10 @@ static void layout_bmp_panel(void)
         bool any = l->n > 0 && !u->bmp_naming;
         CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .padding = { 0, 0, 6, 0 }, .childGap = 8,
                                    .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } } }) {
-            bmp_button(1, "Remove", any);
-            bmp_button(2, "Rename", any);
-            bmp_button(3, "Move Up", any && l->sel > 0);
-            bmp_button(4, "Move Down", any && l->sel < l->n - 1);
+            bmp_button(UI_BMP_REMOVE, "Remove", any);
+            bmp_button(UI_BMP_RENAME, "Rename", any);
+            bmp_button(UI_BMP_UP, "Move Up", any && l->sel > 0);
+            bmp_button(UI_BMP_DOWN, "Move Down", any && l->sel < l->n - 1);
             CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) } } }) {}
             modal_button(UI_MODAL_NO, "Close", true, false);
         }

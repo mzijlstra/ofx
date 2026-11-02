@@ -104,6 +104,14 @@ typedef struct {
     u32   ch;
 } UiEvent;
 
+// The numbers a click carries (F11 review, 2026-11-02: written as 1..4 at both ends before).
+// A toggle (the find bar's, the search's, Open With's), and Open With's "Always open" box; 0 none.
+enum { UI_TOGGLE_CASE = 1, UI_TOGGLE_WORD, UI_TOGGLE_REGEX, UI_TOGGLES = UI_TOGGLE_REGEX, UI_TOGGLE_ALWAYS };
+// Edit Bookmarks' buttons (and their keys); 0 none.
+enum { UI_BMP_REMOVE = 1, UI_BMP_RENAME, UI_BMP_UP, UI_BMP_DOWN, UI_BMP_BTNS = UI_BMP_DOWN };
+// UA_PROPS's index: what Properties shows.
+enum { UI_PROPS_MARKED, UI_PROPS_HERE, UI_PROPS_CTX };   // the marked or the cursor's; the folder shown; the folder menu's
+
 typedef struct {
     UiEvent ev[UI_EVENTS_MAX];
     int     nev;
@@ -149,21 +157,21 @@ typedef struct {
     int     prop_box;    // a checkbox of the Properties panel's grid pressed (0..8, F7.2), -1 for none
     // Open With (F7.3): the apps gui/ lists, in its order (their names, which the filter
     // matches); a row pressed or double-clicked (its place on screen), the field pressed, a
-    // toggle pressed (1 case, 2 whole word, 3 regular expression), each -1 or 0 for none.
+    // toggle pressed (UI_TOGGLE_*), each -1 or 0 for none.
     const Str *app_name;
     isize   app_n;
     int     ow_row, ow_drow;
     bool    ow_field;
     int     ow_wheel;    // notches over its list (or Keyboard Shortcuts'), as wheel
-    int     toggle;      // 4: Open With's "Always open … with this app" box (F7.3.1)
+    int     toggle;      // UI_TOGGLE_ALWAYS: Open With's "Always open … with this app" box (F7.3.1)
     bool    find_x;      // the find bar's × pressed
     // A text bar's field pressed (UiField: the find bar's, the search's name and Containing; -1
-    // none), or with field_toggle one of its toggles (1 case, 2 whole word, 3 regular expression).
+    // none), or with field_toggle one of its toggles (UI_TOGGLE_*).
     int     field, field_toggle;
     bool    inside_btn;  // the search bar's "In files" (F9 step 3)
     // Edit Bookmarks (F7.5): a row pressed or double-clicked (its place on screen), -1 for none; a
     // button pressed (1 Remove, 2 Rename, 3 Move Up, 4 Move Down), 0 for none.
-    int     bmp_row, bmp_drow, bmp_btn;
+    int     bmp_row, bmp_drow, bmp_btn;   // (bmp_btn: UI_BMP_*)
     int     find_step;   // its chevrons: -1 the previous match, 1 the next, 0 none
 } UiInput;
 
@@ -603,6 +611,10 @@ typedef struct {
 #define UI_TEXT(n) struct { char b[n]; int len, caret, anchor; }
 #define UI_TEXT_CLEAR(t) ((t).len = (t).caret = (t).anchor = 0)
 
+// The panel up, under the questions (ui_on_top): Properties, Open With, Edit Bookmarks, Keyboard
+// Shortcuts, About, and the note that the menu bar is hidden; UI_PANEL_NONE for none.
+typedef enum { UI_PANEL_NONE, UI_PANEL_PROPS, UI_PANEL_OW, UI_PANEL_BM, UI_PANEL_KEYS, UI_PANEL_ABOUT, UI_PANEL_BAR } UiPanel;
+
 // Which listing is shown. One value (2026-10-28: in_trash and in_search before, two flags tested
 // apart at about 250 places, which could both be set).
 typedef enum { UI_VIEW_FOLDER, UI_VIEW_TRASH, UI_VIEW_SEARCH } UiView;
@@ -695,9 +707,9 @@ typedef struct {
     bool   can_undo, can_back, can_forward, can_up, can_paste, shows_hidden;
     bool   perms_cols;   // the list's Owner and Permissions columns shown (gui/ reads it from the state)
     bool   group_col;    // and Group between them (View → Show Group, 2026-10-27; only with perms_cols)
-    // The menu bar hidden (View → Show Menu unchecked, 2026-10-27; gui/ reads it from the state), and
-    // the panel up that says how its menus still open.
-    bool   bar_hidden, bar_told;
+    // The menu bar hidden (View → Show Menu unchecked, 2026-10-27; gui/ reads it from the state); the
+    // panel that says how its menus still open is UI_PANEL_BAR.
+    bool   bar_hidden;
     bool   colors;   // the list in eza's colours (View → Show Colors; gui/ reads it from the state)
     UiEvent menu_key;
     // A right-click menu (F8): its entry is one folder (Open in New Tab), and a key opened it (gui/
@@ -728,30 +740,26 @@ typedef struct {
     bool   can_bookmark;
     int    bm_total;         // the file's lines (Edit Bookmarks lists them all)
     int    bm_more, bm_more_at;   // the local bookmarks the menu doesn't list (0: none), the first one's line
-    // Edit Bookmarks (F7.5): up; its list (the file's lines); its rename field open, the text and
-    // the caret (bytes).
-    bool   bmp;
+    // The panel up, one at most (F11 review, 2026-11-02: six flags before, kept apart by hand).
+    UiPanel panel;
+    // Edit Bookmarks (F7.5, UI_PANEL_BM): its list (the file's lines); its rename field open, the
+    // text and the caret (bytes).
     UiList bmp_list;
     bool   bmp_naming;
     UI_TEXT(256) bmp_name;
-    // Keyboard Shortcuts (F7.5): up; its filter's text; the lines it shows (a row of UI_KEYS, or
-    // -1 - a section for its heading), scrolled by keys_list.top.
-    bool   keys;
+    // Keyboard Shortcuts (F7.5, UI_PANEL_KEYS): its filter's text; the lines it shows (a row of
+    // UI_KEYS, or -1 - a section for its heading), scrolled by keys_list.top.
     UI_TEXT(64) keys_filter;
     short  keys_line[UI_KEYS_LINES];
     UiList keys_list;
     UiMatcher keys_m;
-    // About (Michael, 2026-10-27): up. gui/ draws it; Esc, Enter or Close close it.
-    bool   about;
-    // The Properties panel (F7.2): up, its grid's place with the focus (0..8: owner read, write,
-    // execute, then group's, others'), and whether gui/ lets its permissions change.
-    bool   props;
+    // The Properties panel (F7.2, UI_PANEL_PROPS): its grid's place with the focus (0..8: owner
+    // read, write, execute, then group's, others'), and whether gui/ lets its permissions change.
     int    prop_at;
     bool   prop_can;
-    // Open With (F7.3): up; the filter field's text and caret (bytes); the keys in the list, not the
-    // field; the toggles; the apps the filter shows (their places in gui/'s list) and the cursor
-    // over them; ow_fresh until the list is filtered from gui/'s apps.
-    bool   ow;
+    // Open With (F7.3, UI_PANEL_OW): the filter field's text and caret (bytes); the keys in the list,
+    // not the field; the toggles; the apps the filter shows (their places in gui/'s list) and the
+    // cursor over them; ow_fresh until the list is filtered from gui/'s apps.
     bool   ow_in_list;
     bool   ow_fresh;
     UI_TEXT(UI_FIND_MAX + 1) ow_filter;
@@ -823,13 +831,16 @@ static UiOnTop ui_on_top(const Ui *u)
     if (u->empty_asking) return UI_ON_EMPTY;
     if (u->restore_n > 0) return UI_ON_RESTORE;
     if (u->asking) return UI_ON_CLASH;
-    if (u->props) return UI_ON_PROPS;
-    if (u->ow) return UI_ON_OW;
-    if (u->bmp) return UI_ON_BM;
-    if (u->keys) return UI_ON_KEYS;
-    if (u->about) return UI_ON_ABOUT;
-    if (u->bar_told) return UI_ON_BAR;
-    return UI_ON_NONE;
+    static const UiOnTop OF_PANEL[] = { [UI_PANEL_NONE] = UI_ON_NONE, [UI_PANEL_PROPS] = UI_ON_PROPS, [UI_PANEL_OW] = UI_ON_OW,
+                                         [UI_PANEL_BM] = UI_ON_BM, [UI_PANEL_KEYS] = UI_ON_KEYS, [UI_PANEL_ABOUT] = UI_ON_ABOUT,
+                                         [UI_PANEL_BAR] = UI_ON_BAR };
+    return OF_PANEL[u->panel];
+}
+
+// Panel p closed, if it is the one up.
+static void ui_panel_close(Ui *u, UiPanel p)
+{
+    if (u->panel == p) u->panel = UI_PANEL_NONE;
 }
 
 static UiInput ui_input_none(void)

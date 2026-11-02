@@ -130,7 +130,7 @@ static void test_edit_select(void)
     in = keys(1, UK_SEL_LEFT);
     CHECK(ui_handle(&u, names, &in).kind == UA_NONE);
     in = keys(1, UK_SHIFT_ENTER);
-    CHECK(ui_handle(&u, names, &in).kind == UA_OPEN_WITH && u.ow);
+    CHECK(ui_handle(&u, names, &in).kind == UA_OPEN_WITH && u.panel == UI_PANEL_OW);
     ui_ow_close(&u);
     in = keys(1, UK_SEL_END);
     ui_handle(&u, names, &in);
@@ -153,6 +153,31 @@ static void test_edit_select(void)
     in = keys(1, UK_ESC);
     CHECK(ui_handle(&u, names, &in).kind == UA_ANSWER && !u.asking);
     ui_edit_close(&u);
+    // So with the location line, the find bar or the search field: a clash's question keeps them
+    // (the other questions take every key before these are reached, F11 review 2026-11-02).
+    ui_location_open(&u, S("/x"));
+    u.asking = true;
+    in = keys(1, UK_CRUMBS), in.crumb_n = 2;   // (path buttons to go to)
+    ui_handle(&u, names, &in);
+    CHECK(u.focus == UI_FOCUS_EDIT && u.asking);
+    in = keys(1, UK_ESC);
+    ui_handle(&u, names, &in);
+    ui_edit_close(&u);
+    ui_find_open(&u);
+    u.asking = true;
+    in = chars("q");
+    ui_handle(&u, names, &in);
+    CHECK(u.find.len == 0 && u.asking);
+    in = keys(1, UK_ESC);
+    ui_handle(&u, names, &in);
+    ui_find_close(&u);
+    u.view = UI_VIEW_SEARCH, u.focus = UI_FOCUS_SEARCH, u.asking = true;
+    in = chars("q");
+    ui_handle(&u, names, &in);
+    CHECK(u.search.len == 0 && u.asking);
+    in = keys(1, UK_ESC);
+    ui_handle(&u, names, &in);
+    u.view = UI_VIEW_FOLDER, u.focus = UI_FOCUS_LIST;
 }
 
 static void test_edit_clipboard(void)

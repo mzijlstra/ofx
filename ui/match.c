@@ -159,12 +159,12 @@ static bool ui_search_match(const UiMatcher *m, Str name)
     return hit;
 }
 
-// A toggle flipped (1 case, 2 whole word, 3 regular expression; 0 none).
+// A toggle flipped (UI_TOGGLE_*; 0 none).
 static UiMatchOpts ui_toggle(UiMatchOpts o, int which)
 {
-    if (which == 1) o.cased = !o.cased;
-    if (which == 2) o.word = !o.word;
-    if (which == 3) o.regex = !o.regex;
+    if (which == UI_TOGGLE_CASE) o.cased = !o.cased;
+    if (which == UI_TOGGLE_WORD) o.word = !o.word;
+    if (which == UI_TOGGLE_REGEX) o.regex = !o.regex;
     return o;
 }
 
@@ -172,5 +172,5 @@ static UiMatchOpts ui_toggle(UiMatchOpts o, int which)
 static int ui_toggle_key(UiEvent e)
 {
     if (e.key != UK_MENU) return 0;
-    return e.ch == 'c' ? 1 : e.ch == 'w' ? 2 : e.ch == 'r' ? 3 : 0;
+    return e.ch == 'c' ? UI_TOGGLE_CASE : e.ch == 'w' ? UI_TOGGLE_WORD : e.ch == 'r' ? UI_TOGGLE_REGEX : 0;
 }

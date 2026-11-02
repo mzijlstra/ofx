@@ -33,23 +33,36 @@ static bool ui_crumbs_event(Ui *u, const UiInput *in, UiEvent e, UiAction *a)
 
 // ---- the prompts -------------------------------------------------------------------------------
 
-// A yes-or-no question (delete for good, cancel a job, quit with jobs): Enter and y say yes, n and Esc no; *answered
-// when either.
+// A yes-or-no question (ui_is_question): Enter (Shift doesn't change it) and y say yes, n and Esc
+// no; *answered when either.
 static bool ui_yes_no(UiEvent e, bool *answered)
 {
-    bool yes = e.key == UK_ENTER || (e.key == UK_NONE && (e.ch == 'y' || e.ch == 'Y'));
+    bool yes = e.key == UK_ENTER || e.key == UK_SHIFT_ENTER || (e.key == UK_NONE && (e.ch == 'y' || e.ch == 'Y'));
     bool no = e.key == UK_ESC || (e.key == UK_NONE && (e.ch == 'n' || e.ch == 'N'));
     *answered = yes || no;
     return yes;
 }
 
-// A key or character while "Delete … for good? Y/n" is up: Enter and y go ahead, n and Esc don't,
-// the rest is ignored.
-static UiAction ui_confirm_event(Ui *u, UiEvent e)
+// The yes/no questions: delete for good, cancel a job, quit with jobs, Empty Trash, Bring back
+// (F11).
+static bool ui_is_question(UiOnTop on)
 {
-    bool answered, yes = ui_yes_no(e, &answered);
-    if (answered) u->confirming = false;
-    return (UiAction){ yes ? UA_DELETE : UA_NONE, 0, false };
+    return on == UI_ON_QUIT || on == UI_ON_CANCEL || on == UI_ON_DELETE || on == UI_ON_EMPTY || on == UI_ON_RESTORE;
+}
+
+// Question on answered, by a button or a key: it goes, and what it asks for comes back (yes; Bring
+// back's no forgets the windows, so it is an action too). Both routes come here (F11 review,
+// 2026-11-02: each cleared its flag in its own words, and the trash view gate was on one only).
+static UiAction ui_answer(Ui *u, UiOnTop on, bool yes)
+{
+    switch (on) {
+    case UI_ON_QUIT: u->quit_asking = false; return (UiAction){ yes ? UA_QUIT : UA_NONE, 0, false };
+    case UI_ON_CANCEL: u->cancel_asking = false; return (UiAction){ yes ? UA_CANCEL_JOB : UA_NONE, u->cancel_id, false };
+    case UI_ON_DELETE: u->confirming = false; return (UiAction){ yes ? UA_DELETE : UA_NONE, 0, false };
+    case UI_ON_EMPTY: u->empty_asking = false; return (UiAction){ yes ? UA_EMPTY_TRASH : UA_NONE, 0, false };   // (from any view: the folder menu's on Trash, F8)
+    case UI_ON_RESTORE: u->restore_n = 0; return (UiAction){ UA_RESTORE_WINDOWS, 0, yes };
+    default: return (UiAction){ UA_NONE, 0, false };
+    }
 }
 
 // A key or character while a clash waits: s skip, r replace (a folder: merge), k keep both, the

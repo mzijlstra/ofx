@@ -168,9 +168,9 @@ static void test_bookmarks_panel(void)
     Ui u = menu_ui(3);
     u.bm_total = 5, u.bmp_list.rows = 4;
     UiAction a = menu_keys(&u, 1, UK_EDIT_BOOKMARKS);
-    CHECK(a.kind == UA_BM_EDIT && u.bmp && u.bmp_list.n == 5 && u.bmp_list.sel == 0);
+    CHECK(a.kind == UA_BM_EDIT && u.panel == UI_PANEL_BM && u.bmp_list.n == 5 && u.bmp_list.sel == 0);
     // It takes every key: t starts no terminal, F10 no menu.
-    CHECK(menu_keys(&u, 2, 0x100 + 't', UK_F10).kind == UA_NONE && !u.menu_on && u.bmp);
+    CHECK(menu_keys(&u, 2, 0x100 + 't', UK_F10).kind == UA_NONE && !u.menu_on && u.panel == UI_PANEL_BM);
     menu_keys(&u, 2, UK_DOWN, 0x100 + 'j');
     CHECK(u.bmp_list.sel == 2);
     // Alt+Up and Alt+Down move it, not past the ends; Delete removes it.
@@ -183,7 +183,7 @@ static void test_bookmarks_panel(void)
     menu_keys(&u, 1, UK_END);
     CHECK(u.bmp_list.sel == 4 && menu_keys(&u, 1, UK_ALT_DOWN).kind == UA_NONE);
     a = menu_keys(&u, 1, UK_DELETE);
-    CHECK(a.kind == UA_BM_REMOVE && a.index == 4 && u.bmp);
+    CHECK(a.kind == UA_BM_REMOVE && a.index == 4 && u.panel == UI_PANEL_BM);
     // F2: the field (gui/ puts the name in), typing and the caret, Enter renames; Esc in it keeps
     // the panel and the name.
     menu_keys(&u, 1, 0x100 + 'k');
@@ -193,16 +193,16 @@ static void test_bookmarks_panel(void)
     menu_keys(&u, 4, UK_BACKSPACE, UK_HOME, 0x100 + 'M', 0x100 + 'j');
     CHECK(u.bmp_name.len == 5 && memcmp(u.bmp_name.b, "MjDoc", 5) == 0 && u.bmp_list.sel == 3);   // j is text here
     a = menu_keys(&u, 1, UK_ENTER);
-    CHECK(a.kind == UA_BM_RENAME && a.index == 3 && !u.bmp_naming && u.bmp);
+    CHECK(a.kind == UA_BM_RENAME && a.index == 3 && !u.bmp_naming && u.panel == UI_PANEL_BM);
     menu_keys(&u, 1, UK_F2);   // (a key that asks gui/ for something ends the frame's keys)
     menu_keys(&u, 1, UK_ESC);
-    CHECK(!u.bmp_naming && u.bmp);
+    CHECK(!u.bmp_naming && u.panel == UI_PANEL_BM);
     // Enter goes there and closes it; Esc only closes.
     a = menu_keys(&u, 1, UK_ENTER);
-    CHECK(a.kind == UA_BM_GO && a.index == 3 && !u.bmp);
+    CHECK(a.kind == UA_BM_GO && a.index == 3 && u.panel != UI_PANEL_BM);
     menu_keys(&u, 1, UK_EDIT_BOOKMARKS);
     menu_keys(&u, 1, UK_ESC);
-    CHECK(!u.bmp);
+    CHECK(u.panel != UI_PANEL_BM);
     // The pointer: a row, a double click goes; the buttons as their keys; Close.
     menu_keys(&u, 1, UK_EDIT_BOOKMARKS);
     UiInput in = ui_input_none();
@@ -228,15 +228,15 @@ static void test_bookmarks_panel(void)
     CHECK(u.bmp_list.sel == 1);
     in = ui_input_none(), in.bmp_drow = 2;
     a = ui_handle(&u, names, &in);
-    CHECK(a.kind == UA_BM_GO && a.index == 2 && !u.bmp);
+    CHECK(a.kind == UA_BM_GO && a.index == 2 && u.panel != UI_PANEL_BM);
     menu_keys(&u, 1, UK_EDIT_BOOKMARKS);
     in = ui_input_none(), in.modal = UI_MODAL_NO;
     ui_handle(&u, names, &in);
-    CHECK(!u.bmp);
+    CHECK(u.panel != UI_PANEL_BM);
     // None in the file: Enter, Delete and the buttons do nothing.
     u.bm_total = 0;
     menu_keys(&u, 1, UK_EDIT_BOOKMARKS);
-    CHECK(u.bmp && menu_keys(&u, 3, UK_ENTER, UK_DELETE, UK_F2).kind == UA_NONE && u.bmp && !u.bmp_naming);
+    CHECK(u.panel == UI_PANEL_BM && menu_keys(&u, 3, UK_ENTER, UK_DELETE, UK_F2).kind == UA_NONE && u.panel == UI_PANEL_BM && !u.bmp_naming);
     menu_keys(&u, 1, UK_ESC);
     // The menu: Edit Bookmarks…, and with more than 8 "N more" opening it on the first not listed.
     u.bm_total = 12, u.bm_n = UI_MENU_BOOKMARKS, u.bm_more = 3, u.bm_more_at = 10;
@@ -245,12 +245,12 @@ static void test_bookmarks_panel(void)
     menu_keys(&u, 1, -'b');
     u.menu_at = menu_place(m, UM_BM_MORE);
     a = menu_keys(&u, 1, UK_ENTER);
-    CHECK(a.kind == UA_BM_EDIT && u.bmp && u.bmp_list.sel == 10 && !u.menu_on);
+    CHECK(a.kind == UA_BM_EDIT && u.panel == UI_PANEL_BM && u.bmp_list.sel == 10 && !u.menu_on);
     menu_keys(&u, 1, UK_ESC);
     menu_keys(&u, 1, -'b');
     u.menu_at = menu_place(m, UM_EDIT_BOOKMARKS);
     menu_keys(&u, 1, UK_ENTER);
-    CHECK(u.bmp && u.bmp_list.sel == 0);
+    CHECK(u.panel == UI_PANEL_BM && u.bmp_list.sel == 0);
 }
 
 // Edit Bookmarks' changes on the lines (fs/bookmarks.c): found again in the file as it is now.
@@ -304,9 +304,9 @@ static void test_shortcuts(void)
     // F1: every row under its heading; it takes every key (t starts no terminal, it filters).
     Ui u = menu_ui(3);
     u.keys_list.rows = 10;
-    CHECK(menu_keys(&u, 1, UK_SHORTCUTS).kind == UA_NONE && u.keys && u.keys_list.n == UI_KEYS_LINES);
+    CHECK(menu_keys(&u, 1, UK_SHORTCUTS).kind == UA_NONE && u.panel == UI_PANEL_KEYS && u.keys_list.n == UI_KEYS_LINES);
     CHECK(u.keys_line[0] == -1 - KS_MOVE && u.keys_line[1] == 0);
-    CHECK(menu_keys(&u, 1, 0x100 + 't').kind == UA_NONE && u.keys_filter.len == 1 && u.keys);
+    CHECK(menu_keys(&u, 1, 0x100 + 't').kind == UA_NONE && u.keys_filter.len == 1 && u.panel == UI_PANEL_KEYS);
     menu_keys(&u, 1, UK_BACKSPACE);
     CHECK(u.keys_filter.len == 0 && u.keys_list.n == UI_KEYS_LINES);
     // The filter: an action's words or a key, case folded; a section with nothing left out.
@@ -351,24 +351,24 @@ static void test_shortcuts(void)
     ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in);
     in = ui_input_none(), in.click = 2;
     ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in);
-    CHECK(!u.menu_on && u.list.sel == 0 && u.keys);
+    CHECK(!u.menu_on && u.list.sel == 0 && u.panel == UI_PANEL_KEYS);
     // Esc, F1 and Close close it; opened again the filter is empty; Help → Keyboard Shortcuts opens it.
     menu_keys(&u, 1, UK_ESC);
-    CHECK(!u.keys);
+    CHECK(u.panel != UI_PANEL_KEYS);
     menu_keys(&u, 1, UK_SHORTCUTS);
-    CHECK(u.keys && u.keys_filter.len == 0 && u.keys_list.n == UI_KEYS_LINES);
+    CHECK(u.panel == UI_PANEL_KEYS && u.keys_filter.len == 0 && u.keys_list.n == UI_KEYS_LINES);
     menu_keys(&u, 1, UK_ESC);
     menu_keys(&u, 1, UK_SHORTCUTS);
     menu_keys(&u, 1, UK_SHORTCUTS);
-    CHECK(!u.keys);
+    CHECK(u.panel != UI_PANEL_KEYS);
     menu_keys(&u, 1, UK_SHORTCUTS);
     in = ui_input_none(), in.modal = UI_MODAL_NO;
     ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in);
-    CHECK(!u.keys);
+    CHECK(u.panel != UI_PANEL_KEYS);
     int m = ui_menu_of('h');
     CHECK(m == UI_MENUS - 1 && strcmp(UI_MENU[m].title, "Help") == 0 && UI_MENU[m].n == 3);
     menu_keys(&u, 2, -'h', UK_ENTER);
-    CHECK(u.keys && !u.menu_on);
+    CHECK(u.panel == UI_PANEL_KEYS && !u.menu_on);
     ui_keys_close(&u);
 }
 
@@ -379,21 +379,21 @@ static void test_about(void)
     Ui u = menu_ui(5);
     CHECK(UI_MENU[UI_MENUS - 1].items[UI_MENU[UI_MENUS - 1].n - 1] == UM_ABOUT && ui_menu_enabled(&u, UM_ABOUT));
     menu_keys(&u, 3, -'h', UK_UP, UK_ENTER);   // (Up from the first: round to the last)
-    CHECK(u.about && !u.menu_on);
+    CHECK(u.panel == UI_PANEL_ABOUT && !u.menu_on);
     UiAction a = menu_keys(&u, 4, UK_DOWN, 0x100 + 'j', UK_DELETE, UK_SHORTCUTS);
-    CHECK(u.about && a.kind == UA_NONE && u.list.sel == 0 && !u.keys);
+    CHECK(u.panel == UI_PANEL_ABOUT && a.kind == UA_NONE && u.list.sel == 0 && u.panel != UI_PANEL_KEYS);
     UiInput in = ui_input_none();   // nor any click under it
     in.click = 2, in.backs = 1;
-    CHECK(ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in).kind == UA_NONE && u.list.sel == 0 && u.about);
+    CHECK(ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in).kind == UA_NONE && u.list.sel == 0 && u.panel == UI_PANEL_ABOUT);
     menu_keys(&u, 1, UK_ESC);
-    CHECK(!u.about);
+    CHECK(u.panel != UI_PANEL_ABOUT);
     menu_keys(&u, 3, -'h', UK_UP, UK_ENTER);
     menu_keys(&u, 1, UK_ENTER);
-    CHECK(!u.about);
+    CHECK(u.panel != UI_PANEL_ABOUT);
     menu_keys(&u, 3, -'h', UK_UP, UK_ENTER);
     in = ui_input_none();
     in.modal = UI_MODAL_NO;
     CHECK(ui_input_acts(&in));
     ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in);
-    CHECK(!u.about);
+    CHECK(u.panel != UI_PANEL_ABOUT);
 }

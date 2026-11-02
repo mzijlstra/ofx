@@ -355,7 +355,17 @@ static void test_on_top(void)
     UiNames names = { name_at, NULL, NULL };
     u.list.n = 3, u.list.rows = 3;
     CHECK(ui_on_top(&u) == UI_ON_NONE);
-    u.props = u.ow = u.bmp = u.keys = u.about = u.bar_told = true;
+    static const UiOnTop ON[] = { UI_ON_NONE, UI_ON_PROPS, UI_ON_OW, UI_ON_BM, UI_ON_KEYS, UI_ON_ABOUT, UI_ON_BAR };
+    for (UiPanel p = UI_PANEL_NONE; p <= UI_PANEL_BAR; p++) {
+        u.panel = p;
+        CHECK(ui_on_top(&u) == ON[p]);
+    }
+    u.panel = UI_PANEL_OW;   // (closing a panel that isn't up leaves the one that is)
+    ui_panel_close(&u, UI_PANEL_PROPS);
+    CHECK(ui_on_top(&u) == UI_ON_OW);
+    ui_panel_close(&u, UI_PANEL_OW);
+    CHECK(ui_on_top(&u) == UI_ON_NONE);
+    u.panel = UI_PANEL_PROPS;
     CHECK(ui_on_top(&u) == UI_ON_PROPS);
     u.asking = true;
     CHECK(ui_on_top(&u) == UI_ON_CLASH);
@@ -380,18 +390,18 @@ static void test_on_top(void)
     in = ui_input_none(), in.modal = UI_MODAL_YES;
     CHECK(ui_handle(&u, names, &in).kind == UA_DELETE && !u.confirming && u.asking);
     // Properties under a clash: its checkboxes and OK wait.
-    u.props = true, u.prop_can = true;
+    u.panel = UI_PANEL_PROPS, u.prop_can = true;
     in = ui_input_none(), in.prop_box = 3;
     CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.prop_at != 3);
     in = ui_input_none(), in.modal = UI_MODAL_OK;
     ui_handle(&u, names, &in);
-    CHECK(u.props && u.asking);
+    CHECK(u.panel == UI_PANEL_PROPS && u.asking);
     // The find bar's toggles under a panel or a menu: nothing (gui/ reports the hit; ui/ decides).
-    u = (Ui){ 0 }, u.list.n = 3, u.list.rows = 3, u.finding = true, u.props = true;
+    u = (Ui){ 0 }, u.list.n = 3, u.list.rows = 3, u.finding = true, u.panel = UI_PANEL_PROPS;
     in = ui_input_none(), in.field = UI_FIELD_FIND, in.field_toggle = 1;
     ui_handle(&u, names, &in);
     CHECK(u.find_opts.cased == false);
-    u.props = false, u.menu_on = true;
+    ui_panel_close(&u, UI_PANEL_PROPS), u.menu_on = true;
     ui_handle(&u, names, &in);
     CHECK(u.find_opts.cased == false);
     u.menu_on = false;

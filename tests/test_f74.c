@@ -278,31 +278,31 @@ static void test_f74_keys(void)
     CHECK(strcmp(UI_MENU_ITEM[UM_TRASH_VIEW].key, "Alt+End") == 0 && strcmp(UI_MENU_ITEM[UM_OPEN_WITH].key, "Shift+Enter") == 0);
     // In the files: Open With, on the cursor's entry or the marked ones (the panel takes the targets).
     UiAction a = menu_keys(&u, 1, UK_SHIFT_ENTER);
-    CHECK(a.kind == UA_OPEN_WITH && u.ow);
+    CHECK(a.kind == UA_OPEN_WITH && u.panel == UI_PANEL_OW);
     ui_ow_close(&u);
     // The trash view: Open With doesn't work there, as from the menu.
     u.view = UI_VIEW_TRASH;
-    CHECK(menu_keys(&u, 1, UK_SHIFT_ENTER).kind == UA_NOT_IN_TRASH && !u.ow);
+    CHECK(menu_keys(&u, 1, UK_SHIFT_ENTER).kind == UA_NOT_IN_TRASH && u.panel != UI_PANEL_OW);
     u.view = UI_VIEW_FOLDER;
     // An empty folder: nothing.
     Ui e = menu_ui(0);
-    CHECK(menu_keys(&e, 1, UK_SHIFT_ENTER).kind == UA_NONE && !e.ow);
+    CHECK(menu_keys(&e, 1, UK_SHIFT_ENTER).kind == UA_NONE && e.panel != UI_PANEL_OW);
     // The sidebar with the keys: its Enter, the place.
     u.side.rows = 5;
     ui_set(&u.side, 3, 1);
     u.focus = UI_FOCUS_SIDE;
     a = menu_keys(&u, 1, UK_SHIFT_ENTER);
-    CHECK(a.kind == UA_PLACE && a.index == 1 && !u.ow);
+    CHECK(a.kind == UA_PLACE && a.index == 1 && u.panel != UI_PANEL_OW);
     ui_unfocus(&u, UI_FOCUS_SIDE);
     // The find bar with the keys: Enter's, the keys back to the list, no panel.
     UiInput in = chars("/a");
     ui_handle(&u, names, &in);
-    CHECK(menu_keys(&u, 1, UK_SHIFT_ENTER).kind == UA_NONE && u.finding && u.focus != UI_FOCUS_FIND && !u.ow);
+    CHECK(menu_keys(&u, 1, UK_SHIFT_ENTER).kind == UA_NONE && u.finding && u.focus != UI_FOCUS_FIND && u.panel != UI_PANEL_OW);
     menu_keys(&u, 1, UK_ESC);
     ui_find_close(&u);
     // A question: Enter's answer (the delete question's yes).
     u.confirming = true, u.confirm_n = 1;
     a = menu_keys(&u, 1, UK_SHIFT_ENTER);
-    CHECK(a.kind == UA_DELETE && !u.confirming && !u.ow);
+    CHECK(a.kind == UA_DELETE && !u.confirming && u.panel != UI_PANEL_OW);
     ui_matcher_set(&u.find_m, STR_EMPTY, (UiMatchOpts){ 0 });
 }

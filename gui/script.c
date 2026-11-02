@@ -354,7 +354,7 @@ static void script_state(char *out, size_t cap)
     if (!bmlist[0]) snprintf(bmlist, sizeof bmlist, "-");
     // Keyboard Shortcuts' first row shown: its action (spaces '_'; a heading "#" and its name).
     char keysfirst[128] = "-";
-    for (isize v = app.ui.keys_list.top; app.ui.keys && v < app.ui.keys_list.n; v++) {
+    for (isize v = app.ui.keys_list.top; app.ui.panel == UI_PANEL_KEYS && v < app.ui.keys_list.n; v++) {
         int line = app.ui.keys_line[v];
         snprintf(keysfirst, sizeof keysfirst, "%s%s", line < 0 ? "#" : "", line < 0 ? UI_KEY_SECTION[-1 - line] : UI_KEYS[line].action);
         break;
@@ -374,7 +374,7 @@ static void script_state(char *out, size_t cap)
     // and the toggles as letters (c, w, r; "-" none), the panel's and find's.
     char owtext[UI_FIND_MAX + 1], owapp[NAME_MAX + 1], owopts[4], findopts[4], insideopts[4];
     state_word(owtext, sizeof owtext, (Str){ app.ui.ow_filter.b, app.ui.ow_filter.len });
-    isize owsel = app.ui.ow && app.ui.ow_list.n > 0 ? app.ui.ow_idx[app.ui.ow_list.sel] : -1;
+    isize owsel = app.ui.panel == UI_PANEL_OW && app.ui.ow_list.n > 0 ? app.ui.ow_idx[app.ui.ow_list.sel] : -1;
     snprintf(owapp, sizeof owapp, "%.*s", owsel >= 0 ? (int)ow.apps.a[owsel].id.len : 1, owsel >= 0 ? ow.apps.a[owsel].id.p : "-");
     // The icon drawn for that app: its file's name ("-" none).
     const char *owicon = "-";
@@ -459,16 +459,16 @@ static void script_state(char *out, size_t cap)
              ui_zoom_px(&app.ui), cell_w(), cell_h(), Clay_GetElementData(CLAY_ID("zoom-track")).found, tipin, app.nslots,
              thumbs.drawn_last, thumbsel, thumbbox, thumbs_busy(), thumbs.got[TG_MADE], thumbs.got[TG_CACHED], thumbs.got[TG_FAILED],
              thumbs.got[TG_FAIL_KNOWN], thumbs.got[TG_NONE], thumbs.got[TG_CHANGED], thumbs.held, thumbs.evicted, thumbs.resets, app.thumb_local,
-             app.reloads_asked, menuseps, bmlist, app.ui.bm_n, app.ui.bm_here, app.ui.can_bookmark, app.ui.bm_more, app.ui.bmp, app.ui.bmp_list.n, app.ui.bmp_list.sel, app.ui.bmp_naming, bmptext, app.ui.keys, app.ui.keys_list.n, app.ui.keys_list.top, app.ui.keys_list.rows, keysfirst, app.ui.menu_on ? UI_MENU[app.ui.menu].title : "-", menuat, menuoff, menugrey, menuhid, menumarked, menubox, menuin, menuclear, app.ui.perms_cols, perms_shown((float)GetScreenWidth()), (int)(strstr(info, "Permissions_hidden") != NULL), app.ui.group_col,
+             app.reloads_asked, menuseps, bmlist, app.ui.bm_n, app.ui.bm_here, app.ui.can_bookmark, app.ui.bm_more, app.ui.panel == UI_PANEL_BM, app.ui.bmp_list.n, app.ui.bmp_list.sel, app.ui.bmp_naming, bmptext, app.ui.panel == UI_PANEL_KEYS, app.ui.keys_list.n, app.ui.keys_list.top, app.ui.keys_list.rows, keysfirst, app.ui.menu_on ? UI_MENU[app.ui.menu].title : "-", menuat, menuoff, menugrey, menuhid, menumarked, menubox, menuin, menuclear, app.ui.perms_cols, perms_shown((float)GetScreenWidth()), (int)(strstr(info, "Permissions_hidden") != NULL), app.ui.group_col,
              (int)Clay_GetElementData(CLAY_ID("col-group")).found + (int)Clay_GetElementData(CLAY_IDI("group", 0)).found, app.ui.colors, app.ui.bar_hidden, bar_shown(), app.hov.menu_title, app.ui.can_write, windows,
              app.ui.side.rows, footerin,
-             app.ui.props, app.ui.prop_at, app.ui.prop_can, props.n, props.have ? (unsigned)(props.st.st_mode & 07777) : 0u,
+             app.ui.panel == UI_PANEL_PROPS, app.ui.prop_at, app.ui.prop_can, props.n, props.have ? (unsigned)(props.st.st_mode & 07777) : 0u,
              (long long)props.sum.files, (long long)props.sum.dirs, (long long)props.sum.bytes, props.done, props.sum.cut || props.cut,
              (long long)props.sum.linked_names, (long long)props.sum.linked_files, (long long)props.sum.once_bytes, props.sum.once_over,
              props.have ? (unsigned long long)props.st.st_nlink : 0ull,
              props.type[0] ? props.type : "-", proptypename, props.type_by_name, propname,
              propwhere, propdrive, proplink, props.btime >= 0, props.idx,
-             app.ui.ow, app.ui.ow_fresh, app.ui.ow_in_list, owtext, app.ui.ow_list.n, app.ui.ow_list.sel, owapp, owicon, owtex, ow.shown, ow.type[0] ? ow.type : "-", ow.n,
+             app.ui.panel == UI_PANEL_OW, app.ui.ow_fresh, app.ui.ow_in_list, owtext, app.ui.ow_list.n, app.ui.ow_list.sel, owapp, owicon, owtex, ow.shown, ow.type[0] ? ow.type : "-", ow.n,
              app.ui.ow_list.rows, app.ui.ow_list.top, owopts, app.ui.ow_m.bad, app.ui.ow_def, app.ui.ow_def_can, findopts, app.ui.find_m.bad, app.ui.find_select, findn, findat, findtext,
              app.ui.view == UI_VIEW_SEARCH, app.ui.focus == UI_FOCUS_SEARCH, searchtext, app.search_done, app.search_s.full, app.search_due != 0, app.search_m.bad,
              (int)Clay_GetElementData(CLAY_ID("search-bar")).found,

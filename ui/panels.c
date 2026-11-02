@@ -5,14 +5,14 @@
 // The panel opened: the field empty with the keys, the toggles as last time; gui/ lists the apps.
 static UiAction ui_ow_open(Ui *u)
 {
-    u->ow = true, u->ow_in_list = false, u->ow_fresh = true, UI_TEXT_CLEAR(u->ow_filter), u->ow_def = false;
+    u->panel = UI_PANEL_OW, u->ow_in_list = false, u->ow_fresh = true, UI_TEXT_CLEAR(u->ow_filter), u->ow_def = false;
     u->ow_list = (UiList){ .rows = u->ow_list.rows };
     return (UiAction){ UA_OPEN_WITH, 0, false };
 }
 
 static void ui_ow_close(Ui *u)
 {
-    u->ow = false;
+    ui_panel_close(u, UI_PANEL_OW);
     ui_matcher_set(&u->ow_m, STR_EMPTY, u->ow_opts);   // (a compiled expression freed)
 }
 
@@ -114,7 +114,7 @@ static void ui_keys_filter(Ui *u)
 
 static UiAction ui_keys_open(Ui *u)
 {
-    u->keys = true, UI_TEXT_CLEAR(u->keys_filter);
+    u->panel = UI_PANEL_KEYS, UI_TEXT_CLEAR(u->keys_filter);
     u->keys_list = (UiList){ .rows = u->keys_list.rows };
     ui_keys_filter(u);
     return (UiAction){ UA_NONE, 0, false };
@@ -122,7 +122,7 @@ static UiAction ui_keys_open(Ui *u)
 
 static void ui_keys_close(Ui *u)
 {
-    u->keys = false;
+    ui_panel_close(u, UI_PANEL_KEYS);
     ui_matcher_set(&u->keys_m, STR_EMPTY, (UiMatchOpts){ 0 });
 }
 
@@ -150,23 +150,23 @@ static void ui_keys_event(Ui *u, UiEvent e, Str paste)
 // The panel opened on the file's line at (the first when out of range).
 static UiAction ui_bmp_open(Ui *u, int at)
 {
-    u->bmp = true, u->bmp_naming = false;
+    u->panel = UI_PANEL_BM, u->bmp_naming = false;
     u->bmp_list = (UiList){ .rows = u->bmp_list.rows };
     ui_set(&u->bmp_list, u->bm_total, at >= 0 && at < u->bm_total ? at : 0);
     return (UiAction){ UA_BM_EDIT, 0, false };
 }
 
-// What one of the panel's buttons (or its key) asks for the line under the cursor: 1 Remove
-// (Delete), 2 Rename (F2), 3 Move Up (Alt+Up), 4 Move Down (Alt+Down); nothing past the ends.
+// What one of the panel's buttons (or its key) asks for the line under the cursor (UI_BMP_*):
+// Remove (Delete), Rename (F2), Move Up (Alt+Up), Move Down (Alt+Down); nothing past the ends.
 static UiAction ui_bmp_do(Ui *u, int what)
 {
     UiList *l = &u->bmp_list;
     if (l->n == 0) return (UiAction){ UA_NONE, 0, false };
     switch (what) {
-    case 1: return (UiAction){ UA_BM_REMOVE, l->sel, false };
-    case 2: u->bmp_naming = true; return (UiAction){ UA_BM_NAME, l->sel, false };
-    case 3: return l->sel > 0 ? (UiAction){ UA_BM_UP, l->sel, false } : (UiAction){ UA_NONE, 0, false };
-    case 4: return l->sel < l->n - 1 ? (UiAction){ UA_BM_DOWN, l->sel, false } : (UiAction){ UA_NONE, 0, false };
+    case UI_BMP_REMOVE: return (UiAction){ UA_BM_REMOVE, l->sel, false };
+    case UI_BMP_RENAME: u->bmp_naming = true; return (UiAction){ UA_BM_NAME, l->sel, false };
+    case UI_BMP_UP: return l->sel > 0 ? (UiAction){ UA_BM_UP, l->sel, false } : (UiAction){ UA_NONE, 0, false };
+    case UI_BMP_DOWN: return l->sel < l->n - 1 ? (UiAction){ UA_BM_DOWN, l->sel, false } : (UiAction){ UA_NONE, 0, false };
     default: return (UiAction){ UA_NONE, 0, false };
     }
 }
@@ -197,15 +197,15 @@ static UiAction ui_bmp_event(Ui *u, UiEvent e, Str paste)
     case UK_END: ui_move(l, l->n); break;
     case UK_PAGEUP: ui_move(l, -page); break;
     case UK_PAGEDOWN: ui_move(l, page); break;
-    case UK_DELETE: return ui_bmp_do(u, 1);
-    case UK_F2: return ui_bmp_do(u, 2);
-    case UK_PARENT: return ui_bmp_do(u, 3);
-    case UK_ALT_DOWN: return ui_bmp_do(u, 4);
+    case UK_DELETE: return ui_bmp_do(u, UI_BMP_REMOVE);
+    case UK_F2: return ui_bmp_do(u, UI_BMP_RENAME);
+    case UK_PARENT: return ui_bmp_do(u, UI_BMP_UP);
+    case UK_ALT_DOWN: return ui_bmp_do(u, UI_BMP_DOWN);
     case UK_ENTER: case UK_SHIFT_ENTER:
         if (l->n == 0) break;
-        u->bmp = false;
+        ui_panel_close(u, UI_PANEL_BM);
         return (UiAction){ UA_BM_GO, l->sel, false };
-    case UK_ESC: u->bmp = false; break;
+    case UK_ESC: ui_panel_close(u, UI_PANEL_BM); break;
     default: break;
     }
     return (UiAction){ UA_NONE, 0, false };
@@ -225,7 +225,7 @@ static UiAction ui_menu_pick(Ui *u, UiMenuItem it)
         case UM_BM_DOWN_IT: return (UiAction){ UA_BM_DOWN, u->ctx_bmk, false };
         case UM_BM_REMOVE_IT: return (UiAction){ UA_BM_REMOVE, u->ctx_bmk, false };
         case UM_EMPTY_IT: return u->empty_asking = true, (UiAction){ UA_NONE, 0, false };
-        case UM_PROPS_IT: return u->props = true, u->prop_at = 0, (UiAction){ UA_PROPS, 2, false };   // (2: the folder menu's)
+        case UM_PROPS_IT: return u->panel = UI_PANEL_PROPS, u->prop_at = 0, (UiAction){ UA_PROPS, UI_PROPS_CTX, false };
         default: return (UiAction){ UA_FOLDER_DO, it, false };
         }
     }
@@ -242,7 +242,8 @@ static UiAction ui_menu_pick(Ui *u, UiMenuItem it)
         return (UiAction){ UA_SORT, 0, false };
     case UM_DUPLICATE: return (UiAction){ UA_DUPLICATE, 0, false };
     case UM_COLORS: return u->colors = !u->colors, (UiAction){ UA_COLORS, 0, false };
-    case UM_SHOW_MENU: return u->bar_hidden = !u->bar_hidden, u->bar_told = u->bar_hidden, (UiAction){ UA_MENUBAR, 0, false };
+    case UM_SHOW_MENU: return u->bar_hidden = !u->bar_hidden, u->panel = u->bar_hidden ? UI_PANEL_BAR : UI_PANEL_NONE,   // (a menu was open: no panel is)
+                             (UiAction){ UA_MENUBAR, 0, false };
     case UM_BM_0: case UM_BM_1: case UM_BM_2: case UM_BM_3: case UM_BM_4: case UM_BM_5: case UM_BM_6: case UM_BM_7:
         return (UiAction){ UA_BOOKMARK, it - UM_BM_0, false };
     case UM_BM_MORE: return ui_bmp_open(u, u->bm_more_at);
@@ -255,13 +256,13 @@ static UiAction ui_menu_pick(Ui *u, UiMenuItem it)
     case UM_CLOSE: return (UiAction){ UA_TAB_CLOSE, -1, false };
     case UM_PROPERTIES: return ui_props_open(u);
     case UM_OPEN_WITH: return ui_ow_open(u);
-    case UM_ABOUT: return u->about = true, (UiAction){ UA_NONE, 0, false };
+    case UM_ABOUT: return u->panel = UI_PANEL_ABOUT, (UiAction){ UA_NONE, 0, false };
     case UM_PREFERENCES: return (UiAction){ UA_PREFERENCES, 0, false };
     case UM_OPEN_TAB: return (UiAction){ UA_TAB_BG_ROW, u->list.sel, false };
     case UM_TAB_OTHERS: return (UiAction){ UA_TAB_OTHERS, 0, false };
     case UM_TAB_REOPEN: return (UiAction){ UA_TAB_REOPEN, 0, false };
     case UM_EMPTY_TRASH: return u->empty_asking = true, (UiAction){ UA_NONE, 0, false };
-    case UM_HERE_PROPS: return u->props = true, u->prop_at = 0, (UiAction){ UA_PROPS, 1, false };   // (index 1: the folder shown)
+    case UM_HERE_PROPS: return u->panel = UI_PANEL_PROPS, u->prop_at = 0, (UiAction){ UA_PROPS, UI_PROPS_HERE, false };
     case UM_OPEN_WINDOW: return (UiAction){ UA_NEW_WINDOW, u->list.sel, true };
     case UM_PASTE_INTO: return (UiAction){ UA_PASTE, u->list.sel, true };
     case UM_TERMINAL_IN: return (UiAction){ UA_TERMINAL, u->list.sel, true };

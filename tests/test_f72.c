@@ -191,7 +191,7 @@ static void test_props_keys(void)
 {
     // Ctrl+I opens it, the focus on the grid's first box; the menu's entry too.
     Ui u = menu_ui(3);
-    CHECK(props_keys(&u, 1, UK_PROPERTIES).kind == UA_PROPS && u.props && u.prop_at == 0);
+    CHECK(props_keys(&u, 1, UK_PROPERTIES).kind == UA_PROPS && u.panel == UI_PANEL_PROPS && u.prop_at == 0);
     u.prop_can = true;
     // Arrows and h j k l move, stopping at the edges.
     props_keys(&u, 2, UK_LEFT, UK_UP);
@@ -216,14 +216,14 @@ static void test_props_keys(void)
     a = props_keys(&u, 1, UK_SHIFT_ENTER);
     CHECK(a.kind == UA_CHMOD);
     u.prop_can = false;
-    CHECK(props_keys(&u, 2, UK_ENTER, 0x100 + ' ').kind == UA_NONE && u.props);
+    CHECK(props_keys(&u, 2, UK_ENTER, 0x100 + ' ').kind == UA_NONE && u.panel == UI_PANEL_PROPS);
     // Every other key is the panel's: no terminal, no trash, no menu, no find.
-    CHECK(props_keys(&u, 6, 0x100 + 't', UK_DELETE, UK_F10, UK_FIND, UK_TAB_NEW, UK_TERMINAL).kind == UA_NONE && u.props && !u.menu_on && !u.finding);
+    CHECK(props_keys(&u, 6, 0x100 + 't', UK_DELETE, UK_F10, UK_FIND, UK_TAB_NEW, UK_TERMINAL).kind == UA_NONE && u.panel == UI_PANEL_PROPS && !u.menu_on && !u.finding);
     // Esc closes it; so does Ctrl+I again.
     props_keys(&u, 1, UK_ESC);
-    CHECK(!u.props && u.prop_at == 8);
+    CHECK(u.panel != UI_PANEL_PROPS && u.prop_at == 8);
     props_keys(&u, 1, UK_PROPERTIES);   // open again: the focus back on the first box
-    CHECK(u.props && u.prop_at == 0);
+    CHECK(u.panel == UI_PANEL_PROPS && u.prop_at == 0);
     // Clicks behind the panel go nowhere: no row, no header, no bar button.
     UiInput behind = ui_input_none();
     behind.click = 2, behind.header = 1, behind.bar = UB_UP;
@@ -235,25 +235,25 @@ static void test_props_keys(void)
     u.quit_asking = false;
     // A clash or a delete question over it takes the keys: s skips, y deletes.
     u.asking = true;
-    CHECK(props_keys(&u, 1, 0x100 + 's').kind == UA_ANSWER && u.props);
+    CHECK(props_keys(&u, 1, 0x100 + 's').kind == UA_ANSWER && u.panel == UI_PANEL_PROPS);
     u.confirming = true;
-    CHECK(props_keys(&u, 1, 0x100 + 'y').kind == UA_DELETE && u.props);
+    CHECK(props_keys(&u, 1, 0x100 + 'y').kind == UA_DELETE && u.panel == UI_PANEL_PROPS);
     props_keys(&u, 1, UK_ESC);
-    CHECK(!u.props);
+    CHECK(u.panel != UI_PANEL_PROPS);
     props_keys(&u, 1, UK_PROPERTIES);
     props_keys(&u, 1, UK_PROPERTIES);
-    CHECK(!u.props);
+    CHECK(u.panel != UI_PANEL_PROPS);
     // The window closing still closes it (asks first with jobs).
     props_keys(&u, 1, UK_PROPERTIES);
     CHECK(props_keys(&u, 1, UK_QUIT).kind == UA_QUIT);
     // The menu's entry, from a rename: the edit line closes (Ctrl+I there is the line's, as any key).
     u = menu_ui(3);
     ui_edit_open(&u, S("a.txt"));
-    CHECK(props_keys(&u, 1, UK_PROPERTIES).kind == UA_NONE && (u.focus == UI_FOCUS_EDIT) && !u.props);
+    CHECK(props_keys(&u, 1, UK_PROPERTIES).kind == UA_NONE && (u.focus == UI_FOCUS_EDIT) && u.panel != UI_PANEL_PROPS);
     menu_keys(&u, 1, UK_F10);
     CHECK(u.focus != UI_FOCUS_EDIT);
     u.menu_at = file_at(UM_PROPERTIES);
-    CHECK(menu_keys(&u, 1, UK_ENTER).kind == UA_PROPS && u.props && !u.menu_on);
+    CHECK(menu_keys(&u, 1, UK_ENTER).kind == UA_PROPS && u.panel == UI_PANEL_PROPS && !u.menu_on);
     // The pointer: a box takes the focus and flips; a greyed one only the focus; Close closes.
     UiNames names = { name_at, NULL, NULL };
     UiInput in = ui_input_none();
@@ -267,7 +267,7 @@ static void test_props_keys(void)
     in.prop_box = 9;
     CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.prop_at == 2);
     in = ui_input_none(), in.modal = UI_MODAL_OK;
-    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && !u.props);
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.panel != UI_PANEL_PROPS);
     in = ui_input_none(), in.prop_box = 1;   // the panel down: a box means nothing
     u.prop_can = true;
     CHECK(ui_handle(&u, names, &in).kind == UA_NONE);
@@ -276,7 +276,7 @@ static void test_props_keys(void)
     u.quit_asking = true;
     in = job_input(1, 1), in.ev[in.nev++] = (UiEvent){ UK_NONE, 'n' };
     ui_handle(&u, names, &in);
-    CHECK(!u.quit_asking && u.props);
+    CHECK(!u.quit_asking && u.panel == UI_PANEL_PROPS);
     // Alt+Enter: a terminal, as t; not in the trash view.
     u = menu_ui(3);
     CHECK(props_keys(&u, 1, UK_TERMINAL).kind == UA_TERMINAL);

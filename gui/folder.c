@@ -396,7 +396,7 @@ static void places_reload(void)
     // as they were are copied into bmwa, which no change holds by now (they reload after writing).
     static Bookmarks prev;
     int bm_keep = -1;
-    if (app.ui.bmp && app.ui.bmp_list.sel < bmarks.n) {
+    if (app.ui.panel == UI_PANEL_BM && app.ui.bmp_list.sel < bmarks.n) {
         arena_reset(&bmwa);
         prev.n = bmarks.n, prev.full = bmarks.full;
         for (int i = 0; i < bmarks.n; i++) {
@@ -408,7 +408,7 @@ static void places_reload(void)
     }
     arena_reset(&bma);
     bm_parse(&bma, read_file(&bma, bm), &bmarks);
-    if (app.ui.bmp) {
+    if (app.ui.panel == UI_PANEL_BM) {
         int at = bm_keep >= 0 ? bm_locate(&bmarks, &prev, bm_keep) : -1;
         if (at < 0) at = (int)app.ui.bmp_list.sel;
         ui_set(&app.ui.bmp_list, bmarks.n, at >= bmarks.n ? bmarks.n - 1 : at);

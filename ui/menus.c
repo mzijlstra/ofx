@@ -176,8 +176,8 @@ static void ui_folder_open(Ui *u, isize side, int crumb, bool keys)
 // The Properties panel opened, the focus on the grid's first box (F7.2).
 static UiAction ui_props_open(Ui *u)
 {
-    u->props = true, u->prop_at = 0;   // (the menu closed the edit and find lines; Ctrl+I in them is theirs)
-    return (UiAction){ UA_PROPS, 0, false };
+    u->panel = UI_PANEL_PROPS, u->prop_at = 0;   // (the menu closed the edit and find lines; Ctrl+I in them is theirs)
+    return (UiAction){ UA_PROPS, UI_PROPS_MARKED, false };
 }
 
 // A key while the Properties panel is up; it takes every key (a panel). Arrows and h, j, k, l move
@@ -204,7 +204,7 @@ static UiAction ui_props_event(Ui *u, UiEvent e)
     case UK_ENTER: case UK_SHIFT_ENTER:
         if (u->prop_can) return (UiAction){ UA_CHMOD, u->prop_at, false };
         break;
-    case UK_ESC: case UK_PROPERTIES: u->props = false; break;
+    case UK_ESC: case UK_PROPERTIES: ui_panel_close(u, UI_PANEL_PROPS); break;
     default: break;
     }
     return (UiAction){ UA_NONE, 0, false };

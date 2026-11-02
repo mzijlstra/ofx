@@ -874,7 +874,7 @@ static void act(UiAction a)
         break;
     }
     case UA_CLOSE_ALL: close_others(a.all); break;
-    case UA_PROPS: props_open(a.index == 1 ? app.cwd : a.index == 2 ? app.ctx_path : NULL); break;   // (F8: 1 the folder shown, 2 the folder menu's)
+    case UA_PROPS: props_open(a.index == UI_PROPS_HERE ? app.cwd : a.index == UI_PROPS_CTX ? app.ctx_path : NULL); break;   // (F8)
     case UA_CHMOD: props_chmod((int)a.index); break;
     case UA_OPEN_WITH: ow_open(); break;
     case UA_LAUNCH: ow_launch(a.index, a.all); break;

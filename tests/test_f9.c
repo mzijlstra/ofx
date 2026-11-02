@@ -994,14 +994,14 @@ static void test_line_active(void)
     CHECK(ui_line_active(&u, &l) && l.b == u.search.b);
     u.focus = UI_FOCUS_EDIT;
     CHECK(ui_line_active(&u, &l) && l.b == u.edit.b);
-    u.keys = true;
+    u.panel = UI_PANEL_KEYS;
     CHECK(ui_line_active(&u, &l) && l.b == u.keys_filter.b);
     // Only the panel on top counts (ui_on_top): Edit Bookmarks over Shortcuts, not naming, has none.
-    u.bmp = true;
+    u.panel = UI_PANEL_BM;
     CHECK(!ui_line_active(&u, NULL));
     u.bmp_naming = true;
     CHECK(ui_line_active(&u, &l) && l.b == u.bmp_name.b);
-    u.ow = true, u.ow_in_list = true;
+    u.panel = UI_PANEL_OW, u.ow_in_list = true;
     CHECK(!ui_line_active(&u, NULL));
     u.ow_in_list = false;
     CHECK(ui_line_active(&u, &l) && l.b == u.ow_filter.b);
@@ -1049,11 +1049,11 @@ static void test_line_active(void)
         CHECK(w.finding && w.focus == UI_FOCUS_FIND && !w.find_select);
     }
     // A question over a field: none, so a Ctrl+V reads no clipboard (review, 2026-10-28).
-    u.ow = u.bmp = u.keys = false;
+    u.panel = UI_PANEL_NONE;
     CHECK(ui_line_active(&u, &l) && l.b == u.edit.b);
     u.confirming = true;
     CHECK(!ui_line_active(&u, NULL));
-    u.confirming = false, u.props = true;
+    u.confirming = false, u.panel = UI_PANEL_PROPS;
     CHECK(!ui_line_active(&u, NULL));
 }
 

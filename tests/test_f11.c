@@ -398,6 +398,20 @@ static void test_restore_question(void)
     CHECK(a.kind == UA_RESTORE_WINDOWS && a.all && u.restore_n == 0);
     u.restore_n = 1, in = ui_input_none(), in.modal = UI_MODAL_NO, a = ui_handle(&u, names, &in);
     CHECK(a.kind == UA_RESTORE_WINDOWS && !a.all);
+    // Every question answers through ui_answer (F11 review, 2026-11-02): Shift+Enter is Enter's yes,
+    // a key that answers nothing leaves it up.
+    u.restore_n = 1, in = keys(1, UK_SHIFT_ENTER), a = ui_handle(&u, names, &in);
+    CHECK(a.kind == UA_RESTORE_WINDOWS && a.all && u.restore_n == 0);
+    u.quit_asking = true, in = keys(1, UK_SHIFT_ENTER), a = ui_handle(&u, names, &in);
+    CHECK(a.kind == UA_QUIT && !u.quit_asking);
+    u.empty_asking = true, in = chars("x"), a = ui_handle(&u, names, &in);
+    CHECK(a.kind == UA_NONE && u.empty_asking);
+    in = keys(1, UK_SHIFT_ENTER), a = ui_handle(&u, names, &in);
+    CHECK(a.kind == UA_EMPTY_TRASH && !u.empty_asking);
+    u.cancel_asking = true, u.cancel_id = 7, in = keys(1, UK_ESC), a = ui_handle(&u, names, &in);
+    CHECK(a.kind == UA_NONE && !u.cancel_asking);
+    u.cancel_asking = true, in = chars("y"), a = ui_handle(&u, names, &in);
+    CHECK(a.kind == UA_CANCEL_JOB && a.index == 7 && !u.cancel_asking);
     static Conf c;
     conf_parse(S("restore-tabs = on\n"), &c);
     CHECK(c.restore_tabs && !c.sort_rev && !c.bad);

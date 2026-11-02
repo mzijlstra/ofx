@@ -191,7 +191,7 @@ typedef struct {
     int   toggle;       // a toggle of its field (1..4: the 4th "Always open … with this app"), 0 for none
     int   find_step;    // the find bar's chevrons: -1 the previous, 1 the next, 0 none
     int   bmp_row;      // a row of Edit Bookmarks' list (on screen), -1 for none (F7.5)
-    int   bmp_btn;      // one of its buttons (1..4), 0 for none
+    int   bmp_btn;      // one of its buttons (UI_BMP_*), 0 for none
     int   field;        // a text bar's field (UiField), -1 for none; with field_toggle one of its toggles (1..3)
     int   field_toggle;
     bool  inside_btn;   // the search bar's "In files" (F9 step 3)
@@ -747,7 +747,7 @@ int main(int argc, char **argv)
         if (space_take(&app.places, app.cwd, &app.cwd_avail)) dirty = true;
         if (eject_take()) dirty = true;
         if (props.walking && walk_take(&props.sum, &props.done)) dirty = true;
-        if (props.walking && !app.ui.props) walk_ask(NULL, 0), props.walking = false;   // the panel closed: the count stops
+        if (props.walking && app.ui.panel != UI_PANEL_PROPS) walk_ask(NULL, 0), props.walking = false;   // the panel closed: the count stops
         if (thumbs_take()) dirty = true;
         if (app.ui.view == UI_VIEW_SEARCH && search_take()) search_relist(), dirty = true;
         if (app.search_due && now_ms() >= app.search_due) app.search_due = 0, search_retype(), dirty = true;
@@ -777,7 +777,7 @@ int main(int argc, char **argv)
         if (ui_input_acts(&in) && ui_status_clears(app.status_bad, app.status_at, now_ms())) app.status[0] = 0;
         if (ui_input_acts(&in) && ui_tip_act(&app.tip)) seen = true;   // a click or key: the tooltip goes
         bool was_editing = app.ui.focus == UI_FOCUS_EDIT, was_confirming = app.ui.confirming;
-        if (app.ui.ow) in.app_name = ow.names, in.app_n = ow.shown < UI_APPS_MAX ? ow.shown : UI_APPS_MAX;
+        if (app.ui.panel == UI_PANEL_OW) in.app_name = ow.names, in.app_n = ow.shown < UI_APPS_MAX ? ow.shown : UI_APPS_MAX;
         UiAction a = ui_handle(&app.ui, (UiNames){ list_name, NULL, list_dir }, &in);
         bool ctx_up = app.ui.menu_on && app.ui.menu >= UI_MENUS;   // a right-click menu opened: where (F8)
         if (ctx_up && !app.ctx_placed && app.ui.menu == UI_CTX_FOLDER) ctx_facts();
@@ -787,7 +787,7 @@ int main(int argc, char **argv)
         }
         if (ctx_up && !app.ctx_placed) ctx_place();
         app.ctx_placed = ctx_up;
-        if (!app.ui.ow && ow.icons_on) ow_drop();   // the panel closed: its icons go (F7.3)
+        if (app.ui.panel != UI_PANEL_OW && ow.icons_on) ow_drop();   // the panel closed: its icons go (F7.3)
         if (app.ui.copied) text_copy((Str){ app.ui.copy, app.ui.copy_len }), app.ui.copied = false;
         // Shift+Delete and its y can come in one frame's input: the question opened and was answered
         // within ui_handle, so the targets are taken here either way (F5 confirm). A

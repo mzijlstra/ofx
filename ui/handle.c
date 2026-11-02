@@ -140,17 +140,8 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
     case UI_ON_FULL:
         if (in->modal == UI_MODAL_OK || in->nev > 0) return u->full_told = false, (UiAction){ UA_NONE, 0, false };
         break;
-    case UI_ON_QUIT:
-        if (yes_no) return u->quit_asking = false, (UiAction){ said_yes ? UA_QUIT : UA_NONE, 0, false };
-        break;
-    case UI_ON_CANCEL:
-        if (yes_no) return u->cancel_asking = false, (UiAction){ said_yes ? UA_CANCEL_JOB : UA_NONE, u->cancel_id, false };
-        break;
-    case UI_ON_EMPTY:
-        if (yes_no) return u->empty_asking = false, (UiAction){ said_yes ? UA_EMPTY_TRASH : UA_NONE, 0, false };   // (from any view: the folder menu's on Trash, F8)
-        break;
-    case UI_ON_RESTORE:
-        if (yes_no) return u->restore_n = 0, (UiAction){ UA_RESTORE_WINDOWS, 0, said_yes };
+    case UI_ON_QUIT: case UI_ON_CANCEL: case UI_ON_DELETE: case UI_ON_EMPTY: case UI_ON_RESTORE:
+        if (yes_no) return ui_answer(u, ui_on_top(u), said_yes);
         break;
     default: break;
     }
@@ -159,13 +150,13 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
     if (prompt) u->menu_on = false;
     // Open With (F7.3): filtered once gui/ has listed the apps; the pointer: a row takes the
     // cursor (a double click opens it), the field the keys, a toggle flips, Open and Cancel.
-    if (u->ow && u->ow_fresh && in->app_name) ui_ow_filter(u, in);
+    if (u->panel == UI_PANEL_OW && u->ow_fresh && in->app_name) ui_ow_filter(u, in);
     if (on == UI_ON_OW) {
-        if (in->toggle == 4) {
+        if (in->toggle == UI_TOGGLE_ALWAYS) {
             if (u->ow_def_can) u->ow_def = !u->ow_def;
             return (UiAction){ UA_NONE, 0, false };
         }
-        if (in->toggle >= 1 && in->toggle <= 3) {
+        if (in->toggle >= 1 && in->toggle <= UI_TOGGLES) {
             u->ow_opts = ui_toggle(u->ow_opts, in->toggle);
             ui_ow_filter(u, in);
             return (UiAction){ UA_NONE, 0, false };
@@ -185,18 +176,18 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         isize row = in->bmp_drow >= 0 ? in->bmp_drow : in->bmp_row;
         if (row >= 0 && u->bmp_list.top + row < u->bmp_list.n) {
             u->bmp_list.sel = u->bmp_list.top + row, u->bmp_naming = false;
-            if (in->bmp_drow >= 0) return u->bmp = false, (UiAction){ UA_BM_GO, u->bmp_list.sel, false };
+            if (in->bmp_drow >= 0) return ui_panel_close(u, UI_PANEL_BM), (UiAction){ UA_BM_GO, u->bmp_list.sel, false };
         }
-        if (in->bmp_btn >= 1 && in->bmp_btn <= 4 && !u->bmp_naming) return ui_bmp_do(u, in->bmp_btn);
-        if (in->modal == UI_MODAL_NO) return u->bmp = false, (UiAction){ UA_NONE, 0, false };
+        if (in->bmp_btn >= 1 && in->bmp_btn <= UI_BMP_BTNS && !u->bmp_naming) return ui_bmp_do(u, in->bmp_btn);
+        if (in->modal == UI_MODAL_NO) return ui_panel_close(u, UI_PANEL_BM), (UiAction){ UA_NONE, 0, false };
     } else if (on == UI_ON_KEYS) {
         // Keyboard Shortcuts: Close closes; the wheel scrolls it.
         if (in->modal == UI_MODAL_NO) return ui_keys_close(u), (UiAction){ UA_NONE, 0, false };
         if (in->ow_wheel) ui_scroll(&u->keys_list, in->ow_wheel);
     } else if (on == UI_ON_ABOUT) {
-        if (in->modal == UI_MODAL_NO) return u->about = false, (UiAction){ UA_NONE, 0, false };
+        if (in->modal == UI_MODAL_NO) return ui_panel_close(u, UI_PANEL_ABOUT), (UiAction){ UA_NONE, 0, false };
     } else if (on == UI_ON_BAR) {
-        if (in->modal == UI_MODAL_OK) return u->bar_told = false, (UiAction){ UA_NONE, 0, false };
+        if (in->modal == UI_MODAL_OK) return ui_panel_close(u, UI_PANEL_BAR), (UiAction){ UA_NONE, 0, false };
     } else if (!prompt && u->finding && (in->find_x || in->find_step)) {
         // A chevron steps with two matches or more (greyed under that) and leaves the keys where
         // they are.
@@ -208,7 +199,7 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
     } else if (!prompt && !u->menu_on && in->field >= 0 && in->field < UI_FIELDS && ui_field_shown(u, (UiField)in->field)) {
         // A text bar's field takes the keys (the edit line, if open, closes with it); a toggle
         // flips its field's (the name's are find's): find matches again, a search runs again.
-        if (in->field_toggle >= 1 && in->field_toggle <= 3) {
+        if (in->field_toggle >= 1 && in->field_toggle <= UI_TOGGLES) {
             UiMatchOpts *o = ui_field_opts(u, (UiField)in->field);
             *o = ui_toggle(*o, in->field_toggle);
             if (u->finding) ui_find_update(u, names);   // (Containing's change nothing there)
@@ -271,7 +262,7 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         u->prop_at = in->prop_box;
         return u->prop_can ? (UiAction){ UA_CHMOD, in->prop_box, false } : (UiAction){ UA_NONE, 0, false };
     }
-    if (on == UI_ON_PROPS && in->modal == UI_MODAL_OK) return u->props = false, (UiAction){ UA_NONE, 0, false };
+    if (on == UI_ON_PROPS && in->modal == UI_MODAL_OK) return ui_panel_close(u, UI_PANEL_PROPS), (UiAction){ UA_NONE, 0, false };
     // The job rows: the mark kept on a row there is; none left, no keyboard there.
     if (u->job_at >= in->job_n) u->job_at = in->job_n - 1;
     if (u->job_at < 0) u->job_at = 0;
@@ -287,7 +278,6 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
     if (clicked) ui_unfocus(u, UI_FOCUS_JOBS);
     if (u->focus == UI_FOCUS_CRUMBS && u->crumb_at >= in->crumb_n) u->crumb_at = in->crumb_n - 1;
     // A modal panel's buttons: as the keys they stand for.
-    if (on == UI_ON_DELETE && yes_no) return u->confirming = false, (UiAction){ said_yes ? UA_DELETE : UA_NONE, 0, false };
     if (on == UI_ON_CLASH && in->modal == UI_MODAL_ALL) u->ask_all = !u->ask_all;
     if (on == UI_ON_CLASH && in->modal >= UI_MODAL_SKIP && in->modal <= UI_MODAL_CANCEL) {
         static const int ANSWER[] = { UI_ANS_SKIP, UI_ANS_REPLACE, UI_ANS_KEEP, UI_ANS_CANCEL };
@@ -368,26 +358,12 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
             return (UiAction){ UA_CLOSE_ALL, 0, in->jobs_all <= 0 };
         }
         on = ui_on_top(u), prompt = on != UI_ON_NONE;   // (an earlier key may have opened or closed one)
-        if (on == UI_ON_QUIT || on == UI_ON_CANCEL) {
+        if (ui_is_question(on)) {   // Enter and y say yes, Esc and n no; the rest is ignored
             bool answered, yes = ui_yes_no(e, &answered);
             if (!answered) continue;
-            bool quit = u->quit_asking;
-            u->quit_asking = u->cancel_asking = false;
-            if (yes) return (UiAction){ quit ? UA_QUIT : UA_CANCEL_JOB, quit ? 0 : u->cancel_id, false };
+            UiAction a = ui_answer(u, on, yes);
+            if (a.kind != UA_NONE) return a;
             continue;
-        }
-        if (on == UI_ON_EMPTY) {
-            bool answered, yes = ui_yes_no(e, &answered);
-            if (!answered) continue;
-            u->empty_asking = false;
-            if (yes) return (UiAction){ UA_EMPTY_TRASH, 0, false };
-            continue;
-        }
-        if (on == UI_ON_RESTORE) {
-            bool answered, yes = ui_yes_no(e, &answered);
-            if (!answered) continue;
-            u->restore_n = 0;
-            return (UiAction){ UA_RESTORE_WINDOWS, 0, yes };
         }
         // The menu bar's keys (F7.1): F10 the first menu, Alt and a letter its menu; under a menu
         // open, its keys.
@@ -432,7 +408,7 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
             continue;
         }
         if (on == UI_ON_ABOUT || on == UI_ON_BAR) {   // they take every key: Esc and Enter close them
-            if (e.key == UK_ESC || e.key == UK_ENTER) *(on == UI_ON_ABOUT ? &u->about : &u->bar_told) = false;
+            if (e.key == UK_ESC || e.key == UK_ENTER) u->panel = UI_PANEL_NONE;
             continue;
         }
         if (u->focus == UI_FOCUS_EDIT && u->edit_path && !prompt && e.key == UK_CRUMBS) {   // from the location line: it closes
@@ -480,11 +456,6 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         default: break;
         }
 
-        if (on == UI_ON_DELETE) {
-            UiAction a = ui_confirm_event(u, e);
-            if (a.kind != UA_NONE) return a;
-            continue;
-        }
         if (on == UI_ON_CLASH) {
             UiAction a = ui_ask_event(u, e);
             if (a.kind != UA_NONE) return a;

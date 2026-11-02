@@ -283,7 +283,7 @@ static void test_ow_keys(void)
     u.ow_list.rows = 4;
     ow_keys(&u, 1, UK_F10);
     u.menu_at = file_at(UM_OPEN_WITH);
-    CHECK(ow_keys(&u, 1, UK_ENTER).kind == UA_OPEN_WITH && u.ow && !u.ow_in_list && u.ow_fresh && !u.menu_on);
+    CHECK(ow_keys(&u, 1, UK_ENTER).kind == UA_OPEN_WITH && u.panel == UI_PANEL_OW && !u.ow_in_list && u.ow_fresh && !u.menu_on);
     ow_keys(&u, 0);
     CHECK(!u.ow_fresh && u.ow_list.n == COUNT(OW_APPS) && u.ow_list.sel == 0 && u.ow_list.rows == 4);
     // Typing filters (any part, folded); j and k are text in the field; Enter opens the first.
@@ -294,7 +294,7 @@ static void test_ow_keys(void)
     ow_keys(&u, 2, UK_BACKSPACE, UK_BACKSPACE);
     ow_type(&u, "jk");
     CHECK(u.ow_filter.len == 3 && u.ow_list.n == 0 && !u.ow_in_list);
-    CHECK(ow_keys(&u, 2, UK_DOWN, UK_ENTER).kind == UA_NONE && u.ow && !u.ow_in_list);   // nothing to go to, nothing to open
+    CHECK(ow_keys(&u, 2, UK_DOWN, UK_ENTER).kind == UA_NONE && u.panel == UI_PANEL_OW && !u.ow_in_list);   // nothing to go to, nothing to open
     ow_keys(&u, 3, UK_BACKSPACE, UK_BACKSPACE, UK_BACKSPACE);
     CHECK(u.ow_filter.len == 0 && u.ow_list.n == COUNT(OW_APPS));
     // The caret: Left, Right, Home, End by code point; Delete; a character goes in at the caret.
@@ -322,7 +322,7 @@ static void test_ow_keys(void)
     ow_type(&u, "code");
     CHECK(u.ow_list.n == 1);
     ow_keys(&u, 1, -'c');
-    CHECK(u.ow_opts.cased && u.ow_list.n == 0 && u.ow && !u.menu_on);
+    CHECK(u.ow_opts.cased && u.ow_list.n == 0 && u.panel == UI_PANEL_OW && !u.menu_on);
     ow_keys(&u, 2, -'c', -'w');
     CHECK(u.ow_opts.word && u.ow_list.n == 1);
     ow_keys(&u, 4, UK_BACKSPACE, UK_BACKSPACE, UK_BACKSPACE, UK_BACKSPACE);
@@ -335,7 +335,7 @@ static void test_ow_keys(void)
     CHECK(u.ow_m.re_on);
     // Closed with an expression compiled: freed; opened again as it was, the toggle kept.
     ui_ow_close(&u);
-    CHECK(!u.ow_m.re_on && !u.ow);
+    CHECK(!u.ow_m.re_on && u.panel != UI_PANEL_OW);
     ui_ow_open(&u);
     ow_keys(&u, 0);
     ow_type(&u, "^(neo|imv)(");
@@ -382,13 +382,13 @@ static void test_ow_keys(void)
     // Enter: the app under the cursor, the panel closed; from the list or the field.
     ow_keys(&u, 3, UK_DOWN, UK_DOWN, UK_DOWN);
     UiAction a = ow_keys(&u, 1, UK_ENTER);
-    CHECK(a.kind == UA_LAUNCH && a.index == 2 && !u.ow);
+    CHECK(a.kind == UA_LAUNCH && a.index == 2 && u.panel != UI_PANEL_OW);
     // Other keys are the panel's: t starts no terminal, Ctrl+I opens no Properties; Esc closes.
     ui_ow_open(&u);
     ow_keys(&u, 0);
-    CHECK(ow_keys(&u, 1, UK_TERMINAL).kind == UA_NONE && ow_keys(&u, 1, UK_PROPERTIES).kind == UA_NONE && u.ow && !u.props);
+    CHECK(ow_keys(&u, 1, UK_TERMINAL).kind == UA_NONE && ow_keys(&u, 1, UK_PROPERTIES).kind == UA_NONE && u.panel == UI_PANEL_OW && u.panel != UI_PANEL_PROPS);
     CHECK(ow_keys(&u, 1, 0x100 + 't').kind == UA_NONE && u.ow_filter.len == 1);
-    CHECK(ow_keys(&u, 1, UK_ESC).kind == UA_NONE && !u.ow);
+    CHECK(ow_keys(&u, 1, UK_ESC).kind == UA_NONE && u.panel != UI_PANEL_OW);
     // Opened again: an empty field, the toggles kept.
     u.ow_opts.word = true;
     ui_ow_open(&u);
@@ -430,7 +430,7 @@ static void test_ow_mouse(void)
     in.ow_drow = 1;   // the row on screen: the list's 3
     CHECK(ui_input_acts(&in));
     UiAction a = ui_handle(&u, names, &in);
-    CHECK(a.kind == UA_LAUNCH && a.index == 3 && !u.ow);
+    CHECK(a.kind == UA_LAUNCH && a.index == 3 && u.panel != UI_PANEL_OW);
     // A toggle; Open; Cancel.
     ui_ow_open(&u);
     ow_keys(&u, 0);
@@ -438,7 +438,7 @@ static void test_ow_mouse(void)
     in.toggle = 2;
     CHECK(ui_input_acts(&in));
     ui_handle(&u, names, &in);
-    CHECK(u.ow_opts.word && u.ow);
+    CHECK(u.ow_opts.word && u.panel == UI_PANEL_OW);
     in.toggle = 2;
     ui_handle(&u, names, &in);
     in.toggle = 9;   // none such
@@ -447,10 +447,10 @@ static void test_ow_mouse(void)
     in = ui_input_none(), in.app_name = OW_APPS, in.app_n = COUNT(OW_APPS);
     in.modal = UI_MODAL_YES;
     a = ui_handle(&u, names, &in);
-    CHECK(a.kind == UA_LAUNCH && a.index == 0 && !u.ow);
+    CHECK(a.kind == UA_LAUNCH && a.index == 0 && u.panel != UI_PANEL_OW);
     ui_ow_open(&u);
     in.modal = UI_MODAL_NO;
-    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && !u.ow);
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.panel != UI_PANEL_OW);
     // Find's toggles by the pointer, while the find line is open; none while it isn't.
     UiInput f = chars("/beta");
     ui_set(&u.list, COUNT(find_names), 0);
@@ -469,7 +469,7 @@ static void test_ow_mouse(void)
     u.quit_asking = true;
     in = ui_input_none(), in.app_name = OW_APPS, in.app_n = COUNT(OW_APPS), in.modal = UI_MODAL_NO;
     ui_handle(&u, names, &in);
-    CHECK(u.ow);
+    CHECK(u.panel == UI_PANEL_OW);
     u.quit_asking = true;   // (No answered it)
     in = ui_input_none(), in.app_name = OW_APPS, in.app_n = COUNT(OW_APPS), in.toggle = 1;
     ui_handle(&u, names, &in);
@@ -481,7 +481,7 @@ static void test_ow_mouse(void)
     u.confirming = false;
     in = ui_input_none(), in.app_name = OW_APPS, in.app_n = COUNT(OW_APPS), in.menu_title = 0;
     ui_handle(&u, names, &in);
-    CHECK(!u.menu_on && u.ow);
+    CHECK(!u.menu_on && u.panel == UI_PANEL_OW);
     ui_ow_close(&u);
     ui_matcher_set(&u.find_m, STR_EMPTY, (UiMatchOpts){ 0 });
 }
@@ -590,7 +590,7 @@ static void test_ow_default(void)
     UiInput in = ui_input_none();
     in.app_name = OW_APPS, in.app_n = COUNT(OW_APPS), in.toggle = 4;
     ui_handle(&u, names, &in);
-    CHECK(!u.ow_def && u.ow);
+    CHECK(!u.ow_def && u.panel == UI_PANEL_OW);
     u.ow_def = true;   // (even ticked before gui/ said no)
     UiAction a = ow_keys(&u, 1, UK_ENTER);
     CHECK(a.kind == UA_LAUNCH && !a.all);
@@ -610,7 +610,7 @@ static void test_ow_default(void)
     CHECK(!u.ow_def && u.ow_in_list);
     ow_keys(&u, 1, -'d');
     a = ow_keys(&u, 1, UK_ENTER);
-    CHECK(a.kind == UA_LAUNCH && a.all && a.index == 0 && !u.ow);
+    CHECK(a.kind == UA_LAUNCH && a.all && a.index == 0 && u.panel != UI_PANEL_OW);
     ui_ow_open(&u);
     ow_keys(&u, 0);
     u.ow_def_can = true;

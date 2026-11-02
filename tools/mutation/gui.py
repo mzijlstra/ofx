@@ -304,7 +304,7 @@ MUTANTS = [
     ('gui/input.c', '        if (in_box(CLAY_IDI("toggle", k), x, y)) h.toggle = k;', '', 'f73'),
     ('gui/input.c', '        if (ui_press(&app.panel_press, app.ui.ow_list.top + h.ow_row, now_ms()) == 2) in->ow_drow = h.ow_row;', '        if (false) in->ow_drow = h.ow_row;', 'f73'),
     ('gui/input.c', '    in->toggle = h.toggle;\n', '', 'f73'),
-    (G, '        if (app.ui.ow) in.app_name = ow.names, in.app_n = ow.shown < UI_APPS_MAX ? ow.shown : UI_APPS_MAX;', '', 'f73'),
+    (G, '        if (app.ui.panel == UI_PANEL_OW) in.app_name = ow.names, in.app_n = ow.shown < UI_APPS_MAX ? ow.shown : UI_APPS_MAX;', '', 'f73'),
     ('gui/input.c', '    case GLFW_KEY_TAB: return m == 0 || m == GLFW_MOD_SHIFT ? UK_TAB : UK_NONE;', '    case GLFW_KEY_TAB: return m == 0 ? UK_TAB : UK_NONE;', 'f73'),
     ('gui/files.c', '    ui_resize(&app.ui.ow_list, ow_rows(GetScreenHeight()));   // Open With\'s list (F7.3)', '', 'f73'),
     # ---- after Michael's try: listed at once, the apps' icons
@@ -315,7 +315,7 @@ MUTANTS = [
     (OW, '        if (file) icon_tex_load(s, file, ICON_PX);', '', 'f73'),
     (OW, '            file = icon_find(&scratch, &ow.idb, &icon, 1, ICON_PX, app.icon_scale);', '            file = NULL;', 'f73'),
     (OW, '        if (ow.icon[i].tex.id) UnloadTexture(ow.icon[i].tex);\n        ow.icon[i] = (IconSlot){ 0 }, ow.icon_tried[i] = false;', '        ow.icon_tried[i] = false;', 'f73'),
-    (G, '        if (!app.ui.ow && ow.icons_on) ow_drop();   // the panel closed: its icons go (F7.3)', '', 'f73'),
+    (G, '        if (app.ui.panel != UI_PANEL_OW && ow.icons_on) ow_drop();   // the panel closed: its icons go (F7.3)', '', 'f73'),
     ('gui/icons.c', '    if (str_ends_with(str_from_c(file), S(".svg"))) {', '    if (false) {', 'f73'),
     ('gui/icons.c', '    if (stat(file, &st) != 0 || st.st_size > SVG_BYTES_MAX) return img;', '    if (stat(file, &st) != 0) return img;', 'f73'),
     # ---- the find bar (Michael, 2026-10-26)
@@ -388,7 +388,7 @@ MUTANTS = [
     # ---- F7.5: Keyboard Shortcuts
     ('gui/panels.c', '    case UI_ON_KEYS: return MODAL_KEYS;\n', '', 'f75'),
     ('gui/input.c', '    if ((m == 0 || m == GLFW_MOD_CONTROL) && key == GLFW_KEY_F1) return UK_SHORTCUTS;', '    if (m == 0 && key == GLFW_KEY_F1) return UK_SHORTCUTS;', 'f75'),
-    ('gui/input.c', '    if (app.ui.ow || app.ui.keys) return in->ow_wheel = notches, false;', '    if (app.ui.ow) return in->ow_wheel = notches, false;', 'f75'),
+    ('gui/input.c', '    if (app.ui.panel == UI_PANEL_OW || app.ui.panel == UI_PANEL_KEYS) return in->ow_wheel = notches, false;', '    if (app.ui.panel == UI_PANEL_OW) return in->ow_wheel = notches, false;', 'f75'),
     ('gui/files.c', '    ui_resize(&app.ui.keys_list, keys_rows(GetScreenHeight()));   // Keyboard Shortcuts\'', '', 'f75'),
     # Left out: the panel's drawing (pixels); shortcuts.png shows it.
     # ---- Help → About (2026-10-27); its drawing left out (pixels), about.png shows it
@@ -409,7 +409,7 @@ MUTANTS = [
     ('gui/input.c', '    if (x + sz.x > w) x = w - sz.x;\n    if (y + sz.y > h) y = h - sz.y;', '', 'f8'),
     ('gui/input.c', '            y = r.boundingBox.y + r.boundingBox.height;', '            y = r.boundingBox.y;', 'f8'),
     (G, '        if (ctx_up && !app.ctx_placed) ctx_place();', '', 'f8'),
-    ('gui/actions.c', '    case UA_PROPS: props_open(a.index == 1 ? app.cwd : a.index == 2 ? app.ctx_path : NULL); break;', '    case UA_PROPS: props_open(a.index == 2 ? app.ctx_path : NULL); break;', 'f8'),
+    ('gui/actions.c', 'props_open(a.index == UI_PROPS_HERE ? app.cwd : a.index == UI_PROPS_CTX ? app.ctx_path : NULL)', 'props_open(a.index == UI_PROPS_CTX ? app.ctx_path : NULL)', 'f8'),
     ('gui/panels.c', '    if (!here && app.have_list && app.list.n > 0 && n == 1)', '    if (app.have_list && app.list.n > 0 && n == 1)', 'f8'),
     # ---- F8 step 2: a folder's own entries, Make Link, Follow Link. Not run: make_link's messages
     # (the status line), its name-too-long branch (NAME_MAX names in a scratch tree); into_itself's
@@ -448,7 +448,7 @@ MUTANTS = [
     ('gui/input.c', '    case UM_TERMINAL_IN: terminal_in(dir); break;', '    case UM_TERMINAL_IN: terminal_in(app.cwd); break;', 'f8'),
     ('gui/input.c', '    case UM_CUT_IT: case UM_COPY_IT: copy_targets(it == UM_CUT_IT, dir); break;', '    case UM_CUT_IT: case UM_COPY_IT: copy_targets(it == UM_CUT_IT, NULL); break;', 'f8'),
     ('gui/actions.c', '    if (only) own.path[0] = arena_cstr(&owna, str_from_c(only)), own.n = 1;', '    if (false) own.path[0] = arena_cstr(&owna, str_from_c(only)), own.n = 1;', 'f8'),
-    ('gui/actions.c', '    case UA_PROPS: props_open(a.index == 1 ? app.cwd : a.index == 2 ? app.ctx_path : NULL); break;', '    case UA_PROPS: props_open(a.index == 1 ? app.cwd : NULL); break;', 'f8'),
+    ('gui/actions.c', 'props_open(a.index == UI_PROPS_HERE ? app.cwd : a.index == UI_PROPS_CTX ? app.ctx_path : NULL)', 'props_open(a.index == UI_PROPS_HERE ? app.cwd : NULL)', 'f8'),
     ('gui/actions.c', '    case UA_FOLDER_DO: folder_do((UiMenuItem)a.index); break;', '', 'f8'),
     ('gui/input.c', '        if (f.found) {   // under the sidebar row or path button (F8)', '        if (false) {   // under the sidebar row or path button (F8)', 'f8'),
     # ---- F8 step 4: a tab's menu
@@ -512,7 +512,7 @@ MUTANTS = [
     (OW, '    if (set && !op_set_default(&scratch, str_from_c(ow.type), id, &err)) {', '    if (false) {', 'f73'),
     (OW, '    if (set) set_status(false, "opened %s with %.*s, the default for %s now"', '    if (false) set_status(false, "opened %s with %.*s, the default for %s now"', 'f73'),
     ('gui/actions.c', '    case UA_LAUNCH: ow_launch(a.index, a.all); break;', '    case UA_LAUNCH: ow_launch(a.index, false); break;', 'f73'),
-    ('gui/input.c', '    for (int k = 1; k <= 4 && !h.toggle && app.ui.ow; k++)', '    for (int k = 1; k <= 3 && !h.toggle && app.ui.ow; k++)', 'f73'),
+    ('gui/input.c', 'k <= UI_TOGGLE_ALWAYS && !h.toggle && app.ui.panel == UI_PANEL_OW', 'k <= UI_TOGGLES && !h.toggle && app.ui.panel == UI_PANEL_OW', 'f73'),
     # Left out: nsvgRasterize gone leaves a blank texture, which no state word sees (the pixels);
     # f73's ow-panel.png shows the SVG drawn.
     # ---- F9 step 1: the search view (2026-10-28). Left out: what is only pixels (the tab's label,
