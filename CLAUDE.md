@@ -58,8 +58,8 @@ rules shared by every tool here.
   (`ops_program_allowed`). run-script.sh sets it to `<scratch>/thumbnailers` (empty unless the run
   makes fakes there, as f12 does), and the unit tests make their own. bubblewrap (`/usr/bin/bwrap`)
   does run for real in the tests: it sees only `/usr` (read only), the test's file and its own run
-  folder, so it can't reach his files. The fakes that hang sleep 19 s (f12) or 3 s (unit), so they
-  can't be confused with f11j's `sleep 20` stand-ins.
+  folder, so it can't reach his files. The fakes that hang sleep 19.<pid> s (f12) or 3.<pid> s
+  (unit; each run's own, as pgrep sees every run at once), never f11j's `sleep 20`.
 - **ofx-clean deletes previews** (F6.5) in `$XDG_CACHE_HOME/thumbnails`, which is his cache unless
   that is set. Michael runs it (his `--dry-run` first, then the timer he enables), not a test.
   Try it on a copy only: copy with `O_NOATIME` (a plain `cp` resets the access times the 90-day

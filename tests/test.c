@@ -1822,6 +1822,7 @@ int main(void)
     test_thumbers();
     test_thumbers_argv();
     test_thumb_exec();
+    test_clean_runs();
     char cmd[1600];
     snprintf(cmd, sizeof cmd, "chmod -R u+rwx '%s' && rm -rf '%s' '%s'", root, root, decoy);
     if (system(cmd) != 0) fprintf(stderr, "could not remove %s\n", root);

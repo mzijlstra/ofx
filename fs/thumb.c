@@ -604,30 +604,32 @@ typedef enum {
 } ThumbGot;
 
 // The preview of q's file by its thumbnailer, side px at most, into t: run in a folder of its own
-// in the cache (<root>/.ofx-run-<pid>-<n>, emptied and gone after), its PNG read back. False when it
-// made none, or none in time.
-static bool thumb_exec(Arena *a, const ThumbAsk *q, const char *uri, int side, Img *t)
+// in the cache (<root>/.ofx-run-<pid>-<n>, emptied and gone after), its PNG read back. TG_MADE;
+// TG_FAILED when it made none; TG_NONE when it was killed for its time, or didn't run (nothing
+// written: it may make one next time).
+static ThumbGot thumb_exec(Arena *a, const ThumbAsk *q, const char *uri, int side, Img *t)
 {
     static atomic_int seq;
     Err err;
     char dir[PATH_MAX], out[PATH_MAX];
     if (snprintf(dir, sizeof dir, "%s/.ofx-run-%d-%d", q->root, (int)getpid(), atomic_fetch_add(&seq, 1)) >= (int)sizeof dir ||
         snprintf(out, sizeof out, "%s/out.png", dir) >= (int)sizeof out)
-        return false;
-    if (!ops_allowed(dir, &err) || !mkdir_p(dir, 0700, false, &err) || mkdir(dir, 0700) != 0) return false;
+        return TG_NONE;
+    if (!ops_allowed(dir, &err) || !mkdir_p(dir, 0700, false, &err) || mkdir(dir, 0700) != 0) return TG_NONE;
     const char *argv[THUMB_ARGS_MAX + 1];
-    bool ok = false;
+    ThumbGot got = TG_FAILED;   // (an Exec line that won't fill in: a failure too)
     struct stat st;
-    if (thumbers_argv(a, q->exec, q->path, uri, out, side, argv, COUNT(argv)) > 0 && thumb_run(argv, q->path, dir)) {
-        Str png = thumb_read(a, out, THUMB_CACHED_MAX, &st, O_NOFOLLOW);
-        ok = png.len && png_decode(a, png, side, t);
+    if (thumbers_argv(a, q->exec, q->path, uri, out, side, argv, COUNT(argv)) > 0) {
+        ThumbRun r = thumb_run(argv, q->path, dir);
+        Str png = r == TR_ENDED ? thumb_read(a, out, THUMB_CACHED_MAX, &st, O_NOFOLLOW) : STR_EMPTY;
+        got = r != TR_ENDED ? TG_NONE : png.len && png_decode(a, png, side, t) ? TG_MADE : TG_FAILED;
     }
     DIR *d = opendir(dir);   // (whatever it left: its own temporary files too)
     for (struct dirent *de; d && (de = readdir(d));)
         if (strcmp(de->d_name, ".") != 0 && strcmp(de->d_name, "..") != 0) unlinkat(dirfd(d), de->d_name, 0);
     if (d) closedir(d);
     rmdir(dir);
-    return ok;
+    return got;
 }
 
 // The preview for q, drawn size, into the arena (out: when TG_CACHED or TG_MADE). Reads only the
@@ -651,7 +653,9 @@ static ThumbGot thumb_get(Arena *a, const ThumbAsk *q, Img *out)
     if (q->kind == TK_EXEC) {   // (the thumbnailer reads the file itself, so no preview-max-size)
         if (stat(q->path, &st) != 0 || !S_ISREG(st.st_mode)) return TG_NONE;
         if (st.st_mtim.tv_sec != q->mtime || st.st_size != q->size) return TG_CHANGED;
-        made = thumb_exec(a, q, uri, side, &t);
+        ThumbGot g = thumb_exec(a, q, uri, side, &t);
+        if (g == TG_NONE) return TG_NONE;
+        made = g == TG_MADE;
     } else {
         Str src = thumb_read(a, q->path, q->src_max, &st, 0);
         bool empty = S_ISREG(st.st_mode) && st.st_size == 0;   // read, and nothing in it

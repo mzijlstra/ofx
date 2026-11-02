@@ -230,7 +230,7 @@ static void test_thumbers_argv(void)
 static bool sleeping(const char *arg)
 {
     char cmd[128];
-    snprintf(cmd, sizeof cmd, "pgrep -f '[s]leep %s' > /dev/null", arg);   // ([s]: not the sh -c line itself)
+    snprintf(cmd, sizeof cmd, "pgrep -x -f 'sleep %s' > /dev/null", arg);   // (the whole command line: not the sh -c one)
     for (int k = 0; k < 20; k++) {
         if (system(cmd) != 0) return false;
         nanosleep(&(struct timespec){ 0, 50000000 }, NULL);
@@ -239,8 +239,10 @@ static bool sleeping(const char *arg)
 }
 
 // A preview made by a thumbnailer (thumb_get with TK_EXEC): its PNG into the cache as ofx's own
-// and read from there after; one that makes none, a link, or no PNG in time (killed) fails, and
-// is known as failed; in bubblewrap it sees only its file; and the folder it ran in goes.
+// and read from there after; one that makes none or leaves a link fails, and is known as failed;
+// one killed for its time writes nothing (it may make one next time); it gets only PATH, LANG,
+// LC_ALL, HOME and GIO_USE_VFS; in bubblewrap it sees only its file, no network, no terminal; and
+// the folder it ran in goes.
 static void test_thumb_exec(void)
 {
     Arena a;
@@ -253,8 +255,8 @@ static void test_thumb_exec(void)
     Str png;
     CHECK(png_encode(&a, im, NULL, 0, 0, &png));
     // "Videos" that are PNGs, so a fake can make the preview with cp.
-    char clip[9][PATH_MAX];
-    for (int k = 0; k < 9; k++) {
+    char clip[12][PATH_MAX];
+    for (int k = 0; k < 12; k++) {
         snprintf(clip[k], sizeof clip[k], "%s", at("f12/videos/clip %d.mp4", k));
         put_bytes(clip[k], png.p, (size_t)png.len);
         set_mtime(clip[k], 1700000000 + k);
@@ -262,12 +264,23 @@ static void test_thumb_exec(void)
     char secret[PATH_MAX];
     snprintf(secret, sizeof secret, "%s", at("f12/secret.png"));
     put_bytes(secret, png.p, (size_t)png.len);
+    // The hung fakes' sleeps are this run's own (pgrep sees the whole machine: the unit mutants run
+    // many of these at once).
+    char hang[32], slow[32];
+    snprintf(hang, sizeof hang, "3.%06d1", (int)getpid());
+    snprintf(slow, sizeof slow, "3.%06d2", (int)getpid());
     char text[PATH_MAX * 2];
     put_exec(at("f12/bin/copy"), "#!/bin/sh\n[ \"$3\" = 128 ] || exit 1\ncp \"$1\" \"$2\"\n");   // (48 px: normal's 128)
     put_exec(at("f12/bin/large"), "#!/bin/sh\n[ \"$3\" = 256 ] || exit 1\ncp \"$1\" \"$2\"\n");   // (256 px: large's)
     put_exec(at("f12/bin/none"), "#!/bin/sh\nexit 0\n");
-    put_exec(at("f12/bin/hang"), "#!/bin/sh\nsleep 3.125\n");
-    put_exec(at("f12/bin/slow"), "#!/bin/sh\ncp \"$1\" \"$2\"\nsleep 3.25\n");
+    put_exec(at("f12/bin/env"), "#!/bin/sh\n[ -z \"$OFX_TEST_SECRET\" ] && [ \"$GIO_USE_VFS\" = local ] && [ -n \"$HOME\" ] || exit 1\ncp \"$1\" \"$2\"\n");
+    // In the sandbox: lo alone (/proc/net/dev's two heads and its line), and a session of its own
+    // (outside it, the session's leader isn't in its pid namespace: 0).
+    put_exec(at("f12/bin/ns"), "#!/bin/sh\n[ \"$(wc -l < /proc/net/dev)\" -le 3 ] && [ \"$(cut -d' ' -f6 /proc/self/stat)\" != 0 ] || exit 1\ncp \"$1\" \"$2\"\n");
+    snprintf(text, sizeof text, "#!/bin/sh\nsleep %s\n", hang);
+    put_exec(at("f12/bin/hang"), text);
+    snprintf(text, sizeof text, "#!/bin/sh\ncp \"$1\" \"$2\"\nsleep %s\n", slow);
+    put_exec(at("f12/bin/slow"), text);
     put_exec(at("f12/bin/link"), "#!/bin/sh\nln -s \"$1\" \"$2\"\n");
     snprintf(text, sizeof text, "#!/bin/sh\ncp '%s' \"$2\"\n", secret);
     put_exec(at("f12/bin/peek"), text);
@@ -303,30 +316,50 @@ static void test_thumb_exec(void)
     snprintf(exec, sizeof exec, "%s/hang %%i %%o", bin);
     q = ask(clip[3], TK_EXEC, 48, cache), q.exec = exec;
     i64 t0 = now_ms();
-    CHECK(thumb_get(&a, &q, &out) == TG_FAILED && now_ms() - t0 < 2500 && !sleeping("3.125"));
+    CHECK(thumb_get(&a, &q, &out) == TG_NONE && now_ms() - t0 < 2500 && !sleeping(hang));
+    snprintf(exec, sizeof exec, "%s/none %%i %%o", bin);   // (no fail entry: a run that makes none is new)
+    CHECK(thumb_get(&a, &q, &out) == TG_FAILED);
     // Without bubblewrap too (its group); and one that wrote its PNG first doesn't count.
+    snprintf(exec, sizeof exec, "%s/hang %%i %%o", bin);
     thumb_sandbox = false;
     q = ask(clip[6], TK_EXEC, 48, cache), q.exec = exec;
-    CHECK(thumb_get(&a, &q, &out) == TG_FAILED && !sleeping("3.125"));
+    CHECK(thumb_get(&a, &q, &out) == TG_NONE && !sleeping(hang));
     thumb_sandbox = true;
     snprintf(exec, sizeof exec, "%s/slow %%i %%o", bin);
     q = ask(clip[7], TK_EXEC, 48, cache), q.exec = exec;
-    CHECK(thumb_get(&a, &q, &out) == TG_FAILED && !sleeping("3.25"));
+    CHECK(thumb_get(&a, &q, &out) == TG_NONE && !sleeping(slow));
     thumb_run_ms = THUMB_RUN_MS;
+    // Of ofx's environment only the few, in the sandbox and out of it.
+    env_set("OFX_TEST_SECRET", "a token");
+    snprintf(exec, sizeof exec, "%s/env %%i %%o", bin);
+    q = ask(clip[9], TK_EXEC, 48, cache), q.exec = exec;
+    CHECK(thumb_get(&a, &q, &out) == TG_MADE);
+    thumb_sandbox = false;
+    q = ask(clip[10], TK_EXEC, 48, cache), q.exec = exec;
+    CHECK(thumb_get(&a, &q, &out) == TG_MADE);
+    thumb_sandbox = true;
+    env_restore();
     // In bubblewrap it sees only the file it was given; without, everything (OFX_TEST_SANDBOX=off).
     snprintf(exec, sizeof exec, "%s/peek %%i %%o", bin);
     q = ask(clip[4], TK_EXEC, 48, cache), q.exec = exec;
     char bw[PATH_MAX];
-    if (path_find("bwrap", bw, sizeof bw)) CHECK(thumb_get(&a, &q, &out) == TG_FAILED);
-    else fprintf(stderr, "test_thumb_exec: no bwrap here, the sandbox untested\n");
+    if (path_find("bwrap", bw, sizeof bw)) {
+        CHECK(thumb_get(&a, &q, &out) == TG_FAILED);
+        snprintf(exec, sizeof exec, "%s/ns %%i %%o", bin);
+        q = ask(clip[11], TK_EXEC, 48, cache), q.exec = exec;
+        CHECK(thumb_get(&a, &q, &out) == TG_MADE);
+        snprintf(exec, sizeof exec, "%s/peek %%i %%o", bin);
+    } else {
+        fprintf(stderr, "test_thumb_exec: no bwrap here, the sandbox untested\n");
+    }
     thumb_sandbox = false;
     q = ask(clip[5], TK_EXEC, 48, cache), q.exec = exec;
     CHECK(thumb_get(&a, &q, &out) == TG_MADE);
     thumb_sandbox = true;
-    // A program outside the test's folder isn't run under the guard.
+    // A program outside the test's folder isn't run under the guard (nor counted as failed).
     q = ask(clip[2], TK_EXEC, 96, cache), q.exec = "cp %i %o";
     set_mtime(clip[2], 1700000200), q.mtime = 1700000200;
-    CHECK(thumb_get(&a, &q, &out) == TG_FAILED);
+    CHECK(thumb_get(&a, &q, &out) == TG_NONE && thumb_get(&a, &q, &out) == TG_NONE);
     // A folder with a video's name: nothing run.
     char fold[PATH_MAX];
     snprintf(fold, sizeof fold, "%s", at("f12/videos/folder.mp4"));
@@ -346,4 +379,40 @@ static void test_thumb_exec(void)
     char cmd[PATH_MAX + 64];
     snprintf(cmd, sizeof cmd, "! ls -A '%s' | grep -q ofx-run", cache);
     CHECK(system(cmd) == 0);
+}
+
+// ofx-clean: a thumbnailer run folder a crash left goes after a day, what is in it too (a link in
+// it removed, not followed); a newer one, another name, or a file of that name stays; a dry run
+// only counts.
+static void test_clean_runs(void)
+{
+    Arena a;
+    arena_init(&a, "clean runs test", thumbers_test_mem, sizeof thumbers_test_mem);
+    ops_guard(root);
+    i64 now = (i64)time(NULL), old = now - 2 * 86400;
+    char cache[PATH_MAX], keep[PATH_MAX];
+    snprintf(cache, sizeof cache, "%s", at("f12/cleancache/thumbnails"));
+    snprintf(keep, sizeof keep, "%s", at("f12/keep.txt"));
+    put(keep, "mine");
+    put(at("f12/cleancache/thumbnails/.ofx-run-12-3/out.png"), "part");
+    symlink(keep, at("f12/cleancache/thumbnails/.ofx-run-12-3/link"));
+    set_mtime(at("f12/cleancache/thumbnails/.ofx-run-12-3"), old);
+    put(at("f12/cleancache/thumbnails/.ofx-run-12-4/out.png"), "new");
+    put(at("f12/cleancache/thumbnails/.ofx-run-x/out.png"), "x");
+    set_mtime(at("f12/cleancache/thumbnails/.ofx-run-x"), old);
+    put(at("f12/cleancache/thumbnails/.ofx-run-5-6"), "a file");
+    set_mtime(at("f12/cleancache/thumbnails/.ofx-run-5-6"), old);
+    mkdirs(at("f12/cleancache/thumbnails/.ofx-run-7-8/sub"));
+    set_mtime(at("f12/cleancache/thumbnails/.ofx-run-7-8"), old);
+    CleanStats st;
+    CleanOpts o = { .now = now, .cap = 0, .dry = true };
+    clean_run(&a, cache, S("1 0 0:1 / / rw - ext4 a rw\n"), &o, &st);
+    CHECK(st.n[CR_TEMP] == 2 && access(at("f12/cleancache/thumbnails/.ofx-run-12-3/out.png"), F_OK) == 0);
+    o.dry = false;
+    clean_run(&a, cache, S("1 0 0:1 / / rw - ext4 a rw\n"), &o, &st);
+    CHECK(st.n[CR_TEMP] == 1 && st.failed == 1 && access(at("f12/cleancache/thumbnails/.ofx-run-12-3"), F_OK) != 0);   // (7-8: its folder stays)
+    CHECK(strcmp(slurp(keep), "mine") == 0 && access(at("f12/cleancache/thumbnails/.ofx-run-12-4/out.png"), F_OK) == 0);
+    CHECK(access(at("f12/cleancache/thumbnails/.ofx-run-x"), F_OK) == 0 && access(at("f12/cleancache/thumbnails/.ofx-run-5-6"), F_OK) == 0);
+    CHECK(clean_run_name(".ofx-run-1-2") && !clean_run_name(".ofx-run-1-") && !clean_run_name(".ofx-run--2") && !clean_run_name(".ofx-run-1-2x") &&
+          !clean_run_name(".ofx-run-12345678901-2") && !clean_run_name(".ofx-1-2"));
 }

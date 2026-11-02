@@ -6,9 +6,12 @@
 //
 // A video or a PDF from a download is parsed by ffmpeg or poppler, so each runs in bubblewrap when
 // it is installed, as GNOME's do (Nemo's don't): /usr read only, the one file it reads, a folder of
-// its own to write in, and no network, no other processes, nothing of the home folder. It has
-// THUMB_RUN_MS; then it is killed (with whatever it started), and the file counts as failed, so it
-// isn't tried again until it changes (the rule from Nemo's loop).
+// its own to write in, and no network, no other processes, nothing of the home folder, no terminal
+// (a session of its own), and of ofx's environment only PATH, LANG, LC_ALL and HOME (a token in it
+// could leave through the PNG; F12 step 3 review). It has THUMB_RUN_MS; then it is killed (with
+// whatever it started) and nothing is written: a big file under load may make it next time. One
+// that ends without a PNG counts as failed, so it isn't tried again until the file changes (the
+// rule from Nemo's loop).
 //
 // With the test guard on (OFX_GUI_ROOT), only OFX_TEST_THUMBNAILERS's files are read (none
 // without it), and ops_program_allowed runs only a test's own program.
@@ -158,25 +161,38 @@ static int thumbers_argv(Arena *a, const char *exec, const char *path, const cha
     return n;
 }
 
+typedef enum { TR_NOT_RUN, TR_ENDED, TR_KILLED } ThumbRun;
+
 // argv run on in, writing in dir only: in bubblewrap when there is one (thumb_sandbox), else as it
-// is, with /dev/null for its input and output, no blocked signals, in a process group of its own,
-// and killed if the worker thread that started it goes (ofx's end). True when it ended within
-// thumb_run_ms; else it is killed, with its group, and what it wrote doesn't count. Whether it
-// made a PNG is the caller's to see.
-static bool thumb_run(const char *const *argv, const char *in, const char *dir)
+// is, with /dev/null for its input and output, no blocked signals, the environment above, in a
+// process group of its own, and killed if the worker thread that started it goes (ofx's end).
+// TR_ENDED when it ended within thumb_run_ms; else TR_KILLED, with its group, and what it wrote
+// doesn't count. Whether it made a PNG is the caller's to see.
+static ThumbRun thumb_run(const char *const *argv, const char *in, const char *dir)
 {
     Err err;
     char prog[PATH_MAX], bw[PATH_MAX];
-    if (!ops_program_allowed(argv[0], &err)) return false;
-    if (!(argv[0][0] == '/' ? snprintf(prog, sizeof prog, "%s", argv[0]) < (int)sizeof prog : path_find(argv[0], prog, sizeof prog))) return false;
-    const char *av[THUMB_ARGS_MAX + 48];
+    if (!ops_program_allowed(argv[0], &err)) return TR_NOT_RUN;
+    if (!(argv[0][0] == '/' ? snprintf(prog, sizeof prog, "%s", argv[0]) < (int)sizeof prog : path_find(argv[0], prog, sizeof prog))) return TR_NOT_RUN;
+    // The environment, bubblewrap's and so the program's: these of ofx's, and GIO_USE_VFS=local (a %u
+    // URI read without gvfs).
+    static const char *const keep[] = { "PATH", "LANG", "LC_ALL", "HOME", "GIO_USE_VFS" };
+    char ebuf[COUNT(keep)][PATH_MAX];
+    const char *envp[COUNT(keep) + 1];
+    int ne = 0;
+    for (int i = 0; i < COUNT(keep); i++) {
+        const char *v = i == COUNT(keep) - 1 ? "local" : getenv(keep[i]);
+        if (v && snprintf(ebuf[ne], sizeof ebuf[ne], "%s=%s", keep[i], v) < (int)sizeof ebuf[ne]) envp[ne] = ebuf[ne], ne++;
+    }
+    envp[ne] = NULL;
+    const char *av[THUMB_ARGS_MAX + 64];
     int n = 0;
     if (thumb_sandbox && path_find("bwrap", bw, sizeof bw)) {
         static const char *const box[] = {
             "--ro-bind", "/usr", "/usr", "--ro-bind-try", "/etc/ld.so.cache", "/etc/ld.so.cache",
             "--ro-bind-try", "/etc/fonts", "/etc/fonts", "--ro-bind-try", "/var/cache/fontconfig", "/var/cache/fontconfig",   // (without them a PDF's fonts are scanned each run: 570 ms against 63)
             "--symlink", "usr/lib", "/lib", "--symlink", "usr/lib", "/lib64", "--symlink", "usr/bin", "/bin", "--symlink", "usr/bin", "/sbin",
-            "--proc", "/proc", "--dev", "/dev", "--chdir", "/", "--setenv", "GIO_USE_VFS", "local", "--unshare-all", "--die-with-parent",
+            "--proc", "/proc", "--dev", "/dev", "--chdir", "/", "--unshare-all", "--die-with-parent", "--new-session",
         };
         av[n++] = bw;
         for (int i = 0; i < COUNT(box); i++) av[n++] = box[i];
@@ -190,19 +206,19 @@ static bool thumb_run(const char *const *argv, const char *in, const char *dir)
     sigset_t none;
     sigemptyset(&none);
     pid_t pid = fork();
-    if (pid < 0) return false;
+    if (pid < 0) return TR_NOT_RUN;
     if (pid == 0) {   // (only what is safe after a fork in threads, up to the exec)
         sigprocmask(SIG_SETMASK, &none, NULL);
         prctl(PR_SET_PDEATHSIG, SIGKILL);
         setpgid(0, 0);
         int nul = open("/dev/null", O_RDWR | O_CLOEXEC);
         if (nul >= 0) dup2(nul, 0), dup2(nul, 1), dup2(nul, 2);
-        execv(av[0], (char *const *)av);
+        execve(av[0], (char *const *)av, (char *const *)envp);
         _exit(127);
     }
     // ofx's children are reaped by the kernel (spawn_init): the pidfd says when it is gone.
     int pfd = (int)syscall(SYS_pidfd_open, pid, 0);
-    if (pfd < 0) return errno == ESRCH;   // gone already
+    if (pfd < 0) return errno == ESRCH ? TR_ENDED : TR_KILLED;   // (gone already; else, not seen: as killed, nothing kept)
     struct pollfd p = { .fd = pfd, .events = POLLIN };
     int r;
     while ((r = poll(&p, 1, thumb_run_ms)) < 0 && errno == EINTR) {}
@@ -211,5 +227,5 @@ static bool thumb_run(const char *const *argv, const char *in, const char *dir)
         poll(&p, 1, 1000);
     }
     close(pfd);
-    return r > 0;
+    return r > 0 ? TR_ENDED : TR_KILLED;
 }

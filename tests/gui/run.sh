@@ -436,11 +436,11 @@ T=$base/f12; rm -rf "$T"; mkdir -p "$T/tree" "$T/thumbnailers" "$T/tbin"
 cp "$here/f64/wide.png" "$T/tree/clip.mp4"; cp "$here/f64/wide.png" "$T/tree/doc.pdf"
 cp "$here/f64/wide.png" "$T/tree/talk.mp4"; head -c 11534336 /dev/zero >> "$T/tree/talk.mp4"
 echo hi > "$T/tree/readme.txt"
-printf '#!/bin/sh\nhead -c %d "$1" > "$2"\n' "$(stat -c %s "$here/f64/wide.png")" > "$T/tbin/copy"; printf '#!/bin/sh\nsleep 19\n' > "$T/tbin/hang"; chmod +x "$T/tbin/copy" "$T/tbin/hang"
+printf '#!/bin/sh\nhead -c %d "$1" > "$2"\n' "$(stat -c %s "$here/f64/wide.png")" > "$T/tbin/copy"; z="19.$$"; printf '#!/bin/sh\nsleep %s\n' "$z" > "$T/tbin/hang"; chmod +x "$T/tbin/copy" "$T/tbin/hang"   # (z: this run's own, as gui.py runs f12 in several at once)
 printf '[Thumbnailer Entry]\nExec=%s %%i %%o\nMimeType=video/mp4;\n' "$T/tbin/copy" > "$T/thumbnailers/copy.thumbnailer"
 printf '[Thumbnailer Entry]\nExec=%s %%i %%o\nMimeType=application/pdf;\n' "$T/tbin/hang" > "$T/thumbnailers/hang.thumbnailer"
 rs f12 OFX_TEST_THUMB_RUN_MS=500 OFX_TEST_THUMBNAILERS="$T/thumbnailers" -- "$T/tree"
-if pgrep -f "[s]leep 19" > /dev/null; then echo "f12: FAILED: a hung thumbnailer outlived the window"; pkill -f "[s]leep 19"; fail=1; fi
+if pgrep -x -f "sleep $z" > /dev/null; then echo "f12: FAILED: a hung thumbnailer outlived the window"; pkill -x -f "sleep $z"; fail=1; fi
 fi
 if want hang; then
 T=$base/hang; rm -rf "$T"; mkdir -p "$T/tree/stuck"

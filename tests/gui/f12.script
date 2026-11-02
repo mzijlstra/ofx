@@ -1,19 +1,20 @@
 # F12 step 3: previews by the system's thumbnailers, here run.sh's fakes (under the guard the window
 # reads no others): clip.mp4 and talk.mp4 by one that copies them (they are PNGs, 300x200), doc.pdf
-# by one that hangs (killed after OFX_TEST_THUMB_RUN_MS: a failure), readme.txt by none. The test
+# by one that hangs (killed after OFX_TEST_THUMB_RUN_MS: none, and no failure written, so it may
+# make one next time), readme.txt by none. The test
 # output is scale 2: at 48 px a preview is 96 device pixels, from normal (128).
 settle
 key ctrl-2
 wait-for 5000 thumbbusy=0 previews=2
-expect thumbmade=2 thumbfailed=1 thumbnone=1
+expect thumbmade=2 thumbfailed=0 thumbnone=2
 key home
 expect sel=clip.mp4 thumbsel=96x64
 key right
 expect sel=doc.pdf thumbsel=-
-# In the cache as any preview: the videos' in normal, the PDF's failure in fail/ofx/; nothing of the
-# folders they ran in.
+# In the cache as any preview: the videos' in normal; nothing for the PDF, nor of the folders they
+# ran in.
 sh for f in clip.mp4 talk.mp4; do test -f "$OFX_ROOT/cache/thumbnails/normal/$(printf 'file://%s' "$OFX_DIR/$f" | md5sum | cut -c1-32).png" || exit 1; done
-sh test -f "$OFX_ROOT/cache/thumbnails/fail/ofx/$(printf 'file://%s' "$OFX_DIR/doc.pdf" | md5sum | cut -c1-32).png"
+sh test ! -e "$OFX_ROOT/cache/thumbnails/fail"
 sh ! ls -A "$OFX_ROOT/cache/thumbnails" | grep -q ofx-run
 # preview-thumbnailers = off: a new video gets none; those made are still read from the cache.
 sh printf 'preview-thumbnailers = off\n' >> "$OFX_ROOT/config/ofx/ofx.conf"

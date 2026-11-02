@@ -2,6 +2,9 @@
 // systemd user timer. Nothing else cleans ~/.cache/thumbnails here (Nemo doesn't), and on
 // 2026-10-25 258 MiB of its 362 were previews of files that are gone.
 //
+// ofx's own leftovers go after a day: a temporary file (thumb_write's), a thumbnailer's run folder
+// in the root (thumb_exec's).
+//
 // Three rules, in order (ofx.conf's clean options, F10, set or turn off each): a preview not read
 // for clean-unused-days goes (its atime); a preview whose file is gone or has changed goes (its
 // Thumb::URI and Thumb::MTime); then, while the cache is over clean-cap, the least recently read go. Only the cache's own names are looked at, in its size
@@ -62,6 +65,20 @@ static bool clean_name(const char *n)
     for (int i = 0; i < 32; i++)
         if (!((n[i] >= '0' && n[i] <= '9') || (n[i] >= 'a' && n[i] <= 'f'))) return false;
     return strcmp(n + 32, ".png") == 0;
+}
+
+// ofx's thumbnailer run folder (thumb_exec, F12): .ofx-run-<pid>-<n>.
+static bool clean_run_name(const char *n)
+{
+    if (strncmp(n, ".ofx-run-", 9) != 0) return false;
+    const char *p = n + 9;
+    for (int part = 0; part < 2; part++) {
+        const char *d = p;
+        while (*p >= '0' && *p <= '9') p++;
+        if (p == d || p - d > 10 || *p != (part ? 0 : '-')) return false;
+        p++;
+    }
+    return true;
 }
 
 // ofx's temporary name (thumb_write): .ofx-<pid>-<n>.png.
@@ -251,6 +268,47 @@ static void clean_drop(const CleanOpts *o, CleanStats *s, const char *const *dir
 
 #define CLEAN_DIRS_MAX 64
 
+// The thumbnailer run folders a crash left in the cache's root (rfd), a day after their last
+// change: what is in them (no link followed; a folder in one stays, and so does that one), then the
+// folder, each counted as a temporary file (F12 step 3 review).
+static void clean_runs(int rfd, const char *root, const CleanOpts *o, CleanStats *s)
+{
+    int dfd = dup(rfd);
+    DIR *d = dfd >= 0 ? fdopendir(dfd) : NULL;
+    if (!d) {
+        if (dfd >= 0) close(dfd);
+        return;
+    }
+    for (struct dirent *e; (e = readdir(d));) {
+        struct stat st;
+        if (!clean_run_name(e->d_name) || fstatat(rfd, e->d_name, &st, AT_SYMLINK_NOFOLLOW) != 0 || !S_ISDIR(st.st_mode) ||
+            o->now - st.st_mtim.tv_sec <= CLEAN_TMP_S)
+            continue;
+        char path[PATH_MAX];
+        Err err;
+        snprintf(path, sizeof path, "%s/%s", root, e->d_name);
+        if (!o->dry) {
+            if (!ops_allowed(path, &err)) {
+                s->failed++;
+                continue;
+            }
+            int fd = openat(rfd, e->d_name, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
+            DIR *in = fd >= 0 ? fdopendir(fd) : NULL;
+            if (!in && fd >= 0) close(fd);
+            for (struct dirent *f; in && (f = readdir(in));)
+                if (strcmp(f->d_name, ".") != 0 && strcmp(f->d_name, "..") != 0) unlinkat(dirfd(in), f->d_name, 0);
+            if (in) closedir(in);
+            if (unlinkat(rfd, e->d_name, AT_REMOVEDIR) != 0) {
+                s->failed++;
+                continue;
+            }
+        }
+        s->n[CR_TEMP]++;
+        if (o->say) o->say(o->ctx, CR_TEMP, path, 0);
+    }
+    closedir(d);
+}
+
 // One run over the cache at root (thumb_root's). The arena holds the list of files; mountinfo is
 // the mount list (/proc/self/mountinfo's text).
 static void clean_run(Arena *a, const char *root, Str mountinfo, const CleanOpts *o, CleanStats *s)
@@ -274,6 +332,7 @@ static void clean_run(Arena *a, const char *root, Str mountinfo, const CleanOpts
         if (fd >= 0) dirs[nd] = arena_sprintf(a, "%s/fail/%s", root, d->d_name), fds[nd++] = fd;
     }
     if (fd_dir) closedir(fd_dir);
+    clean_runs(rfd, root, o, s);
     close(rfd);
 
     // Every file of the cache's names, by lstat only.
