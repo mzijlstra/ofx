@@ -262,7 +262,7 @@ static void clean_drop(const CleanOpts *o, CleanStats *s, const char *const *dir
     char path[PATH_MAX];
     Err err;
     snprintf(path, sizeof path, "%s/%s", dirs[f->dir], f->name);
-    if (!o->dry && (!ops_allowed(path, &err) || unlinkat(fds[f->dir], f->name, 0) != 0)) {
+    if (!o->dry && (!ops_allowed(path, &err) || (unlinkat(fds[f->dir], f->name, 0) != 0 && errno != ENOENT))) {   // (gone already: another clean, the timer's or a window's)
         s->failed++;
         return;
     }
@@ -302,7 +302,7 @@ static void clean_runs(int rfd, const char *root, const CleanOpts *o, CleanStats
             for (struct dirent *f; in && (f = readdir(in));)
                 if (strcmp(f->d_name, ".") != 0 && strcmp(f->d_name, "..") != 0) unlinkat(dirfd(in), f->d_name, 0);
             if (in) closedir(in);
-            if (unlinkat(rfd, e->d_name, AT_REMOVEDIR) != 0) {
+            if (unlinkat(rfd, e->d_name, AT_REMOVEDIR) != 0 && errno != ENOENT) {
                 s->failed++;
                 continue;
             }

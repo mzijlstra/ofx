@@ -42,7 +42,10 @@ static void *clear_read(void *arg)
 // PATH (the guard lets only a test's own run: its copy on PATH).
 static void clear_start(void)
 {
-    if (clear.running) return;
+    if (clear.running) {   // (asked again while it ran, F12 step 4 review)
+        set_status(false, "The previews are being cleared already");
+        return;
+    }
     char prog[PATH_MAX];
     Err err;
     Str d = path_dir(str_from_c(app.exe));

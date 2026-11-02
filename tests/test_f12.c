@@ -374,6 +374,16 @@ static void test_thumb_exec(void)
     mkdir(fold, 0755);
     q = ask(fold, TK_EXEC, 48, cache), q.exec = exec;
     CHECK(thumb_get(&a, &q, &out) == TG_NONE);
+    // Its run folder gone while it ran (Clear Previews): nothing, and no failure written.
+    put_exec(at("f12/bin/gone"), "#!/bin/sh\nrm -rf \"$(dirname \"$2\")\"\n");
+    snprintf(exec, sizeof exec, "%s/gone %%i %%o", bin);
+    set_mtime(clip[4], 1700000400);
+    thumb_sandbox = false;   // (in bubblewrap the folder is a mount point there)
+    q = ask(clip[4], TK_EXEC, 48, cache), q.exec = exec;
+    CHECK(thumb_get(&a, &q, &out) == TG_NONE);
+    snprintf(exec, sizeof exec, "%s/none %%i %%o", bin);
+    CHECK(thumb_get(&a, &q, &out) == TG_FAILED);   // (no fail entry from the first)
+    thumb_sandbox = true;
     // A file that is gone: nothing. A cache outside the test's folder: refused, nothing made there.
     snprintf(exec, sizeof exec, "%s/copy %%i %%o %%s", bin);
     q = ask(clip[8], TK_EXEC, 48, cache), q.exec = exec;

@@ -32,5 +32,7 @@ key esc
 wait-for 5000 modal=- clearing=0 thumbbusy=0 previews=3 thumbmade=3 thumbresets=1 statusbad=0
 # The cache: the three made again, the rest gone.
 sh test "$(find "$OFX_ROOT/cache/thumbnails" -type f | wc -l)" -eq 3 && test ! -e "$OFX_ROOT/cache/thumbnails/large/0123456789abcdef0123456789abcdef.png"
+# ofx-clean --all's summary, after "<root>: ": its words are pinned here.
+expect status=Previews: 6 deleted, 0.0 MiB freed
 shot cleared.png
 quit

@@ -797,8 +797,8 @@ MUTANTS += [
     (CL, "            else if ((m->has_mtime && m->mtime != f.st_mtim.tv_sec) || (m->has_size && m->size != f.st_size)) r = CR_STALE;", "            else if (m->has_mtime && m->mtime != f.st_mtim.tv_sec) r = CR_STALE;"),
     (CL, "            else if ((m->has_mtime && m->mtime != f.st_mtim.tv_sec) || (m->has_size && m->size != f.st_size)) r = CR_STALE;", "            else if (m->has_size && m->size != f.st_size) r = CR_STALE;"),
     (CL, "    return a->atime < b->atime ? -1 : a->atime > b->atime;", "    return a->atime > b->atime ? -1 : a->atime < b->atime;"),
-    (CL, "    if (!o->dry && (!ops_allowed(path, &err) || unlinkat(fds[f->dir], f->name, 0) != 0)) {", "    if (!o->dry && unlinkat(fds[f->dir], f->name, 0) != 0) {"),
-    (CL, "    if (!o->dry && (!ops_allowed(path, &err) || unlinkat(fds[f->dir], f->name, 0) != 0)) {", "    if (!ops_allowed(path, &err) || unlinkat(fds[f->dir], f->name, 0) != 0) {"),
+    (CL, '    if (!o->dry && (!ops_allowed(path, &err) || (unlinkat(fds[f->dir], f->name, 0) != 0 && errno != ENOENT))) {', '    if (!o->dry && (unlinkat(fds[f->dir], f->name, 0) != 0 && errno != ENOENT)) {'),
+    (CL, '    if (!o->dry && (!ops_allowed(path, &err) || (unlinkat(fds[f->dir], f->name, 0) != 0 && errno != ENOENT))) {', '    if ((!ops_allowed(path, &err) || (unlinkat(fds[f->dir], f->name, 0) != 0 && errno != ENOENT))) {'),
     (CL, "        s->failed++;\n        return;", "        return;"),
     (CL, "        s->failed++;\n        return;", "        s->failed++;"),
     (CL, "    s->n[r]++, s->bytes[r] += f->size;", "    s->n[r]++;"),
@@ -2363,4 +2363,6 @@ MUTANTS += [
     ('ui/ui.c', '    if (u->clear_asking) return UI_ON_CLEAR;\n', ''),
     ('ui/handle.c', ' case UI_ON_RESTORE: case UI_ON_CLEAR:\n', ' case UI_ON_RESTORE:\n'),
     ('ui/ui.c', '    UM_VIEW_LIST, UM_VIEW_ICONS, UM_SEP, UM_CLEAR_PREVIEWS,\n};', '    UM_VIEW_LIST, UM_VIEW_ICONS,\n};'),
+    (TH, '        if (got == TG_FAILED && !png.len && access(dir, F_OK) != 0) got = TG_NONE;', '        if (got == TG_FAILED && !png.len) got = TG_NONE;'),
+    (TH, '        if (got == TG_FAILED && !png.len && access(dir, F_OK) != 0) got = TG_NONE;', '        if (false) got = TG_NONE;'),
 ]
