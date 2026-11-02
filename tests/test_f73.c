@@ -835,6 +835,7 @@ static void test_find_bar(void)
 
 // ---- Shift and a move select (Michael, 2026-10-26) ---------------------------------------------
 
+// shift-select = add (Michael's own; the only way before F12): everything passed over joins.
 static void test_shift_select(void)
 {
     UiNames names = { name_at, NULL, NULL };
@@ -842,7 +843,7 @@ static void test_shift_select(void)
     Ui u = { 0 };
     ui_resize(&u.list, 10);
     ui_set(&u.list, 20, 2);
-    u.mark = mark;
+    u.mark = mark, u.shift_add = true;
     // Shift+Down twice: the start and the two passed over; Shift+Up back marks nothing more and
     // unmarks nothing (as a Shift+click, the selection only grows).
     UiInput in = keys(2, UK_SEL_DOWN, UK_SEL_DOWN);
@@ -941,3 +942,4 @@ static void test_shift_select(void)
     ui_handle(&u, names, &in);
     CHECK(u.marked == 0);
 }
+

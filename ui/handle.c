@@ -334,8 +334,16 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
     if (!prompt && in->click >= 0 && l->top + in->click < l->n) {
         isize row = l->top + in->click;
         ui_edit_close(u);
-        if (in->click_mods & UI_MOD_SHIFT) ui_mark_range(u, l->sel, row);
-        else if (in->click_mods & UI_MOD_CTRL) ui_mark(u, row, !ui_marked(u, row));
+        // Shift+click: in add mode a range from the cursor joins the marks; in range mode the
+        // anchor's range replaces them, or with Ctrl joins them. A click without Shift moves the
+        // anchor.
+        bool shift = in->click_mods & UI_MOD_SHIFT, ctrl = in->click_mods & UI_MOD_CTRL;
+        if (shift && u->shift_add) ui_mark_range(u, l->sel, row);
+        else if (shift) ui_range(u, l->sel, row, ctrl);
+        else {
+            if (ctrl) ui_mark(u, row, !ui_marked(u, row));
+            u->anchor = -1;   // (the next Shift starts at row)
+        }
         l->sel = row, ui_unfocus(u, UI_FOCUS_SIDE), ui_unfocus(u, UI_FOCUS_FIND);   // (the find bar stays open; review, 2026-10-28)
         ui_show_sel(l);
     }
@@ -346,10 +354,11 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
     }
     if (!prompt && in->backs > 0) return (UiAction){ UA_BACK, 0, false };
     if (!prompt && in->forwards > 0) return (UiAction){ UA_FORWARD, 0, false };
-    isize extend = -1;   // a Shift move's start, marked to the cursor once the move is done (ui_extend)
+    isize extend = -1, was = l->sel;   // a Shift move's start, and the cursor before the event (ui_extend)
     // An entry the pointer picked runs its key first (F7.4), then the frame's keys.
-    for (int k = u->menu_key.key || u->menu_key.ch ? -1 : 0; k < in->nev; k++, extend = ui_extend(u, extend)) {
+    for (int k = u->menu_key.key || u->menu_key.ch ? -1 : 0; k < in->nev; k++, extend = ui_extend(u, extend, was)) {
         UiEvent e = k < 0 ? u->menu_key : in->ev[k];
+        was = l->sel;
         if (k < 0) u->menu_key = (UiEvent){ UK_NONE, 0 };
         // Ctrl+Q (F7.1): every window closes, this one as Ctrl+Q closed it before (below).
         if (e.key == UK_QUIT_ALL && !u->quit_asking) {

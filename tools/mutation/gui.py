@@ -489,6 +489,9 @@ MUTANTS = [
     ('gui/files.c', '            if (app.ui.group_col) info_cell(CLAY_IDI("group", r)', '            info_cell(CLAY_IDI("group", r)', 'f8'),
     # ---- quit doesn't wait for a hung drive (2026-10-26: no mutant was hang's or f6b's alone)
     (G, '    if (pthread_timedjoin_np(t, NULL, until) != 0) pthread_detach(t);', '    pthread_join(t, NULL);', 'hang'),   # (join_by: every worker's stop)
+    # ---- shift-select (F12): ofx.conf's line reaches the window; a scripted press holds both keys
+    ('gui/prefs.c', '    app.ui.shift_add = c.shift_add;\n', '', 'f62'),
+    ('gui/script.c', '(strstr(a, "ctrl") ? UI_MOD_CTRL : 0) | (strstr(a, "shift") ? UI_MOD_SHIFT : 0)', 'strstr(a, "ctrl") ? UI_MOD_CTRL : strstr(a, "shift") ? UI_MOD_SHIFT : 0', 'f62'),
     # ---- the quit tells every worker first (F12): the clipboard's join waits for its telling, a copy for its cancel
     (G, '    jobs_quit(), clip_quit(), count_quit(),', '    jobs_quit(), count_quit(),', 'clip'),
     (G, '    jobs_quit(), clip_quit(), count_quit(),', '    clip_quit(), count_quit(),', 'f53'),

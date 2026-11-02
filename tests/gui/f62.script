@@ -76,12 +76,23 @@ press 2
 point-ui row 9
 click-here
 expect idx=9
-# Ctrl and Shift mark cells.
+# Ctrl and Shift mark cells: Shift+click the anchor's range (from the last click, 5) in place of
+# the marks (shift-select = range, F12); Ctrl+Shift+click adds it.
 press 3 ctrl
 press 5 ctrl
 expect marked=2 idx=5
 press 8 shift
-expect marked=5
+expect marked=4 idx=8
+press 1 ctrl shift
+expect marked=8 idx=1
+key esc
+# shift-select = add (ofx.conf, read again as it changes): Shift+click adds the cursor's range.
+sh printf 'shift-select = add\n' >> "$OFX_ROOT/config/ofx/ofx.conf"
+wait-for 3000 shiftsel=add
+press 3 ctrl
+press 7 ctrl
+press 5 shift
+expect marked=4 idx=5
 key esc
 expect marked=0
 # Enter and a double click open; Backspace goes up, back onto the folder left.

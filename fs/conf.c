@@ -42,6 +42,7 @@ typedef struct {
     int        sort;                              // the default sort key, a SortKey
     bool       sort_rev;                          // and Reverse Order
     bool       restore_tabs;                      // the tabs across a restart (F11 step 3)
+    bool       shift_add;                         // shift-select = add (F12; range: false)
     bool       previews;                          // previews in the icon view (F6.4)
     i64        preview_max;                       // the largest image previewed, in bytes
     DateFormat date;
@@ -56,7 +57,7 @@ typedef struct {
     char       why[CONF_WHY_MAX];
 } Conf;
 
-typedef enum { CK_BOOL, CK_SIZE, CK_DATE, CK_NAMES, CK_EDITOR, CK_DAYS, CK_VIEW, CK_ZOOM, CK_SORT } ConfKind;
+typedef enum { CK_BOOL, CK_SIZE, CK_DATE, CK_NAMES, CK_EDITOR, CK_DAYS, CK_VIEW, CK_ZOOM, CK_SORT, CK_SHIFT } ConfKind;
 
 // Each option: its key, kind, its field in Conf, default as written in the file ("": none, the help
 // has an example), and its help (lines, each made a comment). The help says what it does, what it
@@ -94,6 +95,14 @@ static const ConfOpt CONF_OPTS[] = {
       "the window closed last and asks whether to bring back the others. Started on\n"
       "a folder other than your home (Show in folder, ofx <folder>), it opens as\n"
       "one more tab." },
+    { "shift-select", CK_SHIFT, offsetof(Conf, shift_add), "range",
+      "What Shift selects in the files, with the arrows, Home, End, H, J, K, L or a\n"
+      "click: range or add.\n"
+      "  range  exactly the files from where the last plain move or click left the\n"
+      "         cursor to the cursor, in place of what was selected, as in Nemo and\n"
+      "         other GTK programs; Ctrl+Shift+click adds that range instead\n"
+      "  add    every file the cursor passes over joins the selection, and\n"
+      "         Shift+click adds the files from the cursor to the one clicked" },
     { "previews", CK_BOOL, offsetof(Conf, previews), "on",
       "Previews of images in the icon view, in place of their file type's icon.\n"
       "on or off. Off, ofx makes and reads no previews at all (the cache, shared\n"
@@ -196,7 +205,7 @@ static const char *const CONF_WANTS[] = {
     [CK_BOOL] = "on or off", [CK_SIZE] = "a size like 10 MiB", [CK_DATE] = "short, long, iso or a pattern with %",
     [CK_NAMES] = "a folder name, without a /", [CK_EDITOR] = "a name, yes or no, then the command",
     [CK_DAYS] = "a whole number of days", [CK_VIEW] = "list or icons", [CK_ZOOM] = "32, 48, 64, 96, 128 or 256",
-    [CK_SORT] = "name, size or modified",
+    [CK_SORT] = "name, size or modified", [CK_SHIFT] = "range or add",
 };
 
 // The built-in defaults: all of them with no file to read; under a file, what it doesn't set (but
@@ -222,6 +231,9 @@ static bool conf_set(Conf *c, int k, Str v)
     }
     case CK_VIEW:
         if (str_eq(v, S("list")) || str_eq(v, S("icons"))) return *(bool *)f = str_eq(v, S("icons")), true;
+        return false;
+    case CK_SHIFT:
+        if (str_eq(v, S("range")) || str_eq(v, S("add"))) return *(bool *)f = str_eq(v, S("add")), true;
         return false;
     case CK_ZOOM: {
         i64 n = 0;

@@ -888,7 +888,9 @@ static void test_ui_f3(void)
     ui_mark(&u, 3, false), ui_mark(&u, 3, false);
     CHECK(u.marked == 0);
 
-    // Clicks: Ctrl toggles, Shift marks the range from the cursor.
+    // Clicks: Ctrl toggles, Shift marks the range from the cursor (shift-select = add; range's in
+    // test_shift_range).
+    u.shift_add = true;
     in = keys(1, UK_HOME);
     ui_handle(&u, names, &in);
     in = ui_input_none(), in.click = 2, in.click_mods = UI_MOD_CTRL;
@@ -907,6 +909,7 @@ static void test_ui_f3(void)
     ui_handle(&u, names, &in);
     CHECK(u.marked == 4 && u.list.sel == 0);
     ui_mark_clear(&u);
+    u.shift_add = false;
 
     // The actions.
     in = keys(1, UK_DELETE);

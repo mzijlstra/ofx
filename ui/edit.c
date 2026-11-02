@@ -22,10 +22,10 @@ static void ui_mark_clear(Ui *u)
 }
 
 // A new listing's selection: mark (n bytes, all clear) is the array, marked recounted by gui/
-// as it sets the names it kept.
+// as it sets the names it kept. The anchor's row is gone with the old listing.
 static void ui_mark_set(Ui *u, u8 *mark)
 {
-    u->mark = mark, u->marked = 0;
+    u->mark = mark, u->marked = 0, u->anchor = -1;
 }
 
 // Rows from..to marked (either way round).
@@ -38,12 +38,43 @@ static void ui_mark_range(Ui *u, isize from, isize to)
     for (isize i = from; i <= to; i++) ui_mark(u, i, true);
 }
 
-// Shift and a move in the files (Michael, 2026-10-26): every entry the cursor passed over, from
-// where it was (from) to where it is, joins the selection, as a Shift+click does. -1: none
-// pending. Returns -1, for the next event.
-static isize ui_extend(Ui *u, isize from)
+// Rows from..to marked, and no others: a range selection (shift-select = range).
+static void ui_mark_only(Ui *u, isize from, isize to)
 {
-    if (from >= 0) ui_mark_range(u, from, u->list.sel);   // (ui_mark keeps to the list)
+    ui_mark_clear(u);
+    ui_mark_range(u, from, to);
+}
+
+// The anchor a range from at (the cursor, before the Shift move or click) starts at: none yet, not
+// in this listing, or the cursor moved since the last range, at (and it stays there).
+static isize ui_anchor(Ui *u, isize at)
+{
+    if (u->anchor < 0 || u->anchor >= u->list.n || at != u->range_end) u->anchor = at;
+    return u->anchor;
+}
+
+// Range mode: rows anchor..to are the marks (add: to joins them), and the cursor is at to.
+static void ui_range(Ui *u, isize from, isize to, bool add)
+{
+    isize a = ui_anchor(u, from);
+    if (add) ui_mark_range(u, a, to);
+    else ui_mark_only(u, a, to);
+    u->range_end = to;
+}
+
+// After each event in the files: from is a Shift move's start (-1: none), was the cursor before the
+// event. A Shift move in add mode (Michael, 2026-10-26) marks every entry the cursor passed over,
+// as a Shift+click does; in range mode (F12, the default) exactly the anchor to the cursor. A plain
+// move drops the anchor (even one back onto range_end). Returns -1, for the next event.
+static isize ui_extend(Ui *u, isize from, isize was)
+{
+    if (from < 0) {
+        if (u->list.sel != was) u->anchor = -1;
+    } else if (u->shift_add) {
+        ui_mark_range(u, from, u->list.sel);   // (ui_mark keeps to the list)
+    } else {
+        ui_range(u, from, u->list.sel, false);
+    }
     return -1;
 }
 

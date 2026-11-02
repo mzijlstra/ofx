@@ -40,6 +40,7 @@ static void conf_apply(void)
         if (fold_view_of(app.ui.view)) remember_apply(app.cwd);
     }
     thumbs.off = !c.previews, thumbs.src_max = c.preview_max;
+    app.ui.shift_add = c.shift_add;
     if (previews) thumbs_reset();   // (asked again, under the new limit, or not at all)
     if (c.bad) {
         char shown[PATH_MAX + 1];

@@ -1661,6 +1661,7 @@ static void test_format(void)
 #include "test_f9.c"
 #include "test_f10.c"
 #include "test_f11.c"
+#include "test_f12.c"
 #include "test_fm1.c"
 
 int main(void)
@@ -1816,6 +1817,8 @@ int main(void)
     test_field_copy_fallthrough();
     test_line_words();
     test_line_active();
+    test_conf_shift();
+    test_shift_range();
     char cmd[1600];
     snprintf(cmd, sizeof cmd, "chmod -R u+rwx '%s' && rm -rf '%s' '%s'", root, root, decoy);
     if (system(cmd) != 0) fprintf(stderr, "could not remove %s\n", root);

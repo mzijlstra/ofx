@@ -659,6 +659,13 @@ typedef struct {
     // keeps it by name across a reload.
     u8    *mark;
     isize  marked;           // how many are set
+    // Shift's selections (F12, ofx.conf's shift-select): range, from the anchor (where the last
+    // plain move or click left the cursor; -1: where the next Shift starts) to the cursor, in place
+    // of the marks, as Nemo and GTK do; shift_add, everything the cursor passes over joins them.
+    // range_end: the cursor where the last range left it; moved since by anything else (a find,
+    // the pointer, gui/), the anchor is where the next Shift starts.
+    isize  anchor, range_end;
+    bool   shift_add;
     // The edit line: a rename (a new folder is made at once and renamed with it), or the top bar's
     // location line (F4), which holds a path. Open while focus is UI_FOCUS_EDIT.
     bool   edit_path;        // the location line

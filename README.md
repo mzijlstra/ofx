@@ -57,7 +57,7 @@ puts its service file in `~/.local/share/dbus-1/services`), and it exits when id
 | Ctrl+D | bookmark the folder shown (in the GTK bookmarks file, shared with Nemo); the Bookmarks menu (Alt+B) lists the first 8 and goes there |
 | Ctrl+B | Edit Bookmarks: every line of the file; Up/Down (`k`/`j`) move, Enter goes there, Delete removes, F2 renames, Alt+Up/Alt+Down move it, Esc closes |
 | Space, Ctrl+A | select the entry (and move on), select all; Esc clears |
-| Shift and a move | the arrows, Home/End or `H`/`J`/`K`/`L` with Shift: everything the cursor passes over joins the selection (as Shift+click), in the list and the icon view |
+| Shift and a move | the arrows, Home/End or `H`/`J`/`K`/`L` with Shift, in the list and the icon view: the files from where the last plain move or click left the cursor to the cursor are the selection (as Shift+click; Ctrl+Shift+click adds them), as in Nemo; with `shift-select = add` in ofx.conf, everything the cursor passes over joins the selection instead |
 | F2 | rename, in the row, the name up to its extension selected (a folder's whole name): Enter renames, Esc cancels |
 | In the rename and location lines | Shift+Left/Right/Home/End select, Ctrl+A all; Ctrl+C, Ctrl+X, Ctrl+V copy, cut and paste text (the first line; a name leaves `/` out) |
 | Ctrl+Shift+N | a new folder, "New folder", named in the row |
@@ -244,6 +244,15 @@ folder other than your home (Show in folder, `ofx <folder>`), that folder opens 
 # a folder other than your home (Show in folder, ofx <folder>), it opens as
 # one more tab.
 #restore-tabs = off
+
+# What Shift selects in the files, with the arrows, Home, End, H, J, K, L or a
+# click: range or add.
+#   range  exactly the files from where the last plain move or click left the
+#          cursor to the cursor, in place of what was selected, as in Nemo and
+#          other GTK programs; Ctrl+Shift+click adds that range instead
+#   add    every file the cursor passes over joins the selection, and
+#          Shift+click adds the files from the cursor to the one clicked
+#shift-select = range
 
 # Previews of images in the icon view, in place of their file type's icon.
 # on or off. Off, ofx makes and reads no previews at all (the cache, shared
