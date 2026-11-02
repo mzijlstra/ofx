@@ -700,6 +700,7 @@ typedef struct {
     bool   menu_on;
     int    menu;
     int    menu_at;
+    UiFocus menu_field;   // the search view's field it took the keys from (Esc gives them back), else LIST
     bool   can_write;
     // What only gui/ knows, for the Edit, View and Go entries it greys or marks (F7.4), set each
     // frame: an undo to make, history back and forward, a folder above, files to paste, hidden

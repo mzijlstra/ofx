@@ -463,7 +463,18 @@ static void test_search_inside_keys(void)
         CHECK(u.menu_on && u.focus == UI_FOCUS_LIST && !ui_line_active(&u, NULL));
         in = ui_input_none(), in.ev[in.nev++] = (UiEvent){ UK_PASTE, 0 }, in.paste = S("pasted");
         CHECK(ui_handle(&u, names, &in).kind == UA_NOT_IN_SEARCH && !u.menu_on && (f ? u.inside.len : u.search.len) == was);
+        // Esc gives the keys back to the field, also from the next menu over; F10 leaves them.
+        u.focus = f ? UI_FOCUS_INSIDE : UI_FOCUS_SEARCH;
+        menu_keys(&u, 3, UK_F10, UK_RIGHT, UK_ESC);
+        CHECK(!u.menu_on && u.focus == (f ? UI_FOCUS_INSIDE : UI_FOCUS_SEARCH));
+        u.focus = f ? UI_FOCUS_INSIDE : UI_FOCUS_SEARCH;
+        menu_keys(&u, 2, UK_F10, UK_F10);
+        CHECK(!u.menu_on && u.focus == UI_FOCUS_LIST);
     }
+    // From the results, Esc leaves the keys there.
+    u.focus = UI_FOCUS_LIST;
+    menu_keys(&u, 2, UK_F10, UK_ESC);
+    CHECK(!u.menu_on && u.focus == UI_FOCUS_LIST);
     u.menu_on = false, u.view = UI_VIEW_FOLDER;
     in = ui_input_none(), in.inside_btn = true;
     ui_handle(&u, names, &in);

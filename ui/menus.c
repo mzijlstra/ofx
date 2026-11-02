@@ -146,9 +146,11 @@ static int ui_menu_next(const Ui *u, int at, int dir)
 
 // Menu m open: by a key, its first entry that can be picked marked; by the pointer, none. The edit
 // line and the find line close (a new folder keeps its name), and the search view's fields give
-// the keys to the results (F12: a key the menu doesn't take, Ctrl+V, went on into the field).
+// the keys to the results (F12: a key the menu doesn't take, Ctrl+V, went on into the field); Esc
+// gives them back.
 static void ui_menu_open(Ui *u, int m, bool keys)
 {
+    if (!u->menu_on) u->menu_field = u->focus == UI_FOCUS_SEARCH || u->focus == UI_FOCUS_INSIDE ? u->focus : UI_FOCUS_LIST;   // (not from the next menu over)
     u->menu_on = true, u->menu = m;
     u->menu_at = keys ? ui_menu_next(u, -1, 1) : -1;
     ui_edit_close(u), ui_find_leave(u);
@@ -281,7 +283,11 @@ static bool ui_menu_event(Ui *u, UiEvent e, UiAction *a)
     case UK_ENTER: case UK_SHIFT_ENTER:
         if (u->menu_at >= 0 && ui_menu_enabled(u, UI_MENU[u->menu].items[u->menu_at])) *a = ui_menu_pick(u, UI_MENU[u->menu].items[u->menu_at]);
         return true;
-    case UK_ESC: case UK_F10: case UK_TAB: u->menu_on = false; return true;
+    case UK_ESC:
+        u->menu_on = false;
+        if (u->menu_field != UI_FOCUS_LIST) u->focus = u->menu_field;
+        return true;
+    case UK_F10: case UK_TAB: u->menu_on = false; return true;
     case UK_MENU: {
         int m = ui_menu_of(e.ch);
         if (m == u->menu) u->menu_on = false;
