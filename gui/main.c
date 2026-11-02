@@ -792,6 +792,7 @@ int main(int argc, char **argv)
         dirty |= seen;
     }
     if (scripted) script_end();
+    if (atomic_load(&quit_signal)) closing_all = true;   // (SIGTERM, SIGINT: a logout or shutdown ends every window at once, so each keeps its tabs as Close All does; Michael, 2026-11-02)
     restore_save();   // (F11 step 3: before the cursor's write below, which tab_save's listing doesn't touch)
     if (fold_view_of(app.ui.view) && app.have_list) remember_cursor(app.cwd, sel_name());   // (F11)
     if (rem.dirty) remember_write();

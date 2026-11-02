@@ -2,7 +2,7 @@
 // closes for good, read as one starts, and after Close All the question whether the other windows
 // come back, each started on its line's id (--restore). Included by main.c, after actions.c.
 
-static bool closing_all;   // this window closes by Close All, its own Ctrl+Q or another's (its tabs kept)
+static bool closing_all;   // this window closes by Close All, its own Ctrl+Q or another's, or a SIGTERM (its tabs kept)
 
 static struct {
     long ids[SESSION_WINDOWS];   // the window lines left after this start took its own

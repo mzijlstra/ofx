@@ -188,7 +188,9 @@ a network mount, stays).
 With `restore-tabs = on` in ofx.conf, the tabs come back too, as in a web browser: closing the last
 window keeps its tabs (each tab's folder; its view and cursor are the folder's), closing one window
 of several forgets its. After File → Close All Windows (Ctrl+Q), the next start opens the window
-closed last and asks whether to bring back the others, each in a window of its own. Started on a
+closed last and asks whether to bring back the others, each in a window of its own; so does a
+logout or a shutdown (SIGTERM), which ends every window at once. A hard crash or a battery run flat
+without a clean shutdown keeps nothing. Started on a
 folder other than your home (Show in folder, `ofx <folder>`), that folder opens as one more tab.
 
 <!-- ofx.conf: written by `build/ofx-probe --conf`; make test checks this copy -->

@@ -722,7 +722,9 @@ listed: sort, Show Hidden, the tree's open folders, Reopen Closed Tab, the curso
   entries are the ones the 1000 cap is for.
 - **Which window's tabs:** closing one window while others stay forgets its tabs (as browsers do,
   but for Reopen Closed Tab in that window's own session); closing the last one keeps them; Ctrl+Q
-  keeps every window's. A kept window's line stays until a start takes it or the question's No
+  keeps every window's, and so does SIGTERM (a logout or shutdown ends every window at once; Michael,
+  2026-11-02). A crash keeps nothing: that would take each window writing its tabs as they change
+  (offered as a step 3b). A kept window's line stays until a start takes it or the question's No
   forgets it, so one a window was just started on isn't lost if the first window closes before
   that one has read it.
 - **Started on a folder:** the restored tabs come back, and a folder asked for (xdg-open, Show in

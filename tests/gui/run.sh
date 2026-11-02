@@ -3,7 +3,7 @@
 # (tools/gui/run-script.sh):
 #   tests/gui/run.sh <scratch-dir> [binary] [group...]
 # The groups (one or more scripts on one tree): browse big gone watchgap f2 f3 f4 f5 f52 f53 f54
-# f6 (f6, f6b) usb f62 (f62, f62b, f62c) f63 (f63, f63b, f63c) f64 (f64, f64b, f64c, f64d) f7 (f7, f7b) f72 f73 (f73, f73b, f73c, f73d) f74 f75 (f75, f75b) f8 (f8, f8b, f8c, f8d, f8e) f9 (f9, f9b) f10 (f10, f10b, f10c, f10d) f11 (f11, f11b, f11c, f11d, f11e, f11f, f11g, f11h, f11i, f11j, f11k, f11l) clip keys (both in sway) hang guard3 guard. Named ones only, or all of them; a group
+# f6 (f6, f6b) usb f62 (f62, f62b, f62c) f63 (f63, f63b, f63c) f64 (f64, f64b, f64c, f64d) f7 (f7, f7b) f72 f73 (f73, f73b, f73c, f73d) f74 f75 (f75, f75b) f8 (f8, f8b, f8c, f8d, f8e) f9 (f9, f9b) f10 (f10, f10b, f10c, f10d) f11 (f11, f11b, f11c, f11d, f11e, f11f, f11g, f11h, f11i, f11j, f11k, f11l, f11m) clip keys (both in sway) hang guard3 guard. Named ones only, or all of them; a group
 # that fails says "== <script>: FAILED" or "<group>: FAILED" (tools/mutation/gui.py reads it).
 set -u
 base=${1:?usage: run.sh <scratch-dir> [binary]}
@@ -136,12 +136,13 @@ echo "== f11g"; OFX_TEST_HOME="$T/tree" OFX_TEST_MOUNTINFO="$T/mountinfo" "$here
 echo "== f11h"; OFX_TEST_HOME="$T/tree" OFX_TEST_MOUNTINFO="$T/mountinfo" "$here/../../tools/gui/run-script.sh" "$T" "$here/f11h.script" "$bin" --restore 4242 "$T/tree" || failed f11h
 printf 'window 5151 1 0 %s\nwindow 5252 2 0 %s\n' "$T/tree" "$T/tree" >> "$T/state/ofx/state"
 echo "== f11i"; OFX_TEST_HOME="$T/tree" OFX_TEST_MOUNTINFO="$T/mountinfo" "$here/../../tools/gui/run-script.sh" "$T" "$here/f11i.script" "$bin" "$T/tree/sub1" || failed f11i
-# (j: Close All with another window open keeps its tabs; k: closed as one of two, none)
-for x in j k l; do
+# (j: Close All with another window open keeps its tabs; k: closed as one of two, none; m: a SIGTERM keeps them)
+for x in j k l m; do
   echo "== f11$x"; OFX_TEST_HOME="$T/tree" OFX_TEST_MOUNTINFO="$T/mountinfo" "$here/../../tools/gui/run-script.sh" "$T" "$here/f11$x.script" "$bin" "$T/tree" || failed "f11$x"
   case $x in
   j) grep -q "^window $(cat "$T/f11j.pid") " "$T/state/ofx/state" || { echo "f11j: its tabs not kept"; failed f11j; } ;;
   k) ! grep -q "^window $(cat "$T/f11k.pid") " "$T/state/ofx/state" || { echo "f11k: its tabs kept"; failed f11k; } ;;
+  m) grep -q "^window $(cat "$T/f11m.pid") " "$T/state/ofx/state" || { echo "f11m: its tabs not kept"; failed f11m; } ;;
   esac
 done
 [ -f "$T/other.pid" ] && kill "$(cat "$T/other.pid")" 2>/dev/null   # (the stand-in, when f11l didn't run)
