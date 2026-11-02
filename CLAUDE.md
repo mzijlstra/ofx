@@ -62,6 +62,11 @@ rules shared by every tool here.
   (unit; each run's own, as pgrep sees every run at once), never f11j's `sleep 20`.
 - **ofx-clean deletes previews** (F6.5) in `$XDG_CACHE_HOME/thumbnails`, which is his cache unless
   that is set. Michael runs it (his `--dry-run` first, then the timer he enables), not a test.
+  **View → Clear Previews…** (F12 step 4) runs `ofx-clean --all`: every preview in that cache, his
+  and Nemo's and Nautilus's. The window runs the ofx-clean beside it, else PATH's; under the guard
+  only one inside the run's folder (f12b puts a copy among the fakes, with a wrapper that waits a
+  second), and that copy's own guard keeps it in the scratch cache. Never answer that question in a
+  window started without run-script's `XDG_CACHE_HOME`.
   Try it on a copy only: copy with `O_NOATIME` (a plain `cp` resets the access times the 90-day
   rule reads, on his whole cache), set `XDG_CACHE_HOME` and `OFX_GUI_ROOT` to the copy's folder.
   The unit tests make their own caches under the root. It reads ofx.conf's clean options (F10),

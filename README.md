@@ -143,7 +143,10 @@ days goes; so does one whose file is gone or has changed (kept: files on a netwo
 drive not mounted now); then, while the cache is over 1 GiB, the least recently read go. ofx.conf's
 `clean`, `clean-orphans`, `clean-unused-days` and `clean-cap` change or turn off each (below). It reads
 the previews without changing their access times. `ofx-clean --dry-run` lists what would go and
-deletes nothing. `make install` puts in a daily systemd user timer but leaves it off; after a look
+deletes nothing; `ofx-clean --all` deletes every preview, whatever the options say. View → Clear
+Previews… runs that, after asking ("Delete all N previews?", the count made as it opens, and a
+word that Nautilus, Nemo and GNOME apps lose theirs too), then makes the previews on screen again.
+`make install` puts in a daily systemd user timer but leaves it off; after a look
 at the dry run:
 
 ```sh

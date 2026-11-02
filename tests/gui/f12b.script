@@ -1,0 +1,36 @@
+# F12 step 4, after f12 on the same tree and cache: View → Clear Previews… counts the cache's files
+# as it opens (f12's three previews and run.sh's two more), Esc keeps them; Delete runs ofx-clean
+# --all (run.sh's copy, among the fakes), whose line the status says, and the previews drawn are
+# made again (by f12's fake thumbnailer).
+settle
+key ctrl-2
+wait-for 5000 thumbbusy=0 previews=3 thumbmade=0
+point-ui menu-title 2
+click-here
+expect menu=View
+point-menu clear-previews
+click-here
+wait-for 3000 modal=clear-previews clearn=5 menu=-
+shot clear-question.png
+key esc
+expect modal=- clearing=0
+sh test "$(find "$OFX_ROOT/cache/thumbnails" -type f | wc -l)" -eq 5
+# Opened again, counted again (one more file since).
+sh printf 'z' > "$OFX_ROOT/cache/thumbnails/large/0123456789abcdef0123456789abcded.png"
+point-ui menu-title 2
+click-here
+point-menu clear-previews
+click-here
+wait-for 3000 modal=clear-previews clearn=6
+key enter
+# While ofx-clean runs (run.sh's wrapper waits a second first), the entry is greyed.
+wait-for 3000 modal=- clearing=1
+point-ui menu-title 2
+click-here
+expect menu=View menugrey=perms-cols,group-col,colors,zoom-reset,clear-previews
+key esc
+wait-for 5000 modal=- clearing=0 thumbbusy=0 previews=3 thumbmade=3 thumbresets=1 statusbad=0
+# The cache: the three made again, the rest gone.
+sh test "$(find "$OFX_ROOT/cache/thumbnails" -type f | wc -l)" -eq 3 && test ! -e "$OFX_ROOT/cache/thumbnails/large/0123456789abcdef0123456789abcdef.png"
+shot cleared.png
+quit

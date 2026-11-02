@@ -202,6 +202,7 @@ typedef enum {
     UA_TREE_TOGGLE, // index: the tree row whose mark was clicked
     UA_RESTORE,     // the trash view: the marked items (or the cursor's) back where they came from
     UA_EMPTY_TRASH, // the trash view: everything in it deleted for good, asked and answered
+    UA_CLEAR_PREVIEWS,  // every preview in the cache deleted (ofx-clean --all), asked and answered (F12)
     UA_NOT_IN_TRASH,   // something that doesn't work in the trash view (gui/ says so)
     UA_EJECT,       // index: the sidebar row of the drive to eject (F6.1)
     UA_VIEW,        // the view changed (Ui.grid, F6.2): gui/ lays it out again and remembers it
@@ -268,7 +269,7 @@ typedef enum {
     UM_ZOOM_IN, UM_ZOOM_OUT, UM_ZOOM_RESET, UM_VIEW_LIST, UM_VIEW_ICONS,
     UM_PARENT, UM_BACK, UM_FORWARD, UM_HOME, UM_TRASH_VIEW, UM_FIND, UM_SEARCH, UM_LOCATION, UM_TERMINAL,
     UM_ADD_BOOKMARK, UM_EDIT_BOOKMARKS, UM_BM_0, UM_BM_1, UM_BM_2, UM_BM_3, UM_BM_4, UM_BM_5, UM_BM_6, UM_BM_7, UM_BM_MORE,
-    UM_SHORTCUTS, UM_ABOUT, UM_PREFERENCES,
+    UM_SHORTCUTS, UM_ABOUT, UM_PREFERENCES, UM_CLEAR_PREVIEWS,
     UM_OPEN_TAB, UM_EMPTY_TRASH, UM_HERE_PROPS, UM_OPEN_WINDOW, UM_PASTE_INTO, UM_TERMINAL_IN, UM_FOLLOW, UM_BOOKMARK_IT,
     UM_CONTAINING, UM_OPEN_LINE, UM_SEARCH_IN,
     UM_OPEN_IT, UM_CUT_IT, UM_COPY_IT, UM_BM_RENAME_IT, UM_BM_UP_IT, UM_BM_DOWN_IT, UM_BM_REMOVE_IT, UM_BM_EDIT_IT, UM_EJECT_IT,
@@ -344,6 +345,7 @@ static const struct { const char *label, *key, *word; UiEvent ev; char mark; } U
     [UM_SHORTCUTS] = { "Keyboard Shortcuts", "F1", "shortcuts", { UK_SHORTCUTS, 0 } },
     [UM_ABOUT] = { "About", "", "about" },
     [UM_PREFERENCES] = { "Preferences\xE2\x80\xA6", "", "preferences" },   // (ofx.conf, F10)
+    [UM_CLEAR_PREVIEWS] = { "Clear Previews\xE2\x80\xA6", "", "clear-previews" },   // (every preview in the cache, asked first: F12)
     // The right-click menus' own (F8): a folder in a tab behind (its row's middle click); the trash
     // view's Empty Trash; the folder shown's Properties, whatever is marked
     [UM_OPEN_TAB] = { "Open in New Tab", "Middle click", "open-tab" },
@@ -398,7 +400,7 @@ static const UiMenuItem UI_MENU_EDIT[] = {
 static const UiMenuItem UI_MENU_VIEW[] = {
     UM_RELOAD, UM_SEP, UM_SIDE_PLACES, UM_SIDE_TREE, UM_SIDE_NONE, UM_SEP, UM_HIDDEN, UM_PERMS_COLS, UM_GROUP_COL, UM_COLORS, UM_SHOW_MENU, UM_SEP,
     UM_SORT_NAME, UM_SORT_SIZE, UM_SORT_MTIME, UM_SORT_REVERSE, UM_SEP, UM_ZOOM_IN, UM_ZOOM_OUT, UM_ZOOM_RESET, UM_SEP,
-    UM_VIEW_LIST, UM_VIEW_ICONS,
+    UM_VIEW_LIST, UM_VIEW_ICONS, UM_SEP, UM_CLEAR_PREVIEWS,
 };
 static const UiMenuItem UI_MENU_GO[] = {
     UM_PARENT, UM_BACK, UM_FORWARD, UM_SEP, UM_HOME, UM_TRASH_VIEW, UM_SEP, UM_FIND, UM_SEARCH, UM_LOCATION, UM_TERMINAL,
@@ -691,6 +693,8 @@ typedef struct {
     // The listing shown: a folder, the trash view (F6) or a search's results (F9); gui/ says which.
     UiView view;
     bool   empty_asking;     // "Empty the trash?" up
+    bool   clear_asking;     // "Delete all N previews?" up (View → Clear Previews…, F12)
+    bool   clearing;         // gui/ says ofx-clean --all runs: Clear Previews… waits
     int    restore_n;        // "Bring back the N other windows?" up (F11 step 3): their number, 0 none
     // The search view's field's text (find's toggles apply), and search_edited when the text or a
     // toggle changed (gui/ searches again 150 ms after the last change, and clears it).
@@ -792,6 +796,7 @@ typedef enum {
     UI_ON_CANCEL,   // cancel_asking: a job's ×
     UI_ON_DELETE,   // confirming: delete for good
     UI_ON_EMPTY,    // empty_asking: Empty Trash
+    UI_ON_CLEAR,    // clear_asking: Clear Previews (F12)
     UI_ON_RESTORE,  // restore_n: the other windows after Close All (F11)
     UI_ON_CLASH,    // asking: a job waits for a clash answer
     UI_ON_PROPS,
@@ -837,6 +842,7 @@ static UiOnTop ui_on_top(const Ui *u)
     if (u->cancel_asking) return UI_ON_CANCEL;
     if (u->confirming) return UI_ON_DELETE;
     if (u->empty_asking) return UI_ON_EMPTY;
+    if (u->clear_asking) return UI_ON_CLEAR;
     if (u->restore_n > 0) return UI_ON_RESTORE;
     if (u->asking) return UI_ON_CLASH;
     static const UiOnTop OF_PANEL[] = { [UI_PANEL_NONE] = UI_ON_NONE, [UI_PANEL_PROPS] = UI_ON_PROPS, [UI_PANEL_OW] = UI_ON_OW,

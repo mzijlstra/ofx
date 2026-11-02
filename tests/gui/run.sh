@@ -441,6 +441,15 @@ printf '[Thumbnailer Entry]\nExec=%s %%i %%o\nMimeType=video/mp4;\n' "$T/tbin/co
 printf '[Thumbnailer Entry]\nExec=%s %%i %%o\nMimeType=application/pdf;\n' "$T/tbin/hang" > "$T/thumbnailers/hang.thumbnailer"
 rs f12 OFX_TEST_THUMB_RUN_MS=500 OFX_TEST_THUMBNAILERS="$T/thumbnailers" -- "$T/tree"
 if pgrep -x -f "sleep $z" > /dev/null; then echo "f12: FAILED: a hung thumbnailer outlived the window"; pkill -x -f "sleep $z"; fail=1; fi
+# f12b, the same tree and cache (step 4): Clear Previews with ofx-clean itself, a copy among the
+# fakes (the guard runs no program outside the run's folder; its own guard keeps it in there too),
+# two more files in the cache than f12's three previews.
+mkdir -p "$T/fakes" "$T/cache/thumbnails/large" "$T/cache/thumbnails/fail/ofx"
+cp -L "$here/../../build/ofx-clean" "$T/fakes/ofx-clean.real"
+printf '#!/bin/sh\nsleep 1\nexec "%s" "$@"\n' "$T/fakes/ofx-clean.real" > "$T/fakes/ofx-clean"; chmod +x "$T/fakes/ofx-clean"   # (a second's run: f12b sees the entry greyed meanwhile)
+printf 'x' > "$T/cache/thumbnails/large/0123456789abcdef0123456789abcdef.png"
+printf 'y' > "$T/cache/thumbnails/fail/ofx/0123456789abcdef0123456789abcdee.png"
+rs f12b OFX_TEST_THUMB_RUN_MS=500 OFX_TEST_THUMBNAILERS="$T/thumbnailers" -- "$T/tree"
 fi
 if want hang; then
 T=$base/hang; rm -rf "$T"; mkdir -p "$T/tree/stuck"

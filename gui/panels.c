@@ -3,7 +3,7 @@
 
 // ---- the modal panels (F5.1) --------------------------------------------------------------------
 
-typedef enum { MODAL_NONE, MODAL_DELETE, MODAL_CLASH, MODAL_CANCEL, MODAL_QUIT, MODAL_FULL, MODAL_EMPTY, MODAL_PROPS, MODAL_OW, MODAL_BM, MODAL_KEYS, MODAL_ABOUT, MODAL_BAR, MODAL_RESTORE } ModalKind;
+typedef enum { MODAL_NONE, MODAL_DELETE, MODAL_CLASH, MODAL_CANCEL, MODAL_QUIT, MODAL_FULL, MODAL_EMPTY, MODAL_CLEAR, MODAL_PROPS, MODAL_OW, MODAL_BM, MODAL_KEYS, MODAL_ABOUT, MODAL_BAR, MODAL_RESTORE } ModalKind;
 
 // The panel on top, as ui_on_top has it.
 static ModalKind modal_kind(void)
@@ -14,6 +14,7 @@ static ModalKind modal_kind(void)
     case UI_ON_CANCEL: return MODAL_CANCEL;
     case UI_ON_DELETE: return MODAL_DELETE;
     case UI_ON_EMPTY: return MODAL_EMPTY;
+    case UI_ON_CLEAR: return MODAL_CLEAR;
     case UI_ON_RESTORE: return MODAL_RESTORE;
     case UI_ON_CLASH: return jobs.asking >= 0 ? MODAL_CLASH : MODAL_NONE;
     case UI_ON_PROPS: return MODAL_PROPS;
@@ -57,13 +58,25 @@ static void modal_button(int which, const char *label, bool main_one, bool dange
 }
 
 // The panel itself, in the window's middle over the rest.
+// n with its thousands apart: 2,345,678.
+static void props_digits(char *buf, size_t cap, i64 n)
+{
+    char d[32];
+    int len = snprintf(d, sizeof d, "%lld", (long long)(n < 0 ? 0 : n)), o = 0;
+    for (int i = 0; i < len && o + 2 < (int)cap; i++) {
+        if (i && (len - i) % 3 == 0) buf[o++] = ',';
+        buf[o++] = d[i];
+    }
+    buf[o] = 0;
+}
+
 static void layout_modal_panel(ModalKind k)
 {
     Theme *t = &app.theme;
     CLAY(CLAY_ID("modal"), { .layout = { .sizing = { CLAY_SIZING_FIXED(480), CLAY_SIZING_FIT(0) }, .padding = { 24, 24, 20, 20 }, .childGap = 10,
                                          .layoutDirection = CLAY_TOP_TO_BOTTOM },
                              .backgroundColor = cc(t->bg_light),
-                             .border = { .color = k == MODAL_DELETE || k == MODAL_CANCEL || k == MODAL_QUIT || k == MODAL_EMPTY ? cc(t->red) : cc(t->accent), .width = CLAY_BORDER_OUTSIDE(1) },
+                             .border = { .color = k == MODAL_DELETE || k == MODAL_CANCEL || k == MODAL_QUIT || k == MODAL_EMPTY || k == MODAL_CLEAR ? cc(t->red) : cc(t->accent), .width = CLAY_BORDER_OUTSIDE(1) },
                              .floating = { .attachTo = CLAY_ATTACH_TO_ROOT, .zIndex = 20,
                                            .attachPoints = { CLAY_ATTACH_POINT_CENTER_CENTER, CLAY_ATTACH_POINT_CENTER_CENTER } } }) {
         if (k == MODAL_FULL || k == MODAL_QUIT || k == MODAL_CANCEL) {
@@ -119,6 +132,19 @@ static void layout_modal_panel(ModalKind k)
                                                          .childAlignment = { .x = CLAY_ALIGN_X_RIGHT }, .padding = { 0, 0, 8, 0 } } }) {
                 modal_button(UI_MODAL_NO, "Cancel", false, false);
                 modal_button(UI_MODAL_YES, "Empty Trash", true, true);
+            }
+        } else if (k == MODAL_CLEAR) {   // (F12: Michael's wording, 2026-11-02)
+            char n[32], sz[32];
+            props_digits(n, sizeof n, clear.sum.files), ui_size(sz, sizeof sz, clear.sum.bytes);
+            text(cz(!clear.counted ? "Delete all previews?" : arena_sprintf(&frame, "Delete all %s %s (%s)?", n, clear.sum.files == 1 ? "preview" : "previews", sz)), cc(t->fg));
+            if (!clear.counted) text(cz(arena_sprintf(&frame, "Counting them: %s so far", n)), cc(t->fg_dim));
+            CLAY_TEXT(CLAY_STRING("Other programs that use the preview cache (Nautilus, Nemo, GNOME apps) lose theirs too, and make them again as they need them."),
+                      { .textColor = cc(t->fg_dim), .fontSize = FONT_PX, .wrapMode = CLAY_TEXT_WRAP_WORDS });
+            text(cz("Enter or y deletes \xC2\xB7 n or Esc cancels"), cc(t->fg_dim));
+            CLAY(CLAY_ID("modal-buttons"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .childGap = 10,
+                                                         .childAlignment = { .x = CLAY_ALIGN_X_RIGHT }, .padding = { 0, 0, 8, 0 } } }) {
+                modal_button(UI_MODAL_NO, "Cancel", false, false);
+                modal_button(UI_MODAL_YES, "Delete", true, true);
             }
         } else if (k == MODAL_DELETE) {
             text(cz(arena_sprintf(&frame, "Delete %td %s for good?", app.ui.confirm_n, items(app.ui.confirm_n))), cc(t->fg));
@@ -202,17 +228,6 @@ static void props_when(char *buf, size_t cap, i64 t)
     if (!localtime_r(&tt, &tm) || !strftime(buf, cap, "%Y-%m-%d %H:%M:%S", &tm)) snprintf(buf, cap, "?");
 }
 
-// n with its thousands apart: 2,345,678.
-static void props_digits(char *buf, size_t cap, i64 n)
-{
-    char d[32];
-    int len = snprintf(d, sizeof d, "%lld", (long long)(n < 0 ? 0 : n)), o = 0;
-    for (int i = 0; i < len && o + 2 < (int)cap; i++) {
-        if (i && (len - i) % 3 == 0) buf[o++] = ',';
-        buf[o++] = d[i];
-    }
-    buf[o] = 0;
-}
 
 // The drive holding path: the drive place with the longest path above it.
 static const char *props_drive(const char *path)

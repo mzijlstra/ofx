@@ -716,6 +716,7 @@ static void act(UiAction a)
         if (a.index >= 0 && a.index < app.places.n && place_ejectable(&app.places.p[a.index])) eject_start(&app.places.p[a.index]);
         break;
     case UA_EMPTY_TRASH: trash_empty(); break;
+    case UA_CLEAR_PREVIEWS: clear_start(); break;
     case UA_NOT_IN_TRASH: set_status(true, "That doesn't work in the trash: restore it first"); break;
     case UA_NOT_IN_SEARCH: set_status(true, "A search isn't a folder: that works in one"); break;
     case UA_SEARCH: {   // below the folder shown, or (all) a folder entry's (F9)

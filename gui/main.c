@@ -408,6 +408,7 @@ void __wrap_glfwDefaultWindowHints(void)
 
 #include "remember.c"
 #include "folder.c"
+#include "clear.c"     // (before actions.c, which runs it)
 #include "actions.c"
 #include "restore.c"
 #include "prefs.c"
@@ -477,7 +478,7 @@ static void quit_workers(void)
     jobs_quit(), clip_quit(), count_quit(), walk_quit(), search_quit(), thumbs_quit(), space_quit();
     struct timespec until = deadline_in(QUIT_WAIT_MS), jobs_until = deadline_in(QUIT_JOBS_MS);
     count_join(&until), walk_join(&until), search_join(&until), thumbs_join(&until), space_join(&until);
-    jobs_join(&jobs_until);
+    jobs_join(&jobs_until), clear_join(&until);
     clip_close();
 }
 
@@ -765,6 +766,7 @@ int main(int argc, char **argv)
         if (eject_take()) dirty = true;
         if (props.walking && walk_take(&props.sum, &props.done)) dirty = true;
         if (props.walking && app.ui.panel != UI_PANEL_PROPS) walk_ask(NULL, 0), props.walking = false;   // the panel closed: the count stops
+        if (clear_poll()) dirty = true;
         if (thumbs_take()) dirty = true;
         if (app.ui.view == UI_VIEW_SEARCH && search_take()) search_relist(), dirty = true;
         if (app.search_due && now_ms() >= app.search_due) app.search_due = 0, search_retype(), dirty = true;

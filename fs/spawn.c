@@ -75,6 +75,35 @@ static bool spawn_detached(char *const *argv, Err *err)
     return true;
 }
 
+// As spawn_detached, with the child's output on a pipe: its read end into *out (the caller reads it
+// to its end, which is the child's, and closes it). For ofx-clean --all (View → Clear Previews…,
+// F12): the kernel reaps the child (spawn_init), so its end and its summary come this way.
+static bool spawn_piped(char *const *argv, int *out, Err *err)
+{
+    int p[2];
+    if (!ops_program_allowed(argv[0], err)) return false;
+    if (pipe2(p, O_CLOEXEC) != 0) return err_set(err, "a pipe: %s", strerror(errno)), false;
+    posix_spawnattr_t attr;
+    posix_spawn_file_actions_t fa;
+    posix_spawnattr_init(&attr);
+    sigset_t none;
+    sigemptyset(&none);
+    posix_spawnattr_setsigmask(&attr, &none);
+    posix_spawnattr_setflags(&attr, POSIX_SPAWN_SETSID | POSIX_SPAWN_SETSIGMASK);
+    posix_spawn_file_actions_init(&fa);
+    posix_spawn_file_actions_addopen(&fa, 0, "/dev/null", O_RDONLY, 0);
+    posix_spawn_file_actions_adddup2(&fa, p[1], 1);   // (dup2 drops O_CLOEXEC on 1)
+    pid_t pid;
+    int rc = posix_spawnp(&pid, argv[0], &fa, &attr, argv, environ);
+    posix_spawn_file_actions_destroy(&fa);
+    posix_spawnattr_destroy(&attr);
+    close(p[1]);
+    if (rc != 0) return close(p[0]), err_set(err, "%s: %s", argv[0], strerror(rc)), false;
+    spawn_started++;
+    *out = p[0];
+    return true;
+}
+
 // Through uwsm-app when it is there, as Omarchy launches apps (each in its own systemd scope).
 enum { SPAWN_FILES_MAX = 256 };   // files in one launch (F7.3); more go in further launches
 

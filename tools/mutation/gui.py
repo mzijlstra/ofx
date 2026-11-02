@@ -490,6 +490,16 @@ MUTANTS = [
     ('gui/files.c', '            if (app.ui.group_col) info_cell(CLAY_IDI("group", r)', '            info_cell(CLAY_IDI("group", r)', 'f8'),
     # ---- quit doesn't wait for a hung drive (2026-10-26: no mutant was hang's or f6b's alone)
     (G, '    if (pthread_timedjoin_np(t, NULL, until) != 0) pthread_detach(t);', '    pthread_join(t, NULL);', 'hang'),   # (join_by: every worker's stop)
+    # ---- Clear Previews (F12 step 4): counted, run, its end taken
+    ('gui/clear.c', '        if (thumbs.root[0]) walk_ask(roots, 1);', '        if (false) walk_ask(roots, 1);', 'f12'),
+    ('gui/clear.c', '    if (clear.counting && !app.ui.clear_asking) walk_ask(NULL, 0), clear.counting = false;\n', '', 'f12'),
+    ('gui/clear.c', '    if (clear.counting && walk_take(&clear.sum, &clear.counted)) dirty = true;', '    if (false && walk_take(&clear.sum, &clear.counted)) dirty = true;', 'f12'),
+    ('gui/clear.c', '        thumbs_reset();   // (held ones dropped; those drawn are asked for again)\n', '', 'f12'),
+    ('gui/clear.c', '    app.ui.clearing = clear.running;\n', '', 'f12'),
+    ('gui/clear.c', '    char *argv[] = { prog, "--all", NULL };', '    char *argv[] = { prog, NULL };', 'f12'),
+    ('gui/actions.c', '    case UA_CLEAR_PREVIEWS: clear_start(); break;\n', '', 'f12'),
+    ('fs/spawn.c', '    posix_spawn_file_actions_adddup2(&fa, p[1], 1);   // (dup2 drops O_CLOEXEC on 1)\n', '', 'f12'),
+    ('gui/clear.c', '        else set_status(strstr(say, "failed") != NULL, "Previews: %s", say);', '        else set_status(true, "Previews: %s", say);', 'f12'),
     # ---- the system's thumbnailers (F12 step 3): asked for, and ofx.conf's line
     ('gui/thumbs.c', '        if (kind == TK_NONE && thumbs.exec_on && (exec = thumbers_find(&thumbers, mime))) kind = TK_EXEC;', '        if (kind == TK_NONE && (exec = thumbers_find(&thumbers, mime))) kind = TK_EXEC;', 'f12'),
     ('gui/thumbs.c', '        if (kind == TK_NONE && thumbs.exec_on && (exec = thumbers_find(&thumbers, mime))) kind = TK_EXEC;', '        if (kind == TK_NONE && thumbs.exec_on && (exec = thumbers_find(&thumbers, mime))) kind = TK_NONE;', 'f12'),
@@ -852,7 +862,7 @@ for m in MUTANTS:
 # Each worker its own copy of the repo and its own build; the scripts run from the copy, so the
 # repo can be edited meanwhile.
 # vkbd (the test sway's keyboard, run-script.sh puts it on PATH) is built once here; no mutant touches it.
-subprocess.run(['make', '-s', '-C', root, 'build/vkbd'], check=True)
+subprocess.run(['make', '-s', '-C', root, 'build/vkbd', 'build/ofx-clean'], check=True)   # (ofx-clean: f12b's Clear Previews runs it)
 def make_work(w):
     work = os.path.join(scratch, f'gui-mut-src-{w}')
     shutil.rmtree(work, ignore_errors=True)
@@ -860,6 +870,7 @@ def make_work(w):
     os.makedirs(os.path.join(work, 'build'))
     os.symlink(os.path.join(root, 'build', 'raylib'), os.path.join(work, 'build', 'raylib'))
     os.symlink(os.path.join(root, 'build', 'vkbd'), os.path.join(work, 'build', 'vkbd'))
+    os.symlink(os.path.join(root, 'build', 'ofx-clean'), os.path.join(work, 'build', 'ofx-clean'))
     return work
 works = [make_work(w) for w in range(jobs)]
 for f, old, new, *_ in MUTANTS:

@@ -2,6 +2,9 @@
 // systemd user timer. Nothing else cleans ~/.cache/thumbnails here (Nemo doesn't), and on
 // 2026-10-25 258 MiB of its 362 were previews of files that are gone.
 //
+// ofx-clean --all (View → Clear Previews…, F12) deletes every file of those names, and the run
+// folders, whatever their age: the rules aside.
+//
 // ofx's own leftovers go after a day: a temporary file (thumb_write's), a thumbnailer's run folder
 // in the root (thumb_exec's).
 //
@@ -25,9 +28,9 @@
 
 #define CLEAN_TMP_S    86400LL   // ofx's own temporary file, left by a crash, after a day
 
-typedef enum { CR_KEEP, CR_TEMP, CR_UNUSED, CR_ORPHAN, CR_STALE, CR_CAP, CR_N } CleanRule;
+typedef enum { CR_KEEP, CR_TEMP, CR_UNUSED, CR_ORPHAN, CR_STALE, CR_CAP, CR_ALL, CR_N } CleanRule;
 
-static const char *const clean_rule_names[CR_N] = { "kept", "temp", "unused", "orphan", "stale", "cap" };
+static const char *const clean_rule_names[CR_N] = { "kept", "temp", "unused", "orphan", "stale", "cap", "all" };
 
 typedef struct {
     i64  now;       // seconds
@@ -35,6 +38,7 @@ typedef struct {
     bool orphans;   // the second rule
     i64  cap;       // bytes; 0: no cap
     bool dry;    // list, delete nothing
+    bool all;    // every file of the cache's (ofx-clean --all, View → Clear Previews…, F12): the rules aside
     void (*say)(void *ctx, CleanRule r, const char *path, i64 size);   // each delete (or would-be one)
     void *ctx;
 } CleanOpts;
@@ -282,7 +286,7 @@ static void clean_runs(int rfd, const char *root, const CleanOpts *o, CleanStats
     for (struct dirent *e; (e = readdir(d));) {
         struct stat st;
         if (!clean_run_name(e->d_name) || fstatat(rfd, e->d_name, &st, AT_SYMLINK_NOFOLLOW) != 0 || !S_ISDIR(st.st_mode) ||
-            o->now - st.st_mtim.tv_sec <= CLEAN_TMP_S)
+            (!o->all && o->now - st.st_mtim.tv_sec <= CLEAN_TMP_S))
             continue;
         char path[PATH_MAX];
         Err err;
@@ -367,7 +371,8 @@ static void clean_run(Arena *a, const char *root, Str mountinfo, const CleanOpts
     i64 total = 0;
     for (isize i = 0; i < nf; i++) {
         CleanFile *f = &files[i];
-        CleanRule r = f->temp ? (o->now - f->mtime > CLEAN_TMP_S ? CR_TEMP : CR_KEEP)
+        CleanRule r = o->all ? CR_ALL
+                    : f->temp ? (o->now - f->mtime > CLEAN_TMP_S ? CR_TEMP : CR_KEEP)
                     : o->unused_s > 0 && o->now - f->atime > o->unused_s ? CR_UNUSED
                     : o->orphans ? clean_judge(a, &ms, fds[f->dir], f->name) : CR_KEEP;
         if (r != CR_KEEP) {

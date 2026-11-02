@@ -809,7 +809,7 @@ MUTANTS += [
     (CL, "            if ((!temp && !clean_name(d->d_name)) || fstatat(", "            if (fstatat("),
     (CL, "fstatat(fds[i], d->d_name, &st, AT_SYMLINK_NOFOLLOW) != 0 || !S_ISREG(st.st_mode)) continue;", "fstatat(fds[i], d->d_name, &st, 0) != 0 || !S_ISREG(st.st_mode)) continue;"),
     (CL, "fstatat(fds[i], d->d_name, &st, AT_SYMLINK_NOFOLLOW) != 0 || !S_ISREG(st.st_mode)) continue;", "fstatat(fds[i], d->d_name, &st, AT_SYMLINK_NOFOLLOW) != 0) continue;"),
-    (CL, "        CleanRule r = f->temp ? (o->now - f->mtime > CLEAN_TMP_S ? CR_TEMP : CR_KEEP)", "        CleanRule r = f->temp ? (o->now - f->atime > CLEAN_TMP_S ? CR_TEMP : CR_KEEP)"),
+    (CL, '                    : f->temp ? (o->now - f->mtime > CLEAN_TMP_S ? CR_TEMP : CR_KEEP)', '                    : f->temp ? (o->now - f->atime > CLEAN_TMP_S ? CR_TEMP : CR_KEEP)'),
     (CL, "                    : o->unused_s > 0 && o->now - f->atime > o->unused_s ? CR_UNUSED", "                    : o->unused_s > 0 && o->now - f->mtime > o->unused_s ? CR_UNUSED"),
     (CL, "        files[kept++] = *f, total += f->size;", "        files[kept++] = *f;"),
     # Not a mutant: `total >= o->cap` on the outer test is equivalent, the loop's own test deletes
@@ -2155,7 +2155,7 @@ MUTANTS += [
 ]
 MUTANTS += [
     # F10 review step 4: every launch through the test guard (2026-11-01)
-    ('fs/spawn.c', '    if (!ops_program_allowed(argv[0], err)) return false;\n', ''),
+    ('fs/spawn.c', '    if (!ops_program_allowed(argv[0], err)) return false;\n    posix_spawnattr_t attr;', '    posix_spawnattr_t attr;'),
     ('fs/ops.c', "    bool found = strchr(prog, '/') ? snprintf(full, sizeof full, \"%s\", prog) < (int)sizeof full : path_find(prog, full, sizeof full);", '    bool found = path_find(prog, full, sizeof full);'),
 ]
 # ---- F11 step 1: per-folder view, zoom, sort; Show Hidden; the cursor; housekeeping (2026-11-01)
@@ -2241,7 +2241,7 @@ MUTANTS += [
     (CF, '{ "restore-tabs", CK_BOOL, offsetof(Conf, restore_tabs), "off",', '{ "restore-tabs", CK_BOOL, offsetof(Conf, sort_rev), "off",'),
     ('ui/ui.c', '    if (u->restore_n > 0) return UI_ON_RESTORE;\n', ''),
     ('ui/prompts.c', 'u->restore_n = 0; return (UiAction){ UA_RESTORE_WINDOWS, 0, yes };', 'u->restore_n = 0; return (UiAction){ UA_RESTORE_WINDOWS, 0, true };'),
-    ('ui/prompts.c', ' || on == UI_ON_RESTORE;', ';'),
+    ('ui/prompts.c', ' || on == UI_ON_RESTORE || on == UI_ON_CLEAR;', ' || on == UI_ON_CLEAR;'),
 ]
 MUTANTS += [
     # F11 milestone review, step 1 (2026-11-02)
@@ -2343,9 +2343,9 @@ MUTANTS += [
     (TH, '        if (g == TG_NONE) return TG_NONE;\n', ''),
     (TH, '        got = r != TR_ENDED ? TG_NONE : png.len', '        got = r == TR_NOT_RUN ? TG_NONE : png.len'),
     ('fs/clean.c', '    clean_runs(rfd, root, o, s);\n', ''),
-    ('fs/clean.c', '            o->now - st.st_mtim.tv_sec <= CLEAN_TMP_S)', '            o->now - st.st_mtim.tv_sec < 0)'),
+    ('fs/clean.c', '            (!o->all && o->now - st.st_mtim.tv_sec <= CLEAN_TMP_S))', '            (!o->all && o->now - st.st_mtim.tv_sec < 0))'),
     ('fs/clean.c', '        if (!clean_run_name(e->d_name) || fstatat', '        if (fstatat'),
-    ('fs/clean.c', '!S_ISDIR(st.st_mode) ||\n            o->now', 'false ||\n            o->now'),
+    ('fs/clean.c', '!S_ISDIR(st.st_mode) ||\n            (!o->all', 'false ||\n            (!o->all'),
     ('fs/clean.c', '        if (!o->dry) {\n            if (!ops_allowed(path, &err)) {', '        if (true) {\n            if (!ops_allowed(path, &err)) {'),
     ('fs/clean.c', '                if (strcmp(f->d_name, ".") != 0 && strcmp(f->d_name, "..") != 0) unlinkat(dirfd(in), f->d_name, 0);\n', ''),
     ('fs/clean.c', '        s->n[CR_TEMP]++;\n        if (o->say) o->say(o->ctx, CR_TEMP, path, 0);', '        if (o->say) o->say(o->ctx, CR_TEMP, path, 0);'),
@@ -2353,4 +2353,14 @@ MUTANTS += [
     ('fs/clean.c', "        if (p == d || p - d > 10 || *p != (part ? 0 : '-')) return false;", "        if (p - d > 10 || *p != (part ? 0 : '-')) return false;"),
     ('fs/clean.c', '    if (strncmp(n, ".ofx-run-", 9) != 0) return false;\n', ''),
     ('fs/thumbers.c', '        if (!path_find("bwrap", bw, sizeof bw)) return TR_NOT_RUN;\n', ''),
+    # ---- Clear Previews (F12 step 4)
+    ('fs/clean.c', '        CleanRule r = o->all ? CR_ALL', '        CleanRule r = false ? CR_ALL'),
+    ('fs/clean.c', '            (!o->all && o->now - st.st_mtim.tv_sec <= CLEAN_TMP_S))', '            (o->now - st.st_mtim.tv_sec <= CLEAN_TMP_S))'),
+    ('ui/menus.c', '    case UM_CLEAR_PREVIEWS: return !u->clearing;', '    case UM_CLEAR_PREVIEWS: return true;'),
+    ('ui/menus.c', '    case UM_CLEAR_PREVIEWS: return u->clear_asking = true, (UiAction){ UA_NONE, 0, false };', '    case UM_CLEAR_PREVIEWS: return (UiAction){ UA_NONE, 0, false };'),
+    ('ui/prompts.c', '    case UI_ON_CLEAR: u->clear_asking = false; return (UiAction){ yes ? UA_CLEAR_PREVIEWS : UA_NONE, 0, false };', '    case UI_ON_CLEAR: u->clear_asking = false; return (UiAction){ UA_CLEAR_PREVIEWS, 0, false };'),
+    ('ui/prompts.c', '    case UI_ON_CLEAR: u->clear_asking = false; return (UiAction){ yes ? UA_CLEAR_PREVIEWS : UA_NONE, 0, false };', '    case UI_ON_CLEAR: return (UiAction){ yes ? UA_CLEAR_PREVIEWS : UA_NONE, 0, false };'),
+    ('ui/ui.c', '    if (u->clear_asking) return UI_ON_CLEAR;\n', ''),
+    ('ui/handle.c', ' case UI_ON_RESTORE: case UI_ON_CLEAR:\n', ' case UI_ON_RESTORE:\n'),
+    ('ui/ui.c', '    UM_VIEW_LIST, UM_VIEW_ICONS, UM_SEP, UM_CLEAR_PREVIEWS,\n};', '    UM_VIEW_LIST, UM_VIEW_ICONS,\n};'),
 ]

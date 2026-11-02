@@ -35,5 +35,21 @@ printf 'clean-unused-days = 100\n' > "$T/config/ofx/ofx.conf"
 run
 check out " 1 unused" "100 days"
 [ -e "$old" ] && { echo "clean: not deleted at 100 days"; fails=$((fails + 1)); }
+# --all (F12): every preview, a failure entry and a temporary file, however new, clean = off aside;
+# --dry-run with it only counts
+mkdir -p "$T/cache/thumbnails/large" "$T/cache/thumbnails/fail/ofx"
+printf 'x' > "$T/cache/thumbnails/large/0123456789abcdef0123456789abcdef.png"
+printf 'yy' > "$T/cache/thumbnails/fail/ofx/0123456789abcdef0123456789abcdee.png"
+printf 'z' > "$T/cache/thumbnails/large/.ofx-1-2.png"
+printf 'keep' > "$T/cache/thumbnails/large/notes.txt"
+printf 'clean = off\n' > "$T/config/ofx/ofx.conf"
+run --dry-run --all
+check out "ofx-clean --all --dry-run: $T/cache/thumbnails: 3 would go" "all, dry"
+[ -e "$T/cache/thumbnails/large/0123456789abcdef0123456789abcdef.png" ] || { echo "clean: --all --dry-run deleted"; fails=$((fails + 1)); }
+run --all
+check out "ofx-clean --all: $T/cache/thumbnails: 3 deleted" "all"
+[ "$(find "$T/cache/thumbnails" -type f)" = "$T/cache/thumbnails/large/notes.txt" ] || { echo "clean: --all left: $(find "$T/cache/thumbnails" -type f)"; fails=$((fails + 1)); }
+run --all --all
+[ $? = 2 ] || { echo "clean: --all twice wasn't refused"; fails=$((fails + 1)); }
 echo "clean: $fails failed"
 [ "$fails" = 0 ]

@@ -140,7 +140,7 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
     case UI_ON_FULL:
         if (in->modal == UI_MODAL_OK || in->nev > 0) return u->full_told = false, (UiAction){ UA_NONE, 0, false };
         break;
-    case UI_ON_QUIT: case UI_ON_CANCEL: case UI_ON_DELETE: case UI_ON_EMPTY: case UI_ON_RESTORE:
+    case UI_ON_QUIT: case UI_ON_CANCEL: case UI_ON_DELETE: case UI_ON_EMPTY: case UI_ON_RESTORE: case UI_ON_CLEAR:
         if (yes_no) return ui_answer(u, ui_on_top(u), said_yes);
         break;
     default: break;

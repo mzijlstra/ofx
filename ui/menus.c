@@ -96,6 +96,7 @@ static bool ui_menu_enabled(const Ui *u, UiMenuItem it)
     case UM_ADD_BOOKMARK: return u->can_bookmark && ui_view_allows(u->view, UA_ADD_BOOKMARK);
     case UM_BM_0: case UM_BM_1: case UM_BM_2: case UM_BM_3: case UM_BM_4: case UM_BM_5: case UM_BM_6: case UM_BM_7: return true;
     case UM_EDIT_BOOKMARKS: case UM_BM_MORE: case UM_SHORTCUTS: case UM_ABOUT: case UM_PREFERENCES: return true;
+    case UM_CLEAR_PREVIEWS: return !u->clearing;
     case UM_TAB_LEFT: return u->tab_at > 0;
     case UM_TAB_RIGHT: return u->tab_at < u->tab_n - 1;
     case UM_TAB_OTHERS: return u->tab_n > 1;
@@ -226,6 +227,7 @@ static UiAction ui_menu_pick(Ui *u, UiMenuItem it)
     case UM_OPEN_WITH: return ui_ow_open(u);
     case UM_ABOUT: return u->panel = UI_PANEL_ABOUT, (UiAction){ UA_NONE, 0, false };
     case UM_PREFERENCES: return (UiAction){ UA_PREFERENCES, 0, false };
+    case UM_CLEAR_PREVIEWS: return u->clear_asking = true, (UiAction){ UA_NONE, 0, false };   // (gui/ counts them as it opens)
     case UM_OPEN_TAB: return (UiAction){ UA_TAB_BG_ROW, u->list.sel, false };
     case UM_TAB_OTHERS: return (UiAction){ UA_TAB_OTHERS, 0, false };
     case UM_TAB_REOPEN: return (UiAction){ UA_TAB_REOPEN, 0, false };

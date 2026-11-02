@@ -421,6 +421,68 @@ static void test_clean_runs(void)
     CHECK(st.n[CR_TEMP] == 1 && st.failed == 1 && access(at("f12/cleancache/thumbnails/.ofx-run-12-3"), F_OK) != 0);   // (7-8: its folder stays)
     CHECK(strcmp(slurp(keep), "mine") == 0 && access(at("f12/cleancache/thumbnails/.ofx-run-12-4/out.png"), F_OK) == 0);
     CHECK(access(at("f12/cleancache/thumbnails/.ofx-run-x"), F_OK) == 0 && access(at("f12/cleancache/thumbnails/.ofx-run-5-6"), F_OK) == 0);
+    // all (ofx-clean --all, F12 step 4): every file of the cache's, a new run folder too, however new;
+    // a file of another name stays.
+    put(at("f12/cleancache/thumbnails/normal/0123456789abcdef0123456789abcdef.png"), "new");
+    put(at("f12/cleancache/thumbnails/fail/ofx/0123456789abcdef0123456789abcdee.png"), "f");
+    put(at("f12/cleancache/thumbnails/normal/.ofx-9-9.png"), "t");
+    put(at("f12/cleancache/thumbnails/normal/notes.txt"), "mine");
+    o.all = true, o.dry = true;
+    clean_run(&a, cache, S("1 0 0:1 / / rw - ext4 a rw\n"), &o, &st);
+    CHECK(st.n[CR_ALL] == 3 && st.n[CR_TEMP] == 2 && st.n[CR_KEEP] == 0 && access(at("f12/cleancache/thumbnails/normal/.ofx-9-9.png"), F_OK) == 0);   // (temp: 12-4's and 7-8's folders)
+    o.dry = false;
+    clean_run(&a, cache, S("1 0 0:1 / / rw - ext4 a rw\n"), &o, &st);
+    CHECK(st.n[CR_ALL] == 3 && access(at("f12/cleancache/thumbnails/normal/0123456789abcdef0123456789abcdef.png"), F_OK) != 0 &&
+          access(at("f12/cleancache/thumbnails/fail/ofx/0123456789abcdef0123456789abcdee.png"), F_OK) != 0 &&
+          access(at("f12/cleancache/thumbnails/.ofx-run-12-4"), F_OK) != 0 && access(at("f12/cleancache/thumbnails/normal/notes.txt"), F_OK) == 0);
     CHECK(clean_run_name(".ofx-run-1-2") && !clean_run_name(".ofx-run-1-") && !clean_run_name(".ofx-run--2") && !clean_run_name(".ofx-run-1-2x") &&
           !clean_run_name(".ofx-run-12345678901-2") && !clean_run_name(".ofx-1-2"));
+}
+
+// View → Clear Previews… (F12 step 4): the question opens, on top of the panels and under the other
+// questions; Enter, Shift+Enter, y and its Delete button say yes (UA_CLEAR_PREVIEWS), Esc, n and
+// Cancel no; while gui/ says one runs, the entry is greyed.
+static int view_at(UiMenuItem it)
+{
+    for (int i = 0; i < UI_MENU[2].n; i++)
+        if (UI_MENU[2].items[i] == it) return i;
+    return -1;
+}
+
+static void test_clear_question(void)
+{
+    UiNames names = { name_at, NULL, NULL };
+    Ui u = menu_ui(3);
+    CHECK(view_at(UM_CLEAR_PREVIEWS) == UI_MENU[2].n - 1 && UI_MENU[2].items[UI_MENU[2].n - 2] == UM_SEP);   // (View's last, after a line)
+    UiInput in = ui_input_none();
+    u.menu_on = true, u.menu = 2, in.menu_item = view_at(UM_CLEAR_PREVIEWS);
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.clear_asking && !u.menu_on && ui_on_top(&u) == UI_ON_CLEAR);
+    const int no[] = { UK_ESC, 0x100 + 'n', 0x100 + 'N' }, yes[] = { UK_ENTER, UK_SHIFT_ENTER, 0x100 + 'y' };
+    for (int k = 0; k < 3; k++) {
+        u.clear_asking = true;
+        CHECK(menu_keys(&u, 1, no[k]).kind == UA_NONE && !u.clear_asking);
+        u.clear_asking = true;
+        CHECK(menu_keys(&u, 1, yes[k]).kind == UA_CLEAR_PREVIEWS && !u.clear_asking);
+    }
+    // Another key leaves it up and does nothing (no terminal behind it).
+    u.clear_asking = true;
+    CHECK(menu_keys(&u, 2, 0x100 + 't', UK_DOWN).kind == UA_NONE && u.clear_asking && u.list.sel == 0);
+    // The buttons.
+    in = ui_input_none(), in.modal = UI_MODAL_NO;
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && !u.clear_asking);
+    u.clear_asking = true;
+    in = ui_input_none(), in.modal = UI_MODAL_YES;
+    CHECK(ui_handle(&u, names, &in).kind == UA_CLEAR_PREVIEWS && !u.clear_asking);
+    // Its place: over a panel, under Empty Trash's question.
+    u.clear_asking = true, u.panel = UI_PANEL_KEYS;
+    CHECK(ui_on_top(&u) == UI_ON_CLEAR);
+    u.empty_asking = true;
+    CHECK(ui_on_top(&u) == UI_ON_EMPTY);
+    u.empty_asking = u.clear_asking = false, u.panel = UI_PANEL_NONE;
+    // While one runs, greyed: picking it does nothing.
+    u.clearing = true;
+    CHECK(!ui_menu_enabled(&u, UM_CLEAR_PREVIEWS));
+    in = ui_input_none(), u.menu_on = true, u.menu = 2, in.menu_item = view_at(UM_CLEAR_PREVIEWS);
+    ui_handle(&u, names, &in);
+    CHECK(!u.clear_asking);
 }
