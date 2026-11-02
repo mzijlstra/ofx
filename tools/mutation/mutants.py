@@ -884,10 +884,6 @@ MUTANTS += [
     (N, "            if (lstat(it->to, &st) != 0 || !S_ISREG(st.st_mode)) return err_set(err, \"%s isn't a file now: can't undo\", it->to), false;", ""),
     (N, "        case UNDO_MKFILE: one = ops_allowed(it->to, &e) && (unlink", "        case UNDO_MKFILE: one = (unlink"),
     (N, "|| u->kind == UNDO_MKDIR || u->kind == UNDO_MKFILE || u->kind == UNDO_CHMOD) snprintf", "|| u->kind == UNDO_MKDIR || u->kind == UNDO_CHMOD) snprintf"),
-    (ST, "        if (mine && put) continue;   // a key said twice: once", ""),
-    (ST, "        bool mine = eq >= 0 && str_eq(str_trim(str_cut(line, 0, eq)), k);", "        bool mine = eq >= 0 && str_starts_with(line, k);"),
-    (ST, "        else if (line.len) memcpy(", "        else memcpy("),
-    (ST, "    if (!put) n += snprintf(body + n, (size_t)(cap - n), \"%s=%s\\n\", key, value);", ""),
     (SP, "    if (strchr(argv[0], '/') ? access(argv[0], X_OK) != 0 : !on_path(argv[0]))", "    if (!on_path(argv[0]))"),
     (SP, "    if (strchr(argv[0], '/') ? access(argv[0], X_OK) != 0 : !on_path(argv[0]))", "    if (strchr(argv[0], '/') ? false : !on_path(argv[0]))"),
     (W, "    if (t && t[0] == '/') n = snprintf(out, cap, \"%s\", t);", "    if (t && t[0]) n = snprintf(out, cap, \"%s\", t);"),
@@ -2133,9 +2129,6 @@ MUTANTS += [
 # ---- F11 step 1: per-folder view, zoom, sort; Show Hidden; the cursor; housekeeping (2026-11-01)
 FO = 'fs/folders.c'
 MUTANTS += [
-    (FO, " || (path[0] != '/' && strcmp(path, TRASH_URI) != 0)) continue;", ') continue;'),
-    (FO, " || (path[0] != '/' && strcmp(path, TRASH_URI) != 0)) continue;", " || path[0] != '/') continue;"),
-    (FO, "        if (!w[6].len || !percent_decode(w[0], path, sizeof path) ||", "        if (!percent_decode(w[0], path, sizeof path) ||"),
     (FO, '        if (str_eq(w[2], S("icons"))) f->view = 1;', '        if (str_eq(w[2], S("icons"))) f->view = 0;'),
     (FO, '        if (str_eq(w[5], S("on"))) f->rev = 1;', '        if (str_eq(w[5], S("on"))) f->rev = 0;'),
     (FO, '        if (str_eq(w[5], S("off"))) f->rev = 0;\n', ''),
@@ -2159,8 +2152,6 @@ MUTANTS += [
     (FO, '        if (m->changed & FP_SORT) f->sort = m->sort;\n', ''),
     (FO, '        if (m->changed & FP_SEL) f->sel = m->sel ? folder_str(a, str_from_c(m->sel)) : NULL;\n', ''),
     (FO, '        if ((m->changed & FP_AT) && m->at > f->at) f->at = m->at;', '        if (m->changed & FP_AT) f->at = m->at;'),
-    (FO, '        if (line.len && !str_starts_with(line, S("folder "))) memcpy', '        if (line.len) memcpy'),
-    (FO, '    if (ok) *mine = t;', '    (void)0;'),
     (FO, '        if (mask & FP_VIEW) f->view = -1;\n', ''),
     (FO, '        f->changed |= mask, n++;', '        n++;'),
     (FO, '        if (!had) continue;\n', ''),
@@ -2182,9 +2173,6 @@ MUTANTS += [
 MUTANTS += [
     ('fs/state.c', '    if (text->len == 0 && stat(path, &st) == 0 && st.st_size > 0) return err_set', '    if (false) return err_set'),
     ('fs/state.c', '    if (fd >= 0 && flock(fd, LOCK_EX) != 0) close(fd), fd = -1;', '    if (fd >= 0 && 0) close(fd), fd = -1;'),
-    ('fs/state.c', '    int lock = state_lock(path);\n    if (!state_read(scratch, path, &text, err))', '    int lock = -1;\n    if (!state_read(scratch, path, &text, err))'),
-    ('fs/folders.c', '    int lock = state_lock(path);', '    int lock = -1;'),
-    ('fs/folders.c', '    if (!state_read(a, path, &text, err)) return state_unlock(lock), false;', '    state_read(a, path, &text, err);'),
     ('fs/thumb.c', '"lustre", "fuse", "autofs" };', '"lustre", "fuse" };'),
 ]
 MUTANTS += [
@@ -2203,17 +2191,10 @@ MUTANTS += [
     # Not a mutant: percent_encode's false ignored in session_line (a folder cut short there leaves k
     # past cap - 1, which the check after the loop refuses).
     (SE, '    if (k <= 0 || (size_t)k + 1 >= cap) return 0;', '    if (k <= 0) return 0;'),
-    (SE, '            (session_mine(&w, id, me) || (key && w.id == key->id && w.at == key->at) ||', '            ((key && w.id == key->id && w.at == key->at) ||'),
-    (SE, '            (session_mine(&w, id, me) || (key && w.id == key->id && w.at == key->at) ||', '            (session_mine(&w, id, me) || (key && w.id == key->id) ||'),
-    (SE, '             (!session_alive(&w, boot) && !session_kept(', '             (!session_kept('),
     (SE, ' && !session_alive(&w, boot) && (w.at > at || (w.at == at && here > self))) newer++;', ' && (w.at > at || (w.at == at && here > self))) newer++;'),
-    (SE, ' && !mine.open;   // (a running', ';   // (a running'),
     (SE, '    return w->open && boot && strcmp(w->live.boot, boot) == 0 && win_started((pid_t)w->id) == w->live.start;', '    return w->open && boot && strcmp(w->live.boot, boot) == 0;'),
     (SE, '    return w->open && boot && strcmp(w->live.boot, boot) == 0 && win_started((pid_t)w->id) == w->live.start;', '    return w->open && boot && win_started((pid_t)w->id) == w->live.start;'),
     (SE, '    return me && w->open && w->id == id && strcmp(w->live.boot, me->boot) == 0 && w->live.start == me->start;', '    return me && w->open && w->id == id;'),
-    (SE, 'if (session_parse_line(NULL, l, &c) && !session_alive(&c, boot) && (id ?', 'if (session_parse_line(NULL, l, &c) && (id ?'),
-    (SE, 'if (*nrest < cap && session_parse_line(NULL, l, &c) && !session_alive(&c, boot)) rest', 'if (*nrest < cap && session_parse_line(NULL, l, &c)) rest'),
-    (SE, 'rest[(*nrest)++] = (SessionKey){ c.id, c.at, c.open };', 'rest[(*nrest)++] = (SessionKey){ c.id, c.at, false };'),
     # Not a mutant: `else if (!str_eq(how, "closed"))` as `else` ("closed" read again as a first
     # folder is skipped: not an absolute path).
     (SE, '        if (c < 1 || c >= (isize)sizeof w->live.boot || start < 0) return false;', '        if (start < 0) return false;'),
@@ -2221,12 +2202,6 @@ MUTANTS += [
     (SE, '    int newer = extra && extra_at >= at;', '    int newer = 0;'),
     (SE, '    int newer = extra && extra_at >= at;', '    int newer = extra && extra_at > at;'),
     (SE, ' && (w.at > at || (w.at == at && here > self))) newer++;', ' && w.at > at) newer++;'),
-    (SE, '(id ? c.id == id && (!found || c.at > w->at) : !found || c.at > w->at)', '(id ? c.id == id : !found || c.at > w->at)'),
-    (SE, '(id ? c.id == id && (!found || c.at > w->at) : !found || c.at > w->at)', '(id ? c.id == id && (!found || c.at > w->at) : !found)'),
-    (SE, '(id ? c.id == id && (!found || c.at > w->at) : !found || c.at > w->at)', '(!found || c.at > w->at)'),
-    (SE, '        if (!l.len || (isize)(l.p - text.p) == pick) continue;', '        if (!l.len) continue;'),
-    (SE, 'if (*nrest < cap && session_parse_line(NULL, l, &c) && !session_alive(&c, boot)) rest', 'if (session_parse_line(NULL, l, &c) && !session_alive(&c, boot)) rest'),
-    (SE, '    if (line) memcpy(body + n, line, strlen(line)), n += (isize)strlen(line);', '    (void)line;'),
 
 
 
@@ -2241,7 +2216,6 @@ MUTANTS += [
     (CL, '    if (ms->unknown) return false;   // (no mount list', '    // (no mount list'),
     (CL, '        if (!p) return (CleanMounts){ NULL, 0, true };', '        if (!p) return ms;'),
     (SE, '        const char *s = a ? folder_str(a, str_from_c(p)) : "";', '        const char *s = "";'),
-    (SE, '        found = session_parse_line(a, str_cut(text, pick, e), w);', '        found = true;'),
 ]
 MUTANTS += [
     # F11 milestone review, step 2: the guard's gaps (2026-11-02)
@@ -2251,4 +2225,35 @@ MUTANTS += [
     # Not a mutant: state_write's O_EXCL | O_NOFOLLOW as O_TRUNC (the unlink before it takes a link
     # out; only a race between the two would reach one).
     ('fs/state.c', '    unlink(tmp);\n    int fd = open(tmp', '    int fd = open(tmp'),
+]
+MUTANTS += [
+    # F11 milestone review, step 3: one rewrite for the state file's writers (2026-11-02)
+    ('fs/state.c', '    bool ok = state_read(a, path, &text, err) && (!e->prepare || e->prepare(e->ctx, a, text, &room, err));', '    bool ok = (state_read(a, path, &text, err), true) && (!e->prepare || e->prepare(e->ctx, a, text, &room, err));'),
+    ('fs/state.c', '    bool ok = state_read(a, path, &text, err) && (!e->prepare || e->prepare(e->ctx, a, text, &room, err));', '    bool ok = state_read(a, path, &text, err);'),
+    ('fs/state.c', '    int lock = state_lock(path);\n    bool ok = state_read(a', '    int lock = -1;\n    bool ok = state_read(a'),
+    ('fs/state.c', '        if (!line.len || (e->keep && !e->keep(e->ctx, text, line, &out))) continue;', '        if (!line.len) continue;'),
+    ('fs/state.c', '    if (ok && e->tail) n += e->tail(e->ctx, body + n, text.len + room + 2 - n);', ''),
+    ('fs/state.c', '    if (p->put) return false;   // (a key said twice: once)', '    if (p->put) return true;'),
+    ('fs/state.c', '    if (eq < 0 || !str_eq(str_trim(str_cut(line, 0, eq)), p->key)) return true;', '    if (eq < 0 || !str_starts_with(line, p->key)) return true;'),
+    ('fs/state.c', '    if (p->put || p->line.len + 1 > cap) return 0;', '    if (p->line.len + 1 > cap) return 0;'),
+    # Not mutants: state_write's fsync dropped, and session_edit's live writes synced too (only a power
+    # cut, or a stall behind a big write, shows either); session_edit_tail's room check (its room is
+    # that line's: never short).
+    ('fs/folders.c', '        if (!folder_line_read(line, w, path, sizeof path) || folders_find(t, path) >= 0) continue;', '        if (!folder_line_read(line, w, path, sizeof path)) continue;'),
+    ('fs/folders.c', '    return w[6].len && percent_decode(w[0], path, cap) && (path[0] == \'/\' || strcmp(path, TRASH_URI) == 0);', '    return w[6].len && percent_decode(w[0], path, cap) && path[0] == \'/\';'),
+    ('fs/folders.c', '    return w[6].len && percent_decode(w[0], path, cap) && (path[0] == \'/\' || strcmp(path, TRASH_URI) == 0);', '    return percent_decode(w[0], path, cap) && (path[0] == \'/\' || strcmp(path, TRASH_URI) == 0);'),
+    ('fs/folders.c', '    return !folder_line_read(line, w, path, sizeof path);   // (the folder lines', '    return !str_starts_with(line, S("folder "));   // (the folder lines'),
+    ('fs/folders.c', '    *mine = folders_new;\n', ''),
+    ('fs/session.c', '    return !(session_parse_line(NULL, l, &w) &&\n             (session_mine(&w, e->id, e->me) ||', '    return !(session_parse_line(NULL, l, &w) &&\n             (false ||'),
+    ('fs/session.c', ' || (e->key && w.id == e->key->id && w.at == e->key->at) ||', ' || (e->key && w.id == e->key->id) ||'),
+    ('fs/session.c', '              (!session_alive(&w, e->boot) && !session_kept(', '              (!session_kept('),
+    ('fs/session.c', ' && !e->mine.open;   // (a running', ';   // (a running'),
+    ('fs/session.c', '(t->id ? c.id == t->id && (!t->found || c.at > t->w->at) : !t->found || c.at > t->w->at)', '(t->id ? c.id == t->id : !t->found || c.at > t->w->at)'),
+    ('fs/session.c', '(t->id ? c.id == t->id && (!t->found || c.at > t->w->at) : !t->found || c.at > t->w->at)', '(t->id ? c.id == t->id && (!t->found || c.at > t->w->at) : !t->found)'),
+    ('fs/session.c', 'if (session_parse_line(NULL, l, &c) && !session_alive(&c, boot) && (t->id ?', 'if (session_parse_line(NULL, l, &c) && (t->id ?'),
+    ('fs/session.c', '        t->found = session_parse_line(a, str_cut(text, t->pick, e), t->w);', '        t->found = true;'),
+    ('fs/session.c', '        if ((isize)(l.p - text.p) != t->pick && *t->nrest < t->cap && session_parse_line(NULL, l, &c) && !session_alive(&c, boot))', '        if (*t->nrest < t->cap && session_parse_line(NULL, l, &c) && !session_alive(&c, boot))'),
+    ('fs/session.c', '        if ((isize)(l.p - text.p) != t->pick && *t->nrest < t->cap && session_parse_line(NULL, l, &c) && !session_alive(&c, boot))', '        if ((isize)(l.p - text.p) != t->pick && session_parse_line(NULL, l, &c) && !session_alive(&c, boot))'),
+    ('fs/session.c', '            t->rest[(*t->nrest)++] = (SessionKey){ c.id, c.at, c.open };', '            t->rest[(*t->nrest)++] = (SessionKey){ c.id, c.at, false };'),
+    ('fs/session.c', '    return (isize)(l.p - text.p) != ((SessionTake *)ctx)->pick;', '    return true;'),
 ]

@@ -11,6 +11,9 @@ key ctrl-2
 expect view=icons
 key ctrl-equal
 expect zoom=64
+# (not written at once: after the delay, 2 s, 100 ms in a test; a Ctrl+wheel spin is one write, F11 review)
+sh ! grep -q "^folder $OFX_DIR [0-9]* icons 64 " "$OFX_ROOT/state/ofx/state"
+sleep 300
 sh grep -q "^folder $OFX_DIR [0-9]* icons 64 - - -$" "$OFX_ROOT/state/ofx/state"
 key alt-up
 wait-for 2000 sel=sub1 view=list
@@ -42,11 +45,13 @@ wait-for 2000 sel=sub2
 # Show Hidden: remembered (hidden=on)
 key ctrl-h
 wait-for 2000 shown=1
+sleep 300
 sh grep -qx "hidden=on" "$OFX_ROOT/state/ofx/state"
 # Back to the default: unset in the folder's entry (which keeps its cursor)
 char s
 char s
 expect sort=name rev=0
+sleep 300
 sh grep -q "^folder $OFX_DIR [0-9]* - - - - [^-]" "$OFX_ROOT/state/ofx/state"
 char s
 expect sort=size
@@ -77,6 +82,7 @@ wait-for 2000 trash=1 view=icons
 key alt-left
 wait-for 2000 trash=0
 # The state file f11's run.sh started with (no folderdefaults=, as before F11): its folder line kept
+sleep 300
 sh grep -q "^folder $OFX_ROOT 1 icons - - - -$" "$OFX_ROOT/state/ofx/state"
 # The cursor at the quit, kept (f11b)
 key end

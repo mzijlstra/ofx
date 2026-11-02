@@ -77,7 +77,7 @@ static Str state_value(Arena *a, const char *path, const char *key)
 
 // body (n bytes) as file path, its folder made first: written beside it and renamed over it, so a
 // crash leaves the old file or the new, never half of one.
-static bool state_write(const char *path, const char *body, isize n, Err *err)
+static bool state_write(const char *path, const char *body, isize n, bool sync, Err *err)
 {
     if (!ops_allowed(path, err)) return false;
     char dir[PATH_MAX], tmp[PATH_MAX + 32];
@@ -85,13 +85,14 @@ static bool state_write(const char *path, const char *body, isize n, Err *err)
     snprintf(tmp, sizeof tmp, "%s.%d.tmp", path, (int)getpid());
     // The temp file made new, never one there followed (a link at it would have been truncated past
     // the guard; it is beside path, which the guard allowed); one a crash of this pid left is taken
-    // out first. Synced before the rename, so after a power cut the file is the old or the new, whole
-    // (F11 review, 2026-11-02).
+    // out first. Synced before the rename (sync: all but a window's 2 s live writes, whose sync could
+    // stall the window behind a big write on btrfs; reviewer-2), so after a power cut the file is the
+    // old or the new, whole (F11 review, 2026-11-02).
     unlink(tmp);
     int fd = open(tmp, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600);
     if (fd < 0) return err_set(err, "%s: %s", tmp, strerror(errno)), false;
     bool ok = write(fd, body, (size_t)n) == n;
-    ok &= fsync(fd) == 0;
+    if (sync) ok &= fsync(fd) == 0;
     ok &= close(fd) == 0;
     if (!ok || rename(tmp, path) != 0) {
         int e = errno;
@@ -133,31 +134,86 @@ static void state_unlock(int fd)
     if (fd >= 0) close(fd);
 }
 
+// A rewrite of the state file, the one way every writer changes it (state_put, folders_write,
+// session_edit, session_take; F11 review, 2026-11-02: four had their own copy, each with its own
+// rule for a line it couldn't read): under its lock, read whole (refused when it can't be), then
+// prepare (what this writer reads from it, and the room its new lines need), each line kept as it is,
+// replaced, or dropped by keep (NULL: kept), and tail's lines at the end. One rule for them all: a
+// line a writer doesn't own, or can't read, stays as it is. Its strings stay in a for the caller.
+typedef struct {
+    bool  (*prepare)(void *ctx, Arena *a, Str text, isize *room, Err *err);   // false: no write (err said, or nothing to do)
+    bool  (*keep)(void *ctx, Str text, Str line, Str *out);                   // false: dropped; *out (line) may be replaced
+    isize (*tail)(void *ctx, char *out, isize cap);                           // what goes at the end: its length
+    void  *ctx;
+    bool   nosync;   // written without the sync (a window's live tab line, every 2 s: session_edit)
+} StateEdit;
+
+static bool state_rewrite(Arena *a, const char *path, const StateEdit *e, Err *err)
+{
+    Str text;
+    isize room = 0;
+    int lock = state_lock(path);
+    bool ok = state_read(a, path, &text, err) && (!e->prepare || e->prepare(e->ctx, a, text, &room, err));
+    char *body = ok ? arena_try_push(a, text.len + room + 2, 1) : NULL;
+    if (ok && !body) err_set(err, "%s: too big", path), ok = false;
+    isize n = 0, at = 0;
+    for (Str line; ok && next_line(text, &at, &line);) {
+        Str out = line;
+        if (!line.len || (e->keep && !e->keep(e->ctx, text, line, &out))) continue;
+        if (n + out.len + 1 > text.len + room + 2) break;   // (a replacement past its room: never written over the end)
+        memcpy(body + n, out.p, (size_t)out.len), n += out.len, body[n++] = '\n';
+    }
+    if (ok && e->tail) n += e->tail(e->ctx, body + n, text.len + room + 2 - n);
+    ok = ok && state_write(path, body, n, !e->nosync, err);
+    state_unlock(lock);
+    return ok;
+}
+
 // One key's value into file path, the rest of it as it is now (F7.1): each window is its own
 // process (New Window), so a save of the whole State would put back what another window changed
-// since this one read the file. The file is read again here, the key's line replaced (or added),
-// every other line kept, a key ofx doesn't know too.
+// since this one read the file. The key's line replaced where it is (or added at the end), said
+// twice once, every other line kept, a key ofx doesn't know too.
+typedef struct {
+    Str  key;
+    Str  line;   // "key=value"
+    bool put;
+} StatePut;
+
+static bool state_put_prepare(void *ctx, Arena *a, Str text, isize *room, Err *err)
+{
+    (void)a, (void)text, (void)err;
+    *room = ((StatePut *)ctx)->line.len + 1;
+    return true;
+}
+
+static bool state_put_keep(void *ctx, Str text, Str line, Str *out)
+{
+    (void)text;
+    StatePut *p = ctx;
+    isize eq = str_find(line, '=');
+    if (eq < 0 || !str_eq(str_trim(str_cut(line, 0, eq)), p->key)) return true;
+    if (p->put) return false;   // (a key said twice: once)
+    *out = p->line, p->put = true;
+    return true;
+}
+
+static isize state_put_tail(void *ctx, char *out, isize cap)
+{
+    StatePut *p = ctx;
+    if (p->put || p->line.len + 1 > cap) return 0;
+    memcpy(out, p->line.p, (size_t)p->line.len), out[p->line.len] = '\n';
+    return p->line.len + 1;
+}
+
 static bool state_put(Arena *scratch, const char *path, const char *key, const char *value, Err *err)
 {
     ArenaMark mark = arena_mark(scratch);
-    Str text, k = str_from_c(key);
-    int lock = state_lock(path);
-    if (!state_read(scratch, path, &text, err)) return state_unlock(lock), arena_restore(scratch, mark), false;
-    isize cap = text.len + (isize)strlen(key) + (isize)strlen(value) + 4;
-    char *body = arena_try_push(scratch, cap, 1);
-    if (!body) return state_unlock(lock), arena_restore(scratch, mark), err_set(err, "%s: too big", path), false;
-    isize n = 0, at = 0;
-    bool put = false;
-    for (Str line; next_line(text, &at, &line);) {
-        isize eq = str_find(line, '=');
-        bool mine = eq >= 0 && str_eq(str_trim(str_cut(line, 0, eq)), k);
-        if (mine && put) continue;   // a key said twice: once
-        if (mine) n += snprintf(body + n, (size_t)(cap - n), "%s=%s\n", key, value), put = true;
-        else if (line.len) memcpy(body + n, line.p, (size_t)line.len), n += line.len, body[n++] = '\n';
-    }
-    if (!put) n += snprintf(body + n, (size_t)(cap - n), "%s=%s\n", key, value);
-    bool ok = state_write(path, body, n, err);
-    state_unlock(lock);
+    char *line = arena_try_push(scratch, (isize)(strlen(key) + strlen(value) + 2), 1);
+    if (!line) return err_set(err, "%s: too big", path), false;
+    sprintf(line, "%s=%s", key, value);
+    StatePut p = { str_from_c(key), str_from_c(line), false };
+    StateEdit e = { state_put_prepare, state_put_keep, state_put_tail, &p, false };
+    bool ok = state_rewrite(scratch, path, &e, err);
     arena_restore(scratch, mark);
     return ok;
 }

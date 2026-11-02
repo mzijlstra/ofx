@@ -71,17 +71,31 @@ static i64 folder_num(Str w, i64 max)
 }
 
 // The state file's folder lines into t, their strings in a; other lines left alone.
+static int folders_find(const Folders *t, const char *path)
+{
+    for (int i = 0; i < t->n; i++)
+        if (strcmp(t->f[i].path, path) == 0) return i;
+    return -1;
+}
+
+// Whether line is a folder line ofx reads (its seven words, its path a folder's or the trash
+// view's), its words into w and its path into path; a line that isn't stays in the file as it is.
+static bool folder_line_read(Str line, Str *w, char *path, size_t cap)
+{
+    if (!str_starts_with(line, S("folder "))) return false;
+    isize k = 7;
+    for (int i = 0; i < 7; i++) w[i] = folder_word(line, &k);
+    return w[6].len && percent_decode(w[0], path, cap) && (path[0] == '/' || strcmp(path, TRASH_URI) == 0);
+}
+
 static void folders_parse(Arena *a, Str text, Folders *t)
 {
     t->n = 0, t->full = false;
     isize at = 0;
     for (Str line; next_line(text, &at, &line);) {
-        if (!str_starts_with(line, S("folder "))) continue;
-        isize k = 7;
         Str w[7];
-        for (int i = 0; i < 7; i++) w[i] = folder_word(line, &k);
         char path[PATH_MAX], sel[NAME_MAX * 3 + 1];
-        if (!w[6].len || !percent_decode(w[0], path, sizeof path) || (path[0] != '/' && strcmp(path, TRASH_URI) != 0)) continue;
+        if (!folder_line_read(line, w, path, sizeof path) || folders_find(t, path) >= 0) continue;   // (a folder said twice: its first line, F11 review)
         if (t->n == FOLDERS_ROOM) {
             t->full = true;
             continue;
@@ -101,12 +115,6 @@ static void folders_parse(Arena *a, Str text, Folders *t)
     }
 }
 
-static int folders_find(const Folders *t, const char *path)
-{
-    for (int i = 0; i < t->n; i++)
-        if (strcmp(t->f[i].path, path) == 0) return i;
-    return -1;
-}
 
 // The entry for path, made (nothing set) when there is none; NULL when the table is full.
 static FolderPrefs *folders_get(Arena *a, Folders *t, const char *path)
@@ -170,22 +178,25 @@ static int folders_tidy(Folders *t, const CleanMounts *ms)
     return before - t->n;
 }
 
-// mine's changes into state file path: the file read again, each entry's changed fields put into
-// its line (a new line when there is none), the housekeeping done, every other line kept. mine is
-// then the file's folders as written, nothing changed (another window's changes seen too), its
-// strings in a: a is not the arena mine's strings are in now (the caller swaps two). ms: the mount
-// list, for the housekeeping (NULL: no folder judged gone).
-static bool folders_write(Arena *a, const char *path, Folders *mine, const CleanMounts *ms, Err *err)
+// folders_write's part in state_rewrite: the file's table, with this window's changes and the
+// housekeeping, then its lines.
+typedef struct {
+    Folders           *mine;
+    const CleanMounts *ms;
+} FoldersWrite;
+
+static Folders folders_new;   // (the table as written: the file's, with this window's changes)
+
+static bool folders_write_prepare(void *ctx, Arena *a, Str text, isize *room, Err *err)
 {
-    Str text;
-    int lock = state_lock(path);
-    if (!state_read(a, path, &text, err)) return state_unlock(lock), false;
-    static Folders t;
-    folders_parse(a, text, &t);
-    for (int i = 0; i < mine->n; i++) {
-        const FolderPrefs *m = &mine->f[i];
+    (void)err;
+    FoldersWrite *fw = ctx;
+    Folders *t = &folders_new;
+    folders_parse(a, text, t);
+    for (int i = 0; i < fw->mine->n; i++) {
+        const FolderPrefs *m = &fw->mine->f[i];
         if (!m->changed) continue;
-        FolderPrefs *f = folders_get(a, &t, m->path);
+        FolderPrefs *f = folders_get(a, t, m->path);
         if (!f) break;
         if (m->changed & FP_VIEW) f->view = m->view;
         if (m->changed & FP_ZOOM) f->zoom = m->zoom;
@@ -194,19 +205,40 @@ static bool folders_write(Arena *a, const char *path, Folders *mine, const Clean
         if (m->changed & FP_SEL) f->sel = m->sel ? folder_str(a, str_from_c(m->sel)) : NULL;
         if ((m->changed & FP_AT) && m->at > f->at) f->at = m->at;
     }
-    folders_tidy(&t, ms);
-    isize cap = text.len + 64;
-    for (int i = 0; i < t.n; i++) cap += 3 * (isize)(strlen(t.f[i].path) + (t.f[i].sel ? strlen(t.f[i].sel) : 0)) + 80;
-    char *body = arena_try_push(a, cap, 1);
-    if (!body) return state_unlock(lock), err_set(err, "%s: too big", path), false;
-    isize n = 0, at = 0;
-    for (Str line; next_line(text, &at, &line);)
-        if (line.len && !str_starts_with(line, S("folder "))) memcpy(body + n, line.p, (size_t)line.len), n += line.len, body[n++] = '\n';
-    for (int i = 0; i < t.n; i++) n += folder_line(&t.f[i], body + n, (size_t)(cap - n));
-    bool ok = state_write(path, body, n, err);
-    state_unlock(lock);
-    if (ok) *mine = t;
-    return ok;
+    folders_tidy(t, fw->ms);
+    *room = 64;
+    for (int i = 0; i < t->n; i++) *room += 3 * (isize)(strlen(t->f[i].path) + (t->f[i].sel ? strlen(t->f[i].sel) : 0)) + 80;
+    return true;
+}
+
+static bool folders_write_keep(void *ctx, Str text, Str line, Str *out)
+{
+    (void)ctx, (void)text, (void)out;
+    Str w[7];
+    char path[PATH_MAX];
+    return !folder_line_read(line, w, path, sizeof path);   // (the folder lines ofx reads: written again from the table)
+}
+
+static isize folders_write_tail(void *ctx, char *out, isize cap)
+{
+    (void)ctx;
+    isize n = 0;
+    for (int i = 0; i < folders_new.n; i++) n += folder_line(&folders_new.f[i], out + n, (size_t)(cap - n));
+    return n;
+}
+
+// mine's changes into state file path (state_rewrite): the file read again, each entry's changed
+// fields put into its line (a new line when there is none), the housekeeping done, every other line
+// kept. mine is then the file's folders as written, nothing changed (another window's changes seen
+// too), its strings in a: a is not the arena mine's strings are in now (the caller swaps two). ms:
+// the mount list, for the housekeeping (NULL: no folder judged gone).
+static bool folders_write(Arena *a, const char *path, Folders *mine, const CleanMounts *ms, Err *err)
+{
+    FoldersWrite fw = { mine, ms };
+    StateEdit e = { folders_write_prepare, folders_write_keep, folders_write_tail, &fw, false };
+    if (!state_rewrite(a, path, &e, err)) return false;
+    *mine = folders_new;
+    return true;
 }
 
 // Every entry's fields in mask (FP_VIEW and so on) unset, marked changed: a default in ofx.conf

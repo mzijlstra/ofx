@@ -140,32 +140,52 @@ static bool session_kept(Str text, i64 at, isize self, bool extra, i64 extra_at,
 // and line (NULL: none) put at the end; or, me NULL, the line of window key forgotten. Then the
 // lines that aren't running windows' past the newest SESSION_KEEP dropped (reviewer-2, 2026-11-01:
 // a question left unanswered each day, then Close All, piled up 80). Every other line kept.
+typedef struct {
+    long               id;
+    const SessionLive *me;
+    const SessionKey  *key;
+    const char        *line;
+    char               boot[16];
+    SessionWin         mine;
+    bool               extra;
+} SessionEdit;
+
+static bool session_edit_prepare(void *ctx, Arena *a, Str text, isize *room, Err *err)
+{
+    (void)a, (void)text, (void)err;
+    SessionEdit *e = ctx;
+    session_boot(e->boot, sizeof e->boot);
+    e->extra = e->line && session_parse_line(NULL, str_cut(str_from_c(e->line), 0, (isize)strlen(e->line) - 1), &e->mine) && !e->mine.open;   // (a running window's line isn't counted)
+    *room = e->line ? (isize)strlen(e->line) : 0;
+    return true;
+}
+
+static bool session_edit_keep(void *ctx, Str text, Str l, Str *out)
+{
+    (void)out;
+    SessionEdit *e = ctx;
+    SessionWin w;
+    return !(session_parse_line(NULL, l, &w) &&
+             (session_mine(&w, e->id, e->me) || (e->key && w.id == e->key->id && w.at == e->key->at) ||
+              (!session_alive(&w, e->boot) && !session_kept(text, w.at, (isize)(l.p - text.p), e->extra, e->extra ? e->mine.at : 0, e->boot))));
+}
+
+static isize session_edit_tail(void *ctx, char *out, isize cap)
+{
+    SessionEdit *e = ctx;
+    isize n = e->line ? (isize)strlen(e->line) : 0;
+    if (n > cap) return 0;
+    memcpy(out, e->line ? e->line : "", (size_t)n);
+    return n;
+}
+
 static bool session_edit(Arena *a, const char *path, long id, const SessionLive *me, const SessionKey *key, const char *line, Err *err)
 {
-    Str text;
-    char boot[16] = "";
-    session_boot(boot, sizeof boot);
-    int lock = state_lock(path);
-    if (!state_read(a, path, &text, err)) return state_unlock(lock), false;
-    SessionWin mine;
-    bool extra = line && session_parse_line(NULL, str_cut(str_from_c(line), 0, (isize)strlen(line) - 1), &mine) && !mine.open;   // (a running window's line isn't counted)
-    isize cap = text.len + (line ? (isize)strlen(line) : 0) + 2;
-    char *body = arena_try_push(a, cap, 1);
-    if (!body) return state_unlock(lock), err_set(err, "%s: too big", path), false;
-    isize n = 0, at = 0;
-    for (Str l; next_line(text, &at, &l);) {
-        SessionWin w;
-        if (!l.len) continue;
-        if (session_parse_line(NULL, l, &w) &&
-            (session_mine(&w, id, me) || (key && w.id == key->id && w.at == key->at) ||
-             (!session_alive(&w, boot) && !session_kept(text, w.at, (isize)(l.p - text.p), extra, extra ? mine.at : 0, boot))))
-            continue;
-        memcpy(body + n, l.p, (size_t)l.len), n += l.len, body[n++] = '\n';
-    }
-    if (line) memcpy(body + n, line, strlen(line)), n += (isize)strlen(line);
-    bool ok = state_write(path, body, n, err);
-    state_unlock(lock);
-    return ok;
+    SessionEdit c = { .id = id, .me = me, .key = key, .line = line };
+    SessionWin w;
+    bool live = line && session_parse_line(NULL, str_cut(str_from_c(line), 0, (isize)strlen(line) - 1), &w) && w.open;
+    StateEdit e = { session_edit_prepare, session_edit_keep, session_edit_tail, &c, live };
+    return state_rewrite(a, path, &e, err);
 }
 
 static bool session_put(Arena *a, const char *path, long id, const SessionLive *me, const char *line, Err *err)
@@ -182,38 +202,51 @@ static bool session_forget(Arena *a, const char *path, SessionKey key, Err *err)
 // never a running window's. Into *w (its folders in a); the other lines that aren't running windows',
 // in the file's order, into rest (*nrest, at most cap). False when there is none to take. Only the
 // line taken goes, by its place (pids come round again).
-static bool session_take(Arena *a, const char *path, long id, SessionWin *w, SessionKey *rest, int cap, int *nrest, Err *err)
+typedef struct {
+    long        id;
+    SessionWin *w;
+    SessionKey *rest;
+    int         cap, *nrest;
+    bool        found;
+    isize       pick;   // the line taken, its place in the text
+} SessionTake;
+
+static bool session_take_prepare(void *ctx, Arena *a, Str text, isize *room, Err *err)
 {
-    Str text;
+    (void)room, (void)err;
+    SessionTake *t = ctx;
     char boot[16] = "";
     session_boot(boot, sizeof boot);
-    *nrest = 0;
-    int lock = state_lock(path);
-    if (!state_read(a, path, &text, err)) return state_unlock(lock), false;
-    bool found = false;
-    isize pick = -1, at = 0;
+    isize at = 0;
     for (Str l; next_line(text, &at, &l);) {
         SessionWin c;
-        if (session_parse_line(NULL, l, &c) && !session_alive(&c, boot) && (id ? c.id == id && (!found || c.at > w->at) : !found || c.at > w->at))
-            *w = c, found = true, pick = (isize)(l.p - text.p);
+        if (session_parse_line(NULL, l, &c) && !session_alive(&c, boot) && (t->id ? c.id == t->id && (!t->found || c.at > t->w->at) : !t->found || c.at > t->w->at))
+            *t->w = c, t->found = true, t->pick = (isize)(l.p - text.p);
     }
-    if (found) {   // (its folders now, the line's alone)
-        isize e = pick;
+    if (t->found) {   // (its folders now, the line's alone)
+        isize e = t->pick;
         while (e < text.len && text.p[e] != '\n') e++;
-        found = session_parse_line(a, str_cut(text, pick, e), w);
+        t->found = session_parse_line(a, str_cut(text, t->pick, e), t->w);
     }
-    if (!found) return state_unlock(lock), false;
-    char *body = arena_try_push(a, text.len + 1, 1);
-    if (!body) return state_unlock(lock), err_set(err, "%s: too big", path), false;
-    isize m = 0;
     at = 0;
-    for (Str l; next_line(text, &at, &l);) {
+    for (Str l; t->found && next_line(text, &at, &l);) {
         SessionWin c;
-        if (!l.len || (isize)(l.p - text.p) == pick) continue;
-        if (*nrest < cap && session_parse_line(NULL, l, &c) && !session_alive(&c, boot)) rest[(*nrest)++] = (SessionKey){ c.id, c.at, c.open };
-        memcpy(body + m, l.p, (size_t)l.len), m += l.len, body[m++] = '\n';
+        if ((isize)(l.p - text.p) != t->pick && *t->nrest < t->cap && session_parse_line(NULL, l, &c) && !session_alive(&c, boot))
+            t->rest[(*t->nrest)++] = (SessionKey){ c.id, c.at, c.open };
     }
-    bool ok = state_write(path, body, m, err);
-    state_unlock(lock);
-    return ok;
+    return t->found;   // (none to take: nothing written)
+}
+
+static bool session_take_keep(void *ctx, Str text, Str l, Str *out)
+{
+    (void)out;
+    return (isize)(l.p - text.p) != ((SessionTake *)ctx)->pick;
+}
+
+static bool session_take(Arena *a, const char *path, long id, SessionWin *w, SessionKey *rest, int cap, int *nrest, Err *err)
+{
+    *nrest = 0;
+    SessionTake t = { id, w, rest, cap, nrest, false, -1 };
+    StateEdit e = { session_take_prepare, session_take_keep, NULL, &t, false };
+    return state_rewrite(a, path, &e, err) && t.found;
 }

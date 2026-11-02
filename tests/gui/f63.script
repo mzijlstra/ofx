@@ -9,6 +9,7 @@ shot zoom-48.png
 # 128 px (64 at scale 2) as it loads, not its 48@2x scaled up.
 raw-key 61 2
 expect zoom=64 cols=5 rows=3 cellw=128 cellh=120 iconpx=64 icontex=128
+sleep 300
 sh grep -q "^folder $OFX_DIR [0-9]* icons 64 " "$OFX_ROOT/state/ofx/state"   # (the folder's own, F11)
 shot zoom-64.png
 # Ctrl++ (Shift held, 3), the keypad's + (334); Ctrl+= at 256 stays.
@@ -70,7 +71,9 @@ expect zoom=96
 point-ui zoom-knob
 drag-here -500
 expect zoom=32
-# The track's tooltip says the size; the plus's its key.
+# The track's tooltip says the size; the plus's its key. (The zoom's own write done first: its timer
+# would wake the window before the tooltip's.)
+sleep 300
 point-ui zoom-track
 hover-here
 idle
@@ -125,5 +128,6 @@ key ctrl-equal
 key ctrl-equal
 key ctrl-equal
 expect zoom=128 cols=3
+sleep 300
 sh grep -q "^folder $OFX_DIR [0-9]* icons 128 " "$OFX_ROOT/state/ofx/state"
 quit

@@ -3,6 +3,7 @@ settle
 expect view=icons cols=6 iconpx=48
 key ctrl-1
 expect view=list
+sleep 300
 sh grep -q "^folder $OFX_DIR [0-9]* - " "$OFX_ROOT/state/ofx/state"
 sh grep -qx sidebar=places "$OFX_ROOT/state/ofx/state"
 quit

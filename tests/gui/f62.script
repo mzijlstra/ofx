@@ -8,6 +8,7 @@ raw-key 50 2
 expect view=icons cols=6 rows=3 cells=18 cellfirst=0 celllast=17 iconpx=48 idx=0 top=0
 # Its own texture, not the list's stretched: 48 px at the test's scale 2.
 expect icontex=96
+sleep 300
 sh grep -q "^folder $OFX_DIR [0-9]* icons " "$OFX_ROOT/state/ofx/state"   # (the folder's own, F11)
 # Left and Right a cell, Up and Down a row; the scroll a row at a time.
 key right
@@ -110,6 +111,7 @@ expect editing=0 sel=f01
 # The list again: the cursor stays, one entry a row (Ctrl+1 through the callback); and back.
 raw-key 49 2
 expect view=list cols=1 idx=3 iconpx=24
+sleep 300
 sh grep -q "^folder $OFX_DIR [0-9]* - " "$OFX_ROOT/state/ofx/state"   # (the default again: unset)
 key ctrl-2
 expect view=icons cols=6 idx=3
@@ -145,7 +147,9 @@ expect idx=23 top=6
 # The cache never filled.
 expect iconresets=0
 # Tooltips (Michael, 2026-10-24): after 600 ms on an icon button; the window asleep meanwhile is
-# woken by the timer, not the 3 s stand-in.
+# woken by the timer, not the 3 s stand-in. (First the view's own write, 100 ms in a test, done: its
+# timer would wake the window before the tooltip's.)
+sleep 300
 point-ui search
 hover-here
 expect tooltip=-

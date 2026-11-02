@@ -4,12 +4,27 @@
 // next write or at the quit. When ofx.conf's defaults change, the folders' choices for them go.
 // Included by main.c, before folder.c.
 
+// The state file written this long after the last change of the tabs (restore.c) or of a folder's
+// view (here): 2 s (Michael, 2026-11-02), so a Ctrl+wheel spin or a run of sort clicks is one write,
+// not one each (F11 review). OFX_TEST_WRITE_MS: shorter, for the GUI tests (0 to 2000).
+static i64 write_delay_ms(void)
+{
+    static i64 ms = -1;
+    if (ms < 0) {
+        const char *t = getenv("OFX_TEST_WRITE_MS");
+        ms = t && t[0] ? atoi(t) : 2000;
+        if (ms < 0 || ms > 2000) ms = 2000;
+    }
+    return ms;
+}
+
 static struct {
     Folders t;
     u8      mem[2][MiB(2)];   // the table's strings: a write builds the new table in the other one
     Arena   a[2];
     int     cur;
     bool    dirty;            // a cursor kept, not written yet
+    i64     due;              // a view's change to write at this time (now_ms), 0 none
 } rem;
 
 static bool fold_view_of(UiView v)
@@ -75,7 +90,7 @@ static const char *remember_sel(const char *dir)
 }
 
 // The folder shown's view, zoom or sort changed (mask: FP_VIEW and the others): its own now, unless
-// it is the default again; written at once.
+// it is the default again; written write_delay_ms after the last such change.
 static void remember_view(u8 mask)
 {
     if (!fold_view_of(app.ui.view)) return;
@@ -86,7 +101,15 @@ static void remember_view(u8 mask)
     if (mask & FP_SORT) f->sort = (int)app.ui.sort.key == app.conf.sort ? -1 : (int)app.ui.sort.key;
     if (mask & FP_REV) f->rev = app.ui.sort.reverse == app.conf.sort_rev ? -1 : app.ui.sort.reverse;
     f->at = (i64)time(NULL), f->changed |= mask | FP_AT;
-    remember_write();
+    rem.dirty = true, rem.due = now_ms() + write_delay_ms();   // (written by remember_tick, or at the quit)
+}
+
+// After each frame's input: a view's change written once its delay is up. The due time for the
+// timer, 0 for none.
+static i64 remember_tick(i64 now)
+{
+    if (rem.due && now >= rem.due) rem.due = 0, remember_write();
+    return rem.due;
 }
 
 // ofx.conf's view defaults as the state file's folderdefaults= says them: "list 48 name off".

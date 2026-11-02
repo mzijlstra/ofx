@@ -447,3 +447,37 @@ static void test_review_fs(void)
     CHECK(lines == SESSION_KEEP && strstr(text.p, "window 2000 ") && strstr(text.p, "window 1079 ") && !strstr(text.p, "window 1072 "));
     ops_guard(NULL);
 }
+
+// The state file's writers against each other (state_rewrite, F11 review, 2026-11-02): a line one
+// doesn't own or can't read stays as it is through every writer; a folder said twice is one.
+static void test_state_rewrite(void)
+{
+    ops_guard(root);
+    char path[PATH_MAX], d[PATH_MAX];
+    snprintf(path, sizeof path, "%s", at("f11rw/state"));
+    snprintf(d, sizeof d, "%s", at("f11rw/a"));
+    mkdirs(d);
+    char text[4 * PATH_MAX];
+    snprintf(text, sizeof text, "x=1\nsomething from a later ofx\nfolder %%zz 1 list - - - -\nwindow 7 1 99 closed /x\nfolder %s 1 list - - - -\nfolder %s 5 icons - - - -\n", d, d);
+    put(path, text);
+    Err err;
+    CHECK(state_put(&ta, path, "hidden", "on", &err));
+    static Folders t;
+    folders_parse(&ta, STR_EMPTY, &t);
+    FolderPrefs *f = folders_get(&ta, &t, d);
+    f->sort = SORT_SIZE, f->changed = FP_SORT;
+    static u8 mem[MiB(1)];
+    Arena a;
+    arena_init(&a, "rewrite", mem, sizeof mem);
+    CHECK(folders_write(&a, path, &t, NULL, &err));
+    const char *dirs[] = { "/b" };
+    char line[128];
+    session_line(9, 3, 0, NULL, dirs, 1, line, sizeof line);
+    CHECK(session_put(&ta, path, 9, NULL, line, &err));
+    Str now = read_file(&ta, path);
+    char want[2 * PATH_MAX];
+    snprintf(want, sizeof want, "x=1\nsomething from a later ofx\nfolder %%zz 1 list - - - -\nwindow 7 1 99 closed /x\nhidden=on\nfolder %s 1 list - size - -\nwindow 9 3 0 closed /b\n", d);
+    if (strcmp(now.p, want) != 0) fprintf(stderr, "rewrite:\n%s\nwanted:\n%s\n", now.p, want);
+    CHECK(strcmp(now.p, want) == 0);
+    ops_guard(NULL);
+}

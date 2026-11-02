@@ -745,8 +745,8 @@ int main(int argc, char **argv)
         if (thumbs_take()) dirty = true;
         if (app.ui.view == UI_VIEW_SEARCH && search_take()) search_relist(), dirty = true;
         if (app.search_due && now_ms() >= app.search_due) app.search_due = 0, search_retype(), dirty = true;
-        i64 was_due = restore.due;   // (F11 step 3b: the tabs written 2 s after a change)
-        if (restore_tick(now_ms()) != was_due && restore.due) timer_at(wake_due());
+        i64 was_due = restore.due, was_rem = rem.due;   // (F11: the tabs, a folder's view, written 2 s after a change)
+        if ((restore_tick(now_ms()) != was_due && restore.due) | (remember_tick(now_ms()) != was_rem && rem.due)) timer_at(wake_due());
         bool seen;
         UiInput in = input_real(&seen);
         if (scripted) {

@@ -6,7 +6,6 @@
 
 static bool closing_all;   // this window closes by Close All, its own Ctrl+Q or another's, or a SIGTERM (its tabs kept)
 
-enum { RESTORE_WRITE_MS = 2000 };   // a change written this long after it at most (Michael, 2026-11-02)
 
 static struct {
     SessionKey  keys[SESSION_WINDOWS];   // the lines left after this start took its own
@@ -75,7 +74,7 @@ static void restore_write(void)
 }
 
 // After each frame's input: a change of the tabs (or of the folder shown) since the last write is
-// written RESTORE_WRITE_MS after it. The due time for the timer, 0 for none.
+// written write_delay_ms() after it (remember.c: 2 s). The due time for the timer, 0 for none.
 static i64 restore_tick(i64 now)
 {
     if (!app.conf.restore_tabs || !restore.have_me) return 0;
@@ -83,7 +82,7 @@ static i64 restore_tick(i64 now)
     if (restore.due) return restore.due;
     static char line[SESSION_TABS * PATH_MAX * 3 + 96];   // (as restore_write's: the same tabs fit both)
     u64 tail = restore_line(true, line, sizeof line) ? restore_tail(line) : 0;
-    if (tail && tail != restore.last) restore.due = now + RESTORE_WRITE_MS;
+    if (tail && tail != restore.last) restore.due = now + write_delay_ms();
     return restore.due;
 }
 

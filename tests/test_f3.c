@@ -121,7 +121,7 @@ static void test_ops(void)
     mkdirs(at("ops/st"));
     put(at("ops/victim"), "keep");
     CHECK(symlink(at("ops/victim"), tmp) == 0);
-    CHECK(state_write(sp, "a=1\n", 4, &err) && strcmp(slurp(at("ops/victim")), "keep") == 0 && strcmp(slurp(sp), "a=1\n") == 0);
+    CHECK(state_write(sp, "a=1\n", 4, true, &err) && strcmp(slurp(at("ops/victim")), "keep") == 0 && strcmp(slurp(sp), "a=1\n") == 0);
     // A restore whose trash file (or .trashinfo) is outside the root: refused, nothing moved.
     Trashed far = { 0 };
     snprintf(far.from, sizeof far.from, "%s", at("ops/back.txt"));
