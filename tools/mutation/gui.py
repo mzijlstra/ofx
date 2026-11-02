@@ -26,7 +26,7 @@ Each run's trees (about 50 MB: the copy tests' big files) are removed once it is
 run stops while there is still room: the scratch dir is usually /tmp, a tmpfs in RAM, and keeping
 them filled it on 2026-10-24.
 """
-import hashlib, os, re, shutil, subprocess, sys
+import hashlib, os, re, shutil, signal, subprocess, sys
 
 G, W, K, J, TB, WK, OW = 'gui/main.c', 'gui/watch.c', 'gui/counts.c', 'gui/jobs.c', 'gui/thumbs.c', 'gui/walk.c', 'gui/openwith.c'
 MUTANTS = [
@@ -705,6 +705,8 @@ MUTANTS = [
     ('gui/clipboard.c', '    clip.ok = false;   // (the connection gone', '    // (the connection gone', 'clip'),
     ('gui/folder.c', "        app.ui.grid = grid, app.ui.zoom = zoom, app.ui.sort = sort;   // (as for a folder that can't be listed: F11 review)\n", '', 'f11'),
     ('gui/main.c', '        if (closing_all && !close_asked && !app.ui.quit_asking && !app.quit) closing_all = false;', '', 'f7'),
+    ('gui/main.c', '        else if (app.empty_n < 0) app.empty_n = trash_count();', '', 'f8'),
+    ('gui/folder.c', '        for (struct dirent *e; d && (e = readdir(d));) n += strcmp(e->d_name, ".") != 0 && strcmp(e->d_name, "..") != 0;', '        for (struct dirent *e; d && (e = readdir(d));) n++;', 'f8'),
     ('gui/main.c', '            restore_id = strtol(argv[++i], NULL, 10);', '            restore_id = 0, i++;', 'f11'),
     ('gui/actions.c', '    case UA_RESTORE_WINDOWS: restore_others(a.all); break;   // (F11 step 3)', '    case UA_RESTORE_WINDOWS: break;', 'f11'),
     ('gui/files.c', '    if (e->mtime) ui_when(buf, cap, e->mtime, now, app.conf.date, app.conf.date_pattern);', '    if (e->mtime) ui_when(buf, cap, e->mtime, now, DATE_SHORT, "");', 'f10'),
@@ -890,14 +892,29 @@ def unstarted(r):
     last = r.stdout.splitlines()[heads[-1]:] if heads else r.stdout.splitlines()
     return RUN_LAUNCHED not in last
 
+# cmd in a session of its own, its output kept: stopped (Ctrl-C, an error), its whole group is told
+# to stop too, so run-script's trap stops the window and the compositor (F11 review, 2026-11-02: an
+# interrupted run left westons behind).
+def run_own_session(cmd, env):
+    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env, start_new_session=True)
+    try:
+        out, err = p.communicate()
+    except BaseException:
+        try:
+            os.killpg(p.pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+        p.wait()
+        raise
+    return subprocess.CompletedProcess(cmd, p.returncode, out, err)
+
 # A mutant's run stops at its first failure (OFX_GUI_FAIL_FAST, run.sh and script.c), the base's
 # never: it must pass everything. A group whose compositor didn't start runs again, three times in
 # all; unstarted(r) says when it never did.
 def run_groups(work, base, groups, fast=True, binary='build/ofx-mut'):
     env = dict(os.environ, OFX_GUI_FAIL_FAST='1') if fast else {k: v for k, v in os.environ.items() if k != 'OFX_GUI_FAIL_FAST'}
     for _ in range(3):
-        r = subprocess.run([os.path.join(work, 'tests/gui/run.sh'), base, os.path.join(work, binary)] + groups,
-                           capture_output=True, text=True, env=env)
+        r = run_own_session([os.path.join(work, 'tests/gui/run.sh'), base, os.path.join(work, binary)] + groups, env)
         if not unstarted(r):
             break
     return r

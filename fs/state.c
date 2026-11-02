@@ -80,14 +80,18 @@ static Str state_value(Arena *a, const char *path, const char *key)
 static bool state_write(const char *path, const char *body, isize n, Err *err)
 {
     if (!ops_allowed(path, err)) return false;
-    Str d = path_dir(str_from_c(path));
     char dir[PATH_MAX], tmp[PATH_MAX + 32];
-    snprintf(dir, sizeof dir, "%.*s", STR_ARG(d.len ? d : S("/")));
-    if (!mkdir_private(dir, err)) return false;
+    if (!path_parent(dir, sizeof dir, path) || !mkdir_private(dir, err)) return false;
     snprintf(tmp, sizeof tmp, "%s.%d.tmp", path, (int)getpid());
-    int fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0600);
+    // The temp file made new, never one there followed (a link at it would have been truncated past
+    // the guard; it is beside path, which the guard allowed); one a crash of this pid left is taken
+    // out first. Synced before the rename, so after a power cut the file is the old or the new, whole
+    // (F11 review, 2026-11-02).
+    unlink(tmp);
+    int fd = open(tmp, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600);
     if (fd < 0) return err_set(err, "%s: %s", tmp, strerror(errno)), false;
     bool ok = write(fd, body, (size_t)n) == n;
+    ok &= fsync(fd) == 0;
     ok &= close(fd) == 0;
     if (!ok || rename(tmp, path) != 0) {
         int e = errno;

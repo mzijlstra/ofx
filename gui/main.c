@@ -206,6 +206,7 @@ static struct {
     SearchSkips search_s;
     bool        search_done;
     i64         search_due;
+    isize       empty_n;      // the trash's items as the Empty Trash question opened (-1: not counted)
     char        search_pick[PATH_MAX];
     UiMatcher   search_m;     // its text as the walk matches it: a bad expression's reason, for the bar
     UiMatcher   search_im;    // likewise the text inside files (step 3)
@@ -792,6 +793,8 @@ int main(int argc, char **argv)
         // A Close All answered Stay (its question, with jobs) is no Close All any more: this window
         // closing later as one of several forgets its tabs (F11 review, 2026-11-02).
         if (closing_all && !close_asked && !app.ui.quit_asking && !app.quit) closing_all = false;
+        if (!app.ui.empty_asking) app.empty_n = -1;
+        else if (app.empty_n < 0) app.empty_n = trash_count();   // (once, as the question opens)
         // The search field changed (F9): it is searched for 150 ms after the last change.
         if (app.ui.search_edited) app.ui.search_edited = false, app.search_due = now_ms() + SEARCH_TYPE_MS, timer_at(wake_due());
         dirty |= seen;

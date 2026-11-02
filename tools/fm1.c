@@ -68,6 +68,7 @@ int main(int argc, char **argv)
         strcpy(slash + 1, "ofx");
     }
     if (chdir("/") != 0) fprintf(stderr, "ofx-fm1: chdir /: %s\n", strerror(errno));   // keep no drive busy
+    ops_guard(getenv("OFX_GUI_ROOT"));   // (a test's: its launches its own fakes only, as ofx's; F11 review)
     spawn_init();
     sd_bus *bus = NULL;
     sd_bus_slot *slot = NULL;

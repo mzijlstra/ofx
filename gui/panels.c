@@ -109,11 +109,10 @@ static void layout_modal_panel(ModalKind k)
                 modal_button(UI_MODAL_YES, "Bring back", true, true);
             }
         } else if (k == MODAL_EMPTY) {
-            isize all = app.list.n + (app.show_hidden ? 0 : app.list.hidden);
+            isize all = app.empty_n;   // (the trash folders' items, counted as it opened: any view)
             text(cz("Empty the trash?"), cc(t->fg));
-            // (the count is the trash view's listing; asked from a folder's menu elsewhere, none: F11 review)
-            text(cz(app.ui.view == UI_VIEW_TRASH ? arena_sprintf(&frame, "All %td %s in it %s deleted for good.", all, items(all), all == 1 ? "is" : "are")
-                                                 : "Everything in it is deleted for good."), cc(t->fg_dim));
+            text(cz(all < 0 ? "Everything in it is deleted for good." : arena_sprintf(&frame, "All %td %s in it %s deleted for good.", all, items(all), all == 1 ? "is" : "are")),
+                 cc(t->fg_dim));
             text(cz("This can't be undone."), cc(t->red));
             text(cz("Enter or y empties it \xC2\xB7 n or Esc cancels"), cc(t->fg_dim));
             CLAY(CLAY_ID("modal-buttons"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .childGap = 10,

@@ -173,7 +173,8 @@ static bool trash_put(const char *path, Trashed *t, Err *err)
 // A trashed file back where it came from, its .trashinfo gone; never over something there now.
 static bool trash_restore(const Trashed *t, Err *err)
 {
-    if (!ops_allowed(t->from, err)) return false;
+    // (the file out of the trash and its .trashinfo deleted: both writes, both through the guard; F11 review)
+    if (!ops_allowed(t->from, err) || !ops_allowed(t->file, err) || !ops_allowed(t->info, err)) return false;
     if (renameat2(AT_FDCWD, t->file, AT_FDCWD, t->from, RENAME_NOREPLACE) != 0) {
         if (errno == EEXIST) return err_set(err, "%s is there again", t->from), false;
         return err_set(err, "%s: %s", t->file, strerror(errno)), false;

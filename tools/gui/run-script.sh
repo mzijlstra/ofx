@@ -30,7 +30,7 @@
 # - OFX_TEST_SYSBLOCK and OFX_TEST_UDEV, when set, are passed on: the block devices and udev's
 #   database read for unmounted drives (unset: empty folders in the scratch dir, so no run lists,
 #   or could mount, one of Michael's; ofx itself reads none under OFX_GUI_ROOT without them);
-# - OFX_TEST_HOME, when set, becomes the window's HOME (a scratch home for the path buttons' test);
+# - OFX_TEST_HOME, when set, becomes the window's HOME, else <scratch-dir>/home (never his);
 # - OFX_GUI_SHOTS=<scratch-dir>/shots for the script's shots, OFX_GUI_ROOT=<scratch-dir> for its
 #   sh guard and ofx's own (fs/ops.c: no write outside it).
 # Prints the script's output, stderr's first lines, and whether LeakSanitizer or ASan reported
@@ -112,6 +112,9 @@ fi
 # The block devices and udev's database (unmounted drives, 2026-10-30): the run's own, else empty.
 [ -n "${OFX_TEST_SYSBLOCK:-}" ] || { mkdir -p "$T/sysblock"; OFX_TEST_SYSBLOCK="$T/sysblock"; }
 [ -n "${OFX_TEST_UDEV:-}" ] || { mkdir -p "$T/udev"; OFX_TEST_UDEV="$T/udev"; }
+# HOME: the run's own, else <scratch>/home (F11 review, 2026-11-02: Michael's was the default, read
+# by the Home place and by a drive's going; a script had to remember to say otherwise).
+[ -n "${OFX_TEST_HOME:-}" ] || { mkdir -p "$T/home"; OFX_TEST_HOME="$T/home"; }
 [ "$sc" = - ] && script_env=""
 for a in "$@"; do args="$args '$a'"; done
 here=$(cd "$(dirname "$0")" && pwd)
@@ -130,6 +133,10 @@ fi
 comp=${OFX_COMPOSITOR:-weston}
 case $comp in weston | sway) ;; *) echo "run-script: OFX_COMPOSITOR is weston or sway, not '$comp'" >&2; exit 2 ;; esac
 sock=$("$here/$comp.sh" start "$T") || exit 1
+# Interrupted (Ctrl-C, a killed mutant run): the window and the compositor stopped too, never left
+# running (F11 review, 2026-11-02).
+pid=""
+trap '[ -n "$pid" ] && kill "$pid" 2>/dev/null; "$here/$comp.sh" stop "$T" >/dev/null 2>&1; exit 130' INT TERM HUP
 # Never Michael's display: the socket must be the one the compositor just made, and not his.
 case $comp:$sock in weston:ofx-test-* | sway:wayland-[0-9]*) ;; *) echo "run-script: unexpected socket '$sock'" >&2; "$here/$comp.sh" stop "$T"; exit 1 ;; esac
 [ "$sock" != "${WAYLAND_DISPLAY:-}" ] || { echo "run-script: $comp's socket is this session's display" >&2; "$here/$comp.sh" stop "$T"; exit 1; }
@@ -138,7 +145,7 @@ cat > "$T/launch.sh" <<EOS
 echo \$\$ > "$T/run.pid"
 exec env -u DISPLAY -u WAYLAND_SOCKET WAYLAND_DISPLAY="$sock" OFX_TEST_SIZE=${OFX_SCRIPT_SIZE:-936x516} OFX_TEST_WINDOWS="$T/windows" ${script_env} OFX_GUI_ROOT="$T" OFX_GUI_SHOTS="$T/shots" PATH="$T/fakes:\$PATH" XDG_STATE_HOME="$T/state" XDG_CONFIG_HOME="$T/config" XDG_DATA_HOME="$T/data" XDG_CACHE_HOME="$T/cache" \
   LSAN_OPTIONS=suppressions=$root/gui/lsan.supp ASAN_OPTIONS=log_path="$T/asan" ${OFX_TEST_LEAK:+OFX_TEST_LEAK=1} ${OFX_GUI_FAIL_FAST:+OFX_GUI_FAIL_FAST=1} ${OFX_GUI_DEBUG:+OFX_GUI_DEBUG=1} \
-  ${OFX_TEST_WATCH_DELAY_MS:+OFX_TEST_WATCH_DELAY_MS=$OFX_TEST_WATCH_DELAY_MS} ${OFX_TEST_COPY_DELAY_MS:+OFX_TEST_COPY_DELAY_MS=$OFX_TEST_COPY_DELAY_MS} ${OFX_TEST_CROSS:+OFX_TEST_CROSS=1} ${OFX_TEST_HOME:+HOME=$OFX_TEST_HOME} ${OFX_TEST_COUNT_DELAY_MS:+OFX_TEST_COUNT_DELAY_MS=$OFX_TEST_COUNT_DELAY_MS} ${OFX_TEST_MOUNTINFO:+OFX_TEST_MOUNTINFO=$OFX_TEST_MOUNTINFO} OFX_TEST_SYSBLOCK=$OFX_TEST_SYSBLOCK OFX_TEST_UDEV=$OFX_TEST_UDEV ${OFX_TEST_MEDIA:+OFX_TEST_MEDIA=$OFX_TEST_MEDIA} ${OFX_TEST_SPACE_DELAY_MS:+OFX_TEST_SPACE_DELAY_MS=$OFX_TEST_SPACE_DELAY_MS} ${OFX_TEST_ICONS_MAX:+OFX_TEST_ICONS_MAX=$OFX_TEST_ICONS_MAX} ${OFX_TEST_THUMB_HELD_MAX:+OFX_TEST_THUMB_HELD_MAX=$OFX_TEST_THUMB_HELD_MAX} \
+  ${OFX_TEST_WATCH_DELAY_MS:+OFX_TEST_WATCH_DELAY_MS=$OFX_TEST_WATCH_DELAY_MS} ${OFX_TEST_COPY_DELAY_MS:+OFX_TEST_COPY_DELAY_MS=$OFX_TEST_COPY_DELAY_MS} ${OFX_TEST_CROSS:+OFX_TEST_CROSS=1} HOME=$OFX_TEST_HOME ${OFX_TEST_COUNT_DELAY_MS:+OFX_TEST_COUNT_DELAY_MS=$OFX_TEST_COUNT_DELAY_MS} ${OFX_TEST_MOUNTINFO:+OFX_TEST_MOUNTINFO=$OFX_TEST_MOUNTINFO} OFX_TEST_SYSBLOCK=$OFX_TEST_SYSBLOCK OFX_TEST_UDEV=$OFX_TEST_UDEV ${OFX_TEST_MEDIA:+OFX_TEST_MEDIA=$OFX_TEST_MEDIA} ${OFX_TEST_SPACE_DELAY_MS:+OFX_TEST_SPACE_DELAY_MS=$OFX_TEST_SPACE_DELAY_MS} ${OFX_TEST_ICONS_MAX:+OFX_TEST_ICONS_MAX=$OFX_TEST_ICONS_MAX} ${OFX_TEST_THUMB_HELD_MAX:+OFX_TEST_THUMB_HELD_MAX=$OFX_TEST_THUMB_HELD_MAX} \
   "$bin" $args >"$T/out" 2>"$T/err"
 EOS
 chmod +x "$T/launch.sh"

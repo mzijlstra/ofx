@@ -319,7 +319,7 @@ static bool op_set_default(Arena *a, Str type, const char *app, Err *err)
     snprintf(t, sizeof t, "%.*s", STR_ARG(type));
     char *argv[] = { "gio", "mime", "--", t, (char *)app, NULL };
     bool late = false;
-    if (!spawn_capture(argv, out, sizeof out, 3000, &late, err)) return false;
+    if (!spawn_capture(NULL, argv, out, sizeof out, 3000, &late, err)) return false;
     char now[NAME_MAX + 1];
     apps_user_default(a, list, type, now, sizeof now);
     if (late || strcmp(now, app) != 0) {

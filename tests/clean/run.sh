@@ -28,7 +28,7 @@ check out " 0 unused" "days 0"
 check err "ofx.conf line 3 skipped: clean-cap wants a size" "bad line"
 # clean = off: nothing at all, said, exit 0, the preview there
 printf 'clean = off\n' > "$T/config/ofx/ofx.conf"
-run && check out "ofx-clean: off (clean = off in $T/config/ofx/ofx.conf)" "off"
+if run; then check out "ofx-clean: off (clean = off in $T/config/ofx/ofx.conf)" "off"; else echo "clean: clean = off exited $?"; fails=$((fails + 1)); fi   # (its exit 0 checked too: F11 review)
 [ -e "$old" ] || { echo "clean: clean = off deleted"; fails=$((fails + 1)); }
 # clean-unused-days = 100: deleted for real
 printf 'clean-unused-days = 100\n' > "$T/config/ofx/ofx.conf"

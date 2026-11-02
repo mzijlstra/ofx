@@ -93,7 +93,7 @@ point-ui side-row 3
 right-here
 point-menu empty-it
 click-here
-expect menu=- modal=empty trash=0
+expect menu=- modal=empty trash=0 emptyn=1
 type y
 wait-for 3000 modal=- trashfull=0
 # A path button: its folder's Properties; Open in Terminal there

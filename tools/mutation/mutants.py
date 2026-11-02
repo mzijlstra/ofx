@@ -542,7 +542,7 @@ MUTANTS += [
     ('ui/helpers.c', "    if (str_eq(ui_crumb_path(c, i), S(TRASH_URI))) return S(\"Trash\");\n", ""),
     (ST, "        if (!str_eq(key, S(\"sidebar\"))) continue;\n", ""),
     (ST, "Str key = str_trim(str_cut(line, 0, eq)), val = str_trim(str_cut(line, eq + 1, line.len));", "Str key = str_trim(str_cut(line, 0, eq)), val = str_cut(line, eq + 1, line.len);"),
-    (ST, "    if (!ops_allowed(path, err)) return false;\n    Str d", "    Str d"),
+    (ST, "    if (!ops_allowed(path, err)) return false;\n    char dir[PATH_MAX], tmp", "    char dir[PATH_MAX], tmp"),
     (ST, "    if (!ok || rename(tmp, path) != 0) {", "    if (rename(tmp, path) != 0) {"),
     (TR, "    tree_open(t, S(\"/\"));\n", ""),
     (TR, "    if (de->d_type != DT_LNK && de->d_type != DT_UNKNOWN) return false;", "    if (de->d_type != DT_UNKNOWN) return false;"),
@@ -998,7 +998,7 @@ MUTANTS += [
     (M, "            if (which >= 0) out[n++] = ents[which].c, at += strlen(ents[which].e);", "            if (which >= 0) out[n++] = ents[which].c, at++;"),
     (M, "        while (at < end && n + 1 < cap) {", "        while (at < end && n < cap) {"),
     (M, "        out[n] = 0;\n    }\n    arena_restore", "    }\n    arena_restore"),
-    (P, "    if (!spawn_capture(argv, buf, sizeof buf, timeout_ms, &late, &err) || late) return false;", "    if (!spawn_capture(argv, buf, sizeof buf, timeout_ms, &late, &err)) return false;"),
+    (P, "    if (!spawn_capture(NULL, argv, buf, sizeof buf, timeout_ms, &late, &err) || late) return false;", "    if (!spawn_capture(NULL, argv, buf, sizeof buf, timeout_ms, &late, &err)) return false;"),
     (P, "    if (!at) return false;\n    at += strlen(key);", "    at += strlen(key);"),
     (P, "    if (n == 0 || n >= cap) return false;", "    if (n == 0) return false;"),
     (PR, "        if (++w->seen % DU_TICK == 0 && w->tick) w->tick(w->ctx, s);", ""),
@@ -2242,4 +2242,13 @@ MUTANTS += [
     (CL, '        if (!p) return (CleanMounts){ NULL, 0, true };', '        if (!p) return ms;'),
     (SE, '        const char *s = a ? folder_str(a, str_from_c(p)) : "";', '        const char *s = "";'),
     (SE, '        found = session_parse_line(a, str_cut(text, pick, e), w);', '        found = true;'),
+]
+MUTANTS += [
+    # F11 milestone review, step 2: the guard's gaps (2026-11-02)
+    ('fs/spawn.c', '    if (!ops_program_allowed(prog ? prog : argv[0], err)) return false;', '    (void)prog;'),
+    ('fs/spawn.c', '    if (!ops_program_allowed(prog ? prog : argv[0], err)) return false;', '    if (!ops_program_allowed(argv[0], err)) return false;'),
+    ('fs/trash.c', ' || !ops_allowed(t->file, err) || !ops_allowed(t->info, err)) return false;', ') return false;'),
+    # Not a mutant: state_write's O_EXCL | O_NOFOLLOW as O_TRUNC (the unlink before it takes a link
+    # out; only a race between the two would reach one).
+    ('fs/state.c', '    unlink(tmp);\n    int fd = open(tmp', '    int fd = open(tmp'),
 ]

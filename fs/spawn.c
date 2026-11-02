@@ -147,9 +147,12 @@ static bool spawn_terminal(const char *dir, Err *err)
 // or timeout_ms pass (then it and what it started are killed, *timed_out set): into out (cut at
 // cap). Blocking: gui/ runs it off the main thread. The exit status can't be had (SA_NOCLDWAIT
 // reaps the child), so a caller that needs it has the command say so (eject_argv).
-static bool spawn_capture(char *const *argv, char *out, size_t cap, int timeout_ms, bool *timed_out, Err *err)
+static bool spawn_capture(const char *prog, char *const *argv, char *out, size_t cap, int timeout_ms, bool *timed_out, Err *err)
 {
     *timed_out = false;
+    // The test guard asked here, as spawn_detached does (F11 review, 2026-11-02): prog is what runs in
+    // the end (udisksctl under eject's sh -c), argv[0] without one.
+    if (!ops_program_allowed(prog ? prog : argv[0], err)) return false;
     int fd[2];
     if (pipe2(fd, O_CLOEXEC) != 0) return err_set(err, "pipe: %s", strerror(errno)), false;
     posix_spawnattr_t attr;
@@ -209,7 +212,7 @@ static bool spawn_gio_type(const char *path, char *out, size_t cap, int timeout_
     Err err;
     char *argv[] = { "gio", "info", "-a", "standard::content-type", "--", (char *)path, NULL };
     out[0] = 0;
-    if (!spawn_capture(argv, buf, sizeof buf, timeout_ms, &late, &err) || late) return false;
+    if (!spawn_capture(NULL, argv, buf, sizeof buf, timeout_ms, &late, &err) || late) return false;
     const char *key = "\n  standard::content-type: ";
     char *at = strstr(buf, key);
     if (!at) return false;

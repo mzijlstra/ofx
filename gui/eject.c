@@ -40,7 +40,7 @@ static void *eject_thread(void *arg)
     bool late, mounted = false;
     at[0] = 0;
     int limit = ej.op == DRIVE_MOUNT ? MOUNT_TIMEOUT_MS : EJECT_TIMEOUT_MS;
-    if (!spawn_capture((char *const *)argv, out, sizeof out, limit, &late, &err)) snprintf(why, sizeof why, "%s", err.msg);
+    if (!spawn_capture("udisksctl", (char *const *)argv, out, sizeof out, limit, &late, &err)) snprintf(why, sizeof why, "%s", err.msg);
     else if (ej.op == DRIVE_MOUNT) mounted = mount_result(str_from_c(out), at, sizeof at, why, sizeof why);
     else r = eject_result(str_from_c(out), why, sizeof why);
     if (late) snprintf(why, sizeof why, "udisksctl gave no answer in %d s", limit / 1000), mounted = false;

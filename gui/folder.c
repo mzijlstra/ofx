@@ -67,6 +67,23 @@ static bool trash_any(void)
     return false;
 }
 
+// How many items the trash folders hold (each trash's files/), for the Empty Trash question: counted
+// once as it opens, the same in any view (reviewer-2, 2026-11-02: from a folder's menu nothing
+// showed how much goes).
+static isize trash_count(void)
+{
+    isize n = 0;
+    trash_scan();
+    for (int i = 0; i < trashd.n; i++) {
+        char files[PATH_MAX];
+        if (snprintf(files, sizeof files, "%s/files", trashd.dir[i]) >= (int)sizeof files) continue;
+        DIR *d = opendir(files);
+        for (struct dirent *e; d && (e = readdir(d));) n += strcmp(e->d_name, ".") != 0 && strcmp(e->d_name, "..") != 0;
+        if (d) closedir(d);
+    }
+    return n;
+}
+
 // The Trash place's icon, full or empty (2026-10-30): looked at again at the start, when the mounts
 // change, when the trash view lists (a trash folder made on a drive already mounted has no watch
 // yet), after ofx's own trashing and jobs (the first one makes the home trash's info/), and when a

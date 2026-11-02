@@ -107,6 +107,31 @@ static void test_ops(void)
     char *fake[] = { "fakeprog", NULL }, *real[] = { "sh", "-c", "exit 0", NULL }, *byp[] = { "/bin/sh", NULL };
     CHECK(spawn_detached(fake, &err) && spawn_started == started + 1);
     CHECK(!spawn_detached(real, &err) && strstr(err.msg, "sh isn't a test's own") && !spawn_detached(byp, &err) && spawn_started == started + 1);
+    // And a launch whose output is read (gio, udisksctl under sh -c: F11 review): by argv[0], or by
+    // the program named.
+    char cap_out[64];
+    bool late;
+    CHECK(!spawn_capture(NULL, real, cap_out, sizeof cap_out, 2000, &late, &err) && strstr(err.msg, "sh isn't a test's own"));
+    CHECK(spawn_capture(NULL, fake, cap_out, sizeof cap_out, 2000, &late, &err));
+    CHECK(!spawn_capture("sh", fake, cap_out, sizeof cap_out, 2000, &late, &err));
+    // The state file's temp file: a link at it is never followed (its target left as it was).
+    char sp[PATH_MAX], tmp[PATH_MAX + 32];
+    snprintf(sp, sizeof sp, "%s", at("ops/st/state"));
+    snprintf(tmp, sizeof tmp, "%s.%d.tmp", sp, (int)getpid());
+    mkdirs(at("ops/st"));
+    put(at("ops/victim"), "keep");
+    CHECK(symlink(at("ops/victim"), tmp) == 0);
+    CHECK(state_write(sp, "a=1\n", 4, &err) && strcmp(slurp(at("ops/victim")), "keep") == 0 && strcmp(slurp(sp), "a=1\n") == 0);
+    // A restore whose trash file (or .trashinfo) is outside the root: refused, nothing moved.
+    Trashed far = { 0 };
+    snprintf(far.from, sizeof far.from, "%s", at("ops/back.txt"));
+    snprintf(far.file, sizeof far.file, "%s", out_at("ops-far-file"));
+    snprintf(far.info, sizeof far.info, "%s", at("ops/far.trashinfo"));
+    put(far.file, "f"), put(far.info, "i");
+    CHECK(!trash_restore(&far, &err) && access(far.file, F_OK) == 0 && access(far.from, F_OK) != 0);
+    snprintf(far.file, sizeof far.file, "%s", at("ops/far-file")), put(far.file, "f");
+    snprintf(far.info, sizeof far.info, "%s", out_at("ops-far.trashinfo")), put(far.info, "i");
+    CHECK(!trash_restore(&far, &err) && access(far.info, F_OK) == 0 && access(far.from, F_OK) != 0);
     env_restore();
 
     CHECK(name_valid(S("a.txt"), &err));

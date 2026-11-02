@@ -66,7 +66,7 @@ mkdir -p "$S/run" && chmod 700 "$S/run"
 env -u WAYLAND_DISPLAY -u DISPLAY -u DBUS_SESSION_BUS_ADDRESS XDG_RUNTIME_DIR="$S/run" PATH="$S/fakes:$PATH" OFX_FM1_OFX="$S/fakes/ofx" S="$S" B="$B" BIN="$BIN" \
     ASAN_OPTIONS="log_path=$S/asan" \
     dbus-run-session --config-file="$S/bus.conf" -- sh "$S/calls.sh"
-sleep 0.3   # the bus is gone: ofx-fm1 sees it and exits
+for i in $(seq 30); do pgrep -fx "$BIN" > /dev/null || break; sleep 0.1; done   # the bus is gone: ofx-fm1 sees it and exits (3 s at most: a load made 0.3 s a false failure, F11 review)
 
 # Sorted: each launch is detached, so the lines come in no set order. ShowItems on a file: its
 # folder's window, it selected (--select); the same folder twice, a path not there or not file://, once

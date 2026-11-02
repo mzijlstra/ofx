@@ -27,8 +27,11 @@ rules shared by every tool here.
   drives sets `OFX_TEST_MOUNTINFO` to a scratch file (run-script passes it on), so it sees only
   `/` and never his drives' trash; Empty Trash in a test with his real mount list would aim at
   `/mnt/sd/.Trash-1000` (the guard refuses it, but don't rely on that). The first f7 run on
-  2026-10-25 forgot it and listed his SD trash (read only, nothing changed). Likewise a script
-  that types `~` or presses Home sets `OFX_TEST_HOME`, or it browses his real home.
+  2026-10-25 forgot it and listed his SD trash (read only, nothing changed). HOME is the run's own
+  too: `OFX_TEST_HOME`, else `<scratch>/home` (since 2026-11-02; before, a script that typed `~` or
+  pressed Home without it browsed his real home). run-script's trap stops the window and the
+  compositor when a run is interrupted, and gui.py runs run.sh in a session of its own so an
+  interrupt reaches it.
 - **Eject** (F6.1) runs `udisksctl unmount` and `power-off` on a removable drive: a test with the
   real udisksctl would unmount and power off his USB drive. `run-script.sh` puts a logging fake
   first on PATH (it fails the step named in `<scratch>/udisks-fail`); the unit test makes its own.
