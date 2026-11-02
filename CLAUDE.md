@@ -142,6 +142,7 @@ his Hyprland: no output, no workspace, no dock script, no hyprctl at all.
 
 ```sh
 tests/gui/run.sh <absolute scratch>          # every script, each in its own weston
+tests/gui/run.sh -j 6 <absolute scratch>     # the same, 6 groups at once: 54 s against 215 (2026-11-02)
 tools/gui/run-script.sh <absolute scratch> tests/gui/<script> "$PWD/build/ofx" <folder>   # one
 tools/mutation/gui.py <absolute scratch>   # the GUI mutants (each on its tagged groups first)
 tests/gui/run.sh <absolute scratch> "$PWD/build/ofx" f62 f6   # some groups only
@@ -155,7 +156,7 @@ once, so a test that only fails under load shows before any kill counts. `--clan
 (and it is skipped without `tcc` on PATH: `sudo pacman -S tcc`). A mutant that doesn't compile tests
 nothing: when deleting a statement would leave an `else` without its `if`, empty it instead (`{}`).
 
-The GUI mutants' time is mostly the 86 s GUI suite, not the build. So each runs only the `run.sh`
+The GUI mutants' time is mostly the GUI suite (86 s then, 215 s one group at a time by F11), not the build. So each runs only the `run.sh`
 groups that killed it on a whole-suite run (`tools/mutation/gui-tags.txt`, written by `gui.py`):
 164 mutants in 71 min, against about 4 h on the whole suite each; and since 2026-10-26 a mutant stops at its first failure (`OFX_GUI_FAIL_FAST`: the script ends, run.sh skips the group's other scripts), 290 mutants in 881 s against 1591, and with the base in the pool (below) 671 s. Since 2026-10-25 (Michael): a
 mutant runs its groups one at a time and stops at the first kill; one its tags don't kill (new,

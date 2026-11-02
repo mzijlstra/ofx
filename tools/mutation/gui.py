@@ -823,12 +823,11 @@ tags_path = os.environ.get('OFX_GUI_TAGS') or os.path.join(root, 'tools', 'mutat
 # 6), so the order can't gain; there's no long tail to trim.
 t_start = time.monotonic()
 
-# run.sh's groups, in its order: a mutant runs them one at a time and stops at the first that
-# kills it (Michael, 2026-10-25).
-GROUPS = ['browse', 'big', 'gone', 'watchgap', 'f2', 'f3', 'f4', 'f5', 'f52', 'f53', 'f54', 'f6', 'usb', 'f11', 'f10', 'f62', 'f63', 'f64', 'f7',
-          'f72', 'f73', 'f74', 'f75', 'f8', 'f9', 'clip', 'keys', 'hang', 'guard3', 'guard']
+# run.sh's groups, in its order (read from it, F11 review 2026-11-02): a mutant runs them one at a
+# time and stops at the first that kills it (Michael, 2026-10-25).
 run_text = open(os.path.join(root, 'tests/gui/run.sh')).read()
-assert re.findall(r'want ([a-z0-9]+)', run_text) == GROUPS, 'GROUPS in gui.py no longer match tests/gui/run.sh'
+GROUPS = re.findall(r'^if want ([a-z0-9]+); then$', run_text, flags=re.M)
+assert GROUPS and re.findall(r'want ([a-z0-9]+)', run_text) == GROUPS, 'a want in run.sh outside its own if line'
 
 # A mutant is (file, old, new) or (file, old, new, hint): the hint names the group(s) likeliest to
 # kill it, tried first when it has no tags. Its key is the first three only, so a hint added later
@@ -861,7 +860,19 @@ def key(m):
     return hashlib.sha1('\0'.join(m[:3]).encode()).hexdigest()[:12]
 
 # The group of a script that failed: run.sh prints "== <script>: FAILED" or "<group>: FAILED".
-GROUP_OF = {'f6b': 'f6', 'f62b': 'f62', 'f62c': 'f62', 'f63b': 'f63', 'f63c': 'f63', 'f64b': 'f64', 'f64c': 'f64', 'f64d': 'f64', 'f7b': 'f7', 'f73b': 'f73', 'f73c': 'f73', 'f73d': 'f73', 'f75b': 'f75', 'f8b': 'f8', 'f8c': 'f8', 'f8d': 'f8', 'f8e': 'f8', 'f9b': 'f9', 'f10b': 'f10', 'f10c': 'f10', 'f10d': 'f10', 'f11b': 'f11', 'f11c': 'f11', 'f11d': 'f11', 'f11e': 'f11', 'f11f': 'f11', 'f11g': 'f11', 'f11h': 'f11', 'f11i': 'f11', 'f11j': 'f11', 'f11k': 'f11', 'f11l': 'f11', 'f11m': 'f11', 'f11n': 'f11', 'f11o': 'f11', 'f11p': 'f11', 'f11q': 'f11', 'f11r': 'f11', 'f11s': 'f11'}
+# Read from run.sh (F11 review, 2026-11-02: a hand-kept copy before): every script a group's block
+# runs, "rs <name>", "$here/<name>.script", or "$here/<name>$x.script" over its "for x in ...".
+def group_of(text):
+    parts = re.split(r'^if want ([a-z0-9]+); then$', text, flags=re.M)
+    out = {}
+    for g, body in zip(parts[1::2], parts[2::2]):
+        loops = dict(re.findall(r'for (\w+) in ([^;]+); do', body))
+        for name, var in re.findall(r'^\s*rs ([a-z0-9]+)()', body, flags=re.M) + re.findall(r'\$here/([a-z0-9]+)(?:\$(\w+))?\.script', body):
+            for n in ([name + x for x in loops[var].split()] if var else [name]):
+                if n != g:
+                    out[n] = g
+    return out
+GROUP_OF = group_of(run_text)
 
 # The tags as groups run.sh knows: a script's name (f7b, written before GROUP_OF had it) as its
 # group; anything else dropped, so a mutant never "survives" a group that runs nothing.
