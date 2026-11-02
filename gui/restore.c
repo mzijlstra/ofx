@@ -28,6 +28,16 @@ static int restore_line(bool live, char *out, size_t cap)
     return session_line((long)getpid(), (i64)time(NULL), tabbar.cur, live && restore.have_me ? &restore.me : NULL, dir, n, out, cap);
 }
 
+// The room this window's line needs: its fields, each tab's folder %-encoded (3 bytes a byte at
+// most) and a space (reviewer-2, 2026-11-02: SESSION_TABS × PATH_MAX × 3 on the scratch arena left
+// a state file over 330 KiB no room to be read).
+static size_t restore_cap(void)
+{
+    size_t cap = 160;
+    for (int i = 0; i < tabbar.n && i < SESSION_TABS; i++) cap += 3 * strlen(i == tabbar.cur ? app.cwd : tabs[tabbar.slot[i]].dir) + 1;
+    return cap;
+}
+
 // The hash (FNV-1a) of a line past "window <id> <time>": what changes with the tabs; 0 for none.
 static u64 restore_tail(const char *line)
 {
@@ -39,13 +49,13 @@ static u64 restore_tail(const char *line)
 }
 
 // The live line written now, as the tabs are, when they differ from the last one written.
-static void restore_write(void)
+static void restore_write_in(void)
 {
     char path[PATH_MAX];
     Err err;
     restore.due = 0;
     if (!app.conf.restore_tabs || !restore.have_me || !state_path(path, sizeof path)) return;
-    size_t cap = (size_t)SESSION_TABS * PATH_MAX * 3 + 96;
+    size_t cap = restore_cap();
     char *line = arena_try_push(&scratch, (isize)cap, 1);
     if (!line || !restore_line(true, line, cap)) return;
     u64 tail = restore_tail(line);   // (restore_tick asks for a write only when it changed)
@@ -55,6 +65,13 @@ static void restore_write(void)
         return;
     }
     restore.last = tail, restore.wrote = true;
+}
+
+static void restore_write(void)
+{
+    ArenaMark mark = arena_mark(&scratch);   // (what it read and wrote there given back: a state file of 420 KiB, twice, would fill it)
+    restore_write_in();
+    arena_restore(&scratch, mark);
 }
 
 // After each frame's input: a change of the tabs (or of the folder shown) since the last write is
@@ -72,7 +89,7 @@ static i64 restore_tick(i64 now)
 
 // As this window closes for good: its line closed (the last window, Close All, a SIGTERM), or taken
 // out when other windows stay open (as a browser forgets a window closed then).
-static void restore_save(void)
+static void restore_save_in(void)
 {
     char path[PATH_MAX];
     Err err;
@@ -83,18 +100,25 @@ static void restore_save(void)
         if (restore.wrote && !session_put(&scratch, path, (long)getpid(), me, NULL, &err)) fprintf(stderr, "ofx: %s\n", err.msg);
         return;
     }
-    size_t cap = (size_t)SESSION_TABS * PATH_MAX * 3 + 96;   // (restore_line takes the tab shown from app)
+    size_t cap = restore_cap();   // (restore_line takes the tab shown from app)
     char *line = arena_try_push(&scratch, (isize)cap, 1);
     if (!line || !restore_line(false, line, cap) || !session_put(&scratch, path, (long)getpid(), me, line, &err))
         fprintf(stderr, "ofx: the tabs not kept: %s\n", line ? err.msg : "no memory");
+}
+
+static void restore_save(void)
+{
+    ArenaMark mark = arena_mark(&scratch);   // (what it read and wrote there given back: a state file of 420 KiB, twice, would fill it)
+    restore_save_in();
+    arena_restore(&scratch, mark);
 }
 
 // As ofx starts, after the first folder is shown: this window's live mark; then a window's tabs
 // (id's, from --restore; else, with no other window running, the newest line's: closed, or one whose
 // window crashed), the first in this tab and the others behind it, the one shown then as it was.
 // plain: started on home (or nothing): the restored ones alone; else the folder asked stays shown, a
-// tab more. With other lines left, the question. Then this window's own line, at once.
-static void restore_start(long id, bool plain)
+// tab more. With other lines left, the question. (restore_start then writes this window's own line.)
+static void restore_start_in(long id, bool plain)
 {
     char path[PATH_MAX];
     Err err;
@@ -112,12 +136,36 @@ static void restore_start(long id, bool plain)
         for (int i = 0; i < restore.n; i++) restore.crashed |= restore.keys[i].crashed;
         if (!id && restore.n > 0) app.ui.restore_n = restore.n;
     }
-    restore_write();
+}
+
+static void restore_start(long id, bool plain)
+{
+    ArenaMark mark = arena_mark(&scratch);   // (what it read and wrote there given back: a state file of 420 KiB, twice, would fill it)
+    restore_start_in(id, plain);
+    arena_restore(&scratch, mark);
+    restore_write();   // (this window's own line at once, after what the take read is given back)
+}
+
+// restore-tabs turned off while this window runs: its line out at once, so a crash later doesn't
+// leave one a start long after (the option on again) would bring back (reviewer-2, 2026-11-02).
+static void restore_off_in(void)
+{
+    char path[PATH_MAX];
+    Err err;
+    if (restore.wrote && state_path(path, sizeof path) && session_put(&scratch, path, (long)getpid(), restore.have_me ? &restore.me : NULL, NULL, &err))
+        restore.wrote = false, restore.last = 0, restore.due = 0;
+}
+
+static void restore_off(void)
+{
+    ArenaMark mark = arena_mark(&scratch);   // (what it read and wrote there given back: a state file of 420 KiB, twice, would fill it)
+    restore_off_in();
+    arena_restore(&scratch, mark);
 }
 
 // The question's answer: yes, each other window started on its line (this binary, --restore id,
 // through uwsm-app as every launch); no, their lines forgotten.
-static void restore_others(bool yes)
+static void restore_others_in(bool yes)
 {
     char path[PATH_MAX];
     Err err;
@@ -129,4 +177,11 @@ static void restore_others(bool yes)
             set_status(true, "%s", err.msg);
     }
     restore.n = 0;
+}
+
+static void restore_others(bool yes)
+{
+    ArenaMark mark = arena_mark(&scratch);   // (what it read and wrote there given back: a state file of 420 KiB, twice, would fill it)
+    restore_others_in(yes);
+    arena_restore(&scratch, mark);
 }

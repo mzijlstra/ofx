@@ -4,4 +4,9 @@ settle
 expect tabs=1 modal=-
 sh grep -q "^window $(cat "$OFX_ROOT/f11p.pid") [0-9]* [0-9]* closed " "$OFX_ROOT/state/ofx/state"
 sh kill "$(cat "$OFX_ROOT/other.pid")" && rm "$OFX_ROOT/windows/$(cat "$OFX_ROOT/other.pid")"
+# restore-tabs turned off while it runs: its own line out at once (a crash later leaves none)
+sh grep -q "^window $(cat "$OFX_ROOT/run.pid") [0-9]* 0 open:" "$OFX_ROOT/state/ofx/state"
+sh printf 'restore-tabs = off\n' >> "$OFX_ROOT/config/ofx/ofx.conf"
+sleep 1000
+sh ! grep -q "^window $(cat "$OFX_ROOT/run.pid") " "$OFX_ROOT/state/ofx/state"
 quit

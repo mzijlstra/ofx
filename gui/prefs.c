@@ -30,9 +30,11 @@ static void conf_apply(void)
     conf_load(&scratch, &c);
     static bool once;   // (the first read: nothing asked under the old values yet)
     bool previews = once && (c.previews != app.conf.previews || c.preview_max != app.conf.preview_max);
+    bool off = once && app.conf.restore_tabs && !c.restore_tabs;   // (F11 step 3b: this window's line out)
     bool views = once && (c.icons != app.conf.icons || c.zoom != app.conf.zoom || c.sort != app.conf.sort || c.sort_rev != app.conf.sort_rev);
     once = true;
     app.conf = c;
+    if (off) restore_off();
     if (views) {   // (F11: the folders' choices against the old defaults forgotten; the folder shown again)
         remember_defaults();
         if (fold_view_of(app.ui.view)) remember_apply(app.cwd);
