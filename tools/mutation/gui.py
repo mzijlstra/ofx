@@ -532,7 +532,7 @@ MUTANTS = [
     ('gui/input.c', '    [UI_FIELD_SEARCH] = { "search-field", TOGGLE_SEARCH },', '    [UI_FIELD_SEARCH] = { "inside-field", TOGGLE_SEARCH },', 'f9'),
     ('gui/main.c', '        if (app.ui.view == UI_VIEW_SEARCH && search_take()) search_relist(), dirty = true;', '', 'f9'),
     (G, '        if (app.search_due && now_ms() >= app.search_due) app.search_due = 0, search_retype(), dirty = true;', '        if (app.search_due) app.search_due = 0, search_retype(), dirty = true;', 'f9'),
-    ('gui/input.c', '    return !a ? b : !b ? a : a < b ? a : b;', '    return a;', 'f9'),
+    ('gui/input.c', '    i64 ab = !a ? b : !b ? a : a < b ? a : b;', '    i64 ab = a;', 'f9'),
     ('gui/frame.c', '        if (app.ui.view == UI_VIEW_SEARCH) layout_search_bar();', '', 'f9'),
     ('gui/footer.c', '    else snprintf(buf, cap, "%td found%s%s%s", app.list.n, read, sep, skipped);', '    else snprintf(buf, cap, "%td found", app.list.n);', 'f9'),
     ('gui/folder.c', '    if (app.ui.view == UI_VIEW_SEARCH) {   // the folder searched (F9)\n        go_to(app.search_root, STR_EMPTY, 0);\n        return;\n    }', '', 'f9'),
@@ -670,21 +670,30 @@ MUTANTS = [
     ('gui/frame.c', '    u->can_reopen = closed_tabs.n > 0;   // (F11)', '    u->can_reopen = true;', 'f11'),
     ('gui/input.c', '    if (m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT) && key == GLFW_KEY_T) return UK_TAB_REOPEN;   // (F11)\n', '', 'keys'),
     # F11 step 3: the tabs across a restart (2026-11-01)
-    ('gui/restore.c', '    if (others > 0 && !closing_all) return;', '    if (others > 0) return;', 'f11'),
-    ('gui/restore.c', '    if (!app.conf.restore_tabs || !state_path(path, sizeof path)) return;\n    int others', '    if (!state_path(path, sizeof path)) return;\n    int others', 'f11'),
-    ('gui/restore.c', '    for (int i = 0; i < tabbar.n && n < SESSION_TABS; i++) dir[n++] = tabs[tabbar.slot[i]].dir;', '    dir[n++] = tabs[tabbar.slot[0]].dir;', 'f11'),
-    ('gui/restore.c', '    tab_save();\n', '', 'f11'),
-    ('gui/restore.c', 'session_line((long)getpid(), (i64)time(NULL), tabbar.cur, dir,', 'session_line((long)getpid(), (i64)time(NULL), 0, dir,', 'f11'),
+    ('gui/restore.c', '    if (!app.conf.restore_tabs || (others > 0 && !closing_all)) {', '    if (!app.conf.restore_tabs || others > 0) {', 'f11'),
+    ('gui/restore.c', '    if (!app.conf.restore_tabs || (others > 0 && !closing_all)) {', '    if ((others > 0 && !closing_all)) {', 'f11'),
+    ('gui/restore.c', ' dir[n++] = i == tabbar.cur ? app.cwd : tabs[tabbar.slot[i]].dir;', ' dir[n++] = tabs[tabbar.slot[i]].dir;', 'f11'),
+    ('gui/restore.c', 'session_line((long)getpid(), (i64)time(NULL), tabbar.cur, live', 'session_line((long)getpid(), (i64)time(NULL), 0, live', 'f11'),
     ('gui/restore.c', '    if (plain) go_to(w.dir[0], STR_EMPTY, 0);', '    go_to(w.dir[0], STR_EMPTY, 0);', 'f11'),
     ('gui/restore.c', '    for (int i = plain ? 1 : 0; i < w.n; i++)', '    for (int i = 1; i < w.n; i++)', 'f11'),
     ('gui/restore.c', '    if (plain) tab_show(w.shown);', '', 'f11'),
     ('gui/restore.c', '    app.status[0] = 0;   // (not', '    // (not', 'f11'),
     ('gui/restore.c', '    if (!id && restore.n > 0) app.ui.restore_n = restore.n;', '    if (restore.n > 0) app.ui.restore_n = restore.n;', 'f11'),
     ('gui/restore.c', '        const char *cmd[] = { app.exe, "--restore", id };', '        const char *cmd[] = { app.exe, id };', 'f11'),
-    ('gui/restore.c', "        if (yes ? !spawn_app(cmd, COUNT(cmd), &err) : state_path(path, sizeof path) && !session_put", "        if (yes ? !spawn_app(cmd, COUNT(cmd), &err) : false && !session_put", 'f11'),
+    ('gui/restore.c', ': state_path(path, sizeof path) && !session_forget(', ': false && !session_forget(', 'f11'),
     ('gui/main.c', '    closing_all = true;\n    if (quit && jobs.nrun', '    if (quit && jobs.nrun', 'f11'),
     ('gui/main.c', '    restore_save();   // (F11 step 3', '    // (F11 step 3', 'f11'),
     ('gui/main.c', '    if (atomic_load(&quit_signal)) closing_all = true;', '', 'f11'),
+    # F11 step 3b: the line kept as the tabs change (2026-11-02)
+    ('gui/restore.c', '    if (tail && tail != restore.last) restore.due = now + RESTORE_WRITE_MS;', '    if (tail && tail != restore.last) restore.due = now;', 'f11'),
+    ('gui/restore.c', '    if (tail && tail != restore.last) restore.due = now + RESTORE_WRITE_MS;', '', 'f11'),
+    ('gui/restore.c', '    if (restore.due && now >= restore.due) restore_write();', '', 'f11'),
+    ('gui/restore.c', '    restore.last = tail, restore.wrote = true;', '    restore.wrote = true;', 'f11'),
+    ('gui/restore.c', '        if (restore.wrote && !session_put(&scratch, path, (long)getpid(), me, NULL, &err))', '        if (false)', 'f11'),
+    ('gui/restore.c', '    bool others = !id && app.windows[0] && win_signal_others(app.windows, getpid(), 0) > 0;', '    bool others = false;', 'f11'),
+    ('gui/restore.c', '    restore_write();\n}', '}', 'f11'),
+    ('gui/restore.c', '    restore.have_me = session_boot(restore.me.boot, sizeof restore.me.boot) && start >= 0;', '    restore.have_me = false;', 'f11'),
+    ('gui/main.c', '        if (restore_tick(now_ms()) != was_due && restore.due) timer_at(wake_due());', '        restore_tick(now_ms());', 'f11'),
     ('gui/main.c', "    restore_start(restore_id, !selecting && (!start || (h && realpath(h, home_real) && strcmp(home_real, dir) == 0)));", "    restore_start(restore_id, !selecting && !start);", 'f11'),
     ('gui/main.c', '            restore_id = strtol(argv[++i], NULL, 10);', '            restore_id = 0, i++;', 'f11'),
     ('gui/actions.c', '    case UA_RESTORE_WINDOWS: restore_others(a.all); break;   // (F11 step 3)', '    case UA_RESTORE_WINDOWS: break;', 'f11'),
@@ -838,7 +847,7 @@ def key(m):
     return hashlib.sha1('\0'.join(m[:3]).encode()).hexdigest()[:12]
 
 # The group of a script that failed: run.sh prints "== <script>: FAILED" or "<group>: FAILED".
-GROUP_OF = {'f6b': 'f6', 'f62b': 'f62', 'f62c': 'f62', 'f63b': 'f63', 'f63c': 'f63', 'f64b': 'f64', 'f64c': 'f64', 'f64d': 'f64', 'f7b': 'f7', 'f73b': 'f73', 'f73c': 'f73', 'f73d': 'f73', 'f75b': 'f75', 'f8b': 'f8', 'f8c': 'f8', 'f8d': 'f8', 'f8e': 'f8', 'f9b': 'f9', 'f10b': 'f10', 'f10c': 'f10', 'f10d': 'f10', 'f11b': 'f11', 'f11c': 'f11', 'f11d': 'f11', 'f11e': 'f11', 'f11f': 'f11', 'f11g': 'f11', 'f11h': 'f11', 'f11i': 'f11', 'f11j': 'f11', 'f11k': 'f11', 'f11l': 'f11', 'f11m': 'f11'}
+GROUP_OF = {'f6b': 'f6', 'f62b': 'f62', 'f62c': 'f62', 'f63b': 'f63', 'f63c': 'f63', 'f64b': 'f64', 'f64c': 'f64', 'f64d': 'f64', 'f7b': 'f7', 'f73b': 'f73', 'f73c': 'f73', 'f73d': 'f73', 'f75b': 'f75', 'f8b': 'f8', 'f8c': 'f8', 'f8d': 'f8', 'f8e': 'f8', 'f9b': 'f9', 'f10b': 'f10', 'f10c': 'f10', 'f10d': 'f10', 'f11b': 'f11', 'f11c': 'f11', 'f11d': 'f11', 'f11e': 'f11', 'f11f': 'f11', 'f11g': 'f11', 'f11h': 'f11', 'f11i': 'f11', 'f11j': 'f11', 'f11k': 'f11', 'f11l': 'f11', 'f11m': 'f11', 'f11n': 'f11', 'f11o': 'f11', 'f11p': 'f11', 'f11q': 'f11'}
 
 # The tags as groups run.sh knows: a script's name (f7b, written before GROUP_OF had it) as its
 # group; anything else dropped, so a mutant never "survives" a group that runs nothing.

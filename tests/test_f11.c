@@ -269,82 +269,112 @@ static void test_state_writers(void)
     CHECK(!thumb_local(S("1 0 0:1 / / rw - ext4 a rw\n2 1 0:2 / /net rw - autofs b rw\n"), "/net/nas/x"));
 }
 
-// F11 step 3: the window lines (fs/session.c): written, read back, the newest taken, one by id, the
-// rest left; a last window's line alone, Close All's beside the others.
+// F11 steps 3 and 3b: the window lines (fs/session.c): written, read back (old lines too), a
+// running window's told from one that crashed, a window's own line put over, the newest taken but
+// never a running window's, at most SESSION_KEEP kept besides those, one forgotten.
 static void test_session(void)
 {
     ops_guard(root);
-    char path[PATH_MAX], line[PATH_MAX * 4];
+    char path[PATH_MAX], line[PATH_MAX * 4], boot[16];
     snprintf(path, sizeof path, "%s", at("f11s/state"));
+    CHECK(session_boot(boot, sizeof boot) && strlen(boot) == 8);
+    SessionLive me = { .start = win_started(getpid()) };
+    snprintf(me.boot, sizeof me.boot, "%s", boot);
     const char *dirs[] = { "/home/m/a b", "trash:///", "/x" };
-    CHECK(session_line(77, 500, 2, dirs, 3, line, sizeof line) > 0 && strcmp(line, "window 77 500 2 /home/m/a%20b trash:/// /x\n") == 0);
-    CHECK(session_line(77, 500, 2, dirs, 3, line, 20) == 0);
+    CHECK(session_line(77, 500, 2, NULL, dirs, 3, line, sizeof line) > 0 && strcmp(line, "window 77 500 2 closed /home/m/a%20b trash:/// /x\n") == 0);
+    SessionLive l = { "abcd1234", 99 };
+    CHECK(session_line(77, 500, 0, &l, dirs, 1, line, sizeof line) > 0 && strcmp(line, "window 77 500 0 open:abcd1234:99 /home/m/a%20b\n") == 0);
+    int full = session_line(77, 500, 2, NULL, dirs, 3, line, sizeof line);
+    CHECK(full > 0 && session_line(77, 500, 2, NULL, dirs, 3, line, (size_t)full) == 0 && session_line(77, 500, 2, NULL, dirs, 3, line, (size_t)full - 6) == 0);
+    CHECK(session_line(77, 500, 2, NULL, dirs, 3, line, (size_t)full + 1) == full);
     SessionWin w;
-    CHECK(session_parse_line(&ta, S("window 77 500 2 /home/m/a%20b trash:/// /x relative"), &w) && w.id == 77 && w.at == 500 && w.shown == 2 && w.n == 3 &&
-          strcmp(w.dir[0], "/home/m/a b") == 0 && strcmp(w.dir[1], "trash:///") == 0);
-    CHECK(!session_parse_line(&ta, S("window 0 500 0 /x"), &w) && !session_parse_line(&ta, S("window 7 500 0"), &w) && !session_parse_line(&ta, S("folder /x"), &w));
-    CHECK(session_parse_line(&ta, S("window 7 1 9 /x"), &w) && w.shown == 0);   // (a tab past the end: the first)
-    CHECK(!session_parse_line(&ta, S("window 7 1 99 /x"), &w));   // (past any window's tabs: not ofx's)
-    // Cut: a line that doesn't fit is none, never one with a folder left out or cut short.
-    int full = session_line(77, 500, 2, dirs, 3, line, sizeof line);
-    CHECK(full > 0 && session_line(77, 500, 2, dirs, 3, line, (size_t)full) == 0 && session_line(77, 500, 2, dirs, 3, line, (size_t)full - 6) == 0);
-    CHECK(session_line(77, 500, 2, dirs, 3, line, (size_t)full + 1) == full);
-    // A window's line put: beside the others (one not yet taken stays), the other lines kept.
-    put(path, "sidebar=tree\nwindow 5 10 0 /old\nfolder /x 1 list - - - -\n");
-    Err err;
-    session_line(9, 20, 0, dirs, 1, line, sizeof line);
-    CHECK(session_put(&ta, path, 9, line, &err));
-    CHECK(strcmp(read_file(&ta, path).p, "sidebar=tree\nwindow 5 10 0 /old\nfolder /x 1 list - - - -\nwindow 9 20 0 /home/m/a%20b\n") == 0);
-    CHECK(session_put(&ta, path, 5, NULL, &err));
-    // Close All: one line each.
-    session_line(11, 30, 1, dirs + 1, 2, line, sizeof line);
-    CHECK(session_put(&ta, path, 11, line, &err));
-    CHECK(strcmp(read_file(&ta, path).p, "sidebar=tree\nfolder /x 1 list - - - -\nwindow 9 20 0 /home/m/a%20b\nwindow 11 30 1 trash:/// /x\n") == 0);
-    // By id, the older one (9) of two; put back.
-    long rest[4];
-    int nrest;
-    CHECK(session_take(&ta, path, 9, &w, rest, 4, &nrest, &err) && w.id == 9 && nrest == 1 && rest[0] == 11);
-    session_line(9, 20, 0, dirs, 1, line, sizeof line);
-    CHECK(session_put(&ta, path, 9, line, &err));
-    put(path, "sidebar=tree\nfolder /x 1 list - - - -\nwindow 9 20 0 /home/m/a%20b\nwindow 11 30 1 trash:/// /x\n");   // (the newest not first)
-    // The newest taken (11), 9 left; then 9 by id; then none.
-    CHECK(session_take(&ta, path, 0, &w, rest, 4, &nrest, &err) && w.id == 11 && w.shown == 1 && w.n == 2 && nrest == 1 && rest[0] == 9);
-    CHECK(strstr(read_file(&ta, path).p, "window 11 ") == NULL);
-    CHECK(session_take(&ta, path, 9, &w, rest, 4, &nrest, &err) && w.id == 9 && nrest == 0);
-    CHECK(!session_take(&ta, path, 0, &w, rest, 4, &nrest, &err) && strcmp(read_file(&ta, path).p, "sidebar=tree\nfolder /x 1 list - - - -\n") == 0);
-    // At most SESSION_KEEP window lines, the newest (reviewer-2, 2026-11-01: 80 piled up): 12 put,
-    // the 8 newest left, the newest of all taken (not one of the first lines read), 7 left; an old
-    // pid again (after a reboot) doesn't put over the line it had.
+    CHECK(session_parse_line(&ta, S("window 77 500 2 closed /home/m/a%20b trash:/// /x relative"), &w) && w.id == 77 && w.at == 500 && w.shown == 2 && w.n == 3 &&
+          !w.open && strcmp(w.dir[0], "/home/m/a b") == 0 && strcmp(w.dir[1], "trash:///") == 0);
+    CHECK(session_parse_line(&ta, S("window 77 500 0 open:abcd1234:99 /a"), &w) && w.open && strcmp(w.live.boot, "abcd1234") == 0 && w.live.start == 99 && w.n == 1);
+    CHECK(session_parse_line(&ta, S("window 77 500 1 /a /b"), &w) && !w.open && w.n == 2 && w.shown == 1);   // (a line from before 3b)
+    CHECK(!session_parse_line(&ta, S("window 7 1 0 open:x /a"), &w) && !session_parse_line(&ta, S("window 7 1 0 open::5 /a"), &w) &&
+          !session_parse_line(&ta, S("window 7 1 0 open:b:-1 /a"), &w));
+    CHECK(!session_parse_line(&ta, S("window 0 500 0 closed /x"), &w) && !session_parse_line(&ta, S("window 7 500 0 closed"), &w) && !session_parse_line(&ta, S("folder /x"), &w));
+    CHECK(session_parse_line(&ta, S("window 7 1 9 closed /x"), &w) && w.shown == 0);   // (a tab past the end: the first)
+    CHECK(!session_parse_line(&ta, S("window 7 1 99 closed /x"), &w));
+    // Running or not: this process, open, this boot; not another start time, another boot, a pid gone, closed.
+    SessionWin r = { .id = getpid(), .open = true, .live = me };
+    CHECK(session_alive(&r, boot) && session_mine(&r, getpid(), &me));
+    r.live.start++;
+    CHECK(!session_alive(&r, boot) && !session_mine(&r, getpid(), &me));
+    r.live = me, snprintf(r.live.boot, sizeof r.live.boot, "00000000");
+    CHECK(!session_alive(&r, boot));
+    r.live = me, r.id = 999999999;
+    CHECK(!session_alive(&r, boot));
+    r.id = getpid(), r.open = false;
+    CHECK(!session_alive(&r, boot) && !session_alive(&r, NULL));
+
+    // This window's line: put, put over (its own only: same id and mark), taken out; a stale line of
+    // the same pid (another boot) stays.
+    char mine[256], stale[256];
+    snprintf(stale, sizeof stale, "window %d 5 0 open:00000000:%lld /old\n", (int)getpid(), (long long)me.start);
     put(path, "sidebar=tree\n");
-    for (int i = 1; i <= 12; i++) {
-        session_line(100 + i, i, 0, dirs, 1, line, sizeof line);
-        CHECK(session_put(&ta, path, 100 + i, line, &err));
-    }
+    FILE *f = fopen(path, "a");
+    fputs(stale, f), fclose(f);
+    Err err;
+    session_line(getpid(), 10, 0, &me, dirs, 1, mine, sizeof mine);
+    CHECK(session_put(&ta, path, getpid(), &me, mine, &err));
+    session_line(getpid(), 11, 0, &me, dirs + 2, 1, mine, sizeof mine);
+    CHECK(session_put(&ta, path, getpid(), &me, mine, &err));
     Str text = read_file(&ta, path);
+    CHECK(strstr(text.p, stale) && strstr(text.p, mine) && !strstr(text.p, " 10 0 open:"));
+    // A start never takes a running window's line (this one's): the stale one, a crash, instead.
+    SessionKey rest[16];
+    int nrest;
+    CHECK(session_take(&ta, path, 0, &w, rest, 16, &nrest, &err) && w.at == 5 && w.open && nrest == 0 && strstr(read_file(&ta, path).p, mine));
+    CHECK(!session_take(&ta, path, 0, &w, rest, 16, &nrest, &err));
+    CHECK(!session_take(&ta, path, getpid(), &w, rest, 16, &nrest, &err));   // (by id neither)
+    CHECK(session_put(&ta, path, getpid(), &me, NULL, &err) && strcmp(read_file(&ta, path).p, "sidebar=tree\n") == 0);
+
+    // Closed lines: the newest taken, the rest's keys (crashed marked), one forgotten by its key.
+    snprintf(line, sizeof line, "window 9 20 0 closed /a\nwindow 11 30 1 closed trash:/// /x\nwindow 12 25 0 open:00000000:7 /c\n");
+    put(path, line);
+    CHECK(session_take(&ta, path, 0, &w, rest, 16, &nrest, &err) && w.id == 11 && w.shown == 1 && w.n == 2 && nrest == 2 && rest[0].id == 9 &&
+          !rest[0].crashed && rest[1].id == 12 && rest[1].crashed && rest[1].at == 25);
+    CHECK(session_forget(&ta, path, rest[1], &err) && strcmp(read_file(&ta, path).p, "window 9 20 0 closed /a\n") == 0);
+    CHECK(session_take(&ta, path, 9, &w, rest, 16, &nrest, &err) && w.id == 9 && nrest == 0);
+    // Two lines of one id: by id, the newer (first in the file).
+    put(path, "window 8 50 0 closed /c\nwindow 7 9 0 closed /b\nwindow 7 3 0 closed /a\n");   // (8: newer, another id)
+    CHECK(session_take(&ta, path, 7, &w, rest, 16, &nrest, &err) && w.at == 9 && strcmp(read_file(&ta, path).p, "window 8 50 0 closed /c\nwindow 7 3 0 closed /a\n") == 0);
+    // The rest handed back: at most cap.
+    put(path, "window 1 1 0 closed /a\nwindow 2 2 0 closed /a\nwindow 3 3 0 closed /a\nwindow 4 4 0 closed /a\n");
+    CHECK(session_take(&ta, path, 0, &w, rest, 2, &nrest, &err) && w.id == 4 && nrest == 2);
+    // Forgotten by key: only the line with that id and time.
+    put(path, "window 3 1 0 closed /a\nwindow 3 2 0 closed /b\n");
+    CHECK(session_forget(&ta, path, (SessionKey){ 3, 1, false }, &err) && strcmp(read_file(&ta, path).p, "window 3 2 0 closed /b\n") == 0);
+
+    // At most SESSION_KEEP lines besides running windows' (reviewer-2, 2026-11-01: 80 piled up): 12
+    // closed put, the 8 newest left; this window's running line kept besides them; ties: the later.
+    put(path, "");
+    session_line(getpid(), 1000, 0, &me, dirs, 1, mine, sizeof mine);   // (the newest: not counted, as a running window's)
+    CHECK(session_put(&ta, path, getpid(), &me, mine, &err));
+    for (int i = 1; i <= 12; i++) {
+        session_line(100 + i, i, 0, NULL, dirs, 1, line, sizeof line);
+        CHECK(session_put(&ta, path, 100 + i, NULL, line, &err));
+    }
+    text = read_file(&ta, path);
     int lines = 0;
     for (isize i = 0; i < text.len; i++) lines += text.p[i] == '\n';
-    CHECK(lines == 1 + SESSION_KEEP && !strstr(text.p, "window 104 ") && strstr(text.p, "window 105 ") && strstr(text.p, "window 112 "));
-    session_line(112, 50, 0, dirs + 2, 1, line, sizeof line);   // (pid 112 again, later; 105, the oldest, goes)
-    CHECK(session_put(&ta, path, 112, line, &err) && strstr(read_file(&ta, path).p, "window 112 12 ") && strstr(read_file(&ta, path).p, "window 112 50 ") &&
-          !strstr(read_file(&ta, path).p, "window 105 "));
-    CHECK(session_take(&ta, path, 0, &w, rest, 4, &nrest, &err) && w.id == 112 && w.at == 50 && nrest == 4);
-    CHECK(strstr(read_file(&ta, path).p, "window 112 12 ") != NULL);   // (the older 112's line stays)
-    CHECK(session_take(&ta, path, 112, &w, rest, 4, &nrest, &err) && w.at == 12);
-    // The same closing time for all: still SESSION_KEEP kept, the later ones in the file.
+    CHECK(lines == 1 + SESSION_KEEP && strstr(text.p, mine) && !strstr(text.p, "window 104 ") && strstr(text.p, "window 105 ") && strstr(text.p, "window 112 "));
+    session_line(getpid(), 1001, 0, &me, dirs + 2, 1, mine, sizeof mine);   // (put over: still not counted)
+    CHECK(session_put(&ta, path, getpid(), &me, mine, &err) && strstr(read_file(&ta, path).p, "window 105 ") && strstr(read_file(&ta, path).p, mine));
+    session_line(getpid(), 0, 0, &me, dirs, 1, mine, sizeof mine);   // (the oldest: a running window's line is never dropped)
+    CHECK(session_put(&ta, path, getpid(), &me, mine, &err));
+    session_line(300, 2000, 0, NULL, dirs, 1, line, sizeof line);
+    CHECK(session_put(&ta, path, 300, NULL, line, &err) && strstr(read_file(&ta, path).p, mine));
     put(path, "");
     for (int i = 1; i <= SESSION_KEEP + 1; i++) {
-        session_line(200 + i, 7, 0, dirs, 1, line, sizeof line);
-        CHECK(session_put(&ta, path, 200 + i, line, &err));
+        session_line(200 + i, 7, 0, NULL, dirs, 1, line, sizeof line);
+        CHECK(session_put(&ta, path, 200 + i, NULL, line, &err));
     }
     text = read_file(&ta, path), lines = 0;
     for (isize i = 0; i < text.len; i++) lines += text.p[i] == '\n';
     CHECK(lines == SESSION_KEEP && !strstr(text.p, "window 201 ") && strstr(text.p, "window 209 "));
-    // Two lines of one id: by id, the newer.
-    put(path, "window 7 9 0 /b\nwindow 7 3 0 /a\n");   // (the newer first)
-    CHECK(session_take(&ta, path, 7, &w, rest, 4, &nrest, &err) && w.at == 9 && strcmp(read_file(&ta, path).p, "window 7 3 0 /a\n") == 0);
-    // A line forgotten (No): only it.
-    put(path, "window 3 1 0 /a\nwindow 4 2 0 /b\n");
-    CHECK(session_put(&ta, path, 3, NULL, &err) && strcmp(read_file(&ta, path).p, "window 4 2 0 /b\n") == 0);
     ops_guard(NULL);
 }
 

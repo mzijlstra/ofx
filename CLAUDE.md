@@ -123,7 +123,9 @@ rules shared by every tool here.
 - **The tabs across a restart** (F11 step 3): with `restore-tabs` on, a start's "Bring back" starts
   `ofx --restore <id>` through `uwsm-app` (the fake in a test: logged, nothing started). f11j stands
   in for a second window with a `sleep 20` that ignores SIGUSR1, in the run's own window registry
-  (`OFX_TEST_WINDOWS`); f11l and run.sh end it.
+  (`OFX_TEST_WINDOWS`); f11l and run.sh end it. f11n kills its own window (`kill -KILL`, a crash), so
+  run-script reports that run unfinished; run.sh doesn't count it and checks the state file instead.
+  f11p's stand-in has a running window's line, written by run.sh.
 - **A window that stops answering** pops Hyprland's "terminate?" dialog on his screen, even on the
   headless output. The script's `sh` runs under `timeout 5` for that reason; keep everything a
   script waits for short.

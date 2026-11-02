@@ -496,8 +496,9 @@ static bool hover_at(float x, float y);
 // When the timer wakes the loop: a tooltip due, or the search field's text to search for (F9).
 static i64 wake_due(void)
 {
-    i64 a = ui_tip_due(&app.tip), b = app.search_due;
-    return !a ? b : !b ? a : a < b ? a : b;
+    i64 a = ui_tip_due(&app.tip), b = app.search_due, c = restore.due;
+    i64 ab = !a ? b : !b ? a : a < b ? a : b;
+    return !ab ? c : !c ? ab : ab < c ? ab : c;
 }
 
 // The hover highlights for the pointer where it is now, not where it last moved: none once it has

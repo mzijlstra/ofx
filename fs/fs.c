@@ -25,6 +25,6 @@
 #include "bookmarks.c"
 #include "clean.c"
 #include "folders.c"   // (after clean.c: its drive rules)
-#include "session.c"
 #include "fm1.c"
 #include "windows.c"
+#include "session.c"   // (after windows.c: a running window by its start time)

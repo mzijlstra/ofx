@@ -1,0 +1,9 @@
+# F11 step 3b, after f11o (its tabs kept, closed): a running window's line (a stand-in: a sleep, with
+# this boot and its start time, not in the window registry) is neither taken nor asked about; f11o's
+# comes back.
+settle
+expect tabs=2 tabdirs=tree|sub2 modal=-
+sh grep -q "^window $(cat "$OFX_ROOT/other.pid") [0-9]* 0 open:" "$OFX_ROOT/state/ofx/state"
+sh kill "$(cat "$OFX_ROOT/other.pid")"
+sh cp "$OFX_ROOT/run.pid" "$OFX_ROOT/f11p.pid"
+quit

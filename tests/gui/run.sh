@@ -3,7 +3,7 @@
 # (tools/gui/run-script.sh):
 #   tests/gui/run.sh <scratch-dir> [binary] [group...]
 # The groups (one or more scripts on one tree): browse big gone watchgap f2 f3 f4 f5 f52 f53 f54
-# f6 (f6, f6b) usb f62 (f62, f62b, f62c) f63 (f63, f63b, f63c) f64 (f64, f64b, f64c, f64d) f7 (f7, f7b) f72 f73 (f73, f73b, f73c, f73d) f74 f75 (f75, f75b) f8 (f8, f8b, f8c, f8d, f8e) f9 (f9, f9b) f10 (f10, f10b, f10c, f10d) f11 (f11, f11b, f11c, f11d, f11e, f11f, f11g, f11h, f11i, f11j, f11k, f11l, f11m) clip keys (both in sway) hang guard3 guard. Named ones only, or all of them; a group
+# f6 (f6, f6b) usb f62 (f62, f62b, f62c) f63 (f63, f63b, f63c) f64 (f64, f64b, f64c, f64d) f7 (f7, f7b) f72 f73 (f73, f73b, f73c, f73d) f74 f75 (f75, f75b) f8 (f8, f8b, f8c, f8d, f8e) f9 (f9, f9b) f10 (f10, f10b, f10c, f10d) f11 (f11, f11b, f11c, f11d, f11e, f11f, f11g, f11h, f11i, f11j, f11k, f11l, f11m, f11n, f11o, f11p, f11q) clip keys (both in sway) hang guard3 guard. Named ones only, or all of them; a group
 # that fails says "== <script>: FAILED" or "<group>: FAILED" (tools/mutation/gui.py reads it).
 set -u
 base=${1:?usage: run.sh <scratch-dir> [binary]}
@@ -146,6 +146,20 @@ for x in j k l m; do
   esac
 done
 [ -f "$T/other.pid" ] && kill "$(cat "$T/other.pid")" 2>/dev/null   # (the stand-in, when f11l didn't run)
+# step 3b: a crash (SIGKILL) keeps the tabs written as they changed; the next start brings them back;
+# a running window's line (a stand-in's) is left alone
+sed -i '/^window /d' "$T/state/ofx/state"
+echo "== f11n"; OFX_TEST_HOME="$T/tree" OFX_TEST_MOUNTINFO="$T/mountinfo" "$here/../../tools/gui/run-script.sh" "$T" "$here/f11n.script" "$bin" "$T/tree"   # (killed: it "fails", no end line)
+grep -q "^window $(cat "$T/f11n.pid" 2>/dev/null) [0-9]* 1 open:" "$T/state/ofx/state" || { echo "f11n: no open line after the kill"; failed f11n; }
+echo "== f11o"; OFX_TEST_HOME="$T/tree" OFX_TEST_MOUNTINFO="$T/mountinfo" "$here/../../tools/gui/run-script.sh" "$T" "$here/f11o.script" "$bin" "$T/tree" || failed f11o
+( trap '' USR1; exec sleep 20 ) >/dev/null 2>&1 & echo $! > "$T/other.pid"
+printf 'window %s 1 0 open:%s:%s %s\n' "$(cat "$T/other.pid")" "$(cut -c1-8 /proc/sys/kernel/random/boot_id)" "$(sed 's/.*) //' /proc/$(cat "$T/other.pid")/stat | cut -d' ' -f20)" "$T/tree/sub1" >> "$T/state/ofx/state"
+echo "== f11p"; OFX_TEST_HOME="$T/tree" OFX_TEST_MOUNTINFO="$T/mountinfo" "$here/../../tools/gui/run-script.sh" "$T" "$here/f11p.script" "$bin" "$T/tree" || failed f11p
+kill "$(cat "$T/other.pid")" 2>/dev/null
+( trap '' USR1; exec sleep 20 ) >/dev/null 2>&1 & echo $! > "$T/other.pid"
+sed 's/.*) //' /proc/$(cat "$T/other.pid")/stat | cut -d' ' -f20 > "$T/windows/$(cat "$T/other.pid")"
+echo "== f11q"; OFX_TEST_HOME="$T/tree" OFX_TEST_MOUNTINFO="$T/mountinfo" "$here/../../tools/gui/run-script.sh" "$T" "$here/f11q.script" "$bin" "$T/tree" || failed f11q
+kill "$(cat "$T/other.pid")" 2>/dev/null
 fi
 if want f10; then
 # F10 step 1: ofx.conf, made at the start in the run's own config folder (run-script's).

@@ -1,0 +1,19 @@
+# F11 step 3b, after f11m (run.sh cleared the window lines): this window's line kept as its tabs
+# change (not at once: 2 s after the change), then the window killed (SIGKILL: no close at all, as a crash
+# or a battery run flat). run.sh checks its line is still there, open (the run "fails": no end line).
+settle
+expect tabs=1 tabdirs=tree modal=-
+key ctrl-t
+key home
+key right
+expect sel=sub2
+key enter
+wait-for 2000 tabs=2 tab=1 tabdirs=tree|sub2
+sh ! grep -q "^window $(cat "$OFX_ROOT/run.pid") [0-9]* 1 open:[^ ]* .*/tree/sub2$" "$OFX_ROOT/state/ofx/state"
+sleep 2600
+sh grep -q "^window $(cat "$OFX_ROOT/run.pid") [0-9]* 1 open:[^ ]* .*/tree/sub2$" "$OFX_ROOT/state/ofx/state" && stat -c %.9Y "$OFX_ROOT/state/ofx/state" > "$OFX_ROOT/f11n.mtime"
+# Nothing changed since: not written again
+sleep 2600
+sh test "$(stat -c %.9Y "$OFX_ROOT/state/ofx/state")" = "$(cat "$OFX_ROOT/f11n.mtime")"
+sh cp "$OFX_ROOT/run.pid" "$OFX_ROOT/f11n.pid"
+sh kill -KILL "$(cat "$OFX_ROOT/run.pid")"

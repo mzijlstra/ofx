@@ -1,49 +1,118 @@
-// The tabs across a restart (F11 step 3, fs/session.c; ofx.conf's restore-tabs): written as a window
-// closes for good, read as one starts, and after Close All the question whether the other windows
-// come back, each started on its line's id (--restore). Included by main.c, after actions.c.
+// The tabs across a restart (F11 steps 3 and 3b, fs/session.c; ofx.conf's restore-tabs): this
+// window's line kept as its tabs change (2 s after a change at most, so a crash or a power cut loses
+// little), closed or taken out as the window closes, read as one starts, and the question whether
+// the other windows come back, each started on its line's id (--restore). Included by main.c,
+// after actions.c.
 
 static bool closing_all;   // this window closes by Close All, its own Ctrl+Q or another's, or a SIGTERM (its tabs kept)
 
+enum { RESTORE_WRITE_MS = 2000 };   // a change written this long after it at most (Michael, 2026-11-02)
+
 static struct {
-    long ids[SESSION_WINDOWS];   // the window lines left after this start took its own
-    int  n;
+    SessionKey  keys[SESSION_WINDOWS];   // the lines left after this start took its own
+    int         n;
+    bool        crashed;                 // one of them a window's that ended without closing
+    SessionLive me;                      // this window's live mark
+    bool        have_me, wrote;
+    u64         last;                    // the hash of the line last written past its time: the tabs, the one shown
+    i64         due;                     // the write waiting, 0 none
 } restore;
 
-// As this window closes for good: its tabs, unless other windows stay open (then they are forgotten,
-// as a browser does) and it isn't Close All.
+// This window's tabs (the one shown as app has it) as its line, live or closed, into out; its length,
+// 0 when it doesn't fit.
+static int restore_line(bool live, char *out, size_t cap)
+{
+    const char *dir[SESSION_TABS];
+    int n = 0;
+    for (int i = 0; i < tabbar.n && n < SESSION_TABS; i++) dir[n++] = i == tabbar.cur ? app.cwd : tabs[tabbar.slot[i]].dir;
+    return session_line((long)getpid(), (i64)time(NULL), tabbar.cur, live && restore.have_me ? &restore.me : NULL, dir, n, out, cap);
+}
+
+// The hash (FNV-1a) of a line past "window <id> <time>": what changes with the tabs; 0 for none.
+static u64 restore_tail(const char *line)
+{
+    const char *p = strchr(line + 7, ' ');
+    p = p ? strchr(p + 1, ' ') : NULL;
+    u64 h = 1469598103934665603ull;
+    for (; p && *p; p++) h = (h ^ (u8)*p) * 1099511628211ull;
+    return p ? h : 0;
+}
+
+// The live line written now, as the tabs are, when they differ from the last one written.
+static void restore_write(void)
+{
+    char path[PATH_MAX];
+    Err err;
+    restore.due = 0;
+    if (!app.conf.restore_tabs || !restore.have_me || !state_path(path, sizeof path)) return;
+    size_t cap = (size_t)SESSION_TABS * PATH_MAX * 3 + 96;
+    char *line = arena_try_push(&scratch, (isize)cap, 1);
+    if (!line || !restore_line(true, line, cap)) return;
+    u64 tail = restore_tail(line);   // (restore_tick asks for a write only when it changed)
+    if (!tail) return;
+    if (!session_put(&scratch, path, (long)getpid(), &restore.me, line, &err)) {
+        fprintf(stderr, "ofx: the tabs not kept: %s\n", err.msg);
+        return;
+    }
+    restore.last = tail, restore.wrote = true;
+}
+
+// After each frame's input: a change of the tabs (or of the folder shown) since the last write is
+// written RESTORE_WRITE_MS after it. The due time for the timer, 0 for none.
+static i64 restore_tick(i64 now)
+{
+    if (!app.conf.restore_tabs || !restore.have_me) return 0;
+    if (restore.due && now >= restore.due) restore_write();
+    if (restore.due) return restore.due;
+    static char line[SESSION_TABS * PATH_MAX * 3 + 96];   // (as restore_write's: the same tabs fit both)
+    u64 tail = restore_line(true, line, sizeof line) ? restore_tail(line) : 0;
+    if (tail && tail != restore.last) restore.due = now + RESTORE_WRITE_MS;
+    return restore.due;
+}
+
+// As this window closes for good: its line closed (the last window, Close All, a SIGTERM), or taken
+// out when other windows stay open (as a browser forgets a window closed then).
 static void restore_save(void)
 {
     char path[PATH_MAX];
     Err err;
-    if (!app.conf.restore_tabs || !state_path(path, sizeof path)) return;
+    if (!state_path(path, sizeof path)) return;
     int others = app.windows[0] ? win_signal_others(app.windows, getpid(), 0) : 0;
-    if (others > 0 && !closing_all) return;
-    tab_save();
-    const char *dir[SESSION_TABS];
-    int n = 0;
-    for (int i = 0; i < tabbar.n && n < SESSION_TABS; i++) dir[n++] = tabs[tabbar.slot[i]].dir;
-    char *line = arena_try_push(&scratch, (isize)n * PATH_MAX * 3 + 64, 1);
-    if (!line || !session_line((long)getpid(), (i64)time(NULL), tabbar.cur, dir, n, line, (size_t)n * PATH_MAX * 3 + 64) ||
-        !session_put(&scratch, path, (long)getpid(), line, &err))
+    const SessionLive *me = restore.have_me ? &restore.me : NULL;
+    if (!app.conf.restore_tabs || (others > 0 && !closing_all)) {
+        if (restore.wrote && !session_put(&scratch, path, (long)getpid(), me, NULL, &err)) fprintf(stderr, "ofx: %s\n", err.msg);
+        return;
+    }
+    size_t cap = (size_t)SESSION_TABS * PATH_MAX * 3 + 96;   // (restore_line takes the tab shown from app)
+    char *line = arena_try_push(&scratch, (isize)cap, 1);
+    if (!line || !restore_line(false, line, cap) || !session_put(&scratch, path, (long)getpid(), me, line, &err))
         fprintf(stderr, "ofx: the tabs not kept: %s\n", line ? err.msg : "no memory");
 }
 
-// As ofx starts, after the first folder is shown: a window's tabs (id's, from --restore; else the
-// newest line's), the first in this tab and the others behind it, the one shown then as it was.
-// plain: started on home (or nothing): the restored ones alone; else the folder asked stays shown,
-// a tab more. With other lines left (Close All), the question.
+// As ofx starts, after the first folder is shown: this window's live mark; then a window's tabs
+// (id's, from --restore; else, with no other window running, the newest line's: closed, or one whose
+// window crashed), the first in this tab and the others behind it, the one shown then as it was.
+// plain: started on home (or nothing): the restored ones alone; else the folder asked stays shown, a
+// tab more. With other lines left, the question. Then this window's own line, at once.
 static void restore_start(long id, bool plain)
 {
     char path[PATH_MAX];
     Err err;
     SessionWin w;
+    i64 start = win_started(getpid());
+    restore.have_me = session_boot(restore.me.boot, sizeof restore.me.boot) && start >= 0;
+    restore.me.start = start;
     if (!app.conf.restore_tabs || !state_path(path, sizeof path)) return;
-    if (!session_take(&scratch, path, id, &w, restore.ids, SESSION_WINDOWS, &restore.n, &err)) return;
-    if (plain) go_to(w.dir[0], STR_EMPTY, 0);
-    for (int i = plain ? 1 : 0; i < w.n; i++) tab_open(w.dir[i], STR_EMPTY, false);
-    if (plain) tab_show(w.shown);
-    app.status[0] = 0;   // (not "Opened … in a new tab" for each)
-    if (!id && restore.n > 0) app.ui.restore_n = restore.n;
+    bool others = !id && app.windows[0] && win_signal_others(app.windows, getpid(), 0) > 0;   // (an extra window: nothing to bring back)
+    if (!others && session_take(&scratch, path, id, &w, restore.keys, SESSION_WINDOWS, &restore.n, &err)) {
+        if (plain) go_to(w.dir[0], STR_EMPTY, 0);
+        for (int i = plain ? 1 : 0; i < w.n; i++) tab_open(w.dir[i], STR_EMPTY, false);
+        if (plain) tab_show(w.shown);
+        app.status[0] = 0;   // (not "Opened … in a new tab" for each)
+        for (int i = 0; i < restore.n; i++) restore.crashed |= restore.keys[i].crashed;
+        if (!id && restore.n > 0) app.ui.restore_n = restore.n;
+    }
+    restore_write();
 }
 
 // The question's answer: yes, each other window started on its line (this binary, --restore id,
@@ -54,9 +123,9 @@ static void restore_others(bool yes)
     Err err;
     for (int i = 0; i < restore.n; i++) {
         char id[24];
-        snprintf(id, sizeof id, "%ld", restore.ids[i]);
+        snprintf(id, sizeof id, "%ld", restore.keys[i].id);
         const char *cmd[] = { app.exe, "--restore", id };
-        if (yes ? !spawn_app(cmd, COUNT(cmd), &err) : state_path(path, sizeof path) && !session_put(&scratch, path, restore.ids[i], NULL, &err))
+        if (yes ? !spawn_app(cmd, COUNT(cmd), &err) : state_path(path, sizeof path) && !session_forget(&scratch, path, restore.keys[i], &err))
             set_status(true, "%s", err.msg);
     }
     restore.n = 0;

@@ -723,8 +723,10 @@ listed: sort, Show Hidden, the tree's open folders, Reopen Closed Tab, the curso
 - **Which window's tabs:** closing one window while others stay forgets its tabs (as browsers do,
   but for Reopen Closed Tab in that window's own session); closing the last one keeps them; Ctrl+Q
   keeps every window's, and so does SIGTERM (a logout or shutdown ends every window at once; Michael,
-  2026-11-02). A crash keeps nothing: that would take each window writing its tabs as they change
-  (offered as a step 3b). A kept window's line stays until a start takes it or the question's No
+  2026-11-02). A crash too (step 3b, Michael 2026-11-02): each window keeps its line as its tabs
+  change (2 s after a change), marked open with its boot and start time, so a line whose process is
+  gone is a window that crashed; one comes back without asking, several with the question. A start
+  while another window runs takes nothing (an extra window). A kept window's line stays until a start takes it or the question's No
   forgets it, so one a window was just started on isn't lost if the first window closes before
   that one has read it.
 - **Started on a folder:** the restored tabs come back, and a folder asked for (xdg-open, Show in
@@ -737,6 +739,7 @@ listed: sort, Show Hidden, the tree's open folders, Reopen Closed Tab, the curso
    the housekeeping.
 2. The tree's open folders; Reopen Closed Tab.
 3. The tabs across a restart (`restore-tabs`), with the Ctrl+Q modal.
+4. (3b) A crash's tabs too: each window's line kept as its tabs change.
 
 ## F10 design (2026-10-30)
 

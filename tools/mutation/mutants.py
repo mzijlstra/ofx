@@ -2203,8 +2203,20 @@ MUTANTS += [
     # Not a mutant: percent_encode's false ignored in session_line (a folder cut short there leaves k
     # past cap - 1, which the check after the loop refuses).
     (SE, '    if (k <= 0 || (size_t)k + 1 >= cap) return 0;', '    if (k <= 0) return 0;'),
-    (SE, ' && ((!line && w.id == id) || !session_kept(', ' && ((!line) || !session_kept('),
-    (SE, ' && ((!line && w.id == id) || !session_kept(', ' && ((false) || !session_kept('),
+    (SE, '            (session_mine(&w, id, me) || (key && w.id == key->id && w.at == key->at) ||', '            ((key && w.id == key->id && w.at == key->at) ||'),
+    (SE, '            (session_mine(&w, id, me) || (key && w.id == key->id && w.at == key->at) ||', '            (session_mine(&w, id, me) || (key && w.id == key->id) ||'),
+    (SE, '             (!session_alive(&w, boot) && !session_kept(', '             (!session_kept('),
+    (SE, ' && !session_alive(&w, boot) && (w.at > at || (w.at == at && here > self))) newer++;', ' && (w.at > at || (w.at == at && here > self))) newer++;'),
+    (SE, ' && !mine.open;   // (a running', ';   // (a running'),
+    (SE, '    return w->open && boot && strcmp(w->live.boot, boot) == 0 && win_started((pid_t)w->id) == w->live.start;', '    return w->open && boot && strcmp(w->live.boot, boot) == 0;'),
+    (SE, '    return w->open && boot && strcmp(w->live.boot, boot) == 0 && win_started((pid_t)w->id) == w->live.start;', '    return w->open && boot && win_started((pid_t)w->id) == w->live.start;'),
+    (SE, '    return me && w->open && w->id == id && strcmp(w->live.boot, me->boot) == 0 && w->live.start == me->start;', '    return me && w->open && w->id == id;'),
+    (SE, 'if (session_parse_line(a, l, &c) && !session_alive(&c, boot) && (id ?', 'if (session_parse_line(a, l, &c) && (id ?'),
+    (SE, 'if (*nrest < cap && session_parse_line(a, l, &c) && !session_alive(&c, boot)) rest', 'if (*nrest < cap && session_parse_line(a, l, &c)) rest'),
+    (SE, 'rest[(*nrest)++] = (SessionKey){ c.id, c.at, c.open };', 'rest[(*nrest)++] = (SessionKey){ c.id, c.at, false };'),
+    # Not a mutant: `else if (!str_eq(how, "closed"))` as `else` ("closed" read again as a first
+    # folder is skipped: not an absolute path).
+    (SE, '        if (c < 1 || c >= (isize)sizeof w->live.boot || start < 0) return false;', '        if (start < 0) return false;'),
     (SE, '    return newer < SESSION_KEEP;', '    return newer <= SESSION_KEEP;'),
     (SE, '    int newer = extra && extra_at >= at;', '    int newer = 0;'),
     (SE, '    int newer = extra && extra_at >= at;', '    int newer = extra && extra_at > at;'),
@@ -2213,7 +2225,7 @@ MUTANTS += [
     (SE, '(id ? c.id == id && (!found || c.at > w->at) : !found || c.at > w->at)', '(id ? c.id == id && (!found || c.at > w->at) : !found)'),
     (SE, '(id ? c.id == id && (!found || c.at > w->at) : !found || c.at > w->at)', '(!found || c.at > w->at)'),
     (SE, '        if (!l.len || (isize)(l.p - text.p) == pick) continue;', '        if (!l.len) continue;'),
-    (SE, '        if (*nrest < cap && session_parse_line(a, l, &c)) rest[(*nrest)++] = c.id;', '        if (session_parse_line(a, l, &c)) rest[(*nrest)++] = c.id;'),
+    (SE, 'if (*nrest < cap && session_parse_line(a, l, &c) && !session_alive(&c, boot)) rest', 'if (session_parse_line(a, l, &c) && !session_alive(&c, boot)) rest'),
     (SE, '    if (line) memcpy(body + n, line, strlen(line)), n += (isize)strlen(line);', '    (void)line;'),
 
 

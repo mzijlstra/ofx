@@ -2,5 +2,5 @@
 # Close All (Ctrl+Q): its tabs kept beside the other window line run.sh adds after.
 settle
 expect tabs=2 tab=1 tabdirs=tree|sub1 modal=- status=-
-sh grep -q "^window " "$OFX_ROOT/state/ofx/state" && exit 1 || exit 0
+sh [ "$(grep -c '^window ' "$OFX_ROOT/state/ofx/state")" = 1 ] && grep -q "^window $(cat "$OFX_ROOT/run.pid") [0-9]* [0-9]* open:" "$OFX_ROOT/state/ofx/state"   # (its own running line alone, F11 step 3b)
 key ctrl-q

@@ -99,7 +99,9 @@ static void layout_modal_panel(ModalKind k)
         } else if (k == MODAL_RESTORE) {   // (F11 step 3)
             int n = app.ui.restore_n;
             text(cz(n == 1 ? "Bring back the other window?" : arena_sprintf(&frame, "Bring back the other %d windows?", n)), cc(t->fg));
-            text(fit(str_from_c(n == 1 ? "Close All (Ctrl+Q) closed it, with its tabs." : "Close All (Ctrl+Q) closed them, with their tabs."), 430, false), cc(t->fg_dim));
+            const char *why = restore.crashed ? (n == 1 ? "ofx didn't close it properly last time." : "ofx didn't close them all properly last time.")
+                                              : (n == 1 ? "Close All (Ctrl+Q) closed it, with its tabs." : "Close All (Ctrl+Q) closed them, with their tabs.");
+            text(fit(str_from_c(why), 430, false), cc(t->fg_dim));
             text(cz(n == 1 ? "Enter or y brings it back \xC2\xB7 n or Esc forgets it" : "Enter or y brings them back \xC2\xB7 n or Esc forgets them"), cc(t->fg_dim));
             CLAY(CLAY_ID("modal-buttons"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .childGap = 10,
                                                          .childAlignment = { .x = CLAY_ALIGN_X_RIGHT }, .padding = { 0, 0, 8, 0 } } }) {
