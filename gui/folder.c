@@ -211,6 +211,7 @@ static bool go_to_in(const char *dir, Str select, isize fallback, bool stepping)
     u8 *mark = arena_try_new(&lists[next], u8, l.n + 1);
     isize *count = arena_try_new(&lists[next], isize, l.n + 1);
     if (!mime || !mark || !count) {
+        app.ui.grid = grid, app.ui.zoom = zoom, app.ui.sort = sort;   // (as for a folder that can't be listed: F11 review)
         set_status(true, "%s: too many entries for memory", dir);
         return false;
     }

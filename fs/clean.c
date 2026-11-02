@@ -91,19 +91,27 @@ typedef struct {
 typedef struct {
     CleanMount *m;
     isize       n;
+    bool        unknown;   // the list didn't fit its arena: no path is judged (clean_real refuses)
 } CleanMounts;
 
 static CleanMounts clean_mounts(Arena *a, Str mountinfo)
 {
     isize at = 0, lines = 0;
     for (Str line; next_line(mountinfo, &at, &line);) lines++;
-    CleanMounts ms = { arena_new(a, CleanMount, lines + 1), 0 };
+    CleanMounts ms = { arena_try_new(a, CleanMount, lines + 1), 0, false };
+    if (!ms.m) ms.unknown = true;
     at = 0;
-    for (Str line; next_line(mountinfo, &at, &line);) {
+    // (try, never abort: thousands of mounts give the caller's arena no room, and then none are known,
+    // so clean_real keeps every file; F11 review)
+    for (Str line; ms.m && next_line(mountinfo, &at, &line);) {
         char mp[PATH_MAX];
         Str type, src;
         if (!mountinfo_line(line, mp, sizeof mp, &type, &src)) continue;
-        ms.m[ms.n++] = (CleanMount){ arena_sprintf(a, "%s", mp), strlen(mp), !thumb_local(mountinfo, mp) };
+        size_t n = strlen(mp);
+        char *p = arena_try_push(a, (isize)n + 1, 1);
+        if (!p) return (CleanMounts){ NULL, 0, true };
+        memcpy(p, mp, n + 1);
+        ms.m[ms.n++] = (CleanMount){ p, n, !thumb_local(mountinfo, mp) };
     }
     return ms;
 }
@@ -157,6 +165,7 @@ static bool clean_absent_drive(const CleanMounts *ms, const char *path)
 // hang (clean_local): the caller then keeps the preview.
 static bool clean_real(const CleanMounts *ms, const char *path, char *out, size_t cap)
 {
+    if (ms->unknown) return false;   // (no mount list: never judged, kept)
     char rest[PATH_MAX], t[PATH_MAX];
     if (snprintf(rest, sizeof rest, "%s", path) >= (int)sizeof rest || cap < 2) return false;
     snprintf(out, cap, "/");

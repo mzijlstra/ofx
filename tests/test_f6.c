@@ -623,14 +623,14 @@ static void test_trash_keys(void)
     u.empty_asking = true;
     in.modal = UI_MODAL_YES;
     CHECK(ui_handle(&u, names, &in).kind == UA_EMPTY_TRASH);
-    // Left the trash view meanwhile: the panel goes, Yes empties nothing.
+    // Left the trash view meanwhile (a drive gone sends it Home): the question is the trash's, not
+    // the view's, so it stays and Yes empties it (the folder menu asks it from any view: F11 review).
     u.empty_asking = true, u.view = UI_VIEW_FOLDER;
-    in = ui_input_none(), in.modal = UI_MODAL_YES;
-    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && !u.empty_asking);
-    u.empty_asking = true;
     in = ui_input_none();
     ui_handle(&u, names, &in);
-    CHECK(!u.empty_asking);
+    CHECK(u.empty_asking);
+    in = ui_input_none(), in.modal = UI_MODAL_YES;
+    CHECK(ui_handle(&u, names, &in).kind == UA_EMPTY_TRASH && !u.empty_asking);
     // Outside the trash view: r is nothing, Delete trashes, the buttons do nothing.
     in = chars("r");
     CHECK(ui_handle(&u, names, &in).kind == UA_NONE);

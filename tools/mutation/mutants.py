@@ -535,8 +535,7 @@ MUTANTS += [
     ('ui/handle.c', '                if (u->view == UI_VIEW_TRASH && u->focus != UI_FOCUS_SIDE && l->n > 0) return (UiAction){ UA_RESTORE, 0, false };', '                if (u->focus != UI_FOCUS_SIDE && l->n > 0) return (UiAction){ UA_RESTORE, 0, false };'),
     ('ui/handle.c', '            if (l->n > 0 && u->focus != UI_FOCUS_SIDE && u->view == UI_VIEW_TRASH) u->confirming = true,', '            if (0) u->confirming = true,'),
     ('ui/handle.c', '            if (l->n > 0 && u->focus != UI_FOCUS_SIDE && u->view == UI_VIEW_TRASH) return (UiAction){ UA_NOT_IN_TRASH, 0, false };', ''),
-    ('ui/handle.c', 'said_yes && u->view == UI_VIEW_TRASH ? UA_EMPTY_TRASH', 'said_yes ? UA_EMPTY_TRASH'),
-    ('ui/handle.c', '    if (u->view != UI_VIEW_TRASH) u->empty_asking = false;\n', ''),
+    ('ui/handle.c', '(UiAction){ said_yes ? UA_EMPTY_TRASH : UA_NONE, 0, false };   // (from any view', '(UiAction){ UA_EMPTY_TRASH, 0, false };   // (from any view'),
     ('ui/handle.c', '        case UB_RESTORE: if (u->view == UI_VIEW_TRASH && l->n > 0) return', '        case UB_RESTORE: if (l->n > 0) return'),
     ('ui/handle.c', '        case UB_EMPTY: if (u->view == UI_VIEW_TRASH) u->empty_asking = true; break;', '        case UB_EMPTY: u->empty_asking = true; break;'),
     ('ui/handle.c', "            if (yes) return (UiAction){ UA_EMPTY_TRASH, 0, false };", "            return (UiAction){ UA_EMPTY_TRASH, 0, false };"),
@@ -774,7 +773,7 @@ MUTANTS += [
     (CL, "        if (p == d || p - d > 10 || *p != (part ? '.' : '-')) return false;", "        if (p == d || p - d > 10 || *p != (part ? '.' : '.')) return false;"),
     (CL, "    for (int part = 0; part < 2; part++) {", "    for (int part = 0; part < 1; part++) {"),
     (CL, '    return strcmp(p, "png") == 0;', '    return strncmp(p, "png", 3) == 0;'),
-    (CL, "    CleanMounts ms = { arena_new(a, CleanMount, lines + 1), 0 };", "    CleanMounts ms = { arena_new(a, CleanMount, 1), 0 };"),
+    (CL, "    CleanMounts ms = { arena_try_new(a, CleanMount, lines + 1), 0, false };", "    CleanMounts ms = { arena_try_new(a, CleanMount, 1), 0, false };"),
     (CL, '{ { "/run/media/", 2 }, { "/media/", 1 }, { "/mnt/", 1 } };', '{ { "/run/media/", 1 }, { "/media/", 1 }, { "/mnt/", 1 } };'),
     (CL, '{ { "/run/media/", 2 }, { "/media/", 1 }, { "/mnt/", 1 } };', '{ { "/run/media/", 2 }, { "/media/", 1 } };'),
     (CL, '{ { "/run/media/", 2 }, { "/media/", 1 }, { "/mnt/", 1 } };', '{ { "/run/media/", 2 }, { "/mnt/", 1 } };'),
@@ -2141,7 +2140,8 @@ MUTANTS += [
     (FO, '        if (str_eq(w[5], S("on"))) f->rev = 1;', '        if (str_eq(w[5], S("on"))) f->rev = 0;'),
     (FO, '        if (str_eq(w[5], S("off"))) f->rev = 0;\n', ''),
     (FO, " && sel[0] && !strchr(sel, '/')) f->sel", ' && sel[0]) f->sel'),
-    (FO, "        if (!is_digit(w.p[i]) || (n = n * 10 + (w.p[i] - '0')) > max) return -1;", "        if ((n = n * 10 + (w.p[i] - '0')) > max) return -1;"),
+    (FO, "        if (!is_digit(w.p[i]) || n > (max - (w.p[i] - '0')) / 10) return -1;", "        if (n > (max - (w.p[i] - '0')) / 10) return -1;"),
+    (FO, "        if (!is_digit(w.p[i]) || n > (max - (w.p[i] - '0')) / 10) return -1;", "        if (!is_digit(w.p[i]) || n > max / 10) return -1;"),
     (FO, '    return f->view >= 0 || f->zoom > 0 || f->sort >= 0 || f->rev >= 0 || f->sel;', '    return f->view >= 0 || f->zoom > 0 || f->sort >= 0 || f->rev >= 0;'),
     (FO, '    return f->view >= 0 || f->zoom > 0 || f->sort >= 0 || f->rev >= 0 || f->sel;', '    return f->view >= 0 || f->zoom > 0 || f->sort >= 0 || f->sel;'),
     (FO, ' || !clean_real(ms, path, real, sizeof real) || clean_absent_drive(ms, real)) return false;', ' || !clean_real(ms, path, real, sizeof real)) return false;'),
@@ -2211,8 +2211,8 @@ MUTANTS += [
     (SE, '    return w->open && boot && strcmp(w->live.boot, boot) == 0 && win_started((pid_t)w->id) == w->live.start;', '    return w->open && boot && strcmp(w->live.boot, boot) == 0;'),
     (SE, '    return w->open && boot && strcmp(w->live.boot, boot) == 0 && win_started((pid_t)w->id) == w->live.start;', '    return w->open && boot && win_started((pid_t)w->id) == w->live.start;'),
     (SE, '    return me && w->open && w->id == id && strcmp(w->live.boot, me->boot) == 0 && w->live.start == me->start;', '    return me && w->open && w->id == id;'),
-    (SE, 'if (session_parse_line(a, l, &c) && !session_alive(&c, boot) && (id ?', 'if (session_parse_line(a, l, &c) && (id ?'),
-    (SE, 'if (*nrest < cap && session_parse_line(a, l, &c) && !session_alive(&c, boot)) rest', 'if (*nrest < cap && session_parse_line(a, l, &c)) rest'),
+    (SE, 'if (session_parse_line(NULL, l, &c) && !session_alive(&c, boot) && (id ?', 'if (session_parse_line(NULL, l, &c) && (id ?'),
+    (SE, 'if (*nrest < cap && session_parse_line(NULL, l, &c) && !session_alive(&c, boot)) rest', 'if (*nrest < cap && session_parse_line(NULL, l, &c)) rest'),
     (SE, 'rest[(*nrest)++] = (SessionKey){ c.id, c.at, c.open };', 'rest[(*nrest)++] = (SessionKey){ c.id, c.at, false };'),
     # Not a mutant: `else if (!str_eq(how, "closed"))` as `else` ("closed" read again as a first
     # folder is skipped: not an absolute path).
@@ -2225,7 +2225,7 @@ MUTANTS += [
     (SE, '(id ? c.id == id && (!found || c.at > w->at) : !found || c.at > w->at)', '(id ? c.id == id && (!found || c.at > w->at) : !found)'),
     (SE, '(id ? c.id == id && (!found || c.at > w->at) : !found || c.at > w->at)', '(!found || c.at > w->at)'),
     (SE, '        if (!l.len || (isize)(l.p - text.p) == pick) continue;', '        if (!l.len) continue;'),
-    (SE, 'if (*nrest < cap && session_parse_line(a, l, &c) && !session_alive(&c, boot)) rest', 'if (session_parse_line(a, l, &c) && !session_alive(&c, boot)) rest'),
+    (SE, 'if (*nrest < cap && session_parse_line(NULL, l, &c) && !session_alive(&c, boot)) rest', 'if (session_parse_line(NULL, l, &c) && !session_alive(&c, boot)) rest'),
     (SE, '    if (line) memcpy(body + n, line, strlen(line)), n += (isize)strlen(line);', '    (void)line;'),
 
 
@@ -2235,4 +2235,11 @@ MUTANTS += [
     ('ui/ui.c', '    if (u->restore_n > 0) return UI_ON_RESTORE;\n', ''),
     ('ui/handle.c', '        if (yes_no) return u->restore_n = 0, (UiAction){ UA_RESTORE_WINDOWS, 0, said_yes };', '        if (yes_no) return u->restore_n = 0, (UiAction){ UA_RESTORE_WINDOWS, 0, true };'),
     ('ui/handle.c', '            return (UiAction){ UA_RESTORE_WINDOWS, 0, yes };', '            return (UiAction){ UA_RESTORE_WINDOWS, 0, true };'),
+]
+MUTANTS += [
+    # F11 milestone review, step 1 (2026-11-02)
+    (CL, '    if (ms->unknown) return false;   // (no mount list', '    // (no mount list'),
+    (CL, '        if (!p) return (CleanMounts){ NULL, 0, true };', '        if (!p) return ms;'),
+    (SE, '        const char *s = a ? folder_str(a, str_from_c(p)) : "";', '        const char *s = "";'),
+    (SE, '        found = session_parse_line(a, str_cut(text, pick, e), w);', '        found = true;'),
 ]

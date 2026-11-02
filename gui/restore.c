@@ -129,10 +129,15 @@ static void restore_start_in(long id, bool plain)
     if (!app.conf.restore_tabs || !state_path(path, sizeof path)) return;
     bool others = !id && app.windows[0] && win_signal_others(app.windows, getpid(), 0) > 0;   // (an extra window: nothing to bring back)
     if (!others && session_take(&scratch, path, id, &w, restore.keys, SESSION_WINDOWS, &restore.n, &err)) {
-        if (plain) go_to(w.dir[0], STR_EMPTY, 0);
-        for (int i = plain ? 1 : 0; i < w.n; i++) tab_open(w.dir[i], STR_EMPTY, false);
+        // What the start said (a bad line in ofx.conf, no inotify, the folders' defaults forgotten)
+        // stays: opening the tabs would clear it (F11 review, 2026-11-02).
+        char said[sizeof app.status];
+        bool said_bad = app.status_bad;
+        snprintf(said, sizeof said, "%s", app.status);
+        if (plain) go_to_in(w.dir[0], STR_EMPTY, 0, true);   // (stepping: Back from it isn't the start folder)
+        for (int i = w.n - 1; i >= (plain ? 1 : 0); i--) tab_open(w.dir[i], STR_EMPTY, false);   // (last first: each goes right after the tab shown, so they end in their order; F11 review)
         if (plain) tab_show(w.shown);
-        app.status[0] = 0;   // (not "Opened … in a new tab" for each)
+        snprintf(app.status, sizeof app.status, "%s", said), app.status_bad = said_bad;   // (not "Opened … in a new tab" for each)
         for (int i = 0; i < restore.n; i++) restore.crashed |= restore.keys[i].crashed;
         if (!id && restore.n > 0) app.ui.restore_n = restore.n;
     }

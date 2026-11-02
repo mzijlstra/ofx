@@ -111,7 +111,9 @@ static void layout_modal_panel(ModalKind k)
         } else if (k == MODAL_EMPTY) {
             isize all = app.list.n + (app.show_hidden ? 0 : app.list.hidden);
             text(cz("Empty the trash?"), cc(t->fg));
-            text(cz(arena_sprintf(&frame, "All %td %s in it %s deleted for good.", all, items(all), all == 1 ? "is" : "are")), cc(t->fg_dim));
+            // (the count is the trash view's listing; asked from a folder's menu elsewhere, none: F11 review)
+            text(cz(app.ui.view == UI_VIEW_TRASH ? arena_sprintf(&frame, "All %td %s in it %s deleted for good.", all, items(all), all == 1 ? "is" : "are")
+                                                 : "Everything in it is deleted for good."), cc(t->fg_dim));
             text(cz("This can't be undone."), cc(t->red));
             text(cz("Enter or y empties it \xC2\xB7 n or Esc cancels"), cc(t->fg_dim));
             CLAY(CLAY_ID("modal-buttons"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .childGap = 10,

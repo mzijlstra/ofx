@@ -71,7 +71,9 @@ static bool session_mine(const SessionWin *w, long id, const SessionLive *me)
     return me && w->open && w->id == id && strcmp(w->live.boot, me->boot) == 0 && w->live.start == me->start;
 }
 
-// line's window into w, its folders in a; false when it isn't a window line ofx wrote.
+// line's window into w, its folders in a (a NULL: only counted, for a look at its header without
+// copying them: F11 review, every line read again per line filled the arena); false when it isn't a
+// window line ofx wrote.
 static bool session_parse_line(Arena *a, Str line, SessionWin *w)
 {
     if (!str_starts_with(line, S("window "))) return false;
@@ -95,8 +97,8 @@ static bool session_parse_line(Arena *a, Str line, SessionWin *w)
     for (Str d; w->n < SESSION_TABS && (d = folder_word(line, &at)).len;) {
         char p[PATH_MAX];
         if (!percent_decode(d, p, sizeof p) || (p[0] != '/' && !str_starts_with(str_from_c(p), S("trash:")) && !str_starts_with(str_from_c(p), S("search:")))) continue;
-        const char *s = folder_str(a, str_from_c(p));
-        if (s) w->dir[w->n++] = s;
+        const char *s = a ? folder_str(a, str_from_c(p)) : "";
+        if (s) w->dir[w->n++] = a ? s : NULL;
     }
     if (w->shown >= w->n) w->shown = 0;
     return w->n > 0;
@@ -122,14 +124,14 @@ static int session_line(long id, i64 at, int shown, const SessionLive *live, con
 // Whether line l of text (at its place self, written at `at`) is among the newest SESSION_KEEP of
 // text's window lines that aren't running windows' (those are always kept), counting a new line
 // (written at extra_at) as one more when extra.
-static bool session_kept(Arena *a, Str text, i64 at, isize self, bool extra, i64 extra_at, const char *boot)
+static bool session_kept(Str text, i64 at, isize self, bool extra, i64 extra_at, const char *boot)
 {
     int newer = extra && extra_at >= at;   // (the new line goes last: on a tie it is the newer)
     isize p = 0;
     for (Str l; next_line(text, &p, &l);) {
         SessionWin w;
         isize here = (isize)(l.p - text.p);
-        if (here != self && session_parse_line(a, l, &w) && !session_alive(&w, boot) && (w.at > at || (w.at == at && here > self))) newer++;
+        if (here != self && session_parse_line(NULL, l, &w) && !session_alive(&w, boot) && (w.at > at || (w.at == at && here > self))) newer++;
     }
     return newer < SESSION_KEEP;
 }
@@ -146,7 +148,7 @@ static bool session_edit(Arena *a, const char *path, long id, const SessionLive 
     int lock = state_lock(path);
     if (!state_read(a, path, &text, err)) return state_unlock(lock), false;
     SessionWin mine;
-    bool extra = line && session_parse_line(a, str_cut(str_from_c(line), 0, (isize)strlen(line) - 1), &mine) && !mine.open;   // (a running window's line isn't counted)
+    bool extra = line && session_parse_line(NULL, str_cut(str_from_c(line), 0, (isize)strlen(line) - 1), &mine) && !mine.open;   // (a running window's line isn't counted)
     isize cap = text.len + (line ? (isize)strlen(line) : 0) + 2;
     char *body = arena_try_push(a, cap, 1);
     if (!body) return state_unlock(lock), err_set(err, "%s: too big", path), false;
@@ -154,9 +156,9 @@ static bool session_edit(Arena *a, const char *path, long id, const SessionLive 
     for (Str l; next_line(text, &at, &l);) {
         SessionWin w;
         if (!l.len) continue;
-        if (session_parse_line(a, l, &w) &&
+        if (session_parse_line(NULL, l, &w) &&
             (session_mine(&w, id, me) || (key && w.id == key->id && w.at == key->at) ||
-             (!session_alive(&w, boot) && !session_kept(a, text, w.at, (isize)(l.p - text.p), extra, extra ? mine.at : 0, boot))))
+             (!session_alive(&w, boot) && !session_kept(text, w.at, (isize)(l.p - text.p), extra, extra ? mine.at : 0, boot))))
             continue;
         memcpy(body + n, l.p, (size_t)l.len), n += l.len, body[n++] = '\n';
     }
@@ -192,8 +194,13 @@ static bool session_take(Arena *a, const char *path, long id, SessionWin *w, Ses
     isize pick = -1, at = 0;
     for (Str l; next_line(text, &at, &l);) {
         SessionWin c;
-        if (session_parse_line(a, l, &c) && !session_alive(&c, boot) && (id ? c.id == id && (!found || c.at > w->at) : !found || c.at > w->at))
+        if (session_parse_line(NULL, l, &c) && !session_alive(&c, boot) && (id ? c.id == id && (!found || c.at > w->at) : !found || c.at > w->at))
             *w = c, found = true, pick = (isize)(l.p - text.p);
+    }
+    if (found) {   // (its folders now, the line's alone)
+        isize e = pick;
+        while (e < text.len && text.p[e] != '\n') e++;
+        found = session_parse_line(a, str_cut(text, pick, e), w);
     }
     if (!found) return state_unlock(lock), false;
     char *body = arena_try_push(a, text.len + 1, 1);
@@ -203,7 +210,7 @@ static bool session_take(Arena *a, const char *path, long id, SessionWin *w, Ses
     for (Str l; next_line(text, &at, &l);) {
         SessionWin c;
         if (!l.len || (isize)(l.p - text.p) == pick) continue;
-        if (*nrest < cap && session_parse_line(a, l, &c) && !session_alive(&c, boot)) rest[(*nrest)++] = (SessionKey){ c.id, c.at, c.open };
+        if (*nrest < cap && session_parse_line(NULL, l, &c) && !session_alive(&c, boot)) rest[(*nrest)++] = (SessionKey){ c.id, c.at, c.open };
         memcpy(body + m, l.p, (size_t)l.len), m += l.len, body[m++] = '\n';
     }
     bool ok = state_write(path, body, m, err);

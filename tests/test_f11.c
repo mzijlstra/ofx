@@ -334,7 +334,8 @@ static void test_session(void)
     // Closed lines: the newest taken, the rest's keys (crashed marked), one forgotten by its key.
     snprintf(line, sizeof line, "window 9 20 0 closed /a\nwindow 11 30 1 closed trash:/// /x\nwindow 12 25 0 open:00000000:7 /c\n");
     put(path, line);
-    CHECK(session_take(&ta, path, 0, &w, rest, 16, &nrest, &err) && w.id == 11 && w.shown == 1 && w.n == 2 && nrest == 2 && rest[0].id == 9 &&
+    CHECK(session_take(&ta, path, 0, &w, rest, 16, &nrest, &err) && w.id == 11 && w.shown == 1 && w.n == 2 && w.dir[1] && strcmp(w.dir[1], "/x") == 0 &&
+          nrest == 2 && rest[0].id == 9 &&
           !rest[0].crashed && rest[1].id == 12 && rest[1].crashed && rest[1].at == 25);
     CHECK(session_forget(&ta, path, rest[1], &err) && strcmp(read_file(&ta, path).p, "window 9 20 0 closed /a\n") == 0);
     CHECK(session_take(&ta, path, 9, &w, rest, 16, &nrest, &err) && w.id == 9 && nrest == 0);
@@ -402,4 +403,47 @@ static void test_restore_question(void)
     CHECK(c.restore_tabs && !c.sort_rev && !c.bad);
     conf_defaults(&c);
     CHECK(!c.restore_tabs);
+}
+
+// The F11 milestone review's bugs in fs/ (2026-11-02): a number too long for i64 isn't one; a mount
+// list too big for its arena judges nothing; 80 window lines through a 1 MiB arena still keep 8.
+static void test_review_fs(void)
+{
+    CHECK(folder_num(S("99999999999999999999"), INT64_MAX / 2) == -1 && folder_num(S("4611686018427387903"), INT64_MAX / 2) == 4611686018427387903LL);
+    CHECK(folder_num(S("4611686018427387904"), INT64_MAX / 2) == -1);
+    static Folders t;
+    folders_parse(&ta, S("folder /a 99999999999999999999 list - - - -\n"), &t);
+    CHECK(t.n == 1 && t.f[0].at == 0);
+    static u8 tiny[64];
+    Arena small;
+    arena_init(&small, "mounts-tiny", tiny, sizeof tiny);
+    CleanMounts ms = clean_mounts(&small, S("1 0 0:1 / / rw - ext4 a rw\n2 1 0:2 / /x rw - ext4 b rw\n3 1 0:3 / /y rw - ext4 c rw\n"));
+    char real[PATH_MAX];
+    CHECK(ms.unknown && !clean_real(&ms, "/home/m/x", real, sizeof real) && !folder_gone(&ms, "/nowhere/ofx-test"));
+    static u8 room[120];   // (room for the table, not for the long mount points: unknown too)
+    arena_init(&small, "mounts-room", room, sizeof room);
+    ms = clean_mounts(&small, S("1 0 0:1 / /mnt/a-mount-point-with-a-rather-long-name-indeed rw - ext4 a rw\n2 1 0:2 / /mnt/another-mount-point-with-a-long-name-too rw - ext4 b rw\n"));
+    CHECK(ms.unknown && !clean_real(&ms, "/home/m/x", real, sizeof real));
+    ops_guard(root);
+    char path[PATH_MAX], line[256];
+    snprintf(path, sizeof path, "%s", at("f11r/state"));
+    put(path, "");
+    const char *dirs[] = { "/home/m/a folder with a long name", "/home/m/b", "/home/m/c", "/home/m/d", "/home/m/e", "/home/m/f", "/home/m/g", "/home/m/h" };
+    FILE *f = fopen(path, "w");
+    for (int i = 0; i < 80; i++) {
+        session_line(1000 + i, i, 0, NULL, dirs, 8, line, sizeof line);
+        fputs(line, f);
+    }
+    fclose(f);
+    static u8 mem[MiB(1)];
+    Arena a;
+    arena_init(&a, "session-1m", mem, sizeof mem);
+    Err err;
+    session_line(2000, 500, 0, NULL, dirs, 8, line, sizeof line);
+    CHECK(session_put(&a, path, 2000, NULL, line, &err));
+    Str text = read_file(&ta, path);
+    int lines = 0;
+    for (isize i = 0; i < text.len; i++) lines += text.p[i] == '\n';
+    CHECK(lines == SESSION_KEEP && strstr(text.p, "window 2000 ") && strstr(text.p, "window 1079 ") && !strstr(text.p, "window 1072 "));
+    ops_guard(NULL);
 }

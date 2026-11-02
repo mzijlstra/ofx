@@ -193,6 +193,7 @@ static void *clip_loop(void *arg)
         }
         wl_display_dispatch_pending(clip.dpy);
     }
+    clip.ok = false;   // (the connection gone: a copy falls back to GLFW's, not lost; F11 review)
     return NULL;
 }
 

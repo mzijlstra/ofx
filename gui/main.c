@@ -674,7 +674,7 @@ int main(int argc, char **argv)
     // F11 step 3: the tabs from the last time, the folder asked a tab more unless it is home.
     char home_real[PATH_MAX];
     const char *h = getenv("HOME");
-    restore_start(restore_id, !selecting && (!start || (h && realpath(h, home_real) && strcmp(home_real, dir) == 0)));
+    restore_start(restore_id, !selecting && !pick.len && (!start || (h && realpath(h, home_real) && strcmp(home_real, dir) == 0)));   // (a file asked: not plain)
 
     const char *script_path = getenv("OFX_GUI_SCRIPT");
     bool scripted = script_path && script_path[0];
@@ -789,6 +789,9 @@ int main(int argc, char **argv)
         // F2 opened the edit line: on the cursor's entry, as it is named now.
         if (!was_editing && app.ui.focus == UI_FOCUS_EDIT && !app.ui.edit_path) edit_opened();
         if (a.kind != UA_NONE) act(a);
+        // A Close All answered Stay (its question, with jobs) is no Close All any more: this window
+        // closing later as one of several forgets its tabs (F11 review, 2026-11-02).
+        if (closing_all && !close_asked && !app.ui.quit_asking && !app.quit) closing_all = false;
         // The search field changed (F9): it is searched for 150 ms after the last change.
         if (app.ui.search_edited) app.ui.search_edited = false, app.search_due = now_ms() + SEARCH_TYPE_MS, timer_at(wake_due());
         dirty |= seen;

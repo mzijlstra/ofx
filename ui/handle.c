@@ -145,14 +145,13 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         if (yes_no) return u->cancel_asking = false, (UiAction){ said_yes ? UA_CANCEL_JOB : UA_NONE, u->cancel_id, false };
         break;
     case UI_ON_EMPTY:
-        if (yes_no) return u->empty_asking = false, (UiAction){ said_yes && u->view == UI_VIEW_TRASH ? UA_EMPTY_TRASH : UA_NONE, 0, false };
+        if (yes_no) return u->empty_asking = false, (UiAction){ said_yes ? UA_EMPTY_TRASH : UA_NONE, 0, false };   // (from any view: the folder menu's on Trash, F8)
         break;
     case UI_ON_RESTORE:
         if (yes_no) return u->restore_n = 0, (UiAction){ UA_RESTORE_WINDOWS, 0, said_yes };
         break;
     default: break;
     }
-    if (u->view != UI_VIEW_TRASH) u->empty_asking = false;
     UiOnTop on = ui_on_top(u);
     bool prompt = on != UI_ON_NONE;
     if (prompt) u->menu_on = false;

@@ -517,7 +517,8 @@ static bool hover_at(float x, float y)
     // (what is drawn lit; a menu's entries are ui_menu_hover's)
     bool changed = h.row != o.row || h.side != o.side || h.bar != o.bar || h.crumb != o.crumb || h.tab != o.tab || h.tab_x != o.tab_x ||
                    h.mode != o.mode || h.eject != o.eject || h.modal != o.modal || h.job_x != o.job_x || h.zoom != o.zoom ||
-                   h.menu_title != o.menu_title || h.bmp_btn != o.bmp_btn || h.find_x != o.find_x || h.find_step != o.find_step;
+                   h.menu_title != o.menu_title || h.bmp_btn != o.bmp_btn || h.find_x != o.find_x || h.find_step != o.find_step ||
+                   h.inside_btn != o.inside_btn;   // (the search bar's In files, lit by footer.c: F11 review)
     app.hov = h;
     changed |= ui_menu_hover(&app.ui, h.menu_title, h.menu_item);
     // Onto another icon button (or off one): its tooltip waits UI_TIP_MS, the timer wakes the loop.

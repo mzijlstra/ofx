@@ -63,8 +63,10 @@ static i64 folder_num(Str w, i64 max)
 {
     i64 n = 0;
     if (!w.len) return -1;
-    for (isize i = 0; i < w.len; i++)
-        if (!is_digit(w.p[i]) || (n = n * 10 + (w.p[i] - '0')) > max) return -1;
+    for (isize i = 0; i < w.len; i++) {   // (n checked before it grows: no i64 overflow, F11 review)
+        if (!is_digit(w.p[i]) || n > (max - (w.p[i] - '0')) / 10) return -1;
+        n = n * 10 + (w.p[i] - '0');
+    }
     return n;
 }
 

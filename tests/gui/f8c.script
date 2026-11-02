@@ -88,6 +88,14 @@ click-here
 expect menu=- modal=empty
 type n
 expect modal=-
+# Asked again from this folder view, y empties it (F11 review, 2026-11-02: the trash view's gate dropped the question)
+point-ui side-row 3
+right-here
+point-menu empty-it
+click-here
+expect menu=- modal=empty trash=0
+type y
+wait-for 3000 modal=- trashfull=0
 # A path button: its folder's Properties; Open in Terminal there
 point-ui crumb 0
 right-here

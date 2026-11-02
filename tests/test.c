@@ -1800,6 +1800,7 @@ int main(void)
     test_state_writers();
     test_session();
     test_restore_question();
+    test_review_fs();
     test_open_line_keys();
     test_search_match();
     test_search_keys_find();

@@ -55,7 +55,7 @@ static void trash_targets(void)
         else if (!first.msg[0]) first = err;
     }
     if (ok == 0) undo_clear(&undo);
-    say_done("Trashed", ok, n, path_base(str_from_c(paths[0])).p, first.msg);
+    if (n > 0) say_done("Trashed", ok, n, path_base(str_from_c(paths[0])).p, first.msg);
     ui_mark_clear(&app.ui);
     trash_state();
     reload();
@@ -834,8 +834,9 @@ static void act(UiAction a)
     case UA_TAB_MOVE: ui_tabs_move(&tabbar, (int)a.index); break;
     case UA_RESTORE_WINDOWS: restore_others(a.all); break;   // (F11 step 3)
     case UA_TAB_REOPEN:   // (F11) open again, shown
-        if (closed_tabs.n > 0) closed_tabs.n--, tab_open(closed_tabs.dir[closed_tabs.n], STR_EMPTY, true);
-        else set_status(false, "No closed tab to open again");
+        if (closed_tabs.n == 0) set_status(false, "No closed tab to open again");
+        else if (tabbar.n == UI_TABS_MAX) set_status(true, "%d tabs is the most ofx keeps open", UI_TABS_MAX);   // (kept for when one closes)
+        else closed_tabs.n--, tab_open(closed_tabs.dir[closed_tabs.n], STR_EMPTY, true);
         break;
     case UA_TAB_OTHERS:   // (F8) from the last, so each place stays right as the ones after it go
         for (int i = tabbar.n - 1; i >= 0; i--)

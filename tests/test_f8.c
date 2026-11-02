@@ -359,6 +359,15 @@ static void test_ctx_folder_menu(void)
     u.ctx_full = true, u.menu_on = true;
     in = ui_input_none(), in.menu_item = menu_place(UI_CTX_FOLDER, UM_EMPTY_IT);
     CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.empty_asking && !u.menu_on);
+    // Answered from this folder view (not the trash view): y and Yes empty it, other input leaves the
+    // question up (F11 review, 2026-11-02: the view gate dropped it at once).
+    CHECK(u.view != UI_VIEW_TRASH);
+    in = ui_input_none();
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.empty_asking);
+    in = chars("y");
+    CHECK(ui_handle(&u, names, &in).kind == UA_EMPTY_TRASH && !u.empty_asking);
+    u.empty_asking = true, in = ui_input_none(), in.modal = UI_MODAL_YES;
+    CHECK(ui_handle(&u, names, &in).kind == UA_EMPTY_TRASH && !u.empty_asking);
     u.empty_asking = false, u.ctx_trash = u.ctx_full = false;
     // A path button: its menu, the sidebar's cursor left alone; one that isn't there: nothing.
     in = ui_input_none(), in.ctx_crumb = 1, in.crumb_n = 3;

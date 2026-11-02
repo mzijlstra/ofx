@@ -1,0 +1,10 @@
+# F11 milestone review (2026-11-02), after f11q (restore-tabs back on, and a bad line in ofx.conf,
+# from run.sh): started on a file in home, it is no plain start: the file selected in the tab shown,
+# f11p's kept tabs behind, in their order; and the start's word about ofx.conf's bad line stays.
+settle
+expect tabs=3 tab=0 tabdirs=tree|tree|sub2 sel=top.txt statusbad=1 not key value line
+# (the question: f11p's stand-in, ended, left a line that is a crash's now) forgotten
+expect modal=restore
+type n
+expect modal=-
+quit
