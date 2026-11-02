@@ -848,8 +848,10 @@ MUTANTS += [
     # `keys ? 0` (its first entry, New Tab) are equivalent, as New Tab, Close All and Close can
     # always be picked. Edit (F7.4) has entries that can't.
     ('ui/menus.c', "    u->menu_at = keys ? ui_menu_next(u, -1, 1) : -1;", "    u->menu_at = ui_menu_next(u, -1, 1);"),
-    ('ui/menus.c', "    ui_edit_close(u), ui_find_leave(u);\n}", "    ui_find_leave(u);\n}"),
-    ('ui/menus.c', "    ui_edit_close(u), ui_find_leave(u);\n}", "    ui_edit_close(u);\n}"),
+    ('ui/menus.c', "    ui_edit_close(u), ui_find_leave(u);\n    ui_unfocus", "    ui_find_leave(u);\n    ui_unfocus"),
+    ('ui/menus.c', "    ui_edit_close(u), ui_find_leave(u);\n    ui_unfocus", "    ui_edit_close(u);\n    ui_unfocus"),
+    ('ui/menus.c', "    ui_unfocus(u, UI_FOCUS_SEARCH), ui_unfocus(u, UI_FOCUS_INSIDE);\n}", "    ui_unfocus(u, UI_FOCUS_INSIDE);\n}"),
+    ('ui/menus.c', "    ui_unfocus(u, UI_FOCUS_SEARCH), ui_unfocus(u, UI_FOCUS_INSIDE);\n}", "    ui_unfocus(u, UI_FOCUS_SEARCH);\n}"),
     ('ui/menus.c', 'static UiAction ui_menu_pick(Ui *u, UiMenuItem it)\n{\n    u->menu_on = false;', 'static UiAction ui_menu_pick(Ui *u, UiMenuItem it)\n{'),
     ('ui/menus.c', '    case UM_OPEN: return (UiAction){ UA_OPEN, u->list.sel, u->marked > 0 };', '    case UM_OPEN: return (UiAction){ UA_OPEN, 0, u->marked > 0 };'),
     ('ui/menus.c', '    case UM_CLOSE_ALL: return (UiAction){ UA_CLOSE_ALL, 0, true };', '    case UM_CLOSE_ALL: return (UiAction){ UA_CLOSE_ALL, 0, false };'),

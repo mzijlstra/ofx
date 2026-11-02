@@ -145,12 +145,14 @@ static int ui_menu_next(const Ui *u, int at, int dir)
 }
 
 // Menu m open: by a key, its first entry that can be picked marked; by the pointer, none. The edit
-// line and the find line close (a new folder keeps its name).
+// line and the find line close (a new folder keeps its name), and the search view's fields give
+// the keys to the results (F12: a key the menu doesn't take, Ctrl+V, went on into the field).
 static void ui_menu_open(Ui *u, int m, bool keys)
 {
     u->menu_on = true, u->menu = m;
     u->menu_at = keys ? ui_menu_next(u, -1, 1) : -1;
     ui_edit_close(u), ui_find_leave(u);
+    ui_unfocus(u, UI_FOCUS_SEARCH), ui_unfocus(u, UI_FOCUS_INSIDE);
 }
 
 // A right-click menu m opened (F8): the files take the keys; keys: a key opened it.

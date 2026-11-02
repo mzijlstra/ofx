@@ -454,6 +454,16 @@ static void test_search_inside_keys(void)
     in = ui_input_none(), in.field = UI_FIELD_INSIDE, in.field_toggle = 1;
     ui_handle(&u, names, &in);
     CHECK(!u.inside_opts.cased);
+    // A menu opened from either field takes the keys to the results: Ctrl+V there pastes no text
+    // into the field (F12; a key the menu doesn't take went on into it).
+    for (int f = 0; f < 2; f++) {
+        u.menu_on = false, u.focus = f ? UI_FOCUS_INSIDE : UI_FOCUS_SEARCH;
+        isize was = f ? u.inside.len : u.search.len;
+        menu_keys(&u, 1, UK_F10);
+        CHECK(u.menu_on && u.focus == UI_FOCUS_LIST && !ui_line_active(&u, NULL));
+        in = ui_input_none(), in.ev[in.nev++] = (UiEvent){ UK_PASTE, 0 }, in.paste = S("pasted");
+        CHECK(ui_handle(&u, names, &in).kind == UA_NOT_IN_SEARCH && !u.menu_on && (f ? u.inside.len : u.search.len) == was);
+    }
     u.menu_on = false, u.view = UI_VIEW_FOLDER;
     in = ui_input_none(), in.inside_btn = true;
     ui_handle(&u, names, &in);
