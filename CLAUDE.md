@@ -150,7 +150,7 @@ tests/gui/run.sh <absolute scratch> "$PWD/build/ofx" f62 f6   # some groups only
 `tools/mutation/run.py` (the unit mutants) runs one worker per core, in two passes: every mutant
 under tcc first (a 25 ms build, no sanitizers), then the ones tcc didn't kill, or couldn't build,
 under clang with ASan and UBSan as `make test` has them. 609 mutants in 44 s (clang alone 190 s;
-gcc, one at a time, about 45 min). Every worker runs the unmutated tests first under both, all at
+gcc, one at a time, about 45 min); 1836 in 216 s on 2026-11-02 (tcc kills all but 9). Every worker runs the unmutated tests first under both, all at
 once, so a test that only fails under load shows before any kill counts. `--clang-only` skips tcc
 (and it is skipped without `tcc` on PATH: `sudo pacman -S tcc`). A mutant that doesn't compile tests
 nothing: when deleting a statement would leave an `else` without its `if`, empty it instead (`{}`).
@@ -212,7 +212,7 @@ so every run does it. `gui.py` runs from its scratch copy, scripts included, so 
 - The script language is at the top of `gui/script.c`. Start every script with `settle`; check
   the `state` line rather than screenshots where you can.
 
-## Where the code is (2026-10-28)
+## Where the code is (2026-11-02)
 
 One unity build per binary: gui/main.c includes base/, fs/ (fs/fs.c) and ui/ (ui/ui.c), then its own
 files in order. ui/ is raylib-free and unit-tested (tests/test.c includes it); a function in fs/ or
@@ -222,7 +222,9 @@ ui/ that nothing calls makes the test build warn.
   (path_within, path_below, path_put, path_parent, xdg_dir, mkdir_p, the URI and mountinfo codecs);
   `fs/search.c` the search's address and walk, inside files too; `fs/editors.c` Open at Line's
   recipes; `fs/conf.c` ofx.conf (its options table, parser, written default, `conf_load`);
-  `fs/places.c` the sidebar's places, unmounted drives too; `fs/clean.c` ofx-clean's rules.
+  `fs/places.c` the sidebar's places, unmounted drives too; `fs/clean.c` ofx-clean's rules;
+  `fs/state.c` the state file (its lock, `state_rewrite`, the one way every writer changes it),
+  `fs/folders.c` its per-folder lines, `fs/session.c` its window lines (F11).
 - `ui/ui.c`: the types (Ui, UiInput, UiAction, UiFocus, UiOnTop) and tables, then `cursor.c`
   (lists), `match.c`, `find.c`, `edit.c` (UiLine), `prompts.c`, `menus.c`, `panels.c`, `handle.c`
   (ui_handle), `helpers.c` (path buttons, location, tabs, history, timing, text fit).
@@ -230,7 +232,9 @@ ui/ that nothing calls makes the test build warn.
   `actions.c` (act, changing files), `icons.c`, `files.c` (the list and sidebar drawn), `topbar.c`,
   `panels.c` (modal panels, Properties), `footer.c` (job rows, find and search bars, status),
   `frame.c` (tooltips, layout, draw), `input.c` (keys, hit_at, hover), `prefs.c` (ofx.conf read
-  and applied, Edit → Preferences…), `eject.c` (udisksctl mount, unmount, eject); the worker
+  and applied, Edit → Preferences…), `eject.c` (udisksctl mount, unmount, eject), `remember.c`
+  (per folder view, zoom, sort and cursor, F11), `restore.c` (the tabs across a restart and a
+  crash, F11 step 3 and 3b); the worker
   threads and the panels' own files (`openwith.c`, `bookmarks.c`, ...) as before.
 
 ## At the end of each major milestone (Michael, 2026-10-28)

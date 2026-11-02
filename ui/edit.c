@@ -200,8 +200,6 @@ static void ui_line_cut(UiLine l, int from, int to)
     *l.caret = *l.anchor = from;
 }
 
-// Bytes b[0..n) in place of the selection, the caret after them; false (nothing changed) when they
-// don't fit.
 // The field's text set to s, as much as it holds, the caret at its end, nothing selected: a
 // search's text from its address, a bookmark's label to rename (gui/ sets them; 2026-10-28).
 static void ui_line_set(UiLine l, Str s)
@@ -211,6 +209,8 @@ static void ui_line_set(UiLine l, Str s)
     *l.len = *l.caret = *l.anchor = n;
 }
 
+// Bytes b[0..n) in place of the selection, the caret after them; false (nothing changed) when they
+// don't fit.
 static bool ui_line_put(UiLine l, const char *b, int n)
 {
     int lo, hi;

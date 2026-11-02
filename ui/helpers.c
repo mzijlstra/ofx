@@ -445,8 +445,6 @@ static void ui_size(char *buf, size_t cap, i64 size)
     else snprintf(buf, cap, "%.0f %s", v, UNITS[u]);
 }
 
-// A modification time: "14:03" today, "Oct 20" this year, "2025-10-20" before, as `now` sees it
-// (local time).
 // What the status line says when no message is up (F6): about the one entry marked, how many are
 // marked, or else the folder's count and its drive's free space.
 typedef struct {

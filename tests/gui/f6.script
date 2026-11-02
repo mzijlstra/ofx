@@ -4,7 +4,7 @@
 # $OFX_ROOT/mountinfo (OFX_TEST_MOUNTINFO); run.sh makes the tree, the bookmark Bee, the list.
 settle
 expect sidemode=places sides=^Places|Home|Bee|Trash|^Drives|File_System trash=0 trashfull=0 trashicon=user-trash
-# ofx keeps no folder busy by its own working directory (reviewer-2, F6.1)
+# ofx keeps no folder busy by its own working directory (F6.1 review)
 sh test "$(readlink /proc/$(cat "$OFX_ROOT/run.pid")/cwd)" = /
 wait-for 2000 spaced=1
 # A drive mounted, and gone again
@@ -211,7 +211,7 @@ sh printf '33 1 0:31 / / rw - btrfs /dev/x rw\n' > "$OFX_ROOT/mountinfo"
 wait-for 3000 sides=^Places|Home|Bee|Trash|^Drives|File_System
 sh printf x > "$OFX_ROOT/data/Trash/files/o.txt"
 wait-for 2000 n=1 trashfull=1
-# the folder's own watch kept its mask: a write shows (reviewer-2, 2026-10-30: it was replaced)
+# the folder's own watch kept its mask: a write shows (review, 2026-10-30: it was replaced)
 sh printf yy >> "$OFX_ROOT/data/Trash/files/o.txt"
 wait-for 2000 sizecell=3_B
 sh rm "$OFX_ROOT/data/Trash/files/o.txt"

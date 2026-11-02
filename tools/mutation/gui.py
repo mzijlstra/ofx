@@ -210,7 +210,7 @@ MUTANTS = [
     # the hover for the pointer where it is (Michael, 2026-10-24)
     ('gui/input.c', "    return on ? hover_at(x, y) : hover_at(-1e6f, -1e6f);", "    return hover_at(x, y);"),
     (G, "            if (scripted ? script.pointing && hover_refresh(true, script.px, script.py) : hover_refresh(IsCursorOnScreen(), m.x, m.y))\n                dirty = true, glfwPostEmptyEvent();\n", ""),
-    # a full icon cache at a zoom (reviewer-2, F6.3 review)
+    # a full icon cache at a zoom (F6.3 review)
     (G, "        if (app.icons_missed && app.icons_reset_armed) icons_reset()", "        if (app.icons_missed) icons_reset()"),
     ('gui/actions.c', "        app.icons_reset_armed = true;   // the other", "        ;   // the other"),
     ('gui/icons.c', "return app.icons_missed = true, arena_restore(&scratch, mark), NULL;", "return arena_restore(&scratch, mark), NULL;"),
@@ -381,7 +381,7 @@ MUTANTS = [
     ('gui/input.c', '    if (m == GLFW_MOD_ALT && key == GLFW_KEY_DOWN) return UK_ALT_DOWN;   // (Edit Bookmarks\' move down)', '', 'f75'),
     ('gui/folder.c', '        int at = bm_keep >= 0 ? bm_locate(&bmarks, &prev, bm_keep) : -1;', '        int at = -1;', 'f75'),
     # Not run: the bmp buttons' and the field's drawing, the hint (pixels); edit-bookmarks.png shows them.
-    # ---- F7.5: reviewer-2's MEDIUM, a bookmarks file not read whole
+    # ---- F7.5: the review's MEDIUM, a bookmarks file not read whole
     ('gui/folder.c', '    bool ok = bm_read(&bmwa, file, &now, &err) && bm_add(', '    bool ok = (bm_read(&bmwa, file, &now, &err) || true) && bm_add(', 'f75'),
     # Not run: bmp_change's bm_read refusal (with the file unreadable the panel lists no line to act
     # on) and the empty-format refusals (an over-a-MiB file); test_f75.c covers bm_read and bm_format.
@@ -543,7 +543,7 @@ MUTANTS = [
     ('gui/search.c', ' && search.hidden == q.hidden && ', ' && ', 'f9'),
     ('gui/search.c', 'search_opts_eq(search.opts, q.o) && ', '', 'f9'),
     ('gui/search.c', '    search.done = (q.text.len == 0 && q.inside.len == 0) || !search.started;', '    search.done = !search.started;', 'f9'),
-    # the review's two LOWs (reviewer-2, 2026-10-28)
+    # the review's two LOWs (review, 2026-10-28)
     ('gui/actions.c', '    if (i >= app.list.n || !entry_path(i, path, sizeof path)) return;', '    if (i >= app.list.n || !path_put(path, sizeof path, app.cwd, app.list.e[i].name)) return;', 'f9'),
     ('gui/folder.c', '    static char key[PATH_MAX];\n    return app.have_list', '    static char key[NAME_MAX + 1];\n    return app.have_list', 'f9'),
     # ---- F9 step 2: working with results (2026-10-28). Left out: Ctrl+Enter's GLFW mapping (scripts
@@ -884,7 +884,7 @@ def failed_groups(out):
 # compositor that didn't start, the socket checks): it never ran, so that failure says nothing about
 # the build. (2026-10-29: five mutants counted as killed by keys, with no expectation failed, that
 # no group kills; a start timed out under load is the likely cause, as the stale wayland-N sockets
-# of 2026-10-28. reviewer-2's marker, rather than one message to look for.)
+# of 2026-10-28. the review's marker, rather than one message to look for.)
 RUN_LAUNCHED = 'run-script: the window launched'
 
 def unstarted(r):
@@ -1057,7 +1057,7 @@ if retagged:
     print(f'{len(retagged)} mutants tagged in {tags_path}: {sorted(retagged)}')
 for w in works:
     shutil.rmtree(w, ignore_errors=True)
-# What didn't run is said, so a summary never reads 0 for mutants that weren't tested (reviewer-2,
+# What didn't run is said, so a summary never reads 0 for mutants that weren't tested (review,
 # F7.1.1 review).
 untested = sorted(unbuilt + unrun) + (['the rest: out of disk'] if stopped else [])
 print(f'{len(todo)} GUI mutants, {len(survivors)} survived: {sorted(survivors)}' + (f'; NOT TESTED: {untested}' if untested else ''))

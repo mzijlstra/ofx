@@ -2,7 +2,7 @@
 # Runs one scripted ofx window (OFX_GUI_SCRIPT, gui/script.c) in a private headless weston
 # (tools/gui/weston.sh, or tools/gui/sway.sh with OFX_COMPOSITOR=sway), started for the run and
 # stopped after it. Nothing reaches Michael's
-# screen or his Hyprland: the window's WAYLAND_DISPLAY is weston's socket, checked before launch.
+# screen or his Hyprland: the window's WAYLAND_DISPLAY is that compositor's socket, checked before launch.
 #
 #   tools/gui/run-script.sh <scratch-dir> <script> <binary> <args...>
 #
@@ -49,7 +49,7 @@ if [ "$sc" != - ]; then
     sc=$(cd "$(dirname "$sc")" && pwd)/$(basename "$sc")
 fi
 # Each also writes its words one by one, in brackets, to spawn-args.log: spawn.log joins them with
-# spaces, so a word with a space in it can't be told from two (reviewer-2, 2026-10-29).
+# spaces, so a word with a space in it can't be told from two (review, 2026-10-29).
 for f in uwsm-app gio xdg-open xdg-terminal-exec; do   # xdg-open: ofx's opener before gio
     cat > "$T/fakes/$f" <<EOS
 #!/bin/sh
@@ -136,7 +136,10 @@ sock=$("$here/$comp.sh" start "$T") || exit 1
 # Interrupted (Ctrl-C, a killed mutant run): the window and the compositor stopped too, never left
 # running (F11 review, 2026-11-02).
 pid=""
-trap '[ -n "$pid" ] && kill "$pid" 2>/dev/null; "$here/$comp.sh" stop "$T" >/dev/null 2>&1; exit 130' INT TERM HUP
+stop_run() { [ -n "$pid" ] && kill "$pid" 2>/dev/null; "$here/$comp.sh" stop "$T" >/dev/null 2>&1; exit "$1"; }
+trap 'stop_run 130' INT   # (128 + the signal, as a shell reports one)
+trap 'stop_run 143' TERM
+trap 'stop_run 129' HUP
 # Never Michael's display: the socket must be the one the compositor just made, and not his.
 case $comp:$sock in weston:ofx-test-* | sway:wayland-[0-9]*) ;; *) echo "run-script: unexpected socket '$sock'" >&2; "$here/$comp.sh" stop "$T"; exit 1 ;; esac
 [ "$sock" != "${WAYLAND_DISPLAY:-}" ] || { echo "run-script: $comp's socket is this session's display" >&2; "$here/$comp.sh" stop "$T"; exit 1; }

@@ -32,7 +32,7 @@ static void test_match(void)
     // inside it), and ^ there is not the start.
     CHECK(m_has(S("a-b"), "a-|b", (UiMatchOpts){ .regex = true, .word = true }));
     CHECK(!m_has(S("-ab"), "^(-a|ab)", (UiMatchOpts){ .regex = true, .word = true }));
-    // A shorter match from the same start that is whole, where the longest isn't (reviewer-2).
+    // A shorter match from the same start that is whole, where the longest isn't (a review).
     CHECK(m_has(S("--_ "), "-*-", (UiMatchOpts){ .regex = true, .word = true }));
     CHECK(m_has(S("ab-cd"), "ab|ab-c", (UiMatchOpts){ .regex = true, .word = true }));
     CHECK(!m_has(S("abcd"), "ab|ab-c", (UiMatchOpts){ .regex = true, .word = true }));
@@ -53,7 +53,7 @@ static void test_match(void)
     CHECK(m_has(S("x \xC3\xA9t\xC3\xA9"), ".t.", (UiMatchOpts){ .regex = true, .word = true }));
     CHECK(m_has(S("a\xFF\xFEz"), "z$", re) && !m_has(S("\xFF"), "^a", re));
     m_has(S("a\xFF" "b"), "a.b", re), m_has(S("\xC3"), ".", (UiMatchOpts){ .regex = true, .word = true });   // (no crash either way)
-    // Plain text folds past ASCII too (reviewer-2): é and É; not with the case toggle; whole words;
+    // Plain text folds past ASCII too (a review): é and É; not with the case toggle; whole words;
     // never from inside a character; a byte that isn't UTF-8 still matches itself.
     CHECK(m_has(S("CAF\xC3\x89"), "caf\xC3\xA9", plain) && !m_has(S("CAF\xC3\x89"), "caf\xC3\xA9", cased));
     CHECK(m_has(S("x \xC3\x89t\xC3\xA9 y"), "\xC3\xA9T\xC3\x89", word) && !m_has(S("\xC3\x89t\xC3\xA9s"), "\xC3\xA9t\xC3\xA9", word));
@@ -553,7 +553,7 @@ static void test_set_default(void)
     CHECK(op_set_default(&ta, S("text/x-tex"), "nvim.desktop", &err));
     char args[256];
     CHECK(wait_file(at("bin731/args"), args, sizeof args) && strcmp(args, "mime -- text/x-tex nvim.desktop") == 0);
-    // An alias is set (and checked) by its canonical name (reviewer-2).
+    // An alias is set (and checked) by its canonical name (a review).
     unlink(at("bin731/args"));
     CHECK(op_set_default(&ta, S("image/x-old"), "imv.desktop", &err));
     CHECK(wait_file(at("bin731/args"), args, sizeof args) && strcmp(args, "mime -- image/png imv.desktop") == 0);
@@ -688,7 +688,7 @@ static void test_find_count(void)
     in = ui_input_none(), in.find_step = 1;
     ui_handle(&u, names, &in);
     CHECK(u.list.sel == was);
-    // Opened again, no text yet: no count, and Up and Down find nothing (reviewer-2: they stepped
+    // Opened again, no text yet: no count, and Up and Down find nothing (the review: they stepped
     // through the last find's matches).
     in = chars("/");
     ui_handle(&u, names, &in);
@@ -790,7 +790,7 @@ static void test_find_bar(void)
     in = keys(1, UK_ESC);
     ui_handle(&u, names, &in);
     CHECK(u.list.sel == 2);
-    // The same with no match: the cursor where the find began, inside the list (reviewer-2: it was
+    // The same with no match: the cursor where the find began, inside the list (the review: it was
     // past the end, and Enter opened entry 6 of 3).
     ui_set(&u.list, COUNT(find_names), 6);
     in = chars("/");
@@ -808,7 +808,7 @@ static void test_find_bar(void)
     ui_handle(&u, names, &in);
     ui_set(&u.list, COUNT(find_names), 6);
     // A click in the field with the rename line open: the line closes, the keys go to the bar
-    // (reviewer-2: the line took them, and Enter renamed).
+    // (the review: the line took them, and Enter renamed).
     in = chars("/a");
     ui_handle(&u, names, &in);
     in = keys(2, UK_ENTER, UK_F2);
@@ -868,7 +868,7 @@ static void test_shift_select(void)
     in = keys(1, UK_SEL_HOME);
     ui_handle(&u, names, &in);
     CHECK(u.list.sel == 0 && u.marked == 20);
-    // A Shift move doesn't wrap round (reviewer-2: Shift+Up on the first entry marked them all).
+    // A Shift move doesn't wrap round (the review: Shift+Up on the first entry marked them all).
     ui_mark_clear(&u);
     in = keys(1, UK_SEL_UP);
     ui_handle(&u, names, &in);

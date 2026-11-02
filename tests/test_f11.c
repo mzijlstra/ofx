@@ -181,7 +181,7 @@ static void test_tree_remember(void)
     ops_guard(NULL);
 }
 
-// reviewer-2's LOWs on F11 step 1 (2026-11-01): a state file that can't be read whole isn't written
+// the review's LOWs on F11 step 1 (2026-11-01): a state file that can't be read whole isn't written
 // over; writers at once (Ctrl+Q) lose nothing under the lock; autofs is a far mount.
 static void test_state_writers(void)
 {
@@ -349,7 +349,7 @@ static void test_session(void)
     put(path, "window 3 1 0 closed /a\nwindow 3 2 0 closed /b\n");
     CHECK(session_forget(&ta, path, (SessionKey){ 3, 1, false }, &err) && strcmp(read_file(&ta, path).p, "window 3 2 0 closed /b\n") == 0);
 
-    // At most SESSION_KEEP lines besides running windows' (reviewer-2, 2026-11-01: 80 piled up): 12
+    // At most SESSION_KEEP lines besides running windows' (review, 2026-11-01: 80 piled up): 12
     // closed put, the 8 newest left; this window's running line kept besides them; ties: the later.
     put(path, "");
     session_line(getpid(), 1000, 0, &me, dirs, 1, mine, sizeof mine);   // (the newest: not counted, as a running window's)

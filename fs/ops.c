@@ -54,7 +54,7 @@ static bool ops_resolve(const char *path, char *out, size_t cap)
     return n >= 0 && (size_t)n < cap;
 }
 
-// Whether prog, as PATH finds it (or as given, with a /), may run (2026-10-30, reviewer-2): with the
+// Whether prog, as PATH finds it (or as given, with a /), may run (2026-10-30, a review): with the
 // guard on, only one under its folder (a test's fake), so a test whose PATH lost its fakes never
 // runs the real udisksctl on Michael's drives, nor any program ofx starts (spawn_detached). Without
 // the guard, any.
@@ -309,7 +309,7 @@ static bool op_set_default(Arena *a, Str type, const char *app, Err *err)
 {
     // The canonical name, not an alias gio info may give (.p12, .p7b): a list's canonical key would
     // win over the alias's, so setting the alias would do nothing while the check said done
-    // (reviewer-2, F7.3.1 review).
+    // (F7.3.1 review).
     Str names[APPS_TYPES_MAX];
     apps_names(a, &type, names, APPS_TYPES_MAX);
     char list[PATH_MAX];

@@ -140,7 +140,7 @@ static void on_send(void *data, struct ext_data_control_source_v1 *s, const char
 
 // Someone else owns the selection now. Whoever takes a source out of clip.src destroys it: when
 // clip_set or clip_clear_own already did (a Ctrl+C racing another program's copy), s is gone, and
-// destroying it here too would free it twice (reviewer-2, F3 review, 2026-10-20).
+// destroying it here too would free it twice (F3 review, 2026-10-20).
 static void on_cancelled(void *data, struct ext_data_control_source_v1 *s)
 {
     (void)data;

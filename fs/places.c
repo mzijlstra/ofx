@@ -200,7 +200,7 @@ static void places_add_unmounted(Arena *scratch, Places *pl, const char *sysbloc
     static char names[NAMES_MAX][64];
     int nn = 0;
     // Never a drive to mount, and there may be hundreds (loop devices): left out before the count,
-    // so they can't crowd out the drives (reviewer-2, 2026-10-30: 300 loops hid all four).
+    // so they can't crowd out the drives (review, 2026-10-30: 300 loops hid all four).
     static const char *const NOT[] = { "loop", "ram", "zram", "dm-", "md", "nbd" };
     for (struct dirent *e; nn < NAMES_MAX && (e = readdir(d));) {
         size_t len = strlen(e->d_name);

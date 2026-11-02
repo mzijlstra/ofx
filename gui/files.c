@@ -238,7 +238,6 @@ static void layout_side(float h)
     }
 }
 
-// The trash view's bar over the columns (F6): what it is, Restore and Empty Trash.
 // Each top bar and footer button's element id, by UiBar: the code that draws one, its tooltip and
 // the hit test read it here (2026-10-28: each spelled them out, and a typo in one gave a button that
 // draws but can't be clicked).
@@ -266,6 +265,7 @@ static void trash_button(UiBar b, const char *label, bool danger)
     }
 }
 
+// The trash view's bar over the columns (F6): what it is, Restore and Empty Trash.
 static void layout_trash_bar(void)
 {
     Theme *t = &app.theme;
@@ -286,10 +286,7 @@ static float perms_w(void)
     return app.ui.group_col ? 3 * GAP + OWNER_W + GROUP_W + PERM_W : 2 * GAP + OWNER_W + PERM_W;
 }
 
-// Whether the list shows Owner and Permissions (and Group): View → Show Permissions on, and Name
-// keeps NAME_MIN_W beside them in a window w wide (Michael, 2026-10-27: they give way on a narrow
-// one, and the status line says so).
-enum { NAME_MIN_W = 150 };   // (200 until Michael found it hid them beside a second window)
+enum { NAME_MIN_W = 150 };   // Name's least width beside Owner and Permissions (200 until Michael found it hid them beside a second window)
 
 // Entry e's date as the list shows it, in ofx.conf's date-format (F10; "" without one). The list
 // and the scripts' state line both take it from here.
@@ -311,7 +308,7 @@ static float date_w(void)
     if (f == app.conf.date && strcmp(pattern, app.conf.date_pattern) == 0) return cached;
     f = app.conf.date, snprintf(pattern, sizeof pattern, "%s", app.conf.date_pattern);
     // Wide digits (8s) on a Saturday in August, and Wednesday in September: the C locale's widest
-    // day and month names, for a pattern with %A or %B (reviewer-2, 2026-10-30).
+    // day and month names, for a pattern with %A or %B (review, 2026-10-30).
     static const struct tm WIDE[] = { { .tm_year = 2088 - 1900, .tm_mon = 7, .tm_mday = 28, .tm_hour = 20, .tm_min = 48, .tm_sec = 48, .tm_isdst = -1 },
                                       { .tm_year = 2088 - 1900, .tm_mon = 8, .tm_mday = 29, .tm_hour = 20, .tm_min = 48, .tm_sec = 48, .tm_isdst = -1 } };
     float w = DATE_W;
@@ -326,6 +323,9 @@ static float date_w(void)
     return cached = w;
 }
 
+// Whether the list shows Owner and Permissions (and Group): View → Show Permissions on, and Name
+// keeps NAME_MIN_W beside them in a window w wide (Michael, 2026-10-27: they give way on a narrow
+// one, and the status line says so).
 static bool perms_shown(float w)
 {
     float rest = w - side_w() - 2 * PAD - ICON_PX - 3 * GAP - SIZE_W - date_w();

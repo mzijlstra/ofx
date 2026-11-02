@@ -194,7 +194,7 @@ static Texture2D *thumb_for(const char *path, i64 mtime, i64 size, ThumbKind kin
     // A dropped texture is asked again for a cell on screen only: a page ahead asked again would load
     // it, have it dropped, and ask again, a read every frame.
     // A page ahead asks only for the types ofx makes: another type's preview is only read, and
-    // that is quick enough when its cell comes (reviewer-2, F6.4 review).
+    // that is quick enough when its cell comes (F6.4 review).
     if ((e->state == TS_UNKNOWN && (draw || kind != TK_NONE)) || (draw && e->state == TS_DROPPED)) {
         pthread_mutex_lock(&thumbs.mu);
         if (thumbs.rn < THUMB_QUEUE) {

@@ -401,13 +401,13 @@ static bool img_orient(Arena *a, Img in, int o, Img *out)
 
 // libjpeg-turbo's own memory for one JPEG, in MiB, and a progressive one's scans: it allocates a
 // progressive file's coefficients at full size itself, outside the arena, and TurboJPEG 3.2's
-// defaults are unlimited (reviewer-2, F6.4 review: a 6.3 MB 40000 by 40000 file took 3.1 GiB).
+// defaults are unlimited (F6.4 review: a 6.3 MB 40000 by 40000 file took 3.1 GiB).
 // A 12 MP progressive photo needs about 70. A variable, so a test can lower it.
 static int thumb_jpeg_max_mib = 256;
 enum { THUMB_JPEG_SCANS_MAX = 500 };
 
 // A TurboJPEG call that succeeded, or only warned: junk before a marker, a cut file (gdk-pixbuf,
-// Nemo's, decodes both; reviewer-2, F6.4 review).
+// Nemo's, decodes both; F6.4 review).
 static bool tj_ok(tjhandle tj, int r)
 {
     return r == 0 || tj3GetErrorCode(tj) == TJERR_WARNING;
@@ -556,7 +556,7 @@ static bool thumb_make(Arena *a, ThumbKind k, Str src, int side, Img *out)
 // Whether ofx makes previews on the drive holding path, by mountinfo (the mount with the longest
 // mount point above it): not on network file systems or FUSE ones (fuse.sshfs, fuse.gvfsd-fuse),
 // whose reads can hang a worker; fuseblk, a local disk (NTFS), isn't "fuse" nor "fuse.*"; autofs, as
-// a look under it mounts what it stands for (a NAS that is down blocks it; reviewer-2, 2026-11-01).
+// a look under it mounts what it stands for (a NAS that is down blocks it; review, 2026-11-01).
 // Unknown: local.
 static bool thumb_local(Str mountinfo, const char *path)
 {

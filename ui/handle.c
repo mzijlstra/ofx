@@ -119,20 +119,22 @@ static bool ui_find_event(Ui *u, UiNames names, UiEvent e, const UiInput *in)
 
 // One frame's input. Clicks first, then the events in order up to the first that asks gui/ for
 // something (after it, the list may be another folder's). The wheel scrolls the list without
-// moving its cursor, one row a notch (Michael's choice for prdash-tui). A prompt (a clash, the
-// delete confirm) takes every key until it is answered; the edit line takes the keys that edit.
+// moving its cursor, one row a notch (Michael's choice for prdash-tui). What is on top (ui_on_top: a
+// question, a note, a panel, a menu) takes every key until it is answered or closed; the edit line
+// takes the keys that edit.
 static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
 {
     UiList *l = &u->list;
     // The window closed, or another window's Close All (SIGUSR1, F7.1): taken before anything that
-    // ends the frame early (a click, the queue-full note), as gui/ queues it once (reviewer-2,
+    // ends the frame early (a click, the queue-full note), as gui/ queues it once (review,
     // F7.1 review). At once, or asked first when jobs run or wait.
     for (int k = 0; k < in->nev && !u->quit_asking; k++)
         if (in->ev[k].key == UK_QUIT) {   // (asking closes a menu: below)
             if (in->jobs_all <= 0) return (UiAction){ UA_QUIT, 0, false };
             u->quit_asking = true, u->cancel_asking = false;
         }
-    // The panels F5.3 adds: the queue full (any key or OK), quit, cancel a job; and Empty Trash.
+    // The panels F5.3 adds: the queue full (any key or OK), quit, cancel a job; Empty Trash, and the
+    // Bring back question (F11).
     bool yes_no = in->modal == UI_MODAL_YES || in->modal == UI_MODAL_NO, said_yes = in->modal == UI_MODAL_YES;
     switch (ui_on_top(u)) {
     case UI_ON_FULL:
@@ -344,7 +346,7 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         ui_edit_close(u);
         if (in->click_mods & UI_MOD_SHIFT) ui_mark_range(u, l->sel, row);
         else if (in->click_mods & UI_MOD_CTRL) ui_mark(u, row, !ui_marked(u, row));
-        l->sel = row, ui_unfocus(u, UI_FOCUS_SIDE), ui_unfocus(u, UI_FOCUS_FIND);   // (the find bar stays open; reviewer-2, 2026-10-28)
+        l->sel = row, ui_unfocus(u, UI_FOCUS_SIDE), ui_unfocus(u, UI_FOCUS_FIND);   // (the find bar stays open; review, 2026-10-28)
         ui_show_sel(l);
     }
     if (!prompt && in->dclick >= 0 && l->top + in->dclick < l->n) {

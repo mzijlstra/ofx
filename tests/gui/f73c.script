@@ -1,5 +1,5 @@
 # --select on a folder (FileManager1's ShowItems, 2026-10-26): the folder it is in, it selected,
-# not the folder's own list (reviewer-2: it opened inside); a trailing / is the same.
+# not the folder's own list (the review: it opened inside); a trailing / is the same.
 settle
 expect n=6 sel=sub
 quit

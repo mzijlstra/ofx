@@ -148,7 +148,7 @@ sh sed -i "1i file://$OFX_ROOT A\nfile://$OFX_DIR B\nfile://$OFX_DIR/sub2 C" "$O
 wait-for 3000 bmn=4 sides=^Places|Home|A|B|C|Sub|Trash|^Drives|File_System
 point-ui side-row 5
 right-here
-# (its top at 0, over the menu bar: the overlap this checks, pinned, reviewer-2 2026-10-30)
+# (its top at 0, over the menu bar: the overlap this checks, pinned, review, 2026-10-30)
 expect menu=folder menubox=100,0,280,347
 point-menu open-it
 click-here

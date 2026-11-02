@@ -58,7 +58,7 @@ expect status=Can't unmount MY STICK: Error unmount: target is busy
 sh test "$OFX_DIR" = "$OFX_ROOT/media/MY STICK"
 sh rm "$OFX_ROOT/udisks-fail"
 # (udisksctl answers a second after the mount list changed, as with eject's power-off: the window is
-# Home before the answer, never in media/; reviewer-2, 2026-10-30). A second tab on the drive,
+# Home before the answer, never in media/; review, 2026-10-30). A second tab on the drive,
 # behind: Home too (Michael, 2026-10-30); a third, on another drive's folder, stays.
 key ctrl-t
 key ctrl-t

@@ -14,7 +14,7 @@ typedef enum { UNDO_NONE, UNDO_RENAME, UNDO_MKDIR, UNDO_TRASH, UNDO_COPY, UNDO_M
 
 // rename, move: from was moved to to; new folder, new file, copy: to was made; a link: to, pointing at from; a permission change
 // (F7.2): to's mode was info's first word (octal), the file then its device and inode (the rest),
-// so the undo never reaches another file put at that path since (reviewer-2, F7.2 review); trash: from went to file,
+// so the undo never reaches another file put at that path since (F7.2 review); trash: from went to file,
 // with its info.
 typedef struct {
     char *from, *to, *info;

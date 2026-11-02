@@ -188,7 +188,7 @@ typedef struct {
 } TrashDirs;
 
 // A drive's trash folder that ofx lists only as the spec lets it write there (trash_for): its own
-// folder, no symlink; .Trash/$uid only in a sticky .Trash that isn't a symlink (reviewer-2, F6).
+// folder, no symlink; .Trash/$uid only in a sticky .Trash that isn't a symlink (F6 review).
 enum { TRASH_HOME, TRASH_ADMIN, TRASH_USER };
 
 static bool trash_dir_ours(const char *dir, int kind)
@@ -242,7 +242,7 @@ typedef struct TrashItem {
 } TrashItem;
 
 // Whether path has a ".." part: a .trashinfo on a drive anyone could have written (a USB stick)
-// must not send a restore out of its drive (reviewer-2, F6 review).
+// must not send a restore out of its drive (F6 review).
 static bool trash_path_climbs(const char *path)
 {
     Str p = str_from_c(path);
@@ -389,7 +389,7 @@ static bool trash_restore_item(const TrashItem *t, Err *err)
 }
 
 // What Empty Trash deletes, the folders themselves kept (a trash watcher, gvfs's, watches info/;
-// reviewer-2, F6 review): each item in files/ and after it its .trashinfo (deleted only when the
+// F6 review): each item in files/ and after it its .trashinfo (deleted only when the
 // item went), the items without one, the .trashinfo files without an item, and the home trash's
 // directorysizes cache. Into out, at most max; false when that was too few.
 typedef struct {

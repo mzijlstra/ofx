@@ -35,7 +35,7 @@ expect datecolw=133
 # A pattern of its own
 sh printf 'date-format = %%d.%%m.%%Y\n' > "$OFX_ROOT/config/ofx/ofx.conf"
 wait-for 3000 conf=on:10485760:pattern: confbad=0 seldate=02.01.2025
-# names: the column as wide as the widest (Wednesday, September; reviewer-2)
+# names: the column as wide as the widest (Wednesday, September; a review)
 sh printf 'date-format = %%A %%B\n' > "$OFX_ROOT/config/ofx/ofx.conf"
 wait-for 3000 seldate=Thursday_January datecolw=144
 # The search's skip list: target left out, node_modules entered now

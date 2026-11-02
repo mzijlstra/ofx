@@ -63,7 +63,7 @@ static void trash_targets(void)
 
 // What the delete question asks about, taken when it opens: a selection or a cursor that changes
 // while it is up (a delete job finishing in another tab, the cursor's file removed from outside)
-// must not change what Yes deletes (reviewer-2, F5 review, 2026-10-21).
+// must not change what Yes deletes (F5 review, 2026-10-21).
 static struct {
     char *path[CLIP_PATHS_MAX];
     isize n;
@@ -520,7 +520,6 @@ static void tab_open_bg(const char *path)
     tab_open(path, STR_EMPTY, false);
 }
 
-// The tab at place `at` (-1: the one on screen) closed; the last one closes ofx.
 // The tabs closed in this session, the last at the end, for Reopen Closed Tab (F11, Ctrl+Shift+T):
 // each one's folder (its cursor is the folder's, remembered: remember.c).
 enum { CLOSED_TABS_MAX = 16 };
@@ -529,6 +528,7 @@ static struct {
     int  n;
 } closed_tabs;
 
+// The tab at place `at` (-1: the one on screen) closed; the last one closes ofx.
 static void tab_close(int at)
 {
     if (at < 0) at = tabbar.cur;

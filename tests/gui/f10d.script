@@ -1,6 +1,6 @@
 # F10, after f10c on the same scratch tree: ofx.conf's whole folder removed while ofx runs (its
 # watch ends, IN_IGNORED); Preferences makes it again and watches the new folder, so an edit
-# applies (reviewer-2, 2026-11-01).
+# applies (review, 2026-11-01).
 settle
 expect conf=on:10485760:iso: confbad=0
 sh rm -rf "$OFX_ROOT/config/ofx"

@@ -94,7 +94,7 @@ wait-for 3000 n=2
 key ctrl-z
 wait-for 3000 n=1 sel=big2.bin
 sh test -f "$OFX_ROOT/home/tree/bdir/big2.bin"
-# ---- an action during a job (reviewer-2, F5.3 review): a file the job reads can't be trashed; a
+# ---- an action during a job (F5.3 review): a file the job reads can't be trashed; a
 # file it doesn't touch can, and the job's end leaves that trash's undo be
 key ctrl-l
 type ~/tree/src2

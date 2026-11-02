@@ -68,7 +68,7 @@ static bool trash_any(void)
 }
 
 // How many items the trash folders hold (each trash's files/), for the Empty Trash question: counted
-// once as it opens, the same in any view (reviewer-2, 2026-11-02: from a folder's menu nothing
+// once as it opens, the same in any view (review, 2026-11-02: from a folder's menu nothing
 // showed how much goes).
 static isize trash_count(void)
 {
@@ -92,7 +92,7 @@ static isize trash_count(void)
 static bool trash_state(void)
 {
     trash_scan();
-    watch_trashes(&trashd);   // armed before the look, so a change after it is an event (reviewer-2)
+    watch_trashes(&trashd);   // armed before the look, so a change after it is an event (a review)
     bool full = trash_any();
     bool changed = full != app.trash_full;
     app.trash_full = full;
@@ -251,7 +251,7 @@ static bool go_to_in(const char *dir, Str select, isize fallback, bool stepping)
         ui_line_set(ui_search_line(&app.ui), text);
         ui_line_set(ui_inside_line(&app.ui), inside);
         app.ui.search_inside = inside.len > 0;   // (step 3: the address says whether it searched inside)
-        app.ui.search_was_inside = false;   // (another search's field doesn't carry over: reviewer-2, 2026-10-29)
+        app.ui.search_was_inside = false;   // (another search's field doesn't carry over: review, 2026-10-29)
         if (text.len == 0 && inside.len == 0) app.ui.focus = UI_FOCUS_SEARCH;
         else ui_unfocus(&app.ui, UI_FOCUS_SEARCH), ui_unfocus(&app.ui, UI_FOCUS_INSIDE);
         app.ui.search_edited = false, app.search_due = 0;
@@ -357,7 +357,7 @@ static void drive_gone_tabs(const char *mp)
 
 // The drives in was (nwas, as they were before the places were read again) that have gone, whatever
 // removed them (unmounted, ejected, pulled out) and before udisksctl answers: the tab shown, on one,
-// goes Home when the main loop next comes round (reviewer-2 and Michael, 2026-10-30: the folder's
+// goes Home when the main loop next comes round (Michael and the review, 2026-10-30: the folder's
 // own watch reached the gone-folder fallback first, /run/media/<user>; Nemo crashes there), and so
 // does every tab behind on it (Michael). A list with no / is a mount list read that failed
 // (read_file's empty answer), not every drive gone at once: no tab moves for it (2026-11-01).
@@ -465,20 +465,20 @@ static void bookmark_add(const char *dir)
     set_status(false, "Bookmarked %.*s", STR_ARG(path_base(str_from_c(dir))));
 }
 
-// The tree built again (tree mode only): opened down to the folder shown when `follow`, with the
-// cursor on its row; else the cursor stays on its folder, or on the row `fallback`.
 // The tree's open folders into the state file (tree=, F11), as they are now.
 static void tree_remember(void)
 {
     char path[PATH_MAX];
     Err err;
     ArenaMark mark = arena_mark(&scratch);
-    size_t cap = tree_open_cap(&tree);   // (not nopen × PATH_MAX × 3: 128 open would pass the scratch arena; reviewer-2, 2026-11-01)
+    size_t cap = tree_open_cap(&tree);   // (not nopen × PATH_MAX × 3: 128 open would pass the scratch arena; review, 2026-11-01)
     char *text = arena_try_push(&scratch, (isize)cap, 1);
     if (text && tree_open_text(&tree, text, cap) && state_path(path, sizeof path) && !state_put(&scratch, path, "tree", text, &err)) set_status(true, "%s", err.msg);
     arena_restore(&scratch, mark);
 }
 
+// The tree built again (tree mode only): opened down to the folder shown when `follow`, with the
+// cursor on its row; else the cursor stays on its folder, or on the row `fallback`.
 static void tree_refresh(bool follow, int fallback)
 {
     if (app.ui.side_mode != SIDE_TREE) return;

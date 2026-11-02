@@ -220,7 +220,7 @@ static void test_conf_step2(void)
     conf_parse(str_from_c(longline), &c);
     CHECK(c.neditor == 1 && !c.bad);
     // 32 lines of 511 bytes, 17 words each, fit the GUI's 64 KiB arena (editor_now's): each word
-    // takes its own bytes, not the rest of its line (reviewer-2, 2026-11-01).
+    // takes its own bytes, not the rest of its line (review, 2026-11-01).
     {
         static char big[EDITORS_USER * (CONF_LINE_MAX + 16)];
         size_t at = 0;

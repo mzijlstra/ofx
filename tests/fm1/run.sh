@@ -10,7 +10,7 @@ S=$1 BIN=$2
 case $S in /*) ;; *) echo "fm1: the scratch folder must be absolute" >&2; exit 2 ;; esac
 rm -rf "$S"
 # The bus's socket in a short folder of its own: a unix socket's path is at most 107 bytes, and a
-# long scratch path overran it (reviewer-2).
+# long scratch path overran it (a review).
 B=$(mktemp -d "${TMPDIR:-/tmp}/ofx-fm1-XXXXXX")
 trap 'rm -rf "$B"' EXIT
 mkdir -p "$S/services" "$S/fakes" "$S/t/sub dir" "$S/t/b"

@@ -55,7 +55,7 @@
 //   raw-key <key> [mods]    GLFW key code <key> pressed through input.c's key callback, with GLFW's
 //                           mod bits (1 Shift, 2 Ctrl, 4 Alt): what ui_key_of makes of it
 //   user-keys               from here on the compositor's keyboard reaches the window too, keys
-//                           and characters through GLFW's callbacks as a user's: `sh wtype …` in
+//                           and characters through GLFW's callbacks as a user's: `sh vkbd … &` in
 //                           the test sway (tools/gui/sway.sh; weston has no virtual keyboard)
 //   clip-text <text>        the rest of the line onto GLFW's clipboard as another program's copy
 //                           would put it, \n a line break (weston has no data-control)

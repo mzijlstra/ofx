@@ -268,7 +268,7 @@ static void test_close_all_keys(void)
     // The window closed, or another window's Close All (SIGUSR1): as before, this one only.
     in = job_input(0, 0), in.ev[in.nev++] = (UiEvent){ UK_QUIT, 0 };
     CHECK(ui_handle(&u, names, &in).kind == UA_QUIT);
-    // Not lost to a click in the same frame (gui/ queues it once: reviewer-2, F7.1 review): a bar
+    // Not lost to a click in the same frame (gui/ queues it once: F7.1 review): a bar
     // button, a header, a double click, a menu title or entry, a press away from a menu, a job's ×.
     for (int c = 0; c < 7; c++) {
         Ui v = menu_ui(3);
@@ -560,7 +560,7 @@ static void test_windows(void)
     CHECK(win_started(named) >= me);
     kill(named, SIGKILL);
     child_signal(named);
-    // Only names and bodies as win_register writes them (reviewer-2, F7.1 review): "+pid", " pid",
+    // Only names and bodies as win_register writes them (F7.1 review): "+pid", " pid",
     // "0pid", or the time with more after it, are left alone; so is a FIFO, without blocking.
     pid_t odd = waiting_child();
     snprintf(out, sizeof out, "%lld\n", (long long)win_started(odd));

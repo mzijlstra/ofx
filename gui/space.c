@@ -1,4 +1,4 @@
-// The drives' size and free space, and the folder shown's, on a thread of their own (reviewer-2,
+// The drives' size and free space, and the folder shown's, on a thread of their own (review,
 // F6 review): statvfs on a hung mount, or a USB disk spinning up, blocks in the kernel, and the
 // window must not wait for it. The main thread asks with the paths it wants (space_ask, the latest
 // ask replacing one not started) and takes the answer each loop (space_take); an answer is matched

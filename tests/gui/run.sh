@@ -149,7 +149,7 @@ done
 # step 3b: a crash (SIGKILL) keeps the tabs written as they changed; the next start brings them back;
 # a running window's line (a stand-in's) is left alone
 sed -i '/^window /d' "$T/state/ofx/state"
-awk 'BEGIN { for (i = 0; i < 4200; i++) printf "pad%d=%090d\n", i, 0 }' >> "$T/state/ofx/state"   # (420 KiB: the live writes still fit the scratch arena; reviewer-2, 2026-11-02)
+awk 'BEGIN { for (i = 0; i < 4200; i++) printf "pad%d=%090d\n", i, 0 }' >> "$T/state/ofx/state"   # (420 KiB: the live writes still fit the scratch arena; review, 2026-11-02)
 echo "== f11n"; OFX_TEST_WRITE_MS=2000 OFX_TEST_HOME="$T/tree" OFX_TEST_MOUNTINFO="$T/mountinfo" "$here/../../tools/gui/run-script.sh" "$T" "$here/f11n.script" "$bin" "$T/tree"   # (killed: it "fails", no end line)
 grep -q "^window $(cat "$T/f11n.pid" 2>/dev/null) [0-9]* 1 open:" "$T/state/ofx/state" || { echo "f11n: no open line after the kill"; failed f11n; }
 echo "== f11o"; OFX_TEST_HOME="$T/tree" OFX_TEST_MOUNTINFO="$T/mountinfo" "$here/../../tools/gui/run-script.sh" "$T" "$here/f11o.script" "$bin" "$T/tree" || failed f11o
@@ -197,7 +197,7 @@ for i in $(seq -w 1 60); do touch "$T/tree/f$i"; done
 printf '33 1 0:31 / / rw - btrfs /dev/x rw\n' > "$T/mountinfo"
 echo "== f63"; OFX_TEST_MOUNTINFO="$T/mountinfo" "$here/../../tools/gui/run-script.sh" "$T" "$here/f63.script" "$bin" "$T/tree" || failed f63
 echo "== f63b"; OFX_TEST_MOUNTINFO="$T/mountinfo" "$here/../../tools/gui/run-script.sh" "$T" "$here/f63b.script" "$bin" "$T/tree" || failed f63b
-# A full icon cache at a zoom (reviewer-2, F6.3 review): 24 slots, 12 MIME types.
+# A full icon cache at a zoom (F6.3 review): 24 slots, 12 MIME types.
 T=$base/f63c; rm -rf "$T"; mkdir -p "$T/tree"
 for f in a.txt b.png c.jpg d.pdf e.c f.py g.sh h.html i.md j.zip k.mp3 l.mp4; do touch "$T/tree/$f"; done
 echo "== f63c"; OFX_TEST_ICONS_MAX=24 OFX_TEST_MOUNTINFO="$base/f63/mountinfo" "$here/../../tools/gui/run-script.sh" "$T" "$here/f63c.script" "$bin" "$T/tree" || failed f63c
@@ -283,7 +283,7 @@ app ofx-t-code "Ofx T Code" 'Icon=utilities-terminal\nMimeType=text/plain;inode/
 app ofx-t-helper "Ofx T Helper" 'Icon=ofx-t-vec\nNoDisplay=true\nMimeType=text/plain;\n'
 app ofx-t-hidden "Ofx T Hidden" 'NoDisplay=true\n'
 app ofx-t-other "Ofx T Other" 'Icon=ofx-t-no-such-icon\n'
-# An SVG over 1 MiB isn't drawn (reviewer-2, F7.3.1): the generic icon.
+# An SVG over 1 MiB isn't drawn (F7.3.1 review): the generic icon.
 { printf '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"><!-- '; head -c 1100000 /dev/zero | tr '\0' x; printf ' --><rect width="16" height="16"/></svg>\n'; } > "$T/data/pixmaps/zz-big.svg"
 app zz-big "Zz Big Icon" 'Icon=zz-big\n'
 # Set as default (F7.3.1): the desktop's list, read first, sets image/png (Omarchy's sets http).
@@ -348,7 +348,7 @@ touch "$H/tree/a.ts" "$H/tree/b.txt" "$H/tree/src/c.ts" "$H/tree/src/index.ts" "
       "$H/tree/.hid/e.ts" "$H/tree/.f.ts" "$H/tree/.git/g.ts" "$H/tree/node_modules/h.ts" "$H/tree/docs/notes.txt"
 printf x > "$H/tree/src/index.ts"; printf x > "$H/tree/src/deep/index.ts"   # (an empty file opens through its type's app)
 ln -s src "$H/tree/link"; ln -s ../src/c.ts "$H/tree/docs/clink"
-# A result whose folder and name, as the cursor keeps it, are longer than a name (reviewer-2, 2026-10-28)
+# A result whose folder and name, as the cursor keeps it, are longer than a name (review, 2026-10-28)
 L="$H/tree/long/$(printf 'x%.0s' $(seq 250))"; mkdir -p "$L"; printf x > "$L/m2.txt"
 (cd "$H/tree/zz" && seq -f 'zz%05g' 0 10000 | xargs touch)
 printf '1 0 0:1 / / rw - ext4 /dev/x rw\n' > "$T/mountinfo"
@@ -374,7 +374,7 @@ if want keys; then
 # ui_key_of, which the other scripts' ui/ keys skip.
 T=$base/keys; rm -rf "$T"; mkdir -p "$T/tree/adir" "$T/tree/bdir"; touch "$T/tree/a.txt" "$T/tree/my-file name.txt" "$T/tree/adir/inner.txt"
 # vkbd's guard first: it types only into the sway OFX_GUI_ROOT names, as the kernel sees the socket's
-# other end (reviewer-2, 2026-10-28). Refused: a display with no test sway's socket file; an
+# other end (review, 2026-10-28). Refused: a display with no test sway's socket file; an
 # inherited WAYLAND_SOCKET; a real test sway's socket while sway.pid names another process called
 # sway (a copied sleep). The real pid then types, so the refusals aren't for some other reason.
 G=$T/guard; mkdir -p "$G/bin"; vk=$here/../../build/vkbd

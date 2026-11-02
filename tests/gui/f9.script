@@ -154,7 +154,7 @@ key down
 expect idx=1 sel=index.ts seldir=src
 key ctrl-z
 wait-for 2000 n=1 sel=index.ts
-# A folder renamed: the results below it leave the list too (reviewer-2, 2026-10-28); Ctrl+Z puts
+# A folder renamed: the results below it leave the list too (review, 2026-10-28); Ctrl+Z puts
 # them back (deep, node_modules, then dex.txt, index.ts twice)
 key ctrl-shift-f
 keys backspace backspace backspace backspace backspace backspace backspace backspace backspace backspace backspace backspace
@@ -172,7 +172,7 @@ key end
 expect sel=index.ts seldir=src/deep
 sh test -d "$OFX_DIR/src/deep"
 # The "Search" path button's folder menu: the folder searched, never the search's address (a
-# bookmark of it went into the GTK file as file://search:…, reviewer-2, 2026-10-28)
+# bookmark of it went into the GTK file as file://search:…, review, 2026-10-28)
 point-ui crumb 0
 right-here
 expect menu=folder
@@ -206,7 +206,7 @@ wait-for 2000 search=1 tabs=3 searchkeys=1 searchtext=-
 key ctrl-w
 wait-for 2000 tabs=2 search=1
 # A result whose folder and name are longer than a name keeps the cursor as more come (Ctrl+R
-# here; reviewer-2, 2026-10-28: it went to the row, another file)
+# here; review, 2026-10-28: it went to the row, another file)
 key ctrl-shift-f
 keys backspace backspace backspace backspace backspace backspace backspace backspace backspace backspace backspace backspace
 type m?.txt
@@ -224,7 +224,7 @@ sh touch "$OFX_DIR/src/notes2.txt"
 key enter
 key ctrl-r
 wait-for 3000 searchdone=1 n=2
-# Follow Link on a result: its target's folder, the target selected (reviewer-2, 2026-10-28)
+# Follow Link on a result: its target's folder, the target selected (review, 2026-10-28)
 key ctrl-shift-f
 keys backspace backspace backspace backspace backspace
 type clink

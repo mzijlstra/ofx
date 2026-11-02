@@ -118,7 +118,7 @@ static void watch_bookmarks(void)
 // The trash folders' files/ to watch now, in place of the last ones: the new ones added first, so
 // none goes unwatched in between, then the old ones no longer wanted removed. IN_MASK_ADD: a files/
 // that is also the open folder has one wd, and a plain add would replace the folder's mask with
-// this smaller one (reviewer-2, 2026-10-30: a file written there no longer showed its size).
+// this smaller one (review, 2026-10-30: a file written there no longer showed its size).
 static void watch_trashes(const TrashDirs *d)
 {
     if (watch.fd < 0) return;
@@ -171,7 +171,7 @@ static void watch_read(bool *list, bool *theme, bool *mounts, bool *trash, bool 
         if (e->wd == watch.udev_wd && e->len && e->name[0] == 'b') *mounts = true;   // a block device's (b8:17), not the rest udev keeps
         if (!(e->mask & IN_IGNORED) && watch_is_trash(e->wd)) *trash = true;
         if (e->wd == atomic_load(&watch.conf_wd) && e->len && strcmp(e->name, "ofx.conf") == 0) *conf = true;   // (F10)
-        if (e->wd == atomic_load(&watch.conf_wd) && (e->mask & IN_IGNORED)) atomic_store(&watch.conf_wd, -1);   // (its folder gone: Preferences watches the new one, reviewer-2 2026-11-01)
+        if (e->wd == atomic_load(&watch.conf_wd) && (e->mask & IN_IGNORED)) atomic_store(&watch.conf_wd, -1);   // (its folder gone: Preferences watches the new one, review, 2026-11-01)
         if (e->wd == atomic_load(&watch.theme_wd) && !(e->mask & IN_IGNORED)) *theme = true;
         if (e->wd == atomic_load(&watch.current_wd)) *theme = true, rewatch = true;
     }

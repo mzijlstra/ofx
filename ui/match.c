@@ -55,7 +55,7 @@ static bool ui_whole(Str hay, isize from, isize to)
 
 // Whether hay matches m's expression (compiled, in C.UTF-8). With whole words: some span from a
 // boundary to a boundary that it matches in full. The longest match from a start may run past a
-// boundary a shorter one stops at (`-*-` in "--_ ", reviewer-2, F7.3 review), so each span is
+// boundary a shorter one stops at (`-*-` in "--_ ", F7.3 review), so each span is
 // tried: the leftmost-longest match within it is all of it exactly when the span matches. ^ and $
 // keep meaning the name's start and end (NOTBOL, NOTEOL inside it). *at, *end: where it matched.
 static bool ui_match_re(const UiMatcher *m, Str hay, isize *at, isize *end)
@@ -76,7 +76,7 @@ static bool ui_match_re(const UiMatcher *m, Str hay, isize *at, isize *end)
 }
 
 // cp with its case folded as C.UTF-8 has it (towlower), so plain text folds é and É as a regular
-// expression does (reviewer-2, F7.3.1 review); ASCII as before.
+// expression does (F7.3.1 review); ASCII as before.
 static u32 ui_fold_cp(u32 cp)
 {
     if (cp < 0x80) return (u32)fold((unsigned char)cp);

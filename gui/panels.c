@@ -34,7 +34,6 @@ static JobRec *job_by_id(int id)
     return NULL;
 }
 
-// A panel's button; the main one (Enter's) filled, in red when it destroys something.
 // A panel's buttons' element ids, by UI_MODAL_*: drawn and hit-tested by the same (2026-10-28).
 // modal-all is the clash panel's "same for the rest" row.
 static const char *const MODAL_IDS[] = {
@@ -42,6 +41,7 @@ static const char *const MODAL_IDS[] = {
     [UI_MODAL_KEEP] = "modal-keep",     [UI_MODAL_CANCEL] = "modal-cancel", [UI_MODAL_ALL] = "modal-all",   [UI_MODAL_OK] = "modal-ok",
 };
 
+// A panel's button; the main one (Enter's) filled, in red when it destroys something.
 static void modal_button(int which, const char *label, bool main_one, bool danger)
 {
     Theme *t = &app.theme;

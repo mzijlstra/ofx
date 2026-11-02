@@ -273,5 +273,3 @@ static void search_status(char *buf, size_t cap)
     else if (app.search_s.full) snprintf(buf, cap, "%td found, the most a search shows%s%s%s", app.list.n, read, sep, skipped);
     else snprintf(buf, cap, "%td found%s%s%s", app.list.n, read, sep, skipped);
 }
-
-// The window, and the modal panel on top when one is up.

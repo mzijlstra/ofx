@@ -185,7 +185,7 @@ type ~/tree/.dot
 key enter
 wait-for 2000 crumb=1 locating=0 status=.dot is hidden
 key home
-# ---- files copied while a cut's paste runs stay on the clipboard after it (reviewer-2, F5.2
+# ---- files copied while a cut's paste runs stay on the clipboard after it (F5.2 review
 # review; a text copy is the same case, but weston has no data-control to clear). OFX_TEST_CROSS
 # makes the move a slow copy.
 char /

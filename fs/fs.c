@@ -1,6 +1,7 @@
 // ofx's file system side, raylib-free and unit-tested: the folder, MIME types, the icon theme, the
-// Omarchy theme, launching, and changing files (F3). Unity build: included once by each binary,
-// after base.
+// Omarchy theme, the places, launching, changing files (F3), the trash, copy and move jobs, search,
+// thumbnails, bookmarks, ofx.conf, and what ofx remembers (the state file: folders, tabs). Unity
+// build: included once by each binary, after base.
 #include "paths.c"
 #include "list.c"
 #include "mime.c"

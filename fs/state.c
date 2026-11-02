@@ -1,10 +1,12 @@
 // What ofx remembers by itself across a restart (docs/plan.md, F6 "Remembered", F11), in
 // $XDG_STATE_HOME/ofx/state (~/.local/state by default), which ofx writes: the sidebar's mode, the
-// View menu's toggles, Show Hidden Files, and per folder its view, icon size, sort and cursor
-// (fs/folders.c's "folder …" lines). Options Michael sets go in $XDG_CONFIG_HOME/ofx/ofx.conf
-// (fs/conf.c), which ofx only writes when it isn't there.
+// View menu's toggles, Show Hidden Files, the tree's open folders (tree=), per folder its view, icon
+// size, sort and cursor (fs/folders.c's "folder …" lines), and each window's tabs (fs/session.c's
+// "window …" lines). Options Michael sets go in $XDG_CONFIG_HOME/ofx/ofx.conf (fs/conf.c), which
+// ofx only writes when it isn't there.
 //
-// One `key=value` a line; a key ofx doesn't know, or a value it doesn't, is left out.
+// A line each: `key=value`, or a `folder` or `window` line. A line a reader doesn't know, or can't
+// read, is passed over when read and kept as it is when written (state_rewrite).
 
 #include "../base/base.h"
 
@@ -86,7 +88,7 @@ static bool state_write(const char *path, const char *body, isize n, bool sync, 
     // The temp file made new, never one there followed (a link at it would have been truncated past
     // the guard; it is beside path, which the guard allowed); one a crash of this pid left is taken
     // out first. Synced before the rename (sync: all but a window's 2 s live writes, whose sync could
-    // stall the window behind a big write on btrfs; reviewer-2), so after a power cut the file is the
+    // stall the window behind a big write on btrfs; a review), so after a power cut the file is the
     // old or the new, whole (F11 review, 2026-11-02).
     unlink(tmp);
     int fd = open(tmp, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600);
@@ -104,7 +106,7 @@ static bool state_write(const char *path, const char *body, isize n, bool sync, 
 
 // The state file's text into *text, in a: empty when there is no file. False, said, when there is one
 // but it couldn't be read whole (too big for a): a write from what was read would lose the rest
-// (reviewer-2, 2026-11-01).
+// (review, 2026-11-01).
 static bool state_read(Arena *a, const char *path, Str *text, Err *err)
 {
     struct stat st;
@@ -113,9 +115,10 @@ static bool state_read(Arena *a, const char *path, Str *text, Err *err)
     return true;
 }
 
-// The state file's lock, held from the read to the rename by each writer (state_put, folders_write):
+// The state file's lock, held from the read to the rename by each writer (state_rewrite's callers:
+// state_put, folders_write, session_edit, session_take):
 // with Ctrl+Q every window writes at once, and a write from an old read loses another's change
-// (reviewer-2, 2026-11-01: 3 at once lost 112 of 600). A file of its own, <state>.lock: the rename
+// (review, 2026-11-01: 3 at once lost 112 of 600). A file of its own, <state>.lock: the rename
 // replaces the state file's inode. The fd to close, -1 when it can't be had (then written unlocked).
 static int state_lock(const char *path)
 {

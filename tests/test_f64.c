@@ -241,7 +241,7 @@ static void test_thumb_decode(void)
     CHECK(thumb_make(&a, TK_JPEG, jpeg_of(&a, small, 0, false), 128, &out) && out.w == 40 && out.h == 20);
     // Not a JPEG.
     CHECK(!thumb_make(&a, TK_JPEG, S("not a jpeg at all"), 128, &out));
-    // libjpeg's own memory capped (reviewer-2, F6.4 review): a progressive JPEG holds its
+    // libjpeg's own memory capped (F6.4 review): a progressive JPEG holds its
     // coefficients at full size, 1000 by 500 about 3 MiB, over a 1 MiB cap; a baseline one doesn't.
     jpeg_progressive = true;
     Str prog = jpeg_of(&a, im, 0, false);
@@ -251,7 +251,7 @@ static void test_thumb_decode(void)
     CHECK(!thumb_make(&a, TK_JPEG, prog, 128, &out));
     CHECK(thumb_make(&a, TK_JPEG, j, 128, &out) && out.w == 128);
     thumb_jpeg_max_mib = 256;
-    // Only warnings (reviewer-2): 3 junk bytes before a marker, and a cut file, still decode.
+    // Only warnings (a review): 3 junk bytes before a marker, and a cut file, still decode.
     isize seg = 4 + ((u8)j.p[4] << 8 | (u8)j.p[5]);   // past SOI and APP0
     u8 *junk = arena_push(&a, j.len + 3, 1);
     memcpy(junk, j.p, (size_t)seg), memcpy(junk + seg, "\0\0\0", 3), memcpy(junk + seg + 3, j.p + seg, (size_t)(j.len - seg));

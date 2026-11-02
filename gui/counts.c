@@ -57,7 +57,7 @@ static void count_start(void)
 
 // At quit: the thread is told to stop and given 200 ms. A count stuck in the kernel (a hung network
 // mount) must not keep ofx from exiting, so it is then left to the process's end, never joined
-// (reviewer-2, F4 review, 2026-10-20).
+// (F4 review, 2026-10-20).
 static void count_stop(void)
 {
     if (!counts.started) return;

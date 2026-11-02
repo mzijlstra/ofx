@@ -80,7 +80,7 @@ static bool clean_temp_name(const char *n)
 
 // The mount list, parsed once a run: clean_real looks up every prefix of every preview's path, and
 // reading mountinfo's text for each (about 66,000 times on Michael's cache) made a run 4-5 times
-// slower (reviewer-2, 2026-10-25). far is thumb_local's verdict on the mount point itself: the same
+// slower (review, 2026-10-25). far is thumb_local's verdict on the mount point itself: the same
 // mount wins for any path below it, so it is the verdict for those paths too.
 typedef struct {
     char  *mp;
@@ -160,7 +160,7 @@ static bool clean_absent_drive(const CleanMounts *ms, const char *path)
 
 // path with its links followed as far as they go, into out: a link that leads nowhere (its drive
 // away) still names where it leads. Michael's ~/Documents and the like are links onto /mnt/sd, a
-// card that may be out (reviewer-2, 2026-10-25), so the drive rules judge where a file really is.
+// card that may be out (review, 2026-10-25), so the drive rules judge where a file really is.
 // False past 40 links, past PATH_MAX, or on reaching a network or FUSE mount, where a readlink could
 // hang (clean_local): the caller then keeps the preview.
 static bool clean_real(const CleanMounts *ms, const char *path, char *out, size_t cap)
@@ -219,7 +219,7 @@ static CleanRule clean_judge(Arena *a, const CleanMounts *ms, int dfd, const cha
         if (n == st.st_size && png_meta((Str){ p, n }, m) && m->has_uri && file_uri_path(str_from_c(m->uri), path, sizeof path) &&
             clean_real(ms, path, real, sizeof real) && !clean_absent_drive(ms, real)) {
             // stat, not lstat: a link's preview carries its target's MTime and Size (kind_of follows
-            // it), so the link itself would be stale on every run (reviewer-2, 2026-10-25).
+            // it), so the link itself would be stale on every run (review, 2026-10-25).
             if (stat(path, &f) != 0) r = errno == ENOENT || errno == ENOTDIR ? CR_ORPHAN : CR_KEEP;
             else if ((m->has_mtime && m->mtime != f.st_mtim.tv_sec) || (m->has_size && m->size != f.st_size)) r = CR_STALE;
         }

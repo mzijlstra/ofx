@@ -270,9 +270,9 @@ static struct {
     bool      grid_hover_cut;
     isize     grid_first, grid_last;   // the entries in the first and last cell drawn, -1 for none
     int       icons_max;    // the icon cache's slots: ICONS_MAX, or OFX_TEST_ICONS_MAX for a test
-    int       icon_full_resets;   // a full cache emptied at a listing (reviewer-2, F6.2 review), or a zoom
+    int       icon_full_resets;   // a full cache emptied at a listing (F6.2 review), or a zoom
     // A lookup found the cache full; after a zoom or a view change that may empty it once, before
-    // the next frame (reviewer-2, F6.3 review: zooming in one folder filled it, icons went blank).
+    // the next frame (F6.3 review: zooming in one folder filled it, icons went blank).
     bool      icons_missed, icons_reset_armed;
     UiTip     tip;          // the tooltip of the icon button under the pointer (Michael, 2026-10-24)
     bool      zoomed;       // the icon size changed: the next refit keeps the cursor's row (ui_refit)
@@ -337,7 +337,7 @@ static int side_w(void)
 static Undo      undo;
 static ClipFiles own;      // ofx's own copy or cut (own.n 0: none)
 // Bumped by every copy of ours, files or text: a cut's paste empties the clipboard after it only
-// if nothing was copied meanwhile (reviewer-2, F5.2 review).
+// if nothing was copied meanwhile (F5.2 review).
 static u32       own_gen;
 
 static Clay_Color cc(Rgb c)
@@ -469,7 +469,8 @@ static void usage(void)
                     "  Ctrl+C, Ctrl+X, Ctrl+V copy, cut, paste; Ctrl+Z undo; Ctrl+L type a location; Alt+Up up;\n"
                     "  Ctrl+T new tab, Ctrl+W close it, Ctrl+Tab / Ctrl+PgDn next, Ctrl+Shift+Tab / Ctrl+PgUp previous,\n"
                     "  Alt+1..9 a tab, Ctrl+Shift+PgUp/PgDn move it; middle click a folder for a tab behind;\n"
-                    "  F10 or Alt+F the File menu; Ctrl+N a new window; Ctrl+Q close every ofx window.\n");
+                    "  F10 or Alt+F the File menu; Ctrl+N a new window; Ctrl+Q close every ofx window.\n"
+                    "  The rest (search, Ctrl+Shift+T reopen a closed tab, ...): F1 in a window.\n");
 }
 
 // --select PATH: PATH's folder (links in it resolved) and PATH's own name, not resolved, so a
@@ -527,7 +528,7 @@ int main(int argc, char **argv)
         return 1;
     }
     // Every path is absolute from here on: off the folder ofx was started in, so that folder's
-    // drive isn't kept busy by ofx (or by what it starts) when it is to be ejected (reviewer-2, F6.1).
+    // drive isn't kept busy by ofx (or by what it starts) when it is to be ejected (F6.1 review).
     if (chdir("/") != 0) fprintf(stderr, "ofx: chdir /: %s\n", strerror(errno));
 
     // Before any thread exists (GLFW and Mesa start some), so all of them inherit the mask.
@@ -537,13 +538,11 @@ int main(int argc, char **argv)
     sigaddset(&quit_signals, SIGUSR1);
     pthread_sigmask(SIG_BLOCK, &quit_signals, NULL);
     spawn_init();
-    // OFX_TEST_LEAK=1 leaks one block on purpose: the control that shows LeakSanitizer reports
-    // from this binary at all.
     watch_delay_ms = env_int("OFX_TEST_WATCH_DELAY_MS", 0, 0, 1000);   // a window must never stall long
-    // OFX_TEST_COPY_DELAY_MS: a sleep per copied block, so a test sees the progress (capped short:
-    // a job never stalls the window, but a test must not run long).
     // OFX_TEST_ICONS_MAX: a smaller icon cache, so a test can fill it.
     app.icons_max = env_int("OFX_TEST_ICONS_MAX", ICONS_MAX, 1, ICONS_MAX);
+    // OFX_TEST_COPY_DELAY_MS: a sleep per copied block, so a test sees the progress (capped short:
+    // a job never stalls the window, but a test must not run long).
     app.copy_delay_ms = env_int("OFX_TEST_COPY_DELAY_MS", 0, 0, 500);
     // OFX_TEST_CROSS=1: a move copies as across drives, so a test can see a move run (F5.2).
     if (getenv("OFX_TEST_CROSS")) job_test_cross = true;
@@ -551,6 +550,8 @@ int main(int argc, char **argv)
     ops_guard(getenv("OFX_GUI_ROOT"));
     const char *media = getenv("OFX_TEST_MEDIA");   // tests: mounts under it are removable (places.c)
     if (media && media[0]) snprintf(places_test_media, sizeof places_test_media, "%s", media);
+    // OFX_TEST_LEAK=1 leaks one block on purpose: the control that shows LeakSanitizer reports
+    // from this binary at all.
     const char *leak = getenv("OFX_TEST_LEAK");
     if (leak && leak[0]) planted = malloc(4096), planted = NULL;
 
@@ -594,7 +595,7 @@ int main(int argc, char **argv)
         fprintf(stderr, "ofx: cannot open a window\n");
         return 1;
     }
-    SetExitKey(KEY_NULL);   // Ctrl+Q quits; Esc is free for later
+    SetExitKey(KEY_NULL);   // Ctrl+Q quits; Esc is ours (it closes a bar, a panel, a menu), not raylib's exit
     const char *dbg = getenv("OFX_GUI_DEBUG");
     debug_input = dbg && dbg[0];
     GLFWwindow *gw = glfwGetCurrentContext();
@@ -757,7 +758,7 @@ int main(int argc, char **argv)
         if (scripted) {
             UiInput real = in;
             in = ui_input_none();   // the user's input does not reach a scripted window (Ctrl+Q still quits),
-            if (script.user_keys) {   // but after `user-keys` the keyboard's does (wtype in the test sway, 2026-10-28)
+            if (script.user_keys) {   // but after `user-keys` the keyboard's does (vkbd in the test sway, 2026-10-28)
                 memcpy(in.ev, real.ev, sizeof *real.ev * (size_t)real.nev);
                 in.nev = real.nev;
             }
@@ -789,7 +790,7 @@ int main(int argc, char **argv)
         if (!app.ui.ow && ow.icons_on) ow_drop();   // the panel closed: its icons go (F7.3)
         if (app.ui.copied) text_copy((Str){ app.ui.copy, app.ui.copy_len }), app.ui.copied = false;
         // Shift+Delete and its y can come in one frame's input: the question opened and was answered
-        // within ui_handle, so the targets are taken here either way (reviewer-2, F5 confirm). A
+        // within ui_handle, so the targets are taken here either way (F5 confirm). A
         // new question always starts from no targets.
         if (!was_confirming && (app.ui.confirming || a.kind == UA_DELETE)) delete_ask();
         // F2 opened the edit line: on the cursor's entry, as it is named now.

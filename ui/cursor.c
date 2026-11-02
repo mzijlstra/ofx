@@ -133,7 +133,7 @@ static bool ui_input_acts(const UiInput *in)
 
 // Whether a status message gives way to the status line on input that acts (ui_input_acts): a
 // plain one at once; an error only from a second after it came, so one that lands while keys are
-// being pressed (a job failing) is seen (reviewer-2, F6 review).
+// being pressed (a job failing) is seen (F6 review).
 enum { UI_ERROR_MIN_MS = 1000 };
 
 static bool ui_status_clears(bool bad, i64 at_ms, i64 now_ms)

@@ -45,7 +45,7 @@ expect findselect=1
 type b
 key esc
 expect finding=0 marked=1
-# A bad regular expression (Alt+R, "("): Enter keeps the selection and the bar (reviewer-2)
+# A bad regular expression (Alt+R, "("): Enter keeps the selection and the bar (a review)
 raw-key 65 3
 key alt-r
 type (

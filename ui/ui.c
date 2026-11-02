@@ -154,7 +154,7 @@ typedef struct {
     isize   app_n;
     int     ow_row, ow_drow;
     bool    ow_field;
-    int     ow_wheel;    // notches over its list, as wheel
+    int     ow_wheel;    // notches over its list (or Keyboard Shortcuts'), as wheel
     int     toggle;      // 4: Open With's "Always open … with this app" box (F7.3.1)
     bool    find_x;      // the find bar's × pressed
     // A text bar's field pressed (UiField: the find bar's, the search's name and Containing; -1
@@ -247,8 +247,8 @@ typedef struct {
 enum { UI_ANS_SKIP = 1, UI_ANS_REPLACE = 2, UI_ANS_KEEP = 3, UI_ANS_CANCEL = 4 };
 
 // The modal panels' buttons (F5.1): the delete question's, then the clash question's (the answers
-// above, and the "same for the rest" box).
-// The cancel, quit and queue-full panels (F5.3) use YES and NO, and OK.
+// above, and the "same for the rest" box). The cancel, quit, Empty Trash and Bring back (F11)
+// questions use YES and NO, the queue-full note OK; the panels' Close is NO, Open With's Open YES.
 enum { UI_MODAL_YES = 1, UI_MODAL_NO, UI_MODAL_SKIP, UI_MODAL_REPLACE, UI_MODAL_KEEP, UI_MODAL_CANCEL, UI_MODAL_ALL, UI_MODAL_OK };
 
 // The menu bar (F7.1, docs/plan.md "F7 design"; Edit, View and Go F7.4): its menus, each a list of
@@ -331,9 +331,9 @@ static const struct { const char *label, *key, *word; UiEvent ev; char mark; } U
     // Bookmarks (F7.5); a bookmark's label is gui/'s (the file's), marked when it is the folder shown
     [UM_ADD_BOOKMARK] = { "Add Bookmark", "Ctrl+D", "add-bookmark", { UK_ADD_BOOKMARK, 0 } },
     [UM_EDIT_BOOKMARKS] = { "Edit Bookmarks\xE2\x80\xA6", "Ctrl+B", "edit-bookmarks", { UK_EDIT_BOOKMARKS, 0 } },
-    [UM_BM_MORE] = { "", "", "bm-more" },
+    [UM_BM_MORE] = { "", "", "bm-more" },   // "N more in Edit Bookmarks…" (gui/'s label): the panel, on the first not listed
     // Help: no manual (Michael, 2026-10-27)
-    [UM_SHORTCUTS] = { "Keyboard Shortcuts", "F1", "shortcuts", { UK_SHORTCUTS, 0 } },   // "N more in Edit Bookmarks…" (gui/'s label): the panel, on the first not listed
+    [UM_SHORTCUTS] = { "Keyboard Shortcuts", "F1", "shortcuts", { UK_SHORTCUTS, 0 } },
     [UM_ABOUT] = { "About", "", "about" },
     [UM_PREFERENCES] = { "Preferences\xE2\x80\xA6", "", "preferences" },   // (ofx.conf, F10)
     // The right-click menus' own (F8): a folder in a tab behind (its row's middle click); the trash
@@ -607,13 +607,13 @@ typedef struct {
 // apart at about 250 places, which could both be set).
 typedef enum { UI_VIEW_FOLDER, UI_VIEW_TRASH, UI_VIEW_SEARCH } UiView;
 
-// Who has the keys: the files' list unless one of the others took them. One value, so two can't
-// at once (2026-10-28: six flags before, kept apart by hand; opening the location line from the
-// search view left the search field holding the keys too).
 // The text bars' fields (F9's review, 2026-10-29: one table for what was three of each): the find
 // bar's, the search's name and its Containing. ui_field_shown says when each is there.
 typedef enum { UI_FIELD_FIND, UI_FIELD_SEARCH, UI_FIELD_INSIDE, UI_FIELDS } UiField;
 
+// Who has the keys: the files' list unless one of the others took them. One value, so two can't
+// at once (2026-10-28: six flags before, kept apart by hand; opening the location line from the
+// search view left the search field holding the keys too).
 typedef enum {
     UI_FOCUS_LIST,
     UI_FOCUS_SIDE,     // the sidebar's cursor

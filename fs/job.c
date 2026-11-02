@@ -538,7 +538,7 @@ static void job_run(Job *j)
             Err err;
             isize n = 0;
             // The item before it is still there: so is this (its .trashinfo, which the trash view
-            // lists it by; reviewer-2, F6 review).
+            // lists it by; F6 review).
             if (it->after_ok && (i == 0 || j->item[i - 1].out != OUT_NEW)) {
                 it->out = OUT_SKIPPED;
                 continue;

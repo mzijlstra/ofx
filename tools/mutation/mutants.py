@@ -1188,7 +1188,7 @@ MUTANTS += [
     # Not a mutant: ui_find_open's `jobs_focus = false` is inert, every way there (a key, a click)
     # has taken the keys from the job rows already.
 ]
-# ---- reviewer-2's F7.3.1 notes: plain text folds past ASCII, an alias set by its canonical name
+# ---- the review's F7.3.1 notes: plain text folds past ASCII, an alias set by its canonical name
 MUTANTS += [
     ('ui/match.c', "    return l ? (u32)towlower_l((wint_t)cp, l) : cp;", "    return cp;"),
     ('ui/match.c', "        if (ui_fold_cp(x) != ui_fold_cp(y)) return false;", "        if (x != y) return false;"),
@@ -1214,12 +1214,12 @@ MUTANTS += [
     ('ui/handle.c', "ui_find_step(u, names, in->find_step > 0 ? 1 : -1);", "ui_find_step(u, names, 1);"),
     ('ui/cursor.c', 'in->find_x || in->find_step || in->field >= 0 ||', 'in->find_x || in->field >= 0 ||'),
     ('ui/handle.c', 'u->finding && (in->find_x || in->find_step)) {', 'u->finding && in->find_x) {'),
-    # reviewer-2's LOWs: a Shift move doesn't wrap; an empty bar finds nothing
+    # the review's LOWs: a Shift move doesn't wrap; an empty bar finds nothing
     ('ui/handle.c', "            if (shifted) ui_move(l, key == UK_LEFT ? -1 : 1);   // a Shift move doesn't wrap\n            else ", "            "),
     ('ui/handle.c', "            if (shifted) ui_move_rows(l, key == UK_UP ? -1 : 1);\n            else ", "            "),
     ('ui/handle.c', "            if (m == l && !shifted) ui_step_round(l, -1, false);", "            if (m == l) ui_step_round(l, -1, false);"),
     ('ui/handle.c', "            if (m == l && !shifted) ui_step_round(l, 1, false);", "            if (m == l) ui_step_round(l, 1, false);"),
-    ('ui/find.c', "    ui_matcher_set(&u->find_m, STR_EMPTY, u->find_opts);   // Up and Down in an empty bar find nothing (reviewer-2)\n", ""),
+    ('ui/find.c', "    ui_matcher_set(&u->find_m, STR_EMPTY, u->find_opts);   // Up and Down in an empty bar find nothing (a review)\n", ""),
 ]
 # ---- Shift and a move select (Michael, 2026-10-26)
 MUTANTS += [
@@ -1382,7 +1382,7 @@ MUTANTS += [
     ('ui/handle.c', "        if (in->modal == UI_MODAL_NO) return ui_keys_close(u), (UiAction){ UA_NONE, 0, false };", ""),
     ('ui/handle.c', "        if (in->ow_wheel) ui_scroll(&u->keys_list, in->ow_wheel);", ""),
 ]
-# ---- F7.5: reviewer-2's MEDIUM (a file not read whole) and Q2 (links)
+# ---- F7.5: the review's MEDIUM (a file not read whole) and Q2 (links)
 MUTANTS += [
     (BMK, "    if (!text.len && (stat(file, &st) == 0 ? st.st_size > 0 : errno != ENOENT)) return", "    if (false) return"),
     (BMK, "(stat(file, &st) == 0 ? st.st_size > 0 : errno != ENOENT)", "(stat(file, &st) == 0 ? st.st_size > 0 : false)"),
@@ -1675,7 +1675,7 @@ MUTANTS += [
     ('ui/edit.c', '    return UI_TEXT_LINE(u->find, false);', '    return UI_TEXT_LINE(u->find, true);'),
     ('ui/handle.c', '        if (u->focus == UI_FOCUS_FIND && u->finding && !prompt && ui_find_event(u, names, e, in)) continue;', '        if (u->focus == UI_FOCUS_FIND && u->finding && ui_find_event(u, names, e, in)) continue;'),
 ]
-# ---- Ctrl+C, Ctrl+X with nothing selected in the fields: the list's (reviewer-2, 2026-10-28)
+# ---- Ctrl+C, Ctrl+X with nothing selected in the fields: the list's (review, 2026-10-28)
 MUTANTS += [
     ('ui/handle.c', "    if (ui_line_copies_nothing(l, e)) return u->focus = UI_FOCUS_LIST, false;   // (the cursor's result)\n", ''),
     ('ui/edit.c', '    return (e.key == UK_COPY || e.key == UK_CUT) && lo == hi;', '    return e.key == UK_COPY && lo == hi;'),
@@ -2019,14 +2019,14 @@ MUTANTS += [
     (PL, '    if (sysblock && udev) places_add_unmounted(scratch, pl, sysblock, udev, mi);\n', ''),
     (PL, '    if (sysblock && udev) places_add_unmounted', '    if (udev) places_add_unmounted'),
     (PL, ' || pl->p[i].kind == PL_TRASH || pl->p[i].kind == PL_UNMOUNTED) continue;', ' || pl->p[i].kind == PL_TRASH) continue;'),
-    # (the trailing-dot strip of 01f20c3: replaced by a stat check below, reviewer-2 2026-10-30)
+    # (the trailing-dot strip of 01f20c3: replaced by a stat check below, review, 2026-10-30)
     (SP, "            if (p.len && p.p[0] == '/' && (size_t)p.len < atcap)", "            if (p.len && (size_t)p.len < atcap)"),
     (SP, "            if (p.len && p.p[0] == '/' && (size_t)p.len < atcap)", "            if (p.len && p.p[0] == '/')"),
     (SP, '        if (line.len && !why[0]) snprintf(why, whycap, "%.*s", STR_ARG(line));\n    }\n    return false;', '    }\n    return false;'),
     ('ui/menus.c', '    if (u->ctx_unmounted) return it == UM_MOUNT_IT;   // no folder yet (2026-10-30)\n', ''),
 ]
 MUTANTS += [
-    # reviewer-2's LOWs on 01f20c3 (2026-10-30)
+    # the review's LOWs on 01f20c3 (2026-10-30)
     (PL, '        for (int k = 0; k < COUNT(NOT) && !skip; k++) skip = strncmp(e->d_name, NOT[k], strlen(NOT[k])) == 0;\n', ''),
     (SP, "                if (n > 1 && at[n - 1] == '.' && stat(at, &st) != 0) {", "                if (n > 1 && at[n - 1] == '.') {"),
     (SP, "                    if (stat(at, &st) != 0 || !S_ISDIR(st.st_mode)) at[n - 1] = '.';", ''),
@@ -2080,7 +2080,7 @@ MUTANTS += [
     ('fs/thumb.c', '    Str src = thumb_read(a, q->path, q->src_max, &st);', '    Str src = thumb_read(a, q->path, THUMB_SRC_MAX, &st);'),
 ]
 MUTANTS += [
-    # reviewer-2's LOWs on ab1ad1d (2026-10-30)
+    # the review's LOWs on ab1ad1d (2026-10-30)
     (CF, 'return n <= INT64_MAX / UNITS[k].mul && (*out = n * UNITS[k].mul, true);', 'return (*out = n * UNITS[k].mul, true);'),
 ]
 MUTANTS += [
@@ -2117,7 +2117,7 @@ MUTANTS += [
     ('fs/editors.c', '    *out = (Editors){ 0 };\n    editors_add', '    editors_add'),
 ]
 MUTANTS += [
-    # reviewer-2's LOW on 87570e6: a word pushes its own bytes, not the rest of its line
+    # the review's LOW on 87570e6: a word pushes its own bytes, not the rest of its line
     ('fs/editors.c', '        char *out = arena_try_push(a, len + 1, 1);', '        char *out = arena_try_push(a, line.len - i + 1, 1);'),
     # Not a mutant: `else len++` as `len++` (quotes counted too: two bytes more pushed, nothing seen).
 ]
@@ -2169,14 +2169,14 @@ MUTANTS += [
     ('fs/tree.c', "        while (at < text.len && text.p[at] == ' ') at++;\n        isize b", '        isize b'),
     ('fs/state.c', '        if (eq >= 0 && str_eq(str_trim(str_cut(line, 0, eq)), k)) v = str_trim(str_cut(line, eq + 1, line.len));', '        if (eq >= 0 && str_eq(str_trim(str_cut(line, 0, eq)), k) && !v.len) v = str_trim(str_cut(line, eq + 1, line.len));'),
 ]
-# reviewer-2's LOWs on F11 step 1 (2026-11-01): a partial read not written over; the lock; autofs
+# the review's LOWs on F11 step 1 (2026-11-01): a partial read not written over; the lock; autofs
 MUTANTS += [
     ('fs/state.c', '    if (text->len == 0 && stat(path, &st) == 0 && st.st_size > 0) return err_set', '    if (false) return err_set'),
     ('fs/state.c', '    if (fd >= 0 && flock(fd, LOCK_EX) != 0) close(fd), fd = -1;', '    if (fd >= 0 && 0) close(fd), fd = -1;'),
     ('fs/thumb.c', '"lustre", "fuse", "autofs" };', '"lustre", "fuse" };'),
 ]
 MUTANTS += [
-    # reviewer-2's LOW on f3092a0: tree='s room from the paths themselves
+    # the review's LOW on f3092a0: tree='s room from the paths themselves
     ('fs/tree.c', '    for (int i = 0; i < t->nopen; i++) cap += 3 * strlen(t->open[i]) + 1;', '    for (int i = 0; i < t->nopen; i++) cap += strlen(t->open[i]) + 1;'),
     ('fs/tree.c', '    for (int i = 0; i < t->nopen; i++) cap += 3 * strlen(t->open[i]) + 1;', '    for (int i = 0; i < t->nopen; i++) cap += 3 * strlen(t->open[i]);'),
 ]

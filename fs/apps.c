@@ -12,7 +12,7 @@
 // Type=Application, is Hidden, or lacks its TryExec isn't there. The type's parents come after it
 // (subclasses, as gio does; and every text/* under text/plain, which gio doesn't when the
 // subclasses don't say so: text/x-awk and the like get the text editor here, none from gio,
-// reviewer-2's comparison over 1,619 types, 2026-10-25).
+// the review's comparison over 1,619 types, 2026-10-25).
 
 #include "../base/base.h"
 
@@ -315,7 +315,7 @@ static int apps_order(const void *pa, const void *pb)
 
 // apps sorted for type: its default app first, then the recommended ones (that name it or an alias
 // in MimeType=, or a list names for it; less what a list removes for it), then the related ones
-// (the same for its parent types: GTK's chooser lists them apart, reviewer-2 and Michael,
+// (the same for its parent types: GTK's chooser lists them apart, Michael and the review,
 // 2026-10-26), then the rest by name; a NoDisplay app only when recommended (AS_NONE, at the end,
 // otherwise). Returns how many are shown (all but AS_NONE).
 static isize apps_rank(Arena *a, Apps *apps, Str type)

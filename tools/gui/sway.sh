@@ -1,7 +1,7 @@
 #!/bin/sh
 # A second private headless compositor for GUI tests: sway on wlroots' headless backend. weston
 # (tools/gui/weston.sh) stays the main one; sway is here for what weston lacks: ext-data-control
-# (the system clipboard, gui/clipboard.c) and virtual keyboards (wtype, input through GLFW).
+# (the system clipboard, gui/clipboard.c) and virtual keyboards (vkbd, tools/gui/vkbd.c: input through GLFW).
 # Added 2026-10-28. Nothing it shows reaches Michael's screen, and nothing in it touches his
 # Hyprland: its own Wayland socket and IPC socket, and -c a config written here, so ~/.config/sway
 # is never read.
@@ -66,7 +66,7 @@ stop)
     p=$(cat "$T/sway.pid" 2>/dev/null) sock=$(cat "$T/sway.socket" 2>/dev/null)
     [ -n "$p" ] && [ "$(cat "/proc/$p/comm" 2>/dev/null)" = sway ] && kill "$p" 2>/dev/null
     # A sway killed hard (a run stopped by SIGKILL) leaves its socket and lock behind: once it is
-    # gone, they go too (2026-10-28: three were left; reviewer-2). Only a wayland-N it wrote down,
+    # gone, they go too (2026-10-28: three were left; a review). Only a wayland-N it wrote down,
     # and never this session's display.
     for i in $(seq 20); do [ -n "$p" ] && kill -0 "$p" 2>/dev/null || break; sleep 0.1; done
     case $sock in

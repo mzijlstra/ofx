@@ -8,7 +8,7 @@
 
 enum { EJECT_TIMEOUT_MS = 60000 };   // a USB stick's cache written out takes seconds, not a minute
 // A mount may wait on polkit's password prompt, and a timeout doesn't cancel it (udisksd mounts when
-// the answer comes, with no folder opened): five minutes (reviewer-2, 2026-10-30).
+// the answer comes, with no folder opened): five minutes (review, 2026-10-30).
 enum { MOUNT_TIMEOUT_MS = 300000 };
 
 typedef enum { DRIVE_EJECT, DRIVE_MOUNT, DRIVE_UNMOUNT } DriveOp;

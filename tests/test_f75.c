@@ -72,7 +72,7 @@ static void test_bookmarks(void)
     chmod(dir, 0500);
     CHECK(!bm_write(file, S("file:///z\n"), &err) && str_eq(read_file(a, file), S("file:///x X\nfile:///y\n")));
     chmod(dir, 0700);
-    // Read for a change (reviewer-2, MEDIUM): a file there but not read whole (unreadable) is
+    // Read for a change (review, MEDIUM): a file there but not read whole (unreadable) is
     // refused, so no change is written over it; one not there yet is read as empty.
     chmod(file, 0000);
     CHECK(!bm_read(a, file, &bm, &err) && strstr(err.msg, "can't be read"));

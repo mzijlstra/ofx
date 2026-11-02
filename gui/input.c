@@ -8,7 +8,7 @@
 // compositor's (`G`, `~`). The pointer's callbacks are chained the same way.
 static GLFWkeyfun         raylib_key;
 static bool               script_on;     // a script drives the window: Ctrl+Q quits at once
-static bool               close_asked;   // the compositor asked the window to close
+static bool               close_asked;   // the window is to close: the compositor asked, or a quit (Ctrl+Q, Close All's SIGUSR1) waits on the jobs question
 static GLFWcharfun        raylib_char;
 static GLFWmousebuttonfun raylib_button;
 static bool               debug_input;   // OFX_GUI_DEBUG: log every key and button event
@@ -165,7 +165,7 @@ static void on_char(GLFWwindow *w, unsigned int cp)
 {
     if (debug_input) fprintf(stderr, "ofx: char %#x\n", cp);
     // GLFW sends no character with Alt (Mod1) held, so Alt+1 is a tab only; AltGr (Mod5) still
-    // types (reviewer-2, F5 review).
+    // types (F5 review).
     ev_push((UiEvent){ UK_NONE, cp });
     if (raylib_char) raylib_char(w, cp);
 }
@@ -180,9 +180,6 @@ static void on_button(GLFWwindow *w, int button, int action, int mods)
     if (action == GLFW_PRESS && (button == GLFW_MOUSE_BUTTON_5 || button == GLFW_MOUSE_BUTTON_6)) mouse_forwards++;
     if (raylib_button) raylib_button(w, button, action, mods);
 }
-
-// What is under a point of the last frame drawn: a list row, a sidebar row, or a column header
-// (each -1 when not).
 
 static bool in_box(Clay_ElementId id, float x, float y)
 {
@@ -202,6 +199,8 @@ static const struct {
     [UI_FIELD_INSIDE] = { "inside-field", TOGGLE_INSIDE },
 };
 
+// What is under a point of the last frame drawn: a list row, a sidebar row, a column header, a
+// button, a field (each -1, or UB_NONE, when not).
 static Hit hit_at(float x, float y)
 {
     // (by name: a field added or moved shifted every value after it, 2026-10-28; the rest 0 or false)
@@ -257,7 +256,7 @@ static Hit hit_at(float x, float y)
         if (in_box(CLAY_IDI("crumb", i), x, y)) h.bar = UB_CRUMB, h.crumb = i;
     // The cursor's full name in the icon view lies over the cells below it; a press there is the
     // cell's underneath, so a double click never opens the cursor's entry from another's place
-    // (reviewer-2, F6.2 review).
+    // (F6.2 review).
     for (int r = 0; r < list_cells() && h.row < 0; r++)
         if (in_box(CLAY_IDI("row", r), x, y)) h.row = r;
     for (int i = 0; i < jobs.nrun && h.job_x < 0; i++)
@@ -492,7 +491,8 @@ static bool zoom_drag_at(UiInput *in, float x, bool held)
 
 static bool hover_at(float x, float y);
 
-// When the timer wakes the loop: a tooltip due, or the search field's text to search for (F9).
+// When the timer wakes the loop: a tooltip due, the search field's text to search for (F9), or a
+// state write waiting (a folder's view, remember.c; this window's tabs, restore.c; F11).
 static i64 wake_due(void)
 {
     i64 a = ui_tip_due(&app.tip), b = app.search_due, c = !restore.due ? rem.due : !rem.due ? restore.due : restore.due < rem.due ? restore.due : rem.due;
@@ -553,7 +553,7 @@ static UiInput input_real(bool *seen)
     if (IsMouseButtonPressed(MOUSE_BUTTON_RIGHT)) right_at(&in, m.x, m.y);
     bool held = IsMouseButtonDown(MOUSE_BUTTON_LEFT);
     // Off the window the drag ends: Wayland's leave releases no button, and a compositor grab
-    // (a keybind, a screenshot) can take the release (reviewer-2, F6.3 review).
+    // (a keybind, a screenshot) can take the release (F6.3 review).
     bool on = IsCursorOnScreen();
     if (d.x != 0 || !held || !on) *seen |= zoom_drag_at(&in, m.x, held && on);
     in.backs = mouse_backs, mouse_backs = 0;

@@ -727,7 +727,7 @@ static void test_search_crumbs(void)
 }
 
 // A search's folder/name longer than the history keeps: none kept, not a cut one that could name
-// another entry (reviewer-2, 2026-10-28).
+// another entry (review, 2026-10-28).
 static void test_search_hist_keys(void)
 {
     static UiHistory h;
@@ -882,7 +882,7 @@ static void test_find_field_edit(void)
 }
 
 // Ctrl+C and Ctrl+X in either field with no text selected go to the list: the file found (or the
-// result) copied or cut, as before the fields edited (reviewer-2, 2026-10-28); with text selected,
+// result) copied or cut, as before the fields edited (review, 2026-10-28); with text selected,
 // the text.
 static void test_field_copy_fallthrough(void)
 {
@@ -1018,7 +1018,7 @@ static void test_line_active(void)
         CHECK(w.focus == UI_FOCUS_LIST && !ui_line_active(&w, NULL));
     }
     // A click on a row takes the keys from the find bar, which stays open (as GTK's type-ahead
-    // goes on a click; reviewer-2, 2026-10-28): Delete then is the list's.
+    // goes on a click; review, 2026-10-28): Delete then is the list's.
     {
         Ui w = { 0 };
         w.list.n = 3, w.list.rows = 3, w.finding = true, w.focus = UI_FOCUS_FIND;
@@ -1048,7 +1048,7 @@ static void test_line_active(void)
         ui_handle(&w, (UiNames){ name_at, NULL, NULL }, &slash);
         CHECK(w.finding && w.focus == UI_FOCUS_FIND && !w.find_select);
     }
-    // A question over a field: none, so a Ctrl+V reads no clipboard (reviewer-2, 2026-10-28).
+    // A question over a field: none, so a Ctrl+V reads no clipboard (review, 2026-10-28).
     u.ow = u.bmp = u.keys = false;
     CHECK(ui_line_active(&u, &l) && l.b == u.edit.b);
     u.confirming = true;

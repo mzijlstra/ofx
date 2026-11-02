@@ -102,7 +102,7 @@ keys down down down
 key enter
 wait-for 2000 bmp=0 n=2 bmhere=2
 # A file ofx can't read (mode 000): neither Ctrl+D nor a change in the panel writes over it
-# (reviewer-2: it was rewritten with the new line alone); it stays as it was
+# (the review: it was rewritten with the new line alone); it stays as it was
 key alt-home
 wait-for 2000 n=1 canbm=1
 sh cp "$OFX_ROOT/config/gtk-3.0/bookmarks" "$OFX_ROOT/bm.before" && chmod 000 "$OFX_ROOT/config/gtk-3.0/bookmarks"

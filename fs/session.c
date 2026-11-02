@@ -138,7 +138,7 @@ static bool session_kept(Str text, i64 at, isize self, bool extra, i64 extra_at,
 
 // The state file's window lines changed, under its lock: this window's own line (id, me) taken out
 // and line (NULL: none) put at the end; or, me NULL, the line of window key forgotten. Then the
-// lines that aren't running windows' past the newest SESSION_KEEP dropped (reviewer-2, 2026-11-01:
+// lines that aren't running windows' past the newest SESSION_KEEP dropped (review, 2026-11-01:
 // a question left unanswered each day, then Close All, piled up 80). Every other line kept.
 typedef struct {
     long               id;

@@ -61,7 +61,7 @@ static int editor_words(Arena *a, Str line, const char **w, int cap)
         while (i < line.len && (line.p[i] == ' ' || line.p[i] == '\t')) i++;
         if (i == line.len) break;
         if (n == cap) return -1;
-        isize len = 0;   // (the word's bytes first, quotes out: only those pushed, reviewer-2 2026-11-01)
+        isize len = 0;   // (the word's bytes first, quotes out: only those pushed, review, 2026-11-01)
         bool quoted = false;
         for (isize j = i; j < line.len && (quoted || (line.p[j] != ' ' && line.p[j] != '\t')); j++) {
             if (line.p[j] == '"') quoted = !quoted;
@@ -202,7 +202,7 @@ static int editor_argv(const Editor *e, const char *file, i64 line, i64 col, cha
 // --app-id=org.omarchy.<program> -e …`). False, with the reason, when its program isn't there.
 // Each word stays one word as far as the terminal: uwsm-app and xdg-terminal-exec pass them on as
 // they are, and foot (Omarchy's) runs -e's without a shell. A terminal whose -e joins them into a
-// shell line would split a path with a space (reviewer-2, 2026-10-29).
+// shell line would split a path with a space (review, 2026-10-29).
 static bool editor_open(const Editor *e, const char *const *argv, int n, Err *err)
 {
     const char *prog = argv[0];

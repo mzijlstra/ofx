@@ -134,7 +134,7 @@ point-ui find-x
 click-here
 expect finding=0 findkeys=0 rows=14 findn=0 findtext=-
 pointer-off
-# Opened again: an empty bar counts nothing (reviewer-2: it showed the last find's count)
+# Opened again: an empty bar counts nothing (the review: it showed the last find's count)
 char /
 expect finding=1 find=- findn=0 findtext=-
 key esc

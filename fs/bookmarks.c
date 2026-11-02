@@ -116,7 +116,7 @@ static bool bm_put(int fd, Str text)
 
 // text as the bookmarks file `file`: a new file beside it (its mode kept, 0644 for a first one),
 // synced, renamed over it; its folder made (0700, as GLib makes it) when there is none. As GLib
-// does (reviewer-2): a symbolic link's target is written, the link kept (dotfiles kept elsewhere);
+// does (a review): a symbolic link's target is written, the link kept (dotfiles kept elsewhere);
 // a file with other names (st_nlink > 1) is written in place, so they see it too. Refused outside
 // OFX_GUI_ROOT when that is set (ops_allowed), as every write of ofx's.
 static bool bm_write(const char *file, Str text, Err *err)

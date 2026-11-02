@@ -2,10 +2,10 @@
 
 // ---- the menu bar (F7.1) -----------------------------------------------------------------------
 
-// Whether entry it is in its menu now: Move to Trash outside the trash view, Restore in it (F7.4); a
-// bookmark's place while there is one for it (F7.5).
 static bool ui_folder_shown(const Ui *u, UiMenuItem it);
 
+// Whether entry it is in its menu now: Move to Trash outside the trash view, Restore in it (F7.4); a
+// bookmark's place while there is one for it (F7.5).
 static bool ui_menu_shown(const Ui *u, UiMenuItem it)
 {
     if (u->menu == UI_CTX_FOLDER) return ui_folder_shown(u, it);

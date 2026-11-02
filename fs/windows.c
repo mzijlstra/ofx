@@ -101,7 +101,7 @@ static bool win_body(const char *buf, ssize_t n, i64 *t)
 
 // Sends sig to every window listed in dir but self that is still the process it was; an entry
 // whose process is gone, or is another one now, is removed. Only names and bodies as win_register
-// writes them, and regular files (a FIFO would block the read: reviewer-2, F7.1 review). The
+// writes them, and regular files (a FIFO would block the read: F7.1 review). The
 // signal goes through a pidfd taken before the start time is checked, so a pid freed and used
 // again in between can't get it. The number signalled.
 static int win_signal_others(const char *dir, pid_t self, int sig)

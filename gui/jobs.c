@@ -33,7 +33,7 @@ typedef struct {
 } JobRec;
 
 // Bumped by every undo record the main thread writes (trash, rename, a new folder, an undo): a job
-// that finishes after one of those leaves its record be (reviewer-2, F5.3 review).
+// that finishes after one of those leaves its record be (F5.3 review).
 static u32 undo_gen;
 
 static JobRec job_recs[JOB_RECS];
@@ -363,7 +363,7 @@ static void jobs_stop(void)
 }
 
 // Whether a job running or waiting reads or writes path, or something under or above it: a
-// trash, rename, new folder or undo then waits (reviewer-2, F5.3 review).
+// trash, rename, new folder or undo then waits (F5.3 review).
 static bool jobs_touch(const char *path)
 {
     Str p = str_from_c(path);

@@ -14,7 +14,7 @@ static isize ui_find_at(const UiList *l, UiNames names, const UiMatcher *m, isiz
 }
 
 // Where the find began, inside the list: the folder may have been listed again with fewer entries
-// since (reviewer-2, find bar review).
+// since (review, find bar review).
 static isize ui_find_back(const Ui *u)
 {
     return ui_clamp(u->find_from, 0, u->list.n > 0 ? u->list.n - 1 : 0);
@@ -84,7 +84,7 @@ static void ui_mark_clear(Ui *u);
 
 // Select Items Matching's Enter (F7.4, as Nemo's): the selection becomes every name the text
 // matches, and the bar closes; with no text it only closes. A regular expression that doesn't
-// compile matches nothing: the selection stays and so does the bar, its reason in red (reviewer-2).
+// compile matches nothing: the selection stays and so does the bar, its reason in red (a review).
 static void ui_find_select(Ui *u, UiNames names)
 {
     if (u->find_m.bad && u->find.len > 0) return;
@@ -100,7 +100,7 @@ static void ui_find_open(Ui *u)
 {
     u->finding = true, u->find_miss = false, u->find_select = false, UI_TEXT_CLEAR(u->find), u->find_from = u->list.sel;
     u->focus = UI_FOCUS_FIND;
-    ui_matcher_set(&u->find_m, STR_EMPTY, u->find_opts);   // Up and Down in an empty bar find nothing (reviewer-2)
+    ui_matcher_set(&u->find_m, STR_EMPTY, u->find_opts);   // Up and Down in an empty bar find nothing (a review)
 }
 
 // cp as UTF-8 into b: its length, or 0 for a control character or no code point at all.
