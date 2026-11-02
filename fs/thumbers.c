@@ -218,7 +218,11 @@ static ThumbRun thumb_run(const char *const *argv, const char *in, const char *d
     }
     // ofx's children are reaped by the kernel (spawn_init): the pidfd says when it is gone.
     int pfd = (int)syscall(SYS_pidfd_open, pid, 0);
-    if (pfd < 0) return errno == ESRCH ? TR_ENDED : TR_KILLED;   // (gone already; else, not seen: as killed, nothing kept)
+    if (pfd < 0) {   // gone already; else it can't be watched (no fd left): killed, nothing kept
+        if (errno == ESRCH) return TR_ENDED;
+        kill(-pid, SIGKILL);
+        return TR_KILLED;
+    }
     struct pollfd p = { .fd = pfd, .events = POLLIN };
     int r;
     while ((r = poll(&p, 1, thumb_run_ms)) < 0 && errno == EINTR) {}
