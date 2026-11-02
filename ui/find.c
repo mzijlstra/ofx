@@ -14,7 +14,7 @@ static isize ui_find_at(const UiList *l, UiNames names, const UiMatcher *m, isiz
 }
 
 // Where the find began, inside the list: the folder may have been listed again with fewer entries
-// since (review, find bar review).
+// since (find bar review).
 static isize ui_find_back(const Ui *u)
 {
     return ui_clamp(u->find_from, 0, u->list.n > 0 ? u->list.n - 1 : 0);
