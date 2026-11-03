@@ -36,7 +36,7 @@ static void layout_brp_panel(void)
             text(cz("Branches"), cc(t->fg));
             CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) } } }) {}
             // (more than it holds: the latest GIT_BRANCHES_MAX of them)
-            text(cz(git.br.total > git.br.n || git.br.more ? arena_sprintf(&frame, "the latest %d of %s", git.br.n, br_total_text()) : arena_sprintf(&frame, "%d", git.br.n)),
+            text(cz(git.br.more ? arena_sprintf(&frame, "the latest %d of more than %d", git.br.n, git.br.total) : git.br.total > git.br.n ? arena_sprintf(&frame, "the latest %d of %d", git.br.n, git.br.total) : arena_sprintf(&frame, "%d", git.br.n)),
                  cc(t->fg_dim));
         }
         Clay_Color edge = !u->brp_in_list ? cc(t->accent) : rule_color();
@@ -65,7 +65,8 @@ static void layout_brp_panel(void)
                 bool sel = v == u->brp_list.sel, cur = i == git.br.cur;
                 Clay_Color bg = sel ? (u->brp_in_list ? mix(t->accent, t->bg_light, 0.45f) : mix(t->accent, t->bg_light, 0.22f)) : cc(t->bg_light);
                 char age[32];
-                ui_age(age, sizeof age, now, git.br.when[i]);
+                if (git.br.when[i] > 0) ui_age(age, sizeof age, now, git.br.when[i]);
+                else age[0] = 0;   // (HEAD's branch past a cut list: no time read)
                 CLAY(CLAY_IDI("brp-row", r), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(BRP_ROW_H) }, .padding = { 8, 8, 0, 0 },
                                                            .childGap = 8, .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
                                                .backgroundColor = bg }) {

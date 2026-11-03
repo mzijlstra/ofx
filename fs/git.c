@@ -321,15 +321,18 @@ static bool git_branch_add(GitBranches *b, GitRefs *r, int k)
 // The branches into b: head (the one checked out, "" when detached) first, then those the reflog's
 // checkouts name, newest first ("checkout: moving from A to B": B, then A), then the rest of refs,
 // which come newest commit first; only local branches (refs' lines), each once, GIT_BRANCHES_MAX at
-// most. The menu's 8 are the first.
-static void git_branches_merge(GitBranches *b, const char *head, Str reflog, Str refs)
+// most. The menu's 8 are the first. cut: refs' end was cut off (git_refs_whole). With refs not all
+// read, head is listed even when they don't name it: HEAD's own refs/heads name, with no time
+// (review, 2026-11-03: a sort by shared commit dates had put it past the cut).
+static void git_branches_merge(GitBranches *b, const char *head, Str reflog, Str refs, bool cut)
 {
     static GitRefs r;   // (the worker's, or a test's)
     git_refs_parse(&r, refs);
-    b->n = 0, b->cur = -1, b->total = r.n, b->more = r.more;
+    b->n = 0, b->cur = -1, b->total = r.n, b->more = r.more || cut;
     if (head[0]) {
         int k = git_refs_find(&r, str_from_c(head));
         git_branch_add(b, &r, k), b->cur = k >= 0 ? 0 : -1;
+        if (k < 0 && b->more) snprintf(b->name[0], GIT_HEAD_MAX, "%s", head), b->when[0] = 0, b->n = 1, b->cur = 0, b->total++;
     }
     static const Str MOVE = S("checkout: moving from ");
     for (isize e = reflog.len; e > 0 && b->n < GIT_BRANCHES_MAX;) {
@@ -416,8 +419,7 @@ static bool git_branches(const char *git, const char *dir, const char *top, GitB
     if (box_run(&j) != BOX_ENDED || len == 0) return false;
     bool cut;
     Str refs = git_refs_whole((Str){ out, len }, sizeof out, &cut);
-    git_branches_merge(b, head, git_reflog_tail(gitdir, tail, sizeof tail), refs);
-    b->more |= cut;
+    git_branches_merge(b, head, git_reflog_tail(gitdir, tail, sizeof tail), refs, cut);
     return true;
 }
 

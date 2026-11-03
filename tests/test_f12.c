@@ -703,45 +703,51 @@ static void test_git_branches_merge(void)
                 "2 3 t <t@t> 3 +0000\tcheckout: moving from gone to 1a2b3c4\n"
                 "3 4 t <t@t> 4 +0000\tcheckout: moving from feat-a to feat-b\n"
                 "4 5 t <t@t> 5 +0000\trebase -i: moving from r4 to r5");
-    git_branches_merge(&b, "main", log, refs);
+    git_branches_merge(&b, "main", log, refs, false);
     CHECK(b.n == 11 && b.total == 11 && b.cur == 0);
     const char *want[] = { "main", "feat-b", "feat-a", "early", "newest", "old", "r1", "r2", "r3", "r4", "r5" };
     for (int i = 0; i < 11 && i < b.n; i++) CHECK(strcmp(b.name[i], want[i]) == 0);
     CHECK(b.when[0] == 110 && b.when[3] == 10 && b.when[10] == 20);
     // Detached, no reflog: by date only, none marked; a line without its time is no branch.
-    git_branches_merge(&b, "", STR_EMPTY, S("2 x\n1 y\nz\n"));
+    git_branches_merge(&b, "", STR_EMPTY, S("2 x\n1 y\nz\n"), false);
     CHECK(b.n == 2 && b.total == 2 && b.cur == -1 && strcmp(b.name[0], "x") == 0 && strcmp(b.name[1], "y") == 0);
     // HEAD on a branch git doesn't list (an unborn one): none marked; a name that only begins as one
     // of refs' isn't it.
-    git_branches_merge(&b, "fresh", S("1 2 t <t@t> 2 +0000\tcheckout: moving from ma to x"), S("2 main\n1 x"));
+    git_branches_merge(&b, "fresh", S("1 2 t <t@t> 2 +0000\tcheckout: moving from ma to x"), S("2 main\n1 x"), false);
     CHECK(b.n == 2 && b.cur == -1 && strcmp(b.name[0], "x") == 0 && strcmp(b.name[1], "main") == 0);
-    git_branches_merge(&b, "ma", STR_EMPTY, S("2 main\n"));   // (HEAD on "ma": not main's)
+    git_branches_merge(&b, "ma", STR_EMPTY, S("2 main\n"), false);   // (HEAD on "ma": not main's)
     CHECK(b.cur == -1);
     // More than it holds: the latest GIT_BRANCHES_MAX, all of them counted.
     static char many[(GIT_BRANCHES_MAX + 6) * 16];
     isize at = 0;
     for (int k = 0; k < GIT_BRANCHES_MAX + 6; k++) at += snprintf(many + at, sizeof many - (size_t)at, "%d b%d\n", 9999 - k, k);
-    git_branches_merge(&b, "b3", STR_EMPTY, (Str){ many, at });
+    git_branches_merge(&b, "b3", STR_EMPTY, (Str){ many, at }, false);
     CHECK(b.n == GIT_BRANCHES_MAX && b.total == GIT_BRANCHES_MAX + 6 && !b.more && b.cur == 0 && strcmp(b.name[0], "b3") == 0 && strcmp(b.name[1], "b0") == 0);
     // Past the refs it reads: those counted, more said (review, 2026-11-03); exactly that many, not.
     static char refs_max[(GIT_REFS_MAX + 1) * 16];
     at = 0;
     for (int k = 0; k < GIT_REFS_MAX; k++) at += snprintf(refs_max + at, sizeof refs_max - (size_t)at, "%d r%d\n", 99999 - k, k);
-    git_branches_merge(&b, "", STR_EMPTY, (Str){ refs_max, at });
+    git_branches_merge(&b, "", STR_EMPTY, (Str){ refs_max, at }, false);
     CHECK(b.total == GIT_REFS_MAX && !b.more);
     at += snprintf(refs_max + at, sizeof refs_max - (size_t)at, "1 last\n");
-    git_branches_merge(&b, "", STR_EMPTY, (Str){ refs_max, at });
+    git_branches_merge(&b, "", STR_EMPTY, (Str){ refs_max, at }, false);
     CHECK(b.total == GIT_REFS_MAX && b.more);
     // A name of GIT_HEAD_MAX or more is no branch: not listed, not counted.
     static char longn[GIT_HEAD_MAX + 32];
     int w = snprintf(longn, sizeof longn, "3 a\n2 %0*d\n1 b\n", GIT_HEAD_MAX, 0);
-    git_branches_merge(&b, "", STR_EMPTY, (Str){ longn, w });
+    git_branches_merge(&b, "", STR_EMPTY, (Str){ longn, w }, false);
     CHECK(b.n == 2 && b.total == 2 && strcmp(b.name[1], "b") == 0);
     w = snprintf(longn, sizeof longn, "1 %0*d\n", GIT_HEAD_MAX - 1, 0);   // (the longest that is, checked out)
     char head[GIT_HEAD_MAX];
     snprintf(head, sizeof head, "%.*s", w - 3, longn + 2);
-    git_branches_merge(&b, head, STR_EMPTY, (Str){ longn, w });
+    git_branches_merge(&b, head, STR_EMPTY, (Str){ longn, w }, false);
     CHECK(b.n == 1 && b.total == 1 && b.cur == 0);
+    // Refs cut off before HEAD's: it is listed first all the same, current, with no time; refs all
+    // read and HEAD not among them (unborn), not.
+    git_branches_merge(&b, "main", STR_EMPTY, S("3 a\n2 b\n"), true);
+    CHECK(b.n == 3 && b.total == 3 && b.more && b.cur == 0 && strcmp(b.name[0], "main") == 0 && b.when[0] == 0 && strcmp(b.name[1], "a") == 0);
+    git_branches_merge(&b, "main", STR_EMPTY, S("3 a\n2 b\n"), false);
+    CHECK(b.n == 2 && b.total == 2 && !b.more && b.cur == -1);
 }
 
 // for-each-ref's output past its room: cut at its last whole line, and said (review, 2026-11-03).
