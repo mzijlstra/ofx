@@ -156,14 +156,9 @@ static UiLine ui_edit_line(Ui *u)
     return (UiLine){ u->edit.b, &u->edit.len, &u->edit.caret, &u->edit.anchor, ui_edit_max(u), u->edit_path };
 }
 
-static UiLine ui_brp_line(Ui *u)   // (the branches panel's filter, F12 step 6: a branch name may hold a '/')
+static UiLine ui_pick_line(UiPick *p)   // (a picker's filter: Open With's, the branches'; a name may hold a '/')
 {
-    return UI_TEXT_LINE(u->brp_filter, true);
-}
-
-static UiLine ui_ow_line(Ui *u)
-{
-    return UI_TEXT_LINE(u->ow_filter, true);
+    return UI_TEXT_LINE(p->filter, true);
 }
 
 static UiLine ui_bmp_line(Ui *u)
@@ -371,8 +366,8 @@ static bool ui_line_active(Ui *u, UiLine *out)
 {
     UiLine l;
     UiOnTop on = ui_on_top(u);
-    if (on == UI_ON_OW && !u->ow_in_list) l = ui_ow_line(u);
-    else if (on == UI_ON_BRANCHES && !u->brp_in_list) l = ui_brp_line(u);
+    if (on == UI_ON_OW && !u->ow.in_list) l = ui_pick_line(&u->ow);
+    else if (on == UI_ON_BRANCHES && !u->brp.in_list) l = ui_pick_line(&u->brp);
     else if (on == UI_ON_BM && u->bmp_naming) l = ui_bmp_line(u);
     else if (on == UI_ON_KEYS) l = ui_keys_line(u);
     else if (on != UI_ON_NONE) return false;   // (a question, or a panel without a field)

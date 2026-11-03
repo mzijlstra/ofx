@@ -69,8 +69,8 @@ static void list_fit(void)
 {
     ui_set_cols(&app.ui.list, list_cols(GetScreenWidth()));
     ui_resize(&app.ui.list, list_rows(GetScreenHeight()));
-    ui_resize(&app.ui.ow_list, ow_rows(GetScreenHeight()));   // Open With's list (F7.3)
-    ui_resize(&app.ui.brp_list, brp_rows(GetScreenHeight()));   // the branches panel's (F12 step 6)
+    ui_resize(&app.ui.ow.list, ow_rows(GetScreenHeight()));   // Open With's list (F7.3)
+    ui_resize(&app.ui.brp.list, brp_rows(GetScreenHeight()));   // the branches panel's (F12 step 6)
     ui_resize(&app.ui.bmp_list, bmp_rows(GetScreenHeight()));   // Edit Bookmarks' (F7.5)
     ui_resize(&app.ui.keys_list, keys_rows(GetScreenHeight()));   // Keyboard Shortcuts'
 }

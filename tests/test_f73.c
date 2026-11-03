@@ -278,107 +278,113 @@ static UiAction ow_type(Ui *u, const char *s)
 
 static void test_ow_keys(void)
 {
-    // Opened from the menu: gui/ lists the apps; the next frame filters them, the field has the keys.
+    // Opened from the menu: the field has the keys; filtered once gui/ lists the apps (in the frame
+    // that opens it when they are there already, as here; in gui/ they come later).
     Ui u = menu_ui(3);
-    u.ow_list.rows = 4;
+    u.ow.list.rows = 4;
     ow_keys(&u, 1, UK_F10);
     u.menu_at = file_at(UM_OPEN_WITH);
-    CHECK(ow_keys(&u, 1, UK_ENTER).kind == UA_OPEN_WITH && u.panel == UI_PANEL_OW && !u.ow_in_list && u.ow_fresh && !u.menu_on);
+    CHECK(ow_keys(&u, 1, UK_ENTER).kind == UA_OPEN_WITH && u.panel == UI_PANEL_OW && !u.ow.in_list && !u.menu_on);
+    CHECK(!u.ow.fresh && u.ow.list.n == COUNT(OW_APPS) && u.ow.list.sel == 0 && u.ow.list.rows == 4);
+    ui_ow_open(&u);   // (opened again with no apps listed yet: fresh until they are)
+    UiInput none = ui_input_none();
+    ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &none);
+    CHECK(u.ow.fresh && u.ow.list.n == 0);
     ow_keys(&u, 0);
-    CHECK(!u.ow_fresh && u.ow_list.n == COUNT(OW_APPS) && u.ow_list.sel == 0 && u.ow_list.rows == 4);
+    CHECK(!u.ow.fresh && u.ow.list.n == COUNT(OW_APPS));
     // Typing filters (any part, folded); j and k are text in the field; Enter opens the first.
     ow_type(&u, "o");
-    CHECK(u.ow_filter.len == 1 && u.ow_list.n == 7);   // Neovim, LibreOffice, Omawrite, Chromium, Program, Studio Code, Editor
+    CHECK(u.ow.filter.len == 1 && u.ow.list.n == 7);   // Neovim, LibreOffice, Omawrite, Chromium, Program, Studio Code, Editor
     ow_type(&u, "ff");
-    CHECK(u.ow_list.n == 1 && u.ow_idx[0] == 1);
+    CHECK(u.ow.list.n == 1 && u.ow_idx[0] == 1);
     ow_keys(&u, 2, UK_BACKSPACE, UK_BACKSPACE);
     ow_type(&u, "jk");
-    CHECK(u.ow_filter.len == 3 && u.ow_list.n == 0 && !u.ow_in_list);
-    CHECK(ow_keys(&u, 2, UK_DOWN, UK_ENTER).kind == UA_NONE && u.panel == UI_PANEL_OW && !u.ow_in_list);   // nothing to go to, nothing to open
+    CHECK(u.ow.filter.len == 3 && u.ow.list.n == 0 && !u.ow.in_list);
+    CHECK(ow_keys(&u, 2, UK_DOWN, UK_ENTER).kind == UA_NONE && u.panel == UI_PANEL_OW && !u.ow.in_list);   // nothing to go to, nothing to open
     ow_keys(&u, 3, UK_BACKSPACE, UK_BACKSPACE, UK_BACKSPACE);
-    CHECK(u.ow_filter.len == 0 && u.ow_list.n == COUNT(OW_APPS));
+    CHECK(u.ow.filter.len == 0 && u.ow.list.n == COUNT(OW_APPS));
     // The caret: Left, Right, Home, End by code point; Delete; a character goes in at the caret.
     ow_type(&u, "caf");
     ow_keys(&u, 1, 0x100 + 0xE9);   // é, 2 bytes
-    CHECK(u.ow_filter.len == 5 && u.ow_filter.caret == 5 && u.ow_list.n == 1 && u.ow_idx[0] == 8);
+    CHECK(u.ow.filter.len == 5 && u.ow.filter.caret == 5 && u.ow.list.n == 1 && u.ow_idx[0] == 8);
     ow_keys(&u, 1, UK_LEFT);
-    CHECK(u.ow_filter.caret == 3);
+    CHECK(u.ow.filter.caret == 3);
     ow_keys(&u, 1, UK_RIGHT);
-    CHECK(u.ow_filter.caret == 5);
+    CHECK(u.ow.filter.caret == 5);
     ow_keys(&u, 2, UK_HOME, UK_DELETE);
-    CHECK(u.ow_filter.len == 4 && u.ow_filter.caret == 0 && memcmp(u.ow_filter.b, "af\xC3\xA9", 4) == 0);
+    CHECK(u.ow.filter.len == 4 && u.ow.filter.caret == 0 && memcmp(u.ow.filter.b, "af\xC3\xA9", 4) == 0);
     ow_keys(&u, 1, 0x100 + 'C');
-    CHECK(u.ow_filter.len == 5 && u.ow_filter.caret == 1 && u.ow_filter.b[0] == 'C' && u.ow_list.n == 1);
+    CHECK(u.ow.filter.len == 5 && u.ow.filter.caret == 1 && u.ow.filter.b[0] == 'C' && u.ow.list.n == 1);
     ow_keys(&u, 3, UK_END, UK_BACKSPACE, UK_LEFT);
-    CHECK(u.ow_filter.len == 3 && u.ow_filter.caret == 2);
+    CHECK(u.ow.filter.len == 3 && u.ow.filter.caret == 2);
     ow_keys(&u, 2, UK_DELETE, UK_DELETE);   // the last; then nothing after the caret
-    CHECK(u.ow_filter.len == 2 && u.ow_filter.caret == 2);
+    CHECK(u.ow.filter.len == 2 && u.ow.filter.caret == 2);
     ow_keys(&u, 3, UK_HOME, UK_LEFT, UK_BACKSPACE);   // nothing before the caret
-    CHECK(u.ow_filter.len == 2 && u.ow_filter.caret == 0);
+    CHECK(u.ow.filter.len == 2 && u.ow.filter.caret == 0);
     ow_keys(&u, 2, UK_END, UK_RIGHT);
-    CHECK(u.ow_filter.caret == 2);
+    CHECK(u.ow.filter.caret == 2);
     ow_keys(&u, 2, UK_BACKSPACE, UK_BACKSPACE);
     // The toggles: Alt+C, Alt+W, Alt+R; a bad expression shows nothing.
     ow_type(&u, "code");
-    CHECK(u.ow_list.n == 1);
+    CHECK(u.ow.list.n == 1);
     ow_keys(&u, 1, -'c');
-    CHECK(u.ow_opts.cased && u.ow_list.n == 0 && u.panel == UI_PANEL_OW && !u.menu_on);
+    CHECK(u.ow_opts.cased && u.ow.list.n == 0 && u.panel == UI_PANEL_OW && !u.menu_on);
     ow_keys(&u, 2, -'c', -'w');
-    CHECK(u.ow_opts.word && u.ow_list.n == 1);
+    CHECK(u.ow_opts.word && u.ow.list.n == 1);
     ow_keys(&u, 4, UK_BACKSPACE, UK_BACKSPACE, UK_BACKSPACE, UK_BACKSPACE);
     ow_keys(&u, 2, -'w', -'r');
     ow_type(&u, "^(neo|imv)");
-    CHECK(u.ow_opts.regex && u.ow_list.n == 2 && u.ow_idx[1] == 5);
+    CHECK(u.ow_opts.regex && u.ow.list.n == 2 && u.ow_idx[1] == 5);
     ow_type(&u, "(");
-    CHECK(u.ow_list.n == 0 && u.ow_m.bad);
+    CHECK(u.ow.list.n == 0 && u.ow.m.bad);
     ow_keys(&u, 1, UK_BACKSPACE);
-    CHECK(u.ow_m.re_on);
+    CHECK(u.ow.m.re_on);
     // Closed with an expression compiled: freed; opened again as it was, the toggle kept.
     ui_ow_close(&u);
-    CHECK(!u.ow_m.re_on && u.panel != UI_PANEL_OW);
+    CHECK(!u.ow.m.re_on && u.panel != UI_PANEL_OW);
     ui_ow_open(&u);
     ow_keys(&u, 0);
     ow_type(&u, "^(neo|imv)(");
-    CHECK(u.ow_opts.regex && u.ow_m.bad);
+    CHECK(u.ow_opts.regex && u.ow.m.bad);
     for (int k = 0; k < 11; k++) ow_keys(&u, 1, UK_BACKSPACE);
     ow_keys(&u, 1, -'r');
-    CHECK(u.ow_filter.len == 0 && !u.ow_opts.regex && u.ow_list.n == COUNT(OW_APPS));
+    CHECK(u.ow.filter.len == 0 && !u.ow_opts.regex && u.ow.list.n == COUNT(OW_APPS));
     // The list: Down from the field, j, k, Up on the first row back to the field; Tab both ways.
     ow_keys(&u, 1, UK_DOWN);
-    CHECK(u.ow_in_list && u.ow_list.sel == 0);
+    CHECK(u.ow.in_list && u.ow.list.sel == 0);
     ow_keys(&u, 2, 0x100 + 'j', UK_DOWN);
-    CHECK(u.ow_list.sel == 2 && u.ow_filter.len == 0);
+    CHECK(u.ow.list.sel == 2 && u.ow.filter.len == 0);
     ow_keys(&u, 1, 0x100 + 'k');
-    CHECK(u.ow_list.sel == 1);
+    CHECK(u.ow.list.sel == 1);
     ow_keys(&u, 2, UK_UP, UK_UP);
-    CHECK(!u.ow_in_list && u.ow_list.sel == 0);
+    CHECK(!u.ow.in_list && u.ow.list.sel == 0);
     ow_keys(&u, 1, UK_TAB);
-    CHECK(u.ow_in_list);
+    CHECK(u.ow.in_list);
     ow_keys(&u, 1, UK_END);
-    CHECK(u.ow_list.sel == COUNT(OW_APPS) - 1 && u.ow_list.top == COUNT(OW_APPS) - 4);
+    CHECK(u.ow.list.sel == COUNT(OW_APPS) - 1 && u.ow.list.top == COUNT(OW_APPS) - 4);
     ow_keys(&u, 1, UK_DOWN);
-    CHECK(u.ow_list.sel == COUNT(OW_APPS) - 1);   // stops at the end
+    CHECK(u.ow.list.sel == COUNT(OW_APPS) - 1);   // stops at the end
     ow_keys(&u, 1, UK_PAGEUP);
-    CHECK(u.ow_list.sel == COUNT(OW_APPS) - 4);
+    CHECK(u.ow.list.sel == COUNT(OW_APPS) - 4);
     ow_keys(&u, 1, UK_HOME);
-    CHECK(u.ow_list.sel == 0 && u.ow_list.top == 0);
+    CHECK(u.ow.list.sel == 0 && u.ow.list.top == 0);
     ow_keys(&u, 1, UK_PAGEDOWN);
-    CHECK(u.ow_list.sel == 3);
+    CHECK(u.ow.list.sel == 3);
     ow_keys(&u, 2, UK_LEFT, UK_TAB);   // Left does nothing in the list
-    CHECK(!u.ow_in_list && u.ow_list.sel == 3);
+    CHECK(!u.ow.in_list && u.ow.list.sel == 3);
     // Another letter in the list goes to the field, typed at its end; Backspace too.
     ow_keys(&u, 2, UK_TAB, 0x100 + 'g');
-    CHECK(!u.ow_in_list && u.ow_filter.len == 1 && u.ow_list.n == 1 && u.ow_idx[0] == 4);
+    CHECK(!u.ow.in_list && u.ow.filter.len == 1 && u.ow.list.n == 1 && u.ow_idx[0] == 4);
     ow_keys(&u, 3, UK_HOME, UK_TAB, 0x100 + 'n');
-    CHECK(u.ow_filter.len == 2 && u.ow_filter.caret == 2 && memcmp(u.ow_filter.b, "gn", 2) == 0 && u.ow_list.n == 1);
+    CHECK(u.ow.filter.len == 2 && u.ow.filter.caret == 2 && memcmp(u.ow.filter.b, "gn", 2) == 0 && u.ow.list.n == 1);
     ow_keys(&u, 2, UK_TAB, UK_BACKSPACE);
-    CHECK(!u.ow_in_list && u.ow_filter.len == 1 && u.ow_list.n == 1);
+    CHECK(!u.ow.in_list && u.ow.filter.len == 1 && u.ow.list.n == 1);
     ow_keys(&u, 2, UK_TAB, 0x100 + 0x1F);   // a control character: nothing
-    CHECK(u.ow_in_list && u.ow_filter.len == 1);
+    CHECK(u.ow.in_list && u.ow.filter.len == 1);
     ow_keys(&u, 2, UK_BACKSPACE, UK_TAB);
-    CHECK(u.ow_filter.len == 0 && u.ow_in_list);
+    CHECK(u.ow.filter.len == 0 && u.ow.in_list);
     ow_keys(&u, 1, UK_BACKSPACE);   // empty: nothing to erase, to the field
-    CHECK(!u.ow_in_list && u.ow_filter.len == 0);
+    CHECK(!u.ow.in_list && u.ow.filter.len == 0);
     // Enter: the app under the cursor, the panel closed; from the list or the field.
     ow_keys(&u, 3, UK_DOWN, UK_DOWN, UK_DOWN);
     UiAction a = ow_keys(&u, 1, UK_ENTER);
@@ -387,21 +393,21 @@ static void test_ow_keys(void)
     ui_ow_open(&u);
     ow_keys(&u, 0);
     CHECK(ow_keys(&u, 1, UK_TERMINAL).kind == UA_NONE && ow_keys(&u, 1, UK_PROPERTIES).kind == UA_NONE && u.panel == UI_PANEL_OW && u.panel != UI_PANEL_PROPS);
-    CHECK(ow_keys(&u, 1, 0x100 + 't').kind == UA_NONE && u.ow_filter.len == 1);
+    CHECK(ow_keys(&u, 1, 0x100 + 't').kind == UA_NONE && u.ow.filter.len == 1);
     CHECK(ow_keys(&u, 1, UK_ESC).kind == UA_NONE && u.panel != UI_PANEL_OW);
     // Opened again: an empty field, the toggles kept.
     u.ow_opts.word = true;
     ui_ow_open(&u);
-    CHECK(u.ow_filter.len == 0 && u.ow_filter.caret == 0 && u.ow_opts.word && u.ow_list.n == 0 && u.ow_fresh);
+    CHECK(u.ow.filter.len == 0 && u.ow.filter.caret == 0 && u.ow_opts.word && u.ow.list.n == 0 && u.ow.fresh);
     u.ow_opts.word = false;
     ui_ow_close(&u);
     // A full field drops what doesn't fit.
     ui_ow_open(&u);
     ow_keys(&u, 0);
-    for (int k = 0; k < UI_FIND_MAX + 3; k++) ui_line_key(&u, ui_ow_line(&u), (UiEvent){ UK_NONE, 'x' }, STR_EMPTY);
-    CHECK(u.ow_filter.len == UI_FIND_MAX);
-    ui_line_key(&u, ui_ow_line(&u), (UiEvent){ UK_NONE, 0xE9 }, STR_EMPTY);
-    CHECK(u.ow_filter.len == UI_FIND_MAX);
+    for (int k = 0; k < UI_FIND_MAX + 3; k++) ui_line_key(&u, ui_pick_line(&u.ow), (UiEvent){ UK_NONE, 'x' }, STR_EMPTY);
+    CHECK(u.ow.filter.len == UI_FIND_MAX);
+    ui_line_key(&u, ui_pick_line(&u.ow), (UiEvent){ UK_NONE, 0xE9 }, STR_EMPTY);
+    CHECK(u.ow.filter.len == UI_FIND_MAX);
     ui_ow_close(&u);
 }
 
@@ -409,25 +415,25 @@ static void test_ow_mouse(void)
 {
     UiNames names = { name_at, NULL, NULL };
     Ui u = menu_ui(3);
-    u.ow_list.rows = 4;
+    u.ow.list.rows = 4;
     ui_ow_open(&u);
     ow_keys(&u, 0);
     // A row takes the cursor and the keys; one past the list nothing; a double click opens.
     UiInput in = ui_input_none();
     in.app_name = OW_APPS, in.app_n = COUNT(OW_APPS);
-    in.ow_row = 2;
-    CHECK(ui_input_acts(&in) && ui_handle(&u, names, &in).kind == UA_NONE && u.ow_list.sel == 2 && u.ow_in_list);
-    in.ow_row = 40;
+    in.pick_row = 2;
+    CHECK(ui_input_acts(&in) && ui_handle(&u, names, &in).kind == UA_NONE && u.ow.list.sel == 2 && u.ow.in_list);
+    in.pick_row = 40;
     ui_handle(&u, names, &in);
-    CHECK(u.ow_list.sel == 2);
+    CHECK(u.ow.list.sel == 2);
     // The wheel over it scrolls it, the cursor kept; the field takes the keys.
     in = ui_input_none(), in.app_name = OW_APPS, in.app_n = COUNT(OW_APPS);
-    in.ow_wheel = -2, in.ow_field = true;
+    in.panel_wheel = -2, in.pick_field = true;
     CHECK(ui_input_acts(&in));
     ui_handle(&u, names, &in);
-    CHECK(u.ow_list.top == 2 && u.ow_list.sel == 2 && !u.ow_in_list && u.list.top == 0);
+    CHECK(u.ow.list.top == 2 && u.ow.list.sel == 2 && !u.ow.in_list && u.list.top == 0);
     in = ui_input_none(), in.app_name = OW_APPS, in.app_n = COUNT(OW_APPS);
-    in.ow_drow = 1;   // the row on screen: the list's 3
+    in.pick_drow = 1;   // the row on screen: the list's 3
     CHECK(ui_input_acts(&in));
     UiAction a = ui_handle(&u, names, &in);
     CHECK(a.kind == UA_LAUNCH && a.index == 3 && u.panel != UI_PANEL_OW);
@@ -581,7 +587,7 @@ static void test_ow_default(void)
 {
     UiNames names = { name_at, NULL, NULL };
     Ui u = menu_ui(3);
-    u.ow_list.rows = 4;
+    u.ow.list.rows = 4;
     ui_ow_open(&u);
     ow_keys(&u, 0);
     // Not allowed (gui/ says why): Alt+D and the box do nothing; Enter opens without it.
@@ -601,13 +607,13 @@ static void test_ow_default(void)
     u.ow_def_can = true;
     ow_type(&u, "neo");
     ow_keys(&u, 1, -'d');
-    CHECK(u.ow_def && u.ow_filter.len == 3);
+    CHECK(u.ow_def && u.ow.filter.len == 3);
     ow_keys(&u, 1, -'d');
     CHECK(!u.ow_def);
     ui_handle(&u, names, &in);
     CHECK(u.ow_def && ui_input_acts(&in));
     ow_keys(&u, 2, UK_TAB, -'d');   // from the list as well
-    CHECK(!u.ow_def && u.ow_in_list);
+    CHECK(!u.ow_def && u.ow.in_list);
     ow_keys(&u, 1, -'d');
     a = ow_keys(&u, 1, UK_ENTER);
     CHECK(a.kind == UA_LAUNCH && a.all && a.index == 0 && u.panel != UI_PANEL_OW);

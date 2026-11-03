@@ -105,9 +105,10 @@ static void menu_facts(void)
         if (!bmarks.b[i].path[0] || local++ < UI_MENU_BOOKMARKS) continue;
         if (u->bm_more++ == 0) u->bm_more_at = i;
     }
-    // The branch button and its menu (F12 step 5b).
+    // The branch button and its menu (F12 step 5b); the one checked out is the first or none
+    // (git_branches_merge), so always among the menu's.
     u->branch_on = branch_label() != NULL;
-    u->br_n = git.br.n < UI_MENU_BRANCHES ? git.br.n : UI_MENU_BRANCHES, u->br_here = git.br.cur < UI_MENU_BRANCHES ? git.br.cur : -1, u->br_note = git.br.n == 0;
+    u->br_n = git.br.n < UI_MENU_BRANCHES ? git.br.n : UI_MENU_BRANCHES, u->br_here = git.br.cur, u->br_note = git.br.n == 0;
     u->br_total = git.br.total;   // (the panel's: "All branches… (N)", F12 step 6)
 }
 

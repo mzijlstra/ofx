@@ -228,6 +228,34 @@ static void layout_toggles(UiMatchOpts o, int base)
     }
 }
 
+// A picker's field (Open With's, the branches'): its text and caret as the edit line draws them
+// while it has the keys (2026-10-28), with them in the list the text ("Type to filter" for none);
+// the edge lit with the keys, red when the expression is bad; Open With's toggles at its right end.
+static void layout_pick_field(Clay_ElementId id, const char *edit_id, UiPick *p, int text_w, const UiMatchOpts *toggles)
+{
+    Theme *t = &app.theme;
+    Clay_Color edge = p->m.bad ? cc(t->red) : !p->in_list ? cc(t->accent) : rule_color();
+    CLAY(id, { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(32) }, .padding = { 8, 4, 0, 0 }, .childGap = 6,
+                           .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
+               .backgroundColor = cc(t->bg),
+               .border = { .color = edge, .width = CLAY_BORDER_OUTSIDE(1) } }) {
+        CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
+                       .clip = { .horizontal = true } }) {
+            if (p->filter.len == 0 && p->in_list) text(cz("Type to filter"), cc(t->fg_dim));
+            if (!p->in_list) edit_text(edit_id, text_w, ui_pick_line(p), cc(t->fg));
+            else text(fit((Str){ p->filter.b, p->filter.len }, text_w, true), cc(t->fg));
+        }
+        if (toggles) layout_toggles(*toggles, 0);
+    }
+}
+
+// A picker's row's background: the cursor's lit, brighter with the keys in the list.
+static Clay_Color pick_row_bg(const UiPick *p, bool sel)
+{
+    Theme *t = &app.theme;
+    return sel ? mix(t->accent, t->bg_light, p->in_list ? 0.45f : 0.22f) : cc(t->bg_light);
+}
+
 static void layout_ow_panel(void)
 {
     Theme *t = &app.theme;
@@ -246,36 +274,21 @@ static void layout_ow_panel(void)
             CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) } } }) {}
             text(fit(str_from_c(ow.type), 160, false), cc(t->fg_dim));
         }
-        // The field: its text and caret, the toggles at its right end; red when the expression is bad.
-        bool bad = u->ow_m.bad;
-        Clay_Color edge = bad ? cc(t->red) : !u->ow_in_list ? cc(t->accent) : rule_color();
-        CLAY(CLAY_ID("ow-field"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(32) }, .padding = { 8, 4, 0, 0 }, .childGap = 6,
-                                                .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
-                                    .backgroundColor = cc(t->bg),
-                                    .border = { .color = edge, .width = CLAY_BORDER_OUTSIDE(1) } }) {
-            CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
-                           .clip = { .horizontal = true } }) {
-                // As the edit line draws while it has the keys (2026-10-28); with them in the list, the text.
-                if (u->ow_filter.len == 0 && u->ow_in_list) text(cz("Type to filter"), cc(t->fg_dim));
-                if (!u->ow_in_list) edit_text("ow", OW_W - 200, ui_ow_line(u), cc(t->fg));
-                else text(fit((Str){ u->ow_filter.b, u->ow_filter.len }, OW_W - 200, true), cc(t->fg));
-            }
-            layout_toggles(u->ow_opts, 0);
-        }
-        if (bad) text(fit(str_from_c(u->ow_m.err), OW_W - 48, false), cc(t->red));
+        layout_pick_field(CLAY_ID("ow-field"), "ow", &u->ow, OW_W - 200, &u->ow_opts);
+        if (u->ow.m.bad) text(fit(str_from_c(u->ow.m.err), OW_W - 48, false), cc(t->red));
         // The list: a row an app, the cursor's lit (brighter with the keys there); the first of each
         // part says which part it starts.
-        CLAY(CLAY_ID("ow-list"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(u->ow_list.rows * OW_ROW_H) }, .layoutDirection = CLAY_TOP_TO_BOTTOM },
+        CLAY(CLAY_ID("ow-list"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(u->ow.list.rows * OW_ROW_H) }, .layoutDirection = CLAY_TOP_TO_BOTTOM },
                                    .clip = { .vertical = true } }) {
-            if (u->ow_list.n == 0)
+            if (u->ow.list.n == 0)
                 CLAY_AUTO_ID({ .layout = { .padding = { 8, 0, 8, 0 } } }) { text(cz(ow.shown ? "No app matches" : "No apps"), cc(t->fg_dim)); }
-            for (int r = 0; r < u->ow_list.rows; r++) {
-                isize v = u->ow_list.top + r;
-                if (v >= u->ow_list.n) break;
+            for (int r = 0; r < u->ow.list.rows; r++) {
+                isize v = u->ow.list.top + r;
+                if (v >= u->ow.list.n) break;
                 isize i = u->ow_idx[v];
                 const App *p = &ow.apps.a[i];
-                bool sel = v == u->ow_list.sel, first = v == 0 || ow.apps.a[u->ow_idx[v - 1]].section != p->section;
-                Clay_Color bg = sel ? (u->ow_in_list ? mix(t->accent, t->bg_light, 0.45f) : mix(t->accent, t->bg_light, 0.22f)) : cc(t->bg_light);
+                bool sel = v == u->ow.list.sel, first = v == 0 || ow.apps.a[u->ow_idx[v - 1]].section != p->section;
+                Clay_Color bg = pick_row_bg(&u->ow, sel);
                 CLAY(CLAY_IDI("ow-row", r), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(OW_ROW_H) }, .padding = { 8, 8, 0, 0 }, .childGap = 10,
                                                           .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
                                               .backgroundColor = bg,

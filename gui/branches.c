@@ -39,31 +39,20 @@ static void layout_brp_panel(void)
             text(cz(git.br.more ? arena_sprintf(&frame, "the latest %d of more than %d", git.br.n, git.br.total) : git.br.total > git.br.n ? arena_sprintf(&frame, "the latest %d of %d", git.br.n, git.br.total) : arena_sprintf(&frame, "%d", git.br.n)),
                  cc(t->fg_dim));
         }
-        Clay_Color edge = !u->brp_in_list ? cc(t->accent) : rule_color();
-        CLAY(CLAY_ID("brp-field"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(32) }, .padding = { 8, 4, 0, 0 },
-                                                 .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
-                                     .backgroundColor = cc(t->bg),
-                                     .border = { .color = edge, .width = CLAY_BORDER_OUTSIDE(1) } }) {
-            CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
-                           .clip = { .horizontal = true } }) {
-                if (u->brp_filter.len == 0 && u->brp_in_list) text(cz("Type to filter"), cc(t->fg_dim));
-                if (!u->brp_in_list) edit_text("brp", BRP_W - 80, ui_brp_line(u), cc(t->fg));
-                else text(fit((Str){ u->brp_filter.b, u->brp_filter.len }, BRP_W - 80, true), cc(t->fg));
-            }
-        }
+        layout_pick_field(CLAY_ID("brp-field"), "brp", &u->brp, BRP_W - 80, NULL);
         // The list: a row a branch, the one checked out with the dot, its last commit's age at the right.
-        CLAY(CLAY_ID("brp-list"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(u->brp_list.rows * BRP_ROW_H) },
+        CLAY(CLAY_ID("brp-list"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(u->brp.list.rows * BRP_ROW_H) },
                                                 .layoutDirection = CLAY_TOP_TO_BOTTOM },
                                     .clip = { .vertical = true } }) {
-            if (u->brp_list.n == 0)
+            if (u->brp.list.n == 0)
                 CLAY_AUTO_ID({ .layout = { .padding = { 8, 0, 8, 0 } } }) { text(cz(git.br.n ? "No branch matches" : "No branches"), cc(t->fg_dim)); }
-            for (int r = 0; r < u->brp_list.rows; r++) {
-                isize v = u->brp_list.top + r;
-                if (v >= u->brp_list.n) break;
+            for (int r = 0; r < u->brp.list.rows; r++) {
+                isize v = u->brp.list.top + r;
+                if (v >= u->brp.list.n) break;
                 isize i = u->brp_idx[v];
                 if (i >= git.br.n) continue;
-                bool sel = v == u->brp_list.sel, cur = i == git.br.cur;
-                Clay_Color bg = sel ? (u->brp_in_list ? mix(t->accent, t->bg_light, 0.45f) : mix(t->accent, t->bg_light, 0.22f)) : cc(t->bg_light);
+                bool sel = v == u->brp.list.sel, cur = i == git.br.cur;
+                Clay_Color bg = pick_row_bg(&u->brp, sel);
                 char age[32];
                 if (git.br.when[i] > 0) ui_age(age, sizeof age, now, git.br.when[i]);
                 else age[0] = 0;   // (HEAD's branch past a cut list: no time read)

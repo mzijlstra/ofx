@@ -1022,10 +1022,10 @@ static void test_line_active(void)
     CHECK(!ui_line_active(&u, NULL));
     u.bmp_naming = true;
     CHECK(ui_line_active(&u, &l) && l.b == u.bmp_name.b);
-    u.panel = UI_PANEL_OW, u.ow_in_list = true;
+    u.panel = UI_PANEL_OW, u.ow.in_list = true;
     CHECK(!ui_line_active(&u, NULL));
-    u.ow_in_list = false;
-    CHECK(ui_line_active(&u, &l) && l.b == u.ow_filter.b);
+    u.ow.in_list = false;
+    CHECK(ui_line_active(&u, &l) && l.b == u.ow.filter.b);
     // One focus (2026-10-28): the location line opened from the search view takes the keys from
     // its field, which kept them too before; Esc gives them to the list, not back to the field.
     {

@@ -157,19 +157,19 @@ typedef struct {
     int     ctx_tab;     // a tab (its place in the bar), -1 for none (F8)
     int     prop_box;    // a checkbox of the Properties panel's grid pressed (0..8, F7.2), -1 for none
     // Open With (F7.3): the apps gui/ lists, in its order (their names, which the filter
-    // matches); a row pressed or double-clicked (its place on screen), the field pressed, a
-    // toggle pressed (UI_TOGGLE_*), each -1 or 0 for none.
+    // matches); a toggle pressed (UI_TOGGLE_*), 0 for none (its rows and field: pick_row below).
     const Str *app_name;
     isize   app_n;
-    int     ow_row, ow_drow;
-    bool    ow_field;
-    int     ow_wheel;    // notches over its list (or Keyboard Shortcuts', or the branches'), as wheel
     // The branches panel (F12 step 6): every branch gui/ has, in the menu's order (their names,
-    // which the filter matches); a row pressed or double-clicked, the field pressed (-1, false: none).
+    // which the filter matches).
     const Str *br_name;
     isize   br_names;
-    int     brp_row, brp_drow;
-    bool    brp_field;
+    // A picker panel's (Open With's or the branches'): a row pressed or double-clicked (its place on
+    // screen), the field pressed (-1, false: none); and the wheel's notches over a panel's list
+    // (theirs, or Keyboard Shortcuts'), as wheel.
+    int     pick_row, pick_drow;
+    bool    pick_field;
+    int     panel_wheel;
     int     toggle;      // UI_TOGGLE_ALWAYS: Open With's "Always open … with this app" box (F7.3.1)
     bool    find_x;      // the find bar's × pressed
     // A text bar's field pressed (UiField: the find bar's, the search's name and Containing; -1
@@ -645,8 +645,19 @@ typedef struct {
 #define UI_TEXT(n) struct { char b[n]; int len, caret, anchor; }
 #define UI_TEXT_CLEAR(t) ((t).len = (t).caret = (t).anchor = 0)
 
+// A picker: a panel's filter field over a list of what it matches (Open With's apps, F7.3; the
+// branches, F12 step 6). The keys in the list or the field; fresh until filtered from gui/'s names
+// (panels.c, ui_pick_*).
+typedef struct {
+    bool   in_list;
+    bool   fresh;
+    UI_TEXT(UI_FIND_MAX + 1) filter;
+    UiMatcher m;
+    UiList list;
+} UiPick;
+
 // The panel up, under the questions (ui_on_top): Properties, Open With, Edit Bookmarks, Keyboard
-// Shortcuts, About, and the note that the menu bar is hidden; UI_PANEL_NONE for none.
+// Shortcuts, About, the note that the menu bar is hidden, and the branches; UI_PANEL_NONE for none.
 typedef enum { UI_PANEL_NONE, UI_PANEL_PROPS, UI_PANEL_OW, UI_PANEL_BM, UI_PANEL_KEYS, UI_PANEL_ABOUT, UI_PANEL_BAR, UI_PANEL_BRANCHES, UI_PANELS } UiPanel;
 
 // Which listing is shown. One value (2026-10-28: in_trash and in_search before, two flags tested
@@ -808,28 +819,18 @@ typedef struct {
     // read, write, execute, then group's, others'), and whether gui/ lets its permissions change.
     int    prop_at;
     bool   prop_can;
-    // Open With (F7.3, UI_PANEL_OW): the filter field's text and caret (bytes); the keys in the list,
-    // not the field; the toggles; the apps the filter shows (their places in gui/'s list) and the
-    // cursor over them; ow_fresh until the list is filtered from gui/'s apps.
-    bool   ow_in_list;
-    bool   ow_fresh;
-    UI_TEXT(UI_FIND_MAX + 1) ow_filter;
+    // Open With (F7.3, UI_PANEL_OW): its picker; the toggles; the apps the filter shows (their places
+    // in gui/'s list).
+    UiPick ow;
     UiMatchOpts ow_opts;
-    UiMatcher   ow_m;
-    UiList ow_list;
     isize  ow_idx[UI_APPS_MAX];
     // Set as default (F7.3.1): the box ticked, and whether gui/ lets it be (an empty file's type,
     // or one a list read first sets, can't).
     bool   ow_def;
     bool   ow_def_can;
-    // The branches panel (F12 step 6, UI_PANEL_BRANCHES), as Open With's: the filter's text, the
-    // keys in the list or the field, the branches the filter shows (their places in gui/'s list)
-    // and the cursor over them; brp_fresh until filtered from gui/'s names.
-    bool   brp_in_list;
-    bool   brp_fresh;
-    UI_TEXT(UI_FIND_MAX + 1) brp_filter;
-    UiMatcher brp_m;
-    UiList brp_list;
+    // The branches panel (F12 step 6, UI_PANEL_BRANCHES): its picker, and the branches the filter
+    // shows (their places in gui/'s list).
+    UiPick brp;
     isize  brp_idx[UI_BRANCHES_MAX];
 } Ui;
 
@@ -976,7 +977,7 @@ static UiInput ui_input_none(void)
 {
     return (UiInput){ .click = -1, .dclick = -1, .side_click = -1, .header = -1, .click_mods = 0, .bar = UB_NONE, .crumb = -1,
                       .tab_click = -1, .tab_close = -1, .mid_row = -1, .mid_side = -1, .mid_crumb = -1, .modal = 0, .job_x = -1, .side_mode = -1, .side_twisty = -1, .side_eject = -1,
-                      .zoom_to = -1, .menu_title = -1, .menu_item = -1, .ctx_row = -1, .ctx_side = -1, .ctx_crumb = -1, .ctx_tab = -1, .prop_box = -1, .ow_row = -1, .ow_drow = -1, .brp_row = -1, .brp_drow = -1, .bmp_row = -1, .bmp_drow = -1,
+                      .zoom_to = -1, .menu_title = -1, .menu_item = -1, .ctx_row = -1, .ctx_side = -1, .ctx_crumb = -1, .ctx_tab = -1, .prop_box = -1, .pick_row = -1, .pick_drow = -1, .bmp_row = -1, .bmp_drow = -1,
                       .field = -1 };
 }
 

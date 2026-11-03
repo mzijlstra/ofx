@@ -1325,7 +1325,7 @@ static void test_branch_panel(void)
     UiNames names = { name_at, NULL, NULL };
     static const Str BR[] = { { "main", 4 }, { "BIV-24-fix", 10 }, { "feature/x", 9 }, { "biv-31", 6 }, { "old", 3 } };
     Ui u = menu_ui(3);
-    u.branch_on = true, u.br_n = 5, u.br_total = 5, u.br_here = 0, u.brp_list.rows = 4, u.menu_on = true, u.menu = UI_CTX_BRANCH;
+    u.branch_on = true, u.br_n = 5, u.br_total = 5, u.br_here = 0, u.brp.list.rows = 4, u.menu_on = true, u.menu = UI_CTX_BRANCH;
     CHECK(!ui_menu_shown(&u, UM_BR_ALL));
     u.br_total = 9;
     CHECK(ui_menu_shown(&u, UM_BR_ALL) && ui_menu_enabled(&u, UM_BR_ALL));
@@ -1337,28 +1337,28 @@ static void test_branch_panel(void)
     // A press on a row or the field draws a frame (ui_input_acts; review, 2026-11-03).
     UiInput acts = ui_input_none();
     CHECK(!ui_input_acts(&acts));
-    acts.brp_row = 0;
+    acts.pick_row = 0;
     CHECK(ui_input_acts(&acts));
-    acts = ui_input_none(), acts.brp_drow = 0;
+    acts = ui_input_none(), acts.pick_drow = 0;
     CHECK(ui_input_acts(&acts));
-    acts = ui_input_none(), acts.brp_field = true;
+    acts = ui_input_none(), acts.pick_field = true;
     CHECK(ui_input_acts(&acts));
-    CHECK(!u.brp_fresh && u.brp_list.n == 5);
+    CHECK(!u.brp.fresh && u.brp.list.n == 5);
     in = chars("biv"), in.br_name = BR, in.br_names = COUNT(BR);
     ui_handle(&u, names, &in);
-    CHECK(u.brp_list.n == 2 && u.brp_idx[0] == 1 && u.brp_idx[1] == 3 && !u.brp_in_list);
+    CHECK(u.brp.list.n == 2 && u.brp_idx[0] == 1 && u.brp_idx[1] == 3 && !u.brp.in_list);
     in = keys(2, UK_DOWN, UK_DOWN), in.br_name = BR, in.br_names = COUNT(BR);
     ui_handle(&u, names, &in);
-    CHECK(u.brp_in_list && u.brp_list.sel == 1);
+    CHECK(u.brp.in_list && u.brp.list.sel == 1);
     in = keys(1, UK_ENTER), in.br_name = BR, in.br_names = COUNT(BR);
     UiAction a = ui_handle(&u, names, &in);
     CHECK(a.kind == UA_BRANCH && a.index == 3 && u.panel == UI_PANEL_NONE);
     // The pointer: a row takes the cursor, a double click switches; Switch and Close.
     ui_brp_open(&u);
-    in = ui_input_none(), in.br_name = BR, in.br_names = COUNT(BR), in.brp_row = 2;
+    in = ui_input_none(), in.br_name = BR, in.br_names = COUNT(BR), in.pick_row = 2;
     ui_handle(&u, names, &in);
-    CHECK(u.brp_list.sel == 2 && u.brp_in_list);
-    in = ui_input_none(), in.br_name = BR, in.br_names = COUNT(BR), in.brp_drow = 4;
+    CHECK(u.brp.list.sel == 2 && u.brp.in_list);
+    in = ui_input_none(), in.br_name = BR, in.br_names = COUNT(BR), in.pick_drow = 4;
     a = ui_handle(&u, names, &in);
     CHECK(a.kind == UA_BRANCH && a.index == 4 && u.panel == UI_PANEL_NONE);
     ui_brp_open(&u);
@@ -1375,13 +1375,13 @@ static void test_branch_panel(void)
     ui_brp_open(&u);
     in = chars("zz"), in.br_name = BR, in.br_names = COUNT(BR);
     ui_handle(&u, names, &in);
-    CHECK(u.brp_list.n == 0);
+    CHECK(u.brp.list.n == 0);
     in = keys(1, UK_ENTER), in.br_name = BR, in.br_names = COUNT(BR);
     CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.panel == UI_PANEL_BRANCHES);
-    UI_TEXT_CLEAR(u.brp_filter);
+    UI_TEXT_CLEAR(u.brp.filter);
     in = chars("e/"), in.br_name = BR, in.br_names = COUNT(BR);
     ui_handle(&u, names, &in);
-    CHECK(u.brp_list.n == 1 && u.brp_idx[0] == 2);
+    CHECK(u.brp.list.n == 1 && u.brp_idx[0] == 2);
 }
 
 // The window's timer (F12 step 5a review): the soonest due time, whatever its place; 0s are none.

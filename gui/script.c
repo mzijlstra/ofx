@@ -276,9 +276,9 @@ static void script_state(char *out, size_t cap)
     if (app.ui.br_note) state_word(brnote, sizeof brnote, branch_menu_label(UM_BR_NOTE));   // (the note as drawn)
     // The branches panel (F12 step 6): the cursor's branch, the filter's text.
     char brpsel[GIT_HEAD_MAX] = "-", brptext[UI_FIND_MAX + 1] = "-";
-    if (app.ui.panel == UI_PANEL_BRANCHES && app.ui.brp_list.n > 0 && app.ui.brp_idx[app.ui.brp_list.sel] < git.br.n)
-        state_word(brpsel, sizeof brpsel, str_from_c(git.br.name[app.ui.brp_idx[app.ui.brp_list.sel]]));
-    if (app.ui.brp_filter.len) state_word(brptext, sizeof brptext, (Str){ app.ui.brp_filter.b, app.ui.brp_filter.len });
+    if (app.ui.panel == UI_PANEL_BRANCHES && app.ui.brp.list.n > 0 && app.ui.brp_idx[app.ui.brp.list.sel] < git.br.n)
+        state_word(brpsel, sizeof brpsel, str_from_c(git.br.name[app.ui.brp_idx[app.ui.brp.list.sel]]));
+    if (app.ui.brp.filter.len) state_word(brptext, sizeof brptext, (Str){ app.ui.brp.filter.b, app.ui.brp.filter.len });
     if (branch_label()) state_word(branch, sizeof branch, str_from_c(branch_label()));
     // The button inside the path's part of the bar (the path buttons gave it room); its menu's top
     // left at the button's bottom left.
@@ -415,8 +415,8 @@ static void script_state(char *out, size_t cap)
     // Open With (F7.3): its field's text (spaces '_'), the app under the cursor (its desktop id),
     // and the toggles as letters (c, w, r; "-" none), the panel's and find's.
     char owtext[UI_FIND_MAX + 1], owapp[NAME_MAX + 1], owopts[4], findopts[4], insideopts[4];
-    state_word(owtext, sizeof owtext, (Str){ app.ui.ow_filter.b, app.ui.ow_filter.len });
-    isize owsel = app.ui.panel == UI_PANEL_OW && app.ui.ow_list.n > 0 ? app.ui.ow_idx[app.ui.ow_list.sel] : -1;
+    state_word(owtext, sizeof owtext, (Str){ app.ui.ow.filter.b, app.ui.ow.filter.len });
+    isize owsel = app.ui.panel == UI_PANEL_OW && app.ui.ow.list.n > 0 ? app.ui.ow_idx[app.ui.ow.list.sel] : -1;
     snprintf(owapp, sizeof owapp, "%.*s", owsel >= 0 ? (int)ow.apps.a[owsel].id.len : 1, owsel >= 0 ? ow.apps.a[owsel].id.p : "-");
     // The icon drawn for that app: its file's name ("-" none).
     const char *owicon = "-";
@@ -510,8 +510,8 @@ static void script_state(char *out, size_t cap)
              props.have ? (unsigned long long)props.st.st_nlink : 0ull,
              props.type[0] ? props.type : "-", proptypename, props.type_by_name, propname,
              propwhere, propdrive, proplink, props.btime >= 0, props.idx,
-             app.ui.panel == UI_PANEL_OW, app.ui.ow_fresh, app.ui.ow_in_list, owtext, app.ui.ow_list.n, app.ui.ow_list.sel, owapp, owicon, owtex, ow.shown, ow.type[0] ? ow.type : "-", ow.n,
-             app.ui.ow_list.rows, app.ui.ow_list.top, owopts, app.ui.ow_m.bad, app.ui.ow_def, app.ui.ow_def_can, findopts, app.ui.find_m.bad, app.ui.find_select, findn, findat, findtext,
+             app.ui.panel == UI_PANEL_OW, app.ui.ow.fresh, app.ui.ow.in_list, owtext, app.ui.ow.list.n, app.ui.ow.list.sel, owapp, owicon, owtex, ow.shown, ow.type[0] ? ow.type : "-", ow.n,
+             app.ui.ow.list.rows, app.ui.ow.list.top, owopts, app.ui.ow.m.bad, app.ui.ow_def, app.ui.ow_def_can, findopts, app.ui.find_m.bad, app.ui.find_select, findn, findat, findtext,
              app.ui.view == UI_VIEW_SEARCH, app.ui.focus == UI_FOCUS_SEARCH, searchtext, app.search_done, app.search_s.full, app.search_due != 0, app.search_m.bad,
              (int)Clay_GetElementData(CLAY_ID("search-bar")).found,
              app.ui.search.anchor < app.ui.search.caret ? app.ui.search.anchor : app.ui.search.caret,
@@ -519,7 +519,7 @@ static void script_state(char *out, size_t cap)
              app.ui.find.anchor < app.ui.find.caret ? app.ui.find.anchor : app.ui.find.caret,
              app.ui.find.anchor < app.ui.find.caret ? app.ui.find.caret : app.ui.find.anchor, app.ui.find.caret, seldir, searchinfo,
              app.ui.search_inside, app.ui.focus == UI_FOCUS_INSIDE, insidetext, insideopts, app.search_im.bad,
-             (int)Clay_GetElementData(CLAY_ID("inside-field")).found, hit, hitmatch, hitdrawn, VIEWS[app.ui.view].date_col, date_w(), ow_idb_reads, confw, app.conf.bad, seldate, app.trash_full, trashicon, spawn_started, closing_all, closed_tabs.n, app.empty_n, app.ui.shift_add ? "add" : "range", clear.counted ? (long long)clear.sum.files : -1LL, clear.running, git_shown() != NULL, GIT_WORDS[app.have_list && app.list.n ? entry_git(app.ui.list.sel) : GS_NONE], git_shown() ? git_shown()->g.changed : (isize)0, gitnamecol, gitcells, infogit, git.due != 0, branch, app.ui.br_n, app.ui.br_here, brnote, brlist, brfits, brunder, atomic_load(&watch.git_wd) >= 0, app.ui.br_total, app.ui.panel == UI_PANEL_BRANCHES, app.ui.brp_list.n, brpsel, brptext, app.ui.brp_in_list, app.status[0] && app.status_bad, app.status[0] ? app.status : "-");
+             (int)Clay_GetElementData(CLAY_ID("inside-field")).found, hit, hitmatch, hitdrawn, VIEWS[app.ui.view].date_col, date_w(), ow_idb_reads, confw, app.conf.bad, seldate, app.trash_full, trashicon, spawn_started, closing_all, closed_tabs.n, app.empty_n, app.ui.shift_add ? "add" : "range", clear.counted ? (long long)clear.sum.files : -1LL, clear.running, git_shown() != NULL, GIT_WORDS[app.have_list && app.list.n ? entry_git(app.ui.list.sel) : GS_NONE], git_shown() ? git_shown()->g.changed : (isize)0, gitnamecol, gitcells, infogit, git.due != 0, branch, app.ui.br_n, app.ui.br_here, brnote, brlist, brfits, brunder, atomic_load(&watch.git_wd) >= 0, app.ui.br_total, app.ui.panel == UI_PANEL_BRANCHES, app.ui.brp.list.n, brpsel, brptext, app.ui.brp.in_list, app.status[0] && app.status_bad, app.status[0] ? app.status : "-");
     frame_us_max = 0;
 }
 

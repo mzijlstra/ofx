@@ -210,11 +210,9 @@ typedef struct {
     int   menu_title;   // a menu bar title, -1 for none (F7.1)
     int   menu_item;    // an entry of the open menu (its place), -1 for none
     int   prop_box;     // a checkbox of the Properties panel's grid, -1 for none (F7.2)
-    int   ow_row;       // a row of Open With's list (on screen), -1 for none (F7.3)
+    int   pick_row;     // a row of the picker panel's list (Open With's, the branches'; on screen), -1 for none
     bool  find_x;       // the find bar's ×
-    bool  ow_field;     // its field
-    int   brp_row;      // a row of the branches panel's list (on screen), -1 none (F12 step 6)
-    bool  brp_field;    // its field
+    bool  pick_field;   // its field
     int   toggle;       // a toggle of its field (1..4: the 4th "Always open … with this app"), 0 for none
     int   find_step;    // the find bar's chevrons: -1 the previous, 1 the next, 0 none
     int   bmp_row;      // a row of Edit Bookmarks' list (on screen), -1 for none (F7.5)
@@ -228,7 +226,7 @@ typedef struct {
 // had drifted, the hover's without .field).
 #define HIT_NONE                                                                                                   \
     { .row = -1, .side = -1, .header = -1, .bar = UB_NONE, .crumb = -1, .tab = -1, .tab_x = -1, .job_x = -1, .mode = -1, \
-      .twisty = -1, .eject = -1, .menu_title = -1, .menu_item = -1, .prop_box = -1, .ow_row = -1, .brp_row = -1, .bmp_row = -1, .field = -1 }
+      .twisty = -1, .eject = -1, .menu_title = -1, .menu_item = -1, .prop_box = -1, .pick_row = -1, .bmp_row = -1, .field = -1 }
 
 static struct {
     char      cwd[PATH_MAX];
@@ -747,7 +745,7 @@ static void app_end(void)
     if (rem.dirty) remember_write();
     if (app.windows[0]) win_unregister(app.windows, getpid());
     quit_workers();
-    ui_matcher_set(&app.ui.find_m, STR_EMPTY, app.ui.find_opts), ui_matcher_set(&app.ui.ow_m, STR_EMPTY, app.ui.ow_opts);   // (a compiled expression freed: LeakSanitizer)
+    ui_matcher_set(&app.ui.find_m, STR_EMPTY, app.ui.find_opts), ui_matcher_set(&app.ui.ow.m, STR_EMPTY, app.ui.ow_opts);   // (a compiled expression freed: LeakSanitizer)
     ui_matcher_set(&app.search_m, STR_EMPTY, app.ui.find_opts);
     ui_matcher_set(&app.search_im, STR_EMPTY, app.ui.inside_opts);
     timer_stop();

@@ -117,15 +117,14 @@ static bool ui_find_event(Ui *u, UiNames names, UiEvent e, const UiInput *in)
     }
 }
 
-// The panels' and the bars' pointer (ui_handle): Open With's rows, toggles and buttons, Edit
-// Bookmarks', Keyboard Shortcuts', About's and the bar note's; the find bar's chevrons; a text
-// bar's field or toggle; the search's In files. True when it is the frame's (*out: what gui/ does).
+// The panels' and the bars' pointer (ui_handle): Open With's rows, toggles and buttons, the
+// branches', Edit Bookmarks', Keyboard Shortcuts', About's and the bar note's; the find bar's
+// chevrons; a text bar's field or toggle; the search's In files. True when it is the frame's
+// (*out: what gui/ does).
 static bool ui_handle_panels(Ui *u, UiNames names, const UiInput *in, UiOnTop on, bool prompt, UiAction *out)
 {
-    // Open With (F7.3): filtered once gui/ has listed the apps; the pointer: a row takes the
-    // cursor (a double click opens it), the field the keys, a toggle flips, Open and Cancel.
-    if (u->panel == UI_PANEL_OW && u->ow_fresh && in->app_name) ui_ow_filter(u, in);
-    if (u->panel == UI_PANEL_BRANCHES && u->brp_fresh && in->br_name) ui_brp_filter(u, in);
+    UiPickDo d;
+    // Open With (F7.3): a toggle flips; its picker's press (ui_pick_press).
     if (on == UI_ON_OW) {
         if (in->toggle == UI_TOGGLE_ALWAYS) {
             if (u->ow_def_can) u->ow_def = !u->ow_def;
@@ -136,15 +135,7 @@ static bool ui_handle_panels(Ui *u, UiNames names, const UiInput *in, UiOnTop on
             ui_ow_filter(u, in);
             return *out = UI_NONE, true;
         }
-        if (in->ow_field) u->ow_in_list = false;
-        isize row = in->ow_drow >= 0 ? in->ow_drow : in->ow_row;
-        if (row >= 0 && u->ow_list.top + row < u->ow_list.n) {
-            u->ow_list.sel = u->ow_list.top + row, u->ow_in_list = true;
-            if (in->ow_drow >= 0) return *out = ui_ow_launch(u), true;
-        }
-        if (in->modal == UI_MODAL_YES) return *out = ui_ow_launch(u), true;
-        if (in->modal == UI_MODAL_NO) return ui_ow_close(u), *out = UI_NONE, true;
-        if (in->ow_wheel) ui_scroll(&u->ow_list, in->ow_wheel);
+        if ((d = ui_pick_press(&u->ow, in))) return *out = ui_ow_do(u, d, in), true;
     } else if (on == UI_ON_BM) {
         // Edit Bookmarks (F7.5): a row takes the cursor (a double click goes there), a button acts on
         // it as its key does, Close closes; the rename field takes no press (its own keys only).
@@ -156,21 +147,12 @@ static bool ui_handle_panels(Ui *u, UiNames names, const UiInput *in, UiOnTop on
         if (in->bmp_btn >= 1 && in->bmp_btn <= UI_BMP_BTNS && !u->bmp_naming) return *out = ui_bmp_do(u, in->bmp_btn), true;
         if (in->modal == UI_MODAL_NO) return ui_panel_close(u, UI_PANEL_BM), *out = UI_NONE, true;
     } else if (on == UI_ON_BRANCHES) {
-        // The branches (F12 step 6), as Open With's: a row takes the cursor (a double click switches),
-        // the field the keys, Close closes, the wheel scrolls.
-        if (in->brp_field) u->brp_in_list = false;
-        isize row = in->brp_drow >= 0 ? in->brp_drow : in->brp_row;
-        if (row >= 0 && u->brp_list.top + row < u->brp_list.n) {
-            u->brp_list.sel = u->brp_list.top + row, u->brp_in_list = true;
-            if (in->brp_drow >= 0) return *out = ui_brp_pick(u), true;
-        }
-        if (in->modal == UI_MODAL_YES) return *out = ui_brp_pick(u), true;
-        if (in->modal == UI_MODAL_NO) return ui_brp_close(u), *out = UI_NONE, true;
-        if (in->ow_wheel) ui_scroll(&u->brp_list, in->ow_wheel);
+        // The branches (F12 step 6): its picker's press (a double click switches).
+        if ((d = ui_pick_press(&u->brp, in))) return *out = ui_brp_do(u, d, in), true;
     } else if (on == UI_ON_KEYS) {
         // Keyboard Shortcuts: Close closes; the wheel scrolls it.
         if (in->modal == UI_MODAL_NO) return ui_keys_close(u), *out = UI_NONE, true;
-        if (in->ow_wheel) ui_scroll(&u->keys_list, in->ow_wheel);
+        if (in->panel_wheel) ui_scroll(&u->keys_list, in->panel_wheel);
     } else if (on == UI_ON_ABOUT) {
         if (in->modal == UI_MODAL_NO) return ui_panel_close(u, UI_PANEL_ABOUT), *out = UI_NONE, true;
     } else if (on == UI_ON_BAR) {
@@ -551,7 +533,7 @@ static bool ui_panel_key(Ui *u, UiOnTop on, UiEvent e, const UiInput *in, UiActi
     switch (on) {
     case UI_ON_PROPS: *out = ui_props_event(u, e); return true;
     case UI_ON_OW: *out = ui_ow_event(u, e, in); return true;
-    case UI_ON_BRANCHES: *out = ui_brp_event(u, e, in); return true;
+    case UI_ON_BRANCHES: *out = ui_brp_do(u, ui_pick_key(u, &u->brp, e, in), in); return true;
     case UI_ON_BM: *out = ui_bmp_event(u, e, in->paste); return true;
     case UI_ON_KEYS: ui_keys_event(u, e, in->paste); return true;
     case UI_ON_ABOUT: case UI_ON_BAR:   // Esc and Enter close them
@@ -561,11 +543,7 @@ static bool ui_panel_key(Ui *u, UiOnTop on, UiEvent e, const UiInput *in, UiActi
     }
 }
 
-// One frame's input. Clicks first, then the events in order up to the first that asks gui/ for
-// something (after it, the list may be another folder's). The wheel scrolls the list without
-// moving its cursor, one row a notch (Michael's choice for prdash-tui). What is on top (ui_on_top: a
-// question, a note, a panel, a menu) takes every key until it is answered or closed; the edit line
-// takes the keys that edit.
+// ui_handle's frame, between the pickers' first filtering.
 static UiAction ui_handle_frame(Ui *u, UiNames names, const UiInput *in)
 {
     UiList *l = &u->list;
@@ -687,12 +665,25 @@ static UiAction ui_handle_frame(Ui *u, UiNames names, const UiInput *in)
     return UI_NONE;
 }
 
-// A frame's input. The branch menu's All branches opens its panel within the frame, after the fresh
-// filter above ran: filtered here from the same input, as no other event may come to show it
+// A picker panel up and not yet filtered: filtered once gui/ gives its names (Open With's apps come
+// a frame or more after it opens).
+static void ui_picks_fresh(Ui *u, const UiInput *in)
+{
+    if (u->panel == UI_PANEL_OW && u->ow.fresh && in->app_name) ui_ow_filter(u, in);
+    if (u->panel == UI_PANEL_BRANCHES && u->brp.fresh && in->br_name) ui_brp_filter(u, in);
+}
+
+// One frame's input. Clicks first, then the events in order up to the first that asks gui/ for
+// something (after it, the list may be another folder's). The wheel scrolls the list without
+// moving its cursor, one row a notch (Michael's choice for prdash-tui). What is on top (ui_on_top: a
+// question, a note, a panel, a menu) takes every key until it is answered or closed; the edit line
+// takes the keys that edit. A picker is filtered before the frame and after it: the branch menu's
+// All branches opens its panel within the frame, and no other event may come to show it
 // (2026-11-03: it stayed blank until the pointer moved).
 static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
 {
+    ui_picks_fresh(u, in);
     UiAction a = ui_handle_frame(u, names, in);
-    if (u->panel == UI_PANEL_BRANCHES && u->brp_fresh && in->br_name) ui_brp_filter(u, in);
+    ui_picks_fresh(u, in);
     return a;
 }

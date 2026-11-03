@@ -199,6 +199,16 @@ static const struct {
     [UI_FIELD_INSIDE] = { "inside-field", TOGGLE_INSIDE },
 };
 
+// The picker panel on top (Open With's, F7.3; the branches', F12 step 6) and its rows' and field's
+// element ids; NULL for none.
+static const UiPick *pick_on_top(const char **row_id, const char **field_id)
+{
+    UiOnTop on = modal_kind();
+    if (on == UI_ON_OW) return *row_id = "ow-row", *field_id = "ow-field", &app.ui.ow;
+    if (on == UI_ON_BRANCHES) return *row_id = "brp-row", *field_id = "brp-field", &app.ui.brp;
+    return *row_id = *field_id = NULL, NULL;
+}
+
 // What is under a point of the last frame drawn: a list row, a sidebar row, a column header, a
 // button, a field (each -1, or UB_NONE, when not).
 static Hit hit_at(float x, float y)
@@ -224,12 +234,11 @@ static Hit hit_at(float x, float y)
             if (in_box(Clay_GetElementId(cz(MODAL_IDS[b])), x, y)) h.modal = b;
         for (int k = 0; modal_kind() == UI_ON_PROPS && k < 9 && h.prop_box < 0; k++)
             if (in_box(CLAY_IDI("prop-box", k), x, y)) h.prop_box = k;
-        for (int r = 0; modal_kind() == UI_ON_OW && r < app.ui.ow_list.rows && h.ow_row < 0; r++)
-            if (in_box(CLAY_IDI("ow-row", r), x, y)) h.ow_row = r;
-        h.ow_field = modal_kind() == UI_ON_OW && !h.toggle && in_box(CLAY_ID("ow-field"), x, y);
-        for (int r = 0; modal_kind() == UI_ON_BRANCHES && r < app.ui.brp_list.rows && h.brp_row < 0; r++)   // (F12 step 6)
-            if (in_box(CLAY_IDI("brp-row", r), x, y)) h.brp_row = r;
-        h.brp_field = modal_kind() == UI_ON_BRANCHES && in_box(CLAY_ID("brp-field"), x, y);
+        const char *row_id, *field_id;
+        const UiPick *pick = pick_on_top(&row_id, &field_id);
+        for (int r = 0; pick && r < pick->list.rows && h.pick_row < 0; r++)
+            if (in_box(Clay_GetElementIdWithIndex(cz(row_id), (uint32_t)r), x, y)) h.pick_row = r;
+        h.pick_field = pick && !h.toggle && in_box(Clay_GetElementId(cz(field_id)), x, y);   // (Open With's toggles sit in its field)
         for (int r = 0; modal_kind() == UI_ON_BM && r < app.ui.bmp_list.rows && h.bmp_row < 0; r++)
             if (in_box(CLAY_IDI("bmp-row", r), x, y)) h.bmp_row = r;
         for (int k = 1; modal_kind() == UI_ON_BM && k <= UI_BMP_BTNS && !h.bmp_btn; k++)
@@ -297,16 +306,13 @@ static void press_at(UiInput *in, float x, float y, int mods)
     in->bar = h.bar, in->crumb = h.crumb;
     in->modal = h.modal;
     in->prop_box = h.prop_box;
-    if (h.ow_row >= 0) {
-        if (ui_press(&app.panel_press, app.ui.ow_list.top + h.ow_row, now_ms()) == 2) in->ow_drow = h.ow_row;
-        else in->ow_row = h.ow_row;
+    const char *row_id, *field_id;
+    const UiPick *pick = pick_on_top(&row_id, &field_id);
+    if (h.pick_row >= 0 && pick) {
+        if (ui_press(&app.panel_press, pick->list.top + h.pick_row, now_ms()) == 2) in->pick_drow = h.pick_row;
+        else in->pick_row = h.pick_row;
     }
-    in->ow_field = h.ow_field;
-    if (h.brp_row >= 0) {
-        if (ui_press(&app.panel_press, app.ui.brp_list.top + h.brp_row, now_ms()) == 2) in->brp_drow = h.brp_row;
-        else in->brp_row = h.brp_row;
-    }
-    in->brp_field = h.brp_field;
+    in->pick_field = h.pick_field;
     if (h.bmp_row >= 0) {
         if (ui_press(&app.panel_press, app.ui.bmp_list.top + h.bmp_row, now_ms()) == 2) in->bmp_drow = h.bmp_row;
         else in->bmp_row = h.bmp_row;
@@ -469,7 +475,7 @@ static float wheel_left;   // a touchpad's part of a notch, carried to the next 
 // sidebar scrolls by itself. True when the sidebar moved.
 static bool wheel_at(UiInput *in, float x, int notches, bool ctrl)
 {
-    if (app.ui.panel == UI_PANEL_OW || app.ui.panel == UI_PANEL_KEYS || app.ui.panel == UI_PANEL_BRANCHES) return in->ow_wheel = notches, false;   // the panel's list (F7.3; Keyboard Shortcuts', F7.5)
+    if (app.ui.panel == UI_PANEL_OW || app.ui.panel == UI_PANEL_KEYS || app.ui.panel == UI_PANEL_BRANCHES) return in->panel_wheel = notches, false;   // the panel's list (F7.3; Keyboard Shortcuts', F7.5)
     if (x >= side_w() && ctrl) in->zoom_wheel = notches;
     else if (x >= side_w()) in->wheel = notches;
     else if (notches) return app.ui.side.top = ui_clamp(app.ui.side.top - notches, 0, ui_max_top(&app.ui.side)), true;

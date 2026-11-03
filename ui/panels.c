@@ -1,4 +1,5 @@
-// The panels' keys: Properties (F7.2), Open With (F7.3), Keyboard Shortcuts and Edit Bookmarks (F7.5).
+// The panels' keys: Properties (F7.2), Open With (F7.3), Keyboard Shortcuts and Edit Bookmarks (F7.5),
+// the branches (F12 step 6); Open With's and the branches' share a picker.
 // Included by ui.c, before menus.c (whose entries open them).
 
 // ---- Properties (F7.2) --------------------------------------------------------------------------
@@ -32,75 +33,58 @@ static UiAction ui_props_event(Ui *u, UiEvent e)
     return UI_NONE;
 }
 
-// ---- Open With (F7.3) ------------------------------------------------------------------------
+// ---- a picker: Open With's and the branches' filter field over its list -------------------------
 
-// The panel opened: the field empty with the keys, the toggles as last time; gui/ lists the apps.
-static UiAction ui_ow_open(Ui *u)
+// What a picker's key or press asks of its panel (ui_ow_do, ui_brp_do).
+typedef enum { UI_PICK_NONE, UI_PICK_FILTER, UI_PICK_CHOOSE, UI_PICK_CLOSE } UiPickDo;
+
+// Opened: the field empty with the keys; gui/ gives the names to filter.
+static void ui_pick_open(UiPick *p)
 {
-    u->panel = UI_PANEL_OW, u->ow_in_list = false, u->ow_fresh = true, UI_TEXT_CLEAR(u->ow_filter), u->ow_def = false;
-    u->ow_list = (UiList){ .rows = u->ow_list.rows };
-    return (UiAction){ UA_OPEN_WITH, 0, false };
+    p->in_list = false, p->fresh = true, UI_TEXT_CLEAR(p->filter);
+    p->list = (UiList){ .rows = p->list.rows };
 }
 
-static void ui_ow_close(Ui *u)
+// Closed with its panel: a compiled expression freed.
+static void ui_pick_close(Ui *u, UiPanel panel, UiPick *p)
 {
-    ui_panel_close(u, UI_PANEL_OW);
-    ui_matcher_set(&u->ow_m, STR_EMPTY, u->ow_opts);   // (a compiled expression freed)
+    ui_panel_close(u, panel);
+    ui_matcher_set(&p->m, STR_EMPTY, (UiMatchOpts){ 0 });
 }
 
-// The apps the field's text matches, in gui/'s order; the cursor on the first.
-static void ui_ow_filter(Ui *u, const UiInput *in)
+// The names the field's text matches, their places into idx (max at most), in gui/'s order; the
+// cursor on the first.
+static void ui_pick_filter(UiPick *p, UiMatchOpts opts, const Str *names, isize n, isize *idx, isize max)
 {
-    ui_matcher_set(&u->ow_m, (Str){ u->ow_filter.b, u->ow_filter.len }, u->ow_opts);
-    isize n = 0;
-    for (isize i = 0; i < in->app_n && n < UI_APPS_MAX; i++)
-        if (ui_match(&u->ow_m, in->app_name[i])) u->ow_idx[n++] = i;
-    u->ow_list.n = n, u->ow_list.sel = 0, u->ow_list.top = 0;
-    u->ow_fresh = false;
+    ui_matcher_set(&p->m, (Str){ p->filter.b, p->filter.len }, opts);
+    isize k = 0;
+    for (isize i = 0; i < n && k < max; i++)
+        if (ui_match(&p->m, names[i])) idx[k++] = i;
+    p->list.n = k, p->list.sel = 0, p->list.top = 0;
+    p->fresh = false;
 }
 
-// The app under the cursor launched, when the filter shows any.
-static UiAction ui_ow_launch(Ui *u)
-{
-    if (u->ow_list.n == 0) return UI_NONE;
-    isize app = u->ow_idx[u->ow_list.sel];
-    bool def = u->ow_def && u->ow_def_can;
-    ui_ow_close(u);
-    return (UiAction){ UA_LAUNCH, app, def };
-}
-
-// A key while the panel is up; it takes every key (Michael, 2026-10-26). Tab moves between the
+// A key while its panel is up; it takes every key (Michael, 2026-10-26). Tab moves between the
 // field and the list. In the field typing, Backspace, Delete, Left, Right, Home and End edit, Down
 // goes to the list; in the list Up, Down, k, j, Home, End, PgUp and PgDn move, Up on the first
 // row goes to the field, another character goes to the field and is typed there. The field edits as
-// the rename line does (2026-10-28). Enter opens the
-// app under the cursor, Esc closes, Alt+C, Alt+W and Alt+R flip the toggles, Alt+D the box that
-// makes it the default (F7.3.1).
-static UiAction ui_ow_event(Ui *u, UiEvent e, const UiInput *in)
+// the rename line does (2026-10-28). Enter chooses the one under the cursor, Esc closes.
+static UiPickDo ui_pick_key(Ui *u, UiPick *p, UiEvent e, const UiInput *in)
 {
-    UiList *l = &u->ow_list;
+    UiList *l = &p->list;
     int page = l->rows > 1 ? l->rows - 1 : 1;
-    if (e.key == UK_MENU && e.ch == 'd') {
-        if (u->ow_def_can) u->ow_def = !u->ow_def;
-        return UI_NONE;
-    }
-    if (ui_toggle_key(e)) {
-        u->ow_opts = ui_toggle(u->ow_opts, ui_toggle_key(e));
-        ui_ow_filter(u, in);
-        return UI_NONE;
-    }
     switch (e.key) {
-    case UK_ESC: ui_ow_close(u); return UI_NONE;
-    case UK_TAB: u->ow_in_list = !u->ow_in_list; return UI_NONE;
-    case UK_ENTER: case UK_SHIFT_ENTER: return ui_ow_launch(u);
+    case UK_ESC: return UI_PICK_CLOSE;
+    case UK_TAB: p->in_list = !p->in_list; return UI_PICK_NONE;
+    case UK_ENTER: case UK_SHIFT_ENTER: return UI_PICK_CHOOSE;
     default: break;
     }
-    if (u->ow_in_list) {
+    if (p->in_list) {
         e = ui_vi_key(e);
         switch (e.key) {
         case UK_DOWN: ui_move(l, 1); break;
         case UK_UP:
-            if (l->sel == 0) u->ow_in_list = false;
+            if (l->sel == 0) p->in_list = false;
             else ui_move(l, -1);
             break;
         case UK_HOME: ui_move(l, -l->n); break;
@@ -110,17 +94,88 @@ static UiAction ui_ow_event(Ui *u, UiEvent e, const UiInput *in)
         case UK_NONE:
         case UK_BACKSPACE:   // typing (a character there is) in the list: the field's end, then typed there
             if (e.key == UK_NONE && ui_utf8(e.ch, (char[4]){ 0 }) == 0) break;
-            u->ow_in_list = false, u->ow_filter.caret = u->ow_filter.anchor = u->ow_filter.len;
-            if (ui_line_key(u, ui_ow_line(u), e, in->paste) == UI_LINE_CHANGED) ui_ow_filter(u, in);
+            p->in_list = false, p->filter.caret = p->filter.anchor = p->filter.len;
+            if (ui_line_key(u, ui_pick_line(p), e, in->paste) == UI_LINE_CHANGED) return UI_PICK_FILTER;
             break;
         default: break;
         }
+        return UI_PICK_NONE;
+    }
+    UiLineHit h = ui_line_key(u, ui_pick_line(p), e, in->paste);
+    if (h == UI_LINE_CHANGED) return UI_PICK_FILTER;
+    if (!h && e.key == UK_DOWN && l->n > 0) p->in_list = true;
+    return UI_PICK_NONE;
+}
+
+// A press while its panel is up: the field takes the keys, a row the cursor (a double click
+// chooses it); the main button chooses, Cancel closes; the wheel scrolls the list.
+static UiPickDo ui_pick_press(UiPick *p, const UiInput *in)
+{
+    if (in->pick_field) p->in_list = false;
+    isize row = in->pick_drow >= 0 ? in->pick_drow : in->pick_row;
+    if (row >= 0 && p->list.top + row < p->list.n) {
+        p->list.sel = p->list.top + row, p->in_list = true;
+        if (in->pick_drow >= 0) return UI_PICK_CHOOSE;
+    }
+    if (in->modal == UI_MODAL_YES) return UI_PICK_CHOOSE;
+    if (in->modal == UI_MODAL_NO) return UI_PICK_CLOSE;
+    if (in->panel_wheel) ui_scroll(&p->list, in->panel_wheel);
+    return UI_PICK_NONE;
+}
+
+// ---- Open With (F7.3) ------------------------------------------------------------------------
+
+// The panel opened: the field empty with the keys, the toggles as last time; gui/ lists the apps.
+static UiAction ui_ow_open(Ui *u)
+{
+    u->panel = UI_PANEL_OW, u->ow_def = false;
+    ui_pick_open(&u->ow);
+    return (UiAction){ UA_OPEN_WITH, 0, false };
+}
+
+static void ui_ow_close(Ui *u)
+{
+    ui_pick_close(u, UI_PANEL_OW, &u->ow);
+}
+
+static void ui_ow_filter(Ui *u, const UiInput *in)
+{
+    ui_pick_filter(&u->ow, u->ow_opts, in->app_name, in->app_n, u->ow_idx, UI_APPS_MAX);
+}
+
+// The app under the cursor launched, when the filter shows any.
+static UiAction ui_ow_launch(Ui *u)
+{
+    if (u->ow.list.n == 0) return UI_NONE;
+    isize app = u->ow_idx[u->ow.list.sel];
+    bool def = u->ow_def && u->ow_def_can;
+    ui_ow_close(u);
+    return (UiAction){ UA_LAUNCH, app, def };
+}
+
+// What the picker asked: the list filtered again, the app launched, or the panel closed.
+static UiAction ui_ow_do(Ui *u, UiPickDo d, const UiInput *in)
+{
+    if (d == UI_PICK_FILTER) ui_ow_filter(u, in);
+    else if (d == UI_PICK_CHOOSE) return ui_ow_launch(u);
+    else if (d == UI_PICK_CLOSE) ui_ow_close(u);
+    return UI_NONE;
+}
+
+// A key while the panel is up: the picker's (ui_pick_key: Enter opens the app under the cursor),
+// and Alt+C, Alt+W and Alt+R flip the toggles, Alt+D the box that makes it the default (F7.3.1).
+static UiAction ui_ow_event(Ui *u, UiEvent e, const UiInput *in)
+{
+    if (e.key == UK_MENU && e.ch == 'd') {
+        if (u->ow_def_can) u->ow_def = !u->ow_def;
         return UI_NONE;
     }
-    UiLineHit h = ui_line_key(u, ui_ow_line(u), e, in->paste);
-    if (h == UI_LINE_CHANGED) ui_ow_filter(u, in);
-    else if (!h && e.key == UK_DOWN && l->n > 0) u->ow_in_list = true;
-    return UI_NONE;
+    if (ui_toggle_key(e)) {
+        u->ow_opts = ui_toggle(u->ow_opts, ui_toggle_key(e));
+        ui_ow_filter(u, in);
+        return UI_NONE;
+    }
+    return ui_ow_do(u, ui_pick_key(u, &u->ow, e, in), in);
 }
 
 // ---- the branches (F12 step 6) -------------------------------------------------------------------
@@ -129,77 +184,32 @@ static UiAction ui_ow_event(Ui *u, UiEvent e, const UiInput *in)
 // gives the names.
 static UiAction ui_brp_open(Ui *u)
 {
-    u->panel = UI_PANEL_BRANCHES, u->brp_in_list = false, u->brp_fresh = true, UI_TEXT_CLEAR(u->brp_filter);
-    u->brp_list = (UiList){ .rows = u->brp_list.rows };
+    u->panel = UI_PANEL_BRANCHES;
+    ui_pick_open(&u->brp);
     return UI_NONE;
 }
 
 static void ui_brp_close(Ui *u)
 {
-    ui_panel_close(u, UI_PANEL_BRANCHES);
-    ui_matcher_set(&u->brp_m, STR_EMPTY, (UiMatchOpts){ 0 });
+    ui_pick_close(u, UI_PANEL_BRANCHES, &u->brp);
 }
 
-// The branches the field's text is in (case folded: a ticket id typed either way), in gui/'s order;
-// the cursor on the first.
+// The branches the field's text is in (case folded: a ticket id typed either way).
 static void ui_brp_filter(Ui *u, const UiInput *in)
 {
-    ui_matcher_set(&u->brp_m, (Str){ u->brp_filter.b, u->brp_filter.len }, (UiMatchOpts){ 0 });
-    isize n = 0;
-    for (isize i = 0; i < in->br_names && n < UI_BRANCHES_MAX; i++)
-        if (ui_match(&u->brp_m, in->br_name[i])) u->brp_idx[n++] = i;
-    u->brp_list.n = n, u->brp_list.sel = 0, u->brp_list.top = 0;
-    u->brp_fresh = false;
+    ui_pick_filter(&u->brp, (UiMatchOpts){ 0 }, in->br_name, in->br_names, u->brp_idx, UI_BRANCHES_MAX);
 }
 
-// The branch under the cursor switched to, as the menu's entry would (its place in gui/'s list).
-static UiAction ui_brp_pick(Ui *u)
+// What the picker asked: the list filtered again, the branch under the cursor switched to as the
+// menu's entry would (its place in gui/'s list), or the panel closed.
+static UiAction ui_brp_do(Ui *u, UiPickDo d, const UiInput *in)
 {
-    if (u->brp_list.n == 0) return UI_NONE;
-    isize k = u->brp_idx[u->brp_list.sel];
-    ui_brp_close(u);
-    return (UiAction){ UA_BRANCH, k, false };
-}
-
-// A key while the panel is up; it takes every key, as Open With's does: Tab between the field and
-// the list; in the field typing edits and filters, Down goes to the list; in the list the moves (k,
-// j too), Up on the first row back to the field, another character typed in the field. Enter
-// switches, Esc closes.
-static UiAction ui_brp_event(Ui *u, UiEvent e, const UiInput *in)
-{
-    UiList *l = &u->brp_list;
-    int page = l->rows > 1 ? l->rows - 1 : 1;
-    switch (e.key) {
-    case UK_ESC: ui_brp_close(u); return UI_NONE;
-    case UK_TAB: u->brp_in_list = !u->brp_in_list; return UI_NONE;
-    case UK_ENTER: case UK_SHIFT_ENTER: return ui_brp_pick(u);
-    default: break;
-    }
-    if (u->brp_in_list) {
-        e = ui_vi_key(e);
-        switch (e.key) {
-        case UK_DOWN: ui_move(l, 1); break;
-        case UK_UP:
-            if (l->sel == 0) u->brp_in_list = false;
-            else ui_move(l, -1);
-            break;
-        case UK_HOME: ui_move(l, -l->n); break;
-        case UK_END: ui_move(l, l->n); break;
-        case UK_PAGEUP: ui_move(l, -page); break;
-        case UK_PAGEDOWN: ui_move(l, page); break;
-        case UK_NONE:
-        case UK_BACKSPACE:   // typing in the list: at the field's end, typed there
-            if (e.key == UK_NONE && ui_utf8(e.ch, (char[4]){ 0 }) == 0) break;
-            u->brp_in_list = false, u->brp_filter.caret = u->brp_filter.anchor = u->brp_filter.len;
-            if (ui_line_key(u, ui_brp_line(u), e, in->paste) == UI_LINE_CHANGED) ui_brp_filter(u, in);
-            break;
-        default: break;
-        }
-        return UI_NONE;
-    }
-    UiLineHit h = ui_line_key(u, ui_brp_line(u), e, in->paste);
-    if (h == UI_LINE_CHANGED) ui_brp_filter(u, in);
-    else if (!h && e.key == UK_DOWN && l->n > 0) u->brp_in_list = true;
+    if (d == UI_PICK_FILTER) ui_brp_filter(u, in);
+    else if (d == UI_PICK_CHOOSE && u->brp.list.n > 0) {
+        isize k = u->brp_idx[u->brp.list.sel];
+        ui_brp_close(u);
+        return (UiAction){ UA_BRANCH, k, false };
+    } else if (d == UI_PICK_CLOSE) ui_brp_close(u);
     return UI_NONE;
 }
 
