@@ -900,7 +900,7 @@ int main(int argc, char **argv)
         if (ui_input_acts(&in) && ui_tip_act(&app.tip)) seen = true;   // a click or key: the tooltip goes
         bool was_editing = app.ui.focus == UI_FOCUS_EDIT, was_confirming = app.ui.confirming;
         if (app.ui.panel == UI_PANEL_OW) in.app_name = ow.names, in.app_n = ow.shown < UI_APPS_MAX ? ow.shown : UI_APPS_MAX;
-        if (app.ui.panel == UI_PANEL_BRANCHES) in.br_name = brp_names(), in.br_names = git.br.n;   // (F12 step 6)
+        if (app.ui.panel == UI_PANEL_BRANCHES || (app.ui.menu_on && app.ui.menu == UI_CTX_BRANCH)) in.br_name = brp_names(), in.br_names = git.br.n;   // (the menu's too: its All branches opens the panel this frame)
         UiAction a = ui_handle(&app.ui, (UiNames){ list_name, NULL, list_dir }, &in);
         ctx_opened();
         if (app.ui.panel != UI_PANEL_OW && ow.icons_on) ow_drop();   // the panel closed: its icons go (F7.3)

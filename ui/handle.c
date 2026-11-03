@@ -566,7 +566,7 @@ static bool ui_panel_key(Ui *u, UiOnTop on, UiEvent e, const UiInput *in, UiActi
 // moving its cursor, one row a notch (Michael's choice for prdash-tui). What is on top (ui_on_top: a
 // question, a note, a panel, a menu) takes every key until it is answered or closed; the edit line
 // takes the keys that edit.
-static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
+static UiAction ui_handle_frame(Ui *u, UiNames names, const UiInput *in)
 {
     UiList *l = &u->list;
     // The window closed, or another window's Close All (SIGUSR1, F7.1): taken before anything that
@@ -685,4 +685,14 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         if (ui_list_key(u, names, in, e, shifted, shift_enter, &extend, &out)) return out;
     }
     return UI_NONE;
+}
+
+// A frame's input. The branch menu's All branches opens its panel within the frame, after the fresh
+// filter above ran: filtered here from the same input, as no other event may come to show it
+// (2026-11-03: it stayed blank until the pointer moved).
+static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
+{
+    UiAction a = ui_handle_frame(u, names, in);
+    if (u->panel == UI_PANEL_BRANCHES && u->brp_fresh && in->br_name) ui_brp_filter(u, in);
+    return a;
 }

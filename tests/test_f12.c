@@ -1293,11 +1293,10 @@ static void test_branch_panel(void)
     u.br_total = 9;
     CHECK(ui_menu_shown(&u, UM_BR_ALL) && ui_menu_enabled(&u, UM_BR_ALL));
     UiInput in = ui_input_none();
-    in.menu_item = UI_MENU[UI_CTX_BRANCH].n - 1;   // (the last: after the line)
+    in.menu_item = UI_MENU[UI_CTX_BRANCH].n - 1, in.br_name = BR, in.br_names = COUNT(BR);   // (the last: after the line)
     CHECK(UI_MENU[UI_CTX_BRANCH].items[in.menu_item] == UM_BR_ALL);
+    // Filtered in the frame that opens it: no other event may come (2026-11-03).
     CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.panel == UI_PANEL_BRANCHES && !u.menu_on && ui_on_top(&u) == UI_ON_BRANCHES);
-    in = ui_input_none(), in.br_name = BR, in.br_names = COUNT(BR);
-    ui_handle(&u, names, &in);
     CHECK(!u.brp_fresh && u.brp_list.n == 5);
     in = chars("biv"), in.br_name = BR, in.br_names = COUNT(BR);
     ui_handle(&u, names, &in);
