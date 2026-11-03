@@ -14,7 +14,7 @@
 #include <time.h>
 #include <wctype.h>
 
-enum { UI_EVENTS_MAX = 64, UI_FIND_MAX = 256, UI_HISTORY_MAX = 64, UI_JOB_ROWS = 4, UI_APPS_MAX = 1024 };
+enum { UI_EVENTS_MAX = 64, UI_FIND_MAX = 256, UI_HISTORY_MAX = 64, UI_JOB_ROWS = 4, UI_APPS_MAX = 1024, UI_BRANCHES_MAX = 1024 };
 
 // The keys without text, as gui/ reads them (a chord already named). Characters come apart.
 typedef enum {
@@ -163,7 +163,13 @@ typedef struct {
     isize   app_n;
     int     ow_row, ow_drow;
     bool    ow_field;
-    int     ow_wheel;    // notches over its list (or Keyboard Shortcuts'), as wheel
+    int     ow_wheel;    // notches over its list (or Keyboard Shortcuts', or the branches'), as wheel
+    // The branches panel (F12 step 6): every branch gui/ has, in the menu's order (their names,
+    // which the filter matches); a row pressed or double-clicked, the field pressed (-1, false: none).
+    const Str *br_name;
+    isize   br_names;
+    int     brp_row, brp_drow;
+    bool    brp_field;
     int     toggle;      // UI_TOGGLE_ALWAYS: Open With's "Always open … with this app" box (F7.3.1)
     bool    find_x;      // the find bar's × pressed
     // A text bar's field pressed (UiField: the find bar's, the search's name and Containing; -1
@@ -278,7 +284,7 @@ typedef enum {
     UM_CONTAINING, UM_OPEN_LINE, UM_SEARCH_IN,
     UM_OPEN_IT, UM_CUT_IT, UM_COPY_IT, UM_BM_RENAME_IT, UM_BM_UP_IT, UM_BM_DOWN_IT, UM_BM_REMOVE_IT, UM_BM_EDIT_IT, UM_EJECT_IT,
     UM_UNMOUNT_IT, UM_MOUNT_IT, UM_EMPTY_IT, UM_PROPS_IT, UM_TAB_LEFT, UM_TAB_RIGHT, UM_TAB_OTHERS,
-    UM_BR_NOTE, UM_BR_0, UM_BR_1, UM_BR_2, UM_BR_3, UM_BR_4, UM_BR_5, UM_BR_6, UM_BR_7,
+    UM_BR_NOTE, UM_BR_0, UM_BR_1, UM_BR_2, UM_BR_3, UM_BR_4, UM_BR_5, UM_BR_6, UM_BR_7, UM_BR_ALL,
     UM_ITEMS
 } UiMenuItem;
 
@@ -405,6 +411,7 @@ static const struct { const char *label, *key, *word; UiEvent ev; char mark; } U
     // The branch menu's (F12 step 5b): a note while there are none to list ("Reading branches…"),
     // then the branches, gui/'s labels; the one checked out marked.
     [UM_BR_NOTE] = { "", "", "br-note" },
+    [UM_BR_ALL] = { "", "", "br-all" },   // ("All branches… (N)": gui/'s label, step 6)
     UI_SLOT_ITEMS(UM_BR_0, "br-"),
     [UM_TAB_REOPEN] = { "Reopen Closed Tab", "Ctrl+Shift+T", "reopen-tab", { UK_TAB_REOPEN, 0 } },
     UI_SLOT_ITEMS(UM_BM_0, "bm-"),
@@ -447,7 +454,7 @@ static const UiMenuItem UI_MENU_CTX_FOLDER[] = {
 // A tab (the current one: a right press on another shows it first).
 static const UiMenuItem UI_MENU_CTX_TAB[] = { UM_NEW_TAB, UM_TAB_REOPEN, UM_SEP, UM_TAB_LEFT, UM_TAB_RIGHT, UM_SEP, UM_CLOSE, UM_TAB_OTHERS };
 // The branch button's (F12 step 5b).
-static const UiMenuItem UI_MENU_CTX_BRANCH[] = { UM_BR_NOTE, UM_BR_0, UM_BR_1, UM_BR_2, UM_BR_3, UM_BR_4, UM_BR_5, UM_BR_6, UM_BR_7 };
+static const UiMenuItem UI_MENU_CTX_BRANCH[] = { UM_BR_NOTE, UM_BR_0, UM_BR_1, UM_BR_2, UM_BR_3, UM_BR_4, UM_BR_5, UM_BR_6, UM_BR_7, UM_SEP, UM_BR_ALL };
 static const UiMenuItem UI_MENU_CTX_HERE[] = {
     UM_NEW_FOLDER, UM_NEW_FILE, UM_EMPTY_TRASH, UM_SEP, UM_PASTE, UM_SELECT_ALL, UM_SEP, UM_TERMINAL, UM_HIDDEN, UM_SEP,
     UM_ADD_BOOKMARK, UM_SEP, UM_HERE_PROPS,
@@ -640,7 +647,7 @@ typedef struct {
 
 // The panel up, under the questions (ui_on_top): Properties, Open With, Edit Bookmarks, Keyboard
 // Shortcuts, About, and the note that the menu bar is hidden; UI_PANEL_NONE for none.
-typedef enum { UI_PANEL_NONE, UI_PANEL_PROPS, UI_PANEL_OW, UI_PANEL_BM, UI_PANEL_KEYS, UI_PANEL_ABOUT, UI_PANEL_BAR, UI_PANELS } UiPanel;
+typedef enum { UI_PANEL_NONE, UI_PANEL_PROPS, UI_PANEL_OW, UI_PANEL_BM, UI_PANEL_KEYS, UI_PANEL_ABOUT, UI_PANEL_BAR, UI_PANEL_BRANCHES, UI_PANELS } UiPanel;
 
 // Which listing is shown. One value (2026-10-28: in_trash and in_search before, two flags tested
 // apart at about 250 places, which could both be set).
@@ -783,6 +790,7 @@ typedef struct {
     // none), and whether a note shows instead (reading them, or none found).
     bool   branch_on, br_note;
     int    br_n, br_here;
+    int    br_total;   // all of them (the panel's; "All branches… (N)" when more than the menu's 8, step 6)
     // The panel up, one at most (F11 review, 2026-11-02: six flags before, kept apart by hand).
     UiPanel panel;
     // Edit Bookmarks (F7.5, UI_PANEL_BM): its list (the file's lines); its rename field open, the
@@ -814,6 +822,15 @@ typedef struct {
     // or one a list read first sets, can't).
     bool   ow_def;
     bool   ow_def_can;
+    // The branches panel (F12 step 6, UI_PANEL_BRANCHES), as Open With's: the filter's text, the
+    // keys in the list or the field, the branches the filter shows (their places in gui/'s list)
+    // and the cursor over them; brp_fresh until filtered from gui/'s names.
+    bool   brp_in_list;
+    bool   brp_fresh;
+    UI_TEXT(UI_FIND_MAX + 1) brp_filter;
+    UiMatcher brp_m;
+    UiList brp_list;
+    isize  brp_idx[UI_BRANCHES_MAX];
 } Ui;
 
 // The question or panel on top: the one that takes the keys and the pointer, and the one gui/
@@ -836,6 +853,7 @@ typedef enum {
     UI_ON_KEYS,     // Keyboard Shortcuts
     UI_ON_ABOUT,
     UI_ON_BAR,      // panel == UI_PANEL_BAR: the menu bar just hidden
+    UI_ON_BRANCHES, // the branches panel (F12 step 6)
 } UiOnTop;
 
 // Whether an action works in view v. The trash view holds files that are nowhere yet: what would
@@ -933,7 +951,7 @@ static UiOnTop ui_on_top(const Ui *u)
     if (u->asking) return UI_ON_CLASH;
     static const UiOnTop OF_PANEL[] = { [UI_PANEL_NONE] = UI_ON_NONE, [UI_PANEL_PROPS] = UI_ON_PROPS, [UI_PANEL_OW] = UI_ON_OW,
                                          [UI_PANEL_BM] = UI_ON_BM, [UI_PANEL_KEYS] = UI_ON_KEYS, [UI_PANEL_ABOUT] = UI_ON_ABOUT,
-                                         [UI_PANEL_BAR] = UI_ON_BAR };
+                                         [UI_PANEL_BAR] = UI_ON_BAR, [UI_PANEL_BRANCHES] = UI_ON_BRANCHES };
     _Static_assert(COUNT(OF_PANEL) == UI_PANELS, "every panel has its UiOnTop: a new one at the end without its entry would read past the table");
     return OF_PANEL[u->panel];
 }
@@ -958,7 +976,7 @@ static UiInput ui_input_none(void)
 {
     return (UiInput){ .click = -1, .dclick = -1, .side_click = -1, .header = -1, .click_mods = 0, .bar = UB_NONE, .crumb = -1,
                       .tab_click = -1, .tab_close = -1, .mid_row = -1, .mid_side = -1, .mid_crumb = -1, .modal = 0, .job_x = -1, .side_mode = -1, .side_twisty = -1, .side_eject = -1,
-                      .zoom_to = -1, .menu_title = -1, .menu_item = -1, .ctx_row = -1, .ctx_side = -1, .ctx_crumb = -1, .ctx_tab = -1, .prop_box = -1, .ow_row = -1, .ow_drow = -1, .bmp_row = -1, .bmp_drow = -1,
+                      .zoom_to = -1, .menu_title = -1, .menu_item = -1, .ctx_row = -1, .ctx_side = -1, .ctx_crumb = -1, .ctx_tab = -1, .prop_box = -1, .ow_row = -1, .ow_drow = -1, .brp_row = -1, .brp_drow = -1, .bmp_row = -1, .bmp_drow = -1,
                       .field = -1 };
 }
 

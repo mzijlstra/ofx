@@ -125,6 +125,7 @@ static bool ui_handle_panels(Ui *u, UiNames names, const UiInput *in, UiOnTop on
     // Open With (F7.3): filtered once gui/ has listed the apps; the pointer: a row takes the
     // cursor (a double click opens it), the field the keys, a toggle flips, Open and Cancel.
     if (u->panel == UI_PANEL_OW && u->ow_fresh && in->app_name) ui_ow_filter(u, in);
+    if (u->panel == UI_PANEL_BRANCHES && u->brp_fresh && in->br_name) ui_brp_filter(u, in);
     if (on == UI_ON_OW) {
         if (in->toggle == UI_TOGGLE_ALWAYS) {
             if (u->ow_def_can) u->ow_def = !u->ow_def;
@@ -154,6 +155,18 @@ static bool ui_handle_panels(Ui *u, UiNames names, const UiInput *in, UiOnTop on
         }
         if (in->bmp_btn >= 1 && in->bmp_btn <= UI_BMP_BTNS && !u->bmp_naming) return *out = ui_bmp_do(u, in->bmp_btn), true;
         if (in->modal == UI_MODAL_NO) return ui_panel_close(u, UI_PANEL_BM), *out = UI_NONE, true;
+    } else if (on == UI_ON_BRANCHES) {
+        // The branches (F12 step 6), as Open With's: a row takes the cursor (a double click switches),
+        // the field the keys, Close closes, the wheel scrolls.
+        if (in->brp_field) u->brp_in_list = false;
+        isize row = in->brp_drow >= 0 ? in->brp_drow : in->brp_row;
+        if (row >= 0 && u->brp_list.top + row < u->brp_list.n) {
+            u->brp_list.sel = u->brp_list.top + row, u->brp_in_list = true;
+            if (in->brp_drow >= 0) return *out = ui_brp_pick(u), true;
+        }
+        if (in->modal == UI_MODAL_YES) return *out = ui_brp_pick(u), true;
+        if (in->modal == UI_MODAL_NO) return ui_brp_close(u), *out = UI_NONE, true;
+        if (in->ow_wheel) ui_scroll(&u->brp_list, in->ow_wheel);
     } else if (on == UI_ON_KEYS) {
         // Keyboard Shortcuts: Close closes; the wheel scrolls it.
         if (in->modal == UI_MODAL_NO) return ui_keys_close(u), *out = UI_NONE, true;
@@ -538,6 +551,7 @@ static bool ui_panel_key(Ui *u, UiOnTop on, UiEvent e, const UiInput *in, UiActi
     switch (on) {
     case UI_ON_PROPS: *out = ui_props_event(u, e); return true;
     case UI_ON_OW: *out = ui_ow_event(u, e, in); return true;
+    case UI_ON_BRANCHES: *out = ui_brp_event(u, e, in); return true;
     case UI_ON_BM: *out = ui_bmp_event(u, e, in->paste); return true;
     case UI_ON_KEYS: ui_keys_event(u, e, in->paste); return true;
     case UI_ON_ABOUT: case UI_ON_BAR:   // Esc and Enter close them

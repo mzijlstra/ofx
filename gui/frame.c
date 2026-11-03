@@ -107,7 +107,8 @@ static void menu_facts(void)
     }
     // The branch button and its menu (F12 step 5b).
     u->branch_on = branch_label() != NULL;
-    u->br_n = git.br.n, u->br_here = git.br.cur, u->br_note = git.br.n == 0;
+    u->br_n = git.br.n < UI_MENU_BRANCHES ? git.br.n : UI_MENU_BRANCHES, u->br_here = git.br.cur < UI_MENU_BRANCHES ? git.br.cur : -1, u->br_note = git.br.n == 0;
+    u->br_total = git.br.total;   // (the panel's: "All branches… (N)", F12 step 6)
 }
 
 // The window, and the modal panel on top when one is up.
@@ -179,6 +180,8 @@ static Clay_RenderCommandArray layout(int w, int h)
                 text(fit(str_from_c(app.ui.bmp_naming ? "Rename: Enter renames (empty: the folder's name) \xC2\xB7 Esc keeps the name"
                                              : "Bookmarks: \xE2\x86\x91 \xE2\x86\x93 (k j) move \xC2\xB7 Enter goes there \xC2\xB7 Delete removes \xC2\xB7 F2 renames \xC2\xB7 "
                                                "Alt+\xE2\x86\x91 Alt+\xE2\x86\x93 move it \xC2\xB7 Esc closes"), foot_w, false), cc(t->fg_dim));
+            } else if (modal_kind() == UI_ON_BRANCHES) {
+                text(fit(S("Branches: type to filter \xC2\xB7 Tab or \xE2\x86\x93 the list \xC2\xB7 Enter switches \xC2\xB7 Esc closes"), foot_w, false), cc(t->fg_dim));
             } else if (modal_kind() == UI_ON_OW) {
                 text(fit(S("Open With: type to filter \xC2\xB7 Tab or \xE2\x86\x93 the list \xC2\xB7 Enter opens \xC2\xB7 Esc closes \xC2\xB7 "
                            "Alt+C/W/R case, words, regex \xC2\xB7 Alt+D default"), foot_w, false), cc(t->fg_dim));

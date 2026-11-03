@@ -204,9 +204,9 @@ static void script_state(char *out, size_t cap)
     static const char *const MODALS[] = {
         [UI_ON_NONE] = "-", [UI_ON_DELETE] = "delete", [UI_ON_CLASH] = "clash", [UI_ON_CANCEL] = "cancel", [UI_ON_QUIT] = "quit",
         [UI_ON_FULL] = "full", [UI_ON_EMPTY] = "empty", [UI_ON_CLEAR] = "clear-previews", [UI_ON_PROPS] = "props", [UI_ON_OW] = "open-with",
-        [UI_ON_BM] = "bookmarks", [UI_ON_KEYS] = "shortcuts", [UI_ON_ABOUT] = "about", [UI_ON_BAR] = "menubar", [UI_ON_RESTORE] = "restore",
+        [UI_ON_BM] = "bookmarks", [UI_ON_KEYS] = "shortcuts", [UI_ON_ABOUT] = "about", [UI_ON_BAR] = "menubar", [UI_ON_RESTORE] = "restore", [UI_ON_BRANCHES] = "branches",
     };
-    _Static_assert(sizeof MODALS / sizeof MODALS[0] == UI_ON_BAR + 1, "a name for each panel");
+    _Static_assert(sizeof MODALS / sizeof MODALS[0] == UI_ON_BRANCHES + 1, "a name for each panel");
     // The path buttons' labels, '|' between; the cursor's folder count (- unknown, ? unreadable).
     char crumbs[2048] = "", cnt[32] = "-";
     for (int i = 0; i < app.crumbs.n; i++) {
@@ -274,6 +274,11 @@ static void script_state(char *out, size_t cap)
     // The branch button and its menu (F12 step 5b): the label, the list as a|b|c.
     char branch[GIT_HEAD_MAX + 32] = "-", brlist[UI_MENU_BRANCHES * GIT_HEAD_MAX] = "-", brnote[GIT_HEAD_MAX + 32] = "-";
     if (app.ui.br_note) state_word(brnote, sizeof brnote, branch_menu_label(UM_BR_NOTE));   // (the note as drawn)
+    // The branches panel (F12 step 6): the cursor's branch, the filter's text.
+    char brpsel[GIT_HEAD_MAX] = "-", brptext[UI_FIND_MAX + 1] = "-";
+    if (app.ui.panel == UI_PANEL_BRANCHES && app.ui.brp_list.n > 0 && app.ui.brp_idx[app.ui.brp_list.sel] < git.br.n)
+        state_word(brpsel, sizeof brpsel, str_from_c(git.br.name[app.ui.brp_idx[app.ui.brp_list.sel]]));
+    if (app.ui.brp_filter.len) state_word(brptext, sizeof brptext, (Str){ app.ui.brp_filter.b, app.ui.brp_filter.len });
     if (branch_label()) state_word(branch, sizeof branch, str_from_c(branch_label()));
     // The button inside the path's part of the bar (the path buttons gave it room); its menu's top
     // left at the button's bottom left.
@@ -287,7 +292,7 @@ static void script_state(char *out, size_t cap)
     for (int i = app.crumb_lo; brfits && i < app.crumb_hi; i++)   // (nor the path buttons: Clay shrinks them to fit)
         brfits = Clay_GetElementData(CLAY_IDI("crumb", i)).boundingBox.width + 0.5f >= crumb_width(i);
     int brunder = bb.found && mbb.found && fabsf(mbb.boundingBox.x - bb.boundingBox.x) < 0.5f && fabsf(mbb.boundingBox.y - (bb.boundingBox.y + bb.boundingBox.height)) < 0.5f;
-    for (int i = 0, at = 0; i < git.br.n && at < (int)sizeof brlist - 1; i++)
+    for (int i = 0, at = 0; i < app.ui.br_n && at < (int)sizeof brlist - 1; i++)   // (the menu's 8)
         at += snprintf(brlist + at, sizeof brlist - (size_t)at, "%s%s", i ? "|" : "", git.br.name[i]);
     const char *dotp = strstr(info, "\xC2\xB7 ");
     if (dotp && strstr(dotp, "changed")) state_word(infogit, sizeof infogit, str_from_c(dotp + 3));
@@ -475,7 +480,7 @@ static void script_state(char *out, size_t cap)
              "props=%d propat=%d propcan=%d propn=%td propmode=%04o propfiles=%lld propdirs=%lld propbytes=%lld propdone=%d propcut=%d proplinks=%lld,%lld,%lld,%d propnlink=%llu proptype=%s proptypename=%s propbyname=%d propname=%s "
              "propwhere=%s propdrive=%s proplink=%s propcreated=%d propidx=%td "
              "ow=%d owfresh=%d owlist=%d owtext=%s own=%td owsel=%td owapp=%s owicon=%s owtex=%d owshown=%td owtype=%s owfiles=%td owrows=%d owtop=%td owopts=%s owbad=%d owdef=%d owdefcan=%d findopts=%s findbad=%d findselect=%d findn=%td findat=%td findtext=%s "
-             "search=%d searchkeys=%d searchtext=%s searchdone=%d searchfull=%d searchdue=%d searchbad=%d searchbar=%d searchsel=%d-%d searchcaret=%d findsel=%d-%d findcaret=%d seldir=%s searchinfo=%s inside=%d insidekeys=%d insidetext=%s insideopts=%s insidebad=%d insiderow=%d hit=%s hitmatch=%s hitdrawn=%d datecol=%s datecolw=%.0f owreads=%d conf=%s confbad=%d seldate=%s trashfull=%d trashicon=%s spawned=%d closingall=%d closedtabs=%d emptyn=%td shiftsel=%s clearn=%lld clearing=%d gitshown=%d gitsel=%s gitn=%td gitnamecol=%s gitcells=%d infogit=%s gitdue=%d branch=%s brn=%d brhere=%d brnote=%s brlist=%s brfits=%d brunder=%d gitwatch=%d statusbad=%d status=%s",
+             "search=%d searchkeys=%d searchtext=%s searchdone=%d searchfull=%d searchdue=%d searchbad=%d searchbar=%d searchsel=%d-%d searchcaret=%d findsel=%d-%d findcaret=%d seldir=%s searchinfo=%s inside=%d insidekeys=%d insidetext=%s insideopts=%s insidebad=%d insiderow=%d hit=%s hitmatch=%s hitdrawn=%d datecol=%s datecolw=%.0f owreads=%d conf=%s confbad=%d seldate=%s trashfull=%d trashicon=%s spawned=%d closingall=%d closedtabs=%d emptyn=%td shiftsel=%s clearn=%lld clearing=%d gitshown=%d gitsel=%s gitn=%td gitnamecol=%s gitcells=%d infogit=%s gitdue=%d branch=%s brn=%d brhere=%d brnote=%s brlist=%s brfits=%d brunder=%d gitwatch=%d brtotal=%d brp=%d brpn=%td brpsel=%s brptext=%s brpinlist=%d statusbad=%d status=%s",
              app.cwd, app.list.n, app.list.hidden, STR_ARG(sel), app.ui.list.sel, app.ui.list.top, app.ui.list.rows, app.hov.row,
              t->accent.r, t->accent.g, t->accent.b, t->bg.r, t->bg.g, t->bg.b, t->icons[0] ? t->icons : "-",
              app.icon_scale, GetScreenWidth(), GetScreenHeight(), app.reloads, app.themes, atomic_load(&watch.batches),
@@ -514,7 +519,7 @@ static void script_state(char *out, size_t cap)
              app.ui.find.anchor < app.ui.find.caret ? app.ui.find.anchor : app.ui.find.caret,
              app.ui.find.anchor < app.ui.find.caret ? app.ui.find.caret : app.ui.find.anchor, app.ui.find.caret, seldir, searchinfo,
              app.ui.search_inside, app.ui.focus == UI_FOCUS_INSIDE, insidetext, insideopts, app.search_im.bad,
-             (int)Clay_GetElementData(CLAY_ID("inside-field")).found, hit, hitmatch, hitdrawn, VIEWS[app.ui.view].date_col, date_w(), ow_idb_reads, confw, app.conf.bad, seldate, app.trash_full, trashicon, spawn_started, closing_all, closed_tabs.n, app.empty_n, app.ui.shift_add ? "add" : "range", clear.counted ? (long long)clear.sum.files : -1LL, clear.running, git_shown() != NULL, GIT_WORDS[app.have_list && app.list.n ? entry_git(app.ui.list.sel) : GS_NONE], git_shown() ? git_shown()->g.changed : (isize)0, gitnamecol, gitcells, infogit, git.due != 0, branch, app.ui.br_n, app.ui.br_here, brnote, brlist, brfits, brunder, atomic_load(&watch.git_wd) >= 0, app.status[0] && app.status_bad, app.status[0] ? app.status : "-");
+             (int)Clay_GetElementData(CLAY_ID("inside-field")).found, hit, hitmatch, hitdrawn, VIEWS[app.ui.view].date_col, date_w(), ow_idb_reads, confw, app.conf.bad, seldate, app.trash_full, trashicon, spawn_started, closing_all, closed_tabs.n, app.empty_n, app.ui.shift_add ? "add" : "range", clear.counted ? (long long)clear.sum.files : -1LL, clear.running, git_shown() != NULL, GIT_WORDS[app.have_list && app.list.n ? entry_git(app.ui.list.sel) : GS_NONE], git_shown() ? git_shown()->g.changed : (isize)0, gitnamecol, gitcells, infogit, git.due != 0, branch, app.ui.br_n, app.ui.br_here, brnote, brlist, brfits, brunder, atomic_load(&watch.git_wd) >= 0, app.ui.br_total, app.ui.panel == UI_PANEL_BRANCHES, app.ui.brp_list.n, brpsel, brptext, app.ui.brp_in_list, app.status[0] && app.status_bad, app.status[0] ? app.status : "-");
     frame_us_max = 0;
 }
 

@@ -688,13 +688,14 @@ static void test_git_status(void)
     env_restore(), env_restore();
 }
 
-// The branch menu's list (F12 step 5b): the one checked out first, then the reflog's checkouts
-// newest first (each move's target, then where it came from), then the rest by commit date; only
-// local branches, each once, 8 at most; detached: none marked.
+// The branches' list (F12 steps 5b and 6): the one checked out first, then the reflog's checkouts
+// newest first (each move's target, then where it came from), then the rest by commit date, each
+// with its commit's time; only local branches, each once; GIT_BRANCHES_MAX at most, the total
+// counted; detached: none marked.
 static void test_git_branches_merge(void)
 {
     static GitBranches b;
-    Str refs = S("main\nnewest\nfeat-b\nfeat-a\nold\nr1\nr2\nr3\nr4\nr5\nearly\n");
+    Str refs = S("110 main\n100 newest\n90 feat-b\n80 feat-a\n70 old\n60 r1\n50 r2\n40 r3\n30 r4\n20 r5\n10 early\n");
     // (a deleted branch and a detached commit skipped; a message that isn't a checkout's, though
     // its text past the prefix's length reads as one, skipped)
     Str log = S("0 1 t <t@t> 1 +0000\tcommit (initial): one\n"
@@ -703,17 +704,25 @@ static void test_git_branches_merge(void)
                 "3 4 t <t@t> 4 +0000\tcheckout: moving from feat-a to feat-b\n"
                 "4 5 t <t@t> 5 +0000\trebase -i: moving from r4 to r5");
     git_branches_merge(&b, "main", log, refs);
-    CHECK(b.n == 8 && b.cur == 0);
-    const char *want[] = { "main", "feat-b", "feat-a", "early", "newest", "old", "r1", "r2" };
-    for (int i = 0; i < 8 && i < b.n; i++) CHECK(strcmp(b.name[i], want[i]) == 0);
-    CHECK(!git_branch_add(&b, S("r3"), refs) && b.n == 8);   // (full: nothing more)
-    // Detached, no reflog: by date only, none marked.
-    git_branches_merge(&b, "", STR_EMPTY, S("x\ny\n"));
-    CHECK(b.n == 2 && b.cur == -1 && strcmp(b.name[0], "x") == 0 && strcmp(b.name[1], "y") == 0);
+    CHECK(b.n == 11 && b.total == 11 && b.cur == 0);
+    const char *want[] = { "main", "feat-b", "feat-a", "early", "newest", "old", "r1", "r2", "r3", "r4", "r5" };
+    for (int i = 0; i < 11 && i < b.n; i++) CHECK(strcmp(b.name[i], want[i]) == 0);
+    CHECK(b.when[0] == 110 && b.when[3] == 10 && b.when[10] == 20);
+    // Detached, no reflog: by date only, none marked; a line without its time is no branch.
+    git_branches_merge(&b, "", STR_EMPTY, S("2 x\n1 y\nz\n"));
+    CHECK(b.n == 2 && b.total == 2 && b.cur == -1 && strcmp(b.name[0], "x") == 0 && strcmp(b.name[1], "y") == 0);
     // HEAD on a branch git doesn't list (an unborn one): none marked; a name that only begins as one
     // of refs' isn't it.
-    git_branches_merge(&b, "fresh", S("1 2 t <t@t> 2 +0000\tcheckout: moving from ma to x"), S("main\nx"));
+    git_branches_merge(&b, "fresh", S("1 2 t <t@t> 2 +0000\tcheckout: moving from ma to x"), S("2 main\n1 x"));
     CHECK(b.n == 2 && b.cur == -1 && strcmp(b.name[0], "x") == 0 && strcmp(b.name[1], "main") == 0);
+    git_branches_merge(&b, "ma", STR_EMPTY, S("2 main\n"));   // (HEAD on "ma": not main's)
+    CHECK(b.cur == -1);
+    // More than it holds: the latest GIT_BRANCHES_MAX, all of them counted.
+    static char many[(GIT_BRANCHES_MAX + 6) * 16];
+    isize at = 0;
+    for (int k = 0; k < GIT_BRANCHES_MAX + 6; k++) at += snprintf(many + at, sizeof many - (size_t)at, "%d b%d\n", 9999 - k, k);
+    git_branches_merge(&b, "b3", STR_EMPTY, (Str){ many, at });
+    CHECK(b.n == GIT_BRANCHES_MAX && b.total == GIT_BRANCHES_MAX + 6 && b.cur == 0 && strcmp(b.name[0], "b3") == 0 && strcmp(b.name[1], "b0") == 0);
 }
 
 // HEAD's branch read from the gitdir (F12 step 5c: the menu's current one, after a switch): a
@@ -1252,6 +1261,82 @@ static void test_menu_key_agree(void)
     Ui s = menu_ui(3);
     s.view = UI_VIEW_SEARCH, s.can_write = false, s.menu = 1;
     CHECK(ui_menu_enabled(&s, UM_RENAME) && ui_menu_enabled(&s, UM_MAKE_LINK) && ui_allows(&s, UA_DUPLICATE));
+}
+
+// A commit's age as the branches panel says it (F12 step 6).
+static void test_ui_age(void)
+{
+    char b[32];
+    i64 now = 1700000000;
+    struct { i64 ago; const char *want; } T[] = {
+        { 0, "now" }, { 59, "now" }, { -30, "now" }, { 60, "1 min" }, { 3599, "59 min" }, { 3600, "1 h" }, { 86399, "23 h" },
+        { 86400, "1 day" }, { 3 * 86400, "3 days" }, { 14 * 86400, "2 weeks" }, { 59 * 86400, "8 weeks" }, { 60 * 86400, "2 months" },
+        { 364 * 86400, "12 months" }, { 365 * 86400, "1 year" }, { 3 * 365 * 86400, "3 years" },
+    };
+    for (int i = 0; i < COUNT(T); i++) {
+        ui_age(b, sizeof b, now, now - T[i].ago);
+        if (strcmp(b, T[i].want) != 0) fprintf(stderr, "age %lld: %s, want %s\n", (long long)T[i].ago, b, T[i].want);
+        CHECK(strcmp(b, T[i].want) == 0);
+    }
+}
+
+// The branches panel (F12 step 6): the menu's "All branches…" there only with more than 8; it
+// opens the panel, gui/'s names filtered as typed (case folded), Down into the list, Enter switches
+// to the cursor's (its place in gui/'s list), as a double click or Switch does; Esc and Close close.
+static void test_branch_panel(void)
+{
+    UiNames names = { name_at, NULL, NULL };
+    static const Str BR[] = { { "main", 4 }, { "BIV-24-fix", 10 }, { "feature/x", 9 }, { "biv-31", 6 }, { "old", 3 } };
+    Ui u = menu_ui(3);
+    u.branch_on = true, u.br_n = 5, u.br_total = 5, u.br_here = 0, u.brp_list.rows = 4, u.menu_on = true, u.menu = UI_CTX_BRANCH;
+    CHECK(!ui_menu_shown(&u, UM_BR_ALL));
+    u.br_total = 9;
+    CHECK(ui_menu_shown(&u, UM_BR_ALL) && ui_menu_enabled(&u, UM_BR_ALL));
+    UiInput in = ui_input_none();
+    in.menu_item = UI_MENU[UI_CTX_BRANCH].n - 1;   // (the last: after the line)
+    CHECK(UI_MENU[UI_CTX_BRANCH].items[in.menu_item] == UM_BR_ALL);
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.panel == UI_PANEL_BRANCHES && !u.menu_on && ui_on_top(&u) == UI_ON_BRANCHES);
+    in = ui_input_none(), in.br_name = BR, in.br_names = COUNT(BR);
+    ui_handle(&u, names, &in);
+    CHECK(!u.brp_fresh && u.brp_list.n == 5);
+    in = chars("biv"), in.br_name = BR, in.br_names = COUNT(BR);
+    ui_handle(&u, names, &in);
+    CHECK(u.brp_list.n == 2 && u.brp_idx[0] == 1 && u.brp_idx[1] == 3 && !u.brp_in_list);
+    in = keys(2, UK_DOWN, UK_DOWN), in.br_name = BR, in.br_names = COUNT(BR);
+    ui_handle(&u, names, &in);
+    CHECK(u.brp_in_list && u.brp_list.sel == 1);
+    in = keys(1, UK_ENTER), in.br_name = BR, in.br_names = COUNT(BR);
+    UiAction a = ui_handle(&u, names, &in);
+    CHECK(a.kind == UA_BRANCH && a.index == 3 && u.panel == UI_PANEL_NONE);
+    // The pointer: a row takes the cursor, a double click switches; Switch and Close.
+    ui_brp_open(&u);
+    in = ui_input_none(), in.br_name = BR, in.br_names = COUNT(BR), in.brp_row = 2;
+    ui_handle(&u, names, &in);
+    CHECK(u.brp_list.sel == 2 && u.brp_in_list);
+    in = ui_input_none(), in.br_name = BR, in.br_names = COUNT(BR), in.brp_drow = 4;
+    a = ui_handle(&u, names, &in);
+    CHECK(a.kind == UA_BRANCH && a.index == 4 && u.panel == UI_PANEL_NONE);
+    ui_brp_open(&u);
+    in = ui_input_none(), in.br_name = BR, in.br_names = COUNT(BR), in.modal = UI_MODAL_YES;
+    a = ui_handle(&u, names, &in);
+    CHECK(a.kind == UA_BRANCH && a.index == 0);
+    ui_brp_open(&u);
+    in = ui_input_none(), in.br_name = BR, in.br_names = COUNT(BR), in.modal = UI_MODAL_NO;
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.panel == UI_PANEL_NONE);
+    ui_brp_open(&u);
+    in = keys(1, UK_ESC), in.br_name = BR, in.br_names = COUNT(BR);
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.panel == UI_PANEL_NONE);
+    // Nothing matches: Enter does nothing; a '/' types (a branch's).
+    ui_brp_open(&u);
+    in = chars("zz"), in.br_name = BR, in.br_names = COUNT(BR);
+    ui_handle(&u, names, &in);
+    CHECK(u.brp_list.n == 0);
+    in = keys(1, UK_ENTER), in.br_name = BR, in.br_names = COUNT(BR);
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.panel == UI_PANEL_BRANCHES);
+    UI_TEXT_CLEAR(u.brp_filter);
+    in = chars("e/"), in.br_name = BR, in.br_names = COUNT(BR);
+    ui_handle(&u, names, &in);
+    CHECK(u.brp_list.n == 1 && u.brp_idx[0] == 2);
 }
 
 // The window's timer (F12 step 5a review): the soonest due time, whatever its place; 0s are none.

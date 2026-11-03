@@ -151,8 +151,10 @@ The folder shown is asked again at most once a second while files in it keep cha
 
 After the path buttons, the branch checked out (a detached HEAD: its commit's short id), with how far
 it is ahead of and behind its upstream (`main ↑2 ↓1`). A click opens its menu: the 8 local branches
-checked out last (from HEAD's reflog), filled up by commit date, the current one marked. Its list
-is read as the menu opens (`git for-each-ref`, in bubblewrap too). Ctrl+K and Right past the last
+checked out last (from HEAD's reflog), filled up by commit date, the current one marked; with more
+than 8, its last entry "All branches… (N)" opens a panel of all of them (the latest 1,024), in the
+same order with each one's last commit's age, filtered as you type (a ticket id finds its branch).
+Its list is read as the menu opens (`git for-each-ref`, in bubblewrap too). Ctrl+K and Right past the last
 path button reach the button; Enter opens the menu. Picking a branch runs `git switch <branch>` (only
 that: no `-f`, no stash): in bubblewrap with the repository writable, so its hooks and filters run as
 in a terminal but reach nothing else (no network, git's config read only); a hook that needs either

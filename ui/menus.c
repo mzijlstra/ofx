@@ -13,6 +13,7 @@ static bool ui_menu_shown(const Ui *u, UiMenuItem it)
     if (it == UM_BM_MORE) return u->bm_more > 0;
     if (ui_slot(it, UM_BR_0, UI_MENU_BRANCHES) >= 0) return ui_slot(it, UM_BR_0, UI_MENU_BRANCHES) < u->br_n;
     if (it == UM_BR_NOTE) return u->br_note;
+    if (it == UM_BR_ALL) return u->br_total > UI_MENU_BRANCHES;   // (more than the menu shows: F12 step 6)
     // A right-click menu leaves out what doesn't fit its target (F8): a tab for a folder only, a
     // rename for one entry, the new entries outside the trash view (Empty Trash in it).
     if (u->menu >= UI_MENUS && it == UM_OPEN_TAB) return u->ctx_dir && u->view != UI_VIEW_TRASH;
@@ -59,7 +60,7 @@ static bool ui_menu_enabled(const Ui *u, UiMenuItem it)
 {
     bool files = u->list.n > 0, here = files && u->focus != UI_FOCUS_SIDE;
     if (!ui_menu_shown(u, it)) return false;
-    if (ui_slot(it, UM_BM_0, UI_MENU_BOOKMARKS) >= 0 || ui_slot(it, UM_BR_0, UI_MENU_BRANCHES) >= 0) return true;   // (a bookmark, a branch: shown, then picked; UM_BR_NOTE never)
+    if (ui_slot(it, UM_BM_0, UI_MENU_BOOKMARKS) >= 0 || ui_slot(it, UM_BR_0, UI_MENU_BRANCHES) >= 0 || it == UM_BR_ALL) return true;   // (a bookmark, a branch: shown, then picked; UM_BR_NOTE never)
     if (u->menu == UI_CTX_FOLDER) {   // (F8) the rest are always there to pick
         if (it == UM_PASTE_INTO) return u->can_paste && u->ctx_w;
         if (it == UM_BM_UP_IT) return u->ctx_bmk > 0;
@@ -223,6 +224,7 @@ static UiAction ui_menu_pick(Ui *u, UiMenuItem it)
     int k;
     if ((k = ui_slot(it, UM_BM_0, UI_MENU_BOOKMARKS)) >= 0) return (UiAction){ UA_BOOKMARK, k, false };
     if ((k = ui_slot(it, UM_BR_0, UI_MENU_BRANCHES)) >= 0) return (UiAction){ UA_BRANCH, k, false };
+    if (it == UM_BR_ALL) return ui_brp_open(u);
     switch (it) {
     case UM_SIDE_PLACES: return ui_side_mode(u, SIDE_PLACES);
     case UM_SIDE_TREE: return ui_side_mode(u, SIDE_TREE);

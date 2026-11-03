@@ -248,47 +248,73 @@ static bool git_status(Arena *a, const char *git, const char *dir, const char *t
 
 // ---- the branches (F12 step 5b): the branch button's menu ----------------------------------------
 
-enum { GIT_BRANCHES_MAX = 8, GIT_REFLOG_TAIL = KiB(64), GIT_REFS_OUT_MAX = KiB(256) };
+// The branches (step 5b; all of them, step 6): the menu shows the first 8, the panel the rest.
+enum { GIT_BRANCHES_MAX = 1024, GIT_REFS_MAX = 8192, GIT_REFLOG_TAIL = KiB(64), GIT_REFS_OUT_MAX = KiB(256) };
 
 typedef struct {
     int  n;
-    int  cur;   // the one checked out (-1: detached, or not among them)
+    int  total;   // the repository's local branches (n: at most GIT_BRANCHES_MAX of them, the latest)
+    int  cur;     // the one checked out (-1: detached, or not among them)
     char name[GIT_BRANCHES_MAX][GIT_HEAD_MAX];
+    i64  when[GIT_BRANCHES_MAX];   // its last commit's time (unix seconds)
 } GitBranches;
 
-// b holds name already (whole names only).
-static bool git_branch_has(const GitBranches *b, Str name)
-{
-    for (int i = 0; i < b->n; i++)
-        if (str_eq(str_from_c(b->name[i]), name)) return true;
-    return false;
-}
+// The local branches as for-each-ref gives them, one "<committer time> <name>" a line (newest commit
+// first), read into names and times; and whether each is in the list yet.
+typedef struct {
+    int  n;
+    Str  name[GIT_REFS_MAX];
+    i64  when[GIT_REFS_MAX];
+    bool taken[GIT_REFS_MAX];
+} GitRefs;
 
-// name onto b when it is one of refs (the local branches, one per line) and not there yet; false
-// once b is full.
-static bool git_branch_add(GitBranches *b, Str name, Str refs)
+static void git_refs_parse(GitRefs *r, Str refs)
 {
-    if (b->n >= GIT_BRANCHES_MAX) return false;
-    if (!name.len || name.len >= GIT_HEAD_MAX || git_branch_has(b, name)) return true;
-    for (isize at = 0; at < refs.len;) {
+    r->n = 0;
+    for (isize at = 0; at < refs.len && r->n < GIT_REFS_MAX;) {
         isize e = at;
         while (e < refs.len && refs.p[e] != '\n') e++;
-        if (str_eq(str_cut(refs, at, e), name)) {
-            snprintf(b->name[b->n++], GIT_HEAD_MAX, "%.*s", STR_ARG(name));
-            break;
-        }
+        Str l = str_cut(refs, at, e);
         at = e + 1;
+        isize sp = str_find(l, ' ');
+        if (sp <= 0 || sp + 1 >= l.len) continue;
+        i64 t = 0;
+        for (isize k = 0; k < sp && l.p[k] >= '0' && l.p[k] <= '9'; k++) t = t * 10 + (l.p[k] - '0');
+        r->name[r->n] = str_cut(l, sp + 1, l.len), r->when[r->n] = t, r->taken[r->n] = false, r->n++;
     }
+}
+
+// The ref named name (whole names only), or -1.
+static int git_refs_find(const GitRefs *r, Str name)
+{
+    for (int k = 0; k < r->n; k++)
+        if (str_eq(r->name[k], name)) return k;
+    return -1;
+}
+
+// Ref k onto b, unless it is there already or b is full (-1: none). False once b is full.
+static bool git_branch_add(GitBranches *b, GitRefs *r, int k)
+{
+    if (b->n >= GIT_BRANCHES_MAX) return false;
+    if (k < 0 || r->taken[k] || r->name[k].len >= GIT_HEAD_MAX) return true;
+    snprintf(b->name[b->n], GIT_HEAD_MAX, "%.*s", STR_ARG(r->name[k]));
+    b->when[b->n++] = r->when[k], r->taken[k] = true;
     return b->n < GIT_BRANCHES_MAX;
 }
 
-// The menu's branches into b: head (the one checked out, "" when detached) first, then those the
-// reflog's checkouts name, newest first ("checkout: moving from A to B": B, then A), then the rest of
-// refs, which come newest commit first; only local branches (refs' lines), each once, 8 at most.
+// The branches into b: head (the one checked out, "" when detached) first, then those the reflog's
+// checkouts name, newest first ("checkout: moving from A to B": B, then A), then the rest of refs,
+// which come newest commit first; only local branches (refs' lines), each once, GIT_BRANCHES_MAX at
+// most. The menu's 8 are the first.
 static void git_branches_merge(GitBranches *b, const char *head, Str reflog, Str refs)
 {
-    *b = (GitBranches){ .cur = -1 };
-    if (head[0]) git_branch_add(b, str_from_c(head), refs), b->cur = b->n ? 0 : -1;
+    static GitRefs r;   // (the worker's, or a test's)
+    git_refs_parse(&r, refs);
+    b->n = 0, b->cur = -1, b->total = r.n;
+    if (head[0]) {
+        int k = git_refs_find(&r, str_from_c(head));
+        git_branch_add(b, &r, k), b->cur = k >= 0 ? 0 : -1;
+    }
     static const Str MOVE = S("checkout: moving from ");
     for (isize e = reflog.len; e > 0 && b->n < GIT_BRANCHES_MAX;) {
         isize s = e - 1;
@@ -304,15 +330,10 @@ static void git_branches_merge(GitBranches *b, const char *head, Str reflog, Str
         for (isize i = m.len - 4; i >= 0 && to < 0; i--)
             if (str_eq(str_cut(m, i, i + 4), S(" to "))) to = i;
         if (to < 0) continue;
-        if (!git_branch_add(b, str_cut(m, to + 4, m.len), refs)) break;
-        if (!git_branch_add(b, str_cut(m, 0, to), refs)) break;
+        if (!git_branch_add(b, &r, git_refs_find(&r, str_cut(m, to + 4, m.len)))) break;
+        if (!git_branch_add(b, &r, git_refs_find(&r, str_cut(m, 0, to)))) break;
     }
-    for (isize at = 0; at < refs.len && b->n < GIT_BRANCHES_MAX;) {
-        isize e = at;
-        while (e < refs.len && refs.p[e] != '\n') e++;
-        git_branch_add(b, str_cut(refs, at, e), refs);
-        at = e + 1;
-    }
+    for (int k = 0; k < r.n && b->n < GIT_BRANCHES_MAX; k++) git_branch_add(b, &r, k);
 }
 
 // The last GIT_REFLOG_TAIL bytes of HEAD's reflog in gitdir (whole lines), into buf; empty without one.
@@ -366,7 +387,7 @@ static bool git_head_is(const char *gitdir, const char *name)
 static bool git_branches(const char *git, const char *dir, const char *top, GitBranches *b)
 {
     static char out[GIT_REFS_OUT_MAX], tail[GIT_REFLOG_TAIL];   // (the worker's only)
-    const char *argv[] = { git, "--no-optional-locks", "-c", "core.fsmonitor=false", "for-each-ref", "--sort=-committerdate", "--format=%(refname:lstrip=2)", "refs/heads/", NULL };
+    const char *argv[] = { git, "--no-optional-locks", "-c", "core.fsmonitor=false", "for-each-ref", "--sort=-committerdate", "--format=%(committerdate:unix) %(refname:lstrip=2)", "refs/heads/", NULL };
     char gitdir[PATH_MAX];
     GitBinds binds;
     BoxJob j;

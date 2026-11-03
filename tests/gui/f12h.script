@@ -80,6 +80,33 @@ expect brlist=base|main|feat-a|feat-b|other|old0|old1|old2 brhere=0
 point-menu br-1
 click-here
 wait-for 5000 branch=main_↑1_↓1
+# All of them (step 6): 15 branches, the menu's 8 and "All branches… (15)", which opens the panel;
+# typed, it narrows (case folded); Enter switches as the menu does. Then back to main from the menu.
+point-ui git-branch
+click-here
+wait-for 3000 menu=branch brn=8
+expect brtotal=15
+point-menu br-all
+click-here
+wait-for 3000 modal=branches brp=1 brpn=15 brpsel=main
+shot branch-panel.png
+# Down into the list; a press on the field gives it the keys back.
+key down
+expect brpinlist=1
+point-ui brp-field
+click-here
+expect brpinlist=0
+type OLD7
+expect brpn=1 brpsel=old7 brptext=OLD7
+key enter
+wait-for 5000 branch=old7
+expect brp=0 modal=-
+point-ui git-branch
+click-here
+wait-for 3000 menu=branch brn=8
+point-menu br-1
+click-here
+wait-for 5000 branch=main_↑1_↓1
 # A second press closes it, as a menu title's does.
 point-ui git-branch
 click-here
@@ -93,7 +120,7 @@ wait-for 5000 branch=1319d8b
 point-ui git-branch
 click-here
 wait-for 3000 menu=branch brn=8
-expect brhere=-1 brlist=main|base|feat-a|feat-b|other|old0|old1|old2
+expect brhere=-1 brlist=main|old7|base|feat-a|feat-b|other|old0|old1
 key esc
 expect menu=-
 # Outside the repository: no button.

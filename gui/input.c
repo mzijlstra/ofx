@@ -227,6 +227,9 @@ static Hit hit_at(float x, float y)
         for (int r = 0; modal_kind() == UI_ON_OW && r < app.ui.ow_list.rows && h.ow_row < 0; r++)
             if (in_box(CLAY_IDI("ow-row", r), x, y)) h.ow_row = r;
         h.ow_field = modal_kind() == UI_ON_OW && !h.toggle && in_box(CLAY_ID("ow-field"), x, y);
+        for (int r = 0; modal_kind() == UI_ON_BRANCHES && r < app.ui.brp_list.rows && h.brp_row < 0; r++)   // (F12 step 6)
+            if (in_box(CLAY_IDI("brp-row", r), x, y)) h.brp_row = r;
+        h.brp_field = modal_kind() == UI_ON_BRANCHES && in_box(CLAY_ID("brp-field"), x, y);
         for (int r = 0; modal_kind() == UI_ON_BM && r < app.ui.bmp_list.rows && h.bmp_row < 0; r++)
             if (in_box(CLAY_IDI("bmp-row", r), x, y)) h.bmp_row = r;
         for (int k = 1; modal_kind() == UI_ON_BM && k <= UI_BMP_BTNS && !h.bmp_btn; k++)
@@ -299,6 +302,11 @@ static void press_at(UiInput *in, float x, float y, int mods)
         else in->ow_row = h.ow_row;
     }
     in->ow_field = h.ow_field;
+    if (h.brp_row >= 0) {
+        if (ui_press(&app.panel_press, app.ui.brp_list.top + h.brp_row, now_ms()) == 2) in->brp_drow = h.brp_row;
+        else in->brp_row = h.brp_row;
+    }
+    in->brp_field = h.brp_field;
     if (h.bmp_row >= 0) {
         if (ui_press(&app.panel_press, app.ui.bmp_list.top + h.bmp_row, now_ms()) == 2) in->bmp_drow = h.bmp_row;
         else in->bmp_row = h.bmp_row;
@@ -360,7 +368,7 @@ static Vector2 menu_size(int m)
         }
         hgt += MENU_ROW_H;
         marks |= UI_MENU_ITEM[it].mark != 0;
-        Str label = it == UM_OPEN_LINE ? open_line_label() : it >= UM_BR_NOTE && it <= UM_BR_7 ? branch_menu_label(it) : str_from_c(UI_MENU_ITEM[it].label);
+        Str label = it == UM_OPEN_LINE ? open_line_label() : it >= UM_BR_NOTE && it <= UM_BR_ALL ? branch_menu_label(it) : str_from_c(UI_MENU_ITEM[it].label);
         float lw = str_width(label) + str_width(str_from_c(UI_MENU_ITEM[it].key));
         if (lw > row) row = lw;
     }
@@ -461,7 +469,7 @@ static float wheel_left;   // a touchpad's part of a notch, carried to the next 
 // sidebar scrolls by itself. True when the sidebar moved.
 static bool wheel_at(UiInput *in, float x, int notches, bool ctrl)
 {
-    if (app.ui.panel == UI_PANEL_OW || app.ui.panel == UI_PANEL_KEYS) return in->ow_wheel = notches, false;   // the panel's list (F7.3; Keyboard Shortcuts', F7.5)
+    if (app.ui.panel == UI_PANEL_OW || app.ui.panel == UI_PANEL_KEYS || app.ui.panel == UI_PANEL_BRANCHES) return in->ow_wheel = notches, false;   // the panel's list (F7.3; Keyboard Shortcuts', F7.5)
     if (x >= side_w() && ctrl) in->zoom_wheel = notches;
     else if (x >= side_w()) in->wheel = notches;
     else if (notches) return app.ui.side.top = ui_clamp(app.ui.side.top - notches, 0, ui_max_top(&app.ui.side)), true;

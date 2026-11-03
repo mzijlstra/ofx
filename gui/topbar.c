@@ -454,7 +454,7 @@ static void layout_menu(int m)
                     const Bookmark *bk = ui_slot(it, UM_BM_0, UI_MENU_BOOKMARKS) >= 0 ? bm_menu(ui_slot(it, UM_BM_0, UI_MENU_BOOKMARKS)) : NULL;
                     if (it == UM_BM_MORE) text(cz(arena_sprintf(&frame, "%d more in Edit Bookmarks\xE2\x80\xA6", app.ui.bm_more)), on ? cc(t->fg) : off);
                     else if (it == UM_OPEN_LINE) text(cs(open_line_label()), on ? cc(t->fg) : off);   // (the editor's name: F9 step 4)
-                    else if (it >= UM_BR_NOTE && it <= UM_BR_7) text(fit(branch_menu_label(it), 360, true), on ? cc(t->fg) : off);   // (F12 step 5b)
+                    else if (it >= UM_BR_NOTE && it <= UM_BR_ALL) text(fit(branch_menu_label(it), 360, true), on ? cc(t->fg) : off);   // (F12 step 5b)
                     else text(bk ? fit(bm_label(bk), 360, true) : cz(UI_MENU_ITEM[it].label), on ? cc(t->fg) : off);
                 }
                 CLAY(CLAY_IDI("menu-gap", i), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(1) } } }) {}

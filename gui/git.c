@@ -7,7 +7,7 @@
 
 static _Alignas(4096) u8 git_mem[2][GIT_OUT_MAX + MiB(8)];   // (the output, and its tables)
 
-_Static_assert((int)UI_MENU_BRANCHES == (int)GIT_BRANCHES_MAX, "the branch menu's entries are the list fs/git.c makes");
+_Static_assert((int)UI_MENU_BRANCHES <= (int)GIT_BRANCHES_MAX && (int)UI_BRANCHES_MAX >= (int)GIT_BRANCHES_MAX, "the menu shows the first of fs/git.c's list, the panel all of it");
 
 // The least time between two asks for the folder shown (git_ask_soon).
 enum { GIT_ASK_GAP_MS = 1000 };
@@ -60,7 +60,7 @@ static void git_branches_run(void)
     git.br_asked = false;
     pthread_mutex_unlock(&git.mu);
     bool ok = git_top(dir, top, sizeof top) && realpath(dir, real) && git_branches("git", real, top, &b);
-    if (!ok) b = (GitBranches){ .cur = -1 };
+    if (!ok) b.n = b.total = 0, b.cur = -1;
     pthread_mutex_lock(&git.mu);
     if (gen == git.br_gen) git.br_out = b, git.br_ready = true, wake_main();
 }
@@ -194,7 +194,7 @@ static void git_ask_branches(void)
     const GitSlot *g = git_shown();
     pthread_mutex_lock(&git.mu);
     git.br_gen++, git.br_ready = false;
-    git.br = (GitBranches){ .cur = -1 }, git.br_wait = g != NULL;
+    git.br.n = git.br.total = 0, git.br.cur = -1, git.br_wait = g != NULL;
     if (g) snprintf(git.br_want, sizeof git.br_want, "%s", app.cwd), git.br_asked = true, pthread_cond_signal(&git.cv);   // (HEAD read then: a switch may come first)
     pthread_mutex_unlock(&git.mu);
 }
@@ -242,6 +242,7 @@ static Str branch_menu_label(UiMenuItem it)
 {
     if (it == UM_BR_NOTE && git.sw_busy) return str_from_c(arena_sprintf(&frame, "Switching to %s\xE2\x80\xA6", git.sw_name));   // (step 5c: the list comes after)
     if (it == UM_BR_NOTE) return git.br_wait ? S("Reading branches\xE2\x80\xA6") : S("No local branches");
+    if (it == UM_BR_ALL) return str_from_c(arena_sprintf(&frame, "All branches\xE2\x80\xA6 (%d)", git.br.total));   // (step 6)
     int k = ui_slot(it, UM_BR_0, UI_MENU_BRANCHES);
     return k >= 0 && k < git.br.n ? str_from_c(git.br.name[k]) : STR_EMPTY;
 }

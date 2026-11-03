@@ -287,6 +287,21 @@ static i64 ui_due_min(const i64 *d, int n)
     return due;
 }
 
+// How long ago then was, at now (unix seconds), as the branches panel says it (F12 step 6): "now",
+// "5 min", "3 h", "2 days", "3 weeks", "4 months", "2 years" (whole units, rounded down; a time to come,
+// as a clock's skew, is "now").
+static void ui_age(char *out, size_t cap, i64 now, i64 then)
+{
+    i64 d = now - then;
+    if (d < 60) snprintf(out, cap, "now");
+    else if (d < 3600) snprintf(out, cap, "%lld min", (long long)(d / 60));
+    else if (d < 86400) snprintf(out, cap, "%lld h", (long long)(d / 3600));
+    else if (d < 14 * 86400) snprintf(out, cap, "%lld %s", (long long)(d / 86400), d / 86400 == 1 ? "day" : "days");
+    else if (d < 60 * 86400) snprintf(out, cap, "%lld weeks", (long long)(d / (7 * 86400)));
+    else if (d < 365 * 86400) snprintf(out, cap, "%lld months", (long long)(d / (30 * 86400)));
+    else snprintf(out, cap, "%lld %s", (long long)(d / (365 * 86400)), d / (365 * 86400) == 1 ? "year" : "years");
+}
+
 // When the tooltip is due (ms), 0 when none is waiting.
 static i64 ui_tip_due(const UiTip *t)
 {

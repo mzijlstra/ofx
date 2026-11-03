@@ -61,6 +61,7 @@ static int list_cells(void)
 
 // The list's rows and columns for the window as it is now.
 static int  ow_rows(int h);   // Open With (gui/openwith.c, F7.3)
+static int  brp_rows(int h);   // the branches panel (gui/branches.c, F12 step 6)
 static int  bmp_rows(int h);  // Edit Bookmarks (gui/bookmarks.c, F7.5)
 static int  keys_rows(int h); // Keyboard Shortcuts (gui/shortcuts.c, F7.5)
 
@@ -69,6 +70,7 @@ static void list_fit(void)
     ui_set_cols(&app.ui.list, list_cols(GetScreenWidth()));
     ui_resize(&app.ui.list, list_rows(GetScreenHeight()));
     ui_resize(&app.ui.ow_list, ow_rows(GetScreenHeight()));   // Open With's list (F7.3)
+    ui_resize(&app.ui.brp_list, brp_rows(GetScreenHeight()));   // the branches panel's (F12 step 6)
     ui_resize(&app.ui.bmp_list, bmp_rows(GetScreenHeight()));   // Edit Bookmarks' (F7.5)
     ui_resize(&app.ui.keys_list, keys_rows(GetScreenHeight()));   // Keyboard Shortcuts'
 }

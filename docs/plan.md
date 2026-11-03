@@ -734,6 +734,12 @@ vs-code's as the only one). Steps, each with its own reviewer-2 round:
      (and a worktree's real .git) writable, so its hooks and filters run as in a terminal yet reach
      only that repository (no network; git's config files read only). Ctrl+K's path buttons step
      on to the branch button, and Enter opens its menu.
+   - **Step 6, all branches (Michael, 2026-11-03, after using it on the work repos):** the menu's 8
+     are often fewer than a repo's local branches. Its last entry, "All branches… (N)" when there
+     are more than 8, opens a panel as Open With's: a filter field (type to narrow: a ticket id
+     finds its branch), the list in the menu's order (checked out last first, then by commit
+     date), each row with its last commit's age; Enter or a double click switches, as the menu
+     does. Local branches only (remote ones would make a tracking branch: a new write, not now).
 
 ## F11 design (2026-11-01)
 

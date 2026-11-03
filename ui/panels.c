@@ -123,6 +123,86 @@ static UiAction ui_ow_event(Ui *u, UiEvent e, const UiInput *in)
     return UI_NONE;
 }
 
+// ---- the branches (F12 step 6) -------------------------------------------------------------------
+
+// The panel opened from the branch menu's "All branches…": the field empty with the keys; gui/
+// gives the names.
+static UiAction ui_brp_open(Ui *u)
+{
+    u->panel = UI_PANEL_BRANCHES, u->brp_in_list = false, u->brp_fresh = true, UI_TEXT_CLEAR(u->brp_filter);
+    u->brp_list = (UiList){ .rows = u->brp_list.rows };
+    return UI_NONE;
+}
+
+static void ui_brp_close(Ui *u)
+{
+    ui_panel_close(u, UI_PANEL_BRANCHES);
+    ui_matcher_set(&u->brp_m, STR_EMPTY, (UiMatchOpts){ 0 });
+}
+
+// The branches the field's text is in (case folded: a ticket id typed either way), in gui/'s order;
+// the cursor on the first.
+static void ui_brp_filter(Ui *u, const UiInput *in)
+{
+    ui_matcher_set(&u->brp_m, (Str){ u->brp_filter.b, u->brp_filter.len }, (UiMatchOpts){ 0 });
+    isize n = 0;
+    for (isize i = 0; i < in->br_names && n < UI_BRANCHES_MAX; i++)
+        if (ui_match(&u->brp_m, in->br_name[i])) u->brp_idx[n++] = i;
+    u->brp_list.n = n, u->brp_list.sel = 0, u->brp_list.top = 0;
+    u->brp_fresh = false;
+}
+
+// The branch under the cursor switched to, as the menu's entry would (its place in gui/'s list).
+static UiAction ui_brp_pick(Ui *u)
+{
+    if (u->brp_list.n == 0) return UI_NONE;
+    isize k = u->brp_idx[u->brp_list.sel];
+    ui_brp_close(u);
+    return (UiAction){ UA_BRANCH, k, false };
+}
+
+// A key while the panel is up; it takes every key, as Open With's does: Tab between the field and
+// the list; in the field typing edits and filters, Down goes to the list; in the list the moves (k,
+// j too), Up on the first row back to the field, another character typed in the field. Enter
+// switches, Esc closes.
+static UiAction ui_brp_event(Ui *u, UiEvent e, const UiInput *in)
+{
+    UiList *l = &u->brp_list;
+    int page = l->rows > 1 ? l->rows - 1 : 1;
+    switch (e.key) {
+    case UK_ESC: ui_brp_close(u); return UI_NONE;
+    case UK_TAB: u->brp_in_list = !u->brp_in_list; return UI_NONE;
+    case UK_ENTER: case UK_SHIFT_ENTER: return ui_brp_pick(u);
+    default: break;
+    }
+    if (u->brp_in_list) {
+        e = ui_vi_key(e);
+        switch (e.key) {
+        case UK_DOWN: ui_move(l, 1); break;
+        case UK_UP:
+            if (l->sel == 0) u->brp_in_list = false;
+            else ui_move(l, -1);
+            break;
+        case UK_HOME: ui_move(l, -l->n); break;
+        case UK_END: ui_move(l, l->n); break;
+        case UK_PAGEUP: ui_move(l, -page); break;
+        case UK_PAGEDOWN: ui_move(l, page); break;
+        case UK_NONE:
+        case UK_BACKSPACE:   // typing in the list: at the field's end, typed there
+            if (e.key == UK_NONE && ui_utf8(e.ch, (char[4]){ 0 }) == 0) break;
+            u->brp_in_list = false, u->brp_filter.caret = u->brp_filter.anchor = u->brp_filter.len;
+            if (ui_line_key(u, ui_brp_line(u), e, in->paste) == UI_LINE_CHANGED) ui_brp_filter(u, in);
+            break;
+        default: break;
+        }
+        return UI_NONE;
+    }
+    UiLineHit h = ui_line_key(u, ui_brp_line(u), e, in->paste);
+    if (h == UI_LINE_CHANGED) ui_brp_filter(u, in);
+    else if (!h && e.key == UK_DOWN && l->n > 0) u->brp_in_list = true;
+    return UI_NONE;
+}
+
 // ---- Keyboard Shortcuts (F7.5) -------------------------------------------------------------------
 
 // The lines for the filter's text: each section's heading and its rows whose action or keys hold

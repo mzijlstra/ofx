@@ -213,6 +213,8 @@ typedef struct {
     int   ow_row;       // a row of Open With's list (on screen), -1 for none (F7.3)
     bool  find_x;       // the find bar's ×
     bool  ow_field;     // its field
+    int   brp_row;      // a row of the branches panel's list (on screen), -1 none (F12 step 6)
+    bool  brp_field;    // its field
     int   toggle;       // a toggle of its field (1..4: the 4th "Always open … with this app"), 0 for none
     int   find_step;    // the find bar's chevrons: -1 the previous, 1 the next, 0 none
     int   bmp_row;      // a row of Edit Bookmarks' list (on screen), -1 for none (F7.5)
@@ -226,7 +228,7 @@ typedef struct {
 // had drifted, the hover's without .field).
 #define HIT_NONE                                                                                                   \
     { .row = -1, .side = -1, .header = -1, .bar = UB_NONE, .crumb = -1, .tab = -1, .tab_x = -1, .job_x = -1, .mode = -1, \
-      .twisty = -1, .eject = -1, .menu_title = -1, .menu_item = -1, .prop_box = -1, .ow_row = -1, .bmp_row = -1, .field = -1 }
+      .twisty = -1, .eject = -1, .menu_title = -1, .menu_item = -1, .prop_box = -1, .ow_row = -1, .brp_row = -1, .bmp_row = -1, .field = -1 }
 
 static struct {
     char      cwd[PATH_MAX];
@@ -898,6 +900,7 @@ int main(int argc, char **argv)
         if (ui_input_acts(&in) && ui_tip_act(&app.tip)) seen = true;   // a click or key: the tooltip goes
         bool was_editing = app.ui.focus == UI_FOCUS_EDIT, was_confirming = app.ui.confirming;
         if (app.ui.panel == UI_PANEL_OW) in.app_name = ow.names, in.app_n = ow.shown < UI_APPS_MAX ? ow.shown : UI_APPS_MAX;
+        if (app.ui.panel == UI_PANEL_BRANCHES) in.br_name = brp_names(), in.br_names = git.br.n;   // (F12 step 6)
         UiAction a = ui_handle(&app.ui, (UiNames){ list_name, NULL, list_dir }, &in);
         ctx_opened();
         if (app.ui.panel != UI_PANEL_OW && ow.icons_on) ow_drop();   // the panel closed: its icons go (F7.3)

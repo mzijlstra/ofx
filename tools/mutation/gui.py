@@ -384,7 +384,7 @@ MUTANTS = [
     # on) and the empty-format refusals (an over-a-MiB file); test_f75.c covers bm_read and bm_format.
     # ---- F7.5: Keyboard Shortcuts
     ('gui/input.c', '    if ((m == 0 || m == GLFW_MOD_CONTROL) && key == GLFW_KEY_F1) return UK_SHORTCUTS;', '    if (m == 0 && key == GLFW_KEY_F1) return UK_SHORTCUTS;', 'f75'),
-    ('gui/input.c', '    if (app.ui.panel == UI_PANEL_OW || app.ui.panel == UI_PANEL_KEYS) return in->ow_wheel = notches, false;', '    if (app.ui.panel == UI_PANEL_OW) return in->ow_wheel = notches, false;', 'f75'),
+    ('gui/input.c', '    if (app.ui.panel == UI_PANEL_OW || app.ui.panel == UI_PANEL_KEYS || app.ui.panel == UI_PANEL_BRANCHES) return in->ow_wheel = notches, false;', '    if (app.ui.panel == UI_PANEL_OW || app.ui.panel == UI_PANEL_BRANCHES) return in->ow_wheel = notches, false;', 'f75'),
     ('gui/files.c', '    ui_resize(&app.ui.keys_list, keys_rows(GetScreenHeight()));   // Keyboard Shortcuts\'', '', 'f75'),
     # Left out: the panel's drawing (pixels); shortcuts.png shows it.
     # ---- Help → About (2026-10-27); its drawing left out (pixels), about.png shows it
@@ -493,8 +493,8 @@ MUTANTS = [
     ('gui/git.c', '    bool none = !app.conf.git_status || !git_top(app.cwd, top, sizeof top);', '    bool none = !app.conf.git_status;', 'f62'),
     # F12 step 5b: the branch button and its menu
     ('gui/frame.c', '    u->branch_on = branch_label() != NULL;', '    u->branch_on = false;', 'f12h'),
-    ('gui/frame.c', '    u->br_n = git.br.n, u->br_here = git.br.cur, u->br_note = git.br.n == 0;', '    u->br_n = git.br.n, u->br_here = 0, u->br_note = git.br.n == 0;', 'f12h'),
-    ('gui/frame.c', '    u->br_n = git.br.n, u->br_here = git.br.cur, u->br_note = git.br.n == 0;', '    u->br_n = git.br.n, u->br_here = git.br.cur, u->br_note = false;', 'f12h'),
+    ('gui/frame.c', '    u->br_n = git.br.n < UI_MENU_BRANCHES ? git.br.n : UI_MENU_BRANCHES, u->br_here = git.br.cur < UI_MENU_BRANCHES ? git.br.cur : -1, u->br_note = git.br.n == 0;', '    u->br_n = git.br.n < UI_MENU_BRANCHES ? git.br.n : UI_MENU_BRANCHES, u->br_here = 0, u->br_note = git.br.n == 0;', 'f12h'),
+    ('gui/frame.c', '    u->br_n = git.br.n < UI_MENU_BRANCHES ? git.br.n : UI_MENU_BRANCHES, u->br_here = git.br.cur < UI_MENU_BRANCHES ? git.br.cur : -1, u->br_note = git.br.n == 0;', '    u->br_n = git.br.n < UI_MENU_BRANCHES ? git.br.n : UI_MENU_BRANCHES, u->br_here = git.br.cur < UI_MENU_BRANCHES ? git.br.cur : -1, u->br_note = false;', 'f12h'),
     ('gui/git.c', '    if (br) git.br = git.br_out, git.br_ready = false, git.br_wait = false;\n', '', 'f12h'),
     ('gui/git.c', '    if (br && s < 0) return true;\n', '', 'f12h'),
     ('gui/git.c', '    int n = s->head[0] ? snprintf(buf, sizeof buf, "%s", s->head) : snprintf(buf, sizeof buf, "%.7s", s->oid);', '    int n = snprintf(buf, sizeof buf, "%s", s->head);', 'f12h'),
@@ -505,6 +505,10 @@ MUTANTS = [
     ('gui/topbar.c', '            else layout_crumbs(branch ? room - bw - BAR_GAP : room);', '            else layout_crumbs(room);', 'f12h'),
     ('gui/actions.c', '        if (a.index >= 0 && a.index < git.br.n && a.index != git.br.cur && git_ask_switch(', '        if (a.index >= 0 && a.index < git.br.n && git_ask_switch(', 'f12h'),
     ('gui/input.c', '    return ui_due_min(d, COUNT(d));', '    return ui_due_min(d, COUNT(d) - 1);', 'f12g'),
+    # F12 step 6: the branches panel
+    ('gui/frame.c', '    u->br_total = git.br.total;', '    u->br_total = 0;', 'f12h'),
+    ('gui/main.c', '        if (app.ui.panel == UI_PANEL_BRANCHES) in.br_name = brp_names(), in.br_names = git.br.n;', '        (void)0;', 'f12h'),
+    ('gui/input.c', '        h.brp_field = modal_kind() == UI_ON_BRANCHES && in_box(CLAY_ID("brp-field"), x, y);', '        h.brp_field = false;'),
     # F12 code-health step 5 (J): watch_release, modal_kind
     ('gui/watch.c', '    if (wd > 0 && !watch_fixed(wd) && !watch_is_trash(wd) && wd != atomic_load(&watch.dir_wd)) inotify_rm_watch(watch.fd, wd);', '    if (wd > 0 && !watch_is_trash(wd) && wd != atomic_load(&watch.dir_wd)) inotify_rm_watch(watch.fd, wd);', 'f10'),
     ('gui/watch.c', '    if (wd > 0 && !watch_fixed(wd) && !watch_is_trash(wd) && wd != atomic_load(&watch.dir_wd)) inotify_rm_watch(watch.fd, wd);', '    if (wd > 0 && !watch_fixed(wd) && wd != atomic_load(&watch.dir_wd)) inotify_rm_watch(watch.fd, wd);', 'f6'),
