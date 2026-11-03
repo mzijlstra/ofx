@@ -21,6 +21,20 @@ Omarchy's theme: the binary, the folder `tools/ofx`, the window's title and Wayl
 - Keys: arrows, Enter and Backspace, and vim-style `h j k l`, `g`/`G` alongside.
 - A list view only; an icon grid may come later.
 
+## Open items (read before starting a milestone)
+
+- **Two GUI tests flake under load (Michael, 2026-11-03: to look at, not forget).** Each passed on
+  every rerun alone and on most full runs; each failed only with the machine loaded (`-j 6`,
+  reviewer-2 measured load ~8-18):
+  - **f8c, line 46:** `point-menu: no bm-remove in the menu open`, then the `wait-for sides=…` after
+    it. Seen twice: reviewer-2's health-1 run, and the hover-fix suite run (2026-11-03).
+  - **f12g:** once, in reviewer-2's step 6 `-j 6` run; its log was removed before anyone read it.
+    reviewer-2's guess is its timing lines (OFX_TEST_GIT_GAP_MS and the put-off ask).
+
+  Probably the same class as the five load flakes fixed in F12 (a fixed wait shorter than the
+  loaded window takes). Next time either fails, keep the run's log (`<scratch>.out` and the group's
+  folder) before anything else.
+
 ## Milestones
 
 | | What | Exit |
