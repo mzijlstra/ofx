@@ -74,22 +74,27 @@ def run(work, cc='clang'):
         exe = './build/test'
     if b.returncode != 0:
         return 'build-fail'
-    env = dict(os.environ, TMPDIR=os.path.join(work, 'tmp'))
-    # 10 s: the tests take 0.5-0.7 s, and a mutant that hangs them (#172 waited 120 s here, holding
-    # up a whole pass) is killed by the timeout either way. In its own process group, killed whole
-    # afterwards: a test killed or crashed early leaves the children it forks (test_f7's paused
-    # ones) behind, 264 of them by 2026-10-29.
-    t = subprocess.Popen([exe], cwd=work, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env,
-                         start_new_session=True)
-    try:
-        code = t.wait(timeout=10)
-    finally:
+    # The fast tests first; the slow ones (real git and bubblewrap, 4.1 s of 5.6: OFX_TEST_GROUP,
+    # Michael 2026-11-03) only when those pass, so a mutant they kill doesn't wait for git.
+    for group in ('fast', 'slow'):
+        env = dict(os.environ, TMPDIR=os.path.join(work, 'tmp'), OFX_TEST_GROUP=group)
+        # 10 s each: a group takes 1.5-4 s, and a mutant that hangs them (#172 waited 120 s here,
+        # holding up a whole pass) is killed by the timeout either way. In its own process group,
+        # killed whole afterwards: a test killed or crashed early leaves the children it forks
+        # (test_f7's paused ones) behind, 264 of them by 2026-10-29.
+        t = subprocess.Popen([exe], cwd=work, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env,
+                             start_new_session=True)
         try:
-            os.killpg(t.pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
-        t.wait()
-    return 'pass' if code == 0 else 'fail'
+            code = t.wait(timeout=10)
+        finally:
+            try:
+                os.killpg(t.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            t.wait()
+        if code != 0:
+            return 'fail'
+    return 'pass'
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from common import rmtree

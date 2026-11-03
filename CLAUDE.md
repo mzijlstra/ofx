@@ -183,7 +183,10 @@ under tcc first (a 25 ms build, no sanitizers), then the ones tcc didn't kill, o
 under clang with ASan and UBSan as `make test` has them. 609 mutants in 44 s (clang alone 190 s;
 gcc, one at a time, about 45 min); 1836 in 216 s on 2026-11-02 (tcc kills all but 9). Every worker runs the unmutated tests first under both, all at
 once, so a test that only fails under load shows before any kill counts. `--clang-only` skips tcc
-(and it is skipped without `tcc` on PATH: `sudo pacman -S tcc`). A mutant that doesn't compile tests
+(and it is skipped without `tcc` on PATH: `sudo pacman -S tcc`). Each run is the fast tests first, then
+the slow ones only if those pass (`OFX_TEST_GROUP=fast|slow`, Michael 2026-11-03): the tests that run
+real git and bubblewrap took 4.1 s of 5.6 and had doubled the pass (915 s); a new such test goes in
+the slow group (the `if (slow)` calls in tests/test.c's main). A mutant that doesn't compile tests
 nothing: when deleting a statement would leave an `else` without its `if`, empty it instead (`{}`).
 
 The GUI mutants' time is mostly the GUI suite (86 s then, 215 s one group at a time by F11), not the build. So each runs only the `run.sh`
