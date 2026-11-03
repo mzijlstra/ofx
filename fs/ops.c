@@ -62,8 +62,7 @@ static bool ops_program_allowed(const char *prog, Err *err)
 {
     if (!ops_root[0]) return true;
     char full[PATH_MAX], r[PATH_MAX];
-    bool found = strchr(prog, '/') ? snprintf(full, sizeof full, "%s", prog) < (int)sizeof full : path_find(prog, full, sizeof full);
-    if (found && realpath(full, r) && path_below(r, ops_root)) return true;
+    if (prog_resolve(prog, full, sizeof full) && realpath(full, r) && path_below(r, ops_root)) return true;
     snprintf(err->msg, sizeof err->msg, "%.64s isn't a test's own (outside %.300s): not run", prog, ops_root);
     return false;
 }
@@ -202,7 +201,7 @@ enum { TREE_DEPTH_MAX = 256 };
 static bool rm_children(int dirfd, const char *shown, int depth, isize *count, Err *err)
 {
     if (depth > TREE_DEPTH_MAX) return err_set(err, "%s: folders nested too deep", shown), false;
-    int fd = dup(dirfd);
+    int fd = fcntl(dirfd, F_DUPFD_CLOEXEC, 0);
     DIR *d = fd >= 0 ? fdopendir(fd) : NULL;
     if (!d) {
         if (fd >= 0) close(fd);
@@ -223,7 +222,7 @@ static bool rm_children(int dirfd, const char *shown, int depth, isize *count, E
                 break;
             }
             if (S_ISDIR(st.st_mode)) {
-                int sub = openat(dirfd, nm, O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
+                int sub = openat(dirfd, nm, O_RDONLY | O_CLOEXEC | O_DIRECTORY | O_NOFOLLOW);
                 if (sub < 0) {
                     ok = (err_set(err, "%s/%s: %s", shown, nm, strerror(errno)), false);
                     break;
@@ -248,7 +247,7 @@ static bool delete_tree(const char *path, isize *count, Err *err)
     struct stat st;
     if (lstat(path, &st) != 0) return err_set(err, "%s: %s", path, strerror(errno)), false;
     if (S_ISDIR(st.st_mode)) {
-        int fd = open(path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
+        int fd = open(path, O_RDONLY | O_CLOEXEC | O_DIRECTORY | O_NOFOLLOW);
         if (fd < 0) return err_set(err, "%s: %s", path, strerror(errno)), false;
         bool ok = rm_children(fd, path, 0, count, err);
         close(fd);

@@ -419,6 +419,8 @@ static GitSwitch git_switch(const char *git, const char *top, const char *name, 
     git_gitdir(top, gitdir, sizeof gitdir);
     // Read only: git's config files alone; the repository and its real .git writable.
     j.ro[0] = binds.home_conf, j.ro[1] = binds.xdg_conf, j.ro[2] = "/etc/gitconfig", j.ro[3] = j.ro[4] = NULL;
+    // (common comes from the repository's own .git file: the guard asked for it too; review, 2026-11-03)
+    if (binds.common[0] && !ops_allowed(binds.common, &err)) return snprintf(msg, cap, "%s", err.msg), GSW_REFUSED;
     j.rw[0] = top, j.rw[1] = binds.common[0] ? binds.common : NULL;
     j.ms = git_switch_ms;
     isize len = 0;

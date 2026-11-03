@@ -1843,6 +1843,8 @@ int main(void)
     if (fast) test_git_head_name();
     if (fast) test_branch_keys();
     if (fast) test_git_said();
+    if (slow) test_no_fds_leak();
+    if (fast) test_prog_resolve();
     if (slow) test_box_outlive();
     if (slow) test_box_outlive_out();
     if (slow) test_box_output_end();

@@ -154,7 +154,7 @@ static void job_count(Job *j, int dirfd, const char *name, int depth)
         return;
     }
     if (depth > TREE_DEPTH_MAX) return;
-    int fd = openat(dirfd, name, O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
+    int fd = openat(dirfd, name, O_RDONLY | O_CLOEXEC | O_DIRECTORY | O_NOFOLLOW);
     DIR *d = fd >= 0 ? fdopendir(fd) : NULL;
     if (!d) {
         if (fd >= 0) close(fd);
@@ -210,7 +210,7 @@ static void part_remove(int ddir, const char *name)
     struct stat st;
     if (fstatat(ddir, name, &st, AT_SYMLINK_NOFOLLOW) != 0) return;
     if (S_ISDIR(st.st_mode)) {
-        int fd = openat(ddir, name, O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
+        int fd = openat(ddir, name, O_RDONLY | O_CLOEXEC | O_DIRECTORY | O_NOFOLLOW);
         if (fd >= 0) {
             isize n = 0;
             Err e;
@@ -228,7 +228,7 @@ static bool copy_into(Job *j, int sdir, const char *sname, int ddir, const char 
 // The children of folder sfd into folder dfd. fresh: dfd is new (nothing there can clash).
 static bool copy_children(Job *j, int sfd, int dfd, bool fresh, int depth)
 {
-    int fd = dup(sfd);
+    int fd = fcntl(sfd, F_DUPFD_CLOEXEC, 0);
     DIR *d = fd >= 0 ? fdopendir(fd) : NULL;
     if (!d) {
         if (fd >= 0) close(fd);
@@ -285,10 +285,10 @@ static bool copy_into(Job *j, int sdir, const char *sname, int ddir, const char 
     if (depth == 0) j->top = merge ? OUT_MERGED : replace ? OUT_REPLACED : OUT_NEW, snprintf(j->top_name, sizeof j->top_name, "%s", dname);
 
     if (S_ISDIR(st.st_mode)) {
-        int sfd = openat(sdir, sname, O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
+        int sfd = openat(sdir, sname, O_RDONLY | O_CLOEXEC | O_DIRECTORY | O_NOFOLLOW);
         if (sfd < 0) return job_error(j, "%s: %s", j->where, strerror(errno)), false;
         if (merge) {
-            int dfd = openat(ddir, dname, O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
+            int dfd = openat(ddir, dname, O_RDONLY | O_CLOEXEC | O_DIRECTORY | O_NOFOLLOW);
             if (dfd < 0) {
                 close(sfd);
                 return job_error(j, "%s: %s", j->where, strerror(errno)), false;
@@ -304,7 +304,7 @@ static bool copy_into(Job *j, int sdir, const char *sname, int ddir, const char 
             close(sfd);
             return job_error(j, "%s: %s", j->where, strerror(errno)), false;
         }
-        int dfd = openat(ddir, part, O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
+        int dfd = openat(ddir, part, O_RDONLY | O_CLOEXEC | O_DIRECTORY | O_NOFOLLOW);
         bool ok = dfd >= 0 && copy_children(j, sfd, dfd, true, depth);
         if (dfd < 0) job_error(j, "%s: %s", j->where, strerror(errno));
         if (ok) {
@@ -332,8 +332,8 @@ static bool copy_into(Job *j, int sdir, const char *sname, int ddir, const char 
         if (ok) utimensat(ddir, part, (struct timespec[2]){ st.st_atim, st.st_mtim }, AT_SYMLINK_NOFOLLOW);
         if (!ok) job_error(j, "%s: %s", j->where, strerror(errno));
     } else if (S_ISREG(st.st_mode)) {
-        int sfd = openat(sdir, sname, O_RDONLY | O_NOFOLLOW);
-        int dfd = sfd < 0 ? -1 : openat(ddir, part, O_WRONLY | O_CREAT | O_EXCL, 0600);
+        int sfd = openat(sdir, sname, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+        int dfd = sfd < 0 ? -1 : openat(ddir, part, O_WRONLY | O_CLOEXEC | O_CREAT | O_EXCL, 0600);
         if (sfd < 0 || dfd < 0) {
             job_error(j, "%s: %s", j->where, strerror(errno));
             ok = false;
@@ -376,14 +376,14 @@ static bool move_into(Job *j, int sdir, const char *sname, int ddir, const char 
 // A folder onto a folder on the same drive: each child moved in, then the source removed if empty.
 static bool move_merge(Job *j, int sdir, const char *sname, int ddir, const char *dname, int depth)
 {
-    int sfd = openat(sdir, sname, O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
-    int dfd = sfd < 0 ? -1 : openat(ddir, dname, O_RDONLY | O_DIRECTORY | O_NOFOLLOW);
+    int sfd = openat(sdir, sname, O_RDONLY | O_CLOEXEC | O_DIRECTORY | O_NOFOLLOW);
+    int dfd = sfd < 0 ? -1 : openat(ddir, dname, O_RDONLY | O_CLOEXEC | O_DIRECTORY | O_NOFOLLOW);
     if (sfd < 0 || dfd < 0) {
         job_error(j, "%s: %s", j->where, strerror(errno));
         if (sfd >= 0) close(sfd);
         return false;
     }
-    int fd = dup(sfd);
+    int fd = fcntl(sfd, F_DUPFD_CLOEXEC, 0);
     DIR *d = fd >= 0 ? fdopendir(fd) : NULL;
     bool ok = d != NULL;
     // Moving entries out while readdir runs: passes until one moves nothing.
@@ -467,7 +467,7 @@ static int open_parent(const char *path, char *name, size_t cap)
     char d[PATH_MAX];
     if (!path_parent(d, sizeof d, path)) return errno = ENAMETOOLONG, -1;
     snprintf(name, cap, "%.*s", STR_ARG(path_base(str_from_c(path))));
-    return open(d, O_RDONLY | O_DIRECTORY);
+    return open(d, O_RDONLY | O_CLOEXEC | O_DIRECTORY);
 }
 
 // One item of a copy or a move.

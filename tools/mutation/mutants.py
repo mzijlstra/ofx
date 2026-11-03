@@ -92,8 +92,8 @@ MUTANTS = [
     (T, "else if (val.len && val.p[0] == '/') snprintf(path, sizeof path, \"%.*s\", STR_ARG(val));", ""),
     (T, "if (strcmp(path, home) == 0 || u->n == COUNT(u->d)) continue;", "if (u->n == COUNT(u->d)) continue;"),
     # ---- spawn
-    (P, "if (e > at && snprintf(out, cap, \"%.*s/%s\", (int)(e - at), p.p + at, prog) < (int)cap && access(out, X_OK) == 0) return true;", "if (e > at && snprintf(out, cap, \"%.*s/%s\", (int)(e - at), p.p + at, prog) < (int)cap && access(out, F_OK) == 0) return true;"),
-    (P, "posix_spawnattr_setflags(&attr, POSIX_SPAWN_SETSID | POSIX_SPAWN_SETSIGMASK);\n    posix_spawn_file_actions_init(&fa);\n    posix_spawn_file_actions_addopen(&fa, 0, \"/dev/null\", O_RDONLY, 0);\n    posix_spawn_file_actions_addopen(&fa, 1,", "posix_spawnattr_setflags(&attr, POSIX_SPAWN_SETSIGMASK);\n    posix_spawn_file_actions_init(&fa);\n    posix_spawn_file_actions_addopen(&fa, 0, \"/dev/null\", O_RDONLY, 0);\n    posix_spawn_file_actions_addopen(&fa, 1,"),
+    ('fs/spawn.c', '    return stat(path, &st) == 0 && S_ISREG(st.st_mode) && access(path, X_OK) == 0;', '    return stat(path, &st) == 0 && S_ISREG(st.st_mode) && access(path, F_OK) == 0;'),
+    ('fs/spawn.c', '    posix_spawnattr_setflags(&attr, POSIX_SPAWN_SETSID | POSIX_SPAWN_SETSIGMASK);\n    posix_spawn_file_actions_init(&fa);\n    posix_spawn_file_actions_addopen(&fa, 0, "/dev/null", O_RDONLY, 0);\n    if (out >= 0)', '    posix_spawnattr_setflags(&attr, POSIX_SPAWN_SETSIGMASK);\n    posix_spawn_file_actions_init(&fa);\n    posix_spawn_file_actions_addopen(&fa, 0, "/dev/null", O_RDONLY, 0);\n    if (out >= 0)'),
     (P, "if (on_path(\"uwsm-app\")) argv[k++] = \"uwsm-app\", argv[k++] = \"--\";", ""),
     (P, "    if (strchr(argv[0], '/') ? access(argv[0], X_OK) != 0 : !on_path(argv[0])) return err_set(err, \"%s is not installed\", argv[0]), false;\n", ""),
     (P, "snprintf(arg, sizeof arg, \"--dir=%s\", dir);", "snprintf(arg, sizeof arg, \"%s\", dir);"),
@@ -209,7 +209,7 @@ MUTANTS += [
     (T, "S_ISDIR(st.st_mode) && (st.st_mode & S_ISVTX)) {", "S_ISDIR(st.st_mode)) {"),
     (T, "    if (lstat(admin, &st) == 0", "    if (stat(admin, &st) == 0"),
     (T, "    if (lstat(out, &st) != 0 || !S_ISDIR(st.st_mode) || st.st_uid != uid)", "    if (stat(out, &st) != 0 || !S_ISDIR(st.st_mode) || st.st_uid != uid)"),
-    (T, "O_WRONLY | O_CREAT | O_EXCL, 0600);\n        if (fd < 0) {", "O_WRONLY | O_CREAT | O_TRUNC, 0600);\n        if (fd < 0) {"),
+    ('fs/trash.c', 'O_WRONLY | O_CLOEXEC | O_CREAT | O_EXCL, 0600);\n        if (fd < 0) {', 'O_WRONLY | O_CLOEXEC | O_CREAT | O_TRUNC, 0600);\n        if (fd < 0) {'),
     (T, "        if (lstat(t->file, &ex) == 0) continue;", ""),
     (T, "    unlink(t->info);\n    return true;", "    return true;"),
     (T, "    if (renameat2(AT_FDCWD, t->file, AT_FDCWD, t->from, RENAME_NOREPLACE) != 0) {", "    if (renameat(AT_FDCWD, t->file, AT_FDCWD, t->from) != 0) {"),
@@ -607,7 +607,7 @@ MUTANTS += [
     (PL, "        if (!octal_decode(src, p->dev, sizeof p->dev)) p->dev[0] = 0;", "        snprintf(p->dev, sizeof p->dev, \"%.*s\", STR_ARG(src));"),
     (PL, "    return p->kind == PL_REMOVABLE && strncmp(p->dev, \"/dev/\", 5) == 0;", "    return p->kind == PL_REMOVABLE && p->dev[0];"),
     (PL, "    return p->kind == PL_REMOVABLE && strncmp(p->dev, \"/dev/\", 5) == 0;", "    return place_is_drive(p->kind) && strncmp(p->dev, \"/dev/\", 5) == 0;"),
-    (SP, "    posix_spawn_file_actions_adddup2(&fa, fd[1], 2);\n", ""),
+    ('fs/spawn.c', '    if (out >= 0 && err_too) posix_spawn_file_actions_adddup2(&fa, out, 2);\n', ''),
     (SP, "        n += take;", "        n += (size_t)r;"),
     (SP, "(size_t)r < room ? (size_t)r : room;", "(size_t)r;"),
     (SP, "\"udisksctl unmount -b \\\"$1\\\" && echo OFX-UNMOUNTED && udisksctl power-off", "\"udisksctl unmount -b \\\"$1\\\"; echo OFX-UNMOUNTED && udisksctl power-off"),
@@ -2062,8 +2062,8 @@ MUTANTS += [
     (PL, '        for (int k = 0; k < COUNT(NOT) && !skip; k++) skip = strncmp(e->d_name, NOT[k], strlen(NOT[k])) == 0;\n', ''),
     (SP, "                if (n > 1 && at[n - 1] == '.' && stat(at, &st) != 0) {", "                if (n > 1 && at[n - 1] == '.') {"),
     (SP, "                    if (stat(at, &st) != 0 || !S_ISDIR(st.st_mode)) at[n - 1] = '.';", ''),
-    ('fs/ops.c', '    if (found && realpath(full, r) && path_below(r, ops_root)) return true;', '    if (found && path_below(full, ops_root)) return true;'),
-    ('fs/ops.c', '    if (found && realpath(full, r) && path_below(r, ops_root)) return true;', '    if (found) return true;'),
+    ('fs/ops.c', '    if (prog_resolve(prog, full, sizeof full) && realpath(full, r) && path_below(r, ops_root)) return true;', '    if (prog_resolve(prog, full, sizeof full) && path_below(full, ops_root)) return true;'),
+    ('fs/ops.c', '    if (prog_resolve(prog, full, sizeof full) && realpath(full, r) && path_below(r, ops_root)) return true;', '    if (prog_resolve(prog, full, sizeof full)) return true;'),
     ('fs/ops.c', '    if (!ops_root[0]) return true;\n    char full[PATH_MAX], r[PATH_MAX];', '    char full[PATH_MAX], r[PATH_MAX];'),
 ]
 MUTANTS += [
@@ -2155,8 +2155,8 @@ MUTANTS += [
 ]
 MUTANTS += [
     # F10 review step 4: every launch through the test guard (2026-11-01)
-    ('fs/spawn.c', '    if (!ops_program_allowed(argv[0], err)) return false;\n    posix_spawnattr_t attr;', '    posix_spawnattr_t attr;'),
-    ('fs/ops.c', "    bool found = strchr(prog, '/') ? snprintf(full, sizeof full, \"%s\", prog) < (int)sizeof full : path_find(prog, full, sizeof full);", '    bool found = path_find(prog, full, sizeof full);'),
+    ('fs/spawn.c', '    if (!ops_program_allowed(check ? check : argv[0], err)) return false;\n', '    (void)check;\n'),
+    ('fs/spawn.c', '    return strchr(prog, \'/\') ? snprintf(out, cap, "%s", prog) < (int)cap && exec_file(out) : path_find(prog, out, cap);', '    return path_find(prog, out, cap);'),
 ]
 # ---- F11 step 1: per-folder view, zoom, sort; Show Hidden; the cursor; housekeeping (2026-11-01)
 FO = 'fs/folders.c'
@@ -2251,8 +2251,7 @@ MUTANTS += [
 ]
 MUTANTS += [
     # F11 milestone review, step 2: the guard's gaps (2026-11-02)
-    ('fs/spawn.c', '    if (!ops_program_allowed(prog ? prog : argv[0], err)) return false;', '    (void)prog;'),
-    ('fs/spawn.c', '    if (!ops_program_allowed(prog ? prog : argv[0], err)) return false;', '    if (!ops_program_allowed(argv[0], err)) return false;'),
+    ('fs/spawn.c', '    if (!ops_program_allowed(check ? check : argv[0], err)) return false;\n', '    if (!ops_program_allowed(argv[0], err)) return false;\n'),
     ('fs/trash.c', ' || !ops_allowed(t->file, err) || !ops_allowed(t->info, err)) return false;', ') return false;'),
     # Not a mutant: state_write's O_EXCL | O_NOFOLLOW as O_TRUNC (the unlink before it takes a link
     # out; only a race between the two would reach one).
@@ -2455,4 +2454,10 @@ MUTANTS += [
     ('fs/git.c', '"switch", "-q", "--no-guess", name, NULL };', '"switch", "-q", name, NULL };'),
     ('fs/git.c', '    git_said((Str){ out, len }, msg, cap);\n    if (git_head_is(gitdir, name)) return GSW_DONE;', '    if (git_head_is(gitdir, name)) return GSW_DONE;\n    git_said((Str){ out, len }, msg, cap);'),
     ('fs/git.c', '    if (r == BOX_GOING) return snprintf(', '    if (false) return snprintf('),
+    # F12 code-health step 1: fds, the program that runs, the second writable bind
+    ('fs/sandbox.c', '        close_range(3, ~0U, 0);', '        (void)0;'),
+    ('fs/spawn.c', '    posix_spawn_file_actions_addclosefrom_np(&fa, 3);\n', ''),
+    ('fs/spawn.c', '    return stat(path, &st) == 0 && S_ISREG(st.st_mode) && access(path, X_OK) == 0;', '    return access(path, X_OK) == 0;'),
+    ('fs/spawn.c', '    int rc = posix_spawn(pid, full, &fa, &attr, argv, environ);', '    int rc = posix_spawnp(pid, argv[0], &fa, &attr, argv, environ);'),
+    ('fs/git.c', '    if (binds.common[0] && !ops_allowed(binds.common, &err)) return', '    if (false) return'),
 ]

@@ -84,7 +84,7 @@ static BoxRun box_run(const BoxJob *j)
     char prog[PATH_MAX], bw[PATH_MAX];
     const char *const *argv = j->argv;
     if (!ops_program_allowed(argv[0], &err)) return BOX_NOT_RUN;
-    if (!(argv[0][0] == '/' ? snprintf(prog, sizeof prog, "%s", argv[0]) < (int)sizeof prog : path_find(argv[0], prog, sizeof prog))) return BOX_NOT_RUN;
+    if (!prog_resolve(argv[0], prog, sizeof prog)) return BOX_NOT_RUN;
     // The environment, bubblewrap's and so the program's: these of ofx's, and GIO_USE_VFS=local (a
     // thumbnailer's %u URI read without gvfs).
     static const char *const keep[] = { "PATH", "LANG", "LC_ALL", "HOME", "GIO_USE_VFS" };
@@ -141,6 +141,7 @@ static BoxRun box_run(const BoxJob *j)
         if (nul >= 0) dup2(nul, 0), dup2(nul, 1), dup2(nul, 2);
         if (j->out) dup2(pipe_fd[1], 1);
         if (j->out && j->err) dup2(pipe_fd[1], 2);
+        close_range(3, ~0U, 0);   // (none of ofx's other fds: bubblewrap passes them in, and a folder's would reach outside the binds; review, 2026-11-03)
         if (cwd && chdir(cwd) != 0) _exit(127);
         execve(av[0], (char *const *)av, (char *const *)envp);
         _exit(127);

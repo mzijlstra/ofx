@@ -134,7 +134,7 @@ static bool trash_put(const char *path, Trashed *t, Err *err)
             return err_set(err, "%s: the path is too long", path), false;
         struct stat ex;
         if (lstat(t->file, &ex) == 0) continue;
-        int fd = open(t->info, O_WRONLY | O_CREAT | O_EXCL, 0600);
+        int fd = open(t->info, O_WRONLY | O_CLOEXEC | O_CREAT | O_EXCL, 0600);
         if (fd < 0) {
             if (errno == EEXIST) continue;
             return err_set(err, "%s: %s", t->info, strerror(errno)), false;

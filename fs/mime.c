@@ -59,7 +59,7 @@ static Str read_file(Arena *a, const char *path)
     // A FIFO or a device at one of these paths would block fopen: regular files only.
     struct stat pre;
     if (stat(path, &pre) != 0 || !S_ISREG(pre.st_mode)) return STR_EMPTY;
-    FILE *f = fopen(path, "rb");
+    FILE *f = fopen(path, "rbe");
     if (!f) return STR_EMPTY;
     struct stat st;
     char *dst = NULL;

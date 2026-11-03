@@ -942,6 +942,18 @@ static void test_git_switch(void)
     put_exec(git2, "#!/bin/sh\nexec /usr/bin/git \"$@\"\n");
     ops_guard(at("f12/sw/elsewhere"));
     CHECK(git_switch(git2, top, "wtb", msg, sizeof msg) == GSW_REFUSED && msg[0] && git_head_is(gitdir, "feat"));
+    char mtop[PATH_MAX], mdir[PATH_MAX];   // (the repository itself, no .git file: its place alone refuses)
+    CHECK(git_top(repo, mtop, sizeof mtop));
+    git_gitdir(mtop, mdir, sizeof mdir);
+    CHECK(git_switch(git2, mtop, "feat", msg, sizeof msg) == GSW_REFUSED && strstr(msg, "outside") && git_head_is(mdir, "main"));
+    // A worktree inside the guard's root whose repository isn't: refused too, as its .git would be
+    // writable (code-health review, 2026-11-03).
+    ops_guard(root);
+    CHECK(sh_in(repo, "git worktree add -q ../elsewhere/wt2 -b wt2b") == 0);
+    char top2[PATH_MAX];
+    CHECK(git_top(at("f12/sw/elsewhere/wt2"), top2, sizeof top2));
+    ops_guard(at("f12/sw/elsewhere"));
+    CHECK(git_switch(git2, top2, "feat2", msg, sizeof msg) == GSW_REFUSED && strstr(msg, "outside"));
     ops_guard(root);
     env_restore(), env_restore();
 }
@@ -1012,6 +1024,82 @@ static void test_box_outlive_out(void)
     CHECK(box_run(&k) == BOX_GOING && access(done, F_OK) != 0);
     for (int i = 0; i < 40 && access(done, F_OK) != 0; i++) nanosleep(&(struct timespec){ 0, 50 * 1000 * 1000 }, NULL);
     CHECK(access(done, F_OK) == 0);
+}
+
+// None of ofx's fds reach what it runs (code-health review, 2026-11-03: a copy job's folder fd,
+// open as git or a thumbnailer started, reached outside bubblewrap's binds): a folder fd opened
+// without O_CLOEXEC on purpose, not there in a box run (sandboxed or not) nor in a spawned one.
+static void test_no_fds_leak(void)
+{
+    ops_guard(root);
+    int leak = open(root, O_RDONLY | O_DIRECTORY);   // (no O_CLOEXEC: as one forgotten)
+    CHECK(leak > 2);
+    char prog[PATH_MAX], text[256], out[256];
+    snprintf(prog, sizeof prog, "%s", at("f12/bin/fds"));
+    snprintf(text, sizeof text, "#!/bin/sh\nreadlink /proc/$$/fd/%d || echo none\n", leak);
+    put_exec(prog, text);
+    const char *argv[] = { prog, NULL };
+    for (int k = 0; k < 2; k++) {
+        box_sandbox = k == 0;
+        isize len = 0;
+        BoxJob j = { .argv = argv, .ms = 3000, .out = out, .cap = sizeof out - 1, .len = &len };
+        CHECK(box_run(&j) == BOX_ENDED);
+        out[len] = 0;
+        CHECK(strcmp(out, "none\n") == 0);
+        BoxJob o = j;
+        o.outlive = true, len = 0;   // (the memfd's way too)
+        CHECK(box_run(&o) == BOX_ENDED);
+        out[len] = 0;
+        CHECK(strcmp(out, "none\n") == 0);
+    }
+    box_sandbox = true;
+    bool late = false;
+    Err err;
+    CHECK(spawn_capture(NULL, (char *[]){ prog, NULL }, out, sizeof out, 3000, &late, &err) && !late && strcmp(out, "none\n") == 0);
+    close(leak);
+}
+
+// The program the guard checks is the one that runs (code-health review, 2026-11-03): a folder
+// named as it first on PATH is no program, so the next one is found and checked (here outside the
+// root: refused), not run behind the check's back.
+static void test_prog_resolve(void)
+{
+    ops_guard(root);
+    char dir[PATH_MAX], far[PATH_MAX], ran[PATH_MAX], text[3 * PATH_MAX], path[3 * PATH_MAX];
+    snprintf(dir, sizeof dir, "%s", at("f12/pr/bin"));
+    mkdirs(at("f12/pr/bin/tool"));   // (a folder: access(X_OK) passes it)
+    snprintf(far, sizeof far, "%s/pr-bin", decoy);
+    snprintf(ran, sizeof ran, "%s/pr-ran", decoy);
+    mkdir(far, 0700);
+    unlink(ran);
+    snprintf(text, sizeof text, "%s/tool", far);
+    char body[2 * PATH_MAX];
+    snprintf(body, sizeof body, "#!/bin/sh\n/usr/bin/touch '%s'\n", ran);   // (PATH is the test's)
+    put_exec(text, body);
+    snprintf(path, sizeof path, "%s:%s", dir, far);
+    env_set("PATH", path);
+    Err err;
+    char full[PATH_MAX];
+    CHECK(prog_resolve("tool", full, sizeof full) && strcmp(full, text) == 0);
+    CHECK(!spawn_detached((char *[]){ "tool", NULL }, &err) && strstr(err.msg, "not run"));
+    nanosleep(&(struct timespec){ 0, 200 * 1000 * 1000 }, NULL);
+    CHECK(access(ran, F_OK) != 0);
+    // An empty PATH entry is no folder (posix_spawnp's would be the working one): with the working
+    // folder's tool outside the root and an allowed one on PATH, the allowed one runs.
+    char ok[PATH_MAX], okran[PATH_MAX], cwd[PATH_MAX];
+    snprintf(ok, sizeof ok, "%s", at("f12/pr/ok/tool"));
+    snprintf(okran, sizeof okran, "%s", at("f12/pr/ok-ran"));
+    mkdirs(at("f12/pr/ok"));
+    snprintf(body, sizeof body, "#!/bin/sh\n/usr/bin/touch '%s'\n", okran);
+    put_exec(ok, body);
+    snprintf(path, sizeof path, ":%s", at("f12/pr/ok"));
+    env_set("PATH", path);
+    CHECK(getcwd(cwd, sizeof cwd) && chdir(far) == 0);
+    CHECK(spawn_detached((char *[]){ "tool", NULL }, &err));
+    for (int i = 0; i < 120 && access(okran, F_OK) != 0; i++) nanosleep(&(struct timespec){ 0, 25 * 1000 * 1000 }, NULL);   // (3 s at most: a start under the mutants' load)
+    CHECK(access(okran, F_OK) == 0 && access(ran, F_OK) != 0);
+    CHECK(chdir(cwd) == 0);
+    env_restore(), env_restore(), env_restore();
 }
 
 // What git said (F12 step 5c): its last error or fatal line, without the word; else its last line.

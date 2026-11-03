@@ -537,7 +537,7 @@ MUTANTS = [
     ('gui/clear.c', '    app.ui.clearing = clear.running;\n', '', 'f12'),
     ('gui/clear.c', '    char *argv[] = { prog, "--all", NULL };', '    char *argv[] = { prog, NULL };', 'f12'),
     ('gui/actions.c', '    case UA_CLEAR_PREVIEWS: clear_start(); break;\n', '', 'f12'),
-    ('fs/spawn.c', '    posix_spawn_file_actions_adddup2(&fa, p[1], 1);   // (dup2 drops O_CLOEXEC on 1)\n', '', 'f12'),
+    ('fs/spawn.c', '    if (out >= 0) posix_spawn_file_actions_adddup2(&fa, out, 1);   // (dup2 drops O_CLOEXEC on 1)\n', '    if (false) posix_spawn_file_actions_adddup2(&fa, out, 1);   // (dup2 drops O_CLOEXEC on 1)\n', 'f12'),
     ('gui/clear.c', '        else set_status(strstr(say, "failed") != NULL, "Previews: %s", say);', '        else set_status(true, "Previews: %s", say);', 'f12'),
     # ---- the system's thumbnailers (F12 step 3): asked for, and ofx.conf's line
     ('gui/thumbs.c', '        if (kind == TK_NONE && thumbs.exec_on && (exec = thumbers_find(&thumbers, mime))) kind = TK_EXEC;', '        if (kind == TK_NONE && (exec = thumbers_find(&thumbers, mime))) kind = TK_EXEC;', 'f12'),

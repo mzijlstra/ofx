@@ -277,7 +277,7 @@ static void clean_drop(const CleanOpts *o, CleanStats *s, const char *const *dir
 // folder, each counted as a temporary file (F12 step 3 review).
 static void clean_runs(int rfd, const char *root, const CleanOpts *o, CleanStats *s)
 {
-    int dfd = dup(rfd);
+    int dfd = fcntl(rfd, F_DUPFD_CLOEXEC, 0);
     DIR *d = dfd >= 0 ? fdopendir(dfd) : NULL;
     if (!d) {
         if (dfd >= 0) close(dfd);
@@ -343,7 +343,7 @@ static void clean_run(Arena *a, const char *root, Str mountinfo, const CleanOpts
     CleanFile *files = NULL;   // pushed one by one, nothing else between: one array
     isize nf = 0;
     for (int i = 0; i < nd; i++) {
-        int dup_fd = dup(fds[i]);
+        int dup_fd = fcntl(fds[i], F_DUPFD_CLOEXEC, 0);
         DIR *dd = dup_fd >= 0 ? fdopendir(dup_fd) : NULL;
         if (!dd) {
             if (dup_fd >= 0) close(dup_fd);

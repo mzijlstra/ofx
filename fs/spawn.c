@@ -12,6 +12,7 @@
 #include <spawn.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 extern char **environ;
@@ -23,7 +24,15 @@ static void spawn_init(void)
     sigaction(SIGCHLD, &sa, NULL);
 }
 
-// The first executable file named prog in a PATH directory, into out; false when there is none.
+// Whether path is an executable file (not a folder: access(X_OK) passes one).
+static bool exec_file(const char *path)
+{
+    struct stat st;
+    return stat(path, &st) == 0 && S_ISREG(st.st_mode) && access(path, X_OK) == 0;
+}
+
+// The first executable file named prog in a PATH directory, into out; false when there is none (an
+// empty entry is skipped, not the working folder).
 static bool path_find(const char *prog, char *out, size_t cap)
 {
     const char *path = getenv("PATH");
@@ -31,10 +40,16 @@ static bool path_find(const char *prog, char *out, size_t cap)
     for (isize at = 0; at <= p.len;) {
         isize e = at;
         while (e < p.len && p.p[e] != ':') e++;
-        if (e > at && snprintf(out, cap, "%.*s/%s", (int)(e - at), p.p + at, prog) < (int)cap && access(out, X_OK) == 0) return true;
+        if (e > at && snprintf(out, cap, "%.*s/%s", (int)(e - at), p.p + at, prog) < (int)cap && exec_file(out)) return true;
         at = e + 1;
     }
     return false;
+}
+
+// prog as it will run, into out: as given with a /, else as PATH finds it.
+static bool prog_resolve(const char *prog, char *out, size_t cap)
+{
+    return strchr(prog, '/') ? snprintf(out, cap, "%s", prog) < (int)cap && exec_file(out) : path_find(prog, out, cap);
 }
 
 // Whether prog is an executable file in a PATH directory.
@@ -48,31 +63,47 @@ static int spawn_started;   // programs started, for the GUI scripts' state line
 
 static bool ops_program_allowed(const char *prog, Err *err);
 
-// Runs argv (argv[0] looked up on PATH) detached. False, with the reason, when it can't start, or
-// when the test guard refuses it: with the guard on only a test's own fake runs (uwsm-app, which
-// every launch goes through; F10 review, 2026-11-01: without it on PATH an editor would start).
-static bool spawn_detached(char *const *argv, Err *err)
+// argv started (argv[0] looked up on PATH once, and that file run: the one the guard checked, not
+// another PATH search's; a review, 2026-11-03), in a session of its own, its signals unblocked
+// (gui/main.c blocks SIGTERM and SIGINT in every thread: a terminal started from ofx would ignore
+// Ctrl+C), /dev/null for its input, out for its output (-1: /dev/null) and its errors too when
+// err_too (else ofx's), and none of ofx's other fds (a folder's fd a copy job holds would keep a
+// USB drive busy for as long as a terminal ran). False, with the reason, when it can't start or the
+// test guard refuses check (the program that runs in the end: udisksctl under eject's sh -c; NULL:
+// argv[0]).
+static bool spawn_with(const char *check, char *const *argv, int out, bool err_too, pid_t *pid, Err *err)
 {
-    if (!ops_program_allowed(argv[0], err)) return false;
+    char full[PATH_MAX];
+    if (!ops_program_allowed(check ? check : argv[0], err)) return false;
+    if (!prog_resolve(argv[0], full, sizeof full)) return err_set(err, "%s is not installed", argv[0]), false;
     posix_spawnattr_t attr;
     posix_spawn_file_actions_t fa;
     posix_spawnattr_init(&attr);
-    // The child must not inherit ofx's blocked SIGTERM and SIGINT (gui/main.c blocks them in every
-    // thread): a terminal started from ofx would ignore Ctrl+C.
     sigset_t none;
     sigemptyset(&none);
     posix_spawnattr_setsigmask(&attr, &none);
     posix_spawnattr_setflags(&attr, POSIX_SPAWN_SETSID | POSIX_SPAWN_SETSIGMASK);
     posix_spawn_file_actions_init(&fa);
     posix_spawn_file_actions_addopen(&fa, 0, "/dev/null", O_RDONLY, 0);
-    posix_spawn_file_actions_addopen(&fa, 1, "/dev/null", O_WRONLY, 0);
-    pid_t pid;
-    int rc = posix_spawnp(&pid, argv[0], &fa, &attr, argv, environ);
+    if (out >= 0) posix_spawn_file_actions_adddup2(&fa, out, 1);   // (dup2 drops O_CLOEXEC on 1)
+    else posix_spawn_file_actions_addopen(&fa, 1, "/dev/null", O_WRONLY, 0);
+    if (out >= 0 && err_too) posix_spawn_file_actions_adddup2(&fa, out, 2);
+    posix_spawn_file_actions_addclosefrom_np(&fa, 3);
+    int rc = posix_spawn(pid, full, &fa, &attr, argv, environ);
     posix_spawn_file_actions_destroy(&fa);
     posix_spawnattr_destroy(&attr);
     if (rc != 0) return err_set(err, "%s: %s", argv[0], strerror(rc)), false;
     spawn_started++;
     return true;
+}
+
+// Runs argv detached. False, with the reason, when it can't start, or when the test guard refuses
+// it: with the guard on only a test's own fake runs (uwsm-app, which every launch goes through; F10
+// review, 2026-11-01: without it on PATH an editor would start).
+static bool spawn_detached(char *const *argv, Err *err)
+{
+    pid_t pid;
+    return spawn_with(NULL, argv, -1, false, &pid, err);
 }
 
 // As spawn_detached, with the child's output on a pipe: its read end into *out (the caller reads it
@@ -81,25 +112,11 @@ static bool spawn_detached(char *const *argv, Err *err)
 static bool spawn_piped(char *const *argv, int *out, Err *err)
 {
     int p[2];
-    if (!ops_program_allowed(argv[0], err)) return false;
-    if (pipe2(p, O_CLOEXEC) != 0) return err_set(err, "a pipe: %s", strerror(errno)), false;
-    posix_spawnattr_t attr;
-    posix_spawn_file_actions_t fa;
-    posix_spawnattr_init(&attr);
-    sigset_t none;
-    sigemptyset(&none);
-    posix_spawnattr_setsigmask(&attr, &none);
-    posix_spawnattr_setflags(&attr, POSIX_SPAWN_SETSID | POSIX_SPAWN_SETSIGMASK);
-    posix_spawn_file_actions_init(&fa);
-    posix_spawn_file_actions_addopen(&fa, 0, "/dev/null", O_RDONLY, 0);
-    posix_spawn_file_actions_adddup2(&fa, p[1], 1);   // (dup2 drops O_CLOEXEC on 1)
     pid_t pid;
-    int rc = posix_spawnp(&pid, argv[0], &fa, &attr, argv, environ);
-    posix_spawn_file_actions_destroy(&fa);
-    posix_spawnattr_destroy(&attr);
+    if (pipe2(p, O_CLOEXEC) != 0) return err_set(err, "a pipe: %s", strerror(errno)), false;
+    bool ok = spawn_with(NULL, argv, p[1], false, &pid, err);
     close(p[1]);
-    if (rc != 0) return close(p[0]), err_set(err, "%s: %s", argv[0], strerror(rc)), false;
-    spawn_started++;
+    if (!ok) return close(p[0]), false;
     *out = p[0];
     return true;
 }
@@ -179,31 +196,14 @@ static bool spawn_terminal(const char *dir, Err *err)
 static bool spawn_capture(const char *prog, char *const *argv, char *out, size_t cap, int timeout_ms, bool *timed_out, Err *err)
 {
     *timed_out = false;
-    // The test guard asked here, as spawn_detached does (F11 review, 2026-11-02): prog is what runs in
-    // the end (udisksctl under eject's sh -c), argv[0] without one.
-    if (!ops_program_allowed(prog ? prog : argv[0], err)) return false;
+    // The test guard asks for prog (F11 review, 2026-11-02): what runs in the end (udisksctl under
+    // eject's sh -c), argv[0] without one.
     int fd[2];
-    if (pipe2(fd, O_CLOEXEC) != 0) return err_set(err, "pipe: %s", strerror(errno)), false;
-    posix_spawnattr_t attr;
-    posix_spawn_file_actions_t fa;
-    posix_spawnattr_init(&attr);
-    sigset_t none;
-    sigemptyset(&none);
-    posix_spawnattr_setsigmask(&attr, &none);
-    posix_spawnattr_setflags(&attr, POSIX_SPAWN_SETSID | POSIX_SPAWN_SETSIGMASK);
-    posix_spawn_file_actions_init(&fa);
-    posix_spawn_file_actions_addopen(&fa, 0, "/dev/null", O_RDONLY, 0);
-    posix_spawn_file_actions_adddup2(&fa, fd[1], 1);
-    posix_spawn_file_actions_adddup2(&fa, fd[1], 2);
     pid_t pid;
-    int rc = posix_spawnp(&pid, argv[0], &fa, &attr, argv, environ);
-    posix_spawn_file_actions_destroy(&fa);
-    posix_spawnattr_destroy(&attr);
+    if (pipe2(fd, O_CLOEXEC) != 0) return err_set(err, "pipe: %s", strerror(errno)), false;
+    bool ok = spawn_with(prog, argv, fd[1], true, &pid, err);
     close(fd[1]);
-    if (rc != 0) {
-        close(fd[0]);
-        return err_set(err, "%s: %s", argv[0], strerror(rc)), false;
-    }
+    if (!ok) return close(fd[0]), false;
     // Read to the end (the child must not block on a full pipe), keeping what fits.
     size_t n = 0;
     char chunk[512];
