@@ -28,10 +28,12 @@ static struct {
 static void *eject_thread(void *arg)
 {
     (void)arg;
-    const char *argv[6];
+    const char *argv[7];
+    char udisks[PATH_MAX] = "udisksctl";   // (eject's sh -c runs it as resolved)
+    if (!prog_resolve("udisksctl", udisks, sizeof udisks)) snprintf(udisks, sizeof udisks, "udisksctl");
     if (ej.op == DRIVE_MOUNT) mount_argv(ej.dev, argv);
     else if (ej.op == DRIVE_UNMOUNT) unmount_argv(ej.dev, argv);
-    else eject_argv(ej.dev, argv);   // dev and op are not written while busy
+    else eject_argv(ej.dev, udisks, argv);   // dev and op are not written while busy
     static char out[4096];
     static char at[PATH_MAX];
     Err err;
@@ -40,7 +42,7 @@ static void *eject_thread(void *arg)
     bool late, mounted = false;
     at[0] = 0;
     int limit = ej.op == DRIVE_MOUNT ? MOUNT_TIMEOUT_MS : EJECT_TIMEOUT_MS;
-    if (!spawn_capture("udisksctl", (char *const *)argv, out, sizeof out, limit, &late, &err)) snprintf(why, sizeof why, "%s", err.msg);
+    if (!spawn_capture(udisks, (char *const *)argv, out, sizeof out, limit, &late, &err)) snprintf(why, sizeof why, "%s", err.msg);
     else if (ej.op == DRIVE_MOUNT) mounted = mount_result(str_from_c(out), at, sizeof at, why, sizeof why);
     else r = eject_result(str_from_c(out), why, sizeof why);
     if (late) snprintf(why, sizeof why, "udisksctl gave no answer in %d s", limit / 1000), mounted = false;

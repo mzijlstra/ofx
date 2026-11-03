@@ -7,7 +7,9 @@
 #   tests/fm1/run.sh <absolute scratch> <absolute ofx-fm1>
 set -eu
 S=$1 BIN=$2
-case $S in /*) ;; *) echo "fm1: the scratch folder must be absolute" >&2; exit 2 ;; esac
+# (it is removed whole: only a folder named for this test, never a typo's / or home; code-health
+# review, 2026-11-03)
+case $S in /*/fm1-test | /*/fm1-test-*) ;; *) echo "fm1: the scratch folder must be absolute and named fm1-test: '$S'" >&2; exit 2 ;; esac
 rm -rf "$S"
 # The bus's socket in a short folder of its own: a unix socket's path is at most 107 bytes, and a
 # long scratch path overran it (a review).

@@ -29,7 +29,7 @@ sh printf 'k\n' > "$OFX_DIR/kept.txt"
 # The window asleep meanwhile: the timer wakes it for the ask put off.
 idle
 expect idlewoke=timer
-wait-for 3000 gitn=3
+wait-for 5000 gitn=3
 # A commit from elsewhere: its index changes, asked again (the folder's files didn't change).
 sh cd "$OFX_DIR" && GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null git -c user.name=t -c user.email=t@t commit -qam two
 wait-for 3000 gitn=1 gitsel=- gitcells=1
@@ -61,5 +61,6 @@ wait-for 3000 gitshown=1
 sh printf 'git-status = off\n' >> "$OFX_ROOT/config/ofx/ofx.conf"
 wait-for 3000 gitshown=0
 sh sed -i 's/^git-status = off$/git-status = on/' "$OFX_ROOT/config/ofx/ofx.conf"
-wait-for 3000 gitshown=1
+# (asked again as a reload is: the test's 3 s gap since the last ask)
+wait-for 6000 gitshown=1
 quit

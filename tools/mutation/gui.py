@@ -496,7 +496,7 @@ MUTANTS = [
     ('gui/git.c', '    watch_git(git.slot[s].repo ? git.slot[s].gitdir : NULL);\n', '', 'f12g'),
     ('gui/git.c', '    if (g->ignored) return GS_IGNORED;\n', '', 'f12g'),
     ('gui/folder.c', '    else git_ask_soon();\n', '', 'f12g'),
-    ('gui/git.c', '    if (none || now - git.last >= GIT_ASK_GAP_MS) git_ask(app.cwd);', '    if (true) git_ask(app.cwd);', 'f12g'),
+    ('gui/git.c', '    if (none || now - git.last >= git_gap_ms) git_ask(app.cwd);', '    if (true) git_ask(app.cwd);', 'f12g'),
     ('gui/git.c', '    if (git.due && now_ms() >= git.due) git_ask(app.cwd), timer_at(wake_due());', '    if (false) git_ask(app.cwd);', 'f12g'),
     ('gui/git.c', '    bool none = !app.conf.git_status || !git_top(app.cwd, top, sizeof top);', '    bool none = !app.conf.git_status;', 'f62'),
     # F12 step 5b: the branch button and its menu

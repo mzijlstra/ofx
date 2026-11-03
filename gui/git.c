@@ -6,6 +6,10 @@
 
 static _Alignas(4096) u8 git_mem[2][GIT_OUT_MAX + MiB(8)];   // (the output, and its tables)
 
+// The least time between two asks for the folder shown (git_ask_soon).
+enum { GIT_ASK_GAP_MS = 1000 };
+static int git_gap_ms = GIT_ASK_GAP_MS;   // (OFX_TEST_GIT_GAP_MS: f12g's 3 s, so a loaded machine can't spend it before the check; health step 1 review)
+
 typedef struct {
     Arena   a;
     GitStat g;
@@ -114,6 +118,7 @@ static void git_start(void)
     for (int i = 0; i < 2; i++) arena_init(&git.slot[i].a, "git", git_mem[i], sizeof git_mem[i]);
     git_run_ms = env_int("OFX_TEST_GIT_RUN_MS", GIT_RUN_MS, 1, GIT_RUN_MS);
     git_switch_ms = env_int("OFX_TEST_GIT_SWITCH_MS", GIT_SWITCH_MS, 1, GIT_SWITCH_MS);
+    git_gap_ms = env_int("OFX_TEST_GIT_GAP_MS", GIT_ASK_GAP_MS, 1, 10 * GIT_ASK_GAP_MS);
     git.started = pthread_create(&git.th, NULL, git_loop, NULL) == 0;
 }
 
@@ -135,14 +140,13 @@ static i64 wake_due(void);
 // batch; on a 30k-file repo each was 310-340 ms). Going to a folder asks at once (git_ask). Also at
 // once outside a repository, or with git-status off: no git runs then, and a timer put off for it
 // would wake the window before a tooltip's.
-enum { GIT_ASK_GAP_MS = 1000 };
 static void git_ask_soon(void)
 {
     char top[PATH_MAX];
     bool none = !app.conf.git_status || !git_top(app.cwd, top, sizeof top);   // (a realpath and a few lstats)
     i64 now = now_ms();
-    if (none || now - git.last >= GIT_ASK_GAP_MS) git_ask(app.cwd);
-    else if (!git.due) git.due = git.last + GIT_ASK_GAP_MS, timer_at(wake_due());
+    if (none || now - git.last >= git_gap_ms) git_ask(app.cwd);
+    else if (!git.due) git.due = git.last + git_gap_ms, timer_at(wake_due());
 }
 
 // Each frame: an ask put off, made when due; then the timer set for what else waits (one timer: a

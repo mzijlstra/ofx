@@ -95,7 +95,6 @@ MUTANTS = [
     ('fs/spawn.c', '    return stat(path, &st) == 0 && S_ISREG(st.st_mode) && access(path, X_OK) == 0;', '    return stat(path, &st) == 0 && S_ISREG(st.st_mode) && access(path, F_OK) == 0;'),
     ('fs/spawn.c', '    posix_spawnattr_setflags(&attr, POSIX_SPAWN_SETSID | POSIX_SPAWN_SETSIGMASK);\n    posix_spawn_file_actions_init(&fa);\n    posix_spawn_file_actions_addopen(&fa, 0, "/dev/null", O_RDONLY, 0);\n    if (out >= 0)', '    posix_spawnattr_setflags(&attr, POSIX_SPAWN_SETSIGMASK);\n    posix_spawn_file_actions_init(&fa);\n    posix_spawn_file_actions_addopen(&fa, 0, "/dev/null", O_RDONLY, 0);\n    if (out >= 0)'),
     (P, "if (on_path(\"uwsm-app\")) argv[k++] = \"uwsm-app\", argv[k++] = \"--\";", ""),
-    (P, "    if (strchr(argv[0], '/') ? access(argv[0], X_OK) != 0 : !on_path(argv[0])) return err_set(err, \"%s is not installed\", argv[0]), false;\n", ""),
     (P, "snprintf(arg, sizeof arg, \"--dir=%s\", dir);", "snprintf(arg, sizeof arg, \"%s\", dir);"),
     # ---- ui
     ('ui/cursor.c', "    return all > rows ? (all - rows) * c : 0;", "    return all > rows ? (all - rows + 1) * c : 0;"),
@@ -610,7 +609,7 @@ MUTANTS += [
     ('fs/spawn.c', '    if (out >= 0 && err_too) posix_spawn_file_actions_adddup2(&fa, out, 2);\n', ''),
     (SP, "        n += take;", "        n += (size_t)r;"),
     (SP, "(size_t)r < room ? (size_t)r : room;", "(size_t)r;"),
-    (SP, "\"udisksctl unmount -b \\\"$1\\\" && echo OFX-UNMOUNTED && udisksctl power-off", "\"udisksctl unmount -b \\\"$1\\\"; echo OFX-UNMOUNTED && udisksctl power-off"),
+    ('fs/spawn.c', '"\\"$2\\" unmount -b \\"$1\\" && echo OFX-UNMOUNTED && \\"$2\\" power-off', '"\\"$2\\" unmount -b \\"$1\\"; echo OFX-UNMOUNTED && \\"$2\\" power-off'),
     (SP, "    return done && unmounted ? EJECT_DONE : unmounted ? EJECT_UNMOUNTED : EJECT_FAILED;", "    return done ? EJECT_DONE : unmounted ? EJECT_UNMOUNTED : EJECT_FAILED;"),
     (SP, "        else if (line.len && !why[0]) snprintf(why, cap, \"%.*s\", STR_ARG(line));", "        else if (line.len) snprintf(why, cap, \"%.*s\", STR_ARG(line));"),
     (SP, "        line = str_trim(line);\n        if (str_eq(line, S(\"OFX-UNMOUNTED\")))", "        if (str_eq(line, S(\"OFX-UNMOUNTED\")))"),
@@ -899,8 +898,6 @@ MUTANTS += [
     (N, "            if (lstat(it->to, &st) != 0 || !S_ISREG(st.st_mode)) return err_set(err, \"%s isn't a file now: can't undo\", it->to), false;", ""),
     (N, "        case UNDO_MKFILE: one = ops_allowed(it->to, &e) && (unlink", "        case UNDO_MKFILE: one = (unlink"),
     (N, "|| u->kind == UNDO_MKDIR || u->kind == UNDO_MKFILE || u->kind == UNDO_CHMOD) snprintf", "|| u->kind == UNDO_MKDIR || u->kind == UNDO_CHMOD) snprintf"),
-    (SP, "    if (strchr(argv[0], '/') ? access(argv[0], X_OK) != 0 : !on_path(argv[0]))", "    if (!on_path(argv[0]))"),
-    (SP, "    if (strchr(argv[0], '/') ? access(argv[0], X_OK) != 0 : !on_path(argv[0]))", "    if (strchr(argv[0], '/') ? false : !on_path(argv[0]))"),
     (W, "    if (t && t[0] == '/') n = snprintf(out, cap, \"%s\", t);", "    if (t && t[0]) n = snprintf(out, cap, \"%s\", t);"),
     (W, "    for (int field = 3; field < 22; field++) {", "    for (int field = 3; field < 21; field++) {"),
     (W, "    char *s = strrchr(buf, ')');", "    char *s = strchr(buf, ')');"),
@@ -2155,7 +2152,7 @@ MUTANTS += [
 ]
 MUTANTS += [
     # F10 review step 4: every launch through the test guard (2026-11-01)
-    ('fs/spawn.c', '    if (!ops_program_allowed(check ? check : argv[0], err)) return false;\n', '    (void)check;\n'),
+    ('fs/spawn.c', '    if (!ops_program_allowed(check ? check : full, err)) return false;   // (the file found, not a second search)\n', '    (void)check;\n'),
     ('fs/spawn.c', '    return strchr(prog, \'/\') ? snprintf(out, cap, "%s", prog) < (int)cap && exec_file(out) : path_find(prog, out, cap);', '    return path_find(prog, out, cap);'),
 ]
 # ---- F11 step 1: per-folder view, zoom, sort; Show Hidden; the cursor; housekeeping (2026-11-01)
@@ -2251,7 +2248,7 @@ MUTANTS += [
 ]
 MUTANTS += [
     # F11 milestone review, step 2: the guard's gaps (2026-11-02)
-    ('fs/spawn.c', '    if (!ops_program_allowed(check ? check : argv[0], err)) return false;\n', '    if (!ops_program_allowed(argv[0], err)) return false;\n'),
+    ('fs/spawn.c', '    if (!ops_program_allowed(check ? check : full, err)) return false;   // (the file found, not a second search)\n', '    if (!ops_program_allowed(full, err)) return false;\n'),
     ('fs/trash.c', ' || !ops_allowed(t->file, err) || !ops_allowed(t->info, err)) return false;', ') return false;'),
     # Not a mutant: state_write's O_EXCL | O_NOFOLLOW as O_TRUNC (the unlink before it takes a link
     # out; only a race between the two would reach one).
@@ -2460,4 +2457,5 @@ MUTANTS += [
     ('fs/spawn.c', '    return stat(path, &st) == 0 && S_ISREG(st.st_mode) && access(path, X_OK) == 0;', '    return access(path, X_OK) == 0;'),
     ('fs/spawn.c', '    int rc = posix_spawn(pid, full, &fa, &attr, argv, environ);', '    int rc = posix_spawnp(pid, argv[0], &fa, &attr, argv, environ);'),
     ('fs/git.c', '    if (binds.common[0] && !ops_allowed(binds.common, &err)) return', '    if (false) return'),
+    ('fs/spawn.c', 'argv[2] = "\\"$2\\" unmount -b \\"$1\\" && echo OFX-UNMOUNTED && \\"$2\\" power-off -b \\"$1\\" && echo OFX-EJECTED";', 'argv[2] = "udisksctl unmount -b \\"$1\\" && echo OFX-UNMOUNTED && udisksctl power-off -b \\"$1\\" && echo OFX-EJECTED";'),
 ]

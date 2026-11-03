@@ -69,13 +69,13 @@ static bool ops_program_allowed(const char *prog, Err *err);
 // Ctrl+C), /dev/null for its input, out for its output (-1: /dev/null) and its errors too when
 // err_too (else ofx's), and none of ofx's other fds (a folder's fd a copy job holds would keep a
 // USB drive busy for as long as a terminal ran). False, with the reason, when it can't start or the
-// test guard refuses check (the program that runs in the end: udisksctl under eject's sh -c; NULL:
-// argv[0]).
+// test guard refuses check (the program that runs in the end: udisksctl under eject's sh -c, given
+// as resolved; NULL: argv[0]'s file).
 static bool spawn_with(const char *check, char *const *argv, int out, bool err_too, pid_t *pid, Err *err)
 {
     char full[PATH_MAX];
-    if (!ops_program_allowed(check ? check : argv[0], err)) return false;
     if (!prog_resolve(argv[0], full, sizeof full)) return err_set(err, "%s is not installed", argv[0]), false;
+    if (!ops_program_allowed(check ? check : full, err)) return false;   // (the file found, not a second search)
     posix_spawnattr_t attr;
     posix_spawn_file_actions_t fa;
     posix_spawnattr_init(&attr);
@@ -131,7 +131,6 @@ static bool spawn_app(const char *const *cmd, isize n, Err *err)
     if (on_path("uwsm-app")) argv[k++] = "uwsm-app", argv[k++] = "--";
     for (isize i = 0; i < n && k < COUNT(argv) - 1; i++) argv[k++] = cmd[i];
     argv[k] = NULL;
-    if (strchr(argv[0], '/') ? access(argv[0], X_OK) != 0 : !on_path(argv[0])) return err_set(err, "%s is not installed", argv[0]), false;
     return spawn_detached((char *const *)argv, err);
 }
 
@@ -252,13 +251,14 @@ static bool spawn_gio_type(const char *path, char *out, size_t cap, int timeout_
     return true;
 }
 
-// The command that ejects the drive dev: unmount, then power off, each step saying it went (an
-// exit status can't be read, spawn_capture).
-static void eject_argv(const char *dev, const char **argv)
+// The command that ejects the drive dev with udisksctl, the program as resolved (prog_resolve: the
+// one the guard checks, not the shell's own PATH search; health step 1 review, 2026-11-03): unmount,
+// then power off, each step saying it went (an exit status can't be read, spawn_capture).
+static void eject_argv(const char *dev, const char *udisks, const char **argv)
 {
     argv[0] = "sh", argv[1] = "-c";
-    argv[2] = "udisksctl unmount -b \"$1\" && echo OFX-UNMOUNTED && udisksctl power-off -b \"$1\" && echo OFX-EJECTED";
-    argv[3] = "sh", argv[4] = dev, argv[5] = NULL;
+    argv[2] = "\"$2\" unmount -b \"$1\" && echo OFX-UNMOUNTED && \"$2\" power-off -b \"$1\" && echo OFX-EJECTED";
+    argv[3] = "sh", argv[4] = dev, argv[5] = udisks, argv[6] = NULL;
 }
 
 // Mount (2026-10-30): an unmounted drive's row runs `udisksctl mount -b <dev>`, which mounts it under

@@ -78,20 +78,24 @@ def run(work, cc='clang'):
     # Michael 2026-11-03) only when those pass, so a mutant they kill doesn't wait for git.
     for group in ('fast', 'slow'):
         env = dict(os.environ, TMPDIR=os.path.join(work, 'tmp'), OFX_TEST_GROUP=group)
-        # 10 s each: a group takes 1.5-4 s, and a mutant that hangs them (#172 waited 120 s here,
+        # 10 s for the fast group, 30 for the slow one (1.5 and 4 s alone; at a load of 15 the slow
+        # one ran past 10, 2026-11-03), and a mutant that hangs them (#172 waited 120 s here,
         # holding up a whole pass) is killed by the timeout either way. In its own process group,
         # killed whole afterwards: a test killed or crashed early leaves the children it forks
         # (test_f7's paused ones) behind, 264 of them by 2026-10-29.
-        t = subprocess.Popen([exe], cwd=work, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env,
+        # (its output kept in the worker's tmp: a baseline that fails says which checks, 2026-11-03)
+        log = open(os.path.join(work, 'tmp', 'test.out'), 'w')
+        t = subprocess.Popen([exe], cwd=work, stdout=log, stderr=subprocess.STDOUT, env=env,
                              start_new_session=True)
         try:
-            code = t.wait(timeout=10)
+            code = t.wait(timeout=10 if group == 'fast' else 30)
         finally:
             try:
                 os.killpg(t.pid, signal.SIGKILL)
             except ProcessLookupError:
                 pass
             t.wait()
+            log.close()
         if code != 0:
             return 'fail'
     return 'pass'
@@ -132,6 +136,10 @@ try:
             bases = list(pool.map(lambda w: run(w, cc), workers))
         if any(b != 'pass' for b in bases):
             print(f'baseline does not pass under {cc} in every worker:', bases)
+            for w, b in zip(workers, bases):
+                if b == 'fail':
+                    lines = [l for l in open(os.path.join(w, 'tmp', 'test.out'), errors='replace') if 'failed' in l or 'Sanitizer' in l]
+                    print(f'  {os.path.basename(w)}:', ''.join(lines[-6:]) or '(no failed check: killed by its timeout?)', end='')
             sys.exit(2)
     print(f'baseline passes under {" and ".join(passes)} in {jobs} workers at once', flush=True)
     todo = list(enumerate(mutants))

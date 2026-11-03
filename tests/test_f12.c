@@ -317,8 +317,10 @@ static void test_thumb_exec(void)
     q = ask(clip[3], TK_EXEC, 48, cache), q.exec = exec;
     i64 t0 = now_ms();
     CHECK(thumb_get(&a, &q, &out) == TG_NONE && now_ms() - t0 < 2500 && !sleeping(hang));
+    thumb_run_ms = THUMB_RUN_MS;   // (the next isn't a hang: 100 ms failed it under load)
     snprintf(exec, sizeof exec, "%s/none %%i %%o", bin);   // (no fail entry: a run that makes none is new)
     CHECK(thumb_get(&a, &q, &out) == TG_FAILED);
+    thumb_run_ms = 100;
     // Without bubblewrap too (its group); and one that wrote its PNG first doesn't count.
     snprintf(exec, sizeof exec, "%s/hang %%i %%o", bin);
     box_sandbox = false;
@@ -592,7 +594,9 @@ static void test_spawn_piped(void)
 static int sh_in(const char *dir, const char *line)
 {
     char cmd[4 * PATH_MAX];
-    snprintf(cmd, sizeof cmd, "cd '%s' && GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null HOME='%s' %s > /dev/null 2>&1", dir, root, line);
+    // (the ceiling: a repository that failed to be made doesn't send git on to one above the root,
+    // ofx's own; code-health review, 2026-11-03)
+    snprintf(cmd, sizeof cmd, "cd '%s' && GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_CEILING_DIRECTORIES='%s' HOME='%s' %s > /dev/null 2>&1", dir, root, root, line);
     return system(cmd);
 }
 
@@ -610,6 +614,7 @@ static bool gs_run(Arena *a, const char *git, const char *dir, const char *top, 
 
 static void test_git_status(void)
 {
+    git_run_ms = 4 * GIT_RUN_MS;   // (the mutants' load: a status took over 3 s; 2026-11-03)
     Arena a;
     arena_init(&a, "git status test", thumbers_test_mem, sizeof thumbers_test_mem);
     ops_guard(root);
@@ -622,7 +627,7 @@ static void test_git_status(void)
     CHECK(sh_in(repo, "git init -q -b main . && git -c user.name=t -c user.email=t@t commit -q --allow-empty -m 0") == 0);
     put(at("f12/gs/repo/kept.txt"), "k\n"), put(at("f12/gs/repo/src/b.txt"), "b\n"), put(at("f12/gs/repo/.gitignore"), "*.log\n");
     CHECK(sh_in(repo, "git add -A && git -c user.name=t -c user.email=t@t commit -q -m 1") == 0);
-    put(at("f12/gs/repo/kept.txt"), "k2\n"), put(at("f12/gs/repo/src/new.txt"), "n\n"), put(at("f12/gs/repo/x.log"), "l\n");
+    put(at("f12/gs/repo/kept.txt"), "j\n"),   /* (its size unchanged: git hashes it, so its clean filter runs, whatever the index timing) */ put(at("f12/gs/repo/src/new.txt"), "n\n"), put(at("f12/gs/repo/x.log"), "l\n");
     CHECK(sh_in(repo, "git add src/new.txt") == 0);
     // A repository config that would run programs: an fsmonitor, a clean filter writing outside.
     char pwned[PATH_MAX], cfg[3 * PATH_MAX];
@@ -754,6 +759,7 @@ static void test_git_reflog_tail(void)
 // branches by commit date, the checkouts first; a worktree's own reflog; git not answering, none.
 static void test_git_branches(void)
 {
+    git_run_ms = 4 * GIT_RUN_MS;   // (the mutants' load: a status took over 3 s; 2026-11-03)
     ops_guard(root);
     env_set("HOME", root), env_set("XDG_CONFIG_HOME", at("f12/xdg"));
     char repo[PATH_MAX], git[PATH_MAX], top[PATH_MAX];
@@ -842,12 +848,23 @@ static void test_branch_keys(void)
     CHECK(u.crumb_at == 3);
 }
 
+// The process pid (asking a job) killed once marker exists: the job under way (a timer killed it
+// before, and under the mutants' load that could come before the job had started; 2026-11-03).
+static void kill_once(pid_t pid, const char *marker)
+{
+    int st;
+    for (int i = 0; i < 200 && access(marker, F_OK) != 0; i++) nanosleep(&(struct timespec){ 0, 25 * 1000 * 1000 }, NULL);   // (5 s at most)
+    kill(pid, SIGKILL);
+    waitpid(pid, &st, 0);
+}
+
 // git_switch (F12 step 5c) on a scratch repository, the real git behind the wrapper, in bubblewrap
 // with the repository writable: a switch; git's refusal said (local changes, a branch that isn't);
 // a hook runs, writing inside the repository and not outside (it can without the sandbox: it does
 // run); a worktree's switch (its real .git writable); the guard; an option for a name.
 static void test_git_switch(void)
 {
+    git_run_ms = 4 * GIT_RUN_MS;   // (the mutants' load: a status took over 3 s; 2026-11-03)
     ops_guard(root);
     env_set("HOME", root), env_set("XDG_CONFIG_HOME", at("f12/xdg"));
     char repo[PATH_MAX], git[PATH_MAX], top[PATH_MAX], gitdir[PATH_MAX], msg[256], cmd[3 * PATH_MAX];
@@ -896,17 +913,19 @@ static void test_git_switch(void)
     CHECK(git_head_is(gitdir, "wtb"));
     CHECK(git_switch(git, top, "feat", msg, sizeof msg) == GSW_DONE);
     put_exec(git, "#!/bin/sh\nexec /usr/bin/git \"$@\"\n");
-    // ofx gone in the middle of a switch: it still finishes (a slow git, the process asking it killed).
-    put_exec(git, "#!/bin/sh\nsleep 0.3\nexec /usr/bin/git \"$@\"\n");
+    // ofx gone in the middle of a switch: it still finishes (a slow git, the process asking it killed
+    // once git started; its mark in the repository's .git, writable in the box).
+    char mark[PATH_MAX + 16], wrap[3 * PATH_MAX];
+    snprintf(mark, sizeof mark, "%s", at("f12/sw/repo/.git/switching"));
+    unlink(mark);
+    snprintf(wrap, sizeof wrap, "#!/bin/sh\n/usr/bin/touch '%s'\nsleep 0.3\nexec /usr/bin/git \"$@\"\n", mark);
+    put_exec(git, wrap);
     pid_t pid = fork();
     if (pid == 0) {
-        signal(SIGALRM, SIG_DFL);
-        ualarm(100000, 0);
         git_switch(git, top, "wtb", msg, sizeof msg);
         _exit(0);
     }
-    int st;
-    waitpid(pid, &st, 0);
+    kill_once(pid, mark);
     for (int i = 0; i < 40 && !git_head_is(gitdir, "wtb"); i++) nanosleep(&(struct timespec){ 0, 50 * 1000 * 1000 }, NULL);
     CHECK(git_head_is(gitdir, "wtb"));
     CHECK(git_switch(git, top, "feat", msg, sizeof msg) == GSW_DONE);
@@ -916,20 +935,20 @@ static void test_git_switch(void)
     char flt[PATH_MAX], ftop[PATH_MAX], fdir[PATH_MAX];
     snprintf(flt, sizeof flt, "%s", at("f12/sw/flt"));
     mkdirs(flt);
-    put_exec(at("f12/sw/mkflt.sh"), "git init -q -b main . && git config filter.slow.smudge 'sh -c \"sleep 0.02; echo smudged >&2; cat\"' && git config filter.slow.clean cat &&\n"
+    put_exec(at("f12/sw/mkflt.sh"), "git init -q -b main . && git config filter.slow.smudge 'sh -c \"touch .git/smudging; sleep 0.02; echo smudged >&2; cat\"' && git config filter.slow.clean cat &&\n"
                                     "echo '*.txt filter=slow' > .gitattributes && for i in 0 1 2 3 4 5 6 7 8 9; do echo m$i > f$i.txt; done && git add -A && git -c user.name=t -c user.email=t@t commit -qm m &&\n"
                                     "git switch -q -c b && for i in 0 1 2 3 4 5 6 7 8 9; do echo b$i > f$i.txt; done && git -c user.name=t -c user.email=t@t commit -qam b && git switch -q main\n");
     CHECK(sh_in(flt, "sh ../mkflt.sh") == 0);
     CHECK(git_top(flt, ftop, sizeof ftop));
     git_gitdir(ftop, fdir, sizeof fdir);
+    snprintf(mark, sizeof mark, "%s/smudging", fdir);
+    unlink(mark);   // (its setup's own switch made one)
     pid = fork();
     if (pid == 0) {
-        signal(SIGALRM, SIG_DFL);
-        ualarm(50000, 0);
         git_switch(git, ftop, "b", msg, sizeof msg);
         _exit(0);
     }
-    waitpid(pid, &st, 0);
+    kill_once(pid, mark);   // (at the filter's first file: the rest still to come)
     for (int i = 0; i < 60 && !git_head_is(fdir, "b"); i++) nanosleep(&(struct timespec){ 0, 50 * 1000 * 1000 }, NULL);
     char lock[PATH_MAX + 16];
     snprintf(lock, sizeof lock, "%s/index.lock", fdir);
@@ -959,8 +978,8 @@ static void test_git_switch(void)
 }
 
 // A job that outlives ofx (F12 step 5c: a switch): ofx gone in the middle, it still finishes; any
-// other is killed with it. Each from a process a timer kills as it waits.
-static pid_t outlive_start(const char *sub, bool outlive, char *done, size_t cap)
+// other is killed with it. Each from a process killed once its job has started (*started: its mark).
+static pid_t outlive_start(const char *sub, bool outlive, char *done, size_t cap, char *started)
 {
     char dir[PATH_MAX], prog[PATH_MAX + 8], text[3 * PATH_MAX];
     snprintf(dir, sizeof dir, "%s", at(sub));
@@ -968,12 +987,12 @@ static pid_t outlive_start(const char *sub, bool outlive, char *done, size_t cap
     snprintf(prog, sizeof prog, "%s/late", dir);
     snprintf(done, cap, "%s/done", dir);
     unlink(done);
-    snprintf(text, sizeof text, "#!/bin/sh\nsleep 0.3\necho late\necho late >&2\ntouch '%s'\n", done);   // (it writes after its reader went: F12 step 5c review)
+    snprintf(started, cap, "%s/started", dir);
+    unlink(started);
+    snprintf(text, sizeof text, "#!/bin/sh\ntouch '%s'\nsleep 0.3\necho late\necho late >&2\ntouch '%s'\n", started, done);   // (it writes after its reader went: F12 step 5c review)
     put_exec(prog, text);
     pid_t pid = fork();
     if (pid == 0) {
-        signal(SIGALRM, SIG_DFL);
-        ualarm(100000, 0);
         const char *argv[] = { prog, NULL };
         static char out[64];
         isize len;
@@ -988,17 +1007,16 @@ static pid_t outlive_start(const char *sub, bool outlive, char *done, size_t cap
 static void test_box_outlive(void)
 {
     ops_guard(root);
-    char d[4][PATH_MAX + 8];
+    char d[4][PATH_MAX + 8], started[4][PATH_MAX + 8];
     static const char *const sub[4] = { "f12/ol/yes", "f12/ol/no", "f12/ol/yes-plain", "f12/ol/no-plain" };
     pid_t k[4];
-    int st;
     for (int i = 0; i < 4; i++) {
         box_sandbox = i < 2;   // (the child's copy, at its fork)
-        k[i] = outlive_start(sub[i], i % 2 == 0, d[i], sizeof d[i]);
+        k[i] = outlive_start(sub[i], i % 2 == 0, d[i], sizeof d[i], started[i]);
     }
     box_sandbox = true;
-    for (int i = 0; i < 4; i++) waitpid(k[i], &st, 0);
-    for (int i = 0; i < 40 && (access(d[0], F_OK) != 0 || access(d[2], F_OK) != 0); i++) nanosleep(&(struct timespec){ 0, 50 * 1000 * 1000 }, NULL);   // (2 s at most)
+    for (int i = 0; i < 4; i++) kill_once(k[i], started[i]);
+    for (int i = 0; i < 100 && (access(d[0], F_OK) != 0 || access(d[2], F_OK) != 0); i++) nanosleep(&(struct timespec){ 0, 50 * 1000 * 1000 }, NULL);   // (5 s at most)
     nanosleep(&(struct timespec){ 0, 150 * 1000 * 1000 }, NULL);   // (the others had as long, and more)
     CHECK(access(d[0], F_OK) == 0 && access(d[1], F_OK) != 0);
     CHECK(access(d[2], F_OK) == 0 && access(d[3], F_OK) != 0);

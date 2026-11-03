@@ -86,12 +86,13 @@ static void mkdirs(const char *path)
 }
 
 // Environment variables a test changes, put back by env_restore.
-static struct { const char *name; char *old; } saved[16];
+static struct { const char *name; char *old; } saved[32];
 static int nsaved;
 
 static void env_set(const char *name, const char *value)
 {
     const char *old = getenv(name);
+    if (nsaved >= COUNT(saved)) fprintf(stderr, "env_set: more than %d set at once\n", (int)COUNT(saved)), abort();
     saved[nsaved].name = name;
     saved[nsaved++].old = old ? strdup(old) : NULL;   // test-only: the tests may malloc
     if (value) setenv(name, value, 1);
@@ -1672,6 +1673,11 @@ int main(void)
     if (!mkdtemp(root)) return perror("mkdtemp"), 1;
     snprintf(decoy, sizeof decoy, "%s-decoy", root);
     if (mkdir(decoy, 0700) != 0) return perror("mkdir decoy"), 1;
+    // Michael's home and its XDG folders out of reach by default (code-health review, 2026-11-03): a
+    // test that forgets its own env_set reads and writes under the root, not his.
+    static const char *const homes[] = { "HOME", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME", "XDG_CACHE_HOME" };
+    for (int i = 0; i < COUNT(homes); i++) setenv(homes[i], root, 1);
+    unsetenv("DBUS_SESSION_BUS_ADDRESS"), setenv("GIT_CEILING_DIRECTORIES", root, 1);
     // OFX_TEST_GROUP (2026-11-03): "fast" leaves out the tests that run real git and bubblewrap
     // (4.1 s of 5.6), "slow" runs only those, unset both. tools/mutation/run.py runs the slow ones
     // only for a mutant the fast ones didn't kill.

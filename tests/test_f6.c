@@ -779,8 +779,10 @@ static void test_eject(void)
     snprintf(path, sizeof path, "%s:%s", at("ej/bin"), getenv("PATH"));
     env_set("PATH", path);
     env_set("EJ_LOG", at("ej/log"));
-    const char *argv[6];
-    eject_argv("/dev/sd x1", argv);   // a space: passed as one word
+    const char *argv[7];
+    char ud[PATH_MAX];
+    CHECK(prog_resolve("udisksctl", ud, sizeof ud) && strcmp(ud, at("ej/bin/udisksctl")) == 0);
+    eject_argv("/dev/sd x1", ud, argv);   // a space: passed as one word
     char big[512], why[128];
     env_set("EJ_FAIL", "none");
     CHECK(spawn_capture(NULL, (char *const *)argv, big, sizeof big, 5000, &late, &err) && eject_result(str_from_c(big), why, sizeof why) == EJECT_DONE && !why[0]);
@@ -794,11 +796,29 @@ static void test_eject(void)
     env_set("EJ_FAIL", "power-off");
     CHECK(spawn_capture(NULL, (char *const *)argv, big, sizeof big, 5000, &late, &err) && eject_result(str_from_c(big), why, sizeof why) == EJECT_UNMOUNTED);
     CHECK(strcmp(slurp(at("ej/log")), "unmount -b /dev/sd x1\n") == 0);
-    eject_argv("/dev/sd x1", argv);
+    eject_argv("/dev/sd x1", ud, argv);
     env_set("EJ_FAIL", "unmount");
     put(at("ej/log"), "");
     CHECK(spawn_capture(NULL, (char *const *)argv, big, sizeof big, 5000, &late, &err) && eject_result(str_from_c(big), why, sizeof why) == EJECT_FAILED);
     CHECK(strstr(why, "unmount: target is busy") && strcmp(slurp(at("ej/log")), "unmount -b /dev/sd x1\n") == 0);   // no power-off after
+    // The udisksctl run is the one resolved: an empty PATH entry (the shell's working folder) with
+    // another udisksctl there doesn't win (health step 1 review, 2026-11-03).
+    char cwd[PATH_MAX], other[PATH_MAX + 16], olog[PATH_MAX + 16], text2[3 * PATH_MAX];
+    snprintf(other, sizeof other, "%s/udisksctl", decoy);
+    snprintf(olog, sizeof olog, "%s/udisks-ran", decoy);
+    unlink(olog);
+    snprintf(text2, sizeof text2, "#!/bin/sh\n/usr/bin/touch '%s'\n", olog);
+    put(other, text2), chmod(other, 0755);
+    snprintf(path, sizeof path, ":%s:/usr/bin", at("ej/bin"));
+    env_set("PATH", path), env_set("EJ_FAIL", "none");
+    put(at("ej/log"), "");
+    CHECK(prog_resolve("udisksctl", ud, sizeof ud) && strcmp(ud, at("ej/bin/udisksctl")) == 0);
+    eject_argv("/dev/sd x1", ud, argv);
+    CHECK(getcwd(cwd, sizeof cwd) && chdir(decoy) == 0);
+    CHECK(spawn_capture(ud, (char *const *)argv, big, sizeof big, 5000, &late, &err) && eject_result(str_from_c(big), why, sizeof why) == EJECT_DONE);
+    CHECK(chdir(cwd) == 0);
+    CHECK(access(olog, F_OK) != 0 && strcmp(slurp(at("ej/log")), "unmount -b /dev/sd x1\npower-off -b /dev/sd x1\n") == 0);
+    env_restore(), env_restore();
     env_restore(), env_restore(), env_restore(), env_restore(), env_restore();
     // Reading the output.
     CHECK(eject_result(S(""), why, sizeof why) == EJECT_FAILED && !why[0]);

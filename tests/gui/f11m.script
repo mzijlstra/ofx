@@ -2,6 +2,6 @@
 # SIGTERM, as a logout or shutdown ends every window at once: its tabs kept as Close All keeps them
 # (Michael, 2026-11-02; run.sh checks the line, and ends the stand-in).
 settle
-sh ( trap '' USR1; exec sleep 20 ) >/dev/null 2>&1 & p=$!; echo $p > "$OFX_ROOT/other.pid"; t=$(sed 's/.*) //' /proc/$p/stat | cut -d' ' -f20); printf '%s\n' "$t" > "$OFX_ROOT/windows/$p"
+sh kill "$(cat "$OFX_ROOT/other.pid" 2>/dev/null)" 2>/dev/null; ( trap '' USR1; exec sleep 20 ) >/dev/null 2>&1 & p=$!; echo $p > "$OFX_ROOT/other.pid"; t=$(sed 's/.*) //' /proc/$p/stat | cut -d' ' -f20); printf '%s\n' "$t" > "$OFX_ROOT/windows/$p"
 sh cp "$OFX_ROOT/run.pid" "$OFX_ROOT/f11m.pid"
 sh kill -TERM "$(cat "$OFX_ROOT/run.pid")"

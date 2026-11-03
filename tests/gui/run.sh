@@ -445,7 +445,9 @@ if pgrep -x -f "sleep $z" > /dev/null; then echo "f12: FAILED: a hung thumbnaile
 # fakes (the guard runs no program outside the run's folder; its own guard keeps it in there too),
 # two more files in the cache than f12's three previews.
 mkdir -p "$T/fakes" "$T/cache/thumbnails/large" "$T/cache/thumbnails/fail/ofx"
-cp -L "$here/../../build/ofx-clean" "$T/fakes/ofx-clean.real"
+c=$here/../../build/ofx-clean   # (built from the sources now, or f12b would test an old one: make builds it)
+for f in "$here/../../fs/clean.c" "$here/../../tools/clean.c"; do [ "$c" -nt "$f" ] || { echo "f12b: $c is missing or older than $f: make" >&2; failed f12b; }; done
+cp -L "$c" "$T/fakes/ofx-clean.real"
 printf '#!/bin/sh\nsleep 1\nexec "%s" "$@"\n' "$T/fakes/ofx-clean.real" > "$T/fakes/ofx-clean"; chmod +x "$T/fakes/ofx-clean"   # (a second's run: f12b sees the entry greyed meanwhile)
 printf 'x' > "$T/cache/thumbnails/large/0123456789abcdef0123456789abcdef.png"
 printf 'y' > "$T/cache/thumbnails/fail/ofx/0123456789abcdef0123456789abcdee.png"
@@ -457,11 +459,11 @@ if want f12g; then
 # bubblewrap as always. HOME is the run's: no config of Michael's comes in.
 T=$base/f12g; rm -rf "$T"; mkdir -p "$T/tree/repo/src" "$T/fakes"
 printf '#!/bin/sh\nexec /usr/bin/git "$@"\n' > "$T/fakes/git"; chmod +x "$T/fakes/git"
-( cd "$T/tree/repo" && export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null &&
+( cd "$T/tree/repo" && export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_CEILING_DIRECTORIES="$T" &&
   git init -q -b main . && printf 'a\n' > a.txt && printf 'k\n' > kept.txt && printf '*.log\nbuild/\n' > .gitignore && printf 'b\n' > src/b.txt &&
   git add -A && git -c user.name=t -c user.email=t@t commit -qm one &&
   printf 'a2\n' >> a.txt && printf 'n\n' > src/new.txt && git add src/new.txt && mkdir newdir build && printf 'u\n' > newdir/u && printf 'l\n' > x.log && printf 'o\n' > build/out.o ) || failed f12g
-rs f12g -- "$T/tree/repo"
+rs f12g OFX_TEST_GIT_GAP_MS=3000 -- "$T/tree/repo"   # (the gap 3 s: its put-off ask checked before it is due, even loaded)
 fi
 if want f12h; then
 # F12 step 5b: the branch button and its menu, on a repository of its own (as f12g's, made here, git's
@@ -475,7 +477,7 @@ if want f12h; then
 # something on feat-a.
 T=$base/f12h; rm -rf "$T"; mkdir -p "$T/tree/repo" "$T/fakes"
 printf '#!/bin/sh\ncase "$*" in *" switch "*" base") sleep 1 ;; esac\nexec /usr/bin/git "$@"\n' > "$T/fakes/git"; chmod +x "$T/fakes/git"
-( cd "$T/tree/repo" && export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t &&
+( cd "$T/tree/repo" && export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_CEILING_DIRECTORIES="$T" GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t &&
   c() { GIT_AUTHOR_DATE="$1 +0000" GIT_COMMITTER_DATE="$1 +0000" git commit -q --allow-empty -m "$1"; } &&
   git init -q -b main . && printf 'a\n' > a.txt && git add a.txt && c 1700000000 &&
   for i in 0 1 2 3 4 5 6 7 8 9; do git branch "old$i"; done && git branch base &&
