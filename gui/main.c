@@ -72,6 +72,19 @@ static void join_by(pthread_t t, const struct timespec *until)
     if (pthread_timedjoin_np(t, NULL, until) != 0) pthread_detach(t);
 }
 
+// A worker thread told to quit, as each one's X_quit does (code-health review, 2026-11-03: six
+// copies): quit set and its threads woken under its lock, and gen (when there is one) moved, so a
+// long job of its own sees it. Nothing when it never started.
+static void worker_quit(bool started, pthread_mutex_t *mu, pthread_cond_t *cv, bool *quit, atomic_uint *gen)
+{
+    if (!started) return;
+    pthread_mutex_lock(mu);
+    *quit = true;
+    if (gen) atomic_fetch_add(gen, 1);
+    pthread_cond_broadcast(cv);
+    pthread_mutex_unlock(mu);
+}
+
 // A wake-up at a time to come: the main loop sleeps until an event, so a tooltip's delay needs a
 // thread that sleeps until then and wakes it (Michael, 2026-10-24).
 static struct {

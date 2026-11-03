@@ -122,8 +122,7 @@ static void thumbs_start(Arena *scratch)   // (scratch: for reading the thumbnai
     arena_init(&thumbs.arena, "thumbs", thumb_entry_mem, sizeof thumb_entry_mem);
     strmap_init(&thumbs.of, &thumbs.arena, THUMB_ENTRIES * 2);
     // OFX_TEST_THUMB_HELD_MAX: fewer texture bytes, so a test sees previews dropped and asked again.
-    const char *m = getenv("OFX_TEST_THUMB_HELD_MAX");
-    thumbs.held_max = m && atoi(m) > 0 ? atoi(m) : THUMB_HELD_MAX;
+    thumbs.held_max = env_int("OFX_TEST_THUMB_HELD_MAX", THUMB_HELD_MAX, 1, THUMB_HELD_MAX);
     // OFX_TEST_THUMB_RUN_MS: a test's hung fake thumbnailer killed sooner; OFX_TEST_SANDBOX=off, under
     // the guard only: the run without bubblewrap.
     thumb_run_ms = env_int("OFX_TEST_THUMB_RUN_MS", THUMB_RUN_MS, 1, THUMB_RUN_MS);
@@ -137,10 +136,7 @@ static void thumbs_start(Arena *scratch)   // (scratch: for reading the thumbnai
 // drive) left to the process's end; then the textures go.
 static void thumbs_quit(void)
 {
-    pthread_mutex_lock(&thumbs.mu);
-    thumbs.quit = true;
-    pthread_cond_broadcast(&thumbs.cv);
-    pthread_mutex_unlock(&thumbs.mu);
+    worker_quit(true, &thumbs.mu, &thumbs.cv, &thumbs.quit, NULL);
 }
 
 static void thumbs_join(const struct timespec *until)
@@ -222,7 +218,7 @@ static Texture2D *thumb_for(const char *path, i64 mtime, i64 size, Str mime, boo
                              .make = local && kind != TK_NONE && (kind == TK_EXEC || size <= thumbs.src_max), .px = px, .src_max = thumbs.src_max };
             snprintf(r->path, sizeof r->path, "%s", path);
             e->state = TS_ASKED;
-            pthread_cond_signal(&thumbs.cv);
+            pthread_cond_broadcast(&thumbs.cv);   // (one cv for a request and for room: a signal could wake a worker waiting for room)
         }
         pthread_mutex_unlock(&thumbs.mu);
     }

@@ -63,7 +63,7 @@ static void search_publish(SearchWalk *w, bool done)
     pthread_mutex_lock(&search.mu);
     if (w->mine == atomic_load(&search.gen)) {
         search.n = search_wrote, search.s = w->s, search.done = done, search.fresh = true;
-        if (!search.quit) wake_main();
+        wake_main();
     }
     pthread_mutex_unlock(&search.mu);
     search_pub_at = now_ms();
@@ -293,12 +293,7 @@ static bool search_take(void)
 // end.
 static void search_quit(void)
 {
-    if (!search.started) return;
-    pthread_mutex_lock(&search.mu);
-    search.quit = true;
-    atomic_fetch_add(&search.gen, 1);
-    pthread_cond_broadcast(&search.cv);
-    pthread_mutex_unlock(&search.mu);
+    worker_quit(search.started, &search.mu, &search.cv, &search.quit, &search.gen);
 }
 
 static void search_join(const struct timespec *until)

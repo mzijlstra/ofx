@@ -42,7 +42,7 @@ static void *space_loop(void *arg)
         memcpy(space.size, size, sizeof size[0] * (size_t)n);
         memcpy(space.avail, avail, sizeof avail[0] * (size_t)n);
         space.nres = n, space.ready = true;
-        if (!space.quit) wake_main();
+        wake_main();
     }
     pthread_mutex_unlock(&space.mu);
     return NULL;
@@ -50,9 +50,7 @@ static void *space_loop(void *arg)
 
 static void space_start(void)
 {
-    const char *d = getenv("OFX_TEST_SPACE_DELAY_MS");
-    space.delay_ms = d ? atoi(d) : 0;
-    if (space.delay_ms < 0 || space.delay_ms > 30000) space.delay_ms = 0;   // f6b: 30 s
+    space.delay_ms = env_int("OFX_TEST_SPACE_DELAY_MS", 0, 0, 30000);   // f6b: 30 s
     space.started = pthread_create(&space.thread, NULL, space_loop, NULL) == 0;
 }
 
@@ -60,11 +58,7 @@ static void space_start(void)
 // statvfs stuck in the kernel).
 static void space_quit(void)
 {
-    if (!space.started) return;
-    pthread_mutex_lock(&space.mu);
-    space.quit = true;
-    pthread_cond_broadcast(&space.cv);
-    pthread_mutex_unlock(&space.mu);
+    worker_quit(space.started, &space.mu, &space.cv, &space.quit, NULL);
 }
 
 static void space_join(const struct timespec *until)

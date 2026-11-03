@@ -35,7 +35,7 @@ static void walk_tick(void *ctx, const DuSum *s)
     pthread_mutex_lock(&walk.mu);
     if (gen == atomic_load(&walk.gen)) walk.sum = *s, walk.sum_gen = gen, walk.fresh = true;
     i64 now = now_ms();
-    if (!walk.quit && now - woke >= WALK_WAKE_MS) wake_main(), woke = now;
+    if (now - woke >= WALK_WAKE_MS) wake_main(), woke = now;
     pthread_mutex_unlock(&walk.mu);
 }
 
@@ -59,7 +59,7 @@ static void *walk_loop(void *arg)
         bool whole = du_walk(&w, roots, n, &s);
         pthread_mutex_lock(&walk.mu);
         if (whole && gen == atomic_load(&walk.gen)) walk.sum = s, walk.sum_gen = gen, walk.done = walk.fresh = true;
-        if (!walk.quit) wake_main();
+        wake_main();
     }
     pthread_mutex_unlock(&walk.mu);
     return NULL;
@@ -98,12 +98,7 @@ static bool walk_take(DuSum *s, bool *done)
 // process's end.
 static void walk_quit(void)
 {
-    if (!walk.started) return;
-    pthread_mutex_lock(&walk.mu);
-    walk.quit = true;
-    atomic_fetch_add(&walk.gen, 1);
-    pthread_cond_broadcast(&walk.cv);
-    pthread_mutex_unlock(&walk.mu);
+    worker_quit(walk.started, &walk.mu, &walk.cv, &walk.quit, &walk.gen);
 }
 
 static void walk_join(const struct timespec *until)

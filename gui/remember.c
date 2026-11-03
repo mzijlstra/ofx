@@ -10,11 +10,7 @@
 static i64 write_delay_ms(void)
 {
     static i64 ms = -1;
-    if (ms < 0) {
-        const char *t = getenv("OFX_TEST_WRITE_MS");
-        ms = t && t[0] ? atoi(t) : 2000;
-        if (ms < 0 || ms > 2000) ms = 2000;
-    }
+    if (ms < 0) ms = env_int("OFX_TEST_WRITE_MS", 2000, 0, 2000);
     return ms;
 }
 

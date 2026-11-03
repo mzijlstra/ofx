@@ -259,11 +259,7 @@ static GitState entry_git(isize i)
 // At quit, as count_quit and count_join: told, joined by until, else left to the process's end.
 static void git_quit(void)
 {
-    if (!git.started) return;
-    pthread_mutex_lock(&git.mu);
-    git.quit = true;
-    pthread_cond_broadcast(&git.cv);
-    pthread_mutex_unlock(&git.mu);
+    worker_quit(git.started, &git.mu, &git.cv, &git.quit, NULL);
 }
 
 static void git_join(const struct timespec *until)

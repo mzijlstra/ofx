@@ -43,8 +43,7 @@ static void *count_loop(void *arg)
         isize n = count_entries(path, hidden);
         pthread_mutex_lock(&counts.mu);
         if (gen == counts.gen) counts.res[counts.sn++] = (CountAnswer){ gen, idx, n };
-        // Not after quit: the window and GLFW may be gone by the time a stuck count comes back.
-        if (!counts.quit) wake_main();
+        wake_main();   // (none once the window is closing: wake_off)
     }
     pthread_mutex_unlock(&counts.mu);
     return NULL;
@@ -60,11 +59,7 @@ static void count_start(void)
 // process's end, never joined (F4 review, 2026-10-20).
 static void count_quit(void)
 {
-    if (!counts.started) return;
-    pthread_mutex_lock(&counts.mu);
-    counts.quit = true;
-    pthread_cond_broadcast(&counts.cv);
-    pthread_mutex_unlock(&counts.mu);
+    worker_quit(counts.started, &counts.mu, &counts.cv, &counts.quit, NULL);
 }
 
 static void count_join(const struct timespec *until)
