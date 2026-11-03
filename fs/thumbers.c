@@ -75,7 +75,7 @@ static void thumbers_dir(Arena *a, Thumbers *t, const char *dir)
     qsort(names, (size_t)n, sizeof names[0], thumbers_name_cmp);
     for (int i = 0; i < n; i++) {
         char path[PATH_MAX];
-        if (snprintf(path, sizeof path, "%s/%s", dir, names[i]) >= (int)sizeof path) continue;
+        if (!path_put(path, sizeof path, dir, str_from_c(names[i]))) continue;
         thumbers_add(a, t, read_file(a, path));
     }
 }

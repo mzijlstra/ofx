@@ -284,25 +284,6 @@ static bool png_encode(Arena *a, Img im, const char *uri, i64 mtime, i64 size, S
 
 // ---- files --------------------------------------------------------------------------------------
 
-// A regular file of at most max bytes, whole, into the arena, and its stat; STR_EMPTY otherwise.
-// O_NONBLOCK: a FIFO at the path must not block the open (then it isn't regular, and is refused).
-// flags: more for open (O_NOFOLLOW for a thumbnailer's PNG: a link it left there isn't read).
-static Str thumb_read(Arena *a, const char *path, isize max, struct stat *st, int flags)
-{
-    int fd = open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC | flags);
-    if (fd < 0) return STR_EMPTY;
-    Str s = STR_EMPTY;
-    char *p;
-    if (fstat(fd, st) == 0 && S_ISREG(st->st_mode) && st->st_size > 0 && st->st_size <= max &&
-        (p = arena_try_push(a, (isize)st->st_size, 1))) {
-        isize n = 0;
-        for (ssize_t got; n < st->st_size && (got = read(fd, p + n, (size_t)(st->st_size - n))) > 0;) n += got;
-        if (n == st->st_size) s = (Str){ p, n };
-    }
-    close(fd);
-    return s;
-}
-
 // png written to file through a temporary file in its folder, renamed over it, so another program
 // never reads half of one. Every write asks the test guard first (ops.c).
 static bool thumb_write(const char *file, Str png)
@@ -621,15 +602,13 @@ static ThumbGot thumb_exec(Arena *a, const ThumbAsk *q, const char *uri, int sid
     struct stat st;
     if (thumbers_argv(a, q->exec, q->path, uri, out, side, argv, COUNT(argv)) > 0) {
         BoxRun r = thumb_run(argv, q->path, dir);
-        Str png = r == BOX_ENDED ? thumb_read(a, out, THUMB_CACHED_MAX, &st, O_NOFOLLOW) : STR_EMPTY;
+        Str png = r == BOX_ENDED ? file_read_at(a, AT_FDCWD, out, THUMB_CACHED_MAX, &st, O_NOFOLLOW) : STR_EMPTY;
         got = r != BOX_ENDED ? TG_NONE : png.len && png_decode(a, png, side, t) ? TG_MADE : TG_FAILED;
         if (got == TG_FAILED && !png.len && access(dir, F_OK) != 0) got = TG_NONE;   // (its folder went meanwhile: Clear Previews, not the file's fault; F12 step 4 review)
     }
-    DIR *d = opendir(dir);   // (whatever it left: its own temporary files too)
-    for (struct dirent *de; d && (de = readdir(d));)
-        if (strcmp(de->d_name, ".") != 0 && strcmp(de->d_name, "..") != 0) unlinkat(dirfd(d), de->d_name, 0);
-    if (d) closedir(d);
-    rmdir(dir);
+    isize gone;
+    Err derr;
+    delete_tree(dir, &gone, &derr);   // (whatever it left, its own folders too: code-health review, 2026-11-03)
     return got;
 }
 
@@ -643,10 +622,10 @@ static ThumbGot thumb_get(Arena *a, const ThumbAsk *q, Img *out)
     if (!thumb_uri(q->path, uri, sizeof uri) || !thumb_file(q->root, thumb_dirs[level], uri, file, sizeof file)) return TG_NONE;
     struct stat st;
     ThumbMeta m;
-    Str c = thumb_read(a, file, THUMB_CACHED_MAX, &st, 0);
+    Str c = file_read_at(a, AT_FDCWD, file, THUMB_CACHED_MAX, &st, 0);
     if (c.len && png_meta(c, &m) && thumb_fresh(&m, uri, q->mtime, q->size) && png_decode(a, c, q->px, out)) return TG_CACHED;
     if (q->kind == TK_NONE || !q->make || !thumb_file(q->root, "fail/ofx", uri, fail, sizeof fail)) return TG_NONE;
-    Str f = thumb_read(a, fail, THUMB_CACHED_MAX, &st, 0);
+    Str f = file_read_at(a, AT_FDCWD, fail, THUMB_CACHED_MAX, &st, 0);
     if (f.len && png_meta(f, &m) && thumb_fresh(&m, uri, q->mtime, q->size)) return TG_FAIL_KNOWN;
     st = (struct stat){ 0 };
     Img t;
@@ -658,7 +637,7 @@ static ThumbGot thumb_get(Arena *a, const ThumbAsk *q, Img *out)
         if (g == TG_NONE) return TG_NONE;
         made = g == TG_MADE;
     } else {
-        Str src = thumb_read(a, q->path, q->src_max, &st, 0);
+        Str src = file_read_at(a, AT_FDCWD, q->path, q->src_max, &st, 0);
         bool empty = S_ISREG(st.st_mode) && st.st_size == 0;   // read, and nothing in it
         if (!src.len && !empty) return TG_NONE;   // gone, unreadable, or grown past the limit
         if (st.st_mtim.tv_sec != q->mtime || st.st_size != q->size) return TG_CHANGED;

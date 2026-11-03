@@ -116,12 +116,8 @@ static int win_signal_others(const char *dir, pid_t self, int sig)
         long pid = strtol(e->d_name, NULL, 10);
         if (pid > INT32_MAX || (pid_t)pid == self) continue;
         char p[PATH_MAX], buf[32];
-        if (snprintf(p, sizeof p, "%s/%s", dir, e->d_name) >= (int)sizeof p) continue;
-        int fd = open(p, O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC);
-        if (fd < 0) continue;
-        struct stat st;
-        ssize_t n = fstat(fd, &st) == 0 && S_ISREG(st.st_mode) ? read(fd, buf, sizeof buf) : -1;
-        close(fd);
+        if (!path_put(p, sizeof p, dir, str_from_c(e->d_name))) continue;
+        isize n = file_read_buf(p, buf, sizeof buf);
         if (n < 0) continue;   // not a regular file: not ofx's
         i64 want;
         bool whole = win_body(buf, n, &want);

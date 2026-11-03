@@ -2,11 +2,13 @@
 // different from the next): whether a path is inside a folder, a name joined to a folder, the XDG
 // folders, mkdir -p, file:// URIs and %XX, and a mountinfo line. Included first by fs.c.
 #include <errno.h>
+#include <fcntl.h>
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <unistd.h>
 
 // Whether path is dir or inside it; "/" holds everything. Both absolute, no '/' at the end.
 static bool path_within(const char *path, const char *dir)
@@ -24,6 +26,41 @@ static bool path_below(const char *path, const char *dir)
 }
 
 // dir/name into out; false when it would not fit (a cut path could name another file).
+static bool path_put(char *out, size_t cap, const char *dir, Str name);
+
+// A regular file, name in folder dfd (AT_FDCWD: a path), of at most max bytes, whole, into the
+// arena, and its stat; STR_EMPTY otherwise. O_NONBLOCK: a FIFO there must not block the open (then
+// it isn't regular, and is refused). flags: more for open (O_NOFOLLOW: a link isn't read;
+// O_NOATIME: the access time kept). One reader for every small file read whole (code-health
+// review, 2026-11-03: written out six times).
+static Str file_read_at(Arena *a, int dfd, const char *name, isize max, struct stat *st, int flags)
+{
+    int fd = openat(dfd, name, O_RDONLY | O_NONBLOCK | O_CLOEXEC | flags);
+    if (fd < 0) return STR_EMPTY;
+    Str s = STR_EMPTY;
+    char *p;
+    if (fstat(fd, st) == 0 && S_ISREG(st->st_mode) && st->st_size > 0 && st->st_size <= max &&
+        (p = arena_try_push(a, (isize)st->st_size, 1))) {
+        isize n = 0;
+        for (ssize_t got; n < st->st_size && (got = read(fd, p + n, (size_t)(st->st_size - n))) > 0;) n += got;
+        if (n == st->st_size) s = (Str){ p, n };
+    }
+    close(fd);
+    return s;
+}
+
+// The start of the regular file at path, up to cap bytes, into buf: its length, or -1 when it isn't
+// one (or can't be read). Not followed if a link, nor waited on if a FIFO.
+static isize file_read_buf(const char *path, char *buf, isize cap)
+{
+    int fd = open(path, O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC);
+    if (fd < 0) return -1;
+    struct stat st;
+    ssize_t n = fstat(fd, &st) == 0 && S_ISREG(st.st_mode) ? read(fd, buf, (size_t)cap) : -1;
+    close(fd);
+    return n;
+}
+
 static bool path_put(char *out, size_t cap, const char *dir, Str name)
 {
     int n = snprintf(out, cap, "%s%s%.*s", dir, strcmp(dir, "/") == 0 ? "" : "/", STR_ARG(name));

@@ -328,9 +328,9 @@ static void test_thumb_decode(void)
     put(big, "");
     CHECK(truncate(big, CONF_PREVIEW_MAX + 1) == 0);
     struct stat st;
-    CHECK(thumb_read(&a, big, CONF_PREVIEW_MAX, &st, 0).len == 0 && st.st_size == CONF_PREVIEW_MAX + 1);
+    CHECK(file_read_at(&a, AT_FDCWD, big, CONF_PREVIEW_MAX, &st, 0).len == 0 && st.st_size == CONF_PREVIEW_MAX + 1);
     CHECK(truncate(big, 100) == 0);
-    CHECK(thumb_read(&a, big, 100, &st, 0).len == 100 && thumb_read(&a, big, 99, &st, 0).len == 0);
+    CHECK(file_read_at(&a, AT_FDCWD, big, 100, &st, 0).len == 100 && file_read_at(&a, AT_FDCWD, big, 99, &st, 0).len == 0);
 }
 
 // The ask for path at px, as gui/thumbs.c makes it.
@@ -346,7 +346,7 @@ static bool cached_fresh(Arena *a, const char *cache, const char *dir, const cha
     thumb_file(cache, dir, uri, file, sizeof file);
     struct stat st;
     ThumbMeta m;
-    Str c = thumb_read(a, file, THUMB_CACHED_MAX, &st, 0);
+    Str c = file_read_at(a, AT_FDCWD, file, THUMB_CACHED_MAX, &st, 0);
     bool ok = c.len >= 24 && png_meta(c, &m) && thumb_fresh(&m, uri, mtime_of(path), size_of(path));
     if (ok) *w = (int)be32((const u8 *)c.p + 16), *h = (int)be32((const u8 *)c.p + 20);   // IHDR
     return ok && (st.st_mode & 0777) == 0600;

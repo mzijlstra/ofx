@@ -224,20 +224,16 @@ static bool clean_real(const CleanMounts *ms, const char *path, char *out, size_
 // What the second rule makes of one preview, read from dfd/name: CR_ORPHAN, CR_STALE or CR_KEEP.
 static CleanRule clean_judge(Arena *a, const CleanMounts *ms, int dfd, const char *name)
 {
-    int fd = openat(dfd, name, O_RDONLY | O_NOATIME | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC);
-    if (fd < 0) return CR_KEEP;   // not ours to read without touching its atime: left to the others
     ArenaMark mark = arena_mark(a);
     CleanRule r = CR_KEEP;
     struct stat st;
-    char *p;
     ThumbMeta *m = arena_try_new(a, ThumbMeta, 1);
-    if (m && fstat(fd, &st) == 0 && S_ISREG(st.st_mode) && st.st_size > 0 && st.st_size <= THUMB_CACHED_MAX &&
-        (p = arena_try_push(a, (isize)st.st_size, 1))) {
-        isize n = 0;
-        for (ssize_t got; n < st.st_size && (got = read(fd, p + n, (size_t)(st.st_size - n))) > 0;) n += got;
+    // (O_NOATIME: one not ours to read without touching its atime isn't read: left to the others)
+    Str png = m ? file_read_at(a, dfd, name, THUMB_CACHED_MAX, &st, O_NOATIME | O_NOFOLLOW) : STR_EMPTY;
+    if (png.len) {
         char path[PATH_MAX], real[PATH_MAX];
         struct stat f;
-        if (n == st.st_size && png_meta((Str){ p, n }, m) && m->has_uri && file_uri_path(str_from_c(m->uri), path, sizeof path) &&
+        if (png_meta(png, m) && m->has_uri && file_uri_path(str_from_c(m->uri), path, sizeof path) &&
             clean_real(ms, path, real, sizeof real) && !clean_absent_drive(ms, real)) {
             // stat, not lstat: a link's preview carries its target's MTime and Size (kind_of follows
             // it), so the link itself would be stale on every run (review, 2026-10-25).
@@ -245,7 +241,6 @@ static CleanRule clean_judge(Arena *a, const CleanMounts *ms, int dfd, const cha
             else if ((m->has_mtime && m->mtime != f.st_mtim.tv_sec) || (m->has_size && m->size != f.st_size)) r = CR_STALE;
         }
     }
-    close(fd);
     arena_restore(a, mark);
     return r;
 }
@@ -261,7 +256,10 @@ static void clean_drop(const CleanOpts *o, CleanStats *s, const char *const *dir
 {
     char path[PATH_MAX];
     Err err;
-    snprintf(path, sizeof path, "%s/%s", dirs[f->dir], f->name);
+    if (!path_put(path, sizeof path, dirs[f->dir], str_from_c(f->name))) {   // (cut, the guard would judge another path than the one deleted)
+        s->failed++;
+        return;
+    }
     if (!o->dry && (!ops_allowed(path, &err) || (unlinkat(fds[f->dir], f->name, 0) != 0 && errno != ENOENT))) {   // (gone already: another clean, the timer's or a window's)
         s->failed++;
         return;
@@ -290,22 +288,15 @@ static void clean_runs(int rfd, const char *root, const CleanOpts *o, CleanStats
             continue;
         char path[PATH_MAX];
         Err err;
-        snprintf(path, sizeof path, "%s/%s", root, e->d_name);
-        if (!o->dry) {
-            if (!ops_allowed(path, &err)) {
-                s->failed++;
-                continue;
-            }
-            int fd = openat(rfd, e->d_name, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
-            DIR *in = fd >= 0 ? fdopendir(fd) : NULL;
-            if (!in && fd >= 0) close(fd);
-            for (struct dirent *f; in && (f = readdir(in));)
-                if (strcmp(f->d_name, ".") != 0 && strcmp(f->d_name, "..") != 0) unlinkat(dirfd(in), f->d_name, 0);
-            if (in) closedir(in);
-            if (unlinkat(rfd, e->d_name, AT_REMOVEDIR) != 0 && errno != ENOENT) {
-                s->failed++;
-                continue;
-            }
+        isize gone;
+        if (!path_put(path, sizeof path, root, str_from_c(e->d_name))) {   // (cut: another path than the one deleted)
+            s->failed++;
+            continue;
+        }
+        // (all of it, its own folders too, the guard asked: delete_tree; gone already is no failure)
+        if (!o->dry && !delete_tree(path, &gone, &err) && access(path, F_OK) == 0) {
+            s->failed++;
+            continue;
         }
         s->n[CR_TEMP]++;
         if (o->say) o->say(o->ctx, CR_TEMP, path, 0);

@@ -40,6 +40,7 @@ typedef struct {
     // into a memfd, read as it ends, as a pipe without its reader would kill it at its next write
     // (git restores SIGPIPE's default itself; F12 step 5c review).
     bool        outlive;
+    Err        *why;                  // why it didn't run (BOX_NOT_RUN), when not NULL
 } BoxJob;
 
 static bool box_sandbox = true;   // (false: run as it is; a test's only, OFX_TEST_SANDBOX=off under the guard)
@@ -56,9 +57,13 @@ static bool box_read(const BoxJob *j, int fd)
 
 // An outlive job's end (box_run): waited for on its pidfd alone, its output (fd, a memfd) read
 // then; never killed. BOX_GOING when it runs past its time.
-static BoxRun box_wait_out(const BoxJob *j, int pfd, int fd)
+static BoxRun box_wait_out(const BoxJob *j, int pfd, int fd, bool unwatched)
 {
-    bool gone = pfd < 0;   // (pfd < 0: gone already, or it can't be watched: read what it wrote so far)
+    if (unwatched) {   // (no pidfd, no fd left: it carries on, unseen; not read as ended early)
+        if (fd >= 0) close(fd);
+        return BOX_GOING;
+    }
+    bool gone = pfd < 0;   // (pfd < 0: gone already)
     for (i64 until = now_ms() + j->ms; !gone;) {
         i64 left = until - now_ms();
         int r = left > 0 ? poll(&(struct pollfd){ .fd = pfd, .events = POLLIN }, 1, (int)left) : 0;
@@ -85,7 +90,13 @@ static BoxRun box_run(const BoxJob *j)
     Err err;
     char prog[PATH_MAX], bw[PATH_MAX];
     const char *const *argv = j->argv;
-    if (!ops_program_allowed(argv[0], &err)) return BOX_NOT_RUN;
+    int nargs = 0;
+    while (argv[nargs]) nargs++;
+    if (nargs >= BOX_ARGS_MAX) err_set(&err, "%s: too many arguments", argv[0]);   // (refused, not cut)
+    if (nargs >= BOX_ARGS_MAX || !ops_program_allowed(argv[0], &err)) {
+        if (j->why) *j->why = err;
+        return BOX_NOT_RUN;
+    }
     if (!prog_resolve(argv[0], prog, sizeof prog)) return BOX_NOT_RUN;
     // The environment, bubblewrap's and so the program's: these of ofx's, and GIO_USE_VFS=local (a
     // thumbnailer's %u URI read without gvfs).
@@ -101,7 +112,10 @@ static BoxRun box_run(const BoxJob *j)
     const char *av[BOX_ARGS_MAX + 3 * BOX_BINDS_MAX + 64];
     int n = 0;
     if (box_sandbox) {
-        if (!path_find("bwrap", bw, sizeof bw)) return BOX_NOT_RUN;
+        if (!path_find("bwrap", bw, sizeof bw)) {
+            if (j->why) err_set(j->why, "bubblewrap isn't installed");
+            return BOX_NOT_RUN;
+        }
         static const char *const box[] = {
             "--ro-bind", "/usr", "/usr", "--ro-bind-try", "/etc/ld.so.cache", "/etc/ld.so.cache",
             "--ro-bind-try", "/etc/fonts", "/etc/fonts", "--ro-bind-try", "/var/cache/fontconfig", "/var/cache/fontconfig",   // (without them a PDF's fonts are scanned each run: 570 ms against 63)
@@ -119,7 +133,7 @@ static BoxRun box_run(const BoxJob *j)
         av[n++] = "--";
     }
     av[n++] = prog;
-    for (int k = 1; argv[k] && k < BOX_ARGS_MAX; k++) av[n++] = argv[k];
+    for (int k = 1; argv[k]; k++) av[n++] = argv[k];
     av[n] = NULL;
     int pipe_fd[2] = { -1, -1 };
     if (j->out && j->outlive) pipe_fd[0] = pipe_fd[1] = memfd_create("ofx-box", MFD_CLOEXEC);   // (one fd, written by it, read after)
@@ -151,7 +165,7 @@ static BoxRun box_run(const BoxJob *j)
     if (j->out && !j->outlive) close(pipe_fd[1]);
     // ofx's children are reaped by the kernel (spawn_init): the pidfd says when it is gone.
     int pfd = (int)syscall(SYS_pidfd_open, pid, 0), fd = j->out ? pipe_fd[0] : -1;
-    if (j->outlive) return box_wait_out(j, pfd, fd);
+    if (j->outlive) return box_wait_out(j, pfd, fd, pfd < 0 && errno != ESRCH);
     if (pfd < 0 && errno != ESRCH) {   // it can't be watched (no fd left): killed, nothing kept
         kill(-pid, SIGKILL);
         if (fd >= 0) close(fd);

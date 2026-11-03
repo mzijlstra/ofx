@@ -11,6 +11,7 @@
 
 #include "../base/base.h"
 
+#include <fcntl.h>
 #include <fnmatch.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -56,11 +57,14 @@ enum { READ_UNSIZED_MAX = MiB(1) };
 
 static Str read_file(Arena *a, const char *path)
 {
-    // A FIFO or a device at one of these paths would block fopen: regular files only.
-    struct stat pre;
-    if (stat(path, &pre) != 0 || !S_ISREG(pre.st_mode)) return STR_EMPTY;
-    FILE *f = fopen(path, "rbe");
-    if (!f) return STR_EMPTY;
+    // A FIFO or a device at one of these paths would block fopen: opened without blocking, then
+    // regular files only (the fstat below; a stat before the open raced the file's change).
+    int fd = open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
+    FILE *f = fd >= 0 ? fdopen(fd, "rb") : NULL;
+    if (!f) {
+        if (fd >= 0) close(fd);
+        return STR_EMPTY;
+    }
     struct stat st;
     char *dst = NULL;
     size_t n = 0;

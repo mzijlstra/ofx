@@ -395,6 +395,15 @@ static void test_thumb_exec(void)
     snprintf(far, sizeof far, "%s", out_at("f12-cache"));
     q = ask(clip[0], TK_EXEC, 48, far), q.exec = exec;
     CHECK(thumb_get(&a, &q, &out) != TG_MADE && access(far, F_OK) != 0);
+    // One that leaves a folder of its own in its run folder: that goes too (code-health review,
+    // 2026-11-03: one level was emptied, so the run folder stayed).
+    put_exec(at("f12/bin/nest"), "#!/bin/sh\nmkdir -p \"$(dirname \"$2\")/sub/deep\" && : > \"$(dirname \"$2\")/sub/deep/x\"\ncp \"$1\" \"$2\"\n");
+    char nested[PATH_MAX];
+    snprintf(nested, sizeof nested, "%s", at("f12/videos/nest.mp4"));
+    put_bytes(nested, png.p, (size_t)png.len);
+    snprintf(exec, sizeof exec, "%s/nest %%i %%o", bin);
+    q = ask(nested, TK_EXEC, 48, cache), q.exec = exec;
+    CHECK(thumb_get(&a, &q, &out) == TG_MADE);
     // Every folder they ran in is gone.
     char cmd[PATH_MAX + 64];
     snprintf(cmd, sizeof cmd, "! ls -A '%s' | grep -q ofx-run", cache);
@@ -430,7 +439,8 @@ static void test_clean_runs(void)
     CHECK(st.n[CR_TEMP] == 2 && access(at("f12/cleancache/thumbnails/.ofx-run-12-3/out.png"), F_OK) == 0);
     o.dry = false;
     clean_run(&a, cache, S("1 0 0:1 / / rw - ext4 a rw\n"), &o, &st);
-    CHECK(st.n[CR_TEMP] == 1 && st.failed == 1 && access(at("f12/cleancache/thumbnails/.ofx-run-12-3"), F_OK) != 0);   // (7-8: its folder stays)
+    CHECK(st.n[CR_TEMP] == 2 && st.failed == 0 && access(at("f12/cleancache/thumbnails/.ofx-run-12-3"), F_OK) != 0);
+    CHECK(access(at("f12/cleancache/thumbnails/.ofx-run-7-8"), F_OK) != 0);   // (its folder too: all of it goes; code-health review, 2026-11-03)
     CHECK(strcmp(slurp(keep), "mine") == 0 && access(at("f12/cleancache/thumbnails/.ofx-run-12-4/out.png"), F_OK) == 0);
     CHECK(access(at("f12/cleancache/thumbnails/.ofx-run-x"), F_OK) == 0 && access(at("f12/cleancache/thumbnails/.ofx-run-5-6"), F_OK) == 0);
     // all (ofx-clean --all, F12 step 4): every file of the cache's, a new run folder too, however new;
@@ -441,7 +451,7 @@ static void test_clean_runs(void)
     put(at("f12/cleancache/thumbnails/normal/notes.txt"), "mine");
     o.all = true, o.dry = true;
     clean_run(&a, cache, S("1 0 0:1 / / rw - ext4 a rw\n"), &o, &st);
-    CHECK(st.n[CR_ALL] == 3 && st.n[CR_TEMP] == 2 && st.n[CR_KEEP] == 0 && access(at("f12/cleancache/thumbnails/normal/.ofx-9-9.png"), F_OK) == 0);   // (temp: 12-4's and 7-8's folders)
+    CHECK(st.n[CR_ALL] == 3 && st.n[CR_TEMP] == 1 && st.n[CR_KEEP] == 0 && access(at("f12/cleancache/thumbnails/normal/.ofx-9-9.png"), F_OK) == 0);   // (temp: 12-4's folder)
     o.dry = false;
     clean_run(&a, cache, S("1 0 0:1 / / rw - ext4 a rw\n"), &o, &st);
     CHECK(st.n[CR_ALL] == 3 && access(at("f12/cleancache/thumbnails/normal/0123456789abcdef0123456789abcdef.png"), F_OK) != 0 &&
@@ -959,6 +969,10 @@ static void test_git_switch(void)
     char lock[PATH_MAX + 16];
     snprintf(lock, sizeof lock, "%s/index.lock", fdir);
     CHECK(git_head_is(fdir, "b") && access(lock, F_OK) != 0 && sh_in(flt, "test -z \"$(git status --porcelain)\" && grep -qx b9 f9.txt") == 0);
+    // No bubblewrap: refused, and said (code-health review, 2026-11-03).
+    env_set("PATH", at("f12/bin"));
+    CHECK(git_switch(git, top, "wtb", msg, sizeof msg) == GSW_REFUSED && strstr(msg, "bubblewrap"));
+    env_restore();
     // Not a name: an option; outside the guard's root: refused before git runs.
     CHECK(git_switch(git, top, "-f", msg, sizeof msg) == GSW_REFUSED && strstr(msg, "not a branch"));
     // (git itself inside the guard's root there: only the repository's place refuses it)
@@ -995,7 +1009,7 @@ static pid_t outlive_start(const char *sub, bool outlive, char *done, size_t cap
     unlink(done);
     snprintf(started, cap, "%s/started", dir);
     unlink(started);
-    snprintf(text, sizeof text, "#!/bin/sh\ntouch '%s'\nsleep 0.3\necho late\necho late >&2\ntouch '%s'\n", started, done);   // (it writes after its reader went: F12 step 5c review)
+    snprintf(text, sizeof text, "#!/bin/sh\ntouch '%s'\nsleep 1\necho late\necho late >&2\ntouch '%s'\n", started, done);   // (1 s: its asker killed well before, even loaded)   // (it writes after its reader went: F12 step 5c review)
     put_exec(prog, text);
     pid_t pid = fork();
     if (pid == 0) {
@@ -1021,7 +1035,19 @@ static void test_box_outlive(void)
         k[i] = outlive_start(sub[i], i % 2 == 0, d[i], sizeof d[i], started[i]);
     }
     box_sandbox = true;
-    for (int i = 0; i < 4; i++) kill_once(k[i], started[i]);
+    // Each asker killed as soon as its own job has started (one after another, a later job could end
+    // before its turn: a baseline worker under load, 2026-11-03).
+    bool killed[4] = { 0 };
+    for (int t = 0, left = 4; t < 200 && left > 0; t++) {
+        for (int i = 0; i < 4; i++)
+            if (!killed[i] && access(started[i], F_OK) == 0) kill(k[i], SIGKILL), killed[i] = true, left--;
+        if (left) nanosleep(&(struct timespec){ 0, 10 * 1000 * 1000 }, NULL);
+    }
+    for (int i = 0; i < 4; i++) {
+        int st;
+        if (!killed[i]) kill(k[i], SIGKILL);
+        waitpid(k[i], &st, 0);
+    }
     for (int i = 0; i < 100 && (access(d[0], F_OK) != 0 || access(d[2], F_OK) != 0); i++) nanosleep(&(struct timespec){ 0, 50 * 1000 * 1000 }, NULL);   // (5 s at most)
     nanosleep(&(struct timespec){ 0, 150 * 1000 * 1000 }, NULL);   // (the others had as long, and more)
     CHECK(access(d[0], F_OK) == 0 && access(d[1], F_OK) != 0);
@@ -1124,6 +1150,63 @@ static void test_prog_resolve(void)
     CHECK(access(okran, F_OK) == 0 && access(ran, F_OK) != 0);
     CHECK(chdir(cwd) == 0);
     env_restore(), env_restore(), env_restore();
+}
+
+// The small-file readers (code-health review, 2026-11-03: one for each): a regular file whole, at
+// most max (a bigger one: none), into the arena or a buffer; a FIFO (at once), a link (O_NOFOLLOW)
+// and a folder: none.
+static void test_file_read(void)
+{
+    Arena a;
+    arena_init(&a, "file_read test", thumbers_test_mem, sizeof thumbers_test_mem);
+    char buf[8];
+    struct stat st;
+    mkdirs(at("f12/fr"));
+    put(at("f12/fr/small"), "hello");
+    CHECK(str_eq(file_read_at(&a, AT_FDCWD, at("f12/fr/small"), 64, &st, 0), S("hello")) && st.st_size == 5);
+    CHECK(file_read_at(&a, AT_FDCWD, at("f12/fr/small"), 4, &st, 0).len == 0);   // (over max)
+    int dfd = open(at("f12/fr"), O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+    CHECK(dfd >= 0 && str_eq(file_read_at(&a, dfd, "small", 64, &st, O_NOFOLLOW), S("hello")));
+    CHECK(symlink(at("f12/fr/small"), at("f12/fr/link")) == 0);
+    CHECK(file_read_at(&a, dfd, "link", 64, &st, O_NOFOLLOW).len == 0 && file_read_at(&a, dfd, "link", 64, &st, 0).len == 5);
+    close(dfd);
+    CHECK(file_read_buf(at("f12/fr/small"), buf, 3) == 3 && memcmp(buf, "hel", 3) == 0);
+    CHECK(file_read_buf(at("f12/fr/link"), buf, sizeof buf) == -1 && file_read_buf(at("f12/fr"), buf, sizeof buf) == -1);
+    CHECK(mkfifo(at("f12/fr/fifo"), 0600) == 0);
+    i64 t0 = now_ms();
+    CHECK(file_read_buf(at("f12/fr/fifo"), buf, sizeof buf) == -1 && file_read_at(&a, AT_FDCWD, at("f12/fr/fifo"), 64, &st, 0).len == 0 && now_ms() - t0 < 1000);
+}
+
+// A worktree of a bare repository (no /.git/ in its gitdir's path): its commondir names the
+// repository, bound in the box (code-health review, 2026-11-03).
+static void test_git_common_bare(void)
+{
+    char bare[PATH_MAX], top[PATH_MAX], common[PATH_MAX], want[PATH_MAX];
+    snprintf(bare, sizeof bare, "%s", at("f12/bare/x.git"));
+    mkdirs(at("f12/bare"));
+    CHECK(sh_in(at("f12/bare"), "git init -q --bare -b main x.git && git -C x.git worktree add -q --orphan -b w ../wt 2>/dev/null || git -C x.git worktree add -q ../wt") == 0);
+    CHECK(git_top(at("f12/bare/wt"), top, sizeof top));
+    git_common(top, common, sizeof common);
+    CHECK(realpath(bare, want) && strcmp(common, want) == 0);
+}
+
+// box_run says why it didn't run: no bubblewrap; too many arguments (refused, not cut).
+static void test_box_why(void)
+{
+    ops_guard(root);
+    char prog[PATH_MAX];
+    snprintf(prog, sizeof prog, "%s", at("f12/bin/none"));
+    put_exec(prog, "#!/bin/sh\nexit 0\n");
+    Err why = { "" };
+    const char *argv[BOX_ARGS_MAX + 2] = { prog };
+    for (int i = 1; i <= BOX_ARGS_MAX; i++) argv[i] = "x";
+    BoxJob j = { .argv = argv, .ms = 1000, .why = &why };
+    CHECK(box_run(&j) == BOX_NOT_RUN && strstr(why.msg, "too many arguments"));
+    argv[2] = NULL, why.msg[0] = 0;
+    env_set("PATH", at("f12/bin"));   // (no bwrap there)
+    CHECK(box_run(&j) == BOX_NOT_RUN && strstr(why.msg, "bubblewrap"));
+    env_restore();
+    CHECK(box_run(&j) == BOX_ENDED);
 }
 
 // What git said (F12 step 5c): its last error or fatal line, without the word; else its last line.

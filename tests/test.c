@@ -1852,6 +1852,9 @@ int main(void)
     if (slow) test_no_fds_leak();
     if (fast) test_prog_resolve();
     if (fast) test_menu_key_agree();
+    if (fast) test_file_read();
+    if (slow) test_git_common_bare();
+    if (slow) test_box_why();
     if (slow) test_box_outlive();
     if (slow) test_box_outlive_out();
     if (slow) test_box_output_end();

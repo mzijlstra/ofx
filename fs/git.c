@@ -170,11 +170,10 @@ static void git_linked(const char *top, char *out, size_t cap)
     out[0] = 0;
     char g[PATH_MAX + 8], line[PATH_MAX + 16], at[2 * PATH_MAX + 2], r[PATH_MAX];
     snprintf(g, sizeof g, "%s/.git", top);
-    FILE *f = fopen(g, "re");
-    if (!f) return;
-    bool ok = fgets(line, sizeof line, f) && strncmp(line, "gitdir: ", 8) == 0;
-    fclose(f);
-    if (!ok) return;
+    isize n = file_read_buf(g, line, sizeof line - 1);
+    if (n <= 0) return;
+    line[n] = 0;
+    if (strncmp(line, "gitdir: ", 8) != 0) return;
     line[strcspn(line, "\n")] = 0;
     const char *to = line + 8;
     snprintf(at, sizeof at, "%s%s%s", to[0] == '/' ? "" : top, to[0] == '/' ? "" : "/", to);
@@ -185,9 +184,19 @@ static void git_linked(const char *top, char *out, size_t cap)
 // bound too, as its objects are there.
 static void git_common(const char *top, char *out, size_t cap)
 {
-    git_linked(top, out, cap);
-    char *dot = strstr(out, "/.git/");
-    if (dot) dot[5] = 0;   // (…/.git/worktrees/wt, …/.git/modules/sub: the .git above)
+    // The gitdir's commondir names the repository's (a worktree's "../..", one of a bare repository's
+    // too, which has no /.git/ in its path); without one, as a submodule's, the gitdir is it (code-
+    // health review, 2026-11-03: the path was cut at its /.git/).
+    char gitdir[PATH_MAX], p[PATH_MAX + 16], rel[PATH_MAX], at[2 * PATH_MAX + 2], r[PATH_MAX];
+    git_linked(top, gitdir, sizeof gitdir);
+    snprintf(out, cap, "%s", gitdir);
+    if (!gitdir[0]) return;
+    snprintf(p, sizeof p, "%s/commondir", gitdir);
+    isize n = file_read_buf(p, rel, sizeof rel - 1);
+    if (n <= 0) return;
+    rel[n] = 0, rel[strcspn(rel, "\n")] = 0;
+    snprintf(at, sizeof at, "%s%s%s", rel[0] == '/' ? "" : gitdir, rel[0] == '/' ? "" : "/", rel);
+    if (rel[0] && realpath(at, r)) snprintf(out, cap, "%s", r);
 }
 
 // Where top's index and HEAD are, into out: its .git folder, or the one its .git file names. What
@@ -202,17 +211,20 @@ static void git_gitdir(const char *top, char *out, size_t cap)
 // submodule's real .git (git_common), and git's config files (HOME's, XDG's, /etc's).
 typedef struct { char common[PATH_MAX], home_conf[PATH_MAX], xdg_conf[PATH_MAX]; } GitBinds;
 
-// j set up to run argv (git's) in folder dir of repository top, as below: in bubblewrap, those of
-// g's paths bound, for git_run_ms.
-static void git_job(BoxJob *j, GitBinds *g, const char *const *argv, const char *dir, const char *top)
+// j set up to run argv (git's) in folder dir of repository top, as below: in bubblewrap, g's paths
+// bound, for git_run_ms; the repository and its real .git read only, or writable when it writes (a
+// switch), git's config files read only either way.
+static void git_job(BoxJob *j, GitBinds *g, const char *const *argv, const char *dir, const char *top, bool writes)
 {
     const char *home = getenv("HOME"), *xdg = getenv("XDG_CONFIG_HOME");
     git_common(top, g->common, sizeof g->common);
     snprintf(g->home_conf, sizeof g->home_conf, "%s/.gitconfig", home ? home : "/nonexistent");
     if (xdg && xdg[0]) snprintf(g->xdg_conf, sizeof g->xdg_conf, "%s/git", xdg);
     else snprintf(g->xdg_conf, sizeof g->xdg_conf, "%s/.config/git", home ? home : "/nonexistent");
-    *j = (BoxJob){ .argv = argv, .ro = { top, g->home_conf, g->xdg_conf, "/etc/gitconfig" }, .cwd = dir, .ms = git_run_ms };
-    if (g->common[0]) j->ro[4] = g->common;
+    const char *common = g->common[0] ? g->common : NULL;
+    *j = (BoxJob){ .argv = argv, .ro = { g->home_conf, g->xdg_conf, "/etc/gitconfig" }, .cwd = dir, .ms = git_run_ms };
+    if (writes) j->rw[0] = top, j->rw[1] = common;
+    else j->ro[3] = top, j->ro[4] = common;
 }
 
 // git status for folder dir (resolved) in repository top, read into g; git's output is put in a,
@@ -225,7 +237,7 @@ static bool git_status(Arena *a, const char *git, const char *dir, const char *t
     const char *argv[] = { git, "--no-optional-locks", "-c", "core.fsmonitor=false", "status", "--porcelain=v2", "-z", "--ignored", "--branch", "--", ".", NULL };
     GitBinds binds;
     BoxJob j;
-    git_job(&j, &binds, argv, dir, top);
+    git_job(&j, &binds, argv, dir, top, false);
     isize len = 0;
     j.out = arena_try_push(a, GIT_OUT_MAX, 1), j.cap = GIT_OUT_MAX, j.len = &len;
     if (!j.out || box_run(&j) != BOX_ENDED || len == 0) return false;
@@ -333,10 +345,7 @@ static void git_head_name(const char *gitdir, char *name, size_t cap)
     char p[PATH_MAX + 8], line[GIT_HEAD_MAX + 32];
     name[0] = 0;
     snprintf(p, sizeof p, "%s/HEAD", gitdir);
-    int fd = open(p, O_RDONLY | O_CLOEXEC | O_NONBLOCK | O_NOFOLLOW);
-    if (fd < 0) return;
-    ssize_t k = read(fd, line, sizeof line - 1);
-    close(fd);
+    isize k = file_read_buf(p, line, sizeof line - 1);
     if (k <= 0) return;
     line[k] = 0;
     line[strcspn(line, "\n")] = 0;
@@ -361,7 +370,7 @@ static bool git_branches(const char *git, const char *dir, const char *top, GitB
     char gitdir[PATH_MAX];
     GitBinds binds;
     BoxJob j;
-    git_job(&j, &binds, argv, dir, top);
+    git_job(&j, &binds, argv, dir, top, false);
     git_gitdir(top, gitdir, sizeof gitdir);
     char head[GIT_HEAD_MAX];
     git_head_name(gitdir, head, sizeof head);
@@ -415,21 +424,19 @@ static GitSwitch git_switch(const char *git, const char *top, const char *name, 
     char gitdir[PATH_MAX];
     GitBinds binds;
     BoxJob j;
-    git_job(&j, &binds, argv, top, top);
+    git_job(&j, &binds, argv, top, top, true);
     git_gitdir(top, gitdir, sizeof gitdir);
-    // Read only: git's config files alone; the repository and its real .git writable.
-    j.ro[0] = binds.home_conf, j.ro[1] = binds.xdg_conf, j.ro[2] = "/etc/gitconfig", j.ro[3] = j.ro[4] = NULL;
     // (common comes from the repository's own .git file: the guard asked for it too; review, 2026-11-03)
     if (binds.common[0] && !ops_allowed(binds.common, &err)) return snprintf(msg, cap, "%s", err.msg), GSW_REFUSED;
-    j.rw[0] = top, j.rw[1] = binds.common[0] ? binds.common : NULL;
     j.ms = git_switch_ms;
     isize len = 0;
-    j.out = out, j.cap = sizeof out, j.len = &len, j.err = true, j.outlive = true;
+    Err why = { "" };
+    j.out = out, j.cap = sizeof out, j.len = &len, j.err = true, j.outlive = true, j.why = &why;
     BoxRun r = box_run(&j);
     if (r == BOX_GOING) return snprintf(msg, cap, "still switching after %g s; it carries on", git_switch_ms / 1000.0), GSW_GOING;
     git_said((Str){ out, len }, msg, cap);
     if (git_head_is(gitdir, name)) return GSW_DONE;
-    if (r == BOX_NOT_RUN) snprintf(msg, cap, "git didn't run");
+    if (r == BOX_NOT_RUN) snprintf(msg, cap, "%s", why.msg[0] ? why.msg : "git didn't run");
     if (!msg[0]) snprintf(msg, cap, "git switch failed");
     return GSW_REFUSED;
 }
