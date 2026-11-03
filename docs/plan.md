@@ -740,6 +740,11 @@ vs-code's as the only one). Steps, each with its own reviewer-2 round:
      finds its branch), the list in the menu's order (checked out last first, then by commit
      date), each row with its last commit's age; Enter or a double click switches, as the menu
      does. Local branches only (remote ones would make a tracking branch: a new write, not now).
+     Built (c3710f9, review fixes to af207f7): up to 8,192 refs read (256 KiB of output, cut at
+     its last whole line), the latest 1,024 listed, the count "N+" past either; HEAD's branch
+     listed first even when the read was cut before it. A folder change closes the panel and the
+     menu, and a switch is refused for a list read in another folder (f12i). Code-health cleanup
+     after it (6A to 6C): Open With and the branches share one picker (UiPick, ui_pick_*).
 
 ## F11 design (2026-11-01)
 

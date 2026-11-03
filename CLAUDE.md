@@ -62,15 +62,16 @@ rules shared by every tool here.
   (unit; each run's own, as pgrep sees every run at once), never f11j's `sleep 20`.
 - **git status** (F12 step 5): in a folder inside a repository, ofx runs `git --no-optional-locks -c
   core.fsmonitor=false status --porcelain=v2 -z --ignored --branch -- .` there (and, as the branch
-  button's menu opens, `git for-each-ref` for the local branches, step 5b), in bubblewrap
+  button's menu opens, `git for-each-ref` for the local branches with their commit times, step 5b,
+  up to 8,192 for the menu and step 6's panel), in bubblewrap
   (fs/sandbox.c): the repository, its git config files and `/usr` read only, nothing writable, so
   what a repository's own config names (a filter) can't reach the rest; git doesn't write its index.
   The menu reads HEAD's reflog (`logs/HEAD` in the gitdir, its last 64 KiB) itself, read only.
   **Picking a branch writes** (step 5c): `git switch <branch>` in bubblewrap with the repository
   (and a worktree's real .git) writable, its hooks run. On Michael's own repos that is his switch;
   never pick one in a window on a work repo. With the guard on, ofx switches only a repository
-  inside `OFX_GUI_ROOT` (`ops_allowed`) with a test's own git: f12h's wrapper on run.sh's scratch
-  repository, the unit test's on its own.
+  inside `OFX_GUI_ROOT` (`ops_allowed`) with a test's own git: f12h's and f12i's wrappers on
+  run.sh's scratch repositories, the unit test's on its own.
   On Michael's repos that is a read; the work repos are his too, but read only (`../CLAUDE.md`): a
   window showing one reads it, as a terminal's `git status` would, never more. Under the guard ofx
   runs only a test's own git (f12g puts a wrapper among the fakes, before /usr/bin/git; the unit

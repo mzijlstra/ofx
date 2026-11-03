@@ -246,9 +246,10 @@ static bool git_status(Arena *a, const char *git, const char *dir, const char *t
     return true;
 }
 
-// ---- the branches (F12 step 5b): the branch button's menu ----------------------------------------
+// ---- the branches (F12 step 5b): the branch button's menu, and its panel (step 6) -----------------
 
-// The branches (step 5b; all of them, step 6): the menu shows the first 8, the panel the rest.
+// The branches (step 5b; all of them, step 6): the menu shows the first 8, the panel all it holds
+// (GIT_BRANCHES_MAX, of GIT_REFS_MAX read).
 enum { GIT_BRANCHES_MAX = 1024, GIT_REFS_MAX = 8192, GIT_REFLOG_TAIL = KiB(64), GIT_REFS_OUT_MAX = KiB(256) };
 
 typedef struct {
@@ -400,9 +401,11 @@ static bool git_head_is(const char *gitdir, const char *name)
     return now[0] && strcmp(now, name) == 0;
 }
 
-// The branch menu's list for folder dir (resolved) in repository top, its HEAD's branch read now
-// (git_head_name; "": detached): the local branches from `git for-each-ref` (newest commit first; in bubblewrap, as
-// git_status), merged with the reflog's checkouts. False when git didn't run or said nothing.
+// The branch menu's and panel's list for folder dir (resolved) in repository top, its HEAD's branch
+// read now (git_head_name; "": detached): the local branches from `git for-each-ref`, each with its
+// last commit's time (newest commit first; in bubblewrap, as git_status), merged with the reflog's
+// checkouts; its output as far as its last whole line (git_refs_whole). False when git didn't run or
+// said nothing.
 static bool git_branches(const char *git, const char *dir, const char *top, GitBranches *b)
 {
     static char out[GIT_REFS_OUT_MAX], tail[GIT_REFLOG_TAIL];   // (the worker's only)

@@ -12,8 +12,8 @@ static int brp_rows(int h)
     return r < 1 ? 1 : r > BRP_ROWS_MAX ? BRP_ROWS_MAX : r;
 }
 
-// The names ui/ filters, as git.br has them (each frame the panel is up: the list a switch read
-// again may have changed).
+// The names ui/ filters, as git.br has them (each frame the branch menu or the panel is up; git.br
+// changes only when the menu opens: git_ask_branches).
 static const Str *brp_names(void)
 {
     static Str names[GIT_BRANCHES_MAX];

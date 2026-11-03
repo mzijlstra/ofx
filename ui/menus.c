@@ -60,7 +60,7 @@ static bool ui_menu_enabled(const Ui *u, UiMenuItem it)
 {
     bool files = u->list.n > 0, here = files && u->focus != UI_FOCUS_SIDE;
     if (!ui_menu_shown(u, it)) return false;
-    if (ui_slot(it, UM_BM_0, UI_MENU_BOOKMARKS) >= 0 || ui_slot(it, UM_BR_0, UI_MENU_BRANCHES) >= 0 || it == UM_BR_ALL) return true;   // (a bookmark, a branch: shown, then picked; UM_BR_NOTE never)
+    if (ui_slot(it, UM_BM_0, UI_MENU_BOOKMARKS) >= 0 || ui_slot(it, UM_BR_0, UI_MENU_BRANCHES) >= 0 || it == UM_BR_ALL) return true;   // (a bookmark, a branch, All branches: shown, then picked; UM_BR_NOTE never)
     if (u->menu == UI_CTX_FOLDER) {   // (F8) the rest are always there to pick
         if (it == UM_PASTE_INTO) return u->can_paste && u->ctx_w;
         if (it == UM_BM_UP_IT) return u->ctx_bmk > 0;

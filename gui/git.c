@@ -35,12 +35,13 @@ static struct {
     int             shown;            // the window's (main thread's)
     int             ready;            // a fresh answer's slot, -1 none
     i64             last, due;        // the main thread's: when it last asked, and an ask put off to then (0: none)
-    // The branch menu's list (step 5b), asked as it opens: for the folder and HEAD's branch asked.
+    // The branch menu's list (step 5b), asked as it opens: for the folder and HEAD's branch asked;
+    // the branches panel (step 6) shows the same list.
     char            br_want[PATH_MAX];
     bool            br_asked, br_ready;
     u32             br_gen;
     GitBranches     br_out;           // the worker's answer, taken into br
-    GitBranches     br;               // the main thread's: the menu's
+    GitBranches     br;               // the main thread's: the menu's and the panel's
     bool            br_wait;          // asked, no answer yet ("Reading branches…")
     // A switch (step 5c), picked in the menu: to branch sw_name, for folder sw_dir; its answer.
     char            sw_dir[PATH_MAX], sw_name[GIT_HEAD_MAX], sw_msg[256];
@@ -163,7 +164,7 @@ static void git_poll(void)
 
 static const GitSlot *git_shown(void);
 
-// Branch name picked in the menu: switched to, in the folder shown's repository, on the worker
+// Branch name picked in the menu or the panel: switched to, in the folder shown's repository, on the worker
 // (git_switch_take says how it went). One at a time.
 static bool git_ask_switch(const char *name)
 {
@@ -187,7 +188,7 @@ static bool git_switch_take(GitSwitch *got, char *name, size_t ncap, char *dir, 
     return r;
 }
 
-// The branch menu opened: its list asked for the folder shown, the one before dropped (none outside
+// The branch menu opened: its list (the panel's too) asked for the folder shown, the one before dropped (none outside
 // a repository).
 static void git_ask_branches(void)
 {
@@ -237,7 +238,6 @@ static const char *branch_label(void)
     return buf;
 }
 
-// The branch menu's entry it, its label: a branch's name, or the note in their place.
 // The repository's branch count: "N+" when more were left unread (GitBranches.more), rather than a
 // number that reads as exact (review, 2026-11-03).
 static const char *br_total_text(void)
@@ -245,6 +245,8 @@ static const char *br_total_text(void)
     return arena_sprintf(&frame, git.br.more ? "%d+" : "%d", git.br.total);
 }
 
+// The branch menu's entry it, its label: a branch's name, the note in their place, or All branches
+// with the count.
 static Str branch_menu_label(UiMenuItem it)
 {
     if (it == UM_BR_NOTE && git.sw_busy) return str_from_c(arena_sprintf(&frame, "Switching to %s\xE2\x80\xA6", git.sw_name));   // (step 5c: the list comes after)

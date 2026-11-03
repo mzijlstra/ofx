@@ -61,6 +61,12 @@ rs() {
 mi() {   # <T>/mountinfo with / alone on it: ext4, or btrfs (the drive rules differ)
     case $1 in ext4) printf '1 0 0:1 / / rw - ext4 /dev/x rw\n' ;; *) printf '33 1 0:31 / / rw - btrfs /dev/x rw\n' ;; esac > "$T/mountinfo"
 }
+git_fake() {   # a test's git among <T>/fakes (the guard runs no program outside the run's folder): the real one, after line $2 when given
+    { printf '#!/bin/sh\n'; [ -z "${2:-}" ] || printf '%s\n' "$2"; printf 'exec /usr/bin/git "$@"\n'; } > "$1/fakes/git"; chmod +x "$1/fakes/git"
+}
+git_env() {   # in a scratch repository's subshell: git's own config files out of it, nothing above <T> seen, a fixed author
+    export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_CEILING_DIRECTORIES="$1" GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t
+}
 menu_tree() {   # <home>/tree for the menus' groups (f74, f8): sub/, a.txt (3 bytes), b.txt (10), c.txt (1), .hid
     mkdir -p "$1/tree/sub"; printf aaa > "$1/tree/a.txt"; printf 0123456789 > "$1/tree/b.txt"; printf c > "$1/tree/c.txt"; : > "$1/tree/.hid"
 }
@@ -472,10 +478,10 @@ if want f12g; then
 # real git behind a wrapper among the fakes (the guard runs no program outside the run's folder), in
 # bubblewrap as always. HOME is the run's: no config of Michael's comes in.
 T=$base/f12g; rm -rf "$T"; mkdir -p "$T/tree/repo/src" "$T/fakes"
-printf '#!/bin/sh\nexec /usr/bin/git "$@"\n' > "$T/fakes/git"; chmod +x "$T/fakes/git"
-( cd "$T/tree/repo" && export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_CEILING_DIRECTORIES="$T" &&
+git_fake "$T"
+( cd "$T/tree/repo" && git_env "$T" &&
   git init -q -b main . && printf 'a\n' > a.txt && printf 'k\n' > kept.txt && printf '*.log\nbuild/\n' > .gitignore && printf 'b\n' > src/b.txt &&
-  git add -A && git -c user.name=t -c user.email=t@t commit -qm one &&
+  git add -A && git commit -qm one &&
   printf 'a2\n' >> a.txt && printf 'n\n' > src/new.txt && git add src/new.txt && mkdir newdir build && printf 'u\n' > newdir/u && printf 'l\n' > x.log && printf 'o\n' > build/out.o ) || failed f12g
 rs f12g OFX_TEST_GIT_GAP_MS=3000 -- "$T/tree/repo"   # (the gap 3 s: its put-off ask checked before it is due, even loaded)
 chmod -R u+w "$T"   # (f12g makes its repository read-only for a while: writable again, even if it failed there)
@@ -491,8 +497,8 @@ if want f12h; then
 # menu says so meanwhile, and past OFX_TEST_GIT_SWITCH_MS it carries on). A post-checkout hook says
 # something on feat-a.
 T=$base/f12h; rm -rf "$T"; mkdir -p "$T/tree/repo" "$T/fakes"
-printf '#!/bin/sh\ncase "$*" in *" switch "*" base") sleep 1 ;; esac\nexec /usr/bin/git "$@"\n' > "$T/fakes/git"; chmod +x "$T/fakes/git"
-( cd "$T/tree/repo" && export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_CEILING_DIRECTORIES="$T" GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t &&
+git_fake "$T" 'case "$*" in *" switch "*" base") sleep 1 ;; esac'
+( cd "$T/tree/repo" && git_env "$T" &&
   c() { GIT_AUTHOR_DATE="$1 +0000" GIT_COMMITTER_DATE="$1 +0000" git commit -q --allow-empty -m "$1"; } &&
   git init -q -b main . && printf 'a\n' > a.txt && git add a.txt && c 1700000000 &&
   for i in 0 1 2 3 4 5 6 7 8 9; do git branch "old$i"; done && git branch base &&
@@ -509,8 +515,8 @@ if want f12i; then
 # F12 step 6 review: repo O on main with a branch other, and inside it repo inner with 12 branches,
 # other among them; the script removes inner under the branches panel.
 T=$base/f12i; rm -rf "$T"; mkdir -p "$T/tree/O" "$T/fakes"
-printf '#!/bin/sh\nexec /usr/bin/git "$@"\n' > "$T/fakes/git"; chmod +x "$T/fakes/git"
-( cd "$T/tree/O" && export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_CEILING_DIRECTORIES="$T" GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t &&
+git_fake "$T"
+( cd "$T/tree/O" && git_env "$T" &&
   git init -q -b main . && git commit -q --allow-empty -m o && git branch other &&
   mkdir inner && cd inner && git init -q -b main . && git commit -q --allow-empty -m i &&
   for b in other b1 b2 b3 b4 b5 b6 b7 b8 b9 b10; do git branch "$b"; done ) || failed f12i

@@ -475,7 +475,7 @@ static float wheel_left;   // a touchpad's part of a notch, carried to the next 
 // sidebar scrolls by itself. True when the sidebar moved.
 static bool wheel_at(UiInput *in, float x, int notches, bool ctrl)
 {
-    if (app.ui.panel == UI_PANEL_OW || app.ui.panel == UI_PANEL_KEYS || app.ui.panel == UI_PANEL_BRANCHES) return in->panel_wheel = notches, false;   // the panel's list (F7.3; Keyboard Shortcuts', F7.5)
+    if (app.ui.panel == UI_PANEL_OW || app.ui.panel == UI_PANEL_KEYS || app.ui.panel == UI_PANEL_BRANCHES) return in->panel_wheel = notches, false;   // the panel's list (Open With's, F7.3; Keyboard Shortcuts', F7.5; the branches', F12 step 6)
     if (x >= side_w() && ctrl) in->zoom_wheel = notches;
     else if (x >= side_w()) in->wheel = notches;
     else if (notches) return app.ui.side.top = ui_clamp(app.ui.side.top - notches, 0, ui_max_top(&app.ui.side)), true;
