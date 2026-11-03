@@ -21,6 +21,11 @@ static struct {
 
 static int mouse_backs, mouse_forwards;
 
+// A key or character since the pointer last moved, clicked or scrolled: no hover highlights then.
+// Omarchy's Hyprland hides the pointer on a key (cursor:hide_on_key_press) and sends no leave, so
+// the row under where it was stayed lit (Michael, 2026-11-03).
+static bool keys_since_pointer;
+
 static void ev_push(UiEvent e)
 {
     if (evq.n < UI_EVENTS_MAX) evq.ev[evq.n++] = e;
@@ -553,16 +558,21 @@ static UiInput input_real(bool *seen)
     UiInput in = ui_input_none();
     memcpy(in.ev, evq.ev, sizeof *evq.ev * (size_t)evq.n);
     in.nev = evq.n;
+    bool evq_keys = evq.n > 0;
     *seen = evq.n > 0 || IsWindowResized();
     evq.n = 0;
     while (GetKeyPressed() != 0) *seen = true;
     while (GetCharPressed() != 0) {}
     Vector2 m = GetMousePosition(), d = GetMouseDelta();
+    if (evq_keys) keys_since_pointer = true;
+    if (d.x != 0 || d.y != 0 || GetMouseWheelMove() != 0 || IsMouseButtonPressed(MOUSE_BUTTON_LEFT) || IsMouseButtonPressed(MOUSE_BUTTON_MIDDLE) ||
+        IsMouseButtonPressed(MOUSE_BUTTON_RIGHT))
+        keys_since_pointer = false;
     wheel_left += GetMouseWheelMove();
     int notches = (int)wheel_left;
     wheel_left -= (float)notches;
     *seen |= wheel_at(&in, m.x, notches, IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL));
-    if (!script_on) *seen |= hover_refresh(IsCursorOnScreen(), m.x, m.y);
+    if (!script_on) *seen |= hover_refresh(IsCursorOnScreen() && !keys_since_pointer, m.x, m.y);
     if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
         int mods = (IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL) ? UI_MOD_CTRL : 0) |
                    (IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT) ? UI_MOD_SHIFT : 0);
