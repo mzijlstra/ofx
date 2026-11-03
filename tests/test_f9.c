@@ -909,7 +909,7 @@ static void test_field_copy_fallthrough(void)
 {
     UiNames names = { name_at, NULL, NULL };
     Ui u = { 0 };
-    u.list.rows = 10;
+    u.list.rows = 10, u.can_write = true;   // (a folder that can be written: Cut moves out of it)
     ui_set(&u.list, COUNT(find_names), 0);
     for (int k = 0; k < 2; k++) {
         UiKey key = k ? UK_CUT : UK_COPY;

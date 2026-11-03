@@ -382,7 +382,7 @@ static bool ui_line_active(Ui *u, UiLine *out)
 // A key or character in the edit line: an action for gui/ (UA_RENAME or UA_GO on Enter) or UA_NONE.
 static UiAction ui_edit_event(Ui *u, UiEvent e, Str paste)
 {
-    if (ui_line_key(u, ui_edit_line(u), e, paste)) return (UiAction){ UA_NONE, 0, false };
+    if (ui_line_key(u, ui_edit_line(u), e, paste)) return UI_NONE;
     switch (e.key) {
     case UK_ENTER:
     case UK_SHIFT_ENTER: return (UiAction){ u->edit_path ? UA_GO : UA_RENAME, 0, false };
@@ -392,5 +392,5 @@ static UiAction ui_edit_event(Ui *u, UiEvent e, Str paste)
         break;
     default: break;
     }
-    return (UiAction){ UA_NONE, 0, false };
+    return UI_NONE;
 }

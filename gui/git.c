@@ -242,7 +242,7 @@ static Str branch_menu_label(UiMenuItem it)
 {
     if (it == UM_BR_NOTE && git.sw_busy) return str_from_c(arena_sprintf(&frame, "Switching to %s\xE2\x80\xA6", git.sw_name));   // (step 5c: the list comes after)
     if (it == UM_BR_NOTE) return git.br_wait ? S("Reading branches\xE2\x80\xA6") : S("No local branches");
-    int k = (int)(it - UM_BR_0);
+    int k = ui_slot(it, UM_BR_0, UI_MENU_BRANCHES);
     return k >= 0 && k < git.br.n ? str_from_c(git.br.name[k]) : STR_EMPTY;
 }
 

@@ -197,7 +197,7 @@ static int ui_zoom_px(const Ui *u)
 static UiAction ui_zoom(Ui *u, int k)
 {
     k = (int)ui_clamp(k, 0, UI_ZOOMS - 1);
-    if (!u->grid || UI_ZOOM_PX[k] == ui_zoom_px(u)) return (UiAction){ UA_NONE, 0, false };
+    if (!u->grid || UI_ZOOM_PX[k] == ui_zoom_px(u)) return UI_NONE;
     u->zoom = UI_ZOOM_PX[k];
     return (UiAction){ UA_ZOOM, u->zoom, false };
 }

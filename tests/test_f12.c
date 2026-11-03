@@ -1148,18 +1148,23 @@ static void test_menu_key_agree(void)
 {
     static const struct { UiMenuItem it; int key; } P[] = {
         { UM_RENAME, UK_F2 }, { UM_MAKE_LINK, UK_MAKE_LINK }, { UM_PASTE, UK_PASTE }, { UM_NEW_FOLDER, UK_NEWFOLDER }, { UM_OPEN_WITH, UK_SHIFT_ENTER },
+        { UM_TRASH, UK_DELETE }, { UM_DELETE, UK_SHIFT_DELETE }, { UM_CUT, UK_CUT },   // (step 3 review)
     };
     static const struct { UiView v; bool w; } C[] = { { UI_VIEW_FOLDER, true }, { UI_VIEW_FOLDER, false }, { UI_VIEW_TRASH, false }, { UI_VIEW_SEARCH, false } };
     for (int c = 0; c < COUNT(C); c++)
         for (int k = 0; k < COUNT(P); k++) {
+            if (C[c].v == UI_VIEW_TRASH && P[k].it == UM_TRASH) continue;   // (Delete there is for good: UM_DELETE's, below)
             Ui u = menu_ui(3);
             u.view = C[c].v, u.can_write = C[c].w, u.can_paste = true, u.menu = 1;
             bool on = ui_menu_enabled(&u, P[k].it);
             UiAction a = menu_keys(&u, 1, P[k].key);
             bool refused = a.kind == UA_READ_ONLY || a.kind == UA_NOT_IN_TRASH || a.kind == UA_NOT_IN_SEARCH;
+            if (P[k].it == UM_DELETE) refused = !u.confirming;   // (its key asks first)
             if (on == refused) fprintf(stderr, "agree: view %d writable %d item %d: menu %d, key gave %d\n", C[c].v, C[c].w, P[k].it, on, a.kind);
             CHECK(on != refused);
             if (!on && C[c].v == UI_VIEW_FOLDER) CHECK(a.kind == UA_READ_ONLY);
+            if (C[c].v == UI_VIEW_FOLDER && !C[c].w) CHECK(on == (P[k].it == UM_OPEN_WITH));   // (all but Open With write)
+            if (C[c].v == UI_VIEW_TRASH && P[k].it == UM_DELETE) CHECK(on);   // (for good, in the trash: no folder of the view's to write)
         }
     Ui s = menu_ui(3);
     s.view = UI_VIEW_SEARCH, s.can_write = false, s.menu = 1;

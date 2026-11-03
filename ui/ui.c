@@ -254,6 +254,7 @@ typedef struct {
     isize        index;   // UA_OPEN: the entry; UA_PLACE: the place; UA_ANSWER: the answer
     bool         all;     // UA_ANSWER: for all the rest; UA_OPEN: the marked entries, not only index (Enter, F7.3)
 } UiAction;
+#define UI_NONE ((UiAction){ UA_NONE, 0, false })   // (nothing for gui/ to do)
 
 // The clash answers, as fs/job.c numbers them (Answer); ui/ doesn't include it.
 enum { UI_ANS_SKIP = 1, UI_ANS_REPLACE = 2, UI_ANS_KEEP = 3, UI_ANS_CANCEL = 4 };
@@ -286,6 +287,19 @@ enum { UI_MENU_BOOKMARKS = 8 };
 
 // The branch menu's: the 8 checked out last, filled up by commit date (F12 step 5b).
 enum { UI_MENU_BRANCHES = 8 };
+
+// Which of a run of n slots (first, first + 1, …: a bookmark's, a branch's) entry it is, or -1.
+static int ui_slot(UiMenuItem it, UiMenuItem first, int n)
+{
+    return it >= first && it < first + n ? (int)(it - first) : -1;
+}
+
+// A run of 8 slots' entries (bookmarks, branches): no label of their own (gui/'s), named <w>0..7
+// in a script's state line, marked as one of a group.
+#define UI_SLOT_ITEM(first, k, w) [first + k] = { "", "", w #k, .mark = 'r' }
+#define UI_SLOT_ITEMS(first, w) UI_SLOT_ITEM(first, 0, w), UI_SLOT_ITEM(first, 1, w), UI_SLOT_ITEM(first, 2, w), UI_SLOT_ITEM(first, 3, w), \
+                                UI_SLOT_ITEM(first, 4, w), UI_SLOT_ITEM(first, 5, w), UI_SLOT_ITEM(first, 6, w), UI_SLOT_ITEM(first, 7, w)
+_Static_assert(UI_MENU_BOOKMARKS == 8 && UI_MENU_BRANCHES == 8, "UI_SLOT_ITEMS writes 8");
 
 // Each entry's label, its key as the menu shows it, and its name in a script's state line; the key
 // event it stands for (F7.4: picked, the entry runs that key, so the two can't differ; none: its
@@ -391,15 +405,9 @@ static const struct { const char *label, *key, *word; UiEvent ev; char mark; } U
     // The branch menu's (F12 step 5b): a note while there are none to list ("Reading branches…"),
     // then the branches, gui/'s labels; the one checked out marked.
     [UM_BR_NOTE] = { "", "", "br-note" },
-    [UM_BR_0] = { "", "", "br-0", .mark = 'r' }, [UM_BR_1] = { "", "", "br-1", .mark = 'r' },
-    [UM_BR_2] = { "", "", "br-2", .mark = 'r' }, [UM_BR_3] = { "", "", "br-3", .mark = 'r' },
-    [UM_BR_4] = { "", "", "br-4", .mark = 'r' }, [UM_BR_5] = { "", "", "br-5", .mark = 'r' },
-    [UM_BR_6] = { "", "", "br-6", .mark = 'r' }, [UM_BR_7] = { "", "", "br-7", .mark = 'r' },
+    UI_SLOT_ITEMS(UM_BR_0, "br-"),
     [UM_TAB_REOPEN] = { "Reopen Closed Tab", "Ctrl+Shift+T", "reopen-tab", { UK_TAB_REOPEN, 0 } },
-    [UM_BM_0] = { "", "", "bm-0", .mark = 'r' }, [UM_BM_1] = { "", "", "bm-1", .mark = 'r' },
-    [UM_BM_2] = { "", "", "bm-2", .mark = 'r' }, [UM_BM_3] = { "", "", "bm-3", .mark = 'r' },
-    [UM_BM_4] = { "", "", "bm-4", .mark = 'r' }, [UM_BM_5] = { "", "", "bm-5", .mark = 'r' },
-    [UM_BM_6] = { "", "", "bm-6", .mark = 'r' }, [UM_BM_7] = { "", "", "bm-7", .mark = 'r' },
+    UI_SLOT_ITEMS(UM_BM_0, "bm-"),
 };
 
 static const UiMenuItem UI_MENU_FILE[] = {
@@ -847,13 +855,15 @@ static bool ui_view_allows(UiView v, UiActionKind k)
 }
 
 // Whether kind writes in the folder shown, which must then be writable (Ui.can_write): paste and
-// the new entries; a rename, a duplicate and a link too, except in a search, where each is in its
-// result's own folder (F9).
+// the new entries; a rename, a duplicate, a link, a trash, a delete and a cut (its move deletes)
+// too, except in a search, where each is in its result's own folder (F9), and a delete in the
+// trash view, which is the trash's (step 3 review, 2026-11-03).
 static bool ui_view_writes(UiView v, UiActionKind k)
 {
     switch (k) {
     case UA_PASTE: case UA_NEWFOLDER: case UA_NEWFILE: return true;
-    case UA_RENAME: case UA_DUPLICATE: case UA_MAKE_LINK: return v != UI_VIEW_SEARCH;
+    case UA_RENAME: case UA_DUPLICATE: case UA_MAKE_LINK: case UA_TRASH: case UA_CUT: return v != UI_VIEW_SEARCH;
+    case UA_DELETE: return v == UI_VIEW_FOLDER;   // (the trash view's is in the trash; a search's in each result's folder)
     default: return false;
     }
 }
@@ -873,6 +883,36 @@ static UiAction ui_view_act(const Ui *u, UiAction a)
     if (ui_allows(u, a.kind)) return a;
     if (ui_view_allows(u->view, a.kind)) return (UiAction){ UA_READ_ONLY, 0, false };
     return (UiAction){ u->view == UI_VIEW_TRASH ? UA_NOT_IN_TRASH : u->view == UI_VIEW_SEARCH ? UA_NOT_IN_SEARCH : UA_NONE, 0, false };   // (a folder's: nothing to say)
+}
+
+// h, j, k and l as Left, Down, Up and Right (vi's), wherever there is a cursor to move (Michael,
+// 2026-10-21); any other event as it is. (A place that doesn't move that way ignores the arrow, as
+// it ignored the letter.)
+static UiEvent ui_vi_key(UiEvent e)
+{
+    if (e.key != UK_NONE) return e;
+    switch (e.ch) {
+    case 'h': e.key = UK_LEFT; break;
+    case 'j': e.key = UK_DOWN; break;
+    case 'k': e.key = UK_UP; break;
+    case 'l': e.key = UK_RIGHT; break;
+    default: break;
+    }
+    return e;
+}
+
+// A Shift move (UK_SEL_*) as its plain key; any other as it is.
+static UiKey ui_unshift(UiKey k)
+{
+    switch (k) {
+    case UK_SEL_LEFT: return UK_LEFT;
+    case UK_SEL_RIGHT: return UK_RIGHT;
+    case UK_SEL_HOME: return UK_HOME;
+    case UK_SEL_END: return UK_END;
+    case UK_SEL_UP: return UK_UP;
+    case UK_SEL_DOWN: return UK_DOWN;
+    default: return k;
+    }
 }
 
 // f gives the keys back to the list, if it has them.

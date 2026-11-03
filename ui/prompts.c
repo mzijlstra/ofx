@@ -18,14 +18,13 @@ static void ui_crumbs_focus(Ui *u, const UiInput *in)
 // Any other key gives the keyboard back to the list and is the list's.
 static bool ui_crumbs_event(Ui *u, const UiInput *in, UiEvent e, UiAction *a)
 {
-    *a = (UiAction){ UA_NONE, 0, false };
-    if (e.key == UK_NONE && e.ch == 'h') e.key = UK_LEFT;    // as in the list (Michael, 2026-10-21)
-    if (e.key == UK_NONE && e.ch == 'l') e.key = UK_RIGHT;
-    switch (e.key) {
-    case UK_LEFT: case UK_SEL_LEFT: if (u->crumb_at > 0) u->crumb_at--; return true;
-    case UK_RIGHT: case UK_SEL_RIGHT: if (u->crumb_at < in->crumb_n - 1 + u->branch_on) u->crumb_at++; return true;
-    case UK_HOME: case UK_SEL_HOME: u->crumb_at = 0; return true;
-    case UK_END: case UK_SEL_END: u->crumb_at = in->crumb_n - 1 + u->branch_on; return true;   // (the branch button last, as Right reaches it)
+    *a = UI_NONE;
+    e = ui_vi_key(e);   // (as in the list, Michael, 2026-10-21; j and k go on to it)
+    switch (ui_unshift(e.key)) {
+    case UK_LEFT: if (u->crumb_at > 0) u->crumb_at--; return true;
+    case UK_RIGHT: if (u->crumb_at < in->crumb_n - 1 + u->branch_on) u->crumb_at++; return true;
+    case UK_HOME: u->crumb_at = 0; return true;
+    case UK_END: u->crumb_at = in->crumb_n - 1 + u->branch_on; return true;   // (the branch button last, as Right reaches it)
     case UK_ENTER:
         if (u->crumb_at >= in->crumb_n) return ui_branch_open(u, true), true;   // (Esc back on the button)
         u->focus = UI_FOCUS_LIST, *a = (UiAction){ UA_CRUMB, u->crumb_at, false };
@@ -68,7 +67,7 @@ static UiAction ui_answer(Ui *u, UiOnTop on, bool yes)
     case UI_ON_EMPTY: u->empty_asking = false; return (UiAction){ yes ? UA_EMPTY_TRASH : UA_NONE, 0, false };   // (from any view: the folder menu's on Trash, F8)
     case UI_ON_RESTORE: u->restore_n = 0; return (UiAction){ UA_RESTORE_WINDOWS, 0, yes };
     case UI_ON_CLEAR: u->clear_asking = false; return (UiAction){ yes ? UA_CLEAR_PREVIEWS : UA_NONE, 0, false };
-    default: return (UiAction){ UA_NONE, 0, false };
+    default: return UI_NONE;
     }
 }
 
@@ -77,13 +76,13 @@ static UiAction ui_answer(Ui *u, UiOnTop on, bool yes)
 static UiAction ui_ask_event(Ui *u, UiEvent e)
 {
     if (e.key == UK_ESC) return u->asking = false, (UiAction){ UA_ANSWER, UI_ANS_CANCEL, false };
-    if (e.key != UK_NONE) return (UiAction){ UA_NONE, 0, false };
+    if (e.key != UK_NONE) return UI_NONE;
     int a = 0;
     switch (e.ch) {
     case 's': case 'S': a = UI_ANS_SKIP; break;
     case 'r': case 'R': a = UI_ANS_REPLACE; break;
     case 'k': case 'K': a = UI_ANS_KEEP; break;
-    default: return (UiAction){ UA_NONE, 0, false };
+    default: return UI_NONE;
     }
     u->asking = false;
     return (UiAction){ UA_ANSWER, a, (e.ch >= 'A' && e.ch <= 'Z') || u->ask_all };
@@ -94,8 +93,7 @@ static UiAction ui_ask_event(Ui *u, UiEvent e)
 // list and is the list's.
 static bool ui_jobs_event(Ui *u, const UiInput *in, UiEvent e)
 {
-    if (e.key == UK_NONE && e.ch == 'k') e.key = UK_UP;
-    if (e.key == UK_NONE && e.ch == 'j') e.key = UK_DOWN;
+    e = ui_vi_key(e);
     switch (e.key) {
     case UK_UP: if (u->job_at > 0) u->job_at--; return true;
     case UK_DOWN: if (u->job_at < in->job_n - 1) u->job_at++; return true;

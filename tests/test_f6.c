@@ -625,7 +625,7 @@ static void test_trash_keys(void)
     CHECK(ui_handle(&u, names, &in).kind == UA_EMPTY_TRASH);
     // Left the trash view meanwhile (a drive gone sends it Home): the question is the trash's, not
     // the view's, so it stays and Yes empties it (the folder menu asks it from any view: F11 review).
-    u.empty_asking = true, u.view = UI_VIEW_FOLDER;
+    u.empty_asking = true, u.view = UI_VIEW_FOLDER, u.can_write = true;
     in = ui_input_none();
     ui_handle(&u, names, &in);
     CHECK(u.empty_asking);

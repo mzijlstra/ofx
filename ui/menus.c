@@ -9,9 +9,9 @@ static bool ui_folder_shown(const Ui *u, UiMenuItem it);
 static bool ui_menu_shown(const Ui *u, UiMenuItem it)
 {
     if (u->menu == UI_CTX_FOLDER) return ui_folder_shown(u, it);
-    if (it >= UM_BM_0 && it <= UM_BM_7) return (int)(it - UM_BM_0) < u->bm_n;
+    if (ui_slot(it, UM_BM_0, UI_MENU_BOOKMARKS) >= 0) return ui_slot(it, UM_BM_0, UI_MENU_BOOKMARKS) < u->bm_n;
     if (it == UM_BM_MORE) return u->bm_more > 0;
-    if (it >= UM_BR_0 && it <= UM_BR_7) return (int)(it - UM_BR_0) < u->br_n;
+    if (ui_slot(it, UM_BR_0, UI_MENU_BRANCHES) >= 0) return ui_slot(it, UM_BR_0, UI_MENU_BRANCHES) < u->br_n;
     if (it == UM_BR_NOTE) return u->br_note;
     // A right-click menu leaves out what doesn't fit its target (F8): a tab for a folder only, a
     // rename for one entry, the new entries outside the trash view (Empty Trash in it).
@@ -59,6 +59,7 @@ static bool ui_menu_enabled(const Ui *u, UiMenuItem it)
 {
     bool files = u->list.n > 0, here = files && u->focus != UI_FOCUS_SIDE;
     if (!ui_menu_shown(u, it)) return false;
+    if (ui_slot(it, UM_BM_0, UI_MENU_BOOKMARKS) >= 0 || ui_slot(it, UM_BR_0, UI_MENU_BRANCHES) >= 0) return true;   // (a bookmark, a branch: shown, then picked; UM_BR_NOTE never)
     if (u->menu == UI_CTX_FOLDER) {   // (F8) the rest are always there to pick
         if (it == UM_PASTE_INTO) return u->can_paste && u->ctx_w;
         if (it == UM_BM_UP_IT) return u->ctx_bmk > 0;
@@ -74,13 +75,15 @@ static bool ui_menu_enabled(const Ui *u, UiMenuItem it)
     case UM_OPEN: return files;
     case UM_OPEN_WITH: return files && ui_allows(u, UA_OPEN_WITH);
     case UM_UNDO: return u->can_undo;
-    case UM_CUT: case UM_COPY: return here && ui_view_allows(u->view, UA_COPY);
+    case UM_CUT: return here && ui_allows(u, UA_CUT);
+    case UM_COPY: return here && ui_view_allows(u->view, UA_COPY);
     case UM_PASTE: return u->can_paste && ui_allows(u, UA_PASTE);
     case UM_SELECT_ALL: case UM_SELECT_MATCH: case UM_INVERT: return files;
     case UM_RENAME: return here && ui_allows(u, UA_RENAME);
     case UM_DUPLICATE: return here && ui_allows(u, UA_DUPLICATE);
     case UM_MAKE_LINK: return here && ui_allows(u, UA_MAKE_LINK);
-    case UM_TRASH: case UM_DELETE: return here;
+    case UM_TRASH: return here && ui_allows(u, UA_TRASH);
+    case UM_DELETE: return here && ui_allows(u, UA_DELETE);
     case UM_RESTORE: return here;
     case UM_RELOAD: case UM_SIDE_PLACES: case UM_SIDE_TREE: case UM_SIDE_NONE: case UM_HIDDEN: case UM_SHOW_MENU: return true;
     // The list's own (Michael, 2026-10-27): the icon view has no columns or colours; a group without
@@ -99,14 +102,12 @@ static bool ui_menu_enabled(const Ui *u, UiMenuItem it)
     case UM_SEARCH: return ui_view_allows(u->view, UA_SEARCH);
     case UM_TERMINAL: return ui_view_allows(u->view, UA_TERMINAL);
     case UM_ADD_BOOKMARK: return u->can_bookmark && ui_view_allows(u->view, UA_ADD_BOOKMARK);
-    case UM_BM_0: case UM_BM_1: case UM_BM_2: case UM_BM_3: case UM_BM_4: case UM_BM_5: case UM_BM_6: case UM_BM_7: return true;
     case UM_EDIT_BOOKMARKS: case UM_BM_MORE: case UM_SHORTCUTS: case UM_ABOUT: case UM_PREFERENCES: return true;
     case UM_CLEAR_PREVIEWS: return !u->clearing;
     case UM_TAB_LEFT: return u->tab_at > 0;
     case UM_TAB_RIGHT: return u->tab_at < u->tab_n - 1;
     case UM_TAB_OTHERS: return u->tab_n > 1;
     case UM_TAB_REOPEN: return u->can_reopen;
-    case UM_BR_0: case UM_BR_1: case UM_BR_2: case UM_BR_3: case UM_BR_4: case UM_BR_5: case UM_BR_6: case UM_BR_7: return true;   // (UM_BR_NOTE: never)
     case UM_OPEN_TAB: case UM_EMPTY_TRASH: case UM_OPEN_WINDOW: case UM_TERMINAL_IN: case UM_SEARCH_IN: case UM_FOLLOW: case UM_BOOKMARK_IT: return files;
     case UM_CONTAINING: case UM_OPEN_LINE: return true;   // (on a result's menu only)
     case UM_PASTE_INTO: return files && u->can_paste && u->ctx_w;
@@ -118,6 +119,9 @@ static bool ui_menu_enabled(const Ui *u, UiMenuItem it)
 // Entry it's mark: -1 none, else whether it is on (a check checked, one of a group the current).
 static int ui_menu_mark(const Ui *u, UiMenuItem it)
 {
+    int k;
+    if ((k = ui_slot(it, UM_BM_0, UI_MENU_BOOKMARKS)) >= 0) return u->bm_here == k;
+    if ((k = ui_slot(it, UM_BR_0, UI_MENU_BRANCHES)) >= 0) return u->br_here == k;
     switch (it) {
     case UM_SIDE_PLACES: return u->side_mode == SIDE_PLACES;
     case UM_SIDE_TREE: return u->side_mode == SIDE_TREE;
@@ -133,10 +137,6 @@ static int ui_menu_mark(const Ui *u, UiMenuItem it)
     case UM_SORT_REVERSE: return u->sort.reverse;
     case UM_VIEW_LIST: return !u->grid;
     case UM_VIEW_ICONS: return u->grid;
-    case UM_BM_0: case UM_BM_1: case UM_BM_2: case UM_BM_3: case UM_BM_4: case UM_BM_5: case UM_BM_6: case UM_BM_7:
-        return u->bm_here == (int)(it - UM_BM_0);
-    case UM_BR_0: case UM_BR_1: case UM_BR_2: case UM_BR_3: case UM_BR_4: case UM_BR_5: case UM_BR_6: case UM_BR_7:
-        return u->br_here == (int)(it - UM_BR_0);
     default: return -1;
     }
 }
@@ -211,15 +211,18 @@ static UiAction ui_menu_pick(Ui *u, UiMenuItem it)
         case UM_BM_UP_IT: return (UiAction){ UA_BM_UP, u->ctx_bmk, false };
         case UM_BM_DOWN_IT: return (UiAction){ UA_BM_DOWN, u->ctx_bmk, false };
         case UM_BM_REMOVE_IT: return (UiAction){ UA_BM_REMOVE, u->ctx_bmk, false };
-        case UM_EMPTY_IT: return u->empty_asking = true, (UiAction){ UA_NONE, 0, false };
+        case UM_EMPTY_IT: return u->empty_asking = true, UI_NONE;
         case UM_PROPS_IT: return u->panel = UI_PANEL_PROPS, u->prop_at = 0, (UiAction){ UA_PROPS, UI_PROPS_CTX, false };
         default: return (UiAction){ UA_FOLDER_DO, it, false };
         }
     }
     if (UI_MENU_ITEM[it].ev.key != UK_NONE || UI_MENU_ITEM[it].ev.ch) {
         u->menu_key = UI_MENU_ITEM[it].ev;
-        return (UiAction){ UA_NONE, 0, false };
+        return UI_NONE;
     }
+    int k;
+    if ((k = ui_slot(it, UM_BM_0, UI_MENU_BOOKMARKS)) >= 0) return (UiAction){ UA_BOOKMARK, k, false };
+    if ((k = ui_slot(it, UM_BR_0, UI_MENU_BRANCHES)) >= 0) return (UiAction){ UA_BRANCH, k, false };
     switch (it) {
     case UM_SIDE_PLACES: return ui_side_mode(u, SIDE_PLACES);
     case UM_SIDE_TREE: return ui_side_mode(u, SIDE_TREE);
@@ -231,11 +234,7 @@ static UiAction ui_menu_pick(Ui *u, UiMenuItem it)
     case UM_COLORS: return u->colors = !u->colors, (UiAction){ UA_COLORS, 0, false };
     case UM_SHOW_MENU: return u->bar_hidden = !u->bar_hidden, u->panel = u->bar_hidden ? UI_PANEL_BAR : UI_PANEL_NONE,   // (a menu was open: no panel is)
                              (UiAction){ UA_MENUBAR, 0, false };
-    case UM_BM_0: case UM_BM_1: case UM_BM_2: case UM_BM_3: case UM_BM_4: case UM_BM_5: case UM_BM_6: case UM_BM_7:
-        return (UiAction){ UA_BOOKMARK, it - UM_BM_0, false };
     case UM_BM_MORE: return ui_bmp_open(u, u->bm_more_at);
-    case UM_BR_0: case UM_BR_1: case UM_BR_2: case UM_BR_3: case UM_BR_4: case UM_BR_5: case UM_BR_6: case UM_BR_7:
-        return (UiAction){ UA_BRANCH, it - UM_BR_0, false };
     case UM_NEW_TAB: return (UiAction){ UA_TAB_NEW, 0, false };
     case UM_NEW_WINDOW: return (UiAction){ UA_NEW_WINDOW, 0, false };
     case UM_NEW_FOLDER: return (UiAction){ UA_NEWFOLDER, 0, false };
@@ -245,13 +244,13 @@ static UiAction ui_menu_pick(Ui *u, UiMenuItem it)
     case UM_CLOSE: return (UiAction){ UA_TAB_CLOSE, -1, false };
     case UM_PROPERTIES: return ui_props_open(u);
     case UM_OPEN_WITH: return ui_ow_open(u);
-    case UM_ABOUT: return u->panel = UI_PANEL_ABOUT, (UiAction){ UA_NONE, 0, false };
+    case UM_ABOUT: return u->panel = UI_PANEL_ABOUT, UI_NONE;
     case UM_PREFERENCES: return (UiAction){ UA_PREFERENCES, 0, false };
-    case UM_CLEAR_PREVIEWS: return u->clear_asking = true, (UiAction){ UA_NONE, 0, false };   // (gui/ counts them as it opens)
+    case UM_CLEAR_PREVIEWS: return u->clear_asking = true, UI_NONE;   // (gui/ counts them as it opens)
     case UM_OPEN_TAB: return (UiAction){ UA_TAB_BG_ROW, u->list.sel, false };
     case UM_TAB_OTHERS: return (UiAction){ UA_TAB_OTHERS, 0, false };
     case UM_TAB_REOPEN: return (UiAction){ UA_TAB_REOPEN, 0, false };
-    case UM_EMPTY_TRASH: return u->empty_asking = true, (UiAction){ UA_NONE, 0, false };
+    case UM_EMPTY_TRASH: return u->empty_asking = true, UI_NONE;
     case UM_HERE_PROPS: return u->panel = UI_PANEL_PROPS, u->prop_at = 0, (UiAction){ UA_PROPS, UI_PROPS_HERE, false };
     case UM_OPEN_WINDOW: return (UiAction){ UA_NEW_WINDOW, u->list.sel, true };
     case UM_PASTE_INTO: return (UiAction){ UA_PASTE, u->list.sel, true };
@@ -259,7 +258,7 @@ static UiAction ui_menu_pick(Ui *u, UiMenuItem it)
     case UM_BOOKMARK_IT: return (UiAction){ UA_ADD_BOOKMARK, u->list.sel, true };
     case UM_FOLLOW: return (UiAction){ UA_FOLLOW, u->list.sel, false };
     case UM_SEARCH_IN: return (UiAction){ UA_SEARCH, u->list.sel, true };   // (all: below the folder entry index)
-    default: return (UiAction){ UA_NONE, 0, false };
+    default: return UI_NONE;
     }
 }
 
@@ -278,17 +277,10 @@ static int ui_menu_of(u32 ch)
 // list's (a shortcut does what it does).
 static bool ui_menu_event(Ui *u, UiEvent e, UiAction *a)
 {
-    *a = (UiAction){ UA_NONE, 0, false };
-    if (e.key == UK_NONE) {
-        switch (e.ch) {
-        case 'j': e.key = UK_DOWN; break;
-        case 'k': e.key = UK_UP; break;
-        case 'h': e.key = UK_LEFT; break;
-        case 'l': e.key = UK_RIGHT; break;
-        default: return true;
-        }
-    }
-    switch (e.key) {
+    *a = UI_NONE;
+    e = ui_vi_key(e);
+    if (e.key == UK_NONE) return true;   // (a letter the menu doesn't take: nothing)
+    switch (ui_unshift(e.key)) {
     case UK_DOWN: case UK_UP: {
         int at = ui_menu_next(u, u->menu_at < 0 && e.key == UK_UP ? 0 : u->menu_at, e.key == UK_DOWN ? 1 : -1);
         u->menu_at = at;
@@ -296,9 +288,9 @@ static bool ui_menu_event(Ui *u, UiEvent e, UiAction *a)
     }
     case UK_HOME: u->menu_at = ui_menu_next(u, -1, 1); return true;
     case UK_END: u->menu_at = ui_menu_next(u, 0, -1); return true;
-    case UK_LEFT: case UK_SEL_LEFT: case UK_RIGHT: case UK_SEL_RIGHT: {
+    case UK_LEFT: case UK_RIGHT: {
         if (u->menu >= UI_MENUS) return true;   // a right-click menu has no neighbours (F8)
-        int by = e.key == UK_LEFT || e.key == UK_SEL_LEFT ? -1 : 1;
+        int by = ui_unshift(e.key) == UK_LEFT ? -1 : 1;
         ui_menu_open(u, ((u->menu + by) % UI_MENUS + UI_MENUS) % UI_MENUS, true);
         return true;
     }

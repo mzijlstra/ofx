@@ -15,20 +15,12 @@ static UiAction ui_props_open(Ui *u)
 // gui/ allows it, Esc or Ctrl+I closes the panel.
 static UiAction ui_props_event(Ui *u, UiEvent e)
 {
-    if (e.key == UK_NONE) {
-        switch (e.ch) {
-        case 'h': e.key = UK_LEFT; break;
-        case 'j': e.key = UK_DOWN; break;
-        case 'k': e.key = UK_UP; break;
-        case 'l': e.key = UK_RIGHT; break;
-        case ' ': e.key = UK_ENTER; break;
-        default: break;
-        }
-    }
+    e = ui_vi_key(e);
+    if (e.key == UK_NONE && e.ch == ' ') e.key = UK_ENTER;
     int row = u->prop_at / 3, col = u->prop_at % 3;
-    switch (e.key) {
-    case UK_LEFT: case UK_SEL_LEFT: if (col > 0) u->prop_at--; break;
-    case UK_RIGHT: case UK_SEL_RIGHT: if (col < 2) u->prop_at++; break;
+    switch (ui_unshift(e.key)) {
+    case UK_LEFT: if (col > 0) u->prop_at--; break;
+    case UK_RIGHT: if (col < 2) u->prop_at++; break;
     case UK_UP: if (row > 0) u->prop_at -= 3; break;
     case UK_DOWN: if (row < 2) u->prop_at += 3; break;
     case UK_ENTER: case UK_SHIFT_ENTER:
@@ -37,7 +29,7 @@ static UiAction ui_props_event(Ui *u, UiEvent e)
     case UK_ESC: case UK_PROPERTIES: ui_panel_close(u, UI_PANEL_PROPS); break;
     default: break;
     }
-    return (UiAction){ UA_NONE, 0, false };
+    return UI_NONE;
 }
 
 // ---- Open With (F7.3) ------------------------------------------------------------------------
@@ -70,7 +62,7 @@ static void ui_ow_filter(Ui *u, const UiInput *in)
 // The app under the cursor launched, when the filter shows any.
 static UiAction ui_ow_launch(Ui *u)
 {
-    if (u->ow_list.n == 0) return (UiAction){ UA_NONE, 0, false };
+    if (u->ow_list.n == 0) return UI_NONE;
     isize app = u->ow_idx[u->ow_list.sel];
     bool def = u->ow_def && u->ow_def_can;
     ui_ow_close(u);
@@ -90,22 +82,21 @@ static UiAction ui_ow_event(Ui *u, UiEvent e, const UiInput *in)
     int page = l->rows > 1 ? l->rows - 1 : 1;
     if (e.key == UK_MENU && e.ch == 'd') {
         if (u->ow_def_can) u->ow_def = !u->ow_def;
-        return (UiAction){ UA_NONE, 0, false };
+        return UI_NONE;
     }
     if (ui_toggle_key(e)) {
         u->ow_opts = ui_toggle(u->ow_opts, ui_toggle_key(e));
         ui_ow_filter(u, in);
-        return (UiAction){ UA_NONE, 0, false };
+        return UI_NONE;
     }
     switch (e.key) {
-    case UK_ESC: ui_ow_close(u); return (UiAction){ UA_NONE, 0, false };
-    case UK_TAB: u->ow_in_list = !u->ow_in_list; return (UiAction){ UA_NONE, 0, false };
+    case UK_ESC: ui_ow_close(u); return UI_NONE;
+    case UK_TAB: u->ow_in_list = !u->ow_in_list; return UI_NONE;
     case UK_ENTER: case UK_SHIFT_ENTER: return ui_ow_launch(u);
     default: break;
     }
     if (u->ow_in_list) {
-        if (e.key == UK_NONE && e.ch == 'j') e.key = UK_DOWN;
-        else if (e.key == UK_NONE && e.ch == 'k') e.key = UK_UP;
+        e = ui_vi_key(e);
         switch (e.key) {
         case UK_DOWN: ui_move(l, 1); break;
         case UK_UP:
@@ -124,12 +115,12 @@ static UiAction ui_ow_event(Ui *u, UiEvent e, const UiInput *in)
             break;
         default: break;
         }
-        return (UiAction){ UA_NONE, 0, false };
+        return UI_NONE;
     }
     UiLineHit h = ui_line_key(u, ui_ow_line(u), e, in->paste);
     if (h == UI_LINE_CHANGED) ui_ow_filter(u, in);
     else if (!h && e.key == UK_DOWN && l->n > 0) u->ow_in_list = true;
-    return (UiAction){ UA_NONE, 0, false };
+    return UI_NONE;
 }
 
 // ---- Keyboard Shortcuts (F7.5) -------------------------------------------------------------------
@@ -157,7 +148,7 @@ static UiAction ui_keys_open(Ui *u)
     u->panel = UI_PANEL_KEYS, UI_TEXT_CLEAR(u->keys_filter);
     u->keys_list = (UiList){ .rows = u->keys_list.rows };
     ui_keys_filter(u);
-    return (UiAction){ UA_NONE, 0, false };
+    return UI_NONE;
 }
 
 static void ui_keys_close(Ui *u)
@@ -201,13 +192,13 @@ static UiAction ui_bmp_open(Ui *u, int at)
 static UiAction ui_bmp_do(Ui *u, int what)
 {
     UiList *l = &u->bmp_list;
-    if (l->n == 0) return (UiAction){ UA_NONE, 0, false };
+    if (l->n == 0) return UI_NONE;
     switch (what) {
     case UI_BMP_REMOVE: return (UiAction){ UA_BM_REMOVE, l->sel, false };
     case UI_BMP_RENAME: u->bmp_naming = true; return (UiAction){ UA_BM_NAME, l->sel, false };
-    case UI_BMP_UP: return l->sel > 0 ? (UiAction){ UA_BM_UP, l->sel, false } : (UiAction){ UA_NONE, 0, false };
-    case UI_BMP_DOWN: return l->sel < l->n - 1 ? (UiAction){ UA_BM_DOWN, l->sel, false } : (UiAction){ UA_NONE, 0, false };
-    default: return (UiAction){ UA_NONE, 0, false };
+    case UI_BMP_UP: return l->sel > 0 ? (UiAction){ UA_BM_UP, l->sel, false } : UI_NONE;
+    case UI_BMP_DOWN: return l->sel < l->n - 1 ? (UiAction){ UA_BM_DOWN, l->sel, false } : UI_NONE;
+    default: return UI_NONE;
     }
 }
 
@@ -220,16 +211,15 @@ static UiAction ui_bmp_event(Ui *u, UiEvent e, Str paste)
     UiList *l = &u->bmp_list;
     int page = l->rows > 1 ? l->rows - 1 : 1;
     if (u->bmp_naming) {
-        if (ui_line_key(u, ui_bmp_line(u), e, paste)) return (UiAction){ UA_NONE, 0, false };
+        if (ui_line_key(u, ui_bmp_line(u), e, paste)) return UI_NONE;
         switch (e.key) {
         case UK_ENTER: case UK_SHIFT_ENTER: u->bmp_naming = false; return (UiAction){ UA_BM_RENAME, l->sel, false };
         case UK_ESC: u->bmp_naming = false; break;
         default: break;
         }
-        return (UiAction){ UA_NONE, 0, false };
+        return UI_NONE;
     }
-    if (e.key == UK_NONE && e.ch == 'j') e.key = UK_DOWN;
-    else if (e.key == UK_NONE && e.ch == 'k') e.key = UK_UP;
+    e = ui_vi_key(e);
     switch (e.key) {
     case UK_DOWN: ui_move(l, 1); break;
     case UK_UP: ui_move(l, -1); break;
@@ -248,5 +238,5 @@ static UiAction ui_bmp_event(Ui *u, UiEvent e, Str paste)
     case UK_ESC: ui_panel_close(u, UI_PANEL_BM); break;
     default: break;
     }
-    return (UiAction){ UA_NONE, 0, false };
+    return UI_NONE;
 }
