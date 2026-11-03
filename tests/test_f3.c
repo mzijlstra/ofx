@@ -848,6 +848,7 @@ static void test_ui_f3(void)
     static Ui u;
     static u8 marks[20];
     memset(&u, 0, sizeof u);
+    u.can_write = true;   // (a folder that can be written, as gui/ says of most)
     memset(marks, 0, sizeof marks);
     ui_resize(&u.list, 5);
     ui_set(&u.list, 20, 0);

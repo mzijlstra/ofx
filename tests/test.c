@@ -1851,6 +1851,7 @@ int main(void)
     if (fast) test_git_said();
     if (slow) test_no_fds_leak();
     if (fast) test_prog_resolve();
+    if (fast) test_menu_key_agree();
     if (slow) test_box_outlive();
     if (slow) test_box_outlive_out();
     if (slow) test_box_output_end();

@@ -1,5 +1,6 @@
-// The Properties panel's counts (F7.2): the files, folders and bytes under what it shows, counted
-// all the way down (fs/props.c, du_walk) on a thread of its own, the sums showing as they grow.
+// The Properties panel's counts (F7.2), and Clear Previews' (F12): the files, folders and bytes
+// under what it shows, counted all the way down (fs/props.c, du_walk) on a thread of its own, the
+// sums showing as they grow.
 // One walk at a time: a new one (or the panel closing) moves the generation, which the old walk
 // sees at its next entry and stops. Like counts.c's, the thread is never joined at quit if it
 // is stuck. Included by main.c.

@@ -2,9 +2,12 @@
 // folder shown, and again when it changes, or the repository's index or HEAD does (a commit, an add,
 // a switch from a terminal); the window draws from the last answer. Two slots: the window's answer
 // stays in one while the next is made in the other. Outside a repository, or with ofx.conf's
-// git-status off, there is none. Included by main.c.
+// git-status off, there is none. The same thread reads the branch button's menu (step 5b) and makes a
+// switch picked there (step 5c), each asked and taken under the same lock. Included by main.c.
 
 static _Alignas(4096) u8 git_mem[2][GIT_OUT_MAX + MiB(8)];   // (the output, and its tables)
+
+_Static_assert((int)UI_MENU_BRANCHES == (int)GIT_BRANCHES_MAX, "the branch menu's entries are the list fs/git.c makes");
 
 // The least time between two asks for the folder shown (git_ask_soon).
 enum { GIT_ASK_GAP_MS = 1000 };
@@ -128,9 +131,11 @@ static void git_ask(const char *dir)
     git.last = now_ms(), git.due = 0;
     pthread_mutex_lock(&git.mu);
     git.gen++, git.ready = -1;
-    if (dir && app.conf.git_status && git.started) snprintf(git.want, sizeof git.want, "%s", dir), git.asked = true, pthread_cond_signal(&git.cv);
+    bool asked = dir && app.conf.git_status && git.started;
+    if (asked) snprintf(git.want, sizeof git.want, "%s", dir), git.asked = true, pthread_cond_signal(&git.cv);
     else git.slot[git.shown].repo = false;   // (nothing shown until an answer)
     pthread_mutex_unlock(&git.mu);
+    if (!asked) watch_git(NULL);   // (none comes to unwatch it: the search or trash view, git-status off; code-health review, 2026-11-03)
 }
 
 static i64 wake_due(void);
@@ -171,13 +176,13 @@ static bool git_ask_switch(const char *name)
     return true;
 }
 
-// Each frame: a switch's answer; true when it came, with how it went (*got), the branch and what
-// git said.
-static bool git_switch_take(GitSwitch *got, char *name, size_t ncap, char *msg, size_t mcap)
+// Each frame: a switch's answer; true when it came, with how it went (*got), the branch, the folder
+// it was asked in, and what git said.
+static bool git_switch_take(GitSwitch *got, char *name, size_t ncap, char *dir, size_t dcap, char *msg, size_t mcap)
 {
     pthread_mutex_lock(&git.mu);
     bool r = git.sw_ready;
-    if (r) git.sw_ready = false, git.sw_busy = false, *got = git.sw_got, snprintf(name, ncap, "%s", git.sw_name), snprintf(msg, mcap, "%s", git.sw_msg);
+    if (r) git.sw_ready = false, git.sw_busy = false, *got = git.sw_got, snprintf(name, ncap, "%s", git.sw_name), snprintf(dir, dcap, "%s", git.sw_dir), snprintf(msg, mcap, "%s", git.sw_msg);
     pthread_mutex_unlock(&git.mu);
     return r;
 }
@@ -194,7 +199,7 @@ static void git_ask_branches(void)
     pthread_mutex_unlock(&git.mu);
 }
 
-// The window's answer: NULL outside a repository (or none yet). Its folder from the top in *rel.
+// The window's answer: NULL outside a repository (or none yet). Its folder from the top is its rel.
 static const GitSlot *git_shown(void)
 {
     const GitSlot *g = &git.slot[git.shown];
@@ -232,7 +237,7 @@ static const char *branch_label(void)
     return buf;
 }
 
-// The branch menu's entry it's label: a branch's name, or the note in their place.
+// The branch menu's entry it, its label: a branch's name, or the note in their place.
 static Str branch_menu_label(UiMenuItem it)
 {
     if (it == UM_BR_NOTE && git.sw_busy) return str_from_c(arena_sprintf(&frame, "Switching to %s\xE2\x80\xA6", git.sw_name));   // (step 5c: the list comes after)

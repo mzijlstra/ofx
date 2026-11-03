@@ -59,8 +59,23 @@ key enter
 wait-for 3000 gitshown=1
 # git-status = off (ofx.conf): none; on again: back.
 sh printf 'git-status = off\n' >> "$OFX_ROOT/config/ofx/ofx.conf"
-wait-for 3000 gitshown=0
+wait-for 3000 gitshown=0 gitwatch=0
 sh sed -i 's/^git-status = off$/git-status = on/' "$OFX_ROOT/config/ofx/ofx.conf"
 # (asked again as a reload is: the test's 3 s gap since the last ask)
-wait-for 6000 gitshown=1
+wait-for 6000 gitshown=1 gitwatch=1
+# A folder that can't be written: F2 says so, as the greyed Rename does (code-health review,
+# 2026-11-03: the key went on and failed).
+sh chmod a-w "$OFX_DIR"
+key ctrl-r
+wait-for 3000 canwrite=0
+key f2
+expect editing=0 statusbad=1
+expect status=repo can't be written to
+sh chmod u+w "$OFX_DIR"
+key ctrl-r
+wait-for 3000 canwrite=1
+# The search view: no answer, and the repository's .git no longer watched (code-health review,
+# 2026-11-03: it stayed watched, waking the window for each commit).
+key ctrl-shift-f
+wait-for 3000 search=1 gitwatch=0 gitshown=0
 quit

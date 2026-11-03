@@ -137,10 +137,11 @@ static void ui_edit_close(Ui *u)
     ui_unfocus(u, UI_FOCUS_EDIT);
 }
 
-// A line of text being edited, every text field's one editor (F5.2; all seven since 2026-10-28):
-// the rename and location lines, the find bar, the search field, Open With's filter, Edit Bookmarks'
-// name and Keyboard Shortcuts' filter. Its bytes and at most how many, the caret and the
-// selection's other end (bytes), and whether a '/' may go in (all but a name's and find's).
+// A line of text being edited, every text field's one editor (F5.2; all of them since 2026-10-28):
+// the rename and location lines, the find bar, the search field and its Containing (F9), Open
+// With's filter, Edit Bookmarks' name and Keyboard Shortcuts' filter. Its bytes and at most how many,
+// the caret and the selection's other end (bytes), and whether a '/' may go in (not in a name, find,
+// the search field or Containing).
 typedef struct {
     char *b;
     int  *len, *caret, *anchor;

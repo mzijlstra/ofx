@@ -1,11 +1,12 @@
-// A program run in bubblewrap (F12): the thumbnailers (thumbers.c) and git status (git.c) parse
-// what is on the drive, a download or a repository someone else made, and git runs what a
-// repository's own config names (core.fsmonitor, a filter). So each runs with /usr read only, the
-// paths it needs read only (one or two folders writable when it writes), no network, no other processes,
-// nothing else of the home folder, no terminal (a session of its own), and of ofx's environment only
-// PATH, LANG, LC_ALL and HOME (a token in it could leave through what it writes; F12 step 3
-// review). Without bubblewrap installed nothing runs (Michael, 2026-11-02, for both). It has a time
-// limit; then it is killed with whatever it started.
+// A program run in bubblewrap (F12): the thumbnailers (thumbers.c) and git (git.c: status, the
+// branches, a switch) parse what is on the drive, a download or a repository someone else made, and
+// git runs what a repository's own config names (core.fsmonitor, a filter, a hook). So each runs
+// with /usr read only, the paths it needs read only (one or two folders writable when it writes), a
+// /tmp of its own, no network, no other processes, nothing else of the home folder, none of ofx's
+// fds, no terminal (a session of its own), and of ofx's environment only PATH, LANG, LC_ALL and
+// HOME, with GIO_USE_VFS=local (a token in it could leave through what it writes; F12 step 3
+// review). Without bubblewrap installed nothing runs (Michael, 2026-11-02, for all). It has a time
+// limit; then it is killed with whatever it started, unless it is an outlive one (a switch).
 
 #include "../base/base.h"
 
@@ -75,9 +76,10 @@ static BoxRun box_wait_out(const BoxJob *j, int pfd, int fd)
 }
 
 // j run: in bubblewrap (BOX_NOT_RUN without it), or as it is when a test turned box_sandbox off;
-// with /dev/null for its input and error, no blocked signals, the environment above, in a process
-// group of its own, and killed if the thread that started it goes (ofx's end; not when j->outlive). BOX_ENDED when it
-// ended within j->ms; else BOX_KILLED, with its group, and what it wrote doesn't count.
+// with /dev/null for its input (and its errors, unless j->err), none of ofx's other fds, no blocked
+// signals, the environment above, in a process group of its own, and killed if the thread that
+// started it goes (ofx's end; not when j->outlive). BOX_ENDED when it ended within j->ms; else
+// BOX_KILLED, with its group, and what it wrote doesn't count (an outlive one: box_wait_out).
 static BoxRun box_run(const BoxJob *j)
 {
     Err err;

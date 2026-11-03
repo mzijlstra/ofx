@@ -2,7 +2,7 @@
 
 // ---- the path buttons by keyboard (F5.2) -------------------------------------------------------
 
-static void ui_ctx_open(Ui *u, int m, UiNames names, bool keys);
+static void ui_branch_open(Ui *u, bool keys);
 
 // Ctrl+K: the keyboard on the path buttons, the rightmost shown marked (none there: nothing).
 static void ui_crumbs_focus(Ui *u, const UiInput *in)
@@ -25,9 +25,9 @@ static bool ui_crumbs_event(Ui *u, const UiInput *in, UiEvent e, UiAction *a)
     case UK_LEFT: case UK_SEL_LEFT: if (u->crumb_at > 0) u->crumb_at--; return true;
     case UK_RIGHT: case UK_SEL_RIGHT: if (u->crumb_at < in->crumb_n - 1 + u->branch_on) u->crumb_at++; return true;
     case UK_HOME: case UK_SEL_HOME: u->crumb_at = 0; return true;
-    case UK_END: case UK_SEL_END: u->crumb_at = in->crumb_n - 1; return true;
+    case UK_END: case UK_SEL_END: u->crumb_at = in->crumb_n - 1 + u->branch_on; return true;   // (the branch button last, as Right reaches it)
     case UK_ENTER:
-        if (u->crumb_at >= in->crumb_n) return ui_ctx_open(u, UI_CTX_BRANCH, (UiNames){ 0 }, true), true;   // (the keys back to the list as it closes)
+        if (u->crumb_at >= in->crumb_n) return ui_branch_open(u, true), true;   // (Esc back on the button)
         u->focus = UI_FOCUS_LIST, *a = (UiAction){ UA_CRUMB, u->crumb_at, false };
         return true;
     case UK_SHIFT_ENTER: if (u->crumb_at < in->crumb_n) *a = (UiAction){ UA_TAB_BG_CRUMB, u->crumb_at, false }; return true;

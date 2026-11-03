@@ -770,7 +770,7 @@ int main(int argc, char **argv)
         if (props.walking && walk_take(&props.sum, &props.done)) dirty = true;
         if (props.walking && app.ui.panel != UI_PANEL_PROPS) walk_ask(NULL, 0), props.walking = false;   // the panel closed: the count stops
         if (clear_poll()) dirty = true;
-        if (atomic_exchange(&watch.git_ready, false) && fold_view_of(app.ui.view)) git_ask_soon();   // (its index or HEAD changed: F12)
+        if (atomic_exchange(&watch.git_ready, false) && app.ui.view == UI_VIEW_FOLDER) git_ask_soon();   // (its index or HEAD changed: F12)
         git_poll();
         if (git_take()) dirty = true;
         if (branch_switched()) dirty = true;
@@ -792,6 +792,7 @@ int main(int argc, char **argv)
             seen = true;
         }
         in.crumb_n = app.crumbs.n, in.crumb_last = app.crumb_hi - 1;
+        _Static_assert((int)UI_JOB_ROWS >= (int)JOBQ_WORKERS, "a job row each for the jobs running");
         in.job_n = jobs.nrun, in.jobs_all = jobs.nrun + jobs.nwait;
         for (int k = 0; k < jobs.nrun; k++) in.job_id[k] = job_recs[jobs.run[k]].id;
         if (close_asked && in.nev < UI_EVENTS_MAX) in.ev[in.nev++] = (UiEvent){ UK_QUIT, 0 }, close_asked = false, seen = true;

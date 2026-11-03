@@ -205,6 +205,7 @@ typedef enum {
     UA_EMPTY_TRASH, // the trash view: everything in it deleted for good, asked and answered
     UA_CLEAR_PREVIEWS,  // every preview in the cache deleted (ofx-clean --all), asked and answered (F12)
     UA_NOT_IN_TRASH,   // something that doesn't work in the trash view (gui/ says so)
+    UA_READ_ONLY,      // a change in a folder that can't be written (gui/ says so; code-health review, 2026-11-03)
     UA_EJECT,       // index: the sidebar row of the drive to eject (F6.1)
     UA_VIEW,        // the view changed (Ui.grid, F6.2): gui/ lays it out again and remembers it
     UA_ZOOM,        // the icon view's size changed (Ui.zoom, F6.3): gui/ refits it (ui_refit) and remembers it
@@ -258,8 +259,8 @@ typedef struct {
 enum { UI_ANS_SKIP = 1, UI_ANS_REPLACE = 2, UI_ANS_KEEP = 3, UI_ANS_CANCEL = 4 };
 
 // The modal panels' buttons (F5.1): the delete question's, then the clash question's (the answers
-// above, and the "same for the rest" box). The cancel, quit, Empty Trash and Bring back (F11)
-// questions use YES and NO, the queue-full note OK; the panels' Close is NO, Open With's Open YES.
+// above, and the "same for the rest" box). The cancel, quit, Empty Trash, Bring back (F11) and
+// Clear Previews (F12) questions use YES and NO, the queue-full note OK; the panels' Close is NO, Open With's Open YES.
 enum { UI_MODAL_YES = 1, UI_MODAL_NO, UI_MODAL_SKIP, UI_MODAL_REPLACE, UI_MODAL_KEEP, UI_MODAL_CANCEL, UI_MODAL_ALL, UI_MODAL_OK };
 
 // The menu bar (F7.1, docs/plan.md "F7 design"; Edit, View and Go F7.4): its menus, each a list of
@@ -692,7 +693,8 @@ typedef struct {
     bool   copied;
     char   copy[PATH_MAX];
     int    copy_len;
-    // The keyboard on the path buttons (Ctrl+K, F5.2): the one marked.
+    // The keyboard on the path buttons (Ctrl+K, F5.2): the one marked; crumb_n (one past them) is the
+    // branch button while there is one (F12 step 5c).
     int    crumb_at;
     // The prompts and the job: gui/ says when one runs, and when it asks about a clash.
     bool   confirming;       // "Delete … for good? Y/n"
@@ -731,7 +733,7 @@ typedef struct {
     bool   can_write;
     // What only gui/ knows, for the Edit, View and Go entries it greys or marks (F7.4), set each
     // frame: an undo to make, history back and forward, a folder above, files to paste, hidden
-    // files shown. And an entry picked whose key is still to run (ui_handle runs it next).
+    // files shown.
     bool   can_undo, can_back, can_forward, can_up, can_paste, shows_hidden;
     bool   perms_cols;   // the list's Owner and Permissions columns shown (gui/ reads it from the state)
     bool   group_col;    // and Group between them (View → Show Group, 2026-10-27; only with perms_cols)
@@ -739,7 +741,7 @@ typedef struct {
     // panel that says how its menus still open is UI_PANEL_BAR.
     bool   bar_hidden;
     bool   colors;   // the list in eza's colours (View → Show Colors; gui/ reads it from the state)
-    UiEvent menu_key;
+    UiEvent menu_key;   // an entry picked whose key is still to run (ui_handle runs it next)
     // A right-click menu (F8): its entry is one folder (Open in New Tab), and a key opened it (gui/
     // places it under the cursor, not at the pointer).
     bool   ctx_dir, ctx_key, ctx_one;
@@ -825,7 +827,7 @@ typedef enum {
     UI_ON_BM,       // Edit Bookmarks
     UI_ON_KEYS,     // Keyboard Shortcuts
     UI_ON_ABOUT,
-    UI_ON_BAR,      // bar_told: the menu bar just hidden
+    UI_ON_BAR,      // panel == UI_PANEL_BAR: the menu bar just hidden
 } UiOnTop;
 
 // Whether an action works in view v. The trash view holds files that are nowhere yet: what would
@@ -835,18 +837,41 @@ typedef enum {
 static bool ui_view_allows(UiView v, UiActionKind k)
 {
     switch (k) {
-    case UA_COPY: case UA_CUT: case UA_MAKE_LINK: case UA_TERMINAL: case UA_NEW_WINDOW: case UA_SEARCH: return v != UI_VIEW_TRASH;
-    case UA_PASTE: case UA_NEWFOLDER: case UA_ADD_BOOKMARK: return v == UI_VIEW_FOLDER;
+    case UA_COPY: case UA_CUT: case UA_MAKE_LINK: case UA_TERMINAL: case UA_NEW_WINDOW: case UA_SEARCH:
+    case UA_RENAME: case UA_DUPLICATE: case UA_OPEN_WITH: return v != UI_VIEW_TRASH;
+    case UA_PASTE: case UA_NEWFOLDER: case UA_NEWFILE: case UA_ADD_BOOKMARK: return v == UI_VIEW_FOLDER;
     case UA_RESTORE: case UA_EMPTY_TRASH: return v == UI_VIEW_TRASH;
     case UA_CONTAINING: return v == UI_VIEW_SEARCH;
     default: return true;
     }
 }
 
-// a, or why the view shown refuses it (gui/ says so in the status line).
+// Whether kind writes in the folder shown, which must then be writable (Ui.can_write): paste and
+// the new entries; a rename, a duplicate and a link too, except in a search, where each is in its
+// result's own folder (F9).
+static bool ui_view_writes(UiView v, UiActionKind k)
+{
+    switch (k) {
+    case UA_PASTE: case UA_NEWFOLDER: case UA_NEWFILE: return true;
+    case UA_RENAME: case UA_DUPLICATE: case UA_MAKE_LINK: return v != UI_VIEW_SEARCH;
+    default: return false;
+    }
+}
+
+// Whether kind can be done now: the view allows it, and it writes only where it can. The menus
+// grey by it and the keys refuse by it (ui_view_act), so the two can't differ (code-health review,
+// 2026-11-03: Rename, Make Link and Paste were greyed in a folder that can't be written, while
+// their keys went on and failed there).
+static bool ui_allows(const Ui *u, UiActionKind k)
+{
+    return ui_view_allows(u->view, k) && (u->can_write || !ui_view_writes(u->view, k));
+}
+
+// a, or why it can't be done now (gui/ says so in the status line).
 static UiAction ui_view_act(const Ui *u, UiAction a)
 {
-    if (ui_view_allows(u->view, a.kind)) return a;
+    if (ui_allows(u, a.kind)) return a;
+    if (ui_view_allows(u->view, a.kind)) return (UiAction){ UA_READ_ONLY, 0, false };
     return (UiAction){ u->view == UI_VIEW_TRASH ? UA_NOT_IN_TRASH : u->view == UI_VIEW_SEARCH ? UA_NOT_IN_SEARCH : UA_NONE, 0, false };   // (a folder's: nothing to say)
 }
 

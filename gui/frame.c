@@ -72,7 +72,8 @@ static void layout_tip(int w)
     }
 }
 
-// What the Edit, View and Go menus grey or mark that only gui/ knows (F7.4): set at each layout,
+// What the menus grey or mark that only gui/ knows (F7.4; the Bookmarks menu's, the cursor's entry
+// for the right-click menus, the branch menu's since): set at each layout,
 // which follows any change that alters it, before the next input. Paste: the system clipboard can't be read without asking it, so it
 // counts as holding files; without one, ofx's own copy does.
 static void menu_facts(void)

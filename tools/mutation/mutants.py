@@ -390,7 +390,6 @@ MUTANTS += [
     ('ui/prompts.c', "    if (e.key == UK_NONE && e.ch == 'l') e.key = UK_RIGHT;\n", ""),
     ('ui/prompts.c', 'if (u->crumb_at < in->crumb_n - 1 + u->branch_on) u->crumb_at++;', 'u->crumb_at++;'),
     ('ui/prompts.c', "    case UK_HOME: case UK_SEL_HOME: u->crumb_at = 0; return true;\n", ""),
-    ('ui/prompts.c', "    case UK_END: case UK_SEL_END: u->crumb_at = in->crumb_n - 1; return true;\n", ""),
     ('ui/prompts.c', '        u->focus = UI_FOCUS_LIST, *a = (UiAction){ UA_CRUMB, u->crumb_at, false };', '        *a = (UiAction){ UA_CRUMB, u->crumb_at, false };'),
     ('ui/prompts.c', '*a = (UiAction){ UA_TAB_BG_CRUMB, u->crumb_at, false }; return true;', '*a = (UiAction){ UA_CRUMB, u->crumb_at, false }; return true;'),
     ('ui/prompts.c', "    case UK_CRUMBS: return true;\n    case UK_ESC", "    case UK_ESC"),
@@ -538,7 +537,6 @@ MUTANTS += [
     ('ui/handle.c', '            if (u->focus == UI_FOCUS_SIDE && u->side.n > 0 && u->side_mode == SIDE_TREE) return (UiAction){ UA_TREE_LEFT', '            if (u->focus == UI_FOCUS_SIDE && u->side.n > 0) return (UiAction){ UA_TREE_LEFT'),
     ('ui/handle.c', '                if (u->view == UI_VIEW_TRASH && u->focus != UI_FOCUS_SIDE && l->n > 0) return (UiAction){ UA_RESTORE, 0, false };', '                if (u->focus != UI_FOCUS_SIDE && l->n > 0) return (UiAction){ UA_RESTORE, 0, false };'),
     ('ui/handle.c', '            if (l->n > 0 && u->focus != UI_FOCUS_SIDE && u->view == UI_VIEW_TRASH) u->confirming = true,', '            if (0) u->confirming = true,'),
-    ('ui/handle.c', '            if (l->n > 0 && u->focus != UI_FOCUS_SIDE && u->view == UI_VIEW_TRASH) return (UiAction){ UA_NOT_IN_TRASH, 0, false };', ''),
     ('ui/prompts.c', 'yes ? UA_EMPTY_TRASH : UA_NONE', 'UA_EMPTY_TRASH'),
     ('ui/handle.c', '        case UB_RESTORE: if (u->view == UI_VIEW_TRASH && l->n > 0) return', '        case UB_RESTORE: if (l->n > 0) return'),
     ('ui/handle.c', '        case UB_EMPTY: if (u->view == UI_VIEW_TRASH) u->empty_asking = true; break;', '        case UB_EMPTY: u->empty_asking = true; break;'),
@@ -844,8 +842,6 @@ MUTANTS += [
 W = 'fs/windows.c'
 MUTANTS += [
     ('ui/menus.c', "    case UM_NEW_TAB: case UM_CLOSE_ALL: case UM_CLOSE: case UM_PROPERTIES: return true;", "    case UM_NEW_TAB: case UM_CLOSE_ALL: case UM_CLOSE: return true;"),
-    ('ui/menus.c', '    case UM_NEW_FOLDER: case UM_NEW_FILE: return u->view != UI_VIEW_TRASH && u->can_write;', '    case UM_NEW_FOLDER: case UM_NEW_FILE: return u->can_write;'),
-    ('ui/menus.c', '    case UM_NEW_FOLDER: case UM_NEW_FILE: return u->view != UI_VIEW_TRASH && u->can_write;', '    case UM_NEW_FOLDER: case UM_NEW_FILE: return u->view != UI_VIEW_TRASH;'),
     ('ui/menus.c', "    case UM_OPEN: return files;", "    case UM_OPEN: return true;"),
     ('ui/menus.c', "    default: return false;\n    }\n}\n\n// Entry it's mark", "    default: return true;\n    }\n}\n\n// Entry it's mark"),
     ('ui/menus.c', "        int i = ((at + dir * k) % n + n) % n;", "        int i = (at + dir * k) % n;"),
@@ -857,10 +853,6 @@ MUTANTS += [
     ('ui/menus.c', "    ui_edit_close(u), ui_find_leave(u);\n    ui_unfocus", "    ui_edit_close(u);\n    ui_unfocus"),
     ('ui/menus.c', "    ui_unfocus(u, UI_FOCUS_SEARCH), ui_unfocus(u, UI_FOCUS_INSIDE);\n}", "    ui_unfocus(u, UI_FOCUS_INSIDE);\n}"),
     ('ui/menus.c', "    ui_unfocus(u, UI_FOCUS_SEARCH), ui_unfocus(u, UI_FOCUS_INSIDE);\n}", "    ui_unfocus(u, UI_FOCUS_SEARCH);\n}"),
-    ('ui/menus.c', "    if (!u->menu_on) u->menu_field = u->focus == UI_FOCUS_SEARCH || u->focus == UI_FOCUS_INSIDE ? u->focus : UI_FOCUS_LIST;", "    u->menu_field = u->focus == UI_FOCUS_SEARCH || u->focus == UI_FOCUS_INSIDE ? u->focus : UI_FOCUS_LIST;"),
-    ('ui/menus.c', "    if (!u->menu_on) u->menu_field = u->focus == UI_FOCUS_SEARCH || u->focus == UI_FOCUS_INSIDE ? u->focus : UI_FOCUS_LIST;", "    if (!u->menu_on) u->menu_field = u->focus == UI_FOCUS_SEARCH ? u->focus : UI_FOCUS_LIST;"),
-    ('ui/menus.c', "    if (!u->menu_on) u->menu_field = u->focus == UI_FOCUS_SEARCH || u->focus == UI_FOCUS_INSIDE ? u->focus : UI_FOCUS_LIST;", "    if (!u->menu_on) u->menu_field = u->focus == UI_FOCUS_INSIDE ? u->focus : UI_FOCUS_LIST;"),
-    ('ui/menus.c', "    if (!u->menu_on) u->menu_field = u->focus == UI_FOCUS_SEARCH || u->focus == UI_FOCUS_INSIDE ? u->focus : UI_FOCUS_LIST;", "    u->menu_field = u->focus;"),
     ('ui/menus.c', "        if (u->menu_field != UI_FOCUS_LIST) u->focus = u->menu_field;\n", ""),
     ('ui/menus.c', "        if (u->menu_field != UI_FOCUS_LIST) u->focus = u->menu_field;", "        u->focus = u->menu_field;"),
     ('ui/menus.c', 'static UiAction ui_menu_pick(Ui *u, UiMenuItem it)\n{\n    u->menu_on = false;', 'static UiAction ui_menu_pick(Ui *u, UiMenuItem it)\n{'),
@@ -1119,7 +1111,6 @@ MUTANTS += [
 
     ('ui/panels.c', '    else if (!h && e.key == UK_DOWN && l->n > 0) u->ow_in_list = true;', '    else if (!h && e.key == UK_DOWN) u->ow_in_list = true;'),
     ('ui/panels.c', '    if (h == UI_LINE_CHANGED) ui_ow_filter(u, in);\n    else if', '    if (false) ui_ow_filter(u, in);\n    else if'),
-    ('ui/menus.c', '    case UM_OPEN_WITH: return files && u->view != UI_VIEW_TRASH;', '    case UM_OPEN_WITH: return files;'),
     ('ui/menus.c', '    case UM_OPEN_WITH: return ui_ow_open(u);\n', ''),
     ('ui/handle.c', "    if (u->panel == UI_PANEL_OW && u->ow_fresh && in->app_name) ui_ow_filter(u, in);", ""),
     ('ui/handle.c', "        if (in->ow_field) u->ow_in_list = false;", ""),
@@ -1280,11 +1271,7 @@ MUTANTS += [
     ('ui/menus.c', "    if (!ui_menu_shown(u, it)) return false;\n    if (u->menu == UI_CTX_FOLDER)", "    if (u->menu == UI_CTX_FOLDER)"),
     ('ui/menus.c', '    bool files = u->list.n > 0, here = files && u->focus != UI_FOCUS_SIDE;', '    bool files = u->list.n > 0, here = files;'),
     ('ui/menus.c', "    case UM_UNDO: return u->can_undo;", "    case UM_UNDO: return true;"),
-    ('ui/menus.c', "    case UM_PASTE: return u->can_paste && u->can_write;", "    case UM_PASTE: return u->can_write;"),
-    ('ui/menus.c', "    case UM_PASTE: return u->can_paste && u->can_write;", "    case UM_PASTE: return u->can_paste;"),
     ('ui/menus.c', "    case UM_SELECT_ALL: case UM_SELECT_MATCH: case UM_INVERT: return files;", "    case UM_SELECT_ALL: case UM_SELECT_MATCH: case UM_INVERT: return true;"),
-    ('ui/menus.c', '    case UM_RENAME: case UM_DUPLICATE: case UM_MAKE_LINK: return here && u->view != UI_VIEW_TRASH && (u->can_write || u->view == UI_VIEW_SEARCH);', '    case UM_RENAME: case UM_DUPLICATE: case UM_MAKE_LINK: return here && (u->can_write || u->view == UI_VIEW_SEARCH);'),
-    ('ui/menus.c', '    case UM_RENAME: case UM_DUPLICATE: case UM_MAKE_LINK: return here && u->view != UI_VIEW_TRASH && (u->can_write || u->view == UI_VIEW_SEARCH);', '    case UM_RENAME: case UM_DUPLICATE: case UM_MAKE_LINK: return here && u->view != UI_VIEW_TRASH;'),
     ('ui/menus.c', '    case UM_TRASH: case UM_DELETE: return here;', '    case UM_TRASH: case UM_DELETE: return true;'),
     ('ui/menus.c', "    case UM_RESTORE: return here;", "    case UM_RESTORE: return true;"),
     ('ui/menus.c', "    case UM_ZOOM_IN: return u->grid && ui_zoom_level(ui_zoom_px(u)) < UI_ZOOMS - 1;", "    case UM_ZOOM_IN: return u->grid;"),
@@ -1303,7 +1290,6 @@ MUTANTS += [
     ('ui/menus.c', '    case UM_SIDE_NONE: return ui_side_mode(u, SIDE_HIDDEN);', '    case UM_SIDE_NONE: return ui_side_mode(u, SIDE_TREE);'),
     ('ui/handle.c', "        case UK_TRASH_VIEW: return (UiAction){ UA_TRASH_VIEW, 0, false };", ""),
     ('ui/handle.c', '            if (u->focus != UI_FOCUS_SIDE && l->n > 0 && shift_enter) return', '            if (u->focus != UI_FOCUS_SIDE && l->n > 0 && false) return'),
-    ('ui/handle.c', 'return u->view == UI_VIEW_TRASH ? (UiAction){ UA_NOT_IN_TRASH, 0, false } : ui_ow_open(u);', 'return ui_ow_open(u);'),
     ('ui/handle.c', "        bool shift_enter = e.key == UK_SHIFT_ENTER;", "        bool shift_enter = false;"),
     # Not a mutant: the `continue` after a menu's own key is inert, the empty menu_key it falls into
     # ({UK_NONE, 0}) is dropped by the characters' switch.
@@ -1334,7 +1320,6 @@ MUTANTS += [
 # ---- F7.4: Duplicate
 MUTANTS += [
     ('ui/menus.c', '    case UM_DUPLICATE: return (UiAction){ UA_DUPLICATE, 0, false };', ''),
-    ('ui/menus.c', '    case UM_RENAME: case UM_DUPLICATE: case UM_MAKE_LINK: return here && u->view != UI_VIEW_TRASH && (u->can_write || u->view == UI_VIEW_SEARCH);', '    case UM_RENAME: case UM_DUPLICATE: case UM_MAKE_LINK: return u->view != UI_VIEW_TRASH && (u->can_write || u->view == UI_VIEW_SEARCH);'),
 ]
 MUTANTS += [
     ('ui/find.c', '    if (u->find_m.bad && u->find.len > 0) return;\n', ''),
@@ -1473,7 +1458,6 @@ MUTANTS += [
     ('ui/menus.c', '    if (it == UM_FOLLOW) return u->ctx_one && u->sel_link && u->view != UI_VIEW_TRASH;', '    if (it == UM_FOLLOW) return u->sel_link && u->view != UI_VIEW_TRASH;'),
     ('ui/menus.c', '    if (it == UM_FOLLOW) return u->ctx_one && u->sel_link && u->view != UI_VIEW_TRASH;', '    if (it == UM_FOLLOW) return u->ctx_one && u->view != UI_VIEW_TRASH;'),
     ('ui/menus.c', '    if (it == UM_FOLLOW) return u->ctx_one && u->sel_link && u->view != UI_VIEW_TRASH;', '    if (it == UM_FOLLOW) return u->ctx_one && u->sel_link;'),
-    ('ui/menus.c', "    case UM_RENAME: case UM_DUPLICATE: case UM_MAKE_LINK: return", "    case UM_RENAME: case UM_DUPLICATE: return"),
     ('ui/menus.c', "    case UM_PASTE_INTO: return files && u->can_paste && u->ctx_w;", "    case UM_PASTE_INTO: return files && u->ctx_w;"),
     ('ui/menus.c', '    case UM_OPEN_WINDOW: return (UiAction){ UA_NEW_WINDOW, u->list.sel, true };', '    case UM_OPEN_WINDOW: return (UiAction){ UA_NEW_WINDOW, u->list.sel, false };'),
     ('ui/menus.c', '    case UM_PASTE_INTO: return (UiAction){ UA_PASTE, u->list.sel, true };', '    case UM_PASTE_INTO: return (UiAction){ UA_PASTE, u->list.sel, false };'),
@@ -1684,7 +1668,6 @@ MUTANTS += [
     (U, "    UM_OPEN, UM_CONTAINING, UM_OPEN_LINE, UM_OPEN_TAB,", "    UM_OPEN, UM_OPEN_LINE, UM_OPEN_TAB,"),
     (U, "    UM_OPEN, UM_CONTAINING, UM_OPEN_LINE, UM_OPEN_TAB,", "    UM_OPEN, UM_CONTAINING, UM_OPEN_TAB,"),
     (U, "UM_TERMINAL_IN, UM_SEARCH_IN, UM_FOLLOW,", "UM_TERMINAL_IN, UM_FOLLOW,"),
-    ('ui/menus.c', '    case UM_RENAME: case UM_DUPLICATE: case UM_MAKE_LINK: return here && u->view != UI_VIEW_TRASH && (u->can_write || u->view == UI_VIEW_SEARCH);', '    case UM_RENAME: case UM_DUPLICATE: case UM_MAKE_LINK: return here && u->view != UI_VIEW_TRASH && u->can_write;'),
     ('ui/handle.c', "        case UK_CONTAINING:   // (the search view's: elsewhere every entry is in the folder shown)", "        case UK_CONTAINING + 1000:"),
 ]
 # ---- the search field edits as the rename line does (Michael, 2026-10-28)
@@ -1806,14 +1789,9 @@ MUTANTS += [
 
 # One view value and what each view allows (ui_view_allows, 2026-10-28): the table, its callers in the keys and the menus.
 MUTANTS += [
-    ('ui/ui.c', '    case UA_COPY: case UA_CUT: case UA_MAKE_LINK: case UA_TERMINAL: case UA_NEW_WINDOW: case UA_SEARCH: return v != UI_VIEW_TRASH;', '    case UA_COPY: case UA_CUT: case UA_MAKE_LINK: case UA_TERMINAL: case UA_NEW_WINDOW: case UA_SEARCH: return true;'),
     ('ui/ui.c', 'case UA_COPY: case UA_CUT: case UA_MAKE_LINK:', 'case UA_CUT: case UA_MAKE_LINK:'),
-    ('ui/ui.c', 'case UA_TERMINAL: case UA_NEW_WINDOW: case UA_SEARCH: return', 'case UA_NEW_WINDOW: case UA_SEARCH: return'),
-    ('ui/ui.c', '    case UA_PASTE: case UA_NEWFOLDER: case UA_ADD_BOOKMARK: return v == UI_VIEW_FOLDER;', '    case UA_PASTE: case UA_NEWFOLDER: case UA_ADD_BOOKMARK: return v != UI_VIEW_TRASH;'),
-    ('ui/ui.c', '    case UA_PASTE: case UA_NEWFOLDER: case UA_ADD_BOOKMARK: return', '    case UA_PASTE: case UA_ADD_BOOKMARK: return'),
     ('ui/ui.c', '    case UA_RESTORE: case UA_EMPTY_TRASH: return v == UI_VIEW_TRASH;\n', ''),
     ('ui/ui.c', '    case UA_CONTAINING: return v == UI_VIEW_SEARCH;\n', ''),
-    ('ui/ui.c', '    if (ui_view_allows(u->view, a.kind)) return a;', '    return a;'),
     ('ui/ui.c', 'u->view == UI_VIEW_SEARCH ? UA_NOT_IN_SEARCH : UA_NONE, 0, false };', 'UA_NOT_IN_SEARCH, 0, false };'),
     ('ui/ui.c', '{ u->view == UI_VIEW_TRASH ? UA_NOT_IN_TRASH : u->view', '{ false ? UA_NOT_IN_TRASH : u->view'),
     ('ui/handle.c', '    if (u->view != UI_VIEW_SEARCH) return ui_view_act(u, (UiAction){ UA_SEARCH, 0, false });', '    if (u->view != UI_VIEW_SEARCH) return (UiAction){ UA_SEARCH, 0, false };'),
@@ -2418,7 +2396,6 @@ MUTANTS += [
     ('ui/menus.c', '    if (it == UM_BR_NOTE) return u->br_note;\n', ''),
     ('ui/menus.c', '        return u->br_here == (int)(it - UM_BR_0);\n', '        return 0;\n'),
     ('ui/menus.c', '        return (UiAction){ UA_BRANCH, it - UM_BR_0, false };', '        return (UiAction){ UA_BRANCH, 0, false };'),
-    ('ui/handle.c', '            if (u->branch_on) ui_ctx_open(u, UI_CTX_BRANCH, (UiNames){ 0 }, false);', '            ui_ctx_open(u, UI_CTX_BRANCH, (UiNames){ 0 }, false);'),
     ('ui/helpers.c', '        if (d[k] && (!due || d[k] < due)) due = d[k];', '        if (d[k] && !due) due = d[k];'),
     ('ui/helpers.c', '        if (d[k] && (!due || d[k] < due)) due = d[k];', '        if (!due || d[k] < due) due = d[k];'),
     ('fs/git.c', 'O_RDONLY | O_CLOEXEC | O_NONBLOCK | O_NOFOLLOW);   // (a FIFO', 'O_RDONLY | O_CLOEXEC | O_NOFOLLOW);   // (a FIFO'),
@@ -2438,10 +2415,8 @@ MUTANTS += [
     ('fs/sandbox.c', '            if (j->rw[i]) av[n++] = "--bind", av[n++] = j->rw[i], av[n++] = j->rw[i];', '            if (j->rw[i] && i == 0) av[n++] = "--bind", av[n++] = j->rw[i], av[n++] = j->rw[i];'),
     ('fs/sandbox.c', '        if (j->out && j->err) dup2(pipe_fd[1], 2);\n', ''),
     ('ui/prompts.c', '    case UK_RIGHT: case UK_SEL_RIGHT: if (u->crumb_at < in->crumb_n - 1 + u->branch_on) u->crumb_at++; return true;', '    case UK_RIGHT: case UK_SEL_RIGHT: if (u->crumb_at < in->crumb_n) u->crumb_at++; return true;'),
-    ('ui/prompts.c', '        if (u->crumb_at >= in->crumb_n) return ui_ctx_open(u, UI_CTX_BRANCH, (UiNames){ 0 }, true), true;', '        if (u->crumb_at >= in->crumb_n) return ui_ctx_open(u, UI_CTX_BRANCH, (UiNames){ 0 }, false), true;'),
     ('ui/prompts.c', '    case UK_SHIFT_ENTER: if (u->crumb_at < in->crumb_n) *a =', '    case UK_SHIFT_ENTER: *a ='),
     ('ui/handle.c', '    if (u->focus == UI_FOCUS_CRUMBS && u->crumb_at > in->crumb_n - 1 + u->branch_on) u->crumb_at = in->crumb_n - 1 + u->branch_on;', '    if (u->focus == UI_FOCUS_CRUMBS && u->crumb_at > in->crumb_n) u->crumb_at = in->crumb_n;'),
-    ('ui/handle.c', '            if (u->focus == UI_FOCUS_CRUMBS && u->crumb_at >= in->crumb_n) ui_ctx_open(u, UI_CTX_BRANCH, names, true);   // (the branch button\'s)\n            else if', '            if'),
     ('fs/sandbox.c', '        if (!j->outlive) av[n++] = "--die-with-parent";', '        av[n++] = "--die-with-parent";'),
     ('fs/sandbox.c', '        if (!j->outlive) prctl(PR_SET_PDEATHSIG, SIGKILL);', '        prctl(PR_SET_PDEATHSIG, SIGKILL);'),
     ('fs/git.c', ', j.err = true, j.outlive = true;', ', j.err = true;'),
@@ -2458,4 +2433,27 @@ MUTANTS += [
     ('fs/spawn.c', '    int rc = posix_spawn(pid, full, &fa, &attr, argv, environ);', '    int rc = posix_spawnp(pid, argv[0], &fa, &attr, argv, environ);'),
     ('fs/git.c', '    if (binds.common[0] && !ops_allowed(binds.common, &err)) return', '    if (false) return'),
     ('fs/spawn.c', 'argv[2] = "\\"$2\\" unmount -b \\"$1\\" && echo OFX-UNMOUNTED && \\"$2\\" power-off -b \\"$1\\" && echo OFX-EJECTED";', 'argv[2] = "udisksctl unmount -b \\"$1\\" && echo OFX-UNMOUNTED && udisksctl power-off -b \\"$1\\" && echo OFX-EJECTED";'),
+    # F12 code-health step 3: menus and keys agree, the branch menu's ways in, End
+    ('ui/prompts.c', '    case UK_END: case UK_SEL_END: u->crumb_at = in->crumb_n - 1 + u->branch_on; return true;', '    case UK_END: case UK_SEL_END: u->crumb_at = in->crumb_n - 1; return true;'),
+    ('ui/prompts.c', '    case UK_RIGHT: case UK_SEL_RIGHT: if (u->crumb_at < in->crumb_n - 1 + u->branch_on) u->crumb_at++; return true;', '    case UK_RIGHT: case UK_SEL_RIGHT: if (u->crumb_at < in->crumb_n - 1) u->crumb_at++; return true;'),
+    ('ui/prompts.c', '        if (u->crumb_at >= in->crumb_n) return ui_branch_open(u, true), true;', '        if (u->crumb_at >= in->crumb_n) return ui_branch_open(u, false), true;'),
+    ('ui/handle.c', '            if (l->n > 0 && u->focus != UI_FOCUS_SIDE && !ui_allows(u, UA_RENAME)) return ui_view_act(u, (UiAction){ UA_RENAME, 0, false });\n', ''),
+    ('ui/handle.c', 'return ui_allows(u, UA_OPEN_WITH) ? ui_ow_open(u) : ui_view_act(u, (UiAction){ UA_OPEN_WITH, 0, false });', 'return ui_ow_open(u);'),
+    ('ui/handle.c', '    if (u->focus == UI_FOCUS_CRUMBS && u->crumb_at > in->crumb_n - 1 + u->branch_on) u->crumb_at = in->crumb_n - 1 + u->branch_on;', '    if (u->focus == UI_FOCUS_CRUMBS && u->crumb_at > in->crumb_n) u->crumb_at = in->crumb_n;'),
+    ('ui/handle.c', "            if (u->focus == UI_FOCUS_CRUMBS && u->crumb_at >= in->crumb_n) ui_branch_open(u, true);   // (the branch button's)\n            else if", '            if'),
+    ('ui/menus.c', '    if (!u->branch_on) return;\n    u->ctx_key = keys;', '    u->ctx_key = keys;'),
+    ('ui/menus.c', '    case UM_NEW_FOLDER: return ui_allows(u, UA_NEWFOLDER);', '    case UM_NEW_FOLDER: return true;'),
+    ('ui/menus.c', '    case UM_NEW_FILE: return ui_allows(u, UA_NEWFILE);', '    case UM_NEW_FILE: return true;'),
+    ('ui/menus.c', '    case UM_OPEN_WITH: return files && ui_allows(u, UA_OPEN_WITH);', '    case UM_OPEN_WITH: return files;'),
+    ('ui/menus.c', '    case UM_PASTE: return u->can_paste && ui_allows(u, UA_PASTE);', '    case UM_PASTE: return u->can_paste;'),
+    ('ui/menus.c', '    case UM_PASTE: return u->can_paste && ui_allows(u, UA_PASTE);', '    case UM_PASTE: return ui_allows(u, UA_PASTE);'),
+    ('ui/menus.c', '    case UM_RENAME: return here && ui_allows(u, UA_RENAME);', '    case UM_RENAME: return here;'),
+    ('ui/menus.c', '    case UM_DUPLICATE: return here && ui_allows(u, UA_DUPLICATE);', '    case UM_DUPLICATE: return here;'),
+    ('ui/menus.c', '    case UM_MAKE_LINK: return here && ui_allows(u, UA_MAKE_LINK);', '    case UM_MAKE_LINK: return here;'),
+    ('ui/ui.c', '    case UA_RENAME: case UA_DUPLICATE: case UA_OPEN_WITH: return v != UI_VIEW_TRASH;', '    case UA_RENAME: case UA_DUPLICATE: return v != UI_VIEW_TRASH;'),
+    ('ui/ui.c', '    case UA_PASTE: case UA_NEWFOLDER: case UA_NEWFILE: case UA_ADD_BOOKMARK: return v == UI_VIEW_FOLDER;', '    case UA_PASTE: case UA_NEWFOLDER: case UA_ADD_BOOKMARK: return v == UI_VIEW_FOLDER;'),
+    ('ui/ui.c', '    case UA_PASTE: case UA_NEWFOLDER: case UA_NEWFILE: return true;', '    case UA_PASTE: case UA_NEWFILE: return true;'),
+    ('ui/ui.c', '    case UA_RENAME: case UA_DUPLICATE: case UA_MAKE_LINK: return v != UI_VIEW_SEARCH;', '    case UA_RENAME: case UA_DUPLICATE: case UA_MAKE_LINK: return true;'),
+    ('ui/ui.c', '    return ui_view_allows(u->view, k) && (u->can_write || !ui_view_writes(u->view, k));', '    return ui_view_allows(u->view, k);'),
+    ('ui/ui.c', '    if (ui_view_allows(u->view, a.kind)) return (UiAction){ UA_READ_ONLY, 0, false };', '    if (ui_view_allows(u->view, a.kind)) return (UiAction){ UA_NONE, 0, false };'),
 ]

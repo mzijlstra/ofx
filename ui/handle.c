@@ -133,8 +133,8 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
             if (in->jobs_all <= 0) return (UiAction){ UA_QUIT, 0, false };
             u->quit_asking = true, u->cancel_asking = false;
         }
-    // The panels F5.3 adds: the queue full (any key or OK), quit, cancel a job; Empty Trash, and the
-    // Bring back question (F11).
+    // The panels F5.3 adds: the queue full (any key or OK), quit, cancel a job; Empty Trash, the
+    // Bring back question (F11), and Clear Previews (F12).
     bool yes_no = in->modal == UI_MODAL_YES || in->modal == UI_MODAL_NO, said_yes = in->modal == UI_MODAL_YES;
     switch (ui_on_top(u)) {
     case UI_ON_FULL:
@@ -328,8 +328,8 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         case UB_VIEW_ICONS: return ui_view(u, true);
         case UB_ZOOM_OUT: return ui_zoom(u, ui_zoom_level(u->zoom) - 1);
         case UB_ZOOM_IN: return ui_zoom(u, ui_zoom_level(u->zoom) + 1);
-        case UB_BRANCH:   // its menu, under it (F12 step 5b); a second press closes it, as a title's does
-            if (u->branch_on) ui_ctx_open(u, UI_CTX_BRANCH, (UiNames){ 0 }, false);
+        case UB_BRANCH:   // its menu, under it (F12 step 5b); a second press closes it (gui/'s menu_away), as a title's does
+            ui_branch_open(u, false);
             return (UiAction){ UA_NONE, 0, false };
         default: break;
         }
@@ -387,7 +387,7 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         // while the files have the keys (an edit or find line keeps them); the sidebar's cursor's,
         // or the path button's, while they have them.
         if (!prompt && !u->menu_on && e.key == UK_CONTEXT && u->focus != UI_FOCUS_EDIT && !(u->focus == UI_FOCUS_FIND && u->finding) && u->focus != UI_FOCUS_JOBS) {
-            if (u->focus == UI_FOCUS_CRUMBS && u->crumb_at >= in->crumb_n) ui_ctx_open(u, UI_CTX_BRANCH, names, true);   // (the branch button's)
+            if (u->focus == UI_FOCUS_CRUMBS && u->crumb_at >= in->crumb_n) ui_branch_open(u, true);   // (the branch button's)
             else if (u->focus == UI_FOCUS_CRUMBS) ui_folder_open(u, -1, u->crumb_at, true);
             else if (u->focus == UI_FOCUS_SIDE && u->side.n > 0 && !ui_side_head(u, u->side.sel)) ui_folder_open(u, u->side.sel, -1, true);
             else if (u->focus != UI_FOCUS_SIDE) ui_ctx_open(u, u->list.n > 0 ? UI_CTX_ENTRY : UI_CTX_HERE, names, true);
@@ -549,7 +549,7 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         // (Michael, 2026-10-24): they only open and close the tree's folders.
         case UK_ENTER:
             if (u->focus == UI_FOCUS_SIDE && u->side.n > 0) return (UiAction){ UA_PLACE, u->side.sel, false };
-            if (u->focus != UI_FOCUS_SIDE && l->n > 0 && shift_enter) return u->view == UI_VIEW_TRASH ? (UiAction){ UA_NOT_IN_TRASH, 0, false } : ui_ow_open(u);
+            if (u->focus != UI_FOCUS_SIDE && l->n > 0 && shift_enter) return ui_allows(u, UA_OPEN_WITH) ? ui_ow_open(u) : ui_view_act(u, (UiAction){ UA_OPEN_WITH, 0, false });
             if (u->focus != UI_FOCUS_SIDE && l->n > 0) return (UiAction){ UA_OPEN, l->sel, u->marked > 0 };   // all: the marked ones (F7.3)
             break;
         case UK_RIGHT:
@@ -608,7 +608,7 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         case UK_EDIT_BOOKMARKS: return ui_bmp_open(u, 0);
         case UK_SHORTCUTS: return ui_keys_open(u);
         case UK_F2:
-            if (l->n > 0 && u->focus != UI_FOCUS_SIDE && u->view == UI_VIEW_TRASH) return (UiAction){ UA_NOT_IN_TRASH, 0, false };
+            if (l->n > 0 && u->focus != UI_FOCUS_SIDE && !ui_allows(u, UA_RENAME)) return ui_view_act(u, (UiAction){ UA_RENAME, 0, false });
             if (l->n > 0 && u->focus != UI_FOCUS_SIDE) ui_edit_rename(u, names.at(names.ctx, l->sel), names.dir && names.dir(names.ctx, l->sel));
             break;
         case UK_DELETE:

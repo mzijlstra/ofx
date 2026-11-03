@@ -491,7 +491,6 @@ MUTANTS = [
     # ---- quit doesn't wait for a hung drive (2026-10-26: no mutant was hang's or f6b's alone)
     (G, '    if (pthread_timedjoin_np(t, NULL, until) != 0) pthread_detach(t);', '    pthread_join(t, NULL);', 'hang'),   # (join_by: every worker's stop)
     # ---- git status per file (F12 step 5)
-    ('gui/git.c', '    if (dir && app.conf.git_status && git.started)', '    if (dir && git.started)', 'f12g'),
     ('gui/git.c', '    return g->repo && strcmp(g->dir, app.cwd) == 0 ? g : NULL;', '    return g->repo ? g : NULL;', 'f12g'),
     ('gui/git.c', '    watch_git(git.slot[s].repo ? git.slot[s].gitdir : NULL);\n', '', 'f12g'),
     ('gui/git.c', '    if (g->ignored) return GS_IGNORED;\n', '', 'f12g'),
@@ -513,9 +512,14 @@ MUTANTS = [
     ('gui/topbar.c', '            else layout_crumbs(branch ? room - bw - BAR_GAP : room);', '            else layout_crumbs(room);', 'f12h'),
     ('gui/actions.c', '        if (a.index >= 0 && a.index < git.br.n && a.index != git.br.cur && git_ask_switch(', '        if (a.index >= 0 && a.index < git.br.n && git_ask_switch(', 'f12h'),
     ('gui/input.c', '    return ui_due_min(d, COUNT(d));', '    return ui_due_min(d, COUNT(d) - 1);', 'f12g'),
+    # F12 code-health step 3: the .git watch off the folder view, a switch's own folder
+    ('gui/git.c', '    bool asked = dir && app.conf.git_status && git.started;', '    bool asked = dir && git.started;', 'f12g'),
+    ('gui/git.c', '    if (!asked) watch_git(NULL);', '    (void)asked;', 'f12g'),
+    ('gui/actions.c', '    if (app.ui.view == UI_VIEW_FOLDER && strcmp(app.cwd, asked) == 0) reload();', '    if (false) reload();', 'f12h'),
+    ('gui/main.c', '        if (atomic_exchange(&watch.git_ready, false) && app.ui.view == UI_VIEW_FOLDER) git_ask_soon();', '        if (false) git_ask_soon();', 'f12g'),
+    ('gui/actions.c', '    case UA_READ_ONLY: set_status(true,', '    case UA_READ_ONLY: set_status(false,', 'f7'),
     # F12 step 5c: switching from the menu
     ('gui/actions.c', '    if (got == GSW_REFUSED) return set_status(true,', '    if (got == GSW_REFUSED) return set_status(false,', 'f12h'),
-    ('gui/actions.c', '    if (app.ui.view == UI_VIEW_FOLDER) reload();\n', '', 'f12h'),
     ('gui/actions.c', '    if (strcmp(was, app.cwd) != 0) snprintf(gone,', '    if (false) snprintf(gone,', 'f12h'),
     ('gui/main.c', '        if (branch_switched()) dirty = true;\n', '', 'f12h'),
     ('gui/actions.c', '    if (got == GSW_GOING) return set_status(false,', '    if (got == GSW_GOING) return set_status(true,', 'f12h'),
@@ -524,7 +528,6 @@ MUTANTS = [
     ('gui/git.c', '    if (it == UM_BR_NOTE && git.sw_busy) return', '    if (false) return', 'f12h'),
     ('gui/git.c', '    if (r) git.sw_ready = false, git.sw_busy = false, *got = git.sw_got,', '    if (r) git.sw_ready = false, *got = git.sw_got,', 'f12h'),
     ('gui/input.c', 'rem.due, restore.due, git.due }', 'rem.due, restore.due }', 'f12g'),
-    ('gui/main.c', '        if (atomic_exchange(&watch.git_ready, false) && fold_view_of(app.ui.view)) git_ask_soon();   // (its index or HEAD changed: F12)\n', '', 'f12g'),
     ('gui/watch.c', 'strcmp(e->name, "index") == 0 || strcmp(e->name, "HEAD") == 0', 'strcmp(e->name, "HEAD") == 0', 'f12g'),
     ('gui/files.c', ' : sel ? cc(t->fg) : gs != GS_NONE ? git_colour(gs) : ls_name_colour(e, i);', ' : sel ? cc(t->fg) : ls_name_colour(e, i);', 'f12g'),
     ('gui/files.c', '        if (in_git) git_cell(r, i, gs);\n', '', 'f12g'),

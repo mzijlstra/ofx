@@ -834,10 +834,16 @@ static void test_branch_keys(void)
     in = keys(1, UK_SHIFT_ENTER), in.crumb_n = 4, in.crumb_last = 3;
     CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.crumb_at == 4 && !u.menu_on);
     in = keys(1, UK_ENTER), in.crumb_n = 4, in.crumb_last = 3;
-    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.menu_on && u.menu == UI_CTX_BRANCH && u.menu_at == 1 && u.focus != UI_FOCUS_CRUMBS);
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.menu_on && u.menu == UI_CTX_BRANCH && u.menu_at == 1);
+    in = keys(1, UK_ESC), in.crumb_n = 4, in.crumb_last = 3;   // (back on the button, as the folder menu's Esc: code-health review, 2026-11-03)
+    ui_handle(&u, names, &in);
+    CHECK(!u.menu_on && u.focus == UI_FOCUS_CRUMBS && u.crumb_at == 4);
+    in = keys(2, UK_HOME, UK_END), in.crumb_n = 4, in.crumb_last = 3;   // (End: the button, the last Right reaches)
+    ui_handle(&u, names, &in);
+    CHECK(u.crumb_at == 4);
     in = keys(1, UK_ESC), in.crumb_n = 4, in.crumb_last = 3;
     ui_handle(&u, names, &in);
-    CHECK(!u.menu_on && u.focus == UI_FOCUS_LIST);
+    CHECK(u.focus == UI_FOCUS_LIST);
     in = keys(3, UK_CRUMBS, UK_RIGHT, UK_CONTEXT), in.crumb_n = 4, in.crumb_last = 3;
     ui_handle(&u, names, &in);
     CHECK(u.menu_on && u.menu == UI_CTX_BRANCH);
@@ -1132,6 +1138,32 @@ static void test_git_said(void)
     CHECK(strcmp(m, "last") == 0);
     git_said(STR_EMPTY, m, sizeof m);
     CHECK(m[0] == 0);
+}
+
+// A menu entry greyed and its key refused agree (code-health review, 2026-11-03): in a folder that
+// can't be written, Rename (F2), Make Link (Ctrl+M), Paste (Ctrl+V) and New Folder say read-only;
+// in the trash view they and Open With (Shift+Enter) say so of the trash; in a search a rename or
+// a link is in the result's own folder, allowed whatever the folder searched.
+static void test_menu_key_agree(void)
+{
+    static const struct { UiMenuItem it; int key; } P[] = {
+        { UM_RENAME, UK_F2 }, { UM_MAKE_LINK, UK_MAKE_LINK }, { UM_PASTE, UK_PASTE }, { UM_NEW_FOLDER, UK_NEWFOLDER }, { UM_OPEN_WITH, UK_SHIFT_ENTER },
+    };
+    static const struct { UiView v; bool w; } C[] = { { UI_VIEW_FOLDER, true }, { UI_VIEW_FOLDER, false }, { UI_VIEW_TRASH, false }, { UI_VIEW_SEARCH, false } };
+    for (int c = 0; c < COUNT(C); c++)
+        for (int k = 0; k < COUNT(P); k++) {
+            Ui u = menu_ui(3);
+            u.view = C[c].v, u.can_write = C[c].w, u.can_paste = true, u.menu = 1;
+            bool on = ui_menu_enabled(&u, P[k].it);
+            UiAction a = menu_keys(&u, 1, P[k].key);
+            bool refused = a.kind == UA_READ_ONLY || a.kind == UA_NOT_IN_TRASH || a.kind == UA_NOT_IN_SEARCH;
+            if (on == refused) fprintf(stderr, "agree: view %d writable %d item %d: menu %d, key gave %d\n", C[c].v, C[c].w, P[k].it, on, a.kind);
+            CHECK(on != refused);
+            if (!on && C[c].v == UI_VIEW_FOLDER) CHECK(a.kind == UA_READ_ONLY);
+        }
+    Ui s = menu_ui(3);
+    s.view = UI_VIEW_SEARCH, s.can_write = false, s.menu = 1;
+    CHECK(ui_menu_enabled(&s, UM_RENAME) && ui_menu_enabled(&s, UM_MAKE_LINK) && ui_allows(&s, UA_DUPLICATE));
 }
 
 // The window's timer (F12 step 5a review): the soonest due time, whatever its place; 0s are none.

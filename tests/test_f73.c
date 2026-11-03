@@ -710,6 +710,7 @@ static void test_find_count(void)
 static void test_find_bar(void)
 {
     Ui u = { 0 };
+    u.can_write = true;   // (a folder that can be written, as gui/ says of most)
     UiNames names = { name_at, NULL, NULL };
     ui_resize(&u.list, 10);
     ui_set(&u.list, COUNT(find_names), 0);   // alpha Beta gamma.txt delta BETAMAX omega café

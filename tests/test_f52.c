@@ -42,6 +42,7 @@ static void test_edit_select(void)
     UiNames names = { name_at, NULL, NULL };
     static Ui u;
     memset(&u, 0, sizeof u);
+    u.can_write = true;   // (a folder that can be written, as gui/ says of most)
     ui_resize(&u.list, 5);
     ui_set(&u.list, 20, 0);
     static u8 mark[20];
@@ -185,6 +186,7 @@ static void test_edit_clipboard(void)
     UiNames names = { name_at, NULL, NULL };
     static Ui u;
     memset(&u, 0, sizeof u);
+    u.can_write = true;   // (a folder that can be written, as gui/ says of most)
     ui_resize(&u.list, 5);
     ui_set(&u.list, 20, 0);
     static u8 mark[20];
@@ -265,6 +267,7 @@ static void test_crumb_keys(void)
     UiNames names = { name_at, NULL, NULL };
     static Ui u;
     memset(&u, 0, sizeof u);
+    u.can_write = true;   // (a folder that can be written, as gui/ says of most)
     ui_resize(&u.list, 5);
     ui_set(&u.list, 20, 3);
     ui_resize(&u.side, 5);

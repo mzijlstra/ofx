@@ -57,7 +57,6 @@ static void modal_button(int which, const char *label, bool main_one, bool dange
     }
 }
 
-// The panel itself, in the window's middle over the rest.
 // n with its thousands apart: 2,345,678.
 static void props_digits(char *buf, size_t cap, i64 n)
 {
@@ -70,6 +69,7 @@ static void props_digits(char *buf, size_t cap, i64 n)
     buf[o] = 0;
 }
 
+// The panel itself, in the window's middle over the rest.
 static void layout_modal_panel(ModalKind k)
 {
     Theme *t = &app.theme;

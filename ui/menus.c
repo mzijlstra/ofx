@@ -69,14 +69,17 @@ static bool ui_menu_enabled(const Ui *u, UiMenuItem it)
     switch (it) {
     case UM_NEW_TAB: case UM_CLOSE_ALL: case UM_CLOSE: case UM_PROPERTIES: return true;
     case UM_NEW_WINDOW: return ui_view_allows(u->view, UA_NEW_WINDOW);   // ofx starts on a folder, not on the trash view (from a search: the folder searched)
-    case UM_NEW_FOLDER: case UM_NEW_FILE: return u->view != UI_VIEW_TRASH && u->can_write;
+    case UM_NEW_FOLDER: return ui_allows(u, UA_NEWFOLDER);
+    case UM_NEW_FILE: return ui_allows(u, UA_NEWFILE);
     case UM_OPEN: return files;
-    case UM_OPEN_WITH: return files && u->view != UI_VIEW_TRASH;
+    case UM_OPEN_WITH: return files && ui_allows(u, UA_OPEN_WITH);
     case UM_UNDO: return u->can_undo;
     case UM_CUT: case UM_COPY: return here && ui_view_allows(u->view, UA_COPY);
-    case UM_PASTE: return u->can_paste && u->can_write;
+    case UM_PASTE: return u->can_paste && ui_allows(u, UA_PASTE);
     case UM_SELECT_ALL: case UM_SELECT_MATCH: case UM_INVERT: return files;
-    case UM_RENAME: case UM_DUPLICATE: case UM_MAKE_LINK: return here && u->view != UI_VIEW_TRASH && (u->can_write || u->view == UI_VIEW_SEARCH);   // (a result's own folder: F9)
+    case UM_RENAME: return here && ui_allows(u, UA_RENAME);
+    case UM_DUPLICATE: return here && ui_allows(u, UA_DUPLICATE);
+    case UM_MAKE_LINK: return here && ui_allows(u, UA_MAKE_LINK);
     case UM_TRASH: case UM_DELETE: return here;
     case UM_RESTORE: return here;
     case UM_RELOAD: case UM_SIDE_PLACES: case UM_SIDE_TREE: case UM_SIDE_NONE: case UM_HIDDEN: case UM_SHOW_MENU: return true;
@@ -171,6 +174,16 @@ static void ui_ctx_open(Ui *u, int m, UiNames names, bool keys)
     u->ctx_dir = u->ctx_one && names.dir && names.dir(names.ctx, u->list.sel);
     u->ctx_key = keys, u->ctx_w = false;   // (gui/ says, as it opens)
     ui_menu_open(u, m, keys);
+}
+
+// The branch button's menu opened (F12 step 5b), by the pointer or keys (Ctrl+K's on it): the keys
+// stay where they were (on the button after Esc), as the folder menu's do. Nothing when there
+// is no button.
+static void ui_branch_open(Ui *u, bool keys)
+{
+    if (!u->branch_on) return;
+    u->ctx_key = keys;
+    ui_menu_open(u, UI_CTX_BRANCH, keys);
 }
 
 // The folder menu opened (F8) on sidebar row side or path button crumb (the other -1): what it is,

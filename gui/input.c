@@ -495,8 +495,9 @@ static bool zoom_drag_at(UiInput *in, float x, bool held)
 
 static bool hover_at(float x, float y);
 
-// When the timer wakes the loop: a tooltip due, the search field's text to search for (F9), or a
-// state write waiting (a folder's view, remember.c; this window's tabs, restore.c; F11).
+// When the timer wakes the loop: a tooltip due, the search field's text to search for (F9), a
+// state write waiting (a folder's view, remember.c; this window's tabs, restore.c; F11), or a git
+// status ask put off (git.c's once a second, F12).
 static i64 wake_due(void)
 {
     i64 d[] = { ui_tip_due(&app.tip), app.search_due, rem.due, restore.due, git.due };

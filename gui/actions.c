@@ -714,12 +714,12 @@ static void restore_others(bool yes);   // (restore.c, after: it uses the tabs)
 static bool branch_switched(void)
 {
     GitSwitch got;
-    char name[GIT_HEAD_MAX], msg[256], was[PATH_MAX], gone[PATH_MAX + 32] = "";
-    if (!git_switch_take(&got, name, sizeof name, msg, sizeof msg)) return false;
+    char name[GIT_HEAD_MAX], msg[256], was[PATH_MAX], gone[PATH_MAX + 32] = "", asked[PATH_MAX];
+    if (!git_switch_take(&got, name, sizeof name, asked, sizeof asked, msg, sizeof msg)) return false;
     if (got == GSW_REFUSED) return set_status(true, "git switch %s: %s", name, msg), true;
     if (got == GSW_GOING) return set_status(false, "git switch %s: %s", name, msg), true;
     snprintf(was, sizeof was, "%s", app.cwd);
-    if (app.ui.view == UI_VIEW_FOLDER) reload();
+    if (app.ui.view == UI_VIEW_FOLDER && strcmp(app.cwd, asked) == 0) reload();   // (gone elsewhere meanwhile: that folder is its own; review, 2026-11-03)
     if (strcmp(was, app.cwd) != 0) snprintf(gone, sizeof gone, ": %.*s isn't on it", STR_ARG(path_base(str_from_c(was))));
     set_status(false, "Switched to %s%s%s%s%s", name, gone, msg[0] ? " (" : "", msg, msg[0] ? ")" : "");   // (a hook's or a filter's words)
     return true;
@@ -735,6 +735,7 @@ static void act(UiAction a)
     case UA_EMPTY_TRASH: trash_empty(); break;
     case UA_CLEAR_PREVIEWS: clear_start(); break;
     case UA_NOT_IN_TRASH: set_status(true, "That doesn't work in the trash: restore it first"); break;
+    case UA_READ_ONLY: set_status(true, "%.*s can't be written to", STR_ARG(path_base(str_from_c(app.cwd)))); break;
     case UA_NOT_IN_SEARCH: set_status(true, "A search isn't a folder: that works in one"); break;
     case UA_SEARCH: {   // below the folder shown, or (all) a folder entry's (F9)
         char in[PATH_MAX];
