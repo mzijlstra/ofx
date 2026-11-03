@@ -503,11 +503,14 @@ MUTANTS = [
     ('gui/main.c', '    if (ctx_up && !app.ctx_placed && app.ui.menu == UI_CTX_BRANCH) git_ask_branches(), menu_facts();', '    if (ctx_up && !app.ctx_placed && app.ui.menu == UI_CTX_BRANCH) menu_facts();', 'f12h'),
     ('gui/input.c', '    if (br.found) {   // under the branch button, its left edge (F12 step 5b)', '    if (false) {   // under the branch button, its left edge (F12 step 5b)', 'f12h'),
     ('gui/topbar.c', '            else layout_crumbs(branch ? room - bw - BAR_GAP : room);', '            else layout_crumbs(room);', 'f12h'),
-    ('gui/actions.c', '        if (a.index >= 0 && a.index < git.br.n && a.index != git.br.cur && git_ask_switch(', '        if (a.index >= 0 && a.index < git.br.n && git_ask_switch(', 'f12h'),
+    ('gui/actions.c', '        else if (a.index >= 0 && a.index < git.br.n && a.index != git.br.cur && git_ask_switch(', '        else if (a.index >= 0 && a.index < git.br.n && git_ask_switch(', 'f12h'),
     ('gui/input.c', '    return ui_due_min(d, COUNT(d));', '    return ui_due_min(d, COUNT(d) - 1);', 'f12g'),
     # F12 step 6: the branches panel
     ('gui/frame.c', '    u->br_total = git.br.total;', '    u->br_total = 0;', 'f12h'),
-    ('gui/main.c', '        if (app.ui.panel == UI_PANEL_BRANCHES) in.br_name = brp_names(), in.br_names = git.br.n;', '        (void)0;', 'f12h'),
+    ('gui/main.c', '        if (app.ui.panel == UI_PANEL_BRANCHES || (app.ui.menu_on && app.ui.menu == UI_CTX_BRANCH)) in.br_name = brp_names(), in.br_names = git.br.n;', '        (void)0;', 'f12h'),
+    # (Not the menu's half of that line: a script draws a frame each step, and the next one fills the
+    # panel. The bug it caught showed only with no frame to come; test_branch_panel holds ui/'s side.)
+    ('gui/folder.c', '    if (!same && app.ui.panel == UI_PANEL_BRANCHES) ui_brp_close(&app.ui);', '    if (false) ui_brp_close(&app.ui);', 'f12i'),
     ('gui/input.c', '        h.brp_field = modal_kind() == UI_ON_BRANCHES && in_box(CLAY_ID("brp-field"), x, y);', '        h.brp_field = false;'),
     # F12 code-health step 5 (J): watch_release, modal_kind
     ('gui/watch.c', '    if (wd > 0 && !watch_fixed(wd) && !watch_is_trash(wd) && wd != atomic_load(&watch.dir_wd)) inotify_rm_watch(watch.fd, wd);', '    if (wd > 0 && !watch_is_trash(wd) && wd != atomic_load(&watch.dir_wd)) inotify_rm_watch(watch.fd, wd);', 'f10'),

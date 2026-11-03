@@ -722,7 +722,38 @@ static void test_git_branches_merge(void)
     isize at = 0;
     for (int k = 0; k < GIT_BRANCHES_MAX + 6; k++) at += snprintf(many + at, sizeof many - (size_t)at, "%d b%d\n", 9999 - k, k);
     git_branches_merge(&b, "b3", STR_EMPTY, (Str){ many, at });
-    CHECK(b.n == GIT_BRANCHES_MAX && b.total == GIT_BRANCHES_MAX + 6 && b.cur == 0 && strcmp(b.name[0], "b3") == 0 && strcmp(b.name[1], "b0") == 0);
+    CHECK(b.n == GIT_BRANCHES_MAX && b.total == GIT_BRANCHES_MAX + 6 && !b.more && b.cur == 0 && strcmp(b.name[0], "b3") == 0 && strcmp(b.name[1], "b0") == 0);
+    // Past the refs it reads: those counted, more said (review, 2026-11-03); exactly that many, not.
+    static char refs_max[(GIT_REFS_MAX + 1) * 16];
+    at = 0;
+    for (int k = 0; k < GIT_REFS_MAX; k++) at += snprintf(refs_max + at, sizeof refs_max - (size_t)at, "%d r%d\n", 99999 - k, k);
+    git_branches_merge(&b, "", STR_EMPTY, (Str){ refs_max, at });
+    CHECK(b.total == GIT_REFS_MAX && !b.more);
+    at += snprintf(refs_max + at, sizeof refs_max - (size_t)at, "1 last\n");
+    git_branches_merge(&b, "", STR_EMPTY, (Str){ refs_max, at });
+    CHECK(b.total == GIT_REFS_MAX && b.more);
+    // A name of GIT_HEAD_MAX or more is no branch: not listed, not counted.
+    static char longn[GIT_HEAD_MAX + 32];
+    int w = snprintf(longn, sizeof longn, "3 a\n2 %0*d\n1 b\n", GIT_HEAD_MAX, 0);
+    git_branches_merge(&b, "", STR_EMPTY, (Str){ longn, w });
+    CHECK(b.n == 2 && b.total == 2 && strcmp(b.name[1], "b") == 0);
+    w = snprintf(longn, sizeof longn, "1 %0*d\n", GIT_HEAD_MAX - 1, 0);   // (the longest that is, checked out)
+    char head[GIT_HEAD_MAX];
+    snprintf(head, sizeof head, "%.*s", w - 3, longn + 2);
+    git_branches_merge(&b, head, STR_EMPTY, (Str){ longn, w });
+    CHECK(b.n == 1 && b.total == 1 && b.cur == 0);
+}
+
+// for-each-ref's output past its room: cut at its last whole line, and said (review, 2026-11-03).
+static void test_git_refs_whole(void)
+{
+    bool cut;
+    Str s = git_refs_whole(S("1 a\n2 b\n3 c"), 11, &cut);
+    CHECK(cut && str_eq(s, S("1 a\n2 b\n")));
+    s = git_refs_whole(S("1 a\n2 b\n3 c"), 12, &cut);
+    CHECK(!cut && s.len == 11);
+    s = git_refs_whole(S("1 abc"), 5, &cut);
+    CHECK(cut && s.len == 0);
 }
 
 // HEAD's branch read from the gitdir (F12 step 5c: the menu's current one, after a switch): a
@@ -1297,6 +1328,15 @@ static void test_branch_panel(void)
     CHECK(UI_MENU[UI_CTX_BRANCH].items[in.menu_item] == UM_BR_ALL);
     // Filtered in the frame that opens it: no other event may come (2026-11-03).
     CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.panel == UI_PANEL_BRANCHES && !u.menu_on && ui_on_top(&u) == UI_ON_BRANCHES);
+    // A press on a row or the field draws a frame (ui_input_acts; review, 2026-11-03).
+    UiInput acts = ui_input_none();
+    CHECK(!ui_input_acts(&acts));
+    acts.brp_row = 0;
+    CHECK(ui_input_acts(&acts));
+    acts = ui_input_none(), acts.brp_drow = 0;
+    CHECK(ui_input_acts(&acts));
+    acts = ui_input_none(), acts.brp_field = true;
+    CHECK(ui_input_acts(&acts));
     CHECK(!u.brp_fresh && u.brp_list.n == 5);
     in = chars("biv"), in.br_name = BR, in.br_names = COUNT(BR);
     ui_handle(&u, names, &in);

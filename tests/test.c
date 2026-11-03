@@ -1841,6 +1841,7 @@ int main(void)
     if (slow) test_git_status();
     if (fast) test_git_footer();
     if (fast) test_git_branches_merge();
+    if (fast) test_git_refs_whole();
     if (fast) test_git_reflog_tail();
     if (slow) test_git_branches();
     if (fast) test_due_min();

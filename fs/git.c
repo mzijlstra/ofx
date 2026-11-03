@@ -255,14 +255,17 @@ typedef struct {
     int  n;
     int  total;   // the repository's local branches (n: at most GIT_BRANCHES_MAX of them, the latest)
     int  cur;     // the one checked out (-1: detached, or not among them)
+    bool more;    // total a lower bound: refs past GIT_REFS_MAX, or for-each-ref's output past its room
     char name[GIT_BRANCHES_MAX][GIT_HEAD_MAX];
     i64  when[GIT_BRANCHES_MAX];   // its last commit's time (unix seconds)
 } GitBranches;
 
 // The local branches as for-each-ref gives them, one "<committer time> <name>" a line (newest commit
-// first), read into names and times; and whether each is in the list yet.
+// first), read into names and times; and whether each is in the list yet. A name of GIT_HEAD_MAX or
+// more isn't one (the list holds none, so total doesn't count it).
 typedef struct {
     int  n;
+    bool more;   // lines left past GIT_REFS_MAX
     Str  name[GIT_REFS_MAX];
     i64  when[GIT_REFS_MAX];
     bool taken[GIT_REFS_MAX];
@@ -271,17 +274,30 @@ typedef struct {
 static void git_refs_parse(GitRefs *r, Str refs)
 {
     r->n = 0;
-    for (isize at = 0; at < refs.len && r->n < GIT_REFS_MAX;) {
+    isize at = 0;
+    while (at < refs.len && r->n < GIT_REFS_MAX) {
         isize e = at;
         while (e < refs.len && refs.p[e] != '\n') e++;
         Str l = str_cut(refs, at, e);
         at = e + 1;
         isize sp = str_find(l, ' ');
-        if (sp <= 0 || sp + 1 >= l.len) continue;
+        if (sp <= 0 || sp + 1 >= l.len || l.len - sp - 1 >= GIT_HEAD_MAX) continue;
         i64 t = 0;
         for (isize k = 0; k < sp && l.p[k] >= '0' && l.p[k] <= '9'; k++) t = t * 10 + (l.p[k] - '0');
         r->name[r->n] = str_cut(l, sp + 1, l.len), r->when[r->n] = t, r->taken[r->n] = false, r->n++;
     }
+    r->more = at < refs.len;
+}
+
+// for-each-ref's output as far as its last whole line: past its room (cap) the rest is gone, and the
+// line it cut isn't a branch (review, 2026-11-03).
+static Str git_refs_whole(Str out, isize cap, bool *cut)
+{
+    *cut = out.len >= cap;
+    if (!*cut) return out;
+    isize e = out.len;
+    while (e > 0 && out.p[e - 1] != '\n') e--;
+    return str_cut(out, 0, e);
 }
 
 // The ref named name (whole names only), or -1.
@@ -296,7 +312,7 @@ static int git_refs_find(const GitRefs *r, Str name)
 static bool git_branch_add(GitBranches *b, GitRefs *r, int k)
 {
     if (b->n >= GIT_BRANCHES_MAX) return false;
-    if (k < 0 || r->taken[k] || r->name[k].len >= GIT_HEAD_MAX) return true;
+    if (k < 0 || r->taken[k]) return true;
     snprintf(b->name[b->n], GIT_HEAD_MAX, "%.*s", STR_ARG(r->name[k]));
     b->when[b->n++] = r->when[k], r->taken[k] = true;
     return b->n < GIT_BRANCHES_MAX;
@@ -310,7 +326,7 @@ static void git_branches_merge(GitBranches *b, const char *head, Str reflog, Str
 {
     static GitRefs r;   // (the worker's, or a test's)
     git_refs_parse(&r, refs);
-    b->n = 0, b->cur = -1, b->total = r.n;
+    b->n = 0, b->cur = -1, b->total = r.n, b->more = r.more;
     if (head[0]) {
         int k = git_refs_find(&r, str_from_c(head));
         git_branch_add(b, &r, k), b->cur = k >= 0 ? 0 : -1;
@@ -398,7 +414,10 @@ static bool git_branches(const char *git, const char *dir, const char *top, GitB
     isize len = 0;
     j.out = out, j.cap = sizeof out, j.len = &len;
     if (box_run(&j) != BOX_ENDED || len == 0) return false;
-    git_branches_merge(b, head, git_reflog_tail(gitdir, tail, sizeof tail), (Str){ out, len });
+    bool cut;
+    Str refs = git_refs_whole((Str){ out, len }, sizeof out, &cut);
+    git_branches_merge(b, head, git_reflog_tail(gitdir, tail, sizeof tail), refs);
+    b->more |= cut;
     return true;
 }
 

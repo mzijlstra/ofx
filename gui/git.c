@@ -60,7 +60,7 @@ static void git_branches_run(void)
     git.br_asked = false;
     pthread_mutex_unlock(&git.mu);
     bool ok = git_top(dir, top, sizeof top) && realpath(dir, real) && git_branches("git", real, top, &b);
-    if (!ok) b.n = b.total = 0, b.cur = -1;
+    if (!ok) b.n = b.total = 0, b.cur = -1, b.more = false;
     pthread_mutex_lock(&git.mu);
     if (gen == git.br_gen) git.br_out = b, git.br_ready = true, wake_main();
 }
@@ -194,7 +194,7 @@ static void git_ask_branches(void)
     const GitSlot *g = git_shown();
     pthread_mutex_lock(&git.mu);
     git.br_gen++, git.br_ready = false;
-    git.br.n = git.br.total = 0, git.br.cur = -1, git.br_wait = g != NULL;
+    git.br.n = git.br.total = 0, git.br.cur = -1, git.br.more = false, git.br_wait = g != NULL;
     if (g) snprintf(git.br_want, sizeof git.br_want, "%s", app.cwd), git.br_asked = true, pthread_cond_signal(&git.cv);   // (HEAD read then: a switch may come first)
     pthread_mutex_unlock(&git.mu);
 }
@@ -238,11 +238,11 @@ static const char *branch_label(void)
 }
 
 // The branch menu's entry it, its label: a branch's name, or the note in their place.
-// The repository's branch count: past the refs read (GIT_REFS_MAX), "8192+" rather than a number that
-// reads as exact (review, 2026-11-03).
+// The repository's branch count: "N+" when more were left unread (GitBranches.more), rather than a
+// number that reads as exact (review, 2026-11-03).
 static const char *br_total_text(void)
 {
-    return git.br.total >= GIT_REFS_MAX ? arena_sprintf(&frame, "%d+", GIT_REFS_MAX) : arena_sprintf(&frame, "%d", git.br.total);
+    return arena_sprintf(&frame, git.br.more ? "%d+" : "%d", git.br.total);
 }
 
 static Str branch_menu_label(UiMenuItem it)

@@ -1011,7 +1011,9 @@ MUTANTS += [
     ('ui/cursor.c', "|| in->menu_away || in->ctx_row >= 0 || in->ctx_here || in->ctx_side >= 0 || in->ctx_crumb >= 0 || in->ctx_tab >= 0 || in->prop_box >= 0 ||\n", "|| in->menu_away || in->ctx_row >= 0 || in->ctx_here || in->ctx_side >= 0 || in->ctx_crumb >= 0 || in->ctx_tab >= 0 ||\n"),
     ('ui/ui.c', '.menu_item = -1, .ctx_row = -1, .ctx_side = -1, .ctx_crumb = -1, .ctx_tab = -1, .prop_box = -1, .ow_row = -1, .ow_drow = -1, .brp_row = -1, .brp_drow = -1, .bmp_row = -1, .bmp_drow = -1,', '.menu_item = -1, .ctx_row = -1, .ctx_side = -1, .ctx_crumb = -1, .ctx_tab = -1, .prop_box = 0, .ow_row = -1, .ow_drow = -1, .brp_row = -1, .brp_drow = -1, .bmp_row = -1, .bmp_drow = -1,'),
     ('ui/ui.c', '.menu_item = -1, .ctx_row = -1, .ctx_side = -1, .ctx_crumb = -1, .ctx_tab = -1, .prop_box = -1, .ow_row = -1, .ow_drow = -1, .brp_row = -1, .brp_drow = -1, .bmp_row = -1, .bmp_drow = -1,', '.menu_item = -1, .ctx_row = -1, .ctx_side = -1, .ctx_crumb = -1, .ctx_tab = -1, .prop_box = -1, .ow_row = 0, .ow_drow = -1, .brp_row = -1, .brp_drow = -1, .bmp_row = -1, .bmp_drow = -1,'),
-    ('ui/ui.c', '.menu_item = -1, .ctx_row = -1, .ctx_side = -1, .ctx_crumb = -1, .ctx_tab = -1, .prop_box = -1, .ow_row = -1, .ow_drow = -1, .brp_row = -1, .brp_drow = -1, .bmp_row = -1, .bmp_drow = -1,', '.menu_item = -1, .ctx_row = -1, .ctx_side = -1, .ctx_crumb = -1, .ctx_tab = -1, .prop_box = -1, .ow_row = -1, .ow_drow = 0, .bmp_row = -1, .bmp_drow = -1,'),
+    ('ui/ui.c', '.menu_item = -1, .ctx_row = -1, .ctx_side = -1, .ctx_crumb = -1, .ctx_tab = -1, .prop_box = -1, .ow_row = -1, .ow_drow = -1, .brp_row = -1, .brp_drow = -1, .bmp_row = -1, .bmp_drow = -1,', '.menu_item = -1, .ctx_row = -1, .ctx_side = -1, .ctx_crumb = -1, .ctx_tab = -1, .prop_box = -1, .ow_row = -1, .ow_drow = 0, .brp_row = -1, .brp_drow = -1, .bmp_row = -1, .bmp_drow = -1,'),
+    ('ui/ui.c', '.ow_drow = -1, .brp_row = -1, .brp_drow = -1, .bmp_row', '.ow_drow = -1, .brp_row = 0, .brp_drow = -1, .bmp_row'),
+    ('ui/ui.c', '.ow_drow = -1, .brp_row = -1, .brp_drow = -1, .bmp_row', '.ow_drow = -1, .brp_row = -1, .brp_drow = 0, .bmp_row'),
     # ---- the files' cursor round the ends (Michael, 2026-10-25)
     ('ui/cursor.c', "        l->sel = by < 0 ? (l->sel == 0 ? l->n - 1 : l->sel - 1) : (l->sel == l->n - 1 ? 0 : l->sel + 1);", "        l->sel = by < 0 ? (l->sel == 0 ? 0 : l->sel - 1) : (l->sel == l->n - 1 ? 0 : l->sel + 1);"),
     ('ui/cursor.c', "        l->sel = by < 0 ? (l->sel == 0 ? l->n - 1 : l->sel - 1) : (l->sel == l->n - 1 ? 0 : l->sel + 1);", "        l->sel = by < 0 ? (l->sel == 0 ? l->n - 1 : l->sel - 1) : (l->sel == l->n - 1 ? l->sel : l->sel + 1);"),
@@ -1340,7 +1342,7 @@ MUTANTS += [
     ('ui/handle.c', '            if (in->bmp_drow >= 0) return *out = (ui_panel_close(u, UI_PANEL_BM), (UiAction){ UA_BM_GO, u->bmp_list.sel, false }), true;', ''),
     ('ui/handle.c', '        if (in->bmp_btn >= 1 && in->bmp_btn <= UI_BMP_BTNS && !u->bmp_naming)', '        if (in->bmp_btn >= 1 && in->bmp_btn <= UI_BMP_BTNS)'),
     ('ui/handle.c', '        if (in->modal == UI_MODAL_NO) return ui_panel_close(u, UI_PANEL_BM), *out = UI_NONE, true;\n    } else if (on == UI_ON_BRANCHES', '    } else if (on == UI_ON_BRANCHES'),
-    ('ui/cursor.c', "in->bmp_row >= 0 || in->bmp_drow >= 0 || in->bmp_btn || in->ow_wheel != 0;", "in->bmp_row >= 0 || in->bmp_drow >= 0 || in->ow_wheel != 0;"),
+    ('ui/cursor.c', "in->bmp_row >= 0 || in->bmp_drow >= 0 || in->bmp_btn ||\n", "in->bmp_row >= 0 || in->bmp_drow >= 0 ||\n"),
 ]
 # ---- F7.5: Keyboard Shortcuts
 MUTANTS += [
@@ -1378,7 +1380,7 @@ MUTANTS += [
     ('ui/handle.c', '        if (in->modal == UI_MODAL_NO) return ui_panel_close(u, UI_PANEL_ABOUT), *out = UI_NONE, true;', ''),
     ('ui/handle.c', '        if (e.key == UK_ESC || e.key == UK_ENTER) u->panel = UI_PANEL_NONE;', '        if (e.key == UK_ENTER) u->panel = UI_PANEL_NONE;'),
     ('ui/handle.c', '        if (e.key == UK_ESC || e.key == UK_ENTER) u->panel = UI_PANEL_NONE;', '        if (e.key == UK_ESC) u->panel = UI_PANEL_NONE;'),
-    ('ui/cursor.c', " || in->bmp_btn || in->ow_wheel != 0;", " || in->bmp_btn;"),
+    ('ui/cursor.c', " || in->brp_field || in->ow_wheel != 0;", " || in->brp_field;"),
 ]
 # ---- F8 step 1: the files' right-click menus
 MUTANTS += [
@@ -2338,9 +2340,9 @@ MUTANTS += [
     ('fs/git.c', '        if (!str_starts_with(m, MOVE)) continue;\n', ''),
     ('fs/git.c', '        if (from > 0) {   // (the first line is cut: dropped)', '        if (false) {   // (the first line is cut: dropped)'),
     ('fs/git.c', '        off_t from = st.st_size > cap ? st.st_size - cap : 0;', '        off_t from = 0;'),
-    ('fs/git.c', '    if (box_run(&j) != BOX_ENDED || len == 0) return false;\n    git_branches_merge', '    if (box_run(&j) != BOX_ENDED) return false;\n    git_branches_merge'),
+    ('fs/git.c', '    if (box_run(&j) != BOX_ENDED || len == 0) return false;\n    bool cut;', '    if (box_run(&j) != BOX_ENDED) return false;\n    bool cut;'),
     ('fs/git.c', '"for-each-ref", "--sort=-committerdate",', '"for-each-ref",'),
-    ('fs/git.c', '    git_branches_merge(b, head, git_reflog_tail(gitdir, tail, sizeof tail), (Str){ out, len });', '    git_branches_merge(b, head, STR_EMPTY, (Str){ out, len });'),
+    ('fs/git.c', '    git_branches_merge(b, head, git_reflog_tail(gitdir, tail, sizeof tail), refs);', '    git_branches_merge(b, head, STR_EMPTY, refs);'),
     ('fs/git.c', '    git_gitdir(top, gitdir, sizeof gitdir);\n    char head[GIT_HEAD_MAX];', '    snprintf(gitdir, sizeof gitdir, "%s/.git", top);\n    char head[GIT_HEAD_MAX];'),
     ('ui/menus.c', '    if (it == UM_BR_NOTE) return u->br_note;\n', ''),
     ('ui/helpers.c', '        if (d[k] && (!due || d[k] < due)) due = d[k];', '        if (d[k] && !due) due = d[k];'),
@@ -2436,12 +2438,22 @@ MUTANTS += [
     ('ui/helpers.c', '    else if (d < 14 * 86400) snprintf(out, cap, "%lld %s", (long long)(d / 86400), d / 86400 == 1 ? "day" : "days");', '    else if (d < 14 * 86400) snprintf(out, cap, "%lld days", (long long)(d / 86400));'),
     ('ui/helpers.c', '    if (d < 60) snprintf(out, cap, "now");', '    if (d <= 0) snprintf(out, cap, "now");'),
     ('fs/git.c', '        r->name[r->n] = str_cut(l, sp + 1, l.len), r->when[r->n] = t, r->taken[r->n] = false, r->n++;', '        r->name[r->n] = str_cut(l, sp + 1, l.len), r->when[r->n] = 0, r->taken[r->n] = false, r->n++;'),
-    ('fs/git.c', '    b->n = 0, b->cur = -1, b->total = r.n;', '    b->n = 0, b->cur = -1, b->total = 0;'),
-    ('fs/git.c', '    if (k < 0 || r->taken[k] || r->name[k].len >= GIT_HEAD_MAX) return true;', '    if (k < 0 || r->name[k].len >= GIT_HEAD_MAX) return true;'),
+    ('fs/git.c', '    b->n = 0, b->cur = -1, b->total = r.n, b->more = r.more;', '    b->n = 0, b->cur = -1, b->total = 0, b->more = r.more;'),
+    # F12 code-health A (2026-11-03): the cut output, long names, more, a panel press acts
+    ('fs/git.c', '    b->n = 0, b->cur = -1, b->total = r.n, b->more = r.more;', '    b->n = 0, b->cur = -1, b->total = r.n, b->more = false;'),
+    ('fs/git.c', '    r->more = at < refs.len;', '    r->more = false;'),
+    ('fs/git.c', ' || l.len - sp - 1 >= GIT_HEAD_MAX) continue;', ') continue;'),
+    ('fs/git.c', ' || l.len - sp - 1 >= GIT_HEAD_MAX) continue;', ' || l.len - sp - 1 > GIT_HEAD_MAX) continue;'),
+    ('fs/git.c', '    *cut = out.len >= cap;', '    *cut = out.len > cap;'),
+    ('fs/git.c', "    while (e > 0 && out.p[e - 1] != '\\n') e--;\n", ''),
+    ('ui/cursor.c', '           in->brp_row >= 0 || in->brp_drow >= 0 || in->brp_field ||', '           in->brp_drow >= 0 || in->brp_field ||'),
+    ('ui/cursor.c', '           in->brp_row >= 0 || in->brp_drow >= 0 || in->brp_field ||', '           in->brp_row >= 0 || in->brp_field ||'),
+    ('ui/cursor.c', '           in->brp_row >= 0 || in->brp_drow >= 0 || in->brp_field ||', '           in->brp_row >= 0 || in->brp_drow >= 0 ||'),
+    ('fs/git.c', '    if (k < 0 || r->taken[k]) return true;', '    if (k < 0) return true;'),
     ('fs/git.c', '        if (!git_branch_add(b, &r, git_refs_find(&r, str_cut(m, to + 4, m.len)))) break;\n', ''),
     ('fs/git.c', '        if (!git_branch_add(b, &r, git_refs_find(&r, str_cut(m, 0, to)))) break;\n', ''),
     ('fs/git.c', '    for (int k = 0; k < r.n && b->n < GIT_BRANCHES_MAX; k++) git_branch_add(b, &r, k);\n', ''),
     ('fs/git.c', '        git_branch_add(b, &r, k), b->cur = k >= 0 ? 0 : -1;', '        git_branch_add(b, &r, k), b->cur = 0;'),
     ('fs/git.c', '        if (str_eq(r->name[k], name)) return k;', '        if (str_starts_with(r->name[k], name)) return k;'),
-    ('fs/git.c', '        if (sp <= 0 || sp + 1 >= l.len) continue;\n', ''),
+    ('fs/git.c', '        if (sp <= 0 || sp + 1 >= l.len || l.len - sp - 1 >= GIT_HEAD_MAX) continue;\n', ''),
 ]
