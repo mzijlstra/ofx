@@ -16,7 +16,7 @@ base=${1:?usage: run.sh [-j N] <scratch-dir> [binary]}
 bin=${2:-$(cd "$(dirname "$0")/../.." && pwd)/build/ofx}
 shift 2 2>/dev/null || shift $#
 only=" $* "
-want() { [ "$only" = "  " ] || case $only in *" $1 "*) true ;; *) false ;; esac; }
+want() { RS_HOME=; [ "$only" = "  " ] || case $only in *" $1 "*) true ;; *) false ;; esac; }   # (each group sets its own RS_HOME)
 # Each run removes $base/<name>: an empty or relative base would aim that at / or the cwd.
 case $base in /?*) ;; *) echo "run.sh: the scratch dir must be an absolute path: '$base'" >&2; exit 1 ;; esac
 here=$(cd "$(dirname "$0")" && pwd)
@@ -44,14 +44,20 @@ fi
 # and each script ends at its first failure; one is all a mutant needs to count as killed.
 failed() { echo "== $1: FAILED"; fail=1; [ -z "${OFX_GUI_FAIL_FAST:-}" ] || exit 1; }
 # rs <script> [VAR=value ...] -- [ofx args]: one script on $T's tree, in its own compositor
-# (run-script.sh), the variables its alone (a subshell), a failure said by name.
+# (run-script.sh), the variables its alone (a subshell), a failure said by name. RS_HOME: the
+# group's HOME for every script of it (OFX_TEST_HOME; code-health review, 2026-11-03: written on
+# each line); a group's mount list is run-script's own (/ alone) unless it passes one.
 rs() {
     n=$1; shift; echo "== $n"
-    ( while [ $# -gt 0 ] && [ "$1" != -- ]; do export "$1"; shift; done; [ $# -eq 0 ] || shift
+    ( [ -z "${RS_HOME:-}" ] || export OFX_TEST_HOME="$RS_HOME"
+      while [ $# -gt 0 ] && [ "$1" != -- ]; do export "$1"; shift; done; [ $# -eq 0 ] || shift
       exec "$here/../../tools/gui/run-script.sh" "$T" "$here/$n.script" "$bin" "$@" ) || failed "$n"
 }
 mi() {   # <T>/mountinfo with / alone on it: ext4, or btrfs (the drive rules differ)
     case $1 in ext4) printf '1 0 0:1 / / rw - ext4 /dev/x rw\n' ;; *) printf '33 1 0:31 / / rw - btrfs /dev/x rw\n' ;; esac > "$T/mountinfo"
+}
+menu_tree() {   # <home>/tree for the menus' groups (f74, f8): sub/, a.txt (3 bytes), b.txt (10), c.txt (1), .hid
+    mkdir -p "$1/tree/sub"; printf aaa > "$1/tree/a.txt"; printf 0123456789 > "$1/tree/b.txt"; printf c > "$1/tree/c.txt"; : > "$1/tree/.hid"
 }
 tree() {   # a fresh <T>/tree
     rm -rf "$1" && mkdir -p "$1/tree/adir" "$1/tree/bdir"
@@ -91,31 +97,35 @@ rs f3 OFX_TEST_COPY_DELAY_MS=150 -- "$T/tree"
 fi
 if want f4; then
 T=$base/f4; rm -rf "$T"; H=$T/home; mkdir -p "$H/tree/adir" "$H/tree/bdir" "$T/data"
+RS_HOME=$H
 touch "$H/tree/adir/x" "$H/tree/adir/y" "$H/tree/adir/.h" "$H/tree/f.txt"
 L="$H/tree"; for i in 1 2 3 4 5 6 7 8; do L="$L/zz-a-rather-long-folder-name-$i"; done; mkdir -p "$L"
-rs f4 OFX_TEST_COUNT_DELAY_MS=50 OFX_TEST_HOME="$H" -- "$H/tree"
+rs f4 OFX_TEST_COUNT_DELAY_MS=50 -- "$H/tree"
 fi
 if want f5; then
 T=$base/f5; rm -rf "$T"; H=$T/home; mkdir -p "$H/tree/adir" "$H/tree/bdir" "$H/tree/cdir" "$H/tree/gone" "$T/data"
+RS_HOME=$H
 touch "$H/tree/adir/a1" "$H/tree/adir/a2" "$H/tree/bdir/b1" "$H/tree/gone/g1"
 for i in $(seq -w 1 40); do touch "$H/tree/f$i"; done
 head -c 8388608 /dev/urandom > "$H/tree/big.bin"
-rs f5 OFX_TEST_COPY_DELAY_MS=150 OFX_TEST_HOME="$H" -- "$H/tree"
+rs f5 OFX_TEST_COPY_DELAY_MS=150 -- "$H/tree"
 fi
 if want f52; then
 T=$base/f52; rm -rf "$T"; H=$T/home; mkdir -p "$H/tree/adir" "$H/tree/bdir" "$T/data"
+RS_HOME=$H
 touch "$H/tree/adir/a1" "$H/tree/notes.txt" "$H/tree/.dot"
 head -c 4194304 /dev/urandom > "$H/tree/bdir/big.bin"
 L="$H/tree"; for i in 1 2 3 4 5 6 7 8; do L="$L/zz-a-rather-long-folder-name-$i"; done; mkdir -p "$L"
-rs f52 OFX_TEST_COPY_DELAY_MS=150 OFX_TEST_CROSS=1 OFX_TEST_HOME="$H" -- "$H/tree"
+rs f52 OFX_TEST_COPY_DELAY_MS=150 OFX_TEST_CROSS=1 -- "$H/tree"
 fi
 if want f53; then
 T=$base/f53; rm -rf "$T"; H=$T/home; mkdir -p "$H/tree/src" "$H/tree/src2" "$H/tree/adir" "$H/tree/bdir" "$H/tree/cdir" "$H/tree/ddir" "$H/tree/many" "$T/data"
+RS_HOME=$H
 echo d > "$H/tree/ddir/d.txt"
 head -c 8388608 /dev/urandom > "$H/tree/src/big1.bin"; head -c 8388608 /dev/urandom > "$H/tree/src2/big2.bin"
 echo z > "$H/tree/src/z.txt"; echo z > "$H/tree/src2/z.txt"; echo old > "$H/tree/bdir/z.txt"; echo old > "$H/tree/cdir/z.txt"
 for i in $(seq -w 1 10); do touch "$H/tree/many/f$i"; done
-rs f53 OFX_TEST_COPY_DELAY_MS=300 OFX_TEST_HOME="$H" -- "$H/tree"
+rs f53 OFX_TEST_COPY_DELAY_MS=300 -- "$H/tree"
 # Quitting cancelled the running copy and dropped the waiting ones: no part file, no big1.bin.
 if ls -A "$H/tree/adir" | grep -q ofx-part || [ -e "$H/tree/adir/big1.bin" ]; then echo "f53: FAILED: quitting left a copy in adir"; ls -A "$H/tree/adir"; fail=1; fi
 fi
@@ -136,8 +146,8 @@ head -c 8388608 /dev/zero > "$T/big.bin"
 rs f6 OFX_TEST_COPY_DELAY_MS=200 OFX_TEST_MEDIA="$T/media" OFX_TEST_MOUNTINFO="$T/mountinfo" -- "$T/tree"
 # f6b with the drives' space 30 s late (a hung drive): the window answers meanwhile and quits at once
 # (under 25 s: with 10 and 9 s it failed with six runs at once, 2026-10-26).
-echo "== f6b"; start=$(date +%s)
-OFX_TEST_SPACE_DELAY_MS=30000 OFX_TEST_MEDIA="$T/media" OFX_TEST_MOUNTINFO="$T/mountinfo" "$here/../../tools/gui/run-script.sh" "$T" "$here/f6b.script" "$bin" "$T/tree" || failed f6b
+start=$(date +%s)
+rs f6b OFX_TEST_SPACE_DELAY_MS=30000 OFX_TEST_MEDIA="$T/media" OFX_TEST_MOUNTINFO="$T/mountinfo" -- "$T/tree"
 took=$(( $(date +%s) - start )); if [ "$took" -ge 25 ]; then cat "$T/times"; echo "f6b: FAILED, took ${took}s (the space thread held the quit?)"; fail=1; else echo "f6b: quit in ${took}s with the space 30s late"; fi
 fi
 if want usb; then
@@ -154,24 +164,24 @@ T=$base/f11; rm -rf "$T"; mkdir -p "$T/tree/sub1" "$T/tree/sub2"
 touch "$T/tree/sub1/x.txt" "$T/tree/sub1/y.txt" "$T/tree/sub2/a.txt" "$T/tree/sub2/b.txt" "$T/tree/sub2/c.txt" "$T/tree/.hid"
 echo top > "$T/tree/top.txt"
 touch -d 2019-01-01 "$T/tree/.hid"; touch -d 2020-01-01 "$T/tree/sub1"; touch -d 2021-01-01 "$T/tree/sub2"; touch -d 2022-01-01 "$T/tree/top.txt"   # (the modified order: sub1, sub2; .hid, top.txt)
-mi ext4
 mkdir -p "$T/state/ofx" && printf 'sidebar=places\nfolder %s 1 icons - - - -\n' "$T" > "$T/state/ofx/state"   # (as before F11: no folderdefaults=)
-rs f11 OFX_TEST_MOUNTINFO="$T/mountinfo" -- "$T/tree"
-rs f11b OFX_TEST_MOUNTINFO="$T/mountinfo" -- "$T/tree"
-rs f11c OFX_TEST_MOUNTINFO="$T/mountinfo" -- "$T/tree"
-rs f11d OFX_TEST_MOUNTINFO="$T/mountinfo" -- "$T/tree"
+rs f11 -- "$T/tree"
+rs f11b -- "$T/tree"
+rs f11c -- "$T/tree"
+rs f11d -- "$T/tree"
 # step 3: restore-tabs on, HOME the tree (a plain start)
 printf 'restore-tabs = on\n' >> "$T/config/ofx/ofx.conf"
-rs f11e OFX_TEST_HOME="$T/tree" OFX_TEST_MOUNTINFO="$T/mountinfo" -- "$T/tree"
-rs f11f OFX_TEST_HOME="$T/tree" OFX_TEST_MOUNTINFO="$T/mountinfo" -- "$T/tree"
+RS_HOME=$T/tree
+rs f11e -- "$T/tree"
+rs f11f -- "$T/tree"
 printf 'window 4242 1 0 %s\n' "$T/tree/sub2" >> "$T/state/ofx/state"
-rs f11g OFX_TEST_HOME="$T/tree" OFX_TEST_MOUNTINFO="$T/mountinfo" -- "$T/tree"
-rs f11h OFX_TEST_HOME="$T/tree" OFX_TEST_MOUNTINFO="$T/mountinfo" -- --restore 4242 "$T/tree"
+rs f11g -- "$T/tree"
+rs f11h -- --restore 4242 "$T/tree"
 printf 'window 5151 1 0 %s\nwindow 5252 2 0 %s\n' "$T/tree" "$T/tree" >> "$T/state/ofx/state"
-rs f11i OFX_TEST_HOME="$T/tree" OFX_TEST_MOUNTINFO="$T/mountinfo" -- "$T/tree/sub1"
+rs f11i -- "$T/tree/sub1"
 # (j: Close All with another window open keeps its tabs; k: closed as one of two, none; m: a SIGTERM keeps them)
 for x in j k l m; do
-  echo "== f11$x"; OFX_TEST_HOME="$T/tree" OFX_TEST_MOUNTINFO="$T/mountinfo" "$here/../../tools/gui/run-script.sh" "$T" "$here/f11$x.script" "$bin" "$T/tree" || failed "f11$x"
+  rs "f11$x" -- "$T/tree"
   case $x in
   j) grep -q "^window $(cat "$T/f11j.pid") " "$T/state/ofx/state" || { echo "f11j: its tabs not kept"; failed f11j; } ;;
   k) ! grep -q "^window $(cat "$T/f11k.pid") " "$T/state/ofx/state" || { echo "f11k: its tabs kept"; failed f11k; } ;;
@@ -183,34 +193,33 @@ done
 # a running window's line (a stand-in's) is left alone
 sed -i '/^window /d' "$T/state/ofx/state"
 awk 'BEGIN { for (i = 0; i < 4200; i++) printf "pad%d=%090d\n", i, 0 }' >> "$T/state/ofx/state"   # (420 KiB: the live writes still fit the scratch arena; review, 2026-11-02)
-echo "== f11n"; OFX_TEST_WRITE_MS=2000 OFX_TEST_HOME="$T/tree" OFX_TEST_MOUNTINFO="$T/mountinfo" "$here/../../tools/gui/run-script.sh" "$T" "$here/f11n.script" "$bin" "$T/tree"   # (killed: it "fails", no end line)
+echo "== f11n"; OFX_TEST_WRITE_MS=2000 OFX_TEST_HOME="$RS_HOME" "$here/../../tools/gui/run-script.sh" "$T" "$here/f11n.script" "$bin" "$T/tree"   # (killed: it "fails", no end line)
 grep -q "^window $(cat "$T/f11n.pid" 2>/dev/null) [0-9]* 1 open:" "$T/state/ofx/state" || { echo "f11n: no open line after the kill"; failed f11n; }
-rs f11o OFX_TEST_HOME="$T/tree" OFX_TEST_MOUNTINFO="$T/mountinfo" -- "$T/tree"
+rs f11o -- "$T/tree"
 ( trap '' USR1; exec sleep 20 ) >/dev/null 2>&1 & echo $! > "$T/other.pid"
 printf 'window %s 1 0 open:%s:%s %s\n' "$(cat "$T/other.pid")" "$(cut -c1-8 /proc/sys/kernel/random/boot_id)" "$(sed 's/.*) //' /proc/$(cat "$T/other.pid")/stat | cut -d' ' -f20)" "$T/tree/sub1" >> "$T/state/ofx/state"
-rs f11p OFX_TEST_HOME="$T/tree" OFX_TEST_MOUNTINFO="$T/mountinfo" -- "$T/tree"
+rs f11p -- "$T/tree"
 kill "$(cat "$T/other.pid")" 2>/dev/null
 ( trap '' USR1; exec sleep 20 ) >/dev/null 2>&1 & echo $! > "$T/other.pid"
 sed 's/.*) //' /proc/$(cat "$T/other.pid")/stat | cut -d' ' -f20 > "$T/windows/$(cat "$T/other.pid")"
-rs f11q OFX_TEST_HOME="$T/tree" OFX_TEST_MOUNTINFO="$T/mountinfo" -- "$T/tree"
+rs f11q -- "$T/tree"
 kill "$(cat "$T/other.pid")" 2>/dev/null
 printf 'restore-tabs = on\nbogus\n' >> "$T/config/ofx/ofx.conf"
-rs f11r OFX_TEST_HOME="$T/tree" OFX_TEST_MOUNTINFO="$T/mountinfo" -- "$T/tree/top.txt"
+rs f11r -- "$T/tree/top.txt"
 printf 'window 6161 9999999999 0 closed %s\n' "$T/tree/sub1" >> "$T/state/ofx/state"
-rs f11s OFX_TEST_HOME="$T/tree" OFX_TEST_MOUNTINFO="$T/mountinfo" -- "$T/tree"
+rs f11s -- "$T/tree"
 fi
 if want f10; then
 # F10 step 1: ofx.conf, made at the start in the run's own config folder (run-script's).
 T=$base/f10; rm -rf "$T"; mkdir -p "$T/tree/target" "$T/tree/node_modules"
 touch -d '2025-01-02 03:04:05' "$T/tree/a.txt"; touch "$T/tree/target/x.txt" "$T/tree/node_modules/x.txt"
 cp "$here/f64/wide.png" "$T/tree/z.png"
-mi ext4
-rs f10 OFX_TEST_MOUNTINFO="$T/mountinfo" -- "$T/tree"
-rs f10b OFX_TEST_MOUNTINFO="$T/mountinfo" -- "$T/tree"
+rs f10 -- "$T/tree"
+rs f10b -- "$T/tree"
 rm -rf "$T/config/ofx" && echo x > "$T/config/ofx"
-rs f10c OFX_TEST_MOUNTINFO="$T/mountinfo" -- "$T/tree"
+rs f10c -- "$T/tree"
 ln -s "$T/config/ofx" "$T/tree/cfg"
-rs f10d OFX_TEST_MOUNTINFO="$T/mountinfo" -- "$T/tree"
+rs f10d -- "$T/tree"
 fi
 if want f62; then
 # F6.2: the icon view, then f62b on the same tree: the view came back from the state file.
@@ -269,13 +278,13 @@ if want f7; then
 # F7.1: the menu bar. f7: home/tree with a.txt, b.txt, sub.d/, ro/ (read only); f7b: Close All Windows, a copy running.
 # HOME and the mount list are scratch: the trash view shows the scratch trash only, never a drive's.
 T=$base/f7; rm -rf "$T"; H=$T/home; mkdir -p "$H/tree/sub.d" "$H/tree/ro"; echo a > "$H/tree/a.txt"; echo b > "$H/tree/b.txt"
+RS_HOME=$H
 echo x > "$H/tree/ro/x.txt"; chmod 555 "$H/tree/ro"
-mi ext4
 # F7.1.1: text/plain's default app in the scratch config, its desktop file in the scratch data home.
 mkdir -p "$T/config" "$T/data/applications"
 printf '[Default Applications]\ntext/plain=ofx-test-editor.desktop\n' > "$T/config/mimeapps.list"
 printf '[Desktop Entry]\nType=Application\nName=Test editor\nExec=true %%f\n' > "$T/data/applications/ofx-test-editor.desktop"
-rs f7 OFX_TEST_HOME="$H" OFX_TEST_MOUNTINFO="$T/mountinfo" -- "$H/tree"
+rs f7 -- "$H/tree"
 chmod 755 "$H/tree/ro"
 T=$base/f7b; rm -rf "$T"; mkdir -p "$T/tree/src" "$T/tree/dst"; head -c 8388608 /dev/urandom > "$T/tree/src/big.bin"
 rs f7b OFX_TEST_COPY_DELAY_MS=300 OFX_TEST_MOUNTINFO="$base/f7/mountinfo" -- "$T/tree"
@@ -289,13 +298,13 @@ if want f72; then
 # dir/ (a 10 bytes; sub/b 20 bytes), empty/, link -> notes.txt, broken -> none, root -> /etc/hostname
 # (root's), out -> a file outside <T> (the guard: never changed).
 T=$base/f72; O=$base/f72-outside; rm -rf "$T" "$O"; H=$T/home; mkdir -p "$H/tree/dir/sub" "$H/tree/empty" "$O"
+RS_HOME=$H
 printf 'hello world' > "$H/tree/notes.txt"; printf '#!/bin/sh\n' > "$H/tree/run.sh"
 printf '0123456789' > "$H/tree/dir/a"; printf '01234567890123456789' > "$H/tree/dir/sub/b"
 chmod 644 "$H/tree/notes.txt"; chmod 755 "$H/tree/run.sh"
 ln -s notes.txt "$H/tree/link"; ln -s none "$H/tree/broken"; ln -s /etc/hostname "$H/tree/root"
 echo keep > "$O/victim"; chmod 644 "$O/victim"; ln -s "$O/victim" "$H/tree/out"
-mi ext4
-rs f72 OFX_TEST_HOME="$H" OFX_TEST_MOUNTINFO="$T/mountinfo" -- "$H/tree"
+rs f72 -- "$H/tree"
 if [ "$(stat -c %a "$O/victim")" != 644 ]; then echo "f72: FAILED: a file outside the scratch tree changed its mode"; fail=1; fi
 rm -rf "$O"
 fi
@@ -304,6 +313,7 @@ if want f73; then
 # test's apps in the scratch data home (the system's are listed too: the script filters on
 # "ofx t"); their defaults in the scratch config. Launches reach the fake uwsm-app only.
 T=$base/f73; rm -rf "$T"; H=$T/home; mkdir -p "$H/tree/sub" "$T/config" "$T/data/applications"
+RS_HOME=$H
 echo b > "$H/tree/b.txt"; echo notes > "$H/tree/notes.txt"; : > "$H/tree/e.txt"; cp "$here/f64/wide.png" "$H/tree/pic.png"
 printf '[Default Applications]\ntext/plain=ofx-t-edit.desktop\nimage/png=ofx-t-view.desktop\n' > "$T/config/mimeapps.list"
 app() { printf '[Desktop Entry]\nType=Application\nName=%s\nExec=true %%F\n%b' "$2" "$3" > "$T/data/applications/$1.desktop"; }
@@ -321,62 +331,62 @@ app ofx-t-other "Ofx T Other" 'Icon=ofx-t-no-such-icon\n'
 app zz-big "Zz Big Icon" 'Icon=zz-big\n'
 # Set as default (F7.3.1): the desktop's list, read first, sets image/png (Omarchy's sets http).
 printf '[Default Applications]\nimage/png=ofx-t-view.desktop\n' > "$T/config/hyprland-mimeapps.list"
-mi ext4
-rs f73 XDG_CURRENT_DESKTOP=Hyprland OFX_TEST_HOME="$H" OFX_TEST_MOUNTINFO="$T/mountinfo" -- "$H/tree"
-rs f73b OFX_TEST_HOME="$H" OFX_TEST_MOUNTINFO="$T/mountinfo" -- "$H/tree/notes.txt"
+rs f73 XDG_CURRENT_DESKTOP=Hyprland -- "$H/tree"
+rs f73b -- "$H/tree/notes.txt"
 # --select (FileManager1's ShowItems): a folder selected in its own folder, and a link where it is
-rs f73c OFX_TEST_HOME="$H" OFX_TEST_MOUNTINFO="$T/mountinfo" -- --select "$H/tree/sub/"
+rs f73c -- --select "$H/tree/sub/"
 ln -s sub "$H/tree/zlink"
-rs f73d OFX_TEST_HOME="$H" OFX_TEST_MOUNTINFO="$T/mountinfo" -- --select "$H/tree/zlink"
+rs f73d -- --select "$H/tree/zlink"
 fi
 if want f74; then
 # F7.4: the Edit, View and Go menus. HOME=<T>/home; home/tree: sub/, a.txt (3 bytes), b.txt (10),
 # c.txt (1), .hid; the mount list scratch, so the trash view shows the scratch trash only.
-T=$base/f74; rm -rf "$T"; H=$T/home; mkdir -p "$H/tree/sub"
-printf aaa > "$H/tree/a.txt"; printf 0123456789 > "$H/tree/b.txt"; printf c > "$H/tree/c.txt"; : > "$H/tree/.hid"
-mi ext4
-rs f74 OFX_TEST_HOME="$H" OFX_TEST_MOUNTINFO="$T/mountinfo" -- "$H/tree"
+T=$base/f74; rm -rf "$T"; H=$T/home
+RS_HOME=$H
+menu_tree "$H"
+rs f74 -- "$H/tree"
 fi
 if want f75; then
 # F7.5: the Bookmarks menu. HOME=<T>/home; home/tree: a/, b/; the bookmarks file in the scratch
 # config (run-script points XDG_CONFIG_HOME there): home/tree/a labelled "Alpha", an sftp line ofx
 # keeps but doesn't list, home itself.
 T=$base/f75; rm -rf "$T"; H=$T/home; mkdir -p "$H/tree/a" "$H/tree/b" "$T/config/gtk-3.0"
+RS_HOME=$H
 printf 'file://%s/tree/a Alpha\nsftp://host/x Server\nfile://%s\n' "$H" "$H" > "$T/config/gtk-3.0/bookmarks"
-mi ext4
-rs f75 OFX_TEST_HOME="$H" OFX_TEST_MOUNTINFO="$T/mountinfo" -- "$H/tree"
-rs f75b OFX_TEST_HOME="$H" OFX_TEST_MOUNTINFO="$T/mountinfo" -- "$H/tree"
+rs f75 -- "$H/tree"
+rs f75b -- "$H/tree"
 fi
 if want f8; then
 # F8: the right-click menus. The tree as f74's: home/tree: sub/, a.txt, b.txt, c.txt, .hid; the
 # scratch mount list (the trash view shows the scratch trash only).
-T=$base/f8; rm -rf "$T"; H=$T/home; mkdir -p "$H/tree/sub"
-printf aaa > "$H/tree/a.txt"; printf 0123456789 > "$H/tree/b.txt"; printf c > "$H/tree/c.txt"; : > "$H/tree/.hid"
-mi ext4
-rs f8 OFX_TEST_HOME="$H" OFX_TEST_MOUNTINFO="$T/mountinfo" -- "$H/tree"
+T=$base/f8; rm -rf "$T"; H=$T/home
+RS_HOME=$H
+menu_tree "$H"
+rs f8 -- "$H/tree"
 # F8 step 2: a folder's own entries, Make Link, Follow Link. home/tree: sub/inner.txt, a.txt, zlink ->
 # sub/inner.txt; the scratch config's gtk-3.0 for the bookmarks file.
 T=$base/f8b; rm -rf "$T"; H=$T/home; mkdir -p "$H/tree/sub" "$T/config/gtk-3.0"
+RS_HOME=$H
 printf aaa > "$H/tree/a.txt"; : > "$H/tree/sub/inner.txt"; ln -s sub/inner.txt "$H/tree/zlink"
-mi ext4
-rs f8b OFX_TEST_HOME="$H" OFX_TEST_MOUNTINFO="$T/mountinfo" -- "$H/tree"
+rs f8b -- "$H/tree"
 mkdir -p "$T/state/ofx" && printf 'perms=off\nmenubar=off\ncolors=off\ngroup=on\n' > "$T/state/ofx/state"   # (View → Show Permissions, Show Menu, Show Colors off, Show Group on, as a start finds them)
 # An 860 px window (OFX_SCRIPT_SIZE): home/tree with two files, its own scratch.
-E=$base/f8e; rm -rf "$E"; mkdir -p "$E/home/tree"; printf a > "$E/home/tree/a.txt"; printf b > "$E/home/tree/b.txt"; cp "$T/mountinfo" "$E/"
-echo "== f8e"; OFX_SCRIPT_SIZE=860x516 OFX_TEST_HOME="$E/home" OFX_TEST_MOUNTINFO="$E/mountinfo" "$here/../../tools/gui/run-script.sh" "$E" "$here/f8e.script" "$bin" "$E/home/tree" || failed f8e
-rs f8d OFX_TEST_HOME="$H" OFX_TEST_MOUNTINFO="$T/mountinfo" -- "$H/tree"
+E=$base/f8e; rm -rf "$E"; mkdir -p "$E/home/tree"; printf a > "$E/home/tree/a.txt"; printf b > "$E/home/tree/b.txt"
+echo "== f8e"; OFX_SCRIPT_SIZE=860x516 OFX_TEST_HOME="$E/home" "$here/../../tools/gui/run-script.sh" "$E" "$here/f8e.script" "$bin" "$E/home/tree" || failed f8e
+rs f8d -- "$H/tree"
 # F8 step 3: a folder elsewhere's menu. home/tree: sub/, sub2/; the bookmarks file: home/tree/sub
 # labelled "Sub", then home/tree/sub2; the scratch trash there and empty.
 T=$base/f8c; rm -rf "$T"; H=$T/home; mkdir -p "$H/tree/sub" "$H/tree/sub2" "$T/config/gtk-3.0" "$T/data/Trash/files" "$T/data/Trash/info"
+RS_HOME=$H
 printf 'file://%s/tree/sub Sub\nfile://%s/tree/sub2\n' "$H" "$H" > "$T/config/gtk-3.0/bookmarks"
-mi ext4
-rs f8c OFX_TEST_HOME="$H" OFX_TEST_MOUNTINFO="$T/mountinfo" -- "$H/tree"
+rs f8c -- "$H/tree"
 fi
 if want f9; then
 # F9 step 1: the search view. home/tree: names at three depths, two index.ts, a hidden folder and
 # file, .git and node_modules (left out), a link to a folder (not followed), a link to a file,
 # a file 262 bytes below, and zz/ with 10,001 files (the limit).
 T=$base/f9; rm -rf "$T"; H=$T/home; mkdir -p "$T/config/gtk-3.0" "$H/tree/src/deep" "$H/tree/.hid" "$H/tree/.git" "$H/tree/node_modules" "$H/tree/docs" "$H/tree/zz"
+RS_HOME=$H
 touch "$H/tree/a.ts" "$H/tree/b.txt" "$H/tree/src/c.ts" "$H/tree/src/index.ts" "$H/tree/src/deep/index.ts" "$H/tree/src/deep/d.TS" \
       "$H/tree/.hid/e.ts" "$H/tree/.f.ts" "$H/tree/.git/g.ts" "$H/tree/node_modules/h.ts" "$H/tree/docs/notes.txt"
 printf x > "$H/tree/src/index.ts"; printf x > "$H/tree/src/deep/index.ts"   # (an empty file opens through its type's app)
@@ -384,17 +394,16 @@ ln -s src "$H/tree/link"; ln -s ../src/c.ts "$H/tree/docs/clink"
 # A result whose folder and name, as the cursor keeps it, are longer than a name (review, 2026-10-28)
 L="$H/tree/long/$(printf 'x%.0s' $(seq 250))"; mkdir -p "$L"; printf x > "$L/m2.txt"
 (cd "$H/tree/zz" && seq -f 'zz%05g' 0 10000 | xargs touch)
-mi ext4
-rs f9 OFX_TEST_HOME="$H" OFX_TEST_MOUNTINFO="$T/mountinfo" -- "$H/tree"
+rs f9 -- "$H/tree"
 # F9 step 3: inside files. "my tree" (a space in every path, for Open at Line's words): two .ts files and a .js with useState, a binary with it, a 17 MB
 # file, a link to a file, and a file without it.
 T=$base/f9b; rm -rf "$T"; H=$T/home; mkdir -p "$T/config/gtk-3.0" "$H/my tree/src" "$H/my tree/docs"
+RS_HOME=$H
 printf 'import x\nconst [a, b] = useState(0)\n  useState again\n' > "$H/my tree/src/app.ts"
 printf 'useState here\n' > "$H/my tree/src/other.js"; printf 'const USESTATE = 1\n' > "$H/my tree/src/Upper.ts"
 printf 'useState\0' > "$H/my tree/bin.dat"; truncate -s 17M "$H/my tree/big.txt"; printf 'nothing\n' > "$H/my tree/docs/readme.md"
 ln -s src/app.ts "$H/my tree/link.ts"
-mi ext4
-rs f9b OFX_TEST_HOME="$H" OFX_TEST_MOUNTINFO="$T/mountinfo" -- "$H/my tree"
+rs f9b -- "$H/my tree"
 fi
 if want clip; then
 # The system clipboard, in the test sway (tools/gui/sway.sh: weston has no data-control, 2026-10-28).
