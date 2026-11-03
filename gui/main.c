@@ -773,6 +773,7 @@ int main(int argc, char **argv)
         if (atomic_exchange(&watch.git_ready, false) && fold_view_of(app.ui.view)) git_ask_soon();   // (its index or HEAD changed: F12)
         git_poll();
         if (git_take()) dirty = true;
+        if (branch_switched()) dirty = true;
         if (thumbs_take()) dirty = true;
         if (app.ui.view == UI_VIEW_SEARCH && search_take()) search_relist(), dirty = true;
         if (app.search_due && now_ms() >= app.search_due) app.search_due = 0, search_retype(), dirty = true;

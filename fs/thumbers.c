@@ -155,6 +155,6 @@ static int thumbers_argv(Arena *a, const char *exec, const char *path, const cha
 // caller's to see.
 static BoxRun thumb_run(const char *const *argv, const char *in, const char *dir)
 {
-    BoxJob j = { .argv = argv, .ro = { in }, .rw = dir, .ms = thumb_run_ms };
+    BoxJob j = { .argv = argv, .ro = { in }, .rw = { dir }, .ms = thumb_run_ms };
     return box_run(&j);
 }

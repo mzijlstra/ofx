@@ -469,14 +469,19 @@ if want f12h; then
 # main one ahead of and one behind its upstream base; feat-a and feat-b checked out after main, then
 # main again; old0..old9 on the first commit, older than all. Beside it, 12 folders down (wider than the path's room, so the scratch
 # folder's own path never shows), unborn: no commit yet, on a long branch name.
+# Step 5c: feat-a (and feat-b after it) hold only-a/, which main doesn't; other changes a.txt (a
+# switch there refused with a.txt changed); the wrapper takes a second over a switch to base (the
+# menu greyed meanwhile).
 T=$base/f12h; rm -rf "$T"; mkdir -p "$T/tree/repo" "$T/fakes"
-printf '#!/bin/sh\nexec /usr/bin/git "$@"\n' > "$T/fakes/git"; chmod +x "$T/fakes/git"
+printf '#!/bin/sh\n[ "$3 $5" = "switch base" ] && sleep 1\nexec /usr/bin/git "$@"\n' > "$T/fakes/git"; chmod +x "$T/fakes/git"
 ( cd "$T/tree/repo" && export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t &&
   c() { GIT_AUTHOR_DATE="$1 +0000" GIT_COMMITTER_DATE="$1 +0000" git commit -q --allow-empty -m "$1"; } &&
   git init -q -b main . && printf 'a\n' > a.txt && git add a.txt && c 1700000000 &&
   for i in 0 1 2 3 4 5 6 7 8 9; do git branch "old$i"; done && git branch base &&
+  git switch -q -c other && printf 'o\n' > a.txt && git add a.txt && c 1700000050 && git switch -q main &&
   c 1700000100 && git switch -q base && c 1700000200 && git switch -q main && git branch -q -u base &&
-  git switch -q -c feat-a && c 1700000300 && git switch -q -c feat-b && c 1700000400 && git switch -q main &&
+  git switch -q -c feat-a && mkdir only-a && printf 'x\n' > only-a/x.txt && git add only-a && c 1700000300 &&
+  git switch -q -c feat-b && c 1700000400 && git switch -q main &&
   d=../folder-01/folder-02/folder-03/folder-04/folder-05/folder-06/folder-07/folder-08/folder-09/folder-10/folder-11/folder-12/unborn &&
   mkdir -p $d && cd $d && git init -q -b a-branch-name-long-enough-to-take-its-third-of-the-room . ) || failed f12h
 rs f12h -- "$T/tree/repo"

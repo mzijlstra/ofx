@@ -708,6 +708,21 @@ static void state_key(const char *key, const char *value)
 static void prefs_open(void);   // (prefs.c, after: it uses editor_now)
 static void restore_others(bool yes);   // (restore.c, after: it uses the tabs)
 
+// A switch's answer (F12 step 5c): the folder listed again (the branch may not have it: then the
+// nearest above that is there), and the status line says where it is now; or git's refusal.
+static bool branch_switched(void)
+{
+    bool ok;
+    char name[GIT_HEAD_MAX], msg[256], was[PATH_MAX];
+    if (!git_switch_take(&ok, name, sizeof name, msg, sizeof msg)) return false;
+    if (!ok) return set_status(true, "git switch %s: %s", name, msg), true;
+    snprintf(was, sizeof was, "%s", app.cwd);
+    if (app.ui.view == UI_VIEW_FOLDER) reload();
+    if (strcmp(was, app.cwd) != 0) set_status(false, "Switched to %s: %.*s isn't on it", name, STR_ARG(path_base(str_from_c(was))));
+    else set_status(false, "Switched to %s", name);
+    return true;
+}
+
 static void act(UiAction a)
 {
     switch (a.kind) {
@@ -841,8 +856,9 @@ static void act(UiAction a)
         else if (tabbar.n == UI_TABS_MAX) set_status(true, "%d tabs is the most ofx keeps open", UI_TABS_MAX);   // (kept for when one closes)
         else closed_tabs.n--, tab_open(closed_tabs.dir[closed_tabs.n], STR_EMPTY, true);
         break;
-    case UA_BRANCH:   // (F12 step 5b: the menu lists them; switching is step 5c)
-        if (a.index >= 0 && a.index < git.br.n && a.index != git.br.cur) set_status(false, "Switching branches comes next (to %s)", git.br.name[a.index]);
+    case UA_BRANCH:   // (F12 step 5c) the one checked out: nothing
+        if (a.index >= 0 && a.index < git.br.n && a.index != git.br.cur && git_ask_switch(git.br.name[a.index]))
+            set_status(false, "Switching to %s\xE2\x80\xA6", git.br.name[a.index]);
         break;
     case UA_TAB_OTHERS:   // (F8) from the last, so each place stays right as the ones after it go
         for (int i = tabbar.n - 1; i >= 0; i--)

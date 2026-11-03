@@ -29,12 +29,16 @@ static struct {
     int             ready;            // a fresh answer's slot, -1 none
     i64             last, due;        // the main thread's: when it last asked, and an ask put off to then (0: none)
     // The branch menu's list (step 5b), asked as it opens: for the folder and HEAD's branch asked.
-    char            br_want[PATH_MAX], br_head[GIT_HEAD_MAX];
+    char            br_want[PATH_MAX];
     bool            br_asked, br_ready;
     u32             br_gen;
     GitBranches     br_out;           // the worker's answer, taken into br
     GitBranches     br;               // the main thread's: the menu's
     bool            br_wait;          // asked, no answer yet ("Reading branches…")
+    // A switch (step 5c), picked in the menu: to branch sw_name, for folder sw_dir; its answer.
+    char            sw_dir[PATH_MAX], sw_name[GIT_HEAD_MAX], sw_msg[256];
+    bool            sw_asked, sw_ready, sw_ok;
+    bool            sw_busy;          // the main thread's: one asked, not answered yet
 } git = { .mu = PTHREAD_MUTEX_INITIALIZER, .cv = PTHREAD_COND_INITIALIZER, .shown = 0, .ready = -1 };
 
 // The branches asked for, run with git.mu held as it is taken (and held again as it returns): none
@@ -42,15 +46,27 @@ static struct {
 static void git_branches_run(void)
 {
     static GitBranches b;
-    char dir[PATH_MAX], head[GIT_HEAD_MAX], top[PATH_MAX], real[PATH_MAX];
+    char dir[PATH_MAX], top[PATH_MAX], real[PATH_MAX];
     u32 gen = git.br_gen;
-    snprintf(dir, sizeof dir, "%s", git.br_want), snprintf(head, sizeof head, "%s", git.br_head);
+    snprintf(dir, sizeof dir, "%s", git.br_want);
     git.br_asked = false;
     pthread_mutex_unlock(&git.mu);
-    bool ok = git_top(dir, top, sizeof top) && realpath(dir, real) && git_branches("git", real, top, head, &b);
+    bool ok = git_top(dir, top, sizeof top) && realpath(dir, real) && git_branches("git", real, top, &b);
     if (!ok) b = (GitBranches){ .cur = -1 };
     pthread_mutex_lock(&git.mu);
     if (gen == git.br_gen) git.br_out = b, git.br_ready = true, wake_main();
+}
+
+// The switch asked for, run as git_branches_run is (git.mu held as it is taken and as it returns).
+static void git_switch_run(void)
+{
+    char dir[PATH_MAX], name[GIT_HEAD_MAX], top[PATH_MAX], msg[sizeof git.sw_msg];
+    snprintf(dir, sizeof dir, "%s", git.sw_dir), snprintf(name, sizeof name, "%s", git.sw_name);
+    git.sw_asked = false;
+    pthread_mutex_unlock(&git.mu);
+    bool ok = git_top(dir, top, sizeof top) ? git_switch("git", top, name, msg, sizeof msg) : (snprintf(msg, sizeof msg, "not in a repository any more"), false);
+    pthread_mutex_lock(&git.mu);
+    git.sw_ok = ok, snprintf(git.sw_msg, sizeof git.sw_msg, "%s", msg), git.sw_ready = true, wake_main();
 }
 
 static void *git_loop(void *arg)
@@ -58,8 +74,12 @@ static void *git_loop(void *arg)
     (void)arg;
     pthread_mutex_lock(&git.mu);
     for (;;) {
-        while (!git.quit && !git.asked && !git.br_asked) pthread_cond_wait(&git.cv, &git.mu);
+        while (!git.quit && !git.asked && !git.br_asked && !git.sw_asked) pthread_cond_wait(&git.cv, &git.mu);
         if (git.quit) break;
+        if (git.sw_asked) {   // a switch first: it was picked
+            git_switch_run();
+            continue;
+        }
         if (!git.asked) {   // the branches (a status asked meanwhile goes first)
             git_branches_run();
             continue;
@@ -132,6 +152,30 @@ static void git_poll(void)
 
 static const GitSlot *git_shown(void);
 
+// Branch name picked in the menu: switched to, in the folder shown's repository, on the worker
+// (git_switch_take says how it went). One at a time.
+static bool git_ask_switch(const char *name)
+{
+    if (git.sw_busy || !git.started) return false;
+    pthread_mutex_lock(&git.mu);
+    snprintf(git.sw_dir, sizeof git.sw_dir, "%s", app.cwd), snprintf(git.sw_name, sizeof git.sw_name, "%s", name);
+    git.sw_asked = true, git.sw_ready = false, git.sw_busy = true;
+    pthread_cond_signal(&git.cv);
+    pthread_mutex_unlock(&git.mu);
+    return true;
+}
+
+// Each frame: a switch's answer; true when it came, with whether it went (*ok), the branch and
+// git's refusal.
+static bool git_switch_take(bool *ok, char *name, size_t ncap, char *msg, size_t mcap)
+{
+    pthread_mutex_lock(&git.mu);
+    bool r = git.sw_ready;
+    if (r) git.sw_ready = false, git.sw_busy = false, *ok = git.sw_ok, snprintf(name, ncap, "%s", git.sw_name), snprintf(msg, mcap, "%s", git.sw_msg);
+    pthread_mutex_unlock(&git.mu);
+    return r;
+}
+
 // The branch menu opened: its list asked for the folder shown, the one before dropped (none outside
 // a repository).
 static void git_ask_branches(void)
@@ -140,7 +184,7 @@ static void git_ask_branches(void)
     pthread_mutex_lock(&git.mu);
     git.br_gen++, git.br_ready = false;
     git.br = (GitBranches){ .cur = -1 }, git.br_wait = g != NULL;
-    if (g) snprintf(git.br_want, sizeof git.br_want, "%s", app.cwd), snprintf(git.br_head, sizeof git.br_head, "%s", g->g.head), git.br_asked = true, pthread_cond_signal(&git.cv);
+    if (g) snprintf(git.br_want, sizeof git.br_want, "%s", app.cwd), git.br_asked = true, pthread_cond_signal(&git.cv);   // (HEAD read then: a switch may come first)
     pthread_mutex_unlock(&git.mu);
 }
 
@@ -185,6 +229,7 @@ static const char *branch_label(void)
 // The branch menu's entry it's label: a branch's name, or the note in their place.
 static Str branch_menu_label(UiMenuItem it)
 {
+    if (it == UM_BR_NOTE && git.sw_busy) return str_from_c(arena_sprintf(&frame, "Switching to %s\xE2\x80\xA6", git.sw_name));   // (step 5c: the list comes after)
     if (it == UM_BR_NOTE) return git.br_wait ? S("Reading branches\xE2\x80\xA6") : S("No local branches");
     int k = (int)(it - UM_BR_0);
     return k >= 0 && k < git.br.n ? str_from_c(git.br.name[k]) : STR_EMPTY;

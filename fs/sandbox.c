@@ -1,7 +1,7 @@
 // A program run in bubblewrap (F12): the thumbnailers (thumbers.c) and git status (git.c) parse
 // what is on the drive, a download or a repository someone else made, and git runs what a
 // repository's own config names (core.fsmonitor, a filter). So each runs with /usr read only, the
-// paths it needs read only (one folder writable when it writes), no network, no other processes,
+// paths it needs read only (one or two folders writable when it writes), no network, no other processes,
 // nothing else of the home folder, no terminal (a session of its own), and of ofx's environment only
 // PATH, LANG, LC_ALL and HOME (a token in it could leave through what it writes; F12 step 3
 // review). Without bubblewrap installed nothing runs (Michael, 2026-11-02, for both). It has a time
@@ -27,11 +27,13 @@ typedef enum { BOX_NOT_RUN, BOX_ENDED, BOX_KILLED } BoxRun;
 typedef struct {
     const char *const *argv;          // argv[0]: a name on PATH, or a path
     const char *ro[BOX_BINDS_MAX];    // read only inside, each at its own path (one not there: skipped)
-    const char *rw;                   // writable inside, or NULL
+    const char *rw[2];                // writable inside (each NULL: none)
     const char *cwd;                  // where it starts, inside (NULL: /)
     int         ms;                   // its time
     char       *out;                  // its output read into out, cap bytes at most (the rest
     isize       cap, *len;            // read and dropped); out NULL: /dev/null
+    bool        err;                  // its error output into out too (git's refusal: F12 step 5c)
+    bool        outlive;              // it finishes if ofx ends meanwhile (a switch cut short leaves the work tree half switched)
 } BoxJob;
 
 static bool box_sandbox = true;   // (false: run as it is; a test's only, OFX_TEST_SANDBOX=off under the guard)
@@ -48,7 +50,7 @@ static bool box_read(const BoxJob *j, int fd)
 
 // j run: in bubblewrap (BOX_NOT_RUN without it), or as it is when a test turned box_sandbox off;
 // with /dev/null for its input and error, no blocked signals, the environment above, in a process
-// group of its own, and killed if the thread that started it goes (ofx's end). BOX_ENDED when it
+// group of its own, and killed if the thread that started it goes (ofx's end; not when j->outlive). BOX_ENDED when it
 // ended within j->ms; else BOX_KILLED, with its group, and what it wrote doesn't count.
 static BoxRun box_run(const BoxJob *j)
 {
@@ -76,12 +78,14 @@ static BoxRun box_run(const BoxJob *j)
             "--ro-bind", "/usr", "/usr", "--ro-bind-try", "/etc/ld.so.cache", "/etc/ld.so.cache",
             "--ro-bind-try", "/etc/fonts", "/etc/fonts", "--ro-bind-try", "/var/cache/fontconfig", "/var/cache/fontconfig",   // (without them a PDF's fonts are scanned each run: 570 ms against 63)
             "--symlink", "usr/lib", "/lib", "--symlink", "usr/lib", "/lib64", "--symlink", "usr/bin", "/bin", "--symlink", "usr/bin", "/sbin",
-            "--proc", "/proc", "--dev", "/dev", "--unshare-all", "--die-with-parent", "--new-session",
+            "--proc", "/proc", "--dev", "/dev", "--unshare-all", "--new-session",
         };
         av[n++] = bw;
         for (int i = 0; i < COUNT(box); i++) av[n++] = box[i];
+        if (!j->outlive) av[n++] = "--die-with-parent";
         for (int i = 0; i < BOX_BINDS_MAX && j->ro[i]; i++) av[n++] = "--ro-bind-try", av[n++] = j->ro[i], av[n++] = j->ro[i];
-        if (j->rw) av[n++] = "--bind", av[n++] = j->rw, av[n++] = j->rw;
+        for (int i = 0; i < 2; i++)
+            if (j->rw[i]) av[n++] = "--bind", av[n++] = j->rw[i], av[n++] = j->rw[i];
         if (!path_below(prog, "/usr")) av[n++] = "--ro-bind", av[n++] = prog, av[n++] = prog;   // (a program of its own: ~/.local/bin, a test's fake)
         av[n++] = "--chdir", av[n++] = j->cwd ? j->cwd : "/";
         av[n++] = "--";
@@ -102,11 +106,12 @@ static BoxRun box_run(const BoxJob *j)
     }
     if (pid == 0) {   // (only what is safe after a fork in threads, up to the exec)
         sigprocmask(SIG_SETMASK, &none, NULL);
-        prctl(PR_SET_PDEATHSIG, SIGKILL);
+        if (!j->outlive) prctl(PR_SET_PDEATHSIG, SIGKILL);
         setpgid(0, 0);
         int nul = open("/dev/null", O_RDWR | O_CLOEXEC);
         if (nul >= 0) dup2(nul, 0), dup2(nul, 1), dup2(nul, 2);
         if (j->out) dup2(pipe_fd[1], 1);
+        if (j->out && j->err) dup2(pipe_fd[1], 2);
         if (cwd && chdir(cwd) != 0) _exit(127);
         execve(av[0], (char *const *)av, (char *const *)envp);
         _exit(127);

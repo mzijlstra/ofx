@@ -1834,6 +1834,11 @@ int main(void)
     test_git_branches();
     test_due_min();
     test_branch_menu();
+    test_git_switch();
+    test_git_head_name();
+    test_branch_keys();
+    test_git_said();
+    test_box_outlive();
     test_box_output_end();
     char cmd[1600];
     snprintf(cmd, sizeof cmd, "chmod -R u+rwx '%s' && rm -rf '%s' '%s'", root, root, decoy);

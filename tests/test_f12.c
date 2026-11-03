@@ -701,6 +701,30 @@ static void test_git_branches_merge(void)
     CHECK(b.n == 2 && b.cur == -1 && strcmp(b.name[0], "x") == 0 && strcmp(b.name[1], "main") == 0);
 }
 
+// HEAD's branch read from the gitdir (F12 step 5c: the menu's current one, after a switch): a
+// branch; detached; a link or a FIFO there, none (and at once).
+static void test_git_head_name(void)
+{
+    char n[GIT_HEAD_MAX];
+    mkdirs(at("f12/hd"));
+    put(at("f12/hd/HEAD"), "ref: refs/heads/feat/x\n");
+    git_head_name(at("f12/hd"), n, sizeof n);
+    CHECK(strcmp(n, "feat/x") == 0 && git_head_is(at("f12/hd"), "feat/x") && !git_head_is(at("f12/hd"), "feat"));
+    put(at("f12/hd/HEAD"), "1319d8b0000000000000000000000000000000\n");
+    git_head_name(at("f12/hd"), n, sizeof n);
+    CHECK(n[0] == 0 && !git_head_is(at("f12/hd"), ""));
+    unlink(at("f12/hd/HEAD"));
+    put(at("f12/hd/real"), "ref: refs/heads/main\n");
+    CHECK(symlink(at("f12/hd/real"), at("f12/hd/HEAD")) == 0);
+    git_head_name(at("f12/hd"), n, sizeof n);
+    CHECK(n[0] == 0);
+    unlink(at("f12/hd/HEAD"));
+    CHECK(mkfifo(at("f12/hd/HEAD"), 0600) == 0);
+    i64 t0 = now_ms();
+    git_head_name(at("f12/hd"), n, sizeof n);
+    CHECK(n[0] == 0 && now_ms() - t0 < 1000);
+}
+
 // HEAD's reflog read from its end: whole lines only once it is longer than GIT_REFLOG_TAIL; empty
 // without one.
 static void test_git_reflog_tail(void)
@@ -743,15 +767,15 @@ static void test_git_branches(void)
                                  "git branch aaa old\n");   // (by date after mid, by name first)
     CHECK(sh_in(repo, "sh ../mk.sh") == 0);
     static GitBranches b;
-    CHECK(git_top(repo, top, sizeof top) && git_branches(git, top, top, "main", &b));
+    CHECK(git_top(repo, top, sizeof top) && git_branches(git, top, top, &b));
     CHECK(b.n == 5 && b.cur == 0 && strcmp(b.name[0], "main") == 0 && strcmp(b.name[1], "old") == 0 && strcmp(b.name[2], "feat") == 0 && strcmp(b.name[3], "mid") == 0 && strcmp(b.name[4], "aaa") == 0);
     // A worktree's checkouts are its own reflog's (in the repository's .git/worktrees/wt).
     CHECK(sh_in(repo, "git worktree add -q ../wt -b wtb") == 0);
     CHECK(sh_in(at("f12/br/wt"), "git switch -q mid && git switch -q wtb") == 0);
-    CHECK(git_top(at("f12/br/wt"), top, sizeof top) && git_branches(git, top, top, "wtb", &b));
+    CHECK(git_top(at("f12/br/wt"), top, sizeof top) && git_branches(git, top, top, &b));
     CHECK(b.n == 6 && b.cur == 0 && strcmp(b.name[0], "wtb") == 0 && strcmp(b.name[1], "mid") == 0 && strcmp(b.name[2], "feat") == 0);
     put_exec(git, "#!/bin/sh\nexit 128\n");
-    CHECK(!git_branches(git, top, top, "wtb", &b));
+    CHECK(!git_branches(git, top, top, &b));
     env_restore(), env_restore();
 }
 
@@ -783,6 +807,171 @@ static void test_branch_menu(void)
     ui_handle(&u, names, &in);
     in = ui_input_none(), in.menu_away = true;
     CHECK(ui_handle(&u, names, &in).kind == UA_NONE && !u.menu_on);
+}
+
+// The branch button by keyboard (F12 step 5c): Ctrl+K's path buttons, Right past the last onto it
+// (only when it is there), Enter opens its menu with its first entry marked, the keys back to the
+// list as it closes; the menu key too; Shift+Enter there does nothing.
+static void test_branch_keys(void)
+{
+    UiNames names = { name_at, NULL, NULL };
+    Ui u = menu_ui(3);
+    u.br_n = 2, u.br_here = 0;
+    UiInput in = keys(3, UK_CRUMBS, UK_RIGHT, UK_RIGHT);
+    in.crumb_n = 4, in.crumb_last = 3;
+    ui_handle(&u, names, &in);
+    CHECK(u.focus == UI_FOCUS_CRUMBS && u.crumb_at == 3);   // (no button: the last path button)
+    u.branch_on = true;
+    in = keys(1, UK_RIGHT), in.crumb_n = 4, in.crumb_last = 3;
+    ui_handle(&u, names, &in);
+    CHECK(u.crumb_at == 4);
+    in = keys(1, UK_SHIFT_ENTER), in.crumb_n = 4, in.crumb_last = 3;
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.crumb_at == 4 && !u.menu_on);
+    in = keys(1, UK_ENTER), in.crumb_n = 4, in.crumb_last = 3;
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.menu_on && u.menu == UI_CTX_BRANCH && u.menu_at == 1 && u.focus != UI_FOCUS_CRUMBS);
+    in = keys(1, UK_ESC), in.crumb_n = 4, in.crumb_last = 3;
+    ui_handle(&u, names, &in);
+    CHECK(!u.menu_on && u.focus == UI_FOCUS_LIST);
+    in = keys(3, UK_CRUMBS, UK_RIGHT, UK_CONTEXT), in.crumb_n = 4, in.crumb_last = 3;
+    ui_handle(&u, names, &in);
+    CHECK(u.menu_on && u.menu == UI_CTX_BRANCH);
+    // The button gone (another folder): the mark comes back to the last path button.
+    u.menu_on = false, u.focus = UI_FOCUS_CRUMBS, u.crumb_at = 4, u.branch_on = false;
+    in = ui_input_none(), in.crumb_n = 4, in.crumb_last = 3;
+    ui_handle(&u, names, &in);
+    CHECK(u.crumb_at == 3);
+}
+
+// git_switch (F12 step 5c) on a scratch repository, the real git behind the wrapper, in bubblewrap
+// with the repository writable: a switch; git's refusal said (local changes, a branch that isn't);
+// a hook runs, writing inside the repository and not outside (it can without the sandbox: it does
+// run); a worktree's switch (its real .git writable); the guard; an option for a name.
+static void test_git_switch(void)
+{
+    ops_guard(root);
+    env_set("HOME", root), env_set("XDG_CONFIG_HOME", at("f12/xdg"));
+    char repo[PATH_MAX], git[PATH_MAX], top[PATH_MAX], gitdir[PATH_MAX], msg[256], cmd[3 * PATH_MAX];
+    snprintf(repo, sizeof repo, "%s", at("f12/sw/repo"));
+    snprintf(git, sizeof git, "%s", at("f12/bin/git"));
+    put_exec(git, "#!/bin/sh\nexec /usr/bin/git \"$@\"\n");
+    mkdirs(repo);
+    put_exec(at("f12/sw/mk.sh"), "git init -q -b main . && echo a > a.txt && git add a.txt && git -c user.name=t -c user.email=t@t commit -qm 1 &&\n"
+                                 "git switch -q -c feat && echo f > f.txt && echo a2 > a.txt && git add -A && git -c user.name=t -c user.email=t@t commit -qm 2 &&\n"
+                                 "git switch -q main && git branch other\n");
+    CHECK(sh_in(repo, "sh ../mk.sh") == 0);
+    CHECK(git_top(repo, top, sizeof top));
+    git_gitdir(top, gitdir, sizeof gitdir);
+    CHECK(git_switch(git, top, "feat", msg, sizeof msg) && git_head_is(gitdir, "feat") && access(at("f12/sw/repo/f.txt"), F_OK) == 0);
+    CHECK(git_switch(git, top, "main", msg, sizeof msg) && access(at("f12/sw/repo/f.txt"), F_OK) != 0);
+    // Refused: a local change the switch would overwrite; a branch that isn't. HEAD stays.
+    put(at("f12/sw/repo/a.txt"), "mine\n");
+    CHECK(!git_switch(git, top, "feat", msg, sizeof msg) && strstr(msg, "local changes") && git_head_is(gitdir, "main"));
+    CHECK(sh_in(repo, "git checkout -q a.txt") == 0);
+    CHECK(!git_switch(git, top, "nope", msg, sizeof msg) && strstr(msg, "nope") && git_head_is(gitdir, "main"));
+    // A hook: it runs, and writes in the repository only.
+    char pwned[PATH_MAX];
+    snprintf(pwned, sizeof pwned, "%s", at("f12/sw/pwned"));
+    snprintf(cmd, sizeof cmd, "#!/bin/sh\ntouch hooked\necho x > '%s'\nexit 0\n", pwned);
+    put_exec(at("f12/sw/repo/.git/hooks/post-checkout"), cmd);
+    CHECK(git_switch(git, top, "other", msg, sizeof msg) && access(at("f12/sw/repo/hooked"), F_OK) == 0 && access(pwned, F_OK) != 0);
+    box_sandbox = false;
+    CHECK(git_switch(git, top, "main", msg, sizeof msg) && access(pwned, F_OK) == 0);
+    box_sandbox = true;
+    unlink(at("f12/sw/repo/.git/hooks/post-checkout")), unlink(at("f12/sw/repo/hooked"));
+    // A worktree: its HEAD and index in the repository's .git (writable too).
+    CHECK(sh_in(repo, "git worktree add -q ../wt -b wtb") == 0);
+    CHECK(git_top(at("f12/sw/wt"), top, sizeof top));
+    git_gitdir(top, gitdir, sizeof gitdir);
+    CHECK(git_switch(git, top, "feat", msg, sizeof msg) && git_head_is(gitdir, "feat") && access(at("f12/sw/wt/f.txt"), F_OK) == 0);
+    // Out of time: stopped, and said.
+    put_exec(git, "#!/bin/sh\nsleep 2.5\n");
+    git_switch_ms = 100;
+    CHECK(!git_switch(git, top, "wtb", msg, sizeof msg) && strstr(msg, "took over"));
+    git_switch_ms = GIT_SWITCH_MS;
+    put_exec(git, "#!/bin/sh\nexec /usr/bin/git \"$@\"\n");
+    // ofx gone in the middle of a switch: it still finishes (a slow git, the process asking it killed).
+    put_exec(git, "#!/bin/sh\nsleep 0.3\nexec /usr/bin/git \"$@\"\n");
+    pid_t pid = fork();
+    if (pid == 0) {
+        signal(SIGALRM, SIG_DFL);
+        ualarm(100000, 0);
+        git_switch(git, top, "wtb", msg, sizeof msg);
+        _exit(0);
+    }
+    int st;
+    waitpid(pid, &st, 0);
+    for (int i = 0; i < 40 && !git_head_is(gitdir, "wtb"); i++) nanosleep(&(struct timespec){ 0, 50 * 1000 * 1000 }, NULL);
+    CHECK(git_head_is(gitdir, "wtb"));
+    CHECK(git_switch(git, top, "feat", msg, sizeof msg));
+    put_exec(git, "#!/bin/sh\nexec /usr/bin/git \"$@\"\n");
+    // Not a name: an option; outside the guard's root: refused before git runs.
+    CHECK(!git_switch(git, top, "-f", msg, sizeof msg) && strstr(msg, "not a branch"));
+    // (git itself inside the guard's root there: only the repository's place refuses it)
+    char git2[PATH_MAX];
+    snprintf(git2, sizeof git2, "%s", at("f12/sw/elsewhere/git"));
+    put_exec(git2, "#!/bin/sh\nexec /usr/bin/git \"$@\"\n");
+    ops_guard(at("f12/sw/elsewhere"));
+    CHECK(!git_switch(git2, top, "wtb", msg, sizeof msg) && msg[0] && git_head_is(gitdir, "feat"));
+    ops_guard(root);
+    env_restore(), env_restore();
+}
+
+// A job that outlives ofx (F12 step 5c: a switch): ofx gone in the middle, it still finishes; any
+// other is killed with it. Each from a process a timer kills as it waits.
+static pid_t outlive_start(const char *sub, bool outlive, char *done, size_t cap)
+{
+    char dir[PATH_MAX], prog[PATH_MAX + 8], text[3 * PATH_MAX];
+    snprintf(dir, sizeof dir, "%s", at(sub));
+    mkdirs(dir);
+    snprintf(prog, sizeof prog, "%s/late", dir);
+    snprintf(done, cap, "%s/done", dir);
+    unlink(done);
+    snprintf(text, sizeof text, "#!/bin/sh\nsleep 0.3\ntouch '%s'\n", done);
+    put_exec(prog, text);
+    pid_t pid = fork();
+    if (pid == 0) {
+        signal(SIGALRM, SIG_DFL);
+        ualarm(100000, 0);
+        const char *argv[] = { prog, NULL };
+        BoxJob j = { .argv = argv, .rw = { dir }, .ms = 5000, .outlive = outlive };
+        box_run(&j);
+        _exit(0);
+    }
+    return pid;
+}
+
+// The four at once: in bubblewrap and as they are (then the death signal is what would end one).
+static void test_box_outlive(void)
+{
+    ops_guard(root);
+    char d[4][PATH_MAX + 8];
+    static const char *const sub[4] = { "f12/ol/yes", "f12/ol/no", "f12/ol/yes-plain", "f12/ol/no-plain" };
+    pid_t k[4];
+    int st;
+    for (int i = 0; i < 4; i++) {
+        box_sandbox = i < 2;   // (the child's copy, at its fork)
+        k[i] = outlive_start(sub[i], i % 2 == 0, d[i], sizeof d[i]);
+    }
+    box_sandbox = true;
+    for (int i = 0; i < 4; i++) waitpid(k[i], &st, 0);
+    for (int i = 0; i < 40 && (access(d[0], F_OK) != 0 || access(d[2], F_OK) != 0); i++) nanosleep(&(struct timespec){ 0, 50 * 1000 * 1000 }, NULL);   // (2 s at most)
+    nanosleep(&(struct timespec){ 0, 150 * 1000 * 1000 }, NULL);   // (the others had as long, and more)
+    CHECK(access(d[0], F_OK) == 0 && access(d[1], F_OK) != 0);
+    CHECK(access(d[2], F_OK) == 0 && access(d[3], F_OK) != 0);
+}
+
+// What git said (F12 step 5c): its last error or fatal line, without the word; else its last line.
+static void test_git_said(void)
+{
+    char m[128];
+    git_said(S("error: Your local changes would be overwritten:\n\ta.txt\nAborting\n"), m, sizeof m);
+    CHECK(strcmp(m, "Your local changes would be overwritten:") == 0);
+    git_said(S("hint: x\nfatal: invalid reference: nope\n"), m, sizeof m);
+    CHECK(strcmp(m, "invalid reference: nope") == 0);
+    git_said(S("something\n  last  \n\n"), m, sizeof m);
+    CHECK(strcmp(m, "last") == 0);
+    git_said(STR_EMPTY, m, sizeof m);
+    CHECK(m[0] == 0);
 }
 
 // The window's timer (F12 step 5a review): the soonest due time, whatever its place; 0s are none.

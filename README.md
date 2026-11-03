@@ -152,7 +152,12 @@ The folder shown is asked again at most once a second while files in it keep cha
 After the path buttons, the branch checked out (a detached HEAD: its commit's short id), with how far
 it is ahead of and behind its upstream (`main ↑2 ↓1`). A click opens its menu: the 8 local branches
 checked out last (from HEAD's reflog), filled up by commit date, the current one marked. Its list
-is read as the menu opens (`git for-each-ref`, in bubblewrap too). Switching from it comes next.
+is read as the menu opens (`git for-each-ref`, in bubblewrap too). Ctrl+K and Right past the last
+path button reach the button; Enter opens the menu. Picking a branch runs `git switch <branch>` (only
+that: no `-f`, no stash): in bubblewrap with the repository writable, so its hooks and filters run as
+in a terminal but reach nothing else (no network, git's config read only); a hook that needs either
+fails, and git's refusal (local changes it would overwrite) is said in the status line. The folder is
+listed again, or the nearest one above it when the branch doesn't have it.
 
 The cache's cleanup, `ofx-clean` (nothing else cleans it, Nemo neither): a preview not read for 90
 days goes; so does one whose file is gone or has changed (kept: files on a network drive or on a

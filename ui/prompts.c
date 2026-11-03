@@ -2,6 +2,8 @@
 
 // ---- the path buttons by keyboard (F5.2) -------------------------------------------------------
 
+static void ui_ctx_open(Ui *u, int m, UiNames names, bool keys);
+
 // Ctrl+K: the keyboard on the path buttons, the rightmost shown marked (none there: nothing).
 static void ui_crumbs_focus(Ui *u, const UiInput *in)
 {
@@ -11,7 +13,8 @@ static void ui_crumbs_focus(Ui *u, const UiInput *in)
 }
 
 // A key while the path buttons have the keyboard (h and l as Left and Right): true when it was
-// theirs (*a: what gui/ does).
+// theirs (*a: what gui/ does). Right from the last steps on to the branch button when there is
+// one (crumb_at == crumb_n, F12 step 5c): Enter, or the menu key, opens its menu.
 // Any other key gives the keyboard back to the list and is the list's.
 static bool ui_crumbs_event(Ui *u, const UiInput *in, UiEvent e, UiAction *a)
 {
@@ -20,11 +23,14 @@ static bool ui_crumbs_event(Ui *u, const UiInput *in, UiEvent e, UiAction *a)
     if (e.key == UK_NONE && e.ch == 'l') e.key = UK_RIGHT;
     switch (e.key) {
     case UK_LEFT: case UK_SEL_LEFT: if (u->crumb_at > 0) u->crumb_at--; return true;
-    case UK_RIGHT: case UK_SEL_RIGHT: if (u->crumb_at < in->crumb_n - 1) u->crumb_at++; return true;
+    case UK_RIGHT: case UK_SEL_RIGHT: if (u->crumb_at < in->crumb_n - 1 + u->branch_on) u->crumb_at++; return true;
     case UK_HOME: case UK_SEL_HOME: u->crumb_at = 0; return true;
     case UK_END: case UK_SEL_END: u->crumb_at = in->crumb_n - 1; return true;
-    case UK_ENTER: u->focus = UI_FOCUS_LIST, *a = (UiAction){ UA_CRUMB, u->crumb_at, false }; return true;
-    case UK_SHIFT_ENTER: *a = (UiAction){ UA_TAB_BG_CRUMB, u->crumb_at, false }; return true;
+    case UK_ENTER:
+        if (u->crumb_at >= in->crumb_n) return ui_ctx_open(u, UI_CTX_BRANCH, (UiNames){ 0 }, true), true;   // (the keys back to the list as it closes)
+        u->focus = UI_FOCUS_LIST, *a = (UiAction){ UA_CRUMB, u->crumb_at, false };
+        return true;
+    case UK_SHIFT_ENTER: if (u->crumb_at < in->crumb_n) *a = (UiAction){ UA_TAB_BG_CRUMB, u->crumb_at, false }; return true;
     case UK_CRUMBS: return true;
     case UK_ESC: case UK_TAB: u->focus = UI_FOCUS_LIST; return true;
     default: u->focus = UI_FOCUS_LIST; return false;

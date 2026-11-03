@@ -1,28 +1,79 @@
-# F12 step 5b: the branch button after the path buttons, and its menu. run.sh's repository: main
-# one ahead of its upstream base and one behind; feat-a and feat-b checked out after main, then main
-# again; old0..old9 older than all.
+# F12 steps 5b and 5c: the branch button after the path buttons, its menu, and switching from it.
+# run.sh's repository: main one ahead of its upstream base and one behind; feat-a and feat-b checked
+# out after main, then main again (both hold only-a/, main doesn't); other changes a.txt; old0..old9
+# older than all.
 settle
 wait-for 5000 gitshown=1 branch=main_↑1_↓1
 # The menu: the one checked out marked, then the reflog's checkouts, then by commit date; 8 at most.
 point-ui git-branch
 click-here
 wait-for 3000 menu=branch brnote=- brn=8
-expect brhere=0 menumarked=br-0 brlist=main|feat-b|feat-a|base|old0|old1|old2|old3
+expect brhere=0 menumarked=br-0 brlist=main|feat-b|feat-a|base|other|old0|old1|old2
 # Under the button, its left edge; the path buttons give it their room.
 expect brunder=1 brfits=1
 shot branch-menu.png
-# The one checked out picked: nothing. Another: switching is the next step; for now the window says
-# so.
+# The one checked out picked: nothing.
 point-menu br-0
 click-here
 expect menu=- status=-
+# By keyboard (Ctrl+K, then Right past the last path button): feat-a. The folder listed again: it has
+# only-a/ now.
+key ctrl-k
+key right
+expect crumbkey=branch
+key enter
+wait-for 3000 menu=branch brn=8 menuat=br-0
+key down
+key down
+expect menuat=br-2
+key enter
+wait-for 5000 branch=feat-a
+expect statusbad=0 status=Switched to feat-a
+wait-for 3000 n=2
+# Into only-a, then to main: it isn't there, so the window goes up to the repository.
+char /
+type only-a
+key enter
+key enter
+wait-for 3000 n=1 sel=x.txt
+wait-for 5000 branch=feat-a
 point-ui git-branch
 click-here
 wait-for 3000 menu=branch brn=8
+expect brhere=0 brlist=feat-a|main|feat-b|base|other|old0|old1|old2
 point-menu br-1
 click-here
-expect menu=-
-expect status=Switching branches comes next (to feat-b)
+wait-for 5000 branch=main_↑1_↓1
+expect statusbad=0 status=Switched to main: only-a isn't on it
+expect n=1 sel=a.txt
+# A local change the switch would overwrite: git's refusal, in the status line; HEAD stays.
+sh printf 'mine\n' > "$OFX_DIR/a.txt"
+point-ui git-branch
+click-here
+wait-for 3000 menu=branch brn=8
+expect brlist=main|feat-a|feat-b|base|other|old0|old1|old2
+point-menu br-4
+click-here
+wait-for 5000 statusbad=1
+expect branch=main_↑1_↓1
+expect status=git switch other: Your local changes to the following files would be overwritten by checkout:
+sh cd "$OFX_DIR" && GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null git checkout -q a.txt
+# A slow one (the wrapper's second over base): the menu opened meanwhile says so, its list after.
+point-ui git-branch
+click-here
+wait-for 3000 menu=branch brn=8
+point-menu br-3
+click-here
+expect status=Switching to base…
+point-ui git-branch
+click-here
+wait-for 3000 menu=branch
+expect brnote=Switching_to_base… brn=0
+wait-for 5000 brn=8 branch=base
+expect brlist=base|main|feat-a|feat-b|other|old0|old1|old2 brhere=0 status=Switched to base
+point-menu br-1
+click-here
+wait-for 5000 branch=main_↑1_↓1
 # A second press closes it, as a menu title's does.
 point-ui git-branch
 click-here
@@ -36,7 +87,7 @@ wait-for 5000 branch=1319d8b
 point-ui git-branch
 click-here
 wait-for 3000 menu=branch brn=8
-expect brhere=-1 brlist=main|feat-b|feat-a|base|old0|old1|old2|old3
+expect brhere=-1 brlist=main|base|feat-a|feat-b|other|old0|old1|old2
 key esc
 expect menu=-
 # Outside the repository: no button.
@@ -52,7 +103,7 @@ expect brfits=1
 shot branch-long.png
 point-ui git-branch
 click-here
-wait-for 3000 menu=branch brnote=none
+wait-for 3000 menu=branch brnote=No_local_branches
 expect brn=0 brhere=-1
 key esc
 quit

@@ -326,10 +326,35 @@ static Str git_reflog_tail(const char *gitdir, char *buf, isize cap)
     return (Str){ buf, len };
 }
 
-// The branch menu's list for folder dir (resolved) in repository top, whose HEAD is on head ("":
-// detached): the local branches from `git for-each-ref` (newest commit first; in bubblewrap, as
+// HEAD's branch in gitdir into name ("ref: refs/heads/<name>"); "" when detached, or it can't be
+// read (not followed if a link, nor waited on if a FIFO).
+static void git_head_name(const char *gitdir, char *name, size_t cap)
+{
+    char p[PATH_MAX + 8], line[GIT_HEAD_MAX + 32];
+    name[0] = 0;
+    snprintf(p, sizeof p, "%s/HEAD", gitdir);
+    int fd = open(p, O_RDONLY | O_CLOEXEC | O_NONBLOCK | O_NOFOLLOW);
+    if (fd < 0) return;
+    ssize_t k = read(fd, line, sizeof line - 1);
+    close(fd);
+    if (k <= 0) return;
+    line[k] = 0;
+    line[strcspn(line, "\n")] = 0;
+    if (strncmp(line, "ref: refs/heads/", 16) == 0) snprintf(name, cap, "%s", line + 16);
+}
+
+// Whether HEAD in gitdir is on local branch name.
+static bool git_head_is(const char *gitdir, const char *name)
+{
+    char now[GIT_HEAD_MAX];
+    git_head_name(gitdir, now, sizeof now);
+    return now[0] && strcmp(now, name) == 0;
+}
+
+// The branch menu's list for folder dir (resolved) in repository top, its HEAD's branch read now
+// (git_head_name; "": detached): the local branches from `git for-each-ref` (newest commit first; in bubblewrap, as
 // git_status), merged with the reflog's checkouts. False when git didn't run or said nothing.
-static bool git_branches(const char *git, const char *dir, const char *top, const char *head, GitBranches *b)
+static bool git_branches(const char *git, const char *dir, const char *top, GitBranches *b)
 {
     static char out[GIT_REFS_OUT_MAX], tail[GIT_REFLOG_TAIL];   // (the worker's only)
     const char *argv[] = { git, "--no-optional-locks", "-c", "core.fsmonitor=false", "for-each-ref", "--sort=-committerdate", "--format=%(refname:lstrip=2)", "refs/heads/", NULL };
@@ -338,9 +363,66 @@ static bool git_branches(const char *git, const char *dir, const char *top, cons
     BoxJob j;
     git_job(&j, &binds, argv, dir, top);
     git_gitdir(top, gitdir, sizeof gitdir);
+    char head[GIT_HEAD_MAX];
+    git_head_name(gitdir, head, sizeof head);
     isize len = 0;
     j.out = out, j.cap = sizeof out, j.len = &len;
     if (box_run(&j) != BOX_ENDED || len == 0) return false;
     git_branches_merge(b, head, git_reflog_tail(gitdir, tail, sizeof tail), (Str){ out, len });
     return true;
+}
+
+// ---- switching (F12 step 5c) ---------------------------------------------------------------------
+
+enum { GIT_SWITCH_MS = 120000, GIT_SAID_MAX = KiB(16) };   // (a big checkout writes many files: 2 minutes before it is killed)
+static int git_switch_ms = GIT_SWITCH_MS;   // (a unit test's shorter)
+
+// What git said, for the status line: its last "error:" or "fatal:" line, the word itself left out
+// (else its last line); "" for nothing.
+static void git_said(Str out, char *msg, size_t cap)
+{
+    Str last = STR_EMPTY, bad = STR_EMPTY;
+    for (isize at = 0; at < out.len;) {
+        isize e = at;
+        while (e < out.len && out.p[e] != '\n') e++;
+        Str l = str_trim(str_cut(out, at, e));
+        if (l.len) last = l;
+        if (str_starts_with(l, S("error: ")) || str_starts_with(l, S("fatal: "))) bad = str_trim(str_cut(l, 7, l.len));
+        at = e + 1;
+    }
+    Str s = bad.len ? bad : last;
+    snprintf(msg, cap, "%.*s", STR_ARG(s));
+}
+
+// `git switch <name>` in repository top (resolved): in bubblewrap as git_status, but the repository
+// writable, and a worktree's or a submodule's real .git (Michael, 2026-11-03), so its hooks and
+// filters run as in a terminal's switch yet reach nothing else (no network; git's config files
+// read only). Only a local branch's name, never an option (a name can't start with "-"), and only
+// where the guard lets ofx write. True when HEAD is on name after; else git's refusal in msg.
+static bool git_switch(const char *git, const char *top, const char *name, char *msg, size_t cap)
+{
+    static char out[GIT_SAID_MAX];   // (the worker's only)
+    Err err;
+    msg[0] = 0;
+    if (!name[0] || name[0] == '-' || strlen(name) >= GIT_HEAD_MAX) return snprintf(msg, cap, "not a branch: %s", name), false;
+    if (!ops_allowed(top, &err)) return snprintf(msg, cap, "%s", err.msg), false;
+    const char *argv[] = { git, "-c", "core.fsmonitor=false", "switch", "-q", name, NULL };
+    char gitdir[PATH_MAX];
+    GitBinds binds;
+    BoxJob j;
+    git_job(&j, &binds, argv, top, top);
+    git_gitdir(top, gitdir, sizeof gitdir);
+    // Read only: git's config files alone; the repository and its real .git writable.
+    j.ro[0] = binds.home_conf, j.ro[1] = binds.xdg_conf, j.ro[2] = "/etc/gitconfig", j.ro[3] = j.ro[4] = NULL;
+    j.rw[0] = top, j.rw[1] = binds.common[0] ? binds.common : NULL;
+    j.ms = git_switch_ms;
+    isize len = 0;
+    j.out = out, j.cap = sizeof out, j.len = &len, j.err = true, j.outlive = true;
+    BoxRun r = box_run(&j);
+    if (git_head_is(gitdir, name)) return true;
+    if (r == BOX_NOT_RUN) snprintf(msg, cap, "git didn't run");
+    else if (r == BOX_KILLED) snprintf(msg, cap, "git switch took over %d s: stopped", git_switch_ms / 1000);
+    else git_said((Str){ out, len }, msg, cap);
+    if (!msg[0]) snprintf(msg, cap, "git switch failed");
+    return false;
 }

@@ -149,7 +149,7 @@ static void layout_crumbs(float room)
     float wd[UI_CRUMBS_MAX];
     for (int i = 0; i < c->n; i++) wd[i] = crumb_width(i);
     int lo, hi;
-    if (app.ui.focus == UI_FOCUS_CRUMBS) ui_crumbs_show(c, wd, room, ARROW_W, app.ui.crumb_at);
+    if (app.ui.focus == UI_FOCUS_CRUMBS) ui_crumbs_show(c, wd, room, ARROW_W, app.ui.crumb_at < c->n ? app.ui.crumb_at : c->n - 1);   // (crumb_at past them: the branch button)
     app.crumb_arrows = ui_crumbs_window(c, wd, room, ARROW_W, &lo, &hi);
     app.crumb_lo = lo, app.crumb_hi = hi;
     // One outlined group, a line between the buttons, so they read as one path (Michael, 2026-10-20).
@@ -200,10 +200,12 @@ static void branch_button(const char *label, float bw)
 {
     Theme *t = &app.theme;
     bool open = app.ui.menu_on && app.ui.menu == UI_CTX_BRANCH, hover = app.hov.bar == UB_BRANCH;
+    bool keyed = app.ui.focus == UI_FOCUS_CRUMBS && app.ui.crumb_at >= app.crumbs.n;   // Ctrl+K's mark, as a path button's (F12 step 5c)
     CLAY(Clay_GetElementId(cz(BAR_IDS[UB_BRANCH])), { .layout = { .sizing = { CLAY_SIZING_FIT(0), CLAY_SIZING_FIXED(BAR_BTN_H) }, .padding = { CRUMB_PAD, CRUMB_PAD, 0, 0 },
                                                                   .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
                                                       .backgroundColor = open ? cc(t->selection) : hover ? cc(t->bg) : cc(t->bg_light),
-                                                      .border = { .color = rule_color(), .width = CLAY_BORDER_OUTSIDE(1) } }) {
+                                                      .border = keyed ? (Clay_BorderElementConfig){ .color = cc(t->accent), .width = CLAY_BORDER_OUTSIDE(2) }
+                                                                      : (Clay_BorderElementConfig){ .color = rule_color(), .width = CLAY_BORDER_OUTSIDE(1) } }) {
         text(branch_text(label, bw), cc(t->fg_dim));
     }
 }

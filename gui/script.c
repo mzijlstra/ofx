@@ -174,7 +174,7 @@ static void script_state(char *out, size_t cap)
     ui_edit_sel(&app.ui, &slo, &shi);
     char copied[NAME_MAX + 1], keyed[16] = "-";
     state_word(copied, sizeof copied, str_from_c(app.text_copied));
-    if (app.ui.focus == UI_FOCUS_CRUMBS) snprintf(keyed, sizeof keyed, "%d", app.ui.crumb_at);
+    if (app.ui.focus == UI_FOCUS_CRUMBS) snprintf(keyed, sizeof keyed, app.ui.crumb_at >= app.crumbs.n ? "branch" : "%d", app.ui.crumb_at);   // (past the path: the branch button, F12 step 5c)
     // The jobs (F5.3): the oldest running one for job= and done=; the rows' labels, '|' between,
     // spaces as '_'; the marked row; the first row's line (points reached) and whether it has a
     // speed.
@@ -268,7 +268,8 @@ static void script_state(char *out, size_t cap)
     // The footer's git part (" · N changed"), as drawn: the free space before it varies (F12 step 5a review).
     char infogit[64] = "-";
     // The branch button and its menu (F12 step 5b): the label, the list as a|b|c.
-    char branch[GIT_HEAD_MAX + 32] = "-", brlist[UI_MENU_BRANCHES * GIT_HEAD_MAX] = "-";
+    char branch[GIT_HEAD_MAX + 32] = "-", brlist[UI_MENU_BRANCHES * GIT_HEAD_MAX] = "-", brnote[GIT_HEAD_MAX + 32] = "-";
+    if (app.ui.br_note) state_word(brnote, sizeof brnote, branch_menu_label(UM_BR_NOTE));   // (the note as drawn)
     if (branch_label()) state_word(branch, sizeof branch, str_from_c(branch_label()));
     // The button inside the path's part of the bar (the path buttons gave it room); its menu's top
     // left at the button's bottom left.
@@ -509,7 +510,7 @@ static void script_state(char *out, size_t cap)
              app.ui.find.anchor < app.ui.find.caret ? app.ui.find.anchor : app.ui.find.caret,
              app.ui.find.anchor < app.ui.find.caret ? app.ui.find.caret : app.ui.find.anchor, app.ui.find.caret, seldir, searchinfo,
              app.ui.search_inside, app.ui.focus == UI_FOCUS_INSIDE, insidetext, insideopts, app.search_im.bad,
-             (int)Clay_GetElementData(CLAY_ID("inside-field")).found, hit, hitmatch, hitdrawn, VIEWS[app.ui.view].date_col, date_w(), ow_idb_reads, confw, app.conf.bad, seldate, app.trash_full, trashicon, spawn_started, closing_all, closed_tabs.n, app.empty_n, app.ui.shift_add ? "add" : "range", clear.counted ? (long long)clear.sum.files : -1LL, clear.running, git_shown() != NULL, GIT_WORDS[app.have_list && app.list.n ? entry_git(app.ui.list.sel) : GS_NONE], git_shown() ? git_shown()->g.changed : (isize)0, gitnamecol, gitcells, infogit, git.due != 0, branch, app.ui.br_n, app.ui.br_here, !app.ui.br_note ? "-" : git.br_wait ? "reading" : "none", brlist, brfits, brunder, app.status[0] && app.status_bad, app.status[0] ? app.status : "-");
+             (int)Clay_GetElementData(CLAY_ID("inside-field")).found, hit, hitmatch, hitdrawn, VIEWS[app.ui.view].date_col, date_w(), ow_idb_reads, confw, app.conf.bad, seldate, app.trash_full, trashicon, spawn_started, closing_all, closed_tabs.n, app.empty_n, app.ui.shift_add ? "add" : "range", clear.counted ? (long long)clear.sum.files : -1LL, clear.running, git_shown() != NULL, GIT_WORDS[app.have_list && app.list.n ? entry_git(app.ui.list.sel) : GS_NONE], git_shown() ? git_shown()->g.changed : (isize)0, gitnamecol, gitcells, infogit, git.due != 0, branch, app.ui.br_n, app.ui.br_here, brnote, brlist, brfits, brunder, app.status[0] && app.status_bad, app.status[0] ? app.status : "-");
     frame_us_max = 0;
 }
 

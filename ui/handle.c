@@ -276,7 +276,7 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
                    in->tab_click >= 0 || in->tab_close >= 0 || in->mid_row >= 0 || in->mid_side >= 0 || in->mid_crumb >= 0;
     if (clicked || in->crumb_n <= 0) ui_unfocus(u, UI_FOCUS_CRUMBS);
     if (clicked) ui_unfocus(u, UI_FOCUS_JOBS);
-    if (u->focus == UI_FOCUS_CRUMBS && u->crumb_at >= in->crumb_n) u->crumb_at = in->crumb_n - 1;
+    if (u->focus == UI_FOCUS_CRUMBS && u->crumb_at > in->crumb_n - 1 + u->branch_on) u->crumb_at = in->crumb_n - 1 + u->branch_on;   // (crumb_n: the branch button, F12 step 5c)
     // A modal panel's buttons: as the keys they stand for.
     if (on == UI_ON_CLASH && in->modal == UI_MODAL_ALL) u->ask_all = !u->ask_all;
     if (on == UI_ON_CLASH && in->modal >= UI_MODAL_SKIP && in->modal <= UI_MODAL_CANCEL) {
@@ -387,7 +387,8 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         // while the files have the keys (an edit or find line keeps them); the sidebar's cursor's,
         // or the path button's, while they have them.
         if (!prompt && !u->menu_on && e.key == UK_CONTEXT && u->focus != UI_FOCUS_EDIT && !(u->focus == UI_FOCUS_FIND && u->finding) && u->focus != UI_FOCUS_JOBS) {
-            if (u->focus == UI_FOCUS_CRUMBS) ui_folder_open(u, -1, u->crumb_at, true);
+            if (u->focus == UI_FOCUS_CRUMBS && u->crumb_at >= in->crumb_n) ui_ctx_open(u, UI_CTX_BRANCH, names, true);   // (the branch button's)
+            else if (u->focus == UI_FOCUS_CRUMBS) ui_folder_open(u, -1, u->crumb_at, true);
             else if (u->focus == UI_FOCUS_SIDE && u->side.n > 0 && !ui_side_head(u, u->side.sel)) ui_folder_open(u, u->side.sel, -1, true);
             else if (u->focus != UI_FOCUS_SIDE) ui_ctx_open(u, u->list.n > 0 ? UI_CTX_ENTRY : UI_CTX_HERE, names, true);
             continue;

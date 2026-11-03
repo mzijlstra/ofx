@@ -730,6 +730,10 @@ vs-code's as the only one). Steps, each with its own reviewer-2 round:
      own refusal said in the status line; the folder reloads, or goes up to the nearest one that
      still exists. ofx's first write to a repo: through the test guard, a fake git on scratch
      repos in tests, never a work repo.
+     Decided for the switch (Michael, 2026-11-03): in bubblewrap as status, but the repository
+     (and a worktree's real .git) writable, so its hooks and filters run as in a terminal yet reach
+     only that repository (no network; git's config files read only). Ctrl+K's path buttons step
+     on to the branch button, and Enter opens its menu.
 
 ## F11 design (2026-11-01)
 
