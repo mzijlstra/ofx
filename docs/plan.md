@@ -702,6 +702,81 @@ Default and Recommended equal GIO's; GLib's rewrite of a copy adds the two lines
   is first drawn, all of them dropped when it closes (`ow_drop`). SVG icons (theme, pixmaps/ or a
   path) are drawn with nanosvg, vendored; only for the apps, the files' icons stay PNG.
 
+## F13 design (2026-11-03, draft: Michael picks the open points)
+
+Mock-ups: https://claude.ai/artifact/4bdFiKw2U1cA3Aj67f1Boo (six artboards: the list, the sidebar,
+tabs and path buttons, copy or move, the resizable sidebar, Copy Path).
+
+Drag and drop inside ofx, a key that copies the path as text, and a resizable sidebar (Michael,
+2026-11-03). Dragging to and from other programs stays later: GLFW (vendored, not to be edited)
+binds wl_data_device_manager at version 1, keeps no drop position (its motion handler is empty),
+reads a drop with a blocking read on the main thread and never calls `finish`, and has no
+`start_drag` at all. Outside DnD needs ofx's own Wayland code on GLFW's connection: its own
+milestone.
+
+**What exists to build on:** `copy_here(files, into)` (gui/actions.c) already makes a paste a job
+with clash questions, a free name for a copy into the same folder, "Already here" for a move there,
+the cross-drive move (copy, then delete once whole) and undo; a drop fills its own ClipFiles and
+calls it, so the clipboard stays as it was. `targets()` gives the marked files, else the cursor's;
+a plain click keeps the marks, so a press on a marked row can carry them all. `text_copy` sets text
+on the clipboard. The sidebar is one constant (`SIDE_W = 200`), read in six places; the main loop
+refits the list when the room changes. The only drag today is the zoom slider's.
+
+### Drag and drop (inside ofx)
+
+1. **What a drag carries.** A press on a marked row (or icon) and a move carries every marked file;
+   a press on an unmarked one carries that one alone (the marks stay, untouched). The drag starts
+   past a threshold (6 px), so a click stays a click; a double click never drags.
+2. **Where it can drop.**
+   - A folder in the list or the icon grid (not a file: a file row isn't a target).
+   - A sidebar row: a place (Home, a bookmark, a drive's root) or a tree folder.
+   - A tab: into that tab's folder (the one shown is the list's own folder).
+   - A path button: into that folder up the path.
+   - The Trash place: the files go to the trash (as Delete does, with its undo).
+   - The list's empty area: into the folder shown (a drag from the sidebar's tree or another tab's
+     drop needs it; from the list itself it is "Already here").
+   Not a target: the folder being dragged or one inside it (refused as a paste is), a read-only
+   place, the trash view, search results (they are many folders).
+3. **Copy or move** (recommended: Nemo's and Nautilus's rule): a move on the same drive, a copy to
+   another drive; Ctrl held forces a copy, Shift a move. Alternatives: always ask with a small menu
+   (Move here, Copy here, Cancel), or always move.
+4. **What it looks like.** A badge by the pointer: the first file's icon and name, "+ N more", and
+   the action ("Move" or "Copy", red-free, the accent colour); the target under the pointer lit
+   with the accent outline; nothing lit where it can't drop. Esc, or the pointer leaving the
+   window, cancels.
+5. **Spring-loaded folders** (hovering a folder or a tab for ~0.8 s opens it, so a drop can go
+   deeper): recommended for tabs only in F13 (a drag onto a tab switches to it after the wait);
+   folders in the list later.
+6. **Sources.** The folder view, and the search results (each file from its own folder). Not the
+   trash view (Restore is its own action) and not the sidebar's places (dragging a bookmark to
+   reorder it is Edit Bookmarks' job). A tree folder in the sidebar can be dragged (it is a folder).
+7. **After the drop:** the status line says what happened, as a paste does; Ctrl+Z undoes it.
+
+### Copy the path
+
+8. **Ctrl+Shift+C** (free today) copies the cursor's path as text, or every marked file's, one a
+   line; "Copy Path" in the files' right-click menu and in Edit, and in the sidebar's and the path
+   buttons' menus for their folder. The status line says "Copied the path" or "Copied N paths".
+   Alternative: the folder's path when nothing is under the cursor.
+
+### A resizable sidebar
+
+9. **A handle on its right edge** (4 px, the pointer's resize shape over it): dragged, the sidebar
+   is 140 px at least, at most half the window (or 480 px); a double click on it gives 200 back.
+   The width is remembered in the state file (`sidewidth=`, one for every window, as the sidebar's
+   mode is), not ofx.conf. The tree's names and the places' labels use the room they get.
+
+### Steps (proposed, each with its own reviewer-2 round)
+
+1. Copy Path (small, alone).
+2. The resizable sidebar (a second drag besides the zoom's: a general press, hold and release in
+   gui/input.c, and script commands `press-here`, `move-to`, `release` across frames, so step 3's
+   tests have them).
+3. Drag and drop: the drag itself, the targets, copy or move, the badge.
+4. Spring-loaded tabs (if chosen), and what using it shows.
+
+Then the milestone's code-health review and cleanup, and the install.
+
 ## F12 design (2026-11-02, Michael)
 
 Mock-ups: https://claude.ai/artifact/7FJ1PBr2C68Ui479opArUv (the two git styles; Michael chose
