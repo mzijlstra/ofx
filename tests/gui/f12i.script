@@ -1,0 +1,18 @@
+# F12 step 6 review (2026-11-03): the folder shown changes under the branches panel. The inner
+# repository is removed, so the view goes up into the outer one, which has a branch of the same
+# name. The panel closes with the folder it listed, and the outer repository stays on main.
+settle
+wait-for 5000 gitshown=1 branch=main
+point-ui git-branch
+click-here
+wait-for 3000 menu=branch brn=8
+expect brtotal=12
+point-menu br-all
+click-here
+wait-for 3000 brp=1 brpn=12
+sh rm -rf "$OFX_ROOT/tree/O/inner"
+wait-for 5000 brp=0
+sh [ "$OFX_DIR" = "$OFX_ROOT/tree/O" ]
+type other
+key enter
+sh [ "$(GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null git -C "$OFX_DIR" branch --show-current)" = main ]

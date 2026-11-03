@@ -238,11 +238,18 @@ static const char *branch_label(void)
 }
 
 // The branch menu's entry it, its label: a branch's name, or the note in their place.
+// The repository's branch count: past the refs read (GIT_REFS_MAX), "8192+" rather than a number that
+// reads as exact (review, 2026-11-03).
+static const char *br_total_text(void)
+{
+    return git.br.total >= GIT_REFS_MAX ? arena_sprintf(&frame, "%d+", GIT_REFS_MAX) : arena_sprintf(&frame, "%d", git.br.total);
+}
+
 static Str branch_menu_label(UiMenuItem it)
 {
     if (it == UM_BR_NOTE && git.sw_busy) return str_from_c(arena_sprintf(&frame, "Switching to %s\xE2\x80\xA6", git.sw_name));   // (step 5c: the list comes after)
     if (it == UM_BR_NOTE) return git.br_wait ? S("Reading branches\xE2\x80\xA6") : S("No local branches");
-    if (it == UM_BR_ALL) return str_from_c(arena_sprintf(&frame, "All branches\xE2\x80\xA6 (%d)", git.br.total));   // (step 6)
+    if (it == UM_BR_ALL) return str_from_c(arena_sprintf(&frame, "All branches\xE2\x80\xA6 (%s)", br_total_text()));   // (step 6)
     int k = ui_slot(it, UM_BR_0, UI_MENU_BRANCHES);
     return k >= 0 && k < git.br.n ? str_from_c(git.br.name[k]) : STR_EMPTY;
 }

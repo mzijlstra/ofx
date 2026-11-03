@@ -36,7 +36,7 @@ static void layout_brp_panel(void)
             text(cz("Branches"), cc(t->fg));
             CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) } } }) {}
             // (more than it holds: the latest GIT_BRANCHES_MAX of them)
-            text(cz(git.br.total > git.br.n ? arena_sprintf(&frame, "the latest %d of %d", git.br.n, git.br.total) : arena_sprintf(&frame, "%d", git.br.n)),
+            text(cz(git.br.total > git.br.n ? arena_sprintf(&frame, "the latest %d of %s", git.br.n, br_total_text()) : arena_sprintf(&frame, "%d", git.br.n)),
                  cc(t->fg_dim));
         }
         Clay_Color edge = !u->brp_in_list ? cc(t->accent) : rule_color();

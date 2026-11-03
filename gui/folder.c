@@ -243,6 +243,8 @@ static bool go_to_in(const char *dir, Str select, isize fallback, bool stepping)
     // The folder left, with its cursor, for Back: its name is still in the old listing's arena.
     if (!same && app.have_list && !stepping) hist_leave(&hist, app.cwd, sel_name());
     app.cur = next, app.list = l, app.mime = mime, app.have_list = true, app.error[0] = 0, app.lists++;
+    if (!same && app.ui.panel == UI_PANEL_BRANCHES) ui_brp_close(&app.ui);   // (its list was the folder left's: 2026-11-03)
+    if (!same && app.ui.menu_on && app.ui.menu == UI_CTX_BRANCH) app.ui.menu_on = false;
     if (app.ui.view == UI_VIEW_SEARCH && view != UI_VIEW_SEARCH) search_ask((SearchQuery){ .root = "", .skips = &app.conf.skip }), app.search_due = 0;   // (out of it: the walk stops)
     if (view != UI_VIEW_SEARCH) ui_unfocus(&app.ui, UI_FOCUS_SEARCH), ui_unfocus(&app.ui, UI_FOCUS_INSIDE);
     if (view == UI_VIEW_SEARCH && !same) {   // the fields show their text; empty, the first has the keys

@@ -6,7 +6,7 @@
 # printed whole, in order, once all are done; clip and keys share one (each starts a sway, which
 # takes the first free wayland-N).
 # The groups (one or more scripts on one tree): browse big gone watchgap f2 f3 f4 f5 f52 f53 f54
-# f6 (f6, f6b) usb f62 (f62, f62b, f62c) f63 (f63, f63b, f63c) f64 (f64, f64b, f64c, f64d) f7 (f7, f7b) f72 f73 (f73, f73b, f73c, f73d) f74 f75 (f75, f75b) f8 (f8, f8b, f8c, f8d, f8e) f9 (f9, f9b) f10 (f10, f10b, f10c, f10d) f11 (f11, f11b, f11c, f11d, f11e, f11f, f11g, f11h, f11i, f11j, f11k, f11l, f11m, f11n, f11o, f11p, f11q, f11r, f11s) f12 (f12, f12b) f12g f12h clip keys (both in sway) hang guard3 guard. Named ones only, or all of them; a group
+# f6 (f6, f6b) usb f62 (f62, f62b, f62c) f63 (f63, f63b, f63c) f64 (f64, f64b, f64c, f64d) f7 (f7, f7b) f72 f73 (f73, f73b, f73c, f73d) f74 f75 (f75, f75b) f8 (f8, f8b, f8c, f8d, f8e) f9 (f9, f9b) f10 (f10, f10b, f10c, f10d) f11 (f11, f11b, f11c, f11d, f11e, f11f, f11g, f11h, f11i, f11j, f11k, f11l, f11m, f11n, f11o, f11p, f11q, f11r, f11s) f12 (f12, f12b) f12g f12h f12i clip keys (both in sway) hang guard3 guard. Named ones only, or all of them; a group
 # that fails says "== <script>: FAILED" or "<group>: FAILED" (tools/mutation/gui.py reads it).
 set -u
 par=1
@@ -504,6 +504,17 @@ printf '#!/bin/sh\ncase "$*" in *" switch "*" base") sleep 1 ;; esac\nexec /usr/
   d=../folder-01/folder-02/folder-03/folder-04/folder-05/folder-06/folder-07/folder-08/folder-09/folder-10/folder-11/folder-12/unborn &&
   mkdir -p $d && cd $d && git init -q -b a-branch-name-long-enough-to-take-its-third-of-the-room . ) || failed f12h
 rs f12h OFX_TEST_GIT_SWITCH_MS=500 -- "$T/tree/repo"
+fi
+if want f12i; then
+# F12 step 6 review: repo O on main with a branch other, and inside it repo inner with 12 branches,
+# other among them; the script removes inner under the branches panel.
+T=$base/f12i; rm -rf "$T"; mkdir -p "$T/tree/O" "$T/fakes"
+printf '#!/bin/sh\nexec /usr/bin/git "$@"\n' > "$T/fakes/git"; chmod +x "$T/fakes/git"
+( cd "$T/tree/O" && export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_CEILING_DIRECTORIES="$T" GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t &&
+  git init -q -b main . && git commit -q --allow-empty -m o && git branch other &&
+  mkdir inner && cd inner && git init -q -b main . && git commit -q --allow-empty -m i &&
+  for b in other b1 b2 b3 b4 b5 b6 b7 b8 b9 b10; do git branch "$b"; done ) || failed f12i
+rs f12i -- "$T/tree/O/inner"
 fi
 if want hang; then
 T=$base/hang; rm -rf "$T"; mkdir -p "$T/tree/stuck"

@@ -849,7 +849,11 @@ static void act(UiAction a)
         else closed_tabs.n--, tab_open(closed_tabs.dir[closed_tabs.n], STR_EMPTY, true);
         break;
     case UA_BRANCH:   // (F12 step 5c) the one checked out: nothing
-        if (a.index >= 0 && a.index < git.br.n && a.index != git.br.cur && git_ask_switch(git.br.name[a.index]))
+        // The list is for the folder the menu opened in: one another folder took over meanwhile
+        // (the one shown removed, the view gone up into an outer repository) isn't switched by it
+        // (review, 2026-11-03).
+        if (strcmp(git.br_want, app.cwd) != 0) set_status(true, "The branch list is for another folder: open it again");
+        else if (a.index >= 0 && a.index < git.br.n && a.index != git.br.cur && git_ask_switch(git.br.name[a.index]))
             set_status(false, "Switching to %s\xE2\x80\xA6", git.br.name[a.index]);
         break;
     case UA_TAB_OTHERS:   // (F8) from the last, so each place stays right as the ones after it go
