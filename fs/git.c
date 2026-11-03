@@ -7,11 +7,13 @@
 
 #include "../base/base.h"
 
+#include <fcntl.h>
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/stat.h>
 #include <string.h>
+#include <unistd.h>
 
 // By urgency: a folder takes the highest of what it holds (an ignored file doesn't count there).
 typedef enum { GS_NONE, GS_IGNORED, GS_UNTRACKED, GS_STAGED, GS_RENAMED, GS_MODIFIED, GS_CONFLICT, GS_N } GitState;
@@ -196,6 +198,23 @@ static void git_gitdir(const char *top, char *out, size_t cap)
     if (!out[0]) snprintf(out, cap, "%s/.git", top);
 }
 
+// The paths git reads, bound read only in its sandbox: the repository, a worktree's or a
+// submodule's real .git (git_common), and git's config files (HOME's, XDG's, /etc's).
+typedef struct { char common[PATH_MAX], home_conf[PATH_MAX], xdg_conf[PATH_MAX]; } GitBinds;
+
+// j set up to run argv (git's) in folder dir of repository top, as below: in bubblewrap, those of
+// g's paths bound, for git_run_ms.
+static void git_job(BoxJob *j, GitBinds *g, const char *const *argv, const char *dir, const char *top)
+{
+    const char *home = getenv("HOME"), *xdg = getenv("XDG_CONFIG_HOME");
+    git_common(top, g->common, sizeof g->common);
+    snprintf(g->home_conf, sizeof g->home_conf, "%s/.gitconfig", home ? home : "/nonexistent");
+    if (xdg && xdg[0]) snprintf(g->xdg_conf, sizeof g->xdg_conf, "%s/git", xdg);
+    else snprintf(g->xdg_conf, sizeof g->xdg_conf, "%s/.config/git", home ? home : "/nonexistent");
+    *j = (BoxJob){ .argv = argv, .ro = { top, g->home_conf, g->xdg_conf, "/etc/gitconfig" }, .cwd = dir, .ms = git_run_ms };
+    if (g->common[0]) j->ro[4] = g->common;
+}
+
 // git status for folder dir (resolved) in repository top, read into g; git's output is put in a,
 // which must outlive g. git is the program (a test's own under the guard). False when it didn't run,
 // ran out of time, or said nothing (not a repository after all).
@@ -204,18 +223,124 @@ static void git_gitdir(const char *top, char *out, size_t cap)
 static bool git_status(Arena *a, const char *git, const char *dir, const char *top, GitStat *g)
 {
     const char *argv[] = { git, "--no-optional-locks", "-c", "core.fsmonitor=false", "status", "--porcelain=v2", "-z", "--ignored", "--branch", "--", ".", NULL };
-    char common[PATH_MAX], home_conf[PATH_MAX], xdg_conf[PATH_MAX];
-    const char *home = getenv("HOME"), *xdg = getenv("XDG_CONFIG_HOME");
-    git_common(top, common, sizeof common);
-    snprintf(home_conf, sizeof home_conf, "%s/.gitconfig", home ? home : "/nonexistent");
-    if (xdg && xdg[0]) snprintf(xdg_conf, sizeof xdg_conf, "%s/git", xdg);
-    else snprintf(xdg_conf, sizeof xdg_conf, "%s/.config/git", home ? home : "/nonexistent");
-    BoxJob j = { .argv = argv, .ro = { top, home_conf, xdg_conf, "/etc/gitconfig" }, .cwd = dir, .ms = git_run_ms };
-    if (common[0]) j.ro[4] = common;
+    GitBinds binds;
+    BoxJob j;
+    git_job(&j, &binds, argv, dir, top);
     isize len = 0;
     j.out = arena_try_push(a, GIT_OUT_MAX, 1), j.cap = GIT_OUT_MAX, j.len = &len;
     if (!j.out || box_run(&j) != BOX_ENDED || len == 0) return false;
     if (!git_parse(a, (Str){ j.out, len }, g)) return false;
     if (len == GIT_OUT_MAX) g->cut = true;
+    return true;
+}
+
+// ---- the branches (F12 step 5b): the branch button's menu ----------------------------------------
+
+enum { GIT_BRANCHES_MAX = 8, GIT_REFLOG_TAIL = KiB(64), GIT_REFS_OUT_MAX = KiB(256) };
+
+typedef struct {
+    int  n;
+    int  cur;   // the one checked out (-1: detached, or not among them)
+    char name[GIT_BRANCHES_MAX][GIT_HEAD_MAX];
+} GitBranches;
+
+// b holds name already (whole names only).
+static bool git_branch_has(const GitBranches *b, Str name)
+{
+    for (int i = 0; i < b->n; i++)
+        if (str_eq(str_from_c(b->name[i]), name)) return true;
+    return false;
+}
+
+// name onto b when it is one of refs (the local branches, one per line) and not there yet; false
+// once b is full.
+static bool git_branch_add(GitBranches *b, Str name, Str refs)
+{
+    if (b->n >= GIT_BRANCHES_MAX) return false;
+    if (!name.len || name.len >= GIT_HEAD_MAX || git_branch_has(b, name)) return true;
+    for (isize at = 0; at < refs.len;) {
+        isize e = at;
+        while (e < refs.len && refs.p[e] != '\n') e++;
+        if (str_eq(str_cut(refs, at, e), name)) {
+            snprintf(b->name[b->n++], GIT_HEAD_MAX, "%.*s", STR_ARG(name));
+            break;
+        }
+        at = e + 1;
+    }
+    return b->n < GIT_BRANCHES_MAX;
+}
+
+// The menu's branches into b: head (the one checked out, "" when detached) first, then those the
+// reflog's checkouts name, newest first ("checkout: moving from A to B": B, then A), then the rest of
+// refs, which come newest commit first; only local branches (refs' lines), each once, 8 at most.
+static void git_branches_merge(GitBranches *b, const char *head, Str reflog, Str refs)
+{
+    *b = (GitBranches){ .cur = -1 };
+    if (head[0]) git_branch_add(b, str_from_c(head), refs), b->cur = b->n ? 0 : -1;
+    static const Str MOVE = S("checkout: moving from ");
+    for (isize e = reflog.len; e > 0 && b->n < GIT_BRANCHES_MAX;) {
+        isize s = e - 1;
+        while (s > 0 && reflog.p[s - 1] != '\n') s--;
+        Str l = str_cut(reflog, s, reflog.p[e - 1] == '\n' ? e - 1 : e);
+        e = s;
+        isize tab = str_find(l, '\t');
+        if (tab < 0) continue;
+        Str m = str_cut(l, tab + 1, l.len);
+        if (!str_starts_with(m, MOVE)) continue;
+        m = str_cut(m, MOVE.len, m.len);
+        isize to = -1;   // (" to ": the last one, as a name has no spaces)
+        for (isize i = m.len - 4; i >= 0 && to < 0; i--)
+            if (str_eq(str_cut(m, i, i + 4), S(" to "))) to = i;
+        if (to < 0) continue;
+        if (!git_branch_add(b, str_cut(m, to + 4, m.len), refs)) break;
+        if (!git_branch_add(b, str_cut(m, 0, to), refs)) break;
+    }
+    for (isize at = 0; at < refs.len && b->n < GIT_BRANCHES_MAX;) {
+        isize e = at;
+        while (e < refs.len && refs.p[e] != '\n') e++;
+        git_branch_add(b, str_cut(refs, at, e), refs);
+        at = e + 1;
+    }
+}
+
+// The last GIT_REFLOG_TAIL bytes of HEAD's reflog in gitdir (whole lines), into buf; empty without one.
+static Str git_reflog_tail(const char *gitdir, char *buf, isize cap)
+{
+    char p[PATH_MAX + 16];
+    snprintf(p, sizeof p, "%s/logs/HEAD", gitdir);
+    int fd = open(p, O_RDONLY | O_CLOEXEC);
+    if (fd < 0) return STR_EMPTY;
+    struct stat st;
+    isize len = 0;
+    if (fstat(fd, &st) == 0 && S_ISREG(st.st_mode)) {
+        off_t from = st.st_size > cap ? st.st_size - cap : 0;
+        ssize_t k = pread(fd, buf, (size_t)(st.st_size - from < cap ? st.st_size - from : cap), from);
+        len = k > 0 ? k : 0;
+        if (from > 0) {   // (the first line is cut: dropped)
+            isize nl = str_find((Str){ buf, len }, '\n');
+            close(fd);
+            return nl < 0 ? STR_EMPTY : str_cut((Str){ buf, len }, nl + 1, len);
+        }
+    }
+    close(fd);
+    return (Str){ buf, len };
+}
+
+// The branch menu's list for folder dir (resolved) in repository top, whose HEAD is on head ("":
+// detached): the local branches from `git for-each-ref` (newest commit first; in bubblewrap, as
+// git_status), merged with the reflog's checkouts. False when git didn't run or said nothing.
+static bool git_branches(const char *git, const char *dir, const char *top, const char *head, GitBranches *b)
+{
+    static char out[GIT_REFS_OUT_MAX], tail[GIT_REFLOG_TAIL];   // (the worker's only)
+    const char *argv[] = { git, "--no-optional-locks", "-c", "core.fsmonitor=false", "for-each-ref", "--sort=-committerdate", "--format=%(refname:lstrip=2)", "refs/heads/", NULL };
+    char gitdir[PATH_MAX];
+    GitBinds binds;
+    BoxJob j;
+    git_job(&j, &binds, argv, dir, top);
+    git_gitdir(top, gitdir, sizeof gitdir);
+    isize len = 0;
+    j.out = out, j.cap = sizeof out, j.len = &len;
+    if (box_run(&j) != BOX_ENDED || len == 0) return false;
+    git_branches_merge(b, head, git_reflog_tail(gitdir, tail, sizeof tail), (Str){ out, len });
     return true;
 }

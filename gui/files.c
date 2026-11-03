@@ -245,7 +245,7 @@ static const char *const BAR_IDS[] = {
     [UB_BACK] = "nav-back",          [UB_FORWARD] = "nav-fwd",       [UB_UP] = "nav-up",         [UB_LOCATION] = "loc-toggle",
     [UB_SEARCH] = "search",          [UB_LEFT] = "crumb-left",       [UB_RIGHT] = "crumb-right", [UB_RESTORE] = "trash-restore",
     [UB_EMPTY] = "trash-empty",      [UB_VIEW_LIST] = "view-list",   [UB_VIEW_ICONS] = "view-icons",
-    [UB_ZOOM_OUT] = "zoom-out",      [UB_ZOOM_IN] = "zoom-in",
+    [UB_ZOOM_OUT] = "zoom-out",      [UB_ZOOM_IN] = "zoom-in",       [UB_BRANCH] = "git-branch",
 };
 
 static Clay_ElementId bar_id(UiBar b)

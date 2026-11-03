@@ -6,7 +6,7 @@
 # printed whole, in order, once all are done; clip and keys share one (each starts a sway, which
 # takes the first free wayland-N).
 # The groups (one or more scripts on one tree): browse big gone watchgap f2 f3 f4 f5 f52 f53 f54
-# f6 (f6, f6b) usb f62 (f62, f62b, f62c) f63 (f63, f63b, f63c) f64 (f64, f64b, f64c, f64d) f7 (f7, f7b) f72 f73 (f73, f73b, f73c, f73d) f74 f75 (f75, f75b) f8 (f8, f8b, f8c, f8d, f8e) f9 (f9, f9b) f10 (f10, f10b, f10c, f10d) f11 (f11, f11b, f11c, f11d, f11e, f11f, f11g, f11h, f11i, f11j, f11k, f11l, f11m, f11n, f11o, f11p, f11q, f11r, f11s) f12 clip keys (both in sway) hang guard3 guard. Named ones only, or all of them; a group
+# f6 (f6, f6b) usb f62 (f62, f62b, f62c) f63 (f63, f63b, f63c) f64 (f64, f64b, f64c, f64d) f7 (f7, f7b) f72 f73 (f73, f73b, f73c, f73d) f74 f75 (f75, f75b) f8 (f8, f8b, f8c, f8d, f8e) f9 (f9, f9b) f10 (f10, f10b, f10c, f10d) f11 (f11, f11b, f11c, f11d, f11e, f11f, f11g, f11h, f11i, f11j, f11k, f11l, f11m, f11n, f11o, f11p, f11q, f11r, f11s) f12 f12g f12h clip keys (both in sway) hang guard3 guard. Named ones only, or all of them; a group
 # that fails says "== <script>: FAILED" or "<group>: FAILED" (tools/mutation/gui.py reads it).
 set -u
 par=1
@@ -462,6 +462,24 @@ printf '#!/bin/sh\nexec /usr/bin/git "$@"\n' > "$T/fakes/git"; chmod +x "$T/fake
   git add -A && git -c user.name=t -c user.email=t@t commit -qm one &&
   printf 'a2\n' >> a.txt && printf 'n\n' > src/new.txt && git add src/new.txt && mkdir newdir build && printf 'u\n' > newdir/u && printf 'l\n' > x.log && printf 'o\n' > build/out.o ) || failed f12g
 rs f12g -- "$T/tree/repo"
+fi
+if want f12h; then
+# F12 step 5b: the branch button and its menu, on a repository of its own (as f12g's, made here, git's
+# own config out of it). Fixed dates, so the commits' ids are too (the detached HEAD's label):
+# main one ahead of and one behind its upstream base; feat-a and feat-b checked out after main, then
+# main again; old0..old9 on the first commit, older than all. Beside it, 12 folders down (wider than the path's room, so the scratch
+# folder's own path never shows), unborn: no commit yet, on a long branch name.
+T=$base/f12h; rm -rf "$T"; mkdir -p "$T/tree/repo" "$T/fakes"
+printf '#!/bin/sh\nexec /usr/bin/git "$@"\n' > "$T/fakes/git"; chmod +x "$T/fakes/git"
+( cd "$T/tree/repo" && export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t &&
+  c() { GIT_AUTHOR_DATE="$1 +0000" GIT_COMMITTER_DATE="$1 +0000" git commit -q --allow-empty -m "$1"; } &&
+  git init -q -b main . && printf 'a\n' > a.txt && git add a.txt && c 1700000000 &&
+  for i in 0 1 2 3 4 5 6 7 8 9; do git branch "old$i"; done && git branch base &&
+  c 1700000100 && git switch -q base && c 1700000200 && git switch -q main && git branch -q -u base &&
+  git switch -q -c feat-a && c 1700000300 && git switch -q -c feat-b && c 1700000400 && git switch -q main &&
+  d=../folder-01/folder-02/folder-03/folder-04/folder-05/folder-06/folder-07/folder-08/folder-09/folder-10/folder-11/folder-12/unborn &&
+  mkdir -p $d && cd $d && git init -q -b a-branch-name-long-enough-to-take-its-third-of-the-room . ) || failed f12h
+rs f12h -- "$T/tree/repo"
 fi
 if want hang; then
 T=$base/hang; rm -rf "$T"; mkdir -p "$T/tree/stuck"

@@ -328,6 +328,9 @@ static UiAction ui_handle(Ui *u, UiNames names, const UiInput *in)
         case UB_VIEW_ICONS: return ui_view(u, true);
         case UB_ZOOM_OUT: return ui_zoom(u, ui_zoom_level(u->zoom) - 1);
         case UB_ZOOM_IN: return ui_zoom(u, ui_zoom_level(u->zoom) + 1);
+        case UB_BRANCH:   // its menu, under it (F12 step 5b); a second press closes it, as a title's does
+            if (u->branch_on) ui_ctx_open(u, UI_CTX_BRANCH, (UiNames){ 0 }, false);
+            return (UiAction){ UA_NONE, 0, false };
         default: break;
         }
     }

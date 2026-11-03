@@ -810,6 +810,7 @@ int main(int argc, char **argv)
             char e[PATH_MAX];
             app.ui.ctx_w = app.ui.ctx_dir && app.ui.list.sel < app.list.n && entry_path(app.ui.list.sel, e, sizeof e) && access(e, W_OK) == 0;
         }
+        if (ctx_up && !app.ctx_placed && app.ui.menu == UI_CTX_BRANCH) git_ask_branches(), menu_facts();   // (its list read as it opens: F12 step 5b)
         if (ctx_up && !app.ctx_placed) ctx_place();
         app.ctx_placed = ctx_up;
         if (app.ui.panel != UI_PANEL_OW && ow.icons_on) ow_drop();   // the panel closed: its icons go (F7.3)

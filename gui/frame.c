@@ -14,7 +14,7 @@ static bool tip_of(int k, char *buf, size_t cap, Clay_ElementId *id)
     static const struct { UiBar b; const char *text; } BAR[] = {
         { UB_BACK, "Back (Alt+Left)" }, { UB_FORWARD, "Forward (Alt+Right)" }, { UB_UP, "Up to the parent (Backspace)" },
         { UB_LOCATION, "Type a location (Ctrl+L)" }, { UB_SEARCH, "Search (Ctrl+Shift+F)" }, { UB_LEFT, "Earlier folders in the path" },
-        { UB_RIGHT, "Later folders in the path" }, { UB_VIEW_LIST, "List (Ctrl+1)" }, { UB_VIEW_ICONS, "Icons (Ctrl+2)" },
+        { UB_RIGHT, "Later folders in the path" }, { UB_VIEW_LIST, "List (Ctrl+1)" }, { UB_VIEW_ICONS, "Icons (Ctrl+2)" }, { UB_BRANCH, "Git branches" },
         { UB_ZOOM_OUT, "Smaller icons (Ctrl+-)" }, { UB_ZOOM_IN, "Bigger icons (Ctrl+=)" },
     };
     static const char *const MODES[SIDE_MODES] = { "Places (F9)", "Tree (F9)", "No sidebar (F9)" };
@@ -104,6 +104,9 @@ static void menu_facts(void)
         if (!bmarks.b[i].path[0] || local++ < UI_MENU_BOOKMARKS) continue;
         if (u->bm_more++ == 0) u->bm_more_at = i;
     }
+    // The branch button and its menu (F12 step 5b).
+    u->branch_on = branch_label() != NULL;
+    u->br_n = git.br.n, u->br_here = git.br.cur, u->br_note = git.br.n == 0;
 }
 
 // The window, and the modal panel on top when one is up.

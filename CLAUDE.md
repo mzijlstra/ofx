@@ -61,9 +61,11 @@ rules shared by every tool here.
   folder, so it can't reach his files. The fakes that hang sleep 19.<pid> s (f12) or 3.<pid> s
   (unit; each run's own, as pgrep sees every run at once), never f11j's `sleep 20`.
 - **git status** (F12 step 5): in a folder inside a repository, ofx runs `git --no-optional-locks -c
-  core.fsmonitor=false status --porcelain=v2 -z --ignored --branch -- .` there, in bubblewrap
+  core.fsmonitor=false status --porcelain=v2 -z --ignored --branch -- .` there (and, as the branch
+  button's menu opens, `git for-each-ref` for the local branches, step 5b), in bubblewrap
   (fs/sandbox.c): the repository, its git config files and `/usr` read only, nothing writable, so
   what a repository's own config names (a filter) can't reach the rest; git doesn't write its index.
+  The menu reads HEAD's reflog (`logs/HEAD` in the gitdir, its last 64 KiB) itself, read only.
   On Michael's repos that is a read; the work repos are his too, but read only (`../CLAUDE.md`): a
   window showing one reads it, as a terminal's `git status` would, never more. Under the guard ofx
   runs only a test's own git (f12g puts a wrapper among the fakes, before /usr/bin/git; the unit

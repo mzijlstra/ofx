@@ -94,7 +94,8 @@ typedef enum {
 typedef enum { UB_NONE, UB_BACK, UB_FORWARD, UB_UP, UB_LOCATION, UB_SEARCH, UB_LEFT, UB_RIGHT, UB_CRUMB,
                UB_RESTORE, UB_EMPTY,   // the trash view's (F6)
                UB_VIEW_LIST, UB_VIEW_ICONS,   // the view buttons (F6.2)
-               UB_ZOOM_OUT, UB_ZOOM_IN } UiBar;   // the zoom slider's minus and plus (F6.3), in the footer
+               UB_ZOOM_OUT, UB_ZOOM_IN,   // the zoom slider's minus and plus (F6.3), in the footer
+               UB_BRANCH } UiBar;   // the git branch after the path buttons (F12 step 5b)
 
 enum { UI_MOD_CTRL = 1, UI_MOD_SHIFT = 2 };
 
@@ -230,6 +231,7 @@ typedef enum {
     UA_MAKE_LINK,   // a symbolic link "Link to <name>" beside each marked entry (or the cursor's) (F8)
     UA_FOLLOW,      // index: the entry, a link: to its target's folder, the target selected (F8)
     UA_TAB_OTHERS,  // every tab but the current one closed (F8)
+    UA_BRANCH,      // index: the branch menu's entry picked (F12 step 5b; gui/'s list of them)
     UA_TAB_REOPEN,  // the tab closed last, open again (F11)
     UA_RESTORE_WINDOWS,  // all: yes, the other windows back; no, forgotten (F11 step 3)
     UA_COLORS,      // the list's colours on or off (Ui.colors): gui/ remembers it
@@ -274,11 +276,15 @@ typedef enum {
     UM_CONTAINING, UM_OPEN_LINE, UM_SEARCH_IN,
     UM_OPEN_IT, UM_CUT_IT, UM_COPY_IT, UM_BM_RENAME_IT, UM_BM_UP_IT, UM_BM_DOWN_IT, UM_BM_REMOVE_IT, UM_BM_EDIT_IT, UM_EJECT_IT,
     UM_UNMOUNT_IT, UM_MOUNT_IT, UM_EMPTY_IT, UM_PROPS_IT, UM_TAB_LEFT, UM_TAB_RIGHT, UM_TAB_OTHERS,
+    UM_BR_NOTE, UM_BR_0, UM_BR_1, UM_BR_2, UM_BR_3, UM_BR_4, UM_BR_5, UM_BR_6, UM_BR_7,
     UM_ITEMS
 } UiMenuItem;
 
 // The Bookmarks menu's: the first 8 of the file's, in its order (Michael, 2026-10-27).
 enum { UI_MENU_BOOKMARKS = 8 };
+
+// The branch menu's: the 8 checked out last, filled up by commit date (F12 step 5b).
+enum { UI_MENU_BRANCHES = 8 };
 
 // Each entry's label, its key as the menu shows it, and its name in a script's state line; the key
 // event it stands for (F7.4: picked, the entry runs that key, so the two can't differ; none: its
@@ -381,6 +387,13 @@ static const struct { const char *label, *key, *word; UiEvent ev; char mark; } U
     [UM_TAB_LEFT] = { "Move Tab Left", "Ctrl+Shift+PgUp", "tab-left", { UK_TAB_LEFT, 0 } },
     [UM_TAB_RIGHT] = { "Move Tab Right", "Ctrl+Shift+PgDn", "tab-right", { UK_TAB_RIGHT, 0 } },
     [UM_TAB_OTHERS] = { "Close Other Tabs", "", "tab-others" },
+    // The branch menu's (F12 step 5b): a note while there are none to list ("Reading branches…"),
+    // then the branches, gui/'s labels; the one checked out marked.
+    [UM_BR_NOTE] = { "", "", "br-note" },
+    [UM_BR_0] = { "", "", "br-0", .mark = 'r' }, [UM_BR_1] = { "", "", "br-1", .mark = 'r' },
+    [UM_BR_2] = { "", "", "br-2", .mark = 'r' }, [UM_BR_3] = { "", "", "br-3", .mark = 'r' },
+    [UM_BR_4] = { "", "", "br-4", .mark = 'r' }, [UM_BR_5] = { "", "", "br-5", .mark = 'r' },
+    [UM_BR_6] = { "", "", "br-6", .mark = 'r' }, [UM_BR_7] = { "", "", "br-7", .mark = 'r' },
     [UM_TAB_REOPEN] = { "Reopen Closed Tab", "Ctrl+Shift+T", "reopen-tab", { UK_TAB_REOPEN, 0 } },
     [UM_BM_0] = { "", "", "bm-0", .mark = 'r' }, [UM_BM_1] = { "", "", "bm-1", .mark = 'r' },
     [UM_BM_2] = { "", "", "bm-2", .mark = 'r' }, [UM_BM_3] = { "", "", "bm-3", .mark = 'r' },
@@ -424,6 +437,8 @@ static const UiMenuItem UI_MENU_CTX_FOLDER[] = {
 };
 // A tab (the current one: a right press on another shows it first).
 static const UiMenuItem UI_MENU_CTX_TAB[] = { UM_NEW_TAB, UM_TAB_REOPEN, UM_SEP, UM_TAB_LEFT, UM_TAB_RIGHT, UM_SEP, UM_CLOSE, UM_TAB_OTHERS };
+// The branch button's (F12 step 5b).
+static const UiMenuItem UI_MENU_CTX_BRANCH[] = { UM_BR_NOTE, UM_BR_0, UM_BR_1, UM_BR_2, UM_BR_3, UM_BR_4, UM_BR_5, UM_BR_6, UM_BR_7 };
 static const UiMenuItem UI_MENU_CTX_HERE[] = {
     UM_NEW_FOLDER, UM_NEW_FILE, UM_EMPTY_TRASH, UM_SEP, UM_PASTE, UM_SELECT_ALL, UM_SEP, UM_TERMINAL, UM_HIDDEN, UM_SEP,
     UM_ADD_BOOKMARK, UM_SEP, UM_HERE_PROPS,
@@ -442,9 +457,10 @@ static const struct { const char *title; char letter; const UiMenuItem *items; i
     { "here", 0, UI_MENU_CTX_HERE, sizeof UI_MENU_CTX_HERE / sizeof UI_MENU_CTX_HERE[0] },
     { "folder", 0, UI_MENU_CTX_FOLDER, sizeof UI_MENU_CTX_FOLDER / sizeof UI_MENU_CTX_FOLDER[0] },
     { "tab", 0, UI_MENU_CTX_TAB, sizeof UI_MENU_CTX_TAB / sizeof UI_MENU_CTX_TAB[0] },
+    { "branch", 0, UI_MENU_CTX_BRANCH, sizeof UI_MENU_CTX_BRANCH / sizeof UI_MENU_CTX_BRANCH[0] },
 };
 // The bar's menus come first, then the right-click ones.
-enum { UI_MENUS = 6, UI_CTX_ENTRY = UI_MENUS, UI_CTX_HERE, UI_CTX_FOLDER, UI_CTX_TAB, UI_MENUS_ALL };
+enum { UI_MENUS = 6, UI_CTX_ENTRY = UI_MENUS, UI_CTX_HERE, UI_CTX_FOLDER, UI_CTX_TAB, UI_CTX_BRANCH, UI_MENUS_ALL };
 _Static_assert(sizeof UI_MENU / sizeof UI_MENU[0] == UI_MENUS_ALL, "UI_MENU: the bar's menus, then the right-click ones");
 
 // ---- the Keyboard Shortcuts panel (F7.5, docs/plan.md "F7.5 decided") ----------------------------
@@ -752,6 +768,11 @@ typedef struct {
     bool   can_bookmark;
     int    bm_total;         // the file's lines (Edit Bookmarks lists them all)
     int    bm_more, bm_more_at;   // the local bookmarks the menu doesn't list (0: none), the first one's line
+    // The branch menu (F12 step 5b), from gui/ too: whether the button is there (a folder in a
+    // repository), how many branches it lists (at most UI_MENU_BRANCHES), the one checked out (-1
+    // none), and whether a note shows instead (reading them, or none found).
+    bool   branch_on, br_note;
+    int    br_n, br_here;
     // The panel up, one at most (F11 review, 2026-11-02: six flags before, kept apart by hand).
     UiPanel panel;
     // Edit Bookmarks (F7.5, UI_PANEL_BM): its list (the file's lines); its rename field open, the

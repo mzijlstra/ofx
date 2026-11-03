@@ -149,6 +149,11 @@ so a program a repository's own config names can't reach the rest; without bubbl
 In a git-lfs repository the LFS filter can't write in the sandbox, so its files may show as changed.
 The folder shown is asked again at most once a second while files in it keep changing.
 
+After the path buttons, the branch checked out (a detached HEAD: its commit's short id), with how far
+it is ahead of and behind its upstream (`main ↑2 ↓1`). A click opens its menu: the 8 local branches
+checked out last (from HEAD's reflog), filled up by commit date, the current one marked. Its list
+is read as the menu opens (`git for-each-ref`, in bubblewrap too). Switching from it comes next.
+
 The cache's cleanup, `ofx-clean` (nothing else cleans it, Nemo neither): a preview not read for 90
 days goes; so does one whose file is gone or has changed (kept: files on a network drive or on a
 drive not mounted now); then, while the cache is over 1 GiB, the least recently read go. ofx.conf's

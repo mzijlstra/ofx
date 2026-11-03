@@ -11,6 +11,8 @@ static bool ui_menu_shown(const Ui *u, UiMenuItem it)
     if (u->menu == UI_CTX_FOLDER) return ui_folder_shown(u, it);
     if (it >= UM_BM_0 && it <= UM_BM_7) return (int)(it - UM_BM_0) < u->bm_n;
     if (it == UM_BM_MORE) return u->bm_more > 0;
+    if (it >= UM_BR_0 && it <= UM_BR_7) return (int)(it - UM_BR_0) < u->br_n;
+    if (it == UM_BR_NOTE) return u->br_note;
     // A right-click menu leaves out what doesn't fit its target (F8): a tab for a folder only, a
     // rename for one entry, the new entries outside the trash view (Empty Trash in it).
     if (u->menu >= UI_MENUS && it == UM_OPEN_TAB) return u->ctx_dir && u->view != UI_VIEW_TRASH;
@@ -101,6 +103,7 @@ static bool ui_menu_enabled(const Ui *u, UiMenuItem it)
     case UM_TAB_RIGHT: return u->tab_at < u->tab_n - 1;
     case UM_TAB_OTHERS: return u->tab_n > 1;
     case UM_TAB_REOPEN: return u->can_reopen;
+    case UM_BR_0: case UM_BR_1: case UM_BR_2: case UM_BR_3: case UM_BR_4: case UM_BR_5: case UM_BR_6: case UM_BR_7: return true;   // (UM_BR_NOTE: never)
     case UM_OPEN_TAB: case UM_EMPTY_TRASH: case UM_OPEN_WINDOW: case UM_TERMINAL_IN: case UM_SEARCH_IN: case UM_FOLLOW: case UM_BOOKMARK_IT: return files;
     case UM_CONTAINING: case UM_OPEN_LINE: return true;   // (on a result's menu only)
     case UM_PASTE_INTO: return files && u->can_paste && u->ctx_w;
@@ -129,6 +132,8 @@ static int ui_menu_mark(const Ui *u, UiMenuItem it)
     case UM_VIEW_ICONS: return u->grid;
     case UM_BM_0: case UM_BM_1: case UM_BM_2: case UM_BM_3: case UM_BM_4: case UM_BM_5: case UM_BM_6: case UM_BM_7:
         return u->bm_here == (int)(it - UM_BM_0);
+    case UM_BR_0: case UM_BR_1: case UM_BR_2: case UM_BR_3: case UM_BR_4: case UM_BR_5: case UM_BR_6: case UM_BR_7:
+        return u->br_here == (int)(it - UM_BR_0);
     default: return -1;
     }
 }
@@ -216,6 +221,8 @@ static UiAction ui_menu_pick(Ui *u, UiMenuItem it)
     case UM_BM_0: case UM_BM_1: case UM_BM_2: case UM_BM_3: case UM_BM_4: case UM_BM_5: case UM_BM_6: case UM_BM_7:
         return (UiAction){ UA_BOOKMARK, it - UM_BM_0, false };
     case UM_BM_MORE: return ui_bmp_open(u, u->bm_more_at);
+    case UM_BR_0: case UM_BR_1: case UM_BR_2: case UM_BR_3: case UM_BR_4: case UM_BR_5: case UM_BR_6: case UM_BR_7:
+        return (UiAction){ UA_BRANCH, it - UM_BR_0, false };
     case UM_NEW_TAB: return (UiAction){ UA_TAB_NEW, 0, false };
     case UM_NEW_WINDOW: return (UiAction){ UA_NEW_WINDOW, 0, false };
     case UM_NEW_FOLDER: return (UiAction){ UA_NEWFOLDER, 0, false };

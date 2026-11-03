@@ -1829,6 +1829,11 @@ int main(void)
     test_spawn_piped();
     test_git_status();
     test_git_footer();
+    test_git_branches_merge();
+    test_git_reflog_tail();
+    test_git_branches();
+    test_due_min();
+    test_branch_menu();
     test_box_output_end();
     char cmd[1600];
     snprintf(cmd, sizeof cmd, "chmod -R u+rwx '%s' && rm -rf '%s' '%s'", root, root, decoy);

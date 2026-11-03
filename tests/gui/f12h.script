@@ -1,0 +1,58 @@
+# F12 step 5b: the branch button after the path buttons, and its menu. run.sh's repository: main
+# one ahead of its upstream base and one behind; feat-a and feat-b checked out after main, then main
+# again; old0..old9 older than all.
+settle
+wait-for 5000 gitshown=1 branch=main_↑1_↓1
+# The menu: the one checked out marked, then the reflog's checkouts, then by commit date; 8 at most.
+point-ui git-branch
+click-here
+wait-for 3000 menu=branch brnote=- brn=8
+expect brhere=0 menumarked=br-0 brlist=main|feat-b|feat-a|base|old0|old1|old2|old3
+# Under the button, its left edge; the path buttons give it their room.
+expect brunder=1 brfits=1
+shot branch-menu.png
+# The one checked out picked: nothing. Another: switching is the next step; for now the window says
+# so.
+point-menu br-0
+click-here
+expect menu=- status=-
+point-ui git-branch
+click-here
+wait-for 3000 menu=branch brn=8
+point-menu br-1
+click-here
+expect menu=-
+expect status=Switching branches comes next (to feat-b)
+# A second press closes it, as a menu title's does.
+point-ui git-branch
+click-here
+wait-for 3000 menu=branch brn=8
+click-here
+expect menu=-
+# Detached (a checkout from a terminal: HEAD written, asked again): the commit's short id, none
+# marked.
+sh cd "$OFX_DIR" && GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null git checkout -q --detach
+wait-for 5000 branch=1319d8b
+point-ui git-branch
+click-here
+wait-for 3000 menu=branch brn=8
+expect brhere=-1 brlist=main|feat-b|feat-a|base|old0|old1|old2|old3
+key esc
+expect menu=-
+# Outside the repository: no button.
+key backspace
+wait-for 3000 gitshown=0 branch=-
+# A repository with no commit yet: its branch, and no branches to list. The name is long: the button
+# takes its third of the room, and the path buttons still aren't squeezed under it.
+key ctrl-l
+type folder-01/folder-02/folder-03/folder-04/folder-05/folder-06/folder-07/folder-08/folder-09/folder-10/folder-11/folder-12/unborn
+key enter
+wait-for 5000 gitshown=1 branch=a-branch-name-long-enough-to-take-its-third-of-the-room
+expect brfits=1
+shot branch-long.png
+point-ui git-branch
+click-here
+wait-for 3000 menu=branch brnote=none
+expect brn=0 brhere=-1
+key esc
+quit

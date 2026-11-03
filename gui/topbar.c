@@ -174,6 +174,40 @@ static void layout_crumbs(float room)
     }
 }
 
+// The git branch button after the path buttons (F12 step 5b): its label (branch_label), outlined
+// as the path is; marked while its menu (frame.c's, as a right-click one) is open.
+static float bar_room(float w)   // (the path buttons' room in a bar w wide)
+{
+    return w - PAD - 7 * BAR_BTN_W - 9 * BAR_GAP - 2 * PAD;
+}
+
+// The branch button's width (0: none): its label's, at most a third of the room (a long name gives
+// up its end first: the path keeps two thirds).
+static float branch_btn_w(float w, const char *label)
+{
+    float bw = label ? str_width(str_from_c(label)) + 2 * CRUMB_PAD : 0, most = bar_room(w) / 3;
+    return bw > most ? most : bw;
+}
+
+// Its label as drawn in a button bw wide: cut at its end to fit.
+static Clay_String branch_text(const char *label, float bw)
+{
+    float most = bw - 2 * CRUMB_PAD;
+    return fit(str_from_c(label), most > 20 ? most : 20, false);
+}
+
+static void branch_button(const char *label, float bw)
+{
+    Theme *t = &app.theme;
+    bool open = app.ui.menu_on && app.ui.menu == UI_CTX_BRANCH, hover = app.hov.bar == UB_BRANCH;
+    CLAY(Clay_GetElementId(cz(BAR_IDS[UB_BRANCH])), { .layout = { .sizing = { CLAY_SIZING_FIT(0), CLAY_SIZING_FIXED(BAR_BTN_H) }, .padding = { CRUMB_PAD, CRUMB_PAD, 0, 0 },
+                                                                  .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
+                                                      .backgroundColor = open ? cc(t->selection) : hover ? cc(t->bg) : cc(t->bg_light),
+                                                      .border = { .color = rule_color(), .width = CLAY_BORDER_OUTSIDE(1) } }) {
+        text(branch_text(label, bw), cc(t->fg_dim));
+    }
+}
+
 // The location line in the path buttons' place: the path, its selection and a caret (all of it
 // selected as it opens).
 static void layout_location(float room)
@@ -318,12 +352,16 @@ static void layout_bar(float w)
         bar_button(UB_BACK, CHEV_LEFT, NULL, NULL, hist.nback > 0, BAR_BTN_W);
         bar_button(UB_FORWARD, CHEV_RIGHT, NULL, NULL, hist.nfwd > 0, BAR_BTN_W);
         bar_button(UB_UP, CHEV_UP, NULL, NULL, can_up, BAR_BTN_W);
-        float room = w - PAD - 7 * BAR_BTN_W - 9 * BAR_GAP - 2 * PAD;
+        float room = bar_room(w);
+        bool locating = app.ui.focus == UI_FOCUS_EDIT && app.ui.edit_path;
+        const char *branch = locating ? NULL : branch_label();   // (the location line takes the room)
+        float bw = branch_btn_w(w, branch);
         CLAY(CLAY_ID("crumbs"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(BAR_BTN_H) }, .padding = { PAD / 2, 0, 0, 0 },
-                                              .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
+                                              .childGap = BAR_GAP, .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
                                   .clip = { .horizontal = true } }) {
-            if (app.ui.focus == UI_FOCUS_EDIT && app.ui.edit_path) layout_location(room);
-            else layout_crumbs(room);
+            if (locating) layout_location(room);
+            else layout_crumbs(branch ? room - bw - BAR_GAP : room);
+            if (branch) branch_button(branch, bw);
         }
         tool_button(UB_LOCATION, TOOL_PENCIL, app.ui.focus == UI_FOCUS_EDIT && app.ui.edit_path);
         tool_button(UB_SEARCH, TOOL_SEARCH, app.ui.finding);
@@ -414,6 +452,7 @@ static void layout_menu(int m)
                     const Bookmark *bk = it >= UM_BM_0 && it <= UM_BM_7 ? bm_menu(it - UM_BM_0) : NULL;
                     if (it == UM_BM_MORE) text(cz(arena_sprintf(&frame, "%d more in Edit Bookmarks\xE2\x80\xA6", app.ui.bm_more)), on ? cc(t->fg) : off);
                     else if (it == UM_OPEN_LINE) text(cs(open_line_label()), on ? cc(t->fg) : off);   // (the editor's name: F9 step 4)
+                    else if (it >= UM_BR_NOTE && it <= UM_BR_7) text(fit(branch_menu_label(it), 360, true), on ? cc(t->fg) : off);   // (F12 step 5b)
                     else text(bk ? fit(bm_label(bk), 360, true) : cz(UI_MENU_ITEM[it].label), on ? cc(t->fg) : off);
                 }
                 CLAY(CLAY_IDI("menu-gap", i), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(1) } } }) {}

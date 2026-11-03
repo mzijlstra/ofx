@@ -673,6 +673,120 @@ static void test_git_status(void)
     env_restore(), env_restore();
 }
 
+// The branch menu's list (F12 step 5b): the one checked out first, then the reflog's checkouts
+// newest first (each move's target, then where it came from), then the rest by commit date; only
+// local branches, each once, 8 at most; detached: none marked.
+static void test_git_branches_merge(void)
+{
+    static GitBranches b;
+    Str refs = S("main\nnewest\nfeat-b\nfeat-a\nold\nr1\nr2\nr3\nr4\nr5\nearly\n");
+    // (a deleted branch and a detached commit skipped; a message that isn't a checkout's, though
+    // its text past the prefix's length reads as one, skipped)
+    Str log = S("0 1 t <t@t> 1 +0000\tcommit (initial): one\n"
+                "1 2 t <t@t> 2 +0000\tcheckout: moving from early to gone\n"
+                "2 3 t <t@t> 3 +0000\tcheckout: moving from gone to 1a2b3c4\n"
+                "3 4 t <t@t> 4 +0000\tcheckout: moving from feat-a to feat-b\n"
+                "4 5 t <t@t> 5 +0000\trebase -i: moving from r4 to r5");
+    git_branches_merge(&b, "main", log, refs);
+    CHECK(b.n == 8 && b.cur == 0);
+    const char *want[] = { "main", "feat-b", "feat-a", "early", "newest", "old", "r1", "r2" };
+    for (int i = 0; i < 8 && i < b.n; i++) CHECK(strcmp(b.name[i], want[i]) == 0);
+    CHECK(!git_branch_add(&b, S("r3"), refs) && b.n == 8);   // (full: nothing more)
+    // Detached, no reflog: by date only, none marked.
+    git_branches_merge(&b, "", STR_EMPTY, S("x\ny\n"));
+    CHECK(b.n == 2 && b.cur == -1 && strcmp(b.name[0], "x") == 0 && strcmp(b.name[1], "y") == 0);
+    // HEAD on a branch git doesn't list (an unborn one): none marked; a name that only begins as one
+    // of refs' isn't it.
+    git_branches_merge(&b, "fresh", S("1 2 t <t@t> 2 +0000\tcheckout: moving from ma to x"), S("main\nx"));
+    CHECK(b.n == 2 && b.cur == -1 && strcmp(b.name[0], "x") == 0 && strcmp(b.name[1], "main") == 0);
+}
+
+// HEAD's reflog read from its end: whole lines only once it is longer than GIT_REFLOG_TAIL; empty
+// without one.
+static void test_git_reflog_tail(void)
+{
+    static char buf[GIT_REFLOG_TAIL], big[GIT_REFLOG_TAIL + 100];
+    mkdirs(at("f12/rl/logs"));
+    put(at("f12/rl/logs/HEAD"), "a\nb\n");
+    Str t = git_reflog_tail(at("f12/rl"), buf, sizeof buf);
+    CHECK(str_eq(t, S("a\nb\n")));
+    memset(big, 'x', sizeof big - 1);
+    big[200] = '\n', big[sizeof big - 2] = '\n';   // (the cut line ends at 200, past the tail's start)
+    put(at("f12/rl/logs/HEAD"), big);
+    t = git_reflog_tail(at("f12/rl"), buf, sizeof buf);
+    CHECK(t.len == (isize)sizeof big - 1 - 201 && t.p[t.len - 1] == '\n' && str_find(t, '\n') == t.len - 1);
+    CHECK(git_reflog_tail(at("f12/none"), buf, sizeof buf).len == 0);
+}
+
+// git_branches on a scratch repository (the real git behind the wrapper, in bubblewrap): its
+// branches by commit date, the checkouts first; a worktree's own reflog; git not answering, none.
+static void test_git_branches(void)
+{
+    ops_guard(root);
+    env_set("HOME", root), env_set("XDG_CONFIG_HOME", at("f12/xdg"));
+    char repo[PATH_MAX], git[PATH_MAX], top[PATH_MAX];
+    snprintf(repo, sizeof repo, "%s", at("f12/br/repo"));
+    snprintf(git, sizeof git, "%s", at("f12/bin/git"));
+    put_exec(git, "#!/bin/sh\nexec /usr/bin/git \"$@\"\n");
+    mkdirs(repo);
+    put_exec(at("f12/br/mk.sh"), "c() { GIT_COMMITTER_DATE=\"$1 +0000\" git -c user.name=t -c user.email=t@t commit -q --allow-empty -m \"$1\"; }\n"
+                                 "git init -q -b main . && c 1700000000 && git branch old && c 1700000100 && git branch mid &&\n"
+                                 "git switch -q -c feat && c 1700000200 && git switch -q main && git switch -q old && git switch -q main &&\n"
+                                 "git branch aaa old\n");   // (by date after mid, by name first)
+    CHECK(sh_in(repo, "sh ../mk.sh") == 0);
+    static GitBranches b;
+    CHECK(git_top(repo, top, sizeof top) && git_branches(git, top, top, "main", &b));
+    CHECK(b.n == 5 && b.cur == 0 && strcmp(b.name[0], "main") == 0 && strcmp(b.name[1], "old") == 0 && strcmp(b.name[2], "feat") == 0 && strcmp(b.name[3], "mid") == 0 && strcmp(b.name[4], "aaa") == 0);
+    // A worktree's checkouts are its own reflog's (in the repository's .git/worktrees/wt).
+    CHECK(sh_in(repo, "git worktree add -q ../wt -b wtb") == 0);
+    CHECK(sh_in(at("f12/br/wt"), "git switch -q mid && git switch -q wtb") == 0);
+    CHECK(git_top(at("f12/br/wt"), top, sizeof top) && git_branches(git, top, top, "wtb", &b));
+    CHECK(b.n == 6 && b.cur == 0 && strcmp(b.name[0], "wtb") == 0 && strcmp(b.name[1], "mid") == 0 && strcmp(b.name[2], "feat") == 0);
+    put_exec(git, "#!/bin/sh\nexit 128\n");
+    CHECK(!git_branches(git, top, top, "wtb", &b));
+    env_restore(), env_restore();
+}
+
+// The branch button's menu (F12 step 5b): a press opens it while the button is there; its note
+// while there are no branches, else the branches, the one checked out marked; a pick gives its
+// index; another press (or Esc) closes it.
+static void test_branch_menu(void)
+{
+    UiNames names = { name_at, NULL, NULL };
+    Ui u = menu_ui(3);
+    UiInput in = ui_input_none();
+    in.bar = UB_BRANCH;
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && !u.menu_on);   // (no button: nothing)
+    u.branch_on = true, u.br_note = true, u.br_n = 0, u.br_here = -1;
+    in = ui_input_none(), in.bar = UB_BRANCH;
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.menu_on && u.menu == UI_CTX_BRANCH && u.menu_at == -1);
+    CHECK(ui_menu_shown(&u, UM_BR_NOTE) && !ui_menu_enabled(&u, UM_BR_NOTE) && !ui_menu_shown(&u, UM_BR_0));
+    u.br_note = false, u.br_n = 3, u.br_here = 1;
+    CHECK(!ui_menu_shown(&u, UM_BR_NOTE) && ui_menu_enabled(&u, UM_BR_2) && !ui_menu_shown(&u, UM_BR_3));
+    CHECK(ui_menu_mark(&u, UM_BR_1) == 1 && ui_menu_mark(&u, UM_BR_0) == 0 && UI_MENU_ITEM[UM_BR_0].mark == 'r');
+    in = ui_input_none(), in.menu_item = 3;   // (br-2: after the note)
+    UiAction a = ui_handle(&u, names, &in);
+    CHECK(a.kind == UA_BRANCH && a.index == 2 && !u.menu_on);
+    // Esc closes it; a press elsewhere while it is up only closes it.
+    in = ui_input_none(), in.bar = UB_BRANCH;
+    ui_handle(&u, names, &in);
+    CHECK(menu_keys(&u, 1, UK_ESC).kind == UA_NONE && !u.menu_on);
+    in = ui_input_none(), in.bar = UB_BRANCH;
+    ui_handle(&u, names, &in);
+    in = ui_input_none(), in.menu_away = true;
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && !u.menu_on);
+}
+
+// The window's timer (F12 step 5a review): the soonest due time, whatever its place; 0s are none.
+static void test_due_min(void)
+{
+    CHECK(ui_due_min((i64[]){ 0, 0 }, 2) == 0);
+    CHECK(ui_due_min((i64[]){ 0, 500, 0, 300 }, 4) == 300);
+    CHECK(ui_due_min((i64[]){ 900, 0, 200, 700 }, 4) == 200);
+    CHECK(ui_due_min((i64[]){ 100, 400 }, 2) == 100);
+    CHECK(ui_due_min((i64[]){ 300, 0 }, 2) == 300);   // (a none after the soonest)
+}
+
 // The footer in a repository: the changes after the free space (F12 step 5); none said without.
 static void test_git_footer(void)
 {

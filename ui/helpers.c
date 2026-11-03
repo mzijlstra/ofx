@@ -277,6 +277,16 @@ static bool ui_tip_hover(UiTip *t, int target, i64 now)
     return true;
 }
 
+// The soonest of n due times (now_ms times, 0 for none): the window's one timer is set to it. 0:
+// none due.
+static i64 ui_due_min(const i64 *d, int n)
+{
+    i64 due = 0;
+    for (int k = 0; k < n; k++)
+        if (d[k] && (!due || d[k] < due)) due = d[k];
+    return due;
+}
+
 // When the tooltip is due (ms), 0 when none is waiting.
 static i64 ui_tip_due(const UiTip *t)
 {

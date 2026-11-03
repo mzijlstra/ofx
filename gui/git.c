@@ -28,15 +28,42 @@ static struct {
     int             shown;            // the window's (main thread's)
     int             ready;            // a fresh answer's slot, -1 none
     i64             last, due;        // the main thread's: when it last asked, and an ask put off to then (0: none)
+    // The branch menu's list (step 5b), asked as it opens: for the folder and HEAD's branch asked.
+    char            br_want[PATH_MAX], br_head[GIT_HEAD_MAX];
+    bool            br_asked, br_ready;
+    u32             br_gen;
+    GitBranches     br_out;           // the worker's answer, taken into br
+    GitBranches     br;               // the main thread's: the menu's
+    bool            br_wait;          // asked, no answer yet ("Reading branches…")
 } git = { .mu = PTHREAD_MUTEX_INITIALIZER, .cv = PTHREAD_COND_INITIALIZER, .shown = 0, .ready = -1 };
+
+// The branches asked for, run with git.mu held as it is taken (and held again as it returns): none
+// when git fails, or the folder is no repository's any more.
+static void git_branches_run(void)
+{
+    static GitBranches b;
+    char dir[PATH_MAX], head[GIT_HEAD_MAX], top[PATH_MAX], real[PATH_MAX];
+    u32 gen = git.br_gen;
+    snprintf(dir, sizeof dir, "%s", git.br_want), snprintf(head, sizeof head, "%s", git.br_head);
+    git.br_asked = false;
+    pthread_mutex_unlock(&git.mu);
+    bool ok = git_top(dir, top, sizeof top) && realpath(dir, real) && git_branches("git", real, top, head, &b);
+    if (!ok) b = (GitBranches){ .cur = -1 };
+    pthread_mutex_lock(&git.mu);
+    if (gen == git.br_gen) git.br_out = b, git.br_ready = true, wake_main();
+}
 
 static void *git_loop(void *arg)
 {
     (void)arg;
     pthread_mutex_lock(&git.mu);
     for (;;) {
-        while (!git.quit && !git.asked) pthread_cond_wait(&git.cv, &git.mu);
+        while (!git.quit && !git.asked && !git.br_asked) pthread_cond_wait(&git.cv, &git.mu);
         if (git.quit) break;
+        if (!git.asked) {   // the branches (a status asked meanwhile goes first)
+            git_branches_run();
+            continue;
+        }
         // (ready is -1 here: the ask that set asked cleared it, and an answer is published only when
         // no ask came since its own; F12 step 5a review)
         u32 gen = git.gen;
@@ -103,6 +130,20 @@ static void git_poll(void)
     if (git.due && now_ms() >= git.due) git_ask(app.cwd), timer_at(wake_due());
 }
 
+static const GitSlot *git_shown(void);
+
+// The branch menu opened: its list asked for the folder shown, the one before dropped (none outside
+// a repository).
+static void git_ask_branches(void)
+{
+    const GitSlot *g = git_shown();
+    pthread_mutex_lock(&git.mu);
+    git.br_gen++, git.br_ready = false;
+    git.br = (GitBranches){ .cur = -1 }, git.br_wait = g != NULL;
+    if (g) snprintf(git.br_want, sizeof git.br_want, "%s", app.cwd), snprintf(git.br_head, sizeof git.br_head, "%s", g->g.head), git.br_asked = true, pthread_cond_signal(&git.cv);
+    pthread_mutex_unlock(&git.mu);
+}
+
 // The window's answer: NULL outside a repository (or none yet). Its folder from the top in *rel.
 static const GitSlot *git_shown(void)
 {
@@ -110,16 +151,43 @@ static const GitSlot *git_shown(void)
     return g->repo && strcmp(g->dir, app.cwd) == 0 ? g : NULL;   // (one for another folder: not this listing's)
 }
 
-// Each frame: a fresh answer taken; true when it came. Its repository's index and HEAD watched.
+// Each frame: a fresh answer taken (a status, or the branch menu's list); true when one came. A
+// status's repository's index and HEAD watched.
 static bool git_take(void)
 {
     pthread_mutex_lock(&git.mu);
     int s = git.ready;
     if (s >= 0) git.shown = s, git.ready = -1;
+    bool br = git.br_ready;
+    if (br) git.br = git.br_out, git.br_ready = false, git.br_wait = false;
     pthread_mutex_unlock(&git.mu);
+    if (br && s < 0) return true;
     if (s < 0) return false;
     watch_git(git.slot[s].repo ? git.slot[s].gitdir : NULL);
     return true;
+}
+
+// The branch button's label: HEAD's branch, or its commit's short id when detached, then how far
+// it is ahead of and behind its upstream ("main ↑2 ↓1", each when not 0). NULL: no button (outside
+// a repository, or no answer yet; another view has none, its address being no folder of git's).
+static const char *branch_label(void)
+{
+    const GitSlot *g = git_shown();
+    if (!g) return NULL;
+    static char buf[GIT_HEAD_MAX + 32];
+    const GitStat *s = &g->g;
+    int n = s->head[0] ? snprintf(buf, sizeof buf, "%s", s->head) : snprintf(buf, sizeof buf, "%.7s", s->oid);
+    if (s->has_ab && s->ahead) n += snprintf(buf + n, sizeof buf - (size_t)n, " \xE2\x86\x91%d", s->ahead);   // ↑
+    if (s->has_ab && s->behind) snprintf(buf + n, sizeof buf - (size_t)n, " \xE2\x86\x93%d", s->behind);    // ↓
+    return buf;
+}
+
+// The branch menu's entry it's label: a branch's name, or the note in their place.
+static Str branch_menu_label(UiMenuItem it)
+{
+    if (it == UM_BR_NOTE) return git.br_wait ? S("Reading branches\xE2\x80\xA6") : S("No local branches");
+    int k = (int)(it - UM_BR_0);
+    return k >= 0 && k < git.br.n ? str_from_c(git.br.name[k]) : STR_EMPTY;
 }
 
 // An entry's state in the answer shown (GS_NONE for none). A link is a file to git.

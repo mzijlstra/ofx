@@ -360,7 +360,8 @@ static Vector2 menu_size(int m)
         }
         hgt += MENU_ROW_H;
         marks |= UI_MENU_ITEM[it].mark != 0;
-        float lw = str_width(it == UM_OPEN_LINE ? open_line_label() : str_from_c(UI_MENU_ITEM[it].label)) + str_width(str_from_c(UI_MENU_ITEM[it].key));
+        Str label = it == UM_OPEN_LINE ? open_line_label() : it >= UM_BR_NOTE && it <= UM_BR_7 ? branch_menu_label(it) : str_from_c(UI_MENU_ITEM[it].label);
+        float lw = str_width(label) + str_width(str_from_c(UI_MENU_ITEM[it].key));
         if (lw > row) row = lw;
     }
     // The menu's padding, an entry's, the marks' column and its gap, the widest label and key on one
@@ -376,7 +377,10 @@ static void ctx_place(void)
 {
     Vector2 sz = menu_size(app.ui.menu);
     float w = (float)GetScreenWidth(), h = (float)GetScreenHeight(), x = app.ctx_x, y = app.ctx_y;
-    if (app.ui.ctx_key) {
+    Clay_ElementData br = app.ui.menu == UI_CTX_BRANCH ? Clay_GetElementData(Clay_GetElementId(cz(BAR_IDS[UB_BRANCH]))) : (Clay_ElementData){ 0 };
+    if (br.found) {   // under the branch button, its left edge (F12 step 5b)
+        x = br.boundingBox.x, y = br.boundingBox.y + br.boundingBox.height;
+    } else if (app.ui.ctx_key) {
         Clay_ElementData r = Clay_GetElementData(CLAY_IDI("row", (int)(app.ui.list.sel - app.ui.list.top)));
         Clay_ElementData l = Clay_GetElementData(CLAY_ID("list"));
         Clay_ElementData f = app.ui.menu != UI_CTX_FOLDER ? (Clay_ElementData){ 0 }
@@ -468,7 +472,7 @@ static int tip_target(Hit h)
 {
     switch (h.bar) {
     case UB_BACK: case UB_FORWARD: case UB_UP: case UB_LOCATION: case UB_SEARCH: case UB_LEFT: case UB_RIGHT:
-    case UB_VIEW_LIST: case UB_VIEW_ICONS: case UB_ZOOM_OUT: case UB_ZOOM_IN: return TIP_BAR + h.bar;
+    case UB_VIEW_LIST: case UB_VIEW_ICONS: case UB_ZOOM_OUT: case UB_ZOOM_IN: case UB_BRANCH: return TIP_BAR + h.bar;
     default: break;
     }
     if (h.zoom) return TIP_ZOOM;
@@ -495,10 +499,8 @@ static bool hover_at(float x, float y);
 // state write waiting (a folder's view, remember.c; this window's tabs, restore.c; F11).
 static i64 wake_due(void)
 {
-    i64 d[] = { ui_tip_due(&app.tip), app.search_due, rem.due, restore.due, git.due }, due = 0;   // (the soonest, 0: none)
-    for (int k = 0; k < COUNT(d); k++)
-        if (d[k] && (!due || d[k] < due)) due = d[k];
-    return due;
+    i64 d[] = { ui_tip_due(&app.tip), app.search_due, rem.due, restore.due, git.due };
+    return ui_due_min(d, COUNT(d));
 }
 
 // The hover highlights for the pointer where it is now, not where it last moved: none once it has

@@ -841,6 +841,9 @@ static void act(UiAction a)
         else if (tabbar.n == UI_TABS_MAX) set_status(true, "%d tabs is the most ofx keeps open", UI_TABS_MAX);   // (kept for when one closes)
         else closed_tabs.n--, tab_open(closed_tabs.dir[closed_tabs.n], STR_EMPTY, true);
         break;
+    case UA_BRANCH:   // (F12 step 5b: the menu lists them; switching is step 5c)
+        if (a.index >= 0 && a.index < git.br.n && a.index != git.br.cur) set_status(false, "Switching branches comes next (to %s)", git.br.name[a.index]);
+        break;
     case UA_TAB_OTHERS:   // (F8) from the last, so each place stays right as the ones after it go
         for (int i = tabbar.n - 1; i >= 0; i--)
             if (i != tabbar.cur) tab_close(i);
