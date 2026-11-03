@@ -534,43 +534,19 @@ static bool select_path(const char *start, char *out, size_t cap)
     return lstat(out, &st) == 0;
 }
 
-int main(int argc, char **argv)
+// The window closed for good: no other thread wakes the loop after this (wake_main), as GLFW goes.
+// Every way out once it opened (review, 2026-11-03: a bad script's return skipped wake_off).
+static void wake_close(void)
 {
-    const char *start = NULL;
-    bool selecting = false;
-    long restore_id = 0;   // --restore <id>: another window's tabs after Close All (F11 step 3; ofx starts these itself)
-    for (int i = 1; i < argc; i++) {
-        if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) return usage(), 0;
-        if (strcmp(argv[i], "--restore") == 0 && i + 1 < argc && !restore_id) {
-            restore_id = strtol(argv[++i], NULL, 10);
-            if (restore_id <= 0) return usage(), 2;
-            continue;
-        }
-        if (strcmp(argv[i], "--version") == 0) return printf("ofx %s\n", OFX_VERSION), 0;
-        if (strcmp(argv[i], "--select") == 0 && !selecting) {
-            selecting = true;
-            continue;
-        }
-        if (argv[i][0] == '-' || start) return usage(), 2;
-        start = argv[i];
-    }
-    char dir[PATH_MAX];
-    selecting = selecting && start;
-    if (selecting ? !select_path(start, dir, sizeof dir) : !realpath(start ? start : ".", dir)) {
-        fprintf(stderr, "ofx: %s: %s\n", start ? start : ".", strerror(errno));
-        return 1;
-    }
-    // Every path is absolute from here on: off the folder ofx was started in, so that folder's
-    // drive isn't kept busy by ofx (or by what it starts) when it is to be ejected (F6.1 review).
-    if (chdir("/") != 0) fprintf(stderr, "ofx: chdir /: %s\n", strerror(errno));
+    pthread_mutex_lock(&wake_mu);
+    wake_off = true;
+    pthread_mutex_unlock(&wake_mu);
+    CloseWindow();
+}
 
-    // Before any thread exists (GLFW and Mesa start some), so all of them inherit the mask.
-    sigemptyset(&quit_signals);
-    sigaddset(&quit_signals, SIGTERM);
-    sigaddset(&quit_signals, SIGINT);
-    sigaddset(&quit_signals, SIGUSR1);
-    pthread_sigmask(SIG_BLOCK, &quit_signals, NULL);
-    spawn_init();
+// The tests' knobs and the guard (OFX_GUI_ROOT), read once at the start.
+static void test_knobs(void)
+{
     watch_delay_ms = env_int("OFX_TEST_WATCH_DELAY_MS", 0, 0, 1000);   // a window must never stall long
     // OFX_TEST_ICONS_MAX: a smaller icon cache, so a test can fill it.
     app.icons_max = env_int("OFX_TEST_ICONS_MAX", ICONS_MAX, 1, ICONS_MAX);
@@ -587,7 +563,10 @@ int main(int argc, char **argv)
     // from this binary at all.
     const char *leak = getenv("OFX_TEST_LEAK");
     if (leak && leak[0]) planted = malloc(4096), planted = NULL;
+}
 
+static void arenas_init(void)
+{
     arena_init(&frame, "frame", frame_mem, sizeof frame_mem);
     arena_init(&lists[0], "list", list_mem[0], sizeof list_mem[0]);
     arena_init(&lists[1], "list", list_mem[1], sizeof list_mem[1]);
@@ -605,12 +584,12 @@ int main(int argc, char **argv)
     arena_init(&owa, "open with", ow_mem, sizeof ow_mem);
     arena_init(&owia, "open with icons", ow_idb_mem, sizeof ow_idb_mem);
     undo.arena = &undoa;
-    uint32_t need = Clay_MinMemorySize();
-    if ((size_t)need > sizeof clay_mem) {
-        fprintf(stderr, "ofx: Clay needs %llu bytes, clay_mem has %zu\n", (unsigned long long)need, sizeof clay_mem);
-        return 1;
-    }
+}
 
+// The window opened on dir, its input callbacks and the signal waiter set, the font and Clay ready.
+// False (said) when it can't.
+static bool window_open(const char *dir)
+{
     SetTraceLogLevel(LOG_WARNING);
     // GLFW would draw window decorations through libdecor, whose GTK plugin loads GTK 3, Pango
     // and fontconfig into the process. Hyprland tiles without a title bar, so go without it.
@@ -626,7 +605,7 @@ int main(int argc, char **argv)
     InitWindow(win_w, win_h, TextFormat("ofx: %s", dir));
     if (!IsWindowReady()) {
         fprintf(stderr, "ofx: cannot open a window\n");
-        return 1;
+        return false;
     }
     SetExitKey(KEY_NULL);   // Ctrl+Q quits; Esc is ours (it closes a bar, a panel, a menu), not raylib's exit
     const char *dbg = getenv("OFX_GUI_DEBUG");
@@ -641,15 +620,22 @@ int main(int argc, char **argv)
     pthread_detach(waiter);
     if (!font_init()) {
         fprintf(stderr, "ofx: fontconfig finds no usable sans-serif font\n");
-        CloseWindow();
-        return 1;
+        wake_close();
+        return false;
     }
     Clay_Arena arena = Clay_CreateArenaWithCapacityAndMemory(sizeof clay_mem, clay_mem);
     Clay_Initialize(arena, (Clay_Dimensions){ (float)GetScreenWidth(), (float)GetScreenHeight() },
                     (Clay_ErrorHandler){ .errorHandlerFunction = on_clay_error });
     Clay_SetMeasureTextFunction(render_measure_text, NULL);
     render_custom = draw_custom;
+    return true;
+}
 
+// What the window shows before its first folder: the MIME types, the theme, ofx.conf, the watches,
+// the clipboard, the worker threads, the places and the trash, the window registry, the state file's
+// settings and the tree, the sidebar.
+static void app_start(void)
+{
     mime_load(&data, &app.mime_db);
     user_dirs_load(&data, &app.user_dirs);
     theme_apply();
@@ -696,6 +682,127 @@ int main(int argc, char **argv)
     list_fit();
     ui_resize(&app.ui.side, side_rows(GetScreenHeight()));
     app.press.row = -1, app.panel_press.row = -1;
+}
+
+// Each frame: what the watches and the worker threads brought, taken. True when the window must
+// draw again.
+static bool poll_workers(void)
+{
+    bool dirty = false;
+    if (atomic_exchange(&watch.theme_ready, false)) theme_apply(), app.themes++, dirty = true;
+    // The mounts before the folder: a drive unmounted and its folder removed come in one batch,
+    // and the folder's going would move ofx to the folder above before the drive's going sends it
+    // Home (2026-10-30).
+    if (atomic_exchange(&watch.mounts_ready, false)) places_reload(), trash_state(), dirty = true;
+    if (app.drive_gone) {
+        const char *home = getenv("HOME");
+        app.drive_gone = false;
+        if (home && home[0]) go_to(home, STR_EMPTY, 0), dirty = true;
+    }
+    if (atomic_exchange(&watch.list_ready, false)) reload(), dirty = true;
+    if (atomic_exchange(&watch.conf_ready, false)) conf_apply(), reload(), dirty = true;   // (the dates, a search's skips)
+    if (atomic_exchange(&watch.trash_ready, false) && trash_state()) dirty = true;
+    dirty |= jobs_poll();
+    if (app.have_list && count_take(app.count, app.list.n)) dirty = true;
+    if (space_take(&app.places, app.cwd, &app.cwd_avail)) dirty = true;
+    if (eject_take()) dirty = true;
+    if (props.walking && walk_take(&props.sum, &props.done)) dirty = true;
+    if (props.walking && app.ui.panel != UI_PANEL_PROPS) walk_ask(NULL, 0), props.walking = false;   // the panel closed: the count stops
+    if (clear_poll()) dirty = true;
+    if (atomic_exchange(&watch.git_ready, false) && app.ui.view == UI_VIEW_FOLDER) git_ask_soon();   // (its index or HEAD changed: F12)
+    git_poll();
+    if (git_take()) dirty = true;
+    if (branch_switched()) dirty = true;
+    if (thumbs_take()) dirty = true;
+    if (app.ui.view == UI_VIEW_SEARCH && search_take()) search_relist(), dirty = true;
+    if (app.search_due && now_ms() >= app.search_due) app.search_due = 0, search_retype(), dirty = true;
+    i64 was_due = restore.due, was_rem = rem.due;   // (F11: the tabs, a folder's view, written 2 s after a change)
+    if ((restore_tick(now_ms()) != was_due && restore.due) | (remember_tick(now_ms()) != was_rem && rem.due)) timer_at(wake_due());
+    return dirty;
+}
+
+// A right-click menu just opened (F8): what only gui/ knows of its target, then its place.
+static void ctx_opened(void)
+{
+    bool ctx_up = app.ui.menu_on && app.ui.menu >= UI_MENUS;   // a right-click menu opened: where (F8)
+    if (ctx_up && !app.ctx_placed && app.ui.menu == UI_CTX_FOLDER) ctx_facts();
+    if (ctx_up && !app.ctx_placed && app.ui.menu == UI_CTX_ENTRY) {   // (Paste Into Folder: the cursor's, writable)
+        char e[PATH_MAX];
+        app.ui.ctx_w = app.ui.ctx_dir && app.ui.list.sel < app.list.n && entry_path(app.ui.list.sel, e, sizeof e) && access(e, W_OK) == 0;
+    }
+    if (ctx_up && !app.ctx_placed && app.ui.menu == UI_CTX_BRANCH) git_ask_branches(), menu_facts();   // (its list read as it opens: F12 step 5b)
+    if (ctx_up && !app.ctx_placed) ctx_place();
+    app.ctx_placed = ctx_up;
+}
+
+// The window's end: its tabs and the folder's view written, its registry entry gone, the threads
+// told to quit and joined, and the window closed (wake_close).
+static void app_end(void)
+{
+    if (atomic_load(&quit_signal)) closing_all = true;   // (SIGTERM, SIGINT: a logout or shutdown ends every window at once, so each keeps its tabs as Close All does; Michael, 2026-11-02)
+    restore_save();   // (F11 step 3: before the cursor's write below, which tab_save's listing doesn't touch)
+    if (fold_view_of(app.ui.view) && app.have_list) remember_cursor(app.cwd, sel_name());   // (F11)
+    if (rem.dirty) remember_write();
+    if (app.windows[0]) win_unregister(app.windows, getpid());
+    quit_workers();
+    ui_matcher_set(&app.ui.find_m, STR_EMPTY, app.ui.find_opts), ui_matcher_set(&app.ui.ow_m, STR_EMPTY, app.ui.ow_opts);   // (a compiled expression freed: LeakSanitizer)
+    ui_matcher_set(&app.search_m, STR_EMPTY, app.ui.find_opts);
+    ui_matcher_set(&app.search_im, STR_EMPTY, app.ui.inside_opts);
+    timer_stop();
+    for (int i = 0; i < app.nslots; i++)
+        if (app.slot[i].tex.id) UnloadTexture(app.slot[i].tex);
+    wake_close();
+}
+
+int main(int argc, char **argv)
+{
+    const char *start = NULL;
+    bool selecting = false;
+    long restore_id = 0;   // --restore <id>: another window's tabs after Close All (F11 step 3; ofx starts these itself)
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) return usage(), 0;
+        if (strcmp(argv[i], "--restore") == 0 && i + 1 < argc && !restore_id) {
+            restore_id = strtol(argv[++i], NULL, 10);
+            if (restore_id <= 0) return usage(), 2;
+            continue;
+        }
+        if (strcmp(argv[i], "--version") == 0) return printf("ofx %s\n", OFX_VERSION), 0;
+        if (strcmp(argv[i], "--select") == 0 && !selecting) {
+            selecting = true;
+            continue;
+        }
+        if (argv[i][0] == '-' || start) return usage(), 2;
+        start = argv[i];
+    }
+    char dir[PATH_MAX];
+    selecting = selecting && start;
+    if (selecting ? !select_path(start, dir, sizeof dir) : !realpath(start ? start : ".", dir)) {
+        fprintf(stderr, "ofx: %s: %s\n", start ? start : ".", strerror(errno));
+        return 1;
+    }
+    // Every path is absolute from here on: off the folder ofx was started in, so that folder's
+    // drive isn't kept busy by ofx (or by what it starts) when it is to be ejected (F6.1 review).
+    if (chdir("/") != 0) fprintf(stderr, "ofx: chdir /: %s\n", strerror(errno));
+
+    // Before any thread exists (GLFW and Mesa start some), so all of them inherit the mask.
+    sigemptyset(&quit_signals);
+    sigaddset(&quit_signals, SIGTERM);
+    sigaddset(&quit_signals, SIGINT);
+    sigaddset(&quit_signals, SIGUSR1);
+    pthread_sigmask(SIG_BLOCK, &quit_signals, NULL);
+    spawn_init();
+    test_knobs();
+
+    arenas_init();
+    uint32_t need = Clay_MinMemorySize();
+    if ((size_t)need > sizeof clay_mem) {
+        fprintf(stderr, "ofx: Clay needs %llu bytes, clay_mem has %zu\n", (unsigned long long)need, sizeof clay_mem);
+        return 1;
+    }
+
+    if (!window_open(dir)) return 1;
+
+    app_start();
     // Started on a file (a desktop entry's %f, xdg-open on a file's folder), or with --select
     // (ShowItems): its folder, it selected.
     struct stat sst;
@@ -721,7 +828,8 @@ int main(int argc, char **argv)
     bool scripted = script_path && script_path[0];
     script_on = scripted;
     if (scripted && !script_open(script_path)) {
-        CloseWindow();
+        quit_workers();
+        wake_close();
         return 1;
     }
 
@@ -763,35 +871,7 @@ int main(int argc, char **argv)
         }
         PollInputEvents();   // waits for input, or for watch.c's wake-up
         if (atomic_exchange(&close_signal, false)) close_asked = true, closing_all = true;
-        if (atomic_exchange(&watch.theme_ready, false)) theme_apply(), app.themes++, dirty = true;
-        // The mounts before the folder: a drive unmounted and its folder removed come in one batch,
-        // and the folder's going would move ofx to the folder above before the drive's going sends it
-        // Home (2026-10-30).
-        if (atomic_exchange(&watch.mounts_ready, false)) places_reload(), trash_state(), dirty = true;
-        if (app.drive_gone) {
-            const char *home = getenv("HOME");
-            app.drive_gone = false;
-            if (home && home[0]) go_to(home, STR_EMPTY, 0), dirty = true;
-        }
-        if (atomic_exchange(&watch.list_ready, false)) reload(), dirty = true;
-        if (atomic_exchange(&watch.conf_ready, false)) conf_apply(), reload(), dirty = true;   // (the dates, a search's skips)
-        if (atomic_exchange(&watch.trash_ready, false) && trash_state()) dirty = true;
-        dirty |= jobs_poll();
-        if (app.have_list && count_take(app.count, app.list.n)) dirty = true;
-        if (space_take(&app.places, app.cwd, &app.cwd_avail)) dirty = true;
-        if (eject_take()) dirty = true;
-        if (props.walking && walk_take(&props.sum, &props.done)) dirty = true;
-        if (props.walking && app.ui.panel != UI_PANEL_PROPS) walk_ask(NULL, 0), props.walking = false;   // the panel closed: the count stops
-        if (clear_poll()) dirty = true;
-        if (atomic_exchange(&watch.git_ready, false) && app.ui.view == UI_VIEW_FOLDER) git_ask_soon();   // (its index or HEAD changed: F12)
-        git_poll();
-        if (git_take()) dirty = true;
-        if (branch_switched()) dirty = true;
-        if (thumbs_take()) dirty = true;
-        if (app.ui.view == UI_VIEW_SEARCH && search_take()) search_relist(), dirty = true;
-        if (app.search_due && now_ms() >= app.search_due) app.search_due = 0, search_retype(), dirty = true;
-        i64 was_due = restore.due, was_rem = rem.due;   // (F11: the tabs, a folder's view, written 2 s after a change)
-        if ((restore_tick(now_ms()) != was_due && restore.due) | (remember_tick(now_ms()) != was_rem && rem.due)) timer_at(wake_due());
+        dirty |= poll_workers();
         bool seen;
         UiInput in = input_real(&seen);
         if (scripted) {
@@ -819,15 +899,7 @@ int main(int argc, char **argv)
         bool was_editing = app.ui.focus == UI_FOCUS_EDIT, was_confirming = app.ui.confirming;
         if (app.ui.panel == UI_PANEL_OW) in.app_name = ow.names, in.app_n = ow.shown < UI_APPS_MAX ? ow.shown : UI_APPS_MAX;
         UiAction a = ui_handle(&app.ui, (UiNames){ list_name, NULL, list_dir }, &in);
-        bool ctx_up = app.ui.menu_on && app.ui.menu >= UI_MENUS;   // a right-click menu opened: where (F8)
-        if (ctx_up && !app.ctx_placed && app.ui.menu == UI_CTX_FOLDER) ctx_facts();
-        if (ctx_up && !app.ctx_placed && app.ui.menu == UI_CTX_ENTRY) {   // (Paste Into Folder: the cursor's, writable)
-            char e[PATH_MAX];
-            app.ui.ctx_w = app.ui.ctx_dir && app.ui.list.sel < app.list.n && entry_path(app.ui.list.sel, e, sizeof e) && access(e, W_OK) == 0;
-        }
-        if (ctx_up && !app.ctx_placed && app.ui.menu == UI_CTX_BRANCH) git_ask_branches(), menu_facts();   // (its list read as it opens: F12 step 5b)
-        if (ctx_up && !app.ctx_placed) ctx_place();
-        app.ctx_placed = ctx_up;
+        ctx_opened();
         if (app.ui.panel != UI_PANEL_OW && ow.icons_on) ow_drop();   // the panel closed: its icons go (F7.3)
         if (app.ui.copied) text_copy((Str){ app.ui.copy, app.ui.copy_len }), app.ui.copied = false;
         // Shift+Delete and its y can come in one frame's input: the question opened and was answered
@@ -847,21 +919,6 @@ int main(int argc, char **argv)
         dirty |= seen;
     }
     if (scripted) script_end();
-    if (atomic_load(&quit_signal)) closing_all = true;   // (SIGTERM, SIGINT: a logout or shutdown ends every window at once, so each keeps its tabs as Close All does; Michael, 2026-11-02)
-    restore_save();   // (F11 step 3: before the cursor's write below, which tab_save's listing doesn't touch)
-    if (fold_view_of(app.ui.view) && app.have_list) remember_cursor(app.cwd, sel_name());   // (F11)
-    if (rem.dirty) remember_write();
-    if (app.windows[0]) win_unregister(app.windows, getpid());
-    quit_workers();
-    ui_matcher_set(&app.ui.find_m, STR_EMPTY, app.ui.find_opts), ui_matcher_set(&app.ui.ow_m, STR_EMPTY, app.ui.ow_opts);   // (a compiled expression freed: LeakSanitizer)
-    ui_matcher_set(&app.search_m, STR_EMPTY, app.ui.find_opts);
-    ui_matcher_set(&app.search_im, STR_EMPTY, app.ui.inside_opts);
-    timer_stop();
-    for (int i = 0; i < app.nslots; i++)
-        if (app.slot[i].tex.id) UnloadTexture(app.slot[i].tex);
-    pthread_mutex_lock(&wake_mu);
-    wake_off = true;
-    pthread_mutex_unlock(&wake_mu);
-    CloseWindow();
+    app_end();
     return scripted && script.failed ? 1 : 0;
 }

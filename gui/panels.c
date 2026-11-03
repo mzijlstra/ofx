@@ -3,29 +3,12 @@
 
 // ---- the modal panels (F5.1) --------------------------------------------------------------------
 
-typedef enum { MODAL_NONE, MODAL_DELETE, MODAL_CLASH, MODAL_CANCEL, MODAL_QUIT, MODAL_FULL, MODAL_EMPTY, MODAL_CLEAR, MODAL_PROPS, MODAL_OW, MODAL_BM, MODAL_KEYS, MODAL_ABOUT, MODAL_BAR, MODAL_RESTORE } ModalKind;
-
-// The panel on top, as ui_on_top has it.
-static ModalKind modal_kind(void)
+// The panel on top, as ui_on_top has it (UiOnTop draws them: a copy of it here, UiOnTop, had to
+// follow it by hand; code-health review, 2026-11-03), save a clash question while no job asks.
+static UiOnTop modal_kind(void)
 {
-    switch (ui_on_top(&app.ui)) {   // (ui/'s order, which takes the keys)
-    case UI_ON_FULL: return MODAL_FULL;
-    case UI_ON_QUIT: return MODAL_QUIT;
-    case UI_ON_CANCEL: return MODAL_CANCEL;
-    case UI_ON_DELETE: return MODAL_DELETE;
-    case UI_ON_EMPTY: return MODAL_EMPTY;
-    case UI_ON_CLEAR: return MODAL_CLEAR;
-    case UI_ON_RESTORE: return MODAL_RESTORE;
-    case UI_ON_CLASH: return jobs.asking >= 0 ? MODAL_CLASH : MODAL_NONE;
-    case UI_ON_PROPS: return MODAL_PROPS;
-    case UI_ON_OW: return MODAL_OW;
-    case UI_ON_BM: return MODAL_BM;
-    case UI_ON_KEYS: return MODAL_KEYS;
-    case UI_ON_ABOUT: return MODAL_ABOUT;
-    case UI_ON_BAR: return MODAL_BAR;
-    case UI_ON_NONE: break;
-    }
-    return MODAL_NONE;
+    UiOnTop on = ui_on_top(&app.ui);   // (ui/'s order, which takes the keys)
+    return on == UI_ON_CLASH && jobs.asking < 0 ? UI_ON_NONE : on;
 }
 
 static JobRec *job_by_id(int id)
@@ -57,6 +40,20 @@ static void modal_button(int which, const char *label, bool main_one, bool dange
     }
 }
 
+// A question's row of buttons, at its right (code-health review, 2026-11-03: written out six times).
+#define MODAL_ROW CLAY(CLAY_ID("modal-buttons"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .childGap = 10, \
+                                                                .childAlignment = { .x = CLAY_ALIGN_X_RIGHT }, .padding = { 0, 0, 8, 0 } } })
+
+// A yes-or-no question's: no first, then yes, the one Enter picks, red (each says what can't be
+// undone, or what stops).
+static void modal_yes_no(const char *no, const char *yes)
+{
+    MODAL_ROW {
+        modal_button(UI_MODAL_NO, no, false, false);
+        modal_button(UI_MODAL_YES, yes, true, true);
+    }
+}
+
 // n with its thousands apart: 2,345,678.
 static void props_digits(char *buf, size_t cap, i64 n)
 {
@@ -70,21 +67,21 @@ static void props_digits(char *buf, size_t cap, i64 n)
 }
 
 // The panel itself, in the window's middle over the rest.
-static void layout_modal_panel(ModalKind k)
+static void layout_modal_panel(UiOnTop k)
 {
     Theme *t = &app.theme;
     CLAY(CLAY_ID("modal"), { .layout = { .sizing = { CLAY_SIZING_FIXED(480), CLAY_SIZING_FIT(0) }, .padding = { 24, 24, 20, 20 }, .childGap = 10,
                                          .layoutDirection = CLAY_TOP_TO_BOTTOM },
                              .backgroundColor = cc(t->bg_light),
-                             .border = { .color = k == MODAL_DELETE || k == MODAL_CANCEL || k == MODAL_QUIT || k == MODAL_EMPTY || k == MODAL_CLEAR ? cc(t->red) : cc(t->accent), .width = CLAY_BORDER_OUTSIDE(1) },
+                             .border = { .color = k == UI_ON_DELETE || k == UI_ON_CANCEL || k == UI_ON_QUIT || k == UI_ON_EMPTY || k == UI_ON_CLEAR ? cc(t->red) : cc(t->accent), .width = CLAY_BORDER_OUTSIDE(1) },
                              .floating = { .attachTo = CLAY_ATTACH_TO_ROOT, .zIndex = 20,
                                            .attachPoints = { CLAY_ATTACH_POINT_CENTER_CENTER, CLAY_ATTACH_POINT_CENTER_CENTER } } }) {
-        if (k == MODAL_FULL || k == MODAL_QUIT || k == MODAL_CANCEL) {
+        if (k == UI_ON_FULL || k == UI_ON_QUIT || k == UI_ON_CANCEL) {
             const char *line, *hint;
-            if (k == MODAL_FULL) {
+            if (k == UI_ON_FULL) {
                 line = "No more jobs can be queued right now. Wait until one finishes.";
                 hint = "Enter or Esc closes this";
-            } else if (k == MODAL_QUIT) {
+            } else if (k == UI_ON_QUIT) {
                 line = arena_sprintf(&frame, "%d %s running and %d waiting. Quit and cancel them?", jobs.nrun, jobs.nrun == 1 ? "job is" : "jobs are", jobs.nwait);
                 if (jobs.nwait == 0) line = arena_sprintf(&frame, "%d %s running. Quit and cancel %s?", jobs.nrun, jobs.nrun == 1 ? "job is" : "jobs are", jobs.nrun == 1 ? "it" : "them");
                 hint = "Enter or y quits \xC2\xB7 n or Esc stays";
@@ -100,40 +97,26 @@ static void layout_modal_panel(ModalKind k)
             }
             text(fit(str_from_c(line), 430, false), cc(t->fg));
             text(cz(hint), cc(t->fg_dim));
-            CLAY(CLAY_ID("modal-buttons"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .childGap = 10,
-                                                         .childAlignment = { .x = CLAY_ALIGN_X_RIGHT }, .padding = { 0, 0, 8, 0 } } }) {
-                if (k == MODAL_FULL) {
-                    modal_button(UI_MODAL_OK, "OK", true, false);
-                } else {
-                    modal_button(UI_MODAL_NO, k == MODAL_QUIT ? "Stay" : "Keep going", false, false);
-                    modal_button(UI_MODAL_YES, k == MODAL_QUIT ? "Quit" : "Cancel job", true, true);
-                }
-            }
-        } else if (k == MODAL_RESTORE) {   // (F11 step 3)
+            if (k == UI_ON_FULL) {
+                MODAL_ROW { modal_button(UI_MODAL_OK, "OK", true, false); }
+            } else modal_yes_no(k == UI_ON_QUIT ? "Stay" : "Keep going", k == UI_ON_QUIT ? "Quit" : "Cancel job");
+        } else if (k == UI_ON_RESTORE) {   // (F11 step 3)
             int n = app.ui.restore_n;
             text(cz(n == 1 ? "Bring back the other window?" : arena_sprintf(&frame, "Bring back the other %d windows?", n)), cc(t->fg));
             const char *why = restore.crashed ? (n == 1 ? "ofx didn't close it properly last time." : "ofx didn't close them all properly last time.")
                                               : (n == 1 ? "Close All (Ctrl+Q) closed it, with its tabs." : "Close All (Ctrl+Q) closed them, with their tabs.");
             text(fit(str_from_c(why), 430, false), cc(t->fg_dim));
             text(cz(n == 1 ? "Enter or y brings it back \xC2\xB7 n or Esc forgets it" : "Enter or y brings them back \xC2\xB7 n or Esc forgets them"), cc(t->fg_dim));
-            CLAY(CLAY_ID("modal-buttons"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .childGap = 10,
-                                                         .childAlignment = { .x = CLAY_ALIGN_X_RIGHT }, .padding = { 0, 0, 8, 0 } } }) {
-                modal_button(UI_MODAL_NO, n == 1 ? "Forget it" : "Forget them", false, false);
-                modal_button(UI_MODAL_YES, "Bring back", true, true);
-            }
-        } else if (k == MODAL_EMPTY) {
+            modal_yes_no(n == 1 ? "Forget it" : "Forget them", "Bring back");
+        } else if (k == UI_ON_EMPTY) {
             isize all = app.empty_n;   // (the trash folders' items, counted as it opened: any view)
             text(cz("Empty the trash?"), cc(t->fg));
             text(cz(all < 0 ? "Everything in it is deleted for good." : arena_sprintf(&frame, "All %td %s in it %s deleted for good.", all, items(all), all == 1 ? "is" : "are")),
                  cc(t->fg_dim));
             text(cz("This can't be undone."), cc(t->red));
             text(cz("Enter or y empties it \xC2\xB7 n or Esc cancels"), cc(t->fg_dim));
-            CLAY(CLAY_ID("modal-buttons"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .childGap = 10,
-                                                         .childAlignment = { .x = CLAY_ALIGN_X_RIGHT }, .padding = { 0, 0, 8, 0 } } }) {
-                modal_button(UI_MODAL_NO, "Cancel", false, false);
-                modal_button(UI_MODAL_YES, "Empty Trash", true, true);
-            }
-        } else if (k == MODAL_CLEAR) {   // (F12: Michael's wording, 2026-11-02)
+            modal_yes_no("Cancel", "Empty Trash");
+        } else if (k == UI_ON_CLEAR) {   // (F12: Michael's wording, 2026-11-02)
             char n[32], sz[32];
             props_digits(n, sizeof n, clear.sum.files), ui_size(sz, sizeof sz, clear.sum.bytes);
             text(cz(!clear.counted ? "Delete all previews?" : arena_sprintf(&frame, "Delete all %s %s (%s)?", n, clear.sum.files == 1 ? "preview" : "previews", sz)), cc(t->fg));
@@ -141,12 +124,8 @@ static void layout_modal_panel(ModalKind k)
             CLAY_TEXT(CLAY_STRING("Other programs that use the preview cache (Nautilus, Nemo, GNOME apps) lose theirs too, and make them again as they need them."),
                       { .textColor = cc(t->fg_dim), .fontSize = FONT_PX, .wrapMode = CLAY_TEXT_WRAP_WORDS });
             text(cz("Enter or y deletes \xC2\xB7 n or Esc cancels"), cc(t->fg_dim));
-            CLAY(CLAY_ID("modal-buttons"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .childGap = 10,
-                                                         .childAlignment = { .x = CLAY_ALIGN_X_RIGHT }, .padding = { 0, 0, 8, 0 } } }) {
-                modal_button(UI_MODAL_NO, "Cancel", false, false);
-                modal_button(UI_MODAL_YES, "Delete", true, true);
-            }
-        } else if (k == MODAL_DELETE) {
+            modal_yes_no("Cancel", "Delete");
+        } else if (k == UI_ON_DELETE) {
             text(cz(arena_sprintf(&frame, "Delete %td %s for good?", app.ui.confirm_n, items(app.ui.confirm_n))), cc(t->fg));
             CLAY(CLAY_ID("modal-names"), { .layout = { .layoutDirection = CLAY_TOP_TO_BOTTOM, .childGap = 2, .padding = { 12, 0, 4, 4 } } }) {
                 isize shown = doomed.n > 8 ? 7 : doomed.n;
@@ -155,11 +134,7 @@ static void layout_modal_panel(ModalKind k)
             }
             text(cz("This can't be undone."), cc(t->red));
             text(cz("Enter or y deletes \xC2\xB7 n or Esc cancels"), cc(t->fg_dim));
-            CLAY(CLAY_ID("modal-buttons"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .childGap = 10,
-                                                         .childAlignment = { .x = CLAY_ALIGN_X_RIGHT }, .padding = { 0, 0, 8, 0 } } }) {
-                modal_button(UI_MODAL_NO, "Cancel", false, false);
-                modal_button(UI_MODAL_YES, "Delete", true, true);
-            }
+            modal_yes_no("Cancel", "Delete");
         } else {
             // r->clash is safe to read here without jobs.mu: asking is set only after jobs_poll saw
             // the worker waiting (under the lock), and cleared before job_answer lets it go on.
@@ -178,8 +153,7 @@ static void layout_modal_panel(ModalKind k)
             text(cz(r->clash_dirs ? "s skip \xC2\xB7 r merge \xC2\xB7 k keep both \xC2\xB7 Shift: for the rest \xC2\xB7 Esc cancels"
                                     : "s skip \xC2\xB7 r replace \xC2\xB7 k keep both \xC2\xB7 Shift: for the rest \xC2\xB7 Esc cancels"),
                  cc(t->fg_dim));
-            CLAY(CLAY_ID("modal-buttons"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .childGap = 10,
-                                                         .childAlignment = { .x = CLAY_ALIGN_X_RIGHT }, .padding = { 0, 0, 8, 0 } } }) {
+            MODAL_ROW {
                 modal_button(UI_MODAL_CANCEL, "Cancel", false, false);
                 modal_button(UI_MODAL_SKIP, "Skip", false, false);
                 modal_button(UI_MODAL_KEEP, "Keep both", false, false);
@@ -486,16 +460,16 @@ static void layout_props_panel(void)
 
 // The panel over the window, the rest darkened but still readable (Michael's pick over a blur,
 // 2026-10-21).
-static void layout_modal(ModalKind k, float w, float h)
+static void layout_modal(UiOnTop k, float w, float h)
 {
     CLAY(CLAY_ID("modal-backdrop"), { .layout = { .sizing = { CLAY_SIZING_FIXED(w), CLAY_SIZING_FIXED(h) } },
                                       .backgroundColor = { 0, 0, 0, 150 },
                                       .floating = { .attachTo = CLAY_ATTACH_TO_ROOT, .zIndex = 10 } }) {}
-    if (k == MODAL_PROPS) layout_props_panel();
-    else if (k == MODAL_OW) layout_ow_panel();
-    else if (k == MODAL_BM) layout_bmp_panel();
-    else if (k == MODAL_KEYS) layout_keys_panel();
-    else if (k == MODAL_ABOUT) layout_about_panel();
-    else if (k == MODAL_BAR) layout_bar_panel();
+    if (k == UI_ON_PROPS) layout_props_panel();
+    else if (k == UI_ON_OW) layout_ow_panel();
+    else if (k == UI_ON_BM) layout_bmp_panel();
+    else if (k == UI_ON_KEYS) layout_keys_panel();
+    else if (k == UI_ON_ABOUT) layout_about_panel();
+    else if (k == UI_ON_BAR) layout_bar_panel();
     else layout_modal_panel(k);
 }

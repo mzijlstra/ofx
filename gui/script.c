@@ -201,8 +201,12 @@ static void script_state(char *out, size_t cap)
     }
     for (int r = 0; r < app.ui.list.rows; r++) gitcells += Clay_GetElementData(CLAY_IDI("git-mark", r)).found;
     static const char *const GIT_WORDS[GS_N] = { "-", "ignored", "untracked", "staged", "renamed", "modified", "conflict" };   // (the cursor's, F12)
-    static const char *const MODALS[] = { "-", "delete", "clash", "cancel", "quit", "full", "empty", "clear-previews", "props", "open-with", "bookmarks", "shortcuts", "about", "menubar", "restore" };
-    _Static_assert(sizeof MODALS / sizeof MODALS[0] == MODAL_RESTORE + 1, "a name for each panel");
+    static const char *const MODALS[] = {
+        [UI_ON_NONE] = "-", [UI_ON_DELETE] = "delete", [UI_ON_CLASH] = "clash", [UI_ON_CANCEL] = "cancel", [UI_ON_QUIT] = "quit",
+        [UI_ON_FULL] = "full", [UI_ON_EMPTY] = "empty", [UI_ON_CLEAR] = "clear-previews", [UI_ON_PROPS] = "props", [UI_ON_OW] = "open-with",
+        [UI_ON_BM] = "bookmarks", [UI_ON_KEYS] = "shortcuts", [UI_ON_ABOUT] = "about", [UI_ON_BAR] = "menubar", [UI_ON_RESTORE] = "restore",
+    };
+    _Static_assert(sizeof MODALS / sizeof MODALS[0] == UI_ON_BAR + 1, "a name for each panel");
     // The path buttons' labels, '|' between; the cursor's folder count (- unknown, ? unreadable).
     char crumbs[2048] = "", cnt[32] = "-";
     for (int i = 0; i < app.crumbs.n; i++) {

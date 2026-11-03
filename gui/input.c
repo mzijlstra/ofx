@@ -211,25 +211,25 @@ static Hit hit_at(float x, float y)
     // A menu open: its titles and its entries are all there is to hit (F7.1). The entries first: a
     // long context menu on a low row is moved up over the menu bar, and a press on its top entry
     // opened the title under it (2026-10-29, Open on a bookmark below the drives).
-    if (app.ui.menu_on && modal_kind() == MODAL_NONE)
+    if (app.ui.menu_on && modal_kind() == UI_ON_NONE)
         for (int i = 0; i < UI_MENU[app.ui.menu].n && h.menu_item < 0; i++)
             if (UI_MENU[app.ui.menu].items[i] != UM_SEP && in_box(CLAY_IDI("menu-item", i), x, y)) h.menu_item = i;   // (one not shown has no box)
-    if (modal_kind() == MODAL_NONE)
+    if (modal_kind() == UI_ON_NONE)
         for (int m = 0; m < UI_MENUS && h.menu_title < 0 && h.menu_item < 0; m++)
             if (in_box(CLAY_IDI("menu-title", m), x, y)) h.menu_title = m;
-    if (app.ui.menu_on && modal_kind() == MODAL_NONE) return h;
-    if (modal_kind() != MODAL_NONE) {
+    if (app.ui.menu_on && modal_kind() == UI_ON_NONE) return h;
+    if (modal_kind() != UI_ON_NONE) {
         // A panel is up: its buttons are all there is to hit.
         for (int b = 1; b < COUNT(MODAL_IDS) && !h.modal; b++)
             if (in_box(Clay_GetElementId(cz(MODAL_IDS[b])), x, y)) h.modal = b;
-        for (int k = 0; modal_kind() == MODAL_PROPS && k < 9 && h.prop_box < 0; k++)
+        for (int k = 0; modal_kind() == UI_ON_PROPS && k < 9 && h.prop_box < 0; k++)
             if (in_box(CLAY_IDI("prop-box", k), x, y)) h.prop_box = k;
-        for (int r = 0; modal_kind() == MODAL_OW && r < app.ui.ow_list.rows && h.ow_row < 0; r++)
+        for (int r = 0; modal_kind() == UI_ON_OW && r < app.ui.ow_list.rows && h.ow_row < 0; r++)
             if (in_box(CLAY_IDI("ow-row", r), x, y)) h.ow_row = r;
-        h.ow_field = modal_kind() == MODAL_OW && !h.toggle && in_box(CLAY_ID("ow-field"), x, y);
-        for (int r = 0; modal_kind() == MODAL_BM && r < app.ui.bmp_list.rows && h.bmp_row < 0; r++)
+        h.ow_field = modal_kind() == UI_ON_OW && !h.toggle && in_box(CLAY_ID("ow-field"), x, y);
+        for (int r = 0; modal_kind() == UI_ON_BM && r < app.ui.bmp_list.rows && h.bmp_row < 0; r++)
             if (in_box(CLAY_IDI("bmp-row", r), x, y)) h.bmp_row = r;
-        for (int k = 1; modal_kind() == MODAL_BM && k <= UI_BMP_BTNS && !h.bmp_btn; k++)
+        for (int k = 1; modal_kind() == UI_ON_BM && k <= UI_BMP_BTNS && !h.bmp_btn; k++)
             if (in_box(CLAY_IDI("bmp-btn", k), x, y)) h.bmp_btn = k;
         return h;
     }
@@ -336,7 +336,7 @@ static void right_at(UiInput *in, float x, float y)
         in->menu_away = true;
         return;
     }
-    if (modal_kind() != MODAL_NONE) return;
+    if (modal_kind() != UI_ON_NONE) return;
     app.ctx_x = x, app.ctx_y = y;
     if (h.tab >= 0) in->ctx_tab = h.tab;
     else if (h.row >= 0) in->ctx_row = h.row;
@@ -517,7 +517,8 @@ static bool hover_refresh(bool on, float x, float y)
 static bool hover_at(float x, float y)
 {
     Hit h = hit_at(x, y), o = app.hov;
-    // (what is drawn lit; a menu's entries are ui_menu_hover's)
+    // (what is drawn lit; a menu's entries are ui_menu_hover's). Every field of Hit that is drawn
+    // lit belongs here: a new one too (the F11 review found one missing).
     bool changed = h.row != o.row || h.side != o.side || h.bar != o.bar || h.crumb != o.crumb || h.tab != o.tab || h.tab_x != o.tab_x ||
                    h.mode != o.mode || h.eject != o.eject || h.modal != o.modal || h.job_x != o.job_x || h.zoom != o.zoom ||
                    h.menu_title != o.menu_title || h.bmp_btn != o.bmp_btn || h.find_x != o.find_x || h.find_step != o.find_step ||

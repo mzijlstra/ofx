@@ -19,6 +19,14 @@ static void bmp_refresh(int at)
     ui_set(&app.ui.bmp_list, bmarks.n, at < 0 ? 0 : at >= bmarks.n ? bmarks.n - 1 : at);
 }
 
+// The file changed since the list was shown (its line is elsewhere or gone): the list as it is
+// now, and said.
+static void bm_changed(int i)
+{
+    places_reload(), bmp_refresh(i);
+    set_status(true, "The bookmarks changed meanwhile: here they are as they are now");
+}
+
 // A change asked for line i of the list shown: the file read again, the line found there, op done
 // (UA_BM_REMOVE, UP, DOWN, RENAME), written; the cursor follows the line.
 static void bmp_change(UiActionKind op, int i)
@@ -38,8 +46,7 @@ static void bmp_change(UiActionKind op, int i)
     }
     int j = bm_locate(&now, &bmarks, i);
     if (j < 0) {
-        places_reload(), bmp_refresh(i);
-        set_status(true, "The bookmarks changed meanwhile: here they are as they are now");
+        bm_changed(i);
         return;
     }
     int k = bmarks.n == 0 ? 0 : i;   // the line the cursor stays on, in the list shown
@@ -48,8 +55,7 @@ static void bmp_change(UiActionKind op, int i)
     if (op == UA_BM_UP || op == UA_BM_DOWN) {
         int other = bm_locate(&now, &bmarks, op == UA_BM_UP ? i - 1 : i + 1);
         if (other < 0) {
-            places_reload(), bmp_refresh(i);
-            set_status(true, "The bookmarks changed meanwhile: here they are as they are now");
+            bm_changed(i);
             return;
         }
         bm_swap(&now, j, other);

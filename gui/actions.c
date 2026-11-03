@@ -756,22 +756,11 @@ static void act(UiAction a)
         state_key("sidebar", SIDE_MODE_NAMES[app.ui.side_mode]);
         break;
     }
-    case UA_COLORS: {   // remembered, the one key (as UA_VIEW)
-        state_key("colors", app.ui.colors ? "on" : "off");
-        break;
-    }
-    case UA_MENUBAR: {   // remembered, the one key (as UA_VIEW)
-        state_key("menubar", app.ui.bar_hidden ? "off" : "on");
-        break;
-    }
-    case UA_PERMS_COLS: {   // remembered, the one key (as UA_VIEW)
-        state_key("perms", app.ui.perms_cols ? "on" : "off");
-        break;
-    }
-    case UA_GROUP_COL: {
-        state_key("group", app.ui.group_col ? "on" : "off");
-        break;
-    }
+    // View's toggles: each remembered, its one key (as UA_VIEW).
+    case UA_COLORS: state_key("colors", app.ui.colors ? "on" : "off"); break;
+    case UA_MENUBAR: state_key("menubar", app.ui.bar_hidden ? "off" : "on"); break;
+    case UA_PERMS_COLS: state_key("perms", app.ui.perms_cols ? "on" : "off"); break;
+    case UA_GROUP_COL: state_key("group", app.ui.group_col ? "on" : "off"); break;
     case UA_ZOOM:     // F6.3: as the view, the cursor kept on its row at the refit (ui_refit)
     case UA_VIEW: {   // F6.2: remembered; the loop lays it out before the next frame
         if (a.kind == UA_ZOOM) app.zoomed = true;

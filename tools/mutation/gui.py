@@ -63,7 +63,7 @@ MUTANTS = [
     # F4
     ('gui/actions.c', "    if (i + 1 < c->n) snprintf(below, sizeof below, \"%.*s\", STR_ARG(ui_crumb_label(c, i + 1)));", ""),
     ('gui/folder.c', "    // The counts are by row too: asked again in the new order.\n    for (isize i = 0; i < app.list.n; i++) app.count[i] = COUNT_UNKNOWN;", "    // The counts are by row too: asked again in the new order."),
-    (G, "        if (app.have_list && count_take(app.count, app.list.n)) dirty = true;", ""),
+    ('gui/main.c', '    if (app.have_list && count_take(app.count, app.list.n)) dirty = true;', ''),
     ('gui/actions.c', '    if (!S_ISDIR(st.st_mode)) {\n        select = path_base', '    if (0) {\n        select = path_base'),
     ('gui/input.c', "        if (in_box(CLAY_IDI(\"crumb\", i), x, y)) h.bar = UB_CRUMB, h.crumb = i;", ""),
     # Not run: the cursor's row drawing an edit box while the location line is open
@@ -127,7 +127,6 @@ MUTANTS = [
     (J, "        jobline_sample(&r->line, now,", "        if (0) jobline_sample(&r->line, now,"),
     ('gui/input.c', "        if (in_box(CLAY_IDI(\"job-x\", i), x, y)) h.job_x = i;", ""),
     ('gui/input.c', "    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_J) return UK_JOBS;\n", ""),
-    ('gui/panels.c', "    case UI_ON_CANCEL: return MODAL_CANCEL;\n", ""),
     (G, "        for (int k = 0; k < jobs.nrun; k++) in.job_id[k] = job_recs[jobs.run[k]].id;", ""),
     # F5.3 review fixes. Not run: the refusals in rename, new folder and undo (the same
     # jobs_refuse as trash's), and the timed join at quit (it needs a worker stuck in a hung mount).
@@ -139,7 +138,7 @@ MUTANTS = [
     (G, "    app.theme = theme_load(&scratch);\n    icons_reset();", "    app.theme = theme_load(&scratch);"),
     # F6
     (W, "        if (watch.mount_wd >= 0 && e->wd == watch.mount_wd) *mounts = true;\n", ""),
-    (G, "        if (atomic_exchange(&watch.mounts_ready, false)) places_reload(), trash_state(), dirty = true;\n", ""),
+    ('gui/main.c', '    if (atomic_exchange(&watch.mounts_ready, false)) places_reload(), trash_state(), dirty = true;\n', ''),
     ('gui/actions.c', '        if (app.ui.view == UI_VIEW_TRASH && str_eq(path_base(files), S("files")))\n            r->item[k++]', '        if (0)\n            r->item[k++]'),
     ('gui/actions.c', "        job_submit(r, JOB_DELETE, k);\n        r->trash = JOB_TRASH_EMPTY;", "        r->trash = JOB_TRASH_EMPTY;"),
     ('gui/actions.c', "    case UA_RESTORE: trash_restore_targets(); break;\n", ""),
@@ -152,14 +151,14 @@ MUTANTS = [
     ('gui/folder.c', "    if (kind_is_dir(e->kind) && e->trash) {", "    if (0) {"),
     ('gui/folder.c', "    if (app.ui.side_mode == SIDE_PLACES && app.ui.side.sel < app.places.n) keep = app.places.p[app.ui.side.sel];", "    if (app.places.n) keep = app.places.p[app.ui.side.sel];"),
     # F6 review
-    (G, "        if (space_take(&app.places, app.cwd, &app.cwd_avail)) dirty = true;", ""),
+    ('gui/main.c', '    if (space_take(&app.places, app.cwd, &app.cwd_avail)) dirty = true;', ''),
     ('gui/folder.c', "    space_ask(&app.places, app.cwd);\n    return true;", "    return true;"),
     ('gui/actions.c', ".src = arena_cstr(&r->arena, str_from_c(doomed_all[at + i].path)), .after_ok = doomed_all[at + i].after_ok };", ".src = arena_cstr(&r->arena, str_from_c(doomed_all[at + i].path)) };"),
     # F6.1
     ('gui/files.c', "            if (drive) ui_size(avail, sizeof avail, hover ? p->size - p->avail : p->avail);", "            if (drive) ui_size(avail, sizeof avail, p->avail);"),
     ('gui/files.c', "                if (hover && place_ejectable(p)) {", "                if (0) {"),
     ('gui/input.c', "    if (h.side >= 0 && app.ui.side_mode == SIDE_PLACES && in_box(CLAY_IDI(\"side-eject\", h.side), x, y)) h.eject = h.side;", ""),
-    (G, "        if (eject_take()) dirty = true;", ""),
+    ('gui/main.c', '    if (eject_take()) dirty = true;', ''),
     ('gui/eject.c', "    if (op != DRIVE_MOUNT && jobs_refuse(p->path)) return false;   // a job of ours writes there: it says so", ""),
     (G, "    if (chdir(\"/\") != 0) fprintf(stderr, \"ofx: chdir /: %s\\n\", strerror(errno));", ""),
     # F6.2: the icon view
@@ -229,7 +228,7 @@ MUTANTS = [
     ('gui/files.c', "        Texture2D *th = entry_thumb(i, true);", "        Texture2D *th = NULL;"),
     ('gui/files.c', "CLAY_SIZING_FIXED(th->width / s), CLAY_SIZING_FIXED(th->height / s)", "CLAY_SIZING_FIXED(px), CLAY_SIZING_FIXED(px)"),
     # ---- F7.1: the menu bar, New Window, Create New Empty File, Close All Windows
-    ('gui/input.c', "    if (app.ui.menu_on && modal_kind() == MODAL_NONE) return h;\n", "", 'f7'),
+    ('gui/input.c', '    if (app.ui.menu_on && modal_kind() == UI_ON_NONE) return h;\n', '', 'f7'),
     ('gui/input.c', "        in->menu_away = h.menu_title < 0 && h.menu_item < 0;", "        in->menu_away = false;", 'f7'),
     ('gui/input.c', "    changed |= ui_menu_hover(&app.ui, h.menu_title, h.menu_item);", "", 'f7'),
     ('gui/input.c', '    app.hov = h;\n', '', 'f7'),
@@ -275,7 +274,6 @@ MUTANTS = [
     ('gui/panels.c', '    props_read();\n    set_status(false,', '    set_status(false,', 'f72'),
     ('gui/input.c', '            if (in_box(CLAY_IDI("prop-box", k), x, y)) h.prop_box = k;', '', 'f72'),
     ('gui/input.c', '    in->prop_box = h.prop_box;\n', '', 'f72'),
-    ('gui/panels.c', '    case UI_ON_PROPS: return MODAL_PROPS;\n', '', 'f72'),
     ('gui/actions.c', '    case UA_CHMOD: props_chmod((int)a.index); break;', '', 'f72'),
     ('gui/input.c', '    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_I) return UK_PROPERTIES;', '', 'f72'),
     ('gui/input.c', '    if (m == GLFW_MOD_ALT && (key == GLFW_KEY_ENTER || key == GLFW_KEY_KP_ENTER)) return UK_TERMINAL;', '', 'f72'),
@@ -299,9 +297,8 @@ MUTANTS = [
     ('gui/actions.c', '    case UA_OPEN: a.all ? open_marked() : open_entry(a.index); break;', '    case UA_OPEN: open_entry(a.index); break;', 'f73'),
     ('gui/actions.c', '    case UA_OPEN_WITH: ow_open(); break;', '', 'f73'),
     ('gui/actions.c', '    case UA_LAUNCH: ow_launch(a.index, a.all); break;', '', 'f73'),
-    ('gui/panels.c', '    case UI_ON_OW: return MODAL_OW;\n', '', 'f73'),
     ('gui/input.c', '            if (in_box(CLAY_IDI("ow-row", r), x, y)) h.ow_row = r;', '', 'f73'),
-    ('gui/input.c', '        h.ow_field = modal_kind() == MODAL_OW && !h.toggle && in_box(CLAY_ID("ow-field"), x, y);', '', 'f73'),
+    ('gui/input.c', '        h.ow_field = modal_kind() == UI_ON_OW && !h.toggle && in_box(CLAY_ID("ow-field"), x, y);', '', 'f73'),
     ('gui/input.c', '        if (in_box(CLAY_IDI("toggle", k), x, y)) h.toggle = k;', '', 'f73'),
     ('gui/input.c', '        if (ui_press(&app.panel_press, app.ui.ow_list.top + h.ow_row, now_ms()) == 2) in->ow_drow = h.ow_row;', '        if (false) in->ow_drow = h.ow_row;', 'f73'),
     ('gui/input.c', '    in->toggle = h.toggle;\n', '', 'f73'),
@@ -375,7 +372,6 @@ MUTANTS = [
     ('gui/actions.c', '    case UA_BM_EDIT: case UA_BM_GO: case UA_BM_NAME: case UA_BM_REMOVE: case UA_BM_UP: case UA_BM_DOWN: case UA_BM_RENAME: bmp_act(a); break;', '', 'f75'),
     ('gui/frame.c', '        if (u->bm_more++ == 0) u->bm_more_at = i;', '        u->bm_more++;', 'f75'),
     ('gui/frame.c', '        if (!bmarks.b[i].path[0] || local++ < UI_MENU_BOOKMARKS) continue;', '        if (local++ < UI_MENU_BOOKMARKS) continue;', 'f75'),
-    ('gui/panels.c', '    case UI_ON_BM: return MODAL_BM;\n', '', 'f75'),
     ('gui/input.c', '            if (in_box(CLAY_IDI("bmp-row", r), x, y)) h.bmp_row = r;', '', 'f75'),
     ('gui/input.c', '        if (ui_press(&app.panel_press, app.ui.bmp_list.top + h.bmp_row, now_ms()) == 2) in->bmp_drow = h.bmp_row;', '        if (false) in->bmp_drow = h.bmp_row;', 'f75'),
     ('gui/input.c', '    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_B) return UK_EDIT_BOOKMARKS;', '', 'f75'),
@@ -387,14 +383,12 @@ MUTANTS = [
     # Not run: bmp_change's bm_read refusal (with the file unreadable the panel lists no line to act
     # on) and the empty-format refusals (an over-a-MiB file); test_f75.c covers bm_read and bm_format.
     # ---- F7.5: Keyboard Shortcuts
-    ('gui/panels.c', '    case UI_ON_KEYS: return MODAL_KEYS;\n', '', 'f75'),
     ('gui/input.c', '    if ((m == 0 || m == GLFW_MOD_CONTROL) && key == GLFW_KEY_F1) return UK_SHORTCUTS;', '    if (m == 0 && key == GLFW_KEY_F1) return UK_SHORTCUTS;', 'f75'),
     ('gui/input.c', '    if (app.ui.panel == UI_PANEL_OW || app.ui.panel == UI_PANEL_KEYS) return in->ow_wheel = notches, false;', '    if (app.ui.panel == UI_PANEL_OW) return in->ow_wheel = notches, false;', 'f75'),
     ('gui/files.c', '    ui_resize(&app.ui.keys_list, keys_rows(GetScreenHeight()));   // Keyboard Shortcuts\'', '', 'f75'),
     # Left out: the panel's drawing (pixels); shortcuts.png shows it.
     # ---- Help → About (2026-10-27); its drawing left out (pixels), about.png shows it
-    ('gui/panels.c', '    case UI_ON_ABOUT: return MODAL_ABOUT;\n', '', 'f75'),
-    ('gui/panels.c', '    else if (k == MODAL_ABOUT) layout_about_panel();', '', 'f75'),
+    ('gui/panels.c', '    else if (k == UI_ON_ABOUT) layout_about_panel();', '', 'f75'),
     # ---- F8 step 1: the files' right-click menus. Not run: input_real's right button (scripts press
     # through right_at), the footer's hint (pixels); ctx-entry.png, ctx-key.png, ctx-here.png show them.
     # Nor ctx_place's menu above the cursor's row: f8's four rows leave room under the last.
@@ -409,7 +403,7 @@ MUTANTS = [
     ('gui/input.c', '        if (y + sz.y > h) y -= sz.y;', '', 'f8'),
     ('gui/input.c', '    if (x + sz.x > w) x = w - sz.x;\n    if (y + sz.y > h) y = h - sz.y;', '', 'f8'),
     ('gui/input.c', '            y = r.boundingBox.y + r.boundingBox.height;', '            y = r.boundingBox.y;', 'f8'),
-    (G, '        if (ctx_up && !app.ctx_placed) ctx_place();', '', 'f8'),
+    ('gui/main.c', '    if (ctx_up && !app.ctx_placed) ctx_place();', '', 'f8'),
     ('gui/actions.c', 'props_open(a.index == UI_PROPS_HERE ? app.cwd : a.index == UI_PROPS_CTX ? app.ctx_path : NULL)', 'props_open(a.index == UI_PROPS_CTX ? app.ctx_path : NULL)', 'f8'),
     ('gui/panels.c', '    if (!here && app.have_list && app.list.n > 0 && n == 1)', '    if (app.have_list && app.list.n > 0 && n == 1)', 'f8'),
     # ---- F8 step 2: a folder's own entries, Make Link, Follow Link. Not run: make_link's messages
@@ -436,7 +430,7 @@ MUTANTS = [
     # ctx-bookmark.png shows it), Eject (f8c has no removable drive; F6's eject_start is f6's).
     ('gui/input.c', '    else if (h.side >= 0) in->ctx_side = h.side;', '', 'f8'),
     ('gui/input.c', '    else if (h.bar == UB_CRUMB) in->ctx_crumb = h.crumb;', '', 'f8'),
-    (G, '        if (ctx_up && !app.ctx_placed && app.ui.menu == UI_CTX_FOLDER) ctx_facts();', '', 'f8'),
+    ('gui/main.c', '    if (ctx_up && !app.ctx_placed && app.ui.menu == UI_CTX_FOLDER) ctx_facts();', '', 'f8'),
     ('gui/input.c', '    u->ctx_trash = strcmp(app.ctx_path, TRASH_URI) == 0;', '    u->ctx_trash = false;', 'f8'),
     ('gui/input.c', '    u->ctx_full = u->ctx_trash && (trash_state(), app.trash_full);', '    u->ctx_full = u->ctx_trash;', 'f8'),
     ('gui/folder.c', ' < (int)sizeof files && !dir_empty(files)) return true;', ' < (int)sizeof files) return true;', 'f8'),
@@ -460,18 +454,18 @@ MUTANTS = [
     # its folder takes no new files (f8c sees it open on one that does; ui/'s test sees it greyed)
     ('gui/folder.c', '    if (app.ui.menu_on && app.ui.menu == UI_CTX_FOLDER && app.ui.ctx_crumb < 0) app.ui.menu_on = false;', '', 'f8'),
     ('gui/input.c', '    u->ctx_w = app.ctx_path[0] && access(app.ctx_path, W_OK) == 0;', '    u->ctx_w = false;', 'f8'),
-    (G, '            app.ui.ctx_w = app.ui.ctx_dir && app.ui.list.sel < app.list.n && entry_path(app.ui.list.sel, e, sizeof e) && access(e, W_OK) == 0;', '            app.ui.ctx_w = false;', 'f8'),
+    ('gui/main.c', '        app.ui.ctx_w = app.ui.ctx_dir && app.ui.list.sel < app.list.n && entry_path(app.ui.list.sel, e, sizeof e) && access(e, W_OK) == 0;', '        app.ui.ctx_w = false;', 'f8'),
     # ---- the list's Owner, Group, Permissions and links' targets (2026-10-27). Not run: the cells
     # and the target drawn (pixels: f8b's list-columns.png, list-no-perms.png show them)
     (G, '        app.ui.side_mode = st.side, app.ui.perms_cols = !st.no_perms,', '        app.ui.side_mode = st.side, app.ui.perms_cols = true,', 'f8'),
-    ('gui/actions.c', '        state_key("perms", app.ui.perms_cols ? "on" : "off");', '        state_key("perms", "on");', 'f8'),
+    ('gui/actions.c', 'state_key("perms", app.ui.perms_cols ? "on" : "off");', 'state_key("perms", "on");', 'f8'),
     # ---- the three columns give way to a Name under 200 px (2026-10-27)
     ('gui/files.c', '    return app.ui.perms_cols && rest - perms_w() >= NAME_MIN_W;', '    return app.ui.perms_cols;', 'f8'),
     ('gui/files.c', '    return app.ui.perms_cols && rest - perms_w() >= NAME_MIN_W;', '    return rest - perms_w() >= NAME_MIN_W;', 'f8'),
     # ---- View → Show Colors and the note (2026-10-27). Not run: the colours drawn (pixels:
     # f8e's list-plain.png, f8b's list-columns.png)
     (G, '        app.ui.colors = !st.no_colors,', '        app.ui.colors = true,', 'f8'),
-    ('gui/actions.c', '        state_key("colors", app.ui.colors ? "on" : "off");', '        state_key("colors", "on");', 'f8'),
+    ('gui/actions.c', 'state_key("colors", app.ui.colors ? "on" : "off");', 'state_key("colors", "on");', 'f8'),
     ('gui/footer.c', '                  .cramped = app.ui.perms_cols && !app.ui.grid && !perms_shown((float)GetScreenWidth()),', '                  .cramped = false,', 'f8'),
     ('gui/footer.c', '                  .cramped = app.ui.perms_cols && !app.ui.grid && !perms_shown((float)GetScreenWidth()),', '                  .cramped = !perms_shown((float)GetScreenWidth()),', 'f8'),
     # ---- View → Show Menu (2026-10-27). Not run: the note's drawing and footer hint (pixels:
@@ -479,12 +473,11 @@ MUTANTS = [
     (G, '    return !app.ui.bar_hidden || (app.ui.menu_on && app.ui.menu < UI_MENUS);', '    return !app.ui.bar_hidden;', 'f8'),
     (G, '    return !app.ui.bar_hidden || (app.ui.menu_on && app.ui.menu < UI_MENUS);', '    return true;', 'f8'),
     (G, ', app.ui.perms_cols = !st.no_perms, app.ui.bar_hidden = st.no_bar,', ', app.ui.perms_cols = !st.no_perms,', 'f8'),
-    ('gui/actions.c', '        state_key("menubar", app.ui.bar_hidden ? "off" : "on");', '        state_key("menubar", "on");', 'f8'),
-    ('gui/panels.c', '    case UI_ON_BAR: return MODAL_BAR;\n', '', 'f8'),
+    ('gui/actions.c', 'state_key("menubar", app.ui.bar_hidden ? "off" : "on");', 'state_key("menubar", "on");', 'f8'),
     # ---- View → Show Group, Ctrl+P, Ctrl+G (2026-10-27). Not run: the key chords' GLFW mapping
     # (scripts send ui/'s keys); the cells drawn (pixels: f8b's list-group.png)
     (G, '        app.ui.colors = !st.no_colors, app.ui.group_col = st.group, app.show_hidden = st.hidden;', '        app.ui.colors = !st.no_colors, app.show_hidden = st.hidden;', 'f8'),
-    ('gui/actions.c', '        state_key("group", app.ui.group_col ? "on" : "off");', '        state_key("group", "on");', 'f8'),
+    ('gui/actions.c', 'state_key("group", app.ui.group_col ? "on" : "off");', 'state_key("group", "on");', 'f8'),
     ('gui/files.c', '    return app.ui.group_col ? 3 * GAP + OWNER_W + GROUP_W + PERM_W : 2 * GAP + OWNER_W + PERM_W;', '    return 3 * GAP + OWNER_W + GROUP_W + PERM_W;', 'f8'),
     ('gui/files.c', '            if (k == 1 && !app.ui.group_col) continue;', '', 'f8'),
     ('gui/files.c', '            if (app.ui.group_col) info_cell(CLAY_IDI("group", r)', '            info_cell(CLAY_IDI("group", r)', 'f8'),
@@ -507,21 +500,25 @@ MUTANTS = [
     ('gui/git.c', '    int n = s->head[0] ? snprintf(buf, sizeof buf, "%s", s->head) : snprintf(buf, sizeof buf, "%.7s", s->oid);', '    int n = snprintf(buf, sizeof buf, "%s", s->head);', 'f12h'),
     ('gui/git.c', '    if (s->has_ab && s->ahead) n += snprintf(', '    if (false) n += snprintf(', 'f12h'),
     ('gui/git.c', '    if (s->has_ab && s->behind) snprintf(', '    if (false) snprintf(', 'f12h'),
-    ('gui/main.c', '        if (ctx_up && !app.ctx_placed && app.ui.menu == UI_CTX_BRANCH) git_ask_branches(), menu_facts();', '        if (ctx_up && !app.ctx_placed && app.ui.menu == UI_CTX_BRANCH) menu_facts();', 'f12h'),
+    ('gui/main.c', '    if (ctx_up && !app.ctx_placed && app.ui.menu == UI_CTX_BRANCH) git_ask_branches(), menu_facts();', '    if (ctx_up && !app.ctx_placed && app.ui.menu == UI_CTX_BRANCH) menu_facts();', 'f12h'),
     ('gui/input.c', '    if (br.found) {   // under the branch button, its left edge (F12 step 5b)', '    if (false) {   // under the branch button, its left edge (F12 step 5b)', 'f12h'),
     ('gui/topbar.c', '            else layout_crumbs(branch ? room - bw - BAR_GAP : room);', '            else layout_crumbs(room);', 'f12h'),
     ('gui/actions.c', '        if (a.index >= 0 && a.index < git.br.n && a.index != git.br.cur && git_ask_switch(', '        if (a.index >= 0 && a.index < git.br.n && git_ask_switch(', 'f12h'),
     ('gui/input.c', '    return ui_due_min(d, COUNT(d));', '    return ui_due_min(d, COUNT(d) - 1);', 'f12g'),
+    # F12 code-health step 5 (J): watch_release, modal_kind
+    ('gui/watch.c', '    if (wd > 0 && !watch_fixed(wd) && !watch_is_trash(wd) && wd != atomic_load(&watch.dir_wd)) inotify_rm_watch(watch.fd, wd);', '    if (wd > 0 && !watch_is_trash(wd) && wd != atomic_load(&watch.dir_wd)) inotify_rm_watch(watch.fd, wd);', 'f10'),
+    ('gui/watch.c', '    if (wd > 0 && !watch_fixed(wd) && !watch_is_trash(wd) && wd != atomic_load(&watch.dir_wd)) inotify_rm_watch(watch.fd, wd);', '    if (wd > 0 && !watch_fixed(wd) && wd != atomic_load(&watch.dir_wd)) inotify_rm_watch(watch.fd, wd);', 'f6'),
+    ('gui/watch.c', '    if (wd > 0 && !watch_fixed(wd) && !watch_is_trash(wd) && wd != atomic_load(&watch.dir_wd)) inotify_rm_watch(watch.fd, wd);', '    if (wd > 0 && !watch_fixed(wd) && !watch_is_trash(wd)) inotify_rm_watch(watch.fd, wd);', 'f6'),
     # F12 code-health step 3: the .git watch off the folder view, a switch's own folder
     ('gui/git.c', '    bool asked = dir && app.conf.git_status && git.started;', '    bool asked = dir && git.started;', 'f12g'),
     ('gui/git.c', '    if (!asked) watch_git(NULL);', '    (void)asked;', 'f12g'),
     ('gui/actions.c', '    if (app.ui.view == UI_VIEW_FOLDER && strcmp(app.cwd, asked) == 0) reload();', '    if (false) reload();', 'f12h'),
-    ('gui/main.c', '        if (atomic_exchange(&watch.git_ready, false) && app.ui.view == UI_VIEW_FOLDER) git_ask_soon();', '        if (false) git_ask_soon();', 'f12g'),
+    ('gui/main.c', '    if (atomic_exchange(&watch.git_ready, false) && app.ui.view == UI_VIEW_FOLDER) git_ask_soon();', '    if (false) git_ask_soon();', 'f12g'),
     ('gui/actions.c', '    case UA_READ_ONLY: set_status(true,', '    case UA_READ_ONLY: set_status(false,', 'f7'),
     # F12 step 5c: switching from the menu
     ('gui/actions.c', '    if (got == GSW_REFUSED) return set_status(true,', '    if (got == GSW_REFUSED) return set_status(false,', 'f12h'),
     ('gui/actions.c', '    if (strcmp(was, app.cwd) != 0) snprintf(gone,', '    if (false) snprintf(gone,', 'f12h'),
-    ('gui/main.c', '        if (branch_switched()) dirty = true;\n', '', 'f12h'),
+    ('gui/main.c', '    if (branch_switched()) dirty = true;\n', '', 'f12h'),
     ('gui/actions.c', '    if (got == GSW_GOING) return set_status(false,', '    if (got == GSW_GOING) return set_status(true,', 'f12h'),
     ('gui/actions.c', 'set_status(false, "Switched to %s%s%s%s%s", name, gone, msg[0] ? " (" : "", msg, msg[0] ? ")" : "");', 'set_status(false, "Switched to %s%s", name, gone);', 'f12h'),
     ('gui/git.c', '        if (git.sw_asked) {   // a switch first: it was picked', '        if (false) {   // a switch first: it was picked', 'f12h'),
@@ -596,8 +593,8 @@ MUTANTS = [
     ('gui/actions.c', '    case UA_NOT_IN_SEARCH: set_status(true, "A search isn\'t a folder: that works in one"); break;', '    case UA_NOT_IN_SEARCH: break;', 'f9'),
     ('gui/input.c', '    [UI_FIELD_SEARCH] = { "search-field", TOGGLE_SEARCH },', '    [UI_FIELD_SEARCH] = { "search-field", 0 },', 'f9'),
     ('gui/input.c', '    [UI_FIELD_SEARCH] = { "search-field", TOGGLE_SEARCH },', '    [UI_FIELD_SEARCH] = { "inside-field", TOGGLE_SEARCH },', 'f9'),
-    ('gui/main.c', '        if (app.ui.view == UI_VIEW_SEARCH && search_take()) search_relist(), dirty = true;', '', 'f9'),
-    (G, '        if (app.search_due && now_ms() >= app.search_due) app.search_due = 0, search_retype(), dirty = true;', '        if (app.search_due) app.search_due = 0, search_retype(), dirty = true;', 'f9'),
+    ('gui/main.c', '    if (app.ui.view == UI_VIEW_SEARCH && search_take()) search_relist(), dirty = true;', '', 'f9'),
+    ('gui/main.c', '    if (app.search_due && now_ms() >= app.search_due) app.search_due = 0, search_retype(), dirty = true;', '    if (app.search_due) app.search_due = 0, search_retype(), dirty = true;', 'f9'),
     ('gui/frame.c', '        if (app.ui.view == UI_VIEW_SEARCH) layout_search_bar();', '', 'f9'),
     ('gui/footer.c', '    else snprintf(buf, cap, "%td found%s%s%s", app.list.n, read, sep, skipped);', '    else snprintf(buf, cap, "%td found", app.list.n);', 'f9'),
     ('gui/folder.c', '    if (app.ui.view == UI_VIEW_SEARCH) {   // the folder searched (F9)\n        go_to(app.search_root, STR_EMPTY, 0);\n        return;\n    }', '', 'f9'),
@@ -678,8 +675,8 @@ MUTANTS = [
     # script matches only as statusbad), and prefs_open's spawn_open fallback (a script always has
     # the fake nvim recipe).
     ('gui/main.c', '    conf_apply();   // (F10', '    // (F10', 'f10'),
-    ('gui/main.c', '        if (atomic_exchange(&watch.conf_ready, false)) conf_apply(), reload(), dirty = true;', '        if (atomic_exchange(&watch.conf_ready, false)) dirty = true;', 'f10'),
-    ('gui/main.c', '        if (atomic_exchange(&watch.conf_ready, false)) conf_apply(), reload(), dirty = true;', '        if (atomic_exchange(&watch.conf_ready, false)) conf_apply(), dirty = true;', 'f10'),
+    ('gui/main.c', '    if (atomic_exchange(&watch.conf_ready, false)) conf_apply(), reload(), dirty = true;', '    if (atomic_exchange(&watch.conf_ready, false)) dirty = true;', 'f10'),
+    ('gui/main.c', '    if (atomic_exchange(&watch.conf_ready, false)) conf_apply(), reload(), dirty = true;', '    if (atomic_exchange(&watch.conf_ready, false)) conf_apply(), dirty = true;', 'f10'),
     ('gui/watch.c', '        if (e->wd == atomic_load(&watch.conf_wd) && e->len && strcmp(e->name, "ofx.conf") == 0) *conf = true;', '', 'f10'),
     ('gui/watch.c', '    watch_bookmarks();\n    watch_conf();', '    watch_bookmarks();', 'f10'),
     ('gui/watch.c', '    watch_file_dir(&watch.conf_wd, conf_path(file, sizeof file) ? file : NULL);', '', 'f10'),
@@ -780,7 +777,7 @@ MUTANTS = [
     ('gui/files.c', '    if (app.conf.date == DATE_SHORT) return DATE_W;\n    static', '    return DATE_W;\n    static', 'f10'),
     ('gui/files.c', '    for (int k = 0; k < COUNT(WIDE); k++) {', '    for (int k = 0; k < 1; k++) {', 'f10'),
     ('gui/actions.c', '    case UA_PREFERENCES: prefs_open(); break;\n', '', 'f10'),
-    ('gui/main.c', '        if (atomic_exchange(&watch.mounts_ready, false)) places_reload(), trash_state(), dirty = true;\n        if (app.drive_gone) {', '        if (atomic_exchange(&watch.list_ready, false)) reload(), dirty = true;\n        if (atomic_exchange(&watch.mounts_ready, false)) places_reload(), trash_state(), dirty = true;\n        if (app.drive_gone) {', 'usb'),
+    ('gui/main.c', '    if (atomic_exchange(&watch.mounts_ready, false)) places_reload(), trash_state(), dirty = true;\n    if (app.drive_gone) {', '    if (atomic_exchange(&watch.list_ready, false)) reload(), dirty = true;\n    if (atomic_exchange(&watch.mounts_ready, false)) places_reload(), trash_state(), dirty = true;\n    if (app.drive_gone) {', 'usb'),
     ('gui/eject.c', '        else if (go_to(at, STR_EMPTY, 0)) set_status(false, "Mounted %s", ej.label);', '        else set_status(false, "Mounted %s", ej.label);', 'usb'),
     ('gui/eject.c', '        if (!mounted) set_status(true, "Can\'t mount %s: %s"', '        if (false) set_status(true, "Can\'t mount %s: %s"', 'usb'),
     ('gui/script.c', ' : p->kind == PL_UNMOUNTED ? "~" : ""', ' : ""', 'usb'),
@@ -857,16 +854,12 @@ MUTANTS = [
     # script starts with an empty trash), and after a job (the trash folder's watch sees what a
     # job does there as well).
     ('gui/icons.c', 'place_icon_names(&app.places.p[i], &app.user_dirs, app.trash_full, names);', 'place_icon_names(&app.places.p[i], &app.user_dirs, false, names);', 'f6'),
-    ('gui/main.c', '        if (atomic_exchange(&watch.trash_ready, false) && trash_state()) dirty = true;\n', '', 'f6'),
+    ('gui/main.c', '    if (atomic_exchange(&watch.trash_ready, false) && trash_state()) dirty = true;\n', '', 'f6'),
     ('gui/main.c', 'places_reload(), trash_state(), dirty = true;', 'places_reload(), dirty = true;', 'f6'),
     ('gui/watch.c', '        if (!(e->mask & IN_IGNORED) && watch_is_trash(e->wd)) *trash = true;\n', '', 'f6'),
-    ('gui/watch.c', '    if (old >= 0 && !watch_fixed(old) && !watch_is_trash(old)) inotify_rm_watch', '    if (old >= 0 && !watch_fixed(old)) inotify_rm_watch', 'f6'),
-    ('gui/watch.c', '    if (old >= 0 && !watch_fixed(old) && !watch_is_trash(old)) inotify_rm_watch', '    if (old >= 0 && !watch_is_trash(old)) inotify_rm_watch', 'f10'),
     ('gui/folder.c', '    for (int k = 0; read && k < nwas; k++) {', '    for (int k = 0; k < nwas; k++) {', 'usb'),
-    ('gui/watch.c', '        if (old[i] > 0 && !kept && old[i] != atomic_load(&watch.dir_wd) && !watch_fixed(old[i])) inotify_rm_watch(watch.fd, old[i]);', '        if (old[i] > 0 && !kept && !watch_fixed(old[i])) inotify_rm_watch(watch.fd, old[i]);', 'f6'),
     ('gui/folder.c', '    watch_trashes(&trashd);   // armed before', '    // armed before', 'f6'),
     ('gui/watch.c', ' | IN_DELETE_SELF | IN_MOVE_SELF |\n                                                    IN_ONLYDIR | IN_MASK_ADD);', ' | IN_DELETE_SELF | IN_MOVE_SELF |\n                                                    IN_ONLYDIR);', 'f6'),
-    ('gui/watch.c', '        if (old[i] > 0 && !kept && old[i] != atomic_load(&watch.dir_wd) && !watch_fixed(old[i])) inotify_rm_watch(watch.fd, old[i]);', '        if (old[i] > 0 && old[i] != atomic_load(&watch.dir_wd) && !watch_fixed(old[i])) inotify_rm_watch(watch.fd, old[i]);', 'f6'),
     ('gui/actions.c', '    ui_mark_clear(&app.ui);\n    trash_state();\n    reload();', '    ui_mark_clear(&app.ui);\n    reload();', 'f6'),
 ]
 import concurrent.futures, queue, threading, time

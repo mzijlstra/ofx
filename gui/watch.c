@@ -90,13 +90,22 @@ static bool watch_fixed(int wd)
            wd == atomic_load(&watch.bm_wd) || wd == watch.udev_wd || wd == watch.mount_wd || wd == atomic_load(&watch.git_wd);
 }
 
+// wd, one a watch no longer wants (its slot already holds its new one), removed unless another
+// still has it: the folder shown's, a trash's files/, the git folder's or a fixed one may be the same
+// inode, so the same wd (code-health review, 2026-11-03: three copies, each excluding a slightly
+// different set; 2026-10-30 and 2026-11-01 found the cost of one missing).
+static void watch_release(int wd)
+{
+    if (wd > 0 && !watch_fixed(wd) && !watch_is_trash(wd) && wd != atomic_load(&watch.dir_wd)) inotify_rm_watch(watch.fd, wd);
+}
+
 // The folder to watch now, in place of the last one; NULL: none (the search view, F9). IN_MASK_ADD,
 // as the others: a plain add on a folder one of them watches would replace its mask.
 static void watch_dir(const char *dir)
 {
     if (watch.fd < 0) return;
     int old = atomic_exchange(&watch.dir_wd, -1);
-    if (old >= 0 && !watch_fixed(old) && !watch_is_trash(old)) inotify_rm_watch(watch.fd, old);
+    watch_release(old);   // (dir_wd is -1 meanwhile)
     atomic_store(&watch.dir_wd, dir ? inotify_add_watch(watch.fd, dir, WATCH_DIR_MASK | IN_MASK_ADD) : -1);
 }
 
@@ -132,11 +141,7 @@ static void watch_trashes(const TrashDirs *d)
         now[i] = wd > 0 ? wd : 0;
     }
     for (int i = 0; i < TRASH_DIRS_MAX; i++) old[i] = atomic_exchange(&watch.trash_wd[i], now[i]);
-    for (int i = 0; i < TRASH_DIRS_MAX; i++) {
-        bool kept = false;
-        for (int k = 0; k < TRASH_DIRS_MAX; k++) kept |= old[i] == now[k];
-        if (old[i] > 0 && !kept && old[i] != atomic_load(&watch.dir_wd) && !watch_fixed(old[i])) inotify_rm_watch(watch.fd, old[i]);
-    }
+    for (int i = 0; i < TRASH_DIRS_MAX; i++) watch_release(old[i]);   // (one still wanted is among the new ones: kept)
 }
 
 // ofx.conf's folder (F10; none when conf_start couldn't make it: Preferences tries again).
@@ -155,7 +160,7 @@ static void watch_git(const char *gitdir)
     int old = atomic_exchange(&watch.git_wd, -1);
     int wd = gitdir ? inotify_add_watch(watch.fd, gitdir, IN_MOVED_TO | IN_CLOSE_WRITE | IN_CREATE | IN_DELETE | IN_ONLYDIR | IN_MASK_ADD) : -1;
     atomic_store(&watch.git_wd, wd);
-    if (old >= 0 && old != wd && !watch_fixed(old) && !watch_is_trash(old) && old != atomic_load(&watch.dir_wd)) inotify_rm_watch(watch.fd, old);
+    watch_release(old);   // (git_wd is the new one: the same, kept)
 }
 
 static void watch_theme_dirs(void)

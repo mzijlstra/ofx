@@ -166,23 +166,23 @@ static Clay_RenderCommandArray layout(int w, int h)
             layout_modes();
             CLAY(CLAY_ID("footer-line"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
                                            .clip = { .horizontal = true } }) {
-            if (modal_kind() == MODAL_PROPS) {
+            if (modal_kind() == UI_ON_PROPS) {
                 text(fit(S("Properties: \xE2\x86\x90 \xE2\x86\x91 \xE2\x86\x93 \xE2\x86\x92 (h j k l) move \xC2\xB7 Space or Enter changes \xC2\xB7 Esc closes"), foot_w, false),
                      cc(t->fg_dim));
-            } else if (modal_kind() == MODAL_BAR) {
+            } else if (modal_kind() == UI_ON_BAR) {
                 text(fit(S("Menu bar hidden: Enter or Esc closes this"), foot_w, false), cc(t->fg_dim));
-            } else if (modal_kind() == MODAL_ABOUT) {
+            } else if (modal_kind() == UI_ON_ABOUT) {
                 text(fit(S("About: Esc or Enter closes"), foot_w, false), cc(t->fg_dim));
-            } else if (modal_kind() == MODAL_KEYS) {
+            } else if (modal_kind() == UI_ON_KEYS) {
                 text(fit(S("Keyboard Shortcuts: type to filter \xC2\xB7 \xE2\x86\x91 \xE2\x86\x93 PgUp PgDn scroll \xC2\xB7 Esc or F1 closes"), foot_w, false), cc(t->fg_dim));
-            } else if (modal_kind() == MODAL_BM) {
+            } else if (modal_kind() == UI_ON_BM) {
                 text(fit(str_from_c(app.ui.bmp_naming ? "Rename: Enter renames (empty: the folder's name) \xC2\xB7 Esc keeps the name"
                                              : "Bookmarks: \xE2\x86\x91 \xE2\x86\x93 (k j) move \xC2\xB7 Enter goes there \xC2\xB7 Delete removes \xC2\xB7 F2 renames \xC2\xB7 "
                                                "Alt+\xE2\x86\x91 Alt+\xE2\x86\x93 move it \xC2\xB7 Esc closes"), foot_w, false), cc(t->fg_dim));
-            } else if (modal_kind() == MODAL_OW) {
+            } else if (modal_kind() == UI_ON_OW) {
                 text(fit(S("Open With: type to filter \xC2\xB7 Tab or \xE2\x86\x93 the list \xC2\xB7 Enter opens \xC2\xB7 Esc closes \xC2\xB7 "
                            "Alt+C/W/R case, words, regex \xC2\xB7 Alt+D default"), foot_w, false), cc(t->fg_dim));
-            } else if (modal_kind() != MODAL_NONE) {
+            } else if (modal_kind() != UI_ON_NONE) {
                 text(cz("Answer the question above"), cc(t->fg_dim));
             } else if (app.ui.menu_on && app.ui.menu >= UI_MENUS) {
                 text(fit(S("Menu: \xE2\x86\x91 \xE2\x86\x93 (k j) move \xC2\xB7 Enter picks \xC2\xB7 Esc closes"), foot_w, false), cc(t->fg_dim));
@@ -223,8 +223,8 @@ static Clay_RenderCommandArray layout(int w, int h)
             if (app.ui.grid) layout_zoom();
         }
         layout_tip(w);
-        ModalKind mk = modal_kind();
-        if (mk != MODAL_NONE) layout_modal(mk, (float)w, (float)h);
+        UiOnTop mk = modal_kind();
+        if (mk != UI_ON_NONE) layout_modal(mk, (float)w, (float)h);
     }
     return Clay_EndLayout(0);   // deltaTime drives transitions, which we do not use
 }

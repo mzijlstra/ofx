@@ -81,6 +81,8 @@ static bool clear_poll(void)
         char *roots[] = { thumbs.root };
         clear.sum = (DuSum){ 0 }, clear.counted = false;
         clear.counting = true;
+        // (walk.c's one walk is Properties' too: the two never count at once, as the question and a
+        // panel can't both be up, ui_on_top; code-health review, 2026-11-03)
         if (thumbs.root[0]) walk_ask(roots, 1);
         else clear.counted = true;   // (no cache folder: none)
     }
