@@ -308,7 +308,7 @@ static Str git_reflog_tail(const char *gitdir, char *buf, isize cap)
 {
     char p[PATH_MAX + 16];
     snprintf(p, sizeof p, "%s/logs/HEAD", gitdir);
-    int fd = open(p, O_RDONLY | O_CLOEXEC);
+    int fd = open(p, O_RDONLY | O_CLOEXEC | O_NONBLOCK | O_NOFOLLOW);   // (a FIFO there would block the open: F12 step 5b review)
     if (fd < 0) return STR_EMPTY;
     struct stat st;
     isize len = 0;

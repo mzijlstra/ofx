@@ -716,6 +716,14 @@ static void test_git_reflog_tail(void)
     t = git_reflog_tail(at("f12/rl"), buf, sizeof buf);
     CHECK(t.len == (isize)sizeof big - 1 - 201 && t.p[t.len - 1] == '\n' && str_find(t, '\n') == t.len - 1);
     CHECK(git_reflog_tail(at("f12/none"), buf, sizeof buf).len == 0);
+    // A FIFO or a link there: none, at once (a FIFO's open would wait for a writer).
+    unlink(at("f12/rl/logs/HEAD"));
+    CHECK(mkfifo(at("f12/rl/logs/HEAD"), 0600) == 0);
+    i64 t0 = now_ms();
+    CHECK(git_reflog_tail(at("f12/rl"), buf, sizeof buf).len == 0 && now_ms() - t0 < 1000);
+    unlink(at("f12/rl/logs/HEAD"));
+    put(at("f12/rl/real"), "a\n");
+    CHECK(symlink(at("f12/rl/real"), at("f12/rl/logs/HEAD")) == 0 && git_reflog_tail(at("f12/rl"), buf, sizeof buf).len == 0);
 }
 
 // git_branches on a scratch repository (the real git behind the wrapper, in bubblewrap): its

@@ -2425,4 +2425,6 @@ MUTANTS += [
     ('ui/handle.c', '            if (u->branch_on) ui_ctx_open(u, UI_CTX_BRANCH, (UiNames){ 0 }, false);', '            ui_ctx_open(u, UI_CTX_BRANCH, (UiNames){ 0 }, false);'),
     ('ui/helpers.c', '        if (d[k] && (!due || d[k] < due)) due = d[k];', '        if (d[k] && !due) due = d[k];'),
     ('ui/helpers.c', '        if (d[k] && (!due || d[k] < due)) due = d[k];', '        if (!due || d[k] < due) due = d[k];'),
+    ('fs/git.c', 'O_RDONLY | O_CLOEXEC | O_NONBLOCK | O_NOFOLLOW);   // (a FIFO', 'O_RDONLY | O_CLOEXEC | O_NOFOLLOW);   // (a FIFO'),
+    ('fs/git.c', 'O_RDONLY | O_CLOEXEC | O_NONBLOCK | O_NOFOLLOW);   // (a FIFO', 'O_RDONLY | O_CLOEXEC | O_NONBLOCK);   // (a FIFO'),
 ]
