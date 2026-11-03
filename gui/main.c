@@ -185,7 +185,7 @@ enum { FONT_PX = 15, ROW_H = 28, ICON_PX = 24, HEADER_H = 40, COLS_H = 26, FOOTE
 enum { CELL_W_MIN = 112, CELL_W_ROOM = 64, CELL_H_ROOM = 56, CELL_PAD = 4, CELL_LINE_H = FONT_PX + 4, CELL_LINES_FULL = 8 };
 // The footer's zoom slider (F6.3): a minus, a track with a notch a size, a plus.
 enum { ZOOM_BTN_W = 22, ZOOM_TRACK_W = 84, ZOOM_KNOB_W = 10 };
-enum { GIT_W = 16 };   // the git letter's column, at a row's end, in a repository (F12)
+enum { GIT_W = 16 };   // the git letter's column, after the name, in a repository (F12)
 
 // ---- state ----------------------------------------------------------------------------------
 

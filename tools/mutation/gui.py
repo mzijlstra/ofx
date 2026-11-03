@@ -527,7 +527,7 @@ MUTANTS = [
     ('gui/input.c', 'rem.due, restore.due, git.due }', 'rem.due, restore.due }', 'f12g'),
     ('gui/watch.c', 'strcmp(e->name, "index") == 0 || strcmp(e->name, "HEAD") == 0', 'strcmp(e->name, "HEAD") == 0', 'f12g'),
     ('gui/files.c', ' : sel ? cc(t->fg) : gs != GS_NONE ? git_colour(gs) : ls_name_colour(e, i);', ' : sel ? cc(t->fg) : ls_name_colour(e, i);', 'f12g'),
-    ('gui/files.c', '        if (in_git) git_cell(r, i, gs);\n', '', 'f12g'),
+    ('gui/files.c', '        if (in_git) git_cell(r, i, gs);   // (beside the name it marks, before Size: Michael, 2026-11-03)\n', '', 'f12g'),
     ('gui/footer.c', '                  .changed = git_shown() ? git_shown()->g.changed : 0 };', '                  .changed = 0 };', 'f12g'),
     # ---- Clear Previews (F12 step 4): counted, run, its end taken
     ('gui/clear.c', '        if (thumbs.root[0]) walk_ask(roots, 1);', '        if (false) walk_ask(roots, 1);', 'f12'),

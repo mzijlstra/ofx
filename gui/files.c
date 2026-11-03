@@ -375,6 +375,7 @@ static void layout_cols(void)
                                                                                                     .y = CLAY_ALIGN_Y_CENTER } } }) {
                 text(label, on ? cc(t->fg) : cc(t->fg_dim));
             }
+            if (k == SORT_NAME && git_shown()) CLAY(CLAY_ID("col-git"), { .layout = { .sizing = { CLAY_SIZING_FIXED(GIT_W), CLAY_SIZING_GROW(0) } } }) {}   // (over the letters)
         }
         static const struct { const char *id, *name; int w; } MORE[] = { { "col-owner", "Owner", OWNER_W }, { "col-group", "Group", GROUP_W },
                                                                          { "col-perms", "Permissions", PERM_W } };
@@ -386,7 +387,6 @@ static void layout_cols(void)
                 text(cz(MORE[k].name), cc(t->fg_dim));
             }
         }
-        if (git_shown()) CLAY(CLAY_ID("col-git"), { .layout = { .sizing = { CLAY_SIZING_FIXED(GIT_W), CLAY_SIZING_GROW(0) } } }) {}   // (over the letters)
     }
 }
 
@@ -628,6 +628,7 @@ static void layout_row(int r, isize i, float w, i64 now)
                 }
             }
         }
+        if (in_git) git_cell(r, i, gs);   // (beside the name it marks, before Size: Michael, 2026-11-03)
         CLAY(CLAY_IDI("size", r), { .layout = { .sizing = { CLAY_SIZING_FIXED(SIZE_W), CLAY_SIZING_FIT(0) },
                                                 .childAlignment = { .x = CLAY_ALIGN_X_RIGHT } } }) {
             text(cz(arena_sprintf(&frame, "%s", size)), app.ui.colors ? cc(t->green) : cc(t->fg_dim));   // (eza's)
@@ -643,7 +644,6 @@ static void layout_row(int r, isize i, float w, i64 now)
             if (app.ui.group_col) info_cell(CLAY_IDI("group", r), id_name(true, e->gid), GROUP_W, 0, app.ui.colors && e->gid == (u32)getegid() ? cc(t->yellow) : cc(t->fg_dim));
             ls_perms_cell(CLAY_IDI("perms", r), e->mode, PERM_W);
         }
-        if (in_git) git_cell(r, i, gs);
     }
 }
 
