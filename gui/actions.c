@@ -709,17 +709,19 @@ static void prefs_open(void);   // (prefs.c, after: it uses editor_now)
 static void restore_others(bool yes);   // (restore.c, after: it uses the tabs)
 
 // A switch's answer (F12 step 5c): the folder listed again (the branch may not have it: then the
-// nearest above that is there), and the status line says where it is now; or git's refusal.
+// nearest above that is there), and the status line says where it is now, and what a hook said;
+// or git's refusal; or that it carries on past its time.
 static bool branch_switched(void)
 {
-    bool ok;
-    char name[GIT_HEAD_MAX], msg[256], was[PATH_MAX];
-    if (!git_switch_take(&ok, name, sizeof name, msg, sizeof msg)) return false;
-    if (!ok) return set_status(true, "git switch %s: %s", name, msg), true;
+    GitSwitch got;
+    char name[GIT_HEAD_MAX], msg[256], was[PATH_MAX], gone[PATH_MAX + 32] = "";
+    if (!git_switch_take(&got, name, sizeof name, msg, sizeof msg)) return false;
+    if (got == GSW_REFUSED) return set_status(true, "git switch %s: %s", name, msg), true;
+    if (got == GSW_GOING) return set_status(false, "git switch %s: %s", name, msg), true;
     snprintf(was, sizeof was, "%s", app.cwd);
     if (app.ui.view == UI_VIEW_FOLDER) reload();
-    if (strcmp(was, app.cwd) != 0) set_status(false, "Switched to %s: %.*s isn't on it", name, STR_ARG(path_base(str_from_c(was))));
-    else set_status(false, "Switched to %s", name);
+    if (strcmp(was, app.cwd) != 0) snprintf(gone, sizeof gone, ": %.*s isn't on it", STR_ARG(path_base(str_from_c(was))));
+    set_status(false, "Switched to %s%s%s%s%s", name, gone, msg[0] ? " (" : "", msg, msg[0] ? ")" : "");   // (a hook's or a filter's words)
     return true;
 }
 

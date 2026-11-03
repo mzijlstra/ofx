@@ -16,13 +16,14 @@
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/mman.h>
 #include <sys/prctl.h>
 #include <sys/syscall.h>
 #include <unistd.h>
 
 enum { BOX_BINDS_MAX = 8, BOX_ARGS_MAX = 64 };
 
-typedef enum { BOX_NOT_RUN, BOX_ENDED, BOX_KILLED } BoxRun;
+typedef enum { BOX_NOT_RUN, BOX_ENDED, BOX_KILLED, BOX_GOING } BoxRun;   // (BOX_GOING: an outlive job past its time, left running)
 
 typedef struct {
     const char *const *argv;          // argv[0]: a name on PATH, or a path
@@ -33,7 +34,11 @@ typedef struct {
     char       *out;                  // its output read into out, cap bytes at most (the rest
     isize       cap, *len;            // read and dropped); out NULL: /dev/null
     bool        err;                  // its error output into out too (git's refusal: F12 step 5c)
-    bool        outlive;              // it finishes if ofx ends meanwhile (a switch cut short leaves the work tree half switched)
+    // It finishes whatever happens (a switch cut short leaves the work tree half switched, and its
+    // index.lock): not killed at its time (BOX_GOING: still running), nor if ofx ends; its output
+    // into a memfd, read as it ends, as a pipe without its reader would kill it at its next write
+    // (git restores SIGPIPE's default itself; F12 step 5c review).
+    bool        outlive;
 } BoxJob;
 
 static bool box_sandbox = true;   // (false: run as it is; a test's only, OFX_TEST_SANDBOX=off under the guard)
@@ -46,6 +51,27 @@ static bool box_read(const BoxJob *j, int fd)
     ssize_t k = room > 0 ? read(fd, j->out + *j->len, (size_t)room) : read(fd, sink, sizeof sink);
     if (k > 0 && room > 0) *j->len += k;
     return k > 0 || (k < 0 && (errno == EINTR || errno == EAGAIN));
+}
+
+// An outlive job's end (box_run): waited for on its pidfd alone, its output (fd, a memfd) read
+// then; never killed. BOX_GOING when it runs past its time.
+static BoxRun box_wait_out(const BoxJob *j, int pfd, int fd)
+{
+    bool gone = pfd < 0;   // (pfd < 0: gone already, or it can't be watched: read what it wrote so far)
+    for (i64 until = now_ms() + j->ms; !gone;) {
+        i64 left = until - now_ms();
+        int r = left > 0 ? poll(&(struct pollfd){ .fd = pfd, .events = POLLIN }, 1, (int)left) : 0;
+        if (r < 0 && errno == EINTR) continue;
+        if (r <= 0) break;
+        gone = true;
+    }
+    if (gone && fd >= 0) {
+        ssize_t k = pread(fd, j->out, (size_t)j->cap, 0);
+        *j->len = k > 0 ? k : 0;
+    }
+    if (pfd >= 0) close(pfd);
+    if (fd >= 0) close(fd);   // (its own copy stays its: it writes on)
+    return gone ? BOX_ENDED : BOX_GOING;
 }
 
 // j run: in bubblewrap (BOX_NOT_RUN without it), or as it is when a test turned box_sandbox off;
@@ -78,7 +104,7 @@ static BoxRun box_run(const BoxJob *j)
             "--ro-bind", "/usr", "/usr", "--ro-bind-try", "/etc/ld.so.cache", "/etc/ld.so.cache",
             "--ro-bind-try", "/etc/fonts", "/etc/fonts", "--ro-bind-try", "/var/cache/fontconfig", "/var/cache/fontconfig",   // (without them a PDF's fonts are scanned each run: 570 ms against 63)
             "--symlink", "usr/lib", "/lib", "--symlink", "usr/lib", "/lib64", "--symlink", "usr/bin", "/bin", "--symlink", "usr/bin", "/sbin",
-            "--proc", "/proc", "--dev", "/dev", "--unshare-all", "--new-session",
+            "--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp", "--unshare-all", "--new-session",   // (a /tmp of its own: hooks and filters expect one)
         };
         av[n++] = bw;
         for (int i = 0; i < COUNT(box); i++) av[n++] = box[i];
@@ -94,14 +120,17 @@ static BoxRun box_run(const BoxJob *j)
     for (int k = 1; argv[k] && k < BOX_ARGS_MAX; k++) av[n++] = argv[k];
     av[n] = NULL;
     int pipe_fd[2] = { -1, -1 };
-    if (j->out && pipe2(pipe_fd, O_CLOEXEC) != 0) return BOX_NOT_RUN;
+    if (j->out && j->outlive) pipe_fd[0] = pipe_fd[1] = memfd_create("ofx-box", MFD_CLOEXEC);   // (one fd, written by it, read after)
+    else if (j->out && pipe2(pipe_fd, O_CLOEXEC) != 0) return BOX_NOT_RUN;
+    if (j->out && pipe_fd[0] < 0) return BOX_NOT_RUN;
     if (j->out) *j->len = 0;
     const char *cwd = !box_sandbox && j->cwd ? j->cwd : NULL;
     sigset_t none;
     sigemptyset(&none);
     pid_t pid = fork();
     if (pid < 0) {
-        if (j->out) close(pipe_fd[0]), close(pipe_fd[1]);
+        if (j->out) close(pipe_fd[0]);
+        if (j->out && !j->outlive) close(pipe_fd[1]);
         return BOX_NOT_RUN;
     }
     if (pid == 0) {   // (only what is safe after a fork in threads, up to the exec)
@@ -116,9 +145,10 @@ static BoxRun box_run(const BoxJob *j)
         execve(av[0], (char *const *)av, (char *const *)envp);
         _exit(127);
     }
-    if (j->out) close(pipe_fd[1]);
+    if (j->out && !j->outlive) close(pipe_fd[1]);
     // ofx's children are reaped by the kernel (spawn_init): the pidfd says when it is gone.
     int pfd = (int)syscall(SYS_pidfd_open, pid, 0), fd = j->out ? pipe_fd[0] : -1;
+    if (j->outlive) return box_wait_out(j, pfd, fd);
     if (pfd < 0 && errno != ESRCH) {   // it can't be watched (no fd left): killed, nothing kept
         kill(-pid, SIGKILL);
         if (fd >= 0) close(fd);

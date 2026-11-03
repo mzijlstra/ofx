@@ -861,33 +861,40 @@ static void test_git_switch(void)
     CHECK(sh_in(repo, "sh ../mk.sh") == 0);
     CHECK(git_top(repo, top, sizeof top));
     git_gitdir(top, gitdir, sizeof gitdir);
-    CHECK(git_switch(git, top, "feat", msg, sizeof msg) && git_head_is(gitdir, "feat") && access(at("f12/sw/repo/f.txt"), F_OK) == 0);
-    CHECK(git_switch(git, top, "main", msg, sizeof msg) && access(at("f12/sw/repo/f.txt"), F_OK) != 0);
+    CHECK(git_switch(git, top, "feat", msg, sizeof msg) == GSW_DONE && git_head_is(gitdir, "feat") && access(at("f12/sw/repo/f.txt"), F_OK) == 0);
+    CHECK(git_switch(git, top, "main", msg, sizeof msg) == GSW_DONE && access(at("f12/sw/repo/f.txt"), F_OK) != 0);
     // Refused: a local change the switch would overwrite; a branch that isn't. HEAD stays.
     put(at("f12/sw/repo/a.txt"), "mine\n");
-    CHECK(!git_switch(git, top, "feat", msg, sizeof msg) && strstr(msg, "local changes") && git_head_is(gitdir, "main"));
+    CHECK(git_switch(git, top, "feat", msg, sizeof msg) == GSW_REFUSED && strstr(msg, "local changes") && git_head_is(gitdir, "main"));
     CHECK(sh_in(repo, "git checkout -q a.txt") == 0);
-    CHECK(!git_switch(git, top, "nope", msg, sizeof msg) && strstr(msg, "nope") && git_head_is(gitdir, "main"));
+    CHECK(git_switch(git, top, "nope", msg, sizeof msg) == GSW_REFUSED && strstr(msg, "nope") && git_head_is(gitdir, "main"));
+    // Gone since the menu opened, a remote's branch of its name there: not made from it (--no-guess).
+    CHECK(sh_in(repo, "git remote add origin ../nowhere && git update-ref refs/remotes/origin/ghost HEAD") == 0);
+    CHECK(git_switch(git, top, "ghost", msg, sizeof msg) == GSW_REFUSED && git_head_is(gitdir, "main") && access(at("f12/sw/repo/.git/refs/heads/ghost"), F_OK) != 0);
     // A hook: it runs, and writes in the repository only.
     char pwned[PATH_MAX];
     snprintf(pwned, sizeof pwned, "%s", at("f12/sw/pwned"));
-    snprintf(cmd, sizeof cmd, "#!/bin/sh\ntouch hooked\necho x > '%s'\nexit 0\n", pwned);
+    snprintf(cmd, sizeof cmd, "#!/bin/sh\ntouch hooked\necho x > '%s' 2>/dev/null\ntouch /tmp/t && echo hook says hi >&2\nexit 0\n", pwned);
     put_exec(at("f12/sw/repo/.git/hooks/post-checkout"), cmd);
-    CHECK(git_switch(git, top, "other", msg, sizeof msg) && access(at("f12/sw/repo/hooked"), F_OK) == 0 && access(pwned, F_OK) != 0);
+    CHECK(git_switch(git, top, "other", msg, sizeof msg) == GSW_DONE && access(at("f12/sw/repo/hooked"), F_OK) == 0 && access(pwned, F_OK) != 0);
+    CHECK(strcmp(msg, "hook says hi") == 0);   // (its words, said on success; /tmp its own to write)
     box_sandbox = false;
-    CHECK(git_switch(git, top, "main", msg, sizeof msg) && access(pwned, F_OK) == 0);
+    CHECK(git_switch(git, top, "main", msg, sizeof msg) == GSW_DONE && access(pwned, F_OK) == 0);
     box_sandbox = true;
     unlink(at("f12/sw/repo/.git/hooks/post-checkout")), unlink(at("f12/sw/repo/hooked"));
     // A worktree: its HEAD and index in the repository's .git (writable too).
     CHECK(sh_in(repo, "git worktree add -q ../wt -b wtb") == 0);
     CHECK(git_top(at("f12/sw/wt"), top, sizeof top));
     git_gitdir(top, gitdir, sizeof gitdir);
-    CHECK(git_switch(git, top, "feat", msg, sizeof msg) && git_head_is(gitdir, "feat") && access(at("f12/sw/wt/f.txt"), F_OK) == 0);
-    // Out of time: stopped, and said.
-    put_exec(git, "#!/bin/sh\nsleep 2.5\n");
+    CHECK(git_switch(git, top, "feat", msg, sizeof msg) == GSW_DONE && git_head_is(gitdir, "feat") && access(at("f12/sw/wt/f.txt"), F_OK) == 0);
+    // Past its time: not stopped (a half switch), said, and it lands after.
+    put_exec(git, "#!/bin/sh\nsleep 0.3\nexec /usr/bin/git \"$@\"\n");
     git_switch_ms = 100;
-    CHECK(!git_switch(git, top, "wtb", msg, sizeof msg) && strstr(msg, "took over"));
+    CHECK(git_switch(git, top, "wtb", msg, sizeof msg) == GSW_GOING && strstr(msg, "carries on") && git_head_is(gitdir, "feat"));
     git_switch_ms = GIT_SWITCH_MS;
+    for (int i = 0; i < 40 && !git_head_is(gitdir, "wtb"); i++) nanosleep(&(struct timespec){ 0, 50 * 1000 * 1000 }, NULL);
+    CHECK(git_head_is(gitdir, "wtb"));
+    CHECK(git_switch(git, top, "feat", msg, sizeof msg) == GSW_DONE);
     put_exec(git, "#!/bin/sh\nexec /usr/bin/git \"$@\"\n");
     // ofx gone in the middle of a switch: it still finishes (a slow git, the process asking it killed).
     put_exec(git, "#!/bin/sh\nsleep 0.3\nexec /usr/bin/git \"$@\"\n");
@@ -902,16 +909,39 @@ static void test_git_switch(void)
     waitpid(pid, &st, 0);
     for (int i = 0; i < 40 && !git_head_is(gitdir, "wtb"); i++) nanosleep(&(struct timespec){ 0, 50 * 1000 * 1000 }, NULL);
     CHECK(git_head_is(gitdir, "wtb"));
-    CHECK(git_switch(git, top, "feat", msg, sizeof msg));
+    CHECK(git_switch(git, top, "feat", msg, sizeof msg) == GSW_DONE);
     put_exec(git, "#!/bin/sh\nexec /usr/bin/git \"$@\"\n");
+    // The step 5c review's half switch: a smudge filter that writes to stderr for each file, the
+    // process asking killed early. The whole switch lands, its index.lock gone, nothing changed.
+    char flt[PATH_MAX], ftop[PATH_MAX], fdir[PATH_MAX];
+    snprintf(flt, sizeof flt, "%s", at("f12/sw/flt"));
+    mkdirs(flt);
+    put_exec(at("f12/sw/mkflt.sh"), "git init -q -b main . && git config filter.slow.smudge 'sh -c \"sleep 0.02; echo smudged >&2; cat\"' && git config filter.slow.clean cat &&\n"
+                                    "echo '*.txt filter=slow' > .gitattributes && for i in 0 1 2 3 4 5 6 7 8 9; do echo m$i > f$i.txt; done && git add -A && git -c user.name=t -c user.email=t@t commit -qm m &&\n"
+                                    "git switch -q -c b && for i in 0 1 2 3 4 5 6 7 8 9; do echo b$i > f$i.txt; done && git -c user.name=t -c user.email=t@t commit -qam b && git switch -q main\n");
+    CHECK(sh_in(flt, "sh ../mkflt.sh") == 0);
+    CHECK(git_top(flt, ftop, sizeof ftop));
+    git_gitdir(ftop, fdir, sizeof fdir);
+    pid = fork();
+    if (pid == 0) {
+        signal(SIGALRM, SIG_DFL);
+        ualarm(50000, 0);
+        git_switch(git, ftop, "b", msg, sizeof msg);
+        _exit(0);
+    }
+    waitpid(pid, &st, 0);
+    for (int i = 0; i < 60 && !git_head_is(fdir, "b"); i++) nanosleep(&(struct timespec){ 0, 50 * 1000 * 1000 }, NULL);
+    char lock[PATH_MAX + 16];
+    snprintf(lock, sizeof lock, "%s/index.lock", fdir);
+    CHECK(git_head_is(fdir, "b") && access(lock, F_OK) != 0 && sh_in(flt, "test -z \"$(git status --porcelain)\" && grep -qx b9 f9.txt") == 0);
     // Not a name: an option; outside the guard's root: refused before git runs.
-    CHECK(!git_switch(git, top, "-f", msg, sizeof msg) && strstr(msg, "not a branch"));
+    CHECK(git_switch(git, top, "-f", msg, sizeof msg) == GSW_REFUSED && strstr(msg, "not a branch"));
     // (git itself inside the guard's root there: only the repository's place refuses it)
     char git2[PATH_MAX];
     snprintf(git2, sizeof git2, "%s", at("f12/sw/elsewhere/git"));
     put_exec(git2, "#!/bin/sh\nexec /usr/bin/git \"$@\"\n");
     ops_guard(at("f12/sw/elsewhere"));
-    CHECK(!git_switch(git2, top, "wtb", msg, sizeof msg) && msg[0] && git_head_is(gitdir, "feat"));
+    CHECK(git_switch(git2, top, "wtb", msg, sizeof msg) == GSW_REFUSED && msg[0] && git_head_is(gitdir, "feat"));
     ops_guard(root);
     env_restore(), env_restore();
 }
@@ -926,14 +956,16 @@ static pid_t outlive_start(const char *sub, bool outlive, char *done, size_t cap
     snprintf(prog, sizeof prog, "%s/late", dir);
     snprintf(done, cap, "%s/done", dir);
     unlink(done);
-    snprintf(text, sizeof text, "#!/bin/sh\nsleep 0.3\ntouch '%s'\n", done);
+    snprintf(text, sizeof text, "#!/bin/sh\nsleep 0.3\necho late\necho late >&2\ntouch '%s'\n", done);   // (it writes after its reader went: F12 step 5c review)
     put_exec(prog, text);
     pid_t pid = fork();
     if (pid == 0) {
         signal(SIGALRM, SIG_DFL);
         ualarm(100000, 0);
         const char *argv[] = { prog, NULL };
-        BoxJob j = { .argv = argv, .rw = { dir }, .ms = 5000, .outlive = outlive };
+        static char out[64];
+        isize len;
+        BoxJob j = { .argv = argv, .rw = { dir }, .ms = 5000, .outlive = outlive, .out = out, .cap = sizeof out, .len = &len, .err = true };
         box_run(&j);
         _exit(0);
     }
@@ -958,6 +990,28 @@ static void test_box_outlive(void)
     nanosleep(&(struct timespec){ 0, 150 * 1000 * 1000 }, NULL);   // (the others had as long, and more)
     CHECK(access(d[0], F_OK) == 0 && access(d[1], F_OK) != 0);
     CHECK(access(d[2], F_OK) == 0 && access(d[3], F_OK) != 0);
+}
+
+// An outlive job's output, read from its memfd as it ends (both streams); past its time, left
+// running (BOX_GOING) and not killed.
+static void test_box_outlive_out(void)
+{
+    ops_guard(root);
+    char prog[PATH_MAX], done[PATH_MAX], text[3 * PATH_MAX], out[64];
+    isize len = 0;
+    mkdirs(at("f12/olo"));
+    snprintf(prog, sizeof prog, "%s", at("f12/olo/say"));
+    put_exec(prog, "#!/bin/sh\necho one\necho two >&2\n");
+    const char *argv[] = { prog, NULL };
+    BoxJob j = { .argv = argv, .ms = 3000, .outlive = true, .out = out, .cap = sizeof out, .len = &len, .err = true };
+    CHECK(box_run(&j) == BOX_ENDED && str_eq((Str){ out, len }, S("one\ntwo\n")));
+    snprintf(done, sizeof done, "%s", at("f12/olo/done"));
+    snprintf(text, sizeof text, "#!/bin/sh\nsleep 0.3\ntouch '%s'\n", done);
+    put_exec(prog, text);
+    BoxJob k = { .argv = argv, .rw = { at("f12/olo") }, .ms = 100, .outlive = true, .out = out, .cap = sizeof out, .len = &len };
+    CHECK(box_run(&k) == BOX_GOING && access(done, F_OK) != 0);
+    for (int i = 0; i < 40 && access(done, F_OK) != 0; i++) nanosleep(&(struct timespec){ 0, 50 * 1000 * 1000 }, NULL);
+    CHECK(access(done, F_OK) == 0);
 }
 
 // What git said (F12 step 5c): its last error or fatal line, without the word; else its last line.

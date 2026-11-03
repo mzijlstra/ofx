@@ -1839,6 +1839,7 @@ int main(void)
     test_branch_keys();
     test_git_said();
     test_box_outlive();
+    test_box_outlive_out();
     test_box_output_end();
     char cmd[1600];
     snprintf(cmd, sizeof cmd, "chmod -R u+rwx '%s' && rm -rf '%s' '%s'", root, root, decoy);

@@ -471,9 +471,10 @@ if want f12h; then
 # folder's own path never shows), unborn: no commit yet, on a long branch name.
 # Step 5c: feat-a (and feat-b after it) hold only-a/, which main doesn't; other changes a.txt (a
 # switch there refused with a.txt changed); the wrapper takes a second over a switch to base (the
-# menu greyed meanwhile).
+# menu says so meanwhile, and past OFX_TEST_GIT_SWITCH_MS it carries on). A post-checkout hook says
+# something on feat-a.
 T=$base/f12h; rm -rf "$T"; mkdir -p "$T/tree/repo" "$T/fakes"
-printf '#!/bin/sh\n[ "$3 $5" = "switch base" ] && sleep 1\nexec /usr/bin/git "$@"\n' > "$T/fakes/git"; chmod +x "$T/fakes/git"
+printf '#!/bin/sh\ncase "$*" in *" switch "*" base") sleep 1 ;; esac\nexec /usr/bin/git "$@"\n' > "$T/fakes/git"; chmod +x "$T/fakes/git"
 ( cd "$T/tree/repo" && export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t &&
   c() { GIT_AUTHOR_DATE="$1 +0000" GIT_COMMITTER_DATE="$1 +0000" git commit -q --allow-empty -m "$1"; } &&
   git init -q -b main . && printf 'a\n' > a.txt && git add a.txt && c 1700000000 &&
@@ -482,9 +483,10 @@ printf '#!/bin/sh\n[ "$3 $5" = "switch base" ] && sleep 1\nexec /usr/bin/git "$@
   c 1700000100 && git switch -q base && c 1700000200 && git switch -q main && git branch -q -u base &&
   git switch -q -c feat-a && mkdir only-a && printf 'x\n' > only-a/x.txt && git add only-a && c 1700000300 &&
   git switch -q -c feat-b && c 1700000400 && git switch -q main &&
+  printf '#!/bin/sh\n[ "$(git branch --show-current)" = feat-a ] && echo on feat-a now >&2\nexit 0\n' > .git/hooks/post-checkout && chmod +x .git/hooks/post-checkout &&
   d=../folder-01/folder-02/folder-03/folder-04/folder-05/folder-06/folder-07/folder-08/folder-09/folder-10/folder-11/folder-12/unborn &&
   mkdir -p $d && cd $d && git init -q -b a-branch-name-long-enough-to-take-its-third-of-the-room . ) || failed f12h
-rs f12h -- "$T/tree/repo"
+rs f12h OFX_TEST_GIT_SWITCH_MS=500 -- "$T/tree/repo"
 fi
 if want hang; then
 T=$base/hang; rm -rf "$T"; mkdir -p "$T/tree/stuck"

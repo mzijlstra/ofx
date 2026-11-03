@@ -37,7 +37,8 @@ static struct {
     bool            br_wait;          // asked, no answer yet ("Reading branches…")
     // A switch (step 5c), picked in the menu: to branch sw_name, for folder sw_dir; its answer.
     char            sw_dir[PATH_MAX], sw_name[GIT_HEAD_MAX], sw_msg[256];
-    bool            sw_asked, sw_ready, sw_ok;
+    bool            sw_asked, sw_ready;
+    GitSwitch       sw_got;
     bool            sw_busy;          // the main thread's: one asked, not answered yet
 } git = { .mu = PTHREAD_MUTEX_INITIALIZER, .cv = PTHREAD_COND_INITIALIZER, .shown = 0, .ready = -1 };
 
@@ -64,9 +65,9 @@ static void git_switch_run(void)
     snprintf(dir, sizeof dir, "%s", git.sw_dir), snprintf(name, sizeof name, "%s", git.sw_name);
     git.sw_asked = false;
     pthread_mutex_unlock(&git.mu);
-    bool ok = git_top(dir, top, sizeof top) ? git_switch("git", top, name, msg, sizeof msg) : (snprintf(msg, sizeof msg, "not in a repository any more"), false);
+    GitSwitch got = git_top(dir, top, sizeof top) ? git_switch("git", top, name, msg, sizeof msg) : (snprintf(msg, sizeof msg, "not in a repository any more"), GSW_REFUSED);
     pthread_mutex_lock(&git.mu);
-    git.sw_ok = ok, snprintf(git.sw_msg, sizeof git.sw_msg, "%s", msg), git.sw_ready = true, wake_main();
+    git.sw_got = got, snprintf(git.sw_msg, sizeof git.sw_msg, "%s", msg), git.sw_ready = true, wake_main();
 }
 
 static void *git_loop(void *arg)
@@ -112,6 +113,7 @@ static void git_start(void)
 {
     for (int i = 0; i < 2; i++) arena_init(&git.slot[i].a, "git", git_mem[i], sizeof git_mem[i]);
     git_run_ms = env_int("OFX_TEST_GIT_RUN_MS", GIT_RUN_MS, 1, GIT_RUN_MS);
+    git_switch_ms = env_int("OFX_TEST_GIT_SWITCH_MS", GIT_SWITCH_MS, 1, GIT_SWITCH_MS);
     git.started = pthread_create(&git.th, NULL, git_loop, NULL) == 0;
 }
 
@@ -165,13 +167,13 @@ static bool git_ask_switch(const char *name)
     return true;
 }
 
-// Each frame: a switch's answer; true when it came, with whether it went (*ok), the branch and
-// git's refusal.
-static bool git_switch_take(bool *ok, char *name, size_t ncap, char *msg, size_t mcap)
+// Each frame: a switch's answer; true when it came, with how it went (*got), the branch and what
+// git said.
+static bool git_switch_take(GitSwitch *got, char *name, size_t ncap, char *msg, size_t mcap)
 {
     pthread_mutex_lock(&git.mu);
     bool r = git.sw_ready;
-    if (r) git.sw_ready = false, git.sw_busy = false, *ok = git.sw_ok, snprintf(name, ncap, "%s", git.sw_name), snprintf(msg, mcap, "%s", git.sw_msg);
+    if (r) git.sw_ready = false, git.sw_busy = false, *got = git.sw_got, snprintf(name, ncap, "%s", git.sw_name), snprintf(msg, mcap, "%s", git.sw_msg);
     pthread_mutex_unlock(&git.mu);
     return r;
 }

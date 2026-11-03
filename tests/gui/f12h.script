@@ -28,7 +28,7 @@ key down
 expect menuat=br-2
 key enter
 wait-for 5000 branch=feat-a
-expect statusbad=0 status=Switched to feat-a
+expect statusbad=0 status=Switched to feat-a (on feat-a now)
 wait-for 3000 n=2
 # Into only-a, then to main: it isn't there, so the window goes up to the repository.
 char /
@@ -58,7 +58,8 @@ wait-for 5000 statusbad=1
 expect branch=main_↑1_↓1
 expect status=git switch other: Your local changes to the following files would be overwritten by checkout:
 sh cd "$OFX_DIR" && GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null git checkout -q a.txt
-# A slow one (the wrapper's second over base): the menu opened meanwhile says so, its list after.
+# A slow one (the wrapper's second over base): the menu opened meanwhile says so; past the test's
+# half second it carries on, said, and lands (the HEAD watch).
 point-ui git-branch
 click-here
 wait-for 3000 menu=branch brn=8
@@ -69,8 +70,13 @@ point-ui git-branch
 click-here
 wait-for 3000 menu=branch
 expect brnote=Switching_to_base… brn=0
-wait-for 5000 brn=8 branch=base
-expect brlist=base|main|feat-a|feat-b|other|old0|old1|old2 brhere=0 status=Switched to base
+key esc
+wait-for 5000 branch=base
+expect statusbad=0 status=git switch base: still switching after 0.5 s; it carries on
+point-ui git-branch
+click-here
+wait-for 3000 menu=branch brn=8
+expect brlist=base|main|feat-a|feat-b|other|old0|old1|old2 brhere=0
 point-menu br-1
 click-here
 wait-for 5000 branch=main_↑1_↓1

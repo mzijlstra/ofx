@@ -375,7 +375,7 @@ static bool git_branches(const char *git, const char *dir, const char *top, GitB
 // ---- switching (F12 step 5c) ---------------------------------------------------------------------
 
 enum { GIT_SWITCH_MS = 120000, GIT_SAID_MAX = KiB(16) };   // (a big checkout writes many files: 2 minutes before it is killed)
-static int git_switch_ms = GIT_SWITCH_MS;   // (a unit test's shorter)
+static int git_switch_ms = GIT_SWITCH_MS;   // (OFX_TEST_GIT_SWITCH_MS, gui/; a unit test's shorter)
 
 // What git said, for the status line: its last "error:" or "fatal:" line, the word itself left out
 // (else its last line); "" for nothing.
@@ -394,19 +394,24 @@ static void git_said(Str out, char *msg, size_t cap)
     snprintf(msg, cap, "%.*s", STR_ARG(s));
 }
 
+typedef enum { GSW_DONE, GSW_REFUSED, GSW_GOING } GitSwitch;
+
 // `git switch <name>` in repository top (resolved): in bubblewrap as git_status, but the repository
 // writable, and a worktree's or a submodule's real .git (Michael, 2026-11-03), so its hooks and
 // filters run as in a terminal's switch yet reach nothing else (no network; git's config files
 // read only). Only a local branch's name, never an option (a name can't start with "-"), and only
-// where the guard lets ofx write. True when HEAD is on name after; else git's refusal in msg.
-static bool git_switch(const char *git, const char *top, const char *name, char *msg, size_t cap)
+// where the guard lets ofx write. It runs to its end whatever happens (BoxJob.outlive).
+//   GSW_DONE: HEAD is on name after; msg what a hook or a filter said ("" for nothing: -q).
+//   GSW_REFUSED: git's refusal (or why it didn't run) in msg.
+//   GSW_GOING: still running after git_switch_ms; it carries on (the HEAD watch sees its end).
+static GitSwitch git_switch(const char *git, const char *top, const char *name, char *msg, size_t cap)
 {
     static char out[GIT_SAID_MAX];   // (the worker's only)
     Err err;
     msg[0] = 0;
-    if (!name[0] || name[0] == '-' || strlen(name) >= GIT_HEAD_MAX) return snprintf(msg, cap, "not a branch: %s", name), false;
-    if (!ops_allowed(top, &err)) return snprintf(msg, cap, "%s", err.msg), false;
-    const char *argv[] = { git, "-c", "core.fsmonitor=false", "switch", "-q", name, NULL };
+    if (!name[0] || name[0] == '-' || strlen(name) >= GIT_HEAD_MAX) return snprintf(msg, cap, "not a branch: %s", name), GSW_REFUSED;
+    if (!ops_allowed(top, &err)) return snprintf(msg, cap, "%s", err.msg), GSW_REFUSED;
+    const char *argv[] = { git, "-c", "core.fsmonitor=false", "switch", "-q", "--no-guess", name, NULL };   // (no guess: a branch gone since the menu opened isn't made from a remote's)
     char gitdir[PATH_MAX];
     GitBinds binds;
     BoxJob j;
@@ -419,10 +424,10 @@ static bool git_switch(const char *git, const char *top, const char *name, char 
     isize len = 0;
     j.out = out, j.cap = sizeof out, j.len = &len, j.err = true, j.outlive = true;
     BoxRun r = box_run(&j);
-    if (git_head_is(gitdir, name)) return true;
+    if (r == BOX_GOING) return snprintf(msg, cap, "still switching after %g s; it carries on", git_switch_ms / 1000.0), GSW_GOING;
+    git_said((Str){ out, len }, msg, cap);
+    if (git_head_is(gitdir, name)) return GSW_DONE;
     if (r == BOX_NOT_RUN) snprintf(msg, cap, "git didn't run");
-    else if (r == BOX_KILLED) snprintf(msg, cap, "git switch took over %d s: stopped", git_switch_ms / 1000);
-    else git_said((Str){ out, len }, msg, cap);
     if (!msg[0]) snprintf(msg, cap, "git switch failed");
-    return false;
+    return GSW_REFUSED;
 }
