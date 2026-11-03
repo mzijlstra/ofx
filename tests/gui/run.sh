@@ -49,8 +49,13 @@ failed() { echo "== $1: FAILED"; fail=1; [ -z "${OFX_GUI_FAIL_FAST:-}" ] || exit
 # each line); a group's mount list is run-script's own (/ alone) unless it passes one.
 rs() {
     n=$1; shift; echo "== $n"
-    ( [ -z "${RS_HOME:-}" ] || export OFX_TEST_HOME="$RS_HOME"
-      while [ $# -gt 0 ] && [ "$1" != -- ]; do export "$1"; shift; done; [ $# -eq 0 ] || shift
+    # (RS_HOME only while it is this $T's: a group's second T= doesn't inherit the first's home; and a
+    # mount list given must be there, as an empty one would leave no mounts at all; 5M review, 2026-11-03)
+    ( case ${RS_HOME:-} in "$T"/*) export OFX_TEST_HOME="$RS_HOME" ;; esac
+      while [ $# -gt 0 ] && [ "$1" != -- ]; do
+          case $1 in OFX_TEST_MOUNTINFO=*) [ -f "${1#*=}" ] || { echo "$n: no mount list at ${1#*=}" >&2; exit 1; } ;; esac
+          export "$1"; shift
+      done; [ $# -eq 0 ] || shift
       exec "$here/../../tools/gui/run-script.sh" "$T" "$here/$n.script" "$bin" "$@" ) || failed "$n"
 }
 mi() {   # <T>/mountinfo with / alone on it: ext4, or btrfs (the drive rules differ)
@@ -287,7 +292,7 @@ printf '[Desktop Entry]\nType=Application\nName=Test editor\nExec=true %%f\n' > 
 rs f7 -- "$H/tree"
 chmod 755 "$H/tree/ro"
 T=$base/f7b; rm -rf "$T"; mkdir -p "$T/tree/src" "$T/tree/dst"; head -c 8388608 /dev/urandom > "$T/tree/src/big.bin"
-rs f7b OFX_TEST_COPY_DELAY_MS=300 OFX_TEST_MOUNTINFO="$base/f7/mountinfo" -- "$T/tree"
+rs f7b OFX_TEST_COPY_DELAY_MS=300 -- "$T/tree"
 # Its own entry gone with it, the live one's taken away at the menu's pass; the sleeps ended.
 for k in live reused; do [ -f "$T/$k.pid" ] && kill "$(cat "$T/$k.pid")" 2>/dev/null; done
 if [ -n "$(ls -A "$T/windows" 2>/dev/null)" ]; then echo "f7b: FAILED: left in the registry: $(ls -A "$T/windows")"; fail=1; fi
