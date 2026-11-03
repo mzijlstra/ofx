@@ -15,4 +15,5 @@ wait-for 5000 brp=0
 sh [ "$OFX_DIR" = "$OFX_ROOT/tree/O" ]
 type other
 key enter
-sh [ "$(GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null git -C "$OFX_DIR" branch --show-current)" = main ]
+# A switch runs in the git worker: given time to land before HEAD is read (review, 2026-11-03).
+sh sleep 2; [ "$(GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null git -C "$OFX_DIR" branch --show-current)" = main ]
