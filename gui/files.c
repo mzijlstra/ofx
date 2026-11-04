@@ -137,14 +137,28 @@ static bool side_ctx(isize i)
     return app.ui.menu_on && app.ui.menu == UI_CTX_FOLDER && app.ui.ctx_crumb < 0 && app.ui.ctx_side == i;
 }
 
+// The sidebar's handle (F13): its right edge, over the rows, in the accent while the pointer is on it
+// or drags it.
+static bool edge_lit;   // as drawn last (a script's state line)
+
+static void layout_side_edge(float h)
+{
+    bool lit = edge_lit = app.hov.side_edge || app.drag == DRAG_SIDE;
+    CLAY(CLAY_ID("side-edge"), { .layout = { .sizing = { CLAY_SIZING_FIXED(SIDE_EDGE), CLAY_SIZING_FIXED(h) } },
+                                 .backgroundColor = lit ? cc(app.theme.accent) : NO_COLOR,
+                                 .floating = { .attachTo = CLAY_ATTACH_TO_PARENT, .zIndex = 5,
+                                               .attachPoints = { CLAY_ATTACH_POINT_RIGHT_TOP, CLAY_ATTACH_POINT_RIGHT_TOP } } }) {}
+}
+
 // The tree mode (F6): a row a folder, indented by its depth, with its open (▾) or closed (▸)
 // mark; the folder shown in the accent.
 static void layout_tree(float h)
 {
     Theme *t = &app.theme;
-    CLAY(CLAY_ID("side"), { .layout = { .sizing = { CLAY_SIZING_FIXED(SIDE_W), CLAY_SIZING_FIXED(h) },
+    CLAY(CLAY_ID("side"), { .layout = { .sizing = { CLAY_SIZING_FIXED(side_w()), CLAY_SIZING_FIXED(h) },
                                         .layoutDirection = CLAY_TOP_TO_BOTTOM, .padding = { 0, 0, PAD / 2, 0 } },
                             .clip = { .horizontal = true }, .backgroundColor = cc(t->bg_light) }) {
+        layout_side_edge(h);
         UiList *sl = &app.ui.side;
         Str cwd = str_from_c(app.cwd);
         for (int r = 0; r < sl->rows && sl->top + r < sl->n; r++) {
@@ -170,7 +184,7 @@ static void layout_tree(float h)
                 if (special.len) names[n++] = special;
                 names[n++] = S("folder");
                 icon_box(CLAY_IDI("side-icon", r), icon_for(names[0], names, n), SIDE_ICON_PX);
-                float room = SIDE_W - PAD / 2 - indent - 16 - 4 - SIDE_ICON_PX - 4 - PAD;
+                float room = side_w() - PAD / 2 - indent - 16 - 4 - SIDE_ICON_PX - 4 - PAD;
                 if (room > 0) text(fit(row->name, room, false), here ? cc(t->accent) : cc(t->fg));
             }
         }
@@ -182,9 +196,10 @@ static void layout_tree(float h)
 static void layout_side(float h)
 {
     Theme *t = &app.theme;
-    CLAY(CLAY_ID("side"), { .layout = { .sizing = { CLAY_SIZING_FIXED(SIDE_W), CLAY_SIZING_FIXED(h) },
+    CLAY(CLAY_ID("side"), { .layout = { .sizing = { CLAY_SIZING_FIXED(side_w()), CLAY_SIZING_FIXED(h) },
                                         .layoutDirection = CLAY_TOP_TO_BOTTOM, .padding = { 0, 0, PAD / 2, 0 } },
                             .backgroundColor = cc(t->bg_light) }) {
+        layout_side_edge(h);
         UiList *sl = &app.ui.side;
         app.hover_num[0] = 0;
         for (int r = 0; r < sl->rows && sl->top + r < sl->n; r++) {
@@ -205,7 +220,7 @@ static void layout_side(float h)
             if (drive) ui_size(avail, sizeof avail, hover ? p->size - p->avail : p->avail);
             if (hover) snprintf(app.hover_num, sizeof app.hover_num, "%s", avail);
             Str free_s = str_from_c(arena_sprintf(&frame, "%s", avail));
-            float room = SIDE_W - 2 * PAD - SIDE_ICON_PX - 8 - (drive ? str_width(free_s) + 8 : 0);
+            float room = side_w() - 2 * PAD - SIDE_ICON_PX - 8 - (drive ? str_width(free_s) + 8 : 0);
             CLAY(CLAY_IDI("side-row", r), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(SIDE_ROW_H) },
                                                         .padding = { PAD, PAD, 0, 0 }, .childGap = 8,
                                                         .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
@@ -233,7 +248,7 @@ static void layout_side(float h)
                             text(cs(free_s), hover ? drive_used_color(p) : drive_free_color());
                         }
                     }
-                    if (drive) drive_bar(r, p, SIDE_W - 2 * PAD - SIDE_ICON_PX - 8);
+                    if (drive) drive_bar(r, p, side_w() - 2 * PAD - SIDE_ICON_PX - 8);
                 }
             }
         }

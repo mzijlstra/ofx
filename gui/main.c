@@ -179,7 +179,7 @@ enum { TREE_STEP = 10, TRASH_BAR_H = 38, SEARCH_BAR_H = 38, SEARCH_ROW_H = 32 };
 enum { MENU_H = 26, MENU_TITLE_PAD = 10, MENU_ROW_H = 26, MENU_SEP_H = 9, MENU_W_MIN = 280 };
 enum { TAB_H = 30, TAB_X_W = 22, JOB_ROW_H = 40, JOB_WAIT_H = 22, MODE_BTN_W = 28, MODE_BTN_H = 22, MODE_GAP = 4, FIND_BAR_H = 36 };
 enum { FONT_PX = 15, ROW_H = 28, ICON_PX = 24, HEADER_H = 40, COLS_H = 26, FOOTER_H = 28, PAD = 12, SIZE_W = 90,
-       DATE_W = 100, OWNER_W = 100, OWNER_PAD = 20, GROUP_W = 80, PERM_W = 84, SIDE_W = 200, SIDE_ROW_H = 28, SIDE_ICON_PX = 20, GAP = 10, ICONS_MAX = 512 };
+       DATE_W = 100, OWNER_W = 100, OWNER_PAD = 20, GROUP_W = 80, PERM_W = 84, SIDE_EDGE = 4, SIDE_ROW_H = 28, SIDE_ICON_PX = 20, GAP = 10, ICONS_MAX = 512 };
 // The icon view (F6.2): a cell holds its icon (48 px at first, F6.3's zoom from 32 to 256) over two
 // lines of its name; the cursor's name in full, up to CELL_LINES_FULL lines, over the cells below it.
 enum { CELL_W_MIN = 112, CELL_W_ROOM = 64, CELL_H_ROOM = 56, CELL_PAD = 4, CELL_LINE_H = FONT_PX + 4, CELL_LINES_FULL = 8 };
@@ -195,6 +195,9 @@ typedef struct {
     char       file[PATH_MAX];
 } IconSlot;
 
+// What the left button holds, from its press until it is let go (input.c's drag_at).
+enum { DRAG_NONE, DRAG_ZOOM, DRAG_SIDE };
+
 // What a point of the window is over (hit_at): for a press, and for the hover highlights.
 typedef struct {
     int   row, side, header;
@@ -207,6 +210,7 @@ typedef struct {
     int   twisty;       // a tree row's open/close mark, -1 for none
     int   eject;        // a drive's eject button, -1 for none
     bool  zoom;         // the zoom slider's track (F6.3)
+    bool  side_edge;    // the sidebar's right edge, its handle (F13)
     int   menu_title;   // a menu bar title, -1 for none (F7.1)
     int   menu_item;    // an entry of the open menu (its place), -1 for none
     int   prop_box;     // a checkbox of the Properties panel's grid, -1 for none (F7.2)
@@ -301,7 +305,11 @@ static struct {
     bool      icons_missed, icons_reset_armed;
     UiTip     tip;          // the tooltip of the icon button under the pointer (Michael, 2026-10-24)
     bool      zoomed;       // the icon size changed: the next refit keeps the cursor's row (ui_refit)
-    bool      zoom_drag;    // the zoom slider's knob held (F6.3)
+    int       drag;         // what the left button holds (DRAG_*: the zoom slider's knob, F6.3; the sidebar's edge, F13)
+    float     drag_x0;      // where the press was
+    int       drag_w0;      // the sidebar's width then
+    int       side_px;      // the sidebar's width dragged to (ui_side_fit; 0 its first, UI_SIDE_W)
+    UiPress   edge_press;   // the sidebar edge's presses, for its double click
     bool      thumb_local;  // the folder's drive is one ofx makes previews on (F6.4: not a network one)
     float     ctx_x, ctx_y;       // a right-click menu's top left (F8): where it opens, kept inside the window
     bool      ctx_placed;         // one is up and placed (ctx_place)
@@ -354,10 +362,11 @@ static int top_h(void)
     return bar_h() + HEADER_H + (tabbar.n >= 2 ? TAB_H : 0);
 }
 
-// The sidebar's width: none when it is hidden (F6).
+// The sidebar's width: none when it is hidden (F6); else the one dragged to, fitted to the window
+// (F13).
 static int side_w(void)
 {
-    return app.ui.side_mode == SIDE_HIDDEN ? 0 : SIDE_W;
+    return app.ui.side_mode == SIDE_HIDDEN ? 0 : ui_side_fit(app.side_px, GetScreenWidth());
 }
 static Undo      undo;
 static ClipFiles own;      // ofx's own copy or cut (own.n 0: none)
@@ -670,7 +679,7 @@ static void app_start(void)
     if (state_path(state_file, sizeof state_file)) {
         State st = state_load(&scratch, state_file);
         app.ui.side_mode = st.side, app.ui.perms_cols = !st.no_perms, app.ui.bar_hidden = st.no_bar,
-        app.ui.colors = !st.no_colors, app.ui.group_col = st.group, app.show_hidden = st.hidden;
+        app.ui.colors = !st.no_colors, app.ui.group_col = st.group, app.show_hidden = st.hidden, app.side_px = st.side_px;
     }
     remember_defaults();   // (F11: the folders' table, after ofx.conf, which has their defaults)
     if (state_path(state_file, sizeof state_file)) {   // (F11: the tree's open folders)
@@ -681,7 +690,7 @@ static void app_start(void)
     side_refresh();
     list_fit();
     ui_resize(&app.ui.side, side_rows(GetScreenHeight()));
-    app.press.row = -1, app.panel_press.row = -1;
+    app.press.row = -1, app.panel_press.row = -1, app.edge_press.row = -1;
 }
 
 // Each frame: what the watches and the worker threads brought, taken. True when the window must
@@ -884,6 +893,7 @@ int main(int argc, char **argv)
             if (!script_input(&in)) break;
             seen = true;
         }
+        cursor_shape();
         in.crumb_n = app.crumbs.n, in.crumb_last = app.crumb_hi - 1;
         _Static_assert((int)UI_JOB_ROWS >= (int)JOBQ_WORKERS, "a job row each for the jobs running");
         in.job_n = jobs.nrun, in.jobs_all = jobs.nrun + jobs.nwait;

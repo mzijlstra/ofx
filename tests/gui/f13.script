@@ -1,0 +1,68 @@
+# F13 step 2: the sidebar's width. Its right edge is a 4 px handle: lit, with the resize pointer,
+# under the pointer; held and moved, the width follows, 140 px at least, half the window (468 of
+# 936) at most; let go, remembered (sidewidth=); a double click gives 200 back. The tree (run.sh):
+# home/tree with eight files and a folder.
+settle
+expect sidew=200 sidepx=0 drag=- edgelit=0 resizeptr=0
+key ctrl-2
+expect view=icons cols=6
+point-ui side-edge
+hover-here
+expect edgelit=1 resizeptr=1 sidehover=-1
+shot side-edge.png
+# Pressed and let go before any width was kept: nothing written (the width at the press is the
+# one let go with); then past the double click's time
+click-here
+expect sidew=200 drag=-
+sh ! grep -q "^sidewidth=" "$OFX_ROOT/state/ofx/state"
+sleep 500
+# Held and moved: 60 px right, the width 260; the icon grid refits as it moves
+press-here
+expect drag=side edgelit=1
+move-to 258 300
+expect sidew=260 drag=side
+move-to 318 300
+expect sidew=320 cols=5
+# Past the bounds: half the window, then the least (a pointer left of the window's edge too)
+move-to 900 300
+expect sidew=468 edgelit=1 resizeptr=1
+move-to 10 300
+expect sidew=140
+move-to -50 300
+expect sidew=140
+move-to 318 300
+expect sidew=320
+shot side-wide.png
+release
+expect drag=- sidew=320 sidebox=320 sidepx=320 edgelit=1 resizeptr=1
+sh grep -qx "sidewidth=320" "$OFX_ROOT/state/ofx/state"
+# Pressed and let go without a move, at once after the drag (no double click: the drag's press
+# isn't its first): nothing written; where the edge lies over Home's row (y 114), the row isn't
+# pressed (the window stays in tree)
+sh sed -i '/^sidewidth=/d' "$OFX_ROOT/state/ofx/state"
+move-to 318 114
+expect edgelit=1 sidehover=-1
+click-here
+wait 30
+expect sidew=320 drag=- n=9 crumbs=home|tree
+sh ! grep -q "^sidewidth=" "$OFX_ROOT/state/ofx/state"
+# A double click: 200 again, remembered
+point-ui side-edge
+click-here
+click-here
+expect sidew=200 sidebox=200 sidepx=200
+sh grep -qx "sidewidth=200" "$OFX_ROOT/state/ofx/state"
+# Off the edge: unlit, the plain pointer
+move-to 600 300
+expect edgelit=0 resizeptr=0
+# The tree mode has the edge too; with no sidebar there is none
+key f9
+wait-for 2000 sidemode=tree
+point-ui side-edge
+press-here
+move-to 258 300
+release
+expect sidew=260 sidebox=260 sidepx=260
+key f9
+wait-for 2000 sidemode=hidden sidew=0
+quit

@@ -31,12 +31,25 @@ typedef struct {
     bool     no_perms;   // the list's Owner and Permissions columns left out (2026-10-27): "perms=off"
     bool     group;      // and Group shown between them (2026-10-27, off by default as eza's): "group=on"
     bool     no_colors;  // the list's colours off (2026-10-27): "colors=off"
+    int      side_px;    // the sidebar's width dragged to (F13): "sidewidth=260"; 0 none
 } State;
 
 // $XDG_STATE_HOME/ofx/state, else ~/.local/state/ofx/state; false when neither is set.
 static bool state_path(char *out, size_t cap)
 {
     return xdg_dir(out, cap, "XDG_STATE_HOME", ".local/state", "ofx/state");
+}
+
+// A width in pixels as the state file has it: 1 to 4 digits, not 0; else 0 (none).
+static int state_px(Str v)
+{
+    int n = 0;
+    if (v.len > 4) return 0;
+    for (isize i = 0; i < v.len; i++) {
+        if (v.p[i] < '0' || v.p[i] > '9') return 0;
+        n = n * 10 + (v.p[i] - '0');
+    }
+    return n;
 }
 
 // The state in file path; the defaults for what it doesn't say (or no file at all).
@@ -57,6 +70,7 @@ static State state_load(Arena *scratch, const char *path)
         if (str_eq(key, S("menubar"))) s.no_bar = str_eq(val, S("off"));
         if (str_eq(key, S("colors"))) s.no_colors = str_eq(val, S("off"));
         if (str_eq(key, S("group"))) s.group = str_eq(val, S("on"));
+        if (str_eq(key, S("sidewidth"))) s.side_px = state_px(val);
         if (!str_eq(key, S("sidebar"))) continue;
         for (int k = 0; k < SIDE_MODES; k++)
             if (str_eq(val, str_from_c(SIDE_MODE_NAMES[k]))) s.side = (SideMode)k;

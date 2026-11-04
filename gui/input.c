@@ -279,7 +279,8 @@ static Hit hit_at(float x, float y)
         if (in_box(CLAY_IDI("row", r), x, y)) h.row = r;
     for (int i = 0; i < jobs.nrun && h.job_x < 0; i++)
         if (in_box(CLAY_IDI("job-x", i), x, y)) h.job_x = i;
-    for (int r = 0; side_w() && r < app.ui.side.rows && h.side < 0; r++)
+    h.side_edge = side_w() && in_box(CLAY_ID("side-edge"), x, y);   // (F13: before the rows it lies over)
+    for (int r = 0; side_w() && !h.side_edge && r < app.ui.side.rows && h.side < 0; r++)
         if (in_box(CLAY_IDI("side-row", r), x, y)) h.side = r;
     if (h.side >= 0 && app.ui.side_mode == SIDE_TREE && in_box(CLAY_IDI("side-twisty", h.side), x, y)) h.twisty = h.side;
     if (h.side >= 0 && app.ui.side_mode == SIDE_PLACES && in_box(CLAY_IDI("side-eject", h.side), x, y)) h.eject = h.side;
@@ -331,7 +332,10 @@ static void press_at(UiInput *in, float x, float y, int mods)
     in->side_mode = h.mode;
     in->side_twisty = h.twisty;
     // The zoom track: the size nearest the press, and the knob held until the button is let go.
-    if (h.zoom) in->zoom_to = zoom_level_at(x), app.zoom_drag = true;
+    if (h.zoom) in->zoom_to = zoom_level_at(x), app.drag = DRAG_ZOOM;
+    // The sidebar's edge (F13): held, it follows the pointer; a double click gives UI_SIDE_W back.
+    if (h.side_edge && ui_press(&app.edge_press, 0, now_ms()) == 2) side_keep(UI_SIDE_W), app.edge_press.row = -1;
+    else if (h.side_edge) app.drag = DRAG_SIDE, app.drag_x0 = x, app.drag_w0 = app.side_px = side_w();
     if (h.tab_x >= 0) in->tab_close = h.tab_x;
     else if (h.tab >= 0) in->tab_click = h.tab;
 }
@@ -476,6 +480,15 @@ static void folder_do(UiMenuItem it)
     }
 }
 
+static int cursor_now = MOUSE_CURSOR_DEFAULT;   // the pointer's shape set last
+
+// The pointer's shape (F13): the resize arrows over the sidebar's edge and while it is dragged.
+static void cursor_shape(void)
+{
+    int want = app.hov.side_edge || app.drag == DRAG_SIDE ? MOUSE_CURSOR_RESIZE_EW : MOUSE_CURSOR_DEFAULT;
+    if (want != cursor_now) SetMouseCursor(want), cursor_now = want;
+}
+
 static float wheel_left;   // a touchpad's part of a notch, carried to the next frame
 
 // The wheel's notches at x: the files scroll, or with Ctrl held their icons zoom (F6.3); the
@@ -504,14 +517,26 @@ static int tip_target(Hit h)
     return -1;
 }
 
-// The zoom slider's knob held, the pointer at x (F6.3): the size nearest it; the button let go, the
-// knob is dropped (true then: it is drawn unlit).
-static bool zoom_drag_at(UiInput *in, float x, bool held)
+// What the left button holds, the pointer at x: the zoom slider's knob takes the size nearest it
+// (F6.3), the sidebar's edge the width there (F13). The button let go, it is dropped, and a width
+// that changed is remembered. True when what is drawn changed (a drop is drawn unlit).
+static bool drag_at(UiInput *in, float x, bool held)
 {
-    if (!app.zoom_drag) return false;
-    if (!held) return app.zoom_drag = false, true;
-    in->zoom_to = zoom_level_at(x);
-    return false;
+    if (app.drag == DRAG_NONE) return false;
+    if (!held) {
+        if (app.drag == DRAG_SIDE && app.side_px != app.drag_w0) side_keep(app.side_px), app.edge_press.row = -1;   // (a drag's press is no double click's first)
+        app.drag = DRAG_NONE;
+        return true;
+    }
+    if (app.drag == DRAG_ZOOM) {
+        in->zoom_to = zoom_level_at(x);
+        return false;
+    }
+    int to = app.drag_w0 + (int)(x - app.drag_x0);
+    int w = ui_side_fit(to < UI_SIDE_MIN ? UI_SIDE_MIN : to, GetScreenWidth());   // (0 or less is ui_side_fit's "none")
+    if (w == app.side_px) return false;
+    app.side_px = w;
+    return true;
 }
 
 static bool hover_at(float x, float y);
@@ -541,7 +566,7 @@ static bool hover_at(float x, float y)
     // (what is drawn lit; a menu's entries are ui_menu_hover's). Every field of Hit that is drawn
     // lit belongs here: a new one too (the F11 review found one missing).
     bool changed = h.row != o.row || h.side != o.side || h.bar != o.bar || h.crumb != o.crumb || h.tab != o.tab || h.tab_x != o.tab_x ||
-                   h.mode != o.mode || h.eject != o.eject || h.modal != o.modal || h.job_x != o.job_x || h.zoom != o.zoom ||
+                   h.mode != o.mode || h.eject != o.eject || h.modal != o.modal || h.job_x != o.job_x || h.zoom != o.zoom || h.side_edge != o.side_edge ||
                    h.menu_title != o.menu_title || h.bmp_btn != o.bmp_btn || h.find_x != o.find_x || h.find_step != o.find_step ||
                    h.inside_btn != o.inside_btn;   // (the search bar's In files, lit by footer.c: F11 review)
     app.hov = h;
@@ -586,7 +611,7 @@ static UiInput input_real(bool *seen)
     // Off the window the drag ends: Wayland's leave releases no button, and a compositor grab
     // (a keybind, a screenshot) can take the release (F6.3 review).
     bool on = IsCursorOnScreen();
-    if (d.x != 0 || !held || !on) *seen |= zoom_drag_at(&in, m.x, held && on);
+    if (!script_on && (d.x != 0 || !held || !on)) *seen |= drag_at(&in, m.x, held && on);   // (a script's own: press-here, move-to, release)
     in.backs = mouse_backs, mouse_backs = 0;
     in.forwards = mouse_forwards, mouse_forwards = 0;
     // Anything the user did draws a frame: one list, ui_input_acts (unit-tested), so a new click

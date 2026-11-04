@@ -432,6 +432,21 @@ static int ui_wrap(Str s, float width, float dots, float (*adv)(u32), int most, 
     return n;
 }
 
+// ---- the sidebar's width (F13) -------------------------------------------------------------
+
+enum { UI_SIDE_W = 200, UI_SIDE_MIN = 140, UI_SIDE_MAX = 480 };
+
+// The sidebar's width in a window w wide: the one asked for (0: UI_SIDE_W, its first), at least
+// UI_SIDE_MIN, at most half the window or UI_SIDE_MAX (Michael, 2026-11-04); a window too narrow
+// for both keeps the least.
+static int ui_side_fit(int want, int w)
+{
+    int hi = w / 2 < UI_SIDE_MAX ? w / 2 : UI_SIDE_MAX;
+    if (want <= 0) want = UI_SIDE_W;
+    if (want > hi) want = hi;
+    return want < UI_SIDE_MIN ? UI_SIDE_MIN : want;
+}
+
 // ---- display --------------------------------------------------------------------------------
 
 // A mode's permissions as ls prints them, without the type: "rwxr-xr-x"; s/S for set-user and

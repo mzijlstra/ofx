@@ -136,3 +136,33 @@ static void test_shell_quote(void)
     CHECK(shell_quote(S("/home/m/a"), small, sizeof small) == -1 && shell_quote(S("/a b"), small, 6) == -1);
     CHECK(shell_quote(S("/a b"), small, 7) == 6 && strcmp(small, "'/a b'") == 0);
 }
+
+// The sidebar's width (F13 step 2): the one asked for, 200 for none, 140 at least, half the window
+// or 480 at most; a window too narrow for both keeps 140.
+static void test_side_fit(void)
+{
+    static const struct { int want, w, got; } C[] = {
+        { 0, 936, 200 }, { -5, 936, 200 }, { 260, 936, 260 }, { 9999, 936, 468 }, { 469, 936, 468 }, { 468, 936, 468 },
+        { 100, 936, 140 }, { 139, 936, 140 }, { 140, 936, 140 }, { 600, 2000, 480 }, { 481, 2000, 480 }, { 300, 400, 200 }, { 300, 200, 140 },
+    };
+    for (int i = 0; i < COUNT(C); i++) {
+        if (ui_side_fit(C[i].want, C[i].w) != C[i].got) fprintf(stderr, "side_fit %d %d: %d\n", C[i].want, C[i].w, ui_side_fit(C[i].want, C[i].w));
+        CHECK(ui_side_fit(C[i].want, C[i].w) == C[i].got);
+    }
+}
+
+// sidewidth= in the state file: 1 to 4 digits, else none (0).
+static void test_state_sidewidth(void)
+{
+    static const struct { const char *line; int px; } C[] = {
+        { "sidewidth=260\n", 260 }, { "sidewidth = 9999\n", 9999 }, { "sidewidth=7", 7 }, { "sidewidth=12345\n", 0 }, { "sidewidth=abc\n", 0 },
+        { "sidewidth=26a\n", 0 }, { "sidewidth=\n", 0 }, { "sidewidth=-3\n", 0 }, { "sidebar=tree\n", 0 },
+    };
+    char path[PATH_MAX];
+    snprintf(path, sizeof path, "%s", at("f13-state"));
+    for (int i = 0; i < COUNT(C); i++) {
+        put(path, C[i].line);
+        State s = state_load(&ta, path);
+        CHECK(s.side_px == C[i].px);
+    }
+}

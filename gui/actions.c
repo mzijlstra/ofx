@@ -733,6 +733,16 @@ static void state_key(const char *key, const char *value)
     if (state_path(path, sizeof path) && !state_put(&scratch, path, key, value, &err)) set_status(true, "%s", err.msg);
 }
 
+// The sidebar's width w, dragged to or given back (F13): kept, and remembered for every window as
+// its mode is (sidewidth=).
+static void side_keep(int w)
+{
+    char v[16];
+    app.side_px = w;
+    snprintf(v, sizeof v, "%d", w);
+    state_key("sidewidth", v);
+}
+
 static void prefs_open(void);   // (prefs.c, after: it uses editor_now)
 static void restore_others(bool yes);   // (restore.c, after: it uses the tabs)
 

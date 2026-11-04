@@ -45,7 +45,11 @@
 //                           state's idlewoke says which ended the wait (timer or fallback)
 //   click-here              a left press at the last point-ui
 //   drag-here <dx>          a left press there, the pointer <dx> px across and the button let go,
-//                           in one frame, as the mouse's go (zoom_drag_at: the zoom slider's knob)
+//                           in one frame, as the mouse's go (drag_at: the zoom slider's knob, the
+//                           sidebar's edge)
+//   press-here              a left press at the last point, the button held across frames (F13)
+//   move-to <x> <y>         the pointer there (it rests there, as hover-here's); a held button drags
+//   release                 the button let go
 //   middle-here             a middle press there (a folder into a background tab, a tab closed)
 //   middle <row>            a middle press on list row <row>
 //   right-here              a right press there (F8: an entry's menu, or the folder shown's on empty space)
@@ -87,6 +91,7 @@ static struct {
     int   expects, failed;
     float px, py;        // the last point-ui
     bool  pointing;      // the pointer rests there (hover-here), until pointer-off
+    bool  held;          // the left button down (press-here), until release (F13)
     Str   typing;        // what is left of a `type` longer than a frame's events
     bool  user_keys;     // the keyboard's keys and characters reach the window (`user-keys`)
 } script;
@@ -480,7 +485,7 @@ static void script_state(char *out, size_t cap)
              "props=%d propat=%d propcan=%d propn=%td propmode=%04o propfiles=%lld propdirs=%lld propbytes=%lld propdone=%d propcut=%d proplinks=%lld,%lld,%lld,%d propnlink=%llu proptype=%s proptypename=%s propbyname=%d propname=%s "
              "propwhere=%s propdrive=%s proplink=%s propcreated=%d propidx=%td "
              "ow=%d owfresh=%d owlist=%d owtext=%s own=%td owsel=%td owapp=%s owicon=%s owtex=%d owshown=%td owtype=%s owfiles=%td owrows=%d owtop=%td owopts=%s owbad=%d owdef=%d owdefcan=%d findopts=%s findbad=%d findselect=%d findn=%td findat=%td findtext=%s "
-             "search=%d searchkeys=%d searchtext=%s searchdone=%d searchfull=%d searchdue=%d searchbad=%d searchbar=%d searchsel=%d-%d searchcaret=%d findsel=%d-%d findcaret=%d seldir=%s searchinfo=%s inside=%d insidekeys=%d insidetext=%s insideopts=%s insidebad=%d insiderow=%d hit=%s hitmatch=%s hitdrawn=%d datecol=%s datecolw=%.0f owreads=%d conf=%s confbad=%d seldate=%s trashfull=%d trashicon=%s spawned=%d closingall=%d closedtabs=%d emptyn=%td shiftsel=%s clearn=%lld clearing=%d gitshown=%d gitsel=%s gitn=%td gitnamecol=%s gitcells=%d infogit=%s gitdue=%d branch=%s brn=%d brhere=%d brnote=%s brlist=%s brfits=%d brunder=%d gitwatch=%d brtotal=%d brp=%d brpn=%td brpsel=%s brptext=%s brpinlist=%d statusbad=%d status=%s",
+             "search=%d searchkeys=%d searchtext=%s searchdone=%d searchfull=%d searchdue=%d searchbad=%d searchbar=%d searchsel=%d-%d searchcaret=%d findsel=%d-%d findcaret=%d seldir=%s searchinfo=%s inside=%d insidekeys=%d insidetext=%s insideopts=%s insidebad=%d insiderow=%d hit=%s hitmatch=%s hitdrawn=%d datecol=%s datecolw=%.0f owreads=%d conf=%s confbad=%d seldate=%s trashfull=%d trashicon=%s spawned=%d closingall=%d closedtabs=%d emptyn=%td shiftsel=%s clearn=%lld clearing=%d gitshown=%d gitsel=%s gitn=%td gitnamecol=%s gitcells=%d infogit=%s gitdue=%d branch=%s brn=%d brhere=%d brnote=%s brlist=%s brfits=%d brunder=%d gitwatch=%d brtotal=%d brp=%d brpn=%td brpsel=%s brptext=%s brpinlist=%d sidew=%d sidebox=%.0f sidepx=%d drag=%s edgelit=%d resizeptr=%d statusbad=%d status=%s",
              app.cwd, app.list.n, app.list.hidden, STR_ARG(sel), app.ui.list.sel, app.ui.list.top, app.ui.list.rows, app.hov.row,
              t->accent.r, t->accent.g, t->accent.b, t->bg.r, t->bg.g, t->bg.b, t->icons[0] ? t->icons : "-",
              app.icon_scale, GetScreenWidth(), GetScreenHeight(), app.reloads, app.themes, atomic_load(&watch.batches),
@@ -519,7 +524,7 @@ static void script_state(char *out, size_t cap)
              app.ui.find.anchor < app.ui.find.caret ? app.ui.find.anchor : app.ui.find.caret,
              app.ui.find.anchor < app.ui.find.caret ? app.ui.find.caret : app.ui.find.anchor, app.ui.find.caret, seldir, searchinfo,
              app.ui.search_inside, app.ui.focus == UI_FOCUS_INSIDE, insidetext, insideopts, app.search_im.bad,
-             (int)Clay_GetElementData(CLAY_ID("inside-field")).found, hit, hitmatch, hitdrawn, VIEWS[app.ui.view].date_col, date_w(), ow_idb_reads, confw, app.conf.bad, seldate, app.trash_full, trashicon, spawn_started, closing_all, closed_tabs.n, app.empty_n, app.ui.shift_add ? "add" : "range", clear.counted ? (long long)clear.sum.files : -1LL, clear.running, git_shown() != NULL, GIT_WORDS[app.have_list && app.list.n ? entry_git(app.ui.list.sel) : GS_NONE], git_shown() ? git_shown()->g.changed : (isize)0, gitnamecol, gitcells, infogit, git.due != 0, branch, app.ui.br_n, app.ui.br_here, brnote, brlist, brfits, brunder, atomic_load(&watch.git_wd) >= 0, app.ui.br_total, app.ui.panel == UI_PANEL_BRANCHES, app.ui.brp.list.n, brpsel, brptext, app.ui.brp.in_list, app.status[0] && app.status_bad, app.status[0] ? app.status : "-");
+             (int)Clay_GetElementData(CLAY_ID("inside-field")).found, hit, hitmatch, hitdrawn, VIEWS[app.ui.view].date_col, date_w(), ow_idb_reads, confw, app.conf.bad, seldate, app.trash_full, trashicon, spawn_started, closing_all, closed_tabs.n, app.empty_n, app.ui.shift_add ? "add" : "range", clear.counted ? (long long)clear.sum.files : -1LL, clear.running, git_shown() != NULL, GIT_WORDS[app.have_list && app.list.n ? entry_git(app.ui.list.sel) : GS_NONE], git_shown() ? git_shown()->g.changed : (isize)0, gitnamecol, gitcells, infogit, git.due != 0, branch, app.ui.br_n, app.ui.br_here, brnote, brlist, brfits, brunder, atomic_load(&watch.git_wd) >= 0, app.ui.br_total, app.ui.panel == UI_PANEL_BRANCHES, app.ui.brp.list.n, brpsel, brptext, app.ui.brp.in_list, side_w(), Clay_GetElementData(CLAY_ID("side")).boundingBox.width, app.side_px, (const char *[]){ "-", "zoom", "side" }[app.drag], edge_lit && side_w(), cursor_now == MOUSE_CURSOR_RESIZE_EW, app.status[0] && app.status_bad, app.status[0] ? app.status : "-");
     frame_us_max = 0;
 }
 
@@ -789,12 +794,25 @@ static bool script_input(UiInput *in)
             script.user_keys = true;
         } else if (str_eq(cmd, S("idle"))) {
             script_idle();
-        } else if (str_eq(cmd, S("click-here"))) {
+        } else if (str_eq(cmd, S("click-here"))) {   // (pressed and let go: a drag it starts ends at once)
             press_at(in, script.px, script.py, 0);
+            drag_at(in, script.px, false);
         } else if (str_eq(cmd, S("drag-here"))) {
             press_at(in, script.px, script.py, 0);
-            zoom_drag_at(in, script.px + (float)atoi(a), true);
-            zoom_drag_at(in, script.px + (float)atoi(a), false);
+            drag_at(in, script.px + (float)atoi(a), true);
+            drag_at(in, script.px + (float)atoi(a), false);
+        } else if (str_eq(cmd, S("press-here"))) {   // (F13) held across frames, until release
+            press_at(in, script.px, script.py, 0);
+            script.held = true;
+        } else if (str_eq(cmd, S("move-to"))) {
+            float x = 0, y = 0;
+            if (sscanf(a, "%f %f", &x, &y) != 2) script_fail("move-to <x> <y>");
+            script.px = x, script.py = y, script.pointing = true;
+            if (script.held) drag_at(in, x, true);
+            hover_at(x, y);
+        } else if (str_eq(cmd, S("release"))) {
+            drag_at(in, script.px, false);
+            script.held = false;
         } else if (str_eq(cmd, S("middle-here"))) {
             middle_at(in, script.px, script.py);
         } else if (str_eq(cmd, S("right-here"))) {

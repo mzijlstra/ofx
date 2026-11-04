@@ -42,7 +42,7 @@ rules shared by every tool here.
   its udisksctl fake "mounts" under `<scratch>/media` by writing the test mount list, and with the
   guard on (`OFX_GUI_ROOT`) ofx reads neither real folder without them. Reading them is harmless;
   never test a mount against the real ones.
-- **The state file** (F6, F11): ofx writes the sidebar's mode, the View toggles, Show Hidden, and
+- **The state file** (F6, F11): ofx writes the sidebar's mode and width (F13), the View toggles, Show Hidden, and
   per folder its view, icon size, sort and cursor (every folder a window opens, at the quit) to
   `$XDG_STATE_HOME/ofx/state`; `run-script.sh` points that at `<scratch>/state`, so a test never
   changes his. Its housekeeping `stat`s the folders it holds on a write: his if it were his file.

@@ -333,7 +333,7 @@ static void layout_zoom(void)
                 CLAY(CLAY_IDI("zoom-notch", j), { .layout = { .sizing = { CLAY_SIZING_FIXED(2), CLAY_SIZING_FIXED(8) } }, .backgroundColor = line,
                                                   .floating = { .attachTo = CLAY_ATTACH_TO_PARENT, .zIndex = 1, .offset = { zoom_x(j) - 1, 0 },
                                                                 .attachPoints = { CLAY_ATTACH_POINT_LEFT_CENTER, CLAY_ATTACH_POINT_LEFT_CENTER } } }) {}
-            bool lit = app.hov.zoom || app.zoom_drag;
+            bool lit = app.hov.zoom || app.drag == DRAG_ZOOM;
             CLAY(CLAY_ID("zoom-knob"), { .layout = { .sizing = { CLAY_SIZING_FIXED(ZOOM_KNOB_W), CLAY_SIZING_FIXED(14) } },
                                          .backgroundColor = lit ? cc(t->fg) : cc(t->accent), .cornerRadius = CLAY_CORNER_RADIUS(3),
                                          .floating = { .attachTo = CLAY_ATTACH_TO_PARENT, .zIndex = 2, .offset = { zoom_x(k) - ZOOM_KNOB_W / 2.0f, 0 },

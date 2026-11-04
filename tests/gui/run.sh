@@ -6,7 +6,7 @@
 # printed whole, in order, once all are done; clip and keys share one (each starts a sway, which
 # takes the first free wayland-N).
 # The groups (one or more scripts on one tree): browse big gone watchgap f2 f3 f4 f5 f52 f53 f54
-# f6 (f6, f6b) usb f62 (f62, f62b, f62c) f63 (f63, f63b, f63c) f64 (f64, f64b, f64c, f64d) f7 (f7, f7b) f72 f73 (f73, f73b, f73c, f73d) f74 f75 (f75, f75b) f8 (f8, f8b, f8c, f8d, f8e) f9 (f9, f9b) f10 (f10, f10b, f10c, f10d) f11 (f11, f11b, f11c, f11d, f11e, f11f, f11g, f11h, f11i, f11j, f11k, f11l, f11m, f11n, f11o, f11p, f11q, f11r, f11s) f12 (f12, f12b) f12g f12h f12i clip (clip, copypath) keys (both in sway) hang guard3 guard. Named ones only, or all of them; a group
+# f6 (f6, f6b) usb f62 (f62, f62b, f62c) f63 (f63, f63b, f63c) f64 (f64, f64b, f64c, f64d) f7 (f7, f7b) f72 f73 (f73, f73b, f73c, f73d) f74 f75 (f75, f75b) f8 (f8, f8b, f8c, f8d, f8e) f9 (f9, f9b) f10 (f10, f10b, f10c, f10d) f11 (f11, f11b, f11c, f11d, f11e, f11f, f11g, f11h, f11i, f11j, f11k, f11l, f11m, f11n, f11o, f11p, f11q, f11r, f11s) f12 (f12, f12b) f12g f12h f12i f13 (f13, f13b, f13c, f13d) clip (clip, copypath) keys (both in sway) hang guard3 guard. Named ones only, or all of them; a group
 # that fails says "== <script>: FAILED" or "<group>: FAILED" (tools/mutation/gui.py reads it).
 set -u
 par=1
@@ -476,6 +476,17 @@ printf '#!/bin/sh\nsleep 1\nexec "%s" "$@"\n' "$T/fakes/ofx-clean.real" > "$T/fa
 printf 'x' > "$T/cache/thumbnails/large/0123456789abcdef0123456789abcdef.png"
 printf 'y' > "$T/cache/thumbnails/fail/ofx/0123456789abcdef0123456789abcdee.png"
 rs f12b OFX_TEST_THUMB_RUN_MS=500 OFX_TEST_THUMBNAILERS="$T/thumbnailers" -- "$T/tree"
+fi
+if want f13; then
+# F13 step 2: the sidebar's width (f13 drags it; f13b to f13d start from a remembered one).
+T=$base/f13; rm -rf "$T"; H=$T/home; mkdir -p "$H/tree/adir"; for k in 1 2 3 4 5 6 7 8; do : > "$H/tree/f$k.txt"; done
+RS_HOME=$H
+rs f13 -- "$H/tree"
+for w in 300:f13b 9999:f13c abc:f13d; do
+    T=$base/${w#*:}; rm -rf "$T"; H=$T/home; mkdir -p "$H/tree" "$T/state/ofx"; printf 'sidewidth=%s\n' "${w%%:*}" > "$T/state/ofx/state"
+    RS_HOME=$H
+    rs "${w#*:}" OFX_SCRIPT_SIZE=700x516 -- "$H/tree"   # (a narrower window: half of it is 350)
+done
 fi
 if want f12g; then
 # F12 step 5: git status, on a scratch repository made here (git's own config files out of it), the

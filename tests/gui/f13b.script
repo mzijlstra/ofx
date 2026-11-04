@@ -1,0 +1,5 @@
+# F13 step 2: the width remembered (run.sh writes sidewidth=300 before the start), in a window 700
+# wide (run.sh): under half of it.
+settle
+expect w=700 sidew=300 sidepx=300
+quit

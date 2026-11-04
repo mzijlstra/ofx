@@ -194,6 +194,10 @@ or F9 (remembered in `~/.local/state/ofx/state`):
 - **tree**: the folders from `/`, opened down to the one shown.
 - **hidden**: no sidebar.
 
+Its width: drag its right edge (lit, with the resize pointer, under it), from 140 px to half the
+window (480 px at most); a double click on the edge gives the first 200 px back. Remembered beside
+the mode, one width for every window.
+
 The bottom bar's status part: what just happened, until the next key or click; else the selected
 entry (`"adir" selected (12 items)`), how many are selected, or the folder's count and its drive's
 free space.

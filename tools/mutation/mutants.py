@@ -2514,3 +2514,18 @@ MUTANTS += [
     ('fs/paths.c', "            else if (bad)\n                for", "            else if (false)\n                for"),
     ('fs/paths.c', '            else PUT("%.*s", len, s.p + i);', '            else PUT("%c", c);'),
 ]
+# F13 step 2 (2026-11-04): the sidebar's width, sidewidth=
+MUTANTS += [
+    ('ui/helpers.c', '    int hi = w / 2 < UI_SIDE_MAX ? w / 2 : UI_SIDE_MAX;', '    int hi = UI_SIDE_MAX;'),
+    ('ui/helpers.c', '    int hi = w / 2 < UI_SIDE_MAX ? w / 2 : UI_SIDE_MAX;', '    int hi = w / 2;'),
+    ('ui/helpers.c', '    if (want <= 0) want = UI_SIDE_W;', '    if (want < 0) want = UI_SIDE_W;'),
+    ('ui/helpers.c', '    if (want <= 0) want = UI_SIDE_W;\n', ''),
+    ('ui/helpers.c', '    if (want > hi) want = hi;', '    if (want > hi + 1) want = hi;'),
+    ('ui/helpers.c', '    return want < UI_SIDE_MIN ? UI_SIDE_MIN : want;', '    return want;'),
+    ('ui/helpers.c', '    return want < UI_SIDE_MIN ? UI_SIDE_MIN : want;', '    return want <= UI_SIDE_MIN ? UI_SIDE_MIN + 1 : want;'),
+    ('fs/state.c', '    if (v.len > 4) return 0;', '    if (v.len > 5) return 0;'),
+    ('fs/state.c', "        if (v.p[i] < '0' || v.p[i] > '9') return 0;", "        if (v.p[i] < '0') return 0;"),
+    ('fs/state.c', "        if (v.p[i] < '0' || v.p[i] > '9') return 0;", "        if (v.p[i] > '9') return 0;"),
+    ('fs/state.c', "        n = n * 10 + (v.p[i] - '0');", "        n = v.p[i] - '0';"),
+    ('fs/state.c', '        if (str_eq(key, S("sidewidth"))) s.side_px = state_px(val);\n', ''),
+]
