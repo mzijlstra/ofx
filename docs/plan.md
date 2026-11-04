@@ -35,18 +35,24 @@ Omarchy's theme: the binary, the folder `tools/ofx`, the window's title and Wayl
     its row holds another place. f8c checks a rewrite that leaves the file as it was keeps the menu.
     Not seen failing since, so this one is the likely cause, not a proven one.
 
-- **Eleven GUI mutants survived, all from before F13** (F13's full run, 2026-11-04; each also survives
-  on F12's last commit 1c715c9, so their tags were older than the code). Test gaps to look at, or
-  mutants to drop as equivalent:
-  - #177 (a quit with jobs running asks first) and #178 (SIGUSR1 is Close All's signal): killed
-    since 2026-11-04 by f7. Both quit the window where f7b expected it to stay, and the script
-    runner counted only the expectations it reached; a window that quits with commands left fails
-    the run now (the `harness` group checks that).
-  - #0, go up selects the folder left: equivalent now, F11's remembered cursor puts it there too.
-  - #388 (git.c), #566 and #621 (folder.c), #570 and #574 (remember.c), #614 (restore.c),
-    #620 (clipboard.c), #650 (folder.c).
-
-  `tools/mutation/gui.py <scratch> 0,388,566,570,574,614,620,621,650` runs them.
+- **Eleven GUI mutants survived F13's full run (2026-11-04), all from before F13; ten are killed
+  now, one is left** (each also survived on F12's last commit 1c715c9, so their tags were older
+  than the code):
+  - Killed by a harness fix: two quit the window where f7b expected it to stay, and the script
+    runner counted only the expectations it reached. A window that quits with commands left, or
+    during a wait-for, fails the run now, and a script that ends on its quitting key says `quits`
+    first (the `harness` group checks the runner itself).
+  - Killed by new checks: go up past a remembered cursor (browse; it had been thought
+    equivalent), an unlistable folder that remembers a view (f11b), far/ entered in the icon view
+    (f64), the start's own window line (f11n), a lost clipboard connection (`clip-drop`, clip),
+    a folder remembered as icons with the icon cache nearly full (f63d), the folders table filled
+    (`OFX_TEST_FOLDERS_MEM`, f11t). The too-many-entries restore now shares the unlistable
+    folder's path, so one mutant covers both.
+  - **Left: gui/git.c's `if (br && s < 0) return true;`** (the branch list arriving alone asks
+    for a redraw). Without it the open branch menu shows "Reading branches…" until the pointer
+    moves. Scripts draw every frame, so no script sees a missing redraw (as the hit_same mutant
+    dropped in F13's step C1). Michael to pick: drop it with a note, or teach the runner to flag a
+    frame whose state line changed with no redraw asked for.
 
 ## Milestones
 
