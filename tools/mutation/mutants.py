@@ -219,7 +219,8 @@ MUTANTS += [
     (C, "                c->cut = true;\n", ""),
     (C, "            if (str_eq(line, S(\"copy\"))) continue;\n            return false;", "            continue;"),
     (C, "    if (!ok) n = 0;", ""),
-    (C, '            PUT("%s%s", i ? "\\n" : "", c->path[i]);', '            PUT("%s\\n", c->path[i]);'),
+    (C, "        if (i && n + 1 < avail) out[n++] = '\\n';\n", ''),
+    (C, '        isize k = quoted ? shell_quote(', '        isize k = false ? shell_quote('),
     # jobs
     (J, "                fchmod(dfd, st.st_mode & 07777);\n                futimens(dfd, (struct timespec[2]){ st.st_atim, st.st_mtim });", "                futimens(dfd, (struct timespec[2]){ st.st_atim, st.st_mtim });"),
     (J, "                fchmod(dfd, st.st_mode & 07777);\n                futimens(dfd, (struct timespec[2]){ st.st_atim, st.st_mtim });", "                fchmod(dfd, st.st_mode & 07777);"),
@@ -2488,7 +2489,7 @@ MUTANTS += [
     ('ui/menus.c', '    case UM_COPY_PATH_HERE: return (UiAction){ UA_COPY_PATH, -1, true };', '    case UM_COPY_PATH_HERE: return (UiAction){ UA_COPY_PATH, 0, true };'),
     ('ui/menus.c', '    case UM_COPY_PATH_HERE: return true;', '    case UM_COPY_PATH_HERE: return u->list.n > 0;'),
     ('ui/ui.c', 'UM_SEP, UM_PASTE, UM_COPY_PATH_HERE, UM_SELECT_ALL,', 'UM_SEP, UM_PASTE, UM_SELECT_ALL,'),
-    ('fs/paths.c', "    return c < 0x20 || c == 0x7f || (c == 0xc2", "    return c < 0x20 || (c == 0xc2"),
+    ('fs/paths.c', "    return cp < 0x20 || cp == 0x7f || (cp >= 0x80", "    return cp < 0x20 || (cp >= 0x80"),
     ('fs/paths.c', "strchr(\"/._-+,:@%=\", c)", "strchr(\"/._-+,:@%= \", c)"),
     ('fs/paths.c', "    bool plain = s.len > 0, ctrl = false;", "    bool plain = true, ctrl = false;"),
     ('fs/paths.c', "            if (s.p[i] == '\\'') PUT(\"'\\\\''\");\n            else PUT", "            PUT"),
@@ -2498,8 +2499,8 @@ MUTANTS += [
 ]
 # F13 step 1 re-review (2026-11-04): a byte of no valid UTF-8 spelled \xHH
 MUTANTS += [
-    ('fs/paths.c', "(u8)s.p[i + 1] <= 0x9f) ? n : 0;", "(u8)s.p[i + 1] <= 0xbf) ? n : 0;"),
-    ('fs/paths.c', "    if (n == 0) return 1;\n    return c < 0x20", "    if (n == 0) return 0;\n    return c < 0x20"),
+    ('fs/paths.c', "(cp >= 0x80 && cp <= 0x9f) || hidden", "(cp >= 0x80 && cp <= 0xbf) || hidden"),
+    ('fs/paths.c', "    if (n == 0) return 1;\n    u32 cp", "    if (n == 0) return 0;\n    u32 cp"),
     ('fs/paths.c', "c >= 0xc2 && c <= 0xdf ? 2", "c >= 0xc0 && c <= 0xdf ? 2"),
     ('fs/paths.c', "c >= 0xf0 && c <= 0xf4 ? 4", "c >= 0xf0 && c <= 0xf7 ? 4"),
     ('fs/paths.c', "c == 0xe0 ? 0xa0 :", "c == 0xe0 ? 0x80 :"),
@@ -2537,4 +2538,16 @@ MUTANTS += [
     ('ui/helpers.c', '    if (mods & UI_MOD_CTRL) return UI_DROP_COPY;\n', ''),
     ('ui/helpers.c', '    if (mods & UI_MOD_SHIFT) return UI_DROP_MOVE;\n', ''),
     ('ui/helpers.c', '    return same_drive ? UI_DROP_MOVE : UI_DROP_COPY;', '    return UI_DROP_MOVE;'),
+]
+# F13 code-health step D (2026-11-04): the invisible characters escaped
+MUTANTS += [
+    ('fs/paths.c', ' || (cp >= 0x80 && cp <= 0x9f) || hidden ? n : 0;', ' || (cp >= 0x80 && cp <= 0x9f) ? n : 0;'),
+    ('fs/paths.c', '    bool hidden = cp == 0x061c || ', '    bool hidden = '),
+    ('fs/paths.c', '(cp >= 0x200b && cp <= 0x200f)', '(cp >= 0x200a && cp <= 0x200f)'),
+    ('fs/paths.c', '(cp >= 0x200b && cp <= 0x200f)', '(cp >= 0x200c && cp <= 0x200f)'),
+    ('fs/paths.c', '(cp >= 0x2028 && cp <= 0x202e)', '(cp >= 0x2029 && cp <= 0x202e)'),
+    ('fs/paths.c', '(cp >= 0x2028 && cp <= 0x202e)', '(cp >= 0x2028 && cp <= 0x202d)'),
+    ('fs/paths.c', '(cp >= 0x2060 && cp <= 0x2069)', '(cp >= 0x2060 && cp <= 0x2068)'),
+    ('fs/paths.c', '(cp >= 0x2060 && cp <= 0x2069)', '(cp >= 0x2060 && cp <= 0x2070)'),
+    ('fs/paths.c', ' || cp == 0xfeff;', ';'),
 ]

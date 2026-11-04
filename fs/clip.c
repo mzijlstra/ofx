@@ -26,8 +26,28 @@ typedef struct {
 //   gnome: "copy" or "cut", then a file:// URI a line (no newline at the end, as Nautilus writes)
 //   uris:  a file:// URI a line, each ending in CRLF (RFC 2483)
 //   text:  the paths a line, as they are (a terminal pastes them)
+// c's paths as text in a, one a line: each quoted as a shell would need it (shell_quote), as other
+// programs are offered them (a name with a line break pasted into a terminal was a second command:
+// Michael, 2026-11-04), or as they are (ofx's own text fields). Empty when they don't fit.
+static Str clip_text(Arena *a, const ClipFiles *c, bool quoted)
+{
+    isize avail, n = 0;
+    char *out = arena_tail(a, &avail);
+    if (avail < 1) return arena_commit(a, 0), STR_EMPTY;
+    for (isize i = 0; i < c->n && n >= 0; i++) {
+        if (i && n + 1 < avail) out[n++] = '\n';
+        isize k = quoted ? shell_quote(str_from_c(c->path[i]), out + n, avail - n) : snprintf(out + n, (size_t)(avail - n), "%s", c->path[i]);
+        n = k < 0 || k >= avail - n ? -1 : n + k;
+    }
+    if (n < 0) n = 0;
+    out[n] = 0;
+    arena_commit(a, n + 1);
+    return (Str){ out, n };
+}
+
 static Str clip_payload(Arena *a, const ClipFiles *c, ClipFormat f)
 {
+    if (f == CLIP_FMT_TEXT) return clip_text(a, c, true);
     isize avail;
     char *out = arena_tail(a, &avail);
     isize n = 0;
@@ -40,10 +60,6 @@ static Str clip_payload(Arena *a, const ClipFiles *c, ClipFormat f)
     } while (0)
     if (f == CLIP_FMT_GNOME) PUT("%s", c->cut ? "cut" : "copy");
     for (isize i = 0; ok && i < c->n; i++) {
-        if (f == CLIP_FMT_TEXT) {
-            PUT("%s%s", i ? "\n" : "", c->path[i]);
-            continue;
-        }
         char enc[PATH_MAX * 3];
         if (!percent_encode(str_from_c(c->path[i]), "/", enc, sizeof enc)) ok = false;
         else if (f == CLIP_FMT_GNOME) PUT("\nfile://%s", enc);

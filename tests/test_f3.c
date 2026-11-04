@@ -378,7 +378,9 @@ static void test_clip(void)
     arena_reset(&ta);
     CHECK_STR(clip_payload(&ta, &c, CLIP_FMT_GNOME), "copy\nfile:///home/m/a%20b.txt\nfile:///home/m/%C3%A9%23%3F.txt");
     CHECK_STR(clip_payload(&ta, &c, CLIP_FMT_URIS), "file:///home/m/a%20b.txt\r\nfile:///home/m/%C3%A9%23%3F.txt\r\n");
-    CHECK_STR(clip_payload(&ta, &c, CLIP_FMT_TEXT), "/home/m/a b.txt\n/home/m/\xC3\xA9#?.txt");
+    // (text, quoted as a shell needs it as other programs get it; as it is for ofx's own fields: F13 code-health review)
+    CHECK_STR(clip_payload(&ta, &c, CLIP_FMT_TEXT), "'/home/m/a b.txt'\n'/home/m/\xC3\xA9#?.txt'");
+    CHECK_STR(clip_text(&ta, &c, false), "/home/m/a b.txt\n/home/m/\xC3\xA9#?.txt");
     c.cut = true;
     Str g = clip_payload(&ta, &c, CLIP_FMT_GNOME);
     CHECK(str_starts_with(g, S("cut\nfile://")));
@@ -404,6 +406,11 @@ static void test_clip(void)
     Arena sa;
     arena_init(&sa, "small", small, sizeof small);
     CHECK(clip_payload(&sa, &c, CLIP_FMT_TEXT).len == 0);
+    // (room for the first path, not the second: still empty; F13 code-health review)
+    static u8 mid[40];
+    Arena ma;
+    arena_init(&ma, "mid", mid, sizeof mid);
+    CHECK(clip_payload(&ma, &c, CLIP_FMT_URIS).len == 0);
 }
 
 // ---- jobs ---------------------------------------------------------------------------------------

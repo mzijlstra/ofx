@@ -83,15 +83,22 @@ static int utf8_at(Str s, isize i)
 }
 
 // How many bytes from i a paste must spell as \xHH, 0 for none: a control character (C0, DEL, or
-// C1 in UTF-8, U+0080..U+009F, which a terminal may take as a command: U+009B is CSI), or a byte
-// that starts no valid UTF-8 (step 1 re-review: so the paste is valid UTF-8, and no 8-bit control
+// C1 in UTF-8, U+0080..U+009F, which a terminal may take as a command: U+009B is CSI), an
+// invisible one (below), or a byte that starts no valid UTF-8 (step 1 re-review: so the paste is valid UTF-8, and no 8-bit control
 // reaches a Latin-1 terminal).
 static int shell_ctrl(Str s, isize i)
 {
     u8 c = (u8)s.p[i];
     int n = utf8_at(s, i);
     if (n == 0) return 1;
-    return c < 0x20 || c == 0x7f || (c == 0xc2 && (u8)s.p[i + 1] <= 0x9f) ? n : 0;
+    u32 cp = n == 1 ? c : n == 2 ? (u32)(c & 0x1f) << 6 | ((u8)s.p[i + 1] & 0x3f)
+           : n == 3 ? (u32)(c & 0x0f) << 12 | (u32)((u8)s.p[i + 1] & 0x3f) << 6 | ((u8)s.p[i + 2] & 0x3f) : 0x10000;
+    // The invisible ones too (Michael, 2026-11-04): what turns text's direction (U+061C, U+200E-200F,
+    // U+202A-202E, U+2066-2069), joins or breaks it unseen (U+180E, U+200B-200D, U+2060-2065,
+    // U+FEFF), and the line and paragraph separators (U+2028-2029), so a path pastes as it runs.
+    bool hidden = cp == 0x061c || cp == 0x180e || (cp >= 0x200b && cp <= 0x200f) || (cp >= 0x2028 && cp <= 0x202e) ||
+                  (cp >= 0x2060 && cp <= 0x2069) || cp == 0xfeff;
+    return cp < 0x20 || cp == 0x7f || (cp >= 0x80 && cp <= 0x9f) || hidden ? n : 0;
 }
 
 // s as a shell reads it back (ls's shell-escape style, Copy Path; Michael, 2026-11-04): as it is

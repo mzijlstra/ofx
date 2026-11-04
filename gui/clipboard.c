@@ -365,6 +365,15 @@ static ClipFrom clip_get(Arena *a, ClipFiles *c)
     return clip_parse(a, got, gnome, c) ? CLIP_THEIRS : CLIP_NONE;
 }
 
+// Whether the selection is ours (we offered it last, and nobody has taken it since).
+static bool clip_ours(void)
+{
+    pthread_mutex_lock(&clip.mu);
+    bool ours = clip.src != NULL;
+    pthread_mutex_unlock(&clip.mu);
+    return ours;
+}
+
 // The selection as text for an edit line's Ctrl+V (into a): ours as we offer it, another
 // program's text/plain. False without the protocol (the caller asks GLFW); true and empty when the
 // selection holds no text.

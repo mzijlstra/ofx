@@ -360,31 +360,25 @@ static void path_copy(const char *only)
     else c.n = targets(&pastea, c.path, CLIP_PATHS_MAX);
     if (c.n == 0 && app.list.n == 0) c.path[0] = arena_cstr(&pastea, str_from_c(here_dir())), c.n = 1;
     if (c.n == 0) return;
-    isize avail, n = 0;
-    char *out = arena_tail(&pastea, &avail);
-    for (isize i = 0; i < c.n && n >= 0; i++) {
-        if (i && n + 1 < avail) out[n++] = '\n';
-        isize k = shell_quote(str_from_c(c.path[i]), out + n, avail - n);
-        n = k < 0 ? -1 : n + k;
-    }
-    arena_commit(&pastea, n < 0 ? 0 : n + 1);
-    if (n < 0) {
+    Str t = clip_text(&pastea, &c, true);
+    if (t.len == 0) {
         set_status(true, "The paths are too long to copy together");
         return;
     }
-    text_copy((Str){ out, n });
+    text_copy(t);
     if (c.n == 1) set_status(false, "Copied the path");
     else set_status(false, "Copied %td paths", c.n);
 }
 
-// The clipboard's text for an edit line's Ctrl+V, into pastea: through data-control where there
-// is one; else our own files' paths as text when we hold some, or GLFW's text.
+// The clipboard's text for an edit line's Ctrl+V, into pastea: our own files' paths as they are,
+// not quoted as other programs get them (F13 code-health review, 2026-11-04), while the clipboard
+// is still ours; else through data-control where there is one, or GLFW's text.
 static Str text_paste(void)
 {
     arena_reset(&pastea);
     Str t;
+    if (own.n > 0 && (!clip.ok || clip_ours())) return clip_text(&pastea, &own, false);
     if (clip_get_text(&pastea, &t)) return t;
-    if (own.n > 0) return clip_payload(&pastea, &own, CLIP_FMT_TEXT);
     const char *g = GetClipboardText();
     return g ? str_from_c(arena_cstr(&pastea, str_from_c(g))) : STR_EMPTY;
 }

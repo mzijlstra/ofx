@@ -110,4 +110,16 @@ expect idx=4
 key ctrl-shift-c
 sh test "$(wl-paste -n)" = "'$OFX_DIR/it'\''s here.txt'"
 sh test "$(bash -c "printf %s $(wl-paste -n)")" = "$OFX_DIR/it's here.txt"
+# Ctrl+C (F13 code-health review, Michael 2026-11-04): other programs' text quoted as Copy Path's,
+# the file lists other file managers paste from as before; ofx's own fields get the path as it is
+key ctrl-c
+expect status=Copied it's here.txt
+sh test "$(wl-paste -n -t text/plain)" = "'$OFX_DIR/it'\''s here.txt'"
+sh test "$(wl-paste -n -t text/uri-list)" = "$(printf 'file://%s/it%%27s%%20here.txt\r' "$OFX_DIR")"
+sh test "$(wl-paste -n -t x-special/gnome-copied-files)" = "$(printf 'copy\nfile://%s/it%%27s%%20here.txt' "$OFX_DIR")"
+key ctrl-l
+key ctrl-a
+key ctrl-v
+key enter
+wait-for 2000 locating=0 idx=4 statusbad=0
 quit

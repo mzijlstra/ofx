@@ -117,6 +117,15 @@ static void test_shell_quote(void)
         { "/a/\xE0\x9F\x80 \xE0\xA0\x80", "$'/a/\\xe0\\x9f\\x80 \xE0\xA0\x80'" },
         { "/a/\xF0\x8F\xBF\xBF\xF4\x8F\xBF\xBF", "$'/a/\\xf0\\x8f\\xbf\\xbf\xF4\x8F\xBF\xBF'" },
         { "/a/b\xE2\x28\xA1", "$'/a/b\\xe2(\\xa1'" },
+        // the invisible (F13 code-health review, 2026-11-04): a right-to-left override, a zero-width
+        // space, a line separator, a byte-order mark, one past the set (U+2070, superscript zero: kept)
+        { "/a/x\xE2\x80\xAEtxt.exe", "$'/a/x\\xe2\\x80\\xaetxt.exe'" },
+        { "/a/x\xE2\x80\x8By", "$'/a/x\\xe2\\x80\\x8by'" },
+        { "/a/x\xE2\x80\xA8y", "$'/a/x\\xe2\\x80\\xa8y'" },
+        { "/a/\xEF\xBB\xBFx", "$'/a/\\xef\\xbb\\xbfx'" },
+        { "/a/\xD8\x9Cx", "$'/a/\\xd8\\x9cx'" },
+        { "/a/\xE2\x81\xA9x", "$'/a/\\xe2\\x81\\xa9x'" },
+        { "/a/\xE2\x81\xB0x\xE2\x80\x8A", "/a/\xE2\x81\xB0x\xE2\x80\x8A" },
         { "/a/\xE2\x82\x28", "$'/a/\\xe2\\x82('" },
         { "/a/\xF5\x80\x80\x80", "$'/a/\\xf5\\x80\\x80\\x80'" },
         { "/a/it's\tb\\c", "$'/a/it\\'s\\tb\\\\c'" },
