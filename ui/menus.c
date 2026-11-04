@@ -37,6 +37,7 @@ static bool ui_folder_shown(const Ui *u, UiMenuItem it)
     case UM_SEP: case UM_OPEN_IT: case UM_OPEN_TAB: return true;
     case UM_OPEN_WINDOW: case UM_TERMINAL_IN: case UM_SEARCH_IN: case UM_PASTE_INTO: case UM_PROPS_IT: return !u->ctx_trash;
     case UM_CUT_IT: case UM_COPY_IT: return !u->ctx_trash && !u->ctx_place;
+    case UM_COPY_PATH_IT: return !u->ctx_trash;   // (a place's too: a bookmark's, a drive's)
     case UM_BOOKMARK_IT: return !u->ctx_trash && !u->ctx_bmed;
     case UM_BM_RENAME_IT: case UM_BM_UP_IT: case UM_BM_DOWN_IT: case UM_BM_REMOVE_IT: case UM_BM_EDIT_IT: return u->ctx_bmk >= 0;
     case UM_EJECT_IT: case UM_UNMOUNT_IT: return u->ctx_eject;   // (Unmount: the drive stays, to mount again, 2026-10-30)
@@ -78,6 +79,7 @@ static bool ui_menu_enabled(const Ui *u, UiMenuItem it)
     case UM_UNDO: return u->can_undo;
     case UM_CUT: return here && ui_allows(u, UA_CUT);
     case UM_COPY: return here && ui_view_allows(u->view, UA_COPY);
+    case UM_COPY_PATH: return u->focus != UI_FOCUS_SIDE && ui_view_allows(u->view, UA_COPY_PATH);   // (no entry: the folder's)
     case UM_PASTE: return u->can_paste && ui_allows(u, UA_PASTE);
     case UM_SELECT_ALL: case UM_SELECT_MATCH: case UM_INVERT: return files;
     case UM_RENAME: return here && ui_allows(u, UA_RENAME);

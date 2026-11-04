@@ -1,14 +1,14 @@
 # F7.5: the Keyboard Shortcuts panel and the Help menu: F1 and Ctrl+F1, the filter, scrolling, Close.
 settle
 key f1
-expect keys=1 modal=shortcuts keysn=116 keystop=0 keysrows=12 keysfirst=#Moving
+expect keys=1 modal=shortcuts keysn=117 keystop=0 keysrows=12 keysfirst=#Moving
 shot shortcuts.png
 # It takes every key: t filters (no terminal); the filter: words or a key
 type trash
 expect keysn=4 keysfirst=#Moving
 shot shortcuts-trash.png
 keys backspace backspace backspace backspace backspace
-expect keysn=116
+expect keysn=117
 type alt+r
 expect keysn=4 keysfirst=#Moving
 keys backspace backspace backspace backspace backspace

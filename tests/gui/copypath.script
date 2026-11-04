@@ -1,0 +1,90 @@
+# Copy Path (F13): Ctrl+Shift+C, Edit's entry, an entry's, a place's and a path button's, as text on
+# the test sway's clipboard, read back with wl-paste (clip.script has why sway). The tree (run.sh):
+# home/tree: adir/, empty/, a.txt, b.txt.
+settle
+expect n=4 sel=adir sysclip=1
+# The cursor's path; our files leave the clipboard, as with any text copied
+key ctrl-c
+expect status=Copied adir
+raw-key 67 3
+expect status=Copied the path
+sh test "$(wl-paste -n)" = "$OFX_DIR/adir"
+key ctrl-v
+expect status=The clipboard holds no files n=4
+# The marked ones, one a line, in the list's order
+key down
+key down
+key space
+key space
+expect marked=2
+key ctrl-shift-c
+expect status=Copied 2 paths
+sh test "$(wl-paste -n)" = "$(printf '%s/a.txt\n%s/b.txt' "$OFX_DIR" "$OFX_DIR")"
+key esc
+expect marked=0 sel=b.txt
+# Edit's entry: the same
+sh printf x | wl-copy
+key alt-e
+point-menu copy-path
+click-here
+expect menu=-
+sh test "$(wl-paste -n)" = "$OFX_DIR/b.txt"
+# An entry's right-click menu: its own
+point-ui row 0
+right-here
+expect menu=entry sel=adir
+point-menu copy-path
+click-here
+expect menu=-
+sh test "$(wl-paste -n)" = "$OFX_DIR/adir"
+# An empty folder: its own path (Michael, 2026-11-04), by the key and by Edit's entry
+key down
+expect sel=empty
+key enter
+wait-for 2000 n=0
+sh printf x | wl-copy
+key ctrl-shift-c
+expect status=Copied the path
+sh test "$(wl-paste -n)" = "$OFX_DIR"
+sh printf x | wl-copy
+key alt-e
+point-menu copy-path
+click-here
+sh test "$(wl-paste -n)" = "$OFX_DIR"
+# The sidebar's keys: nothing (its rows' menus have it)
+key tab
+expect sidefocus=1
+sh printf x | wl-copy
+key ctrl-shift-c
+sh test "$(wl-paste -n)" = x
+key tab
+# A place's menu, with entries marked: Home's path alone
+key backspace
+wait-for 2000 n=4 sel=empty
+key ctrl-a
+expect marked=4
+point-ui side-row 1
+right-here
+expect menu=folder
+point-menu copy-path-it
+click-here
+expect menu=-
+sh test "$(wl-paste -n)" = "$OFX_ROOT/home"
+# A path button's: its folder's
+point-ui crumb 1
+right-here
+expect menu=folder
+point-menu copy-path-it
+click-here
+sh test "$(wl-paste -n)" = "$OFX_ROOT/home/tree"
+# A search that found nothing: the folder searched
+key esc
+key ctrl-shift-f
+wait-for 2000 search=1 searchkeys=1
+type zzz
+wait-for 3000 searchdue=0 searchdone=1 n=0
+sh printf x | wl-copy
+key ctrl-shift-c
+expect status=Copied the path
+sh test "$(wl-paste -n)" = "$OFX_ROOT/home/tree"
+quit

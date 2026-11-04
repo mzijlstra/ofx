@@ -1663,6 +1663,7 @@ static void test_format(void)
 #include "test_f10.c"
 #include "test_f11.c"
 #include "test_f12.c"
+#include "test_f13.c"
 #include "test_fm1.c"
 
 int main(void)
@@ -1856,6 +1857,7 @@ int main(void)
     if (fast) test_ui_age();
     if (fast) test_branch_panel();
     if (fast) test_file_read();
+    if (fast) test_copy_path();
     if (slow) test_git_common_bare();
     if (slow) test_box_why();
     if (slow) test_box_outlive();

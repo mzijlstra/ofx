@@ -31,6 +31,7 @@ typedef enum {
     UK_ALL,        // Ctrl+A
     UK_COPY,       // Ctrl+C
     UK_CUT,        // Ctrl+X
+    UK_COPY_PATH,  // Ctrl+Shift+C: the paths as text (F13)
     UK_PASTE,      // Ctrl+V
     UK_UNDO,       // Ctrl+Z
     UK_NEWFOLDER,  // Ctrl+Shift+N
@@ -251,6 +252,7 @@ typedef enum {
     UA_NOT_IN_SEARCH,   // something the search view can't do: paste, a new folder, a bookmark of it (F9; gui/ says so)
     UA_CONTAINING,  // index: a search result: its folder, it selected (F9)
     UA_OPEN_LINE,   // index: a search result found inside files: in the editor at its line (F9 step 4; gui/ says when it has none)
+    UA_COPY_PATH,   // the marked entries' paths (or the cursor's; none: the folder shown's) as text, one a line (F13)
 } UiActionKind;
 // A right-click menu's entry on a folder of the files (F8) acts on that folder, not the folder
 // shown: UA_NEW_WINDOW, UA_TERMINAL, UA_PASTE and UA_ADD_BOOKMARK with `all` set; index is the entry.
@@ -274,7 +276,7 @@ enum { UI_MODAL_YES = 1, UI_MODAL_NO, UI_MODAL_SKIP, UI_MODAL_REPLACE, UI_MODAL_
 // entries; UM_SEP is a line between groups.
 typedef enum {
     UM_SEP, UM_NEW_TAB, UM_TAB_REOPEN, UM_NEW_WINDOW, UM_NEW_FOLDER, UM_NEW_FILE, UM_OPEN, UM_OPEN_WITH, UM_PROPERTIES, UM_CLOSE_ALL, UM_CLOSE,
-    UM_UNDO, UM_CUT, UM_COPY, UM_PASTE, UM_SELECT_ALL, UM_SELECT_MATCH, UM_INVERT, UM_DUPLICATE, UM_MAKE_LINK, UM_RENAME, UM_TRASH, UM_DELETE, UM_RESTORE,
+    UM_UNDO, UM_CUT, UM_COPY, UM_COPY_PATH, UM_PASTE, UM_SELECT_ALL, UM_SELECT_MATCH, UM_INVERT, UM_DUPLICATE, UM_MAKE_LINK, UM_RENAME, UM_TRASH, UM_DELETE, UM_RESTORE,
     UM_RELOAD, UM_SIDE_PLACES, UM_SIDE_TREE, UM_SIDE_NONE, UM_HIDDEN, UM_PERMS_COLS, UM_GROUP_COL, UM_COLORS, UM_SHOW_MENU, UM_SORT_NAME, UM_SORT_SIZE, UM_SORT_MTIME, UM_SORT_REVERSE,
     UM_ZOOM_IN, UM_ZOOM_OUT, UM_ZOOM_RESET, UM_VIEW_LIST, UM_VIEW_ICONS,
     UM_PARENT, UM_BACK, UM_FORWARD, UM_HOME, UM_TRASH_VIEW, UM_FIND, UM_SEARCH, UM_LOCATION, UM_TERMINAL,
@@ -282,7 +284,7 @@ typedef enum {
     UM_SHORTCUTS, UM_ABOUT, UM_PREFERENCES, UM_CLEAR_PREVIEWS,
     UM_OPEN_TAB, UM_EMPTY_TRASH, UM_HERE_PROPS, UM_OPEN_WINDOW, UM_PASTE_INTO, UM_TERMINAL_IN, UM_FOLLOW, UM_BOOKMARK_IT,
     UM_CONTAINING, UM_OPEN_LINE, UM_SEARCH_IN,
-    UM_OPEN_IT, UM_CUT_IT, UM_COPY_IT, UM_BM_RENAME_IT, UM_BM_UP_IT, UM_BM_DOWN_IT, UM_BM_REMOVE_IT, UM_BM_EDIT_IT, UM_EJECT_IT,
+    UM_OPEN_IT, UM_CUT_IT, UM_COPY_IT, UM_COPY_PATH_IT, UM_BM_RENAME_IT, UM_BM_UP_IT, UM_BM_DOWN_IT, UM_BM_REMOVE_IT, UM_BM_EDIT_IT, UM_EJECT_IT,
     UM_UNMOUNT_IT, UM_MOUNT_IT, UM_EMPTY_IT, UM_PROPS_IT, UM_TAB_LEFT, UM_TAB_RIGHT, UM_TAB_OTHERS,
     UM_BR_NOTE, UM_BR_0, UM_BR_1, UM_BR_2, UM_BR_3, UM_BR_4, UM_BR_5, UM_BR_6, UM_BR_7, UM_BR_ALL,
     UM_ITEMS
@@ -325,6 +327,7 @@ static const struct { const char *label, *key, *word; UiEvent ev; char mark; } U
     [UM_UNDO] = { "Undo", "Ctrl+Z", "undo", { UK_UNDO, 0 } },
     [UM_CUT] = { "Cut", "Ctrl+X", "cut", { UK_CUT, 0 } },
     [UM_COPY] = { "Copy", "Ctrl+C", "copy", { UK_COPY, 0 } },
+    [UM_COPY_PATH] = { "Copy Path", "Ctrl+Shift+C", "copy-path", { UK_COPY_PATH, 0 } },   // (F13)
     [UM_PASTE] = { "Paste", "Ctrl+V", "paste", { UK_PASTE, 0 } },
     [UM_SELECT_ALL] = { "Select All", "Ctrl+A", "select-all", { UK_ALL, 0 } },
     [UM_SELECT_MATCH] = { "Select Items Matching\xE2\x80\xA6", "Ctrl+Shift+A", "select-match", { UK_SELECT_MATCH, 0 } },
@@ -394,6 +397,7 @@ static const struct { const char *label, *key, *word; UiEvent ev; char mark; } U
     [UM_OPEN_IT] = { "Open", "", "open-it" },
     [UM_CUT_IT] = { "Cut", "", "cut-it" },
     [UM_COPY_IT] = { "Copy", "", "copy-it" },
+    [UM_COPY_PATH_IT] = { "Copy Path", "", "copy-path-it" },
     [UM_BM_RENAME_IT] = { "Rename\xE2\x80\xA6", "", "bm-rename" },
     [UM_BM_UP_IT] = { "Move Up", "", "bm-up" },
     [UM_BM_DOWN_IT] = { "Move Down", "", "bm-down" },
@@ -423,7 +427,7 @@ static const UiMenuItem UI_MENU_FILE[] = {
 };
 // Move to Trash shows outside the trash view, Restore in it (ui_menu_shown).
 static const UiMenuItem UI_MENU_EDIT[] = {
-    UM_UNDO, UM_SEP, UM_CUT, UM_COPY, UM_PASTE, UM_SEP, UM_SELECT_ALL, UM_SELECT_MATCH, UM_INVERT, UM_SEP, UM_DUPLICATE, UM_MAKE_LINK, UM_RENAME, UM_SEP,
+    UM_UNDO, UM_SEP, UM_CUT, UM_COPY, UM_COPY_PATH, UM_PASTE, UM_SEP, UM_SELECT_ALL, UM_SELECT_MATCH, UM_INVERT, UM_SEP, UM_DUPLICATE, UM_MAKE_LINK, UM_RENAME, UM_SEP,
     UM_TRASH, UM_RESTORE, UM_DELETE, UM_SEP, UM_PREFERENCES,
 };
 static const UiMenuItem UI_MENU_VIEW[] = {
@@ -442,13 +446,13 @@ static const UiMenuItem UI_MENU_HELP[] = { UM_SHORTCUTS, UM_SEP, UM_ABOUT };
 // The right-click menus (F8, docs/plan.md "F8 design"): an entry of the files (the marks, or the
 // cursor's), and the files' empty space (the folder shown).
 static const UiMenuItem UI_MENU_CTX_ENTRY[] = {
-    UM_OPEN, UM_CONTAINING, UM_OPEN_LINE, UM_OPEN_TAB, UM_OPEN_WINDOW, UM_OPEN_WITH, UM_SEP, UM_CUT, UM_COPY, UM_PASTE_INTO, UM_DUPLICATE, UM_SEP,
+    UM_OPEN, UM_CONTAINING, UM_OPEN_LINE, UM_OPEN_TAB, UM_OPEN_WINDOW, UM_OPEN_WITH, UM_SEP, UM_CUT, UM_COPY, UM_COPY_PATH, UM_PASTE_INTO, UM_DUPLICATE, UM_SEP,
     UM_MAKE_LINK, UM_RENAME, UM_SEP, UM_TERMINAL_IN, UM_SEARCH_IN, UM_FOLLOW, UM_BOOKMARK_IT, UM_SEP, UM_TRASH, UM_RESTORE, UM_DELETE, UM_SEP,
     UM_PROPERTIES,
 };
 // A folder elsewhere: a tree row, a path button, a place (Trash, a bookmark, a drive have their own).
 static const UiMenuItem UI_MENU_CTX_FOLDER[] = {
-    UM_OPEN_IT, UM_OPEN_TAB, UM_OPEN_WINDOW, UM_TERMINAL_IN, UM_SEARCH_IN, UM_SEP, UM_CUT_IT, UM_COPY_IT, UM_PASTE_INTO, UM_SEP, UM_BOOKMARK_IT,
+    UM_OPEN_IT, UM_OPEN_TAB, UM_OPEN_WINDOW, UM_TERMINAL_IN, UM_SEARCH_IN, UM_SEP, UM_CUT_IT, UM_COPY_IT, UM_COPY_PATH_IT, UM_PASTE_INTO, UM_SEP, UM_BOOKMARK_IT,
     UM_BM_RENAME_IT, UM_BM_UP_IT, UM_BM_DOWN_IT, UM_BM_REMOVE_IT, UM_BM_EDIT_IT, UM_SEP, UM_UNMOUNT_IT, UM_EJECT_IT, UM_MOUNT_IT, UM_EMPTY_IT, UM_SEP, UM_PROPS_IT,
 };
 // A tab (the current one: a right press on another shows it first).
@@ -515,6 +519,7 @@ static const struct { UiKeySection sec; const char *action, *key, *key2; } UI_KE
     { KS_SELECT, "Clear the selection", "Esc", "" },
     { KS_CHANGE, "Cut", "Ctrl+X", "" },
     { KS_CHANGE, "Copy", "Ctrl+C", "" },
+    { KS_CHANGE, "Copy Path", "Ctrl+Shift+C", "" },
     { KS_CHANGE, "Paste", "Ctrl+V", "" },
     { KS_CHANGE, "Undo", "Ctrl+Z", "" },
     { KS_CHANGE, "Make Link", "Ctrl+M", "" },
@@ -864,7 +869,7 @@ typedef enum {
 static bool ui_view_allows(UiView v, UiActionKind k)
 {
     switch (k) {
-    case UA_COPY: case UA_CUT: case UA_MAKE_LINK: case UA_TERMINAL: case UA_NEW_WINDOW: case UA_SEARCH:
+    case UA_COPY: case UA_COPY_PATH: case UA_CUT: case UA_MAKE_LINK: case UA_TERMINAL: case UA_NEW_WINDOW: case UA_SEARCH:
     case UA_RENAME: case UA_DUPLICATE: case UA_OPEN_WITH: return v != UI_VIEW_TRASH;
     case UA_PASTE: case UA_NEWFOLDER: case UA_NEWFILE: case UA_ADD_BOOKMARK: return v == UI_VIEW_FOLDER;
     case UA_RESTORE: case UA_EMPTY_TRASH: return v == UI_VIEW_TRASH;

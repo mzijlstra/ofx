@@ -6,7 +6,7 @@
 # printed whole, in order, once all are done; clip and keys share one (each starts a sway, which
 # takes the first free wayland-N).
 # The groups (one or more scripts on one tree): browse big gone watchgap f2 f3 f4 f5 f52 f53 f54
-# f6 (f6, f6b) usb f62 (f62, f62b, f62c) f63 (f63, f63b, f63c) f64 (f64, f64b, f64c, f64d) f7 (f7, f7b) f72 f73 (f73, f73b, f73c, f73d) f74 f75 (f75, f75b) f8 (f8, f8b, f8c, f8d, f8e) f9 (f9, f9b) f10 (f10, f10b, f10c, f10d) f11 (f11, f11b, f11c, f11d, f11e, f11f, f11g, f11h, f11i, f11j, f11k, f11l, f11m, f11n, f11o, f11p, f11q, f11r, f11s) f12 (f12, f12b) f12g f12h f12i clip keys (both in sway) hang guard3 guard. Named ones only, or all of them; a group
+# f6 (f6, f6b) usb f62 (f62, f62b, f62c) f63 (f63, f63b, f63c) f64 (f64, f64b, f64c, f64d) f7 (f7, f7b) f72 f73 (f73, f73b, f73c, f73d) f74 f75 (f75, f75b) f8 (f8, f8b, f8c, f8d, f8e) f9 (f9, f9b) f10 (f10, f10b, f10c, f10d) f11 (f11, f11b, f11c, f11d, f11e, f11f, f11g, f11h, f11i, f11j, f11k, f11l, f11m, f11n, f11o, f11p, f11q, f11r, f11s) f12 (f12, f12b) f12g f12h f12i clip (clip, copypath) keys (both in sway) hang guard3 guard. Named ones only, or all of them; a group
 # that fails says "== <script>: FAILED" or "<group>: FAILED" (tools/mutation/gui.py reads it).
 set -u
 par=1
@@ -421,6 +421,10 @@ if want clip; then
 # Due in 30 s, not 120: a window stuck on the clipboard's lock runs out the limit.
 T=$base/clip; tree "$T"; rm -f "$T/tree/.hidden" "$T/tree/b2.txt" "$T/tree/b10.txt"; touch "$T/tree/b.txt"
 rs clip RUN_SCRIPT_LIMIT=30 OFX_COMPOSITOR=sway -- "$T/tree"
+# Copy Path (F13), read back as clip's text is: home/tree: adir/, empty/, a.txt, b.txt.
+T=$base/copypath; rm -rf "$T"; H=$T/home; mkdir -p "$H/tree/adir" "$H/tree/empty"; touch "$H/tree/a.txt" "$H/tree/b.txt"
+RS_HOME=$H
+rs copypath RUN_SCRIPT_LIMIT=30 OFX_COMPOSITOR=sway -- "$H/tree"
 fi
 if want keys; then
 # Keys through the compositor (tools/gui/vkbd.c in the test sway, 2026-10-28): GLFW's keycodes and

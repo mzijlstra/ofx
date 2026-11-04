@@ -13,6 +13,8 @@ shot menu-edit.png
 key down
 expect menuat=copy
 key down
+expect menuat=copy-path
+key down
 expect menuat=select-all
 key enter
 expect menu=- marked=4

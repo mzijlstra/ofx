@@ -111,6 +111,7 @@ static UiKey ui_key_of(int key, int mods)
         }
     }
     if (m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT) && key == GLFW_KEY_N) return UK_NEWFOLDER;
+    if (m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT) && key == GLFW_KEY_C) return UK_COPY_PATH;   // (F13)
     if (key == GLFW_KEY_DELETE || key == GLFW_KEY_KP_DECIMAL) {
         if (key == GLFW_KEY_KP_DECIMAL) return UK_NONE;   // the keypad's . types a dot
         return m == GLFW_MOD_SHIFT ? UK_SHIFT_DELETE : m == 0 ? UK_DELETE : UK_NONE;
@@ -464,6 +465,7 @@ static void folder_do(UiMenuItem it)
     case UM_OPEN_WINDOW: window_on(dir); break;
     case UM_TERMINAL_IN: terminal_in(dir); break;
     case UM_CUT_IT: case UM_COPY_IT: copy_targets(it == UM_CUT_IT, dir); break;
+    case UM_COPY_PATH_IT: path_copy(dir); break;
     case UM_PASTE_INTO: paste(dir); break;
     case UM_BOOKMARK_IT: bookmark_add(dir); break;
     case UM_EJECT_IT:

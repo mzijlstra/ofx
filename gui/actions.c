@@ -319,6 +319,26 @@ static void text_copy(Str t)
     own.n = 0;
 }
 
+// Copy Path (F13): the marked entries' paths (or the cursor's) as text, one a line, or only's (a
+// folder's menu); in an empty folder its own (Michael, 2026-11-04).
+static void path_copy(const char *only)
+{
+    static ClipFiles c;
+    arena_reset(&pastea);
+    if (only) c.path[0] = arena_cstr(&pastea, str_from_c(only)), c.n = 1;
+    else c.n = targets(&pastea, c.path, CLIP_PATHS_MAX);
+    if (c.n == 0 && app.list.n == 0) c.path[0] = arena_cstr(&pastea, str_from_c(here_dir())), c.n = 1;
+    if (c.n == 0) return;
+    Str t = clip_payload(&pastea, &c, CLIP_FMT_TEXT);
+    if (t.len == 0) {
+        set_status(true, "The paths are too long to copy together");
+        return;
+    }
+    text_copy(t);
+    if (c.n == 1) set_status(false, "Copied the path");
+    else set_status(false, "Copied %td paths", c.n);
+}
+
 // The clipboard's text for an edit line's Ctrl+V, into pastea: through data-control where there
 // is one; else our own files' paths as text when we hold some, or GLFW's text.
 static Str text_paste(void)
@@ -824,6 +844,9 @@ static void act(UiAction a)
         if (too_many_marked()) break;
         if (a.kind == UA_TRASH) trash_targets();
         else copy_targets(a.kind == UA_CUT, NULL);
+        break;
+    case UA_COPY_PATH:
+        if (!too_many_marked()) path_copy(NULL);
         break;
     case UA_RENAME: rename_commit(); break;
     case UA_TAB_NEW: tab_open(app.cwd, sel_name(), true); break;

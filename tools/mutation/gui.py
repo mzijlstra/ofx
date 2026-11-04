@@ -868,6 +868,17 @@ MUTANTS = [
     ('gui/folder.c', '    watch_trashes(&trashd);   // armed before', '    // armed before', 'f6'),
     ('gui/watch.c', ' | IN_DELETE_SELF | IN_MOVE_SELF |\n                                                    IN_ONLYDIR | IN_MASK_ADD);', ' | IN_DELETE_SELF | IN_MOVE_SELF |\n                                                    IN_ONLYDIR);', 'f6'),
     ('gui/actions.c', '    ui_mark_clear(&app.ui);\n    trash_state();\n    reload();', '    ui_mark_clear(&app.ui);\n    reload();', 'f6'),
+    # F13 step 1 (2026-11-04): Copy Path (copypath, in the clip group)
+    ('gui/input.c', '    if (m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT) && key == GLFW_KEY_C) return UK_COPY_PATH;   // (F13)\n', '', 'clip'),
+    ('gui/input.c', '    case UM_COPY_PATH_IT: path_copy(dir); break;\n', '', 'clip'),
+    ('gui/actions.c', '    if (only) c.path[0] = arena_cstr(&pastea, str_from_c(only)), c.n = 1;', '    if (false) c.path[0] = arena_cstr(&pastea, str_from_c(only)), c.n = 1;', 'clip'),
+    ('gui/actions.c', '    if (c.n == 0 && app.list.n == 0) c.path[0]', '    if (false) c.path[0]', 'clip'),
+    ('gui/actions.c', 'str_from_c(here_dir())), c.n = 1;', 'str_from_c(app.cwd)), c.n = 1;', 'clip'),
+    ('gui/actions.c', '    Str t = clip_payload(&pastea, &c, CLIP_FMT_TEXT);', '    Str t = clip_payload(&pastea, &c, CLIP_FMT_URIS);', 'clip'),
+    ('gui/actions.c', '    text_copy(t);\n    if (c.n == 1)', '    if (c.n == 1)', 'clip'),
+    ('gui/actions.c', '    if (c.n == 1) set_status(false, "Copied the path");', '    if (true) set_status(false, "Copied the path");', 'clip'),
+    ('gui/actions.c', '    case UA_COPY_PATH:\n        if (!too_many_marked()) path_copy(NULL);\n', '    case UA_COPY_PATH:\n', 'clip'),
+    ('gui/actions.c', '    snprintf(app.text_copied, sizeof app.text_copied, "%.*s", STR_ARG(t));\n    if (!clip_set_text(t))', '    snprintf(app.text_copied, sizeof app.text_copied, "%.*s", STR_ARG(t));\n    if (true)', 'clip'),
 ]
 import concurrent.futures, queue, threading, time
 

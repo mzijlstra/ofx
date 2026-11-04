@@ -102,7 +102,7 @@ rules shared by every tool here.
   `/mnt/sd` that is `/mnt/sd/.Trash-1000`, shared with Nemo). `run-script.sh` points
   `XDG_DATA_HOME` at `<scratch>/data`; the unit tests set it to their root.
 - **The clipboard:** ofx sets the system clipboard through `ext-data-control-v1` on Ctrl+C or
-  Ctrl+X, in the list and in the edit lines (text, F5.2), which replaces Michael's clipboard. weston has no data-control; the
+  Ctrl+X, in the list and in the edit lines (text, F5.2), and Copy Path's text (Ctrl+Shift+C, F13), which replaces Michael's clipboard. weston has no data-control; the
   `clip` group runs in the test sway (below), whose clipboard is its own, with `wl-copy` and
   `wl-paste` as the other program (a `sh` line's WAYLAND_DISPLAY is the window's, so they reach
   that sway). Never run them in a test without that socket: they would read and replace his. A

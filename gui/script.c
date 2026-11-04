@@ -9,7 +9,7 @@
 //   sleep <ms>              frames until that much time has passed
 //   key <name>              up down pageup pagedown home end enter right left backspace esc tab
 //                           f2 f9 delete shift-delete space, and the chords alt-left alt-right ctrl-f
-//                           ctrl-h ctrl-a ctrl-c ctrl-x ctrl-v ctrl-z ctrl-shift-n ctrl-l alt-up
+//                           ctrl-h ctrl-a ctrl-c ctrl-shift-c ctrl-x ctrl-v ctrl-z ctrl-shift-n ctrl-l alt-up
 //                           ctrl-t ctrl-w ctrl-tab ctrl-shift-tab ctrl-shift-pageup ctrl-shift-pagedown,
 //                           shift-left shift-right shift-home shift-end shift-enter ctrl-k ctrl-j ctrl-q,
 //                           ctrl-1 ctrl-2 ctrl-left ctrl-right (a word in a field), ctrl-shift-left ctrl-shift-right,
@@ -555,7 +555,7 @@ static UiKey script_key(Str name)
         { "left", UK_LEFT }, { "backspace", UK_BACKSPACE }, { "esc", UK_ESC }, { "tab", UK_TAB },
         { "alt-left", UK_BACK }, { "alt-right", UK_FORWARD }, { "ctrl-f", UK_FIND }, { "ctrl-h", UK_HIDDEN },
         { "f2", UK_F2 }, { "f9", UK_F9 }, { "delete", UK_DELETE }, { "shift-delete", UK_SHIFT_DELETE }, { "ctrl-a", UK_ALL },
-        { "ctrl-c", UK_COPY }, { "ctrl-m", UK_MAKE_LINK }, { "ctrl-p", UK_PERMS_COLS }, { "ctrl-g", UK_GROUP_COL }, { "ctrl-x", UK_CUT }, { "ctrl-v", UK_PASTE }, { "ctrl-z", UK_UNDO },
+        { "ctrl-c", UK_COPY }, { "ctrl-shift-c", UK_COPY_PATH }, { "ctrl-m", UK_MAKE_LINK }, { "ctrl-p", UK_PERMS_COLS }, { "ctrl-g", UK_GROUP_COL }, { "ctrl-x", UK_CUT }, { "ctrl-v", UK_PASTE }, { "ctrl-z", UK_UNDO },
         { "ctrl-shift-n", UK_NEWFOLDER }, { "ctrl-l", UK_LOCATION }, { "alt-up", UK_PARENT },
         { "ctrl-t", UK_TAB_NEW }, { "ctrl-shift-t", UK_TAB_REOPEN }, { "ctrl-w", UK_TAB_CLOSE }, { "ctrl-tab", UK_TAB_NEXT }, { "ctrl-shift-tab", UK_TAB_PREV },
         { "ctrl-shift-pageup", UK_TAB_LEFT }, { "ctrl-shift-pagedown", UK_TAB_RIGHT },

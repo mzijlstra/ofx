@@ -491,6 +491,7 @@ static bool ui_list_key(Ui *u, UiNames names, const UiInput *in, UiEvent e, bool
     case UK_COPY: if (files) return *out = ui_view_act(u, (UiAction){ UA_COPY, 0, false }), true; break;
     case UK_MAKE_LINK: if (files) return *out = ui_view_act(u, (UiAction){ UA_MAKE_LINK, 0, false }), true; break;
     case UK_CUT: if (files) return *out = ui_view_act(u, (UiAction){ UA_CUT, 0, false }), true; break;
+    case UK_COPY_PATH: if (u->focus != UI_FOCUS_SIDE) return *out = ui_view_act(u, (UiAction){ UA_COPY_PATH, 0, false }), true; break;   // (an empty folder: its own path)
     case UK_PASTE: return *out = ui_view_act(u, (UiAction){ UA_PASTE, 0, false }), true;
     case UK_UNDO: return *out = (UiAction){ UA_UNDO, 0, false }, true;
     case UK_NEWFOLDER: return *out = ui_view_act(u, (UiAction){ UA_NEWFOLDER, 0, false }), true;

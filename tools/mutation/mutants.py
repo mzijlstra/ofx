@@ -1752,7 +1752,7 @@ MUTANTS += [
 
 # One view value and what each view allows (ui_view_allows, 2026-10-28): the table, its callers in the keys and the menus.
 MUTANTS += [
-    ('ui/ui.c', 'case UA_COPY: case UA_CUT: case UA_MAKE_LINK:', 'case UA_CUT: case UA_MAKE_LINK:'),
+    ('ui/ui.c', 'case UA_COPY: case UA_COPY_PATH: case UA_CUT: case UA_MAKE_LINK:', 'case UA_COPY_PATH: case UA_CUT: case UA_MAKE_LINK:'),
     ('ui/ui.c', '    case UA_RESTORE: case UA_EMPTY_TRASH: return v == UI_VIEW_TRASH;\n', ''),
     ('ui/ui.c', '    case UA_CONTAINING: return v == UI_VIEW_SEARCH;\n', ''),
     ('ui/ui.c', 'u->view == UI_VIEW_SEARCH ? UA_NOT_IN_SEARCH : UA_NONE, 0, false };', 'UA_NOT_IN_SEARCH, 0, false };'),
@@ -2461,4 +2461,21 @@ MUTANTS += [
     ('fs/git.c', '        git_branch_add(b, &r, k), b->cur = k >= 0 ? 0 : -1;', '        git_branch_add(b, &r, k), b->cur = 0;'),
     ('fs/git.c', '        if (str_eq(r->name[k], name)) return k;', '        if (str_starts_with(r->name[k], name)) return k;'),
     ('fs/git.c', '        if (sp <= 0 || sp + 1 >= l.len || l.len - sp - 1 >= GIT_HEAD_MAX) continue;\n', ''),
+]
+# F13 step 1 (2026-11-04): Copy Path
+MUTANTS += [
+    ('ui/handle.c', '    case UK_COPY_PATH: if (u->focus != UI_FOCUS_SIDE) return', '    case UK_COPY_PATH: if (true) return'),
+    ('ui/handle.c', '    case UK_COPY_PATH: if (u->focus != UI_FOCUS_SIDE) return *out = ui_view_act(u, (UiAction){ UA_COPY_PATH, 0, false }), true; break;', ''),
+    ('ui/handle.c', 'ui_view_act(u, (UiAction){ UA_COPY_PATH, 0, false })', '(UiAction){ UA_COPY_PATH, 0, false }'),
+    ('ui/ui.c', '    case UA_COPY: case UA_COPY_PATH: case UA_CUT:', '    case UA_COPY: case UA_CUT:'),
+    ('ui/menus.c', '    case UM_COPY_PATH: return u->focus != UI_FOCUS_SIDE && ui_view_allows', '    case UM_COPY_PATH: return ui_view_allows'),
+    ('ui/menus.c', '    case UM_COPY_PATH: return u->focus != UI_FOCUS_SIDE && ui_view_allows(u->view, UA_COPY_PATH);', '    case UM_COPY_PATH: return u->focus != UI_FOCUS_SIDE;'),
+    ('ui/menus.c', '    case UM_COPY_PATH: return u->focus != UI_FOCUS_SIDE && ui_view_allows(u->view, UA_COPY_PATH);', '    case UM_COPY_PATH: return here && ui_view_allows(u->view, UA_COPY_PATH);'),
+    ('ui/menus.c', '    case UM_COPY_PATH_IT: return !u->ctx_trash;', '    case UM_COPY_PATH_IT: return true;'),
+    ('ui/menus.c', '    case UM_COPY_PATH_IT: return !u->ctx_trash;', '    case UM_COPY_PATH_IT: return !u->ctx_trash && !u->ctx_place;'),
+    ('ui/ui.c', '    UM_UNDO, UM_SEP, UM_CUT, UM_COPY, UM_COPY_PATH, UM_PASTE,', '    UM_UNDO, UM_SEP, UM_CUT, UM_COPY, UM_PASTE,'),
+    ('ui/ui.c', 'UM_SEP, UM_CUT, UM_COPY, UM_COPY_PATH, UM_PASTE_INTO,', 'UM_SEP, UM_CUT, UM_COPY, UM_PASTE_INTO,'),
+    ('ui/ui.c', 'UM_SEP, UM_CUT_IT, UM_COPY_IT, UM_COPY_PATH_IT, UM_PASTE_INTO,', 'UM_SEP, UM_CUT_IT, UM_COPY_IT, UM_PASTE_INTO,'),
+    ('ui/ui.c', '"copy-path", { UK_COPY_PATH, 0 } }', '"copy-path", { UK_COPY, 0 } }'),
+    ('ui/ui.c', '    { KS_CHANGE, "Copy Path", "Ctrl+Shift+C", "" },\n', ''),
 ]
