@@ -6,7 +6,7 @@
 # printed whole, in order, once all are done; clip and keys share one (each starts a sway, which
 # takes the first free wayland-N).
 # The groups (one or more scripts on one tree): browse big gone watchgap f2 f3 f4 f5 f52 f53 f54
-# f6 (f6, f6b) usb f62 (f62, f62b, f62c) f63 (f63, f63b, f63c) f64 (f64, f64b, f64c, f64d) f7 (f7, f7b) f72 f73 (f73, f73b, f73c, f73d) f74 f75 (f75, f75b) f8 (f8, f8b, f8c, f8d, f8e) f9 (f9, f9b) f10 (f10, f10b, f10c, f10d) f11 (f11, f11b, f11c, f11d, f11e, f11f, f11g, f11h, f11i, f11j, f11k, f11l, f11m, f11n, f11o, f11p, f11q, f11r, f11s) f12 (f12, f12b) f12g f12h f12i f13 (f13, f13b, f13c, f13d, f13e) clip (clip, copypath) keys (both in sway) hang guard3 guard. Named ones only, or all of them; a group
+# f6 (f6, f6b) usb f62 (f62, f62b, f62c) f63 (f63, f63b, f63c) f64 (f64, f64b, f64c, f64d) f7 (f7, f7b) f72 f73 (f73, f73b, f73c, f73d) f74 f75 (f75, f75b) f8 (f8, f8b, f8c, f8d, f8e) f9 (f9, f9b) f10 (f10, f10b, f10c, f10d) f11 (f11, f11b, f11c, f11d, f11e, f11f, f11g, f11h, f11i, f11j, f11k, f11l, f11m, f11n, f11o, f11p, f11q, f11r, f11s) f12 (f12, f12b) f12g f12h f12i f13 (f13, f13b, f13c, f13d, f13e, f13f) clip (clip, copypath) keys (both in sway) hang guard3 guard. Named ones only, or all of them; a group
 # that fails says "== <script>: FAILED" or "<group>: FAILED" (tools/mutation/gui.py reads it).
 set -u
 par=1
@@ -495,6 +495,9 @@ printf 'file://%s/tree/bdir\n' "$H" > "$T/config/gtk-3.0/bookmarks"
 RS_HOME=$H
 rs f13e -- "$H/tree"
 chmod 755 "$H/tree/ro"
+T=$base/f13f; rm -rf "$T"; H=$T/home; mkdir -p "$H/tree/adir" "$H/tree/bdir"; ln -s adir "$H/tree/alink"
+RS_HOME=$H
+rs f13f -- "$H/tree"
 fi
 if want f12g; then
 # F12 step 5: git status, on a scratch repository made here (git's own config files out of it), the

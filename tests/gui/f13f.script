@@ -1,0 +1,18 @@
+# F13 step 3 review: a target reached through a link into the folder dragged isn't one (no
+# outline), as the job's into_itself would refuse it. The tree (run.sh): adir/, alink -> adir,
+# bdir/.
+settle
+expect n=3
+point-ui row 0
+press-here
+move-by 0 10
+expect dragname=adir
+point-ui row 1
+move-here
+expect drop=row:1 dropok=0 dropmark=0 badge=none
+point-ui row 2
+move-here
+expect drop=row:2 dropok=1 dropdir=bdir
+key esc
+release
+quit

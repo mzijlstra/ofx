@@ -198,7 +198,7 @@ Drag and drop inside ofx: press on an entry (or a tree folder) and move; the sel
 the press was on a selected entry, else that entry alone. It drops on a folder's row or icon, a
 sidebar row, a tab, a path button, or the files' empty space (the folder shown); on Trash it
 trashes them. On the same drive it moves, onto another it copies; Ctrl held copies, Shift held
-moves; the badge by the pointer says which, and the target is outlined (nothing where it can't
+moves (held after the press: a press with Ctrl or Shift selects); the badge by the pointer says which, and the target is outlined (nothing where it can't
 go: a file, a read-only folder, the folder dragged or one inside it, a search's results). Esc or
 leaving the window cancels; Ctrl+Z undoes a drop, as a paste. A tree folder opens when the button
 is let go, not on the press, so it can be dragged. Dragging to and from other programs isn't there

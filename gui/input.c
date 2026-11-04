@@ -301,6 +301,18 @@ static void drag_arm(float x, float y, isize src, Str tree_dir)
     snprintf(app.drag_tree, sizeof app.drag_tree, "%.*s", STR_ARG(tree_dir));
 }
 
+// The folders dragged, resolved (dragged_real): a target reached through a link into one of them is
+// refused as copy_here's into_itself would refuse it, so the outline and the job agree (step 3
+// review).
+static void drag_real(void)
+{
+    for (isize i = 0; i < dragged.n; i++) {
+        struct stat st;
+        char r[PATH_MAX];
+        dragged_real[i] = lstat(dragged.path[i], &st) == 0 && S_ISDIR(st.st_mode) && realpath(dragged.path[i], r) ? arena_cstr(&draga, str_from_c(r)) : NULL;
+    }
+}
+
 // The press moved far enough: what it drags, into dragged. On a marked entry every marked one, else
 // the entry pressed alone (the marks stay); a tree row's folder. False when there is nothing (or
 // more than a drop takes: said).
@@ -311,6 +323,7 @@ static bool drag_start(void)
     char p[PATH_MAX];
     if (app.drag_src < 0) {
         dragged.path[0] = arena_cstr(&draga, str_from_c(app.drag_tree)), dragged.n = 1;
+        drag_real();
         snprintf(app.drag_name, sizeof app.drag_name, "%.*s", STR_ARG(path_base(str_from_c(app.drag_tree))));
         Str folder = S("folder");
         app.drag_icon = icon_for_px(folder, &folder, 1, ICON_PX);
@@ -323,6 +336,7 @@ static bool drag_start(void)
     } else if (entry_path(app.drag_src, p, sizeof p)) {
         dragged.path[0] = arena_cstr(&draga, str_from_c(p)), dragged.n = 1;
     }
+    drag_real();
     const Entry *e = &app.list.e[app.drag_src];
     snprintf(app.drag_name, sizeof app.drag_name, "%.*s", STR_ARG(e->name));
     Str folder = S("folder");
@@ -335,9 +349,10 @@ static bool drag_start(void)
 static bool drop_takes(const char *dir, bool *same_drive)
 {
     struct stat ds, fs;
-    if (stat(dir, &ds) != 0 || !S_ISDIR(ds.st_mode) || access(dir, W_OK) != 0) return false;
+    char real[PATH_MAX];
+    if (stat(dir, &ds) != 0 || !S_ISDIR(ds.st_mode) || access(dir, W_OK) != 0 || !realpath(dir, real)) return false;
     for (isize i = 0; i < dragged.n; i++)
-        if (ui_under(str_from_c(dir), str_from_c(dragged.path[i]))) return false;
+        if (dragged_real[i] && ui_under(str_from_c(real), str_from_c(dragged_real[i]))) return false;
     *same_drive = lstat(dragged.path[0], &fs) == 0 && fs.st_dev == ds.st_dev;
     return true;
 }

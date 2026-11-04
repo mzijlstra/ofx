@@ -398,6 +398,7 @@ static int side_w(void)
 static Undo      undo;
 static ClipFiles own;      // ofx's own copy or cut (own.n 0: none)
 static ClipFiles dragged;  // what a drag of files carries (F13 step 3), its own: the clipboard stays as it was
+static char     *dragged_real[CLIP_PATHS_MAX];   // each folder of it resolved (realpath), NULL for the rest: drop_takes
 // Bumped by every copy of ours, files or text: a cut's paste empties the clipboard after it only
 // if nothing was copied meanwhile (F5.2 review).
 static u32       own_gen;
