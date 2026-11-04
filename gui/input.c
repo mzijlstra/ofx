@@ -292,6 +292,112 @@ static Hit hit_at(float x, float y)
     return h;
 }
 
+// ---- drag and drop inside ofx (F13 step 3) ----------------------------------------------------
+
+// A press that may become a drag: on entry src, or (src -1) on the tree's folder tree_dir.
+static void drag_arm(float x, float y, isize src, Str tree_dir)
+{
+    app.drag = DRAG_PRESS, app.drag_x0 = app.drag_px = x, app.drag_y0 = app.drag_py = y, app.drag_src = src;
+    snprintf(app.drag_tree, sizeof app.drag_tree, "%.*s", STR_ARG(tree_dir));
+}
+
+// The press moved far enough: what it drags, into dragged. On a marked entry every marked one, else
+// the entry pressed alone (the marks stay); a tree row's folder. False when there is nothing (or
+// more than a drop takes: said).
+static bool drag_start(void)
+{
+    arena_reset(&draga);
+    dragged.n = 0;
+    char p[PATH_MAX];
+    if (app.drag_src < 0) {
+        dragged.path[0] = arena_cstr(&draga, str_from_c(app.drag_tree)), dragged.n = 1;
+        snprintf(app.drag_name, sizeof app.drag_name, "%.*s", STR_ARG(path_base(str_from_c(app.drag_tree))));
+        Str folder = S("folder");
+        app.drag_icon = icon_for_px(folder, &folder, 1, ICON_PX);
+        return true;
+    }
+    if (app.drag_src >= app.list.n) return false;
+    if (ui_marked(&app.ui, app.drag_src)) {
+        if (too_many_marked()) return false;
+        dragged.n = targets(&draga, dragged.path, CLIP_PATHS_MAX);
+    } else if (entry_path(app.drag_src, p, sizeof p)) {
+        dragged.path[0] = arena_cstr(&draga, str_from_c(p)), dragged.n = 1;
+    }
+    const Entry *e = &app.list.e[app.drag_src];
+    snprintf(app.drag_name, sizeof app.drag_name, "%.*s", STR_ARG(e->name));
+    Str folder = S("folder");
+    app.drag_icon = kind_is_dir(e->kind) ? icon_for_px(folder, &folder, 1, ICON_PX) : icon_for_px(entry_mime(app.drag_src), NULL, 0, ICON_PX);
+    return dragged.n > 0;
+}
+
+// Whether folder dir takes the files dragged: there, writable, neither one of them nor inside one
+// (as a paste refuses); *same_drive: on the first one's drive (Nemo's rule, ui_drop_op).
+static bool drop_takes(const char *dir, bool *same_drive)
+{
+    struct stat ds, fs;
+    if (stat(dir, &ds) != 0 || !S_ISDIR(ds.st_mode) || access(dir, W_OK) != 0) return false;
+    for (isize i = 0; i < dragged.n; i++)
+        if (ui_under(str_from_c(dir), str_from_c(dragged.path[i]))) return false;
+    *same_drive = lstat(dragged.path[0], &fs) == 0 && fs.st_dev == ds.st_dev;
+    return true;
+}
+
+// What the files dragged are over at x, y, into app.drop (the folder asked again only when it is
+// another): a folder's row or cell, a sidebar row (the Trash's trashes; a heading, a drive not
+// mounted yet, none), a tab (its folder), a path button, the files' empty space (the folder
+// shown). Not a file's row, nor the trash view's or a search's rows and space (many folders).
+static void drop_find(float x, float y)
+{
+    Drop d = { DROP_NONE, -1, false, false, false, "" };
+    Hit h = hit_at(x, y);
+    const char *dir = NULL;
+    char buf[PATH_MAX];
+    bool shown = app.ui.view == UI_VIEW_FOLDER;
+    if (h.row >= 0) {
+        isize e = app.ui.list.top + h.row;
+        d.kind = DROP_ROW, d.at = h.row;
+        if (shown && app.have_list && e < app.list.n && kind_is_dir(app.list.e[e].kind) && entry_path(e, buf, sizeof buf)) dir = buf;
+    } else if (h.side >= 0) {
+        d.kind = DROP_SIDE, d.at = h.side;
+        dir = side_path(app.ui.side.top + h.side, buf, sizeof buf);
+        d.trash = dir && strcmp(dir, TRASH_URI) == 0;
+    } else if (h.tab >= 0) {
+        d.kind = DROP_TAB, d.at = h.tab;
+        dir = h.tab == tabbar.cur ? (shown ? app.cwd : NULL) : tabs[tabbar.slot[h.tab]].dir;
+        if (dir && (strcmp(dir, TRASH_URI) == 0 || is_search(dir))) dir = NULL;
+    } else if (h.bar == UB_CRUMB && h.crumb >= 0) {
+        d.kind = DROP_CRUMB, d.at = h.crumb;
+        snprintf(buf, sizeof buf, "%.*s", STR_ARG(ui_crumb_path(&app.crumbs, h.crumb)));
+        dir = buf;
+    } else if (in_box(CLAY_ID("list"), x, y)) {
+        d.kind = DROP_LIST;
+        if (shown) dir = app.cwd;
+    }
+    if (dir) snprintf(d.dir, sizeof d.dir, "%s", dir);
+    if (d.kind == app.drop.kind && d.at == app.drop.at && strcmp(d.dir, app.drop.dir) == 0) return;   // (the same: not asked again)
+    d.ok = dir && (d.trash || drop_takes(d.dir, &d.same_drive));
+    app.drop = d;
+}
+
+// A drag of files ended without a drop: Esc, or the pointer off the window.
+static void drag_cancel(void)
+{
+    if (app.drag == DRAG_PRESS || app.drag == DRAG_FILES) app.drag = DRAG_NONE, app.drop = (Drop){ .kind = DROP_NONE, .at = -1 };
+}
+
+// Esc during a drag of files cancels it, and is the drag's alone (it would clear the marks too).
+static void drag_keys(UiInput *in)
+{
+    if (app.drag != DRAG_FILES) return;
+    int k = 0;
+    bool esc = false;
+    for (int i = 0; i < in->nev; i++)
+        if (in->ev[i].key == UK_ESC) esc = true;
+        else in->ev[k++] = in->ev[i];
+    in->nev = k;
+    if (esc) drag_cancel();
+}
+
 // A left press at a point, into in: a list row's goes through the double-click timing (not with
 // Ctrl or Shift held, which mark rows: UI_MOD_*).
 static void press_at(UiInput *in, float x, float y, int mods)
@@ -331,6 +437,17 @@ static void press_at(UiInput *in, float x, float y, int mods)
     in->job_x = h.job_x;
     in->side_mode = h.mode;
     in->side_twisty = h.twisty;
+    // A plain press on an entry, or on a tree row's folder, may become a drag of files (F13 step 3)
+    // once it moves UI_DRAG_PX: not the second press of a double click, not in the trash view
+    // (Restore is its own), not a drive's root.
+    if (!mods && in->dclick < 0 && h.row >= 0 && app.ui.view != UI_VIEW_TRASH && app.have_list && app.ui.list.top + h.row < app.list.n)
+        drag_arm(x, y, app.ui.list.top + h.row, STR_EMPTY);
+    else if (!mods && h.side >= 0 && h.twisty < 0 && app.ui.side_mode == SIDE_TREE && app.ui.side.top + h.side < tree.n &&
+             tree.row[app.ui.side.top + h.side].depth > 0) {
+        // (a tree row opens when the button is let go, a drag's never: else a drag of it went into it first)
+        drag_arm(x, y, -1, tree.row[app.ui.side.top + h.side].path);
+        app.drag_side = in->side_click, in->side_click = -1;
+    }
     // The zoom track: the size nearest the press, and the knob held until the button is let go.
     if (h.zoom) in->zoom_to = zoom_level_at(x), app.drag = DRAG_ZOOM;
     // The sidebar's edge (F13): held, it follows the pointer; a double click gives UI_SIDE_W back.
@@ -517,20 +634,36 @@ static int tip_target(Hit h)
     return -1;
 }
 
-// What the left button holds, the pointer at x: the zoom slider's knob takes the size nearest it
-// (F6.3), the sidebar's edge the width there (F13). The button let go, it is dropped, and a width
-// that changed is remembered. True when what is drawn changed (a drop is drawn unlit).
-static bool drag_at(UiInput *in, float x, bool held)
+// What the left button holds, the pointer at x, y: the zoom slider's knob takes the size nearest it
+// (F6.3), the sidebar's edge the width there (F13); a press on files past UI_DRAG_PX drags them,
+// and the drag finds where they would land (F13 step 3). The button let go, it is dropped: a width
+// that changed is remembered, the files dropped where they are over. True when what is drawn
+// changed (a drop is drawn unlit).
+static bool drag_at(UiInput *in, float x, float y, bool held)
 {
     if (app.drag == DRAG_NONE) return false;
     if (!held) {
         if (app.drag == DRAG_SIDE && app.side_px != app.drag_w0) side_keep(app.side_px), app.edge_press.row = -1;   // (a drag's press is no double click's first)
-        app.drag = DRAG_NONE;
-        return true;
+        if (app.drag == DRAG_FILES && app.drop.ok) drop_do(&app.drop);
+        if (app.drag == DRAG_PRESS && app.drag_src < 0) in->side_click = app.drag_side;   // (a click on a tree row, after all)
+        bool drawn = app.drag != DRAG_PRESS;
+        app.drag = DRAG_NONE, app.drop = (Drop){ .kind = DROP_NONE, .at = -1 };
+        return drawn;
     }
     if (app.drag == DRAG_ZOOM) {
         in->zoom_to = zoom_level_at(x);
         return false;
+    }
+    if (app.drag == DRAG_PRESS) {
+        if (!ui_drag_past(x - app.drag_x0, y - app.drag_y0)) return false;
+        if (!drag_start()) return app.drag = DRAG_NONE, false;
+        app.drag = DRAG_FILES, app.drop = (Drop){ .kind = DROP_NONE, .at = -2 };   // (-2: none found yet, so the first is asked)
+        app.press.row = -1;   // (a drag's press is no double click's first: the next press on that row would open it)
+    }
+    if (app.drag == DRAG_FILES) {
+        app.drag_px = x, app.drag_py = y;
+        drop_find(x, y);
+        return true;
     }
     int to = app.drag_w0 + (int)(x - app.drag_x0);
     int w = ui_side_fit(to < UI_SIDE_MIN ? UI_SIDE_MIN : to, GetScreenWidth());   // (0 or less is ui_side_fit's "none")
@@ -611,7 +744,12 @@ static UiInput input_real(bool *seen)
     // Off the window the drag ends: Wayland's leave releases no button, and a compositor grab
     // (a keybind, a screenshot) can take the release (F6.3 review).
     bool on = IsCursorOnScreen();
-    if (!script_on && (d.x != 0 || !held || !on)) *seen |= drag_at(&in, m.x, held && on);   // (a script's own: press-here, move-to, release)
+    // (a script's own: press-here, move-to, release.) Off the window a drag of files is cancelled,
+    // not dropped where it last was.
+    if (!script_on) app.drag_mods = (IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL) ? UI_MOD_CTRL : 0) |
+                                    (IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT) ? UI_MOD_SHIFT : 0);
+    if (!script_on && !on && (app.drag == DRAG_PRESS || app.drag == DRAG_FILES)) drag_cancel(), *seen = true;
+    else if (!script_on && (d.x != 0 || d.y != 0 || !held || !on)) *seen |= drag_at(&in, m.x, m.y, held && on);
     in.backs = mouse_backs, mouse_backs = 0;
     in.forwards = mouse_forwards, mouse_forwards = 0;
     // Anything the user did draws a frame: one list, ui_input_acts (unit-tested), so a new click

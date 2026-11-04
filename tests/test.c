@@ -1861,6 +1861,7 @@ int main(void)
     if (fast) test_shell_quote();
     if (fast) test_side_fit();
     if (fast) test_state_sidewidth();
+    if (fast) test_drag_rule();
     if (slow) test_git_common_bare();
     if (slow) test_box_why();
     if (slow) test_box_outlive();

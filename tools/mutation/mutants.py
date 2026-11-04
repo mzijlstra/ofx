@@ -2529,3 +2529,12 @@ MUTANTS += [
     ('fs/state.c', "        n = n * 10 + (v.p[i] - '0');", "        n = v.p[i] - '0';"),
     ('fs/state.c', '        if (str_eq(key, S("sidewidth"))) s.side_px = state_px(val);\n', ''),
 ]
+# F13 step 3 (2026-11-04): drag and drop's threshold and Nemo's rule
+MUTANTS += [
+    ('ui/helpers.c', '    return dx * dx + dy * dy >= (float)(UI_DRAG_PX * UI_DRAG_PX);', '    return dx * dx + dy * dy > (float)(UI_DRAG_PX * UI_DRAG_PX);'),
+    ('ui/helpers.c', '    return dx * dx + dy * dy >= (float)(UI_DRAG_PX * UI_DRAG_PX);', '    return dx * dx >= (float)(UI_DRAG_PX * UI_DRAG_PX);'),
+    ('ui/helpers.c', 'enum { UI_DRAG_PX = 6 };', 'enum { UI_DRAG_PX = 5 };'),
+    ('ui/helpers.c', '    if (mods & UI_MOD_CTRL) return UI_DROP_COPY;\n', ''),
+    ('ui/helpers.c', '    if (mods & UI_MOD_SHIFT) return UI_DROP_MOVE;\n', ''),
+    ('ui/helpers.c', '    return same_drive ? UI_DROP_MOVE : UI_DROP_COPY;', '    return UI_DROP_MOVE;'),
+]

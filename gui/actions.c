@@ -40,11 +40,20 @@ static void say_done(const char *verb, isize ok, isize n, const char *one, const
     else set_status(true, "%s %td of %td: %s", verb, ok, n, why);
 }
 
+static void trash_paths(char *const *paths, isize n);
+
 static void trash_targets(void)
 {
     char *paths[CLIP_PATHS_MAX];
     arena_reset(&pastea);
-    isize n = targets(&pastea, paths, CLIP_PATHS_MAX), ok = 0;
+    isize n = targets(&pastea, paths, CLIP_PATHS_MAX);
+    trash_paths(paths, n);
+}
+
+// paths to the trash, as one undo (Delete's, and a drop on the Trash: F13 step 3).
+static void trash_paths(char *const *paths, isize n)
+{
+    isize ok = 0;
     for (isize i = 0; i < n; i++)
         if (jobs_refuse(paths[i])) return;
     Err err, first = { "" };
@@ -243,6 +252,26 @@ static void copy_here(const ClipFiles *c, const char *into)
     r->own_cut = c == &own && c->cut, r->own_gen = own_gen;
     job_submit(r, c->cut ? JOB_MOVE : JOB_COPY, n);
     if (self) set_status(true, "Skipped %td: a folder can't go into itself", self);
+}
+
+// What a drop on d does with the files dragged (F13 step 3): the Trash trashes them; else
+// Nemo's rule (ui_drop_op), with the keys held now.
+static UiDropOp drop_op(const Drop *d)
+{
+    return d->trash ? UI_DROP_TRASH : ui_drop_op(d->same_drive, app.drag_mods);
+}
+
+// The files dragged, dropped on d: trashed, or copied or moved there as a paste is (its job, its
+// clash questions, its undo), from their own list, so the clipboard stays as it was.
+static void drop_do(const Drop *d)
+{
+    UiDropOp op = drop_op(d);
+    if (op == UI_DROP_TRASH) {
+        trash_paths(dragged.path, dragged.n);
+        return;
+    }
+    dragged.cut = op == UI_DROP_MOVE;
+    copy_here(&dragged, d->dir);
 }
 
 static void paste(const char *dest)

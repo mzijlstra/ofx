@@ -36,6 +36,8 @@
 //                           printed as "point: x y" and kept for click-here
 //   point-menu <word>       the same for the open menu's entry named <word> in the state's menu
 //                           lists (follow, search-in): a new entry doesn't renumber the scripts
+//   point-side <name>       the same for the sidebar row shown with that name (a tree folder's, a
+//                           place's label: F13)
 //   hover-here              the pointer to the last point-ui (the hover highlights, a drive's
 //                           eject button, a button's tooltip); it rests there, hit again after
 //                           each frame as the mouse's is (hover_refresh)
@@ -48,8 +50,11 @@
 //                           in one frame, as the mouse's go (drag_at: the zoom slider's knob, the
 //                           sidebar's edge)
 //   press-here              a left press at the last point, the button held across frames (F13)
-//   move-to <x> <y>         the pointer there (it rests there, as hover-here's); a held button drags
-//   release                 the button let go
+//   move-to <x> <y> [ctrl][shift]  the pointer there (it rests there, as hover-here's); a held button
+//                           drags, with those keys held (a drop's copy or move, F13 step 3)
+//   move-here [ctrl][shift] the same, to the last point-ui
+//   move-by <dx> <dy> [ctrl][shift]  the same, that far from where the pointer is
+//   release [ctrl][shift]   the button let go, those keys held
 //   middle-here             a middle press there (a folder into a background tab, a tab closed)
 //   middle <row>            a middle press on list row <row>
 //   right-here              a right press there (F8: an entry's menu, or the folder shown's on empty space)
@@ -97,6 +102,13 @@ static struct {
 } script;
 
 static u8 script_mem[KiB(256)];
+
+// The keys a pointer command says are held: ctrl, shift (UI_MOD_*), among its words (press, the
+// drag's moves and release).
+static int script_mods(const char *a)
+{
+    return (strstr(a, "ctrl") ? UI_MOD_CTRL : 0) | (strstr(a, "shift") ? UI_MOD_SHIFT : 0);
+}
 
 // `idle`'s stand-in wake-up: 3 s on, should the timer never come. Each idle has its own number,
 // so a stand-in left over from an earlier one (two idles within 3 s) doesn't end this one, and it
@@ -194,6 +206,15 @@ static void script_state(char *out, size_t cap)
     if (!joblabels[0]) snprintf(joblabels, sizeof joblabels, "-");
     if (app.ui.focus == UI_FOCUS_JOBS) snprintf(jobkey, sizeof jobkey, "%d", app.ui.job_at);
     char clashjob[256] = "-";   // the job the clash panel names
+    // A drag of files (F13 step 3): the name pressed, what is under the pointer (kind:place), what
+    // the drop does, its folder's name; the outline drawn, and the badge's action as drawn.
+    static const char *const DROP_WORDS[] = { "-", "row", "side", "tab", "crumb", "list" }, *const OP_WORDS[] = { "move", "copy", "trash" };
+    char dragname[NAME_MAX + 1] = "-", dropw[32] = "-", dropdir[NAME_MAX + 1] = "-";
+    if (app.drag == DRAG_FILES) state_word(dragname, sizeof dragname, str_from_c(app.drag_name));
+    if (app.drag == DRAG_FILES && app.drop.kind != DROP_NONE) snprintf(dropw, sizeof dropw, "%s:%d", DROP_WORDS[app.drop.kind], app.drop.at);
+    if (app.drag == DRAG_FILES && app.drop.ok) state_word(dropdir, sizeof dropdir, path_base(str_from_c(app.drop.dir)));
+    const char *dropop = app.drag == DRAG_FILES && app.drop.ok ? OP_WORDS[drop_op(&app.drop)] : "-";
+    const char *badge = !badge_drawn ? "-" : badge_op ? badge_op : "none";
     if (jobs.asking >= 0) state_word(clashjob, sizeof clashjob, str_from_c(job_recs[jobs.asking].label));
     // The cursor's name colour as an unselected row would have it: its git change's ("git") or else
     // its type's; and the rows whose git letter or dot was drawn (F12).
@@ -485,7 +506,7 @@ static void script_state(char *out, size_t cap)
              "props=%d propat=%d propcan=%d propn=%td propmode=%04o propfiles=%lld propdirs=%lld propbytes=%lld propdone=%d propcut=%d proplinks=%lld,%lld,%lld,%d propnlink=%llu proptype=%s proptypename=%s propbyname=%d propname=%s "
              "propwhere=%s propdrive=%s proplink=%s propcreated=%d propidx=%td "
              "ow=%d owfresh=%d owlist=%d owtext=%s own=%td owsel=%td owapp=%s owicon=%s owtex=%d owshown=%td owtype=%s owfiles=%td owrows=%d owtop=%td owopts=%s owbad=%d owdef=%d owdefcan=%d findopts=%s findbad=%d findselect=%d findn=%td findat=%td findtext=%s "
-             "search=%d searchkeys=%d searchtext=%s searchdone=%d searchfull=%d searchdue=%d searchbad=%d searchbar=%d searchsel=%d-%d searchcaret=%d findsel=%d-%d findcaret=%d seldir=%s searchinfo=%s inside=%d insidekeys=%d insidetext=%s insideopts=%s insidebad=%d insiderow=%d hit=%s hitmatch=%s hitdrawn=%d datecol=%s datecolw=%.0f owreads=%d conf=%s confbad=%d seldate=%s trashfull=%d trashicon=%s spawned=%d closingall=%d closedtabs=%d emptyn=%td shiftsel=%s clearn=%lld clearing=%d gitshown=%d gitsel=%s gitn=%td gitnamecol=%s gitcells=%d infogit=%s gitdue=%d branch=%s brn=%d brhere=%d brnote=%s brlist=%s brfits=%d brunder=%d gitwatch=%d brtotal=%d brp=%d brpn=%td brpsel=%s brptext=%s brpinlist=%d sidew=%d sidebox=%.0f sidepx=%d drag=%s edgelit=%d resizeptr=%d statusbad=%d status=%s",
+             "search=%d searchkeys=%d searchtext=%s searchdone=%d searchfull=%d searchdue=%d searchbad=%d searchbar=%d searchsel=%d-%d searchcaret=%d findsel=%d-%d findcaret=%d seldir=%s searchinfo=%s inside=%d insidekeys=%d insidetext=%s insideopts=%s insidebad=%d insiderow=%d hit=%s hitmatch=%s hitdrawn=%d datecol=%s datecolw=%.0f owreads=%d conf=%s confbad=%d seldate=%s trashfull=%d trashicon=%s spawned=%d closingall=%d closedtabs=%d emptyn=%td shiftsel=%s clearn=%lld clearing=%d gitshown=%d gitsel=%s gitn=%td gitnamecol=%s gitcells=%d infogit=%s gitdue=%d branch=%s brn=%d brhere=%d brnote=%s brlist=%s brfits=%d brunder=%d gitwatch=%d brtotal=%d brp=%d brpn=%td brpsel=%s brptext=%s brpinlist=%d sidew=%d sidebox=%.0f sidepx=%d drag=%s edgelit=%d resizeptr=%d dragn=%td dragname=%s drop=%s dropok=%d dropop=%s dropdir=%s dropmark=%d badge=%s statusbad=%d status=%s",
              app.cwd, app.list.n, app.list.hidden, STR_ARG(sel), app.ui.list.sel, app.ui.list.top, app.ui.list.rows, app.hov.row,
              t->accent.r, t->accent.g, t->accent.b, t->bg.r, t->bg.g, t->bg.b, t->icons[0] ? t->icons : "-",
              app.icon_scale, GetScreenWidth(), GetScreenHeight(), app.reloads, app.themes, atomic_load(&watch.batches),
@@ -524,7 +545,7 @@ static void script_state(char *out, size_t cap)
              app.ui.find.anchor < app.ui.find.caret ? app.ui.find.anchor : app.ui.find.caret,
              app.ui.find.anchor < app.ui.find.caret ? app.ui.find.caret : app.ui.find.anchor, app.ui.find.caret, seldir, searchinfo,
              app.ui.search_inside, app.ui.focus == UI_FOCUS_INSIDE, insidetext, insideopts, app.search_im.bad,
-             (int)Clay_GetElementData(CLAY_ID("inside-field")).found, hit, hitmatch, hitdrawn, VIEWS[app.ui.view].date_col, date_w(), ow_idb_reads, confw, app.conf.bad, seldate, app.trash_full, trashicon, spawn_started, closing_all, closed_tabs.n, app.empty_n, app.ui.shift_add ? "add" : "range", clear.counted ? (long long)clear.sum.files : -1LL, clear.running, git_shown() != NULL, GIT_WORDS[app.have_list && app.list.n ? entry_git(app.ui.list.sel) : GS_NONE], git_shown() ? git_shown()->g.changed : (isize)0, gitnamecol, gitcells, infogit, git.due != 0, branch, app.ui.br_n, app.ui.br_here, brnote, brlist, brfits, brunder, atomic_load(&watch.git_wd) >= 0, app.ui.br_total, app.ui.panel == UI_PANEL_BRANCHES, app.ui.brp.list.n, brpsel, brptext, app.ui.brp.in_list, side_w(), Clay_GetElementData(CLAY_ID("side")).boundingBox.width, app.side_px, (const char *[]){ "-", "zoom", "side" }[app.drag], edge_lit && side_w(), cursor_now == MOUSE_CURSOR_RESIZE_EW, app.status[0] && app.status_bad, app.status[0] ? app.status : "-");
+             (int)Clay_GetElementData(CLAY_ID("inside-field")).found, hit, hitmatch, hitdrawn, VIEWS[app.ui.view].date_col, date_w(), ow_idb_reads, confw, app.conf.bad, seldate, app.trash_full, trashicon, spawn_started, closing_all, closed_tabs.n, app.empty_n, app.ui.shift_add ? "add" : "range", clear.counted ? (long long)clear.sum.files : -1LL, clear.running, git_shown() != NULL, GIT_WORDS[app.have_list && app.list.n ? entry_git(app.ui.list.sel) : GS_NONE], git_shown() ? git_shown()->g.changed : (isize)0, gitnamecol, gitcells, infogit, git.due != 0, branch, app.ui.br_n, app.ui.br_here, brnote, brlist, brfits, brunder, atomic_load(&watch.git_wd) >= 0, app.ui.br_total, app.ui.panel == UI_PANEL_BRANCHES, app.ui.brp.list.n, brpsel, brptext, app.ui.brp.in_list, side_w(), Clay_GetElementData(CLAY_ID("side")).boundingBox.width, app.side_px, (const char *[]){ "-", "zoom", "side", "press", "files" }[app.drag], edge_lit && side_w(), cursor_now == MOUSE_CURSOR_RESIZE_EW, app.drag == DRAG_FILES ? dragged.n : (isize)0, dragname, dropw, app.drop.ok, dropop, dropdir, drop_marked, badge, app.status[0] && app.status_bad, app.status[0] ? app.status : "-");
     frame_us_max = 0;
 }
 
@@ -754,7 +775,7 @@ static bool script_input(UiInput *in)
             else wheel_at(in, (float)side_w() + 40, atoi(a), false);   // over the files, as the mouse's (a panel's list takes it, F7.5)
         } else if (str_eq(cmd, S("press"))) {
             int r = atoi(a);
-            int mods = (strstr(a, "ctrl") ? UI_MOD_CTRL : 0) | (strstr(a, "shift") ? UI_MOD_SHIFT : 0);
+            int mods = script_mods(a);
             if (!mods && ui_press(&app.press, r, now_ms()) == 2) in->dclick = r;
             else in->click = r, in->click_mods = mods;
         } else if (str_eq(cmd, S("press-side"))) {
@@ -784,6 +805,18 @@ static bool script_input(UiInput *in)
             if (!d.found) script_fail("point-menu: no %s in the menu open", a);
             script.px = d.boundingBox.x + d.boundingBox.width / 2, script.py = d.boundingBox.y + d.boundingBox.height / 2;
             printf("point: %.0f %.0f\n", script.px, script.py);
+        } else if (str_eq(cmd, S("point-side"))) {   // as point-ui, the sidebar row shown named <name> (F13: the tree's rows move with the scratch path)
+            int k = -1;
+            for (int r = 0; r < app.ui.side.rows && app.ui.side.top + r < app.ui.side.n && k < 0; r++) {
+                isize i = app.ui.side.top + r;
+                Str name = app.ui.side_mode == SIDE_TREE ? (i < tree.n ? tree.row[i].name : STR_EMPTY) : (i < app.places.n ? str_from_c(app.places.p[i].label) : STR_EMPTY);
+                if (str_eq(name, str_from_c(a))) k = r;
+            }
+            Clay_ElementData d = { 0 };
+            if (k >= 0) d = Clay_GetElementData(CLAY_IDI("side-row", k));
+            if (!d.found) script_fail("point-side: no row %s shown", a);
+            script.px = d.boundingBox.x + d.boundingBox.width / 2, script.py = d.boundingBox.y + d.boundingBox.height / 2;
+            printf("point: %.0f %.0f\n", script.px, script.py);
         } else if (str_eq(cmd, S("hover-here"))) {
             script.pointing = true;
             hover_at(script.px, script.py);
@@ -796,22 +829,26 @@ static bool script_input(UiInput *in)
             script_idle();
         } else if (str_eq(cmd, S("click-here"))) {   // (pressed and let go: a drag it starts ends at once)
             press_at(in, script.px, script.py, 0);
-            drag_at(in, script.px, false);
+            drag_at(in, script.px, script.py, false);
         } else if (str_eq(cmd, S("drag-here"))) {
             press_at(in, script.px, script.py, 0);
-            drag_at(in, script.px + (float)atoi(a), true);
-            drag_at(in, script.px + (float)atoi(a), false);
+            drag_at(in, script.px + (float)atoi(a), script.py, true);
+            drag_at(in, script.px + (float)atoi(a), script.py, false);
         } else if (str_eq(cmd, S("press-here"))) {   // (F13) held across frames, until release
             press_at(in, script.px, script.py, 0);
             script.held = true;
-        } else if (str_eq(cmd, S("move-to"))) {
-            float x = 0, y = 0;
-            if (sscanf(a, "%f %f", &x, &y) != 2) script_fail("move-to <x> <y>");
+        } else if (str_eq(cmd, S("move-to")) || str_eq(cmd, S("move-here")) || str_eq(cmd, S("move-by"))) {
+            float x = script.px, y = script.py, dx = 0, dy = 0;
+            if (str_eq(cmd, S("move-to")) && sscanf(a, "%f %f", &x, &y) != 2) script_fail("move-to <x> <y>");
+            if (str_eq(cmd, S("move-by")) && sscanf(a, "%f %f", &dx, &dy) != 2) script_fail("move-by <dx> <dy>");
+            x += dx, y += dy;
+            app.drag_mods = script_mods(a);
             script.px = x, script.py = y, script.pointing = true;
-            if (script.held) drag_at(in, x, true);
+            if (script.held) drag_at(in, x, y, true);
             hover_at(x, y);
         } else if (str_eq(cmd, S("release"))) {
-            drag_at(in, script.px, false);
+            app.drag_mods = script_mods(a);
+            drag_at(in, script.px, script.py, false);
             script.held = false;
         } else if (str_eq(cmd, S("middle-here"))) {
             middle_at(in, script.px, script.py);

@@ -447,6 +447,27 @@ static int ui_side_fit(int want, int w)
     return want < UI_SIDE_MIN ? UI_SIDE_MIN : want;
 }
 
+// ---- drag and drop (F13 step 3) -------------------------------------------------------------
+
+// A press held and moved this far (px) is a drag; less is still a click.
+enum { UI_DRAG_PX = 6 };
+
+static bool ui_drag_past(float dx, float dy)
+{
+    return dx * dx + dy * dy >= (float)(UI_DRAG_PX * UI_DRAG_PX);
+}
+
+// What a drop does: Nemo's and Nautilus's rule (Michael, 2026-11-04): Ctrl held copies, Shift held
+// moves; else a move on the same drive, a copy to another. (The Trash's is UI_DROP_TRASH, gui/'s.)
+typedef enum { UI_DROP_MOVE, UI_DROP_COPY, UI_DROP_TRASH } UiDropOp;
+
+static UiDropOp ui_drop_op(bool same_drive, int mods)
+{
+    if (mods & UI_MOD_CTRL) return UI_DROP_COPY;
+    if (mods & UI_MOD_SHIFT) return UI_DROP_MOVE;
+    return same_drive ? UI_DROP_MOVE : UI_DROP_COPY;
+}
+
 // ---- display --------------------------------------------------------------------------------
 
 // A mode's permissions as ls prints them, without the type: "rwxr-xr-x"; s/S for set-user and

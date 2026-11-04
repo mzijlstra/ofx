@@ -113,6 +113,56 @@ static void menu_facts(void)
 }
 
 // The window, and the modal panel on top when one is up.
+// The element a drop target is drawn over (F13 step 3).
+static Clay_ElementId drop_elem(const Drop *d)
+{
+    switch (d->kind) {
+    case DROP_ROW: return CLAY_IDI("row", d->at);
+    case DROP_SIDE: return CLAY_IDI("side-row", d->at);
+    case DROP_TAB: return CLAY_IDI("tab", d->at);
+    case DROP_CRUMB: return CLAY_IDI("crumb", d->at);
+    default: return CLAY_ID("list");
+    }
+}
+
+static bool        drop_marked, badge_drawn;   // as drawn last (a script's state line)
+static const char *badge_op;
+
+// A drag of files (F13 step 3): the place it would drop in, outlined in the accent (nowhere it
+// can't), and by the pointer a badge: the entry pressed, its icon and name, "+ N more", and what
+// the drop does there ("Move", "Copy", "Trash").
+static void layout_drag(void)
+{
+    drop_marked = badge_drawn = false, badge_op = NULL;
+    if (app.drag != DRAG_FILES) return;
+    Theme *t = &app.theme;
+    Clay_ElementData e = Clay_GetElementData(drop_elem(&app.drop));
+    if (app.drop.ok && e.found) {
+        drop_marked = true;
+        CLAY(CLAY_ID("drop-mark"), { .layout = { .sizing = { CLAY_SIZING_FIXED(e.boundingBox.width), CLAY_SIZING_FIXED(e.boundingBox.height) } },
+                                     .cornerRadius = CLAY_CORNER_RADIUS(3),
+                                     .border = { .color = cc(t->accent), .width = CLAY_BORDER_OUTSIDE(2) },
+                                     .floating = { .attachTo = CLAY_ATTACH_TO_ROOT, .zIndex = 25, .offset = { e.boundingBox.x, e.boundingBox.y },
+                                                   .pointerCaptureMode = CLAY_POINTER_CAPTURE_MODE_PASSTHROUGH } }) {}
+    }
+    static const char *const OPS[] = { "Move", "Copy", "Trash" };
+    badge_drawn = true, badge_op = app.drop.ok ? OPS[drop_op(&app.drop)] : NULL;
+    CLAY(CLAY_ID("drag-badge"), { .layout = { .sizing = { CLAY_SIZING_FIT(0), CLAY_SIZING_FIT(0) }, .padding = { 8, 8, 5, 5 }, .childGap = 8,
+                                              .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
+                                  .backgroundColor = cc(t->bg_light), .cornerRadius = CLAY_CORNER_RADIUS(3),
+                                  .border = { .color = cc(t->accent), .width = CLAY_BORDER_OUTSIDE(1) },
+                                  .floating = { .attachTo = CLAY_ATTACH_TO_ROOT, .zIndex = 30, .offset = { app.drag_px + 14, app.drag_py + 16 },
+                                                .pointerCaptureMode = CLAY_POINTER_CAPTURE_MODE_PASSTHROUGH } }) {
+        icon_box(CLAY_ID("drag-icon"), app.drag_icon, SIDE_ICON_PX);
+        text(fit(str_from_c(app.drag_name), 240, false), cc(t->fg));
+        if (dragged.n > 1) text(cz(arena_sprintf(&frame, "+ %td more", dragged.n - 1)), cc(t->fg_dim));
+        if (badge_op)
+            CLAY(CLAY_ID("drag-op"), { .layout = { .padding = { 6, 6, 1, 1 } }, .backgroundColor = cc(t->accent), .cornerRadius = CLAY_CORNER_RADIUS(2) }) {
+                text(cz(badge_op), cc(t->bg));
+            }
+    }
+}
+
 static Clay_RenderCommandArray layout(int w, int h)
 {
     menu_facts();
@@ -227,6 +277,7 @@ static Clay_RenderCommandArray layout(int w, int h)
             if (app.ui.grid) layout_zoom();
         }
         layout_tip(w);
+        layout_drag();
         UiOnTop mk = modal_kind();
         if (mk != UI_ON_NONE) layout_modal(mk, (float)w, (float)h);
     }

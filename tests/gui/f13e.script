@@ -1,0 +1,213 @@
+# F13 step 3: drag and drop inside ofx. The tree (run.sh): home/tree: adir/, bdir/, ro/ (read
+# only), a.txt, b.txt, c.txt; the bookmarks file: home/tree/bdir. The sidebar: Places, Home,
+# bdir, Trash, Drives, File System.
+settle
+expect n=6 sel=adir sides=^Places|Home|bdir|Trash|^Drives|File_System drag=-
+# ---- Under 6 px a press stays a click; past it, the entry pressed is dragged
+point-ui row 3
+press-here
+move-by 3 3
+expect drag=press sel=a.txt
+move-by 3 3
+expect drag=files dragn=1 dragname=a.txt badge=none
+# ---- A folder's row: lit, Move (the same drive); let go, moved there, Ctrl+Z puts it back
+point-ui row 0
+move-here
+expect drop=row:0 dropok=1 dropop=move dropdir=adir dropmark=1 badge=Move
+shot drop-row.png
+release
+expect drag=- dropmark=0 badge=-
+wait-for 3000 job=- n=5
+sh test -f "$OFX_DIR/adir/a.txt" && test ! -e "$OFX_DIR/a.txt"
+expect undo=move
+key ctrl-z
+wait-for 3000 n=6
+sh test -f "$OFX_DIR/a.txt" && test ! -e "$OFX_DIR/adir/a.txt"
+# ---- Ctrl held: a copy (the badge says so as the key goes down), onto bdir's row; the clipboard
+# is left as it was
+key down
+key ctrl-c
+expect status=Copied b.txt clip=1
+point-ui row 4
+press-here
+move-by 0 10
+point-ui row 1
+move-here
+expect dropop=move badge=Move
+move-here ctrl
+expect dropop=copy badge=Copy
+release ctrl
+wait-for 3000 job=-
+sh test -f "$OFX_DIR/bdir/b.txt" && test -f "$OFX_DIR/b.txt"
+expect clip=1 cut=0 undo=copy
+# ---- Not where it can't go: a file's row, a read-only folder, the dragged folder itself; let go
+# there, nothing happens
+point-ui row 4
+press-here
+move-by 0 10
+point-ui row 5
+move-here
+expect drop=row:5 dropok=0 dropmark=0 badge=none
+point-ui row 2
+move-here
+expect drop=row:2 dropok=0 badge=none
+release
+wait 30
+expect drag=- n=6 job=- statusbad=0 jobs=0
+sh test -f "$OFX_DIR/b.txt" && test ! -e "$OFX_DIR/ro/b.txt"
+point-ui row 0
+press-here
+move-by 0 10
+point-ui row 0
+move-here
+expect dragname=adir drop=row:0 dropok=0
+point-ui list
+move-here
+expect drop=list:-1 dropok=1 dropop=move dropdir=tree
+release
+wait 10
+expect status=Already here
+# ---- The marks: a press on a marked entry carries them all, onto the Trash (trashed, Ctrl+Z
+# back); a press on an unmarked one carries it alone, the marks kept
+press 3 ctrl
+press 5 ctrl
+expect marked=2
+point-ui row 5
+press-here
+move-by 0 10
+expect dragn=2 dragname=c.txt
+point-ui side-row 3
+move-here
+expect drop=side:3 dropop=trash badge=Trash dropmark=1
+release
+wait-for 3000 n=4 undo=trash
+sh test ! -e "$OFX_DIR/a.txt" && test ! -e "$OFX_DIR/c.txt"
+key ctrl-z
+wait-for 3000 n=6
+press 3 ctrl
+press 5 ctrl
+expect marked=2
+point-ui row 4
+press-here
+move-by 0 10
+expect dragn=1 dragname=b.txt marked=2
+# ---- Esc cancels, and is the drag's alone: the marks stay
+key esc
+expect drag=- badge=- marked=2
+release
+key esc
+expect marked=0
+# ---- A sidebar place (the bookmark bdir); a path button (home): into that folder
+point-ui row 3
+press-here
+move-by 0 10
+point-ui side-row 2
+move-here
+expect drop=side:2 dropdir=bdir dropop=move
+release
+wait-for 3000 job=- n=5
+sh test -f "$OFX_DIR/bdir/a.txt"
+point-ui row 3
+press-here
+move-by 0 10
+point-ui crumb 0
+move-here
+expect drop=crumb:0 dropdir=home dropop=move
+release
+wait-for 3000 job=- n=4
+sh test -f "$OFX_ROOT/home/b.txt"
+# ---- A tab: into its folder. A second tab on bdir; a.txt from there onto the first (tree)
+key ctrl-t
+wait-for 2000 tabs=2 tab=1
+point-ui row 1
+click-here
+click-here
+wait-for 2000 crumbs=home|tree|bdir n=2
+point-ui row 0
+press-here
+move-by 0 10
+expect dragname=a.txt
+point-ui tab 0
+move-here
+expect drop=tab:0 dropdir=tree dropok=1 dropop=move dropmark=1
+point-ui tab 1
+move-here
+expect drop=tab:1 dropdir=bdir dropok=1
+point-ui tab 0
+move-here
+release
+wait-for 3000 job=- n=1
+sh test -f "$OFX_DIR/../a.txt"
+key ctrl-w
+wait-for 2000 tabs=1 n=5
+# ---- The tree: a folder of it dragged, which a press no longer opens (it opens when let go
+# without a drag); bdir into the files' empty space is "Already here", into adir's row it moves
+key f9
+wait-for 2000 sidemode=tree
+# (the tree runs from /: the sidebar's keys open tree, the folder shown, and bring its folders
+# into sight)
+key tab
+expect treecur=tree:0
+key right
+key down
+key down
+key down
+key tab
+point-side bdir
+press-here
+expect crumbs=home|tree drag=press
+move-by 0 10
+expect drag=files dragname=bdir dragn=1 crumbs=home|tree
+point-ui list
+move-here
+expect drop=list:-1 dropok=1 dropdir=tree
+point-ui row 0
+move-here
+expect drop=row:0 dropdir=adir dropok=1
+release
+wait-for 3000 job=- n=4
+sh test -d "$OFX_DIR/adir/bdir"
+# a click on a tree row still opens it (when let go)
+point-side adir
+click-here
+wait-for 2000 crumbs=home|tree|adir n=1
+key backspace
+wait-for 2000 crumbs=home|tree|adir n=4
+key f9
+key f9
+wait-for 2000 sidemode=places
+# ---- Search results: each from its own folder (c.txt onto bdir's place... bdir moved: onto Home)
+key ctrl-shift-f
+wait-for 2000 search=1 searchkeys=1
+type c.txt
+wait-for 3000 searchdone=1 n=1
+key enter
+point-ui row 0
+press-here
+move-by 0 10
+expect dragname=c.txt
+point-ui list
+move-here
+expect drop=list:-1 dropok=0
+point-side Home
+move-here
+expect dropdir=home dropok=1
+release
+wait-for 3000 job=-
+sh test -f "$OFX_ROOT/home/c.txt" && test ! -e "$OFX_ROOT/home/tree/c.txt"
+key ctrl-w
+wait-for 2000 tabs=1
+# ---- The trash view is no source
+sh touch "$OFX_DIR/gone.txt"
+wait-for 3000 n=4
+key end
+key delete
+wait-for 3000 n=3
+key alt-end
+wait-for 2000 trash=1 n=1
+point-ui row 0
+press-here
+move-by 0 20
+expect drag=- badge=-
+release
+quit

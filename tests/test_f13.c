@@ -166,3 +166,13 @@ static void test_state_sidewidth(void)
         CHECK(s.side_px == C[i].px);
     }
 }
+
+// A drag starts 6 px from the press, any way; Nemo's rule for what a drop does (F13 step 3).
+static void test_drag_rule(void)
+{
+    CHECK(!ui_drag_past(0, 0) && !ui_drag_past(5, 0) && !ui_drag_past(0, -5) && !ui_drag_past(4, 4));
+    CHECK(ui_drag_past(6, 0) && ui_drag_past(0, -6) && ui_drag_past(-5, 4) && ui_drag_past(4.3f, 4.3f));
+    CHECK(ui_drop_op(true, 0) == UI_DROP_MOVE && ui_drop_op(false, 0) == UI_DROP_COPY);
+    CHECK(ui_drop_op(true, UI_MOD_CTRL) == UI_DROP_COPY && ui_drop_op(false, UI_MOD_SHIFT) == UI_DROP_MOVE);
+    CHECK(ui_drop_op(false, UI_MOD_CTRL | UI_MOD_SHIFT) == UI_DROP_COPY);   // (both: Ctrl's, as Nemo; its link is not ofx's)
+}

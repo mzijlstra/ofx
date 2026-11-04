@@ -194,6 +194,16 @@ or F9 (remembered in `~/.local/state/ofx/state`):
 - **tree**: the folders from `/`, opened down to the one shown.
 - **hidden**: no sidebar.
 
+Drag and drop inside ofx: press on an entry (or a tree folder) and move; the selection goes when
+the press was on a selected entry, else that entry alone. It drops on a folder's row or icon, a
+sidebar row, a tab, a path button, or the files' empty space (the folder shown); on Trash it
+trashes them. On the same drive it moves, onto another it copies; Ctrl held copies, Shift held
+moves; the badge by the pointer says which, and the target is outlined (nothing where it can't
+go: a file, a read-only folder, the folder dragged or one inside it, a search's results). Esc or
+leaving the window cancels; Ctrl+Z undoes a drop, as a paste. A tree folder opens when the button
+is let go, not on the press, so it can be dragged. Dragging to and from other programs isn't there
+yet.
+
 Its width: drag its right edge (lit, with the resize pointer, under it), from 140 px to half the
 window (480 px at most); a double click on the edge gives the first 200 px back. Remembered beside
 the mode, one width for every window.

@@ -165,11 +165,12 @@ static u8 icon_mem[MiB(16)];       // the icon theme's index and the icon cache;
 static u8 scratch_mem[MiB(1)];
 static u8 undo_mem[MiB(4)];        // the undo record's paths
 static u8 own_mem[MiB(2)];         // what ofx itself copied or cut
+static u8 drag_mem[MiB(2)];        // the files a drag carries (F13), apart from the clipboard
 static u8 paste_mem[MiB(2)];       // another program's files, read for one paste
 static u8 tree_mem[MiB(4)];        // the sidebar tree's paths and names; reset per build
 static u8 bm_mem[MiB(1)], bmw_mem[MiB(1)];   // the bookmarks file as the menu lists it; a change's own read (F7.5)
 
-static Arena frame, lists[2], data, icona, scratch, undoa, owna, pastea, treea, bma, bmwa;
+static Arena frame, lists[2], data, icona, scratch, undoa, owna, pastea, treea, bma, bmwa, draga;
 static Bookmarks bmarks;   // the bookmarks file's lines (F7.5), read with the places
 static int   watch_delay_ms;   // OFX_TEST_WATCH_DELAY_MS, for one test
 
@@ -195,8 +196,22 @@ typedef struct {
     char       file[PATH_MAX];
 } IconSlot;
 
-// What the left button holds, from its press until it is let go (input.c's drag_at).
-enum { DRAG_NONE, DRAG_ZOOM, DRAG_SIDE };
+// What the left button holds, from its press until it is let go (input.c's drag_at): the zoom
+// slider's knob, the sidebar's edge; a press on files that may become a drag of them (DRAG_PRESS,
+// until it moves UI_DRAG_PX), and that drag (DRAG_FILES, F13 step 3).
+enum { DRAG_NONE, DRAG_ZOOM, DRAG_SIDE, DRAG_PRESS, DRAG_FILES };
+
+// Where a drag of files would land (F13 step 3), and what is drawn lit for it: a folder row (at:
+// its place on screen), a sidebar row, a tab, a path button, the files' empty space, the Trash.
+typedef enum { DROP_NONE, DROP_ROW, DROP_SIDE, DROP_TAB, DROP_CRUMB, DROP_LIST } DropKind;
+typedef struct {
+    DropKind kind;            // what is under the pointer
+    int      at;
+    bool     ok;              // and it takes the files (drop_takes): lit, and a release drops there
+    bool     trash;           // the Trash place: the files trashed, not moved
+    bool     same_drive;      // the folder on the first file's drive
+    char     dir[PATH_MAX];   // the folder they go into
+} Drop;
 
 // What a point of the window is over (hit_at): for a press, and for the hover highlights.
 typedef struct {
@@ -312,6 +327,14 @@ static struct {
     int       drag;         // what the left button holds (DRAG_*: the zoom slider's knob, F6.3; the sidebar's edge, F13)
     float     drag_x0;      // where the press was
     int       drag_w0;      // the sidebar's width then
+    float     drag_y0, drag_px, drag_py;   // (DRAG_PRESS, DRAG_FILES: the press's y; the pointer now)
+    isize     drag_src;     // the entry pressed (-1: a tree row, its folder in drag_tree)
+    char      drag_tree[PATH_MAX];
+    int       drag_side;    // its row on screen: a press let go there without a drag opens it
+    char      drag_name[NAME_MAX + 1];   // the badge's: the entry pressed, or the tree row's folder
+    IconSlot *drag_icon;
+    int       drag_mods;    // Ctrl, Shift held (UI_MOD_*): a copy, a move
+    Drop      drop;         // where it would land now
     int       side_px;      // the sidebar's width dragged to (ui_side_fit; 0 its first, UI_SIDE_W)
     UiPress   edge_press;   // the sidebar edge's presses, for its double click
     bool      thumb_local;  // the folder's drive is one ofx makes previews on (F6.4: not a network one)
@@ -374,6 +397,7 @@ static int side_w(void)
 }
 static Undo      undo;
 static ClipFiles own;      // ofx's own copy or cut (own.n 0: none)
+static ClipFiles dragged;  // what a drag of files carries (F13 step 3), its own: the clipboard stays as it was
 // Bumped by every copy of ours, files or text: a cut's paste empties the clipboard after it only
 // if nothing was copied meanwhile (F5.2 review).
 static u32       own_gen;
@@ -588,6 +612,7 @@ static void arenas_init(void)
     arena_init(&scratch, "scratch", scratch_mem, sizeof scratch_mem);
     arena_init(&undoa, "undo", undo_mem, sizeof undo_mem);
     arena_init(&owna, "clipboard", own_mem, sizeof own_mem);
+    arena_init(&draga, "drag", drag_mem, sizeof drag_mem);
     arena_init(&pastea, "paste", paste_mem, sizeof paste_mem);
     arena_init(&treea, "tree", tree_mem, sizeof tree_mem);
     arena_init(&bma, "bookmarks", bm_mem, sizeof bm_mem);
@@ -897,6 +922,7 @@ int main(int argc, char **argv)
             if (!script_input(&in)) break;
             seen = true;
         }
+        drag_keys(&in);   // (Esc during a drag of files: the drag's)
         cursor_shape();
         in.crumb_n = app.crumbs.n, in.crumb_last = app.crumb_hi - 1;
         _Static_assert((int)UI_JOB_ROWS >= (int)JOBQ_WORKERS, "a job row each for the jobs running");
