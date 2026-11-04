@@ -166,7 +166,7 @@ static void test_side_fit(void)
 static void test_state_sidewidth(void)
 {
     static const struct { const char *line; int px; } C[] = {
-        { "sidewidth=260\n", 260 }, { "sidewidth = 9999\n", 9999 }, { "sidewidth=7", 7 }, { "sidewidth=12345\n", 0 }, { "sidewidth=abc\n", 0 },
+        { "sidewidth=260\n", 260 }, { "sidewidth = 9999\n", 9999 }, { "sidewidth=7", 7 }, { "sidewidth=12345\n", 0 }, { "sidewidth=01000\n", 0 }, { "sidewidth=0300\n", 300 }, { "sidewidth=abc\n", 0 },
         { "sidewidth=26a\n", 0 }, { "sidewidth=\n", 0 }, { "sidewidth=-3\n", 0 }, { "sidebar=tree\n", 0 },
     };
     char path[PATH_MAX];

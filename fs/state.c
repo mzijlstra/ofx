@@ -43,7 +43,7 @@ static bool state_path(char *out, size_t cap)
 // A width in pixels as the state file has it: 1 to 4 digits, not 0; else 0 (none).
 static int state_px(Str v)
 {
-    i64 n = str_num(v, 9999);
+    i64 n = v.len > 4 ? -1 : str_num(v, 9999);   // (by length too: "01000" isn't one, as before; C3 review)
     return n < 0 ? 0 : (int)n;
 }
 

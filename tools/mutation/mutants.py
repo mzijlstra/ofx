@@ -2536,7 +2536,7 @@ MUTANTS += [
     ('fs/paths.c', "        if (w.p[i] < '0' || w.p[i] > '9' || n > (max - (w.p[i] - '0')) / 10) return -1;", "        if (w.p[i] < '0' || w.p[i] > '9' || n > max / 10) return -1;"),
     ('fs/paths.c', "        if (w.p[i] < '0' || w.p[i] > '9' || n > (max - (w.p[i] - '0')) / 10) return -1;", "        if (w.p[i] > '9' || n > (max - (w.p[i] - '0')) / 10) return -1;"),
     ('fs/paths.c', "    if (!w.len) return -1;\n    for (isize i = 0; i < w.len; i++) {   // (n checked", "    for (isize i = 0; i < w.len; i++) {   // (n checked"),
-    ('fs/state.c', '    i64 n = str_num(v, 9999);', '    i64 n = str_num(v, 99999);'),
+    ('fs/state.c', '    i64 n = v.len > 4 ? -1 : str_num(v, 9999);', '    i64 n = str_num(v, 9999);'),
     ('fs/state.c', '    return n < 0 ? 0 : (int)n;', '    return (int)n;'),
     ('fs/state.c', '    *key = str_trim(str_cut(line, 0, eq)), *val = str_trim(str_cut(line, eq + 1, line.len));', '    *key = str_trim(str_cut(line, 0, eq)), *val = str_cut(line, eq + 1, line.len);'),
     ('fs/clip.c', '    return *cp == 0xfffd && j - i == 1 ? 0 : (int)(j - i);', '    return *cp == 0xfffd ? 0 : (int)(j - i);'),
