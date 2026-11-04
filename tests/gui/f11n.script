@@ -1,10 +1,11 @@
 # F11 step 3b, after f11m (run.sh cleared the window lines): this window's line kept as its tabs
 # change (not at once: 2 s after the change), then the window killed (SIGKILL: no close at all, as a crash
 # or a battery run flat). run.sh checks its line is still there, open (the run "fails": no end line).
+# This window's line written as it starts, before the 2 s a change waits; checked before settle,
+# which under load outlasts them (a GUI mutant, 2026-11-04)
+sh grep -q "^window $(cat "$OFX_ROOT/run.pid") [0-9]* 0 open:[^ ]* .*/tree$" "$OFX_ROOT/state/ofx/state"
 settle
 expect tabs=1 tabdirs=tree modal=-
-# This window's line written as it starts, before the 2 s a change waits (a GUI mutant, 2026-11-04)
-sh grep -q "^window $(cat "$OFX_ROOT/run.pid") [0-9]* 0 open:[^ ]* .*/tree$" "$OFX_ROOT/state/ofx/state"
 key ctrl-t
 key home
 key right

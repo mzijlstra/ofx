@@ -499,7 +499,8 @@ MUTANTS = [
     ('gui/frame.c', '    u->br_n = git.br.n < UI_MENU_BRANCHES ? git.br.n : UI_MENU_BRANCHES, u->br_here = git.br.cur, u->br_note = git.br.n == 0;', '    u->br_n = git.br.n < UI_MENU_BRANCHES ? git.br.n : UI_MENU_BRANCHES, u->br_here = git.br.cur, u->br_note = false;', 'f12h'),
     ('gui/git.c', '    if (br) git.br = git.br_out, git.br_ready = false, git.br_wait = false;\n', '', 'f12h'),
     # (git_take's redraw when only the branch list came: a script draws every frame, so none sees a
-    # missed one, as hit_same's in F13 C1; dropped, Michael 2026-11-04)
+    # missed one; unscripted the menu stays on "Reading branches…" until the pointer moves. Dropped,
+    # Michael 2026-11-04)
     ('gui/git.c', '    int n = s->head[0] ? snprintf(buf, sizeof buf, "%s", s->head) : snprintf(buf, sizeof buf, "%.7s", s->oid);', '    int n = snprintf(buf, sizeof buf, "%s", s->head);', 'f12h'),
     ('gui/git.c', '    if (s->has_ab && s->ahead) n += snprintf(', '    if (false) n += snprintf(', 'f12h'),
     ('gui/git.c', '    if (s->has_ab && s->behind) snprintf(', '    if (false) snprintf(', 'f12h'),

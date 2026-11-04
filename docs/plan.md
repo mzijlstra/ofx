@@ -50,8 +50,7 @@ Omarchy's theme: the binary, the folder `tools/ofx`, the window's title and Wayl
     folder's path, so one mutant covers both.
   - **Dropped: gui/git.c's `if (br && s < 0) return true;`** (the branch list arriving alone asks
     for a redraw; without it the open branch menu shows "Reading branches…" until the pointer
-    moves). Scripts draw every frame, so no script sees a missing redraw (as the hit_same mutant
-    dropped in F13's step C1). Michael, 2026-11-04: drop it with a note rather than teach the
+    moves). Scripts draw every frame, so no script sees a missing redraw. Michael, 2026-11-04: drop it with a note rather than teach the
     runner to flag a frame whose state changed with no redraw asked for.
 
 ## Milestones
