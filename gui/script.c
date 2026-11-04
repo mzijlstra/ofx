@@ -66,6 +66,8 @@
 //   user-keys               from here on the compositor's keyboard reaches the window too, keys
 //                           and characters through GLFW's callbacks as a user's: `sh vkbd … &` in
 //                           the test sway (tools/gui/sway.sh; weston has no virtual keyboard)
+//   clip-drop               the system clipboard's own connection cut, as a compositor that drops it
+//                           (the clip group, in the test sway)
 //   clip-text <text>        the rest of the line onto GLFW's clipboard as another program's copy
 //                           would put it, \n a line break (weston has no data-control)
 //   shot <file.png>         the next drawn frame; a relative path goes under OFX_GUI_SHOTS
@@ -84,6 +86,7 @@
 //                           window that quits with commands left fails the run
 
 #include <spawn.h>
+#include <sys/socket.h>
 #include <sys/wait.h>
 
 static struct {
@@ -857,6 +860,8 @@ static bool script_input(UiInput *in)
             hover_refresh(false, script.px, script.py);   // GLFW keeps the last position
         } else if (str_eq(cmd, S("user-keys"))) {
             script.user_keys = true;
+        } else if (str_eq(cmd, S("clip-drop"))) {
+            if (!clip.dpy || shutdown(wl_display_get_fd(clip.dpy), SHUT_RDWR) != 0) script_fail("clip-drop: no clipboard connection to cut");
         } else if (str_eq(cmd, S("idle"))) {
             script_idle();
         } else if (str_eq(cmd, S("click-here"))) {   // (pressed and let go: a drag it starts ends at once)

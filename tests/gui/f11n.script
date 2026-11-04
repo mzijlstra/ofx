@@ -3,6 +3,8 @@
 # or a battery run flat). run.sh checks its line is still there, open (the run "fails": no end line).
 settle
 expect tabs=1 tabdirs=tree modal=-
+# This window's line written as it starts, before the 2 s a change waits (a GUI mutant, 2026-11-04)
+sh grep -q "^window $(cat "$OFX_ROOT/run.pid") [0-9]* 0 open:[^ ]* .*/tree$" "$OFX_ROOT/state/ofx/state"
 key ctrl-t
 key home
 key right
