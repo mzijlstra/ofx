@@ -3,4 +3,5 @@
 settle
 sh ( trap '' USR1; exec sleep 20 ) >/dev/null 2>&1 & p=$!; echo $p > "$OFX_ROOT/other.pid"; t=$(sed 's/.*) //' /proc/$p/stat | cut -d' ' -f20); printf '%s\n' "$t" > "$OFX_ROOT/windows/$p"
 sh cp "$OFX_ROOT/run.pid" "$OFX_ROOT/f11j.pid"
+quits 5
 key ctrl-q

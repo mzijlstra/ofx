@@ -2,4 +2,5 @@
 # one of two (the stand-in still open) keeps none (run.sh checks).
 settle
 sh cp "$OFX_ROOT/run.pid" "$OFX_ROOT/f11k.pid"
+quits 5
 key close-window

@@ -3,4 +3,5 @@
 settle
 expect tabs=2 tab=1 tabdirs=tree|sub1 modal=- status=-
 sh [ "$(grep -c '^window ' "$OFX_ROOT/state/ofx/state")" = 1 ] && grep -q "^window $(cat "$OFX_ROOT/run.pid") [0-9]* [0-9]* open:" "$OFX_ROOT/state/ofx/state"   # (its own running line alone, F11 step 3b)
+quits 5
 key ctrl-q

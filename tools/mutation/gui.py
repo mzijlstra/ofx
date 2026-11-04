@@ -945,6 +945,9 @@ MUTANTS = [
     ('gui/script.c', "        if (line.len && line.p[0] != '#') script.expects++", "        if (line.len) script.expects++", 'harness'),
     ('gui/script.c', '    if (script.quits_ran && script.quits-- > 0) return true;\n    if (script.quits_ran) {', '    if (script.quits_ran && script.quits-- > 0) return true;\n    if (false) {', 'harness'),
     ('gui/script.c', '        if (script.quits && !str_eq(cmd, S("quits"))) script.quits_ran = true;', '        if (script.quits) script.quits_ran = true;', 'harness'),
+    ('gui/script.c', '    if (script.waiting_for[0]) script_fail("the window quit during a wait-for', '    if (false) script_fail("the window quit during a wait-for', 'harness'),
+    # (the scripts that end on their quitting key say `quits` first: review, 2026-11-04)
+    ('gui/actions.c', '    case UA_QUIT: app.quit = true; break;', '    case UA_QUIT: break;', 'f7'),
 ]
 import concurrent.futures, queue, threading, time
 

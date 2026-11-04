@@ -949,6 +949,7 @@ static bool script_input(UiInput *in)
         } else if (str_eq(cmd, S("quits"))) {
             script.expects++;
             script.quits = atoi(a);
+            if (script.quits < 1) script_fail("quits: a frame count of 1 or more, not '%s'", a);
         } else if (str_eq(cmd, S("quit"))) {
             script.at = script.text.len;   // what follows it is left on purpose
             break;

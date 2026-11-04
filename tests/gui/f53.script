@@ -229,4 +229,5 @@ shot quit.png
 char n
 expect modal=- jobs=1
 key ctrl-q
+quits 5
 key enter

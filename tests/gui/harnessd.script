@@ -1,0 +1,5 @@
+# The harness itself: a window that quits during a wait-for fails, though nothing is left after it
+# (a SIGTERM half a second in, from the background: without the delay it races the wait-for).
+settle
+sh ( sleep 0.5; kill -TERM $(cat "$OFX_ROOT/run.pid") ) >/dev/null 2>&1 &
+wait-for 3000 never-there

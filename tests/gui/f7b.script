@@ -41,4 +41,5 @@ key up
 expect menuat=close-all
 key enter
 wait-for 2000 modal=quit menu=-
+quits 5
 key enter
