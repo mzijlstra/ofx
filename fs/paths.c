@@ -67,27 +67,48 @@ static bool path_put(char *out, size_t cap, const char *dir, Str name)
     return n >= 0 && (size_t)n < cap;
 }
 
-// Whether byte i of s starts a control character: C0, DEL, or C1 in UTF-8 (U+0080..U+009F, which
-// a terminal may take as a command: U+009B is CSI).
-static bool shell_ctrl(Str s, isize i)
+// The length of the valid UTF-8 sequence at byte i of s (1 for ASCII), 0 for none: no overlong
+// form, no surrogate, nothing past U+10FFFF.
+static int utf8_at(Str s, isize i)
 {
     u8 c = (u8)s.p[i];
-    return c < 0x20 || c == 0x7f || (c == 0xc2 && i + 1 < s.len && (u8)s.p[i + 1] >= 0x80 && (u8)s.p[i + 1] <= 0x9f);
+    if (c < 0x80) return 1;
+    int n = c >= 0xc2 && c <= 0xdf ? 2 : c >= 0xe0 && c <= 0xef ? 3 : c >= 0xf0 && c <= 0xf4 ? 4 : 0;
+    if (n == 0 || i + n > s.len) return 0;
+    u8 lo = c == 0xe0 ? 0xa0 : c == 0xf0 ? 0x90 : 0x80, hi = c == 0xed ? 0x9f : c == 0xf4 ? 0x8f : 0xbf;
+    if ((u8)s.p[i + 1] < lo || (u8)s.p[i + 1] > hi) return 0;
+    for (int k = 2; k < n; k++)
+        if (((u8)s.p[i + k] & 0xc0) != 0x80) return 0;
+    return n;
+}
+
+// How many bytes from i a paste must spell as \xHH, 0 for none: a control character (C0, DEL, or
+// C1 in UTF-8, U+0080..U+009F, which a terminal may take as a command: U+009B is CSI), or a byte
+// that starts no valid UTF-8 (step 1 re-review: so the paste is valid UTF-8, and no 8-bit control
+// reaches a Latin-1 terminal).
+static int shell_ctrl(Str s, isize i)
+{
+    u8 c = (u8)s.p[i];
+    int n = utf8_at(s, i);
+    if (n == 0) return 1;
+    return c < 0x20 || c == 0x7f || (c == 0xc2 && (u8)s.p[i + 1] <= 0x9f) ? n : 0;
 }
 
 // s as a shell reads it back (ls's shell-escape style, Copy Path; Michael, 2026-11-04): as it is
 // when every byte is safe there (letters, digits, / . _ - + , : @ % =, and UTF-8), else in single
-// quotes (' as '\''), or in $'…' when it holds a control character (\n, \t, \r, \\, \', the rest
-// \xHH), so a name can't paste as a second command line. The length written into out (NUL
-// ended), -1 when it doesn't fit.
+// quotes (' as '\''), or in $'…' when it holds a control character or a byte of no valid UTF-8
+// (\n, \t, \r, \\, \', the rest \xHH), so a name can't paste as a second command line. The length
+// written into out (NUL ended), -1 when it doesn't fit.
 static isize shell_quote(Str s, char *out, isize cap)
 {
     bool plain = s.len > 0, ctrl = false;
-    for (isize i = 0; i < s.len; i++) {
+    for (isize i = 0; i < s.len;) {   // (a sequence at a time: a UTF-8 character's later bytes start none)
         u8 c = (u8)s.p[i];
-        if (shell_ctrl(s, i)) ctrl = true;
+        int bad = shell_ctrl(s, i);
         bool safe = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || strchr("/._-+,:@%=", c) || c >= 0x80;
-        if (!safe || shell_ctrl(s, i)) plain = false;
+        if (bad) ctrl = true;
+        if (!safe || bad) plain = false;
+        i += bad ? bad : utf8_at(s, i);
     }
     isize n = 0;
 #define PUT(...)                                                                                   \
@@ -107,18 +128,17 @@ static isize shell_quote(Str s, char *out, isize cap)
         PUT("'");
     } else {
         PUT("$'");
-        for (isize i = 0; i < s.len; i++) {
+        for (isize i = 0; i < s.len;) {
             u8 c = (u8)s.p[i];
+            int bad = shell_ctrl(s, i), len = bad ? bad : utf8_at(s, i);
             if (c == '\n') PUT("\\n");
             else if (c == '\t') PUT("\\t");
             else if (c == '\r') PUT("\\r");
             else if (c == '\\' || c == '\'') PUT("\\%c", c);
-            else if (shell_ctrl(s, i) && c == 0xc2) {
-                PUT("\\x%02x\\x%02x", c, (u8)s.p[i + 1]);
-                i++;
-            }
-            else if (shell_ctrl(s, i)) PUT("\\x%02x", c);
-            else PUT("%c", c);
+            else if (bad)
+                for (int k = 0; k < len; k++) PUT("\\x%02x", (u8)s.p[i + k]);
+            else PUT("%.*s", len, s.p + i);
+            i += len;
         }
         PUT("'");
     }

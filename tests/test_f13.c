@@ -105,6 +105,19 @@ static void test_shell_quote(void)
         { "/a/\xC2\xA9\xC2\x80", "$'/a/\xC2\xA9\\xc2\\x80'" },   // (U+00A9 is a letter's kind; U+0080 is C1)
         { "/a/\x7f", "$'/a/\\x7f'" },
         { "/a/\xC2\xA9", "/a/\xC2\xA9" },
+        // UTF-8 kept whole; a byte of none as \xHH (step 1 re-review): a lone 8-bit CSI, a cut
+        // sequence, an overlong /, a surrogate, past U+10FFFF
+        { "/a/\xE2\x82\xAC\xF0\x9F\x98\x80", "/a/\xE2\x82\xAC\xF0\x9F\x98\x80" },
+        { "/a/\x9B" "31m", "$'/a/\\x9b31m'" },
+        { "/a/\xE2\x82", "$'/a/\\xe2\\x82'" },
+        { "/a/\xC0\xAF", "$'/a/\\xc0\\xaf'" },
+        { "/a/\xED\xA0\x80", "$'/a/\\xed\\xa0\\x80'" },
+        { "/a/\xF4\x90\x80\x80", "$'/a/\\xf4\\x90\\x80\\x80'" },
+        { "/a/\xE0\x9F\x80 \xE0\xA0\x80", "$'/a/\\xe0\\x9f\\x80 \xE0\xA0\x80'" },
+        { "/a/\xF0\x8F\xBF\xBF\xF4\x8F\xBF\xBF", "$'/a/\\xf0\\x8f\\xbf\\xbf\xF4\x8F\xBF\xBF'" },
+        { "/a/b\xE2\x28\xA1", "$'/a/b\\xe2(\\xa1'" },
+        { "/a/\xE2\x82\x28", "$'/a/\\xe2\\x82('" },
+        { "/a/\xF5\x80\x80\x80", "$'/a/\\xf5\\x80\\x80\\x80'" },
         { "/a/it's\tb\\c", "$'/a/it\\'s\\tb\\\\c'" },
         { "/a/$(id)`id`\"!~#*?[]{}<>|&;^", NULL },
         { "", "''" },
