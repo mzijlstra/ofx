@@ -772,7 +772,8 @@ MUTANTS = [
     # (hover_at's compare is hit_same's now, every field: one left out only costs a script a redraw it
     # makes anyway, so no script kills it; the size assert guards a field added: F13 code-health C1)
     ('gui/clipboard.c', '    clip.ok = false;   // (the connection gone', '    // (the connection gone', 'clip'),
-    ('gui/folder.c', "        app.ui.grid = grid, app.ui.zoom = zoom, app.ui.sort = sort;   // (as for a folder that can't be listed: F11 review)\n", '', 'f11'),
+    # (go_to_in's too-many-entries restore shares the unlistable folder's since 2026-11-04: that
+    # mutant, the restore line dropped, covers both)
     ('gui/main.c', '        if (closing_all && !close_asked && !app.ui.quit_asking && !app.quit) closing_all = false;', '', 'f7'),
     ('gui/main.c', '        else if (app.empty_n < 0) app.empty_n = trash_count();', '', 'f8'),
     # F11 review step 3: a folder's view written 2 s after the last change (OFX_TEST_WRITE_MS in tests)

@@ -14,6 +14,13 @@ key enter
 expect sel=inner.txt n=1
 key backspace
 expect sel=adir n=5
+# Up selects the folder left even when the one above remembers another cursor (b10.txt, where it
+# was left for Back's adir).
+key end
+key alt-left
+expect sel=inner.txt n=1
+key backspace
+expect sel=adir n=5
 key right
 char h
 expect sel=adir

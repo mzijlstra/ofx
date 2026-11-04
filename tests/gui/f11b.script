@@ -7,6 +7,11 @@ key enter
 wait-for 2000 view=icons zoom=64 sort=mtime sel=y.txt
 key alt-up
 wait-for 2000 sel=sub1 view=list
+# A folder that can't be listed leaves the view as it was, not the one it remembers (sub1's icons).
+sh chmod 000 "$OFX_DIR/sub1"
+key enter
+wait-for 2000 statusbad=1 sel=sub1 view=list zoom=48
+sh chmod 755 "$OFX_DIR/sub1"
 key down
 expect sel=sub2
 key enter

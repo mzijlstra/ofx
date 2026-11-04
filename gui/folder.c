@@ -215,7 +215,19 @@ static bool go_to_in(const char *dir, Str select, isize fallback, bool stepping)
         const char *kept = remember_sel(dir);
         if (!select.len && fallback == 0 && kept) select = str_from_c(kept);
     }
-    if (!view_list(view, &lists[next], dir, &l, &err)) {
+    // A listing, and the arrays beside it: one way out when either fails, so f11b's folder that
+    // can't be listed checks the restore for both (2026-11-04).
+    Str *mime = NULL;
+    u8 *mark = NULL;
+    isize *count = NULL;
+    bool ok = view_list(view, &lists[next], dir, &l, &err);
+    if (ok) {
+        mime = arena_try_new(&lists[next], Str, l.n + 1);
+        mark = arena_try_new(&lists[next], u8, l.n + 1);
+        count = arena_try_new(&lists[next], isize, l.n + 1);
+        if (!mime || !mark || !count) ok = false, err_set(&err, "%s: too many entries for memory", dir);
+    }
+    if (!ok) {
         app.ui.grid = grid, app.ui.zoom = zoom, app.ui.sort = sort;
         if (!app.have_list) snprintf(app.error, sizeof app.error, "%s", err.msg);
         set_status(true, "%s", err.msg);
@@ -224,14 +236,6 @@ static bool go_to_in(const char *dir, Str select, isize fallback, bool stepping)
     // The name to select lives in the old listing: find it before that arena is reused.
     isize sel = select.len ? listing_find(&l, select) : -1;
     if (sel < 0) sel = fallback;
-    Str *mime = arena_try_new(&lists[next], Str, l.n + 1);
-    u8 *mark = arena_try_new(&lists[next], u8, l.n + 1);
-    isize *count = arena_try_new(&lists[next], isize, l.n + 1);
-    if (!mime || !mark || !count) {
-        app.ui.grid = grid, app.ui.zoom = zoom, app.ui.sort = sort;   // (as for a folder that can't be listed: F11 review)
-        set_status(true, "%s: too many entries for memory", dir);
-        return false;
-    }
     // The same folder again: the selection is kept by name.
     isize marked = 0;
     for (isize i = 0; same && app.have_list && app.ui.marked && i < app.list.n; i++) {

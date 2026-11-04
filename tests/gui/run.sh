@@ -174,7 +174,7 @@ rs usb OFX_TEST_HOME="$T/home" OFX_TEST_MEDIA="$T/media" OFX_TEST_MOUNTINFO="$T/
 fi
 if want f11; then
 # F11: what ofx remembers per folder, in the run's own state and config folders (run-script's).
-T=$base/f11; rm -rf "$T"; mkdir -p "$T/tree/sub1" "$T/tree/sub2"
+home_tree f11; mkdir -p "$T/tree/sub1" "$T/tree/sub2"
 touch "$T/tree/sub1/x.txt" "$T/tree/sub1/y.txt" "$T/tree/sub2/a.txt" "$T/tree/sub2/b.txt" "$T/tree/sub2/c.txt" "$T/tree/.hid"
 echo top > "$T/tree/top.txt"
 touch -d 2019-01-01 "$T/tree/.hid"; touch -d 2020-01-01 "$T/tree/sub1"; touch -d 2021-01-01 "$T/tree/sub2"; touch -d 2022-01-01 "$T/tree/top.txt"   # (the modified order: sub1, sub2; .hid, top.txt)
@@ -288,6 +288,7 @@ png = (b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', struct.pack('>IIBBBBB', 90, 128, 8,
 open(os.path.join(out, hashlib.md5(uri.encode()).hexdigest() + '.png'), 'wb').write(png)
 PY
 printf '33 1 0:31 / / rw - btrfs /dev/x rw\n34 33 0:40 / %s rw - nfs4 srv:/x rw\n' "$T/tree/far" > "$T/mountinfo"
+mkdir -p "$T/state/ofx" && printf 'folder %s 1 icons - - - -\n' "$T/tree/far" > "$T/state/ofx/state"   # (far/ opens in the icon view)
 rs f64 OFX_TEST_MOUNTINFO="$T/mountinfo" -- "$T/tree"
 rs f64b OFX_TEST_MOUNTINFO="$T/mountinfo" -- "$T/tree"
 # 40 previews of 96 by 64 (24 KiB each): f64d where 10 may be held (fewer than a screen's 18), f64c
