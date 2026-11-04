@@ -39,7 +39,8 @@ Omarchy's theme: the binary, the folder `tools/ofx`, the window's title and Wayl
   on F12's last commit 1c715c9, so their tags were older than the code). Test gaps to look at, or
   mutants to drop as equivalent:
   - #0, go up selects the folder left: equivalent now, F11's remembered cursor puts it there too.
-  - #177, a quit with jobs running asks first (Close All).
+  - #177, a quit with jobs running asks first (Close All). First to test (reviewer-2): without it,
+    Close All during a copy quits at once and leaves the copy half done.
   - #178, SIGUSR1 is Close All's signal.
   - #388 (git.c), #566 and #621 (folder.c), #570 and #574 (remember.c), #614 (restore.c),
     #620 (clipboard.c), #650 (folder.c).
