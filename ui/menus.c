@@ -80,7 +80,7 @@ static bool ui_menu_enabled(const Ui *u, UiMenuItem it)
     case UM_UNDO: return u->can_undo;
     case UM_CUT: return here && ui_allows(u, UA_CUT);
     case UM_COPY: return here && ui_view_allows(u->view, UA_COPY);
-    case UM_COPY_PATH: return u->focus != UI_FOCUS_SIDE && ui_view_allows(u->view, UA_COPY_PATH);   // (no entry: the folder's)
+    case UM_COPY_PATH: return u->focus == UI_FOCUS_SIDE ? u->side.n > 0 : ui_view_allows(u->view, UA_COPY_PATH);   // (no entry: the folder's; the sidebar's keys: its cursor's, as the key)
     case UM_PASTE: return u->can_paste && ui_allows(u, UA_PASTE);
     case UM_SELECT_ALL: case UM_SELECT_MATCH: case UM_INVERT: return files;
     case UM_RENAME: return here && ui_allows(u, UA_RENAME);

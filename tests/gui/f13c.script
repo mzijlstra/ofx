@@ -1,5 +1,9 @@
 # F13 step 2: a remembered width wider than the window allows (sidewidth=9999): half of the 700
-# (run.sh), kept as it was for a wider one.
+# (run.sh), kept as it was for a wider one; a click on the edge without a move doesn't make the
+# fitted width the kept one (code-health review, 2026-11-04).
 settle
 expect w=700 sidew=350 sidebox=350 sidepx=9999
+point-ui side-edge
+click-here
+expect sidew=350 sidepx=9999 drag=-
 quit

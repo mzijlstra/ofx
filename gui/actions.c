@@ -40,18 +40,19 @@ static void say_done(const char *verb, isize ok, isize n, const char *one, const
     else set_status(true, "%s %td of %td: %s", verb, ok, n, why);
 }
 
-static void trash_paths(char *const *paths, isize n);
+static void trash_paths(char *const *paths, isize n, bool marks);
 
 static void trash_targets(void)
 {
     char *paths[CLIP_PATHS_MAX];
     arena_reset(&pastea);
     isize n = targets(&pastea, paths, CLIP_PATHS_MAX);
-    trash_paths(paths, n);
+    trash_paths(paths, n, true);
 }
 
-// paths to the trash, as one undo (Delete's, and a drop on the Trash: F13 step 3).
-static void trash_paths(char *const *paths, isize n)
+// paths to the trash, as one undo (Delete's, and a drop on the Trash: F13 step 3); marks: they are
+// the marks, which clear (a drag of an unmarked entry leaves them: code-health review, 2026-11-04).
+static void trash_paths(char *const *paths, isize n, bool marks)
 {
     isize ok = 0;
     for (isize i = 0; i < n; i++)
@@ -65,7 +66,7 @@ static void trash_paths(char *const *paths, isize n)
     }
     if (ok == 0) undo_clear(&undo);
     if (n > 0) say_done("Trashed", ok, n, path_base(str_from_c(paths[0])).p, first.msg);
-    ui_mark_clear(&app.ui);
+    if (marks) ui_mark_clear(&app.ui);
     trash_state();
     reload();
 }
@@ -267,7 +268,7 @@ static void drop_do(const Drop *d)
 {
     UiDropOp op = drop_op(d);
     if (op == UI_DROP_TRASH) {
-        trash_paths(dragged.path, dragged.n);
+        trash_paths(dragged.path, dragged.n, app.drag_marked);
         return;
     }
     dragged.cut = op == UI_DROP_MOVE;

@@ -23,8 +23,9 @@ static void test_copy_path(void)
     u.side.sel = 2;
     UiAction a = menu_keys(&u, 1, UK_COPY_PATH);
     CHECK(a.kind == UA_COPY_PATH && a.all && a.index == 2 && u.focus == UI_FOCUS_SIDE);
+    CHECK(ui_menu_enabled(&u, UM_COPY_PATH));   // (Edit's entry as the key: code-health review, 2026-11-04)
     u.view = UI_VIEW_TRASH;   // (a sidebar row is a folder elsewhere: the view doesn't matter)
-    CHECK(menu_keys(&u, 1, UK_COPY_PATH).kind == UA_COPY_PATH);
+    CHECK(menu_keys(&u, 1, UK_COPY_PATH).kind == UA_COPY_PATH && ui_menu_enabled(&u, UM_COPY_PATH));
     // The menus: Edit and an entry's after Copy, a folder's after its Copy; picked, Edit's runs the
     // key, the folder's goes to gui/ for its folder.
     CHECK(menu_place(1, UM_COPY_PATH) == menu_place(1, UM_COPY) + 1);

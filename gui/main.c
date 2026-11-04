@@ -211,6 +211,7 @@ typedef struct {
     bool     trash;           // the Trash place: the files trashed, not moved
     bool     same_drive;      // the folder on the first file's drive
     char     dir[PATH_MAX];   // the folder they go into
+    int      reloads;         // app.reloads when it was found: a listing since moves the rows under it
 } Drop;
 
 // What a point of the window is over (hit_at): for a press, and for the hover highlights.
@@ -327,9 +328,11 @@ static struct {
     int       drag;         // what the left button holds (DRAG_*: the zoom slider's knob, F6.3; the sidebar's edge, F13)
     float     drag_x0;      // where the press was
     int       drag_w0;      // the sidebar's width then
+    bool      drag_moved;   // (DRAG_SIDE) it moved: let go, the width is kept
     float     drag_y0, drag_px, drag_py;   // (DRAG_PRESS, DRAG_FILES: the press's y; the pointer now)
-    isize     drag_src;     // the entry pressed (-1: a tree row, its folder in drag_tree)
-    char      drag_tree[PATH_MAX];
+    char      drag_path[PATH_MAX];   // what the press was on (an entry, a tree row's folder)
+    bool      drag_marked;  // a marked entry: the marks are dragged
+    bool      drag_tree;    // a tree row: let go without a drag, it opens
     int       drag_side;    // its row on screen: a press let go there without a drag opens it
     char      drag_name[NAME_MAX + 1];   // the badge's: the entry pressed, or the tree row's folder
     IconSlot *drag_icon;
@@ -895,6 +898,7 @@ int main(int argc, char **argv)
         if (srows != app.ui.side.rows) ui_resize(&app.ui.side, srows), dirty = true;
         if (ui_tip_tick(&app.tip, now_ms())) dirty = true;
         if (spring_tick() || (app.drag == DRAG_FILES && app.spring_tab >= 0)) dirty = true;   // (its bar fills as it waits)
+        if (app.drag == DRAG_FILES && app.drop.reloads != app.reloads) drop_find(app.drag_px, app.drag_py), dirty = true;   // (the rows under a still pointer changed)
         if (dirty || scripted) {
             i64 t0 = now_us();
             draw();

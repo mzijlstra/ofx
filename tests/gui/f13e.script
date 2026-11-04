@@ -97,6 +97,46 @@ expect drag=- badge=- marked=2
 release
 key esc
 expect marked=0
+# ---- (code-health review, 2026-11-04) Keys during a drag go nowhere (Delete would have trashed
+# what is dragged, Ctrl+W closed a tab); an unmarked entry onto the Trash leaves the marks
+press 3 ctrl
+expect marked=1
+point-ui row 4
+press-here
+move-by 0 10
+expect dragname=b.txt marked=1
+key delete
+key ctrl-t
+wait 10
+expect drag=files n=6 tabs=1
+point-ui side-row 3
+move-here
+release
+wait-for 3000 n=5 undo=trash
+expect marked=1
+sh test ! -e "$OFX_DIR/b.txt"
+key ctrl-z
+wait-for 3000 n=6
+key esc
+expect marked=0
+# what a press drags is its entry, wherever a reload moves it before the drag starts; and the
+# target is found again after a reload under a still pointer
+point-ui row 4
+press-here
+sh touch "$OFX_DIR/0.txt"
+wait-for 3000 n=7
+move-by 0 10
+expect drag=files dragname=b.txt
+point-ui row 0
+move-here
+expect drop=row:0 dropdir=adir
+sh mkdir "$OFX_DIR/0dir"
+wait-for 3000 n=8 dropdir=0dir
+key esc
+expect drag=-
+release
+sh rmdir "$OFX_DIR/0dir" && rm "$OFX_DIR/0.txt"
+wait-for 3000 n=6
 # ---- A sidebar place (the bookmark bdir); a path button (home): into that folder
 point-ui row 3
 press-here
