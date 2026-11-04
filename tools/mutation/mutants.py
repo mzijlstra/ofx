@@ -1335,7 +1335,6 @@ MUTANTS += [
     ('ui/panels.c', '    case UK_DELETE: return ui_bmp_do(u, UI_BMP_REMOVE);', ''),
     ('ui/panels.c', "        if (l->n == 0) break;\n        ui_panel_close(u, UI_PANEL_BM);\n        return (UiAction){ UA_BM_GO, l->sel, false };", "        ui_panel_close(u, UI_PANEL_BM);\n        return (UiAction){ UA_BM_GO, l->sel, false };"),
     ('ui/panels.c', '    case UK_ESC: ui_panel_close(u, UI_PANEL_BM); break;\n    default: break;\n    }\n    return UI_NONE;\n}', '    default: break;\n    }\n    return UI_NONE;\n}'),
-    ('ui/menus.c', "    if (it == UM_BM_MORE) return u->bm_more > 0;", "    if (it == UM_BM_MORE) return true;"),
     ('ui/menus.c', '    case UM_BM_MORE: return ui_bmp_open(u, u->bm_more_at);', '    case UM_BM_MORE: return ui_bmp_open(u, 0);'),
     ('ui/handle.c', '    case UK_EDIT_BOOKMARKS: return *out = ui_bmp_open(u, 0), true;', ''),
     ('ui/handle.c', '            if (in->bmp_drow >= 0) return *out = (ui_panel_close(u, UI_PANEL_BM), (UiAction){ UA_BM_GO, u->bmp_list.sel, false }), true;', ''),
@@ -1384,12 +1383,6 @@ MUTANTS += [
 # ---- F8 step 1: the files' right-click menus
 MUTANTS += [
     (U, ".menu_item = -1, .ctx_row = -1, .ctx_side = -1, .ctx_crumb = -1, .ctx_tab = -1, .prop_box = -1,", ".menu_item = -1, .ctx_row = 0, .ctx_side = -1, .ctx_crumb = -1, .ctx_tab = -1, .prop_box = -1,"),
-    ('ui/menus.c', '    if (u->menu >= UI_MENUS && it == UM_OPEN_TAB) return u->ctx_dir && u->view != UI_VIEW_TRASH;', '    if (u->menu >= UI_MENUS && it == UM_OPEN_TAB) return u->ctx_dir;'),
-    ('ui/menus.c', '    if (u->menu >= UI_MENUS && it == UM_OPEN_TAB) return u->ctx_dir && u->view != UI_VIEW_TRASH;', ''),
-    ('ui/menus.c', "    if (u->menu >= UI_MENUS && it == UM_RENAME) return u->marked <= 1;", ""),
-    ('ui/menus.c', "    if (u->menu >= UI_MENUS && it == UM_RENAME) return u->marked <= 1;", "    if (u->menu >= UI_MENUS && it == UM_RENAME) return u->marked < 1;"),
-    ('ui/menus.c', '    if (u->menu >= UI_MENUS && (it == UM_NEW_FOLDER || it == UM_NEW_FILE)) return u->view != UI_VIEW_TRASH;', ''),
-    ('ui/menus.c', '    if (u->menu >= UI_MENUS && (it == UM_NEW_FOLDER || it == UM_NEW_FILE)) return u->view != UI_VIEW_TRASH;', '    if (it == UM_NEW_FOLDER || it == UM_NEW_FILE) return u->view != UI_VIEW_TRASH;'),
     ('ui/menus.c', "    case UM_OPEN_TAB: case UM_EMPTY_TRASH: case UM_OPEN_WINDOW:", "    case UM_OPEN_TAB: case UM_EMPTY_TRASH: return true;\n    case UM_OPEN_WINDOW:"),
     ('ui/menus.c', '    case UM_HERE_PROPS: return u->view != UI_VIEW_SEARCH;   // (a search is no folder)\n', ''),
     ('ui/menus.c', '    case UM_OPEN_TAB: return (UiAction){ UA_TAB_BG_ROW, u->list.sel, false };', ''),
@@ -1415,13 +1408,6 @@ MUTANTS += [
 ]
 # ---- F8 step 2: a folder's own entries, Follow Link, Make Link and its undo
 MUTANTS += [
-    ('ui/menus.c', '|| it == UM_SEARCH_IN) return u->ctx_dir && u->view != UI_VIEW_TRASH;', '|| it == UM_SEARCH_IN) return u->ctx_dir;'),
-    ('ui/menus.c', '|| it == UM_SEARCH_IN) return u->ctx_dir && u->view != UI_VIEW_TRASH;', '|| it == UM_SEARCH_IN) return u->view != UI_VIEW_TRASH;'),
-    ('ui/menus.c', '    if (it == UM_BOOKMARK_IT) return u->ctx_dir && u->view != UI_VIEW_TRASH && !u->sel_bm;', '    if (it == UM_BOOKMARK_IT) return u->ctx_dir && u->view != UI_VIEW_TRASH;'),
-    ('ui/menus.c', '    if (it == UM_BOOKMARK_IT) return u->ctx_dir && u->view != UI_VIEW_TRASH && !u->sel_bm;', '    if (it == UM_BOOKMARK_IT) return u->ctx_dir && !u->sel_bm;'),
-    ('ui/menus.c', '    if (it == UM_FOLLOW) return u->ctx_one && u->sel_link && u->view != UI_VIEW_TRASH;', '    if (it == UM_FOLLOW) return u->sel_link && u->view != UI_VIEW_TRASH;'),
-    ('ui/menus.c', '    if (it == UM_FOLLOW) return u->ctx_one && u->sel_link && u->view != UI_VIEW_TRASH;', '    if (it == UM_FOLLOW) return u->ctx_one && u->view != UI_VIEW_TRASH;'),
-    ('ui/menus.c', '    if (it == UM_FOLLOW) return u->ctx_one && u->sel_link && u->view != UI_VIEW_TRASH;', '    if (it == UM_FOLLOW) return u->ctx_one && u->sel_link;'),
     ('ui/menus.c', "    case UM_PASTE_INTO: return files && u->can_paste && u->ctx_w;", "    case UM_PASTE_INTO: return files && u->ctx_w;"),
     ('ui/menus.c', '    case UM_OPEN_WINDOW: return (UiAction){ UA_NEW_WINDOW, u->list.sel, true };', '    case UM_OPEN_WINDOW: return (UiAction){ UA_NEW_WINDOW, u->list.sel, false };'),
     ('ui/menus.c', '    case UM_PASTE_INTO: return (UiAction){ UA_PASTE, u->list.sel, true };', '    case UM_PASTE_INTO: return (UiAction){ UA_PASTE, u->list.sel, false };'),
@@ -1768,10 +1754,6 @@ MUTANTS += [
     ('ui/handle.c', '    case UK_NEWFOLDER: return *out = ui_view_act(u, (UiAction){ UA_NEWFOLDER, 0, false }), true;', '    case UK_NEWFOLDER: return *out = (UiAction){ UA_NEWFOLDER, 0, false }, true;'),
     ('ui/handle.c', '    case UK_NEW_WINDOW: return *out = ui_view_act(u, (UiAction){ UA_NEW_WINDOW, 0, false }), true;', '    case UK_NEW_WINDOW: return *out = (UiAction){ UA_NEW_WINDOW, 0, false }, true;'),
     ('ui/handle.c', '    case UK_TERMINAL: return *out = ui_view_act(u, (UiAction){ UA_TERMINAL, 0, false }), true;', '    case UK_TERMINAL: return *out = (UiAction){ UA_TERMINAL, 0, false }, true;'),
-    ('ui/menus.c', '    if (it == UM_CONTAINING) return ui_view_allows(u->view, UA_CONTAINING);', '    if (it == UM_CONTAINING) return true;'),
-    ('ui/menus.c', '    if (it == UM_EMPTY_TRASH) return ui_view_allows(u->view, UA_EMPTY_TRASH);\n', ''),
-    ('ui/menus.c', 'it == UM_RESTORE ? ui_view_allows(u->view, UA_RESTORE) : true;', 'it == UM_RESTORE ? true : true;'),
-    ('ui/menus.c', 'return it == UM_TRASH ? u->view != UI_VIEW_TRASH : it', 'return it == UM_TRASH ? true : it'),
     ('ui/menus.c', '    case UM_NEW_WINDOW: return ui_view_allows(u->view, UA_NEW_WINDOW);', '    case UM_NEW_WINDOW: return true;'),
     ('ui/menus.c', '    case UM_COPY: return here && ui_view_allows(u->view, UA_COPY);', '    case UM_COPY: return here;'),
     ('ui/menus.c', '    case UM_SEARCH: return ui_view_allows(u->view, UA_SEARCH);', '    case UM_SEARCH: return true;'),
@@ -1909,8 +1891,6 @@ MUTANTS += [
     ('ui/handle.c', '        if (u->view == UI_VIEW_SEARCH && files) return *out = (UiAction){ UA_OPEN_LINE, l->sel, false }, true;', '        if (files) return *out = (UiAction){ UA_OPEN_LINE, l->sel, false }, true;'),
     ('ui/handle.c', '        if (u->view == UI_VIEW_SEARCH && files) return *out = (UiAction){ UA_OPEN_LINE, l->sel, false }, true;', '        if (u->view == UI_VIEW_SEARCH && l->n > 0) return *out = (UiAction){ UA_OPEN_LINE, l->sel, false }, true;'),
     ('ui/handle.c', '        if (u->view == UI_VIEW_SEARCH && files) return *out = (UiAction){ UA_OPEN_LINE, l->sel, false }, true;', '        if (u->view == UI_VIEW_SEARCH && u->focus != UI_FOCUS_SIDE) return *out = (UiAction){ UA_OPEN_LINE, l->sel, false }, true;'),
-    ('ui/menus.c', '    if (it == UM_OPEN_LINE) return u->ctx_one && u->sel_hit;', '    if (it == UM_OPEN_LINE) return u->sel_hit;'),
-    ('ui/menus.c', '    if (it == UM_OPEN_LINE) return u->ctx_one && u->sel_hit;', '    if (it == UM_OPEN_LINE) return u->ctx_one;'),
 ]
 
 # ---- after F9: the lighter milestone review's fixes, and Ctrl+K to the search field (2026-10-29)
@@ -2343,7 +2323,6 @@ MUTANTS += [
     ('fs/git.c', '"for-each-ref", "--sort=-committerdate",', '"for-each-ref",'),
     ('fs/git.c', '    git_branches_merge(b, head, git_reflog_tail(gitdir, tail, sizeof tail), refs, cut);', '    git_branches_merge(b, head, STR_EMPTY, refs, cut);'),
     ('fs/git.c', '    git_gitdir(top, gitdir, sizeof gitdir);\n    char head[GIT_HEAD_MAX];', '    snprintf(gitdir, sizeof gitdir, "%s/.git", top);\n    char head[GIT_HEAD_MAX];'),
-    ('ui/menus.c', '    if (it == UM_BR_NOTE) return u->br_note;\n', ''),
     ('ui/helpers.c', '        if (d[k] && (!due || d[k] < due)) due = d[k];', '        if (d[k] && !due) due = d[k];'),
     ('ui/helpers.c', '        if (d[k] && (!due || d[k] < due)) due = d[k];', '        if (!due || d[k] < due) due = d[k];'),
     ('fs/git.c', 'O_RDONLY | O_CLOEXEC | O_NONBLOCK | O_NOFOLLOW);   // (a FIFO', 'O_RDONLY | O_CLOEXEC | O_NOFOLLOW);   // (a FIFO'),
@@ -2426,7 +2405,6 @@ MUTANTS += [
     ('fs/thumb.c', '    delete_tree(dir, &gone, &derr);', '    rmdir(dir), (void)gone, (void)derr;'),
     ('fs/git.c', '    if (r == BOX_NOT_RUN) snprintf(msg, cap, "%s", why.msg[0] ? why.msg : "git didn\'t run");', '    if (r == BOX_NOT_RUN) snprintf(msg, cap, "git didn\'t run");'),
     # F12 step 6: the branches panel, the full list with times
-    ('ui/menus.c', '    if (it == UM_BR_ALL) return u->br_total > UI_MENU_BRANCHES;', '    if (it == UM_BR_ALL) return u->br_total > 0;'),
     ('ui/menus.c', '    if (it == UM_BR_ALL) return ui_brp_open(u);\n', ''),
     ('ui/panels.c', '    isize k = u->brp_idx[u->brp.list.sel];', '    isize k = u->brp.list.sel;'),
     ('ui/panels.c', '    else if (d == UI_PICK_CHOOSE && u->brp.list.n > 0) {', '    else if (d == UI_PICK_CHOOSE) {'),
@@ -2485,8 +2463,6 @@ MUTANTS += [
     ('ui/handle.c', '        if (u->focus == UI_FOCUS_SIDE) return *out = (UiAction){ UA_COPY_PATH, u->side.sel, true }, u->side.n > 0;\n', '        if (u->focus == UI_FOCUS_SIDE) break;\n'),
     ('ui/handle.c', '(UiAction){ UA_COPY_PATH, u->side.sel, true }, u->side.n > 0;', '(UiAction){ UA_COPY_PATH, u->side.sel, true }, true;'),
     ('ui/handle.c', '(UiAction){ UA_COPY_PATH, u->side.sel, true }, u->side.n > 0;', '(UiAction){ UA_COPY_PATH, u->side.sel, false }, u->side.n > 0;'),
-    ('ui/menus.c', '    if (it == UM_COPY_PATH_HERE) return ui_view_allows(u->view, UA_COPY_PATH);\n', ''),
-    ('ui/menus.c', '    case UM_COPY_PATH_HERE: return (UiAction){ UA_COPY_PATH, -1, true };', '    case UM_COPY_PATH_HERE: return (UiAction){ UA_COPY_PATH, 0, true };'),
     ('ui/menus.c', '    case UM_COPY_PATH_HERE: return true;', '    case UM_COPY_PATH_HERE: return u->list.n > 0;'),
     ('ui/ui.c', 'UM_SEP, UM_PASTE, UM_COPY_PATH_HERE, UM_SELECT_ALL,', 'UM_SEP, UM_PASTE, UM_SELECT_ALL,'),
     ('fs/paths.c', "    return cp < 0x20 || cp == 0x7f || (cp >= 0x80", "    return cp < 0x20 || (cp >= 0x80"),
@@ -2519,8 +2495,6 @@ MUTANTS += [
 MUTANTS += [
     ('ui/helpers.c', '    int hi = w / 2 < UI_SIDE_MAX ? w / 2 : UI_SIDE_MAX;', '    int hi = UI_SIDE_MAX;'),
     ('ui/helpers.c', '    int hi = w / 2 < UI_SIDE_MAX ? w / 2 : UI_SIDE_MAX;', '    int hi = w / 2;'),
-    ('ui/helpers.c', '    if (want <= 0) want = UI_SIDE_W;', '    if (want < 0) want = UI_SIDE_W;'),
-    ('ui/helpers.c', '    if (want <= 0) want = UI_SIDE_W;\n', ''),
     ('ui/helpers.c', '    if (want > hi) want = hi;', '    if (want > hi + 1) want = hi;'),
     ('ui/helpers.c', '    return want < UI_SIDE_MIN ? UI_SIDE_MIN : want;', '    return want;'),
     ('ui/helpers.c', '    return want < UI_SIDE_MIN ? UI_SIDE_MIN : want;', '    return want <= UI_SIDE_MIN ? UI_SIDE_MIN + 1 : want;'),
@@ -2550,4 +2524,29 @@ MUTANTS += [
     ('fs/paths.c', '(cp >= 0x2060 && cp <= 0x2069)', '(cp >= 0x2060 && cp <= 0x2068)'),
     ('fs/paths.c', '(cp >= 0x2060 && cp <= 0x2069)', '(cp >= 0x2060 && cp <= 0x2070)'),
     ('fs/paths.c', ' || cp == 0xfeff;', ';'),
+]
+# F13 code-health step C2 (2026-11-04): ui_menu_shown as a switch (each entry's rule negated), the width rule
+MUTANTS += [
+    ('ui/menus.c', '    case UM_BM_MORE: return u->bm_more > 0;', '    case UM_BM_MORE: return !(u->bm_more > 0);'),
+    ('ui/menus.c', '    case UM_BR_NOTE: return u->br_note;', '    case UM_BR_NOTE: return !(u->br_note);'),
+    ('ui/menus.c', '    case UM_BR_ALL: return u->br_total > UI_MENU_BRANCHES;', '    case UM_BR_ALL: return !(u->br_total > UI_MENU_BRANCHES);'),
+    ('ui/menus.c', '    case UM_OPEN_TAB: return !ctx || (u->ctx_dir && !trash);', '    case UM_OPEN_TAB: return !(!ctx || (u->ctx_dir && !trash));'),
+    ('ui/menus.c', '    case UM_OPEN_TAB: return !ctx || (u->ctx_dir && !trash);', '    case UM_OPEN_TAB: return (u->ctx_dir && !trash);'),
+    ('ui/menus.c', '    case UM_RENAME: return !ctx || u->marked <= 1;', '    case UM_RENAME: return !(!ctx || u->marked <= 1);'),
+    ('ui/menus.c', '    case UM_RENAME: return !ctx || u->marked <= 1;', '    case UM_RENAME: return u->marked <= 1;'),
+    ('ui/menus.c', '    case UM_NEW_FOLDER: case UM_NEW_FILE: return !ctx || !trash;', '    case UM_NEW_FOLDER: case UM_NEW_FILE: return !(!ctx || !trash);'),
+    ('ui/menus.c', '    case UM_NEW_FOLDER: case UM_NEW_FILE: return !ctx || !trash;', '    case UM_NEW_FOLDER: case UM_NEW_FILE: return !trash;'),
+    ('ui/menus.c', '    case UM_OPEN_WINDOW: case UM_PASTE_INTO: case UM_TERMINAL_IN: case UM_SEARCH_IN: return u->ctx_dir && !trash;', '    case UM_OPEN_WINDOW: case UM_PASTE_INTO: case UM_TERMINAL_IN: case UM_SEARCH_IN: return !(u->ctx_dir && !trash);'),
+    ('ui/menus.c', '    case UM_CONTAINING: return ui_view_allows(u->view, UA_CONTAINING);', '    case UM_CONTAINING: return !(ui_view_allows(u->view, UA_CONTAINING));'),
+    ('ui/menus.c', '    case UM_OPEN_LINE: return u->ctx_one && u->sel_hit;', '    case UM_OPEN_LINE: return !(u->ctx_one && u->sel_hit);'),
+    ('ui/menus.c', '    case UM_BOOKMARK_IT: return u->ctx_dir && !trash && !u->sel_bm;', '    case UM_BOOKMARK_IT: return !(u->ctx_dir && !trash && !u->sel_bm);'),
+    ('ui/menus.c', '    case UM_FOLLOW: return u->ctx_one && u->sel_link && !trash;', '    case UM_FOLLOW: return !(u->ctx_one && u->sel_link && !trash);'),
+    ('ui/menus.c', '    case UM_EMPTY_TRASH: return ui_view_allows(u->view, UA_EMPTY_TRASH);', '    case UM_EMPTY_TRASH: return !(ui_view_allows(u->view, UA_EMPTY_TRASH));'),
+    ('ui/menus.c', '    case UM_COPY_PATH_HERE: return ui_view_allows(u->view, UA_COPY_PATH);', '    case UM_COPY_PATH_HERE: return !(ui_view_allows(u->view, UA_COPY_PATH));'),
+    ('ui/menus.c', '    case UM_TRASH: return !trash;', '    case UM_TRASH: return !(!trash);'),
+    ('ui/menus.c', '    case UM_RESTORE: return ui_view_allows(u->view, UA_RESTORE);', '    case UM_RESTORE: return !(ui_view_allows(u->view, UA_RESTORE));'),
+    ('ui/menus.c', '    if ((k = ui_slot(it, UM_BM_0, UI_MENU_BOOKMARKS)) >= 0) return k < u->bm_n;', '    if ((k = ui_slot(it, UM_BM_0, UI_MENU_BOOKMARKS)) >= 0) return k <= u->bm_n;'),
+    ('ui/menus.c', '    if ((k = ui_slot(it, UM_BR_0, UI_MENU_BRANCHES)) >= 0) return k < u->br_n;', '    if ((k = ui_slot(it, UM_BR_0, UI_MENU_BRANCHES)) >= 0) return k <= u->br_n;'),
+    ('ui/menus.c', '    bool ctx = u->menu >= UI_MENUS, trash', '    bool ctx = u->menu > UI_MENUS, trash'),
+    ('ui/menus.c', '    case UM_COPY_PATH_HERE: return (UiAction){ UA_COPY_PATH, UI_COPY_SHOWN, true };', '    case UM_COPY_PATH_HERE: return (UiAction){ UA_COPY_PATH, 0, true };'),
 ]

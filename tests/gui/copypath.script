@@ -60,7 +60,7 @@ point-menu copy-path-here
 click-here
 expect menu=-
 sh test "$(wl-paste -n)" = "$OFX_DIR"
-# The sidebar's keys: its cursor's folder, as its menu (step 1 review); the Trash's none
+# The sidebar's keys: its cursor's folder, as its menu (step 1 review); the Trash's none, said
 key tab
 expect sidefocus=1 place=Home
 key ctrl-shift-c
@@ -69,6 +69,7 @@ key down
 expect place=Trash
 sh printf x | wl-copy
 key ctrl-shift-c
+expect statusbad=1 status=The Trash has no path to copy
 sh test "$(wl-paste -n)" = x
 key tab
 # A place's menu, with entries marked: Home's path alone

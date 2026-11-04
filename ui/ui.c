@@ -253,8 +253,10 @@ typedef enum {
     UA_CONTAINING,  // index: a search result: its folder, it selected (F9)
     UA_OPEN_LINE,   // index: a search result found inside files: in the editor at its line (F9 step 4; gui/ says when it has none)
     UA_COPY_PATH,   // the marked entries' paths (or the cursor's; none: the folder shown's) as text, one a line (F13);
-                    // all: a folder's instead, index the sidebar row, -1 the folder shown
+                    // all: a folder's instead, index the sidebar row, or UI_COPY_SHOWN the folder shown
 } UiActionKind;
+enum { UI_COPY_SHOWN = -1 };   // UA_COPY_PATH's index with all: the folder shown (the empty space's menu)
+
 // A right-click menu's entry on a folder of the files (F8) acts on that folder, not the folder
 // shown: UA_NEW_WINDOW, UA_TERMINAL, UA_PASTE and UA_ADD_BOOKMARK with `all` set; index is the entry.
 

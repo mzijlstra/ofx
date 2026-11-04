@@ -686,8 +686,7 @@ static bool drag_release(UiInput *in)
 // The sidebar's edge held at x: the width there (F13), kept as it was until it moves.
 static bool side_drag_at(float x)
 {
-    int to = app.drag_w0 + (int)(x - app.drag_x0);
-    int w = ui_side_fit(to < UI_SIDE_MIN ? UI_SIDE_MIN : to, GetScreenWidth());   // (0 or less is ui_side_fit's "none")
+    int w = ui_side_fit(app.drag_w0 + (int)(x - app.drag_x0), GetScreenWidth());
     if (w == (app.drag_moved ? app.side_px : app.drag_w0)) return false;
     app.side_px = w, app.drag_moved = true;
     return true;

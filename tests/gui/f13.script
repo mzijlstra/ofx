@@ -3,7 +3,7 @@
 # 936) at most; let go, remembered (sidewidth=); a double click gives 200 back. The tree (run.sh):
 # home/tree with eight files and a folder.
 settle
-expect sidew=200 sidepx=0 drag=- edgelit=0 resizeptr=0
+expect sidew=200 sidepx=200 drag=- edgelit=0 resizeptr=0
 key ctrl-2
 expect view=icons cols=6
 point-ui side-edge

@@ -478,7 +478,7 @@ MUTANTS = [
     ('gui/actions.c', 'state_key("menubar", app.ui.bar_hidden ? "off" : "on");', 'state_key("menubar", "on");', 'f8'),
     # ---- View → Show Group, Ctrl+P, Ctrl+G (2026-10-27). Not run: the key chords' GLFW mapping
     # (scripts send ui/'s keys); the cells drawn (pixels: f8b's list-group.png)
-    (G, 'app.ui.group_col = st.group, app.show_hidden = st.hidden, app.side_px', 'app.show_hidden = st.hidden, app.side_px', 'f8'),
+    (G, 'app.ui.group_col = st.group, app.show_hidden = st.hidden;', 'app.show_hidden = st.hidden;', 'f8'),
     ('gui/actions.c', 'state_key("group", app.ui.group_col ? "on" : "off");', 'state_key("group", "on");', 'f8'),
     ('gui/files.c', '    return app.ui.group_col ? 3 * GAP + OWNER_W + GROUP_W + PERM_W : 2 * GAP + OWNER_W + PERM_W;', '    return 3 * GAP + OWNER_W + GROUP_W + PERM_W;', 'f8'),
     ('gui/files.c', '            if (k == 1 && !app.ui.group_col) continue;', '', 'f8'),
@@ -880,8 +880,8 @@ MUTANTS = [
     ('gui/actions.c', '    text_copy(t);\n    if (c.n == 1)', '    if (c.n == 1)', 'clip'),
     ('gui/actions.c', '    if (c.n == 1) set_status(false, "Copied the path");', '    if (true) set_status(false, "Copied the path");', 'clip'),
     ('gui/actions.c', '        if (!a.all && !too_many_marked()) path_copy(NULL);\n', '        if (!a.all) {}\n', 'clip'),
-    ('gui/actions.c', '        else if (dir && strcmp(dir, TRASH_URI) != 0) path_copy(dir);\n', '', 'clip'),
-    ('gui/actions.c', '        else if (dir && strcmp(dir, TRASH_URI) != 0) path_copy(dir);', '        else if (dir) path_copy(dir);', 'clip'),
+    ('gui/actions.c', '        else if (dir) path_copy(dir);\n', '', 'clip'),
+    ('gui/actions.c', '        else if (dir && strcmp(dir, TRASH_URI) == 0) set_status', '        else if (false) set_status', 'clip'),
     # F13 step 2 (2026-11-04): the sidebar's width (f13)
     ('gui/input.c', '    h.side_edge = side_w() && in_box(CLAY_ID("side-edge"), x, y);', '    h.side_edge = false;', 'f13'),
     ('gui/input.c', 'side_w() && !h.side_edge && r < app.ui.side.rows', 'side_w() && r < app.ui.side.rows', 'f13'),
@@ -890,15 +890,15 @@ MUTANTS = [
     ('gui/input.c', 'app.drag_w0 = side_w(), app.drag_moved = false;', 'app.drag_w0 = app.side_px = side_w(), app.drag_moved = false;', 'f13'),
     ('gui/input.c', '    if (app.drag == DRAG_SIDE && app.drag_moved) side_keep', '    if (app.drag == DRAG_SIDE) side_keep', 'f13'),
     ('gui/input.c', 'side_keep(app.side_px), app.edge_press.row = -1;', 'side_keep(app.side_px);', 'f13'),
-    ('gui/input.c', 'ui_side_fit(to < UI_SIDE_MIN ? UI_SIDE_MIN : to, GetScreenWidth())', 'ui_side_fit(to, GetScreenWidth())', 'f13'),
-    ('gui/input.c', '    int to = app.drag_w0 + (int)(x - app.drag_x0);', '    int to = app.drag_w0;', 'f13'),
+    ('gui/input.c', '    int w = ui_side_fit(app.drag_w0 + (int)(x - app.drag_x0), GetScreenWidth());', '    int w = ui_side_fit(app.drag_w0, GetScreenWidth());', 'f13'),
     ('gui/input.c', 'app.hov.side_edge || app.drag == DRAG_SIDE ? MOUSE_CURSOR_RESIZE_EW', 'app.hov.side_edge ? MOUSE_CURSOR_RESIZE_EW', 'f13'),
     ('gui/input.c', 'else if (!script_on && (d.x != 0 || d.y != 0 || !held || !on)) *seen |= drag_at', 'else if ((d.x != 0 || d.y != 0 || !held || !on)) *seen |= drag_at', 'f13'),
     ('gui/files.c', 'bool lit = edge_lit = app.hov.side_edge || app.drag == DRAG_SIDE;', 'bool lit = edge_lit = app.hov.side_edge;', 'f13'),
     ('gui/files.c', '                                        .layoutDirection = CLAY_TOP_TO_BOTTOM, .padding = { 0, 0, PAD / 2, 0 } },\n                            .backgroundColor = cc(t->bg_light) }) {', '                                        .layoutDirection = CLAY_TOP_TO_BOTTOM, .padding = { 0, 0, PAD / 2, 0 } },\n                            .backgroundColor = cc(t->bg_light) }) {\n        if (false)', 'f13'),
     ('gui/actions.c', '    state_key("sidewidth", v);\n', '', 'f13'),
     ('gui/main.c', 'ui_side_fit(app.side_px, GetScreenWidth());', 'ui_side_fit(app.side_px, 936);', 'f13'),
-    ('gui/main.c', 'app.show_hidden = st.hidden, app.side_px = st.side_px;', 'app.show_hidden = st.hidden;', 'f13'),
+    ('gui/main.c', '        if (st.side_px) app.side_px = st.side_px;\n', '', 'f13'),
+    ('gui/main.c', 'app.ui.colors = true, app.side_px = UI_SIDE_W;', 'app.ui.colors = true;', 'f13'),
     ('gui/main.c', '        cursor_shape();\n', '', 'f13'),
     # F13 step 3 (2026-11-04): drag and drop inside ofx (f13e)
     ('gui/input.c', ' && h.row >= 0 && app.ui.view != UI_VIEW_TRASH && app.have_list', ' && h.row >= 0 && app.have_list', 'f13'),

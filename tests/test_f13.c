@@ -40,7 +40,7 @@ static void test_copy_path(void)
     UiInput hin = ui_input_none();
     hin.menu_item = menu_place(UI_CTX_HERE, UM_COPY_PATH_HERE);
     a = ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &hin);
-    CHECK(a.kind == UA_COPY_PATH && a.all && a.index == -1 && !u.menu_on);
+    CHECK(a.kind == UA_COPY_PATH && a.all && a.index == UI_COPY_SHOWN && !u.menu_on);
     u.view = UI_VIEW_SEARCH;
     CHECK(ui_menu_shown(&u, UM_COPY_PATH_HERE));
     u.view = UI_VIEW_TRASH;
@@ -147,12 +147,12 @@ static void test_shell_quote(void)
     CHECK(shell_quote(S("/a b"), small, 7) == 6 && strcmp(small, "'/a b'") == 0);
 }
 
-// The sidebar's width (F13 step 2): the one asked for, 200 for none, 140 at least, half the window
-// or 480 at most; a window too narrow for both keeps 140.
+// The sidebar's width (F13 step 2): the one asked for, 140 at least (0 or less too: a drag past the
+// window's edge), half the window or 480 at most; a window too narrow for both keeps 140.
 static void test_side_fit(void)
 {
     static const struct { int want, w, got; } C[] = {
-        { 0, 936, 200 }, { -5, 936, 200 }, { 260, 936, 260 }, { 9999, 936, 468 }, { 469, 936, 468 }, { 468, 936, 468 },
+        { 0, 936, 140 }, { -5, 936, 140 }, { 200, 936, 200 }, { 260, 936, 260 }, { 9999, 936, 468 }, { 469, 936, 468 }, { 468, 936, 468 },
         { 100, 936, 140 }, { 139, 936, 140 }, { 140, 936, 140 }, { 600, 2000, 480 }, { 481, 2000, 480 }, { 300, 400, 200 }, { 300, 200, 140 },
     };
     for (int i = 0; i < COUNT(C); i++) {
@@ -185,4 +185,15 @@ static void test_drag_rule(void)
     CHECK(ui_drop_op(true, 0) == UI_DROP_MOVE && ui_drop_op(false, 0) == UI_DROP_COPY);
     CHECK(ui_drop_op(true, UI_MOD_CTRL) == UI_DROP_COPY && ui_drop_op(false, UI_MOD_SHIFT) == UI_DROP_MOVE);
     CHECK(ui_drop_op(false, UI_MOD_CTRL | UI_MOD_SHIFT) == UI_DROP_COPY);   // (both: Ctrl's, as Nemo; its link is not ofx's)
+}
+
+// The menus' rules as a switch (F13 code-health review): Rename is in Edit with several marked
+// (greyed by its key's rule), off a right-click menu then.
+static void test_menu_shown_switch(void)
+{
+    Ui u = menu_ui(3);
+    u.marked = 2, u.menu = 1;   // (the rule reads the count)
+    CHECK(ui_menu_shown(&u, UM_RENAME));
+    u.menu = UI_CTX_ENTRY;
+    CHECK(!ui_menu_shown(&u, UM_RENAME));
 }

@@ -1,4 +1,4 @@
 # F13 step 2: a sidewidth= that isn't a width: the first, 200.
 settle
-expect sidew=200 sidepx=0
+expect sidew=200 sidepx=200
 quit

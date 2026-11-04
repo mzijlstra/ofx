@@ -9,24 +9,30 @@ static bool ui_folder_shown(const Ui *u, UiMenuItem it);
 static bool ui_menu_shown(const Ui *u, UiMenuItem it)
 {
     if (u->menu == UI_CTX_FOLDER) return ui_folder_shown(u, it);
-    if (ui_slot(it, UM_BM_0, UI_MENU_BOOKMARKS) >= 0) return ui_slot(it, UM_BM_0, UI_MENU_BOOKMARKS) < u->bm_n;
-    if (it == UM_BM_MORE) return u->bm_more > 0;
-    if (ui_slot(it, UM_BR_0, UI_MENU_BRANCHES) >= 0) return ui_slot(it, UM_BR_0, UI_MENU_BRANCHES) < u->br_n;
-    if (it == UM_BR_NOTE) return u->br_note;
-    if (it == UM_BR_ALL) return u->br_total > UI_MENU_BRANCHES;   // (more than the menu shows: F12 step 6)
+    int k;
+    if ((k = ui_slot(it, UM_BM_0, UI_MENU_BOOKMARKS)) >= 0) return k < u->bm_n;
+    if ((k = ui_slot(it, UM_BR_0, UI_MENU_BRANCHES)) >= 0) return k < u->br_n;
     // A right-click menu leaves out what doesn't fit its target (F8): a tab for a folder only, a
     // rename for one entry, the new entries outside the trash view (Empty Trash in it).
-    if (u->menu >= UI_MENUS && it == UM_OPEN_TAB) return u->ctx_dir && u->view != UI_VIEW_TRASH;
-    if (u->menu >= UI_MENUS && it == UM_RENAME) return u->marked <= 1;
-    if (it == UM_OPEN_WINDOW || it == UM_PASTE_INTO || it == UM_TERMINAL_IN || it == UM_SEARCH_IN) return u->ctx_dir && u->view != UI_VIEW_TRASH;
-    if (it == UM_CONTAINING) return ui_view_allows(u->view, UA_CONTAINING);
-    if (it == UM_OPEN_LINE) return u->ctx_one && u->sel_hit;   // (one result found inside files)
-    if (it == UM_BOOKMARK_IT) return u->ctx_dir && u->view != UI_VIEW_TRASH && !u->sel_bm;
-    if (it == UM_FOLLOW) return u->ctx_one && u->sel_link && u->view != UI_VIEW_TRASH;
-    if (u->menu >= UI_MENUS && (it == UM_NEW_FOLDER || it == UM_NEW_FILE)) return u->view != UI_VIEW_TRASH;
-    if (it == UM_EMPTY_TRASH) return ui_view_allows(u->view, UA_EMPTY_TRASH);
-    if (it == UM_COPY_PATH_HERE) return ui_view_allows(u->view, UA_COPY_PATH);
-    return it == UM_TRASH ? u->view != UI_VIEW_TRASH : it == UM_RESTORE ? ui_view_allows(u->view, UA_RESTORE) : true;
+    bool ctx = u->menu >= UI_MENUS, trash = u->view == UI_VIEW_TRASH;
+    switch (it) {
+    case UM_BM_MORE: return u->bm_more > 0;
+    case UM_BR_NOTE: return u->br_note;
+    case UM_BR_ALL: return u->br_total > UI_MENU_BRANCHES;   // (more than the menu shows: F12 step 6)
+    case UM_OPEN_TAB: return !ctx || (u->ctx_dir && !trash);
+    case UM_RENAME: return !ctx || u->marked <= 1;
+    case UM_NEW_FOLDER: case UM_NEW_FILE: return !ctx || !trash;
+    case UM_OPEN_WINDOW: case UM_PASTE_INTO: case UM_TERMINAL_IN: case UM_SEARCH_IN: return u->ctx_dir && !trash;
+    case UM_CONTAINING: return ui_view_allows(u->view, UA_CONTAINING);
+    case UM_OPEN_LINE: return u->ctx_one && u->sel_hit;   // (one result found inside files)
+    case UM_BOOKMARK_IT: return u->ctx_dir && !trash && !u->sel_bm;
+    case UM_FOLLOW: return u->ctx_one && u->sel_link && !trash;
+    case UM_EMPTY_TRASH: return ui_view_allows(u->view, UA_EMPTY_TRASH);
+    case UM_COPY_PATH_HERE: return ui_view_allows(u->view, UA_COPY_PATH);
+    case UM_TRASH: return !trash;
+    case UM_RESTORE: return ui_view_allows(u->view, UA_RESTORE);
+    default: return true;
+    }
 }
 
 // The folder menu's (F8): what fits that folder. Trash is gone to, not into; a place has no Cut or
@@ -257,7 +263,7 @@ static UiAction ui_menu_pick(Ui *u, UiMenuItem it)
     case UM_TAB_OTHERS: return (UiAction){ UA_TAB_OTHERS, 0, false };
     case UM_TAB_REOPEN: return (UiAction){ UA_TAB_REOPEN, 0, false };
     case UM_EMPTY_TRASH: return u->empty_asking = true, UI_NONE;
-    case UM_COPY_PATH_HERE: return (UiAction){ UA_COPY_PATH, -1, true };
+    case UM_COPY_PATH_HERE: return (UiAction){ UA_COPY_PATH, UI_COPY_SHOWN, true };
     case UM_HERE_PROPS: return u->panel = UI_PANEL_PROPS, u->prop_at = 0, (UiAction){ UA_PROPS, UI_PROPS_HERE, false };
     case UM_OPEN_WINDOW: return (UiAction){ UA_NEW_WINDOW, u->list.sel, true };
     case UM_PASTE_INTO: return (UiAction){ UA_PASTE, u->list.sel, true };

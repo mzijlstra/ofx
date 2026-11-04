@@ -887,11 +887,12 @@ static void act(UiAction a)
         if (a.kind == UA_TRASH) trash_targets();
         else copy_targets(a.kind == UA_CUT, NULL);
         break;
-    case UA_COPY_PATH: {   // all: a folder's, a sidebar row's (not the trash's) or the folder shown's
+    case UA_COPY_PATH: {   // all: a sidebar row's folder, or the folder shown's
         char buf[PATH_MAX];
-        const char *dir = !a.all ? NULL : a.index < 0 ? here_dir() : side_path(a.index, buf, sizeof buf);
+        const char *dir = !a.all ? NULL : a.index == UI_COPY_SHOWN ? here_dir() : side_path(a.index, buf, sizeof buf);
         if (!a.all && !too_many_marked()) path_copy(NULL);
-        else if (dir && strcmp(dir, TRASH_URI) != 0) path_copy(dir);
+        else if (dir && strcmp(dir, TRASH_URI) == 0) set_status(true, "The Trash has no path to copy");   // (said, as its menu hides the entry: F13 code-health review)
+        else if (dir) path_copy(dir);
         break;
     }
     case UA_RENAME: rename_commit(); break;

@@ -351,7 +351,7 @@ static struct {
     Drop      drop;         // where it would land now
     int       spring_tab;   // the tab it is held over (not the one shown), -1 none (F13 step 4)
     i64       spring_at;    // since when
-    int       side_px;      // the sidebar's width dragged to (ui_side_fit; 0 its first, UI_SIDE_W)
+    int       side_px;      // the sidebar's width dragged to, UI_SIDE_W at first (fitted to the window: ui_side_fit)
     UiPress   edge_press;   // the sidebar edge's presses, for its double click
     bool      thumb_local;  // the folder's drive is one ofx makes previews on (F6.4: not a network one)
     float     ctx_x, ctx_y;       // a right-click menu's top left (F8): where it opens, kept inside the window
@@ -721,11 +721,12 @@ static void app_start(void)
         app.windows[0] = 0;
     }
     char state_file[PATH_MAX];
-    app.ui.perms_cols = app.ui.colors = true;   // (on without a state file too)
+    app.ui.perms_cols = app.ui.colors = true, app.side_px = UI_SIDE_W;   // (on without a state file too)
     if (state_path(state_file, sizeof state_file)) {
         State st = state_load(&scratch, state_file);
         app.ui.side_mode = st.side, app.ui.perms_cols = !st.no_perms, app.ui.bar_hidden = st.no_bar,
-        app.ui.colors = !st.no_colors, app.ui.group_col = st.group, app.show_hidden = st.hidden, app.side_px = st.side_px;
+        app.ui.colors = !st.no_colors, app.ui.group_col = st.group, app.show_hidden = st.hidden;
+        if (st.side_px) app.side_px = st.side_px;
     }
     remember_defaults();   // (F11: the folders' table, after ofx.conf, which has their defaults)
     if (state_path(state_file, sizeof state_file)) {   // (F11: the tree's open folders)
