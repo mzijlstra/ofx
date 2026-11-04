@@ -36,7 +36,7 @@ Omarchy's theme: the binary, the folder `tools/ofx`, the window's title and Wayl
     Not seen failing since, so this one is the likely cause, not a proven one.
 
 - **Eleven GUI mutants survived F13's full run (2026-11-04), all from before F13; ten are killed
-  now, one is left** (each also survived on F12's last commit 1c715c9, so their tags were older
+  now, one dropped** (each also survived on F12's last commit 1c715c9, so their tags were older
   than the code):
   - Killed by a harness fix: two quit the window where f7b expected it to stay, and the script
     runner counted only the expectations it reached. A window that quits with commands left, or
@@ -48,11 +48,11 @@ Omarchy's theme: the binary, the folder `tools/ofx`, the window's title and Wayl
     a folder remembered as icons with the icon cache nearly full (f63d), the folders table filled
     (`OFX_TEST_FOLDERS_MEM`, f11t). The too-many-entries restore now shares the unlistable
     folder's path, so one mutant covers both.
-  - **Left: gui/git.c's `if (br && s < 0) return true;`** (the branch list arriving alone asks
-    for a redraw). Without it the open branch menu shows "Reading branches…" until the pointer
-    moves. Scripts draw every frame, so no script sees a missing redraw (as the hit_same mutant
-    dropped in F13's step C1). Michael to pick: drop it with a note, or teach the runner to flag a
-    frame whose state line changed with no redraw asked for.
+  - **Dropped: gui/git.c's `if (br && s < 0) return true;`** (the branch list arriving alone asks
+    for a redraw; without it the open branch menu shows "Reading branches…" until the pointer
+    moves). Scripts draw every frame, so no script sees a missing redraw (as the hit_same mutant
+    dropped in F13's step C1). Michael, 2026-11-04: drop it with a note rather than teach the
+    runner to flag a frame whose state changed with no redraw asked for.
 
 ## Milestones
 
