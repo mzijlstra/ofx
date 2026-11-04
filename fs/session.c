@@ -80,14 +80,14 @@ static bool session_parse_line(Arena *a, Str line, SessionWin *w)
     isize at = 7;
     Str f[3];
     for (int i = 0; i < 3; i++) f[i] = folder_word(line, &at);
-    i64 id = folder_num(f[0], INT32_MAX), when = folder_num(f[1], INT64_MAX / 2), shown = folder_num(f[2], SESSION_TABS - 1);
+    i64 id = str_num(f[0], INT32_MAX), when = str_num(f[1], INT64_MAX / 2), shown = str_num(f[2], SESSION_TABS - 1);
     if (id <= 0 || when < 0 || shown < 0) return false;
     *w = (SessionWin){ .id = (long)id, .at = when, .shown = (int)shown };
     isize was = at;
     Str how = folder_word(line, &at);
     if (str_starts_with(how, S("open:"))) {   // open:<boot>:<start>
         isize c = str_find(str_cut(how, 5, how.len), ':');
-        i64 start = c >= 0 ? folder_num(str_cut(how, 5 + c + 1, how.len), INT64_MAX / 2) : -1;
+        i64 start = c >= 0 ? str_num(str_cut(how, 5 + c + 1, how.len), INT64_MAX / 2) : -1;
         if (c < 1 || c >= (isize)sizeof w->live.boot || start < 0) return false;
         snprintf(w->live.boot, sizeof w->live.boot, "%.*s", (int)c, how.p + 5);
         w->live.start = start, w->open = true;

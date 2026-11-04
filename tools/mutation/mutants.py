@@ -531,7 +531,6 @@ MUTANTS += [
     ('ui/handle.c', '            UiAction a = ui_answer(u, on, yes);\n            if (a.kind != UA_NONE) return a;\n            continue;', '            UiAction a = ui_answer(u, on, yes);\n            if (a.kind != UA_NONE) return a;'),
     ('ui/helpers.c', "    if (str_eq(ui_crumb_path(c, i), S(TRASH_URI))) return S(\"Trash\");\n", ""),
     (ST, "        if (!str_eq(key, S(\"sidebar\"))) continue;\n", ""),
-    (ST, "Str key = str_trim(str_cut(line, 0, eq)), val = str_trim(str_cut(line, eq + 1, line.len));", "Str key = str_trim(str_cut(line, 0, eq)), val = str_cut(line, eq + 1, line.len);"),
     (ST, "    if (!ops_allowed(path, err)) return false;\n    char dir[PATH_MAX], tmp", "    char dir[PATH_MAX], tmp"),
     (ST, "    if (!ok || rename(tmp, path) != 0) {", "    if (rename(tmp, path) != 0) {"),
     (TR, "    tree_open(t, S(\"/\"));\n", ""),
@@ -1683,7 +1682,6 @@ MUTANTS += [
     ('fs/paths.c', "return strncmp(path, dir, n) == 0 && path[n] == '/' && path[n + 1];", 'return strncmp(path, dir, n) == 0 && path[n + 1];'),
     ('fs/paths.c', 'dir, strcmp(dir, "/") == 0 ? "" : "/", STR_ARG(name));', 'dir, "/", STR_ARG(name));'),
     ('fs/paths.c', "STR_ARG(name));\n    return n >= 0 && (size_t)n < cap;", "STR_ARG(name));\n    return n >= 0;"),
-    ('fs/paths.c', '    return n >= 0 && (size_t)n < cap;\n}\n\n// An XDG', '    return n >= 0;\n}\n\n// An XDG'),
     ('fs/paths.c', 'STR_ARG(d.len ? d : S("/")));\n    return n', 'STR_ARG(d));\n    return n'),
     ('fs/paths.c', '    if (x && x[0] == \'/\') n = snprintf(out, cap, "%s/%s", x, sub);', '    if (x && x[0]) n = snprintf(out, cap, "%s/%s", x, sub);'),
     ('fs/paths.c', "    else if (home && home[0] == '/') n = snprintf", '    else if (home) n = snprintf'),
@@ -2084,8 +2082,6 @@ MUTANTS += [
     (FO, '        if (str_eq(w[5], S("on"))) f->rev = 1;', '        if (str_eq(w[5], S("on"))) f->rev = 0;'),
     (FO, '        if (str_eq(w[5], S("off"))) f->rev = 0;\n', ''),
     (FO, " && sel[0] && !strchr(sel, '/')) f->sel", ' && sel[0]) f->sel'),
-    (FO, "        if (!is_digit(w.p[i]) || n > (max - (w.p[i] - '0')) / 10) return -1;", "        if (n > (max - (w.p[i] - '0')) / 10) return -1;"),
-    (FO, "        if (!is_digit(w.p[i]) || n > (max - (w.p[i] - '0')) / 10) return -1;", "        if (!is_digit(w.p[i]) || n > max / 10) return -1;"),
     (FO, '    return f->view >= 0 || f->zoom > 0 || f->sort >= 0 || f->rev >= 0 || f->sel;', '    return f->view >= 0 || f->zoom > 0 || f->sort >= 0 || f->rev >= 0;'),
     (FO, '    return f->view >= 0 || f->zoom > 0 || f->sort >= 0 || f->rev >= 0 || f->sel;', '    return f->view >= 0 || f->zoom > 0 || f->sort >= 0 || f->sel;'),
     (FO, ' || !clean_real(ms, path, real, sizeof real) || clean_absent_drive(ms, real)) return false;', ' || !clean_real(ms, path, real, sizeof real)) return false;'),
@@ -2118,7 +2114,6 @@ MUTANTS += [
     ('fs/tree.c', '        if (!percent_encode(str_from_c(t->open[i]), "/", out + n, cap - n)) return false;', '        percent_encode(str_from_c(t->open[i]), "/", out + n, cap - n);'),
     ('fs/tree.c', "        if (at > b && percent_decode(str_cut(text, b, at), p, sizeof p) && p[0] == '/') tree_open(t, str_from_c(p));", "        if (at > b && percent_decode(str_cut(text, b, at), p, sizeof p)) tree_open(t, str_from_c(p));"),
     ('fs/tree.c', "        while (at < text.len && text.p[at] == ' ') at++;\n        isize b", '        isize b'),
-    ('fs/state.c', '        if (eq >= 0 && str_eq(str_trim(str_cut(line, 0, eq)), k)) v = str_trim(str_cut(line, eq + 1, line.len));', '        if (eq >= 0 && str_eq(str_trim(str_cut(line, 0, eq)), k) && !v.len) v = str_trim(str_cut(line, eq + 1, line.len));'),
 ]
 # the review's LOWs on F11 step 1 (2026-11-01): a partial read not written over; the lock; autofs
 MUTANTS += [
@@ -2184,7 +2179,6 @@ MUTANTS += [
     ('fs/state.c', '        if (!line.len || (e->keep && !e->keep(e->ctx, text, line, &out))) continue;', '        if (!line.len) continue;'),
     ('fs/state.c', '    isize t = ok && e->tail ? e->tail(e->ctx, body + n, text.len + room + 2 - n) : 0;', '    isize t = 0;'),
     ('fs/state.c', '    if (p->put) return false;   // (a key said twice: once)', '    if (p->put) return true;'),
-    ('fs/state.c', '    if (eq < 0 || !str_eq(str_trim(str_cut(line, 0, eq)), p->key)) return true;', '    if (eq < 0 || !str_starts_with(line, p->key)) return true;'),
     ('fs/state.c', '    if (p->put) return 0;\n    if (p->line.len + 1 > cap)', '    if (p->line.len + 1 > cap)'),
     # F11 milestone cleanup, step 4: a rewrite past its room fails (2026-11-02)
     ('fs/state.c', '            err_set(err, "%s: too big", path), ok = false;\n            break;', '            break;'),
@@ -2465,31 +2459,20 @@ MUTANTS += [
     ('ui/handle.c', '(UiAction){ UA_COPY_PATH, u->side.sel, true }, u->side.n > 0;', '(UiAction){ UA_COPY_PATH, u->side.sel, false }, u->side.n > 0;'),
     ('ui/menus.c', '    case UM_COPY_PATH_HERE: return true;', '    case UM_COPY_PATH_HERE: return u->list.n > 0;'),
     ('ui/ui.c', 'UM_SEP, UM_PASTE, UM_COPY_PATH_HERE, UM_SELECT_ALL,', 'UM_SEP, UM_PASTE, UM_SELECT_ALL,'),
-    ('fs/paths.c', "    return cp < 0x20 || cp == 0x7f || (cp >= 0x80", "    return cp < 0x20 || (cp >= 0x80"),
-    ('fs/paths.c', "strchr(\"/._-+,:@%=\", c)", "strchr(\"/._-+,:@%= \", c)"),
-    ('fs/paths.c', "    bool plain = s.len > 0, ctrl = false;", "    bool plain = true, ctrl = false;"),
-    ('fs/paths.c', "            if (s.p[i] == '\\'') PUT(\"'\\\\''\");\n            else PUT", "            PUT"),
-    ('fs/paths.c', "            if (c == '\\n') PUT(\"\\\\n\");\n", ""),
-    ('fs/paths.c', "            else if (c == '\\\\' || c == '\\'') PUT(\"\\\\%c\", c);\n", ""),
-    ('fs/paths.c', "        if (k_ < 0 || k_ >= cap - n) return -1;", "        if (k_ < 0) return -1;"),
+    ('fs/clip.c', '    return cp < 0x20 || cp == 0x7f || (cp >= 0x80', '    return cp < 0x20 || (cp >= 0x80'),
+    ('fs/clip.c', 'strchr("/._-+,:@%=", c)', 'strchr("/._-+,:@%= ", c)'),
+    ('fs/clip.c', '    bool plain = s.len > 0, ctrl = false;', '    bool plain = true, ctrl = false;'),
+    ('fs/clip.c', '            if (s.p[i] == \'\\\'\') PUT("\'\\\\\'\'");\n            else PUT', '            PUT'),
+    ('fs/clip.c', '            if (c == \'\\n\') PUT("\\\\n");\n', ''),
+    ('fs/clip.c', '            else if (c == \'\\\\\' || c == \'\\\'\') PUT("\\\\%c", c);\n', ''),
 ]
 # F13 step 1 re-review (2026-11-04): a byte of no valid UTF-8 spelled \xHH
 MUTANTS += [
-    ('fs/paths.c', "(cp >= 0x80 && cp <= 0x9f) || hidden", "(cp >= 0x80 && cp <= 0xbf) || hidden"),
-    ('fs/paths.c', "    if (n == 0) return 1;\n    u32 cp", "    if (n == 0) return 0;\n    u32 cp"),
-    ('fs/paths.c', "c >= 0xc2 && c <= 0xdf ? 2", "c >= 0xc0 && c <= 0xdf ? 2"),
-    ('fs/paths.c', "c >= 0xf0 && c <= 0xf4 ? 4", "c >= 0xf0 && c <= 0xf7 ? 4"),
-    ('fs/paths.c', "c == 0xe0 ? 0xa0 :", "c == 0xe0 ? 0x80 :"),
-    ('fs/paths.c', "c == 0xf0 ? 0x90 :", "c == 0xf0 ? 0x80 :"),
-    ('fs/paths.c', "c == 0xed ? 0x9f :", "c == 0xed ? 0xbf :"),
-    ('fs/paths.c', "c == 0xf4 ? 0x8f :", "c == 0xf4 ? 0xbf :"),
-    ('fs/paths.c', "    if ((u8)s.p[i + 1] < lo || (u8)s.p[i + 1] > hi) return 0;", "    if ((u8)s.p[i + 1] > hi) return 0;"),
-    ('fs/paths.c', "        if (((u8)s.p[i + k] & 0xc0) != 0x80) return 0;\n", "        {}\n"),
-    ('fs/paths.c', " || c >= 0x80;\n        if (bad)", ";\n        if (bad)"),
-    ('fs/paths.c', "        if (!safe || bad) plain = false;", "        if (!safe) plain = false;"),
-    ('fs/paths.c', "        i += bad ? bad : utf8_at(s, i);", "        i++;"),
-    ('fs/paths.c', "            else if (bad)\n                for", "            else if (false)\n                for"),
-    ('fs/paths.c', '            else PUT("%.*s", len, s.p + i);', '            else PUT("%c", c);'),
+    ('fs/clip.c', '(cp >= 0x80 && cp <= 0x9f) || hidden', '(cp >= 0x80 && cp <= 0xbf) || hidden'),
+    ('fs/clip.c', ' || c >= 0x80;\n        if (bad)', ';\n        if (bad)'),
+    ('fs/clip.c', '        if (!safe || bad) plain = false;', '        if (!safe) plain = false;'),
+    ('fs/clip.c', '            else if (bad)\n                for', '            else if (false)\n                for'),
+    ('fs/clip.c', '            else PUT("%.*s", len, s.p + i);', '            else PUT("%c", c);'),
 ]
 # F13 step 2 (2026-11-04): the sidebar's width, sidewidth=
 MUTANTS += [
@@ -2498,10 +2481,6 @@ MUTANTS += [
     ('ui/helpers.c', '    if (want > hi) want = hi;', '    if (want > hi + 1) want = hi;'),
     ('ui/helpers.c', '    return want < UI_SIDE_MIN ? UI_SIDE_MIN : want;', '    return want;'),
     ('ui/helpers.c', '    return want < UI_SIDE_MIN ? UI_SIDE_MIN : want;', '    return want <= UI_SIDE_MIN ? UI_SIDE_MIN + 1 : want;'),
-    ('fs/state.c', '    if (v.len > 4) return 0;', '    if (v.len > 5) return 0;'),
-    ('fs/state.c', "        if (v.p[i] < '0' || v.p[i] > '9') return 0;", "        if (v.p[i] < '0') return 0;"),
-    ('fs/state.c', "        if (v.p[i] < '0' || v.p[i] > '9') return 0;", "        if (v.p[i] > '9') return 0;"),
-    ('fs/state.c', "        n = n * 10 + (v.p[i] - '0');", "        n = v.p[i] - '0';"),
     ('fs/state.c', '        if (str_eq(key, S("sidewidth"))) s.side_px = state_px(val);\n', ''),
 ]
 # F13 step 3 (2026-11-04): drag and drop's threshold and Nemo's rule
@@ -2515,15 +2494,15 @@ MUTANTS += [
 ]
 # F13 code-health step D (2026-11-04): the invisible characters escaped
 MUTANTS += [
-    ('fs/paths.c', ' || (cp >= 0x80 && cp <= 0x9f) || hidden ? n : 0;', ' || (cp >= 0x80 && cp <= 0x9f) ? n : 0;'),
-    ('fs/paths.c', '    bool hidden = cp == 0x061c || ', '    bool hidden = '),
-    ('fs/paths.c', '(cp >= 0x200b && cp <= 0x200f)', '(cp >= 0x200a && cp <= 0x200f)'),
-    ('fs/paths.c', '(cp >= 0x200b && cp <= 0x200f)', '(cp >= 0x200c && cp <= 0x200f)'),
-    ('fs/paths.c', '(cp >= 0x2028 && cp <= 0x202e)', '(cp >= 0x2029 && cp <= 0x202e)'),
-    ('fs/paths.c', '(cp >= 0x2028 && cp <= 0x202e)', '(cp >= 0x2028 && cp <= 0x202d)'),
-    ('fs/paths.c', '(cp >= 0x2060 && cp <= 0x2069)', '(cp >= 0x2060 && cp <= 0x2068)'),
-    ('fs/paths.c', '(cp >= 0x2060 && cp <= 0x2069)', '(cp >= 0x2060 && cp <= 0x2070)'),
-    ('fs/paths.c', ' || cp == 0xfeff;', ';'),
+    ('fs/clip.c', ' || (cp >= 0x80 && cp <= 0x9f) || hidden ? n : 0;', ' || (cp >= 0x80 && cp <= 0x9f) ? n : 0;'),
+    ('fs/clip.c', '    bool hidden = cp == 0x061c || ', '    bool hidden = '),
+    ('fs/clip.c', '(cp >= 0x200b && cp <= 0x200f)', '(cp >= 0x200a && cp <= 0x200f)'),
+    ('fs/clip.c', '(cp >= 0x200b && cp <= 0x200f)', '(cp >= 0x200c && cp <= 0x200f)'),
+    ('fs/clip.c', '(cp >= 0x2028 && cp <= 0x202e)', '(cp >= 0x2029 && cp <= 0x202e)'),
+    ('fs/clip.c', '(cp >= 0x2028 && cp <= 0x202e)', '(cp >= 0x2028 && cp <= 0x202d)'),
+    ('fs/clip.c', '(cp >= 0x2060 && cp <= 0x2069)', '(cp >= 0x2060 && cp <= 0x2068)'),
+    ('fs/clip.c', '(cp >= 0x2060 && cp <= 0x2069)', '(cp >= 0x2060 && cp <= 0x2070)'),
+    ('fs/clip.c', ' || cp == 0xfeff;', ';'),
 ]
 # F13 code-health step C2 (2026-11-04): ui_menu_shown as a switch (each entry's rule negated), the width rule
 MUTANTS += [
@@ -2549,4 +2528,19 @@ MUTANTS += [
     ('ui/menus.c', '    if ((k = ui_slot(it, UM_BR_0, UI_MENU_BRANCHES)) >= 0) return k < u->br_n;', '    if ((k = ui_slot(it, UM_BR_0, UI_MENU_BRANCHES)) >= 0) return k <= u->br_n;'),
     ('ui/menus.c', '    bool ctx = u->menu >= UI_MENUS, trash', '    bool ctx = u->menu > UI_MENUS, trash'),
     ('ui/menus.c', '    case UM_COPY_PATH_HERE: return (UiAction){ UA_COPY_PATH, UI_COPY_SHOWN, true };', '    case UM_COPY_PATH_HERE: return (UiAction){ UA_COPY_PATH, 0, true };'),
+]
+# F13 code-health step C3 (2026-11-04): one number parser (str_num), state_kv, utf8_at over base's
+# utf8_next, buf_put
+MUTANTS += [
+    ('fs/paths.c', "        if (w.p[i] < '0' || w.p[i] > '9' || n > (max - (w.p[i] - '0')) / 10) return -1;", "        if (n > (max - (w.p[i] - '0')) / 10) return -1;"),
+    ('fs/paths.c', "        if (w.p[i] < '0' || w.p[i] > '9' || n > (max - (w.p[i] - '0')) / 10) return -1;", "        if (w.p[i] < '0' || w.p[i] > '9' || n > max / 10) return -1;"),
+    ('fs/paths.c', "        if (w.p[i] < '0' || w.p[i] > '9' || n > (max - (w.p[i] - '0')) / 10) return -1;", "        if (w.p[i] > '9' || n > (max - (w.p[i] - '0')) / 10) return -1;"),
+    ('fs/paths.c', "    if (!w.len) return -1;\n    for (isize i = 0; i < w.len; i++) {   // (n checked", "    for (isize i = 0; i < w.len; i++) {   // (n checked"),
+    ('fs/state.c', '    i64 n = str_num(v, 9999);', '    i64 n = str_num(v, 99999);'),
+    ('fs/state.c', '    return n < 0 ? 0 : (int)n;', '    return (int)n;'),
+    ('fs/state.c', '    *key = str_trim(str_cut(line, 0, eq)), *val = str_trim(str_cut(line, eq + 1, line.len));', '    *key = str_trim(str_cut(line, 0, eq)), *val = str_cut(line, eq + 1, line.len);'),
+    ('fs/clip.c', '    return *cp == 0xfffd && j - i == 1 ? 0 : (int)(j - i);', '    return *cp == 0xfffd ? 0 : (int)(j - i);'),
+    ('fs/clip.c', '    return *cp == 0xfffd && j - i == 1 ? 0 : (int)(j - i);', '    return (int)(j - i);'),
+    ('fs/clip.c', '    if (k < 0 || k >= cap - *n) return false;', '    if (k < 0) return false;'),
+    ('fs/clip.c', '        u32 cp;\n        i += bad ? bad : utf8_at(s, i, &cp);', '        i++;'),
 ]

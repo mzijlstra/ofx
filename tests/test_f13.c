@@ -127,6 +127,7 @@ static void test_shell_quote(void)
         { "/a/\xE2\x81\xA9x", "$'/a/\\xe2\\x81\\xa9x'" },
         { "/a/\xE2\x81\xB0x\xE2\x80\x8A", "/a/\xE2\x81\xB0x\xE2\x80\x8A" },
         { "/a/\xE2\x82\x28", "$'/a/\\xe2\\x82('" },
+        { "/a/\xEF\xBF\xBD", "/a/\xEF\xBF\xBD" },   // (a real U+FFFD is a character: kept)
         { "/a/\xF5\x80\x80\x80", "$'/a/\\xf5\\x80\\x80\\x80'" },
         { "/a/it's\tb\\c", "$'/a/it\\'s\\tb\\\\c'" },
         { "/a/$(id)`id`\"!~#*?[]{}<>|&;^", NULL },

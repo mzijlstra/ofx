@@ -57,17 +57,6 @@ static Str folder_word(Str line, isize *at)
     return str_cut(line, b, *at);
 }
 
-static i64 folder_num(Str w, i64 max)
-{
-    i64 n = 0;
-    if (!w.len) return -1;
-    for (isize i = 0; i < w.len; i++) {   // (n checked before it grows: no i64 overflow, F11 review)
-        if (!is_digit(w.p[i]) || n > (max - (w.p[i] - '0')) / 10) return -1;
-        n = n * 10 + (w.p[i] - '0');
-    }
-    return n;
-}
-
 // The state file's folder lines into t, their strings in a; other lines left alone.
 static int folders_find(const Folders *t, const char *path)
 {
@@ -96,7 +85,7 @@ static void folders_parse(Arena *a, Str text, Folders *t)
         if (!folder_line_read(line, w, path, sizeof path) || folders_find(t, path) >= 0) continue;   // (a folder said twice: its first line, F11 review)
         if (t->n == FOLDERS_ROOM) continue;   // (the rest left out: folders_tidy keeps FOLDERS_MAX)
         FolderPrefs *f = &t->f[t->n];
-        i64 when = folder_num(w[1], INT64_MAX / 2), zoom = folder_num(w[3], 4096);
+        i64 when = str_num(w[1], INT64_MAX / 2), zoom = str_num(w[3], 4096);
         *f = (FolderPrefs){ .at = when < 0 ? 0 : when, .view = -1, .zoom = (int)(zoom < 0 ? 0 : zoom), .sort = -1, .rev = -1 };
         if (str_eq(w[2], S("list"))) f->view = 0;
         if (str_eq(w[2], S("icons"))) f->view = 1;

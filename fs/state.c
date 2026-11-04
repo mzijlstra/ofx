@@ -1,6 +1,6 @@
 // What ofx remembers by itself across a restart (docs/plan.md, F6 "Remembered", F11), in
-// $XDG_STATE_HOME/ofx/state (~/.local/state by default), which ofx writes: the sidebar's mode, the
-// View menu's toggles, Show Hidden Files, the tree's open folders (tree=), per folder its view, icon
+// $XDG_STATE_HOME/ofx/state (~/.local/state by default), which ofx writes: the sidebar's mode and
+// width (sidewidth=, F13), the View menu's toggles, Show Hidden Files, the tree's open folders (tree=), per folder its view, icon
 // size, sort and cursor (fs/folders.c's "folder …" lines), and each window's tabs (fs/session.c's
 // "window …" lines). Options Michael sets go in $XDG_CONFIG_HOME/ofx/ofx.conf (fs/conf.c), which
 // ofx only writes when it isn't there.
@@ -43,13 +43,17 @@ static bool state_path(char *out, size_t cap)
 // A width in pixels as the state file has it: 1 to 4 digits, not 0; else 0 (none).
 static int state_px(Str v)
 {
-    int n = 0;
-    if (v.len > 4) return 0;
-    for (isize i = 0; i < v.len; i++) {
-        if (v.p[i] < '0' || v.p[i] > '9') return 0;
-        n = n * 10 + (v.p[i] - '0');
-    }
-    return n;
+    i64 n = str_num(v, 9999);
+    return n < 0 ? 0 : (int)n;
+}
+
+// A state line's key and value, each trimmed; false for a line without '='.
+static bool state_kv(Str line, Str *key, Str *val)
+{
+    isize eq = str_find(line, '=');
+    if (eq < 0) return false;
+    *key = str_trim(str_cut(line, 0, eq)), *val = str_trim(str_cut(line, eq + 1, line.len));
+    return true;
 }
 
 // The state in file path; the defaults for what it doesn't say (or no file at all).
@@ -60,10 +64,8 @@ static State state_load(Arena *scratch, const char *path)
     Str text = read_file(scratch, path);
     isize at = 0;
     for (Str line; next_line(text, &at, &line);) {
-        line = str_trim(line);
-        isize eq = str_find(line, '=');
-        if (eq < 0) continue;
-        Str key = str_trim(str_cut(line, 0, eq)), val = str_trim(str_cut(line, eq + 1, line.len));
+        Str key, val;
+        if (!state_kv(str_trim(line), &key, &val)) continue;
         if (str_eq(key, S("hidden"))) s.hidden = str_eq(val, S("on"));
         if (str_eq(key, S("folderdefaults")) && val.len < (isize)sizeof s.folder_defaults) snprintf(s.folder_defaults, sizeof s.folder_defaults, "%.*s", STR_ARG(val));
         if (str_eq(key, S("perms"))) s.no_perms = str_eq(val, S("off"));
@@ -84,10 +86,8 @@ static Str state_value(Arena *a, const char *path, const char *key)
 {
     Str text = read_file(a, path), k = str_from_c(key), v = STR_EMPTY;
     isize at = 0;
-    for (Str line; next_line(text, &at, &line);) {
-        isize eq = str_find(line, '=');
-        if (eq >= 0 && str_eq(str_trim(str_cut(line, 0, eq)), k)) v = str_trim(str_cut(line, eq + 1, line.len));
-    }
+    for (Str line, lk, lv; next_line(text, &at, &line);)
+        if (state_kv(line, &lk, &lv) && str_eq(lk, k)) v = lv;
     return v;
 }
 
@@ -211,8 +211,8 @@ static bool state_put_keep(void *ctx, Str text, Str line, Str *out)
 {
     (void)text;
     StatePut *p = ctx;
-    isize eq = str_find(line, '=');
-    if (eq < 0 || !str_eq(str_trim(str_cut(line, 0, eq)), p->key)) return true;
+    Str key, val;
+    if (!state_kv(line, &key, &val) || !str_eq(key, p->key)) return true;
     if (p->put) return false;   // (a key said twice: once)
     *out = p->line, p->put = true;
     return true;

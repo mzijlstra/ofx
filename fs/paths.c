@@ -1,6 +1,7 @@
 // Paths as fs/ uses them, in one place (2026-10-28: each file had its own copy, a little
 // different from the next): whether a path is inside a folder, a name joined to a folder, the XDG
-// folders, mkdir -p, file:// URIs and %XX, and a mountinfo line. Included first by fs.c.
+// folders, mkdir -p, file:// URIs and %XX, a mountinfo line, a whole number (str_num). Included
+// first by fs.c.
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
@@ -67,98 +68,26 @@ static bool path_put(char *out, size_t cap, const char *dir, Str name)
     return n >= 0 && (size_t)n < cap;
 }
 
-// The length of the valid UTF-8 sequence at byte i of s (1 for ASCII), 0 for none: no overlong
-// form, no surrogate, nothing past U+10FFFF.
-static int utf8_at(Str s, isize i)
-{
-    u8 c = (u8)s.p[i];
-    if (c < 0x80) return 1;
-    int n = c >= 0xc2 && c <= 0xdf ? 2 : c >= 0xe0 && c <= 0xef ? 3 : c >= 0xf0 && c <= 0xf4 ? 4 : 0;
-    if (n == 0 || i + n > s.len) return 0;
-    u8 lo = c == 0xe0 ? 0xa0 : c == 0xf0 ? 0x90 : 0x80, hi = c == 0xed ? 0x9f : c == 0xf4 ? 0x8f : 0xbf;
-    if ((u8)s.p[i + 1] < lo || (u8)s.p[i + 1] > hi) return 0;
-    for (int k = 2; k < n; k++)
-        if (((u8)s.p[i + k] & 0xc0) != 0x80) return 0;
-    return n;
-}
-
-// How many bytes from i a paste must spell as \xHH, 0 for none: a control character (C0, DEL, or
-// C1 in UTF-8, U+0080..U+009F, which a terminal may take as a command: U+009B is CSI), an
-// invisible one (below), or a byte that starts no valid UTF-8 (step 1 re-review: so the paste is valid UTF-8, and no 8-bit control
-// reaches a Latin-1 terminal).
-static int shell_ctrl(Str s, isize i)
-{
-    u8 c = (u8)s.p[i];
-    int n = utf8_at(s, i);
-    if (n == 0) return 1;
-    u32 cp = n == 1 ? c : n == 2 ? (u32)(c & 0x1f) << 6 | ((u8)s.p[i + 1] & 0x3f)
-           : n == 3 ? (u32)(c & 0x0f) << 12 | (u32)((u8)s.p[i + 1] & 0x3f) << 6 | ((u8)s.p[i + 2] & 0x3f) : 0x10000;
-    // The invisible ones too (Michael, 2026-11-04): what turns text's direction (U+061C, U+200E-200F,
-    // U+202A-202E, U+2066-2069), joins or breaks it unseen (U+180E, U+200B-200D, U+2060-2065,
-    // U+FEFF), and the line and paragraph separators (U+2028-2029), so a path pastes as it runs.
-    bool hidden = cp == 0x061c || cp == 0x180e || (cp >= 0x200b && cp <= 0x200f) || (cp >= 0x2028 && cp <= 0x202e) ||
-                  (cp >= 0x2060 && cp <= 0x2069) || cp == 0xfeff;
-    return cp < 0x20 || cp == 0x7f || (cp >= 0x80 && cp <= 0x9f) || hidden ? n : 0;
-}
-
-// s as a shell reads it back (ls's shell-escape style, Copy Path; Michael, 2026-11-04): as it is
-// when every byte is safe there (letters, digits, / . _ - + , : @ % =, and UTF-8), else in single
-// quotes (' as '\''), or in $'…' when it holds a control character or a byte of no valid UTF-8
-// (\n, \t, \r, \\, \', the rest \xHH), so a name can't paste as a second command line. The length
-// written into out (NUL ended), -1 when it doesn't fit.
-static isize shell_quote(Str s, char *out, isize cap)
-{
-    bool plain = s.len > 0, ctrl = false;
-    for (isize i = 0; i < s.len;) {   // (a sequence at a time: a UTF-8 character's later bytes start none)
-        u8 c = (u8)s.p[i];
-        int bad = shell_ctrl(s, i);
-        bool safe = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || strchr("/._-+,:@%=", c) || c >= 0x80;
-        if (bad) ctrl = true;
-        if (!safe || bad) plain = false;
-        i += bad ? bad : utf8_at(s, i);
-    }
-    isize n = 0;
-#define PUT(...)                                                                                   \
-    do {                                                                                           \
-        int k_ = snprintf(out + n, (size_t)(cap - n), __VA_ARGS__);                                \
-        if (k_ < 0 || k_ >= cap - n) return -1;                                                    \
-        n += k_;                                                                                   \
-    } while (0)
-    if (cap <= 0) return -1;
-    out[0] = 0;
-    if (plain) PUT("%.*s", STR_ARG(s));
-    else if (!ctrl) {
-        PUT("'");
-        for (isize i = 0; i < s.len; i++)
-            if (s.p[i] == '\'') PUT("'\\''");
-            else PUT("%c", s.p[i]);
-        PUT("'");
-    } else {
-        PUT("$'");
-        for (isize i = 0; i < s.len;) {
-            u8 c = (u8)s.p[i];
-            int bad = shell_ctrl(s, i), len = bad ? bad : utf8_at(s, i);
-            if (c == '\n') PUT("\\n");
-            else if (c == '\t') PUT("\\t");
-            else if (c == '\r') PUT("\\r");
-            else if (c == '\\' || c == '\'') PUT("\\%c", c);
-            else if (bad)
-                for (int k = 0; k < len; k++) PUT("\\x%02x", (u8)s.p[i + k]);
-            else PUT("%.*s", len, s.p + i);
-            i += len;
-        }
-        PUT("'");
-    }
-#undef PUT
-    return n;
-}
-
 // path's folder into out ("/" for one at the top); false when it doesn't fit.
 static bool path_parent(char *out, size_t cap, const char *path)
 {
     Str d = path_dir(str_from_c(path));
     int n = snprintf(out, cap, "%.*s", STR_ARG(d.len ? d : S("/")));
     return n >= 0 && (size_t)n < cap;
+}
+
+// w as a whole number, at most max: -1 when it isn't one (empty, not all digits, or past max; no
+// i64 overflow, F11 review). The state file's and the window lines' numbers (folders.c, session.c,
+// state.c: F13 code-health review, one parser for the three).
+static i64 str_num(Str w, i64 max)
+{
+    i64 n = 0;
+    if (!w.len) return -1;
+    for (isize i = 0; i < w.len; i++) {   // (n checked before it grows)
+        if (w.p[i] < '0' || w.p[i] > '9' || n > (max - (w.p[i] - '0')) / 10) return -1;
+        n = n * 10 + (w.p[i] - '0');
+    }
+    return n;
 }
 
 // An XDG base folder's sub: $var/sub when var is absolute (a relative one is ignored, as the spec

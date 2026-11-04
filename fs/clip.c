@@ -1,10 +1,12 @@
 // What Ctrl+C and Ctrl+X put on the system clipboard, and what Ctrl+V reads back from it
 // (docs/plan.md, F3 "System clipboard"): the same paths in the forms Nemo, browsers and
-// terminals each read. gui/clipboard.c moves the bytes; this is only their format.
+// terminals each read, the text quoted as a shell reads it back (shell_quote, F13). gui/clipboard.c
+// moves the bytes; this is only their format.
 
 #include "../base/base.h"
 
 #include <limits.h>
+#include <stdarg.h>
 #include <stdio.h>
 
 enum { CLIP_PATHS_MAX = 4096 };
@@ -26,6 +28,101 @@ typedef struct {
 //   gnome: "copy" or "cut", then a file:// URI a line (no newline at the end, as Nautilus writes)
 //   uris:  a file:// URI a line, each ending in CRLF (RFC 2483)
 //   text:  the paths a line, as they are (a terminal pastes them)
+// fmt at out + *n, cap bytes in all, *n moved past it: false, *n as it was, when it doesn't fit
+// (the clipboard's forms and shell_quote: F13 code-health review).
+static bool buf_put(char *out, isize cap, isize *n, const char *fmt, ...) __attribute__((format(printf, 4, 5)));
+static bool buf_put(char *out, isize cap, isize *n, const char *fmt, ...)
+{
+    va_list ap;
+    va_start(ap, fmt);
+    int k = vsnprintf(out + *n, (size_t)(cap - *n), fmt, ap);
+    va_end(ap);
+    if (k < 0 || k >= cap - *n) return false;
+    *n += k;
+    return true;
+}
+
+// ---- text a shell reads back (Copy Path, and Ctrl+C's text: F13) ---------------------------
+
+// The length of the valid UTF-8 sequence at byte i of s (1 for ASCII), its code point in *cp; 0 for
+// a byte that starts none (base's utf8_next: no overlong form, no surrogate, nothing past
+// U+10FFFF; it gives U+FFFD for one such byte, a real U+FFFD being three).
+static int utf8_at(Str s, isize i, u32 *cp)
+{
+    isize j = i;
+    *cp = utf8_next(s.p, s.len, &j);
+    return *cp == 0xfffd && j - i == 1 ? 0 : (int)(j - i);
+}
+
+// How many bytes from i a paste must spell as \xHH, 0 for none: a control character (C0, DEL, or
+// C1 in UTF-8, U+0080..U+009F, which a terminal may take as a command: U+009B is CSI), an
+// invisible one (below), or a byte that starts no valid UTF-8 (F13 step 1 re-review, 2026-11-04:
+// so the paste is valid UTF-8, and no 8-bit control reaches a Latin-1 terminal).
+static int shell_ctrl(Str s, isize i)
+{
+    u32 cp;
+    int n = utf8_at(s, i, &cp);
+    if (n == 0) return 1;
+    // The invisible ones too (Michael, 2026-11-04): what turns text's direction (U+061C, U+200E-200F,
+    // U+202A-202E, U+2066-2069), joins or breaks it unseen (U+180E, U+200B-200D, U+2060-2065,
+    // U+FEFF), and the line and paragraph separators (U+2028-2029), so a path pastes as it runs.
+    bool hidden = cp == 0x061c || cp == 0x180e || (cp >= 0x200b && cp <= 0x200f) || (cp >= 0x2028 && cp <= 0x202e) ||
+                  (cp >= 0x2060 && cp <= 0x2069) || cp == 0xfeff;
+    return cp < 0x20 || cp == 0x7f || (cp >= 0x80 && cp <= 0x9f) || hidden ? n : 0;
+}
+
+// s as a shell reads it back (ls's shell-escape style, Copy Path; Michael, 2026-11-04): as it is
+// when every byte is safe there (letters, digits, / . _ - + , : @ % =, and UTF-8), else in single
+// quotes (' as '\''), or in $'…' when it holds a control character or a byte of no valid UTF-8
+// (\n, \t, \r, \\, \', the rest \xHH), so a name can't paste as a second command line. The length
+// written into out (NUL ended), -1 when it doesn't fit.
+static isize shell_quote(Str s, char *out, isize cap)
+{
+    bool plain = s.len > 0, ctrl = false;
+    for (isize i = 0; i < s.len;) {   // (a sequence at a time: a UTF-8 character's later bytes start none)
+        u8 c = (u8)s.p[i];
+        int bad = shell_ctrl(s, i);
+        bool safe = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || strchr("/._-+,:@%=", c) || c >= 0x80;
+        if (bad) ctrl = true;
+        if (!safe || bad) plain = false;
+        u32 cp;
+        i += bad ? bad : utf8_at(s, i, &cp);
+    }
+    isize n = 0;
+#define PUT(...)                                                                                   \
+    do {                                                                                           \
+        if (!buf_put(out, cap, &n, __VA_ARGS__)) return -1;                                        \
+    } while (0)
+    if (cap <= 0) return -1;
+    out[0] = 0;
+    if (plain) PUT("%.*s", STR_ARG(s));
+    else if (!ctrl) {
+        PUT("'");
+        for (isize i = 0; i < s.len; i++)
+            if (s.p[i] == '\'') PUT("'\\''");
+            else PUT("%c", s.p[i]);
+        PUT("'");
+    } else {
+        PUT("$'");
+        for (isize i = 0; i < s.len;) {
+            u8 c = (u8)s.p[i];
+            u32 cp;
+            int bad = shell_ctrl(s, i), len = bad ? bad : utf8_at(s, i, &cp);
+            if (c == '\n') PUT("\\n");
+            else if (c == '\t') PUT("\\t");
+            else if (c == '\r') PUT("\\r");
+            else if (c == '\\' || c == '\'') PUT("\\%c", c);
+            else if (bad)
+                for (int k = 0; k < len; k++) PUT("\\x%02x", (u8)s.p[i + k]);
+            else PUT("%.*s", len, s.p + i);
+            i += len;
+        }
+        PUT("'");
+    }
+#undef PUT
+    return n;
+}
+
 // c's paths as text in a, one a line: each quoted as a shell would need it (shell_quote), as other
 // programs are offered them (a name with a line break pasted into a terminal was a second command:
 // Michael, 2026-11-04), or as they are (ofx's own text fields). Empty when they don't fit.
@@ -52,12 +149,7 @@ static Str clip_payload(Arena *a, const ClipFiles *c, ClipFormat f)
     char *out = arena_tail(a, &avail);
     isize n = 0;
     bool ok = true;
-#define PUT(...)                                                                                   \
-    do {                                                                                           \
-        int k_ = snprintf(out + n, (size_t)(avail - n), __VA_ARGS__);                              \
-        if (k_ < 0 || k_ >= avail - n) ok = false;                                                 \
-        else n += k_;                                                                              \
-    } while (0)
+#define PUT(...) (ok = ok && buf_put(out, avail, &n, __VA_ARGS__))
     if (f == CLIP_FMT_GNOME) PUT("%s", c->cut ? "cut" : "copy");
     for (isize i = 0; ok && i < c->n; i++) {
         char enc[PATH_MAX * 3];

@@ -423,8 +423,9 @@ static void test_restore_question(void)
 // list too big for its arena judges nothing; 80 window lines through a 1 MiB arena still keep 8.
 static void test_review_fs(void)
 {
-    CHECK(folder_num(S("99999999999999999999"), INT64_MAX / 2) == -1 && folder_num(S("4611686018427387903"), INT64_MAX / 2) == 4611686018427387903LL);
-    CHECK(folder_num(S("4611686018427387904"), INT64_MAX / 2) == -1);
+    CHECK(str_num(S("99999999999999999999"), INT64_MAX / 2) == -1 && str_num(S("4611686018427387903"), INT64_MAX / 2) == 4611686018427387903LL);
+    CHECK(str_num(S("4611686018427387904"), INT64_MAX / 2) == -1);
+    CHECK(str_num(S(""), 9) == -1 && str_num(S("-3"), 100) == -1 && str_num(S("1-"), 100) == -1 && str_num(S("07"), 9) == 7);   // (F13 code-health review)
     static Folders t;
     folders_parse(&ta, S("folder /a 99999999999999999999 list - - - -\n"), &t);
     CHECK(t.n == 1 && t.f[0].at == 0);
