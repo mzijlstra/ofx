@@ -396,10 +396,16 @@ static void drop_find(float x, float y)
     app.drop = d;
 }
 
+// The drag's end: nothing held, nothing lit, no tab waited for.
+static void drag_end(void)
+{
+    app.drag = DRAG_NONE, app.drop = (Drop){ .kind = DROP_NONE, .at = -1 }, app.spring_tab = -1;
+}
+
 // A drag of files ended without a drop: Esc, or the pointer off the window.
 static void drag_cancel(void)
 {
-    if (app.drag == DRAG_PRESS || app.drag == DRAG_FILES) app.drag = DRAG_NONE, app.drop = (Drop){ .kind = DROP_NONE, .at = -1 }, app.spring_tab = -1;
+    if (app.drag == DRAG_PRESS || app.drag == DRAG_FILES) drag_end();
 }
 
 // A drag held over another tab UI_SPRING_MS (F13 step 4): that tab shown, so the drop can go into
@@ -408,7 +414,7 @@ static bool spring_tick(void)
 {
     if (app.drag != DRAG_FILES || app.spring_tab < 0 || now_ms() < app.spring_at + UI_SPRING_MS) return false;
     tab_show(app.spring_tab);
-    app.spring_tab = -1, app.drop.at = -2;   // (-2: asked again, the same place under another tab)
+    app.spring_tab = -1, app.drop.at = DROP_AGAIN;   // (the same place, under another tab)
     drop_find(app.drag_px, app.drag_py);
     return true;
 }
@@ -663,6 +669,38 @@ static int tip_target(Hit h)
     return -1;
 }
 
+// The left button let go: a width that moved is kept (and its press is no double click's first),
+// the files dropped where they are over, a press on a tree row that didn't drag opens it. True when
+// what is drawn changed.
+static bool drag_release(UiInput *in)
+{
+    if (app.drag == DRAG_NONE) return false;
+    if (app.drag == DRAG_SIDE && app.drag_moved) side_keep(app.side_px), app.edge_press.row = -1;
+    if (app.drag == DRAG_FILES && app.drop.ok) drop_do(&app.drop);
+    if (app.drag == DRAG_PRESS && app.drag_tree) in->side_click = app.drag_side;
+    bool drawn = app.drag != DRAG_PRESS;
+    drag_end();
+    return drawn;
+}
+
+// The sidebar's edge held at x: the width there (F13), kept as it was until it moves.
+static bool side_drag_at(float x)
+{
+    int to = app.drag_w0 + (int)(x - app.drag_x0);
+    int w = ui_side_fit(to < UI_SIDE_MIN ? UI_SIDE_MIN : to, GetScreenWidth());   // (0 or less is ui_side_fit's "none")
+    if (w == (app.drag_moved ? app.side_px : app.drag_w0)) return false;
+    app.side_px = w, app.drag_moved = true;
+    return true;
+}
+
+// Files dragged to x, y: the badge follows, and where they would land is found (F13 step 3).
+static bool files_drag_at(float x, float y)
+{
+    app.drag_px = x, app.drag_py = y;
+    drop_find(x, y);
+    return true;
+}
+
 // What the left button holds, the pointer at x, y: the zoom slider's knob takes the size nearest it
 // (F6.3), the sidebar's edge the width there (F13); a press on files past UI_DRAG_PX drags them,
 // and the drag finds where they would land (F13 step 3). The button let go, it is dropped: a width
@@ -670,35 +708,19 @@ static int tip_target(Hit h)
 // changed (a drop is drawn unlit).
 static bool drag_at(UiInput *in, float x, float y, bool held)
 {
-    if (app.drag == DRAG_NONE) return false;
-    if (!held) {
-        if (app.drag == DRAG_SIDE && app.drag_moved) side_keep(app.side_px), app.edge_press.row = -1;   // (a drag's press is no double click's first)
-        if (app.drag == DRAG_FILES && app.drop.ok) drop_do(&app.drop);
-        if (app.drag == DRAG_PRESS && app.drag_tree) in->side_click = app.drag_side;   // (a click on a tree row, after all)
-        bool drawn = app.drag != DRAG_PRESS;
-        app.drag = DRAG_NONE, app.drop = (Drop){ .kind = DROP_NONE, .at = -1 }, app.spring_tab = -1;
-        return drawn;
-    }
-    if (app.drag == DRAG_ZOOM) {
-        in->zoom_to = zoom_level_at(x);
-        return false;
-    }
-    if (app.drag == DRAG_PRESS) {
+    if (!held) return drag_release(in);
+    switch (app.drag) {
+    case DRAG_ZOOM: in->zoom_to = zoom_level_at(x); return false;
+    case DRAG_SIDE: return side_drag_at(x);
+    case DRAG_PRESS:
         if (!ui_drag_past(x - app.drag_x0, y - app.drag_y0)) return false;
         if (!drag_start()) return app.drag = DRAG_NONE, false;
-        app.drag = DRAG_FILES, app.drop = (Drop){ .kind = DROP_NONE, .at = -2 };   // (-2: none found yet, so the first is asked)
+        app.drag = DRAG_FILES, app.drop = (Drop){ .kind = DROP_NONE, .at = DROP_AGAIN };
         app.press.row = -1;   // (a drag's press is no double click's first: the next press on that row would open it)
+        return files_drag_at(x, y);
+    case DRAG_FILES: return files_drag_at(x, y);
+    default: return false;
     }
-    if (app.drag == DRAG_FILES) {
-        app.drag_px = x, app.drag_py = y;
-        drop_find(x, y);
-        return true;
-    }
-    int to = app.drag_w0 + (int)(x - app.drag_x0);
-    int w = ui_side_fit(to < UI_SIDE_MIN ? UI_SIDE_MIN : to, GetScreenWidth());   // (0 or less is ui_side_fit's "none")
-    if (w == (app.drag_moved ? app.side_px : app.drag_w0)) return false;
-    app.side_px = w, app.drag_moved = true;
-    return true;
 }
 
 static bool hover_at(float x, float y);
@@ -724,13 +746,8 @@ static bool hover_refresh(bool on, float x, float y)
 // What is under the pointer at x, y, for the hover highlights: true when any changed.
 static bool hover_at(float x, float y)
 {
-    Hit h = hit_at(x, y), o = app.hov;
-    // (what is drawn lit; a menu's entries are ui_menu_hover's). Every field of Hit that is drawn
-    // lit belongs here: a new one too (the F11 review found one missing).
-    bool changed = h.row != o.row || h.side != o.side || h.bar != o.bar || h.crumb != o.crumb || h.tab != o.tab || h.tab_x != o.tab_x ||
-                   h.mode != o.mode || h.eject != o.eject || h.modal != o.modal || h.job_x != o.job_x || h.zoom != o.zoom || h.side_edge != o.side_edge ||
-                   h.menu_title != o.menu_title || h.bmp_btn != o.bmp_btn || h.find_x != o.find_x || h.find_step != o.find_step ||
-                   h.inside_btn != o.inside_btn;   // (the search bar's In files, lit by footer.c: F11 review)
+    Hit h = hit_at(x, y);
+    bool changed = !hit_same(h, app.hov);   // (a menu's entries: ui_menu_hover's, below)
     app.hov = h;
     changed |= ui_menu_hover(&app.ui, h.menu_title, h.menu_item);
     // Onto another icon button (or off one): its tooltip waits UI_TIP_MS, the timer wakes the loop.
@@ -739,6 +756,13 @@ static bool hover_at(float x, float y)
         timer_at(wake_due());
     }
     return changed;
+}
+
+// Ctrl and Shift as held now (UI_MOD_*).
+static int mods_held(void)
+{
+    return (IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL) ? UI_MOD_CTRL : 0) |
+           (IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT) ? UI_MOD_SHIFT : 0);
 }
 
 // The user's input since the last frame. *seen: anything that could change what is on screen.
@@ -760,13 +784,9 @@ static UiInput input_real(bool *seen)
     wheel_left += GetMouseWheelMove();
     int notches = (int)wheel_left;
     wheel_left -= (float)notches;
-    *seen |= wheel_at(&in, m.x, notches, IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL));
+    *seen |= wheel_at(&in, m.x, notches, mods_held() & UI_MOD_CTRL);
     if (!script_on) *seen |= hover_refresh(IsCursorOnScreen(), m.x, m.y);
-    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-        int mods = (IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL) ? UI_MOD_CTRL : 0) |
-                   (IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT) ? UI_MOD_SHIFT : 0);
-        press_at(&in, m.x, m.y, mods);
-    }
+    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) press_at(&in, m.x, m.y, mods_held());
     if (IsMouseButtonPressed(MOUSE_BUTTON_MIDDLE)) middle_at(&in, m.x, m.y);
     if (IsMouseButtonPressed(MOUSE_BUTTON_RIGHT)) right_at(&in, m.x, m.y);
     bool held = IsMouseButtonDown(MOUSE_BUTTON_LEFT);
@@ -775,8 +795,7 @@ static UiInput input_real(bool *seen)
     bool on = IsCursorOnScreen();
     // (a script's own: press-here, move-to, release.) Off the window a drag of files is cancelled,
     // not dropped where it last was.
-    if (!script_on) app.drag_mods = (IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL) ? UI_MOD_CTRL : 0) |
-                                    (IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT) ? UI_MOD_SHIFT : 0);
+    if (!script_on) app.drag_mods = mods_held();
     if (!script_on && !on && (app.drag == DRAG_PRESS || app.drag == DRAG_FILES)) drag_cancel(), *seen = true;
     else if (!script_on && (d.x != 0 || d.y != 0 || !held || !on)) *seen |= drag_at(&in, m.x, m.y, held && on);
     in.backs = mouse_backs, mouse_backs = 0;

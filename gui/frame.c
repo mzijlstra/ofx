@@ -112,7 +112,6 @@ static void menu_facts(void)
     u->br_total = git.br.total;   // (the panel's: "All branches… (N)", F12 step 6)
 }
 
-// The window, and the modal panel on top when one is up.
 // The element a drop target is drawn over (F13 step 3).
 static Clay_ElementId drop_elem(const Drop *d)
 {
@@ -180,6 +179,7 @@ static void layout_drag(void)
     }
 }
 
+// The window, and the modal panel on top when one is up.
 static Clay_RenderCommandArray layout(int w, int h)
 {
     menu_facts();

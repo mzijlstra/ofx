@@ -199,7 +199,7 @@ MUTANTS = [
     ('gui/actions.c', "        if (a.kind == UA_ZOOM) app.zoomed = true;\n", ""),
     ('gui/topbar.c', "    int k = (int)lroundf((x - d.boundingBox.x - ZOOM_KNOB_W / 2.0f) / step);", "    int k = (int)((x - d.boundingBox.x - ZOOM_KNOB_W / 2.0f) / step);"),
     ('gui/input.c', "    if (h.zoom) in->zoom_to = zoom_level_at(x), app.drag = DRAG_ZOOM;", "    if (h.zoom) in->zoom_to = zoom_level_at(x);"),
-    ('gui/input.c', "        in->zoom_to = zoom_level_at(x);\n        return false;", "        return false;"),
+    ('gui/input.c', "    case DRAG_ZOOM: in->zoom_to = zoom_level_at(x); return false;", "    case DRAG_ZOOM: return false;"),
     ('gui/input.c', "    if (x >= side_w() && ctrl) in->zoom_wheel = notches;", "    if (0) in->zoom_wheel = notches;"),
     ('gui/input.c', "    if ((m == GLFW_MOD_CONTROL || m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT)) && (key == GLFW_KEY_EQUAL", "    if ((m == GLFW_MOD_CONTROL) && (key == GLFW_KEY_EQUAL"),
     ('gui/input.c', " (key == GLFW_KEY_MINUS || key == GLFW_KEY_KP_SUBTRACT)) return UK_ZOOM_OUT;", " key == GLFW_KEY_MINUS) return UK_ZOOM_OUT;"),
@@ -769,7 +769,8 @@ MUTANTS = [
     ('gui/restore.c', '    for (int i = 0; i < tabbar.n && i < SESSION_TABS; i++) cap += 3 * strlen(', '    cap += (size_t)SESSION_TABS * PATH_MAX * 3; for (int i = 0; i < 0; i++) cap += 3 * strlen(', 'f11'),
     ('gui/main.c', '    restore_start(restore_id, !selecting && !pick.len && (!start || ', '    restore_start(restore_id, !selecting && (!start || ', 'f11'),
     ('gui/main.c', ' && (!start || (h && realpath(h, home_real) && strcmp(home_real, dir) == 0)));', ' && !start);', 'f11'),
-    ('gui/input.c', ' ||\n                   h.inside_btn != o.inside_btn;', ';', 'f9'),
+    # (hover_at's compare is hit_same's now, every field: one left out only costs a script a redraw it
+    # makes anyway, so no script kills it; the size assert guards a field added: F13 code-health C1)
     ('gui/clipboard.c', '    clip.ok = false;   // (the connection gone', '    // (the connection gone', 'clip'),
     ('gui/folder.c', "        app.ui.grid = grid, app.ui.zoom = zoom, app.ui.sort = sort;   // (as for a folder that can't be listed: F11 review)\n", '', 'f11'),
     ('gui/main.c', '        if (closing_all && !close_asked && !app.ui.quit_asking && !app.quit) closing_all = false;', '', 'f7'),
@@ -887,7 +888,7 @@ MUTANTS = [
     ('gui/input.c', '    if (h.side_edge && ui_press(&app.edge_press, 0, now_ms()) == 2)', '    if (false)', 'f13'),
     ('gui/input.c', '    else if (h.side_edge) app.drag = DRAG_SIDE,', '    else if (false) app.drag = DRAG_SIDE,', 'f13'),
     ('gui/input.c', 'app.drag_w0 = side_w(), app.drag_moved = false;', 'app.drag_w0 = app.side_px = side_w(), app.drag_moved = false;', 'f13'),
-    ('gui/input.c', '        if (app.drag == DRAG_SIDE && app.drag_moved) side_keep', '        if (app.drag == DRAG_SIDE) side_keep', 'f13'),
+    ('gui/input.c', '    if (app.drag == DRAG_SIDE && app.drag_moved) side_keep', '    if (app.drag == DRAG_SIDE) side_keep', 'f13'),
     ('gui/input.c', 'side_keep(app.side_px), app.edge_press.row = -1;', 'side_keep(app.side_px);', 'f13'),
     ('gui/input.c', 'ui_side_fit(to < UI_SIDE_MIN ? UI_SIDE_MIN : to, GetScreenWidth())', 'ui_side_fit(to, GetScreenWidth())', 'f13'),
     ('gui/input.c', '    int to = app.drag_w0 + (int)(x - app.drag_x0);', '    int to = app.drag_w0;', 'f13'),
@@ -902,7 +903,7 @@ MUTANTS = [
     # F13 step 3 (2026-11-04): drag and drop inside ofx (f13e)
     ('gui/input.c', ' && h.row >= 0 && app.ui.view != UI_VIEW_TRASH && app.have_list', ' && h.row >= 0 && app.have_list', 'f13'),
     ('gui/input.c', '        app.drag_side = in->side_click, in->side_click = -1;', '        app.drag_side = in->side_click;', 'f13'),
-    ('gui/input.c', '        if (app.drag == DRAG_PRESS && app.drag_tree) in->side_click = app.drag_side;', '', 'f13'),
+    ('gui/input.c', '    if (app.drag == DRAG_PRESS && app.drag_tree) in->side_click = app.drag_side;\n', '', 'f13'),
     ('gui/input.c', '        drag_arm(x, y, str_from_c(p), ui_marked(&app.ui, i), false,', '        drag_arm(x, y, str_from_c(p), false, false,', 'f13'),
     ('gui/input.c', ' || !S_ISDIR(ds.st_mode) || access(dir, W_OK) != 0 || !realpath(dir, real)) return false;', ' || !S_ISDIR(ds.st_mode) || !realpath(dir, real)) return false;', 'f13'),
     ('gui/input.c', '        if (dragged_real[i] && ui_under(str_from_c(real), str_from_c(dragged_real[i]))) return false;', '        {}', 'f13'),
@@ -915,7 +916,7 @@ MUTANTS = [
     ('gui/input.c', '    d.ok = dir && (d.trash || drop_takes(d.dir, &d.same_drive));', '    d.ok = dir != NULL;', 'f13'),
     ('gui/input.c', '    if (esc) drag_cancel();', '', 'f13'),
     ('gui/input.c', '    in->nev = 0;\n    if (esc)', '    if (esc)', 'f13'),
-    ('gui/input.c', '        if (app.drag == DRAG_FILES && app.drop.ok) drop_do(&app.drop);', '        if (app.drag == DRAG_FILES) drop_do(&app.drop);', 'f13'),
+    ('gui/input.c', '    if (app.drag == DRAG_FILES && app.drop.ok) drop_do(&app.drop);', '    if (app.drag == DRAG_FILES) drop_do(&app.drop);', 'f13'),
     ('gui/input.c', '        if (!ui_drag_past(x - app.drag_x0, y - app.drag_y0)) return false;', '        if (false) return false;', 'f13'),
     ('gui/input.c', '        app.press.row = -1;   // (a drag', '        (void)0;   // (a drag', 'f13'),
     ('gui/main.c', '        drag_keys(&in);', '', 'f13'),
@@ -931,7 +932,6 @@ MUTANTS = [
     ('gui/input.c', ' || app.spring_tab < 0 || now_ms() < app.spring_at + UI_SPRING_MS) return false;', ' || app.spring_tab < 0) return false;', 'f13'),
     ('gui/input.c', '    tab_show(app.spring_tab);\n', '', 'f13'),
     ('gui/input.c', ' .at = -1 }, app.spring_tab = -1;\n}', ' .at = -1 };\n}', 'f13'),
-    ('gui/input.c', ' .at = -1 }, app.spring_tab = -1;\n        return drawn;', ' .at = -1 };\n        return drawn;', 'f13'),
     ('gui/main.c', '        if (spring_tick() || (app.drag', '        if ((app.drag', 'f13'),
     ('gui/frame.c', '    if (bx + bb.width > (float)GetScreenWidth()) bx = app.drag_px - 14 - bb.width;\n', '', 'f13'),
     # F13 code-health step A (2026-11-04)

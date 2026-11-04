@@ -202,8 +202,10 @@ typedef struct {
 enum { DRAG_NONE, DRAG_ZOOM, DRAG_SIDE, DRAG_PRESS, DRAG_FILES };
 
 // Where a drag of files would land (F13 step 3), and what is drawn lit for it: a folder row (at:
-// its place on screen), a sidebar row, a tab, a path button, the files' empty space, the Trash.
+// its place on screen), a sidebar row (the Trash's among them), a tab, a path button, the files'
+// empty space. DROP_AGAIN: an at that is no place, so drop_find asks again.
 typedef enum { DROP_NONE, DROP_ROW, DROP_SIDE, DROP_TAB, DROP_CRUMB, DROP_LIST } DropKind;
+enum { DROP_AGAIN = -2 };
 typedef struct {
     DropKind kind;            // what is under the pointer
     int      at;
@@ -241,10 +243,19 @@ typedef struct {
     int   field_toggle;
     bool  inside_btn;   // the search bar's "In files" (F9 step 3)
 } Hit;
-// A field added changes this: then look at whether it is drawn lit, and if so add it to hover_at's
-// compare (input.c), as no script can see a hover that doesn't redraw (F13 step 2 review; the F11
-// review found one missing).
-_Static_assert(sizeof(Hit) == 100, "a new Hit field: is it drawn lit? Then hover_at compares it");
+// Whether two hits are over the same things: hover_at draws again when not. Every field, lit or not
+// (one that isn't drawn lit costs a frame more; one left out was a highlight that stayed where the
+// pointer left: the F11 review found one, and no script can see it). A field added changes the
+// size below: add it here too (F13 code-health review, 2026-11-04).
+static bool hit_same(Hit a, Hit b)
+{
+    return a.row == b.row && a.side == b.side && a.header == b.header && a.bar == b.bar && a.crumb == b.crumb && a.tab == b.tab &&
+           a.tab_x == b.tab_x && a.modal == b.modal && a.job_x == b.job_x && a.mode == b.mode && a.twisty == b.twisty && a.eject == b.eject &&
+           a.zoom == b.zoom && a.side_edge == b.side_edge && a.menu_title == b.menu_title && a.menu_item == b.menu_item && a.prop_box == b.prop_box && a.pick_row == b.pick_row &&
+           a.find_x == b.find_x && a.pick_field == b.pick_field && a.toggle == b.toggle && a.find_step == b.find_step && a.bmp_row == b.bmp_row && a.bmp_btn == b.bmp_btn &&
+           a.field == b.field && a.field_toggle == b.field_toggle && a.inside_btn == b.inside_btn;
+}
+_Static_assert(sizeof(Hit) == 100, "a new Hit field: hit_same compares it");
 
 // Under nothing: the start of hit_at, and the hover before the first frame (F11 review: two copies
 // had drifted, the hover's without .field).
