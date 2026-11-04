@@ -757,7 +757,7 @@ refits the list when the room changes. The only drag today is the zoom slider's.
 8. **Ctrl+Shift+C** (free today) copies the cursor's path as text, or every marked file's, one a
    line; "Copy Path" in the files' right-click menu and in Edit, and in the sidebar's and the path
    buttons' menus for their folder. The status line says "Copied the path" or "Copied N paths".
-   Still open: the folder's path when nothing is under the cursor (to ask at step 1).
+   With nothing under the cursor (an empty folder), the folder's own path (Michael, 2026-11-04).
 
 ### A resizable sidebar
 
