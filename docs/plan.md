@@ -82,6 +82,13 @@ Omarchy's theme: the binary, the folder `tools/ofx`, the window's title and Wayl
 | F10 | `ofx.conf`: the options you set, in one commented file ofx reads and watches; Edit → Preferences… | Below |
 | F11 | What ofx remembers: view, zoom and sort per folder, Show Hidden, the cursor per folder, the tree's open folders, Reopen Closed Tab, and the tabs across a restart (an option) | Below |
 | F12 | The F11 review's leftovers, `shift-select`, previews through the system's thumbnailers, Clear Previews, git status per file with a branch button | Below |
+| F13 | Drag and drop inside ofx (the list, the sidebar, the tabs, spring-loaded), Copy Path (Ctrl+Shift+C), a resizable sidebar | Below |
+| F14 | Drag and drop with other programs (a browser first): files dragged out of ofx, and dropped into it; ofx's own Wayland data-device code beside GLFW's | To design |
+| F15 | Key bindings the user sets | To design |
+| F16 | Network shares (Samba, NFS), with the folder counting in a separate process so a dead mount can't hang ofx | To design |
+
+**The major milestones end at F16** (Michael, 2026-11-04). What is left after it is on the later
+list below, smaller items to pick from.
 
 Each milestone ends in a reviewer-2 round, then Michael's go before `make install`.
 
@@ -98,7 +105,7 @@ his word: Nemo's compact view and its icon size slider.
   which needs a passphrase to unlock first; unmounted internal partitions (not listed on purpose).
 - A panel with the keys (F6 took the key list out of the status line).
 - A key that copies the cursor's path as text (Ctrl+C already puts files on the clipboard, F3).
-- Keybindings the user sets (Michael, 2026-10-24: the keys are reaching personal preference).
+- Keybindings the user sets (Michael, 2026-10-24: the keys are reaching personal preference): F15.
 - Install Nautilus at some point to compare its features with ofx's (not a priority).
 - Search through subfolders: F9 (2026-10-27).
 - Optional columns: permissions; type (Michael doesn't want it by default). Date and time format as
@@ -107,8 +114,9 @@ his word: Nemo's compact view and its icon size slider.
 - Counting in a separate process (reviewer-2, F4 review): a readdir on a hard NFS mount that
   hangs sits in D state, which no thread exit can reap, so ofx's process (its Wayland socket) can
   outlive its window. Only a child process that does the counting decouples a dead mount fully.
+  Part of F16.
 - Remember the open tabs across a restart: F11 (2026-11-01).
-- A resizable sidebar (the tree's deep levels get little room at 200 px).
+- A resizable sidebar (the tree's deep levels get little room at 200 px): F13.
 - The Trash place's icon full or empty: done (c621bf7, d99f180, 2026-10-30), every trash's files/
   watched. Not yet: a trash folder that appears from outside (another program's very first trash,
   or one moved back) is seen at the next look (a mount change, the trash view, ofx's own trash),
@@ -124,10 +132,15 @@ his word: Nemo's compact view and its icon size slider.
 - Open With: the theme's app-folder list is kept since bcefb00 (2026-10-29), read again when the
   theme's name changes. Not yet: a theme edited in place under the same name keeps the old icons
   until a restart (reviewer-2, 2026-10-29).
-- Drag and drop (Michael, 2026-10-29): inside ofx first (the list, the sidebar, the tabs), then
-  with other programs.
-- Network shares (Michael, 2026-10-29): Samba and NFS. Needs machines to test against, and the
+- Drag and drop (Michael, 2026-10-29): inside ofx first (F13), then with other programs (F14).
+- Network shares (Michael, 2026-10-29): Samba and NFS, F16. Needs machines to test against, and the
   counting in a separate process above, so a dead mount can't hang ofx.
+- Redo (Edit menu), beside undo: needs a history of undone changes.
+- Tooling: run the slowest GUI mutants first (above); select gui.py's mutants by their key, not
+  their index (indices move whenever a mutant is inserted or dropped; 2026-11-04 shifted them
+  several times); a missed-redraw check in the script runner (a frame whose state line changed
+  with no redraw asked for: the kind of the dropped git.c mutant, 2026-11-04), after an audit of
+  the state words that read worker state directly.
 - Not wanted: Nemo's built-in terminal (`t`, a terminal here, covers it).
 
 **Thumbnails, a rule from Nemo (2026-10-20):** Nemo looped at up to 45% CPU on one file
