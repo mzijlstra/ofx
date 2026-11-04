@@ -35,6 +35,17 @@ Omarchy's theme: the binary, the folder `tools/ofx`, the window's title and Wayl
     its row holds another place. f8c checks a rewrite that leaves the file as it was keeps the menu.
     Not seen failing since, so this one is the likely cause, not a proven one.
 
+- **Eleven GUI mutants survive, all from before F13** (F13's full run, 2026-11-04; each also survives
+  on F12's last commit 1c715c9, so their tags were older than the code). Test gaps to look at, or
+  mutants to drop as equivalent:
+  - #0, go up selects the folder left: equivalent now, F11's remembered cursor puts it there too.
+  - #177, a quit with jobs running asks first (Close All).
+  - #178, SIGUSR1 is Close All's signal.
+  - #388 (git.c), #566 and #621 (folder.c), #570 and #574 (remember.c), #614 (restore.c),
+    #620 (clipboard.c), #650 (folder.c).
+
+  `tools/mutation/gui.py <scratch> 0,177,178,388,566,570,574,614,620,621,650` runs them.
+
 ## Milestones
 
 | | What | Exit |
