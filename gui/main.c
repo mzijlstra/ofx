@@ -225,6 +225,10 @@ typedef struct {
     int   field_toggle;
     bool  inside_btn;   // the search bar's "In files" (F9 step 3)
 } Hit;
+// A field added changes this: then look at whether it is drawn lit, and if so add it to hover_at's
+// compare (input.c), as no script can see a hover that doesn't redraw (F13 step 2 review; the F11
+// review found one missing).
+_Static_assert(sizeof(Hit) == 100, "a new Hit field: is it drawn lit? Then hover_at compares it");
 
 // Under nothing: the start of hit_at, and the hover before the first frame (F11 review: two copies
 // had drifted, the hover's without .field).
