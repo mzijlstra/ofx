@@ -335,6 +335,8 @@ static struct {
     IconSlot *drag_icon;
     int       drag_mods;    // Ctrl, Shift held (UI_MOD_*): a copy, a move
     Drop      drop;         // where it would land now
+    int       spring_tab;   // the tab it is held over (not the one shown), -1 none (F13 step 4)
+    i64       spring_at;    // since when
     int       side_px;      // the sidebar's width dragged to (ui_side_fit; 0 its first, UI_SIDE_W)
     UiPress   edge_press;   // the sidebar edge's presses, for its double click
     bool      thumb_local;  // the folder's drive is one ofx makes previews on (F6.4: not a network one)
@@ -720,7 +722,7 @@ static void app_start(void)
     side_refresh();
     list_fit();
     ui_resize(&app.ui.side, side_rows(GetScreenHeight()));
-    app.press.row = -1, app.panel_press.row = -1, app.edge_press.row = -1;
+    app.press.row = -1, app.panel_press.row = -1, app.edge_press.row = -1, app.spring_tab = -1;
 }
 
 // Each frame: what the watches and the worker threads brought, taken. True when the window must
@@ -892,6 +894,7 @@ int main(int argc, char **argv)
         if (rows != app.ui.list.rows) ui_resize(&app.ui.list, rows), dirty = true;
         if (srows != app.ui.side.rows) ui_resize(&app.ui.side, srows), dirty = true;
         if (ui_tip_tick(&app.tip, now_ms())) dirty = true;
+        if (spring_tick() || (app.drag == DRAG_FILES && app.spring_tab >= 0)) dirty = true;   // (its bar fills as it waits)
         if (dirty || scripted) {
             i64 t0 = now_us();
             draw();
@@ -907,6 +910,7 @@ int main(int argc, char **argv)
             if (scripted ? script.pointing && hover_refresh(true, script.px, script.py) : hover_refresh(IsCursorOnScreen(), m.x, m.y))
                 dirty = true, glfwPostEmptyEvent();
             if (app.icons_missed && app.icons_reset_armed) dirty = true, glfwPostEmptyEvent();   // emptied and drawn again at once
+            if (app.drag == DRAG_FILES && app.spring_tab >= 0) glfwPostEmptyEvent();   // (the spring's bar: the next frame at once)
         }
         PollInputEvents();   // waits for input, or for watch.c's wake-up
         if (atomic_exchange(&close_signal, false)) close_asked = true, closing_all = true;

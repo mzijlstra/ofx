@@ -449,8 +449,9 @@ static int ui_side_fit(int want, int w)
 
 // ---- drag and drop (F13 step 3) -------------------------------------------------------------
 
-// A press held and moved this far (px) is a drag; less is still a click.
-enum { UI_DRAG_PX = 6 };
+// A press held and moved this far (px) is a drag; less is still a click. A drag held this long
+// (ms) over another tab shows it (spring-loaded tabs, F13 step 4).
+enum { UI_DRAG_PX = 6, UI_SPRING_MS = 800 };
 
 static bool ui_drag_past(float dx, float dy)
 {

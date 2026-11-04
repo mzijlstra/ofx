@@ -200,7 +200,8 @@ sidebar row, a tab, a path button, or the files' empty space (the folder shown);
 trashes them. On the same drive it moves, onto another it copies; Ctrl held copies, Shift held
 moves (held after the press: a press with Ctrl or Shift selects); the badge by the pointer says which, and the target is outlined (nothing where it can't
 go: a file, a read-only folder, the folder dragged or one inside it, a search's results). Esc or
-leaving the window cancels; Ctrl+Z undoes a drop, as a paste. A tree folder opens when the button
+leaving the window cancels; Ctrl+Z undoes a drop, as a paste. Held over another tab for 0.8 s
+(a bar fills in the badge), that tab opens, so the drop can go into one of its folders. A tree folder opens when the button
 is let go, not on the press, so it can be dragged. Dragging to and from other programs isn't there
 yet.
 

@@ -389,6 +389,9 @@ static void drop_find(float x, float y)
         if (shown) dir = app.cwd;
     }
     if (dir) snprintf(d.dir, sizeof d.dir, "%s", dir);
+    // Over another tab the wait for it to open starts (spring_tick); off it, it starts over.
+    int spring = d.kind == DROP_TAB && d.at != tabbar.cur ? d.at : -1;
+    if (spring != app.spring_tab) app.spring_tab = spring, app.spring_at = spring >= 0 ? now_ms() : 0, timer_at(wake_due());
     if (d.kind == app.drop.kind && d.at == app.drop.at && strcmp(d.dir, app.drop.dir) == 0) return;   // (the same: not asked again)
     d.ok = dir && (d.trash || drop_takes(d.dir, &d.same_drive));
     app.drop = d;
@@ -397,7 +400,18 @@ static void drop_find(float x, float y)
 // A drag of files ended without a drop: Esc, or the pointer off the window.
 static void drag_cancel(void)
 {
-    if (app.drag == DRAG_PRESS || app.drag == DRAG_FILES) app.drag = DRAG_NONE, app.drop = (Drop){ .kind = DROP_NONE, .at = -1 };
+    if (app.drag == DRAG_PRESS || app.drag == DRAG_FILES) app.drag = DRAG_NONE, app.drop = (Drop){ .kind = DROP_NONE, .at = -1 }, app.spring_tab = -1;
+}
+
+// A drag held over another tab UI_SPRING_MS (F13 step 4): that tab shown, so the drop can go into
+// one of its folders, and what the files are over found again. True when it opened.
+static bool spring_tick(void)
+{
+    if (app.drag != DRAG_FILES || app.spring_tab < 0 || now_ms() < app.spring_at + UI_SPRING_MS) return false;
+    tab_show(app.spring_tab);
+    app.spring_tab = -1, app.drop.at = -2;   // (-2: asked again, the same place under another tab)
+    drop_find(app.drag_px, app.drag_py);
+    return true;
 }
 
 // Esc during a drag of files cancels it, and is the drag's alone (it would clear the marks too).
@@ -662,7 +676,7 @@ static bool drag_at(UiInput *in, float x, float y, bool held)
         if (app.drag == DRAG_FILES && app.drop.ok) drop_do(&app.drop);
         if (app.drag == DRAG_PRESS && app.drag_src < 0) in->side_click = app.drag_side;   // (a click on a tree row, after all)
         bool drawn = app.drag != DRAG_PRESS;
-        app.drag = DRAG_NONE, app.drop = (Drop){ .kind = DROP_NONE, .at = -1 };
+        app.drag = DRAG_NONE, app.drop = (Drop){ .kind = DROP_NONE, .at = -1 }, app.spring_tab = -1;
         return drawn;
     }
     if (app.drag == DRAG_ZOOM) {
@@ -690,11 +704,11 @@ static bool drag_at(UiInput *in, float x, float y, bool held)
 static bool hover_at(float x, float y);
 
 // When the timer wakes the loop: a tooltip due, the search field's text to search for (F9), a
-// state write waiting (a folder's view, remember.c; this window's tabs, restore.c; F11), or a git
-// status ask put off (git.c's once a second, F12).
+// state write waiting (a folder's view, remember.c; this window's tabs, restore.c; F11), a git
+// status ask put off (git.c's once a second, F12), or a drag's tab to open (F13 step 4).
 static i64 wake_due(void)
 {
-    i64 d[] = { ui_tip_due(&app.tip), app.search_due, rem.due, restore.due, git.due };
+    i64 d[] = { ui_tip_due(&app.tip), app.search_due, rem.due, restore.due, git.due, app.spring_tab >= 0 ? app.spring_at + UI_SPRING_MS : 0 };
     return ui_due_min(d, COUNT(d));
 }
 

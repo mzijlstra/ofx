@@ -126,6 +126,8 @@ static Clay_ElementId drop_elem(const Drop *d)
 }
 
 static bool        drop_marked, badge_drawn;   // as drawn last (a script's state line)
+static float       spring_fill = -1;           // the spring's bar, 0 to 1; -1 none drawn
+static float       badge_x, badge_y;           // where the badge was put
 static const char *badge_op;
 
 // A drag of files (F13 step 3): the place it would drop in, outlined in the accent (nowhere it
@@ -133,7 +135,7 @@ static const char *badge_op;
 // the drop does there ("Move", "Copy", "Trash").
 static void layout_drag(void)
 {
-    drop_marked = badge_drawn = false, badge_op = NULL;
+    drop_marked = badge_drawn = false, badge_op = NULL, spring_fill = -1;
     if (app.drag != DRAG_FILES) return;
     Theme *t = &app.theme;
     Clay_ElementData e = Clay_GetElementData(drop_elem(&app.drop));
@@ -147,15 +149,30 @@ static void layout_drag(void)
     }
     static const char *const OPS[] = { "Move", "Copy", "Trash" };
     badge_drawn = true, badge_op = app.drop.ok ? OPS[drop_op(&app.drop)] : NULL;
+    // Right of the pointer and below it; left of it, or above it, where the window's edge would cut
+    // it (its size the last frame's).
+    Clay_BoundingBox bb = Clay_GetElementData(CLAY_ID("drag-badge")).boundingBox;
+    float bx = app.drag_px + 14, by = app.drag_py + 16;
+    if (bx + bb.width > (float)GetScreenWidth()) bx = app.drag_px - 14 - bb.width;
+    if (by + bb.height > (float)GetScreenHeight()) by = app.drag_py - 16 - bb.height;
+    badge_x = bx < 0 ? 0 : bx, badge_y = by < 0 ? 0 : by;
     CLAY(CLAY_ID("drag-badge"), { .layout = { .sizing = { CLAY_SIZING_FIT(0), CLAY_SIZING_FIT(0) }, .padding = { 8, 8, 5, 5 }, .childGap = 8,
                                               .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
                                   .backgroundColor = cc(t->bg_light), .cornerRadius = CLAY_CORNER_RADIUS(3),
                                   .border = { .color = cc(t->accent), .width = CLAY_BORDER_OUTSIDE(1) },
-                                  .floating = { .attachTo = CLAY_ATTACH_TO_ROOT, .zIndex = 30, .offset = { app.drag_px + 14, app.drag_py + 16 },
+                                  .floating = { .attachTo = CLAY_ATTACH_TO_ROOT, .zIndex = 30, .offset = { badge_x, badge_y },
                                                 .pointerCaptureMode = CLAY_POINTER_CAPTURE_MODE_PASSTHROUGH } }) {
         icon_box(CLAY_ID("drag-icon"), app.drag_icon, SIDE_ICON_PX);
         text(fit(str_from_c(app.drag_name), 240, false), cc(t->fg));
         if (dragged.n > 1) text(cz(arena_sprintf(&frame, "+ %td more", dragged.n - 1)), cc(t->fg_dim));
+        if (app.spring_tab >= 0) {   // (F13 step 4: the tab under it opens when the bar is full)
+            float f = (float)(now_ms() - app.spring_at) / UI_SPRING_MS;
+            spring_fill = f < 0 ? 0 : f > 1 ? 1 : f;
+            CLAY(CLAY_ID("spring-bar"), { .layout = { .sizing = { CLAY_SIZING_FIXED(60), CLAY_SIZING_FIXED(4) } }, .backgroundColor = rule_color() }) {
+                CLAY(CLAY_ID("spring-fill"), { .layout = { .sizing = { CLAY_SIZING_FIXED(60 * spring_fill), CLAY_SIZING_GROW(0) } }, .backgroundColor = cc(t->accent) }) {}
+            }
+            text(cz("opening the tab\xE2\x80\xA6"), cc(t->fg_dim));
+        }
         if (badge_op)
             CLAY(CLAY_ID("drag-op"), { .layout = { .padding = { 6, 6, 1, 1 } }, .backgroundColor = cc(t->accent), .cornerRadius = CLAY_CORNER_RADIUS(2) }) {
                 text(cz(badge_op), cc(t->bg));

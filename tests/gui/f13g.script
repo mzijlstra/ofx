@@ -1,0 +1,70 @@
+# F13 step 4: spring-loaded tabs. A drag held over another tab 0.8 s shows that tab (its bar fills
+# meanwhile), so the drop can go into one of its folders; off it sooner, or let go, or Esc, it
+# doesn't. The tree (run.sh): home/tree: adir/deep/, a.txt, b.txt; a second tab in adir.
+settle
+key ctrl-t
+wait-for 2000 tabs=2 tab=1
+key enter
+wait-for 2000 crumbs=home|tree|adir n=1
+key ctrl-tab
+wait-for 2000 tab=0 n=3
+key end
+expect sel=b.txt
+# ---- Over the tab shown: no wait. Over the other, the bar fills; off it before 0.8 s, nothing
+point-ui row 1
+press-here
+move-by 0 10
+expect drag=files dragname=a.txt spring=-1 springbar=-1
+point-ui tab 0
+move-here
+expect spring=-1
+point-ui tab 1
+move-here
+expect spring=1 tab=0
+sleep 300
+expect spring=1 tab=0 badge=Move badgein=1
+shot spring.png
+point-ui list
+move-here
+expect spring=-1 springbar=-1
+sleep 700
+expect tab=0
+# ---- Held there 0.8 s: tab 1 shows, its row deep is a target; the drop goes in
+point-ui tab 1
+move-here
+sleep 1000
+expect tab=1 spring=-1 crumbs=home|tree|adir drop=tab:1
+point-ui row 0
+move-here
+expect drop=row:0 dropdir=deep dropok=1 dropop=move
+release
+wait-for 3000 job=-
+sh test -f "$OFX_DIR/deep/a.txt" && test ! -e "$OFX_DIR/../a.txt"
+# ---- Let go before the time: no tab opens (the drop goes into the tab's folder, as on any tab);
+# Esc: nothing at all
+key ctrl-tab
+wait-for 2000 tab=0 n=2
+point-ui row 1
+press-here
+move-by 0 10
+point-ui tab 1
+move-here
+expect spring=1
+release
+wait-for 3000 job=- n=1
+sleep 1000
+expect tab=0 spring=-1
+sh test -f "$OFX_DIR/adir/b.txt"
+sh touch "$OFX_DIR/c.txt"
+wait-for 3000 n=2
+point-ui row 1
+press-here
+move-by 0 10
+point-ui tab 1
+move-here
+expect spring=1
+key esc
+sleep 1000
+expect tab=0 drag=- spring=-1 n=2
+release
+quit

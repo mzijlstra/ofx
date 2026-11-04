@@ -2533,7 +2533,7 @@ MUTANTS += [
 MUTANTS += [
     ('ui/helpers.c', '    return dx * dx + dy * dy >= (float)(UI_DRAG_PX * UI_DRAG_PX);', '    return dx * dx + dy * dy > (float)(UI_DRAG_PX * UI_DRAG_PX);'),
     ('ui/helpers.c', '    return dx * dx + dy * dy >= (float)(UI_DRAG_PX * UI_DRAG_PX);', '    return dx * dx >= (float)(UI_DRAG_PX * UI_DRAG_PX);'),
-    ('ui/helpers.c', 'enum { UI_DRAG_PX = 6 };', 'enum { UI_DRAG_PX = 5 };'),
+    ('ui/helpers.c', 'enum { UI_DRAG_PX = 6, UI_SPRING_MS', 'enum { UI_DRAG_PX = 5, UI_SPRING_MS'),
     ('ui/helpers.c', '    if (mods & UI_MOD_CTRL) return UI_DROP_COPY;\n', ''),
     ('ui/helpers.c', '    if (mods & UI_MOD_SHIFT) return UI_DROP_MOVE;\n', ''),
     ('ui/helpers.c', '    return same_drive ? UI_DROP_MOVE : UI_DROP_COPY;', '    return UI_DROP_MOVE;'),

@@ -531,7 +531,7 @@ MUTANTS = [
     ('gui/git.c', '        if (git.sw_asked) {   // a switch first: it was picked', '        if (false) {   // a switch first: it was picked', 'f12h'),
     ('gui/git.c', '    if (it == UM_BR_NOTE && git.sw_busy) return', '    if (false) return', 'f12h'),
     ('gui/git.c', '    if (r) git.sw_ready = false, git.sw_busy = false, *got = git.sw_got,', '    if (r) git.sw_ready = false, *got = git.sw_got,', 'f12h'),
-    ('gui/input.c', 'rem.due, restore.due, git.due }', 'rem.due, restore.due }', 'f12g'),
+    ('gui/input.c', 'rem.due, restore.due, git.due, app.spring_tab', 'rem.due, restore.due, 0, app.spring_tab', 'f12g'),
     ('gui/watch.c', 'strcmp(e->name, "index") == 0 || strcmp(e->name, "HEAD") == 0', 'strcmp(e->name, "HEAD") == 0', 'f12g'),
     ('gui/files.c', ' : sel ? cc(t->fg) : gs != GS_NONE ? git_colour(gs) : ls_name_colour(e, i);', ' : sel ? cc(t->fg) : ls_name_colour(e, i);', 'f12g'),
     ('gui/files.c', '        if (in_git) git_cell(r, i, gs);   // (beside the name it marks, before Size: Michael, 2026-11-03)\n', '', 'f12g'),
@@ -925,6 +925,15 @@ MUTANTS = [
     ('gui/actions.c', '    return d->trash ? UI_DROP_TRASH : ui_drop_op(d->same_drive, app.drag_mods);', '    return d->trash ? UI_DROP_TRASH : ui_drop_op(d->same_drive, 0);', 'f13'),
     ('gui/frame.c', '    if (app.drop.ok && e.found) {', '    if (e.found) {', 'f13'),
     ('gui/frame.c', '    badge_drawn = true, badge_op = app.drop.ok ? OPS[drop_op(&app.drop)] : NULL;', '    badge_drawn = true, badge_op = OPS[drop_op(&app.drop)];', 'f13'),
+    # F13 step 4 (2026-11-04): spring-loaded tabs (f13g)
+    ('gui/input.c', '    int spring = d.kind == DROP_TAB && d.at != tabbar.cur ? d.at : -1;', '    int spring = d.kind == DROP_TAB ? d.at : -1;', 'f13'),
+    ('gui/input.c', 'app.spring_at = spring >= 0 ? now_ms() : 0, timer_at', 'app.spring_at = 0, timer_at', 'f13'),
+    ('gui/input.c', ' || app.spring_tab < 0 || now_ms() < app.spring_at + UI_SPRING_MS) return false;', ' || app.spring_tab < 0) return false;', 'f13'),
+    ('gui/input.c', '    tab_show(app.spring_tab);\n', '', 'f13'),
+    ('gui/input.c', ' .at = -1 }, app.spring_tab = -1;\n}', ' .at = -1 };\n}', 'f13'),
+    ('gui/input.c', ' .at = -1 }, app.spring_tab = -1;\n        return drawn;', ' .at = -1 };\n        return drawn;', 'f13'),
+    ('gui/main.c', '        if (spring_tick() || (app.drag', '        if ((app.drag', 'f13'),
+    ('gui/frame.c', '    if (bx + bb.width > (float)GetScreenWidth()) bx = app.drag_px - 14 - bb.width;\n', '', 'f13'),
     ('gui/actions.c', '    snprintf(app.text_copied, sizeof app.text_copied, "%.*s", STR_ARG(t));\n    if (!clip_set_text(t))', '    snprintf(app.text_copied, sizeof app.text_copied, "%.*s", STR_ARG(t));\n    if (true)', 'clip'),
 ]
 import concurrent.futures, queue, threading, time
