@@ -702,7 +702,7 @@ Default and Recommended equal GIO's; GLib's rewrite of a copy adds the two lines
   is first drawn, all of them dropped when it closes (`ow_drop`). SVG icons (theme, pixmaps/ or a
   path) are drawn with nanosvg, vendored; only for the apps, the files' icons stay PNG.
 
-## F13 design (2026-11-03, draft: Michael picks the open points)
+## F13 design (2026-11-03; Michael, 2026-11-04: "sounds good" to the recommendations below)
 
 Mock-ups: https://claude.ai/artifact/4bdFiKw2U1cA3Aj67f1Boo (six artboards: the list, the sidebar,
 tabs and path buttons, copy or move, the resizable sidebar, Copy Path).
@@ -757,7 +757,7 @@ refits the list when the room changes. The only drag today is the zoom slider's.
 8. **Ctrl+Shift+C** (free today) copies the cursor's path as text, or every marked file's, one a
    line; "Copy Path" in the files' right-click menu and in Edit, and in the sidebar's and the path
    buttons' menus for their folder. The status line says "Copied the path" or "Copied N paths".
-   Alternative: the folder's path when nothing is under the cursor.
+   Still open: the folder's path when nothing is under the cursor (to ask at step 1).
 
 ### A resizable sidebar
 
