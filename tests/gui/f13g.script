@@ -21,7 +21,7 @@ expect spring=-1
 point-ui tab 1
 move-here
 expect spring=1 tab=0
-sleep 300
+sleep 100
 expect spring=1 tab=0 badge=Move badgein=1
 shot spring.png
 point-ui list
