@@ -320,7 +320,8 @@ static void text_copy(Str t)
 }
 
 // Copy Path (F13): the marked entries' paths (or the cursor's) as text, one a line, or only's (a
-// folder's menu); in an empty folder its own (Michael, 2026-11-04).
+// folder's menu); in an empty folder its own (Michael, 2026-11-04). Each quoted as a shell needs it
+// (shell_quote: a name with a line break would paste as a command; step 1 review).
 static void path_copy(const char *only)
 {
     static ClipFiles c;
@@ -329,12 +330,19 @@ static void path_copy(const char *only)
     else c.n = targets(&pastea, c.path, CLIP_PATHS_MAX);
     if (c.n == 0 && app.list.n == 0) c.path[0] = arena_cstr(&pastea, str_from_c(here_dir())), c.n = 1;
     if (c.n == 0) return;
-    Str t = clip_payload(&pastea, &c, CLIP_FMT_TEXT);
-    if (t.len == 0) {
+    isize avail, n = 0;
+    char *out = arena_tail(&pastea, &avail);
+    for (isize i = 0; i < c.n && n >= 0; i++) {
+        if (i && n + 1 < avail) out[n++] = '\n';
+        isize k = shell_quote(str_from_c(c.path[i]), out + n, avail - n);
+        n = k < 0 ? -1 : n + k;
+    }
+    arena_commit(&pastea, n < 0 ? 0 : n + 1);
+    if (n < 0) {
         set_status(true, "The paths are too long to copy together");
         return;
     }
-    text_copy(t);
+    text_copy((Str){ out, n });
     if (c.n == 1) set_status(false, "Copied the path");
     else set_status(false, "Copied %td paths", c.n);
 }
@@ -845,9 +853,13 @@ static void act(UiAction a)
         if (a.kind == UA_TRASH) trash_targets();
         else copy_targets(a.kind == UA_CUT, NULL);
         break;
-    case UA_COPY_PATH:
-        if (!too_many_marked()) path_copy(NULL);
+    case UA_COPY_PATH: {   // all: a folder's, a sidebar row's (not the trash's) or the folder shown's
+        char buf[PATH_MAX];
+        const char *dir = !a.all ? NULL : a.index < 0 ? here_dir() : side_path(a.index, buf, sizeof buf);
+        if (!a.all && !too_many_marked()) path_copy(NULL);
+        else if (dir && strcmp(dir, TRASH_URI) != 0) path_copy(dir);
         break;
+    }
     case UA_RENAME: rename_commit(); break;
     case UA_TAB_NEW: tab_open(app.cwd, sel_name(), true); break;
     case UA_TAB_CLOSE: tab_close((int)a.index); break;

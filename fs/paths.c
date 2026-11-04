@@ -67,6 +67,65 @@ static bool path_put(char *out, size_t cap, const char *dir, Str name)
     return n >= 0 && (size_t)n < cap;
 }
 
+// Whether byte i of s starts a control character: C0, DEL, or C1 in UTF-8 (U+0080..U+009F, which
+// a terminal may take as a command: U+009B is CSI).
+static bool shell_ctrl(Str s, isize i)
+{
+    u8 c = (u8)s.p[i];
+    return c < 0x20 || c == 0x7f || (c == 0xc2 && i + 1 < s.len && (u8)s.p[i + 1] >= 0x80 && (u8)s.p[i + 1] <= 0x9f);
+}
+
+// s as a shell reads it back (ls's shell-escape style, Copy Path; Michael, 2026-11-04): as it is
+// when every byte is safe there (letters, digits, / . _ - + , : @ % =, and UTF-8), else in single
+// quotes (' as '\''), or in $'…' when it holds a control character (\n, \t, \r, \\, \', the rest
+// \xHH), so a name can't paste as a second command line. The length written into out (NUL
+// ended), -1 when it doesn't fit.
+static isize shell_quote(Str s, char *out, isize cap)
+{
+    bool plain = s.len > 0, ctrl = false;
+    for (isize i = 0; i < s.len; i++) {
+        u8 c = (u8)s.p[i];
+        if (shell_ctrl(s, i)) ctrl = true;
+        bool safe = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || strchr("/._-+,:@%=", c) || c >= 0x80;
+        if (!safe || shell_ctrl(s, i)) plain = false;
+    }
+    isize n = 0;
+#define PUT(...)                                                                                   \
+    do {                                                                                           \
+        int k_ = snprintf(out + n, (size_t)(cap - n), __VA_ARGS__);                                \
+        if (k_ < 0 || k_ >= cap - n) return -1;                                                    \
+        n += k_;                                                                                   \
+    } while (0)
+    if (cap <= 0) return -1;
+    out[0] = 0;
+    if (plain) PUT("%.*s", STR_ARG(s));
+    else if (!ctrl) {
+        PUT("'");
+        for (isize i = 0; i < s.len; i++)
+            if (s.p[i] == '\'') PUT("'\\''");
+            else PUT("%c", s.p[i]);
+        PUT("'");
+    } else {
+        PUT("$'");
+        for (isize i = 0; i < s.len; i++) {
+            u8 c = (u8)s.p[i];
+            if (c == '\n') PUT("\\n");
+            else if (c == '\t') PUT("\\t");
+            else if (c == '\r') PUT("\\r");
+            else if (c == '\\' || c == '\'') PUT("\\%c", c);
+            else if (shell_ctrl(s, i) && c == 0xc2) {
+                PUT("\\x%02x\\x%02x", c, (u8)s.p[i + 1]);
+                i++;
+            }
+            else if (shell_ctrl(s, i)) PUT("\\x%02x", c);
+            else PUT("%c", c);
+        }
+        PUT("'");
+    }
+#undef PUT
+    return n;
+}
+
 // path's folder into out ("/" for one at the top); false when it doesn't fit.
 static bool path_parent(char *out, size_t cap, const char *path)
 {

@@ -94,7 +94,7 @@ key esc
 key ctrl-1
 # Kept inside the window at its bottom right corner: flipped up and left of the pointer
 right-at 900 470
-expect menu=here menuin=1 menubox=601,216,298,252
+expect menu=here menuin=1 menubox=601,190,298,278
 key esc
 # Show Hidden Files, checked when on
 point-ui list
@@ -115,7 +115,7 @@ raw-key 269 4
 wait-for 2000 trash=1 n=1
 point-ui list
 right-here
-expect menu=here menuhid=new-folder,new-file
+expect menu=here menuhid=new-folder,new-file,copy-path-here
 point-menu empty-trash
 click-here
 expect menu=- modal=empty

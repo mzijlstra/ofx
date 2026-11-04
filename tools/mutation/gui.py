@@ -874,10 +874,13 @@ MUTANTS = [
     ('gui/actions.c', '    if (only) c.path[0] = arena_cstr(&pastea, str_from_c(only)), c.n = 1;', '    if (false) c.path[0] = arena_cstr(&pastea, str_from_c(only)), c.n = 1;', 'clip'),
     ('gui/actions.c', '    if (c.n == 0 && app.list.n == 0) c.path[0]', '    if (false) c.path[0]', 'clip'),
     ('gui/actions.c', 'str_from_c(here_dir())), c.n = 1;', 'str_from_c(app.cwd)), c.n = 1;', 'clip'),
-    ('gui/actions.c', '    Str t = clip_payload(&pastea, &c, CLIP_FMT_TEXT);', '    Str t = clip_payload(&pastea, &c, CLIP_FMT_URIS);', 'clip'),
-    ('gui/actions.c', '    text_copy(t);\n    if (c.n == 1)', '    if (c.n == 1)', 'clip'),
+    ('gui/actions.c', '    text_copy((Str){ out, n });\n', '', 'clip'),
     ('gui/actions.c', '    if (c.n == 1) set_status(false, "Copied the path");', '    if (true) set_status(false, "Copied the path");', 'clip'),
-    ('gui/actions.c', '    case UA_COPY_PATH:\n        if (!too_many_marked()) path_copy(NULL);\n', '    case UA_COPY_PATH:\n', 'clip'),
+    ('gui/actions.c', '        if (!a.all && !too_many_marked()) path_copy(NULL);\n', '        if (!a.all) {}\n', 'clip'),
+    ('gui/actions.c', '        else if (dir && strcmp(dir, TRASH_URI) != 0) path_copy(dir);\n', '', 'clip'),
+    ('gui/actions.c', '        else if (dir && strcmp(dir, TRASH_URI) != 0) path_copy(dir);', '        else if (dir) path_copy(dir);', 'clip'),
+    ('gui/actions.c', '        isize k = shell_quote(str_from_c(c.path[i]), out + n, avail - n);', '        isize k = snprintf(out + n, (size_t)(avail - n), "%s", c.path[i]);', 'clip'),
+    ('gui/actions.c', "        if (i && n + 1 < avail) out[n++] = '\\n';\n", '', 'clip'),
     ('gui/actions.c', '    snprintf(app.text_copied, sizeof app.text_copied, "%.*s", STR_ARG(t));\n    if (!clip_set_text(t))', '    snprintf(app.text_copied, sizeof app.text_copied, "%.*s", STR_ARG(t));\n    if (true)', 'clip'),
 ]
 import concurrent.futures, queue, threading, time

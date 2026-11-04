@@ -758,6 +758,10 @@ refits the list when the room changes. The only drag today is the zoom slider's.
    line; "Copy Path" in the files' right-click menu and in Edit, and in the sidebar's and the path
    buttons' menus for their folder. The status line says "Copied the path" or "Copied N paths".
    With nothing under the cursor (an empty folder), the folder's own path (Michael, 2026-11-04).
+   After the step 1 review (Michael, 2026-11-04): each path quoted only when a shell needs it,
+   as `ls` does (`'my file.txt'`, `$'a\nb'`), since a name with a line break pasted raw into a
+   terminal is a second command line, and double quotes don't stop `"` or `$( )`; Ctrl+Shift+C
+   with the sidebar's keys copies its cursor's folder; the empty space's menu has Copy Path too.
 
 ### A resizable sidebar
 

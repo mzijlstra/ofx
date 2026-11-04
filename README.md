@@ -65,7 +65,7 @@ puts its service file in `~/.local/share/dbus-1/services`), and it exits when id
 | `r` | in the trash view: restore the selected entries where they came from |
 | Shift+Delete | delete for good, after "Y/n" (Enter or `y` deletes) |
 | Ctrl+C, Ctrl+X, Ctrl+V | copy, cut, paste; Nemo and terminals paste what ofx copied, ofx what Nemo copied |
-| Ctrl+Shift+C, Edit → Copy Path | the selected files' paths as text, one a line (none selected: the cursor's; an empty folder: its own); a folder's right-click menu in the sidebar or the path has Copy Path for that folder |
+| Ctrl+Shift+C, Edit → Copy Path | the selected files' paths as text, one a line (none selected: the cursor's; an empty folder: its own), quoted as a shell needs only when it does (`'my file.txt'`; `$'…\n…'` for a name with a line break, so it can't paste as a second command), as `ls` shows them; in the sidebar, its cursor's folder. The empty space's right-click menu has Copy Path for the folder shown, a folder's in the sidebar or the path for that folder |
 | Ctrl+Z | undo the last rename, new folder, new file (while it is still empty), trash, copy or move |
 | Ctrl+T, Ctrl+W | a new tab on this folder, close the tab (the last one closes the window) |
 | Ctrl+Shift+T | the tab closed last, open again (the last 16 of this window; also in the File menu and a tab's right-click menu) |

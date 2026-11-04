@@ -1695,7 +1695,7 @@ MUTANTS += [
     ('fs/paths.c', "return strncmp(path, dir, n) == 0 && path[n] == '/' && path[n + 1];", "return strncmp(path, dir, n) == 0 && path[n] == '/';"),
     ('fs/paths.c', "return strncmp(path, dir, n) == 0 && path[n] == '/' && path[n + 1];", 'return strncmp(path, dir, n) == 0 && path[n + 1];'),
     ('fs/paths.c', 'dir, strcmp(dir, "/") == 0 ? "" : "/", STR_ARG(name));', 'dir, "/", STR_ARG(name));'),
-    ('fs/paths.c', "    return n >= 0 && (size_t)n < cap;\n}\n\n// path's folder", "    return n >= 0;\n}\n\n// path's folder"),
+    ('fs/paths.c', "    return n >= 0 && (size_t)n < cap;\n}\n\n// Whether byte i", "    return n >= 0;\n}\n\n// Whether byte i"),
     ('fs/paths.c', '    return n >= 0 && (size_t)n < cap;\n}\n\n// An XDG', '    return n >= 0;\n}\n\n// An XDG'),
     ('fs/paths.c', 'STR_ARG(d.len ? d : S("/")));\n    return n', 'STR_ARG(d));\n    return n'),
     ('fs/paths.c', '    if (x && x[0] == \'/\') n = snprintf(out, cap, "%s/%s", x, sub);', '    if (x && x[0]) n = snprintf(out, cap, "%s/%s", x, sub);'),
@@ -2464,8 +2464,8 @@ MUTANTS += [
 ]
 # F13 step 1 (2026-11-04): Copy Path
 MUTANTS += [
-    ('ui/handle.c', '    case UK_COPY_PATH: if (u->focus != UI_FOCUS_SIDE) return', '    case UK_COPY_PATH: if (true) return'),
-    ('ui/handle.c', '    case UK_COPY_PATH: if (u->focus != UI_FOCUS_SIDE) return *out = ui_view_act(u, (UiAction){ UA_COPY_PATH, 0, false }), true; break;', ''),
+    ('ui/handle.c', '        if (u->focus == UI_FOCUS_SIDE) return *out = (UiAction){ UA_COPY_PATH', '        if (false) return *out = (UiAction){ UA_COPY_PATH'),
+    ('ui/handle.c', '        return *out = ui_view_act(u, (UiAction){ UA_COPY_PATH, 0, false }), true;\n', '        break;\n'),
     ('ui/handle.c', 'ui_view_act(u, (UiAction){ UA_COPY_PATH, 0, false })', '(UiAction){ UA_COPY_PATH, 0, false }'),
     ('ui/ui.c', '    case UA_COPY: case UA_COPY_PATH: case UA_CUT:', '    case UA_COPY: case UA_CUT:'),
     ('ui/menus.c', '    case UM_COPY_PATH: return u->focus != UI_FOCUS_SIDE && ui_view_allows', '    case UM_COPY_PATH: return ui_view_allows'),
@@ -2478,4 +2478,28 @@ MUTANTS += [
     ('ui/ui.c', 'UM_SEP, UM_CUT_IT, UM_COPY_IT, UM_COPY_PATH_IT, UM_PASTE_INTO,', 'UM_SEP, UM_CUT_IT, UM_COPY_IT, UM_PASTE_INTO,'),
     ('ui/ui.c', '"copy-path", { UK_COPY_PATH, 0 } }', '"copy-path", { UK_COPY, 0 } }'),
     ('ui/ui.c', '    { KS_CHANGE, "Copy Path", "Ctrl+Shift+C", "" },\n', ''),
+]
+# F13 step 1 review (2026-11-04): the sidebar's key, the empty space's entry, shell_quote
+MUTANTS += [
+    ('ui/handle.c', '        if (u->focus == UI_FOCUS_SIDE) return *out = (UiAction){ UA_COPY_PATH, u->side.sel, true }, u->side.n > 0;\n', '        if (u->focus == UI_FOCUS_SIDE) break;\n'),
+    ('ui/handle.c', '(UiAction){ UA_COPY_PATH, u->side.sel, true }, u->side.n > 0;', '(UiAction){ UA_COPY_PATH, u->side.sel, true }, true;'),
+    ('ui/handle.c', '(UiAction){ UA_COPY_PATH, u->side.sel, true }, u->side.n > 0;', '(UiAction){ UA_COPY_PATH, u->side.sel, false }, u->side.n > 0;'),
+    ('ui/menus.c', '    if (it == UM_COPY_PATH_HERE) return ui_view_allows(u->view, UA_COPY_PATH);\n', ''),
+    ('ui/menus.c', '    case UM_COPY_PATH_HERE: return (UiAction){ UA_COPY_PATH, -1, true };', '    case UM_COPY_PATH_HERE: return (UiAction){ UA_COPY_PATH, 0, true };'),
+    ('ui/menus.c', '    case UM_COPY_PATH_HERE: return true;', '    case UM_COPY_PATH_HERE: return u->list.n > 0;'),
+    ('ui/ui.c', 'UM_SEP, UM_PASTE, UM_COPY_PATH_HERE, UM_SELECT_ALL,', 'UM_SEP, UM_PASTE, UM_SELECT_ALL,'),
+    ('fs/paths.c', "    return c < 0x20 || c == 0x7f || (c == 0xc2", "    return c < 0x20 || (c == 0xc2"),
+    ('fs/paths.c', "    return c < 0x20 || c == 0x7f || (c == 0xc2 && i + 1 < s.len && (u8)s.p[i + 1] >= 0x80 && (u8)s.p[i + 1] <= 0x9f);", "    return c < 0x20 || c == 0x7f;"),
+    ('fs/paths.c', "(u8)s.p[i + 1] <= 0x9f);", "(u8)s.p[i + 1] <= 0xbf);"),
+    ('fs/paths.c', "strchr(\"/._-+,:@%=\", c)", "strchr(\"/._-+,:@%= \", c)"),
+    ('fs/paths.c', " || c >= 0x80;\n        if (!safe", ";\n        if (!safe"),
+    ('fs/paths.c', "        if (!safe || shell_ctrl(s, i)) plain = false;", "        if (!safe) plain = false;"),
+    ('fs/paths.c', "    bool plain = s.len > 0, ctrl = false;", "    bool plain = true, ctrl = false;"),
+    ('fs/paths.c', "            if (s.p[i] == '\\'') PUT(\"'\\\\''\");\n            else PUT", "            PUT"),
+    ('fs/paths.c', "            if (c == '\\n') PUT(\"\\\\n\");\n", ""),
+    ('fs/paths.c', "            else if (c == '\\\\' || c == '\\'') PUT(\"\\\\%c\", c);\n", ""),
+    ('fs/paths.c', "            else if (shell_ctrl(s, i) && c == 0xc2) {", "            else if (false) {"),
+    ('fs/paths.c', "                i++;\n            }", "            }"),
+    ('fs/paths.c', "            else if (shell_ctrl(s, i)) PUT(\"\\\\x%02x\", c);\n", ""),
+    ('fs/paths.c', "        if (k_ < 0 || k_ >= cap - n) return -1;", "        if (k_ < 0) return -1;"),
 ]

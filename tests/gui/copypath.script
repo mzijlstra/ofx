@@ -51,9 +51,22 @@ key alt-e
 point-menu copy-path
 click-here
 sh test "$(wl-paste -n)" = "$OFX_DIR"
-# The sidebar's keys: nothing (its rows' menus have it)
+# and by its empty space's menu
+sh printf x | wl-copy
+point-ui list
+right-here
+expect menu=here
+point-menu copy-path-here
+click-here
+expect menu=-
+sh test "$(wl-paste -n)" = "$OFX_DIR"
+# The sidebar's keys: its cursor's folder, as its menu (step 1 review); the Trash's none
 key tab
-expect sidefocus=1
+expect sidefocus=1 place=Home
+key ctrl-shift-c
+sh test "$(wl-paste -n)" = "$OFX_ROOT/home"
+key down
+expect place=Trash
 sh printf x | wl-copy
 key ctrl-shift-c
 sh test "$(wl-paste -n)" = x
@@ -87,4 +100,14 @@ sh printf x | wl-copy
 key ctrl-shift-c
 expect status=Copied the path
 sh test "$(wl-paste -n)" = "$OFX_ROOT/home/tree"
+# A name a shell must have quoted: in single quotes, read back by bash as the name
+key ctrl-w
+wait-for 2000 search=0 n=4
+sh touch "$OFX_DIR/it's here.txt"
+wait-for 3000 n=5
+key end
+expect idx=4
+key ctrl-shift-c
+sh test "$(wl-paste -n)" = "'$OFX_DIR/it'\''s here.txt'"
+sh test "$(bash -c "printf %s $(wl-paste -n)")" = "$OFX_DIR/it's here.txt"
 quit

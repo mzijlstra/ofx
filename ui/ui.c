@@ -252,7 +252,8 @@ typedef enum {
     UA_NOT_IN_SEARCH,   // something the search view can't do: paste, a new folder, a bookmark of it (F9; gui/ says so)
     UA_CONTAINING,  // index: a search result: its folder, it selected (F9)
     UA_OPEN_LINE,   // index: a search result found inside files: in the editor at its line (F9 step 4; gui/ says when it has none)
-    UA_COPY_PATH,   // the marked entries' paths (or the cursor's; none: the folder shown's) as text, one a line (F13)
+    UA_COPY_PATH,   // the marked entries' paths (or the cursor's; none: the folder shown's) as text, one a line (F13);
+                    // all: a folder's instead, index the sidebar row, -1 the folder shown
 } UiActionKind;
 // A right-click menu's entry on a folder of the files (F8) acts on that folder, not the folder
 // shown: UA_NEW_WINDOW, UA_TERMINAL, UA_PASTE and UA_ADD_BOOKMARK with `all` set; index is the entry.
@@ -284,7 +285,7 @@ typedef enum {
     UM_SHORTCUTS, UM_ABOUT, UM_PREFERENCES, UM_CLEAR_PREVIEWS,
     UM_OPEN_TAB, UM_EMPTY_TRASH, UM_HERE_PROPS, UM_OPEN_WINDOW, UM_PASTE_INTO, UM_TERMINAL_IN, UM_FOLLOW, UM_BOOKMARK_IT,
     UM_CONTAINING, UM_OPEN_LINE, UM_SEARCH_IN,
-    UM_OPEN_IT, UM_CUT_IT, UM_COPY_IT, UM_COPY_PATH_IT, UM_BM_RENAME_IT, UM_BM_UP_IT, UM_BM_DOWN_IT, UM_BM_REMOVE_IT, UM_BM_EDIT_IT, UM_EJECT_IT,
+    UM_OPEN_IT, UM_CUT_IT, UM_COPY_IT, UM_COPY_PATH_IT, UM_COPY_PATH_HERE, UM_BM_RENAME_IT, UM_BM_UP_IT, UM_BM_DOWN_IT, UM_BM_REMOVE_IT, UM_BM_EDIT_IT, UM_EJECT_IT,
     UM_UNMOUNT_IT, UM_MOUNT_IT, UM_EMPTY_IT, UM_PROPS_IT, UM_TAB_LEFT, UM_TAB_RIGHT, UM_TAB_OTHERS,
     UM_BR_NOTE, UM_BR_0, UM_BR_1, UM_BR_2, UM_BR_3, UM_BR_4, UM_BR_5, UM_BR_6, UM_BR_7, UM_BR_ALL,
     UM_ITEMS
@@ -398,6 +399,7 @@ static const struct { const char *label, *key, *word; UiEvent ev; char mark; } U
     [UM_CUT_IT] = { "Cut", "", "cut-it" },
     [UM_COPY_IT] = { "Copy", "", "copy-it" },
     [UM_COPY_PATH_IT] = { "Copy Path", "", "copy-path-it" },
+    [UM_COPY_PATH_HERE] = { "Copy Path", "", "copy-path-here" },   // (the files' empty space: the folder shown's)
     [UM_BM_RENAME_IT] = { "Rename\xE2\x80\xA6", "", "bm-rename" },
     [UM_BM_UP_IT] = { "Move Up", "", "bm-up" },
     [UM_BM_DOWN_IT] = { "Move Down", "", "bm-down" },
@@ -460,7 +462,7 @@ static const UiMenuItem UI_MENU_CTX_TAB[] = { UM_NEW_TAB, UM_TAB_REOPEN, UM_SEP,
 // The branch button's (F12 step 5b).
 static const UiMenuItem UI_MENU_CTX_BRANCH[] = { UM_BR_NOTE, UM_BR_0, UM_BR_1, UM_BR_2, UM_BR_3, UM_BR_4, UM_BR_5, UM_BR_6, UM_BR_7, UM_SEP, UM_BR_ALL };
 static const UiMenuItem UI_MENU_CTX_HERE[] = {
-    UM_NEW_FOLDER, UM_NEW_FILE, UM_EMPTY_TRASH, UM_SEP, UM_PASTE, UM_SELECT_ALL, UM_SEP, UM_TERMINAL, UM_HIDDEN, UM_SEP,
+    UM_NEW_FOLDER, UM_NEW_FILE, UM_EMPTY_TRASH, UM_SEP, UM_PASTE, UM_COPY_PATH_HERE, UM_SELECT_ALL, UM_SEP, UM_TERMINAL, UM_HIDDEN, UM_SEP,
     UM_ADD_BOOKMARK, UM_SEP, UM_HERE_PROPS,
 };
 

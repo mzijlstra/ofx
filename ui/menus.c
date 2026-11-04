@@ -25,6 +25,7 @@ static bool ui_menu_shown(const Ui *u, UiMenuItem it)
     if (it == UM_FOLLOW) return u->ctx_one && u->sel_link && u->view != UI_VIEW_TRASH;
     if (u->menu >= UI_MENUS && (it == UM_NEW_FOLDER || it == UM_NEW_FILE)) return u->view != UI_VIEW_TRASH;
     if (it == UM_EMPTY_TRASH) return ui_view_allows(u->view, UA_EMPTY_TRASH);
+    if (it == UM_COPY_PATH_HERE) return ui_view_allows(u->view, UA_COPY_PATH);
     return it == UM_TRASH ? u->view != UI_VIEW_TRASH : it == UM_RESTORE ? ui_view_allows(u->view, UA_RESTORE) : true;
 }
 
@@ -115,6 +116,7 @@ static bool ui_menu_enabled(const Ui *u, UiMenuItem it)
     case UM_CONTAINING: case UM_OPEN_LINE: return true;   // (on a result's menu only)
     case UM_PASTE_INTO: return files && u->can_paste && u->ctx_w;
     case UM_HERE_PROPS: return u->view != UI_VIEW_SEARCH;   // (a search is no folder)
+    case UM_COPY_PATH_HERE: return true;   // (the folder searched, in a search)
     default: return false;
     }
 }
@@ -255,6 +257,7 @@ static UiAction ui_menu_pick(Ui *u, UiMenuItem it)
     case UM_TAB_OTHERS: return (UiAction){ UA_TAB_OTHERS, 0, false };
     case UM_TAB_REOPEN: return (UiAction){ UA_TAB_REOPEN, 0, false };
     case UM_EMPTY_TRASH: return u->empty_asking = true, UI_NONE;
+    case UM_COPY_PATH_HERE: return (UiAction){ UA_COPY_PATH, -1, true };
     case UM_HERE_PROPS: return u->panel = UI_PANEL_PROPS, u->prop_at = 0, (UiAction){ UA_PROPS, UI_PROPS_HERE, false };
     case UM_OPEN_WINDOW: return (UiAction){ UA_NEW_WINDOW, u->list.sel, true };
     case UM_PASTE_INTO: return (UiAction){ UA_PASTE, u->list.sel, true };

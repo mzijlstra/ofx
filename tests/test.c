@@ -1858,6 +1858,7 @@ int main(void)
     if (fast) test_branch_panel();
     if (fast) test_file_read();
     if (fast) test_copy_path();
+    if (fast) test_shell_quote();
     if (slow) test_git_common_bare();
     if (slow) test_box_why();
     if (slow) test_box_outlive();
