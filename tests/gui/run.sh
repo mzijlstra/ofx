@@ -70,6 +70,9 @@ git_env() {   # in a scratch repository's subshell: git's own config files out o
 menu_tree() {   # <home>/tree for the menus' groups (f74, f8): sub/, a.txt (3 bytes), b.txt (10), c.txt (1), .hid
     mkdir -p "$1/tree/sub"; printf aaa > "$1/tree/a.txt"; printf 0123456789 > "$1/tree/b.txt"; printf c > "$1/tree/c.txt"; : > "$1/tree/.hid"
 }
+home_tree() {   # $base/<name> as T, emptied (made writable first: a run that failed may have left a read-only folder), H its home
+    T=$base/$1; [ ! -d "$T" ] || chmod -R u+rwx "$T"; rm -rf "$T"; H=$T/home
+}
 tree() {   # a fresh <T>/tree
     rm -rf "$1" && mkdir -p "$1/tree/adir" "$1/tree/bdir"
     touch "$1/tree/adir/inner.txt" "$1/tree/a.txt" "$1/tree/b2.txt" "$1/tree/.hidden"
@@ -107,14 +110,14 @@ head -c 8388608 /dev/urandom > "$T/tree/big.bin"
 rs f3 OFX_TEST_COPY_DELAY_MS=150 -- "$T/tree"
 fi
 if want f4; then
-T=$base/f4; rm -rf "$T"; H=$T/home; mkdir -p "$H/tree/adir" "$H/tree/bdir" "$T/data"
+home_tree f4; mkdir -p "$H/tree/adir" "$H/tree/bdir" "$T/data"
 RS_HOME=$H
 touch "$H/tree/adir/x" "$H/tree/adir/y" "$H/tree/adir/.h" "$H/tree/f.txt"
 L="$H/tree"; for i in 1 2 3 4 5 6 7 8; do L="$L/zz-a-rather-long-folder-name-$i"; done; mkdir -p "$L"
 rs f4 OFX_TEST_COUNT_DELAY_MS=50 -- "$H/tree"
 fi
 if want f5; then
-T=$base/f5; rm -rf "$T"; H=$T/home; mkdir -p "$H/tree/adir" "$H/tree/bdir" "$H/tree/cdir" "$H/tree/gone" "$T/data"
+home_tree f5; mkdir -p "$H/tree/adir" "$H/tree/bdir" "$H/tree/cdir" "$H/tree/gone" "$T/data"
 RS_HOME=$H
 touch "$H/tree/adir/a1" "$H/tree/adir/a2" "$H/tree/bdir/b1" "$H/tree/gone/g1"
 for i in $(seq -w 1 40); do touch "$H/tree/f$i"; done
@@ -122,7 +125,7 @@ head -c 8388608 /dev/urandom > "$H/tree/big.bin"
 rs f5 OFX_TEST_COPY_DELAY_MS=150 -- "$H/tree"
 fi
 if want f52; then
-T=$base/f52; rm -rf "$T"; H=$T/home; mkdir -p "$H/tree/adir" "$H/tree/bdir" "$T/data"
+home_tree f52; mkdir -p "$H/tree/adir" "$H/tree/bdir" "$T/data"
 RS_HOME=$H
 touch "$H/tree/adir/a1" "$H/tree/notes.txt" "$H/tree/.dot"
 head -c 4194304 /dev/urandom > "$H/tree/bdir/big.bin"
@@ -130,7 +133,7 @@ L="$H/tree"; for i in 1 2 3 4 5 6 7 8; do L="$L/zz-a-rather-long-folder-name-$i"
 rs f52 OFX_TEST_COPY_DELAY_MS=150 OFX_TEST_CROSS=1 -- "$H/tree"
 fi
 if want f53; then
-T=$base/f53; rm -rf "$T"; H=$T/home; mkdir -p "$H/tree/src" "$H/tree/src2" "$H/tree/adir" "$H/tree/bdir" "$H/tree/cdir" "$H/tree/ddir" "$H/tree/many" "$T/data"
+home_tree f53; mkdir -p "$H/tree/src" "$H/tree/src2" "$H/tree/adir" "$H/tree/bdir" "$H/tree/cdir" "$H/tree/ddir" "$H/tree/many" "$T/data"
 RS_HOME=$H
 echo d > "$H/tree/ddir/d.txt"
 head -c 8388608 /dev/urandom > "$H/tree/src/big1.bin"; head -c 8388608 /dev/urandom > "$H/tree/src2/big2.bin"
@@ -288,7 +291,7 @@ fi
 if want f7; then
 # F7.1: the menu bar. f7: home/tree with a.txt, b.txt, sub.d/, ro/ (read only); f7b: Close All Windows, a copy running.
 # HOME and the mount list are scratch: the trash view shows the scratch trash only, never a drive's.
-T=$base/f7; rm -rf "$T"; H=$T/home; mkdir -p "$H/tree/sub.d" "$H/tree/ro"; echo a > "$H/tree/a.txt"; echo b > "$H/tree/b.txt"
+home_tree f7; mkdir -p "$H/tree/sub.d" "$H/tree/ro"; echo a > "$H/tree/a.txt"; echo b > "$H/tree/b.txt"
 RS_HOME=$H
 echo x > "$H/tree/ro/x.txt"; chmod 555 "$H/tree/ro"
 # F7.1.1: text/plain's default app in the scratch config, its desktop file in the scratch data home.
@@ -323,7 +326,7 @@ if want f73; then
 # F7.3: Open With. HOME=<T>/home; home/tree: b.txt, notes.txt, e.txt (empty), pic.png, sub/. The
 # test's apps in the scratch data home (the system's are listed too: the script filters on
 # "ofx t"); their defaults in the scratch config. Launches reach the fake uwsm-app only.
-T=$base/f73; rm -rf "$T"; H=$T/home; mkdir -p "$H/tree/sub" "$T/config" "$T/data/applications"
+home_tree f73; mkdir -p "$H/tree/sub" "$T/config" "$T/data/applications"
 RS_HOME=$H
 echo b > "$H/tree/b.txt"; echo notes > "$H/tree/notes.txt"; : > "$H/tree/e.txt"; cp "$here/f64/wide.png" "$H/tree/pic.png"
 printf '[Default Applications]\ntext/plain=ofx-t-edit.desktop\nimage/png=ofx-t-view.desktop\n' > "$T/config/mimeapps.list"
@@ -352,7 +355,7 @@ fi
 if want f74; then
 # F7.4: the Edit, View and Go menus. HOME=<T>/home; home/tree: sub/, a.txt (3 bytes), b.txt (10),
 # c.txt (1), .hid; the mount list scratch, so the trash view shows the scratch trash only.
-T=$base/f74; rm -rf "$T"; H=$T/home
+home_tree f74
 RS_HOME=$H
 menu_tree "$H"
 rs f74 -- "$H/tree"
@@ -361,7 +364,7 @@ if want f75; then
 # F7.5: the Bookmarks menu. HOME=<T>/home; home/tree: a/, b/; the bookmarks file in the scratch
 # config (run-script points XDG_CONFIG_HOME there): home/tree/a labelled "Alpha", an sftp line ofx
 # keeps but doesn't list, home itself.
-T=$base/f75; rm -rf "$T"; H=$T/home; mkdir -p "$H/tree/a" "$H/tree/b" "$T/config/gtk-3.0"
+home_tree f75; mkdir -p "$H/tree/a" "$H/tree/b" "$T/config/gtk-3.0"
 RS_HOME=$H
 printf 'file://%s/tree/a Alpha\nsftp://host/x Server\nfile://%s\n' "$H" "$H" > "$T/config/gtk-3.0/bookmarks"
 rs f75 -- "$H/tree"
@@ -370,13 +373,13 @@ fi
 if want f8; then
 # F8: the right-click menus. The tree as f74's: home/tree: sub/, a.txt, b.txt, c.txt, .hid; the
 # scratch mount list (the trash view shows the scratch trash only).
-T=$base/f8; rm -rf "$T"; H=$T/home
+home_tree f8
 RS_HOME=$H
 menu_tree "$H"
 rs f8 -- "$H/tree"
 # F8 step 2: a folder's own entries, Make Link, Follow Link. home/tree: sub/inner.txt, a.txt, zlink ->
 # sub/inner.txt; the scratch config's gtk-3.0 for the bookmarks file.
-T=$base/f8b; rm -rf "$T"; H=$T/home; mkdir -p "$H/tree/sub" "$T/config/gtk-3.0"
+home_tree f8b; mkdir -p "$H/tree/sub" "$T/config/gtk-3.0"
 RS_HOME=$H
 printf aaa > "$H/tree/a.txt"; : > "$H/tree/sub/inner.txt"; ln -s sub/inner.txt "$H/tree/zlink"
 rs f8b -- "$H/tree"
@@ -387,7 +390,7 @@ echo "== f8e"; OFX_SCRIPT_SIZE=860x516 OFX_TEST_HOME="$E/home" "$here/../../tool
 rs f8d -- "$H/tree"
 # F8 step 3: a folder elsewhere's menu. home/tree: sub/, sub2/; the bookmarks file: home/tree/sub
 # labelled "Sub", then home/tree/sub2; the scratch trash there and empty.
-T=$base/f8c; rm -rf "$T"; H=$T/home; mkdir -p "$H/tree/sub" "$H/tree/sub2" "$T/config/gtk-3.0" "$T/data/Trash/files" "$T/data/Trash/info"
+home_tree f8c; mkdir -p "$H/tree/sub" "$H/tree/sub2" "$T/config/gtk-3.0" "$T/data/Trash/files" "$T/data/Trash/info"
 RS_HOME=$H
 printf 'file://%s/tree/sub Sub\nfile://%s/tree/sub2\n' "$H" "$H" > "$T/config/gtk-3.0/bookmarks"
 rs f8c -- "$H/tree"
@@ -396,7 +399,7 @@ if want f9; then
 # F9 step 1: the search view. home/tree: names at three depths, two index.ts, a hidden folder and
 # file, .git and node_modules (left out), a link to a folder (not followed), a link to a file,
 # a file 262 bytes below, and zz/ with 10,001 files (the limit).
-T=$base/f9; rm -rf "$T"; H=$T/home; mkdir -p "$T/config/gtk-3.0" "$H/tree/src/deep" "$H/tree/.hid" "$H/tree/.git" "$H/tree/node_modules" "$H/tree/docs" "$H/tree/zz"
+home_tree f9; mkdir -p "$T/config/gtk-3.0" "$H/tree/src/deep" "$H/tree/.hid" "$H/tree/.git" "$H/tree/node_modules" "$H/tree/docs" "$H/tree/zz"
 RS_HOME=$H
 touch "$H/tree/a.ts" "$H/tree/b.txt" "$H/tree/src/c.ts" "$H/tree/src/index.ts" "$H/tree/src/deep/index.ts" "$H/tree/src/deep/d.TS" \
       "$H/tree/.hid/e.ts" "$H/tree/.f.ts" "$H/tree/.git/g.ts" "$H/tree/node_modules/h.ts" "$H/tree/docs/notes.txt"
@@ -408,7 +411,7 @@ L="$H/tree/long/$(printf 'x%.0s' $(seq 250))"; mkdir -p "$L"; printf x > "$L/m2.
 rs f9 -- "$H/tree"
 # F9 step 3: inside files. "my tree" (a space in every path, for Open at Line's words): two .ts files and a .js with useState, a binary with it, a 17 MB
 # file, a link to a file, and a file without it.
-T=$base/f9b; rm -rf "$T"; H=$T/home; mkdir -p "$T/config/gtk-3.0" "$H/my tree/src" "$H/my tree/docs"
+home_tree f9b; mkdir -p "$T/config/gtk-3.0" "$H/my tree/src" "$H/my tree/docs"
 RS_HOME=$H
 printf 'import x\nconst [a, b] = useState(0)\n  useState again\n' > "$H/my tree/src/app.ts"
 printf 'useState here\n' > "$H/my tree/src/other.js"; printf 'const USESTATE = 1\n' > "$H/my tree/src/Upper.ts"
@@ -422,7 +425,7 @@ if want clip; then
 T=$base/clip; tree "$T"; rm -f "$T/tree/.hidden" "$T/tree/b2.txt" "$T/tree/b10.txt"; touch "$T/tree/b.txt"
 rs clip RUN_SCRIPT_LIMIT=30 OFX_COMPOSITOR=sway -- "$T/tree"
 # Copy Path (F13), read back as clip's text is: home/tree: adir/, empty/, a.txt, b.txt.
-T=$base/copypath; rm -rf "$T"; H=$T/home; mkdir -p "$H/tree/adir" "$H/tree/empty"; touch "$H/tree/a.txt" "$H/tree/b.txt"
+home_tree copypath; mkdir -p "$H/tree/adir" "$H/tree/empty"; touch "$H/tree/a.txt" "$H/tree/b.txt"
 RS_HOME=$H
 rs copypath RUN_SCRIPT_LIMIT=30 OFX_COMPOSITOR=sway -- "$H/tree"
 fi
@@ -479,11 +482,11 @@ rs f12b OFX_TEST_THUMB_RUN_MS=500 OFX_TEST_THUMBNAILERS="$T/thumbnailers" -- "$T
 fi
 if want f13; then
 # F13 step 2: the sidebar's width (f13 drags it; f13b to f13d start from a remembered one).
-T=$base/f13; rm -rf "$T"; H=$T/home; mkdir -p "$H/tree/adir"; for k in 1 2 3 4 5 6 7 8; do : > "$H/tree/f$k.txt"; done
+home_tree f13; mkdir -p "$H/tree/adir"; for k in 1 2 3 4 5 6 7 8; do : > "$H/tree/f$k.txt"; done
 RS_HOME=$H
 rs f13 -- "$H/tree"
 side_state() {   # <name> <sidewidth>: $base/<name> with a state file holding it (f13b to f13d)
-    T=$base/$1; rm -rf "$T"; H=$T/home; mkdir -p "$H/tree" "$T/state/ofx"; printf 'sidewidth=%s\n' "$2" > "$T/state/ofx/state"; RS_HOME=$H
+    home_tree "$1"; mkdir -p "$H/tree" "$T/state/ofx"; printf 'sidewidth=%s\n' "$2" > "$T/state/ofx/state"; RS_HOME=$H
 }
 # (each rs by name, so tools/mutation/gui.py finds its group; a narrower window: half of it is 350)
 side_state f13b 300; rs f13b OFX_SCRIPT_SIZE=700x516 -- "$H/tree"
@@ -491,17 +494,17 @@ side_state f13c 9999; rs f13c OFX_SCRIPT_SIZE=700x516 -- "$H/tree"
 side_state f13d abc; rs f13d -- "$H/tree"
 # F13 step 3: drag and drop. home/tree: adir/, bdir/, ro/ (read only), a.txt, b.txt, c.txt; bdir
 # bookmarked.
-T=$base/f13e; rm -rf "$T"; H=$T/home; mkdir -p "$H/tree/adir" "$H/tree/bdir" "$H/tree/ro" "$T/config/gtk-3.0"
+home_tree f13e; mkdir -p "$H/tree/adir" "$H/tree/bdir" "$H/tree/ro" "$T/config/gtk-3.0"
 for f in a b c; do printf %s "$f" > "$H/tree/$f.txt"; done; chmod 555 "$H/tree/ro"
 printf 'file://%s/tree/bdir\n' "$H" > "$T/config/gtk-3.0/bookmarks"
 RS_HOME=$H
 rs f13e -- "$H/tree"
 chmod 755 "$H/tree/ro"
-T=$base/f13f; rm -rf "$T"; H=$T/home; mkdir -p "$H/tree/adir" "$H/tree/bdir"; ln -s adir "$H/tree/alink"
+home_tree f13f; mkdir -p "$H/tree/adir" "$H/tree/bdir"; ln -s adir "$H/tree/alink"
 RS_HOME=$H
 rs f13f -- "$H/tree"
 # F13 step 4: spring-loaded tabs. home/tree: adir/deep/, a.txt, b.txt.
-T=$base/f13g; rm -rf "$T"; H=$T/home; mkdir -p "$H/tree/adir/deep"; : > "$H/tree/a.txt"; : > "$H/tree/b.txt"
+home_tree f13g; mkdir -p "$H/tree/adir/deep"; : > "$H/tree/a.txt"; : > "$H/tree/b.txt"
 RS_HOME=$H
 rs f13g -- "$H/tree"
 fi
