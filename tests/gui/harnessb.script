@@ -1,0 +1,4 @@
+# The harness itself: `quits` fails when the command after it leaves the window open.
+settle
+quits 5
+key down

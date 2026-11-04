@@ -1,0 +1,7 @@
+# The harness itself (2026-11-04): a window that quits with commands left fails the run (run.sh
+# checks the line and the exit code), comments and blank lines don't count.
+settle
+key ctrl-q
+# (left on purpose: the next line is never reached)
+
+expect n=0

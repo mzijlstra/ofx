@@ -939,6 +939,11 @@ MUTANTS = [
     ('gui/actions.c', '    if (marks) ui_mark_clear(&app.ui);\n    trash_state();', '    ui_mark_clear(&app.ui);\n    trash_state();', 'f13'),
     ('gui/input.c', '    app.side_px = w, app.drag_moved = true;', '    app.side_px = w;', 'f13'),
     ('gui/actions.c', '    snprintf(app.text_copied, sizeof app.text_copied, "%.*s", STR_ARG(t));\n    if (!clip_set_text(t))', '    snprintf(app.text_copied, sizeof app.text_copied, "%.*s", STR_ARG(t));\n    if (true)', 'clip'),
+    # The script runner's early-quit checks (2026-11-04): the harness group runs scripts that must fail
+    ('gui/script.c', "        if (line.len && line.p[0] != '#') script.expects++", "        if (false) script.expects++", 'harness'),
+    ('gui/script.c', "        if (line.len && line.p[0] != '#') script.expects++", "        if (line.len) script.expects++", 'harness'),
+    ('gui/script.c', '    if (script.quits_ran && script.quits-- > 0) return true;\n    if (script.quits_ran) {', '    if (script.quits_ran && script.quits-- > 0) return true;\n    if (false) {', 'harness'),
+    ('gui/script.c', '        if (script.quits && !str_eq(cmd, S("quits"))) script.quits_ran = true;', '        if (script.quits) script.quits_ran = true;', 'harness'),
 ]
 import concurrent.futures, queue, threading, time
 

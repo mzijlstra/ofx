@@ -79,6 +79,9 @@
 //   wait-for <ms> <word>... frames until every word is in the state line (a reload comes in its
 //                           own time); an expectation, failed when <ms> pass
 //   quit
+//   quits <frames>          the next command must make the window quit within that many frames
+//                           (the last tab's Ctrl+W); what follows it is never run. Without it, a
+//                           window that quits with commands left fails the run
 
 #include <spawn.h>
 #include <sys/wait.h>
@@ -97,6 +100,8 @@ static struct {
     float px, py;        // the last point-ui
     bool  pointing;      // the pointer rests there (hover-here), until pointer-off
     bool  held;          // the left button down (press-here), until release (F13)
+    int   quits;         // frames left for the window to quit in, after the command after `quits`
+    bool  quits_ran;     // that command ran
     Str   typing;        // what is left of a `type` longer than a frame's events
     bool  user_keys;     // the keyboard's keys and characters reach the window (`user-keys`)
 } script;
@@ -688,12 +693,20 @@ static void script_after_draw(void)
 }
 
 // The script's last line, once: at its end, or when the window quits under it (the last tab's
-// Ctrl+W).
+// Ctrl+W). A window that quits with a command left, or a wait-for waiting, fails the run: what it
+// never reached would otherwise pass unseen (a Close All that quit where f7b expects it to ask,
+// 2026-11-04).
 static void script_end(void)
 {
     static bool done;
     if (done) return;
     done = true;
+    if (script.waiting_for[0]) script_fail("the window quit during a wait-for, before the script's end");
+    Str line;
+    for (int n = script.line; !script.quits_ran && !script.failed && next_line(script.text, &script.at, &line);) {
+        line = str_trim(line), n++;
+        if (line.len && line.p[0] != '#') script.expects++, script_fail("the window quit before line %d, the script's end not reached", n);
+    }
     printf("script: %d of %d expectations failed\n", script.failed, script.expects);
     fflush(stdout);
 }
@@ -739,6 +752,12 @@ static bool script_input(UiInput *in)
         }
         if (now_ms() < script.until) return true;
         script.until = 0;
+    }
+    if (script.quits_ran && script.quits-- > 0) return true;
+    if (script.quits_ran) {
+        script_fail("the window didn't quit");
+        script_end();
+        return false;
     }
     Str line;
     while (next_line(script.text, &script.at, &line)) {
@@ -922,11 +941,16 @@ static bool script_input(UiInput *in)
             script.expects++;
             script.until = now_ms() + atoi(a);
             snprintf(script.waiting_for, sizeof script.waiting_for, "%.*s", STR_ARG(str_cut(arg, s2 + 1, arg.len)));
+        } else if (str_eq(cmd, S("quits"))) {
+            script.expects++;
+            script.quits = atoi(a);
         } else if (str_eq(cmd, S("quit"))) {
+            script.at = script.text.len;   // what follows it is left on purpose
             break;
         } else {
             script_fail("unknown command %.*s", STR_ARG(cmd));
         }
+        if (script.quits && !str_eq(cmd, S("quits"))) script.quits_ran = true;
         fflush(stdout);
         return true;
     }

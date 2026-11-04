@@ -1,0 +1,5 @@
+# The harness itself: a quit with only comments and blank lines left passes.
+settle
+key ctrl-q
+# nothing left
+

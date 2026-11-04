@@ -194,6 +194,7 @@
 3bb5c0ed1863 f12g
 3bc9432bdbed f10
 3c0ee7bb9512 usb
+3c7b81fd5d7e harness
 3c7f15bee1e9 f11
 3d683185bb73 f13
 3e2b6b634051 f12h
@@ -246,6 +247,7 @@
 4a10fff7981d f75
 4a731c6e45d2 f12h
 4b3d9af4d1b4 keys
+4b4c5addaff0 harness
 4baaaa0fd604 f13
 4bddaefe644f f9
 4c22abae9b0a f13
@@ -451,6 +453,7 @@
 939d175a44eb f4
 9406d94ab6c4 f11
 9451973412d5 f7
+94f4c5e302bb f7
 94fccf7d9ed6 clip
 95c67d1e960a f62
 96d5a2c94a04 usb
@@ -607,6 +610,7 @@ cdb03015cf7d f11
 cde15b55d105 usb
 cdf1accdaba1 f3
 ce21a81202e0 f12h
+cfd113ab8348 harness
 d04a03e882f1 f5
 d0f29de3617d f9
 d1fe8c38f917 f3
@@ -729,6 +733,7 @@ f562e11d3347 f9
 f57586d498e1 f4
 f58db6b29036 f6
 f5afcace2147 f52
+f602165d8147 f5
 f6854dbce6d5 f12i
 f6cea0c4bd62 f8
 f70bd2c9109d f72

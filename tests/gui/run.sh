@@ -6,7 +6,7 @@
 # printed whole, in order, once all are done; clip and keys share one (each starts a sway, which
 # takes the first free wayland-N).
 # The groups (one or more scripts on one tree): browse big gone watchgap f2 f3 f4 f5 f52 f53 f54
-# f6 (f6, f6b) usb f62 (f62, f62b, f62c) f63 (f63, f63b, f63c) f64 (f64, f64b, f64c, f64d) f7 (f7, f7b) f72 f73 (f73, f73b, f73c, f73d) f74 f75 (f75, f75b) f8 (f8, f8b, f8c, f8d, f8e) f9 (f9, f9b) f10 (f10, f10b, f10c, f10d) f11 (f11, f11b, f11c, f11d, f11e, f11f, f11g, f11h, f11i, f11j, f11k, f11l, f11m, f11n, f11o, f11p, f11q, f11r, f11s) f12 (f12, f12b) f12g f12h f12i f13 (f13, f13b, f13c, f13d, f13e, f13f, f13g) clip (clip, copypath) keys (both in sway) hang guard3 guard. Named ones only, or all of them; a group
+# f6 (f6, f6b) usb f62 (f62, f62b, f62c) f63 (f63, f63b, f63c) f64 (f64, f64b, f64c, f64d) f7 (f7, f7b) f72 f73 (f73, f73b, f73c, f73d) f74 f75 (f75, f75b) f8 (f8, f8b, f8c, f8d, f8e) f9 (f9, f9b) f10 (f10, f10b, f10c, f10d) f11 (f11, f11b, f11c, f11d, f11e, f11f, f11g, f11h, f11i, f11j, f11k, f11l, f11m, f11n, f11o, f11p, f11q, f11r, f11s) f12 (f12, f12b) f12g f12h f12i f13 (f13, f13b, f13c, f13d, f13e, f13f, f13g) clip (clip, copypath) keys (both in sway) hang guard3 guard harness (harness, harnessb, harnessc). Named ones only, or all of them; a group
 # that fails says "== <script>: FAILED" or "<group>: FAILED" (tools/mutation/gui.py reads it).
 set -u
 par=1
@@ -595,5 +595,20 @@ if grep -q "sh refused: .* is not under OFX_GUI_ROOT" "$T/run.out" && [ ! -e "$T
 else
     cat "$T/run.out"; echo "guard: FAILED"; fail=1
 fi
+fi
+if want harness; then
+# The script runner's own checks (2026-11-04): a window that quits with commands left fails, and so
+# does a `quits` whose command leaves it open; a quit with only comments left passes. Without the
+# first, a mutant that quit where f7b expects a question passed.
+T=$base/harness; rm -rf "$T"; mkdir -p "$T/tree"
+echo "== harness"
+h() {   # <script> <rc> <line the output must hold>
+    "$here/../../tools/gui/run-script.sh" "$T" "$here/$1.script" "$bin" "$T/tree" > "$T/$1.out" 2>&1
+    rc=$?
+    if [ "$rc" != "$2" ] || ! grep -q "$3" "$T/$1.out"; then cat "$T/$1.out"; echo "harness: FAILED ($1: rc $rc)"; fail=1; fi
+}
+h harness 1 "the window quit before line 7, the script's end not reached"
+h harnessb 1 "the window didn't quit"
+h harnessc 0 "script: 0 of 0 expectations failed"
 fi
 exit $fail

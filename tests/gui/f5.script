@@ -173,6 +173,5 @@ key ctrl-w
 key ctrl-w
 key ctrl-w
 expect tabs=1
+quits 5
 key ctrl-w
-wait 5
-expect never-reached
