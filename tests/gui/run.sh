@@ -482,11 +482,13 @@ if want f13; then
 T=$base/f13; rm -rf "$T"; H=$T/home; mkdir -p "$H/tree/adir"; for k in 1 2 3 4 5 6 7 8; do : > "$H/tree/f$k.txt"; done
 RS_HOME=$H
 rs f13 -- "$H/tree"
-for w in 300:f13b 9999:f13c abc:f13d; do
-    T=$base/${w#*:}; rm -rf "$T"; H=$T/home; mkdir -p "$H/tree" "$T/state/ofx"; printf 'sidewidth=%s\n' "${w%%:*}" > "$T/state/ofx/state"
-    RS_HOME=$H
-    rs "${w#*:}" OFX_SCRIPT_SIZE=700x516 -- "$H/tree"   # (a narrower window: half of it is 350)
-done
+side_state() {   # <name> <sidewidth>: $base/<name> with a state file holding it (f13b to f13d)
+    T=$base/$1; rm -rf "$T"; H=$T/home; mkdir -p "$H/tree" "$T/state/ofx"; printf 'sidewidth=%s\n' "$2" > "$T/state/ofx/state"; RS_HOME=$H
+}
+# (each rs by name, so tools/mutation/gui.py finds its group; a narrower window: half of it is 350)
+side_state f13b 300; rs f13b OFX_SCRIPT_SIZE=700x516 -- "$H/tree"
+side_state f13c 9999; rs f13c OFX_SCRIPT_SIZE=700x516 -- "$H/tree"
+side_state f13d abc; rs f13d -- "$H/tree"
 # F13 step 3: drag and drop. home/tree: adir/, bdir/, ro/ (read only), a.txt, b.txt, c.txt; bdir
 # bookmarked.
 T=$base/f13e; rm -rf "$T"; H=$T/home; mkdir -p "$H/tree/adir" "$H/tree/bdir" "$H/tree/ro" "$T/config/gtk-3.0"

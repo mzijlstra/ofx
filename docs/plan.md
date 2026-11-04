@@ -23,17 +23,17 @@ Omarchy's theme: the binary, the folder `tools/ofx`, the window's title and Wayl
 
 ## Open items (read before starting a milestone)
 
-- **Two GUI tests flake under load (Michael, 2026-11-03: to look at, not forget).** Each passed on
-  every rerun alone and on most full runs; each failed only with the machine loaded (`-j 6`,
-  reviewer-2 measured load ~8-18):
-  - **f8c, line 46:** `point-menu: no bm-remove in the menu open`, then the `wait-for sides=…` after
-    it. Seen twice: reviewer-2's health-1 run, and the hover-fix suite run (2026-11-03).
-  - **f12g:** once, in reviewer-2's step 6 `-j 6` run; its log was removed before anyone read it.
-    reviewer-2's guess is its timing lines (OFX_TEST_GIT_GAP_MS and the put-off ask).
-
-  Probably the same class as the five load flakes fixed in F12 (a fixed wait shorter than the
-  loaded window takes). Next time either fails, keep the run's log (`<scratch>.out` and the group's
-  folder) before anything else.
+- **Two GUI tests flaked under load (Michael, 2026-11-03: to look at, not forget). Both fixed
+  in F13's code-health step B (2026-11-04); if either fails again, reopen this.**
+  - **f12g** (failed again 2026-11-04, log in `a review log`):
+    a test timing bug. The test's 3 s gap between git asks (`OFX_TEST_GIT_GAP_MS`) put the ask
+    after a commit off until 3 s after the last one, and the `wait-for 3000` that waited for it
+    passed only by the commit's own time. Lines 23 and 37 wait 6 s now, as line 67 already did.
+  - **f8c, line 46** (`point-menu: no bm-remove in the menu open`): a real bug. The echo of ofx's
+    own bookmarks write reloaded the places, and `places_reload` closed any open folder menu even
+    when nothing changed, so a menu opened just before the echo was gone. Now it closes only when
+    its row holds another place. f8c checks a rewrite that leaves the file as it was keeps the menu.
+    Not seen failing since, so this one is the likely cause, not a proven one.
 
 ## Milestones
 

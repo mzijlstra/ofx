@@ -1695,7 +1695,7 @@ MUTANTS += [
     ('fs/paths.c', "return strncmp(path, dir, n) == 0 && path[n] == '/' && path[n + 1];", "return strncmp(path, dir, n) == 0 && path[n] == '/';"),
     ('fs/paths.c', "return strncmp(path, dir, n) == 0 && path[n] == '/' && path[n + 1];", 'return strncmp(path, dir, n) == 0 && path[n + 1];'),
     ('fs/paths.c', 'dir, strcmp(dir, "/") == 0 ? "" : "/", STR_ARG(name));', 'dir, "/", STR_ARG(name));'),
-    ('fs/paths.c', "    return n >= 0 && (size_t)n < cap;\n}\n\n// The length of the valid", "    return n >= 0;\n}\n\n// The length of the valid"),
+    ('fs/paths.c', "STR_ARG(name));\n    return n >= 0 && (size_t)n < cap;", "STR_ARG(name));\n    return n >= 0;"),
     ('fs/paths.c', '    return n >= 0 && (size_t)n < cap;\n}\n\n// An XDG', '    return n >= 0;\n}\n\n// An XDG'),
     ('fs/paths.c', 'STR_ARG(d.len ? d : S("/")));\n    return n', 'STR_ARG(d));\n    return n'),
     ('fs/paths.c', '    if (x && x[0] == \'/\') n = snprintf(out, cap, "%s/%s", x, sub);', '    if (x && x[0]) n = snprintf(out, cap, "%s/%s", x, sub);'),

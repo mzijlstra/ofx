@@ -174,6 +174,8 @@ static char *state_word(char *out, size_t cap, Str s)
     return out;
 }
 
+static void script_fail(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
+
 static void script_state(char *out, size_t cap)
 {
     const char *icon = "-";
@@ -498,7 +500,9 @@ static void script_state(char *out, size_t cap)
         if (c >= 0) snprintf(cnt, sizeof cnt, "%td", c);
         else if (c == -1) snprintf(cnt, sizeof cnt, "?");
     }
-    snprintf(out, cap,
+    static const char *const DRAG_WORDS[] = { "-", "zoom", "side", "press", "files" };
+    _Static_assert(sizeof DRAG_WORDS / sizeof DRAG_WORDS[0] == DRAG_FILES + 1, "a word for each DRAG_*");
+    int len = snprintf(out, cap,
              "dir=%s n=%td hidden=%td sel=%.*s idx=%td top=%td rows=%d hover=%d accent=#%02x%02x%02x bg=#%02x%02x%02x "
              "icons=%s scale=%d w=%d h=%d reloads=%d themes=%d batches=%d frame_ms_max=%.1f icon=%s "
              "shown=%d sort=%s rev=%d finding=%d findkeys=%d miss=%d find=%.*s last=%.*s side=%td sidefocus=%d place=%s here=%s "
@@ -552,7 +556,9 @@ static void script_state(char *out, size_t cap)
              app.ui.find.anchor < app.ui.find.caret ? app.ui.find.anchor : app.ui.find.caret,
              app.ui.find.anchor < app.ui.find.caret ? app.ui.find.caret : app.ui.find.anchor, app.ui.find.caret, seldir, searchinfo,
              app.ui.search_inside, app.ui.focus == UI_FOCUS_INSIDE, insidetext, insideopts, app.search_im.bad,
-             (int)Clay_GetElementData(CLAY_ID("inside-field")).found, hit, hitmatch, hitdrawn, VIEWS[app.ui.view].date_col, date_w(), ow_idb_reads, confw, app.conf.bad, seldate, app.trash_full, trashicon, spawn_started, closing_all, closed_tabs.n, app.empty_n, app.ui.shift_add ? "add" : "range", clear.counted ? (long long)clear.sum.files : -1LL, clear.running, git_shown() != NULL, GIT_WORDS[app.have_list && app.list.n ? entry_git(app.ui.list.sel) : GS_NONE], git_shown() ? git_shown()->g.changed : (isize)0, gitnamecol, gitcells, infogit, git.due != 0, branch, app.ui.br_n, app.ui.br_here, brnote, brlist, brfits, brunder, atomic_load(&watch.git_wd) >= 0, app.ui.br_total, app.ui.panel == UI_PANEL_BRANCHES, app.ui.brp.list.n, brpsel, brptext, app.ui.brp.in_list, side_w(), Clay_GetElementData(CLAY_ID("side")).boundingBox.width, app.side_px, (const char *[]){ "-", "zoom", "side", "press", "files" }[app.drag], edge_lit && side_w(), cursor_now == MOUSE_CURSOR_RESIZE_EW, app.drag == DRAG_FILES ? dragged.n : (isize)0, dragname, dropw, app.drop.ok, dropop, dropdir, drop_marked, badge, app.spring_tab, spring_fill < 0 ? -1 : (int)(spring_fill * 100), badge_drawn && badge_in(), app.status[0] && app.status_bad, app.status[0] ? app.status : "-");
+             (int)Clay_GetElementData(CLAY_ID("inside-field")).found, hit, hitmatch, hitdrawn, VIEWS[app.ui.view].date_col, date_w(), ow_idb_reads, confw, app.conf.bad, seldate, app.trash_full, trashicon, spawn_started, closing_all, closed_tabs.n, app.empty_n, app.ui.shift_add ? "add" : "range", clear.counted ? (long long)clear.sum.files : -1LL, clear.running, git_shown() != NULL, GIT_WORDS[app.have_list && app.list.n ? entry_git(app.ui.list.sel) : GS_NONE], git_shown() ? git_shown()->g.changed : (isize)0, gitnamecol, gitcells, infogit, git.due != 0, branch, app.ui.br_n, app.ui.br_here, brnote, brlist, brfits, brunder, atomic_load(&watch.git_wd) >= 0, app.ui.br_total, app.ui.panel == UI_PANEL_BRANCHES, app.ui.brp.list.n, brpsel, brptext, app.ui.brp.in_list, side_w(), Clay_GetElementData(CLAY_ID("side")).boundingBox.width, app.side_px, DRAG_WORDS[app.drag], edge_lit && side_w(), cursor_now == MOUSE_CURSOR_RESIZE_EW, app.drag == DRAG_FILES ? dragged.n : (isize)0, dragname, dropw, app.drop.ok, dropop, dropdir, drop_marked, badge, app.spring_tab, spring_fill < 0 ? -1 : (int)(spring_fill * 100), badge_drawn && badge_in(), app.status[0] && app.status_bad, app.status[0] ? app.status : "-");
+    // (cut short, its last words, status= among them, would fail an expect that is right: F13 code-health review)
+    if (len < 0 || (size_t)len >= cap) script_fail("the state line is %d bytes, more than its %zu", len, cap);
     frame_us_max = 0;
 }
 

@@ -22,6 +22,15 @@ sh sed -i "1i file://$OFX_DIR New" "$OFX_ROOT/config/gtk-3.0/bookmarks"
 wait-for 3000 bmn=3 menu=-
 sh sed -i 1d "$OFX_ROOT/config/gtk-3.0/bookmarks"
 wait-for 3000 bmn=2
+# The file written again as it was (as ofx's own write echoes back): the menu stays (F13 code-health
+# review, 2026-11-04: this echo closed menus, f8c's flake)
+point-ui side-row 3
+right-here
+expect menu=folder
+sh cp "$OFX_ROOT/config/gtk-3.0/bookmarks" "$OFX_ROOT/b.tmp" && mv "$OFX_ROOT/b.tmp" "$OFX_ROOT/config/gtk-3.0/bookmarks"
+sleep 600
+expect menu=folder bmn=2
+key esc
 point-ui side-row 2
 right-here
 # Move Down: the file's order changes, the places follow

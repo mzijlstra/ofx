@@ -19,7 +19,8 @@ expect infogit=3_changed
 shot git-list.png
 # A change in the folder: asked again with its listing.
 sh printf 'k2\n' > "$OFX_DIR/kept.txt"
-wait-for 3000 gitn=4
+# (6 s: the test's 3 s gap, as below)
+wait-for 6000 gitn=4
 key up
 expect sel=kept.txt gitsel=modified
 # Changes in a row: asked again at most once a second, the rest put off (and the last still asked).
@@ -32,7 +33,8 @@ expect idlewoke=timer
 wait-for 5000 gitn=3
 # A commit from elsewhere: its index changes, asked again (the folder's files didn't change).
 sh cd "$OFX_DIR" && GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null git -c user.name=t -c user.email=t@t commit -qam two
-wait-for 3000 gitn=1 gitsel=- gitcells=1
+# (6 s: the ask for it waits out the test's 3 s gap since the last one; F13 code-health review)
+wait-for 6000 gitn=1 gitsel=- gitcells=1
 # Into an ignored folder: all of it ignored (git names the folder only).
 key home
 key enter

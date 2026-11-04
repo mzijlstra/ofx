@@ -386,9 +386,14 @@ static void drive_gone_check(char (*was)[PATH_MAX], int nwas)
 static void places_reload(void)
 {
     // A folder menu open on a place was resolved against these places (ctx_facts: its row, its
-    // bookmark line); read again, they may be another's, so it closes (F8 review, 2026-10-27: Nemo
-    // adding a bookmark above made Remove take the wrong line).
-    if (app.ui.menu_on && app.ui.menu == UI_CTX_FOLDER && app.ui.ctx_crumb < 0) app.ui.menu_on = false;
+    // bookmark line); read again, its row may be another's, and then it closes (F8 review,
+    // 2026-10-27: Nemo adding a bookmark above made Remove take the wrong line). The same place on
+    // the same line keeps it: the echo of ofx's own bookmarks write closed a menu just opened
+    // (f8c's flake, F13 code-health review, 2026-11-04).
+    static Place menu_pl;   // (static: a Place holds its path)
+    int menu_row = app.ui.menu_on && app.ui.menu == UI_CTX_FOLDER && app.ui.ctx_crumb < 0 && app.ui.side_mode == SIDE_PLACES ? app.ui.ctx_side : -1;
+    if (menu_row >= app.places.n) menu_row = -1;
+    if (menu_row >= 0) menu_pl = app.places.p[menu_row];
     Place keep = { .kind = PL_HEAD };   // in the tree mode the cursor is a tree row's: none kept
     if (app.ui.side_mode == SIDE_PLACES && app.ui.side.sel < app.places.n) keep = app.places.p[app.ui.side.sel];
     // The drives (not /), to see which are still there after.
@@ -419,6 +424,12 @@ static void places_reload(void)
         int at = bm_keep >= 0 ? bm_locate(&bmarks, &prev, bm_keep) : -1;
         if (at < 0) at = (int)app.ui.bmp_list.sel;
         ui_set(&app.ui.bmp_list, bmarks.n, at >= bmarks.n ? bmarks.n - 1 : at);
+    }
+    if (menu_row >= 0) {
+        const Place *now = menu_row < app.places.n ? &app.places.p[menu_row] : NULL;
+        bool same = now && now->kind == menu_pl.kind && strcmp(now->path, menu_pl.path) == 0 &&
+                    (now->kind != PL_BOOKMARK || bm_find(&bmarks, now->path) == app.ui.ctx_bmk);
+        if (!same) app.ui.menu_on = false;
     }
     space_ask(&app.places, app.cwd);
     isize sel = 0;

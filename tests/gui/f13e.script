@@ -65,8 +65,7 @@ point-ui list
 move-here
 expect drop=list:-1 dropok=1 dropop=move dropdir=tree
 release
-wait 10
-expect status=Already here
+wait-for 2000 status=Already here
 # ---- The marks: a press on a marked entry carries them all, onto the Trash (trashed, Ctrl+Z
 # back); a press on an unmarked one carries it alone, the marks kept
 press 3 ctrl

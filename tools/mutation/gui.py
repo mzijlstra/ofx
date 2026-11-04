@@ -452,7 +452,8 @@ MUTANTS = [
     ('gui/actions.c', '            if (i != tabbar.cur) tab_close(i);', '            if (i != 0) tab_close(i);', 'f8'),
     # ---- F8 review: a folder menu closes when the places are read again; Paste Into greyed when
     # its folder takes no new files (f8c sees it open on one that does; ui/'s test sees it greyed)
-    ('gui/folder.c', '    if (app.ui.menu_on && app.ui.menu == UI_CTX_FOLDER && app.ui.ctx_crumb < 0) app.ui.menu_on = false;', '', 'f8'),
+    ('gui/folder.c', '        if (!same) app.ui.menu_on = false;\n', '', 'f8'),
+    ('gui/folder.c', '        bool same = now && now->kind == menu_pl.kind', '        bool same = false && now->kind == menu_pl.kind', 'f8'),
     ('gui/input.c', '    u->ctx_w = app.ctx_path[0] && access(app.ctx_path, W_OK) == 0;', '    u->ctx_w = false;', 'f8'),
     ('gui/main.c', '        app.ui.ctx_w = app.ui.ctx_dir && app.ui.list.sel < app.list.n && entry_path(app.ui.list.sel, e, sizeof e) && access(e, W_OK) == 0;', '        app.ui.ctx_w = false;', 'f8'),
     # ---- the list's Owner, Group, Permissions and links' targets (2026-10-27). Not run: the cells
@@ -1004,7 +1005,12 @@ def group_of(text):
     out = {}
     for g, body in zip(parts[1::2], parts[2::2]):
         loops = dict(re.findall(r'for (\w+) in ([^;]+); do', body))
-        for name, var in re.findall(r'^\s*rs ([a-z0-9]+)()', body, flags=re.M) + re.findall(r'\$here/([a-z0-9]+)(?:\$(\w+))?\.script', body):
+        # (an rs whose script isn't named outright would leave its kills untagged: F13 code-health review)
+        bad = [l for l in re.findall(r'(?:^|;)\s*rs (\S+)', body, flags=re.M)
+               if not re.fullmatch(r'[a-z0-9]+', l) and not (re.fullmatch(r'"[a-z0-9]+\$(\w+)"', l) and re.fullmatch(r'"[a-z0-9]+\$(\w+)"', l).group(1) in loops)]
+        assert not bad, f'run.sh group {g}: rs with a script not named outright: {bad}'
+        for name, var in (re.findall(r'(?:^|;)\s*rs ([a-z0-9]+)()', body, flags=re.M) + re.findall(r'(?:^|;)\s*rs "([a-z0-9]+)\$(\w+)"', body, flags=re.M) +
+                          re.findall(r'\$here/([a-z0-9]+)(?:\$(\w+))?\.script', body)):
             for n in ([name + x for x in loops[var].split()] if var else [name]):
                 if n != g:
                     out[n] = g
