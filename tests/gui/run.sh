@@ -6,7 +6,7 @@
 # printed whole, in order, once all are done; clip and keys share one (each starts a sway, which
 # takes the first free wayland-N).
 # The groups (one or more scripts on one tree): browse big gone watchgap f2 f3 f4 f5 f52 f53 f54
-# f6 (f6, f6b) usb f62 (f62, f62b, f62c) f63 (f63, f63b, f63c) f64 (f64, f64b, f64c, f64d) f7 (f7, f7b) f72 f73 (f73, f73b, f73c, f73d) f74 f75 (f75, f75b) f8 (f8, f8b, f8c, f8d, f8e) f9 (f9, f9b) f10 (f10, f10b, f10c, f10d) f11 (f11, f11b, f11c, f11d, f11e, f11f, f11g, f11h, f11i, f11j, f11k, f11l, f11m, f11n, f11o, f11p, f11q, f11r, f11s) f12 (f12, f12b) f12g f12h f12i f13 (f13, f13b, f13c, f13d, f13e, f13f, f13g) clip (clip, copypath) keys (both in sway) hang guard3 guard harness (harness, harnessb, harnessc). Named ones only, or all of them; a group
+# f6 (f6, f6b) usb f62 (f62, f62b, f62c) f63 (f63, f63b, f63c, f63d) f64 (f64, f64b, f64c, f64d) f7 (f7, f7b) f72 f73 (f73, f73b, f73c, f73d) f74 f75 (f75, f75b) f8 (f8, f8b, f8c, f8d, f8e) f9 (f9, f9b) f10 (f10, f10b, f10c, f10d) f11 (f11, f11b, f11c, f11d, f11e, f11f, f11g, f11h, f11i, f11j, f11k, f11l, f11m, f11n, f11o, f11p, f11q, f11r, f11s, f11t) f12 (f12, f12b) f12g f12h f12i f13 (f13, f13b, f13c, f13d, f13e, f13f, f13g) clip (clip, copypath) keys (both in sway) hang guard3 guard harness (harness, harnessb, harnessc). Named ones only, or all of them; a group
 # that fails says "== <script>: FAILED" or "<group>: FAILED" (tools/mutation/gui.py reads it).
 set -u
 par=1
@@ -222,6 +222,10 @@ printf 'restore-tabs = on\nbogus\n' >> "$T/config/ofx/ofx.conf"
 rs f11r -- "$T/tree/top.txt"
 printf 'window 6161 9999999999 0 closed %s\n' "$T/tree/sub1" >> "$T/state/ofx/state"
 rs f11s -- "$T/tree"
+# The table's strings in 8 KiB, a name of 200 bytes kept again and again (f11t)
+T=$base/f11t; rm -rf "$T"; mkdir -p "$T/tree/d"; mi btrfs
+touch "$T/tree/d/a" "$T/tree/d/$(printf 'x%.0s' $(seq 200))"
+rs f11t OFX_TEST_FOLDERS_MEM=8192 OFX_TEST_MOUNTINFO="$T/mountinfo" -- "$T/tree"
 fi
 if want f10; then
 # F10 step 1: ofx.conf, made at the start in the run's own config folder (run-script's).
@@ -257,6 +261,11 @@ rs f63b OFX_TEST_MOUNTINFO="$T/mountinfo" -- "$T/tree"
 T=$base/f63c; rm -rf "$T"; mkdir -p "$T/tree"
 for f in a.txt b.png c.jpg d.pdf e.c f.py g.sh h.html i.md j.zip k.mp3 l.mp4; do touch "$T/tree/$f"; done
 rs f63c OFX_TEST_ICONS_MAX=24 OFX_TEST_MOUNTINFO="$base/f63/mountinfo" -- "$T/tree"
+# The same 12 types again in in/, remembered as icons (F11): entered from the list (f63d)
+T=$base/f63d; rm -rf "$T"; mkdir -p "$T/tree/in"
+for f in a.txt b.png c.jpg d.pdf e.c f.py g.sh h.html i.md j.zip k.mp3 l.mp4; do touch "$T/tree/$f" "$T/tree/in/$f"; done
+mkdir -p "$T/state/ofx" && printf 'folder %s 1 icons - - - -\n' "$T/tree/in" > "$T/state/ofx/state"
+rs f63d OFX_TEST_ICONS_MAX=24 OFX_TEST_MOUNTINFO="$base/f63/mountinfo" -- "$T/tree"
 fi
 if want f64; then
 # F6.4: previews in the icon view (tests/gui/f64/ has the images), then f64b on the same tree and

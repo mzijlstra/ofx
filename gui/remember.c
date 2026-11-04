@@ -23,6 +23,15 @@ static struct {
     i64     due;              // a view's change to write at this time (now_ms), 0 none
 } rem;
 
+// The table's string room: its 2 MiB, or OFX_TEST_FOLDERS_MEM's bytes (4096 up), so a script fills
+// it (f11t).
+static isize folders_mem(void)
+{
+    static int n = -1;
+    if (n < 0) n = env_int("OFX_TEST_FOLDERS_MEM", (int)sizeof rem.mem[0], 4096, (int)sizeof rem.mem[0]);
+    return n;
+}
+
 static bool fold_view_of(UiView v)
 {
     return v == UI_VIEW_FOLDER || v == UI_VIEW_TRASH;   // (a search's results keep the view they have)
@@ -33,7 +42,7 @@ static void remember_load(void)
 {
     char path[PATH_MAX];
     rem.cur = 0;
-    for (int i = 0; i < 2; i++) arena_init(&rem.a[i], "folders", rem.mem[i], sizeof rem.mem[i]);
+    for (int i = 0; i < 2; i++) arena_init(&rem.a[i], "folders", rem.mem[i], folders_mem());
     ArenaMark mark = arena_mark(&scratch);
     folders_parse(&rem.a[0], state_path(path, sizeof path) ? read_file(&scratch, path) : STR_EMPTY, &rem.t);
     arena_restore(&scratch, mark);
@@ -75,7 +84,7 @@ static void remember_cursor(const char *dir, Str name)
     if (!f) return;
     f->sel = name.len && name.len <= NAME_MAX ? folder_str(&rem.a[rem.cur], name) : NULL;
     f->at = (i64)time(NULL), f->changed |= FP_SEL | FP_AT, rem.dirty = true;
-    if (rem.a[rem.cur].used > (isize)sizeof rem.mem[0] / 2) remember_write();   // (each write starts the strings afresh)
+    if (rem.a[rem.cur].used > rem.a[rem.cur].cap / 2) remember_write();   // (each write starts the strings afresh)
 }
 
 // The cursor's entry remembered for dir, NULL for none.

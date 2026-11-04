@@ -240,6 +240,8 @@ so every run does it. `gui.py` runs from its scratch copy, scripts included, so 
 - `OFX_GUI_DEBUG=1` logs every key, character and mouse button event.
 - `OFX_TEST_CROSS=1` makes a move copy as across drives (a slow move with the delay below).
 - `OFX_TEST_ICONS_MAX` shrinks the icon cache (512 slots), so a script can fill it (f62c).
+- `OFX_TEST_FOLDERS_MEM` shrinks the remembered folders' string room (2 MiB, 4096 up), so a
+  script fills it (f11t).
 - `OFX_TEST_THUMB_HELD_MAX` shrinks the previews' texture bytes (64 MiB), so a script sees them
   dropped and read back (f64c).
 - `OFX_TEST_COPY_DELAY_MS` sleeps per copied block (500 ms at most), so a script sees the progress

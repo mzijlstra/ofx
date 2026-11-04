@@ -720,7 +720,7 @@ MUTANTS = [
     ('gui/remember.c', '    if (mask & FP_VIEW) f->view = app.ui.grid == app.conf.icons ? -1 : app.ui.grid;', '    if (mask & FP_VIEW) f->view = app.ui.grid;', 'f62'),
     ('gui/remember.c', '    if (mask & FP_SORT) f->sort = (int)app.ui.sort.key == app.conf.sort ? -1 : (int)app.ui.sort.key;', '    if (mask & FP_SORT) f->sort = (int)app.ui.sort.key;', 'f11'),
     ('gui/remember.c', '    if (mask & FP_REV) f->rev = app.ui.sort.reverse == app.conf.sort_rev ? -1 : app.ui.sort.reverse;', '    if (mask & FP_REV) f->rev = app.ui.sort.reverse;', 'f11'),
-    ('gui/remember.c', '    if (rem.a[rem.cur].used > (isize)sizeof rem.mem[0] / 2) remember_write();', '', 'f11'),
+    ('gui/remember.c', '    if (rem.a[rem.cur].used > rem.a[rem.cur].cap / 2) remember_write();', '', 'f11'),
     ('gui/remember.c', '    if (st.folder_defaults[0]) {', '    if (true) {', 'f11'),
     ('gui/remember.c', '        mask |= strcmp(sort, SORT_NAMES[app.conf.sort]) ? FP_SORT : 0;', '', 'f11'),
     ('gui/remember.c', '    int n = mask ? folders_wipe(&rem.t, mask) : 0;', '    int n = 0;', 'f11'),

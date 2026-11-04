@@ -1,0 +1,8 @@
+# F11 with F6.3's full cache: a folder remembered as icons, entered from the list (24 slots, run.sh).
+# The list and the sidebar leave too few for its 12 types at 48, and the listing finds the cache not
+# full, so it is the view's change on entering that empties it once, as a Ctrl+2 there would.
+settle
+expect view=list iconresets=0 sel=in
+key enter
+wait-for 2000 view=icons zoom=48 icontex=96 iconresets=1 sel=a.txt
+quit
