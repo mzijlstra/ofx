@@ -48,7 +48,7 @@ Omarchy's theme: the binary, the folder `tools/ofx`, the window's title and Wayl
     a folder remembered as icons with the icon cache nearly full (f63d), the folders table filled
     (`OFX_TEST_FOLDERS_MEM`, f11t). The too-many-entries restore now shares the unlistable
     folder's path, so one mutant covers both.
-  - **Dropped: gui/git.c's `if (br && s < 0) return true;`** (the branch list arriving alone asks
+  - **Dropped, then back and killed on 2026-11-05: gui/git.c's `if (br && s < 0) return true;`** (the branch list arriving alone asks
     for a redraw; without it the open branch menu shows "Reading branches…" until the pointer
     moves). Scripts draw every frame, so no script sees a missing redraw. Michael, 2026-11-04: drop it with a note rather than teach the
     runner to flag a frame whose state changed with no redraw asked for.
@@ -139,9 +139,8 @@ his word: Nemo's compact view and its icon size slider.
 - Tooling: run the slowest GUI mutants first (above; done 2026-11-05 in its lighter form, last run's
   survivors and the untagged first: runs sat within 5% of their floor, so only a late survivor's
   tail was left to trim); select gui.py's mutants by their key, not
-  their index (done 2026-11-05: indices moved several times on 2026-11-04); a missed-redraw check in the script runner (a frame whose state line changed
-  with no redraw asked for: the kind of the dropped git.c mutant, 2026-11-04), after an audit of
-  the state words that read worker state directly.
+  their index (done 2026-11-05: indices moved several times on 2026-11-04); a missed-redraw check in the script runner: done 2026-11-05 (expect and wait-for read the last
+  frame an unscripted window would draw; the git.c mutant dropped on 2026-11-04 is back, and killed).
 - Not wanted: Nemo's built-in terminal (`t`, a terminal here, covers it).
 
 **Thumbnails, a rule from Nemo (2026-10-20):** Nemo looped at up to 45% CPU on one file

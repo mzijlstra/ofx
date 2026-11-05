@@ -61,7 +61,7 @@ static struct {
     i64        frame;
     char       root[PATH_MAX];   // the cache; "" when there is no HOME to find it from
     int        got[TG_CHANGED + 1];   // answers taken, by kind, for the tests
-    int        drawn_last, drawn_now;   // previews drawn in the last frame, and in this one
+    int        drawn_now;   // previews drawn in this frame (the last one, between frames)
     int        resets, evicted;
     bool       off;        // ofx.conf's previews = off (F10): none made or read
     bool       exec_on;    // ofx.conf's preview-thumbnailers (F12)
@@ -166,7 +166,7 @@ static void thumbs_frame(void)
 {
     if (thumbs.full) thumbs_reset();
     thumbs.frame++;
-    thumbs.drawn_last = thumbs.drawn_now, thumbs.drawn_now = 0;
+    thumbs.drawn_now = 0;
     pthread_mutex_lock(&thumbs.mu);
     for (int k = 0; k < thumbs.rn; k++) {
         int i = thumbs.req[(thumbs.rhead + k) % THUMB_QUEUE].entry;

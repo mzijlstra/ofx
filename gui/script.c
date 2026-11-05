@@ -78,6 +78,11 @@
 //   state                   prints one line of key=value words about the window
 //   expect <word>...        each word must be in that line (whole words: `sel=a.txt`); the
 //                           script ends with "script: N of M expectations failed" when any did
+//                           expect and wait-for read the line as of the last frame an unscripted
+//                           window would draw too (asked for by input, a worker's answer or a
+//                           timer), so a change that asks for no frame fails them: the screen
+//                           would not show it (2026-11-05). A frame the script gives no input to
+//                           (wait, sleep, expect, sh, ...) asks for none by itself.
 //   wait-for <ms> <word>... frames until every word is in the state line (a reload comes in its
 //                           own time); an expectation, failed when <ms> pass
 //   quit
@@ -106,6 +111,9 @@ static struct {
     int   quits;         // frames left for the window to quit in, after the command after `quits`
     bool  quits_ran;     // that command ran
     Str   typing;        // what is left of a `type` longer than a frame's events
+    char  drawn[16384];  // the state line as of the last frame an unscripted window would draw too
+    bool  pending;       // a frame is asked for, not drawn yet: what it will show is the state now
+    bool  gave;          // this frame's command was input (a key, the pointer), not a wait or a check
     bool  user_keys;     // the keyboard's keys and characters reach the window (`user-keys`)
 } script;
 
@@ -544,7 +552,7 @@ static void script_state(char *out, size_t cap)
              app.ui.side.sel - app.ui.side.top, treehere, app.ui.view == UI_VIEW_TRASH, app.hov.side, hovernum, ejectbtn, app.cwd_avail >= 0, info,
              app.ui.grid ? "icons" : "list", (int)ui_cols(&app.ui.list), app.grid_cells, app.grid_first, app.grid_last, app.grid_full_lines, app.grid_hover_lines, app.grid_hover_cut, entry_px(), icontex, app.icon_full_resets, app.ui.focus == UI_FOCUS_CRUMBS, tipword, idle_woke,
              ui_zoom_px(&app.ui), cell_w(), cell_h(), Clay_GetElementData(CLAY_ID("zoom-track")).found, tipin, app.nslots,
-             thumbs.drawn_last, thumbsel, thumbbox, thumbs_busy(), thumbs.got[TG_MADE], thumbs.got[TG_CACHED], thumbs.got[TG_FAILED],
+             thumbs.drawn_now, thumbsel, thumbbox, thumbs_busy(), thumbs.got[TG_MADE], thumbs.got[TG_CACHED], thumbs.got[TG_FAILED],
              thumbs.got[TG_FAIL_KNOWN], thumbs.got[TG_NONE], thumbs.got[TG_CHANGED], thumbs.held, thumbs.evicted, thumbs.resets, app.thumb_local,
              app.reloads_asked, menuseps, bmlist, app.ui.bm_n, app.ui.bm_here, app.ui.can_bookmark, app.ui.bm_more, app.ui.panel == UI_PANEL_BM, app.ui.bmp_list.n, app.ui.bmp_list.sel, app.ui.bmp_naming, bmptext, app.ui.panel == UI_PANEL_KEYS, app.ui.keys_list.n, app.ui.keys_list.top, app.ui.keys_list.rows, keysfirst, app.ui.menu_on ? UI_MENU[app.ui.menu].title : "-", menuat, menuoff, menugrey, menuhid, menumarked, menubox, menuin, menuclear, app.ui.perms_cols, perms_shown((float)GetScreenWidth()), (int)(strstr(info, "Permissions_hidden") != NULL), app.ui.group_col,
              (int)Clay_GetElementData(CLAY_ID("col-group")).found + (int)Clay_GetElementData(CLAY_IDI("group", 0)).found, app.ui.colors, app.ui.bar_hidden, bar_shown(), app.hov.menu_title, app.ui.can_write, windows,
@@ -686,6 +694,44 @@ static void script_sh(Str cmd)
 }
 
 // After a frame is drawn, before the swap: a pending shot.
+// The frame was one an unscripted window draws too (dirty): what expect and wait-for read, so a
+// change no frame asked to draw fails them (2026-11-05: the branch list that came alone, and the
+// menu kept showing "Reading branches…" until the pointer moved).
+static void script_drawn(void)
+{
+    script_state(script.drawn, sizeof script.drawn);
+}
+
+// What expect and wait-for read: the last drawn frame's state, or the state now while a frame is
+// asked for and not drawn yet (a worker's answer, a hover after a frame); with the words no frame shows read as they are now: the window registry's count, the previews'
+// texture bytes (dropping one not drawn changes nothing on screen, so it asks for no frame).
+static void script_seen(char *out, size_t cap)
+{
+    static const char *const live_words[] = { "windows=", "thumbheld=" };
+    if (script.pending) {
+        script_state(out, cap);
+        return;
+    }
+    static char live[16384];
+    script_state(live, sizeof live);
+    size_t n = 0;
+    for (const char *p = script.drawn; *p && n + 1 < cap;) {
+        const char *end = strchr(p, ' '), *from = p;
+        size_t len = end ? (size_t)(end - p) : strlen(p);
+        for (size_t k = 0; k < sizeof live_words / sizeof *live_words; k++) {
+            size_t kl = strlen(live_words[k]);
+            if (len < kl || strncmp(p, live_words[k], kl) != 0) continue;
+            const char *l = strstr(live, live_words[k]);
+            while (l && l != live && l[-1] != ' ') l = strstr(l + 1, live_words[k]);
+            if (l) from = l, len = strcspn(l, " ");
+        }
+        n += (size_t)snprintf(out + n, cap - n, "%s%.*s", n ? " " : "", (int)len, from);
+        if (n >= cap) n = cap - 1;
+        p += end ? (size_t)(end - p) + 1 : strlen(p);
+    }
+    out[n] = 0;
+}
+
 static void script_after_draw(void)
 {
     if (!script.shot[0]) return;
@@ -718,6 +764,7 @@ static void script_end(void)
 // mutants) the first failure ends it: every wait-for after it would only run out its time.
 static bool script_input(UiInput *in)
 {
+    script.gave = false;
     char state[16384], missing_buf[256];
     const char *missing;
     static int fast = -1;
@@ -732,6 +779,7 @@ static bool script_input(UiInput *in)
         isize i = 0;
         while (i < script.typing.len && in->nev < UI_EVENTS_MAX) in->ev[in->nev++] = (UiEvent){ UK_NONE, utf8_next(script.typing.p, script.typing.len, &i) };
         script.typing = str_cut(script.typing, i, script.typing.len);
+        script.gave = true;
         return true;
     }
     if (script.settling) {
@@ -743,7 +791,7 @@ static bool script_input(UiInput *in)
     }
     if (script.until) {
         if (script.waiting_for[0]) {
-            script_state(state, sizeof state);
+            script_seen(state, sizeof state);
             if (script_has_all(state, str_from_c(script.waiting_for), &missing, missing_buf, sizeof missing_buf)) {
                 script.until = 0, script.waiting_for[0] = 0;
                 return true;
@@ -935,7 +983,7 @@ static bool script_input(UiInput *in)
             printf("state: %s\n", state);
         } else if (str_eq(cmd, S("expect"))) {
             script.expects++;
-            script_state(state, sizeof state);
+            script_seen(state, sizeof state);
             if (!script_has_all(state, arg, &missing, missing_buf, sizeof missing_buf)) script_fail("expect: no %s in: %s", missing, state);
         } else if (str_eq(cmd, S("wait-for"))) {
             isize s2 = str_find(arg, ' ');
@@ -957,6 +1005,9 @@ static bool script_input(UiInput *in)
             script_fail("unknown command %.*s", STR_ARG(cmd));
         }
         if (script.quits && !str_eq(cmd, S("quits"))) script.quits_ran = true;
+        static const Str passive[] = { S("settle"), S("wait"), S("sleep"), S("state"), S("expect"), S("wait-for"), S("quits"), S("shot"), S("sh"), S("idle") };
+        script.gave = true;
+        for (size_t k = 0; k < sizeof passive / sizeof *passive; k++) script.gave &= !str_eq(cmd, passive[k]);
         fflush(stdout);
         return true;
     }

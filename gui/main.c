@@ -912,10 +912,12 @@ int main(int argc, char **argv)
         if (spring_tick() || (app.drag == DRAG_FILES && app.spring_tab >= 0)) dirty = true;   // (its bar fills as it waits)
         if (app.drag == DRAG_FILES && app.drop.reloads != app.reloads) drop_find(app.drag_px, app.drag_py), dirty = true;   // (the rows under a still pointer changed)
         if (dirty || scripted) {
+            bool asked = dirty;   // (a frame an unscripted window draws too: what the script's checks read)
             i64 t0 = now_us();
             draw();
             i64 ta = now_us();
             if (scripted) script_after_draw();
+            if (scripted && asked) script_drawn();
             i64 tb = now_us();
             SwapScreenBuffer();
             i64 us = now_us() - t0 - (tb - ta);
@@ -940,8 +942,9 @@ int main(int argc, char **argv)
                 memcpy(in.ev, real.ev, sizeof *real.ev * (size_t)real.nev);
                 in.nev = real.nev;
             }
+            script.pending = dirty;
             if (!script_input(&in)) break;
-            seen = true;
+            seen = script.gave || IsWindowResized() || (script.user_keys && real.nev > 0);   // (a frame the script gave no input to is one an unscripted window sleeps through)
         }
         drag_keys(&in);   // (Esc during a drag of files: the drag's)
         cursor_shape();
