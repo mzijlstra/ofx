@@ -743,42 +743,58 @@ blocking `read` on the main thread inside its event dispatch, and hands the path
 drop list (which ofx ignores). It never calls `finish`, its motion handler is empty (no drop
 position), and it has no `start_drag`.
 
-**So ofx brings its own, on GLFW's connection** (`glfwGetWaylandDisplay`, `glfwGetWaylandWindow`):
-a registry of its own binding `wl_data_device_manager` at version 3 and the seat, its own data
-device, and its own `wl_pointer` for the button serials `start_drag` needs. A drag has to start on
-the window's own connection and surface, so the clipboard's way (a connection of its own) can't
-do it.
-
-**Its own event queue and thread.** Dragged out and back into ofx's own window, GLFW's blocking read
-on the main thread waits for ofx's data source to answer `send`; on the main thread that answer
-would never come (the window hangs: Hyprland's "not responding"). A dnd thread dispatches ofx's
-queue (`wl_display_prepare_read_queue`, as libwayland allows beside GLFW's own reads), answers
-`send` there, and hands what the main thread needs (an offer's types, its position, a drop) over
-with atomics and `wake_main`, as the other workers do.
+**What the spike found (2026-11-05, branch `spike/f14-dnd`, kept as a reference):**
+- A data device of ofx's own works in sway (sway sends a drag to every device of a client), but
+  **not on Hyprland**: it sends a drag to a client's first device only (`dataDeviceForClient`,
+  `find_if` over its list, Hyprland 0.56.2), which is GLFW's, and a version 1 device can't be
+  released. Michael's hand check: Nemo's drag never reached ofx's second device; ofx's drags out
+  did reach Chromium and Firefox (starting a drag doesn't go by that lookup).
+- **So vendored GLFW is patched** (Michael, 2026-11-05: "let's go with the GLFW patch";
+  `vendor/patches/glfw-dnd.patch`, 95 lines, reapplied on a raylib update): the data device
+  manager bound at version 3; GLFW's offer listener given the version 3 events (else libwayland
+  calls past its end); `glfwSetWaylandDragHook` hands its device's drags (each offer's types and
+  actions, enter, leave, motion, drop) to ofx instead of GLFW's own blocking drop, the selection
+  staying GLFW's; `glfwGetWaylandDataDevice` for `start_drag`. With it, on Hyprland by hand and
+  in the test sway: a drop from Nemo read and finished, a drag out opened in Chromium, a drag
+  out and back onto ofx's own window kept the window answering.
+- **No dnd thread:** the hook runs on the main thread inside GLFW's dispatch, and GLFW never reads
+  a drop itself any more. What can block goes to a short thread of its own: a drop's read (another
+  program writes it in its own time) and a source's write. A drop of ofx's own drag back on its
+  window is known by a type of ofx's own in the offer and never read: its answer would have to
+  come from the thread reading it (the spike deadlocked so before).
+- **ofx's own registry** binds a data device manager (version 3, for its sources) and the seat,
+  and a pointer for the press's serial `start_drag` needs, asked for only once the seat has a
+  pointer (asked on a seat without one is a protocol error: the headless test sway has none).
+- **Hyprland sends a clipboard offer through the same device on every keyboard focus change**, so
+  each offer's types are kept by the offer, never as "the latest".
+- raylib's `GetWindowHandle()` is already GLFW's `wl_surface` on Wayland.
+- **Tests:** `tools/gui/dndpeer.c` (a target or a source window) and `tools/gui/vptr.c` (a virtual
+  pointer, wlr-virtual-pointer-unstable-v1 beside vkbd's protocol), both refused outside the test
+  sway as vkbd is.
 
 **Out (ofx to a browser, a file manager, an editor):** the F13 drag of files that leaves the window
 is handed to the compositor (`start_drag`; until F14 leaving cancels it). The source offers
 `text/uri-list` (file URIs, percent-encoded as Copy's) and `text/plain` (the paths, quoted as
-Copy Path's), actions copy, move and ask. The drag image is the icon and the count badge, in a
+Copy Path's), actions copy, with move added while Shift is held (Michael, 2026-11-05: Nemo took a move offered
+across drives in the spike). The drag image is the icon and the count badge, in a
 small shm buffer. A move a file manager makes is its own (GTK moves the files itself); ofx only
 sees them go.
 
 **In (files from another program):** an offer with `text/uri-list` of `file://` URIs: its position
 lights the row or sidebar folder as F13's drags do (drop_find), the spring-loaded tabs work, and
 the drop copies or moves with Nemo's rule (ui_drop_op) within the actions the source offers, read
-on the dnd thread (a cap on its size), then `copy_here` as a job, then `finish`. Dragged out and
+on a short thread of its own (a cap on its size), then `copy_here` as a job, then `finish`. Dragged out and
 back in, ofx knows its own source (a type of its own in the offer) and drops as inside.
 
 **Tests:** in the test sway only, with a peer program of ours (as vkbd: `tools/gui/dndpeer.c`): a
 target that writes what it was offered and received to a file, and a source that drags files in
-through a virtual pointer (sway's `zwlr_virtual_pointer_v1`). Then Michael's hand check on
+through vptr. Then Michael's hand check on
 Hyprland, with Chromium, Firefox and Nemo, since compositors differ in how they treat two data
 devices on one client.
 
-**Steps (proposed):** 0. a spike in the test sway: ofx's data device beside GLFW's gets enter,
-motion and drop with positions, a v3 offer's actions work while GLFW's v1 one accepts too, and
-`start_drag` works with the serial from ofx's own pointer; then the same on Hyprland, by hand. 1.
-dragging out. 2. dropping in. 3. the milestone's code-health review.
+**Steps:** 0. the spike: done (above). 1. the GLFW patch, dndpeer and vptr, and the drag hook's
+plumbing (offers by offer, the reads and writes off the main thread). 2. dragging out. 3.
+dropping in. 4. the milestone's code-health review.
 
 **Michael's answers (2026-11-05):**
 - **Scope:** out, and files in (both in F14, out first).
@@ -787,6 +803,8 @@ dragging out. 2. dropping in. 3. the milestone's code-health review.
 - **A drop of files from outside:** Nemo's rule, as F13's (move on the same drive, copy across,
   Ctrl copies, Shift moves), within the actions the source allows.
 - **The drag image outside the window:** the icon and the count badge.
+- **A drag out of ofx offers copy; with Shift held, move as well** (after the spike, where Nemo
+  moved a file offered both ways, across drives).
 
 ## F13 design (2026-11-03; Michael, 2026-11-04: "sounds good" to the recommendations below)
 
