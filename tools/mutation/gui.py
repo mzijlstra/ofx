@@ -972,12 +972,15 @@ MUTANTS = [
     ('gui/input.c', '    if (!dnd_start(&dragged, app.drag_mods & UI_MOD_SHIFT, have', '    if (!dnd_start(&dragged, false, have', 'dnd'),
     ('gui/input.c', '    bool have = drag_image(&im);', '    bool have = false;', 'dnd'),
     ('gui/input.c', '        dnd_own_answer(app.drop.ok, op != UI_DROP_COPY);', '        dnd_own_answer(false, op != UI_DROP_COPY);', 'dnd'),
+    ('gui/input.c', '        dnd_own_answer(app.drop.ok, op != UI_DROP_COPY);', '        dnd_own_answer(true, op != UI_DROP_COPY);', 'dnd'),
     ('gui/input.c', '        if (app.drop.ok) drop_do(&app.drop);\n        app.out_own = true;', '        app.out_own = true;', 'dnd'),
     ('gui/input.c', '        if (dragged.n == 1) set_status(false, "%s %s to another program"', '        if (false) set_status(false, "%s %s to another program"', 'dnd'),
     ('gui/input.c', '    if (app.drag == DRAG_OUT) dnd_cancel();\n', '', 'dnd'),
     ('gui/dnd.c', '(void)serial, (void)s; dnd.press = 0; }\nstatic void dnd_ptr_motion', '(void)serial, (void)s; }\nstatic void dnd_ptr_motion', 'dnd'),
     # Not run: drag_out telling raylib the button is up, and drag_release leaving DRAG_OUT alone:
     # a scripted window takes no compositor input, so only a hand check shows them.
+    # Nor own_dropped's `action != 0` and drag_out_poll's `drop.ok`: sway never sends the drop of a
+    # drag its target refused (dnde's refused step), Hyprland does, with action 0.
     # Not run either: an offer's action kept by its slot (dnd_offer_action). Hyprland sends it before
     # the enter, the test sway after, so only Michael's hand check on Hyprland shows it (2026-11-05).
 ]

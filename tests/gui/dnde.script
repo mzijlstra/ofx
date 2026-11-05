@@ -18,6 +18,23 @@ sh test -f "$OFX_DIR/adir/a.txt" && test ! -e "$OFX_DIR/a.txt"
 expect undo=move
 key ctrl-z
 wait-for 3000 n=3
+# ---- adir dragged out and back onto its own row: refused there (into itself), so let go nothing
+# happens, no job, nothing moved (review, 2026-11-05). sway cancels a drag its target refused, and
+# never sends the drop (Hyprland sent one with action 0: own_dropped's guards are for that).
+sh vptr move 100 450 press wait 1500 move 300 300 move 568 106 wait 800 release >"$OFX_ROOT/vptr3.log" 2>&1 &
+wait-for 3000 dndpress=1
+point-ui row 0
+press-here
+move-by 0 10
+expect dragname=adir
+move-to -5 100
+expect drag=out
+wait-for 3000 dndover=1 drop=row:0 dropok=0
+wait-for 3000 drag=- dndout=cancelled
+expect owndrops=1
+sleep 300
+expect n=3 job=- status=-
+sh test -d "$OFX_DIR/adir" && test -f "$OFX_DIR/a.txt"
 # ---- Esc during a drag out ends it: the compositor's drag goes with our source
 sh vptr move 100 450 press wait 1500 release >"$OFX_ROOT/vptr2.log" 2>&1 &
 wait-for 3000 dndpress=1
