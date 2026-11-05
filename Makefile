@@ -59,7 +59,8 @@ test-fm1: build/ofx-fm1
 
 # ---- raylib: native Wayland, built from here ---------------------------------------------------
 #
-# raylib 6.0 is vendored unedited under vendor/raylib (the same commit as prdash and uml-viewer). Its own Makefile
+# raylib 6.0 is vendored under vendor/raylib (the same commit as prdash and uml-viewer), unedited but for
+# vendor/patches/glfw-dnd.patch (F14: drags through GLFW's data device; Michael, 2026-11-05). Its own Makefile
 # writes generated Wayland headers into its source tree, so it is built from here instead:
 # protocol headers go to build/raylib/wl, objects and libraylib.a to build/raylib. Only the 2D
 # modules are compiled (core, shapes, textures, text) plus its bundled GLFW with the Wayland

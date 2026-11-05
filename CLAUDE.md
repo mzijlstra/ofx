@@ -290,7 +290,11 @@ steps 1-4 (09b056b to 0a4c64a).
 `LICENSE`), both as in prdash and uml-viewer, built by our Makefile; nanosvg (`master` at
 239e102, `nanosvg.h`, `nanosvgrast.h`, `LICENSE.txt`; zlib licence) for the SVG app icons in Open
 With (Michael, 2026-10-26), compiled into gui/main.c. `base/` and `gui/font.c`,
-`gui/render.c` are uml-viewer's at cca8e45 (`render.c` gained images). Do not edit vendored files.
+`gui/render.c` are uml-viewer's at cca8e45 (`render.c` gained images). Do not edit vendored files,
+with one exception: raylib's GLFW carries `vendor/patches/glfw-dnd.patch` (F14, Michael
+2026-11-05), since Hyprland sends drags only to GLFW's own data device: version 3, the offers'
+version 3 events, and `glfwSetWaylandDragHook` handing its drags to gui/dnd.c. A raylib update
+reapplies it (`git apply vendor/patches/glfw-dnd.patch`); changing it needs Michael's go.
 
 ## Git
 

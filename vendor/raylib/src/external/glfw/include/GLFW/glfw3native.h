@@ -498,6 +498,14 @@ GLFWAPI GLXWindow glfwGetGLXWindow(GLFWwindow* window);
  */
 GLFWAPI struct wl_display* glfwGetWaylandDisplay(void);
 
+/* ofx (F14, 2026-11-05): the data device GLFW made, and a hook that gets its drags (enter, leave,
+ * motion, drop, and each offer's types and actions) instead of GLFW's own drop. The selection
+ * stays GLFW's. An offer entered is the hook's to destroy. */
+GLFWAPI struct wl_data_device* glfwGetWaylandDataDevice(void);
+GLFWAPI void glfwSetWaylandDragHook(const struct wl_data_device_listener* device,
+                                    const struct wl_data_offer_listener* offer,
+                                    void* user);
+
 /*! @brief Returns the `struct wl_output*` of the specified monitor.
  *
  *  @return The `struct wl_output*` of the specified monitor, or `NULL` if an

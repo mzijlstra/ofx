@@ -144,9 +144,11 @@ static void registryHandleGlobal(void* userData,
     {
         if (!_glfw.wl.dataDeviceManager)
         {
+            // ofx (F14, 2026-11-05): version 3, for drag and drop's actions and finish
             _glfw.wl.dataDeviceManager =
                 wl_registry_bind(registry, name,
-                                 &wl_data_device_manager_interface, 1);
+                                 &wl_data_device_manager_interface,
+                                 version < 3 ? version : 3);
         }
     }
     else if (strcmp(interface, "xdg_wm_base") == 0)

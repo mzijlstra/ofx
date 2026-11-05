@@ -447,6 +447,10 @@ typedef struct _GLFWlibraryWayland
     struct wl_data_offer*       dragOffer;
     _GLFWwindow*                dragFocus;
     uint32_t                    dragSerial;
+    // ofx (F14, 2026-11-05): glfwSetWaylandDragHook's
+    const struct wl_data_device_listener* dragHookDevice;
+    const struct wl_data_offer_listener*  dragHookOffer;
+    void*                       dragHookUser;
 
     const char*                 tag;
 
