@@ -953,6 +953,9 @@ MUTANTS = [
     ('gui/script.c', '    if (script.waiting_for[0]) script_fail("the window quit during a wait-for', '    if (false) script_fail("the window quit during a wait-for', 'harness'),
     # (the scripts that end on their quitting key say `quits` first: review, 2026-11-04)
     ('gui/actions.c', '    case UA_QUIT: app.quit = true; break;', '    case UA_QUIT: break;', 'f7'),
+    # A hover over another sidebar row that asks for no frame (review, 2026-11-05: a pointer move
+    # counts as input only when it changes what is lit)
+    ('gui/main.c', '    return a.row == b.row && a.side == b.side && a.header', '    return a.row == b.row && a.header', 'f6'),
 ]
 import concurrent.futures, queue, threading, time
 

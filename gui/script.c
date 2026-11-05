@@ -82,7 +82,8 @@
 //                           window would draw too (asked for by input, a worker's answer or a
 //                           timer), so a change that asks for no frame fails them: the screen
 //                           would not show it (2026-11-05). A frame the script gives no input to
-//                           (wait, sleep, expect, sh, ...) asks for none by itself.
+//                           (wait, sleep, expect, sh, point-ui, ...) asks for none by itself, and a
+//                           pointer move only when it changes what is lit or dragged.
 //   wait-for <ms> <word>... frames until every word is in the state line (a reload comes in its
 //                           own time); an expectation, failed when <ms> pass
 //   quit
@@ -819,6 +820,7 @@ static bool script_input(UiInput *in)
         Str cmd = sp < 0 ? line : str_cut(line, 0, sp), arg = sp < 0 ? STR_EMPTY : str_trim(str_cut(line, sp + 1, line.len));
         char a[1024];
         snprintf(a, sizeof a, "%.*s", STR_ARG(arg));
+        int moved = -1;   // a pointer command's: whether it changed what is lit or dragged
         if (str_eq(cmd, S("settle"))) {
             script.settling = true, script.settle_n = 0;
         } else if (str_eq(cmd, S("wait"))) {
@@ -902,10 +904,10 @@ static bool script_input(UiInput *in)
             printf("point: %.0f %.0f\n", script.px, script.py);
         } else if (str_eq(cmd, S("hover-here"))) {
             script.pointing = true;
-            hover_at(script.px, script.py);
+            moved = hover_at(script.px, script.py);
         } else if (str_eq(cmd, S("pointer-off"))) {
             script.pointing = false;
-            hover_refresh(false, script.px, script.py);   // GLFW keeps the last position
+            moved = hover_refresh(false, script.px, script.py);   // GLFW keeps the last position
         } else if (str_eq(cmd, S("user-keys"))) {
             script.user_keys = true;
         } else if (str_eq(cmd, S("clip-drop"))) {
@@ -929,8 +931,8 @@ static bool script_input(UiInput *in)
             x += dx, y += dy;
             app.drag_mods = script_mods(a);
             script.px = x, script.py = y, script.pointing = true;
-            if (script.held) drag_at(in, x, y, true);
-            hover_at(x, y);
+            moved = script.held && drag_at(in, x, y, true);
+            moved |= hover_at(x, y);
         } else if (str_eq(cmd, S("release"))) {
             app.drag_mods = script_mods(a);
             drag_at(in, script.px, script.py, false);
@@ -1005,9 +1007,14 @@ static bool script_input(UiInput *in)
             script_fail("unknown command %.*s", STR_ARG(cmd));
         }
         if (script.quits && !str_eq(cmd, S("quits"))) script.quits_ran = true;
-        static const Str passive[] = { S("settle"), S("wait"), S("sleep"), S("state"), S("expect"), S("wait-for"), S("quits"), S("shot"), S("sh"), S("idle") };
+        // What gives the window input, as for a user: not a wait, a check, a point computed, another
+        // program's copy; a pointer move only when it changes what is lit or dragged, as
+        // input_real's (review, 2026-11-05).
+        static const Str passive[] = { S("settle"), S("wait"), S("sleep"), S("state"), S("expect"), S("wait-for"), S("quits"), S("shot"), S("sh"), S("idle"),
+                                       S("point-ui"), S("point-menu"), S("point-side"), S("user-keys"), S("clip-text"), S("clip-drop") };
         script.gave = true;
         for (size_t k = 0; k < sizeof passive / sizeof *passive; k++) script.gave &= !str_eq(cmd, passive[k]);
+        if (moved >= 0) script.gave = moved;
         fflush(stdout);
         return true;
     }
