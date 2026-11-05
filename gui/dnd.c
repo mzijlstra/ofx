@@ -182,6 +182,17 @@ static const ClipFiles *dnd_in_over(float *x, float *y, uint32_t *actions)
     return &dnd.got;
 }
 
+// Another program's drag over the window that holds no files (text, a web address: refused), and
+// where: the window says so, as Hyprland's pointer doesn't change for a refused drag.
+static bool dnd_in_nofiles(float *x, float *y)
+{
+    if (dnd.over < 0) return false;
+    unsigned t = dnd.offers[dnd.over].types;
+    bool none = !(t & DND_TYPE_OWN) && (!(t & DND_TYPE_URIS) || (dnd.offers[dnd.over].o == dnd.in_offer && dnd.in_read && dnd.got.n == 0));
+    if (none) *x = dnd.x, *y = dnd.y;
+    return none;
+}
+
 // A drop from another program waits for its read to end.
 static bool dnd_in_waiting(void)
 {
@@ -361,7 +372,10 @@ static void dnd_drop(void *data, struct wl_data_device *d)
         dnd.drops_failed++;
         return;
     }
-    dnd.in_dropped = true, dnd.in_x = dnd.x, dnd.in_y = dnd.y, dnd.in_drop_act = dnd.action ? dnd.action : dnd.in_act;
+    // By the window's own answer, within the source's actions: Hyprland didn't send the action
+    // again after it (Michael's log, 2026-11-05: Ctrl's copy in Nemo dropped as the move it had
+    // sent before the enter); the compositor's only when the window gave none.
+    dnd.in_dropped = true, dnd.in_x = dnd.x, dnd.in_y = dnd.y, dnd.in_drop_act = dnd.in_act ? dnd.in_act : dnd.action;
 }
 
 static void dnd_selection(void *data, struct wl_data_device *d, struct wl_data_offer *o)

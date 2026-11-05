@@ -567,6 +567,10 @@ static bool drag_in_poll(void)
 {
     float x, y;
     uint32_t actions = 0, act;
+    bool no = dnd_in_nofiles(&x, &y);
+    if (no) app.drag_px = x, app.drag_py = y;
+    bool said = no != app.in_nofiles;   // (the badge saying so comes and goes)
+    app.in_nofiles = no;
     const ClipFiles *f = dnd_in_over(&x, &y, &actions);
     bool started = f && app.drag == DRAG_NONE;
     if (started) drag_in_start(f);
@@ -575,7 +579,7 @@ static bool drag_in_poll(void)
         drop_find(x, y);
         uint32_t a = drop_in_action(&app.drop, actions);
         dnd_in_answer(a != 0, a);
-        return started;
+        return started || said;
     }
     const ClipFiles *d = dnd_in_dropped(&x, &y, &act);
     if (d) {
@@ -590,7 +594,7 @@ static bool drag_in_poll(void)
         return true;
     }
     if (app.drag == DRAG_IN && !dnd_in_waiting()) return drag_end(), true;
-    return false;
+    return said;
 }
 
 // The keys during a drag, or a press that may become one: Esc cancels it, and is the drag's alone

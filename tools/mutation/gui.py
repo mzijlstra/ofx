@@ -939,7 +939,7 @@ MUTANTS = [
     ('gui/input.c', '    tab_show(app.spring_tab);\n', '', 'f13'),
     ('gui/input.c', ' .at = -1 }, app.spring_tab = -1;\n}', ' .at = -1 };\n}', 'f13'),
     ('gui/main.c', '        if (spring_tick() || (files_over()', '        if ((files_over()', 'f13'),
-    ('gui/frame.c', '    if (bx + bb.width > (float)GetScreenWidth()) bx = app.drag_px - 14 - bb.width;\n', '', 'f13'),
+    ('gui/frame.c', '    if (bx + w > (float)GetScreenWidth()) bx = app.drag_px - 14 - w;\n', '', 'f13'),
     # F13 code-health step A (2026-11-04)
     ('gui/main.c', '        if (files_over() && app.drop.reloads != app.reloads) drop_find', '        if (false) drop_find', 'f13'),
     ('gui/actions.c', '    if (marks) ui_mark_clear(&app.ui);\n    trash_state();', '    ui_mark_clear(&app.ui);\n    trash_state();', 'f13'),
@@ -985,6 +985,9 @@ MUTANTS = [
     ('gui/input.c', '    if (started) drag_in_start(f);', '    if (false) drag_in_start(f);', 'dnd'),
     ('gui/input.c', ': act == DND_MOVE ? UI_DROP_MOVE : UI_DROP_COPY;', ': UI_DROP_MOVE;', 'dnd'),
     ('gui/input.c', '    if (!files_over() || app.spring_tab < 0 || now_ms() < app.spring_at + UI_SPRING_MS) return false;', '    if (app.drag != DRAG_FILES || app.spring_tab < 0 || now_ms() < app.spring_at + UI_SPRING_MS) return false;', 'dnd'),
+    ('gui/dnd.c', '    if (none) *x = dnd.x, *y = dnd.y;\n    return none;', '    return false;', 'dnd'),
+    # Not run: a drop by the window's own answer over the compositor's action (Hyprland didn't send
+    # it again after the answer; sway does, so both agree there).
     # Not run: a drop dnd_drop keeps waiting for its read, and the trash refused a copy-only source:
     # sway sends no drop the window refused (Hyprland does), so no script reaches them.
     # Not run: drag_out telling raylib the button is up, and drag_release leaving DRAG_OUT alone:

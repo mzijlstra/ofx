@@ -841,6 +841,12 @@ web address), or another read still going: refused, and sway then cancels the dr
 sending it (a drop that does come, as Hyprland may send, waits for its read). Ctrl and Shift go by
 the source's own actions (Nemo changes them as its keys go down); the window's keys count too
 when it has the keyboard.
+Michael's hand check on Hyprland (2026-11-05): Nemo's move, the tab that opens, the Trash, as
+meant. Two fixed after: with Ctrl held, the badge said Copy but the drop moved (Hyprland didn't send
+the action again after ofx's answer, so the drop went by the move it had sent before the enter: a
+drop now goes by the window's own answer, the compositor's only without one); and a browser's link
+showed nothing refused (Hyprland's pointer doesn't change for a refused drag), so a badge by the
+pointer says "Only files can be dropped here".
 
 **Michael's answers (2026-11-05):**
 - **Scope:** out, and files in (both in F14, out first).

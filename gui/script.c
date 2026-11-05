@@ -242,7 +242,7 @@ static void script_state(char *out, size_t cap)
     if (files_over() && app.drop.kind != DROP_NONE) snprintf(dropw, sizeof dropw, "%s:%d", DROP_WORDS[app.drop.kind], app.drop.at);
     if (files_over() && app.drop.ok) state_word(dropdir, sizeof dropdir, path_base(str_from_c(app.drop.dir)));
     const char *dropop = files_over() && app.drop.ok ? OP_WORDS[drop_op(&app.drop)] : "-";
-    const char *badge = !badge_drawn ? "-" : badge_op ? badge_op : "none";
+    const char *badge = !badge_drawn ? "-" : app.in_nofiles && app.drag == DRAG_NONE ? "nofiles" : badge_op ? badge_op : "none";
     if (jobs.asking >= 0) state_word(clashjob, sizeof clashjob, str_from_c(job_recs[jobs.asking].label));
     // The cursor's name colour as an unselected row would have it: its git change's ("git") or else
     // its type's; and the rows whose git letter or dot was drawn (F12).
