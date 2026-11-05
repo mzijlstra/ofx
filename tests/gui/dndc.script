@@ -1,0 +1,16 @@
+# F14 step 1: a source that never writes what it was asked for (dndpeer source-stall): the drop's
+# read waits on its own thread, the window answers meanwhile, and after the read's 2 s the drop
+# counts as failed, its offer given back unfinished. Layout as dnd.script.
+settle
+sh dndpeer source-stall "file://$OFX_ROOT/from/c.txt" "$OFX_ROOT/peer.log" >/dev/null 2>&1 &
+sleep 800
+settle
+sh vptr move 700 250 press move 650 250 move 300 200 move 200 150 wait 300 release >"$OFX_ROOT/vptr.log" 2>&1 &
+wait-for 3000 dndreading=1
+key down
+expect sel=a.txt dndreading=1 drops=0
+wait-for 4000 dndreading=0 dropfail=1
+expect drops=0 dropn=0
+sh grep -q "source send text/uri-list" "$OFX_ROOT/peer.log"
+sh ! grep -q "source dnd_finished" "$OFX_ROOT/peer.log"
+quit

@@ -1,0 +1,14 @@
+# F14 step 1: a drag of text, no files (dndpeer source-text): refused over the window (no type
+# taken, no action), and its drop read nothing. Layout as dnd.script.
+settle
+sh dndpeer source-text "hello" "$OFX_ROOT/peer.log" >/dev/null 2>&1 &
+sleep 800
+settle
+sh vptr move 700 250 press move 650 250 move 300 200 move 200 150 wait 1500 release >"$OFX_ROOT/vptr.log" 2>&1 &
+wait-for 3000 dndover=1 dndat=200,150
+expect dndaction=0 drops=0
+wait-for 3000 dndover=0
+expect drops=0 dropn=0 dndreading=0
+sh grep -q "source cancelled" "$OFX_ROOT/peer.log"
+sh ! grep -q "source send" "$OFX_ROOT/peer.log"
+quit

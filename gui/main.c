@@ -149,6 +149,7 @@ static void timer_stop(void)
 
 #include "watch.c"
 #include "clipboard.c"
+#include "dnd.c"
 #include "counts.c"
 #include "thumbs.c"
 #include "space.c"
@@ -549,6 +550,7 @@ static void quit_workers(void)
     count_join(&until), walk_join(&until), search_join(&until), thumbs_join(&until), space_join(&until), git_join(&until);
     jobs_join(&jobs_until), clear_join(&until);
     clip_close();
+    dnd_close();
 }
 
 static void usage(void)
@@ -697,6 +699,7 @@ static void app_start(void)
     conf_start();   // (F10: before watch_start, which watches the file's folder)
     if (!watch_start()) set_status(true, "inotify is unavailable: no live refresh");
     clip_init();   // false: the clipboard stays inside ofx
+    dnd_init();    // (F14: drags to and from other programs)
     // OFX_TEST_COUNT_DELAY_MS: each count takes that much longer, so a test can change the listing
     // while answers for the old one are on their way, or (60 s) stand in for a hung mount at quit.
     counts.delay_ms = env_int("OFX_TEST_COUNT_DELAY_MS", 0, 0, 60000);
@@ -770,6 +773,7 @@ static bool poll_workers(void)
     if (git_take()) dirty = true;
     if (branch_switched()) dirty = true;
     if (thumbs_take()) dirty = true;
+    if (dnd_poll()) dirty = true;
     if (app.ui.view == UI_VIEW_SEARCH && search_take()) search_relist(), dirty = true;
     if (app.search_due && now_ms() >= app.search_due) app.search_due = 0, search_retype(), dirty = true;
     i64 was_due = restore.due, was_rem = rem.due;   // (F11: the tabs, a folder's view, written 2 s after a change)
@@ -846,9 +850,9 @@ int main(int argc, char **argv)
     sigaddset(&quit_signals, SIGINT);
     sigaddset(&quit_signals, SIGUSR1);
     pthread_sigmask(SIG_BLOCK, &quit_signals, NULL);
-    // SIGPIPE too, which nobody waits for: a program reading our clipboard that leaves early would
-    // end the window at the next write; blocked, the write gets EPIPE. Children start with no
-    // signal blocked (fs/spawn.c, fs/sandbox.c, script.c's sh).
+    // SIGPIPE too, which nobody waits for: a program reading our clipboard or our drag that leaves
+    // early would end the window at the next write; blocked, the write gets EPIPE (F14). Children
+    // start with no signal blocked (fs/spawn.c, fs/sandbox.c, script.c's sh).
     sigset_t pipe_sig;
     sigemptyset(&pipe_sig);
     sigaddset(&pipe_sig, SIGPIPE);

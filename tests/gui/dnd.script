@@ -1,0 +1,22 @@
+# F14 step 1: drags from another program into ofx, through GLFW's data device and the drag hook
+# (gui/dnd.c), in the test sway (OFX_COMPOSITOR=sway). dndpeer (tools/gui/dndpeer.c) is the other
+# program, the right half of the output beside ofx; vptr (tools/gui/vptr.c) is the pointer, its x
+# and y the output's logical pixels (936x516). The tree (run.sh): adir/, a.txt, b.txt; $OFX_ROOT/from/c.txt
+# outside it.
+settle
+expect dndok=1 dndover=0 drops=0 dropfail=0
+sh dndpeer source "file://$OFX_ROOT/from/c.txt" "$OFX_ROOT/peer.log" >/dev/null 2>&1 &
+sleep 800
+settle
+# ---- a file dragged over the window: where it is, the copy the source offers taken; dropped: read
+# off the main thread, finished, its file kept (dropped files reach no folder yet: step 3)
+sh vptr move 700 250 press move 650 250 move 300 200 move 200 150 wait 1500 release >"$OFX_ROOT/vptr.log" 2>&1 &
+wait-for 3000 dndover=1 dndat=200,150 dndaction=1
+expect drops=0 n=3
+wait-for 3000 drops=1 dropn=1 dropfirst=c.txt dndover=0 dndreading=0 dropfail=0
+sh grep -q "source dnd_finished" "$OFX_ROOT/peer.log"
+sh test -f "$OFX_ROOT/from/c.txt" && test ! -e "$OFX_DIR/c.txt"
+# ---- the window answers its keys after it
+key down
+expect sel=a.txt
+quit

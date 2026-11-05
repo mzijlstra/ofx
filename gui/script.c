@@ -50,6 +50,9 @@
 //                           in one frame, as the mouse's go (drag_at: the zoom slider's knob, the
 //                           sidebar's edge)
 //   press-here              a left press at the last point, the button held across frames (F13)
+//   drag-out [move]         the marked files, or the cursor's, dragged out to other programs from the
+//                           compositor's left press holding the button now (F14: vptr's, in the
+//                           test sway), offered as copy, with move too
 //   move-to <x> <y> [ctrl][shift]  the pointer there (it rests there, as hover-here's); a held button
 //                           drags, with those keys held (a drop's copy or move, F13 step 3)
 //   move-here [ctrl][shift] the same, to the last point-ui
@@ -236,6 +239,8 @@ static void script_state(char *out, size_t cap)
     // the drop does, its folder's name; the outline drawn, and the badge's action as drawn.
     static const char *const DROP_WORDS[] = { "-", "row", "side", "tab", "crumb", "list" }, *const OP_WORDS[] = { "move", "copy", "trash" };
     char dragname[NAME_MAX + 1] = "-", dropw[32] = "-", dropdir[NAME_MAX + 1] = "-";
+    char dropfirst[NAME_MAX + 1] = "-";   // (F14: the first file of the last drop from another program)
+    if (dnd.got.n) state_word(dropfirst, sizeof dropfirst, path_base(str_from_c(dnd.got.path[0])));
     if (app.drag == DRAG_FILES) state_word(dragname, sizeof dragname, str_from_c(app.drag_name));
     if (app.drag == DRAG_FILES && app.drop.kind != DROP_NONE) snprintf(dropw, sizeof dropw, "%s:%d", DROP_WORDS[app.drop.kind], app.drop.at);
     if (app.drag == DRAG_FILES && app.drop.ok) state_word(dropdir, sizeof dropdir, path_base(str_from_c(app.drop.dir)));
@@ -534,7 +539,7 @@ static void script_state(char *out, size_t cap)
              "props=%d propat=%d propcan=%d propn=%td propmode=%04o propfiles=%lld propdirs=%lld propbytes=%lld propdone=%d propcut=%d proplinks=%lld,%lld,%lld,%d propnlink=%llu proptype=%s proptypename=%s propbyname=%d propname=%s "
              "propwhere=%s propdrive=%s proplink=%s propcreated=%d propidx=%td "
              "ow=%d owfresh=%d owlist=%d owtext=%s own=%td owsel=%td owapp=%s owicon=%s owtex=%d owshown=%td owtype=%s owfiles=%td owrows=%d owtop=%td owopts=%s owbad=%d owdef=%d owdefcan=%d findopts=%s findbad=%d findselect=%d findn=%td findat=%td findtext=%s "
-             "search=%d searchkeys=%d searchtext=%s searchdone=%d searchfull=%d searchdue=%d searchbad=%d searchbar=%d searchsel=%d-%d searchcaret=%d findsel=%d-%d findcaret=%d seldir=%s searchinfo=%s inside=%d insidekeys=%d insidetext=%s insideopts=%s insidebad=%d insiderow=%d hit=%s hitmatch=%s hitdrawn=%d datecol=%s datecolw=%.0f owreads=%d conf=%s confbad=%d seldate=%s trashfull=%d trashicon=%s spawned=%d closingall=%d closedtabs=%d emptyn=%td shiftsel=%s clearn=%lld clearing=%d gitshown=%d gitsel=%s gitn=%td gitnamecol=%s gitcells=%d infogit=%s gitdue=%d branch=%s brn=%d brhere=%d brnote=%s brlist=%s brfits=%d brunder=%d gitwatch=%d brtotal=%d brp=%d brpn=%td brpsel=%s brptext=%s brpinlist=%d sidew=%d sidebox=%.0f sidepx=%d drag=%s edgelit=%d resizeptr=%d dragn=%td dragname=%s drop=%s dropok=%d dropop=%s dropdir=%s dropmark=%d badge=%s spring=%d springbar=%d badgein=%d statusbad=%d status=%s",
+             "search=%d searchkeys=%d searchtext=%s searchdone=%d searchfull=%d searchdue=%d searchbad=%d searchbar=%d searchsel=%d-%d searchcaret=%d findsel=%d-%d findcaret=%d seldir=%s searchinfo=%s inside=%d insidekeys=%d insidetext=%s insideopts=%s insidebad=%d insiderow=%d hit=%s hitmatch=%s hitdrawn=%d datecol=%s datecolw=%.0f owreads=%d conf=%s confbad=%d seldate=%s trashfull=%d trashicon=%s spawned=%d closingall=%d closedtabs=%d emptyn=%td shiftsel=%s clearn=%lld clearing=%d gitshown=%d gitsel=%s gitn=%td gitnamecol=%s gitcells=%d infogit=%s gitdue=%d branch=%s brn=%d brhere=%d brnote=%s brlist=%s brfits=%d brunder=%d gitwatch=%d brtotal=%d brp=%d brpn=%td brpsel=%s brptext=%s brpinlist=%d sidew=%d sidebox=%.0f sidepx=%d drag=%s edgelit=%d resizeptr=%d dragn=%td dragname=%s drop=%s dropok=%d dropop=%s dropdir=%s dropmark=%d badge=%s spring=%d springbar=%d badgein=%d dndok=%d dndpress=%d dndover=%d dndat=%.0f,%.0f dndaction=%u dndreading=%d drops=%d dropfail=%d dropn=%td dropfirst=%s owndrops=%d dndout=%s dndoutact=%u dndsent=%lld dndwrote=%d statusbad=%d status=%s",
              app.cwd, app.list.n, app.list.hidden, STR_ARG(sel), app.ui.list.sel, app.ui.list.top, app.ui.list.rows, app.hov.row,
              t->accent.r, t->accent.g, t->accent.b, t->bg.r, t->bg.g, t->bg.b, t->icons[0] ? t->icons : "-",
              app.icon_scale, GetScreenWidth(), GetScreenHeight(), app.reloads, app.themes, atomic_load(&watch.batches),
@@ -573,7 +578,7 @@ static void script_state(char *out, size_t cap)
              app.ui.find.anchor < app.ui.find.caret ? app.ui.find.anchor : app.ui.find.caret,
              app.ui.find.anchor < app.ui.find.caret ? app.ui.find.caret : app.ui.find.anchor, app.ui.find.caret, seldir, searchinfo,
              app.ui.search_inside, app.ui.focus == UI_FOCUS_INSIDE, insidetext, insideopts, app.search_im.bad,
-             (int)Clay_GetElementData(CLAY_ID("inside-field")).found, hit, hitmatch, hitdrawn, VIEWS[app.ui.view].date_col, date_w(), ow_idb_reads, confw, app.conf.bad, seldate, app.trash_full, trashicon, spawn_started, closing_all, closed_tabs.n, app.empty_n, app.ui.shift_add ? "add" : "range", clear.counted ? (long long)clear.sum.files : -1LL, clear.running, git_shown() != NULL, GIT_WORDS[app.have_list && app.list.n ? entry_git(app.ui.list.sel) : GS_NONE], git_shown() ? git_shown()->g.changed : (isize)0, gitnamecol, gitcells, infogit, git.due != 0, branch, app.ui.br_n, app.ui.br_here, brnote, brlist, brfits, brunder, atomic_load(&watch.git_wd) >= 0, app.ui.br_total, app.ui.panel == UI_PANEL_BRANCHES, app.ui.brp.list.n, brpsel, brptext, app.ui.brp.in_list, side_w(), Clay_GetElementData(CLAY_ID("side")).boundingBox.width, app.side_px, DRAG_WORDS[app.drag], edge_lit && side_w(), cursor_now == MOUSE_CURSOR_RESIZE_EW, app.drag == DRAG_FILES ? dragged.n : (isize)0, dragname, dropw, app.drop.ok, dropop, dropdir, drop_marked, badge, app.spring_tab, spring_fill < 0 ? -1 : (int)(spring_fill * 100), badge_drawn && badge_in(), app.status[0] && app.status_bad, app.status[0] ? app.status : "-");
+             (int)Clay_GetElementData(CLAY_ID("inside-field")).found, hit, hitmatch, hitdrawn, VIEWS[app.ui.view].date_col, date_w(), ow_idb_reads, confw, app.conf.bad, seldate, app.trash_full, trashicon, spawn_started, closing_all, closed_tabs.n, app.empty_n, app.ui.shift_add ? "add" : "range", clear.counted ? (long long)clear.sum.files : -1LL, clear.running, git_shown() != NULL, GIT_WORDS[app.have_list && app.list.n ? entry_git(app.ui.list.sel) : GS_NONE], git_shown() ? git_shown()->g.changed : (isize)0, gitnamecol, gitcells, infogit, git.due != 0, branch, app.ui.br_n, app.ui.br_here, brnote, brlist, brfits, brunder, atomic_load(&watch.git_wd) >= 0, app.ui.br_total, app.ui.panel == UI_PANEL_BRANCHES, app.ui.brp.list.n, brpsel, brptext, app.ui.brp.in_list, side_w(), Clay_GetElementData(CLAY_ID("side")).boundingBox.width, app.side_px, DRAG_WORDS[app.drag], edge_lit && side_w(), cursor_now == MOUSE_CURSOR_RESIZE_EW, app.drag == DRAG_FILES ? dragged.n : (isize)0, dragname, dropw, app.drop.ok, dropop, dropdir, drop_marked, badge, app.spring_tab, spring_fill < 0 ? -1 : (int)(spring_fill * 100), badge_drawn && badge_in(), dnd.ok, dnd.press != 0, dnd.over >= 0, dnd.x, dnd.y, dnd.action, dnd.reading != NULL, dnd.drops, dnd.drops_failed, dnd.got.n, dropfirst, dnd.own_drops, DND_OUT_WORD[dnd.out], dnd.out_action, (long long)atomic_load(&dnd.sent), atomic_load(&dnd.wrote), app.status[0] && app.status_bad, app.status[0] ? app.status : "-");
     // (cut short, its last words, status= among them, would fail an expect that is right: F13 code-health review)
     if (len < 0 || (size_t)len >= cap) script_fail("the state line is %d bytes, more than its %zu", len, cap);
     frame_us_max = 0;
@@ -921,6 +926,11 @@ static bool script_input(UiInput *in)
             press_at(in, script.px, script.py, 0);
             drag_at(in, script.px + (float)atoi(a), script.py, true);
             drag_at(in, script.px + (float)atoi(a), script.py, false);
+        } else if (str_eq(cmd, S("drag-out"))) {   // (F14 step 1, until the files' drag leaving the window does it)
+            static ClipFiles c;
+            arena_reset(&scratch);
+            c.n = targets(&scratch, c.path, CLIP_PATHS_MAX);
+            if (!dnd_start(&c, strstr(a, "move") != NULL)) script_fail("drag-out: no drag started (dndok=%d, a press held: %d)", dnd.ok, dnd.press != 0);
         } else if (str_eq(cmd, S("press-here"))) {   // (F13) held across frames, until release
             press_at(in, script.px, script.py, 0);
             script.held = true;

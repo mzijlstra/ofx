@@ -1,0 +1,418 @@
+// Drag and drop with other programs (docs/plan.md, F14). GLFW's own data device carries the drags
+// (Hyprland sends a drag to a client's first data device only, and that is GLFW's), and the
+// patched GLFW hands them to this file (glfwSetWaylandDragHook, vendor/patches/glfw-dnd.patch)
+// instead of reading a drop itself. Its events run on the main thread, inside GLFW's dispatch.
+// A registry of ofx's own on GLFW's connection binds a data device manager (ofx's sources) and the
+// seat, and a pointer once the seat has one: a drag out needs the serial of the press that holds
+// the button.
+//
+// What can block runs on a short thread of its own, so the window keeps answering: a drop's read
+// (the other program writes it in its own time) and each write of a source of ours (the other
+// program reads it in its own). A drop of ofx's own drag back on its window isn't read: its offer
+// carries a type naming this process (own_mime), its files are the drag's already, and it drops
+// as a drag inside the window does (F13; the spike, reading it on the main thread, waited on
+// itself).
+// Included by main.c.
+
+#include <linux/input-event-codes.h>
+
+#define GLFW_EXPOSE_NATIVE_WAYLAND
+#include "GLFW/glfw3native.h"
+
+enum { DND_OFFERS = 8, DND_READ_MAX = MiB(1), DND_WAIT_MS = 2000 };
+enum { DND_TYPE_URIS = 1, DND_TYPE_TEXT = 2, DND_TYPE_OWN = 4 };
+typedef enum { DND_OUT_NONE, DND_OUT_DRAGGING, DND_OUT_DROPPED, DND_OUT_DONE, DND_OUT_CANCELLED } DndOut;
+static const char *const DND_OUT_WORD[] = { "none", "dragging", "dropped", "done", "cancelled" };
+
+static char dnd_read_mem[DND_READ_MAX];   // a drop's text/uri-list, written by dnd_reader alone while dnd.reading
+static u8   dnd_got_mem[MiB(2)];          // dnd.got's paths
+static u8   dnd_src_mem[MiB(2)];          // our source's payloads, read by the writers alone while dnd.writers
+
+static struct {
+    bool ok;                              // the hook is set: drags reach ofx
+    struct wl_display *dpy;
+    struct wl_registry *reg;
+    struct wl_seat *seat;
+    struct wl_pointer *ptr;
+    struct wl_data_device_manager *mgr;
+    struct wl_data_device *dev;           // GLFW's
+    struct wl_surface *surf;              // GLFW's window
+    char own_mime[64];                    // "application/x-ofx-drag-<pid>": another ofx window's is another program's
+    bool changed;                         // something a frame shows changed (dnd_poll)
+
+    // Every offer announced on the device, its types and the source's actions: Hyprland announces a
+    // clipboard offer on every keyboard focus change, through the same device, so the types belong
+    // to an offer, never to "the latest". Slots of offers never entered are only forgotten: those are
+    // GLFW's (the selection) to destroy.
+    struct { struct wl_data_offer *o; unsigned types; uint32_t actions; u32 age; } offers[DND_OFFERS];
+    u32 ages;
+    int over;                             // the slot entered, -1 for none: a drag over the window
+    uint32_t serial;                      // its enter's
+    float x, y;                           // where it is, in the surface's logical pixels
+    uint32_t action;                      // the action the compositor settled on (offer.action)
+
+    // The drop being read (dnd_reader), then finished on the main thread (dnd_poll).
+    struct wl_data_offer *reading;
+    int read_fd;
+    isize read_n;
+    bool read_whole;                      // to its end within DND_WAIT_MS and DND_READ_MAX
+    atomic_bool read_done;
+    Arena gota;
+    ClipFiles got;                        // the last drop's files (dnd_take)
+    bool got_new;
+    int drops, own_drops, drops_failed;   // for the scripts' state line
+
+    // Our drag out (dnd_start).
+    struct wl_data_source *src;
+    uint32_t press;                       // the serial of the left press holding the button, 0 for none
+    Arena srca;
+    Str payload[CLIP_FMTS];
+    atomic_int writers;                   // writer threads still reading payload
+    atomic_llong sent;                    // bytes the writers wrote, for the scripts
+    atomic_int wrote;                     // writers ended, for the scripts
+    DndOut out;
+    uint32_t out_action;                  // the action the target took (source.action)
+} dnd;   // (no initializer, so in .bss rather than 33 KB of .data: dnd_init sets the -1s)
+
+static int dnd_slot(struct wl_data_offer *o)
+{
+    for (int i = 0; o && i < DND_OFFERS; i++)
+        if (dnd.offers[i].o == o) return i;
+    return -1;
+}
+
+static void dnd_offer_type(void *data, struct wl_data_offer *o, const char *mime)
+{
+    (void)data;
+    int i = dnd_slot(o);
+    if (i < 0) return;
+    if (strcmp(mime, CLIP_MIME_URIS) == 0) dnd.offers[i].types |= DND_TYPE_URIS;
+    else if (strcmp(mime, CLIP_MIME_TEXT[0]) == 0 || strcmp(mime, CLIP_MIME_TEXT[1]) == 0) dnd.offers[i].types |= DND_TYPE_TEXT;
+    else if (strcmp(mime, dnd.own_mime) == 0) dnd.offers[i].types |= DND_TYPE_OWN;
+}
+static void dnd_offer_actions(void *data, struct wl_data_offer *o, uint32_t a)
+{
+    (void)data;
+    int i = dnd_slot(o);
+    if (i >= 0) dnd.offers[i].actions = a;
+}
+static void dnd_offer_action(void *data, struct wl_data_offer *o, uint32_t a)
+{
+    (void)data;
+    if (dnd.over >= 0 && dnd.offers[dnd.over].o == o) dnd.action = a, dnd.changed = true;
+}
+static const struct wl_data_offer_listener dnd_offer_l = { dnd_offer_type, dnd_offer_actions, dnd_offer_action };
+
+// A new offer: its own slot (a slot of the same address is one GLFW destroyed: the address came
+// back), else a free one, else the oldest one not entered.
+static void dnd_data_offer(void *data, struct wl_data_device *d, struct wl_data_offer *o)
+{
+    (void)data, (void)d;
+    int i = dnd_slot(o);
+    for (int k = 0; i < 0 && k < DND_OFFERS; k++)
+        if (!dnd.offers[k].o) i = k;
+    if (i < 0)
+        for (int k = 0; k < DND_OFFERS; k++)
+            if (k != dnd.over && (i < 0 || dnd.offers[k].age < dnd.offers[i].age)) i = k;
+    dnd.offers[i].o = o, dnd.offers[i].types = 0, dnd.offers[i].actions = 0, dnd.offers[i].age = ++dnd.ages;
+}
+
+static void dnd_forget(int i)
+{
+    if (i >= 0) dnd.offers[i].o = NULL;
+}
+
+// What the drag over the window is told: step 1 takes files as a copy only (step 3 asks the target
+// under the pointer, and Nemo's rule), and ofx's own drag back with its own type.
+static void dnd_answer(void)
+{
+    int i = dnd.over;
+    if (i < 0) return;
+    struct wl_data_offer *o = dnd.offers[i].o;
+    unsigned t = dnd.offers[i].types;
+    bool copy = dnd.offers[i].actions & WL_DATA_DEVICE_MANAGER_DND_ACTION_COPY;
+    const char *mime = t & DND_TYPE_OWN ? dnd.own_mime : (t & DND_TYPE_URIS) && copy && !dnd.reading ? CLIP_MIME_URIS : NULL;
+    wl_data_offer_accept(o, dnd.serial, mime);
+    uint32_t a = mime ? WL_DATA_DEVICE_MANAGER_DND_ACTION_COPY : WL_DATA_DEVICE_MANAGER_DND_ACTION_NONE;
+    wl_data_offer_set_actions(o, a, a);
+}
+
+static void dnd_leave(void *data, struct wl_data_device *d);
+
+static void dnd_enter(void *data, struct wl_data_device *d, uint32_t serial, struct wl_surface *s, wl_fixed_t x, wl_fixed_t y, struct wl_data_offer *o)
+{
+    (void)data, (void)d;
+    if (dnd.over >= 0) dnd_leave(NULL, d);   // (a second enter without a leave: the first is over)
+    dnd.serial = serial, dnd.x = (float)wl_fixed_to_double(x), dnd.y = (float)wl_fixed_to_double(y);
+    dnd.action = 0, dnd.changed = true;
+    int i = dnd_slot(o);
+    if (!o) return;   // (a drag of another client's own, with no data: nothing to take)
+    if (i < 0 || s != dnd.surf) {   // (not announced, or GLFW's decorations: refused, and the offer is ours)
+        wl_data_offer_accept(o, serial, NULL);
+        wl_data_offer_destroy(o);
+        dnd_forget(i);
+        return;
+    }
+    dnd.over = i;
+    dnd_answer();
+}
+
+static void dnd_leave(void *data, struct wl_data_device *d)
+{
+    (void)data, (void)d;
+    if (dnd.over < 0) return;
+    wl_data_offer_destroy(dnd.offers[dnd.over].o);
+    dnd_forget(dnd.over);
+    dnd.over = -1, dnd.changed = true;
+}
+
+static void dnd_motion(void *data, struct wl_data_device *d, uint32_t t, wl_fixed_t x, wl_fixed_t y)
+{
+    (void)data, (void)d, (void)t;
+    if (dnd.over < 0) return;
+    dnd.x = (float)wl_fixed_to_double(x), dnd.y = (float)wl_fixed_to_double(y), dnd.changed = true;
+}
+
+// The drop's text/uri-list, read off the main thread: DND_WAIT_MS at most, DND_READ_MAX bytes at
+// most; then dnd_poll finishes the offer on the main thread, where it lives.
+static void *dnd_reader(void *arg)
+{
+    (void)arg;
+    int fd = dnd.read_fd;
+    isize n = 0;
+    bool whole = false;
+    i64 until = now_ms() + DND_WAIT_MS;
+    while (n < DND_READ_MAX - 1 && now_ms() < until) {
+        if (poll(&(struct pollfd){ .fd = fd, .events = POLLIN }, 1, 50) <= 0) continue;
+        ssize_t k = read(fd, dnd_read_mem + n, (size_t)(DND_READ_MAX - 1 - n));
+        if (k < 0 && (errno == EINTR || errno == EAGAIN)) continue;
+        if (k <= 0) {
+            whole = k == 0;
+            break;
+        }
+        n += k;
+    }
+    close(fd);
+    dnd_read_mem[n] = 0;
+    dnd.read_n = n, dnd.read_whole = whole;
+    atomic_store(&dnd.read_done, true);
+    wake_main();
+    return NULL;
+}
+
+static void dnd_drop(void *data, struct wl_data_device *d)
+{
+    (void)data, (void)d;
+    int i = dnd.over;
+    if (i < 0) return;
+    struct wl_data_offer *o = dnd.offers[i].o;
+    unsigned t = dnd.offers[i].types;
+    dnd.over = -1, dnd.changed = true;   // (the leave after a drop, if one comes, finds nothing entered)
+    dnd_forget(i);
+    if (t & DND_TYPE_OWN) {   // ofx's own drag: not read (above)
+        wl_data_offer_finish(o);
+        wl_data_offer_destroy(o);
+        dnd.own_drops++;
+        return;
+    }
+    int p[2];
+    if (!(t & DND_TYPE_URIS) || dnd.reading || dnd.action == WL_DATA_DEVICE_MANAGER_DND_ACTION_NONE || pipe2(p, O_CLOEXEC) != 0) {
+        wl_data_offer_destroy(o);
+        dnd.drops_failed++;
+        return;
+    }
+    wl_data_offer_receive(o, CLIP_MIME_URIS, p[1]);
+    wl_display_flush(dnd.dpy);
+    close(p[1]);
+    dnd.read_fd = p[0], dnd.reading = o;
+    pthread_t th;
+    if (pthread_create(&th, NULL, dnd_reader, NULL) == 0) {
+        pthread_detach(th);
+        return;
+    }
+    close(p[0]);
+    wl_data_offer_destroy(o);
+    dnd.reading = NULL, dnd.drops_failed++;
+}
+
+static void dnd_selection(void *data, struct wl_data_device *d, struct wl_data_offer *o)
+{
+    (void)data, (void)d, (void)o;   // (the selection is GLFW's: the hook isn't asked)
+}
+
+static const struct wl_data_device_listener dnd_dev_l = { dnd_data_offer, dnd_enter, dnd_leave, dnd_motion, dnd_drop, dnd_selection };
+
+// ---- our drag out --------------------------------------------------------------------------------
+
+// One of a source's payloads to fd, off the main thread: DND_WAIT_MS at most (a reader that leaves
+// early gets EPIPE: SIGPIPE is blocked in every thread, main.c).
+static void *dnd_writer(void *arg)
+{
+    int fd = (int)((intptr_t)arg >> 8);
+    Str p = dnd.payload[(intptr_t)arg & 0xff];
+    fcntl(fd, F_SETFL, O_NONBLOCK);
+    i64 until = now_ms() + DND_WAIT_MS;
+    isize at = 0;
+    while (at < p.len && now_ms() < until) {
+        ssize_t k = write(fd, p.p + at, (size_t)(p.len - at));
+        if (k > 0) at += k;
+        else if (k < 0 && errno != EAGAIN && errno != EINTR) break;
+        else poll(&(struct pollfd){ .fd = fd, .events = POLLOUT }, 1, 50);
+    }
+    close(fd);
+    atomic_fetch_add(&dnd.sent, (long long)at);
+    atomic_fetch_add(&dnd.wrote, 1);
+    atomic_fetch_sub(&dnd.writers, 1);
+    wake_main();
+    return NULL;
+}
+
+static void dnd_src_target(void *data, struct wl_data_source *s, const char *mime) { (void)data, (void)s, (void)mime; }
+static void dnd_src_send(void *data, struct wl_data_source *s, const char *mime, int32_t fd)
+{
+    (void)data, (void)s;
+    int f = strcmp(mime, CLIP_MIME_URIS) == 0 ? CLIP_FMT_URIS : strcmp(mime, CLIP_MIME_TEXT[0]) == 0 || strcmp(mime, CLIP_MIME_TEXT[1]) == 0 ? CLIP_FMT_TEXT : -1;
+    pthread_t th;
+    atomic_fetch_add(&dnd.writers, 1);
+    if (f >= 0 && pthread_create(&th, NULL, dnd_writer, (void *)(((intptr_t)fd << 8) | f)) == 0) {
+        pthread_detach(th);
+        return;
+    }
+    atomic_fetch_sub(&dnd.writers, 1);   // (our own type, which is never read, or no thread)
+    close(fd);
+}
+static void dnd_src_end(struct wl_data_source *s, DndOut how)
+{
+    wl_data_source_destroy(s);
+    if (dnd.src == s) dnd.src = NULL, dnd.out = how, dnd.changed = true;
+}
+static void dnd_src_cancelled(void *data, struct wl_data_source *s) { (void)data; dnd_src_end(s, DND_OUT_CANCELLED); }
+static void dnd_src_performed(void *data, struct wl_data_source *s)
+{
+    (void)data;
+    if (dnd.src == s) dnd.out = DND_OUT_DROPPED, dnd.changed = true;
+}
+static void dnd_src_finished(void *data, struct wl_data_source *s) { (void)data; dnd_src_end(s, DND_OUT_DONE); }
+static void dnd_src_action(void *data, struct wl_data_source *s, uint32_t a)
+{
+    (void)data;
+    if (dnd.src == s) dnd.out_action = a, dnd.changed = true;
+}
+static const struct wl_data_source_listener dnd_src_l = { dnd_src_target, dnd_src_send, dnd_src_cancelled, dnd_src_performed, dnd_src_finished, dnd_src_action };
+
+// c's files dragged out of the window, as copy (and with move, a move too), from the left press
+// that holds the button now: false when there is none, or a drag of ours is still going or being
+// read.
+static bool dnd_start(const ClipFiles *c, bool move)
+{
+    if (!dnd.ok || !dnd.press || dnd.src || atomic_load(&dnd.writers) > 0 || c->n == 0) return false;
+    arena_reset(&dnd.srca);
+    dnd.payload[CLIP_FMT_URIS] = clip_payload(&dnd.srca, c, CLIP_FMT_URIS);
+    dnd.payload[CLIP_FMT_TEXT] = clip_payload(&dnd.srca, c, CLIP_FMT_TEXT);
+    if (dnd.payload[CLIP_FMT_URIS].len == 0) return false;   // (too many to fit)
+    dnd.src = wl_data_device_manager_create_data_source(dnd.mgr);
+    wl_data_source_add_listener(dnd.src, &dnd_src_l, NULL);
+    wl_data_source_offer(dnd.src, CLIP_MIME_URIS);
+    wl_data_source_offer(dnd.src, CLIP_MIME_TEXT[0]);
+    wl_data_source_offer(dnd.src, CLIP_MIME_TEXT[1]);
+    wl_data_source_offer(dnd.src, dnd.own_mime);
+    wl_data_source_set_actions(dnd.src, WL_DATA_DEVICE_MANAGER_DND_ACTION_COPY | (move ? WL_DATA_DEVICE_MANAGER_DND_ACTION_MOVE : 0));
+    wl_data_device_start_drag(dnd.dev, dnd.src, dnd.surf, NULL, dnd.press);
+    wl_display_flush(dnd.dpy);
+    dnd.out = DND_OUT_DRAGGING, dnd.out_action = 0, dnd.changed = true;
+    return true;
+}
+
+// ---- the pointer's press serial, the seat, the registry ------------------------------------------
+
+static void dnd_ptr_enter(void *data, struct wl_pointer *p, uint32_t serial, struct wl_surface *s, wl_fixed_t x, wl_fixed_t y) { (void)data, (void)p, (void)serial, (void)s, (void)x, (void)y; }
+static void dnd_ptr_leave(void *data, struct wl_pointer *p, uint32_t serial, struct wl_surface *s) { (void)data, (void)p, (void)serial, (void)s; }
+static void dnd_ptr_motion(void *data, struct wl_pointer *p, uint32_t t, wl_fixed_t x, wl_fixed_t y) { (void)data, (void)p, (void)t, (void)x, (void)y; }
+static void dnd_ptr_button(void *data, struct wl_pointer *p, uint32_t serial, uint32_t t, uint32_t button, uint32_t state)
+{
+    (void)data, (void)p, (void)t;
+    if (button == BTN_LEFT) dnd.press = state == WL_POINTER_BUTTON_STATE_PRESSED ? serial : 0, dnd.changed = true;
+}
+static void dnd_ptr_axis(void *data, struct wl_pointer *p, uint32_t t, uint32_t a, wl_fixed_t v) { (void)data, (void)p, (void)t, (void)a, (void)v; }
+static const struct wl_pointer_listener dnd_ptr_l = { .enter = dnd_ptr_enter, .leave = dnd_ptr_leave, .motion = dnd_ptr_motion, .button = dnd_ptr_button, .axis = dnd_ptr_axis };
+
+// The pointer once the seat has one (asked for on a seat without one is a protocol error: the
+// headless test sway has none until vptr makes one), bound at version 1, which has no other events.
+static void dnd_seat_caps(void *data, struct wl_seat *s, uint32_t caps)
+{
+    (void)data;
+    if ((caps & WL_SEAT_CAPABILITY_POINTER) && !dnd.ptr) dnd.ptr = wl_seat_get_pointer(s), wl_pointer_add_listener(dnd.ptr, &dnd_ptr_l, NULL);
+    else if (!(caps & WL_SEAT_CAPABILITY_POINTER) && dnd.ptr) wl_pointer_destroy(dnd.ptr), dnd.ptr = NULL, dnd.press = 0;
+}
+static void dnd_seat_name(void *data, struct wl_seat *s, const char *name) { (void)data, (void)s, (void)name; }
+static const struct wl_seat_listener dnd_seat_l = { dnd_seat_caps, dnd_seat_name };
+
+static void dnd_global(void *data, struct wl_registry *r, uint32_t name, const char *iface, uint32_t version)
+{
+    (void)data;
+    if (strcmp(iface, wl_data_device_manager_interface.name) == 0 && !dnd.mgr && version >= 3)
+        dnd.mgr = wl_registry_bind(r, name, &wl_data_device_manager_interface, 3);
+    if (strcmp(iface, wl_seat_interface.name) == 0 && !dnd.seat) dnd.seat = wl_registry_bind(r, name, &wl_seat_interface, 1);
+}
+static void dnd_global_remove(void *data, struct wl_registry *r, uint32_t name) { (void)data, (void)r, (void)name; }
+static const struct wl_registry_listener dnd_reg_l = { dnd_global, dnd_global_remove };
+
+// After the window opens. Without Wayland, a version 3 data device manager or a seat, drags stay
+// GLFW's (raylib's drop list, which ofx ignores).
+static void dnd_init(void)
+{
+    dnd.over = -1, dnd.read_fd = -1;
+    arena_init(&dnd.gota, "drop", dnd_got_mem, sizeof dnd_got_mem);
+    arena_init(&dnd.srca, "drag source", dnd_src_mem, sizeof dnd_src_mem);
+    snprintf(dnd.own_mime, sizeof dnd.own_mime, "application/x-ofx-drag-%d", (int)getpid());
+    dnd.dpy = glfwGetWaylandDisplay();
+    dnd.surf = GetWindowHandle();   // (raylib's is GLFW's wl_surface on Wayland)
+    dnd.dev = dnd.dpy ? glfwGetWaylandDataDevice() : NULL;
+    if (!dnd.dev || !dnd.surf) return;
+    dnd.reg = wl_display_get_registry(dnd.dpy);   // (GLFW's queue: dispatched as GLFW dispatches)
+    wl_registry_add_listener(dnd.reg, &dnd_reg_l, NULL);
+    wl_display_roundtrip(dnd.dpy);
+    if (!dnd.mgr || !dnd.seat) return;
+    wl_seat_add_listener(dnd.seat, &dnd_seat_l, NULL);
+    glfwSetWaylandDragHook(&dnd_dev_l, &dnd_offer_l, NULL);
+    dnd.ok = true;
+}
+
+// Each frame: a drop read to its end finished and its files kept (dnd_take); whether anything a
+// frame shows changed.
+static bool dnd_poll(void)
+{
+    if (atomic_exchange(&dnd.read_done, false) && dnd.reading) {
+        arena_reset(&dnd.gota);
+        bool files = dnd.read_whole && clip_parse(&dnd.gota, (Str){ dnd_read_mem, dnd.read_n }, false, &dnd.got);
+        if (files) wl_data_offer_finish(dnd.reading), dnd.drops++, dnd.got_new = true;
+        else dnd.got.n = 0, dnd.drops_failed++;
+        wl_data_offer_destroy(dnd.reading);
+        dnd.reading = NULL, dnd.changed = true;
+    }
+    bool c = dnd.changed;
+    dnd.changed = false;
+    return c;
+}
+
+// The files of a drop from another program, once (NULL: none since the last call).
+static const ClipFiles *dnd_take(void)
+{
+    if (!dnd.got_new) return NULL;
+    dnd.got_new = false;
+    return &dnd.got;
+}
+
+// At the quit, the window still open: our source and every offer we hold given back, the hook
+// unset. A thread still reading or writing has its own fd, and ends within DND_WAIT_MS.
+static void dnd_close(void)
+{
+    if (!dnd.ok) return;
+    glfwSetWaylandDragHook(NULL, NULL, NULL);
+    if (dnd.src) wl_data_source_destroy(dnd.src), dnd.src = NULL;
+    if (dnd.over >= 0) wl_data_offer_destroy(dnd.offers[dnd.over].o), dnd.over = -1;
+    if (dnd.reading) wl_data_offer_destroy(dnd.reading), dnd.reading = NULL;
+    if (dnd.ptr) wl_pointer_destroy(dnd.ptr), dnd.ptr = NULL;
+    wl_seat_destroy(dnd.seat), wl_data_device_manager_destroy(dnd.mgr), wl_registry_destroy(dnd.reg);
+    dnd.ok = false;
+}

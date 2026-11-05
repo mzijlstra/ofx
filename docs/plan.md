@@ -796,6 +796,19 @@ devices on one client.
 plumbing (offers by offer, the reads and writes off the main thread). 2. dragging out. 3.
 dropping in. 4. the milestone's code-health review.
 
+**Step 1 (2026-11-05):** gui/dnd.c on the patched GLFW. Offers kept by offer (eight slots, an
+offer never entered only forgotten: it is GLFW's selection to destroy); a drag over the window is
+taken as a copy of `text/uri-list` for now (step 3 asks the target under the pointer); a drop is
+read on a thread of its own (2 s, 1 MiB at most), then finished on the main thread and its files
+kept for step 3 (`dnd_take`); a source of ours (`dnd_start`, from the press our own pointer saw)
+offers `text/uri-list`, both text/plain names and `application/x-ofx-drag-<pid>`, each write on a
+thread of its own. Another ofx window's drag is another program's (the pid). Its tests are the
+`dnd` group in the test sway, the script's `drag-out` standing in for step 2's start. Found on the
+way: ofx never blocked SIGPIPE, so a program that left our clipboard's or drag's pipe early would
+have ended the window at the next write (now blocked in every thread; children start with none
+blocked); and the test sway's output was 468x258 logical, not weston's 936x516 (its resolution is
+pixels): fixed, the clip and keys groups pass at either size.
+
 **Michael's answers (2026-11-05):**
 - **Scope:** out, and files in (both in F14, out first).
 - **A browser's link or image** (a web address, no file): refused in F14, the drop cursor says no.

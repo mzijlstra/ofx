@@ -1,0 +1,16 @@
+# F14 step 1: a target that closes the pipe unread (dndpeer target-hangup): our writer gets EPIPE,
+# not SIGPIPE, which would end the window (main.c blocks it in every thread). Layout as dnd.script.
+settle
+sh dndpeer target-hangup "$OFX_ROOT/peer.log" >/dev/null 2>&1 &
+sleep 800
+settle
+key down
+sh vptr move 200 300 press wait 1500 move 300 300 move 650 250 move 700 250 wait 300 release >"$OFX_ROOT/vptr.log" 2>&1 &
+wait-for 3000 dndpress=1
+drag-out
+wait-for 4000 dndwrote=1 dndsent=0
+sh grep -q "hung up" "$OFX_ROOT/peer.log"
+sleep 300
+key down
+expect sel=b.txt
+quit

@@ -956,6 +956,17 @@ MUTANTS = [
     # A hover over another sidebar row that asks for no frame (review, 2026-11-05: a pointer move
     # counts as input only when it changes what is lit)
     ('gui/main.c', '    return a.row == b.row && a.side == b.side && a.header', '    return a.row == b.row && a.header', 'f6'),
+    # F14 step 1 (2026-11-05): drags with other programs (gui/dnd.c), in the test sway (dnd)
+    ('gui/main.c', '    pthread_sigmask(SIG_BLOCK, &pipe_sig, NULL);\n', '', 'dnd'),
+    ('gui/main.c', '    if (dnd_poll()) dirty = true;', '    dnd_poll();', 'dnd'),
+    ('gui/dnd.c', '    if (strcmp(mime, CLIP_MIME_URIS) == 0) dnd.offers[i].types |= DND_TYPE_URIS;\n    else if', '    if (false) {}\n    else if', 'dnd'),
+    ('gui/dnd.c', '    if (t & DND_TYPE_OWN) {   // ofx\'s own drag: not read (above)', '    if (false) {   // ofx\'s own drag: not read (above)', 'dnd'),
+    ('gui/dnd.c', '    dnd.x = (float)wl_fixed_to_double(x), dnd.y = (float)wl_fixed_to_double(y), dnd.changed = true;\n}', '}', 'dnd'),
+    ('gui/dnd.c', '    if (pthread_create(&th, NULL, dnd_reader, NULL) == 0) {\n        pthread_detach(th);\n        return;\n    }', '    if (dnd_reader(NULL) == NULL) return;\n    (void)th;', 'dnd'),
+    ('gui/dnd.c', '        if (files) wl_data_offer_finish(dnd.reading), dnd.drops++', '        if (files) dnd.drops++', 'dnd'),
+    ('gui/dnd.c', '    wl_data_source_offer(dnd.src, CLIP_MIME_TEXT[0]);\n', '', 'dnd'),
+    ('gui/dnd.c', ' | (move ? WL_DATA_DEVICE_MANAGER_DND_ACTION_MOVE : 0));', ');', 'dnd'),
+    ('gui/dnd.c', '    if (button == BTN_LEFT) dnd.press = state == WL_POINTER_BUTTON_STATE_PRESSED ? serial : 0', '    if (button == BTN_LEFT) dnd.press = 0', 'dnd'),
 ]
 import concurrent.futures, queue, threading, time
 

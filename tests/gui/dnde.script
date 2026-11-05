@@ -1,0 +1,15 @@
+# F14 step 1: ofx's own drag dropped back on its own window: known by its own type, counted as its
+# own and not read (its files are the drag's), and the window keeps answering. Layout as
+# dnd.script, with no peer: ofx fills the output.
+settle
+key down
+sh vptr move 200 300 press wait 1500 move 300 300 move 400 200 wait 300 release >"$OFX_ROOT/vptr.log" 2>&1 &
+wait-for 3000 dndpress=1
+drag-out
+wait-for 3000 dndover=1
+expect dndaction=1
+wait-for 4000 owndrops=1 dndover=0
+expect drops=0 dropfail=0 dndreading=0 dndsent=0
+key down
+expect sel=b.txt
+quit
