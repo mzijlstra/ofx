@@ -12,8 +12,8 @@
 # The IPC socket (SWAYSOCK, for swaymsg) is in a folder of its own under /tmp, named in
 # <scratch-dir>/sway.ipcdir: a socket's path has at most 107 bytes, and in a long scratch dir sway
 # couldn't bind it and crashed (2026-10-29: the GUI mutants' clip and keys runs). The output is 936x516 logical
-# at scale 2, the window's size in weston (sway draws no decorations, so the tiled window is the
-# output), or OFX_SWAY_SIZE=WxH.
+# (OFX_SWAY_SIZE=WxH), at scale 2, the window's size in weston (sway draws no decorations, so the
+# tiled window is the output). Until 2026-11-05 it was 936x516 pixels, so half that logical.
 set -u
 cmd=${1:?start|stop} T=${2:?scratch dir}
 case $T in /?*) ;; *) echo "sway.sh: the scratch dir must be an absolute path" >&2; exit 1 ;; esac
@@ -24,11 +24,12 @@ start)
     ipc=$(mktemp -d /tmp/ofx-sway-XXXXXX) || exit 1
     echo "$ipc" > "$T/sway.ipcdir"
     size=${OFX_SWAY_SIZE:-936x516}
+    px="$((${size%x*} * 2))x$((${size#*x} * 2))"   # (sway's resolution is pixels)
     # sway picks its own socket name (wayland-N, the first free): the config's exec, a child of
     # this sway, writes it down. No bar, no borders, no background or nag helpers, no XWayland; the
     # window fills the output as in weston's kiosk shell.
     cat > "$T/sway.config" <<EOS
-output HEADLESS-1 resolution $size scale 2
+output HEADLESS-1 resolution $px scale 2
 default_border none
 default_floating_border none
 swaybg_command -
