@@ -502,7 +502,7 @@ static bool drag_out_poll(void)
         if (app.drop.ok) drop_do(&app.drop);
         app.out_own = true;
     }
-    if (dnd.out == DND_OUT_DRAGGING || dnd.out == DND_OUT_DROPPED) return over || was;
+    if (dnd.out == DND_OUT_DRAGGING || dnd.out == DND_OUT_DROPPED) return over != was;   // (each motion asks for its frame itself: dnd_poll)
     if (dnd.out == DND_OUT_DONE && !app.out_own) {
         char name[NAME_MAX + 1];
         snprintf(name, sizeof name, "%.*s", STR_ARG(path_base(str_from_c(dragged.path[0]))));
@@ -519,11 +519,78 @@ static bool drag_out_poll(void)
 // one of its folders, and what the files are over found again. True when it opened.
 static bool spring_tick(void)
 {
-    if (app.drag != DRAG_FILES || app.spring_tab < 0 || now_ms() < app.spring_at + UI_SPRING_MS) return false;
+    if (!files_over() || app.spring_tab < 0 || now_ms() < app.spring_at + UI_SPRING_MS) return false;
     tab_show(app.spring_tab);
     app.spring_tab = -1, app.drop.at = DROP_AGAIN;   // (the same place, under another tab)
     drop_find(app.drag_px, app.drag_py);
     return true;
+}
+
+// ---- dropping in from other programs (F14 step 3) ---------------------------------------------
+
+enum { DND_COPY = WL_DATA_DEVICE_MANAGER_DND_ACTION_COPY, DND_MOVE = WL_DATA_DEVICE_MANAGER_DND_ACTION_MOVE };
+
+// What a drop of another program's files on d does, as the compositor's action: Nemo's rule (a move
+// on the same drive, a copy across; Ctrl, Shift), within what the source allows (actions): a move
+// it doesn't allow is a copy, the trash needs a move (Michael, 2026-11-05). 0: refused.
+static uint32_t drop_in_action(const Drop *d, uint32_t actions)
+{
+    if (!d->ok) return 0;
+    UiDropOp op = drop_op(d);
+    uint32_t want = op == UI_DROP_COPY ? DND_COPY : DND_MOVE;
+    if (actions & want) return want;
+    return op == UI_DROP_MOVE && (actions & DND_COPY) ? DND_COPY : 0;
+}
+
+// Another program's files come over the window: dragged as a drag inside it is (F13), from their
+// own list: the badge, the targets lit, the tabs that open.
+static void drag_in_start(const ClipFiles *f)
+{
+    arena_reset(&draga);
+    for (isize i = 0; i < f->n; i++) dragged.path[i] = arena_cstr(&draga, str_from_c(f->path[i]));
+    dragged.n = f->n, dragged.cut = false;
+    drag_real();
+    Str name = path_base(str_from_c(f->path[0])), folder = S("folder");
+    struct stat st;
+    bool dir = stat(f->path[0], &st) == 0 && S_ISDIR(st.st_mode);
+    app.drag = DRAG_IN, app.drop = (Drop){ .kind = DROP_NONE, .at = DROP_AGAIN };
+    app.drag_marked = app.drag_tree = false;
+    app.drag_icon = dir ? icon_for_px(folder, &folder, 1, ICON_PX) : icon_for_px(mime_of_name(&scratch, &app.mime_db, name), NULL, 0, ICON_PX);
+    snprintf(app.drag_path, sizeof app.drag_path, "%s", f->path[0]);
+    snprintf(app.drag_name, sizeof app.drag_name, "%.*s", STR_ARG(name));
+}
+
+// Each frame of another program's drag: over the window, found and answered as F13's drag is; let
+// go, dropped as one (the compositor's action: copy, move, or the trash's move), and the source told;
+// gone (a leave, or its files not read yet), the drag ends. True when what is drawn changed.
+static bool drag_in_poll(void)
+{
+    float x, y;
+    uint32_t actions = 0, act;
+    const ClipFiles *f = dnd_in_over(&x, &y, &actions);
+    bool started = f && app.drag == DRAG_NONE;
+    if (started) drag_in_start(f);
+    if (app.drag == DRAG_IN && f) {   // (each motion asks for its frame itself: dnd_poll)
+        app.drag_px = x, app.drag_py = y;
+        drop_find(x, y);
+        uint32_t a = drop_in_action(&app.drop, actions);
+        dnd_in_answer(a != 0, a);
+        return started;
+    }
+    const ClipFiles *d = dnd_in_dropped(&x, &y, &act);
+    if (d) {
+        bool done = false;
+        if (app.drag == DRAG_IN) {
+            drop_find(x, y);
+            UiDropOp op = app.drop.trash ? UI_DROP_TRASH : act == DND_MOVE ? UI_DROP_MOVE : UI_DROP_COPY;
+            if (app.drop.ok && act && (op != UI_DROP_TRASH || act == DND_MOVE)) drop_with(&app.drop, op), done = true;
+        }
+        dnd_in_finish(done);
+        if (app.drag == DRAG_IN) drag_end();
+        return true;
+    }
+    if (app.drag == DRAG_IN && !dnd_in_waiting()) return drag_end(), true;
+    return false;
 }
 
 // The keys during a drag, or a press that may become one: Esc cancels it, and is the drag's alone
@@ -781,7 +848,7 @@ static int tip_target(Hit h)
 // what is drawn changed.
 static bool drag_release(UiInput *in)
 {
-    if (app.drag == DRAG_NONE || app.drag == DRAG_OUT) return false;   // (a drag out ends by the compositor: drag_out_poll)
+    if (app.drag == DRAG_NONE || app.drag == DRAG_OUT || app.drag == DRAG_IN) return false;   // (drags with other programs end by the compositor: drag_out_poll, drag_in_poll)
     if (app.drag == DRAG_SIDE && app.drag_moved) side_keep(app.side_px), app.edge_press.row = -1;
     if (app.drag == DRAG_FILES && app.drop.ok) drop_do(&app.drop);
     if (app.drag == DRAG_PRESS && app.drag_tree) in->side_click = app.drag_side;

@@ -829,6 +829,19 @@ offer's action is kept by its slot now, as its types are; checked again by hand,
 sway sends the action after the enter, so no script shows it. `OFX_GUI_DEBUG=1` logs every drag
 event now, which is how it was found.
 
+**Step 3 (2026-11-05):** another program's drag is read as it enters (its text/uri-list on the
+reader thread, 2 s at most), not at the drop: the files must be known before it (Nemo's rule asks
+their drive, a folder can't go into itself), as Nautilus and Nemo read a drag's data on motion too.
+Read, with local `file://` files in it, the drag is one of ofx's own (`DRAG_IN`, `drag_in_poll`):
+the badge, the targets lit, a tab held under it opens; the window answers the compositor with
+Nemo's rule within the source's actions (`drop_in_action`: a move the source doesn't allow is a
+copy, the trash needs a move). Let go, it drops by the action the compositor settled on, as a paste
+job with its undo, and the source is told it is done (`finish`). Not read yet, not files (text, a
+web address), or another read still going: refused, and sway then cancels the drop instead of
+sending it (a drop that does come, as Hyprland may send, waits for its read). Ctrl and Shift go by
+the source's own actions (Nemo changes them as its keys go down); the window's keys count too
+when it has the keyboard.
+
 **Michael's answers (2026-11-05):**
 - **Scope:** out, and files in (both in F14, out first).
 - **A browser's link or image** (a web address, no file): refused in F14, the drop cursor says no.

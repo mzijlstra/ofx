@@ -6,7 +6,7 @@
 # printed whole, in order, once all are done; clip, keys and dnd share one (each starts a sway,
 # which takes the first free wayland-N).
 # The groups (one or more scripts on one tree): browse big gone watchgap f2 f3 f4 f5 f52 f53 f54
-# f6 (f6, f6b) usb f62 (f62, f62b, f62c) f63 (f63, f63b, f63c, f63d) f64 (f64, f64b, f64c, f64d) f7 (f7, f7b) f72 f73 (f73, f73b, f73c, f73d) f74 f75 (f75, f75b) f8 (f8, f8b, f8c, f8d, f8e) f9 (f9, f9b) f10 (f10, f10b, f10c, f10d) f11 (f11, f11b, f11c, f11d, f11e, f11f, f11g, f11h, f11i, f11j, f11k, f11l, f11m, f11n, f11o, f11p, f11q, f11r, f11s, f11t) f12 (f12, f12b) f12g f12h f12i f13 (f13, f13b, f13c, f13d, f13e, f13f, f13g) clip (clip, copypath) keys dnd (dnd, dndb, dndc, dndd, dnde, dndf, dndg) (the three in sway) hang guard3 guard harness (harness, harnessb, harnessc, harnessd). Named ones only, or all of them; a group
+# f6 (f6, f6b) usb f62 (f62, f62b, f62c) f63 (f63, f63b, f63c, f63d) f64 (f64, f64b, f64c, f64d) f7 (f7, f7b) f72 f73 (f73, f73b, f73c, f73d) f74 f75 (f75, f75b) f8 (f8, f8b, f8c, f8d, f8e) f9 (f9, f9b) f10 (f10, f10b, f10c, f10d) f11 (f11, f11b, f11c, f11d, f11e, f11f, f11g, f11h, f11i, f11j, f11k, f11l, f11m, f11n, f11o, f11p, f11q, f11r, f11s, f11t) f12 (f12, f12b) f12g f12h f12i f13 (f13, f13b, f13c, f13d, f13e, f13f, f13g) clip (clip, copypath) keys dnd (dnd, dndb, dndc, dndd, dnde, dndf, dndg, dndh, dndi) (the three in sway) hang guard3 guard harness (harness, harnessb, harnessc, harnessd). Named ones only, or all of them; a group
 # that fails says "== <script>: FAILED" or "<group>: FAILED" (tools/mutation/gui.py reads it).
 set -u
 par=1
@@ -480,6 +480,8 @@ dnd_tree dndd; rs dndd RUN_SCRIPT_LIMIT=40 OFX_COMPOSITOR=sway -- "$T/tree"
 dnd_tree dnde; rs dnde RUN_SCRIPT_LIMIT=40 OFX_COMPOSITOR=sway -- "$T/tree"
 dnd_tree dndf; rs dndf RUN_SCRIPT_LIMIT=40 OFX_COMPOSITOR=sway -- "$T/tree"
 dnd_tree dndg; rs dndg RUN_SCRIPT_LIMIT=40 OFX_COMPOSITOR=sway -- "$T/tree"
+dnd_tree dndh; rs dndh RUN_SCRIPT_LIMIT=40 OFX_COMPOSITOR=sway -- "$T/tree"
+dnd_tree dndi; rs dndi RUN_SCRIPT_LIMIT=40 OFX_COMPOSITOR=sway -- "$T/tree"
 fi
 if want f12; then
 # F12 step 3: previews by thumbnailers, the run's own fakes (run-script.sh: the window reads no

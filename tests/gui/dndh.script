@@ -1,0 +1,29 @@
+# F14 step 3: a source that allows a copy only (dndpeer source-copy) onto adir's row: Nemo's rule
+# says move (the same drive), the source says copy, so a copy; c.txt stays where it was. Then a web
+# address (dndpeer source with an https URI): read, no file in it, refused (sway cancels its
+# drop); nothing dropped. Layout
+# as dnd.script.
+settle
+sh dndpeer source-copy "file://$OFX_ROOT/from/c.txt" "$OFX_ROOT/peer.log" >/dev/null 2>&1 &
+sleep 800
+settle
+sh vptr move 700 250 press move 650 250 move 352 106 wait 1500 release >"$OFX_ROOT/vptr.log" 2>&1 &
+wait-for 3000 drag=in drop=row:0 dropok=1 dropdir=adir dndaction=1
+wait-for 3000 drops=1 drag=-
+wait-for 3000 job=-
+sh test -f "$OFX_DIR/adir/c.txt" && test -f "$OFX_ROOT/from/c.txt"
+expect undo=copy
+# ---- a web address: no files
+sh pkill -x -f "dndpeer source-copy file://$OFX_ROOT/from/c.txt $OFX_ROOT/peer.log" || true
+sleep 500
+sh dndpeer source "https://example.com/page" "$OFX_ROOT/peer2.log" >/dev/null 2>&1 &
+sleep 800
+settle
+sh vptr move 700 250 press move 650 250 move 352 300 wait 1500 release >"$OFX_ROOT/vptr2.log" 2>&1 &
+wait-for 3000 dndover=1 dndreading=0
+expect drag=- dndaction=0 dropn=0
+wait-for 3000 dndover=0
+expect drops=1 dropfail=0 n=3
+sh grep -q "source send text/uri-list" "$OFX_ROOT/peer2.log"
+sh ! grep -q "source dnd_finished" "$OFX_ROOT/peer2.log"
+quit

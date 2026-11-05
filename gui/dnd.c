@@ -6,8 +6,8 @@
 // seat, and a pointer once the seat has one: a drag out needs the serial of the press that holds
 // the button.
 //
-// What can block runs on a short thread of its own, so the window keeps answering: a drop's read
-// (the other program writes it in its own time) and each write of a source of ours (the other
+// What can block runs on a short thread of its own, so the window keeps answering: the read of
+// another program's drag, as it enters (the other program writes it in its own time) and each write of a source of ours (the other
 // program reads it in its own). A drop of ofx's own drag back on its window isn't read: its offer
 // carries a type naming this process (own_mime), its files are the drag's already, and it drops
 // as a drag inside the window does (F13; the spike, reading it on the main thread, waited on
@@ -61,15 +61,25 @@ static struct {
     bool own_ok, own_move, own_dropped;
     float own_x, own_y;
 
-    // The drop being read (dnd_reader), then finished on the main thread (dnd_poll).
-    struct wl_data_offer *reading;
+    // A drag of files from another program (F14 step 3): its text/uri-list read as it enters, so
+    // the files are known before the drop (Nemo's rule asks their drive, a folder can't go into
+    // itself), on a thread of its own (dnd_reader), DND_WAIT_MS at most. in_offer is the offer the
+    // read is of: the one entered, or dropped and waiting for its read; read_id tells a read for an
+    // offer a leave took (whose address can come back) from one for the offer now (in_id).
+    struct wl_data_offer *in_offer;
+    u32 in_id, read_id;
+    bool reading;                         // a read's thread runs (one at a time: an enter meanwhile is refused)
+    bool in_read;                         // in_offer's read is done: got holds its files (none: no files, a web link)
+    bool in_dropped;                      // in_offer was dropped: dnd_in_dropped hands it to the window
+    bool in_ok;                           // the window's answer (dnd_in_answer), the action it takes
+    uint32_t in_act, in_drop_act;
+    float in_x, in_y;                     // where it was dropped
     int read_fd;
     isize read_n;
     bool read_whole;                      // to its end within DND_WAIT_MS and DND_READ_MAX
     atomic_bool read_done;
     Arena gota;
-    ClipFiles got;                        // the last drop's files (dnd_take)
-    bool got_new;
+    ClipFiles got;                        // in_offer's files
     int drops, own_drops, drops_failed;   // for the scripts' state line
 
     // Our drag out (dnd_start).
@@ -143,25 +153,72 @@ static void dnd_forget(int i)
     if (i >= 0) dnd.offers[i].o = NULL;
 }
 
-// What the drag over the window is told: step 1 takes files as a copy only (step 3 asks the target
-// under the pointer, and Nemo's rule), and ofx's own drag back with its own type.
+// What the drag over the window is told, as the window answers it: ofx's own drag back by its own
+// type (dnd_own_answer), another program's files once they are read (dnd_in_answer), by the target
+// under the pointer and its copy or move; anything else refused.
 static void dnd_answer(void)
 {
     int i = dnd.over;
     if (i < 0) return;
     struct wl_data_offer *o = dnd.offers[i].o;
     unsigned t = dnd.offers[i].types;
-    bool copy = dnd.offers[i].actions & WL_DATA_DEVICE_MANAGER_DND_ACTION_COPY;
     if (t & DND_TYPE_OWN) {   // ofx's own: as the window answers (the target under the pointer, its copy or move)
         enum { C = WL_DATA_DEVICE_MANAGER_DND_ACTION_COPY, M = WL_DATA_DEVICE_MANAGER_DND_ACTION_MOVE };
         wl_data_offer_accept(o, dnd.serial, dnd.own_ok ? dnd.own_mime : NULL);
         wl_data_offer_set_actions(o, dnd.own_ok ? C | M : 0, dnd.own_ok ? (dnd.own_move ? M : C) : 0);
         return;
     }
-    const char *mime = (t & DND_TYPE_URIS) && copy && !dnd.reading ? CLIP_MIME_URIS : NULL;
-    wl_data_offer_accept(o, dnd.serial, mime);
-    uint32_t a = mime ? WL_DATA_DEVICE_MANAGER_DND_ACTION_COPY : WL_DATA_DEVICE_MANAGER_DND_ACTION_NONE;
-    wl_data_offer_set_actions(o, a, a);
+    bool ok = o == dnd.in_offer && dnd.in_read && dnd.got.n > 0 && dnd.in_ok;
+    wl_data_offer_accept(o, dnd.serial, ok ? CLIP_MIME_URIS : NULL);
+    wl_data_offer_set_actions(o, ok ? dnd.in_act : 0, ok ? dnd.in_act : 0);
+}
+
+// Another program's files over the window, read, and where they are and what its source allows
+// (WL_DATA_DEVICE_MANAGER_DND_ACTION_*); NULL while there are none (no drag, not read yet, not files).
+static const ClipFiles *dnd_in_over(float *x, float *y, uint32_t *actions)
+{
+    if (dnd.over < 0 || dnd.offers[dnd.over].o != dnd.in_offer || !dnd.in_read || dnd.got.n == 0) return NULL;
+    *x = dnd.x, *y = dnd.y, *actions = dnd.offers[dnd.over].actions;
+    return &dnd.got;
+}
+
+// A drop from another program waits for its read to end.
+static bool dnd_in_waiting(void)
+{
+    return dnd.in_dropped && !dnd.in_read;
+}
+
+// What the window says to another program's files over it: ok and the action it takes (copy or
+// move); told the compositor when it changes.
+static void dnd_in_answer(bool ok, uint32_t action)
+{
+    if (ok == dnd.in_ok && action == dnd.in_act) return;
+    dnd.in_ok = ok, dnd.in_act = action;
+    DND_LOG("answer: %s %u", ok ? "takes it" : "refused", action);
+    if (dnd.over >= 0 && dnd.offers[dnd.over].o == dnd.in_offer) dnd_answer(), wl_display_flush(dnd.dpy);
+}
+
+// Another program's drop, once its read is done: its files (none: nothing to drop), where, and the
+// action the compositor settled on (else the window's answer). The window then calls dnd_in_finish.
+static const ClipFiles *dnd_in_dropped(float *x, float *y, uint32_t *action)
+{
+    if (!dnd.in_dropped || !dnd.in_read) return NULL;
+    *x = dnd.in_x, *y = dnd.in_y, *action = dnd.in_drop_act;
+    return &dnd.got;
+}
+
+// The drop dealt with: told the source it is done (done: the files are taken, as a job), and
+// given back.
+static void dnd_in_finish(bool done)
+{
+    if (!dnd.in_dropped) return;
+    if (done && dnd.in_drop_act) wl_data_offer_finish(dnd.in_offer);
+    wl_data_offer_destroy(dnd.in_offer);
+    wl_display_flush(dnd.dpy);
+    DND_LOG("drop %s", done ? "taken" : "given back");
+    if (done) dnd.drops++;
+    else dnd.drops_failed++;
+    dnd.in_offer = NULL, dnd.in_dropped = false, dnd.changed = true;
 }
 
 // Whether our own drag is over the window, and where (the surface's logical pixels).
@@ -192,6 +249,28 @@ static bool dnd_own_dropped(float *x, float *y)
 }
 
 static void dnd_leave(void *data, struct wl_data_device *d);
+static void *dnd_reader(void *arg);
+
+// Offer o's text/uri-list read, on a thread of its own: it is in_offer now. A read that can't start
+// is done at once, with no files.
+static void dnd_read_start(struct wl_data_offer *o)
+{
+    dnd.in_offer = o, dnd.in_id++, dnd.in_read = false, dnd.in_ok = false, dnd.in_act = 0;
+    dnd.got.n = 0;
+    int p[2];
+    if (pipe2(p, O_CLOEXEC) != 0) return (void)(dnd.in_read = true);
+    wl_data_offer_receive(o, CLIP_MIME_URIS, p[1]);
+    wl_display_flush(dnd.dpy);
+    close(p[1]);
+    dnd.read_fd = p[0], dnd.read_id = dnd.in_id, dnd.reading = true;
+    pthread_t th;
+    if (pthread_create(&th, NULL, dnd_reader, NULL) == 0) {
+        pthread_detach(th);
+        return;
+    }
+    close(p[0]);
+    dnd.reading = false, dnd.in_read = true;
+}
 
 static void dnd_enter(void *data, struct wl_data_device *d, uint32_t serial, struct wl_surface *s, wl_fixed_t x, wl_fixed_t y, struct wl_data_offer *o)
 {
@@ -209,6 +288,7 @@ static void dnd_enter(void *data, struct wl_data_device *d, uint32_t serial, str
         return;
     }
     dnd.over = i, dnd.action = dnd.offers[i].action;
+    if (!(dnd.offers[i].types & DND_TYPE_OWN) && (dnd.offers[i].types & DND_TYPE_URIS) && !dnd.reading && !dnd.in_dropped) dnd_read_start(o);
     dnd_answer();
 }
 
@@ -217,6 +297,7 @@ static void dnd_leave(void *data, struct wl_data_device *d)
     (void)data, (void)d;
     DND_LOG("leave (slot %d)", dnd.over);
     if (dnd.over < 0) return;
+    if (dnd.offers[dnd.over].o == dnd.in_offer) dnd.in_offer = NULL;   // (a read still going is for nothing now)
     wl_data_offer_destroy(dnd.offers[dnd.over].o);
     dnd_forget(dnd.over);
     dnd.over = -1, dnd.changed = true;
@@ -229,8 +310,8 @@ static void dnd_motion(void *data, struct wl_data_device *d, uint32_t t, wl_fixe
     dnd.x = (float)wl_fixed_to_double(x), dnd.y = (float)wl_fixed_to_double(y), dnd.changed = true;
 }
 
-// The drop's text/uri-list, read off the main thread: DND_WAIT_MS at most, DND_READ_MAX bytes at
-// most; then dnd_poll finishes the offer on the main thread, where it lives.
+// An offer's text/uri-list, read off the main thread: DND_WAIT_MS at most, DND_READ_MAX bytes at
+// most; then dnd_poll takes its files on the main thread.
 static void *dnd_reader(void *arg)
 {
     (void)arg;
@@ -272,24 +353,15 @@ static void dnd_drop(void *data, struct wl_data_device *d)
         dnd.own_drops++, dnd.own_dropped = dnd.action != 0, dnd.own_x = dnd.x, dnd.own_y = dnd.y;
         return;
     }
-    int p[2];
-    if (!(t & DND_TYPE_URIS) || dnd.reading || dnd.action == WL_DATA_DEVICE_MANAGER_DND_ACTION_NONE || pipe2(p, O_CLOEXEC) != 0) {
+    // Another program's: kept for the window, once its read is done (dnd_in_dropped). Refused
+    // (no files, or another's read still going when it entered): given back.
+    if (o != dnd.in_offer || (dnd.in_read && (!dnd.got.n || !dnd.in_ok))) {
+        if (o == dnd.in_offer) dnd.in_offer = NULL;
         wl_data_offer_destroy(o);
         dnd.drops_failed++;
         return;
     }
-    wl_data_offer_receive(o, CLIP_MIME_URIS, p[1]);
-    wl_display_flush(dnd.dpy);
-    close(p[1]);
-    dnd.read_fd = p[0], dnd.reading = o;
-    pthread_t th;
-    if (pthread_create(&th, NULL, dnd_reader, NULL) == 0) {
-        pthread_detach(th);
-        return;
-    }
-    close(p[0]);
-    wl_data_offer_destroy(o);
-    dnd.reading = NULL, dnd.drops_failed++;
+    dnd.in_dropped = true, dnd.in_x = dnd.x, dnd.in_y = dnd.y, dnd.in_drop_act = dnd.action ? dnd.action : dnd.in_act;
 }
 
 static void dnd_selection(void *data, struct wl_data_device *d, struct wl_data_offer *o)
@@ -496,29 +568,22 @@ static void dnd_init(void)
     dnd.ok = true;
 }
 
-// Each frame: a drop read to its end finished and its files kept (dnd_take); whether anything a
-// frame shows changed.
+// Each frame: a read ended, its files kept for the offer it is of (only local file:// URIs count:
+// a web link is no file); whether anything a frame shows changed.
 static bool dnd_poll(void)
 {
-    if (atomic_exchange(&dnd.read_done, false) && dnd.reading) {
-        arena_reset(&dnd.gota);
-        bool files = dnd.read_whole && clip_parse(&dnd.gota, (Str){ dnd_read_mem, dnd.read_n }, false, &dnd.got);
-        if (files) wl_data_offer_finish(dnd.reading), dnd.drops++, dnd.got_new = true;
-        else dnd.got.n = 0, dnd.drops_failed++;
-        wl_data_offer_destroy(dnd.reading);
-        dnd.reading = NULL, dnd.changed = true;
+    if (atomic_exchange(&dnd.read_done, false)) {
+        dnd.reading = false, dnd.changed = true;   // (another enter may read now)
+        if (dnd.in_offer && dnd.read_id == dnd.in_id) {
+            arena_reset(&dnd.gota);
+            if (!dnd.read_whole || !clip_parse(&dnd.gota, (Str){ dnd_read_mem, dnd.read_n }, false, &dnd.got)) dnd.got.n = 0;
+            dnd.in_read = true, dnd.changed = true;
+            DND_LOG("read %td bytes%s: %td files", dnd.read_n, dnd.read_whole ? "" : " (cut short)", dnd.got.n);
+        }
     }
     bool c = dnd.changed;
     dnd.changed = false;
     return c;
-}
-
-// The files of a drop from another program, once (NULL: none since the last call).
-static const ClipFiles *dnd_take(void)
-{
-    if (!dnd.got_new) return NULL;
-    dnd.got_new = false;
-    return &dnd.got;
 }
 
 // At the quit, the window still open: our source and every offer we hold given back, the hook
@@ -532,7 +597,8 @@ static void dnd_close(void)
     if (dnd.comp) wl_compositor_destroy(dnd.comp), dnd.comp = NULL;
     if (dnd.shm) wl_shm_destroy(dnd.shm), dnd.shm = NULL;
     if (dnd.over >= 0) wl_data_offer_destroy(dnd.offers[dnd.over].o), dnd.over = -1;
-    if (dnd.reading) wl_data_offer_destroy(dnd.reading), dnd.reading = NULL;
+    if (dnd.in_dropped) wl_data_offer_destroy(dnd.in_offer), dnd.in_dropped = false;
+    dnd.in_offer = NULL;
     if (dnd.ptr) wl_pointer_destroy(dnd.ptr), dnd.ptr = NULL;
     wl_seat_destroy(dnd.seat), wl_data_device_manager_destroy(dnd.mgr), wl_registry_destroy(dnd.reg);
     dnd.ok = false;

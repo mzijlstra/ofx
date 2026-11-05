@@ -201,7 +201,7 @@ typedef struct {
 // What the left button holds, from its press until it is let go (input.c's drag_at): the zoom
 // slider's knob, the sidebar's edge; a press on files that may become a drag of them (DRAG_PRESS,
 // until it moves UI_DRAG_PX), and that drag (DRAG_FILES, F13 step 3).
-enum { DRAG_NONE, DRAG_ZOOM, DRAG_SIDE, DRAG_PRESS, DRAG_FILES, DRAG_OUT };   // (DRAG_OUT: handed to the compositor, F14)
+enum { DRAG_NONE, DRAG_ZOOM, DRAG_SIDE, DRAG_PRESS, DRAG_FILES, DRAG_OUT, DRAG_IN };   // (F14: DRAG_OUT handed to the compositor, DRAG_IN another program's)
 
 // Where a drag of files would land (F13 step 3), and what is drawn lit for it: a folder row (at:
 // its place on screen), a sidebar row (the Trash's among them), a tab, a path button, the files'
@@ -420,11 +420,11 @@ static ClipFiles own;      // ofx's own copy or cut (own.n 0: none)
 static ClipFiles dragged;  // what a drag of files carries (F13 step 3), its own: the clipboard stays as it was
 static char     *dragged_real[CLIP_PATHS_MAX];   // each folder of it resolved (realpath), NULL for the rest: drop_takes
 
-// Files dragged over the window, lit and answered: a drag inside it (F13), or ours out to other
-// programs brought back over it (F14).
+// Files dragged over the window, lit and answered: a drag inside it (F13), ours out to other programs
+// brought back over it, or another program's (F14).
 static bool files_over(void)
 {
-    return app.drag == DRAG_FILES || (app.drag == DRAG_OUT && app.out_over);
+    return app.drag == DRAG_FILES || app.drag == DRAG_IN || (app.drag == DRAG_OUT && app.out_over);
 }
 // Bumped by every copy of ours, files or text: a cut's paste empties the clipboard after it only
 // if nothing was copied meanwhile (F5.2 review).
@@ -785,6 +785,7 @@ static bool poll_workers(void)
     if (thumbs_take()) dirty = true;
     if (dnd_poll()) dirty = true;
     if (drag_out_poll()) dirty = true;   // (F14: our drag out, back over the window or ended)
+    if (drag_in_poll()) dirty = true;    // (F14: another program's files over the window, or dropped)
     if (app.ui.view == UI_VIEW_SEARCH && search_take()) search_relist(), dirty = true;
     if (app.search_due && now_ms() >= app.search_due) app.search_due = 0, search_retype(), dirty = true;
     i64 was_due = restore.due, was_rem = rem.due;   // (F11: the tabs, a folder's view, written 2 s after a change)
@@ -931,7 +932,7 @@ int main(int argc, char **argv)
         if (rows != app.ui.list.rows) ui_resize(&app.ui.list, rows), dirty = true;
         if (srows != app.ui.side.rows) ui_resize(&app.ui.side, srows), dirty = true;
         if (ui_tip_tick(&app.tip, now_ms())) dirty = true;
-        if (spring_tick() || (app.drag == DRAG_FILES && app.spring_tab >= 0)) dirty = true;   // (its bar fills as it waits)
+        if (spring_tick() || (files_over() && app.spring_tab >= 0)) dirty = true;   // (its bar fills as it waits)
         if (files_over() && app.drop.reloads != app.reloads) drop_find(app.drag_px, app.drag_py), dirty = true;   // (the rows under a still pointer changed)
         if (dirty || scripted) {
             bool asked = dirty;   // (a frame an unscripted window draws too: what the script's checks read)
@@ -950,7 +951,7 @@ int main(int argc, char **argv)
             if (scripted ? script.pointing && hover_refresh(true, script.px, script.py) : hover_refresh(IsCursorOnScreen(), m.x, m.y))
                 dirty = true, glfwPostEmptyEvent();
             if (app.icons_missed && app.icons_reset_armed) dirty = true, glfwPostEmptyEvent();   // emptied and drawn again at once
-            if (app.drag == DRAG_FILES && app.spring_tab >= 0) glfwPostEmptyEvent();   // (the spring's bar: the next frame at once)
+            if (files_over() && app.spring_tab >= 0) glfwPostEmptyEvent();   // (the spring's bar: the next frame at once)
         }
         PollInputEvents();   // waits for input, or for watch.c's wake-up
         if (atomic_exchange(&close_signal, false)) close_asked = true, closing_all = true;

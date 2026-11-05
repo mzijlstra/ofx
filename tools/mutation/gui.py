@@ -938,7 +938,7 @@ MUTANTS = [
     ('gui/input.c', ' || app.spring_tab < 0 || now_ms() < app.spring_at + UI_SPRING_MS) return false;', ' || app.spring_tab < 0) return false;', 'f13'),
     ('gui/input.c', '    tab_show(app.spring_tab);\n', '', 'f13'),
     ('gui/input.c', ' .at = -1 }, app.spring_tab = -1;\n}', ' .at = -1 };\n}', 'f13'),
-    ('gui/main.c', '        if (spring_tick() || (app.drag', '        if ((app.drag', 'f13'),
+    ('gui/main.c', '        if (spring_tick() || (files_over()', '        if ((files_over()', 'f13'),
     ('gui/frame.c', '    if (bx + bb.width > (float)GetScreenWidth()) bx = app.drag_px - 14 - bb.width;\n', '', 'f13'),
     # F13 code-health step A (2026-11-04)
     ('gui/main.c', '        if (files_over() && app.drop.reloads != app.reloads) drop_find', '        if (false) drop_find', 'f13'),
@@ -963,7 +963,6 @@ MUTANTS = [
     ('gui/dnd.c', '    if (t & DND_TYPE_OWN) {   // ofx\'s own drag: not read (above)', '    if (false) {   // ofx\'s own drag: not read (above)', 'dnd'),
     ('gui/dnd.c', '    dnd.x = (float)wl_fixed_to_double(x), dnd.y = (float)wl_fixed_to_double(y), dnd.changed = true;\n}', '}', 'dnd'),
     ('gui/dnd.c', '    if (pthread_create(&th, NULL, dnd_reader, NULL) == 0) {\n        pthread_detach(th);\n        return;\n    }', '    if (dnd_reader(NULL) == NULL) return;\n    (void)th;', 'dnd'),
-    ('gui/dnd.c', '        if (files) wl_data_offer_finish(dnd.reading), dnd.drops++', '        if (files) dnd.drops++', 'dnd'),
     ('gui/dnd.c', '    wl_data_source_offer(dnd.src, CLIP_MIME_TEXT[0]);\n', '', 'dnd'),
     ('gui/dnd.c', ' | (move ? WL_DATA_DEVICE_MANAGER_DND_ACTION_MOVE : 0));', ');', 'dnd'),
     ('gui/dnd.c', '    if (button == BTN_LEFT) dnd.press = state == WL_POINTER_BUTTON_STATE_PRESSED ? serial : 0', '    if (button == BTN_LEFT) dnd.press = 0', 'dnd'),
@@ -977,6 +976,17 @@ MUTANTS = [
     ('gui/input.c', '        if (dragged.n == 1) set_status(false, "%s %s to another program"', '        if (false) set_status(false, "%s %s to another program"', 'dnd'),
     ('gui/input.c', '    if (app.drag == DRAG_OUT) dnd_cancel();\n', '', 'dnd'),
     ('gui/dnd.c', '(void)serial, (void)s; dnd.press = 0; }\nstatic void dnd_ptr_motion', '(void)serial, (void)s; }\nstatic void dnd_ptr_motion', 'dnd'),
+    # F14 step 3 (2026-11-05): files dropped in from other programs
+    ('gui/dnd.c', ' && !dnd.reading && !dnd.in_dropped) dnd_read_start(o);', ' && false) dnd_read_start(o);', 'dnd'),
+    ('gui/dnd.c', '    bool ok = o == dnd.in_offer && dnd.in_read && dnd.got.n > 0 && dnd.in_ok;', '    bool ok = false;', 'dnd'),
+    ('gui/dnd.c', '        dnd.reading = false, dnd.changed = true;   // (another enter may read now)', '        dnd.reading = false;', 'dnd'),
+    ('gui/dnd.c', '    if (done && dnd.in_drop_act) wl_data_offer_finish(dnd.in_offer);\n', '', 'dnd'),
+    ('gui/input.c', '    return op == UI_DROP_MOVE && (actions & DND_COPY) ? DND_COPY : 0;', '    return 0;', 'dnd'),
+    ('gui/input.c', '    if (started) drag_in_start(f);', '    if (false) drag_in_start(f);', 'dnd'),
+    ('gui/input.c', ': act == DND_MOVE ? UI_DROP_MOVE : UI_DROP_COPY;', ': UI_DROP_MOVE;', 'dnd'),
+    ('gui/input.c', '    if (!files_over() || app.spring_tab < 0 || now_ms() < app.spring_at + UI_SPRING_MS) return false;', '    if (app.drag != DRAG_FILES || app.spring_tab < 0 || now_ms() < app.spring_at + UI_SPRING_MS) return false;', 'dnd'),
+    # Not run: a drop dnd_drop keeps waiting for its read, and the trash refused a copy-only source:
+    # sway sends no drop the window refused (Hyprland does), so no script reaches them.
     # Not run: drag_out telling raylib the button is up, and drag_release leaving DRAG_OUT alone:
     # a scripted window takes no compositor input, so only a hand check shows them.
     # Nor own_dropped's `action != 0` and drag_out_poll's `drop.ok`: sway never sends the drop of a

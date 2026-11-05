@@ -1,0 +1,34 @@
+# F14 step 3: two files from another program: held over the second tab it opens (F13's spring),
+# then dropped in that tab's folder (adir); then the same two onto the sidebar's Trash, which takes
+# a move. Tab 0 the tree, tab 1 adir; with two tabs the tab bar is up: tab 1 at 398,81, the files'
+# space at 352,300, Trash at 100,142. Layout as dnd.script.
+settle
+key ctrl-t
+key enter
+wait-for 2000 tabs=2 tab=1 tabdirs=tree|adir
+key ctrl-shift-tab
+wait-for 2000 tab=0
+sh touch "$OFX_ROOT/from/d.txt"
+sh dndpeer source "file://$OFX_ROOT/from/c.txt file://$OFX_ROOT/from/d.txt" "$OFX_ROOT/peer.log" >/dev/null 2>&1 &
+sleep 800
+settle
+sh vptr move 700 250 press move 650 250 move 398 81 wait 2000 move 352 300 wait 600 release >"$OFX_ROOT/vptr.log" 2>&1 &
+wait-for 3000 drag=in dragn=2 drop=tab:1 dropok=1
+wait-for 3000 tab=1
+wait-for 3000 drops=1 drag=-
+wait-for 3000 job=-
+sh test -f "$OFX_DIR/c.txt" && test -f "$OFX_DIR/d.txt" && test ! -e "$OFX_ROOT/from/c.txt"
+# ---- back to the tree, the two dragged back out of adir by the peer onto the Trash
+key ctrl-shift-tab
+wait-for 2000 tab=0
+sh pkill -x -f "dndpeer source file://$OFX_ROOT/from/c.txt file://$OFX_ROOT/from/d.txt $OFX_ROOT/peer.log" || true
+sleep 500
+sh dndpeer source "file://$OFX_ROOT/tree/adir/c.txt file://$OFX_ROOT/tree/adir/d.txt" "$OFX_ROOT/peer2.log" >/dev/null 2>&1 &
+sleep 800
+settle
+sh vptr move 700 250 press move 650 250 move 100 142 wait 1500 release >"$OFX_ROOT/vptr2.log" 2>&1 &
+wait-for 3000 drag=in drop=side:2 dropok=1 dropop=trash badge=Trash dndaction=2
+wait-for 3000 drops=2 drag=-
+wait-for 3000 job=-
+sh test ! -e "$OFX_ROOT/tree/adir/c.txt" && test ! -e "$OFX_ROOT/tree/adir/d.txt" && ls "$OFX_ROOT/data/Trash/files" | grep -q "c.txt"
+quit

@@ -1,21 +1,27 @@
-# F14 step 1: drags from another program into ofx, through GLFW's data device and the drag hook
+# F14 step 3: files dragged in from another program, through GLFW's data device and the drag hook
 # (gui/dnd.c), in the test sway (OFX_COMPOSITOR=sway). dndpeer (tools/gui/dndpeer.c) is the other
 # program, the right half of the output beside ofx; vptr (tools/gui/vptr.c) is the pointer, its x
-# and y the output's logical pixels (936x516). The tree (run.sh): adir/, a.txt, b.txt; $OFX_ROOT/from/c.txt
-# outside it.
+# and y the output's logical pixels (936x516). The tree (run.sh): adir/, a.txt, b.txt (rows at x
+# 352: 106, 134, 162); $OFX_ROOT/from/c.txt outside it, on the same drive.
 settle
 expect dndok=1 dndover=0 drops=0 dropfail=0
 sh dndpeer source "file://$OFX_ROOT/from/c.txt" "$OFX_ROOT/peer.log" >/dev/null 2>&1 &
 sleep 800
 settle
-# ---- a file dragged over the window: where it is, the copy the source offers taken; dropped: read
-# off the main thread, finished, its file kept (dropped files reach no folder yet: step 3)
-sh vptr move 700 250 press move 650 250 move 300 200 move 200 150 wait 1500 release >"$OFX_ROOT/vptr.log" 2>&1 &
-wait-for 3000 dndover=1 dndat=200,150 dndaction=1
-expect drops=0 n=3
-wait-for 3000 drops=1 dropn=1 dropfirst=c.txt dndover=0 dndreading=0 dropfail=0
+# ---- c.txt over the files' empty space: read as it enters, then dragged as a drag inside the
+# window is (the badge, the folder lit), a move by Nemo's rule (the same drive), which the source
+# allows; let go: moved here as a paste is, the source told it is done, Ctrl+Z puts it back
+sh vptr move 700 250 press move 650 250 move 352 300 wait 1500 release >"$OFX_ROOT/vptr.log" 2>&1 &
+wait-for 3000 dndover=1 dndat=352,300 drag=in dragn=1 dragname=c.txt drop=list:-1 dropok=1 dropop=move badge=Move dndaction=2
+expect dropn=1 dropfirst=c.txt n=3
+wait-for 3000 drops=1 drag=- dndover=0 dropfail=0
+wait-for 3000 job=- n=4
 sh grep -q "source dnd_finished" "$OFX_ROOT/peer.log"
-sh test -f "$OFX_ROOT/from/c.txt" && test ! -e "$OFX_DIR/c.txt"
+sh test -f "$OFX_DIR/c.txt" && test ! -e "$OFX_ROOT/from/c.txt"
+expect undo=move
+key ctrl-z
+wait-for 3000 n=3
+sh test -f "$OFX_ROOT/from/c.txt"
 # ---- the window answers its keys after it
 key down
 expect sel=a.txt

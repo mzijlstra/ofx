@@ -4,8 +4,9 @@
 //   dndpeer target-move <log>         the same, a move when the source offers one
 //   dndpeer target-hangup <log>       the same, but it closes the pipe unread (the source's write
 //                                     then gets EPIPE, or SIGPIPE where it isn't blocked)
-//   dndpeer source <uri> <log>        a window whose left press drags <uri> (text/uri-list), copy
-//                                     or move
+//   dndpeer source <uris> <log>       a window whose left press drags <uris> (space-separated,
+//                                     text/uri-list), copy or move
+//   dndpeer source-copy <uris> <log>  the same, copy only
 //   dndpeer source-text <text> <log>  the same with text/plain only (no files)
 //   dndpeer source-stall <uri> <log>  the same as source, but it never writes the data asked for
 // The pointer is vptr's. The log is a line per event.
@@ -33,7 +34,7 @@ static struct wl_surface *surf;
 static struct wl_data_device *dev;
 static struct wl_data_offer *offer;
 static struct wl_data_source *src;
-static bool source, uris, done, configured, text_only, stall, hangup, prefer_move;
+static bool source, uris, done, configured, text_only, stall, hangup, prefer_move, copy_only;
 static const char *uri;
 static int stalled[8], nstalled;   // (source-stall: the fds asked for, held open, never written)
 static FILE *peer_log;
@@ -138,12 +139,18 @@ static void sr_send(void *data, struct wl_data_source *s, const char *m, int fd)
         stalled[nstalled++] = fd;
         return;
     }
-    dprintf(fd, text_only ? "%s" : "%s\r\n", uri);
+    if (text_only) dprintf(fd, "%s", uri);
+    else
+        for (const char *u = uri; *u;) {   // (a URI a line, CRLF)
+            size_t n = strcspn(u, " ");
+            dprintf(fd, "%.*s\r\n", (int)n, u);
+            u += n + (u[n] == ' ');
+        }
     close(fd);
 }
-static void sr_cancelled(void *data, struct wl_data_source *s) { (void)data, (void)s; LOG("source cancelled"); }
+static void sr_cancelled(void *data, struct wl_data_source *s) { (void)data; LOG("source cancelled"); wl_data_source_destroy(s), src = NULL; }   // (another press drags again)
 static void sr_performed(void *data, struct wl_data_source *s) { (void)data, (void)s; LOG("source dnd_drop_performed"); }
-static void sr_finished(void *data, struct wl_data_source *s) { (void)data, (void)s; LOG("source dnd_finished"); }
+static void sr_finished(void *data, struct wl_data_source *s) { (void)data; LOG("source dnd_finished"); wl_data_source_destroy(s), src = NULL; }
 static void sr_action(void *data, struct wl_data_source *s, uint32_t a) { (void)data, (void)s; LOG("source action %u", a); }
 static const struct wl_data_source_listener sr_l = { sr_target, sr_send, sr_cancelled, sr_performed, sr_finished, sr_action };
 
@@ -158,7 +165,7 @@ static void pt_button(void *data, struct wl_pointer *p, uint32_t serial, uint32_
     src = wl_data_device_manager_create_data_source(mgr);
     wl_data_source_add_listener(src, &sr_l, NULL);
     wl_data_source_offer(src, text_only ? "text/plain" : "text/uri-list");
-    wl_data_source_set_actions(src, WL_DATA_DEVICE_MANAGER_DND_ACTION_COPY | WL_DATA_DEVICE_MANAGER_DND_ACTION_MOVE);
+    wl_data_source_set_actions(src, WL_DATA_DEVICE_MANAGER_DND_ACTION_COPY | (copy_only ? 0 : WL_DATA_DEVICE_MANAGER_DND_ACTION_MOVE));
     wl_data_device_start_drag(dev, src, surf, NULL, serial);
     LOG("start_drag");
 }
@@ -182,15 +189,15 @@ static const struct wl_seat_listener seat_l = { seat_caps, seat_name };
 
 int main(int argc, char **argv)
 {
-    static const char *const modes[] = { "target", "target-move", "target-hangup", "source", "source-text", "source-stall" };
+    static const char *const modes[] = { "target", "target-move", "target-hangup", "source", "source-text", "source-stall", "source-copy" };
     int m = -1;
-    for (int i = 0; argc > 1 && i < 6; i++)
+    for (int i = 0; argc > 1 && i < 7; i++)
         if (!strcmp(argv[1], modes[i])) m = i;
     if (m < 0 || argc != (m >= 3 ? 4 : 3)) {
-        fprintf(stderr, "dndpeer target|target-move|target-hangup <log> | dndpeer source|source-text|source-stall <data> <log>\n");
+        fprintf(stderr, "dndpeer target|target-move|target-hangup <log> | dndpeer source|source-text|source-stall|source-copy <data> <log>\n");
         return 2;
     }
-    prefer_move = m == 1, hangup = m == 2, text_only = m == 4, stall = m == 5;
+    prefer_move = m == 1, hangup = m == 2, text_only = m == 4, stall = m == 5, copy_only = m == 6;
     source = m >= 3;
     uri = source ? argv[2] : NULL;
     peer_log = fopen(argv[source ? 3 : 2], "a");
