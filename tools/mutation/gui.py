@@ -2,7 +2,12 @@
 """GUI mutants: each applied to a scratch copy of the repo, built, and run through
 tests/gui/run.sh, each script in its own headless weston (CLAUDE.md, "Testing the GUI").
 
-    tools/mutation/gui.py <scratch-dir> [index,...] [--jobs N]
+    tools/mutation/gui.py <scratch-dir> [mutant,...] [--jobs N]
+
+A mutant is named by its key (the 12 hex digits each result line prints after its index, or 6 or
+more of their first), which stays while mutants are inserted or dropped before it, or by its index
+in MUTANTS, which doesn't (2026-11-05: F13's survivors moved three times in a day). The summary
+prints the survivors' keys as a command line.
 
 The whole GUI suite takes about 90 s, so each mutant runs the script groups that killed it before
 first (its tags, in gui-tags.txt): a grid mutant runs f62, not the copy jobs' f53. Groups run one
@@ -961,7 +966,27 @@ if '--jobs' in args:
 if len(args) not in (1, 2) or any(a.startswith('-') for a in args):
     sys.exit(__doc__.strip())   # an unknown flag isn't taken for the scratch folder
 scratch = args[0]
-only = [int(x) for x in args[1].split(',')] if len(args) > 1 else None
+picks = args[1].split(',') if len(args) > 1 else None
+
+# A mutant's tag key: its file and texts, so a mutant edited is a new one, untagged.
+def key(m):
+    return hashlib.sha1('\0'.join(m[:3]).encode()).hexdigest()[:12]
+KEYS = [key(m) for m in MUTANTS]
+
+# The mutants asked for: a token under 6 characters, all digits, is an index; anything else is a key
+# or the first 6 or more hex digits of one, which must name exactly one mutant.
+def pick(t):
+    if len(t) < 6 and t.isdigit():
+        if int(t) >= len(MUTANTS):
+            sys.exit(f'gui.py: no mutant #{t} (there are {len(MUTANTS)})')
+        return int(t)
+    hexed = re.fullmatch(r'[0-9a-f]{6,12}', t)
+    hits = [i for i, k in enumerate(KEYS) if hexed and k.startswith(t)]
+    if len(hits) != 1:
+        sys.exit(f'gui.py: {t!r} names {len(hits)} mutants: a key (6 to 12 hex digits) or an index (5 digits at most)'
+                 + (' (its text changed since, or it was dropped)' if hexed and not hits else ''))
+    return hits[0]
+only = sorted({pick(t) for t in picks}) if picks else None
 root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # OFX_GUI_TAGS: another tags file, for a run beside one that will write this one.
 tags_path = os.environ.get('OFX_GUI_TAGS') or os.path.join(root, 'tools', 'mutation', 'gui-tags.txt')
@@ -1003,9 +1028,6 @@ for f, old, new, *_ in MUTANTS:
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from common import rmtree
 
-# A mutant's tag key: its file and texts, so a mutant edited is a new one, untagged.
-def key(m):
-    return hashlib.sha1('\0'.join(m[:3]).encode()).hexdigest()[:12]
 
 # The group of a script that failed: run.sh prints "== <script>: FAILED" or "<group>: FAILED".
 # Read from run.sh (F11 review, 2026-11-02: a hand-kept copy before): every script a group's block
@@ -1158,7 +1180,7 @@ def one(i):
         b = subprocess.run(['make', '-s', 'build/ofx-mut'], cwd=work, capture_output=True, text=True)
         if b.returncode != 0:
             open(path, 'w').write(text)
-            print(f'#{i} build failed: {b.stderr[-300:]}', flush=True)
+            print(f'#{i} {k} build failed: {b.stderr[-300:]}', flush=True)
             with lock:
                 unbuilt.append(i)
             return
@@ -1183,7 +1205,7 @@ def one(i):
         with lock:
             if lost:
                 unrun.append(i)
-                print(f'#{i} NOT TESTED: {lost}\'s compositor never started [{ran} of {len(order)} groups] {f}: {old.strip()[:60]!r} '
+                print(f'#{i} {k} NOT TESTED: {lost}\'s compositor never started [{ran} of {len(order)} groups] {f}: {old.strip()[:60]!r} '
                       f'(its output: {scratch}/unstarted-{i}-{lost}.log)', flush=True)
                 return
             if killer and killer not in tagged:
@@ -1192,7 +1214,7 @@ def one(i):
             if not killer:
                 survivors.append(i)
             how = f'killed by {killer}' if killer else 'SURVIVED'
-            print(f'#{i} {how} [{ran} of {len(order)} groups, {took:.0f} s] {f}: {old.strip()[:60]!r}  {fails[:1]}', flush=True)
+            print(f'#{i} {k} {how} [{ran} of {len(order)} groups, {took:.0f} s] {f}: {old.strip()[:60]!r}  {fails[:1]}', flush=True)
     finally:
         free_works.put(work)
 
@@ -1225,6 +1247,8 @@ for w in works:
 # F7.1.1 review).
 untested = sorted(unbuilt + unrun) + (['the rest: out of disk'] if stopped else [])
 print(f'{len(todo)} GUI mutants, {len(survivors)} survived: {sorted(survivors)}' + (f'; NOT TESTED: {untested}' if untested else ''))
+if survivors:
+    print(f'the survivors again: tools/mutation/gui.py {scratch} {",".join(KEYS[i] for i in sorted(survivors))}')
 print(f'time: {t_end - t_start:.0f} s, {jobs} at once (the base done at {t_base - t_start:.0f} s)')
 if untested:
     sys.exit(1)
