@@ -846,6 +846,13 @@ int main(int argc, char **argv)
     sigaddset(&quit_signals, SIGINT);
     sigaddset(&quit_signals, SIGUSR1);
     pthread_sigmask(SIG_BLOCK, &quit_signals, NULL);
+    // SIGPIPE too, which nobody waits for: a program reading our clipboard that leaves early would
+    // end the window at the next write; blocked, the write gets EPIPE. Children start with no
+    // signal blocked (fs/spawn.c, fs/sandbox.c, script.c's sh).
+    sigset_t pipe_sig;
+    sigemptyset(&pipe_sig);
+    sigaddset(&pipe_sig, SIGPIPE);
+    pthread_sigmask(SIG_BLOCK, &pipe_sig, NULL);
     spawn_init();
     test_knobs();
 
