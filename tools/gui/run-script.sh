@@ -93,8 +93,10 @@ chmod +x "$T/fakes/udisksctl"
 # vkbd (tools/gui/vkbd.c), the scripts' keyboard in the test sway: `make build/vkbd` first.
 root=$(cd "$(dirname "$0")/../.." && pwd)
 if [ "${OFX_COMPOSITOR:-weston}" = sway ]; then
-    [ -x "$root/build/vkbd" ] || { echo "run-script: no $root/build/vkbd (make build/vkbd)" >&2; exit 1; }
-    ln -sf "$root/build/vkbd" "$T/fakes/vkbd"
+    for t in vkbd vptr dndpeer; do   # (the keyboard; F14: the pointer and the other program, tools/gui/)
+        [ -x "$root/build/$t" ] || { echo "run-script: no $root/build/$t (make build/$t)" >&2; exit 1; }
+        ln -sf "$root/build/$t" "$T/fakes/$t"
+    done
 fi
 if [ ! -d "$T/state" ]; then
     mkdir -p "$T/state/omarchy/current/theme"

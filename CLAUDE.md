@@ -231,6 +231,15 @@ so every run does it. `gui.py` runs from its scratch copy, scripts included, so 
   nothing while a `sh` line waits. vkbd refuses unless WAYLAND_DISPLAY is the test sway's
   (`$OFX_GUI_ROOT/sway.socket`, its pid a sway): run against Michael's Hyprland it would type into
   his focused window.
+- **Drag and drop with other programs** (F14, `dnd`): `vptr` (`tools/gui/vptr.c`, a virtual
+  pointer through wlr-virtual-pointer-unstable-v1) gives the headless sway a pointer and moves it,
+  `dndpeer` (`tools/gui/dndpeer.c`) is the other program, a target or a source window beside ofx;
+  both on the window's PATH (run-script.sh) and run with `sh … &`; vptr's x and y are the output's
+  logical pixels (936x516, two windows side by side at 468 each). vkbd, vptr and dndpeer
+  share one guard (`tools/gui/testsway.h`): run against Michael's Hyprland, vptr would move his
+  pointer and dndpeer drop into his windows. A drag out of a real ofx on his desktop reaches his
+  programs as any drag does (a browser opens the file, Nemo may move it); test that only by hand,
+  with his go.
 - `run-script.sh` checks the socket is the one weston made before launching, takes the pid from the
   launch script, and stops weston after the run. For an unscripted run (`-`), kill the pid, then
   `tools/gui/weston.sh stop <scratch>`.

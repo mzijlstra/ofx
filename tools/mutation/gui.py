@@ -1008,15 +1008,17 @@ for m in MUTANTS:
 
 # Each worker its own copy of the repo and its own build; the scripts run from the copy, so the
 # repo can be edited meanwhile.
-# vkbd (the test sway's keyboard, run-script.sh puts it on PATH) is built once here; no mutant touches it.
-subprocess.run(['make', '-s', '-C', root, 'build/vkbd', 'build/ofx-clean'], check=True)   # (ofx-clean: f12b's Clear Previews runs it)
+# vkbd, vptr and dndpeer (the test sway's keyboard, pointer and other program, run-script.sh puts them
+# on PATH) are built once here; no mutant touches them.
+subprocess.run(['make', '-s', '-C', root, 'build/vkbd', 'build/vptr', 'build/dndpeer', 'build/ofx-clean'], check=True)   # (ofx-clean: f12b's Clear Previews runs it)
 def make_work(w):
     work = os.path.join(scratch, f'gui-mut-src-{w}')
     shutil.rmtree(work, ignore_errors=True)
     shutil.copytree(root, work, ignore=shutil.ignore_patterns('.git', 'build'))
     os.makedirs(os.path.join(work, 'build'))
     os.symlink(os.path.join(root, 'build', 'raylib'), os.path.join(work, 'build', 'raylib'))
-    os.symlink(os.path.join(root, 'build', 'vkbd'), os.path.join(work, 'build', 'vkbd'))
+    for t in ('vkbd', 'vptr', 'dndpeer'):
+        os.symlink(os.path.join(root, 'build', t), os.path.join(work, 'build', t))
     os.symlink(os.path.join(root, 'build', 'ofx-clean'), os.path.join(work, 'build', 'ofx-clean'))
     return work
 works = [make_work(w) for w in range(jobs)]

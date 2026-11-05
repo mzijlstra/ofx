@@ -18,9 +18,21 @@ PREFIX  ?= $(HOME)/.local
 
 all: build/ofx build/ofx-clean build/ofx-fm1
 
+# F14's pointer in the test sway (tools/gui/vptr.c, 2026-11-05), as vkbd is the keyboard.
+VPTR_XML = tools/gui/wlr-virtual-pointer-unstable-v1.xml
+build/vptr: tools/gui/vptr.c tools/gui/testsway.h $(VPTR_XML) Makefile | build
+	wayland-scanner client-header $(VPTR_XML) build/wlr-virtual-pointer-unstable-v1-client-protocol.h
+	wayland-scanner private-code $(VPTR_XML) build/wlr-virtual-pointer-unstable-v1-protocol.c
+	$(CC) $(CFLAGS) -Ibuild -o $@ tools/gui/vptr.c build/wlr-virtual-pointer-unstable-v1-protocol.c $(shell pkg-config --cflags --libs wayland-client)
+
+# F14's drag and drop peer in the test sway (tools/gui/dndpeer.c, 2026-11-05): xdg-shell's header
+# from raylib's protocols.
+build/dndpeer: tools/gui/dndpeer.c tools/gui/testsway.h build/raylib/wl/stamp Makefile | build
+	$(CC) $(CFLAGS) -isystem $(RL_WL) -o $@ tools/gui/dndpeer.c $(shell pkg-config --cflags --libs wayland-client)
+
 # The GUI scripts' keyboard in the test sway (tools/gui/vkbd.c, 2026-10-28).
 VKBD_XML = tools/gui/virtual-keyboard-unstable-v1.xml
-build/vkbd: tools/gui/vkbd.c $(VKBD_XML) Makefile | build
+build/vkbd: tools/gui/vkbd.c tools/gui/testsway.h $(VKBD_XML) Makefile | build
 	wayland-scanner client-header $(VKBD_XML) build/virtual-keyboard-unstable-v1-client-protocol.h
 	wayland-scanner private-code $(VKBD_XML) build/virtual-keyboard-unstable-v1-protocol.c
 	$(CC) $(CFLAGS) -Ibuild -o $@ tools/gui/vkbd.c build/virtual-keyboard-unstable-v1-protocol.c $(shell pkg-config --cflags --libs wayland-client xkbcommon)
