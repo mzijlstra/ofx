@@ -133,6 +133,8 @@ his word: Nemo's compact view and its icon size slider.
   theme's name changes. Not yet: a theme edited in place under the same name keeps the old icons
   until a restart (reviewer-2, 2026-10-29).
 - Drag and drop (Michael, 2026-10-29): inside ofx first (F13), then with other programs (F14).
+- A browser's link or image dropped into ofx saved as a file (a download as a job, its name, a size
+  cap): F14 refuses them (Michael, 2026-11-05).
 - Network shares (Michael, 2026-10-29): Samba and NFS, F16. Needs machines to test against, and the
   counting in a separate process above, so a dead mount can't hang ofx.
 - Redo (Edit menu), beside undo: needs a history of undone changes.
@@ -732,6 +734,59 @@ Default and Recommended equal GIO's; GLib's rewrite of a copy adds the two lines
   index.theme files read again; start-up is back to about 51 ms), each app's texture when its row
   is first drawn, all of them dropped when it closes (`ow_drop`). SVG icons (theme, pixmaps/ or a
   path) are drawn with nanosvg, vendored; only for the apps, the files' icons stay PNG.
+
+## F14 design (2026-11-05; Michael, 2026-11-05: the recommendations below)
+
+**What GLFW does (vendored 3.4, not to be edited):** it binds `wl_data_device_manager` at version 1
+(no actions: no copy or move), accepts any drop that offers `text/uri-list`, reads it with a
+blocking `read` on the main thread inside its event dispatch, and hands the paths to raylib's
+drop list (which ofx ignores). It never calls `finish`, its motion handler is empty (no drop
+position), and it has no `start_drag`.
+
+**So ofx brings its own, on GLFW's connection** (`glfwGetWaylandDisplay`, `glfwGetWaylandWindow`):
+a registry of its own binding `wl_data_device_manager` at version 3 and the seat, its own data
+device, and its own `wl_pointer` for the button serials `start_drag` needs. A drag has to start on
+the window's own connection and surface, so the clipboard's way (a connection of its own) can't
+do it.
+
+**Its own event queue and thread.** Dragged out and back into ofx's own window, GLFW's blocking read
+on the main thread waits for ofx's data source to answer `send`; on the main thread that answer
+would never come (the window hangs: Hyprland's "not responding"). A dnd thread dispatches ofx's
+queue (`wl_display_prepare_read_queue`, as libwayland allows beside GLFW's own reads), answers
+`send` there, and hands what the main thread needs (an offer's types, its position, a drop) over
+with atomics and `wake_main`, as the other workers do.
+
+**Out (ofx to a browser, a file manager, an editor):** the F13 drag of files that leaves the window
+is handed to the compositor (`start_drag`; until F14 leaving cancels it). The source offers
+`text/uri-list` (file URIs, percent-encoded as Copy's) and `text/plain` (the paths, quoted as
+Copy Path's), actions copy, move and ask. The drag image is the icon and the count badge, in a
+small shm buffer. A move a file manager makes is its own (GTK moves the files itself); ofx only
+sees them go.
+
+**In (files from another program):** an offer with `text/uri-list` of `file://` URIs: its position
+lights the row or sidebar folder as F13's drags do (drop_find), the spring-loaded tabs work, and
+the drop copies or moves with Nemo's rule (ui_drop_op) within the actions the source offers, read
+on the dnd thread (a cap on its size), then `copy_here` as a job, then `finish`. Dragged out and
+back in, ofx knows its own source (a type of its own in the offer) and drops as inside.
+
+**Tests:** in the test sway only, with a peer program of ours (as vkbd: `tools/gui/dndpeer.c`): a
+target that writes what it was offered and received to a file, and a source that drags files in
+through a virtual pointer (sway's `zwlr_virtual_pointer_v1`). Then Michael's hand check on
+Hyprland, with Chromium, Firefox and Nemo, since compositors differ in how they treat two data
+devices on one client.
+
+**Steps (proposed):** 0. a spike in the test sway: ofx's data device beside GLFW's gets enter,
+motion and drop with positions, a v3 offer's actions work while GLFW's v1 one accepts too, and
+`start_drag` works with the serial from ofx's own pointer; then the same on Hyprland, by hand. 1.
+dragging out. 2. dropping in. 3. the milestone's code-health review.
+
+**Michael's answers (2026-11-05):**
+- **Scope:** out, and files in (both in F14, out first).
+- **A browser's link or image** (a web address, no file): refused in F14, the drop cursor says no.
+  Saving one (a download as a job) is on the later list.
+- **A drop of files from outside:** Nemo's rule, as F13's (move on the same drive, copy across,
+  Ctrl copies, Shift moves), within the actions the source allows.
+- **The drag image outside the window:** the icon and the count badge.
 
 ## F13 design (2026-11-03; Michael, 2026-11-04: "sounds good" to the recommendations below)
 
