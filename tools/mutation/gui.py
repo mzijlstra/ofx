@@ -941,7 +941,7 @@ MUTANTS = [
     ('gui/main.c', '        if (spring_tick() || (app.drag', '        if ((app.drag', 'f13'),
     ('gui/frame.c', '    if (bx + bb.width > (float)GetScreenWidth()) bx = app.drag_px - 14 - bb.width;\n', '', 'f13'),
     # F13 code-health step A (2026-11-04)
-    ('gui/main.c', '        if (app.drag == DRAG_FILES && app.drop.reloads != app.reloads) drop_find', '        if (false) drop_find', 'f13'),
+    ('gui/main.c', '        if (files_over() && app.drop.reloads != app.reloads) drop_find', '        if (false) drop_find', 'f13'),
     ('gui/actions.c', '    if (marks) ui_mark_clear(&app.ui);\n    trash_state();', '    ui_mark_clear(&app.ui);\n    trash_state();', 'f13'),
     ('gui/input.c', '    app.side_px = w, app.drag_moved = true;', '    app.side_px = w;', 'f13'),
     ('gui/actions.c', '    snprintf(app.text_copied, sizeof app.text_copied, "%.*s", STR_ARG(t));\n    if (!clip_set_text(t))', '    snprintf(app.text_copied, sizeof app.text_copied, "%.*s", STR_ARG(t));\n    if (true)', 'clip'),
@@ -967,6 +967,17 @@ MUTANTS = [
     ('gui/dnd.c', '    wl_data_source_offer(dnd.src, CLIP_MIME_TEXT[0]);\n', '', 'dnd'),
     ('gui/dnd.c', ' | (move ? WL_DATA_DEVICE_MANAGER_DND_ACTION_MOVE : 0));', ');', 'dnd'),
     ('gui/dnd.c', '    if (button == BTN_LEFT) dnd.press = state == WL_POINTER_BUTTON_STATE_PRESSED ? serial : 0', '    if (button == BTN_LEFT) dnd.press = 0', 'dnd'),
+    # F14 step 2 (2026-11-05): files dragged past the window's edge go out; ours back over it drop as inside
+    ('gui/input.c', '    if ((x < 0 || y < 0 || x >= (float)GetScreenWidth() || y >= (float)GetScreenHeight()) && drag_out()) return true;', '', 'dnd'),
+    ('gui/input.c', '    if (!dnd_start(&dragged, app.drag_mods & UI_MOD_SHIFT, have', '    if (!dnd_start(&dragged, false, have', 'dnd'),
+    ('gui/input.c', '    bool have = drag_image(&im);', '    bool have = false;', 'dnd'),
+    ('gui/input.c', '        dnd_own_answer(app.drop.ok, op != UI_DROP_COPY);', '        dnd_own_answer(false, op != UI_DROP_COPY);', 'dnd'),
+    ('gui/input.c', '        if (app.drop.ok) drop_do(&app.drop);\n        app.out_own = true;', '        app.out_own = true;', 'dnd'),
+    ('gui/input.c', '        if (dragged.n == 1) set_status(false, "%s %s to another program"', '        if (false) set_status(false, "%s %s to another program"', 'dnd'),
+    ('gui/input.c', '    if (app.drag == DRAG_OUT) dnd_cancel();\n', '', 'dnd'),
+    ('gui/dnd.c', '(void)serial, (void)s; dnd.press = 0; }\nstatic void dnd_ptr_motion', '(void)serial, (void)s; }\nstatic void dnd_ptr_motion', 'dnd'),
+    # Not run: drag_out telling raylib the button is up, and drag_release leaving DRAG_OUT alone:
+    # a scripted window takes no compositor input, so only a hand check shows them.
 ]
 import concurrent.futures, queue, threading, time
 

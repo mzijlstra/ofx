@@ -1,15 +1,33 @@
-# F14 step 1: ofx's own drag dropped back on its own window: known by its own type, counted as its
-# own and not read (its files are the drag's), and the window keeps answering. Layout as
-# dnd.script, with no peer: ofx fills the output.
+# F14 step 2: our drag out brought back over the window: lit and answered as a drag inside it is
+# (adir's row, Move), and dropped there as one (a.txt moved into adir, Ctrl+Z puts it back); its
+# offer is known by our own type and not read. Then a drag out cancelled with Esc. No peer: ofx
+# fills the output (rows at x 568: adir 106, a.txt 134, b.txt 162).
 settle
-key down
-sh vptr move 200 300 press wait 1500 move 300 300 move 400 200 wait 300 release >"$OFX_ROOT/vptr.log" 2>&1 &
+sh vptr move 100 450 press wait 1500 move 300 300 move 568 106 wait 800 release >"$OFX_ROOT/vptr.log" 2>&1 &
 wait-for 3000 dndpress=1
-drag-out
-wait-for 3000 dndover=1
-expect dndaction=1
-wait-for 4000 owndrops=1 dndover=0
+point-ui row 1
+press-here
+move-by 0 10
+move-to -5 100
+expect drag=out dndout=dragging
+wait-for 3000 dndover=1 drop=row:0 dropok=1 dropop=move dropmark=1 badge=Move
+wait-for 3000 owndrops=1 drag=- dndover=0
 expect drops=0 dropfail=0 dndreading=0 dndsent=0
-key down
-expect sel=b.txt
+wait-for 3000 job=- n=2
+sh test -f "$OFX_DIR/adir/a.txt" && test ! -e "$OFX_DIR/a.txt"
+expect undo=move
+key ctrl-z
+wait-for 3000 n=3
+# ---- Esc during a drag out ends it: the compositor's drag goes with our source
+sh vptr move 100 450 press wait 1500 release >"$OFX_ROOT/vptr2.log" 2>&1 &
+wait-for 3000 dndpress=1
+point-ui row 2
+press-here
+move-by 0 10
+move-to -5 100
+expect drag=out
+key esc
+expect drag=- dndout=cancelled dndicon=0
+sleep 1800
+expect n=3 drag=-
 quit

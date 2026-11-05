@@ -405,7 +405,114 @@ static void drag_end(void)
 // A drag of files ended without a drop: Esc, or the pointer off the window.
 static void drag_cancel(void)
 {
-    if (app.drag == DRAG_PRESS || app.drag == DRAG_FILES) drag_end();
+    if (app.drag == DRAG_OUT) dnd_cancel();
+    if (app.drag == DRAG_PRESS || app.drag == DRAG_FILES || app.drag == DRAG_OUT) drag_end();
+}
+
+// ---- dragging out to other programs (F14 step 2) ---------------------------------------------
+
+enum { DRAG_IMG_PX = 48, DRAG_IMG_ICON = 32, DRAG_IMG_MAX = DRAG_IMG_PX * 4 };
+static u32 drag_img[DRAG_IMG_MAX * DRAG_IMG_MAX];   // the drag image's pixels, for the compositor's buffer
+
+// The drag image, as the badge's first part (Michael, 2026-11-05): the first file's icon, and when
+// more go a count in the accent colour at its corner; drawn at the window's scale into a texture and
+// read back premultiplied (the compositor's ARGB8888). False when it can't be (no texture).
+static bool drag_image(DndImage *im)
+{
+    int sc = window_scale(), px = DRAG_IMG_PX * sc;
+    if (sc > 4) return false;
+    RenderTexture2D rt = LoadRenderTexture(px, px);
+    if (!rt.id) return false;
+    Theme *t = &app.theme;
+    BeginTextureMode(rt);
+    ClearBackground(BLANK);
+    // Every channel blended over the clear texture: the colours come out premultiplied, alpha whole
+    // (BLEND_ALPHA would square an edge's alpha).
+    rlSetBlendFactorsSeparate(0x0302, 0x0303, 1, 0x0303, 0x8006, 0x8006);   // (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, ..., GL_FUNC_ADD)
+    BeginBlendMode(BLEND_CUSTOM_SEPARATE);
+    BeginMode2D((Camera2D){ .zoom = (float)sc });
+    float ix = 4, iy = (float)(DRAG_IMG_PX - DRAG_IMG_ICON) - 4;
+    if (app.drag_icon && app.drag_icon->tex.id) {
+        Texture2D tx = app.drag_icon->tex;
+        DrawTexturePro(tx, (Rectangle){ 0, 0, (float)tx.width, (float)tx.height }, (Rectangle){ ix, iy, DRAG_IMG_ICON, DRAG_IMG_ICON }, (Vector2){ 0 }, 0, WHITE);
+    }
+    if (dragged.n > 1) {
+        char num[24];
+        snprintf(num, sizeof num, "%td", dragged.n);
+        float w = 0, size = 12;
+        for (const char *c = num; *c; c++) w += font_advance((u32)*c, size);
+        float r = w / 2 + 5 < 9 ? 9 : w / 2 + 5, cx = DRAG_IMG_PX - r - 1, cy = r + 1;
+        Color acc = { t->accent.r, t->accent.g, t->accent.b, 255 }, bg = { t->bg.r, t->bg.g, t->bg.b, 255 };
+        DrawRectangleRounded((Rectangle){ cx - r, cy - 9, 2 * r, 18 }, 1, 12, acc);
+        float x = cx - w / 2;
+        for (const char *c = num; *c; c++) font_draw((u32)*c, x, cy - 8, size, bg), x += font_advance((u32)*c, size);
+    }
+    EndMode2D();
+    EndBlendMode();
+    EndTextureMode();
+    Image img = LoadImageFromTexture(rt.texture);
+    UnloadRenderTexture(rt);
+    if (!img.data) return false;
+    ImageFormat(&img, PIXELFORMAT_UNCOMPRESSED_R8G8B8A8);
+    const u8 *p = img.data;
+    for (int y = 0; y < px; y++)   // (a render texture is upside down)
+        for (int x = 0; x < px; x++) {
+            const u8 *q = p + ((size_t)(px - 1 - y) * (size_t)px + (size_t)x) * 4;
+            drag_img[y * px + x] = (u32)q[3] << 24 | (u32)q[0] << 16 | (u32)q[1] << 8 | q[2];
+        }
+    UnloadImage(img);
+    *im = (DndImage){ drag_img, px, px, sc, (int)(ix + DRAG_IMG_ICON / 2), (int)(iy + DRAG_IMG_ICON / 2) };
+    return true;
+}
+
+// The files dragged past the window's edge, the button still held (the compositor keeps the
+// pointer ours until it is let go): handed to the compositor as a drag to other programs, as a
+// copy, and with Shift held a move too (Michael, 2026-11-05). raylib is told the button is up, as
+// it will never see its release (the next press would be no press). False when it can't be (no
+// compositor drags, no press it saw): the drag stays ofx's.
+static bool drag_out(void)
+{
+    DndImage im;
+    bool have = drag_image(&im);
+    if (!dnd_start(&dragged, app.drag_mods & UI_MOD_SHIFT, have ? &im : NULL)) return false;
+    app.drag = DRAG_OUT, app.drop = (Drop){ .kind = DROP_NONE, .at = -1 }, app.spring_tab = -1, app.out_over = false;
+    if (raylib_button) raylib_button(glfwGetCurrentContext(), GLFW_MOUSE_BUTTON_LEFT, GLFW_RELEASE, 0);
+    return true;
+}
+
+// Each frame of a drag out: back over the window it is ours again, lit and answered as a drag
+// inside it is, and dropped there as one; ended (dropped elsewhere, or cancelled), the status says
+// where it went. True when what is drawn changed.
+static bool drag_out_poll(void)
+{
+    if (app.drag != DRAG_OUT) return false;
+    float x, y;
+    bool over = dnd_own_over(&x, &y), was = app.out_over;
+    app.out_over = over;
+    if (over) {
+        app.drag_px = x, app.drag_py = y;
+        drop_find(x, y);
+        UiDropOp op = drop_op(&app.drop);
+        dnd_own_answer(app.drop.ok, op != UI_DROP_COPY);
+    } else if (was) {
+        app.drop = (Drop){ .kind = DROP_NONE, .at = -1 }, dnd_own_answer(false, false);
+    }
+    if (dnd_own_dropped(&x, &y)) {
+        drop_find(x, y);
+        if (app.drop.ok) drop_do(&app.drop);
+        app.out_own = true;
+    }
+    if (dnd.out == DND_OUT_DRAGGING || dnd.out == DND_OUT_DROPPED) return over || was;
+    if (dnd.out == DND_OUT_DONE && !app.out_own) {
+        char name[NAME_MAX + 1];
+        snprintf(name, sizeof name, "%.*s", STR_ARG(path_base(str_from_c(dragged.path[0]))));
+        bool moved = dnd.out_action == WL_DATA_DEVICE_MANAGER_DND_ACTION_MOVE;
+        if (dragged.n == 1) set_status(false, "%s %s to another program", moved ? "Moved" : "Copied", name);
+        else set_status(false, "%s %td items to another program", moved ? "Moved" : "Copied", dragged.n);
+    }
+    app.out_own = false;
+    drag_end();
+    return true;
 }
 
 // A drag held over another tab UI_SPRING_MS (F13 step 4): that tab shown, so the drop can go into
@@ -425,7 +532,7 @@ static bool spring_tick(void)
 // 2026-11-04).
 static void drag_keys(UiInput *in)
 {
-    if (app.drag != DRAG_PRESS && app.drag != DRAG_FILES) return;
+    if (app.drag != DRAG_PRESS && app.drag != DRAG_FILES && app.drag != DRAG_OUT) return;
     bool esc = false;
     for (int i = 0; i < in->nev; i++) esc |= in->ev[i].key == UK_ESC;
     in->nev = 0;
@@ -674,7 +781,7 @@ static int tip_target(Hit h)
 // what is drawn changed.
 static bool drag_release(UiInput *in)
 {
-    if (app.drag == DRAG_NONE) return false;
+    if (app.drag == DRAG_NONE || app.drag == DRAG_OUT) return false;   // (a drag out ends by the compositor: drag_out_poll)
     if (app.drag == DRAG_SIDE && app.drag_moved) side_keep(app.side_px), app.edge_press.row = -1;
     if (app.drag == DRAG_FILES && app.drop.ok) drop_do(&app.drop);
     if (app.drag == DRAG_PRESS && app.drag_tree) in->side_click = app.drag_side;
@@ -692,9 +799,11 @@ static bool side_drag_at(float x)
     return true;
 }
 
-// Files dragged to x, y: the badge follows, and where they would land is found (F13 step 3).
+// Files dragged to x, y: the badge follows, and where they would land is found (F13 step 3); past
+// the window's edge they go out to other programs (F14 step 2).
 static bool files_drag_at(float x, float y)
 {
+    if ((x < 0 || y < 0 || x >= (float)GetScreenWidth() || y >= (float)GetScreenHeight()) && drag_out()) return true;
     app.drag_px = x, app.drag_py = y;
     drop_find(x, y);
     return true;

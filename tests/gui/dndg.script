@@ -1,15 +1,20 @@
-# F14 step 1: every file marked, dragged out with move offered too (drag-out move): the target
-# (dndpeer target-move) takes the move. ofx only sees what the target does with them (nothing:
-# dndpeer moves no files). Layout as dnd.script.
+# F14 step 2: every file marked, dragged out with Shift held: move offered too, and the target
+# (dndpeer target-move) takes it. ofx only says so (dndpeer moves no files). Layout as dndd.script.
 settle
 sh dndpeer target-move "$OFX_ROOT/peer.log" >/dev/null 2>&1 &
 sleep 800
 settle
 key ctrl-a
-sh vptr move 200 300 press wait 1500 move 300 300 move 650 250 move 700 250 wait 300 release >"$OFX_ROOT/vptr.log" 2>&1 &
+sh vptr move 100 400 press wait 2000 move 300 300 move 650 250 move 700 250 wait 300 release >"$OFX_ROOT/vptr.log" 2>&1 &
 wait-for 3000 dndpress=1
-drag-out move
-wait-for 4000 dndout=done dndoutact=2
+point-ui row 1
+press-here
+move-by 0 10
+expect drag=files dragn=3
+move-to -5 100 shift
+expect drag=out dndicon=1
+wait-for 5000 dndout=done dndoutact=2 drag=-
+expect status=Moved 3 items to another program
 sh grep -q "source actions 3$" "$OFX_ROOT/peer.log"
 sh tr -d '\r\n' < "$OFX_ROOT/peer.log" | grep -q "bytes: file://$OFX_DIR/adirfile://$OFX_DIR/a.txtfile://$OFX_DIR/b.txt"
 expect n=3

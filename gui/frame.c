@@ -135,7 +135,7 @@ static const char *badge_op;
 static void layout_drag(void)
 {
     drop_marked = badge_drawn = false, badge_op = NULL, spring_fill = -1;
-    if (app.drag != DRAG_FILES) return;
+    if (!files_over()) return;
     Theme *t = &app.theme;
     Clay_ElementData e = Clay_GetElementData(drop_elem(&app.drop));
     if (app.drop.ok && e.found) {

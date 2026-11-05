@@ -809,6 +809,19 @@ have ended the window at the next write (now blocked in every thread; children s
 blocked); and the test sway's output was 468x258 logical, not weston's 936x516 (its resolution is
 pixels): fixed, the clip and keys groups pass at either size.
 
+**Step 2 (2026-11-05):** a drag of files (F13's) that crosses the window's edge with the button
+held is handed to the compositor (`drag_out`, input.c): the implicit grab keeps the pointer's
+motion ours past the edge, so the crossing is seen, and the press's serial is still good. Copy is
+offered, move too with Shift held; the drag image is the first file's icon with the count in the
+accent colour (drawn into a texture at the window's scale, read back premultiplied into an shm
+buffer); raylib is told the button is up (it never sees that release). Brought back over the window
+the drag is ours again (`files_over`): lit, answered to the compositor as the target takes it, and
+dropped as a drag inside the window (Nemo's rule, its job, its undo); Esc ends it. Dropped elsewhere,
+the status says "Copied a.txt to another program" (or Moved, as the target took it). Step 1's
+`drag-out` script command is gone: the scripts drag past the edge as a user does, vptr holding the
+compositor's button. A press's serial goes at an enter or leave and once a drag used it (a drag's
+grab takes the release, so it stayed, and the next drag out started from a dead press).
+
 **Michael's answers (2026-11-05):**
 - **Scope:** out, and files in (both in F14, out first).
 - **A browser's link or image** (a web address, no file): refused in F14, the drop cursor says no.

@@ -15,6 +15,7 @@
 // Included by main.c.
 
 #include <linux/input-event-codes.h>
+#include <sys/mman.h>
 
 #define GLFW_EXPOSE_NATIVE_WAYLAND
 #include "GLFW/glfw3native.h"
@@ -35,6 +36,8 @@ static struct {
     struct wl_seat *seat;
     struct wl_pointer *ptr;
     struct wl_data_device_manager *mgr;
+    struct wl_compositor *comp;           // the drag image's surface (version 3 for its scale)
+    struct wl_shm *shm;                   // and its buffer
     struct wl_data_device *dev;           // GLFW's
     struct wl_surface *surf;              // GLFW's window
     char own_mime[64];                    // "application/x-ofx-drag-<pid>": another ofx window's is another program's
@@ -50,6 +53,11 @@ static struct {
     uint32_t serial;                      // its enter's
     float x, y;                           // where it is, in the surface's logical pixels
     uint32_t action;                      // the action the compositor settled on (offer.action)
+
+    // Our own drag over the window (F14 step 2): what the window answers (dnd_own_answer), and
+    // its drop, once, for the window to drop as a drag inside it does (dnd_own_dropped).
+    bool own_ok, own_move, own_dropped;
+    float own_x, own_y;
 
     // The drop being read (dnd_reader), then finished on the main thread (dnd_poll).
     struct wl_data_offer *reading;
@@ -72,6 +80,8 @@ static struct {
     atomic_int wrote;                     // writers ended, for the scripts
     DndOut out;
     uint32_t out_action;                  // the action the target took (source.action)
+    struct wl_surface *icon;              // the drag image, while our drag goes
+    struct wl_buffer *icon_buf;
 } dnd;   // (no initializer, so in .bss rather than 33 KB of .data: dnd_init sets the -1s)
 
 static int dnd_slot(struct wl_data_offer *o)
@@ -131,10 +141,42 @@ static void dnd_answer(void)
     struct wl_data_offer *o = dnd.offers[i].o;
     unsigned t = dnd.offers[i].types;
     bool copy = dnd.offers[i].actions & WL_DATA_DEVICE_MANAGER_DND_ACTION_COPY;
-    const char *mime = t & DND_TYPE_OWN ? dnd.own_mime : (t & DND_TYPE_URIS) && copy && !dnd.reading ? CLIP_MIME_URIS : NULL;
+    if (t & DND_TYPE_OWN) {   // ofx's own: as the window answers (the target under the pointer, its copy or move)
+        enum { C = WL_DATA_DEVICE_MANAGER_DND_ACTION_COPY, M = WL_DATA_DEVICE_MANAGER_DND_ACTION_MOVE };
+        wl_data_offer_accept(o, dnd.serial, dnd.own_ok ? dnd.own_mime : NULL);
+        wl_data_offer_set_actions(o, dnd.own_ok ? C | M : 0, dnd.own_ok ? (dnd.own_move ? M : C) : 0);
+        return;
+    }
+    const char *mime = (t & DND_TYPE_URIS) && copy && !dnd.reading ? CLIP_MIME_URIS : NULL;
     wl_data_offer_accept(o, dnd.serial, mime);
     uint32_t a = mime ? WL_DATA_DEVICE_MANAGER_DND_ACTION_COPY : WL_DATA_DEVICE_MANAGER_DND_ACTION_NONE;
     wl_data_offer_set_actions(o, a, a);
+}
+
+// Whether our own drag is over the window, and where (the surface's logical pixels).
+static bool dnd_own_over(float *x, float *y)
+{
+    if (dnd.over < 0 || !(dnd.offers[dnd.over].types & DND_TYPE_OWN)) return false;
+    *x = dnd.x, *y = dnd.y;
+    return true;
+}
+
+// What the window says to our own drag over it: whether the target under it takes the files, and
+// as a move or a copy; told the compositor when it changes, for its pointer.
+static void dnd_own_answer(bool ok, bool move)
+{
+    if (ok == dnd.own_ok && move == dnd.own_move) return;
+    dnd.own_ok = ok, dnd.own_move = move;
+    float x, y;
+    if (dnd_own_over(&x, &y)) dnd_answer(), wl_display_flush(dnd.dpy);
+}
+
+// Our own drag dropped on the window, once: where.
+static bool dnd_own_dropped(float *x, float *y)
+{
+    if (!dnd.own_dropped) return false;
+    dnd.own_dropped = false, *x = dnd.own_x, *y = dnd.own_y;
+    return true;
 }
 
 static void dnd_leave(void *data, struct wl_data_device *d);
@@ -210,9 +252,9 @@ static void dnd_drop(void *data, struct wl_data_device *d)
     dnd.over = -1, dnd.changed = true;   // (the leave after a drop, if one comes, finds nothing entered)
     dnd_forget(i);
     if (t & DND_TYPE_OWN) {   // ofx's own drag: not read (above)
-        wl_data_offer_finish(o);
+        if (dnd.action) wl_data_offer_finish(o);
         wl_data_offer_destroy(o);
-        dnd.own_drops++;
+        dnd.own_drops++, dnd.own_dropped = dnd.action != 0, dnd.own_x = dnd.x, dnd.own_y = dnd.y;
         return;
     }
     int p[2];
@@ -281,10 +323,17 @@ static void dnd_src_send(void *data, struct wl_data_source *s, const char *mime,
     atomic_fetch_sub(&dnd.writers, 1);   // (our own type, which is never read, or no thread)
     close(fd);
 }
+// The drag image's surface and buffer, given back once the drag is over.
+static void dnd_icon_drop(void)
+{
+    if (dnd.icon) wl_surface_destroy(dnd.icon), dnd.icon = NULL;
+    if (dnd.icon_buf) wl_buffer_destroy(dnd.icon_buf), dnd.icon_buf = NULL;
+}
+
 static void dnd_src_end(struct wl_data_source *s, DndOut how)
 {
     wl_data_source_destroy(s);
-    if (dnd.src == s) dnd.src = NULL, dnd.out = how, dnd.changed = true;
+    if (dnd.src == s) dnd.src = NULL, dnd.out = how, dnd.changed = true, dnd_icon_drop();
 }
 static void dnd_src_cancelled(void *data, struct wl_data_source *s) { (void)data; dnd_src_end(s, DND_OUT_CANCELLED); }
 static void dnd_src_performed(void *data, struct wl_data_source *s)
@@ -300,10 +349,35 @@ static void dnd_src_action(void *data, struct wl_data_source *s, uint32_t a)
 }
 static const struct wl_data_source_listener dnd_src_l = { dnd_src_target, dnd_src_send, dnd_src_cancelled, dnd_src_performed, dnd_src_finished, dnd_src_action };
 
+// The drag image: w x h ARGB pixels, premultiplied, at scale (its buffer's), the pointer at hx, hy
+// on it (logical pixels); a surface of its own, or none when it can't be made.
+typedef struct {
+    const u32 *px;
+    int w, h, scale, hx, hy;
+} DndImage;
+
+static struct wl_surface *dnd_icon_make(const DndImage *im)
+{
+    if (!im || !im->px || !dnd.comp || !dnd.shm) return NULL;
+    int stride = im->w * 4, size = stride * im->h;
+    int fd = memfd_create("ofx-drag", MFD_CLOEXEC);
+    if (fd < 0) return NULL;
+    void *p = ftruncate(fd, size) == 0 ? mmap(NULL, (size_t)size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0) : MAP_FAILED;
+    if (p == MAP_FAILED) return close(fd), NULL;
+    memcpy(p, im->px, (size_t)size);
+    munmap(p, (size_t)size);
+    struct wl_shm_pool *pool = wl_shm_create_pool(dnd.shm, fd, size);
+    close(fd);   // (the compositor has its own)
+    dnd.icon_buf = wl_shm_pool_create_buffer(pool, 0, im->w, im->h, stride, WL_SHM_FORMAT_ARGB8888);
+    wl_shm_pool_destroy(pool);
+    dnd.icon = wl_compositor_create_surface(dnd.comp);
+    return dnd.icon;
+}
+
 // c's files dragged out of the window, as copy (and with move, a move too), from the left press
-// that holds the button now: false when there is none, or a drag of ours is still going or being
-// read.
-static bool dnd_start(const ClipFiles *c, bool move)
+// that holds the button now, im under the pointer (NULL: the compositor's own): false when there is
+// no press, or a drag of ours is still going or being read.
+static bool dnd_start(const ClipFiles *c, bool move, const DndImage *im)
 {
     if (!dnd.ok || !dnd.press || dnd.src || atomic_load(&dnd.writers) > 0 || c->n == 0) return false;
     arena_reset(&dnd.srca);
@@ -317,16 +391,36 @@ static bool dnd_start(const ClipFiles *c, bool move)
     wl_data_source_offer(dnd.src, CLIP_MIME_TEXT[1]);
     wl_data_source_offer(dnd.src, dnd.own_mime);
     wl_data_source_set_actions(dnd.src, WL_DATA_DEVICE_MANAGER_DND_ACTION_COPY | (move ? WL_DATA_DEVICE_MANAGER_DND_ACTION_MOVE : 0));
-    wl_data_device_start_drag(dnd.dev, dnd.src, dnd.surf, NULL, dnd.press);
+    struct wl_surface *icon = dnd_icon_make(im);
+    wl_data_device_start_drag(dnd.dev, dnd.src, dnd.surf, icon, dnd.press);
+    if (icon) {   // (a drag icon's offset moves it from the pointer: the pointer at hx, hy on it)
+        wl_surface_set_buffer_scale(icon, im->scale);
+        wl_surface_attach(icon, dnd.icon_buf, -im->hx, -im->hy);
+        wl_surface_damage(icon, 0, 0, im->w, im->h);
+        wl_surface_commit(icon);
+    }
     wl_display_flush(dnd.dpy);
     dnd.out = DND_OUT_DRAGGING, dnd.out_action = 0, dnd.changed = true;
+    dnd.own_ok = false, dnd.own_move = false, dnd.own_dropped = false;
     return true;
+}
+
+// Our drag ended by the window (Esc): the compositor ends it as the source goes.
+static void dnd_cancel(void)
+{
+    if (!dnd.src) return;
+    wl_data_source_destroy(dnd.src);
+    dnd.src = NULL, dnd.out = DND_OUT_CANCELLED, dnd.changed = true;
+    dnd_icon_drop();
+    wl_display_flush(dnd.dpy);
 }
 
 // ---- the pointer's press serial, the seat, the registry ------------------------------------------
 
-static void dnd_ptr_enter(void *data, struct wl_pointer *p, uint32_t serial, struct wl_surface *s, wl_fixed_t x, wl_fixed_t y) { (void)data, (void)p, (void)serial, (void)s, (void)x, (void)y; }
-static void dnd_ptr_leave(void *data, struct wl_pointer *p, uint32_t serial, struct wl_surface *s) { (void)data, (void)p, (void)serial, (void)s; }
+// A press's serial lasts until its release, which a drag's grab takes (ours or another's), so it
+// goes at an enter or a leave too: a drag's start is a leave.
+static void dnd_ptr_enter(void *data, struct wl_pointer *p, uint32_t serial, struct wl_surface *s, wl_fixed_t x, wl_fixed_t y) { (void)data, (void)p, (void)serial, (void)s, (void)x, (void)y; dnd.press = 0; }
+static void dnd_ptr_leave(void *data, struct wl_pointer *p, uint32_t serial, struct wl_surface *s) { (void)data, (void)p, (void)serial, (void)s; dnd.press = 0; }
 static void dnd_ptr_motion(void *data, struct wl_pointer *p, uint32_t t, wl_fixed_t x, wl_fixed_t y) { (void)data, (void)p, (void)t, (void)x, (void)y; }
 static void dnd_ptr_button(void *data, struct wl_pointer *p, uint32_t serial, uint32_t t, uint32_t button, uint32_t state)
 {
@@ -353,6 +447,8 @@ static void dnd_global(void *data, struct wl_registry *r, uint32_t name, const c
     if (strcmp(iface, wl_data_device_manager_interface.name) == 0 && !dnd.mgr && version >= 3)
         dnd.mgr = wl_registry_bind(r, name, &wl_data_device_manager_interface, 3);
     if (strcmp(iface, wl_seat_interface.name) == 0 && !dnd.seat) dnd.seat = wl_registry_bind(r, name, &wl_seat_interface, 1);
+    if (strcmp(iface, wl_compositor_interface.name) == 0 && !dnd.comp && version >= 3) dnd.comp = wl_registry_bind(r, name, &wl_compositor_interface, 3);
+    if (strcmp(iface, wl_shm_interface.name) == 0 && !dnd.shm) dnd.shm = wl_registry_bind(r, name, &wl_shm_interface, 1);
 }
 static void dnd_global_remove(void *data, struct wl_registry *r, uint32_t name) { (void)data, (void)r, (void)name; }
 static const struct wl_registry_listener dnd_reg_l = { dnd_global, dnd_global_remove };
@@ -410,6 +506,9 @@ static void dnd_close(void)
     if (!dnd.ok) return;
     glfwSetWaylandDragHook(NULL, NULL, NULL);
     if (dnd.src) wl_data_source_destroy(dnd.src), dnd.src = NULL;
+    dnd_icon_drop();
+    if (dnd.comp) wl_compositor_destroy(dnd.comp), dnd.comp = NULL;
+    if (dnd.shm) wl_shm_destroy(dnd.shm), dnd.shm = NULL;
     if (dnd.over >= 0) wl_data_offer_destroy(dnd.offers[dnd.over].o), dnd.over = -1;
     if (dnd.reading) wl_data_offer_destroy(dnd.reading), dnd.reading = NULL;
     if (dnd.ptr) wl_pointer_destroy(dnd.ptr), dnd.ptr = NULL;

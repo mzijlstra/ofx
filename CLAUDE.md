@@ -235,7 +235,9 @@ so every run does it. `gui.py` runs from its scratch copy, scripts included, so 
   pointer through wlr-virtual-pointer-unstable-v1) gives the headless sway a pointer and moves it,
   `dndpeer` (`tools/gui/dndpeer.c`) is the other program, a target or a source window beside ofx;
   both on the window's PATH (run-script.sh) and run with `sh … &`; vptr's x and y are the output's
-  logical pixels (936x516, two windows side by side at 468 each). vkbd, vptr and dndpeer
+  logical pixels (936x516, two windows side by side at 468 each). A drag out is a scripted F13 drag
+  (`press-here`, `move-to` past the window's edge) while `vptr … press wait …` holds the
+  compositor's button, whose serial the drag starts from. vkbd, vptr and dndpeer
   share one guard (`tools/gui/testsway.h`): run against Michael's Hyprland, vptr would move his
   pointer and dndpeer drop into his windows. A drag out of a real ofx on his desktop reaches his
   programs as any drag does (a browser opens the file, Nemo may move it); test that only by hand,
