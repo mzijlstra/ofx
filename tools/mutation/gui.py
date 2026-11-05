@@ -978,6 +978,8 @@ MUTANTS = [
     ('gui/dnd.c', '(void)serial, (void)s; dnd.press = 0; }\nstatic void dnd_ptr_motion', '(void)serial, (void)s; }\nstatic void dnd_ptr_motion', 'dnd'),
     # Not run: drag_out telling raylib the button is up, and drag_release leaving DRAG_OUT alone:
     # a scripted window takes no compositor input, so only a hand check shows them.
+    # Not run either: an offer's action kept by its slot (dnd_offer_action). Hyprland sends it before
+    # the enter, the test sway after, so only Michael's hand check on Hyprland shows it (2026-11-05).
 ]
 import concurrent.futures, queue, threading, time
 

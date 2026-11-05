@@ -821,6 +821,13 @@ the status says "Copied a.txt to another program" (or Moved, as the target took 
 `drag-out` script command is gone: the scripts drag past the edge as a user does, vptr holding the
 compositor's button. A press's serial goes at an enter or leave and once a drag used it (a drag's
 grab takes the release, so it stayed, and the next drag out started from a dead press).
+Michael's hand check on Hyprland (2026-11-05): out to Chromium and Nemo, Shift's move, Esc, the
+image, all as meant; out and back onto a folder said "Copied a.txt to another program" and dropped
+nothing. Hyprland sends an offer's action before its enter, and step 1 kept the action only for the
+offer entered, so the drop read as refused (a drop from another program would have been too). Each
+offer's action is kept by its slot now, as its types are; checked again by hand, it moves. The test
+sway sends the action after the enter, so no script shows it. `OFX_GUI_DEBUG=1` logs every drag
+event now, which is how it was found.
 
 **Michael's answers (2026-11-05):**
 - **Scope:** out, and files in (both in F14, out first).

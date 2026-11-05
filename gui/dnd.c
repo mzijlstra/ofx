@@ -47,7 +47,9 @@ static struct {
     // clipboard offer on every keyboard focus change, through the same device, so the types belong
     // to an offer, never to "the latest". Slots of offers never entered are only forgotten: those are
     // GLFW's (the selection) to destroy.
-    struct { struct wl_data_offer *o; unsigned types; uint32_t actions; u32 age; } offers[DND_OFFERS];
+    // Its action too: Hyprland sends an offer's action before the enter (2026-11-05, Michael's log),
+    // so one kept only for the offer entered was lost, and its drop read as refused.
+    struct { struct wl_data_offer *o; unsigned types; uint32_t actions, action; u32 age; } offers[DND_OFFERS];
     u32 ages;
     int over;                             // the slot entered, -1 for none: a drag over the window
     uint32_t serial;                      // its enter's
@@ -84,6 +86,9 @@ static struct {
     struct wl_buffer *icon_buf;
 } dnd;   // (no initializer, so in .bss rather than 33 KB of .data: dnd_init sets the -1s)
 
+static bool dnd_debug;   // OFX_GUI_DEBUG: every drag event on stderr, as input.c's keys and buttons
+#define DND_LOG(...) (dnd_debug ? fprintf(stderr, "ofx: dnd " __VA_ARGS__), fputc('\n', stderr) : 0)
+
 static int dnd_slot(struct wl_data_offer *o)
 {
     for (int i = 0; o && i < DND_OFFERS; i++)
@@ -95,6 +100,7 @@ static void dnd_offer_type(void *data, struct wl_data_offer *o, const char *mime
 {
     (void)data;
     int i = dnd_slot(o);
+    DND_LOG("offer %p slot %d type %s", (void *)o, i, mime);
     if (i < 0) return;
     if (strcmp(mime, CLIP_MIME_URIS) == 0) dnd.offers[i].types |= DND_TYPE_URIS;
     else if (strcmp(mime, CLIP_MIME_TEXT[0]) == 0 || strcmp(mime, CLIP_MIME_TEXT[1]) == 0) dnd.offers[i].types |= DND_TYPE_TEXT;
@@ -104,12 +110,16 @@ static void dnd_offer_actions(void *data, struct wl_data_offer *o, uint32_t a)
 {
     (void)data;
     int i = dnd_slot(o);
+    DND_LOG("offer %p slot %d source actions %u", (void *)o, i, a);
     if (i >= 0) dnd.offers[i].actions = a;
 }
 static void dnd_offer_action(void *data, struct wl_data_offer *o, uint32_t a)
 {
     (void)data;
-    if (dnd.over >= 0 && dnd.offers[dnd.over].o == o) dnd.action = a, dnd.changed = true;
+    int i = dnd_slot(o);
+    DND_LOG("offer %p slot %d action %u", (void *)o, i, a);
+    if (i >= 0) dnd.offers[i].action = a;
+    if (i >= 0 && i == dnd.over) dnd.action = a, dnd.changed = true;
 }
 static const struct wl_data_offer_listener dnd_offer_l = { dnd_offer_type, dnd_offer_actions, dnd_offer_action };
 
@@ -124,7 +134,8 @@ static void dnd_data_offer(void *data, struct wl_data_device *d, struct wl_data_
     if (i < 0)
         for (int k = 0; k < DND_OFFERS; k++)
             if (k != dnd.over && (i < 0 || dnd.offers[k].age < dnd.offers[i].age)) i = k;
-    dnd.offers[i].o = o, dnd.offers[i].types = 0, dnd.offers[i].actions = 0, dnd.offers[i].age = ++dnd.ages;
+    dnd.offers[i].o = o, dnd.offers[i].types = 0, dnd.offers[i].actions = dnd.offers[i].action = 0, dnd.offers[i].age = ++dnd.ages;
+    DND_LOG("data_offer %p slot %d", (void *)o, i);
 }
 
 static void dnd_forget(int i)
@@ -167,6 +178,7 @@ static void dnd_own_answer(bool ok, bool move)
 {
     if (ok == dnd.own_ok && move == dnd.own_move) return;
     dnd.own_ok = ok, dnd.own_move = move;
+    DND_LOG("own answer: %s%s", ok ? "takes it" : "refused", ok && move ? ", a move" : "");
     float x, y;
     if (dnd_own_over(&x, &y)) dnd_answer(), wl_display_flush(dnd.dpy);
 }
@@ -188,6 +200,7 @@ static void dnd_enter(void *data, struct wl_data_device *d, uint32_t serial, str
     dnd.serial = serial, dnd.x = (float)wl_fixed_to_double(x), dnd.y = (float)wl_fixed_to_double(y);
     dnd.action = 0, dnd.changed = true;
     int i = dnd_slot(o);
+    DND_LOG("enter %p slot %d types %u on %s at %.0f,%.0f", (void *)o, i, i >= 0 ? dnd.offers[i].types : 0, s == dnd.surf ? "the window" : "another surface", dnd.x, dnd.y);
     if (!o) return;   // (a drag of another client's own, with no data: nothing to take)
     if (i < 0 || s != dnd.surf) {   // (not announced, or GLFW's decorations: refused, and the offer is ours)
         wl_data_offer_accept(o, serial, NULL);
@@ -195,13 +208,14 @@ static void dnd_enter(void *data, struct wl_data_device *d, uint32_t serial, str
         dnd_forget(i);
         return;
     }
-    dnd.over = i;
+    dnd.over = i, dnd.action = dnd.offers[i].action;
     dnd_answer();
 }
 
 static void dnd_leave(void *data, struct wl_data_device *d)
 {
     (void)data, (void)d;
+    DND_LOG("leave (slot %d)", dnd.over);
     if (dnd.over < 0) return;
     wl_data_offer_destroy(dnd.offers[dnd.over].o);
     dnd_forget(dnd.over);
@@ -249,6 +263,7 @@ static void dnd_drop(void *data, struct wl_data_device *d)
     if (i < 0) return;
     struct wl_data_offer *o = dnd.offers[i].o;
     unsigned t = dnd.offers[i].types;
+    DND_LOG("drop %p slot %d types %u action %u at %.0f,%.0f", (void *)o, i, t, dnd.action, dnd.x, dnd.y);
     dnd.over = -1, dnd.changed = true;   // (the leave after a drop, if one comes, finds nothing entered)
     dnd_forget(i);
     if (t & DND_TYPE_OWN) {   // ofx's own drag: not read (above)
@@ -313,6 +328,7 @@ static void dnd_src_target(void *data, struct wl_data_source *s, const char *mim
 static void dnd_src_send(void *data, struct wl_data_source *s, const char *mime, int32_t fd)
 {
     (void)data, (void)s;
+    DND_LOG("source send %s", mime);
     int f = strcmp(mime, CLIP_MIME_URIS) == 0 ? CLIP_FMT_URIS : strcmp(mime, CLIP_MIME_TEXT[0]) == 0 || strcmp(mime, CLIP_MIME_TEXT[1]) == 0 ? CLIP_FMT_TEXT : -1;
     pthread_t th;
     atomic_fetch_add(&dnd.writers, 1);
@@ -332,6 +348,7 @@ static void dnd_icon_drop(void)
 
 static void dnd_src_end(struct wl_data_source *s, DndOut how)
 {
+    DND_LOG("source %s", DND_OUT_WORD[how]);
     wl_data_source_destroy(s);
     if (dnd.src == s) dnd.src = NULL, dnd.out = how, dnd.changed = true, dnd_icon_drop();
 }
@@ -339,12 +356,14 @@ static void dnd_src_cancelled(void *data, struct wl_data_source *s) { (void)data
 static void dnd_src_performed(void *data, struct wl_data_source *s)
 {
     (void)data;
+    DND_LOG("source dropped");
     if (dnd.src == s) dnd.out = DND_OUT_DROPPED, dnd.changed = true;
 }
 static void dnd_src_finished(void *data, struct wl_data_source *s) { (void)data; dnd_src_end(s, DND_OUT_DONE); }
 static void dnd_src_action(void *data, struct wl_data_source *s, uint32_t a)
 {
     (void)data;
+    DND_LOG("source action %u", a);
     if (dnd.src == s) dnd.out_action = a, dnd.changed = true;
 }
 static const struct wl_data_source_listener dnd_src_l = { dnd_src_target, dnd_src_send, dnd_src_cancelled, dnd_src_performed, dnd_src_finished, dnd_src_action };
@@ -400,6 +419,7 @@ static bool dnd_start(const ClipFiles *c, bool move, const DndImage *im)
         wl_surface_commit(icon);
     }
     wl_display_flush(dnd.dpy);
+    DND_LOG("start_drag (%s), offering %s", dnd.own_mime, move ? "copy and move" : "copy");
     dnd.out = DND_OUT_DRAGGING, dnd.out_action = 0, dnd.changed = true;
     dnd.own_ok = false, dnd.own_move = false, dnd.own_dropped = false;
     return true;
@@ -458,6 +478,8 @@ static const struct wl_registry_listener dnd_reg_l = { dnd_global, dnd_global_re
 static void dnd_init(void)
 {
     dnd.over = -1, dnd.read_fd = -1;
+    const char *dbg = getenv("OFX_GUI_DEBUG");
+    dnd_debug = dbg && dbg[0];
     arena_init(&dnd.gota, "drop", dnd_got_mem, sizeof dnd_got_mem);
     arena_init(&dnd.srca, "drag source", dnd_src_mem, sizeof dnd_src_mem);
     snprintf(dnd.own_mime, sizeof dnd.own_mime, "application/x-ofx-drag-%d", (int)getpid());
