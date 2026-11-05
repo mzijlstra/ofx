@@ -136,7 +136,9 @@ his word: Nemo's compact view and its icon size slider.
 - Network shares (Michael, 2026-10-29): Samba and NFS, F16. Needs machines to test against, and the
   counting in a separate process above, so a dead mount can't hang ofx.
 - Redo (Edit menu), beside undo: needs a history of undone changes.
-- Tooling: run the slowest GUI mutants first (above); select gui.py's mutants by their key, not
+- Tooling: run the slowest GUI mutants first (above; done 2026-11-05 in its lighter form, last run's
+  survivors and the untagged first: runs sat within 5% of their floor, so only a late survivor's
+  tail was left to trim); select gui.py's mutants by their key, not
   their index (done 2026-11-05: indices moved several times on 2026-11-04); a missed-redraw check in the script runner (a frame whose state line changed
   with no redraw asked for: the kind of the dropped git.c mutant, 2026-11-04), after an audit of
   the state words that read worker state directly.

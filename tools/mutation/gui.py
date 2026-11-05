@@ -990,9 +990,7 @@ only = sorted({pick(t) for t in picks}) if picks else None
 root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # OFX_GUI_TAGS: another tags file, for a run beside one that will write this one.
 tags_path = os.environ.get('OFX_GUI_TAGS') or os.path.join(root, 'tools', 'mutation', 'gui-tags.txt')
-# The run's times, and each mutant's, are printed. Starting the slowest first was measured on
-# 2026-10-26 and left out: 290 mutants took 1360 s against a floor of 1349 (their worker time over
-# 6), so the order can't gain; there's no long tail to trim.
+# The run's times, and each mutant's, are printed (the order they start in: at `todo` below).
 t_start = time.monotonic()
 
 # run.sh's groups, in its order (read from it, F11 review 2026-11-02): a mutant runs them one at a
@@ -1051,13 +1049,16 @@ GROUP_OF = group_of(run_text)
 
 # The tags as groups run.sh knows: a script's name (f7b, written before GROUP_OF had it) as its
 # group; anything else dropped, so a mutant never "survives" a group that runs nothing.
-tags = {}
+# A mutant that survived its last run is marked `survived` instead (2026-11-05).
+tags, survived_before = {}, set()
 if os.path.exists(tags_path):
     for line in open(tags_path):
         w = line.split('#')[0].split()
         g = list(dict.fromkeys(GROUP_OF.get(x, x) for x in w[1:] if GROUP_OF.get(x, x) in GROUPS))
         if len(w) >= 2 and g:
             tags[w[0]] = g
+        elif w[1:] == ['survived']:
+            survived_before.add(w[0])
 def failed_groups(out):
     g = []
     for l in out.splitlines():
@@ -1154,6 +1155,7 @@ for w in works:
     free_works.put(w)
 lock = threading.Lock()
 survivors, unbuilt, retagged, stopped, unrun = [], [], [], False, []
+survived_now = set(survived_before)
 base_left = list(GROUPS)
 
 # One mutant in a free worker: its groups one run.sh at a time, until one kills it: its tags, its
@@ -1213,12 +1215,21 @@ def one(i):
                 retagged.append(i)
             if not killer:
                 survivors.append(i)
+                survived_now.add(k)
+            else:
+                survived_now.discard(k)
             how = f'killed by {killer}' if killer else 'SURVIVED'
             print(f'#{i} {k} {how} [{ran} of {len(order)} groups, {took:.0f} s] {f}: {old.strip()[:60]!r}  {fails[:1]}', flush=True)
     finally:
         free_works.put(work)
 
 todo = [i for i in range(len(MUTANTS)) if only is None or i in only] if 'GUI_BASE_ONLY' not in os.environ else []
+# The long ones first (Michael, 2026-11-05): a run's time is its workers' over --jobs, plus what idles
+# at the end; a mutant that survives runs every group (about 470 s on F13's run), and one started
+# last left five workers idle that long. So last run's survivors start first, then the untagged
+# (their hint may miss), then the rest in order. Ordering by every mutant's last time was left out:
+# runs sat within 5% of that floor (579 mutants, 1868 s against 1798 + the base's 74).
+todo.sort(key=lambda i: 0 if KEYS[i] in survived_before else 1 if KEYS[i] not in tags else 2)
 with concurrent.futures.ThreadPoolExecutor(jobs) as ex:
     # The pool takes them in order: the base's groups first, the mutants as workers come free.
     futs = [ex.submit(base_group, g) for g in GROUPS] + [ex.submit(one, i) for i in todo]
@@ -1233,12 +1244,16 @@ if base_failed:
     sys.exit(2)
 if 'GUI_BASE_ONLY' in os.environ:
     sys.exit(0)
-if retagged:
-    live = {key(m) for m in MUTANTS}
+if retagged or survived_now != survived_before:
+    live = set(KEYS)
     with open(tags_path, 'w') as out:
-        out.write('# tools/mutation/gui.py: each GUI mutant (its key) and the run.sh group that killed it\n')
-        for k in sorted(tags):
-            if k in live and tags[k] != ['all']:
+        out.write('# tools/mutation/gui.py: each GUI mutant (its key) and the run.sh group that killed it, or survived\n')
+        for k in sorted(set(tags) | survived_now):
+            if k not in live:
+                continue
+            if k in survived_now:
+                out.write(f'{k} survived\n')
+            elif tags[k] != ['all']:
                 out.write(f'{k} {" ".join(tags[k])}\n')
     print(f'{len(retagged)} mutants tagged in {tags_path}: {sorted(retagged)}')
 for w in works:
