@@ -341,6 +341,26 @@ static bool ui_handle_pointer(Ui *u, UiNames names, const UiInput *in, UiOnTop o
     return false;
 }
 
+// The keys in the files that only ask gui/ for an action (code-health review, 2026-11-06: a new
+// one is a line here): its kind and argument, through the view's rules (ui_view_act) when gated,
+// and only with entries to act on when files.
+static const struct { UiKey key; UiActionKind kind; int arg; bool gated, files; } UI_KEY_ACTS[] = {
+    { UK_BACKSPACE, UA_PARENT, 0, false, false }, { UK_PARENT, UA_PARENT, 0, false, false },
+    { UK_BACK, UA_BACK, 0, false, false }, { UK_FORWARD, UA_FORWARD, 0, false, false },
+    { UK_HIDDEN, UA_HIDDEN, 0, false, false }, { UK_RELOAD, UA_RELOAD, 0, false, false },
+    { UK_HOMEDIR, UA_HOMEDIR, 0, false, false }, { UK_TRASH_VIEW, UA_TRASH_VIEW, 0, false, false },
+    { UK_UNDO, UA_UNDO, 0, false, false },
+    { UK_LOCATION, UA_LOCATION, 0, false, false }, { UK_WORD_RIGHT, UA_LOCATION, 0, false, false },   // (Ctrl+Right too, outside a text field)
+    { UK_TAB_NEW, UA_TAB_NEW, 0, false, false }, { UK_TAB_REOPEN, UA_TAB_REOPEN, 0, false, false },
+    { UK_TAB_CLOSE, UA_TAB_CLOSE, -1, false, false },
+    { UK_TAB_NEXT, UA_TAB_STEP, 1, false, false }, { UK_TAB_PREV, UA_TAB_STEP, -1, false, false },
+    { UK_TAB_LEFT, UA_TAB_MOVE, -1, false, false }, { UK_TAB_RIGHT, UA_TAB_MOVE, 1, false, false },
+    { UK_ADD_BOOKMARK, UA_ADD_BOOKMARK, 0, true, false }, { UK_PASTE, UA_PASTE, 0, true, false },
+    { UK_NEWFOLDER, UA_NEWFOLDER, 0, true, false }, { UK_NEW_WINDOW, UA_NEW_WINDOW, 0, true, false },
+    { UK_TERMINAL, UA_TERMINAL, 0, true, false },
+    { UK_COPY, UA_COPY, 0, true, true }, { UK_MAKE_LINK, UA_MAKE_LINK, 0, true, true }, { UK_CUT, UA_CUT, 0, true, true },
+};
+
 // A key in the files or the sidebar (ui_handle), Shift taken off the moves (shifted, and
 // shift_enter for Shift+Enter): the moves, the vi letters, and the commands. True when it asks gui/
 // for something (*out); *extend is where a Shift move starts.
@@ -367,11 +387,11 @@ static bool ui_list_key(Ui *u, UiNames names, const UiInput *in, UiEvent e, bool
         case 'G': key = UK_END; break;
         case '/': key = UK_FIND; break;
         case '.': key = UK_HIDDEN; break;
-        case 't': return *out = ui_view_act(u, (UiAction){ UA_TERMINAL, 0, false }), true;
+        case 't': key = UK_TERMINAL; break;
         case 'r':
             if (u->view == UI_VIEW_TRASH && files) return *out = (UiAction){ UA_RESTORE, 0, false }, true;
             return false;
-        case '~': return *out = (UiAction){ UA_HOMEDIR, 0, false }, true;
+        case '~': key = UK_HOMEDIR; break;
         case 's': u->sort = (Sort){ (SortKey)((u->sort.key + 1) % SORT_KEYS), false }; return *out = (UiAction){ UA_SORT, 0, false }, true;
         case 'S': u->sort.reverse = !u->sort.reverse; return *out = (UiAction){ UA_SORT, 0, false }, true;
         case 'n': ui_find_again(u, names, 1); return false;
@@ -397,6 +417,12 @@ static bool ui_list_key(Ui *u, UiNames names, const UiInput *in, UiEvent e, bool
         ui_move_rows(l, key == UK_PAGEUP ? -page : page);
         return false;
     }
+    for (int i = 0; i < COUNT(UI_KEY_ACTS); i++)
+        if (UI_KEY_ACTS[i].key == key) {
+            if (UI_KEY_ACTS[i].files && !files) return false;
+            UiAction a = { UI_KEY_ACTS[i].kind, UI_KEY_ACTS[i].arg, false };
+            return *out = UI_KEY_ACTS[i].gated ? ui_view_act(u, a) : a, true;
+        }
     switch (key) {
     case UK_UP:
         if (m == l && !shifted) ui_step_round(l, -1, false);
@@ -428,7 +454,6 @@ static bool ui_list_key(Ui *u, UiNames names, const UiInput *in, UiEvent e, bool
     case UK_LEFT:
         if (u->focus == UI_FOCUS_SIDE && u->side.n > 0 && u->side_mode == SIDE_TREE) return *out = (UiAction){ UA_TREE_LEFT, u->side.sel, false }, true;
         break;
-    case UK_BACKSPACE: return *out = (UiAction){ UA_PARENT, 0, false }, true;
     case UK_F9: return *out = ui_side_mode(u, (SideMode)((u->side_mode + 1) % SIDE_MODES)), true;
     case UK_TAB:
     case UK_WORD_LEFT:   // (Ctrl+Left: a word in a text field, the sidebar here)
@@ -452,13 +477,10 @@ static bool ui_list_key(Ui *u, UiNames names, const UiInput *in, UiEvent e, bool
         if (u->marked) ui_mark_clear(u);
         else ui_unfocus(u, UI_FOCUS_SIDE);
         break;
-    case UK_BACK: return *out = (UiAction){ UA_BACK, 0, false }, true;
-    case UK_FORWARD: return *out = (UiAction){ UA_FORWARD, 0, false }, true;
     case UK_FIND: ui_find_open(u); break;
     case UK_SELECT_MATCH:
         if (l->n > 0) ui_find_open(u), u->find_select = true;
         break;
-    case UK_HIDDEN: return *out = (UiAction){ UA_HIDDEN, 0, false }, true;
     case UK_PERMS_COLS:   // (greyed in the icon view, as its entry)
         if (!u->grid) return *out = (u->perms_cols = !u->perms_cols, (UiAction){ UA_PERMS_COLS, 0, false }), true;
         break;
@@ -471,10 +493,6 @@ static bool ui_list_key(Ui *u, UiNames names, const UiInput *in, UiEvent e, bool
     case UK_INVERT:
         for (isize i = 0; i < l->n; i++) ui_mark(u, i, !ui_marked(u, i));
         break;
-    case UK_RELOAD: return *out = (UiAction){ UA_RELOAD, 0, false }, true;
-    case UK_HOMEDIR: return *out = (UiAction){ UA_HOMEDIR, 0, false }, true;
-    case UK_TRASH_VIEW: return *out = (UiAction){ UA_TRASH_VIEW, 0, false }, true;
-    case UK_ADD_BOOKMARK: return *out = ui_view_act(u, (UiAction){ UA_ADD_BOOKMARK, 0, false }), true;
     case UK_EDIT_BOOKMARKS: return *out = ui_bmp_open(u, 0), true;
     case UK_SHORTCUTS: return *out = ui_keys_open(u), true;
     case UK_F2:
@@ -490,16 +508,9 @@ static bool ui_list_key(Ui *u, UiNames names, const UiInput *in, UiEvent e, bool
         if (files && !ui_allows(u, UA_DELETE)) return *out = ui_view_act(u, (UiAction){ UA_DELETE, 0, false }), true;
         if (files) u->confirming = true, u->confirm_n = u->marked ? u->marked : 1;
         break;
-    case UK_COPY: if (files) return *out = ui_view_act(u, (UiAction){ UA_COPY, 0, false }), true; break;
-    case UK_MAKE_LINK: if (files) return *out = ui_view_act(u, (UiAction){ UA_MAKE_LINK, 0, false }), true; break;
-    case UK_CUT: if (files) return *out = ui_view_act(u, (UiAction){ UA_CUT, 0, false }), true; break;
     case UK_COPY_PATH:   // (an empty folder: its own path; the sidebar's keys: its cursor's folder, as its menu)
         if (u->focus == UI_FOCUS_SIDE) return *out = (UiAction){ UA_COPY_PATH, u->side.sel, true }, u->side.n > 0;
         return *out = ui_view_act(u, (UiAction){ UA_COPY_PATH, 0, false }), true;
-    case UK_PASTE: return *out = ui_view_act(u, (UiAction){ UA_PASTE, 0, false }), true;
-    case UK_UNDO: return *out = (UiAction){ UA_UNDO, 0, false }, true;
-    case UK_NEWFOLDER: return *out = ui_view_act(u, (UiAction){ UA_NEWFOLDER, 0, false }), true;
-    case UK_LOCATION: case UK_WORD_RIGHT: return *out = (UiAction){ UA_LOCATION, 0, false }, true;   // (Ctrl+Right too, outside a text field)
     case UK_CRUMBS:   // in a search, its field first (then on to the path buttons from there)
         if (u->view == UI_VIEW_SEARCH) ui_search_back(u);
         else ui_crumbs_focus(u, in);
@@ -508,12 +519,7 @@ static bool ui_list_key(Ui *u, UiNames names, const UiInput *in, UiEvent e, bool
         if (u->finding) u->focus = UI_FOCUS_FIND;
         else if (in->job_n > 0) u->focus = UI_FOCUS_JOBS, u->job_at = 0;
         break;
-    case UK_PARENT: return *out = (UiAction){ UA_PARENT, 0, false }, true;
-    case UK_TAB_NEW: return *out = (UiAction){ UA_TAB_NEW, 0, false }, true;
-    case UK_TAB_REOPEN: return *out = (UiAction){ UA_TAB_REOPEN, 0, false }, true;
-    case UK_NEW_WINDOW: return *out = ui_view_act(u, (UiAction){ UA_NEW_WINDOW, 0, false }), true;
     case UK_PROPERTIES: return *out = ui_props_open(u, UI_PROPS_MARKED), true;
-    case UK_TERMINAL: return *out = ui_view_act(u, (UiAction){ UA_TERMINAL, 0, false }), true;
     case UK_SEARCH: return *out = ui_search_open(u), true;
     case UK_CONTAINING:   // (the search view's: elsewhere every entry is in the folder shown)
         if (u->view == UI_VIEW_SEARCH && files) return *out = (UiAction){ UA_CONTAINING, l->sel, false }, true;
@@ -521,11 +527,6 @@ static bool ui_list_key(Ui *u, UiNames names, const UiInput *in, UiEvent e, bool
     case UK_OPEN_LINE:   // (F9 step 4: gui/ says so when the result has no line)
         if (u->view == UI_VIEW_SEARCH && files) return *out = (UiAction){ UA_OPEN_LINE, l->sel, false }, true;
         break;
-    case UK_TAB_CLOSE: return *out = (UiAction){ UA_TAB_CLOSE, -1, false }, true;
-    case UK_TAB_NEXT: return *out = (UiAction){ UA_TAB_STEP, 1, false }, true;
-    case UK_TAB_PREV: return *out = (UiAction){ UA_TAB_STEP, -1, false }, true;
-    case UK_TAB_LEFT: return *out = (UiAction){ UA_TAB_MOVE, -1, false }, true;
-    case UK_TAB_RIGHT: return *out = (UiAction){ UA_TAB_MOVE, 1, false }, true;
     case UK_TAB_JUMP: return *out = (UiAction){ UA_TAB_JUMP, (isize)e.ch, false }, true;
     default: break;
     }
