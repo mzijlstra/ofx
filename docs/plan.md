@@ -866,6 +866,14 @@ with its own commits, gates and reviewer-2 round.
   another program's drag are the drag's as F13's are (Delete trashed what was under it); the badge's
   icon kept by its key and looked up as drawn (an icon cache reset gave its slot to another, f13h);
   a drag out that can't start is tried once a drag, after `dnd_can_start`, not again each motion.
+- **C, the guard and small fixes:** unmount runs the udisksctl resolved, as eject (its sh found its
+  own on PATH); clip_payload's full-arena guard; the script's sh gets OFX_DIR and OFX_ROOT in an
+  envp of its own (no setenv beside the workers' getenv), and OFX_TEST_SANDBOX is read before any
+  thread; stale comments and dead bits swept.
+- **D, the jobs' clashes:** `job_resolve_clash` for copy and move (their copies had drifted: a move
+  didn't count a skip done or tick for keep both), `copy_into` split into `copy_dir` and
+  `copy_leaf`; a move's merge no longer asks a skipped clash again on its next pass, and a move on
+  one drive counts its items, not each entry merged.
 
 **Michael's answers (2026-11-05):**
 - **Scope:** out, and files in (both in F14, out first).

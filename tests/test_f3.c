@@ -641,6 +641,11 @@ static void test_job(void)
     job_run(j);
     CHECK(strcmp(slurp(at("j/mv/src/e/k")), "k1") == 0 && strcmp(slurp(at("j/mv/dst/e/k")), "k0") == 0);
     CHECK(strcmp(slurp(at("j/mv/dst/e/l")), "l") == 0 && !there(at("j/mv/src/e/l")));
+    // Asked once: a later pass doesn't visit the entry it left (it asked again, and the answers ran
+    // out into a cancel); a move on one drive counts its one item done, not each entry merged
+    // (code-health review, 2026-11-06).
+    CHECK(asks.at == 2 && j->item[0].out == OUT_MERGED && !atomic_load(&j->cancel));
+    CHECK(atomic_load(&j->files_total) == 1 && atomic_load(&j->files_done) == 1);
     // Move clashes: replace a file, keep both.
     put(at("j/mv/src/r"), "r1");
     put(at("j/mv/dst/r"), "r0");
@@ -648,6 +653,13 @@ static void test_job(void)
     j = job_new(JOB_MOVE, 1, at("j/mv/src/r"), at("j/mv/dst/r"));
     job_run(j);
     CHECK(!there(at("j/mv/src/r")) && strcmp(slurp(at("j/mv/dst/r")), "r1") == 0 && j->item[0].out == OUT_REPLACED);
+    // A skip at the top counts the item done, so the progress ends whole.
+    put(at("j/mv/src/r"), "r3");
+    asks_set(1, ANS_SKIP);
+    j = job_new(JOB_MOVE, 1, at("j/mv/src/r"), at("j/mv/dst/r"));
+    job_run(j);
+    CHECK(j->item[0].out == OUT_SKIPPED && atomic_load(&j->files_total) == 1 && atomic_load(&j->files_done) == 1);
+    unlink(at("j/mv/src/r"));
     put(at("j/mv/src/r"), "r2");
     asks_set(1, ANS_KEEP);
     j = job_new(JOB_MOVE, 1, at("j/mv/src/r"), at("j/mv/dst/r"));
