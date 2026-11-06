@@ -22,8 +22,10 @@ sh grep -q "received [0-9]* bytes: file://$OFX_DIR/a.txt" "$OFX_ROOT/peer.log"
 sh grep -q "offer type text/uri-list" "$OFX_ROOT/peer.log" && grep -q "offer type text/plain;charset=utf-8" "$OFX_ROOT/peer.log" && grep -q "offer type application/x-ofx-drag-" "$OFX_ROOT/peer.log"
 sh grep -q "source actions 1$" "$OFX_ROOT/peer.log"
 sh test -f "$OFX_DIR/a.txt"
-# ---- the window's left button works again after it (raylib was told it is up)
-point-ui row 2
-click-here
-expect sel=b.txt
+# ---- the window's left button works again after it (raylib was told it is up, as it never sees
+# the release the drag's grab took): the compositor's own press on b.txt's row, as a user's (two
+# moves: GLFW takes the position from a motion, not from the enter the first one makes)
+user-pointer
+sh vptr move 340 160 wait 100 move 352 162 wait 100 press wait 100 release >"$OFX_ROOT/vptr2.log" 2>&1 &
+wait-for 3000 sel=b.txt
 quit

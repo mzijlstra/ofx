@@ -973,7 +973,7 @@ int main(int argc, char **argv)
             dirty = font_frame_end();   // out of atlas: the next frame starts from an empty one
             // The frame may have moved things under the pointer: lit again, at once.
             Vector2 m = GetMousePosition();
-            if (scripted ? script.pointing && hover_refresh(true, script.px, script.py) : hover_refresh(IsCursorOnScreen(), m.x, m.y))
+            if (scripted && !script.user_pointer ? script.pointing && hover_refresh(true, script.px, script.py) : hover_refresh(IsCursorOnScreen(), m.x, m.y))
                 dirty = true, glfwPostEmptyEvent();
             if (app.icons_missed && app.icons_reset_armed) dirty = true, glfwPostEmptyEvent();   // emptied and drawn again at once
             if (files_over() && app.spring_tab >= 0) glfwPostEmptyEvent();   // (the spring's bar: the next frame at once)
@@ -985,14 +985,18 @@ int main(int argc, char **argv)
         UiInput in = input_real(&seen);
         if (scripted) {
             UiInput real = in;
-            in = ui_input_none();   // the user's input does not reach a scripted window (Ctrl+Q still quits),
-            if (script.user_keys) {   // but after `user-keys` the keyboard's does (vkbd in the test sway, 2026-10-28)
+            bool real_seen = seen;
+            // The user's input does not reach a scripted window (Ctrl+Q still quits), but after
+            // `user-keys` the keyboard's does (vkbd in the test sway, 2026-10-28), and after
+            // `user-pointer` all of it (vptr: code-health review, 2026-11-06).
+            if (!script.user_pointer) in = ui_input_none();
+            if (script.user_keys && !script.user_pointer) {
                 memcpy(in.ev, real.ev, sizeof *real.ev * (size_t)real.nev);
                 in.nev = real.nev;
             }
             script.pending = dirty;
             if (!script_input(&in)) break;
-            seen = script.gave || IsWindowResized() || (script.user_keys && real.nev > 0);   // (a frame the script gave no input to is one an unscripted window sleeps through)
+            seen = script.gave || IsWindowResized() || (script.user_keys && real.nev > 0) || (script.user_pointer && real_seen);   // (a frame the script gave no input to is one an unscripted window sleeps through)
         }
         drag_keys(&in);   // (Esc during a drag of files: the drag's)
         cursor_shape();

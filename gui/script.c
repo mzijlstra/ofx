@@ -66,6 +66,9 @@
 //   user-keys               from here on the compositor's keyboard reaches the window too, keys
 //                           and characters through GLFW's callbacks as a user's: `sh vkbd … &` in
 //                           the test sway (tools/gui/sway.sh; weston has no virtual keyboard)
+//   user-pointer            from here on the compositor's pointer reaches the window as a user's,
+//                           raylib's button state and all (hover, presses, drags): `sh vptr … &` in
+//                           the test sway; the scripted pointer commands are not for after it
 //   clip-drop               the system clipboard's own connection cut, as a compositor that drops it
 //                           (the clip group, in the test sway)
 //   clip-text <text>        the rest of the line onto GLFW's clipboard as another program's copy
@@ -116,6 +119,7 @@ static struct {
     bool  pending;       // a frame is asked for, not drawn yet: what it will show is the state now
     bool  gave;          // this frame's command was input (a key, the pointer), not a wait or a check
     bool  user_keys;     // the keyboard's keys and characters reach the window (`user-keys`)
+    bool  user_pointer;  // the pointer's input reaches it, as an unscripted window's (`user-pointer`)
 } script;
 
 static u8 script_mem[KiB(256)];
@@ -193,6 +197,34 @@ static char *state_word(char *out, size_t cap, Str s)
 
 static void script_fail(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
 
+// The state line's words for the drags (F13: inside the window, F14: with other programs; split out
+// of script_state, code-health review 2026-11-06): what the left button holds, the files dragged
+// and where they would land (kind:place), what the drop does and its folder, the outline and the
+// badge as drawn, the spring, and the compositor's side (gui/dnd.c). Its length, as snprintf's.
+static int state_drag(char *out, size_t cap)
+{
+    static const char *const DRAG_WORDS[] = { "-", "zoom", "side", "press", "files", "out", "in" };
+    _Static_assert(sizeof DRAG_WORDS / sizeof DRAG_WORDS[0] == DRAG_IN + 1, "a word for each DRAG_*");
+    static const char *const DROP_WORDS[] = { "-", "row", "side", "tab", "crumb", "list" }, *const OP_WORDS[] = { "move", "copy", "trash" };
+    char dragname[NAME_MAX + 1] = "-", dropw[32] = "-", dropdir[NAME_MAX + 1] = "-";
+    char dropfirst[NAME_MAX + 1] = "-";   // (F14: the first file of the last drop from another program)
+    if (dnd.got.n) state_word(dropfirst, sizeof dropfirst, path_base(str_from_c(dnd.got.path[0])));
+    if (files_over()) state_word(dragname, sizeof dragname, str_from_c(app.drag_name));
+    if (files_over() && app.drop.kind != DROP_NONE) snprintf(dropw, sizeof dropw, "%s:%d", DROP_WORDS[app.drop.kind], app.drop.at);
+    if (files_over() && app.drop.ok) state_word(dropdir, sizeof dropdir, path_base(str_from_c(app.drop.dir)));
+    const char *dropop = files_over() && app.drop.ok ? OP_WORDS[drop_op(&app.drop)] : "-";
+    const char *badge = !badge_drawn ? "-" : app.in_nofiles && app.drag == DRAG_NONE ? "nofiles" : badge_op ? badge_op : "none";
+    return snprintf(out, cap,
+                    " drag=%s edgelit=%d resizeptr=%d dragn=%td dragname=%s dragicon=%s drop=%s dropok=%d dropop=%s dropdir=%s dropmark=%d badge=%s"
+                    " spring=%d springbar=%d badgein=%d dndok=%d dndpress=%d dndover=%d dndat=%.0f,%.0f dndaction=%u dndreading=%d drops=%d"
+                    " dropfail=%d dropn=%td dropfirst=%s owndrops=%d dndout=%s dndoutact=%u dndsent=%lld dndwrote=%d dndicon=%d",
+                    DRAG_WORDS[app.drag], edge_lit && side_w(), cursor_now == MOUSE_CURSOR_RESIZE_EW, files_over() ? dragged.n : (isize)0,
+                    dragname, badge_icon[0] ? badge_icon : "-", dropw, app.drop.ok, dropop, dropdir, drop_marked, badge, app.spring_tab,
+                    spring_fill < 0 ? -1 : (int)(spring_fill * 100), badge_drawn && badge_in(), dnd.ok, dnd.press != 0, dnd.over >= 0,
+                    dnd.x, dnd.y, dnd.action, dnd.reading, dnd.drops, dnd.drops_failed, dnd.got.n, dropfirst, dnd.own_drops,
+                    DND_OUT_WORD[dnd.out], dnd.out_action, (long long)atomic_load(&dnd.sent), atomic_load(&dnd.wrote), dnd.icon != NULL);
+}
+
 static void script_state(char *out, size_t cap)
 {
     const char *icon = "-";
@@ -232,17 +264,6 @@ static void script_state(char *out, size_t cap)
     if (!joblabels[0]) snprintf(joblabels, sizeof joblabels, "-");
     if (app.ui.focus == UI_FOCUS_JOBS) snprintf(jobkey, sizeof jobkey, "%d", app.ui.job_at);
     char clashjob[256] = "-";   // the job the clash panel names
-    // A drag of files (F13 step 3): the name pressed, what is under the pointer (kind:place), what
-    // the drop does, its folder's name; the outline drawn, and the badge's action as drawn.
-    static const char *const DROP_WORDS[] = { "-", "row", "side", "tab", "crumb", "list" }, *const OP_WORDS[] = { "move", "copy", "trash" };
-    char dragname[NAME_MAX + 1] = "-", dropw[32] = "-", dropdir[NAME_MAX + 1] = "-";
-    char dropfirst[NAME_MAX + 1] = "-";   // (F14: the first file of the last drop from another program)
-    if (dnd.got.n) state_word(dropfirst, sizeof dropfirst, path_base(str_from_c(dnd.got.path[0])));
-    if (files_over()) state_word(dragname, sizeof dragname, str_from_c(app.drag_name));
-    if (files_over() && app.drop.kind != DROP_NONE) snprintf(dropw, sizeof dropw, "%s:%d", DROP_WORDS[app.drop.kind], app.drop.at);
-    if (files_over() && app.drop.ok) state_word(dropdir, sizeof dropdir, path_base(str_from_c(app.drop.dir)));
-    const char *dropop = files_over() && app.drop.ok ? OP_WORDS[drop_op(&app.drop)] : "-";
-    const char *badge = !badge_drawn ? "-" : app.in_nofiles && app.drag == DRAG_NONE ? "nofiles" : badge_op ? badge_op : "none";
     if (jobs.asking >= 0) state_word(clashjob, sizeof clashjob, str_from_c(job_recs[jobs.asking].label));
     // The cursor's name colour as an unselected row would have it: its git change's ("git") or else
     // its type's; and the rows whose git letter or dot was drawn (F12).
@@ -519,8 +540,6 @@ static void script_state(char *out, size_t cap)
         if (c >= 0) snprintf(cnt, sizeof cnt, "%td", c);
         else if (c == -1) snprintf(cnt, sizeof cnt, "?");
     }
-    static const char *const DRAG_WORDS[] = { "-", "zoom", "side", "press", "files", "out", "in" };
-    _Static_assert(sizeof DRAG_WORDS / sizeof DRAG_WORDS[0] == DRAG_IN + 1, "a word for each DRAG_*");
     int len = snprintf(out, cap,
              "dir=%s n=%td hidden=%td sel=%.*s idx=%td top=%td rows=%d hover=%d accent=#%02x%02x%02x bg=#%02x%02x%02x "
              "icons=%s scale=%d w=%d h=%d reloads=%d themes=%d batches=%d frame_ms_max=%.1f icon=%s "
@@ -536,7 +555,7 @@ static void script_state(char *out, size_t cap)
              "props=%d propat=%d propcan=%d propn=%td propmode=%04o propfiles=%lld propdirs=%lld propbytes=%lld propdone=%d propcut=%d proplinks=%lld,%lld,%lld,%d propnlink=%llu proptype=%s proptypename=%s propbyname=%d propname=%s "
              "propwhere=%s propdrive=%s proplink=%s propcreated=%d propidx=%td "
              "ow=%d owfresh=%d owlist=%d owtext=%s own=%td owsel=%td owapp=%s owicon=%s owtex=%d owshown=%td owtype=%s owfiles=%td owrows=%d owtop=%td owopts=%s owbad=%d owdef=%d owdefcan=%d findopts=%s findbad=%d findselect=%d findn=%td findat=%td findtext=%s "
-             "search=%d searchkeys=%d searchtext=%s searchdone=%d searchfull=%d searchdue=%d searchbad=%d searchbar=%d searchsel=%d-%d searchcaret=%d findsel=%d-%d findcaret=%d seldir=%s searchinfo=%s inside=%d insidekeys=%d insidetext=%s insideopts=%s insidebad=%d insiderow=%d hit=%s hitmatch=%s hitdrawn=%d datecol=%s datecolw=%.0f owreads=%d conf=%s confbad=%d seldate=%s trashfull=%d trashicon=%s spawned=%d closingall=%d closedtabs=%d emptyn=%td shiftsel=%s clearn=%lld clearing=%d gitshown=%d gitsel=%s gitn=%td gitnamecol=%s gitcells=%d infogit=%s gitdue=%d branch=%s brn=%d brhere=%d brnote=%s brlist=%s brfits=%d brunder=%d gitwatch=%d brtotal=%d brp=%d brpn=%td brpsel=%s brptext=%s brpinlist=%d sidew=%d sidebox=%.0f sidepx=%d drag=%s edgelit=%d resizeptr=%d dragn=%td dragname=%s dragicon=%s drop=%s dropok=%d dropop=%s dropdir=%s dropmark=%d badge=%s spring=%d springbar=%d badgein=%d dndok=%d dndpress=%d dndover=%d dndat=%.0f,%.0f dndaction=%u dndreading=%d drops=%d dropfail=%d dropn=%td dropfirst=%s owndrops=%d dndout=%s dndoutact=%u dndsent=%lld dndwrote=%d dndicon=%d statusbad=%d status=%s",
+             "search=%d searchkeys=%d searchtext=%s searchdone=%d searchfull=%d searchdue=%d searchbad=%d searchbar=%d searchsel=%d-%d searchcaret=%d findsel=%d-%d findcaret=%d seldir=%s searchinfo=%s inside=%d insidekeys=%d insidetext=%s insideopts=%s insidebad=%d insiderow=%d hit=%s hitmatch=%s hitdrawn=%d datecol=%s datecolw=%.0f owreads=%d conf=%s confbad=%d seldate=%s trashfull=%d trashicon=%s spawned=%d closingall=%d closedtabs=%d emptyn=%td shiftsel=%s clearn=%lld clearing=%d gitshown=%d gitsel=%s gitn=%td gitnamecol=%s gitcells=%d infogit=%s gitdue=%d branch=%s brn=%d brhere=%d brnote=%s brlist=%s brfits=%d brunder=%d gitwatch=%d brtotal=%d brp=%d brpn=%td brpsel=%s brptext=%s brpinlist=%d sidew=%d sidebox=%.0f sidepx=%d ",
              app.cwd, app.list.n, app.list.hidden, STR_ARG(sel), app.ui.list.sel, app.ui.list.top, app.ui.list.rows, app.hov.row,
              t->accent.r, t->accent.g, t->accent.b, t->bg.r, t->bg.g, t->bg.b, t->icons[0] ? t->icons : "-",
              app.icon_scale, GetScreenWidth(), GetScreenHeight(), app.reloads, app.themes, atomic_load(&watch.batches),
@@ -575,7 +594,10 @@ static void script_state(char *out, size_t cap)
              app.ui.find.anchor < app.ui.find.caret ? app.ui.find.anchor : app.ui.find.caret,
              app.ui.find.anchor < app.ui.find.caret ? app.ui.find.caret : app.ui.find.anchor, app.ui.find.caret, seldir, searchinfo,
              app.ui.search_inside, app.ui.focus == UI_FOCUS_INSIDE, insidetext, insideopts, app.search_im.bad,
-             (int)Clay_GetElementData(CLAY_ID("inside-field")).found, hit, hitmatch, hitdrawn, VIEWS[app.ui.view].date_col, date_w(), ow_idb_reads, confw, app.conf.bad, seldate, app.trash_full, trashicon, spawn_started, closing_all, closed_tabs.n, app.empty_n, app.ui.shift_add ? "add" : "range", clear.counted ? (long long)clear.sum.files : -1LL, clear.running, git_shown() != NULL, GIT_WORDS[app.have_list && app.list.n ? entry_git(app.ui.list.sel) : GS_NONE], git_shown() ? git_shown()->g.changed : (isize)0, gitnamecol, gitcells, infogit, git.due != 0, branch, app.ui.br_n, app.ui.br_here, brnote, brlist, brfits, brunder, atomic_load(&watch.git_wd) >= 0, app.ui.br_total, app.ui.panel == UI_PANEL_BRANCHES, app.ui.brp.list.n, brpsel, brptext, app.ui.brp.in_list, side_w(), Clay_GetElementData(CLAY_ID("side")).boundingBox.width, app.side_px, DRAG_WORDS[app.drag], edge_lit && side_w(), cursor_now == MOUSE_CURSOR_RESIZE_EW, files_over() ? dragged.n : (isize)0, dragname, badge_icon[0] ? badge_icon : "-", dropw, app.drop.ok, dropop, dropdir, drop_marked, badge, app.spring_tab, spring_fill < 0 ? -1 : (int)(spring_fill * 100), badge_drawn && badge_in(), dnd.ok, dnd.press != 0, dnd.over >= 0, dnd.x, dnd.y, dnd.action, dnd.reading, dnd.drops, dnd.drops_failed, dnd.got.n, dropfirst, dnd.own_drops, DND_OUT_WORD[dnd.out], dnd.out_action, (long long)atomic_load(&dnd.sent), atomic_load(&dnd.wrote), dnd.icon != NULL, app.status[0] && app.status_bad, app.status[0] ? app.status : "-");
+             (int)Clay_GetElementData(CLAY_ID("inside-field")).found, hit, hitmatch, hitdrawn, VIEWS[app.ui.view].date_col, date_w(), ow_idb_reads, confw, app.conf.bad, seldate, app.trash_full, trashicon, spawn_started, closing_all, closed_tabs.n, app.empty_n, app.ui.shift_add ? "add" : "range", clear.counted ? (long long)clear.sum.files : -1LL, clear.running, git_shown() != NULL, GIT_WORDS[app.have_list && app.list.n ? entry_git(app.ui.list.sel) : GS_NONE], git_shown() ? git_shown()->g.changed : (isize)0, gitnamecol, gitcells, infogit, git.due != 0, branch, app.ui.br_n, app.ui.br_here, brnote, brlist, brfits, brunder, atomic_load(&watch.git_wd) >= 0, app.ui.br_total, app.ui.panel == UI_PANEL_BRANCHES, app.ui.brp.list.n, brpsel, brptext, app.ui.brp.in_list, side_w(), Clay_GetElementData(CLAY_ID("side")).boundingBox.width, app.side_px);
+    if (len >= 0 && (size_t)len < cap) len += state_drag(out + len, cap - (size_t)len);
+    // status= last: its text has spaces, so it takes the rest of the line.
+    if (len >= 0 && (size_t)len < cap) len += snprintf(out + len, cap - (size_t)len, " statusbad=%d status=%s", app.status[0] && app.status_bad, app.status[0] ? app.status : "-");
     // (cut short, its last words, status= among them, would fail an expect that is right: F13 code-health review)
     if (len < 0 || (size_t)len >= cap) script_fail("the state line is %d bytes, more than its %zu", len, cap);
     frame_us_max = 0;
@@ -926,6 +948,8 @@ static bool script_input(UiInput *in)
             moved = hover_refresh(false, script.px, script.py);   // GLFW keeps the last position
         } else if (str_eq(cmd, S("user-keys"))) {
             script.user_keys = true;
+        } else if (str_eq(cmd, S("user-pointer"))) {
+            script.user_pointer = true, script_on = false;   // (input_real's hover and drags as a user's)
         } else if (str_eq(cmd, S("clip-drop"))) {
             if (!clip.dpy || shutdown(wl_display_get_fd(clip.dpy), SHUT_RDWR) != 0) script_fail("clip-drop: no clipboard connection to cut");
         } else if (str_eq(cmd, S("idle"))) {
@@ -1027,7 +1051,7 @@ static bool script_input(UiInput *in)
         // program's copy; a pointer move only when it changes what is lit or dragged, as
         // input_real's (review, 2026-11-05).
         static const Str passive[] = { S("settle"), S("wait"), S("sleep"), S("state"), S("expect"), S("wait-for"), S("quits"), S("shot"), S("sh"), S("idle"),
-                                       S("point-ui"), S("point-menu"), S("point-side"), S("user-keys"), S("clip-text"), S("clip-drop") };
+                                       S("point-ui"), S("point-menu"), S("point-side"), S("user-keys"), S("user-pointer"), S("clip-text"), S("clip-drop") };
         script.gave = true;
         for (size_t k = 0; k < sizeof passive / sizeof *passive; k++) script.gave &= !str_eq(cmd, passive[k]);
         if (moved >= 0) script.gave = moved;

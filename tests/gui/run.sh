@@ -491,16 +491,7 @@ if want dnd; then
 # Each script on its own tree: adir/, a.txt, b.txt, and from/c.txt beside it (a source's file).
 dnd_tree() { T=$base/$1; rm -rf "$T"; mkdir -p "$T/tree/adir" "$T/from"; touch "$T/tree/a.txt" "$T/tree/b.txt" "$T/from/c.txt"; }
 dnd_tree dnd; rs dnd RUN_SCRIPT_LIMIT=40 OFX_COMPOSITOR=sway -- "$T/tree"
-dnd_tree dndb; rs dndb RUN_SCRIPT_LIMIT=40 OFX_COMPOSITOR=sway -- "$T/tree"
-dnd_tree dndc; rs dndc RUN_SCRIPT_LIMIT=40 OFX_COMPOSITOR=sway -- "$T/tree"
-dnd_tree dndd; rs dndd RUN_SCRIPT_LIMIT=40 OFX_COMPOSITOR=sway -- "$T/tree"
-dnd_tree dnde; rs dnde RUN_SCRIPT_LIMIT=40 OFX_COMPOSITOR=sway -- "$T/tree"
-dnd_tree dndf; rs dndf RUN_SCRIPT_LIMIT=40 OFX_COMPOSITOR=sway -- "$T/tree"
-dnd_tree dndg; rs dndg RUN_SCRIPT_LIMIT=40 OFX_COMPOSITOR=sway -- "$T/tree"
-dnd_tree dndh; rs dndh RUN_SCRIPT_LIMIT=40 OFX_COMPOSITOR=sway -- "$T/tree"
-dnd_tree dndi; rs dndi RUN_SCRIPT_LIMIT=40 OFX_COMPOSITOR=sway -- "$T/tree"
-dnd_tree dndj; rs dndj RUN_SCRIPT_LIMIT=40 OFX_COMPOSITOR=sway -- "$T/tree"
-dnd_tree dndk; rs dndk RUN_SCRIPT_LIMIT=40 OFX_COMPOSITOR=sway -- "$T/tree"
+for x in b c d e f g h i j k; do dnd_tree "dnd$x"; rs "dnd$x" RUN_SCRIPT_LIMIT=40 OFX_COMPOSITOR=sway -- "$T/tree"; done
 fi
 if want f12; then
 # F12 step 3: previews by thumbnailers, the run's own fakes (run-script.sh: the window reads no

@@ -1002,8 +1002,10 @@ MUTANTS = [
     # the window refused (Hyprland does), so no script reaches them. Nor drag_in_take ending an
     # earlier offer's drag, or the drop's check of in_id: a leave and the next enter between two
     # frames, which no script can time.
-    # Not run: drag_out telling raylib the button is up, and drag_release leaving DRAG_OUT alone:
-    # a scripted window takes no compositor input, so only a hand check shows them.
+    # drag_out telling raylib the button is up: dndd's real press after the drag (`user-pointer`,
+    # code-health step G, 2026-11-06). Not run: drag_release leaving DRAG_OUT alone (the scripted
+    # drag's synthetic release ends a drag out the compositor still carries: a hand check).
+    ('gui/input.c', '    if (raylib_button) raylib_button(glfwGetCurrentContext(), GLFW_MOUSE_BUTTON_LEFT, GLFW_RELEASE, 0);\n', '', 'dnd'),
     # Nor own_dropped's `action != 0` and drag_out_poll's `drop.ok`: sway never sends the drop of a
     # drag its target refused (dnde's refused step), Hyprland does, with action 0.
     # Not run either: an offer's action kept by its slot (dnd_offer_action). Hyprland sends it before
