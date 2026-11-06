@@ -354,6 +354,7 @@ static struct {
     bool      out_over;     // (DRAG_OUT) back over the window: lit and answered as DRAG_FILES is
     bool      out_own;      // (DRAG_OUT) dropped back on the window: its own drop said what it did
     bool      in_nofiles;   // another program's drag over the window holds no files: the badge says so
+    u32       in_id;        // (DRAG_IN) the offer it is of (dnd_in_over): another offer's files are another drag
     int       spring_tab;   // the tab it is held over (not the one shown), -1 none (F13 step 4)
     i64       spring_at;    // since when
     int       side_px;      // the sidebar's width dragged to, UI_SIDE_W at first (fitted to the window: ui_side_fit)

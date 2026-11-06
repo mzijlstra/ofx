@@ -1,0 +1,20 @@
+# Code-health review 2026-11-06: a drag that enters while an earlier offer's read still runs is read
+# once that one ends, not refused until it leaves and comes back. dndpeer source-stall never writes
+# its first read: c.txt enters (that read waits its 2 s), goes out over dndpeer and comes back, a
+# new offer, still while the first read runs; its own read starts as the first ends, and the drag
+# is ofx's then: dropped on the files' space, moved here. Layout as dnd.script.
+settle
+sh dndpeer source-stall "file://$OFX_ROOT/from/c.txt" "$OFX_ROOT/peer.log" >/dev/null 2>&1 &
+sleep 800
+settle
+sh vptr move 700 250 press move 650 250 move 352 300 wait 300 move 700 300 wait 300 move 352 300 wait 3500 release >"$OFX_ROOT/vptr.log" 2>&1 &
+wait-for 3000 dndreading=1 dndover=1
+expect drag=-
+wait-for 3000 dndover=0
+wait-for 3000 dndover=1
+expect drag=- dndreading=1
+wait-for 4000 drag=in dragname=c.txt dropok=1 dropop=move
+wait-for 4000 drops=1 drag=- dndover=0 dropfail=0
+wait-for 3000 job=- n=4
+sh test -f "$OFX_DIR/c.txt" && test ! -e "$OFX_ROOT/from/c.txt"
+quit

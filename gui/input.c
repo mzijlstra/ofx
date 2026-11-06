@@ -542,9 +542,19 @@ static uint32_t drop_in_action(const Drop *d, uint32_t actions)
     return op == UI_DROP_MOVE && (actions & DND_COPY) ? DND_COPY : 0;
 }
 
-// Another program's files come over the window: dragged as a drag inside it is (F13), from their
-// own list: the badge, the targets lit, the tabs that open.
-static void drag_in_start(const ClipFiles *f)
+// The action a drop of another program's files takes: a move only when the window's (a) and the
+// compositor's (c) both say so, else a copy (a copy loses nothing); either alone when the other has
+// none. Hyprland didn't send the action again after the window's answer (Michael's log, 2026-11-05:
+// Ctrl's copy in Nemo dropped as the move it had sent before the enter), and a compositor may change
+// it for keys the window doesn't see (review, 2026-11-06).
+static uint32_t drop_in_merge(uint32_t a, uint32_t c)
+{
+    return !a ? c : !c || a == c ? a : DND_COPY;
+}
+
+// Another program's files come over the window (offer id's): dragged as a drag inside it is (F13),
+// from their own list: the badge, the targets lit, the tabs that open.
+static void drag_in_start(const ClipFiles *f, u32 id)
 {
     arena_reset(&draga);
     for (isize i = 0; i < f->n; i++) dragged.path[i] = arena_cstr(&draga, str_from_c(f->path[i]));
@@ -553,39 +563,53 @@ static void drag_in_start(const ClipFiles *f)
     Str name = path_base(str_from_c(f->path[0])), folder = S("folder");
     struct stat st;
     bool dir = stat(f->path[0], &st) == 0 && S_ISDIR(st.st_mode);
-    app.drag = DRAG_IN, app.drop = (Drop){ .kind = DROP_NONE, .at = DROP_AGAIN };
+    app.drag = DRAG_IN, app.in_id = id, app.drop = (Drop){ .kind = DROP_NONE, .at = DROP_AGAIN };
     app.drag_marked = app.drag_tree = false;
     app.drag_icon = dir ? icon_for_px(folder, &folder, 1, ICON_PX) : icon_for_px(mime_of_name(&scratch, &app.mime_db, name), NULL, 0, ICON_PX);
     snprintf(app.drag_path, sizeof app.drag_path, "%s", f->path[0]);
     snprintf(app.drag_name, sizeof app.drag_name, "%.*s", STR_ARG(name));
 }
 
+// The window's drag made offer id's, from its files f, when no drag goes or the one going is an
+// earlier offer's (a leave and the next enter between two frames: its files aren't these); true when
+// it started now.
+static bool drag_in_take(const ClipFiles *f, u32 id)
+{
+    if (app.drag == DRAG_IN && app.in_id != id) drag_end();
+    if (app.drag != DRAG_NONE) return false;
+    drag_in_start(f, id);
+    return true;
+}
+
 // Each frame of another program's drag: over the window, found and answered as F13's drag is; let
-// go, dropped as one (the compositor's action: copy, move, or the trash's move), and the source told;
-// gone (a leave, or its files not read yet), the drag ends. True when what is drawn changed.
+// go, dropped as one (copy, move, or the trash's move: drop_in_merge), and the source told; gone (a
+// leave, or its files not read yet), the drag ends. A drop that came before its files were read is
+// dragged and dropped once they are. True when what is drawn changed.
 static bool drag_in_poll(void)
 {
     float x, y;
     uint32_t actions = 0, act;
+    u32 id;
     bool no = dnd_in_nofiles(&x, &y);
     if (no) app.drag_px = x, app.drag_py = y;
     bool said = no != app.in_nofiles;   // (the badge saying so comes and goes)
     app.in_nofiles = no;
-    const ClipFiles *f = dnd_in_over(&x, &y, &actions);
-    bool started = f && app.drag == DRAG_NONE;
-    if (started) drag_in_start(f);
-    if (app.drag == DRAG_IN && f) {   // (each motion asks for its frame itself: dnd_poll)
+    const ClipFiles *f = dnd_in_over(&x, &y, &actions, &id);
+    bool started = f && drag_in_take(f, id);
+    if (f && app.drag == DRAG_IN) {   // (each motion asks for its frame itself: dnd_poll)
         app.drag_px = x, app.drag_py = y;
         drop_find(x, y);
         uint32_t a = drop_in_action(&app.drop, actions);
         dnd_in_answer(a != 0, a);
         return started || said;
     }
-    const ClipFiles *d = dnd_in_dropped(&x, &y, &act);
+    const ClipFiles *d = dnd_in_dropped(&x, &y, &actions, &act, &id);
     if (d) {
         bool done = false;
-        if (app.drag == DRAG_IN) {
+        if (d->n > 0) drag_in_take(d, id);   // (dropped before it was read: dragged only now)
+        if (d->n > 0 && app.drag == DRAG_IN) {
             drop_find(x, y);
+            act = drop_in_merge(drop_in_action(&app.drop, actions), act);
             UiDropOp op = app.drop.trash ? UI_DROP_TRASH : act == DND_MOVE ? UI_DROP_MOVE : UI_DROP_COPY;
             if (app.drop.ok && act && (op != UI_DROP_TRASH || act == DND_MOVE)) drop_with(&app.drop, op), done = true;
         }
@@ -593,7 +617,7 @@ static bool drag_in_poll(void)
         if (app.drag == DRAG_IN) drag_end();
         return true;
     }
-    if (app.drag == DRAG_IN && !dnd_in_waiting()) return drag_end(), true;
+    if (app.drag == DRAG_IN) return drag_end(), true;
     return said;
 }
 

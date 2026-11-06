@@ -8,7 +8,8 @@
 //                                     text/uri-list), copy or move
 //   dndpeer source-copy <uris> <log>  the same, copy only
 //   dndpeer source-text <text> <log>  the same with text/plain only (no files)
-//   dndpeer source-stall <uri> <log>  the same as source, but it never writes the data asked for
+//   dndpeer source-stall <uri> <log>  the same as source, but it never writes the first data asked
+//                                     for (the next it does: a read after a stalled one)
 // The pointer is vptr's. The log is a line per event.
 
 #include <errno.h>
@@ -36,7 +37,7 @@ static struct wl_data_offer *offer;
 static struct wl_data_source *src;
 static bool source, uris, done, configured, text_only, stall, hangup, prefer_move, copy_only;
 static const char *uri;
-static int stalled[8], nstalled;   // (source-stall: the fds asked for, held open, never written)
+static int stalled = -1;   // (source-stall: the first fd asked for, held open, never written)
 static FILE *peer_log;
 static int width = 200, height = 200;
 
@@ -135,8 +136,8 @@ static void sr_send(void *data, struct wl_data_source *s, const char *m, int fd)
 {
     (void)data, (void)s;
     LOG("source send %s", m);
-    if (stall && nstalled < 8) {
-        stalled[nstalled++] = fd;
+    if (stall && stalled < 0) {
+        stalled = fd;
         return;
     }
     if (text_only) dprintf(fd, "%s", uri);
