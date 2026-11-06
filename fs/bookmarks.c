@@ -77,7 +77,7 @@ static bool bm_add(Arena *a, Bookmarks *bm, const char *path, Err *err)
     if (bm_find(bm, path) >= 0) return err_set(err, "already a bookmark"), false;
     if (bm->n == BM_MAX) return err_set(err, "the bookmarks file is full (%d)", BM_MAX), false;   // (full: n is BM_MAX)
     char uri[PATH_MAX * 3 + 8];
-    if (!thumb_uri(path, uri, sizeof uri)) return err_set(err, "the path is too long"), false;
+    if (!file_uri(path, uri, sizeof uri)) return err_set(err, "the path is too long"), false;
     Bookmark *b = &bm->b[bm->n++];
     b->uri = (Str){ arena_cstr(a, str_from_c(uri)), (isize)strlen(uri) };
     b->label = STR_EMPTY;

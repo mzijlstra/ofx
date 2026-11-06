@@ -38,7 +38,7 @@ static void preview_of(Arena *a, const char *cache, const char *dir, const char 
 {
     char uri[PATH_MAX * 3];
     struct stat st;
-    CHECK(thumb_uri(path, uri, sizeof uri) && stat(path, &st) == 0);
+    CHECK(file_uri(path, uri, sizeof uri) && stat(path, &st) == 0);
     preview(a, cache, dir, uri, st.st_mtim.tv_sec, st.st_size, atime, out);
 }
 
@@ -77,12 +77,12 @@ static void test_clean_names(void)
     CHECK(!file_uri_path(S("file:///a%"), p, sizeof p) && !file_uri_path(S("http:///a"), p, sizeof p));
     // Too small: refused, never cut.
     CHECK(!file_uri_path(S("file:///abc"), p, 4) && file_uri_path(S("file:///abc"), p, 5));
-    // Its round trip with thumb_uri, for every byte but NUL.
+    // Its round trip with file_uri, for every byte but NUL.
     char path[300], uri[PATH_MAX * 3];
     path[0] = '/';
     for (int i = 1; i < 256; i++) path[i] = (char)i;
     path[256] = 0;
-    CHECK(thumb_uri(path, uri, sizeof uri) && file_uri_path(str_from_c(uri), p, sizeof p) && strcmp(p, path) == 0);
+    CHECK(file_uri(path, uri, sizeof uri) && file_uri_path(str_from_c(uri), p, sizeof p) && strcmp(p, path) == 0);
 
     Str mi = S("1 0 0:1 / / rw - ext4 a rw\n"
                "2 1 0:2 / /mnt/sd rw - ext4 b rw\n"
@@ -274,7 +274,7 @@ static void test_clean_run(void)
         char lf[PATH_MAX], lu[PATH_MAX * 3];
         struct stat ks;
         snprintf(lf, sizeof lf, "%s/link.png", pics);
-        CHECK(symlink("keep.png", lf) == 0 && stat(keep, &ks) == 0 && thumb_uri(lf, lu, sizeof lu));
+        CHECK(symlink("keep.png", lf) == 0 && stat(keep, &ks) == 0 && file_uri(lf, lu, sizeof lu));
         preview(&a, cache, "large", lu, ks.st_mtim.tv_sec, ks.st_size, recent, p[P_LINKED_FILE]);
     }
     // Bigger than a cached preview can be: not read, so kept although its file is gone.

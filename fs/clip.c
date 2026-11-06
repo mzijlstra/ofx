@@ -158,10 +158,10 @@ static Str clip_payload(Arena *a, const ClipFiles *c, ClipFormat f)
 #define PUT(...) (ok = ok && buf_put(out, avail, &n, __VA_ARGS__))
     if (f == CLIP_FMT_GNOME) PUT("%s", c->cut ? "cut" : "copy");
     for (isize i = 0; ok && i < c->n; i++) {
-        char enc[PATH_MAX * 3];
-        if (!percent_encode(str_from_c(c->path[i]), "/", enc, sizeof enc)) ok = false;
-        else if (f == CLIP_FMT_GNOME) PUT("\nfile://%s", enc);
-        else PUT("file://%s\r\n", enc);
+        char uri[PATH_MAX * 3 + 8];
+        if (!file_uri(c->path[i], uri, sizeof uri)) ok = false;
+        else if (f == CLIP_FMT_GNOME) PUT("\n%s", uri);
+        else PUT("%s\r\n", uri);
     }
 #undef PUT
     if (!ok) n = 0;

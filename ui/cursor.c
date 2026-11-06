@@ -202,6 +202,28 @@ static UiAction ui_zoom(Ui *u, int k)
     return (UiAction){ UA_ZOOM, u->zoom, false };
 }
 
+// The icon size step sizes up (by 1) or down (-1): the keys, the buttons, Ctrl and the wheel.
+static UiAction ui_zoom_by(Ui *u, int step)
+{
+    return ui_zoom(u, ui_zoom_level(u->zoom) + step);
+}
+
+// A panel's list moved by k (the arrows, Home, End, PgUp, PgDn, a page a screen less a row): false
+// for any other key.
+static bool ui_list_nav(UiList *l, UiKey k)
+{
+    isize page = l->rows > 1 ? l->rows - 1 : 1;
+    switch (k) {
+    case UK_DOWN: ui_move(l, 1); return true;
+    case UK_UP: ui_move(l, -1); return true;
+    case UK_HOME: ui_move(l, -l->n); return true;
+    case UK_END: ui_move(l, l->n); return true;
+    case UK_PAGEUP: ui_move(l, -page); return true;
+    case UK_PAGEDOWN: ui_move(l, page); return true;
+    default: return false;
+    }
+}
+
 // The view: icons in a grid, or the list. gui/ sets the columns at its next layout.
 static UiAction ui_view(Ui *u, bool grid)
 {

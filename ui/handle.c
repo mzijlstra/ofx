@@ -127,7 +127,7 @@ static bool ui_handle_panels(Ui *u, UiNames names, const UiInput *in, UiOnTop on
     // Open With (F7.3): a toggle flips; its picker's press (ui_pick_press).
     if (on == UI_ON_OW) {
         if (in->toggle == UI_TOGGLE_ALWAYS) {
-            if (u->ow_def_can) u->ow_def = !u->ow_def;
+            ui_ow_def_flip(u);
             return *out = UI_NONE, true;
         }
         if (in->toggle >= 1 && in->toggle <= UI_TOGGLES) {
@@ -189,6 +189,18 @@ static bool ui_handle_panels(Ui *u, UiNames names, const UiInput *in, UiOnTop on
 static bool ui_handle_pointer(Ui *u, UiNames names, const UiInput *in, UiOnTop on, bool prompt, UiAction *out)
 {
     UiList *l = &u->list;
+    // First, whatever returns below (code-health review, 2026-11-06: a menu's or a panel's press
+    // returned before them):
+    // The job rows: the mark kept on a row there is; none left, no keyboard there.
+    if (u->job_at >= in->job_n) u->job_at = in->job_n - 1;
+    if (u->job_at < 0) u->job_at = 0;
+    if (in->job_n <= 0) ui_unfocus(u, UI_FOCUS_JOBS);
+    // A click anywhere gives the path buttons' keyboard back; so does their going.
+    bool clicked = in->click >= 0 || in->dclick >= 0 || in->side_click >= 0 || in->header >= 0 || in->bar != UB_NONE ||
+                   in->tab_click >= 0 || in->tab_close >= 0 || in->mid_row >= 0 || in->mid_side >= 0 || in->mid_crumb >= 0;
+    if (clicked || in->crumb_n <= 0) ui_unfocus(u, UI_FOCUS_CRUMBS);
+    if (clicked) ui_unfocus(u, UI_FOCUS_JOBS);
+    if (u->focus == UI_FOCUS_CRUMBS && u->crumb_at > in->crumb_n - 1 + u->branch_on) u->crumb_at = in->crumb_n - 1 + u->branch_on;   // (crumb_n: the branch button, F12 step 5c)
     // The menu bar (F7.1): a title opens its menu or closes it; while a menu is open a press on one
     // of its entries picks it (one that can't be picked keeps the menu open), and a press anywhere
     // else only closes it.
@@ -242,20 +254,10 @@ static bool ui_handle_pointer(Ui *u, UiNames names, const UiInput *in, UiOnTop o
         return *out = u->prop_can ? (UiAction){ UA_CHMOD, in->prop_box, false } : UI_NONE, true;
     }
     if (on == UI_ON_PROPS && in->modal == UI_MODAL_OK) return ui_panel_close(u, UI_PANEL_PROPS), *out = UI_NONE, true;
-    // The job rows: the mark kept on a row there is; none left, no keyboard there.
-    if (u->job_at >= in->job_n) u->job_at = in->job_n - 1;
-    if (u->job_at < 0) u->job_at = 0;
-    if (in->job_n <= 0) ui_unfocus(u, UI_FOCUS_JOBS);
     if (!prompt && in->job_x >= 0 && in->job_x < in->job_n) {
         u->cancel_asking = true, u->cancel_id = in->job_id[in->job_x];
         return *out = UI_NONE, true;
     }
-    // A click anywhere gives the path buttons' keyboard back; so does their going.
-    bool clicked = in->click >= 0 || in->dclick >= 0 || in->side_click >= 0 || in->header >= 0 || in->bar != UB_NONE ||
-                   in->tab_click >= 0 || in->tab_close >= 0 || in->mid_row >= 0 || in->mid_side >= 0 || in->mid_crumb >= 0;
-    if (clicked || in->crumb_n <= 0) ui_unfocus(u, UI_FOCUS_CRUMBS);
-    if (clicked) ui_unfocus(u, UI_FOCUS_JOBS);
-    if (u->focus == UI_FOCUS_CRUMBS && u->crumb_at > in->crumb_n - 1 + u->branch_on) u->crumb_at = in->crumb_n - 1 + u->branch_on;   // (crumb_n: the branch button, F12 step 5c)
     // A modal panel's buttons: as the keys they stand for.
     if (on == UI_ON_CLASH && in->modal == UI_MODAL_ALL) u->ask_all = !u->ask_all;
     if (on == UI_ON_CLASH && in->modal >= UI_MODAL_SKIP && in->modal <= UI_MODAL_CANCEL) {
@@ -266,7 +268,7 @@ static bool ui_handle_pointer(Ui *u, UiNames names, const UiInput *in, UiOnTop o
     }
     if (in->wheel) ui_scroll(l, in->wheel);
     if (!prompt && in->zoom_to >= 0) return *out = ui_zoom(u, in->zoom_to), true;
-    if (!prompt && in->zoom_wheel) return *out = ui_zoom(u, ui_zoom_level(u->zoom) + (in->zoom_wheel > 0 ? 1 : -1)), true;
+    if (!prompt && in->zoom_wheel) return *out = ui_zoom_by(u, in->zoom_wheel > 0 ? 1 : -1), true;
     if (!prompt && in->header >= 0 && in->header < SORT_KEYS) {
         u->sort = ui_sort_click(u->sort, (SortKey)in->header);
         return *out = (UiAction){ UA_SORT, 0, false }, true;
@@ -305,8 +307,8 @@ static bool ui_handle_pointer(Ui *u, UiNames names, const UiInput *in, UiOnTop o
         case UB_EMPTY: if (u->view == UI_VIEW_TRASH) u->empty_asking = true; break;
         case UB_VIEW_LIST: return *out = ui_view(u, false), true;
         case UB_VIEW_ICONS: return *out = ui_view(u, true), true;
-        case UB_ZOOM_OUT: return *out = ui_zoom(u, ui_zoom_level(u->zoom) - 1), true;
-        case UB_ZOOM_IN: return *out = ui_zoom(u, ui_zoom_level(u->zoom) + 1), true;
+        case UB_ZOOM_OUT: return *out = ui_zoom_by(u, -1), true;
+        case UB_ZOOM_IN: return *out = ui_zoom_by(u, 1), true;
         case UB_BRANCH:   // its menu, under it (F12 step 5b); a second press closes it (gui/'s menu_away), as a title's does
             ui_branch_open(u, false);
             return *out = UI_NONE, true;
@@ -410,8 +412,8 @@ static bool ui_list_key(Ui *u, UiNames names, const UiInput *in, UiEvent e, bool
     case UK_END: ui_step(u, m, m->n); break;
     case UK_VIEW_ICONS: return *out = ui_view(u, true), true;
     case UK_VIEW_LIST: return *out = ui_view(u, false), true;
-    case UK_ZOOM_IN: return *out = ui_zoom(u, ui_zoom_level(u->zoom) + 1), true;
-    case UK_ZOOM_OUT: return *out = ui_zoom(u, ui_zoom_level(u->zoom) - 1), true;
+    case UK_ZOOM_IN: return *out = ui_zoom_by(u, 1), true;
+    case UK_ZOOM_OUT: return *out = ui_zoom_by(u, -1), true;
     case UK_ZOOM_RESET: return *out = ui_zoom(u, ui_zoom_level(UI_ZOOM_DEFAULT)), true;
     // Enter opens and Backspace goes up; Left and Right don't, in the list or the icon view
     // (Michael, 2026-10-24): they only open and close the tree's folders.
@@ -510,7 +512,7 @@ static bool ui_list_key(Ui *u, UiNames names, const UiInput *in, UiEvent e, bool
     case UK_TAB_NEW: return *out = (UiAction){ UA_TAB_NEW, 0, false }, true;
     case UK_TAB_REOPEN: return *out = (UiAction){ UA_TAB_REOPEN, 0, false }, true;
     case UK_NEW_WINDOW: return *out = ui_view_act(u, (UiAction){ UA_NEW_WINDOW, 0, false }), true;
-    case UK_PROPERTIES: return *out = ui_props_open(u), true;
+    case UK_PROPERTIES: return *out = ui_props_open(u, UI_PROPS_MARKED), true;
     case UK_TERMINAL: return *out = ui_view_act(u, (UiAction){ UA_TERMINAL, 0, false }), true;
     case UK_SEARCH: return *out = ui_search_open(u), true;
     case UK_CONTAINING:   // (the search view's: elsewhere every entry is in the folder shown)
@@ -623,46 +625,49 @@ static UiAction ui_handle_frame(Ui *u, UiNames names, const UiInput *in)
             if (out.kind != UA_NONE) return out;
             continue;
         }
-        if (u->focus == UI_FOCUS_EDIT && u->edit_path && !prompt && e.key == UK_CRUMBS) {   // from the location line: it closes
+        // A clash (the only thing left that can be on top: the questions and panels took theirs
+        // above) takes its keys before any field's: K keeps all, the find bar's text doesn't type
+        // into it (code-health review, 2026-11-06: six fields asked !prompt for this). Shift
+        // doesn't change its keys, nor Enter.
+        if (on == UI_ON_CLASH) {
+            UiEvent c = e;
+            c.key = c.key == UK_SHIFT_ENTER ? UK_ENTER : ui_unshift(c.key);
+            UiAction a = ui_ask_event(u, c);
+            if (a.kind != UA_NONE) return a;
+            continue;
+        }
+        if (u->focus == UI_FOCUS_EDIT && u->edit_path && e.key == UK_CRUMBS) {   // from the location line: it closes
             ui_crumbs_focus(u, in);   // (no path buttons: the line stays)
             continue;
         }
-        if (u->focus == UI_FOCUS_EDIT && !prompt) {
+        if (u->focus == UI_FOCUS_EDIT) {
             UiAction a = ui_edit_event(u, e, in->paste);
             if (a.kind != UA_NONE) return a;
             continue;
         }
         // The search field (F9) before Shift is taken off the moves: it selects with them.
         // Alt+I (F9 step 3): inside files or not, wherever the keys are in the search view.
-        if (u->view == UI_VIEW_SEARCH && !prompt && e.key == UK_MENU && e.ch == 'i') {
+        if (u->view == UI_VIEW_SEARCH && e.key == UK_MENU && e.ch == 'i') {
             ui_search_inside(u, !u->search_inside);
             continue;
         }
-        if ((u->focus == UI_FOCUS_SEARCH || (u->focus == UI_FOCUS_INSIDE && u->search_inside)) && u->view == UI_VIEW_SEARCH && !prompt &&
-            ui_search_event(u, e, in))
+        if ((u->focus == UI_FOCUS_SEARCH || (u->focus == UI_FOCUS_INSIDE && u->search_inside)) && u->view == UI_VIEW_SEARCH && ui_search_event(u, e, in))
             continue;
-        // The find bar's likewise (2026-10-28), after the questions: a clash or the delete question
-        // takes its keys first.
-        if (u->focus == UI_FOCUS_FIND && u->finding && !prompt && ui_find_event(u, names, e, in)) continue;
-        if (u->focus == UI_FOCUS_CRUMBS && !prompt) {
+        // The find bar's likewise (2026-10-28), after the questions and a clash.
+        if (u->focus == UI_FOCUS_FIND && u->finding && ui_find_event(u, names, e, in)) continue;
+        if (u->focus == UI_FOCUS_CRUMBS) {
             UiAction a;
             if (ui_crumbs_event(u, in, e, &a)) {
                 if (a.kind != UA_NONE) return a;
                 continue;
             }
         }
-        if (u->focus == UI_FOCUS_JOBS && !prompt && ui_jobs_event(u, in, e)) continue;   // before a clash's keys
+        if (u->focus == UI_FOCUS_JOBS && ui_jobs_event(u, in, e)) continue;
         // Outside an edit line and the path buttons, Shift doesn't change Enter; with a move in the
         // files (arrows, Home, End, or H, J, K, L) it selects what the cursor passes over (below).
         bool shifted = ui_unshift(e.key) != e.key;
         bool shift_enter = e.key == UK_SHIFT_ENTER;   // Enter for the questions and the find bar; Open With in the files
         e.key = shift_enter ? UK_ENTER : ui_unshift(e.key);
-
-        if (on == UI_ON_CLASH) {
-            UiAction a = ui_ask_event(u, e);
-            if (a.kind != UA_NONE) return a;
-            continue;
-        }
         if (ui_list_key(u, names, in, e, shifted, shift_enter, &extend, &out)) return out;
     }
     return UI_NONE;

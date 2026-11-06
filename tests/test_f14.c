@@ -77,3 +77,17 @@ static void test_fd_timed(void)
     CHECK(clip_fmt_of("text/plain") == CLIP_FMT_TEXT && clip_fmt_of("text/plain;charset=utf-8") == CLIP_FMT_TEXT);
     CHECK(clip_fmt_of("application/x-ofx-drag-1") == -1 && clip_fmt_of("text/html") == -1);
 }
+
+// The pointer's tidying runs whatever the press does after it (code-health review, 2026-11-06): a
+// press on a menu title, which returns at once, still takes the keys from job rows that are gone.
+static void test_pointer_tidy(void)
+{
+    static u8 mark[3];
+    UiNames names = { name_at, NULL, dir_at };
+    Ui u = menu_ui(3);
+    u.mark = mark, u.focus = UI_FOCUS_JOBS, u.job_at = 4;
+    UiInput in = ui_input_none();
+    in.menu_title = 0, in.job_n = 0;
+    ui_handle(&u, names, &in);
+    CHECK(u.menu_on && u.focus != UI_FOCUS_JOBS && u.job_at == 0);
+}

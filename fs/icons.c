@@ -57,13 +57,8 @@ static Str ini_get(Str text, Str section, Str key)
 static int ini_int(Str text, Str section, Str key, int dflt)
 {
     Str v = ini_get(text, section, key);
-    if (v.len == 0 || v.len > 9) return dflt;
-    int n = 0;
-    for (isize i = 0; i < v.len; i++) {
-        if (!is_digit(v.p[i])) return dflt;
-        n = n * 10 + (v.p[i] - '0');
-    }
-    return n;
+    i64 n = str_num(v, 999999999);   // (nine digits at most)
+    return n < 0 ? dflt : (int)n;
 }
 
 // The next comma-separated item of list from *at, trimmed.

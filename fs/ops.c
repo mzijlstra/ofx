@@ -145,51 +145,44 @@ static bool op_rename(const char *dir, Str from, Str to, Err *err)
     return move_noreplace(a, b, err);
 }
 
-// A new folder in dir called name, or name (2) and so on when it is taken; *made gets the name.
+typedef enum { MAKE_DIR, MAKE_FILE, MAKE_LINK } MakeKind;
+
+// A new folder, empty file or link (to target) in dir called name, or name (2) and so on when it
+// is taken (a file's and a link's before the extension); *made gets the name. Tried five times, as
+// another program may take the name in between (code-health review, 2026-11-06: three copies).
+static bool op_make(MakeKind kind, const char *dir, const char *target, Str name, char *made, size_t cap, Err *err)
+{
+    if (!name_valid(name, err)) return false;
+    for (int tries = 0; tries < 5; tries++) {
+        char p[PATH_MAX];
+        if (!name_free(dir, name, kind == MAKE_DIR, false, false, made, cap) || !path_put(p, sizeof p, dir, str_from_c(made)))
+            return err_set(err, "no free name for %.*s", STR_ARG(name)), false;
+        if (!ops_allowed(p, err)) return false;
+        int fd = -1;
+        bool ok = kind == MAKE_DIR ? mkdir(p, 0777) == 0
+                : kind == MAKE_LINK ? symlink(target, p) == 0
+                                    : (fd = open(p, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0666)) >= 0;
+        if (fd >= 0) close(fd);
+        if (ok) return true;
+        if (errno != EEXIST) return err_set(err, "%s: %s", p, strerror(errno)), false;
+    }
+    return err_set(err, "no free name for %.*s", STR_ARG(name)), false;
+}
+
+// A new folder (F3), an empty file (F7.1), a link to target, an absolute path (Make Link, F8).
 static bool op_mkdir(const char *dir, Str name, char *made, size_t cap, Err *err)
 {
-    if (!name_valid(name, err)) return false;
-    for (int tries = 0; tries < 5; tries++) {   // another program may take the name in between
-        char p[PATH_MAX];
-        if (!name_free(dir, name, true, false, false, made, cap) || !path_put(p, sizeof p, dir, str_from_c(made)))
-            return err_set(err, "no free name for %.*s", STR_ARG(name)), false;
-        if (!ops_allowed(p, err)) return false;
-        if (mkdir(p, 0777) == 0) return true;
-        if (errno != EEXIST) return err_set(err, "%s: %s", p, strerror(errno)), false;
-    }
-    return err_set(err, "no free name for %.*s", STR_ARG(name)), false;
+    return op_make(MAKE_DIR, dir, NULL, name, made, cap, err);
 }
 
-// An empty file named name in dir (F7.1), as op_mkdir makes a folder: "New file (2)" when taken.
 static bool op_mkfile(const char *dir, Str name, char *made, size_t cap, Err *err)
 {
-    if (!name_valid(name, err)) return false;
-    for (int tries = 0; tries < 5; tries++) {
-        char p[PATH_MAX];
-        if (!name_free(dir, name, false, false, false, made, cap) || !path_put(p, sizeof p, dir, str_from_c(made)))
-            return err_set(err, "no free name for %.*s", STR_ARG(name)), false;
-        if (!ops_allowed(p, err)) return false;
-        int fd = open(p, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0666);
-        if (fd >= 0) return close(fd), true;
-        if (errno != EEXIST) return err_set(err, "%s: %s", p, strerror(errno)), false;
-    }
-    return err_set(err, "no free name for %.*s", STR_ARG(name)), false;
+    return op_make(MAKE_FILE, dir, NULL, name, made, cap, err);
 }
 
-// A symbolic link in dir to target (an absolute path), named name or name (2) and so on (before
-// its extension) when it is taken (Make Link, F8); *made gets the name.
 static bool op_symlink(const char *dir, const char *target, Str name, char *made, size_t cap, Err *err)
 {
-    if (!name_valid(name, err)) return false;
-    for (int tries = 0; tries < 5; tries++) {
-        char p[PATH_MAX];
-        if (!name_free(dir, name, false, false, false, made, cap) || !path_put(p, sizeof p, dir, str_from_c(made)))
-            return err_set(err, "no free name for %.*s", STR_ARG(name)), false;
-        if (!ops_allowed(p, err)) return false;
-        if (symlink(target, p) == 0) return true;
-        if (errno != EEXIST) return err_set(err, "%s: %s", p, strerror(errno)), false;
-    }
-    return err_set(err, "no free name for %.*s", STR_ARG(name)), false;
+    return op_make(MAKE_LINK, dir, target, name, made, cap, err);
 }
 
 // ---- delete for good --------------------------------------------------------------------------

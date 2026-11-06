@@ -880,6 +880,13 @@ with its own commits, gates and reviewer-2 round.
   drags' timed pipe loops and MIME map (`fd_read_timed`, `fd_write_timed`, `clip_fmt_of`; the read
   had drifted: the clipboard's gave up at an EINTR); and the search fields' rules as the view
   changes (`ui_view_set`, from gui/folder.c).
+- **F, the copies in ui/ and fs/:** the key loop's clash takes its keys in one place after the
+  panels (six fields asked `!prompt` for it); the pointer's tidying of the job rows and path buttons
+  runs before any press returns; `ui_zoom_by`, `ui_list_nav`, `ui_props_open(which)`,
+  `ui_ow_def_flip`, and `ui_edit_sel` by `ui_line_sel`; `op_make` for a new folder, file and link;
+  `str_num` for conf's days and zoom, the theme's ini numbers, a preview's numbers and the window
+  registry's; one `file_uri` (GLib's escapes) for the previews, the bookmarks, the clipboard and
+  the drags; `file_read_fd` under `file_read_at` and `read_file`.
 
 **Michael's answers (2026-11-05):**
 - **Scope:** out, and files in (both in F14, out first).

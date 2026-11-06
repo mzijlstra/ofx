@@ -1870,6 +1870,7 @@ int main(void)
     if (fast) test_dnd_drop();
     if (fast) test_view_set();
     if (fast) test_fd_timed();
+    if (fast) test_pointer_tidy();
     if (slow) test_git_common_bare();
     if (slow) test_box_why();
     if (slow) test_box_outlive();

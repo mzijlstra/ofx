@@ -34,18 +34,25 @@ static bool path_put(char *out, size_t cap, const char *dir, Str name);
 // it isn't regular, and is refused). flags: more for open (O_NOFOLLOW: a link isn't read;
 // O_NOATIME: the access time kept). One reader for every small file read whole (code-health
 // review, 2026-11-03: written out six times).
+// The regular file open at fd (st its fstat) whole into the arena, max bytes at most, with a NUL
+// after it when nul: STR_EMPTY when it isn't one, is empty, too big, or reads shorter than its
+// size (it changed meanwhile). file_read_at's and read_file's (mime.c) one loop.
+static Str file_read_fd(Arena *a, int fd, const struct stat *st, isize max, bool nul)
+{
+    char *p;
+    if (!S_ISREG(st->st_mode) || st->st_size <= 0 || st->st_size > max || !(p = arena_try_push(a, (isize)st->st_size + nul, 1))) return STR_EMPTY;
+    isize n = 0;
+    for (ssize_t got; n < st->st_size && (got = read(fd, p + n, (size_t)(st->st_size - n))) > 0;) n += got;
+    if (n != st->st_size) return STR_EMPTY;
+    if (nul) p[n] = 0;
+    return (Str){ p, n };
+}
+
 static Str file_read_at(Arena *a, int dfd, const char *name, isize max, struct stat *st, int flags)
 {
     int fd = openat(dfd, name, O_RDONLY | O_NONBLOCK | O_CLOEXEC | flags);
     if (fd < 0) return STR_EMPTY;
-    Str s = STR_EMPTY;
-    char *p;
-    if (fstat(fd, st) == 0 && S_ISREG(st->st_mode) && st->st_size > 0 && st->st_size <= max &&
-        (p = arena_try_push(a, (isize)st->st_size, 1))) {
-        isize n = 0;
-        for (ssize_t got; n < st->st_size && (got = read(fd, p + n, (size_t)(st->st_size - n))) > 0;) n += got;
-        if (n == st->st_size) s = (Str){ p, n };
-    }
+    Str s = fstat(fd, st) == 0 ? file_read_fd(a, fd, st, max, false) : STR_EMPTY;
     close(fd);
     return s;
 }
@@ -169,6 +176,17 @@ static bool percent_encode(Str s, const char *keep, char *out, size_t cap)
     }
     out[n] = 0;
     return true;
+}
+
+// path's file:// URI as GLib makes it (g_filename_to_uri), which is what Nemo hashes for its
+// previews: every byte but letters, digits and -._~!$&'()*+,=@:/ as %XX in upper case (seen with
+// `gio info`, 2026-10-24). The previews', the bookmarks' and the clipboard's and drags' (one
+// builder: code-health review, 2026-11-06). False when it would not fit.
+static bool file_uri(const char *path, char *out, size_t cap)
+{
+    if (cap < 8) return false;
+    memcpy(out, "file://", 7);
+    return percent_encode(str_from_c(path), "!$&'()*+,=@:/", out + 7, cap - 7);
 }
 
 // A file:// URI's path: "file:///" or "file://localhost/", then %XX escapes; false for another

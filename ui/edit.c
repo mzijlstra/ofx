@@ -194,8 +194,7 @@ static void ui_line_sel(UiLine l, int *lo, int *hi)
 
 static void ui_edit_sel(const Ui *u, int *lo, int *hi)   // (the edit line's, for the state line and the tests)
 {
-    int a = u->edit.anchor, c = u->edit.caret;
-    *lo = a < c ? a : c, *hi = a < c ? c : a;
+    ui_line_sel(ui_edit_line((Ui *)u), lo, hi);   // (read only: a UiLine points into u)
 }
 
 // Ctrl+C or Ctrl+X with no text selected: not the field's. The find bar and the search field give

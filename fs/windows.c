@@ -91,12 +91,8 @@ static bool win_name(const char *name)
 static bool win_body(const char *buf, ssize_t n, i64 *t)
 {
     if (n < 2 || buf[n - 1] != '\n') return false;
-    i64 v = 0;
-    for (ssize_t i = 0; i < n - 1; i++) {
-        if (buf[i] < '0' || buf[i] > '9' || v > INT64_MAX / 10 - 1) return false;
-        v = v * 10 + (buf[i] - '0');
-    }
-    return *t = v, true;
+    i64 v = str_num((Str){ buf, (isize)(n - 1) }, INT64_MAX);
+    return v >= 0 && (*t = v, true);
 }
 
 // Sends sig to every window listed in dir but self that is still the process it was; an entry

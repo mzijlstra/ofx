@@ -116,8 +116,8 @@ sh test "$(bash -c "printf %s $(wl-paste -n)")" = "$OFX_DIR/it's here.txt"
 key ctrl-c
 expect status=Copied it's here.txt
 sh test "$(wl-paste -n -t text/plain)" = "'$OFX_DIR/it'\''s here.txt'"
-sh test "$(wl-paste -n -t text/uri-list)" = "$(printf 'file://%s/it%%27s%%20here.txt\r' "$OFX_DIR")"
-sh test "$(wl-paste -n -t x-special/gnome-copied-files)" = "$(printf 'copy\nfile://%s/it%%27s%%20here.txt' "$OFX_DIR")"
+sh test "$(wl-paste -n -t text/uri-list)" = "$(printf 'file://%s/it\047s%%20here.txt\r' "$OFX_DIR")"
+sh test "$(wl-paste -n -t x-special/gnome-copied-files)" = "$(printf 'copy\nfile://%s/it\047s%%20here.txt' "$OFX_DIR")"
 key ctrl-l
 key ctrl-a
 key ctrl-v
