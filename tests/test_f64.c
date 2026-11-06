@@ -213,6 +213,7 @@ static void test_png_meta(void)
     i64 v;
     CHECK(parse_i64(S("0"), &v) && v == 0 && parse_i64(S("123456789012345678"), &v) && v == 123456789012345678LL);
     CHECK(!parse_i64(S(""), &v) && !parse_i64(S("-1"), &v) && !parse_i64(S("12a"), &v) && !parse_i64(S("1234567890123456789"), &v));
+    CHECK(!parse_i64(S("0000000000000000001"), &v));   // (nineteen digits, zeros too: review, 2026-11-06)
 }
 
 static void test_thumb_decode(void)

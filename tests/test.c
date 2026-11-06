@@ -594,6 +594,7 @@ static void test_icons(void)
     CHECK_STR(ini_get(ini, S("C"), S("x")), "");
     CHECK(ini_int(ini, S("B"), S("x"), 9) == 3 && ini_int(ini, S("B"), S("n"), 9) == 9 && ini_int(ini, S("B"), S("big"), 9) == 9);
     CHECK(ini_int(ini, S("B"), S("absent"), 7) == 7);
+    CHECK(ini_int(S("[B]\nz=0000000001\n"), S("B"), S("z"), 7) == 7);   // (ten digits, zeros too: review, 2026-11-06)
     CHECK_STR(ini_get(S("[Ax\nk=1\n"), S("A"), S("k")), "");   // no closing ]: not a section
     Str item, list = S(" a, ,b ,,");
     isize iat = 0;

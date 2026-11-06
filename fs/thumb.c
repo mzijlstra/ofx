@@ -163,7 +163,7 @@ static u32 be32(const u8 *p) { return (u32)p[0] << 24 | (u32)p[1] << 16 | (u32)p
 // Digits only, at most 18 of them (str_num).
 static bool parse_i64(Str s, i64 *out)
 {
-    i64 v = str_num(s, 999999999999999999LL);
+    i64 v = s.len > 18 ? -1 : str_num(s, 999999999999999999LL);   // (leading zeros counted)
     return v >= 0 && (*out = v, true);
 }
 

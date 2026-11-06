@@ -57,7 +57,7 @@ static Str ini_get(Str text, Str section, Str key)
 static int ini_int(Str text, Str section, Str key, int dflt)
 {
     Str v = ini_get(text, section, key);
-    i64 n = str_num(v, 999999999);   // (nine digits at most)
+    i64 n = v.len > 9 ? -1 : str_num(v, 999999999);   // (nine digits at most, leading zeros counted)
     return n < 0 ? dflt : (int)n;
 }
 
