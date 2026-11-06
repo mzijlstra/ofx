@@ -86,12 +86,13 @@ static int ui_edit_max(const Ui *u)
     return u->edit_path ? PATH_MAX - 1 : NAME_MAX;
 }
 
+// The edit line opened on text (a path: the location line), all of it selected, the caret at its end.
 static void ui_edit_start(Ui *u, Str text, bool path)
 {
     u->edit_path = path;
     isize max = ui_edit_max(u), n = text.len < max ? text.len : max;
     memcpy(u->edit.b, text.p, (size_t)n);
-    u->edit.len = (int)n, u->edit.caret = (int)n, u->edit.anchor = path ? 0 : (int)n;
+    u->edit.len = (int)n, u->edit.caret = (int)n, u->edit.anchor = 0;
     ui_find_leave(u);
     u->focus = UI_FOCUS_EDIT;   // (the search field's keys too: they stayed before, 2026-10-28)
 }
@@ -101,7 +102,6 @@ static void ui_edit_start(Ui *u, Str text, bool path)
 static void ui_edit_open_all(Ui *u, Str text)
 {
     ui_edit_start(u, text, false);
-    u->edit.anchor = 0;
 }
 
 // Where a file name's extension starts, as F2 selects the rest (Michael, 2026-10-25): at its last
@@ -121,7 +121,6 @@ static int ui_name_stem(Str name)
 static void ui_edit_rename(Ui *u, Str name, bool dir)
 {
     ui_edit_start(u, name, false);
-    u->edit.anchor = 0;
     if (!dir) u->edit.caret = ui_name_stem((Str){ u->edit.b, u->edit.len });
 }
 

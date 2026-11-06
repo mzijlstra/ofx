@@ -1,5 +1,7 @@
 // Input: GLFW's keys and buttons as ui/'s events, what a point of the window is over (hit_at),
-// presses, the right-click menus' placing, the hover highlights. Included by main.c.
+// presses, the right-click menus' placing, the hover highlights, and the left button's drags: the
+// zoom knob, the sidebar's edge, files inside the window (F13), out to other programs and in from
+// them (F14, with gui/dnd.c). Included by main.c.
 
 // ---- input ----------------------------------------------------------------------------------
 
@@ -510,6 +512,10 @@ static bool drag_out_poll(void)
     } else if (was) {
         drop_reset(-1), dnd_own_answer(false, false);
     }
+    // Dropped back on the window: as a drag inside it, by Nemo's rule (drop_op), not by the
+    // compositor's action. Without Shift the source offers only copy, so the compositor settles on
+    // copy while the badge said Move on the same drive; the badge and the drop agree, as inside the
+    // window (Michael, 2026-11-06). Other programs' drops go by both (drop_in_merge).
     if (dnd_own_dropped(&x, &y)) {
         drop_find(x, y);
         if (app.drop.ok) drop_do(&app.drop);

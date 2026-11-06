@@ -21,7 +21,7 @@
 #include "GLFW/glfw3native.h"
 
 enum { DND_OFFERS = 8, DND_READ_MAX = MiB(1), DND_WAIT_MS = 2000 };
-enum { DND_TYPE_URIS = 1, DND_TYPE_TEXT = 2, DND_TYPE_OWN = 4 };
+enum { DND_TYPE_URIS = 1, DND_TYPE_OWN = 2 };   // (text alone is refused, whatever its type)
 typedef enum { DND_OUT_NONE, DND_OUT_DRAGGING, DND_OUT_DROPPED, DND_OUT_DONE, DND_OUT_CANCELLED } DndOut;
 static const char *const DND_OUT_WORD[] = { "none", "dragging", "dropped", "done", "cancelled" };
 
@@ -115,7 +115,6 @@ static void dnd_offer_type(void *data, struct wl_data_offer *o, const char *mime
     DND_LOG("offer %p slot %d type %s", (void *)o, i, mime);
     if (i < 0) return;
     if (strcmp(mime, CLIP_MIME_URIS) == 0) dnd.offers[i].types |= DND_TYPE_URIS;
-    else if (strcmp(mime, CLIP_MIME_TEXT[0]) == 0 || strcmp(mime, CLIP_MIME_TEXT[1]) == 0) dnd.offers[i].types |= DND_TYPE_TEXT;
     else if (strcmp(mime, dnd.own_mime) == 0) dnd.offers[i].types |= DND_TYPE_OWN;
 }
 static void dnd_offer_actions(void *data, struct wl_data_offer *o, uint32_t a)

@@ -5,11 +5,12 @@
 #include "../fs/fs.c"
 #include "../ui/ui.c"
 
-// The edit line opened on a name, the caret at its end (the tests' way in; ofx opens it with
-// ui_edit_rename and ui_edit_new).
+// The edit line opened on a name, the caret at its end, nothing selected (the tests' way in; ofx
+// opens it with ui_edit_rename and ui_edit_open_all).
 static void ui_edit_open(Ui *u, Str text)
 {
     ui_edit_start(u, text, false);
+    u->edit.anchor = u->edit.caret;
 }
 
 #include <stdarg.h>

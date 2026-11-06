@@ -1,7 +1,8 @@
 #!/bin/sh
 # A second private headless compositor for GUI tests: sway on wlroots' headless backend. weston
 # (tools/gui/weston.sh) stays the main one; sway is here for what weston lacks: ext-data-control
-# (the system clipboard, gui/clipboard.c) and virtual keyboards (vkbd, tools/gui/vkbd.c: input through GLFW).
+# (the system clipboard, gui/clipboard.c), virtual keyboards (vkbd, tools/gui/vkbd.c: input through
+# GLFW) and pointers (vptr, F14), and drags between programs (dndpeer, gui/dnd.c).
 # Added 2026-10-28. Nothing it shows reaches Michael's screen, and nothing in it touches his
 # Hyprland: its own Wayland socket and IPC socket, and -c a config written here, so ~/.config/sway
 # is never read.

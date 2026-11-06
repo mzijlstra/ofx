@@ -21,7 +21,8 @@ rules shared by every tool here.
   scratch copy (`<scratch>/state`), so a theme test edits the copy, never Michael's files. Never
   run `omarchy-theme-set` or anything else that changes his theme to test a switch.
 - **The sidebar** reads the GTK bookmarks (shared with Nemo) and the XDG user dirs under
-  `$XDG_CONFIG_HOME`; `run-script.sh` points that at `<scratch>/config`. ofx never writes them.
+  `$XDG_CONFIG_HOME`; `run-script.sh` points that at `<scratch>/config`. It writes the bookmarks
+  since F7.5 (below), never the user dirs.
 - **The mount list** (F6): ofx polls `/proc/self/mountinfo`, and reads each drive's trash
   (`/mnt/sd/.Trash-1000` here) in the trash view. A GUI test that opens the trash view or counts
   drives sets `OFX_TEST_MOUNTINFO` to a scratch file (run-script passes it on), so it sees only
@@ -260,7 +261,7 @@ so every run does it. `gui.py` runs from its scratch copy, scripts included, so 
 - The script language is at the top of `gui/script.c`. Start every script with `settle`; check
   the `state` line rather than screenshots where you can.
 
-## Where the code is (2026-11-02)
+## Where the code is (2026-11-06)
 
 One unity build per binary: gui/main.c includes base/, fs/ (fs/fs.c) and ui/ (ui/ui.c), then its own
 files in order. ui/ is raylib-free and unit-tested (tests/test.c includes it); a function in fs/ or
@@ -281,7 +282,9 @@ ui/ that nothing calls makes the test build warn.
 - `gui/main.c`: memory, the app state, signals, main(); then `folder.c` (go_to, history, places),
   `actions.c` (act, changing files), `icons.c`, `files.c` (the list and sidebar drawn), `topbar.c`,
   `panels.c` (modal panels, Properties), `footer.c` (job rows, find and search bars, status),
-  `frame.c` (tooltips, layout, draw), `input.c` (keys, hit_at, hover), `prefs.c` (ofx.conf read
+  `frame.c` (tooltips, layout, draw), `input.c` (keys, hit_at, hover, the drags: F13's inside the
+  window, F14's out and in), `dnd.c` (drags with other programs on the patched GLFW, F14),
+  `clipboard.c` (the system clipboard, ext-data-control), `prefs.c` (ofx.conf read
   and applied, Edit → Preferences…), `eject.c` (udisksctl mount, unmount, eject), `remember.c`
   (per folder view, zoom, sort and cursor, F11), `restore.c` (the tabs across a restart and a
   crash, F11 step 3 and 3b); the worker

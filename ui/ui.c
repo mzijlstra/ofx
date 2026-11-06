@@ -1,7 +1,7 @@
 // What the keys, characters, wheel and clicks do: the list's cursor and scroll, the sidebar's,
-// find, sort, the history, the selection, the edit line and the prompts, and the one action a
-// frame may ask of gui/ (open, go somewhere, toggle hidden files, sort again, change files).
-// raylib-free and unit-tested; gui/main.c feeds it (docs/plan.md, F1 "Keys", F2 and F3).
+// find and search, sort, the history and tabs, the selection, the text fields, the prompts, menus
+// and panels, and the one action a frame may ask of gui/ (open, go somewhere, change files, ...).
+// raylib-free and unit-tested; gui/main.c feeds it (docs/plan.md, from F1 "Keys" on).
 
 #include "../base/base.h"
 
