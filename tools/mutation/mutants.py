@@ -26,7 +26,6 @@ MUTANTS = [
     (L, "if (str_eq(l->e[i].name, name) && str_eq(l->e[i].dir, dir)) return i;", "if (str_eq(l->e[i].name, name) && str_eq(l->e[i].dir, dir)) return i + 1;"),
     # ---- MIME
     (M, "for (isize i = 0; i < s.len; i++) p[i] = (char)fold((unsigned char)s.p[i]);", "for (isize i = 0; i < s.len; i++) p[i] = s.p[i];"),
-    (M, "        whole = n == (size_t)st.st_size;", "        whole = true;"),
     (M, "if (g.p[i] == '*' || g.p[i] == '?' || g.p[i] == '[') return false;", "if (g.p[i] == '*' || g.p[i] == '?') return false;"),
     (M, "if (g.len < 3 || g.p[0] != '*' || g.p[1] != '.') return false;", "if (g.len < 3 || g.p[0] != '*') return false;"),
     (M, "if (!glob_is_literal(rest)) return false;", ""),
@@ -55,8 +54,8 @@ MUTANTS = [
     (M, "        if (up == 0) names[n++] = str_from_c(arena_sprintf(a, \"%.*s-x-generic\", STR_ARG(media)));", "        if (up == 0) names[n++] = S(\"text-x-generic\");"),
     # ---- icons
     (I, "in = line.len >= 2 && line.p[line.len - 1] == ']' && str_eq(str_cut(line, 1, line.len - 1), section);", "in = str_eq(str_cut(line, 1, line.len - 1), section);"),
-    (I, "if (v.len == 0 || v.len > 9) return dflt;", "if (v.len == 0) return dflt;"),
-    (I, "if (!is_digit(v.p[i])) return dflt;", ""),
+    ('fs/icons.c', '    i64 n = v.len > 9 ? -1 :', '    i64 n = v.len > 10 ? -1 :'),
+    ('fs/icons.c', '    return n < 0 ? dflt : (int)n;', '    return (int)n;'),
     (I, "if (item->len) return true;", "return true;"),
     (I, "if (home && home[0]) out[n++] = arena_sprintf(a, \"%s/.icons\", home);", ""),
     (I, "if ((!png && !is_svg) || s.len == 4) continue;", "if (s.len == 4) continue;"),
@@ -92,7 +91,7 @@ MUTANTS = [
     (T, "else if (val.len && val.p[0] == '/') snprintf(path, sizeof path, \"%.*s\", STR_ARG(val));", ""),
     (T, "if (strcmp(path, home) == 0 || u->n == COUNT(u->d)) continue;", "if (u->n == COUNT(u->d)) continue;"),
     # ---- spawn
-    ('fs/spawn.c', '    return stat(path, &st) == 0 && S_ISREG(st.st_mode) && access(path, X_OK) == 0;', '    return stat(path, &st) == 0 && S_ISREG(st.st_mode) && access(path, F_OK) == 0;'),
+    ('fs/guard.c', '    return stat(path, &st) == 0 && S_ISREG(st.st_mode) && access(path, X_OK) == 0;', '    return stat(path, &st) == 0 && S_ISREG(st.st_mode) && access(path, F_OK) == 0;'),
     ('fs/spawn.c', '    posix_spawnattr_setflags(&attr, POSIX_SPAWN_SETSID | POSIX_SPAWN_SETSIGMASK);\n    posix_spawn_file_actions_init(&fa);\n    posix_spawn_file_actions_addopen(&fa, 0, "/dev/null", O_RDONLY, 0);\n    if (out >= 0)', '    posix_spawnattr_setflags(&attr, POSIX_SPAWN_SETSIGMASK);\n    posix_spawn_file_actions_init(&fa);\n    posix_spawn_file_actions_addopen(&fa, 0, "/dev/null", O_RDONLY, 0);\n    if (out >= 0)'),
     (P, "if (on_path(\"uwsm-app\")) argv[k++] = \"uwsm-app\", argv[k++] = \"--\";", ""),
     (P, "snprintf(arg, sizeof arg, \"--dir=%s\", dir);", "snprintf(arg, sizeof arg, \"%s\", dir);"),
@@ -167,9 +166,9 @@ MUTANTS += [
 ]
 MUTANTS += [
     # ---- F2: procfs files read to their end
-    (M, "if (fstat(fileno(f), &st) == 0 && S_ISREG(st.st_mode) && st.st_size == 0) {", "if (0) {"),
-    (M, "        whole = feof(f) && !ferror(f);", "        whole = true;"),
-    (M, "        arena_commit(a, whole ? (isize)n + 1 : 0);", "        arena_commit(a, (isize)n + 1);"),
+    ('fs/mime.c', '    } else if (S_ISREG(st.st_mode) && st.st_size == 0) {', '    } else if (0) {'),
+    ('fs/mime.c', '        bool whole = avail > 1 && got == 0;', '        bool whole = true;'),
+    ('fs/mime.c', '        arena_commit(a, whole ? n + 1 : 0);', '        arena_commit(a, n + 1);'),
 ]
 MUTANTS += [
     ('ui/helpers.c', "    if (*no > 0) (*no)--;", "    (void)no;"),
@@ -178,9 +177,9 @@ MUTANTS += [
 O, T, C, J, N = 'fs/ops.c', 'fs/trash.c', 'fs/clip.c', 'fs/job.c', 'fs/undo.c'
 MUTANTS += [
     # the guard
-    (O, "    if (!ops_root[0]) return true;\n    char r[PATH_MAX];", "    return true;\n    char r[PATH_MAX];"),
-    (O, '        snprintf(ops_root, sizeof ops_root, "/nonexistent/ofx-guard");', "        ops_root[0] = 0;"),
-    (O, '        if (str_eq(str_cut(rest, i, e), S(".."))) return false;', ""),
+    ('fs/guard.c', "    if (!ops_root[0]) return true;\n    char r[PATH_MAX];", "    return true;\n    char r[PATH_MAX];"),
+    ('fs/guard.c', '        snprintf(ops_root, sizeof ops_root, "/nonexistent/ofx-guard");', "        ops_root[0] = 0;"),
+    ('fs/guard.c', '        if (str_eq(str_cut(rest, i, e), S(".."))) return false;', ""),
     # names
     (O, "    if (str_find(name, '/') >= 0)", "    if (0)"),
     (O, 'if (str_eq(name, S(".")) || str_eq(name, S("..")))', 'if (str_eq(name, S(".")))'),
@@ -191,7 +190,7 @@ MUTANTS += [
     (O, "|| lstat(p, &st) == 0;   // too long", "|| stat(p, &st) == 0;   // too long"),
     (O, "for (int k = copy ? 1 : 2;", "for (int k = 2;"),
     (O, "    if (renameat2(AT_FDCWD, from, AT_FDCWD, to, RENAME_NOREPLACE) == 0) return true;", "    if (renameat(AT_FDCWD, from, AT_FDCWD, to) == 0) return true;"),
-    (O, "        if (!ops_allowed(p, err)) return false;\n        if (mkdir(p, 0777) == 0) return true;", "        if (mkdir(p, 0777) == 0) return true;"),
+    ('fs/ops.c', '        if (!ops_allowed(p, err)) return false;\n        int fd = -1;', '        int fd = -1;'),
     # delete for good
     # Inert, kept out: one pass instead of passes until nothing is left. Linux readdir on tmpfs,
     # ext4 and btrfs skips nothing after unlinks, so no test can tell; the passes are for file
@@ -215,24 +214,24 @@ MUTANTS += [
     (T, "    if (!ops_allowed(files, err) || !mkdir_private", "    if (!mkdir_private"),
     # the clipboard payloads
     (C, 'PUT("%s", c->cut ? "cut" : "copy");', 'PUT("%s", "copy");'),
-    (C, 'else PUT("file://%s\\r\\n", enc);', 'else PUT("file://%s\\n", enc);'),
+    ('fs/clip.c', 'else PUT("%s\\r\\n", uri);', 'else PUT("%s\\n", uri);'),
     (C, "                c->cut = true;\n", ""),
     (C, "            if (str_eq(line, S(\"copy\"))) continue;\n            return false;", "            continue;"),
     (C, "    if (!ok) n = 0;", ""),
     (C, "        if (i && n + 1 < avail) out[n++] = '\\n';\n", ''),
     (C, '        isize k = quoted ? shell_quote(', '        isize k = false ? shell_quote('),
     # jobs
-    (J, "                fchmod(dfd, st.st_mode & 07777);\n                futimens(dfd, (struct timespec[2]){ st.st_atim, st.st_mtim });", "                futimens(dfd, (struct timespec[2]){ st.st_atim, st.st_mtim });"),
-    (J, "                fchmod(dfd, st.st_mode & 07777);\n                futimens(dfd, (struct timespec[2]){ st.st_atim, st.st_mtim });", "                fchmod(dfd, st.st_mode & 07777);"),
+    ('fs/job.c', '                fchmod(dfd, st->st_mode & 07777);\n                futimens(dfd, (struct timespec[2]){ st->st_atim, st->st_mtim });', '                futimens(dfd, (struct timespec[2]){ st->st_atim, st->st_mtim });'),
+    ('fs/job.c', '                fchmod(dfd, st->st_mode & 07777);\n                futimens(dfd, (struct timespec[2]){ st->st_atim, st->st_mtim });', '                fchmod(dfd, st->st_mode & 07777);'),
     (J, "    if (fresh) snprintf(part, sizeof part, \"%s\", dname);\n    else part_name(part, sizeof part, dname);\n    bool ok = true;", "    snprintf(part, sizeof part, \"%s\", dname);\n    bool ok = true;"),
     (J, '        if (!ok && dfd >= 0) unlinkat(ddir, part, 0);', ""),
     (J, "int r = replace ? renameat(ddir, part, ddir, dname) : renameat2(ddir, part, ddir, dname, RENAME_NOREPLACE);", "int r = renameat2(ddir, part, ddir, dname, RENAME_NOREPLACE);"),
-    (J, "            dname = keep;\n", ""),
-    (J, "        } else if (S_ISDIR(st.st_mode) != S_ISDIR(dt.st_mode)) {", "        } else if (0) {"),
-    (J, "            merge = true;\n", "            replace = true;\n"),
-    (J, "            fchmod(dfd, st.st_mode & 07777);\n            futimens(dfd, (struct timespec[2]){ st.st_atim, st.st_mtim });\n        }\n        if (dfd >= 0) close(dfd);", "        }\n        if (dfd >= 0) close(dfd);"),
-    (J, "        if (ok && !fresh && renameat2(ddir, part, ddir, dname, RENAME_NOREPLACE) != 0) {", "        if (0) {"),
-    (J, "        if (!ok && !fresh) part_remove(ddir, part);", ""),
+    ('fs/job.c', '        *dname = keep;\n', ''),
+    ('fs/job.c', '    if (a != ANS_SKIP && dir != S_ISDIR(dt->st_mode))', '    if (0)'),
+    ('fs/job.c', '    else return dir ? (*merge = true) : (*replace = true), 1;', '    else return (*replace = true), 1;'),
+    ('fs/job.c', '    if (ok) {\n        fchmod(dfd, st->st_mode & 07777);\n        futimens(dfd, (struct timespec[2]){ st->st_atim, st->st_mtim });\n    }\n    if (dfd >= 0) close(dfd);', '    if (ok) {\n    }\n    if (dfd >= 0) close(dfd);'),
+    ('fs/job.c', '    if (ok && !fresh && renameat2(ddir, part, ddir, dname, RENAME_NOREPLACE) != 0) {', '    if (0) {'),
+    ('fs/job.c', '    if (!ok && !fresh) part_remove(ddir, part);', ''),
     (J, "        if (S_ISREG(st.st_mode)) atomic_fetch_add(&j->bytes_total, (long long)st.st_size);", "        atomic_fetch_add(&j->bytes_total, (long long)st.st_size);"),
     (J, "if (strcmp(de->d_name, \".\") && strcmp(de->d_name, \"..\")) job_count(j, fd, de->d_name, depth + 1);", "(void)de;"),
     (J, "        atomic_fetch_add(&j->bytes_done, (long long)k);\n", ""),
@@ -240,7 +239,7 @@ MUTANTS += [
     (J, "    if (*rest) return *rest;\n", ""),
     (J, "    if (!j->ask) return ANS_SKIP;", "    if (!j->ask) return ANS_REPLACE;"),
     (J, "    if (a == ANS_CANCEL) atomic_store(&j->cancel, true);", "    if (a == ANS_CANCEL) {}"),
-    (J, "    if (renameat2(sdir, sname, ddir, dname, RENAME_NOREPLACE) == 0) {\n        atomic_fetch_add(&j->files_done, 1);\n        if (depth == 0)", "    if (renameat(sdir, sname, ddir, dname) == 0) {\n        atomic_fetch_add(&j->files_done, 1);\n        if (depth == 0)"),
+    ('fs/job.c', '    if (renameat2(sdir, sname, ddir, dname, RENAME_NOREPLACE) == 0) {\n        if (depth == 0) atomic_fetch_add', '    if (renameat(sdir, sname, ddir, dname) == 0) {\n        if (depth == 0) atomic_fetch_add'),
     (J, "    if (ok) unlinkat(sdir, sname, AT_REMOVEDIR);", ""),
     (J, "    if (j->kind == JOB_MOVE && it->out == OUT_NEW && !whole) it->out = OUT_MERGED;", ""),
     (J, "    if (whole && j->kind == JOB_MOVE && !same_drive) {", "    if (j->kind == JOB_MOVE && !same_drive) {"),
@@ -309,8 +308,7 @@ MUTANTS += [
     ('ui/helpers.c', "        while (text.len && text.p[0] == '/') text = str_cut(text, 1, text.len);", ""),
     ('ui/helpers.c', "    text = str_trim(text);\n    if (text.len == 0) return false;", "    if (text.len == 0) return false;"),
     ('ui/helpers.c', "        if (!home || home[0] != '/') return false;", ""),
-    ('ui/edit.c', 'u->edit.anchor = path ? 0 : (int)n;', 'u->edit.anchor = (int)n;'),
-    ('ui/edit.c', 'u->edit.anchor = path ? 0 : (int)n;', 'u->edit.anchor = 0;'),
+    ('ui/edit.c', ', u->edit.anchor = 0;\n    ui_find_leave(u);', ', u->edit.anchor = (int)n;\n    ui_find_leave(u);'),
     ('ui/edit.c', "(e.ch != '/' || l.slash)", "(e.ch != '/')"),
     ('ui/edit.c', "    return u->edit_path ? PATH_MAX - 1 : NAME_MAX;", "    return NAME_MAX;"),
     ('ui/edit.c', "    case UK_SHIFT_ENTER: return (UiAction){ u->edit_path ? UA_GO : UA_RENAME, 0, false };", "    case UK_SHIFT_ENTER: return (UiAction){ UA_RENAME, 0, false };"),
@@ -319,7 +317,7 @@ MUTANTS += [
     ('ui/handle.c', "    if (!prompt && in->bar != UB_NONE) {", "    if (in->bar != UB_NONE) {"),
     ('ui/handle.c', '            if (u->focus == UI_FOCUS_EDIT && u->edit_path) return ui_edit_close(u), *out = UI_NONE, true;\n', ''),
     ('ui/handle.c', '        case UB_UP: ui_edit_close(u); return *out = (UiAction){ UA_PARENT, 0, false }, true;', '        case UB_UP: return *out = (UiAction){ UA_PARENT, 0, false }, true;'),
-    ('ui/handle.c', '    case UK_PARENT: return *out = (UiAction){ UA_PARENT, 0, false }, true;\n', ''),
+    ('ui/handle.c', '    { UK_BACKSPACE, UA_PARENT, 0, false, false }, { UK_PARENT, UA_PARENT, 0, false, false },', '    { UK_BACKSPACE, UA_PARENT, 0, false, false }, { UK_NONE, UA_PARENT, 0, false, false },'),
     # counts
     (L, "        if (nm[0] == '.' && !hidden) continue;\n        n++;", "        n++;"),
     (L, "    if (!d) return -1;\n    isize n = 0;", "    if (!d) return 0;\n    isize n = 0;"),
@@ -341,7 +339,7 @@ MUTANTS += [
     ('ui/handle.c', "    if (!prompt && in->tab_close >= 0) return", "    if (in->tab_close >= 0) return"),
     ('ui/handle.c', '    if (!prompt && in->mid_row >= 0 && l->top + in->mid_row < l->n) return *out = (UiAction){ UA_TAB_BG_ROW, l->top + in->mid_row, false }, true;', '    if (!prompt && in->mid_row >= 0) return *out = (UiAction){ UA_TAB_BG_ROW, in->mid_row, false }, true;'),
     ('ui/handle.c', "    if (!prompt && in->mid_side >= 0 && u->side.top + in->mid_side < u->side.n && !ui_side_head", "    if (!prompt && in->mid_side >= 0 && !ui_side_head"),
-    ('ui/handle.c', '    case UK_TAB_CLOSE: return *out = (UiAction){ UA_TAB_CLOSE, -1, false }, true;', '    case UK_TAB_CLOSE: return *out = (UiAction){ UA_TAB_CLOSE, 0, false }, true;'),
+    ('ui/handle.c', '{ UK_TAB_CLOSE, UA_TAB_CLOSE, -1, false, false },', '{ UK_TAB_CLOSE, UA_TAB_CLOSE, 0, false, false },'),
     ('ui/handle.c', '    case UK_TAB_JUMP: return *out = (UiAction){ UA_TAB_JUMP, (isize)e.ch, false }, true;', ''),
     ('ui/handle.c', '    if (!prompt && in->tab_click >= 0) return *out = (ui_edit_close(u), (UiAction){ UA_TAB_SHOW, in->tab_click, false }), true;', '    if (!prompt && in->tab_click >= 0) return *out = (UiAction){ UA_TAB_SHOW, in->tab_click, false }, true;'),
 ]
@@ -398,10 +396,8 @@ MUTANTS += [
     ('ui/handle.c', "in->tab_click >= 0 || in->tab_close >= 0 || in->mid_row >= 0 || in->mid_side >= 0 || in->mid_crumb >= 0;", "in->tab_click >= 0 || in->tab_close >= 0 || in->mid_row >= 0 || in->mid_side >= 0;"),
     ('ui/handle.c', "    bool clicked = in->click >= 0 || in->dclick >= 0 ||", "    bool clicked = in->dclick >= 0 ||"),
     ('ui/handle.c', '    if (u->focus == UI_FOCUS_CRUMBS && u->crumb_at > in->crumb_n - 1 + u->branch_on) u->crumb_at = in->crumb_n - 1 + u->branch_on;   // (crumb_n: the branch button, F12 step 5c)\n', ''),
-    ('ui/handle.c', '        if (u->focus == UI_FOCUS_EDIT && u->edit_path && !prompt && e.key == UK_CRUMBS) {', '        if (u->focus == UI_FOCUS_EDIT && !prompt && e.key == UK_CRUMBS) {'),
-    ('ui/handle.c', '        if (u->focus == UI_FOCUS_EDIT && u->edit_path && !prompt && e.key == UK_CRUMBS) {', '        if (u->focus == UI_FOCUS_EDIT && u->edit_path && e.key == UK_CRUMBS) {'),
-    ('ui/handle.c', '        if (u->focus == UI_FOCUS_EDIT && !prompt) {\n            UiAction a = ui_edit_event', '        if (u->focus == UI_FOCUS_EDIT) {\n            UiAction a = ui_edit_event'),
-    ('ui/handle.c', '        if (u->focus == UI_FOCUS_CRUMBS && !prompt) {', '        if (u->focus == UI_FOCUS_CRUMBS) {'),
+    ('ui/handle.c', '        if (u->focus == UI_FOCUS_EDIT && u->edit_path && e.key == UK_CRUMBS) {', '        if (u->focus == UI_FOCUS_EDIT && e.key == UK_CRUMBS) {'),
+    ('ui/handle.c', '        if (on == UI_ON_CLASH) {\n            UiAction a = ui_ask_event(u, e);', '        if (0) {\n            UiAction a = ui_ask_event(u, e);'),
     ('ui/handle.c', '        else ui_crumbs_focus(u, in);\n        break;', '        else {}\n        break;'),
     ('ui/helpers.c', "    if (at < lo) c->lo = at;\n", ""),
     ('ui/helpers.c', "    while (at >= hi && lo < at) hi = ui_crumbs_fit(w, c->n, room - 2 * arrow, ++lo), c->lo = lo;", "    while (at >= hi && lo < at) hi = ui_crumbs_fit(w, c->n, room, ++lo), c->lo = lo;"),
@@ -436,7 +432,6 @@ MUTANTS += [
     ('ui/prompts.c', '    case UK_JOBS: u->focus = UI_FOCUS_LIST; return true;', '    case UK_JOBS: return true;'),
     ('ui/prompts.c', '(list, find bar, jobs)\n    case UK_ESC: case UK_TAB: u->focus = UI_FOCUS_LIST; return true;\n', '(list, find bar, jobs)\n'),
     ('ui/prompts.c', '(list, find bar, jobs)\n    case UK_ESC: case UK_TAB: u->focus = UI_FOCUS_LIST; return true;\n    default: u->focus = UI_FOCUS_LIST; return false;', '(list, find bar, jobs)\n    case UK_ESC: case UK_TAB: u->focus = UI_FOCUS_LIST; return true;\n    default: return false;'),
-    ('ui/handle.c', '        if (u->focus == UI_FOCUS_JOBS && !prompt && ui_jobs_event(u, in, e)) continue;', '        if (u->focus == UI_FOCUS_JOBS && ui_jobs_event(u, in, e)) continue;'),
     ('ui/handle.c', '        else if (in->job_n > 0) u->focus = UI_FOCUS_JOBS, u->job_at = 0;', '        else u->focus = UI_FOCUS_JOBS, u->job_at = 0;'),
     ('ui/handle.c', '        else if (in->job_n > 0) u->focus = UI_FOCUS_JOBS, u->job_at = 0;', '        else if (in->job_n > 0) u->focus = UI_FOCUS_JOBS;'),
     ('ui/handle.c', "    if (u->job_at >= in->job_n) u->job_at = in->job_n - 1;\n", ""),
@@ -664,13 +659,14 @@ MUTANTS += [
     ('ui/cursor.c', "    return (UiAction){ UA_ZOOM, u->zoom, false };", "    return (UiAction){ UA_ZOOM, 0, false };"),
     ('ui/handle.c', '    if (!prompt && in->zoom_to >= 0) return *out = ui_zoom(u, in->zoom_to), true;', '    if (in->zoom_to >= 0) return *out = ui_zoom(u, in->zoom_to), true;'),
     ('ui/handle.c', '    if (!prompt && in->zoom_to >= 0) return *out = ui_zoom(u, in->zoom_to), true;', ''),
-    ('ui/handle.c', '    if (!prompt && in->zoom_wheel) return *out = ui_zoom(u, ui_zoom_level(u->zoom) + (in->zoom_wheel > 0 ? 1 : -1)), true;', '    if (in->zoom_wheel) return *out = ui_zoom(u, ui_zoom_level(u->zoom) + (in->zoom_wheel > 0 ? 1 : -1)), true;'),
-    ('ui/handle.c', '    if (!prompt && in->zoom_wheel) return *out = ui_zoom(u, ui_zoom_level(u->zoom) + (in->zoom_wheel > 0 ? 1 : -1)), true;', '    if (!prompt && in->zoom_wheel) return *out = ui_zoom(u, ui_zoom_level(u->zoom) + in->zoom_wheel), true;'),
-    ('ui/handle.c', '    if (!prompt && in->zoom_wheel) return *out = ui_zoom(u, ui_zoom_level(u->zoom) + (in->zoom_wheel > 0 ? 1 : -1)), true;', '    if (!prompt && in->zoom_wheel) return *out = ui_zoom(u, ui_zoom_level(u->zoom) + (in->zoom_wheel > 0 ? -1 : 1)), true;'),
-    ('ui/handle.c', '        case UB_ZOOM_OUT: return *out = ui_zoom(u, ui_zoom_level(u->zoom) - 1), true;', ''),
-    ('ui/handle.c', '        case UB_ZOOM_IN: return *out = ui_zoom(u, ui_zoom_level(u->zoom) + 1), true;', ''),
-    ('ui/handle.c', '    case UK_ZOOM_IN: return *out = ui_zoom(u, ui_zoom_level(u->zoom) + 1), true;', ''),
-    ('ui/handle.c', '    case UK_ZOOM_OUT: return *out = ui_zoom(u, ui_zoom_level(u->zoom) - 1), true;', '    case UK_ZOOM_OUT: return *out = ui_zoom(u, ui_zoom_level(u->zoom) + 1), true;'),
+    ('ui/handle.c', '    if (!prompt && in->zoom_wheel) return *out = ui_zoom_by(u, in->zoom_wheel > 0 ? 1 : -1), true;', '    if (in->zoom_wheel) return *out = ui_zoom_by(u, in->zoom_wheel > 0 ? 1 : -1), true;'),
+    ('ui/handle.c', 'ui_zoom_by(u, in->zoom_wheel > 0 ? 1 : -1)', 'ui_zoom_by(u, in->zoom_wheel)'),
+    ('ui/handle.c', 'ui_zoom_by(u, in->zoom_wheel > 0 ? 1 : -1)', 'ui_zoom_by(u, in->zoom_wheel > 0 ? -1 : 1)'),
+    ('ui/cursor.c', '    return ui_zoom(u, ui_zoom_level(u->zoom) + step);', '    return ui_zoom(u, ui_zoom_level(u->zoom) - step);'),
+    ('ui/handle.c', '        case UB_ZOOM_OUT: return *out = ui_zoom_by(u, -1), true;', ''),
+    ('ui/handle.c', '        case UB_ZOOM_IN: return *out = ui_zoom_by(u, 1), true;', ''),
+    ('ui/handle.c', '    case UK_ZOOM_IN: return *out = ui_zoom_by(u, 1), true;', ''),
+    ('ui/handle.c', '    case UK_ZOOM_OUT: return *out = ui_zoom_by(u, -1), true;', '    case UK_ZOOM_OUT: return *out = ui_zoom_by(u, 1), true;'),
     ('ui/handle.c', '    case UK_ZOOM_RESET: return *out = ui_zoom(u, ui_zoom_level(UI_ZOOM_DEFAULT)), true;', '    case UK_ZOOM_RESET: return *out = ui_zoom(u, 0), true;'),
     ('ui/cursor.c', "           in->zoom_wheel != 0 || in->zoom_to >= 0 ||", "           in->zoom_to >= 0 ||"),
     ('ui/cursor.c', "           in->zoom_wheel != 0 || in->zoom_to >= 0 ||", "           in->zoom_wheel != 0 ||"),
@@ -697,7 +693,7 @@ MUTANTS += [
     (TH, 'b = b + md5_rotl(a + f + K[i] + w[g], R[(i / 16) * 4 + i % 4]);', 'b = b + md5_rotl(a + f + K[i] + w[g], R[i % 4]);'),
     (TH, '    while (m.n % 64 != 56) md5_add(&m, "", 1);', '    while (m.n % 64 != 55) md5_add(&m, "", 1);'),
     (TH, '(m.s[i / 4] >> (8 * (i % 4))) & 0xff);', '(m.s[i / 4] >> (8 * (3 - i % 4))) & 0xff);'),
-    (TH, '    if (cap < 8) return false;\n', ''),
+    ('fs/paths.c', '    if (cap < 8) return false;\n    memcpy(out, "file://", 7);', '    memcpy(out, "file://", 7);'),
     (TH, '    while (l < THUMB_LEVELS - 1 && (128 << l) < px) l++;', '    while (l < THUMB_LEVELS - 1 && (128 << l) <= px) l++;'),
     (TH, '    while (l < THUMB_LEVELS - 1 && (128 << l) < px) l++;', '    while (l < THUMB_LEVELS && (128 << l) < px) l++;'),
     (TH, '        if (n > (u64)(png.len - i - 12)) return false;\n', ''),
@@ -705,8 +701,8 @@ MUTANTS += [
     (TH, '    return m->has_uri && strcmp(m->uri, uri) == 0 && m->has_mtime', '    return m->has_uri && m->has_mtime'),
     (TH, '&& m->has_mtime && m->mtime == mtime && (!m->has_size', '&& m->mtime == mtime && (!m->has_size'),
     (TH, ' && (!m->has_size || m->size == size);', ';'),
-    (TH, '    if (s.len == 0 || s.len > 18) return false;', '    if (s.len > 18) return false;'),
-    (TH, '        if (s.p[i] < \'0\' || s.p[i] > \'9\') return false;\n', ''),
+    ('fs/thumb.c', '    i64 v = s.len > 18 ? -1 :', '    i64 v = s.len > 19 ? -1 :'),
+    ('fs/thumb.c', '    return v >= 0 && (*out = v, true);', '    return (*out = v, true);'),
     (TH, '        r[0] = 4;', '        r[0] = 1;'),
     (TH, '    int fd = open(tmp, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0600);', '    int fd = open(tmp, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0644);'),
     (TH, '    bool ok = close(fd) == 0 && at == png.len && rename(tmp, file) == 0;', '    bool ok = close(fd) == 0 && at == png.len && link(tmp, file) == 0;'),
@@ -869,7 +865,7 @@ MUTANTS += [
     ('ui/cursor.c', "|| in->menu_title >= 0 || in->menu_item >= 0 || in->menu_away || in->ctx_row >= 0 || in->ctx_here || in->ctx_side >= 0 || in->ctx_crumb >= 0 || in->ctx_tab >= 0 || in->prop_box", " || in->menu_title >= 0 || in->menu_item >= 0 || in->ctx_row >= 0 || in->ctx_here || in->ctx_side >= 0 || in->ctx_crumb >= 0 || in->ctx_tab >= 0 || in->prop_box"),
     # Not a mutant: dropping O_EXCL in op_mkfile is inert without a race, as name_free picked a
     # name not there; kept so another program's file made in between is never truncated.
-    (O, "        if (!name_free(dir, name, false, false, false, made, cap) || !path_put(p, sizeof p, dir, str_from_c(made)))\n            return err_set(err, \"no free name for %.*s\", STR_ARG(name)), false;\n        if (!ops_allowed(p, err)) return false;\n        int fd", "        if (!name_free(dir, name, false, false, false, made, cap) || !path_put(p, sizeof p, dir, str_from_c(made)))\n            return err_set(err, \"no free name for %.*s\", STR_ARG(name)), false;\n        int fd"),
+    ('fs/ops.c', '        bool ok = kind == MAKE_DIR ? mkdir', '        bool ok = kind != MAKE_DIR ? mkdir'),
     (N, "            if (st.st_size != 0) return err_set(err, \"%s isn't empty now: can't undo\", it->to), false;", ""),
     (N, "            if (lstat(it->to, &st) != 0 || !S_ISREG(st.st_mode)) return err_set(err, \"%s isn't a file now: can't undo\", it->to), false;", ""),
     (N, "        case UNDO_MKFILE: one = ops_allowed(it->to, &e) && (unlink", "        case UNDO_MKFILE: one = (unlink"),
@@ -887,8 +883,7 @@ MUTANTS += [
     (W, "    return name[i] == 0 && i <= 10;", "    return i <= 10;"),
     (W, "    return name[i] == 0 && i <= 10;", "    return name[i] == 0;"),
     (W, "    if (n < 2 || buf[n - 1] != '\\n') return false;", "    if (n < 1) return false;"),
-    (W, "        if (buf[i] < '0' || buf[i] > '9' || v > INT64_MAX / 10 - 1) return false;", "        if (v > INT64_MAX / 10 - 1) return false;"),
-    (W, "        if (buf[i] < '0' || buf[i] > '9' || v > INT64_MAX / 10 - 1) return false;", "        if (buf[i] < '0' || buf[i] > '9') return false;"),
+    ('fs/windows.c', '    return v >= 0 && (*t = v, true);', '    return (*t = v, true);'),
     (W, "        if (!win_name(e->d_name)) continue;", ""),
     (W, "        if (n < 0) continue;   // not a regular file: not ofx's", ""),
     (W, "            if (errno == ESRCH) unlink(p);   // gone", ""),
@@ -901,14 +896,12 @@ MUTANTS += [
     ('ui/handle.c', "    for (int k = 0; k < in->nev && !u->quit_asking; k++)\n        if (in->ev[k].key == UK_QUIT) {", "    for (int k = 0; k < 0; k++)\n        if (in->ev[k].key == UK_QUIT) {"),
     ('ui/handle.c', "            if (in->jobs_all <= 0) return (UiAction){ UA_QUIT, 0, false };\n            u->quit_asking = true, u->cancel_asking = false;\n        }\n    // The panels", "            if (in->jobs_all < 0) return (UiAction){ UA_QUIT, 0, false };\n            u->quit_asking = true, u->cancel_asking = false;\n        }\n    // The panels"),
     ('ui/handle.c', "            u->quit_asking = true, u->cancel_asking = false;\n        }\n    // The panels", "            u->quit_asking = true;\n        }\n    // The panels"),
-    ('ui/edit.c', '    ui_edit_start(u, text, false);\n    u->edit.anchor = 0;', '    ui_edit_start(u, text, false);'),
     ('ui/edit.c', "    if (dot <= 1) return (int)name.len;", "    if (dot < 1) return (int)name.len;"),
     ('ui/edit.c', "    if (dot <= 1) return (int)name.len;", ""),
     ('ui/edit.c', "    if (dot > 4 && memcmp(name.p + dot - 4, \".tar\", 4) == 0) dot -= 4;", ""),
     ('ui/edit.c', "    if (dot > 4 && memcmp(name.p + dot - 4, \".tar\", 4) == 0) dot -= 4;", "    if (dot >= 4 && memcmp(name.p + dot - 4, \".tar\", 4) == 0) dot -= 4;"),
     ('ui/edit.c', "    while (dot > 0 && name.p[dot - 1] != '.') dot--;", "    while (dot > 0 && name.p[dot - 1] != '.') dot -= 2;"),
     ('ui/edit.c', '    if (!dir) u->edit.caret = ui_name_stem((Str){ u->edit.b, u->edit.len });', ''),
-    ('ui/edit.c', '    u->edit.anchor = 0;\n    if (!dir)', '    if (!dir)'),
     ('ui/handle.c', "names.dir && names.dir(names.ctx, l->sel));", "false);"),
     # ---- F7.1.1: the default app for a type
 ]
@@ -1006,8 +999,8 @@ MUTANTS += [
     ('ui/handle.c', '    if (on == UI_ON_PROPS && in->prop_box >= 0', '    if (u->panel == UI_PANEL_PROPS && in->prop_box >= 0'),
     ('ui/handle.c', '        return *out = u->prop_can ? (UiAction){ UA_CHMOD, in->prop_box, false } : UI_NONE, true;', '        return *out = (UiAction){ UA_CHMOD, in->prop_box, false }, true;'),
     ('ui/handle.c', '    if (on == UI_ON_PROPS && in->modal == UI_MODAL_OK) return ui_panel_close(u, UI_PANEL_PROPS), *out = UI_NONE, true;\n', ''),
-    ('ui/handle.c', '    case UK_PROPERTIES: return *out = ui_props_open(u), true;', ''),
-    ('ui/menus.c', '    case UM_PROPERTIES: return ui_props_open(u);', ''),
+    ('ui/handle.c', '    case UK_PROPERTIES: return *out = ui_props_open(u, UI_PROPS_MARKED), true;', ''),
+    ('ui/menus.c', '    case UM_PROPERTIES: return ui_props_open(u, UI_PROPS_MARKED);', ''),
     ('ui/cursor.c', "|| in->menu_away || in->ctx_row >= 0 || in->ctx_here || in->ctx_side >= 0 || in->ctx_crumb >= 0 || in->ctx_tab >= 0 || in->prop_box >= 0 ||\n", "|| in->menu_away || in->ctx_row >= 0 || in->ctx_here || in->ctx_side >= 0 || in->ctx_crumb >= 0 || in->ctx_tab >= 0 ||\n"),
     ('ui/ui.c', '.menu_item = -1, .ctx_row = -1, .ctx_side = -1, .ctx_crumb = -1, .ctx_tab = -1, .prop_box = -1, .pick_row = -1, .pick_drow = -1, .bmp_row = -1, .bmp_drow = -1,', '.menu_item = -1, .ctx_row = -1, .ctx_side = -1, .ctx_crumb = -1, .ctx_tab = -1, .prop_box = 0, .pick_row = -1, .pick_drow = -1, .bmp_row = -1, .bmp_drow = -1,'),
     ('ui/ui.c', '.menu_item = -1, .ctx_row = -1, .ctx_side = -1, .ctx_crumb = -1, .ctx_tab = -1, .prop_box = -1, .pick_row = -1, .pick_drow = -1, .bmp_row = -1, .bmp_drow = -1,', '.menu_item = -1, .ctx_row = -1, .ctx_side = -1, .ctx_crumb = -1, .ctx_tab = -1, .prop_box = -1, .pick_row = 0, .pick_drow = -1, .bmp_row = -1, .bmp_drow = -1,'),
@@ -1075,9 +1068,9 @@ MUTANTS += [
 
     ('ui/panels.c', '    if (u->ow.list.n == 0) return UI_NONE;\n    isize app', '    isize app'),
     ('ui/panels.c', '    case UK_TAB: p->in_list = !p->in_list; return UI_PICK_NONE;', ''),
-    ('ui/panels.c', '            if (l->sel == 0) p->in_list = false;\n            else ui_move(l, -1);', '            ui_move(l, -1);'),
-    ('ui/panels.c', 'p->in_list = false;\n            else ui_move(l, -1);\n            break;\n        case UK_HOME: ui_move(l, -l->n); break;\n        case UK_END: ui_move(l, l->n); break;', 'p->in_list = false;\n            else ui_move(l, -1);\n            break;\n        case UK_END: ui_move(l, l->n); break;'),
-    ('ui/panels.c', 'p->in_list = false;\n            else ui_move(l, -1);\n            break;\n        case UK_HOME: ui_move(l, -l->n); break;\n        case UK_END: ui_move(l, l->n); break;\n        case UK_PAGEUP: ui_move(l, -page); break;\n        case UK_PAGEDOWN:', 'p->in_list = false;\n            else ui_move(l, -1);\n            break;\n        case UK_HOME: ui_move(l, -l->n); break;\n        case UK_END: ui_move(l, l->n); break;\n        case UK_PAGEDOWN:'),
+    ('ui/panels.c', '        if (e.key == UK_UP && l->sel == 0) p->in_list = false;', '        if (0) p->in_list = false;'),
+    ('ui/cursor.c', '    case UK_HOME: ui_move(l, -l->n); return true;\n', ''),
+    ('ui/cursor.c', '    case UK_PAGEUP: ui_move(l, -page); return true;\n', ''),
     ('ui/panels.c', '            if (e.key == UK_NONE && ui_utf8(e.ch, (char[4]){ 0 }) == 0) break;\n            p->in_list = false, p->filter.caret', '            p->in_list = false, p->filter.caret'),
     ('ui/panels.c', '            p->in_list = false, p->filter.caret = p->filter.anchor = p->filter.len;\n', '            p->in_list = false;\n'),
 
@@ -1143,10 +1136,10 @@ MUTANTS += [
     ('fs/apps.c', '    if (!ops_allowed(list, err)) return false;\n    char t[256]', '    char t[256]'),
     ('fs/apps.c', '    if (late || strcmp(now, app) != 0) {', '    if (late) {'),
     ('fs/apps.c', '        return err_set(err, "%s", out[0] ? out : "gio didn\'t set it"), false;', '        return err_set(err, "gio didn\'t set it"), false;'),
-    ('ui/panels.c', "    if (e.key == UK_MENU && e.ch == 'd') {\n        if (u->ow_def_can) u->ow_def = !u->ow_def;", "    if (e.key == UK_MENU && e.ch == 'd') {\n        u->ow_def = !u->ow_def;"),
+    ('ui/panels.c', '    if (u->ow_def_can) u->ow_def = !u->ow_def;', '    u->ow_def = !u->ow_def;'),
     ('ui/panels.c', "    bool def = u->ow_def && u->ow_def_can;", "    bool def = u->ow_def;"),
     ('ui/panels.c', '    u->panel = UI_PANEL_OW, u->ow_def = false;', '    u->panel = UI_PANEL_OW;'),
-    ('ui/handle.c', '        if (in->toggle == UI_TOGGLE_ALWAYS) {\n            if (u->ow_def_can) u->ow_def = !u->ow_def;', '        if (in->toggle == UI_TOGGLE_ALWAYS) {\n            u->ow_def = !u->ow_def;'),
+    ('ui/handle.c', '        if (in->toggle == UI_TOGGLE_ALWAYS) {\n            ui_ow_def_flip(u);', '        if (in->toggle == UI_TOGGLE_ALWAYS) {\n            u->ow_def = !u->ow_def;'),
 ]
 # ---- the find bar (Michael, 2026-10-26)
 MUTANTS += [
@@ -1157,7 +1150,7 @@ MUTANTS += [
     ('ui/handle.c', '        if (in->job_n > 0) u->focus = UI_FOCUS_JOBS, u->job_at = 0;\n        return true;', '        return true;'),
     ('ui/handle.c', "    case UK_JOBS:\n        ui_find_leave(u);", "    case UK_JOBS:\n        ui_find_close(u);"),
     ('ui/handle.c', '        if (u->finding) u->focus = UI_FOCUS_FIND;', '        if (false) u->focus = UI_FOCUS_FIND;'),
-    ('ui/handle.c', '        if (u->focus == UI_FOCUS_FIND && u->finding && !prompt && ui_find_event(u, names, e, in)) continue;', '        if (u->finding && !prompt && ui_find_event(u, names, e, in)) continue;'),
+    ('ui/handle.c', '        if (u->focus == UI_FOCUS_FIND && u->finding && ui_find_event(u, names, e, in)) continue;', '        if (u->finding && ui_find_event(u, names, e, in)) continue;'),
     # (the magnifier's find bar toggle: the search's since F9, 2026-10-28)
     ('ui/handle.c', '        } else ui_find_close(u);', '        } else ui_find_leave(u);'),
     ('ui/handle.c', '        } else u->focus = UI_FIELD_FOCUS[in->field];', '        } else {}'),
@@ -1257,7 +1250,7 @@ MUTANTS += [
     ('ui/menus.c', '        u->menu_key = UI_MENU_ITEM[it].ev;\n        return UI_NONE;', '        return UI_NONE;'),
     ('ui/menus.c', '        u->sort.key = it == UM_SORT_NAME ? SORT_NAME : it == UM_SORT_SIZE ? SORT_SIZE : SORT_MTIME;', '        u->sort.key = it == UM_SORT_NAME ? SORT_NAME : SORT_MTIME;'),
     ('ui/menus.c', '    case UM_SIDE_NONE: return ui_side_mode(u, SIDE_HIDDEN);', '    case UM_SIDE_NONE: return ui_side_mode(u, SIDE_TREE);'),
-    ('ui/handle.c', '    case UK_TRASH_VIEW: return *out = (UiAction){ UA_TRASH_VIEW, 0, false }, true;', ''),
+    ('ui/handle.c', '{ UK_TRASH_VIEW, UA_TRASH_VIEW, 0, false, false },', '{ UK_NONE, UA_TRASH_VIEW, 0, false, false },'),
     ('ui/handle.c', '        if (files && shift_enter) return', '        if (files && false) return'),
     ('ui/handle.c', "        bool shift_enter = e.key == UK_SHIFT_ENTER;", "        bool shift_enter = false;"),
     # Not a mutant: the `continue` after a menu's own key is inert, the empty menu_key it falls into
@@ -1267,8 +1260,8 @@ MUTANTS += [
     ('ui/handle.c', "    for (int k = u->menu_key.key || u->menu_key.ch ? -1 : 0; k < in->nev;", "    for (int k = 0; k < in->nev;"),
     ('ui/handle.c', "        if (k < 0) u->menu_key = (UiEvent){ UK_NONE, 0 };", ""),
     ('ui/handle.c', '        for (isize i = 0; i < l->n; i++) ui_mark(u, i, !ui_marked(u, i));', '        for (isize i = 0; i < l->n; i++) ui_mark(u, i, true);'),
-    ('ui/handle.c', '    case UK_RELOAD: return *out = (UiAction){ UA_RELOAD, 0, false }, true;', ''),
-    ('ui/handle.c', '    case UK_HOMEDIR: return *out = (UiAction){ UA_HOMEDIR, 0, false }, true;', ''),
+    ('ui/handle.c', '{ UK_RELOAD, UA_RELOAD, 0, false, false },', '{ UK_NONE, UA_RELOAD, 0, false, false },'),
+    ('ui/handle.c', '    { UK_HOMEDIR, UA_HOMEDIR, 0, false, false },', '    { UK_NONE, UA_HOMEDIR, 0, false, false },'),
 ]
 # ---- F7.4: Select Items Matching
 MUTANTS += [
@@ -1386,7 +1379,7 @@ MUTANTS += [
     ('ui/menus.c', '    case UM_HERE_PROPS: return u->view != UI_VIEW_SEARCH;   // (a search is no folder)\n', ''),
     ('ui/menus.c', '    case UM_OPEN_TAB: return (UiAction){ UA_TAB_BG_ROW, u->list.sel, false };', ''),
     ('ui/menus.c', '    case UM_EMPTY_TRASH: return u->empty_asking = true, UI_NONE;', ''),
-    ('ui/menus.c', '    case UM_HERE_PROPS: return u->panel = UI_PANEL_PROPS, u->prop_at = 0, (UiAction){ UA_PROPS, UI_PROPS_HERE, false };', '    case UM_HERE_PROPS: return ui_props_open(u);'),
+    ('ui/menus.c', '    case UM_HERE_PROPS: return ui_props_open(u, UI_PROPS_HERE);', '    case UM_HERE_PROPS: return ui_props_open(u, UI_PROPS_MARKED);'),
     ('ui/menus.c', '    ui_unfocus(u, UI_FOCUS_SIDE), ui_unfocus(u, UI_FOCUS_CRUMBS), ui_unfocus(u, UI_FOCUS_JOBS);\n    u->ctx_one', '    u->ctx_one'),
     ('ui/menus.c', "    u->ctx_one = u->list.n > 0 && (u->marked == 0 || (u->marked == 1 && ui_marked(u, u->list.sel)));", "    u->ctx_one = u->list.n > 0 && u->marked <= 1;"),
     ('ui/menus.c', "    u->ctx_one = u->list.n > 0 && (u->marked == 0 || (u->marked == 1 && ui_marked(u, u->list.sel)));", "    u->ctx_one = u->list.n > 0 && u->marked == 0;"),
@@ -1413,9 +1406,8 @@ MUTANTS += [
     ('ui/menus.c', '    case UM_TERMINAL_IN: return (UiAction){ UA_TERMINAL, u->list.sel, true };', '    case UM_TERMINAL_IN: return (UiAction){ UA_TERMINAL, 0, true };'),
     ('ui/menus.c', '    case UM_BOOKMARK_IT: return (UiAction){ UA_ADD_BOOKMARK, u->list.sel, true };', '    case UM_BOOKMARK_IT: return (UiAction){ UA_ADD_BOOKMARK, u->list.sel, false };'),
     ('ui/menus.c', '    case UM_FOLLOW: return (UiAction){ UA_FOLLOW, u->list.sel, false };', ''),
-    (O, "        if (symlink(target, p) == 0) return true;", "        if (symlink(target, p) == 0) return false;"),
-    (O, "        if (!name_free(dir, name, false, false, false, made, cap) || !path_put(p, sizeof p, dir, str_from_c(made)))\n            return err_set(err, \"no free name for %.*s\", STR_ARG(name)), false;\n        if (!ops_allowed(p, err)) return false;\n        if (symlink", "        if (!name_free(dir, name, false, false, false, made, cap) || !path_put(p, sizeof p, dir, str_from_c(made)))\n            return err_set(err, \"no free name for %.*s\", STR_ARG(name)), false;\n        if (symlink"),
-    (O, "    if (!name_valid(name, err)) return false;\n    for (int tries = 0; tries < 5; tries++) {\n        char p[PATH_MAX];\n        if (!name_free(dir, name, false, false, false, made, cap) || !path_put(p, sizeof p, dir, str_from_c(made)))\n            return err_set(err, \"no free name for %.*s\", STR_ARG(name)), false;\n        if (!ops_allowed(p, err)) return false;\n        if (symlink", "    for (int tries = 0; tries < 5; tries++) {\n        char p[PATH_MAX];\n        if (!name_free(dir, name, false, false, false, made, cap) || !path_put(p, sizeof p, dir, str_from_c(made)))\n            return err_set(err, \"no free name for %.*s\", STR_ARG(name)), false;\n        if (!ops_allowed(p, err)) return false;\n        if (symlink"),
+    ('fs/ops.c', '                : kind == MAKE_LINK ? symlink(target, p) == 0', '                : kind == MAKE_LINK ? symlink(target, p) != 0'),
+    ('fs/ops.c', '    if (!name_valid(name, err)) return false;\n    for (int tries = 0; tries < 5; tries++) {\n        char p[PATH_MAX];\n        if (!name_free(dir, name, kind == MAKE_DIR', '    for (int tries = 0; tries < 5; tries++) {\n        char p[PATH_MAX];\n        if (!name_free(dir, name, kind == MAKE_DIR'),
     (N, "            if (k < 0 || !it->from || (at[k] = 0, strcmp(at, it->from) != 0)) return", "            if (k < 0) return"),
     (N, "        if (u->kind == UNDO_LINK) {\n            char at", "        if (false) {\n            char at"),
     (N, "        case UNDO_LINK:\n        case UNDO_MKFILE:", "        case UNDO_MKFILE:"),
@@ -1442,7 +1434,7 @@ MUTANTS += [
     ('ui/menus.c', '        case UM_BM_DOWN_IT: return (UiAction){ UA_BM_DOWN, u->ctx_bmk, false };', ''),
     ('ui/menus.c', '        case UM_BM_REMOVE_IT: return (UiAction){ UA_BM_REMOVE, u->ctx_bmk, false };', '        case UM_BM_REMOVE_IT: return (UiAction){ UA_BM_REMOVE, 0, false };'),
     ('ui/menus.c', '        case UM_EMPTY_IT: return u->empty_asking = true, UI_NONE;', ''),
-    ('ui/menus.c', '(UiAction){ UA_PROPS, UI_PROPS_CTX, false };', '(UiAction){ UA_PROPS, UI_PROPS_MARKED, false };'),
+    ('ui/menus.c', '        case UM_PROPS_IT: return ui_props_open(u, UI_PROPS_CTX);', '        case UM_PROPS_IT: return ui_props_open(u, UI_PROPS_MARKED);'),
     ('ui/menus.c', "    u->ctx_side = (int)side, u->ctx_crumb = crumb, u->ctx_key = keys;", "    u->ctx_side = (int)side, u->ctx_crumb = crumb;"),
     ('ui/menus.c', "    u->ctx_trash = u->ctx_place = u->ctx_bmed = u->ctx_eject = u->ctx_full = u->ctx_w = u->ctx_unmounted = false;\n", "    u->ctx_w = u->ctx_unmounted = false;\n"),
     ('ui/menus.c', "    u->ctx_bmk = -1, u->ctx_bms = 0;\n", ""),
@@ -1625,7 +1617,6 @@ MUTANTS += [
 
 
     ('ui/edit.c', '    return UI_TEXT_LINE(u->search, false);', '    return UI_TEXT_LINE(u->search, true);'),
-    ('ui/handle.c', 'u->view == UI_VIEW_SEARCH && !prompt &&\n            ui_search_event(u, e, in))', 'u->view == UI_VIEW_SEARCH &&\n            ui_search_event(u, e, in))'),
     ('ui/handle.c', '    UiLineHit h = ui_line_key(u, l, e, in->paste);\n    if (h == UI_LINE_CHANGED) u->search_edited = true;', '    UiLineHit h = ui_line_key(u, l, e, STR_EMPTY);\n    if (h == UI_LINE_CHANGED) u->search_edited = true;'),
 ]
 # ---- the find bar's field on the shared line (Michael, 2026-10-28)
@@ -1634,7 +1625,6 @@ MUTANTS += [
 
 
     ('ui/edit.c', '    return UI_TEXT_LINE(u->find, false);', '    return UI_TEXT_LINE(u->find, true);'),
-    ('ui/handle.c', '        if (u->focus == UI_FOCUS_FIND && u->finding && !prompt && ui_find_event(u, names, e, in)) continue;', '        if (u->focus == UI_FOCUS_FIND && u->finding && ui_find_event(u, names, e, in)) continue;'),
 ]
 # ---- Ctrl+C, Ctrl+X with nothing selected in the fields: the list's (review, 2026-10-28)
 MUTANTS += [
@@ -1670,7 +1660,7 @@ MUTANTS += [
     ('ui/panels.c', "        if (ui_line_key(u, ui_keys_line(u), e, paste) == UI_LINE_CHANGED) ui_keys_filter(u);", "        ui_line_key(u, ui_keys_line(u), e, paste);"),
     ('ui/panels.c', '        if (ui_line_key(u, ui_bmp_line(u), e, paste)) return UI_NONE;', ''),
     ('ui/handle.c', '    case UK_WORD_LEFT:   // (Ctrl+Left: a word in a text field, the sidebar here)', ''),
-    ('ui/handle.c', '    case UK_LOCATION: case UK_WORD_RIGHT: return *out = (UiAction){ UA_LOCATION, 0, false }, true;', '    case UK_LOCATION: return *out = (UiAction){ UA_LOCATION, 0, false }, true;'),
+    ('ui/handle.c', '{ UK_WORD_RIGHT, UA_LOCATION, 0, false, false },', '{ UK_NONE, UA_LOCATION, 0, false, false },'),
 ]
 
 # fs/paths.c (2026-10-28): the path helpers each fs/ file had its own copy of, and their callers.
@@ -1706,8 +1696,8 @@ MUTANTS += [
     ('fs/paths.c', '    *type = s1 < 0 ? rest : str_cut(rest, 0, s1);', '    *type = rest;'),
     ('fs/paths.c', '        *source = s2 < 0 ? src : str_cut(src, 0, s2);', '        *source = src;'),
     ('fs/paths.c', '    if (sp <= 0 || !octal_decode(str_cut(f, 0, sp), mp, cap)) return false;', '    if (!octal_decode(str_cut(f, 0, sp < 0 ? 0 : sp), mp, cap)) return false;'),
-    ('fs/ops.c', '    if (ops_resolve(path, r, sizeof r) && path_below(r, ops_root)) return true;', '    if (ops_resolve(path, r, sizeof r) && path_within(r, ops_root)) return true;'),
-    ('fs/ops.c', '    if (ops_resolve(path, r, sizeof r) && path_below(r, ops_root)) return true;', '    if (ops_resolve(path, r, sizeof r)) return true;'),
+    ('fs/guard.c', '    if (ops_resolve(path, r, sizeof r) && path_below(r, ops_root)) return true;', '    if (ops_resolve(path, r, sizeof r) && path_within(r, ops_root)) return true;'),
+    ('fs/guard.c', '    if (ops_resolve(path, r, sizeof r) && path_below(r, ops_root)) return true;', '    if (ops_resolve(path, r, sizeof r)) return true;'),
     ('fs/job.c', '    return path_within(d, s);', '    return path_below(d, s);'),
     ('fs/places.c', ' || path_below(mp, "/media") ||', ' ||'),
     ('fs/places.c', ' || (places_test_media[0] && path_below(mp, places_test_media)))', ')'),
@@ -1717,7 +1707,7 @@ MUTANTS += [
     ('fs/thumb.c', '    if (path_below(q->path, q->root)) return TG_NONE;', '    if (0) return TG_NONE;'),
     ('fs/thumb.c', '        if (!path_within(path, mp) || (isize)n < best || !t.len) continue;', '        if (!path_within(path, mp) || (isize)n <= best || !t.len) continue;'),
     ('fs/thumb.c', '        if (!path_within(path, mp) || (isize)n < best || !t.len) continue;', '        if ((isize)n < best || !t.len) continue;'),
-    ('fs/thumb.c', '    return percent_encode(str_from_c(path), "!$&\'()*+,=@:/", out + 7, cap - 7);', '    return percent_encode(str_from_c(path), "!$\'()*+,=@:/", out + 7, cap - 7);'),
+    ('fs/paths.c', '    return percent_encode(str_from_c(path), "!$&\'()*+,=@:/", out + 7, cap - 7);', '    return percent_encode(str_from_c(path), "!$\'()*+,=@:/", out + 7, cap - 7);'),
     ('fs/thumb.c', ' || !ops_allowed(file, &err) || !mkdir_p(file, 0700, false, &err)) return false;', ' || !mkdir_p(file, 0700, false, &err)) return false;'),
     ('fs/thumb.c', '!mkdir_p(file, 0700, false, &err)) return false;', '!mkdir_p(file, 0755, false, &err)) return false;'),
     ('fs/clean.c', '        if (path_within(path, m->mp) && (isize)m->n >= best) best', '        if (path_within(path, m->mp)) best'),
@@ -1743,15 +1733,15 @@ MUTANTS += [
     ('ui/ui.c', 'u->view == UI_VIEW_SEARCH ? UA_NOT_IN_SEARCH : UA_NONE, 0, false };', 'UA_NOT_IN_SEARCH, 0, false };'),
     ('ui/ui.c', '{ u->view == UI_VIEW_TRASH ? UA_NOT_IN_TRASH : u->view', '{ false ? UA_NOT_IN_TRASH : u->view'),
     ('ui/handle.c', '    if (u->view != UI_VIEW_SEARCH) return ui_view_act(u, (UiAction){ UA_SEARCH, 0, false });', '    if (u->view != UI_VIEW_SEARCH) return (UiAction){ UA_SEARCH, 0, false };'),
-    ('ui/handle.c', "        case 't': return *out = ui_view_act(u, (UiAction){ UA_TERMINAL, 0, false }), true;", "        case 't': return *out = (UiAction){ UA_TERMINAL, 0, false }, true;"),
-    ('ui/handle.c', '    case UK_ADD_BOOKMARK: return *out = ui_view_act(u, (UiAction){ UA_ADD_BOOKMARK, 0, false }), true;', '    case UK_ADD_BOOKMARK: return *out = (UiAction){ UA_ADD_BOOKMARK, 0, false }, true;'),
-    ('ui/handle.c', 'return *out = ui_view_act(u, (UiAction){ UA_COPY, 0, false }), true; break;', 'return *out = (UiAction){ UA_COPY, 0, false }, true; break;'),
-    ('ui/handle.c', 'return *out = ui_view_act(u, (UiAction){ UA_MAKE_LINK, 0, false }), true; break;', 'return *out = (UiAction){ UA_MAKE_LINK, 0, false }, true; break;'),
-    ('ui/handle.c', 'return *out = ui_view_act(u, (UiAction){ UA_CUT, 0, false }), true; break;', 'return *out = (UiAction){ UA_CUT, 0, false }, true; break;'),
-    ('ui/handle.c', '    case UK_PASTE: return *out = ui_view_act(u, (UiAction){ UA_PASTE, 0, false }), true;', '    case UK_PASTE: return *out = (UiAction){ UA_PASTE, 0, false }, true;'),
-    ('ui/handle.c', '    case UK_NEWFOLDER: return *out = ui_view_act(u, (UiAction){ UA_NEWFOLDER, 0, false }), true;', '    case UK_NEWFOLDER: return *out = (UiAction){ UA_NEWFOLDER, 0, false }, true;'),
-    ('ui/handle.c', '    case UK_NEW_WINDOW: return *out = ui_view_act(u, (UiAction){ UA_NEW_WINDOW, 0, false }), true;', '    case UK_NEW_WINDOW: return *out = (UiAction){ UA_NEW_WINDOW, 0, false }, true;'),
-    ('ui/handle.c', '    case UK_TERMINAL: return *out = ui_view_act(u, (UiAction){ UA_TERMINAL, 0, false }), true;', '    case UK_TERMINAL: return *out = (UiAction){ UA_TERMINAL, 0, false }, true;'),
+    ('ui/handle.c', "        case 't': key = UK_TERMINAL; break;", "        case 't': return false;"),
+    ('ui/handle.c', '{ UK_ADD_BOOKMARK, UA_ADD_BOOKMARK, 0, true, false },', '{ UK_ADD_BOOKMARK, UA_ADD_BOOKMARK, 0, false, false },'),
+    ('ui/handle.c', '{ UK_COPY, UA_COPY, 0, true, true },', '{ UK_COPY, UA_COPY, 0, false, true },'),
+    ('ui/handle.c', '{ UK_MAKE_LINK, UA_MAKE_LINK, 0, true, true },', '{ UK_MAKE_LINK, UA_MAKE_LINK, 0, false, true },'),
+    ('ui/handle.c', '{ UK_CUT, UA_CUT, 0, true, true },', '{ UK_CUT, UA_CUT, 0, false, true },'),
+    ('ui/handle.c', '{ UK_PASTE, UA_PASTE, 0, true, false },', '{ UK_PASTE, UA_PASTE, 0, false, false },'),
+    ('ui/handle.c', '    { UK_NEWFOLDER, UA_NEWFOLDER, 0, true, false },', '    { UK_NEWFOLDER, UA_NEWFOLDER, 0, false, false },'),
+    ('ui/handle.c', '{ UK_NEW_WINDOW, UA_NEW_WINDOW, 0, true, false },', '{ UK_NEW_WINDOW, UA_NEW_WINDOW, 0, false, false },'),
+    ('ui/handle.c', '    { UK_TERMINAL, UA_TERMINAL, 0, true, false },', '    { UK_TERMINAL, UA_TERMINAL, 0, false, false },'),
     ('ui/menus.c', '    case UM_NEW_WINDOW: return ui_view_allows(u->view, UA_NEW_WINDOW);', '    case UM_NEW_WINDOW: return true;'),
     ('ui/menus.c', '    case UM_COPY: return here && ui_view_allows(u->view, UA_COPY);', '    case UM_COPY: return here;'),
     ('ui/menus.c', '    case UM_SEARCH: return ui_view_allows(u->view, UA_SEARCH);', '    case UM_SEARCH: return true;'),
@@ -1828,8 +1818,8 @@ MUTANTS += [
     ('ui/handle.c', '    if (e.key == UK_TAB && u->search_inside) return', '    if (e.key == UK_TAB) return'),
     ('ui/handle.c', '    if (e.key == UK_TAB && u->search_inside) return u->focus = inside ? UI_FOCUS_SEARCH : UI_FOCUS_INSIDE,', '    if (e.key == UK_TAB && u->search_inside) return u->focus = UI_FOCUS_INSIDE,'),
     ('ui/handle.c', '    UiLine l = inside ? ui_inside_line(u) : ui_search_line(u);', '    UiLine l = ui_search_line(u);'),
-    ('ui/handle.c', "        if (u->view == UI_VIEW_SEARCH && !prompt && e.key == UK_MENU && e.ch == 'i') {", "        if (u->view == UI_VIEW_SEARCH && !prompt && e.key == UK_MENU && e.ch == 'x') {"),
-    ('ui/handle.c', "        if (u->view == UI_VIEW_SEARCH && !prompt && e.key == UK_MENU && e.ch == 'i') {", "        if (!prompt && e.key == UK_MENU && e.ch == 'i') {"),
+    ('ui/handle.c', "        if (u->view == UI_VIEW_SEARCH && e.key == UK_MENU && e.ch == 'i') {", "        if (u->view == UI_VIEW_SEARCH && e.key == UK_MENU && e.ch == 'x') {"),
+    ('ui/handle.c', "        if (u->view == UI_VIEW_SEARCH && e.key == UK_MENU && e.ch == 'i') {", "        if (e.key == UK_MENU && e.ch == 'i') {"),
     ('ui/handle.c', '(u->focus == UI_FOCUS_INSIDE && u->search_inside)) && u->view', 'u->focus == UI_FOCUS_INSIDE) && u->view'),
     ('ui/handle.c', '    } else if (!prompt && !u->menu_on && u->view == UI_VIEW_SEARCH && in->inside_btn) {', '    } else if (!prompt && u->view == UI_VIEW_SEARCH && in->inside_btn) {'),
     ('ui/handle.c', '    } else if (!prompt && !u->menu_on && u->view == UI_VIEW_SEARCH && in->inside_btn) {', '    } else if (!prompt && !u->menu_on && in->inside_btn) {'),
@@ -1979,9 +1969,9 @@ MUTANTS += [
     (PL, '        for (int k = 0; k < COUNT(NOT) && !skip; k++) skip = strncmp(e->d_name, NOT[k], strlen(NOT[k])) == 0;\n', ''),
     (SP, "                if (n > 1 && at[n - 1] == '.' && stat(at, &st) != 0) {", "                if (n > 1 && at[n - 1] == '.') {"),
     (SP, "                    if (stat(at, &st) != 0 || !S_ISDIR(st.st_mode)) at[n - 1] = '.';", ''),
-    ('fs/ops.c', '    if (prog_resolve(prog, full, sizeof full) && realpath(full, r) && path_below(r, ops_root)) return true;', '    if (prog_resolve(prog, full, sizeof full) && path_below(full, ops_root)) return true;'),
-    ('fs/ops.c', '    if (prog_resolve(prog, full, sizeof full) && realpath(full, r) && path_below(r, ops_root)) return true;', '    if (prog_resolve(prog, full, sizeof full)) return true;'),
-    ('fs/ops.c', '    if (!ops_root[0]) return true;\n    char full[PATH_MAX], r[PATH_MAX];', '    char full[PATH_MAX], r[PATH_MAX];'),
+    ('fs/guard.c', '    if (prog_resolve(prog, full, sizeof full) && realpath(full, r) && path_below(r, ops_root)) return true;', '    if (prog_resolve(prog, full, sizeof full) && path_below(full, ops_root)) return true;'),
+    ('fs/guard.c', '    if (prog_resolve(prog, full, sizeof full) && realpath(full, r) && path_below(r, ops_root)) return true;', '    if (prog_resolve(prog, full, sizeof full)) return true;'),
+    ('fs/guard.c', '    if (!ops_root[0]) return true;\n    char full[PATH_MAX], r[PATH_MAX];', '    char full[PATH_MAX], r[PATH_MAX];'),
 ]
 MUTANTS += [
     # sysfs's 4096-byte sizes (2026-10-30): read_file in sys_line's place gives nothing
@@ -1990,7 +1980,7 @@ MUTANTS += [
 ]
 MUTANTS += [
     # Unmount (2026-10-30)
-    (SP, '"udisksctl unmount -b \\"$1\\" && echo OFX-UNMOUNTED";', '"udisksctl unmount -b \\"$1\\" && echo OFX-UNMOUNTED && udisksctl power-off -b \\"$1\\"";'),
+    ('fs/spawn.c', '"\\"$2\\" unmount -b \\"$1\\" && echo OFX-UNMOUNTED";', '"\\"$2\\" unmount -b \\"$1\\" && echo OFX-UNMOUNTED && \\"$2\\" power-off -b \\"$1\\"";'),
     ('ui/menus.c', '    case UM_EJECT_IT: case UM_UNMOUNT_IT: return u->ctx_eject;', '    case UM_EJECT_IT: return u->ctx_eject;'),
 ]
 
@@ -2049,9 +2039,8 @@ MUTANTS += [
     (CF, '{ "preview-max-size", CK_SIZE, offsetof(Conf, preview_max),', '{ "preview-max-size", CK_SIZE, offsetof(Conf, clean_cap),'),
     (CF, '{ "previews", CK_BOOL, offsetof(Conf, previews),', '{ "previews", CK_BOOL, offsetof(Conf, clean),'),
     (CF, '    case CK_BOOL: return conf_bool(v, f);', '    case CK_BOOL: return false;'),
-    (CF, "            if (!is_digit(v.p[i]) || (n = n * 10 + (v.p[i] - '0')) > CONF_DAYS_MAX) return false;", "            if ((n = n * 10 + (v.p[i] - '0')) > CONF_DAYS_MAX) return false;"),
-    (CF, "            if (!is_digit(v.p[i]) || (n = n * 10 + (v.p[i] - '0')) > CONF_DAYS_MAX) return false;", "            if (!is_digit(v.p[i]) || (n = n * 10 + (v.p[i] - '0')) > CONF_DAYS_MAX + 1) return false;"),
-    (CF, '        return v.len && (*(i64 *)f = n, true);', '        return (*(i64 *)f = n, true);'),
+    ('fs/conf.c', '        return n >= 0 && (*(i64 *)f = n, true);', '        return (*(i64 *)f = n, true);'),
+    ('fs/conf.c', '        i64 n = str_num(v, CONF_DAYS_MAX);', '        i64 n = str_num(v, CONF_DAYS_MAX + 1);'),
     (CF, '        if (v.len >= CONF_LINE_MAX || c->neditor == EDITORS_USER) return false;', '        if (v.len > CONF_LINE_MAX || c->neditor == EDITORS_USER) return false;'),
     (CF, '        if (v.len >= CONF_LINE_MAX || c->neditor == EDITORS_USER) return false;', '        if (v.len >= CONF_LINE_MAX) return false;'),
     (CF, '        if (one.n != 1) return false;\n', ''),
@@ -2073,7 +2062,7 @@ MUTANTS += [
 MUTANTS += [
     # F10 review step 4: every launch through the test guard (2026-11-01)
     ('fs/spawn.c', '    if (!ops_program_allowed(check ? check : full, err)) return false;   // (the file found, not a second search)\n', '    (void)check;\n'),
-    ('fs/spawn.c', '    return strchr(prog, \'/\') ? snprintf(out, cap, "%s", prog) < (int)cap && exec_file(out) : path_find(prog, out, cap);', '    return path_find(prog, out, cap);'),
+    ('fs/guard.c', '    return strchr(prog, \'/\') ? snprintf(out, cap, "%s", prog) < (int)cap && exec_file(out) : path_find(prog, out, cap);', '    return path_find(prog, out, cap);'),
 ]
 # ---- F11 step 1: per-folder view, zoom, sort; Show Hidden; the cursor; housekeeping (2026-11-01)
 FO = 'fs/folders.c'
@@ -2349,7 +2338,7 @@ MUTANTS += [
     # F12 code-health step 1: fds, the program that runs, the second writable bind
     ('fs/sandbox.c', '        close_range(3, ~0U, 0);', '        (void)0;'),
     ('fs/spawn.c', '    posix_spawn_file_actions_addclosefrom_np(&fa, 3);\n', ''),
-    ('fs/spawn.c', '    return stat(path, &st) == 0 && S_ISREG(st.st_mode) && access(path, X_OK) == 0;', '    return access(path, X_OK) == 0;'),
+    ('fs/guard.c', '    return stat(path, &st) == 0 && S_ISREG(st.st_mode) && access(path, X_OK) == 0;', '    return access(path, X_OK) == 0;'),
     ('fs/spawn.c', '    int rc = posix_spawn(pid, full, &fa, &attr, argv, environ);', '    int rc = posix_spawnp(pid, argv[0], &fa, &attr, argv, environ);'),
     ('fs/git.c', '    if (binds.common[0] && !ops_allowed(binds.common, &err)) return', '    if (false) return'),
     ('fs/spawn.c', 'argv[2] = "\\"$2\\" unmount -b \\"$1\\" && echo OFX-UNMOUNTED && \\"$2\\" power-off -b \\"$1\\" && echo OFX-EJECTED";', 'argv[2] = "udisksctl unmount -b \\"$1\\" && echo OFX-UNMOUNTED && udisksctl power-off -b \\"$1\\" && echo OFX-EJECTED";'),
@@ -2390,7 +2379,7 @@ MUTANTS += [
     ('ui/menus.c', '    case UM_DELETE: return here && ui_allows(u, UA_DELETE);', '    case UM_DELETE: return here;'),
     # F12 code-health step 5 (K): the readers, commondir, git_job's writes, box_run's reasons, a run folder whole
     ('fs/paths.c', '    int fd = open(path, O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC);\n    if (fd < 0) return -1;', '    int fd = open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC);\n    if (fd < 0) return -1;'),
-    ('fs/paths.c', '    if (fstat(fd, st) == 0 && S_ISREG(st->st_mode) && st->st_size > 0 && st->st_size <= max &&', '    if (fstat(fd, st) == 0 && S_ISREG(st->st_mode) && st->st_size > 0 &&'),
+    ('fs/paths.c', ' || st->st_size > max ||', ' ||'),
     ('fs/git.c', '    if (rel[0] && realpath(at, r)) snprintf(out, cap, "%s", r);', '    (void)r;'),
     ('fs/git.c', '    if (writes) j->rw[0] = top, j->rw[1] = common;\n    else j->ro[3] = top, j->ro[4] = common;', '    j->ro[3] = top, j->ro[4] = common;'),
     ('fs/sandbox.c', '    if (nargs >= BOX_ARGS_MAX || !ops_program_allowed(argv[0], &err)) {', '    if (!ops_program_allowed(argv[0], &err)) {'),
@@ -2543,4 +2532,11 @@ MUTANTS += [
     ('fs/clip.c', '    return *cp == 0xfffd && j - i == 1 ? 0 : (int)(j - i);', '    return (int)(j - i);'),
     ('fs/clip.c', '    if (k < 0 || k >= cap - *n) return false;', '    if (k < 0) return false;'),
     ('fs/clip.c', '        u32 cp;\n        i += bad ? bad : utf8_at(s, i, &cp);', '        i++;'),
+]
+
+# Code-health step D (2026-11-06): move_merge doesn't visit an entry it left again (test_f3's
+# asks), and knows it by its name as well as its inode (the hard links that must still move).
+MUTANTS += [
+    ('fs/job.c', '            if (seen) continue;\n', ''),
+    ('fs/job.c', ' && left[k].name == name;', ';'),
 ]

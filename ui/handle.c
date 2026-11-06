@@ -628,12 +628,10 @@ static UiAction ui_handle_frame(Ui *u, UiNames names, const UiInput *in)
         }
         // A clash (the only thing left that can be on top: the questions and panels took theirs
         // above) takes its keys before any field's: K keeps all, the find bar's text doesn't type
-        // into it (code-health review, 2026-11-06: six fields asked !prompt for this). Shift
-        // doesn't change its keys, nor Enter.
+        // into it (code-health review, 2026-11-06: six fields asked !prompt for this). Its keys are
+        // letters and Esc, which Shift doesn't change.
         if (on == UI_ON_CLASH) {
-            UiEvent c = e;
-            c.key = c.key == UK_SHIFT_ENTER ? UK_ENTER : ui_unshift(c.key);
-            UiAction a = ui_ask_event(u, c);
+            UiAction a = ui_ask_event(u, e);
             if (a.kind != UA_NONE) return a;
             continue;
         }
