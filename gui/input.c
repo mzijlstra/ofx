@@ -557,7 +557,8 @@ static uint32_t drop_in_action(const Drop *d, uint32_t actions)
 
 // The action a drop of another program's files takes: a move only when the window's (a) and the
 // compositor's (c) both say so, else a copy (a copy loses nothing); either alone when the other has
-// none. Hyprland didn't send the action again after the window's answer (Michael's log, 2026-11-05:
+// none. (A drop the window refused, which Hyprland sends with c 0, the source told it was cancelled,
+// never comes here: dnd_drop gives it back.) Hyprland didn't send the action again after the window's answer (Michael's log, 2026-11-05:
 // Ctrl's copy in Nemo dropped as the move it had sent before the enter), and a compositor may change
 // it for keys the window doesn't see (review, 2026-11-06).
 static uint32_t drop_in_merge(uint32_t a, uint32_t c)
@@ -597,8 +598,7 @@ static bool drag_in_take(const ClipFiles *f, u32 id)
 
 // Each frame of another program's drag: over the window, found and answered as F13's drag is; let
 // go, dropped as one (copy, move, or the trash's move: drop_in_merge), and the source told; gone (a
-// leave, or its files not read yet), the drag ends. A drop that came before its files were read is
-// dragged and dropped once they are. True when what is drawn changed.
+// leave, or its files not read yet), the drag ends. True when what is drawn changed.
 static bool drag_in_poll(void)
 {
     float x, y;
@@ -620,8 +620,7 @@ static bool drag_in_poll(void)
     const ClipFiles *d = dnd_in_dropped(&x, &y, &actions, &act, &id);
     if (d) {
         bool done = false;
-        if (d->n > 0) drag_in_take(d, id);   // (dropped before it was read: dragged only now)
-        if (d->n > 0 && app.drag == DRAG_IN) {
+        if (app.drag == DRAG_IN && app.in_id == id) {   // (a drag of an earlier offer's files: not these)
             drop_find(x, y);
             act = drop_in_merge(drop_in_action(&app.drop, actions), act);
             UiDropOp op = app.drop.trash ? UI_DROP_TRASH : act == DND_MOVE ? UI_DROP_MOVE : UI_DROP_COPY;

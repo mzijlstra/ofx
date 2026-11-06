@@ -448,13 +448,14 @@ T=$base/keys; rm -rf "$T"; mkdir -p "$T/tree/adir" "$T/tree/bdir"; touch "$T/tre
 # 2026-10-28). Refused: a display with no test sway's socket file; an inherited WAYLAND_SOCKET; a
 # real test sway's socket while sway.pid names another process called sway (a copied sleep). The
 # real pid then works, so the refusals aren't for some other reason (no display at all refuses as
-# well: code-health review, 2026-11-06). Each tool's run: vkbd types b, vptr moves, dndpeer's window
-# is still there after a second; a refused dndpeer writes no log.
+# well: code-health review, 2026-11-06). Each tool's run: vkbd types b, vptr moves, dndpeer's log
+# says ready (it writes it after the guard; its window is stopped after a second).
+# A refused dndpeer writes no log.
 G=$T/guard; mkdir -p "$G/bin"
 guarded() {
     t=$1; shift
     case $t in
-    dndpeer) timeout 1 "$here/../../build/dndpeer" target "$G/peer.log"; [ $? = 124 ] ;;
+    dndpeer) timeout 1 "$here/../../build/dndpeer" target "$G/peer.log"; grep -q "^ready" "$G/peer.log" 2>/dev/null ;;
     vptr) "$here/../../build/vptr" move 10 10 ;;
     vkbd) "$here/../../build/vkbd" b ;;
     esac

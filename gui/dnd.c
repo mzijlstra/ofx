@@ -74,7 +74,6 @@ static struct {
     bool in_dropped;                      // in_offer was dropped: dnd_in_dropped hands it to the window
     bool in_ok;                           // the window's answer (dnd_in_answer), the action it takes
     uint32_t in_act;
-    bool in_took;                         // at the drop, the compositor had been told the window takes it
     uint32_t in_drop_actions, in_drop_c;  // the dropped offer's source actions, the compositor's action then
     float in_x, in_y;                     // where it was dropped
     int read_fd;
@@ -207,26 +206,24 @@ static void dnd_in_answer(bool ok, uint32_t action)
     if (dnd.over >= 0 && dnd.offers[dnd.over].o == dnd.in_offer) dnd_answer(), wl_display_flush(dnd.dpy);
 }
 
-// Another program's drop, once its read is done (it may end after the drop: the window then takes
-// the files only now): its files (none: nothing to drop), where, what its source allows, the action
-// the compositor settled on (0: none), and which offer (as dnd_in_over). The window then calls
-// dnd_in_finish.
+// Another program's drop, one the window had said it takes: its files, where, what its source
+// allows, the action the compositor settled on (0: none), and which offer (as dnd_in_over). The
+// window then calls dnd_in_finish.
 static const ClipFiles *dnd_in_dropped(float *x, float *y, uint32_t *actions, uint32_t *action, u32 *id)
 {
-    if (!dnd.in_dropped || !dnd.in_read) return NULL;
+    if (!dnd.in_dropped) return NULL;
     *x = dnd.in_x, *y = dnd.in_y, *actions = dnd.in_drop_actions, *action = dnd.in_drop_c, *id = dnd.in_id;
     return &dnd.got;
 }
 
 static void dnd_read_next(void);
 
-// The drop dealt with: told the source it is done (done: the files are taken, as a job; only when
-// the compositor had been told the window takes them, as finishing a drop it refused is untimely),
-// and given back.
+// The drop dealt with: told the source it is done (done: the files are taken, as a job), and given
+// back.
 static void dnd_in_finish(bool done)
 {
     if (!dnd.in_dropped) return;
-    if (done && dnd.in_took) wl_data_offer_finish(dnd.in_offer);
+    if (done) wl_data_offer_finish(dnd.in_offer);
     wl_data_offer_destroy(dnd.in_offer);
     wl_display_flush(dnd.dpy);
     DND_LOG("drop %s", done ? "taken" : "given back");
@@ -380,17 +377,19 @@ static void dnd_drop(void *data, struct wl_data_device *d)
         dnd.own_drops++, dnd.own_dropped = dnd.action != 0, dnd.own_x = dnd.x, dnd.own_y = dnd.y;
         return;
     }
-    // Another program's: kept for the window, once its read is done (dnd_in_dropped), even when it
-    // ends after the drop (sway never sends the drop of a drag the window refused; Hyprland does).
-    // Refused (no files, the window's answer no, or not read at all): given back.
-    if (o != dnd.in_offer || (dnd.in_read && (!dnd.got.n || !dnd.in_ok))) {
+    // Another program's: kept for the window (dnd_in_dropped) when the window had said it takes it.
+    // Refused (no files, the window's answer no, its read not done or another's still going): given
+    // back. sway never sends the drop of a drag the window refused, Hyprland does (with the
+    // compositor's action 0, the source then told it was cancelled): taking the files then would move
+    // them while their program is told nothing happened (review, 2026-11-06).
+    if (o != dnd.in_offer || !dnd.in_read || !dnd.got.n || !dnd.in_ok) {
         if (o == dnd.in_offer) dnd.in_offer = NULL;
         wl_data_offer_destroy(o);
         dnd.drops_failed++;
         dnd_read_next();
         return;
     }
-    dnd.in_dropped = true, dnd.in_took = dnd.in_read, dnd.in_x = dnd.x, dnd.in_y = dnd.y;
+    dnd.in_dropped = true, dnd.in_x = dnd.x, dnd.in_y = dnd.y;
     dnd.in_drop_actions = dnd.offers[i].actions, dnd.in_drop_c = dnd.action;
 }
 

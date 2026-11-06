@@ -838,7 +838,7 @@ Nemo's rule within the source's actions (`drop_in_action`: a move the source doe
 copy, the trash needs a move). Let go, it drops by the action the compositor settled on, as a paste
 job with its undo, and the source is told it is done (`finish`). Not read yet, not files (text, a
 web address), or another read still going: refused, and sway then cancels the drop instead of
-sending it (a drop that does come, as Hyprland may send, waits for its read: step 4's A). Ctrl and Shift go by
+sending it (a drop that does come, as Hyprland sends, is given back: step 4's A). Ctrl and Shift go by
 the source's own actions (Nemo changes them as its keys go down); the window's keys count too
 when it has the keyboard.
 Michael's hand check on Hyprland (2026-11-05): Nemo's move, the tab that opens, the Trash, as
@@ -853,11 +853,11 @@ pointer says "Only files can be dropped here".
 **Step 4, the code-health review (2026-11-06):** findings on
 https://claude.ai/artifact/UWtUA5He9hJzzfxVdUgJLb; Michael picked every cleanup step, A to G, each
 with its own commits, gates and reviewer-2 round.
-- **A, the read's lifecycle:** a drop that came before its read ended couldn't be dropped (its drag
-  never started) and, after a leave and an enter between two frames, the drag still going was the
-  earlier offer's, with its files. The window's drag now names its offer (`app.in_id`,
-  `drag_in_take`), and a drop that came early is dragged and dropped once its read ends (finished
-  only when the compositor had been told the window takes it). An offer that entered while another's
+- **A, the read's lifecycle:** a drop that came before its read ended waited for a read whose drag
+  could never start, and, after a leave and an enter between two frames, the drag still going was
+  the earlier offer's, with its files. The window's drag now names its offer (`app.in_id`,
+  `drag_in_take`), and a drop the window hadn't said it takes is given back at once: acting on it
+  would move files whose program was told the drag was cancelled (review, 2026-11-06). An offer that entered while another's
   read ran stayed refused until it left; now it is read when that one ends (`dnd_read_next`, dndj).
   The test tools' guard is proved against the keys group's sway for all three tools.
 - **B, the drag's state:** one `drop_reset` for the five places that forgot the target, the spring's

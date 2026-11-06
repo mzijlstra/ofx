@@ -980,7 +980,7 @@ MUTANTS = [
     ('gui/dnd.c', '    dnd.over = i, dnd.action = dnd.offers[i].action;\n    dnd_read_next();\n', '    dnd.over = i, dnd.action = dnd.offers[i].action;\n', 'dnd'),
     ('gui/dnd.c', '    bool ok = o == dnd.in_offer && dnd.in_read && dnd.got.n > 0 && dnd.in_ok;', '    bool ok = false;', 'dnd'),
     ('gui/dnd.c', '        dnd.reading = false, dnd.changed = true;   // (another enter may read now)', '        dnd.reading = false;', 'dnd'),
-    ('gui/dnd.c', '    if (done && dnd.in_took) wl_data_offer_finish(dnd.in_offer);\n', '', 'dnd'),
+    ('gui/dnd.c', '    if (done) wl_data_offer_finish(dnd.in_offer);\n', '', 'dnd'),
     ('gui/input.c', '    return op == UI_DROP_MOVE && (actions & DND_COPY) ? DND_COPY : 0;', '    return 0;', 'dnd'),
     ('gui/input.c', '    bool started = f && drag_in_take(f, id);', '    bool started = false;', 'dnd'),
     ('gui/input.c', ': act == DND_MOVE ? UI_DROP_MOVE : UI_DROP_COPY;', ': UI_DROP_MOVE;', 'dnd'),
@@ -998,11 +998,11 @@ MUTANTS = [
     # each motion): what they save is time, which no state word shows.
     # Not run: the drop's action when the window's answer and the compositor's differ (drop_in_merge,
     # a copy): Hyprland didn't send it again after the answer; sway does, so both agree there.
-    # Not run: a drop that came before its read ended (dnd_drop keeps it, drag_in_take starts the
-    # drag at the read's end, dnd_in_finish finishes it only when in_took), the read of the offer
-    # entered meanwhile (dnd_in_finish's and the refused drop's dnd_read_next), and the trash refused
-    # a copy-only source: sway sends no drop the window refused (Hyprland does), so no script reaches
-    # them. Nor drag_in_take ending an earlier offer's drag: a leave and the next enter between two
+    # Not run: a drop that came before its read ended, or that the window refused, given back
+    # (dnd_drop's `!dnd.in_read`), the read of the offer entered meanwhile (dnd_in_finish's and the
+    # refused drop's dnd_read_next), and the trash refused a copy-only source: sway sends no drop
+    # the window refused (Hyprland does), so no script reaches them. Nor drag_in_take ending an
+    # earlier offer's drag, or the drop's check of in_id: a leave and the next enter between two
     # frames, which no script can time.
     # Not run: drag_out telling raylib the button is up, and drag_release leaving DRAG_OUT alone:
     # a scripted window takes no compositor input, so only a hand check shows them.
