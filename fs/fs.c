@@ -5,6 +5,7 @@
 // tabs). Unity
 // build: included once by each binary, after base.
 #include "paths.c"
+#include "guard.c"    // (first after paths.c: every write and program after it asks it)
 #include "list.c"
 #include "mime.c"
 #include "icons.c"

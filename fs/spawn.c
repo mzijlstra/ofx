@@ -27,44 +27,7 @@ static void spawn_init(void)
     sigaction(SIGCHLD, &sa, NULL);
 }
 
-// Whether path is an executable file (not a folder: access(X_OK) passes one).
-static bool exec_file(const char *path)
-{
-    struct stat st;
-    return stat(path, &st) == 0 && S_ISREG(st.st_mode) && access(path, X_OK) == 0;
-}
-
-// The first executable file named prog in a PATH directory, into out; false when there is none (an
-// empty entry is skipped, not the working folder).
-static bool path_find(const char *prog, char *out, size_t cap)
-{
-    const char *path = getenv("PATH");
-    Str p = str_from_c(path ? path : "");
-    for (isize at = 0; at <= p.len;) {
-        isize e = at;
-        while (e < p.len && p.p[e] != ':') e++;
-        if (e > at && snprintf(out, cap, "%.*s/%s", (int)(e - at), p.p + at, prog) < (int)cap && exec_file(out)) return true;
-        at = e + 1;
-    }
-    return false;
-}
-
-// prog as it will run, into out: as given with a /, else as PATH finds it.
-static bool prog_resolve(const char *prog, char *out, size_t cap)
-{
-    return strchr(prog, '/') ? snprintf(out, cap, "%s", prog) < (int)cap && exec_file(out) : path_find(prog, out, cap);
-}
-
-// Whether prog is an executable file in a PATH directory.
-static bool on_path(const char *prog)
-{
-    char full[4096];
-    return path_find(prog, full, sizeof full);
-}
-
 static int spawn_started;   // programs started, for the GUI scripts' state line (spawned=)
-
-static bool ops_program_allowed(const char *prog, Err *err);
 
 // argv started (argv[0] looked up on PATH once, and that file run: the one the guard checked, not
 // another PATH search's; a review, 2026-11-03), in a session of its own, its signals unblocked

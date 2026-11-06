@@ -374,8 +374,6 @@ static bool conf_load(Arena *a, Conf *c)
     return there;
 }
 
-static bool ops_allowed(const char *path, Err *err);
-
 // The file ofx writes, at path, when there is none (at the start, and on Preferences): its folder
 // made, never one replaced (an existing file, or a link, is left as it is: true, nothing written).
 // Through the test guard.

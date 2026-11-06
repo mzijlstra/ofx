@@ -94,7 +94,7 @@ rules shared by every tool here.
   `~/.config/systemd/user/ofx-clean.{service,timer}` and runs `systemctl --user daemon-reload`;
   only Michael enables the timer.
 - **ofx changes files since F3:** rename, new folder, trash, delete for good, copy and move. Every
-  write in fs/ goes through `ops_allowed` (fs/ops.c), which refuses any path outside
+  write in fs/ goes through `ops_allowed` (fs/guard.c, included right after paths.c), which refuses any path outside
   `OFX_GUI_ROOT` when it is set: `run-script.sh` sets it to the run's scratch dir, the unit tests
   to their mkdtemp root. A guard test aims at a decoy beside that root, never at `/tmp` or a real
   folder, so a mutant that switches the guard off can only reach the decoy. Never start ofx in a
@@ -269,6 +269,8 @@ ui/ that nothing calls makes the test build warn.
 
 - `fs/`: the file system side; `fs/paths.c` holds the path helpers every other file uses
   (path_within, path_below, path_put, path_parent, xdg_dir, mkdir_p, the URI and mountinfo codecs);
+  `fs/guard.c` the test guard (`ops_allowed`, `ops_program_allowed`) and the PATH lookups it checks,
+  next, so every file after it has them;
   `fs/search.c` the search's address and walk, inside files too; `fs/editors.c` Open at Line's
   recipes; `fs/conf.c` ofx.conf (its options table, parser, written default, `conf_load`);
   `fs/places.c` the sidebar's places, unmounted drives too; `fs/clean.c` ofx-clean's rules;
