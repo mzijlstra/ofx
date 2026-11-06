@@ -284,8 +284,8 @@ ui/ that nothing calls makes the test build warn.
 - `gui/main.c`: memory, the app state, signals, main(); then `folder.c` (go_to, history, places),
   `actions.c` (act, changing files), `icons.c`, `files.c` (the list and sidebar drawn), `topbar.c`,
   `panels.c` (modal panels, Properties), `footer.c` (job rows, find and search bars, status),
-  `frame.c` (tooltips, layout, draw), `input.c` (keys, hit_at, hover, the drags: F13's inside the
-  window, F14's out and in), `dnd.c` (drags with other programs on the patched GLFW, F14),
+  `frame.c` (tooltips, layout, draw), `input.c` (keys, hit_at, hover; it includes `drag.c`, the
+  drags: F13's inside the window, F14's out and in), `dnd.c` (drags with other programs on the patched GLFW, F14),
   `clipboard.c` (the system clipboard, ext-data-control), `prefs.c` (ofx.conf read
   and applied, Edit → Preferences…), `eject.c` (udisksctl mount, unmount, eject), `remember.c`
   (per folder view, zoom, sort and cursor, F11), `restore.c` (the tabs across a restart and a

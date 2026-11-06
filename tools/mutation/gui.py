@@ -214,7 +214,7 @@ MUTANTS = [
     ('gui/frame.c', '        { UB_ZOOM_OUT, "Smaller icons (Ctrl+-)" }, { UB_ZOOM_IN, "Bigger icons (Ctrl+=)" },', '        { UB_ZOOM_OUT, "Smaller icons (Ctrl+-)" },'),
     # the hover for the pointer where it is (Michael, 2026-10-24)
     ('gui/input.c', "    return on && !keys_since_pointer ? hover_at(x, y) : hover_at(-1e6f, -1e6f);", "    return hover_at(x, y);"),
-    (G, "            if (scripted ? script.pointing && hover_refresh(true, script.px, script.py) : hover_refresh(IsCursorOnScreen(), m.x, m.y))\n                dirty = true, glfwPostEmptyEvent();\n", ""),
+    (G, "            if (scripted && !script.user_pointer ? script.pointing && hover_refresh(true, script.px, script.py) : hover_refresh(IsCursorOnScreen(), m.x, m.y))\n                dirty = true, glfwPostEmptyEvent();\n", ""),
     # a full icon cache at a zoom (F6.3 review)
     (G, "        if (app.icons_missed && app.icons_reset_armed) icons_reset()", "        if (app.icons_missed) icons_reset()"),
     ('gui/actions.c', "        app.icons_reset_armed = true;   // the other", "        ;   // the other"),
@@ -902,18 +902,18 @@ MUTANTS = [
     ('gui/input.c', ' && h.row >= 0 && app.ui.view != UI_VIEW_TRASH && app.have_list', ' && h.row >= 0 && app.have_list', 'f13'),
     ('gui/input.c', '        app.drag_side = in->side_click, in->side_click = -1;', '        app.drag_side = in->side_click;', 'f13'),
     ('gui/input.c', '    if (app.drag == DRAG_PRESS && app.drag_tree) in->side_click = app.drag_side;\n', '', 'f13'),
-    ('gui/input.c', ' drag_arm(x, y, str_from_c(p), ui_marked(&app.ui, i), false,', ' drag_arm(x, y, str_from_c(p), false, false,', 'f13'),
-    ('gui/input.c', ' || !S_ISDIR(ds.st_mode) || access(dir, W_OK) != 0 || !realpath(dir, real)) return false;', ' || !S_ISDIR(ds.st_mode) || !realpath(dir, real)) return false;', 'f13'),
-    ('gui/input.c', '        if (dragged_real[i] && ui_under(str_from_c(real), str_from_c(dragged_real[i]))) return false;', '        {}', 'f13'),
-    ('gui/input.c', '        if (dragged_real[i] && ui_under(str_from_c(real), str_from_c(dragged_real[i]))) return false;', '        if (ui_under(str_from_c(dir), str_from_c(dragged.path[i]))) return false;', 'f13'),
-    ('gui/input.c', '    drag_real();\n    return dragged.n > 0;', '    return dragged.n > 0;', 'f13'),
-    ('gui/input.c', '    *same_drive = lstat(dragged.path[0], &fs) == 0 && fs.st_dev == ds.st_dev;', '    *same_drive = false;', 'f13'),
-    ('gui/input.c', '        dir = h.tab == tabbar.cur ? (shown ? app.cwd : NULL) : tabs[tabbar.slot[h.tab]].dir;', '        dir = app.cwd;', 'f13'),
-    ('gui/input.c', '        d.trash = dir && strcmp(dir, TRASH_URI) == 0;', '        d.trash = false;', 'f13'),
-    ('gui/input.c', '        snprintf(buf, sizeof buf, "%.*s", STR_ARG(ui_crumb_path(&app.crumbs, h.crumb)));', '        snprintf(buf, sizeof buf, "%s", app.cwd);', 'f13'),
-    ('gui/input.c', '    d.ok = dir && (d.trash || drop_takes(d.dir, &d.same_drive));', '    d.ok = dir != NULL;', 'f13'),
-    ('gui/input.c', '    if (esc) drag_cancel();', '', 'f13'),
-    ('gui/input.c', '    in->nev = 0;\n    if (esc)', '    if (esc)', 'f13'),
+    ('gui/drag.c', ' drag_arm(x, y, str_from_c(p), ui_marked(&app.ui, i), false,', ' drag_arm(x, y, str_from_c(p), false, false,', 'f13'),
+    ('gui/drag.c', ' || !S_ISDIR(ds.st_mode) || access(dir, W_OK) != 0 || !realpath(dir, real)) return false;', ' || !S_ISDIR(ds.st_mode) || !realpath(dir, real)) return false;', 'f13'),
+    ('gui/drag.c', '        if (dragged_real[i] && ui_under(str_from_c(real), str_from_c(dragged_real[i]))) return false;', '        {}', 'f13'),
+    ('gui/drag.c', '        if (dragged_real[i] && ui_under(str_from_c(real), str_from_c(dragged_real[i]))) return false;', '        if (ui_under(str_from_c(dir), str_from_c(dragged.path[i]))) return false;', 'f13'),
+    ('gui/drag.c', '    drag_real();\n    return dragged.n > 0;', '    return dragged.n > 0;', 'f13'),
+    ('gui/drag.c', '    *same_drive = lstat(dragged.path[0], &fs) == 0 && fs.st_dev == ds.st_dev;', '    *same_drive = false;', 'f13'),
+    ('gui/drag.c', '        dir = h.tab == tabbar.cur ? (shown ? app.cwd : NULL) : tabs[tabbar.slot[h.tab]].dir;', '        dir = app.cwd;', 'f13'),
+    ('gui/drag.c', '        d.trash = dir && strcmp(dir, TRASH_URI) == 0;', '        d.trash = false;', 'f13'),
+    ('gui/drag.c', '        snprintf(buf, sizeof buf, "%.*s", STR_ARG(ui_crumb_path(&app.crumbs, h.crumb)));', '        snprintf(buf, sizeof buf, "%s", app.cwd);', 'f13'),
+    ('gui/drag.c', '    d.ok = dir && (d.trash || drop_takes(d.dir, &d.same_drive));', '    d.ok = dir != NULL;', 'f13'),
+    ('gui/drag.c', '    if (esc) drag_cancel();', '', 'f13'),
+    ('gui/drag.c', '    in->nev = 0;\n    if (esc)', '    if (esc)', 'f13'),
     ('gui/input.c', '    if (app.drag == DRAG_FILES && app.drop.ok) drop_do(&app.drop);', '    if (app.drag == DRAG_FILES) drop_do(&app.drop);', 'f13'),
     ('gui/input.c', '        if (!ui_drag_past(x - app.drag_x0, y - app.drag_y0)) return false;', '        if (false) return false;', 'f13'),
     ('gui/input.c', '        app.press.row = -1;   // (a drag', '        (void)0;   // (a drag', 'f13'),
@@ -925,11 +925,11 @@ MUTANTS = [
     ('gui/frame.c', '    if (app.drop.ok && e.found) {', '    if (e.found) {', 'f13'),
     ('gui/frame.c', '    badge_drawn = true, badge_op = app.drop.ok ? OPS[drop_op(&app.drop)] : NULL;', '    badge_drawn = true, badge_op = OPS[drop_op(&app.drop)];', 'f13'),
     # F13 step 4 (2026-11-04): spring-loaded tabs (f13g)
-    ('gui/input.c', '    int spring = d.kind == DROP_TAB && d.at != tabbar.cur ? d.at : -1;', '    int spring = d.kind == DROP_TAB ? d.at : -1;', 'f13'),
-    ('gui/input.c', 'app.spring_at = spring >= 0 ? now_ms() : 0, timer_at', 'app.spring_at = 0, timer_at', 'f13'),
-    ('gui/input.c', ' || app.spring_tab < 0 || now_ms() < app.spring_at + UI_SPRING_MS) return false;', ' || app.spring_tab < 0) return false;', 'f13'),
-    ('gui/input.c', '    tab_show(app.spring_tab);\n', '', 'f13'),
-    ('gui/input.c', ' .at = at }, app.spring_tab = -1;\n}', ' .at = at };\n}', 'f13'),
+    ('gui/drag.c', '    int spring = d.kind == DROP_TAB && d.at != tabbar.cur ? d.at : -1;', '    int spring = d.kind == DROP_TAB ? d.at : -1;', 'f13'),
+    ('gui/drag.c', 'app.spring_at = spring >= 0 ? now_ms() : 0, timer_at', 'app.spring_at = 0, timer_at', 'f13'),
+    ('gui/drag.c', ' || app.spring_tab < 0 || now_ms() < app.spring_at + UI_SPRING_MS) return false;', ' || app.spring_tab < 0) return false;', 'f13'),
+    ('gui/drag.c', '    tab_show(app.spring_tab);\n', '', 'f13'),
+    ('gui/drag.c', ' .at = at }, app.spring_tab = -1;\n}', ' .at = at };\n}', 'f13'),
     ('gui/main.c', '        if (spring_tick() || (files_over()', '        if ((files_over()', 'f13'),
     ('gui/frame.c', '    if (bx + w > (float)GetScreenWidth()) bx = app.drag_px - 14 - w;\n', '', 'f13'),
     # F13 code-health step A (2026-11-04)
@@ -960,28 +960,28 @@ MUTANTS = [
     ('gui/dnd.c', '    if (button == BTN_LEFT) dnd.press = state == WL_POINTER_BUTTON_STATE_PRESSED ? serial : 0', '    if (button == BTN_LEFT) dnd.press = 0', 'dnd'),
     # F14 step 2 (2026-11-05): files dragged past the window's edge go out; ours back over it drop as inside
     ('gui/input.c', '    if ((x < 0 || y < 0 || x >= (float)GetScreenWidth() || y >= (float)GetScreenHeight()) && drag_out()) return true;', '', 'dnd'),
-    ('gui/input.c', '    if (!dnd_start(&dragged, app.drag_mods & UI_MOD_SHIFT, have', '    if (!dnd_start(&dragged, false, have', 'dnd'),
-    ('gui/input.c', '    bool have = dnd_can_start() && drag_image(&im);', '    bool have = false;', 'dnd'),
-    ('gui/input.c', '        dnd_own_answer(app.drop.ok, op != UI_DROP_COPY);', '        dnd_own_answer(false, op != UI_DROP_COPY);', 'dnd'),
-    ('gui/input.c', '        dnd_own_answer(app.drop.ok, op != UI_DROP_COPY);', '        dnd_own_answer(true, op != UI_DROP_COPY);', 'dnd'),
-    ('gui/input.c', '        if (app.drop.ok) drop_do(&app.drop);\n        app.out_own = true;', '        app.out_own = true;', 'dnd'),
-    ('gui/input.c', '        if (dragged.n == 1) set_status(false, "%s %s to another program"', '        if (false) set_status(false, "%s %s to another program"', 'dnd'),
-    ('gui/input.c', '    if (app.drag == DRAG_OUT) dnd_cancel();\n', '', 'dnd'),
+    ('gui/drag.c', '    if (!dnd_start(&dragged, app.drag_mods & UI_MOD_SHIFT, have', '    if (!dnd_start(&dragged, false, have', 'dnd'),
+    ('gui/drag.c', '    bool have = dnd_can_start() && drag_image(&im);', '    bool have = false;', 'dnd'),
+    ('gui/drag.c', '        dnd_own_answer(app.drop.ok, op != UI_DROP_COPY);', '        dnd_own_answer(false, op != UI_DROP_COPY);', 'dnd'),
+    ('gui/drag.c', '        dnd_own_answer(app.drop.ok, op != UI_DROP_COPY);', '        dnd_own_answer(true, op != UI_DROP_COPY);', 'dnd'),
+    ('gui/drag.c', '        if (app.drop.ok) drop_do(&app.drop);\n        app.out_own = true;', '        app.out_own = true;', 'dnd'),
+    ('gui/drag.c', '        if (dragged.n == 1) set_status(false, "%s %s to another program"', '        if (false) set_status(false, "%s %s to another program"', 'dnd'),
+    ('gui/drag.c', '    if (app.drag == DRAG_OUT) dnd_cancel();\n', '', 'dnd'),
     ('gui/dnd.c', '(void)serial, (void)s; dnd.press = 0; }\nstatic void dnd_ptr_motion', '(void)serial, (void)s; }\nstatic void dnd_ptr_motion', 'dnd'),
     # F14 step 3 (2026-11-05): files dropped in from other programs
     ('gui/dnd.c', '    dnd.over = i, dnd.action = dnd.offers[i].action;\n    dnd_read_next();\n', '    dnd.over = i, dnd.action = dnd.offers[i].action;\n', 'dnd'),
     ('gui/dnd.c', '    bool ok = o == dnd.in_offer && dnd.in_read && dnd.got.n > 0 && dnd.in_ok;', '    bool ok = false;', 'dnd'),
     ('gui/dnd.c', '        dnd.reading = false, dnd.changed = true;   // (another enter may read now)', '        dnd.reading = false;', 'dnd'),
     ('gui/dnd.c', '    if (done) wl_data_offer_finish(dnd.in_offer);\n', '', 'dnd'),
-    ('gui/input.c', '    bool started = f && drag_in_take(f, id);', '    bool started = false;', 'dnd'),
-    ('gui/input.c', '    if (!files_over() || app.spring_tab < 0 || now_ms() < app.spring_at + UI_SPRING_MS) return false;', '    if (app.drag != DRAG_FILES || app.spring_tab < 0 || now_ms() < app.spring_at + UI_SPRING_MS) return false;', 'dnd'),
+    ('gui/drag.c', '    bool started = f && drag_in_take(f, id);', '    bool started = false;', 'dnd'),
+    ('gui/drag.c', '    if (!files_over() || app.spring_tab < 0 || now_ms() < app.spring_at + UI_SPRING_MS) return false;', '    if (app.drag != DRAG_FILES || app.spring_tab < 0 || now_ms() < app.spring_at + UI_SPRING_MS) return false;', 'dnd'),
     ('gui/dnd.c', '    if (none) *x = dnd.x, *y = dnd.y;\n    return none;', '    return false;', 'dnd'),
     # Code-health step A (2026-11-06): the read's lifecycle. An offer entered while another's read
     # runs is read when that one ends (dndj).
     ('gui/dnd.c', '        dnd_read_next();   // (the offer entered while it ran)\n', '', 'dnd'),
     # Code-health step B (2026-11-06): the spring forgotten as a drag out leaves the window again
     # (dndk), keys swallowed during another program's drag (dnd), the badge's icon by its key (f13h).
-    ('gui/input.c', '        drop_reset(-1), dnd_own_answer(false, false);', '        app.drop = (Drop){ .kind = DROP_NONE, .at = -1 }, dnd_own_answer(false, false);', 'dnd'),
+    ('gui/drag.c', '        drop_reset(-1), dnd_own_answer(false, false);', '        app.drop = (Drop){ .kind = DROP_NONE, .at = -1 }, dnd_own_answer(false, false);', 'dnd'),
     ('gui/main.c', ' || app.drag == DRAG_OUT || app.drag == DRAG_IN;\n}\n\n// A drag with another program', ' || app.drag == DRAG_OUT;\n}\n\n// A drag with another program', 'dnd'),
     ('gui/icons.c', '    snprintf(app.drag_icon, sizeof app.drag_icon, "%.*s", STR_ARG(key));\n', '', 'f13'),
     # Not run: drag_out's out_failed and dnd_can_start (a hand-off that can't start not tried again
@@ -995,7 +995,7 @@ MUTANTS = [
     # Code-health step E (2026-11-06): the source's actions, the both-agree merge and the Trash's move
     # are ui/'s now (ui_dnd_action, ui_dnd_merge, ui_dnd_drop), mutated by run.py and killed by
     # tests/test_f14.c; the merge's disagreeing case, which sway never shows, among them.
-    ('gui/input.c', '    return d->ok ? ui_dnd_action(drop_op(d), actions) : 0;', '    return d->ok ? UI_DND_COPY : 0;', 'dnd'),
+    ('gui/drag.c', '    return d->ok ? ui_dnd_action(drop_op(d), actions) : 0;', '    return d->ok ? UI_DND_COPY : 0;', 'dnd'),
     # Not run: a drop that came before its read ended, or that the window refused, given back
     # (dnd_drop's `!dnd.in_read`), the read of the offer entered meanwhile (dnd_in_finish's and the
     # refused drop's dnd_read_next), and the trash refused a copy-only source: sway sends no drop
@@ -1005,7 +1005,7 @@ MUTANTS = [
     # drag_out telling raylib the button is up: dndd's real press after the drag (`user-pointer`,
     # code-health step G, 2026-11-06). Not run: drag_release leaving DRAG_OUT alone (the scripted
     # drag's synthetic release ends a drag out the compositor still carries: a hand check).
-    ('gui/input.c', '    if (raylib_button) raylib_button(glfwGetCurrentContext(), GLFW_MOUSE_BUTTON_LEFT, GLFW_RELEASE, 0);\n', '', 'dnd'),
+    ('gui/drag.c', '    if (raylib_button) raylib_button(glfwGetCurrentContext(), GLFW_MOUSE_BUTTON_LEFT, GLFW_RELEASE, 0);\n', '', 'dnd'),
     # Nor own_dropped's `action != 0` and drag_out_poll's `drop.ok`: sway never sends the drop of a
     # drag its target refused (dnde's refused step), Hyprland does, with action 0.
     # Not run either: an offer's action kept by its slot (dnd_offer_action). Hyprland sends it before

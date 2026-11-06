@@ -887,6 +887,11 @@ with its own commits, gates and reviewer-2 round.
   `str_num` for conf's days and zoom, the theme's ini numbers, a preview's numbers and the window
   registry's; one `file_uri` (GLib's escapes) for the previews, the bookmarks, the clipboard and
   the drags; `file_read_fd` under `file_read_at` and `read_file`.
+- **G, the structure:** `UI_KEY_ACTS`, a row for each key that only asks for an action; the test
+  guard in fs/guard.c, first after paths.c; the drags out of input.c into gui/drag.c; a
+  `user-pointer` script mode (vptr's presses reach the window as a user's, so dndd's check after a
+  drag out is real); the drag words out of `script_state`; the dnd group as a loop. Left out: a
+  script include for the drag-out prelude (four lines with a row that varies).
 
 **Michael's answers (2026-11-05):**
 - **Scope:** out, and files in (both in F14, out first).
