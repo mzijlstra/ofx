@@ -30,18 +30,18 @@ static void test_thumb_names(void)
 {
     char uri[PATH_MAX * 3], file[PATH_MAX];
     // As `gio info` printed it for this name (2026-10-24).
-    CHECK(thumb_uri("/a !\"#$%&'()*+,;<=>?@[\\]^`{|}~\xc3\xa9", uri, sizeof uri));
+    CHECK(file_uri("/a !\"#$%&'()*+,;<=>?@[\\]^`{|}~\xc3\xa9", uri, sizeof uri));
     CHECK_STR(str_from_c(uri), "file:///a%20!%22%23$%25&'()*+,%3B%3C=%3E%3F@%5B%5C%5D%5E%60%7B%7C%7D~%C3%A9");
-    CHECK(thumb_uri("/x/A-z_0.9", uri, sizeof uri));
+    CHECK(file_uri("/x/A-z_0.9", uri, sizeof uri));
     CHECK_STR(str_from_c(uri), "file:///x/A-z_0.9");
-    CHECK(thumb_uri("/\x01\x7f\xff", uri, sizeof uri));
+    CHECK(file_uri("/\x01\x7f\xff", uri, sizeof uri));
     CHECK_STR(str_from_c(uri), "file:///%01%7F%FF");
     // Too small a buffer: refused, never cut (a cut URI names another file).
-    CHECK(!thumb_uri("/abc", uri, 11) && thumb_uri("/abc", uri, 12));
-    CHECK(!thumb_uri("/ab ", uri, 13) && thumb_uri("/ab ", uri, 14));
-    CHECK(!thumb_uri("", uri, 7) && thumb_uri("", uri, 8));
+    CHECK(!file_uri("/abc", uri, 11) && file_uri("/abc", uri, 12));
+    CHECK(!file_uri("/ab ", uri, 13) && file_uri("/ab ", uri, 14));
+    CHECK(!file_uri("", uri, 7) && file_uri("", uri, 8));
     // A name Nemo wrote in Michael's large/ (seen 2026-10-24): the URI's MD5 is the file's name.
-    CHECK(thumb_uri("/home/mzijlstra/Downloads/cpt_report_CS574.pdf", uri, sizeof uri));
+    CHECK(file_uri("/home/mzijlstra/Downloads/cpt_report_CS574.pdf", uri, sizeof uri));
     CHECK(thumb_file("/c/thumbnails", "large", uri, file, sizeof file));
     CHECK_STR(str_from_c(file), "/c/thumbnails/large/003931868899a9ba56c6e378b18d3bd4.png");
     CHECK(!thumb_file("/c/thumbnails", "large", uri, file, 40));
@@ -213,6 +213,7 @@ static void test_png_meta(void)
     i64 v;
     CHECK(parse_i64(S("0"), &v) && v == 0 && parse_i64(S("123456789012345678"), &v) && v == 123456789012345678LL);
     CHECK(!parse_i64(S(""), &v) && !parse_i64(S("-1"), &v) && !parse_i64(S("12a"), &v) && !parse_i64(S("1234567890123456789"), &v));
+    CHECK(!parse_i64(S("0000000000000000001"), &v));   // (nineteen digits, zeros too: review, 2026-11-06)
 }
 
 static void test_thumb_decode(void)
@@ -342,7 +343,7 @@ static ThumbAsk ask(const char *path, ThumbKind k, int px, const char *cache)
 static bool cached_fresh(Arena *a, const char *cache, const char *dir, const char *path, int *w, int *h)
 {
     char uri[PATH_MAX * 3], file[PATH_MAX];
-    thumb_uri(path, uri, sizeof uri);
+    file_uri(path, uri, sizeof uri);
     thumb_file(cache, dir, uri, file, sizeof file);
     struct stat st;
     ThumbMeta m;
@@ -421,7 +422,7 @@ static void test_thumb_get(void)
     put(pdf, "%PDF-1.4");
     set_mtime(pdf, 1700000000);
     char uri[PATH_MAX * 3], file[PATH_MAX];
-    thumb_uri(pdf, uri, sizeof uri);
+    file_uri(pdf, uri, sizeof uri);
     thumb_file(cache, "large", uri, file, sizeof file);
     Str nemo;
     CHECK(png_encode(&a, halves(&a, 181, 256), uri, 1700000000, 0, &nemo));
@@ -457,7 +458,7 @@ static void test_thumb_get(void)
     q = (ThumbAsk){ .path = gone, .mtime = 5, .size = 5, .kind = TK_PNG, .make = true, .px = 48, .root = cache, .src_max = CONF_PREVIEW_MAX };
     CHECK(thumb_get(&a, &q, &out) == TG_NONE && !cached_fresh(&a, cache, "fail/ofx", gone, &w, &h));
     // The cache's own files get none.
-    thumb_uri(p, uri, sizeof uri);
+    file_uri(p, uri, sizeof uri);
     thumb_file(cache, "normal", uri, file, sizeof file);
     q = ask(file, TK_PNG, 48, cache);
     CHECK(thumb_get(&a, &q, &out) == TG_NONE);

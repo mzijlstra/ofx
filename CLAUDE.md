@@ -21,7 +21,8 @@ rules shared by every tool here.
   scratch copy (`<scratch>/state`), so a theme test edits the copy, never Michael's files. Never
   run `omarchy-theme-set` or anything else that changes his theme to test a switch.
 - **The sidebar** reads the GTK bookmarks (shared with Nemo) and the XDG user dirs under
-  `$XDG_CONFIG_HOME`; `run-script.sh` points that at `<scratch>/config`. ofx never writes them.
+  `$XDG_CONFIG_HOME`; `run-script.sh` points that at `<scratch>/config`. It writes the bookmarks
+  since F7.5 (below), never the user dirs.
 - **The mount list** (F6): ofx polls `/proc/self/mountinfo`, and reads each drive's trash
   (`/mnt/sd/.Trash-1000` here) in the trash view. A GUI test that opens the trash view or counts
   drives sets `OFX_TEST_MOUNTINFO` to a scratch file (run-script passes it on), so it sees only
@@ -93,7 +94,7 @@ rules shared by every tool here.
   `~/.config/systemd/user/ofx-clean.{service,timer}` and runs `systemctl --user daemon-reload`;
   only Michael enables the timer.
 - **ofx changes files since F3:** rename, new folder, trash, delete for good, copy and move. Every
-  write in fs/ goes through `ops_allowed` (fs/ops.c), which refuses any path outside
+  write in fs/ goes through `ops_allowed` (fs/guard.c, included right after paths.c), which refuses any path outside
   `OFX_GUI_ROOT` when it is set: `run-script.sh` sets it to the run's scratch dir, the unit tests
   to their mkdtemp root. A guard test aims at a decoy beside that root, never at `/tmp` or a real
   folder, so a mutant that switches the guard off can only reach the decoy. Never start ofx in a
@@ -231,6 +232,17 @@ so every run does it. `gui.py` runs from its scratch copy, scripts included, so 
   nothing while a `sh` line waits. vkbd refuses unless WAYLAND_DISPLAY is the test sway's
   (`$OFX_GUI_ROOT/sway.socket`, its pid a sway): run against Michael's Hyprland it would type into
   his focused window.
+- **Drag and drop with other programs** (F14, `dnd`): `vptr` (`tools/gui/vptr.c`, a virtual
+  pointer through wlr-virtual-pointer-unstable-v1) gives the headless sway a pointer and moves it,
+  `dndpeer` (`tools/gui/dndpeer.c`) is the other program, a target or a source window beside ofx;
+  both on the window's PATH (run-script.sh) and run with `sh … &`; vptr's x and y are the output's
+  logical pixels (936x516, two windows side by side at 468 each). A drag out is a scripted F13 drag
+  (`press-here`, `move-to` past the window's edge) while `vptr … press wait …` holds the
+  compositor's button, whose serial the drag starts from. vkbd, vptr and dndpeer
+  share one guard (`tools/gui/testsway.h`): run against Michael's Hyprland, vptr would move his
+  pointer and dndpeer drop into his windows. A drag out of a real ofx on his desktop reaches his
+  programs as any drag does (a browser opens the file, Nemo may move it); test that only by hand,
+  with his go.
 - `run-script.sh` checks the socket is the one weston made before launching, takes the pid from the
   launch script, and stops weston after the run. For an unscripted run (`-`), kill the pid, then
   `tools/gui/weston.sh stop <scratch>`.
@@ -249,7 +261,7 @@ so every run does it. `gui.py` runs from its scratch copy, scripts included, so 
 - The script language is at the top of `gui/script.c`. Start every script with `settle`; check
   the `state` line rather than screenshots where you can.
 
-## Where the code is (2026-11-02)
+## Where the code is (2026-11-06)
 
 One unity build per binary: gui/main.c includes base/, fs/ (fs/fs.c) and ui/ (ui/ui.c), then its own
 files in order. ui/ is raylib-free and unit-tested (tests/test.c includes it); a function in fs/ or
@@ -257,6 +269,8 @@ ui/ that nothing calls makes the test build warn.
 
 - `fs/`: the file system side; `fs/paths.c` holds the path helpers every other file uses
   (path_within, path_below, path_put, path_parent, xdg_dir, mkdir_p, the URI and mountinfo codecs);
+  `fs/guard.c` the test guard (`ops_allowed`, `ops_program_allowed`) and the PATH lookups it checks,
+  next, so every file after it has them;
   `fs/search.c` the search's address and walk, inside files too; `fs/editors.c` Open at Line's
   recipes; `fs/conf.c` ofx.conf (its options table, parser, written default, `conf_load`);
   `fs/places.c` the sidebar's places, unmounted drives too; `fs/clean.c` ofx-clean's rules;
@@ -270,7 +284,9 @@ ui/ that nothing calls makes the test build warn.
 - `gui/main.c`: memory, the app state, signals, main(); then `folder.c` (go_to, history, places),
   `actions.c` (act, changing files), `icons.c`, `files.c` (the list and sidebar drawn), `topbar.c`,
   `panels.c` (modal panels, Properties), `footer.c` (job rows, find and search bars, status),
-  `frame.c` (tooltips, layout, draw), `input.c` (keys, hit_at, hover), `prefs.c` (ofx.conf read
+  `frame.c` (tooltips, layout, draw), `input.c` (keys, hit_at, hover; it includes `drag.c`, the
+  drags: F13's inside the window, F14's out and in), `dnd.c` (drags with other programs on the patched GLFW, F14),
+  `clipboard.c` (the system clipboard, ext-data-control), `prefs.c` (ofx.conf read
   and applied, Edit → Preferences…), `eject.c` (udisksctl mount, unmount, eject), `remember.c`
   (per folder view, zoom, sort and cursor, F11), `restore.c` (the tabs across a restart and a
   crash, F11 step 3 and 3b); the worker
@@ -290,7 +306,11 @@ steps 1-4 (09b056b to 0a4c64a).
 `LICENSE`), both as in prdash and uml-viewer, built by our Makefile; nanosvg (`master` at
 239e102, `nanosvg.h`, `nanosvgrast.h`, `LICENSE.txt`; zlib licence) for the SVG app icons in Open
 With (Michael, 2026-10-26), compiled into gui/main.c. `base/` and `gui/font.c`,
-`gui/render.c` are uml-viewer's at cca8e45 (`render.c` gained images). Do not edit vendored files.
+`gui/render.c` are uml-viewer's at cca8e45 (`render.c` gained images). Do not edit vendored files,
+with one exception: raylib's GLFW carries `vendor/patches/glfw-dnd.patch` (F14, Michael
+2026-11-05), since Hyprland sends drags only to GLFW's own data device: version 3, the offers'
+version 3 events, and `glfwSetWaylandDragHook` handing its drags to gui/dnd.c. A raylib update
+reapplies it (`git apply vendor/patches/glfw-dnd.patch`); changing it needs Michael's go.
 
 ## Git
 

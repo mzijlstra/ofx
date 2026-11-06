@@ -796,6 +796,103 @@ devices on one client.
 plumbing (offers by offer, the reads and writes off the main thread). 2. dragging out. 3.
 dropping in. 4. the milestone's code-health review.
 
+**Step 1 (2026-11-05):** gui/dnd.c on the patched GLFW. Offers kept by offer (eight slots, an
+offer never entered only forgotten: it is GLFW's selection to destroy); a drag over the window is
+taken as a copy of `text/uri-list` for now (step 3 asks the target under the pointer); a drop is
+read on a thread of its own (2 s, 1 MiB at most), then finished on the main thread and its files
+kept for step 3 (`dnd_take`); a source of ours (`dnd_start`, from the press our own pointer saw)
+offers `text/uri-list`, both text/plain names and `application/x-ofx-drag-<pid>`, each write on a
+thread of its own. Another ofx window's drag is another program's (the pid). Its tests are the
+`dnd` group in the test sway, the script's `drag-out` standing in for step 2's start. Found on the
+way: ofx never blocked SIGPIPE, so a program that left our clipboard's or drag's pipe early would
+have ended the window at the next write (now blocked in every thread; children start with none
+blocked); and the test sway's output was 468x258 logical, not weston's 936x516 (its resolution is
+pixels): fixed, the clip and keys groups pass at either size.
+
+**Step 2 (2026-11-05):** a drag of files (F13's) that crosses the window's edge with the button
+held is handed to the compositor (`drag_out`, input.c): the implicit grab keeps the pointer's
+motion ours past the edge, so the crossing is seen, and the press's serial is still good. Copy is
+offered, move too with Shift held; the drag image is the first file's icon with the count in the
+accent colour (drawn into a texture at the window's scale, read back premultiplied into an shm
+buffer); raylib is told the button is up (it never sees that release). Brought back over the window
+the drag is ours again (`files_over`): lit, answered to the compositor as the target takes it, and
+dropped as a drag inside the window (Nemo's rule, its job, its undo); Esc ends it. Dropped elsewhere,
+the status says "Copied a.txt to another program" (or Moved, as the target took it). Step 1's
+`drag-out` script command is gone: the scripts drag past the edge as a user does, vptr holding the
+compositor's button. A press's serial goes at an enter or leave and once a drag used it (a drag's
+grab takes the release, so it stayed, and the next drag out started from a dead press).
+Michael's hand check on Hyprland (2026-11-05): out to Chromium and Nemo, Shift's move, Esc, the
+image, all as meant; out and back onto a folder said "Copied a.txt to another program" and dropped
+nothing. Hyprland sends an offer's action before its enter, and step 1 kept the action only for the
+offer entered, so the drop read as refused (a drop from another program would have been too). Each
+offer's action is kept by its slot now, as its types are; checked again by hand, it moves. The test
+sway sends the action after the enter, so no script shows it. `OFX_GUI_DEBUG=1` logs every drag
+event now, which is how it was found.
+
+**Step 3 (2026-11-05):** another program's drag is read as it enters (its text/uri-list on the
+reader thread, 2 s at most), not at the drop: the files must be known before it (Nemo's rule asks
+their drive, a folder can't go into itself), as Nautilus and Nemo read a drag's data on motion too.
+Read, with local `file://` files in it, the drag is one of ofx's own (`DRAG_IN`, `drag_in_poll`):
+the badge, the targets lit, a tab held under it opens; the window answers the compositor with
+Nemo's rule within the source's actions (`drop_in_action`: a move the source doesn't allow is a
+copy, the trash needs a move). Let go, it drops by the action the compositor settled on, as a paste
+job with its undo, and the source is told it is done (`finish`). Not read yet, not files (text, a
+web address), or another read still going: refused, and sway then cancels the drop instead of
+sending it (a drop that does come, as Hyprland sends, is given back: step 4's A). Ctrl and Shift go by
+the source's own actions (Nemo changes them as its keys go down); the window's keys count too
+when it has the keyboard.
+Michael's hand check on Hyprland (2026-11-05): Nemo's move, the tab that opens, the Trash, as
+meant. Two fixed after: with Ctrl held, the badge said Copy but the drop moved (Hyprland didn't send
+the action again after ofx's answer, so the drop went by the move it had sent before the enter: a
+drop is a move only when the window's answer and the compositor's action both say so, else a
+copy, either alone when the other has none: review, 2026-11-06, as a compositor may change the
+action for keys the window doesn't see); and a browser's link
+showed nothing refused (Hyprland's pointer doesn't change for a refused drag), so a badge by the
+pointer says "Only files can be dropped here".
+
+**Step 4, the code-health review (2026-11-06):** findings on
+https://claude.ai/artifact/UWtUA5He9hJzzfxVdUgJLb; Michael picked every cleanup step, A to G, each
+with its own commits, gates and reviewer-2 round.
+- **A, the read's lifecycle:** a drop that came before its read ended waited for a read whose drag
+  could never start, and, after a leave and an enter between two frames, the drag still going was
+  the earlier offer's, with its files. The window's drag now names its offer (`app.in_id`,
+  `drag_in_take`), and a drop the window hadn't said it takes is given back at once: acting on it
+  would move files whose program was told the drag was cancelled (review, 2026-11-06). An offer that entered while another's
+  read ran stayed refused until it left; now it is read when that one ends (`dnd_read_next`, dndj).
+  The test tools' guard is proved against the keys group's sway for all three tools.
+- **B, the drag's state:** one `drop_reset` for the five places that forgot the target, the spring's
+  tab with it (a drag out that left the window from another tab and came back found the old timer,
+  dndk); `drag_of_files` and `drag_by_compositor` name the lists of states, and the keys during
+  another program's drag are the drag's as F13's are (Delete trashed what was under it); the badge's
+  icon kept by its key and looked up as drawn (an icon cache reset gave its slot to another, f13h);
+  a drag out that can't start is tried once a drag, after `dnd_can_start`, not again each motion.
+- **C, the guard and small fixes:** unmount runs the udisksctl resolved, as eject (its sh found its
+  own on PATH); clip_payload's full-arena guard; the script's sh gets OFX_DIR and OFX_ROOT in an
+  envp of its own (no setenv beside the workers' getenv), and OFX_TEST_SANDBOX is read before any
+  thread; stale comments and dead bits swept.
+- **D, the jobs' clashes:** `job_resolve_clash` for copy and move (their copies had drifted: a move
+  didn't count a skip done or tick for keep both), `copy_into` split into `copy_dir` and
+  `copy_leaf`; a move's merge no longer asks a skipped clash again on its next pass, and a move on
+  one drive counts its items, not each entry merged.
+- **E, into ui/ and fs/ with unit tests:** F14's pure decisions (`ui_dnd_action`, `ui_dnd_merge`,
+  `ui_dnd_drop`, tests/test_f14.c: the merge's disagreeing case, which sway never shows, among
+  them; the offer slots stay in dnd.c, as they are its offers' own records); the clipboard's and the
+  drags' timed pipe loops and MIME map (`fd_read_timed`, `fd_write_timed`, `clip_fmt_of`; the read
+  had drifted: the clipboard's gave up at an EINTR); and the search fields' rules as the view
+  changes (`ui_view_set`, from gui/folder.c).
+- **F, the copies in ui/ and fs/:** the key loop's clash takes its keys in one place after the
+  panels (six fields asked `!prompt` for it); the pointer's tidying of the job rows and path buttons
+  runs before any press returns; `ui_zoom_by`, `ui_list_nav`, `ui_props_open(which)`,
+  `ui_ow_def_flip`, and `ui_edit_sel` by `ui_line_sel`; `op_make` for a new folder, file and link;
+  `str_num` for conf's days and zoom, the theme's ini numbers, a preview's numbers and the window
+  registry's; one `file_uri` (GLib's escapes) for the previews, the bookmarks, the clipboard and
+  the drags; `file_read_fd` under `file_read_at` and `read_file`.
+- **G, the structure:** `UI_KEY_ACTS`, a row for each key that only asks for an action; the test
+  guard in fs/guard.c, first after paths.c; the drags out of input.c into gui/drag.c; a
+  `user-pointer` script mode (vptr's presses reach the window as a user's, so dndd's check after a
+  drag out is real); the drag words out of `script_state`; the dnd group as a loop. Left out: a
+  script include for the drag-out prelude (four lines with a row that varies).
+
 **Michael's answers (2026-11-05):**
 - **Scope:** out, and files in (both in F14, out first).
 - **A browser's link or image** (a web address, no file): refused in F14, the drop cursor says no.

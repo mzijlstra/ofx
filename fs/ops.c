@@ -1,6 +1,6 @@
-// Changing files, the small ones: the test guard, names (valid, free, " (2)", " (copy)"), rename,
-// a new folder, and deleting a tree for good (docs/plan.md, F3). Every write in fs/ asks
-// ops_allowed first.
+// Changing files, the small ones: names (valid, free, " (2)", " (copy)"), rename, a new folder,
+// file or link, and deleting a tree for good (docs/plan.md, F3). Every write in fs/ asks
+// ops_allowed first (fs/guard.c).
 
 #include "../base/base.h"
 
@@ -12,71 +12,6 @@
 #include <stdlib.h>
 #include <sys/stat.h>
 #include <unistd.h>
-
-// ---- the test guard ---------------------------------------------------------------------------
-//
-// With OFX_GUI_ROOT set (the GUI tests) every write is refused outside that folder, so a bug in a
-// test, or a mutant, can never reach Michael's files. The unit tests set it to their mkdtemp root.
-
-static char ops_root[PATH_MAX];   // resolved; empty: no guard
-static int  ops_refusals;         // writes the guard refused, for the tests
-
-static void ops_guard(const char *root)
-{
-    ops_root[0] = 0;
-    if (root && root[0] && !realpath(root, ops_root)) {
-        // A guard that can't be resolved refuses everything rather than nothing.
-        snprintf(ops_root, sizeof ops_root, "/nonexistent/ofx-guard");
-    }
-}
-
-// path resolved into out: its nearest folder that exists, through realpath, then the rest as it
-// is (the parts that don't exist yet, and the last part, which may be a symlink that is the thing
-// itself). False when nothing resolves, or the rest climbs with "..".
-static bool ops_resolve(const char *path, char *out, size_t cap)
-{
-    char d[PATH_MAX], r[PATH_MAX];
-    Str p = str_from_c(path), rest = path_base(p), dir = path_dir(p);
-    for (;;) {
-        snprintf(d, sizeof d, "%.*s", STR_ARG(dir.len ? dir : S("/")));
-        if (realpath(d, r)) break;
-        if (dir.len == 0) return false;
-        rest = str_cut(p, dir.len - path_base(dir).len, p.len);
-        dir = path_dir(dir);
-    }
-    for (isize i = 0; i < rest.len;) {
-        isize e = i;
-        while (e < rest.len && rest.p[e] != '/') e++;
-        if (str_eq(str_cut(rest, i, e), S(".."))) return false;
-        i = e + 1;
-    }
-    int n = snprintf(out, cap, "%s%s%.*s", r, strcmp(r, "/") == 0 ? "" : "/", STR_ARG(rest));
-    return n >= 0 && (size_t)n < cap;
-}
-
-// Whether prog, as PATH finds it (or as given, with a /), may run (2026-10-30, a review): with the
-// guard on, only one under its folder (a test's fake), so a test whose PATH lost its fakes never
-// runs the real udisksctl on Michael's drives, nor any program ofx starts (spawn_detached). Without
-// the guard, any.
-static bool ops_program_allowed(const char *prog, Err *err)
-{
-    if (!ops_root[0]) return true;
-    char full[PATH_MAX], r[PATH_MAX];
-    if (prog_resolve(prog, full, sizeof full) && realpath(full, r) && path_below(r, ops_root)) return true;
-    snprintf(err->msg, sizeof err->msg, "%.64s isn't a test's own (outside %.300s): not run", prog, ops_root);
-    return false;
-}
-
-// Whether a write to path is allowed: always without a guard; with one, only when path is under it.
-static bool ops_allowed(const char *path, Err *err)
-{
-    if (!ops_root[0]) return true;
-    char r[PATH_MAX];
-    if (ops_resolve(path, r, sizeof r) && path_below(r, ops_root)) return true;
-    ops_refusals++;
-    fprintf(stderr, "ofx: guard: refused a write to %s (outside %s)\n", path, ops_root);
-    return err_set(err, "%s: outside the test folder, refused", path), false;
-}
 
 // ---- names ------------------------------------------------------------------------------------
 
@@ -145,51 +80,44 @@ static bool op_rename(const char *dir, Str from, Str to, Err *err)
     return move_noreplace(a, b, err);
 }
 
-// A new folder in dir called name, or name (2) and so on when it is taken; *made gets the name.
+typedef enum { MAKE_DIR, MAKE_FILE, MAKE_LINK } MakeKind;
+
+// A new folder, empty file or link (to target) in dir called name, or name (2) and so on when it
+// is taken (a file's and a link's before the extension); *made gets the name. Tried five times, as
+// another program may take the name in between (code-health review, 2026-11-06: three copies).
+static bool op_make(MakeKind kind, const char *dir, const char *target, Str name, char *made, size_t cap, Err *err)
+{
+    if (!name_valid(name, err)) return false;
+    for (int tries = 0; tries < 5; tries++) {
+        char p[PATH_MAX];
+        if (!name_free(dir, name, kind == MAKE_DIR, false, false, made, cap) || !path_put(p, sizeof p, dir, str_from_c(made)))
+            return err_set(err, "no free name for %.*s", STR_ARG(name)), false;
+        if (!ops_allowed(p, err)) return false;
+        int fd = -1;
+        bool ok = kind == MAKE_DIR ? mkdir(p, 0777) == 0
+                : kind == MAKE_LINK ? symlink(target, p) == 0
+                                    : (fd = open(p, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0666)) >= 0;
+        if (fd >= 0) close(fd);
+        if (ok) return true;
+        if (errno != EEXIST) return err_set(err, "%s: %s", p, strerror(errno)), false;
+    }
+    return err_set(err, "no free name for %.*s", STR_ARG(name)), false;
+}
+
+// A new folder (F3), an empty file (F7.1), a link to target, an absolute path (Make Link, F8).
 static bool op_mkdir(const char *dir, Str name, char *made, size_t cap, Err *err)
 {
-    if (!name_valid(name, err)) return false;
-    for (int tries = 0; tries < 5; tries++) {   // another program may take the name in between
-        char p[PATH_MAX];
-        if (!name_free(dir, name, true, false, false, made, cap) || !path_put(p, sizeof p, dir, str_from_c(made)))
-            return err_set(err, "no free name for %.*s", STR_ARG(name)), false;
-        if (!ops_allowed(p, err)) return false;
-        if (mkdir(p, 0777) == 0) return true;
-        if (errno != EEXIST) return err_set(err, "%s: %s", p, strerror(errno)), false;
-    }
-    return err_set(err, "no free name for %.*s", STR_ARG(name)), false;
+    return op_make(MAKE_DIR, dir, NULL, name, made, cap, err);
 }
 
-// An empty file named name in dir (F7.1), as op_mkdir makes a folder: "New file (2)" when taken.
 static bool op_mkfile(const char *dir, Str name, char *made, size_t cap, Err *err)
 {
-    if (!name_valid(name, err)) return false;
-    for (int tries = 0; tries < 5; tries++) {
-        char p[PATH_MAX];
-        if (!name_free(dir, name, false, false, false, made, cap) || !path_put(p, sizeof p, dir, str_from_c(made)))
-            return err_set(err, "no free name for %.*s", STR_ARG(name)), false;
-        if (!ops_allowed(p, err)) return false;
-        int fd = open(p, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0666);
-        if (fd >= 0) return close(fd), true;
-        if (errno != EEXIST) return err_set(err, "%s: %s", p, strerror(errno)), false;
-    }
-    return err_set(err, "no free name for %.*s", STR_ARG(name)), false;
+    return op_make(MAKE_FILE, dir, NULL, name, made, cap, err);
 }
 
-// A symbolic link in dir to target (an absolute path), named name or name (2) and so on (before
-// its extension) when it is taken (Make Link, F8); *made gets the name.
 static bool op_symlink(const char *dir, const char *target, Str name, char *made, size_t cap, Err *err)
 {
-    if (!name_valid(name, err)) return false;
-    for (int tries = 0; tries < 5; tries++) {
-        char p[PATH_MAX];
-        if (!name_free(dir, name, false, false, false, made, cap) || !path_put(p, sizeof p, dir, str_from_c(made)))
-            return err_set(err, "no free name for %.*s", STR_ARG(name)), false;
-        if (!ops_allowed(p, err)) return false;
-        if (symlink(target, p) == 0) return true;
-        if (errno != EEXIST) return err_set(err, "%s: %s", p, strerror(errno)), false;
-    }
-    return err_set(err, "no free name for %.*s", STR_ARG(name)), false;
+    return op_make(MAKE_LINK, dir, target, name, made, cap, err);
 }
 
 // ---- delete for good --------------------------------------------------------------------------

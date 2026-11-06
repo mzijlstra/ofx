@@ -125,6 +125,7 @@ static Clay_ElementId drop_elem(const Drop *d)
 }
 
 static bool        drop_marked, badge_drawn;   // as drawn last (a script's state line)
+static char        badge_icon[128];             // the badge's icon as drawn last, by its slot's key
 static float       spring_fill = -1;           // the spring's bar, 0 to 1; -1 none drawn
 static float       badge_x, badge_y;           // where the badge was put
 static const char *badge_op;
@@ -132,11 +133,34 @@ static const char *badge_op;
 // A drag of files (F13 step 3): the place it would drop in, outlined in the accent (nowhere it
 // can't), and by the pointer a badge: the entry pressed, its icon and name, "+ N more", and what
 // the drop does there ("Move", "Copy", "Trash").
+// The badge's place, w x h: right of the pointer and below it; left of it, or above it, where the
+// window's edge would cut it.
+static void badge_place(float w, float h)
+{
+    float bx = app.drag_px + 14, by = app.drag_py + 16;
+    if (bx + w > (float)GetScreenWidth()) bx = app.drag_px - 14 - w;
+    if (by + h > (float)GetScreenHeight()) by = app.drag_py - 16 - h;
+    badge_x = bx < 0 ? 0 : bx, badge_y = by < 0 ? 0 : by;
+}
+
 static void layout_drag(void)
 {
-    drop_marked = badge_drawn = false, badge_op = NULL, spring_fill = -1;
-    if (app.drag != DRAG_FILES) return;
+    drop_marked = badge_drawn = false, badge_op = NULL, spring_fill = -1, badge_icon[0] = 0;
     Theme *t = &app.theme;
+    if (app.in_nofiles && app.drag == DRAG_NONE) {   // (F14: a refused drag says why, by the pointer)
+        static const char NOFILES[] = "Only files can be dropped here";
+        badge_drawn = true;
+        badge_place(str_width(str_from_c(NOFILES)) + 18, 30);   // (its size now: it is drawn once, the pointer still)
+        CLAY(CLAY_ID("drag-badge"), { .layout = { .sizing = { CLAY_SIZING_FIT(0), CLAY_SIZING_FIT(0) }, .padding = { 8, 8, 5, 5 } },
+                                      .backgroundColor = cc(t->bg_light), .cornerRadius = CLAY_CORNER_RADIUS(3),
+                                      .border = { .color = rule_color(), .width = CLAY_BORDER_OUTSIDE(1) },
+                                      .floating = { .attachTo = CLAY_ATTACH_TO_ROOT, .zIndex = 30, .offset = { badge_x, badge_y },
+                                                    .pointerCaptureMode = CLAY_POINTER_CAPTURE_MODE_PASSTHROUGH } }) {
+            text(cz(NOFILES), cc(t->fg_dim));
+        }
+        return;
+    }
+    if (!files_over()) return;
     Clay_ElementData e = Clay_GetElementData(drop_elem(&app.drop));
     if (app.drop.ok && e.found) {
         drop_marked = true;
@@ -148,20 +172,17 @@ static void layout_drag(void)
     }
     static const char *const OPS[] = { "Move", "Copy", "Trash" };
     badge_drawn = true, badge_op = app.drop.ok ? OPS[drop_op(&app.drop)] : NULL;
-    // Right of the pointer and below it; left of it, or above it, where the window's edge would cut
-    // it (its size the last frame's).
-    Clay_BoundingBox bb = Clay_GetElementData(CLAY_ID("drag-badge")).boundingBox;
-    float bx = app.drag_px + 14, by = app.drag_py + 16;
-    if (bx + bb.width > (float)GetScreenWidth()) bx = app.drag_px - 14 - bb.width;
-    if (by + bb.height > (float)GetScreenHeight()) by = app.drag_py - 16 - bb.height;
-    badge_x = bx < 0 ? 0 : bx, badge_y = by < 0 ? 0 : by;
+    Clay_BoundingBox bb = Clay_GetElementData(CLAY_ID("drag-badge")).boundingBox;   // (its size the last frame's)
+    badge_place(bb.width, bb.height);
     CLAY(CLAY_ID("drag-badge"), { .layout = { .sizing = { CLAY_SIZING_FIT(0), CLAY_SIZING_FIT(0) }, .padding = { 8, 8, 5, 5 }, .childGap = 8,
                                               .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
                                   .backgroundColor = cc(t->bg_light), .cornerRadius = CLAY_CORNER_RADIUS(3),
                                   .border = { .color = cc(t->accent), .width = CLAY_BORDER_OUTSIDE(1) },
                                   .floating = { .attachTo = CLAY_ATTACH_TO_ROOT, .zIndex = 30, .offset = { badge_x, badge_y },
                                                 .pointerCaptureMode = CLAY_POINTER_CAPTURE_MODE_PASSTHROUGH } }) {
-        icon_box(CLAY_ID("drag-icon"), app.drag_icon, SIDE_ICON_PX);
+        IconSlot *icon = drag_icon_slot();
+        if (icon) snprintf(badge_icon, sizeof badge_icon, "%.*s", STR_ARG(icon->key));
+        icon_box(CLAY_ID("drag-icon"), icon, SIDE_ICON_PX);
         text(fit(str_from_c(app.drag_name), 240, false), cc(t->fg));
         if (dragged.n > 1) text(cz(arena_sprintf(&frame, "+ %td more", dragged.n - 1)), cc(t->fg_dim));
         if (app.spring_tab >= 0) {   // (F13 step 4: the tab under it opens when the bar is full)

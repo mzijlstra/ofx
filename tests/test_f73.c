@@ -593,6 +593,7 @@ static void test_ow_default(void)
     // Not allowed (gui/ says why): Alt+D and the box do nothing; Enter opens without it.
     u.ow_def_can = false;
     ow_keys(&u, 1, -'d');
+    CHECK(!u.ow_def);   // (each alone: two flips would undo each other; code-health review, 2026-11-06)
     UiInput in = ui_input_none();
     in.app_name = OW_APPS, in.app_n = COUNT(OW_APPS), in.toggle = 4;
     ui_handle(&u, names, &in);

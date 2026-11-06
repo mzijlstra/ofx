@@ -1,0 +1,31 @@
+# F14 step 2: files dragged past the window's edge go out to another program (dndpeer target, the
+# right half): the scripted drag (press-here, move-to) is F13's, and vptr holds the compositor's
+# button meanwhile, whose press the drag out starts from. Offered as files, text and ofx's own
+# type, as a copy only; the drag image is ours; the target reads the files on our writer thread and
+# finishes; the status says where they went. Layout as dnd.script (rows at x 352: adir, a.txt, b.txt).
+settle
+sh dndpeer target "$OFX_ROOT/peer.log" >/dev/null 2>&1 &
+sleep 800
+settle
+expect dndout=none dndpress=0 sel=adir drag=-
+sh vptr move 100 400 press wait 2000 move 300 300 move 650 250 move 700 250 wait 300 release >"$OFX_ROOT/vptr.log" 2>&1 &
+wait-for 3000 dndpress=1
+point-ui row 1
+press-here
+move-by 0 10
+expect drag=files dragn=1 dragname=a.txt
+move-to -5 100
+expect drag=out dndout=dragging dndicon=1 badge=-
+wait-for 5000 dndout=done dndoutact=1 dndwrote=1 drag=- dndicon=0
+expect status=Copied a.txt to another program
+sh grep -q "received [0-9]* bytes: file://$OFX_DIR/a.txt" "$OFX_ROOT/peer.log"
+sh grep -q "offer type text/uri-list" "$OFX_ROOT/peer.log" && grep -q "offer type text/plain;charset=utf-8" "$OFX_ROOT/peer.log" && grep -q "offer type application/x-ofx-drag-" "$OFX_ROOT/peer.log"
+sh grep -q "source actions 1$" "$OFX_ROOT/peer.log"
+sh test -f "$OFX_DIR/a.txt"
+# ---- the window's left button works again after it (raylib was told it is up, as it never sees
+# the release the drag's grab took): the compositor's own press on b.txt's row, as a user's (two
+# moves: GLFW takes the position from a motion, not from the enter the first one makes)
+user-pointer
+sh vptr move 340 160 wait 100 move 352 162 wait 100 press wait 100 release >"$OFX_ROOT/vptr2.log" 2>&1 &
+wait-for 3000 sel=b.txt
+quit

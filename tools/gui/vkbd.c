@@ -23,6 +23,7 @@
 #include <xkbcommon/xkbcommon.h>
 
 #include "virtual-keyboard-unstable-v1-client-protocol.h"
+#include "testsway.h"
 
 static struct wl_seat *seat;
 static struct zwp_virtual_keyboard_manager_v1 *mgr;
@@ -88,7 +89,6 @@ static struct zwp_virtual_keyboard_v1 *kb;
 static struct xkb_state *xs;
 static struct wl_display *dpy;
 static uint32_t ms;
-static int sway_pid;   // the test sway's, from $OFX_GUI_ROOT/sway.pid (refused)
 
 static void pause_ms(int n)
 {
@@ -116,29 +116,6 @@ static void chord(const int *mods, int nmods, int code)
     for (int i = nmods - 1; i >= 0; i--) key(mods[i], false);
 }
 
-// The test sway's display, or a reason to refuse.
-static const char *refused(void)
-{
-    const char *root = getenv("OFX_GUI_ROOT"), *wd = getenv("WAYLAND_DISPLAY");
-    if (!root || !root[0] || !wd || !wd[0]) return "OFX_GUI_ROOT and WAYLAND_DISPLAY must be set";
-    // libwayland connects to an inherited WAYLAND_SOCKET before it reads WAYLAND_DISPLAY.
-    if (getenv("WAYLAND_SOCKET")) return "WAYLAND_SOCKET is set: the display checked here wouldn't be the one used";
-    char path[4096], sock[256] = "", comm[64] = "";
-    int pid = 0;
-    snprintf(path, sizeof path, "%s/sway.socket", root);
-    FILE *f = fopen(path, "r");
-    if (f) fscanf(f, "%255s", sock), fclose(f);
-    if (strcmp(sock, wd) != 0) return "WAYLAND_DISPLAY is not the test sway's ($OFX_GUI_ROOT/sway.socket)";
-    snprintf(path, sizeof path, "%s/sway.pid", root);
-    if ((f = fopen(path, "r"))) fscanf(f, "%d", &pid), fclose(f);
-    snprintf(path, sizeof path, "/proc/%d/comm", pid);
-    if (pid <= 0 || !(f = fopen(path, "r"))) return "no test sway running ($OFX_GUI_ROOT/sway.pid)";
-    fscanf(f, "%63s", comm), fclose(f);
-    if (strcmp(comm, "sway") != 0) return "$OFX_GUI_ROOT/sway.pid is not a sway";
-    sway_pid = pid;
-    return NULL;
-}
-
 // A chord's key code, its modifiers' codes into mods (four at most) and their count into *n; -1 when
 // it names a key or a modifier there isn't (said on stderr).
 static int chord_parse(const char *arg, int mods[4], int *n)
@@ -162,8 +139,6 @@ static int chord_parse(const char *arg, int mods[4], int *n)
 int main(int argc, char **argv)
 {
     if (argc < 2) return fprintf(stderr, "usage: vkbd <chord|text:chars>...\n"), 2;
-    const char *why = refused();
-    if (why) return fprintf(stderr, "vkbd: refused: %s\n", why), 1;
     // Every argument checked before the first key goes out.
     for (int i = 1; i < argc; i++) {
         bool shift;
@@ -175,12 +150,7 @@ int main(int argc, char **argv)
         int mods[4], n;
         if (chord_parse(argv[i], mods, &n) < 0) return 2;
     }
-    if (!(dpy = wl_display_connect(NULL))) return fprintf(stderr, "vkbd: no display\n"), 1;
-    // The socket's other end must be that sway itself, not whatever WAYLAND_DISPLAY names.
-    struct ucred cr;
-    socklen_t crlen = sizeof cr;
-    if (getsockopt(wl_display_get_fd(dpy), SOL_SOCKET, SO_PEERCRED, &cr, &crlen) != 0 || cr.pid != sway_pid)
-        return fprintf(stderr, "vkbd: refused: the display isn't served by the test sway (pid %d)\n", sway_pid), 1;
+    if (!(dpy = test_sway_connect("vkbd"))) return 1;
     struct wl_registry *reg = wl_display_get_registry(dpy);
     wl_registry_add_listener(reg, &registry_listener, NULL);
     wl_display_roundtrip(dpy);

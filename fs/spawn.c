@@ -1,7 +1,10 @@
-// Launching what ofx hands off: a file to `gio open`, a folder to the terminal (docs/plan.md,
-// "Launching"). Each child gets its own session (it outlives ofx, and a Ctrl+C in a terminal that
-// started ofx doesn't reach it), /dev/null for stdin and stdout, and ofx's stderr. Children are
-// reaped by the kernel: spawn_init sets SA_NOCLDWAIT on SIGCHLD.
+// Launching what ofx hands off: a file to `gio open`, a folder to the terminal, an app (Open With),
+// a new window (docs/plan.md, "Launching"). Each child gets its own session (it outlives ofx, and a
+// Ctrl+C in a terminal that started ofx doesn't reach it), /dev/null for stdin and stdout, and
+// ofx's stderr. Children are reaped by the kernel: spawn_init sets SA_NOCLDWAIT on SIGCHLD.
+// Then the short runs whose output ofx reads (spawn_capture, under a time limit): `gio info`'s
+// type, and udisksctl's mount, unmount and eject with their results. Every program goes through
+// the test guard's check (ops_program_allowed) as resolved on PATH.
 
 #include "../base/base.h"
 
@@ -24,44 +27,7 @@ static void spawn_init(void)
     sigaction(SIGCHLD, &sa, NULL);
 }
 
-// Whether path is an executable file (not a folder: access(X_OK) passes one).
-static bool exec_file(const char *path)
-{
-    struct stat st;
-    return stat(path, &st) == 0 && S_ISREG(st.st_mode) && access(path, X_OK) == 0;
-}
-
-// The first executable file named prog in a PATH directory, into out; false when there is none (an
-// empty entry is skipped, not the working folder).
-static bool path_find(const char *prog, char *out, size_t cap)
-{
-    const char *path = getenv("PATH");
-    Str p = str_from_c(path ? path : "");
-    for (isize at = 0; at <= p.len;) {
-        isize e = at;
-        while (e < p.len && p.p[e] != ':') e++;
-        if (e > at && snprintf(out, cap, "%.*s/%s", (int)(e - at), p.p + at, prog) < (int)cap && exec_file(out)) return true;
-        at = e + 1;
-    }
-    return false;
-}
-
-// prog as it will run, into out: as given with a /, else as PATH finds it.
-static bool prog_resolve(const char *prog, char *out, size_t cap)
-{
-    return strchr(prog, '/') ? snprintf(out, cap, "%s", prog) < (int)cap && exec_file(out) : path_find(prog, out, cap);
-}
-
-// Whether prog is an executable file in a PATH directory.
-static bool on_path(const char *prog)
-{
-    char full[4096];
-    return path_find(prog, full, sizeof full);
-}
-
 static int spawn_started;   // programs started, for the GUI scripts' state line (spawned=)
-
-static bool ops_program_allowed(const char *prog, Err *err);
 
 // argv started (argv[0] looked up on PATH once, and that file run: the one the guard checked, not
 // another PATH search's; a review, 2026-11-03), in a session of its own, its signals unblocked
@@ -300,11 +266,13 @@ static bool mount_result(Str out, char *at, size_t atcap, char *why, size_t whyc
 }
 
 // Unmount (2026-10-30): eject without the power-off, the drive left there to mount again; its
-// output read as eject's (EJECT_UNMOUNTED is all it can reach).
-static void unmount_argv(const char *dev, const char **argv)
+// output read as eject's (EJECT_UNMOUNTED is all it can reach). udisks is the udisksctl resolved, as
+// eject's: sh's own PATH lookup would find another than the one the test guard checked (code-health
+// review, 2026-11-06).
+static void unmount_argv(const char *dev, const char *udisks, const char **argv)
 {
-    argv[0] = "sh", argv[1] = "-c", argv[2] = "udisksctl unmount -b \"$1\" && echo OFX-UNMOUNTED";
-    argv[3] = "sh", argv[4] = dev, argv[5] = NULL;
+    argv[0] = "sh", argv[1] = "-c", argv[2] = "\"$2\" unmount -b \"$1\" && echo OFX-UNMOUNTED";
+    argv[3] = "sh", argv[4] = dev, argv[5] = udisks, argv[6] = NULL;
 }
 
 typedef enum { EJECT_FAILED, EJECT_UNMOUNTED, EJECT_DONE } EjectResult;

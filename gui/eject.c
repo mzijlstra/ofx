@@ -29,10 +29,10 @@ static void *eject_thread(void *arg)
 {
     (void)arg;
     const char *argv[7];
-    char udisks[PATH_MAX] = "udisksctl";   // (eject's sh -c runs it as resolved)
+    char udisks[PATH_MAX] = "udisksctl";   // (eject's and unmount's sh -c run it as resolved)
     if (!prog_resolve("udisksctl", udisks, sizeof udisks)) snprintf(udisks, sizeof udisks, "udisksctl");
     if (ej.op == DRIVE_MOUNT) mount_argv(ej.dev, argv);
-    else if (ej.op == DRIVE_UNMOUNT) unmount_argv(ej.dev, argv);
+    else if (ej.op == DRIVE_UNMOUNT) unmount_argv(ej.dev, udisks, argv);
     else eject_argv(ej.dev, udisks, argv);   // dev and op are not written while busy
     static char out[4096];
     static char at[PATH_MAX];

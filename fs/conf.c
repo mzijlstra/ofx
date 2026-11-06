@@ -242,10 +242,8 @@ static bool conf_set(Conf *c, int k, Str v)
     case CK_BOOL: return conf_bool(v, f);
     case CK_SIZE: return conf_size(v, f);
     case CK_DAYS: {
-        i64 n = 0;
-        for (isize i = 0; i < v.len; i++)
-            if (!is_digit(v.p[i]) || (n = n * 10 + (v.p[i] - '0')) > CONF_DAYS_MAX) return false;
-        return v.len && (*(i64 *)f = n, true);
+        i64 n = str_num(v, CONF_DAYS_MAX);
+        return n >= 0 && (*(i64 *)f = n, true);
     }
     case CK_VIEW:
         if (str_eq(v, S("list")) || str_eq(v, S("icons"))) return *(bool *)f = str_eq(v, S("icons")), true;
@@ -254,9 +252,8 @@ static bool conf_set(Conf *c, int k, Str v)
         if (str_eq(v, S("range")) || str_eq(v, S("add"))) return *(bool *)f = str_eq(v, S("add")), true;
         return false;
     case CK_ZOOM: {
-        i64 n = 0;
-        for (isize i = 0; i < v.len && n <= 256; i++) n = is_digit(v.p[i]) ? n * 10 + (v.p[i] - '0') : 999;
-        for (int i = 0; i < COUNT(CONF_ZOOMS); i++)   // (empty: 0, none of them)
+        i64 n = str_num(v, 256);
+        for (int i = 0; i < COUNT(CONF_ZOOMS); i++)   // (not a number: -1, none of them)
             if (n == CONF_ZOOMS[i]) return *(int *)f = (int)n, true;
         return false;
     }
@@ -376,8 +373,6 @@ static bool conf_load(Arena *a, Conf *c)
     arena_restore(a, mark);
     return there;
 }
-
-static bool ops_allowed(const char *path, Err *err);
 
 // The file ofx writes, at path, when there is none (at the start, and on Preferences): its folder
 // made, never one replaced (an existing file, or a link, is left as it is: true, nothing written).

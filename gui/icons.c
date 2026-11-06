@@ -102,6 +102,20 @@ static IconSlot *icon_for(Str key, const Str *given, isize ngiven)
     return icon_for_px(key, given, ngiven, ICON_PX);
 }
 
+// The badge's icon: by its key, looked up as it is drawn (a slot kept across an icon cache reset would
+// be another icon's: code-health review, 2026-11-06).
+static void drag_icon_set(Str key, bool named)
+{
+    snprintf(app.drag_icon, sizeof app.drag_icon, "%.*s", STR_ARG(key));
+    app.drag_icon_named = named;
+}
+
+static IconSlot *drag_icon_slot(void)
+{
+    Str k = str_from_c(app.drag_icon);
+    return icon_for_px(k, app.drag_icon_named ? &k : NULL, app.drag_icon_named, ICON_PX);
+}
+
 // The icon view's icon size and its cells' (F6.3): as wide as the icon and a little, a cell's width
 // at least, so two lines of a name fit under a small one.
 static int grid_px(void)

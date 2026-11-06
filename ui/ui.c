@@ -1,7 +1,7 @@
 // What the keys, characters, wheel and clicks do: the list's cursor and scroll, the sidebar's,
-// find, sort, the history, the selection, the edit line and the prompts, and the one action a
-// frame may ask of gui/ (open, go somewhere, toggle hidden files, sort again, change files).
-// raylib-free and unit-tested; gui/main.c feeds it (docs/plan.md, F1 "Keys", F2 and F3).
+// find and search, sort, the history and tabs, the selection, the text fields, the prompts, menus
+// and panels, and the one action a frame may ask of gui/ (open, go somewhere, change files, ...).
+// raylib-free and unit-tested; gui/main.c feeds it (docs/plan.md, from F1 "Keys" on).
 
 #include "../base/base.h"
 
@@ -864,6 +864,7 @@ typedef enum {
     UI_ON_ABOUT,
     UI_ON_BAR,      // panel == UI_PANEL_BAR: the menu bar just hidden
     UI_ON_BRANCHES, // the branches panel (F12 step 6)
+    UI_ON_KINDS     // (their count: tests/test_f14.c checks each has an owner for its keys)
 } UiOnTop;
 
 // Whether an action works in view v. The trash view holds files that are nowhere yet: what would

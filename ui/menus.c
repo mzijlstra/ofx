@@ -223,7 +223,7 @@ static UiAction ui_menu_pick(Ui *u, UiMenuItem it)
         case UM_BM_DOWN_IT: return (UiAction){ UA_BM_DOWN, u->ctx_bmk, false };
         case UM_BM_REMOVE_IT: return (UiAction){ UA_BM_REMOVE, u->ctx_bmk, false };
         case UM_EMPTY_IT: return u->empty_asking = true, UI_NONE;
-        case UM_PROPS_IT: return u->panel = UI_PANEL_PROPS, u->prop_at = 0, (UiAction){ UA_PROPS, UI_PROPS_CTX, false };
+        case UM_PROPS_IT: return ui_props_open(u, UI_PROPS_CTX);
         default: return (UiAction){ UA_FOLDER_DO, it, false };
         }
     }
@@ -254,7 +254,7 @@ static UiAction ui_menu_pick(Ui *u, UiMenuItem it)
     case UM_OPEN: return (UiAction){ UA_OPEN, u->list.sel, u->marked > 0 };
     case UM_CLOSE_ALL: return (UiAction){ UA_CLOSE_ALL, 0, true };   // gui/ asks first with jobs (close_others)
     case UM_CLOSE: return (UiAction){ UA_TAB_CLOSE, -1, false };
-    case UM_PROPERTIES: return ui_props_open(u);
+    case UM_PROPERTIES: return ui_props_open(u, UI_PROPS_MARKED);
     case UM_OPEN_WITH: return ui_ow_open(u);
     case UM_ABOUT: return u->panel = UI_PANEL_ABOUT, UI_NONE;
     case UM_PREFERENCES: return (UiAction){ UA_PREFERENCES, 0, false };
@@ -264,7 +264,7 @@ static UiAction ui_menu_pick(Ui *u, UiMenuItem it)
     case UM_TAB_REOPEN: return (UiAction){ UA_TAB_REOPEN, 0, false };
     case UM_EMPTY_TRASH: return u->empty_asking = true, UI_NONE;
     case UM_COPY_PATH_HERE: return (UiAction){ UA_COPY_PATH, UI_COPY_SHOWN, true };
-    case UM_HERE_PROPS: return u->panel = UI_PANEL_PROPS, u->prop_at = 0, (UiAction){ UA_PROPS, UI_PROPS_HERE, false };
+    case UM_HERE_PROPS: return ui_props_open(u, UI_PROPS_HERE);
     case UM_OPEN_WINDOW: return (UiAction){ UA_NEW_WINDOW, u->list.sel, true };
     case UM_PASTE_INTO: return (UiAction){ UA_PASTE, u->list.sel, true };
     case UM_TERMINAL_IN: return (UiAction){ UA_TERMINAL, u->list.sel, true };

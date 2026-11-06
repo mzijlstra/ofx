@@ -5,11 +5,12 @@
 #include "../fs/fs.c"
 #include "../ui/ui.c"
 
-// The edit line opened on a name, the caret at its end (the tests' way in; ofx opens it with
-// ui_edit_rename and ui_edit_new).
+// The edit line opened on a name, the caret at its end, nothing selected (the tests' way in; ofx
+// opens it with ui_edit_rename and ui_edit_open_all).
 static void ui_edit_open(Ui *u, Str text)
 {
     ui_edit_start(u, text, false);
+    u->edit.anchor = u->edit.caret;
 }
 
 #include <stdarg.h>
@@ -593,6 +594,7 @@ static void test_icons(void)
     CHECK_STR(ini_get(ini, S("C"), S("x")), "");
     CHECK(ini_int(ini, S("B"), S("x"), 9) == 3 && ini_int(ini, S("B"), S("n"), 9) == 9 && ini_int(ini, S("B"), S("big"), 9) == 9);
     CHECK(ini_int(ini, S("B"), S("absent"), 7) == 7);
+    CHECK(ini_int(S("[B]\nz=0000000001\n"), S("B"), S("z"), 7) == 7);   // (ten digits, zeros too: review, 2026-11-06)
     CHECK_STR(ini_get(S("[Ax\nk=1\n"), S("A"), S("k")), "");   // no closing ]: not a section
     Str item, list = S(" a, ,b ,,");
     isize iat = 0;
@@ -1664,6 +1666,7 @@ static void test_format(void)
 #include "test_f11.c"
 #include "test_f12.c"
 #include "test_f13.c"
+#include "test_f14.c"
 #include "test_fm1.c"
 
 int main(void)
@@ -1863,6 +1866,13 @@ int main(void)
     if (fast) test_state_sidewidth();
     if (fast) test_drag_rule();
     if (fast) test_menu_shown_switch();
+    if (fast) test_dnd_action();
+    if (fast) test_dnd_merge();
+    if (fast) test_dnd_drop();
+    if (fast) test_view_set();
+    if (fast) test_fd_timed();
+    if (fast) test_pointer_tidy();
+    if (fast) test_on_top_owner();
     if (slow) test_git_common_bare();
     if (slow) test_box_why();
     if (slow) test_box_outlive();

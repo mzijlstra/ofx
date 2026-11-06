@@ -86,12 +86,13 @@ static int ui_edit_max(const Ui *u)
     return u->edit_path ? PATH_MAX - 1 : NAME_MAX;
 }
 
+// The edit line opened on text (a path: the location line), all of it selected, the caret at its end.
 static void ui_edit_start(Ui *u, Str text, bool path)
 {
     u->edit_path = path;
     isize max = ui_edit_max(u), n = text.len < max ? text.len : max;
     memcpy(u->edit.b, text.p, (size_t)n);
-    u->edit.len = (int)n, u->edit.caret = (int)n, u->edit.anchor = path ? 0 : (int)n;
+    u->edit.len = (int)n, u->edit.caret = (int)n, u->edit.anchor = 0;
     ui_find_leave(u);
     u->focus = UI_FOCUS_EDIT;   // (the search field's keys too: they stayed before, 2026-10-28)
 }
@@ -101,7 +102,6 @@ static void ui_edit_start(Ui *u, Str text, bool path)
 static void ui_edit_open_all(Ui *u, Str text)
 {
     ui_edit_start(u, text, false);
-    u->edit.anchor = 0;
 }
 
 // Where a file name's extension starts, as F2 selects the rest (Michael, 2026-10-25): at its last
@@ -121,7 +121,6 @@ static int ui_name_stem(Str name)
 static void ui_edit_rename(Ui *u, Str name, bool dir)
 {
     ui_edit_start(u, name, false);
-    u->edit.anchor = 0;
     if (!dir) u->edit.caret = ui_name_stem((Str){ u->edit.b, u->edit.len });
 }
 
@@ -195,8 +194,7 @@ static void ui_line_sel(UiLine l, int *lo, int *hi)
 
 static void ui_edit_sel(const Ui *u, int *lo, int *hi)   // (the edit line's, for the state line and the tests)
 {
-    int a = u->edit.anchor, c = u->edit.caret;
-    *lo = a < c ? a : c, *hi = a < c ? c : a;
+    ui_line_sel(ui_edit_line((Ui *)u), lo, hi);   // (read only: a UiLine points into u)
 }
 
 // Ctrl+C or Ctrl+X with no text selected: not the field's. The find bar and the search field give
@@ -239,6 +237,23 @@ static void ui_line_set(UiLine l, Str s)
     int n = s.len < l.max ? (int)s.len : l.max;
     memcpy(l.b, s.p, (size_t)n);
     *l.len = *l.caret = *l.anchor = n;
+}
+
+// The view a listing is shown in (gui/folder.c's go_to): out of the search view its fields lose the
+// keys; into a search not shown already (same: the one shown, read again, keeps its fields), they
+// show the address's text and inside text (F9 step 3), another search's "Containing" doesn't carry
+// over (review, 2026-10-29), and the first has the keys when both are empty.
+static void ui_view_set(Ui *u, UiView view, bool same, Str text, Str inside)
+{
+    if (view != UI_VIEW_SEARCH) ui_unfocus(u, UI_FOCUS_SEARCH), ui_unfocus(u, UI_FOCUS_INSIDE);
+    if (view == UI_VIEW_SEARCH && !same) {
+        ui_line_set(ui_search_line(u), text);
+        ui_line_set(ui_inside_line(u), inside);
+        u->search_inside = inside.len > 0, u->search_was_inside = false, u->search_edited = false;
+        if (text.len == 0 && inside.len == 0) u->focus = UI_FOCUS_SEARCH;
+        else ui_unfocus(u, UI_FOCUS_SEARCH), ui_unfocus(u, UI_FOCUS_INSIDE);
+    }
+    u->view = view;
 }
 
 // Bytes b[0..n) in place of the selection, the caret after them; false (nothing changed) when they

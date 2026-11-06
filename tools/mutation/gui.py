@@ -214,7 +214,7 @@ MUTANTS = [
     ('gui/frame.c', '        { UB_ZOOM_OUT, "Smaller icons (Ctrl+-)" }, { UB_ZOOM_IN, "Bigger icons (Ctrl+=)" },', '        { UB_ZOOM_OUT, "Smaller icons (Ctrl+-)" },'),
     # the hover for the pointer where it is (Michael, 2026-10-24)
     ('gui/input.c', "    return on && !keys_since_pointer ? hover_at(x, y) : hover_at(-1e6f, -1e6f);", "    return hover_at(x, y);"),
-    (G, "            if (scripted ? script.pointing && hover_refresh(true, script.px, script.py) : hover_refresh(IsCursorOnScreen(), m.x, m.y))\n                dirty = true, glfwPostEmptyEvent();\n", ""),
+    (G, "            if (scripted && !script.user_pointer ? script.pointing && hover_refresh(true, script.px, script.py) : hover_refresh(IsCursorOnScreen(), m.x, m.y))\n                dirty = true, glfwPostEmptyEvent();\n", ""),
     # a full icon cache at a zoom (F6.3 review)
     (G, "        if (app.icons_missed && app.icons_reset_armed) icons_reset()", "        if (app.icons_missed) icons_reset()"),
     ('gui/actions.c', "        app.icons_reset_armed = true;   // the other", "        ;   // the other"),
@@ -257,7 +257,7 @@ MUTANTS = [
     ('gui/files.c', "    int r = (h - bar_h() - HEADER_H - FOOTER_H - PAD) / SIDE_ROW_H;", "    int r = (h - HEADER_H - FOOTER_H - PAD) / SIDE_ROW_H;", 'f7'),
     ('gui/frame.c', "        if (bar_shown()) layout_menubar();\n", "", 'f7'),
     ('gui/topbar.c', "                if (open) layout_menu(m);", "", 'f7'),
-    ('gui/actions.c', '    ui_edit_open_all(&app.ui, str_from_c(made));', '    ui_edit_start(&app.ui, str_from_c(made), false);', 'f3'),
+    ('gui/actions.c', '    ui_edit_open_all(&app.ui, str_from_c(made));\n', '', 'f3'),   # (was ui_edit_start's call, the same since step C's ui_edit_start: review, 2026-11-06)
     ('gui/input.c', "    return kind_is_dir(app.list.e[i].kind);\n}", "    return false;\n}", 'f7'),
     ('gui/folder.c', "    if (e->size == 0 && (e->kind == K_FILE || e->kind == K_LINK_FILE) && apps_default(", "    if (e->kind == K_FILE && false && apps_default(", 'f7'),
     ('gui/folder.c', "    if (e->size == 0 && (e->kind == K_FILE || e->kind == K_LINK_FILE) && apps_default(", "    if ((e->kind == K_FILE || e->kind == K_LINK_FILE) && apps_default(", 'f7'),
@@ -601,7 +601,6 @@ MUTANTS = [
     ('gui/folder.c', '    fs_sort(l, app.ui.sort);\n    snprintf(app.search_root', '    snprintf(app.search_root', 'f9'),
     ('gui/folder.c', '    go_to_in(app.cwd, str_from_c(app.search_pick[0] ? app.search_pick : keep), app.ui.list.sel, true);', '    go_to_in(app.cwd, str_from_c(keep), app.ui.list.sel, true);', 'f9'),
     ('gui/folder.c', '    snprintf(app.cwd, sizeof app.cwd, "%s", uri);\n    app.search_pick[0] = 0;', '    app.search_pick[0] = 0;', 'f9'),
-    ('gui/folder.c', '        if (text.len == 0 && inside.len == 0) app.ui.focus = UI_FOCUS_SEARCH;', '        if (false) app.ui.focus = UI_FOCUS_SEARCH;', 'f9'),
     ('gui/folder.c', '        snprintf(app.search_pick, sizeof app.search_pick, "%.*s", STR_ARG(select));\n    }', '    }', 'f9'),
     ('gui/actions.c', '    if (dir && search_uri(uri, sizeof uri, dir, STR_EMPTY, STR_EMPTY)) tab_open(uri, STR_EMPTY, true);', '    if (dir) tab_open(dir, STR_EMPTY, true);', 'f9'),
     ('gui/actions.c', '    case UA_NOT_IN_SEARCH: set_status(true, "A search isn\'t a folder: that works in one"); break;', '    case UA_NOT_IN_SEARCH: break;', 'f9'),
@@ -625,7 +624,6 @@ MUTANTS = [
     # ---- F9 step 2: working with results (2026-10-28). Left out: Ctrl+Enter's GLFW mapping (scripts
     # send ui/'s keys).
     ('gui/input.c', '    if (p && is_search(p)) p = app.search_root;', '', 'f9'),
-    ('gui/folder.c', '        ui_line_set(ui_search_line(&app.ui), text);\n', '', 'f9'),
     ('gui/search.c', '        search_gone[i] = search_res_path(i, root, p, sizeof p) && lstat(p, &st) != 0;', '        search_gone[i] = lstat(p, &st) != 0;', 'f9'),
     ('gui/search.c', '        if (search_gone[i]) continue;\n        const Entry *r', '        const Entry *r', 'f9'),
     ('gui/search.c', '    memset(search_gone, 0, sizeof search_gone), arena_reset(&search_edits);', '    arena_reset(&search_edits);', 'f9'),
@@ -650,8 +648,6 @@ MUTANTS = [
     ('gui/clipboard.c', "    if (files) ext_data_control_source_v1_offer(clip.src, CLIP_MIME_GNOME);\n", "", 'clip'),
     ('gui/clipboard.c', "    if (files) ext_data_control_source_v1_offer(clip.src, CLIP_MIME_URIS);\n", "", 'clip'),
     ('gui/clipboard.c', "    ext_data_control_source_v1_offer(clip.src, CLIP_MIME_TEXT[1]);\n", "", 'clip'),
-    ('gui/clipboard.c', "    if (strcmp(mime, CLIP_MIME_GNOME) == 0) p = clip.payload[CLIP_FMT_GNOME];", "    if (strcmp(mime, CLIP_MIME_GNOME) == 0) p = clip.payload[CLIP_FMT_URIS];", 'clip'),
-    ('gui/clipboard.c', "strcmp(mime, CLIP_MIME_TEXT[1]) == 0) p = clip.payload[CLIP_FMT_TEXT];", "strcmp(mime, CLIP_MIME_TEXT[1]) == 0) {}", 'clip'),
     ('gui/clipboard.c', "    bool gnome = types & OFFER_GNOME;", "    bool gnome = false;", 'clip'),
     ('gui/clipboard.c', "    if (!(types & (OFFER_UTF8 | OFFER_TEXT))) {", "    if (true) {", 'clip'),
     # Keys through the compositor (keys, in the test sway with vkbd, 2026-10-28): the mappings no
@@ -678,7 +674,7 @@ MUTANTS = [
     ('gui/input.c', '        u->ctx_unmounted = pl->kind == PL_UNMOUNTED;\n', '', 'usb'),
     ('gui/eject.c', '    if (ej.op == DRIVE_MOUNT) mount_argv(ej.dev, argv);\n    else if', '    if (false) mount_argv(ej.dev, argv);\n    else if', 'usb'),
     # Unmount (2026-10-30)
-    ('gui/eject.c', '    else if (ej.op == DRIVE_UNMOUNT) unmount_argv(ej.dev, argv);\n', '', 'usb'),
+    ('gui/eject.c', '    else if (ej.op == DRIVE_UNMOUNT) unmount_argv(ej.dev, udisks, argv);\n', '', 'usb'),
     ('gui/eject.c', '        else set_status(false, "%s is unmounted", ej.label);', '', 'usb'),
     ('gui/eject.c', '        if (r == EJECT_FAILED) set_status(true, "Can\'t unmount %s: %s"', '        if (false) set_status(true, "Can\'t unmount %s: %s"', 'usb'),
     ('gui/input.c', '        if (ctx_pl && place_ejectable(ctx_pl)) (it == UM_EJECT_IT ? eject_start : unmount_start)(ctx_pl);', '        if (ctx_pl && place_ejectable(ctx_pl)) eject_start(ctx_pl);', 'usb'),
@@ -828,9 +824,6 @@ MUTANTS = [
     ('gui/search.c', '    search.opts = q.o, search.inside_opts = q.io, search.hidden = q.hidden;', '    search.opts = q.o, search.hidden = q.hidden;', 'f9'),
     ('gui/search.c', '    search.done = (q.text.len == 0 && q.inside.len == 0) || !search.started;', '    search.done = q.text.len == 0 || !search.started;', 'f9'),
     ('gui/folder.c', ', .io = app.ui.inside_opts, .hidden', ', .hidden', 'f9'),
-    ('gui/folder.c', '        ui_line_set(ui_inside_line(&app.ui), inside);\n', '', 'f9'),
-    ('gui/folder.c', '        app.ui.search_inside = inside.len > 0;', '', 'f9'),
-    ('gui/folder.c', '        if (text.len == 0 && inside.len == 0) app.ui.focus = UI_FOCUS_SEARCH;', '        if (text.len == 0) app.ui.focus = UI_FOCUS_SEARCH;', 'f9'),
     ('gui/folder.c', '    Str inside = app.ui.search_inside ? (Str){ app.ui.inside.b, app.ui.inside.len } : STR_EMPTY;', '    Str inside = (Str){ app.ui.inside.b, app.ui.inside.len };', 'f9'),
     ('gui/folder.c', '    return VIEWS[app.ui.view].bar_h + (app.ui.view == UI_VIEW_SEARCH && app.ui.search_inside ? SEARCH_ROW_H : 0);', '    return VIEWS[app.ui.view].bar_h;', 'f9'),
     ('gui/footer.c', '        if (u->search_inside) {\n            CLAY_AUTO_ID', '        if (false) {\n            CLAY_AUTO_ID', 'f9'),
@@ -859,7 +852,6 @@ MUTANTS = [
     ('gui/actions.c', '    editors.old = editors.user.n - mine;', '    editors.old = 0;', 'f9'),
     ('gui/frame.c', '    u->sel_hit = e && e->hit;   // (F9 step 4: Open at Line)', '', 'f9'),
     ('gui/input.c', '    if (m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT) && (key == GLFW_KEY_ENTER || key == GLFW_KEY_KP_ENTER)) return UK_OPEN_LINE;', '', 'keys'),
-    ('gui/folder.c', '        app.ui.search_was_inside = false;   // (another search', '        // (another search', 'f9'),
     # Drives at the top (2026-10-29): an open menu's entry over a menu title is the entry's
     ('gui/input.c', '        for (int m = 0; m < UI_MENUS && h.menu_title < 0 && h.menu_item < 0; m++)', '        for (int m = 0; m < UI_MENUS && h.menu_title < 0; m++)', 'f8'),
     # Tab on the folder shown's row (2026-10-29)
@@ -898,7 +890,7 @@ MUTANTS = [
     ('gui/input.c', 'side_keep(app.side_px), app.edge_press.row = -1;', 'side_keep(app.side_px);', 'f13'),
     ('gui/input.c', '    int w = ui_side_fit(app.drag_w0 + (int)(x - app.drag_x0), GetScreenWidth());', '    int w = ui_side_fit(app.drag_w0, GetScreenWidth());', 'f13'),
     ('gui/input.c', 'app.hov.side_edge || app.drag == DRAG_SIDE ? MOUSE_CURSOR_RESIZE_EW', 'app.hov.side_edge ? MOUSE_CURSOR_RESIZE_EW', 'f13'),
-    ('gui/input.c', 'else if (!script_on && (d.x != 0 || d.y != 0 || !held || !on)) *seen |= drag_at', 'else if ((d.x != 0 || d.y != 0 || !held || !on)) *seen |= drag_at', 'f13'),
+    ('gui/input.c', 'else if (real && (d.x != 0 || d.y != 0 || !held || !on)) *seen |= drag_at', 'else if ((d.x != 0 || d.y != 0 || !held || !on)) *seen |= drag_at', 'f13'),
     ('gui/files.c', 'bool lit = edge_lit = app.hov.side_edge || app.drag == DRAG_SIDE;', 'bool lit = edge_lit = app.hov.side_edge;', 'f13'),
     ('gui/files.c', '                                        .layoutDirection = CLAY_TOP_TO_BOTTOM, .padding = { 0, 0, PAD / 2, 0 } },\n                            .backgroundColor = cc(t->bg_light) }) {', '                                        .layoutDirection = CLAY_TOP_TO_BOTTOM, .padding = { 0, 0, PAD / 2, 0 } },\n                            .backgroundColor = cc(t->bg_light) }) {\n        if (false)', 'f13'),
     ('gui/actions.c', '    state_key("sidewidth", v);\n', '', 'f13'),
@@ -910,18 +902,18 @@ MUTANTS = [
     ('gui/input.c', ' && h.row >= 0 && app.ui.view != UI_VIEW_TRASH && app.have_list', ' && h.row >= 0 && app.have_list', 'f13'),
     ('gui/input.c', '        app.drag_side = in->side_click, in->side_click = -1;', '        app.drag_side = in->side_click;', 'f13'),
     ('gui/input.c', '    if (app.drag == DRAG_PRESS && app.drag_tree) in->side_click = app.drag_side;\n', '', 'f13'),
-    ('gui/input.c', '        drag_arm(x, y, str_from_c(p), ui_marked(&app.ui, i), false,', '        drag_arm(x, y, str_from_c(p), false, false,', 'f13'),
-    ('gui/input.c', ' || !S_ISDIR(ds.st_mode) || access(dir, W_OK) != 0 || !realpath(dir, real)) return false;', ' || !S_ISDIR(ds.st_mode) || !realpath(dir, real)) return false;', 'f13'),
-    ('gui/input.c', '        if (dragged_real[i] && ui_under(str_from_c(real), str_from_c(dragged_real[i]))) return false;', '        {}', 'f13'),
-    ('gui/input.c', '        if (dragged_real[i] && ui_under(str_from_c(real), str_from_c(dragged_real[i]))) return false;', '        if (ui_under(str_from_c(dir), str_from_c(dragged.path[i]))) return false;', 'f13'),
-    ('gui/input.c', '    drag_real();\n    return dragged.n > 0;', '    return dragged.n > 0;', 'f13'),
-    ('gui/input.c', '    *same_drive = lstat(dragged.path[0], &fs) == 0 && fs.st_dev == ds.st_dev;', '    *same_drive = false;', 'f13'),
-    ('gui/input.c', '        dir = h.tab == tabbar.cur ? (shown ? app.cwd : NULL) : tabs[tabbar.slot[h.tab]].dir;', '        dir = app.cwd;', 'f13'),
-    ('gui/input.c', '        d.trash = dir && strcmp(dir, TRASH_URI) == 0;', '        d.trash = false;', 'f13'),
-    ('gui/input.c', '        snprintf(buf, sizeof buf, "%.*s", STR_ARG(ui_crumb_path(&app.crumbs, h.crumb)));', '        snprintf(buf, sizeof buf, "%s", app.cwd);', 'f13'),
-    ('gui/input.c', '    d.ok = dir && (d.trash || drop_takes(d.dir, &d.same_drive));', '    d.ok = dir != NULL;', 'f13'),
-    ('gui/input.c', '    if (esc) drag_cancel();', '', 'f13'),
-    ('gui/input.c', '    in->nev = 0;\n    if (esc)', '    if (esc)', 'f13'),
+    ('gui/drag.c', ' drag_arm(x, y, str_from_c(p), ui_marked(&app.ui, i), false,', ' drag_arm(x, y, str_from_c(p), false, false,', 'f13'),
+    ('gui/drag.c', ' || !S_ISDIR(ds.st_mode) || access(dir, W_OK) != 0 || !realpath(dir, real)) return false;', ' || !S_ISDIR(ds.st_mode) || !realpath(dir, real)) return false;', 'f13'),
+    ('gui/drag.c', '        if (dragged_real[i] && ui_under(str_from_c(real), str_from_c(dragged_real[i]))) return false;', '        {}', 'f13'),
+    ('gui/drag.c', '        if (dragged_real[i] && ui_under(str_from_c(real), str_from_c(dragged_real[i]))) return false;', '        if (ui_under(str_from_c(dir), str_from_c(dragged.path[i]))) return false;', 'f13'),
+    ('gui/drag.c', '    drag_real();\n    return dragged.n > 0;', '    return dragged.n > 0;', 'f13'),
+    ('gui/drag.c', '    *same_drive = lstat(dragged.path[0], &fs) == 0 && fs.st_dev == ds.st_dev;', '    *same_drive = false;', 'f13'),
+    ('gui/drag.c', '        dir = h.tab == tabbar.cur ? (shown ? app.cwd : NULL) : tabs[tabbar.slot[h.tab]].dir;', '        dir = app.cwd;', 'f13'),
+    ('gui/drag.c', '        d.trash = dir && strcmp(dir, TRASH_URI) == 0;', '        d.trash = false;', 'f13'),
+    ('gui/drag.c', '        snprintf(buf, sizeof buf, "%.*s", STR_ARG(ui_crumb_path(&app.crumbs, h.crumb)));', '        snprintf(buf, sizeof buf, "%s", app.cwd);', 'f13'),
+    ('gui/drag.c', '    d.ok = dir && (d.trash || drop_takes(d.dir, &d.same_drive));', '    d.ok = dir != NULL;', 'f13'),
+    ('gui/drag.c', '    if (esc) drag_cancel();', '', 'f13'),
+    ('gui/drag.c', '    in->nev = 0;\n    if (esc)', '    if (esc)', 'f13'),
     ('gui/input.c', '    if (app.drag == DRAG_FILES && app.drop.ok) drop_do(&app.drop);', '    if (app.drag == DRAG_FILES) drop_do(&app.drop);', 'f13'),
     ('gui/input.c', '        if (!ui_drag_past(x - app.drag_x0, y - app.drag_y0)) return false;', '        if (false) return false;', 'f13'),
     ('gui/input.c', '        app.press.row = -1;   // (a drag', '        (void)0;   // (a drag', 'f13'),
@@ -933,15 +925,15 @@ MUTANTS = [
     ('gui/frame.c', '    if (app.drop.ok && e.found) {', '    if (e.found) {', 'f13'),
     ('gui/frame.c', '    badge_drawn = true, badge_op = app.drop.ok ? OPS[drop_op(&app.drop)] : NULL;', '    badge_drawn = true, badge_op = OPS[drop_op(&app.drop)];', 'f13'),
     # F13 step 4 (2026-11-04): spring-loaded tabs (f13g)
-    ('gui/input.c', '    int spring = d.kind == DROP_TAB && d.at != tabbar.cur ? d.at : -1;', '    int spring = d.kind == DROP_TAB ? d.at : -1;', 'f13'),
-    ('gui/input.c', 'app.spring_at = spring >= 0 ? now_ms() : 0, timer_at', 'app.spring_at = 0, timer_at', 'f13'),
-    ('gui/input.c', ' || app.spring_tab < 0 || now_ms() < app.spring_at + UI_SPRING_MS) return false;', ' || app.spring_tab < 0) return false;', 'f13'),
-    ('gui/input.c', '    tab_show(app.spring_tab);\n', '', 'f13'),
-    ('gui/input.c', ' .at = -1 }, app.spring_tab = -1;\n}', ' .at = -1 };\n}', 'f13'),
-    ('gui/main.c', '        if (spring_tick() || (app.drag', '        if ((app.drag', 'f13'),
-    ('gui/frame.c', '    if (bx + bb.width > (float)GetScreenWidth()) bx = app.drag_px - 14 - bb.width;\n', '', 'f13'),
+    ('gui/drag.c', '    int spring = d.kind == DROP_TAB && d.at != tabbar.cur ? d.at : -1;', '    int spring = d.kind == DROP_TAB ? d.at : -1;', 'f13'),
+    ('gui/drag.c', 'app.spring_at = spring >= 0 ? now_ms() : 0, timer_at', 'app.spring_at = 0, timer_at', 'f13'),
+    ('gui/drag.c', ' || app.spring_tab < 0 || now_ms() < app.spring_at + UI_SPRING_MS) return false;', ' || app.spring_tab < 0) return false;', 'f13'),
+    ('gui/drag.c', '    tab_show(app.spring_tab);\n', '', 'f13'),
+    ('gui/drag.c', ' .at = at }, app.spring_tab = -1;\n}', ' .at = at };\n}', 'f13'),
+    ('gui/main.c', '        if (spring_tick() || (files_over()', '        if ((files_over()', 'f13'),
+    ('gui/frame.c', '    if (bx + w > (float)GetScreenWidth()) bx = app.drag_px - 14 - w;\n', '', 'f13'),
     # F13 code-health step A (2026-11-04)
-    ('gui/main.c', '        if (app.drag == DRAG_FILES && app.drop.reloads != app.reloads) drop_find', '        if (false) drop_find', 'f13'),
+    ('gui/main.c', '        if (files_over() && app.drop.reloads != app.reloads) drop_find', '        if (false) drop_find', 'f13'),
     ('gui/actions.c', '    if (marks) ui_mark_clear(&app.ui);\n    trash_state();', '    ui_mark_clear(&app.ui);\n    trash_state();', 'f13'),
     ('gui/input.c', '    app.side_px = w, app.drag_moved = true;', '    app.side_px = w;', 'f13'),
     ('gui/actions.c', '    snprintf(app.text_copied, sizeof app.text_copied, "%.*s", STR_ARG(t));\n    if (!clip_set_text(t))', '    snprintf(app.text_copied, sizeof app.text_copied, "%.*s", STR_ARG(t));\n    if (true)', 'clip'),
@@ -956,6 +948,68 @@ MUTANTS = [
     # A hover over another sidebar row that asks for no frame (review, 2026-11-05: a pointer move
     # counts as input only when it changes what is lit)
     ('gui/main.c', '    return a.row == b.row && a.side == b.side && a.header', '    return a.row == b.row && a.header', 'f6'),
+    # F14 step 1 (2026-11-05): drags with other programs (gui/dnd.c), in the test sway (dnd)
+    ('gui/main.c', '    pthread_sigmask(SIG_BLOCK, &pipe_sig, NULL);\n', '', 'dnd'),
+    ('gui/main.c', '    if (dnd_poll()) dirty = true;', '    dnd_poll();', 'dnd'),
+    ('gui/dnd.c', '    if (strcmp(mime, CLIP_MIME_URIS) == 0) dnd.offers[i].types |= DND_TYPE_URIS;\n    else if', '    if (false) {}\n    else if', 'dnd'),
+    ('gui/dnd.c', '    if (t & DND_TYPE_OWN) {   // ofx\'s own drag: not read (above)', '    if (false) {   // ofx\'s own drag: not read (above)', 'dnd'),
+    ('gui/dnd.c', '    dnd.x = (float)wl_fixed_to_double(x), dnd.y = (float)wl_fixed_to_double(y), dnd.changed = true;\n}', '}', 'dnd'),
+    ('gui/dnd.c', '    if (pthread_create(&th, NULL, dnd_reader, NULL) == 0) {\n        pthread_detach(th);\n        return;\n    }', '    if (dnd_reader(NULL) == NULL) return;\n    (void)th;', 'dnd'),
+    ('gui/dnd.c', '    wl_data_source_offer(dnd.src, CLIP_MIME_TEXT[0]);\n', '', 'dnd'),
+    ('gui/dnd.c', ' | (move ? WL_DATA_DEVICE_MANAGER_DND_ACTION_MOVE : 0));', ');', 'dnd'),
+    ('gui/dnd.c', '    if (button == BTN_LEFT) dnd.press = state == WL_POINTER_BUTTON_STATE_PRESSED ? serial : 0', '    if (button == BTN_LEFT) dnd.press = 0', 'dnd'),
+    # F14 step 2 (2026-11-05): files dragged past the window's edge go out; ours back over it drop as inside
+    ('gui/input.c', '    if ((x < 0 || y < 0 || x >= (float)GetScreenWidth() || y >= (float)GetScreenHeight()) && drag_out()) return true;', '', 'dnd'),
+    ('gui/drag.c', '    if (!dnd_start(&dragged, app.drag_mods & UI_MOD_SHIFT, have', '    if (!dnd_start(&dragged, false, have', 'dnd'),
+    ('gui/drag.c', '    bool have = dnd_can_start() && drag_image(&im);', '    bool have = false;', 'dnd'),
+    ('gui/drag.c', '        dnd_own_answer(app.drop.ok, op != UI_DROP_COPY);', '        dnd_own_answer(false, op != UI_DROP_COPY);', 'dnd'),
+    ('gui/drag.c', '        dnd_own_answer(app.drop.ok, op != UI_DROP_COPY);', '        dnd_own_answer(true, op != UI_DROP_COPY);', 'dnd'),
+    ('gui/drag.c', '        if (app.drop.ok) drop_do(&app.drop);\n        app.out_own = true;', '        app.out_own = true;', 'dnd'),
+    ('gui/drag.c', '        if (dragged.n == 1) set_status(false, "%s %s to another program"', '        if (false) set_status(false, "%s %s to another program"', 'dnd'),
+    ('gui/drag.c', '    if (app.drag == DRAG_OUT) dnd_cancel();\n', '', 'dnd'),
+    ('gui/dnd.c', '(void)serial, (void)s; dnd.press = 0; }\nstatic void dnd_ptr_motion', '(void)serial, (void)s; }\nstatic void dnd_ptr_motion', 'dnd'),
+    # F14 step 3 (2026-11-05): files dropped in from other programs
+    ('gui/dnd.c', '    dnd.over = i, dnd.action = dnd.offers[i].action;\n    dnd_read_next();\n', '    dnd.over = i, dnd.action = dnd.offers[i].action;\n', 'dnd'),
+    ('gui/dnd.c', '    bool ok = o == dnd.in_offer && dnd.in_read && dnd.got.n > 0 && dnd.in_ok;', '    bool ok = false;', 'dnd'),
+    ('gui/dnd.c', '        dnd.reading = false, dnd.changed = true;   // (another enter may read now)', '        dnd.reading = false;', 'dnd'),
+    ('gui/dnd.c', '    if (done) wl_data_offer_finish(dnd.in_offer);\n', '', 'dnd'),
+    ('gui/drag.c', '    bool started = f && drag_in_take(f, id);', '    bool started = false;', 'dnd'),
+    ('gui/drag.c', '    if (!files_over() || app.spring_tab < 0 || now_ms() < app.spring_at + UI_SPRING_MS) return false;', '    if (app.drag != DRAG_FILES || app.spring_tab < 0 || now_ms() < app.spring_at + UI_SPRING_MS) return false;', 'dnd'),
+    ('gui/dnd.c', '    if (none) *x = dnd.x, *y = dnd.y;\n    return none;', '    return false;', 'dnd'),
+    # Code-health step A (2026-11-06): the read's lifecycle. An offer entered while another's read
+    # runs is read when that one ends (dndj).
+    ('gui/dnd.c', '        dnd_read_next();   // (the offer entered while it ran)\n', '', 'dnd'),
+    # Code-health step B (2026-11-06): the spring forgotten as a drag out leaves the window again
+    # (dndk), keys swallowed during another program's drag (dnd), the badge's icon by its key (f13h).
+    ('gui/drag.c', '        drop_reset(-1), dnd_own_answer(false, false);', '        app.drop = (Drop){ .kind = DROP_NONE, .at = -1 }, dnd_own_answer(false, false);', 'dnd'),
+    ('gui/main.c', ' || app.drag == DRAG_OUT || app.drag == DRAG_IN;\n}\n\n// A drag with another program', ' || app.drag == DRAG_OUT;\n}\n\n// A drag with another program', 'dnd'),
+    ('gui/icons.c', '    snprintf(app.drag_icon, sizeof app.drag_icon, "%.*s", STR_ARG(key));\n', '', 'f13'),
+    # Not run: drag_out's out_failed and dnd_can_start (a hand-off that can't start not tried again
+    # each motion): what they save is time, which no state word shows.
+    # Code-health step E (2026-11-06): the search fields' rules as the view changes are ui_view_set's
+    # and the MIME types' formats clip_fmt_of's now (run.py's, killed by test_f14.c); here only
+    # their callers.
+    ('gui/folder.c', '    ui_view_set(&app.ui, view, same, text, inside);', '    app.ui.view = view;', 'f9'),
+    ('gui/folder.c', '        search_parse(dir, &root, &text, &inside);\n', '', 'f9'),
+    ('gui/clipboard.c', '    if (f >= 0) fd_write_timed(fd, clip.payload[f], CLIP_WAIT_MS);', '', 'clip'),
+    # Code-health step E (2026-11-06): the source's actions, the both-agree merge and the Trash's move
+    # are ui/'s now (ui_dnd_action, ui_dnd_merge, ui_dnd_drop), mutated by run.py and killed by
+    # tests/test_f14.c; the merge's disagreeing case, which sway never shows, among them.
+    ('gui/drag.c', '    return d->ok ? ui_dnd_action(drop_op(d), actions) : 0;', '    return d->ok ? UI_DND_COPY : 0;', 'dnd'),
+    # Not run: a drop that came before its read ended, or that the window refused, given back
+    # (dnd_drop's `!dnd.in_read`), the read of the offer entered meanwhile (dnd_in_finish's and the
+    # refused drop's dnd_read_next), and the trash refused a copy-only source: sway sends no drop
+    # the window refused (Hyprland does), so no script reaches them. Nor drag_in_take ending an
+    # earlier offer's drag, or the drop's check of in_id: a leave and the next enter between two
+    # frames, which no script can time.
+    # drag_out telling raylib the button is up: dndd's real press after the drag (`user-pointer`,
+    # code-health step G, 2026-11-06). Not run: drag_release leaving DRAG_OUT alone (the scripted
+    # drag's synthetic release ends a drag out the compositor still carries: a hand check).
+    ('gui/drag.c', '    if (raylib_button) raylib_button(glfwGetCurrentContext(), GLFW_MOUSE_BUTTON_LEFT, GLFW_RELEASE, 0);\n', '', 'dnd'),
+    # Nor own_dropped's `action != 0` and drag_out_poll's `drop.ok`: sway never sends the drop of a
+    # drag its target refused (dnde's refused step), Hyprland does, with action 0.
+    # Not run either: an offer's action kept by its slot (dnd_offer_action). Hyprland sends it before
+    # the enter, the test sway after, so only Michael's hand check on Hyprland shows it (2026-11-05).
 ]
 import concurrent.futures, queue, threading, time
 
@@ -1008,15 +1062,17 @@ for m in MUTANTS:
 
 # Each worker its own copy of the repo and its own build; the scripts run from the copy, so the
 # repo can be edited meanwhile.
-# vkbd (the test sway's keyboard, run-script.sh puts it on PATH) is built once here; no mutant touches it.
-subprocess.run(['make', '-s', '-C', root, 'build/vkbd', 'build/ofx-clean'], check=True)   # (ofx-clean: f12b's Clear Previews runs it)
+# vkbd, vptr and dndpeer (the test sway's keyboard, pointer and other program, run-script.sh puts them
+# on PATH) are built once here; no mutant touches them.
+subprocess.run(['make', '-s', '-C', root, 'build/vkbd', 'build/vptr', 'build/dndpeer', 'build/ofx-clean'], check=True)   # (ofx-clean: f12b's Clear Previews runs it)
 def make_work(w):
     work = os.path.join(scratch, f'gui-mut-src-{w}')
     shutil.rmtree(work, ignore_errors=True)
     shutil.copytree(root, work, ignore=shutil.ignore_patterns('.git', 'build'))
     os.makedirs(os.path.join(work, 'build'))
     os.symlink(os.path.join(root, 'build', 'raylib'), os.path.join(work, 'build', 'raylib'))
-    os.symlink(os.path.join(root, 'build', 'vkbd'), os.path.join(work, 'build', 'vkbd'))
+    for t in ('vkbd', 'vptr', 'dndpeer'):
+        os.symlink(os.path.join(root, 'build', t), os.path.join(work, 'build', t))
     os.symlink(os.path.join(root, 'build', 'ofx-clean'), os.path.join(work, 'build', 'ofx-clean'))
     return work
 works = [make_work(w) for w in range(jobs)]

@@ -123,16 +123,6 @@ static void md5_hex(const void *data, size_t n, char out[33])
 
 // ---- names --------------------------------------------------------------------------------------
 
-// path's file:// URI as GLib makes it (g_filename_to_uri), which is what Nemo hashes: every byte
-// but letters, digits and -._~!$&'()*+,=@:/ as %XX in upper case (seen with `gio info`,
-// 2026-10-24). False when it would not fit.
-static bool thumb_uri(const char *path, char *out, size_t cap)
-{
-    if (cap < 8) return false;
-    memcpy(out, "file://", 7);
-    return percent_encode(str_from_c(path), "!$&'()*+,=@:/", out + 7, cap - 7);
-}
-
 // The cache's folders: a preview of up to 128 px is in normal, 256 large, 512 x-large, 1024 xx-large.
 static const char *const thumb_dirs[THUMB_LEVELS] = { "normal", "large", "x-large", "xx-large" };
 
@@ -170,16 +160,11 @@ typedef struct {
 
 static u32 be32(const u8 *p) { return (u32)p[0] << 24 | (u32)p[1] << 16 | (u32)p[2] << 8 | p[3]; }
 
-// Digits only, at most 18 of them.
+// Digits only, at most 18 of them (str_num).
 static bool parse_i64(Str s, i64 *out)
 {
-    if (s.len == 0 || s.len > 18) return false;
-    i64 v = 0;
-    for (isize i = 0; i < s.len; i++) {
-        if (s.p[i] < '0' || s.p[i] > '9') return false;
-        v = v * 10 + (s.p[i] - '0');
-    }
-    return *out = v, true;
+    i64 v = s.len > 18 ? -1 : str_num(s, 999999999999999999LL);   // (leading zeros counted)
+    return v >= 0 && (*out = v, true);
 }
 
 // The tEXt chunks of a whole PNG; false when it isn't one, or is cut short (no IEND).
@@ -619,7 +604,7 @@ static ThumbGot thumb_get(Arena *a, const ThumbAsk *q, Img *out)
     char uri[sizeof ((ThumbMeta *)0)->uri], file[PATH_MAX], fail[PATH_MAX];
     if (path_below(q->path, q->root)) return TG_NONE;   // the cache's own files (the spec)
     int level = thumb_level(q->px), side = 128 << level;
-    if (!thumb_uri(q->path, uri, sizeof uri) || !thumb_file(q->root, thumb_dirs[level], uri, file, sizeof file)) return TG_NONE;
+    if (!file_uri(q->path, uri, sizeof uri) || !thumb_file(q->root, thumb_dirs[level], uri, file, sizeof file)) return TG_NONE;
     struct stat st;
     ThumbMeta m;
     Str c = file_read_at(a, AT_FDCWD, file, THUMB_CACHED_MAX, &st, 0);

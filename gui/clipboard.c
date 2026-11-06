@@ -122,18 +122,8 @@ static void on_send(void *data, struct ext_data_control_source_v1 *s, const char
 {
     (void)data, (void)s;
     pthread_mutex_lock(&clip.mu);
-    Str p = STR_EMPTY;
-    if (strcmp(mime, CLIP_MIME_GNOME) == 0) p = clip.payload[CLIP_FMT_GNOME];
-    else if (strcmp(mime, CLIP_MIME_URIS) == 0) p = clip.payload[CLIP_FMT_URIS];
-    else if (strcmp(mime, CLIP_MIME_TEXT[0]) == 0 || strcmp(mime, CLIP_MIME_TEXT[1]) == 0) p = clip.payload[CLIP_FMT_TEXT];
-    fcntl(fd, F_SETFL, O_NONBLOCK);
-    i64 until = now_ms() + CLIP_WAIT_MS;
-    for (isize at = 0; at < p.len && now_ms() < until;) {
-        ssize_t k = write(fd, p.p + at, (size_t)(p.len - at));
-        if (k > 0) at += k;
-        else if (k < 0 && errno != EAGAIN && errno != EINTR) break;
-        else poll(&(struct pollfd){ .fd = fd, .events = POLLOUT }, 1, 50);
-    }
+    int f = clip_fmt_of(mime);
+    if (f >= 0) fd_write_timed(fd, clip.payload[f], CLIP_WAIT_MS);
     pthread_mutex_unlock(&clip.mu);
     close(fd);
 }
@@ -327,16 +317,9 @@ static bool clip_receive(Arena *a, int i, const char *mime, Str *out)
     isize avail;
     char *buf = arena_tail(a, &avail);
     if (avail > CLIP_READ_MAX) avail = CLIP_READ_MAX;
-    isize n = 0;
-    i64 until = now_ms() + CLIP_WAIT_MS;
-    while (n < avail - 1 && now_ms() < until) {
-        if (poll(&(struct pollfd){ .fd = fds[0], .events = POLLIN }, 1, 50) <= 0) continue;
-        ssize_t k = read(fds[0], buf + n, (size_t)(avail - 1 - n));
-        if (k <= 0) break;
-        n += k;
-    }
+    bool whole;
+    isize n = fd_read_timed(fds[0], buf, avail, CLIP_WAIT_MS, &whole);   // (what came within the time counts)
     close(fds[0]);
-    buf[n] = 0;
     arena_commit(a, n + 1);
     *out = (Str){ buf, n };
     return true;

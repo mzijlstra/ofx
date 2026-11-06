@@ -596,7 +596,7 @@ static void test_windows(void)
     CHECK(win_name("1") && win_name("4194304") && win_name("1234567890"));
     CHECK(!win_name("") && !win_name("0") && !win_name("12345678901") && !win_name("1 ") && !win_name("-1"));
     i64 t;
-    CHECK(win_body("12\n", 3, &t) && t == 12 && !win_body("\n", 1, &t) && !win_body("1", 1, &t) && !win_body("1a\n", 3, &t));
+    CHECK(win_body("12\n", 3, &t) && t == 12 && !win_body("\n", 1, &t) && !win_body("1", 1, &t) && !win_body("12", 2, &t) && !win_body("1a\n", 3, &t));
     CHECK(!win_body("99999999999999999999\n", 21, &t));
     kill(odd, SIGKILL);
     child_signal(odd);

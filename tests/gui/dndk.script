@@ -1,0 +1,28 @@
+# Code-health review 2026-11-06: our drag out brought back over another tab and taken off the
+# window again forgets that tab, so coming back starts the spring's 0.8 s again rather than finding
+# the old timer and opening the tab at once. dndpeer is a target beside ofx (layout as dnd.script:
+# tab 1 at 398,81, a.txt's row at 352,134); vptr holds the button.
+settle
+sh dndpeer target "$OFX_ROOT/peer.log" >/dev/null 2>&1 &
+sleep 800
+settle
+key ctrl-t
+wait-for 2000 tabs=2 tab=1
+key ctrl-tab
+wait-for 2000 tab=0 n=3
+sh vptr move 352 134 press wait 1500 move 398 81 wait 400 move 700 250 wait 1500 move 398 81 wait 1500 move 700 250 wait 500 release >"$OFX_ROOT/vptr.log" 2>&1 &
+wait-for 3000 dndpress=1
+point-ui row 1
+press-here
+move-by 0 10
+move-to 600 134
+expect drag=out
+wait-for 3000 dndover=1 spring=1 tab=0
+wait-for 3000 dndover=0
+expect drag=out spring=-1 tab=0
+wait-for 3000 dndover=1 spring=1
+expect tab=0
+wait-for 3000 tab=1 spring=-1
+wait-for 4000 drag=- dndout=done
+sh grep -q "finished" "$OFX_ROOT/peer.log"
+quit

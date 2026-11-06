@@ -5,9 +5,13 @@
 
 #include "../base/base.h"
 
+#include <errno.h>
+#include <fcntl.h>
 #include <limits.h>
+#include <poll.h>
 #include <stdarg.h>
 #include <stdio.h>
+#include <unistd.h>
 
 enum { CLIP_PATHS_MAX = 4096 };
 
@@ -24,10 +28,6 @@ typedef struct {
     isize n;
 } ClipFiles;
 
-// The payload for one format into the arena (NUL-terminated, the NUL not counted):
-//   gnome: "copy" or "cut", then a file:// URI a line (no newline at the end, as Nautilus writes)
-//   uris:  a file:// URI a line, each ending in CRLF (RFC 2483)
-//   text:  the paths a line, as they are (a terminal pastes them)
 // fmt at out + *n, cap bytes in all, *n moved past it: false, *n as it was, when it doesn't fit
 // (the clipboard's forms and shell_quote: F13 code-health review).
 static bool buf_put(char *out, isize cap, isize *n, const char *fmt, ...) __attribute__((format(printf, 4, 5)));
@@ -142,26 +142,80 @@ static Str clip_text(Arena *a, const ClipFiles *c, bool quoted)
     return (Str){ out, n };
 }
 
+// The payload for one format into the arena (NUL-terminated, the NUL not counted), for the clipboard's
+// offers (gui/clipboard.c) and a drag out's (gui/dnd.c); empty when it doesn't fit:
+//   gnome: "copy" or "cut", then a file:// URI a line (no newline at the end, as Nautilus writes)
+//   uris:  a file:// URI a line, each ending in CRLF (RFC 2483)
+//   text:  the paths a line, each quoted as a shell reads it back (clip_text)
 static Str clip_payload(Arena *a, const ClipFiles *c, ClipFormat f)
 {
     if (f == CLIP_FMT_TEXT) return clip_text(a, c, true);
     isize avail;
     char *out = arena_tail(a, &avail);
+    if (avail < 1) return arena_commit(a, 0), STR_EMPTY;   // (no room for the 0 either, as clip_text)
     isize n = 0;
     bool ok = true;
 #define PUT(...) (ok = ok && buf_put(out, avail, &n, __VA_ARGS__))
     if (f == CLIP_FMT_GNOME) PUT("%s", c->cut ? "cut" : "copy");
     for (isize i = 0; ok && i < c->n; i++) {
-        char enc[PATH_MAX * 3];
-        if (!percent_encode(str_from_c(c->path[i]), "/", enc, sizeof enc)) ok = false;
-        else if (f == CLIP_FMT_GNOME) PUT("\nfile://%s", enc);
-        else PUT("file://%s\r\n", enc);
+        char uri[PATH_MAX * 3 + 8];
+        if (!file_uri(c->path[i], uri, sizeof uri)) ok = false;
+        else if (f == CLIP_FMT_GNOME) PUT("\n%s", uri);
+        else PUT("%s\r\n", uri);
     }
 #undef PUT
     if (!ok) n = 0;
     out[n] = 0;
     arena_commit(a, n + 1);
     return (Str){ out, n };
+}
+
+// The format a MIME type asks for (CLIP_MIME_*), -1 for none of ours.
+static int clip_fmt_of(const char *mime)
+{
+    if (strcmp(mime, CLIP_MIME_GNOME) == 0) return CLIP_FMT_GNOME;
+    if (strcmp(mime, CLIP_MIME_URIS) == 0) return CLIP_FMT_URIS;
+    if (strcmp(mime, CLIP_MIME_TEXT[0]) == 0 || strcmp(mime, CLIP_MIME_TEXT[1]) == 0) return CLIP_FMT_TEXT;
+    return -1;
+}
+
+// Another program's bytes from fd into buf, cap - 1 at most and a NUL after them, wait_ms at most
+// (it writes in its own time): the count, *whole when it read to the end. For the clipboard's paste
+// and a drop's read (gui/clipboard.c, gui/dnd.c: their two copies had drifted, one giving up at an
+// EINTR: code-health review, 2026-11-06).
+static isize fd_read_timed(int fd, char *buf, isize cap, int wait_ms, bool *whole)
+{
+    isize n = 0;
+    *whole = false;
+    i64 until = now_ms() + wait_ms;
+    while (n < cap - 1 && now_ms() < until) {
+        if (poll(&(struct pollfd){ .fd = fd, .events = POLLIN }, 1, 50) <= 0) continue;
+        ssize_t k = read(fd, buf + n, (size_t)(cap - 1 - n));
+        if (k < 0 && (errno == EINTR || errno == EAGAIN)) continue;
+        if (k <= 0) {
+            *whole = k == 0;
+            break;
+        }
+        n += k;
+    }
+    buf[n] = 0;
+    return n;
+}
+
+// p to another program's fd, made nonblocking, wait_ms at most (it reads in its own time; one that
+// leaves early gets EPIPE, as SIGPIPE is blocked): the bytes written.
+static isize fd_write_timed(int fd, Str p, int wait_ms)
+{
+    fcntl(fd, F_SETFL, O_NONBLOCK);
+    i64 until = now_ms() + wait_ms;
+    isize at = 0;
+    while (at < p.len && now_ms() < until) {
+        ssize_t k = write(fd, p.p + at, (size_t)(p.len - at));
+        if (k > 0) at += k;
+        else if (k < 0 && errno != EAGAIN && errno != EINTR) break;
+        else poll(&(struct pollfd){ .fd = fd, .events = POLLOUT }, 1, 50);
+    }
+    return at;
 }
 
 // The paths in a gnome-copied-files or uri-list payload into c (strings in the arena). Only

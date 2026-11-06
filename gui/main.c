@@ -32,6 +32,7 @@
 #include "nanosvgrast.h"
 #include "GLFW/glfw3.h"
 #include "render.c"   // includes raylib and font.c
+#include "rlgl.h"     // (rlSetBlendFactorsSeparate: the drag image, F14)
 
 // Wakes the main loop's event wait from another thread; never once the window is closing, when
 // GLFW is being torn down (a cancelled job's part file removed at quit woke the watcher then).
@@ -149,6 +150,7 @@ static void timer_stop(void)
 
 #include "watch.c"
 #include "clipboard.c"
+#include "dnd.c"
 #include "counts.c"
 #include "thumbs.c"
 #include "space.c"
@@ -198,8 +200,10 @@ typedef struct {
 
 // What the left button holds, from its press until it is let go (input.c's drag_at): the zoom
 // slider's knob, the sidebar's edge; a press on files that may become a drag of them (DRAG_PRESS,
-// until it moves UI_DRAG_PX), and that drag (DRAG_FILES, F13 step 3).
-enum { DRAG_NONE, DRAG_ZOOM, DRAG_SIDE, DRAG_PRESS, DRAG_FILES };
+// until it moves UI_DRAG_PX), and that drag (DRAG_FILES, F13 step 3); then F14's, which the
+// compositor carries and ends: ours handed to it past the window's edge (DRAG_OUT), another
+// program's files over the window (DRAG_IN, no button of ours held).
+enum { DRAG_NONE, DRAG_ZOOM, DRAG_SIDE, DRAG_PRESS, DRAG_FILES, DRAG_OUT, DRAG_IN };
 
 // Where a drag of files would land (F13 step 3), and what is drawn lit for it: a folder row (at:
 // its place on screen), a sidebar row (the Trash's among them), a tab, a path button, the files'
@@ -336,19 +340,26 @@ static struct {
     bool      icons_missed, icons_reset_armed;
     UiTip     tip;          // the tooltip of the icon button under the pointer (Michael, 2026-10-24)
     bool      zoomed;       // the icon size changed: the next refit keeps the cursor's row (ui_refit)
-    int       drag;         // what the left button holds (DRAG_*: the zoom slider's knob, F6.3; the sidebar's edge, F13)
+    int       drag;         // what the left button holds, or the compositor's drag (DRAG_*, above)
     float     drag_x0;      // where the press was
     int       drag_w0;      // the sidebar's width then
     bool      drag_moved;   // (DRAG_SIDE) it moved: let go, the width is kept
-    float     drag_y0, drag_px, drag_py;   // (DRAG_PRESS, DRAG_FILES: the press's y; the pointer now)
+    float     drag_y0, drag_px, drag_py;   // (the press's y; the files' drags: the pointer now, the badge's place)
     char      drag_path[PATH_MAX];   // what the press was on (an entry, a tree row's folder)
     bool      drag_marked;  // a marked entry: the marks are dragged
     bool      drag_tree;    // a tree row: let go without a drag, it opens
     int       drag_side;    // its row on screen: a press let go there without a drag opens it
     char      drag_name[NAME_MAX + 1];   // the badge's: the entry pressed, or the tree row's folder
-    IconSlot *drag_icon;
+    char      drag_icon[128];   // its icon's key (a MIME type, or "folder" by that name): looked up when
+                                // drawn, as an icon cache reset mid-drag gives its slot to another (drag_icon_slot)
+    bool      drag_icon_named;  // the key is the icon's name, not a MIME type
+    bool      out_failed;   // (DRAG_FILES) the hand-off to the compositor failed: not tried again this drag
     int       drag_mods;    // Ctrl, Shift held (UI_MOD_*): a copy, a move
     Drop      drop;         // where it would land now
+    bool      out_over;     // (DRAG_OUT) back over the window: lit and answered as DRAG_FILES is
+    bool      out_own;      // (DRAG_OUT) dropped back on the window: its own drop said what it did
+    bool      in_nofiles;   // another program's drag over the window holds no files: the badge says so
+    u32       in_id;        // (DRAG_IN) the offer it is of (dnd_in_over): another offer's files are another drag
     int       spring_tab;   // the tab it is held over (not the one shown), -1 none (F13 step 4)
     i64       spring_at;    // since when
     int       side_px;      // the sidebar's width dragged to, UI_SIDE_W at first (fitted to the window: ui_side_fit)
@@ -415,6 +426,26 @@ static Undo      undo;
 static ClipFiles own;      // ofx's own copy or cut (own.n 0: none)
 static ClipFiles dragged;  // what a drag of files carries (F13 step 3), its own: the clipboard stays as it was
 static char     *dragged_real[CLIP_PATHS_MAX];   // each folder of it resolved (realpath), NULL for the rest: drop_takes
+
+// Files dragged over the window, lit and answered: a drag inside it (F13), ours out to other programs
+// brought back over it, or another program's (F14).
+static bool files_over(void)
+{
+    return app.drag == DRAG_FILES || app.drag == DRAG_IN || (app.drag == DRAG_OUT && app.out_over);
+}
+
+// A drag of files, or a press that may become one: the keys are its own (drag_keys).
+static bool drag_of_files(void)
+{
+    return app.drag == DRAG_PRESS || app.drag == DRAG_FILES || app.drag == DRAG_OUT || app.drag == DRAG_IN;
+}
+
+// A drag with another program: the compositor's, ended by it (drag_out_poll, drag_in_poll), never by
+// the window's own button or pointer.
+static bool drag_by_compositor(void)
+{
+    return app.drag == DRAG_OUT || app.drag == DRAG_IN;
+}
 // Bumped by every copy of ours, files or text: a cut's paste empties the clipboard after it only
 // if nothing was copied meanwhile (F5.2 review).
 static u32       own_gen;
@@ -549,6 +580,7 @@ static void quit_workers(void)
     count_join(&until), walk_join(&until), search_join(&until), thumbs_join(&until), space_join(&until), git_join(&until);
     jobs_join(&jobs_until), clear_join(&until);
     clip_close();
+    dnd_close();
 }
 
 static void usage(void)
@@ -611,6 +643,11 @@ static void test_knobs(void)
     if (getenv("OFX_TEST_CROSS")) job_test_cross = true;
     // The test guard: with OFX_GUI_ROOT set (the GUI tests), no write outside it.
     ops_guard(getenv("OFX_GUI_ROOT"));
+    // OFX_TEST_SANDBOX=off, under the guard only: bubblewrap's runs as they are (fs/sandbox.c), set
+    // before any thread that runs one starts (code-health review, 2026-11-06: thumbs_start set it,
+    // after git's worker could already have read it).
+    const char *sb = getenv("OFX_TEST_SANDBOX");
+    box_sandbox = !(ops_root[0] && sb && strcmp(sb, "off") == 0);
     const char *media = getenv("OFX_TEST_MEDIA");   // tests: mounts under it are removable (places.c)
     if (media && media[0]) snprintf(places_test_media, sizeof places_test_media, "%s", media);
     // OFX_TEST_LEAK=1 leaks one block on purpose: the control that shows LeakSanitizer reports
@@ -697,6 +734,7 @@ static void app_start(void)
     conf_start();   // (F10: before watch_start, which watches the file's folder)
     if (!watch_start()) set_status(true, "inotify is unavailable: no live refresh");
     clip_init();   // false: the clipboard stays inside ofx
+    dnd_init();    // (F14: drags to and from other programs)
     // OFX_TEST_COUNT_DELAY_MS: each count takes that much longer, so a test can change the listing
     // while answers for the old one are on their way, or (60 s) stand in for a hung mount at quit.
     counts.delay_ms = env_int("OFX_TEST_COUNT_DELAY_MS", 0, 0, 60000);
@@ -770,6 +808,9 @@ static bool poll_workers(void)
     if (git_take()) dirty = true;
     if (branch_switched()) dirty = true;
     if (thumbs_take()) dirty = true;
+    if (dnd_poll()) dirty = true;
+    if (drag_out_poll()) dirty = true;   // (F14: our drag out, back over the window or ended)
+    if (drag_in_poll()) dirty = true;    // (F14: another program's files over the window, or dropped)
     if (app.ui.view == UI_VIEW_SEARCH && search_take()) search_relist(), dirty = true;
     if (app.search_due && now_ms() >= app.search_due) app.search_due = 0, search_retype(), dirty = true;
     i64 was_due = restore.due, was_rem = rem.due;   // (F11: the tabs, a folder's view, written 2 s after a change)
@@ -846,6 +887,13 @@ int main(int argc, char **argv)
     sigaddset(&quit_signals, SIGINT);
     sigaddset(&quit_signals, SIGUSR1);
     pthread_sigmask(SIG_BLOCK, &quit_signals, NULL);
+    // SIGPIPE too, which nobody waits for: a program reading our clipboard or our drag that leaves
+    // early would end the window at the next write; blocked, the write gets EPIPE (F14). Children
+    // start with no signal blocked (fs/spawn.c, fs/sandbox.c, script.c's sh).
+    sigset_t pipe_sig;
+    sigemptyset(&pipe_sig);
+    sigaddset(&pipe_sig, SIGPIPE);
+    pthread_sigmask(SIG_BLOCK, &pipe_sig, NULL);
     spawn_init();
     test_knobs();
 
@@ -909,8 +957,8 @@ int main(int argc, char **argv)
         if (rows != app.ui.list.rows) ui_resize(&app.ui.list, rows), dirty = true;
         if (srows != app.ui.side.rows) ui_resize(&app.ui.side, srows), dirty = true;
         if (ui_tip_tick(&app.tip, now_ms())) dirty = true;
-        if (spring_tick() || (app.drag == DRAG_FILES && app.spring_tab >= 0)) dirty = true;   // (its bar fills as it waits)
-        if (app.drag == DRAG_FILES && app.drop.reloads != app.reloads) drop_find(app.drag_px, app.drag_py), dirty = true;   // (the rows under a still pointer changed)
+        if (spring_tick() || (files_over() && app.spring_tab >= 0)) dirty = true;   // (its bar fills as it waits)
+        if (files_over() && app.drop.reloads != app.reloads) drop_find(app.drag_px, app.drag_py), dirty = true;   // (the rows under a still pointer changed)
         if (dirty || scripted) {
             bool asked = dirty;   // (a frame an unscripted window draws too: what the script's checks read)
             i64 t0 = now_us();
@@ -925,10 +973,10 @@ int main(int argc, char **argv)
             dirty = font_frame_end();   // out of atlas: the next frame starts from an empty one
             // The frame may have moved things under the pointer: lit again, at once.
             Vector2 m = GetMousePosition();
-            if (scripted ? script.pointing && hover_refresh(true, script.px, script.py) : hover_refresh(IsCursorOnScreen(), m.x, m.y))
+            if (scripted && !script.user_pointer ? script.pointing && hover_refresh(true, script.px, script.py) : hover_refresh(IsCursorOnScreen(), m.x, m.y))
                 dirty = true, glfwPostEmptyEvent();
             if (app.icons_missed && app.icons_reset_armed) dirty = true, glfwPostEmptyEvent();   // emptied and drawn again at once
-            if (app.drag == DRAG_FILES && app.spring_tab >= 0) glfwPostEmptyEvent();   // (the spring's bar: the next frame at once)
+            if (files_over() && app.spring_tab >= 0) glfwPostEmptyEvent();   // (the spring's bar: the next frame at once)
         }
         PollInputEvents();   // waits for input, or for watch.c's wake-up
         if (atomic_exchange(&close_signal, false)) close_asked = true, closing_all = true;
@@ -937,14 +985,18 @@ int main(int argc, char **argv)
         UiInput in = input_real(&seen);
         if (scripted) {
             UiInput real = in;
-            in = ui_input_none();   // the user's input does not reach a scripted window (Ctrl+Q still quits),
-            if (script.user_keys) {   // but after `user-keys` the keyboard's does (vkbd in the test sway, 2026-10-28)
+            bool real_seen = seen;
+            // The user's input does not reach a scripted window (Ctrl+Q still quits), but after
+            // `user-keys` the keyboard's does (vkbd in the test sway, 2026-10-28), and after
+            // `user-pointer` all of it (vptr: code-health review, 2026-11-06).
+            if (!script.user_pointer) in = ui_input_none();
+            if (script.user_keys && !script.user_pointer) {
                 memcpy(in.ev, real.ev, sizeof *real.ev * (size_t)real.nev);
                 in.nev = real.nev;
             }
             script.pending = dirty;
             if (!script_input(&in)) break;
-            seen = script.gave || IsWindowResized() || (script.user_keys && real.nev > 0);   // (a frame the script gave no input to is one an unscripted window sleeps through)
+            seen = script.gave || IsWindowResized() || (script.user_keys && real.nev > 0) || (script.user_pointer && real_seen);   // (a frame the script gave no input to is one an unscripted window sleeps through)
         }
         drag_keys(&in);   // (Esc during a drag of files: the drag's)
         cursor_shape();

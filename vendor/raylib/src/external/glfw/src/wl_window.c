@@ -1921,6 +1921,9 @@ static void dataOfferHandleOffer(void* userData,
                                  struct wl_data_offer* offer,
                                  const char* mimeType)
 {
+    if (_glfw.wl.dragHookOffer)
+        _glfw.wl.dragHookOffer->offer(_glfw.wl.dragHookUser, offer, mimeType);
+
     for (unsigned int i = 0; i < _glfw.wl.offerCount; i++)
     {
         if (_glfw.wl.offers[i].offer == offer)
@@ -1935,9 +1938,28 @@ static void dataOfferHandleOffer(void* userData,
     }
 }
 
+// ofx (F14, 2026-11-05): a version 3 offer's actions, handed to the drag hook
+static void dataOfferHandleSourceActions(void* userData,
+                                         struct wl_data_offer* offer,
+                                         uint32_t actions)
+{
+    if (_glfw.wl.dragHookOffer)
+        _glfw.wl.dragHookOffer->source_actions(_glfw.wl.dragHookUser, offer, actions);
+}
+
+static void dataOfferHandleAction(void* userData,
+                                  struct wl_data_offer* offer,
+                                  uint32_t action)
+{
+    if (_glfw.wl.dragHookOffer)
+        _glfw.wl.dragHookOffer->action(_glfw.wl.dragHookUser, offer, action);
+}
+
 static const struct wl_data_offer_listener dataOfferListener =
 {
-    dataOfferHandleOffer
+    dataOfferHandleOffer,
+    dataOfferHandleSourceActions,
+    dataOfferHandleAction
 };
 
 static void dataDeviceHandleDataOffer(void* userData,
@@ -1958,6 +1980,9 @@ static void dataDeviceHandleDataOffer(void* userData,
 
     _glfw.wl.offers[_glfw.wl.offerCount - 1] = (_GLFWofferWayland) { offer };
     wl_data_offer_add_listener(offer, &dataOfferListener, NULL);
+
+    if (_glfw.wl.dragHookDevice)
+        _glfw.wl.dragHookDevice->data_offer(_glfw.wl.dragHookUser, device, offer);
 }
 
 static void dataDeviceHandleEnter(void* userData,
@@ -1968,6 +1993,23 @@ static void dataDeviceHandleEnter(void* userData,
                                   wl_fixed_t y,
                                   struct wl_data_offer* offer)
 {
+    // ofx (F14, 2026-11-05): with a drag hook the offer is the hook's, off GLFW's list
+    if (_glfw.wl.dragHookDevice)
+    {
+        for (unsigned int i = 0; i < _glfw.wl.offerCount; i++)
+        {
+            if (_glfw.wl.offers[i].offer == offer)
+            {
+                _glfw.wl.offers[i] = _glfw.wl.offers[_glfw.wl.offerCount - 1];
+                _glfw.wl.offerCount--;
+                break;
+            }
+        }
+
+        _glfw.wl.dragHookDevice->enter(_glfw.wl.dragHookUser, device, serial, surface, x, y, offer);
+        return;
+    }
+
     if (_glfw.wl.dragOffer)
     {
         wl_data_offer_destroy(_glfw.wl.dragOffer);
@@ -2015,6 +2057,12 @@ static void dataDeviceHandleEnter(void* userData,
 static void dataDeviceHandleLeave(void* userData,
                                   struct wl_data_device* device)
 {
+    if (_glfw.wl.dragHookDevice)
+    {
+        _glfw.wl.dragHookDevice->leave(_glfw.wl.dragHookUser, device);
+        return;
+    }
+
     if (_glfw.wl.dragOffer)
     {
         wl_data_offer_destroy(_glfw.wl.dragOffer);
@@ -2029,11 +2077,19 @@ static void dataDeviceHandleMotion(void* userData,
                                    wl_fixed_t x,
                                    wl_fixed_t y)
 {
+    if (_glfw.wl.dragHookDevice)
+        _glfw.wl.dragHookDevice->motion(_glfw.wl.dragHookUser, device, time, x, y);
 }
 
 static void dataDeviceHandleDrop(void* userData,
                                  struct wl_data_device* device)
 {
+    if (_glfw.wl.dragHookDevice)
+    {
+        _glfw.wl.dragHookDevice->drop(_glfw.wl.dragHookUser, device);
+        return;
+    }
+
     if (!_glfw.wl.dragOffer)
         return;
 
@@ -3288,6 +3344,29 @@ GLFWAPI struct wl_display* glfwGetWaylandDisplay(void)
     }
 
     return _glfw.wl.display;
+}
+
+// ofx (F14, 2026-11-05): the one data device a compositor may send drags to (Hyprland sends them
+// to a client's first only), and its drags handed to the application instead of GLFW's own drop
+GLFWAPI struct wl_data_device* glfwGetWaylandDataDevice(void)
+{
+    _GLFW_REQUIRE_INIT_OR_RETURN(NULL);
+
+    if (_glfw.platform.platformID != GLFW_PLATFORM_WAYLAND)
+        return NULL;
+
+    return _glfw.wl.dataDevice;
+}
+
+GLFWAPI void glfwSetWaylandDragHook(const struct wl_data_device_listener* device,
+                                    const struct wl_data_offer_listener* offer,
+                                    void* user)
+{
+    _GLFW_REQUIRE_INIT();
+
+    _glfw.wl.dragHookDevice = device;
+    _glfw.wl.dragHookOffer = offer;
+    _glfw.wl.dragHookUser = user;
 }
 
 GLFWAPI struct wl_surface* glfwGetWaylandWindow(GLFWwindow* handle)

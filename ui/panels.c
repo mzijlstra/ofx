@@ -4,11 +4,12 @@
 
 // ---- Properties (F7.2) --------------------------------------------------------------------------
 
-// The Properties panel opened, the focus on the grid's first box (F7.2).
-static UiAction ui_props_open(Ui *u)
+// The Properties panel opened, the focus on the grid's first box (F7.2), on which (UI_PROPS_*: the
+// marked or the cursor's, a menu's entry, the folder shown).
+static UiAction ui_props_open(Ui *u, int which)
 {
     u->panel = UI_PANEL_PROPS, u->prop_at = 0;   // (the menu closed the edit and find lines; Ctrl+I in them is theirs)
-    return (UiAction){ UA_PROPS, UI_PROPS_MARKED, false };
+    return (UiAction){ UA_PROPS, which, false };
 }
 
 // A key while the Properties panel is up; it takes every key (a panel). Arrows and h, j, k, l move
@@ -72,7 +73,6 @@ static void ui_pick_filter(UiPick *p, UiMatchOpts opts, const Str *names, isize 
 static UiPickDo ui_pick_key(Ui *u, UiPick *p, UiEvent e, const UiInput *in)
 {
     UiList *l = &p->list;
-    int page = l->rows > 1 ? l->rows - 1 : 1;
     switch (e.key) {
     case UK_ESC: return UI_PICK_CLOSE;
     case UK_TAB: p->in_list = !p->in_list; return UI_PICK_NONE;
@@ -81,16 +81,9 @@ static UiPickDo ui_pick_key(Ui *u, UiPick *p, UiEvent e, const UiInput *in)
     }
     if (p->in_list) {
         e = ui_vi_key(e);
-        switch (e.key) {
-        case UK_DOWN: ui_move(l, 1); break;
-        case UK_UP:
-            if (l->sel == 0) p->in_list = false;
-            else ui_move(l, -1);
-            break;
-        case UK_HOME: ui_move(l, -l->n); break;
-        case UK_END: ui_move(l, l->n); break;
-        case UK_PAGEUP: ui_move(l, -page); break;
-        case UK_PAGEDOWN: ui_move(l, page); break;
+        if (e.key == UK_UP && l->sel == 0) p->in_list = false;   // (above the first row: the field)
+        else if (ui_list_nav(l, e.key)) {}
+        else switch (e.key) {
         case UK_NONE:
         case UK_BACKSPACE:   // typing (a character there is) in the list: the field's end, then typed there
             if (e.key == UK_NONE && ui_utf8(e.ch, (char[4]){ 0 }) == 0) break;
@@ -162,12 +155,18 @@ static UiAction ui_ow_do(Ui *u, UiPickDo d, const UiInput *in)
     return UI_NONE;
 }
 
+// Open With's "Use as default" box flipped, when the type allows one (a key, or the box pressed).
+static void ui_ow_def_flip(Ui *u)
+{
+    if (u->ow_def_can) u->ow_def = !u->ow_def;
+}
+
 // A key while the panel is up: the picker's (ui_pick_key: Enter opens the app under the cursor),
 // and Alt+C, Alt+W and Alt+R flip the toggles, Alt+D the box that makes it the default (F7.3.1).
 static UiAction ui_ow_event(Ui *u, UiEvent e, const UiInput *in)
 {
     if (e.key == UK_MENU && e.ch == 'd') {
-        if (u->ow_def_can) u->ow_def = !u->ow_def;
+        ui_ow_def_flip(u);
         return UI_NONE;
     }
     if (ui_toggle_key(e)) {
@@ -299,7 +298,6 @@ static UiAction ui_bmp_do(Ui *u, int what)
 static UiAction ui_bmp_event(Ui *u, UiEvent e, Str paste)
 {
     UiList *l = &u->bmp_list;
-    int page = l->rows > 1 ? l->rows - 1 : 1;
     if (u->bmp_naming) {
         if (ui_line_key(u, ui_bmp_line(u), e, paste)) return UI_NONE;
         switch (e.key) {
@@ -310,13 +308,8 @@ static UiAction ui_bmp_event(Ui *u, UiEvent e, Str paste)
         return UI_NONE;
     }
     e = ui_vi_key(e);
+    if (ui_list_nav(l, e.key)) return UI_NONE;
     switch (e.key) {
-    case UK_DOWN: ui_move(l, 1); break;
-    case UK_UP: ui_move(l, -1); break;
-    case UK_HOME: ui_move(l, -l->n); break;
-    case UK_END: ui_move(l, l->n); break;
-    case UK_PAGEUP: ui_move(l, -page); break;
-    case UK_PAGEDOWN: ui_move(l, page); break;
     case UK_DELETE: return ui_bmp_do(u, UI_BMP_REMOVE);
     case UK_F2: return ui_bmp_do(u, UI_BMP_RENAME);
     case UK_PARENT: return ui_bmp_do(u, UI_BMP_UP);

@@ -264,15 +264,19 @@ static UiDropOp drop_op(const Drop *d)
 
 // The files dragged, dropped on d: trashed, or copied or moved there as a paste is (its job, its
 // clash questions, its undo), from their own list, so the clipboard stays as it was.
-static void drop_do(const Drop *d)
+static void drop_with(const Drop *d, UiDropOp op)
 {
-    UiDropOp op = drop_op(d);
     if (op == UI_DROP_TRASH) {
         trash_paths(dragged.path, dragged.n, app.drag_marked);
         return;
     }
     dragged.cut = op == UI_DROP_MOVE;
     copy_here(&dragged, d->dir);
+}
+
+static void drop_do(const Drop *d)
+{
+    drop_with(d, drop_op(d));
 }
 
 static void paste(const char *dest)

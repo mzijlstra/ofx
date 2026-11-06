@@ -141,6 +141,35 @@ static void part_name(char *out, size_t cap, const char *name)
     else snprintf(out, cap, ".ofx-part-%d-%d", (int)getpid(), atomic_fetch_add(&seq, 1));
 }
 
+// A name clash at ddir/dname (st the source's, dt what is there), as the job's ask answers it, the
+// same for a copy and a move (code-health review, 2026-11-06: their two copies had drifted). -1: a
+// cancel or an error (the caller returns false); 0: skipped, counted done when count (the caller
+// returns true); 1: go on, into *dname (keep's free name, in keep), merging two folders or
+// replacing a file.
+static int job_resolve_clash(Job *j, const struct stat *st, const struct stat *dt, const char **dname, char *keep, size_t cap,
+                             int depth, bool count, bool *merge, bool *replace)
+{
+    bool dir = S_ISDIR(st->st_mode);
+    *merge = *replace = false;
+    Answer a = job_clash(j, dir, S_ISDIR(dt->st_mode));
+    if (a == ANS_CANCEL) return -1;
+    if (a == ANS_KEEP) {
+        char pd[PATH_MAX];   // (the folder of where, for name_free)
+        if (!path_parent(pd, sizeof pd, j->where) || !name_free(pd, str_from_c(*dname), dir, false, true, keep, cap))
+            return job_error(j, "%s: no free name", j->where), -1;
+        *dname = keep;
+        return 1;
+    }
+    if (a != ANS_SKIP && dir != S_ISDIR(dt->st_mode))
+        job_note(j, "%s: can't replace a %s with a %s", j->where, S_ISDIR(dt->st_mode) ? "folder" : "file", dir ? "folder" : "file");
+    else if (a == ANS_SKIP) job_note(j, "%s: skipped", j->where);
+    else return dir ? (*merge = true) : (*replace = true), 1;
+    if (count) atomic_fetch_add(&j->files_done, 1);
+    if (depth == 0) j->top = OUT_SKIPPED;
+    job_tick(j);
+    return 0;
+}
+
 // ---- counting -----------------------------------------------------------------------------------
 
 // Files (anything not a folder) and their bytes under dirfd/name, into the totals.
@@ -246,92 +275,53 @@ static bool copy_children(Job *j, int sfd, int dfd, bool fresh, int depth)
     return ok && !job_cancelled(j);
 }
 
-// One entry, sdir/sname to ddir/dname, the target new (`fresh`, written directly: it is inside a
-// part folder) or possibly there (a clash is asked). False on an error or a cancel.
-static bool copy_into(Job *j, int sdir, const char *sname, int ddir, const char *dname, bool fresh, int depth)
+// A folder, sfd (st its stat) to ddir/dname: into the folder there (merge), or made under a part
+// name and renamed to dname once whole (fresh: written directly, inside a part folder already).
+static bool copy_dir(Job *j, int sfd, const struct stat *st, int ddir, const char *dname, bool fresh, bool merge, int depth)
 {
-    if (job_cancelled(j)) return false;
-    if (depth > TREE_DEPTH_MAX) return job_error(j, "%s: folders nested too deep", j->where), false;
-    struct stat st, dt;
-    if (fstatat(sdir, sname, &st, AT_SYMLINK_NOFOLLOW) != 0) return job_error(j, "%s: %s", sname, strerror(errno)), false;
-    bool replace = false, merge = false;
-    char keep[NAME_MAX + 1];
-    if (!fresh && fstatat(ddir, dname, &dt, AT_SYMLINK_NOFOLLOW) == 0) {
-        Answer a = job_clash(j, S_ISDIR(st.st_mode), S_ISDIR(dt.st_mode));
-        if (a == ANS_CANCEL) return false;
-        if (a == ANS_SKIP) {
-            job_note(j, "%s: skipped", j->where);
-            if (!S_ISDIR(st.st_mode)) atomic_fetch_add(&j->files_done, 1);
-            if (depth == 0) j->top = OUT_SKIPPED;
-            return true;
-        }
-        if (a == ANS_KEEP) {
-            // The folder of where, for name_free.
-            char pd[PATH_MAX];
-            if (!path_parent(pd, sizeof pd, j->where) || !name_free(pd, str_from_c(dname), S_ISDIR(st.st_mode), false, true, keep, sizeof keep))
-                return job_error(j, "%s: no free name", j->where), false;
-            dname = keep;
-        } else if (S_ISDIR(st.st_mode) != S_ISDIR(dt.st_mode)) {
-            job_note(j, "%s: can't replace a %s with a %s", j->where, S_ISDIR(dt.st_mode) ? "folder" : "file",
-                     S_ISDIR(st.st_mode) ? "folder" : "file");
-            if (depth == 0) j->top = OUT_SKIPPED;
-            return true;
-        } else if (S_ISDIR(st.st_mode)) {
-            merge = true;
-        } else {
-            replace = true;
-        }
-    }
-    if (depth == 0) j->top = merge ? OUT_MERGED : replace ? OUT_REPLACED : OUT_NEW, snprintf(j->top_name, sizeof j->top_name, "%s", dname);
-
-    if (S_ISDIR(st.st_mode)) {
-        int sfd = openat(sdir, sname, O_RDONLY | O_CLOEXEC | O_DIRECTORY | O_NOFOLLOW);
-        if (sfd < 0) return job_error(j, "%s: %s", j->where, strerror(errno)), false;
-        if (merge) {
-            int dfd = openat(ddir, dname, O_RDONLY | O_CLOEXEC | O_DIRECTORY | O_NOFOLLOW);
-            if (dfd < 0) {
-                close(sfd);
-                return job_error(j, "%s: %s", j->where, strerror(errno)), false;
-            }
-            bool ok = copy_children(j, sfd, dfd, false, depth);
-            close(dfd), close(sfd);
-            return ok;
-        }
-        char part[NAME_MAX + 1];
-        if (fresh) snprintf(part, sizeof part, "%s", dname);
-        else part_name(part, sizeof part, dname);
-        if (mkdirat(ddir, part, 0700) != 0) {
-            close(sfd);
-            return job_error(j, "%s: %s", j->where, strerror(errno)), false;
-        }
-        int dfd = openat(ddir, part, O_RDONLY | O_CLOEXEC | O_DIRECTORY | O_NOFOLLOW);
-        bool ok = dfd >= 0 && copy_children(j, sfd, dfd, true, depth);
-        if (dfd < 0) job_error(j, "%s: %s", j->where, strerror(errno));
-        if (ok) {
-            fchmod(dfd, st.st_mode & 07777);
-            futimens(dfd, (struct timespec[2]){ st.st_atim, st.st_mtim });
-        }
-        if (dfd >= 0) close(dfd);
-        close(sfd);
-        if (ok && !fresh && renameat2(ddir, part, ddir, dname, RENAME_NOREPLACE) != 0) {
-            job_error(j, "%s: %s", j->where, strerror(errno));
-            ok = false;
-        }
-        if (!ok && !fresh) part_remove(ddir, part);
+    if (merge) {
+        int dfd = openat(ddir, dname, O_RDONLY | O_CLOEXEC | O_DIRECTORY | O_NOFOLLOW);
+        if (dfd < 0) return job_error(j, "%s: %s", j->where, strerror(errno)), false;
+        bool ok = copy_children(j, sfd, dfd, false, depth);
+        close(dfd);
         return ok;
     }
+    char part[NAME_MAX + 1];
+    if (fresh) snprintf(part, sizeof part, "%s", dname);
+    else part_name(part, sizeof part, dname);
+    if (mkdirat(ddir, part, 0700) != 0) return job_error(j, "%s: %s", j->where, strerror(errno)), false;
+    int dfd = openat(ddir, part, O_RDONLY | O_CLOEXEC | O_DIRECTORY | O_NOFOLLOW);
+    bool ok = dfd >= 0 && copy_children(j, sfd, dfd, true, depth);
+    if (dfd < 0) job_error(j, "%s: %s", j->where, strerror(errno));
+    if (ok) {
+        fchmod(dfd, st->st_mode & 07777);
+        futimens(dfd, (struct timespec[2]){ st->st_atim, st->st_mtim });
+    }
+    if (dfd >= 0) close(dfd);
+    if (ok && !fresh && renameat2(ddir, part, ddir, dname, RENAME_NOREPLACE) != 0) {
+        job_error(j, "%s: %s", j->where, strerror(errno));
+        ok = false;
+    }
+    if (!ok && !fresh) part_remove(ddir, part);
+    return ok;
+}
 
+// Anything but a folder, sdir/sname (st its stat) to ddir/dname: a link as a link, a file's bytes,
+// under a part name renamed to dname once whole (over what is there only to replace it; fresh:
+// written directly). Anything else is skipped.
+static bool copy_leaf(Job *j, int sdir, const char *sname, const struct stat *st, int ddir, const char *dname, bool fresh, bool replace)
+{
     char part[NAME_MAX + 1];
     if (fresh) snprintf(part, sizeof part, "%s", dname);
     else part_name(part, sizeof part, dname);
     bool ok = true;
-    if (S_ISLNK(st.st_mode)) {
+    if (S_ISLNK(st->st_mode)) {
         char target[PATH_MAX];
         ssize_t k = readlinkat(sdir, sname, target, sizeof target - 1);
         if (k < 0 || symlinkat((target[k < 0 ? 0 : k] = 0, target), ddir, part) != 0) ok = false;
-        if (ok) utimensat(ddir, part, (struct timespec[2]){ st.st_atim, st.st_mtim }, AT_SYMLINK_NOFOLLOW);
+        if (ok) utimensat(ddir, part, (struct timespec[2]){ st->st_atim, st->st_mtim }, AT_SYMLINK_NOFOLLOW);
         if (!ok) job_error(j, "%s: %s", j->where, strerror(errno));
-    } else if (S_ISREG(st.st_mode)) {
+    } else if (S_ISREG(st->st_mode)) {
         int sfd = openat(sdir, sname, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
         int dfd = sfd < 0 ? -1 : openat(ddir, part, O_WRONLY | O_CLOEXEC | O_CREAT | O_EXCL, 0600);
         if (sfd < 0 || dfd < 0) {
@@ -340,8 +330,8 @@ static bool copy_into(Job *j, int sdir, const char *sname, int ddir, const char 
         } else {
             ok = copy_bytes(j, sfd, dfd);
             if (ok) {
-                fchmod(dfd, st.st_mode & 07777);
-                futimens(dfd, (struct timespec[2]){ st.st_atim, st.st_mtim });
+                fchmod(dfd, st->st_mode & 07777);
+                futimens(dfd, (struct timespec[2]){ st->st_atim, st->st_mtim });
             }
         }
         if (sfd >= 0) close(sfd);
@@ -369,6 +359,29 @@ static bool copy_into(Job *j, int sdir, const char *sname, int ddir, const char 
     return ok;
 }
 
+// One entry, sdir/sname to ddir/dname, the target new (`fresh`, written directly: it is inside a
+// part folder) or possibly there (a clash is asked). False on an error or a cancel.
+static bool copy_into(Job *j, int sdir, const char *sname, int ddir, const char *dname, bool fresh, int depth)
+{
+    if (job_cancelled(j)) return false;
+    if (depth > TREE_DEPTH_MAX) return job_error(j, "%s: folders nested too deep", j->where), false;
+    struct stat st, dt;
+    if (fstatat(sdir, sname, &st, AT_SYMLINK_NOFOLLOW) != 0) return job_error(j, "%s: %s", sname, strerror(errno)), false;
+    bool replace = false, merge = false;
+    char keep[NAME_MAX + 1];
+    if (!fresh && fstatat(ddir, dname, &dt, AT_SYMLINK_NOFOLLOW) == 0) {
+        int go = job_resolve_clash(j, &st, &dt, &dname, keep, sizeof keep, depth, !S_ISDIR(st.st_mode), &merge, &replace);   // (a copy counts files)
+        if (go <= 0) return go == 0;
+    }
+    if (depth == 0) j->top = merge ? OUT_MERGED : replace ? OUT_REPLACED : OUT_NEW, snprintf(j->top_name, sizeof j->top_name, "%s", dname);
+    if (!S_ISDIR(st.st_mode)) return copy_leaf(j, sdir, sname, &st, ddir, dname, fresh, replace);
+    int sfd = openat(sdir, sname, O_RDONLY | O_CLOEXEC | O_DIRECTORY | O_NOFOLLOW);
+    if (sfd < 0) return job_error(j, "%s: %s", j->where, strerror(errno)), false;
+    bool ok = copy_dir(j, sfd, &st, ddir, dname, fresh, merge, depth);
+    close(sfd);
+    return ok;
+}
+
 // ---- moving -----------------------------------------------------------------------------------
 
 static bool move_into(Job *j, int sdir, const char *sname, int ddir, const char *dname, int depth);
@@ -386,14 +399,26 @@ static bool move_merge(Job *j, int sdir, const char *sname, int ddir, const char
     int fd = fcntl(sfd, F_DUPFD_CLOEXEC, 0);
     DIR *d = fd >= 0 ? fdopendir(fd) : NULL;
     bool ok = d != NULL;
-    // Moving entries out while readdir runs: passes until one moves nothing.
-    for (isize moved = 1; ok && moved > 0 && !job_cancelled(j);) {
+    // Moving entries out while readdir runs: passes until one moves nothing. An entry left behind (a
+    // skip in it) isn't visited again, or its clash was asked once a pass (code-health review,
+    // 2026-11-06); past LEFT_MAX of them no other pass runs (readdir still returns every entry
+    // that stays: POSIX leaves only those removed or added unspecified). Known by inode and name
+    // both: an inode alone is every hard link of it, which were then never moved (review,
+    // 2026-11-06).
+    enum { LEFT_MAX = 64 };
+    struct { ino_t ino; u64 name; } left[LEFT_MAX];
+    int nleft = 0;
+    for (isize moved = 1; ok && moved > 0 && nleft <= LEFT_MAX && !job_cancelled(j);) {
         moved = 0;
         rewinddir(d);
         for (struct dirent *de; ok && !job_cancelled(j) && (de = readdir(d));) {
             if (!strcmp(de->d_name, ".") || !strcmp(de->d_name, "..")) continue;
             struct stat before;
             if (fstatat(sfd, de->d_name, &before, AT_SYMLINK_NOFOLLOW) != 0) continue;
+            bool seen = false;
+            u64 name = str_hash(str_from_c(de->d_name));
+            for (int k = 0; k < nleft && k < LEFT_MAX && !seen; k++) seen = left[k].ino == before.st_ino && left[k].name == name;
+            if (seen) continue;
             char nm[NAME_MAX + 1];
             snprintf(nm, sizeof nm, "%s", de->d_name);
             size_t back = job_push(j, nm);
@@ -401,6 +426,7 @@ static bool move_merge(Job *j, int sdir, const char *sname, int ddir, const char
             ok = move_into(j, sfd, nm, dfd, nm, depth + 1);
             job_pop(j, back);
             if (ok && j->skipped == skipped) moved++;
+            else if (ok && nleft++ < LEFT_MAX) left[nleft - 1].ino = before.st_ino, left[nleft - 1].name = name;
         }
     }
     if (d) closedir(d);
@@ -415,7 +441,7 @@ static bool move_into(Job *j, int sdir, const char *sname, int ddir, const char 
 {
     if (job_cancelled(j)) return false;
     if (renameat2(sdir, sname, ddir, dname, RENAME_NOREPLACE) == 0) {
-        atomic_fetch_add(&j->files_done, 1);
+        if (depth == 0) atomic_fetch_add(&j->files_done, 1);   // (a move on one drive counts its items: job_run)
         if (depth == 0) j->top = OUT_NEW, snprintf(j->top_name, sizeof j->top_name, "%s", dname);
         job_tick(j);
         return true;
@@ -424,31 +450,20 @@ static bool move_into(Job *j, int sdir, const char *sname, int ddir, const char 
     struct stat st, dt;
     if (fstatat(sdir, sname, &st, AT_SYMLINK_NOFOLLOW) != 0 || fstatat(ddir, dname, &dt, AT_SYMLINK_NOFOLLOW) != 0)
         return job_error(j, "%s: %s", j->where, strerror(errno)), false;
-    Answer a = job_clash(j, S_ISDIR(st.st_mode), S_ISDIR(dt.st_mode));
-    if (a == ANS_CANCEL) return false;
-    if (a == ANS_SKIP) {
-        if (depth == 0) j->top = OUT_SKIPPED;
-        return job_note(j, "%s: skipped", j->where), true;
+    bool merge, replace;
+    char keep[NAME_MAX + 1];
+    int go = job_resolve_clash(j, &st, &dt, &dname, keep, sizeof keep, depth, depth == 0, &merge, &replace);
+    if (go <= 0) return go == 0;
+    if (depth == 0) j->top = merge ? OUT_MERGED : replace ? OUT_REPLACED : OUT_NEW, snprintf(j->top_name, sizeof j->top_name, "%s", dname);
+    bool ok;
+    if (merge) ok = move_merge(j, sdir, sname, ddir, dname, depth);
+    else {   // over the file there to replace it; under keep's free name, never over anything
+        ok = (replace ? renameat(sdir, sname, ddir, dname) : renameat2(sdir, sname, ddir, dname, RENAME_NOREPLACE)) == 0;
+        if (!ok) job_error(j, "%s: %s", j->where, strerror(errno));
     }
-    if (a == ANS_KEEP) {
-        char pd[PATH_MAX], keep[NAME_MAX + 1];
-        if (!path_parent(pd, sizeof pd, j->where) || !name_free(pd, str_from_c(dname), S_ISDIR(st.st_mode), false, true, keep, sizeof keep))
-            return job_error(j, "%s: no free name", j->where), false;
-        if (renameat2(sdir, sname, ddir, keep, RENAME_NOREPLACE) != 0) return job_error(j, "%s: %s", j->where, strerror(errno)), false;
-        atomic_fetch_add(&j->files_done, 1);
-        if (depth == 0) j->top = OUT_NEW, snprintf(j->top_name, sizeof j->top_name, "%s", keep);
-        return true;
-    }
-    if (S_ISDIR(st.st_mode) != S_ISDIR(dt.st_mode)) {
-        job_note(j, "%s: can't replace a %s with a %s", j->where, S_ISDIR(dt.st_mode) ? "folder" : "file", S_ISDIR(st.st_mode) ? "folder" : "file");
-        if (depth == 0) j->top = OUT_SKIPPED;
-        return true;
-    }
-    if (depth == 0) j->top = S_ISDIR(st.st_mode) ? OUT_MERGED : OUT_REPLACED, snprintf(j->top_name, sizeof j->top_name, "%s", dname);
-    if (S_ISDIR(st.st_mode)) return move_merge(j, sdir, sname, ddir, dname, depth);
-    if (renameat(sdir, sname, ddir, dname) != 0) return job_error(j, "%s: %s", j->where, strerror(errno)), false;
-    atomic_fetch_add(&j->files_done, 1);
-    return true;
+    if (ok && depth == 0) atomic_fetch_add(&j->files_done, 1);
+    job_tick(j);
+    return ok;
 }
 
 // ---- the job ----------------------------------------------------------------------------------

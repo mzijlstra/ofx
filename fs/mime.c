@@ -57,34 +57,28 @@ enum { READ_UNSIZED_MAX = MiB(1) };
 
 static Str read_file(Arena *a, const char *path)
 {
-    // A FIFO or a device at one of these paths would block fopen: opened without blocking, then
-    // regular files only (the fstat below; a stat before the open raced the file's change).
+    // A FIFO or a device at one of these paths would block the open: opened without blocking, then
+    // regular files only (file_read_fd; a stat before the open raced the file's change).
     int fd = open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
-    FILE *f = fd >= 0 ? fdopen(fd, "rb") : NULL;
-    if (!f) {
-        if (fd >= 0) close(fd);
-        return STR_EMPTY;
-    }
+    if (fd < 0) return STR_EMPTY;
     struct stat st;
-    char *dst = NULL;
-    size_t n = 0;
-    bool whole = false;
-    if (fstat(fileno(f), &st) == 0 && S_ISREG(st.st_mode) && st.st_size == 0) {
-        isize avail;
-        dst = arena_tail(a, &avail);
-        size_t cap = avail - 1 < READ_UNSIZED_MAX ? (size_t)(avail - 1) : READ_UNSIZED_MAX;
-        for (size_t got; avail > 1 && n < cap && (got = fread(dst + n, 1, cap - n, f)) > 0;) n += got;
-        whole = feof(f) && !ferror(f);
+    Str s = STR_EMPTY;
+    if (fstat(fd, &st) != 0) {
+    } else if (S_ISREG(st.st_mode) && st.st_size == 0) {   // (procfs: read to its end)
+        isize avail, n = 0;
+        char *dst = arena_tail(a, &avail);
+        isize cap = avail - 1 < READ_UNSIZED_MAX ? avail - 1 : READ_UNSIZED_MAX;
+        ssize_t got = 1;
+        while (avail > 1 && n < cap && (got = read(fd, dst + n, (size_t)(cap - n))) > 0) n += got;
+        bool whole = avail > 1 && got == 0;
         if (!whole && n == READ_UNSIZED_MAX) fprintf(stderr, "ofx: WARN %s is over %d bytes: not read\n", path, READ_UNSIZED_MAX);
-        arena_commit(a, whole ? (isize)n + 1 : 0);
-    } else if (S_ISREG(st.st_mode) && (dst = arena_try_push(a, (isize)st.st_size + 1, 1))) {
-        n = fread(dst, 1, (size_t)st.st_size, f);
-        whole = n == (size_t)st.st_size;
+        if (whole) dst[n] = 0, s = (Str){ dst, n };
+        arena_commit(a, whole ? n + 1 : 0);
+    } else {
+        s = file_read_fd(a, fd, &st, PTRDIFF_MAX - 1, true);
     }
-    fclose(f);
-    if (!whole) return STR_EMPTY;
-    dst[n] = 0;
-    return (Str){ dst, (isize)n };
+    close(fd);
+    return s;
 }
 
 // The next line of s from *at, without its newline.

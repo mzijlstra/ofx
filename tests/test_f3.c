@@ -641,6 +641,32 @@ static void test_job(void)
     job_run(j);
     CHECK(strcmp(slurp(at("j/mv/src/e/k")), "k1") == 0 && strcmp(slurp(at("j/mv/dst/e/k")), "k0") == 0);
     CHECK(strcmp(slurp(at("j/mv/dst/e/l")), "l") == 0 && !there(at("j/mv/src/e/l")));
+    // Asked once: a later pass doesn't visit the entry it left (it asked again, and the answers ran
+    // out into a cancel); a move on one drive counts its one item done, not each entry merged
+    // (code-health review, 2026-11-06).
+    CHECK(asks.at == 2 && j->item[0].out == OUT_MERGED && !atomic_load(&j->cancel));
+    CHECK(atomic_load(&j->files_total) == 1 && atomic_load(&j->files_done) == 1);
+    // The entry left is known by its name too: k00's 39 other hard links all move although k, one
+    // more name of it, is skipped (an inode alone left them all; review, 2026-11-06). k is linked
+    // last, so tmpfs's readdir, newest first, meets it first.
+    put(at("j/mv/src/h/k00"), "h");
+    put(at("j/mv/dst/h/k"), "k0");
+    for (int i = 1; i < 40; i++) {
+        char ln[32];
+        snprintf(ln, sizeof ln, "j/mv/src/h/k%02d", i);
+        CHECK(link(at("j/mv/src/h/k00"), at(ln)) == 0);
+    }
+    CHECK(link(at("j/mv/src/h/k00"), at("j/mv/src/h/k")) == 0);
+    asks_set(2, ANS_REPLACE, ANS_SKIP);
+    j = job_new(JOB_MOVE, 1, at("j/mv/src/h"), at("j/mv/dst/h"));
+    job_run(j);
+    int moved = 0;
+    for (int i = 0; i < 40; i++) {
+        char ln[32];
+        snprintf(ln, sizeof ln, "j/mv/dst/h/k%02d", i);
+        moved += there(at(ln));
+    }
+    CHECK(moved == 40 && there(at("j/mv/src/h/k")) && strcmp(slurp(at("j/mv/dst/h/k")), "k0") == 0 && asks.at == 2 && !atomic_load(&j->cancel));
     // Move clashes: replace a file, keep both.
     put(at("j/mv/src/r"), "r1");
     put(at("j/mv/dst/r"), "r0");
@@ -648,6 +674,13 @@ static void test_job(void)
     j = job_new(JOB_MOVE, 1, at("j/mv/src/r"), at("j/mv/dst/r"));
     job_run(j);
     CHECK(!there(at("j/mv/src/r")) && strcmp(slurp(at("j/mv/dst/r")), "r1") == 0 && j->item[0].out == OUT_REPLACED);
+    // A skip at the top counts the item done, so the progress ends whole.
+    put(at("j/mv/src/r"), "r3");
+    asks_set(1, ANS_SKIP);
+    j = job_new(JOB_MOVE, 1, at("j/mv/src/r"), at("j/mv/dst/r"));
+    job_run(j);
+    CHECK(j->item[0].out == OUT_SKIPPED && atomic_load(&j->files_total) == 1 && atomic_load(&j->files_done) == 1);
+    unlink(at("j/mv/src/r"));
     put(at("j/mv/src/r"), "r2");
     asks_set(1, ANS_KEEP);
     j = job_new(JOB_MOVE, 1, at("j/mv/src/r"), at("j/mv/dst/r"));

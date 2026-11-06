@@ -791,7 +791,7 @@ static void test_eject(void)
     CHECK(spawn_capture(NULL, (char *const *)argv, big, sizeof big, 5000, &late, &err) && eject_result(str_from_c(big), why, sizeof why) == EJECT_UNMOUNTED);
     CHECK(strstr(why, "power-off: target is busy"));
     // Unmount (2026-10-30): the unmount alone, never the power-off.
-    unmount_argv("/dev/sd x1", argv);
+    unmount_argv("/dev/sd x1", ud, argv);
     put(at("ej/log"), "");
     env_set("EJ_FAIL", "power-off");
     CHECK(spawn_capture(NULL, (char *const *)argv, big, sizeof big, 5000, &late, &err) && eject_result(str_from_c(big), why, sizeof why) == EJECT_UNMOUNTED);
@@ -818,6 +818,13 @@ static void test_eject(void)
     CHECK(spawn_capture(ud, (char *const *)argv, big, sizeof big, 5000, &late, &err) && eject_result(str_from_c(big), why, sizeof why) == EJECT_DONE);
     CHECK(chdir(cwd) == 0);
     CHECK(access(olog, F_OK) != 0 && strcmp(slurp(at("ej/log")), "unmount -b /dev/sd x1\npower-off -b /dev/sd x1\n") == 0);
+    // Unmount's too (code-health review, 2026-11-06: its sh looked udisksctl up on PATH itself).
+    put(at("ej/log"), "");
+    unmount_argv("/dev/sd x1", ud, argv);
+    CHECK(chdir(decoy) == 0);
+    CHECK(spawn_capture(ud, (char *const *)argv, big, sizeof big, 5000, &late, &err) && eject_result(str_from_c(big), why, sizeof why) == EJECT_UNMOUNTED);
+    CHECK(chdir(cwd) == 0);
+    CHECK(access(olog, F_OK) != 0 && strcmp(slurp(at("ej/log")), "unmount -b /dev/sd x1\n") == 0);
     env_restore(), env_restore();
     env_restore(), env_restore(), env_restore(), env_restore(), env_restore();
     // Reading the output.
