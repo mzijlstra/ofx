@@ -402,9 +402,11 @@ static bool move_merge(Job *j, int sdir, const char *sname, int ddir, const char
     // Moving entries out while readdir runs: passes until one moves nothing. An entry left behind (a
     // skip in it) isn't visited again, or its clash was asked once a pass (code-health review,
     // 2026-11-06); past LEFT_MAX of them no other pass runs (readdir still returns every entry
-    // that stays: POSIX leaves only those removed or added unspecified).
+    // that stays: POSIX leaves only those removed or added unspecified). Known by inode and name
+    // both: an inode alone is every hard link of it, which were then never moved (review,
+    // 2026-11-06).
     enum { LEFT_MAX = 64 };
-    ino_t left[LEFT_MAX];
+    struct { ino_t ino; u64 name; } left[LEFT_MAX];
     int nleft = 0;
     for (isize moved = 1; ok && moved > 0 && nleft <= LEFT_MAX && !job_cancelled(j);) {
         moved = 0;
@@ -414,7 +416,8 @@ static bool move_merge(Job *j, int sdir, const char *sname, int ddir, const char
             struct stat before;
             if (fstatat(sfd, de->d_name, &before, AT_SYMLINK_NOFOLLOW) != 0) continue;
             bool seen = false;
-            for (int k = 0; k < nleft && k < LEFT_MAX && !seen; k++) seen = left[k] == before.st_ino;
+            u64 name = str_hash(str_from_c(de->d_name));
+            for (int k = 0; k < nleft && k < LEFT_MAX && !seen; k++) seen = left[k].ino == before.st_ino && left[k].name == name;
             if (seen) continue;
             char nm[NAME_MAX + 1];
             snprintf(nm, sizeof nm, "%s", de->d_name);
@@ -423,7 +426,7 @@ static bool move_merge(Job *j, int sdir, const char *sname, int ddir, const char
             ok = move_into(j, sfd, nm, dfd, nm, depth + 1);
             job_pop(j, back);
             if (ok && j->skipped == skipped) moved++;
-            else if (ok && nleft++ < LEFT_MAX) left[nleft - 1] = before.st_ino;
+            else if (ok && nleft++ < LEFT_MAX) left[nleft - 1].ino = before.st_ino, left[nleft - 1].name = name;
         }
     }
     if (d) closedir(d);

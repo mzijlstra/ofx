@@ -646,6 +646,27 @@ static void test_job(void)
     // (code-health review, 2026-11-06).
     CHECK(asks.at == 2 && j->item[0].out == OUT_MERGED && !atomic_load(&j->cancel));
     CHECK(atomic_load(&j->files_total) == 1 && atomic_load(&j->files_done) == 1);
+    // The entry left is known by its name too: k00's 39 other hard links all move although k, one
+    // more name of it, is skipped (an inode alone left them all; review, 2026-11-06). k is linked
+    // last, so tmpfs's readdir, newest first, meets it first.
+    put(at("j/mv/src/h/k00"), "h");
+    put(at("j/mv/dst/h/k"), "k0");
+    for (int i = 1; i < 40; i++) {
+        char ln[32];
+        snprintf(ln, sizeof ln, "j/mv/src/h/k%02d", i);
+        CHECK(link(at("j/mv/src/h/k00"), at(ln)) == 0);
+    }
+    CHECK(link(at("j/mv/src/h/k00"), at("j/mv/src/h/k")) == 0);
+    asks_set(2, ANS_REPLACE, ANS_SKIP);
+    j = job_new(JOB_MOVE, 1, at("j/mv/src/h"), at("j/mv/dst/h"));
+    job_run(j);
+    int moved = 0;
+    for (int i = 0; i < 40; i++) {
+        char ln[32];
+        snprintf(ln, sizeof ln, "j/mv/dst/h/k%02d", i);
+        moved += there(at(ln));
+    }
+    CHECK(moved == 40 && there(at("j/mv/src/h/k")) && strcmp(slurp(at("j/mv/dst/h/k")), "k0") == 0 && asks.at == 2 && !atomic_load(&j->cancel));
     // Move clashes: replace a file, keep both.
     put(at("j/mv/src/r"), "r1");
     put(at("j/mv/dst/r"), "r0");
