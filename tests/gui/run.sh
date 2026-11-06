@@ -443,22 +443,41 @@ if want keys; then
 # Keys through the compositor (tools/gui/vkbd.c in the test sway, 2026-10-28): GLFW's keycodes and
 # ui_key_of, which the other scripts' ui/ keys skip.
 T=$base/keys; rm -rf "$T"; mkdir -p "$T/tree/adir" "$T/tree/bdir"; touch "$T/tree/a.txt" "$T/tree/my-file name.txt" "$T/tree/adir/inner.txt"
-# vkbd's guard first: it types only into the sway OFX_GUI_ROOT names, as the kernel sees the socket's
-# other end (review, 2026-10-28). Refused: a display with no test sway's socket file; an
-# inherited WAYLAND_SOCKET; a real test sway's socket while sway.pid names another process called
-# sway (a copied sleep). The real pid then types, so the refusals aren't for some other reason.
-G=$T/guard; mkdir -p "$G/bin"; vk=$here/../../build/vkbd
-if WAYLAND_DISPLAY=ofx-no-such OFX_GUI_ROOT="$G" "$vk" b 2>/dev/null; then echo "keys: vkbd typed with no test sway"; failed keys; fi
+# The test tools' guard first (tools/gui/testsway.h, shared by vkbd, vptr and dndpeer): each acts
+# only on the sway OFX_GUI_ROOT names, as the kernel sees the socket's other end (review,
+# 2026-10-28). Refused: a display with no test sway's socket file; an inherited WAYLAND_SOCKET; a
+# real test sway's socket while sway.pid names another process called sway (a copied sleep). The
+# real pid then works, so the refusals aren't for some other reason (no display at all refuses as
+# well: code-health review, 2026-11-06). Each tool's run: vkbd types b, vptr moves, dndpeer's window
+# is still there after a second; a refused dndpeer writes no log.
+G=$T/guard; mkdir -p "$G/bin"
+guarded() {
+    t=$1; shift
+    case $t in
+    dndpeer) timeout 1 "$here/../../build/dndpeer" target "$G/peer.log"; [ $? = 124 ] ;;
+    vptr) "$here/../../build/vptr" move 10 10 ;;
+    vkbd) "$here/../../build/vkbd" b ;;
+    esac
+}
+for t in vkbd vptr dndpeer; do
+    if WAYLAND_DISPLAY=ofx-no-such OFX_GUI_ROOT="$G" guarded $t 2>/dev/null; then echo "keys: $t ran with no test sway"; failed keys; fi
+done
 if gs=$("$here/../../tools/gui/sway.sh" start "$G"); then
     real=$(cat "$G/sway.pid") bad=""   # (failed only after the stop: under OFX_GUI_FAIL_FAST it exits)
-    if WAYLAND_SOCKET=99 WAYLAND_DISPLAY="$gs" OFX_GUI_ROOT="$G" "$vk" b 2>/dev/null; then bad="took WAYLAND_SOCKET"; fi
     cp /usr/bin/sleep "$G/bin/sway"; "$G/bin/sway" 30 & fake=$!
-    echo "$fake" > "$G/sway.pid"
-    if WAYLAND_DISPLAY="$gs" OFX_GUI_ROOT="$G" "$vk" b 2>/dev/null; then bad="typed into a sway sway.pid doesn't name"; fi
-    kill "$fake"; echo "$real" > "$G/sway.pid"
-    WAYLAND_DISPLAY="$gs" OFX_GUI_ROOT="$G" "$vk" b || bad="refused the test sway itself"
+    for t in vkbd vptr dndpeer; do
+        if WAYLAND_SOCKET=99 WAYLAND_DISPLAY="$gs" OFX_GUI_ROOT="$G" guarded $t 2>/dev/null; then bad="$bad $t took WAYLAND_SOCKET;"; fi
+        echo "$fake" > "$G/sway.pid"
+        if WAYLAND_DISPLAY="$gs" OFX_GUI_ROOT="$G" guarded $t 2>/dev/null; then bad="$bad $t ran in a sway sway.pid doesn't name;"; fi
+        echo "$real" > "$G/sway.pid"
+    done
+    kill "$fake"
+    [ ! -e "$G/peer.log" ] || bad="$bad a refused dndpeer wrote its log;"
+    for t in vkbd vptr dndpeer; do
+        WAYLAND_DISPLAY="$gs" OFX_GUI_ROOT="$G" guarded $t || bad="$bad $t refused the test sway itself;"
+    done
     "$here/../../tools/gui/sway.sh" stop "$G"
-    [ -z "$bad" ] || { echo "keys: vkbd $bad"; failed keys; }
+    [ -z "$bad" ] || { echo "keys:$bad"; failed keys; }
 else
     failed keys
 fi
@@ -466,11 +485,8 @@ rs keys RUN_SCRIPT_LIMIT=60 OFX_COMPOSITOR=sway -- "$T/tree"
 fi
 if want dnd; then
 # Drag and drop with other programs (F14, gui/dnd.c), in the test sway: dndpeer is the other program,
-# vptr the pointer (tools/gui/; both refused outside the test sway, as vkbd, by testsway.h: the
-# refusals the keys group proves for vkbd, here for theirs without a sway at all).
-for t in vptr dndpeer; do
-    if WAYLAND_DISPLAY=ofx-no-such OFX_GUI_ROOT=$base/no-such "$here/../../build/$t" target /dev/null 2>/dev/null; then echo "dnd: $t ran with no test sway"; failed dnd; fi
-done
+# vptr the pointer (tools/gui/; both refused outside the test sway, as vkbd: the keys group proves
+# their guard).
 # Each script on its own tree: adir/, a.txt, b.txt, and from/c.txt beside it (a source's file).
 dnd_tree() { T=$base/$1; rm -rf "$T"; mkdir -p "$T/tree/adir" "$T/from"; touch "$T/tree/a.txt" "$T/tree/b.txt" "$T/from/c.txt"; }
 dnd_tree dnd; rs dnd RUN_SCRIPT_LIMIT=40 OFX_COMPOSITOR=sway -- "$T/tree"

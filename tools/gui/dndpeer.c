@@ -200,10 +200,10 @@ int main(int argc, char **argv)
     prefer_move = m == 1, hangup = m == 2, text_only = m == 4, stall = m == 5, copy_only = m == 6;
     source = m >= 3;
     uri = source ? argv[2] : NULL;
-    peer_log = fopen(argv[source ? 3 : 2], "a");
-    if (!peer_log) return 1;
     struct wl_display *d = test_sway_connect("dndpeer");
     if (!d) return 1;
+    peer_log = fopen(argv[source ? 3 : 2], "a");   // (after the guard: a refused run writes nothing)
+    if (!peer_log) return 1;
     struct wl_registry *r = wl_display_get_registry(d);
     wl_registry_add_listener(r, &reg_l, NULL);
     wl_display_roundtrip(d);
