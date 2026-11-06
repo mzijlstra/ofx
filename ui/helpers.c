@@ -469,6 +469,40 @@ static UiDropOp ui_drop_op(bool same_drive, int mods)
     return same_drive ? UI_DROP_MOVE : UI_DROP_COPY;
 }
 
+// ---- drops from other programs (F14 step 3) -------------------------------------------------------
+
+// The compositor's actions, as wl_data_device_manager numbers them (gui/dnd.c asserts they match).
+enum { UI_DND_COPY = 1, UI_DND_MOVE = 2 };
+
+// What op asks of another program's source, which allows actions: a move it doesn't allow is a
+// copy, the Trash needs a move (Michael, 2026-11-05). 0: refused.
+static u32 ui_dnd_action(UiDropOp op, u32 actions)
+{
+    u32 want = op == UI_DROP_COPY ? UI_DND_COPY : UI_DND_MOVE;
+    if (actions & want) return want;
+    return op == UI_DROP_MOVE && (actions & UI_DND_COPY) ? UI_DND_COPY : 0;
+}
+
+// The action a drop takes: a move only when the window's (a) and the compositor's (c) both say so,
+// else a copy (a copy loses nothing); either alone when the other has none. Hyprland didn't send
+// the action again after the window's answer (Michael's log, 2026-11-05: Ctrl's copy in Nemo dropped
+// as the move it had sent before the enter), and a compositor may change it for keys the window
+// doesn't see (review, 2026-11-06). (A drop the window refused, which Hyprland sends with c 0, the
+// source told it was cancelled, never comes here: gui/dnd.c gives it back.)
+static u32 ui_dnd_merge(u32 a, u32 c)
+{
+    return !a ? c : !c || a == c ? a : UI_DND_COPY;
+}
+
+// What a drop with action act does to the files (*op): on the Trash only a move trashes them,
+// elsewhere a move or a copy as it says. False: nothing (no action, or a copy onto the Trash).
+static bool ui_dnd_drop(bool trash, u32 act, UiDropOp *op)
+{
+    if (!act || (trash && act != UI_DND_MOVE)) return false;
+    *op = trash ? UI_DROP_TRASH : act == UI_DND_MOVE ? UI_DROP_MOVE : UI_DROP_COPY;
+    return true;
+}
+
 // ---- display --------------------------------------------------------------------------------
 
 // A mode's permissions as ls prints them, without the type: "rwxr-xr-x"; s/S for set-user and

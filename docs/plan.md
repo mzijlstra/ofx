@@ -874,6 +874,12 @@ with its own commits, gates and reviewer-2 round.
   didn't count a skip done or tick for keep both), `copy_into` split into `copy_dir` and
   `copy_leaf`; a move's merge no longer asks a skipped clash again on its next pass, and a move on
   one drive counts its items, not each entry merged.
+- **E, into ui/ and fs/ with unit tests:** F14's pure decisions (`ui_dnd_action`, `ui_dnd_merge`,
+  `ui_dnd_drop`, tests/test_f14.c: the merge's disagreeing case, which sway never shows, among
+  them; the offer slots stay in dnd.c, as they are its offers' own records); the clipboard's and the
+  drags' timed pipe loops and MIME map (`fd_read_timed`, `fd_write_timed`, `clip_fmt_of`; the read
+  had drifted: the clipboard's gave up at an EINTR); and the search fields' rules as the view
+  changes (`ui_view_set`, from gui/folder.c).
 
 **Michael's answers (2026-11-05):**
 - **Scope:** out, and files in (both in F14, out first).

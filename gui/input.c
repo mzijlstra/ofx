@@ -515,7 +515,7 @@ static bool drag_out_poll(void)
     // Dropped back on the window: as a drag inside it, by Nemo's rule (drop_op), not by the
     // compositor's action. Without Shift the source offers only copy, so the compositor settles on
     // copy while the badge said Move on the same drive; the badge and the drop agree, as inside the
-    // window (Michael, 2026-11-06). Other programs' drops go by both (drop_in_merge).
+    // window (Michael, 2026-11-06). Other programs' drops go by both (ui_dnd_merge).
     if (dnd_own_dropped(&x, &y)) {
         drop_find(x, y);
         if (app.drop.ok) drop_do(&app.drop);
@@ -547,29 +547,14 @@ static bool spring_tick(void)
 
 // ---- dropping in from other programs (F14 step 3) ---------------------------------------------
 
-enum { DND_COPY = WL_DATA_DEVICE_MANAGER_DND_ACTION_COPY, DND_MOVE = WL_DATA_DEVICE_MANAGER_DND_ACTION_MOVE };
+_Static_assert((int)UI_DND_COPY == (int)WL_DATA_DEVICE_MANAGER_DND_ACTION_COPY && (int)UI_DND_MOVE == (int)WL_DATA_DEVICE_MANAGER_DND_ACTION_MOVE, "ui/'s actions are Wayland's");
 
 // What a drop of another program's files on d does, as the compositor's action: Nemo's rule (a move
-// on the same drive, a copy across; Ctrl, Shift), within what the source allows (actions): a move
-// it doesn't allow is a copy, the trash needs a move (Michael, 2026-11-05). 0: refused.
+// on the same drive, a copy across; Ctrl, Shift) within what the source allows (ui_dnd_action). 0:
+// refused.
 static uint32_t drop_in_action(const Drop *d, uint32_t actions)
 {
-    if (!d->ok) return 0;
-    UiDropOp op = drop_op(d);
-    uint32_t want = op == UI_DROP_COPY ? DND_COPY : DND_MOVE;
-    if (actions & want) return want;
-    return op == UI_DROP_MOVE && (actions & DND_COPY) ? DND_COPY : 0;
-}
-
-// The action a drop of another program's files takes: a move only when the window's (a) and the
-// compositor's (c) both say so, else a copy (a copy loses nothing); either alone when the other has
-// none. (A drop the window refused, which Hyprland sends with c 0, the source told it was cancelled,
-// never comes here: dnd_drop gives it back.) Hyprland didn't send the action again after the window's answer (Michael's log, 2026-11-05:
-// Ctrl's copy in Nemo dropped as the move it had sent before the enter), and a compositor may change
-// it for keys the window doesn't see (review, 2026-11-06).
-static uint32_t drop_in_merge(uint32_t a, uint32_t c)
-{
-    return !a ? c : !c || a == c ? a : DND_COPY;
+    return d->ok ? ui_dnd_action(drop_op(d), actions) : 0;
 }
 
 // Another program's files come over the window (offer id's): dragged as a drag inside it is (F13),
@@ -603,7 +588,7 @@ static bool drag_in_take(const ClipFiles *f, u32 id)
 }
 
 // Each frame of another program's drag: over the window, found and answered as F13's drag is; let
-// go, dropped as one (copy, move, or the trash's move: drop_in_merge), and the source told; gone (a
+// go, dropped as one (copy, move, or the trash's move: ui_dnd_merge), and the source told; gone (a
 // leave, or its files not read yet), the drag ends. True when what is drawn changed.
 static bool drag_in_poll(void)
 {
@@ -628,9 +613,8 @@ static bool drag_in_poll(void)
         bool done = false;
         if (app.drag == DRAG_IN && app.in_id == id) {   // (a drag of an earlier offer's files: not these)
             drop_find(x, y);
-            act = drop_in_merge(drop_in_action(&app.drop, actions), act);
-            UiDropOp op = app.drop.trash ? UI_DROP_TRASH : act == DND_MOVE ? UI_DROP_MOVE : UI_DROP_COPY;
-            if (app.drop.ok && act && (op != UI_DROP_TRASH || act == DND_MOVE)) drop_with(&app.drop, op), done = true;
+            UiDropOp op;
+            if (app.drop.ok && ui_dnd_drop(app.drop.trash, ui_dnd_merge(drop_in_action(&app.drop, actions), act), &op)) drop_with(&app.drop, op), done = true;
         }
         dnd_in_finish(done);
         if (app.drag == DRAG_IN) drag_end();

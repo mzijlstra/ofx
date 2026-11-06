@@ -240,6 +240,23 @@ static void ui_line_set(UiLine l, Str s)
     *l.len = *l.caret = *l.anchor = n;
 }
 
+// The view a listing is shown in (gui/folder.c's go_to): out of the search view its fields lose the
+// keys; into a search not shown already (same: the one shown, read again, keeps its fields), they
+// show the address's text and inside text (F9 step 3), another search's "Containing" doesn't carry
+// over (review, 2026-10-29), and the first has the keys when both are empty.
+static void ui_view_set(Ui *u, UiView view, bool same, Str text, Str inside)
+{
+    if (view != UI_VIEW_SEARCH) ui_unfocus(u, UI_FOCUS_SEARCH), ui_unfocus(u, UI_FOCUS_INSIDE);
+    if (view == UI_VIEW_SEARCH && !same) {
+        ui_line_set(ui_search_line(u), text);
+        ui_line_set(ui_inside_line(u), inside);
+        u->search_inside = inside.len > 0, u->search_was_inside = false, u->search_edited = false;
+        if (text.len == 0 && inside.len == 0) u->focus = UI_FOCUS_SEARCH;
+        else ui_unfocus(u, UI_FOCUS_SEARCH), ui_unfocus(u, UI_FOCUS_INSIDE);
+    }
+    u->view = view;
+}
+
 // Bytes b[0..n) in place of the selection, the caret after them; false (nothing changed) when they
 // don't fit.
 static bool ui_line_put(UiLine l, const char *b, int n)

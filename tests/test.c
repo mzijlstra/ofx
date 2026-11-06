@@ -1665,6 +1665,7 @@ static void test_format(void)
 #include "test_f11.c"
 #include "test_f12.c"
 #include "test_f13.c"
+#include "test_f14.c"
 #include "test_fm1.c"
 
 int main(void)
@@ -1864,6 +1865,11 @@ int main(void)
     if (fast) test_state_sidewidth();
     if (fast) test_drag_rule();
     if (fast) test_menu_shown_switch();
+    if (fast) test_dnd_action();
+    if (fast) test_dnd_merge();
+    if (fast) test_dnd_drop();
+    if (fast) test_view_set();
+    if (fast) test_fd_timed();
     if (slow) test_git_common_bare();
     if (slow) test_box_why();
     if (slow) test_box_outlive();

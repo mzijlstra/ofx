@@ -601,7 +601,6 @@ MUTANTS = [
     ('gui/folder.c', '    fs_sort(l, app.ui.sort);\n    snprintf(app.search_root', '    snprintf(app.search_root', 'f9'),
     ('gui/folder.c', '    go_to_in(app.cwd, str_from_c(app.search_pick[0] ? app.search_pick : keep), app.ui.list.sel, true);', '    go_to_in(app.cwd, str_from_c(keep), app.ui.list.sel, true);', 'f9'),
     ('gui/folder.c', '    snprintf(app.cwd, sizeof app.cwd, "%s", uri);\n    app.search_pick[0] = 0;', '    app.search_pick[0] = 0;', 'f9'),
-    ('gui/folder.c', '        if (text.len == 0 && inside.len == 0) app.ui.focus = UI_FOCUS_SEARCH;', '        if (false) app.ui.focus = UI_FOCUS_SEARCH;', 'f9'),
     ('gui/folder.c', '        snprintf(app.search_pick, sizeof app.search_pick, "%.*s", STR_ARG(select));\n    }', '    }', 'f9'),
     ('gui/actions.c', '    if (dir && search_uri(uri, sizeof uri, dir, STR_EMPTY, STR_EMPTY)) tab_open(uri, STR_EMPTY, true);', '    if (dir) tab_open(dir, STR_EMPTY, true);', 'f9'),
     ('gui/actions.c', '    case UA_NOT_IN_SEARCH: set_status(true, "A search isn\'t a folder: that works in one"); break;', '    case UA_NOT_IN_SEARCH: break;', 'f9'),
@@ -625,7 +624,6 @@ MUTANTS = [
     # ---- F9 step 2: working with results (2026-10-28). Left out: Ctrl+Enter's GLFW mapping (scripts
     # send ui/'s keys).
     ('gui/input.c', '    if (p && is_search(p)) p = app.search_root;', '', 'f9'),
-    ('gui/folder.c', '        ui_line_set(ui_search_line(&app.ui), text);\n', '', 'f9'),
     ('gui/search.c', '        search_gone[i] = search_res_path(i, root, p, sizeof p) && lstat(p, &st) != 0;', '        search_gone[i] = lstat(p, &st) != 0;', 'f9'),
     ('gui/search.c', '        if (search_gone[i]) continue;\n        const Entry *r', '        const Entry *r', 'f9'),
     ('gui/search.c', '    memset(search_gone, 0, sizeof search_gone), arena_reset(&search_edits);', '    arena_reset(&search_edits);', 'f9'),
@@ -650,8 +648,6 @@ MUTANTS = [
     ('gui/clipboard.c', "    if (files) ext_data_control_source_v1_offer(clip.src, CLIP_MIME_GNOME);\n", "", 'clip'),
     ('gui/clipboard.c', "    if (files) ext_data_control_source_v1_offer(clip.src, CLIP_MIME_URIS);\n", "", 'clip'),
     ('gui/clipboard.c', "    ext_data_control_source_v1_offer(clip.src, CLIP_MIME_TEXT[1]);\n", "", 'clip'),
-    ('gui/clipboard.c', "    if (strcmp(mime, CLIP_MIME_GNOME) == 0) p = clip.payload[CLIP_FMT_GNOME];", "    if (strcmp(mime, CLIP_MIME_GNOME) == 0) p = clip.payload[CLIP_FMT_URIS];", 'clip'),
-    ('gui/clipboard.c', "strcmp(mime, CLIP_MIME_TEXT[1]) == 0) p = clip.payload[CLIP_FMT_TEXT];", "strcmp(mime, CLIP_MIME_TEXT[1]) == 0) {}", 'clip'),
     ('gui/clipboard.c', "    bool gnome = types & OFFER_GNOME;", "    bool gnome = false;", 'clip'),
     ('gui/clipboard.c', "    if (!(types & (OFFER_UTF8 | OFFER_TEXT))) {", "    if (true) {", 'clip'),
     # Keys through the compositor (keys, in the test sway with vkbd, 2026-10-28): the mappings no
@@ -828,9 +824,6 @@ MUTANTS = [
     ('gui/search.c', '    search.opts = q.o, search.inside_opts = q.io, search.hidden = q.hidden;', '    search.opts = q.o, search.hidden = q.hidden;', 'f9'),
     ('gui/search.c', '    search.done = (q.text.len == 0 && q.inside.len == 0) || !search.started;', '    search.done = q.text.len == 0 || !search.started;', 'f9'),
     ('gui/folder.c', ', .io = app.ui.inside_opts, .hidden', ', .hidden', 'f9'),
-    ('gui/folder.c', '        ui_line_set(ui_inside_line(&app.ui), inside);\n', '', 'f9'),
-    ('gui/folder.c', '        app.ui.search_inside = inside.len > 0;', '', 'f9'),
-    ('gui/folder.c', '        if (text.len == 0 && inside.len == 0) app.ui.focus = UI_FOCUS_SEARCH;', '        if (text.len == 0) app.ui.focus = UI_FOCUS_SEARCH;', 'f9'),
     ('gui/folder.c', '    Str inside = app.ui.search_inside ? (Str){ app.ui.inside.b, app.ui.inside.len } : STR_EMPTY;', '    Str inside = (Str){ app.ui.inside.b, app.ui.inside.len };', 'f9'),
     ('gui/folder.c', '    return VIEWS[app.ui.view].bar_h + (app.ui.view == UI_VIEW_SEARCH && app.ui.search_inside ? SEARCH_ROW_H : 0);', '    return VIEWS[app.ui.view].bar_h;', 'f9'),
     ('gui/footer.c', '        if (u->search_inside) {\n            CLAY_AUTO_ID', '        if (false) {\n            CLAY_AUTO_ID', 'f9'),
@@ -859,7 +852,6 @@ MUTANTS = [
     ('gui/actions.c', '    editors.old = editors.user.n - mine;', '    editors.old = 0;', 'f9'),
     ('gui/frame.c', '    u->sel_hit = e && e->hit;   // (F9 step 4: Open at Line)', '', 'f9'),
     ('gui/input.c', '    if (m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT) && (key == GLFW_KEY_ENTER || key == GLFW_KEY_KP_ENTER)) return UK_OPEN_LINE;', '', 'keys'),
-    ('gui/folder.c', '        app.ui.search_was_inside = false;   // (another search', '        // (another search', 'f9'),
     # Drives at the top (2026-10-29): an open menu's entry over a menu title is the entry's
     ('gui/input.c', '        for (int m = 0; m < UI_MENUS && h.menu_title < 0 && h.menu_item < 0; m++)', '        for (int m = 0; m < UI_MENUS && h.menu_title < 0; m++)', 'f8'),
     # Tab on the folder shown's row (2026-10-29)
@@ -981,9 +973,7 @@ MUTANTS = [
     ('gui/dnd.c', '    bool ok = o == dnd.in_offer && dnd.in_read && dnd.got.n > 0 && dnd.in_ok;', '    bool ok = false;', 'dnd'),
     ('gui/dnd.c', '        dnd.reading = false, dnd.changed = true;   // (another enter may read now)', '        dnd.reading = false;', 'dnd'),
     ('gui/dnd.c', '    if (done) wl_data_offer_finish(dnd.in_offer);\n', '', 'dnd'),
-    ('gui/input.c', '    return op == UI_DROP_MOVE && (actions & DND_COPY) ? DND_COPY : 0;', '    return 0;', 'dnd'),
     ('gui/input.c', '    bool started = f && drag_in_take(f, id);', '    bool started = false;', 'dnd'),
-    ('gui/input.c', ': act == DND_MOVE ? UI_DROP_MOVE : UI_DROP_COPY;', ': UI_DROP_MOVE;', 'dnd'),
     ('gui/input.c', '    if (!files_over() || app.spring_tab < 0 || now_ms() < app.spring_at + UI_SPRING_MS) return false;', '    if (app.drag != DRAG_FILES || app.spring_tab < 0 || now_ms() < app.spring_at + UI_SPRING_MS) return false;', 'dnd'),
     ('gui/dnd.c', '    if (none) *x = dnd.x, *y = dnd.y;\n    return none;', '    return false;', 'dnd'),
     # Code-health step A (2026-11-06): the read's lifecycle. An offer entered while another's read
@@ -996,8 +986,16 @@ MUTANTS = [
     ('gui/icons.c', '    snprintf(app.drag_icon, sizeof app.drag_icon, "%.*s", STR_ARG(key));\n', '', 'f13'),
     # Not run: drag_out's out_failed and dnd_can_start (a hand-off that can't start not tried again
     # each motion): what they save is time, which no state word shows.
-    # Not run: the drop's action when the window's answer and the compositor's differ (drop_in_merge,
-    # a copy): Hyprland didn't send it again after the answer; sway does, so both agree there.
+    # Code-health step E (2026-11-06): the search fields' rules as the view changes are ui_view_set's
+    # and the MIME types' formats clip_fmt_of's now (run.py's, killed by test_f14.c); here only
+    # their callers.
+    ('gui/folder.c', '    ui_view_set(&app.ui, view, same, text, inside);', '    app.ui.view = view;', 'f9'),
+    ('gui/folder.c', '        search_parse(dir, &root, &text, &inside);\n', '', 'f9'),
+    ('gui/clipboard.c', '    if (f >= 0) fd_write_timed(fd, clip.payload[f], CLIP_WAIT_MS);', '', 'clip'),
+    # Code-health step E (2026-11-06): the source's actions, the both-agree merge and the Trash's move
+    # are ui/'s now (ui_dnd_action, ui_dnd_merge, ui_dnd_drop), mutated by run.py and killed by
+    # tests/test_f14.c; the merge's disagreeing case, which sway never shows, among them.
+    ('gui/input.c', '    return d->ok ? ui_dnd_action(drop_op(d), actions) : 0;', '    return d->ok ? UI_DND_COPY : 0;', 'dnd'),
     # Not run: a drop that came before its read ended, or that the window refused, given back
     # (dnd_drop's `!dnd.in_read`), the read of the offer entered meanwhile (dnd_in_finish's and the
     # refused drop's dnd_read_next), and the trash refused a copy-only source: sway sends no drop

@@ -250,20 +250,13 @@ static bool go_to_in(const char *dir, Str select, isize fallback, bool stepping)
     if (!same && app.ui.panel == UI_PANEL_BRANCHES) ui_brp_close(&app.ui);   // (its list was the folder left's: 2026-11-03)
     if (!same && app.ui.menu_on && app.ui.menu == UI_CTX_BRANCH) app.ui.menu_on = false;
     if (app.ui.view == UI_VIEW_SEARCH && view != UI_VIEW_SEARCH) search_ask((SearchQuery){ .root = "", .skips = &app.conf.skip }), app.search_due = 0;   // (out of it: the walk stops)
-    if (view != UI_VIEW_SEARCH) ui_unfocus(&app.ui, UI_FOCUS_SEARCH), ui_unfocus(&app.ui, UI_FOCUS_INSIDE);
-    if (view == UI_VIEW_SEARCH && !same) {   // the fields show their text; empty, the first has the keys
-        Str root, text, inside;
+    Str root, text = STR_EMPTY, inside = STR_EMPTY;
+    if (view == UI_VIEW_SEARCH && !same) {   // (the fields show the address's text: ui_view_set)
         search_parse(dir, &root, &text, &inside);
-        ui_line_set(ui_search_line(&app.ui), text);
-        ui_line_set(ui_inside_line(&app.ui), inside);
-        app.ui.search_inside = inside.len > 0;   // (step 3: the address says whether it searched inside)
-        app.ui.search_was_inside = false;   // (another search's field doesn't carry over: review, 2026-10-29)
-        if (text.len == 0 && inside.len == 0) app.ui.focus = UI_FOCUS_SEARCH;
-        else ui_unfocus(&app.ui, UI_FOCUS_SEARCH), ui_unfocus(&app.ui, UI_FOCUS_INSIDE);
-        app.ui.search_edited = false, app.search_due = 0;
+        app.search_due = 0;
         snprintf(app.search_pick, sizeof app.search_pick, "%.*s", STR_ARG(select));
     }
-    app.ui.view = view;
+    ui_view_set(&app.ui, view, same, text, inside);
     app.ui.can_write = view == UI_VIEW_FOLDER && access(dir, W_OK) == 0;   // the File menu's Create entries (F7.1)
     for (isize i = 0; i < l.n; i++) count[i] = COUNT_UNKNOWN;
     app.count = count;

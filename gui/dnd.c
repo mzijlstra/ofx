@@ -339,21 +339,9 @@ static void *dnd_reader(void *arg)
 {
     (void)arg;
     int fd = dnd.read_fd;
-    isize n = 0;
-    bool whole = false;
-    i64 until = now_ms() + DND_WAIT_MS;
-    while (n < DND_READ_MAX - 1 && now_ms() < until) {
-        if (poll(&(struct pollfd){ .fd = fd, .events = POLLIN }, 1, 50) <= 0) continue;
-        ssize_t k = read(fd, dnd_read_mem + n, (size_t)(DND_READ_MAX - 1 - n));
-        if (k < 0 && (errno == EINTR || errno == EAGAIN)) continue;
-        if (k <= 0) {
-            whole = k == 0;
-            break;
-        }
-        n += k;
-    }
+    bool whole;
+    isize n = fd_read_timed(fd, dnd_read_mem, DND_READ_MAX, DND_WAIT_MS, &whole);
     close(fd);
-    dnd_read_mem[n] = 0;
     dnd.read_n = n, dnd.read_whole = whole;
     atomic_store(&dnd.read_done, true);
     wake_main();
@@ -406,16 +394,7 @@ static const struct wl_data_device_listener dnd_dev_l = { dnd_data_offer, dnd_en
 static void *dnd_writer(void *arg)
 {
     int fd = (int)((intptr_t)arg >> 8);
-    Str p = dnd.payload[(intptr_t)arg & 0xff];
-    fcntl(fd, F_SETFL, O_NONBLOCK);
-    i64 until = now_ms() + DND_WAIT_MS;
-    isize at = 0;
-    while (at < p.len && now_ms() < until) {
-        ssize_t k = write(fd, p.p + at, (size_t)(p.len - at));
-        if (k > 0) at += k;
-        else if (k < 0 && errno != EAGAIN && errno != EINTR) break;
-        else poll(&(struct pollfd){ .fd = fd, .events = POLLOUT }, 1, 50);
-    }
+    isize at = fd_write_timed(fd, dnd.payload[(intptr_t)arg & 0xff], DND_WAIT_MS);
     close(fd);
     atomic_fetch_add(&dnd.sent, (long long)at);
     atomic_fetch_add(&dnd.wrote, 1);
@@ -429,7 +408,7 @@ static void dnd_src_send(void *data, struct wl_data_source *s, const char *mime,
 {
     (void)data, (void)s;
     DND_LOG("source send %s", mime);
-    int f = strcmp(mime, CLIP_MIME_URIS) == 0 ? CLIP_FMT_URIS : strcmp(mime, CLIP_MIME_TEXT[0]) == 0 || strcmp(mime, CLIP_MIME_TEXT[1]) == 0 ? CLIP_FMT_TEXT : -1;
+    int f = clip_fmt_of(mime);   // (no gnome-copied-files: a drag doesn't offer it)
     pthread_t th;
     atomic_fetch_add(&dnd.writers, 1);
     if (f >= 0 && pthread_create(&th, NULL, dnd_writer, (void *)(((intptr_t)fd << 8) | f)) == 0) {
