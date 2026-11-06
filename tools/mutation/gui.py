@@ -678,7 +678,7 @@ MUTANTS = [
     ('gui/input.c', '        u->ctx_unmounted = pl->kind == PL_UNMOUNTED;\n', '', 'usb'),
     ('gui/eject.c', '    if (ej.op == DRIVE_MOUNT) mount_argv(ej.dev, argv);\n    else if', '    if (false) mount_argv(ej.dev, argv);\n    else if', 'usb'),
     # Unmount (2026-10-30)
-    ('gui/eject.c', '    else if (ej.op == DRIVE_UNMOUNT) unmount_argv(ej.dev, argv);\n', '', 'usb'),
+    ('gui/eject.c', '    else if (ej.op == DRIVE_UNMOUNT) unmount_argv(ej.dev, udisks, argv);\n', '', 'usb'),
     ('gui/eject.c', '        else set_status(false, "%s is unmounted", ej.label);', '', 'usb'),
     ('gui/eject.c', '        if (r == EJECT_FAILED) set_status(true, "Can\'t unmount %s: %s"', '        if (false) set_status(true, "Can\'t unmount %s: %s"', 'usb'),
     ('gui/input.c', '        if (ctx_pl && place_ejectable(ctx_pl)) (it == UM_EJECT_IT ? eject_start : unmount_start)(ctx_pl);', '        if (ctx_pl && place_ejectable(ctx_pl)) eject_start(ctx_pl);', 'usb'),

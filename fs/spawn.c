@@ -1,7 +1,10 @@
-// Launching what ofx hands off: a file to `gio open`, a folder to the terminal (docs/plan.md,
-// "Launching"). Each child gets its own session (it outlives ofx, and a Ctrl+C in a terminal that
-// started ofx doesn't reach it), /dev/null for stdin and stdout, and ofx's stderr. Children are
-// reaped by the kernel: spawn_init sets SA_NOCLDWAIT on SIGCHLD.
+// Launching what ofx hands off: a file to `gio open`, a folder to the terminal, an app (Open With),
+// a new window (docs/plan.md, "Launching"). Each child gets its own session (it outlives ofx, and a
+// Ctrl+C in a terminal that started ofx doesn't reach it), /dev/null for stdin and stdout, and
+// ofx's stderr. Children are reaped by the kernel: spawn_init sets SA_NOCLDWAIT on SIGCHLD.
+// Then the short runs whose output ofx reads (spawn_capture, under a time limit): `gio info`'s
+// type, and udisksctl's mount, unmount and eject with their results. Every program goes through
+// the test guard's check (ops_program_allowed) as resolved on PATH.
 
 #include "../base/base.h"
 
@@ -300,11 +303,13 @@ static bool mount_result(Str out, char *at, size_t atcap, char *why, size_t whyc
 }
 
 // Unmount (2026-10-30): eject without the power-off, the drive left there to mount again; its
-// output read as eject's (EJECT_UNMOUNTED is all it can reach).
-static void unmount_argv(const char *dev, const char **argv)
+// output read as eject's (EJECT_UNMOUNTED is all it can reach). udisks is the udisksctl resolved, as
+// eject's: sh's own PATH lookup would find another than the one the test guard checked (code-health
+// review, 2026-11-06).
+static void unmount_argv(const char *dev, const char *udisks, const char **argv)
 {
-    argv[0] = "sh", argv[1] = "-c", argv[2] = "udisksctl unmount -b \"$1\" && echo OFX-UNMOUNTED";
-    argv[3] = "sh", argv[4] = dev, argv[5] = NULL;
+    argv[0] = "sh", argv[1] = "-c", argv[2] = "\"$2\" unmount -b \"$1\" && echo OFX-UNMOUNTED";
+    argv[3] = "sh", argv[4] = dev, argv[5] = udisks, argv[6] = NULL;
 }
 
 typedef enum { EJECT_FAILED, EJECT_UNMOUNTED, EJECT_DONE } EjectResult;
