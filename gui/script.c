@@ -949,7 +949,7 @@ static bool script_input(UiInput *in)
         } else if (str_eq(cmd, S("user-keys"))) {
             script.user_keys = true;
         } else if (str_eq(cmd, S("user-pointer"))) {
-            script.user_pointer = true, script_on = false;   // (input_real's hover and drags as a user's)
+            script.user_pointer = user_pointer = true;   // (input_real's hover and drags as a user's)
         } else if (str_eq(cmd, S("clip-drop"))) {
             if (!clip.dpy || shutdown(wl_display_get_fd(clip.dpy), SHUT_RDWR) != 0) script_fail("clip-drop: no clipboard connection to cut");
         } else if (str_eq(cmd, S("idle"))) {

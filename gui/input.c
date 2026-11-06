@@ -10,6 +10,7 @@
 // compositor's (`G`, `~`). The pointer's callbacks are chained the same way.
 static GLFWkeyfun         raylib_key;
 static bool               script_on;     // a script drives the window: Ctrl+Q quits at once
+static bool               user_pointer;  // the script's `user-pointer`: the pointer's input as an unscripted window's
 static bool               close_asked;   // the window is to close: the compositor asked, or a quit (Ctrl+Q, Close All's SIGUSR1) waits on the jobs question
 static GLFWcharfun        raylib_char;
 static GLFWmousebuttonfun raylib_button;
@@ -650,7 +651,8 @@ static UiInput input_real(bool *seen)
     int notches = (int)wheel_left;
     wheel_left -= (float)notches;
     *seen |= wheel_at(&in, m.x, notches, mods_held() & UI_MOD_CTRL);
-    if (!script_on) *seen |= hover_refresh(IsCursorOnScreen(), m.x, m.y);
+    bool real = !script_on || user_pointer;   // (the pointer's own hover, drags and keys held)
+    if (real) *seen |= hover_refresh(IsCursorOnScreen(), m.x, m.y);
     if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) press_at(&in, m.x, m.y, mods_held());
     if (IsMouseButtonPressed(MOUSE_BUTTON_MIDDLE)) middle_at(&in, m.x, m.y);
     if (IsMouseButtonPressed(MOUSE_BUTTON_RIGHT)) right_at(&in, m.x, m.y);
@@ -660,9 +662,9 @@ static UiInput input_real(bool *seen)
     bool on = IsCursorOnScreen();
     // (a script's own: press-here, move-to, release.) Off the window a drag of files is cancelled,
     // not dropped where it last was.
-    if (!script_on) app.drag_mods = mods_held();
-    if (!script_on && !on && drag_of_files() && !drag_by_compositor()) drag_cancel(), *seen = true;
-    else if (!script_on && (d.x != 0 || d.y != 0 || !held || !on)) *seen |= drag_at(&in, m.x, m.y, held && on);
+    if (real) app.drag_mods = mods_held();
+    if (real && !on && drag_of_files() && !drag_by_compositor()) drag_cancel(), *seen = true;
+    else if (real && (d.x != 0 || d.y != 0 || !held || !on)) *seen |= drag_at(&in, m.x, m.y, held && on);
     in.backs = mouse_backs, mouse_backs = 0;
     in.forwards = mouse_forwards, mouse_forwards = 0;
     // Anything the user did draws a frame: one list, ui_input_acts (unit-tested), so a new click

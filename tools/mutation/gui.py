@@ -257,7 +257,7 @@ MUTANTS = [
     ('gui/files.c', "    int r = (h - bar_h() - HEADER_H - FOOTER_H - PAD) / SIDE_ROW_H;", "    int r = (h - HEADER_H - FOOTER_H - PAD) / SIDE_ROW_H;", 'f7'),
     ('gui/frame.c', "        if (bar_shown()) layout_menubar();\n", "", 'f7'),
     ('gui/topbar.c', "                if (open) layout_menu(m);", "", 'f7'),
-    ('gui/actions.c', '    ui_edit_open_all(&app.ui, str_from_c(made));', '    ui_edit_start(&app.ui, str_from_c(made), false);', 'f3'),
+    ('gui/actions.c', '    ui_edit_open_all(&app.ui, str_from_c(made));\n', '', 'f3'),   # (was ui_edit_start's call, the same since step C's ui_edit_start: review, 2026-11-06)
     ('gui/input.c', "    return kind_is_dir(app.list.e[i].kind);\n}", "    return false;\n}", 'f7'),
     ('gui/folder.c', "    if (e->size == 0 && (e->kind == K_FILE || e->kind == K_LINK_FILE) && apps_default(", "    if (e->kind == K_FILE && false && apps_default(", 'f7'),
     ('gui/folder.c', "    if (e->size == 0 && (e->kind == K_FILE || e->kind == K_LINK_FILE) && apps_default(", "    if ((e->kind == K_FILE || e->kind == K_LINK_FILE) && apps_default(", 'f7'),
@@ -890,7 +890,7 @@ MUTANTS = [
     ('gui/input.c', 'side_keep(app.side_px), app.edge_press.row = -1;', 'side_keep(app.side_px);', 'f13'),
     ('gui/input.c', '    int w = ui_side_fit(app.drag_w0 + (int)(x - app.drag_x0), GetScreenWidth());', '    int w = ui_side_fit(app.drag_w0, GetScreenWidth());', 'f13'),
     ('gui/input.c', 'app.hov.side_edge || app.drag == DRAG_SIDE ? MOUSE_CURSOR_RESIZE_EW', 'app.hov.side_edge ? MOUSE_CURSOR_RESIZE_EW', 'f13'),
-    ('gui/input.c', 'else if (!script_on && (d.x != 0 || d.y != 0 || !held || !on)) *seen |= drag_at', 'else if ((d.x != 0 || d.y != 0 || !held || !on)) *seen |= drag_at', 'f13'),
+    ('gui/input.c', 'else if (real && (d.x != 0 || d.y != 0 || !held || !on)) *seen |= drag_at', 'else if ((d.x != 0 || d.y != 0 || !held || !on)) *seen |= drag_at', 'f13'),
     ('gui/files.c', 'bool lit = edge_lit = app.hov.side_edge || app.drag == DRAG_SIDE;', 'bool lit = edge_lit = app.hov.side_edge;', 'f13'),
     ('gui/files.c', '                                        .layoutDirection = CLAY_TOP_TO_BOTTOM, .padding = { 0, 0, PAD / 2, 0 } },\n                            .backgroundColor = cc(t->bg_light) }) {', '                                        .layoutDirection = CLAY_TOP_TO_BOTTOM, .padding = { 0, 0, PAD / 2, 0 } },\n                            .backgroundColor = cc(t->bg_light) }) {\n        if (false)', 'f13'),
     ('gui/actions.c', '    state_key("sidewidth", v);\n', '', 'f13'),
