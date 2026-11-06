@@ -671,8 +671,22 @@ static void script_sh(Str cmd)
         script_fail("sh refused: %s is not under OFX_GUI_ROOT (%s)", shown, root ? root : "unset");
         return;
     }
-    setenv("OFX_DIR", shown, 1);
-    setenv("OFX_ROOT", root, 1);
+    // OFX_DIR and OFX_ROOT in the child's environment only: setenv here would change environ while
+    // the worker threads getenv (code-health review, 2026-11-06).
+    enum { ENV_MAX = 1024 };
+    static char *envp[ENV_MAX + 3];
+    int ne = 0;
+    for (char **e = environ; *e; e++) {
+        if (strncmp(*e, "OFX_DIR=", 8) == 0 || strncmp(*e, "OFX_ROOT=", 9) == 0) continue;
+        if (ne == ENV_MAX) {
+            script_fail("sh: over %d environment variables", ENV_MAX);
+            return;
+        }
+        envp[ne++] = *e;
+    }
+    envp[ne++] = arena_sprintf(&scratch, "OFX_DIR=%s", shown);
+    envp[ne++] = arena_sprintf(&scratch, "OFX_ROOT=%s", root);
+    envp[ne] = NULL;
     char *c = arena_cstr(&scratch, cmd);
     // Under `timeout`: the window answers no events while it waits, and a window that stops
     // answering for long pops Hyprland's "terminate?" dialog on Michael's screen.
@@ -687,7 +701,7 @@ static void script_sh(Str cmd)
     sigemptyset(&none);
     posix_spawnattr_setsigmask(&attr, &none);
     posix_spawnattr_setflags(&attr, POSIX_SPAWN_SETSIGMASK);
-    if (posix_spawnp(&pid, "timeout", NULL, &attr, argv, environ) == 0) {
+    if (posix_spawnp(&pid, "timeout", NULL, &attr, argv, envp) == 0) {
         int st;
         waitpid(pid, &st, 0);
         if (!WIFEXITED(st) || WEXITSTATUS(st) != 0) script_fail("sh failed: %.*s", STR_ARG(cmd));

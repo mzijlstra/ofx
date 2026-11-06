@@ -200,8 +200,10 @@ typedef struct {
 
 // What the left button holds, from its press until it is let go (input.c's drag_at): the zoom
 // slider's knob, the sidebar's edge; a press on files that may become a drag of them (DRAG_PRESS,
-// until it moves UI_DRAG_PX), and that drag (DRAG_FILES, F13 step 3).
-enum { DRAG_NONE, DRAG_ZOOM, DRAG_SIDE, DRAG_PRESS, DRAG_FILES, DRAG_OUT, DRAG_IN };   // (F14: DRAG_OUT handed to the compositor, DRAG_IN another program's)
+// until it moves UI_DRAG_PX), and that drag (DRAG_FILES, F13 step 3); then F14's, which the
+// compositor carries and ends: ours handed to it past the window's edge (DRAG_OUT), another
+// program's files over the window (DRAG_IN, no button of ours held).
+enum { DRAG_NONE, DRAG_ZOOM, DRAG_SIDE, DRAG_PRESS, DRAG_FILES, DRAG_OUT, DRAG_IN };
 
 // Where a drag of files would land (F13 step 3), and what is drawn lit for it: a folder row (at:
 // its place on screen), a sidebar row (the Trash's among them), a tab, a path button, the files'
@@ -338,11 +340,11 @@ static struct {
     bool      icons_missed, icons_reset_armed;
     UiTip     tip;          // the tooltip of the icon button under the pointer (Michael, 2026-10-24)
     bool      zoomed;       // the icon size changed: the next refit keeps the cursor's row (ui_refit)
-    int       drag;         // what the left button holds (DRAG_*: the zoom slider's knob, F6.3; the sidebar's edge, F13)
+    int       drag;         // what the left button holds, or the compositor's drag (DRAG_*, above)
     float     drag_x0;      // where the press was
     int       drag_w0;      // the sidebar's width then
     bool      drag_moved;   // (DRAG_SIDE) it moved: let go, the width is kept
-    float     drag_y0, drag_px, drag_py;   // (DRAG_PRESS, DRAG_FILES: the press's y; the pointer now)
+    float     drag_y0, drag_px, drag_py;   // (the press's y; the files' drags: the pointer now, the badge's place)
     char      drag_path[PATH_MAX];   // what the press was on (an entry, a tree row's folder)
     bool      drag_marked;  // a marked entry: the marks are dragged
     bool      drag_tree;    // a tree row: let go without a drag, it opens
@@ -641,6 +643,11 @@ static void test_knobs(void)
     if (getenv("OFX_TEST_CROSS")) job_test_cross = true;
     // The test guard: with OFX_GUI_ROOT set (the GUI tests), no write outside it.
     ops_guard(getenv("OFX_GUI_ROOT"));
+    // OFX_TEST_SANDBOX=off, under the guard only: bubblewrap's runs as they are (fs/sandbox.c), set
+    // before any thread that runs one starts (code-health review, 2026-11-06: thumbs_start set it,
+    // after git's worker could already have read it).
+    const char *sb = getenv("OFX_TEST_SANDBOX");
+    box_sandbox = !(ops_root[0] && sb && strcmp(sb, "off") == 0);
     const char *media = getenv("OFX_TEST_MEDIA");   // tests: mounts under it are removable (places.c)
     if (media && media[0]) snprintf(places_test_media, sizeof places_test_media, "%s", media);
     // OFX_TEST_LEAK=1 leaks one block on purpose: the control that shows LeakSanitizer reports

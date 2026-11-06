@@ -24,10 +24,6 @@ typedef struct {
     isize n;
 } ClipFiles;
 
-// The payload for one format into the arena (NUL-terminated, the NUL not counted):
-//   gnome: "copy" or "cut", then a file:// URI a line (no newline at the end, as Nautilus writes)
-//   uris:  a file:// URI a line, each ending in CRLF (RFC 2483)
-//   text:  the paths a line, as they are (a terminal pastes them)
 // fmt at out + *n, cap bytes in all, *n moved past it: false, *n as it was, when it doesn't fit
 // (the clipboard's forms and shell_quote: F13 code-health review).
 static bool buf_put(char *out, isize cap, isize *n, const char *fmt, ...) __attribute__((format(printf, 4, 5)));
@@ -142,11 +138,17 @@ static Str clip_text(Arena *a, const ClipFiles *c, bool quoted)
     return (Str){ out, n };
 }
 
+// The payload for one format into the arena (NUL-terminated, the NUL not counted), for the clipboard's
+// offers (gui/clipboard.c) and a drag out's (gui/dnd.c); empty when it doesn't fit:
+//   gnome: "copy" or "cut", then a file:// URI a line (no newline at the end, as Nautilus writes)
+//   uris:  a file:// URI a line, each ending in CRLF (RFC 2483)
+//   text:  the paths a line, each quoted as a shell reads it back (clip_text)
 static Str clip_payload(Arena *a, const ClipFiles *c, ClipFormat f)
 {
     if (f == CLIP_FMT_TEXT) return clip_text(a, c, true);
     isize avail;
     char *out = arena_tail(a, &avail);
+    if (avail < 1) return arena_commit(a, 0), STR_EMPTY;   // (no room for the 0 either, as clip_text)
     isize n = 0;
     bool ok = true;
 #define PUT(...) (ok = ok && buf_put(out, avail, &n, __VA_ARGS__))
