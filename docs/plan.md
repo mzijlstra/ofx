@@ -860,6 +860,12 @@ with its own commits, gates and reviewer-2 round.
   only when the compositor had been told the window takes it). An offer that entered while another's
   read ran stayed refused until it left; now it is read when that one ends (`dnd_read_next`, dndj).
   The test tools' guard is proved against the keys group's sway for all three tools.
+- **B, the drag's state:** one `drop_reset` for the five places that forgot the target, the spring's
+  tab with it (a drag out that left the window from another tab and came back found the old timer,
+  dndk); `drag_of_files` and `drag_by_compositor` name the lists of states, and the keys during
+  another program's drag are the drag's as F13's are (Delete trashed what was under it); the badge's
+  icon kept by its key and looked up as drawn (an icon cache reset gave its slot to another, f13h);
+  a drag out that can't start is tried once a drag, after `dnd_can_start`, not again each motion.
 
 **Michael's answers (2026-11-05):**
 - **Scope:** out, and files in (both in F14, out first).

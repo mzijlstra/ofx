@@ -1,0 +1,16 @@
+# Code-health review 2026-11-06: the badge's icon is the dragged file's after the icon cache is
+# reset mid-drag (a theme change here; a zoom or a full cache do the same): looked up by its key as
+# it is drawn, not kept as a slot another icon takes. The tree (run.sh): home/tree: adir/, a.txt.
+settle
+expect n=2 sel=adir
+point-ui row 1
+press-here
+move-by 0 10
+expect drag=files dragname=a.txt dragicon=text/plain
+sh C="$OFX_ROOT/state/omarchy/current"; rm -rf "$C/next-theme"; mkdir "$C/next-theme" && printf 'accent = "#112233"\n' > "$C/next-theme/colors.toml" && echo Yaru-blue > "$C/next-theme/icons.theme" && rm -rf "$C/theme" && mv "$C/next-theme" "$C/theme"
+wait-for 3000 themes=1 icons=Yaru-blue
+move-by 0 10
+expect drag=files dragicon=text/plain
+key esc
+expect drag=- dragicon=-
+quit

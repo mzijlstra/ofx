@@ -495,12 +495,19 @@ static struct wl_surface *dnd_icon_make(const DndImage *im)
     return dnd.icon;
 }
 
+// Whether a drag out could start now (a press holding the button, no drag of ours going or being
+// read): asked before the drag image is drawn for it.
+static bool dnd_can_start(void)
+{
+    return dnd.ok && dnd.press && !dnd.src && atomic_load(&dnd.writers) == 0;
+}
+
 // c's files dragged out of the window, as copy (and with move, a move too), from the left press
 // that holds the button now, im under the pointer (NULL: the compositor's own): false when there is
 // no press, or a drag of ours is still going or being read.
 static bool dnd_start(const ClipFiles *c, bool move, const DndImage *im)
 {
-    if (!dnd.ok || !dnd.press || dnd.src || atomic_load(&dnd.writers) > 0 || c->n == 0) return false;
+    if (!dnd_can_start() || c->n == 0) return false;
     arena_reset(&dnd.srca);
     dnd.payload[CLIP_FMT_URIS] = clip_payload(&dnd.srca, c, CLIP_FMT_URIS);
     dnd.payload[CLIP_FMT_TEXT] = clip_payload(&dnd.srca, c, CLIP_FMT_TEXT);

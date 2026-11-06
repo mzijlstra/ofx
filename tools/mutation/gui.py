@@ -910,7 +910,7 @@ MUTANTS = [
     ('gui/input.c', ' && h.row >= 0 && app.ui.view != UI_VIEW_TRASH && app.have_list', ' && h.row >= 0 && app.have_list', 'f13'),
     ('gui/input.c', '        app.drag_side = in->side_click, in->side_click = -1;', '        app.drag_side = in->side_click;', 'f13'),
     ('gui/input.c', '    if (app.drag == DRAG_PRESS && app.drag_tree) in->side_click = app.drag_side;\n', '', 'f13'),
-    ('gui/input.c', '        drag_arm(x, y, str_from_c(p), ui_marked(&app.ui, i), false,', '        drag_arm(x, y, str_from_c(p), false, false,', 'f13'),
+    ('gui/input.c', ' drag_arm(x, y, str_from_c(p), ui_marked(&app.ui, i), false,', ' drag_arm(x, y, str_from_c(p), false, false,', 'f13'),
     ('gui/input.c', ' || !S_ISDIR(ds.st_mode) || access(dir, W_OK) != 0 || !realpath(dir, real)) return false;', ' || !S_ISDIR(ds.st_mode) || !realpath(dir, real)) return false;', 'f13'),
     ('gui/input.c', '        if (dragged_real[i] && ui_under(str_from_c(real), str_from_c(dragged_real[i]))) return false;', '        {}', 'f13'),
     ('gui/input.c', '        if (dragged_real[i] && ui_under(str_from_c(real), str_from_c(dragged_real[i]))) return false;', '        if (ui_under(str_from_c(dir), str_from_c(dragged.path[i]))) return false;', 'f13'),
@@ -937,7 +937,7 @@ MUTANTS = [
     ('gui/input.c', 'app.spring_at = spring >= 0 ? now_ms() : 0, timer_at', 'app.spring_at = 0, timer_at', 'f13'),
     ('gui/input.c', ' || app.spring_tab < 0 || now_ms() < app.spring_at + UI_SPRING_MS) return false;', ' || app.spring_tab < 0) return false;', 'f13'),
     ('gui/input.c', '    tab_show(app.spring_tab);\n', '', 'f13'),
-    ('gui/input.c', ' .at = -1 }, app.spring_tab = -1;\n}', ' .at = -1 };\n}', 'f13'),
+    ('gui/input.c', ' .at = at }, app.spring_tab = -1;\n}', ' .at = at };\n}', 'f13'),
     ('gui/main.c', '        if (spring_tick() || (files_over()', '        if ((files_over()', 'f13'),
     ('gui/frame.c', '    if (bx + w > (float)GetScreenWidth()) bx = app.drag_px - 14 - w;\n', '', 'f13'),
     # F13 code-health step A (2026-11-04)
@@ -969,7 +969,7 @@ MUTANTS = [
     # F14 step 2 (2026-11-05): files dragged past the window's edge go out; ours back over it drop as inside
     ('gui/input.c', '    if ((x < 0 || y < 0 || x >= (float)GetScreenWidth() || y >= (float)GetScreenHeight()) && drag_out()) return true;', '', 'dnd'),
     ('gui/input.c', '    if (!dnd_start(&dragged, app.drag_mods & UI_MOD_SHIFT, have', '    if (!dnd_start(&dragged, false, have', 'dnd'),
-    ('gui/input.c', '    bool have = drag_image(&im);', '    bool have = false;', 'dnd'),
+    ('gui/input.c', '    bool have = dnd_can_start() && drag_image(&im);', '    bool have = false;', 'dnd'),
     ('gui/input.c', '        dnd_own_answer(app.drop.ok, op != UI_DROP_COPY);', '        dnd_own_answer(false, op != UI_DROP_COPY);', 'dnd'),
     ('gui/input.c', '        dnd_own_answer(app.drop.ok, op != UI_DROP_COPY);', '        dnd_own_answer(true, op != UI_DROP_COPY);', 'dnd'),
     ('gui/input.c', '        if (app.drop.ok) drop_do(&app.drop);\n        app.out_own = true;', '        app.out_own = true;', 'dnd'),
@@ -989,6 +989,13 @@ MUTANTS = [
     # Code-health step A (2026-11-06): the read's lifecycle. An offer entered while another's read
     # runs is read when that one ends (dndj).
     ('gui/dnd.c', '        dnd_read_next();   // (the offer entered while it ran)\n', '', 'dnd'),
+    # Code-health step B (2026-11-06): the spring forgotten as a drag out leaves the window again
+    # (dndk), keys swallowed during another program's drag (dnd), the badge's icon by its key (f13h).
+    ('gui/input.c', '        drop_reset(-1), dnd_own_answer(false, false);', '        app.drop = (Drop){ .kind = DROP_NONE, .at = -1 }, dnd_own_answer(false, false);', 'dnd'),
+    ('gui/main.c', ' || app.drag == DRAG_OUT || app.drag == DRAG_IN;\n}\n\n// A drag with another program', ' || app.drag == DRAG_OUT;\n}\n\n// A drag with another program', 'dnd'),
+    ('gui/icons.c', '    snprintf(app.drag_icon, sizeof app.drag_icon, "%.*s", STR_ARG(key));\n', '', 'f13'),
+    # Not run: drag_out's out_failed and dnd_can_start (a hand-off that can't start not tried again
+    # each motion): what they save is time, which no state word shows.
     # Not run: the drop's action when the window's answer and the compositor's differ (drop_in_merge,
     # a copy): Hyprland didn't send it again after the answer; sway does, so both agree there.
     # Not run: a drop that came before its read ended (dnd_drop keeps it, drag_in_take starts the

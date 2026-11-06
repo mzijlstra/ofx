@@ -348,7 +348,10 @@ static struct {
     bool      drag_tree;    // a tree row: let go without a drag, it opens
     int       drag_side;    // its row on screen: a press let go there without a drag opens it
     char      drag_name[NAME_MAX + 1];   // the badge's: the entry pressed, or the tree row's folder
-    IconSlot *drag_icon;
+    char      drag_icon[128];   // its icon's key (a MIME type, or "folder" by that name): looked up when
+                                // drawn, as an icon cache reset mid-drag gives its slot to another (drag_icon_slot)
+    bool      drag_icon_named;  // the key is the icon's name, not a MIME type
+    bool      out_failed;   // (DRAG_FILES) the hand-off to the compositor failed: not tried again this drag
     int       drag_mods;    // Ctrl, Shift held (UI_MOD_*): a copy, a move
     Drop      drop;         // where it would land now
     bool      out_over;     // (DRAG_OUT) back over the window: lit and answered as DRAG_FILES is
@@ -427,6 +430,19 @@ static char     *dragged_real[CLIP_PATHS_MAX];   // each folder of it resolved (
 static bool files_over(void)
 {
     return app.drag == DRAG_FILES || app.drag == DRAG_IN || (app.drag == DRAG_OUT && app.out_over);
+}
+
+// A drag of files, or a press that may become one: the keys are its own (drag_keys).
+static bool drag_of_files(void)
+{
+    return app.drag == DRAG_PRESS || app.drag == DRAG_FILES || app.drag == DRAG_OUT || app.drag == DRAG_IN;
+}
+
+// A drag with another program: the compositor's, ended by it (drag_out_poll, drag_in_poll), never by
+// the window's own button or pointer.
+static bool drag_by_compositor(void)
+{
+    return app.drag == DRAG_OUT || app.drag == DRAG_IN;
 }
 // Bumped by every copy of ours, files or text: a cut's paste empties the clipboard after it only
 // if nothing was copied meanwhile (F5.2 review).

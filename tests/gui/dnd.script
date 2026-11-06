@@ -14,6 +14,10 @@ settle
 sh vptr move 700 250 press move 650 250 move 352 300 wait 1500 release >"$OFX_ROOT/vptr.log" 2>&1 &
 wait-for 3000 dndover=1 dndat=352,300 drag=in dragn=1 dragname=c.txt drop=list:-1 dropok=1 dropop=move badge=Move dndaction=2
 expect dropn=1 dropfirst=c.txt n=3
+# (keys during it are the drag's, as in F13's: Delete would trash adir under it; code-health review,
+# 2026-11-06)
+key delete
+expect n=3 drag=in confirming=0
 wait-for 3000 drops=1 drag=- dndover=0 dropfail=0
 wait-for 3000 job=- n=4
 sh grep -q "source dnd_finished" "$OFX_ROOT/peer.log"

@@ -125,6 +125,7 @@ static Clay_ElementId drop_elem(const Drop *d)
 }
 
 static bool        drop_marked, badge_drawn;   // as drawn last (a script's state line)
+static char        badge_icon[128];             // the badge's icon as drawn last, by its slot's key
 static float       spring_fill = -1;           // the spring's bar, 0 to 1; -1 none drawn
 static float       badge_x, badge_y;           // where the badge was put
 static const char *badge_op;
@@ -144,7 +145,7 @@ static void badge_place(float w, float h)
 
 static void layout_drag(void)
 {
-    drop_marked = badge_drawn = false, badge_op = NULL, spring_fill = -1;
+    drop_marked = badge_drawn = false, badge_op = NULL, spring_fill = -1, badge_icon[0] = 0;
     Theme *t = &app.theme;
     if (app.in_nofiles && app.drag == DRAG_NONE) {   // (F14: a refused drag says why, by the pointer)
         static const char NOFILES[] = "Only files can be dropped here";
@@ -179,7 +180,9 @@ static void layout_drag(void)
                                   .border = { .color = cc(t->accent), .width = CLAY_BORDER_OUTSIDE(1) },
                                   .floating = { .attachTo = CLAY_ATTACH_TO_ROOT, .zIndex = 30, .offset = { badge_x, badge_y },
                                                 .pointerCaptureMode = CLAY_POINTER_CAPTURE_MODE_PASSTHROUGH } }) {
-        icon_box(CLAY_ID("drag-icon"), app.drag_icon, SIDE_ICON_PX);
+        IconSlot *icon = drag_icon_slot();
+        if (icon) snprintf(badge_icon, sizeof badge_icon, "%.*s", STR_ARG(icon->key));
+        icon_box(CLAY_ID("drag-icon"), icon, SIDE_ICON_PX);
         text(fit(str_from_c(app.drag_name), 240, false), cc(t->fg));
         if (dragged.n > 1) text(cz(arena_sprintf(&frame, "+ %td more", dragged.n - 1)), cc(t->fg_dim));
         if (app.spring_tab >= 0) {   // (F13 step 4: the tab under it opens when the bar is full)

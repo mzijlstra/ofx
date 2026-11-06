@@ -296,11 +296,13 @@ static Hit hit_at(float x, float y)
 
 // A press that may become a drag, on the entry or tree folder at path: what it would drag is taken
 // now, by its path, not its place in a list a reload may change before the drag starts (code-health
-// review, 2026-11-04); marked: the press was on a marked entry, so the marks go.
-static void drag_arm(float x, float y, Str path, bool marked, bool in_tree, IconSlot *icon)
+// review, 2026-11-04); marked: the press was on a marked entry, so the marks go. icon: its key, a
+// MIME type or (named) an icon's name.
+static void drag_arm(float x, float y, Str path, bool marked, bool in_tree, Str icon, bool named)
 {
     app.drag = DRAG_PRESS, app.drag_x0 = app.drag_px = x, app.drag_y0 = app.drag_py = y;
-    app.drag_marked = marked, app.drag_tree = in_tree, app.drag_icon = icon;
+    app.drag_marked = marked, app.drag_tree = in_tree;
+    drag_icon_set(icon, named);
     snprintf(app.drag_path, sizeof app.drag_path, "%.*s", STR_ARG(path));
     snprintf(app.drag_name, sizeof app.drag_name, "%.*s", STR_ARG(path_base(path)));
 }
@@ -310,10 +312,8 @@ static void drag_arm_entry(float x, float y, isize i)
 {
     char p[PATH_MAX];
     const Entry *e = &app.list.e[i];
-    Str folder = S("folder");
-    if (entry_path(i, p, sizeof p))
-        drag_arm(x, y, str_from_c(p), ui_marked(&app.ui, i), false,
-                 kind_is_dir(e->kind) ? icon_for_px(folder, &folder, 1, ICON_PX) : icon_for_px(entry_mime(i), NULL, 0, ICON_PX));
+    bool dir = kind_is_dir(e->kind);
+    if (entry_path(i, p, sizeof p)) drag_arm(x, y, str_from_c(p), ui_marked(&app.ui, i), false, dir ? S("folder") : entry_mime(i), dir);
 }
 
 // The folders dragged, resolved (dragged_real): a target reached through a link into one of them is
@@ -397,16 +397,25 @@ static void drop_find(float x, float y)
 }
 
 // The drag's end: nothing held, nothing lit, no tab waited for.
+// Where the files would land forgotten (at: DROP_AGAIN, found at the next point; -1, none), and the
+// tab held under them with it: a drag starts, ends, or leaves the window (a drag out that came back
+// onto the tab it left from found its old timer, and the tab opened at once: code-health review,
+// 2026-11-06).
+static void drop_reset(int at)
+{
+    app.drop = (Drop){ .kind = DROP_NONE, .at = at }, app.spring_tab = -1;
+}
+
 static void drag_end(void)
 {
-    app.drag = DRAG_NONE, app.drop = (Drop){ .kind = DROP_NONE, .at = -1 }, app.spring_tab = -1;
+    app.drag = DRAG_NONE, drop_reset(-1);
 }
 
 // A drag of files ended without a drop: Esc, or the pointer off the window.
 static void drag_cancel(void)
 {
     if (app.drag == DRAG_OUT) dnd_cancel();
-    if (app.drag == DRAG_PRESS || app.drag == DRAG_FILES || app.drag == DRAG_OUT) drag_end();
+    if (drag_of_files() && app.drag != DRAG_IN) drag_end();   // (another program's is its own to cancel)
 }
 
 // ---- dragging out to other programs (F14 step 2) ---------------------------------------------
@@ -432,8 +441,9 @@ static bool drag_image(DndImage *im)
     BeginBlendMode(BLEND_CUSTOM_SEPARATE);
     BeginMode2D((Camera2D){ .zoom = (float)sc });
     float ix = 4, iy = (float)(DRAG_IMG_PX - DRAG_IMG_ICON) - 4;
-    if (app.drag_icon && app.drag_icon->tex.id) {
-        Texture2D tx = app.drag_icon->tex;
+    IconSlot *icon = drag_icon_slot();
+    if (icon && icon->tex.id) {
+        Texture2D tx = icon->tex;
         DrawTexturePro(tx, (Rectangle){ 0, 0, (float)tx.width, (float)tx.height }, (Rectangle){ ix, iy, DRAG_IMG_ICON, DRAG_IMG_ICON }, (Vector2){ 0 }, 0, WHITE);
     }
     if (dragged.n > 1) {
@@ -469,13 +479,16 @@ static bool drag_image(DndImage *im)
 // pointer ours until it is let go): handed to the compositor as a drag to other programs, as a
 // copy, and with Shift held a move too (Michael, 2026-11-05). raylib is told the button is up, as
 // it will never see its release (the next press would be no press). False when it can't be (no
-// compositor drags, no press it saw): the drag stays ofx's.
+// compositor drags, no press it saw, too many files): the drag stays ofx's, and isn't handed off
+// again until the next one (each try draws the image and builds the payloads).
 static bool drag_out(void)
 {
+    if (app.out_failed) return false;
     DndImage im;
-    bool have = drag_image(&im);
-    if (!dnd_start(&dragged, app.drag_mods & UI_MOD_SHIFT, have ? &im : NULL)) return false;
-    app.drag = DRAG_OUT, app.drop = (Drop){ .kind = DROP_NONE, .at = -1 }, app.spring_tab = -1, app.out_over = false;
+    bool have = dnd_can_start() && drag_image(&im);
+    if (!dnd_start(&dragged, app.drag_mods & UI_MOD_SHIFT, have ? &im : NULL)) return app.out_failed = true, false;
+    app.drag = DRAG_OUT, app.out_over = false;
+    drop_reset(-1);
     if (raylib_button) raylib_button(glfwGetCurrentContext(), GLFW_MOUSE_BUTTON_LEFT, GLFW_RELEASE, 0);
     return true;
 }
@@ -495,7 +508,7 @@ static bool drag_out_poll(void)
         UiDropOp op = drop_op(&app.drop);
         dnd_own_answer(app.drop.ok, op != UI_DROP_COPY);
     } else if (was) {
-        app.drop = (Drop){ .kind = DROP_NONE, .at = -1 }, dnd_own_answer(false, false);
+        drop_reset(-1), dnd_own_answer(false, false);
     }
     if (dnd_own_dropped(&x, &y)) {
         drop_find(x, y);
@@ -560,12 +573,13 @@ static void drag_in_start(const ClipFiles *f, u32 id)
     for (isize i = 0; i < f->n; i++) dragged.path[i] = arena_cstr(&draga, str_from_c(f->path[i]));
     dragged.n = f->n, dragged.cut = false;
     drag_real();
-    Str name = path_base(str_from_c(f->path[0])), folder = S("folder");
+    Str name = path_base(str_from_c(f->path[0]));
     struct stat st;
     bool dir = stat(f->path[0], &st) == 0 && S_ISDIR(st.st_mode);
-    app.drag = DRAG_IN, app.in_id = id, app.drop = (Drop){ .kind = DROP_NONE, .at = DROP_AGAIN };
+    app.drag = DRAG_IN, app.in_id = id;
+    drop_reset(DROP_AGAIN);
     app.drag_marked = app.drag_tree = false;
-    app.drag_icon = dir ? icon_for_px(folder, &folder, 1, ICON_PX) : icon_for_px(mime_of_name(&scratch, &app.mime_db, name), NULL, 0, ICON_PX);
+    drag_icon_set(dir ? S("folder") : mime_of_name(&scratch, &app.mime_db, name), dir);
     snprintf(app.drag_path, sizeof app.drag_path, "%s", f->path[0]);
     snprintf(app.drag_name, sizeof app.drag_name, "%.*s", STR_ARG(name));
 }
@@ -627,7 +641,7 @@ static bool drag_in_poll(void)
 // 2026-11-04).
 static void drag_keys(UiInput *in)
 {
-    if (app.drag != DRAG_PRESS && app.drag != DRAG_FILES && app.drag != DRAG_OUT) return;
+    if (!drag_of_files()) return;
     bool esc = false;
     for (int i = 0; i < in->nev; i++) esc |= in->ev[i].key == UK_ESC;
     in->nev = 0;
@@ -681,8 +695,7 @@ static void press_at(UiInput *in, float x, float y, int mods)
     else if (!mods && h.side >= 0 && h.twisty < 0 && app.ui.side_mode == SIDE_TREE && app.ui.side.top + h.side < tree.n &&
              tree.row[app.ui.side.top + h.side].depth > 0) {
         // (a tree row opens when the button is let go, a drag's never: else a drag of it went into it first)
-        Str folder = S("folder");
-        drag_arm(x, y, tree.row[app.ui.side.top + h.side].path, false, true, icon_for_px(folder, &folder, 1, ICON_PX));
+        drag_arm(x, y, tree.row[app.ui.side.top + h.side].path, false, true, S("folder"), true);
         app.drag_side = in->side_click, in->side_click = -1;
     }
     // The zoom track: the size nearest the press, and the knob held until the button is let go.
@@ -876,7 +889,7 @@ static int tip_target(Hit h)
 // what is drawn changed.
 static bool drag_release(UiInput *in)
 {
-    if (app.drag == DRAG_NONE || app.drag == DRAG_OUT || app.drag == DRAG_IN) return false;   // (drags with other programs end by the compositor: drag_out_poll, drag_in_poll)
+    if (app.drag == DRAG_NONE || drag_by_compositor()) return false;
     if (app.drag == DRAG_SIDE && app.drag_moved) side_keep(app.side_px), app.edge_press.row = -1;
     if (app.drag == DRAG_FILES && app.drop.ok) drop_do(&app.drop);
     if (app.drag == DRAG_PRESS && app.drag_tree) in->side_click = app.drag_side;
@@ -918,7 +931,8 @@ static bool drag_at(UiInput *in, float x, float y, bool held)
     case DRAG_PRESS:
         if (!ui_drag_past(x - app.drag_x0, y - app.drag_y0)) return false;
         if (!drag_start()) return app.drag = DRAG_NONE, false;
-        app.drag = DRAG_FILES, app.drop = (Drop){ .kind = DROP_NONE, .at = DROP_AGAIN };
+        app.drag = DRAG_FILES, app.out_failed = false;
+        drop_reset(DROP_AGAIN);
         app.press.row = -1;   // (a drag's press is no double click's first: the next press on that row would open it)
         return files_drag_at(x, y);
     case DRAG_FILES: return files_drag_at(x, y);
@@ -999,7 +1013,7 @@ static UiInput input_real(bool *seen)
     // (a script's own: press-here, move-to, release.) Off the window a drag of files is cancelled,
     // not dropped where it last was.
     if (!script_on) app.drag_mods = mods_held();
-    if (!script_on && !on && (app.drag == DRAG_PRESS || app.drag == DRAG_FILES)) drag_cancel(), *seen = true;
+    if (!script_on && !on && drag_of_files() && !drag_by_compositor()) drag_cancel(), *seen = true;
     else if (!script_on && (d.x != 0 || d.y != 0 || !held || !on)) *seen |= drag_at(&in, m.x, m.y, held && on);
     in.backs = mouse_backs, mouse_backs = 0;
     in.forwards = mouse_forwards, mouse_forwards = 0;
