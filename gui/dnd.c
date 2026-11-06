@@ -372,10 +372,14 @@ static void dnd_drop(void *data, struct wl_data_device *d)
         dnd.drops_failed++;
         return;
     }
-    // By the window's own answer, within the source's actions: Hyprland didn't send the action
-    // again after it (Michael's log, 2026-11-05: Ctrl's copy in Nemo dropped as the move it had
-    // sent before the enter); the compositor's only when the window gave none.
-    dnd.in_dropped = true, dnd.in_x = dnd.x, dnd.in_y = dnd.y, dnd.in_drop_act = dnd.in_act ? dnd.in_act : dnd.action;
+    // A move only when the window's answer and the compositor's action both say so, else a copy
+    // (a copy loses nothing): Hyprland didn't send the action again after the window's answer
+    // (Michael's log, 2026-11-05: Ctrl's copy in Nemo dropped as the move it had sent before the
+    // enter), and a compositor may change it for keys the window doesn't see (review, 2026-11-06).
+    // Either alone when the other has none.
+    uint32_t a = dnd.in_act, c = dnd.action;
+    dnd.in_drop_act = !a ? c : !c || a == c ? a : WL_DATA_DEVICE_MANAGER_DND_ACTION_COPY;
+    dnd.in_dropped = true, dnd.in_x = dnd.x, dnd.in_y = dnd.y;
 }
 
 static void dnd_selection(void *data, struct wl_data_device *d, struct wl_data_offer *o)

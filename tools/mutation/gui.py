@@ -986,8 +986,8 @@ MUTANTS = [
     ('gui/input.c', ': act == DND_MOVE ? UI_DROP_MOVE : UI_DROP_COPY;', ': UI_DROP_MOVE;', 'dnd'),
     ('gui/input.c', '    if (!files_over() || app.spring_tab < 0 || now_ms() < app.spring_at + UI_SPRING_MS) return false;', '    if (app.drag != DRAG_FILES || app.spring_tab < 0 || now_ms() < app.spring_at + UI_SPRING_MS) return false;', 'dnd'),
     ('gui/dnd.c', '    if (none) *x = dnd.x, *y = dnd.y;\n    return none;', '    return false;', 'dnd'),
-    # Not run: a drop by the window's own answer over the compositor's action (Hyprland didn't send
-    # it again after the answer; sway does, so both agree there).
+    # Not run: the drop's action when the window's answer and the compositor's differ (a copy):
+    # Hyprland didn't send it again after the answer; sway does, so both agree there.
     # Not run: a drop dnd_drop keeps waiting for its read, and the trash refused a copy-only source:
     # sway sends no drop the window refused (Hyprland does), so no script reaches them.
     # Not run: drag_out telling raylib the button is up, and drag_release leaving DRAG_OUT alone:

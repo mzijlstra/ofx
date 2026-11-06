@@ -844,7 +844,9 @@ when it has the keyboard.
 Michael's hand check on Hyprland (2026-11-05): Nemo's move, the tab that opens, the Trash, as
 meant. Two fixed after: with Ctrl held, the badge said Copy but the drop moved (Hyprland didn't send
 the action again after ofx's answer, so the drop went by the move it had sent before the enter: a
-drop now goes by the window's own answer, the compositor's only without one); and a browser's link
+drop is a move only when the window's answer and the compositor's action both say so, else a
+copy, either alone when the other has none: review, 2026-11-06, as a compositor may change the
+action for keys the window doesn't see); and a browser's link
 showed nothing refused (Hyprland's pointer doesn't change for a refused drag), so a badge by the
 pointer says "Only files can be dropped here".
 
