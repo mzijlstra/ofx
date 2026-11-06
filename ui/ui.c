@@ -864,6 +864,7 @@ typedef enum {
     UI_ON_ABOUT,
     UI_ON_BAR,      // panel == UI_PANEL_BAR: the menu bar just hidden
     UI_ON_BRANCHES, // the branches panel (F12 step 6)
+    UI_ON_KINDS     // (their count: tests/test_f14.c checks each has an owner for its keys)
 } UiOnTop;
 
 // Whether an action works in view v. The trash view holds files that are nowhere yet: what would

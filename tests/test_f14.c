@@ -91,3 +91,20 @@ static void test_pointer_tidy(void)
     ui_handle(&u, names, &in);
     CHECK(u.menu_on && u.focus != UI_FOCUS_JOBS && u.job_at == 0);
 }
+
+// Every kind of thing on top has an owner for the keys (code-health review, 2026-11-06): the key
+// loop gives a clash its keys once the questions and panels have taken theirs, so a new panel
+// without a case in ui_panel_key would hand the fields its keys instead.
+static void test_on_top_owner(void)
+{
+    UiInput in = ui_input_none();
+    for (int k = UI_ON_NONE; k < UI_ON_KINDS; k++) {
+        Ui u = menu_ui(3);
+        UiAction out;
+        UiOnTop on = (UiOnTop)k;
+        bool owned = on == UI_ON_NONE || on == UI_ON_FULL || on == UI_ON_CLASH || ui_is_question(on) ||
+                     ui_panel_key(&u, on, (UiEvent){ UK_NONE, 0 }, &in, &out);
+        checks++;
+        if (!owned) failures++, fprintf(stderr, "UiOnTop %d: no owner for its keys\n", k);
+    }
+}
