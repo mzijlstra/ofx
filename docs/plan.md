@@ -746,7 +746,9 @@ from the theme already (used = `accent`, 90% full = `red`, free = `dark_foregrou
 `lighter_background`), unchecked. Against the sidebar's three backgrounds (row, hover, cursor):
 the used colour is under 3:1 in 6 themes, the red under 3:1 in 9 (1.66 in solitude), red and accent
 alike in last-horizon, solitude and vantablack (the warning doesn't show), and the free track about
-1.2:1 everywhere, 1.00 in white (dark_foreground there is the background's grey).
+1.2:1 everywhere, 1.00 in white (dark_foreground there is the background's grey). **Corrected
+2026-11-07:** the 1.2 was the tool's error (its mix took 25% dark_foreground; C's `mix(a, b, t)` is
+t of a, so 75%); the track reads 1.35 to 3.5, and fails only in white.
 
 **No fixed colour works:** the best single colour over every theme's backgrounds reads 2.1:1 at
 worst (#e030d0; the best fixed red #f03870, the same); three themes are light, the rest dark.
@@ -768,6 +770,24 @@ The prototype passes 20 of 22 (the two greyscale ones need rule 4).
 2. The pick, as above, for every colour that fails; unit tests over all themes.
 3. Screenshots of ofx under each theme in the test weston (its scratch theme copy, never his
    desktop), before and after, on one page for Michael to judge by eye.
+
+**Step 1 done (2026-11-07, Omarchy 4.5, `tools/theme-contrast.py --all`):** 23 themes (4.5 adds
+jade-horse and lupine; osaka-jade is gone, only an empty backgrounds folder left). Every colour ofx
+draws text or a bar in, worst over the backgrounds it sits on (list rows: bg, bg_light on hover,
+selection, marked; sidebar: bg_light, bg, selection; footer: bg_light, bg), themes under 3:1:
+- **dark_foreground as text** (every dimmed label, the columns with colours off, the git ignored):
+  16 to 20 of 23; 1.00 (invisible) where it equals the selection or the background (last-horizon,
+  white, everforest's cursor row). ristretto 1.66. The sidebar's free number (75% of it): 23 of 23.
+- **The terminal colours** in names and columns: red 11 (the git C, perm w), date blue 8, size green,
+  owner yellow, magenta 6 each, cyan 5; the light themes (catppuccin-latte, flexoki-light) and
+  rose-pine, kanagawa, miasma, nord most often.
+- **accent** (here, marked, the used line, the job and spring fills against their track): 4 to 5.
+- **The drive's 90% red:** 9. The track: white only. fg on every background: 0.
+- **One rule would cover all of it:** each colour the theme gives, pushed toward the foreground
+  just until 3:1 on its backgrounds, untouched where it already reads. That moves 0 colours in
+  ethereal, jade-horse and starship, 1 in ristretto (dark_foreground, 40% toward fg), 6 to 7 in
+  catppuccin-latte, flexoki-light, kanagawa, miasma, rose-pine. Disabled controls (dim_color) are
+  left dim on purpose. Michael picks the scope and the dimmed text's floor (below).
 
 ## F14 design (2026-11-05; Michael, 2026-11-05: the recommendations below)
 

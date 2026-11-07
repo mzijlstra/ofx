@@ -41,12 +41,12 @@ def push(c, fg, bgs, target):   # toward the foreground until it reads: the hue 
         if worst(x, bgs) >= target: return x, k / 10
     return mix(c, fg, 1), 1.0
 
-print('== now: used = accent, warning = red (90% full), free = dark_foreground 75% toward lighter_background')
+print('== now: used = accent, warning = red (90% full), free = 75% dark_foreground, 25% lighter_background')
 print(f"{'theme':18} {'used':>5} {'warn':>5} {'free':>5} {'dE':>6}")
 for n, t in themes:
     if any(k not in t for k in need): print(f'{n:18} missing {[k for k in need if k not in t]}'); continue
     bgs = [t['lighter_background'], t['background'], t['selection']]
-    free = mix(t['dark_foreground'], t['lighter_background'], 0.75)
+    free = mix(t['dark_foreground'], t['lighter_background'], 0.25)   # drive_free_color: 75% dark_foreground (C's mix is t of a)
     a, r, fr, d = worst(t['accent'], bgs), worst(t['red'], bgs), cr(free, t['lighter_background']), dE(t['accent'], t['red'])
     flag = ' '.join(x for x, c in (('ACC', a < 3), ('RED', r < 3), ('FREE', fr < 1.3), ('SAME', d < 20)) if c)
     print(f'{n:18} {a:5.2f} {r:5.2f} {fr:5.2f} {d:6.1f}  {flag}')
@@ -67,3 +67,44 @@ for n, t in themes:
     flag = ' '.join(x for x, c in (('SAME', dE(used, warn) < 20), ('TRACK', cr(track, bgl) < 1.3)) if c)
     print(f"{n:18} {worst(used, bgs):5.2f} {worst(warn, bgs):5.2f} {dE(used, warn):6.1f} {cr(track, bgl):5.2f}  "
           f"{uk}{'+%.1f' % ut if ut else ''} / {wk}{'+%.1f' % wt if wt else ''}  {flag}")
+
+# ---- every colour ofx draws text or a bar in (--all, 2026-11-07) ------------------------------------
+# Each role: (what, where in gui/, its colour, the backgrounds it is drawn on, the ratio it needs).
+# Text needs 3:1 here (WCAG's large-text and non-text line: ofx's text is small, so 4.5 is listed as
+# well); the drive bar's track 1.3 against its row (a shape, only to be seen). The terminal colours
+# (blue, cyan, ...) are fs/theme.c's: the theme's normal ones.
+import sys
+def roles(t):
+    g = lambda k: t[k]
+    bg, bgl, sel, acc, fg, fgd = g('background'), g('lighter_background'), g('selection'), g('accent'), g('foreground'), g('dark_foreground')
+    marked = mix(acc, bg, 0.72)                 # mix(t->accent, t->bg, 0.28f): 28% accent
+    rows, cols, side, foot = [bg, bgl], [bg, bgl, sel, marked], [bgl, bg, sel], [bgl, bg]
+    free = mix(fgd, bgl, 0.25)                  # drive_free_color: 75% dark_foreground
+    r = [('name: folder (blue)', g('blue'), rows), ('name: link (cyan)', g('cyan'), rows),
+         ('name: build/README (yellow)', g('yellow'), rows), ('name: executable (green)', g('green'), rows),
+         ('name: image/video (magenta)', g('magenta'), rows), ('name: archive, broken link (red)', g('red'), rows),
+         ('name: plain (fg)', fg, rows + [sel]), ('name: marked (accent)', acc, [marked]),
+         ('column: size (green)', g('green'), cols), ('column: date (blue)', g('blue'), cols),
+         ('column: owner, git M (yellow)', g('yellow'), cols), ('column: git R (cyan)', g('cyan'), cols),
+         ('column: git C, perm w (red)', g('red'), cols), ('column: perm other (magenta)', g('magenta'), cols),
+         ('column: dimmed (dark_fg)', fgd, cols),
+         ('sidebar: name (fg)', fg, side), ('sidebar: dim (dark_fg)', fgd, side), ('sidebar: here (accent)', acc, side),
+         ('sidebar: free number', free, side), ('drive: used (accent)', acc, side), ('drive: 90% (red)', g('red'), side),
+         ('footer: text (fg)', fg, foot), ('footer: dim (dark_fg)', fgd, foot), ('footer: status bad (red)', g('red'), foot),
+         ('footer: accent', acc, foot), ('list: error (red)', g('red'), [bg]),
+         ('badge: op label (bg on accent)', bg, [acc]),
+         ('job/spring: fill (accent) vs track', acc, [mix(acc, bgl, 0.8)])]
+    return r
+
+if '--all' in sys.argv:
+    res = {}
+    for n, t in themes:
+        if any(k not in t for k in need + ('blue', 'cyan', 'yellow', 'green', 'magenta')): continue
+        for what, c, bgs in roles(t): res.setdefault(what, []).append((n, worst(c, bgs)))
+        bgl = t['lighter_background']
+        res.setdefault('drive: track (free) vs row', []).append((n, cr(mix(t['dark_foreground'], bgl, 0.25), bgl)))
+    print(f'\n== every role, worst over its backgrounds: themes under 3:1 (the track: under 1.3); [n under 4.5]')
+    for what, xs in res.items():
+        lim = 1.3 if 'track (free)' in what else 3
+        bad = sorted((v, n) for n, v in xs if v < lim); aa = sum(v < 4.5 for _, v in xs)
+        print(f"{what:34} {len(bad):2}/{len(xs)} [{aa:2}]  " + ' '.join(f'{n} {v:.2f}' for v, n in bad))
