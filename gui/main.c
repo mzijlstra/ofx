@@ -565,6 +565,7 @@ static void theme_apply(void)
 {
     app.theme = theme_load(&scratch);
     app.theme_list = app.theme;
+    theme_fit_list(&app.theme_list);   // (a prototype: the files area only rescued, 2026-11-07)
     theme_fit(&app.theme);   // (2026-11-07: the sidebar's and the bars' colours read on their backgrounds)
     icons_reset();
 }

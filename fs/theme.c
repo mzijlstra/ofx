@@ -188,13 +188,73 @@ static double rgb_worst(Rgb c, const Rgb *bg, int n)
     return w;
 }
 
-// c moved toward `to` in twentieths, just until it reads `min` over every background; `to` itself
-// if nothing short of it does. marked: the list's marked rows are a background too, the colour's own
-// accent 28% into bg (gui/files.c), so the accent moves its own background as it moves.
+// OKLab (Björn Ottosson, 2020): lightness, and two colour axes, perceptually even. OKLCH is its
+// polar form: L, chroma C, hue h. Moving L alone keeps a colour's hue and as much of its chroma as
+// the sRGB gamut allows, where a mix toward fg (white or black) washes it out (Michael, 2026-11-07:
+// the mix made the files area's colours "same-same").
+static void rgb_oklab(Rgb c, double o[3])
+{
+    double r = rgb_lin(c.r), g = rgb_lin(c.g), b = rgb_lin(c.b);
+    double l = cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+    double m = cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+    double s = cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+    o[0] = 0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * s;
+    o[1] = 1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s;
+    o[2] = 0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s;
+}
+
+static double lin_to_srgb(double v)
+{
+    return v <= 0.0031308 ? 12.92 * v : 1.055 * pow(v, 1 / 2.4) - 0.055;
+}
+
+// OKLab to sRGB, false where the colour is outside sRGB.
+static bool oklab_rgb(const double o[3], Rgb *out)
+{
+    double l = o[0] + 0.3963377774 * o[1] + 0.2158037573 * o[2];
+    double m = o[0] - 0.1055613458 * o[1] - 0.0638541728 * o[2];
+    double s = o[0] - 0.0894841775 * o[1] - 1.2914855480 * o[2];
+    l = l * l * l, m = m * m * m, s = s * s * s;
+    double rgb[3] = { 4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s, -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+                      -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s };
+    u8 v[3];
+    for (int i = 0; i < 3; i++) {
+        double e = lin_to_srgb(rgb[i]);
+        if (e < -0.0005 || e > 1.0005) return false;
+        v[i] = (u8)lround(fmin(1, fmax(0, e)) * 255);
+    }
+    *out = (Rgb){ v[0], v[1], v[2] };
+    return true;
+}
+
+// The colour at lightness L with c's hue and as much of its chroma as fits in sRGB.
+static Rgb oklch_at(const double c[3], double L)
+{
+    double lo = 0, hi = 1, o[3];
+    Rgb x;
+    o[0] = L, o[1] = c[1], o[2] = c[2];
+    if (oklab_rgb(o, &x)) return x;
+    for (int i = 0; i < 20; i++) {   // the most chroma that fits, by halving
+        double k = (lo + hi) / 2;
+        o[1] = c[1] * k, o[2] = c[2] * k;
+        if (oklab_rgb(o, &x)) lo = k;
+        else hi = k;
+    }
+    o[1] = c[1] * lo, o[2] = c[2] * lo;
+    oklab_rgb(o, &x);
+    return x;
+}
+
+// c's lightness moved toward `to`'s in fortieths, hue kept, just until it reads `min` over every
+// background; `to` itself if nothing short of it does. marked: the list's marked rows are a
+// background too, the colour's own accent 28% into bg (gui/files.c), so the accent moves its own
+// background as it moves.
 static Rgb rgb_push(Rgb c, Rgb to, const Rgb *bg, int n, double min, const Rgb *marked_bg)
 {
-    for (int k = 0; k <= 20; k++) {
-        Rgb x = rgb_mix(to, c, k / 20.0);
+    double o[3], ot[3];
+    rgb_oklab(c, o), rgb_oklab(to, ot);
+    for (int k = 0; k <= 40; k++) {
+        Rgb x = k == 0 ? c : oklch_at(o, o[0] + (ot[0] - o[0]) * k / 40.0);
         if (rgb_worst(x, bg, n) >= min && (!marked_bg || rgb_contrast(x, rgb_mix(x, *marked_bg, 0.28)) >= min)) return x;
     }
     return to;
@@ -251,6 +311,17 @@ static void theme_fit(Theme *t)
     for (int i = 0; i < COUNT(text); i++) *text[i] = rgb_push(*text[i], t->fg, list, 4, THEME_TEXT_MIN, NULL);
     t->drive_track = rgb_mix(t->fg_dim, t->bg_light, 0.75);
     t->drive_free = rgb_push(t->drive_track, t->fg, side, 3, THEME_DIM_MIN, NULL);
+}
+
+// The files area's colours (2026-11-07, a prototype): only rescued where they are near illegible,
+// under THEME_RESCUE_MIN, so the theme's own colours stay as vibrant as its author made them there.
+#define THEME_RESCUE_MIN 1.5
+static void theme_fit_list(Theme *t)
+{
+    t->accent = rgb_push(t->accent, t->fg, (Rgb[]){ t->bg, t->bg_light, t->selection }, 3, THEME_RESCUE_MIN, &t->bg);
+    const Rgb list[] = { t->bg, t->bg_light, t->selection, rgb_mix(t->accent, t->bg, 0.28) };
+    Rgb *text[] = { &t->fg_dim, &t->red, &t->yellow, &t->green, &t->blue, &t->cyan, &t->magenta };
+    for (int i = 0; i < COUNT(text); i++) *text[i] = rgb_push(*text[i], t->fg, list, 4, THEME_RESCUE_MIN, NULL);
 }
 
 // ---- XDG user directories -------------------------------------------------------------------
