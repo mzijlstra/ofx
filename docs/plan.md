@@ -735,6 +735,40 @@ Default and Recommended equal GIO's; GLib's rewrite of a copy adds the two lines
   is first drawn, all of them dropped when it closes (`ow_drop`). SVG icons (theme, pixmaps/ or a
   path) are drawn with nanosvg, vendored; only for the apps, the files' icons stay PNG.
 
+## Theme colours across Omarchy's themes (2026-11-07; Michael: "great plan")
+
+Before publishing (Michael wants a public repo next), ofx is checked on every Omarchy theme. He saw
+the drives' usage line read badly on some. Order: Michael upgrades Omarchy to 4.5 and reboots;
+then the steps below, each with its reviewer-2 round.
+
+**Measured** (`tools/theme-contrast.py`, read only, 22 themes before 4.5): the line's colours come
+from the theme already (used = `accent`, 90% full = `red`, free = `dark_foreground` 75% toward
+`lighter_background`), unchecked. Against the sidebar's three backgrounds (row, hover, cursor):
+the used colour is under 3:1 in 6 themes, the red under 3:1 in 9 (1.66 in solitude), red and accent
+alike in last-horizon, solitude and vantablack (the warning doesn't show), and the free track about
+1.2:1 everywhere, 1.00 in white (dark_foreground there is the background's grey).
+
+**No fixed colour works:** the best single colour over every theme's backgrounds reads 2.1:1 at
+worst (#e030d0; the best fixed red #f03870, the same); three themes are light, the rest dark.
+
+**The plan: picked from the theme's own palette, with checks, at theme load** (a pure function in
+ui/ or fs/, unit-tested over every theme's colors.toml):
+1. Warning: the best-reading of `red`, `bright_red`, `orange`, pushed toward `foreground` (hue
+   kept, lightness moved) until 3:1.
+2. Used: `accent`, unless too like the warning (dE under 30): then the theme's best other colour
+   (blue, cyan, green, magenta, ...), pushed the same way.
+3. Free track: set to about 1.35:1, not a fixed mix.
+4. Greyscale themes (vantablack, white: even their red is grey): the warning by lightness (the
+   foreground at 90% full, the mid grey below), the theme left grey; no imported red.
+The prototype passes 20 of 22 (the two greyscale ones need rule 4).
+
+**Steps:**
+1. Re-run the measurement on 4.5's themes; widen it to every colour ofx draws text or bars in (the
+   git letters, the badge, the spring bar, the status's red, links, the dimmed labels).
+2. The pick, as above, for every colour that fails; unit tests over all themes.
+3. Screenshots of ofx under each theme in the test weston (its scratch theme copy, never his
+   desktop), before and after, on one page for Michael to judge by eye.
+
 ## F14 design (2026-11-05; Michael, 2026-11-05: the recommendations below)
 
 **What GLFW does (vendored 3.4, not to be edited):** it binds `wl_data_device_manager` at version 1
