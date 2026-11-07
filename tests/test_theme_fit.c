@@ -1,7 +1,7 @@
 // theme_fit (2026-11-07): every colour ofx draws text in reads on its backgrounds, under every
 // Omarchy theme, and one that already read is left as the theme gave it.
 
-// Hard cases from Omarchy 4.5's themes (their colours only, as key=rrggbb): ristretto (Michael's;
+// Hard cases from Omarchy 4.5's themes (their colours only, as key=rrggbb): ristretto (
 // only dark_foreground short), white and vantablack (greyscale: even their red is grey), solitude
 // (red a grey, bright_red the colour), miasma (red 1.69:1), last-horizon (background ==
 // lighter_background, dark_foreground == selection), gruvbox and nord (red under 3:1, orange reads:
