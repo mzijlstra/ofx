@@ -802,6 +802,15 @@ that mix unpushed (pushed, it met the used part: white's fill on track fell 2.80
 review's finding). Checked over every
 installed theme in test_theme_fit (and eight embedded, so it runs without Omarchy).
 
+**Michael's pick (2026-11-07, page https://claude.ai/artifact/4VcjkTmgQBHTNb3NXRvTWs, column 4):**
+the fit everywhere (6de0248) washed the files area's colours out ("same-same": a mix toward fg
+takes chroma). Picked: lightness-only pushes in OKLCH (hue and chroma kept); the menu bar, top bar,
+sidebar and footer at 3:1 / dimmed 2:1 (in white their buttons disappeared); the files area only
+rescued under 1.5:1 (`theme_fit_list`, `app.theme_list`). Prototype on branch `theme-side-only`
+(e1c5c65, 21911ab, e06ba03). **To finish:** tests for OKLCH (round trip, chroma kept, the pins
+again, theme_fit_list's properties), f54's expectation, mutants for both, run.py, gui.py, the full
+GUI suite, theme-contrast.py told about OKLCH or retired, reviewer-2, then Michael's install go.
+
 ## F14 design (2026-11-05; Michael, 2026-11-05: the recommendations below)
 
 **What GLFW does (vendored 3.4, not to be edited):** it binds `wl_data_device_manager` at version 1
