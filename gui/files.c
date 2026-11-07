@@ -113,19 +113,19 @@ static float drive_used(const Place *p)
 // track a shade of its own (drive_bar).
 static Clay_Color drive_used_color(const Place *p)
 {
-    return drive_used(p) >= 0.9f ? cc(app.theme.drive_warn) : cc(app.theme.drive_used);
+    return drive_used(p) >= 0.9f ? cc(app.theme_side.drive_warn) : cc(app.theme_side.drive_used);
 }
 
 static Clay_Color drive_free_color(void)
 {
-    return cc(app.theme.drive_free);
+    return cc(app.theme_side.drive_free);
 }
 
 // A drive's fullness: a thin bar under its name.
 static void drive_bar(int r, const Place *p, float w)
 {
     CLAY(CLAY_IDI("side-bar", r), { .layout = { .sizing = { CLAY_SIZING_FIXED(w), CLAY_SIZING_FIXED(3) } },
-                                    .backgroundColor = cc(app.theme.drive_track) }) {
+                                    .backgroundColor = cc(app.theme_side.drive_track) }) {
         CLAY(CLAY_IDI("side-used", r), { .layout = { .sizing = { CLAY_SIZING_FIXED(w * drive_used(p)), CLAY_SIZING_GROW(0) } },
                                          .backgroundColor = drive_used_color(p) }) {}
     }
@@ -155,7 +155,7 @@ static void layout_side_edge(float h)
 // mark; the folder shown in the accent.
 static void layout_tree(float h)
 {
-    Theme *t = &app.theme;
+    Theme *t = &app.theme_side;
     CLAY(CLAY_ID("side"), { .layout = { .sizing = { CLAY_SIZING_FIXED(side_w()), CLAY_SIZING_FIXED(h) },
                                         .layoutDirection = CLAY_TOP_TO_BOTTOM, .padding = { 0, 0, PAD / 2, 0 } },
                             .clip = { .horizontal = true }, .backgroundColor = cc(t->bg_light) }) {
@@ -196,7 +196,7 @@ static void layout_tree(float h)
 // the right and its fullness under its name.
 static void layout_side(float h)
 {
-    Theme *t = &app.theme;
+    Theme *t = &app.theme_side;
     CLAY(CLAY_ID("side"), { .layout = { .sizing = { CLAY_SIZING_FIXED(side_w()), CLAY_SIZING_FIXED(h) },
                                         .layoutDirection = CLAY_TOP_TO_BOTTOM, .padding = { 0, 0, PAD / 2, 0 } },
                             .backgroundColor = cc(t->bg_light) }) {
