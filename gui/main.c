@@ -304,7 +304,7 @@ static struct {
     bool      quit;
 
     Theme     theme;
-    Theme     theme_side;   // the sidebar's: theme_fit's copy (the files area keeps the theme as given, 2026-11-07)
+    Theme     theme_list;   // the files area's: the theme as given (theme is fitted for the sidebar and the bars, 2026-11-07)
     MimeDb    mime_db;
     UserDirs  user_dirs;
     IconDb    icons;
@@ -564,8 +564,8 @@ static void close_others(bool quit)
 static void theme_apply(void)
 {
     app.theme = theme_load(&scratch);
-    app.theme_side = app.theme;
-    theme_fit(&app.theme_side);   // (2026-11-07: the sidebar's colours read on its backgrounds)
+    app.theme_list = app.theme;
+    theme_fit(&app.theme);   // (2026-11-07: the sidebar's and the bars' colours read on their backgrounds)
     icons_reset();
 }
 
