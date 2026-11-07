@@ -141,7 +141,7 @@ MUTANTS = [
     # F5.4: a theme switch as omarchy-theme-set makes it
     (W, "        if (e->wd == atomic_load(&watch.current_wd)) *theme = true, rewatch = true;", "        if (e->wd == atomic_load(&watch.current_wd)) rewatch = true;"),
     (W, "        if (e->wd == atomic_load(&watch.theme_wd) && !(e->mask & IN_IGNORED)) *theme = true;", ""),
-    (G, "    app.theme = theme_load(&scratch);\n    icons_reset();", "    app.theme = theme_load(&scratch);"),
+    (G, "    theme_fit(&app.theme);   // (2026-11-07: every colour reads on its backgrounds)\n    icons_reset();", "    theme_fit(&app.theme);   // (2026-11-07: every colour reads on its backgrounds)"),
     # F6
     (W, "        if (watch.mount_wd >= 0 && e->wd == watch.mount_wd) *mounts = true;\n", ""),
     ('gui/main.c', '    if (atomic_exchange(&watch.mounts_ready, false)) places_reload(), trash_state(), dirty = true;\n', ''),
