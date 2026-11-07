@@ -1645,6 +1645,7 @@ static void test_format(void)
     tzset();
 }
 
+#include "test_theme_fit.c"
 #include "test_f3.c"
 #include "test_f4.c"
 #include "test_f5.c"
@@ -1692,6 +1693,7 @@ int main(void)
     if (fast) test_mime();
     if (fast) test_icons();
     if (fast) test_theme();
+    if (fast) test_theme_fit();
     if (fast) test_user_dirs();
     if (fast) test_spawn();
     if (fast) test_ui();

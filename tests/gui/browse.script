@@ -62,8 +62,9 @@ expect n=1 sel=inner.txt
 back
 expect sel=adir n=6
 shot browse.png
-# The theme: the scratch copy's accent changes.
-sh sed -i 's/^accent = .*/accent = "#123456"/' "$OFX_ROOT/state/omarchy/current/theme/colors.toml"
+# The theme: the scratch copy's accent changes, on backgrounds it reads on whatever Michael's theme is
+# (theme_fit moves an accent that doesn't, 2026-11-07).
+sh sed -i 's/^accent = .*/accent = "#123456"/; s/^background = .*/background = "#ffffff"/; s/^lighter_background = .*/lighter_background = "#ffffff"/; s/^selection = .*/selection = "#ffffff"/; s/^foreground = .*/foreground = "#000000"/' "$OFX_ROOT/state/omarchy/current/theme/colors.toml"
 wait-for 1500 themes=1 accent=#123456
 shot theme.png
 quit

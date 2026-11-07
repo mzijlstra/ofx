@@ -789,6 +789,17 @@ selection, marked; sidebar: bg_light, bg, selection; footer: bg_light, bg), them
   catppuccin-latte, flexoki-light, kanagawa, miasma, rose-pine. Disabled controls (dim_color) are
   left dim on purpose. Michael picks the scope and the dimmed text's floor (below).
 
+**Step 2 (2026-11-07):** Michael: all text colours, and dimmed text at 2:1 ("muted, but the floor
+stops it going illegible"; picked on a mock page of the four floors). `theme_fit` (fs/theme.c, run
+by theme_apply after every load) pushes in place, toward the foreground in twentieths, just until
+each reads on the list's four backgrounds (row, hover, cursor, marked): dark_foreground to 2:1,
+accent (its own marked rows moving with it) and the six terminal colours to 3:1. The drive bar
+gets three colours of its own: the warning is the theme's red where it reads (ristretto keeps its
+red), else the best-reading of red, bright_red, orange that is a colour (solitude's red is a grey),
+else the foreground (vantablack, white); the used part is the accent unless within dE 20 of the
+warning (ristretto's 29 reads apart, so 30 was too strict); the free part 2:1. Checked over every
+installed theme in test_theme_fit (and eight embedded, so it runs without Omarchy).
+
 ## F14 design (2026-11-05; Michael, 2026-11-05: the recommendations below)
 
 **What GLFW does (vendored 3.4, not to be edited):** it binds `wl_data_device_manager` at version 1

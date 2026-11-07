@@ -1010,6 +1010,9 @@ MUTANTS = [
     # drag its target refused (dnde's refused step), Hyprland does, with action 0.
     # Not run either: an offer's action kept by its slot (dnd_offer_action). Hyprland sends it before
     # the enter, the test sway after, so only Michael's hand check on Hyprland shows it (2026-11-05).
+    # ---- theme_fit (2026-11-07): the reload fits the colours (f54's dark accent comes back pushed).
+    # Not run: the drive bar's three colours drawn (pixels; the theme screenshots page shows them).
+    (G, '    theme_fit(&app.theme);   // (2026-11-07: every colour reads on its backgrounds)\n', '', 'f54'),
 ]
 import concurrent.futures, queue, threading, time
 

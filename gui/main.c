@@ -563,6 +563,7 @@ static void close_others(bool quit)
 static void theme_apply(void)
 {
     app.theme = theme_load(&scratch);
+    theme_fit(&app.theme);   // (2026-11-07: every colour reads on its backgrounds)
     icons_reset();
 }
 

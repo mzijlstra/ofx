@@ -2540,3 +2540,35 @@ MUTANTS += [
     ('fs/job.c', '            if (seen) continue;\n', ''),
     ('fs/job.c', ' && left[k].name == name;', ';'),
 ]
+
+# 2026-11-07: theme_fit, every colour ofx draws text in read on its backgrounds (test_theme_fit.c).
+TF = 'fs/theme.c'   # (T is fs/trash.c by here)
+MUTANTS += [
+    (TF, "return v <= 0.03928 ? v / 12.92 : pow((v + 0.055) / 1.055, 2.4);", "return pow((v + 0.055) / 1.055, 2.4);"),
+    (TF, "return la > lb ? (la + 0.05) / (lb + 0.05) : (lb + 0.05) / (la + 0.05);", "return (la + 0.05) / (lb + 0.05);"),
+    (TF, "return (Rgb){ (u8)lround(a.r * t + b.r * (1 - t)),", "return (Rgb){ (u8)lround(b.r * t + a.r * (1 - t)),"),
+    (TF, "f[i] = xyz[i] > 0.008856 ? cbrt(xyz[i]) : 7.787 * xyz[i] + 16.0 / 116;", "f[i] = xyz[i] > 0.008856 ? xyz[i] : 7.787 * xyz[i] + 16.0 / 116;"),
+    (TF, "return sqrt(l[1] * l[1] + l[2] * l[2]);", "return sqrt(l[1] * l[1]);"),
+    (TF, "for (int i = 0; i < n; i++) w = fmin(w, rgb_contrast(c, bg[i]));", "for (int i = 0; i < n; i++) w = fmax(w, rgb_contrast(c, bg[i]));"),
+    (TF, "if (rgb_worst(x, bg, n) >= min && (!marked_bg ||", "if ((!marked_bg ||"),
+    (TF, "if (rgb_worst(x, bg, n) >= min && (!marked_bg ||", "if (rgb_worst(x, bg, n) >= min && (1 ||"),
+    (TF, "Rgb x = rgb_mix(to, c, k / 20.0);", "Rgb x = rgb_mix(c, to, k / 20.0);"),
+    (TF, "        if (rgb_worst(x, bg, n) >= min && (!marked_bg || rgb_contrast(x, rgb_mix(x, *marked_bg, 0.28)) >= min)) return x;\n    }\n    return to;", "        if (rgb_worst(x, bg, n) >= min && (!marked_bg || rgb_contrast(x, rgb_mix(x, *marked_bg, 0.28)) >= min)) return x;\n    }\n    return c;"),
+    (TF, "                t->have |= 1u << k;\n", ""),
+    (TF, "    if (theme_has(t, TK_BRIGHT_RED)) warm[nw++] = &t->bright_red;\n", ""),
+    (TF, "    if (theme_has(t, TK_ORANGE)) warm[nw++] = &t->orange;\n", ""),
+    (TF, "if (rgb_chroma(*warm[i]) >= 20 && (!best ||", "if ((!best ||"),
+    (TF, "    if (rgb_chroma(t->red) >= 20 && rgb_worst(t->red, side, 3) >= THEME_TEXT_MIN) best = &t->red;\n", ""),
+    (TF, "    if (rgb_delta(t->accent, t->drive_warn) < THEME_UNLIKE_MIN) {", "    if (rgb_delta(t->accent, t->drive_warn) > THEME_UNLIKE_MIN) {"),
+    (TF, "t->drive_warn = !best ? t->fg : rgb_push(", "t->drive_warn = best ? t->fg : rgb_push("),
+    (TF, "(rgb_delta(*other[i], t->drive_warn) >= THEME_UNLIKE_MIN) * 100", "(rgb_delta(*other[i], t->drive_warn) >= THEME_UNLIKE_MIN) * 0"),
+    (TF, "    t->drive_used = rgb_push(*used, t->fg, side, 3, THEME_TEXT_MIN, NULL);", "    t->drive_used = *used;"),
+    (TF, "    t->accent = rgb_push(t->accent, t->fg, (Rgb[]){ t->bg, t->bg_light, t->selection }, 3, THEME_TEXT_MIN, &t->bg);\n", ""),
+    (TF, "3, THEME_TEXT_MIN, &t->bg);", "3, THEME_TEXT_MIN, NULL);"),
+    (TF, "const Rgb list[] = { t->bg, t->bg_light, t->selection, rgb_mix(t->accent, t->bg, 0.28) };", "const Rgb list[] = { t->bg, t->bg_light, t->selection, t->bg };"),
+    (TF, "t->fg_dim = rgb_push(t->fg_dim, t->fg, list, 4, THEME_DIM_MIN, NULL);", "t->fg_dim = rgb_push(t->fg_dim, t->fg, list, 4, THEME_TEXT_MIN, NULL);"),
+    (TF, "t->fg_dim = rgb_push(t->fg_dim, t->fg, list, 4, THEME_DIM_MIN, NULL);", "t->fg_dim = rgb_push(t->fg_dim, t->fg, list, 3, THEME_DIM_MIN, NULL);"),
+    (TF, "    for (int i = 0; i < COUNT(text); i++) *text[i] = rgb_push(*text[i], t->fg, list, 4, THEME_TEXT_MIN, NULL);\n", ""),
+    (TF, "Rgb *text[] = { &t->red, &t->yellow,", "Rgb *text[] = { &t->yellow, &t->yellow,"),
+    (TF, "t->drive_free = rgb_push(rgb_mix(t->fg_dim, t->bg_light, 0.75), t->fg, side, 3, THEME_DIM_MIN, NULL);", "t->drive_free = rgb_mix(t->fg_dim, t->bg_light, 0.75);"),
+]

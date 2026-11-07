@@ -18,7 +18,8 @@ expect ow=0
 key home
 # ---- a switch: new colours and a new icon theme
 sh C="$OFX_ROOT/state/omarchy/current"; rm -rf "$C/next-theme"; mkdir "$C/next-theme" && printf 'accent = "#112233"\nbackground = "#0a0b0c"\nforeground = "#d0d1d2"\n' > "$C/next-theme/colors.toml" && echo Yaru-blue > "$C/next-theme/icons.theme" && rm -rf "$C/theme" && mv "$C/next-theme" "$C/theme"
-wait-for 3000 accent=#112233 bg=#0a0b0c icons=Yaru-blue
+# (#112233 doesn't read on #0a0b0c: theme_fit pushes it toward the foreground, 2026-11-07)
+wait-for 3000 accent=#717a83 bg=#0a0b0c icons=Yaru-blue
 wait-for 2000 icon=/usr/share/icons/Yaru-blue/24x24@2x/places/folder.png
 shot theme-blue.png
 key end
@@ -27,8 +28,8 @@ wait-for 2000 ow=1 owreads=2
 key esc
 key home
 # ---- two switches back to back: the second one shows
-sh C="$OFX_ROOT/state/omarchy/current"; for t in 1 2; do rm -rf "$C/next-theme"; mkdir "$C/next-theme"; if [ $t = 1 ]; then a=#334455 i=Yaru-olive; else a=#445566 i=Yaru-red; fi; printf 'accent = "%s"\nbackground = "#1b1c1d"\n' "$a" > "$C/next-theme/colors.toml"; echo $i > "$C/next-theme/icons.theme"; rm -rf "$C/theme"; mv "$C/next-theme" "$C/theme"; done
-wait-for 3000 accent=#445566 bg=#1b1c1d icons=Yaru-red
+sh C="$OFX_ROOT/state/omarchy/current"; for t in 1 2; do rm -rf "$C/next-theme"; mkdir "$C/next-theme"; if [ $t = 1 ]; then a=#a3b4c5 i=Yaru-olive; else a=#b4c5d6 i=Yaru-red; fi; printf 'accent = "%s"\nbackground = "#1b1c1d"\n' "$a" > "$C/next-theme/colors.toml"; echo $i > "$C/next-theme/icons.theme"; rm -rf "$C/theme"; mv "$C/next-theme" "$C/theme"; done
+wait-for 3000 accent=#b4c5d6 bg=#1b1c1d icons=Yaru-red
 wait-for 2000 icon=/usr/share/icons/Yaru-red/24x24@2x/places/folder.png
 # ---- Omarchy's white theme names Yaru-grey, which no package ships (omacom/omarchy#14851): Yaru
 sh C="$OFX_ROOT/state/omarchy/current"; rm -rf "$C/next-theme"; mkdir "$C/next-theme" && printf 'accent = "#8a8a8d"\n' > "$C/next-theme/colors.toml" && echo Yaru-grey > "$C/next-theme/icons.theme" && rm -rf "$C/theme" && mv "$C/next-theme" "$C/theme"
@@ -36,13 +37,13 @@ wait-for 3000 accent=#8a8a8d icons=Yaru-grey
 wait-for 2000 icon=/usr/share/icons/Yaru/24x24@2x/places/folder.png
 shot theme-grey.png
 # ---- a theme without icons.theme: the colours change, the icons fall back on Yaru too
-sh C="$OFX_ROOT/state/omarchy/current"; rm -rf "$C/next-theme"; mkdir "$C/next-theme" && printf 'accent = "#556677"\n' > "$C/next-theme/colors.toml" && rm -rf "$C/theme" && mv "$C/next-theme" "$C/theme"
-wait-for 3000 accent=#556677 icons=-
+sh C="$OFX_ROOT/state/omarchy/current"; rm -rf "$C/next-theme"; mkdir "$C/next-theme" && printf 'accent = "#8899aa"\n' > "$C/next-theme/colors.toml" && rm -rf "$C/theme" && mv "$C/next-theme" "$C/theme"
+wait-for 3000 accent=#8899aa icons=-
 wait-for 2000 icon=/usr/share/icons/Yaru/24x24@2x/places/folder.png
 shot theme-noicons.png
 # ---- a theme set again after that, the watch still there: in place, as an edit
-sh sed -i 's/^accent = .*/accent = "#667788"/' "$OFX_ROOT/state/omarchy/current/theme/colors.toml"
-wait-for 3000 accent=#667788
+sh sed -i 's/^accent = .*/accent = "#99aabb"/' "$OFX_ROOT/state/omarchy/current/theme/colors.toml"
+wait-for 3000 accent=#99aabb
 # ---- no theme folder for a while, then one moved in (only current/ sees that)
 sh rm -rf "$OFX_ROOT/state/omarchy/current/theme"
 sleep 600

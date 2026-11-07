@@ -108,16 +108,16 @@ static float drive_used(const Place *p)
     return used < 0 ? 0 : used > 1 ? 1 : used;
 }
 
-// The bar's colours, which its numbers take too (F6.1): the used part in the accent (red from 90%
-// full on), the free part dimmed.
+// The bar's colours, which its numbers take too (F6.1): the used part in the accent (the warning
+// from 90% full on), the free part dimmed; theme_fit picks all three from the theme (2026-11-07).
 static Clay_Color drive_used_color(const Place *p)
 {
-    return drive_used(p) >= 0.9f ? cc(app.theme.red) : cc(app.theme.accent);
+    return drive_used(p) >= 0.9f ? cc(app.theme.drive_warn) : cc(app.theme.drive_used);
 }
 
 static Clay_Color drive_free_color(void)
 {
-    return mix(app.theme.fg_dim, app.theme.bg_light, 0.75f);
+    return cc(app.theme.drive_free);
 }
 
 // A drive's fullness: a thin bar under its name.
