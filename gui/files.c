@@ -109,7 +109,8 @@ static float drive_used(const Place *p)
 }
 
 // The bar's colours, which its numbers take too (F6.1): the used part in the accent (the warning
-// from 90% full on), the free part dimmed; theme_fit picks all three from the theme (2026-11-07).
+// from 90% full on), the free part dimmed; theme_fit picks them from the theme (2026-11-07), the
+// track a shade of its own (drive_bar).
 static Clay_Color drive_used_color(const Place *p)
 {
     return drive_used(p) >= 0.9f ? cc(app.theme.drive_warn) : cc(app.theme.drive_used);
@@ -124,7 +125,7 @@ static Clay_Color drive_free_color(void)
 static void drive_bar(int r, const Place *p, float w)
 {
     CLAY(CLAY_IDI("side-bar", r), { .layout = { .sizing = { CLAY_SIZING_FIXED(w), CLAY_SIZING_FIXED(3) } },
-                                    .backgroundColor = drive_free_color() }) {
+                                    .backgroundColor = cc(app.theme.drive_track) }) {
         CLAY(CLAY_IDI("side-used", r), { .layout = { .sizing = { CLAY_SIZING_FIXED(w * drive_used(p)), CLAY_SIZING_GROW(0) } },
                                          .backgroundColor = drive_used_color(p) }) {}
     }

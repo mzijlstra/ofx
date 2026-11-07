@@ -2570,5 +2570,10 @@ MUTANTS += [
     (TF, "t->fg_dim = rgb_push(t->fg_dim, t->fg, list, 4, THEME_DIM_MIN, NULL);", "t->fg_dim = rgb_push(t->fg_dim, t->fg, list, 3, THEME_DIM_MIN, NULL);"),
     (TF, "    for (int i = 0; i < COUNT(text); i++) *text[i] = rgb_push(*text[i], t->fg, list, 4, THEME_TEXT_MIN, NULL);\n", ""),
     (TF, "Rgb *text[] = { &t->red, &t->yellow,", "Rgb *text[] = { &t->yellow, &t->yellow,"),
-    (TF, "t->drive_free = rgb_push(rgb_mix(t->fg_dim, t->bg_light, 0.75), t->fg, side, 3, THEME_DIM_MIN, NULL);", "t->drive_free = rgb_mix(t->fg_dim, t->bg_light, 0.75);"),
+    (TF, "t->drive_free = rgb_push(t->drive_track, t->fg, side, 3, THEME_DIM_MIN, NULL);", "t->drive_free = t->drive_track;"),
+    # The theme-fit review's three (2026-11-07), and the track's own shade:
+    (TF, "rgb_worst(*warm[i], side, 3) > rgb_worst(*best, side, 3))) best = warm[i];", "rgb_worst(*warm[i], side, 3) < rgb_worst(*best, side, 3))) best = warm[i];"),
+    (TF, "t->drive_track = rgb_mix(t->fg_dim, t->bg_light, 0.75);", "t->drive_track = rgb_mix(t->fg_dim, t->bg_light, 0.25);"),
+    (TF, "* 100 + rgb_worst(*other[i], side, 3);", "* 100;"),
+    (TF, "    t->drive_track = rgb_mix(t->fg_dim, t->bg_light, 0.75);\n    t->drive_free = rgb_push(t->drive_track, t->fg, side, 3, THEME_DIM_MIN, NULL);", "    t->drive_free = rgb_push(rgb_mix(t->fg_dim, t->bg_light, 0.75), t->fg, side, 3, THEME_DIM_MIN, NULL);\n    t->drive_track = t->drive_free;"),
 ]

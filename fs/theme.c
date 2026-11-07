@@ -14,7 +14,7 @@ typedef struct {
     Rgb  bg, bg_light, fg, fg_dim, accent, selection, red;
     Rgb  yellow, green, blue, cyan, magenta;   // the terminal's, as eza colours ls with them (a trial, 2026-10-27)
     Rgb  orange, bright_red, bright_blue, bright_cyan;   // read for theme_fit's picks only, where `have` says
-    Rgb  drive_used, drive_warn, drive_free;   // theme_fit's: a drive's bar and its free number
+    Rgb  drive_used, drive_warn, drive_free, drive_track;   // theme_fit's: a drive's bar, its free number, the bar's track
     u32  have;         // which of THEME_KEYS colors.toml gave, bit k for key k
     char icons[128];   // the icon theme's name, "" without one
     int  ncolors;      // how many keys colors.toml gave: 0 means all fallbacks
@@ -212,7 +212,10 @@ static bool theme_has(const Theme *t, int k)
 //   by lightness and nothing foreign comes in;
 // - the used part: the accent, or where that looks like the warning (dE under THEME_UNLIKE_MIN), the theme's
 //   best-reading colour that doesn't, pushed to 3:1;
-// - the free part, and the free number beside the name: dimmer than dark_foreground, at 2:1.
+// - the free number beside the name: dimmer than dark_foreground, at 2:1;
+// - the bar's track: that mix too, of the fitted dark_foreground, but not pushed. It isn't text,
+//   and pushed toward fg it met the used part, flat in the grey themes (white's 2.80 to 1.51:
+//   theme-fit review, 2026-11-07).
 // The sidebar's backgrounds: a row, the hovered row, the cursor's.
 static void theme_fit(Theme *t)
 {
@@ -246,7 +249,8 @@ static void theme_fit(Theme *t)
     t->fg_dim = rgb_push(t->fg_dim, t->fg, list, 4, THEME_DIM_MIN, NULL);
     Rgb *text[] = { &t->red, &t->yellow, &t->green, &t->blue, &t->cyan, &t->magenta };
     for (int i = 0; i < COUNT(text); i++) *text[i] = rgb_push(*text[i], t->fg, list, 4, THEME_TEXT_MIN, NULL);
-    t->drive_free = rgb_push(rgb_mix(t->fg_dim, t->bg_light, 0.75), t->fg, side, 3, THEME_DIM_MIN, NULL);
+    t->drive_track = rgb_mix(t->fg_dim, t->bg_light, 0.75);
+    t->drive_free = rgb_push(t->drive_track, t->fg, side, 3, THEME_DIM_MIN, NULL);
 }
 
 // ---- XDG user directories -------------------------------------------------------------------

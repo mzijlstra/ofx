@@ -797,7 +797,9 @@ accent (its own marked rows moving with it) and the six terminal colours to 3:1.
 gets three colours of its own: the warning is the theme's red where it reads (ristretto keeps its
 red), else the best-reading of red, bright_red, orange that is a colour (solitude's red is a grey),
 else the foreground (vantablack, white); the used part is the accent unless within dE 20 of the
-warning (ristretto's 29 reads apart, so 30 was too strict); the free part 2:1. Checked over every
+warning (ristretto's 29 reads apart, so 30 was too strict); the free number 2:1, the bar's track
+that mix unpushed (pushed, it met the used part: white's fill on track fell 2.80 to 1.51, the
+review's finding). Checked over every
 installed theme in test_theme_fit (and eight embedded, so it runs without Omarchy).
 
 ## F14 design (2026-11-05; Michael, 2026-11-05: the recommendations below)
