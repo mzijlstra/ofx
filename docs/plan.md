@@ -825,7 +825,9 @@ hand-written table (`UI_KEYS`). There is no type-to-find, so a letter can be a c
 - The bar menus' entries with no key are commands too (new-file, duplicate, preferences, the
   sidebar modes, colors, show-menu, the sorts, clear-previews, about): `UK_ITEM0 + UiMenuItem`,
   run as picked when the bar menu has them enabled; and Close Other Tabs (tab-others), the tab
-  menu's, on the current tab (Michael, 2026-11-08: "great addition"). The right-click menus' other
+  menu's, on the current tab (Michael, 2026-11-08: "great addition"), with Ctrl+Shift+W as ofx has
+  it (his pick: Ctrl+W's others; VS Code has no Linux default for it, browsers close the window
+  with it, Reopen Closed Tab undoes a slip). The one key F15 adds; the step 1 pin lists it. The right-click menus' other
   entries aren't: they act on what was clicked.
 - A menu pick runs the command alone (`ui_cmd_event`), whatever keys it has (the step 1 review).
 - The written ofx.conf lists every key as ofx has it, commented out, and the commands with none;
@@ -834,6 +836,15 @@ hand-written table (`UI_KEYS`). There is no type-to-find, so a letter can be a c
 - Scripts: `key` sends what a real key would, nothing for a key that means nothing (a name that is
   no key still fails); the state line has `keysbad`, `keyclashes` and `menukeys` (the open menu's
   keys as shown).
+
+**Step 3 as built (2026-11-08, branch f15-keys):**
+- Keyboard Shortcuts has a row for each command (the rows of several, "Up, down", "Select while
+  moving", "Find it again, back", "To the sidebar and back" with Ctrl+Left, split), the commands
+  with no key included, so it lists everything a key line can name. Each row shows the command's
+  name in ofx.conf (dimmed), its first two keys as they are, yours in the accent colour; the filter
+  matches the name too. The panel is 860 px wide (was 720) for the name's column. The fixed keys'
+  rows stay as written.
+- README: a key-line example under "Options: ofx.conf", and the F1 row says what the panel shows.
 
 ## Theme colours across Omarchy's themes (2026-11-07; Michael: "great plan")
 
