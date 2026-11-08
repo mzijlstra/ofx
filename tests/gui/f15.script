@@ -15,6 +15,12 @@ expect tabs=2
 key f10
 expect menu=File menukeys=new-tab=Ctrl+E,reopen-tab=Ctrl+Shift+T,new-window=Ctrl+N,new-folder=Ctrl+Shift+N,open=Enter,open-with=Shift+Enter,properties=Ctrl+I,close-all=Ctrl+Q,close=Ctrl+W
 key esc
+# Keyboard Shortcuts (step 3): New Tab's row shows Ctrl+E, marked as yours; its name finds it
+key f1
+type new-tab
+expect keys=1 keysn=2 keysfirst=#Tabs_and_windows keyscap=Ctrl+E keyscapmine=1
+shot f15-keys.png
+key esc
 # A line ofx can't read: named, the rest apply (Ctrl+T is New Tab's again)
 sh printf 'key = Ctrl+T nosuch\nkey = Ctrl+E new-tab\n' > "$OFX_ROOT/config/ofx/ofx.conf"
 wait-for 3000 keysbad=1 statusbad=1

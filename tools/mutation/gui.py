@@ -976,7 +976,8 @@ MUTANTS = [
     ('gui/input.c', "    else if (e.key || e.cmd) ev_push(e);", "    else if (e.cmd) ev_push(e);", 'keys'),
     ('gui/input.c', "    ev_push(ui_event_of((UiChord){ cp, UI_MOD_TYPED }));", "    ev_push((UiEvent){ UK_NONE, cp, UK_NONE });", 'keys'),
     ('gui/topbar.c', "if (ui_menu_key(it)[0]) text(cz(ui_menu_key(it)), on ? cc(t->fg_dim) : off);", "", 'f7'),
-    ('gui/shortcuts.c', "keycap(ui_keys_key(line, 0));", "keycap(\"\");", 'f75'),
+    ('gui/shortcuts.c', "keycap(ui_keys_key(line, 0), ui_keys_mine(line, 0));", "keycap(\"\", false);", 'f75'),
+    ('gui/shortcuts.c', "keycap(ui_keys_key(line, 0), ui_keys_mine(line, 0));", "keycap(ui_keys_key(line, 0), false);", 'f15'),
     ('gui/input.c', "float lw = str_width(label) + str_width(str_from_c(ui_menu_key(it)));", "float lw = str_width(label);", 'f7'),
     # F15 step 2: ofx.conf's key lines applied on each read, a bad one named, a clash said after a save.
     ('gui/prefs.c', "    UiKeysRead keys = conf_keys_read = ui_binds_set(c.key, c.key_no, c.nkey);", "    UiKeysRead keys = conf_keys_read = (UiKeysRead){ 0 };", 'f15'),

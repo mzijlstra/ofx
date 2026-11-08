@@ -2,7 +2,7 @@
 // filter leaves it, a heading a section, a row an action with its key and a second one. Included by
 // main.c after bookmarks.c.
 
-enum { KEYS_ROW_H = 26, KEYS_ROWS_MAX = 18, KEYS_W = 720 };
+enum { KEYS_ROW_H = 26, KEYS_ROWS_MAX = 18, KEYS_W = 860, KEYS_NAME_W = 140, KEYS_KEY_W = 150 };
 
 static int keys_rows(int h)
 {
@@ -10,19 +10,21 @@ static int keys_rows(int h)
     return r < 1 ? 1 : r > KEYS_ROWS_MAX ? KEYS_ROWS_MAX : r;
 }
 
-// The first keycap the panel drew this frame (a script's keyscap, F15: the keys come from ui/keys.c).
+// The first keycap the panel drew this frame, and whether it is one of yours (a script's keyscap
+// and keyscapmine, F15: the keys come from ui/keys.c).
 static const char *keys_cap_drawn;
+static bool        keys_cap_mine;
 
-// A key as a little keycap.
-static void keycap(const char *k)
+// A key as a little keycap; one of yours (ofx.conf's, F15 step 3) in the accent colour.
+static void keycap(const char *k, bool mine)
 {
     Theme *t = &app.theme;
     if (!k[0]) return;
-    if (!keys_cap_drawn) keys_cap_drawn = k;
+    if (!keys_cap_drawn) keys_cap_drawn = k, keys_cap_mine = mine;
     CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_FIT(0), CLAY_SIZING_FIXED(20) }, .padding = { 6, 6, 0, 0 }, .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
                    .backgroundColor = cc(t->bg), .cornerRadius = CLAY_CORNER_RADIUS(3),
-                   .border = { .color = rule_color(), .width = CLAY_BORDER_OUTSIDE(1) } }) {
-        text(cz(k), cc(t->fg));
+                   .border = { .color = mine ? cc(t->accent) : rule_color(), .width = CLAY_BORDER_OUTSIDE(1) } }) {
+        text(cz(k), mine ? cc(t->accent) : cc(t->fg));
     }
 }
 
@@ -71,11 +73,17 @@ static void layout_keys_panel(void)
                 }
                 CLAY(CLAY_IDI("keys-row", r), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(KEYS_ROW_H) }, .padding = { 16, 8, 0, 0 }, .childGap = 8,
                                                             .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } } }) {
-                    text(fit(str_from_c(UI_KEYS[line].action), KEYS_W - 380, false), cc(t->fg));
+                    text(fit(str_from_c(UI_KEYS[line].action), KEYS_W - 380 - KEYS_NAME_W, false), cc(t->fg));
                     CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) } } }) {}
-                    keycap(ui_keys_key(line, 0));
+                    // (the command's name in ofx.conf, dimmed: what a key line names, F15 step 3)
+                    CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_FIXED(KEYS_NAME_W), CLAY_SIZING_FIT(0) } } }) {
+                        text(fit(str_from_c(ui_keys_name(line)), KEYS_NAME_W - 8, false), cc(t->fg_dim));
+                    }
+                    CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_FIXED(KEYS_KEY_W), CLAY_SIZING_FIT(0) }, .childAlignment = { .x = CLAY_ALIGN_X_RIGHT } } }) {
+                        keycap(ui_keys_key(line, 0), ui_keys_mine(line, 0));
+                    }
                     CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_FIXED(150), CLAY_SIZING_FIT(0) }, .childAlignment = { .x = CLAY_ALIGN_X_LEFT } } }) {
-                        keycap(ui_keys_key(line, 1));
+                        keycap(ui_keys_key(line, 1), ui_keys_mine(line, 1));
                     }
                 }
             }

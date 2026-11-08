@@ -297,7 +297,7 @@ static void test_shortcuts(void)
     }
     int per[KS_SECTIONS] = { 0 };
     for (int r = 0; r < UI_KEYS_N; r++) {
-        CHECK(UI_KEYS[r].action[0] && ui_keys_key(r, 0)[0] && UI_KEYS[r].sec < KS_SECTIONS);
+        CHECK(UI_KEYS[r].action[0] && (ui_keys_key(r, 0)[0] || UI_KEYS[r].cmd >= UK_ITEM0) && UI_KEYS[r].sec < KS_SECTIONS);   // (a menu entry's command: no key as ofx has them)
         per[UI_KEYS[r].sec]++;
     }
     for (int s = 0; s < KS_SECTIONS; s++) CHECK(per[s] > 0 && UI_KEY_SECTION[s][0]);

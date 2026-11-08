@@ -215,8 +215,8 @@ static UiAction ui_brp_do(Ui *u, UiPickDo d, const UiInput *in)
 
 // ---- Keyboard Shortcuts (F7.5) -------------------------------------------------------------------
 
-// The lines for the filter's text: each section's heading and its rows whose action or keys hold
-// the text (case folded); a section with none left out.
+// The lines for the filter's text: each section's heading and its rows whose action, keys or
+// command's name (F15 step 3) hold the text (case folded); a section with none left out.
 static void ui_keys_filter(Ui *u)
 {
     ui_matcher_set(&u->keys_m, (Str){ u->keys_filter.b, u->keys_filter.len }, (UiMatchOpts){ 0 });
@@ -226,7 +226,8 @@ static void ui_keys_filter(Ui *u)
         u->keys_line[n++] = (short)(-1 - s);
         for (int r = 0; r < UI_KEYS_N; r++)
             if (UI_KEYS[r].sec == (UiKeySection)s && (!u->keys_filter.len || ui_match(&u->keys_m, str_from_c(UI_KEYS[r].action)) ||
-                                                      ui_match(&u->keys_m, str_from_c(ui_keys_key(r, 0))) || ui_match(&u->keys_m, str_from_c(ui_keys_key(r, 1)))))
+                                                      ui_match(&u->keys_m, str_from_c(ui_keys_key(r, 0))) || ui_match(&u->keys_m, str_from_c(ui_keys_key(r, 1))) ||
+                                                      ui_match(&u->keys_m, str_from_c(ui_keys_name(r)))))
                 u->keys_line[n++] = (short)r;
         if (n == head + 1) n = head;   // nothing under it
     }

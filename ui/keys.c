@@ -171,6 +171,7 @@ static const UiBind UI_BINDS_DEFAULT[] = {
     { K(UKC_F1 + 1, 0), UK_F2 }, { K('n', C_ | S_), UK_NEWFOLDER }, { K(UKC_DELETE, 0), UK_DELETE }, { K(UKC_DELETE, S_), UK_SHIFT_DELETE },
     { T('r'), UK_RESTORE }, { K('d', C_), UK_ADD_BOOKMARK }, { K('b', C_), UK_EDIT_BOOKMARKS },   // (F7.5, as Nemo)
     { K('t', C_), UK_TAB_NEW }, { K('t', C_ | S_), UK_TAB_REOPEN }, { K('n', C_), UK_NEW_WINDOW }, { K('w', C_), UK_TAB_CLOSE },
+    { K('w', C_ | S_), UK_ITEM0 + UM_TAB_OTHERS },   // (Close Other Tabs: Ctrl+W's others, Michael, 2026-11-08)
     { K(UKC_TAB, C_), UK_TAB_NEXT }, { K(UKC_PGDN, C_), UK_TAB_NEXT }, { K(UKC_TAB, C_ | S_), UK_TAB_PREV }, { K(UKC_PGUP, C_), UK_TAB_PREV },
     { K(UKC_PGUP, C_ | S_), UK_TAB_LEFT }, { K(UKC_PGDN, C_ | S_), UK_TAB_RIGHT }, { K('q', C_), UK_QUIT_ALL },
     { K(UKC_F1 + 9, 0), UK_F10 }, { K(UKC_F1 + 9, S_), UK_CONTEXT }, { K(UKC_MENU, 0), UK_CONTEXT },   // (F8, as GTK)
@@ -228,13 +229,20 @@ static UiKey ui_bound(UiChord c)
     return UK_NONE;
 }
 
-// The name of command cmd's k-th key (0 the first), "" past its last.
-static const char *ui_cmd_key(UiKey cmd, int k)
+// Command cmd's k-th binding (0 the first), -1 past its last.
+static int ui_cmd_bind(UiKey cmd, int k)
 {
     ui_binds_ready();
     for (int i = 0; i < ui_binds.n; i++)
-        if (ui_binds.b[i].cmd == cmd && k-- == 0) return ui_binds.name[i];
-    return "";
+        if (ui_binds.b[i].cmd == cmd && k-- == 0) return i;
+    return -1;
+}
+
+// The name of command cmd's k-th key (0 the first), "" past its last.
+static const char *ui_cmd_key(UiKey cmd, int k)
+{
+    int i = ui_cmd_bind(cmd, k);
+    return i < 0 ? "" : ui_binds.name[i];
 }
 
 // ---- events -------------------------------------------------------------------------------------
@@ -483,4 +491,18 @@ static const char *ui_keys_key(int r, int k)
 {
     const char *row = k ? UI_KEYS[r].key2 : UI_KEYS[r].key;
     return row || !UI_KEYS[r].cmd ? row : ui_cmd_key(UI_KEYS[r].cmd, k);
+}
+
+// Whether that key is one of yours, from ofx.conf (the panel marks it, F15 step 3).
+static bool ui_keys_mine(int r, int k)
+{
+    const char *row = k ? UI_KEYS[r].key2 : UI_KEYS[r].key;
+    int i = row || !UI_KEYS[r].cmd ? -1 : ui_cmd_bind(UI_KEYS[r].cmd, k);
+    return i >= 0 && ui_binds.user[i];
+}
+
+// Row r's command's name in ofx.conf, "" for a row of fixed keys.
+static const char *ui_keys_name(int r)
+{
+    return UI_KEYS[r].cmd ? ui_cmd_name(UI_KEYS[r].cmd) : "";
 }

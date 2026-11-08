@@ -86,7 +86,7 @@ puts its service file in `~/.local/share/dbus-1/services`), and it exits when id
 | Ctrl+Shift+PgUp, Ctrl+Shift+PgDn | move the tab left or right |
 | Ctrl+J, Ctrl+Down | the keys to the find bar when it is open, then to the job rows' ×: Up/Down (`k`/`j`) move, Enter asks to cancel that job; Ctrl+J again or Esc back to the list |
 | Ctrl+Q | close every ofx window (each asks first while its jobs run or wait) |
-| F1, Ctrl+F1 | Keyboard Shortcuts: every key by where it works, type to filter, Esc closes (also Help, Alt+H) |
+| F1, Ctrl+F1 | Keyboard Shortcuts: every command and key by where it works, with its name in ofx.conf and your own keys marked; type to filter (a name finds its command), Esc closes (also Help, Alt+H) |
 | Help → About | the name, the build's version (`ofx --version` too: the last commit's date and hash, `+dirty` with changes), the license; Esc, Enter or Close close it |
 | F10, Alt+F, Alt+E, Alt+V, Alt+G, Alt+B, Alt+H | the File, Edit, View, Go, Bookmarks and Help menus: Up/Down (`k`/`j`) move, Left/Right (`h`/`l`) the next menu, Enter picks, Esc closes; also by the pointer. Each entry does what its key does; what can't be done now is greyed, the current sidebar, sort and view marked |
 | Right click, Shift+F10, Menu key | the right-click menu: an entry's (an unmarked one becomes the selection; a marked one keeps the marks), or on empty space the folder shown's (New Folder, Paste, Select All, Terminal Here, Properties of the folder). By the keys it opens under the cursor's entry. On one folder it also opens it in a new window or a terminal, pastes into it, bookmarks it; on a link, Follow Link goes to what it points at. On a sidebar row or a path button, that folder's menu: open it (a tab, a window, a terminal), Cut, Copy (not a place), Paste Into Folder, Add Bookmark, Properties; a bookmark's Rename…, Move Up, Move Down, Remove; a drive's Eject; Trash's Empty Trash…. On a tab: New Tab, Move Tab Left and Right, Close, Close Other Tabs |
@@ -254,6 +254,23 @@ they change (2 s after a change), so after a crash, a battery run flat or a powe
 brings them back too: one window without asking, several with the question ("ofx didn't close them
 properly"). A start while another ofx window runs is an extra window: nothing comes back then. Started on a
 folder other than your home (Show in folder, `ofx <folder>`), that folder opens as one more tab.
+
+Your own keys (F15) are `key` lines, one key a line, the key as the menus write it and the command
+by its name:
+
+```ini
+key = Ctrl+E terminal
+key = Ctrl+T reload
+key = none trash
+```
+
+Here Ctrl+E opens a terminal (Alt+Enter and `t` still do too), Ctrl+T reloads, and New Tab, which
+had Ctrl+T, keeps no key: the status line says so after you save. `none` takes all of a command's
+keys, so Delete no longer trashes (in a text field it still deletes a character). Every command
+can have keys, the menus' entries without one included (`duplicate`, `side-tree`, `about`, ...);
+fixed are the keys inside a text field, a question's answers, the panels' own lists, and Alt with
+a menu's letter or a digit. The menus show your key, and Help → Keyboard Shortcuts (F1) lists every
+command with its name and keys, yours in the accent colour; type a name to find one.
 
 <!-- ofx.conf: written by `build/ofx-probe --conf`; make test checks this copy -->
 ```ini
@@ -463,6 +480,7 @@ search-skip = node_modules
 #key = Ctrl+Shift+T reopen-tab
 #key = Ctrl+N new-window
 #key = Ctrl+W close
+#key = Ctrl+Shift+W tab-others
 #key = Ctrl+Tab next-tab
 #key = Ctrl+PgDn next-tab
 #key = Ctrl+Shift+Tab previous-tab
@@ -511,7 +529,7 @@ search-skip = node_modules
 #key = Ctrl+Shift+Enter open-line
 # With no key: new-file, duplicate, preferences, side-places, side-tree,
 # side-none, colors, show-menu, sort-name, sort-size, sort-mtime,
-# clear-previews, about, tab-others
+# clear-previews, about
 ```
 <!-- ofx.conf end -->
 

@@ -1342,7 +1342,7 @@ MUTANTS += [
     ('ui/panels.c', '        if (n == head + 1) n = head;   // nothing under it', ''),
     ('ui/panels.c', "        u->keys_line[n++] = (short)(-1 - s);", "        u->keys_line[n++] = (short)(-1);"),
     ('ui/panels.c', '            if (UI_KEYS[r].sec == (UiKeySection)s && (!u->keys_filter.len || ui_match(&u->keys_m, str_from_c(UI_KEYS[r].action)) ||', '            if (UI_KEYS[r].sec == (UiKeySection)s && (!u->keys_filter.len || false ||'),
-    ('ui/panels.c', '                                                      ui_match(&u->keys_m, str_from_c(ui_keys_key(r, 0))) || ui_match(&u->keys_m, str_from_c(ui_keys_key(r, 1)))))', '                                                      ui_match(&u->keys_m, str_from_c(ui_keys_key(r, 1)))))'),
+    ('ui/panels.c', "                                                      ui_match(&u->keys_m, str_from_c(ui_keys_key(r, 0))) || ui_match(&u->keys_m, str_from_c(ui_keys_key(r, 1))) ||", "                                                      ui_match(&u->keys_m, str_from_c(ui_keys_key(r, 1))) ||"),
     ('ui/panels.c', '    u->panel = UI_PANEL_KEYS, UI_TEXT_CLEAR(u->keys_filter);', '    u->panel = UI_PANEL_KEYS;'),
 
 
@@ -2661,4 +2661,9 @@ MUTANTS += [
     (KY, "    memcpy(ui_clashed.c, ui_clashed.next, sizeof ui_clashed.c[0] * (size_t)ui_clashed.next_n), ui_clashed.n = ui_clashed.next_n;", ""),
     (KY, "                memmove(&from[i], &from[i + 1], sizeof from[0] * (size_t)(users - i));", ""),
     ('ui/menus.c', "    static const int MENUS[] = { 0, 1, 2, 3, 4, 5, UI_CTX_TAB };", "    static const int MENUS[] = { 0, 1, 2, 3, 4, 5 };"),
+    # F15 step 3: the shortcuts panel's rows of commands, yours marked, found by name.
+    (KY, "    return i >= 0 && ui_binds.user[i];", "    return i >= 0;"),
+    (KY, "    int i = row || !UI_KEYS[r].cmd ? -1 : ui_cmd_bind(UI_KEYS[r].cmd, k);", "    int i = !UI_KEYS[r].cmd ? -1 : ui_cmd_bind(UI_KEYS[r].cmd, k);"),
+    (KY, "    return UI_KEYS[r].cmd ? ui_cmd_name(UI_KEYS[r].cmd) : \"\";", "    return \"\";"),
+    ('ui/panels.c', " ||\n                                                      ui_match(&u->keys_m, str_from_c(ui_keys_name(r)))))", "))"),
 ]

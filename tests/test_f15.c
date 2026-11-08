@@ -185,112 +185,6 @@ static const struct { const char *key; UiKey uk; u32 ch; } PIN_MENU[UM_ITEMS] = 
     { "", UK_NONE, 0 },
     { "", UK_NONE, 0 },
 };
-// Each Keyboard Shortcuts row's two keys.
-static const struct { const char *key, *key2; } PIN_PANEL[] = {
-    { "Up, Down", "k, j" },
-    { "PgUp, PgDn", "" },
-    { "Home, End", "g, G" },
-    { "Alt+Left", "Mouse back" },
-    { "Alt+Right", "Mouse forward" },
-    { "Alt+Up", "Backspace" },
-    { "Alt+Home", "~" },
-    { "Alt+End", "" },
-    { "Ctrl+L", "Ctrl+Right" },
-    { "Enter", "" },
-    { "Shift+Enter", "" },
-    { "Alt+Enter", "t" },
-    { "Ctrl+I", "" },
-    { "Space", "" },
-    { "Shift+arrows", "H, J, K, L" },
-    { "Ctrl+A", "" },
-    { "Ctrl+Shift+A", "" },
-    { "Ctrl+Shift+I", "" },
-    { "Esc", "" },
-    { "Ctrl+X", "" },
-    { "Ctrl+C", "" },
-    { "Ctrl+Shift+C", "" },
-    { "Ctrl+V", "" },
-    { "Ctrl+Z", "" },
-    { "Ctrl+M", "" },
-    { "F2", "" },
-    { "Ctrl+Shift+N", "" },
-    { "Delete", "" },
-    { "Shift+Delete", "" },
-    { "r", "" },
-    { "Ctrl+D", "" },
-    { "Ctrl+B", "" },
-    { "s, r, k", "S, R, K the rest" },
-    { "Ctrl+T", "" },
-    { "Ctrl+Shift+T", "" },
-    { "Ctrl+N", "" },
-    { "Ctrl+W", "" },
-    { "Ctrl+Tab", "Ctrl+PgDn" },
-    { "Ctrl+Shift+Tab", "Ctrl+PgUp" },
-    { "Ctrl+Shift+PgUp", "" },
-    { "Ctrl+Shift+PgDn", "" },
-    { "Alt+1 \xE2\x80\xA6 Alt+9", "" },
-    { "Middle click", "" },
-    { "Ctrl+Q", "" },
-    { "F10", "Alt+F, E, V, G, B, H" },
-    { "Shift+F10", "Menu" },
-    { "F1", "Ctrl+F1" },
-    { "Ctrl+R", "" },
-    { "Ctrl+H", "." },
-    { "Ctrl+P", "" },
-    { "Ctrl+G", "" },
-    { "s", "a column's header" },
-    { "S", "" },
-    { "Ctrl+1", "" },
-    { "Ctrl+2", "" },
-    { "Ctrl+=", "Ctrl+wheel" },
-    { "Ctrl+-", "" },
-    { "Ctrl+0", "" },
-    { "Tab", "Ctrl+Left" },
-    { "F9", "Ctrl+S" },
-    { "Enter", "" },
-    { "Left, Right", "h, l" },
-    { "Ctrl+K", "Ctrl+Up; in a search, the search field first" },
-    { "Left, Right", "h, l" },
-    { "Enter", "" },
-    { "Shift+Enter", "" },
-    { "Esc", "" },
-    { "Ctrl+F", "/" },
-    { "Up, Down", "the chevrons" },
-    { "Enter", "" },
-    { "Esc", "" },
-    { "n, N", "" },
-    { "Alt+C", "" },
-    { "Alt+W", "" },
-    { "Alt+R", "" },
-    { "Ctrl+Shift+F", "the magnifier" },
-    { "Ctrl+Enter", "" },
-    { "Ctrl+Shift+Enter", "a result found inside files, in the editor" },
-    { "Enter", "Esc, Down" },
-    { "Ctrl+Shift+F", "a click in it" },
-    { "*, ?", "*.ts" },
-    { "Alt+C, W, R", "the name's shared with find; Containing's its own" },
-    { "Alt+I", "the In files button" },
-    { "Tab", "" },
-    { "Shift+Left, Right", "Shift+Home, End" },
-    { "Ctrl+Left, Right", "" },
-    { "Ctrl+Shift+Left, Right", "" },
-    { "Ctrl+Backspace", "Ctrl+Delete" },
-    { "Ctrl+A", "" },
-    { "Ctrl+C, X, V", "" },
-    { "Enter", "" },
-    { "Esc", "" },
-    { "Ctrl+J", "Ctrl+Down" },
-    { "Up, Down", "k, j" },
-    { "Enter", "its \xC3\x97" },
-    { "Esc", "Ctrl+J" },
-    { "Tab", "Down" },
-    { "Alt+D", "" },
-    { "Enter", "a double click" },
-    { "Delete", "" },
-    { "F2", "" },
-    { "Alt+Up, Alt+Down", "" },
-    { "Enter", "a double click" },
-};
 
 // An event as one UiKey, as ofx read a key before F15: the key's own meaning, or its command.
 static UiKey legacy_key(UiEvent e)
@@ -325,6 +219,11 @@ static void test_keys_pinned(void)
                 for (int i = 0; i < COUNT(PIN_KEYS); i++)
                     if (PIN_KEYS[i].key == key && PIN_KEYS[i].mods == mods && PIN_KEYS[i].action == action) uk = PIN_KEYS[i].uk, ch = PIN_KEYS[i].ch;
                 // (and nothing at all where nothing was: a key that means nothing sends no event)
+                // (the one key F15 adds: Ctrl+Shift+W, Close Other Tabs, Michael 2026-11-08)
+                if (key == GLFW_KEY_W && mods == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT)) {
+                    CHECK(e.key == UK_CMD && e.cmd == UK_ITEM0 + UM_TAB_OTHERS);
+                    continue;
+                }
                 bool ok = legacy_key(e) == uk && e.ch == ch && e.cmd == legacy_cmd(uk) && (uk || (!e.key && !e.cmd)) && (e.key != UK_CMD || e.cmd);
                 sent += uk != UK_NONE;
                 if (!ok && bad++ < 10) fprintf(stderr, "key %d mods %d action %d: %d,%u,%d (was %d,%u)\n", key, mods, action, e.key, e.ch, e.cmd, uk, ch);
@@ -363,18 +262,14 @@ static void test_keys_pinned(void)
     for (int it = 0; it < UM_ITEMS; it++) {
         UiEvent e = ui_menu_runs((UiMenuItem)it);
         UiKey was = PIN_MENU[it].uk ? legacy_cmd(PIN_MENU[it].uk) : PIN_MENU[it].ch ? ui_event_of((UiChord){ PIN_MENU[it].ch, UI_MOD_TYPED }).cmd : UK_NONE;
-        bool ok = strcmp(ui_menu_key((UiMenuItem)it), PIN_MENU[it].key) == 0 && e.cmd == was && (was ? e.key == UK_CMD && !e.ch : !e.key);
+        const char *label = it == UM_TAB_OTHERS ? "Ctrl+Shift+W" : PIN_MENU[it].key;   // (F15's one new key)
+        bool ok = strcmp(ui_menu_key((UiMenuItem)it), label) == 0 && e.cmd == was && (was ? e.key == UK_CMD && !e.ch : !e.key);
         if (!ok) fprintf(stderr, "menu entry %s: %s %d,%u (was %s %d,%u)\n", UI_MENU_ITEM[it].word, ui_menu_key((UiMenuItem)it), legacy_key(e), e.ch, PIN_MENU[it].key, PIN_MENU[it].uk, PIN_MENU[it].ch);
         CHECK(ok);
         CHECK(!UI_MENU_ITEM[it].runs || e.cmd == UI_MENU_ITEM[it].cmd);
     }
-    // The shortcuts panel: every row's keys as before.
-    CHECK(COUNT(PIN_PANEL) == UI_KEYS_N);
-    for (int r = 0; r < UI_KEYS_N && r < COUNT(PIN_PANEL); r++) {
-        bool ok = strcmp(ui_keys_key(r, 0), PIN_PANEL[r].key) == 0 && strcmp(ui_keys_key(r, 1), PIN_PANEL[r].key2) == 0;
-        if (!ok) fprintf(stderr, "shortcuts row %s: %s / %s (was %s / %s)\n", UI_KEYS[r].action, ui_keys_key(r, 0), ui_keys_key(r, 1), PIN_PANEL[r].key, PIN_PANEL[r].key2);
-        CHECK(ok);
-    }
+    // (The shortcuts panel's rows were pinned too until step 3 gave each command its row:
+    // test_keys_panel.)
 }
 
 static void test_keys_table(void)
@@ -668,4 +563,51 @@ static void test_keys_conf(void)
     // No lines: the keys as ofx has them again, none yours.
     r = ui_binds_set(line, no, 0);
     CHECK(!r.bad && r.changed && strcmp(ui_menu_key(UM_NEW_TAB), "Ctrl+T") == 0 && !ui_binds.user[0]);
+}
+
+// Keyboard Shortcuts after F15 step 3: each command has its row, with its keys as they are (yours
+// marked) and its name, which the filter finds.
+static void test_keys_panel(void)
+{
+    for (int i = 0; i < COUNT(UI_CMDS); i++) {
+        int rows = 0;
+        for (int r = 0; r < UI_KEYS_N; r++) rows += UI_KEYS[r].cmd == UI_CMDS[i].cmd;
+        if (!rows) fprintf(stderr, "no shortcuts row for %s\n", UI_CMDS[i].name);
+        CHECK(rows >= 1);
+    }
+    for (int r = 0; r < UI_KEYS_N; r++) {
+        if (!UI_KEYS[r].cmd) {
+            CHECK(UI_KEYS[r].key && UI_KEYS[r].key2 && !ui_keys_name(r)[0]);   // (fixed keys: written out)
+            continue;
+        }
+        CHECK(!UI_KEYS[r].key && strcmp(ui_keys_key(r, 0), ui_cmd_key(UI_KEYS[r].cmd, 0)) == 0 && strcmp(ui_keys_name(r), ui_cmd_name(UI_KEYS[r].cmd)) == 0);
+        CHECK(UI_KEYS[r].key2 || strcmp(ui_keys_key(r, 1), ui_cmd_key(UI_KEYS[r].cmd, 1)) == 0);
+        CHECK(!ui_keys_mine(r, 0) && !ui_keys_mine(r, 1));   // (the keys as ofx has them: none yours)
+    }
+    // Yours marked, and the row follows: Terminal Here shows Ctrl+E (yours) then Alt+Enter.
+    keys_set(1, "Ctrl+E terminal");
+    int term = -1;
+    for (int r = 0; r < UI_KEYS_N; r++)
+        if (UI_KEYS[r].cmd == UK_TERMINAL) term = r;
+    CHECK(term >= 0 && strcmp(ui_keys_key(term, 0), "Ctrl+E") == 0 && ui_keys_mine(term, 0));
+    CHECK(strcmp(ui_keys_key(term, 1), "Alt+Enter") == 0 && !ui_keys_mine(term, 1));
+    // A hint where a second key would be is never yours (Back: Mouse back).
+    keys_set(2, "F7 back", "F8 back");
+    for (int r = 0; r < UI_KEYS_N; r++)
+        if (UI_KEYS[r].cmd == UK_BACK) CHECK(ui_keys_mine(r, 0) && strcmp(ui_keys_key(r, 1), "Mouse back") == 0 && !ui_keys_mine(r, 1));
+    // The filter finds a command by its name in ofx.conf.
+    Ui u = menu_ui(3);
+    u.keys_list.rows = 10;
+    menu_keys(&u, 1, UK_SHORTCUTS);
+    UiInput in = chars("tab-others");
+    ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in);
+    CHECK(u.keys_list.n == 2 && u.keys_line[0] == -1 - KS_TABS && strcmp(UI_KEYS[u.keys_line[1]].action, "Close Other Tabs") == 0);
+    // and still by an action's words alone ("selection" is in no name or key).
+    while (u.keys_filter.len) menu_keys(&u, 1, UK_BACKSPACE);
+    in = chars("selection");
+    ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in);
+    bool inv = false;
+    for (int v = 0; v < u.keys_list.n; v++) inv |= u.keys_line[v] >= 0 && strcmp(UI_KEYS[u.keys_line[v]].action, "Invert Selection") == 0;
+    CHECK(inv);
+    keys_set(0);
 }
