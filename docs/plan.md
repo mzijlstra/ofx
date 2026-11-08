@@ -808,6 +808,31 @@ hand-written table (`UI_KEYS`). There is no type-to-find, so a letter can be a c
   3ef3827 (243 rows), every typed ASCII character's command, every menu entry's key and what it
   runs, and every shortcuts row's keys.
 
+**Step 2 as built (2026-11-08, branch f15-keys):**
+- `fs/conf.c` keeps each `key = ...` line as written, with its line in the file (`Conf.key`,
+  `key_no`, at most 256): fs/ doesn't know the keys, and ofx-clean reads the same file without
+  them. `ui_binds_set` (ui/keys.c) applies them over the defaults on every read: yours first, in
+  their order (a command's first key is the one its menu shows), a key bound leaves the command
+  that had it, the later of two lines on one key wins, `none` takes the command's keys so far. A
+  line it can't read is skipped; the status line names the first bad line of the whole file.
+- The status line says what a key took only after a save that changed the keys
+  ("ofx.conf: Ctrl+T is reload now, not new-tab", "and N more"); at the start the file is simply
+  the keys (f15b).
+- Key names as the menus write them, any case for modifiers and names; a character alone is typed
+  (G, ~, é), Shift and a character is refused ("write G"), Ctrl/Alt/Super with a non-US character
+  too; Alt and a letter or digit stays fixed.
+- The bar menus' entries with no key are commands too (new-file, duplicate, preferences, the
+  sidebar modes, colors, show-menu, the sorts, clear-previews, about): `UK_ITEM0 + UiMenuItem`,
+  run as picked when the bar menu has them enabled. The right-click menus' own entries aren't: they
+  act on what was clicked.
+- A menu pick runs the command alone (`ui_cmd_event`), whatever keys it has (the step 1 review).
+- The written ofx.conf lists every key as ofx has it, commented out, and the commands with none;
+  all of it uncommented reads back as exactly the defaults. ofx-probe takes in ui/ for the
+  README's copy.
+- Scripts: `key` sends what a real key would, nothing for a key that means nothing (a name that is
+  no key still fails); the state line has `keysbad`, `keyclashes` and `menukeys` (the open menu's
+  keys as shown).
+
 ## Theme colours across Omarchy's themes (2026-11-07; Michael: "great plan")
 
 Before publishing (Michael wants a public repo next), ofx is checked on every Omarchy theme. He saw
