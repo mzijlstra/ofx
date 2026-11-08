@@ -84,7 +84,7 @@ Omarchy's theme: the binary, the folder `tools/ofx`, the window's title and Wayl
 | F12 | The F11 review's leftovers, `shift-select`, previews through the system's thumbnailers, Clear Previews, git status per file with a branch button | Below |
 | F13 | Drag and drop inside ofx (the list, the sidebar, the tabs, spring-loaded), Copy Path (Ctrl+Shift+C), a resizable sidebar | Below |
 | F14 | Drag and drop with other programs (a browser first): files dragged out of ofx, and dropped into it; ofx's own Wayland data-device code beside GLFW's | To design |
-| F15 | Key bindings the user sets | To design |
+| F15 | Key bindings the user sets: `key` lines in ofx.conf, one binding table behind the keys, the menus and the shortcuts panel | Below |
 | F16 | Network shares (Samba, NFS), with the folder counting in a separate process so a dead mount can't hang ofx | To design |
 
 **The major milestones end at F16** (Michael, 2026-11-04). What is left after it is on the later
@@ -734,6 +734,45 @@ Default and Recommended equal GIO's; GLib's rewrite of a copy adds the two lines
   index.theme files read again; start-up is back to about 51 ms), each app's texture when its row
   is first drawn, all of them dropped when it closes (`ow_drop`). SVG icons (theme, pixmaps/ or a
   path) are drawn with nanosvg, vendored; only for the apps, the files' icons stay PNG.
+
+## F15 design: key bindings the user sets (2026-11-08; Michael's answers the same day)
+
+**Today:** the keys are written down three times. gui/input.c's `ui_key_of` turns about 75 key and
+modifier pairs into `UK_*`; ui_list_key reads 14 bare letters (hjkl, g/G, `/`, `.`, `t`, `~`, s/S,
+n/N, `r`); the menus carry their own labels ("Ctrl+T"), and the Keyboard Shortcuts panel its own
+hand-written table (`UI_KEYS`). There is no type-to-find, so a letter can be a command. The menus'
+90 entries already have names (`new-tab`, `new-window`, ...).
+
+**Michael's answers:**
+1. **In ofx.conf:** `key = <keys> <command>` lines, applied on save as every option. The written
+   default file lists every command with its default keys, commented out.
+2. **Every command:** every menu command and the list's own keys (moving, hjkl, g/G, marking, sort,
+   find next, terminal, ...). Fixed: the keys inside text fields (caret, selection, Enter, Esc),
+   the answers to questions (y/n/k ...), and the panels' own lists.
+3. **Clashes, yours wins:** a key bound to your command leaves the command that had it by default
+   (which keeps its other keys); the status line says so once after a save. Two of your own lines
+   on one key: the later wins, and the status line names both.
+4. **The panel shows, the file changes:** Keyboard Shortcuts (F1) shows the keys as they are, yours
+   marked; changing one stays a text edit (Edit → Preferences…), so ofx still never changes a file
+   you edited.
+
+**Defaults taken without asking:** key names as the menus write them (`ctrl+shift+n`, `alt+left`,
+`f2`, `t`, `G` for shift+g; case-insensitive for the modifiers); several keys per command
+(one key a line; a command may have several lines);
+`key = none <command>` removes all of a command's keys; no sequences (vim's `gg`); no presets.
+
+**Steps, each with its commits, gates and reviewer-2 round:**
+1. **One binding table, no change in behaviour:** a command list (name, what it does, its section)
+   and a default key table (key + modifiers, or a character → command), in ui/. `ui_key_of`, the
+   list's letters, the menus' labels and the shortcuts panel all read it. Tests: every key today
+   reaches the same command (pinned against the old mapping), every menu label as before, every
+   command named once.
+2. **`key` lines in ofx.conf:** parsed in fs/conf.c, applied to a live binding table on load and on
+   save; clashes as above, with the status line; the written default lists the commands. GUI
+   script: a bound key acts, the default it took no longer does, and the menu label follows.
+3. **The panel and the docs:** Keyboard Shortcuts marks your keys and its filter finds a command by
+   name; the README's ofx.conf section shows a `key` line.
+4. **F15's code-health review** (the end of a major milestone), then Michael's go to install.
 
 ## Theme colours across Omarchy's themes (2026-11-07; Michael: "great plan")
 
