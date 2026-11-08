@@ -386,7 +386,9 @@ search-skip = node_modules
 ## Where things come from
 
 - Colours: `~/.local/state/omarchy/current/theme/colors.toml` (`$XDG_STATE_HOME`), Tokyo Night for
-  anything missing.
+  anything missing. A colour that doesn't read on its background is made lighter or darker, its hue
+  kept: to 3:1 (dimmed text 2:1) in the bars and the sidebar, and only past 1.5:1 in the files
+  area, which keeps the theme's colours as they are (`fs/theme.c`).
 - Icons: the theme in `icons.theme` next to it (Yaru-magenta here), its parents, then hicolor; PNG
   only, at the window's scale.
 - MIME types: shared-mime-info's `globs2` by file name.
@@ -402,6 +404,10 @@ search-skip = node_modules
 
 MIT (`LICENSE`). The vendored raylib, Clay and nanosvg are zlib-licensed (their own files under
 `vendor/`).
+
+`base/` (arenas, strings), `gui/font.c` and `gui/render.c` come from uml-viewer, the author's own
+C take on [Uncle Bob's uml-viewer](https://github.com/unclebob/uml-viewer) (Clojure, BSD Zero
+Clause), which showed the way: raylib and Clay in C, Wayland-native.
 
 ## Testing
 

@@ -239,6 +239,10 @@ edit vendored files, with one exception: raylib's GLFW carries `vendor/patches/g
 events, and `glfwSetWaylandDragHook` handing its drags to gui/dnd.c. A raylib update reapplies it
 (`git apply vendor/patches/glfw-dnd.patch`).
 
+`base/`, `gui/font.c` and `gui/render.c` came from uml-viewer (the author's C take on Uncle Bob's
+Clojure uml-viewer, 0BSD); `render.c` has gained images since. They are ofx's own now: edit them
+as any other file.
+
 ## Commits
 
 Conventional Commits (`type(scope): subject`, imperative, lowercase, no trailing period), with a
