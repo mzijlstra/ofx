@@ -407,7 +407,7 @@ MIT (`LICENSE`). The vendored raylib, Clay and nanosvg are zlib-licensed (their 
 
 `make test` runs the unit tests. `tools/mutation/run.py` mutates `fs/` and `ui/` one site at a
 time against them, `tools/mutation/gui.py` the window against the GUI scripts. GUI scripts run in
-a private headless weston, never on the desktop: see `CLAUDE.md` and `tests/gui/run.sh`.
+a private headless weston, never on the desktop: see `AGENTS.md` and `tests/gui/run.sh`.
 `build/ofx-probe DIR` prints a folder as ofx sees it (types and icon files), without a window.
 `build/ofx-clean` is the cache's cleanup: it deletes in `~/.cache/thumbnails`, so try it with
 `--dry-run`, or with `XDG_CACHE_HOME` on a copy.

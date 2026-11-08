@@ -1,6 +1,6 @@
 // OFX_GUI_SCRIPT=FILE: the input comes from a script instead of the user, one frame per loop, so
 // the window can be tested and screenshotted on a headless output without touching anyone's
-// keyboard or pointer (CLAUDE.md, "Testing the GUI"). Included by main.c after its state.
+// keyboard or pointer (AGENTS.md, "Testing the GUI"). Included by main.c after its state.
 //
 // One command per line; # starts a comment.
 //   settle                  wait until the window's size has held for 20 frames (the compositor

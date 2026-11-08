@@ -25,7 +25,7 @@ Omarchy's theme: the binary, the folder `tools/ofx`, the window's title and Wayl
 
 - **Two GUI tests flaked under load (Michael, 2026-11-03: to look at, not forget). Both fixed
   in F13's code-health step B (2026-11-04); if either fails again, reopen this.**
-  - **f12g** (failed again 2026-11-04, log in `a review log`):
+  - **f12g** (failed again 2026-11-04):
     a test timing bug. The test's 3 s gap between git asks (`OFX_TEST_GIT_GAP_MS`) put the ask
     after a commit off until 3 s after the last one, and the `wait-for 3000` that waited for it
     passed only by the commit's own time. Lines 23 and 37 wait 6 s now, as line 67 already did.
@@ -483,8 +483,8 @@ script's `wheel` goes through `wheel_at` now, as the mouse's does, so a panel's 
 Explorer", "By A.M.S. Zijlstra", the version, "MIT License", "Built with raylib, Clay and
 nanosvg", Close (gui/about.c, `Ui.about`). The version is the last commit's date and short hash,
 `+dirty` with changes to tracked files (build/version.h, written by make only when it changes;
-"unknown" without git, as in the GUI mutants' copies); `ofx --version` prints it. MIT as Omarchy
-is; who holds the copyright (his name, or his employer, for work on company time) is his to check.
+"unknown" without git, as in the GUI mutants' copies); `ofx --version` prints it. MIT, as Omarchy
+is, under Michael's name.
 The wheel over a panel's list (Open With, Keyboard Shortcuts) drew nothing until the next input:
 `ow_wheel` is in `ui_input_acts` now (f4fced7).
 
@@ -1103,12 +1103,12 @@ vs-code's as the only one). Steps, each with its own reviewer-2 round:
      then switching as its own step: `git switch <branch>` only (no `-f`, stash or paths), git's
      own refusal said in the status line; the folder reloads, or goes up to the nearest one that
      still exists. ofx's first write to a repo: through the test guard, a fake git on scratch
-     repos in tests, never a work repo.
+     repos in tests, never a real repository.
      Decided for the switch (Michael, 2026-11-03): in bubblewrap as status, but the repository
      (and a worktree's real .git) writable, so its hooks and filters run as in a terminal yet reach
      only that repository (no network; git's config files read only). Ctrl+K's path buttons step
      on to the branch button, and Enter opens its menu.
-   - **Step 6, all branches (Michael, 2026-11-03, after using it on the work repos):** the menu's 8
+   - **Step 6, all branches (Michael, 2026-11-03, after using it on his work repos):** the menu's 8
      are often fewer than a repo's local branches. Its last entry, "All branches… (N)" when there
      are more than 8, opens a panel as Open With's: a filter field (type to narrow: a ticket id
      finds its branch), the list in the menu's order (checked out last first, then by commit
@@ -1326,7 +1326,7 @@ match is kept as a `SearchHit` on the result's `Entry` (line, column in characte
 lines, the line cut to 160 bytes from 40 before the match, its indent dropped and control characters
 as spaces). The row shows it after the folder, which gets at most a third of the room. The matcher
 got faster for this: `memmem` to the next start with case, a first-byte check without (1.94 s to
-1.07 s over a code folder cached; with case 0.75 s; a regular expression 2.5 s). Calls made: a
+1.07 s over that code folder cached; with case 0.75 s; a regular expression 2.5 s). Calls made: a
 link to a file isn't read even when its name matches, and folders aren't results inside files;
 with "In files" on and nothing in "Containing" it searches by name, so the results don't blank as
 it turns on; a regular expression's `^` in a later piece of a long line matches that piece's start.

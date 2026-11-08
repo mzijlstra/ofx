@@ -9,8 +9,8 @@ per worker (-j, the cores by default); each mutant is applied in a worker's copy
 built with clang (AddressSanitizer and UBSan as in `make test`, a little over twice as fast to
 compile as gcc: Michael, 2026-10-23) and run, and the file put back. Every worker runs the
 unmutated tests first, all at once, so a test that only fails under load shows before any kill
-counts. A mutant the tests don't fail on SURVIVES: a missing test until it is shown inert (house
-standard, ../CLAUDE.md). Prints one line per mutant as it finishes and the survivors at the end.
+counts. A mutant the tests don't fail on SURVIVES: a missing test until it is shown inert.
+Prints one line per mutant as it finishes and the survivors at the end.
 
 Two passes when tcc is there (Michael, 2026-10-24): tcc builds the tests in about 25 ms, against
 clang's 1.45 s, but has no sanitizers. So every mutant runs first under tcc; what its tests fail on

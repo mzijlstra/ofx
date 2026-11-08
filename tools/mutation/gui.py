@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """GUI mutants: each applied to a scratch copy of the repo, built, and run through
-tests/gui/run.sh, each script in its own headless weston (CLAUDE.md, "Testing the GUI").
+tests/gui/run.sh, each script in its own headless weston (AGENTS.md, "Testing the GUI").
 
     tools/mutation/gui.py <scratch-dir> [mutant,...] [--jobs N]
 
