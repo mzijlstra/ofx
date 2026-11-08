@@ -815,8 +815,9 @@ hand-written table (`UI_KEYS`). There is no type-to-find, so a letter can be a c
   their order (a command's first key is the one its menu shows), a key bound leaves the command
   that had it, the later of two lines on one key wins, `none` takes the command's keys so far. A
   line it can't read is skipped; the status line names the first bad line of the whole file.
-- The status line says what a key took only after a save that changed the keys
-  ("ofx.conf: Ctrl+T is reload now, not new-tab", "and N more"); at the start the file is simply
+- The status line says what a key took after a save, once: only keys the lines didn't take the
+  read before (the step 2 review: a second save named the first clash again), the first named,
+  "and N more" ("ofx.conf: Ctrl+T is reload now, not new-tab"); at the start the file is simply
   the keys (f15b).
 - Key names as the menus write them, any case for modifiers and names; a character alone is typed
   (G, ~, é), Shift and a character is refused ("write G"), Ctrl/Alt/Super with a non-US character

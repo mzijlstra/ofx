@@ -566,6 +566,17 @@ static void test_keys_conf(void)
     r = keys_set(2, "Ctrl+E terminal", "Ctrl+E reload");
     CHECK(r.clashes == 1 && strcmp(r.clash, "lines 1 and 2 both bind Ctrl+E: line 2 wins") == 0 && chord_ev('e', UI_MOD_CTRL).cmd == UK_RELOAD);
     CHECK(strcmp(ui_menu_key(UM_TERMINAL), "Alt+Enter") == 0);
+    // Said once (the step 2 review): a key taken the read before isn't said again; a new one is,
+    // and only it.
+    r = keys_set(1, "Ctrl+T reload");
+    CHECK(r.fresh == 1 && strcmp(r.clash, "Ctrl+T is reload now, not new-tab") == 0);
+    r = keys_set(2, "Ctrl+T reload", "F7 terminal");
+    CHECK(r.clashes == 1 && r.fresh == 0);
+    r = keys_set(2, "Ctrl+T reload", "Ctrl+R terminal");
+    CHECK(r.clashes == 2 && r.fresh == 1 && strcmp(r.clash, "Ctrl+R is terminal now, not reload") == 0);
+    // The earlier line named right after a none dropped a line before it (the step 2 review).
+    r = keys_set(4, "F7 reload", "KP1 sort-name", "none reload", "KP1 find");
+    CHECK(strcmp(r.clash, "lines 2 and 4 both bind KP1: line 4 wins") == 0);
     // none: every key of the command so far, yours too; a line after it gives one again.
     r = keys_set(2, "F8 trash", "none trash");
     CHECK(!r.bad && !r.clashes && chord_ev(UKC_DELETE, 0).cmd == UK_NONE && chord_ev(UKC_DELETE, 0).key == UK_DELETE);

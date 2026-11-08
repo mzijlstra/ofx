@@ -335,16 +335,25 @@ static void ui_binds_drop(int i)
     ui_binds.n--;
 }
 
-// What ofx.conf's key lines did: the first line skipped and why; the first key one took from
-// another command (a default's, or an earlier line's) and how many did; whether the bindings
+// What ofx.conf's key lines did: the first line skipped and why; how many keys a line took from
+// another command (a default's, or an earlier line's), how many of those weren't taken the read
+// before (fresh: said once, Michael's answer 3), and the first fresh one; whether the bindings
 // changed from those before.
 typedef struct {
     int  bad;
     char why[200];
-    int  clashes;
+    int  clashes, fresh;
     char clash[200];
     bool changed;
 } UiKeysRead;
+
+enum { UI_CLASHES_MAX = 64 };
+
+// The keys the last read's lines took from another command (UiKeysRead.fresh is the rest).
+static struct {
+    UiChord c[UI_CLASHES_MAX];
+    int     n;
+} ui_clashed;
 
 // ofx.conf's key lines (n of them, each `<key> <command>` or `none <command>`, from file line no[i])
 // over the defaults, in order: a key bound leaves the command it had (which keeps its others), a
@@ -360,6 +369,8 @@ static UiKeysRead ui_binds_set(const char (*line)[64], const int *no, int n)
     ui_binds_reset();
     int users = 0;   // (ofx.conf's come first: a command's first key is the one its menu shows)
     static int from[UI_BINDS_MAX];   // each user binding's file line
+    static UiChord now[UI_CLASHES_MAX];   // the keys this read's lines took
+    int now_n = 0;
     for (int k = 0; k < n; k++) {
         Str l = str_trim(str_from_c(line[k]));
         isize sp = str_find(l, ' ');
@@ -379,11 +390,17 @@ static UiKeysRead ui_binds_set(const char (*line)[64], const int *no, int n)
         for (int i = ui_binds.n - 1; i >= 0; i--) {
             bool same_key = !none && ui_chord_eq(ui_binds.b[i].c, c);
             if (!(none ? ui_binds.b[i].cmd == cmd : same_key)) continue;
-            if (same_key && ui_binds.b[i].cmd != cmd && !r.clashes++) {
-                char kn[UI_KEY_NAME_MAX];
-                ui_chord_name(c, kn, (int)sizeof kn);
-                if (ui_binds.user[i]) snprintf(r.clash, sizeof r.clash, "lines %d and %d both bind %s: line %d wins", from[i], no[k], kn, no[k]);
-                else snprintf(r.clash, sizeof r.clash, "%s is %.*s now, not %s", kn, (int)name.len, name.p, ui_cmd_name(ui_binds.b[i].cmd));
+            if (same_key && ui_binds.b[i].cmd != cmd) {
+                r.clashes++;
+                bool seen = false;
+                for (int j = 0; j < ui_clashed.n && !seen; j++) seen = ui_chord_eq(ui_clashed.c[j], c);
+                if (now_n < UI_CLASHES_MAX) now[now_n++] = c;
+                if (!seen && !r.fresh++) {
+                    char kn[UI_KEY_NAME_MAX];
+                    ui_chord_name(c, kn, (int)sizeof kn);
+                    if (ui_binds.user[i]) snprintf(r.clash, sizeof r.clash, "lines %d and %d both bind %s: line %d wins", from[i], no[k], kn, no[k]);
+                    else snprintf(r.clash, sizeof r.clash, "%s is %.*s now, not %s", kn, (int)name.len, name.p, ui_cmd_name(ui_binds.b[i].cmd));
+                }
             }
             if (ui_binds.user[i]) {
                 users--;
@@ -400,6 +417,7 @@ static UiKeysRead ui_binds_set(const char (*line)[64], const int *no, int n)
         users++, ui_binds.n++;
     }
     r.changed = was_n != ui_binds.n || memcmp(was, ui_binds.b, sizeof was[0] * (size_t)was_n) != 0;
+    memcpy(ui_clashed.c, now, sizeof now[0] * (size_t)now_n), ui_clashed.n = now_n;
     return r;
 }
 

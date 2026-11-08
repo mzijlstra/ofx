@@ -2642,7 +2642,7 @@ MUTANTS += [
     (KY, "    if (!code && ui_same_nocase(s, \"Space\")) code = ' ';", ""),
     (KY, "        if (sp < 0 || str_find(name, ' ') >= 0) snprintf(", "        if (sp < 0) snprintf("),
     (KY, "            if (!r.bad) r.bad = no[k], snprintf(", "            r.bad = no[k], snprintf("),
-    (KY, "            if (same_key && ui_binds.b[i].cmd != cmd && !r.clashes++) {", "            if (same_key && !r.clashes++) {"),
+    (KY, "            if (same_key && ui_binds.b[i].cmd != cmd) {\n                r.clashes++;", "            if (same_key) {\n                r.clashes++;"),
     (KY, "                if (ui_binds.user[i]) snprintf(r.clash, sizeof r.clash, \"lines", "                if (0) snprintf(r.clash, sizeof r.clash, \"lines"),
     (KY, "        if (none) continue;\n", ""),
     (KY, "        users++, ui_binds.n++;", "        ui_binds.n++;"),
@@ -2656,5 +2656,7 @@ MUTANTS += [
     ('ui/menus.c', "            if (!ui_menu_enabled(u, it)) return u->menu = was, false;", "            if (0) return u->menu = was, false;"),
     ('ui/menus.c', "            u->menu = m;   // (what is shown and enabled is the bar menu's)\n", ""),
     ('ui/handle.c', "    if (key >= UK_ITEM0) return ui_item_cmd(u, (UiMenuItem)(key - UK_ITEM0), out);\n", ""),
+    (KY, "                if (!seen && !r.fresh++) {", "                if (!r.fresh++) {"),
+    (KY, "    memcpy(ui_clashed.c, now, sizeof now[0] * (size_t)now_n), ui_clashed.n = now_n;", ""),
+    (KY, "                memmove(&from[i], &from[i + 1], sizeof from[0] * (size_t)(users - i));", ""),
 ]
-

@@ -33,7 +33,7 @@ static void conf_start(void)
 }
 
 // ofx.conf read again and applied; the first line it couldn't read said in the status line, else,
-// after a save that changed the keys, a key taken from another command (F15). With no file to read
+// after a save, a key a line takes from another command now that it didn't before (F15: said once). With no file to read
 // (it couldn't be made, or went since), the built-in defaults. Open at Line reads its editor lines
 // from app.conf (editor_now).
 static void conf_apply(void)
@@ -60,8 +60,8 @@ static void conf_apply(void)
     conf_shown(shown, sizeof shown);
     if (c.bad && (!keys.bad || c.bad < keys.bad)) set_status(true, "%s line %d: %s", shown, c.bad, c.why);
     else if (keys.bad) set_status(true, "%s line %d: %s", shown, keys.bad, keys.why);
-    else if (was_once && keys.changed && keys.clashes)
-        set_status(false, "ofx.conf: %s%s", keys.clash, keys.clashes > 1 ? arena_sprintf(&scratch, " (and %d more)", keys.clashes - 1) : "");
+    else if (was_once && keys.fresh)
+        set_status(false, "ofx.conf: %s%s", keys.clash, keys.fresh > 1 ? arena_sprintf(&scratch, " (and %d more)", keys.fresh - 1) : "");
 }
 
 // Edit → Preferences…: ofx.conf, written first when there is none, opened in the editor Open at

@@ -981,8 +981,8 @@ MUTANTS = [
     # F15 step 2: ofx.conf's key lines applied on each read, a bad one named, a clash said after a save.
     ('gui/prefs.c', "    UiKeysRead keys = conf_keys_read = ui_binds_set(c.key, c.key_no, c.nkey);", "    UiKeysRead keys = conf_keys_read = (UiKeysRead){ 0 };", 'f15'),
     ('gui/prefs.c', "    else if (keys.bad) set_status(true,", "    else if (0) set_status(true,", 'f15'),
-    ('gui/prefs.c', "    else if (was_once && keys.changed && keys.clashes)", "    else if (keys.clashes)", 'f15'),
-    ('gui/prefs.c', "    else if (was_once && keys.changed && keys.clashes)", "    else if (0)", 'f15'),
+    ('gui/prefs.c', "    else if (was_once && keys.fresh)", "    else if (keys.fresh)", 'f15'),
+    ('gui/prefs.c', "    else if (was_once && keys.fresh)", "    else if (0)", 'f15'),
 ]
 import concurrent.futures, queue, threading, time
 
