@@ -122,12 +122,18 @@ static Theme theme_load(Arena *scratch)
 // dark_foreground (ofx's dimmed text) reads under 3:1 in 16 of 23 themes, and is the selection's
 // own colour in some, and the terminal colours under 3:1 in up to 11. No fixed colour reads on all
 // of them (docs/plan.md, "Theme colours across Omarchy's themes"). So each colour ofx draws text in
-// is pushed toward the foreground just until it reads on every background it sits on, and left as
-// the theme gave it where it already does: dimmed text to 2:1 (muted, never illegible: Michael,
-// 2026-11-07), coloured text to 3:1. Contrast is WCAG's ratio; likeness CIE76's dE in Lab.
+// is made lighter or darker, hue and chroma kept (OKLCH), just until it reads on every background
+// it sits on, and left as the theme gave it where it already does:
+// - the window's frame (the menu bar, the top bar, the sidebar, the footer, the panels): dimmed text
+//   to 2:1 (muted, never illegible: Michael, 2026-11-07), coloured text to 3:1 (theme_fit);
+// - the files area: only rescued where a colour reads under 1.5:1 (theme_fit_list), so its colours
+//   stay as vibrant as the theme made them (Michael picked this, 2026-11-07, over the frame's floors
+//   there, which made the names' colours "same-same").
+// Contrast is WCAG's ratio; likeness CIE76's dE in Lab.
 
 #define THEME_DIM_MIN    2.0
 #define THEME_TEXT_MIN   3.0
+#define THEME_RESCUE_MIN 1.5
 #define THEME_UNLIKE_MIN 20.0   // dE: ristretto's accent and red are 29 apart, and read apart (Michael, 2026-11-07)
 
 static double rgb_lin(u8 c)
@@ -190,8 +196,8 @@ static double rgb_worst(Rgb c, const Rgb *bg, int n)
 
 // OKLab (Björn Ottosson, 2020): lightness, and two colour axes, perceptually even. OKLCH is its
 // polar form: L, chroma C, hue h. Moving L alone keeps a colour's hue and as much of its chroma as
-// the sRGB gamut allows, where a mix toward fg (white or black) washes it out (Michael, 2026-11-07:
-// the mix made the files area's colours "same-same").
+// the sRGB gamut allows, where a mix toward fg (white or black) washed it out (the first fit,
+// 6de0248: catppuccin-latte's yellow kept chroma 27 of 70, by lightness 60).
 static void rgb_oklab(Rgb c, double o[3])
 {
     double r = rgb_lin(c.r), g = rgb_lin(c.g), b = rgb_lin(c.b);
@@ -230,19 +236,18 @@ static bool oklab_rgb(const double o[3], Rgb *out)
 // The colour at lightness L with c's hue and as much of its chroma as fits in sRGB.
 static Rgb oklch_at(const double c[3], double L)
 {
-    double lo = 0, hi = 1, o[3];
-    Rgb x;
-    o[0] = L, o[1] = c[1], o[2] = c[2];
+    double lo = 0, hi = 1, o[3] = { L, c[1], c[2] };
+    Rgb x, fits;
     if (oklab_rgb(o, &x)) return x;
+    o[1] = o[2] = 0;
+    oklab_rgb(o, &fits);   // the grey at L, which always fits
     for (int i = 0; i < 20; i++) {   // the most chroma that fits, by halving
         double k = (lo + hi) / 2;
         o[1] = c[1] * k, o[2] = c[2] * k;
-        if (oklab_rgb(o, &x)) lo = k;
+        if (oklab_rgb(o, &x)) lo = k, fits = x;
         else hi = k;
     }
-    o[1] = c[1] * lo, o[2] = c[2] * lo;
-    oklab_rgb(o, &x);
-    return x;
+    return fits;
 }
 
 // c's lightness moved toward `to`'s in fortieths, hue kept, just until it reads `min` over every
@@ -265,7 +270,19 @@ static bool theme_has(const Theme *t, int k)
     return t->have >> k & 1;
 }
 
-// The theme's colours fitted for drawing, in place (above), and the drive bar's three:
+// The text colours, in place, over the list's backgrounds (the widest set: the frame's are among
+// them): a row, the hovered row, the cursor's, a marked row. The accent first, as the others are
+// read on its marked rows. Coloured text to text_min, dark_foreground to dim_min.
+static void theme_fit_text(Theme *t, double text_min, double dim_min)
+{
+    t->accent = rgb_push(t->accent, t->fg, (Rgb[]){ t->bg, t->bg_light, t->selection }, 3, text_min, &t->bg);
+    const Rgb list[] = { t->bg, t->bg_light, t->selection, rgb_mix(t->accent, t->bg, 0.28) };
+    t->fg_dim = rgb_push(t->fg_dim, t->fg, list, 4, dim_min, NULL);
+    Rgb *text[] = { &t->red, &t->yellow, &t->green, &t->blue, &t->cyan, &t->magenta };
+    for (int i = 0; i < COUNT(text); i++) *text[i] = rgb_push(*text[i], t->fg, list, 4, text_min, NULL);
+}
+
+// The frame's colours fitted for drawing, in place (above), and the drive bar's four:
 // - the warning (a drive 90% full): the theme's red where it reads, else the best-reading of red,
 //   bright_red and orange that is a colour (solitude's red is a grey), pushed to 3:1; in a theme
 //   without a colour among them (vantablack's and white's are greys) the foreground, so it differs
@@ -302,26 +319,16 @@ static void theme_fit(Theme *t)
     }
     t->drive_used = rgb_push(*used, t->fg, side, 3, THEME_TEXT_MIN, NULL);
 
-    // The text colours, over the list's backgrounds: a row, the hovered row, the cursor's, a marked
-    // row (the accent first, as the others are read on its marked rows).
-    t->accent = rgb_push(t->accent, t->fg, (Rgb[]){ t->bg, t->bg_light, t->selection }, 3, THEME_TEXT_MIN, &t->bg);
-    const Rgb list[] = { t->bg, t->bg_light, t->selection, rgb_mix(t->accent, t->bg, 0.28) };
-    t->fg_dim = rgb_push(t->fg_dim, t->fg, list, 4, THEME_DIM_MIN, NULL);
-    Rgb *text[] = { &t->red, &t->yellow, &t->green, &t->blue, &t->cyan, &t->magenta };
-    for (int i = 0; i < COUNT(text); i++) *text[i] = rgb_push(*text[i], t->fg, list, 4, THEME_TEXT_MIN, NULL);
+    theme_fit_text(t, THEME_TEXT_MIN, THEME_DIM_MIN);
     t->drive_track = rgb_mix(t->fg_dim, t->bg_light, 0.75);
     t->drive_free = rgb_push(t->drive_track, t->fg, side, 3, THEME_DIM_MIN, NULL);
 }
 
-// The files area's colours (2026-11-07, a prototype): only rescued where they are near illegible,
-// under THEME_RESCUE_MIN, so the theme's own colours stay as vibrant as its author made them there.
-#define THEME_RESCUE_MIN 1.5
+// The files area's colours: only rescued where one is near illegible (white's dark_foreground is
+// its selection's grey), so the rest stay as the theme made them.
 static void theme_fit_list(Theme *t)
 {
-    t->accent = rgb_push(t->accent, t->fg, (Rgb[]){ t->bg, t->bg_light, t->selection }, 3, THEME_RESCUE_MIN, &t->bg);
-    const Rgb list[] = { t->bg, t->bg_light, t->selection, rgb_mix(t->accent, t->bg, 0.28) };
-    Rgb *text[] = { &t->fg_dim, &t->red, &t->yellow, &t->green, &t->blue, &t->cyan, &t->magenta };
-    for (int i = 0; i < COUNT(text); i++) *text[i] = rgb_push(*text[i], t->fg, list, 4, THEME_RESCUE_MIN, NULL);
+    theme_fit_text(t, THEME_RESCUE_MIN, THEME_RESCUE_MIN);
 }
 
 // ---- XDG user directories -------------------------------------------------------------------

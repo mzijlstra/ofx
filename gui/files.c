@@ -482,7 +482,7 @@ static void size_cell(isize i, char *size, size_t cap, bool ask)
 // (Makefile, README…) yellow; images and videos magenta, music cyan, archives red; the rest plain.
 static Clay_Color ls_name_colour(const Entry *e, isize i)
 {
-    Theme *t = &app.theme_list;   // (the files area: the theme as given)
+    Theme *t = &app.theme_list;   // (the files area: theme_fit_list)
     if (e->kind == K_LINK_BROKEN) return cc(t->red);
     if (!app.ui.colors) return cc(t->fg);   // (View → Show Colors off)
     if (kind_is_dir(e->kind)) return e->kind == K_LINK_DIR ? cc(t->cyan) : cc(t->blue);
@@ -509,7 +509,7 @@ static Clay_Color ls_name_colour(const Entry *e, isize i)
 // green, renamed cyan, a conflict red; ignored dimmed.
 static Clay_Color git_colour(GitState s)
 {
-    Theme *t = &app.theme_list;   // (the files area: the theme as given)
+    Theme *t = &app.theme_list;   // (the files area: theme_fit_list)
     switch (s) {
     case GS_MODIFIED: return cc(t->yellow);
     case GS_STAGED: case GS_UNTRACKED: return cc(t->green);
@@ -532,7 +532,7 @@ static void git_cell(int r, isize i, GitState s)
 // A Permissions cell in eza's colours: r yellow, w red, x green, s/S/t/T magenta, - dim.
 static void ls_perms_cell(Clay_ElementId id, u32 mode, int w)
 {
-    Theme *t = &app.theme_list;   // (the files area: the theme as given)
+    Theme *t = &app.theme_list;   // (the files area: theme_fit_list)
     char p[16];
     ui_perms(p, sizeof p, mode);
     CLAY(id, { .layout = { .sizing = { CLAY_SIZING_FIXED(w), CLAY_SIZING_FIT(0) } }, .clip = { .horizontal = true } }) {
@@ -558,7 +558,7 @@ static void info_cell(Clay_ElementId id, const char *s, int w, int pad, Clay_Col
 // match. The match is shown whole when it fits.
 static void layout_hit(int r, const SearchHit *h, float room)
 {
-    Theme *t = &app.theme_list;   // (the files area: the theme as given)
+    Theme *t = &app.theme_list;   // (the files area: theme_fit_list)
     Str num = str_from_c(arena_sprintf(&frame, "%lld:", (long long)h->line));
     Str more = h->more ? str_from_c(arena_sprintf(&frame, "+%lld", (long long)h->more)) : STR_EMPTY;
     room -= str_width(num) + 6 + (more.len ? str_width(more) + 6 : 0);
@@ -586,7 +586,7 @@ static void layout_hit(int r, const SearchHit *h, float room)
 // git change's over the type's, ignored dimmed (F12); else the type's.
 static Clay_Color row_name_colour(isize i, bool sel, bool marked, GitState gs)
 {
-    Theme *t = &app.theme_list;   // (the files area: the theme as given)
+    Theme *t = &app.theme_list;   // (the files area: theme_fit_list)
     const Entry *e = &app.list.e[i];
     return e->kind == K_LINK_BROKEN ? cc(t->red) : marked ? cc(t->accent) : sel ? cc(t->fg) : gs != GS_NONE ? git_colour(gs) : ls_name_colour(e, i);
 }
@@ -594,7 +594,7 @@ static Clay_Color row_name_colour(isize i, bool sel, bool marked, GitState gs)
 static void layout_row(int r, isize i, float w, i64 now)
 {
     const Entry *e = &app.list.e[i];
-    Theme *t = &app.theme_list;   // (the files area: the theme as given)
+    Theme *t = &app.theme_list;   // (the files area: theme_fit_list)
     bool sel = i == app.ui.list.sel, hover = r == app.hov.row, marked = ui_marked(&app.ui, i);
     // Marked rows: the accent mixed into the background; the cursor keeps the selection colour.
     Clay_Color bg = sel ? cc(t->selection) : marked ? mix(t->accent, t->bg, 0.28f) : hover ? cc(t->bg_light) : cc(t->bg);
@@ -691,7 +691,7 @@ static int name_lines(const char *id, int k, Str name, int most, float w, Clay_C
 static void layout_cell(int k, isize i)
 {
     const Entry *e = &app.list.e[i];
-    Theme *t = &app.theme_list;   // (the files area: the theme as given)
+    Theme *t = &app.theme_list;   // (the files area: theme_fit_list)
     bool sel = i == app.ui.list.sel, hover = k == app.hov.row, marked = ui_marked(&app.ui, i);
     GitState gs = entry_git(i);   // (F12: the label tinted, a dot on the icon's corner)
     Clay_Color fg = e->kind == K_LINK_BROKEN ? cc(t->red) : marked ? cc(t->accent) : gs != GS_NONE ? git_colour(gs) : cc(t->fg);

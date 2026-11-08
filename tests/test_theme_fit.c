@@ -87,6 +87,22 @@ static void fit_check_theme(const char *name, Theme raw)
     // The track shows on its row, and the used part on the track (the review's 1.6, 2026-11-07).
     fit_check(name, "drive track shows", rgb_contrast(t.drive_track, t.bg_light) >= 1.3);
     fit_check(name, "drive used on its track", rgb_contrast(t.drive_used, t.drive_track) >= 1.6);
+
+    // The files area (theme_fit_list): each colour rescued to 1.5:1, the rest as the theme gave them.
+    Theme l = raw;
+    theme_fit_list(&l);
+    Rgb ll[] = { l.bg, l.bg_light, l.selection, rgb_mix(l.accent, l.bg, 0.28) };
+    fit_check(name, "list accent", fit_reads(l.accent, l.fg, ll, 3, THEME_RESCUE_MIN) && fit_reads(l.accent, l.fg, ll + 3, 1, THEME_RESCUE_MIN));
+    if (rgb_worst(raw.accent, raw_list, 3) >= THEME_RESCUE_MIN && rgb_contrast(raw.accent, raw_list[3]) >= THEME_RESCUE_MIN)
+        fit_check(name, "list accent left alone", rgb_same(l.accent, raw.accent));
+    const struct { const char *what; Rgb now, was; } lt[] = {
+        { "list dark_foreground", l.fg_dim, raw.fg_dim }, { "list red", l.red, raw.red }, { "list yellow", l.yellow, raw.yellow },
+        { "list green", l.green, raw.green }, { "list blue", l.blue, raw.blue }, { "list cyan", l.cyan, raw.cyan }, { "list magenta", l.magenta, raw.magenta },
+    };
+    for (int i = 0; i < COUNT(lt); i++) {
+        fit_check(name, lt[i].what, fit_reads(lt[i].now, l.fg, ll, 4, THEME_RESCUE_MIN));
+        if (rgb_worst(lt[i].was, ll, 4) >= THEME_RESCUE_MIN) fit_check(name, lt[i].what, rgb_same(lt[i].now, lt[i].was));
+    }
 }
 
 static void test_theme_fit(void)
@@ -101,15 +117,47 @@ static void test_theme_fit(void)
     CHECK(rgb_chroma(grey) < 1 && rgb_chroma((Rgb){ 255, 0, 0 }) > 100);
     Rgb bgs[] = { black, (Rgb){ 0x20, 0x20, 0x20 } };
     CHECK(fabs(rgb_worst(white, bgs, 2) - rgb_contrast(white, bgs[1])) < 1e-9);
-    // A push leaves what reads alone, stops at the first twentieth that reads, and gives `to` when
-    // nothing short of it does.
+    // OKLab: sRGB there and back is the same colour, for every colour on a 17-step grid (4,096).
+    int round_trip_bad = 0;
+    for (int r = 0; r < 256; r += 17)
+        for (int g = 0; g < 256; g += 17)
+            for (int b = 0; b < 256; b += 17) {
+                Rgb c = { (u8)r, (u8)g, (u8)b };
+                double o[3];
+                rgb_oklab(c, o);
+                round_trip_bad += !rgb_same(oklch_at(o, o[0]), c);
+            }
+    CHECK(round_trip_bad == 0);
+    {   // white is L 1, black 0; a lightness sRGB can't hold at that chroma keeps the hue, less chroma
+        double o[3], w[3], y[3];
+        rgb_oklab(white, w), rgb_oklab(black, o);
+        CHECK(fabs(w[0] - 1) < 1e-3 && fabs(o[0]) < 1e-9);
+        Rgb red = { 255, 0, 0 }, pale;
+        rgb_oklab(red, o);
+        pale = oklch_at(o, 0.9);
+        rgb_oklab(pale, y);
+        CHECK(fabs(y[0] - 0.9) < 0.01 && fabs(atan2(y[2], y[1]) - atan2(o[2], o[1])) < 0.05 && rgb_chroma(pale) < rgb_chroma(red));
+    }
+    // A push leaves what reads alone, stops at the first fortieth of the way to `to`'s lightness that
+    // reads, and gives `to` when nothing short of it does.
     CHECK(rgb_same(rgb_push(white, grey, bgs, 2, 3, NULL), white));
     Rgb dark = { 0x30, 0x30, 0x30 }, p = rgb_push(dark, white, bgs, 2, 3, NULL);
     CHECK(rgb_worst(p, bgs, 2) >= 3);
+    double od[3], ow[3];
+    rgb_oklab(dark, od), rgb_oklab(white, ow);
     int k = 0;
-    while (k <= 20 && !rgb_same(rgb_mix(white, dark, k / 20.0), p)) k++;
-    CHECK(k > 0 && k <= 20 && rgb_worst(rgb_mix(white, dark, (k - 1) / 20.0), bgs, 2) < 3);
+    while (k <= 40 && !rgb_same(oklch_at(od, od[0] + (ow[0] - od[0]) * k / 40.0), p)) k++;
+    CHECK(k > 0 && k <= 40 && rgb_worst(oklch_at(od, od[0] + (ow[0] - od[0]) * (k - 1) / 40.0), bgs, 2) < 3);
     CHECK(rgb_same(rgb_push(dark, grey, bgs, 2, 20, NULL), grey));
+    // Lightness only: the hue stays and most of the chroma (the mix kept 27 of this yellow's 70, on
+    // catppuccin-latte's list backgrounds, 2026-11-07).
+    {
+        Rgb lbg[] = { { 0xef, 0xf1, 0xf5 }, { 0xdc, 0xe0, 0xe8 }, { 0xcc, 0xd0, 0xda } }, yel = { 0xdf, 0x8e, 0x1d };
+        Rgb py = rgb_push(yel, (Rgb){ 0x4c, 0x4f, 0x69 }, lbg, 3, 3, NULL);
+        double a0[3], a1[3];
+        rgb_oklab(yel, a0), rgb_oklab(py, a1);
+        CHECK(rgb_worst(py, lbg, 3) >= 3 && rgb_chroma(py) > 55 && fabs(atan2(a1[2], a1[1]) - atan2(a0[2], a0[1])) < 0.1);
+    }
     // The marked row moves with the colour: a colour that reads on bg alone may not on its marked row.
     Rgb mid = { 0x5c, 0x5c, 0x5c };
     CHECK(rgb_worst(mid, bgs, 1) >= 3 && rgb_contrast(mid, rgb_mix(mid, black, 0.28)) < 3);
@@ -131,16 +179,16 @@ static void test_theme_fit(void)
     // The drive's four as they are for each embedded theme, pinned (the theme-fit review, 2026-11-07:
     // the picks' order and the track's mix pass every property above, wrong or right).
     static const struct { const char *name; Rgb warn, used, free_, track; } PINS[] = {
-    { "ristretto", { 0xfd, 0x68, 0x83 }, { 0xf3, 0x8d, 0x70 }, { 0x78, 0x6d, 0x6d }, { 0x72, 0x67, 0x67 } },
-    { "white", { 0x00, 0x00, 0x00 }, { 0x69, 0x69, 0x69 }, { 0x86, 0x86, 0x86 }, { 0x95, 0x95, 0x95 } },
-    { "vantablack", { 0xff, 0xff, 0xff }, { 0x8d, 0x8d, 0x8d }, { 0x52, 0x52, 0x52 }, { 0x49, 0x49, 0x49 } },
-    { "solitude", { 0xde, 0x61, 0x45 }, { 0x81, 0x89, 0x8d }, { 0x66, 0x69, 0x6d }, { 0x54, 0x57, 0x5c } },
-    { "miasma", { 0x9d, 0x7f, 0x63 }, { 0x7f, 0x88, 0x55 }, { 0x69, 0x69, 0x64 }, { 0x5f, 0x5f, 0x5c } },
-    { "last-horizon", { 0xc9, 0x96, 0x88 }, { 0xc4, 0xd8, 0xe2 }, { 0x87, 0x82, 0x84 }, { 0x6a, 0x64, 0x66 } },
-    { "catppuccin-latte", { 0xd2, 0x0f, 0x39 }, { 0x1e, 0x66, 0xf5 }, { 0x8d, 0x91, 0xa3 }, { 0x9d, 0xa1, 0xb1 } },
-    { "gruvbox", { 0xe1, 0x87, 0x5c }, { 0x7d, 0xae, 0xa3 }, { 0x86, 0x78, 0x68 }, { 0x73, 0x67, 0x5c } },
-    { "nord", { 0xd5, 0x96, 0x7a }, { 0x81, 0xa1, 0xc1 }, { 0x78, 0x80, 0x8e }, { 0x6d, 0x75, 0x84 } },
-    { "rose-pine", { 0xb4, 0x63, 0x7a }, { 0x56, 0x80, 0x94 }, { 0x9b, 0x95, 0xa7 }, { 0xac, 0xa6, 0xb3 } },
+        { "ristretto", { 0xfd, 0x68, 0x83 }, { 0xf3, 0x8d, 0x70 }, { 0x74, 0x6a, 0x69 }, { 0x71, 0x67, 0x66 } },
+        { "white", { 0x00, 0x00, 0x00 }, { 0x66, 0x66, 0x66 }, { 0x83, 0x83, 0x83 }, { 0x92, 0x92, 0x92 } },
+        { "vantablack", { 0xff, 0xff, 0xff }, { 0x8d, 0x8d, 0x8d }, { 0x4d, 0x4d, 0x4d }, { 0x49, 0x49, 0x49 } },
+        { "solitude", { 0xde, 0x61, 0x45 }, { 0x7e, 0x86, 0x8c }, { 0x68, 0x6b, 0x72 }, { 0x52, 0x55, 0x5c } },
+        { "miasma", { 0xa5, 0x78, 0x58 }, { 0x7d, 0x87, 0x50 }, { 0x65, 0x65, 0x65 }, { 0x5c, 0x5c, 0x5c } },
+        { "last-horizon", { 0xca, 0x92, 0x82 }, { 0xc4, 0xd8, 0xe2 }, { 0x86, 0x7d, 0x7f }, { 0x69, 0x61, 0x63 } },
+        { "catppuccin-latte", { 0xd2, 0x0f, 0x39 }, { 0x1e, 0x66, 0xf5 }, { 0x8e, 0x91, 0x9f }, { 0x9c, 0xa0, 0xae } },
+        { "gruvbox", { 0xe1, 0x87, 0x5c }, { 0x7d, 0xae, 0xa3 }, { 0x83, 0x78, 0x6e }, { 0x72, 0x67, 0x5e } },
+        { "nord", { 0xd5, 0x96, 0x7a }, { 0x81, 0xa1, 0xc1 }, { 0x73, 0x7c, 0x8d }, { 0x69, 0x72, 0x83 } },
+        { "rose-pine", { 0xb4, 0x63, 0x7a }, { 0x47, 0x85, 0x8f }, { 0x9f, 0x99, 0xa5 }, { 0xac, 0xa6, 0xb2 } },
     };
     _Static_assert(COUNT(PINS) == COUNT(FIT_THEMES), "a pin per embedded theme");
     for (int i = 0; i < COUNT(PINS); i++) {
@@ -180,6 +228,13 @@ static void test_theme_fit(void)
     Theme m = fit_theme_of(FIT_THEMES[5].colors), m0 = m;
     theme_fit(&m);
     CHECK(rgb_delta(m0.accent, m.drive_warn) < THEME_UNLIKE_MIN && rgb_delta(m.drive_used, m.accent) >= 10);
+    // The files area: ristretto's colours all read past 1.5, so none moves; white's dark_foreground
+    // (the selection's own grey) is rescued, and only that far.
+    Theme rlist = r, wl = fit_theme_of(FIT_THEMES[1].colors), wl0 = wl;
+    theme_fit_list(&rlist), theme_fit_list(&wl);
+    CHECK(memcmp(&rlist, &r, sizeof rlist) == 0);
+    Rgb wbg[] = { wl.bg, wl.bg_light, wl.selection, rgb_mix(wl.accent, wl.bg, 0.28) };
+    CHECK(!rgb_same(wl.fg_dim, wl0.fg_dim) && rgb_worst(wl.fg_dim, wbg, 4) >= THEME_RESCUE_MIN && rgb_worst(wl.fg_dim, wbg, 4) < THEME_RESCUE_MIN + 0.2);
     // white: dark_foreground was the selection's own grey.
     CHECK(rgb_contrast(w.fg_dim, w.selection) < 1.01);
     theme_fit(&w);

@@ -141,7 +141,7 @@ MUTANTS = [
     # F5.4: a theme switch as omarchy-theme-set makes it
     (W, "        if (e->wd == atomic_load(&watch.current_wd)) *theme = true, rewatch = true;", "        if (e->wd == atomic_load(&watch.current_wd)) rewatch = true;"),
     (W, "        if (e->wd == atomic_load(&watch.theme_wd) && !(e->mask & IN_IGNORED)) *theme = true;", ""),
-    (G, "    theme_fit(&app.theme);   // (2026-11-07: every colour reads on its backgrounds)\n    icons_reset();", "    theme_fit(&app.theme);   // (2026-11-07: every colour reads on its backgrounds)"),
+    (G, "    theme_fit(&app.theme);             // (the frame's colours read on their backgrounds)\n    icons_reset();", "    theme_fit(&app.theme);             // (the frame's colours read on their backgrounds)"),
     # F6
     (W, "        if (watch.mount_wd >= 0 && e->wd == watch.mount_wd) *mounts = true;\n", ""),
     ('gui/main.c', '    if (atomic_exchange(&watch.mounts_ready, false)) places_reload(), trash_state(), dirty = true;\n', ''),
@@ -1010,9 +1010,11 @@ MUTANTS = [
     # drag its target refused (dnde's refused step), Hyprland does, with action 0.
     # Not run either: an offer's action kept by its slot (dnd_offer_action). Hyprland sends it before
     # the enter, the test sway after, so only Michael's hand check on Hyprland shows it (2026-11-05).
-    # ---- theme_fit (2026-11-07): the reload fits the colours (f54's dark accent comes back pushed).
+    # ---- theme_fit (2026-11-07): the reload fits the frame's colours (f54's dark accent comes back lighter).
     # Not run: the drive bar's three colours drawn (pixels; the theme screenshots page shows them).
-    (G, '    theme_fit(&app.theme);   // (2026-11-07: every colour reads on its backgrounds)\n', '', 'f54'),
+    (G, '    theme_fit(&app.theme);             // (the frame's colours read on their backgrounds)\n', '', 'f54'),
+    # The files area's copy, rescued only (2026-11-08): f54's listacc.
+    (G, '    theme_fit_list(&app.theme_list);   // (2026-11-07: the files area only rescued)\n', '', 'f54'),
 ]
 import concurrent.futures, queue, threading, time
 

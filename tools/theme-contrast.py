@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-"""How the drive usage line's colours read under every Omarchy theme (2026-11-07), and what the
-proposed theme-derived pick gives instead. Read-only: it reads /usr/share/omarchy/themes/*/colors.toml
-(and ~/.config/omarchy/themes/*/colors.toml) and prints; nothing is written.
+"""How the themes' own colours read under every Omarchy theme (2026-11-07), as the themes give them,
+before ofx fits them (fs/theme.c's theme_fit and theme_fit_list do that, tested in
+tests/test_theme_fit.c). Read-only: it reads /usr/share/omarchy/themes/*/colors.toml (and
+~/.config/omarchy/themes/*/colors.toml) and prints; nothing is written.
 
-    tools/theme-contrast.py           the current colours, then the proposed pick
+    tools/theme-contrast.py           the drive usage line's colours
+    tools/theme-contrast.py --all     every colour ofx draws text or a bar in
 
 Contrast is WCAG's ratio against the sidebar's three backgrounds (lighter_background: a row;
 background: hover; selection: the cursor), the worst of the three; dE is CIE76 between the used
@@ -35,11 +37,6 @@ themes = [(f.split('/')[-2], load(f)) for f in files]
 need = ('lighter_background', 'background', 'selection', 'accent', 'red', 'dark_foreground', 'foreground')
 
 def worst(c, bgs): return min(cr(c, b) for b in bgs)
-def push(c, fg, bgs, target):   # toward the foreground until it reads: the hue kept, the lightness moved
-    for k in range(11):
-        x = mix(c, fg, k / 10)
-        if worst(x, bgs) >= target: return x, k / 10
-    return mix(c, fg, 1), 1.0
 
 print('== now: used = accent, warning = red (90% full), free = 75% dark_foreground, 25% lighter_background')
 print(f"{'theme':18} {'used':>5} {'warn':>5} {'free':>5} {'dE':>6}")
@@ -51,22 +48,6 @@ for n, t in themes:
     flag = ' '.join(x for x, c in (('ACC', a < 3), ('RED', r < 3), ('FREE', fr < 1.3), ('SAME', d < 20)) if c)
     print(f'{n:18} {a:5.2f} {r:5.2f} {fr:5.2f} {d:6.1f}  {flag}')
 
-print('\n== proposed: warning = the best-reading of red/bright_red/orange, used = accent unless it is too like it,')
-print('   each pushed toward the foreground to 3:1; the track set to 1.35:1 (+k: how far it was pushed)')
-print(f"{'theme':18} {'used':>5} {'warn':>5} {'dE':>6} {'track':>5}  used from / warning from")
-for n, t in themes:
-    if any(k not in t for k in need): continue
-    bgs = [t['lighter_background'], t['background'], t['selection']]; fg = t['foreground']
-    warm = [k for k in ('red', 'bright_red', 'orange') if k in t]
-    wk = max(warm, key=lambda k: worst(t[k], bgs)); warn, wt = push(t[wk], fg, bgs, 3)
-    cands = [k for k in ('blue', 'cyan', 'green', 'magenta', 'yellow', 'bright_blue', 'bright_cyan') if k in t]
-    uk = 'accent' if dE(t['accent'], warn) >= 30 else max(cands, key=lambda k: (dE(t[k], warn) >= 30, worst(t[k], bgs)))
-    used, ut = push(t[uk], fg, bgs, 3)
-    bgl, fgd = t['lighter_background'], t['dark_foreground']
-    track = next((mix(bgl, fgd, k / 20) for k in range(21) if cr(mix(bgl, fgd, k / 20), bgl) >= 1.35), fgd)
-    flag = ' '.join(x for x, c in (('SAME', dE(used, warn) < 20), ('TRACK', cr(track, bgl) < 1.3)) if c)
-    print(f"{n:18} {worst(used, bgs):5.2f} {worst(warn, bgs):5.2f} {dE(used, warn):6.1f} {cr(track, bgl):5.2f}  "
-          f"{uk}{'+%.1f' % ut if ut else ''} / {wk}{'+%.1f' % wt if wt else ''}  {flag}")
 
 # ---- every colour ofx draws text or a bar in (--all, 2026-11-07) ------------------------------------
 # Each role: (what, where in gui/, its colour, the backgrounds it is drawn on, the ratio it needs).

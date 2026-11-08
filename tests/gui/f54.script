@@ -18,8 +18,9 @@ expect ow=0
 key home
 # ---- a switch: new colours and a new icon theme
 sh C="$OFX_ROOT/state/omarchy/current"; rm -rf "$C/next-theme"; mkdir "$C/next-theme" && printf 'accent = "#112233"\nbackground = "#0a0b0c"\nforeground = "#d0d1d2"\n' > "$C/next-theme/colors.toml" && echo Yaru-blue > "$C/next-theme/icons.theme" && rm -rf "$C/theme" && mv "$C/next-theme" "$C/theme"
-# (#112233 doesn't read on #0a0b0c: theme_fit pushes it toward the foreground, 2026-11-07)
-wait-for 3000 accent=#717a83 bg=#0a0b0c icons=Yaru-blue
+# (#112233 doesn't read on #0a0b0c: theme_fit lightens it, still blue, to 3:1 for the frame, and
+# theme_fit_list only to 1.5:1 for the files area, 2026-11-07)
+wait-for 3000 accent=#6a7e93 listacc=#3b4e61 bg=#0a0b0c icons=Yaru-blue
 wait-for 2000 icon=/usr/share/icons/Yaru-blue/24x24@2x/places/folder.png
 shot theme-blue.png
 key end
