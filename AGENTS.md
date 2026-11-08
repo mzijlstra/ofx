@@ -214,12 +214,14 @@ ui/ that nothing calls makes the test build warn.
   bubblewrap's runs; `fs/thumbers.c` the system's thumbnailers; `fs/git.c` git status;
   `fs/state.c` the state file (its lock, `state_rewrite`), `fs/folders.c` its per-folder lines,
   `fs/session.c` its window lines.
-- `ui/ui.c`: the types (Ui, UiInput, UiAction, UiFocus, UiOnTop) and tables, then `cursor.c`,
+- `ui/ui.c`: the types (Ui, UiInput, UiAction, UiFocus, UiOnTop) and tables, then `keys.c` (the
+  keys: each key's own meaning, the commands, the bindings, the event a key sends; F15), `cursor.c`,
   `match.c`, `find.c`, `edit.c`, `prompts.c`, `menus.c`, `panels.c`, `handle.c` (ui_handle),
-  `helpers.c`.
+  `helpers.c`. An event carries the key itself, which text fields, panels, menus and questions
+  read, and its command (`UiEvent.cmd`), which the files and the sidebar read.
 - `gui/main.c`: memory, the app state, signals, main(); then `folder.c`, `actions.c`, `icons.c`,
   `files.c` (the list and sidebar drawn), `topbar.c`, `panels.c`, `footer.c`, `frame.c`, `input.c`
-  (it includes `drag.c`), `dnd.c` (drags with other programs on the patched GLFW), `clipboard.c`,
+  (it includes `glfwkeys.c`, GLFW's keys as ui/'s, which the unit tests take in too, and `drag.c`), `dnd.c` (drags with other programs on the patched GLFW), `clipboard.c`,
   `prefs.c`, `eject.c`, `remember.c`, `restore.c`; the worker threads and the panels' own files.
 
 ## At the end of each major milestone

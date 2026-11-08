@@ -774,6 +774,34 @@ hand-written table (`UI_KEYS`). There is no type-to-find, so a letter can be a c
    name; the README's ofx.conf section shows a `key` line.
 4. **F15's code-health review** (the end of a major milestone), then Michael's go to install.
 
+**Step 1 as built (2026-11-08, branch f15-keys):**
+- `ui/keys.c` holds the table: each key's own meaning (`UI_FIXED`: the text fields', panels' and
+  questions' keys, which stay), the commands by name (`UI_CMDS`), and the default bindings
+  (`UI_BINDS_DEFAULT`, a command's first key the one its menu entry shows). A key is a chord (a key
+  and its modifiers, from GLFW's key callback, `gui/glfwkeys.c`) or a typed character.
+- **An event carries two meanings:** the key itself (`UiEvent.key`, `UK_CMD` when it has none of
+  its own) and its command (`UiEvent.cmd`). Delete deletes a character in a field and trashes in
+  the files; with Delete bound elsewhere (step 2), the field keeps it. The files and the sidebar
+  read `cmd`; so do the few places a field or panel acts on a command (Ctrl+K in the search field,
+  Ctrl+J in the find bar, Ctrl+L closing the location line, F1 and Ctrl+I closing their panels, F10
+  closing a menu).
+- The letters the files read (hjkl, HJKL, g, G, /, ., t, r, ~, s, S, n, N, Space) are bindings now;
+  Ctrl+Left's sidebar is its own command (`to-sidebar`: it goes there, Tab goes there and back).
+- Shift with Esc, Tab, Backspace, PgUp or PgDn is the key without it, unless bound itself (no
+  `shift+esc` lines in the defaults). The keypad's digits, + and - are keys of their own (`KP1`), as
+  before (Ctrl+KP1 is List, Alt+KP1 nothing); its Enter is Enter.
+- Fixed, not bindable: Alt and a letter (the menus, the find bar's toggles), Alt and a digit (a tab
+  by place).
+- **One change:** Ctrl+Q closed every window with Shift, Alt or Super held too (on_key tested Ctrl
+  alone); it is Ctrl+Q only.
+- Not yet: the menu entries with no key (Create New Empty File, Duplicate, the sidebar modes, ...)
+  get commands in step 2, where a key first needs them; the shortcuts panel's rows of several
+  commands ("Up, down", "Select while moving") stay hand-written until step 3 gives each command
+  its row.
+- Tests: `tests/test_f15.c` pins every GLFW key, modifier set and action to the event ofx sent at
+  3ef3827 (243 rows), every typed ASCII character's command, every menu entry's key and what it
+  runs, and every shortcuts row's keys.
+
 ## Theme colours across Omarchy's themes (2026-11-07; Michael: "great plan")
 
 Before publishing (Michael wants a public repo next), ofx is checked on every Omarchy theme. He saw
