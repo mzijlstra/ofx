@@ -984,6 +984,7 @@ MUTANTS = [
     ('gui/prefs.c', "    else if (was_once && keys.fresh)", "    else if (keys.fresh)", 'f15'),
     ('gui/prefs.c', "    else if (was_once && keys.fresh)", "    else if (0)", 'f15'),
     ('gui/prefs.c', "    if (!c.bad && !keys.bad) ui_clashes_told();", "    ui_clashes_told();", 'f15'),
+    ('gui/prefs.c', "    if (!c.bad && !keys.bad) ui_clashes_told();", "    if (!keys.bad) ui_clashes_told();", 'f15'),
 ]
 import concurrent.futures, queue, threading, time
 

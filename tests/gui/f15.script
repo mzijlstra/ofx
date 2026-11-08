@@ -33,6 +33,11 @@ sh printf 'key = Ctrl+W reload\nkey = Ctrl+Bogus find\n' > "$OFX_ROOT/config/ofx
 wait-for 3000 keysbad=2 statusbad=1
 sh printf 'key = Ctrl+W reload\n' > "$OFX_ROOT/config/ofx/ofx.conf"
 wait-for 3000 keysbad=0 statusbad=0 status=ofx.conf: Ctrl+W is reload now,
+# The same beside a line no option reads (ofx.conf's own bad line)
+sh printf 'key = Ctrl+N reload\nbogus-option = 1\n' > "$OFX_ROOT/config/ofx/ofx.conf"
+wait-for 3000 keysbad=0 statusbad=1
+sh printf 'key = Ctrl+N reload\n' > "$OFX_ROOT/config/ofx/ofx.conf"
+wait-for 3000 statusbad=0 status=ofx.conf: Ctrl+N is reload now,
 # A clash in the file at the start isn't said (only after a save that changed the keys): f15b
 sh printf 'key = Ctrl+T reload\n' > "$OFX_ROOT/config/ofx/ofx.conf"
 wait-for 3000 keyclashes=1
