@@ -4,6 +4,10 @@ A keyboard-first file explorer for Omarchy: one folder at a time as a list, in t
 theme's colours and icons. C with arenas, Clay for layout, raylib on native Wayland. It idles at
 about 0% CPU: it draws only when something changes.
 
+![ofx in Omarchy's Tokyo Night theme: the sidebar with places and a drive's usage bar, a git
+repository's files in the list with ls colours and git's A/M/R letters, two marked rows and the
+cursor](docs/screenshots/tokyo-night.png)
+
 ## Build and run
 
 ```sh
