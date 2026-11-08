@@ -275,11 +275,15 @@ static UiAction ui_menu_pick(Ui *u, UiMenuItem it)
     }
 }
 
-// A bar menu's entry run by a key bound to it (F15 step 2): as picked from its menu, when the menu
-// would show it enabled. True when it asks gui/ for something (*out).
+// A menu entry run by a key bound to it (F15 step 2): as picked from its menu, when the menu would
+// show it enabled; a bar menu's, or the tab menu's (on the current tab, as a right press on another
+// shows it first). True when it asks gui/ for something (*out).
 static bool ui_item_cmd(Ui *u, UiMenuItem it, UiAction *out)
 {
-    for (int m = 0; m < UI_MENUS; m++)
+    static const int MENUS[] = { 0, 1, 2, 3, 4, 5, UI_CTX_TAB };
+    _Static_assert(UI_MENUS == 6, "MENUS: the bar's, then the tab menu");
+    for (int k = 0; k < COUNT(MENUS); k++) {
+        int m = MENUS[k];
         for (int i = 0; i < UI_MENU[m].n; i++) {
             if (UI_MENU[m].items[i] != it) continue;
             int was = u->menu;
@@ -288,6 +292,7 @@ static bool ui_item_cmd(Ui *u, UiMenuItem it, UiAction *out)
             *out = ui_menu_pick(u, it);
             return out->kind != UA_NONE;
         }
+    }
     return false;
 }
 

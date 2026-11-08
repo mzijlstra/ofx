@@ -511,7 +511,7 @@ search-skip = node_modules
 #key = Ctrl+Shift+Enter open-line
 # With no key: new-file, duplicate, preferences, side-places, side-tree,
 # side-none, colors, show-menu, sort-name, sort-size, sort-mtime,
-# clear-previews, about
+# clear-previews, about, tab-others
 ```
 <!-- ofx.conf end -->
 

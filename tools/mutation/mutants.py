@@ -2660,4 +2660,5 @@ MUTANTS += [
     (KY, "    memcpy(ui_clashed.next, now, sizeof now[0] * (size_t)now_n), ui_clashed.next_n = now_n;", ""),
     (KY, "    memcpy(ui_clashed.c, ui_clashed.next, sizeof ui_clashed.c[0] * (size_t)ui_clashed.next_n), ui_clashed.n = ui_clashed.next_n;", ""),
     (KY, "                memmove(&from[i], &from[i + 1], sizeof from[0] * (size_t)(users - i));", ""),
+    ('ui/menus.c', "    static const int MENUS[] = { 0, 1, 2, 3, 4, 5, UI_CTX_TAB };", "    static const int MENUS[] = { 0, 1, 2, 3, 4, 5 };"),
 ]

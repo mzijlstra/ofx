@@ -424,7 +424,7 @@ static const struct { const char *label, *word; UiKey cmd; bool runs; char mark;
     // and on a tab
     [UM_TAB_LEFT] = { "Move Tab Left", "tab-left", .cmd = UK_TAB_LEFT, .runs = true },
     [UM_TAB_RIGHT] = { "Move Tab Right", "tab-right", .cmd = UK_TAB_RIGHT, .runs = true },
-    [UM_TAB_OTHERS] = { "Close Other Tabs", "tab-others" },
+    [UM_TAB_OTHERS] = { "Close Other Tabs", "tab-others", .cmd = UK_ITEM0 + UM_TAB_OTHERS },
     // The branch menu's (F12 step 5b): a note while there are none to list ("Reading branches…"),
     // then the branches, gui/'s labels; the one checked out marked.
     [UM_BR_NOTE] = { "", "br-note" },

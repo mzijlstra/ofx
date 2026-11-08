@@ -613,6 +613,13 @@ static void test_keys_conf(void)
     keys_set(1, "F5 side-tree");
     u = menu_ui(5);
     CHECK(key_act(&u, chord_ev(UKC_F1 + 4, 0)).kind == UA_SIDE_MODE && u.side_mode == SIDE_TREE);
+    // Close Other Tabs (Michael, 2026-11-08): the tab menu's, on the current tab; with one tab, nothing.
+    keys_set(1, "Ctrl+Alt+W tab-others");
+    u = menu_ui(5);
+    u.tab_n = 3;
+    CHECK(key_act(&u, chord_ev('w', UI_MOD_CTRL | UI_MOD_ALT)).kind == UA_TAB_OTHERS && strcmp(ui_menu_key(UM_TAB_OTHERS), "Ctrl+Alt+W") == 0);
+    u.tab_n = 1;
+    CHECK(key_act(&u, chord_ev('w', UI_MOD_CTRL | UI_MOD_ALT)).kind == UA_NONE);
     // A line ofx can't read is skipped, the first named, the rest apply.
     r = keys_set(4, "Ctrl+E", "Ctrl+E nosuch", "Shift+q reload", "Ctrl+E reload");
     CHECK(r.bad == 1 && strcmp(r.why, "key wants a key, then a command") == 0 && chord_ev('e', UI_MOD_CTRL).cmd == UK_RELOAD);

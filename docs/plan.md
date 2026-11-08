@@ -824,8 +824,9 @@ hand-written table (`UI_KEYS`). There is no type-to-find, so a letter can be a c
   too; Alt and a letter or digit stays fixed.
 - The bar menus' entries with no key are commands too (new-file, duplicate, preferences, the
   sidebar modes, colors, show-menu, the sorts, clear-previews, about): `UK_ITEM0 + UiMenuItem`,
-  run as picked when the bar menu has them enabled. The right-click menus' own entries aren't: they
-  act on what was clicked.
+  run as picked when the bar menu has them enabled; and Close Other Tabs (tab-others), the tab
+  menu's, on the current tab (Michael, 2026-11-08: "great addition"). The right-click menus' other
+  entries aren't: they act on what was clicked.
 - A menu pick runs the command alone (`ui_cmd_event`), whatever keys it has (the step 1 review).
 - The written ofx.conf lists every key as ofx has it, commented out, and the commands with none;
   all of it uncommented reads back as exactly the defaults. ofx-probe takes in ui/ for the
