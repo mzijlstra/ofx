@@ -197,13 +197,14 @@ static void ui_edit_sel(const Ui *u, int *lo, int *hi)   // (the edit line's, fo
     ui_line_sel(ui_edit_line((Ui *)u), lo, hi);   // (read only: a UiLine points into u)
 }
 
-// Ctrl+C or Ctrl+X with no text selected: not the field's. The find bar and the search field give
-// it to the list, which copies the file (as before they edited, 2026-10-28).
+// Ctrl+C or Ctrl+X with no text selected, while bound to a command: not the field's. The find bar
+// and the search field give it to the list, which copies the file (as before they edited,
+// 2026-10-28); unbound (ofx.conf), it stays the field's (the F15 code-health review).
 static bool ui_line_copies_nothing(UiLine l, UiEvent e)
 {
     int lo, hi;
     ui_line_sel(l, &lo, &hi);
-    return (e.key == UK_COPY || e.key == UK_CUT) && lo == hi;
+    return (e.key == UK_COPY || e.key == UK_CUT) && e.cmd && lo == hi;
 }
 
 static int ui_line_back(UiLine l, int at)

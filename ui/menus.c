@@ -277,7 +277,8 @@ static UiAction ui_menu_pick(Ui *u, UiMenuItem it)
 
 // A menu entry run by a key bound to it (F15 step 2): as picked from its menu, when the menu would
 // show it enabled; a bar menu's, or the tab menu's (on the current tab, as a right press on another
-// shows it first). True when it asks gui/ for something (*out).
+// shows it first). Greyed by its view, it says why, as Ctrl+Shift+N would (the code-health review).
+// True when it asks gui/ for something (*out).
 static bool ui_item_cmd(Ui *u, UiMenuItem it, UiAction *out)
 {
     static const int MENUS[] = { 0, 1, 2, 3, 4, 5, UI_CTX_TAB };
@@ -288,7 +289,12 @@ static bool ui_item_cmd(Ui *u, UiMenuItem it, UiAction *out)
             if (UI_MENU[m].items[i] != it) continue;
             int was = u->menu;
             u->menu = m;   // (what is shown and enabled is the bar menu's)
-            if (!ui_menu_enabled(u, it)) return u->menu = was, false;
+            if (!ui_menu_enabled(u, it)) {   // (greyed: what its view says, as a key's action would)
+                u->menu = was;
+                UiActionKind kind = it == UM_NEW_FILE ? UA_NEWFILE : it == UM_DUPLICATE ? UA_DUPLICATE : UA_NONE;
+                *out = kind && !ui_allows(u, kind) ? ui_view_act(u, (UiAction){ kind, 0, false }) : UI_NONE;
+                return out->kind != UA_NONE;
+            }
             *out = ui_menu_pick(u, it);
             return out->kind != UA_NONE;
         }

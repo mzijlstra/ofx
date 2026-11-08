@@ -501,8 +501,11 @@ static void test_keys_conf(void)
     CHECK(chord_ev(UKC_F1 + 4, 0).cmd == UK_ITEM0 + UM_NEW_FILE && strcmp(ui_menu_key(UM_NEW_FILE), "F5") == 0);
     u = menu_ui(5);
     CHECK(key_act(&u, chord_ev(UKC_F1 + 4, 0)).kind == UA_NEWFILE);
-    u.can_write = false;   // (greyed in a folder that takes no new files: nothing)
-    CHECK(key_act(&u, chord_ev(UKC_F1 + 4, 0)).kind == UA_NONE);
+    u.can_write = false;   // (greyed by its view: why, as a key's action says)
+    CHECK(key_act(&u, chord_ev(UKC_F1 + 4, 0)).kind == UA_READ_ONLY);
+    u.can_write = true, u.view = UI_VIEW_TRASH;
+    CHECK(key_act(&u, chord_ev(UKC_F1 + 4, 0)).kind == UA_NOT_IN_TRASH);
+    u.view = UI_VIEW_FOLDER;
     u.can_write = true, u.menu = UI_CTX_FOLDER;   // (a folder's right-click menu was the last open: the bar menu's rules apply)
     CHECK(key_act(&u, chord_ev(UKC_F1 + 4, 0)).kind == UA_NEWFILE);
     keys_set(1, "F5 side-tree");
@@ -609,5 +612,46 @@ static void test_keys_panel(void)
     bool inv = false;
     for (int v = 0; v < u.keys_list.n; v++) inv |= u.keys_line[v] >= 0 && strcmp(UI_KEYS[u.keys_line[v]].action, "Invert Selection") == 0;
     CHECK(inv);
+    keys_set(0);
+}
+
+// A character bound to a command, typed into a text field, is the field's text (the F15
+// code-health review): the rename and location lines, find, search and Containing, the panels'
+// filters and Edit Bookmarks' name; in the files it runs the command.
+static void test_keys_in_fields(void)
+{
+    static const char *const BOUND[] = { "q close-all", "m menus", "k path-buttons", "x context-menu", "z shortcuts", "w new-tab" };
+    for (int b = 0; b < COUNT(BOUND); b++) {
+        keys_set(1, BOUND[b]);
+        u32 c = (u32)BOUND[b][0];
+        for (int field = 0; field < 6; field++) {
+            Ui u = menu_ui(3);
+            u.keys_list.rows = 10;
+            int *len = NULL;
+            switch (field) {
+            case 0: ui_edit_rename(&u, S("abc"), false), key_act(&u, ev_key(UK_END)), len = &u.edit.len; break;   // (End: the name no longer selected)
+            case 1: ui_edit_start(&u, S("/tmp/"), true), key_act(&u, ev_key(UK_END)), len = &u.edit.len; break;
+            case 2: key_act(&u, ev_key(UK_FIND)), len = &u.find.len; break;
+            case 3: u.view = UI_VIEW_SEARCH, u.focus = UI_FOCUS_SEARCH, len = &u.search.len; break;
+            case 4: u.view = UI_VIEW_SEARCH, u.search_inside = true, u.focus = UI_FOCUS_INSIDE, len = &u.inside.len; break;
+            case 5: key_act(&u, ev_key(UK_SHORTCUTS)), len = &u.keys_filter.len; break;
+            }
+            int before = *len;
+            UiAction a = key_act(&u, ev_ch(c));
+            bool ok = a.kind == UA_NONE && *len == before + 1 && !u.menu_on && u.focus != UI_FOCUS_CRUMBS && (field != 5 || u.panel == UI_PANEL_KEYS);
+            if (!ok) fprintf(stderr, "'%s' typed into field %d: action %d, length %d (was %d)\n", BOUND[b], field, a.kind, *len, before);
+            CHECK(ok);
+        }
+    }
+    // Ctrl+C with nothing selected leaves the find bar for the list's copy; unbound, it stays.
+    Ui f = menu_ui(3);
+    key_act(&f, ev_key(UK_FIND)), key_act(&f, ev_ch('a'));
+    keys_set(1, "none copy");
+    CHECK(key_act(&f, ev_key(UK_COPY)).kind == UA_NONE && f.focus == UI_FOCUS_FIND);
+    keys_set(0);
+    CHECK(key_act(&f, ev_key(UK_COPY)).kind == UA_COPY && f.focus != UI_FOCUS_FIND);
+    keys_set(1, "q close-all");   // (and in the files, the command)
+    Ui u = menu_ui(3);
+    CHECK(key_act(&u, ev_ch('q')).kind == UA_CLOSE_ALL);
     keys_set(0);
 }
