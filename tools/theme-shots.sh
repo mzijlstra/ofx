@@ -5,11 +5,14 @@
 # folder, as the theme scripts do). The folder shows each colour ofx draws text in: the ls colours
 # (folder, link, build file, README, executable, image, audio, archive, broken link), git's letters
 # (modified, added, untracked, renamed, ignored), the columns, a marked row, the cursor, a hovered
-# row, and the sidebar's drive with its bar. Nothing is written outside <scratch> and <out dir>.
+# row, and the sidebar's drive with its bar. Nothing is written outside <scratch>/theme-shots (made
+# and removed: never <scratch> itself, which may be any folder given, the code-health review) and
+# <out dir>.
 set -eu
 [ $# -eq 3 ] || { echo "usage: $0 <absolute scratch> <ofx binary> <out dir>" >&2; exit 2; }
 T=$1 bin=$2 out=$3
 case $T in /*) ;; *) echo "$0: the scratch dir must be absolute" >&2; exit 2 ;; esac
+T=$T/theme-shots
 here=$(cd "$(dirname "$0")" && pwd)
 rm -rf "$T"; mkdir -p "$T/tree/repo/src" "$T/fakes" "$T/themes" "$out"
 # The test's git among the fakes (the guard runs no program outside the run's folder), as run.sh's.

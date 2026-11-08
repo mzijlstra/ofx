@@ -128,7 +128,7 @@ def one(item, cc='clang'):
     took = time.time() - t0
     if cc == 'tcc' and r in ('pass', 'build-fail'):
         return i, r   # clang decides
-    verdict = 'SURVIVED' if r == 'pass' else 'killed' + (' (build)' if r == 'build-fail' else '') + (' (tcc)' if cc == 'tcc' else '')
+    verdict = 'SURVIVED' if r == 'pass' else 'NOT TESTED' if r == 'build-fail' else 'killed' + (' (tcc)' if cc == 'tcc' else '')
     print(f'#{i:02d} {verdict:16} {took:5.1f}s {f}: {old.strip()[:70]!r} -> {new.strip()[:50]!r}', flush=True)
     return i, r
 
@@ -162,4 +162,10 @@ try:
 finally:
     rmtree(top)   # an interrupted run too
 survivors = sorted(i for i, r in results if r == 'pass')
+untested = sorted(i for i, r in results if r == 'build-fail')
 print(f'{len(mutants)} mutants, {len(survivors)} survived: {survivors}')
+# A mutant that doesn't build under clang tests nothing (AGENTS.md): named, and the run fails, as
+# gui.py does (the F15 code-health review: they were counted as killed).
+if untested:
+    print(f'{len(untested)} NOT TESTED (they do not build): {untested}')
+    sys.exit(1)
