@@ -807,9 +807,9 @@ the fit everywhere (6de0248) washed the files area's colours out ("same-same": a
 takes chroma). Picked: lightness-only pushes in OKLCH (hue and chroma kept); the menu bar, top bar,
 sidebar and footer at 3:1 / dimmed 2:1 (in white their buttons disappeared); the files area only
 rescued under 1.5:1 (`theme_fit_list`, `app.theme_list`). Prototype on branch `theme-side-only`
-(e1c5c65, 21911ab, e06ba03). **To finish:** tests for OKLCH (round trip, chroma kept, the pins
-again, theme_fit_list's properties), f54's expectation, mutants for both, run.py, gui.py, the full
-GUI suite, theme-contrast.py told about OKLCH or retired, reviewer-2, then Michael's install go.
+(e1c5c65, 21911ab, e06ba03), finished in 963198d (2026-11-08): `theme_fit_text(t, text_min,
+dim_min)` shared by both fits; OKLab round trip, gamut, hue and chroma tests; the rescue's
+properties over every theme; `listacc` on the state line for f54; theme-contrast.py measures only.
 
 ## F14 design (2026-11-05; Michael, 2026-11-05: the recommendations below)
 
