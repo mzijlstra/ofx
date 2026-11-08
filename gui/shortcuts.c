@@ -15,8 +15,9 @@ static int keys_rows(int h)
 static const char *keys_cap_drawn;
 static bool        keys_cap_mine;
 
-// A key as a little keycap; one of yours (ofx.conf's, F15 step 3) in the accent colour.
-static void keycap(const char *k, bool mine)
+// A key as a little keycap, cut to fit width; one of yours (ofx.conf's, F15 step 3) in the accent
+// colour.
+static void keycap(const char *k, bool mine, float width)
 {
     Theme *t = &app.theme;
     if (!k[0]) return;
@@ -24,7 +25,7 @@ static void keycap(const char *k, bool mine)
     CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_FIT(0), CLAY_SIZING_FIXED(20) }, .padding = { 6, 6, 0, 0 }, .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
                    .backgroundColor = cc(t->bg), .cornerRadius = CLAY_CORNER_RADIUS(3),
                    .border = { .color = mine ? cc(t->accent) : rule_color(), .width = CLAY_BORDER_OUTSIDE(1) } }) {
-        text(cz(k), mine ? cc(t->accent) : cc(t->fg));
+        text(fit(str_from_c(k), width - 12, false), mine ? cc(t->accent) : cc(t->fg));
     }
 }
 
@@ -80,10 +81,10 @@ static void layout_keys_panel(void)
                         text(fit(str_from_c(ui_keys_name(line)), KEYS_NAME_W - 8, false), cc(t->fg_dim));
                     }
                     CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_FIXED(KEYS_KEY_W), CLAY_SIZING_FIT(0) }, .childAlignment = { .x = CLAY_ALIGN_X_RIGHT } } }) {
-                        keycap(ui_keys_key(line, 0), ui_keys_mine(line, 0));
+                        keycap(ui_keys_key(line, 0), ui_keys_mine(line, 0), KEYS_KEY_W);
                     }
                     CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_FIXED(150), CLAY_SIZING_FIT(0) }, .childAlignment = { .x = CLAY_ALIGN_X_LEFT } } }) {
-                        keycap(ui_keys_key(line, 1), ui_keys_mine(line, 1));
+                        keycap(ui_keys_key(line, 1), ui_keys_mine(line, 1), 150);
                     }
                 }
             }
