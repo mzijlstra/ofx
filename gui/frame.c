@@ -11,24 +11,27 @@ enum { TIP_BAR = 100, TIP_MODE = 200, TIP_EJECT = 300, TIP_TAB_X = 400, TIP_ZOOM
 // Target k's text, and the element it hangs from; false for none (gone since).
 static bool tip_of(int k, char *buf, size_t cap, Clay_ElementId *id)
 {
-    static const struct { UiBar b; const char *text; } BAR[] = {
-        { UB_BACK, "Back (Alt+Left)" }, { UB_FORWARD, "Forward (Alt+Right)" }, { UB_UP, "Up to the parent (Backspace)" },
-        { UB_LOCATION, "Type a location (Ctrl+L)" }, { UB_SEARCH, "Search (Ctrl+Shift+F)" }, { UB_LEFT, "Earlier folders in the path" },
-        { UB_RIGHT, "Later folders in the path" }, { UB_VIEW_LIST, "List (Ctrl+1)" }, { UB_VIEW_ICONS, "Icons (Ctrl+2)" }, { UB_BRANCH, "Git branches" },
-        { UB_ZOOM_OUT, "Smaller icons (Ctrl+-)" }, { UB_ZOOM_IN, "Bigger icons (Ctrl+=)" },
+    // (each with its command's first key as it is: ui_with_key, F15)
+    static const struct { UiBar b; const char *text; UiKey cmd; } BAR[] = {
+        { UB_BACK, "Back", UK_BACK }, { UB_FORWARD, "Forward", UK_FORWARD }, { UB_UP, "Up to the parent", UK_PARENT },
+        { UB_LOCATION, "Type a location", UK_LOCATION }, { UB_SEARCH, "Search", UK_SEARCH }, { UB_LEFT, "Earlier folders in the path", UK_NONE },
+        { UB_RIGHT, "Later folders in the path", UK_NONE }, { UB_VIEW_LIST, "List", UK_VIEW_LIST }, { UB_VIEW_ICONS, "Icons", UK_VIEW_ICONS },
+        { UB_BRANCH, "Git branches", UK_NONE }, { UB_ZOOM_OUT, "Smaller icons", UK_ZOOM_OUT }, { UB_ZOOM_IN, "Bigger icons", UK_ZOOM_IN },
     };
-    static const char *const MODES[SIDE_MODES] = { "Places (F9)", "Tree (F9)", "No sidebar (F9)" };
+    static const char *const MODES[SIDE_MODES] = { "Places", "Tree", "No sidebar" };   // (the sidebar's next mode's key)
     if (k >= TIP_FIND) {
         *id = k == TIP_FIND ? CLAY_ID("find-prev") : CLAY_ID("find-next");
         return app.ui.finding && snprintf(buf, cap, "%s", k == TIP_FIND ? "Previous match (Up)" : "Next match (Down)") > 0;
     }
     if (k == TIP_ZOOM) {
         *id = CLAY_ID("zoom-track");
-        return app.ui.grid && snprintf(buf, cap, "Icons %d px (Ctrl+0: %d px)", ui_zoom_px(&app.ui), UI_ZOOM_DEFAULT) > 0;
+        const char *zk = ui_cmd_key(UK_ZOOM_RESET, 0);
+        return app.ui.grid && (zk[0] ? snprintf(buf, cap, "Icons %d px (%s: %d px)", ui_zoom_px(&app.ui), zk, UI_ZOOM_DEFAULT)
+                                    : snprintf(buf, cap, "Icons %d px", ui_zoom_px(&app.ui))) > 0;
     }
     if (k >= TIP_TAB_X) {
         *id = CLAY_IDI("tab-x", k - TIP_TAB_X);
-        return snprintf(buf, cap, "Close the tab (Ctrl+W)") > 0;
+        return ui_with_key(buf, cap, "Close the tab", UK_TAB_CLOSE)[0];
     }
     if (k >= TIP_EJECT) {
         isize i = app.ui.side.top + (k - TIP_EJECT);
@@ -38,10 +41,10 @@ static bool tip_of(int k, char *buf, size_t cap, Clay_ElementId *id)
     }
     if (k >= TIP_MODE) {
         *id = CLAY_IDI("mode", k - TIP_MODE);
-        return snprintf(buf, cap, "%s", MODES[k - TIP_MODE]) > 0;
+        return ui_with_key(buf, cap, MODES[k - TIP_MODE], UK_F9)[0];
     }
     for (int j = 0; j < COUNT(BAR); j++)
-        if (TIP_BAR + (int)BAR[j].b == k) return *id = bar_id(BAR[j].b), snprintf(buf, cap, "%s", BAR[j].text) > 0;
+        if (TIP_BAR + (int)BAR[j].b == k) return *id = bar_id(BAR[j].b), ui_with_key(buf, cap, BAR[j].text, BAR[j].cmd)[0];
     return false;
 }
 
@@ -265,7 +268,9 @@ static Clay_RenderCommandArray layout(int w, int h)
             } else if (modal_kind() == UI_ON_ABOUT) {
                 text(fit(S("About: Esc or Enter closes"), foot_w, false), cc(t->fg_dim));
             } else if (modal_kind() == UI_ON_KEYS) {
-                text(fit(S("Keyboard Shortcuts: type to filter \xC2\xB7 \xE2\x86\x91 \xE2\x86\x93 PgUp PgDn scroll \xC2\xB7 Esc or F1 closes"), foot_w, false), cc(t->fg_dim));
+                const char *k = ui_cmd_key(UK_SHORTCUTS, 0);   // (as bound, F15)
+                text(fit(str_from_c(arena_sprintf(&frame, "Keyboard Shortcuts: type to filter \xC2\xB7 \xE2\x86\x91 \xE2\x86\x93 PgUp PgDn scroll \xC2\xB7 Esc%s%s closes",
+                                                  k[0] ? " or " : "", k)), foot_w, false), cc(t->fg_dim));
             } else if (modal_kind() == UI_ON_BM) {
                 text(fit(str_from_c(app.ui.bmp_naming ? "Rename: Enter renames (empty: the folder's name) \xC2\xB7 Esc keeps the name"
                                              : "Bookmarks: \xE2\x86\x91 \xE2\x86\x93 (k j) move \xC2\xB7 Enter goes there \xC2\xB7 Delete removes \xC2\xB7 F2 renames \xC2\xB7 "
@@ -299,8 +304,9 @@ static Clay_RenderCommandArray layout(int w, int h)
                 text(fit(S("Select: Enter selects every match \xC2\xB7 Esc cancels \xC2\xB7 \xE2\x86\x91 \xE2\x86\x93 previous and next \xC2\xB7 "
                            "Alt+C/W/R case, words, regex"), foot_w, false), cc(t->fg_dim));
             } else if (app.ui.finding && app.ui.focus == UI_FOCUS_FIND) {
-                text(fit(S("Find: \xE2\x86\x91 \xE2\x86\x93 previous and next \xC2\xB7 Enter keeps \xC2\xB7 Esc closes \xC2\xB7 Ctrl+J the jobs \xC2\xB7 "
-                           "Alt+C/W/R case, words, regex"), foot_w, false), cc(t->fg_dim));
+                const char *k = ui_cmd_key(UK_JOBS, 0);   // (as bound, F15)
+                text(fit(str_from_c(arena_sprintf(&frame, "Find: \xE2\x86\x91 \xE2\x86\x93 previous and next \xC2\xB7 Enter keeps \xC2\xB7 Esc closes \xC2\xB7 %s%s"
+                                                  "Alt+C/W/R case, words, regex", k, k[0] ? " the jobs \xC2\xB7 " : "")), foot_w, false), cc(t->fg_dim));
             } else if (app.status[0]) {
                 text(fit(str_from_c(app.status), foot_w, false), app.status_bad ? cc(t->red) : cc(t->fg));
             } else if (app.ui.view == UI_VIEW_SEARCH && !app.ui.marked) {

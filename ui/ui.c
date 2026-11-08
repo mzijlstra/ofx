@@ -509,8 +509,8 @@ typedef enum {
 } UiKeySection;
 
 static const char *const UI_KEY_SECTION[KS_SECTIONS] = {
-    "Moving", "Opening", "Selecting", "Changing files", "Tabs and windows", "View", "The sidebar", "The path buttons (Ctrl+K)",
-    "The find bar", "Search below the folder", "Text fields (rename, location, find, search, filters)", "The job rows (Ctrl+J)", "Open With", "Edit Bookmarks",
+    "Moving", "Opening", "Selecting", "Changing files", "Tabs and windows", "View", "The sidebar", "The path buttons",
+    "The find bar", "Search below the folder", "Text fields (rename, location, find, search, filters)", "The job rows", "Open With", "Edit Bookmarks",
 };
 
 static const struct { UiKeySection sec; const char *action; UiKey cmd; const char *key, *key2; } UI_KEYS[] = {
@@ -634,7 +634,7 @@ static const struct { UiKeySection sec; const char *action; UiKey cmd; const cha
     { KS_JOBS, "To the job rows", UK_JOBS, NULL, NULL },
     { KS_JOBS, "The next row", UK_NONE, "Up, Down", "k, j" },
     { KS_JOBS, "Cancel that job", UK_NONE, "Enter", "its \xC3\x97" },
-    { KS_JOBS, "Back to the files", UK_NONE, "Esc", "Ctrl+J" },
+    { KS_JOBS, "Back to the files", UK_JOBS, "Esc", NULL },   // (Esc, then the job rows' own key as bound)
     { KS_OW, "The field, the list", UK_NONE, "Tab", "Down" },
     { KS_OW, "Always open with this app", UK_NONE, "Alt+D", "" },
     { KS_OW, "Open", UK_NONE, "Enter", "a double click" },

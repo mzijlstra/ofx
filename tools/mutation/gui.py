@@ -193,7 +193,7 @@ MUTANTS = [
     ('gui/frame.c', "            if (app.ui.grid) layout_zoom();\n", ""),
     ('gui/frame.c', "    Clay_FloatingAttachPoints at = above && right ?", "    Clay_FloatingAttachPoints at = 0 ?"),
     ('gui/input.c', "    if (h.zoom) return TIP_ZOOM;\n", ""),
-    ('gui/frame.c', '        { UB_ZOOM_OUT, "Smaller icons (Ctrl+-)" }, { UB_ZOOM_IN, "Bigger icons (Ctrl+=)" },', '        { UB_ZOOM_OUT, "Smaller icons (Ctrl+-)" },'),
+    ('gui/frame.c', '{ UB_ZOOM_OUT, "Smaller icons", UK_ZOOM_OUT }, { UB_ZOOM_IN, "Bigger icons", UK_ZOOM_IN },', '{ UB_ZOOM_OUT, "Smaller icons", UK_ZOOM_OUT },'),
     # the hover for the pointer where it is (Michael, 2026-10-24)
     ('gui/input.c', "    return on && !keys_since_pointer ? hover_at(x, y) : hover_at(-1e6f, -1e6f);", "    return hover_at(x, y);"),
     (G, "            if (scripted && !script.user_pointer ? script.pointing && hover_refresh(true, script.px, script.py) : hover_refresh(IsCursorOnScreen(), m.x, m.y))\n                dirty = true, glfwPostEmptyEvent();\n", ""),
@@ -979,6 +979,9 @@ MUTANTS = [
     ('gui/shortcuts.c', "keycap(ui_keys_key(line, 0), ui_keys_mine(line, 0), KEYS_KEY_W);", "keycap(\"\", false, KEYS_KEY_W);", 'f75'),
     ('gui/shortcuts.c', "keycap(ui_keys_key(line, 0), ui_keys_mine(line, 0), KEYS_KEY_W);", "keycap(ui_keys_key(line, 0), false, KEYS_KEY_W);", 'f15'),
     ('gui/input.c', "float lw = str_width(label) + str_width(str_from_c(ui_menu_key(it)));", "float lw = str_width(label);", 'f7'),
+    # F15's code-health review, B: the tooltips' keys from the table.
+    ('gui/frame.c', "ui_with_key(buf, cap, BAR[j].text, BAR[j].cmd)[0];", "snprintf(buf, cap, \"%s\", BAR[j].text) > 0;", 'f63'),
+    ('gui/frame.c', "        return ui_with_key(buf, cap, MODES[k - TIP_MODE], UK_F9)[0];", "        return snprintf(buf, cap, \"%s\", MODES[k - TIP_MODE]) > 0;", 'f62'),
     # F15 step 2: ofx.conf's key lines applied on each read, a bad one named, a clash said after a save.
     ('gui/prefs.c', "    UiKeysRead keys = conf_keys_read = ui_binds_set(c.key, c.key_no, c.nkey);", "    UiKeysRead keys = conf_keys_read = (UiKeysRead){ 0 };", 'f15'),
     ('gui/prefs.c', "    else if (keys.bad) set_status(true,", "    else if (0) set_status(true,", 'f15'),

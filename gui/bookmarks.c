@@ -129,7 +129,10 @@ static void layout_bmp_panel(void)
         CLAY(CLAY_ID("bmp-list"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(l->rows * BMP_ROW_H) }, .layoutDirection = CLAY_TOP_TO_BOTTOM },
                                     .clip = { .vertical = true } }) {
             if (l->n == 0)
-                CLAY_AUTO_ID({ .layout = { .padding = { 8, 0, 8, 0 } } }) { text(cz("No bookmarks: Ctrl+D bookmarks the folder shown"), cc(t->fg_dim)); }
+                CLAY_AUTO_ID({ .layout = { .padding = { 8, 0, 8, 0 } } }) {
+                    const char *k = ui_cmd_key(UK_ADD_BOOKMARK, 0);   // (as bound, F15)
+                    text(cz(k[0] ? arena_sprintf(&frame, "No bookmarks: %s bookmarks the folder shown", k) : "No bookmarks: Bookmarks \xE2\x86\x92 Add Bookmark"), cc(t->fg_dim));
+                }
             for (int r = 0; r < l->rows; r++) {
                 isize v = l->top + r;
                 if (v >= l->n || v >= bmarks.n) break;

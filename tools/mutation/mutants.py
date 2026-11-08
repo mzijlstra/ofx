@@ -2611,7 +2611,7 @@ MUTANTS += [
     (KY, " { K(UKC_ESC, UI_MOD_SHIFT), UK_ESC },", ""),
     (KY, "{ K('x', UI_MOD_CTRL), UK_CUT }, ", ""),
     (KY, "{ K(UKC_DOWN, UI_MOD_ALT), UK_ALT_DOWN },", ""),
-    (KY, "    return row || !UI_KEYS[r].cmd ? row : ui_cmd_key(UI_KEYS[r].cmd, k);", "    return !UI_KEYS[r].cmd ? row : ui_cmd_key(UI_KEYS[r].cmd, k);"),
+    (KY, "    if (*text || !UI_KEYS[r].cmd) return -1;", "    if (!UI_KEYS[r].cmd) return -1;"),
     (KY, "    if (UI_MENU_ITEM[it].hint) return UI_MENU_ITEM[it].hint;\n", ""),
     (KY, "    return UI_MENU_ITEM[it].runs ? ui_cmd_event(UI_MENU_ITEM[it].cmd) : (UiEvent){ UK_NONE, 0, UK_NONE };", "    return ui_cmd_event(UI_MENU_ITEM[it].cmd);"),
     (KY, "{ K(UKC_F1, 0), UK_SHORTCUTS }, { K(UKC_F1, C_), UK_SHORTCUTS },", "{ K(UKC_F1, C_), UK_SHORTCUTS }, { K(UKC_F1, 0), UK_SHORTCUTS },"),
@@ -2662,7 +2662,7 @@ MUTANTS += [
     ('ui/menus.c', "    static const int MENUS[] = { 0, 1, 2, 3, 4, 5, UI_CTX_TAB };", "    static const int MENUS[] = { 0, 1, 2, 3, 4, 5 };"),
     # F15 step 3: the shortcuts panel's rows of commands, yours marked, found by name.
     (KY, "    return i >= 0 && ui_binds.user[i];", "    return i >= 0;"),
-    (KY, "    int i = row || !UI_KEYS[r].cmd ? -1 : ui_cmd_bind(UI_KEYS[r].cmd, k);", "    int i = !UI_KEYS[r].cmd ? -1 : ui_cmd_bind(UI_KEYS[r].cmd, k);"),
+    (KY, "    return text ? text : i < 0 ? \"\" : ui_binds.name[i];", "    return text ? text : \"\";"),
     (KY, "    return UI_KEYS[r].cmd ? ui_cmd_name(UI_KEYS[r].cmd) : \"\";", "    return \"\";"),
     ('ui/panels.c', " ||\n                                                      ui_match(&u->keys_m, str_from_c(ui_keys_name(r)))))", "))"),
     # F15's code-health review, A: typed characters in fields, greyed menu commands, Ctrl+C unbound.
@@ -2671,4 +2671,7 @@ MUTANTS += [
     ('ui/handle.c', "(ui_line_active(u, NULL) || ui_on_top(u) != UI_ON_NONE || u->menu_on)) e.cmd = UK_NONE;", "(ui_line_active(u, NULL) || ui_on_top(u) != UI_ON_NONE)) e.cmd = UK_NONE;"),
     ('ui/menus.c', "                *out = kind && !ui_allows(u, kind) ? ui_view_act(u, (UiAction){ kind, 0, false }) : UI_NONE;", "                *out = UI_NONE;"),
     ('ui/edit.c', "    return (e.key == UK_COPY || e.key == UK_CUT) && e.cmd && lo == hi;", "    return (e.key == UK_COPY || e.key == UK_CUT) && lo == hi;"),
+    # F15's code-health review, B: keys from the table in tooltips, hints and the panel.
+    (KY, "    return ui_cmd_bind(UI_KEYS[r].cmd, k - (k == 1 && UI_KEYS[r].key));", "    return ui_cmd_bind(UI_KEYS[r].cmd, k);"),
+    (KY, "    snprintf(out, cap, k[0] ? \"%s (%s)\" : \"%s\", what, k);", "    snprintf(out, cap, \"%s (%s)\", what, k);"),
 ]

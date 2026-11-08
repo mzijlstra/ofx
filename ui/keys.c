@@ -486,18 +486,28 @@ static UiEvent ui_menu_runs(UiMenuItem it)
     return UI_MENU_ITEM[it].runs ? ui_cmd_event(UI_MENU_ITEM[it].cmd) : (UiEvent){ UK_NONE, 0, UK_NONE };
 }
 
-// Keyboard Shortcuts' row r: its key k (0 the first, 1 the second; "" none).
+// Keyboard Shortcuts' row r's key k (0 the first, 1 the second): what the row says, else its
+// command's keys in order after the row's own ("Esc", then the job rows' key); -1: a row's text.
+static int ui_keys_bind(int r, int k, const char **text)
+{
+    *text = k ? UI_KEYS[r].key2 : UI_KEYS[r].key;
+    if (*text || !UI_KEYS[r].cmd) return -1;
+    return ui_cmd_bind(UI_KEYS[r].cmd, k - (k == 1 && UI_KEYS[r].key));
+}
+
+// Row r's key k as shown ("" none).
 static const char *ui_keys_key(int r, int k)
 {
-    const char *row = k ? UI_KEYS[r].key2 : UI_KEYS[r].key;
-    return row || !UI_KEYS[r].cmd ? row : ui_cmd_key(UI_KEYS[r].cmd, k);
+    const char *text;
+    int i = ui_keys_bind(r, k, &text);
+    return text ? text : i < 0 ? "" : ui_binds.name[i];
 }
 
 // Whether that key is one of yours, from ofx.conf (the panel marks it, F15 step 3).
 static bool ui_keys_mine(int r, int k)
 {
-    const char *row = k ? UI_KEYS[r].key2 : UI_KEYS[r].key;
-    int i = row || !UI_KEYS[r].cmd ? -1 : ui_cmd_bind(UI_KEYS[r].cmd, k);
+    const char *text;
+    int i = ui_keys_bind(r, k, &text);
     return i >= 0 && ui_binds.user[i];
 }
 
@@ -505,4 +515,14 @@ static bool ui_keys_mine(int r, int k)
 static const char *ui_keys_name(int r)
 {
     return UI_KEYS[r].cmd ? ui_cmd_name(UI_KEYS[r].cmd) : "";
+}
+
+// what, and its command's first key in brackets ("Back (Alt+Left)"); what alone when the command has
+// none (ofx.conf took them): a tooltip or a hint never names a key that doesn't do it (the F15
+// code-health review). out, for the caller to use at once.
+static const char *ui_with_key(char *out, size_t cap, const char *what, UiKey cmd)
+{
+    const char *k = ui_cmd_key(cmd, 0);
+    snprintf(out, cap, k[0] ? "%s (%s)" : "%s", what, k);
+    return out;
 }

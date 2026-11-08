@@ -39,7 +39,8 @@ static void layout_bar_panel(void)
                                               .attachPoints = { CLAY_ATTACH_POINT_CENTER_CENTER, CLAY_ATTACH_POINT_CENTER_CENTER } } }) {
         text(cz("The menu bar is hidden"), cc(t->fg));
         CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_FIT(0), CLAY_SIZING_FIXED(4) } } }) {}
-        text(cz("Its menus still open with F10, or with Alt and"), cc(t->fg_dim));
+        const char *k = ui_cmd_key(UK_F10, 0);   // (as bound, F15)
+        text(cz(k[0] ? arena_sprintf(&frame, "Its menus still open with %s, or with Alt and", k) : "Its menus still open with Alt and"), cc(t->fg_dim));
         text(cz("a menu's letter: Alt+F, E, V, G, B, H."), cc(t->fg_dim));
         text(cz("View \xE2\x86\x92 Show Menu brings it back."), cc(t->fg_dim));
         CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .padding = { 0, 0, 8, 0 },

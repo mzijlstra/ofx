@@ -583,7 +583,12 @@ static void test_keys_panel(void)
             CHECK(UI_KEYS[r].key && UI_KEYS[r].key2 && !ui_keys_name(r)[0]);   // (fixed keys: written out)
             continue;
         }
-        CHECK(!UI_KEYS[r].key && strcmp(ui_keys_key(r, 0), ui_cmd_key(UI_KEYS[r].cmd, 0)) == 0 && strcmp(ui_keys_name(r), ui_cmd_name(UI_KEYS[r].cmd)) == 0);
+        CHECK(strcmp(ui_keys_name(r), ui_cmd_name(UI_KEYS[r].cmd)) == 0);
+        if (UI_KEYS[r].key) {   // (a key of the row's own first, then its command's: the job rows' Esc, then Ctrl+J)
+            CHECK(strcmp(ui_keys_key(r, 0), UI_KEYS[r].key) == 0 && !UI_KEYS[r].key2 && strcmp(ui_keys_key(r, 1), ui_cmd_key(UI_KEYS[r].cmd, 0)) == 0);
+            continue;
+        }
+        CHECK(strcmp(ui_keys_key(r, 0), ui_cmd_key(UI_KEYS[r].cmd, 0)) == 0);
         CHECK(UI_KEYS[r].key2 || strcmp(ui_keys_key(r, 1), ui_cmd_key(UI_KEYS[r].cmd, 1)) == 0);
         CHECK(!ui_keys_mine(r, 0) && !ui_keys_mine(r, 1));   // (the keys as ofx has them: none yours)
     }
@@ -598,6 +603,25 @@ static void test_keys_panel(void)
     keys_set(2, "F7 back", "F8 back");
     for (int r = 0; r < UI_KEYS_N; r++)
         if (UI_KEYS[r].cmd == UK_BACK) CHECK(ui_keys_mine(r, 0) && strcmp(ui_keys_key(r, 1), "Mouse back") == 0 && !ui_keys_mine(r, 1));
+    // The job rows' "Back to the files": Esc, then the job rows' key as bound (no key in a heading).
+    keys_set(1, "F6 job-rows");
+    for (int r = 0; r < UI_KEYS_N; r++)
+        if (UI_KEYS[r].sec == KS_JOBS && strcmp(UI_KEYS[r].action, "Back to the files") == 0)
+            CHECK(strcmp(ui_keys_key(r, 0), "Esc") == 0 && strcmp(ui_keys_key(r, 1), "F6") == 0 && ui_keys_mine(r, 1) && !ui_keys_mine(r, 0));
+    for (int s = 0; s < KS_SECTIONS; s++) CHECK(!strstr(UI_KEY_SECTION[s], "Ctrl+"));
+    // A tooltip or hint names a command's first key as it is, or none (the code-health review).
+    char tip[64];
+    keys_set(1, "F7 back");
+    CHECK(strcmp(ui_with_key(tip, sizeof tip, "Back", UK_BACK), "Back (F7)") == 0);   // (yours first)
+    keys_set(1, "none back");
+    CHECK(strcmp(ui_with_key(tip, sizeof tip, "Back", UK_BACK), "Back") == 0);
+    keys_set(0);
+    CHECK(strcmp(ui_with_key(tip, sizeof tip, "Back", UK_BACK), "Back (Alt+Left)") == 0);
+    // "The menus" row's Alt letters are the menus' own.
+    char letters[32] = "Alt+";
+    for (int m = 0; m < UI_MENUS; m++) snprintf(letters + strlen(letters), sizeof letters - strlen(letters), "%s%c", m ? ", " : "", UI_MENU[m].letter - 'a' + 'A');
+    for (int r = 0; r < UI_KEYS_N; r++)
+        if (strcmp(UI_KEYS[r].action, "The menus") == 0) CHECK(strcmp(UI_KEYS[r].key2, letters) == 0);
     // The filter finds a command by its name in ofx.conf.
     Ui u = menu_ui(3);
     u.keys_list.rows = 10;

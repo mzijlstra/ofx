@@ -592,16 +592,8 @@ static void usage(void)
     fprintf(stderr, "usage: ofx [--select] [PATH] | --version\n"
                     "  A file explorer: the folder (default: the current one) as a list; on a file, its folder\n"
                     "  with it selected; --select: PATH's folder with PATH selected, a folder too.\n"
-                    "  Enter, Right, l open; Backspace, Left, h up; j k, arrows, PgUp PgDn, Home End, g G move;\n"
-                    "  Alt+Left/Right back and forward; / or Ctrl+F find, n N again; . or Ctrl+H hidden files;\n"
-                    "  Ctrl+P the owner and permissions columns, Ctrl+G the group column;\n"
-                    "  s sort by the next column, S reverse; Tab the places; t terminal here; ~ home;\n"
-                    "  Space select, Ctrl+A all; F2 rename; Ctrl+Shift+N new folder; Delete trash, Shift+Delete for good;\n"
-                    "  Ctrl+C, Ctrl+X, Ctrl+V copy, cut, paste; Ctrl+Z undo; Ctrl+L type a location; Alt+Up up;\n"
-                    "  Ctrl+T new tab, Ctrl+W close it, Ctrl+Tab / Ctrl+PgDn next, Ctrl+Shift+Tab / Ctrl+PgUp previous,\n"
-                    "  Alt+1..9 a tab, Ctrl+Shift+PgUp/PgDn move it; middle click a folder for a tab behind;\n"
-                    "  F10 or Alt+F the File menu; Ctrl+N a new window; Ctrl+Q close every ofx window.\n"
-                    "  The rest (search, Ctrl+Shift+T reopen a closed tab, ...): F1 in a window.\n");
+                    "  Keys: F1 in a window lists every command and its keys (Help > Keyboard Shortcuts); key\n"
+                    "  lines in ~/.config/ofx/ofx.conf (Edit > Preferences...) change them.\n");
 }
 
 // --select PATH: PATH's folder (links in it resolved) and PATH's own name, not resolved, so a
