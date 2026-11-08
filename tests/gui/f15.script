@@ -28,6 +28,11 @@ expect tabs=3
 key f10
 expect menukeys=reopen-tab=Ctrl+Shift+T,new-window=Ctrl+N,new-folder=Ctrl+Shift+N,open=Enter,open-with=Shift+Enter,properties=Ctrl+I,close-all=Ctrl+Q,close=Ctrl+W
 key esc
+# A clash saved beside a typo: the typo's line is said first, the clash once the typo is fixed
+sh printf 'key = Ctrl+W reload\nkey = Ctrl+Bogus find\n' > "$OFX_ROOT/config/ofx/ofx.conf"
+wait-for 3000 keysbad=2 statusbad=1
+sh printf 'key = Ctrl+W reload\n' > "$OFX_ROOT/config/ofx/ofx.conf"
+wait-for 3000 keysbad=0 statusbad=0 status=ofx.conf: Ctrl+W is reload now,
 # A clash in the file at the start isn't said (only after a save that changed the keys): f15b
 sh printf 'key = Ctrl+T reload\n' > "$OFX_ROOT/config/ofx/ofx.conf"
 wait-for 3000 keyclashes=1

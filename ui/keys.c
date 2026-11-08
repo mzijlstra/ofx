@@ -349,11 +349,19 @@ typedef struct {
 
 enum { UI_CLASHES_MAX = 64 };
 
-// The keys the last read's lines took from another command (UiKeysRead.fresh is the rest).
+// The keys lines took from another command as the status line last could say them (UiKeysRead.fresh
+// is the rest), and the last read's, until ui_clashes_told.
 static struct {
-    UiChord c[UI_CLASHES_MAX];
-    int     n;
+    UiChord c[UI_CLASHES_MAX], next[UI_CLASHES_MAX];
+    int     n, next_n;
 } ui_clashed;
+
+// The last read's clashes as said: called when the status line could say them (no bad line took it:
+// the step 2 confirm, 2026-11-08), so a clash saved beside a typo is said once the typo is fixed.
+static void ui_clashes_told(void)
+{
+    memcpy(ui_clashed.c, ui_clashed.next, sizeof ui_clashed.c[0] * (size_t)ui_clashed.next_n), ui_clashed.n = ui_clashed.next_n;
+}
 
 // ofx.conf's key lines (n of them, each `<key> <command>` or `none <command>`, from file line no[i])
 // over the defaults, in order: a key bound leaves the command it had (which keeps its others), a
@@ -417,7 +425,7 @@ static UiKeysRead ui_binds_set(const char (*line)[64], const int *no, int n)
         users++, ui_binds.n++;
     }
     r.changed = was_n != ui_binds.n || memcmp(was, ui_binds.b, sizeof was[0] * (size_t)was_n) != 0;
-    memcpy(ui_clashed.c, now, sizeof now[0] * (size_t)now_n), ui_clashed.n = now_n;
+    memcpy(ui_clashed.next, now, sizeof now[0] * (size_t)now_n), ui_clashed.next_n = now_n;
     return r;
 }
 

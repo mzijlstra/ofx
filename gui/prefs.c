@@ -62,6 +62,7 @@ static void conf_apply(void)
     else if (keys.bad) set_status(true, "%s line %d: %s", shown, keys.bad, keys.why);
     else if (was_once && keys.fresh)
         set_status(false, "ofx.conf: %s%s", keys.clash, keys.fresh > 1 ? arena_sprintf(&scratch, " (and %d more)", keys.fresh - 1) : "");
+    if (!c.bad && !keys.bad) ui_clashes_told();   // (a bad line's note took the status line: said after the fix)
 }
 
 // Edit → Preferences…: ofx.conf, written first when there is none, opened in the editor Open at

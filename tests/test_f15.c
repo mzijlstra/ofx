@@ -483,7 +483,9 @@ static UiKeysRead keys_set(int n, ...)
     va_start(ap, n);
     for (int i = 0; i < n; i++) snprintf(line[i], sizeof line[i], "%s", va_arg(ap, const char *)), no[i] = i + 1;
     va_end(ap);
-    return ui_binds_set(line, no, n);
+    UiKeysRead r = ui_binds_set(line, no, n);
+    ui_clashes_told();   // (as conf_apply with no bad line)
+    return r;
 }
 
 static UiEvent chord_ev(u32 code, u8 mods)
@@ -574,6 +576,15 @@ static void test_keys_conf(void)
     CHECK(r.clashes == 1 && r.fresh == 0);
     r = keys_set(2, "Ctrl+T reload", "Ctrl+R terminal");
     CHECK(r.clashes == 2 && r.fresh == 1 && strcmp(r.clash, "Ctrl+R is terminal now, not reload") == 0);
+    // Saved beside a bad line, whose note takes the status line: said once that is fixed (the
+    // step 2 confirm).
+    keys_set(0);
+    static char two[2][64] = { "Ctrl+T reload", "Ctrl+Bogus find" };
+    static int two_no[2] = { 1, 2 };
+    r = ui_binds_set(two, two_no, 2);   // (no ui_clashes_told: conf_apply showed the bad line)
+    CHECK(r.bad == 2 && r.fresh == 1);
+    r = keys_set(1, "Ctrl+T reload");
+    CHECK(!r.bad && r.fresh == 1 && strcmp(r.clash, "Ctrl+T is reload now, not new-tab") == 0);
     // The earlier line named right after a none dropped a line before it (the step 2 review).
     r = keys_set(4, "F7 reload", "KP1 sort-name", "none reload", "KP1 find");
     CHECK(strcmp(r.clash, "lines 2 and 4 both bind KP1: line 4 wins") == 0);
