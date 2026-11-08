@@ -1008,7 +1008,7 @@ int main(int argc, char **argv)
         _Static_assert((int)UI_JOB_ROWS >= (int)JOBQ_WORKERS, "a job row each for the jobs running");
         in.job_n = jobs.nrun, in.jobs_all = jobs.nrun + jobs.nwait;
         for (int k = 0; k < jobs.nrun; k++) in.job_id[k] = job_recs[jobs.run[k]].id;
-        if (close_asked && in.nev < UI_EVENTS_MAX) in.ev[in.nev++] = (UiEvent){ UK_QUIT, 0 }, close_asked = false, seen = true;
+        if (close_asked && in.nev < UI_EVENTS_MAX) in.ev[in.nev++] = (UiEvent){ UK_QUIT, 0, UK_NONE }, close_asked = false, seen = true;
         // A Ctrl+V in a text field reads the clipboard first, and only then.
         bool pasting = false;
         for (int k = 0; k < in.nev; k++) pasting |= in.ev[k].key == UK_PASTE;

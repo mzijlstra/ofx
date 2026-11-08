@@ -19,7 +19,7 @@ static void edit_keys(Ui *u, UiNames names, int n, ...)
     UiInput in = ui_input_none();
     va_list ap;
     va_start(ap, n);
-    for (int i = 0; i < n; i++) in.ev[in.nev++] = (UiEvent){ (UiKey)va_arg(ap, int), 0 };
+    for (int i = 0; i < n; i++) in.ev[in.nev++] = ev_key((UiKey)va_arg(ap, int));
     va_end(ap);
     ui_handle(u, names, &in);
 }
@@ -120,7 +120,7 @@ static void test_edit_select(void)
     edit_type(&u, names, "y");
     CHECK(u.edit.len == NAME_MAX && u.edit.b[NAME_MAX - 1] == 'x');
     edit_keys(&u, names, 1, UK_SEL_LEFT);
-    in = ui_input_none(), in.ev[in.nev++] = (UiEvent){ UK_NONE, 0xE9 };   // é: two bytes over one
+    in = ui_input_none(), in.ev[in.nev++] = ev_ch(0xE9);   // é: two bytes over one
     ui_handle(&u, names, &in);
     CHECK(u.edit.len == NAME_MAX && u.edit.anchor == NAME_MAX && u.edit.caret == NAME_MAX - 1);
     edit_type(&u, names, "y");

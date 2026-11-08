@@ -60,8 +60,6 @@ MUTANTS = [
     ('gui/actions.c', "            if (c->cut) {\n                here++;", "            if (0) {\n                here++;"),
     ('gui/actions.c', '        undo_start(app.edit_new ? app.edit_new : UNDO_RENAME);', '        undo_start(UNDO_RENAME);'),
     ('gui/actions.c', "    if (back[0]) go_to(app.cwd, str_from_c(back), app.ui.list.sel);\n    else reload();", "    reload();"),
-    ('gui/input.c', "        return m == GLFW_MOD_SHIFT ? UK_SHIFT_DELETE : m == 0 ? UK_DELETE : UK_NONE;", "        return m == 0 ? UK_DELETE : UK_SHIFT_DELETE;"),
-    ('gui/input.c', "    if (m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT) && key == GLFW_KEY_N) return UK_NEWFOLDER;", ""),
     (J, "        if (jobs.asking >= 0) app.ui.asking = true, app.ui.ask_all = false;", ""),
     (G, "    ops_guard(getenv(\"OFX_GUI_ROOT\"));", ""),
     (G, '        if (!was_editing && app.ui.focus == UI_FOCUS_EDIT && !app.ui.edit_path) edit_opened();', ''),
@@ -74,7 +72,6 @@ MUTANTS = [
     # Not run: the cursor's row drawing an edit box while the location line is open
     # (`&& !app.ui.edit_path` in layout_row) shows only on screen; location.png shows the names.
     ('gui/folder.c', "        ui_crumbs_set(&app.crumbs, app.cwd, getenv(\"HOME\"));", ""),
-    ('gui/input.c', "    if (m == GLFW_MOD_ALT && key == GLFW_KEY_UP) return UK_PARENT;", ""),
     ('gui/actions.c', "    ui_edit_close(&app.ui);\n    if (name[0] == '.'", "    if (name[0] == '.'"),
     # Not run: counts.c drops an old listing's answer twice over (in count_loop and in count_take),
     # so taking out either check alone changes nothing a test can see.
@@ -89,8 +86,6 @@ MUTANTS = [
     ('gui/actions.c', "    if (shown) tab_load();", ""),
     ('gui/actions.c', "    if (strcmp(path, TRASH_URI) != 0 && !is_search(path) && (stat(path, &st) != 0 || !S_ISDIR(st.st_mode))) {", "    if (strcmp(path, TRASH_URI) != 0 && !is_search(path) && stat(path, &st) != 0) {"),
     ('gui/input.c', "    if (h.tab >= 0) in->tab_close = h.tab;\n    else if (h.row >= 0)", "    if (h.row >= 0)"),
-    ('gui/input.c', "    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_W) return UK_TAB_CLOSE;", ""),
-    ('gui/input.c', "    if (action == GLFW_PRESS && m == GLFW_MOD_ALT && key >= GLFW_KEY_1 && key <= GLFW_KEY_9)", "    if (action == GLFW_PRESS && key >= GLFW_KEY_1 && key <= GLFW_KEY_9)"),
     (G, "    return bar_h() + HEADER_H + (tabbar.n >= 2 ? TAB_H : 0);", "    return bar_h() + HEADER_H;"),
     ('gui/actions.c', "    case UA_TAB_MOVE: ui_tabs_move(&tabbar, (int)a.index); break;", "    case UA_TAB_MOVE: break;"),
     # F5 review: the delete question's targets taken when it opens
@@ -105,9 +100,6 @@ MUTANTS = [
     (J, "        if (jobs.asking >= 0) app.ui.asking = true, app.ui.ask_all = false;", "        if (jobs.asking >= 0) app.ui.asking = true;"),
     # F5.2: the edit lines' text clipboard, the path buttons by keyboard. clipboard.c's
     # data-control text: with the clipboard's own, at the end (clip, in the test sway).
-    ('gui/input.c', "        case GLFW_KEY_LEFT: return UK_SEL_LEFT;\n", ""),
-    ('gui/input.c', "        case GLFW_KEY_KP_ENTER: return UK_SHIFT_ENTER;\n", ""),
-    ('gui/input.c', "    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_K) return UK_CRUMBS;\n", ""),
     ('gui/topbar.c', '    if (app.ui.focus == UI_FOCUS_CRUMBS) ui_crumbs_show(c, wd, room, ARROW_W, app.ui.crumb_at < c->n ? app.ui.crumb_at : c->n - 1);   // (crumb_at past them: the branch button)\n', ''),
     (G, "        in.crumb_n = app.crumbs.n, in.crumb_last = app.crumb_hi - 1;", "        in.crumb_n = app.crumbs.n, in.crumb_last = app.crumb_hi;"),
     (G, '        if (pasting && ui_line_active(&app.ui, NULL)) in.paste = text_paste();   // (whichever text field has the keys)\n', ''),
@@ -132,7 +124,6 @@ MUTANTS = [
     (J, "    for (int i = 0; i < jobs.nrun; i++) job_cancel(job_recs[jobs.run[i]].id);", ""),
     (J, "        jobline_sample(&r->line, now,", "        if (0) jobline_sample(&r->line, now,"),
     ('gui/input.c', "        if (in_box(CLAY_IDI(\"job-x\", i), x, y)) h.job_x = i;", ""),
-    ('gui/input.c', "    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_J) return UK_JOBS;\n", ""),
     (G, "        for (int k = 0; k < jobs.nrun; k++) in.job_id[k] = job_recs[jobs.run[k]].id;", ""),
     # F5.3 review fixes. Not run: the refusals in rename, new folder and undo (the same
     # jobs_refuse as trash's), and the timed join at quit (it needs a worker stuck in a hung mount).
@@ -174,8 +165,6 @@ MUTANTS = [
     ('gui/folder.c', "    if (!same && app.nslots >= app.icons_max) icons_reset(), app.icon_full_resets++;\n", ""),
     (G, "        if (rows != app.ui.list.rows) ui_resize(&app.ui.list, rows), dirty = true;\n", ""),
     ('gui/files.c', "    if (!app.ui.grid) return 1;\n    int c = (w", "    int c = (w"),
-    ('gui/input.c', "    if (m == GLFW_MOD_CONTROL && (key == GLFW_KEY_1 || key == GLFW_KEY_KP_1)) return UK_VIEW_LIST;", ""),
-    ('gui/input.c', "    if (m == GLFW_MOD_CONTROL && (key == GLFW_KEY_2 || key == GLFW_KEY_KP_2)) return UK_VIEW_ICONS;", ""),
     ('gui/icons.c', "    return app.ui.grid ? grid_px() : ICON_PX;", "    return ICON_PX;"),
     ('gui/files.c', "            int n = name_lines(\"cell-line\", k, e->name, 2, name_w, fg, &cut);", "            int n = name_lines(\"cell-line\", k, e->name, CELL_LINES_FULL, name_w, fg, &cut);"),
     ('gui/files.c', "        isize first = app.ui.list.top + (isize)r * cols;", "        isize first = app.ui.list.top + r;"),
@@ -184,11 +173,6 @@ MUTANTS = [
     ('gui/frame.c', "            if (app.have_list && app.ui.grid) layout_grid();\n", ""),
     ('gui/icons.c', "    if (strmap_get(&app.slot_of, slot_key, &k))", "    if (strmap_get(&app.slot_of, key, &k))"),
     # F6.2 keys (Michael, 2026-10-24): Ctrl and an arrow, Ctrl+S
-    ('gui/input.c', '    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_LEFT) return UK_WORD_LEFT;', '    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_LEFT) return UK_NONE;'),
-    ('gui/input.c', "    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_UP) return UK_CRUMBS;\n", ""),
-    ('gui/input.c', "    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_DOWN) return UK_JOBS;\n", ""),
-    ('gui/input.c', '    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_RIGHT) return UK_WORD_RIGHT;', '    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_RIGHT) return UK_NONE;'),
-    ('gui/input.c', "    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_S) return UK_F9;\n", ""),
     # tooltips (Michael, 2026-10-24)
     ('gui/input.c', "        timer_at(wake_due());\n", ""),
     (G, "        if (ui_tip_tick(&app.tip, now_ms())) dirty = true;\n", ""),
@@ -206,8 +190,6 @@ MUTANTS = [
     ('gui/input.c', "    if (h.zoom) in->zoom_to = zoom_level_at(x), app.drag = DRAG_ZOOM;", "    if (h.zoom) in->zoom_to = zoom_level_at(x);"),
     ('gui/input.c', "    case DRAG_ZOOM: in->zoom_to = zoom_level_at(x); return false;", "    case DRAG_ZOOM: return false;"),
     ('gui/input.c', "    if (x >= side_w() && ctrl) in->zoom_wheel = notches;", "    if (0) in->zoom_wheel = notches;"),
-    ('gui/input.c', "    if ((m == GLFW_MOD_CONTROL || m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT)) && (key == GLFW_KEY_EQUAL", "    if ((m == GLFW_MOD_CONTROL) && (key == GLFW_KEY_EQUAL"),
-    ('gui/input.c', " (key == GLFW_KEY_MINUS || key == GLFW_KEY_KP_SUBTRACT)) return UK_ZOOM_OUT;", " key == GLFW_KEY_MINUS) return UK_ZOOM_OUT;"),
     ('gui/frame.c', "            if (app.ui.grid) layout_zoom();\n", ""),
     ('gui/frame.c', "    Clay_FloatingAttachPoints at = above && right ?", "    Clay_FloatingAttachPoints at = 0 ?"),
     ('gui/input.c', "    if (h.zoom) return TIP_ZOOM;\n", ""),
@@ -250,9 +232,6 @@ MUTANTS = [
     (G, "    if (win_dir(app.windows, sizeof app.windows) && !win_register(app.windows, getpid(), &werr)) {", "    if (win_dir(app.windows, sizeof app.windows) && false) {", 'f7'),
     (G, "    if (app.windows[0]) win_unregister(app.windows, getpid());", "", 'f7'),
     (G, "    sigaddset(&quit_signals, SIGUSR1);", "", 'f7'),
-    ('gui/input.c', "    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_N) return UK_NEW_WINDOW;", "", 'f7'),
-    ('gui/input.c', "    case GLFW_KEY_F10: return m == 0 ? UK_F10 : UK_NONE;", "", 'f7'),
-    ('gui/input.c', "key >= GLFW_KEY_A && key <= GLFW_KEY_Z) ev_push((UiEvent){ UK_MENU, (u32)('a' + key - GLFW_KEY_A) });", "key >= GLFW_KEY_A && key <= GLFW_KEY_Z) ev_push((UiEvent){ UK_MENU, (u32)('A' + key - GLFW_KEY_A) });", 'f7'),
     ('gui/frame.c', "        float body_h = (float)(h - bar_h() - HEADER_H - FOOTER_H);", "        float body_h = (float)(h - HEADER_H - FOOTER_H);", 'f7'),
     ('gui/files.c', "    int r = (h - bar_h() - HEADER_H - FOOTER_H - PAD) / SIDE_ROW_H;", "    int r = (h - HEADER_H - FOOTER_H - PAD) / SIDE_ROW_H;", 'f7'),
     ('gui/frame.c', "        if (bar_shown()) layout_menubar();\n", "", 'f7'),
@@ -281,8 +260,6 @@ MUTANTS = [
     ('gui/input.c', '            if (in_box(CLAY_IDI("prop-box", k), x, y)) h.prop_box = k;', '            {}', 'f72'),
     ('gui/input.c', '    in->prop_box = h.prop_box;\n', '', 'f72'),
     ('gui/actions.c', '    case UA_CHMOD: props_chmod((int)a.index); break;', '', 'f72'),
-    ('gui/input.c', '    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_I) return UK_PROPERTIES;', '', 'f72'),
-    ('gui/input.c', '    if (m == GLFW_MOD_ALT && (key == GLFW_KEY_ENTER || key == GLFW_KEY_KP_ENTER)) return UK_TERMINAL;', '', 'f72'),
     ('gui/panels.c', '    if (statx(AT_FDCWD, path, props.broken ? AT_SYMLINK_NOFOLLOW : 0, STATX_BTIME, &sx) == 0 && (sx.stx_mask & STATX_BTIME))', '    if (false)', 'f72'),
     ('gui/panels.c', '            if (app.ui.marked ? app.ui.mark[i] : i == app.ui.list.sel) props.idx = i;', '            {}', 'f72'),
     (WK, '        if (whole && gen == atomic_load(&walk.gen)) walk.sum = s, walk.sum_gen = gen, walk.done = walk.fresh = true;', '', 'f72'),
@@ -309,7 +286,6 @@ MUTANTS = [
     ('gui/input.c', '        if (ui_press(&app.panel_press, pick->list.top + h.pick_row, now_ms()) == 2) in->pick_drow = h.pick_row;', '        if (false) in->pick_drow = h.pick_row;', 'f73'),
     ('gui/input.c', '    in->toggle = h.toggle;\n', '', 'f73'),
     (G, '        if (app.ui.panel == UI_PANEL_OW) in.app_name = ow.names, in.app_n = ow.shown < UI_APPS_MAX ? ow.shown : UI_APPS_MAX;', '', 'f73'),
-    ('gui/input.c', '    case GLFW_KEY_TAB: return m == 0 || m == GLFW_MOD_SHIFT ? UK_TAB : UK_NONE;', '    case GLFW_KEY_TAB: return m == 0 ? UK_TAB : UK_NONE;', 'f73'),
     ('gui/files.c', '    ui_resize(&app.ui.ow.list, ow_rows(GetScreenHeight()));   // Open With\'s list (F7.3)', '', 'f73'),
     # ---- after Michael's try: listed at once, the apps' icons
     (OW, '    ui_ow_filter(&app.ui, &in);\n}', '}', 'f73'),
@@ -324,7 +300,6 @@ MUTANTS = [
     ('gui/icons.c', '    if (stat(file, &st) != 0 || st.st_size > SVG_BYTES_MAX) return img;', '    if (stat(file, &st) != 0) return img;', 'f73'),
     # ---- the find bar (Michael, 2026-10-26)
     ('gui/frame.c', '        if (app.ui.finding) layout_find_bar();', '', 'f2'),
-    ('gui/input.c', '        case GLFW_KEY_DOWN: return UK_SEL_DOWN;', '', 'f2'),
     (G, ' || (stat(dir, &sst) == 0 && !S_ISDIR(sst.st_mode))) {', ') {', 'f73'),
     ('gui/folder.c', '    if (!same) app.ui.find_from = app.ui.list.sel;', '', 'f2'),
     ('gui/files.c', ' -\n               (app.ui.finding ? FIND_BAR_H : 0);', ';', 'f2'),
@@ -338,13 +313,8 @@ MUTANTS = [
     ('gui/frame.c', '    u->shows_hidden = app.show_hidden;', '', 'f74'),
     ('gui/actions.c', '    case UA_RELOAD: app.reloads_asked++, app.ui.view == UI_VIEW_SEARCH ? search_again() : reload(); break;', '', 'f74'),
     ('gui/actions.c', '    case UA_TRASH_VIEW: go_to(TRASH_URI, STR_EMPTY, 0); break;', '', 'f74'),
-    ('gui/input.c', '    if (m == GLFW_MOD_ALT && key == GLFW_KEY_HOME) return UK_HOMEDIR;', '', 'f74'),
-    ('gui/input.c', '    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_R) return UK_RELOAD;', '', 'f74'),
-    ('gui/input.c', '    if (m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT) && key == GLFW_KEY_I) return UK_INVERT;', '', 'f74'),
     ('gui/topbar.c', '            if (!ui_menu_shown(&app.ui, it) || (it == UM_SEP', '            if ((it == UM_SEP', 'f74'),
     # Left out: the marks' column and the ✓ / • drawn (pixels only); menu-view.png shows them.
-    ('gui/input.c', '    if (m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT) && key == GLFW_KEY_A) return UK_SELECT_MATCH;', '', 'f74'),
-    ('gui/input.c', '    if (m == GLFW_MOD_ALT && key == GLFW_KEY_END) return UK_TRASH_VIEW;', '', 'f74'),
     # Left out: the bar's "Select" label and its footer hint (pixels only); select-match.png shows them.
     ('gui/actions.c', '    if (dup.n > 0) copy_here(&dup, NULL);', '', 'f74'),
     ('gui/actions.c', '    dup.cut = false, dup.n = targets(&pastea, dup.path, CLIP_PATHS_MAX);', '    dup.cut = true, dup.n = targets(&pastea, dup.path, CLIP_PATHS_MAX);', 'f74'),
@@ -359,7 +329,6 @@ MUTANTS = [
     # Not a mutant: bookmark_add's places_reload, the watch reads them again 100 ms later; it is kept so
     # the menu is right at once.
     ('gui/actions.c', '        if (b) go_to(b->path, STR_EMPTY, 0);', '', 'f75'),
-    ('gui/input.c', '    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_D) return UK_ADD_BOOKMARK;   // (F7.5, as Nemo)', '', 'f75'),
     ('gui/topbar.c', ' || (it == UM_SEP && !ui_menu_sep_shown(&app.ui, m, i))) continue;', ') continue;', 'f74'),
     (W, '        if (e->wd == atomic_load(&watch.bm_wd) && e->len && strcmp(e->name, "bookmarks") == 0) *mounts = true;', '', 'f75'),
     (W, '    watch_bookmarks();\n    watch_conf();', '    watch_conf();', 'f75'),
@@ -380,8 +349,6 @@ MUTANTS = [
     ('gui/frame.c', '        if (!bmarks.b[i].path[0] || local++ < UI_MENU_BOOKMARKS) continue;', '        if (local++ < UI_MENU_BOOKMARKS) continue;', 'f75'),
     ('gui/input.c', '            if (in_box(CLAY_IDI("bmp-row", r), x, y)) h.bmp_row = r;', '', 'f75'),
     ('gui/input.c', '        if (ui_press(&app.panel_press, app.ui.bmp_list.top + h.bmp_row, now_ms()) == 2) in->bmp_drow = h.bmp_row;', '        if (false) in->bmp_drow = h.bmp_row;', 'f75'),
-    ('gui/input.c', '    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_B) return UK_EDIT_BOOKMARKS;', '', 'f75'),
-    ('gui/input.c', '    if (m == GLFW_MOD_ALT && key == GLFW_KEY_DOWN) return UK_ALT_DOWN;   // (Edit Bookmarks\' move down)', '', 'f75'),
     ('gui/folder.c', '        int at = bm_keep >= 0 ? bm_locate(&bmarks, &prev, bm_keep) : -1;', '        int at = -1;', 'f75'),
     # Not run: the bmp buttons' and the field's drawing, the hint (pixels); edit-bookmarks.png shows them.
     # ---- F7.5: the review's MEDIUM, a bookmarks file not read whole
@@ -389,7 +356,6 @@ MUTANTS = [
     # Not run: bmp_change's bm_read refusal (with the file unreadable the panel lists no line to act
     # on) and the empty-format refusals (an over-a-MiB file); test_f75.c covers bm_read and bm_format.
     # ---- F7.5: Keyboard Shortcuts
-    ('gui/input.c', '    if ((m == 0 || m == GLFW_MOD_CONTROL) && key == GLFW_KEY_F1) return UK_SHORTCUTS;', '    if (m == 0 && key == GLFW_KEY_F1) return UK_SHORTCUTS;', 'f75'),
     ('gui/input.c', '    if (app.ui.panel == UI_PANEL_OW || app.ui.panel == UI_PANEL_KEYS || app.ui.panel == UI_PANEL_BRANCHES) return in->panel_wheel = notches, false;', '    if (app.ui.panel == UI_PANEL_OW || app.ui.panel == UI_PANEL_BRANCHES) return in->panel_wheel = notches, false;', 'f75'),
     ('gui/files.c', '    ui_resize(&app.ui.keys_list, keys_rows(GetScreenHeight()));   // Keyboard Shortcuts\'', '', 'f75'),
     # Left out: the panel's drawing (pixels); shortcuts.png shows it.
@@ -398,8 +364,6 @@ MUTANTS = [
     # ---- F8 step 1: the files' right-click menus. Not run: input_real's right button (scripts press
     # through right_at), the footer's hint (pixels); ctx-entry.png, ctx-key.png, ctx-here.png show them.
     # Nor ctx_place's menu above the cursor's row: f8's four rows leave room under the last.
-    ('gui/input.c', '    if ((m == GLFW_MOD_SHIFT && key == GLFW_KEY_F10) || (m == 0 && key == GLFW_KEY_MENU)) return UK_CONTEXT;', '    if (m == 0 && key == GLFW_KEY_MENU) return UK_CONTEXT;', 'f8'),
-    ('gui/input.c', '    if ((m == GLFW_MOD_SHIFT && key == GLFW_KEY_F10) || (m == 0 && key == GLFW_KEY_MENU)) return UK_CONTEXT;', '    if (m == GLFW_MOD_SHIFT && key == GLFW_KEY_F10) return UK_CONTEXT;', 'f8'),
     ('gui/frame.c', '        if (app.ui.menu_on && app.ui.menu >= UI_MENUS) layout_menu(app.ui.menu);   // a right-click menu (F8)', '', 'f8'),
     ('gui/input.c', '    if (app.ui.menu_on) {\n        in->menu_away = true;\n        return;\n    }\n    if (modal_kind()', '    if (modal_kind()', 'f8'),
     ('gui/input.c', '    else if (h.row >= 0) in->ctx_row = h.row;', '    else if (false) in->ctx_row = h.row;', 'f8'),
@@ -415,7 +379,6 @@ MUTANTS = [
     # ---- F8 step 2: a folder's own entries, Make Link, Follow Link. Not run: make_link's messages
     # (the status line), its name-too-long branch (NAME_MAX names in a scratch tree); into_itself's
     # dest (a mutant would copy a folder into itself without end; f8b checks the refusal).
-    ('gui/input.c', "        case GLFW_KEY_M: return UK_MAKE_LINK;   // (F8, as Nemo)", '', 'f8'),
     ('gui/frame.c', '    u->sel_link = e && (e->kind == K_LINK_FILE || e->kind == K_LINK_DIR);', '    u->sel_link = false;', 'f8'),
     ('gui/frame.c', '    u->sel_bm = e && kind_is_dir(e->kind) && entry_path(u->list.sel, p, sizeof p) && bm_find(&bmarks, p) >= 0;', '    u->sel_bm = false;', 'f8'),
     ('gui/folder.c', '    bool ok = bm_read(&bmwa, file, &now, &err) && bm_add(&bmwa, &now, dir, &err);', '    bool ok = bm_read(&bmwa, file, &now, &err) && bm_add(&bmwa, &now, app.cwd, &err);', 'f8'),
@@ -652,12 +615,6 @@ MUTANTS = [
     ('gui/clipboard.c', "    if (!(types & (OFFER_UTF8 | OFFER_TEXT))) {", "    if (true) {", 'clip'),
     # Keys through the compositor (keys, in the test sway with vkbd, 2026-10-28): the mappings no
     # other script reaches, and the scripted window's door for them.
-    ('gui/input.c', "    if (m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT) && key == GLFW_KEY_F) return UK_SEARCH;\n", "", 'keys'),
-    ('gui/input.c', "    if (m == GLFW_MOD_CONTROL && (key == GLFW_KEY_ENTER || key == GLFW_KEY_KP_ENTER)) return UK_CONTAINING;", "    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_KP_ENTER) return UK_CONTAINING;", 'keys'),
-    ('gui/input.c', "    if (m == GLFW_MOD_ALT && (key == GLFW_KEY_ENTER || key == GLFW_KEY_KP_ENTER)) return UK_TERMINAL;", "    if (m == GLFW_MOD_ALT && key == GLFW_KEY_KP_ENTER) return UK_TERMINAL;", 'keys'),
-    ('gui/input.c', "    if (m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT) && key == GLFW_KEY_RIGHT) return UK_SEL_WORD_RIGHT;\n", "", 'keys'),
-    ('gui/input.c', "    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_BACKSPACE) return UK_WORD_BACKSPACE;\n", "", 'keys'),
-    ('gui/input.c', "    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_DELETE) return UK_WORD_DELETE;\n", "", 'keys'),
     (G, "                memcpy(in.ev, real.ev, sizeof *real.ev * (size_t)real.nev);\n                in.nev = real.nev;", "                memcpy(in.ev, real.ev, sizeof *real.ev * (size_t)real.nev);", 'keys'),
     # The views in gui/folder.c (2026-10-28): listing, watching, Up, what changes prune, the table.
     ('gui/folder.c', '    return strcmp(dir, TRASH_URI) == 0 ? UI_VIEW_TRASH : is_search(dir)', '    return is_search(dir)', 'f6'),
@@ -741,7 +698,6 @@ MUTANTS = [
     ('gui/actions.c', '        else closed_tabs.n--, tab_open(', '        else tab_open(', 'f11'),
     ('gui/actions.c', '        else if (tabbar.n == UI_TABS_MAX) set_status(true, "%d tabs is the most ofx keeps open", UI_TABS_MAX);   // (kept for when one closes)\n', '', 'f11'),
     ('gui/frame.c', '    u->can_reopen = closed_tabs.n > 0;   // (F11)', '    u->can_reopen = true;', 'f11'),
-    ('gui/input.c', '    if (m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT) && key == GLFW_KEY_T) return UK_TAB_REOPEN;   // (F11)\n', '', 'keys'),
     # F11 step 3: the tabs across a restart (2026-11-01)
     ('gui/restore.c', '    if (!app.conf.restore_tabs || (others > 0 && !closing_all)) {', '    if (!app.conf.restore_tabs || others > 0) {', 'f11'),
     ('gui/restore.c', '    if (!app.conf.restore_tabs || (others > 0 && !closing_all)) {', '    if ((others > 0 && !closing_all)) {', 'f11'),
@@ -851,7 +807,6 @@ MUTANTS = [
     ('gui/actions.c', '    else if (editors.old && !editors.told) editors.told = true, set_status', '    else if (false) editors.told = true, set_status', 'f9'),
     ('gui/actions.c', '    editors.old = editors.user.n - mine;', '    editors.old = 0;', 'f9'),
     ('gui/frame.c', '    u->sel_hit = e && e->hit;   // (F9 step 4: Open at Line)', '', 'f9'),
-    ('gui/input.c', '    if (m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT) && (key == GLFW_KEY_ENTER || key == GLFW_KEY_KP_ENTER)) return UK_OPEN_LINE;', '', 'keys'),
     # Drives at the top (2026-10-29): an open menu's entry over a menu title is the entry's
     ('gui/input.c', '        for (int m = 0; m < UI_MENUS && h.menu_title < 0 && h.menu_item < 0; m++)', '        for (int m = 0; m < UI_MENUS && h.menu_title < 0; m++)', 'f8'),
     # Tab on the folder shown's row (2026-10-29)
@@ -870,7 +825,6 @@ MUTANTS = [
     ('gui/watch.c', ' | IN_DELETE_SELF | IN_MOVE_SELF |\n                                                    IN_ONLYDIR | IN_MASK_ADD);', ' | IN_DELETE_SELF | IN_MOVE_SELF |\n                                                    IN_ONLYDIR);', 'f6'),
     ('gui/actions.c', '    if (marks) ui_mark_clear(&app.ui);\n    trash_state();\n    reload();', '    if (marks) ui_mark_clear(&app.ui);\n    reload();', 'f6'),
     # F13 step 1 (2026-11-04): Copy Path (copypath, in the clip group)
-    ('gui/input.c', '    if (m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT) && key == GLFW_KEY_C) return UK_COPY_PATH;   // (F13)\n', '', 'clip'),
     ('gui/input.c', '    case UM_COPY_PATH_IT: path_copy(dir); break;\n', '', 'clip'),
     ('gui/actions.c', '    if (only) c.path[0] = arena_cstr(&pastea, str_from_c(only)), c.n = 1;', '    if (false) c.path[0] = arena_cstr(&pastea, str_from_c(only)), c.n = 1;', 'clip'),
     ('gui/actions.c', '    if (c.n == 0 && app.list.n == 0) c.path[0]', '    if (false) c.path[0]', 'clip'),
@@ -1017,6 +971,13 @@ MUTANTS = [
     (G, '    theme_fit_list(&app.theme_list);   // (2026-11-07: the files area only rescued)\n', '', 'f54'),
     # A files-area function drawing from the frame's copy: f54's markedname (the theme-fit review, 2026-11-08).
     ('gui/files.c', "    Theme *t = &app.theme_list;   // (the files area: theme_fit_list)\n    const Entry *e = &app.list.e[i];\n    return e->kind == K_LINK_BROKEN", "    Theme *t = &app.theme;\n    const Entry *e = &app.list.e[i];\n    return e->kind == K_LINK_BROKEN", 'f54'),
+    # F15 step 1 (2026-11-08): the key callback sends ui/keys.c's event, the character callback a
+    # typed character's with its command, the menus and the shortcuts panel show the table's keys.
+    ('gui/input.c', "    else if (e.key || e.cmd) ev_push(e);", "    else if (e.cmd) ev_push(e);", 'keys'),
+    ('gui/input.c', "    ev_push(ui_event_of((UiChord){ cp, UI_MOD_TYPED }));", "    ev_push((UiEvent){ UK_NONE, cp, UK_NONE });", 'keys'),
+    ('gui/topbar.c', "if (ui_menu_key(it)[0]) text(cz(ui_menu_key(it)), on ? cc(t->fg_dim) : off);", "", 'f7'),
+    ('gui/shortcuts.c', "keycap(ui_keys_key(line, 0));", "keycap(\"\");", 'f75'),
+    ('gui/input.c', "float lw = str_width(label) + str_width(str_from_c(ui_menu_key(it)));", "float lw = str_width(label);", 'f7'),
 ]
 import concurrent.futures, queue, threading, time
 

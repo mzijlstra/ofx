@@ -56,8 +56,8 @@ build/release/ofx-fm1: tools/fm1.c $(wildcard base/*.c base/*.h fs/*.c) | build/
 # The tests warn of a function nothing calls: they take in every fs/ and ui/ function, so one unused
 # there is dead (2026-10-28: state_save had 20 checks on code ofx no longer ran). The binaries can't:
 # each takes in all of fs/ and uses part of it.
-build/test: $(wildcard tests/*.c) $(wildcard base/*.c base/*.h fs/*.c ui/*.c) | build
-	$(CC) $(CFLAGS) -Wunused-function $(IMG_INC) $(DEBUG) -o $@ tests/test.c $(IMG_LIBS) -lm
+build/test: $(wildcard tests/*.c) $(wildcard base/*.c base/*.h fs/*.c ui/*.c) gui/glfwkeys.c | build
+	$(CC) $(CFLAGS) -Wunused-function $(IMG_INC) -isystem vendor/raylib/src/external/glfw/include $(DEBUG) -o $@ tests/test.c $(IMG_LIBS) -lm
 
 # Then ofx-clean as its timer runs it, reading ofx.conf (a scratch cache and config, the guard on).
 test: build/test build/ofx-clean

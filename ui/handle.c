@@ -53,7 +53,7 @@ static bool ui_search_event(Ui *u, UiEvent e, const UiInput *in)
         return true;
     }
     if (e.key == UK_TAB && u->search_inside) return u->focus = inside ? UI_FOCUS_SEARCH : UI_FOCUS_INSIDE, u->search_was_inside = !inside, true;
-    if (e.key == UK_CRUMBS) return u->focus = UI_FOCUS_LIST, ui_crumbs_focus(u, in), true;   // (Ctrl+K again: on to the path buttons, as Ctrl+J from the find bar goes on to the jobs)
+    if (e.cmd == UK_CRUMBS) return u->focus = UI_FOCUS_LIST, ui_crumbs_focus(u, in), true;   // (Ctrl+K again: on to the path buttons, as Ctrl+J from the find bar goes on to the jobs)
     UiLine l = inside ? ui_inside_line(u) : ui_search_line(u);
     if (ui_line_copies_nothing(l, e)) return u->focus = UI_FOCUS_LIST, false;   // (the cursor's result)
     UiLineHit h = ui_line_key(u, l, e, in->paste);
@@ -98,6 +98,12 @@ static bool ui_find_event(Ui *u, UiNames names, UiEvent e, const UiInput *in)
     UiLineHit h = ui_line_key(u, ui_find_line(u), e, in->paste);
     if (h == UI_LINE_CHANGED) ui_find_update(u, names);
     if (h) return true;
+    if (e.cmd == UK_JOBS) {
+        ui_find_leave(u);
+        if (in->job_n > 0) u->focus = UI_FOCUS_JOBS, u->job_at = 0;
+        return true;
+    }
+    if (e.cmd == UK_FIND) return true;
     switch (e.key) {
     case UK_ENTER: case UK_SHIFT_ENTER:
         if (u->find_select) ui_find_select(u, names);
@@ -108,11 +114,6 @@ static bool ui_find_event(Ui *u, UiNames names, UiEvent e, const UiInput *in)
         u->list.sel = ui_find_back(u), ui_show_sel(&u->list);
         return true;
     case UK_UP: case UK_DOWN: case UK_SEL_UP: case UK_SEL_DOWN: ui_find_step(u, names, e.key == UK_UP || e.key == UK_SEL_UP ? -1 : 1); return true;
-    case UK_JOBS:
-        ui_find_leave(u);
-        if (in->job_n > 0) u->focus = UI_FOCUS_JOBS, u->job_at = 0;
-        return true;
-    case UK_FIND: return true;
     default: ui_find_leave(u); return false;   // a command: the keys go back to the list, which does it
     }
 }
@@ -345,12 +346,12 @@ static bool ui_handle_pointer(Ui *u, UiNames names, const UiInput *in, UiOnTop o
 // one is a line here): its kind and argument, through the view's rules (ui_view_act) when gated,
 // and only with entries to act on when files.
 static const struct { UiKey key; UiActionKind kind; int arg; bool gated, files; } UI_KEY_ACTS[] = {
-    { UK_BACKSPACE, UA_PARENT, 0, false, false }, { UK_PARENT, UA_PARENT, 0, false, false },
+    { UK_PARENT, UA_PARENT, 0, false, false },
     { UK_BACK, UA_BACK, 0, false, false }, { UK_FORWARD, UA_FORWARD, 0, false, false },
     { UK_HIDDEN, UA_HIDDEN, 0, false, false }, { UK_RELOAD, UA_RELOAD, 0, false, false },
     { UK_HOMEDIR, UA_HOMEDIR, 0, false, false }, { UK_TRASH_VIEW, UA_TRASH_VIEW, 0, false, false },
     { UK_UNDO, UA_UNDO, 0, false, false },
-    { UK_LOCATION, UA_LOCATION, 0, false, false }, { UK_WORD_RIGHT, UA_LOCATION, 0, false, false },   // (Ctrl+Right too, outside a text field)
+    { UK_LOCATION, UA_LOCATION, 0, false, false },
     { UK_TAB_NEW, UA_TAB_NEW, 0, false, false }, { UK_TAB_REOPEN, UA_TAB_REOPEN, 0, false, false },
     { UK_TAB_CLOSE, UA_TAB_CLOSE, -1, false, false },
     { UK_TAB_NEXT, UA_TAB_STEP, 1, false, false }, { UK_TAB_PREV, UA_TAB_STEP, -1, false, false },
@@ -361,47 +362,32 @@ static const struct { UiKey key; UiActionKind kind; int arg; bool gated, files; 
     { UK_COPY, UA_COPY, 0, true, true }, { UK_MAKE_LINK, UA_MAKE_LINK, 0, true, true }, { UK_CUT, UA_CUT, 0, true, true },
 };
 
-// A key in the files or the sidebar (ui_handle), Shift taken off the moves (shifted, and
-// shift_enter for Shift+Enter): the moves, the vi letters, and the commands. True when it asks gui/
-// for something (*out); *extend is where a Shift move starts.
-static bool ui_list_key(Ui *u, UiNames names, const UiInput *in, UiEvent e, bool shifted, bool shift_enter, isize *extend, UiAction *out)
+// A command in the files or the sidebar (ui_handle), Shift taken off the moves (shifted, and
+// shift_enter for Shift+Enter); ch the key's character (Alt+1 .. Alt+9's digit). True when it asks
+// gui/ for something (*out); *extend is where a Shift move starts.
+static bool ui_list_key(Ui *u, UiNames names, const UiInput *in, UiKey key, u32 ch, bool shifted, bool shift_enter, isize *extend, UiAction *out)
 {
     UiList *l = &u->list;
     bool files = l->n > 0 && u->focus != UI_FOCUS_SIDE;
-    // H, J, K and L (Shift and h, j, k, l) as the Shift arrows: here, after the questions and the
-    // find bar have taken their letters (K keeps all in a clash; text in the find bar).
-    if (e.key == UK_NONE && (e.ch == 'H' || e.ch == 'J' || e.ch == 'K' || e.ch == 'L')) {
-        shifted = true;
-        e = (UiEvent){ e.ch == 'H' ? UK_LEFT : e.ch == 'J' ? UK_DOWN : e.ch == 'K' ? UK_UP : UK_RIGHT, 0 };
-    }
     if (shifted && u->focus != UI_FOCUS_SIDE) *extend = l->sel;
     // The keys and letters that move a cursor: the sidebar's when it has the keyboard. In the
     // icon view, Up and Down move a row and Left and Right a cell (F6.2).
     UiList *m = u->focus == UI_FOCUS_SIDE ? &u->side : l;
     isize page = m->rows > 1 ? m->rows - 1 : 1;
     bool grid = u->grid && m == l;
-    UiKey key = ui_vi_key(e).key;
-    if (key == UK_NONE) {
-        switch (e.ch) {
-        case 'g': key = UK_HOME; break;
-        case 'G': key = UK_END; break;
-        case '/': key = UK_FIND; break;
-        case '.': key = UK_HIDDEN; break;
-        case 't': key = UK_TERMINAL; break;
-        case 'r':
-            if (u->view == UI_VIEW_TRASH && files) return *out = (UiAction){ UA_RESTORE, 0, false }, true;
-            return false;
-        case '~': key = UK_HOMEDIR; break;
-        case 's': u->sort = (Sort){ (SortKey)((u->sort.key + 1) % SORT_KEYS), false }; return *out = (UiAction){ UA_SORT, 0, false }, true;
-        case 'S': u->sort.reverse = !u->sort.reverse; return *out = (UiAction){ UA_SORT, 0, false }, true;
-        case 'n': ui_find_again(u, names, 1); return false;
-        case 'N': ui_find_again(u, names, -1); return false;
-        case ' ':
-            // Space marks the entry under the cursor, or unmarks it, and moves on.
-            if (files) ui_mark(u, l->sel, !ui_marked(u, l->sel)), ui_move(l, 1);
-            return false;
-        default: return false;
-        }
+    switch (key) {
+    case UK_RESTORE:
+        if (u->view == UI_VIEW_TRASH && files) return *out = (UiAction){ UA_RESTORE, 0, false }, true;
+        return false;
+    case UK_SORT_NEXT: u->sort = (Sort){ (SortKey)((u->sort.key + 1) % SORT_KEYS), false }; return *out = (UiAction){ UA_SORT, 0, false }, true;
+    case UK_SORT_REVERSE: u->sort.reverse = !u->sort.reverse; return *out = (UiAction){ UA_SORT, 0, false }, true;
+    case UK_FIND_NEXT: ui_find_again(u, names, 1); return false;
+    case UK_FIND_PREV: ui_find_again(u, names, -1); return false;
+    case UK_MARK:
+        // Space marks the entry under the cursor, or unmarks it, and moves on.
+        if (files) ui_mark(u, l->sel, !ui_marked(u, l->sel)), ui_move(l, 1);
+        return false;
+    default: break;
     }
     if (grid && (key == UK_LEFT || key == UK_RIGHT)) {
         if (shifted) ui_move(l, key == UK_LEFT ? -1 : 1);   // a Shift move doesn't wrap
@@ -456,7 +442,7 @@ static bool ui_list_key(Ui *u, UiNames names, const UiInput *in, UiEvent e, bool
         break;
     case UK_F9: return *out = ui_side_mode(u, (SideMode)((u->side_mode + 1) % SIDE_MODES)), true;
     case UK_TAB:
-    case UK_WORD_LEFT:   // (Ctrl+Left: a word in a text field, the sidebar here)
+    case UK_SIDE_GO:   // (Ctrl+Left: a word in a text field, the sidebar here)
         // Tab goes to the sidebar and back, Ctrl+Left there; a hidden one shows as places
         // (gui/ lists them for the mode, the cursor off a heading).
         if (key == UK_TAB && u->focus == UI_FOCUS_SIDE) {
@@ -527,7 +513,7 @@ static bool ui_list_key(Ui *u, UiNames names, const UiInput *in, UiEvent e, bool
     case UK_OPEN_LINE:   // (F9 step 4: gui/ says so when the result has no line)
         if (u->view == UI_VIEW_SEARCH && files) return *out = (UiAction){ UA_OPEN_LINE, l->sel, false }, true;
         break;
-    case UK_TAB_JUMP: return *out = (UiAction){ UA_TAB_JUMP, (isize)e.ch, false }, true;
+    case UK_TAB_JUMP: return *out = (UiAction){ UA_TAB_JUMP, (isize)ch, false }, true;
     default: break;
     }
     return false;
@@ -583,9 +569,9 @@ static UiAction ui_handle_frame(Ui *u, UiNames names, const UiInput *in)
     for (int k = u->menu_key.key || u->menu_key.ch ? -1 : 0; k < in->nev; k++, extend = ui_extend(u, extend, was)) {
         UiEvent e = k < 0 ? u->menu_key : in->ev[k];
         was = l->sel;
-        if (k < 0) u->menu_key = (UiEvent){ UK_NONE, 0 };
+        if (k < 0) u->menu_key = (UiEvent){ UK_NONE, 0, UK_NONE };
         // Ctrl+Q (F7.1): every window closes, this one as Ctrl+Q closed it before (below).
-        if (e.key == UK_QUIT_ALL && !u->quit_asking) {
+        if (e.cmd == UK_QUIT_ALL && !u->quit_asking) {
             u->menu_on = false;
             if (in->jobs_all > 0) u->quit_asking = true, u->cancel_asking = false;
             return (UiAction){ UA_CLOSE_ALL, 0, in->jobs_all <= 0 };
@@ -600,14 +586,14 @@ static UiAction ui_handle_frame(Ui *u, UiNames names, const UiInput *in)
         }
         // The menu bar's keys (F7.1): F10 the first menu, Alt and a letter its menu; under a menu
         // open, its keys.
-        if (!prompt && !u->menu_on && (e.key == UK_F10 || (e.key == UK_MENU && ui_menu_of(e.ch) >= 0))) {
-            ui_menu_open(u, e.key == UK_F10 ? 0 : ui_menu_of(e.ch), true);
+        if (!prompt && !u->menu_on && (e.cmd == UK_F10 || (e.key == UK_MENU && ui_menu_of(e.ch) >= 0))) {
+            ui_menu_open(u, e.cmd == UK_F10 ? 0 : ui_menu_of(e.ch), true);
             continue;
         }
         // Shift+F10 and the Menu key (F8): the cursor's menu, or the folder shown's in an empty one,
         // while the files have the keys (an edit or find line keeps them); the sidebar's cursor's,
         // or the path button's, while they have them.
-        if (!prompt && !u->menu_on && e.key == UK_CONTEXT && u->focus != UI_FOCUS_EDIT && !(u->focus == UI_FOCUS_FIND && u->finding) && u->focus != UI_FOCUS_JOBS) {
+        if (!prompt && !u->menu_on && e.cmd == UK_CONTEXT && u->focus != UI_FOCUS_EDIT && !(u->focus == UI_FOCUS_FIND && u->finding) && u->focus != UI_FOCUS_JOBS) {
             if (u->focus == UI_FOCUS_CRUMBS && u->crumb_at >= in->crumb_n) ui_branch_open(u, true);   // (the branch button's)
             else if (u->focus == UI_FOCUS_CRUMBS) ui_folder_open(u, -1, u->crumb_at, true);
             else if (u->focus == UI_FOCUS_SIDE && u->side.n > 0 && !ui_side_head(u, u->side.sel)) ui_folder_open(u, u->side.sel, -1, true);
@@ -619,7 +605,7 @@ static UiAction ui_handle_frame(Ui *u, UiNames names, const UiInput *in)
             if (ui_menu_event(u, e, &a)) {
                 if (a.kind != UA_NONE) return a;
                 if (!u->menu_key.key && !u->menu_key.ch) continue;
-                e = u->menu_key, u->menu_key = (UiEvent){ UK_NONE, 0 };   // an entry picked runs its key, here
+                e = u->menu_key, u->menu_key = (UiEvent){ UK_NONE, 0, UK_NONE };   // an entry picked runs its key, here
             }
         }
         if (ui_panel_key(u, on, e, in, &out)) {   // a panel up takes every key
@@ -635,7 +621,7 @@ static UiAction ui_handle_frame(Ui *u, UiNames names, const UiInput *in)
             if (a.kind != UA_NONE) return a;
             continue;
         }
-        if (u->focus == UI_FOCUS_EDIT && u->edit_path && e.key == UK_CRUMBS) {   // from the location line: it closes
+        if (u->focus == UI_FOCUS_EDIT && u->edit_path && e.cmd == UK_CRUMBS) {   // from the location line: it closes
             ui_crumbs_focus(u, in);   // (no path buttons: the line stays)
             continue;
         }
@@ -662,12 +648,14 @@ static UiAction ui_handle_frame(Ui *u, UiNames names, const UiInput *in)
             }
         }
         if (u->focus == UI_FOCUS_JOBS && ui_jobs_event(u, in, e)) continue;
-        // Outside an edit line and the path buttons, Shift doesn't change Enter; with a move in the
-        // files (arrows, Home, End, or H, J, K, L) it selects what the cursor passes over (below).
-        bool shifted = ui_unshift(e.key) != e.key;
-        bool shift_enter = e.key == UK_SHIFT_ENTER;   // Enter for the questions and the find bar; Open With in the files
-        e.key = shift_enter ? UK_ENTER : ui_unshift(e.key);
-        if (ui_list_key(u, names, in, e, shifted, shift_enter, &extend, &out)) return out;
+        // The files and the sidebar read the command (F15). Outside an edit line and the path
+        // buttons, Shift doesn't change Enter; with a move in the files (arrows, Home, End, or H, J,
+        // K, L: here, after the questions, a clash and the find bar took their letters) it selects
+        // what the cursor passes over (below).
+        bool shifted = ui_unshift(e.cmd) != e.cmd;
+        bool shift_enter = e.cmd == UK_SHIFT_ENTER;   // Open With in the files
+        UiKey cmd = shift_enter ? UK_ENTER : ui_unshift(e.cmd);
+        if (ui_list_key(u, names, in, cmd, e.ch, shifted, shift_enter, &extend, &out)) return out;
     }
     return UI_NONE;
 }

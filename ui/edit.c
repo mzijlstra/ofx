@@ -399,13 +399,14 @@ static bool ui_line_active(Ui *u, UiLine *out)
 static UiAction ui_edit_event(Ui *u, UiEvent e, Str paste)
 {
     if (ui_line_key(u, ui_edit_line(u), e, paste)) return UI_NONE;
+    if (e.cmd == UK_LOCATION) {   // Ctrl+L again: the location line closes; a rename doesn't take it
+        if (u->edit_path) ui_edit_close(u);
+        return UI_NONE;
+    }
     switch (e.key) {
     case UK_ENTER:
     case UK_SHIFT_ENTER: return (UiAction){ u->edit_path ? UA_GO : UA_RENAME, 0, false };
     case UK_ESC: ui_edit_close(u); break;
-    case UK_LOCATION:   // Ctrl+L again: the location line closes; a rename doesn't take it
-        if (u->edit_path) ui_edit_close(u);
-        break;
     default: break;
     }
     return UI_NONE;

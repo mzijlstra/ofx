@@ -19,6 +19,7 @@ static UiAction ui_props_event(Ui *u, UiEvent e)
 {
     e = ui_vi_key(e);
     if (e.key == UK_NONE && e.ch == ' ') e.key = UK_ENTER;
+    if (e.cmd == UK_PROPERTIES) return ui_panel_close(u, UI_PANEL_PROPS), UI_NONE;
     int row = u->prop_at / 3, col = u->prop_at % 3;
     switch (ui_unshift(e.key)) {
     case UK_LEFT: if (col > 0) u->prop_at--; break;
@@ -28,7 +29,7 @@ static UiAction ui_props_event(Ui *u, UiEvent e)
     case UK_ENTER: case UK_SHIFT_ENTER:
         if (u->prop_can) return (UiAction){ UA_CHMOD, u->prop_at, false };
         break;
-    case UK_ESC: case UK_PROPERTIES: ui_panel_close(u, UI_PANEL_PROPS); break;
+    case UK_ESC: ui_panel_close(u, UI_PANEL_PROPS); break;
     default: break;
     }
     return UI_NONE;
@@ -225,7 +226,7 @@ static void ui_keys_filter(Ui *u)
         u->keys_line[n++] = (short)(-1 - s);
         for (int r = 0; r < UI_KEYS_N; r++)
             if (UI_KEYS[r].sec == (UiKeySection)s && (!u->keys_filter.len || ui_match(&u->keys_m, str_from_c(UI_KEYS[r].action)) ||
-                                                      ui_match(&u->keys_m, str_from_c(UI_KEYS[r].key)) || ui_match(&u->keys_m, str_from_c(UI_KEYS[r].key2))))
+                                                      ui_match(&u->keys_m, str_from_c(ui_keys_key(r, 0))) || ui_match(&u->keys_m, str_from_c(ui_keys_key(r, 1)))))
                 u->keys_line[n++] = (short)r;
         if (n == head + 1) n = head;   // nothing under it
     }
@@ -253,12 +254,16 @@ static void ui_keys_event(Ui *u, UiEvent e, Str paste)
 {
     UiList *l = &u->keys_list;
     int page = l->rows > 1 ? l->rows - 1 : 1;
+    if (e.cmd == UK_SHORTCUTS) {
+        ui_keys_close(u);
+        return;
+    }
     switch (e.key) {
     case UK_UP: case UK_DOWN: ui_scroll(l, e.key == UK_UP ? 1 : -1); break;   // (as the wheel's notches: up is +)
     case UK_PAGEUP: case UK_PAGEDOWN: ui_scroll(l, e.key == UK_PAGEUP ? page : -page); break;
     case UK_HOME: ui_scroll(l, (int)l->n); break;
     case UK_END: ui_scroll(l, (int)-l->n); break;
-    case UK_ESC: case UK_SHORTCUTS: case UK_ENTER: ui_keys_close(u); break;
+    case UK_ESC: case UK_ENTER: ui_keys_close(u); break;
     default:
         if (ui_line_key(u, ui_keys_line(u), e, paste) == UI_LINE_CHANGED) ui_keys_filter(u);
         break;

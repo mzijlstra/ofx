@@ -103,7 +103,7 @@ static void test_on_top_owner(void)
         UiAction out;
         UiOnTop on = (UiOnTop)k;
         bool owned = on == UI_ON_NONE || on == UI_ON_FULL || on == UI_ON_CLASH || ui_is_question(on) ||
-                     ui_panel_key(&u, on, (UiEvent){ UK_NONE, 0 }, &in, &out);
+                     ui_panel_key(&u, on, ev_ch(0), &in, &out);
         checks++;
         if (!owned) failures++, fprintf(stderr, "UiOnTop %d: no owner for its keys\n", k);
     }

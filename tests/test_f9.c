@@ -397,7 +397,7 @@ static void test_search_inside_keys(void)
     Ui u = menu_ui(5);
     u.mark = mark, u.view = UI_VIEW_SEARCH, u.focus = UI_FOCUS_SEARCH;
     UiInput in = ui_input_none();
-    in.ev[in.nev++] = (UiEvent){ UK_MENU, 'i' };
+    in.ev[in.nev++] = ui_event_of((UiChord){ 'i', UI_MOD_ALT });
     CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.search_inside && u.focus == UI_FOCUS_INSIDE && u.search_edited && !u.menu_on);
     u.search_edited = false;
     in = chars("use");
@@ -407,11 +407,11 @@ static void test_search_inside_keys(void)
     CHECK(ui_line_active(&u, &l) && l.b == u.inside.b);   // (the clipboard's keys act on it)
     // Its toggles are its own; the name field's are find's.
     u.search_edited = false;
-    in = ui_input_none(), in.ev[in.nev++] = (UiEvent){ UK_MENU, 'c' };
+    in = ui_input_none(), in.ev[in.nev++] = ui_event_of((UiChord){ 'c', UI_MOD_ALT });
     ui_handle(&u, names, &in);
     CHECK(u.inside_opts.cased && !u.find_opts.cased && u.search_edited);
     CHECK(menu_keys(&u, 1, UK_TAB).kind == UA_NONE && u.focus == UI_FOCUS_SEARCH);
-    in = ui_input_none(), in.ev[in.nev++] = (UiEvent){ UK_MENU, 'w' };
+    in = ui_input_none(), in.ev[in.nev++] = ui_event_of((UiChord){ 'w', UI_MOD_ALT });
     ui_handle(&u, names, &in);
     CHECK(u.find_opts.word && !u.inside_opts.word);
     in = chars("*.ts");
@@ -421,12 +421,12 @@ static void test_search_inside_keys(void)
     // Enter gives the keys to the results; Alt+I there turns it off and on again.
     CHECK(menu_keys(&u, 1, UK_ENTER).kind == UA_NONE && u.focus == UI_FOCUS_LIST);
     u.search_edited = false;
-    in = ui_input_none(), in.ev[in.nev++] = (UiEvent){ UK_MENU, 'i' };
+    in = ui_input_none(), in.ev[in.nev++] = ui_event_of((UiChord){ 'i', UI_MOD_ALT });
     ui_handle(&u, names, &in);
     CHECK(!u.search_inside && u.focus == UI_FOCUS_LIST && u.search_edited && u.inside.len == 3);
     // Off from its field: the keys go to the name's, and Tab there goes on as before (the sidebar).
     u.search_inside = true, u.focus = UI_FOCUS_INSIDE;
-    in = ui_input_none(), in.ev[in.nev++] = (UiEvent){ UK_MENU, 'i' };
+    in = ui_input_none(), in.ev[in.nev++] = ui_event_of((UiChord){ 'i', UI_MOD_ALT });
     ui_handle(&u, names, &in);
     CHECK(!u.search_inside && u.focus == UI_FOCUS_SEARCH);
     CHECK(menu_keys(&u, 1, UK_TAB).kind == UA_NONE && u.focus != UI_FOCUS_INSIDE && u.focus != UI_FOCUS_SEARCH);
@@ -461,7 +461,7 @@ static void test_search_inside_keys(void)
         isize was = f ? u.inside.len : u.search.len;
         menu_keys(&u, 1, UK_F10);
         CHECK(u.menu_on && u.focus == UI_FOCUS_LIST && !ui_line_active(&u, NULL));
-        in = ui_input_none(), in.ev[in.nev++] = (UiEvent){ UK_PASTE, 0 }, in.paste = S("pasted");
+        in = ui_input_none(), in.ev[in.nev++] = ev_key(UK_PASTE), in.paste = S("pasted");
         CHECK(ui_handle(&u, names, &in).kind == UA_NOT_IN_SEARCH && !u.menu_on && (f ? u.inside.len : u.search.len) == was);
         // Esc gives the keys back to the field, also from the next menu over; F10 leaves them.
         u.focus = f ? UI_FOCUS_INSIDE : UI_FOCUS_SEARCH;
@@ -479,7 +479,7 @@ static void test_search_inside_keys(void)
     in = ui_input_none(), in.inside_btn = true;
     ui_handle(&u, names, &in);
     CHECK(u.search_inside);
-    in = ui_input_none(), in.ev[in.nev++] = (UiEvent){ UK_MENU, 'i' };
+    in = ui_input_none(), in.ev[in.nev++] = ui_event_of((UiChord){ 'i', UI_MOD_ALT });
     ui_handle(&u, names, &in);
     CHECK(u.search_inside);
     // Ctrl+K (and Ctrl+Up) from the results: back to the field the keys were in last; again from
@@ -490,7 +490,7 @@ static void test_search_inside_keys(void)
     u.focus = UI_FOCUS_LIST;
     CHECK(menu_keys(&u, 1, UK_CRUMBS).kind == UA_NONE && u.focus == UI_FOCUS_INSIDE);
     in = ui_input_none(), in.crumb_n = 2, in.crumb_last = 1;
-    in.ev[in.nev++] = (UiEvent){ UK_CRUMBS, 0 };
+    in.ev[in.nev++] = ev_key(UK_CRUMBS);
     ui_handle(&u, names, &in);
     CHECK(u.focus == UI_FOCUS_CRUMBS && u.crumb_at == 1);
     u.focus = UI_FOCUS_SEARCH;
@@ -514,7 +514,7 @@ static void test_search_inside_keys(void)
     // Outside a search: the path buttons straight away.
     u.view = UI_VIEW_FOLDER, u.focus = UI_FOCUS_LIST;
     in = ui_input_none(), in.crumb_n = 2, in.crumb_last = 0;
-    in.ev[in.nev++] = (UiEvent){ UK_CRUMBS, 0 };
+    in.ev[in.nev++] = ev_key(UK_CRUMBS);
     ui_handle(&u, names, &in);
     CHECK(u.focus == UI_FOCUS_CRUMBS);
     u.focus = UI_FOCUS_LIST, u.search_was_inside = false;
@@ -590,7 +590,7 @@ static void test_search_ui_keys(void)
     // Backspace change it, '/' doesn't go in; each change is marked for gui/.
     u.view = UI_VIEW_SEARCH, u.focus = UI_FOCUS_SEARCH;
     in = chars("a/b");
-    in.ev[in.nev++] = (UiEvent){ UK_NONE, 0xE9 };   // é
+    in.ev[in.nev++] = ev_ch(0xE9);   // é
     CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.search.len == 4 && memcmp(u.search.b, "ab\xC3\xA9", 4) == 0 && u.search_edited);
     CHECK(u.list.sel == 0);   // (no letter moved the cursor)
     u.search_edited = false;
@@ -609,7 +609,7 @@ static void test_search_ui_keys(void)
     CHECK(u.search.len == UI_FIND_MAX);
     u.search.len = 1, u.search_edited = false;
     // Find's toggles, from the keys and the bar's buttons; each a change.
-    in = ui_input_none(), in.ev[in.nev++] = (UiEvent){ UK_MENU, 'c' };
+    in = ui_input_none(), in.ev[in.nev++] = ui_event_of((UiChord){ 'c', UI_MOD_ALT });
     ui_handle(&u, names, &in);
     CHECK(u.find_opts.cased && u.search_edited && !u.menu_on);
     u.search_edited = false;
@@ -951,7 +951,7 @@ static void test_line_words(void)
     char b[64] = "my-file name.tär";
     int len = (int)strlen(b), caret = len, anchor = len;
     UiLine l = { b, &len, &caret, &anchor, 63, false };
-    UiEvent wl = { UK_WORD_LEFT, 0 }, wr = { UK_WORD_RIGHT, 0 };
+    UiEvent wl = ev_key(UK_WORD_LEFT), wr = ev_key(UK_WORD_RIGHT);
     CHECK(ui_line_key(&u, l, wl, STR_EMPTY) == UI_LINE_MOVED && caret == 13 && anchor == 13);   // tär (ä a word's)
     ui_line_key(&u, l, wl, STR_EMPTY);
     CHECK(caret == 8);   // name
@@ -963,26 +963,26 @@ static void test_line_words(void)
     ui_line_key(&u, l, wr, STR_EMPTY);
     CHECK(caret == 7);   // file|
     // Ctrl+Shift: the anchor stays.
-    ui_line_key(&u, l, (UiEvent){ UK_SEL_WORD_RIGHT, 0 }, STR_EMPTY);
+    ui_line_key(&u, l, ev_key(UK_SEL_WORD_RIGHT), STR_EMPTY);
     CHECK(anchor == 7 && caret == 12);
-    ui_line_key(&u, l, (UiEvent){ UK_SEL_WORD_LEFT, 0 }, STR_EMPTY), ui_line_key(&u, l, (UiEvent){ UK_SEL_WORD_LEFT, 0 }, STR_EMPTY);
+    ui_line_key(&u, l, ev_key(UK_SEL_WORD_LEFT), STR_EMPTY), ui_line_key(&u, l, ev_key(UK_SEL_WORD_LEFT), STR_EMPTY);
     CHECK(anchor == 7 && caret == 3);
     // Ctrl+Backspace, Ctrl+Delete: a word that way, or the selection.
     caret = anchor = 12;
-    CHECK(ui_line_key(&u, l, (UiEvent){ UK_WORD_BACKSPACE, 0 }, STR_EMPTY) == UI_LINE_CHANGED && len == 13 && memcmp(b, "my-file .tär", 13) == 0 && caret == 8);
-    ui_line_key(&u, l, (UiEvent){ UK_WORD_DELETE, 0 }, STR_EMPTY);
+    CHECK(ui_line_key(&u, l, ev_key(UK_WORD_BACKSPACE), STR_EMPTY) == UI_LINE_CHANGED && len == 13 && memcmp(b, "my-file .tär", 13) == 0 && caret == 8);
+    ui_line_key(&u, l, ev_key(UK_WORD_DELETE), STR_EMPTY);
     CHECK(len == 8 && memcmp(b, "my-file ", 8) == 0 && caret == 8);
     caret = 0, anchor = 1;   // a selection: it goes, not the word
-    ui_line_key(&u, l, (UiEvent){ UK_WORD_DELETE, 0 }, STR_EMPTY);
+    ui_line_key(&u, l, ev_key(UK_WORD_DELETE), STR_EMPTY);
     CHECK(len == 7 && memcmp(b, "y-file ", 7) == 0);
     caret = 6, anchor = 5;
-    ui_line_key(&u, l, (UiEvent){ UK_WORD_BACKSPACE, 0 }, STR_EMPTY);
+    ui_line_key(&u, l, ev_key(UK_WORD_BACKSPACE), STR_EMPTY);
     CHECK(len == 6 && memcmp(b, "y-fil ", 6) == 0);
     caret = 0, anchor = 1;
-    ui_line_key(&u, l, (UiEvent){ UK_DELETE, 0 }, STR_EMPTY);
+    ui_line_key(&u, l, ev_key(UK_DELETE), STR_EMPTY);
     CHECK(len == 5 && memcmp(b, "-fil ", 5) == 0);
     caret = anchor = 5;
-    ui_line_key(&u, l, (UiEvent){ UK_WORD_BACKSPACE, 0 }, STR_EMPTY);
+    ui_line_key(&u, l, ev_key(UK_WORD_BACKSPACE), STR_EMPTY);
     CHECK(len == 1 && b[0] == '-');
     // In the list: Ctrl+Left is the sidebar's, Ctrl+Right the location line; the rest nothing.
     Ui v = menu_ui(3);

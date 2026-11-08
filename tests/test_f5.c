@@ -91,7 +91,7 @@ static void test_ui_f5(void)
         CHECK(a.kind == K[i].a && a.index == K[i].idx);
     }
     in = ui_input_none();
-    in.ev[in.nev++] = (UiEvent){ UK_TAB_JUMP, 4 };
+    in.ev[in.nev++] = ui_event_of((UiChord){ '4', UI_MOD_ALT });
     UiAction a = ui_handle(&u, names, &in);
     CHECK(a.kind == UA_TAB_JUMP && a.index == 4);
     // Clicks on the bar, and middle clicks.

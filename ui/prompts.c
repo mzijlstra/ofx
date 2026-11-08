@@ -20,6 +20,7 @@ static bool ui_crumbs_event(Ui *u, const UiInput *in, UiEvent e, UiAction *a)
 {
     *a = UI_NONE;
     e = ui_vi_key(e);   // (as in the list, Michael, 2026-10-21; j and k go on to it)
+    if (e.cmd == UK_CRUMBS) return true;
     switch (ui_unshift(e.key)) {
     case UK_LEFT: if (u->crumb_at > 0) u->crumb_at--; return true;
     case UK_RIGHT: if (u->crumb_at < in->crumb_n - 1 + u->branch_on) u->crumb_at++; return true;
@@ -30,7 +31,6 @@ static bool ui_crumbs_event(Ui *u, const UiInput *in, UiEvent e, UiAction *a)
         u->focus = UI_FOCUS_LIST, *a = (UiAction){ UA_CRUMB, u->crumb_at, false };
         return true;
     case UK_SHIFT_ENTER: if (u->crumb_at < in->crumb_n) *a = (UiAction){ UA_TAB_BG_CRUMB, u->crumb_at, false }; return true;
-    case UK_CRUMBS: return true;
     case UK_ESC: case UK_TAB: u->focus = UI_FOCUS_LIST; return true;
     default: u->focus = UI_FOCUS_LIST; return false;
     }
@@ -94,11 +94,11 @@ static UiAction ui_ask_event(Ui *u, UiEvent e)
 static bool ui_jobs_event(Ui *u, const UiInput *in, UiEvent e)
 {
     e = ui_vi_key(e);
+    if (e.cmd == UK_JOBS) return u->focus = UI_FOCUS_LIST, true;   // the third Ctrl+J: back to the list (list, find bar, jobs)
     switch (e.key) {
     case UK_UP: if (u->job_at > 0) u->job_at--; return true;
     case UK_DOWN: if (u->job_at < in->job_n - 1) u->job_at++; return true;
     case UK_ENTER: u->cancel_asking = true, u->cancel_id = in->job_id[u->job_at]; return true;
-    case UK_JOBS: u->focus = UI_FOCUS_LIST; return true;   // the third Ctrl+J: back to the list (list, find bar, jobs)
     case UK_ESC: case UK_TAB: u->focus = UI_FOCUS_LIST; return true;
     default: u->focus = UI_FOCUS_LIST; return false;
     }

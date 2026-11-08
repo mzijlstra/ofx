@@ -1,5 +1,6 @@
 # F1's mutants: (file, old, new), `old` exactly once in the file. tools/mutation/run.py runs them.
 L, M, I, T, P, U = 'fs/list.c', 'fs/mime.c', 'fs/icons.c', 'fs/theme.c', 'fs/spawn.c', 'ui/ui.c'
+KY, GK = 'ui/keys.c', 'gui/glfwkeys.c'   # (F15)
 MUTANTS = [
     # ---- natural order, listing
     (L, "return k == K_DIR || k == K_LINK_DIR;", "return k == K_DIR;"),
@@ -154,7 +155,7 @@ MUTANTS += [
     ('ui/handle.c', '        l->sel = row, ui_unfocus(u, UI_FOCUS_SIDE), ui_unfocus(u, UI_FOCUS_FIND);   // (the find bar', '        l->sel = row, ui_unfocus(u, UI_FOCUS_FIND);   // (the find bar'),
     ('ui/handle.c', '    if (!prompt && in->forwards > 0) return *out = (UiAction){ UA_FORWARD, 0, false }, true;\n', ''),
     ('ui/handle.c', 'UiList *m = u->focus == UI_FOCUS_SIDE ? &u->side : l;', 'UiList *m = l;'),
-    ('ui/handle.c', "case 's': u->sort = (Sort){ (SortKey)((u->sort.key + 1) % SORT_KEYS), false }; return *out = (UiAction){ UA_SORT, 0, false }, true;", "case 's': u->sort = (Sort){ (SortKey)((u->sort.key + 1) % SORT_KEYS), u->sort.reverse }; return *out = (UiAction){ UA_SORT, 0, false }, true;"),
+    ('ui/handle.c', '    case UK_SORT_NEXT: u->sort = (Sort){ (SortKey)((u->sort.key + 1) % SORT_KEYS), false };', '    case UK_SORT_NEXT: u->sort = (Sort){ (SortKey)((u->sort.key + 1) % SORT_KEYS), u->sort.reverse };'),
     ('ui/handle.c', '        u->focus = u->side.n > 0 ? UI_FOCUS_SIDE : UI_FOCUS_LIST;', '        u->focus = UI_FOCUS_SIDE;'),
     ('ui/handle.c', '        else ui_unfocus(u, UI_FOCUS_SIDE);\n', ''),
     ('ui/handle.c', '        if (u->focus == UI_FOCUS_SIDE && u->side.n > 0) return *out = (UiAction){ UA_PLACE, u->side.sel, false }, true;', '        if (u->focus == UI_FOCUS_SIDE) return *out = (UiAction){ UA_PLACE, u->side.sel, false }, true;'),
@@ -312,12 +313,12 @@ MUTANTS += [
     ('ui/edit.c', "(e.ch != '/' || l.slash)", "(e.ch != '/')"),
     ('ui/edit.c', "    return u->edit_path ? PATH_MAX - 1 : NAME_MAX;", "    return NAME_MAX;"),
     ('ui/edit.c', "    case UK_SHIFT_ENTER: return (UiAction){ u->edit_path ? UA_GO : UA_RENAME, 0, false };", "    case UK_SHIFT_ENTER: return (UiAction){ UA_RENAME, 0, false };"),
-    ('ui/edit.c', "        if (u->edit_path) ui_edit_close(u);\n        break;", "        ui_edit_close(u);\n        break;"),
+    ('ui/edit.c', '        if (u->edit_path) ui_edit_close(u);\n        return UI_NONE;', '        ui_edit_close(u);\n        return UI_NONE;'),
     # bar clicks
     ('ui/handle.c', "    if (!prompt && in->bar != UB_NONE) {", "    if (in->bar != UB_NONE) {"),
     ('ui/handle.c', '            if (u->focus == UI_FOCUS_EDIT && u->edit_path) return ui_edit_close(u), *out = UI_NONE, true;\n', ''),
     ('ui/handle.c', '        case UB_UP: ui_edit_close(u); return *out = (UiAction){ UA_PARENT, 0, false }, true;', '        case UB_UP: return *out = (UiAction){ UA_PARENT, 0, false }, true;'),
-    ('ui/handle.c', '    { UK_BACKSPACE, UA_PARENT, 0, false, false }, { UK_PARENT, UA_PARENT, 0, false, false },', '    { UK_BACKSPACE, UA_PARENT, 0, false, false }, { UK_NONE, UA_PARENT, 0, false, false },'),
+    ('ui/handle.c', '    { UK_PARENT, UA_PARENT, 0, false, false },', '    { UK_NONE, UA_PARENT, 0, false, false },'),
     # counts
     (L, "        if (nm[0] == '.' && !hidden) continue;\n        n++;", "        n++;"),
     (L, "    if (!d) return -1;\n    isize n = 0;", "    if (!d) return 0;\n    isize n = 0;"),
@@ -340,7 +341,7 @@ MUTANTS += [
     ('ui/handle.c', '    if (!prompt && in->mid_row >= 0 && l->top + in->mid_row < l->n) return *out = (UiAction){ UA_TAB_BG_ROW, l->top + in->mid_row, false }, true;', '    if (!prompt && in->mid_row >= 0) return *out = (UiAction){ UA_TAB_BG_ROW, in->mid_row, false }, true;'),
     ('ui/handle.c', "    if (!prompt && in->mid_side >= 0 && u->side.top + in->mid_side < u->side.n && !ui_side_head", "    if (!prompt && in->mid_side >= 0 && !ui_side_head"),
     ('ui/handle.c', '{ UK_TAB_CLOSE, UA_TAB_CLOSE, -1, false, false },', '{ UK_TAB_CLOSE, UA_TAB_CLOSE, 0, false, false },'),
-    ('ui/handle.c', '    case UK_TAB_JUMP: return *out = (UiAction){ UA_TAB_JUMP, (isize)e.ch, false }, true;', ''),
+    ('ui/handle.c', '    case UK_TAB_JUMP: return *out = (UiAction){ UA_TAB_JUMP, (isize)ch, false }, true;', ''),
     ('ui/handle.c', '    if (!prompt && in->tab_click >= 0) return *out = (ui_edit_close(u), (UiAction){ UA_TAB_SHOW, in->tab_click, false }), true;', '    if (!prompt && in->tab_click >= 0) return *out = (UiAction){ UA_TAB_SHOW, in->tab_click, false }, true;'),
 ]
 # ---- F5.1: the modal panels
@@ -387,16 +388,16 @@ MUTANTS += [
     ('ui/prompts.c', 'if (u->crumb_at < in->crumb_n - 1 + u->branch_on) u->crumb_at++;', 'u->crumb_at++;'),
     ('ui/prompts.c', '        u->focus = UI_FOCUS_LIST, *a = (UiAction){ UA_CRUMB, u->crumb_at, false };', '        *a = (UiAction){ UA_CRUMB, u->crumb_at, false };'),
     ('ui/prompts.c', '*a = (UiAction){ UA_TAB_BG_CRUMB, u->crumb_at, false }; return true;', '*a = (UiAction){ UA_CRUMB, u->crumb_at, false }; return true;'),
-    ('ui/prompts.c', "    case UK_CRUMBS: return true;\n    case UK_ESC", "    case UK_ESC"),
-    ('ui/prompts.c', '    case UK_CRUMBS: return true;\n    case UK_ESC: case UK_TAB: u->focus = UI_FOCUS_LIST; return true;\n', '    case UK_CRUMBS: return true;\n'),
-    ('ui/prompts.c', '    case UK_CRUMBS: return true;\n    case UK_ESC: case UK_TAB: u->focus = UI_FOCUS_LIST; return true;\n    default: u->focus = UI_FOCUS_LIST; return false;', '    case UK_CRUMBS: return true;\n    case UK_ESC: case UK_TAB: u->focus = UI_FOCUS_LIST; return true;\n    default: return false;'),
-    ('ui/prompts.c', '    case UK_CRUMBS: return true;\n    case UK_ESC: case UK_TAB: u->focus = UI_FOCUS_LIST; return true;\n    default: u->focus = UI_FOCUS_LIST; return false;', '    case UK_CRUMBS: return true;\n    case UK_ESC: case UK_TAB: u->focus = UI_FOCUS_LIST; return true;\n    default: u->focus = UI_FOCUS_LIST; return true;'),
+    ('ui/prompts.c', '    if (e.cmd == UK_CRUMBS) return true;\n', ''),
+    ('ui/prompts.c', '    case UK_SHIFT_ENTER: if (u->crumb_at < in->crumb_n) *a = (UiAction){ UA_TAB_BG_CRUMB, u->crumb_at, false }; return true;\n    case UK_ESC: case UK_TAB: u->focus = UI_FOCUS_LIST; return true;\n', '    case UK_SHIFT_ENTER: if (u->crumb_at < in->crumb_n) *a = (UiAction){ UA_TAB_BG_CRUMB, u->crumb_at, false }; return true;\n'),
+    ('ui/prompts.c', '    case UK_SHIFT_ENTER: if (u->crumb_at < in->crumb_n) *a = (UiAction){ UA_TAB_BG_CRUMB, u->crumb_at, false }; return true;\n    case UK_ESC: case UK_TAB: u->focus = UI_FOCUS_LIST; return true;\n    default: u->focus = UI_FOCUS_LIST; return false;', '    case UK_SHIFT_ENTER: if (u->crumb_at < in->crumb_n) *a = (UiAction){ UA_TAB_BG_CRUMB, u->crumb_at, false }; return true;\n    case UK_ESC: case UK_TAB: u->focus = UI_FOCUS_LIST; return true;\n    default: return false;'),
+    ('ui/prompts.c', '    case UK_SHIFT_ENTER: if (u->crumb_at < in->crumb_n) *a = (UiAction){ UA_TAB_BG_CRUMB, u->crumb_at, false }; return true;\n    case UK_ESC: case UK_TAB: u->focus = UI_FOCUS_LIST; return true;\n    default: u->focus = UI_FOCUS_LIST; return false;', '    case UK_SHIFT_ENTER: if (u->crumb_at < in->crumb_n) *a = (UiAction){ UA_TAB_BG_CRUMB, u->crumb_at, false }; return true;\n    case UK_ESC: case UK_TAB: u->focus = UI_FOCUS_LIST; return true;\n    default: u->focus = UI_FOCUS_LIST; return true;'),
     ('ui/handle.c', '    if (clicked || in->crumb_n <= 0) ui_unfocus(u, UI_FOCUS_CRUMBS);', '    if (in->crumb_n <= 0) ui_unfocus(u, UI_FOCUS_CRUMBS);'),
     ('ui/handle.c', '    if (clicked || in->crumb_n <= 0) ui_unfocus(u, UI_FOCUS_CRUMBS);', '    if (clicked) ui_unfocus(u, UI_FOCUS_CRUMBS);'),
     ('ui/handle.c', "in->tab_click >= 0 || in->tab_close >= 0 || in->mid_row >= 0 || in->mid_side >= 0 || in->mid_crumb >= 0;", "in->tab_click >= 0 || in->tab_close >= 0 || in->mid_row >= 0 || in->mid_side >= 0;"),
     ('ui/handle.c', "    bool clicked = in->click >= 0 || in->dclick >= 0 ||", "    bool clicked = in->dclick >= 0 ||"),
     ('ui/handle.c', '    if (u->focus == UI_FOCUS_CRUMBS && u->crumb_at > in->crumb_n - 1 + u->branch_on) u->crumb_at = in->crumb_n - 1 + u->branch_on;   // (crumb_n: the branch button, F12 step 5c)\n', ''),
-    ('ui/handle.c', '        if (u->focus == UI_FOCUS_EDIT && u->edit_path && e.key == UK_CRUMBS) {', '        if (u->focus == UI_FOCUS_EDIT && e.key == UK_CRUMBS) {'),
+    ('ui/handle.c', '        if (u->focus == UI_FOCUS_EDIT && u->edit_path && e.cmd == UK_CRUMBS) {', '        if (u->focus == UI_FOCUS_EDIT && e.cmd == UK_CRUMBS) {'),
     ('ui/handle.c', '        if (on == UI_ON_CLASH) {\n            UiAction a = ui_ask_event(u, e);', '        if (0) {\n            UiAction a = ui_ask_event(u, e);'),
     ('ui/handle.c', '        else ui_crumbs_focus(u, in);\n        break;', '        else {}\n        break;'),
     ('ui/helpers.c', "    if (at < lo) c->lo = at;\n", ""),
@@ -429,9 +430,9 @@ MUTANTS += [
     ('ui/prompts.c', "    case UK_UP: if (u->job_at > 0) u->job_at--; return true;", "    case UK_UP: u->job_at--; return true;"),
     ('ui/prompts.c', "    case UK_DOWN: if (u->job_at < in->job_n - 1) u->job_at++; return true;", "    case UK_DOWN: u->job_at++; return true;"),
     ('ui/prompts.c', "    case UK_ENTER: u->cancel_asking = true, u->cancel_id = in->job_id[u->job_at]; return true;", "    case UK_ENTER: u->cancel_asking = true, u->cancel_id = in->job_id[0]; return true;"),
-    ('ui/prompts.c', '    case UK_JOBS: u->focus = UI_FOCUS_LIST; return true;', '    case UK_JOBS: return true;'),
-    ('ui/prompts.c', '(list, find bar, jobs)\n    case UK_ESC: case UK_TAB: u->focus = UI_FOCUS_LIST; return true;\n', '(list, find bar, jobs)\n'),
-    ('ui/prompts.c', '(list, find bar, jobs)\n    case UK_ESC: case UK_TAB: u->focus = UI_FOCUS_LIST; return true;\n    default: u->focus = UI_FOCUS_LIST; return false;', '(list, find bar, jobs)\n    case UK_ESC: case UK_TAB: u->focus = UI_FOCUS_LIST; return true;\n    default: return false;'),
+    ('ui/prompts.c', '    if (e.cmd == UK_JOBS) return u->focus = UI_FOCUS_LIST, true;', '    if (e.cmd == UK_JOBS) return true;'),
+    ('ui/prompts.c', '    case UK_ENTER: u->cancel_asking = true, u->cancel_id = in->job_id[u->job_at]; return true;\n    case UK_ESC: case UK_TAB: u->focus = UI_FOCUS_LIST; return true;\n', '    case UK_ENTER: u->cancel_asking = true, u->cancel_id = in->job_id[u->job_at]; return true;\n'),
+    ('ui/prompts.c', '    case UK_ENTER: u->cancel_asking = true, u->cancel_id = in->job_id[u->job_at]; return true;\n    case UK_ESC: case UK_TAB: u->focus = UI_FOCUS_LIST; return true;\n    default: u->focus = UI_FOCUS_LIST; return false;', '    case UK_ENTER: u->cancel_asking = true, u->cancel_id = in->job_id[u->job_at]; return true;\n    case UK_ESC: case UK_TAB: u->focus = UI_FOCUS_LIST; return true;\n    default: return false;'),
     ('ui/handle.c', '        else if (in->job_n > 0) u->focus = UI_FOCUS_JOBS, u->job_at = 0;', '        else u->focus = UI_FOCUS_JOBS, u->job_at = 0;'),
     ('ui/handle.c', '        else if (in->job_n > 0) u->focus = UI_FOCUS_JOBS, u->job_at = 0;', '        else if (in->job_n > 0) u->focus = UI_FOCUS_JOBS;'),
     ('ui/handle.c', "    if (u->job_at >= in->job_n) u->job_at = in->job_n - 1;\n", ""),
@@ -518,7 +519,7 @@ MUTANTS += [
     ('ui/helpers.c', "    if (k > 0 && in->hidden && (size_t)k < cap) k += snprintf", "    if (k > 0 && (size_t)k < cap) k += snprintf"),
     ('ui/helpers.c', "    if (k > 0 && in->avail >= 0 && (size_t)k < cap) ui_size", "    if (k > 0 && (size_t)k < cap) ui_size"),
     ('ui/handle.c', "    if (!prompt && in->side_twisty >= 0 && u->side_mode == SIDE_TREE && u->side.top", "    if (!prompt && in->side_twisty >= 0 && u->side.top"),
-    ('ui/handle.c', '            if (u->view == UI_VIEW_TRASH && files) return *out = (UiAction){ UA_RESTORE, 0, false }, true;', '            if (files) return *out = (UiAction){ UA_RESTORE, 0, false }, true;'),
+    ('ui/handle.c', '        if (u->view == UI_VIEW_TRASH && files) return *out = (UiAction){ UA_RESTORE, 0, false }, true;', '        if (files) return *out = (UiAction){ UA_RESTORE, 0, false }, true;'),
     ('ui/handle.c', '        if (files && u->view == UI_VIEW_TRASH) u->confirming = true,', '        if (0) u->confirming = true,'),
     ('ui/prompts.c', 'yes ? UA_EMPTY_TRASH : UA_NONE', 'UA_EMPTY_TRASH'),
     ('ui/handle.c', '        case UB_RESTORE: if (u->view == UI_VIEW_TRASH && l->n > 0) return', '        case UB_RESTORE: if (l->n > 0) return'),
@@ -844,7 +845,7 @@ MUTANTS += [
     ('ui/menus.c', '    case UK_HOME: u->menu_at = ui_menu_next(u, -1, 1); return true;', '    case UK_HOME: return true;'),
     ('ui/menus.c', '    case UK_END: u->menu_at = ui_menu_next(u, 0, -1); return true;', '    case UK_END: return true;'),
     ('ui/menus.c', '        if (u->menu_at >= 0 && ui_menu_enabled(u, UI_MENU[u->menu].items[u->menu_at])) *a =', '        if (u->menu_at >= 0) *a ='),
-    ('ui/menus.c', '    case UK_F10: case UK_TAB: u->menu_on = false; return true;', '    case UK_F10: u->menu_on = false; return true;'),
+    ('ui/menus.c', '    case UK_TAB: u->menu_on = false; return true;\n', ''),
     ('ui/menus.c', '    case UK_ESC:\n        u->menu_on = false;\n', '    case UK_ESC:\n'),
     ('ui/menus.c', '        if (m == u->menu) u->menu_on = false;', '        if (false) u->menu_on = false;'),
     ('ui/menus.c', '    default: u->menu_on = false; return false;\n    }\n}', '    default: return false;\n    }\n}'),
@@ -859,8 +860,8 @@ MUTANTS += [
     ('ui/handle.c', "    if (!prompt && in->menu_title >= 0 && in->menu_title < UI_MENUS) {", "    if (in->menu_title >= 0 && in->menu_title < UI_MENUS) {"),
     ('ui/handle.c', "            if (in->jobs_all > 0) u->quit_asking = true, u->cancel_asking = false;", ""),
     ('ui/handle.c', "            return (UiAction){ UA_CLOSE_ALL, 0, in->jobs_all <= 0 };", "            return (UiAction){ UA_CLOSE_ALL, 0, true };"),
-    ('ui/handle.c', "        if (e.key == UK_QUIT_ALL && !u->quit_asking) {", "        if (e.key == UK_QUIT_ALL) {"),
-    ('ui/handle.c', "        if (!prompt && !u->menu_on && (e.key == UK_F10 ||", "        if (!u->menu_on && (e.key == UK_F10 ||"),
+    ('ui/handle.c', '        if (e.cmd == UK_QUIT_ALL && !u->quit_asking) {', '        if (e.cmd == UK_QUIT_ALL) {'),
+    ('ui/handle.c', '        if (!prompt && !u->menu_on && (e.cmd == UK_F10 ||', '        if (!u->menu_on && (e.cmd == UK_F10 ||'),
     ('ui/handle.c', "        if (u->menu_on && !prompt) {\n            UiAction a;\n            if (ui_menu_event(u, e, &a)) {", "        if (u->menu_on && !prompt && false) {\n            UiAction a;\n            if (ui_menu_event(u, e, &a)) {"),
     ('ui/cursor.c', "|| in->menu_title >= 0 || in->menu_item >= 0 || in->menu_away || in->ctx_row >= 0 || in->ctx_here || in->ctx_side >= 0 || in->ctx_crumb >= 0 || in->ctx_tab >= 0 || in->prop_box", " || in->menu_title >= 0 || in->menu_item >= 0 || in->ctx_row >= 0 || in->ctx_here || in->ctx_side >= 0 || in->ctx_crumb >= 0 || in->ctx_tab >= 0 || in->prop_box"),
     # Not a mutant: dropping O_EXCL in op_mkfile is inert without a race, as name_free picked a
@@ -995,7 +996,7 @@ MUTANTS += [
     ('ui/panels.c', '    case UK_UP: if (row > 0) u->prop_at -= 3; break;', '    case UK_UP: if (row >= 0) u->prop_at -= 3; break;'),
     ('ui/panels.c', '    case UK_DOWN: if (row < 2) u->prop_at += 3; break;', '    case UK_DOWN: u->prop_at += 3; break;'),
     ('ui/panels.c', '        if (u->prop_can) return (UiAction){ UA_CHMOD, u->prop_at, false };', '        return (UiAction){ UA_CHMOD, u->prop_at, false };'),
-    ('ui/panels.c', '    case UK_ESC: case UK_PROPERTIES: ui_panel_close(u, UI_PANEL_PROPS); break;', '    case UK_ESC: ui_panel_close(u, UI_PANEL_PROPS); break;'),
+    ('ui/panels.c', '    if (e.cmd == UK_PROPERTIES) return ui_panel_close(u, UI_PANEL_PROPS), UI_NONE;\n', ''),
     ('ui/handle.c', '    if (on == UI_ON_PROPS && in->prop_box >= 0', '    if (u->panel == UI_PANEL_PROPS && in->prop_box >= 0'),
     ('ui/handle.c', '        return *out = u->prop_can ? (UiAction){ UA_CHMOD, in->prop_box, false } : UI_NONE, true;', '        return *out = (UiAction){ UA_CHMOD, in->prop_box, false }, true;'),
     ('ui/handle.c', '    if (on == UI_ON_PROPS && in->modal == UI_MODAL_OK) return ui_panel_close(u, UI_PANEL_PROPS), *out = UI_NONE, true;\n', ''),
@@ -1148,7 +1149,7 @@ MUTANTS += [
     ('ui/handle.c', '    case UK_UP: case UK_DOWN: case UK_SEL_UP: case UK_SEL_DOWN: ui_find_step(u, names, e.key == UK_UP || e.key == UK_SEL_UP ? -1 : 1); return true;', '    case UK_UP: case UK_DOWN: case UK_SEL_UP: case UK_SEL_DOWN: ui_find_step(u, names, e.key == UK_UP ? -1 : 1); return true;'),
     ('ui/find.c', "    if (i >= 0) u->list.sel = i, ui_show_sel(&u->list);\n}\n\n// How many", "}\n\n// How many"),
     ('ui/handle.c', '        if (in->job_n > 0) u->focus = UI_FOCUS_JOBS, u->job_at = 0;\n        return true;', '        return true;'),
-    ('ui/handle.c', "    case UK_JOBS:\n        ui_find_leave(u);", "    case UK_JOBS:\n        ui_find_close(u);"),
+    ('ui/handle.c', '    if (e.cmd == UK_JOBS) {\n        ui_find_leave(u);', '    if (e.cmd == UK_JOBS) {\n        ui_find_close(u);'),
     ('ui/handle.c', '        if (u->finding) u->focus = UI_FOCUS_FIND;', '        if (false) u->focus = UI_FOCUS_FIND;'),
     ('ui/handle.c', '        if (u->focus == UI_FOCUS_FIND && u->finding && ui_find_event(u, names, e, in)) continue;', '        if (u->finding && ui_find_event(u, names, e, in)) continue;'),
     # (the magnifier's find bar toggle: the search's since F9, 2026-10-28)
@@ -1211,8 +1212,8 @@ MUTANTS += [
     ('fs/conf.c', '        if (str_eq(v, S("range")) || str_eq(v, S("add"))) return *(bool *)f = str_eq(v, S("add")), true;', '        return *(bool *)f = str_eq(v, S("add")), true;'),
     ('ui/handle.c', 'k < in->nev; k++, extend = ui_extend(u, extend, was)) {', 'k < in->nev; k++) {'),
     ('ui/handle.c', '        UiEvent e = k < 0 ? u->menu_key : in->ev[k];\n        was = l->sel;\n', '        UiEvent e = k < 0 ? u->menu_key : in->ev[k];\n'),
-    ('ui/handle.c', "    if (e.key == UK_NONE && (e.ch == 'H' || e.ch == 'J' || e.ch == 'K' || e.ch == 'L')) {", "    if (e.key == UK_NONE && (e.ch == 'J' || e.ch == 'K' || e.ch == 'L')) {"),
-    ('ui/handle.c', "        e = (UiEvent){ e.ch == 'H' ? UK_LEFT : e.ch == 'J' ? UK_DOWN : e.ch == 'K' ? UK_UP : UK_RIGHT, 0 };", "        e = (UiEvent){ e.ch == 'H' ? UK_LEFT : e.ch == 'J' ? UK_DOWN : UK_RIGHT, 0 };"),
+    (KY, "{ T('H'), UK_SEL_LEFT }, ", ''),
+    (KY, "{ T('K'), UK_SEL_UP }", "{ T('K'), UK_RIGHT }"),
     ('ui/handle.c', '    if (shifted && u->focus != UI_FOCUS_SIDE) *extend = l->sel;', '    if (shifted) *extend = l->sel;'),
 ]
 # ---- FileManager1 (2026-10-26): the URIs to windows
@@ -1247,18 +1248,18 @@ MUTANTS += [
     ('ui/menus.c', "    case UM_HIDDEN: return u->shows_hidden;", "    case UM_HIDDEN: return 0;"),
     ('ui/menus.c', "    case UM_SORT_REVERSE: return u->sort.reverse;", "    case UM_SORT_REVERSE: return 0;"),
     ('ui/menus.c', "    case UM_VIEW_LIST: return !u->grid;", "    case UM_VIEW_LIST: return u->grid;"),
-    ('ui/menus.c', '        u->menu_key = UI_MENU_ITEM[it].ev;\n        return UI_NONE;', '        return UI_NONE;'),
+    ('ui/menus.c', '        u->menu_key = ui_menu_runs(it);\n        return UI_NONE;', '        return UI_NONE;'),
     ('ui/menus.c', '        u->sort.key = it == UM_SORT_NAME ? SORT_NAME : it == UM_SORT_SIZE ? SORT_SIZE : SORT_MTIME;', '        u->sort.key = it == UM_SORT_NAME ? SORT_NAME : SORT_MTIME;'),
     ('ui/menus.c', '    case UM_SIDE_NONE: return ui_side_mode(u, SIDE_HIDDEN);', '    case UM_SIDE_NONE: return ui_side_mode(u, SIDE_TREE);'),
     ('ui/handle.c', '{ UK_TRASH_VIEW, UA_TRASH_VIEW, 0, false, false },', '{ UK_NONE, UA_TRASH_VIEW, 0, false, false },'),
     ('ui/handle.c', '        if (files && shift_enter) return', '        if (files && false) return'),
-    ('ui/handle.c', "        bool shift_enter = e.key == UK_SHIFT_ENTER;", "        bool shift_enter = false;"),
+    ('ui/handle.c', '        bool shift_enter = e.cmd == UK_SHIFT_ENTER;', '        bool shift_enter = false;'),
     # Not a mutant: the `continue` after a menu's own key is inert, the empty menu_key it falls into
     # ({UK_NONE, 0}) is dropped by the characters' switch.
-    ('ui/handle.c', "                e = u->menu_key, u->menu_key = (UiEvent){ UK_NONE, 0 };   // an entry picked runs its key, here", "                e = u->menu_key;"),
+    ('ui/handle.c', '                e = u->menu_key, u->menu_key = (UiEvent){ UK_NONE, 0, UK_NONE };   // an entry picked runs its key, here', '                e = u->menu_key;'),
     ('ui/handle.c', '        if (a.kind != UA_NONE || (!u->menu_key.key && !u->menu_key.ch)) return *out = a, true;', '        return *out = a, true;'),
     ('ui/handle.c', "    for (int k = u->menu_key.key || u->menu_key.ch ? -1 : 0; k < in->nev;", "    for (int k = 0; k < in->nev;"),
-    ('ui/handle.c', "        if (k < 0) u->menu_key = (UiEvent){ UK_NONE, 0 };", ""),
+    ('ui/handle.c', '        if (k < 0) u->menu_key = (UiEvent){ UK_NONE, 0, UK_NONE };', ''),
     ('ui/handle.c', '        for (isize i = 0; i < l->n; i++) ui_mark(u, i, !ui_marked(u, i));', '        for (isize i = 0; i < l->n; i++) ui_mark(u, i, true);'),
     ('ui/handle.c', '{ UK_RELOAD, UA_RELOAD, 0, false, false },', '{ UK_NONE, UA_RELOAD, 0, false, false },'),
     ('ui/handle.c', '    { UK_HOMEDIR, UA_HOMEDIR, 0, false, false },', '    { UK_NONE, UA_HOMEDIR, 0, false, false },'),
@@ -1336,18 +1337,18 @@ MUTANTS += [
 ]
 # ---- F7.5: Keyboard Shortcuts
 MUTANTS += [
-    (U, '    { KS_MOVE, "Trash", "Alt+End", "" },', '    { KS_MOVE, "Trash", "Alt+Home", "" },'),
-    (U, '    { KS_CHANGE, "Add Bookmark", "Ctrl+D", "" },\n', ''),
+    (U, '    { KS_MOVE, "Trash", UK_TRASH_VIEW, NULL, NULL },', '    { KS_MOVE, "Trash", UK_HOMEDIR, NULL, NULL },'),
+    (U, '    { KS_CHANGE, "Add Bookmark", UK_ADD_BOOKMARK, NULL, NULL },\n', ''),
     ('ui/panels.c', '        if (n == head + 1) n = head;   // nothing under it', ''),
     ('ui/panels.c', "        u->keys_line[n++] = (short)(-1 - s);", "        u->keys_line[n++] = (short)(-1);"),
     ('ui/panels.c', '            if (UI_KEYS[r].sec == (UiKeySection)s && (!u->keys_filter.len || ui_match(&u->keys_m, str_from_c(UI_KEYS[r].action)) ||', '            if (UI_KEYS[r].sec == (UiKeySection)s && (!u->keys_filter.len || false ||'),
-    ('ui/panels.c', "                                                      ui_match(&u->keys_m, str_from_c(UI_KEYS[r].key)) || ui_match(&u->keys_m, str_from_c(UI_KEYS[r].key2))))", "                                                      ui_match(&u->keys_m, str_from_c(UI_KEYS[r].key2))))"),
+    ('ui/panels.c', '                                                      ui_match(&u->keys_m, str_from_c(ui_keys_key(r, 0))) || ui_match(&u->keys_m, str_from_c(ui_keys_key(r, 1)))))', '                                                      ui_match(&u->keys_m, str_from_c(ui_keys_key(r, 1)))))'),
     ('ui/panels.c', '    u->panel = UI_PANEL_KEYS, UI_TEXT_CLEAR(u->keys_filter);', '    u->panel = UI_PANEL_KEYS;'),
 
 
     ('ui/panels.c', "    case UK_UP: case UK_DOWN: ui_scroll(l, e.key == UK_UP ? 1 : -1); break;", "    case UK_UP: case UK_DOWN: ui_scroll(l, 1); break;"),
     ('ui/panels.c', "    case UK_END: ui_scroll(l, (int)-l->n); break;", ""),
-    ('ui/panels.c', "    case UK_ESC: case UK_SHORTCUTS: case UK_ENTER: ui_keys_close(u); break;", "    case UK_ESC: case UK_ENTER: ui_keys_close(u); break;"),
+    ('ui/panels.c', '    if (e.cmd == UK_SHORTCUTS) {\n        ui_keys_close(u);\n        return;\n    }\n', ''),
     ('ui/handle.c', '    case UK_SHORTCUTS: return *out = ui_keys_open(u), true;', ''),
     ('ui/handle.c', '        if (in->modal == UI_MODAL_NO) return ui_keys_close(u), *out = UI_NONE, true;', ''),
     ('ui/handle.c', "        if (in->panel_wheel) ui_scroll(&u->keys_list, in->panel_wheel);", ""),
@@ -1495,8 +1496,8 @@ MUTANTS += [
 ]
 # ---- View → Show Group, Ctrl+P, Ctrl+G (2026-10-27)
 MUTANTS += [
-    (U, "    [UM_PERMS_COLS] = { \"Show Permissions\", \"Ctrl+P\", \"perms-cols\", { UK_PERMS_COLS, 0 }, 'c' },", "    [UM_PERMS_COLS] = { \"Show Permissions\", \"Ctrl+P\", \"perms-cols\", { UK_NONE, 0 }, 'c' },"),
-    (U, "    [UM_GROUP_COL] = { \"Show Group\", \"Ctrl+G\", \"group-col\", { UK_GROUP_COL, 0 }, 'c' },", "    [UM_GROUP_COL] = { \"Show Group\", \"Ctrl+G\", \"group-col\", { UK_NONE, 0 }, 'c' },"),
+    (U, "    [UM_PERMS_COLS] = { \"Show Permissions\", \"perms-cols\", .cmd = UK_PERMS_COLS, .runs = true, .mark = 'c' },", "    [UM_PERMS_COLS] = { \"Show Permissions\", \"perms-cols\", .cmd = UK_PERMS_COLS, .mark = 'c' },"),
+    (U, "    [UM_GROUP_COL] = { \"Show Group\", \"group-col\", .cmd = UK_GROUP_COL, .runs = true, .mark = 'c' },", "    [UM_GROUP_COL] = { \"Show Group\", \"group-col\", .cmd = UK_GROUP_COL, .mark = 'c' },"),
     ('ui/menus.c', "    case UM_GROUP_COL: return !u->grid && u->perms_cols;", "    case UM_GROUP_COL: return !u->grid;"),
     ('ui/menus.c', "    case UM_GROUP_COL: return !u->grid && u->perms_cols;", "    case UM_GROUP_COL: return u->perms_cols;"),
     ('ui/menus.c', "    case UM_PERMS_COLS: case UM_COLORS: return !u->grid;", "    case UM_PERMS_COLS: case UM_COLORS: return true;"),
@@ -1589,7 +1590,7 @@ MUTANTS += [
     ('ui/cursor.c', ' in->field >= 0 || in->inside_btn ||', ' in->inside_btn ||'),
     ('ui/handle.c', '            return *out = ui_search_open(u), true;', '            return *out = UI_NONE, true;'),
     ('ui/handle.c', '    case UK_SEARCH: return *out = ui_search_open(u), true;', ''),
-    (U, "    [UM_SEARCH] = { \"Search\\xE2\\x80\\xA6\", \"Ctrl+Shift+F\", \"search\", { UK_SEARCH, 0 } },", "    [UM_SEARCH] = { \"Search\\xE2\\x80\\xA6\", \"Ctrl+Shift+F\", \"search\", { UK_NONE, 0 } },"),
+    (U, '"search", .cmd = UK_SEARCH, .runs = true },', '"search", .cmd = UK_SEARCH },'),
     (U, "UM_SEP, UM_FIND, UM_SEARCH, UM_LOCATION, UM_TERMINAL,\n};", "UM_SEP, UM_FIND, UM_LOCATION, UM_TERMINAL,\n};"),
     # what the results can't do yet, and the menus
     ('ui/menus.c', '    case UM_HERE_PROPS: return u->view != UI_VIEW_SEARCH;', '    case UM_HERE_PROPS: return true;'),
@@ -1600,7 +1601,7 @@ MUTANTS += [
 ]
 # ---- F9 step 2: working with results (2026-10-28)
 MUTANTS += [
-    (U, "    [UM_CONTAINING] = { \"Open Containing Folder\", \"Ctrl+Enter\", \"containing\", { UK_CONTAINING, 0 } },", "    [UM_CONTAINING] = { \"Open Containing Folder\", \"Ctrl+Enter\", \"containing\", { UK_NONE, 0 } },"),
+    (U, '"containing", .cmd = UK_CONTAINING, .runs = true },', '"containing", .cmd = UK_CONTAINING },'),
     ('ui/handle.c', '        if (u->view == UI_VIEW_SEARCH && files) return *out = (UiAction){ UA_CONTAINING, l->sel, false }, true;', '        if (files) return *out = (UiAction){ UA_CONTAINING, l->sel, false }, true;'),
     ('ui/handle.c', '        if (u->view == UI_VIEW_SEARCH && files) return *out = (UiAction){ UA_CONTAINING, l->sel, false }, true;', '        if (u->view == UI_VIEW_SEARCH && l->n > 0) return *out = (UiAction){ UA_CONTAINING, l->sel, false }, true;'),
     ('ui/handle.c', '        if (u->view == UI_VIEW_SEARCH && files) return *out = (UiAction){ UA_CONTAINING, l->sel, false }, true;', '        if (u->view == UI_VIEW_SEARCH && files) return *out = (UiAction){ UA_CONTAINING, 0, false }, true;'),
@@ -1659,8 +1660,8 @@ MUTANTS += [
     ('ui/handle.c', "    if (h == UI_LINE_CHANGED) ui_find_update(u, names);", ""),
     ('ui/panels.c', "        if (ui_line_key(u, ui_keys_line(u), e, paste) == UI_LINE_CHANGED) ui_keys_filter(u);", "        ui_line_key(u, ui_keys_line(u), e, paste);"),
     ('ui/panels.c', '        if (ui_line_key(u, ui_bmp_line(u), e, paste)) return UI_NONE;', ''),
-    ('ui/handle.c', '    case UK_WORD_LEFT:   // (Ctrl+Left: a word in a text field, the sidebar here)', ''),
-    ('ui/handle.c', '{ UK_WORD_RIGHT, UA_LOCATION, 0, false, false },', '{ UK_NONE, UA_LOCATION, 0, false, false },'),
+    ('ui/handle.c', '    case UK_SIDE_GO:   // (Ctrl+Left: a word in a text field, the sidebar here)\n', ''),
+    (KY, "{ K('l', C_), UK_LOCATION }, { K(UKC_RIGHT, C_), UK_LOCATION },", "{ K('l', C_), UK_LOCATION },"),
 ]
 
 # fs/paths.c (2026-10-28): the path helpers each fs/ file had its own copy of, and their callers.
@@ -1733,7 +1734,7 @@ MUTANTS += [
     ('ui/ui.c', 'u->view == UI_VIEW_SEARCH ? UA_NOT_IN_SEARCH : UA_NONE, 0, false };', 'UA_NOT_IN_SEARCH, 0, false };'),
     ('ui/ui.c', '{ u->view == UI_VIEW_TRASH ? UA_NOT_IN_TRASH : u->view', '{ false ? UA_NOT_IN_TRASH : u->view'),
     ('ui/handle.c', '    if (u->view != UI_VIEW_SEARCH) return ui_view_act(u, (UiAction){ UA_SEARCH, 0, false });', '    if (u->view != UI_VIEW_SEARCH) return (UiAction){ UA_SEARCH, 0, false };'),
-    ('ui/handle.c', "        case 't': key = UK_TERMINAL; break;", "        case 't': return false;"),
+    (KY, "{ T('t'), UK_TERMINAL },", ''),
     ('ui/handle.c', '{ UK_ADD_BOOKMARK, UA_ADD_BOOKMARK, 0, true, false },', '{ UK_ADD_BOOKMARK, UA_ADD_BOOKMARK, 0, false, false },'),
     ('ui/handle.c', '{ UK_COPY, UA_COPY, 0, true, true },', '{ UK_COPY, UA_COPY, 0, false, true },'),
     ('ui/handle.c', '{ UK_MAKE_LINK, UA_MAKE_LINK, 0, true, true },', '{ UK_MAKE_LINK, UA_MAKE_LINK, 0, false, true },'),
@@ -1886,8 +1887,8 @@ MUTANTS += [
     ('ui/handle.c', '    u->focus = u->search_inside && u->search_was_inside ? UI_FOCUS_INSIDE : UI_FOCUS_SEARCH;', '    u->focus = u->search_was_inside ? UI_FOCUS_INSIDE : UI_FOCUS_SEARCH;'),
     ('ui/handle.c', '    u->focus = u->search_inside && u->search_was_inside ? UI_FOCUS_INSIDE : UI_FOCUS_SEARCH;', '    u->focus = u->search_inside ? UI_FOCUS_INSIDE : UI_FOCUS_SEARCH;'),
     ('ui/handle.c', '    u->search_was_inside = inside;\n', ''),
-    ('ui/handle.c', '    if (e.key == UK_CRUMBS) return u->focus = UI_FOCUS_LIST, ui_crumbs_focus(u, in), true;', ''),
-    ('ui/handle.c', '    if (e.key == UK_CRUMBS) return u->focus = UI_FOCUS_LIST, ui_crumbs_focus(u, in), true;', '    if (e.key == UK_CRUMBS) return ui_crumbs_focus(u, in), true;'),
+    ('ui/handle.c', '    if (e.cmd == UK_CRUMBS) return u->focus = UI_FOCUS_LIST, ui_crumbs_focus(u, in), true;', ''),
+    ('ui/handle.c', '    if (e.cmd == UK_CRUMBS) return u->focus = UI_FOCUS_LIST, ui_crumbs_focus(u, in), true;', '    if (e.cmd == UK_CRUMBS) return ui_crumbs_focus(u, in), true;'),
     ('ui/handle.c', '        if (u->view == UI_VIEW_SEARCH) ui_search_back(u);\n        else ui_crumbs_focus(u, in);', '        ui_crumbs_focus(u, in);'),
     ('ui/handle.c', '    ui_edit_close(u);\n    ui_search_back(u);', '    ui_edit_close(u);\n    u->focus = UI_FOCUS_SEARCH;'),
     (SR, '    snprintf(big, sizeof big, "over %d MB", SEARCH_FILE_MAX_MB);', '    snprintf(big, sizeof big, "over %d MB", 1);'),
@@ -2438,8 +2439,8 @@ MUTANTS += [
     ('ui/ui.c', '    UM_UNDO, UM_SEP, UM_CUT, UM_COPY, UM_COPY_PATH, UM_PASTE,', '    UM_UNDO, UM_SEP, UM_CUT, UM_COPY, UM_PASTE,'),
     ('ui/ui.c', 'UM_SEP, UM_CUT, UM_COPY, UM_COPY_PATH, UM_PASTE_INTO,', 'UM_SEP, UM_CUT, UM_COPY, UM_PASTE_INTO,'),
     ('ui/ui.c', 'UM_SEP, UM_CUT_IT, UM_COPY_IT, UM_COPY_PATH_IT, UM_PASTE_INTO,', 'UM_SEP, UM_CUT_IT, UM_COPY_IT, UM_PASTE_INTO,'),
-    ('ui/ui.c', '"copy-path", { UK_COPY_PATH, 0 } }', '"copy-path", { UK_COPY, 0 } }'),
-    ('ui/ui.c', '    { KS_CHANGE, "Copy Path", "Ctrl+Shift+C", "" },\n', ''),
+    ('ui/ui.c', '"copy-path", .cmd = UK_COPY_PATH, .runs = true }', '"copy-path", .cmd = UK_COPY, .runs = true }'),
+    ('ui/ui.c', '    { KS_CHANGE, "Copy Path", UK_COPY_PATH, NULL, NULL },\n', ''),
 ]
 # F13 step 1 review (2026-11-04): the sidebar's key, the empty space's entry, shell_quote
 MUTANTS += [
@@ -2589,4 +2590,42 @@ MUTANTS += [
     (TF, "t->drive_track = rgb_mix(t->fg_dim, t->bg_light, 0.75);", "t->drive_track = rgb_mix(t->fg_dim, t->bg_light, 0.25);"),
     (TF, "* 100 + rgb_worst(*other[i], side, 3);", "* 100;"),
     (TF, "    t->drive_track = rgb_mix(t->fg_dim, t->bg_light, 0.75);\n    t->drive_free = rgb_push(t->drive_track, t->fg, side, 3, THEME_DIM_MIN, NULL);", "    t->drive_free = rgb_push(rgb_mix(t->fg_dim, t->bg_light, 0.75), t->fg, side, 3, THEME_DIM_MIN, NULL);\n    t->drive_track = t->drive_free;"),
+]
+
+# F15 step 1 (2026-11-08): the one key table (ui/keys.c), GLFW's keys as its chords
+# (gui/glfwkeys.c), and the files' commands read from the event's command.
+MUTANTS += [
+    (KY, "if (c.mods == UI_MOD_ALT && c.code >= 'a' && c.code <= 'z') return", "if (c.mods == UI_MOD_ALT && c.code >= 'a' && c.code <= 'y') return"),
+    (KY, "if (c.mods == UI_MOD_ALT && c.code >= '1' && c.code <= '9')", "if (c.mods == UI_MOD_ALT && c.code >= '0' && c.code <= '9')"),
+    (KY, "return *ch = c.code - '0', UK_TAB_JUMP;", "return *ch = c.code, UK_TAB_JUMP;"),
+    (KY, "    if (e.key == UK_TAB_JUMP) e.cmd = UK_TAB_JUMP;\n", ""),
+    (KY, "e.key && e.key == ui_fixed_of(plain, &ch)", "e.key == ui_fixed_of(plain, &ch)"),
+    (KY, "    if (!e.key && e.cmd) e.key = UK_CMD;", "    if (!e.key) e.key = UK_CMD;"),
+    (KY, "    if (c.mods & UI_MOD_TYPED) return (UiEvent){ UK_NONE, c.code, ui_bound(c) };", "    if (c.mods & UI_MOD_TYPED) return (UiEvent){ UK_NONE, c.code, UK_NONE };"),
+    (KY, "    return a.code == b.code && a.mods == b.mods;", "    return a.code == b.code;"),
+    (KY, "if (ui_binds.b[i].cmd == cmd && k-- == 0)", "if (ui_binds.b[i].cmd == cmd && --k == 0)"),
+    (KY, "        if (UI_BINDS_DEFAULT[i].cmd == cmd) return ui_event_of(UI_BINDS_DEFAULT[i].c);\n    return (UiEvent){ UK_CMD, 0, cmd };", "        if (UI_BINDS_DEFAULT[i].cmd == cmd) return ui_event_of(UI_BINDS_DEFAULT[i].c);\n    return (UiEvent){ UK_NONE, 0, cmd };"),
+    (KY, '{ UI_MOD_SHIFT, "Shift+" }', '{ UI_MOD_SHIFT, "Shift-" }'),
+    (KY, '"F%u", c.code - UKC_F1 + 1);', '"F%u", c.code - UKC_F1);'),
+    (KY, '        if (c.code == \' \') snprintf(out, (size_t)cap, "Space");\n        else {', '        if (0) snprintf(out, (size_t)cap, "Space");\n        else {'),
+    (KY, "(char)(c.code - 'a' + 'A') : (char)c.code);", "(char)c.code : (char)c.code);"),
+    (KY, " { K(UKC_ESC, UI_MOD_SHIFT), UK_ESC },", ""),
+    (KY, "{ K('x', UI_MOD_CTRL), UK_CUT }, ", ""),
+    (KY, "{ K(UKC_DOWN, UI_MOD_ALT), UK_ALT_DOWN },", ""),
+    (KY, "    return row || !UI_KEYS[r].cmd ? row : ui_cmd_key(UI_KEYS[r].cmd, k);", "    return !UI_KEYS[r].cmd ? row : ui_cmd_key(UI_KEYS[r].cmd, k);"),
+    (KY, "    if (UI_MENU_ITEM[it].hint) return UI_MENU_ITEM[it].hint;\n", ""),
+    (KY, "    return UI_MENU_ITEM[it].runs ? ui_cmd_event(UI_MENU_ITEM[it].cmd) : (UiEvent){ UK_NONE, 0, UK_NONE };", "    return ui_cmd_event(UI_MENU_ITEM[it].cmd);"),
+    (KY, "{ K(UKC_F1, 0), UK_SHORTCUTS }, { K(UKC_F1, C_), UK_SHORTCUTS },", "{ K(UKC_F1, C_), UK_SHORTCUTS }, { K(UKC_F1, 0), UK_SHORTCUTS },"),
+    (KY, "{ T('N'), UK_FIND_PREV },", "{ T('N'), UK_FIND_NEXT },"),
+    (GK, "c = (u32)('a' + key - GLFW_KEY_A);", "c = (u32)key;"),
+    (GK, "{ GLFW_KEY_KP_ENTER, UKC_ENTER }, ", ""),
+    (GK, "(mods & GLFW_MOD_SUPER ? UI_MOD_SUPER : 0)", "0"),
+    (GK, "if (action != GLFW_PRESS && (e.cmd == UK_QUIT_ALL ||", "if (0 && (e.cmd == UK_QUIT_ALL ||"),
+    (GK, "c = UKC_KP0 + (u32)(key - GLFW_KEY_KP_0);", "c = (u32)('0' + key - GLFW_KEY_KP_0);"),
+    ('ui/handle.c', "    case UK_SORT_REVERSE: u->sort.reverse = !u->sort.reverse;", "    case UK_SORT_REVERSE: u->sort.reverse = true;"),
+    ('ui/handle.c', "    case UK_FIND_PREV: ui_find_again(u, names, -1); return false;", "    case UK_FIND_PREV: ui_find_again(u, names, 1); return false;"),
+    ('ui/handle.c', "        bool shifted = ui_unshift(e.cmd) != e.cmd;", "        bool shifted = false;"),
+    ('ui/handle.c', "        UiKey cmd = shift_enter ? UK_ENTER : ui_unshift(e.cmd);", "        UiKey cmd = shift_enter ? UK_ENTER : e.cmd;"),
+    ('ui/handle.c', "    if (e.cmd == UK_FIND) return true;\n", ""),
+    ('ui/menus.c', "    if (e.cmd == UK_F10) return u->menu_on = false, true;", "    if (e.cmd == UK_F10) return true;"),
 ]

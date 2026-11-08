@@ -58,7 +58,7 @@ static void test_shift_range(void)
     CHECK(u.list.sel == 1 && u.marked == 4 && mark[1] && !mark[0] && u.anchor == 4);
     // A key that moves nothing, in the frame of a Shift move, keeps the anchor for the next.
     in = keys(1, UK_SEL_DOWN);
-    in.ev[in.nev++] = (UiEvent){ UK_NONE, 'x' };
+    in.ev[in.nev++] = ev_ch('x');
     ui_handle(&u, names, &in);
     in = keys(1, UK_SEL_DOWN);
     ui_handle(&u, names, &in);

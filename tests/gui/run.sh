@@ -441,7 +441,7 @@ rs copypath RUN_SCRIPT_LIMIT=30 OFX_COMPOSITOR=sway -- "$H/tree"
 fi
 if want keys; then
 # Keys through the compositor (tools/gui/vkbd.c in the test sway, 2026-10-28): GLFW's keycodes and
-# ui_key_of, which the other scripts' ui/ keys skip.
+# gui/glfwkeys.c, which the other scripts' keys skip.
 T=$base/keys; rm -rf "$T"; mkdir -p "$T/tree/adir" "$T/tree/bdir"; touch "$T/tree/a.txt" "$T/tree/my-file name.txt" "$T/tree/adir/inner.txt"
 # The test tools' guard first (tools/gui/testsway.h, shared by vkbd, vptr and dndpeer): each acts
 # only on the sway OFX_GUI_ROOT names, as the kernel sees the socket's other end (review,

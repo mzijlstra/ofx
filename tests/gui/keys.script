@@ -1,5 +1,5 @@
 # Keys typed through the compositor, in the test sway (tools/gui/sway.sh, OFX_COMPOSITOR=sway):
-# vkbd (tools/gui/vkbd.c) sends a US keyboard's evdev keycodes, and GLFW and ui_key_of make of them
+# vkbd (tools/gui/vkbd.c) sends a US keyboard's evdev keycodes, and GLFW and gui/glfwkeys.c make of them
 # what they make of a user's (2026-10-28). The other scripts send ui/'s keys and skip that step.
 # Each `vkbd … &` runs beside the window, which answers its keyboard while it types. The tree
 # (run.sh): adir/inner.txt, bdir/, a.txt, "my-file name.txt" (folders first). The state shows a

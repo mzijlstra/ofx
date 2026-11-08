@@ -154,7 +154,7 @@ static void job_keys(Ui *u, UiNames names, UiInput in, int n, ...)
 {
     va_list ap;
     va_start(ap, n);
-    for (int i = 0; i < n; i++) in.ev[in.nev++] = (UiEvent){ (UiKey)va_arg(ap, int), 0 };
+    for (int i = 0; i < n; i++) in.ev[in.nev++] = ev_key((UiKey)va_arg(ap, int));
     va_end(ap);
     ui_handle(u, names, &in);
 }
@@ -177,10 +177,10 @@ static void test_job_keys(void)
     job_keys(&u, names, job_input(3, 3), 1, UK_DOWN);
     CHECK(u.job_at == 1);
     UiInput in = job_input(3, 3);
-    in.ev[in.nev++] = (UiEvent){ UK_NONE, 'j' }, in.ev[in.nev++] = (UiEvent){ UK_NONE, 'j' };
+    in.ev[in.nev++] = ev_ch('j'), in.ev[in.nev++] = ev_ch('j');
     ui_handle(&u, names, &in);
     CHECK(u.job_at == 2);
-    in = job_input(3, 3), in.ev[in.nev++] = (UiEvent){ UK_NONE, 'k' };
+    in = job_input(3, 3), in.ev[in.nev++] = ev_ch('k');
     ui_handle(&u, names, &in);
     CHECK(u.job_at == 1);
     job_keys(&u, names, job_input(3, 3), 2, UK_UP, UK_JOBS);   // Ctrl+J again: back to the list (F7.3 find bar order)
@@ -198,16 +198,16 @@ static void test_job_keys(void)
     job_keys(&u, names, job_input(3, 3), 1, UK_ESC);
     CHECK(!u.cancel_asking && (u.focus == UI_FOCUS_JOBS));
     job_keys(&u, names, job_input(3, 3), 1, UK_ENTER);
-    in = job_input(3, 3), in.ev[in.nev++] = (UiEvent){ UK_DOWN, 0 };   // other keys: ignored while asked
+    in = job_input(3, 3), in.ev[in.nev++] = ev_key(UK_DOWN);   // other keys: ignored while asked
     CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.cancel_asking && u.job_at == 1);
-    in = job_input(3, 3), in.ev[in.nev++] = (UiEvent){ UK_NONE, 'y' };
+    in = job_input(3, 3), in.ev[in.nev++] = ev_ch('y');
     UiAction a = ui_handle(&u, names, &in);
     CHECK(a.kind == UA_CANCEL_JOB && a.index == 11 && !u.cancel_asking);
     job_keys(&u, names, job_input(3, 3), 1, UK_ENTER);
-    in = job_input(3, 3), in.ev[in.nev++] = (UiEvent){ UK_NONE, 'n' };
+    in = job_input(3, 3), in.ev[in.nev++] = ev_ch('n');
     CHECK(ui_handle(&u, names, &in).kind == UA_NONE && !u.cancel_asking);
     job_keys(&u, names, job_input(3, 3), 1, UK_ENTER);
-    in = job_input(3, 3), in.ev[in.nev++] = (UiEvent){ UK_ENTER, 0 };
+    in = job_input(3, 3), in.ev[in.nev++] = ev_key(UK_ENTER);
     a = ui_handle(&u, names, &in);
     CHECK(a.kind == UA_CANCEL_JOB && a.index == 11);
     // The panel's buttons.
@@ -241,10 +241,10 @@ static void test_job_keys(void)
     CHECK(u.focus != UI_FOCUS_JOBS);
     // Ctrl+K and an edit line take it; Ctrl+J takes it from the path buttons and the sidebar.
     job_keys(&u, names, job_input(2, 2), 1, UK_JOBS);
-    in = job_input(2, 2), in.ev[in.nev++] = (UiEvent){ UK_CRUMBS, 0 }, in.crumb_n = 3, in.crumb_last = 2;
+    in = job_input(2, 2), in.ev[in.nev++] = ev_key(UK_CRUMBS), in.crumb_n = 3, in.crumb_last = 2;
     ui_handle(&u, names, &in);
     CHECK(u.focus != UI_FOCUS_JOBS && (u.focus == UI_FOCUS_CRUMBS));
-    in = job_input(2, 2), in.ev[in.nev++] = (UiEvent){ UK_JOBS, 0 }, in.crumb_n = 3;
+    in = job_input(2, 2), in.ev[in.nev++] = ev_key(UK_JOBS), in.crumb_n = 3;
     ui_handle(&u, names, &in);
     CHECK((u.focus == UI_FOCUS_JOBS) && u.focus != UI_FOCUS_CRUMBS);
     ui_edit_open(&u, S("x"));
@@ -267,7 +267,7 @@ static void test_job_keys(void)
     CHECK(!u.cancel_asking && u.confirming);
     u.confirming = false;
     // Esc in the list never cancels a job.
-    in = job_input(2, 2), in.ev[in.nev++] = (UiEvent){ UK_ESC, 0 };
+    in = job_input(2, 2), in.ev[in.nev++] = ev_key(UK_ESC);
     CHECK(ui_handle(&u, names, &in).kind == UA_NONE && !u.cancel_asking);
     // A clash panel up: the job keys wait, with the rows' keyboard or without.
     u.asking = true;
@@ -290,53 +290,53 @@ static void test_quit_full(void)
     ui_set(&u.list, 20, 0);
     // No jobs: Ctrl+Q quits at once.
     UiInput in = job_input(0, 0);
-    in.ev[in.nev++] = (UiEvent){ UK_QUIT, 0 };
+    in.ev[in.nev++] = ev_key(UK_QUIT);
     CHECK(ui_handle(&u, names, &in).kind == UA_QUIT);
     // Jobs running or waiting: asked first. n and Esc stay, Enter and y quit, the buttons too.
-    in = job_input(1, 3), in.ev[in.nev++] = (UiEvent){ UK_QUIT, 0 };
+    in = job_input(1, 3), in.ev[in.nev++] = ev_key(UK_QUIT);
     CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.quit_asking);
-    in = job_input(1, 3), in.ev[in.nev++] = (UiEvent){ UK_NONE, 'x' };
+    in = job_input(1, 3), in.ev[in.nev++] = ev_ch('x');
     CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.quit_asking);
-    in = job_input(1, 3), in.ev[in.nev++] = (UiEvent){ UK_ESC, 0 };
+    in = job_input(1, 3), in.ev[in.nev++] = ev_key(UK_ESC);
     CHECK(ui_handle(&u, names, &in).kind == UA_NONE && !u.quit_asking);
-    in = job_input(0, 2), in.ev[in.nev++] = (UiEvent){ UK_QUIT, 0 };   // only waiting ones: asked too
+    in = job_input(0, 2), in.ev[in.nev++] = ev_key(UK_QUIT);   // only waiting ones: asked too
     CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.quit_asking);
     u.quit_asking = false;
-    in = job_input(0, 2), in.ev[in.nev++] = (UiEvent){ UK_QUIT, 0 }, in.ev[in.nev++] = (UiEvent){ UK_NONE, 'y' };
+    in = job_input(0, 2), in.ev[in.nev++] = ev_key(UK_QUIT), in.ev[in.nev++] = ev_ch('y');
     CHECK(ui_handle(&u, names, &in).kind == UA_QUIT && !u.quit_asking);
-    in = job_input(1, 1), in.ev[in.nev++] = (UiEvent){ UK_QUIT, 0 }, in.ev[in.nev++] = (UiEvent){ UK_ENTER, 0 };
+    in = job_input(1, 1), in.ev[in.nev++] = ev_key(UK_QUIT), in.ev[in.nev++] = ev_key(UK_ENTER);
     CHECK(ui_handle(&u, names, &in).kind == UA_QUIT);
-    in = job_input(1, 1), in.ev[in.nev++] = (UiEvent){ UK_QUIT, 0 }, in.ev[in.nev++] = (UiEvent){ UK_NONE, 'n' };
+    in = job_input(1, 1), in.ev[in.nev++] = ev_key(UK_QUIT), in.ev[in.nev++] = ev_ch('n');
     CHECK(ui_handle(&u, names, &in).kind == UA_NONE && !u.quit_asking);
-    in = job_input(1, 1), in.ev[in.nev++] = (UiEvent){ UK_QUIT, 0 };
+    in = job_input(1, 1), in.ev[in.nev++] = ev_key(UK_QUIT);
     ui_handle(&u, names, &in);
     in = job_input(1, 1), in.modal = UI_MODAL_NO;
     CHECK(ui_handle(&u, names, &in).kind == UA_NONE && !u.quit_asking);
-    in = job_input(1, 1), in.ev[in.nev++] = (UiEvent){ UK_QUIT, 0 };
+    in = job_input(1, 1), in.ev[in.nev++] = ev_key(UK_QUIT);
     ui_handle(&u, names, &in);
     in = job_input(1, 1), in.modal = UI_MODAL_YES;
     CHECK(ui_handle(&u, names, &in).kind == UA_QUIT);
     // Ctrl+Q over the cancel question or a clash: the quit question takes over.
     u.cancel_asking = true, u.cancel_id = 10;
-    in = job_input(1, 1), in.ev[in.nev++] = (UiEvent){ UK_QUIT, 0 };
+    in = job_input(1, 1), in.ev[in.nev++] = ev_key(UK_QUIT);
     ui_handle(&u, names, &in);
     CHECK(u.quit_asking && !u.cancel_asking);
-    in = job_input(1, 1), in.ev[in.nev++] = (UiEvent){ UK_ESC, 0 };
+    in = job_input(1, 1), in.ev[in.nev++] = ev_key(UK_ESC);
     ui_handle(&u, names, &in);
     u.asking = true;
-    in = job_input(1, 1), in.ev[in.nev++] = (UiEvent){ UK_QUIT, 0 }, in.ev[in.nev++] = (UiEvent){ UK_NONE, 'n' };
+    in = job_input(1, 1), in.ev[in.nev++] = ev_key(UK_QUIT), in.ev[in.nev++] = ev_ch('n');
     CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.asking && !u.quit_asking);
     u.asking = false;
     // The queue full: any key closes the note and does nothing else; so does OK.
     u.full_told = true;
-    in = job_input(1, 1), in.ev[in.nev++] = (UiEvent){ UK_DOWN, 0 };
+    in = job_input(1, 1), in.ev[in.nev++] = ev_key(UK_DOWN);
     CHECK(ui_handle(&u, names, &in).kind == UA_NONE && !u.full_told && u.list.sel == 0);
     u.full_told = true;
     in = job_input(1, 1), in.modal = UI_MODAL_OK;
     CHECK(ui_handle(&u, names, &in).kind == UA_NONE && !u.full_told);
     u.full_told = true;
     // The window closed (or another window's Close All, F7.1) isn't eaten by the note: it asks.
-    in = job_input(1, 1), in.ev[in.nev++] = (UiEvent){ UK_QUIT, 0 };
+    in = job_input(1, 1), in.ev[in.nev++] = ev_key(UK_QUIT);
     CHECK(ui_handle(&u, names, &in).kind == UA_NONE && !u.full_told && u.quit_asking);
     u.quit_asking = false;
     u.full_told = true;

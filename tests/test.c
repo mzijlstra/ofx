@@ -796,12 +796,30 @@ static void test_spawn(void)
 
 // ---- ui -------------------------------------------------------------------------------------
 
+// The event the first key that means k sends, as gui/ reads it (F15, ui/keys.c): a key with a
+// meaning of its own (the text fields', the panels'), else a key bound to command k; k alone
+// with neither (UK_QUIT, the compositor's close).
+static UiEvent ev_key(UiKey k)
+{
+    for (int i = 0; i < COUNT(UI_FIXED); i++)
+        if (UI_FIXED[i].key == k) return ui_event_of(UI_FIXED[i].c);
+    for (int i = 0; i < COUNT(UI_BINDS_DEFAULT); i++)
+        if (UI_BINDS_DEFAULT[i].cmd == k && !(UI_BINDS_DEFAULT[i].c.mods & UI_MOD_TYPED)) return ui_event_of(UI_BINDS_DEFAULT[i].c);
+    return (UiEvent){ k, 0, UK_NONE };
+}
+
+// A typed character's event, its command and all.
+static UiEvent ev_ch(u32 ch)
+{
+    return ui_event_of((UiChord){ ch, UI_MOD_TYPED });
+}
+
 static UiInput keys(int n, ...)
 {
     UiInput in = ui_input_none();
     va_list ap;
     va_start(ap, n);
-    for (int i = 0; i < n; i++) in.ev[in.nev++] = (UiEvent){ (UiKey)va_arg(ap, int), 0 };
+    for (int i = 0; i < n; i++) in.ev[in.nev++] = ev_key((UiKey)va_arg(ap, int));
     va_end(ap);
     return in;
 }
@@ -810,7 +828,7 @@ static UiInput keys(int n, ...)
 static UiInput chars(const char *s)
 {
     UiInput in = ui_input_none();
-    for (; *s && in.nev < UI_EVENTS_MAX; s++) in.ev[in.nev++] = (UiEvent){ UK_NONE, (u32)(unsigned char)*s };
+    for (; *s && in.nev < UI_EVENTS_MAX; s++) in.ev[in.nev++] = ev_ch((u32)(unsigned char)*s);
     return in;
 }
 
@@ -1022,7 +1040,7 @@ static void test_find(void)
     ui_handle(&u, names, &in);
     CHECK(u.finding);
     in = ui_input_none();
-    in.ev[in.nev++] = (UiEvent){ UK_NONE, 0xE9 };   // é
+    in.ev[in.nev++] = ev_ch(0xE9);   // é
     ui_handle(&u, names, &in);
     CHECK(u.find.len == 2 && u.list.sel == 6);
     in = keys(1, UK_BACKSPACE);
@@ -1033,15 +1051,15 @@ static void test_find(void)
     CHECK(u.find.len == 0 && u.finding);
     // Control characters are not text; a 4-byte one is.
     in = ui_input_none();
-    in.ev[in.nev++] = (UiEvent){ UK_NONE, 0x7F };
-    in.ev[in.nev++] = (UiEvent){ UK_NONE, 0x1F };
-    in.ev[in.nev++] = (UiEvent){ UK_NONE, 0x1F600 };
-    in.ev[in.nev++] = (UiEvent){ UK_NONE, 0x110000 };
+    in.ev[in.nev++] = ev_ch(0x7F);
+    in.ev[in.nev++] = ev_ch(0x1F);
+    in.ev[in.nev++] = ev_ch(0x1F600);
+    in.ev[in.nev++] = ev_ch(0x110000);
     ui_handle(&u, names, &in);
     CHECK(u.find.len == 4 && memcmp(u.find.b, "\xF0\x9F\x98\x80", 4) == 0);
     in = ui_input_none();
-    in.ev[in.nev++] = (UiEvent){ UK_NONE, 0x20AC };   // €, 3 bytes
-    in.ev[in.nev++] = (UiEvent){ UK_NONE, 0x3B1 };    // α, 2 bytes
+    in.ev[in.nev++] = ev_ch(0x20AC);   // €, 3 bytes
+    in.ev[in.nev++] = ev_ch(0x3B1);    // α, 2 bytes
     ui_handle(&u, names, &in);
     CHECK(u.find.len == 9 && memcmp(u.find.b + 4, "\xE2\x82\xAC\xCE\xB1", 5) == 0);
     // A command gives the keys back and is the list's, keeping the text for n; the bar stays. (Home
@@ -1054,7 +1072,7 @@ static void test_find(void)
     ui_find_open(&u);
     for (int k = 0; k < UI_FIND_MAX + 10; k++) in = chars("x"), ui_handle(&u, names, &in);
     CHECK(u.find.len == UI_FIND_MAX);
-    in = ui_input_none(), in.ev[in.nev++] = (UiEvent){ UK_NONE, 0xE9 };
+    in = ui_input_none(), in.ev[in.nev++] = ev_ch(0xE9);
     ui_handle(&u, names, &in);
     CHECK(u.find.len == UI_FIND_MAX);
     ui_find_close(&u);
@@ -1669,6 +1687,7 @@ static void test_format(void)
 #include "test_f13.c"
 #include "test_f14.c"
 #include "test_fm1.c"
+#include "test_f15.c"
 
 int main(void)
 {
@@ -1859,6 +1878,9 @@ int main(void)
     if (slow) test_no_fds_leak();
     if (fast) test_prog_resolve();
     if (fast) test_menu_key_agree();
+    test_keys_pinned();
+    test_keys_table();
+    test_keys_commands();
     if (fast) test_ui_age();
     if (fast) test_branch_panel();
     if (fast) test_file_read();

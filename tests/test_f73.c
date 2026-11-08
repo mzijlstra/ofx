@@ -83,8 +83,8 @@ static void test_match(void)
     t = ui_toggle(ui_toggle(t, 2), 3);
     CHECK(t.cased && t.word && t.regex && !ui_toggle(t, 1).cased && !ui_toggle(t, 2).word && !ui_toggle(t, 3).regex);
     CHECK(ui_toggle(plain, 0).cased == false && ui_toggle(plain, 4).regex == false);
-    CHECK(ui_toggle_key((UiEvent){ UK_MENU, 'c' }) == 1 && ui_toggle_key((UiEvent){ UK_MENU, 'w' }) == 2 && ui_toggle_key((UiEvent){ UK_MENU, 'r' }) == 3);
-    CHECK(ui_toggle_key((UiEvent){ UK_MENU, 'f' }) == 0 && ui_toggle_key((UiEvent){ UK_NONE, 'c' }) == 0);
+    CHECK(ui_toggle_key(ui_event_of((UiChord){ 'c', UI_MOD_ALT })) == 1 && ui_toggle_key(ui_event_of((UiChord){ 'w', UI_MOD_ALT })) == 2 && ui_toggle_key(ui_event_of((UiChord){ 'r', UI_MOD_ALT })) == 3);
+    CHECK(ui_toggle_key(ui_event_of((UiChord){ 'f', UI_MOD_ALT })) == 0 && ui_toggle_key(ev_ch('c')) == 0);
 }
 
 // Find with the toggles: Alt+C, Alt+W, Alt+R in the line, kept for n and for the next find.
@@ -98,12 +98,12 @@ static void test_find_toggles(void)
     ui_handle(&u, names, &in);
     CHECK(u.list.sel == 1);
     in = ui_input_none();
-    in.ev[in.nev++] = (UiEvent){ UK_MENU, 'c' };   // case: "beta" is in no name now
+    in.ev[in.nev++] = ui_event_of((UiChord){ 'c', UI_MOD_ALT });   // case: "beta" is in no name now
     ui_handle(&u, names, &in);
     CHECK(u.finding && u.find_opts.cased && u.find_miss && u.list.sel == 0 && !u.menu_on);
     in = ui_input_none();
-    in.ev[in.nev++] = (UiEvent){ UK_MENU, 'c' };
-    in.ev[in.nev++] = (UiEvent){ UK_MENU, 'w' };   // whole word: Beta, not BETAMAX
+    in.ev[in.nev++] = ui_event_of((UiChord){ 'c', UI_MOD_ALT });
+    in.ev[in.nev++] = ui_event_of((UiChord){ 'w', UI_MOD_ALT });   // whole word: Beta, not BETAMAX
     ui_handle(&u, names, &in);
     CHECK(!u.find_opts.cased && u.find_opts.word && !u.find_miss && u.list.sel == 1);
     in = keys(1, UK_ENTER);
@@ -115,8 +115,8 @@ static void test_find_toggles(void)
     in = chars("/");
     ui_handle(&u, names, &in);
     in = ui_input_none();
-    in.ev[in.nev++] = (UiEvent){ UK_MENU, 'w' };
-    in.ev[in.nev++] = (UiEvent){ UK_MENU, 'r' };
+    in.ev[in.nev++] = ui_event_of((UiChord){ 'w', UI_MOD_ALT });
+    in.ev[in.nev++] = ui_event_of((UiChord){ 'r', UI_MOD_ALT });
     ui_handle(&u, names, &in);
     CHECK(u.find_opts.regex && !u.find_opts.word && u.finding);
     in = chars("^g.*txt$");
@@ -134,7 +134,7 @@ static void test_find_toggles(void)
     in = chars("/a");
     ui_handle(&u, names, &in);
     in = ui_input_none();
-    in.ev[in.nev++] = (UiEvent){ UK_MENU, 'f' };
+    in.ev[in.nev++] = ui_event_of((UiChord){ 'f', UI_MOD_ALT });
     ui_handle(&u, names, &in);
     CHECK(u.finding && u.focus != UI_FOCUS_FIND && u.menu_on);
     // n after a find closed empty: the last text found, not the empty one.
@@ -263,7 +263,7 @@ static UiAction ow_keys(Ui *u, int n, ...)
     va_start(ap, n);
     for (int i = 0; i < n; i++) {
         int k = va_arg(ap, int);
-        in.ev[in.nev++] = k >= 0x100 ? (UiEvent){ UK_NONE, (u32)(k - 0x100) } : k < 0 ? (UiEvent){ UK_MENU, (u32)-k } : (UiEvent){ (UiKey)k, 0 };
+        in.ev[in.nev++] = k >= 0x100 ? ev_ch((u32)(k - 0x100)) : k < 0 ? ui_event_of((UiChord){ (u32)-k, UI_MOD_ALT }) : ev_key((UiKey)k);
     }
     va_end(ap);
     return ui_handle(u, names, &in);
@@ -404,9 +404,9 @@ static void test_ow_keys(void)
     // A full field drops what doesn't fit.
     ui_ow_open(&u);
     ow_keys(&u, 0);
-    for (int k = 0; k < UI_FIND_MAX + 3; k++) ui_line_key(&u, ui_pick_line(&u.ow), (UiEvent){ UK_NONE, 'x' }, STR_EMPTY);
+    for (int k = 0; k < UI_FIND_MAX + 3; k++) ui_line_key(&u, ui_pick_line(&u.ow), ev_ch('x'), STR_EMPTY);
     CHECK(u.ow.filter.len == UI_FIND_MAX);
-    ui_line_key(&u, ui_pick_line(&u.ow), (UiEvent){ UK_NONE, 0xE9 }, STR_EMPTY);
+    ui_line_key(&u, ui_pick_line(&u.ow), ev_ch(0xE9), STR_EMPTY);
     CHECK(u.ow.filter.len == UI_FIND_MAX);
     ui_ow_close(&u);
 }

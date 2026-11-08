@@ -56,6 +56,8 @@ for w in range(jobs):
     work = os.path.join(top, f'w{w}')
     for d in ('base', 'fs', 'ui', 'tests'):
         shutil.copytree(os.path.join(root, d), os.path.join(work, d))
+    os.makedirs(os.path.join(work, 'gui'))
+    shutil.copy(os.path.join(root, 'gui', 'glfwkeys.c'), os.path.join(work, 'gui'))   # (the unit tests take it in, F15)
     shutil.copy(os.path.join(root, 'Makefile'), work)
     shutil.copy(os.path.join(root, 'README.md'), work)   # (its ofx.conf copy is checked, F10)
     os.symlink(os.path.join(root, 'vendor'), os.path.join(work, 'vendor'))   # stb_image_resize2 (fs/thumb.c), never mutated
@@ -65,7 +67,8 @@ for w in range(jobs):
 def run(work, cc='clang'):
     if cc == 'tcc':
         os.makedirs(os.path.join(work, 'build'), exist_ok=True)
-        b = subprocess.run(['tcc', '-std=c11', '-D_GNU_SOURCE', '-pthread', '-isystem', 'vendor/raylib/src', '-o', 'build/test-tcc',
+        b = subprocess.run(['tcc', '-std=c11', '-D_GNU_SOURCE', '-pthread', '-isystem', 'vendor/raylib/src',
+                            '-isystem', 'vendor/raylib/src/external/glfw/include', '-o', 'build/test-tcc',
                             'tests/test.c', '-lturbojpeg', '-lwebp', '-lpng16', '-lgif', '-lz', '-lm'],
                            cwd=work, capture_output=True, text=True)
         exe = './build/test-tcc'

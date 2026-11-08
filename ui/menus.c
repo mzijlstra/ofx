@@ -227,8 +227,8 @@ static UiAction ui_menu_pick(Ui *u, UiMenuItem it)
         default: return (UiAction){ UA_FOLDER_DO, it, false };
         }
     }
-    if (UI_MENU_ITEM[it].ev.key != UK_NONE || UI_MENU_ITEM[it].ev.ch) {
-        u->menu_key = UI_MENU_ITEM[it].ev;
+    if (UI_MENU_ITEM[it].runs) {
+        u->menu_key = ui_menu_runs(it);
         return UI_NONE;
     }
     int k;
@@ -292,6 +292,7 @@ static bool ui_menu_event(Ui *u, UiEvent e, UiAction *a)
 {
     *a = UI_NONE;
     e = ui_vi_key(e);
+    if (e.cmd == UK_F10) return u->menu_on = false, true;   // (the key that opens the menus closes them)
     if (e.key == UK_NONE) return true;   // (a letter the menu doesn't take: nothing)
     switch (ui_unshift(e.key)) {
     case UK_DOWN: case UK_UP: {
@@ -314,7 +315,7 @@ static bool ui_menu_event(Ui *u, UiEvent e, UiAction *a)
         u->menu_on = false;
         if (u->menu_field != UI_FOCUS_LIST) u->focus = u->menu_field;
         return true;
-    case UK_F10: case UK_TAB: u->menu_on = false; return true;
+    case UK_TAB: u->menu_on = false; return true;
     case UK_MENU: {
         int m = ui_menu_of(e.ch);
         if (m == u->menu) u->menu_on = false;

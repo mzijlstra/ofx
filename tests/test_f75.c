@@ -287,17 +287,17 @@ static void test_shortcuts(void)
 {
     // Every menu entry with a key has a row of its name with that key, so the two can't disagree.
     for (int it = 1; it < UM_ITEMS; it++) {
-        if (!UI_MENU_ITEM[it].key[0]) continue;
+        if (!ui_menu_key((UiMenuItem)it)[0]) continue;
         bool found = false;
         for (int r = 0; r < UI_KEYS_N && !found; r++)
             found = strcmp(UI_KEYS[r].action, UI_MENU_ITEM[it].label) == 0 &&
-                    (strcmp(UI_KEYS[r].key, UI_MENU_ITEM[it].key) == 0 || strcmp(UI_KEYS[r].key2, UI_MENU_ITEM[it].key) == 0);
-        if (!found) fprintf(stderr, "no shortcut row for the menu's %s (%s)\n", UI_MENU_ITEM[it].label, UI_MENU_ITEM[it].key);
+                    (strcmp(ui_keys_key(r, 0), ui_menu_key((UiMenuItem)it)) == 0 || strcmp(ui_keys_key(r, 1), ui_menu_key((UiMenuItem)it)) == 0);
+        if (!found) fprintf(stderr, "no shortcut row for the menu's %s (%s)\n", UI_MENU_ITEM[it].label, ui_menu_key((UiMenuItem)it));
         CHECK(found);
     }
     int per[KS_SECTIONS] = { 0 };
     for (int r = 0; r < UI_KEYS_N; r++) {
-        CHECK(UI_KEYS[r].action[0] && UI_KEYS[r].key[0] && UI_KEYS[r].sec < KS_SECTIONS);
+        CHECK(UI_KEYS[r].action[0] && ui_keys_key(r, 0)[0] && UI_KEYS[r].sec < KS_SECTIONS);
         per[UI_KEYS[r].sec]++;
     }
     for (int s = 0; s < KS_SECTIONS; s++) CHECK(per[s] > 0 && UI_KEY_SECTION[s][0]);
@@ -323,7 +323,7 @@ static void test_shortcuts(void)
     CHECK(u.keys_list.n == 0);
     while (u.keys_filter.len) menu_keys(&u, 1, UK_BACKSPACE);
     in = ui_input_none();   // a character past ASCII (é, two bytes): Backspace takes both
-    in.ev[in.nev++] = (UiEvent){ UK_NONE, 0xE9 };
+    in.ev[in.nev++] = ev_ch(0xE9);
     ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in);
     CHECK(u.keys_filter.len == 2);
     menu_keys(&u, 1, UK_BACKSPACE);

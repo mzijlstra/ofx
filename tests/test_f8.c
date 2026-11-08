@@ -110,7 +110,7 @@ static void test_ctx_keys(void)
     u.mark = mark;
     u.list.sel = 2;
     UiInput in = ui_input_none();
-    in.ev[in.nev++] = (UiEvent){ UK_CONTEXT, 0 };
+    in.ev[in.nev++] = ev_key(UK_CONTEXT);
     ui_handle(&u, names, &in);
     CHECK(u.menu_on && u.menu == UI_CTX_ENTRY && u.ctx_key && u.ctx_dir && UI_MENU[UI_CTX_ENTRY].items[u.menu_at] == UM_OPEN);
     menu_keys(&u, 1, UK_DOWN);
@@ -120,7 +120,7 @@ static void test_ctx_keys(void)
     CHECK(a.kind == UA_TAB_BG_ROW && a.index == 2 && !u.menu_on);
     // One marked elsewhere: the menu is the mark's, so no tab for the cursor's folder.
     ui_mark(&u, 0, true);
-    in = ui_input_none(), in.ev[in.nev++] = (UiEvent){ UK_CONTEXT, 0 };
+    in = ui_input_none(), in.ev[in.nev++] = ev_key(UK_CONTEXT);
     ui_handle(&u, names, &in);   // (menu_keys hands no folders)
     CHECK(u.menu_on && u.list.sel == 2 && !u.ctx_dir);
     menu_keys(&u, 1, UK_ESC);
@@ -144,7 +144,7 @@ static void test_ctx_keys(void)
     menu_keys(&u, 1, UK_ESC);
     // An empty folder: the folder shown's, and no entry asked whether it is a folder.
     Ui e = menu_ui(0);
-    in = ui_input_none(), in.ev[in.nev++] = (UiEvent){ UK_CONTEXT, 0 };
+    in = ui_input_none(), in.ev[in.nev++] = ev_key(UK_CONTEXT);
     ui_handle(&e, (UiNames){ name_at, NULL, dir_any }, &in);
     CHECK(e.menu_on && e.menu == UI_CTX_HERE && e.ctx_key && !e.ctx_dir);
 }
@@ -379,7 +379,7 @@ static void test_ctx_folder_menu(void)
     CHECK(!u.menu_on);
     // By the keys: the sidebar's cursor's (not on a heading), the path button's; the keys stay there.
     u.focus = UI_FOCUS_SIDE;
-    in = ui_input_none(), in.ev[in.nev++] = (UiEvent){ UK_CONTEXT, 0 };
+    in = ui_input_none(), in.ev[in.nev++] = ev_key(UK_CONTEXT);
     ui_handle(&u, names, &in);
     CHECK(u.menu_on && u.menu == UI_CTX_FOLDER && u.ctx_side == 3 && u.ctx_key && (u.focus == UI_FOCUS_SIDE));
     menu_keys(&u, 1, UK_ESC);
@@ -388,13 +388,13 @@ static void test_ctx_folder_menu(void)
     menu_keys(&u, 1, UK_CONTEXT);
     CHECK(!u.menu_on);
     ui_unfocus(&u, UI_FOCUS_SIDE), u.focus = UI_FOCUS_CRUMBS, u.crumb_at = 2;
-    in = ui_input_none(), in.crumb_n = 3, in.crumb_last = 2, in.ev[in.nev++] = (UiEvent){ UK_CONTEXT, 0 };
+    in = ui_input_none(), in.crumb_n = 3, in.crumb_last = 2, in.ev[in.nev++] = ev_key(UK_CONTEXT);
     ui_handle(&u, names, &in);
     CHECK(u.menu_on && u.menu == UI_CTX_FOLDER && u.ctx_crumb == 2 && u.ctx_side == -1 && (u.focus == UI_FOCUS_CRUMBS));
     menu_keys(&u, 1, UK_ESC);
     // The job rows keep the key.
     ui_unfocus(&u, UI_FOCUS_CRUMBS), u.focus = UI_FOCUS_JOBS;
-    in = ui_input_none(), in.job_n = 1, in.ev[in.nev++] = (UiEvent){ UK_CONTEXT, 0 };
+    in = ui_input_none(), in.job_n = 1, in.ev[in.nev++] = ev_key(UK_CONTEXT);
     ui_handle(&u, names, &in);
     CHECK(!u.menu_on);   // (a key not theirs gives the files the keys back, as before F8)
 }

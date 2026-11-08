@@ -878,7 +878,7 @@ static void test_undo(void)
 static UiInput ev1(UiKey k, u32 ch)
 {
     UiInput in = ui_input_none();
-    in.ev[in.nev++] = (UiEvent){ k, ch };
+    in.ev[in.nev++] = k ? ev_key(k) : ev_ch(ch);
     return in;
 }
 
@@ -1026,8 +1026,8 @@ static void test_ui_f3(void)
     // Opened and answered in one frame's input: ui_handle returns UA_DELETE with the question
     // already closed, so gui/ takes the targets on UA_DELETE too.
     in = ui_input_none();
-    in.ev[in.nev++] = (UiEvent){ UK_SHIFT_DELETE, 0 };
-    in.ev[in.nev++] = (UiEvent){ UK_NONE, 'y' };
+    in.ev[in.nev++] = ev_key(UK_SHIFT_DELETE);
+    in.ev[in.nev++] = ev_ch('y');
     CHECK(ui_handle(&u, names, &in).kind == UA_DELETE && !u.confirming);
 
     // A clash: s r k, the capitals for the rest, Esc cancels; others wait.
@@ -1094,8 +1094,8 @@ static void test_ui_f3(void)
     in = keys(1, UK_END);
     ui_handle(&u, names, &in);
     in = ui_input_none();
-    in.ev[in.nev++] = (UiEvent){ UK_NONE, 0xE9 };
-    in.ev[in.nev++] = (UiEvent){ UK_NONE, 0x1F600 };
+    in.ev[in.nev++] = ev_ch(0xE9);
+    in.ev[in.nev++] = ev_ch(0x1F600);
     ui_handle(&u, names, &in);
     CHECK(u.edit.len == 7 + 2 + 4 && u.edit.caret == 13);
     in = keys(1, UK_LEFT);
@@ -1133,9 +1133,9 @@ static void test_ui_f3(void)
     memset(big, 'a', NAME_MAX - 1);
     ui_edit_open(&u, (Str){ big, NAME_MAX - 1 });
     in = ui_input_none();
-    in.ev[in.nev++] = (UiEvent){ UK_NONE, 0xE9 };   // 2 bytes: no room
-    in.ev[in.nev++] = (UiEvent){ UK_NONE, 'b' };
-    in.ev[in.nev++] = (UiEvent){ UK_NONE, 'c' };
+    in.ev[in.nev++] = ev_ch(0xE9);   // 2 bytes: no room
+    in.ev[in.nev++] = ev_ch('b');
+    in.ev[in.nev++] = ev_ch('c');
     ui_handle(&u, names, &in);
     CHECK(u.edit.len == NAME_MAX && u.edit.b[NAME_MAX - 1] == 'b');
     ui_edit_close(&u);

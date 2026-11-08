@@ -458,7 +458,7 @@ static void layout_menu(int m)
                     else text(bk ? fit(bm_label(bk), 360, true) : cz(UI_MENU_ITEM[it].label), on ? cc(t->fg) : off);
                 }
                 CLAY(CLAY_IDI("menu-gap", i), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(1) } } }) {}
-                if (UI_MENU_ITEM[it].key[0]) text(cz(UI_MENU_ITEM[it].key), on ? cc(t->fg_dim) : off);
+                if (ui_menu_key(it)[0]) text(cz(ui_menu_key(it)), on ? cc(t->fg_dim) : off);
             }
         }
     }

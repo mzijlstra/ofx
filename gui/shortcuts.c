@@ -10,11 +10,15 @@ static int keys_rows(int h)
     return r < 1 ? 1 : r > KEYS_ROWS_MAX ? KEYS_ROWS_MAX : r;
 }
 
+// The first keycap the panel drew this frame (a script's keyscap, F15: the keys come from ui/keys.c).
+static const char *keys_cap_drawn;
+
 // A key as a little keycap.
 static void keycap(const char *k)
 {
     Theme *t = &app.theme;
     if (!k[0]) return;
+    if (!keys_cap_drawn) keys_cap_drawn = k;
     CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_FIT(0), CLAY_SIZING_FIXED(20) }, .padding = { 6, 6, 0, 0 }, .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
                    .backgroundColor = cc(t->bg), .cornerRadius = CLAY_CORNER_RADIUS(3),
                    .border = { .color = rule_color(), .width = CLAY_BORDER_OUTSIDE(1) } }) {
@@ -24,6 +28,7 @@ static void keycap(const char *k)
 
 static void layout_keys_panel(void)
 {
+    keys_cap_drawn = NULL;
     Theme *t = &app.theme;
     Ui *u = &app.ui;
     UiList *l = &u->keys_list;
@@ -68,9 +73,9 @@ static void layout_keys_panel(void)
                                                             .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } } }) {
                     text(fit(str_from_c(UI_KEYS[line].action), KEYS_W - 380, false), cc(t->fg));
                     CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) } } }) {}
-                    keycap(UI_KEYS[line].key);
+                    keycap(ui_keys_key(line, 0));
                     CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_FIXED(150), CLAY_SIZING_FIT(0) }, .childAlignment = { .x = CLAY_ALIGN_X_LEFT } } }) {
-                        keycap(UI_KEYS[line].key2);
+                        keycap(ui_keys_key(line, 1));
                     }
                 }
             }

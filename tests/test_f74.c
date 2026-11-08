@@ -48,8 +48,8 @@ static void test_menu_f74(void)
     // Each entry that stands for a key does what the key does, picked by Enter or by the pointer:
     // the same action and the same state after (marks, find, the rename line, the questions).
     for (int it = 1; it < UM_ITEMS; it++) {
-        UiEvent ev = UI_MENU_ITEM[it].ev;
-        if (!ev.key && !ev.ch) continue;
+        if (!UI_MENU_ITEM[it].runs) continue;
+        UiEvent ev = ui_menu_runs((UiMenuItem)it);   // (what its first key sends: ui/keys.c)
         if (it >= UM_OPEN_TAB) continue;   // (a right-click menu's own: test_f8.c)
         for (int pointer = 0; pointer < 2; pointer++) {
             Ui a = menu_all_on(m1), b = menu_all_on(m2);
@@ -90,7 +90,7 @@ static void test_menu_f74(void)
     in.menu_title = 1;
     ui_handle(&u, names, &in);
     in = ui_input_none(), in.menu_item = menu_place(1, UM_SELECT_ALL);
-    in.ev[in.nev++] = (UiEvent){ UK_INVERT, 0 };
+    in.ev[in.nev++] = ev_key(UK_INVERT);
     ui_handle(&u, names, &in);
     CHECK(u.marked == 0);
     // The entries without a key: sort, the sidebar's modes, the trash view.
@@ -275,7 +275,7 @@ static void test_f74_keys(void)
     UiNames names = { name_at, NULL, NULL };
     Ui u = menu_ui(3);
     CHECK(menu_keys(&u, 1, UK_TRASH_VIEW).kind == UA_TRASH_VIEW);
-    CHECK(strcmp(UI_MENU_ITEM[UM_TRASH_VIEW].key, "Alt+End") == 0 && strcmp(UI_MENU_ITEM[UM_OPEN_WITH].key, "Shift+Enter") == 0);
+    CHECK(strcmp(ui_menu_key(UM_TRASH_VIEW), "Alt+End") == 0 && strcmp(ui_menu_key(UM_OPEN_WITH), "Shift+Enter") == 0);
     // In the files: Open With, on the cursor's entry or the marked ones (the panel takes the targets).
     UiAction a = menu_keys(&u, 1, UK_SHIFT_ENTER);
     CHECK(a.kind == UA_OPEN_WITH && u.panel == UI_PANEL_OW);

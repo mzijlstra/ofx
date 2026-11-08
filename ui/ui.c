@@ -89,6 +89,10 @@ typedef enum {
     // Ctrl+Shift+Right select, Ctrl+Backspace and Ctrl+Delete delete; outside a field the last four do
     // nothing.
     UK_WORD_LEFT, UK_WORD_RIGHT, UK_SEL_WORD_LEFT, UK_SEL_WORD_RIGHT, UK_WORD_BACKSPACE, UK_WORD_DELETE,
+    // The commands that were letters in the files before F15 (ui/keys.c binds them): r, s, S, n,
+    // N, Space; and Ctrl+Left's outside a text field, the sidebar.
+    UK_RESTORE, UK_SORT_NEXT, UK_SORT_REVERSE, UK_FIND_NEXT, UK_FIND_PREV, UK_MARK, UK_SIDE_GO,
+    UK_CMD,   // a key with no meaning of its own, only the command bound to it (UiEvent.cmd)
 } UiKey;
 
 // The top bar's buttons (F4).
@@ -98,12 +102,15 @@ typedef enum { UB_NONE, UB_BACK, UB_FORWARD, UB_UP, UB_LOCATION, UB_SEARCH, UB_L
                UB_ZOOM_OUT, UB_ZOOM_IN,   // the zoom slider's minus and plus (F6.3), in the footer
                UB_BRANCH } UiBar;   // the git branch after the path buttons (F12 step 5b)
 
-enum { UI_MOD_CTRL = 1, UI_MOD_SHIFT = 2 };
+enum { UI_MOD_CTRL = 1, UI_MOD_SHIFT = 2, UI_MOD_ALT = 4, UI_MOD_SUPER = 8, UI_MOD_TYPED = 16 };   // (TYPED: ui/keys.c's UiChord)
 
 // One key or one typed character, in the order they came: a find needs `/`, then text, then Enter.
+// The key itself for the text fields, panels, menus and questions; the command bound to it for the
+// files and the sidebar (F15, ui/keys.c).
 typedef struct {
-    UiKey key;   // UK_NONE: the character ch
+    UiKey key;   // UK_NONE: the character ch; UK_CMD: only a command
     u32   ch;
+    UiKey cmd;   // the command bound to the key or character, UK_NONE for none
 } UiEvent;
 
 // The numbers a click carries (F11 review, 2026-11-02: written as 1..4 at both ends before).
@@ -307,121 +314,122 @@ static int ui_slot(UiMenuItem it, UiMenuItem first, int n)
 
 // A run of 8 slots' entries (bookmarks, branches): no label of their own (gui/'s), named <w>0..7
 // in a script's state line, marked as one of a group.
-#define UI_SLOT_ITEM(first, k, w) [first + k] = { "", "", w #k, .mark = 'r' }
+#define UI_SLOT_ITEM(first, k, w) [first + k] = { "", w #k, .mark = 'r' }
 #define UI_SLOT_ITEMS(first, w) UI_SLOT_ITEM(first, 0, w), UI_SLOT_ITEM(first, 1, w), UI_SLOT_ITEM(first, 2, w), UI_SLOT_ITEM(first, 3, w), \
                                 UI_SLOT_ITEM(first, 4, w), UI_SLOT_ITEM(first, 5, w), UI_SLOT_ITEM(first, 6, w), UI_SLOT_ITEM(first, 7, w)
 _Static_assert(UI_MENU_BOOKMARKS == 8 && UI_MENU_BRANCHES == 8, "UI_SLOT_ITEMS writes 8");
 
-// Each entry's label, its key as the menu shows it, and its name in a script's state line; the key
-// event it stands for (F7.4: picked, the entry runs that key, so the two can't differ; none: its
-// action in ui_menu_pick); and its mark: 'c' a check when on, 'r' one of a group, the one that is.
-static const struct { const char *label, *key, *word; UiEvent ev; char mark; } UI_MENU_ITEM[UM_ITEMS] = {
-    [UM_SEP] = { "", "", "-" },
-    [UM_NEW_TAB] = { "New Tab", "Ctrl+T", "new-tab" },
-    [UM_NEW_WINDOW] = { "New Window", "Ctrl+N", "new-window" },
-    [UM_NEW_FOLDER] = { "Create New Folder", "Ctrl+Shift+N", "new-folder" },
-    [UM_NEW_FILE] = { "Create New Empty File", "", "new-file" },
-    [UM_OPEN] = { "Open", "Enter", "open" },
-    [UM_OPEN_WITH] = { "Open With Other Application\xE2\x80\xA6", "Shift+Enter", "open-with" },   // (its own action: with the keys in the sidebar Shift+Enter is Enter there)
-    [UM_PROPERTIES] = { "Properties\xE2\x80\xA6", "Ctrl+I", "properties" },
-    [UM_CLOSE_ALL] = { "Close All Windows", "Ctrl+Q", "close-all" },
-    [UM_CLOSE] = { "Close", "Ctrl+W", "close" },
+// Each entry's label and its name in a script's state line; the command whose first key the menu
+// shows (ui/keys.c), and whether picking it runs that command (F7.4: so the two can't differ; else
+// its action in ui_menu_pick); its mark: 'c' a check when on, 'r' one of a group, the one that is;
+// and a hint shown where a key would be (no key: a click).
+static const struct { const char *label, *word; UiKey cmd; bool runs; char mark; const char *hint; } UI_MENU_ITEM[UM_ITEMS] = {
+    [UM_SEP] = { "", "-" },
+    [UM_NEW_TAB] = { "New Tab", "new-tab", .cmd = UK_TAB_NEW },
+    [UM_NEW_WINDOW] = { "New Window", "new-window", .cmd = UK_NEW_WINDOW },
+    [UM_NEW_FOLDER] = { "Create New Folder", "new-folder", .cmd = UK_NEWFOLDER },
+    [UM_NEW_FILE] = { "Create New Empty File", "new-file" },
+    [UM_OPEN] = { "Open", "open", .cmd = UK_ENTER },
+    [UM_OPEN_WITH] = { "Open With Other Application\xE2\x80\xA6", "open-with", .cmd = UK_SHIFT_ENTER },   // (its own action: with the keys in the sidebar Shift+Enter is Enter there)
+    [UM_PROPERTIES] = { "Properties\xE2\x80\xA6", "properties", .cmd = UK_PROPERTIES },
+    [UM_CLOSE_ALL] = { "Close All Windows", "close-all", .cmd = UK_QUIT_ALL },
+    [UM_CLOSE] = { "Close", "close", .cmd = UK_TAB_CLOSE },
     // Edit
-    [UM_UNDO] = { "Undo", "Ctrl+Z", "undo", { UK_UNDO, 0 } },
-    [UM_CUT] = { "Cut", "Ctrl+X", "cut", { UK_CUT, 0 } },
-    [UM_COPY] = { "Copy", "Ctrl+C", "copy", { UK_COPY, 0 } },
-    [UM_COPY_PATH] = { "Copy Path", "Ctrl+Shift+C", "copy-path", { UK_COPY_PATH, 0 } },   // (F13)
-    [UM_PASTE] = { "Paste", "Ctrl+V", "paste", { UK_PASTE, 0 } },
-    [UM_SELECT_ALL] = { "Select All", "Ctrl+A", "select-all", { UK_ALL, 0 } },
-    [UM_SELECT_MATCH] = { "Select Items Matching\xE2\x80\xA6", "Ctrl+Shift+A", "select-match", { UK_SELECT_MATCH, 0 } },
-    [UM_INVERT] = { "Invert Selection", "Ctrl+Shift+I", "invert", { UK_INVERT, 0 } },
-    [UM_DUPLICATE] = { "Duplicate", "", "duplicate" },
-    [UM_MAKE_LINK] = { "Make Link", "Ctrl+M", "make-link", { UK_MAKE_LINK, 0 } },
-    [UM_RENAME] = { "Rename\xE2\x80\xA6", "F2", "rename", { UK_F2, 0 } },
-    [UM_TRASH] = { "Move to Trash", "Delete", "trash", { UK_DELETE, 0 } },
-    [UM_DELETE] = { "Delete\xE2\x80\xA6", "Shift+Delete", "delete", { UK_SHIFT_DELETE, 0 } },
-    [UM_RESTORE] = { "Restore", "r", "restore", { UK_NONE, 'r' } },
+    [UM_UNDO] = { "Undo", "undo", .cmd = UK_UNDO, .runs = true },
+    [UM_CUT] = { "Cut", "cut", .cmd = UK_CUT, .runs = true },
+    [UM_COPY] = { "Copy", "copy", .cmd = UK_COPY, .runs = true },
+    [UM_COPY_PATH] = { "Copy Path", "copy-path", .cmd = UK_COPY_PATH, .runs = true },   // (F13)
+    [UM_PASTE] = { "Paste", "paste", .cmd = UK_PASTE, .runs = true },
+    [UM_SELECT_ALL] = { "Select All", "select-all", .cmd = UK_ALL, .runs = true },
+    [UM_SELECT_MATCH] = { "Select Items Matching\xE2\x80\xA6", "select-match", .cmd = UK_SELECT_MATCH, .runs = true },
+    [UM_INVERT] = { "Invert Selection", "invert", .cmd = UK_INVERT, .runs = true },
+    [UM_DUPLICATE] = { "Duplicate", "duplicate" },
+    [UM_MAKE_LINK] = { "Make Link", "make-link", .cmd = UK_MAKE_LINK, .runs = true },
+    [UM_RENAME] = { "Rename\xE2\x80\xA6", "rename", .cmd = UK_F2, .runs = true },
+    [UM_TRASH] = { "Move to Trash", "trash", .cmd = UK_DELETE, .runs = true },
+    [UM_DELETE] = { "Delete\xE2\x80\xA6", "delete", .cmd = UK_SHIFT_DELETE, .runs = true },
+    [UM_RESTORE] = { "Restore", "restore", .cmd = UK_RESTORE, .runs = true },
     // View
-    [UM_RELOAD] = { "Reload", "Ctrl+R", "reload", { UK_RELOAD, 0 } },
-    [UM_SIDE_PLACES] = { "Places Sidebar", "", "side-places", .mark = 'r' },
-    [UM_SIDE_TREE] = { "Tree Sidebar", "", "side-tree", .mark = 'r' },
-    [UM_SIDE_NONE] = { "No Sidebar", "", "side-none", .mark = 'r' },
-    [UM_HIDDEN] = { "Show Hidden Files", "Ctrl+H", "hidden", { UK_HIDDEN, 0 }, 'c' },
-    [UM_PERMS_COLS] = { "Show Permissions", "Ctrl+P", "perms-cols", { UK_PERMS_COLS, 0 }, 'c' },   // the list's Owner and Permissions (2026-10-27)
-    [UM_GROUP_COL] = { "Show Group", "Ctrl+G", "group-col", { UK_GROUP_COL, 0 }, 'c' },   // and Group, off by default as eza's (Michael, 2026-10-27)
-    [UM_COLORS] = { "Show Colors", "", "colors", .mark = 'c' },   // the list in eza's colours (2026-10-27)
-    [UM_SHOW_MENU] = { "Show Menu", "", "show-menu", .mark = 'c' },   // the menu bar (2026-10-27): F10 and Alt+letters open its menus either way
-    [UM_SORT_NAME] = { "Sort by Name", "", "sort-name", .mark = 'r' },
-    [UM_SORT_SIZE] = { "Sort by Size", "", "sort-size", .mark = 'r' },
-    [UM_SORT_MTIME] = { "Sort by Modified", "", "sort-mtime", .mark = 'r' },
-    [UM_SORT_REVERSE] = { "Reverse Order", "S", "sort-reverse", { UK_NONE, 'S' }, 'c' },
-    [UM_ZOOM_IN] = { "Zoom In", "Ctrl+=", "zoom-in", { UK_ZOOM_IN, 0 } },
-    [UM_ZOOM_OUT] = { "Zoom Out", "Ctrl+-", "zoom-out", { UK_ZOOM_OUT, 0 } },
-    [UM_ZOOM_RESET] = { "Normal Size", "Ctrl+0", "zoom-reset", { UK_ZOOM_RESET, 0 } },
-    [UM_VIEW_LIST] = { "List", "Ctrl+1", "view-list", { UK_VIEW_LIST, 0 }, 'r' },
-    [UM_VIEW_ICONS] = { "Icons", "Ctrl+2", "view-icons", { UK_VIEW_ICONS, 0 }, 'r' },
+    [UM_RELOAD] = { "Reload", "reload", .cmd = UK_RELOAD, .runs = true },
+    [UM_SIDE_PLACES] = { "Places Sidebar", "side-places", .mark = 'r' },
+    [UM_SIDE_TREE] = { "Tree Sidebar", "side-tree", .mark = 'r' },
+    [UM_SIDE_NONE] = { "No Sidebar", "side-none", .mark = 'r' },
+    [UM_HIDDEN] = { "Show Hidden Files", "hidden", .cmd = UK_HIDDEN, .runs = true, .mark = 'c' },
+    [UM_PERMS_COLS] = { "Show Permissions", "perms-cols", .cmd = UK_PERMS_COLS, .runs = true, .mark = 'c' },   // the list's Owner and Permissions (2026-10-27)
+    [UM_GROUP_COL] = { "Show Group", "group-col", .cmd = UK_GROUP_COL, .runs = true, .mark = 'c' },   // and Group, off by default as eza's (Michael, 2026-10-27)
+    [UM_COLORS] = { "Show Colors", "colors", .mark = 'c' },   // the list in eza's colours (2026-10-27)
+    [UM_SHOW_MENU] = { "Show Menu", "show-menu", .mark = 'c' },   // the menu bar (2026-10-27): F10 and Alt+letters open its menus either way
+    [UM_SORT_NAME] = { "Sort by Name", "sort-name", .mark = 'r' },
+    [UM_SORT_SIZE] = { "Sort by Size", "sort-size", .mark = 'r' },
+    [UM_SORT_MTIME] = { "Sort by Modified", "sort-mtime", .mark = 'r' },
+    [UM_SORT_REVERSE] = { "Reverse Order", "sort-reverse", .cmd = UK_SORT_REVERSE, .runs = true, .mark = 'c' },
+    [UM_ZOOM_IN] = { "Zoom In", "zoom-in", .cmd = UK_ZOOM_IN, .runs = true },
+    [UM_ZOOM_OUT] = { "Zoom Out", "zoom-out", .cmd = UK_ZOOM_OUT, .runs = true },
+    [UM_ZOOM_RESET] = { "Normal Size", "zoom-reset", .cmd = UK_ZOOM_RESET, .runs = true },
+    [UM_VIEW_LIST] = { "List", "view-list", .cmd = UK_VIEW_LIST, .runs = true, .mark = 'r' },
+    [UM_VIEW_ICONS] = { "Icons", "view-icons", .cmd = UK_VIEW_ICONS, .runs = true, .mark = 'r' },
     // Go
-    [UM_PARENT] = { "Open Parent", "Alt+Up", "parent", { UK_PARENT, 0 } },
-    [UM_BACK] = { "Back", "Alt+Left", "back", { UK_BACK, 0 } },
-    [UM_FORWARD] = { "Forward", "Alt+Right", "forward", { UK_FORWARD, 0 } },
-    [UM_HOME] = { "Home", "Alt+Home", "home", { UK_HOMEDIR, 0 } },
-    [UM_TRASH_VIEW] = { "Trash", "Alt+End", "trash-view", { UK_TRASH_VIEW, 0 } },
-    [UM_FIND] = { "Find in Folder\xE2\x80\xA6", "Ctrl+F", "find", { UK_FIND, 0 } },
-    [UM_SEARCH] = { "Search\xE2\x80\xA6", "Ctrl+Shift+F", "search", { UK_SEARCH, 0 } },   // below the folder shown (F9)
-    [UM_LOCATION] = { "Location\xE2\x80\xA6", "Ctrl+L", "location", { UK_LOCATION, 0 } },
-    [UM_TERMINAL] = { "Terminal Here", "Alt+Enter", "terminal", { UK_TERMINAL, 0 } },
+    [UM_PARENT] = { "Open Parent", "parent", .cmd = UK_PARENT, .runs = true },
+    [UM_BACK] = { "Back", "back", .cmd = UK_BACK, .runs = true },
+    [UM_FORWARD] = { "Forward", "forward", .cmd = UK_FORWARD, .runs = true },
+    [UM_HOME] = { "Home", "home", .cmd = UK_HOMEDIR, .runs = true },
+    [UM_TRASH_VIEW] = { "Trash", "trash-view", .cmd = UK_TRASH_VIEW, .runs = true },
+    [UM_FIND] = { "Find in Folder\xE2\x80\xA6", "find", .cmd = UK_FIND, .runs = true },
+    [UM_SEARCH] = { "Search\xE2\x80\xA6", "search", .cmd = UK_SEARCH, .runs = true },   // below the folder shown (F9)
+    [UM_LOCATION] = { "Location\xE2\x80\xA6", "location", .cmd = UK_LOCATION, .runs = true },
+    [UM_TERMINAL] = { "Terminal Here", "terminal", .cmd = UK_TERMINAL, .runs = true },
     // Bookmarks (F7.5); a bookmark's label is gui/'s (the file's), marked when it is the folder shown
-    [UM_ADD_BOOKMARK] = { "Add Bookmark", "Ctrl+D", "add-bookmark", { UK_ADD_BOOKMARK, 0 } },
-    [UM_EDIT_BOOKMARKS] = { "Edit Bookmarks\xE2\x80\xA6", "Ctrl+B", "edit-bookmarks", { UK_EDIT_BOOKMARKS, 0 } },
-    [UM_BM_MORE] = { "", "", "bm-more" },   // "N more in Edit Bookmarks…" (gui/'s label): the panel, on the first not listed
+    [UM_ADD_BOOKMARK] = { "Add Bookmark", "add-bookmark", .cmd = UK_ADD_BOOKMARK, .runs = true },
+    [UM_EDIT_BOOKMARKS] = { "Edit Bookmarks\xE2\x80\xA6", "edit-bookmarks", .cmd = UK_EDIT_BOOKMARKS, .runs = true },
+    [UM_BM_MORE] = { "", "bm-more" },   // "N more in Edit Bookmarks…" (gui/'s label): the panel, on the first not listed
     // Help: no manual (Michael, 2026-10-27)
-    [UM_SHORTCUTS] = { "Keyboard Shortcuts", "F1", "shortcuts", { UK_SHORTCUTS, 0 } },
-    [UM_ABOUT] = { "About", "", "about" },
-    [UM_PREFERENCES] = { "Preferences\xE2\x80\xA6", "", "preferences" },   // (ofx.conf, F10)
-    [UM_CLEAR_PREVIEWS] = { "Clear Previews\xE2\x80\xA6", "", "clear-previews" },   // (every preview in the cache, asked first: F12)
+    [UM_SHORTCUTS] = { "Keyboard Shortcuts", "shortcuts", .cmd = UK_SHORTCUTS, .runs = true },
+    [UM_ABOUT] = { "About", "about" },
+    [UM_PREFERENCES] = { "Preferences\xE2\x80\xA6", "preferences" },   // (ofx.conf, F10)
+    [UM_CLEAR_PREVIEWS] = { "Clear Previews\xE2\x80\xA6", "clear-previews" },   // (every preview in the cache, asked first: F12)
     // The right-click menus' own (F8): a folder in a tab behind (its row's middle click); the trash
     // view's Empty Trash; the folder shown's Properties, whatever is marked
-    [UM_OPEN_TAB] = { "Open in New Tab", "Middle click", "open-tab" },
-    [UM_EMPTY_TRASH] = { "Empty Trash\xE2\x80\xA6", "", "empty-trash" },
-    [UM_HERE_PROPS] = { "Properties\xE2\x80\xA6", "", "here-properties" },
+    [UM_OPEN_TAB] = { "Open in New Tab", "open-tab", .hint = "Middle click" },
+    [UM_EMPTY_TRASH] = { "Empty Trash\xE2\x80\xA6", "empty-trash" },
+    [UM_HERE_PROPS] = { "Properties\xE2\x80\xA6", "here-properties" },
     // and on one folder of the files, that folder: a window, a paste into it, a terminal, a bookmark;
     // on a link, its target
-    [UM_OPEN_WINDOW] = { "Open in New Window", "", "open-window" },
-    [UM_PASTE_INTO] = { "Paste Into Folder", "", "paste-into" },
-    [UM_TERMINAL_IN] = { "Open in Terminal", "", "terminal-in" },
-    [UM_FOLLOW] = { "Follow Link", "", "follow" },
+    [UM_OPEN_WINDOW] = { "Open in New Window", "open-window" },
+    [UM_PASTE_INTO] = { "Paste Into Folder", "paste-into" },
+    [UM_TERMINAL_IN] = { "Open in Terminal", "terminal-in" },
+    [UM_FOLLOW] = { "Follow Link", "follow" },
     // the search view's (F9): a result's folder, it selected; and a folder searched below
-    [UM_CONTAINING] = { "Open Containing Folder", "Ctrl+Enter", "containing", { UK_CONTAINING, 0 } },
-    [UM_OPEN_LINE] = { "Open at Line", "Ctrl+Shift+Enter", "open-line", { UK_OPEN_LINE, 0 } },   // gui/ adds "in <editor>" (F9 step 4)
-    [UM_SEARCH_IN] = { "Search in Folder\xE2\x80\xA6", "", "search-in" },
-    [UM_BOOKMARK_IT] = { "Add Bookmark", "", "bookmark-it" },
+    [UM_CONTAINING] = { "Open Containing Folder", "containing", .cmd = UK_CONTAINING, .runs = true },
+    [UM_OPEN_LINE] = { "Open at Line", "open-line", .cmd = UK_OPEN_LINE, .runs = true },   // gui/ adds "in <editor>" (F9 step 4)
+    [UM_SEARCH_IN] = { "Search in Folder\xE2\x80\xA6", "search-in" },
+    [UM_BOOKMARK_IT] = { "Add Bookmark", "bookmark-it" },
     // and on a folder elsewhere (a sidebar row, a path button): that folder; a bookmark's own, as
     // Edit Bookmarks has them; a drive's eject; the trash's emptying
-    [UM_OPEN_IT] = { "Open", "", "open-it" },
-    [UM_CUT_IT] = { "Cut", "", "cut-it" },
-    [UM_COPY_IT] = { "Copy", "", "copy-it" },
-    [UM_COPY_PATH_IT] = { "Copy Path", "", "copy-path-it" },
-    [UM_COPY_PATH_HERE] = { "Copy Path", "", "copy-path-here" },   // (the files' empty space: the folder shown's)
-    [UM_BM_RENAME_IT] = { "Rename\xE2\x80\xA6", "", "bm-rename" },
-    [UM_BM_UP_IT] = { "Move Up", "", "bm-up" },
-    [UM_BM_DOWN_IT] = { "Move Down", "", "bm-down" },
-    [UM_BM_REMOVE_IT] = { "Remove", "", "bm-remove" },
-    [UM_BM_EDIT_IT] = { "Edit Bookmarks\xE2\x80\xA6", "Ctrl+B", "bm-edit" },
-    [UM_EJECT_IT] = { "Eject", "", "eject" },
-    [UM_MOUNT_IT] = { "Mount", "", "mount-it" },
-    [UM_UNMOUNT_IT] = { "Unmount", "", "unmount-it" },
-    [UM_EMPTY_IT] = { "Empty Trash\xE2\x80\xA6", "", "empty-it" },
-    [UM_PROPS_IT] = { "Properties\xE2\x80\xA6", "", "properties-it" },
+    [UM_OPEN_IT] = { "Open", "open-it" },
+    [UM_CUT_IT] = { "Cut", "cut-it" },
+    [UM_COPY_IT] = { "Copy", "copy-it" },
+    [UM_COPY_PATH_IT] = { "Copy Path", "copy-path-it" },
+    [UM_COPY_PATH_HERE] = { "Copy Path", "copy-path-here" },   // (the files' empty space: the folder shown's)
+    [UM_BM_RENAME_IT] = { "Rename\xE2\x80\xA6", "bm-rename" },
+    [UM_BM_UP_IT] = { "Move Up", "bm-up" },
+    [UM_BM_DOWN_IT] = { "Move Down", "bm-down" },
+    [UM_BM_REMOVE_IT] = { "Remove", "bm-remove" },
+    [UM_BM_EDIT_IT] = { "Edit Bookmarks\xE2\x80\xA6", "bm-edit", .cmd = UK_EDIT_BOOKMARKS },
+    [UM_EJECT_IT] = { "Eject", "eject" },
+    [UM_MOUNT_IT] = { "Mount", "mount-it" },
+    [UM_UNMOUNT_IT] = { "Unmount", "unmount-it" },
+    [UM_EMPTY_IT] = { "Empty Trash\xE2\x80\xA6", "empty-it" },
+    [UM_PROPS_IT] = { "Properties\xE2\x80\xA6", "properties-it" },
     // and on a tab
-    [UM_TAB_LEFT] = { "Move Tab Left", "Ctrl+Shift+PgUp", "tab-left", { UK_TAB_LEFT, 0 } },
-    [UM_TAB_RIGHT] = { "Move Tab Right", "Ctrl+Shift+PgDn", "tab-right", { UK_TAB_RIGHT, 0 } },
-    [UM_TAB_OTHERS] = { "Close Other Tabs", "", "tab-others" },
+    [UM_TAB_LEFT] = { "Move Tab Left", "tab-left", .cmd = UK_TAB_LEFT, .runs = true },
+    [UM_TAB_RIGHT] = { "Move Tab Right", "tab-right", .cmd = UK_TAB_RIGHT, .runs = true },
+    [UM_TAB_OTHERS] = { "Close Other Tabs", "tab-others" },
     // The branch menu's (F12 step 5b): a note while there are none to list ("Reading branches…"),
     // then the branches, gui/'s labels; the one checked out marked.
-    [UM_BR_NOTE] = { "", "", "br-note" },
-    [UM_BR_ALL] = { "", "", "br-all" },   // ("All branches… (N)": gui/'s label, step 6)
+    [UM_BR_NOTE] = { "", "br-note" },
+    [UM_BR_ALL] = { "", "br-all" },   // ("All branches… (N)": gui/'s label, step 6)
     UI_SLOT_ITEMS(UM_BR_0, "br-"),
-    [UM_TAB_REOPEN] = { "Reopen Closed Tab", "Ctrl+Shift+T", "reopen-tab", { UK_TAB_REOPEN, 0 } },
+    [UM_TAB_REOPEN] = { "Reopen Closed Tab", "reopen-tab", .cmd = UK_TAB_REOPEN, .runs = true },
     UI_SLOT_ITEMS(UM_BM_0, "bm-"),
 };
 
@@ -490,6 +498,8 @@ _Static_assert(sizeof UI_MENU / sizeof UI_MENU[0] == UI_MENUS_ALL, "UI_MENU: the
 // ---- the Keyboard Shortcuts panel (F7.5, docs/plan.md "F7.5 decided") ----------------------------
 
 // Its sections, by where the keys work, and its rows: an action, its key, a second key ("" none).
+// A row of one command shows its keys from ui/keys.c (key NULL; key2 NULL its second key, else
+// what the row says); the rest are the fixed keys, and rows of several commands (until F15 step 3).
 // A menu entry with a key has a row of the same name and key (test_f75.c checks).
 typedef enum {
     KS_MOVE, KS_OPEN, KS_SELECT, KS_CHANGE, KS_TABS, KS_VIEW, KS_SIDE, KS_CRUMBS, KS_FIND, KS_SEARCH, KS_EDIT, KS_JOBS, KS_OW, KS_BM,
@@ -501,110 +511,110 @@ static const char *const UI_KEY_SECTION[KS_SECTIONS] = {
     "The find bar", "Search below the folder", "Text fields (rename, location, find, search, filters)", "The job rows (Ctrl+J)", "Open With", "Edit Bookmarks",
 };
 
-static const struct { UiKeySection sec; const char *action, *key, *key2; } UI_KEYS[] = {
-    { KS_MOVE, "Up, down", "Up, Down", "k, j" },
-    { KS_MOVE, "A page up, down", "PgUp, PgDn", "" },
-    { KS_MOVE, "The first, the last", "Home, End", "g, G" },
-    { KS_MOVE, "Back", "Alt+Left", "Mouse back" },
-    { KS_MOVE, "Forward", "Alt+Right", "Mouse forward" },
-    { KS_MOVE, "Open Parent", "Alt+Up", "Backspace" },
-    { KS_MOVE, "Home", "Alt+Home", "~" },
-    { KS_MOVE, "Trash", "Alt+End", "" },
-    { KS_MOVE, "Location\xE2\x80\xA6", "Ctrl+L", "Ctrl+Right" },
-    { KS_OPEN, "Open", "Enter", "" },
-    { KS_OPEN, "Open With Other Application\xE2\x80\xA6", "Shift+Enter", "" },
-    { KS_OPEN, "Terminal Here", "Alt+Enter", "t" },
-    { KS_OPEN, "Properties\xE2\x80\xA6", "Ctrl+I", "" },
-    { KS_SELECT, "Select the entry, and on", "Space", "" },
-    { KS_SELECT, "Select while moving", "Shift+arrows", "H, J, K, L" },
-    { KS_SELECT, "Select All", "Ctrl+A", "" },
-    { KS_SELECT, "Select Items Matching\xE2\x80\xA6", "Ctrl+Shift+A", "" },
-    { KS_SELECT, "Invert Selection", "Ctrl+Shift+I", "" },
-    { KS_SELECT, "Clear the selection", "Esc", "" },
-    { KS_CHANGE, "Cut", "Ctrl+X", "" },
-    { KS_CHANGE, "Copy", "Ctrl+C", "" },
-    { KS_CHANGE, "Copy Path", "Ctrl+Shift+C", "" },
-    { KS_CHANGE, "Paste", "Ctrl+V", "" },
-    { KS_CHANGE, "Undo", "Ctrl+Z", "" },
-    { KS_CHANGE, "Make Link", "Ctrl+M", "" },
-    { KS_CHANGE, "Rename\xE2\x80\xA6", "F2", "" },
-    { KS_CHANGE, "Create New Folder", "Ctrl+Shift+N", "" },
-    { KS_CHANGE, "Move to Trash", "Delete", "" },
-    { KS_CHANGE, "Delete\xE2\x80\xA6", "Shift+Delete", "" },
-    { KS_CHANGE, "Restore", "r", "" },
-    { KS_CHANGE, "Add Bookmark", "Ctrl+D", "" },
-    { KS_CHANGE, "Edit Bookmarks\xE2\x80\xA6", "Ctrl+B", "" },
-    { KS_CHANGE, "A clash: skip, replace, keep both", "s, r, k", "S, R, K the rest" },
-    { KS_TABS, "New Tab", "Ctrl+T", "" },
-    { KS_TABS, "Reopen Closed Tab", "Ctrl+Shift+T", "" },
-    { KS_TABS, "New Window", "Ctrl+N", "" },
-    { KS_TABS, "Close", "Ctrl+W", "" },
-    { KS_TABS, "The next tab", "Ctrl+Tab", "Ctrl+PgDn" },
-    { KS_TABS, "The previous tab", "Ctrl+Shift+Tab", "Ctrl+PgUp" },
-    { KS_TABS, "Move Tab Left", "Ctrl+Shift+PgUp", "" },
-    { KS_TABS, "Move Tab Right", "Ctrl+Shift+PgDn", "" },
-    { KS_TABS, "A tab by its place", "Alt+1 " "\xE2\x80\xA6" " Alt+9", "" },
-    { KS_TABS, "Open in New Tab", "Middle click", "" },
-    { KS_TABS, "Close All Windows", "Ctrl+Q", "" },
-    { KS_VIEW, "The menus", "F10", "Alt+F, E, V, G, B, H" },
-    { KS_VIEW, "The right-click menu", "Shift+F10", "Menu" },
-    { KS_VIEW, "Keyboard Shortcuts", "F1", "Ctrl+F1" },
-    { KS_VIEW, "Reload", "Ctrl+R", "" },
-    { KS_VIEW, "Show Hidden Files", "Ctrl+H", "." },
-    { KS_VIEW, "Show Permissions", "Ctrl+P", "" },
-    { KS_VIEW, "Show Group", "Ctrl+G", "" },
-    { KS_VIEW, "Sort by the next column", "s", "a column's header" },
-    { KS_VIEW, "Reverse Order", "S", "" },
-    { KS_VIEW, "List", "Ctrl+1", "" },
-    { KS_VIEW, "Icons", "Ctrl+2", "" },
-    { KS_VIEW, "Zoom In", "Ctrl+=", "Ctrl+wheel" },
-    { KS_VIEW, "Zoom Out", "Ctrl+-", "" },
-    { KS_VIEW, "Normal Size", "Ctrl+0", "" },
-    { KS_SIDE, "To the sidebar and back", "Tab", "Ctrl+Left" },
-    { KS_SIDE, "The sidebar's next mode", "F9", "Ctrl+S" },
-    { KS_SIDE, "Go there", "Enter", "" },
-    { KS_SIDE, "In the tree: close, open", "Left, Right", "h, l" },
-    { KS_CRUMBS, "To the path buttons", "Ctrl+K", "Ctrl+Up; in a search, the search field first" },
-    { KS_CRUMBS, "The next button", "Left, Right", "h, l" },
-    { KS_CRUMBS, "Go there", "Enter", "" },
-    { KS_CRUMBS, "Open it in a tab behind", "Shift+Enter", "" },
-    { KS_CRUMBS, "Back to the files", "Esc", "" },
-    { KS_FIND, "Find in Folder\xE2\x80\xA6", "Ctrl+F", "/" },
-    { KS_FIND, "The previous, next match", "Up, Down", "the chevrons" },
-    { KS_FIND, "Keep it, the keys to the files", "Enter", "" },
-    { KS_FIND, "Close it", "Esc", "" },
-    { KS_FIND, "Find it again, back", "n, N", "" },
-    { KS_FIND, "Match case", "Alt+C", "" },
-    { KS_FIND, "Whole words", "Alt+W", "" },
-    { KS_FIND, "A regular expression", "Alt+R", "" },
-    { KS_SEARCH, "Search\xE2\x80\xA6", "Ctrl+Shift+F", "the magnifier" },
-    { KS_SEARCH, "Open Containing Folder", "Ctrl+Enter", "" },
-    { KS_SEARCH, "Open at Line", "Ctrl+Shift+Enter", "a result found inside files, in the editor" },
-    { KS_SEARCH, "The keys to the results", "Enter", "Esc, Down" },
-    { KS_SEARCH, "Back to the search field", "Ctrl+Shift+F", "a click in it" },
-    { KS_SEARCH, "A wildcard over the whole name", "*, ?", "*.ts" },
-    { KS_SEARCH, "Match case, whole words, a regular expression", "Alt+C, W, R", "the name's shared with find; Containing's its own" },
-    { KS_SEARCH, "In files: a Containing field too", "Alt+I", "the In files button" },
-    { KS_SEARCH, "The other field, in files", "Tab", "" },
-    { KS_EDIT, "Select", "Shift+Left, Right", "Shift+Home, End" },
-    { KS_EDIT, "A word left, right", "Ctrl+Left, Right", "" },
-    { KS_EDIT, "Select a word", "Ctrl+Shift+Left, Right", "" },
-    { KS_EDIT, "Delete a word", "Ctrl+Backspace", "Ctrl+Delete" },
-    { KS_EDIT, "All of it", "Ctrl+A", "" },
-    { KS_EDIT, "Copy, cut, paste text", "Ctrl+C, X, V", "" },
-    { KS_EDIT, "Done", "Enter", "" },
-    { KS_EDIT, "Leave it as it was", "Esc", "" },
-    { KS_JOBS, "To the job rows", "Ctrl+J", "Ctrl+Down" },
-    { KS_JOBS, "The next row", "Up, Down", "k, j" },
-    { KS_JOBS, "Cancel that job", "Enter", "its \xC3\x97" },
-    { KS_JOBS, "Back to the files", "Esc", "Ctrl+J" },
-    { KS_OW, "The field, the list", "Tab", "Down" },
-    { KS_OW, "Always open with this app", "Alt+D", "" },
-    { KS_OW, "Open", "Enter", "a double click" },
-    { KS_BM, "Remove", "Delete", "" },
-    { KS_BM, "Rename", "F2", "" },
-    { KS_BM, "Move it up, down", "Alt+Up, Alt+Down", "" },
-    { KS_BM, "Go there", "Enter", "a double click" },
+static const struct { UiKeySection sec; const char *action; UiKey cmd; const char *key, *key2; } UI_KEYS[] = {
+    { KS_MOVE, "Up, down", UK_NONE, "Up, Down", "k, j" },
+    { KS_MOVE, "A page up, down", UK_NONE, "PgUp, PgDn", "" },
+    { KS_MOVE, "The first, the last", UK_NONE, "Home, End", "g, G" },
+    { KS_MOVE, "Back", UK_BACK, NULL, "Mouse back" },
+    { KS_MOVE, "Forward", UK_FORWARD, NULL, "Mouse forward" },
+    { KS_MOVE, "Open Parent", UK_PARENT, NULL, NULL },
+    { KS_MOVE, "Home", UK_HOMEDIR, NULL, NULL },
+    { KS_MOVE, "Trash", UK_TRASH_VIEW, NULL, NULL },
+    { KS_MOVE, "Location\xE2\x80\xA6", UK_LOCATION, NULL, NULL },
+    { KS_OPEN, "Open", UK_ENTER, NULL, NULL },
+    { KS_OPEN, "Open With Other Application\xE2\x80\xA6", UK_SHIFT_ENTER, NULL, NULL },
+    { KS_OPEN, "Terminal Here", UK_TERMINAL, NULL, NULL },
+    { KS_OPEN, "Properties\xE2\x80\xA6", UK_PROPERTIES, NULL, NULL },
+    { KS_SELECT, "Select the entry, and on", UK_MARK, NULL, NULL },
+    { KS_SELECT, "Select while moving", UK_NONE, "Shift+arrows", "H, J, K, L" },
+    { KS_SELECT, "Select All", UK_ALL, NULL, NULL },
+    { KS_SELECT, "Select Items Matching\xE2\x80\xA6", UK_SELECT_MATCH, NULL, NULL },
+    { KS_SELECT, "Invert Selection", UK_INVERT, NULL, NULL },
+    { KS_SELECT, "Clear the selection", UK_ESC, NULL, NULL },
+    { KS_CHANGE, "Cut", UK_CUT, NULL, NULL },
+    { KS_CHANGE, "Copy", UK_COPY, NULL, NULL },
+    { KS_CHANGE, "Copy Path", UK_COPY_PATH, NULL, NULL },
+    { KS_CHANGE, "Paste", UK_PASTE, NULL, NULL },
+    { KS_CHANGE, "Undo", UK_UNDO, NULL, NULL },
+    { KS_CHANGE, "Make Link", UK_MAKE_LINK, NULL, NULL },
+    { KS_CHANGE, "Rename\xE2\x80\xA6", UK_F2, NULL, NULL },
+    { KS_CHANGE, "Create New Folder", UK_NEWFOLDER, NULL, NULL },
+    { KS_CHANGE, "Move to Trash", UK_DELETE, NULL, NULL },
+    { KS_CHANGE, "Delete\xE2\x80\xA6", UK_SHIFT_DELETE, NULL, NULL },
+    { KS_CHANGE, "Restore", UK_RESTORE, NULL, NULL },
+    { KS_CHANGE, "Add Bookmark", UK_ADD_BOOKMARK, NULL, NULL },
+    { KS_CHANGE, "Edit Bookmarks\xE2\x80\xA6", UK_EDIT_BOOKMARKS, NULL, NULL },
+    { KS_CHANGE, "A clash: skip, replace, keep both", UK_NONE, "s, r, k", "S, R, K the rest" },
+    { KS_TABS, "New Tab", UK_TAB_NEW, NULL, NULL },
+    { KS_TABS, "Reopen Closed Tab", UK_TAB_REOPEN, NULL, NULL },
+    { KS_TABS, "New Window", UK_NEW_WINDOW, NULL, NULL },
+    { KS_TABS, "Close", UK_TAB_CLOSE, NULL, NULL },
+    { KS_TABS, "The next tab", UK_TAB_NEXT, NULL, NULL },
+    { KS_TABS, "The previous tab", UK_TAB_PREV, NULL, NULL },
+    { KS_TABS, "Move Tab Left", UK_TAB_LEFT, NULL, NULL },
+    { KS_TABS, "Move Tab Right", UK_TAB_RIGHT, NULL, NULL },
+    { KS_TABS, "A tab by its place", UK_NONE, "Alt+1 " "\xE2\x80\xA6" " Alt+9", "" },
+    { KS_TABS, "Open in New Tab", UK_NONE, "Middle click", "" },
+    { KS_TABS, "Close All Windows", UK_QUIT_ALL, NULL, NULL },
+    { KS_VIEW, "The menus", UK_F10, NULL, "Alt+F, E, V, G, B, H" },
+    { KS_VIEW, "The right-click menu", UK_CONTEXT, NULL, NULL },
+    { KS_VIEW, "Keyboard Shortcuts", UK_SHORTCUTS, NULL, NULL },
+    { KS_VIEW, "Reload", UK_RELOAD, NULL, NULL },
+    { KS_VIEW, "Show Hidden Files", UK_HIDDEN, NULL, NULL },
+    { KS_VIEW, "Show Permissions", UK_PERMS_COLS, NULL, NULL },
+    { KS_VIEW, "Show Group", UK_GROUP_COL, NULL, NULL },
+    { KS_VIEW, "Sort by the next column", UK_SORT_NEXT, NULL, "a column's header" },
+    { KS_VIEW, "Reverse Order", UK_SORT_REVERSE, NULL, NULL },
+    { KS_VIEW, "List", UK_VIEW_LIST, NULL, "" },
+    { KS_VIEW, "Icons", UK_VIEW_ICONS, NULL, "" },
+    { KS_VIEW, "Zoom In", UK_ZOOM_IN, NULL, "Ctrl+wheel" },
+    { KS_VIEW, "Zoom Out", UK_ZOOM_OUT, NULL, "" },
+    { KS_VIEW, "Normal Size", UK_ZOOM_RESET, NULL, "" },
+    { KS_SIDE, "To the sidebar and back", UK_NONE, "Tab", "Ctrl+Left" },
+    { KS_SIDE, "The sidebar's next mode", UK_F9, NULL, NULL },
+    { KS_SIDE, "Go there", UK_NONE, "Enter", "" },
+    { KS_SIDE, "In the tree: close, open", UK_NONE, "Left, Right", "h, l" },
+    { KS_CRUMBS, "To the path buttons", UK_CRUMBS, NULL, "Ctrl+Up; in a search, the search field first" },
+    { KS_CRUMBS, "The next button", UK_NONE, "Left, Right", "h, l" },
+    { KS_CRUMBS, "Go there", UK_NONE, "Enter", "" },
+    { KS_CRUMBS, "Open it in a tab behind", UK_NONE, "Shift+Enter", "" },
+    { KS_CRUMBS, "Back to the files", UK_NONE, "Esc", "" },
+    { KS_FIND, "Find in Folder\xE2\x80\xA6", UK_FIND, NULL, NULL },
+    { KS_FIND, "The previous, next match", UK_NONE, "Up, Down", "the chevrons" },
+    { KS_FIND, "Keep it, the keys to the files", UK_NONE, "Enter", "" },
+    { KS_FIND, "Close it", UK_NONE, "Esc", "" },
+    { KS_FIND, "Find it again, back", UK_NONE, "n, N", "" },
+    { KS_FIND, "Match case", UK_NONE, "Alt+C", "" },
+    { KS_FIND, "Whole words", UK_NONE, "Alt+W", "" },
+    { KS_FIND, "A regular expression", UK_NONE, "Alt+R", "" },
+    { KS_SEARCH, "Search\xE2\x80\xA6", UK_SEARCH, NULL, "the magnifier" },
+    { KS_SEARCH, "Open Containing Folder", UK_CONTAINING, NULL, NULL },
+    { KS_SEARCH, "Open at Line", UK_OPEN_LINE, NULL, "a result found inside files, in the editor" },
+    { KS_SEARCH, "The keys to the results", UK_NONE, "Enter", "Esc, Down" },
+    { KS_SEARCH, "Back to the search field", UK_SEARCH, NULL, "a click in it" },
+    { KS_SEARCH, "A wildcard over the whole name", UK_NONE, "*, ?", "*.ts" },
+    { KS_SEARCH, "Match case, whole words, a regular expression", UK_NONE, "Alt+C, W, R", "the name's shared with find; Containing's its own" },
+    { KS_SEARCH, "In files: a Containing field too", UK_NONE, "Alt+I", "the In files button" },
+    { KS_SEARCH, "The other field, in files", UK_NONE, "Tab", "" },
+    { KS_EDIT, "Select", UK_NONE, "Shift+Left, Right", "Shift+Home, End" },
+    { KS_EDIT, "A word left, right", UK_NONE, "Ctrl+Left, Right", "" },
+    { KS_EDIT, "Select a word", UK_NONE, "Ctrl+Shift+Left, Right", "" },
+    { KS_EDIT, "Delete a word", UK_NONE, "Ctrl+Backspace", "Ctrl+Delete" },
+    { KS_EDIT, "All of it", UK_NONE, "Ctrl+A", "" },
+    { KS_EDIT, "Copy, cut, paste text", UK_NONE, "Ctrl+C, X, V", "" },
+    { KS_EDIT, "Done", UK_NONE, "Enter", "" },
+    { KS_EDIT, "Leave it as it was", UK_NONE, "Esc", "" },
+    { KS_JOBS, "To the job rows", UK_JOBS, NULL, NULL },
+    { KS_JOBS, "The next row", UK_NONE, "Up, Down", "k, j" },
+    { KS_JOBS, "Cancel that job", UK_NONE, "Enter", "its \xC3\x97" },
+    { KS_JOBS, "Back to the files", UK_NONE, "Esc", "Ctrl+J" },
+    { KS_OW, "The field, the list", UK_NONE, "Tab", "Down" },
+    { KS_OW, "Always open with this app", UK_NONE, "Alt+D", "" },
+    { KS_OW, "Open", UK_NONE, "Enter", "a double click" },
+    { KS_BM, "Remove", UK_NONE, "Delete", "" },
+    { KS_BM, "Rename", UK_NONE, "F2", "" },
+    { KS_BM, "Move it up, down", UK_NONE, "Alt+Up, Alt+Down", "" },
+    { KS_BM, "Go there", UK_NONE, "Enter", "a double click" },
 };
 enum { UI_KEYS_N = sizeof UI_KEYS / sizeof UI_KEYS[0], UI_KEYS_LINES = UI_KEYS_N + KS_SECTIONS };
 
@@ -991,6 +1001,7 @@ static UiInput ui_input_none(void)
                       .field = -1 };
 }
 
+#include "keys.c"
 #include "cursor.c"
 #include "match.c"
 #include "find.c"

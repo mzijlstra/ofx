@@ -181,7 +181,7 @@ static UiAction props_keys(Ui *u, int n, ...)
     va_start(ap, n);
     for (int i = 0; i < n; i++) {
         int k = va_arg(ap, int);
-        in.ev[in.nev++] = k >= 0x100 ? (UiEvent){ UK_NONE, (u32)(k - 0x100) } : (UiEvent){ (UiKey)k, 0 };
+        in.ev[in.nev++] = k >= 0x100 ? ev_ch((u32)(k - 0x100)) : ev_key((UiKey)k);
     }
     va_end(ap);
     return ui_handle(u, (UiNames){ name_at, NULL, NULL }, &in);
@@ -274,7 +274,7 @@ static void test_props_keys(void)
     // Under the queue-full note and a quit question the panel's keys wait.
     props_keys(&u, 1, UK_PROPERTIES);
     u.quit_asking = true;
-    in = job_input(1, 1), in.ev[in.nev++] = (UiEvent){ UK_NONE, 'n' };
+    in = job_input(1, 1), in.ev[in.nev++] = ev_ch('n');
     ui_handle(&u, names, &in);
     CHECK(!u.quit_asking && u.panel == UI_PANEL_PROPS);
     // Alt+Enter: a terminal, as t; not in the trash view.

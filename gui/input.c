@@ -34,130 +34,16 @@ static void ev_push(UiEvent e)
     if (evq.n < UI_EVENTS_MAX) evq.ev[evq.n++] = e;
 }
 
-// A key and its modifiers as ui/ names it; UK_NONE for the rest (letters come as characters).
-static UiKey ui_key_of(int key, int mods)
-{
-    int m = mods & (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT | GLFW_MOD_ALT | GLFW_MOD_SUPER);
-    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_F) return UK_FIND;
-    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_H) return UK_HIDDEN;
-    if (m == GLFW_MOD_ALT && key == GLFW_KEY_LEFT) return UK_BACK;
-    if (m == GLFW_MOD_ALT && key == GLFW_KEY_RIGHT) return UK_FORWARD;
-    if (m == GLFW_MOD_ALT && key == GLFW_KEY_UP) return UK_PARENT;
-    if (m == GLFW_MOD_ALT && key == GLFW_KEY_HOME) return UK_HOMEDIR;   // (F7.4, as Nemo)
-    if (m == GLFW_MOD_ALT && key == GLFW_KEY_END) return UK_TRASH_VIEW;   // (Michael, 2026-10-27)
-    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_D) return UK_ADD_BOOKMARK;   // (F7.5, as Nemo)
-    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_B) return UK_EDIT_BOOKMARKS;
-    if ((m == 0 || m == GLFW_MOD_CONTROL) && key == GLFW_KEY_F1) return UK_SHORTCUTS;   // (F7.5: F1 and Ctrl+F1, Nemo's two)
-    if (m == GLFW_MOD_ALT && key == GLFW_KEY_DOWN) return UK_ALT_DOWN;   // (Edit Bookmarks' move down)
-    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_R) return UK_RELOAD;
-    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_P) return UK_PERMS_COLS;   // (Michael, 2026-10-27)
-    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_G) return UK_GROUP_COL;
-    if (m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT) && key == GLFW_KEY_I) return UK_INVERT;
-    if (m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT) && key == GLFW_KEY_A) return UK_SELECT_MATCH;
-    if (m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT) && key == GLFW_KEY_F) return UK_SEARCH;
-    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_T) return UK_TAB_NEW;
-    if (m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT) && key == GLFW_KEY_T) return UK_TAB_REOPEN;   // (F11)
-    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_N) return UK_NEW_WINDOW;
-    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_I) return UK_PROPERTIES;
-    if (m == GLFW_MOD_ALT && (key == GLFW_KEY_ENTER || key == GLFW_KEY_KP_ENTER)) return UK_TERMINAL;
-    if (m == GLFW_MOD_CONTROL && (key == GLFW_KEY_ENTER || key == GLFW_KEY_KP_ENTER)) return UK_CONTAINING;
-    if (m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT) && (key == GLFW_KEY_ENTER || key == GLFW_KEY_KP_ENTER)) return UK_OPEN_LINE;
-    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_W) return UK_TAB_CLOSE;
-    if ((m == GLFW_MOD_CONTROL && key == GLFW_KEY_TAB) || (m == GLFW_MOD_CONTROL && key == GLFW_KEY_PAGE_DOWN)) return UK_TAB_NEXT;
-    if ((m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT) && key == GLFW_KEY_TAB) || (m == GLFW_MOD_CONTROL && key == GLFW_KEY_PAGE_UP)) return UK_TAB_PREV;
-    if (m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT) && key == GLFW_KEY_PAGE_UP) return UK_TAB_LEFT;
-    if (m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT) && key == GLFW_KEY_PAGE_DOWN) return UK_TAB_RIGHT;
-    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_L) return UK_LOCATION;
-    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_K) return UK_CRUMBS;
-    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_J) return UK_JOBS;
-    // Ctrl and an arrow: the keys to the part of the window that way (Michael, 2026-10-24); Ctrl+S
-    // the sidebar's next mode, as F9.
-    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_LEFT) return UK_WORD_LEFT;   // (outside a text field: the sidebar)
-    if (m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT) && key == GLFW_KEY_LEFT) return UK_SEL_WORD_LEFT;
-    if (m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT) && key == GLFW_KEY_RIGHT) return UK_SEL_WORD_RIGHT;
-    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_BACKSPACE) return UK_WORD_BACKSPACE;
-    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_DELETE) return UK_WORD_DELETE;
-    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_UP) return UK_CRUMBS;
-    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_DOWN) return UK_JOBS;
-    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_RIGHT) return UK_WORD_RIGHT;   // (outside a text field: UK_LOCATION)
-    if (m == GLFW_MOD_CONTROL && key == GLFW_KEY_S) return UK_F9;
-    // The views in the top bar's order, list first (Michael, 2026-10-24; Nemo has them the other way).
-    if (m == GLFW_MOD_CONTROL && (key == GLFW_KEY_1 || key == GLFW_KEY_KP_1)) return UK_VIEW_LIST;
-    if (m == GLFW_MOD_CONTROL && (key == GLFW_KEY_2 || key == GLFW_KEY_KP_2)) return UK_VIEW_ICONS;
-    // The icon view's sizes (F6.3), as Nemo's: Ctrl+= or Ctrl++ (Shift+= on most layouts), Ctrl+-,
-    // Ctrl+0, and the keypad's.
-    if ((m == GLFW_MOD_CONTROL || m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT)) && (key == GLFW_KEY_EQUAL || key == GLFW_KEY_KP_ADD)) return UK_ZOOM_IN;
-    if (m == GLFW_MOD_CONTROL && (key == GLFW_KEY_MINUS || key == GLFW_KEY_KP_SUBTRACT)) return UK_ZOOM_OUT;
-    if (m == GLFW_MOD_CONTROL && (key == GLFW_KEY_0 || key == GLFW_KEY_KP_0)) return UK_ZOOM_RESET;
-    if (m == GLFW_MOD_SHIFT) {
-        switch (key) {
-        case GLFW_KEY_LEFT: return UK_SEL_LEFT;
-        case GLFW_KEY_RIGHT: return UK_SEL_RIGHT;
-        case GLFW_KEY_HOME: return UK_SEL_HOME;
-        case GLFW_KEY_END: return UK_SEL_END;
-        case GLFW_KEY_UP: return UK_SEL_UP;
-        case GLFW_KEY_DOWN: return UK_SEL_DOWN;
-        case GLFW_KEY_ENTER:
-        case GLFW_KEY_KP_ENTER: return UK_SHIFT_ENTER;
-        default: break;
-        }
-    }
-    if (m == GLFW_MOD_CONTROL) {
-        switch (key) {
-        case GLFW_KEY_A: return UK_ALL;
-        case GLFW_KEY_C: return UK_COPY;
-        case GLFW_KEY_X: return UK_CUT;
-        case GLFW_KEY_V: return UK_PASTE;
-        case GLFW_KEY_Z: return UK_UNDO;
-        case GLFW_KEY_M: return UK_MAKE_LINK;   // (F8, as Nemo)
-        default: break;
-        }
-    }
-    if (m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT) && key == GLFW_KEY_N) return UK_NEWFOLDER;
-    if (m == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT) && key == GLFW_KEY_C) return UK_COPY_PATH;   // (F13)
-    if (key == GLFW_KEY_DELETE || key == GLFW_KEY_KP_DECIMAL) {
-        if (key == GLFW_KEY_KP_DECIMAL) return UK_NONE;   // the keypad's . types a dot
-        return m == GLFW_MOD_SHIFT ? UK_SHIFT_DELETE : m == 0 ? UK_DELETE : UK_NONE;
-    }
-    if ((m == GLFW_MOD_SHIFT && key == GLFW_KEY_F10) || (m == 0 && key == GLFW_KEY_MENU)) return UK_CONTEXT;   // the right-click menu (F8, as GTK)
-    if (m & (GLFW_MOD_CONTROL | GLFW_MOD_ALT | GLFW_MOD_SUPER)) return UK_NONE;
-    switch (key) {
-    case GLFW_KEY_UP: return UK_UP;
-    case GLFW_KEY_DOWN: return UK_DOWN;
-    case GLFW_KEY_PAGE_UP: return UK_PAGEUP;
-    case GLFW_KEY_PAGE_DOWN: return UK_PAGEDOWN;
-    case GLFW_KEY_HOME: return UK_HOME;
-    case GLFW_KEY_END: return UK_END;
-    case GLFW_KEY_ENTER:
-    case GLFW_KEY_KP_ENTER: return UK_ENTER;
-    case GLFW_KEY_RIGHT: return UK_RIGHT;
-    case GLFW_KEY_LEFT: return UK_LEFT;
-    case GLFW_KEY_BACKSPACE: return UK_BACKSPACE;
-    case GLFW_KEY_ESCAPE: return UK_ESC;
-    case GLFW_KEY_TAB: return m == 0 || m == GLFW_MOD_SHIFT ? UK_TAB : UK_NONE;   // Shift+Tab: back, where there are two places (F7.3)
-    case GLFW_KEY_F2: return m == 0 ? UK_F2 : UK_NONE;
-    case GLFW_KEY_F9: return m == 0 ? UK_F9 : UK_NONE;
-    case GLFW_KEY_F10: return m == 0 ? UK_F10 : UK_NONE;
-    default: return UK_NONE;
-    }
-}
+#include "glfwkeys.c"
 
 static void on_key(GLFWwindow *w, int key, int scancode, int action, int mods)
 {
     if (debug_input) fprintf(stderr, "ofx: key %d action %d mods %#x\n", key, action, mods);
-    // Ctrl+Q closes every ofx window (F7.1), each asking first when its jobs run or wait (F5.3);
-    // a scripted window quits at once.
-    if (action == GLFW_PRESS && key == GLFW_KEY_Q && (mods & GLFW_MOD_CONTROL)) {
-        if (script_on) app.quit = true;
-        else ev_push((UiEvent){ UK_QUIT_ALL, 0 });
-    }
-    UiKey k = action != GLFW_RELEASE ? ui_key_of(key, mods) : UK_NONE;
-    if (k) ev_push((UiEvent){ k, 0 });
-    // Alt+1 .. Alt+9: a tab by place (the digit rides in ch).
-    int m = mods & (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT | GLFW_MOD_ALT | GLFW_MOD_SUPER);
-    if (action == GLFW_PRESS && m == GLFW_MOD_ALT && key >= GLFW_KEY_1 && key <= GLFW_KEY_9) ev_push((UiEvent){ UK_TAB_JUMP, (u32)(key - GLFW_KEY_0) });
-    // Alt and a letter: a menu (F7.1); ui/ knows which letters have one.
-    if (action == GLFW_PRESS && m == GLFW_MOD_ALT && key >= GLFW_KEY_A && key <= GLFW_KEY_Z) ev_push((UiEvent){ UK_MENU, (u32)('a' + key - GLFW_KEY_A) });
+    // The key's meaning and its command (ui/keys.c); Ctrl+Q's closes every ofx window (F7.1), each
+    // asking first when its jobs run or wait (F5.3), a scripted window at once.
+    UiEvent e = glfw_event(key, mods, action);
+    if (e.cmd == UK_QUIT_ALL && script_on) app.quit = true;
+    else if (e.key || e.cmd) ev_push(e);
     if (raylib_key) raylib_key(w, key, scancode, action, mods);
 }
 
@@ -175,7 +61,7 @@ static void on_char(GLFWwindow *w, unsigned int cp)
     if (debug_input) fprintf(stderr, "ofx: char %#x\n", cp);
     // GLFW sends no character with Alt (Mod1) held, so Alt+1 is a tab only; AltGr (Mod5) still
     // types (F5 review).
-    ev_push((UiEvent){ UK_NONE, cp });
+    ev_push(ui_event_of((UiChord){ cp, UI_MOD_TYPED }));
     if (raylib_char) raylib_char(w, cp);
 }
 
@@ -401,7 +287,7 @@ static Vector2 menu_size(int m)
         hgt += MENU_ROW_H;
         marks |= UI_MENU_ITEM[it].mark != 0;
         Str label = it == UM_OPEN_LINE ? open_line_label() : it >= UM_BR_NOTE && it <= UM_BR_ALL ? branch_menu_label(it) : str_from_c(UI_MENU_ITEM[it].label);
-        float lw = str_width(label) + str_width(str_from_c(UI_MENU_ITEM[it].key));
+        float lw = str_width(label) + str_width(str_from_c(ui_menu_key(it)));
         if (lw > row) row = lw;
     }
     // The menu's padding, an entry's, the marks' column and its gap, the widest label and key on one

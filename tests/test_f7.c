@@ -21,7 +21,7 @@ static UiAction menu_keys(Ui *u, int n, ...)
     va_start(ap, n);
     for (int i = 0; i < n; i++) {
         int k = va_arg(ap, int);
-        in.ev[in.nev++] = k < 0 ? (UiEvent){ UK_MENU, (u32)-k } : k >= 0x100 ? (UiEvent){ UK_NONE, (u32)(k - 0x100) } : (UiEvent){ (UiKey)k, 0 };
+        in.ev[in.nev++] = k < 0 ? ui_event_of((UiChord){ (u32)-k, UI_MOD_ALT }) : k >= 0x100 ? ev_ch((u32)(k - 0x100)) : ev_key((UiKey)k);
     }
     va_end(ap);
     return ui_handle(u, (UiNames){ name_at, NULL, NULL }, &in);
@@ -251,23 +251,23 @@ static void test_close_all_keys(void)
     // Ctrl+Q: the others asked, this one quits; with jobs it asks first, the others asked anyway.
     Ui u = menu_ui(3);
     UiInput in = job_input(0, 0);
-    in.ev[in.nev++] = (UiEvent){ UK_QUIT_ALL, 0 };
+    in.ev[in.nev++] = ev_key(UK_QUIT_ALL);
     UiAction a = ui_handle(&u, names, &in);
     CHECK(a.kind == UA_CLOSE_ALL && a.all && !u.quit_asking);
-    in = job_input(1, 2), in.ev[in.nev++] = (UiEvent){ UK_QUIT_ALL, 0 };
+    in = job_input(1, 2), in.ev[in.nev++] = ev_key(UK_QUIT_ALL);
     a = ui_handle(&u, names, &in);
     CHECK(a.kind == UA_CLOSE_ALL && !a.all && u.quit_asking);
     // Again while asked: nothing more; n stays.
-    in = job_input(1, 2), in.ev[in.nev++] = (UiEvent){ UK_QUIT_ALL, 0 };
+    in = job_input(1, 2), in.ev[in.nev++] = ev_key(UK_QUIT_ALL);
     CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.quit_asking);
-    in = job_input(1, 2), in.ev[in.nev++] = (UiEvent){ UK_NONE, 'n' };
+    in = job_input(1, 2), in.ev[in.nev++] = ev_ch('n');
     CHECK(ui_handle(&u, names, &in).kind == UA_NONE && !u.quit_asking);
     // With a menu open it closes, and Ctrl+Q still works.
     menu_keys(&u, 1, UK_F10);
-    in = job_input(0, 0), in.ev[in.nev++] = (UiEvent){ UK_QUIT_ALL, 0 };
+    in = job_input(0, 0), in.ev[in.nev++] = ev_key(UK_QUIT_ALL);
     CHECK(ui_handle(&u, names, &in).kind == UA_CLOSE_ALL && !u.menu_on);
     // The window closed, or another window's Close All (SIGUSR1): as before, this one only.
-    in = job_input(0, 0), in.ev[in.nev++] = (UiEvent){ UK_QUIT, 0 };
+    in = job_input(0, 0), in.ev[in.nev++] = ev_key(UK_QUIT);
     CHECK(ui_handle(&u, names, &in).kind == UA_QUIT);
     // Not lost to a click in the same frame (gui/ queues it once: F7.1 review): a bar
     // button, a header, a double click, a menu title or entry, a press away from a menu, a job's ×.
@@ -275,7 +275,7 @@ static void test_close_all_keys(void)
         Ui v = menu_ui(3);
         if (c >= 4) menu_keys(&v, 1, UK_F10);
         for (int jobs = 0; jobs < 2; jobs++) {
-            in = job_input(jobs, jobs), in.ev[in.nev++] = (UiEvent){ UK_QUIT, 0 };
+            in = job_input(jobs, jobs), in.ev[in.nev++] = ev_key(UK_QUIT);
             switch (c) {
             case 0: in.bar = UB_UP; break;
             case 1: in.header = 1; break;
@@ -312,7 +312,7 @@ static void test_rename_select(void)
     // F2: a file's name up to its extension selected, the caret there; a folder's whole name.
     Ui u = menu_ui(3);
     UiInput in = ui_input_none();
-    in.ev[in.nev++] = (UiEvent){ UK_F2, 0 };
+    in.ev[in.nev++] = ev_key(UK_F2);
     u.list.sel = 2;
     ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in);
     CHECK((u.focus == UI_FOCUS_EDIT) && u.edit.anchor == 0 && u.edit.caret == 5);   // "gamma" of gamma.txt
@@ -322,7 +322,7 @@ static void test_rename_select(void)
     ui_edit_close(&u);
     // Typing replaces the name and keeps the extension.
     ui_edit_rename(&u, S("test.txt"), false);
-    ui_edit_event(&u, (UiEvent){ UK_NONE, 'n' }, STR_EMPTY);
+    ui_edit_event(&u, ev_ch('n'), STR_EMPTY);
     CHECK(u.edit.len == 5 && memcmp(u.edit.b, "n.txt", 5) == 0 && u.edit.caret == 1);
 }
 
@@ -335,7 +335,7 @@ static void test_new_file(void)
     int lo, hi;
     ui_edit_sel(&u, &lo, &hi);
     CHECK((u.focus == UI_FOCUS_EDIT) && lo == 0 && hi == 8 && u.edit.caret == 8);
-    ui_edit_event(&u, (UiEvent){ UK_NONE, 'x' }, STR_EMPTY);
+    ui_edit_event(&u, ev_ch('x'), STR_EMPTY);
     CHECK(u.edit.len == 1 && u.edit.b[0] == 'x');
     ui_edit_open(&u, S("a.txt"));
     ui_edit_sel(&u, &lo, &hi);

@@ -7,17 +7,12 @@
 //                           resizes a new window after its first frames)
 //   wait <frames>
 //   sleep <ms>              frames until that much time has passed
-//   key <name>              up down pageup pagedown home end enter right left backspace esc tab
-//                           f2 f9 delete shift-delete space, and the chords alt-left alt-right ctrl-f
-//                           ctrl-h ctrl-a ctrl-c ctrl-shift-c ctrl-x ctrl-v ctrl-z ctrl-shift-n ctrl-l alt-up
-//                           ctrl-t ctrl-w ctrl-tab ctrl-shift-tab ctrl-shift-pageup ctrl-shift-pagedown,
-//                           shift-left shift-right shift-home shift-end shift-enter ctrl-k ctrl-j ctrl-q,
-//                           ctrl-1 ctrl-2 ctrl-left ctrl-right (a word in a field), ctrl-shift-left ctrl-shift-right,
-//                           ctrl-backspace ctrl-delete, ctrl-equal ctrl-minus ctrl-0, and alt-1 .. alt-9;
-//                           f10, alt-<letter> (a menu), ctrl-n, and close-window (the compositor's
-//                           close, as SIGUSR1 from another window's Close All); ctrl-q is Close All;
-//                           ctrl-i (Properties, F7.2), alt-enter (a terminal), ctrl-m (Make Link),
-//                           ctrl-p ctrl-g (Show Permissions, Show Group), ctrl-shift-f (Search, F9), ctrl-enter (Open Containing Folder)
+//   key <name>              the event a real key sends (ui/keys.c, F15): ctrl-, shift- and alt-
+//                           before up down left right pageup pagedown home end enter backspace esc
+//                           tab delete menu f1 .. f25 equal minus, or the key's character (ctrl-t,
+//                           alt-1, alt-f); space a typed space; close-window the compositor's close
+//                           (as SIGUSR1 from another window's Close All). A key that means nothing
+//                           fails the script.
 //   char <c>                one typed character
 //   keys <word>...          keys and characters in one frame's input, as fast typing during a slow
 //                           frame gives them: each word a key name (as for `key`) or char:<c>
@@ -62,7 +57,7 @@
 //   back, forward           the mouse's back and forward buttons
 //   raw-button <n>          GLFW's button n (1-8) pressed and released through input.c's callback
 //   raw-key <key> [mods]    GLFW key code <key> pressed through input.c's key callback, with GLFW's
-//                           mod bits (1 Shift, 2 Ctrl, 4 Alt): what ui_key_of makes of it
+//                           mod bits (1 Shift, 2 Ctrl, 4 Alt): what gui/glfwkeys.c makes of it
 //   user-keys               from here on the compositor's keyboard reaches the window too, keys
 //                           and characters through GLFW's callbacks as a user's: `sh vkbd … &` in
 //                           the test sway (tools/gui/sway.sh; weston has no virtual keyboard)
@@ -477,6 +472,9 @@ static void script_state(char *out, size_t cap)
         break;
     }
     for (char *c = keysfirst; *c; c++) *c = *c == ' ' ? '_' : *c;
+    char keyscap[UI_KEY_NAME_MAX + 16];   // and the first key it drew (spaces '_'; "-" none)
+    snprintf(keyscap, sizeof keyscap, "%s", app.ui.panel == UI_PANEL_KEYS && keys_cap_drawn ? keys_cap_drawn : "-");
+    for (char *c = keyscap; *c; c++) *c = *c == ' ' ? '_' : *c;
     char bmptext[300];   // Edit Bookmarks' rename field (spaces '_'; "-" empty)
     state_word(bmptext, sizeof bmptext, (Str){ app.ui.bmp_name.b, app.ui.bmp_name.len });
     // The bottom bar as the last frame drew it lies inside the window (F7.1: under the menu bar's
@@ -551,7 +549,7 @@ static void script_state(char *out, size_t cap)
              "view=%s cols=%d cells=%d cellfirst=%td celllast=%td fulllines=%d celllines=%d cellcut=%d iconpx=%d icontex=%d iconresets=%d crumbfocus=%d tooltip=%s idlewoke=%s "
              "zoom=%d cellw=%d cellh=%d zoomshown=%d tipin=%d slots=%d "
              "previews=%d thumbsel=%s thumbbox=%s thumbbusy=%d thumbmade=%d thumbread=%d thumbfailed=%d thumbknown=%d thumbnone=%d thumbchanged=%d "
-             "thumbheld=%td thumbdropped=%d thumbresets=%d thumblocal=%d reloadasked=%d menuseps=%d bmlist=%s bmn=%d bmhere=%d canbm=%d bmmore=%d bmp=%d bmpn=%td bmpsel=%td bmpnaming=%d bmptext=%s keys=%d keysn=%td keystop=%td keysrows=%d keysfirst=%s menu=%s menuat=%s menuoff=%s menugrey=%s menuhid=%s menumarked=%s menubox=%s menuin=%d menuclear=%d permscols=%d permsshown=%d permsnote=%d groupcol=%d groupdrawn=%d colors=%d barhidden=%d barshown=%d menuhover=%d canwrite=%d windows=%d siderows=%d footerin=%d "
+             "thumbheld=%td thumbdropped=%d thumbresets=%d thumblocal=%d reloadasked=%d menuseps=%d bmlist=%s bmn=%d bmhere=%d canbm=%d bmmore=%d bmp=%d bmpn=%td bmpsel=%td bmpnaming=%d bmptext=%s keys=%d keysn=%td keystop=%td keysrows=%d keysfirst=%s keyscap=%s menu=%s menuat=%s menuoff=%s menugrey=%s menuhid=%s menumarked=%s menubox=%s menuin=%d menuclear=%d permscols=%d permsshown=%d permsnote=%d groupcol=%d groupdrawn=%d colors=%d barhidden=%d barshown=%d menuhover=%d canwrite=%d windows=%d siderows=%d footerin=%d "
              "props=%d propat=%d propcan=%d propn=%td propmode=%04o propfiles=%lld propdirs=%lld propbytes=%lld propdone=%d propcut=%d proplinks=%lld,%lld,%lld,%d propnlink=%llu proptype=%s proptypename=%s propbyname=%d propname=%s "
              "propwhere=%s propdrive=%s proplink=%s propcreated=%d propidx=%td "
              "ow=%d owfresh=%d owlist=%d owtext=%s own=%td owsel=%td owapp=%s owicon=%s owtex=%d owshown=%td owtype=%s owfiles=%td owrows=%d owtop=%td owopts=%s owbad=%d owdef=%d owdefcan=%d findopts=%s findbad=%d findselect=%d findn=%td findat=%td findtext=%s "
@@ -577,7 +575,7 @@ static void script_state(char *out, size_t cap)
              ui_zoom_px(&app.ui), cell_w(), cell_h(), Clay_GetElementData(CLAY_ID("zoom-track")).found, tipin, app.nslots,
              thumbs.drawn_now, thumbsel, thumbbox, thumbs_busy(), thumbs.got[TG_MADE], thumbs.got[TG_CACHED], thumbs.got[TG_FAILED],
              thumbs.got[TG_FAIL_KNOWN], thumbs.got[TG_NONE], thumbs.got[TG_CHANGED], thumbs.held, thumbs.evicted, thumbs.resets, app.thumb_local,
-             app.reloads_asked, menuseps, bmlist, app.ui.bm_n, app.ui.bm_here, app.ui.can_bookmark, app.ui.bm_more, app.ui.panel == UI_PANEL_BM, app.ui.bmp_list.n, app.ui.bmp_list.sel, app.ui.bmp_naming, bmptext, app.ui.panel == UI_PANEL_KEYS, app.ui.keys_list.n, app.ui.keys_list.top, app.ui.keys_list.rows, keysfirst, app.ui.menu_on ? UI_MENU[app.ui.menu].title : "-", menuat, menuoff, menugrey, menuhid, menumarked, menubox, menuin, menuclear, app.ui.perms_cols, perms_shown((float)GetScreenWidth()), (int)(strstr(info, "Permissions_hidden") != NULL), app.ui.group_col,
+             app.reloads_asked, menuseps, bmlist, app.ui.bm_n, app.ui.bm_here, app.ui.can_bookmark, app.ui.bm_more, app.ui.panel == UI_PANEL_BM, app.ui.bmp_list.n, app.ui.bmp_list.sel, app.ui.bmp_naming, bmptext, app.ui.panel == UI_PANEL_KEYS, app.ui.keys_list.n, app.ui.keys_list.top, app.ui.keys_list.rows, keysfirst, keyscap, app.ui.menu_on ? UI_MENU[app.ui.menu].title : "-", menuat, menuoff, menugrey, menuhid, menumarked, menubox, menuin, menuclear, app.ui.perms_cols, perms_shown((float)GetScreenWidth()), (int)(strstr(info, "Permissions_hidden") != NULL), app.ui.group_col,
              (int)Clay_GetElementData(CLAY_ID("col-group")).found + (int)Clay_GetElementData(CLAY_IDI("group", 0)).found, app.ui.colors, app.ui.bar_hidden, bar_shown(), app.hov.menu_title, app.ui.can_write, windows,
              app.ui.side.rows, footerin,
              app.ui.panel == UI_PANEL_PROPS, app.ui.prop_at, app.ui.prop_can, props.n, props.have ? (unsigned)(props.st.st_mode & 07777) : 0u,
@@ -628,30 +626,37 @@ static bool script_has_all(const char *line, Str words, const char **missing, ch
     return true;
 }
 
-static UiKey script_key(Str name)
+// A `key` word as the event a real key sends (ui/keys.c, as bound): ctrl-, shift- and alt- before a
+// key's name (up, pageup, enter, esc, f1 ... f25, equal, minus, or the key's character: ctrl-t,
+// alt-1), space a typed space, close-window the compositor's close. False for a word that names no
+// key, or a key that means nothing.
+static bool script_event(Str name, UiEvent *e)
 {
-    static const struct { const char *name; UiKey k; } KEYS[] = {
-        { "up", UK_UP }, { "down", UK_DOWN }, { "pageup", UK_PAGEUP }, { "pagedown", UK_PAGEDOWN },
-        { "home", UK_HOME }, { "end", UK_END }, { "enter", UK_ENTER }, { "right", UK_RIGHT },
-        { "left", UK_LEFT }, { "backspace", UK_BACKSPACE }, { "esc", UK_ESC }, { "tab", UK_TAB },
-        { "alt-left", UK_BACK }, { "alt-right", UK_FORWARD }, { "ctrl-f", UK_FIND }, { "ctrl-h", UK_HIDDEN },
-        { "f2", UK_F2 }, { "f9", UK_F9 }, { "delete", UK_DELETE }, { "shift-delete", UK_SHIFT_DELETE }, { "ctrl-a", UK_ALL },
-        { "ctrl-c", UK_COPY }, { "ctrl-shift-c", UK_COPY_PATH }, { "ctrl-m", UK_MAKE_LINK }, { "ctrl-p", UK_PERMS_COLS }, { "ctrl-g", UK_GROUP_COL }, { "ctrl-x", UK_CUT }, { "ctrl-v", UK_PASTE }, { "ctrl-z", UK_UNDO },
-        { "ctrl-shift-n", UK_NEWFOLDER }, { "ctrl-l", UK_LOCATION }, { "alt-up", UK_PARENT },
-        { "ctrl-t", UK_TAB_NEW }, { "ctrl-shift-t", UK_TAB_REOPEN }, { "ctrl-w", UK_TAB_CLOSE }, { "ctrl-tab", UK_TAB_NEXT }, { "ctrl-shift-tab", UK_TAB_PREV },
-        { "ctrl-shift-pageup", UK_TAB_LEFT }, { "ctrl-shift-pagedown", UK_TAB_RIGHT },
-        { "shift-left", UK_SEL_LEFT }, { "shift-right", UK_SEL_RIGHT }, { "shift-home", UK_SEL_HOME }, { "shift-end", UK_SEL_END },
-        { "shift-up", UK_SEL_UP }, { "shift-down", UK_SEL_DOWN },
-        { "shift-enter", UK_SHIFT_ENTER }, { "ctrl-k", UK_CRUMBS }, { "ctrl-j", UK_JOBS }, { "ctrl-q", UK_QUIT_ALL }, { "close-window", UK_QUIT },
-        { "f10", UK_F10 }, { "ctrl-n", UK_NEW_WINDOW }, { "ctrl-i", UK_PROPERTIES }, { "alt-enter", UK_TERMINAL },
-        { "ctrl-1", UK_VIEW_LIST }, { "ctrl-2", UK_VIEW_ICONS }, { "ctrl-left", UK_WORD_LEFT }, { "ctrl-right", UK_WORD_RIGHT },
-        { "ctrl-shift-left", UK_SEL_WORD_LEFT }, { "ctrl-shift-right", UK_SEL_WORD_RIGHT }, { "ctrl-backspace", UK_WORD_BACKSPACE }, { "ctrl-delete", UK_WORD_DELETE },
-        { "ctrl-equal", UK_ZOOM_IN }, { "ctrl-minus", UK_ZOOM_OUT }, { "ctrl-0", UK_ZOOM_RESET },
-        { "ctrl-shift-f", UK_SEARCH }, { "ctrl-enter", UK_CONTAINING }, { "ctrl-shift-enter", UK_OPEN_LINE }, { "ctrl-shift-i", UK_INVERT }, { "ctrl-shift-a", UK_SELECT_MATCH }, { "ctrl-r", UK_RELOAD }, { "alt-home", UK_HOMEDIR }, { "alt-end", UK_TRASH_VIEW }, { "ctrl-d", UK_ADD_BOOKMARK }, { "ctrl-b", UK_EDIT_BOOKMARKS }, { "f1", UK_SHORTCUTS }, { "alt-down", UK_ALT_DOWN },
+    if (str_eq(name, S("close-window"))) return *e = (UiEvent){ UK_QUIT, 0, UK_NONE }, true;
+    if (str_eq(name, S("space"))) return *e = ui_event_of((UiChord){ ' ', UI_MOD_TYPED }), true;
+    u8 mods = 0;
+    for (bool more = true; more;) {
+        more = false;
+        static const struct { const char *pre; u8 bit; } MODS[] = { { "ctrl-", UI_MOD_CTRL }, { "shift-", UI_MOD_SHIFT }, { "alt-", UI_MOD_ALT } };
+        for (int i = 0; i < COUNT(MODS); i++)
+            if (name.len > (isize)strlen(MODS[i].pre) && str_starts_with(name, str_from_c(MODS[i].pre)))
+                mods |= MODS[i].bit, name = str_cut(name, (isize)strlen(MODS[i].pre), name.len), more = true;
+    }
+    static const struct { const char *name; u32 code; } KEYS[] = {
+        { "up", UKC_UP }, { "down", UKC_DOWN }, { "left", UKC_LEFT }, { "right", UKC_RIGHT }, { "pageup", UKC_PGUP }, { "pagedown", UKC_PGDN },
+        { "home", UKC_HOME }, { "end", UKC_END }, { "enter", UKC_ENTER }, { "backspace", UKC_BACKSPACE }, { "esc", UKC_ESC }, { "tab", UKC_TAB },
+        { "delete", UKC_DELETE }, { "menu", UKC_MENU }, { "equal", '=' }, { "minus", '-' },
     };
+    u32 code = 0;
     for (int i = 0; i < COUNT(KEYS); i++)
-        if (str_eq(name, str_from_c(KEYS[i].name))) return KEYS[i].k;
-    return UK_NONE;
+        if (str_eq(name, str_from_c(KEYS[i].name))) code = KEYS[i].code;
+    char b[8];
+    snprintf(b, sizeof b, "%.*s", STR_ARG(name));
+    if (!code && b[0] == 'f' && b[1] >= '1' && b[1] <= '9' && atoi(b + 1) <= 25) code = UKC_F1 + (u32)atoi(b + 1) - 1;
+    if (!code && name.len == 1 && name.p[0] > ' ' && name.p[0] < 0x7F) code = (u32)(name.p[0] >= 'A' && name.p[0] <= 'Z' ? name.p[0] - 'A' + 'a' : name.p[0]);
+    if (!code) return false;
+    *e = ui_event_of((UiChord){ code, mods });
+    return e->key || e->cmd;
 }
 
 static void script_fail(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
@@ -817,7 +822,7 @@ static bool script_input(UiInput *in)
     if (script.typing.len) {
         // A long `type` goes on over several frames, UI_EVENTS_MAX characters a frame.
         isize i = 0;
-        while (i < script.typing.len && in->nev < UI_EVENTS_MAX) in->ev[in->nev++] = (UiEvent){ UK_NONE, utf8_next(script.typing.p, script.typing.len, &i) };
+        while (i < script.typing.len && in->nev < UI_EVENTS_MAX) in->ev[in->nev++] = ui_event_of((UiChord){ utf8_next(script.typing.p, script.typing.len, &i), UI_MOD_TYPED });
         script.typing = str_cut(script.typing, i, script.typing.len);
         script.gave = true;
         return true;
@@ -867,14 +872,9 @@ static bool script_input(UiInput *in)
         } else if (str_eq(cmd, S("sleep"))) {
             script.until = now_ms() + atoi(a);
         } else if (str_eq(cmd, S("key"))) {
-            UiKey k = script_key(arg);
-            if (str_eq(arg, S("space"))) in->ev[in->nev++] = (UiEvent){ UK_NONE, ' ' };   // a typed space
-            else if (arg.len == 5 && str_starts_with(arg, S("alt-")) && arg.p[4] >= '1' && arg.p[4] <= '9')
-                in->ev[in->nev++] = (UiEvent){ UK_TAB_JUMP, (u32)(arg.p[4] - '0') };
-            else if (arg.len == 5 && str_starts_with(arg, S("alt-")) && arg.p[4] >= 'a' && arg.p[4] <= 'z')
-                in->ev[in->nev++] = (UiEvent){ UK_MENU, (u32)arg.p[4] };
-            else if (!k) script_fail("no key %s", a);
-            else in->ev[in->nev++] = (UiEvent){ k, 0 };
+            UiEvent e;
+            if (!script_event(arg, &e)) script_fail("no key %s", a);
+            else in->ev[in->nev++] = e;
         } else if (str_eq(cmd, S("keys"))) {
             for (isize at = 0; at < arg.len && in->nev < UI_EVENTS_MAX;) {
                 while (at < arg.len && arg.p[at] == ' ') at++;
@@ -883,8 +883,9 @@ static bool script_input(UiInput *in)
                 Str w = str_cut(arg, at, e);
                 at = e;
                 if (w.len == 0) break;
-                if (str_starts_with(w, S("char:")) && w.len == 6) in->ev[in->nev++] = (UiEvent){ UK_NONE, (u32)(unsigned char)w.p[5] };
-                else if (script_key(w)) in->ev[in->nev++] = (UiEvent){ script_key(w), 0 };
+                UiEvent ev;
+                if (str_starts_with(w, S("char:")) && w.len == 6) in->ev[in->nev++] = ui_event_of((UiChord){ (u32)(unsigned char)w.p[5], UI_MOD_TYPED });
+                else if (script_event(w, &ev)) in->ev[in->nev++] = ev;
                 else script_fail("keys: no key %.*s", STR_ARG(w));
             }
         } else if (str_eq(cmd, S("char")) || str_eq(cmd, S("type"))) {
@@ -892,7 +893,7 @@ static bool script_input(UiInput *in)
             Str text = str_eq(cmd, S("type")) ? str_cut(line, 5, line.len) : arg;
             if (str_eq(cmd, S("char")) && text.len != 1) script_fail("char takes one character");
             isize i = 0;
-            while (i < text.len && in->nev < UI_EVENTS_MAX) in->ev[in->nev++] = (UiEvent){ UK_NONE, utf8_next(text.p, text.len, &i) };
+            while (i < text.len && in->nev < UI_EVENTS_MAX) in->ev[in->nev++] = ui_event_of((UiChord){ utf8_next(text.p, text.len, &i), UI_MOD_TYPED });
             script.typing = str_cut(text, i, text.len);   // the rest on the next frames
         } else if (str_eq(cmd, S("wheel"))) {
             if (strstr(a, "ctrl")) wheel_at(in, (float)GetScreenWidth() - 2, atoi(a), true);
