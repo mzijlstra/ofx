@@ -1878,11 +1878,12 @@ int main(void)
     if (slow) test_no_fds_leak();
     if (fast) test_prog_resolve();
     if (fast) test_menu_key_agree();
-    test_keys_pinned();
-    test_keys_table();
-    test_keys_commands();
-    test_keys_conf();
-    test_keys_panel();
+    if (fast) test_keys_pinned();
+    if (fast) test_keys_table();
+    if (fast) test_keys_commands();
+    if (fast) test_keys_conf();
+    if (fast) test_keys_panel();
+    if (fast) test_keys_in_fields();
     if (fast) test_ui_age();
     if (fast) test_branch_panel();
     if (fast) test_file_read();

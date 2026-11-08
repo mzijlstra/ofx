@@ -46,5 +46,5 @@ sh printf 'key = Ctrl+N reload\n' > "$OFX_ROOT/config/ofx/ofx.conf"
 wait-for 3000 statusbad=0 status=ofx.conf: Ctrl+N is reload now,
 # A clash in the file at the start isn't said (only after a save that changed the keys): f15b
 sh printf 'key = Ctrl+T reload\n' > "$OFX_ROOT/config/ofx/ofx.conf"
-wait-for 3000 keyclashes=1
+wait-for 3000 keyclashes=1 status=ofx.conf: Ctrl+T is reload now,
 quit

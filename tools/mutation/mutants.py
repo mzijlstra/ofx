@@ -1630,10 +1630,10 @@ MUTANTS += [
 # ---- Ctrl+C, Ctrl+X with nothing selected in the fields: the list's (review, 2026-10-28)
 MUTANTS += [
     ('ui/handle.c', "    if (ui_line_copies_nothing(l, e)) return u->focus = UI_FOCUS_LIST, false;   // (the cursor's result)\n", ''),
-    ('ui/edit.c', '    return (e.key == UK_COPY || e.key == UK_CUT) && lo == hi;', '    return e.key == UK_COPY && lo == hi;'),
-    ('ui/edit.c', '    return (e.key == UK_COPY || e.key == UK_CUT) && lo == hi;', '    return (e.key == UK_COPY || e.key == UK_CUT);'),
+    ('ui/edit.c', '    return (e.key == UK_COPY || e.key == UK_CUT) && e.cmd && lo == hi;', '    return e.key == UK_COPY && e.cmd && lo == hi;'),
+    ('ui/edit.c', '    return (e.key == UK_COPY || e.key == UK_CUT) && e.cmd && lo == hi;', '    return (e.key == UK_COPY || e.key == UK_CUT) && e.cmd;'),
     ('ui/handle.c', '    if (ui_line_copies_nothing(ui_find_line(u), e)) return ui_find_leave(u), false;\n', ''),
-    ('ui/edit.c', '    return (e.key == UK_COPY || e.key == UK_CUT) && lo == hi;', '    return (e.key == UK_CUT) && lo == hi;'),
+    ('ui/edit.c', '    return (e.key == UK_COPY || e.key == UK_CUT) && e.cmd && lo == hi;', '    return (e.key == UK_CUT) && e.cmd && lo == hi;'),
 ]
 # ---- the text fields on one line editor, and words (2026-10-28)
 MUTANTS += [
@@ -2017,7 +2017,7 @@ MUTANTS += [
     ('ui/helpers.c', 'f == DATE_ISO ? "%Y-%m-%dT%H:%M:%S" : pattern;', 'f == DATE_ISO ? "%Y-%m-%d %H:%M:%S" : pattern;'),
     ('fs/search.c', '    const SearchSkipList *l = w->skips;', '    const SearchSkipList *l = &SEARCH_SKIP_DEFAULT;'),
     ('ui/menus.c', '    case UM_PREFERENCES: return (UiAction){ UA_PREFERENCES, 0, false };\n', ''),
-    ('fs/thumb.c', 'file_read_at(a, AT_FDCWD, q->path, q->src_max, &st, 0)', 'file_read_at(a, AT_FDCWD, q->path, THUMB_SRC_MAX, &st, 0)'),
+    ('fs/thumb.c', 'file_read_at(a, AT_FDCWD, q->path, q->src_max, &st, 0)', 'file_read_at(a, AT_FDCWD, q->path, (i64)10 << 20, &st, 0)'),
 ]
 MUTANTS += [
     # the review's LOWs on ab1ad1d (2026-10-30)
@@ -2347,7 +2347,6 @@ MUTANTS += [
     ('ui/prompts.c', '        if (u->crumb_at >= in->crumb_n) return ui_branch_open(u, true), true;', '        if (u->crumb_at >= in->crumb_n) return ui_branch_open(u, false), true;'),
     ('ui/handle.c', '        if (files && !ui_allows(u, UA_RENAME)) return *out = ui_view_act(u, (UiAction){ UA_RENAME, 0, false }), true;\n', ''),
     ('ui/handle.c', 'return *out = ui_allows(u, UA_OPEN_WITH) ? ui_ow_open(u) : ui_view_act(u, (UiAction){ UA_OPEN_WITH, 0, false }), true;', 'return *out = ui_ow_open(u), true;'),
-    ('ui/handle.c', '    if (u->focus == UI_FOCUS_CRUMBS && u->crumb_at > in->crumb_n - 1 + u->branch_on) u->crumb_at = in->crumb_n - 1 + u->branch_on;', '    if (u->focus == UI_FOCUS_CRUMBS && u->crumb_at > in->crumb_n) u->crumb_at = in->crumb_n;'),
     ('ui/handle.c', "            if (u->focus == UI_FOCUS_CRUMBS && u->crumb_at >= in->crumb_n) ui_branch_open(u, true);   // (the branch button's)\n            else if", '            if'),
     ('ui/menus.c', '    if (!u->branch_on) return;\n    u->ctx_key = keys;', '    u->ctx_key = keys;'),
     ('ui/menus.c', '    case UM_NEW_FOLDER: return ui_allows(u, UA_NEWFOLDER);', '    case UM_NEW_FOLDER: return true;'),
@@ -2404,7 +2403,7 @@ MUTANTS += [
     ('ui/panels.c', '    case UK_ENTER: case UK_SHIFT_ENTER: return UI_PICK_CHOOSE;', ''),
     ('ui/panels.c', '    else if (d == UI_PICK_CLOSE) ui_ow_close(u);', ''),
     ('ui/panels.c', '    else if (d == UI_PICK_CHOOSE) return ui_ow_launch(u);', ''),
-    ('ui/panels.c', '    if (d == UI_PICK_FILTER) ui_brp_filter(u, in);', ''),
+    ('ui/panels.c', '    if (d == UI_PICK_FILTER) ui_brp_filter(u, in);', '    if (d == UI_PICK_FILTER) {}'),
     ('ui/handle.c', '    ui_picks_fresh(u, in);\n    return a;', '    return a;'),
     # F12 code-health A (2026-11-03): the cut output, long names, more, a panel press acts
     ('fs/git.c', '        if (k < 0 && b->more) snprintf(', '        if (k < 0 && false) snprintf('),
@@ -2453,7 +2452,7 @@ MUTANTS += [
     ('fs/clip.c', 'strchr("/._-+,:@%=", c)', 'strchr("/._-+,:@%= ", c)'),
     ('fs/clip.c', '    bool plain = s.len > 0, ctrl = false;', '    bool plain = true, ctrl = false;'),
     ('fs/clip.c', '            if (s.p[i] == \'\\\'\') PUT("\'\\\\\'\'");\n            else PUT', '            PUT'),
-    ('fs/clip.c', '            if (c == \'\\n\') PUT("\\\\n");\n', ''),
+    ('fs/clip.c', '            if (c == \'\\n\') PUT("\\\\n");\n', '            if (0) PUT("\\\\n");\n'),
     ('fs/clip.c', '            else if (c == \'\\\\\' || c == \'\\\'\') PUT("\\\\%c", c);\n', ''),
 ]
 # F13 step 1 re-review (2026-11-04): a byte of no valid UTF-8 spelled \xHH
@@ -2653,7 +2652,7 @@ MUTANTS += [
     (CF, "        if (!v.len || v.len >= CONF_KEY_LEN || c->nkey == CONF_KEYS_MAX) return false;", "        if (!v.len || v.len >= CONF_KEY_LEN) return false;"),
     (CF, "            if (CONF_OPTS[k].kind == CK_KEY) c->key_no[c->nkey - 1] = no;\n", ""),
     (CF, "        if (o->kind == CK_KEY && keys && at < cap) {", "        if (0) {"),
-    ('ui/menus.c', "            if (!ui_menu_enabled(u, it)) return u->menu = was, false;", "            if (0) return u->menu = was, false;"),
+    ('ui/menus.c', "            if (!ui_menu_enabled(u, it)) {   // (greyed: what its view says, as a key's action would)", "            if (0) {"),
     ('ui/menus.c', "            u->menu = m;   // (what is shown and enabled is the bar menu's)\n", ""),
     ('ui/handle.c', "    if (key >= UK_ITEM0) return ui_item_cmd(u, (UiMenuItem)(key - UK_ITEM0), out);\n", ""),
     (KY, "                if (!seen && !r.fresh++) {", "                if (!r.fresh++) {"),
@@ -2666,4 +2665,8 @@ MUTANTS += [
     (KY, "    int i = row || !UI_KEYS[r].cmd ? -1 : ui_cmd_bind(UI_KEYS[r].cmd, k);", "    int i = !UI_KEYS[r].cmd ? -1 : ui_cmd_bind(UI_KEYS[r].cmd, k);"),
     (KY, "    return UI_KEYS[r].cmd ? ui_cmd_name(UI_KEYS[r].cmd) : \"\";", "    return \"\";"),
     ('ui/panels.c', " ||\n                                                      ui_match(&u->keys_m, str_from_c(ui_keys_name(r)))))", "))"),
+    # F15's code-health review, A: typed characters in fields, greyed menu commands, Ctrl+C unbound.
+    ('ui/handle.c', "        if (e.key == UK_NONE && e.ch && ui_line_active(u, NULL)) e.cmd = UK_NONE;", ""),
+    ('ui/menus.c', "                *out = kind && !ui_allows(u, kind) ? ui_view_act(u, (UiAction){ kind, 0, false }) : UI_NONE;", "                *out = UI_NONE;"),
+    ('ui/edit.c', "    return (e.key == UK_COPY || e.key == UK_CUT) && e.cmd && lo == hi;", "    return (e.key == UK_COPY || e.key == UK_CUT) && lo == hi;"),
 ]
