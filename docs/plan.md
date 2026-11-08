@@ -793,7 +793,7 @@ hand-written table (`UI_KEYS`). There is no type-to-find, so a letter can be a c
 - Fixed, not bindable: Alt and a letter (the menus, the find bar's toggles), Alt and a digit (a tab
   by place).
 - **One change:** Ctrl+Q closed every window with Shift, Alt or Super held too (on_key tested Ctrl
-  alone); it is Ctrl+Q only.
+  alone); it is Ctrl+Q only. (Michael, 2026-11-08: "keep Ctrl+Q only".)
 - Not yet: the menu entries with no key (Create New Empty File, Duplicate, the sidebar modes, ...)
   get commands in step 2, where a key first needs them; the shortcuts panel's rows of several
   commands ("Up, down", "Select while moving") stay hand-written until step 3 gives each command
