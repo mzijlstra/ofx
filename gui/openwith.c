@@ -242,7 +242,7 @@ static void layout_pick_field(Clay_ElementId id, const char *edit_id, UiPick *p,
         CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
                        .clip = { .horizontal = true } }) {
             if (p->filter.len == 0 && p->in_list) text(cz("Type to filter"), cc(t->fg_dim));
-            if (!p->in_list) edit_text(edit_id, text_w, ui_pick_line(p), cc(t->fg));
+            if (!p->in_list) edit_text(t, edit_id, text_w, ui_pick_line(p), cc(t->fg));
             else text(fit((Str){ p->filter.b, p->filter.len }, text_w, true), cc(t->fg));
         }
         if (toggles) layout_toggles(*toggles, 0);

@@ -44,7 +44,7 @@ static void layout_keys_panel(void)
                     text(cz("Type to filter"), cc(t->fg_dim));
                     CLAY(CLAY_ID("keys-caret"), { .layout = { .sizing = { CLAY_SIZING_FIXED(2), CLAY_SIZING_FIXED(FONT_PX + 2) } }, .backgroundColor = cc(t->accent) }) {}
                 } else {
-                    edit_text("keys", KEYS_W - 300, ui_keys_line(u), cc(t->fg));   // (as the edit line draws, 2026-10-28)
+                    edit_text(t, "keys", KEYS_W - 300, ui_keys_line(u), cc(t->fg));   // (as the edit line draws, 2026-10-28)
                 }
             }
         }

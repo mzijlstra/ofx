@@ -143,7 +143,7 @@ static void layout_bmp_panel(void)
                                                                  .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
                                                      .backgroundColor = cc(t->bg), .border = { .color = cc(t->accent), .width = CLAY_BORDER_OUTSIDE(1) },
                                                      .clip = { .horizontal = true } }) {
-                            edit_text("bmp", 220, ui_bmp_line(u), cc(t->fg));   // (as the edit line draws, 2026-10-28)
+                            edit_text(t, "bmp", 220, ui_bmp_line(u), cc(t->fg));   // (as the edit line draws, 2026-10-28)
                         }
                     } else {
                         CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_FIXED(240), CLAY_SIZING_FIT(0) } }, .clip = { .horizontal = true } }) {

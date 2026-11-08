@@ -411,9 +411,8 @@ static void layout_cols(void)
 // A run of the edit line's text: at most `most` wide (cut with "…" from the end, or from its
 // start with keep_end), on the accent half mixed in when selected (the row under a rename has the
 // selection colour already).
-static void edit_run(Clay_ElementId sel_id, Str s, bool sel, float most, bool keep_end, Clay_Color fg)
+static void edit_run(const Theme *t, Clay_ElementId sel_id, Str s, bool sel, float most, bool keep_end, Clay_Color fg)
 {
-    Theme *t = &app.theme;
     if (!s.len || most < 1) return;
     Clay_String txt = fit(s, most, keep_end);
     if (!sel) { text(txt, fg); return; }
@@ -424,10 +423,10 @@ static void edit_run(Clay_ElementId sel_id, Str s, bool sel, float most, bool ke
 }
 
 // The edit line's text in `room`: the selection marked (F5.2) and the caret at its place, kept in
-// view (the text after it gets half the room at most, the ends cut with "…").
-static void edit_text(const char *id, float room, UiLine line, Clay_Color fg)
+// view (the text after it gets half the room at most, the ends cut with "…"). t: the theme copy of
+// the place it is drawn in, the files area's for a rename (2026-11-08).
+static void edit_text(const Theme *t, const char *id, float room, UiLine line, Clay_Color fg)
 {
-    Theme *t = &app.theme;
     Str ed = { line.b, *line.len };
     int lo, hi, c = *line.caret;
     ui_line_sel(line, &lo, &hi);
@@ -441,12 +440,12 @@ static void edit_text(const char *id, float room, UiLine line, Clay_Color fg)
     float right = room - (lw < left ? lw : left);
     float v1 = str_width(r1) < right ? str_width(r1) : right, v2 = right - v1;
     Clay_ElementId sel = Clay_GetElementId(cz(arena_sprintf(&frame, "%s-sel", id)));
-    edit_run(sel, l1, false, w1, true, fg);
-    edit_run(sel, l2, true, w2, true, fg);
+    edit_run(t, sel, l1, false, w1, true, fg);
+    edit_run(t, sel, l2, true, w2, true, fg);
     CLAY(Clay_GetElementId(cz(arena_sprintf(&frame, "%s-caret", id))), { .layout = { .sizing = { CLAY_SIZING_FIXED(2), CLAY_SIZING_FIXED(FONT_PX + 2) } },
                                                                           .backgroundColor = cc(t->accent) }) {}
-    edit_run(sel, r1, true, v1, false, fg);
-    edit_run(sel, r2, false, v2, false, fg);
+    edit_run(t, sel, r1, true, v1, false, fg);
+    edit_run(t, sel, r2, false, v2, false, fg);
 }
 
 // The edit line in place of the name.
@@ -456,7 +455,7 @@ static void layout_edit(Theme *t, float room)
                                         .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
                             .clip = { .horizontal = true },
                             .backgroundColor = cc(t->bg), .border = { .color = cc(t->accent), .width = CLAY_BORDER_ALL(1) } }) {
-        edit_text("edit", room - 12, ui_edit_line(&app.ui), cc(t->fg));
+        edit_text(t, "edit", room - 12, ui_edit_line(&app.ui), cc(t->fg));
     }
 }
 
@@ -584,6 +583,10 @@ static void layout_hit(int r, const SearchHit *h, float room)
 
 // A row's name colour: the cursor's row plain (blue on the selection is faint), marked the accent; a
 // git change's over the type's, ignored dimmed (F12); else the type's.
+// The first marked row's name colour as drawn last (a script's state line: which theme copy the
+// files area draws from, 2026-11-08); alpha 0 when none was drawn.
+static Clay_Color marked_name_drawn;
+
 static Clay_Color row_name_colour(isize i, bool sel, bool marked, GitState gs)
 {
     Theme *t = &app.theme_list;   // (the files area: theme_fit_list)
@@ -616,7 +619,9 @@ static void layout_row(int r, isize i, float w, i64 now)
             if (sel && app.ui.focus == UI_FOCUS_EDIT && !app.ui.edit_path) {
                 layout_edit(t, name_w);
             } else {
-                text(fit(e->name, name_w, false), row_name_colour(i, sel, marked, gs));
+                Clay_Color nc = row_name_colour(i, sel, marked, gs);
+                if (marked && !marked_name_drawn.a) marked_name_drawn = nc;
+                text(fit(e->name, name_w, false), nc);
                 if (link) text(cz("\xE2\x86\x92"), cc(t->fg_dim));   // →
                 if (link && e->target.len) {   // where it leads, as written, home as ~ (2026-10-27)
                     char to[PATH_MAX];

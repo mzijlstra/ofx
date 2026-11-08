@@ -541,7 +541,7 @@ static void script_state(char *out, size_t cap)
         else if (c == -1) snprintf(cnt, sizeof cnt, "?");
     }
     int len = snprintf(out, cap,
-             "dir=%s n=%td hidden=%td sel=%.*s idx=%td top=%td rows=%d hover=%d accent=#%02x%02x%02x listacc=#%02x%02x%02x bg=#%02x%02x%02x "
+             "dir=%s n=%td hidden=%td sel=%.*s idx=%td top=%td rows=%d hover=%d accent=#%02x%02x%02x listacc=#%02x%02x%02x markedname=%s bg=#%02x%02x%02x "
              "icons=%s scale=%d w=%d h=%d reloads=%d themes=%d batches=%d frame_ms_max=%.1f icon=%s "
              "shown=%d sort=%s rev=%d finding=%d findkeys=%d miss=%d find=%.*s last=%.*s side=%td sidefocus=%d place=%s here=%s "
              "back=%d fwd=%d marked=%td editing=%d edit=%s confirming=%d asking=%d job=%s done=%lld/%lld undo=%s clip=%td cut=%d "
@@ -557,7 +557,8 @@ static void script_state(char *out, size_t cap)
              "ow=%d owfresh=%d owlist=%d owtext=%s own=%td owsel=%td owapp=%s owicon=%s owtex=%d owshown=%td owtype=%s owfiles=%td owrows=%d owtop=%td owopts=%s owbad=%d owdef=%d owdefcan=%d findopts=%s findbad=%d findselect=%d findn=%td findat=%td findtext=%s "
              "search=%d searchkeys=%d searchtext=%s searchdone=%d searchfull=%d searchdue=%d searchbad=%d searchbar=%d searchsel=%d-%d searchcaret=%d findsel=%d-%d findcaret=%d seldir=%s searchinfo=%s inside=%d insidekeys=%d insidetext=%s insideopts=%s insidebad=%d insiderow=%d hit=%s hitmatch=%s hitdrawn=%d datecol=%s datecolw=%.0f owreads=%d conf=%s confbad=%d seldate=%s trashfull=%d trashicon=%s spawned=%d closingall=%d closedtabs=%d emptyn=%td shiftsel=%s clearn=%lld clearing=%d gitshown=%d gitsel=%s gitn=%td gitnamecol=%s gitcells=%d infogit=%s gitdue=%d branch=%s brn=%d brhere=%d brnote=%s brlist=%s brfits=%d brunder=%d gitwatch=%d brtotal=%d brp=%d brpn=%td brpsel=%s brptext=%s brpinlist=%d sidew=%d sidebox=%.0f sidepx=%d ",
              app.cwd, app.list.n, app.list.hidden, STR_ARG(sel), app.ui.list.sel, app.ui.list.top, app.ui.list.rows, app.hov.row,
-             t->accent.r, t->accent.g, t->accent.b, app.theme_list.accent.r, app.theme_list.accent.g, app.theme_list.accent.b, t->bg.r, t->bg.g, t->bg.b, t->icons[0] ? t->icons : "-",
+             t->accent.r, t->accent.g, t->accent.b, app.theme_list.accent.r, app.theme_list.accent.g, app.theme_list.accent.b,
+             marked_name_drawn.a ? arena_sprintf(&frame, "#%02x%02x%02x", (int)marked_name_drawn.r, (int)marked_name_drawn.g, (int)marked_name_drawn.b) : "-", t->bg.r, t->bg.g, t->bg.b, t->icons[0] ? t->icons : "-",
              app.icon_scale, GetScreenWidth(), GetScreenHeight(), app.reloads, app.themes, atomic_load(&watch.batches),
              (double)frame_us_max / 1000.0, icon, app.show_hidden,
              app.ui.sort.key == SORT_NAME ? "name" : app.ui.sort.key == SORT_SIZE ? "size" : "mtime", app.ui.sort.reverse,

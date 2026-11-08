@@ -99,7 +99,7 @@ static void bar_field(const char *name, bool keys, bool bad, UiLine line, Str sh
         float room = fd.found && fd.boundingBox.width > 140 ? fd.boundingBox.width - 110 : 400;
         CLAY(Clay_GetElementId(cz(arena_sprintf(&frame, "%s-text", name))),
              { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } }, .clip = { .horizontal = true } }) {
-            if (keys) edit_text(name, room, line, fg);
+            if (keys) edit_text(t, name, room, line, fg);
             else text(fit(shown, room, true), fg);
         }
         layout_toggles(o, toggles);

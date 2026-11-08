@@ -1015,6 +1015,8 @@ MUTANTS = [
     (G, "    theme_fit(&app.theme);             // (the frame's colours read on their backgrounds)\n", '', 'f54'),
     # The files area's copy, rescued only (2026-11-08): f54's listacc.
     (G, '    theme_fit_list(&app.theme_list);   // (2026-11-07: the files area only rescued)\n', '', 'f54'),
+    # A files-area function drawing from the frame's copy: f54's markedname (the theme-fit review, 2026-11-08).
+    ('gui/files.c', "    Theme *t = &app.theme_list;   // (the files area: theme_fit_list)\n    const Entry *e = &app.list.e[i];\n    return e->kind == K_LINK_BROKEN", "    Theme *t = &app.theme;\n    const Entry *e = &app.list.e[i];\n    return e->kind == K_LINK_BROKEN", 'f54'),
 ]
 import concurrent.futures, queue, threading, time
 

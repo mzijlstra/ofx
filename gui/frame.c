@@ -242,6 +242,7 @@ static Clay_RenderCommandArray layout(int w, int h)
                 }
             }
             if (app.have_list && app.ui.grid) layout_grid();
+            marked_name_drawn = NO_COLOR;
             for (int r = 0; app.have_list && !app.ui.grid && r < app.ui.list.rows && app.ui.list.top + r < app.list.n; r++)
                 layout_row(r, app.ui.list.top + r, (float)w, now);
         }

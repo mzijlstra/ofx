@@ -219,7 +219,7 @@ static void layout_location(float room)
                                             .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
                                 .clip = { .horizontal = true },
                                 .backgroundColor = cc(t->bg), .border = { .color = cc(t->accent), .width = CLAY_BORDER_ALL(1) } }) {
-        edit_text("location", room - 24, ui_edit_line(&app.ui), cc(app.theme.fg));
+        edit_text(&app.theme, "location", room - 24, ui_edit_line(&app.ui), cc(app.theme.fg));
     }
 }
 
