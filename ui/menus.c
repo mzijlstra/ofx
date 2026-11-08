@@ -292,7 +292,6 @@ static bool ui_menu_event(Ui *u, UiEvent e, UiAction *a)
 {
     *a = UI_NONE;
     e = ui_vi_key(e);
-    if (e.cmd == UK_F10) return u->menu_on = false, true;   // (the key that opens the menus closes them)
     if (e.key == UK_NONE) return true;   // (a letter the menu doesn't take: nothing)
     switch (ui_unshift(e.key)) {
     case UK_DOWN: case UK_UP: {

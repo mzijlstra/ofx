@@ -430,6 +430,20 @@ static void test_keys_table(void)
     CHECK(ui_event_of((UiChord){ UKC_ESC, UI_MOD_SHIFT }).cmd == UK_ESC && ui_event_of((UiChord){ UKC_BACKSPACE, UI_MOD_SHIFT }).cmd == UK_PARENT);
     CHECK(ui_event_of((UiChord){ UKC_UP, UI_MOD_SHIFT }).cmd == UK_SEL_UP && ui_event_of((UiChord){ UKC_DELETE, UI_MOD_SHIFT }).key == UK_CMD);
     CHECK(ui_event_of((UiChord){ UKC_F1 + 1, UI_MOD_SHIFT }).key == UK_NONE && ui_event_of((UiChord){ UKC_F1 + 1, UI_MOD_SHIFT }).cmd == UK_NONE);
+    // Exactly five chords inherit so (the step 1 review, 2026-11-08): every key code with each
+    // modifier set that holds Shift, against the chord bound itself.
+    int inherit = 0;
+    for (u32 code = 1; code <= UKC_F25; code++)
+        for (u8 m = UI_MOD_SHIFT; m < 16; m++) {
+            if (!(m & UI_MOD_SHIFT)) continue;
+            UiChord c = { code, m };
+            UiEvent e = ui_event_of(c);
+            if (e.cmd && !ui_bound(c)) {
+                inherit++;
+                CHECK(m == UI_MOD_SHIFT && (code == UKC_ESC || code == UKC_TAB || code == UKC_BACKSPACE || code == UKC_PGUP || code == UKC_PGDN));
+            }
+        }
+    CHECK(inherit == 5);
     // A command's keys in order, "" past the last.
     CHECK(strcmp(ui_cmd_key(UK_PARENT, 0), "Alt+Up") == 0 && strcmp(ui_cmd_key(UK_PARENT, 1), "Backspace") == 0 && strcmp(ui_cmd_key(UK_PARENT, 2), "") == 0);
     CHECK(strcmp(ui_cmd_key(UK_NONE, 0), "") == 0);

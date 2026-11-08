@@ -2627,5 +2627,4 @@ MUTANTS += [
     ('ui/handle.c', "        bool shifted = ui_unshift(e.cmd) != e.cmd;", "        bool shifted = false;"),
     ('ui/handle.c', "        UiKey cmd = shift_enter ? UK_ENTER : ui_unshift(e.cmd);", "        UiKey cmd = shift_enter ? UK_ENTER : e.cmd;"),
     ('ui/handle.c', "    if (e.cmd == UK_FIND) return true;\n", ""),
-    ('ui/menus.c', "    if (e.cmd == UK_F10) return u->menu_on = false, true;", "    if (e.cmd == UK_F10) return true;"),
 ]

@@ -798,6 +798,12 @@ hand-written table (`UI_KEYS`). There is no type-to-find, so a letter can be a c
   get commands in step 2, where a key first needs them; the shortcuts panel's rows of several
   commands ("Up, down", "Select while moving") stay hand-written until step 3 gives each command
   its row.
+- **For step 2** (the step 1 review, reviewer-2's response 2026-11-08): a menu pick runs the
+  command alone (`ui_cmd_event` returns `{ UK_CMD, 0, cmd }`; it reads the default chord's binding
+  now, which a rebind would change; every pick already runs on the list path, so nothing changes);
+  and a name round trip (chord, name, parse, the same chord) for every named key and modifier set:
+  60 named keys send nothing today (F11-F25, Insert, the keypad's others), so only that test sees
+  them.
 - Tests: `tests/test_f15.c` pins every GLFW key, modifier set and action to the event ofx sent at
   3ef3827 (243 rows), every typed ASCII character's command, every menu entry's key and what it
   runs, and every shortcuts row's keys.
