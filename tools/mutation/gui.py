@@ -650,15 +650,15 @@ MUTANTS = [
     ('gui/watch.c', '    watch_file_dir(&watch.bm_wd, bookmarks_path(file, sizeof file));', '', 'f75'),
     ('gui/watch.c', '        if (e->wd == atomic_load(&watch.bm_wd) && (e->mask & IN_IGNORED)) atomic_store(&watch.bm_wd, -1);', '', 'f75'),
     ('gui/prefs.c', '    watch_conf();   // (its folder may be new)\n', '', 'f10'),
-    ('gui/prefs.c', '    if (!conf_create(path, &err)) {', '    if (false) {', 'f10'),
-    ('gui/prefs.c', '    if (conf_path(path, sizeof path) && !conf_create(path, &err)) set_status', '    if (false) set_status', 'f10'),
+    ('gui/prefs.c', '    if (!conf_create(path, conf_keys(), &err)) {', '    if (false) {', 'f10'),
+    ('gui/prefs.c', '    if (conf_path(path, sizeof path) && !conf_create(path, conf_keys(), &err)) set_status', '    if (false) set_status', 'f10'),
     ('gui/main.c', '    conf_start();   // (F10', '    // (F10', 'f10'),
     ('gui/watch.c', '        if (e->wd == atomic_load(&watch.conf_wd) && (e->mask & IN_IGNORED)) atomic_store(&watch.conf_wd, -1);', '', 'f10'),
     ('gui/folder.c', '        if (app.cwd[0]) app.status[0] = 0;', '        app.status[0] = 0;', 'f10'),
     ('gui/prefs.c', '    thumbs.off = !c.previews, thumbs.src_max = c.preview_max, thumbs.exec_on = c.thumbnailers;', '    thumbs.src_max = c.preview_max, thumbs.exec_on = c.thumbnailers;', 'f10'),
     ('gui/prefs.c', '    thumbs.off = !c.previews, thumbs.src_max = c.preview_max, thumbs.exec_on = c.thumbnailers;', '    thumbs.off = !c.previews, thumbs.src_max = CONF_PREVIEW_MAX, thumbs.exec_on = c.thumbnailers;', 'f10'),
     ('gui/prefs.c', '    if (previews) thumbs_reset();', '', 'f10'),
-    ('gui/prefs.c', '    if (c.bad) {', '    if (false) {', 'f10'),
+    ('gui/prefs.c', '    if (c.bad && (!keys.bad || c.bad < keys.bad)) set_status', '    if (false) set_status', 'f10'),
     ('gui/prefs.c', '    int n = e ? editor_argv(e, path, 1, 1, buf', '    int n = e ? editor_argv(e, path, 2, 1, buf', 'f10'),
     ('gui/thumbs.c', ' || thumbs.full || thumbs.off) return NULL;', ' || thumbs.full) return NULL;', 'f10'),
     # Not a mutant: the request's src_max as THUMB_SRC_MAX (its make flag has the limit already; the
@@ -978,6 +978,11 @@ MUTANTS = [
     ('gui/topbar.c', "if (ui_menu_key(it)[0]) text(cz(ui_menu_key(it)), on ? cc(t->fg_dim) : off);", "", 'f7'),
     ('gui/shortcuts.c', "keycap(ui_keys_key(line, 0));", "keycap(\"\");", 'f75'),
     ('gui/input.c', "float lw = str_width(label) + str_width(str_from_c(ui_menu_key(it)));", "float lw = str_width(label);", 'f7'),
+    # F15 step 2: ofx.conf's key lines applied on each read, a bad one named, a clash said after a save.
+    ('gui/prefs.c', "    UiKeysRead keys = conf_keys_read = ui_binds_set(c.key, c.key_no, c.nkey);", "    UiKeysRead keys = conf_keys_read = (UiKeysRead){ 0 };", 'f15'),
+    ('gui/prefs.c', "    else if (keys.bad) set_status(true,", "    else if (0) set_status(true,", 'f15'),
+    ('gui/prefs.c', "    else if (was_once && keys.changed && keys.clashes)", "    else if (keys.clashes)", 'f15'),
+    ('gui/prefs.c', "    else if (was_once && keys.changed && keys.clashes)", "    else if (0)", 'f15'),
 ]
 import concurrent.futures, queue, threading, time
 

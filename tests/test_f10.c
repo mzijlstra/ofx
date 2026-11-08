@@ -6,7 +6,7 @@
 static bool conf_same(const Conf *a, const Conf *b)
 {
     bool same = a->previews == b->previews && a->preview_max == b->preview_max && a->date == b->date &&
-                strcmp(a->date_pattern, b->date_pattern) == 0 && a->skip.n == b->skip.n && a->bad == b->bad;
+                strcmp(a->date_pattern, b->date_pattern) == 0 && a->skip.n == b->skip.n && a->bad == b->bad;   // (key lines: test_f15.c)
     for (int k = 0; same && k < a->skip.n; k++) same = strcmp(a->skip.name[k], b->skip.name[k]) == 0;
     return same;
 }
@@ -65,8 +65,9 @@ static void test_conf(void)
     CHECK(c.bad == 1 && strcmp(c.why, "previews wants on or off") == 0 && c.previews);
     // The file ofx writes: every option's help and default in it, commented out but the list's
     // lines, so it reads back as the defaults with no bad line.
-    static char text[16384];
-    size_t n = conf_default_text(text, sizeof text);
+    static char keys[8192], text[CONF_TEXT_MAX];
+    ui_keys_conf_text(keys, sizeof keys);
+    size_t n = conf_default_text(text, sizeof text, keys);
     CHECK(n > 0 && n < sizeof text - 1 && strlen(text) == n);
     for (int k = 0; k < COUNT(CONF_OPTS); k++) {
         CHECK(CONF_OPTS[k].help[0]);
@@ -83,7 +84,7 @@ static void test_conf(void)
     conf_defaults(&d);
     CHECK(!c.bad && conf_same(&c, &d));
     // Uncommented, every default line reads back as the default too.
-    static char on[16384];
+    static char on[CONF_TEXT_MAX];
     size_t o = 0;
     for (const char *p = text; *p; p++)
         if (!(*p == '#' && (p == text || p[-1] == '\n') && p[1] && p[1] != ' ' && p[1] != '\n')) on[o++] = *p;
@@ -91,7 +92,7 @@ static void test_conf(void)
     conf_parse(str_from_c(on), &c);
     CHECK(!c.bad && conf_same(&c, &d));
     // Its search-skip lines removed (Michael, 2026-11-01): nothing skipped; one of them, the other.
-    static char cut[16384];
+    static char cut[CONF_TEXT_MAX];
     snprintf(cut, sizeof cut, "%s", text);
     char *g = strstr(cut, "\nsearch-skip = .git\n");
     memmove(g + 1, g + 20, strlen(g + 20) + 1);
@@ -104,15 +105,16 @@ static void test_conf(void)
     // ofx's file: made with its folder, read back as the defaults; an existing one (or a
     // link) never replaced; outside the guard's root, refused.
     Err err;
-    CHECK(conf_create(at("cf/ofx/ofx.conf"), &err));
-    CHECK(strcmp(slurp(at("cf/ofx/ofx.conf")), text) == 0);
+    CHECK(conf_create(at("cf/ofx/ofx.conf"), keys, &err));
+    Str made = read_file(&ta, at("cf/ofx/ofx.conf"));   // (past slurp's 8 KiB since F15's key lines)
+    CHECK((size_t)made.len == n && memcmp(made.p, text, n) == 0);
     put(at("cf/ofx/ofx.conf"), "previews = off\n");
-    CHECK(conf_create(at("cf/ofx/ofx.conf"), &err) && strcmp(slurp(at("cf/ofx/ofx.conf")), "previews = off\n") == 0);
+    CHECK(conf_create(at("cf/ofx/ofx.conf"), keys, &err) && strcmp(slurp(at("cf/ofx/ofx.conf")), "previews = off\n") == 0);
     symlink("nowhere", at("cf/ofx/link.conf"));
-    CHECK(conf_create(at("cf/ofx/link.conf"), &err) && access(at("cf/nowhere"), F_OK) != 0);
-    CHECK(!conf_create(out_at("cf/ofx.conf"), &err) && access(out_at("cf/ofx.conf"), F_OK) != 0);
+    CHECK(conf_create(at("cf/ofx/link.conf"), keys, &err) && access(at("cf/nowhere"), F_OK) != 0);
+    CHECK(!conf_create(out_at("cf/ofx.conf"), keys, &err) && access(out_at("cf/ofx.conf"), F_OK) != 0);
     put(out_at("cf-there.conf"), "x");   // one there already, outside the root: opened, not refused
-    CHECK(conf_create(out_at("cf-there.conf"), &err) && strcmp(slurp(out_at("cf-there.conf")), "x") == 0);
+    CHECK(conf_create(out_at("cf-there.conf"), keys, &err) && strcmp(slurp(out_at("cf-there.conf")), "x") == 0);
     // Where it is: $XDG_CONFIG_HOME/ofx/ofx.conf, else ~/.config/ofx/ofx.conf.
     char cp[PATH_MAX];
     env_set("XDG_CONFIG_HOME", "/x/cfg");
@@ -132,7 +134,7 @@ static void test_conf(void)
     }
     // Cut short: never past cap, NUL-ended.
     char small[64];
-    CHECK(conf_default_text(small, sizeof small) == sizeof small - 1 && strlen(small) == sizeof small - 1);
+    CHECK(conf_default_text(small, sizeof small, keys) == sizeof small - 1 && strlen(small) == sizeof small - 1);
 }
 
 // The search's skip list from ofx.conf (F10): the walk skips its names, counts each, and the status

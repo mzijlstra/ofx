@@ -2604,7 +2604,7 @@ MUTANTS += [
     (KY, "    if (c.mods & UI_MOD_TYPED) return (UiEvent){ UK_NONE, c.code, ui_bound(c) };", "    if (c.mods & UI_MOD_TYPED) return (UiEvent){ UK_NONE, c.code, UK_NONE };"),
     (KY, "    return a.code == b.code && a.mods == b.mods;", "    return a.code == b.code;"),
     (KY, "if (ui_binds.b[i].cmd == cmd && k-- == 0)", "if (ui_binds.b[i].cmd == cmd && --k == 0)"),
-    (KY, "        if (UI_BINDS_DEFAULT[i].cmd == cmd) return ui_event_of(UI_BINDS_DEFAULT[i].c);\n    return (UiEvent){ UK_CMD, 0, cmd };", "        if (UI_BINDS_DEFAULT[i].cmd == cmd) return ui_event_of(UI_BINDS_DEFAULT[i].c);\n    return (UiEvent){ UK_NONE, 0, cmd };"),
+    (KY, "{\n    return (UiEvent){ UK_CMD, 0, cmd };\n}", "{\n    return (UiEvent){ UK_NONE, 0, cmd };\n}"),
     (KY, '{ UI_MOD_SHIFT, "Shift+" }', '{ UI_MOD_SHIFT, "Shift-" }'),
     (KY, '"F%u", c.code - UKC_F1 + 1);', '"F%u", c.code - UKC_F1);'),
     (KY, '        if (c.code == \' \') snprintf(out, (size_t)cap, "Space");\n        else {', '        if (0) snprintf(out, (size_t)cap, "Space");\n        else {'),
@@ -2628,3 +2628,33 @@ MUTANTS += [
     ('ui/handle.c', "        UiKey cmd = shift_enter ? UK_ENTER : ui_unshift(e.cmd);", "        UiKey cmd = shift_enter ? UK_ENTER : e.cmd;"),
     ('ui/handle.c', "    if (e.cmd == UK_FIND) return true;\n", ""),
 ]
+
+# F15 step 2 (2026-11-08): ofx.conf's key lines, read by ui/keys.c; menu entries as commands.
+CF = 'fs/conf.c'
+MUTANTS += [
+    (KY, "        if (x >= 'A' && x <= 'Z') x = (char)(x - 'A' + 'a');\n", ""),
+    (KY, "        if (!mods) return *c = (UiChord){ cp, UI_MOD_TYPED }, true;", "        if (0) return *c = (UiChord){ cp, UI_MOD_TYPED }, true;"),
+    (KY, "        if (mods == UI_MOD_SHIFT) return snprintf(", "        if (0) return snprintf("),
+    (KY, "        code = cp >= 'A' && cp <= 'Z' ? cp - 'A' + 'a' : cp;", "        code = cp;"),
+    (KY, "    if (code == ' ' && !mods) return *c = (UiChord){ ' ', UI_MOD_TYPED }, true;\n", ""),
+    (KY, "    if (mods == UI_MOD_ALT && ((code >= 'a' && code <= 'z') || (code >= '1' && code <= '9')))", "    if (0)"),
+    (KY, "        if (cp >= 0x7F) return snprintf(", "        if (0) return snprintf("),
+    (KY, "    if (!code && ui_same_nocase(s, \"Space\")) code = ' ';", ""),
+    (KY, "        if (sp < 0 || str_find(name, ' ') >= 0) snprintf(", "        if (sp < 0) snprintf("),
+    (KY, "            if (!r.bad) r.bad = no[k], snprintf(", "            r.bad = no[k], snprintf("),
+    (KY, "            if (same_key && ui_binds.b[i].cmd != cmd && !r.clashes++) {", "            if (same_key && !r.clashes++) {"),
+    (KY, "                if (ui_binds.user[i]) snprintf(r.clash, sizeof r.clash, \"lines", "                if (0) snprintf(r.clash, sizeof r.clash, \"lines"),
+    (KY, "        if (none) continue;\n", ""),
+    (KY, "        users++, ui_binds.n++;", "        ui_binds.n++;"),
+    (KY, "    r.changed = was_n != ui_binds.n || memcmp(was, ui_binds.b, sizeof was[0] * (size_t)was_n) != 0;", "    r.changed = was_n != ui_binds.n;"),
+    (KY, "        bool wrap = !first && at - start + 2 + strlen(UI_CMDS[i].name) > 79;", "        bool wrap = false;"),
+    (KY, "        if (has) continue;\n", ""),
+    (KY, "    if (!ui_binds.ready) ui_binds_reset();", "    if (!ui_binds.n) ui_binds_reset();"),
+    (CF, "        if (!v.len || v.len >= CONF_KEY_LEN || c->nkey == CONF_KEYS_MAX) return false;", "        if (!v.len || v.len >= CONF_KEY_LEN) return false;"),
+    (CF, "            if (CONF_OPTS[k].kind == CK_KEY) c->key_no[c->nkey - 1] = no;\n", ""),
+    (CF, "        if (o->kind == CK_KEY && keys && at < cap) {", "        if (0) {"),
+    ('ui/menus.c', "            if (!ui_menu_enabled(u, it)) return u->menu = was, false;", "            if (0) return u->menu = was, false;"),
+    ('ui/menus.c', "            u->menu = m;   // (what is shown and enabled is the bar menu's)\n", ""),
+    ('ui/handle.c', "    if (key >= UK_ITEM0) return ui_item_cmd(u, (UiMenuItem)(key - UK_ITEM0), out);\n", ""),
+]
+

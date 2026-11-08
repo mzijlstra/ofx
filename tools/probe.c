@@ -1,8 +1,9 @@
 // ofx-probe DIR [SIZE SCALE]: the listing as ofx sees it, one line per entry (kind, MIME type, icon
 // file), from the real MIME database, icon theme and Omarchy theme. No window: fs/ only.
-// ofx-probe --conf: the ofx.conf Preferences writes (F10), for the README's copy.
+// ofx-probe --conf: the ofx.conf Preferences writes (F10), for the README's copy (ui/ for its keys).
 #include "../base/base.c"
 #include "../fs/fs.c"
+#include "../ui/ui.c"   // (the key lines the file has, F15)
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -12,8 +13,9 @@ static u8 mem[MiB(64)];
 int main(int argc, char **argv)
 {
     if (argc == 2 && strcmp(argv[1], "--conf") == 0) {
-        static char text[16384];
-        fwrite(text, 1, conf_default_text(text, sizeof text), stdout);
+        static char keys[8192], text[CONF_TEXT_MAX];
+        ui_keys_conf_text(keys, sizeof keys);
+        fwrite(text, 1, conf_default_text(text, sizeof text, keys), stdout);
         return 0;
     }
     if (argc != 2 && argc != 4) return fprintf(stderr, "usage: ofx-probe DIR [SIZE SCALE] | --conf\n"), 2;

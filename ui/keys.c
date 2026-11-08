@@ -124,6 +124,12 @@ static const struct { UiKey cmd; const char *name; } UI_CMDS[] = {
     { UK_TAB, "sidebar" }, { UK_SIDE_GO, "to-sidebar" }, { UK_F9, "sidebar-mode" }, { UK_CRUMBS, "path-buttons" }, { UK_JOBS, "job-rows" },
     { UK_FIND, "find" }, { UK_FIND_NEXT, "find-next" }, { UK_FIND_PREV, "find-previous" },
     { UK_SEARCH, "search" }, { UK_CONTAINING, "containing" }, { UK_OPEN_LINE, "open-line" },
+    // The bar menus' entries with no key as ofx has them (F15 step 2): each runs as picked.
+    { UK_ITEM0 + UM_NEW_FILE, "new-file" }, { UK_ITEM0 + UM_DUPLICATE, "duplicate" }, { UK_ITEM0 + UM_PREFERENCES, "preferences" },
+    { UK_ITEM0 + UM_SIDE_PLACES, "side-places" }, { UK_ITEM0 + UM_SIDE_TREE, "side-tree" }, { UK_ITEM0 + UM_SIDE_NONE, "side-none" },
+    { UK_ITEM0 + UM_COLORS, "colors" }, { UK_ITEM0 + UM_SHOW_MENU, "show-menu" }, { UK_ITEM0 + UM_SORT_NAME, "sort-name" },
+    { UK_ITEM0 + UM_SORT_SIZE, "sort-size" }, { UK_ITEM0 + UM_SORT_MTIME, "sort-mtime" }, { UK_ITEM0 + UM_CLEAR_PREVIEWS, "clear-previews" },
+    { UK_ITEM0 + UM_ABOUT, "about" },
 };
 
 // ---- the bindings -------------------------------------------------------------------------------
@@ -187,25 +193,28 @@ static const UiBind UI_BINDS_DEFAULT[] = {
 
 enum { UI_BINDS_MAX = 512 };
 
-// The bindings in use, and each one's name as the menus write it.
+// The bindings in use (ofx.conf's key lines first, in their order, then the defaults they left),
+// whether each is from ofx.conf, and each one's name as the menus write it.
 static struct {
     UiBind b[UI_BINDS_MAX];
+    bool   user[UI_BINDS_MAX];
     char   name[UI_BINDS_MAX][UI_KEY_NAME_MAX];
     int    n;
+    bool   ready;
 } ui_binds;
 
 static void ui_binds_reset(void)
 {
-    ui_binds.n = 0;
+    ui_binds.n = 0, ui_binds.ready = true;
     for (int i = 0; i < COUNT(UI_BINDS_DEFAULT); i++, ui_binds.n++) {
-        ui_binds.b[i] = UI_BINDS_DEFAULT[i];
+        ui_binds.b[i] = UI_BINDS_DEFAULT[i], ui_binds.user[i] = false;
         ui_chord_name(UI_BINDS_DEFAULT[i].c, ui_binds.name[i], UI_KEY_NAME_MAX);
     }
 }
 
 static void ui_binds_ready(void)
 {
-    if (!ui_binds.n) ui_binds_reset();
+    if (!ui_binds.ready) ui_binds_reset();
 }
 
 static UiKey ui_bound(UiChord c)
@@ -243,13 +252,186 @@ static UiEvent ui_event_of(UiChord c)
     return e;
 }
 
-// What command cmd's menu entry runs when picked: what its first key as ofx has it sends (a text
-// field takes Copy as Ctrl+C), or the command alone.
+// What command cmd's menu entry runs when picked: the command alone, whatever keys it has (a menu
+// open has taken the keys from any field: the step 1 review measured every pick, 2026-11-08).
 static UiEvent ui_cmd_event(UiKey cmd)
 {
-    for (int i = 0; i < COUNT(UI_BINDS_DEFAULT); i++)
-        if (UI_BINDS_DEFAULT[i].cmd == cmd) return ui_event_of(UI_BINDS_DEFAULT[i].c);
     return (UiEvent){ UK_CMD, 0, cmd };
+}
+
+// ---- ofx.conf's key lines (F15 step 2) -------------------------------------------------------------
+
+// a and b the same, ASCII letters in either case.
+static bool ui_same_nocase(Str a, const char *b)
+{
+    isize n = (isize)strlen(b);
+    if (a.len != n) return false;
+    for (isize i = 0; i < n; i++) {
+        char x = a.p[i], y = b[i];
+        if (x >= 'A' && x <= 'Z') x = (char)(x - 'A' + 'a');
+        if (y >= 'A' && y <= 'Z') y = (char)(y - 'A' + 'a');
+        if (x != y) return false;
+    }
+    return true;
+}
+
+// A key as the menus write it (ui_chord_name), into *c: modifiers (Ctrl+, Alt+, Shift+, Super+, in
+// any order and case) and a key's name (Enter, PgUp, F2, KP1, Space, any case) or its character
+// (Ctrl+T, Ctrl+=, Ctrl++); with no modifier, a character is typed (t, G, ~, é) and Space a typed
+// space. False, with why, for what isn't one, or is one ofx keeps fixed.
+static bool ui_chord_parse(Str s, UiChord *c, char *why, int cap)
+{
+    static const struct { const char *pre; u8 bit; } MODS[] = { { "ctrl+", UI_MOD_CTRL }, { "alt+", UI_MOD_ALT }, { "shift+", UI_MOD_SHIFT }, { "super+", UI_MOD_SUPER } };
+    u8 mods = 0;
+    for (bool more = true; more;) {
+        more = false;
+        for (int i = 0; i < COUNT(MODS); i++) {
+            isize n = (isize)strlen(MODS[i].pre);
+            if (s.len > n && ui_same_nocase(str_cut(s, 0, n), MODS[i].pre)) mods |= MODS[i].bit, s = str_cut(s, n, s.len), more = true;
+        }
+    }
+    u32 code = 0;
+    char b[UI_KEY_NAME_MAX];
+    for (u32 k = UKC_ESC; k <= UKC_F25 && !code; k++) {
+        ui_chord_name((UiChord){ k, 0 }, b, (int)sizeof b);
+        if (b[0] != '?' && ui_same_nocase(s, b)) code = k;
+    }
+    if (!code && ui_same_nocase(s, "Space")) code = ' ';
+    isize at = 0;
+    u32 cp = s.len ? utf8_next(s.p, s.len, &at) : 0;
+    if (!code && s.len && at == s.len && cp > ' ' && cp != 0x7F) {
+        if (!mods) return *c = (UiChord){ cp, UI_MOD_TYPED }, true;
+        if (cp >= 0x7F) return snprintf(why, (size_t)cap, "a key with Ctrl, Alt or Super is one of a US keyboard's"), false;
+        if (mods == UI_MOD_SHIFT) return snprintf(why, (size_t)cap, "Shift and a character: write the character it types (G, ~)"), false;
+        code = cp >= 'A' && cp <= 'Z' ? cp - 'A' + 'a' : cp;
+    }
+    if (!code) return snprintf(why, (size_t)cap, "no key %.*s", (int)(s.len < 40 ? s.len : 40), s.p), false;
+    if (code == ' ' && !mods) return *c = (UiChord){ ' ', UI_MOD_TYPED }, true;
+    if (mods == UI_MOD_ALT && ((code >= 'a' && code <= 'z') || (code >= '1' && code <= '9')))
+        return snprintf(why, (size_t)cap, "Alt and a letter or digit stays: the menus, a tab by place"), false;
+    return *c = (UiChord){ code, mods }, true;
+}
+
+// The command named name (UI_CMDS), UK_NONE for none.
+static UiKey ui_cmd_named(Str name)
+{
+    for (int i = 0; i < COUNT(UI_CMDS); i++)
+        if (str_eq(name, str_from_c(UI_CMDS[i].name))) return UI_CMDS[i].cmd;
+    return UK_NONE;
+}
+
+static const char *ui_cmd_name(UiKey cmd)
+{
+    for (int i = 0; i < COUNT(UI_CMDS); i++)
+        if (UI_CMDS[i].cmd == cmd) return UI_CMDS[i].name;
+    return "?";
+}
+
+static void ui_binds_drop(int i)
+{
+    memmove(&ui_binds.b[i], &ui_binds.b[i + 1], sizeof ui_binds.b[0] * (size_t)(ui_binds.n - i - 1));
+    memmove(&ui_binds.user[i], &ui_binds.user[i + 1], sizeof ui_binds.user[0] * (size_t)(ui_binds.n - i - 1));
+    memmove(&ui_binds.name[i], &ui_binds.name[i + 1], sizeof ui_binds.name[0] * (size_t)(ui_binds.n - i - 1));
+    ui_binds.n--;
+}
+
+// What ofx.conf's key lines did: the first line skipped and why; the first key one took from
+// another command (a default's, or an earlier line's) and how many did; whether the bindings
+// changed from those before.
+typedef struct {
+    int  bad;
+    char why[200];
+    int  clashes;
+    char clash[200];
+    bool changed;
+} UiKeysRead;
+
+// ofx.conf's key lines (n of them, each `<key> <command>` or `none <command>`, from file line no[i])
+// over the defaults, in order: a key bound leaves the command it had (which keeps its others), a
+// later line on the same key wins over an earlier one, none takes all of a command's keys so far.
+// A line ofx can't read is skipped and the rest apply.
+static UiKeysRead ui_binds_set(const char (*line)[64], const int *no, int n)
+{
+    UiKeysRead r = { 0 };
+    static UiBind was[UI_BINDS_MAX];
+    ui_binds_ready();
+    int was_n = ui_binds.n;
+    memcpy(was, ui_binds.b, sizeof was[0] * (size_t)was_n);
+    ui_binds_reset();
+    int users = 0;   // (ofx.conf's come first: a command's first key is the one its menu shows)
+    static int from[UI_BINDS_MAX];   // each user binding's file line
+    for (int k = 0; k < n; k++) {
+        Str l = str_trim(str_from_c(line[k]));
+        isize sp = str_find(l, ' ');
+        Str keys = sp < 0 ? l : str_cut(l, 0, sp), name = sp < 0 ? STR_EMPTY : str_trim(str_cut(l, sp + 1, l.len));
+        UiKey cmd = ui_cmd_named(name);
+        char why[160] = "";
+        UiChord c = { 0 };
+        bool none = str_eq(keys, S("none"));
+        if (sp < 0 || str_find(name, ' ') >= 0) snprintf(why, sizeof why, "key wants a key, then a command");
+        else if (!cmd) snprintf(why, sizeof why, "no command %.*s", (int)(name.len < 40 ? name.len : 40), name.p);
+        else if (!none && !ui_chord_parse(keys, &c, why, (int)sizeof why)) {}
+        else if (!none && users == UI_BINDS_MAX - COUNT(UI_BINDS_DEFAULT)) snprintf(why, sizeof why, "too many key lines");
+        if (why[0]) {
+            if (!r.bad) r.bad = no[k], snprintf(r.why, sizeof r.why, "%s", why);
+            continue;
+        }
+        for (int i = ui_binds.n - 1; i >= 0; i--) {
+            bool same_key = !none && ui_chord_eq(ui_binds.b[i].c, c);
+            if (!(none ? ui_binds.b[i].cmd == cmd : same_key)) continue;
+            if (same_key && ui_binds.b[i].cmd != cmd && !r.clashes++) {
+                char kn[UI_KEY_NAME_MAX];
+                ui_chord_name(c, kn, (int)sizeof kn);
+                if (ui_binds.user[i]) snprintf(r.clash, sizeof r.clash, "lines %d and %d both bind %s: line %d wins", from[i], no[k], kn, no[k]);
+                else snprintf(r.clash, sizeof r.clash, "%s is %.*s now, not %s", kn, (int)name.len, name.p, ui_cmd_name(ui_binds.b[i].cmd));
+            }
+            if (ui_binds.user[i]) {
+                users--;
+                memmove(&from[i], &from[i + 1], sizeof from[0] * (size_t)(users - i));
+            }
+            ui_binds_drop(i);
+        }
+        if (none) continue;
+        memmove(&ui_binds.b[users + 1], &ui_binds.b[users], sizeof ui_binds.b[0] * (size_t)(ui_binds.n - users));
+        memmove(&ui_binds.user[users + 1], &ui_binds.user[users], sizeof ui_binds.user[0] * (size_t)(ui_binds.n - users));
+        memmove(&ui_binds.name[users + 1], &ui_binds.name[users], sizeof ui_binds.name[0] * (size_t)(ui_binds.n - users));
+        ui_binds.b[users] = (UiBind){ c, cmd }, ui_binds.user[users] = true, from[users] = no[k];
+        ui_chord_name(c, ui_binds.name[users], UI_KEY_NAME_MAX);
+        users++, ui_binds.n++;
+    }
+    r.changed = was_n != ui_binds.n || memcmp(was, ui_binds.b, sizeof was[0] * (size_t)was_n) != 0;
+    return r;
+}
+
+// The key lines the written ofx.conf has: every key as ofx has it, commented out, and the
+// commands with none. Its length; cut at cap.
+static size_t ui_keys_conf_text(char *out, size_t cap)
+{
+    size_t at = 0;
+    char b[UI_KEY_NAME_MAX];
+    out[0] = 0;
+    for (int i = 0; i < COUNT(UI_BINDS_DEFAULT) && at < cap; i++) {
+        ui_chord_name(UI_BINDS_DEFAULT[i].c, b, (int)sizeof b);
+        int n = snprintf(out + at, cap - at, "#key = %s %s\n", b, ui_cmd_name(UI_BINDS_DEFAULT[i].cmd));
+        if (n > 0) at += (size_t)n;
+    }
+    bool first = true;
+    size_t start = at;   // (the comment line's start: wrapped before 80 columns)
+    for (int i = 0; i < COUNT(UI_CMDS) && at < cap; i++) {
+        bool has = false;
+        for (int j = 0; j < COUNT(UI_BINDS_DEFAULT); j++) has |= UI_BINDS_DEFAULT[j].cmd == UI_CMDS[i].cmd;
+        if (has) continue;
+        bool wrap = !first && at - start + 2 + strlen(UI_CMDS[i].name) > 79;
+        int n = snprintf(out + at, cap - at, "%s%s", first ? "# With no key: " : wrap ? ",\n# " : ", ", UI_CMDS[i].name);
+        if (wrap) start = at + 2;
+        if (n > 0) at += (size_t)n;
+        first = false;
+    }
+    if (!first && at < cap) {
+        int n = snprintf(out + at, cap - at, "\n");
+        if (n > 0) at += (size_t)n;
+    }
+    return at < cap ? at : cap - 1;
 }
 
 // ---- the menus and the panel ---------------------------------------------------------------------

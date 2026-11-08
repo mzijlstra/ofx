@@ -37,7 +37,7 @@ build/vkbd: tools/gui/vkbd.c tools/gui/testsway.h $(VKBD_XML) Makefile | build
 	wayland-scanner private-code $(VKBD_XML) build/virtual-keyboard-unstable-v1-protocol.c
 	$(CC) $(CFLAGS) -Ibuild -o $@ tools/gui/vkbd.c build/virtual-keyboard-unstable-v1-protocol.c $(shell pkg-config --cflags --libs wayland-client xkbcommon)
 
-build/ofx-probe: tools/probe.c $(wildcard base/*.c base/*.h fs/*.c) | build
+build/ofx-probe: tools/probe.c $(wildcard base/*.c base/*.h fs/*.c ui/*.c) | build
 	$(CC) $(CFLAGS) $(IMG_INC) $(DEBUG) -o $@ tools/probe.c $(IMG_LIBS) -lm
 
 build/ofx-clean: tools/clean.c $(wildcard base/*.c base/*.h fs/*.c) | build

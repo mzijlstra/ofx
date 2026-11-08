@@ -11,8 +11,8 @@
 //                           before up down left right pageup pagedown home end enter backspace esc
 //                           tab delete menu f1 .. f25 equal minus, or the key's character (ctrl-t,
 //                           alt-1, alt-f); space a typed space; close-window the compositor's close
-//                           (as SIGUSR1 from another window's Close All). A key that means nothing
-//                           fails the script.
+//                           (as SIGUSR1 from another window's Close All). A name that is no key
+//                           fails the script; a key that means nothing sends nothing, as on_key.
 //   char <c>                one typed character
 //   keys <word>...          keys and characters in one frame's input, as fast typing during a slow
 //                           frame gives them: each word a key name (as for `key`) or char:<c>
@@ -407,6 +407,15 @@ static void script_state(char *out, size_t cap)
         if (it != UM_SEP && !ui_menu_enabled(&app.ui, it)) snprintf(menuoff + k, sizeof menuoff - k, "%s%s", k ? "," : "", UI_MENU_ITEM[it].word);
     }
     if (!menuoff[0]) snprintf(menuoff, sizeof menuoff, "-");
+    // The open menu's keys as it shows them (F15): word=key for each entry with one.
+    char menukeys[1024] = "";
+    for (int i = 0; app.ui.menu_on && i < UI_MENU[app.ui.menu].n; i++) {
+        UiMenuItem it = UI_MENU[app.ui.menu].items[i];
+        size_t k = strlen(menukeys);
+        if (ui_menu_key(it)[0]) snprintf(menukeys + k, sizeof menukeys - k, "%s%s=%s", k ? "," : "", UI_MENU_ITEM[it].word, ui_menu_key(it));
+    }
+    if (!menukeys[0]) snprintf(menukeys, sizeof menukeys, "-");
+    for (char *c = menukeys; *c; c++) *c = *c == ' ' ? '_' : *c;
     // The open menu's entries (F7.4): those that can't be picked, those the last frame didn't draw,
     // those marked.
     char menugrey[512] = "", menuhid[512] = "", menumarked[256] = "";
@@ -549,7 +558,7 @@ static void script_state(char *out, size_t cap)
              "view=%s cols=%d cells=%d cellfirst=%td celllast=%td fulllines=%d celllines=%d cellcut=%d iconpx=%d icontex=%d iconresets=%d crumbfocus=%d tooltip=%s idlewoke=%s "
              "zoom=%d cellw=%d cellh=%d zoomshown=%d tipin=%d slots=%d "
              "previews=%d thumbsel=%s thumbbox=%s thumbbusy=%d thumbmade=%d thumbread=%d thumbfailed=%d thumbknown=%d thumbnone=%d thumbchanged=%d "
-             "thumbheld=%td thumbdropped=%d thumbresets=%d thumblocal=%d reloadasked=%d menuseps=%d bmlist=%s bmn=%d bmhere=%d canbm=%d bmmore=%d bmp=%d bmpn=%td bmpsel=%td bmpnaming=%d bmptext=%s keys=%d keysn=%td keystop=%td keysrows=%d keysfirst=%s keyscap=%s menu=%s menuat=%s menuoff=%s menugrey=%s menuhid=%s menumarked=%s menubox=%s menuin=%d menuclear=%d permscols=%d permsshown=%d permsnote=%d groupcol=%d groupdrawn=%d colors=%d barhidden=%d barshown=%d menuhover=%d canwrite=%d windows=%d siderows=%d footerin=%d "
+             "thumbheld=%td thumbdropped=%d thumbresets=%d thumblocal=%d reloadasked=%d menuseps=%d bmlist=%s bmn=%d bmhere=%d canbm=%d bmmore=%d bmp=%d bmpn=%td bmpsel=%td bmpnaming=%d bmptext=%s keys=%d keysn=%td keystop=%td keysrows=%d keysfirst=%s keyscap=%s keysbad=%d keyclashes=%d menukeys=%s menu=%s menuat=%s menuoff=%s menugrey=%s menuhid=%s menumarked=%s menubox=%s menuin=%d menuclear=%d permscols=%d permsshown=%d permsnote=%d groupcol=%d groupdrawn=%d colors=%d barhidden=%d barshown=%d menuhover=%d canwrite=%d windows=%d siderows=%d footerin=%d "
              "props=%d propat=%d propcan=%d propn=%td propmode=%04o propfiles=%lld propdirs=%lld propbytes=%lld propdone=%d propcut=%d proplinks=%lld,%lld,%lld,%d propnlink=%llu proptype=%s proptypename=%s propbyname=%d propname=%s "
              "propwhere=%s propdrive=%s proplink=%s propcreated=%d propidx=%td "
              "ow=%d owfresh=%d owlist=%d owtext=%s own=%td owsel=%td owapp=%s owicon=%s owtex=%d owshown=%td owtype=%s owfiles=%td owrows=%d owtop=%td owopts=%s owbad=%d owdef=%d owdefcan=%d findopts=%s findbad=%d findselect=%d findn=%td findat=%td findtext=%s "
@@ -575,7 +584,7 @@ static void script_state(char *out, size_t cap)
              ui_zoom_px(&app.ui), cell_w(), cell_h(), Clay_GetElementData(CLAY_ID("zoom-track")).found, tipin, app.nslots,
              thumbs.drawn_now, thumbsel, thumbbox, thumbs_busy(), thumbs.got[TG_MADE], thumbs.got[TG_CACHED], thumbs.got[TG_FAILED],
              thumbs.got[TG_FAIL_KNOWN], thumbs.got[TG_NONE], thumbs.got[TG_CHANGED], thumbs.held, thumbs.evicted, thumbs.resets, app.thumb_local,
-             app.reloads_asked, menuseps, bmlist, app.ui.bm_n, app.ui.bm_here, app.ui.can_bookmark, app.ui.bm_more, app.ui.panel == UI_PANEL_BM, app.ui.bmp_list.n, app.ui.bmp_list.sel, app.ui.bmp_naming, bmptext, app.ui.panel == UI_PANEL_KEYS, app.ui.keys_list.n, app.ui.keys_list.top, app.ui.keys_list.rows, keysfirst, keyscap, app.ui.menu_on ? UI_MENU[app.ui.menu].title : "-", menuat, menuoff, menugrey, menuhid, menumarked, menubox, menuin, menuclear, app.ui.perms_cols, perms_shown((float)GetScreenWidth()), (int)(strstr(info, "Permissions_hidden") != NULL), app.ui.group_col,
+             app.reloads_asked, menuseps, bmlist, app.ui.bm_n, app.ui.bm_here, app.ui.can_bookmark, app.ui.bm_more, app.ui.panel == UI_PANEL_BM, app.ui.bmp_list.n, app.ui.bmp_list.sel, app.ui.bmp_naming, bmptext, app.ui.panel == UI_PANEL_KEYS, app.ui.keys_list.n, app.ui.keys_list.top, app.ui.keys_list.rows, keysfirst, keyscap, conf_keys_read.bad, conf_keys_read.clashes, menukeys, app.ui.menu_on ? UI_MENU[app.ui.menu].title : "-", menuat, menuoff, menugrey, menuhid, menumarked, menubox, menuin, menuclear, app.ui.perms_cols, perms_shown((float)GetScreenWidth()), (int)(strstr(info, "Permissions_hidden") != NULL), app.ui.group_col,
              (int)Clay_GetElementData(CLAY_ID("col-group")).found + (int)Clay_GetElementData(CLAY_IDI("group", 0)).found, app.ui.colors, app.ui.bar_hidden, bar_shown(), app.hov.menu_title, app.ui.can_write, windows,
              app.ui.side.rows, footerin,
              app.ui.panel == UI_PANEL_PROPS, app.ui.prop_at, app.ui.prop_can, props.n, props.have ? (unsigned)(props.st.st_mode & 07777) : 0u,
@@ -629,7 +638,7 @@ static bool script_has_all(const char *line, Str words, const char **missing, ch
 // A `key` word as the event a real key sends (ui/keys.c, as bound): ctrl-, shift- and alt- before a
 // key's name (up, pageup, enter, esc, f1 ... f25, equal, minus, or the key's character: ctrl-t,
 // alt-1), space a typed space, close-window the compositor's close. False for a word that names no
-// key, or a key that means nothing.
+// key; a key that means nothing (Ctrl+Y, or a key ofx.conf took away) is an empty event.
 static bool script_event(Str name, UiEvent *e)
 {
     if (str_eq(name, S("close-window"))) return *e = (UiEvent){ UK_QUIT, 0, UK_NONE }, true;
@@ -656,7 +665,7 @@ static bool script_event(Str name, UiEvent *e)
     if (!code && name.len == 1 && name.p[0] > ' ' && name.p[0] < 0x7F) code = (u32)(name.p[0] >= 'A' && name.p[0] <= 'Z' ? name.p[0] - 'A' + 'a' : name.p[0]);
     if (!code) return false;
     *e = ui_event_of((UiChord){ code, mods });
-    return e->key || e->cmd;
+    return true;
 }
 
 static void script_fail(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
@@ -874,7 +883,7 @@ static bool script_input(UiInput *in)
         } else if (str_eq(cmd, S("key"))) {
             UiEvent e;
             if (!script_event(arg, &e)) script_fail("no key %s", a);
-            else in->ev[in->nev++] = e;
+            else if (e.key || e.cmd || e.ch) in->ev[in->nev++] = e;   // (as on_key: a key that means nothing sends nothing)
         } else if (str_eq(cmd, S("keys"))) {
             for (isize at = 0; at < arg.len && in->nev < UI_EVENTS_MAX;) {
                 while (at < arg.len && arg.p[at] == ' ') at++;
@@ -885,7 +894,9 @@ static bool script_input(UiInput *in)
                 if (w.len == 0) break;
                 UiEvent ev;
                 if (str_starts_with(w, S("char:")) && w.len == 6) in->ev[in->nev++] = ui_event_of((UiChord){ (u32)(unsigned char)w.p[5], UI_MOD_TYPED });
-                else if (script_event(w, &ev)) in->ev[in->nev++] = ev;
+                else if (script_event(w, &ev)) {
+                    if (ev.key || ev.cmd || ev.ch) in->ev[in->nev++] = ev;
+                }
                 else script_fail("keys: no key %.*s", STR_ARG(w));
             }
         } else if (str_eq(cmd, S("char")) || str_eq(cmd, S("type"))) {

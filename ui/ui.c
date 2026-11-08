@@ -93,6 +93,7 @@ typedef enum {
     // N, Space; and Ctrl+Left's outside a text field, the sidebar.
     UK_RESTORE, UK_SORT_NEXT, UK_SORT_REVERSE, UK_FIND_NEXT, UK_FIND_PREV, UK_MARK, UK_SIDE_GO,
     UK_CMD,   // a key with no meaning of its own, only the command bound to it (UiEvent.cmd)
+    UK_ITEM0, // and from here a bar menu's entry as a command, UK_ITEM0 + its UiMenuItem (F15 step 2)
 } UiKey;
 
 // The top bar's buttons (F4).
@@ -328,7 +329,7 @@ static const struct { const char *label, *word; UiKey cmd; bool runs; char mark;
     [UM_NEW_TAB] = { "New Tab", "new-tab", .cmd = UK_TAB_NEW },
     [UM_NEW_WINDOW] = { "New Window", "new-window", .cmd = UK_NEW_WINDOW },
     [UM_NEW_FOLDER] = { "Create New Folder", "new-folder", .cmd = UK_NEWFOLDER },
-    [UM_NEW_FILE] = { "Create New Empty File", "new-file" },
+    [UM_NEW_FILE] = { "Create New Empty File", "new-file", .cmd = UK_ITEM0 + UM_NEW_FILE },
     [UM_OPEN] = { "Open", "open", .cmd = UK_ENTER },
     [UM_OPEN_WITH] = { "Open With Other Application\xE2\x80\xA6", "open-with", .cmd = UK_SHIFT_ENTER },   // (its own action: with the keys in the sidebar Shift+Enter is Enter there)
     [UM_PROPERTIES] = { "Properties\xE2\x80\xA6", "properties", .cmd = UK_PROPERTIES },
@@ -343,7 +344,7 @@ static const struct { const char *label, *word; UiKey cmd; bool runs; char mark;
     [UM_SELECT_ALL] = { "Select All", "select-all", .cmd = UK_ALL, .runs = true },
     [UM_SELECT_MATCH] = { "Select Items Matching\xE2\x80\xA6", "select-match", .cmd = UK_SELECT_MATCH, .runs = true },
     [UM_INVERT] = { "Invert Selection", "invert", .cmd = UK_INVERT, .runs = true },
-    [UM_DUPLICATE] = { "Duplicate", "duplicate" },
+    [UM_DUPLICATE] = { "Duplicate", "duplicate", .cmd = UK_ITEM0 + UM_DUPLICATE },
     [UM_MAKE_LINK] = { "Make Link", "make-link", .cmd = UK_MAKE_LINK, .runs = true },
     [UM_RENAME] = { "Rename\xE2\x80\xA6", "rename", .cmd = UK_F2, .runs = true },
     [UM_TRASH] = { "Move to Trash", "trash", .cmd = UK_DELETE, .runs = true },
@@ -351,17 +352,17 @@ static const struct { const char *label, *word; UiKey cmd; bool runs; char mark;
     [UM_RESTORE] = { "Restore", "restore", .cmd = UK_RESTORE, .runs = true },
     // View
     [UM_RELOAD] = { "Reload", "reload", .cmd = UK_RELOAD, .runs = true },
-    [UM_SIDE_PLACES] = { "Places Sidebar", "side-places", .mark = 'r' },
-    [UM_SIDE_TREE] = { "Tree Sidebar", "side-tree", .mark = 'r' },
-    [UM_SIDE_NONE] = { "No Sidebar", "side-none", .mark = 'r' },
+    [UM_SIDE_PLACES] = { "Places Sidebar", "side-places", .cmd = UK_ITEM0 + UM_SIDE_PLACES, .mark = 'r' },
+    [UM_SIDE_TREE] = { "Tree Sidebar", "side-tree", .cmd = UK_ITEM0 + UM_SIDE_TREE, .mark = 'r' },
+    [UM_SIDE_NONE] = { "No Sidebar", "side-none", .cmd = UK_ITEM0 + UM_SIDE_NONE, .mark = 'r' },
     [UM_HIDDEN] = { "Show Hidden Files", "hidden", .cmd = UK_HIDDEN, .runs = true, .mark = 'c' },
     [UM_PERMS_COLS] = { "Show Permissions", "perms-cols", .cmd = UK_PERMS_COLS, .runs = true, .mark = 'c' },   // the list's Owner and Permissions (2026-10-27)
     [UM_GROUP_COL] = { "Show Group", "group-col", .cmd = UK_GROUP_COL, .runs = true, .mark = 'c' },   // and Group, off by default as eza's (Michael, 2026-10-27)
-    [UM_COLORS] = { "Show Colors", "colors", .mark = 'c' },   // the list in eza's colours (2026-10-27)
-    [UM_SHOW_MENU] = { "Show Menu", "show-menu", .mark = 'c' },   // the menu bar (2026-10-27): F10 and Alt+letters open its menus either way
-    [UM_SORT_NAME] = { "Sort by Name", "sort-name", .mark = 'r' },
-    [UM_SORT_SIZE] = { "Sort by Size", "sort-size", .mark = 'r' },
-    [UM_SORT_MTIME] = { "Sort by Modified", "sort-mtime", .mark = 'r' },
+    [UM_COLORS] = { "Show Colors", "colors", .cmd = UK_ITEM0 + UM_COLORS, .mark = 'c' },   // the list in eza's colours (2026-10-27)
+    [UM_SHOW_MENU] = { "Show Menu", "show-menu", .cmd = UK_ITEM0 + UM_SHOW_MENU, .mark = 'c' },   // the menu bar (2026-10-27): F10 and Alt+letters open its menus either way
+    [UM_SORT_NAME] = { "Sort by Name", "sort-name", .cmd = UK_ITEM0 + UM_SORT_NAME, .mark = 'r' },
+    [UM_SORT_SIZE] = { "Sort by Size", "sort-size", .cmd = UK_ITEM0 + UM_SORT_SIZE, .mark = 'r' },
+    [UM_SORT_MTIME] = { "Sort by Modified", "sort-mtime", .cmd = UK_ITEM0 + UM_SORT_MTIME, .mark = 'r' },
     [UM_SORT_REVERSE] = { "Reverse Order", "sort-reverse", .cmd = UK_SORT_REVERSE, .runs = true, .mark = 'c' },
     [UM_ZOOM_IN] = { "Zoom In", "zoom-in", .cmd = UK_ZOOM_IN, .runs = true },
     [UM_ZOOM_OUT] = { "Zoom Out", "zoom-out", .cmd = UK_ZOOM_OUT, .runs = true },
@@ -384,9 +385,9 @@ static const struct { const char *label, *word; UiKey cmd; bool runs; char mark;
     [UM_BM_MORE] = { "", "bm-more" },   // "N more in Edit Bookmarks…" (gui/'s label): the panel, on the first not listed
     // Help: no manual (Michael, 2026-10-27)
     [UM_SHORTCUTS] = { "Keyboard Shortcuts", "shortcuts", .cmd = UK_SHORTCUTS, .runs = true },
-    [UM_ABOUT] = { "About", "about" },
-    [UM_PREFERENCES] = { "Preferences\xE2\x80\xA6", "preferences" },   // (ofx.conf, F10)
-    [UM_CLEAR_PREVIEWS] = { "Clear Previews\xE2\x80\xA6", "clear-previews" },   // (every preview in the cache, asked first: F12)
+    [UM_ABOUT] = { "About", "about", .cmd = UK_ITEM0 + UM_ABOUT },
+    [UM_PREFERENCES] = { "Preferences\xE2\x80\xA6", "preferences", .cmd = UK_ITEM0 + UM_PREFERENCES },   // (ofx.conf, F10)
+    [UM_CLEAR_PREVIEWS] = { "Clear Previews\xE2\x80\xA6", "clear-previews", .cmd = UK_ITEM0 + UM_CLEAR_PREVIEWS },   // (every preview in the cache, asked first: F12)
     // The right-click menus' own (F8): a folder in a tab behind (its row's middle click); the trash
     // view's Empty Trash; the folder shown's Properties, whatever is marked
     [UM_OPEN_TAB] = { "Open in New Tab", "open-tab", .hint = "Middle click" },

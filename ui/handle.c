@@ -375,6 +375,7 @@ static bool ui_list_key(Ui *u, UiNames names, const UiInput *in, UiKey key, u32 
     UiList *m = u->focus == UI_FOCUS_SIDE ? &u->side : l;
     isize page = m->rows > 1 ? m->rows - 1 : 1;
     bool grid = u->grid && m == l;
+    if (key >= UK_ITEM0) return ui_item_cmd(u, (UiMenuItem)(key - UK_ITEM0), out);
     switch (key) {
     case UK_RESTORE:
         if (u->view == UI_VIEW_TRASH && files) return *out = (UiAction){ UA_RESTORE, 0, false }, true;

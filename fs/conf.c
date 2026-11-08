@@ -17,7 +17,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-enum { CONF_SKIP_MAX = 32, CONF_NAME_MAX = 64, CONF_DATE_MAX = 64, CONF_WHY_MAX = 200, CONF_LINE_MAX = 512, CONF_DAYS_MAX = 36500 };
+enum { CONF_TEXT_MAX = 32768, CONF_SKIP_MAX = 32, CONF_NAME_MAX = 64, CONF_DATE_MAX = 64, CONF_WHY_MAX = 200, CONF_LINE_MAX = 512, CONF_DAYS_MAX = 36500, CONF_KEYS_MAX = 256, CONF_KEY_LEN = 64 };
 
 typedef enum { DATE_SHORT, DATE_LONG, DATE_ISO, DATE_PATTERN } DateFormat;
 
@@ -55,11 +55,14 @@ typedef struct {
     bool       clean, clean_orphans;              // ofx-clean (F6.5): at all; previews of files gone or changed
     i64        clean_unused_days;                 // 0: never for this
     i64        clean_cap;                         // bytes; 0: no cap
+    char       key[CONF_KEYS_MAX][CONF_KEY_LEN];  // the key lines' values, as written (ui/keys.c reads them, F15)
+    int        key_no[CONF_KEYS_MAX];             // and each one's line in the file
+    int        nkey;
     int        bad;                               // the first line skipped (0: none), and why
     char       why[CONF_WHY_MAX];
 } Conf;
 
-typedef enum { CK_BOOL, CK_SIZE, CK_DATE, CK_NAMES, CK_EDITOR, CK_DAYS, CK_VIEW, CK_ZOOM, CK_SORT, CK_SHIFT } ConfKind;
+typedef enum { CK_BOOL, CK_SIZE, CK_DATE, CK_NAMES, CK_EDITOR, CK_DAYS, CK_VIEW, CK_ZOOM, CK_SORT, CK_SHIFT, CK_KEY } ConfKind;
 
 // Each option: its key, kind, its field in Conf, default as written in the file ("": none, the help
 // has an example), and its help (lines, each made a comment). The help says what it does, what it
@@ -172,6 +175,18 @@ static const ConfOpt CONF_OPTS[] = {
     { "clean-cap", CK_SIZE, offsetof(Conf, clean_cap), "1 GiB",
       "The size ofx-clean keeps the cache under: past it, the least recently read\n"
       "previews go first. A size, as preview-max-size takes; 0: no cap." },
+    { "key", CK_KEY, offsetof(Conf, key), "",
+      "Your keys: key = <key> <command>, one key a line, a command may have several.\n"
+      "The key as the menus write it: Ctrl+Shift+N, Alt+Left, F2, PgUp, a letter, G\n"
+      "for Shift and g, Space. A key bound here leaves the command that had it\n"
+      "(which keeps its other keys), and the status line says so after you save;\n"
+      "of two lines on one key, the later wins. key = none <command> takes all of a\n"
+      "command's keys; a line after it can give it one again. Fixed: the keys in a\n"
+      "text field (the caret, Enter, Esc...), a question's answers, the panels' own\n"
+      "lists, Alt and a menu's letter, Alt+1 .. Alt+9. Help > Keyboard Shortcuts\n"
+      "(F1) shows the keys as they are.\n"
+      "Example: key = Ctrl+E terminal\n"
+      "Below, every key as ofx has it, commented out." },
 };
 
 static const char CONF_HEAD[] =
@@ -223,7 +238,7 @@ static const char *const CONF_WANTS[] = {
     [CK_BOOL] = "on or off", [CK_SIZE] = "a size like 10 MiB", [CK_DATE] = "short, long, iso or a pattern with %",
     [CK_NAMES] = "a folder name, without a /", [CK_EDITOR] = "a name, yes or no, then the command",
     [CK_DAYS] = "a whole number of days", [CK_VIEW] = "list or icons", [CK_ZOOM] = "32, 48, 64, 96, 128 or 256",
-    [CK_SORT] = "name, size or modified", [CK_SHIFT] = "range or add",
+    [CK_SORT] = "name, size or modified", [CK_SHIFT] = "range or add", [CK_KEY] = "a key, then a command",
 };
 
 // The built-in defaults: all of them with no file to read; under a file, what it doesn't set (but
@@ -276,6 +291,11 @@ static bool conf_set(Conf *c, int k, Str v)
         snprintf(l->name[l->n++], CONF_NAME_MAX, "%.*s", STR_ARG(v));
         return true;
     }
+    case CK_KEY: {   // (key, key_no and nkey: ui/keys.c reads the line itself, the gui's frame on its line)
+        if (!v.len || v.len >= CONF_KEY_LEN || c->nkey == CONF_KEYS_MAX) return false;
+        snprintf(c->key[c->nkey++], CONF_KEY_LEN, "%.*s", STR_ARG(v));
+        return true;
+    }
     case CK_EDITOR: {   // (editor and neditor; read as the editors file reads a recipe: one, no bad line)
         static u8 mem[KiB(16)];
         static Editors one;
@@ -307,7 +327,10 @@ static void conf_parse(Str text, Conf *c)
         int k = -1;
         for (int i = 0; i < COUNT(CONF_OPTS) && k < 0; i++)
             if (str_eq(key, str_from_c(CONF_OPTS[i].key))) k = i;
-        if (eq >= 0 && k >= 0 && conf_set(c, k, val)) continue;
+        if (eq >= 0 && k >= 0 && conf_set(c, k, val)) {
+            if (CONF_OPTS[k].kind == CK_KEY) c->key_no[c->nkey - 1] = no;
+            continue;
+        }
         if (c->bad) continue;
         c->bad = no;
         if (eq < 0) snprintf(c->why, sizeof c->why, "not a key = value line");
@@ -330,8 +353,9 @@ static void conf_comment(char *out, size_t cap, size_t *at, const char *text)
 
 // The file ofx writes when there is none: the head, then each option's help and its default
 // commented out, but a list's default written out, a line per name (the file's lines are the
-// list); an option with no default, its help alone. Its length; cut at cap.
-static size_t conf_default_text(char *out, size_t cap)
+// list); an option with no default, its help alone; after key's help, keys (the key lines ui/
+// writes, ui_keys_conf_text: fs/ doesn't know the keys). Its length; cut at cap.
+static size_t conf_default_text(char *out, size_t cap, const char *keys)
 {
     size_t at = 0;
     out[0] = 0;
@@ -341,6 +365,10 @@ static size_t conf_default_text(char *out, size_t cap)
         int n = snprintf(out + at, cap - at, "\n");
         if (n > 0) at += (size_t)n;
         conf_comment(out, cap, &at, o->help);
+        if (o->kind == CK_KEY && keys && at < cap) {
+            n = snprintf(out + at, cap - at, "%s", keys);
+            if (n > 0) at += (size_t)n;
+        }
         Str def = str_from_c(o->def);
         for (isize i = 0; i < def.len && at < cap;) {   // (a list's names, one a line)
             isize e = o->kind == CK_NAMES ? i : def.len;
@@ -375,17 +403,17 @@ static bool conf_load(Arena *a, Conf *c)
 }
 
 // The file ofx writes, at path, when there is none (at the start, and on Preferences): its folder
-// made, never one replaced (an existing file, or a link, is left as it is: true, nothing written).
-// Through the test guard.
-static bool conf_create(const char *path, Err *err)
+// made, never one replaced (an existing file, or a link, is left as it is: true, nothing written);
+// keys as conf_default_text takes them. Through the test guard.
+static bool conf_create(const char *path, const char *keys, Err *err)
 {
     struct stat st;
     if (lstat(path, &st) == 0) return true;
     if (!ops_allowed(path, err)) return false;
     char d[PATH_MAX];
     if (!path_parent(d, sizeof d, path) || !mkdir_p(d, 0700, true, err)) return false;
-    static char text[16384];
-    size_t n = conf_default_text(text, sizeof text);
+    static char text[CONF_TEXT_MAX];
+    size_t n = conf_default_text(text, sizeof text, keys);
     int fd = open(path, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC | O_NOFOLLOW, 0644);
     if (fd < 0) return errno == EEXIST || (err_set(err, "%s: %s", path, strerror(errno)), false);
     bool ok = write(fd, text, n) == (ssize_t)n;

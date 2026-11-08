@@ -1,0 +1,34 @@
+# F15 step 2: ofx.conf's key lines, applied when the file is saved. A key bound acts, the default
+# it took no longer does (it says so once), the menu shows your key, a line ofx can't read is named
+# and the rest apply, none takes a command's keys. The tree (run.sh): a/, b/, c.txt.
+settle
+expect n=3 tabs=1 keysbad=0 keyclashes=0
+key f10
+expect menu=File menukeys=new-tab=Ctrl+T,reopen-tab=Ctrl+Shift+T,new-window=Ctrl+N,new-folder=Ctrl+Shift+N,open=Enter,open-with=Shift+Enter,properties=Ctrl+I,close-all=Ctrl+Q,close=Ctrl+W
+key esc
+sh printf 'key = Ctrl+T reload\nkey = Ctrl+E new-tab\n' > "$OFX_ROOT/config/ofx/ofx.conf"
+wait-for 3000 keysbad=0 keyclashes=1 statusbad=0 status=ofx.conf: Ctrl+T is reload now,
+key ctrl-t
+expect tabs=1
+key ctrl-e
+expect tabs=2
+key f10
+expect menu=File menukeys=new-tab=Ctrl+E,reopen-tab=Ctrl+Shift+T,new-window=Ctrl+N,new-folder=Ctrl+Shift+N,open=Enter,open-with=Shift+Enter,properties=Ctrl+I,close-all=Ctrl+Q,close=Ctrl+W
+key esc
+# A line ofx can't read: named, the rest apply (Ctrl+T is New Tab's again)
+sh printf 'key = Ctrl+T nosuch\nkey = Ctrl+E new-tab\n' > "$OFX_ROOT/config/ofx/ofx.conf"
+wait-for 3000 keysbad=1 statusbad=1
+key ctrl-t
+expect tabs=3
+# none: New Tab keeps no key
+sh printf 'key = none new-tab\n' > "$OFX_ROOT/config/ofx/ofx.conf"
+wait-for 3000 keysbad=0 keyclashes=0
+key ctrl-t
+expect tabs=3
+key f10
+expect menukeys=reopen-tab=Ctrl+Shift+T,new-window=Ctrl+N,new-folder=Ctrl+Shift+N,open=Enter,open-with=Shift+Enter,properties=Ctrl+I,close-all=Ctrl+Q,close=Ctrl+W
+key esc
+# A clash in the file at the start isn't said (only after a save that changed the keys): f15b
+sh printf 'key = Ctrl+T reload\n' > "$OFX_ROOT/config/ofx/ofx.conf"
+wait-for 3000 keyclashes=1
+quit

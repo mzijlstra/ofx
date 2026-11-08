@@ -391,6 +391,127 @@ search-skip = node_modules
 # The size ofx-clean keeps the cache under: past it, the least recently read
 # previews go first. A size, as preview-max-size takes; 0: no cap.
 #clean-cap = 1 GiB
+
+# Your keys: key = <key> <command>, one key a line, a command may have several.
+# The key as the menus write it: Ctrl+Shift+N, Alt+Left, F2, PgUp, a letter, G
+# for Shift and g, Space. A key bound here leaves the command that had it
+# (which keeps its other keys), and the status line says so after you save;
+# of two lines on one key, the later wins. key = none <command> takes all of a
+# command's keys; a line after it can give it one again. Fixed: the keys in a
+# text field (the caret, Enter, Esc...), a question's answers, the panels' own
+# lists, Alt and a menu's letter, Alt+1 .. Alt+9. Help > Keyboard Shortcuts
+# (F1) shows the keys as they are.
+# Example: key = Ctrl+E terminal
+# Below, every key as ofx has it, commented out.
+#key = Up up
+#key = k up
+#key = Down down
+#key = j down
+#key = Left left
+#key = h left
+#key = Right right
+#key = l right
+#key = PgUp page-up
+#key = PgDn page-down
+#key = Home first
+#key = g first
+#key = End last
+#key = G last
+#key = Shift+Up select-up
+#key = K select-up
+#key = Shift+Down select-down
+#key = J select-down
+#key = Shift+Left select-left
+#key = H select-left
+#key = Shift+Right select-right
+#key = L select-right
+#key = Shift+Home select-first
+#key = Shift+End select-last
+#key = Space mark
+#key = Alt+Left back
+#key = Alt+Right forward
+#key = Alt+Up parent
+#key = Backspace parent
+#key = Alt+Home home
+#key = ~ home
+#key = Alt+End trash-view
+#key = Ctrl+L location
+#key = Ctrl+Right location
+#key = Enter open
+#key = Shift+Enter open-with
+#key = Alt+Enter terminal
+#key = t terminal
+#key = Ctrl+I properties
+#key = Ctrl+A select-all
+#key = Ctrl+Shift+A select-match
+#key = Ctrl+Shift+I invert
+#key = Esc unselect
+#key = Ctrl+X cut
+#key = Ctrl+C copy
+#key = Ctrl+Shift+C copy-path
+#key = Ctrl+V paste
+#key = Ctrl+Z undo
+#key = Ctrl+M make-link
+#key = F2 rename
+#key = Ctrl+Shift+N new-folder
+#key = Delete trash
+#key = Shift+Delete delete
+#key = r restore
+#key = Ctrl+D add-bookmark
+#key = Ctrl+B edit-bookmarks
+#key = Ctrl+T new-tab
+#key = Ctrl+Shift+T reopen-tab
+#key = Ctrl+N new-window
+#key = Ctrl+W close
+#key = Ctrl+Tab next-tab
+#key = Ctrl+PgDn next-tab
+#key = Ctrl+Shift+Tab previous-tab
+#key = Ctrl+PgUp previous-tab
+#key = Ctrl+Shift+PgUp tab-left
+#key = Ctrl+Shift+PgDn tab-right
+#key = Ctrl+Q close-all
+#key = F10 menus
+#key = Shift+F10 context-menu
+#key = Menu context-menu
+#key = F1 shortcuts
+#key = Ctrl+F1 shortcuts
+#key = Ctrl+R reload
+#key = Ctrl+H hidden
+#key = . hidden
+#key = Ctrl+P perms-cols
+#key = Ctrl+G group-col
+#key = s sort-next
+#key = S sort-reverse
+#key = Ctrl+1 view-list
+#key = Ctrl+KP1 view-list
+#key = Ctrl+2 view-icons
+#key = Ctrl+KP2 view-icons
+#key = Ctrl+= zoom-in
+#key = Ctrl+Shift+= zoom-in
+#key = Ctrl+KP+ zoom-in
+#key = Ctrl+Shift+KP+ zoom-in
+#key = Ctrl+- zoom-out
+#key = Ctrl+KP- zoom-out
+#key = Ctrl+0 zoom-reset
+#key = Ctrl+KP0 zoom-reset
+#key = Tab sidebar
+#key = Ctrl+Left to-sidebar
+#key = F9 sidebar-mode
+#key = Ctrl+S sidebar-mode
+#key = Ctrl+K path-buttons
+#key = Ctrl+Up path-buttons
+#key = Ctrl+J job-rows
+#key = Ctrl+Down job-rows
+#key = Ctrl+F find
+#key = / find
+#key = n find-next
+#key = N find-previous
+#key = Ctrl+Shift+F search
+#key = Ctrl+Enter containing
+#key = Ctrl+Shift+Enter open-line
+# With no key: new-file, duplicate, preferences, side-places, side-tree,
+# side-none, colors, show-menu, sort-name, sort-size, sort-mtime,
+# clear-previews, about
 ```
 <!-- ofx.conf end -->
 

@@ -358,12 +358,12 @@ static void test_keys_pinned(void)
     }
     CHECK(ui_event_of((UiChord){ 0xE9, UI_MOD_TYPED }).cmd == UK_NONE);
 
-    // The menus: each entry's key as before, and what picking it runs, the same event.
+    // The menus: each entry's key as before, and what picking it runs, the same command (step 2:
+    // the command alone, whatever keys it has).
     for (int it = 0; it < UM_ITEMS; it++) {
         UiEvent e = ui_menu_runs((UiMenuItem)it);
-        bool ok = strcmp(ui_menu_key((UiMenuItem)it), PIN_MENU[it].key) == 0 && e.ch == PIN_MENU[it].ch &&
-                  (PIN_MENU[it].uk || PIN_MENU[it].ch ? legacy_key(e) == PIN_MENU[it].uk || (PIN_MENU[it].uk == UK_NONE && e.key == UK_NONE)
-                                                      : !e.key && !e.cmd);
+        UiKey was = PIN_MENU[it].uk ? legacy_cmd(PIN_MENU[it].uk) : PIN_MENU[it].ch ? ui_event_of((UiChord){ PIN_MENU[it].ch, UI_MOD_TYPED }).cmd : UK_NONE;
+        bool ok = strcmp(ui_menu_key((UiMenuItem)it), PIN_MENU[it].key) == 0 && e.cmd == was && (was ? e.key == UK_CMD && !e.ch : !e.key);
         if (!ok) fprintf(stderr, "menu entry %s: %s %d,%u (was %s %d,%u)\n", UI_MENU_ITEM[it].word, ui_menu_key((UiMenuItem)it), legacy_key(e), e.ch, PIN_MENU[it].key, PIN_MENU[it].uk, PIN_MENU[it].ch);
         CHECK(ok);
         CHECK(!UI_MENU_ITEM[it].runs || e.cmd == UI_MENU_ITEM[it].cmd);
@@ -387,7 +387,7 @@ static void test_keys_table(void)
         for (const char *p = n; *p; p++) word &= (*p >= 'a' && *p <= 'z') || (*p >= '0' && *p <= '9') || *p == '-';
         CHECK(word && UI_CMDS[i].cmd != UK_NONE && UI_CMDS[i].cmd != UK_CMD);
         for (int j = 0; j < i; j++) CHECK(strcmp(UI_CMDS[j].name, n) != 0 && UI_CMDS[j].cmd != UI_CMDS[i].cmd);
-        CHECK(ui_cmd_key(UI_CMDS[i].cmd, 0)[0]);
+        CHECK(UI_CMDS[i].cmd >= UK_ITEM0 || ui_cmd_key(UI_CMDS[i].cmd, 0)[0]);   // (a menu entry's own: no key as ofx has them)
     }
     for (int i = 0; i < COUNT(UI_BINDS_DEFAULT); i++) {
         int named = 0;
@@ -464,4 +464,179 @@ static void test_keys_commands(void)
     menu_keys(&u, 2, 0x100 + 'a', 0x100 + 'b');
     CHECK(u.finding && u.focus == UI_FOCUS_FIND && u.find.len == 2);
     CHECK(menu_keys(&u, 1, UK_FIND).kind == UA_NONE && u.finding && u.focus == UI_FOCUS_FIND && u.find.len == 2);
+}
+
+// One event through ui_handle.
+static UiAction key_act(Ui *u, UiEvent e)
+{
+    UiInput in = ui_input_none();
+    in.ev[in.nev++] = e;
+    return ui_handle(u, (UiNames){ name_at, NULL, NULL }, &in);
+}
+
+// ofx.conf's key lines (F15 step 2), n of them from file line 1 on.
+static UiKeysRead keys_set(int n, ...)
+{
+    static char line[16][64];
+    static int no[16];
+    va_list ap;
+    va_start(ap, n);
+    for (int i = 0; i < n; i++) snprintf(line[i], sizeof line[i], "%s", va_arg(ap, const char *)), no[i] = i + 1;
+    va_end(ap);
+    return ui_binds_set(line, no, n);
+}
+
+static UiEvent chord_ev(u32 code, u8 mods)
+{
+    return ui_event_of((UiChord){ code, mods });
+}
+
+static void test_keys_conf(void)
+{
+    // Every name the menus write reads back as its key (the step 1 review): every named key and
+    // US character key with every modifier set, but those a line can't bind (a character alone is
+    // typed; Shift and one is the character it types; Alt and a letter or digit stays).
+    char b[UI_KEY_NAME_MAX], why[160];
+    int named = 0;
+    for (u32 code = ' '; code <= UKC_F25; code++) {
+        if (code >= 0x7F && code < UKC_ESC) continue;
+        if (code >= 'A' && code <= 'Z') continue;   // (a key's character is lower case)
+        for (u8 m = 0; m < 16; m++) {
+            bool chr = code < 0x7F;
+            if (chr && (m == 0 || m == UI_MOD_SHIFT)) continue;
+            if (m == UI_MOD_ALT && ((code >= 'a' && code <= 'z') || (code >= '1' && code <= '9'))) continue;
+            UiChord c = { code, m }, back = { 0 };
+            ui_chord_name(c, b, (int)sizeof b);
+            bool ok = ui_chord_parse(str_from_c(b), &back, why, (int)sizeof why) && ui_chord_eq(back, c);
+            if (!ok) fprintf(stderr, "key name %s doesn't read back\n", b);
+            CHECK(ok);
+            named++;
+        }
+    }
+    CHECK(named == 1827);   // (69 characters x 14 modifier sets less Alt and 35, 56 named keys x 16)
+    for (u32 cp = '!'; cp < 0x7F; cp++) {   // and the typed characters, and Space
+        UiChord c = { cp, UI_MOD_TYPED }, back = { 0 };
+        ui_chord_name(c, b, (int)sizeof b);
+        CHECK(ui_chord_parse(str_from_c(b), &back, why, (int)sizeof why) && ui_chord_eq(back, c));
+    }
+    UiChord c = { 0 };
+    CHECK(ui_chord_parse(S("Space"), &c, why, (int)sizeof why) && ui_chord_eq(c, (UiChord){ ' ', UI_MOD_TYPED }));
+    CHECK(ui_chord_parse(S("\xC3\xA9"), &c, why, (int)sizeof why) && ui_chord_eq(c, (UiChord){ 0xE9, UI_MOD_TYPED }));
+    // Any case for the modifiers and the names, any order; a key's character either case.
+    CHECK(ui_chord_parse(S("shift+CTRL+n"), &c, why, (int)sizeof why) && ui_chord_eq(c, (UiChord){ 'n', UI_MOD_CTRL | UI_MOD_SHIFT }));
+    CHECK(ui_chord_parse(S("ctrl+pgdn"), &c, why, (int)sizeof why) && ui_chord_eq(c, (UiChord){ UKC_PGDN, UI_MOD_CTRL }));
+    CHECK(ui_chord_parse(S("Ctrl++"), &c, why, (int)sizeof why) && ui_chord_eq(c, (UiChord){ '+', UI_MOD_CTRL }));
+    CHECK(ui_chord_parse(S("kp+"), &c, why, (int)sizeof why) && ui_chord_eq(c, (UiChord){ UKC_KP_ADD, 0 }));
+    // What a line can't bind, and why.
+    CHECK(!ui_chord_parse(S("Shift+g"), &c, why, (int)sizeof why) && strstr(why, "write the character"));
+    CHECK(!ui_chord_parse(S("Alt+f"), &c, why, (int)sizeof why) && strstr(why, "stays"));
+    CHECK(!ui_chord_parse(S("Alt+3"), &c, why, (int)sizeof why) && strstr(why, "stays"));
+    CHECK(ui_chord_parse(S("Alt+Shift+f"), &c, why, (int)sizeof why));   // (only Alt alone with one)
+    CHECK(!ui_chord_parse(S("Ctrl+\xC3\xA9"), &c, why, (int)sizeof why) && strstr(why, "US keyboard"));
+    CHECK(!ui_chord_parse(S("Hyper+x"), &c, why, (int)sizeof why) && strcmp(why, "no key Hyper+x") == 0);
+    CHECK(!ui_chord_parse(S("Ctrl+"), &c, why, (int)sizeof why) && !ui_chord_parse(S(""), &c, why, (int)sizeof why));
+
+    // A key of your own: it acts, and the menu shows it (yours first); the command keeps its others.
+    UiKeysRead r = keys_set(1, "Ctrl+E terminal");
+    CHECK(!r.bad && !r.clashes && r.changed);
+    CHECK(chord_ev('e', UI_MOD_CTRL).cmd == UK_TERMINAL && chord_ev(UKC_ENTER, UI_MOD_ALT).cmd == UK_TERMINAL);
+    CHECK(strcmp(ui_menu_key(UM_TERMINAL), "Ctrl+E") == 0 && strcmp(ui_cmd_key(UK_TERMINAL, 1), "Alt+Enter") == 0);
+    CHECK(!keys_set(1, "Ctrl+E terminal").changed);   // (the same lines again: nothing changed)
+    CHECK(keys_set(1, "Ctrl+E reload").changed);      // (as many keys, one to another command)
+    // Yours wins a clash: Ctrl+T trashes, New Tab has no key left, Delete still trashes; said once.
+    r = keys_set(1, "ctrl+t trash");
+    CHECK(r.changed && !r.bad && r.clashes == 1 && strcmp(r.clash, "Ctrl+T is trash now, not new-tab") == 0);
+    CHECK(chord_ev('t', UI_MOD_CTRL).cmd == UK_DELETE && chord_ev('t', UI_MOD_CTRL).key == UK_CMD);
+    CHECK(strcmp(ui_menu_key(UM_NEW_TAB), "") == 0 && chord_ev(UKC_DELETE, 0).cmd == UK_DELETE);
+    Ui u = menu_ui(5);
+    u.list.sel = 1;
+    CHECK(key_act(&u, chord_ev('t', UI_MOD_CTRL)).kind == UA_TRASH);
+    // In a text field Ctrl+T still means nothing of its own, and Delete still deletes a character.
+    ui_edit_rename(&u, S("abc"), false);
+    UiAction a = key_act(&u, chord_ev(UKC_HOME, 0));
+    a = key_act(&u, chord_ev('t', UI_MOD_CTRL));
+    CHECK(a.kind == UA_NONE && u.focus == UI_FOCUS_EDIT && u.edit.len == 3);
+    key_act(&u, chord_ev(UKC_DELETE, 0));
+    CHECK(u.focus == UI_FOCUS_EDIT && u.edit.len == 2);
+    ui_edit_close(&u);
+    // Two keys of yours for one command: the menu shows the first line's; yours before its own.
+    keys_set(2, "F7 terminal", "F8 terminal");
+    CHECK(strcmp(ui_cmd_key(UK_TERMINAL, 0), "F7") == 0 && strcmp(ui_cmd_key(UK_TERMINAL, 1), "F8") == 0 && strcmp(ui_cmd_key(UK_TERMINAL, 2), "Alt+Enter") == 0);
+    // Two of your lines on one key: the later wins, both named.
+    r = keys_set(2, "Ctrl+E terminal", "Ctrl+E reload");
+    CHECK(r.clashes == 1 && strcmp(r.clash, "lines 1 and 2 both bind Ctrl+E: line 2 wins") == 0 && chord_ev('e', UI_MOD_CTRL).cmd == UK_RELOAD);
+    CHECK(strcmp(ui_menu_key(UM_TERMINAL), "Alt+Enter") == 0);
+    // none: every key of the command so far, yours too; a line after it gives one again.
+    r = keys_set(2, "F8 trash", "none trash");
+    CHECK(!r.bad && !r.clashes && chord_ev(UKC_DELETE, 0).cmd == UK_NONE && chord_ev(UKC_DELETE, 0).key == UK_DELETE);
+    CHECK(chord_ev(UKC_F1 + 7, 0).cmd == UK_NONE && strcmp(ui_menu_key(UM_TRASH), "") == 0);
+    keys_set(2, "none trash", "F8 trash");
+    CHECK(chord_ev(UKC_F1 + 7, 0).cmd == UK_DELETE && chord_ev(UKC_DELETE, 0).cmd == UK_NONE && strcmp(ui_menu_key(UM_TRASH), "F8") == 0);
+    // A typed character bound: the files run it, the find bar still types it.
+    keys_set(1, "x terminal");
+    CHECK(ui_event_of((UiChord){ 'x', UI_MOD_TYPED }).cmd == UK_TERMINAL);
+    u = menu_ui(5);
+    CHECK(key_act(&u, ev_ch('x')).kind == UA_TERMINAL);
+    key_act(&u, ev_key(UK_FIND)), key_act(&u, ev_ch('x'));
+    CHECK(u.finding && u.find.len == 1);
+    // A menu entry with no key of its own, bound: run as picked, when its menu has it enabled.
+    keys_set(1, "F5 new-file");
+    CHECK(chord_ev(UKC_F1 + 4, 0).cmd == UK_ITEM0 + UM_NEW_FILE && strcmp(ui_menu_key(UM_NEW_FILE), "F5") == 0);
+    u = menu_ui(5);
+    CHECK(key_act(&u, chord_ev(UKC_F1 + 4, 0)).kind == UA_NEWFILE);
+    u.can_write = false;   // (greyed in a folder that takes no new files: nothing)
+    CHECK(key_act(&u, chord_ev(UKC_F1 + 4, 0)).kind == UA_NONE);
+    u.can_write = true, u.menu = UI_CTX_FOLDER;   // (a folder's right-click menu was the last open: the bar menu's rules apply)
+    CHECK(key_act(&u, chord_ev(UKC_F1 + 4, 0)).kind == UA_NEWFILE);
+    keys_set(1, "F5 side-tree");
+    u = menu_ui(5);
+    CHECK(key_act(&u, chord_ev(UKC_F1 + 4, 0)).kind == UA_SIDE_MODE && u.side_mode == SIDE_TREE);
+    // A line ofx can't read is skipped, the first named, the rest apply.
+    r = keys_set(4, "Ctrl+E", "Ctrl+E nosuch", "Shift+q reload", "Ctrl+E reload");
+    CHECK(r.bad == 1 && strcmp(r.why, "key wants a key, then a command") == 0 && chord_ev('e', UI_MOD_CTRL).cmd == UK_RELOAD);
+    r = keys_set(2, "Ctrl+E nosuch", "Ctrl+E reload terminal");
+    CHECK(r.bad == 1 && strcmp(r.why, "no command nosuch") == 0);
+    r = keys_set(1, "Ctrl+E reload terminal");
+    CHECK(r.bad == 1 && strcmp(r.why, "key wants a key, then a command") == 0);
+    r = keys_set(1, "Shift+q reload");
+    CHECK(r.bad == 1 && strstr(r.why, "write the character"));
+
+    // The written file's key lines: every key as ofx has it, and the commands with none; all of
+    // them uncommented read back as exactly the keys as ofx has them.
+    static char text[8192];
+    size_t n = ui_keys_conf_text(text, sizeof text);
+    CHECK(n > 0 && n < sizeof text - 1);
+    static char line[CONF_KEYS_MAX][64];
+    static int no[CONF_KEYS_MAX];
+    int k = 0;
+    for (const char *p = text; *p && k < CONF_KEYS_MAX;) {
+        const char *e = strchr(p, '\n');
+        if (strncmp(p, "#key = ", 7) == 0) snprintf(line[k], sizeof line[k], "%.*s", (int)(e - p - 7), p + 7), no[k] = k + 1, k++;
+        p = e + 1;
+    }
+    CHECK(k == COUNT(UI_BINDS_DEFAULT));
+    r = ui_binds_set(line, no, k);
+    CHECK(!r.bad && !r.clashes);
+    CHECK(ui_binds.n == COUNT(UI_BINDS_DEFAULT));
+    for (int i = 0; i < ui_binds.n && i < COUNT(UI_BINDS_DEFAULT); i++) CHECK(ui_chord_eq(ui_binds.b[i].c, UI_BINDS_DEFAULT[i].c) && ui_binds.b[i].cmd == UI_BINDS_DEFAULT[i].cmd);
+    for (int i = 0; i < COUNT(UI_CMDS); i++)
+        if (UI_CMDS[i].cmd >= UK_ITEM0) CHECK(strstr(text, UI_CMDS[i].name) != NULL);
+    char small[16];
+    CHECK(ui_keys_conf_text(small, sizeof small) == sizeof small - 1);
+    // ofx.conf keeps each key line and its line in the file for ui/; past 256, a line it skips.
+    static Conf cf;
+    conf_parse(S("previews = on\n\nkey = Ctrl+E terminal\n# x\nkey = none trash\n"), &cf);
+    CHECK(!cf.bad && cf.nkey == 2 && strcmp(cf.key[0], "Ctrl+E terminal") == 0 && cf.key_no[0] == 3 && cf.key_no[1] == 5);
+    static char many[300 * 24];
+    size_t m = 0;
+    for (int i = 0; i < 300; i++) m += (size_t)snprintf(many + m, sizeof many - m, "key = F%d about\n", i % 25 + 1);
+    conf_parse(str_from_c(many), &cf);
+    CHECK(cf.nkey == CONF_KEYS_MAX && cf.bad == CONF_KEYS_MAX + 1 && strcmp(cf.why, "key wants a key, then a command") == 0);
+    // none for every command: no key does anything (not the defaults back).
+    for (k = 0; k < COUNT(UI_CMDS); k++) snprintf(line[k], sizeof line[k], "none %s", UI_CMDS[k].name), no[k] = k + 1;
+    r = ui_binds_set(line, no, k);
+    CHECK(!r.bad && ui_binds.n == 0 && chord_ev('t', UI_MOD_CTRL).cmd == UK_NONE && chord_ev(UKC_UP, 0).cmd == UK_NONE && strcmp(ui_menu_key(UM_NEW_TAB), "") == 0);
+    // No lines: the keys as ofx has them again, none yours.
+    r = ui_binds_set(line, no, 0);
+    CHECK(!r.bad && r.changed && strcmp(ui_menu_key(UM_NEW_TAB), "Ctrl+T") == 0 && !ui_binds.user[0]);
 }

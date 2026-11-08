@@ -1,0 +1,7 @@
+# F15 step 2, after f15.script: ofx.conf binds Ctrl+T to reload (New Tab's key). At the start that is
+# simply the keys: the status line says nothing (it says what a save took, once).
+settle
+expect keysbad=0 keyclashes=1 status=- tabs=1
+key ctrl-t
+expect tabs=1
+quit

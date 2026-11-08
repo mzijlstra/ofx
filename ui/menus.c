@@ -275,6 +275,22 @@ static UiAction ui_menu_pick(Ui *u, UiMenuItem it)
     }
 }
 
+// A bar menu's entry run by a key bound to it (F15 step 2): as picked from its menu, when the menu
+// would show it enabled. True when it asks gui/ for something (*out).
+static bool ui_item_cmd(Ui *u, UiMenuItem it, UiAction *out)
+{
+    for (int m = 0; m < UI_MENUS; m++)
+        for (int i = 0; i < UI_MENU[m].n; i++) {
+            if (UI_MENU[m].items[i] != it) continue;
+            int was = u->menu;
+            u->menu = m;   // (what is shown and enabled is the bar menu's)
+            if (!ui_menu_enabled(u, it)) return u->menu = was, false;
+            *out = ui_menu_pick(u, it);
+            return out->kind != UA_NONE;
+        }
+    return false;
+}
+
 // The menu whose Alt letter is ch, -1 for none.
 static int ui_menu_of(u32 ch)
 {

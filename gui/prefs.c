@@ -12,23 +12,37 @@ static void conf_shown(char *out, size_t cap)
     ui_tilde(out, cap, p, getenv("HOME"));
 }
 
+// The key lines the written file has (ui/keys.c's, every key as ofx has it).
+static const char *conf_keys(void)
+{
+    static char text[8192];
+    if (!text[0]) ui_keys_conf_text(text, sizeof text);
+    return text;
+}
+
+// What ofx.conf's key lines did when last read (a script's keysbad and keyclashes).
+static UiKeysRead conf_keys_read;
+
 // At the start: ofx.conf written when it isn't there, its defaults and their help in it; when it
 // can't be, the status line says so, and the built-in defaults apply.
 static void conf_start(void)
 {
     char path[PATH_MAX];
     Err err;
-    if (conf_path(path, sizeof path) && !conf_create(path, &err)) set_status(true, "Can't make ofx.conf, so the built-in options apply: %s", err.msg);
+    if (conf_path(path, sizeof path) && !conf_create(path, conf_keys(), &err)) set_status(true, "Can't make ofx.conf, so the built-in options apply: %s", err.msg);
 }
 
-// ofx.conf read again and applied; a line it couldn't read said in the status line. With no file to
-// read (it couldn't be made, or went since), the built-in defaults. Open at Line reads its editor
-// lines from app.conf (editor_now).
+// ofx.conf read again and applied; the first line it couldn't read said in the status line, else,
+// after a save that changed the keys, a key taken from another command (F15). With no file to read
+// (it couldn't be made, or went since), the built-in defaults. Open at Line reads its editor lines
+// from app.conf (editor_now).
 static void conf_apply(void)
 {
-    static Conf c;   // (18 KiB: the editor lines)
+    static Conf c;   // (34 KiB: the editor and key lines)
     conf_load(&scratch, &c);
+    UiKeysRead keys = conf_keys_read = ui_binds_set(c.key, c.key_no, c.nkey);
     static bool once;   // (the first read: nothing asked under the old values yet)
+    bool was_once = once;
     bool previews = once && (c.previews != app.conf.previews || c.preview_max != app.conf.preview_max || c.thumbnailers != app.conf.thumbnailers);
     bool off = once && app.conf.restore_tabs && !c.restore_tabs;   // (F11 step 3b: this window's line out)
     bool views = once && (c.icons != app.conf.icons || c.zoom != app.conf.zoom || c.sort != app.conf.sort || c.sort_rev != app.conf.sort_rev);
@@ -42,11 +56,12 @@ static void conf_apply(void)
     thumbs.off = !c.previews, thumbs.src_max = c.preview_max, thumbs.exec_on = c.thumbnailers;
     app.ui.shift_add = c.shift_add;
     if (previews) thumbs_reset();   // (asked again, under the new limit, or not at all)
-    if (c.bad) {
-        char shown[PATH_MAX + 1];
-        conf_shown(shown, sizeof shown);
-        set_status(true, "%s line %d: %s", shown, c.bad, c.why);
-    }
+    char shown[PATH_MAX + 1];
+    conf_shown(shown, sizeof shown);
+    if (c.bad && (!keys.bad || c.bad < keys.bad)) set_status(true, "%s line %d: %s", shown, c.bad, c.why);
+    else if (keys.bad) set_status(true, "%s line %d: %s", shown, keys.bad, keys.why);
+    else if (was_once && keys.changed && keys.clashes)
+        set_status(false, "ofx.conf: %s%s", keys.clash, keys.clashes > 1 ? arena_sprintf(&scratch, " (and %d more)", keys.clashes - 1) : "");
 }
 
 // Edit → Preferences…: ofx.conf, written first when there is none, opened in the editor Open at
@@ -60,7 +75,7 @@ static void prefs_open(void)
         set_status(true, "No HOME or XDG_CONFIG_HOME: no place for ofx.conf");
         return;
     }
-    if (!conf_create(path, &err)) {
+    if (!conf_create(path, conf_keys(), &err)) {
         set_status(true, "Can't make %s: %s", shown, err.msg);
         return;
     }
