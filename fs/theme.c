@@ -325,7 +325,9 @@ static void theme_fit(Theme *t)
 }
 
 // The files area's colours: only rescued where one is near illegible (white's dark_foreground is
-// its selection's grey), so the rest stay as the theme made them.
+// its selection's grey), so the rest stay as the theme made them. Dimmed text too: 1.5, not the
+// frame's 2:1, so it stands further from the names beside it (Michael, 2026-11-08: "visually more
+// interesting", the background's contrast the price he chose).
 static void theme_fit_list(Theme *t)
 {
     theme_fit_text(t, THEME_RESCUE_MIN, THEME_RESCUE_MIN);

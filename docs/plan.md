@@ -810,6 +810,10 @@ rescued under 1.5:1 (`theme_fit_list`, `app.theme_list`). Prototype on branch `t
 (e1c5c65, 21911ab, e06ba03), finished in 963198d (2026-11-08): `theme_fit_text(t, text_min,
 dim_min)` shared by both fits; OKLab round trip, gamut, hue and chroma tests; the rescue's
 properties over every theme; `listacc` on the state line for f54; theme-contrast.py measures only.
+Round 3 review (reviewer-2 SHIP): the files area's dimmed text sits at 1.5 to 2.0 in 15 themes;
+Michael keeps 1.5 over 2:1 (2026-11-08: more contrast with the names beside it, "visually more
+interesting"; the background's contrast the sacrifice he chose). Fixed: one theme copy per edit box,
+`markedname` on the state line (b37401e).
 
 ## F14 design (2026-11-05; Michael, 2026-11-05: the recommendations below)
 
