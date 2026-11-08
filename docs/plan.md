@@ -846,6 +846,30 @@ hand-written table (`UI_KEYS`). There is no type-to-find, so a letter can be a c
   rows stay as written.
 - README: a key-line example under "Options: ofx.conf", and the F1 row says what the panel shows.
 
+**Step 4, the code-health review (2026-11-08):** four read-only reviewers (gui/, ui/, fs/ with
+base/, workers with tests and tooling). No unguarded write, no dead code, no confirmed race.
+Michael's picks: all of it before the install ("A + B + C + D now"); h/j/k/l stay fixed in the
+menus, the path buttons and the job rows (small lists, as the panels'). In order, each with its
+commits, gates and reviewer-2 round:
+- **A, bugs and false signals:** a typed character bound to a command fired inside a text field
+  (`key = q close-all`, q in the rename line closed every window); a bound menu entry refused
+  silently where its key says why (new-file in the trash); Ctrl+C with copy rebound left the find
+  bar for nothing; tools/theme-shots.sh removed any absolute folder given; run.py counted a mutant
+  that didn't build as killed; the F15 tests ran in both test groups; an f15 wait-for that
+  couldn't fail; a duplicate mutant.
+- **B, keys written outside the table:** the top bar's tooltips, two footer hints, the empty
+  Bookmarks menu, About, the shortcuts panel's headings "(Ctrl+K)", "(Ctrl+J)" and the jobs row,
+  `ofx --help`'s 40 keys.
+- **C, F15's tidy-up:** the key-line limits fs/ and ui/ disagree on (and the wrong reason for line
+  257); eight menu entries with a command running their own action (menu_key a command); the
+  UiKey comments; ui_binds' parallel arrays; ui_item_cmd's u->menu; the panel's widths; named
+  sizes for the key text; PIN_MENU's initializers; stale comments.
+- **D, older drift:** the three write-beside-rename-over copies (fs/), script_state, the ten test
+  helpers, menu_size against layout_menu, the bookmark read-change-write twice, the GTK bookmark
+  line parsed twice, run.py and gui.py's shared code, gui.py's vendor copies, run.sh's fresh
+  trees, the dead state-line fields, the Makefile's gaps, clean_mounts' O(mounts^2), conf_apply,
+  the footer hints' if-chain, timer_stop, main().
+
 ## Theme colours across Omarchy's themes (2026-11-07; Michael: "great plan")
 
 Before publishing (Michael wants a public repo next), ofx is checked on every Omarchy theme. He saw
