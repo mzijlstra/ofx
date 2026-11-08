@@ -7,6 +7,13 @@ about 0% CPU: it draws only when something changes.
 ![ofx in Omarchy's Tokyo Night theme: the sidebar with places and a drive's usage bar, a git
 repository's files in the list with ls colours and git's A/M/R letters, two marked rows and the
 cursor](docs/screenshots/tokyo-night.png)
+<p align="center"><em>Tokyo Night, Omarchy's default theme</em></p>
+
+| Rose Pine (light) | Retro 82 |
+|:---:|:---:|
+| ![The same folder in ofx under Omarchy's light Rose Pine theme](docs/screenshots/rose-pine.png) | ![The same folder in ofx under Omarchy's Retro 82 theme](docs/screenshots/retro-82.png) |
+
+ofx follows the theme Omarchy has set, and changes with it while it runs.
 
 ## Build and run
 
