@@ -571,9 +571,11 @@ static UiAction ui_handle_frame(Ui *u, UiNames names, const UiInput *in)
         UiEvent e = k < 0 ? u->menu_key : in->ev[k];
         was = l->sel;
         if (k < 0) u->menu_key = (UiEvent){ UK_NONE, 0, UK_NONE };
-        // A character typed into a text field is its text, whatever command it is bound to (the
-        // F15 code-health review: `key = q close-all` and a q in the rename line closed every window).
-        if (e.key == UK_NONE && e.ch && ui_line_active(u, NULL)) e.cmd = UK_NONE;
+        // A character typed into a text field, a question, a panel or an open menu is theirs (its
+        // text, an answer, a menu's letter), whatever command it is bound to (the F15 code-health
+        // review: `key = q close-all` and a q in the rename line, or y at "Delete for good?", closed
+        // every window).
+        if (e.key == UK_NONE && e.ch && (ui_line_active(u, NULL) || ui_on_top(u) != UI_ON_NONE || u->menu_on)) e.cmd = UK_NONE;
         // Ctrl+Q (F7.1): every window closes, this one as Ctrl+Q closed it before (below).
         if (e.cmd == UK_QUIT_ALL && !u->quit_asking) {
             u->menu_on = false;

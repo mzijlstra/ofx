@@ -650,6 +650,21 @@ static void test_keys_in_fields(void)
     CHECK(key_act(&f, ev_key(UK_COPY)).kind == UA_NONE && f.focus == UI_FOCUS_FIND);
     keys_set(0);
     CHECK(key_act(&f, ev_key(UK_COPY)).kind == UA_COPY && f.focus != UI_FOCUS_FIND);
+    // A question's answers and an open menu's letters, bound to close-all, are the answer, the
+    // menu's (the group A review: y at "Delete for good?" closed every window).
+    keys_set(1, "y close-all");
+    Ui d = menu_ui(3);
+    d.list.sel = 1, d.confirming = true, d.confirm_n = 1;
+    UiAction ans = key_act(&d, ev_ch('y'));
+    CHECK(ans.kind != UA_CLOSE_ALL && !d.confirming);
+    keys_set(1, "s close-all");
+    Ui q = menu_ui(3);
+    q.asking = true;   // (a clash: s skips)
+    CHECK(key_act(&q, ev_ch('s')).kind == UA_ANSWER);
+    keys_set(1, "x close-all");
+    Ui m = menu_ui(3);
+    key_act(&m, ev_key(UK_F10));
+    CHECK(m.menu_on && key_act(&m, ev_ch('x')).kind != UA_CLOSE_ALL);
     keys_set(1, "q close-all");   // (and in the files, the command)
     Ui u = menu_ui(3);
     CHECK(key_act(&u, ev_ch('q')).kind == UA_CLOSE_ALL);

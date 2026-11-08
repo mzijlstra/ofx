@@ -2666,7 +2666,9 @@ MUTANTS += [
     (KY, "    return UI_KEYS[r].cmd ? ui_cmd_name(UI_KEYS[r].cmd) : \"\";", "    return \"\";"),
     ('ui/panels.c', " ||\n                                                      ui_match(&u->keys_m, str_from_c(ui_keys_name(r)))))", "))"),
     # F15's code-health review, A: typed characters in fields, greyed menu commands, Ctrl+C unbound.
-    ('ui/handle.c', "        if (e.key == UK_NONE && e.ch && ui_line_active(u, NULL)) e.cmd = UK_NONE;", ""),
+    ('ui/handle.c', "        if (e.key == UK_NONE && e.ch && (ui_line_active(u, NULL) || ui_on_top(u) != UI_ON_NONE || u->menu_on)) e.cmd = UK_NONE;", ""),
+    ('ui/handle.c', "(ui_line_active(u, NULL) || ui_on_top(u) != UI_ON_NONE || u->menu_on)) e.cmd = UK_NONE;", "(ui_line_active(u, NULL) || u->menu_on)) e.cmd = UK_NONE;"),
+    ('ui/handle.c', "(ui_line_active(u, NULL) || ui_on_top(u) != UI_ON_NONE || u->menu_on)) e.cmd = UK_NONE;", "(ui_line_active(u, NULL) || ui_on_top(u) != UI_ON_NONE)) e.cmd = UK_NONE;"),
     ('ui/menus.c', "                *out = kind && !ui_allows(u, kind) ? ui_view_act(u, (UiAction){ kind, 0, false }) : UI_NONE;", "                *out = UI_NONE;"),
     ('ui/edit.c', "    return (e.key == UK_COPY || e.key == UK_CUT) && e.cmd && lo == hi;", "    return (e.key == UK_COPY || e.key == UK_CUT) && lo == hi;"),
 ]
