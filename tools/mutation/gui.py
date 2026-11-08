@@ -1012,7 +1012,7 @@ MUTANTS = [
     # the enter, the test sway after, so only Michael's hand check on Hyprland shows it (2026-11-05).
     # ---- theme_fit (2026-11-07): the reload fits the frame's colours (f54's dark accent comes back lighter).
     # Not run: the drive bar's three colours drawn (pixels; the theme screenshots page shows them).
-    (G, '    theme_fit(&app.theme);             // (the frame's colours read on their backgrounds)\n', '', 'f54'),
+    (G, "    theme_fit(&app.theme);             // (the frame's colours read on their backgrounds)\n", '', 'f54'),
     # The files area's copy, rescued only (2026-11-08): f54's listacc.
     (G, '    theme_fit_list(&app.theme_list);   // (2026-11-07: the files area only rescued)\n', '', 'f54'),
 ]
