@@ -1,0 +1,10 @@
+# ofx's test Samba server (F16): a guest share (pub) and one for user tester, password secret
+# (priv). Built locally from alpine; tests/net/run.sh starts it on 127.0.0.1 only.
+FROM docker.io/library/alpine:latest
+RUN apk add --no-cache samba && \
+    adduser -D -H tester && printf 'secret\nsecret\n' | smbpasswd -a -s tester && \
+    mkdir -p /srv/pub/sub /srv/priv && echo hi > /srv/pub/hello.txt && echo p > /srv/priv/p.txt && \
+    for i in $(seq 1 50); do touch /srv/pub/sub/f$i; done && chmod -R a+rwX /srv
+COPY smb.conf /etc/samba/smb.conf
+EXPOSE 445
+CMD ["smbd", "--foreground", "--no-process-group", "--debug-stdout"]

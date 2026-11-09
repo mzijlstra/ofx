@@ -14,7 +14,7 @@ IMG_LIBS = -lturbojpeg -lwebp -lpng16 -lgif -lz
 
 PREFIX  ?= $(HOME)/.local
 
-.PHONY: all release test test-fm1 install clean FORCE
+.PHONY: all release test test-fm1 test-net install clean FORCE
 
 all: build/ofx build/ofx-clean build/ofx-fm1 build/ofx-probe   # (ofx-probe: the README's ofx.conf copy, which make test checks)
 
@@ -68,6 +68,12 @@ test: build/test build/ofx-clean
 # with fakes for uwsm-app and ofx: no call reaches Michael's bus, no window opens.
 test-fm1: build/ofx-fm1
 	tests/fm1/run.sh "$(CURDIR)/build/fm1-test" "$(CURDIR)/build/ofx-fm1"
+
+# Network shares (F16): a Samba server in a rootless podman container on 127.0.0.1, mounted through
+# a gvfs of the test's own (a private session bus listing only gvfsd, its runtime folder under
+# build/): the desktop's gvfs and keyring are never reached. Skipped without podman or gvfs-smb.
+test-net:
+	tests/net/run.sh "$(CURDIR)/build/net-test"
 
 # ---- raylib: native Wayland, built from here ---------------------------------------------------
 #

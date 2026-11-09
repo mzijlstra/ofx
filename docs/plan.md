@@ -756,8 +756,13 @@ folder, and `thumb_far_type` keeps previews off them and off every FUSE mount. G
   `<runtime>/gvfs/smb-share:port=4445,server=127.0.0.1,share=pub`. Listing 50 files takes 7 ms;
   writes work.
 - **A dead server** (`podman pause`): a read blocks in an interruptible wait (S); the next one fails
-  after about 90 s. SIGKILL ends a blocked reader (briefly D, then gone): FUSE waits are killable.
-  After `podman unpause`, reads work at once (9 ms).
+  after about 90 s. After `podman unpause`, reads work at once (9 ms).
+- **SIGKILL doesn't end a blocked reader at once** (corrected in step 1; the spike read a passing
+  D as brief). A FUSE request already with gvfsd waits for its answer: the killed reader stayed
+  in D (`request_wait_answer`) for about 20 s, until gvfsd gave up, and ends at once when the
+  server answers again. So a reader of a share must be a child process ofx doesn't wait for. A
+  thread of ofx's own that is blocked holds the whole process, and with it the window's Wayland
+  connection, until gvfsd answers, even after ofx exits.
 - So on today's main thread, a dead share freezes the window for about 90 s (Hyprland's "not
   responding" question). gvfs mounts are subfolders of one FUSE mount, not mountinfo lines of their
   own.
@@ -801,6 +806,37 @@ folder, and `thumb_far_type` keeps previews off them and off every FUSE mount. G
   inside that session. They are skipped, saying so, without podman. Dead servers come from
   `podman pause`. They never use the session's gvfs, keyring or `/run/user/$UID/gvfs`, and never
   touch containers that aren't theirs.
+
+**Step 1's audit (2026-11-09): what touches a folder's files, and on which thread.** A dead share
+blocks each of these for up to gvfs's 90 s. On a thread it also holds ofx's exit, as above.
+- **Main thread, on every folder entered:**
+  - `fs_list` (opendir, readdir, an fstatat per entry; gui/folder.c:163);
+  - `access(W_OK)` for Can Write (folder.c:260);
+  - `inotify_add_watch` on the folder (watch.c:114, from folder.c:172);
+  - `git_top`'s realpath and lstats up the tree (git.c, `git_ask_soon` and the branch button);
+  - the `stat` and `realpath` of the way there (actions.c:572, 628).
+- **Main thread, on an action:**
+  - rename, New Folder and New File (`op_*`, actions.c:399, 425);
+  - Properties (lstat, readlink, stat, statx; panels.c:226-237, 292);
+  - the right-click menu's `access` (main.c:818, input.c:344);
+  - a drag's target check (`drop_takes`: stat, access, realpath, drag.c:62), on each new target;
+  - the search view's `lstat` of each result (search.c:258);
+  - a start on a path (`select_path`, main.c:606).
+- **Worker threads:**
+  - the item counts (gui/counts.c);
+  - the free space (`statvfs`, gui/space.c);
+  - jobs (copy, move, trash, delete);
+  - the search walk;
+  - the open-with type lookup (bounded at 1 s through gio, a child).
+- **Already off far mounts or in children:** previews (`thumb_far_type`), git (bubblewrap, timed;
+  but `git_top` above runs first), ofx-clean.
+- **Plan:**
+  - step 2 moves the listing, the counts, Can Write and the watch's first `stat` into `ofx-list`;
+  - step 3 takes the rest: an action on a far folder runs its syscalls in a child, or as a job;
+    `git_top` and the free space are skipped on far folders; the drag's target check is answered
+    "not known" there until a child says.
+  - Each item's measured freeze comes with step 2's GUI group `net` (ofx in weston inside the
+    private gvfs session).
 
 **Steps, each with its commits, gates and reviewer-2 round:**
 1. **The harness and the audit:** `tests/net/` (Containerfile, smb.conf, the private session) and

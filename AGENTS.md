@@ -117,6 +117,16 @@ shared state. Every test runs against fakes and scratch folders. Keep it that wa
   with a `sleep 20` that ignores SIGUSR1, in the run's own registry; f11l and run.sh end it. f11n
   kills its own window (a crash), so run-script reports that run unfinished; run.sh checks the
   state file instead.
+- **Network shares** (F16): `make test-net` (tests/net/run.sh) builds a Samba image
+  (`localhost/ofx-test-smb:<hash of its files>`) with your podman and runs one container,
+  `ofx-test-<pid>`, published on 127.0.0.1 only and removed by the script's trap. It pauses and
+  unpauses that container to make a dead server. It mounts the shares through a gvfs of its own:
+  `dbus-run-session` with a bus config listing only gvfsd, `XDG_RUNTIME_DIR` and `HOME` under
+  `build/net-test`, so gvfsd-fuse mounts there. Never run `gio mount` in a test on the session's
+  bus: the share would appear in your file managers and `/run/user/$UID/gvfs`, and a password
+  could reach your keyring (the default session config starts a gnome-keyring). podman inside it
+  runs with the real `HOME` and `XDG_RUNTIME_DIR`; with the scratch ones it starts a stray pause
+  process (`catatonit`) of its own. Never touch a container that isn't the run's.
 - **A window that stops answering** makes the compositor ask whether to terminate it, on your
   screen. The script's `sh` runs under `timeout 5` for that reason; keep everything a script waits
   for short.
