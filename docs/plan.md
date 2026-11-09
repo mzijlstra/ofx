@@ -889,7 +889,9 @@ blocks each of these for up to gvfs's 90 s. On a thread it also holds ofx's exit
      - **Test harness:** `script_under` (the scripts' `sh` guard) checks a far folder by its path,
        not `realpath` (that blocked the window on a paused share).
      - **Known gaps, for step 3:**
-       - starting ofx on a far path (`realpath` at start);
+       - any path handed to ofx that reaches a far drive through a local link (a start folder, a
+         typed location, a restored tab, Back: `~/nas/sub` is judged by its text, and `realpath`
+         at start would read it; step 2b confirm);
        - a typed far path that is a file (the lister says "Not a directory");
        - a far folder that is gone, reached by reload or Back: shown with its error, where a local
          one is skipped or left for the folder above (`go_to_in`'s true now means "going there";
