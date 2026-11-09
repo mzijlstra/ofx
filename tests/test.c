@@ -803,8 +803,9 @@ static UiEvent ev_key(UiKey k)
 {
     for (int i = 0; i < COUNT(UI_FIXED); i++)
         if (UI_FIXED[i].key == k) return ui_event_of(UI_FIXED[i].c);
-    for (int i = 0; i < COUNT(UI_BINDS_DEFAULT); i++)
-        if (UI_BINDS_DEFAULT[i].cmd == k && !(UI_BINDS_DEFAULT[i].c.mods & UI_MOD_TYPED)) return ui_event_of(UI_BINDS_DEFAULT[i].c);
+    for (int typed = 0; typed < 2; typed++)   // (a chord first; else a typed character: r, S)
+        for (int i = 0; i < COUNT(UI_BINDS_DEFAULT); i++)
+            if (UI_BINDS_DEFAULT[i].cmd == k && !(UI_BINDS_DEFAULT[i].c.mods & UI_MOD_TYPED) == !typed) return ui_event_of(UI_BINDS_DEFAULT[i].c);
     return (UiEvent){ k, 0, UK_NONE };
 }
 

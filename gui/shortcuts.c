@@ -1,8 +1,12 @@
 // The Keyboard Shortcuts panel (F7.5, docs/plan.md "F7.5 decided"): ui/'s table (UI_KEYS) as its
-// filter leaves it, a heading a section, a row an action with its key and a second one. Included by
-// main.c after bookmarks.c.
+// filter leaves it, a heading a section, a row an action, its command's name in ofx.conf and its
+// keys as they are bound, yours marked (F15). Included by panels.c.
 
-enum { KEYS_ROW_H = 26, KEYS_ROWS_MAX = 18, KEYS_W = 860, KEYS_NAME_W = 140, KEYS_KEY_W = 150 };
+enum { KEYS_ROW_H = 26, KEYS_ROWS_MAX = 18, KEYS_W = 884, KEYS_NAME_W = 140, KEYS_KEY_W = 150, KEYS_KEY2_W = 150 };
+// A row's action gets what its columns leave: the panel's padding (24 a side), the row's (16 and 8),
+// four gaps of 8, the name and the two keys: 340 (the code-health review: the row had 24 px less
+// than the action was given).
+enum { KEYS_ACTION_W = KEYS_W - 2 * 24 - (16 + 8) - 4 * 8 - KEYS_NAME_W - KEYS_KEY_W - KEYS_KEY2_W };
 
 static int keys_rows(int h)
 {
@@ -63,7 +67,7 @@ static void layout_keys_panel(void)
             for (int r = 0; r < l->rows; r++) {
                 isize v = l->top + r;
                 if (v >= l->n) break;
-                int line = u->keys_line[v];
+                int line = u->keys_row[v];
                 if (line < 0) {   // a section's heading
                     CLAY(CLAY_IDI("keys-row", r), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(KEYS_ROW_H) }, .padding = { 4, 8, 0, 0 },
                                                                 .childAlignment = { .y = CLAY_ALIGN_Y_BOTTOM } },
@@ -74,7 +78,7 @@ static void layout_keys_panel(void)
                 }
                 CLAY(CLAY_IDI("keys-row", r), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(KEYS_ROW_H) }, .padding = { 16, 8, 0, 0 }, .childGap = 8,
                                                             .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } } }) {
-                    text(fit(str_from_c(UI_KEYS[line].action), KEYS_W - 380 - KEYS_NAME_W, false), cc(t->fg));
+                    text(fit(str_from_c(UI_KEYS[line].action), KEYS_ACTION_W, false), cc(t->fg));
                     CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) } } }) {}
                     // (the command's name in ofx.conf, dimmed: what a key line names, F15 step 3)
                     CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_FIXED(KEYS_NAME_W), CLAY_SIZING_FIT(0) } } }) {
@@ -83,8 +87,8 @@ static void layout_keys_panel(void)
                     CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_FIXED(KEYS_KEY_W), CLAY_SIZING_FIT(0) }, .childAlignment = { .x = CLAY_ALIGN_X_RIGHT } } }) {
                         keycap(ui_keys_key(line, 0), ui_keys_mine(line, 0), KEYS_KEY_W);
                     }
-                    CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_FIXED(150), CLAY_SIZING_FIT(0) }, .childAlignment = { .x = CLAY_ALIGN_X_LEFT } } }) {
-                        keycap(ui_keys_key(line, 1), ui_keys_mine(line, 1), 150);
+                    CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_FIXED(KEYS_KEY2_W), CLAY_SIZING_FIT(0) }, .childAlignment = { .x = CLAY_ALIGN_X_LEFT } } }) {
+                        keycap(ui_keys_key(line, 1), ui_keys_mine(line, 1), KEYS_KEY2_W);
                     }
                 }
             }

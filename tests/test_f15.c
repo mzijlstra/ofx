@@ -8,8 +8,10 @@
 // What on_key sent before F15 (gui/input.c's ui_key_of, and Ctrl+Q, Alt+digit and Alt+letter):
 // for every GLFW key, modifier set (GLFW's bits: 1 Shift, 2 Ctrl, 4 Alt, 8 Super) and action (1
 // press, 2 repeat) that sent anything, the event (its key, its character). Recorded from the code at
-// 3ef3827; the rest sent nothing.
+// 3ef3827, and the one key F15 adds (Ctrl+Shift+W, Close Other Tabs: Michael, 2026-11-08); the rest
+// sent nothing.
 static const struct { int key, mods, action; UiKey uk; u32 ch; } PIN_KEYS[] = {
+    { 87, 3, 1, UK_ITEM0 + UM_TAB_OTHERS, 0 }, { 87, 3, 2, UK_ITEM0 + UM_TAB_OTHERS, 0 },
     { 45, 2, 1, UK_ZOOM_OUT, 0 }, { 45, 2, 2, UK_ZOOM_OUT, 0 }, { 48, 2, 1, UK_ZOOM_RESET, 0 }, { 48, 2, 2, UK_ZOOM_RESET, 0 },
     { 49, 2, 1, UK_VIEW_LIST, 0 }, { 49, 2, 2, UK_VIEW_LIST, 0 }, { 49, 4, 1, UK_TAB_JUMP, 1 }, { 50, 2, 1, UK_VIEW_ICONS, 0 },
     { 50, 2, 2, UK_VIEW_ICONS, 0 }, { 50, 4, 1, UK_TAB_JUMP, 2 }, { 51, 4, 1, UK_TAB_JUMP, 3 }, { 52, 4, 1, UK_TAB_JUMP, 4 },
@@ -76,114 +78,115 @@ static const struct { int key, mods, action; UiKey uk; u32 ch; } PIN_KEYS_DROPPE
     { 81, 3, 1, UK_QUIT_ALL, 0 }, { 81, 6, 1, UK_QUIT_ALL, 0 }, { 81, 7, 1, UK_QUIT_ALL, 0 }, { 81, 10, 1, UK_QUIT_ALL, 0 },
     { 81, 11, 1, UK_QUIT_ALL, 0 }, { 81, 14, 1, UK_QUIT_ALL, 0 }, { 81, 15, 1, UK_QUIT_ALL, 0 },
 };
-// Each menu entry's key as it showed, and the event picking it ran (UK_NONE, 0: its own action).
+// Each menu entry's key as it showed, and the event picking it ran (UK_NONE, 0: its own action); a
+// new entry with no row fails cleanly (key NULL).
 static const struct { const char *key; UiKey uk; u32 ch; } PIN_MENU[UM_ITEMS] = {
-    { "", UK_NONE, 0 },
-    { "Ctrl+T", UK_NONE, 0 },
-    { "Ctrl+Shift+T", UK_TAB_REOPEN, 0 },
-    { "Ctrl+N", UK_NONE, 0 },
-    { "Ctrl+Shift+N", UK_NONE, 0 },
-    { "", UK_NONE, 0 },
-    { "Enter", UK_NONE, 0 },
-    { "Shift+Enter", UK_NONE, 0 },
-    { "Ctrl+I", UK_NONE, 0 },
-    { "Ctrl+Q", UK_NONE, 0 },
-    { "Ctrl+W", UK_NONE, 0 },
-    { "Ctrl+Z", UK_UNDO, 0 },
-    { "Ctrl+X", UK_CUT, 0 },
-    { "Ctrl+C", UK_COPY, 0 },
-    { "Ctrl+Shift+C", UK_COPY_PATH, 0 },
-    { "Ctrl+V", UK_PASTE, 0 },
-    { "Ctrl+A", UK_ALL, 0 },
-    { "Ctrl+Shift+A", UK_SELECT_MATCH, 0 },
-    { "Ctrl+Shift+I", UK_INVERT, 0 },
-    { "", UK_NONE, 0 },
-    { "Ctrl+M", UK_MAKE_LINK, 0 },
-    { "F2", UK_F2, 0 },
-    { "Delete", UK_DELETE, 0 },
-    { "Shift+Delete", UK_SHIFT_DELETE, 0 },
-    { "r", UK_NONE, 114 },
-    { "Ctrl+R", UK_RELOAD, 0 },
-    { "", UK_NONE, 0 },
-    { "", UK_NONE, 0 },
-    { "", UK_NONE, 0 },
-    { "Ctrl+H", UK_HIDDEN, 0 },
-    { "Ctrl+P", UK_PERMS_COLS, 0 },
-    { "Ctrl+G", UK_GROUP_COL, 0 },
-    { "", UK_NONE, 0 },
-    { "", UK_NONE, 0 },
-    { "", UK_NONE, 0 },
-    { "", UK_NONE, 0 },
-    { "", UK_NONE, 0 },
-    { "S", UK_NONE, 83 },
-    { "Ctrl+=", UK_ZOOM_IN, 0 },
-    { "Ctrl+-", UK_ZOOM_OUT, 0 },
-    { "Ctrl+0", UK_ZOOM_RESET, 0 },
-    { "Ctrl+1", UK_VIEW_LIST, 0 },
-    { "Ctrl+2", UK_VIEW_ICONS, 0 },
-    { "Alt+Up", UK_PARENT, 0 },
-    { "Alt+Left", UK_BACK, 0 },
-    { "Alt+Right", UK_FORWARD, 0 },
-    { "Alt+Home", UK_HOMEDIR, 0 },
-    { "Alt+End", UK_TRASH_VIEW, 0 },
-    { "Ctrl+F", UK_FIND, 0 },
-    { "Ctrl+Shift+F", UK_SEARCH, 0 },
-    { "Ctrl+L", UK_LOCATION, 0 },
-    { "Alt+Enter", UK_TERMINAL, 0 },
-    { "Ctrl+D", UK_ADD_BOOKMARK, 0 },
-    { "Ctrl+B", UK_EDIT_BOOKMARKS, 0 },
-    { "", UK_NONE, 0 },
-    { "", UK_NONE, 0 },
-    { "", UK_NONE, 0 },
-    { "", UK_NONE, 0 },
-    { "", UK_NONE, 0 },
-    { "", UK_NONE, 0 },
-    { "", UK_NONE, 0 },
-    { "", UK_NONE, 0 },
-    { "", UK_NONE, 0 },
-    { "F1", UK_SHORTCUTS, 0 },
-    { "", UK_NONE, 0 },
-    { "", UK_NONE, 0 },
-    { "", UK_NONE, 0 },
-    { "Middle click", UK_NONE, 0 },
-    { "", UK_NONE, 0 },
-    { "", UK_NONE, 0 },
-    { "", UK_NONE, 0 },
-    { "", UK_NONE, 0 },
-    { "", UK_NONE, 0 },
-    { "", UK_NONE, 0 },
-    { "", UK_NONE, 0 },
-    { "Ctrl+Enter", UK_CONTAINING, 0 },
-    { "Ctrl+Shift+Enter", UK_OPEN_LINE, 0 },
-    { "", UK_NONE, 0 },
-    { "", UK_NONE, 0 },
-    { "", UK_NONE, 0 },
-    { "", UK_NONE, 0 },
-    { "", UK_NONE, 0 },
-    { "", UK_NONE, 0 },
-    { "", UK_NONE, 0 },
-    { "", UK_NONE, 0 },
-    { "", UK_NONE, 0 },
-    { "", UK_NONE, 0 },
-    { "Ctrl+B", UK_NONE, 0 },
-    { "", UK_NONE, 0 },
-    { "", UK_NONE, 0 },
-    { "", UK_NONE, 0 },
-    { "", UK_NONE, 0 },
-    { "", UK_NONE, 0 },
-    { "Ctrl+Shift+PgUp", UK_TAB_LEFT, 0 },
-    { "Ctrl+Shift+PgDn", UK_TAB_RIGHT, 0 },
-    { "", UK_NONE, 0 },
-    { "", UK_NONE, 0 },
-    { "", UK_NONE, 0 },
-    { "", UK_NONE, 0 },
-    { "", UK_NONE, 0 },
-    { "", UK_NONE, 0 },
-    { "", UK_NONE, 0 },
-    { "", UK_NONE, 0 },
-    { "", UK_NONE, 0 },
-    { "", UK_NONE, 0 },
-    { "", UK_NONE, 0 },
+    [UM_SEP] = { "", UK_NONE, 0 },
+    [UM_NEW_TAB] = { "Ctrl+T", UK_NONE, 0 },
+    [UM_TAB_REOPEN] = { "Ctrl+Shift+T", UK_TAB_REOPEN, 0 },
+    [UM_NEW_WINDOW] = { "Ctrl+N", UK_NONE, 0 },
+    [UM_NEW_FOLDER] = { "Ctrl+Shift+N", UK_NONE, 0 },
+    [UM_NEW_FILE] = { "", UK_NONE, 0 },
+    [UM_OPEN] = { "Enter", UK_NONE, 0 },
+    [UM_OPEN_WITH] = { "Shift+Enter", UK_NONE, 0 },
+    [UM_PROPERTIES] = { "Ctrl+I", UK_NONE, 0 },
+    [UM_CLOSE_ALL] = { "Ctrl+Q", UK_NONE, 0 },
+    [UM_CLOSE] = { "Ctrl+W", UK_NONE, 0 },
+    [UM_UNDO] = { "Ctrl+Z", UK_UNDO, 0 },
+    [UM_CUT] = { "Ctrl+X", UK_CUT, 0 },
+    [UM_COPY] = { "Ctrl+C", UK_COPY, 0 },
+    [UM_COPY_PATH] = { "Ctrl+Shift+C", UK_COPY_PATH, 0 },
+    [UM_PASTE] = { "Ctrl+V", UK_PASTE, 0 },
+    [UM_SELECT_ALL] = { "Ctrl+A", UK_ALL, 0 },
+    [UM_SELECT_MATCH] = { "Ctrl+Shift+A", UK_SELECT_MATCH, 0 },
+    [UM_INVERT] = { "Ctrl+Shift+I", UK_INVERT, 0 },
+    [UM_DUPLICATE] = { "", UK_NONE, 0 },
+    [UM_MAKE_LINK] = { "Ctrl+M", UK_MAKE_LINK, 0 },
+    [UM_RENAME] = { "F2", UK_F2, 0 },
+    [UM_TRASH] = { "Delete", UK_DELETE, 0 },
+    [UM_DELETE] = { "Shift+Delete", UK_SHIFT_DELETE, 0 },
+    [UM_RESTORE] = { "r", UK_NONE, 114 },
+    [UM_RELOAD] = { "Ctrl+R", UK_RELOAD, 0 },
+    [UM_SIDE_PLACES] = { "", UK_NONE, 0 },
+    [UM_SIDE_TREE] = { "", UK_NONE, 0 },
+    [UM_SIDE_NONE] = { "", UK_NONE, 0 },
+    [UM_HIDDEN] = { "Ctrl+H", UK_HIDDEN, 0 },
+    [UM_PERMS_COLS] = { "Ctrl+P", UK_PERMS_COLS, 0 },
+    [UM_GROUP_COL] = { "Ctrl+G", UK_GROUP_COL, 0 },
+    [UM_COLORS] = { "", UK_NONE, 0 },
+    [UM_SHOW_MENU] = { "", UK_NONE, 0 },
+    [UM_SORT_NAME] = { "", UK_NONE, 0 },
+    [UM_SORT_SIZE] = { "", UK_NONE, 0 },
+    [UM_SORT_MTIME] = { "", UK_NONE, 0 },
+    [UM_SORT_REVERSE] = { "S", UK_NONE, 83 },
+    [UM_ZOOM_IN] = { "Ctrl+=", UK_ZOOM_IN, 0 },
+    [UM_ZOOM_OUT] = { "Ctrl+-", UK_ZOOM_OUT, 0 },
+    [UM_ZOOM_RESET] = { "Ctrl+0", UK_ZOOM_RESET, 0 },
+    [UM_VIEW_LIST] = { "Ctrl+1", UK_VIEW_LIST, 0 },
+    [UM_VIEW_ICONS] = { "Ctrl+2", UK_VIEW_ICONS, 0 },
+    [UM_PARENT] = { "Alt+Up", UK_PARENT, 0 },
+    [UM_BACK] = { "Alt+Left", UK_BACK, 0 },
+    [UM_FORWARD] = { "Alt+Right", UK_FORWARD, 0 },
+    [UM_HOME] = { "Alt+Home", UK_HOMEDIR, 0 },
+    [UM_TRASH_VIEW] = { "Alt+End", UK_TRASH_VIEW, 0 },
+    [UM_FIND] = { "Ctrl+F", UK_FIND, 0 },
+    [UM_SEARCH] = { "Ctrl+Shift+F", UK_SEARCH, 0 },
+    [UM_LOCATION] = { "Ctrl+L", UK_LOCATION, 0 },
+    [UM_TERMINAL] = { "Alt+Enter", UK_TERMINAL, 0 },
+    [UM_ADD_BOOKMARK] = { "Ctrl+D", UK_ADD_BOOKMARK, 0 },
+    [UM_EDIT_BOOKMARKS] = { "Ctrl+B", UK_EDIT_BOOKMARKS, 0 },
+    [UM_BM_0] = { "", UK_NONE, 0 },
+    [UM_BM_1] = { "", UK_NONE, 0 },
+    [UM_BM_2] = { "", UK_NONE, 0 },
+    [UM_BM_3] = { "", UK_NONE, 0 },
+    [UM_BM_4] = { "", UK_NONE, 0 },
+    [UM_BM_5] = { "", UK_NONE, 0 },
+    [UM_BM_6] = { "", UK_NONE, 0 },
+    [UM_BM_7] = { "", UK_NONE, 0 },
+    [UM_BM_MORE] = { "", UK_NONE, 0 },
+    [UM_SHORTCUTS] = { "F1", UK_SHORTCUTS, 0 },
+    [UM_ABOUT] = { "", UK_NONE, 0 },
+    [UM_PREFERENCES] = { "", UK_NONE, 0 },
+    [UM_CLEAR_PREVIEWS] = { "", UK_NONE, 0 },
+    [UM_OPEN_TAB] = { "Middle click", UK_NONE, 0 },
+    [UM_EMPTY_TRASH] = { "", UK_NONE, 0 },
+    [UM_HERE_PROPS] = { "", UK_NONE, 0 },
+    [UM_OPEN_WINDOW] = { "", UK_NONE, 0 },
+    [UM_PASTE_INTO] = { "", UK_NONE, 0 },
+    [UM_TERMINAL_IN] = { "", UK_NONE, 0 },
+    [UM_FOLLOW] = { "", UK_NONE, 0 },
+    [UM_BOOKMARK_IT] = { "", UK_NONE, 0 },
+    [UM_CONTAINING] = { "Ctrl+Enter", UK_CONTAINING, 0 },
+    [UM_OPEN_LINE] = { "Ctrl+Shift+Enter", UK_OPEN_LINE, 0 },
+    [UM_SEARCH_IN] = { "", UK_NONE, 0 },
+    [UM_OPEN_IT] = { "", UK_NONE, 0 },
+    [UM_CUT_IT] = { "", UK_NONE, 0 },
+    [UM_COPY_IT] = { "", UK_NONE, 0 },
+    [UM_COPY_PATH_IT] = { "", UK_NONE, 0 },
+    [UM_COPY_PATH_HERE] = { "", UK_NONE, 0 },
+    [UM_BM_RENAME_IT] = { "", UK_NONE, 0 },
+    [UM_BM_UP_IT] = { "", UK_NONE, 0 },
+    [UM_BM_DOWN_IT] = { "", UK_NONE, 0 },
+    [UM_BM_REMOVE_IT] = { "", UK_NONE, 0 },
+    [UM_BM_EDIT_IT] = { "Ctrl+B", UK_NONE, 0 },
+    [UM_EJECT_IT] = { "", UK_NONE, 0 },
+    [UM_UNMOUNT_IT] = { "", UK_NONE, 0 },
+    [UM_MOUNT_IT] = { "", UK_NONE, 0 },
+    [UM_EMPTY_IT] = { "", UK_NONE, 0 },
+    [UM_PROPS_IT] = { "", UK_NONE, 0 },
+    [UM_TAB_LEFT] = { "Ctrl+Shift+PgUp", UK_TAB_LEFT, 0 },
+    [UM_TAB_RIGHT] = { "Ctrl+Shift+PgDn", UK_TAB_RIGHT, 0 },
+    [UM_TAB_OTHERS] = { "Ctrl+Shift+W", UK_NONE, 0 },   // (F15's one new key)
+    [UM_BR_NOTE] = { "", UK_NONE, 0 },
+    [UM_BR_0] = { "", UK_NONE, 0 },
+    [UM_BR_1] = { "", UK_NONE, 0 },
+    [UM_BR_2] = { "", UK_NONE, 0 },
+    [UM_BR_3] = { "", UK_NONE, 0 },
+    [UM_BR_4] = { "", UK_NONE, 0 },
+    [UM_BR_5] = { "", UK_NONE, 0 },
+    [UM_BR_6] = { "", UK_NONE, 0 },
+    [UM_BR_7] = { "", UK_NONE, 0 },
+    [UM_BR_ALL] = { "", UK_NONE, 0 },
 };
 
 // An event as one UiKey, as ofx read a key before F15: the key's own meaning, or its command.
@@ -219,11 +222,6 @@ static void test_keys_pinned(void)
                 for (int i = 0; i < COUNT(PIN_KEYS); i++)
                     if (PIN_KEYS[i].key == key && PIN_KEYS[i].mods == mods && PIN_KEYS[i].action == action) uk = PIN_KEYS[i].uk, ch = PIN_KEYS[i].ch;
                 // (and nothing at all where nothing was: a key that means nothing sends no event)
-                // (the one key F15 adds: Ctrl+Shift+W, Close Other Tabs, Michael 2026-11-08)
-                if (key == GLFW_KEY_W && mods == (GLFW_MOD_CONTROL | GLFW_MOD_SHIFT)) {
-                    CHECK(e.key == UK_CMD && e.cmd == UK_ITEM0 + UM_TAB_OTHERS);
-                    continue;
-                }
                 bool ok = legacy_key(e) == uk && e.ch == ch && e.cmd == legacy_cmd(uk) && (uk || (!e.key && !e.cmd)) && (e.key != UK_CMD || e.cmd);
                 sent += uk != UK_NONE;
                 if (!ok && bad++ < 10) fprintf(stderr, "key %d mods %d action %d: %d,%u,%d (was %d,%u)\n", key, mods, action, e.key, e.ch, e.cmd, uk, ch);
@@ -260,10 +258,10 @@ static void test_keys_pinned(void)
     // The menus: each entry's key as before, and what picking it runs, the same command (step 2:
     // the command alone, whatever keys it has).
     for (int it = 0; it < UM_ITEMS; it++) {
-        UiEvent e = ui_menu_runs((UiMenuItem)it);
+        UiEvent e = UI_MENU_ITEM[it].runs ? (UiEvent){ UK_CMD, 0, UI_MENU_ITEM[it].cmd } : (UiEvent){ UK_NONE, 0, UK_NONE };
         UiKey was = PIN_MENU[it].uk ? legacy_cmd(PIN_MENU[it].uk) : PIN_MENU[it].ch ? ui_event_of((UiChord){ PIN_MENU[it].ch, UI_MOD_TYPED }).cmd : UK_NONE;
-        const char *label = it == UM_TAB_OTHERS ? "Ctrl+Shift+W" : PIN_MENU[it].key;   // (F15's one new key)
-        bool ok = strcmp(ui_menu_key((UiMenuItem)it), label) == 0 && e.cmd == was && (was ? e.key == UK_CMD && !e.ch : !e.key);
+        if (!was && UI_MENU_ITEM[it].runs) was = UI_MENU_ITEM[it].cmd;   // (the six entries that ran their own action until the code-health review)
+        bool ok = PIN_MENU[it].key && strcmp(ui_menu_key((UiMenuItem)it), PIN_MENU[it].key) == 0 && e.cmd == was && (was ? e.key == UK_CMD && !e.ch : !e.key);
         if (!ok) fprintf(stderr, "menu entry %s: %s %d,%u (was %s %d,%u)\n", UI_MENU_ITEM[it].word, ui_menu_key((UiMenuItem)it), legacy_key(e), e.ch, PIN_MENU[it].key, PIN_MENU[it].uk, PIN_MENU[it].ch);
         CHECK(ok);
         CHECK(!UI_MENU_ITEM[it].runs || e.cmd == UI_MENU_ITEM[it].cmd);
@@ -342,9 +340,6 @@ static void test_keys_table(void)
     // A command's keys in order, "" past the last.
     CHECK(strcmp(ui_cmd_key(UK_PARENT, 0), "Alt+Up") == 0 && strcmp(ui_cmd_key(UK_PARENT, 1), "Backspace") == 0 && strcmp(ui_cmd_key(UK_PARENT, 2), "") == 0);
     CHECK(strcmp(ui_cmd_key(UK_NONE, 0), "") == 0);
-    // A command with no key of its own picked from a menu: the command alone.
-    UiEvent alone = ui_cmd_event(UK_TAB_JUMP);
-    CHECK(alone.key == UK_CMD && alone.cmd == UK_TAB_JUMP && alone.ch == 0);
 }
 
 // The commands that were letters in the files, as their own: S reverses and reverses back; Ctrl+F
@@ -372,7 +367,7 @@ static UiAction key_act(Ui *u, UiEvent e)
 // ofx.conf's key lines (F15 step 2), n of them from file line 1 on.
 static UiKeysRead keys_set(int n, ...)
 {
-    static char line[16][64];
+    static char line[16][CONF_KEY_LEN];
     static int no[16];
     va_list ap;
     va_start(ap, n);
@@ -459,6 +454,9 @@ static void test_keys_conf(void)
     // Two keys of yours for one command: the menu shows the first line's; yours before its own.
     keys_set(2, "F7 terminal", "F8 terminal");
     CHECK(strcmp(ui_cmd_key(UK_TERMINAL, 0), "F7") == 0 && strcmp(ui_cmd_key(UK_TERMINAL, 1), "F8") == 0 && strcmp(ui_cmd_key(UK_TERMINAL, 2), "Alt+Enter") == 0);
+    // Your later line, after an earlier one it replaced, still before the keys as ofx has them.
+    keys_set(2, "F7 reload", "F7 up");
+    CHECK(strcmp(ui_cmd_key(UK_UP, 0), "F7") == 0 && strcmp(ui_cmd_key(UK_UP, 1), "Up") == 0 && strcmp(ui_cmd_key(UK_RELOAD, 0), "Ctrl+R") == 0);
     // Two of your lines on one key: the later wins, both named.
     r = keys_set(2, "Ctrl+E terminal", "Ctrl+E reload");
     CHECK(r.clashes == 1 && strcmp(r.clash, "lines 1 and 2 both bind Ctrl+E: line 2 wins") == 0 && chord_ev('e', UI_MOD_CTRL).cmd == UK_RELOAD);
@@ -474,7 +472,7 @@ static void test_keys_conf(void)
     // Saved beside a bad line, whose note takes the status line: said once that is fixed (the
     // step 2 confirm).
     keys_set(0);
-    static char two[2][64] = { "Ctrl+T reload", "Ctrl+Bogus find" };
+    static char two[2][CONF_KEY_LEN] = { "Ctrl+T reload", "Ctrl+Bogus find" };
     static int two_no[2] = { 1, 2 };
     r = ui_binds_set(two, two_no, 2);   // (no ui_clashes_told: conf_apply showed the bad line)
     CHECK(r.bad == 2 && r.fresh == 1);
@@ -508,6 +506,7 @@ static void test_keys_conf(void)
     u.view = UI_VIEW_FOLDER;
     u.can_write = true, u.menu = UI_CTX_FOLDER;   // (a folder's right-click menu was the last open: the bar menu's rules apply)
     CHECK(key_act(&u, chord_ev(UKC_F1 + 4, 0)).kind == UA_NEWFILE);
+    CHECK(u.menu == UI_CTX_FOLDER);   // (the last menu's, as it was: no menu open changed)
     keys_set(1, "F5 side-tree");
     u = menu_ui(5);
     CHECK(key_act(&u, chord_ev(UKC_F1 + 4, 0)).kind == UA_SIDE_MODE && u.side_mode == SIDE_TREE);
@@ -530,10 +529,10 @@ static void test_keys_conf(void)
 
     // The written file's key lines: every key as ofx has it, and the commands with none; all of
     // them uncommented read back as exactly the keys as ofx has them.
-    static char text[8192];
+    static char text[CONF_KEYS_TEXT_MAX];
     size_t n = ui_keys_conf_text(text, sizeof text);
     CHECK(n > 0 && n < sizeof text - 1);
-    static char line[CONF_KEYS_MAX][64];
+    static char line[CONF_KEYS_MAX][CONF_KEY_LEN];
     static int no[CONF_KEYS_MAX];
     int k = 0;
     for (const char *p = text; *p && k < CONF_KEYS_MAX;) {
@@ -545,7 +544,7 @@ static void test_keys_conf(void)
     r = ui_binds_set(line, no, k);
     CHECK(!r.bad && !r.clashes);
     CHECK(ui_binds.n == COUNT(UI_BINDS_DEFAULT));
-    for (int i = 0; i < ui_binds.n && i < COUNT(UI_BINDS_DEFAULT); i++) CHECK(ui_chord_eq(ui_binds.b[i].c, UI_BINDS_DEFAULT[i].c) && ui_binds.b[i].cmd == UI_BINDS_DEFAULT[i].cmd);
+    for (int i = 0; i < ui_binds.n && i < COUNT(UI_BINDS_DEFAULT); i++) CHECK(ui_chord_eq(ui_binds.e[i].b.c, UI_BINDS_DEFAULT[i].c) && ui_binds.e[i].b.cmd == UI_BINDS_DEFAULT[i].cmd);
     for (int i = 0; i < COUNT(UI_CMDS); i++)
         if (UI_CMDS[i].cmd >= UK_ITEM0) CHECK(strstr(text, UI_CMDS[i].name) != NULL);
     char small[16];
@@ -558,14 +557,22 @@ static void test_keys_conf(void)
     size_t m = 0;
     for (int i = 0; i < 300; i++) m += (size_t)snprintf(many + m, sizeof many - m, "key = F%d about\n", i % 25 + 1);
     conf_parse(str_from_c(many), &cf);
-    CHECK(cf.nkey == CONF_KEYS_MAX && cf.bad == CONF_KEYS_MAX + 1 && strcmp(cf.why, "key wants a key, then a command") == 0);
+    CHECK(cf.nkey == CONF_KEYS_MAX && cf.bad == CONF_KEYS_MAX + 1 && strcmp(cf.why, "key: too many lines, or one too long") == 0);
+    // (the code-health review: the reason was "key wants a key, then a command"; the same for a
+    // list's 33rd name, and a value too long)
+    m = 0;
+    for (int i = 0; i < CONF_SKIP_MAX + 1; i++) m += (size_t)snprintf(many + m, sizeof many - m, "search-skip = d%d\n", i);
+    conf_parse(str_from_c(many), &cf);
+    CHECK(cf.skip.n == CONF_SKIP_MAX && cf.bad == CONF_SKIP_MAX + 1 && strcmp(cf.why, "search-skip: too many lines, or one too long") == 0);
+    conf_parse(S("key = Ctrl+E aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"), &cf);
+    CHECK(cf.nkey == 0 && cf.bad == 1 && strcmp(cf.why, "key: too many lines, or one too long") == 0);
     // none for every command: no key does anything (not the defaults back).
     for (k = 0; k < COUNT(UI_CMDS); k++) snprintf(line[k], sizeof line[k], "none %s", UI_CMDS[k].name), no[k] = k + 1;
     r = ui_binds_set(line, no, k);
     CHECK(!r.bad && ui_binds.n == 0 && chord_ev('t', UI_MOD_CTRL).cmd == UK_NONE && chord_ev(UKC_UP, 0).cmd == UK_NONE && strcmp(ui_menu_key(UM_NEW_TAB), "") == 0);
     // No lines: the keys as ofx has them again, none yours.
     r = ui_binds_set(line, no, 0);
-    CHECK(!r.bad && r.changed && strcmp(ui_menu_key(UM_NEW_TAB), "Ctrl+T") == 0 && !ui_binds.user[0]);
+    CHECK(!r.bad && r.changed && strcmp(ui_menu_key(UM_NEW_TAB), "Ctrl+T") == 0 && !ui_binds.e[0].user);
 }
 
 // Keyboard Shortcuts after F15 step 3: each command has its row, with its keys as they are (yours
@@ -628,13 +635,13 @@ static void test_keys_panel(void)
     menu_keys(&u, 1, UK_SHORTCUTS);
     UiInput in = chars("tab-others");
     ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in);
-    CHECK(u.keys_list.n == 2 && u.keys_line[0] == -1 - KS_TABS && strcmp(UI_KEYS[u.keys_line[1]].action, "Close Other Tabs") == 0);
+    CHECK(u.keys_list.n == 2 && u.keys_row[0] == -1 - KS_TABS && strcmp(UI_KEYS[u.keys_row[1]].action, "Close Other Tabs") == 0);
     // and still by an action's words alone ("selection" is in no name or key).
     while (u.keys_filter.len) menu_keys(&u, 1, UK_BACKSPACE);
     in = chars("selection");
     ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in);
     bool inv = false;
-    for (int v = 0; v < u.keys_list.n; v++) inv |= u.keys_line[v] >= 0 && strcmp(UI_KEYS[u.keys_line[v]].action, "Invert Selection") == 0;
+    for (int v = 0; v < u.keys_list.n; v++) inv |= u.keys_row[v] >= 0 && strcmp(UI_KEYS[u.keys_row[v]].action, "Invert Selection") == 0;
     CHECK(inv);
     keys_set(0);
 }

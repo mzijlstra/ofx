@@ -17,7 +17,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-enum { CONF_TEXT_MAX = 32768, CONF_SKIP_MAX = 32, CONF_NAME_MAX = 64, CONF_DATE_MAX = 64, CONF_WHY_MAX = 200, CONF_LINE_MAX = 512, CONF_DAYS_MAX = 36500, CONF_KEYS_MAX = 256, CONF_KEY_LEN = 64 };
+enum { CONF_TEXT_MAX = 32768, CONF_KEYS_TEXT_MAX = 8192, CONF_SKIP_MAX = 32, CONF_NAME_MAX = 64, CONF_DATE_MAX = 64, CONF_WHY_MAX = 200, CONF_LINE_MAX = 512, CONF_DAYS_MAX = 36500, CONF_KEYS_MAX = 256, CONF_KEY_LEN = 64 };
 
 typedef enum { DATE_SHORT, DATE_LONG, DATE_ISO, DATE_PATTERN } DateFormat;
 
@@ -249,8 +249,9 @@ static void conf_defaults(Conf *c)
                  .clean_orphans = true, .clean_unused_days = CLEAN_UNUSED_S / 86400, .clean_cap = CLEAN_CAP };
 }
 
-// One value for opt k into c; false when it isn't one opt k takes.
-static bool conf_set(Conf *c, int k, Str v)
+// One value for opt k, from file line no, into c; false when it isn't one opt k takes, *full set when
+// the reason is that a list (search-skip, editor, key) has no room or the value is too long.
+static bool conf_set(Conf *c, int k, Str v, int no, bool *full)
 {
     void *f = (char *)c + CONF_OPTS[k].at;
     switch (CONF_OPTS[k].kind) {
@@ -286,22 +287,23 @@ static bool conf_set(Conf *c, int k, Str v)
         return c->date = DATE_PATTERN, true;
     case CK_NAMES: {
         SearchSkipList *l = f;
-        if (!v.len || v.len >= CONF_NAME_MAX || str_find(v, '/') >= 0 || str_eq(v, S(".")) || str_eq(v, S(".."))) return false;
-        if (l->n == CONF_SKIP_MAX) return false;
+        if (l->n == CONF_SKIP_MAX || v.len >= CONF_NAME_MAX) return *full = true, false;
+        if (!v.len || str_find(v, '/') >= 0 || str_eq(v, S(".")) || str_eq(v, S(".."))) return false;
         snprintf(l->name[l->n++], CONF_NAME_MAX, "%.*s", STR_ARG(v));
         return true;
     }
-    case CK_KEY: {   // (key, key_no and nkey: ui/keys.c reads the line itself, the gui's frame on its line)
-        if (!v.len || v.len >= CONF_KEY_LEN || c->nkey == CONF_KEYS_MAX) return false;
+    case CK_KEY:   // (key, key_no and nkey: ui/keys.c reads the line itself)
+        if (c->nkey == CONF_KEYS_MAX || v.len >= CONF_KEY_LEN) return *full = true, false;
+        if (!v.len) return false;
+        c->key_no[c->nkey] = no;
         snprintf(c->key[c->nkey++], CONF_KEY_LEN, "%.*s", STR_ARG(v));
         return true;
-    }
     case CK_EDITOR: {   // (editor and neditor; read as the editors file reads a recipe: one, no bad line)
         static u8 mem[KiB(16)];
         static Editors one;
         Arena a;
         arena_init(&a, "conf-editor", mem, sizeof mem);
-        if (v.len >= CONF_LINE_MAX || c->neditor == EDITORS_USER) return false;
+        if (v.len >= CONF_LINE_MAX || c->neditor == EDITORS_USER) return *full = true, false;
         editors_parse(&a, v, &one);
         if (one.n != 1) return false;
         snprintf(c->editor[c->neditor++], CONF_LINE_MAX, "%.*s", STR_ARG(v));
@@ -327,14 +329,13 @@ static void conf_parse(Str text, Conf *c)
         int k = -1;
         for (int i = 0; i < COUNT(CONF_OPTS) && k < 0; i++)
             if (str_eq(key, str_from_c(CONF_OPTS[i].key))) k = i;
-        if (eq >= 0 && k >= 0 && conf_set(c, k, val)) {
-            if (CONF_OPTS[k].kind == CK_KEY) c->key_no[c->nkey - 1] = no;
-            continue;
-        }
+        bool full = false;
+        if (eq >= 0 && k >= 0 && conf_set(c, k, val, no, &full)) continue;
         if (c->bad) continue;
         c->bad = no;
         if (eq < 0) snprintf(c->why, sizeof c->why, "not a key = value line");
         else if (k < 0) snprintf(c->why, sizeof c->why, "no option %.*s", (int)(key.len < 60 ? key.len : 60), key.p);
+        else if (full) snprintf(c->why, sizeof c->why, "%s: too many lines, or one too long", CONF_OPTS[k].key);
         else snprintf(c->why, sizeof c->why, "%s wants %s", CONF_OPTS[k].key, CONF_WANTS[CONF_OPTS[k].kind]);
     }
 }
@@ -414,6 +415,7 @@ static bool conf_create(const char *path, const char *keys, Err *err)
     if (!path_parent(d, sizeof d, path) || !mkdir_p(d, 0700, true, err)) return false;
     static char text[CONF_TEXT_MAX];
     size_t n = conf_default_text(text, sizeof text, keys);
+    if (n == sizeof text - 1) return err_set(err, "%s: the text is past %d bytes", path, CONF_TEXT_MAX), false;   // (never a cut file: it is never written again)
     int fd = open(path, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC | O_NOFOLLOW, 0644);
     if (fd < 0) return errno == EEXIST || (err_set(err, "%s: %s", path, strerror(errno)), false);
     bool ok = write(fd, text, n) == (ssize_t)n;

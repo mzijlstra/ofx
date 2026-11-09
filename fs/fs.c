@@ -15,7 +15,7 @@
 #include "editors.c"
 #include "conf.c"     // (after editors.c: an editor line is checked as a recipe)
 #include "ops.c"
-#include "apps.c"     // (after ops.c: Set as default writes through ops_allowed)
+#include "apps.c"     // (Set as default writes mimeapps.list through ops_allowed: guard.c)
 #include "trash.c"
 #include "clip.c"
 #include "job.c"

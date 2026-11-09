@@ -26,7 +26,7 @@ sh rm "$OFX_DIR/0new"
 wait-for 2000 n=6 marked=2
 key esc
 expect marked=0
-# The keys as GLFW reports them (ui_key_of): Ctrl+A, Esc, Shift+Delete, F2, Ctrl+Shift+N, Ctrl+Z
+# The keys as GLFW reports them (gui/glfwkeys.c): Ctrl+A, Esc, Shift+Delete, F2, Ctrl+Shift+N, Ctrl+Z
 raw-key 65 2
 expect marked=6
 raw-key 256 0

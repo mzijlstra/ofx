@@ -551,14 +551,13 @@ static void *signal_waiter(void *arg)
 }
 
 // Close All Windows (F7.1): the other ofx windows in the registry are asked to close (SIGUSR1),
-// and this one quits (quit), or has asked first (ui_handle, with jobs). From the menu, it closes
-// as when its window closes: at once, or after that question.
+// and this one quits (quit), or has asked first (ui_quit_all, with jobs: the menu's entry too
+// since the F15 code-health review, so the question is always ui/'s).
 static void close_others(bool quit)
 {
     if (app.windows[0]) win_signal_others(app.windows, getpid(), SIGUSR1);
     closing_all = true;
-    if (quit && jobs.nrun + jobs.nwait > 0) close_asked = true;
-    else if (quit) app.quit = true;
+    if (quit) app.quit = true;
 }
 
 static void theme_apply(void)

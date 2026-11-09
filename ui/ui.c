@@ -16,15 +16,21 @@
 
 enum { UI_EVENTS_MAX = 64, UI_FIND_MAX = 256, UI_HISTORY_MAX = 64, UI_JOB_ROWS = 4, UI_APPS_MAX = 1024, UI_BRANCHES_MAX = 1024 };
 
-// The keys without text, as gui/ reads them (a chord already named). Characters come apart.
+// What a key means (UiEvent.key: the text fields', panels', menus' and questions' own meaning of a
+// key, fixed) and the commands keys are bound to (UiEvent.cmd), in one list: many are both (Enter,
+// Delete, Ctrl+C). ui/keys.c makes them of a key or a typed character: UI_FIXED the fixed meanings,
+// UI_CMDS the commands by name, UI_BINDS_DEFAULT the keys as ofx has them, which the comments below
+// name (ofx.conf's key lines may change them: F15). Some are named after their first key (UK_F2 is
+// rename, UK_F9 the sidebar's next mode, UK_F10 the menus, UK_TAB the sidebar, UK_ESC unselect,
+// UK_DELETE trash, UK_SHIFT_DELETE delete).
 typedef enum {
     UK_NONE,
     UK_UP, UK_DOWN, UK_PAGEUP, UK_PAGEDOWN, UK_HOME, UK_END,
     UK_ENTER, UK_RIGHT, UK_LEFT, UK_BACKSPACE, UK_ESC, UK_TAB,
     UK_BACK,       // Alt+Left
     UK_FORWARD,    // Alt+Right
-    UK_FIND,       // Ctrl+F
-    UK_HIDDEN,     // Ctrl+H
+    UK_FIND,       // Ctrl+F, /
+    UK_HIDDEN,     // Ctrl+H, .
     UK_F2,         // rename
     UK_DELETE,     // to the trash; in the edit line, the character after the caret
     UK_SHIFT_DELETE,   // for good
@@ -54,15 +60,15 @@ typedef enum {
     UK_SEL_DOWN,   // Shift+Down
     UK_SHIFT_ENTER,   // on a path button: a background tab; in the files Open With (Michael,
                       // 2026-10-27); elsewhere as Enter
-    UK_CRUMBS,     // Ctrl+K: the keyboard on the path buttons (F5.2)
-    UK_JOBS,       // Ctrl+J: the keyboard on the job rows' × (F5.3)
+    UK_CRUMBS,     // Ctrl+K, Ctrl+Up: the keyboard on the path buttons (F5.2)
+    UK_JOBS,       // Ctrl+J, Ctrl+Down: the keyboard on the job rows' × (F5.3)
     UK_QUIT,       // the window closed, or another window's Close All (F7.1)
     UK_QUIT_ALL,   // Ctrl+Q: every ofx window closes (F7.1)
     UK_F10,        // the menu bar's first menu (F7.1)
     UK_MENU,       // Alt and a letter: the menu it opens (F7.1); the event's ch is the letter, lower case
     UK_PROPERTIES, // Ctrl+I: the Properties panel (F7.2)
     UK_TERMINAL,   // Alt+Enter: a terminal here, as t (Michael, 2026-10-25)
-    UK_F9,         // the sidebar's next mode (F6)
+    UK_F9,         // F9, Ctrl+S: the sidebar's next mode (F6)
     UK_VIEW_ICONS, // Ctrl+2: the files as icons (F6.2)
     UK_VIEW_LIST,  // Ctrl+1: the files as the list
     UK_ZOOM_IN,    // Ctrl+= (Ctrl++, the keypad's +): the icon view's icons a size bigger (F6.3)
@@ -326,15 +332,15 @@ _Static_assert(UI_MENU_BOOKMARKS == 8 && UI_MENU_BRANCHES == 8, "UI_SLOT_ITEMS w
 // and a hint shown where a key would be (no key: a click).
 static const struct { const char *label, *word; UiKey cmd; bool runs; char mark; const char *hint; } UI_MENU_ITEM[UM_ITEMS] = {
     [UM_SEP] = { "", "-" },
-    [UM_NEW_TAB] = { "New Tab", "new-tab", .cmd = UK_TAB_NEW },
-    [UM_NEW_WINDOW] = { "New Window", "new-window", .cmd = UK_NEW_WINDOW },
-    [UM_NEW_FOLDER] = { "Create New Folder", "new-folder", .cmd = UK_NEWFOLDER },
+    [UM_NEW_TAB] = { "New Tab", "new-tab", .cmd = UK_TAB_NEW, .runs = true },
+    [UM_NEW_WINDOW] = { "New Window", "new-window", .cmd = UK_NEW_WINDOW, .runs = true },
+    [UM_NEW_FOLDER] = { "Create New Folder", "new-folder", .cmd = UK_NEWFOLDER, .runs = true },
     [UM_NEW_FILE] = { "Create New Empty File", "new-file", .cmd = UK_ITEM0 + UM_NEW_FILE },
     [UM_OPEN] = { "Open", "open", .cmd = UK_ENTER },
     [UM_OPEN_WITH] = { "Open With Other Application\xE2\x80\xA6", "open-with", .cmd = UK_SHIFT_ENTER },   // (its own action: with the keys in the sidebar Shift+Enter is Enter there)
-    [UM_PROPERTIES] = { "Properties\xE2\x80\xA6", "properties", .cmd = UK_PROPERTIES },
-    [UM_CLOSE_ALL] = { "Close All Windows", "close-all", .cmd = UK_QUIT_ALL },
-    [UM_CLOSE] = { "Close", "close", .cmd = UK_TAB_CLOSE },
+    [UM_PROPERTIES] = { "Properties\xE2\x80\xA6", "properties", .cmd = UK_PROPERTIES, .runs = true },
+    [UM_CLOSE_ALL] = { "Close All Windows", "close-all", .cmd = UK_QUIT_ALL, .runs = true },
+    [UM_CLOSE] = { "Close", "close", .cmd = UK_TAB_CLOSE, .runs = true },
     // Edit
     [UM_UNDO] = { "Undo", "undo", .cmd = UK_UNDO, .runs = true },
     [UM_CUT] = { "Cut", "cut", .cmd = UK_CUT, .runs = true },
@@ -813,7 +819,7 @@ typedef struct {
     // panel that says how its menus still open is UI_PANEL_BAR.
     bool   bar_hidden;
     bool   colors;   // the list in eza's colours (View → Show Colors; gui/ reads it from the state)
-    UiEvent menu_key;   // an entry picked whose key is still to run (ui_handle runs it next)
+    UiKey  menu_cmd;   // an entry picked whose command is still to run (ui_handle runs it next)
     // A right-click menu (F8): its entry is one folder (Open in New Tab), and a key opened it (gui/
     // places it under the cursor, not at the pointer).
     bool   ctx_dir, ctx_key, ctx_one;
@@ -858,7 +864,7 @@ typedef struct {
     // Keyboard Shortcuts (F7.5, UI_PANEL_KEYS): its filter's text; the lines it shows (a row of
     // UI_KEYS, or -1 - a section for its heading), scrolled by keys_list.top.
     UI_TEXT(64) keys_filter;
-    short  keys_line[UI_KEYS_LINES];
+    short  keys_row[UI_KEYS_LINES];
     UiList keys_list;
     UiMatcher keys_m;
     // The Properties panel (F7.2, UI_PANEL_PROPS): its grid's place with the focus (0..8: owner
@@ -951,9 +957,10 @@ static UiAction ui_view_act(const Ui *u, UiAction a)
     return (UiAction){ u->view == UI_VIEW_TRASH ? UA_NOT_IN_TRASH : u->view == UI_VIEW_SEARCH ? UA_NOT_IN_SEARCH : UA_NONE, 0, false };   // (a folder's: nothing to say)
 }
 
-// h, j, k and l as Left, Down, Up and Right (vi's), wherever there is a cursor to move (Michael,
-// 2026-10-21); any other event as it is. (A place that doesn't move that way ignores the arrow, as
-// it ignored the letter.)
+// h, j, k and l as Left, Down, Up and Right (vi's, Michael 2026-10-21) where they are fixed: the
+// menus, the path buttons, the job rows and the panels' lists (Michael, 2026-11-08: the files'
+// moves are bindings, ui/keys.c, these aren't); any other event as it is. (A place that doesn't
+// move that way ignores the arrow, as it ignored the letter.)
 static UiEvent ui_vi_key(UiEvent e)
 {
     if (e.key != UK_NONE) return e;

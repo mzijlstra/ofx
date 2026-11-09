@@ -49,7 +49,7 @@ static void test_menu_f74(void)
     // the same action and the same state after (marks, find, the rename line, the questions).
     for (int it = 1; it < UM_ITEMS; it++) {
         if (!UI_MENU_ITEM[it].runs) continue;
-        UiEvent ev = ui_menu_runs((UiMenuItem)it);   // (what its first key sends: ui/keys.c)
+        UiEvent ev = ev_key(UI_MENU_ITEM[it].cmd);   // (what its first key sends: ui/keys.c)
         if (it >= UM_OPEN_TAB) continue;   // (a right-click menu's own: test_f8.c)
         for (int pointer = 0; pointer < 2; pointer++) {
             Ui a = menu_all_on(m1), b = menu_all_on(m2);
@@ -71,11 +71,12 @@ static void test_menu_f74(void)
                 b.menu_at = menu_place(m, (UiMenuItem)it);
                 ma = menu_keys(&b, 1, UK_ENTER);
             }
+            if (!(ka.kind == ma.kind && ka.index == ma.index && ka.all == ma.all && !b.menu_on)) fprintf(stderr, "entry %s pointer %d: key %d,%td,%d menu %d,%td,%d\n", UI_MENU_ITEM[it].word, pointer, ka.kind, ka.index, ka.all, ma.kind, ma.index, ma.all);
             CHECK(ka.kind == ma.kind && ka.index == ma.index && ka.all == ma.all && !b.menu_on);
             CHECK(a.marked == b.marked && memcmp(m1, m2, 4) == 0 && a.finding == b.finding && a.focus == b.focus &&
                   a.confirming == b.confirming && a.sort.key == b.sort.key && a.sort.reverse == b.sort.reverse && a.list.sel == b.list.sel &&
                   a.perms_cols == b.perms_cols && a.group_col == b.group_col);
-            CHECK(!b.menu_key.key && !b.menu_key.ch);   // run once
+            CHECK(!b.menu_cmd);   // run once
         }
     }
     // A menu's own keys stay the menu's: Down moves its mark, not the list's cursor.

@@ -270,7 +270,7 @@ static bool png_encode(Arena *a, Img im, const char *uri, i64 mtime, i64 size, S
 // ---- files --------------------------------------------------------------------------------------
 
 // png written to file through a temporary file in its folder, renamed over it, so another program
-// never reads half of one. Every write asks the test guard first (ops.c).
+// never reads half of one. Every write asks the test guard first (guard.c).
 static bool thumb_write(const char *file, Str png)
 {
     static atomic_int seq;

@@ -476,7 +476,7 @@ static void script_state(char *out, size_t cap)
     // Keyboard Shortcuts' first row shown: its action (spaces '_'; a heading "#" and its name).
     char keysfirst[128] = "-";
     for (isize v = app.ui.keys_list.top; app.ui.panel == UI_PANEL_KEYS && v < app.ui.keys_list.n; v++) {
-        int line = app.ui.keys_line[v];
+        int line = app.ui.keys_row[v];
         snprintf(keysfirst, sizeof keysfirst, "%s%s", line < 0 ? "#" : "", line < 0 ? UI_KEY_SECTION[-1 - line] : UI_KEYS[line].action);
         break;
     }

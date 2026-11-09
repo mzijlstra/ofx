@@ -12,7 +12,7 @@
 // for clean-unused-days goes (its atime); a preview whose file is gone or has changed goes (its
 // Thumb::URI and Thumb::MTime); then, while the cache is over clean-cap, the least recently read go. Only the cache's own names are looked at, in its size
 // folders and fail/<program>/, never followed through a link, and each delete asks the test guard
-// (ops.c) first.
+// (guard.c) first.
 //
 // A file's path is judged where its links lead: a link onto a drive that is out keeps its previews.
 //

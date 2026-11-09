@@ -214,8 +214,8 @@ static bool ui_handle_pointer(Ui *u, UiNames names, const UiInput *in, UiOnTop o
         UiMenuItem it = UI_MENU[u->menu].items[in->menu_item];
         if (!ui_menu_enabled(u, it)) return *out = UI_NONE, true;
         UiAction a = ui_menu_pick(u, it);
-        if (a.kind != UA_NONE || (!u->menu_key.key && !u->menu_key.ch)) return *out = a, true;
-        // (an entry that stands for a key: the loop below runs it first)
+        if (a.kind != UA_NONE || !u->menu_cmd) return *out = a, true;
+        // (an entry that runs its command: the loop below runs it first)
     }
     if (u->menu_on && in->menu_away) return u->menu_on = false, *out = UI_NONE, true;
     // A right press (F8): on a row, its menu. An unmarked row becomes the only one (the marks clear,
@@ -536,6 +536,15 @@ static bool ui_panel_key(Ui *u, UiOnTop on, UiEvent e, const UiInput *in, UiActi
     }
 }
 
+// Ctrl+Q, File → Close All Windows (F7.1): every window closes, this one at once, or asked first
+// while jobs run or wait (the others asked anyway).
+static UiAction ui_quit_all(Ui *u, const UiInput *in)
+{
+    u->menu_on = false;
+    if (in->jobs_all > 0) u->quit_asking = true, u->cancel_asking = false;
+    return (UiAction){ UA_CLOSE_ALL, 0, in->jobs_all <= 0 };
+}
+
 // ui_handle's frame, between the pickers' first filtering.
 static UiAction ui_handle_frame(Ui *u, UiNames names, const UiInput *in)
 {
@@ -566,22 +575,17 @@ static UiAction ui_handle_frame(Ui *u, UiNames names, const UiInput *in)
     UiAction out;
     if (ui_handle_panels(u, names, in, on, prompt, &out) || ui_handle_pointer(u, names, in, on, prompt, &out)) return out;
     isize extend = -1, was = l->sel;   // a Shift move's start, and the cursor before the event (ui_extend)
-    // An entry the pointer picked runs its key first (F7.4), then the frame's keys.
-    for (int k = u->menu_key.key || u->menu_key.ch ? -1 : 0; k < in->nev; k++, extend = ui_extend(u, extend, was)) {
-        UiEvent e = k < 0 ? u->menu_key : in->ev[k];
+    // An entry the pointer picked runs its command first (F7.4), then the frame's keys.
+    for (int k = u->menu_cmd ? -1 : 0; k < in->nev; k++, extend = ui_extend(u, extend, was)) {
+        UiEvent e = k < 0 ? (UiEvent){ UK_CMD, 0, u->menu_cmd } : in->ev[k];
         was = l->sel;
-        if (k < 0) u->menu_key = (UiEvent){ UK_NONE, 0, UK_NONE };
+        if (k < 0) u->menu_cmd = UK_NONE;
         // A character typed into a text field, a question, a panel or an open menu is theirs (its
         // text, an answer, a menu's letter), whatever command it is bound to (the F15 code-health
         // review: `key = q close-all` and a q in the rename line, or y at "Delete for good?", closed
         // every window).
         if (e.key == UK_NONE && e.ch && (ui_line_active(u, NULL) || ui_on_top(u) != UI_ON_NONE || u->menu_on)) e.cmd = UK_NONE;
-        // Ctrl+Q (F7.1): every window closes, this one as Ctrl+Q closed it before (below).
-        if (e.cmd == UK_QUIT_ALL && !u->quit_asking) {
-            u->menu_on = false;
-            if (in->jobs_all > 0) u->quit_asking = true, u->cancel_asking = false;
-            return (UiAction){ UA_CLOSE_ALL, 0, in->jobs_all <= 0 };
-        }
+        if (e.cmd == UK_QUIT_ALL && !u->quit_asking) return ui_quit_all(u, in);
         on = ui_on_top(u), prompt = on != UI_ON_NONE;   // (an earlier key may have opened or closed one)
         if (ui_is_question(on)) {   // Enter and y say yes, Esc and n no; the rest is ignored
             bool answered, yes = ui_yes_no(e, &answered);
@@ -610,8 +614,9 @@ static UiAction ui_handle_frame(Ui *u, UiNames names, const UiInput *in)
             UiAction a;
             if (ui_menu_event(u, e, &a)) {
                 if (a.kind != UA_NONE) return a;
-                if (!u->menu_key.key && !u->menu_key.ch) continue;
-                e = u->menu_key, u->menu_key = (UiEvent){ UK_NONE, 0, UK_NONE };   // an entry picked runs its key, here
+                if (!u->menu_cmd) continue;
+                e = (UiEvent){ UK_CMD, 0, u->menu_cmd }, u->menu_cmd = UK_NONE;   // an entry picked runs its command, here
+                if (e.cmd == UK_QUIT_ALL && !u->quit_asking) return ui_quit_all(u, in);   // (read above, before the menus)
             }
         }
         if (ui_panel_key(u, on, e, in, &out)) {   // a panel up takes every key

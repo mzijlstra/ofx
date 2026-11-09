@@ -62,8 +62,8 @@ static bool ui_menu_sep_shown(const Ui *u, int m, int i)
     return false;
 }
 
-// Whether entry it can be picked now. One that runs a key is greyed where that key would do
-// nothing, or only say it can't (Copy in the trash view).
+// Whether entry it can be picked now. One that runs its command is greyed where the command would
+// do nothing, or only say it can't (Copy in the trash view).
 static bool ui_menu_enabled(const Ui *u, UiMenuItem it)
 {
     bool files = u->list.n > 0, here = files && u->focus != UI_FOCUS_SIDE;
@@ -209,8 +209,8 @@ static void ui_folder_open(Ui *u, isize side, int crumb, bool keys)
 
 // ---- an entry picked, the menus' keys and the pointer -------------------------------------------
 
-// Entry it picked: the menu closes, and gui/ does what it says; one that stands for a key leaves
-// it in menu_key, for ui_handle to run as that key.
+// Entry it picked: the menu closes, and gui/ does what it says; one that runs its command leaves it
+// in menu_cmd, for ui_handle to run as a key bound to it would (F7.4: the two can't differ).
 static UiAction ui_menu_pick(Ui *u, UiMenuItem it)
 {
     u->menu_on = false;
@@ -228,7 +228,7 @@ static UiAction ui_menu_pick(Ui *u, UiMenuItem it)
         }
     }
     if (UI_MENU_ITEM[it].runs) {
-        u->menu_key = ui_menu_runs(it);
+        u->menu_cmd = UI_MENU_ITEM[it].cmd;
         return UI_NONE;
     }
     int k;
@@ -247,14 +247,8 @@ static UiAction ui_menu_pick(Ui *u, UiMenuItem it)
     case UM_SHOW_MENU: return u->bar_hidden = !u->bar_hidden, u->panel = u->bar_hidden ? UI_PANEL_BAR : UI_PANEL_NONE,   // (a menu was open: no panel is)
                              (UiAction){ UA_MENUBAR, 0, false };
     case UM_BM_MORE: return ui_bmp_open(u, u->bm_more_at);
-    case UM_NEW_TAB: return (UiAction){ UA_TAB_NEW, 0, false };
-    case UM_NEW_WINDOW: return (UiAction){ UA_NEW_WINDOW, 0, false };
-    case UM_NEW_FOLDER: return (UiAction){ UA_NEWFOLDER, 0, false };
     case UM_NEW_FILE: return (UiAction){ UA_NEWFILE, 0, false };
     case UM_OPEN: return (UiAction){ UA_OPEN, u->list.sel, u->marked > 0 };
-    case UM_CLOSE_ALL: return (UiAction){ UA_CLOSE_ALL, 0, true };   // gui/ asks first with jobs (close_others)
-    case UM_CLOSE: return (UiAction){ UA_TAB_CLOSE, -1, false };
-    case UM_PROPERTIES: return ui_props_open(u, UI_PROPS_MARKED);
     case UM_OPEN_WITH: return ui_ow_open(u);
     case UM_ABOUT: return u->panel = UI_PANEL_ABOUT, UI_NONE;
     case UM_PREFERENCES: return (UiAction){ UA_PREFERENCES, 0, false };
@@ -288,7 +282,7 @@ static bool ui_item_cmd(Ui *u, UiMenuItem it, UiAction *out)
         for (int i = 0; i < UI_MENU[m].n; i++) {
             if (UI_MENU[m].items[i] != it) continue;
             int was = u->menu;
-            u->menu = m;   // (what is shown and enabled is the bar menu's)
+            u->menu = m;   // (what is shown and enabled is the bar menu's, for this pick only)
             if (!ui_menu_enabled(u, it)) {   // (greyed: what its view says, as a key's action would)
                 u->menu = was;
                 UiActionKind kind = it == UM_NEW_FILE ? UA_NEWFILE : it == UM_DUPLICATE ? UA_DUPLICATE : UA_NONE;
@@ -296,6 +290,7 @@ static bool ui_item_cmd(Ui *u, UiMenuItem it, UiAction *out)
                 return out->kind != UA_NONE;
             }
             *out = ui_menu_pick(u, it);
+            u->menu = was;   // (no menu is open: the last one's stays, as before)
             return out->kind != UA_NONE;
         }
     }

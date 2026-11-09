@@ -1,6 +1,7 @@
 // ofx.conf (F10, docs/plan.md "F10 design"; fs/conf.c reads it): read at the start and whenever
 // its folder's watch says it changed, and applied at once: the previews, the list's dates, the
-// search's skip list (a search under way keeps the one it started with). Written at the start when
+// search's skip list (a search under way keeps the one it started with), the folders' default view,
+// zoom and sort, restore-tabs, shift-select, the keys (F15, ui/keys.c). Written at the start when
 // it isn't there, so the file is what applies (Michael, 2026-11-01). Edit → Preferences… opens it
 // in Omarchy's default editor, writing it first if it went since. Included by main.c.
 
@@ -15,8 +16,8 @@ static void conf_shown(char *out, size_t cap)
 // The key lines the written file has (ui/keys.c's, every key as ofx has it).
 static const char *conf_keys(void)
 {
-    static char text[8192];
-    if (!text[0]) ui_keys_conf_text(text, sizeof text);
+    static char text[CONF_KEYS_TEXT_MAX];
+    if (!text[0] && ui_keys_conf_text(text, sizeof text) == sizeof text - 1) text[0] = 0, fprintf(stderr, "ofx: the key lines are past %d bytes\n", CONF_KEYS_TEXT_MAX);
     return text;
 }
 

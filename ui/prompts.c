@@ -19,7 +19,7 @@ static void ui_crumbs_focus(Ui *u, const UiInput *in)
 static bool ui_crumbs_event(Ui *u, const UiInput *in, UiEvent e, UiAction *a)
 {
     *a = UI_NONE;
-    e = ui_vi_key(e);   // (as in the list, Michael, 2026-10-21; j and k go on to it)
+    e = ui_vi_key(e);   // (fixed here, Michael 2026-11-08; j and k go on to it)
     if (e.cmd == UK_CRUMBS) return true;
     switch (ui_unshift(e.key)) {
     case UK_LEFT: if (u->crumb_at > 0) u->crumb_at--; return true;

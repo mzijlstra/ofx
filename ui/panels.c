@@ -223,12 +223,12 @@ static void ui_keys_filter(Ui *u)
     int n = 0;
     for (int s = 0; s < KS_SECTIONS; s++) {
         int head = n;
-        u->keys_line[n++] = (short)(-1 - s);
+        u->keys_row[n++] = (short)(-1 - s);
         for (int r = 0; r < UI_KEYS_N; r++)
             if (UI_KEYS[r].sec == (UiKeySection)s && (!u->keys_filter.len || ui_match(&u->keys_m, str_from_c(UI_KEYS[r].action)) ||
                                                       ui_match(&u->keys_m, str_from_c(ui_keys_key(r, 0))) || ui_match(&u->keys_m, str_from_c(ui_keys_key(r, 1))) ||
                                                       ui_match(&u->keys_m, str_from_c(ui_keys_name(r)))))
-                u->keys_line[n++] = (short)r;
+                u->keys_row[n++] = (short)r;
         if (n == head + 1) n = head;   // nothing under it
     }
     ui_set(&u->keys_list, n, 0);   // (its cursor on the first line: the top there too)

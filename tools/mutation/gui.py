@@ -226,7 +226,7 @@ MUTANTS = [
     ('gui/actions.c', '    case UA_NEWFILE: new_made(true); break;', '    case UA_NEWFILE: new_made(false); break;', 'f7'),
     ('gui/actions.c', 'if (spawn_window(app.exe, dir, &err))', 'if (spawn_window("ofx", dir, &err))', 'f7'),
     (G, "    if (app.windows[0]) win_signal_others(app.windows, getpid(), SIGUSR1);", "", 'f7'),
-    (G, "    if (quit && jobs.nrun + jobs.nwait > 0) close_asked = true;", "    if (false) close_asked = true;", 'f7'),
+    (G, "    if (quit) app.quit = true;\n}", "}", 'f7'),
     (G, "        if (sig == SIGUSR1) {", "        if (sig == SIGUSR2) {", 'f7'),
     (G, "        if (atomic_exchange(&close_signal, false)) close_asked = true, closing_all = true;", "", 'f7'),
     (G, "    if (win_dir(app.windows, sizeof app.windows) && !win_register(app.windows, getpid(), &werr)) {", "    if (win_dir(app.windows, sizeof app.windows) && false) {", 'f7'),
@@ -712,7 +712,7 @@ MUTANTS = [
     ('gui/restore.c', '    if (!id && restore.n > 0) app.ui.restore_n = restore.n;', '    if (restore.n > 0) app.ui.restore_n = restore.n;', 'f11'),
     ('gui/restore.c', '        const char *cmd[] = { app.exe, "--restore", id };', '        const char *cmd[] = { app.exe, id };', 'f11'),
     ('gui/restore.c', ': state_path(path, sizeof path) && !session_forget(', ': false && !session_forget(', 'f11'),
-    ('gui/main.c', '    closing_all = true;\n    if (quit && jobs.nrun', '    if (quit && jobs.nrun', 'f11'),
+    ('gui/main.c', '    closing_all = true;\n    if (quit) app.quit', '    if (quit) app.quit', 'f11'),
     ('gui/main.c', '    restore_save();   // (F11 step 3', '    // (F11 step 3', 'f11'),
     ('gui/main.c', '    if (atomic_load(&quit_signal)) closing_all = true;', '', 'f11'),
     # F11 step 3b: the line kept as the tabs change (2026-11-02)

@@ -305,18 +305,18 @@ static void test_shortcuts(void)
     Ui u = menu_ui(3);
     u.keys_list.rows = 10;
     CHECK(menu_keys(&u, 1, UK_SHORTCUTS).kind == UA_NONE && u.panel == UI_PANEL_KEYS && u.keys_list.n == UI_KEYS_LINES);
-    CHECK(u.keys_line[0] == -1 - KS_MOVE && u.keys_line[1] == 0);
+    CHECK(u.keys_row[0] == -1 - KS_MOVE && u.keys_row[1] == 0);
     CHECK(menu_keys(&u, 1, 0x100 + 't').kind == UA_NONE && u.keys_filter.len == 1 && u.panel == UI_PANEL_KEYS);
     menu_keys(&u, 1, UK_BACKSPACE);
     CHECK(u.keys_filter.len == 0 && u.keys_list.n == UI_KEYS_LINES);
     // The filter: an action's words or a key, case folded; a section with nothing left out.
     UiInput in = chars("alt+end");
     ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in);
-    CHECK(u.keys_list.n == 2 && u.keys_line[0] == -1 - KS_MOVE && strcmp(UI_KEYS[u.keys_line[1]].action, "Trash") == 0);
+    CHECK(u.keys_list.n == 2 && u.keys_row[0] == -1 - KS_MOVE && strcmp(UI_KEYS[u.keys_row[1]].action, "Trash") == 0);
     while (u.keys_filter.len) menu_keys(&u, 1, UK_BACKSPACE);
     in = chars("TRASH");
     ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in);
-    CHECK(u.keys_list.n == 4 && u.keys_line[2] == -1 - KS_CHANGE);   // Moving: Trash; Changing files: Move to Trash
+    CHECK(u.keys_list.n == 4 && u.keys_row[2] == -1 - KS_CHANGE);   // Moving: Trash; Changing files: Move to Trash
     while (u.keys_filter.len) menu_keys(&u, 1, UK_BACKSPACE);
     in = chars("zzqq");
     ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in);

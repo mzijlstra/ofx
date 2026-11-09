@@ -65,7 +65,7 @@ static void test_conf(void)
     CHECK(c.bad == 1 && strcmp(c.why, "previews wants on or off") == 0 && c.previews);
     // The file ofx writes: every option's help and default in it, commented out but the list's
     // lines, so it reads back as the defaults with no bad line.
-    static char keys[8192], text[CONF_TEXT_MAX];
+    static char keys[CONF_KEYS_TEXT_MAX], text[CONF_TEXT_MAX];
     ui_keys_conf_text(keys, sizeof keys);
     size_t n = conf_default_text(text, sizeof text, keys);
     CHECK(n > 0 && n < sizeof text - 1 && strlen(text) == n);
@@ -115,6 +115,10 @@ static void test_conf(void)
     CHECK(!conf_create(out_at("cf/ofx.conf"), keys, &err) && access(out_at("cf/ofx.conf"), F_OK) != 0);
     put(out_at("cf-there.conf"), "x");   // one there already, outside the root: opened, not refused
     CHECK(conf_create(out_at("cf-there.conf"), keys, &err) && strcmp(slurp(out_at("cf-there.conf")), "x") == 0);
+    // Text past CONF_TEXT_MAX is refused, not written cut (a cut file is never written again).
+    static char big[CONF_TEXT_MAX + 16];
+    memset(big, '#', sizeof big - 1), big[sizeof big - 1] = 0;
+    CHECK(!conf_create(at("cf/ofx/big.conf"), big, &err) && strstr(err.msg, "past") && access(at("cf/ofx/big.conf"), F_OK) != 0);
     // Where it is: $XDG_CONFIG_HOME/ofx/ofx.conf, else ~/.config/ofx/ofx.conf.
     char cp[PATH_MAX];
     env_set("XDG_CONFIG_HOME", "/x/cfg");

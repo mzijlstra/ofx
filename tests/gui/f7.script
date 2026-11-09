@@ -208,7 +208,7 @@ type b.txt
 key enter
 key enter
 sh grep -qx "uwsm-app -- gio open $OFX_DIR/b.txt" "$OFX_ROOT/spawn.log"
-# ---- the keys as GLFW gives them (ui_key_of, on_key): F10, Alt+F, Ctrl+N
+# ---- the keys as GLFW gives them (gui/glfwkeys.c, on_key): F10, Alt+F, Ctrl+N
 raw-key 299
 expect menu=File menuat=new-tab
 raw-key 299

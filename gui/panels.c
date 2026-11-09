@@ -103,8 +103,10 @@ static void layout_modal_panel(UiOnTop k)
         } else if (k == UI_ON_RESTORE) {   // (F11 step 3)
             int n = app.ui.restore_n;
             text(cz(n == 1 ? "Bring back the other window?" : arena_sprintf(&frame, "Bring back the other %d windows?", n)), cc(t->fg));
+            char ca[64];   // (Close All's key as bound, F15)
+            ui_with_key(ca, sizeof ca, "Close All", UK_QUIT_ALL);
             const char *why = restore.crashed ? (n == 1 ? "ofx didn't close it properly last time." : "ofx didn't close them all properly last time.")
-                                              : (n == 1 ? "Close All (Ctrl+Q) closed it, with its tabs." : "Close All (Ctrl+Q) closed them, with their tabs.");
+                                              : arena_sprintf(&frame, n == 1 ? "%s closed it, with its tabs." : "%s closed them, with their tabs.", ca);
             text(fit(str_from_c(why), 430, false), cc(t->fg_dim));
             text(cz(n == 1 ? "Enter or y brings it back \xC2\xB7 n or Esc forgets it" : "Enter or y brings them back \xC2\xB7 n or Esc forgets them"), cc(t->fg_dim));
             modal_yes_no(n == 1 ? "Forget it" : "Forget them", "Bring back");
