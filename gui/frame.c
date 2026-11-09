@@ -204,6 +204,52 @@ static void layout_drag(void)
 }
 
 // The window, and the modal panel on top when one is up.
+// The footer's hint for what has the keys now (a panel, a question, a menu, a field), NULL when
+// nothing does (the status line or the folder's line then). One draw for all of them (the F15
+// code-health review: 17 branches, each its own text() call, three without fit).
+static const char *footer_hint(void)
+{
+    UiOnTop on = modal_kind();
+    switch (on) {
+    case UI_ON_PROPS: return "Properties: \xE2\x86\x90 \xE2\x86\x91 \xE2\x86\x93 \xE2\x86\x92 (h j k l) move \xC2\xB7 Space or Enter changes \xC2\xB7 Esc closes";
+    case UI_ON_BAR: return "Menu bar hidden: Enter or Esc closes this";
+    case UI_ON_ABOUT: return "About: Esc or Enter closes";
+    case UI_ON_KEYS: {
+        const char *k = ui_cmd_key(UK_SHORTCUTS, 0);   // (as bound, F15)
+        return arena_sprintf(&frame, "Keyboard Shortcuts: type to filter \xC2\xB7 \xE2\x86\x91 \xE2\x86\x93 PgUp PgDn scroll \xC2\xB7 Esc%s%s closes", k[0] ? " or " : "", k);
+    }
+    case UI_ON_BM:
+        return app.ui.bmp_naming ? "Rename: Enter renames (empty: the folder's name) \xC2\xB7 Esc keeps the name"
+                                 : "Bookmarks: \xE2\x86\x91 \xE2\x86\x93 (k j) move \xC2\xB7 Enter goes there \xC2\xB7 Delete removes \xC2\xB7 F2 renames \xC2\xB7 "
+                                   "Alt+\xE2\x86\x91 Alt+\xE2\x86\x93 move it \xC2\xB7 Esc closes";
+    case UI_ON_BRANCHES: return "Branches: type to filter \xC2\xB7 Tab or \xE2\x86\x93 the list \xC2\xB7 Enter switches \xC2\xB7 Esc closes";
+    case UI_ON_OW:
+        return "Open With: type to filter \xC2\xB7 Tab or \xE2\x86\x93 the list \xC2\xB7 Enter opens \xC2\xB7 Esc closes \xC2\xB7 "
+               "Alt+C/W/R case, words, regex \xC2\xB7 Alt+D default";
+    case UI_ON_NONE: break;
+    default: return "Answer the question above";
+    }
+    if (app.ui.menu_on && app.ui.menu >= UI_MENUS) return "Menu: \xE2\x86\x91 \xE2\x86\x93 (k j) move \xC2\xB7 Enter picks \xC2\xB7 Esc closes";
+    if (app.ui.menu_on) return "Menu: \xE2\x86\x91 \xE2\x86\x93 (k j) move \xC2\xB7 \xE2\x86\x90 \xE2\x86\x92 the next menu \xC2\xB7 Enter picks \xC2\xB7 Esc closes";
+    switch (app.ui.focus) {
+    case UI_FOCUS_CRUMBS: return "Path: \xE2\x86\x90 \xE2\x86\x92 (h l) move \xC2\xB7 Enter goes there \xC2\xB7 Shift+Enter in a new tab \xC2\xB7 Esc back to the list";
+    case UI_FOCUS_EDIT:
+        return app.ui.edit_path             ? "Go to: Enter goes there \xC2\xB7 Esc cancels \xC2\xB7 ~ is home, a relative path starts here"
+               : app.edit_new == UNDO_MKDIR  ? "New folder: Enter keeps the name \xC2\xB7 Esc keeps \"New folder\""
+               : app.edit_new == UNDO_MKFILE ? "New file: Enter keeps the name \xC2\xB7 Esc keeps \"New file\""
+                                             : "Rename: Enter renames \xC2\xB7 Esc cancels";
+    case UI_FOCUS_JOBS: return "Jobs: \xE2\x86\x91 \xE2\x86\x93 (k j) move \xC2\xB7 Enter cancels the marked job \xC2\xB7 Esc back to the list";
+    case UI_FOCUS_FIND:
+        if (!app.ui.finding) return NULL;
+        if (app.ui.find_select)
+            return "Select: Enter selects every match \xC2\xB7 Esc cancels \xC2\xB7 \xE2\x86\x91 \xE2\x86\x93 previous and next \xC2\xB7 Alt+C/W/R case, words, regex";
+        const char *k = ui_cmd_key(UK_JOBS, 0);   // (as bound, F15)
+        return arena_sprintf(&frame, "Find: \xE2\x86\x91 \xE2\x86\x93 previous and next \xC2\xB7 Enter keeps \xC2\xB7 Esc closes \xC2\xB7 %s%sAlt+C/W/R case, words, regex",
+                             k, k[0] ? " the jobs \xC2\xB7 " : "");
+    default: return NULL;
+    }
+}
+
 static Clay_RenderCommandArray layout(int w, int h)
 {
     menu_facts();
@@ -260,53 +306,9 @@ static Clay_RenderCommandArray layout(int w, int h)
             layout_modes();
             CLAY(CLAY_ID("footer-line"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
                                            .clip = { .horizontal = true } }) {
-            if (modal_kind() == UI_ON_PROPS) {
-                text(fit(S("Properties: \xE2\x86\x90 \xE2\x86\x91 \xE2\x86\x93 \xE2\x86\x92 (h j k l) move \xC2\xB7 Space or Enter changes \xC2\xB7 Esc closes"), foot_w, false),
-                     cc(t->fg_dim));
-            } else if (modal_kind() == UI_ON_BAR) {
-                text(fit(S("Menu bar hidden: Enter or Esc closes this"), foot_w, false), cc(t->fg_dim));
-            } else if (modal_kind() == UI_ON_ABOUT) {
-                text(fit(S("About: Esc or Enter closes"), foot_w, false), cc(t->fg_dim));
-            } else if (modal_kind() == UI_ON_KEYS) {
-                const char *k = ui_cmd_key(UK_SHORTCUTS, 0);   // (as bound, F15)
-                text(fit(str_from_c(arena_sprintf(&frame, "Keyboard Shortcuts: type to filter \xC2\xB7 \xE2\x86\x91 \xE2\x86\x93 PgUp PgDn scroll \xC2\xB7 Esc%s%s closes",
-                                                  k[0] ? " or " : "", k)), foot_w, false), cc(t->fg_dim));
-            } else if (modal_kind() == UI_ON_BM) {
-                text(fit(str_from_c(app.ui.bmp_naming ? "Rename: Enter renames (empty: the folder's name) \xC2\xB7 Esc keeps the name"
-                                             : "Bookmarks: \xE2\x86\x91 \xE2\x86\x93 (k j) move \xC2\xB7 Enter goes there \xC2\xB7 Delete removes \xC2\xB7 F2 renames \xC2\xB7 "
-                                               "Alt+\xE2\x86\x91 Alt+\xE2\x86\x93 move it \xC2\xB7 Esc closes"), foot_w, false), cc(t->fg_dim));
-            } else if (modal_kind() == UI_ON_BRANCHES) {
-                text(fit(S("Branches: type to filter \xC2\xB7 Tab or \xE2\x86\x93 the list \xC2\xB7 Enter switches \xC2\xB7 Esc closes"), foot_w, false), cc(t->fg_dim));
-            } else if (modal_kind() == UI_ON_OW) {
-                text(fit(S("Open With: type to filter \xC2\xB7 Tab or \xE2\x86\x93 the list \xC2\xB7 Enter opens \xC2\xB7 Esc closes \xC2\xB7 "
-                           "Alt+C/W/R case, words, regex \xC2\xB7 Alt+D default"), foot_w, false), cc(t->fg_dim));
-            } else if (modal_kind() != UI_ON_NONE) {
-                text(cz("Answer the question above"), cc(t->fg_dim));
-            } else if (app.ui.menu_on && app.ui.menu >= UI_MENUS) {
-                text(fit(S("Menu: \xE2\x86\x91 \xE2\x86\x93 (k j) move \xC2\xB7 Enter picks \xC2\xB7 Esc closes"), foot_w, false), cc(t->fg_dim));
-            } else if (app.ui.menu_on) {
-                text(fit(S("Menu: \xE2\x86\x91 \xE2\x86\x93 (k j) move \xC2\xB7 \xE2\x86\x90 \xE2\x86\x92 the next menu \xC2\xB7 Enter picks \xC2\xB7 Esc closes"), foot_w, false),
-                     cc(t->fg_dim));
-            } else if (app.ui.focus == UI_FOCUS_CRUMBS) {
-                text(fit(S("Path: \xE2\x86\x90 \xE2\x86\x92 (h l) move \xC2\xB7 Enter goes there \xC2\xB7 Shift+Enter in a new tab \xC2\xB7 Esc back to the list"), foot_w, false),
-                     cc(t->fg_dim));
-            } else if (app.ui.focus == UI_FOCUS_EDIT && app.ui.edit_path) {
-                text(cz("Go to: Enter goes there \xC2\xB7 Esc cancels \xC2\xB7 ~ is home, a relative path starts here"), cc(t->fg_dim));
-            } else if (app.ui.focus == UI_FOCUS_EDIT) {
-                text(cz(app.edit_new == UNDO_MKDIR  ? "New folder: Enter keeps the name \xC2\xB7 Esc keeps \"New folder\""
-                        : app.edit_new == UNDO_MKFILE ? "New file: Enter keeps the name \xC2\xB7 Esc keeps \"New file\""
-                                                      : "Rename: Enter renames \xC2\xB7 Esc cancels"),
-                     cc(t->fg_dim));
-            } else if (app.ui.focus == UI_FOCUS_JOBS) {
-                text(fit(S("Jobs: \xE2\x86\x91 \xE2\x86\x93 (k j) move \xC2\xB7 Enter cancels the marked job \xC2\xB7 Esc back to the list"), foot_w, false),
-                     cc(t->fg_dim));
-            } else if (app.ui.finding && app.ui.focus == UI_FOCUS_FIND && app.ui.find_select) {
-                text(fit(S("Select: Enter selects every match \xC2\xB7 Esc cancels \xC2\xB7 \xE2\x86\x91 \xE2\x86\x93 previous and next \xC2\xB7 "
-                           "Alt+C/W/R case, words, regex"), foot_w, false), cc(t->fg_dim));
-            } else if (app.ui.finding && app.ui.focus == UI_FOCUS_FIND) {
-                const char *k = ui_cmd_key(UK_JOBS, 0);   // (as bound, F15)
-                text(fit(str_from_c(arena_sprintf(&frame, "Find: \xE2\x86\x91 \xE2\x86\x93 previous and next \xC2\xB7 Enter keeps \xC2\xB7 Esc closes \xC2\xB7 %s%s"
-                                                  "Alt+C/W/R case, words, regex", k, k[0] ? " the jobs \xC2\xB7 " : "")), foot_w, false), cc(t->fg_dim));
+            const char *hint = footer_hint();
+            if (hint) {
+                text(fit(str_from_c(hint), foot_w, false), cc(t->fg_dim));
             } else if (app.status[0]) {
                 text(fit(str_from_c(app.status), foot_w, false), app.status_bad ? cc(t->red) : cc(t->fg));
             } else if (app.ui.view == UI_VIEW_SEARCH && !app.ui.marked) {

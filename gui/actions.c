@@ -970,8 +970,8 @@ static void act(UiAction a)
     case UA_LAUNCH: ow_launch(a.index, a.all); break;
     case UA_PASTE: {   // all: into the folder entry index (F8)
         char into[PATH_MAX];
-        if (!a.all) paste(app.cwd);
-        else if (a.index < app.list.n && entry_path(a.index, into, sizeof into)) paste(into);
+        const char *dir = act_dir(a, into, sizeof into);
+        if (dir) paste(dir);
         break;
     }
     case UA_MAKE_LINK:
@@ -988,8 +988,8 @@ static void act(UiAction a)
     case UA_BM_EDIT: case UA_BM_GO: case UA_BM_NAME: case UA_BM_REMOVE: case UA_BM_UP: case UA_BM_DOWN: case UA_BM_RENAME: bmp_act(a); break;
     case UA_ADD_BOOKMARK: {   // all: the folder entry index (F8)
         char bm[PATH_MAX];
-        if (!a.all) bookmark_add(app.cwd);
-        else if (a.index < app.list.n && entry_path(a.index, bm, sizeof bm)) bookmark_add(bm);
+        const char *dir = act_dir(a, bm, sizeof bm);
+        if (dir) bookmark_add(dir);
         break;
     }
     case UA_BOOKMARK: {

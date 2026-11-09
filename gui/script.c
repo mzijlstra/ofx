@@ -180,14 +180,20 @@ static bool script_open(const char *path)
     return true;
 }
 
+// s's spaces as '_', in place (the state line is split at spaces). Returns s.
+static char *state_unspace(char *s)
+{
+    for (char *c = s; *c; c++)
+        if (*c == ' ') *c = '_';
+    return s;
+}
+
 // A word of the state line: s, "-" when it is empty, spaces as '_' (the line is split at spaces;
 // F9's review, 2026-10-29: this was written out at each word). Into out; returns out.
 static char *state_word(char *out, size_t cap, Str s)
 {
     snprintf(out, cap, "%.*s", s.len ? (int)s.len : 1, s.len ? s.p : "-");
-    for (char *c = out; *c; c++)
-        if (*c == ' ') *c = '_';
-    return out;
+    return state_unspace(out);
 }
 
 static void script_fail(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
@@ -218,6 +224,20 @@ static int state_drag(char *out, size_t cap)
                     spring_fill < 0 ? -1 : (int)(spring_fill * 100), badge_drawn && badge_in(), dnd.ok, dnd.press != 0, dnd.over >= 0,
                     dnd.x, dnd.y, dnd.action, dnd.reading, dnd.drops, dnd.drops_failed, dnd.got.n, dropfirst, dnd.own_drops,
                     DND_OUT_WORD[dnd.out], dnd.out_action, (long long)atomic_load(&dnd.sent), atomic_load(&dnd.wrote), dnd.icon != NULL);
+}
+
+// Words of the state line appended at out + *len (cap the whole line's room), each with its own
+// printf so the compiler checks its format against its arguments (the F15 code-health review: one
+// snprintf of about 200 words, its arguments far from their words). *len counts on past cap, as
+// snprintf does, so the caller sees a line cut short.
+static void sw(char *out, size_t cap, int *len, const char *fmt, ...) __attribute__((format(printf, 4, 5)));
+static void sw(char *out, size_t cap, int *len, const char *fmt, ...)
+{
+    va_list ap;
+    va_start(ap, fmt);
+    int n = vsnprintf((size_t)*len < cap ? out + *len : NULL, (size_t)*len < cap ? cap - (size_t)*len : 0, fmt, ap);
+    va_end(ap);
+    if (n > 0) *len += n;
 }
 
 static void script_state(char *out, size_t cap)
@@ -415,7 +435,7 @@ static void script_state(char *out, size_t cap)
         if (ui_menu_key(it)[0]) snprintf(menukeys + k, sizeof menukeys - k, "%s%s=%s", k ? "," : "", UI_MENU_ITEM[it].word, ui_menu_key(it));
     }
     if (!menukeys[0]) snprintf(menukeys, sizeof menukeys, "-");
-    for (char *c = menukeys; *c; c++) *c = *c == ' ' ? '_' : *c;
+    state_unspace(menukeys);
     // The open menu's entries (F7.4): those that can't be picked, those the last frame didn't draw,
     // those marked.
     char menugrey[512] = "", menuhid[512] = "", menumarked[256] = "";
@@ -454,6 +474,10 @@ static void script_state(char *out, size_t cap)
     Clay_ElementData mb = Clay_GetElementData(CLAY_ID("menu"));
     if (app.ui.menu_on && mb.found)
         snprintf(menubox, sizeof menubox, "%.0f,%.0f,%.0f,%.0f", mb.boundingBox.x, mb.boundingBox.y, mb.boundingBox.width, mb.boundingBox.height);
+    // And whether menu_size, which places a right-click menu before it is drawn, measured it as
+    // drawn (the F15 code-health review found them apart for a long branch name).
+    Vector2 msz = app.ui.menu_on && mb.found ? menu_size(app.ui.menu) : (Vector2){ 0 };
+    int menusized = app.ui.menu_on && mb.found && fabsf(msz.x - 2 - mb.boundingBox.width) < 1 && fabsf(msz.y - 2 - mb.boundingBox.height) < 1;   // (its border outside the box)
     int menuin = app.ui.menu_on && mb.found && mb.boundingBox.x >= 0 && mb.boundingBox.y >= 0 &&
                  mb.boundingBox.x + mb.boundingBox.width <= (float)GetScreenWidth() && mb.boundingBox.y + mb.boundingBox.height <= (float)GetScreenHeight();
     // And whether it leaves the cursor's row in sight (a right-click menu by the keys opens under it).
@@ -471,7 +495,7 @@ static void script_state(char *out, size_t cap)
         size_t at = strlen(bmlist);
         snprintf(bmlist + at, sizeof bmlist - at, "%s%.*s", at ? "|" : "", STR_ARG(bm_label(b)));
     }
-    for (char *c = bmlist; *c; c++) *c = *c == ' ' ? '_' : *c;
+    state_unspace(bmlist);
     if (!bmlist[0]) snprintf(bmlist, sizeof bmlist, "-");
     // Keyboard Shortcuts' first row shown: its action (spaces '_'; a heading "#" and its name).
     char keysfirst[128] = "-";
@@ -480,10 +504,10 @@ static void script_state(char *out, size_t cap)
         snprintf(keysfirst, sizeof keysfirst, "%s%s", line < 0 ? "#" : "", line < 0 ? UI_KEY_SECTION[-1 - line] : UI_KEYS[line].action);
         break;
     }
-    for (char *c = keysfirst; *c; c++) *c = *c == ' ' ? '_' : *c;
+    state_unspace(keysfirst);
     char keyscap[UI_KEY_NAME_MAX + 16];   // and the first key it drew (spaces '_'; "-" none)
     snprintf(keyscap, sizeof keyscap, "%s", app.ui.panel == UI_PANEL_KEYS && keys_cap_drawn ? keys_cap_drawn : "-");
-    for (char *c = keyscap; *c; c++) *c = *c == ' ' ? '_' : *c;
+    state_unspace(keyscap);
     bool keyscapmine = app.ui.panel == UI_PANEL_KEYS && keys_cap_drawn && keys_cap_mine;
     char bmptext[300];   // Edit Bookmarks' rename field (spaces '_'; "-" empty)
     state_word(bmptext, sizeof bmptext, (Str){ app.ui.bmp_name.b, app.ui.bmp_name.len });
@@ -523,14 +547,14 @@ static void script_state(char *out, size_t cap)
     isize findat, findn = find_count(&findat);
     char findtext[48] = "-";
     if (findn > 0) find_label(findn, findat, findtext, sizeof findtext);
-    for (char *c = findtext; *c; c++) *c = *c == ' ' ? '_' : *c;
+    state_unspace(findtext);
     char propwhere[PATH_MAX], propdrive[256], proplink[PATH_MAX];
     snprintf(propwhere, sizeof propwhere, "%s", props.where[0] ? props.where : "-");
     snprintf(propdrive, sizeof propdrive, "%s", props.drive[0] ? props.drive : "-");
     snprintf(proplink, sizeof proplink, "%s", props.link[0] ? props.link : "-");
-    for (char *c = propwhere; *c; c++) *c = *c == ' ' ? '_' : *c;
-    for (char *c = propdrive; *c; c++) *c = *c == ' ' ? '_' : *c;
-    for (char *c = proplink; *c; c++) *c = *c == ' ' ? '_' : *c;
+    state_unspace(propwhere);
+    state_unspace(propdrive);
+    state_unspace(proplink);
     int windows = 0;
     DIR *wd = app.windows[0] ? opendir(app.windows) : NULL;
     for (struct dirent *we; wd && (we = readdir(wd));) windows += we->d_name[0] != '.';
@@ -548,62 +572,276 @@ static void script_state(char *out, size_t cap)
         if (c >= 0) snprintf(cnt, sizeof cnt, "%td", c);
         else if (c == -1) snprintf(cnt, sizeof cnt, "?");
     }
-    int len = snprintf(out, cap,
-             "dir=%s n=%td hidden=%td sel=%.*s idx=%td top=%td rows=%d hover=%d accent=#%02x%02x%02x listacc=#%02x%02x%02x markedname=%s bg=#%02x%02x%02x "
-             "icons=%s scale=%d w=%d h=%d reloads=%d themes=%d batches=%d frame_ms_max=%.1f icon=%s "
-             "shown=%d sort=%s rev=%d finding=%d findkeys=%d miss=%d find=%.*s last=%.*s side=%td sidefocus=%d place=%s here=%s "
-             "back=%d fwd=%d marked=%td editing=%d edit=%s confirming=%d asking=%d job=%s done=%lld/%lld undo=%s clip=%td cut=%d "
-             "sysclip=%d modal=%s askall=%d tabs=%d tab=%d tabdirs=%s sizecell=%s crumbs=%s crumbhome=%d crumb=%d crumbshown=%d-%d arrows=%d locating=%d cnt=%s "
-             "esel=%d-%d caret=%d copied=%s crumbkey=%s jobs=%d waiting=%d jobrows=%s jobkey=%s jobline=%d jobspeed=%d clashjob=%s "
-             "sides=%s spaced=%d sidemode=%s treen=%d treecur=%s treerow=%td treehere=%d trash=%d sidehover=%d hovernum=%s ejectbtn=%d cwdavail=%d info=%s "
-             "view=%s cols=%d cells=%d cellfirst=%td celllast=%td fulllines=%d celllines=%d cellcut=%d iconpx=%d icontex=%d iconresets=%d crumbfocus=%d tooltip=%s idlewoke=%s "
-             "zoom=%d cellw=%d cellh=%d zoomshown=%d tipin=%d slots=%d "
-             "previews=%d thumbsel=%s thumbbox=%s thumbbusy=%d thumbmade=%d thumbread=%d thumbfailed=%d thumbknown=%d thumbnone=%d thumbchanged=%d "
-             "thumbheld=%td thumbdropped=%d thumbresets=%d thumblocal=%d reloadasked=%d menuseps=%d bmlist=%s bmn=%d bmhere=%d canbm=%d bmmore=%d bmp=%d bmpn=%td bmpsel=%td bmpnaming=%d bmptext=%s keys=%d keysn=%td keystop=%td keysrows=%d keysfirst=%s keyscap=%s keyscapmine=%d keysbad=%d keyclashes=%d menukeys=%s menu=%s menuat=%s menuoff=%s menugrey=%s menuhid=%s menumarked=%s menubox=%s menuin=%d menuclear=%d permscols=%d permsshown=%d permsnote=%d groupcol=%d groupdrawn=%d colors=%d barhidden=%d barshown=%d menuhover=%d canwrite=%d windows=%d siderows=%d footerin=%d "
-             "props=%d propat=%d propcan=%d propn=%td propmode=%04o propfiles=%lld propdirs=%lld propbytes=%lld propdone=%d propcut=%d proplinks=%lld,%lld,%lld,%d propnlink=%llu proptype=%s proptypename=%s propbyname=%d propname=%s "
-             "propwhere=%s propdrive=%s proplink=%s propcreated=%d propidx=%td "
-             "ow=%d owfresh=%d owlist=%d owtext=%s own=%td owsel=%td owapp=%s owicon=%s owtex=%d owshown=%td owtype=%s owfiles=%td owrows=%d owtop=%td owopts=%s owbad=%d owdef=%d owdefcan=%d findopts=%s findbad=%d findselect=%d findn=%td findat=%td findtext=%s "
-             "search=%d searchkeys=%d searchtext=%s searchdone=%d searchfull=%d searchdue=%d searchbad=%d searchbar=%d searchsel=%d-%d searchcaret=%d findsel=%d-%d findcaret=%d seldir=%s searchinfo=%s inside=%d insidekeys=%d insidetext=%s insideopts=%s insidebad=%d insiderow=%d hit=%s hitmatch=%s hitdrawn=%d datecol=%s datecolw=%.0f owreads=%d conf=%s confbad=%d seldate=%s trashfull=%d trashicon=%s spawned=%d closingall=%d closedtabs=%d emptyn=%td shiftsel=%s clearn=%lld clearing=%d gitshown=%d gitsel=%s gitn=%td gitnamecol=%s gitcells=%d infogit=%s gitdue=%d branch=%s brn=%d brhere=%d brnote=%s brlist=%s brfits=%d brunder=%d gitwatch=%d brtotal=%d brp=%d brpn=%td brpsel=%s brptext=%s brpinlist=%d sidew=%d sidebox=%.0f sidepx=%d ",
-             app.cwd, app.list.n, app.list.hidden, STR_ARG(sel), app.ui.list.sel, app.ui.list.top, app.ui.list.rows, app.hov.row,
-             t->accent.r, t->accent.g, t->accent.b, app.theme_list.accent.r, app.theme_list.accent.g, app.theme_list.accent.b,
-             marked_name_drawn.a ? arena_sprintf(&frame, "#%02x%02x%02x", (int)marked_name_drawn.r, (int)marked_name_drawn.g, (int)marked_name_drawn.b) : "-", t->bg.r, t->bg.g, t->bg.b, t->icons[0] ? t->icons : "-",
-             app.icon_scale, GetScreenWidth(), GetScreenHeight(), app.reloads, app.themes, atomic_load(&watch.batches),
-             (double)frame_us_max / 1000.0, icon, app.show_hidden,
-             app.ui.sort.key == SORT_NAME ? "name" : app.ui.sort.key == SORT_SIZE ? "size" : "mtime", app.ui.sort.reverse,
-             app.ui.finding, app.ui.focus == UI_FOCUS_FIND, app.ui.find_miss, app.ui.find.len ? app.ui.find.len : 1, app.ui.find.len ? app.ui.find.b : "-",
-             app.ui.last_len ? app.ui.last_len : 1, app.ui.last_len ? app.ui.last : "-", app.ui.side.sel, app.ui.focus == UI_FOCUS_SIDE,
-             app.ui.side_mode == SIDE_PLACES && app.ui.side.sel < app.places.n ? app.places.p[app.ui.side.sel].label : "-", app.place_cur >= 0 ? app.places.p[app.place_cur].label : "-",
-             hist.nback, hist.nfwd, app.ui.marked, app.ui.focus == UI_FOCUS_EDIT, edit, app.ui.confirming, app.ui.asking,
-             !oldest ? "-" : JOB_PHASES[atomic_load(&oldest->j.phase)], oldest ? atomic_load(&oldest->j.files_done) : 0LL,
-             oldest ? atomic_load(&oldest->j.files_total) : 0LL,
-             UNDO_KINDS[undo.kind], own.n, own.cut, clip.ok, MODALS[modal_kind()], app.ui.ask_all, tabbar.n, tabbar.cur, tabdirs, sizecell, crumbs, app.crumbs.seg[0].home ? 0 : -1, app.crumbs.cur, app.crumb_lo, app.crumb_hi, app.crumb_arrows,
-             app.ui.focus == UI_FOCUS_EDIT && app.ui.edit_path, cnt, slo, shi, app.ui.edit.caret, copied, keyed,
-             jobs.nrun, jobs.nwait, joblabels, jobkey, oldest ? oldest->line.reached : 0, oldest && oldest->line.now > 0, clashjob,
-             sides[0] ? sides : "-", spaced, SIDE_MODES_W[app.ui.side_mode], app.ui.side_mode == SIDE_TREE ? tree.n : 0, treecur,
-             app.ui.side.sel - app.ui.side.top, treehere, app.ui.view == UI_VIEW_TRASH, app.hov.side, hovernum, ejectbtn, app.cwd_avail >= 0, info,
-             app.ui.grid ? "icons" : "list", (int)ui_cols(&app.ui.list), app.grid_cells, app.grid_first, app.grid_last, app.grid_full_lines, app.grid_hover_lines, app.grid_hover_cut, entry_px(), icontex, app.icon_full_resets, app.ui.focus == UI_FOCUS_CRUMBS, tipword, idle_woke,
-             ui_zoom_px(&app.ui), cell_w(), cell_h(), Clay_GetElementData(CLAY_ID("zoom-track")).found, tipin, app.nslots,
-             thumbs.drawn_now, thumbsel, thumbbox, thumbs_busy(), thumbs.got[TG_MADE], thumbs.got[TG_CACHED], thumbs.got[TG_FAILED],
-             thumbs.got[TG_FAIL_KNOWN], thumbs.got[TG_NONE], thumbs.got[TG_CHANGED], thumbs.held, thumbs.evicted, thumbs.resets, app.thumb_local,
-             app.reloads_asked, menuseps, bmlist, app.ui.bm_n, app.ui.bm_here, app.ui.can_bookmark, app.ui.bm_more, app.ui.panel == UI_PANEL_BM, app.ui.bmp_list.n, app.ui.bmp_list.sel, app.ui.bmp_naming, bmptext, app.ui.panel == UI_PANEL_KEYS, app.ui.keys_list.n, app.ui.keys_list.top, app.ui.keys_list.rows, keysfirst, keyscap, keyscapmine, conf_keys_read.bad, conf_keys_read.clashes, menukeys, app.ui.menu_on ? UI_MENU[app.ui.menu].title : "-", menuat, menuoff, menugrey, menuhid, menumarked, menubox, menuin, menuclear, app.ui.perms_cols, perms_shown((float)GetScreenWidth()), (int)(strstr(info, "Permissions_hidden") != NULL), app.ui.group_col,
-             (int)Clay_GetElementData(CLAY_ID("col-group")).found + (int)Clay_GetElementData(CLAY_IDI("group", 0)).found, app.ui.colors, app.ui.bar_hidden, bar_shown(), app.hov.menu_title, app.ui.can_write, windows,
-             app.ui.side.rows, footerin,
-             app.ui.panel == UI_PANEL_PROPS, app.ui.prop_at, app.ui.prop_can, props.n, props.have ? (unsigned)(props.st.st_mode & 07777) : 0u,
-             (long long)props.sum.files, (long long)props.sum.dirs, (long long)props.sum.bytes, props.done, props.sum.cut || props.cut,
-             (long long)props.sum.linked_names, (long long)props.sum.linked_files, (long long)props.sum.once_bytes, props.sum.once_over,
-             props.have ? (unsigned long long)props.st.st_nlink : 0ull,
-             props.type[0] ? props.type : "-", proptypename, props.type_by_name, propname,
-             propwhere, propdrive, proplink, props.btime >= 0, props.idx,
-             app.ui.panel == UI_PANEL_OW, app.ui.ow.fresh, app.ui.ow.in_list, owtext, app.ui.ow.list.n, app.ui.ow.list.sel, owapp, owicon, owtex, ow.shown, ow.type[0] ? ow.type : "-", ow.n,
-             app.ui.ow.list.rows, app.ui.ow.list.top, owopts, app.ui.ow.m.bad, app.ui.ow_def, app.ui.ow_def_can, findopts, app.ui.find_m.bad, app.ui.find_select, findn, findat, findtext,
-             app.ui.view == UI_VIEW_SEARCH, app.ui.focus == UI_FOCUS_SEARCH, searchtext, app.search_done, app.search_s.full, app.search_due != 0, app.search_m.bad,
-             (int)Clay_GetElementData(CLAY_ID("search-bar")).found,
-             app.ui.search.anchor < app.ui.search.caret ? app.ui.search.anchor : app.ui.search.caret,
-             app.ui.search.anchor < app.ui.search.caret ? app.ui.search.caret : app.ui.search.anchor, app.ui.search.caret,
-             app.ui.find.anchor < app.ui.find.caret ? app.ui.find.anchor : app.ui.find.caret,
-             app.ui.find.anchor < app.ui.find.caret ? app.ui.find.caret : app.ui.find.anchor, app.ui.find.caret, seldir, searchinfo,
-             app.ui.search_inside, app.ui.focus == UI_FOCUS_INSIDE, insidetext, insideopts, app.search_im.bad,
-             (int)Clay_GetElementData(CLAY_ID("inside-field")).found, hit, hitmatch, hitdrawn, VIEWS[app.ui.view].date_col, date_w(), ow_idb_reads, confw, app.conf.bad, seldate, app.trash_full, trashicon, spawn_started, closing_all, closed_tabs.n, app.empty_n, app.ui.shift_add ? "add" : "range", clear.counted ? (long long)clear.sum.files : -1LL, clear.running, git_shown() != NULL, GIT_WORDS[app.have_list && app.list.n ? entry_git(app.ui.list.sel) : GS_NONE], git_shown() ? git_shown()->g.changed : (isize)0, gitnamecol, gitcells, infogit, git.due != 0, branch, app.ui.br_n, app.ui.br_here, brnote, brlist, brfits, brunder, atomic_load(&watch.git_wd) >= 0, app.ui.br_total, app.ui.panel == UI_PANEL_BRANCHES, app.ui.brp.list.n, brpsel, brptext, app.ui.brp.in_list, side_w(), Clay_GetElementData(CLAY_ID("side")).boundingBox.width, app.side_px);
+    int len = 0;
+    sw(out, cap, &len, "dir=%s ", app.cwd);
+    sw(out, cap, &len, "n=%td ", app.list.n);
+    sw(out, cap, &len, "hidden=%td ", app.list.hidden);
+    sw(out, cap, &len, "sel=%.*s ", STR_ARG(sel));
+    sw(out, cap, &len, "idx=%td ", app.ui.list.sel);
+    sw(out, cap, &len, "top=%td ", app.ui.list.top);
+    sw(out, cap, &len, "rows=%d ", app.ui.list.rows);
+    sw(out, cap, &len, "hover=%d ", app.hov.row);
+    sw(out, cap, &len, "accent=#%02x%02x%02x ", t->accent.r, t->accent.g, t->accent.b);
+    sw(out, cap, &len, "listacc=#%02x%02x%02x ", app.theme_list.accent.r, app.theme_list.accent.g, app.theme_list.accent.b);
+    sw(out, cap, &len, "markedname=%s ", marked_name_drawn.a ? arena_sprintf(&frame, "#%02x%02x%02x", (int)marked_name_drawn.r, (int)marked_name_drawn.g, (int)marked_name_drawn.b) : "-");
+    sw(out, cap, &len, "bg=#%02x%02x%02x ", t->bg.r, t->bg.g, t->bg.b);
+    sw(out, cap, &len, "icons=%s ", t->icons[0] ? t->icons : "-");
+    sw(out, cap, &len, "scale=%d ", app.icon_scale);
+    sw(out, cap, &len, "w=%d ", GetScreenWidth());
+    sw(out, cap, &len, "h=%d ", GetScreenHeight());
+    sw(out, cap, &len, "reloads=%d ", app.reloads);
+    sw(out, cap, &len, "themes=%d ", app.themes);
+    sw(out, cap, &len, "batches=%d ", atomic_load(&watch.batches));
+    sw(out, cap, &len, "frame_ms_max=%.1f ", (double)frame_us_max / 1000.0);
+    sw(out, cap, &len, "icon=%s ", icon);
+    sw(out, cap, &len, "shown=%d ", app.show_hidden);
+    sw(out, cap, &len, "sort=%s ", app.ui.sort.key == SORT_NAME ? "name" : app.ui.sort.key == SORT_SIZE ? "size" : "mtime");
+    sw(out, cap, &len, "rev=%d ", app.ui.sort.reverse);
+    sw(out, cap, &len, "finding=%d ", app.ui.finding);
+    sw(out, cap, &len, "findkeys=%d ", app.ui.focus == UI_FOCUS_FIND);
+    sw(out, cap, &len, "miss=%d ", app.ui.find_miss);
+    sw(out, cap, &len, "find=%.*s ", app.ui.find.len ? app.ui.find.len : 1, app.ui.find.len ? app.ui.find.b : "-");
+    sw(out, cap, &len, "last=%.*s ", app.ui.last_len ? app.ui.last_len : 1, app.ui.last_len ? app.ui.last : "-");
+    sw(out, cap, &len, "side=%td ", app.ui.side.sel);
+    sw(out, cap, &len, "sidefocus=%d ", app.ui.focus == UI_FOCUS_SIDE);
+    sw(out, cap, &len, "place=%s ", app.ui.side_mode == SIDE_PLACES && app.ui.side.sel < app.places.n ? app.places.p[app.ui.side.sel].label : "-");
+    sw(out, cap, &len, "here=%s ", app.place_cur >= 0 ? app.places.p[app.place_cur].label : "-");
+    sw(out, cap, &len, "back=%d ", hist.nback);
+    sw(out, cap, &len, "fwd=%d ", hist.nfwd);
+    sw(out, cap, &len, "marked=%td ", app.ui.marked);
+    sw(out, cap, &len, "editing=%d ", app.ui.focus == UI_FOCUS_EDIT);
+    sw(out, cap, &len, "edit=%s ", edit);
+    sw(out, cap, &len, "confirming=%d ", app.ui.confirming);
+    sw(out, cap, &len, "asking=%d ", app.ui.asking);
+    sw(out, cap, &len, "job=%s ", !oldest ? "-" : JOB_PHASES[atomic_load(&oldest->j.phase)]);
+    sw(out, cap, &len, "done=%lld/%lld ", oldest ? atomic_load(&oldest->j.files_done) : 0LL, oldest ? atomic_load(&oldest->j.files_total) : 0LL);
+    sw(out, cap, &len, "undo=%s ", UNDO_KINDS[undo.kind]);
+    sw(out, cap, &len, "clip=%td ", own.n);
+    sw(out, cap, &len, "cut=%d ", own.cut);
+    sw(out, cap, &len, "sysclip=%d ", clip.ok);
+    sw(out, cap, &len, "modal=%s ", MODALS[modal_kind()]);
+    sw(out, cap, &len, "askall=%d ", app.ui.ask_all);
+    sw(out, cap, &len, "tabs=%d ", tabbar.n);
+    sw(out, cap, &len, "tab=%d ", tabbar.cur);
+    sw(out, cap, &len, "tabdirs=%s ", tabdirs);
+    sw(out, cap, &len, "sizecell=%s ", sizecell);
+    sw(out, cap, &len, "crumbs=%s ", crumbs);
+    sw(out, cap, &len, "crumbhome=%d ", app.crumbs.seg[0].home ? 0 : -1);
+    sw(out, cap, &len, "crumb=%d ", app.crumbs.cur);
+    sw(out, cap, &len, "crumbshown=%d-%d ", app.crumb_lo, app.crumb_hi);
+    sw(out, cap, &len, "arrows=%d ", app.crumb_arrows);
+    sw(out, cap, &len, "locating=%d ", app.ui.focus == UI_FOCUS_EDIT && app.ui.edit_path);
+    sw(out, cap, &len, "cnt=%s ", cnt);
+    sw(out, cap, &len, "esel=%d-%d ", slo, shi);
+    sw(out, cap, &len, "caret=%d ", app.ui.edit.caret);
+    sw(out, cap, &len, "copied=%s ", copied);
+    sw(out, cap, &len, "crumbkey=%s ", keyed);
+    sw(out, cap, &len, "jobs=%d ", jobs.nrun);
+    sw(out, cap, &len, "waiting=%d ", jobs.nwait);
+    sw(out, cap, &len, "jobrows=%s ", joblabels);
+    sw(out, cap, &len, "jobkey=%s ", jobkey);
+    sw(out, cap, &len, "jobline=%d ", oldest ? oldest->line.reached : 0);
+    sw(out, cap, &len, "jobspeed=%d ", oldest && oldest->line.now > 0);
+    sw(out, cap, &len, "clashjob=%s ", clashjob);
+    sw(out, cap, &len, "sides=%s ", sides[0] ? sides : "-");
+    sw(out, cap, &len, "spaced=%d ", spaced);
+    sw(out, cap, &len, "sidemode=%s ", SIDE_MODES_W[app.ui.side_mode]);
+    sw(out, cap, &len, "treen=%d ", app.ui.side_mode == SIDE_TREE ? tree.n : 0);
+    sw(out, cap, &len, "treecur=%s ", treecur);
+    sw(out, cap, &len, "treerow=%td ", app.ui.side.sel - app.ui.side.top);
+    sw(out, cap, &len, "treehere=%d ", treehere);
+    sw(out, cap, &len, "trash=%d ", app.ui.view == UI_VIEW_TRASH);
+    sw(out, cap, &len, "sidehover=%d ", app.hov.side);
+    sw(out, cap, &len, "hovernum=%s ", hovernum);
+    sw(out, cap, &len, "ejectbtn=%d ", ejectbtn);
+    sw(out, cap, &len, "cwdavail=%d ", app.cwd_avail >= 0);
+    sw(out, cap, &len, "info=%s ", info);
+    sw(out, cap, &len, "view=%s ", app.ui.grid ? "icons" : "list");
+    sw(out, cap, &len, "cols=%d ", (int)ui_cols(&app.ui.list));
+    sw(out, cap, &len, "cells=%d ", app.grid_cells);
+    sw(out, cap, &len, "cellfirst=%td ", app.grid_first);
+    sw(out, cap, &len, "celllast=%td ", app.grid_last);
+    sw(out, cap, &len, "fulllines=%d ", app.grid_full_lines);
+    sw(out, cap, &len, "celllines=%d ", app.grid_hover_lines);
+    sw(out, cap, &len, "cellcut=%d ", app.grid_hover_cut);
+    sw(out, cap, &len, "iconpx=%d ", entry_px());
+    sw(out, cap, &len, "icontex=%d ", icontex);
+    sw(out, cap, &len, "iconresets=%d ", app.icon_full_resets);
+    sw(out, cap, &len, "crumbfocus=%d ", app.ui.focus == UI_FOCUS_CRUMBS);
+    sw(out, cap, &len, "tooltip=%s ", tipword);
+    sw(out, cap, &len, "idlewoke=%s ", idle_woke);
+    sw(out, cap, &len, "zoom=%d ", ui_zoom_px(&app.ui));
+    sw(out, cap, &len, "cellw=%d ", cell_w());
+    sw(out, cap, &len, "cellh=%d ", cell_h());
+    sw(out, cap, &len, "zoomshown=%d ", Clay_GetElementData(CLAY_ID("zoom-track")).found);
+    sw(out, cap, &len, "tipin=%d ", tipin);
+    sw(out, cap, &len, "slots=%d ", app.nslots);
+    sw(out, cap, &len, "previews=%d ", thumbs.drawn_now);
+    sw(out, cap, &len, "thumbsel=%s ", thumbsel);
+    sw(out, cap, &len, "thumbbox=%s ", thumbbox);
+    sw(out, cap, &len, "thumbbusy=%d ", thumbs_busy());
+    sw(out, cap, &len, "thumbmade=%d ", thumbs.got[TG_MADE]);
+    sw(out, cap, &len, "thumbread=%d ", thumbs.got[TG_CACHED]);
+    sw(out, cap, &len, "thumbfailed=%d ", thumbs.got[TG_FAILED]);
+    sw(out, cap, &len, "thumbknown=%d ", thumbs.got[TG_FAIL_KNOWN]);
+    sw(out, cap, &len, "thumbnone=%d ", thumbs.got[TG_NONE]);
+    sw(out, cap, &len, "thumbchanged=%d ", thumbs.got[TG_CHANGED]);
+    sw(out, cap, &len, "thumbheld=%td ", thumbs.held);
+    sw(out, cap, &len, "thumbdropped=%d ", thumbs.evicted);
+    sw(out, cap, &len, "thumbresets=%d ", thumbs.resets);
+    sw(out, cap, &len, "thumblocal=%d ", app.thumb_local);
+    sw(out, cap, &len, "reloadasked=%d ", app.reloads_asked);
+    sw(out, cap, &len, "menuseps=%d ", menuseps);
+    sw(out, cap, &len, "bmlist=%s ", bmlist);
+    sw(out, cap, &len, "bmn=%d ", app.ui.bm_n);
+    sw(out, cap, &len, "bmhere=%d ", app.ui.bm_here);
+    sw(out, cap, &len, "canbm=%d ", app.ui.can_bookmark);
+    sw(out, cap, &len, "bmmore=%d ", app.ui.bm_more);
+    sw(out, cap, &len, "bmp=%d ", app.ui.panel == UI_PANEL_BM);
+    sw(out, cap, &len, "bmpn=%td ", app.ui.bmp_list.n);
+    sw(out, cap, &len, "bmpsel=%td ", app.ui.bmp_list.sel);
+    sw(out, cap, &len, "bmpnaming=%d ", app.ui.bmp_naming);
+    sw(out, cap, &len, "bmptext=%s ", bmptext);
+    sw(out, cap, &len, "keys=%d ", app.ui.panel == UI_PANEL_KEYS);
+    sw(out, cap, &len, "keysn=%td ", app.ui.keys_list.n);
+    sw(out, cap, &len, "keystop=%td ", app.ui.keys_list.top);
+    sw(out, cap, &len, "keysrows=%d ", app.ui.keys_list.rows);
+    sw(out, cap, &len, "keysfirst=%s ", keysfirst);
+    sw(out, cap, &len, "keyscap=%s ", keyscap);
+    sw(out, cap, &len, "keyscapmine=%d ", keyscapmine);
+    sw(out, cap, &len, "keysbad=%d ", conf_keys_read.bad);
+    sw(out, cap, &len, "keyclashes=%d ", conf_keys_read.clashes);
+    sw(out, cap, &len, "menukeys=%s ", menukeys);
+    sw(out, cap, &len, "menu=%s ", app.ui.menu_on ? UI_MENU[app.ui.menu].title : "-");
+    sw(out, cap, &len, "menuat=%s ", menuat);
+    sw(out, cap, &len, "menuoff=%s ", menuoff);
+    sw(out, cap, &len, "menugrey=%s ", menugrey);
+    sw(out, cap, &len, "menuhid=%s ", menuhid);
+    sw(out, cap, &len, "menumarked=%s ", menumarked);
+    sw(out, cap, &len, "menubox=%s ", menubox);
+    sw(out, cap, &len, "menusized=%d menusize=%.0fx%.0f ", menusized, msz.x, msz.y);
+    sw(out, cap, &len, "menuin=%d ", menuin);
+    sw(out, cap, &len, "menuclear=%d ", menuclear);
+    sw(out, cap, &len, "permscols=%d ", app.ui.perms_cols);
+    sw(out, cap, &len, "permsshown=%d ", perms_shown((float)GetScreenWidth()));
+    sw(out, cap, &len, "permsnote=%d ", (int)(strstr(info, "Permissions_hidden") != NULL));
+    sw(out, cap, &len, "groupcol=%d ", app.ui.group_col);
+    sw(out, cap, &len, "groupdrawn=%d ", (int)Clay_GetElementData(CLAY_ID("col-group")).found + (int)Clay_GetElementData(CLAY_IDI("group", 0)).found);
+    sw(out, cap, &len, "colors=%d ", app.ui.colors);
+    sw(out, cap, &len, "barhidden=%d ", app.ui.bar_hidden);
+    sw(out, cap, &len, "barshown=%d ", bar_shown());
+    sw(out, cap, &len, "menuhover=%d ", app.hov.menu_title);
+    sw(out, cap, &len, "canwrite=%d ", app.ui.can_write);
+    sw(out, cap, &len, "windows=%d ", windows);
+    sw(out, cap, &len, "siderows=%d ", app.ui.side.rows);
+    sw(out, cap, &len, "footerin=%d ", footerin);
+    sw(out, cap, &len, "props=%d ", app.ui.panel == UI_PANEL_PROPS);
+    sw(out, cap, &len, "propat=%d ", app.ui.prop_at);
+    sw(out, cap, &len, "propcan=%d ", app.ui.prop_can);
+    sw(out, cap, &len, "propn=%td ", props.n);
+    sw(out, cap, &len, "propmode=%04o ", props.have ? (unsigned)(props.st.st_mode & 07777) : 0u);
+    sw(out, cap, &len, "propfiles=%lld ", (long long)props.sum.files);
+    sw(out, cap, &len, "propdirs=%lld ", (long long)props.sum.dirs);
+    sw(out, cap, &len, "propbytes=%lld ", (long long)props.sum.bytes);
+    sw(out, cap, &len, "propdone=%d ", props.done);
+    sw(out, cap, &len, "propcut=%d ", props.sum.cut || props.cut);
+    sw(out, cap, &len, "proplinks=%lld,%lld,%lld,%d ", (long long)props.sum.linked_names, (long long)props.sum.linked_files, (long long)props.sum.once_bytes, props.sum.once_over);
+    sw(out, cap, &len, "propnlink=%llu ", props.have ? (unsigned long long)props.st.st_nlink : 0ull);
+    sw(out, cap, &len, "proptype=%s ", props.type[0] ? props.type : "-");
+    sw(out, cap, &len, "proptypename=%s ", proptypename);
+    sw(out, cap, &len, "propbyname=%d ", props.type_by_name);
+    sw(out, cap, &len, "propname=%s ", propname);
+    sw(out, cap, &len, "propwhere=%s ", propwhere);
+    sw(out, cap, &len, "propdrive=%s ", propdrive);
+    sw(out, cap, &len, "proplink=%s ", proplink);
+    sw(out, cap, &len, "propcreated=%d ", props.btime >= 0);
+    sw(out, cap, &len, "propidx=%td ", props.idx);
+    sw(out, cap, &len, "ow=%d ", app.ui.panel == UI_PANEL_OW);
+    sw(out, cap, &len, "owfresh=%d ", app.ui.ow.fresh);
+    sw(out, cap, &len, "owlist=%d ", app.ui.ow.in_list);
+    sw(out, cap, &len, "owtext=%s ", owtext);
+    sw(out, cap, &len, "own=%td ", app.ui.ow.list.n);
+    sw(out, cap, &len, "owsel=%td ", app.ui.ow.list.sel);
+    sw(out, cap, &len, "owapp=%s ", owapp);
+    sw(out, cap, &len, "owicon=%s ", owicon);
+    sw(out, cap, &len, "owtex=%d ", owtex);
+    sw(out, cap, &len, "owshown=%td ", ow.shown);
+    sw(out, cap, &len, "owtype=%s ", ow.type[0] ? ow.type : "-");
+    sw(out, cap, &len, "owfiles=%td ", ow.n);
+    sw(out, cap, &len, "owrows=%d ", app.ui.ow.list.rows);
+    sw(out, cap, &len, "owtop=%td ", app.ui.ow.list.top);
+    sw(out, cap, &len, "owopts=%s ", owopts);
+    sw(out, cap, &len, "owbad=%d ", app.ui.ow.m.bad);
+    sw(out, cap, &len, "owdef=%d ", app.ui.ow_def);
+    sw(out, cap, &len, "owdefcan=%d ", app.ui.ow_def_can);
+    sw(out, cap, &len, "findopts=%s ", findopts);
+    sw(out, cap, &len, "findbad=%d ", app.ui.find_m.bad);
+    sw(out, cap, &len, "findselect=%d ", app.ui.find_select);
+    sw(out, cap, &len, "findn=%td ", findn);
+    sw(out, cap, &len, "findat=%td ", findat);
+    sw(out, cap, &len, "findtext=%s ", findtext);
+    sw(out, cap, &len, "search=%d ", app.ui.view == UI_VIEW_SEARCH);
+    sw(out, cap, &len, "searchkeys=%d ", app.ui.focus == UI_FOCUS_SEARCH);
+    sw(out, cap, &len, "searchtext=%s ", searchtext);
+    sw(out, cap, &len, "searchdone=%d ", app.search_done);
+    sw(out, cap, &len, "searchfull=%d ", app.search_s.full);
+    sw(out, cap, &len, "searchdue=%d ", app.search_due != 0);
+    sw(out, cap, &len, "searchbad=%d ", app.search_m.bad);
+    sw(out, cap, &len, "searchbar=%d ", (int)Clay_GetElementData(CLAY_ID("search-bar")).found);
+    sw(out, cap, &len, "searchsel=%d-%d ", app.ui.search.anchor < app.ui.search.caret ? app.ui.search.anchor : app.ui.search.caret, app.ui.search.anchor < app.ui.search.caret ? app.ui.search.caret : app.ui.search.anchor);
+    sw(out, cap, &len, "searchcaret=%d ", app.ui.search.caret);
+    sw(out, cap, &len, "findsel=%d-%d ", app.ui.find.anchor < app.ui.find.caret ? app.ui.find.anchor : app.ui.find.caret, app.ui.find.anchor < app.ui.find.caret ? app.ui.find.caret : app.ui.find.anchor);
+    sw(out, cap, &len, "findcaret=%d ", app.ui.find.caret);
+    sw(out, cap, &len, "seldir=%s ", seldir);
+    sw(out, cap, &len, "searchinfo=%s ", searchinfo);
+    sw(out, cap, &len, "inside=%d ", app.ui.search_inside);
+    sw(out, cap, &len, "insidekeys=%d ", app.ui.focus == UI_FOCUS_INSIDE);
+    sw(out, cap, &len, "insidetext=%s ", insidetext);
+    sw(out, cap, &len, "insideopts=%s ", insideopts);
+    sw(out, cap, &len, "insidebad=%d ", app.search_im.bad);
+    sw(out, cap, &len, "insiderow=%d ", (int)Clay_GetElementData(CLAY_ID("inside-field")).found);
+    sw(out, cap, &len, "hit=%s ", hit);
+    sw(out, cap, &len, "hitmatch=%s ", hitmatch);
+    sw(out, cap, &len, "hitdrawn=%d ", hitdrawn);
+    sw(out, cap, &len, "datecol=%s ", VIEWS[app.ui.view].date_col);
+    sw(out, cap, &len, "datecolw=%.0f ", date_w());
+    sw(out, cap, &len, "owreads=%d ", ow_idb_reads);
+    sw(out, cap, &len, "conf=%s ", confw);
+    sw(out, cap, &len, "confbad=%d ", app.conf.bad);
+    sw(out, cap, &len, "seldate=%s ", seldate);
+    sw(out, cap, &len, "trashfull=%d ", app.trash_full);
+    sw(out, cap, &len, "trashicon=%s ", trashicon);
+    sw(out, cap, &len, "spawned=%d ", spawn_started);
+    sw(out, cap, &len, "closingall=%d ", closing_all);
+    sw(out, cap, &len, "closedtabs=%d ", closed_tabs.n);
+    sw(out, cap, &len, "emptyn=%td ", app.empty_n);
+    sw(out, cap, &len, "shiftsel=%s ", app.ui.shift_add ? "add" : "range");
+    sw(out, cap, &len, "clearn=%lld ", clear.counted ? (long long)clear.sum.files : -1LL);
+    sw(out, cap, &len, "clearing=%d ", clear.running);
+    sw(out, cap, &len, "gitshown=%d ", git_shown() != NULL);
+    sw(out, cap, &len, "gitsel=%s ", GIT_WORDS[app.have_list && app.list.n ? entry_git(app.ui.list.sel) : GS_NONE]);
+    sw(out, cap, &len, "gitn=%td ", git_shown() ? git_shown()->g.changed : (isize)0);
+    sw(out, cap, &len, "gitnamecol=%s ", gitnamecol);
+    sw(out, cap, &len, "gitcells=%d ", gitcells);
+    sw(out, cap, &len, "infogit=%s ", infogit);
+    sw(out, cap, &len, "gitdue=%d ", git.due != 0);
+    sw(out, cap, &len, "branch=%s ", branch);
+    sw(out, cap, &len, "brn=%d ", app.ui.br_n);
+    sw(out, cap, &len, "brhere=%d ", app.ui.br_here);
+    sw(out, cap, &len, "brnote=%s ", brnote);
+    sw(out, cap, &len, "brlist=%s ", brlist);
+    sw(out, cap, &len, "brfits=%d ", brfits);
+    sw(out, cap, &len, "brunder=%d ", brunder);
+    sw(out, cap, &len, "gitwatch=%d ", atomic_load(&watch.git_wd) >= 0);
+    sw(out, cap, &len, "brtotal=%d ", app.ui.br_total);
+    sw(out, cap, &len, "brp=%d ", app.ui.panel == UI_PANEL_BRANCHES);
+    sw(out, cap, &len, "brpn=%td ", app.ui.brp.list.n);
+    sw(out, cap, &len, "brpsel=%s ", brpsel);
+    sw(out, cap, &len, "brptext=%s ", brptext);
+    sw(out, cap, &len, "brpinlist=%d ", app.ui.brp.in_list);
+    sw(out, cap, &len, "sidew=%d ", side_w());
+    sw(out, cap, &len, "sidebox=%.0f ", Clay_GetElementData(CLAY_ID("side")).boundingBox.width);
+    sw(out, cap, &len, "sidepx=%d ", app.side_px);
     if (len >= 0 && (size_t)len < cap) len += state_drag(out + len, cap - (size_t)len);
     // status= last: its text has spaces, so it takes the rest of the line.
     if (len >= 0 && (size_t)len < cap) len += snprintf(out + len, cap - (size_t)len, " statusbad=%d status=%s", app.status[0] && app.status_bad, app.status[0] ? app.status : "-");
@@ -1029,8 +1267,12 @@ static bool script_input(UiInput *in)
             SetClipboardText(t);
         } else if (str_eq(cmd, S("shot"))) {
             const char *dir = getenv("OFX_GUI_SHOTS");
+            Err err;
             if (a[0] != '/' && dir && dir[0]) snprintf(script.shot, sizeof script.shot, "%s/%s", dir, a);
             else snprintf(script.shot, sizeof script.shot, "%s", a);
+            // (through the test guard as ofx's own writes: an absolute path outside OFX_GUI_ROOT is
+            // refused, the F15 code-health review)
+            if (!ops_allowed(script.shot, &err)) script_fail("shot: %s", err.msg), script.shot[0] = 0;
             script.wait = 1;   // drawn on the next frame
         } else if (str_eq(cmd, S("sh"))) {
             script_sh(arg);

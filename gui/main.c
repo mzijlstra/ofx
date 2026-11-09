@@ -141,10 +141,7 @@ static void timer_at(i64 due)
 
 static void timer_stop(void)
 {
-    pthread_mutex_lock(&timer.mu);
-    timer.quit = true;
-    pthread_cond_signal(&timer.cv);
-    pthread_mutex_unlock(&timer.mu);
+    worker_quit(timer.started, &timer.mu, &timer.cv, &timer.quit, NULL);   // (the 2026-11-03 cleanup missed this copy: F15's review)
     if (timer.started) pthread_join(timer.th, NULL);
 }
 
@@ -730,9 +727,6 @@ static void app_start(void)
     if (!watch_start()) set_status(true, "inotify is unavailable: no live refresh");
     clip_init();   // false: the clipboard stays inside ofx
     dnd_init();    // (F14: drags to and from other programs)
-    // OFX_TEST_COUNT_DELAY_MS: each count takes that much longer, so a test can change the listing
-    // while answers for the old one are on their way, or (60 s) stand in for a hung mount at quit.
-    counts.delay_ms = env_int("OFX_TEST_COUNT_DELAY_MS", 0, 0, 60000);
     count_start();
     walk_start();
     search_start();
@@ -755,14 +749,15 @@ static void app_start(void)
     }
     char state_file[PATH_MAX];
     app.ui.perms_cols = app.ui.colors = true, app.side_px = UI_SIDE_W;   // (on without a state file too)
-    if (state_path(state_file, sizeof state_file)) {
+    bool have_state = state_path(state_file, sizeof state_file);
+    if (have_state) {
         State st = state_load(&scratch, state_file);
         app.ui.side_mode = st.side, app.ui.perms_cols = !st.no_perms, app.ui.bar_hidden = st.no_bar,
         app.ui.colors = !st.no_colors, app.ui.group_col = st.group, app.show_hidden = st.hidden;
         if (st.side_px) app.side_px = st.side_px;
     }
     remember_defaults();   // (F11: the folders' table, after ofx.conf, which has their defaults)
-    if (state_path(state_file, sizeof state_file)) {   // (F11: the tree's open folders)
+    if (have_state) {   // (F11: the tree's open folders)
         ArenaMark mark = arena_mark(&scratch);
         tree_open_load(&tree, state_value(&scratch, state_file, "tree"));
         arena_restore(&scratch, mark);
@@ -844,6 +839,48 @@ static void app_end(void)
     for (int i = 0; i < app.nslots; i++)
         if (app.slot[i].tex.id) UnloadTexture(app.slot[i].tex);
     wake_close();
+}
+
+// A scripted window's frame of input (script.c's) in place of the user's: the user's does not reach
+// it (Ctrl+Q still quits), but after `user-keys` the keyboard's does (vkbd in the test sway,
+// 2026-10-28), and after `user-pointer` all of it (vptr: code-health review, 2026-11-06). *seen:
+// whether an unscripted window would draw this frame. False when the script has ended.
+static bool script_merge(UiInput *in, bool dirty, bool *seen)
+{
+    UiInput real = *in;
+    bool real_seen = *seen;
+    if (!script.user_pointer) *in = ui_input_none();
+    if (script.user_keys && !script.user_pointer) {
+        memcpy(in->ev, real.ev, sizeof *real.ev * (size_t)real.nev);
+        in->nev = real.nev;
+    }
+    script.pending = dirty;
+    if (!script_input(in)) return false;
+    *seen = script.gave || IsWindowResized() || (script.user_keys && real.nev > 0) || (script.user_pointer && real_seen);   // (a frame the script gave no input to is one an unscripted window sleeps through)
+    return true;
+}
+
+// What ui_handle needs of gui/ besides the input (main's loop; split out of main() by the F15
+// code-health review): a drag's Esc, the path buttons and the jobs, the compositor's close, the
+// clipboard's text for a Ctrl+V in a field, the status line cleared by a key, the panels' names.
+static void input_feed(UiInput *in, bool *seen)
+{
+    drag_keys(in);   // (Esc during a drag of files: the drag's)
+    cursor_shape();
+    in->crumb_n = app.crumbs.n, in->crumb_last = app.crumb_hi - 1;
+    _Static_assert((int)UI_JOB_ROWS >= (int)JOBQ_WORKERS, "a job row each for the jobs running");
+    in->job_n = jobs.nrun, in->jobs_all = jobs.nrun + jobs.nwait;
+    for (int k = 0; k < jobs.nrun; k++) in->job_id[k] = job_recs[jobs.run[k]].id;
+    if (close_asked && in->nev < UI_EVENTS_MAX) in->ev[in->nev++] = (UiEvent){ UK_QUIT, 0, UK_NONE }, close_asked = false, *seen = true;
+    // A Ctrl+V in a text field reads the clipboard first, and only then.
+    bool pasting = false;
+    for (int k = 0; k < in->nev; k++) pasting |= in->ev[k].key == UK_PASTE;
+    if (pasting && ui_line_active(&app.ui, NULL)) in->paste = text_paste();   // (whichever text field has the keys)
+    // A message stays until the next key or click; an error at least a second.
+    if (ui_input_acts(in) && ui_status_clears(app.status_bad, app.status_at, now_ms())) app.status[0] = 0;
+    if (ui_input_acts(in) && ui_tip_act(&app.tip)) *seen = true;   // a click or key: the tooltip goes
+    if (app.ui.panel == UI_PANEL_OW) in->app_name = ow.names, in->app_n = ow.shown < UI_APPS_MAX ? ow.shown : UI_APPS_MAX;
+    if (app.ui.panel == UI_PANEL_BRANCHES || (app.ui.menu_on && app.ui.menu == UI_CTX_BRANCH)) in->br_name = brp_names(), in->br_names = git.br.n;   // (the menu's too: its All branches opens the panel this frame)
 }
 
 int main(int argc, char **argv)
@@ -978,38 +1015,9 @@ int main(int argc, char **argv)
         dirty |= poll_workers();
         bool seen;
         UiInput in = input_real(&seen);
-        if (scripted) {
-            UiInput real = in;
-            bool real_seen = seen;
-            // The user's input does not reach a scripted window (Ctrl+Q still quits), but after
-            // `user-keys` the keyboard's does (vkbd in the test sway, 2026-10-28), and after
-            // `user-pointer` all of it (vptr: code-health review, 2026-11-06).
-            if (!script.user_pointer) in = ui_input_none();
-            if (script.user_keys && !script.user_pointer) {
-                memcpy(in.ev, real.ev, sizeof *real.ev * (size_t)real.nev);
-                in.nev = real.nev;
-            }
-            script.pending = dirty;
-            if (!script_input(&in)) break;
-            seen = script.gave || IsWindowResized() || (script.user_keys && real.nev > 0) || (script.user_pointer && real_seen);   // (a frame the script gave no input to is one an unscripted window sleeps through)
-        }
-        drag_keys(&in);   // (Esc during a drag of files: the drag's)
-        cursor_shape();
-        in.crumb_n = app.crumbs.n, in.crumb_last = app.crumb_hi - 1;
-        _Static_assert((int)UI_JOB_ROWS >= (int)JOBQ_WORKERS, "a job row each for the jobs running");
-        in.job_n = jobs.nrun, in.jobs_all = jobs.nrun + jobs.nwait;
-        for (int k = 0; k < jobs.nrun; k++) in.job_id[k] = job_recs[jobs.run[k]].id;
-        if (close_asked && in.nev < UI_EVENTS_MAX) in.ev[in.nev++] = (UiEvent){ UK_QUIT, 0, UK_NONE }, close_asked = false, seen = true;
-        // A Ctrl+V in a text field reads the clipboard first, and only then.
-        bool pasting = false;
-        for (int k = 0; k < in.nev; k++) pasting |= in.ev[k].key == UK_PASTE;
-        if (pasting && ui_line_active(&app.ui, NULL)) in.paste = text_paste();   // (whichever text field has the keys)
-        // A message stays until the next key or click; an error at least a second.
-        if (ui_input_acts(&in) && ui_status_clears(app.status_bad, app.status_at, now_ms())) app.status[0] = 0;
-        if (ui_input_acts(&in) && ui_tip_act(&app.tip)) seen = true;   // a click or key: the tooltip goes
+        if (scripted && !script_merge(&in, dirty, &seen)) break;
+        input_feed(&in, &seen);
         bool was_editing = app.ui.focus == UI_FOCUS_EDIT, was_confirming = app.ui.confirming;
-        if (app.ui.panel == UI_PANEL_OW) in.app_name = ow.names, in.app_n = ow.shown < UI_APPS_MAX ? ow.shown : UI_APPS_MAX;
-        if (app.ui.panel == UI_PANEL_BRANCHES || (app.ui.menu_on && app.ui.menu == UI_CTX_BRANCH)) in.br_name = brp_names(), in.br_names = git.br.n;   // (the menu's too: its All branches opens the panel this frame)
         UiAction a = ui_handle(&app.ui, (UiNames){ list_name, NULL, list_dir }, &in);
         ctx_opened();
         if (app.ui.panel != UI_PANEL_OW && ow.icons_on) ow_drop();   // the panel closed: its icons go (F7.3)

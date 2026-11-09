@@ -51,6 +51,10 @@ static void *count_loop(void *arg)
 
 static void count_start(void)
 {
+    // OFX_TEST_COUNT_DELAY_MS: each count takes that much longer, so a test can change the listing
+    // while answers for the old one are on their way, or (60 s) stand in for a hung mount at quit.
+    // (Set here, as space_start sets its own: the F15 code-health review.)
+    counts.delay_ms = env_int("OFX_TEST_COUNT_DELAY_MS", 0, 0, 60000);
     counts.started = pthread_create(&counts.thread, NULL, count_loop, NULL) == 0;
 }
 

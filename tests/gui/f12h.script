@@ -139,4 +139,17 @@ click-here
 wait-for 3000 menu=branch brnote=No_local_branches
 expect brn=0 brhere=-1
 key esc
+# A branch name past the menu's 360 px, checked out last: the menu draws it cut, and is placed by its
+# drawn width (the F15 code-health review: menu_size measured the whole name, so the menu sat as
+# far left as the whole name would have needed).
+sh cd "$OFX_ROOT/tree/repo" && export GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null && git branch b-a-branch-name-that-is-very-much-longer-than-the-three-hundred-and-sixty-pixels-a-menu-gives-a-label-so-it-is-cut && git switch -q b-a-branch-name-that-is-very-much-longer-than-the-three-hundred-and-sixty-pixels-a-menu-gives-a-label-so-it-is-cut && git switch -q main
+key ctrl-l
+type ../../../../../../../../../../../../../repo
+key enter
+wait-for 5000 gitshown=1 branch=main_↑1_↓1
+point-ui git-branch
+click-here
+wait-for 3000 menu=branch brnote=- brn=8
+expect menusized=1
+key esc
 quit

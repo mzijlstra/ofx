@@ -410,6 +410,30 @@ static void layout_tabs(float w)
 
 // ---- the menu bar (F7.1) ----------------------------------------------------------------------
 
+// The menu's padding, an entry's, its marks' column and the gap after it, and the gap between an
+// entry's label, the spring and its key: layout_menu draws with them, menu_size measures with them.
+enum { MENU_PAD = 4, MENU_ITEM_PAD = 10, MENU_MARK_W = 14, MENU_MARK_GAP = 6, MENU_GAP = 32, MENU_LABEL_MAX = 360 };
+
+// Entry it's label as its menu draws it: a bookmark's, a branch's (cut to MENU_LABEL_MAX), Open at
+// Line's with its editor, "N more", or the table's (the F15 code-health review: menu_size measured
+// the branch's uncut).
+static Clay_String menu_label(UiMenuItem it)
+{
+    const Bookmark *bk = ui_slot(it, UM_BM_0, UI_MENU_BOOKMARKS) >= 0 ? bm_menu(ui_slot(it, UM_BM_0, UI_MENU_BOOKMARKS)) : NULL;
+    if (it == UM_BM_MORE) return cz(arena_sprintf(&frame, "%d more in Edit Bookmarks\xE2\x80\xA6", app.ui.bm_more));
+    if (it == UM_OPEN_LINE) return cs(open_line_label());   // (the editor's name: F9 step 4)
+    if (it >= UM_BR_NOTE && it <= UM_BR_ALL) return fit(branch_menu_label(it), MENU_LABEL_MAX, true);   // (F12 step 5b)
+    return bk ? fit(bm_label(bk), MENU_LABEL_MAX, true) : cz(UI_MENU_ITEM[it].label);
+}
+
+// Whether menu m has a column for checks and a group's dots (any entry with a mark, shown or not).
+static bool menu_marks(int m)
+{
+    bool marks = false;
+    for (int i = 0; i < UI_MENU[m].n; i++) marks |= UI_MENU_ITEM[UI_MENU[m].items[i]].mark != 0;
+    return marks;
+}
+
 // Menu m's entries under its title: each label on the left and its key on the right, those that
 // can't be picked now dimmed, the marked one in the selection colour; lines between the groups.
 // A menu with checks or a group's dots keeps a column for them on the left (F7.4); an entry not
@@ -422,13 +446,12 @@ static void layout_menu(int m)
     Clay_FloatingElementConfig where = m < UI_MENUS ? (Clay_FloatingElementConfig){ .attachTo = CLAY_ATTACH_TO_PARENT, .zIndex = 30, .offset = { 0, 2 },
                                                                                   .attachPoints = { CLAY_ATTACH_POINT_LEFT_TOP, CLAY_ATTACH_POINT_LEFT_BOTTOM } }
                                                  : (Clay_FloatingElementConfig){ .attachTo = CLAY_ATTACH_TO_ROOT, .zIndex = 30, .offset = { app.ctx_x, app.ctx_y } };
-    CLAY(CLAY_ID("menu"), { .layout = { .sizing = { CLAY_SIZING_FIT(MENU_W_MIN, 0), CLAY_SIZING_FIT(0) }, .padding = { 4, 4, 4, 4 },
+    CLAY(CLAY_ID("menu"), { .layout = { .sizing = { CLAY_SIZING_FIT(MENU_W_MIN, 0), CLAY_SIZING_FIT(0) }, .padding = { MENU_PAD, MENU_PAD, MENU_PAD, MENU_PAD },
                                         .layoutDirection = CLAY_TOP_TO_BOTTOM },
                             .backgroundColor = cc(t->bg_light),
                             .border = { .color = mix(t->fg_dim, t->bg_light, 0.6f), .width = CLAY_BORDER_OUTSIDE(1) },
                             .floating = where }) {
-        bool marks = false;
-        for (int i = 0; i < UI_MENU[m].n; i++) marks |= UI_MENU_ITEM[UI_MENU[m].items[i]].mark != 0;
+        bool marks = menu_marks(m);
         for (int i = 0; i < UI_MENU[m].n; i++) {
             UiMenuItem it = UI_MENU[m].items[i];
             if (!ui_menu_shown(&app.ui, it) || (it == UM_SEP && !ui_menu_sep_shown(&app.ui, m, i))) continue;
@@ -440,22 +463,18 @@ static void layout_menu(int m)
                 continue;
             }
             bool on = ui_menu_enabled(&app.ui, it), at = on && app.ui.menu_at == i;
-            CLAY(CLAY_IDI("menu-item", i), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(MENU_ROW_H) }, .padding = { 10, 10, 0, 0 },
-                                                         .childGap = 32, .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
+            CLAY(CLAY_IDI("menu-item", i), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(MENU_ROW_H) }, .padding = { MENU_ITEM_PAD, MENU_ITEM_PAD, 0, 0 },
+                                                         .childGap = MENU_GAP, .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
                                              .backgroundColor = at ? cc(t->selection) : cc(t->bg_light), .cornerRadius = CLAY_CORNER_RADIUS(3) }) {
-                CLAY(CLAY_IDI("menu-label", i), { .layout = { .childGap = 6, .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } } }) {
+                CLAY(CLAY_IDI("menu-label", i), { .layout = { .childGap = MENU_MARK_GAP, .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } } }) {
                     if (marks) {
                         int mk = ui_menu_mark(&app.ui, it);
-                        CLAY(CLAY_IDI("menu-mark", i), { .layout = { .sizing = { CLAY_SIZING_FIXED(14), CLAY_SIZING_FIT(0) } } }) {
+                        CLAY(CLAY_IDI("menu-mark", i), { .layout = { .sizing = { CLAY_SIZING_FIXED(MENU_MARK_W), CLAY_SIZING_FIT(0) } } }) {
                             // ✓ for a check, • for the current one of a group
                             if (mk == 1) text(cz(UI_MENU_ITEM[it].mark == 'c' ? "\xE2\x9C\x93" : "\xE2\x80\xA2"), on ? cc(t->accent) : off);
                         }
                     }
-                    const Bookmark *bk = ui_slot(it, UM_BM_0, UI_MENU_BOOKMARKS) >= 0 ? bm_menu(ui_slot(it, UM_BM_0, UI_MENU_BOOKMARKS)) : NULL;
-                    if (it == UM_BM_MORE) text(cz(arena_sprintf(&frame, "%d more in Edit Bookmarks\xE2\x80\xA6", app.ui.bm_more)), on ? cc(t->fg) : off);
-                    else if (it == UM_OPEN_LINE) text(cs(open_line_label()), on ? cc(t->fg) : off);   // (the editor's name: F9 step 4)
-                    else if (it >= UM_BR_NOTE && it <= UM_BR_ALL) text(fit(branch_menu_label(it), 360, true), on ? cc(t->fg) : off);   // (F12 step 5b)
-                    else text(bk ? fit(bm_label(bk), 360, true) : cz(UI_MENU_ITEM[it].label), on ? cc(t->fg) : off);
+                    text(menu_label(it), on ? cc(t->fg) : off);
                 }
                 CLAY(CLAY_IDI("menu-gap", i), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(1) } } }) {}
                 if (ui_menu_key(it)[0]) text(cz(ui_menu_key(it)), on ? cc(t->fg_dim) : off);

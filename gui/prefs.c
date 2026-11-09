@@ -33,8 +33,22 @@ static void conf_start(void)
     if (conf_path(path, sizeof path) && !conf_create(path, conf_keys(), &err)) set_status(true, "Can't make ofx.conf, so the built-in options apply: %s", err.msg);
 }
 
-// ofx.conf read again and applied; the first line it couldn't read said in the status line, else,
-// after a save, a key a line takes from another command now that it didn't before (F15: said once). With no file to read
+// What ofx.conf's read says in the status line: the first line it couldn't read (ofx.conf's own or
+// a key line's, whichever comes first), else, after the start, a key a line took from another
+// command that it didn't the read before (F15: said once); a key line's clash counts as said only
+// when no bad line took the status line (the code-health review split it out of conf_apply).
+static void conf_status(const Conf *c, const UiKeysRead *keys, bool after_start)
+{
+    char shown[PATH_MAX + 1];
+    conf_shown(shown, sizeof shown);
+    if (c->bad && (!keys->bad || c->bad < keys->bad)) set_status(true, "%s line %d: %s", shown, c->bad, c->why);
+    else if (keys->bad) set_status(true, "%s line %d: %s", shown, keys->bad, keys->why);
+    else if (after_start && keys->fresh)
+        set_status(false, "ofx.conf: %s%s", keys->clash, keys->fresh > 1 ? arena_sprintf(&scratch, " (and %d more)", keys->fresh - 1) : "");
+    if (!c->bad && !keys->bad) ui_clashes_told();   // (a bad line's note took the status line: said after the fix)
+}
+
+// ofx.conf read again and applied, and said in the status line (conf_status). With no file to read
 // (it couldn't be made, or went since), the built-in defaults. Open at Line reads its editor lines
 // from app.conf (editor_now).
 static void conf_apply(void)
@@ -57,13 +71,7 @@ static void conf_apply(void)
     thumbs.off = !c.previews, thumbs.src_max = c.preview_max, thumbs.exec_on = c.thumbnailers;
     app.ui.shift_add = c.shift_add;
     if (previews) thumbs_reset();   // (asked again, under the new limit, or not at all)
-    char shown[PATH_MAX + 1];
-    conf_shown(shown, sizeof shown);
-    if (c.bad && (!keys.bad || c.bad < keys.bad)) set_status(true, "%s line %d: %s", shown, c.bad, c.why);
-    else if (keys.bad) set_status(true, "%s line %d: %s", shown, keys.bad, keys.why);
-    else if (was_once && keys.fresh)
-        set_status(false, "ofx.conf: %s%s", keys.clash, keys.fresh > 1 ? arena_sprintf(&scratch, " (and %d more)", keys.fresh - 1) : "");
-    if (!c.bad && !keys.bad) ui_clashes_told();   // (a bad line's note took the status line: said after the fix)
+    conf_status(&c, &keys, was_once);
 }
 
 // Edit → Preferences…: ofx.conf, written first when there is none, opened in the editor Open at

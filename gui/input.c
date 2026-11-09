@@ -111,7 +111,7 @@ static Hit hit_at(float x, float y)
     // (by name: a field added or moved shifted every value after it, 2026-10-28; the rest 0 or false)
     Hit h = HIT_NONE;
     // Open With's toggles (its panel's)
-    for (int k = 1; k <= UI_TOGGLE_ALWAYS && !h.toggle && app.ui.panel == UI_PANEL_OW; k++)
+    for (int k = 1; k <= UI_TOGGLE_ALWAYS && !h.toggle && modal_kind() == UI_ON_OW; k++)   // (what is on top: a question over the panel has the pointer, the F15 code-health review)
         if (in_box(CLAY_IDI("toggle", k), x, y)) h.toggle = k;
     // A menu open: its titles and its entries are all there is to hit (F7.1). The entries first: a
     // long context menu on a low row is moved up over the menu bar, and a press on its top entry
@@ -272,11 +272,12 @@ static void right_at(UiInput *in, float x, float y)
 }
 
 // A right-click menu's size as layout_menu draws it (F8), before it is drawn: its rows and lines,
-// the widest label and key on one row (the gaps between them, the marks' column), its padding.
+// the widest entry (its label as drawn, menu_label; the spring; its key, a gap each side when it has
+// one), the marks' column, the paddings (topbar.c's MENU_* sizes, which layout_menu draws with), and
+// its 1-pixel border round the box. The state line's menusized checks it against the drawn box.
 static Vector2 menu_size(int m)
 {
-    float row = 0, hgt = 8;
-    bool marks = false;
+    float row = 0, hgt = 2 * MENU_PAD;
     for (int i = 0; i < UI_MENU[m].n; i++) {
         UiMenuItem it = UI_MENU[m].items[i];
         if (it == UM_SEP ? !ui_menu_sep_shown(&app.ui, m, i) : !ui_menu_shown(&app.ui, it)) continue;   // (as layout_menu leaves them out)
@@ -285,15 +286,13 @@ static Vector2 menu_size(int m)
             continue;
         }
         hgt += MENU_ROW_H;
-        marks |= UI_MENU_ITEM[it].mark != 0;
-        Str label = it == UM_OPEN_LINE ? open_line_label() : it >= UM_BR_NOTE && it <= UM_BR_ALL ? branch_menu_label(it) : str_from_c(UI_MENU_ITEM[it].label);
-        float lw = str_width(label) + str_width(str_from_c(ui_menu_key(it)));
-        if (lw > row) row = lw;
+        Clay_String label = menu_label(it);
+        const char *key = ui_menu_key(it);
+        float w = str_width((Str){ label.chars, label.length }) + MENU_GAP + (key[0] ? MENU_GAP + str_width(str_from_c(key)) : 0);   // (the spring between them grows from 0)
+        if (w > row) row = w;
     }
-    // The menu's padding, an entry's, the marks' column and its gap, the widest label and key on one
-    // row, two gaps of 32 round the 1-pixel spring between them: as layout_menu lays them out.
-    float wid = 8 + 20 + (marks ? 14 + 6 : 0) + row + 2 * 32 + 1;
-    return (Vector2){ wid > MENU_W_MIN ? wid : MENU_W_MIN, hgt + 2 };
+    float wid = 2 * MENU_PAD + 2 * MENU_ITEM_PAD + (menu_marks(m) ? MENU_MARK_W + MENU_MARK_GAP : 0) + row;
+    return (Vector2){ (wid > MENU_W_MIN ? wid : MENU_W_MIN) + 2, hgt + 2 };   // (+2: its border, drawn outside the box)
 }
 
 // A right-click menu just opened (F8): its top left. By the pointer, at the press, flipped left or
@@ -397,7 +396,8 @@ static float wheel_left;   // a touchpad's part of a notch, carried to the next 
 // sidebar scrolls by itself. True when the sidebar moved.
 static bool wheel_at(UiInput *in, float x, int notches, bool ctrl)
 {
-    if (app.ui.panel == UI_PANEL_OW || app.ui.panel == UI_PANEL_KEYS || app.ui.panel == UI_PANEL_BRANCHES) return in->panel_wheel = notches, false;   // the panel's list (Open With's, F7.3; Keyboard Shortcuts', F7.5; the branches', F12 step 6)
+    UiOnTop on = modal_kind();   // (what is on top, not the panel under a question: the F15 code-health review)
+    if (on == UI_ON_OW || on == UI_ON_KEYS || on == UI_ON_BRANCHES) return in->panel_wheel = notches, false;   // the panel's list (Open With's, F7.3; Keyboard Shortcuts', F7.5; the branches', F12 step 6)
     if (x >= side_w() && ctrl) in->zoom_wheel = notches;
     else if (x >= side_w()) in->wheel = notches;
     else if (notches) return app.ui.side.top = ui_clamp(app.ui.side.top - notches, 0, ui_max_top(&app.ui.side)), true;

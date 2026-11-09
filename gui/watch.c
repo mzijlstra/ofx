@@ -46,7 +46,11 @@ static struct {
     int         udev_wd;       // udev's database folder: a drive plugged in or pulled (2026-10-30)
     atomic_bool list_ready, theme_ready, mounts_ready, trash_ready, conf_ready, git_ready;
     atomic_int  batches;       // how many batches it raised, for the tests' state line
-} watch = { .fd = -1, .dir_wd = -1, .theme_wd = -1, .current_wd = -1, .mount_fd = -1, .mount_wd = -1, .bm_wd = -1, .udev_wd = -1, .conf_wd = -1, .git_wd = -1 };
+    // The thread's re-watch of the theme folder (an add, then its store) against main's release of a
+    // wd it no longer wants: inotify gives a folder one wd, so between the two main could take the
+    // theme's watch away as the old folder's (the F15 code-health review).
+    pthread_mutex_t wd_mu;
+} watch = { .wd_mu = PTHREAD_MUTEX_INITIALIZER, .fd = -1, .dir_wd = -1, .theme_wd = -1, .current_wd = -1, .mount_fd = -1, .mount_wd = -1, .bm_wd = -1, .udev_wd = -1, .conf_wd = -1, .git_wd = -1 };
 
 // The mount list ofx reads: /proc/self/mountinfo, or the tests' OFX_TEST_MOUNTINFO.
 static const char *mountinfo_path(void)
@@ -96,7 +100,9 @@ static bool watch_fixed(int wd)
 // different set; 2026-10-30 and 2026-11-01 found the cost of one missing).
 static void watch_release(int wd)
 {
+    pthread_mutex_lock(&watch.wd_mu);
     if (wd > 0 && !watch_fixed(wd) && !watch_is_trash(wd) && wd != atomic_load(&watch.dir_wd)) inotify_rm_watch(watch.fd, wd);
+    pthread_mutex_unlock(&watch.wd_mu);
 }
 
 // The folder to watch now, in place of the last one; NULL: none (the search view, F9). IN_MASK_ADD,
@@ -165,8 +171,10 @@ static void watch_git(const char *gitdir)
 
 static void watch_theme_dirs(void)
 {
+    pthread_mutex_lock(&watch.wd_mu);
     atomic_store(&watch.current_wd, inotify_add_watch(watch.fd, watch.current, WATCH_THEME_MASK | IN_MASK_ADD));
     atomic_store(&watch.theme_wd, inotify_add_watch(watch.fd, watch.theme, WATCH_THEME_MASK | IN_MASK_ADD));
+    pthread_mutex_unlock(&watch.wd_mu);
 }
 
 // Reads what is waiting: which flags it calls for.
@@ -196,7 +204,11 @@ static void watch_read(bool *list, bool *theme, bool *mounts, bool *trash, bool 
         if (e->wd == atomic_load(&watch.current_wd)) *theme = true, rewatch = true;
     }
     // The theme directory replaced, or made after ofx started: watch the new one.
-    if (rewatch) atomic_store(&watch.theme_wd, inotify_add_watch(watch.fd, watch.theme, WATCH_THEME_MASK | IN_MASK_ADD));
+    if (rewatch) {
+        pthread_mutex_lock(&watch.wd_mu);
+        atomic_store(&watch.theme_wd, inotify_add_watch(watch.fd, watch.theme, WATCH_THEME_MASK | IN_MASK_ADD));
+        pthread_mutex_unlock(&watch.wd_mu);
+    }
 }
 
 // One poll of inotify and the mountinfo file, for at most ms (-1: no limit): the flags it raises.

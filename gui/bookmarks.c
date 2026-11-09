@@ -32,19 +32,17 @@ static void bm_changed(int i)
 static void bmp_change(UiActionKind op, int i)
 {
     char file[PATH_MAX];
-    bookmarks_path(file, sizeof file);
-    static Bookmarks now;
-    arena_reset(&bmwa);
     Err err = { 0 };
-    if (!bm_read(&bmwa, file, &now, &err)) {
+    Bookmarks *now = bm_begin(file, sizeof file, &err);
+    if (!now) {
         set_status(true, "Bookmarks not changed: %s", err.msg);
         return;
     }
-    if (now.full) {
+    if (now->full) {
         set_status(true, "The bookmarks file has more than %d lines: ofx leaves it as it is", BM_MAX);
         return;
     }
-    int j = bm_locate(&now, &bmarks, i);
+    int j = bm_locate(now, &bmarks, i);
     if (j < 0) {
         bm_changed(i);
         return;
@@ -53,22 +51,19 @@ static void bmp_change(UiActionKind op, int i)
     // A move swaps with the line shown next to it, found again too (so lines added meanwhile
     // elsewhere stay where they were).
     if (op == UA_BM_UP || op == UA_BM_DOWN) {
-        int other = bm_locate(&now, &bmarks, op == UA_BM_UP ? i - 1 : i + 1);
+        int other = bm_locate(now, &bmarks, op == UA_BM_UP ? i - 1 : i + 1);
         if (other < 0) {
             bm_changed(i);
             return;
         }
-        bm_swap(&now, j, other);
+        bm_swap(now, j, other);
         k = op == UA_BM_UP ? i - 1 : i + 1;
     } else if (op == UA_BM_REMOVE) {
-        bm_remove(&now, j);
+        bm_remove(now, j);
     } else if (op == UA_BM_RENAME) {
-        bm_rename(&bmwa, &now, j, (Str){ app.ui.bmp_name.b, app.ui.bmp_name.len });
+        bm_rename(&bmwa, now, j, (Str){ app.ui.bmp_name.b, app.ui.bmp_name.len });
     }
-    Str text = bm_format(&bmwa, &now);
-    bool ok = now.n == 0 || text.len > 0;
-    if (!ok) err_set(&err, "the bookmarks are too long to write");
-    if (!ok || !bm_write(file, text, &err)) {
+    if (!bm_commit(file, now, &err)) {
         set_status(true, "Bookmarks not changed: %s", err.msg);
         return;
     }

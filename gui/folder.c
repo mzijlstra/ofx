@@ -461,17 +461,31 @@ static Str bm_label(const Bookmark *b)
 // Bookmarks → Add Bookmark, Ctrl+D (F7.5): the folder shown (or dir, a folder's right-click menu,
 // F8) at the end of the file, read again first so a change Nemo made meanwhile stays; the places
 // (and the menu) read again after.
+// The bookmarks file read for a change (its path into file): the lines as they are now, in bmwa;
+// NULL, err said, when it can't be (bm_read). A change to them goes back with bm_commit.
+static Bookmarks *bm_begin(char *file, size_t cap, Err *err)
+{
+    static Bookmarks now;
+    bookmarks_path(file, cap);
+    arena_reset(&bmwa);
+    return bm_read(&bmwa, file, &now, err) ? &now : NULL;
+}
+
+// now (bm_begin's, changed) written back as file. Bookmark Add and Edit Bookmarks' changes (the F15
+// code-health review: written twice, the length check two ways).
+static bool bm_commit(const char *file, const Bookmarks *now, Err *err)
+{
+    Str text = bm_format(&bmwa, now);
+    if (now->n > 0 && !text.len) return err_set(err, "the bookmarks are too long to write"), false;
+    return bm_write(file, text, err);
+}
+
 static void bookmark_add(const char *dir)
 {
     char file[PATH_MAX];
-    bookmarks_path(file, sizeof file);
-    static Bookmarks now;
-    arena_reset(&bmwa);
     Err err = { 0 };
-    bool ok = bm_read(&bmwa, file, &now, &err) && bm_add(&bmwa, &now, dir, &err);
-    Str text = ok ? bm_format(&bmwa, &now) : STR_EMPTY;
-    if (ok && !text.len) err_set(&err, "the bookmarks are too long to write"), ok = false;   // (n > 0 after an add)
-    if (!ok || !bm_write(file, text, &err)) {
+    Bookmarks *now = bm_begin(file, sizeof file, &err);
+    if (!now || !bm_add(&bmwa, now, dir, &err) || !bm_commit(file, now, &err)) {
         set_status(true, "No bookmark: %s", err.msg);
         return;
     }

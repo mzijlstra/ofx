@@ -39,7 +39,7 @@ MUTANTS = [
     ('gui/folder.c', "    if (go_to(app.cwd, str_from_c(keep), app.ui.list.sel)) return;", "    if (go_to(app.cwd, STR_EMPTY, app.ui.list.sel)) return;"),
     ('gui/folder.c', "        memmove(up, d.p, (size_t)d.len);\n        up[d.len] = 0;", "        snprintf(up, sizeof up, \"%.*s\", STR_ARG(d));"),
     (W, "static const u32 WATCH_DIR_MASK = IN_CREATE | ", "static const u32 WATCH_DIR_MASK = "),
-    (W, "    if (rewatch) atomic_store(&watch.theme_wd, inotify_add_watch(watch.fd, watch.theme, WATCH_THEME_MASK | IN_MASK_ADD));", ""),
+    ('gui/watch.c', '        atomic_store(&watch.theme_wd, inotify_add_watch(watch.fd, watch.theme, WATCH_THEME_MASK | IN_MASK_ADD));\n        pthread_mutex_unlock(&watch.wd_mu);\n    }', '        pthread_mutex_unlock(&watch.wd_mu);\n    }'),
     (W, "        if (theme) atomic_store(&watch.theme_ready, true);", ""),
     # F2
     ('gui/folder.c', "    if (!same && app.have_list && !stepping) hist_leave(&hist, app.cwd, sel_name());\n", ""),
@@ -101,8 +101,8 @@ MUTANTS = [
     # F5.2: the edit lines' text clipboard, the path buttons by keyboard. clipboard.c's
     # data-control text: with the clipboard's own, at the end (clip, in the test sway).
     ('gui/topbar.c', '    if (app.ui.focus == UI_FOCUS_CRUMBS) ui_crumbs_show(c, wd, room, ARROW_W, app.ui.crumb_at < c->n ? app.ui.crumb_at : c->n - 1);   // (crumb_at past them: the branch button)\n', ''),
-    (G, "        in.crumb_n = app.crumbs.n, in.crumb_last = app.crumb_hi - 1;", "        in.crumb_n = app.crumbs.n, in.crumb_last = app.crumb_hi;"),
-    (G, '        if (pasting && ui_line_active(&app.ui, NULL)) in.paste = text_paste();   // (whichever text field has the keys)\n', ''),
+    ('gui/main.c', '    in->crumb_n = app.crumbs.n, in->crumb_last = app.crumb_hi - 1;', '    in->crumb_n = app.crumbs.n, in->crumb_last = app.crumb_hi;'),
+    ('gui/main.c', '    if (pasting && ui_line_active(&app.ui, NULL)) in->paste = text_paste();   // (whichever text field has the keys)\n', ''),
     (G, "        if (app.ui.copied) text_copy((Str){ app.ui.copy, app.ui.copy_len }), app.ui.copied = false;", "        app.ui.copied = false;"),
     ('gui/actions.c', "    if (!clip_set_text(t)) SetClipboardText(app.text_copied);\n    own.n = 0;", "    if (!clip_set_text(t)) SetClipboardText(app.text_copied);"),
     ('gui/actions.c', '    if (own.n > 0 && (!clip.ok || clip_ours())) return clip_text(&pastea, &own, false);\n', '', 'clip'),
@@ -124,7 +124,7 @@ MUTANTS = [
     (J, "    for (int i = 0; i < jobs.nrun; i++) job_cancel(job_recs[jobs.run[i]].id);", ""),
     (J, "        jobline_sample(&r->line, now,", "        if (0) jobline_sample(&r->line, now,"),
     ('gui/input.c', "        if (in_box(CLAY_IDI(\"job-x\", i), x, y)) h.job_x = i;", ""),
-    (G, "        for (int k = 0; k < jobs.nrun; k++) in.job_id[k] = job_recs[jobs.run[k]].id;", ""),
+    ('gui/main.c', '    for (int k = 0; k < jobs.nrun; k++) in->job_id[k] = job_recs[jobs.run[k]].id;', ''),
     # F5.3 review fixes. Not run: the refusals in rename, new folder and undo (the same
     # jobs_refuse as trash's), and the timed join at quit (it needs a worker stuck in a hung mount).
     (J, "    if (undo_gen != r->undo_gen) {", "    if (0) {"),
@@ -139,9 +139,9 @@ MUTANTS = [
     ('gui/actions.c', '        if (app.ui.view == UI_VIEW_TRASH && str_eq(path_base(files), S("files")))\n            r->item[k++]', '        if (0)\n            r->item[k++]'),
     ('gui/actions.c', "        job_submit(r, JOB_DELETE, k);\n        r->trash = JOB_TRASH_EMPTY;", "        r->trash = JOB_TRASH_EMPTY;"),
     ('gui/actions.c', "    case UA_RESTORE: trash_restore_targets(); break;\n", ""),
-    (G, "        if (ui_input_acts(&in) && ui_status_clears(app.status_bad, app.status_at, now_ms())) app.status[0] = 0;", ""),
+    ('gui/main.c', '    if (ui_input_acts(in) && ui_status_clears(app.status_bad, app.status_at, now_ms())) app.status[0] = 0;', ''),
     ('gui/actions.c', '        state_key("sidebar", SIDE_MODE_NAMES[app.ui.side_mode]);\n', ''),
-    (G, "    if (state_path(state_file, sizeof state_file)) {\n        State st", "    if (0) {\n        State st"),
+    ('gui/main.c', '    if (have_state) {\n        State st', '    if (0) {\n        State st'),
     ('gui/actions.c', "    case UA_SIDE_MODE: {\n        side_refresh();", "    case UA_SIDE_MODE: {"),
     ('gui/input.c', "        if (in_box(CLAY_IDI(\"mode\", k), x, y)) h.mode = k;", "        if (0) h.mode = k;"),
     (J, "    if (r->trash == JOB_TRASH_ITEMS) done /= 2, shown_n /= 2;", ""),
@@ -176,7 +176,7 @@ MUTANTS = [
     # tooltips (Michael, 2026-10-24)
     ('gui/input.c', "        timer_at(wake_due());\n", ""),
     (G, "        if (ui_tip_tick(&app.tip, now_ms())) dirty = true;\n", ""),
-    (G, "        if (ui_input_acts(&in) && ui_tip_act(&app.tip)) seen = true;   // a click or key: the tooltip goes\n", ""),
+    ('gui/main.c', '    if (ui_input_acts(in) && ui_tip_act(&app.tip)) *seen = true;   // a click or key: the tooltip goes\n', ''),
     (G, "        pthread_cond_timedwait(&timer.cv, &timer.mu, &ts);", "        pthread_cond_wait(&timer.cv, &timer.mu);"),
     ('gui/input.c', "    if (h.mode >= 0) return TIP_MODE + h.mode;\n", ""),
     # F6.3: the icon view's sizes
@@ -285,7 +285,7 @@ MUTANTS = [
     ('gui/input.c', '        if (in_box(CLAY_IDI("toggle", k), x, y)) h.toggle = k;', '', 'f73'),
     ('gui/input.c', '        if (ui_press(&app.panel_press, pick->list.top + h.pick_row, now_ms()) == 2) in->pick_drow = h.pick_row;', '        if (false) in->pick_drow = h.pick_row;', 'f73'),
     ('gui/input.c', '    in->toggle = h.toggle;\n', '', 'f73'),
-    (G, '        if (app.ui.panel == UI_PANEL_OW) in.app_name = ow.names, in.app_n = ow.shown < UI_APPS_MAX ? ow.shown : UI_APPS_MAX;', '', 'f73'),
+    ('gui/main.c', '    if (app.ui.panel == UI_PANEL_OW) in->app_name = ow.names, in->app_n = ow.shown < UI_APPS_MAX ? ow.shown : UI_APPS_MAX;', '', 'f73'),
     ('gui/files.c', '    ui_resize(&app.ui.ow.list, ow_rows(GetScreenHeight()));   // Open With\'s list (F7.3)', '', 'f73'),
     # ---- after Michael's try: listed at once, the apps' icons
     (OW, '    ui_ow_filter(&app.ui, &in);\n}', '}', 'f73'),
@@ -325,7 +325,7 @@ MUTANTS = [
     ('gui/frame.c', '        if (!bmarks.b[i].path[0]) continue;\n        if (strcmp(bmarks.b[i].path, app.cwd)', '        if (strcmp(bmarks.b[i].path, app.cwd)', 'f75'),
     ('gui/folder.c', '        if (bmarks.b[i].path[0] && k-- == 0) return &bmarks.b[i];', '        if (k-- == 0) return &bmarks.b[i];', 'f75'),
     ('gui/folder.c', '    return b->label.len ? b->label : strcmp(b->path, "/") == 0', '    return false ? b->label : strcmp(b->path, "/") == 0', 'f75'),
-    ('gui/folder.c', '    bool ok = bm_read(&bmwa, file, &now, &err) && bm_add(', '    bool ok = (now.n = 0, true) && bm_add(', 'f75'),
+    ('gui/folder.c', '    return bm_read(&bmwa, file, &now, err) ? &now : NULL;', '    return now.n = 0, &now;', 'f75'),
     # Not a mutant: bookmark_add's places_reload, the watch reads them again 100 ms later; it is kept so
     # the menu is right at once.
     ('gui/actions.c', '        if (b) go_to(b->path, STR_EMPTY, 0);', '', 'f75'),
@@ -333,13 +333,13 @@ MUTANTS = [
     (W, '        if (e->wd == atomic_load(&watch.bm_wd) && e->len && strcmp(e->name, "bookmarks") == 0) *mounts = true;', '', 'f75'),
     (W, '    watch_bookmarks();\n    watch_conf();', '    watch_conf();', 'f75'),
     # ---- F7.5: Edit Bookmarks
-    ('gui/bookmarks.c', '    if (now.full) {', '    if (false) {', 'f75'),
+    ('gui/bookmarks.c', '    if (now->full) {', '    if (false) {', 'f75'),
     # Not a mutant: bmp_change's bm_locate for `i`; the panel shows the file as it is (a change
     # reads it again), so only a race between the watch and a key tells; test_f75.c tests bm_locate.
-    ('gui/bookmarks.c', '        bm_swap(&now, j, other);', '', 'f75'),
+    ('gui/bookmarks.c', '        bm_swap(now, j, other);', '', 'f75'),
     ('gui/bookmarks.c', '        k = op == UA_BM_UP ? i - 1 : i + 1;', '', 'f75'),
-    ('gui/bookmarks.c', '        bm_remove(&now, j);', '', 'f75'),
-    ('gui/bookmarks.c', '        bm_rename(&bmwa, &now, j, (Str){ app.ui.bmp_name.b, app.ui.bmp_name.len });', '', 'f75'),
+    ('gui/bookmarks.c', '        bm_remove(now, j);', '', 'f75'),
+    ('gui/bookmarks.c', '        bm_rename(&bmwa, now, j, (Str){ app.ui.bmp_name.b, app.ui.bmp_name.len });', '', 'f75'),
     ('gui/bookmarks.c', '    places_reload();\n    bmp_refresh(k);', '    bmp_refresh(k);', 'f75'),
     ('gui/bookmarks.c', '        if (bmarks.b[a.index].path[0]) go_to(bmarks.b[a.index].path, STR_EMPTY, 0);', '        if (true) go_to(bmarks.b[a.index].path, STR_EMPTY, 0);', 'f75'),
     ('gui/bookmarks.c', '        ui_line_set(ui_bmp_line(&app.ui), s);\n', '', 'f75'),
@@ -352,11 +352,11 @@ MUTANTS = [
     ('gui/folder.c', '        int at = bm_keep >= 0 ? bm_locate(&bmarks, &prev, bm_keep) : -1;', '        int at = -1;', 'f75'),
     # Not run: the bmp buttons' and the field's drawing, the hint (pixels); edit-bookmarks.png shows them.
     # ---- F7.5: the review's MEDIUM, a bookmarks file not read whole
-    ('gui/folder.c', '    bool ok = bm_read(&bmwa, file, &now, &err) && bm_add(', '    bool ok = (bm_read(&bmwa, file, &now, &err) || true) && bm_add(', 'f75'),
+    ('gui/folder.c', '    return bm_read(&bmwa, file, &now, err) ? &now : NULL;', '    return bm_read(&bmwa, file, &now, err), &now;', 'f75'),
     # Not run: bmp_change's bm_read refusal (with the file unreadable the panel lists no line to act
     # on) and the empty-format refusals (an over-a-MiB file); test_f75.c covers bm_read and bm_format.
     # ---- F7.5: Keyboard Shortcuts
-    ('gui/input.c', '    if (app.ui.panel == UI_PANEL_OW || app.ui.panel == UI_PANEL_KEYS || app.ui.panel == UI_PANEL_BRANCHES) return in->panel_wheel = notches, false;', '    if (app.ui.panel == UI_PANEL_OW || app.ui.panel == UI_PANEL_BRANCHES) return in->panel_wheel = notches, false;', 'f75'),
+    ('gui/input.c', '    if (on == UI_ON_OW || on == UI_ON_KEYS || on == UI_ON_BRANCHES) return in->panel_wheel = notches, false;', '    if (on == UI_ON_OW || on == UI_ON_BRANCHES) return in->panel_wheel = notches, false;', 'f75'),
     ('gui/files.c', '    ui_resize(&app.ui.keys_list, keys_rows(GetScreenHeight()));   // Keyboard Shortcuts\'', '', 'f75'),
     # Left out: the panel's drawing (pixels); shortcuts.png shows it.
     # ---- Help → About (2026-10-27); its drawing left out (pixels), about.png shows it
@@ -381,7 +381,7 @@ MUTANTS = [
     # dest (a mutant would copy a folder into itself without end; f8b checks the refusal).
     ('gui/frame.c', '    u->sel_link = e && (e->kind == K_LINK_FILE || e->kind == K_LINK_DIR);', '    u->sel_link = false;', 'f8'),
     ('gui/frame.c', '    u->sel_bm = e && kind_is_dir(e->kind) && entry_path(u->list.sel, p, sizeof p) && bm_find(&bmarks, p) >= 0;', '    u->sel_bm = false;', 'f8'),
-    ('gui/folder.c', '    bool ok = bm_read(&bmwa, file, &now, &err) && bm_add(&bmwa, &now, dir, &err);', '    bool ok = bm_read(&bmwa, file, &now, &err) && bm_add(&bmwa, &now, app.cwd, &err);', 'f8'),
+    ('gui/folder.c', '    if (!now || !bm_add(&bmwa, now, dir, &err) || !bm_commit(file, now, &err)) {', '    if (!now || !bm_add(&bmwa, now, app.cwd, &err) || !bm_commit(file, now, &err)) {', 'f8'),
     ('gui/actions.c', '        if (same_dir(sdir, dest)) {', '        if (same_dir(sdir, app.cwd)) {', 'f8'),
     ('gui/actions.c', '        if (!path_put(dst, sizeof dst, dest, str_from_c(name))) continue;', '        if (!path_put(dst, sizeof dst, app.cwd, str_from_c(name))) continue;', 'f8'),
     ('gui/actions.c', '        if (!op_symlink(in, paths[i], str_from_c(name), one, sizeof one, &err)', '        if (!op_symlink(in, in, str_from_c(name), one, sizeof one, &err)', 'f8'),
@@ -391,8 +391,8 @@ MUTANTS = [
     ('gui/actions.c', '    go_to(dir, strcmp(real, "/") == 0 ? STR_EMPTY : base, 0);', '    go_to(dir, STR_EMPTY, 0);', 'f8'),
     ('gui/actions.c', '        search_in(act_dir(a, in, sizeof in));', '        search_in(app.cwd);', 'f9'),
     ('gui/actions.c', '        window_on(act_dir(a, on, sizeof on));', '        window_on(app.cwd);', 'f8'),
-    ('gui/actions.c', '        else if (a.index < app.list.n && entry_path(a.index, into, sizeof into)) paste(into);', '        else paste(app.cwd);', 'f8'),
-    ('gui/actions.c', '        else if (a.index < app.list.n && entry_path(a.index, bm, sizeof bm)) bookmark_add(bm);', '        else bookmark_add(app.cwd);', 'f8'),
+    ('gui/actions.c', '        const char *dir = act_dir(a, into, sizeof into);\n        if (dir) paste(dir);', '        paste(app.cwd);', 'f8'),
+    ('gui/actions.c', '        const char *dir = act_dir(a, bm, sizeof bm);\n        if (dir) bookmark_add(dir);', '        bookmark_add(app.cwd);', 'f8'),
     ('gui/actions.c', '        if (!too_many_marked()) make_link();\n', '', 'f8'),
     ('gui/actions.c', '    case UA_FOLLOW: follow_link(a.index); break;', '', 'f8'),
     # ---- F8 step 3: a folder elsewhere's menu. Not run: the lit sidebar row (side_ctx, pixels;
@@ -477,7 +477,7 @@ MUTANTS = [
     ('gui/input.c', '    return ui_due_min(d, COUNT(d));', '    return ui_due_min(d, COUNT(d) - 1);', 'f12g'),
     # F12 step 6: the branches panel
     ('gui/frame.c', '    u->br_total = git.br.total;', '    u->br_total = 0;', 'f12h'),
-    ('gui/main.c', '        if (app.ui.panel == UI_PANEL_BRANCHES || (app.ui.menu_on && app.ui.menu == UI_CTX_BRANCH)) in.br_name = brp_names(), in.br_names = git.br.n;', '        (void)0;', 'f12h'),
+    ('gui/main.c', '    if (app.ui.panel == UI_PANEL_BRANCHES || (app.ui.menu_on && app.ui.menu == UI_CTX_BRANCH)) in->br_name = brp_names(), in->br_names = git.br.n;', '    (void)0;', 'f12h'),
     # (Not the menu's half of that line: a script draws a frame each step, and the next one fills the
     # panel. The bug it caught showed only with no frame to come; test_branch_panel holds ui/'s side.)
     ('gui/folder.c', '    if (!same && app.ui.panel == UI_PANEL_BRANCHES) ui_brp_close(&app.ui);', '    if (false) ui_brp_close(&app.ui);', 'f12i'),
@@ -552,7 +552,7 @@ MUTANTS = [
     (OW, '    if (set && !op_set_default(&scratch, str_from_c(ow.type), id, &err)) {', '    if (false) {', 'f73'),
     (OW, '    if (set) set_status(false, "opened %s with %.*s, the default for %s now"', '    if (false) set_status(false, "opened %s with %.*s, the default for %s now"', 'f73'),
     ('gui/actions.c', '    case UA_LAUNCH: ow_launch(a.index, a.all); break;', '    case UA_LAUNCH: ow_launch(a.index, false); break;', 'f73'),
-    ('gui/input.c', 'k <= UI_TOGGLE_ALWAYS && !h.toggle && app.ui.panel == UI_PANEL_OW', 'k <= UI_TOGGLES && !h.toggle && app.ui.panel == UI_PANEL_OW', 'f73'),
+    ('gui/input.c', 'k <= UI_TOGGLE_ALWAYS && !h.toggle && modal_kind() == UI_ON_OW', 'k <= UI_TOGGLES && !h.toggle && modal_kind() == UI_ON_OW', 'f73'),
     # Left out: nsvgRasterize gone leaves a blank texture, which no state word sees (the pixels);
     # f73's ow-panel.png shows the SVG drawn.
     # ---- F9 step 1: the search view (2026-10-28). Left out: what is only pixels (the tab's label,
@@ -615,7 +615,7 @@ MUTANTS = [
     ('gui/clipboard.c', "    if (!(types & (OFFER_UTF8 | OFFER_TEXT))) {", "    if (true) {", 'clip'),
     # Keys through the compositor (keys, in the test sway with vkbd, 2026-10-28): the mappings no
     # other script reaches, and the scripted window's door for them.
-    (G, "                memcpy(in.ev, real.ev, sizeof *real.ev * (size_t)real.nev);\n                in.nev = real.nev;", "                memcpy(in.ev, real.ev, sizeof *real.ev * (size_t)real.nev);", 'keys'),
+    ('gui/main.c', '        memcpy(in->ev, real.ev, sizeof *real.ev * (size_t)real.nev);\n        in->nev = real.nev;', '        memcpy(in->ev, real.ev, sizeof *real.ev * (size_t)real.nev);', 'keys'),
     # The views in gui/folder.c (2026-10-28): listing, watching, Up, what changes prune, the table.
     ('gui/folder.c', '    return strcmp(dir, TRASH_URI) == 0 ? UI_VIEW_TRASH : is_search(dir)', '    return is_search(dir)', 'f6'),
     ('gui/folder.c', 'is_search(dir) ? UI_VIEW_SEARCH : UI_VIEW_FOLDER;', 'UI_VIEW_FOLDER;', 'f9'),
@@ -658,7 +658,7 @@ MUTANTS = [
     ('gui/prefs.c', '    thumbs.off = !c.previews, thumbs.src_max = c.preview_max, thumbs.exec_on = c.thumbnailers;', '    thumbs.src_max = c.preview_max, thumbs.exec_on = c.thumbnailers;', 'f10'),
     ('gui/prefs.c', '    thumbs.off = !c.previews, thumbs.src_max = c.preview_max, thumbs.exec_on = c.thumbnailers;', '    thumbs.off = !c.previews, thumbs.src_max = CONF_PREVIEW_MAX, thumbs.exec_on = c.thumbnailers;', 'f10'),
     ('gui/prefs.c', '    if (previews) thumbs_reset();', '', 'f10'),
-    ('gui/prefs.c', '    if (c.bad && (!keys.bad || c.bad < keys.bad)) set_status', '    if (false) set_status', 'f10'),
+    ('gui/prefs.c', '    if (c->bad && (!keys->bad || c->bad < keys->bad)) set_status', '    if (false) set_status', 'f10'),
     ('gui/prefs.c', '    int n = e ? editor_argv(e, path, 1, 1, buf', '    int n = e ? editor_argv(e, path, 2, 1, buf', 'f10'),
     ('gui/thumbs.c', ' || thumbs.full || thumbs.off) return NULL;', ' || thumbs.full) return NULL;', 'f10'),
     # Not a mutant: the request's src_max as THUMB_SRC_MAX (its make flag has the limit already; the
@@ -851,7 +851,7 @@ MUTANTS = [
     ('gui/main.c', 'ui_side_fit(app.side_px, GetScreenWidth());', 'ui_side_fit(app.side_px, 936);', 'f13'),
     ('gui/main.c', '        if (st.side_px) app.side_px = st.side_px;\n', '', 'f13'),
     ('gui/main.c', 'app.ui.colors = true, app.side_px = UI_SIDE_W;', 'app.ui.colors = true;', 'f13'),
-    ('gui/main.c', '        cursor_shape();\n', '', 'f13'),
+    ('gui/main.c', '    cursor_shape();\n', '', 'f13'),
     # F13 step 3 (2026-11-04): drag and drop inside ofx (f13e)
     ('gui/input.c', ' && h.row >= 0 && app.ui.view != UI_VIEW_TRASH && app.have_list', ' && h.row >= 0 && app.have_list', 'f13'),
     ('gui/input.c', '        app.drag_side = in->side_click, in->side_click = -1;', '        app.drag_side = in->side_click;', 'f13'),
@@ -871,7 +871,7 @@ MUTANTS = [
     ('gui/input.c', '    if (app.drag == DRAG_FILES && app.drop.ok) drop_do(&app.drop);', '    if (app.drag == DRAG_FILES) drop_do(&app.drop);', 'f13'),
     ('gui/input.c', '        if (!ui_drag_past(x - app.drag_x0, y - app.drag_y0)) return false;', '        if (false) return false;', 'f13'),
     ('gui/input.c', '        app.press.row = -1;   // (a drag', '        (void)0;   // (a drag', 'f13'),
-    ('gui/main.c', '        drag_keys(&in);', '', 'f13'),
+    ('gui/main.c', '    drag_keys(in);', '', 'f13'),
     ('gui/actions.c', '    dragged.cut = op == UI_DROP_MOVE;', '    dragged.cut = true;', 'f13'),
     ('gui/actions.c', '        trash_paths(dragged.path, dragged.n, app.drag_marked);\n        return;', '        return;', 'f13'),
     ('gui/actions.c', '    return d->trash ? UI_DROP_TRASH : ui_drop_op(d->same_drive, app.drag_mods);', '    return ui_drop_op(d->same_drive, app.drag_mods);', 'f13'),
@@ -978,17 +978,20 @@ MUTANTS = [
     ('gui/topbar.c', "if (ui_menu_key(it)[0]) text(cz(ui_menu_key(it)), on ? cc(t->fg_dim) : off);", "", 'f7'),
     ('gui/shortcuts.c', "keycap(ui_keys_key(line, 0), ui_keys_mine(line, 0), KEYS_KEY_W);", "keycap(\"\", false, KEYS_KEY_W);", 'f75'),
     ('gui/shortcuts.c', "keycap(ui_keys_key(line, 0), ui_keys_mine(line, 0), KEYS_KEY_W);", "keycap(ui_keys_key(line, 0), false, KEYS_KEY_W);", 'f15'),
-    ('gui/input.c', "float lw = str_width(label) + str_width(str_from_c(ui_menu_key(it)));", "float lw = str_width(label);", 'f7'),
+    ('gui/input.c', 'float w = str_width((Str){ label.chars, label.length }) + MENU_GAP + (key[0] ? MENU_GAP + str_width(str_from_c(key)) : 0);', 'float w = str_width((Str){ label.chars, label.length }) + MENU_GAP;', 'f7'),
+    # F15's code-health review, D (gui/): the menu's size from layout_menu's own sizes and labels.
+    ('gui/input.c', "(menu_marks(m) ? MENU_MARK_W + MENU_MARK_GAP : 0)", "0", 'f8'),
+    ('gui/input.c', "        Clay_String label = menu_label(it);", "        Clay_String label = cz(UI_MENU_ITEM[it].label);", 'f12h'),
     # F15's code-health review, B: the tooltips' keys from the table.
     ('gui/frame.c', "ui_with_key(buf, cap, BAR[j].text, BAR[j].cmd)[0];", "snprintf(buf, cap, \"%s\", BAR[j].text) > 0;", 'f63'),
     ('gui/frame.c', "        return ui_with_key(buf, cap, MODES[k - TIP_MODE], UK_F9)[0];", "        return snprintf(buf, cap, \"%s\", MODES[k - TIP_MODE]) > 0;", 'f62'),
     # F15 step 2: ofx.conf's key lines applied on each read, a bad one named, a clash said after a save.
     ('gui/prefs.c', "    UiKeysRead keys = conf_keys_read = ui_binds_set(c.key, c.key_no, c.nkey);", "    UiKeysRead keys = conf_keys_read = (UiKeysRead){ 0 };", 'f15'),
-    ('gui/prefs.c', "    else if (keys.bad) set_status(true,", "    else if (0) set_status(true,", 'f15'),
-    ('gui/prefs.c', "    else if (was_once && keys.fresh)", "    else if (keys.fresh)", 'f15'),
-    ('gui/prefs.c', "    else if (was_once && keys.fresh)", "    else if (0)", 'f15'),
-    ('gui/prefs.c', "    if (!c.bad && !keys.bad) ui_clashes_told();", "    ui_clashes_told();", 'f15'),
-    ('gui/prefs.c', "    if (!c.bad && !keys.bad) ui_clashes_told();", "    if (!keys.bad) ui_clashes_told();", 'f15'),
+    ('gui/prefs.c', '    else if (keys->bad) set_status(true,', '    else if (0) set_status(true,', 'f15'),
+    ('gui/prefs.c', '    else if (after_start && keys->fresh)', '    else if (keys->fresh)', 'f15'),
+    ('gui/prefs.c', '    else if (after_start && keys->fresh)', '    else if (0)', 'f15'),
+    ('gui/prefs.c', '    if (!c->bad && !keys->bad) ui_clashes_told();', '    ui_clashes_told();', 'f15'),
+    ('gui/prefs.c', '    if (!c->bad && !keys->bad) ui_clashes_told();', '    if (!keys->bad) ui_clashes_told();', 'f15'),
 ]
 import concurrent.futures, queue, threading, time
 
