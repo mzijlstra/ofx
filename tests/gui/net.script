@@ -10,6 +10,10 @@ key ctrl-r
 expect farloading=1 n=2 sel=sub
 wait-for 4000 farslow=1 statusbad=1
 expect isn't answering
+# Listed again while it hangs: the hung lister killed first, and the new one waits for it to leave
+# the kernel (one per folder; step 2a review: it started at once, and they gathered).
+key ctrl-r
+expect farheld=1 farwait=1
 shot net-slow.png
 # The window answers meanwhile.
 key down

@@ -36,8 +36,11 @@ static int spawn_started;   // programs started, for the GUI scripts' state line
 // err_too (else ofx's), and none of ofx's other fds (a folder's fd a copy job holds would keep a
 // USB drive busy for as long as a terminal ran). False, with the reason, when it can't start or the
 // test guard refuses check (the program that runs in the end: udisksctl under eject's sh -c, given
-// as resolved; NULL: argv[0]'s file). spawn_fds: in for its input instead of /dev/null (-1: that).
-static bool spawn_fds(const char *check, char *const *argv, int in, int out, bool err_too, pid_t *pid, Err *err)
+// as resolved; NULL: argv[0]'s file). spawn_fds: in for its input instead of /dev/null (-1: that),
+// and errs for its errors: SPAWN_ERR_OURS (ofx's own) or SPAWN_ERR_NULL (/dev/null: ofx-list, which
+// can outlive ofx in D and would keep a pipe on ofx's stderr open; step 2a review), else an fd.
+enum { SPAWN_ERR_OURS = -2, SPAWN_ERR_NULL = -1 };
+static bool spawn_fds(const char *check, char *const *argv, int in, int out, int errs, pid_t *pid, Err *err)
 {
     char full[PATH_MAX];
     if (!prog_resolve(argv[0], full, sizeof full)) return err_set(err, "%s is not installed", argv[0]), false;
@@ -54,7 +57,8 @@ static bool spawn_fds(const char *check, char *const *argv, int in, int out, boo
     else posix_spawn_file_actions_addopen(&fa, 0, "/dev/null", O_RDONLY, 0);
     if (out >= 0) posix_spawn_file_actions_adddup2(&fa, out, 1);   // (dup2 drops O_CLOEXEC on 1)
     else posix_spawn_file_actions_addopen(&fa, 1, "/dev/null", O_WRONLY, 0);
-    if (out >= 0 && err_too) posix_spawn_file_actions_adddup2(&fa, out, 2);
+    if (errs >= 0) posix_spawn_file_actions_adddup2(&fa, errs, 2);
+    else if (errs == SPAWN_ERR_NULL) posix_spawn_file_actions_addopen(&fa, 2, "/dev/null", O_WRONLY, 0);
     posix_spawn_file_actions_addclosefrom_np(&fa, 3);
     int rc = posix_spawn(pid, full, &fa, &attr, argv, environ);
     posix_spawn_file_actions_destroy(&fa);
@@ -66,7 +70,7 @@ static bool spawn_fds(const char *check, char *const *argv, int in, int out, boo
 
 static bool spawn_with(const char *check, char *const *argv, int out, bool err_too, pid_t *pid, Err *err)
 {
-    return spawn_fds(check, argv, -1, out, err_too, pid, err);
+    return spawn_fds(check, argv, -1, out, out >= 0 && err_too ? out : SPAWN_ERR_OURS, pid, err);
 }
 
 // Runs argv detached. False, with the reason, when it can't start, or when the test guard refuses

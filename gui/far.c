@@ -174,7 +174,7 @@ static bool far_start(const char *exe, const char *dir, bool hidden, Err *err)
     if (pipe2(in, O_CLOEXEC) != 0) return err_set(err, "a pipe: %s", strerror(errno)), false;
     if (pipe2(out, O_CLOEXEC) != 0) return close(in[0]), close(in[1]), err_set(err, "a pipe: %s", strerror(errno)), false;
     pid_t pid;
-    bool ok = spawn_fds(NULL, argv, in[0], out[1], false, &pid, err);
+    bool ok = spawn_fds(NULL, argv, in[0], out[1], SPAWN_ERR_NULL, &pid, err);
     close(in[0]), close(out[1]);
     int pfd = ok ? (int)syscall(SYS_pidfd_open, pid, 0) : -1;
     if (!ok || pfd < 0) {   // (no pidfd: it can't be killed safely later; not used)

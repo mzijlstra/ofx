@@ -374,6 +374,7 @@ static struct {
     bool      far_loading;        // its listing hasn't come yet (the list shown: none, or the last one's)
     bool      far_waiting;        // its last lister is still in the kernel: a new one waits for it
     bool      far_ready;          // (go_to_in's: the listing came, take it)
+    bool      far_kept;           // a reload: the listing shown kept until it comes (the cursor taken then)
     bool      far_slow;           // no answer within FAR_ANSWER_MS: said so
     bool      far_can_write;      // what the lister said
     i64       far_since;          // when it was asked

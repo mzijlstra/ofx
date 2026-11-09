@@ -227,7 +227,7 @@ static void test_spawn_fds_in(void)
     char *argv[] = { prog, NULL };
     pid_t pid;
     Err err;
-    CHECK(spawn_fds(NULL, argv, in[0], out[1], false, &pid, &err));
+    CHECK(spawn_fds(NULL, argv, in[0], out[1], SPAWN_ERR_OURS, &pid, &err));
     close(in[0]), close(out[1]);
     CHECK(write(in[1], "hello\n", 6) == 6);
     close(in[1]);
@@ -237,4 +237,36 @@ static void test_spawn_fds_in(void)
     close(out[0]);
     buf[n] = 0;
     CHECK(strcmp(buf, "got hello\n") == 0);
+}
+
+// spawn_fds' errors: /dev/null when asked (a lister that outlives ofx holds none of its fds), ofx's
+// own when asked, or the fd given.
+static void test_spawn_fds_errs(void)
+{
+    ops_guard(root);
+    char prog[PATH_MAX];
+    snprintf(prog, sizeof prog, "%s", at("f16/bin/errto"));
+    mkdirs(at("f16/bin"));
+    put_exec(prog, "#!/bin/sh\nreadlink /proc/self/fd/2\n");
+    int want[] = { SPAWN_ERR_NULL, SPAWN_ERR_OURS, 1 };
+    for (int i = 0; i < COUNT(want); i++) {
+        int out[2];
+        CHECK(pipe2(out, O_CLOEXEC) == 0);
+        char *argv[] = { prog, NULL };
+        pid_t pid;
+        Err err;
+        CHECK(spawn_fds(NULL, argv, -1, out[1], want[i] == 1 ? out[1] : want[i], &pid, &err));
+        close(out[1]);
+        char buf[PATH_MAX] = "";
+        isize n = 0;
+        for (ssize_t k; (k = read(out[0], buf + n, sizeof buf - 1 - (size_t)n)) > 0;) n += k;
+        close(out[0]);
+        buf[n] = 0;
+        char ours[PATH_MAX] = "";
+        ssize_t k = readlink("/proc/self/fd/2", ours, sizeof ours - 1);
+        if (k > 0) ours[k] = 0;
+        if (i == 0) CHECK(strcmp(buf, "/dev/null\n") == 0);
+        if (i == 1) CHECK(strncmp(buf, ours, strlen(ours)) == 0 && buf[strlen(ours)] == '\n');
+        if (i == 2) CHECK(strncmp(buf, "pipe:", 5) == 0);
+    }
 }

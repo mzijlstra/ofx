@@ -888,8 +888,17 @@ blocks each of these for up to gvfs's 90 s. On a thread it also holds ofx's exit
        its killed reader. A request still queued behind it ends with the kill.
      - **Test harness:** `script_under` (the scripts' `sh` guard) checks a far folder by its path,
        not `realpath` (that blocked the window on a paused share).
-     - **Known gaps, for step 3:** starting ofx on a far path (`realpath` at start), and a typed
-       far path that is a file (the lister says "Not a directory").
+     - **Known gaps, for step 3:**
+       - starting ofx on a far path (`realpath` at start);
+       - a typed far path that is a file (the lister says "Not a directory");
+       - a far folder that is gone, reached by reload or Back: shown with its error, where a local
+         one is skipped or left for the folder above (`go_to_in`'s true now means "going there";
+         step 2a review).
+     - **The step 2a review's fixes:**
+       - a reload of a hung far folder kills its lister before asking whether one is held, so it
+         waits ("one per folder" had a hole there);
+       - a slow reload keeps the cursor where it was moved meanwhile;
+       - ofx-list's stderr goes to /dev/null (a lister held in D kept ofx's).
    - **2b, links into far mounts from local folders**, and a far mount point listed in a local
      folder (its `fstatat` reaches the share's root): not followed in-process, kinds reported later
      by a lister (step 1 review).

@@ -10,6 +10,9 @@ wait-for 3000 faron=1 farloading=0 n=2 sel=sub canwrite=1 farnote=- statusbad=0
 # the share itself). No free space said: statvfs there could hold ofx.
 wait-for 3000 sizecell=3_items farasked=1
 expect info=2_items_(1_hidden)
+# Its lister's errors go to /dev/null, not ofx's stderr: one that outlives ofx in D would hold a
+# pipe there open (step 2a review).
+sh p=$(pgrep -f "ofx-list $OFX_DIR\$"); [ -n "$p" ] && [ "$(readlink /proc/$p/fd/2)" = /dev/null ]
 # Show Hidden: listed again by a new lister (the last one killed), .dot with it.
 key ctrl-h
 wait-for 3000 n=3 hidden=1 farkills=1
@@ -40,6 +43,14 @@ shot far-slow.png
 key down
 expect farloading=1
 wait-for 3000 farloading=0 farslow=0 farnote=- n=2 statusbad=0
+# A slow reload keeps the listing shown, and the cursor where it is moved meanwhile (step 2a review:
+# it went back to where it was at Ctrl+R).
+key home
+key ctrl-r
+expect farloading=1 sel=sub n=2
+key down
+expect sel=x.txt
+wait-for 6000 farloading=0 sel=x.txt n=2
 # Left before it answers: its lister killed, and its answer never shown.
 key backspace
 wait-for 3000 faron=0 sel=share

@@ -1917,6 +1917,7 @@ int main(void)
     if (fast) test_tree_far();
     if (fast) test_far_footer();
     if (fast) test_spawn_fds_in();
+    if (fast) test_spawn_fds_errs();
     if (fast) test_wheel_under_question();
     if (fast) test_ui_age();
     if (fast) test_branch_panel();

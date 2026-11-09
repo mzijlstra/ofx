@@ -974,7 +974,7 @@ MUTANTS = [
     ('gui/far.c', '    bool ok = n > 0 && far.in >= 0 && write(far.in, buf, (size_t)n) == n;', '    bool ok = n > 0 && far.in >= 0;', 'f16'),
     ('gui/folder.c', '    app.far_loading = true, app.far_waiting = far_busy(dir);', '    app.far_loading = true, app.far_waiting = false;', 'net'),
     ('gui/folder.c', '    timer_at(wake_due());   // (one timer for all: wake_due holds the "isn\'t answering" time)\n', '', 'f16'),
-    ('gui/folder.c', '        *l = (Listing){ 0 }, app.far_can_write = false;', '        *l = (Listing){ 0 };', 'f16'),
+    ('gui/folder.c', '        *l = (Listing){ 0 }, app.far_can_write = false, app.far_kept = false;', '        *l = (Listing){ 0 }, app.far_kept = false;', 'f16'),
     ('gui/folder.c', '    fs_sort(l, app.ui.sort);\n    return true;\n}', '    return true;\n}', 'f16'),
     ('gui/folder.c', '    if (app.far_waiting && !far_busy(app.cwd)) {', '    if (0) {', 'net'),
     ('gui/folder.c', "        while (!ended && (r = far_next(b, &far_scan, &m)) == 1) ended = m.type == 'L' || m.type == 'X';", "        while (!ended && (r = far_next(b, &far_scan, &m)) == 1) ended = m.type == 'L';", 'f16'),
@@ -994,4 +994,8 @@ MUTANTS = [
     ('gui/actions.c', '    if (far_dir(path)) {\n        if (go_to(path, STR_EMPTY, 0)) ui_edit_close(&app.ui);\n        return;\n    }\n', '', 'net'),
     ('gui/frame.c', '           : far_word                   ? (app.far_note[0] ? app.far_note : "Opening\\xE2\\x80\\xA6")\n', '', 'f16'),
     ('gui/footer.c', ', .opening = app.far_on && app.far_loading && !app.list.n };', ' };', 'f16'),
+    # (the step 2a review: a reload while hung, the cursor across a slow reload, the lister's stderr)
+    ('gui/folder.c', '    far_drop();\n    app.far_loading = true, app.far_waiting = far_busy(dir);', '    app.far_loading = true, app.far_waiting = far_busy(dir);', 'net'),
+    ('gui/folder.c', '        if (far_begin(dir, select, fallback, &err)) return app.far_kept = true, true;', '        if (far_begin(dir, select, fallback, &err)) return true;', 'f16'),
+    ('gui/far.c', '    bool ok = spawn_fds(NULL, argv, in[0], out[1], SPAWN_ERR_NULL, &pid, err);', '    bool ok = spawn_fds(NULL, argv, in[0], out[1], SPAWN_ERR_OURS, &pid, err);', 'f16'),
 ]

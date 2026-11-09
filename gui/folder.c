@@ -208,6 +208,9 @@ static bool far_begin(const char *dir, Str select, isize fallback, Err *err)
 {
     snprintf(app.far_select, sizeof app.far_select, "%.*s", STR_ARG(select));
     app.far_fallback = fallback, app.far_since = now_ms(), app.far_slow = false, app.far_note[0] = 0, far_scan = 0;
+    // The last lister killed first: if it is still in the kernel (a reload of a folder that hangs),
+    // it holds this one back too (step 2a review: asked before, a reload started one at once).
+    far_drop();
     app.far_loading = true, app.far_waiting = far_busy(dir);
     if (!app.far_waiting && !far_start(app.exe, dir, app.show_hidden, err)) return app.far_loading = false, false;
     timer_at(wake_due());   // (one timer for all: wake_due holds the "isn't answering" time)
@@ -219,7 +222,7 @@ static bool far_begin(const char *dir, Str select, isize fallback, Err *err)
 static bool far_list(const char *dir, Arena *a, Listing *l, Str select, isize fallback, Err *err)
 {
     if (!app.far_ready) {
-        *l = (Listing){ 0 }, app.far_can_write = false;   // (not known until it says: not the last folder's)
+        *l = (Listing){ 0 }, app.far_can_write = false, app.far_kept = false;   // (not known until it says: not the last folder's)
         return far_begin(dir, select, fallback, err);
     }
     isize len;
@@ -262,7 +265,12 @@ static bool far_poll(void)
         while (!ended && (r = far_next(b, &far_scan, &m)) == 1) ended = m.type == 'L' || m.type == 'X';
         if (ended || r < 0) {
             app.far_ready = true;
-            bool ok = go_to_in(app.cwd, str_from_c(app.far_select), app.far_fallback, true);
+            // A reload kept its listing on screen: the cursor where it is now, not where it was
+            // asked (moves made meanwhile stay; step 2a review).
+            char keep[NAME_MAX + 1];
+            if (app.far_kept) snprintf(keep, sizeof keep, "%.*s", STR_ARG(sel_name()));
+            Str select = app.far_kept ? str_from_c(keep) : str_from_c(app.far_select);
+            bool ok = go_to_in(app.cwd, select, app.far_kept ? app.ui.list.sel : app.far_fallback, true);
             app.far_ready = false, app.far_loading = false;
             if (!ok) snprintf(app.far_note, sizeof app.far_note, "%s", app.status);
             else if (app.far_slow) app.status[0] = 0;   // (its "isn't answering" said its last)
@@ -309,7 +317,7 @@ static bool go_to_in(const char *dir, Str select, isize fallback, bool stepping)
     // A far folder listed again (Ctrl+R, a change ofx made): a new lister, the listing shown kept
     // until its answer comes.
     if (on_far && !app.far_ready && same && app.far_on && app.have_list) {
-        if (far_begin(dir, select, fallback, &err)) return true;
+        if (far_begin(dir, select, fallback, &err)) return app.far_kept = true, true;
         return far_failed(err.msg), false;
     }
     // Another folder (F11): the one left keeps its cursor; this one's own view, size and sort, its

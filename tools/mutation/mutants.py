@@ -93,7 +93,7 @@ MUTANTS = [
     ('fs/places.c', "if (strcmp(path, home) == 0 || u->n == COUNT(u->d)) continue;", "if (u->n == COUNT(u->d)) continue;"),
     # ---- spawn
     ('fs/guard.c', '    return stat(path, &st) == 0 && S_ISREG(st.st_mode) && access(path, X_OK) == 0;', '    return stat(path, &st) == 0 && S_ISREG(st.st_mode) && access(path, F_OK) == 0;'),
-    ('fs/spawn.c', '    posix_spawnattr_setflags(&attr, POSIX_SPAWN_SETSID | POSIX_SPAWN_SETSIGMASK);\n    posix_spawn_file_actions_init(&fa);\n    posix_spawn_file_actions_addopen(&fa, 0, "/dev/null", O_RDONLY, 0);\n    if (out >= 0)', '    posix_spawnattr_setflags(&attr, POSIX_SPAWN_SETSIGMASK);\n    posix_spawn_file_actions_init(&fa);\n    posix_spawn_file_actions_addopen(&fa, 0, "/dev/null", O_RDONLY, 0);\n    if (out >= 0)'),
+    ('fs/spawn.c', '    posix_spawnattr_setflags(&attr, POSIX_SPAWN_SETSID | POSIX_SPAWN_SETSIGMASK);', '    posix_spawnattr_setflags(&attr, POSIX_SPAWN_SETSIGMASK);'),
     (P, "if (on_path(\"uwsm-app\")) argv[k++] = \"uwsm-app\", argv[k++] = \"--\";", ""),
     (P, "snprintf(arg, sizeof arg, \"--dir=%s\", dir);", "snprintf(arg, sizeof arg, \"%s\", dir);"),
     # ---- ui
@@ -588,7 +588,6 @@ MUTANTS += [
     (PL, "        if (!octal_decode(src, p->dev, sizeof p->dev)) p->dev[0] = 0;", "        snprintf(p->dev, sizeof p->dev, \"%.*s\", STR_ARG(src));"),
     (PL, "    return p->kind == PL_REMOVABLE && strncmp(p->dev, \"/dev/\", 5) == 0;", "    return p->kind == PL_REMOVABLE && p->dev[0];"),
     (PL, "    return p->kind == PL_REMOVABLE && strncmp(p->dev, \"/dev/\", 5) == 0;", "    return place_is_drive(p->kind) && strncmp(p->dev, \"/dev/\", 5) == 0;"),
-    ('fs/spawn.c', '    if (out >= 0 && err_too) posix_spawn_file_actions_adddup2(&fa, out, 2);\n', ''),
     (SP, "        n += take;", "        n += (size_t)r;"),
     (SP, "(size_t)r < room ? (size_t)r : room;", "(size_t)r;"),
     ('fs/spawn.c', '"\\"$2\\" unmount -b \\"$1\\" && echo OFX-UNMOUNTED && \\"$2\\" power-off', '"\\"$2\\" unmount -b \\"$1\\"; echo OFX-UNMOUNTED && \\"$2\\" power-off'),
@@ -2737,4 +2736,6 @@ MUTANTS += [
     ('fs/tree.c', '    if (t->mounts.len && !thumb_local(t->mounts, dir)) return;', ''),
     ('ui/helpers.c', '    if (in->opening) {\n        snprintf(buf, cap, "Opening\\xE2\\x80\\xA6");\n        return;\n    }\n', ''),
     ('fs/spawn.c', '    if (in >= 0) posix_spawn_file_actions_adddup2(&fa, in, 0);\n    else posix_spawn_file_actions_addopen', '    posix_spawn_file_actions_addopen'),
+    ('fs/spawn.c', '    else if (errs == SPAWN_ERR_NULL) posix_spawn_file_actions_addopen(&fa, 2, "/dev/null", O_WRONLY, 0);\n', ''),
+    ('fs/spawn.c', '    if (errs >= 0) posix_spawn_file_actions_adddup2(&fa, errs, 2);', '    if (errs >= 0) {}'),
 ]
