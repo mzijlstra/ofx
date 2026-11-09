@@ -1885,6 +1885,7 @@ int main(void)
     if (fast) test_keys_conf();
     if (fast) test_keys_panel();
     if (fast) test_keys_in_fields();
+    if (fast) test_wheel_under_question();
     if (fast) test_ui_age();
     if (fast) test_branch_panel();
     if (fast) test_file_read();

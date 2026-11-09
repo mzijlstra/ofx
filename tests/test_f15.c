@@ -701,3 +701,18 @@ static void test_keys_in_fields(void)
     CHECK(key_act(&u, ev_ch('q')).kind == UA_CLOSE_ALL);
     keys_set(0);
 }
+
+// The wheel under a question (the group D review): the list stays where it was.
+static void test_wheel_under_question(void)
+{
+    Ui u = menu_ui(40);
+    u.list.rows = 10;
+    u.confirming = true, u.confirm_n = 1;
+    UiInput in = ui_input_none();
+    in.wheel = -3;
+    ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in);
+    CHECK(u.list.top == 0 && u.confirming);
+    u.confirming = false;
+    ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in);
+    CHECK(u.list.top == 3);   // (and with nothing on top, it scrolls)
+}

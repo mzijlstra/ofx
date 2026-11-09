@@ -267,7 +267,7 @@ static bool ui_handle_pointer(Ui *u, UiNames names, const UiInput *in, UiOnTop o
         u->asking = false;
         return *out = (UiAction){ UA_ANSWER, a, a != UI_ANS_CANCEL && u->ask_all }, true;
     }
-    if (in->wheel) ui_scroll(l, in->wheel);
+    if (!prompt && in->wheel) ui_scroll(l, in->wheel);   // (not under a question or a panel: the group D review)
     if (!prompt && in->zoom_to >= 0) return *out = ui_zoom(u, in->zoom_to), true;
     if (!prompt && in->zoom_wheel) return *out = ui_zoom_by(u, in->zoom_wheel > 0 ? 1 : -1), true;
     if (!prompt && in->header >= 0 && in->header < SORT_KEYS) {
