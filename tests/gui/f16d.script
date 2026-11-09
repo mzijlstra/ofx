@@ -4,6 +4,8 @@
 # on local/mylinks/nas: far only through the links, so the start doesn't read it (its lister does).
 settle
 wait-for 3000 faron=1 farloading=0 n=2 sel=sub
+# media/nas, a far drive, holds an item in its trash: never looked at, so the Trash stays empty.
+expect trashfull=0
 # Up: the share's real folder, tree (the start was resolved, never past the share).
 key backspace
 wait-for 3000 faron=0 n=3 sel=share
@@ -53,4 +55,13 @@ expect sel=chain
 wait-for 2000 sizecell=?
 key enter
 wait-for 3000 faron=1 farloading=0 n=1 sel=x.txt
+# A search in local: chain and mylinks/nas lead into the share. chain is found by its name but
+# neither it nor the share is entered (x.txt there isn't found); said in the line.
+key alt-left
+wait-for 3000 faron=0 sel=chain
+key ctrl-shift-f
+wait-for 2000 search=1
+type a
+wait-for 3000 searchdue=0 searchdone=1 n=2
+expect searchinfo=2_found_·_skipped_1_network_folder,_1_link_to_a_folder
 quit

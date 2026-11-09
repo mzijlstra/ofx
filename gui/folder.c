@@ -46,13 +46,15 @@ static void icons_reset(void);
 
 static TrashDirs trashd;   // the trash folders the trash view shows (F6)
 
-// The trash folders there are now: the home trash, and each drive's.
+// The trash folders there are now: the home trash, and each drive's but a far one's (F16 step 3: a
+// dead share's would hold the window on every look at the trash, from any folder).
 static void trash_scan(void)
 {
     const char *mp[PLACES_MAX];
     int n = 0;
+    Str mi = far_mounts();
     for (int i = 0; i < app.places.n; i++)
-        if (place_is_drive(app.places.p[i].kind)) mp[n++] = app.places.p[i].path;
+        if (place_is_drive(app.places.p[i].kind) && thumb_local(mi, app.places.p[i].path)) mp[n++] = app.places.p[i].path;
     trash_dirs(&trashd, mp, n);
 }
 

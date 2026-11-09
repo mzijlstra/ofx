@@ -90,6 +90,7 @@ typedef struct {
     i64  drives;               // folders where another drive is mounted
     i64  links;                // links to folders
     i64  unread;               // folders that couldn't be read, or nested too deep
+    i64  far;                  // far drives (a share's mount, a link into one) never entered (F16 step 3)
     i64  folders;              // folders searched, the one it started from included
     // Inside files (step 3): files read, and those left unread whose name matched.
     i64  files;
@@ -117,6 +118,11 @@ typedef struct {
     void             (*tick)(void *ctx, const SearchSkips *s);   // every SEARCH_TICK entries
     void              *ctx;
     dev_t              dev;    // the drive it started on
+    // The mount list (F16 step 3; empty: none): a far drive's mount point and a link into one are
+    // never looked at (a dead share would hold the walk's thread, and with it ofx's exit). root:
+    // the folder searched, resolved by far_real (rel's folders are below it, not links).
+    Str                mounts;
+    char               root[PATH_MAX];
     SearchSkips        s;
     isize              seen;
     char               rel[PATH_MAX];   // the folder being read, below the one searched
@@ -265,6 +271,28 @@ static bool search_inside(SearchWalk *w, DIR *d, const char *nm, unsigned char t
     return false;
 }
 
+// The folder being read, absolute (from the root's real path): out; false when it doesn't fit.
+static bool search_at(const SearchWalk *w, char *out, size_t cap)
+{
+    int n = snprintf(out, cap, "%s%s%s", w->root, w->rel_len && strcmp(w->root, "/") != 0 ? "/" : "", w->rel);
+    return n >= 0 && (size_t)n < cap;
+}
+
+// Whether nm (readdir's type t) in the folder being read is a far drive's mount point or a link into
+// one (F16 step 3): by the mount list and the link's text, its local links followed (far_real),
+// nothing on the far drive looked at.
+static bool search_far(const SearchWalk *w, int dfd, const char *nm, unsigned char t)
+{
+    if (!w->mounts.len || (t != DT_DIR && t != DT_LNK && t != DT_UNKNOWN)) return false;
+    char dir[PATH_MAX], p[PATH_MAX], tg[PATH_MAX], abs[PATH_MAX], real[PATH_MAX];
+    if (!search_at(w, dir, sizeof dir) || !path_put(p, sizeof p, dir, str_from_c(nm))) return false;
+    if (!thumb_local(w->mounts, p)) return true;
+    if (t == DT_DIR) return false;
+    bool far = false;
+    ssize_t n = readlinkat(dfd, nm, tg, sizeof tg - 1);   // (DT_UNKNOWN: fails unless it is a link)
+    return n > 0 && link_abs(dir, (Str){ tg, n }, abs, sizeof abs) && far_real(w->mounts, abs, real, sizeof real, &far) && far;
+}
+
 // The folder fd (closed here) and everything below it it may enter. False when stopped or full.
 static bool search_dir(SearchWalk *w, int fd, int depth)
 {
@@ -290,6 +318,14 @@ static bool search_dir(SearchWalk *w, int fd, int depth)
         // from one to a file).
         unsigned char t = e->d_type;
         struct stat st;
+        if (search_far(w, dirfd(d), nm, t)) {   // (found by its name only: not read, not entered)
+            w->s.far++;
+            if (!w->line && w->match(w->ctx, name) && !w->found(w->ctx, (Str){ w->rel, w->rel_len }, name, dirfd(d), NULL)) {
+                w->s.full = true, go = false;
+                break;
+            }
+            continue;
+        }
         if (t == DT_UNKNOWN) {
             if (fstatat(dirfd(d), nm, &st, AT_SYMLINK_NOFOLLOW) != 0) continue;
             t = S_ISDIR(st.st_mode) ? DT_DIR : S_ISLNK(st.st_mode) ? DT_LNK : S_ISREG(st.st_mode) ? DT_REG : DT_UNKNOWN;   // (else: none of the three, read or entered)
@@ -333,7 +369,15 @@ static bool search_walk(SearchWalk *w, const char *root)
 {
     w->s = (SearchSkips){ 0 }, w->seen = 0, w->rel_len = 0, w->rel[0] = 0;
     struct stat st;
-    int fd = open(root, O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+    bool far = false;
+    if (!w->mounts.len) snprintf(w->root, sizeof w->root, "%s", root);
+    else if (!far_real(w->mounts, root, w->root, sizeof w->root, &far) || far) {   // (a far folder searched: none of it read)
+        if (far) w->s.far++;
+        else w->s.unread++;
+        if (w->tick) w->tick(w->ctx, &w->s);
+        return true;
+    }
+    int fd = open(w->root, O_RDONLY | O_DIRECTORY | O_CLOEXEC);
     if (fd < 0 || fstat(fd, &st) != 0) {
         if (fd >= 0) close(fd);
         w->s.unread++;
@@ -362,6 +406,7 @@ static void search_skips_text(const SearchSkips *s, const SearchSkipList *names,
     for (int i = 0; i < names->n; i++) SEARCH_PART(s->skip[i], names->name[i], names->name[i])
     SEARCH_PART(s->hidden, "hidden", "hidden")
     SEARCH_PART(s->drives, "other drive", "other drives")
+    SEARCH_PART(s->far, "network folder", "network folders")
     SEARCH_PART(s->links, "link to a folder", "links to folders")
     SEARCH_PART(s->unread, "unreadable folder", "unreadable folders")
     SEARCH_PART(s->binary, "binary", "binary")

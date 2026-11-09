@@ -446,3 +446,41 @@ static void test_hist_take(void)
     CHECK(hist_step(&h, 1, "/a", S("x"), &to) && strcmp(to.dir, "/c") == 0 && h.nback == 1);
     CHECK(hist_take(&h, 1, &was) && strcmp(was.dir, "/a") == 0 && h.nback == 0 && h.nfwd == 0);
 }
+
+// The search walk (step 3): a far drive's mount point, a link into one and a chain through a local
+// link into one are matched by name but never entered or read; the walk counts them. A search in a
+// far folder reads none of it. (share is a plain folder named in the mount list.)
+static void test_search_far(void)
+{
+    arena_reset(&ta);
+    char r[300], sh[300];   // (at's buffers turn over)
+    snprintf(r, sizeof r, "%s", at("sf/top"));
+    snprintf(sh, sizeof sh, "%s", at("sf/top/share"));
+    put(at("sf/top/a.txt"), "a");
+    put(at("sf/top/share/a.txt"), "a");
+    put(at("sf/top/share/inner/a.txt"), "a");
+    mkdirs(at("sf/links"));
+    CHECK(symlink("share", at("sf/top/nas")) == 0);
+    CHECK(symlink("../links", at("sf/top/mylinks")) == 0);
+    CHECK(symlink("../top/share", at("sf/links/nas")) == 0);
+    CHECK(symlink("mylinks/nas", at("sf/top/chain")) == 0);
+    Str mounts = str_from_c(arena_sprintf(&ta, "1 0 0:1 / / rw - ext4 /dev/x rw\n2 1 0:2 / %s rw - fuse.gvfsd-fuse g rw\n", sh));
+    SearchWalk w = sw_walk("a", (UiMatchOpts){ 0 }, false);
+    w.mounts = mounts;
+    CHECK(search_walk(&w, r));
+    CHECK(sw.n == 4 && sw_has("|a.txt") && sw_has("|share") && sw_has("|nas") && sw_has("|chain") && w.s.far == 3);
+    // Inside files: none of the far ones is a result (not read).
+    w = sw_inside("*", "a");
+    w.mounts = mounts;
+    CHECK(search_walk(&w, r) && sw.n == 1 && sw_has("|a.txt") && w.s.far == 3);
+    // Searched from a far folder (here through the link nas): nothing read.
+    w = sw_walk("a", (UiMatchOpts){ 0 }, false);
+    w.mounts = mounts;
+    CHECK(search_walk(&w, at("sf/top/nas")) && sw.n == 0 && w.s.far == 1 && w.s.folders == 0);
+    char skipped[256];
+    search_skips_text(&w.s, &SEARCH_SKIP_DEFAULT, skipped, sizeof skipped);
+    CHECK(strcmp(skipped, "skipped 1 network folder") == 0);
+    // No mount list: the share is entered, as any folder.
+    w = sw_walk("a", (UiMatchOpts){ 0 }, false);
+    CHECK(search_walk(&w, r) && sw_has("share|a.txt") && sw_has("share/inner|a.txt") && w.s.far == 0);
+}

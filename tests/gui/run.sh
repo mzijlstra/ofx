@@ -425,8 +425,11 @@ rs f16c OFX_TEST_MOUNTINFO="$T/mountinfo" -- "$T/tree"
 # whose nas is ../share: a chain no path's text shows. ofx starts on local/mylinks/nas.
 fresh f16d; mkdir -p "$T/tree/share/sub" "$T/tree/local" "$T/tree/links"; : > "$T/tree/share/x.txt"; : > "$T/tree/local/a.txt"
 ln -s ../links "$T/tree/local/mylinks"; ln -s ../share "$T/tree/links/nas"; ln -s mylinks/nas "$T/tree/local/chain"
-printf '1 0 0:1 / / rw - ext4 /dev/x rw\n2 1 0:2 / %s rw,nosuid,nodev - fuse.gvfsd-fuse gvfsd-fuse rw\n' "$T/tree/share" > "$T/mountinfo"
-rs f16d OFX_TEST_MOUNTINFO="$T/mountinfo" -- "$T/tree/local/mylinks/nas"
+# media/nas: a far drive (nfs) whose trash holds an item, never looked at (the Trash icon stays empty).
+mkdir -p "$T/media/nas/.Trash-$(id -u)/info" "$T/media/nas/.Trash-$(id -u)/files"; : > "$T/media/nas/.Trash-$(id -u)/files/old"
+printf '[Trash Info]\nPath=%s\nDeletionDate=2026-11-09T10:00:00\n' "$T/media/nas/old" > "$T/media/nas/.Trash-$(id -u)/info/old.trashinfo"
+printf '1 0 0:1 / / rw - ext4 /dev/x rw\n2 1 0:2 / %s rw,nosuid,nodev - fuse.gvfsd-fuse gvfsd-fuse rw\n3 1 0:3 / %s rw - nfs4 h:/x rw\n' "$T/tree/share" "$T/media/nas" > "$T/mountinfo"
+rs f16d OFX_TEST_MEDIA="$T/media" OFX_TEST_MOUNTINFO="$T/mountinfo" -- "$T/tree/local/mylinks/nas"
 fi
 if want net; then
 # F16 step 2 on a real share (tests/net/lib.sh: a Samba container, a gvfs of the run's own under <T>/rt,
