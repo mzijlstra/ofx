@@ -976,7 +976,9 @@ blocks each of these for up to gvfs's 90 s. On a thread it also holds ofx's exit
    status line.
 5. **The sidebar's Network section:** mounted shares (read from the gvfs FUSE folder; a watch on
    it) with unmount, and `smb://` bookmarks mounted on a click. Add Bookmark on a share writes its
-   `smb://` address.
+   `smb://` address. With the share's friendly name, the far actions' "isn't answering" and "is
+   slow" name the share, not the item (step 3 confirm; today gvfs's folder name is
+   `smb-share:port=…`).
 6. **NFS spike, then NFS:** gvfs-nfs against nfs-ganesha rootless; nfs:// in Connect to Server if
    it works, else kernel NFS mounts only (above).
 7. **Discovery:** the Network place browsing servers and shares (`smb://` root through gvfs's
