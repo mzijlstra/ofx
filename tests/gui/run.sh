@@ -148,6 +148,12 @@ if ls -A "$H/tree/adir" | grep -q ofx-part || [ -e "$H/tree/adir/big1.bin" ]; th
 fi
 if want f54; then
 T=$base/f54; tree "$T"
+# Its own icon theme to start from (Yaru): its first switch is to Yaru-blue, which must be another
+# (2026-11-09: with the desktop's theme on Yaru-blue, Open With's icons weren't read again). The
+# colours are the desktop's, copied as run-script does.
+mkdir -p "$T/state/omarchy/current/theme"
+cp "${XDG_STATE_HOME:-$HOME/.local/state}/omarchy/current/theme/colors.toml" "$T/state/omarchy/current/theme/" 2>/dev/null
+echo Yaru > "$T/state/omarchy/current/theme/icons.theme"
 rs f54 -- "$T/tree"
 fi
 if want f6; then
