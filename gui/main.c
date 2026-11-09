@@ -207,6 +207,12 @@ enum { DRAG_NONE, DRAG_ZOOM, DRAG_SIDE, DRAG_PRESS, DRAG_FILES, DRAG_OUT, DRAG_I
 // its place on screen), a sidebar row (the Trash's among them), a tab, a path button, the files'
 // empty space. DROP_AGAIN: an at that is no place, so drop_find asks again.
 typedef enum { DROP_NONE, DROP_ROW, DROP_SIDE, DROP_TAB, DROP_CRUMB, DROP_LIST } DropKind;
+
+// What a far folder's lister refusing it leads to (F16 step 3), by how ofx got there: as a local
+// folder's refusal would. A file: opened from the folder before (a far link, taken for a folder),
+// or its folder shown with it selected (a path typed or started on). Gone: skipped as Back and
+// Forward skip one, or the nearest folder above (a reload, a tab).
+typedef enum { FAR_THEN_SHOW, FAR_THEN_OPEN, FAR_THEN_SELECT, FAR_THEN_BACK, FAR_THEN_FORWARD, FAR_THEN_UP } FarThen;
 enum { DROP_AGAIN = -2 };
 typedef struct {
     DropKind kind;            // what is under the pointer
@@ -375,7 +381,7 @@ static struct {
     bool      far_waiting;        // its last lister is still in the kernel: a new one waits for it
     bool      far_ready;          // (go_to_in's: the listing came, take it)
     bool      far_kept;           // a reload: the listing shown kept until it comes (the cursor taken then)
-    bool      far_link;           // gone to through a far link (taken for a folder): a file is opened instead
+    FarThen   far_then;           // what its lister's refusal leads to (a file, a folder gone): set by the way there
     bool      far_slow;           // no answer within FAR_ANSWER_MS: said so
     bool      far_can_write;      // what the lister said
     i64       far_since;          // when it was asked
@@ -619,13 +625,15 @@ static bool select_path(const char *start, char *out, size_t cap)
     for (size_t n = strlen(p); n > 1 && p[n - 1] == '/'; n--) p[n - 1] = 0;
     char *slash = strrchr(p, '/');
     const char *base = slash ? slash + 1 : p;
-    if (!*base || strcmp(base, ".") == 0 || strcmp(base, "..") == 0) return realpath(p, out) != NULL;
+    // (far_path, not realpath: never past a far drive, F16 step 3; a name there is taken as given.)
+    bool reaches;
+    if (!*base || strcmp(base, ".") == 0 || strcmp(base, "..") == 0) return far_path(p, out, cap, &reaches);
     char parent[PATH_MAX];
-    if (!realpath(!slash ? "." : slash == p ? "/" : (*slash = 0, p), parent)) return false;
+    if (!far_path(!slash ? "." : slash == p ? "/" : (*slash = 0, p), parent, sizeof parent, &reaches)) return false;
     int n = snprintf(out, cap, "%s/%s", strcmp(parent, "/") == 0 ? "" : parent, base);
     if (n < 0 || (size_t)n >= cap) return errno = ENAMETOOLONG, false;
     struct stat st;
-    return lstat(out, &st) == 0;
+    return reaches || lstat(out, &st) == 0;
 }
 
 // The window closed for good: no other thread wakes the loop after this (wake_main), as GLFW goes.
@@ -923,7 +931,8 @@ int main(int argc, char **argv)
     }
     char dir[PATH_MAX];
     selecting = selecting && start;
-    if (selecting ? !select_path(start, dir, sizeof dir) : !realpath(start ? start : ".", dir)) {
+    bool start_far = false;   // (resolved by far_path: never past a far drive, F16 step 3)
+    if (selecting ? !select_path(start, dir, sizeof dir) : !far_path(start ? start : ".", dir, sizeof dir, &start_far)) {
         fprintf(stderr, "ofx: %s: %s\n", start ? start : ".", strerror(errno));
         return 1;
     }
@@ -961,7 +970,8 @@ int main(int argc, char **argv)
     // (ShowItems): its folder, it selected.
     struct stat sst;
     Str pick = STR_EMPTY;
-    if ((selecting && strcmp(dir, "/") != 0) || (stat(dir, &sst) == 0 && !S_ISDIR(sst.st_mode))) {
+    // A far one isn't looked at: gone to as a folder, its lister says if it is a file (far_typed).
+    if ((selecting && strcmp(dir, "/") != 0) || (!start_far && stat(dir, &sst) == 0 && !S_ISDIR(sst.st_mode))) {
         char *slash = strrchr(dir, '/');
         static char base[NAME_MAX + 1];
         snprintf(base, sizeof base, "%s", slash + 1);
@@ -970,6 +980,7 @@ int main(int argc, char **argv)
         else *slash = 0;
     }
     go_to(dir, pick, 0);
+    if (app.far_loading && start_far) app.far_then = FAR_THEN_SELECT;
     if (!app.have_list) snprintf(app.cwd, sizeof app.cwd, "%s", dir);
     tabs[0].used = true;
     ui_tabs_open(&tabbar, 0, true);

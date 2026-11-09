@@ -35,7 +35,9 @@ static void drag_real(void)
     for (isize i = 0; i < dragged.n; i++) {
         struct stat st;
         char r[PATH_MAX];
-        dragged_real[i] = lstat(dragged.path[i], &st) == 0 && S_ISDIR(st.st_mode) && realpath(dragged.path[i], r) ? arena_cstr(&draga, str_from_c(r)) : NULL;
+        bool reaches;   // (one on a far drive isn't looked at: resolved by far_path, kept whatever it is, F16 step 3)
+        bool ok = far_path(dragged.path[i], r, sizeof r, &reaches) && (reaches || (lstat(dragged.path[i], &st) == 0 && S_ISDIR(st.st_mode)));
+        dragged_real[i] = ok ? arena_cstr(&draga, str_from_c(r)) : NULL;
     }
 }
 
@@ -54,15 +56,25 @@ static bool drag_start(void)
 }
 
 // Whether folder dir takes the files dragged: there, writable, neither one of them nor inside one
-// (as a paste refuses); *same_drive: on the first one's drive (Nemo's rule, ui_drop_op).
+// (as a paste refuses); *same_drive: on the first one's drive (Nemo's rule, ui_drop_op). A far one
+// (F16 step 3) isn't looked at: taken unless its lister said it can't be written (the folder shown),
+// and never "the same drive" (a copy, the safer guess).
 static bool drop_takes(const char *dir, bool *same_drive)
 {
     struct stat ds, fs;
     char real[PATH_MAX];
-    if (stat(dir, &ds) != 0 || !S_ISDIR(ds.st_mode) || access(dir, W_OK) != 0 || !realpath(dir, real)) return false;
+    bool reaches;
+    if (!far_path(dir, real, sizeof real, &reaches)) return false;
+    if (reaches) {
+        if (app.far_on && strcmp(dir, app.cwd) == 0 && !app.far_loading && !app.far_can_write) return false;
+        for (isize i = 0; i < dragged.n; i++)
+            if (dragged_real[i] && ui_under(str_from_c(real), str_from_c(dragged_real[i]))) return false;
+        return *same_drive = false, true;
+    }
+    if (stat(dir, &ds) != 0 || !S_ISDIR(ds.st_mode) || access(dir, W_OK) != 0) return false;
     for (isize i = 0; i < dragged.n; i++)
         if (dragged_real[i] && ui_under(str_from_c(real), str_from_c(dragged_real[i]))) return false;
-    *same_drive = lstat(dragged.path[0], &fs) == 0 && fs.st_dev == ds.st_dev;
+    *same_drive = !far_dir(dragged.path[0]) && lstat(dragged.path[0], &fs) == 0 && fs.st_dev == ds.st_dev;
     return true;
 }
 

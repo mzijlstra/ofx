@@ -362,3 +362,87 @@ static void test_fs_list_far(void)
     tree_build(&ta, &t, str_from_c(arena_cstr(&ta, str_from_c(at("flf/home")))), false);
     CHECK(t.n == 3 && str_eq(t.row[2].name, S("d")) && t.row[2].depth == 2);   // (nas read: d below it; tofile followed to a file, gone)
 }
+
+// far_real (step 3): realpath that never goes past a far drive. Each local part looked at and its
+// links followed, a chain through a local link into a share caught; past the share's mount, the
+// rest by its text. The proof it isn't looked at: "share" here is a plain folder named in the
+// mount list, and paths below it that don't exist still resolve.
+static void test_far_real(void)
+{
+    arena_reset(&ta);
+    mkdirs(at("fr/share/d"));
+    mkdirs(at("fr/home"));
+    mkdirs(at("fr/links"));
+    put(at("fr/home/x.txt"), "x");
+    CHECK(symlink("../share", at("fr/home/nas")) == 0);
+    CHECK(symlink("../links", at("fr/home/mylinks")) == 0);   // (a chain: mylinks/nas, then ../share)
+    CHECK(symlink("../share", at("fr/links/nas")) == 0);
+    CHECK(symlink("loop", at("fr/home/loop")) == 0);
+    CHECK(symlink(at("fr/home"), at("fr/abs")) == 0);
+    Str mounts = str_from_c(arena_sprintf(&ta, "1 0 0:1 / / rw - ext4 /dev/x rw\n2 1 0:2 / %s rw - fuse.gvfsd-fuse g rw\n", at("fr/share")));
+    char real[PATH_MAX], out[PATH_MAX];
+    bool far;
+    CHECK(realpath(at("fr"), real));   // (the test root may itself sit below a link)
+    struct { const char *path, *want; bool far; } c[] = {
+        { "fr/home/nas/missing/../q", "/share/q", true },   // (past the mount by the text: missing isn't looked up)
+        { "fr/home/mylinks/nas/q", "/share/q", true },
+        { "fr/abs/nas", "/share", true },
+        { "fr/home/nas/..", "", false },                    // (back out: local again)
+        { "fr/home/./x.txt", "/home/x.txt", false },
+        { "fr/home/mylinks", "/links", false },
+        { "fr/share", "/share", true },
+    };
+    for (int i = 0; i < COUNT(c); i++) {
+        far = !c[i].far;
+        bool ok = far_real(mounts, at(c[i].path), out, sizeof out, &far);
+        char want[PATH_MAX + 16];
+        snprintf(want, sizeof want, "%s%s", real, c[i].want);
+        if (!ok || strcmp(out, want) != 0 || far != c[i].far) fprintf(stderr, "far_real %s: %d %s %d\n", c[i].path, ok, ok ? out : strerror(errno), far);
+        CHECK(ok && strcmp(out, want) == 0 && far == c[i].far);
+    }
+    CHECK(far_real(mounts, "/", out, sizeof out, &far) && strcmp(out, "/") == 0 && !far);
+    // Errors as realpath's, from the local parts.
+    struct { const char *path; int e; } bad[] = {
+        { "fr/home/missing/x", ENOENT }, { "fr/home/x.txt/y", ENOTDIR }, { "fr/home/loop", ELOOP },
+    };
+    for (int i = 0; i < COUNT(bad); i++) {
+        errno = 0;
+        CHECK(!far_real(mounts, at(bad[i].path), out, sizeof out, &far) && errno == bad[i].e);
+    }
+    // No mount list: realpath's answer (share is a plain folder here).
+    CHECK(far_real(STR_EMPTY, at("fr/home/mylinks/nas/d"), out, sizeof out, &far) && !far);
+    char want[PATH_MAX + 16];
+    snprintf(want, sizeof want, "%s/share/d", real);
+    CHECK(strcmp(out, want) == 0);
+    CHECK(!far_real(STR_EMPTY, at("fr/home/nas/missing"), out, sizeof out, &far) && errno == ENOENT);
+    // Too small an out: refused, not cut.
+    char small[8];
+    CHECK(!far_real(mounts, at("fr/home"), small, sizeof small, &far) && errno == ENAMETOOLONG);
+    // A listing in fr/home: chain, a chain through a local link into the share, is far now
+    // (step 2b's known gap), not followed.
+    CHECK(symlink("mylinks/nas", at("fr/home/chain")) == 0);
+    Listing l;
+    Err err;
+    CHECK(fs_list_far(&ta, at("fr/home"), false, (Sort){ SORT_NAME, false }, mounts, &l, &err));
+    isize k = listing_find(&l, S("chain"));
+    CHECK(k >= 0 && l.e[k].kind == K_LINK_DIR && l.e[k].far);
+    k = listing_find(&l, S("mylinks"));
+    CHECK(k >= 0 && l.e[k].kind == K_LINK_DIR && !l.e[k].far);
+}
+
+// hist_take (step 3): a Back step found gone only later, when a far folder's lister says so. The
+// folder the step left comes off the forward stack, as hist_unstep drops it; Forward the same way.
+static void test_hist_take(void)
+{
+    static UiHistory h;
+    static UiPlace to, was;
+    h = (UiHistory){ 0 };
+    hist_leave(&h, "/a", S("x"));
+    hist_leave(&h, "/b", S("y"));
+    CHECK(hist_step(&h, -1, "/c", S("z"), &to) && strcmp(to.dir, "/b") == 0 && h.nfwd == 1);
+    CHECK(hist_take(&h, -1, &was) && strcmp(was.dir, "/c") == 0 && strcmp(was.sel, "z") == 0 && h.nfwd == 0 && h.nback == 1);
+    CHECK(!hist_take(&h, -1, &was));
+    CHECK(hist_step(&h, -1, "/c", S("z"), &to) && strcmp(to.dir, "/a") == 0);
+    CHECK(hist_step(&h, 1, "/a", S("x"), &to) && strcmp(to.dir, "/c") == 0 && h.nback == 1);
+    CHECK(hist_take(&h, 1, &was) && strcmp(was.dir, "/a") == 0 && h.nback == 0 && h.nfwd == 0);
+}

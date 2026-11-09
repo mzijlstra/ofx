@@ -202,11 +202,12 @@ static void copy_targets(bool cut, const char *only)
     else set_status(false, "%s %td items%s", cut ? "Cut" : "Copied", own.n, note);
 }
 
-// Whether a and b are the same folder, resolved.
+// Whether a and b are the same folder, resolved (never past a far drive: far_path, F16 step 3).
 static bool same_dir(const char *a, const char *b)
 {
     char x[PATH_MAX], y[PATH_MAX];
-    return realpath(a, x) && realpath(b, y) && strcmp(x, y) == 0;
+    bool fx, fy;
+    return far_path(a, x, sizeof x, &fx) && far_path(b, y, sizeof y, &fy) && strcmp(x, y) == 0;
 }
 
 // c's files copied (or, cut, moved) into the folder dest, as one job: there already, a copy gets a
@@ -333,8 +334,9 @@ static void make_link(void)
 static void follow_link(isize i)
 {
     char path[PATH_MAX], real[PATH_MAX], dir[PATH_MAX];
+    bool reaches;   // (a link into a far drive: its target by the text from there, never looked at, F16 step 3)
     if (i >= app.list.n || !entry_path(i, path, sizeof path)) return;
-    if (!realpath(path, real)) {
+    if (!far_path(path, real, sizeof real, &reaches)) {
         set_status(true, "%.*s leads nowhere: %s", STR_ARG(app.list.e[i].name), strerror(errno));
         return;
     }
@@ -517,7 +519,9 @@ static void tab_load(void)
     ui_edit_close(&app.ui);
     ui_find_close(&app.ui);   // (a tab's own find isn't kept)
     ui_mark_clear(&app.ui);   // the same folder in two tabs: this tab's marks, not the other's
-    if (!go_to_in(t->dir, str_from_c(t->sel), t->row, true)) {
+    if (go_to_in(t->dir, str_from_c(t->sel), t->row, true)) {
+        if (app.far_loading) app.far_then = FAR_THEN_UP;   // (a far one: if its lister says it is gone, F16 step 3)
+    } else {
         // Gone: the nearest folder above. There but unreadable: the same, with its error kept.
         char why[sizeof app.status];
         snprintf(why, sizeof why, "%s", app.status);
@@ -625,8 +629,11 @@ static void location_go(void)
     }
     snprintf(path, sizeof path, "%.*s", STR_ARG(to));
     // A far one (F16) is gone to as a folder, never looked at here: its lister says what it is.
+    // A file there: its folder, it selected, when the lister says so (far_refused, step 3).
     if (far_dir(path)) {
-        if (go_to(path, STR_EMPTY, 0)) ui_edit_close(&app.ui);
+        if (!go_to(path, STR_EMPTY, 0)) return;
+        if (app.far_loading) app.far_then = FAR_THEN_SELECT;
+        ui_edit_close(&app.ui);
         return;
     }
     struct stat st;

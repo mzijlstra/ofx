@@ -43,10 +43,22 @@ static Str far_mounts(void)
     return read_file(&far_mia, mountinfo_path());
 }
 
-// Whether path is on a far drive, by the mount list alone (no syscall on path itself).
+// path resolved, every local link on the way followed, never past a far drive (far_real, F16 step
+// 3), into out; *far whether it reaches one. False, errno set, when a local part of it isn't there.
+static bool far_path(const char *path, char *out, size_t cap, bool *reaches)
+{
+    return far_real(far_mounts(), path, out, cap, reaches);
+}
+
+// Whether path is on a far drive: by the mount list, then through the local links on its way
+// (`~/nas/sub`, nas a link into a share; step 3). Nothing on a far drive is looked at.
 static bool far_dir(const char *path)
 {
-    return path[0] == '/' && !thumb_local(far_mounts(), path);
+    if (path[0] != '/') return false;
+    if (!thumb_local(far_mounts(), path)) return true;
+    char real[PATH_MAX];
+    bool reaches;
+    return far_path(path, real, sizeof real, &reaches) && reaches;
 }
 
 static void far_word(void)

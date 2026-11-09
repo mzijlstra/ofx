@@ -255,6 +255,17 @@ static void hist_unstep(UiHistory *h, int dir)
     if (*no > 0) (*no)--;
 }
 
+// A step found to lead nowhere only later (a far folder's lister said it is gone, F16 step 3): the
+// folder it left taken back off the other stack into *was. False when there is none.
+static bool hist_take(UiHistory *h, int dir, UiPlace *was)
+{
+    UiPlace *other = dir < 0 ? h->fwd : h->back;
+    int *no = dir < 0 ? &h->nfwd : &h->nback;
+    if (*no == 0) return false;
+    *was = other[--*no];
+    return true;
+}
+
 // ---- timing -------------------------------------------------------------------------------
 
 // A tooltip (Michael, 2026-10-24): shown once the pointer has rested UI_TIP_MS on one button (gui/

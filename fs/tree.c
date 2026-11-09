@@ -119,14 +119,6 @@ static bool tree_is_dir(int dirfd, const char *dir, Str mounts, const struct dir
     return kind_is_dir(kind_of_far(dirfd, dir, de->d_name, mounts, &st, &far));
 }
 
-// Whether path is a link whose target, by its text, is on a far drive (F16): its folder isn't read.
-static bool tree_far_link(Str mounts, const char *path)
-{
-    char t[PATH_MAX], dir[PATH_MAX], real[PATH_MAX], abs[PATH_MAX];
-    ssize_t n = mounts.len ? readlink(path, t, sizeof t - 1) : -1;
-    return n > 0 && path_parent(dir, sizeof dir, path) && realpath(dir, real) && link_abs(real, (Str){ t, n }, abs, sizeof abs) && !thumb_local(mounts, abs);   // (its folder's real path: as fs_list_far)
-}
-
 static void tree_add(Arena *a, Tree *t, Str path, int depth, bool hidden);
 
 // The subfolders of path, sorted, each added at depth (with its own when open).
@@ -134,11 +126,14 @@ static void tree_children(Arena *a, Tree *t, Str path, int depth, bool hidden)
 {
     char dir[PATH_MAX];
     snprintf(dir, sizeof dir, "%.*s", STR_ARG(path));
-    if (t->mounts.len && (!thumb_local(t->mounts, dir) || tree_far_link(t->mounts, dir))) return;   // (open, but shown without its subfolders: a dead share would hold the window, F16)
+    // On a far drive, by its real path (a link into one, or through one, F16 step 3): open, but shown
+    // without its subfolders, a dead share would hold the window. Its far checks from that path too.
+    char real[PATH_MAX];
+    bool far = false;
+    if (t->mounts.len && (!far_real(t->mounts, dir, real, sizeof real, &far) || far)) return;
+    const char *at = t->mounts.len ? real : dir;
     DIR *d = opendir(dir);
     if (!d) return;
-    char real[PATH_MAX];   // (the far checks from its real path, as fs_list_far's)
-    const char *at = t->mounts.len && realpath(dir, real) ? real : dir;
     isize cap = 64, n = 0;
     Str *names = arena_try_new(a, Str, cap);
     for (struct dirent *de; names && (de = readdir(d));) {

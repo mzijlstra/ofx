@@ -1,0 +1,56 @@
+# F16 step 3: paths that reach a far folder through local links, and far folders that turn out to
+# be a file or gone. run.sh's tree: share (far by the mount list) with sub/ and x.txt; local holds
+# a.txt, mylinks (a link to ../links) and chain (to mylinks/nas); links/nas is ../share. ofx starts
+# on local/mylinks/nas: far only through the links, so the start doesn't read it (its lister does).
+settle
+wait-for 3000 faron=1 farloading=0 n=2 sel=sub
+# Up: the share's real folder, tree (the start was resolved, never past the share).
+key backspace
+wait-for 3000 faron=0 n=3 sel=share
+# A typed path through the links to a file on the share: gone to as a folder, never looked at here;
+# the lister says it is a file, so its folder, it selected, as a local file typed is.
+key ctrl-l
+type local/mylinks/nas/x.txt
+key enter
+wait-for 3000 faron=1 farloading=0 n=2 sel=x.txt statusbad=0
+# Back from there: tree, as before the typed path (the file took no place in the history).
+key alt-left
+wait-for 3000 faron=0 sel=share
+key alt-right
+wait-for 3000 faron=1 farloading=0 sel=x.txt
+# A far folder gone, reached by Forward: skipped as a local one is, back where the step began.
+key home
+expect sel=sub
+key enter
+wait-for 3000 faron=1 farloading=0 n=0
+key alt-left
+wait-for 3000 faron=1 farloading=0 n=2 sel=sub
+sh rmdir "$OFX_DIR/sub"
+key alt-right
+wait-for 3000 faron=1 farloading=0 n=1 sel=x.txt statusbad=1 farnote=-
+expect is gone: skipped
+# Gone while shown, found by a reload: the nearest folder above, as a local one.
+sh mkdir "$OFX_DIR/sub2"
+key ctrl-r
+wait-for 3000 farloading=0 n=2
+key home
+expect sel=sub2
+key enter
+wait-for 3000 faron=1 farloading=0 n=0
+sh rmdir "$OFX_DIR"
+key ctrl-r
+wait-for 3000 faron=1 farloading=0 n=1 sel=x.txt statusbad=1 farnote=-
+expect is gone
+# chain (a link to mylinks/nas) in local: a far link though its text points at a local link (step
+# 2b's gap): no count, and Enter lists the share the far way. (Up goes by the path as typed, as for
+# any link: local/mylinks, then local.)
+key backspace
+wait-for 3000 faron=0 n=1 sel=nas
+key backspace
+wait-for 3000 faron=0 n=3 sel=mylinks
+key home
+expect sel=chain
+wait-for 2000 sizecell=?
+key enter
+wait-for 3000 faron=1 farloading=0 n=1 sel=x.txt
+quit

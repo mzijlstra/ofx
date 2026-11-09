@@ -1920,6 +1920,8 @@ int main(void)
     if (fast) test_spawn_fds_errs();
     if (fast) test_link_abs();
     if (fast) test_fs_list_far();
+    if (fast) test_far_real();
+    if (fast) test_hist_take();
     if (fast) test_wheel_under_question();
     if (fast) test_ui_age();
     if (fast) test_branch_panel();

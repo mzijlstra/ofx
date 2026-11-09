@@ -59,21 +59,22 @@ expect farloading=1
 key backspace
 wait-for 3000 faron=0 sel=share farheld=0
 expect n=2 sel=share
-# The folder gone meanwhile (the real lister back): listed again, the lister says so; the listing
-# shown stays.
+# The folder gone meanwhile (the real lister back): listed again, the lister says so, and the
+# nearest folder above is shown, as for a local folder gone (step 3; it stayed, with its error).
 sh cp "$OFX_ROOT/fakes/ofx-list.real" "$OFX_ROOT/fakes/ofx-list"
 key enter
 wait-for 3000 faron=1 farloading=0 n=2
 sh mv "$OFX_DIR" "$OFX_DIR.away"
 key ctrl-r
-wait-for 3000 farloading=0 n=2 statusbad=1 farnote=share:_No_such_file_or_directory
-sh mv "$OFX_DIR.away" "$OFX_DIR"
-key backspace
-wait-for 3000 faron=0 sel=share
+wait-for 3000 faron=0 n=2 statusbad=1 farnote=-
+expect is gone
+sh mv "$OFX_DIR/share.away" "$OFX_DIR/share"
+key ctrl-r
+wait-for 3000 faron=0 n=2
 # Links into the share from a local folder (2b): local/nas (to the share) and local/doc (to its
 # x.txt), taken for folders and never looked at. Enter on nas lists the share the far way; on doc,
 # found a file, it comes back and opens it.
-key up
+key home
 expect sel=local
 key enter
 wait-for 3000 faron=0 n=5 sel=doc
