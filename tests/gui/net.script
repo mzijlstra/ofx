@@ -40,4 +40,10 @@ wait-for 3000 faron=1 farwait=1 farloading=1 n=0
 sh ps -o stat=,args= -C ofx-list | grep -q "^D.*$OFX_DIR"
 sh "$OFX_ROOT/unpause"
 wait-for 20000 farwait=0 farloading=0 farheld=0 n=2 farnote=-
+# The home folder holds nas, a link into the share (2b): with the server stopped, home is listed at
+# once, nas taken for a folder and never looked at.
+sh "$OFX_ROOT/pause"
+key alt-home
+wait-for 3000 faron=0 n=1 sel=nas
+sh "$OFX_ROOT/unpause"
 quit

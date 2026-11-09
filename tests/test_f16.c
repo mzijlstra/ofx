@@ -270,3 +270,72 @@ static void test_spawn_fds_errs(void)
         if (i == 2) CHECK(strncmp(buf, "pipe:", 5) == 0);
     }
 }
+
+// A link's target by its text alone: ".", "..", repeated slashes; ".." at / stays at /.
+static void test_link_abs(void)
+{
+    struct { const char *dir, *target, *want; } c[] = {
+        { "/home/m", "nas", "/home/m/nas" },
+        { "/home/m", "../x/./y//z", "/home/x/y/z" },
+        { "/home/m", "/run/user/1/gvfs/s", "/run/user/1/gvfs/s" },
+        { "/home/m", "../../../..", "/" },
+        { "/", "a/..", "/" },
+        { "/a", "b/../../c/", "/c" },
+    };
+    for (int i = 0; i < COUNT(c); i++) {
+        char out[PATH_MAX];
+        CHECK(link_abs(c[i].dir, str_from_c(c[i].target), out, sizeof out));
+        if (strcmp(out, c[i].want) != 0) fprintf(stderr, "link_abs %s + %s: %s\n", c[i].dir, c[i].target, out);
+        CHECK(strcmp(out, c[i].want) == 0);
+    }
+    char small[6];
+    CHECK(!link_abs("/home", S("m"), small, sizeof small) && link_abs("/ho", S("m"), small, sizeof small) && strcmp(small, "/ho/m") == 0);
+    CHECK(!link_abs("/ho", S("mm"), small, sizeof small));   // (6 characters: no room for its end)
+}
+
+// A local folder with far links and a far mount point (by the mount list): taken for folders, never
+// looked at. The proof: a link to a far *file*, and a "mount point" that is a file, both listed as
+// folders; a link to a local file stays one.
+static void test_fs_list_far(void)
+{
+    arena_reset(&ta);
+    mkdirs(at("flf/share/d"));
+    put(at("flf/share/f.txt"), "f");
+    mkdirs(at("flf/home"));
+    put(at("flf/home/mp"), "a file standing in for a mount point");
+    put(at("flf/home/local.txt"), "l");
+    CHECK(symlink(at("flf/share/f.txt"), at("flf/home/tofile")) == 0);
+    CHECK(symlink("../share", at("flf/home/nas")) == 0);
+    CHECK(symlink("local.txt", at("flf/home/ll")) == 0);
+    Str mounts = str_from_c(arena_sprintf(&ta, "1 0 0:1 / / rw - ext4 /dev/x rw\n2 1 0:2 / %s rw - fuse.gvfsd-fuse g rw\n3 1 0:3 / %s rw - nfs4 h:/x rw\n",
+                                          at("flf/share"), at("flf/home/mp")));
+    Listing l;
+    Err err;
+    CHECK(fs_list_far(&ta, at("flf/home"), false, (Sort){ SORT_NAME, false }, mounts, &l, &err) && l.n == 5);
+    struct { const char *name; Kind kind; bool far; } want[] = {
+        { "mp", K_DIR, true }, { "nas", K_LINK_DIR, true }, { "tofile", K_LINK_DIR, true }, { "ll", K_LINK_FILE, false }, { "local.txt", K_FILE, false },
+    };
+    for (int i = 0; i < COUNT(want); i++) {
+        isize k = listing_find(&l, str_from_c(want[i].name));
+        CHECK(k >= 0 && l.e[k].kind == want[i].kind && l.e[k].far == want[i].far);
+    }
+    isize k = listing_find(&l, S("nas"));
+    CHECK(k >= 0 && str_eq(l.e[k].target, S("../share")) && l.e[k].size == 0);
+    // Without the mount list (fs_list): followed as before.
+    CHECK(fs_list(&ta, at("flf/home"), false, (Sort){ SORT_NAME, false }, &l, &err));
+    k = listing_find(&l, S("tofile"));
+    CHECK(k >= 0 && l.e[k].kind == K_LINK_FILE && !l.e[k].far);
+    // The tree: nas is a folder, shown, but not read even when open.
+    static Tree t;
+    t = (Tree){ 0 };
+    mkdirs(at("flf/share/d/inner"));
+    tree_follow(&t, at("flf/home/nas/d"));
+    t.mounts = mounts;
+    tree_build(&ta, &t, str_from_c(arena_cstr(&ta, str_from_c(at("flf/home")))), false);
+    bool found = false;
+    for (int i = 0; i < t.n; i++) found |= str_eq(t.row[i].name, S("nas"));
+    CHECK(found && t.n == 3 && t.row[1].open && str_eq(t.row[2].name, S("tofile")));   // (home, nas open, tofile: nothing below nas; mp, a file here, has no folder d_type)
+    t.mounts = STR_EMPTY;
+    tree_build(&ta, &t, str_from_c(arena_cstr(&ta, str_from_c(at("flf/home")))), false);
+    CHECK(t.n == 3 && str_eq(t.row[2].name, S("d")) && t.row[2].depth == 2);   // (nas read: d below it; tofile followed to a file, gone)
+}

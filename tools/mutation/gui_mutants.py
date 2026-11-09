@@ -998,4 +998,10 @@ MUTANTS = [
     ('gui/folder.c', '    far_drop();\n    app.far_loading = true, app.far_waiting = far_busy(dir);', '    app.far_loading = true, app.far_waiting = far_busy(dir);', 'net'),
     ('gui/folder.c', '        if (far_begin(dir, select, fallback, &err)) return app.far_kept = true, true;', '        if (far_begin(dir, select, fallback, &err)) return true;', 'f16'),
     ('gui/far.c', '    bool ok = spawn_fds(NULL, argv, in[0], out[1], SPAWN_ERR_NULL, &pid, err);', '    bool ok = spawn_fds(NULL, argv, in[0], out[1], SPAWN_ERR_OURS, &pid, err);', 'f16'),
+    # ---- F16 step 2b: links into far drives, far mount points
+    ('gui/folder.c', '    return fs_list_far(a, dir, app.show_hidden, app.ui.sort, far_mounts(), l, err);', '    return fs_list(a, dir, app.show_hidden, app.ui.sort, l, err);', 'net'),
+    ('gui/folder.c', '    if (app.list.e[i].far) return app.count[i] = -1, false;', '', 'f16'),
+    ('gui/folder.c', '        if (go_to(to, STR_EMPTY, 0) && app.far_loading) app.far_link = e->kind == K_LINK_DIR;', '        go_to(to, STR_EMPTY, 0);', 'f16'),
+    ('gui/folder.c', '    if (e->far) {   // (F16) a far mount point', '    if (0) {   // (F16) a far mount point', 'f16'),
+    ('gui/folder.c', '    hist_go(-1);\n    if (spawn_open(file, &err))', '    if (spawn_open(file, &err))', 'f16'),
 ]

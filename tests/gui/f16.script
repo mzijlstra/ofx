@@ -70,6 +70,30 @@ wait-for 3000 farloading=0 n=2 statusbad=1 farnote=share:_No_such_file_or_direct
 sh mv "$OFX_DIR.away" "$OFX_DIR"
 key backspace
 wait-for 3000 faron=0 sel=share
+# Links into the share from a local folder (2b): local/nas (to the share) and local/doc (to its
+# x.txt), taken for folders and never looked at. Enter on nas lists the share the far way; on doc,
+# found a file, it comes back and opens it.
+key up
+expect sel=local
+key enter
+wait-for 3000 faron=0 n=3 sel=doc
+key down
+expect sel=nas
+# Its item count isn't asked (the count thread would read the share): "?".
+wait-for 2000 sizecell=?
+key enter
+wait-for 3000 faron=1 farloading=0 n=2 sel=sub
+key alt-left
+wait-for 3000 faron=0 sel=nas
+key up
+expect sel=doc
+key enter
+wait-for 3000 faron=0 sel=doc
+sh grep -q "share/x.txt" "$OFX_ROOT/spawn.log"
+key backspace
+wait-for 3000 sel=local
+key down
+expect sel=share
 # A lister that ends without a word: said, not waited for.
 sh printf '#!/bin/sh\nexit 0\n' > "$OFX_ROOT/fakes/ofx-list"
 key enter

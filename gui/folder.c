@@ -160,7 +160,7 @@ static bool view_list(UiView v, Arena *a, const char *dir, Listing *l, Err *err)
     case UI_VIEW_SEARCH: return search_list(a, dir, l, err);
     case UI_VIEW_FOLDER: break;
     }
-    return fs_list(a, dir, app.show_hidden, app.ui.sort, l, err);
+    return fs_list_far(a, dir, app.show_hidden, app.ui.sort, far_mounts(), l, err);   // (its far links and mount points never looked at, F16)
 }
 
 // What a view's changes come in by: the folder, the home trash's info/ for the trash view (a
@@ -207,7 +207,7 @@ static isize far_scan;   // how far what the lister said was looked through for 
 static bool far_begin(const char *dir, Str select, isize fallback, Err *err)
 {
     snprintf(app.far_select, sizeof app.far_select, "%.*s", STR_ARG(select));
-    app.far_fallback = fallback, app.far_since = now_ms(), app.far_slow = false, app.far_note[0] = 0, far_scan = 0;
+    app.far_fallback = fallback, app.far_since = now_ms(), app.far_slow = false, app.far_note[0] = 0, far_scan = 0, app.far_link = false;
     // The last lister killed first: if it is still in the kernel (a reload of a folder that hangs),
     // it holds this one back too (step 2a review: asked before, a reload started one at once).
     far_drop();
@@ -243,6 +243,21 @@ static void far_failed(const char *why)
     set_status(true, "%s", why);
 }
 
+static void hist_go(int dir);
+
+// A link into a far drive, taken for a folder (F16, Michael 2026-11-09: no second look), was a file:
+// back to the folder it is in, and the file opened from there.
+static void far_link_file(void)
+{
+    char file[PATH_MAX];
+    Err err;
+    snprintf(file, sizeof file, "%s", app.cwd);
+    app.far_link = false;
+    hist_go(-1);
+    if (spawn_open(file, &err)) set_status(false, "opened %.*s", STR_ARG(path_base(str_from_c(file))));
+    else set_status(true, "%s", err.msg);
+}
+
 // Each frame, on a far folder: its listing taken when it has come (then the counts asked since),
 // its lister started once a killed one is gone, and "isn't answering" said after FAR_ANSWER_MS.
 // True when the window must draw again.
@@ -272,6 +287,7 @@ static bool far_poll(void)
             Str select = app.far_kept ? str_from_c(keep) : str_from_c(app.far_select);
             bool ok = go_to_in(app.cwd, select, app.far_kept ? app.ui.list.sel : app.far_fallback, true);
             app.far_ready = false, app.far_loading = false;
+            if (!ok && app.far_link && strstr(app.status, strerror(ENOTDIR))) return far_link_file(), true;
             if (!ok) snprintf(app.far_note, sizeof app.far_note, "%s", app.status);
             else if (app.far_slow) app.status[0] = 0;   // (its "isn't answering" said its last)
             if (ok) app.far_note[0] = 0, app.far_slow = false;
@@ -298,6 +314,7 @@ static bool far_poll(void)
 // else of the count thread.
 static bool row_count_ask(isize i, const char *path)
 {
+    if (app.list.e[i].far) return app.count[i] = -1, false;   // (a far link's target: never counted here, it would hold the count thread)
     if (app.far_on) return !app.far_loading && far_count_send(app.far_cgen, i, app.list.e[i].name);
     return count_ask(i, path, app.show_hidden);
 }
@@ -730,6 +747,16 @@ static void open_entry(isize i)
     }
     if (kind_is_dir(e->kind) && e->trash) {   // the trash view: a file opens, a folder doesn't
         set_status(true, "%.*s is in the trash: restore it to open it", STR_ARG(e->name));
+        return;
+    }
+    if (e->far) {   // (F16) a far mount point, or a link into a far drive: its target, the far way
+        char to[PATH_MAX];
+        if (e->kind == K_DIR) snprintf(to, sizeof to, "%s", path);
+        else if (!link_abs(here_dir(), e->target, to, sizeof to)) {
+            set_status(true, "%.*s: its target is too long", STR_ARG(e->name));
+            return;
+        }
+        if (go_to(to, STR_EMPTY, 0) && app.far_loading) app.far_link = e->kind == K_LINK_DIR;   // (a file after all: opened, far_poll)
         return;
     }
     if (kind_is_dir(e->kind)) {

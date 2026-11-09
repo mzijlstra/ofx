@@ -29,7 +29,6 @@ typedef struct {
     Str     mounts;                         // the mount list (mountinfo): a far drive's folders aren't read (F16)
 } Tree;
 
-static bool thumb_local(Str mountinfo, const char *path);   // (thumb.c)
 
 static int tree_open_at(const Tree *t, Str path)
 {
@@ -109,13 +108,23 @@ static int tree_name_cmp(const void *x, const void *y)
     return natural_cmp(*(const Str *)x, *(const Str *)y);
 }
 
-// Whether entry de of the folder dirfd is a folder, or a symlink to one.
-static bool tree_is_dir(int dirfd, const struct dirent *de)
+// Whether entry de of the folder dirfd (dir) is a folder, or a symlink to one: as the list takes it
+// (kind_of_far), so a link into a far drive is one, never followed (F16).
+static bool tree_is_dir(int dirfd, const char *dir, Str mounts, const struct dirent *de)
 {
     if (de->d_type == DT_DIR) return true;
     if (de->d_type != DT_LNK && de->d_type != DT_UNKNOWN) return false;
     struct stat st;
-    return fstatat(dirfd, de->d_name, &st, 0) == 0 && S_ISDIR(st.st_mode);
+    bool far;
+    return kind_is_dir(kind_of_far(dirfd, dir, de->d_name, mounts, &st, &far));
+}
+
+// Whether path is a link whose target, by its text, is on a far drive (F16): its folder isn't read.
+static bool tree_far_link(Str mounts, const char *path)
+{
+    char t[PATH_MAX], dir[PATH_MAX], abs[PATH_MAX];
+    ssize_t n = mounts.len ? readlink(path, t, sizeof t - 1) : -1;
+    return n > 0 && path_parent(dir, sizeof dir, path) && link_abs(dir, (Str){ t, n }, abs, sizeof abs) && !thumb_local(mounts, abs);
 }
 
 static void tree_add(Arena *a, Tree *t, Str path, int depth, bool hidden);
@@ -125,14 +134,14 @@ static void tree_children(Arena *a, Tree *t, Str path, int depth, bool hidden)
 {
     char dir[PATH_MAX];
     snprintf(dir, sizeof dir, "%.*s", STR_ARG(path));
-    if (t->mounts.len && !thumb_local(t->mounts, dir)) return;   // (open, but shown without its subfolders: a dead share would hold the window, F16)
+    if (t->mounts.len && (!thumb_local(t->mounts, dir) || tree_far_link(t->mounts, dir))) return;   // (open, but shown without its subfolders: a dead share would hold the window, F16)
     DIR *d = opendir(dir);
     if (!d) return;
     isize cap = 64, n = 0;
     Str *names = arena_try_new(a, Str, cap);
     for (struct dirent *de; names && (de = readdir(d));) {
         const char *nm = de->d_name;
-        if (strcmp(nm, ".") == 0 || strcmp(nm, "..") == 0 || (nm[0] == '.' && !hidden) || !tree_is_dir(dirfd(d), de)) continue;
+        if (strcmp(nm, ".") == 0 || strcmp(nm, "..") == 0 || (nm[0] == '.' && !hidden) || !tree_is_dir(dirfd(d), dir, t->mounts, de)) continue;
         if (n == cap) {
             Str *grown = arena_try_new(a, Str, cap * 2);
             if (!grown) break;

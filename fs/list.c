@@ -45,6 +45,8 @@ typedef struct {
     const TrashItem *trash;   // the trash view's (F6, trash.c): where the item is; NULL elsewhere
     Str   dir;       // the search view's (F9): its folder below the one searched ("" in that one)
     const SearchHit *hit;   // the search view's inside files (F9 step 3): where it matched; NULL elsewhere
+    bool  far;       // (F16) a link into a far drive, or a far drive's mount point, in a local folder:
+                     // never looked at (a dead share would hold the window), taken for a folder
 } Entry;
 
 typedef struct {
@@ -131,16 +133,63 @@ static void fs_sort(Listing *l, Sort s)
 
 // ---- reading --------------------------------------------------------------------------------
 
-static Kind kind_of(int dirfd, const char *name, struct stat *st)
+static bool thumb_local(Str mountinfo, const char *path);   // (thumb.c)
+
+// A link's target as an absolute path, from readlink's text alone (dir: the link's folder): "."
+// and ".." taken by the text, no syscall (F16: the target may be on a share that hangs). False when
+// it doesn't fit. Links on the way aren't followed, so a chain through a local link isn't seen.
+static bool link_abs(const char *dir, Str target, char *out, size_t cap)
 {
+    char buf[2 * PATH_MAX];
+    int n = target.len && target.p[0] == '/' ? snprintf(buf, sizeof buf, "%.*s", STR_ARG(target)) : snprintf(buf, sizeof buf, "%s/%.*s", dir, STR_ARG(target));
+    if (n < 0 || (size_t)n >= sizeof buf || cap < 2) return false;
+    size_t o = 0;
+    for (char *p = buf; *p;) {
+        while (*p == '/') p++;
+        char *seg = p;
+        while (*p && *p != '/') p++;
+        size_t len = (size_t)(p - seg);
+        if (len == 0 || (len == 1 && seg[0] == '.')) continue;
+        if (len == 2 && seg[0] == '.' && seg[1] == '.') {   // (the last part off; at / it stays /)
+            while (o > 0 && out[o - 1] != '/') o--;
+            if (o > 0) o--;
+            continue;
+        }
+        if (o + 1 + len + 1 > cap) return false;
+        out[o++] = '/', memcpy(out + o, seg, len), o += len;
+    }
+    if (o == 0) out[o++] = '/';
+    out[o] = 0;
+    return true;
+}
+
+// What name in the folder dirfd is (a symlink by its target), its stat in st. In a local folder
+// dir with the mount list `mounts` (F16; empty: none): a far drive's mount point is a folder, not
+// even lstat'd (that reaches the drive's root), and a link whose target is, by its text, on a far
+// drive is a link to a folder, not followed (*far set for both).
+static Kind kind_of_far(int dirfd, const char *dir, const char *name, Str mounts, struct stat *st, bool *far)
+{
+    char p[PATH_MAX];
+    *far = false;
+    bool look = mounts.len && dir && path_put(p, sizeof p, dir, str_from_c(name));
+    if (look && !thumb_local(mounts, p)) return *far = true, *st = (struct stat){ .st_mode = S_IFDIR }, K_DIR;
     if (fstatat(dirfd, name, st, AT_SYMLINK_NOFOLLOW) != 0) return *st = (struct stat){ 0 }, K_OTHER;   // (gone since readdir: nothing to show)
     if (S_ISLNK(st->st_mode)) {
-        struct stat t;
-        if (fstatat(dirfd, name, &t, 0) != 0) return K_LINK_BROKEN;
-        *st = t;
-        return S_ISDIR(t.st_mode) ? K_LINK_DIR : K_LINK_FILE;
+        char t[PATH_MAX], abs[PATH_MAX];
+        ssize_t n = look ? readlinkat(dirfd, name, t, sizeof t - 1) : 0;
+        if (n > 0 && link_abs(dir, (Str){ t, n }, abs, sizeof abs) && !thumb_local(mounts, abs)) return *far = true, K_LINK_DIR;
+        struct stat tg;
+        if (fstatat(dirfd, name, &tg, 0) != 0) return K_LINK_BROKEN;
+        *st = tg;
+        return S_ISDIR(tg.st_mode) ? K_LINK_DIR : K_LINK_FILE;
     }
     return S_ISDIR(st->st_mode) ? K_DIR : S_ISREG(st->st_mode) ? K_FILE : K_OTHER;
+}
+
+static Kind kind_of(int dirfd, const char *name, struct stat *st)
+{
+    bool far;
+    return kind_of_far(dirfd, NULL, name, STR_EMPTY, st, &far);
 }
 
 // A symlink's target as it is written, into a; empty when it can't be read (or a is full).
@@ -157,10 +206,11 @@ static Str link_target(Arena *a, int dirfd, const char *name)
 
 // The entry nm in the folder fd, its name and a link's target in a; false when a is full. (fs_list's,
 // and the search view's walk's, F9.)
-static bool entry_read(Arena *a, int fd, const char *nm, Entry *out)
+static bool entry_read_far(Arena *a, int fd, const char *dir, const char *nm, Str mounts, Entry *out)
 {
     struct stat st;
-    Kind k = kind_of(fd, nm, &st);
+    bool far;
+    Kind k = kind_of_far(fd, dir, nm, mounts, &st, &far);
     isize len = (isize)strlen(nm);
     char *copy = arena_try_push(a, len + 1, 1);
     if (!copy) return false;
@@ -174,13 +224,28 @@ static bool entry_read(Arena *a, int fd, const char *nm, Entry *out)
         .mode = k == K_LINK_BROKEN ? 0 : (u32)st.st_mode,
         .uid = (u32)st.st_uid, .gid = (u32)st.st_gid,
         .target = link ? link_target(a, fd, nm) : STR_EMPTY,
+        .far = far,
     };
     return true;
 }
 
+static bool entry_read(Arena *a, int fd, const char *nm, Entry *out)
+{
+    return entry_read_far(a, fd, NULL, nm, STR_EMPTY, out);
+}
+
 // The entries of dir, sorted; dot-files counted in hidden, and left out unless show_hidden. False,
 // with the reason, when the folder can't be opened or the arena is full.
+static bool fs_list_far(Arena *a, const char *dir, bool show_hidden, Sort sort, Str mounts, Listing *out, Err *err);
+
 static bool fs_list(Arena *a, const char *dir, bool show_hidden, Sort sort, Listing *out, Err *err)
+{
+    return fs_list_far(a, dir, show_hidden, sort, STR_EMPTY, out, err);
+}
+
+// fs_list in a local folder that may hold far links or mount points (mounts: the mount list; F16):
+// those listed by kind_of_far, never looked at.
+static bool fs_list_far(Arena *a, const char *dir, bool show_hidden, Sort sort, Str mounts, Listing *out, Err *err)
 {
     *out = (Listing){ 0 };
     DIR *d = opendir(dir);
@@ -207,7 +272,7 @@ static bool fs_list(Arena *a, const char *dir, bool show_hidden, Sort sort, List
             memcpy(grown, e, (size_t)n * sizeof *e);
             e = grown, cap *= 2;
         }
-        if (!entry_read(a, fd, nm, &e[n])) {
+        if (!entry_read_far(a, fd, dir, nm, mounts, &e[n])) {
             ok = false;
             break;
         }

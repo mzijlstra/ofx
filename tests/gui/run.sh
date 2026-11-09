@@ -401,6 +401,7 @@ if want f16; then
 # .dot; local: a.txt.
 fresh f16; mkdir -p "$T/tree/share/sub" "$T/tree/local"
 touch "$T/tree/share/sub/1" "$T/tree/share/sub/2" "$T/tree/share/sub/3" "$T/tree/share/x.txt" "$T/tree/share/.dot" "$T/tree/local/a.txt"
+ln -s ../share "$T/tree/local/nas"; ln -s ../share/x.txt "$T/tree/local/doc"   # (2b: links into the share)
 printf '1 0 0:1 / / rw - ext4 /dev/x rw\n2 1 0:2 / %s rw,nosuid,nodev - fuse.gvfsd-fuse gvfsd-fuse rw\n' "$T/tree/share" > "$T/mountinfo"
 rs f16 OFX_TEST_MOUNTINFO="$T/mountinfo" -- "$T/tree"
 # f16b: git on a far folder. f16b/tree/repo (local) and f16b/tree/share2 (far by the mount list), each
@@ -422,6 +423,7 @@ fresh net; mkdir -p "$T/home"
   net_ok || exit 0
   trap net_end EXIT; trap 'exit 130' INT TERM
   { net_server "$T" && net_hold "$T" pub; } || { echo "== net: FAILED (its server or share)"; exit 1; }
+  ln -s "$NET_SHARE" "$T/home/nas"   # (2b: a link into the share from the home folder)
   for w in pause unpause; do
       printf '#!/bin/sh\nexec env -i HOME="%s" XDG_RUNTIME_DIR="%s" PATH=/usr/bin podman %s %s > /dev/null\n' "$NET_REAL_HOME" "$NET_REAL_RT" "$w" "$NET_C" > "$T/$w"
       chmod +x "$T/$w"

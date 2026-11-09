@@ -900,8 +900,16 @@ blocks each of these for up to gvfs's 90 s. On a thread it also holds ofx's exit
        - a slow reload keeps the cursor where it was moved meanwhile;
        - ofx-list's stderr goes to /dev/null (a lister held in D kept ofx's).
    - **2b, links into far mounts from local folders**, and a far mount point listed in a local
-     folder (its `fstatat` reaches the share's root): not followed in-process, kinds reported later
-     by a lister (step 1 review).
+     folder (its `fstatat` reaches the share's root), done:
+     - **Michael, 2026-11-09:** "assume a folder", no second look. A link whose target is on a far
+       drive, by its text (`link_abs`: `.` and `..` by the text, no syscall), is listed as a link to
+       a folder with no size. A far mount point is listed as a folder and not even `lstat`'d.
+       `Entry.far` marks both.
+     - **Enter on one** goes to its target the far way. If the lister says it is a file ("Not a
+       directory"), ofx goes Back and opens the file.
+     - **What isn't done for them:** item counts ("?"), and the tree doesn't read below such a link.
+     - **Known gap:** a chain through a local link (a link to a local link into the share) isn't
+       seen. The list follows it in-process.
 3. **The audit's other touches** moved off the main thread or skipped on far folders.
 4. **Connect to Server… and passwords:** the address line (Go menu and Ctrl+L with `smb://`), the
    password question, `gio mount` on a job thread, wrong password and unknown host said in the
