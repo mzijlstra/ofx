@@ -85,7 +85,7 @@ Omarchy's theme: the binary, the folder `tools/ofx`, the window's title and Wayl
 | F13 | Drag and drop inside ofx (the list, the sidebar, the tabs, spring-loaded), Copy Path (Ctrl+Shift+C), a resizable sidebar | Below |
 | F14 | Drag and drop with other programs (a browser first): files dragged out of ofx, and dropped into it; ofx's own Wayland data-device code beside GLFW's | To design |
 | F15 | Key bindings the user sets: `key` lines in ofx.conf, one binding table behind the keys, the menus and the shortcuts panel | Below |
-| F16 | Network shares (Samba, NFS), with the folder counting in a separate process so a dead mount can't hang ofx | To design |
+| F16 | Network shares through gvfs (Samba, then NFS, then discovery), listed and counted in a child process on a far folder so a dead share can't hang ofx | Below |
 
 **The major milestones end at F16** (Michael, 2026-11-04). What is left after it is on the later
 list below, smaller items to pick from.
@@ -135,8 +135,10 @@ his word: Nemo's compact view and its icon size slider.
 - Drag and drop (Michael, 2026-10-29): inside ofx first (F13), then with other programs (F14).
 - A browser's link or image dropped into ofx saved as a file (a download as a job, its name, a size
   cap): F14 refuses them (Michael, 2026-11-05).
-- Network shares (Michael, 2026-10-29): Samba and NFS, F16. Needs machines to test against, and the
-  counting in a separate process above, so a dead mount can't hang ofx.
+- Network shares (Michael, 2026-10-29): Samba and NFS, F16 (designed 2026-11-09, tested against
+  podman containers).
+- Remember share passwords in the keyring (libsecret), so a bookmarked share mounts without asking
+  (Michael, 2026-11-09: F16 asks each time).
 - Redo (Edit menu), beside undo: needs a history of undone changes.
 - Tooling: run the slowest GUI mutants first (above; done 2026-11-05 in its lighter form, last run's
   survivors and the untagged first: runs sat within 5% of their floor, so only a late survivor's
@@ -734,6 +736,93 @@ Default and Recommended equal GIO's; GLib's rewrite of a copy adds the two lines
   index.theme files read again; start-up is back to about 51 ms), each app's texture when its row
   is first drawn, all of them dropped when it closes (`ow_drop`). SVG icons (theme, pixmaps/ or a
   path) are drawn with nanosvg, vendored; only for the apps, the files' icons stay PNG.
+
+## F16 design: network shares (2026-11-09; Michael's answers the same day)
+
+**Today:** ofx lists a folder on its main thread (`fs_list`, gui/folder.c), and counts subfolders'
+items on a worker (gui/counts.c). Kernel network mounts (fstab cifs/nfs) already show as any
+folder, and `thumb_far_type` keeps previews off them and off every FUSE mount. GTK bookmarks to
+`smb://` or `sftp://` are kept in the file but not listed (F7.5).
+
+**Spike (2026-11-09; Michael's idea: test servers in podman, no other machines needed):**
+- A Samba server in a rootless podman container (alpine + samba, 70 MB, built locally) on
+  127.0.0.1:4445, with a guest share and a password share.
+- A private gvfs: `dbus-run-session` with a bus config listing only `org.gtk.vfs.Daemon`, and
+  `XDG_RUNTIME_DIR` and `HOME` scratch. Its gvfsd-fuse mounts under the scratch runtime dir, so
+  the session's gvfs, `/run/user/$UID/gvfs` and keyring are never touched. The default session
+  config started a gnome-keyring there: the gvfs-only service list is required.
+- `gio mount -a smb://127.0.0.1:4445/pub` takes 53 ms. The password share takes user, domain and
+  password on stdin, in 48 ms. The share's path is
+  `<runtime>/gvfs/smb-share:port=4445,server=127.0.0.1,share=pub`. Listing 50 files takes 7 ms;
+  writes work.
+- **A dead server** (`podman pause`): a read blocks in an interruptible wait (S); the next one fails
+  after about 90 s. SIGKILL ends a blocked reader (briefly D, then gone): FUSE waits are killable.
+  After `podman unpause`, reads work at once (9 ms).
+- So on today's main thread, a dead share freezes the window for about 90 s (Hyprland's "not
+  responding" question). gvfs mounts are subfolders of one FUSE mount, not mountinfo lines of their
+  own.
+- podman inside the private session needs the real `HOME` and `XDG_RUNTIME_DIR` (its storage and
+  state). With the scratch ones it starts a pause process of its own.
+
+**Michael's answers:**
+1. **Through gvfs:** ofx runs `gio mount` and lists the share's FUSE path as any folder. Shares
+   mounted by Nemo or a GTK file chooser show up too; kernel mounts stay as they are.
+2. **The address and the sidebar first, discovery last.** Connect to Server… takes `smb://` (and
+   `nfs://` after the NFS step). A Network section in the sidebar lists the mounted shares, each
+   with an unmount button, and the `smb://` GTK bookmarks, mounted on a click. Discovery (browsing
+   the network for servers) is F16's last step, kept apart: "one of the absolute worst things
+   related to network file systems".
+3. **Passwords asked each time:** ofx's own question (user, domain, password), handed to
+   `gio mount` on stdin and never stored or logged. Remembering them in the keyring is on the later
+   list.
+4. **NFS as a spike step** after SMB: gvfs-nfs (libnfs, user space) against an nfs-ganesha
+   container. If that can't run rootless, NFS in F16 means kernel NFS mounts only, shown and kept
+   from hanging ofx.
+
+**Defaults taken without asking:**
+- A share is "far" by its path: under a gvfs FUSE mount, or a far mount type (`thumb_far_type`).
+- On a far folder, the listing and the item counts run in a child process (`ofx-list`, a small
+  binary beside ofx-clean). It streams entries over a pipe; the window polls it with the other
+  workers.
+  - No answer within 3 s: the list says the share isn't answering, and the window works on. The
+    child is killed (SIGKILL) when you leave or after 90 s, gvfs's own limit.
+  - Local folders keep today's in-process listing: a fork per folder costs time for nothing there.
+- Everything else that touches the folder from the main thread gets an audit (step 1): crumbs,
+  `access` for Can Write, `statvfs`, the watch, Properties, git status (git already runs in a
+  timed child). Each one is moved off the main thread, or skipped on a far folder.
+- Jobs (copy, move, trash) on a far folder run as today, on their thread. A dead server fails them
+  after gvfs's 90 s, with gvfs's error.
+- The trash on a share: gvfs refuses it, so Delete there asks "delete for good?" as on a drive
+  without a trash.
+- Unmount is `gio mount -u`, with the eject button's way of saying it is busy.
+- Tests use the spike's harness: one shared image (`localhost/ofx-test-smb`, built from a
+  Containerfile in `tests/net/`), containers named `ofx-test-<pid>` with a trap that removes them,
+  and the private gvfs session above. `make test-net` and a GUI group `net`, which run-script starts
+  inside that session. They are skipped, saying so, without podman. Dead servers come from
+  `podman pause`. They never use the session's gvfs, keyring or `/run/user/$UID/gvfs`, and never
+  touch containers that aren't theirs.
+
+**Steps, each with its commits, gates and reviewer-2 round:**
+1. **The harness and the audit:** `tests/net/` (Containerfile, smb.conf, the private session) and
+   `make test-net`, mounting and listing a share with `gio`. Then the list of main-thread touches
+   of the folder, each with what happens on a dead share today (measured on a paused container).
+2. **`ofx-list`, the child lister:** far folders listed and counted through it, the "not
+   answering" state, kill on leave. Tests: a paused server, the window still answering (frames
+   keep coming), a leave mid-hang, unpause and reload.
+3. **The audit's other touches** moved off the main thread or skipped on far folders.
+4. **Connect to Server… and passwords:** the address line (Go menu and Ctrl+L with `smb://`), the
+   password question, `gio mount` on a job thread, wrong password and unknown host said in the
+   status line.
+5. **The sidebar's Network section:** mounted shares (read from the gvfs FUSE folder; a watch on
+   it) with unmount, and `smb://` bookmarks mounted on a click. Add Bookmark on a share writes its
+   `smb://` address.
+6. **NFS spike, then NFS:** gvfs-nfs against nfs-ganesha rootless; nfs:// in Connect to Server if
+   it works, else kernel NFS mounts only (above).
+7. **Discovery:** the Network place browsing servers and shares (`smb://` root through gvfs's
+   smb-browse, and avahi), apart from everything above, so it can be dropped without touching
+   them.
+8. **The milestone's code-health review and cleanup** (AGENTS.md "At the end of each major
+   milestone"), then install.
 
 ## F15 design: key bindings the user sets (2026-11-08; Michael's answers the same day)
 
