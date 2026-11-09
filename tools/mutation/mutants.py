@@ -2790,7 +2790,7 @@ MUTANTS += [
     ('fs/fardo.c', '    return at == b.len;\n}', '    return true;\n}'),
     ('fs/fardo.c', '        if (!op_rename(argv[1], str_from_c(argv[2]), str_from_c(argv[3]), &err)) return far_reply_err(out, err.msg), 0;', '        if (!op_rename(argv[1], str_from_c(argv[2]), str_from_c(argv[3]), &err)) {}'),
     ('fs/fardo.c', "        bool ok = op[2] == 'd' ? op_mkdir(", "        bool ok = op[2] == 'f' ? op_mkdir("),
-    ('fs/fardo.c', "name_free(argv[1], str_from_c(argv[2]), argv[3][0] == '1', argv[4][0] == '1', argv[5][0] == '1', made, sizeof made)", "name_free(argv[1], str_from_c(argv[2]), argv[3][0] == '1', false, argv[5][0] == '1', made, sizeof made)"),
+    ('fs/fardo.c', "bool ok = name_free(argv[i], str_from_c(argv[i + 2]), argv[i + 1][0] == '1', true, true, names[k], sizeof names[k]);", "bool ok = name_free(argv[i], str_from_c(argv[i + 2]), argv[i + 1][0] == '1', false, true, names[k], sizeof names[k]);"),
     ('fs/fardo.c', '            broken = stat(argv[1], &st) != 0;', '            broken = false;'),
     ('fs/fardo.c', 'broken ? STR_EMPTY : far_bytes(&st, sizeof st)', 'far_bytes(&st, sizeof st)'),
     ('fs/fardo.c', '        Str f[3] = { str_from_c(t.from), str_from_c(t.file), str_from_c(t.info) };', '        Str f[3] = { str_from_c(t.from), str_from_c(t.info), str_from_c(t.file) };'),
@@ -2798,6 +2798,14 @@ MUTANTS += [
     ('fs/fardo.c', '        snprintf(was, sizeof was, "%o", (unsigned)old);', '        snprintf(was, sizeof was, "%u", (unsigned)old);'),
     ('fs/fardo.c', '        Str f[2] = { str_from_c(ok ? "done" : err.msg), str_from_c(d) };\n        far_reply(out, ok, 2, f);', '        Str f[2] = { str_from_c(ok ? "done" : err.msg), str_from_c(d) };\n        far_reply(out, true, 2, f);'),
     ('fs/fardo.c', '    if (argc != (n) + 1) {', '    if (argc < (n) + 1) {'),
+    # (step 3 review: the batches, far_drive)
+    ('fs/fardo.c', '            f[i - 1] = lstat(argv[i], &st) != 0 ? S("-") : S_ISDIR(st.st_mode) ? S("d") : S("o");', '            f[i - 1] = lstat(argv[i], &st) != 0 ? S("-") : S("o");'),
+    ('fs/fardo.c', '        if (argc < 4 || (argc - 1) % 3 != 0 ||', '        if (argc < 4 ||'),
+    # (Justified: frees' "" for a name not free, as free's was: 10,000 names taken.)
+    ('fs/list.c', '        if (!path_within(path, mp) || n < best) continue;   // (a later mount', '        if (!path_within(path, mp)) continue;   // (a later mount'),
+    ('fs/list.c', '    *gvfs = strcmp(type, "fuse.gvfsd-fuse") == 0;\n    if (!*gvfs) return true;', '    *gvfs = strcmp(type, "fuse.gvfsd-fuse") == 0;\n    return true;'),
+    ('fs/list.c', '    while (*rest == \'/\') rest++;\n    size_t k = strcspn', '    size_t k = strcspn'),
+    ('fs/list.c', '    if (k && o + 1 + k < cap) out[o] =', '    if (k) out[o] ='),
     # (Dropped as equivalent: a field's length capped at what is left of the answer (past it, the
     # last check that the answer ends there fails too); "" or NULL for an undo item's empty parts
     # (undo_check and undo_do take both as none). Justified: "no free name" needs 10,000 names taken.)

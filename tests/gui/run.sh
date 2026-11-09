@@ -443,8 +443,9 @@ rs f16g OFX_TEST_MOUNTINFO="$T/mountinfo" -- "$T/tree/local/mylinks/nas/x.txt"
 # f16f (step 3b): the actions on a far folder, each run by ofx-list --do (fardos= counts them);
 # moves taken as across drives (OFX_TEST_CROSS), for an undo that is a job.
 # tree/share (far by the mount list): a.txt (0644) and sub/.
+# An sshfs mount, not gvfs's: gvfs gives a share no trash (net checks that), sshfs a .Trash-uid.
 fresh f16f; mkdir -p "$T/tree/share/sub"; printf 'a\n' > "$T/tree/share/a.txt"; chmod 644 "$T/tree/share/a.txt"
-printf '1 0 0:1 / / rw - ext4 /dev/x rw\n2 1 0:2 / %s rw,nosuid,nodev - fuse.gvfsd-fuse gvfsd-fuse rw\n' "$T/tree/share" > "$T/mountinfo"
+printf '1 0 0:1 / / rw - ext4 /dev/x rw\n2 1 0:2 / %s rw,nosuid,nodev - fuse.sshfs sshfs rw\n' "$T/tree/share" > "$T/mountinfo"
 rs f16f OFX_TEST_CROSS=1 OFX_TEST_MOUNTINFO="$T/mountinfo" -- "$T/tree/share"
 fi
 if want net; then

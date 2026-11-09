@@ -157,6 +157,18 @@ expect sel=sub
 key ctrl-i
 wait-for 2000 props=1 propname=sub propdone=0 propfiles=0
 key esc
+# A far folder pasted into itself: refused, as a local one is (that it is a folder from ofx-list).
+key ctrl-c
+key enter
+wait-for 3000 faron=1 farloading=0 n=0
+key ctrl-v
+expect statusbad=1 job=-
+expect paste a folder into itself
+key backspace
+wait-for 3000 farloading=0 n=4
+key home
+key down
+expect sel=sub
 # A move across drives (OFX_TEST_CROSS) undone on a far folder: ofx-list checks it and says it is a
 # job, which moves it back. ("a (copy).txt", the third row.)
 key end
@@ -179,28 +191,61 @@ wait-for 2000 props=1 propname=sub propdone=0
 key esc
 key backspace
 wait-for 3000 faron=1 farloading=0 n=4
+# A paste of several, each beside itself: what they are and their free names asked in two children
+# in all, not two for each (step 3 review).
+key ctrl-a
+expect marked=4
+key ctrl-c
+key ctrl-v
+wait-for 5000 job=- fardos=20
+wait-for 3000 farloading=0 n=8
+# A batch on a slow share (each action 1 s): one deadline, 1.5 s, for all of it (step 3 review: it
+# was each action's). The first done, the second cut off, the rest not tried.
+sh cp "$OFX_ROOT/fakes/ofx-list" "$OFX_ROOT/fakes/ofx-list.real" && printf '#!/bin/sh\n[ "$1" = --do ] && sleep 1\nexec "%s/fakes/ofx-list.real" "$@"\n' "$OFX_ROOT" > "$OFX_ROOT/fakes/slow" && chmod +x "$OFX_ROOT/fakes/slow" && mv "$OFX_ROOT/fakes/slow" "$OFX_ROOT/fakes/ofx-list"
+key ctrl-a
+expect marked=8
+key delete
+expect fardos=22 statusbad=1
+expect 1 of 8:
+expect answering: it may still happen there
+wait-for 5000 farloading=0 n=7
+sh cp "$OFX_ROOT/fakes/ofx-list.real" "$OFX_ROOT/fakes/real" && mv "$OFX_ROOT/fakes/real" "$OFX_ROOT/fakes/ofx-list"
 # A share that doesn't answer an action: ofx waits 1.5 s at most, says so, and goes on (the child
 # killed; one held in the kernel on a real share is the net group's). Nothing made.
-# (Written aside and renamed over: the lister running it keeps the old file.)
-sh cp "$OFX_ROOT/fakes/ofx-list" "$OFX_ROOT/fakes/ofx-list.real" && printf '#!/bin/sh\n[ "$1" = --do ] && exec sleep 4\nexec "%s/fakes/ofx-list.real" "$@"\n' "$OFX_ROOT" > "$OFX_ROOT/fakes/slow" && chmod +x "$OFX_ROOT/fakes/slow" && mv "$OFX_ROOT/fakes/slow" "$OFX_ROOT/fakes/ofx-list"
+# (Written aside and renamed over: the lister running it keeps the old file; ofx-list.real is the
+# real one, copied above.)
+sh printf '#!/bin/sh\n[ "$1" = --do ] && exec sleep 4\nexec "%s/fakes/ofx-list.real" "$@"\n' "$OFX_ROOT" > "$OFX_ROOT/fakes/slow" && chmod +x "$OFX_ROOT/fakes/slow" && mv "$OFX_ROOT/fakes/slow" "$OFX_ROOT/fakes/ofx-list"
 key ctrl-shift-n
-expect fardos=18 statusbad=1 n=4
+expect fardos=23 statusbad=1 n=7
 expect answering: it may still happen there
 sh ! test -e "$OFX_DIR/New folder (2)"
-# A batch stops at the first that doesn't answer (each would wait as long again): all four marked,
+# A batch stops at the first that doesn't answer (each would wait as long again): all seven marked,
 # trashed, one try; linked, one try.
 key home
 key ctrl-a
-expect marked=4
+expect marked=7
 key delete
-expect fardos=19
+expect fardos=24
 expect answering: it may still happen there
 key ctrl-a
-expect marked=4
+expect marked=7
 key ctrl-m
-expect fardos=20
+expect fardos=25
 key esc
 # The window answers after it.
 key home
 expect idx=0
+# A paste whose first item went since the copy: the others keep their own free names (each by its
+# place among those asked of ofx-list), the last one too.
+sh cp "$OFX_ROOT/fakes/ofx-list.real" "$OFX_ROOT/fakes/real" && mv "$OFX_ROOT/fakes/real" "$OFX_ROOT/fakes/ofx-list"
+sh mkdir "$OFX_DIR/aa" && : > "$OFX_DIR/zz"
+key ctrl-r
+wait-for 3000 farloading=0 n=9
+key ctrl-a
+expect marked=9
+key ctrl-c
+sh rmdir "$OFX_DIR/aa"
+key ctrl-v
+wait-for 5000 job=- farloading=0 n=16
+sh test -f "$OFX_DIR/zz (copy)" && ! test -e "$OFX_DIR/aa (copy)"
 quit

@@ -218,21 +218,50 @@ static bool far_start(const char *exe, const char *dir, bool hidden, Err *err)
 
 // ---- an action on a far drive (F16 step 3b: ofx-list --do, fs/fardo.c) --------------------------
 
-enum { FAR_DO_MS = 1500, FAR_DO_ARGS = 800 };   // (Michael, 2026-11-09: a bounded wait; an undo's 256 items fit)
+enum { FAR_DO_MS = 1500, FAR_DO_ARGS = 2 * CLIP_PATHS_MAX + 8 };   // (Michael, 2026-11-09: a bounded wait; a paste's batch fits)
 
 static u8 far_do_mem[MiB(1)];   // the last action's answer (its fields point into it)
 
+// Whether the far drive path is on (its share, under gvfs) has a child still held, a lister or an
+// action that didn't answer (step 3 review): it isn't answering, and asking it again would only wait
+// as long again. Over when that child is gone, which is when the share answers.
+static bool far_stuck(const char *path)
+{
+    char drive[PATH_MAX], other[PATH_MAX], real[PATH_MAX];
+    bool gvfs, reaches;
+    if (!far_path(path, real, sizeof real, &reaches) || !reaches) return false;   // (through local links too)
+    Str mi = far_mounts();
+    if (!far_drive(mi, real, drive, sizeof drive, &gvfs)) return false;
+    pthread_mutex_lock(&far.mu);
+    bool stuck = false;
+    for (int i = 0; i < far.nkilled && !stuck; i++) stuck = far_drive(mi, far.killed[i].dir, other, sizeof other, &gvfs) && strcmp(other, drive) == 0;
+    pthread_mutex_unlock(&far.mu);
+    return stuck;
+}
+
+// Whether path is on a gvfs share, which has no trash (step 3 review).
+static bool far_no_trash(const char *path)
+{
+    char drive[PATH_MAX], real[PATH_MAX];
+    bool gvfs, reaches;
+    return far_path(path, real, sizeof real, &reaches) && reaches && far_drive(far_mounts(), real, drive, sizeof drive, &gvfs) && gvfs;
+}
+
 // One action on the far drive under dir (said by its name), args from the action's name on (NULL
-// ended): run by ofx-list --do, its answer in *r. ofx waits for it FAR_DO_MS at most; then it is
-// killed and held as a lister is (far_hold), and the share is said not to answer: the action may
-// still happen there. False, with the reason, when there is no answer; true with r->ok false when it
-// was refused (r->f[0] says why).
-static bool far_do(const char *exe, const char *dir, const char *const *args, FarReply *r, Err *err)
+// ended): run by ofx-list --do, its answer in *r. ofx waits for it until `until` (now_ms's; 0:
+// FAR_DO_MS from now, a batch passes its own: step 3 review, one deadline for all of it); then it
+// is killed and held as a lister is (far_hold), and the share is said not to answer: the action
+// may still happen there. Not tried at all while a child of the same share is held (far_stuck).
+// False, with the reason, when there is no answer; true with r->ok false when it was refused
+// (r->f[0] says why).
+static bool far_do(const char *exe, const char *dir, const char *const *args, i64 until, FarReply *r, Err *err)
 {
     Str name = path_base(str_from_c(dir));
+    if (far_stuck(dir)) return err_set(err, "%.*s isn't answering: not tried", STR_ARG(name)), false;
     char prog[PATH_MAX];
     if (!far_prog(exe, name, prog, sizeof prog, err)) return false;
-    char *argv[FAR_DO_ARGS + 3] = { prog, "--do" };
+    static char *argv[FAR_DO_ARGS + 3];
+    argv[0] = prog, argv[1] = "--do";
     int n = 2;
     for (const char *const *a = args; *a; a++) {
         if (n == FAR_DO_ARGS + 2) return err_set(err, "far_do: too many arguments"), false;
@@ -252,7 +281,7 @@ static bool far_do(const char *exe, const char *dir, const char *const *args, Fa
         return false;
     }
     isize len = 0;
-    i64 until = now_ms() + FAR_DO_MS;
+    if (!until) until = now_ms() + FAR_DO_MS;
     bool ended = false;
     while (!ended) {
         i64 left = until - now_ms();

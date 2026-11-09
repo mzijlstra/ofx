@@ -50,6 +50,13 @@ sh "$OFX_ROOT/unpause"
 # for it, says the share isn't answering, and holds the killed child while it is in the kernel.
 key enter
 wait-for 8000 faron=1 farloading=0 n=2 fardos=0
+# Delete on a gvfs share: it has no trash (gvfs's own root would hold it, and refuses it), said at
+# once, nothing asked of the share (step 3 review: it failed for every file, naming that root).
+key end
+expect sel=hello.txt
+key delete
+expect fardos=0 statusbad=1 n=2
+expect network share has no trash: Shift+Delete deletes for good
 key home
 expect sel=sub
 sh "$OFX_ROOT/pause"
@@ -66,6 +73,11 @@ expect fardos=1 statusbad=1 farheld=1
 expect answering: it may still happen there
 key down
 expect sel=hello.txt
+# Asked again while that child is held: not tried at all, at once (step 3 review: each would wait
+# 1.5 s again).
+key ctrl-shift-n
+expect fardos=1 statusbad=1
+expect answering: not tried
 # (When gvfsd answers the request it took before the pause is its own affair: over 60 s for this
 # mkdir after the unpause, measured. The run's end takes the share and the held child with it.)
 sh "$OFX_ROOT/unpause"

@@ -410,6 +410,17 @@ static void test_far_real(void)
         errno = 0;
         CHECK(!far_real(mounts, at(bad[i].path), out, sizeof out, &far) && errno == bad[i].e);
     }
+    // A chain of 41 links: one past the kernel's 40, refused as realpath refuses it.
+    mkdirs(at("fr/chain"));
+    for (int i = 0; i < 41; i++) {
+        char from[PATH_MAX], to[32];
+        snprintf(from, sizeof from, "%s/l%d", at("fr/chain"), i);
+        snprintf(to, sizeof to, i == 40 ? "." : "l%d", i + 1);
+        CHECK(symlink(to, from) == 0);
+    }
+    errno = 0;
+    CHECK(!far_real(mounts, at("fr/chain/l0"), out, sizeof out, &far) && errno == ELOOP);
+    CHECK(far_real(mounts, at("fr/chain/l1"), out, sizeof out, &far) && !far);   // (40: still followed)
     // No mount list: realpath's answer (share is a plain folder here).
     CHECK(far_real(STR_EMPTY, at("fr/home/mylinks/nas/d"), out, sizeof out, &far) && !far);
     char want[PATH_MAX + 16];
@@ -532,8 +543,13 @@ static void test_far_do(void)
     CHECK(FD("mkfile", d, "New file") && fd_r.ok && str_eq(fd_r.f[0], S("New file")));
     CHECK(FD("rename", d, "New file", "a\nb.txt") && fd_r.ok && fd_r.n == 0);   // (a newline in a name: by length)
     CHECK(FD("rename", d, "gone", "x") && !fd_r.ok && fd_r.n == 1 && fd_r.f[0].len > 0);
-    CHECK(FD("free", d, "a\nb.txt", "0", "1", "1") && fd_r.ok && str_eq(fd_r.f[0], S("a\nb (copy).txt")));
-    CHECK(FD("free", d, "z.txt", "0", "0", "0") && fd_r.ok && str_eq(fd_r.f[0], S("z.txt")));
+    CHECK(FD("frees", d, "0", "a\nb.txt", d, "1", "New folder") && fd_r.ok && fd_r.n == 2 && str_eq(fd_r.f[0], S("a\nb (copy).txt")) && str_eq(fd_r.f[1], S("New folder (copy)")));
+    CHECK(!FD("frees", d, "0") && fd_parsed && !fd_r.ok);   // (a triple short)
+    CHECK(!FD("frees", d, "0", "x", d, "1") && fd_parsed && !fd_r.ok);   // (one whole, one short)
+    char ab[PATH_MAX], gonep[PATH_MAX];
+    snprintf(ab, sizeof ab, "%s/a\nb.txt", d), snprintf(gonep, sizeof gonep, "%s/none", d);
+    CHECK(FD("kinds", ab, d, gonep) && fd_r.ok && fd_r.n == 3 && str_eq(fd_r.f[0], S("o")) && str_eq(fd_r.f[1], S("d")) && str_eq(fd_r.f[2], S("-")));
+    CHECK(!FD("kinds") && fd_parsed && !fd_r.ok);
     char target[PATH_MAX];
     snprintf(target, sizeof target, "%s/a\nb.txt", d);
     CHECK(FD("symlink", d, target, "Link to it") && fd_r.ok && str_eq(fd_r.f[0], S("Link to it")));
@@ -582,7 +598,12 @@ static void test_far_do(void)
     CHECK(!far_reply_parse(S("ok 9\n"), &fd_r) && !far_reply_parse(S("maybe 0\n"), &fd_r) && !far_reply_parse(S("ok x\n"), &fd_r));
     CHECK(far_reply_parse(S("ok 2\n0\n2\nab"), &fd_r) && fd_r.n == 2 && fd_r.f[0].len == 0 && str_eq(fd_r.f[1], S("ab")));
     CHECK(!far_reply_parse(S("ok /\n"), &fd_r) && !far_reply_parse(S("ok 1\n\n"), &fd_r));   // (digits only, and at least one)
-    CHECK(!far_reply_parse(S("ok 9\n0\n0\n0\n0\n0\n0\n0\n0\n0\n"), &fd_r));   // (more fields than it holds)
+    {   // (more fields than it holds: refused, not written past its end)
+        static char many[16 + 2 * (FAR_DO_FIELDS + 1)];
+        int at = snprintf(many, sizeof many, "ok %d\n", FAR_DO_FIELDS + 1);
+        for (int i = 0; i <= FAR_DO_FIELDS; i++) many[at++] = '0', many[at++] = '\n';
+        CHECK(!far_reply_parse((Str){ many, at }, &fd_r));
+    }
     char *two = malloc(2);   // (a header too short, the last bytes there are: not read past)
     CHECK(two != NULL);
     if (two) {
@@ -590,4 +611,23 @@ static void test_far_do(void)
         CHECK(!far_reply_parse((Str){ two, 2 }, &fd_r));
         free(two);
     }
+}
+
+// far_drive (step 3 review): the mount a path is on; under gvfs's one FUSE mount, the share too, so
+// one share that doesn't answer isn't taken for another.
+static void test_far_drive(void)
+{
+    Str mi = S("1 0 0:1 / / rw - ext4 /dev/x rw\n2 1 0:2 / /run/u/gvfs rw - fuse.gvfsd-fuse g rw\n3 1 0:3 / /mnt/nas rw - nfs4 h:/x rw\n");
+    char d[PATH_MAX];
+    bool gvfs;
+    CHECK(far_drive(mi, "/run/u/gvfs/smb-share:server=a,share=p/sub/x", d, sizeof d, &gvfs) && gvfs && strcmp(d, "/run/u/gvfs/smb-share:server=a,share=p") == 0);
+    CHECK(far_drive(mi, "/run/u/gvfs/smb-share:server=a,share=p", d, sizeof d, &gvfs) && gvfs && strcmp(d, "/run/u/gvfs/smb-share:server=a,share=p") == 0);
+    CHECK(far_drive(mi, "/run/u/gvfs", d, sizeof d, &gvfs) && gvfs && strcmp(d, "/run/u/gvfs") == 0);
+    CHECK(far_drive(mi, "/mnt/nas/a/b", d, sizeof d, &gvfs) && !gvfs && strcmp(d, "/mnt/nas") == 0);
+    CHECK(far_drive(mi, "/home/m", d, sizeof d, &gvfs) && !gvfs && strcmp(d, "/") == 0);
+    CHECK(!far_drive(S("1 0 0:2 / /mnt/nas rw - nfs4 h:/x rw\n"), "/home/m", d, sizeof d, &gvfs));
+    // The longest mount point holding it, wherever its line is.
+    CHECK(far_drive(S("3 1 0:3 / /mnt/nas rw - nfs4 h:/x rw\n1 0 0:1 / / rw - ext4 /dev/x rw\n"), "/mnt/nas/a", d, sizeof d, &gvfs) && strcmp(d, "/mnt/nas") == 0);
+    char small[16];   // (a share's name that doesn't fit: the mount point alone)
+    CHECK(far_drive(S("2 1 0:2 / /g rw - fuse.gvfsd-fuse g rw\n"), "/g/smb-share:server=a,share=p", small, sizeof small, &gvfs) && strcmp(small, "/g") == 0);
 }

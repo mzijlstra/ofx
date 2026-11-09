@@ -222,6 +222,34 @@ static bool far_real(Str mounts, const char *path, char *out, size_t cap, bool *
     return true;
 }
 
+// The drive path is on, by the mount list alone, into out: its mount point, and under gvfs's one
+// FUSE mount for every share, the share's own folder below it (F16 step 3 review: one share that
+// doesn't answer isn't another). *gvfs says it is one (gvfs gives a share no trash). False when no
+// mount holds it.
+static bool far_drive(Str mounts, const char *path, char *out, size_t cap, bool *gvfs)
+{
+    isize at = 0, best = -1;
+    char mp[PATH_MAX], type[64] = "";
+    *gvfs = false;
+    for (Str line; next_line(mounts, &at, &line);) {
+        Str t, src;
+        if (!mountinfo_line(line, mp, sizeof mp, &t, &src)) continue;
+        isize n = (isize)strlen(mp);
+        if (!path_within(path, mp) || n < best) continue;   // (a later mount on the same point wins)
+        best = n;
+        snprintf(out, cap, "%s", mp);
+        snprintf(type, sizeof type, "%.*s", STR_ARG(t));
+    }
+    if (best < 0) return false;
+    *gvfs = strcmp(type, "fuse.gvfsd-fuse") == 0;
+    if (!*gvfs) return true;
+    const char *rest = path + best;   // (the share: the part after the mount point)
+    while (*rest == '/') rest++;
+    size_t k = strcspn(rest, "/"), o = strlen(out);
+    if (k && o + 1 + k < cap) out[o] = '/', memcpy(out + o + 1, rest, k), out[o + 1 + k] = 0;
+    return true;
+}
+
 // What name in the folder dirfd is (a symlink by its target), its stat in st. In a local folder
 // dir with the mount list `mounts` (F16; empty: none): a far drive's mount point is a folder, not
 // even lstat'd (that reaches the drive's root), and a link whose target is, by its text, on a far

@@ -36,30 +36,33 @@ static void undo_start(UndoKind k)
 static FarReply far_r;   // the last far action's answer (its fields in far.c's far_do_mem)
 
 // An action on the far drive under dir, run by ofx-list --do (far_do: ofx waits for it a moment at
-// most), args from the action's name on, NULL ended. False with the reason, its own or "isn't
-// answering"; its answer in far_r.
-static bool far_act(const char *dir, const char *const *args, Err *err)
+// most), args from the action's name on, NULL ended; until: a batch's deadline (far_batch), 0 for
+// one action's own. False with the reason, its own or "isn't answering"; its answer in far_r.
+static bool far_act_by(const char *dir, const char *const *args, i64 until, Err *err)
 {
-    if (!far_do(app.exe, dir, args, &far_r, err)) return false;
+    if (!far_do(app.exe, dir, args, until, &far_r, err)) return false;
     if (!far_r.ok) return err_set(err, "%.*s", STR_ARG(far_r.f[0])), false;
     return true;
 }
 
-// Whether the far drive didn't answer (the action's err): the rest of a batch isn't tried, each
-// would wait as long again.
+static bool far_act(const char *dir, const char *const *args, Err *err)
+{
+    return far_act_by(dir, args, 0, err);
+}
+
+// A batch's deadline on a far drive (step 3 review: the wait is bounded for the batch, not each of
+// its actions), set by its first far action: *until 0 before.
+static i64 far_batch(i64 *until)
+{
+    if (!*until) *until = now_ms() + FAR_DO_MS;
+    return *until;
+}
+
+// Whether the far drive didn't answer in time, the batch's (the action's err): the rest of a batch
+// isn't tried, each would be killed at once.
 static bool far_silent(const Err *err)
 {
     return strstr(err->msg, " isn't answering: ") != NULL;
-}
-
-// path's lstat (a far one's from ofx-list, F16 step 3b). False, with the reason, when it can't be.
-static bool lstat_far(const char *path, struct stat *st, Err *err)
-{
-    if (!far_dir(path)) return lstat(path, st) == 0 || (err_set(err, "%s: %s", path, strerror(errno)), false);
-    if (!far_act(path, (const char *const[]){ "stat", path, NULL }, err)) return false;
-    if (far_r.f[0].len != (isize)sizeof *st) return err_set(err, "%s: no answer from its reader", path), false;
-    memcpy(st, far_r.f[0].p, sizeof *st);
-    return true;
 }
 
 // "Trashed a.txt", "Trashed 3 items" or "Trashed 2 of 3: why" (verb, ok of n done, one the name
@@ -89,17 +92,28 @@ static void trash_paths(char *const *paths, isize n, bool marks)
     for (isize i = 0; i < n; i++)
         if (jobs_refuse(paths[i])) return;
     Err err, first = { "" };
+    // gvfs gives a share no trash (step 3 review: its trash would be at gvfs's own root, which
+    // refuses it): said at once, as Nautilus does, the files left.
+    for (isize i = 0; i < n; i++)
+        if (far_no_trash(paths[i])) {
+            set_status(true, "A network share has no trash: Shift+Delete deletes for good");
+            return;
+        }
+    i64 until = 0;
     undo_start(UNDO_TRASH);
     for (isize i = 0; i < n; i++) {
         static Trashed t;
         bool one;
         if (!far_dir(paths[i])) one = trash_put(paths[i], &t, &err);
-        else if ((one = far_act(paths[i], (const char *const[]){ "trash", paths[i], NULL }, &err)))   // (F16 step 3b)
+        else if ((one = far_act_by(paths[i], (const char *const[]){ "trash", paths[i], NULL }, far_batch(&until), &err)))   // (F16 step 3b)
             snprintf(t.from, sizeof t.from, "%.*s", STR_ARG(far_r.f[0])), snprintf(t.file, sizeof t.file, "%.*s", STR_ARG(far_r.f[1])),
                 snprintf(t.info, sizeof t.info, "%.*s", STR_ARG(far_r.f[2]));
         if (one) undo_add(&undo, t.from, t.file, t.info), ok++;
         else if (!first.msg[0]) first = err;
-        if (!one && far_silent(&err)) break;
+        if (!one && far_silent(&err)) {
+            first = err;
+            break;
+        }
     }
     if (ok == 0) undo_clear(&undo);
     if (n > 0) say_done("Trashed", ok, n, path_base(str_from_c(paths[0])).p, first.msg);
@@ -263,51 +277,70 @@ static void copy_here(const ClipFiles *c, const char *into)
 {
     JobRec *r = job_new();
     if (!r) return;
-    isize n = 0, here = 0, self = 0, gone = 0;
-    for (isize i = 0; i < c->n && n < CLIP_PATHS_MAX; i++) {
+    // What each is (d a folder, o anything else, - gone; 0 not yet) and the name it gets: a far
+    // one's by ofx-list, all of them in one child, and the free names in one more, under one
+    // deadline (step 3 review: one child per item held the window for the whole batch).
+    static char kind[CLIP_PATHS_MAX], names[CLIP_PATHS_MAX][NAME_MAX + 1];
+    static const char *args[3 * CLIP_PATHS_MAX + 4];
+    static isize wait[CLIP_PATHS_MAX];
+    isize m = c->n < CLIP_PATHS_MAX ? c->n : CLIP_PATHS_MAX, k = 0, nw = 0;
+    i64 until = 0;
+    Err err;
+    const char *far_at = NULL;
+    args[k++] = "kinds";
+    for (isize i = 0; i < m; i++) {
+        struct stat st;
+        if (far_dir(c->path[i])) args[k++] = c->path[i], kind[i] = 0, far_at = far_at ? far_at : c->path[i];
+        else kind[i] = lstat(c->path[i], &st) != 0 ? '-' : S_ISDIR(st.st_mode) ? 'd' : 'o';
+    }
+    args[k] = NULL;
+    if (far_at && !far_act_by(far_at, args, far_batch(&until), &err)) {   // (r unused: still free)
+        set_status(true, "%s", err.msg);
+        return;
+    }
+    for (isize i = 0, f = 0; far_at && i < m; i++)
+        if (!kind[i]) kind[i] = f < far_r.n && far_r.f[f].len == 1 ? far_r.f[f].p[0] : '-', f++;
+    isize here = 0, self = 0, gone = 0;
+    k = 0, far_at = NULL;
+    args[k++] = "frees";
+    for (isize i = 0; i < m; i++) {
         const char *src = c->path[i];
         Str base = path_base(str_from_c(src));
-        char sdir[PATH_MAX], name[NAME_MAX + 1], dst[PATH_MAX];
+        char sdir[PATH_MAX];
         path_parent(sdir, sizeof sdir, src);
         const char *dest = into ? into : sdir;
-        struct stat st;
-        Err err;
-        if (!lstat_far(src, &st, &err)) {
-            if (far_silent(&err)) {   // (r unused: still free)
-                set_status(true, "%s", err.msg);
-                return;
-            }
+        names[i][0] = 0;
+        if (kind[i] == '-') {
             gone++;
             continue;
         }
-        if (S_ISDIR(st.st_mode) && into_itself_far(src, dest)) {
+        if (kind[i] == 'd' && into_itself_far(src, dest)) {
             self++;
             continue;
         }
-        if (same_dir(sdir, dest)) {
-            if (c->cut) {
-                here++;
-                continue;
-            }
-            if (!far_dir(dest)) {
-                if (!name_free(dest, base, S_ISDIR(st.st_mode), true, true, name, sizeof name)) continue;
-            } else {   // (a far one: its free name from ofx-list, F16 step 3b)
-                char bn[NAME_MAX + 1];
-                snprintf(bn, sizeof bn, "%.*s", STR_ARG(base));
-                if (!far_act(dest, (const char *const[]){ "free", dest, bn, S_ISDIR(st.st_mode) ? "1" : "0", "1", "1", NULL }, &err)) {
-                    if (far_silent(&err)) {   // (r unused: still free)
-                        set_status(true, "%s", err.msg);
-                        return;
-                    }
-                    continue;
-                }
-                snprintf(name, sizeof name, "%.*s", STR_ARG(far_r.f[0]));
-            }
-        } else {
-            snprintf(name, sizeof name, "%.*s", STR_ARG(base));
+        if (!same_dir(sdir, dest)) {
+            snprintf(names[i], sizeof names[i], "%.*s", STR_ARG(base));
+        } else if (c->cut) {
+            here++;
+        } else if (!far_dir(dest)) {
+            name_free(dest, base, kind[i] == 'd', true, true, names[i], sizeof names[i]);
+        } else {   // (a far one: asked of ofx-list with the rest, below)
+            args[k++] = arena_cstr(&r->arena, str_from_c(dest)), args[k++] = kind[i] == 'd' ? "1" : "0", args[k++] = arena_cstr(&r->arena, base);
+            wait[nw++] = i, far_at = far_at ? far_at : src;
         }
-        if (!path_put(dst, sizeof dst, dest, str_from_c(name))) continue;
-        r->item[n++] = (JobItem){ .src = arena_cstr(&r->arena, str_from_c(src)), .dst = arena_cstr(&r->arena, str_from_c(dst)) };
+    }
+    args[k] = NULL;
+    if (far_at && !far_act_by(far_at, args, far_batch(&until), &err)) {
+        set_status(true, "%s", err.msg);
+        return;
+    }
+    for (isize w = 0; far_at && w < nw && w < far_r.n; w++) snprintf(names[wait[w]], sizeof names[0], "%.*s", STR_ARG(far_r.f[w]));
+    isize n = 0;
+    for (isize i = 0; i < m; i++) {
+        char sdir[PATH_MAX], dst[PATH_MAX];
+        path_parent(sdir, sizeof sdir, c->path[i]);
+        if (!names[i][0] || !path_put(dst, sizeof dst, into ? into : sdir, str_from_c(names[i]))) continue;
+        r->item[n++] = (JobItem){ .src = arena_cstr(&r->arena, str_from_c(c->path[i])), .dst = arena_cstr(&r->arena, str_from_c(dst)) };
     }
     if (n == 0) {
         if (self) set_status(true, "Can't paste a folder into itself");
@@ -373,6 +406,7 @@ static void make_link(void)
     arena_reset(&pastea);
     isize n = targets(&pastea, paths, CLIP_PATHS_MAX), done = 0;
     Err err = { 0 };
+    i64 until = 0;   // (on a far drive: one deadline for all of them, step 3 review)
     for (isize i = 0; i < n; i++) {
         char name[NAME_MAX + 8], one[NAME_MAX + 1];
         Str base = path_base(str_from_c(paths[i]));
@@ -382,7 +416,7 @@ static void make_link(void)
         }
         char in[PATH_MAX];
         path_parent(in, sizeof in, paths[i]);   // (beside it: a search result's own folder, F9)
-        bool ok = far_dir(in) ? far_act(in, (const char *const[]){ "symlink", in, paths[i], name, NULL }, &err) && snprintf(one, sizeof one, "%.*s", STR_ARG(far_r.f[0])) > 0
+        bool ok = far_dir(in) ? far_act_by(in, (const char *const[]){ "symlink", in, paths[i], name, NULL }, far_batch(&until), &err) && snprintf(one, sizeof one, "%.*s", STR_ARG(far_r.f[0])) > 0
                               : op_symlink(in, paths[i], str_from_c(name), one, sizeof one, &err);   // (F16 step 3b: made by ofx-list there)
         if (!ok && far_silent(&err)) break;
         if (!ok || !path_put(p, sizeof p, in, str_from_c(one))) continue;

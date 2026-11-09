@@ -12,7 +12,10 @@
 //   symlink <dir> <target> <name>            op_symlink: the name made
 //   chmod <path> <octal>                     op_chmod: the mode it had (octal)
 //   trash <path>                             trash_put: where it went (from, file, info)
-//   free <dir> <name> <dir?> <copy?> <fresh?> name_free (0 or 1 each): the free name
+//   kinds <path>...                          one field each: d (a folder), o (anything else there), -
+//                                            (not there): a paste's look at what it takes, at once
+//   frees (<dir> <dir?> <name>)...           a copy's free name each, for a paste into its own
+//                                            folder ("" when none is): the batch in one child
 //   stat <path>                              lstat, and stat when a link: both as bytes, the link's
 //                                            text, the birth time (-1: none); "" for a broken link's
 //                                            stat
@@ -27,7 +30,7 @@
 #include <string.h>
 #include <sys/stat.h>
 
-enum { FAR_DO_FIELDS = 8 };
+enum { FAR_DO_FIELDS = 4100 };   // (a batch of a paste's CLIP_PATHS_MAX, and a few)
 
 typedef struct {
     bool ok;
@@ -130,12 +133,23 @@ static int far_do_serve(FILE *out, int argc, char **argv)
         if (!trash_put(argv[1], &t, &err)) return far_reply_err(out, err.msg), 0;
         Str f[3] = { str_from_c(t.from), str_from_c(t.file), str_from_c(t.info) };
         far_reply(out, true, 3, f);
-    } else if (strcmp(op, "free") == 0) {
-        ARGS(5);
-        if (!name_free(argv[1], str_from_c(argv[2]), argv[3][0] == '1', argv[4][0] == '1', argv[5][0] == '1', made, sizeof made))
-            return far_reply_err(out, "no free name"), 0;
-        Str f = str_from_c(made);
-        far_reply(out, true, 1, &f);
+    } else if (strcmp(op, "kinds") == 0) {
+        if (argc < 2 || argc - 1 > FAR_DO_FIELDS) return far_reply_err(out, "ofx-list --do: wrong arguments"), 2;
+        static Str f[FAR_DO_FIELDS];
+        for (int i = 1; i < argc; i++) {
+            struct stat st;
+            f[i - 1] = lstat(argv[i], &st) != 0 ? S("-") : S_ISDIR(st.st_mode) ? S("d") : S("o");
+        }
+        far_reply(out, true, argc - 1, f);
+    } else if (strcmp(op, "frees") == 0) {
+        if (argc < 4 || (argc - 1) % 3 != 0 || (argc - 1) / 3 > FAR_DO_FIELDS) return far_reply_err(out, "ofx-list --do: wrong arguments"), 2;
+        static Str f[FAR_DO_FIELDS];
+        static char names[FAR_DO_FIELDS][NAME_MAX + 1];
+        for (int i = 1, k = 0; i + 2 < argc; i += 3, k++) {
+            bool ok = name_free(argv[i], str_from_c(argv[i + 2]), argv[i + 1][0] == '1', true, true, names[k], sizeof names[k]);
+            f[k] = ok ? str_from_c(names[k]) : STR_EMPTY;
+        }
+        far_reply(out, true, (argc - 1) / 3, f);
     } else if (strcmp(op, "stat") == 0) {
         ARGS(1);
         struct stat lst, st;

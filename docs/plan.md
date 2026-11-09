@@ -949,7 +949,17 @@ blocks each of these for up to gvfs's 90 s. On a thread it also holds ofx's exit
      `ofx-list --do …` (fs/fardo.c), and ofx waits for it at most 1.5 s (gui/far.c `far_do`). On a
      dead share the window stalls that long, then says the share isn't answering (the action may
      still land; a reload shows). The child is killed and held as a lister is.
-     - **A batch** (trash, links) stops at the first that doesn't answer.
+     - **A batch** (trash, links) has one deadline, 1.5 s, for all of it, and stops at the first
+       that doesn't answer by then; a paste asks what its items are and their free names in two
+       children in all (`kinds`, `frees`), not two for each (step 3 review: measured 12 ms an
+       action on loopback, so 50 trashes held the window 0.6 s, and a slow share any longer).
+     - **A share with a child still held** (one that didn't answer) isn't asked again: refused at
+       once, "isn't answering: not tried", until that child is gone (the share answered). By the
+       share (`far_drive`: under gvfs's one FUSE mount, its own folder), not the folder.
+     - **No trash on a gvfs share** (step 3 review, found on the real one): gvfs's own root would
+       hold `.Trash-uid` and refuses it, so every Delete failed naming that root. Said at once, as
+       Nautilus does: "A network share has no trash: Shift+Delete deletes for good". A kernel or
+       other FUSE mount keeps its `.Trash-uid`.
      - **New Folder** there doesn't open its name to edit (its row comes with the listing): "F2
        renames it".
      - **A reload's cursor:** on the name asked (a rename's new one), unless the cursor was moved
