@@ -17,7 +17,8 @@
 //   keys <word>...          keys and characters in one frame's input, as fast typing during a slow
 //                           frame gives them: each word a key name (as for `key`) or char:<c>
 //   type <text>             the rest of the line, after one space, as typed characters
-//   wheel <notches> [ctrl]  over the list; positive away from the user (up); with ctrl at the
+//   wheel <notches> [ctrl|side] over the list; positive away from the user (up); with side over
+//                           the sidebar; with ctrl at the
 //                           window's right edge, as the mouse's wheel goes (wheel_at): the zoom
 //   press <row> [ctrl][shift] a left press on list row <row> (0 = the first on screen; in the icon
 //                           view the cell, across then down), through the
@@ -727,6 +728,7 @@ static void script_state(char *out, size_t cap)
     sw(out, cap, &len, "canwrite=%d ", app.ui.can_write);
     sw(out, cap, &len, "windows=%d ", windows);
     sw(out, cap, &len, "siderows=%d ", app.ui.side.rows);
+    sw(out, cap, &len, "sidetop=%td ", app.ui.side.top);
     sw(out, cap, &len, "footerin=%d ", footerin);
     sw(out, cap, &len, "props=%d ", app.ui.panel == UI_PANEL_PROPS);
     sw(out, cap, &len, "propat=%d ", app.ui.prop_at);
@@ -1137,6 +1139,7 @@ static bool script_input(UiInput *in)
             script.typing = str_cut(text, i, text.len);   // the rest on the next frames
         } else if (str_eq(cmd, S("wheel"))) {
             if (strstr(a, "ctrl")) wheel_at(in, (float)GetScreenWidth() - 2, atoi(a), true);
+            else if (strstr(a, "side")) wheel_at(in, 10, atoi(a), false);   // (over the sidebar's left edge)
             else wheel_at(in, (float)side_w() + 40, atoi(a), false);   // over the files, as the mouse's (a panel's list takes it, F7.5)
         } else if (str_eq(cmd, S("press"))) {
             int r = atoi(a);

@@ -1,0 +1,18 @@
+# The wheel over the sidebar (group D review LOW): it scrolls the sidebar, but not under a
+# question. run.sh's bookmarks: 20 folders, so the sidebar is taller than its rows.
+settle
+expect sidetop=0 confirming=0
+wheel -3 side
+expect sidetop=3
+wheel 3 side
+expect sidetop=0
+# A question up (delete for good): the wheel over the sidebar moves nothing under it.
+key shift-delete
+expect confirming=1
+wheel -3 side
+expect sidetop=0 confirming=1
+key esc
+expect confirming=0
+wheel -3 side
+expect sidetop=3
+quit

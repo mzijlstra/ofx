@@ -289,6 +289,7 @@ MUTANTS = [
     # ---- F7.5: the Bookmarks menu
     ('gui/folder.c', '    arena_reset(&bma);\n    bm_parse(&bma, read_file(&bma, bm), &bmarks);', '    arena_reset(&bma);', 'f75'),
     ('gui/frame.c', '        if (strcmp(bmarks.b[i].path, app.cwd) == 0) u->bm_here = u->bm_n;', '', 'f75'),
+    ('gui/input.c', '    if (on != UI_ON_NONE) return false;', '    if (0) return false;', 'f75'),
     ('gui/frame.c', '        if (!bmarks.b[i].path[0]) continue;\n        if (strcmp(bmarks.b[i].path, app.cwd)', '        if (strcmp(bmarks.b[i].path, app.cwd)', 'f75'),
     ('gui/folder.c', '        if (bmarks.b[i].path[0] && k-- == 0) return &bmarks.b[i];', '        if (k-- == 0) return &bmarks.b[i];', 'f75'),
     ('gui/folder.c', '    return b->label.len ? b->label : strcmp(b->path, "/") == 0', '    return false ? b->label : strcmp(b->path, "/") == 0', 'f75'),
