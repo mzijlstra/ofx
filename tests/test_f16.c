@@ -782,3 +782,103 @@ static void test_login_keys(void)
     ui_menu_pick(&g, UM_CONNECT);
     CHECK(g.focus == UI_FOCUS_EDIT && g.edit_path && g.edit.len == 6 && memcmp(g.edit.b, "smb://", 6) == 0 && g.edit.caret == 6 && g.edit.anchor == 6);
 }
+
+// gvfs's share folders' names (step 5): the share's name as gvfs gives it.
+static void test_gvfs_label(void)
+{
+    char l[64], v[16];
+    gvfs_share_label(S("smb-share:port=4445,server=127.0.0.1,share=pub"), l, sizeof l);
+    CHECK(strcmp(l, "pub on 127.0.0.1") == 0);
+    gvfs_share_label(S("smb-share:domain=W,server=nas,share=My%20Docs,user=m"), l, sizeof l);
+    CHECK(strcmp(l, "My Docs on nas") == 0);
+    gvfs_share_label(S("afp-volume:host=mac,volume=Time"), l, sizeof l);
+    CHECK(strcmp(l, "Time on mac") == 0);
+    gvfs_share_label(S("sftp:host=box,user=me"), l, sizeof l);
+    CHECK(strcmp(l, "me@box") == 0);
+    gvfs_share_label(S("dav:host=web,ssl=true"), l, sizeof l);
+    CHECK(strcmp(l, "web") == 0);
+    gvfs_share_label(S("mtp:host=Phone"), l, sizeof l);
+    CHECK(strcmp(l, "Phone") == 0);
+    gvfs_share_label(S("something"), l, sizeof l);   // (not one of gvfs's: its name)
+    CHECK(strcmp(l, "something") == 0);
+    gvfs_share_label(S("smb-share:server=,share=x"), l, sizeof l);   // (an empty value is none)
+    CHECK(strcmp(l, "smb-share:server=,share=x") == 0);
+    CHECK(gvfs_key(S("smb-share:servers=a,server=b"), "server", v, sizeof v) && strcmp(v, "b") == 0);   // (a key, not its prefix)
+    CHECK(gvfs_key(S("smb-share:a=1,server=b%2"), "server", v, sizeof v) && strcmp(v, "b%2") == 0);   // (half an escape: kept)
+    CHECK(gvfs_key(S("smb-share:server=%4e%41s"), "server", v, sizeof v) && strcmp(v, "NAs") == 0);
+    CHECK(!gvfs_key(S("noколон"), "server", v, sizeof v) && !gvfs_key(S("x:server=a"), "share", v, sizeof v));
+    CHECK(!gvfs_key(S("server=a"), "server", v, sizeof v));   // (no "type:": not one of gvfs's)
+    CHECK(gvfs_key(str_cut(S("x:server=b%41"), 0, 12), "server", v, sizeof v) && strcmp(v, "b%4") == 0);   // (an escape cut off at the name's end: not read past it)
+    char tiny[3];
+    CHECK(gvfs_key(S("x:server=abcdef"), "server", tiny, sizeof tiny) && strcmp(tiny, "ab") == 0);
+}
+
+// The Network section (step 5): the shares gvfs has mounted, then the smb:// bookmarks; no heading
+// when there are none; a share's folder isn't a drive, so its space isn't asked.
+static void test_places_net(void)
+{
+    put(at("places/netbm"), "file:///home/m/x\nsmb://nas/pub/sub Music\nsmb://nas/home\nsftp://box/x\nsmb://nas Server\nsmb://u:pw@nas/p\n");
+    Places pl = { 0 };
+    places_load_net(&ta, &pl, at("places/netbm"), S("/run/u/gvfs/smb-share:server=nas,share=pub\nrel\n\n/run/u/gvfs/sftp:host=box,user=me\n/run/u/gvfs/smb-share:server=nas,share=pub\n"));
+    const char *want[][3] = {
+        { "", "Network", "h" }, { "/run/u/gvfs/smb-share:server=nas,share=pub", "pub on nas", "s" }, { "/run/u/gvfs/sftp:host=box,user=me", "me@box", "s" },
+        { "smb://nas/pub/sub", "Music", "b" }, { "smb://nas/home", "home on nas", "b" },
+    };
+    CHECK(pl.n == COUNT(want));
+    for (int i = 0; i < pl.n && i < COUNT(want); i++) {
+        PlaceKind k = want[i][2][0] == 'h' ? PL_HEAD : want[i][2][0] == 's' ? PL_SHARE : PL_NETBM;
+        CHECK(pl.p[i].kind == k && strcmp(pl.p[i].path, want[i][0]) == 0 && strcmp(pl.p[i].label, want[i][1]) == 0);
+        CHECK(!place_is_drive(pl.p[i].kind));
+    }
+    CHECK(place_unmountable(&pl.p[1]) && !place_unmountable(&pl.p[3]) && !place_ejectable(&pl.p[1]));
+    CHECK(places_current(&pl, "/run/u/gvfs/smb-share:server=nas,share=pub/a/b") == 1 && places_current(&pl, "smb://nas/home") == -1);
+    Str names[3];
+    CHECK(place_icon_names(&pl.p[1], &(UserDirs){ 0 }, false, names) == 2 && str_eq(names[0], S("folder-remote")));
+    CHECK(place_icon_names(&pl.p[3], &(UserDirs){ 0 }, false, names) == 2 && str_eq(names[0], S("folder-remote")));
+    Places none = { 0 };
+    places_load_net(&ta, &none, at("places/none"), S(""));
+    CHECK(none.n == 0);
+    // A share is a place in its own section: a Places bookmark to the same folder doesn't hide it.
+    Places both = { 0 };
+    places_add(&both, PL_BOOKMARK, "/run/u/gvfs/smb-share:server=nas,share=pub", S("b"));
+    places_load_net(&ta, &both, at("places/none"), S("/run/u/gvfs/smb-share:server=nas,share=pub\n"));
+    CHECK(both.n == 3 && both.p[2].kind == PL_SHARE);
+}
+
+// A share's folder's smb:// address (step 5: Add Bookmark there).
+static void test_gvfs_uri(void)
+{
+    char u[128];
+    CHECK(gvfs_share_uri(S("smb-share:port=4445,server=127.0.0.1,share=pub"), "", u, sizeof u) && strcmp(u, "smb://127.0.0.1:4445/pub") == 0);
+    CHECK(gvfs_share_uri(S("smb-share:server=nas,share=My%20Docs"), "/a b/c", u, sizeof u) && strcmp(u, "smb://nas/My%20Docs/a%20b/c") == 0);
+    CHECK(gvfs_share_uri(S("smb-share:domain=W,server=nas,share=h,user=m"), "", u, sizeof u) && strcmp(u, "smb://W;m@nas/h") == 0);
+    CHECK(gvfs_share_uri(S("smb-share:domain=W,server=nas,share=h"), "", u, sizeof u) && strcmp(u, "smb://nas/h") == 0);   // (a domain without a user: none)
+    CHECK(!gvfs_share_uri(S("sftp:host=box,user=me"), "", u, sizeof u) && !gvfs_share_uri(S("dav:server=a,share=b"), "", u, sizeof u));
+    CHECK(!gvfs_share_uri(S("smb-share:server=nas"), "", u, sizeof u) && !gvfs_share_uri(S("smb-share:share=x"), "", u, sizeof u));
+    char tiny[12];
+    CHECK(!gvfs_share_uri(S("smb-share:server=nas,share=pub"), "/long", tiny, sizeof tiny));
+    // and back: the address Connect takes, naming the same share
+    char uri[128], host[32], share[32], why[64];
+    CHECK(gvfs_share_uri(S("smb-share:port=4445,server=nas,share=pub,user=m"), "/s", u, sizeof u) && connect_uri(str_from_c(u), uri, sizeof uri, host, sizeof host, share, sizeof share, why, sizeof why) == CONNECT_OK &&
+          strcmp(host, "nas") == 0 && strcmp(share, "pub") == 0);
+}
+
+// A share's path buttons (step 5): from the share, named as gvfs names it, not from / or home.
+static void test_crumbs_share(void)
+{
+    UiCrumbs c = { 0 };
+    const char *sh = "/run/u/gvfs/smb-share:server=nas,share=pub";
+    ui_crumbs_set_share(&c, "/run/u/gvfs/smb-share:server=nas,share=pub/a/b", "/home/m", sh, "pub on nas");
+    CHECK(c.n == 3 && c.seg[0].share && !c.seg[0].home && str_eq(ui_crumb_label(&c, 0), S("pub on nas")) && str_eq(ui_crumb_path(&c, 0), str_from_c(sh)));
+    CHECK(str_eq(ui_crumb_label(&c, 1), S("a")) && str_eq(ui_crumb_label(&c, 2), S("b")) && c.cur == 2 && !c.seg[1].share);
+    ui_crumbs_set_share(&c, sh, "/home/m", sh, "pub on nas");   // (up: the deeper ones kept, as anywhere)
+    CHECK(c.n == 3 && c.cur == 0);
+    ui_crumbs_set_share(&c, "/home/m/x", "/home/m", NULL, NULL);   // (out of it: from home again)
+    CHECK(c.seg[0].home && !c.seg[0].share && c.n == 2);
+    ui_crumbs_set_share(&c, "/run/u/gvfs/other", "/home/m", sh, "pub on nas");   // (a share not cwd's: none)
+    CHECK(!c.seg[0].share && str_eq(ui_crumb_label(&c, 0), S("/")));
+    ui_crumbs_set_share(&c, "/run/u/gvfs/smb-share:server=nas,share=pubx", "/home/m", sh, "pub on nas");   // (a prefix isn't the share)
+    CHECK(!c.seg[0].share);
+    ui_crumbs_set_share(&c, "/home/m/s", "/home/m/s", "/home/m/s", NULL);   // (no label: none)
+    CHECK(!c.seg[0].share && c.seg[0].home);
+}

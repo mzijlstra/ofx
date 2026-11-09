@@ -70,7 +70,7 @@ static bool far_silent(const Err *err)
 // confirm), said so rather than that it isn't answering.
 static void far_slow_said(Err *why, isize done, const char *path)
 {
-    if (done > 0) err_set(why, "%.*s is slow: the rest weren't tried", STR_ARG(path_base(str_from_c(path))));
+    if (done > 0) err_set(why, "%.*s is slow: the rest weren't tried", STR_ARG(far_who(path)));
 }
 
 // "Trashed a.txt", "Trashed 3 items" or "Trashed 2 of 3: why" (verb, ok of n done, one the name
@@ -730,7 +730,7 @@ static void tab_open(const char *dir, Str sel, bool show)
     *t = (Tab){ .used = true };
     snprintf(t->dir, sizeof t->dir, "%s", dir);
     snprintf(t->sel, sizeof t->sel, "%.*s", STR_ARG(sel));
-    ui_crumbs_set(&t->crumbs, t->dir, getenv("HOME"));
+    crumbs_for(&t->crumbs, t->dir);
     ui_tabs_open(&tabbar, slot, show);
     if (show) tab_load();
     else set_status(false, "Opened %s in a new tab", path_base(str_from_c(t->dir)).p);
@@ -977,6 +977,7 @@ static void act(UiAction a)
     case UA_RESTORE: trash_restore_targets(); break;
     case UA_EJECT:
         if (a.index >= 0 && a.index < app.places.n && place_ejectable(&app.places.p[a.index])) eject_start(&app.places.p[a.index]);
+        else if (a.index >= 0 && a.index < app.places.n && app.places.p[a.index].kind == PL_SHARE) share_unmount_start(&app.places.p[a.index]);   // (F16 step 5)
         break;
     case UA_EMPTY_TRASH: trash_empty(); break;
     case UA_CLEAR_PREVIEWS: clear_start(); break;
@@ -1031,6 +1032,8 @@ static void act(UiAction a)
         if (p) go_to(p, STR_EMPTY, 0);
         else if (app.ui.side_mode == SIDE_PLACES && a.index >= 0 && a.index < app.places.n && app.places.p[a.index].kind == PL_UNMOUNTED)
             mount_start(&app.places.p[a.index]);   // a drive not mounted yet: mounted, then opened (2026-10-30)
+        else if (app.ui.side_mode == SIDE_PLACES && a.index >= 0 && a.index < app.places.n && app.places.p[a.index].kind == PL_NETBM)
+            connect_start(str_from_c(app.places.p[a.index].path));   // an smb:// bookmark: connected, then opened (F16 step 5)
         break;
     }
     case UA_TREE_LEFT:

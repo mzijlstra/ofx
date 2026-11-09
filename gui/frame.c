@@ -106,7 +106,7 @@ static void menu_facts(void)
         if (strcmp(bmarks.b[i].path, app.cwd) == 0) u->bm_here = u->bm_n;
         u->bm_n++;
     }
-    u->can_bookmark = u->view == UI_VIEW_FOLDER && !bmarks.full && bm_find(&bmarks, app.cwd) < 0;
+    u->can_bookmark = u->view == UI_VIEW_FOLDER && !bmarks.full && bm_find(&bmarks, app.cwd) < 0 && (!app.cwd_uri[0] || bm_find_uri(&bmarks, app.cwd_uri) < 0);
     // The cursor's entry (F8): a link that leads somewhere (Follow Link); a folder bookmarked already.
     const Entry *e = app.have_list && u->list.n > 0 && u->list.sel < app.list.n ? &app.list.e[u->list.sel] : NULL;
     char p[PATH_MAX];

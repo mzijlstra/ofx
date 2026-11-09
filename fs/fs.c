@@ -11,9 +11,9 @@
 #include "mime.c"
 #include "icons.c"
 #include "theme.c"
+#include "connect.c"   // (F16 step 4: Connect to Server's address and what gio says; before places.c: a share's name)
 #include "places.c"
 #include "spawn.c"
-#include "connect.c"   // (F16 step 4: Connect to Server's address and what gio says)
 #include "editors.c"
 #include "conf.c"     // (after editors.c: an editor line is checked as a recipe)
 #include "ops.c"

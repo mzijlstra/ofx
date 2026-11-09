@@ -19,7 +19,10 @@ enum { PLACES_MAX = 64 };
 
 // PL_UNMOUNTED: a removable drive not mounted yet (2026-10-30), its path and dev the device's
 // (/dev/sdb1); a click mounts it. Not a drive for place_is_drive: it has no folder yet.
-typedef enum { PL_HEAD, PL_HOME, PL_BOOKMARK, PL_TRASH, PL_ROOT, PL_MOUNT, PL_REMOVABLE, PL_UNMOUNTED } PlaceKind;
+// The Network section (F16 step 5): PL_SHARE, a share gvfs has mounted, its path the share's folder
+// under gvfs's FUSE mount; PL_NETBM, an smb:// bookmark, its path the address (a click connects).
+// Neither is a drive: their space isn't asked (statvfs would wait on a share that doesn't answer).
+typedef enum { PL_HEAD, PL_HOME, PL_BOOKMARK, PL_TRASH, PL_ROOT, PL_MOUNT, PL_REMOVABLE, PL_UNMOUNTED, PL_SHARE, PL_NETBM } PlaceKind;
 
 typedef struct {
     char      path[PATH_MAX];   // "" for a heading
@@ -46,11 +49,23 @@ static bool place_ejectable(const Place *p)
     return p->kind == PL_REMOVABLE && strncmp(p->dev, "/dev/", 5) == 0;
 }
 
-// Whether path is a place already in its section (a drive among the drives, else among the rest).
+// Whether a place has an unmount button: a removable drive (udisksctl), or a share (gio mount -u).
+static bool place_unmountable(const Place *p)
+{
+    return place_ejectable(p) || p->kind == PL_SHARE;
+}
+
+static bool place_is_net(PlaceKind k)
+{
+    return k == PL_SHARE || k == PL_NETBM;
+}
+
+// Whether path is a place already in its section (a drive among the drives, a share or network
+// bookmark among those, else among the rest).
 static bool places_has(const Places *pl, PlaceKind kind, const char *path)
 {
     for (int i = 0; i < pl->n; i++)
-        if (place_is_drive(pl->p[i].kind) == place_is_drive(kind) && strcmp(pl->p[i].path, path) == 0) return true;
+        if (place_is_drive(pl->p[i].kind) == place_is_drive(kind) && place_is_net(pl->p[i].kind) == place_is_net(kind) && strcmp(pl->p[i].path, path) == 0) return true;
     return false;
 }
 
@@ -339,6 +354,38 @@ static void places_load(Arena *scratch, Places *pl, const char *bookmarks, const
     arena_restore(scratch, mark);
 }
 
+// The Network section (F16 step 5), after the rest, under its heading when it has a row: the shares
+// gvfs has mounted (shares: their folders, one a line, as the watch thread lists gvfs's FUSE
+// folders), then the smb:// lines of the bookmarks file, with their labels (else the share's name
+// as gvfs gives it). A bookmark of a mounted share stays a bookmark: a click on it connects, which
+// for a share mounted already goes straight there.
+static void places_load_net(Arena *scratch, Places *pl, const char *bookmarks, Str shares)
+{
+    int head = pl->n;
+    places_head(pl, "Network");
+    isize at = 0;
+    for (Str line; next_line(shares, &at, &line);) {
+        if (line.len == 0 || line.len >= PATH_MAX || line.p[0] != '/') continue;
+        char path[PATH_MAX], label[256];
+        snprintf(path, sizeof path, "%.*s", STR_ARG(line));
+        gvfs_share_label(path_base(line), label, sizeof label);
+        places_add(pl, PL_SHARE, path, str_from_c(label));
+    }
+    ArenaMark mark = arena_mark(scratch);
+    Str text = read_file(scratch, bookmarks);
+    at = 0;
+    for (Str line; next_line(text, &at, &line);) {
+        Str uri, label;
+        char path[PATH_MAX], u[PATH_MAX], host[256], share[256], why[256], name[520];
+        gtk_bookmark_line(str_trim(line), &uri, &label, path, sizeof path);   // (a local one isn't an address: Places has it)
+        if (connect_uri(uri, u, sizeof u, host, sizeof host, share, sizeof share, why, sizeof why) != CONNECT_OK) continue;
+        if (label.len == 0) snprintf(name, sizeof name, "%s on %s", share, host), label = str_from_c(name);
+        places_add(pl, PL_NETBM, u, label);
+    }
+    arena_restore(scratch, mark);
+    if (pl->n == head + 1) pl->n = head;   // (nothing in it: no heading)
+}
+
 // $XDG_CONFIG_HOME/gtk-3.0/bookmarks, ~/.config by default; into buf.
 static const char *bookmarks_path(char *buf, size_t cap)
 {
@@ -355,7 +402,7 @@ static int places_current(const Places *pl, const char *path)
     size_t best_n = 0;
     for (int i = 0; i < pl->n; i++) {
         if (pl->p[i].kind == PL_TRASH && strcmp(path, TRASH_URI) == 0) return i;
-        if (pl->p[i].kind == PL_HEAD || pl->p[i].kind == PL_TRASH || pl->p[i].kind == PL_UNMOUNTED) continue;
+        if (pl->p[i].kind == PL_HEAD || pl->p[i].kind == PL_TRASH || pl->p[i].kind == PL_UNMOUNTED || pl->p[i].kind == PL_NETBM) continue;
         const char *p = pl->p[i].path;
         size_t n = strlen(p);
         if (path_within(path, p) && (best < 0 || n > best_n)) best = i, best_n = n;
@@ -372,6 +419,8 @@ static isize place_icon_names(const Place *p, const UserDirs *u, bool trash_full
     case PL_MOUNT: names[n++] = S("drive-harddisk"); break;
     case PL_REMOVABLE:
     case PL_UNMOUNTED: names[n++] = S("drive-removable-media"), names[n++] = S("drive-harddisk"); break;
+    case PL_SHARE:
+    case PL_NETBM: names[n++] = S("folder-remote"); break;
     case PL_TRASH:   // full: when any trash folder holds something (2026-10-30)
         if (trash_full) names[n++] = S("user-trash-full");
         names[n++] = S("user-trash");

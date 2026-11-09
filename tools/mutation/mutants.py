@@ -2811,6 +2811,30 @@ MUTANTS += [
     # (undo_check and undo_do take both as none). Justified: "no free name" needs 10,000 names taken.)
     ('fs/fardo.c', '        far_reply_err(out, "ofx-list --do: no such action");\n        return 2;', '        return 2;'),
     ('ui/helpers.c', '    UiPlace *other = dir < 0 ? h->fwd : h->back;\n    int *no = dir < 0 ? &h->nfwd : &h->nback;\n    if (*no == 0) return false;', '    UiPlace *other = dir < 0 ? h->fwd : h->back;\n    int *no = dir < 0 ? &h->nfwd : &h->nback;'),
+    # F16 step 5: gvfs's share folders' names and addresses, the Network places, a share's crumbs, a network bookmark
+    ('fs/connect.c', "        if (part.len > k.len && memcmp(part.p, k.p, (size_t)k.len) == 0 && part.p[k.len] == '=') {", '        if (part.len > k.len && memcmp(part.p, k.p, (size_t)k.len) == 0) {'),
+    ('fs/connect.c', "                if (v.p[i] == '%' && i + 2 < v.len && (hi = hex_digit(v.p[i + 1])) >= 0 && (lo = hex_digit(v.p[i + 2])) >= 0)", "                if (v.p[i] == '%' && i + 2 <= v.len && (hi = hex_digit(v.p[i + 1])) >= 0 && (lo = hex_digit(v.p[i + 2])) >= 0)"),
+    ('fs/connect.c', '            return o > 0;\n        }\n        at = end + 1;', '            return true;\n        }\n        at = end + 1;'),
+    ('fs/connect.c', '    if (colon < 0 || cap == 0) return false;\n    Str rest', '    if (cap == 0) return false;\n    Str rest'),
+    ('fs/connect.c', '    bool share = gvfs_key(name, "share", what, sizeof what) || gvfs_key(name, "volume", what, sizeof what);', '    bool share = gvfs_key(name, "share", what, sizeof what);'),
+    ('fs/connect.c', '    bool server = gvfs_key(name, "server", host, sizeof host) || gvfs_key(name, "host", host, sizeof host);', '    bool server = gvfs_key(name, "server", host, sizeof host);'),
+    ('fs/connect.c', '    else if (server && gvfs_key(name, "user", user, sizeof user)) snprintf(out, cap, "%s@%s", user, host);', ''),
+    ('fs/connect.c', '    if (!str_starts_with(name, S("smb-share:")) || !gvfs_key(name, "server"', '    if (!gvfs_key(name, "server"'),
+    ('fs/connect.c', 'hd && hu ? domain : "", hd && hu ? ";" : ""', 'hd ? domain : "", hd ? ";" : ""'),
+    ('fs/connect.c', '    if (snprintf(path, sizeof path, "/%s%s", share, rest) >= (int)sizeof path || !percent_encode(', '    if (!percent_encode('),
+    ('fs/connect.c', '    return n > 0 && (size_t)n < cap;\n}', '    return n > 0;\n}'),
+    ('fs/places.c', "        if (line.len == 0 || line.len >= PATH_MAX || line.p[0] != '/') continue;", '        if (line.len == 0 || line.len >= PATH_MAX) continue;'),
+    ('fs/places.c', '        if (label.len == 0) snprintf(name, sizeof name, "%s on %s", share, host), label = str_from_c(name);', ''),
+    ('fs/places.c', '    if (pl->n == head + 1) pl->n = head;   // (nothing in it: no heading)', ''),
+    ('fs/places.c', '&& place_is_net(pl->p[i].kind) == place_is_net(kind) && strcmp', '&& strcmp'),
+    ('fs/places.c', '    return place_ejectable(p) || p->kind == PL_SHARE;', '    return place_ejectable(p);'),
+    ('fs/places.c', ' || pl->p[i].kind == PL_UNMOUNTED || pl->p[i].kind == PL_NETBM) continue;', ' || pl->p[i].kind == PL_UNMOUNTED) continue;'),
+    ('fs/places.c', '    case PL_SHARE:\n    case PL_NETBM: names[n++] = S("folder-remote"); break;', ''),
+    ('ui/helpers.c', '    if (sh.len > 1 && sh.p[0] == \'/\' && ui_under(cw, sh) && label) {', '    if (sh.len > 1 && sh.p[0] == \'/\' && label) {'),
+    ('ui/helpers.c', '    if (sh.len > 1 && sh.p[0] == \'/\' && ui_under(cw, sh) && label) {', '    if (sh.len > 1 && sh.p[0] == \'/\' && ui_under(cw, sh)) {'),
+    ('ui/helpers.c', '    if (c->seg[i].share) return str_from_c(c->share_label);', ''),
+    # (Dropped, not observable: places_load_net's skip of an address connect_uri refuses. Its buffer
+    # then still holds the last good address, which places_has drops as a second row.)
     # F16 step 4: Connect to Server's address and what gio says (fs/connect.c), the question's keys (ui/)
     ('fs/connect.c', '        if (tolower((unsigned char)a.p[i]) != (unsigned char)b[i]) return false;', '        if ((unsigned char)a.p[i] != (unsigned char)b[i]) return false;'),
     ('fs/connect.c', '        if ((unsigned char)text.p[i] < 0x20 || text.p[i] == 0x7F) return', '        if ((unsigned char)text.p[i] < 0x20) return'),

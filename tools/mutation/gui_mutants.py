@@ -38,7 +38,7 @@ MUTANTS = [
     ('gui/input.c', "        if (in_box(CLAY_IDI(\"crumb\", i), x, y)) h.bar = UB_CRUMB, h.crumb = i;", ""),
     # Not run: the cursor's row drawing an edit box while the location line is open
     # (`&& !app.ui.edit_path` in layout_row) shows only on screen; location.png shows the names.
-    ('gui/folder.c', "        ui_crumbs_set(&app.crumbs, app.cwd, getenv(\"HOME\"));", ""),
+    ('gui/folder.c', '        crumbs_for(&app.crumbs, app.cwd);', ''),
     ('gui/actions.c', "    ui_edit_close(&app.ui);\n    if (name[0] == '.'", "    if (name[0] == '.'"),
     # Not run: counts.c drops an old listing's answer twice over (in count_loop and in count_take),
     # so taking out either check alone changes nothing a test can see.
@@ -120,7 +120,7 @@ MUTANTS = [
     ('gui/actions.c', ".src = arena_cstr(&r->arena, str_from_c(doomed_all[at + i].path)), .after_ok = doomed_all[at + i].after_ok };", ".src = arena_cstr(&r->arena, str_from_c(doomed_all[at + i].path)) };"),
     # F6.1
     ('gui/files.c', "            if (drive) ui_size(avail, sizeof avail, hover ? p->size - p->avail : p->avail);", "            if (drive) ui_size(avail, sizeof avail, p->avail);"),
-    ('gui/files.c', "                if (hover && place_ejectable(p)) {", "                if (0) {"),
+    ('gui/files.c', '                if (hover && place_unmountable(p)) {', '                if (0) {'),
     ('gui/input.c', "    if (h.side >= 0 && app.ui.side_mode == SIDE_PLACES && in_box(CLAY_IDI(\"side-eject\", h.side), x, y)) h.eject = h.side;", ""),
     ('gui/main.c', '    if (eject_take()) dirty = true;', ''),
     ('gui/eject.c', "    if (op != DRIVE_MOUNT && jobs_refuse(p->path)) return false;   // a job of ours writes there: it says so", ""),
@@ -349,7 +349,7 @@ MUTANTS = [
     # dest (a mutant would copy a folder into itself without end; f8b checks the refusal).
     ('gui/frame.c', '    u->sel_link = e && (e->kind == K_LINK_FILE || e->kind == K_LINK_DIR);', '    u->sel_link = false;', 'f8'),
     ('gui/frame.c', '    u->sel_bm = e && kind_is_dir(e->kind) && entry_path(u->list.sel, p, sizeof p) && bm_find(&bmarks, p) >= 0;', '    u->sel_bm = false;', 'f8'),
-    ('gui/folder.c', '    if (!now || !bm_add(&bmwa, now, dir, &err) || !bm_commit(file, now, &err)) {', '    if (!now || !bm_add(&bmwa, now, app.cwd, &err) || !bm_commit(file, now, &err)) {', 'f8'),
+    ('gui/folder.c', ' : bm_add(&bmwa, now, dir, &err))', ' : bm_add(&bmwa, now, app.cwd, &err))', 'f8'),
     ('gui/actions.c', '        if (!same_dir(sdir, dest)) {', '        if (!same_dir(sdir, app.cwd)) {', 'f8'),
     ('gui/actions.c', 'if (!names[i][0] || !path_put(dst, sizeof dst, into ? into : sdir, str_from_c(names[i]))) continue;', 'if (!names[i][0] || !path_put(dst, sizeof dst, app.cwd, str_from_c(names[i]))) continue;', 'f8'),
     ('gui/actions.c', '                              : op_symlink(in, paths[i], str_from_c(name), one, sizeof one, &err);', '                              : op_symlink(in, in, str_from_c(name), one, sizeof one, &err);', 'f8'),
@@ -371,7 +371,7 @@ MUTANTS = [
     ('gui/input.c', '    u->ctx_trash = strcmp(app.ctx_path, TRASH_URI) == 0;', '    u->ctx_trash = false;', 'f8'),
     ('gui/input.c', '    u->ctx_full = u->ctx_trash && (trash_state(), app.trash_full);', '    u->ctx_full = u->ctx_trash;', 'f8'),
     ('gui/folder.c', ' < (int)sizeof files && !dir_empty(files)) return true;', ' < (int)sizeof files) return true;', 'f8'),
-    ('gui/input.c', '    u->ctx_bmed = bm_find(&bmarks, app.ctx_path) >= 0;', '    u->ctx_bmed = false;', 'f8'),
+    ('gui/input.c', '    u->ctx_bmed = bm_find(&bmarks, app.ctx_path) >= 0 ||', '    u->ctx_bmed = false ||', 'f8'),
     ('gui/input.c', '    u->ctx_bms = bmarks.n;', '', 'f8'),
     ('gui/input.c', '        u->ctx_place = true;\n', '', 'f8'),
     ('gui/input.c', '        if (pl->kind == PL_BOOKMARK) u->ctx_bmk = bm_find(&bmarks, pl->path);', '', 'f8'),
@@ -593,11 +593,11 @@ MUTANTS = [
     # shot usb-unmounted.png shows it), and the guard's NULL folders (no test runs without its own).
     ('gui/watch.c', "        if (e->wd == watch.udev_wd && e->len && e->name[0] == 'b') *mounts = true;", '', 'usb'),
     ('gui/watch.c', "        if (e->wd == watch.udev_wd && e->len && e->name[0] == 'b') *mounts = true;", "        if (e->wd == watch.udev_wd && e->len && e->name[0] == 'c') *mounts = true;", 'usb'),
-    ('gui/folder.c', ' || app.places.p[i].kind == PL_UNMOUNTED) return NULL;', ') return NULL;', 'usb'),
+    ('gui/folder.c', 'app.places.p[i].kind == PL_HEAD || app.places.p[i].kind == PL_UNMOUNTED', 'app.places.p[i].kind == PL_HEAD', 'usb'),
     ('gui/actions.c', '            mount_start(&app.places.p[a.index]);   // a drive not mounted yet', '            {}   // a drive not mounted yet', 'usb'),
     ('gui/input.c', '    if (it == UM_MOUNT_IT && ctx_pl && ctx_pl->kind == PL_UNMOUNTED) mount_start(ctx_pl);', '', 'usb'),
-    ('gui/input.c', '        u->ctx_unmounted = pl->kind == PL_UNMOUNTED;\n', '', 'usb'),
-    ('gui/eject.c', '    if (ej.op == DRIVE_MOUNT) mount_argv(ej.dev, argv);\n    else if', '    if (false) mount_argv(ej.dev, argv);\n    else if', 'usb'),
+    ('gui/input.c', '        u->ctx_unmounted = pl->kind == PL_UNMOUNTED || pl->kind == PL_NETBM;', '        u->ctx_unmounted = pl->kind == PL_NETBM;', 'usb'),
+    ('gui/eject.c', '    else if (ej.op == DRIVE_MOUNT) mount_argv(ej.dev, argv);', '    else if (false) mount_argv(ej.dev, argv);', 'usb'),
     # Unmount (2026-10-30)
     ('gui/eject.c', '    else if (ej.op == DRIVE_UNMOUNT) unmount_argv(ej.dev, udisks, argv);\n', '', 'usb'),
     ('gui/eject.c', '        else set_status(false, "%s is unmounted", ej.label);', '', 'usb'),
@@ -716,7 +716,7 @@ MUTANTS = [
     ('gui/main.c', '    if (atomic_exchange(&watch.mounts_ready, false)) places_reload(), trash_state(), dirty = true;\n    if (app.drive_gone) {', '    if (atomic_exchange(&watch.list_ready, false)) reload(), dirty = true;\n    if (atomic_exchange(&watch.mounts_ready, false)) places_reload(), trash_state(), dirty = true;\n    if (app.drive_gone) {', 'usb'),
     ('gui/eject.c', '        else if (go_to(at, STR_EMPTY, 0)) set_status(false, "Mounted %s", ej.label);', '        else set_status(false, "Mounted %s", ej.label);', 'usb'),
     ('gui/eject.c', '        if (!mounted) set_status(true, "Can\'t mount %s: %s"', '        if (false) set_status(true, "Can\'t mount %s: %s"', 'usb'),
-    ('gui/script.c', ' : p->kind == PL_UNMOUNTED ? "~" : ""', ' : ""', 'usb'),
+    ('gui/script.c', ' : p->kind == PL_UNMOUNTED || p->kind == PL_NETBM ? "~" : ""', ' : p->kind == PL_NETBM ? "~" : ""', 'usb'),
     # Not run (2026-10-30): drive_start's ops_program_allowed (a script can't change the window's
     # PATH to a udisksctl outside the root; the unit test has it), and the mount's longer limit.
     ('gui/folder.c', '    if (v == UI_VIEW_TRASH && trash_home(tinfo, sizeof tinfo - 8)) strcat(tinfo, "/info");\n', '', 'f6'),
@@ -1087,7 +1087,7 @@ MUTANTS = [
     ('gui/far.c', '    if (far_stuck(dir)) return err_set(err, "%.*s isn\'t answering: not tried", STR_ARG(name)), false;', '', 'net'),
     ('gui/far.c', '    for (int i = 0; i < far.nkilled && !stuck; i++) stuck = far_drive(mi, far.killed[i].dir, other, sizeof other, &gvfs) && strcmp(other, drive) == 0;', '', 'net'),
     ('gui/far.c', '    if (!until) until = now_ms() + FAR_DO_MS;', '    until = now_ms() + FAR_DO_MS;', 'f16'),
-    ('gui/actions.c', '    if (done > 0) err_set(why, "%.*s is slow: the rest weren\'t tried", STR_ARG(path_base(str_from_c(path))));', '', 'f16'),
+    ('gui/actions.c', '    if (done > 0) err_set(why, "%.*s is slow: the rest weren\'t tried", STR_ARG(far_who(path)));', '', 'f16'),
     # (Justified, step 3 confirm: far_do's "is slow" before spawning past a batch's deadline. The
     # deadline passes during a child's wait, which kills it, and the batch stops there; it is only
     # reached when it passed between two actions, where it saves a fork.)
@@ -1124,4 +1124,29 @@ MUTANTS = [
     ('gui/connect.c', '        prctl(PR_SET_DUMPABLE, 0, 0, 0, 0);\n    }', '    }', 'net'),
     ('gui/connect.c', '    prctl(PR_SET_DUMPABLE, 1, 0, 0, 0);   // (every copy', '    // (every copy', 'net'),
     ('gui/connect.c', ', strcmp(why, "Invalid argument") == 0 ? " (is the server\'s name right?)" : ""), true;', ', ""), true;', 'net'),
+    # F16 step 5: the Network section, a share's unmount, crumbs, bookmarks and names
+    ('gui/watch.c', '        if (!((*c >= \'a\' && *c <= \'z\') || (*c >= \'0\' && *c <= \'9\') || *c == \'-\')) return false;', '', 'f16'),
+    ('gui/watch.c', '    return strchr(colon, \'=\') != NULL;', '    return true;', 'f16'),
+    ('gui/watch.c', '        if (!mountinfo_line(line, mp, sizeof mp, &type, &src) || !str_eq(type, S("fuse.gvfsd-fuse"))) continue;', '        if (!mountinfo_line(line, mp, sizeof mp, &type, &src)) continue;', 'f16'),
+    ('gui/watch.c', '        if (kicked || now_ms() >= gvfs_due) {', '        if (now_ms() >= gvfs_due) {', 'net'),
+    ('gui/watch.c', '    qsort(line_of, (size_t)k, sizeof *line_of, cmp_cstr);', '', 'net'),
+    ('gui/folder.c', '    places_load_net(&scratch, &app.places, bm, watch_shares(&scratch));   // (F16 step 5: after the drives)', '', 'f16'),
+    ('gui/folder.c', '    return (place_is_drive(k) && k != PL_ROOT) || k == PL_SHARE;', '    return place_is_drive(k) && k != PL_ROOT;', 'f16'),
+    ('gui/folder.c', ' || app.places.p[i].kind == PL_UNMOUNTED || app.places.p[i].kind == PL_NETBM)\n        return NULL;', ' || app.places.p[i].kind == PL_UNMOUNTED)\n        return NULL;', 'f16'),
+    ('gui/actions.c', '            connect_start(str_from_c(app.places.p[a.index].path));   // an smb:// bookmark: connected, then opened (F16 step 5)', '            ;', 'f16'),
+    ('gui/actions.c', '        else if (a.index >= 0 && a.index < app.places.n && app.places.p[a.index].kind == PL_SHARE) share_unmount_start(&app.places.p[a.index]);   // (F16 step 5)', '', 'f16'),
+    ('gui/input.c', '        u->ctx_share = pl->kind == PL_SHARE;', '', 'f16'),
+    ('gui/input.c', '        u->ctx_unmounted = pl->kind == PL_UNMOUNTED || pl->kind == PL_NETBM;', '        u->ctx_unmounted = pl->kind == PL_UNMOUNTED;', 'f16'),
+    ('gui/input.c', '    if (it == UM_MOUNT_IT && ctx_pl && ctx_pl->kind == PL_NETBM) connect_start(str_from_c(ctx_pl->path));', '', 'f16'),
+    ('gui/input.c', ' || (app.ctx_path[0] == \'/\' && far_share_uri(app.ctx_path, uri, sizeof uri) && bm_find_uri(&bmarks, uri) >= 0);', ';', 'f16'),
+    ('gui/eject.c', '    if (op == DRIVE_SHARE) watch_gvfs_kick();   // (gone from the sidebar, and its folders Home, at once)', '', 'net'),
+    ('gui/eject.c', '    else if (ej.op == DRIVE_SHARE) r = gio_why(str_from_c(out), why, sizeof why) ? EJECT_FAILED : EJECT_DONE;', '    else if (ej.op == DRIVE_SHARE) r = EJECT_FAILED;', 'f16'),
+    ('gui/connect.c', '    watch_gvfs_kick();   // (the share in the sidebar', '    // (the share in the sidebar', 'net'),
+    ('gui/far.c', '    if (!gvfs_share_name(root + strlen(root) - base.len)) return false;', '', 'f16'),
+    ('gui/far.c', '    if (far_share(path, root, sizeof root, label, sizeof label)) return str_from_c(label);', '', 'net'),
+    ('gui/far.c', '    ui_crumbs_set_share(c, dir, getenv("HOME"), sh ? root : NULL, sh ? label : NULL);', '    ui_crumbs_set_share(c, dir, getenv("HOME"), NULL, NULL);', 'f16'),
+    ('gui/folder.c', '        if (!far_share_uri(app.cwd, app.cwd_uri, sizeof app.cwd_uri)) app.cwd_uri[0] = 0;', '        app.cwd_uri[0] = 0;', 'f16'),
+    ('gui/folder.c', '    Str name = net && strcmp(dir, root) != 0 ? path_base(str_from_c(dir)) : str_from_c(label);', '    Str name = str_from_c(label);', 'f16'),
+    ('gui/folder.c', '    if (!now || !(net ? bm_add_uri(&bmwa, now, uri, name, &err) : bm_add(&bmwa, now, dir, &err))', '    if (!now || !bm_add(&bmwa, now, dir, &err)', 'f16'),
+    ('gui/script.c', '    state_unspace(crumbs);   // (a share\'s button', '    // (a share\'s button', 'f16'),
 ]

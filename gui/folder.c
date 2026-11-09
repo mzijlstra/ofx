@@ -347,7 +347,7 @@ static bool far_poll(void)
     if (app.far_loading) {
         if (app.far_slow || now_ms() - app.far_since < FAR_ANSWER_MS) return false;
         app.far_slow = true;
-        snprintf(app.far_note, sizeof app.far_note, "%.*s isn't answering", STR_ARG(path_base(str_from_c(app.cwd))));   // (its name: the crumbs say where)
+        snprintf(app.far_note, sizeof app.far_note, "%.*s isn't answering", STR_ARG(far_who(app.cwd)));   // (its name, or its share's: the crumbs say where)
         set_status(true, "%s", app.far_note);
         return true;
     }
@@ -463,7 +463,8 @@ static bool go_to_in(const char *dir, Str select, isize fallback, bool stepping)
     if (!same) {
         if (app.cwd[0]) app.status[0] = 0;   // what happened in the last folder (not at the start: what it said stays)
         snprintf(app.cwd, sizeof app.cwd, "%s", dir);
-        ui_crumbs_set(&app.crumbs, app.cwd, getenv("HOME"));
+        crumbs_for(&app.crumbs, app.cwd);
+        if (!far_share_uri(app.cwd, app.cwd_uri, sizeof app.cwd_uri)) app.cwd_uri[0] = 0;
         app.ui.list.top = 0;
         app.place_cur = places_current(&app.places, app.cwd);
         // OFX_TEST_WATCH_DELAY_MS widens the gap between the listing and the watch, so
@@ -552,6 +553,13 @@ static void drive_gone_tabs(const char *mp)
     }
 }
 
+// The places whose going sends the folders on them Home: a drive but /, and a share (F16 step 5:
+// unmounted, by ofx or another program).
+static bool place_gone_matters(PlaceKind k)
+{
+    return (place_is_drive(k) && k != PL_ROOT) || k == PL_SHARE;
+}
+
 // The drives in was (nwas, as they were before the places were read again) that have gone, whatever
 // removed them (unmounted, ejected, pulled out) and before udisksctl answers: the tab shown, on one,
 // goes Home when the main loop next comes round (Michael and the review, 2026-10-30: the folder's
@@ -564,7 +572,7 @@ static void drive_gone_check(char (*was)[PATH_MAX], int nwas)
     for (int i = 0; i < app.places.n && !read; i++) read = app.places.p[i].kind == PL_ROOT;
     for (int k = 0; read && k < nwas; k++) {
         bool still = false;
-        for (int i = 0; i < app.places.n && !still; i++) still = place_is_drive(app.places.p[i].kind) && strcmp(app.places.p[i].path, was[k]) == 0;
+        for (int i = 0; i < app.places.n && !still; i++) still = place_gone_matters(app.places.p[i].kind) && strcmp(app.places.p[i].path, was[k]) == 0;
         if (still) continue;
         if (path_within(here_dir(), was[k])) app.drive_gone = true;
         drive_gone_tabs(was[k]);
@@ -590,9 +598,12 @@ static void places_reload(void)
     static char was[PLACES_MAX][PATH_MAX];
     int nwas = 0;
     for (int i = 0; i < app.places.n; i++)
-        if (place_is_drive(app.places.p[i].kind) && app.places.p[i].kind != PL_ROOT) snprintf(was[nwas++], PATH_MAX, "%s", app.places.p[i].path);
+        if (place_gone_matters(app.places.p[i].kind)) snprintf(was[nwas++], PATH_MAX, "%s", app.places.p[i].path);
     char bm[PATH_MAX];
     places_load(&scratch, &app.places, bookmarks_path(bm, sizeof bm), mountinfo_path(), sysblock_path(), udev_path());
+    ArenaMark m = arena_mark(&scratch);
+    places_load_net(&scratch, &app.places, bm, watch_shares(&scratch));   // (F16 step 5: after the drives)
+    arena_restore(&scratch, m);
     // The Bookmarks menu's (F7.5). With Edit Bookmarks up its cursor stays on its line, found
     // again as a change finds it (bm_locate), wherever a change made elsewhere moved it; the lines
     // as they were are copied into bmwa, which no change holds by now (they reload after writing).
@@ -675,16 +686,20 @@ static bool bm_commit(const char *file, const Bookmarks *now, Err *err)
 
 static void bookmark_add(const char *dir)
 {
-    char file[PATH_MAX];
+    char file[PATH_MAX], uri[PATH_MAX], root[PATH_MAX], label[256];
     Err err = { 0 };
+    // A folder in an SMB share: its smb:// address, which connects when it isn't mounted (F16 step
+    // 5); labelled with the share's name at its top, else the folder's (the sidebar shows the label).
+    bool net = far_share_uri(dir, uri, sizeof uri) && far_share(dir, root, sizeof root, label, sizeof label);
+    Str name = net && strcmp(dir, root) != 0 ? path_base(str_from_c(dir)) : str_from_c(label);
     Bookmarks *now = bm_begin(file, sizeof file, &err);
-    if (!now || !bm_add(&bmwa, now, dir, &err) || !bm_commit(file, now, &err)) {
+    if (!now || !(net ? bm_add_uri(&bmwa, now, uri, name, &err) : bm_add(&bmwa, now, dir, &err)) || !bm_commit(file, now, &err)) {
         set_status(true, "No bookmark: %s", err.msg);
         return;
     }
     watch_bookmarks();   // its folder may be new
     places_reload();
-    set_status(false, "Bookmarked %.*s", STR_ARG(path_base(str_from_c(dir))));
+    set_status(false, "Bookmarked %.*s", STR_ARG(net ? name : path_base(str_from_c(dir))));
 }
 
 // The tree's open folders into the state file (tree=, F11), as they are now.
@@ -734,7 +749,8 @@ static const char *side_path(isize i, char *buf, size_t cap)
         snprintf(buf, cap, "%.*s", STR_ARG(tree.row[i].path));
         return buf;
     }
-    if (i < 0 || i >= app.places.n || app.places.p[i].kind == PL_HEAD || app.places.p[i].kind == PL_UNMOUNTED) return NULL;   // (a device: no folder to open in a tab)
+    if (i < 0 || i >= app.places.n || app.places.p[i].kind == PL_HEAD || app.places.p[i].kind == PL_UNMOUNTED || app.places.p[i].kind == PL_NETBM)
+        return NULL;   // (a device, or a network bookmark's address: no folder to open in a tab)
     return app.places.p[i].path;
 }
 

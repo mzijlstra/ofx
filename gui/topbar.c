@@ -138,7 +138,7 @@ static void bar_button(UiBar which, int chev, const char *glyph, IconSlot *icon,
 static float crumb_width(int i)
 {
     const UiCrumbs *c = &app.crumbs;
-    return str_width(ui_crumb_label(c, i)) + 2 * CRUMB_PAD + (c->seg[i].home ? CRUMB_ICON_PX + 6 : 0);
+    return str_width(ui_crumb_label(c, i)) + 2 * CRUMB_PAD + (c->seg[i].home || c->seg[i].share ? CRUMB_ICON_PX + 6 : 0);
 }
 
 // The path buttons: the current folder marked, the deeper ones dimmer; ‹ and › when they don't fit.
@@ -164,9 +164,9 @@ static void layout_crumbs(float room)
                                                  .childGap = 6, .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
                                      .backgroundColor = cur ? cc(t->selection) : hover ? cc(t->bg) : cc(t->bg_light),
                                      .border = { .color = cc(t->accent), .width = { keyed * 2, keyed * 2, keyed * 2, keyed * 2, 0 } } }) {
-            if (c->seg[i].home) icon_box(CLAY_IDI("crumb-icon", i), named_icon("user-home"), CRUMB_ICON_PX);
+            if (c->seg[i].home || c->seg[i].share) icon_box(CLAY_IDI("crumb-icon", i), named_icon(c->seg[i].share ? "folder-remote" : "user-home"), CRUMB_ICON_PX);
             Str label = ui_crumb_label(c, i);
-            float most = room - 2 * ARROW_W - 2 * CRUMB_PAD - (c->seg[i].home ? CRUMB_ICON_PX + 6 : 0);
+            float most = room - 2 * ARROW_W - 2 * CRUMB_PAD - (c->seg[i].home || c->seg[i].share ? CRUMB_ICON_PX + 6 : 0);
             text(fit(label, most > 20 ? most : 20, false), cur ? cc(t->accent) : i > c->cur ? cc(t->fg_dim) : cc(t->fg));
         }
     }

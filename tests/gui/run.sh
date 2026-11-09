@@ -6,7 +6,7 @@
 # printed whole, in order, once all are done; clip, keys and dnd share one (each starts a sway,
 # which takes the first free wayland-N).
 # The groups (one or more scripts on one tree): browse big gone watchgap f2 f3 f4 f5 f52 f53 f54
-# f6 (f6, f6b) usb f62 (f62, f62b, f62c) f63 (f63, f63b, f63c, f63d) f64 (f64, f64b, f64c, f64d) f7 (f7, f7b) f72 f73 (f73, f73b, f73c, f73d) f74 f75 (f75, f75b, f75c) f15 (f15, f15b) f16 (f16, f16b, f16c, f16d, f16e, f16f, f16g) net (net, netq, netc) f8 (f8, f8b, f8c, f8d, f8e) f9 (f9, f9b) f10 (f10, f10b, f10c, f10d) f11 (f11, f11b, f11c, f11d, f11e, f11f, f11g, f11h, f11i, f11j, f11k, f11l, f11m, f11n, f11o, f11p, f11q, f11r, f11s, f11t) f12 (f12, f12b) f12g f12h f12i f13 (f13, f13b, f13c, f13d, f13e, f13f, f13g, f13h) clip (clip, copypath) keys dnd (dnd, dndb, dndc, dndd, dnde, dndf, dndg, dndh, dndi, dndj, dndk) (the three in sway) hang guard3 guard harness (harness, harnessb, harnessc, harnessd). Named ones only, or all of them; a group
+# f6 (f6, f6b) usb f62 (f62, f62b, f62c) f63 (f63, f63b, f63c, f63d) f64 (f64, f64b, f64c, f64d) f7 (f7, f7b) f72 f73 (f73, f73b, f73c, f73d) f74 f75 (f75, f75b, f75c) f15 (f15, f15b) f16 (f16, f16b, f16c, f16d, f16e, f16f, f16g, f16h) net (net, netq, netc, netu) f8 (f8, f8b, f8c, f8d, f8e) f9 (f9, f9b) f10 (f10, f10b, f10c, f10d) f11 (f11, f11b, f11c, f11d, f11e, f11f, f11g, f11h, f11i, f11j, f11k, f11l, f11m, f11n, f11o, f11p, f11q, f11r, f11s, f11t) f12 (f12, f12b) f12g f12h f12i f13 (f13, f13b, f13c, f13d, f13e, f13f, f13g, f13h) clip (clip, copypath) keys dnd (dnd, dndb, dndc, dndd, dnde, dndf, dndg, dndh, dndi, dndj, dndk) (the three in sway) hang guard3 guard harness (harness, harnessb, harnessc, harnessd). Named ones only, or all of them; a group
 # that fails says "== <script>: FAILED" or "<group>: FAILED" (tools/mutation/gui.py reads it).
 set -u
 par=1
@@ -453,6 +453,17 @@ rs f16g OFX_TEST_MOUNTINFO="$T/mountinfo" -- "$T/tree/local/mylinks/nas/x.txt"
 fresh f16f; mkdir -p "$T/tree/share/sub"; printf 'a\n' > "$T/tree/share/a.txt"; chmod 644 "$T/tree/share/a.txt"
 printf '1 0 0:1 / / rw - ext4 /dev/x rw\n2 1 0:2 / %s rw,nosuid,nodev - fuse.sshfs sshfs rw\n' "$T/tree/share" > "$T/mountinfo"
 rs f16f OFX_TEST_CROSS=1 OFX_TEST_MOUNTINFO="$T/mountinfo" -- "$T/tree/share"
+# f16h (step 5): the sidebar's Network section on a stand-in gvfs FUSE folder: <T>/gvfs in the mount
+# list as gvfsd-fuse's, holding a share's folder named as gvfs names one (sub/ and a.txt in it) and
+# folders that aren't (junk, "My Notes:x=1", a:b); <T>/other, an ext4 mount holding a folder named as
+# gvfs names one; the bookmarks file has a local line and two smb:// ones.
+fresh f16h; mkdir -p "$T/home" "$T/gvfs/smb-share:server=nas,share=pub/sub" "$T/gvfs/junk" "$T/gvfs/My Notes:x=1" "$T/gvfs/a:b" "$T/config/gtk-3.0"
+mkdir -p "$T/other/smb-share:server=no,share=no"   # (gvfs's form, in a mount that isn't gvfs's)
+: > "$T/gvfs/smb-share:server=nas,share=pub/a.txt"
+printf 'file://%s/home Mine\nsmb://nas/home Home NAS\nsmb://nas/pub\n' "$T" > "$T/config/gtk-3.0/bookmarks"
+printf '1 0 0:1 / / rw - ext4 /dev/x rw\n2 1 0:2 / %s rw,nosuid,nodev - fuse.gvfsd-fuse gvfsd-fuse rw\n3 1 0:3 / %s rw - ext4 /dev/y rw\n' "$T/gvfs" "$T/other" > "$T/mountinfo"
+RS_HOME=$T/home
+rs f16h OFX_TEST_MOUNTINFO="$T/mountinfo" -- "$T/home"
 fi
 if want net; then
 # F16 step 2 on a real share (tests/net/lib.sh: a Samba container, a gvfs of the run's own under <T>/rt,
@@ -490,6 +501,15 @@ fresh net; mkdir -p "$T/home"
   echo "== netc"
   ( export OFX_TEST_HOME="$T/home" OFX_TEST_MOUNTINFO="$T/mountinfo" OFX_TEST_GIO="$T/giotest"
     exec "$here/../../tools/gui/run-script.sh" "$T" "$T/netc.script" "$bin" "$T/home" ) || failed netc
+  # The Network section on the real shares (F16 step 5), after netc mounted open and priv; a bookmark
+  # of priv. (Unmounting open from the sidebar: its row goes as gvfs's FUSE folder, listed again, no
+  # longer has it.)
+  sed "s/@PORT@/$NET_PORT/g" "$here/netu.script" > "$T/netu.script"
+  mkdir -p "$T/config/gtk-3.0"; printf 'smb://127.0.0.1:%s/priv Priv\n' "$NET_PORT" > "$T/config/gtk-3.0/bookmarks"
+  echo "== netu"
+  # (the shares listed every 10 min: only ofx's own unmount and connect show them at once)
+  ( export OFX_TEST_HOME="$T/home" OFX_TEST_MOUNTINFO="$T/mountinfo" OFX_TEST_GIO="$T/giotest" OFX_TEST_GVFS_MS=600000
+    exec "$here/../../tools/gui/run-script.sh" "$T" "$T/netu.script" "$bin" "$T/home" ) || failed netu
   exit $fail ) || fail=1
 fi
 if want f8; then

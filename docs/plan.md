@@ -1011,11 +1011,40 @@ blocks each of these for up to gvfs's 90 s. On a thread it also holds ofx's exit
      guest refused, a wrong then right password, a share mounted already, a closed port, the
      password nowhere in ofx's output or the programs' arguments). Its gio reaches only the run's own
      gvfs (run-script's `OFX_TEST_GIO`).
-5. **The sidebar's Network section:** mounted shares (read from the gvfs FUSE folder; a watch on
-   it) with unmount, and `smb://` bookmarks mounted on a click. Add Bookmark on a share writes its
-   `smb://` address. With the share's friendly name, the far actions' "isn't answering" and "is
-   slow" name the share, not the item (step 3 confirm; today gvfs's folder name is
-   `smb-share:port=…`).
+5. **The sidebar's Network section** (built 2026-11-09):
+   - **What it lists:** under Drives, the shares gvfs has mounted, named as gvfs names them ("pub on
+     nas", "me@box"), then the bookmarks file's `smb://` lines, dim (their label, else "share on
+     server").
+   - **A share:** a click opens it, read as any far folder. Its unmount button sits in the icon's
+     place, and its menu has Unmount (no Eject). The unmount is `gio mount -u <its folder>` on the
+     eject thread. A share that goes (unmounted by ofx or anything else) sends the folders on it
+     Home, as a drive's going does.
+   - **A network bookmark:** a click, or its menu's Mount, connects (step 4); a mounted one is gone
+     to with no question.
+   - **Everywhere else:**
+     - a share's path buttons start at the share, by its name, with the network folder icon (as
+       Nautilus and Nemo);
+     - Add Bookmark in a share writes its `smb://` address, labelled with the folder's name (the
+       share's at its top), as Nautilus does;
+     - the far actions' "isn't answering" and "is slow", and the list's note, name the share (step 3
+       confirm).
+   - **Measured on the test Samba (spike):**
+     - gvfsd-fuse shows each mounted share as a folder of its FUSE mount, named by its mount spec
+       (`smb-share:port=…,server=…,share=…`).
+     - Listing that FUSE folder took 4 ms with the server paused and 30 requests stuck on its share:
+       gvfsd-fuse answers it from its mount table.
+     - No inotify event comes as a share appears (only the folder's link count moves). So the
+       watch thread lists the FUSE folders every 2 s, and at once after ofx's own connect or
+       unmount; only names of gvfs's form count.
+     - `gio mount -u <folder>` unmounts by the FUSE path in 10 ms. gvfs unmounts with a process
+       inside the share. A paused server takes gvfs's 20 s.
+     - **Known gap (gvfs's):** a share mounted again within about 2 s of its unmount reads
+       "Input/output error" in the FUSE folder until then (plain `ls` too; fine after a 5 s gap).
+       ofx shows that error; a reload a moment later lists it.
+   - **Tests:** unit (the names, the addresses, the Network places, the share's path buttons);
+     f16h on a stand-in gvfs folder (no network: listing, unmount, a share appearing, bookmarks,
+     Add Bookmark); the net group's netu on the real shares (unmount from the sidebar checked on the
+     run's gvfs; a bookmark of a mounted share) and the share's name in net's "isn't answering".
 6. **NFS spike, then NFS:** gvfs-nfs against nfs-ganesha rootless; nfs:// in Connect to Server if
    it works, else kernel NFS mounts only (above).
 7. **Discovery:** the Network place browsing servers and shares (`smb://` root through gvfs's

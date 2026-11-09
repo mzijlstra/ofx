@@ -82,6 +82,27 @@ static bool bm_add(Arena *a, Bookmarks *bm, const char *path, Err *err)
     return true;
 }
 
+// The place of the bookmark whose address is uri (a network one, F16 step 5), -1 for none.
+static int bm_find_uri(const Bookmarks *bm, const char *uri)
+{
+    for (int i = 0; i < bm->n; i++)
+        if (str_eq(bm->b[i].uri, str_from_c(uri))) return i;
+    return -1;
+}
+
+// A bookmark of a network address at the end (a folder in a share, F16 step 5: as Nautilus writes
+// one), with its label (empty: none); false, saying why, as bm_add.
+static bool bm_add_uri(Arena *a, Bookmarks *bm, const char *uri, Str label, Err *err)
+{
+    if (bm_find_uri(bm, uri) >= 0) return err_set(err, "already a bookmark"), false;
+    if (bm->n == BM_MAX) return err_set(err, "the bookmarks file is full (%d)", BM_MAX), false;
+    Bookmark *b = &bm->b[bm->n++];
+    b->uri = (Str){ arena_cstr(a, str_from_c(uri)), (isize)strlen(uri) };
+    b->label = label.len ? (Str){ arena_cstr(a, label), label.len } : STR_EMPTY;
+    b->path[0] = 0;
+    return true;
+}
+
 // The file's text: a line a bookmark, the label after a space.
 static Str bm_format(Arena *a, const Bookmarks *bm)
 {

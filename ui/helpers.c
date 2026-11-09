@@ -5,17 +5,20 @@
 //
 // The top bar's path as buttons, one per folder. The bar keeps the deepest path it showed: going
 // up keeps the deeper buttons (Nemo does), going anywhere off that path starts it anew. Under the
-// home folder the first button is home, and the folders above it are left out.
+// home folder the first button is home, and the folders above it are left out; in a share gvfs
+// mounted (F16 step 5), the share, named as gvfs names it ("pub on nas"), as Nautilus and Nemo do.
 
 enum { UI_CRUMBS_MAX = 128 };
 
 typedef struct {
     isize end;    // the button's folder is deep[0..end)
     bool  home;   // the home folder's button
+    bool  share;  // a share's (its label: UiCrumbs.share_label)
 } UiCrumb;
 
 typedef struct {
     char    deep[PATH_MAX];
+    char    share_label[256];
     UiCrumb seg[UI_CRUMBS_MAX];
     int     n;
     int     cur;  // the button of the current folder
@@ -29,13 +32,14 @@ static bool ui_under(Str p, Str dir)
     return str_starts_with(p, dir) && (p.len == dir.len || p.p[dir.len] == '/');
 }
 
-// The current folder is cwd (absolute); home is $HOME (NULL or empty: none).
-static void ui_crumbs_set(UiCrumbs *c, const char *cwd, const char *home)
+// The current folder is cwd (absolute); home is $HOME (NULL or empty: none); share the folder of the
+// share cwd is in and label its name (NULL: none).
+static void ui_crumbs_set_share(UiCrumbs *c, const char *cwd, const char *home, const char *share, const char *label)
 {
-    Str cw = str_from_c(cwd), h = str_from_c(home);
+    Str cw = str_from_c(cwd), h = str_from_c(home), sh = str_from_c(share);
     if (str_eq(cw, S(TRASH_URI)) || is_search(cwd)) {   // the trash view (F6): one button, "Trash"; a search's (F9), "Search"
         snprintf(c->deep, sizeof c->deep, "%s", cwd);
-        c->seg[0] = (UiCrumb){ cw.len, false };
+        c->seg[0] = (UiCrumb){ cw.len, false, false };
         c->n = 1, c->cur = 0, c->lo = -1;
         return;
     }
@@ -45,13 +49,16 @@ static void ui_crumbs_set(UiCrumbs *c, const char *cwd, const char *home)
     Str d = str_from_c(c->deep);
     c->n = 0;
     isize at;
-    if (h.len > 1 && h.p[0] == '/' && ui_under(cw, h)) c->seg[c->n++] = (UiCrumb){ h.len, true }, at = h.len;
-    else c->seg[c->n++] = (UiCrumb){ 1, false }, at = 1;
+    if (sh.len > 1 && sh.p[0] == '/' && ui_under(cw, sh) && label) {
+        c->seg[c->n++] = (UiCrumb){ sh.len, false, true }, at = sh.len;
+        snprintf(c->share_label, sizeof c->share_label, "%s", label);
+    } else if (h.len > 1 && h.p[0] == '/' && ui_under(cw, h)) c->seg[c->n++] = (UiCrumb){ h.len, true, false }, at = h.len;
+    else c->seg[c->n++] = (UiCrumb){ 1, false, false }, at = 1;
     while (at < d.len && c->n < UI_CRUMBS_MAX) {
         while (at < d.len && d.p[at] == '/') at++;
         isize e = at;
         while (e < d.len && d.p[e] != '/') e++;
-        if (e > at) c->seg[c->n++] = (UiCrumb){ e, false };
+        if (e > at) c->seg[c->n++] = (UiCrumb){ e, false, false };
         at = e;
     }
     // Past UI_CRUMBS_MAX buttons the current one may not be among them: the deepest shown stands
@@ -62,15 +69,21 @@ static void ui_crumbs_set(UiCrumbs *c, const char *cwd, const char *home)
     if (c->cur < 0) c->cur = c->n - 1;
 }
 
+static void ui_crumbs_set(UiCrumbs *c, const char *cwd, const char *home)
+{
+    ui_crumbs_set_share(c, cwd, home, NULL, NULL);
+}
+
 // Button i's folder.
 static Str ui_crumb_path(const UiCrumbs *c, int i)
 {
     return (Str){ c->deep, c->seg[i].end };
 }
 
-// Button i's label: "/" for the root, else its folder's own name (home's too).
+// Button i's label: "/" for the root, a share's name, else its folder's own name (home's too).
 static Str ui_crumb_label(const UiCrumbs *c, int i)
 {
+    if (c->seg[i].share) return str_from_c(c->share_label);
     if (!c->seg[i].home && c->seg[i].end == 1) return S("/");
     if (str_eq(ui_crumb_path(c, i), S(TRASH_URI))) return S("Trash");
     if (str_starts_with(ui_crumb_path(c, i), S(SEARCH_URI))) return S("Search");

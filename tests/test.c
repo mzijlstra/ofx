@@ -1929,6 +1929,10 @@ int main(void)
     if (fast) test_gio_ask();
     if (fast) test_gio_why();
     if (fast) test_login_keys();
+    if (fast) test_gvfs_label();
+    if (fast) test_places_net();
+    if (fast) test_gvfs_uri();
+    if (fast) test_crumbs_share();
     if (fast) test_wheel_under_question();
     if (fast) test_ui_age();
     if (fast) test_branch_panel();

@@ -47,7 +47,8 @@ static bool ui_folder_shown(const Ui *u, UiMenuItem it)
     case UM_COPY_PATH_IT: return !u->ctx_trash;   // (a place's too: a bookmark's, a drive's)
     case UM_BOOKMARK_IT: return !u->ctx_trash && !u->ctx_bmed;
     case UM_BM_RENAME_IT: case UM_BM_UP_IT: case UM_BM_DOWN_IT: case UM_BM_REMOVE_IT: case UM_BM_EDIT_IT: return u->ctx_bmk >= 0;
-    case UM_EJECT_IT: case UM_UNMOUNT_IT: return u->ctx_eject;   // (Unmount: the drive stays, to mount again, 2026-10-30)
+    case UM_EJECT_IT: return u->ctx_eject;
+    case UM_UNMOUNT_IT: return u->ctx_eject || u->ctx_share;   // (Unmount: the drive stays, to mount again, 2026-10-30)
     case UM_EMPTY_IT: return u->ctx_trash;
     default: return false;
     }
@@ -202,7 +203,7 @@ static void ui_branch_open(Ui *u, bool keys)
 static void ui_folder_open(Ui *u, isize side, int crumb, bool keys)
 {
     u->ctx_side = (int)side, u->ctx_crumb = crumb, u->ctx_key = keys;
-    u->ctx_trash = u->ctx_place = u->ctx_bmed = u->ctx_eject = u->ctx_full = u->ctx_w = u->ctx_unmounted = false;
+    u->ctx_trash = u->ctx_place = u->ctx_bmed = u->ctx_eject = u->ctx_full = u->ctx_w = u->ctx_unmounted = u->ctx_share = false;
     u->ctx_bmk = -1, u->ctx_bms = 0;
     ui_menu_open(u, UI_CTX_FOLDER, keys);
 }

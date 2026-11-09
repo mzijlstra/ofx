@@ -312,6 +312,7 @@ static bool connect_take(void)
     // (libsmbclient's word for a server name it can't find, and gvfs passes it on: a hint, as a name
     // isn't looked up first, which would miss the ones only found by broadcast)
     if (!ok) return set_status(true, "Can't connect to %s: %s%s", cn_name(), why[0] ? why : "no reason given", strcmp(why, "Invalid argument") == 0 ? " (is the server's name right?)" : ""), true;
+    watch_gvfs_kick();   // (the share in the sidebar's Network section at once, F16 step 5)
     if (go_to(path, STR_EMPTY, 0)) set_status(false, "Connected to %s", cn_name());
     return true;
 }

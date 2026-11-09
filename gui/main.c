@@ -274,6 +274,7 @@ _Static_assert(sizeof(Hit) == 104, "a new Hit field: hit_same compares it");
 
 static struct {
     char      cwd[PATH_MAX];
+    char      cwd_uri[PATH_MAX];   // its smb:// address when it is in an SMB share gvfs mounted, else "" (F16 step 5)
     // The search view (F9): the folder searched, what the walk left out so far and whether it ended,
     // when the field's last change runs (0: none waiting), and the entry to put the cursor on when
     // it comes (back to a search, the one left from).

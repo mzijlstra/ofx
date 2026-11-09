@@ -304,6 +304,7 @@ static void script_state(char *out, size_t cap)
         size_t k = strlen(crumbs);
         snprintf(crumbs + k, sizeof crumbs - k, "%s%.*s", i ? "|" : "", STR_ARG(ui_crumb_label(&app.crumbs, i)));
     }
+    state_unspace(crumbs);   // (a share's button: "pub on nas", F16 step 5)
     // The tabs' folder names in order, '|' between (the current one from app.cwd).
     char tabdirs[1024] = "";
     for (int i = 0; i < tabbar.n; i++) {
@@ -319,7 +320,7 @@ static void script_state(char *out, size_t cap)
         const Place *p = &app.places.p[i];
         size_t k = strlen(sides);
         // (^ a heading; ~ a drive not mounted yet, 2026-10-30)
-        snprintf(sides + k, sizeof sides - k, "%s%s%s", i ? "|" : "", p->kind == PL_HEAD ? "^" : p->kind == PL_UNMOUNTED ? "~" : "", p->label);
+        snprintf(sides + k, sizeof sides - k, "%s%s%s", i ? "|" : "", p->kind == PL_HEAD ? "^" : p->kind == PL_UNMOUNTED || p->kind == PL_NETBM ? "~" : "", p->label);
         spaced += place_is_drive(p->kind) && p->size > 0;
     }
     for (char *c = sides; *c; c++)
@@ -346,7 +347,7 @@ static void script_state(char *out, size_t cap)
         ui_size(used, sizeof used, hp->size - hp->avail), ui_size(avail, sizeof avail, hp->avail);
         snprintf(hovernum, sizeof hovernum, "%s", strcmp(app.hover_num, used) == 0 ? "used" : strcmp(app.hover_num, avail) == 0 ? "free" : "?");
     }
-    if (app.ui.side_mode == SIDE_PLACES && hi >= 0 && hi < app.places.n) ejectbtn = place_ejectable(&app.places.p[hi]);
+    if (app.ui.side_mode == SIDE_PLACES && hi >= 0 && hi < app.places.n) ejectbtn = place_unmountable(&app.places.p[hi]);
     // The tooltip shown (Michael, 2026-10-24), spaces as '_'.
     char tipword[NAME_MAX + 64] = "-";
     // The tooltip shown lies inside the window (F6.3: the zoom plus's, at the right edge); -1 none.
@@ -625,6 +626,7 @@ static void script_state(char *out, size_t cap)
     sw(out, cap, &len, "sizecell=%s ", sizecell);
     sw(out, cap, &len, "crumbs=%s ", crumbs);
     sw(out, cap, &len, "crumbhome=%d ", app.crumbs.seg[0].home ? 0 : -1);
+    sw(out, cap, &len, "crumbshare=%d ", app.crumbs.n > 0 && app.crumbs.seg[0].share);   // (the first button a share's, F16 step 5)
     sw(out, cap, &len, "crumb=%d ", app.crumbs.cur);
     sw(out, cap, &len, "crumbshown=%d-%d ", app.crumb_lo, app.crumb_hi);
     sw(out, cap, &len, "arrows=%d ", app.crumb_arrows);

@@ -51,6 +51,43 @@ static bool far_path(const char *path, char *out, size_t cap, bool *reaches)
     return far_real(far_mounts(), path, out, cap, reaches);
 }
 
+// The share gvfs mounted that path is in (F16 step 5), by the mount list and the path's text: its
+// folder into root, its name as gvfs gives it into label; false when path isn't in one.
+static bool far_share(const char *path, char *root, size_t rcap, char *label, size_t lcap)
+{
+    bool gvfs;
+    if (!far_drive(far_mounts(), path, root, rcap, &gvfs) || !gvfs) return false;
+    Str base = path_base(str_from_c(root));
+    if (!gvfs_share_name(root + strlen(root) - base.len)) return false;
+    gvfs_share_label(base, label, lcap);
+    return true;
+}
+
+// The smb:// address of path, a folder in an SMB share gvfs mounted; false for any other.
+static bool far_share_uri(const char *path, char *uri, size_t cap)
+{
+    char root[PATH_MAX], label[256];
+    return far_share(path, root, sizeof root, label, sizeof label) && gvfs_share_uri(path_base(str_from_c(root)), path + strlen(root), uri, cap);
+}
+
+// What a far path is called when it doesn't answer: the share it is in, as gvfs names it ("pub on
+// nas": the server is what doesn't answer, F16 step 5, the step 3 confirm's ask), else the folder's
+// own name. Valid until the next call.
+static Str far_who(const char *path)
+{
+    static char root[PATH_MAX], label[256];
+    if (far_share(path, root, sizeof root, label, sizeof label)) return str_from_c(label);
+    return path_base(str_from_c(path));
+}
+
+// A path's buttons: from its share when it is in one (F16 step 5), else from home or /.
+static void crumbs_for(UiCrumbs *c, const char *dir)
+{
+    char root[PATH_MAX], label[256];
+    bool sh = dir[0] == '/' && far_share(dir, root, sizeof root, label, sizeof label);
+    ui_crumbs_set_share(c, dir, getenv("HOME"), sh ? root : NULL, sh ? label : NULL);
+}
+
 // Whether path is on a far drive: by the mount list, then through the local links on its way
 // (`~/nas/sub`, nas a link into a share; step 3). Nothing on a far drive is looked at.
 static bool far_dir(const char *path)
@@ -256,7 +293,7 @@ static bool far_no_trash(const char *path)
 // (r->f[0] says why).
 static bool far_do(const char *exe, const char *dir, const char *const *args, i64 until, FarReply *r, Err *err)
 {
-    Str name = path_base(str_from_c(dir));
+    Str name = far_who(dir);
     if (far_stuck(dir)) return err_set(err, "%.*s isn't answering: not tried", STR_ARG(name)), false;
     // A batch past its deadline: not started at all (step 3 confirm: one killed would be held, and
     // the share, only slow, refused at once next time).

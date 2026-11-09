@@ -1,0 +1,31 @@
+# F16 step 5 on the real shares (run.sh's net group, after netc: open, priv and pub mounted; the
+# bookmarks file has priv as "Priv"): the Network section lists them by gvfs's names; an unmount from
+# the sidebar takes one away (run.sh checks the run's gvfs after); a bookmark of a mounted share goes
+# there with no question; a connect shows its share at once. The shares are listed at the start and
+# then only when ofx kicks the listing (its unmount, its connect: OFX_TEST_GVFS_MS is 10 min here).
+settle
+wait-for 5000 sides=^Places|Home|Trash|^Drives|File_System|^Network|open_on_127.0.0.1|priv_on_127.0.0.1|pub_on_127.0.0.1|~Priv
+point-side open on 127.0.0.1
+click-here
+wait-for 5000 faron=1 farloading=0 n=1 sel=o.txt crumbs=open_on_127.0.0.1
+point-ui side-row 6
+hover-here
+wait-for 2000 ejectbtn=1
+point-ui side-eject 6
+click-here
+wait-for 5000 statusbad=0 unmounted
+# Gone from the sidebar at once (ofx lists gvfs's folders again), and the folder shown on it Home.
+wait-for 3000 sides=^Places|Home|Trash|^Drives|File_System|^Network|priv_on_127.0.0.1|pub_on_127.0.0.1|~Priv faron=0 sel=nas
+point-side Priv
+click-here
+wait-for 8000 conn=0 login=0 faron=1 farloading=0 n=1 sel=p.txt connasked=0 statusbad=0
+# (connected again only after 3 s: a share mounted again within about 2 s of its unmount reads
+# "Input/output error" in gvfs's FUSE folder until then, measured with ls too; plan.md's known gap)
+sleep 3000
+key ctrl-l
+type smb://127.0.0.1:@PORT@/open
+key enter
+wait-for 8000 login=1
+key alt-g
+wait-for 8000 conn=0 login=0 faron=1 sel=o.txt sides=^Places|Home|Trash|^Drives|File_System|^Network|open_on_127.0.0.1|priv_on_127.0.0.1|pub_on_127.0.0.1|~Priv
+quit

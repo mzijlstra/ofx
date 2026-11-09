@@ -9,7 +9,9 @@ sh "$OFX_ROOT/pause"
 key ctrl-r
 expect farloading=1 n=2 sel=sub
 wait-for 4000 farslow=1 statusbad=1
-expect isn't answering
+# (named as gvfs names the share: the server is what doesn't answer, step 5)
+expect on 127.0.0.1 isn't answering
+expect farnote=pub_on_127.0.0.1_isn't_answering
 # Listed again while it hangs: the hung lister killed first, and the new one waits for it to leave
 # the kernel (one per folder; step 2a review: it started at once, and they gathered).
 key ctrl-r

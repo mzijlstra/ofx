@@ -143,6 +143,10 @@ shared state. Every test runs against fakes and scratch folders. Keep it that wa
   run-script's gio fake only logs them, unless the run gives `OFX_TEST_GIO`: the `net` group's,
   a gio on that run's own gvfs session (its bus checked first). Never test it with the real gio on
   the session bus, and never put a real password in a test.
+- **The Network section** (F16 step 5) lists the shares in every `fuse.gvfsd-fuse` mount of the mount
+  list (the watch thread, every 2 s), and its unmount button runs `gio mount -u <share folder>`.
+  With `OFX_TEST_MOUNTINFO` a test's stand-in folder is listed instead (f16h); the gio fake only
+  logs the unmount. On your desktop that button unmounts your real share.
 - **A window that stops answering** makes the compositor ask whether to terminate it, on your
   screen. The script's `sh` runs under `timeout 5` for that reason; keep everything a script waits
   for short.

@@ -21,6 +21,13 @@
 // trash_ready, and the main thread looks again whether any holds something (the Trash place's icon).
 // The main thread arms them (watch_trashes) whenever it reads the trash folders again.
 //
+// The shares gvfs has mounted (F16 step 5): gvfsd-fuse shows each as a folder of its FUSE mount, and
+// no inotify event comes as one appears (measured: only the folder's link count moves). So the thread
+// lists those FUSE folders every WATCH_GVFS_MS, and at once when the main thread kicks it (ofx's own
+// connect or unmount, watch_gvfs_kick); a change reads the places again. A listing there is answered
+// by gvfsd-fuse from its mount table, not the servers: 4 ms with a server paused and 30 requests
+// stuck on its share (measured). Only names gvfs gives ("type:key=value,…") are shares.
+//
 // The main thread points the folder watch at a new folder (watch_dir); the thread owns the theme
 // watches. inotify's calls are safe from both threads. A batch ends 100 ms after its last event,
 // and never more than a second after its first, so a file being written all the time (a download)
@@ -28,9 +35,18 @@
 
 #include <poll.h>
 #include <stdatomic.h>
+#include <sys/eventfd.h>
 #include <sys/inotify.h>
 
-enum { WATCH_QUIET_MS = 100, WATCH_MAX_MS = 1000 };
+enum { WATCH_QUIET_MS = 100, WATCH_MAX_MS = 1000, WATCH_GVFS_MS = 2000 };
+
+// The shares' folders, one a line, as the thread last listed them (watch_shares copies them out).
+static struct {
+    pthread_mutex_t mu;
+    char            text[32768];
+    int             len;
+    int             kick;   // an eventfd: watch_gvfs_kick lists them again at once (-1: none)
+} gvfsw = { .mu = PTHREAD_MUTEX_INITIALIZER, .kick = -1 };
 
 static struct {
     int         fd;
@@ -210,13 +226,83 @@ static void watch_read(bool *list, bool *theme, bool *mounts, bool *trash, bool 
     }
 }
 
-// One poll of inotify and the mountinfo file, for at most ms (-1: no limit): the flags it raises.
-static void watch_poll(int ms, bool *list, bool *theme, bool *mounts, bool *trash, bool *conf)
+// Whether a folder name is one gvfs gives a share: "type:key=value…" (a scratch stand-in's own
+// folders aren't).
+static bool gvfs_share_name(const char *n)
 {
-    struct pollfd p[2] = { { watch.fd, POLLIN, 0 }, { watch.mount_fd, POLLPRI, 0 } };
-    if (poll(p, 2, ms) <= 0) return;
+    const char *colon = strchr(n, ':');
+    if (!colon || colon == n) return false;
+    for (const char *c = n; c < colon; c++)
+        if (!((*c >= 'a' && *c <= 'z') || (*c >= '0' && *c <= '9') || *c == '-')) return false;
+    return strchr(colon, '=') != NULL;
+}
+
+static int cmp_cstr(const void *x, const void *y)
+{
+    return strcmp(*(char *const *)x, *(char *const *)y);
+}
+
+// The shares listed again (sorted): true when they changed.
+static bool watch_gvfs_scan(void)
+{
+    static char now[sizeof gvfsw.text], mem[KiB(512)];
+    static Arena a;
+    arena_init(&a, "gvfs mounts", mem, sizeof mem);
+    Str mi = read_file(&a, mountinfo_path());
+    if (mi.len == 0) return false;   // (a read that failed isn't every share gone: no tab goes Home for it)
+    enum { SHARES_MAX = 64 };   // (as many as the sidebar has places)
+    char *line_of[SHARES_MAX];
+    int k = 0;
+    isize at = 0;
+    for (Str line; next_line(mi, &at, &line);) {
+        char mp[PATH_MAX];
+        Str type, src;
+        if (!mountinfo_line(line, mp, sizeof mp, &type, &src) || !str_eq(type, S("fuse.gvfsd-fuse"))) continue;
+        DIR *d = opendir(mp);
+        for (struct dirent *e; d && k < SHARES_MAX && (e = readdir(d));)
+            if (gvfs_share_name(e->d_name)) line_of[k++] = arena_sprintf(&a, "%s/%s\n", mp, e->d_name);
+        if (d) closedir(d);
+    }
+    qsort(line_of, (size_t)k, sizeof *line_of, cmp_cstr);   // (by name, whatever order the folder gives)
+    int n = 0;
+    for (int i = 0; i < k; i++) {
+        int w = (int)strlen(line_of[i]);
+        if (n + w < (int)sizeof now) memcpy(now + n, line_of[i], (size_t)w), n += w;
+    }
+    pthread_mutex_lock(&gvfsw.mu);
+    bool changed = n != gvfsw.len || memcmp(now, gvfsw.text, (size_t)n) != 0;
+    if (changed) memcpy(gvfsw.text, now, (size_t)n), gvfsw.len = n;
+    pthread_mutex_unlock(&gvfsw.mu);
+    return changed;
+}
+
+// The shares' folders as last listed, copied into a (the places read them).
+static Str watch_shares(Arena *a)
+{
+    pthread_mutex_lock(&gvfsw.mu);
+    char *b = arena_push(a, gvfsw.len + 1, 1);
+    memcpy(b, gvfsw.text, (size_t)gvfsw.len);
+    Str s = { b, gvfsw.len };
+    pthread_mutex_unlock(&gvfsw.mu);
+    return s;
+}
+
+// The shares listed again at once (a connection made, or a share unmounted, by ofx).
+static void watch_gvfs_kick(void)
+{
+    if (gvfsw.kick >= 0) eventfd_write(gvfsw.kick, 1);
+}
+
+// One poll of inotify, the mountinfo file and the kick, for at most ms (-1: no limit): the flags it
+// raises; *kicked when the shares are to be listed now.
+static void watch_poll(int ms, bool *list, bool *theme, bool *mounts, bool *trash, bool *conf, bool *kicked)
+{
+    struct pollfd p[3] = { { watch.fd, POLLIN, 0 }, { watch.mount_fd, POLLPRI, 0 }, { gvfsw.kick, POLLIN, 0 } };
+    if (poll(p, 3, ms) <= 0) return;
     if (p[0].revents & POLLIN) watch_read(list, theme, mounts, trash, conf);
     if (p[1].revents & (POLLPRI | POLLERR)) *mounts = true;
+    eventfd_t v;
+    if ((p[2].revents & POLLIN) && eventfd_read(gvfsw.kick, &v) == 0) *kicked = true;
 }
 
 static void *watch_thread(void *arg)
@@ -225,14 +311,24 @@ static void *watch_thread(void *arg)
     // Its signal mask is the main thread's (SIGTERM and SIGINT blocked), so a quit still goes to
     // main.c's signal_waiter.
     watch_theme_dirs();
+    i64 gvfs_due = 0;   // (listed at once)
     for (;;) {
-        bool list = false, theme = false, mounts = false, trash = false, conf = false;
-        watch_poll(-1, &list, &theme, &mounts, &trash, &conf);
+        bool list = false, theme = false, mounts = false, trash = false, conf = false, kicked = false;
+        i64 wait = gvfs_due - now_ms();
+        if (wait > 0) watch_poll((int)wait, &list, &theme, &mounts, &trash, &conf, &kicked);
+        if (kicked || now_ms() >= gvfs_due) {
+            if (watch_gvfs_scan()) mounts = true;
+            // (OFX_TEST_GVFS_MS: longer, so a test sees ofx's own kicks alone; step 5)
+            static int every = -1;
+            if (every < 0) every = env_int("OFX_TEST_GVFS_MS", WATCH_GVFS_MS, 100, 600000);
+            gvfs_due = now_ms() + every;
+        }
         if (!list && !theme && !mounts && !trash && !conf) continue;
         i64 first = now_ms(), last = first;
         for (i64 now; (now = now_ms()) < ui_batch_due(first, last, WATCH_QUIET_MS, WATCH_MAX_MS);) {
-            bool l2 = false, t2 = false, m2 = false, r2 = false, c2 = false;
-            watch_poll((int)(ui_batch_due(first, last, WATCH_QUIET_MS, WATCH_MAX_MS) - now), &l2, &t2, &m2, &r2, &c2);
+            bool l2 = false, t2 = false, m2 = false, r2 = false, c2 = false, k2 = false;
+            watch_poll((int)(ui_batch_due(first, last, WATCH_QUIET_MS, WATCH_MAX_MS) - now), &l2, &t2, &m2, &r2, &c2, &k2);
+            if (k2 && watch_gvfs_scan()) m2 = true;
             if (l2 || t2 || m2 || r2 || c2) last = now_ms();
             list |= l2, theme |= t2, mounts |= m2, trash |= r2, conf |= c2;
         }
@@ -251,6 +347,7 @@ static bool watch_start(void)
 {
     watch.fd = inotify_init1(IN_CLOEXEC);
     if (watch.fd < 0) return false;
+    gvfsw.kick = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
     char dir[PATH_MAX];
     theme_dir(dir, sizeof dir);
     snprintf(watch.theme, sizeof watch.theme, "%s", dir);

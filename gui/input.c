@@ -347,13 +347,15 @@ static void ctx_facts(void)
     u->ctx_w = app.ctx_path[0] && can_write_at(app.ctx_path);
     u->ctx_trash = strcmp(app.ctx_path, TRASH_URI) == 0;
     u->ctx_full = u->ctx_trash && (trash_state(), app.trash_full);   // (the icon's answer, looked at again)
-    u->ctx_bmed = bm_find(&bmarks, app.ctx_path) >= 0;
+    char uri[PATH_MAX];   // (a folder in a share: its smb:// address, F16 step 5)
+    u->ctx_bmed = bm_find(&bmarks, app.ctx_path) >= 0 || (app.ctx_path[0] == '/' && far_share_uri(app.ctx_path, uri, sizeof uri) && bm_find_uri(&bmarks, uri) >= 0);
     u->ctx_bms = bmarks.n;
     if (u->ctx_crumb < 0 && u->side_mode == SIDE_PLACES && u->ctx_side >= 0 && u->ctx_side < app.places.n) {
         const Place *pl = &app.places.p[u->ctx_side];
         u->ctx_place = true;
         u->ctx_eject = place_ejectable(pl);
-        u->ctx_unmounted = pl->kind == PL_UNMOUNTED;
+        u->ctx_share = pl->kind == PL_SHARE;
+        u->ctx_unmounted = pl->kind == PL_UNMOUNTED || pl->kind == PL_NETBM;   // (a network bookmark: Mount connects, F16 step 5)
         if (pl->kind == PL_BOOKMARK) u->ctx_bmk = bm_find(&bmarks, pl->path);
     }
 }
@@ -365,6 +367,7 @@ static void folder_do(UiMenuItem it)
     const char *dir = app.ctx_path;
     const Place *ctx_pl = app.ui.ctx_side >= 0 && app.ui.ctx_side < app.places.n ? &app.places.p[app.ui.ctx_side] : NULL;
     if (it == UM_MOUNT_IT && ctx_pl && ctx_pl->kind == PL_UNMOUNTED) mount_start(ctx_pl);   // (no folder yet: before the check below)
+    if (it == UM_MOUNT_IT && ctx_pl && ctx_pl->kind == PL_NETBM) connect_start(str_from_c(ctx_pl->path));
     if (!dir[0]) return;
     switch (it) {
     case UM_OPEN_IT: go_to(dir, STR_EMPTY, 0); break;
@@ -379,6 +382,7 @@ static void folder_do(UiMenuItem it)
     case UM_EJECT_IT:
     case UM_UNMOUNT_IT:
         if (ctx_pl && place_ejectable(ctx_pl)) (it == UM_EJECT_IT ? eject_start : unmount_start)(ctx_pl);
+        else if (ctx_pl && ctx_pl->kind == PL_SHARE && it == UM_UNMOUNT_IT) share_unmount_start(ctx_pl);
         break;
     default: break;
     }

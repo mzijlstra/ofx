@@ -227,7 +227,7 @@ static void layout_side(float h)
                                                         .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
                                             .backgroundColor = bg,
                                             .border = { .color = cc(t->accent), .width = { .left = cursor ? 3 : 0 } } }) {
-                if (hover && place_ejectable(p)) {   // in the icon's place while the pointer is over it
+                if (hover && place_unmountable(p)) {   // in the icon's place while the pointer is over it (a share's: unmount, F16 step 5)
                     bool on = app.hov.eject == r;
                     CLAY(CLAY_IDI("side-eject", r), { .layout = { .sizing = { CLAY_SIZING_FIXED(SIDE_ICON_PX), CLAY_SIZING_FIXED(SIDE_ICON_PX) },
                                                                   .childAlignment = { .x = CLAY_ALIGN_X_CENTER, .y = CLAY_ALIGN_Y_CENTER } },

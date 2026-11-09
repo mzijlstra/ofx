@@ -132,3 +132,65 @@ static bool gio_local_path(Str info, char *path, size_t cap)
     }
     return false;
 }
+
+// ---- gvfs's share folders (F16 step 5) ---------------------------------------------------------
+//
+// gvfsd-fuse shows each mounted share as a folder of its FUSE mount named by the share's mount spec:
+// "smb-share:port=4445,server=nas,share=pub", "sftp:host=h,user=u", "afp-volume:host=h,volume=v",
+// "dav:host=h,ssl=true", keys sorted, values escaped as in a URI (%xx).
+
+// The value of key in a gvfs folder name (the part after its "type:"), unescaped into out; false
+// when it has none.
+static bool gvfs_key(Str name, const char *key, char *out, size_t cap)
+{
+    isize colon = str_find(name, ':');
+    if (colon < 0 || cap == 0) return false;
+    Str rest = str_cut(name, colon + 1, name.len), k = str_from_c(key);
+    isize at = 0;
+    while (at <= rest.len) {
+        isize end = at;
+        while (end < rest.len && rest.p[end] != ',') end++;
+        Str part = str_cut(rest, at, end);
+        if (part.len > k.len && memcmp(part.p, k.p, (size_t)k.len) == 0 && part.p[k.len] == '=') {
+            Str v = str_cut(part, k.len + 1, part.len);
+            size_t o = 0;
+            for (isize i = 0; i < v.len && o + 1 < cap; i++) {
+                int hi, lo;
+                if (v.p[i] == '%' && i + 2 < v.len && (hi = hex_digit(v.p[i + 1])) >= 0 && (lo = hex_digit(v.p[i + 2])) >= 0)
+                    out[o++] = (char)(hi << 4 | lo), i += 2;
+                else out[o++] = v.p[i];
+            }
+            out[o] = 0;
+            return o > 0;
+        }
+        at = end + 1;
+    }
+    return false;
+}
+
+// A share's name as gvfs (and Nautilus, Nemo) give it, from its folder's name: "pub on nas" for an
+// SMB share or an AFP volume, "u@h" or "h" for others; the folder's name when it isn't one of gvfs's.
+static void gvfs_share_label(Str name, char *out, size_t cap)
+{
+    char what[256], host[256], user[128];
+    bool share = gvfs_key(name, "share", what, sizeof what) || gvfs_key(name, "volume", what, sizeof what);
+    bool server = gvfs_key(name, "server", host, sizeof host) || gvfs_key(name, "host", host, sizeof host);
+    if (share && server) snprintf(out, cap, "%s on %s", what, host);
+    else if (server && gvfs_key(name, "user", user, sizeof user)) snprintf(out, cap, "%s@%s", user, host);
+    else if (server) snprintf(out, cap, "%s", host);
+    else snprintf(out, cap, "%.*s", STR_ARG(name));
+}
+
+// The smb:// address of a folder in an SMB share gvfs mounted (Add Bookmark there writes it, as
+// Nautilus does, not the FUSE folder's path): name its share's folder's name, rest the path below
+// that ("" or "/sub/x"). The share and rest escaped as a URI's path; false for another kind of share
+// or one that doesn't fit.
+static bool gvfs_share_uri(Str name, const char *rest, char *out, size_t cap)
+{
+    char server[256], share[256], port[16], user[128], domain[128], path[PATH_MAX], esc[PATH_MAX * 3 + 8];
+    if (!str_starts_with(name, S("smb-share:")) || !gvfs_key(name, "server", server, sizeof server) || !gvfs_key(name, "share", share, sizeof share)) return false;
+    bool hp = gvfs_key(name, "port", port, sizeof port), hu = gvfs_key(name, "user", user, sizeof user), hd = gvfs_key(name, "domain", domain, sizeof domain);
+    if (snprintf(path, sizeof path, "/%s%s", share, rest) >= (int)sizeof path || !percent_encode(str_from_c(path), "!$&'()*+,=@:/", esc, sizeof esc)) return false;
+    int n = snprintf(out, cap, "smb://%s%s%s%s%s%s%s%s", hd && hu ? domain : "", hd && hu ? ";" : "", hu ? user : "", hu ? "@" : "", server, hp ? ":" : "", hp ? port : "", esc);
+    return n > 0 && (size_t)n < cap;
+}

@@ -844,7 +844,8 @@ typedef struct {
     // bookmark's row), a bookmark already, a drive with an eject button, a trash with something in it.
     int    ctx_side, ctx_crumb;
     bool   ctx_trash, ctx_place, ctx_bmed, ctx_eject, ctx_full;
-    bool   ctx_unmounted;   // a drive not mounted yet (2026-10-30): Mount is all its menu has
+    bool   ctx_unmounted;   // a drive not mounted yet (2026-10-30), or a network bookmark (F16 step 5): Mount is all its menu has
+    bool   ctx_share;       // a share gvfs has mounted (F16 step 5): Unmount, no Eject
     bool   ctx_w;   // the folder (either menu's, as it opens) takes new files: Paste Into Folder
     int    ctx_bmk, ctx_bms;
     // The tabs, from gui/ each frame (menu_facts): the current one's place, how many (F8's tab menu).
