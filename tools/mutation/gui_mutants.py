@@ -1108,14 +1108,23 @@ MUTANTS = [
     # after the unmount; a closed input makes gio wait for gvfs's answer first, so there is no race.)
     ('gui/connect.c', '        if (mounted) {', '        if (0) {', 'net'),
     ('gui/connect.c', ' || strcmp(why, "Location is already mounted") == 0;', ';', 'net'),
-    ('gui/connect.c', '    if (!ok && guest && !cancelled) ok = cn_mount(true,', '    if (0) ok = cn_mount(true,', 'net'),
+    ('gui/connect.c', '    if (!ok && guest && !cancelled && !quit) ok = cn_mount(true,', '    if (0) ok = cn_mount(true,', 'net'),
     ('gui/connect.c', 'ok = cn_mount(false, why, sizeof why, &cancelled, &guest) && cn_folder(path, sizeof path, why, sizeof why);', 'ok = cn_mount(false, why, sizeof why, &cancelled, &guest) && (cn_folder(path, sizeof path, why, sizeof why) || true);', 'net'),
     ('gui/connect.c', '    if (busy) return set_status(true, "Still connecting to %s", cn_name()), true;', '', 'net'),
     ('gui/connect.c', '        cn.reply = k == UA_LOGIN ? CN_ANSWER : k == UA_LOGIN_GUEST ? CN_GUEST : CN_CANCEL;', '        cn.reply = k == UA_LOGIN ? CN_ANSWER : CN_CANCEL;', 'net'),
     ('gui/connect.c', '    pthread_mutex_unlock(&cn.mu);\n    connect_fields_clear();\n    if (k == UA_LOGIN_CANCEL)', '    pthread_mutex_unlock(&cn.mu);\n    if (k == UA_LOGIN_CANCEL)', 'net'),
     ('gui/connect.c', '        if (!cn.again) {   // (asked again: what was typed stays, save the password)', '        if (1) {', 'net'),
     ('gui/connect.c', '        u->login_at = cn.ask_user && u->login_user.len == 0 ? UI_LOGIN_USER : UI_LOGIN_PASS;', '        u->login_at = UI_LOGIN_USER;', 'net'),
-    ('gui/connect.c', '    if (!ok) return set_status(true, "Can\'t connect to %s: %s", cn_name(), why[0] ? why : "no reason given"), true;', '    if (!ok) return true;', 'net'),
+    ('gui/connect.c', '    if (!ok) return set_status(true, "Can\'t connect to %s: %s%s", cn_name(),', '    if (!ok) return true; if (0) set_status(true, "%s%s%s", cn_name(),', 'net'),
     ('gui/actions.c', '    if (connect_start((Str){ app.ui.edit.b, app.ui.edit.len })) return;   // smb://… (F16 step 4)', '', 'net'),
     ('gui/input.c', '            if (in_box(CLAY_IDI("login-field", f), x, y)) h.login_field = f;', '', 'net'),
+    # (step 4 review: quit cancels as Cancel does, waits, kills last; not dumpable while connecting)
+    # (Dropped, not seen: quit's wait for the thread. Without it gio is killed at once, but quit has
+    # closed its input already (the other workers are joined first), and the run's gvfs then mounted
+    # nothing in 8 s of looking, by hand. The wait keeps that order certain and lets the thread's
+    # unmount run when gvfs did mount.)
+    ('gui/connect.c', '    cn.quit = true;\n    if (cn.reply == CN_WAIT) cn.reply = CN_CANCEL;', '    cn.quit = true;', 'net'),
+    ('gui/connect.c', '        prctl(PR_SET_DUMPABLE, 0, 0, 0, 0);\n    }', '    }', 'net'),
+    ('gui/connect.c', '    prctl(PR_SET_DUMPABLE, 1, 0, 0, 0);   // (every copy', '    // (every copy', 'net'),
+    ('gui/connect.c', ', strcmp(why, "Invalid argument") == 0 ? " (is the server\'s name right?)" : ""), true;', ', ""), true;', 'net'),
 ]

@@ -1,0 +1,12 @@
+# F16 step 4 review: quitting with Connect's question up cancels it as Esc does, so gvfs mounts
+# nothing (a killed gio left it to mount the guest share open: run.sh checks the run's gvfs after the
+# window ends). While a connection runs, ofx isn't dumpable (no core file holds a password).
+settle
+wait-for 5000 n=1 sel=nas conn=0 dumpable=1
+key ctrl-l
+type smb://127.0.0.1:@PORT@/open
+key enter
+wait-for 8000 login=1 conn=2 dumpable=0
+type abc
+expect loginpass=3
+quit

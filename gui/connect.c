@@ -9,9 +9,18 @@
 // Passwords are asked each time and never stored (Michael, 2026-11-09). One goes to gio on its input,
 // as a line: never in its arguments (any process reads those) or a log. Each copy in ofx (the field,
 // the thread's) is wiped as it is handed on, and when the question goes unanswered.
+// While a connection runs, ofx isn't dumpable: a crash then writes no core file holding a password
+// (systemd-coredump keeps them for days), and no process of the same user can read its memory.
 // One connection at a time. Included by actions.c.
 
+#include <sys/prctl.h>
+
 enum { CONNECT_INFO_MS = 10000 };   // `gio info` on a share just mounted answers in milliseconds
+// At quit, a question up is cancelled as Cancel does it (gio's input closed, an unmount if gvfs
+// mounted as a guest anyway), waited for this long; only then is gio killed. A killed gio leaves
+// gvfs to mount a guest share all the same (step 4 review, measured). Mount and unmount take about
+// 50 ms each on loopback.
+enum { CONNECT_QUIT_MS = 1500 };
 
 typedef enum { CN_IDLE, CN_RUN, CN_ASK, CN_DONE } CnPhase;
 typedef enum { CN_WAIT, CN_ANSWER, CN_GUEST, CN_CANCEL } CnReply;
@@ -33,6 +42,7 @@ static struct {
     char    path[PATH_MAX], why[512];
     int     pidfd;    // gio's while it runs, -1 none
     bool    quit;
+    bool    running;  // the thread is there (connect_join waits for its end)
     int     asked;    // questions put, for the scripts' state line (connasked=)
 } cn = { .mu = PTHREAD_MUTEX_INITIALIZER, .cv = PTHREAD_COND_INITIALIZER, .pidfd = -1 };
 
@@ -98,7 +108,6 @@ static bool cn_mount(bool guest, char *why, size_t cap, bool *cancelled, bool *a
     }
     pthread_mutex_lock(&cn.mu);
     cn.pidfd = pfd;
-    if (cn.quit) syscall(SYS_pidfd_send_signal, pfd, SIGKILL, NULL, 0);
     pthread_mutex_unlock(&cn.mu);
     static char ob[16384], eb[4096];
     size_t on = 0, en = 0, handled = 0;
@@ -190,9 +199,15 @@ static void *cn_thread(void *arg)
     char why[512] = "", path[PATH_MAX] = "";
     bool cancelled = false, guest = false, ok = cn_mount(false, why, sizeof why, &cancelled, &guest) && cn_folder(path, sizeof path, why, sizeof why);
     // Guest, not mounted by it: gio -a, whose refusal says why ("Anonymous access denied").
-    if (!ok && guest && !cancelled) ok = cn_mount(true, why, sizeof why, &cancelled, &guest) && cn_folder(path, sizeof path, why, sizeof why);
     pthread_mutex_lock(&cn.mu);
-    cn.ok = ok, cn.cancelled = cancelled, cn.phase = CN_DONE;
+    bool quit = cn.quit;
+    pthread_mutex_unlock(&cn.mu);
+    if (!ok && guest && !cancelled && !quit) ok = cn_mount(true, why, sizeof why, &cancelled, &guest) && cn_folder(path, sizeof path, why, sizeof why);
+    pthread_mutex_lock(&cn.mu);
+    cn_wipe();
+    prctl(PR_SET_DUMPABLE, 1, 0, 0, 0);   // (every copy of a password wiped: the field as it was answered)
+    cn.ok = ok, cn.cancelled = cancelled, cn.phase = CN_DONE, cn.running = false;
+    pthread_cond_broadcast(&cn.cv);
     snprintf(cn.path, sizeof cn.path, "%s", path);
     snprintf(cn.why, sizeof cn.why, "%s", why);
     pthread_mutex_unlock(&cn.mu);
@@ -212,14 +227,16 @@ static bool connect_start(Str text)
     bool busy = cn.phase != CN_IDLE;
     if (!busy) {
         snprintf(cn.uri, sizeof cn.uri, "%s", uri), snprintf(cn.host, sizeof cn.host, "%s", host), snprintf(cn.share, sizeof cn.share, "%s", share);
-        cn.phase = CN_RUN, cn.shown = false, cn.reply = CN_WAIT, cn.user[0] = cn.domain[0] = 0;
+        cn.phase = CN_RUN, cn.shown = false, cn.reply = CN_WAIT, cn.user[0] = cn.domain[0] = 0, cn.running = true;
+        prctl(PR_SET_DUMPABLE, 0, 0, 0, 0);
     }
     pthread_mutex_unlock(&cn.mu);
     if (busy) return set_status(true, "Still connecting to %s", cn_name()), true;
     pthread_t t;
     if (pthread_create(&t, NULL, cn_thread, NULL) != 0) {
         pthread_mutex_lock(&cn.mu);
-        cn.phase = CN_IDLE;
+        cn.phase = CN_IDLE, cn.running = false;
+        prctl(PR_SET_DUMPABLE, 1, 0, 0, 0);
         pthread_mutex_unlock(&cn.mu);
         return set_status(true, "Can't connect: %s", strerror(errno)), true;
     }
@@ -251,7 +268,7 @@ static void connect_answer(UiActionKind k)
         memcpy(cn.pass, u->login_pass.b, (size_t)n), cn.pass[n] = 0;
         cn.reply = k == UA_LOGIN ? CN_ANSWER : k == UA_LOGIN_GUEST ? CN_GUEST : CN_CANCEL;
         cn.shown = false;
-        pthread_cond_signal(&cn.cv);
+        pthread_cond_broadcast(&cn.cv);
     }
     pthread_mutex_unlock(&cn.mu);
     connect_fields_clear();
@@ -287,19 +304,35 @@ static bool connect_take(void)
     pthread_mutex_unlock(&cn.mu);
     ui_panel_close(u, UI_PANEL_LOGIN);   // (an answer closed it: none is waited for now)
     if (cancelled) return true;   // (said as it was cancelled)
-    if (!ok) return set_status(true, "Can't connect to %s: %s", cn_name(), why[0] ? why : "no reason given"), true;
+    // (libsmbclient's word for a server name it can't find, and gvfs passes it on: a hint, as a name
+    // isn't looked up first, which would miss the ones only found by broadcast)
+    if (!ok) return set_status(true, "Can't connect to %s: %s%s", cn_name(), why[0] ? why : "no reason given", strcmp(why, "Invalid argument") == 0 ? " (is the server's name right?)" : ""), true;
     if (go_to(path, STR_EMPTY, 0)) set_status(false, "Connected to %s", cn_name());
     return true;
 }
 
-// At quit: a question unanswered is cancelled, and gio stopped (the thread ends with it).
+// At quit: a question unanswered is cancelled as Cancel cancels it (and one gio asks later, too).
 static void connect_quit(void)
 {
     pthread_mutex_lock(&cn.mu);
     cn.quit = true;
     if (cn.reply == CN_WAIT) cn.reply = CN_CANCEL;
     cn_wipe();
-    pthread_cond_signal(&cn.cv);
-    if (cn.pidfd >= 0) syscall(SYS_pidfd_send_signal, cn.pidfd, SIGKILL, NULL, 0);
+    pthread_cond_broadcast(&cn.cv);
+    pthread_mutex_unlock(&cn.mu);
+    connect_fields_clear();
+}
+
+// The thread's end awaited until CONNECT_QUIT_MS from now (its unmount of a guest mount gvfs made
+// anyway); past that gio is killed (no question was answered, so gvfs hasn't reached the share: a
+// paused server, say) and the thread left to end on its own.
+static void connect_join(void)
+{
+    struct timespec until;
+    clock_gettime(CLOCK_REALTIME, &until);
+    until.tv_nsec += CONNECT_QUIT_MS % 1000 * 1000000L, until.tv_sec += CONNECT_QUIT_MS / 1000 + until.tv_nsec / 1000000000L, until.tv_nsec %= 1000000000L;
+    pthread_mutex_lock(&cn.mu);
+    while (cn.running && pthread_cond_timedwait(&cn.cv, &cn.mu, &until) == 0) {}
+    if (cn.running && cn.pidfd >= 0) syscall(SYS_pidfd_send_signal, cn.pidfd, SIGKILL, NULL, 0);
     pthread_mutex_unlock(&cn.mu);
 }

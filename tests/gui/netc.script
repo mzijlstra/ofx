@@ -96,7 +96,7 @@ expect login=0 loginpass=0
 wait-for 8000 login=1 connasked=5 loginagain=1 loginuser=tester loginpass=0 loginat=2
 type secret
 key enter
-wait-for 8000 conn=0 login=0 faron=1 farloading=0 n=1 sel=p.txt statusbad=0
+wait-for 8000 conn=0 login=0 faron=1 farloading=0 n=1 sel=p.txt statusbad=0 dumpable=1
 expect to priv on 127.0.0.1
 # A share mounted already (the run's pub), and a folder in it: no question, straight there.
 key ctrl-l
@@ -109,6 +109,14 @@ type smb://127.0.0.1:1/x
 key enter
 wait-for 8000 conn=0 statusbad=1
 expect connect to x on 127.0.0.1: Connection refused
+# A server name nothing knows: gvfs asks first, then says "Invalid argument"; ofx adds a hint.
+key ctrl-l
+type smb://no-such-host.invalid/x
+key enter
+wait-for 8000 login=1
+key enter
+wait-for 8000 conn=0 login=0 statusbad=1
+expect connect to x on no-such-host.invalid: Invalid argument (is the server's name right?)
 # The password is nowhere ofx writes (its output, errors, the programs' arguments).
 sh ! grep -qs secret "$OFX_ROOT/spawn.log" "$OFX_ROOT/spawn-args.log" "$OFX_ROOT/out" "$OFX_ROOT/err"
 sh ! grep -qs wrong "$OFX_ROOT/spawn.log" "$OFX_ROOT/spawn-args.log" "$OFX_ROOT/out" "$OFX_ROOT/err"

@@ -996,8 +996,16 @@ blocks each of these for up to gvfs's 90 s. On a thread it also holds ofx's exit
        meanwhile. A port nothing listens on: "Connection refused" at once.
      - An unknown server name is asked for a password first, then fails with "Invalid argument"
        (libsmbclient's word): said as gvfs says it.
+   - **The step 4 review's fixes:**
+     - Quitting with the question up killed gio, and gvfs then mounted the guest share in the
+       session (measured 2 s later). Quit now cancels as Cancel does, waits up to 1.5 s for the
+       thread (its unmount), and kills gio only past that. netq checks the run's gvfs after the
+       window ends.
+     - While a connection runs ofx isn't dumpable (`PR_SET_DUMPABLE`): a crash then writes no core
+       file holding a password, and no process of the same user reads its memory.
+     - An unknown server's "Invalid argument" gets a hint: "(is the server's name right?)".
    - **Tests:** unit (the address, gio's questions and errors, its local path, from the spike's
-     recordings); the net group's netc (a paused server, Cancel, Guest by button and by key, a
+     recordings); the net group's netq (quit with the question up) and netc (a paused server, Cancel, Guest by button and by key, a
      guest refused, a wrong then right password, a share mounted already, a closed port, the
      password nowhere in ofx's output or the programs' arguments). Its gio reaches only the run's own
      gvfs (run-script's `OFX_TEST_GIO`).

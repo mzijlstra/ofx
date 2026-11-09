@@ -743,10 +743,10 @@ static void script_state(char *out, size_t cap)
     sw(out, cap, &len, "listword=%s ", state_word(listword, sizeof listword, str_from_c(word)));
     pthread_mutex_unlock(&far.mu);
     // Connect to Server (F16 step 4): the thread's phase (0 idle, 1 gio runs, 2 a question, 3 a
-    // result), the questions put; the question up, its field with the keys, asked again, no user
+    // result), the questions put, whether ofx is dumpable (not while one runs); the question up, its field with the keys, asked again, no user
     // field; its user, and the password's length only (never its text).
     pthread_mutex_lock(&cn.mu);
-    sw(out, cap, &len, "conn=%d connasked=%d ", (int)cn.phase, cn.asked);
+    sw(out, cap, &len, "conn=%d connasked=%d dumpable=%d ", (int)cn.phase, cn.asked, prctl(PR_GET_DUMPABLE, 0, 0, 0, 0));
     pthread_mutex_unlock(&cn.mu);
     char loginuser[256];
     sw(out, cap, &len, "login=%d loginat=%d loginagain=%d loginnouser=%d loginuser=%s loginpass=%d ", app.ui.panel == UI_PANEL_LOGIN, app.ui.login_at, app.ui.login_again,

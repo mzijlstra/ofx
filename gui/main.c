@@ -602,7 +602,7 @@ static void quit_workers(void)
     jobs_quit(), clip_quit(), count_quit(), walk_quit(), search_quit(), thumbs_quit(), space_quit(), git_quit(), far_quit(), connect_quit();
     struct timespec until = deadline_in(QUIT_WAIT_MS), jobs_until = deadline_in(QUIT_JOBS_MS);
     count_join(&until), walk_join(&until), search_join(&until), thumbs_join(&until), space_join(&until), git_join(&until), far_join(&until);
-    jobs_join(&jobs_until), clear_join(&until);
+    jobs_join(&jobs_until), clear_join(&until), connect_join();
     clip_close();
     dnd_close();
 }
