@@ -65,7 +65,7 @@ static bool win_register(const char *dir, pid_t pid, Err *err)
     int n = snprintf(body, sizeof body, "%lld\n", (long long)t);
     int fd = open(p, O_WRONLY | O_CREAT | O_TRUNC | O_NOFOLLOW | O_CLOEXEC, 0600);
     if (fd < 0) return err_set(err, "%s: %s", p, strerror(errno)), false;
-    bool ok = write(fd, body, (size_t)n) == n;
+    bool ok = fd_write_all(fd, body, n);
     ok &= close(fd) == 0;
     if (!ok) return unlink(p), err_set(err, "%s: cannot write it", p), false;
     return true;

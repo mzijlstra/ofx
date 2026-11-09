@@ -80,6 +80,34 @@ static BoxRun box_wait_out(const BoxJob *j, int pfd, int fd, bool unwatched)
     return gone ? BOX_ENDED : BOX_GOING;
 }
 
+// j's command line into av: bubblewrap bw's arguments (bw NULL: none, a test's run as it is), then
+// prog and j's own (box_run's; the F15 code-health review split it out of a 105-line box_run). av
+// holds BOX_ARGS_MAX + 3 * BOX_BINDS_MAX + 64.
+static void box_argv(const BoxJob *j, const char *bw, const char *prog, const char **av)
+{
+    int n = 0;
+    if (bw) {
+        static const char *const box[] = {
+            "--ro-bind", "/usr", "/usr", "--ro-bind-try", "/etc/ld.so.cache", "/etc/ld.so.cache",
+            "--ro-bind-try", "/etc/fonts", "/etc/fonts", "--ro-bind-try", "/var/cache/fontconfig", "/var/cache/fontconfig",   // (without them a PDF's fonts are scanned each run: 570 ms against 63)
+            "--symlink", "usr/lib", "/lib", "--symlink", "usr/lib", "/lib64", "--symlink", "usr/bin", "/bin", "--symlink", "usr/bin", "/sbin",
+            "--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp", "--unshare-all", "--new-session",   // (a /tmp of its own: hooks and filters expect one)
+        };
+        av[n++] = bw;
+        for (int i = 0; i < COUNT(box); i++) av[n++] = box[i];
+        if (!j->outlive) av[n++] = "--die-with-parent";
+        for (int i = 0; i < BOX_BINDS_MAX && j->ro[i]; i++) av[n++] = "--ro-bind-try", av[n++] = j->ro[i], av[n++] = j->ro[i];
+        for (int i = 0; i < 2; i++)
+            if (j->rw[i]) av[n++] = "--bind", av[n++] = j->rw[i], av[n++] = j->rw[i];
+        if (!path_below(prog, "/usr")) av[n++] = "--ro-bind", av[n++] = prog, av[n++] = prog;   // (a program of its own: ~/.local/bin, a test's fake)
+        av[n++] = "--chdir", av[n++] = j->cwd ? j->cwd : "/";
+        av[n++] = "--";
+    }
+    av[n++] = prog;
+    for (int k = 1; j->argv[k]; k++) av[n++] = j->argv[k];
+    av[n] = NULL;
+}
+
 // j run: in bubblewrap (BOX_NOT_RUN without it), or as it is when a test turned box_sandbox off;
 // with /dev/null for its input (and its errors, unless j->err), none of ofx's other fds, no blocked
 // signals, the environment above, in a process group of its own, and killed if the thread that
@@ -110,31 +138,11 @@ static BoxRun box_run(const BoxJob *j)
     }
     envp[ne] = NULL;
     const char *av[BOX_ARGS_MAX + 3 * BOX_BINDS_MAX + 64];
-    int n = 0;
-    if (box_sandbox) {
-        if (!path_find("bwrap", bw, sizeof bw)) {
-            if (j->why) err_set(j->why, "bubblewrap isn't installed");
-            return BOX_NOT_RUN;
-        }
-        static const char *const box[] = {
-            "--ro-bind", "/usr", "/usr", "--ro-bind-try", "/etc/ld.so.cache", "/etc/ld.so.cache",
-            "--ro-bind-try", "/etc/fonts", "/etc/fonts", "--ro-bind-try", "/var/cache/fontconfig", "/var/cache/fontconfig",   // (without them a PDF's fonts are scanned each run: 570 ms against 63)
-            "--symlink", "usr/lib", "/lib", "--symlink", "usr/lib", "/lib64", "--symlink", "usr/bin", "/bin", "--symlink", "usr/bin", "/sbin",
-            "--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp", "--unshare-all", "--new-session",   // (a /tmp of its own: hooks and filters expect one)
-        };
-        av[n++] = bw;
-        for (int i = 0; i < COUNT(box); i++) av[n++] = box[i];
-        if (!j->outlive) av[n++] = "--die-with-parent";
-        for (int i = 0; i < BOX_BINDS_MAX && j->ro[i]; i++) av[n++] = "--ro-bind-try", av[n++] = j->ro[i], av[n++] = j->ro[i];
-        for (int i = 0; i < 2; i++)
-            if (j->rw[i]) av[n++] = "--bind", av[n++] = j->rw[i], av[n++] = j->rw[i];
-        if (!path_below(prog, "/usr")) av[n++] = "--ro-bind", av[n++] = prog, av[n++] = prog;   // (a program of its own: ~/.local/bin, a test's fake)
-        av[n++] = "--chdir", av[n++] = j->cwd ? j->cwd : "/";
-        av[n++] = "--";
+    if (box_sandbox && !path_find("bwrap", bw, sizeof bw)) {
+        if (j->why) err_set(j->why, "bubblewrap isn't installed");
+        return BOX_NOT_RUN;
     }
-    av[n++] = prog;
-    for (int k = 1; argv[k]; k++) av[n++] = argv[k];
-    av[n] = NULL;
+    box_argv(j, box_sandbox ? bw : NULL, prog, av);
     int pipe_fd[2] = { -1, -1 };
     if (j->out && j->outlive) pipe_fd[0] = pipe_fd[1] = memfd_create("ofx-box", MFD_CLOEXEC);   // (one fd, written by it, read after)
     else if (j->out && pipe2(pipe_fd, O_CLOEXEC) != 0) return BOX_NOT_RUN;

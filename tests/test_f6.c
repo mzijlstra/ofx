@@ -41,7 +41,7 @@ static void test_state(void)
     bool wrote = state_put(&ta, path, "sidebar", "hidden", &err);
     setrlimit(RLIMIT_FSIZE, &was);
     signal(SIGXFSZ, SIG_DFL);
-    CHECK(!wrote && strstr(err.msg, "cannot write it"));
+    CHECK(!wrote && strstr(err.msg, strerror(EFBIG)));   // (why, since file_replace: the F15 code-health review)
     CHECK(state_load(&ta, path).side == SIDE_TREE && access(tmp, F_OK) != 0);
     // A folder in the way: the save fails and says why, the old file stays.
     env_restore();

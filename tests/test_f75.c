@@ -53,6 +53,10 @@ static void test_bookmarks(void)
     chmod(file, 0600);
     CHECK(bm_add(a, &bm, "/y", &err) && bm_write(file, bm_format(a, &bm), &err));
     CHECK(stat(file, &st) == 0 && (st.st_mode & 0777) == 0600 && str_eq(read_file(a, file), S("file:///x X\nfile:///y\n")));
+    chmod(file, 0666);   // (a mode the umask would cut: kept whole, file_replace's fchmod)
+    mode_t um = umask(022);
+    CHECK(bm_write(file, bm_format(a, &bm), &err) && stat(file, &st) == 0 && (st.st_mode & 0777) == 0666);
+    umask(um), chmod(file, 0600);
     DIR *dd = opendir(dir);
     int names = 0;
     for (struct dirent *de; dd && (de = readdir(dd));) names += de->d_name[0] != '.' || strncmp(de->d_name, ".bookmarks", 10) == 0;

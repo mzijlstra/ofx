@@ -279,13 +279,7 @@ static bool thumb_write(const char *file, Str png)
     Str dir = path_dir(str_from_c(file));
     int n = snprintf(tmp, sizeof tmp, "%.*s/.ofx-%d-%d.png", STR_ARG(dir), (int)getpid(), atomic_fetch_add(&seq, 1));
     if (n < 0 || (size_t)n >= sizeof tmp || !ops_allowed(file, &err) || !mkdir_p(file, 0700, false, &err)) return false;   // (0700: the spec's mode)
-    int fd = open(tmp, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0600);
-    if (fd < 0) return false;
-    isize at = 0;
-    for (ssize_t w; at < png.len && (w = write(fd, png.p + at, (size_t)(png.len - at))) > 0;) at += w;
-    bool ok = close(fd) == 0 && at == png.len && rename(tmp, file) == 0;
-    if (!ok) unlink(tmp);
-    return ok;
+    return file_replace(file, tmp, png.p, png.len, 0600, false, &err);
 }
 
 // ---- decoding -----------------------------------------------------------------------------------
@@ -526,9 +520,20 @@ static bool thumb_make(Arena *a, ThumbKind k, Str src, int side, Img *out)
 // whose reads can hang a worker; fuseblk, a local disk (NTFS), isn't "fuse" nor "fuse.*"; autofs, as
 // a look under it mounts what it stands for (a NAS that is down blocks it; review, 2026-11-01).
 // Unknown: local.
-static bool thumb_local(Str mountinfo, const char *path)
+// Whether a mount of type t (as mountinfo writes it: "nfs4", "fuse.sshfs") is a network or user
+// one, whose files may be far or slow.
+static bool thumb_far_type(Str t)
 {
     static const char *const far[] = { "nfs", "nfs4", "cifs", "smb3", "smbfs", "9p", "ceph", "afs", "glusterfs", "davfs", "lustre", "fuse", "autofs" };
+    for (int i = 0; i < COUNT(far); i++) {
+        isize n = (isize)strlen(far[i]);
+        if (t.len >= n && memcmp(t.p, far[i], (size_t)n) == 0 && (t.len == n || t.p[n] == '.')) return true;
+    }
+    return false;
+}
+
+static bool thumb_local(Str mountinfo, const char *path)
+{
     isize at = 0, best = -1;
     char type[64] = "";
     for (Str line; next_line(mountinfo, &at, &line);) {
@@ -540,11 +545,7 @@ static bool thumb_local(Str mountinfo, const char *path)
         snprintf(type, sizeof type, "%.*s", STR_ARG(t));
         best = (isize)n;
     }
-    for (int i = 0; i < COUNT(far); i++) {
-        size_t n = strlen(far[i]);
-        if (strncmp(type, far[i], n) == 0 && (type[n] == 0 || type[n] == '.')) return false;
-    }
-    return true;
+    return !thumb_far_type(str_from_c(type));
 }
 
 // ---- one preview --------------------------------------------------------------------------------

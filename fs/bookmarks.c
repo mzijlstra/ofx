@@ -41,13 +41,10 @@ static void bm_parse(Arena *a, Str text, Bookmarks *out)
             break;
         }
         Bookmark *b = &out->b[out->n++];
-        isize sp = str_find(line, ' ');
-        Str uri = sp < 0 ? line : str_cut(line, 0, sp), label = sp < 0 ? STR_EMPTY : str_trim(str_cut(line, sp + 1, line.len));
+        Str uri, label;
+        gtk_bookmark_line(line, &uri, &label, b->path, sizeof b->path);   // (path "" for another scheme's)
         b->uri = (Str){ arena_cstr(a, uri), uri.len };
         b->label = (Str){ arena_cstr(a, label), label.len };
-        b->path[0] = 0;
-        if (!file_uri_path(uri, b->path, sizeof b->path)) b->path[0] = 0;
-        for (size_t n = strlen(b->path); n > 1 && b->path[n - 1] == '/';) b->path[--n] = 0;
     }
 }
 
@@ -103,17 +100,6 @@ static Str bm_format(Arena *a, const Bookmarks *bm)
     return (Str){ out, n };
 }
 
-// text written whole into fd; false when a write or the sync fails.
-static bool bm_put(int fd, Str text)
-{
-    for (isize at = 0; at < text.len;) {
-        ssize_t k = write(fd, text.p + at, (size_t)(text.len - at));
-        if (k <= 0) return false;
-        at += k;
-    }
-    return fsync(fd) == 0;
-}
-
 // text as the bookmarks file `file`: a new file beside it (its mode kept, 0644 for a first one),
 // synced, renamed over it; its folder made (0700, as GLib makes it) when there is none. As GLib
 // does (a review): a symbolic link's target is written, the link kept (dotfiles kept elsewhere);
@@ -131,7 +117,7 @@ static bool bm_write(const char *file, Str text, Err *err)
     if (stat(file, &st) == 0 && S_ISREG(st.st_mode) && st.st_nlink > 1) {
         int fd = open(file, O_WRONLY | O_TRUNC | O_CLOEXEC);
         if (fd < 0) return err_set(err, "%s: %s", file, strerror(errno)), false;
-        bool ok = bm_put(fd, text);
+        bool ok = fd_write_all(fd, text.p, text.len) && fsync(fd) == 0;
         int e = errno;
         if (close(fd) != 0 || !ok) return err_set(err, "%s: %s", file, strerror(ok ? errno : e)), false;
         return true;
@@ -141,16 +127,7 @@ static bool bm_write(const char *file, Str text, Err *err)
     if (mkdir(dir, 0700) != 0 && errno != EEXIST) return err_set(err, "%s: %s", dir, strerror(errno)), false;
     if (snprintf(tmp, sizeof tmp, "%s/.bookmarks.ofx-%d", dir, (int)getpid()) >= (int)sizeof tmp) return err_set(err, "the path is too long"), false;
     mode_t mode = stat(file, &st) == 0 ? st.st_mode & 0777 : 0644;
-    int fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC | O_NOFOLLOW, mode);
-    if (fd < 0) return err_set(err, "%s: %s", tmp, strerror(errno)), false;
-    bool ok = fchmod(fd, mode) == 0 && bm_put(fd, text);
-    int e = errno;
-    if (close(fd) != 0) ok = false;
-    if (ok && rename(tmp, file) == 0) return true;
-    if (!ok) errno = e;
-    err_set(err, "%s: %s", file, strerror(errno));
-    unlink(tmp);
-    return false;
+    return file_replace(file, tmp, text.p, text.len, mode, true, err);
 }
 
 // ---- Edit Bookmarks' changes (F7.5) -----------------------------------------------------------

@@ -50,10 +50,7 @@ static int state_px(Str v)
 // A state line's key and value, each trimmed; false for a line without '='.
 static bool state_kv(Str line, Str *key, Str *val)
 {
-    isize eq = str_find(line, '=');
-    if (eq < 0) return false;
-    *key = str_trim(str_cut(line, 0, eq)), *val = str_trim(str_cut(line, eq + 1, line.len));
-    return true;
+    return kv_split(line, key, val);
 }
 
 // The state in file path; the defaults for what it doesn't say (or no file at all).
@@ -99,23 +96,11 @@ static bool state_write(const char *path, const char *body, isize n, bool sync, 
     char dir[PATH_MAX], tmp[PATH_MAX + 32];
     if (!path_parent(dir, sizeof dir, path) || !mkdir_private(dir, err)) return false;
     snprintf(tmp, sizeof tmp, "%s.%d.tmp", path, (int)getpid());
-    // The temp file made new, never one there followed (a link at it would have been truncated past
-    // the guard; it is beside path, which the guard allowed); one a crash of this pid left is taken
-    // out first. Synced before the rename (sync: all but a window's 2 s live writes, whose sync could
-    // stall the window behind a big write on btrfs; a review), so after a power cut the file is the
-    // old or the new, whole (F11 review, 2026-11-02).
-    unlink(tmp);
-    int fd = open(tmp, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600);
-    if (fd < 0) return err_set(err, "%s: %s", tmp, strerror(errno)), false;
-    bool ok = write(fd, body, (size_t)n) == n;
-    if (sync) ok &= fsync(fd) == 0;
-    ok &= close(fd) == 0;
-    if (!ok || rename(tmp, path) != 0) {
-        int e = errno;
-        unlink(tmp);
-        return err_set(err, "%s: %s", path, ok ? strerror(e) : "cannot write it"), false;
-    }
-    return true;
+    // (file_replace: the temp file made new, never one there followed; synced before the rename
+    // (sync: all but a window's 2 s live writes, whose sync could stall the window behind a big
+    // write on btrfs; a review), so after a power cut the file is the old or the new, whole: F11
+    // review, 2026-11-02)
+    return file_replace(path, tmp, body, n, 0600, sync, err);
 }
 
 // The state file's text into *text, in a: empty when there is no file. False, said, when there is one

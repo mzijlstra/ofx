@@ -28,13 +28,14 @@ typedef struct {
     int  n;
 } SearchSkipList;
 
-// The built-in defaults, each said once here; CONF_OPTS' text says the same (test_conf ties them).
+// The built-in defaults, each said once here; CONF_OPTS' text says the same (test_conf and
+// test_f11's view defaults tie them).
 static const SearchSkipList SEARCH_SKIP_DEFAULT = { { ".git", "node_modules" }, 2 };
 #define CONF_PREVIEW_MAX ((i64)10 << 20)   // preview-max-size (Michael, 2026-10-24)
 #define CLEAN_UNUSED_S   (90 * 86400LL)    // clean-unused-days, in seconds (F6.5, Michael, 2026-10-25)
 #define CLEAN_CAP        ((i64)1 << 30)    // clean-cap
-#define CONF_ZOOM        48                // zoom (F6.3's UI_ZOOM_DEFAULT; test_conf ties them)
-static const int CONF_ZOOMS[] = { 32, 48, 64, 96, 128, 256 };   // the icon view's sizes (ui/'s UI_ZOOM_PX)
+#define CONF_ZOOM        48                // zoom (F6.3: ui/'s UI_ZOOM_DEFAULT is this)
+static const int CONF_ZOOMS[] = { 32, 48, 64, 96, 128, 256 };   // the icon view's sizes (ui/'s UI_ZOOM_PX is this)
 
 typedef struct {
     bool       icons;                             // view: a folder's default view the icon view (F11)
@@ -324,16 +325,16 @@ static void conf_parse(Str text, Conf *c)
     for (Str line; next_line(text, &at, &line);) {
         line = str_trim(line), no++;
         if (line.len == 0 || line.p[0] == '#') continue;
-        isize eq = str_find(line, '=');
-        Str key = eq < 0 ? line : str_trim(str_cut(line, 0, eq)), val = eq < 0 ? STR_EMPTY : str_trim(str_cut(line, eq + 1, line.len));
+        Str key = line, val = STR_EMPTY;
+        bool eq = kv_split(line, &key, &val);
         int k = -1;
         for (int i = 0; i < COUNT(CONF_OPTS) && k < 0; i++)
             if (str_eq(key, str_from_c(CONF_OPTS[i].key))) k = i;
         bool full = false;
-        if (eq >= 0 && k >= 0 && conf_set(c, k, val, no, &full)) continue;
+        if (eq && k >= 0 && conf_set(c, k, val, no, &full)) continue;
         if (c->bad) continue;
         c->bad = no;
-        if (eq < 0) snprintf(c->why, sizeof c->why, "not a key = value line");
+        if (!eq) snprintf(c->why, sizeof c->why, "not a key = value line");
         else if (k < 0) snprintf(c->why, sizeof c->why, "no option %.*s", (int)(key.len < 60 ? key.len : 60), key.p);
         else if (full) snprintf(c->why, sizeof c->why, "%s: too many lines, or one too long", CONF_OPTS[k].key);
         else snprintf(c->why, sizeof c->why, "%s wants %s", CONF_OPTS[k].key, CONF_WANTS[CONF_OPTS[k].kind]);
@@ -418,7 +419,7 @@ static bool conf_create(const char *path, const char *keys, Err *err)
     if (n == sizeof text - 1) return err_set(err, "%s: the text is past %d bytes", path, CONF_TEXT_MAX), false;   // (never a cut file: it is never written again)
     int fd = open(path, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC | O_NOFOLLOW, 0644);
     if (fd < 0) return errno == EEXIST || (err_set(err, "%s: %s", path, strerror(errno)), false);
-    bool ok = write(fd, text, n) == (ssize_t)n;
+    bool ok = fd_write_all(fd, text, (isize)n);
     int e = errno;
     if (close(fd) != 0 || !ok) {
         e = ok ? errno : e;

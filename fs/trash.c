@@ -141,7 +141,7 @@ static bool trash_put(const char *path, Trashed *t, Err *err)
         }
         char body[PATH_MAX * 3 + 128];
         int n = snprintf(body, sizeof body, "[Trash Info]\nPath=%s\nDeletionDate=%s\n", enc, date);
-        bool wrote = n > 0 && write(fd, body, (size_t)n) == n;
+        bool wrote = n > 0 && fd_write_all(fd, body, n);
         close(fd);
         if (!wrote) {
             unlink(t->info);

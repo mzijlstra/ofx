@@ -132,7 +132,10 @@ static CleanMounts clean_mounts(Arena *a, Str mountinfo)
         char *p = arena_try_push(a, (isize)n + 1, 1);
         if (!p) return (CleanMounts){ NULL, 0, true };
         memcpy(p, mp, n + 1);
-        ms.m[ms.n++] = (CleanMount){ p, n, !thumb_local(mountinfo, mp) };
+        // (its own type: clean_local takes the last mount on a point, as thumb_local does; one with
+        // no type, thumb_local's rule, which skips it. Once a mount, not once a mount per mount: the
+        // F15 code-health review, about 4 million line reads for 2,000 mounts)
+        ms.m[ms.n++] = (CleanMount){ p, n, type.len ? thumb_far_type(type) : !thumb_local(mountinfo, mp) };
     }
     return ms;
 }

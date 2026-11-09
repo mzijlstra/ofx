@@ -1,6 +1,6 @@
 // The Omarchy theme: colours from colors.toml and the icon theme's name from icons.theme, both in
 // $XDG_STATE_HOME/omarchy/current/theme (~/.local/state by default). A missing file or key keeps
-// Tokyo Night's value (docs/plan.md, "Theme"). Also the XDG user directories, for their icons.
+// Tokyo Night's value (docs/plan.md, "Theme").
 
 #include "../base/base.h"
 
@@ -83,9 +83,8 @@ static void theme_parse_colors(Theme *t, Str text)
         line = str_trim(line);
         if (line.len && line.p[0] == '[') break;
         // A comment line's key starts with '#', so it never names a colour.
-        isize eq = str_find(line, '=');
-        if (eq <= 0) continue;
-        Str key = str_trim(str_cut(line, 0, eq)), val = str_trim(str_cut(line, eq + 1, line.len));
+        Str key, val;
+        if (!kv_split(line, &key, &val) || !key.len) continue;
         // A comment after the value: the colour's own '#' is inside its quotes.
         if (val.len && (val.p[0] == '"' || val.p[0] == '\'')) {
             isize close = str_find(str_cut(val, 1, val.len), val.p[0]);
@@ -331,65 +330,4 @@ static void theme_fit(Theme *t)
 static void theme_fit_list(Theme *t)
 {
     theme_fit_text(t, THEME_RESCUE_MIN, THEME_RESCUE_MIN);
-}
-
-// ---- XDG user directories -------------------------------------------------------------------
-
-typedef struct {
-    char path[4096];
-    Str  icon;
-} UserDir;
-
-typedef struct {
-    UserDir d[12];
-    int     n;
-} UserDirs;
-
-// $HOME and the folders in ~/.config/user-dirs.dirs (XDG_DOWNLOAD_DIR="$HOME/Downloads/"), with
-// the icon each gets. A key pointing at $HOME itself (Michael's TEMPLATES, PUBLICSHARE) is skipped,
-// so home keeps user-home.
-static void user_dirs_load(Arena *scratch, UserDirs *u)
-{
-    static const struct { const char *key; const char *icon; } KEYS[] = {
-        { "XDG_DESKTOP_DIR", "user-desktop" },       { "XDG_DOWNLOAD_DIR", "folder-download" },
-        { "XDG_TEMPLATES_DIR", "folder-templates" }, { "XDG_PUBLICSHARE_DIR", "folder-publicshare" },
-        { "XDG_DOCUMENTS_DIR", "folder-documents" }, { "XDG_MUSIC_DIR", "folder-music" },
-        { "XDG_PICTURES_DIR", "folder-pictures" },   { "XDG_VIDEOS_DIR", "folder-videos" },
-    };
-    *u = (UserDirs){ 0 };
-    const char *home = getenv("HOME");
-    if (!home || !home[0]) return;
-    snprintf(u->d[0].path, sizeof u->d[0].path, "%s", home);
-    u->d[0].icon = S("user-home");
-    u->n = 1;
-    ArenaMark mark = arena_mark(scratch);
-    char dirs[PATH_MAX];
-    Str text = xdg_dir(dirs, sizeof dirs, "XDG_CONFIG_HOME", ".config", "user-dirs.dirs") ? read_file(scratch, dirs) : STR_EMPTY;
-    isize at = 0;
-    for (Str line; next_line(text, &at, &line);) {
-        isize eq = str_find(line, '=');
-        if (eq <= 0 || line.p[0] == '#') continue;
-        Str key = str_trim(str_cut(line, 0, eq)), val = str_trim(str_cut(line, eq + 1, line.len));
-        if (val.len >= 2 && val.p[0] == '"' && val.p[val.len - 1] == '"') val = str_cut(val, 1, val.len - 1);
-        while (val.len > 1 && val.p[val.len - 1] == '/') val.len--;
-        char path[4096];
-        if (str_starts_with(val, S("$HOME"))) snprintf(path, sizeof path, "%s%.*s", home, STR_ARG(str_cut(val, 5, val.len)));
-        else if (val.len && val.p[0] == '/') snprintf(path, sizeof path, "%.*s", STR_ARG(val));
-        else continue;
-        if (strcmp(path, home) == 0 || u->n == COUNT(u->d)) continue;
-        for (int k = 0; k < COUNT(KEYS); k++)
-            if (str_eq(key, str_from_c(KEYS[k].key))) {
-                snprintf(u->d[u->n].path, sizeof u->d[u->n].path, "%s", path);
-                u->d[u->n++].icon = str_from_c(KEYS[k].icon);
-            }
-    }
-    arena_restore(scratch, mark);
-}
-
-// The icon a folder at path gets, STR_EMPTY for a plain one.
-static Str user_dir_icon(const UserDirs *u, const char *path)
-{
-    for (int i = 0; i < u->n; i++)
-        if (strcmp(u->d[i].path, path) == 0) return u->d[i].icon;
-    return STR_EMPTY;
 }

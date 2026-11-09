@@ -49,49 +49,6 @@ static Str lower(Arena *a, Str s)
     return (Str){ p, s.len };
 }
 
-// The whole file, NUL-terminated, into a; STR_EMPTY when it isn't there or won't fit. Sized by
-// fstat first: opening the arena's whole free tail would cost a pass over it under ASan. A file
-// that reads shorter than that size changed while read, and gives nothing. procfs files say 0
-// (/proc/self/mountinfo): those are read to their end, up to READ_UNSIZED_MAX.
-enum { READ_UNSIZED_MAX = MiB(1) };
-
-static Str read_file(Arena *a, const char *path)
-{
-    // A FIFO or a device at one of these paths would block the open: opened without blocking, then
-    // regular files only (file_read_fd; a stat before the open raced the file's change).
-    int fd = open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
-    if (fd < 0) return STR_EMPTY;
-    struct stat st;
-    Str s = STR_EMPTY;
-    if (fstat(fd, &st) != 0) {
-    } else if (S_ISREG(st.st_mode) && st.st_size == 0) {   // (procfs: read to its end)
-        isize avail, n = 0;
-        char *dst = arena_tail(a, &avail);
-        isize cap = avail - 1 < READ_UNSIZED_MAX ? avail - 1 : READ_UNSIZED_MAX;
-        ssize_t got = 1;
-        while (avail > 1 && n < cap && (got = read(fd, dst + n, (size_t)(cap - n))) > 0) n += got;
-        bool whole = avail > 1 && got == 0;
-        if (!whole && n == READ_UNSIZED_MAX) fprintf(stderr, "ofx: WARN %s is over %d bytes: not read\n", path, READ_UNSIZED_MAX);
-        if (whole) dst[n] = 0, s = (Str){ dst, n };
-        arena_commit(a, whole ? n + 1 : 0);
-    } else {
-        s = file_read_fd(a, fd, &st, PTRDIFF_MAX - 1, true);
-    }
-    close(fd);
-    return s;
-}
-
-// The next line of s from *at, without its newline.
-static bool next_line(Str s, isize *at, Str *line)
-{
-    if (*at >= s.len) return false;
-    isize e = *at;
-    while (e < s.len && s.p[e] != '\n') e++;
-    *line = str_cut(s, *at, e);
-    *at = e + 1;
-    return true;
-}
-
 static bool glob_is_literal(Str g)
 {
     for (isize i = 0; i < g.len; i++)

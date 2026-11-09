@@ -152,7 +152,7 @@ static bool spawn_terminal(const char *dir, Err *err)
     return spawn_app(cmd, COUNT(cmd), err);
 }
 
-// ---- eject (F6.1) -----------------------------------------------------------------------------
+// ---- a program's output; eject, mount, unmount (F6.1) --------------------------------------------
 
 // Runs argv (argv[0] on PATH) and reads what it writes, stdout and stderr together, until it ends
 // or timeout_ms pass (then it and what it started are killed, *timed_out set): into out (cut at
@@ -220,11 +220,15 @@ static bool spawn_gio_type(const char *path, char *out, size_t cap, int timeout_
 // The command that ejects the drive dev with udisksctl, the program as resolved (prog_resolve: the
 // one the guard checks, not the shell's own PATH search; health step 1 review, 2026-11-03): unmount,
 // then power off, each step saying it went (an exit status can't be read, spawn_capture).
+// script run as sh -c with dev as $1 and udisks as $2 (eject_argv's, unmount_argv's).
+static void udisks_sh_argv(const char *script, const char *dev, const char *udisks, const char **argv)
+{
+    argv[0] = "sh", argv[1] = "-c", argv[2] = script, argv[3] = "sh", argv[4] = dev, argv[5] = udisks, argv[6] = NULL;
+}
+
 static void eject_argv(const char *dev, const char *udisks, const char **argv)
 {
-    argv[0] = "sh", argv[1] = "-c";
-    argv[2] = "\"$2\" unmount -b \"$1\" && echo OFX-UNMOUNTED && \"$2\" power-off -b \"$1\" && echo OFX-EJECTED";
-    argv[3] = "sh", argv[4] = dev, argv[5] = udisks, argv[6] = NULL;
+    udisks_sh_argv("\"$2\" unmount -b \"$1\" && echo OFX-UNMOUNTED && \"$2\" power-off -b \"$1\" && echo OFX-EJECTED", dev, udisks, argv);
 }
 
 // Mount (2026-10-30): an unmounted drive's row runs `udisksctl mount -b <dev>`, which mounts it under
@@ -271,8 +275,7 @@ static bool mount_result(Str out, char *at, size_t atcap, char *why, size_t whyc
 // review, 2026-11-06).
 static void unmount_argv(const char *dev, const char *udisks, const char **argv)
 {
-    argv[0] = "sh", argv[1] = "-c", argv[2] = "\"$2\" unmount -b \"$1\" && echo OFX-UNMOUNTED";
-    argv[3] = "sh", argv[4] = dev, argv[5] = udisks, argv[6] = NULL;
+    udisks_sh_argv("\"$2\" unmount -b \"$1\" && echo OFX-UNMOUNTED", dev, udisks, argv);
 }
 
 typedef enum { EJECT_FAILED, EJECT_UNMOUNTED, EJECT_DONE } EjectResult;

@@ -87,10 +87,10 @@ MUTANTS = [
     (T, "if (close >= 0) val = str_cut(val, 0, close + 2);", ""),
     (T, "t->ncolors++;", ""),
     (T, "if (icons.len < (isize)sizeof t.icons && str_find(icons, '/') < 0 && str_find(icons, '\\n') < 0)", "if (icons.len < (isize)sizeof t.icons)"),
-    (T, "if (val.len >= 2 && val.p[0] == '\"' && val.p[val.len - 1] == '\"') val = str_cut(val, 1, val.len - 1);", ""),
-    (T, "while (val.len > 1 && val.p[val.len - 1] == '/') val.len--;", ""),
-    (T, "else if (val.len && val.p[0] == '/') snprintf(path, sizeof path, \"%.*s\", STR_ARG(val));", ""),
-    (T, "if (strcmp(path, home) == 0 || u->n == COUNT(u->d)) continue;", "if (u->n == COUNT(u->d)) continue;"),
+    ('fs/places.c', 'if (val.len >= 2 && val.p[0] == \'"\' && val.p[val.len - 1] == \'"\') val = str_cut(val, 1, val.len - 1);', ''),
+    ('fs/places.c', "while (val.len > 1 && val.p[val.len - 1] == '/') val.len--;", ""),
+    ('fs/places.c', 'else if (val.len && val.p[0] == \'/\') snprintf(path, sizeof path, "%.*s", STR_ARG(val));', ''),
+    ('fs/places.c', "if (strcmp(path, home) == 0 || u->n == COUNT(u->d)) continue;", "if (u->n == COUNT(u->d)) continue;"),
     # ---- spawn
     ('fs/guard.c', '    return stat(path, &st) == 0 && S_ISREG(st.st_mode) && access(path, X_OK) == 0;', '    return stat(path, &st) == 0 && S_ISREG(st.st_mode) && access(path, F_OK) == 0;'),
     ('fs/spawn.c', '    posix_spawnattr_setflags(&attr, POSIX_SPAWN_SETSID | POSIX_SPAWN_SETSIGMASK);\n    posix_spawn_file_actions_init(&fa);\n    posix_spawn_file_actions_addopen(&fa, 0, "/dev/null", O_RDONLY, 0);\n    if (out >= 0)', '    posix_spawnattr_setflags(&attr, POSIX_SPAWN_SETSIGMASK);\n    posix_spawn_file_actions_init(&fa);\n    posix_spawn_file_actions_addopen(&fa, 0, "/dev/null", O_RDONLY, 0);\n    if (out >= 0)'),
@@ -167,9 +167,9 @@ MUTANTS += [
 ]
 MUTANTS += [
     # ---- F2: procfs files read to their end
-    ('fs/mime.c', '    } else if (S_ISREG(st.st_mode) && st.st_size == 0) {', '    } else if (0) {'),
-    ('fs/mime.c', '        bool whole = avail > 1 && got == 0;', '        bool whole = true;'),
-    ('fs/mime.c', '        arena_commit(a, whole ? n + 1 : 0);', '        arena_commit(a, n + 1);'),
+    ('fs/paths.c', '    } else if (S_ISREG(st.st_mode) && st.st_size == 0) {', '    } else if (0) {'),
+    ('fs/paths.c', '        bool whole = avail > 1 && got == 0;', '        bool whole = true;'),
+    ('fs/paths.c', '        arena_commit(a, whole ? n + 1 : 0);', '        arena_commit(a, n + 1);'),
 ]
 MUTANTS += [
     ('ui/helpers.c', "    if (*no > 0) (*no)--;", "    (void)no;"),
@@ -528,7 +528,7 @@ MUTANTS += [
     ('ui/helpers.c', "    if (str_eq(ui_crumb_path(c, i), S(TRASH_URI))) return S(\"Trash\");\n", ""),
     (ST, "        if (!str_eq(key, S(\"sidebar\"))) continue;\n", ""),
     (ST, "    if (!ops_allowed(path, err)) return false;\n    char dir[PATH_MAX], tmp", "    char dir[PATH_MAX], tmp"),
-    (ST, "    if (!ok || rename(tmp, path) != 0) {", "    if (rename(tmp, path) != 0) {"),
+    ('fs/paths.c', '    if (ok && rename(tmp, path) == 0) return true;', '    if (ok && link(tmp, path) == 0) return true;'),
     (TR, "    tree_open(t, S(\"/\"));\n", ""),
     (TR, "    if (de->d_type != DT_LNK && de->d_type != DT_UNKNOWN) return false;", "    if (de->d_type != DT_UNKNOWN) return false;"),
     (TR, "(nm[0] == '.' && !hidden)", "(nm[0] == '.')"),
@@ -705,8 +705,7 @@ MUTANTS += [
     ('fs/thumb.c', '    i64 v = s.len > 18 ? -1 :', '    i64 v = s.len > 19 ? -1 :'),
     ('fs/thumb.c', '    return v >= 0 && (*out = v, true);', '    return (*out = v, true);'),
     (TH, '        r[0] = 4;', '        r[0] = 1;'),
-    (TH, '    int fd = open(tmp, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0600);', '    int fd = open(tmp, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0644);'),
-    (TH, '    bool ok = close(fd) == 0 && at == png.len && rename(tmp, file) == 0;', '    bool ok = close(fd) == 0 && at == png.len && link(tmp, file) == 0;'),
+    ('fs/paths.c', '    bool ok = fchmod(fd, mode) == 0 && fd_write_all(fd, body, n) && (!sync || fsync(fd) == 0);', '    bool ok = fchmod(fd, mode) == 0 && (!sync || fsync(fd) == 0);'),
     (TH, '    int w = (int)(((i64)in.w * side + big / 2) / big), h', '    int w = (int)(((i64)in.w * side) / big), h'),
     (TH, '                    return v >= 1 && v <= 8 ? (int)v : 1;', '                    return (int)v;'),
     (TH, "            bool le = t[0] == 'I' && t[1] == 'I';", '            bool le = false;'),
@@ -734,8 +733,8 @@ MUTANTS += [
     (TH, '        if (png_encode(a, (Img){ clear, 1, 1 }, uri, q->mtime, q->size, &png)) thumb_write(fail, png);', '        ;'),
     (TH, '    if (png_encode(a, t, uri, q->mtime, q->size, &png)) thumb_write(file, png);', '    ;'),
     (TH, '    return img_fit(a, t, q->px, out) ? TG_MADE : TG_NONE;', '    return img_fit(a, t, side, out) ? TG_MADE : TG_NONE;'),
-    (TH, "        if (strncmp(type, far[i], n) == 0 && (type[n] == 0 || type[n] == '.')) return false;", '        if (strncmp(type, far[i], n) == 0 && type[n] == 0) return false;'),
-    (TH, "        if (strncmp(type, far[i], n) == 0 && (type[n] == 0 || type[n] == '.')) return false;", '        if (strncmp(type, far[i], n) == 0) return false;'),
+    (TH, "        if (t.len >= n && memcmp(t.p, far[i], (size_t)n) == 0 && (t.len == n || t.p[n] == '.')) return true;", '        if (t.len >= n && memcmp(t.p, far[i], (size_t)n) == 0 && t.len == n) return true;'),
+    (TH, "        if (t.len >= n && memcmp(t.p, far[i], (size_t)n) == 0 && (t.len == n || t.p[n] == '.')) return true;", '        if (t.len >= n && memcmp(t.p, far[i], (size_t)n) == 0) return true;'),
     (TH, '                            if (c == transparent || c >= map->ColorCount) continue;', '                            if (c >= map->ColorCount) continue;'),
     (TH, ' || d->Left + d->Width > g->SWidth || ', ' || '),
     (TH, '                    for (int y = d->Interlace ? start[pass] : 0; ok', '                    for (int y = 0; ok'),
@@ -1292,7 +1291,7 @@ BMK = 'fs/bookmarks.c'
 MUTANTS += [
     (BMK, "        if (!line.len) continue;\n        if (out->n == BM_MAX) {", "        if (out->n == BM_MAX) {"),
     (BMK, "            out->full = true;\n            break;", "            break;"),
-    (BMK, "        for (size_t n = strlen(b->path); n > 1 && b->path[n - 1] == '/';) b->path[--n] = 0;", ""),
+    ('fs/places.c', "    for (size_t n = strlen(path); n > 1 && path[n - 1] == '/';) path[--n] = 0;\n", ''),
     (BMK, "        if (bm->b[i].path[0] && strcmp(bm->b[i].path, path) == 0) return i;", "        if (strcmp(bm->b[i].path, path) == 0) return i;"),
     (BMK, "    if (bm_find(bm, path) >= 0) return err_set(err, \"already a bookmark\"), false;", ""),
     (BMK, "        int k = b->label.len ? snprintf(", "        int k = false ? snprintf("),
@@ -1301,7 +1300,7 @@ MUTANTS += [
     (BMK, "    if (mkdir(dir, 0700) != 0 && errno != EEXIST)", "    if (mkdir(dir, 0755) != 0 && errno != EEXIST)"),
     # Not a mutant: `ok &&` before bm_write's rename needs a write() or fsync() that fails midway,
     # which no test can bring about.
-    (BMK, "    unlink(tmp);\n    return false;", "    return false;"),
+    ('fs/paths.c', '    unlink(tmp);\n    return err_set(err, "%s: %s", path, strerror(e)), false;', '    return err_set(err, "%s: %s", path, strerror(e)), false;'),
     ('ui/menus.c', "        if (ui_menu_shown(u, UI_MENU[m].items[k])) return true;\n    return false;", "        if (ui_menu_shown(u, UI_MENU[m].items[k])) return true;\n    return true;"),
 ]
 # ---- F7.5: Edit Bookmarks
@@ -1362,7 +1361,7 @@ MUTANTS += [
     (BMK, "    if (stat(file, &st) == 0 && S_ISREG(st.st_mode) && st.st_nlink > 1) {", "    if (false) {"),
     # Not a mutant: bm_write's `S_ISREG` before the in-place write; without it a folder (nlink > 1)
     # fails to open there instead of failing to be renamed over: false either way, nothing left.
-    (BMK, "        bool ok = bm_put(fd, text);\n        int e = errno;", "        bool ok = true;\n        int e = errno;"),
+    (BMK, '        bool ok = fd_write_all(fd, text.p, text.len) && fsync(fd) == 0;', '        bool ok = true;'),
 ]
 # ---- Help → About (2026-10-27), and the wheel over a panel (f4fced7)
 MUTANTS += [
@@ -1704,7 +1703,7 @@ MUTANTS += [
     ('fs/places.c', ' || (places_test_media[0] && path_below(mp, places_test_media)))', ')'),
     ('fs/places.c', '        if (pl->n == before) continue;\n', ''),
     ('fs/places.c', 'if (path_within(path, p) && (best < 0 || n > best_n)) best = i, best_n = n;', 'if (path_within(path, p) && best < 0) best = i, best_n = n;'),
-    ('fs/places.c', '        if (!file_uri_path(uri, path, sizeof path)) continue;', '        file_uri_path(uri, path, sizeof path);'),
+    ('fs/places.c', '    if (!file_uri_path(*uri, path, cap)) return path[0] = 0, false;', '    file_uri_path(*uri, path, cap);'),
     ('fs/thumb.c', '    if (path_below(q->path, q->root)) return TG_NONE;', '    if (0) return TG_NONE;'),
     ('fs/thumb.c', '        if (!path_within(path, mp) || (isize)n < best || !t.len) continue;', '        if (!path_within(path, mp) || (isize)n <= best || !t.len) continue;'),
     ('fs/thumb.c', '        if (!path_within(path, mp) || (isize)n < best || !t.len) continue;', '        if ((isize)n < best || !t.len) continue;'),
@@ -1722,7 +1721,6 @@ MUTANTS += [
     ('fs/trash.c', ' || !ops_resolve(t->from, res, sizeof res) || !path_within(res, top))', ' || !ops_resolve(t->from, res, sizeof res))'),
     ('fs/paths.c', '    if (!mkdir_p(path, 0700, true, err)) return false;\n', ''),
     ('fs/fm1.c', '        if (!file_uri_path(str_from_c(uris[i]), path, sizeof path) || stat(path, &st) != 0) {', '        if (!file_uri_path(str_from_c(uris[i]), path, sizeof path)) {'),
-    ('fs/bookmarks.c', '        if (!file_uri_path(uri, b->path, sizeof b->path)) b->path[0] = 0;', ''),
     ('fs/theme.c', '    if (!xdg_dir(buf, cap, "XDG_STATE_HOME", ".local/state", "omarchy/current/theme")) buf[0] = 0;', '    xdg_dir(buf, cap, "XDG_STATE_HOME", ".local/state", "omarchy/current/theme");'),
 ]
 
@@ -1981,7 +1979,7 @@ MUTANTS += [
 ]
 MUTANTS += [
     # Unmount (2026-10-30)
-    ('fs/spawn.c', '"\\"$2\\" unmount -b \\"$1\\" && echo OFX-UNMOUNTED";', '"\\"$2\\" unmount -b \\"$1\\" && echo OFX-UNMOUNTED && \\"$2\\" power-off -b \\"$1\\"";'),
+    ('fs/spawn.c', '    udisks_sh_argv("\\"$2\\" unmount -b \\"$1\\" && echo OFX-UNMOUNTED", dev, udisks, argv);', '    udisks_sh_argv("\\"$2\\" unmount -b \\"$1\\" && echo OFX-UNMOUNTED && \\"$2\\" power-off -b \\"$1\\"", dev, udisks, argv);'),
     ('ui/menus.c', '    case UM_EJECT_IT: case UM_UNMOUNT_IT: return u->ctx_eject;', '    case UM_EJECT_IT: return u->ctx_eject;'),
 ]
 
@@ -2003,7 +2001,7 @@ MUTANTS += [
     (CF, " || str_find(v, '/') >= 0", ''),
     (CF, ' || str_eq(v, S(".")) || str_eq(v, S(".."))', ''),
     (CF, '        if (l->n == CONF_SKIP_MAX || v.len >= CONF_NAME_MAX) return *full = true, false;\n', ''),
-    (CF, '        if (line.len == 0 || line.p[0] == \'#\') continue;\n        isize eq', '        if (line.len == 0) continue;\n        isize eq'),
+    (CF, "        if (line.len == 0 || line.p[0] == '#') continue;\n        Str key", '        if (line.len == 0) continue;\n        Str key'),
     # Not a mutant: `eq >= 0 &&` dropped (without an = the value is empty, which no option takes).
     (CF, '        if (c->bad) continue;\n', ''),
     (CF, '        int k = snprintf(out + *at, cap - *at, n ? "# %.*s\\n" : "#\\n", n, p);', '        int k = snprintf(out + *at, cap - *at, "# %.*s\\n", n, p);'),
@@ -2159,7 +2157,7 @@ MUTANTS += [
     ('fs/trash.c', ' || !ops_allowed(t->file, err) || !ops_allowed(t->info, err)) return false;', ') return false;'),
     # Not a mutant: state_write's O_EXCL | O_NOFOLLOW as O_TRUNC (the unlink before it takes a link
     # out; only a race between the two would reach one).
-    ('fs/state.c', '    unlink(tmp);\n    int fd = open(tmp', '    int fd = open(tmp'),
+    ('fs/paths.c', '    unlink(tmp);\n    int fd = open(tmp', '    int fd = open(tmp'),
 ]
 MUTANTS += [
     # F11 milestone review, step 3: one rewrite for the state file's writers (2026-11-02)
@@ -2220,8 +2218,8 @@ MUTANTS += [
     ('fs/thumbers.c', '    case \'%\': return "%";\n', ''),
     ('fs/thumbers.c', "            if (*p != '%') { len++; continue; }", "            if (*p != '%') { continue; }"),
     ('fs/sandbox.c', '    if (nargs >= BOX_ARGS_MAX || !ops_program_allowed(argv[0], &err)) {', '    if (nargs >= BOX_ARGS_MAX) {'),
-    ('fs/sandbox.c', '    if (box_sandbox) {\n        if (!path_find', '    if (true) {\n        if (!path_find'),
-    ('fs/sandbox.c', '    if (box_sandbox) {\n        if (!path_find', '    if (false) {\n        if (!path_find'),
+    ('fs/sandbox.c', '    box_argv(j, box_sandbox ? bw : NULL, prog, av);', '    box_argv(j, bw, prog, av);'),
+    ('fs/sandbox.c', '    box_argv(j, box_sandbox ? bw : NULL, prog, av);', '    box_argv(j, NULL, prog, av);'),
     ('fs/sandbox.c', '        if (!path_below(prog, "/usr")) av[n++] = "--ro-bind", av[n++] = prog, av[n++] = prog;', '        if (false) av[n++] = "--ro-bind", av[n++] = prog, av[n++] = prog;'),
     ('fs/sandbox.c', '        setpgid(0, 0);\n', ''),
     ('fs/sandbox.c', '    if (!ended) {\n        kill(-pid, SIGKILL);', '    if (false) {\n        kill(-pid, SIGKILL);'),
@@ -2251,7 +2249,7 @@ MUTANTS += [
     ('fs/clean.c', "        if (p == d || p - d > 10 || *p != (part ? 0 : '-')) return false;", "        if (p == d || *p != (part ? 0 : '-')) return false;"),
     ('fs/clean.c', "        if (p == d || p - d > 10 || *p != (part ? 0 : '-')) return false;", "        if (p - d > 10 || *p != (part ? 0 : '-')) return false;"),
     ('fs/clean.c', '    if (strncmp(n, ".ofx-run-", 9) != 0) return false;\n', ''),
-    ('fs/sandbox.c', '        if (!path_find("bwrap", bw, sizeof bw)) {', '        if (false) {'),
+    ('fs/sandbox.c', '    if (box_sandbox && !path_find("bwrap", bw, sizeof bw)) {', '    if (false) {'),
     # ---- Clear Previews (F12 step 4)
     ('fs/clean.c', '        CleanRule r = o->all ? CR_ALL', '        CleanRule r = false ? CR_ALL'),
     ('fs/clean.c', '            (!o->all && o->now - st.st_mtim.tv_sec <= CLEAN_TMP_S))', '            (o->now - st.st_mtim.tv_sec <= CLEAN_TMP_S))'),
@@ -2342,7 +2340,7 @@ MUTANTS += [
     ('fs/guard.c', '    return stat(path, &st) == 0 && S_ISREG(st.st_mode) && access(path, X_OK) == 0;', '    return access(path, X_OK) == 0;'),
     ('fs/spawn.c', '    int rc = posix_spawn(pid, full, &fa, &attr, argv, environ);', '    int rc = posix_spawnp(pid, argv[0], &fa, &attr, argv, environ);'),
     ('fs/git.c', '    if (binds.common[0] && !ops_allowed(binds.common, &err)) return', '    if (false) return'),
-    ('fs/spawn.c', 'argv[2] = "\\"$2\\" unmount -b \\"$1\\" && echo OFX-UNMOUNTED && \\"$2\\" power-off -b \\"$1\\" && echo OFX-EJECTED";', 'argv[2] = "udisksctl unmount -b \\"$1\\" && echo OFX-UNMOUNTED && udisksctl power-off -b \\"$1\\" && echo OFX-EJECTED";'),
+    ('fs/spawn.c', '    udisks_sh_argv("\\"$2\\" unmount -b \\"$1\\" && echo OFX-UNMOUNTED && \\"$2\\" power-off -b \\"$1\\" && echo OFX-EJECTED", dev, udisks, argv);', '    udisks_sh_argv("udisksctl unmount -b \\"$1\\" && echo OFX-UNMOUNTED && udisksctl power-off -b \\"$1\\" && echo OFX-EJECTED", dev, udisks, argv);'),
     # F12 code-health step 3: menus and keys agree, the branch menu's ways in, End
     ('ui/prompts.c', '        if (u->crumb_at >= in->crumb_n) return ui_branch_open(u, true), true;', '        if (u->crumb_at >= in->crumb_n) return ui_branch_open(u, false), true;'),
     ('ui/handle.c', '        if (files && !ui_allows(u, UA_RENAME)) return *out = ui_view_act(u, (UiAction){ UA_RENAME, 0, false }), true;\n', ''),
@@ -2383,7 +2381,7 @@ MUTANTS += [
     ('fs/git.c', '    if (rel[0] && realpath(at, r)) snprintf(out, cap, "%s", r);', '    (void)r;'),
     ('fs/git.c', '    if (writes) j->rw[0] = top, j->rw[1] = common;\n    else j->ro[3] = top, j->ro[4] = common;', '    j->ro[3] = top, j->ro[4] = common;'),
     ('fs/sandbox.c', '    if (nargs >= BOX_ARGS_MAX || !ops_program_allowed(argv[0], &err)) {', '    if (!ops_program_allowed(argv[0], &err)) {'),
-    ('fs/sandbox.c', '            if (j->why) err_set(j->why, "bubblewrap isn\'t installed");\n', ''),
+    ('fs/sandbox.c', '        if (j->why) err_set(j->why, "bubblewrap isn\'t installed");\n', ''),
     ('fs/sandbox.c', '        if (j->why) *j->why = err;\n', ''),
     ('fs/thumb.c', '    delete_tree(dir, &gone, &derr);', '    rmdir(dir), (void)gone, (void)derr;'),
     ('fs/git.c', '    if (r == BOX_NOT_RUN) snprintf(msg, cap, "%s", why.msg[0] ? why.msg : "git didn\'t run");', '    if (r == BOX_NOT_RUN) snprintf(msg, cap, "git didn\'t run");'),
@@ -2527,7 +2525,7 @@ MUTANTS += [
     ('fs/paths.c', "    if (!w.len) return -1;\n    for (isize i = 0; i < w.len; i++) {   // (n checked", "    for (isize i = 0; i < w.len; i++) {   // (n checked"),
     ('fs/state.c', '    i64 n = v.len > 4 ? -1 : str_num(v, 9999);', '    i64 n = str_num(v, 9999);'),
     ('fs/state.c', '    return n < 0 ? 0 : (int)n;', '    return (int)n;'),
-    ('fs/state.c', '    *key = str_trim(str_cut(line, 0, eq)), *val = str_trim(str_cut(line, eq + 1, line.len));', '    *key = str_trim(str_cut(line, 0, eq)), *val = str_cut(line, eq + 1, line.len);'),
+    ('fs/paths.c', '    *key = str_trim(str_cut(line, 0, eq)), *val = str_trim(str_cut(line, eq + 1, line.len));', '    *key = str_trim(str_cut(line, 0, eq)), *val = str_cut(line, eq + 1, line.len);'),
     ('fs/clip.c', '    return *cp == 0xfffd && j - i == 1 ? 0 : (int)(j - i);', '    return *cp == 0xfffd ? 0 : (int)(j - i);'),
     ('fs/clip.c', '    return *cp == 0xfffd && j - i == 1 ? 0 : (int)(j - i);', '    return (int)(j - i);'),
     ('fs/clip.c', '    if (k < 0 || k >= cap - *n) return false;', '    if (k < 0) return false;'),
@@ -2678,4 +2676,9 @@ MUTANTS += [
     # F15's code-health review, C: menu entries run their commands, Close All from a menu pick.
     ('ui/ui.c', '[UM_NEW_TAB] = { "New Tab", "new-tab", .cmd = UK_TAB_NEW, .runs = true }', '[UM_NEW_TAB] = { "New Tab", "new-tab", .cmd = UK_TAB_NEW }'),
     ('ui/ui.c', '[UM_CLOSE_ALL] = { "Close All Windows", "close-all", .cmd = UK_QUIT_ALL, .runs = true }', '[UM_CLOSE_ALL] = { "Close All Windows", "close-all", .cmd = UK_QUIT_ALL }'),
+    # F15's code-health review, D (fs/): file_replace, kv_split, the bookmark line, box_argv.
+    ('fs/paths.c', "    bool ok = fchmod(fd, mode) == 0 && fd_write_all(fd, body, n)", "    bool ok = fd_write_all(fd, body, n)"),
+    ('fs/paths.c', "    if (eq < 0) return false;\n    *key", "    if (eq < 0) eq = 0;\n    *key"),
+    ('fs/places.c', "    *uri = sp < 0 ? line : str_cut(line, 0, sp), *label = sp < 0 ? STR_EMPTY : str_trim(str_cut(line, sp + 1, line.len));", "    *uri = line, *label = STR_EMPTY;"),
+    ('fs/sandbox.c', "        if (!j->outlive) av[n++] = \"--die-with-parent\";\n", ""),
 ]

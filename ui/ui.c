@@ -654,8 +654,8 @@ enum { UI_KEYS_N = sizeof UI_KEYS / sizeof UI_KEYS[0], UI_KEYS_LINES = UI_KEYS_N
 
 // The icon view's sizes (F6.3, Michael 2026-10-24): Yaru's 32 and 48, and its 256 scaled down
 // between them. The list doesn't zoom.
-static const int UI_ZOOM_PX[] = { 32, 48, 64, 96, 128, 256 };
-enum { UI_ZOOMS = sizeof UI_ZOOM_PX / sizeof UI_ZOOM_PX[0], UI_ZOOM_DEFAULT = 48 };
+#define UI_ZOOM_PX CONF_ZOOMS   // (fs/conf.c's, which ofx.conf's zoom is one of: written once, the F15 code-health review)
+enum { UI_ZOOMS = COUNT(CONF_ZOOMS), UI_ZOOM_DEFAULT = CONF_ZOOM };
 
 typedef struct {
     isize n;      // entries in the list

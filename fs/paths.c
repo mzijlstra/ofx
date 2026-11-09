@@ -29,14 +29,41 @@ static bool path_below(const char *path, const char *dir)
 // dir/name into out; false when it would not fit (a cut path could name another file).
 static bool path_put(char *out, size_t cap, const char *dir, Str name);
 
-// A regular file, name in folder dfd (AT_FDCWD: a path), of at most max bytes, whole, into the
-// arena, and its stat; STR_EMPTY otherwise. O_NONBLOCK: a FIFO there must not block the open (then
-// it isn't regular, and is refused). flags: more for open (O_NOFOLLOW: a link isn't read;
-// O_NOATIME: the access time kept). One reader for every small file read whole (code-health
-// review, 2026-11-03: written out six times).
+// n bytes of body written whole into fd (a short write goes on; EINTR again); false, errno set, when
+// a write fails. The one writer of whole small files (the F15 code-health review: four did a single
+// write() and took a short one for an error, two looped).
+static bool fd_write_all(int fd, const void *body, isize n)
+{
+    for (isize at = 0; at < n;) {
+        ssize_t k = write(fd, (const char *)body + at, (size_t)(n - at));
+        if (k < 0 && errno == EINTR) continue;
+        if (k <= 0) return k == 0 ? (errno = EIO, false) : false;
+        at += k;
+    }
+    return true;
+}
+
+// body as file path through tmp, a new file beside it (one a crash left there taken out first):
+// mode, written whole, synced when sync, renamed over path, so a reader or a crash sees the old file
+// or the new, never half of one; tmp removed when it fails. The caller asks the test guard for path
+// and makes its folder (each its own way: the state's private, a thumbnail's 0700 by the spec).
+static bool file_replace(const char *path, const char *tmp, const void *body, isize n, mode_t mode, bool sync, Err *err)
+{
+    unlink(tmp);
+    int fd = open(tmp, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, mode);
+    if (fd < 0) return err_set(err, "%s: %s", tmp, strerror(errno)), false;
+    bool ok = fchmod(fd, mode) == 0 && fd_write_all(fd, body, n) && (!sync || fsync(fd) == 0);
+    int e = errno;
+    if (close(fd) != 0 && ok) ok = false, e = errno;
+    if (ok && rename(tmp, path) == 0) return true;
+    if (ok) e = errno;
+    unlink(tmp);
+    return err_set(err, "%s: %s", path, strerror(e)), false;
+}
+
 // The regular file open at fd (st its fstat) whole into the arena, max bytes at most, with a NUL
 // after it when nul: STR_EMPTY when it isn't one, is empty, too big, or reads shorter than its
-// size (it changed meanwhile). file_read_at's and read_file's (mime.c) one loop.
+// size (it changed meanwhile). file_read_at's and read_file's one loop.
 static Str file_read_fd(Arena *a, int fd, const struct stat *st, isize max, bool nul)
 {
     char *p;
@@ -48,6 +75,11 @@ static Str file_read_fd(Arena *a, int fd, const struct stat *st, isize max, bool
     return (Str){ p, n };
 }
 
+// A regular file, name in folder dfd (AT_FDCWD: a path), of at most max bytes, whole, into the
+// arena, and its stat; STR_EMPTY otherwise. O_NONBLOCK: a FIFO there must not block the open (then
+// it isn't regular, and is refused). flags: more for open (O_NOFOLLOW: a link isn't read;
+// O_NOATIME: the access time kept). One reader for every small file read whole (code-health
+// review, 2026-11-03: written out six times).
 static Str file_read_at(Arena *a, int dfd, const char *name, isize max, struct stat *st, int flags)
 {
     int fd = openat(dfd, name, O_RDONLY | O_NONBLOCK | O_CLOEXEC | flags);
@@ -55,6 +87,59 @@ static Str file_read_at(Arena *a, int dfd, const char *name, isize max, struct s
     Str s = fstat(fd, st) == 0 ? file_read_fd(a, fd, st, max, false) : STR_EMPTY;
     close(fd);
     return s;
+}
+
+// The whole file, NUL-terminated, into a; STR_EMPTY when it isn't there or won't fit. Sized by
+// fstat first: opening the arena's whole free tail would cost a pass over it under ASan. A file
+// that reads shorter than that size changed while read, and gives nothing. procfs files say 0
+// (/proc/self/mountinfo): those are read to their end, up to READ_UNSIZED_MAX.
+enum { READ_UNSIZED_MAX = MiB(1) };
+
+static Str read_file(Arena *a, const char *path)
+{
+    // A FIFO or a device at one of these paths would block the open: opened without blocking, then
+    // regular files only (file_read_fd; a stat before the open raced the file's change).
+    int fd = open(path, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
+    if (fd < 0) return STR_EMPTY;
+    struct stat st;
+    Str s = STR_EMPTY;
+    if (fstat(fd, &st) != 0) {
+    } else if (S_ISREG(st.st_mode) && st.st_size == 0) {   // (procfs: read to its end)
+        isize avail, n = 0;
+        char *dst = arena_tail(a, &avail);
+        isize cap = avail - 1 < READ_UNSIZED_MAX ? avail - 1 : READ_UNSIZED_MAX;
+        ssize_t got = 1;
+        while (avail > 1 && n < cap && (got = read(fd, dst + n, (size_t)(cap - n))) > 0) n += got;
+        bool whole = avail > 1 && got == 0;
+        if (!whole && n == READ_UNSIZED_MAX) fprintf(stderr, "ofx: WARN %s is over %d bytes: not read\n", path, READ_UNSIZED_MAX);
+        if (whole) dst[n] = 0, s = (Str){ dst, n };
+        arena_commit(a, whole ? n + 1 : 0);
+    } else {
+        s = file_read_fd(a, fd, &st, PTRDIFF_MAX - 1, true);
+    }
+    close(fd);
+    return s;
+}
+
+// The next line of s from *at, without its newline.
+static bool next_line(Str s, isize *at, Str *line)
+{
+    if (*at >= s.len) return false;
+    isize e = *at;
+    while (e < s.len && s.p[e] != '\n') e++;
+    *line = str_cut(s, *at, e);
+    *at = e + 1;
+    return true;
+}
+
+// A `key = value` line split at its first '=', each side trimmed; false with no '='. ofx.conf, the
+// state file and the theme's files read their lines so (the F15 code-health review: four copies).
+static bool kv_split(Str line, Str *key, Str *val)
+{
+    isize eq = str_find(line, '=');
+    if (eq < 0) return false;
+    *key = str_trim(str_cut(line, 0, eq)), *val = str_trim(str_cut(line, eq + 1, line.len));
+    return true;
 }
 
 // The start of the regular file at path, up to cap bytes, into buf: its length, or -1 when it isn't
