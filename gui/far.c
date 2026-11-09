@@ -218,7 +218,7 @@ static bool far_start(const char *exe, const char *dir, bool hidden, Err *err)
 
 // ---- an action on a far drive (F16 step 3b: ofx-list --do, fs/fardo.c) --------------------------
 
-enum { FAR_DO_MS = 1500, FAR_DO_ARGS = 2 * CLIP_PATHS_MAX + 8 };   // (Michael, 2026-11-09: a bounded wait; a paste's batch fits)
+enum { FAR_DO_MS = 1500, FAR_DO_ARGS = 3 * CLIP_PATHS_MAX + 8 };   // (Michael, 2026-11-09: a bounded wait; a paste's frees, a triple an item, fit)
 
 static u8 far_do_mem[MiB(1)];   // the last action's answer (its fields point into it)
 
@@ -258,6 +258,9 @@ static bool far_do(const char *exe, const char *dir, const char *const *args, i6
 {
     Str name = path_base(str_from_c(dir));
     if (far_stuck(dir)) return err_set(err, "%.*s isn't answering: not tried", STR_ARG(name)), false;
+    // A batch past its deadline: not started at all (step 3 confirm: one killed would be held, and
+    // the share, only slow, refused at once next time).
+    if (until && now_ms() >= until) return err_set(err, "%.*s is slow: the rest weren't tried", STR_ARG(name)), false;
     char prog[PATH_MAX];
     if (!far_prog(exe, name, prog, sizeof prog, err)) return false;
     static char *argv[FAR_DO_ARGS + 3];

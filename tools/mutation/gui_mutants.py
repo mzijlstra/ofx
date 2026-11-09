@@ -564,7 +564,7 @@ MUTANTS = [
     ('gui/actions.c', '    if (rel.len) snprintf(keep, sizeof keep, "%.*s/%.*s", STR_ARG(rel), STR_ARG(to));', '    if (false) {}', 'f9'),
     ('gui/actions.c', '    if (e && entry_path(app.ui.list.sel, path, sizeof path)) path_parent(app.edit_dir, sizeof app.edit_dir, path);', '    if (false) {}', 'f9'),
     ('gui/actions.c', '    snprintf(app.edit_from, sizeof app.edit_from, "%.*s", e ? (int)e->name.len : 0, e ? e->name.p : "");', '    snprintf(app.edit_from, sizeof app.edit_from, "%.*s", STR_ARG(sel_name()));', 'f9'),
-    ('gui/actions.c', '                              : op_symlink(in, paths[i], str_from_c(name), one, sizeof one, &err);   // (F16 step 3b: made by ofx-list there)\n        if (!ok && far_silent(&err)) break;\n        if (!ok || !path_put(p, sizeof p, in, str_from_c(one))) continue;', '                              : op_symlink(app.cwd, paths[i], str_from_c(name), one, sizeof one, &err);   // (F16 step 3b: made by ofx-list there)\n        if (!ok && far_silent(&err)) break;\n        if (!ok || !path_put(p, sizeof p, app.cwd, str_from_c(one))) continue;', 'f9'),
+    ('gui/actions.c', '                              : op_symlink(in, paths[i], str_from_c(name), one, sizeof one, &err);   // (F16 step 3b: made by ofx-list there)', '                              : op_symlink(app.cwd, paths[i], str_from_c(name), one, sizeof one, &err);   // (F16 step 3b: made by ofx-list there)', 'f9'),
     ('gui/actions.c', '        const char *dest = into ? into : sdir;', '        const char *dest = into ? into : app.cwd;', 'f9'),
     ('gui/folder.c', '    return app.ui.view == UI_VIEW_SEARCH ? app.search_root : app.cwd;', '    return app.cwd;', 'f9'),
     ('gui/folder.c', '    if (!a.all) return here_dir();', '    if (!a.all) return app.cwd;', 'f9'),
@@ -1058,15 +1058,15 @@ MUTANTS = [
     ('gui/far.c', '        far_hold(pfd, dir);\n        pthread_mutex_unlock(&far.mu);', '        close(pfd);\n        pthread_mutex_unlock(&far.mu);', 'net'),
     ('gui/far.c', '    far.dos++;\n', '', 'f16'),
     ('gui/actions.c', '    if (!far_r.ok) return err_set(err, "%.*s", STR_ARG(far_r.f[0])), false;', '', 'f16'),
-    ('gui/actions.c', '    return strstr(err->msg, " isn\'t answering: ") != NULL;', '    return false;', 'f16'),
+    ('gui/actions.c', '    return strstr(err->msg, " isn\'t answering: ") != NULL || strstr(err->msg, " is slow: ") != NULL;', '    return false;', 'f16'),
     ('gui/actions.c', '        if (far_dir(c->path[i])) args[k++] = c->path[i]', '        if (0) args[k++] = c->path[i]', 'f16'),
     ('gui/actions.c', '        if (!far_dir(paths[i])) one = trash_put(paths[i], &t, &err);', '        if (1) one = trash_put(paths[i], &t, &err);', 'f16'),
-    ('gui/actions.c', '        if (!one && far_silent(&err)) {\n            first = err;\n            break;\n        }', '        if (!one && far_silent(&err)) {\n            first = err;\n        }', 'f16'),
+    ('gui/actions.c', '        if (!one && far_silent(&err)) {\n            first = err;\n            far_slow_said(&first, ok, paths[i]);\n            break;\n        }', '        if (!one && far_silent(&err)) {\n            first = err;\n            far_slow_said(&first, ok, paths[i]);\n        }', 'f16'),
     ('gui/actions.c', '        } else if (!far_dir(dest)) {\n            name_free(', '        } else if (1) {\n            name_free(', 'f16'),
     # (Dropped, step 3 review: into_itself by realpath for a paste's far folder. As same_dir, it is reached only after ofx-list answered for the batch; on a live share it answers the same.)
     ('gui/actions.c', '    return far_path(src, s, sizeof s, &fs) && far_path(dst_dir, d, sizeof d, &fd) && path_within(d, s);', '    return false;', 'f13'),
     ('gui/actions.c', '        bool ok = far_dir(in) ? far_act_by(in, (const char *const[]){ "symlink"', '        bool ok = 0 ? far_act_by(in, (const char *const[]){ "symlink"', 'f16'),
-    ('gui/actions.c', '        if (!ok && far_silent(&err)) break;\n', '', 'f16'),
+    ('gui/actions.c', '        if (!ok && far_silent(&err)) {\n            far_slow_said(&err, done, paths[i]);\n            break;\n        }', '        if (!ok && far_silent(&err)) {\n            far_slow_said(&err, done, paths[i]);\n        }', 'f16'),
     ('gui/actions.c', '    bool ok = far_dir(in) ? (to.len < (isize)sizeof tc', '    bool ok = 0 ? (to.len < (isize)sizeof tc', 'f16'),
     ('gui/actions.c', '    if (app.far_on) {   // (by ofx-list, F16 step 3b)', '    if (0) {   // (by ofx-list, F16 step 3b)', 'f16'),
     ('gui/actions.c', '    if (app.far_on) {   // (its row comes with the listing', '    if (0) {   // (its row comes with the listing', 'f16'),
@@ -1087,6 +1087,10 @@ MUTANTS = [
     ('gui/far.c', '    if (far_stuck(dir)) return err_set(err, "%.*s isn\'t answering: not tried", STR_ARG(name)), false;', '', 'net'),
     ('gui/far.c', '    for (int i = 0; i < far.nkilled && !stuck; i++) stuck = far_drive(mi, far.killed[i].dir, other, sizeof other, &gvfs) && strcmp(other, drive) == 0;', '', 'net'),
     ('gui/far.c', '    if (!until) until = now_ms() + FAR_DO_MS;', '    until = now_ms() + FAR_DO_MS;', 'f16'),
+    ('gui/actions.c', '    if (done > 0) err_set(why, "%.*s is slow: the rest weren\'t tried", STR_ARG(path_base(str_from_c(path))));', '', 'f16'),
+    # (Justified, step 3 confirm: far_do's "is slow" before spawning past a batch's deadline. The
+    # deadline passes during a child's wait, which kills it, and the batch stops there; it is only
+    # reached when it passed between two actions, where it saves a fork.)
     ('gui/actions.c', '    if (!*until) *until = now_ms() + FAR_DO_MS;', '    *until = now_ms() + FAR_DO_MS;', 'f16'),
     ('gui/actions.c', '        if (far_no_trash(paths[i])) {', '        if (0) {', 'net'),
     ('gui/far.c', '    return far_path(path, real, sizeof real, &reaches) && reaches && far_drive(far_mounts(), real, drive, sizeof drive, &gvfs) && gvfs;', '    return false;', 'net'),

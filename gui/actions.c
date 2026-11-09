@@ -58,11 +58,18 @@ static i64 far_batch(i64 *until)
     return *until;
 }
 
-// Whether the far drive didn't answer in time, the batch's (the action's err): the rest of a batch
-// isn't tried, each would be killed at once.
+// Whether the far drive didn't answer in time, or the batch's time is up (the action's err): the
+// rest of a batch isn't tried.
 static bool far_silent(const Err *err)
 {
-    return strstr(err->msg, " isn't answering: ") != NULL;
+    return strstr(err->msg, " isn't answering: ") != NULL || strstr(err->msg, " is slow: ") != NULL;
+}
+
+// A batch on a far drive cut off after some of it was done: the share answers, slowly (step 3
+// confirm), said so rather than that it isn't answering.
+static void far_slow_said(Err *why, isize done, const char *path)
+{
+    if (done > 0) err_set(why, "%.*s is slow: the rest weren't tried", STR_ARG(path_base(str_from_c(path))));
 }
 
 // "Trashed a.txt", "Trashed 3 items" or "Trashed 2 of 3: why" (verb, ok of n done, one the name
@@ -112,6 +119,7 @@ static void trash_paths(char *const *paths, isize n, bool marks)
         else if (!first.msg[0]) first = err;
         if (!one && far_silent(&err)) {
             first = err;
+            far_slow_said(&first, ok, paths[i]);
             break;
         }
     }
@@ -418,7 +426,10 @@ static void make_link(void)
         path_parent(in, sizeof in, paths[i]);   // (beside it: a search result's own folder, F9)
         bool ok = far_dir(in) ? far_act_by(in, (const char *const[]){ "symlink", in, paths[i], name, NULL }, far_batch(&until), &err) && snprintf(one, sizeof one, "%.*s", STR_ARG(far_r.f[0])) > 0
                               : op_symlink(in, paths[i], str_from_c(name), one, sizeof one, &err);   // (F16 step 3b: made by ofx-list there)
-        if (!ok && far_silent(&err)) break;
+        if (!ok && far_silent(&err)) {
+            far_slow_said(&err, done, paths[i]);
+            break;
+        }
         if (!ok || !path_put(p, sizeof p, in, str_from_c(one))) continue;
         if (done++ == 0) undo_start(UNDO_LINK);
         undo_add(&undo, paths[i], p, NULL);
