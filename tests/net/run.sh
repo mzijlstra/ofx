@@ -24,7 +24,11 @@ pm() { env HOME="$REAL_HOME" XDG_RUNTIME_DIR="$REAL_RT" podman "$@"; }
 
 # The image, named for its files' contents: a change to them builds a new one.
 TAG=localhost/ofx-test-smb:$(cat "$D/Containerfile" "$D/smb.conf" | sha1sum | cut -c1-12)
-pm image exists "$TAG" || pm build -q -t "$TAG" "$D" > /dev/null
+if ! pm image exists "$TAG"; then
+    pm build -q -t "$TAG" "$D" > /dev/null
+    # Its older builds go (named for the files they were built from; only this repository's tags).
+    pm images --format '{{.Repository}}:{{.Tag}}' | grep '^localhost/ofx-test-smb:' | grep -vx "$TAG" | xargs -r env HOME="$REAL_HOME" XDG_RUNTIME_DIR="$REAL_RT" podman rmi > /dev/null 2>&1 || true
+fi
 C=ofx-test-$$
 # The bus's socket in a short folder of its own (a unix socket's path is at most 107 bytes).
 B=$(mktemp -d "${TMPDIR:-/tmp}/ofx-net-XXXXXX")
@@ -93,7 +97,7 @@ pm pause "$C" > /dev/null
 ls "$PUB" > /dev/null 2>&1 &
 L=$!
 sleep 2
-check "a read blocks on a dead server" test "$(state $L)" = S
+check "a read blocks on a dead server" test "$(state $L)" = S   # (if it ever flakes: S or D, never "not gone"; review)
 kill -9 $L 2> /dev/null
 sleep 0.5
 check "SIGKILL leaves it waiting for gvfsd" test "$(state $L)" = D

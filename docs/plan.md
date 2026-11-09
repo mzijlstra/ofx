@@ -822,6 +822,21 @@ blocks each of these for up to gvfs's 90 s. On a thread it also holds ofx's exit
   - a drag's target check (`drop_takes`: stat, access, realpath, drag.c:62), on each new target;
   - the search view's `lstat` of each result (search.c:258);
   - a start on a path (`select_path`, main.c:606).
+- **Main thread, added by the step 1 review** (a search of fs/ for every function reaching a path
+  syscall that gui/ calls):
+  - Trash (`trash_paths`, then `trash_put`): inline, not a job;
+  - the paste's checks before its job (`copy_here`: lstat, realpath, `name_free`);
+  - Make Link;
+  - undo (`undo_check`, `undo_do`);
+  - Permissions (`op_chmod`);
+  - the trash scan (`trash_scan`, `trash_any`) of every drive place. A dead NFS mount under /mnt
+    freezes the trash refresh from any folder.
+- **Symlinks into a share, from a local folder** (step 1 review, measured):
+  - `fs_list` follows every link (`kind_of`'s fstatat); so does the tree's `tree_is_dir`.
+  - With the server paused, a link's lstat answers in 2 ms, but the followed stat blocks. So `~`
+    with `~/nas` pointing into a share freezes the window, though `~` isn't far.
+  - (A share path gvfs has already looked up answers from its attribute cache; the test must use
+    one not yet looked up.)
 - **Worker threads:**
   - the item counts (gui/counts.c);
   - the free space (`statvfs`, gui/space.c);
@@ -831,10 +846,21 @@ blocks each of these for up to gvfs's 90 s. On a thread it also holds ofx's exit
 - **Already off far mounts or in children:** previews (`thumb_far_type`), git (bubblewrap, timed;
   but `git_top` above runs first), ofx-clean.
 - **Plan:**
-  - step 2 moves the listing, the counts, Can Write and the watch's first `stat` into `ofx-list`;
-  - step 3 takes the rest: an action on a far folder runs its syscalls in a child, or as a job;
-    `git_top` and the free space are skipped on far folders; the drag's target check is answered
-    "not known" there until a child says.
+  - step 2 moves the listing, the counts, Can Write and the watch's first `stat` into `ofx-list`.
+    Everything else on the way into a folder comes with it, so entering a dead share leaves the
+    window answering: the `stat` before `go_to`, `git_top`, the tree, and the free space.
+  - Also step 2: a link whose target is under a far mount is not followed in-process. Its target,
+    made absolute from readlink's text with no syscall, is checked against mountinfo's far mounts
+    (the gvfs FUSE mount among them). It is listed as a link of unknown kind, and `ofx-list`
+    reports its kind later, as it does the counts. Enter on it goes the far way. A chain through a
+    local link isn't caught; noted, not handled.
+  - One `ofx-list` per far folder at most. A new one for the same folder waits for the last;
+    killed ones are counted, and the count shows. Unmount says "busy" while one runs. Never
+    `wait()` or `waitpid(-1)`: under SA_NOCLDWAIT they wait for the D children too (review).
+  - step 3 takes the actions: trash, paste checks, Make Link, undo, Permissions, rename, New
+    Folder/File and Properties on a far folder run their syscalls in a child, or as a job. The
+    drag's target check is answered "not known" there until a child says. The trash scan skips far
+    drives.
   - Each item's measured freeze comes with step 2's GUI group `net` (ofx in weston inside the
     private gvfs session).
 
