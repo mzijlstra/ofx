@@ -51,7 +51,7 @@ static void ow_open(void)
         ui_ow_close(&app.ui);
         return;
     }
-    if (!app.thumb_local || !spawn_gio_type(ow.paths[0], ow.type, sizeof ow.type, 1000)) {
+    if (!app.thumb_local || far_dir(ow.paths[0]) || !spawn_gio_type(ow.paths[0], ow.type, sizeof ow.type, 1000)) {   // (a far link's target: by its name, F16 step 3b)
         isize i = app.ui.marked ? -1 : app.ui.list.sel;
         for (isize k = 0; i < 0 && k < app.list.n; k++)
             if (app.ui.mark[k]) i = k;

@@ -888,7 +888,7 @@ blocks each of these for up to gvfs's 90 s. On a thread it also holds ofx's exit
        its killed reader. A request still queued behind it ends with the kill.
      - **Test harness:** `script_under` (the scripts' `sh` guard) checks a far folder by its path,
        not `realpath` (that blocked the window on a paused share).
-     - **Known gaps, for step 3:**
+     - **Known gaps, for step 3** (all three handled in 3a):
        - any path handed to ofx that reaches a far drive through a local link (a start folder, a
          typed location, a restored tab, Back: `~/nas/sub` is judged by its text, and `realpath`
          at start would read it; step 2b confirm);
@@ -913,11 +913,54 @@ blocks each of these for up to gvfs's 90 s. On a thread it also holds ofx's exit
      - **From the folder's real path** (step 2b review): `fs_list_far`, the tree and Enter call
        `realpath` on the local folder once, so a link's `..` goes up from where the folder really
        is. A far mount point's Owner, Group and Permissions are blank, not root and `d---------`.
-     - **Known gap:** a link whose target runs through another local link into the share (nas →
-       mylinks/nas, mylinks a link) isn't seen. The list follows it in-process.
+     - **Known gap (closed in 3a):** a link whose target runs through another local link into the
+       share (nas → mylinks/nas, mylinks a link) wasn't seen.
      - **For step 3** (step 2b review): the search walk; and on far links, `copy_here`'s
        into-itself check, drag sources and Open With.
-3. **The audit's other touches** moved off the main thread or skipped on far folders.
+3. **The audit's other touches** moved off the main thread or skipped on far folders. Split in two
+   (2026-11-09):
+   - **3a, paths, refusals, the search walk and the trash scan:**
+     - **`far_real`** (fs/list.c): a path resolved as realpath does, every local link followed, but
+       never past a far drive. Each part is `lstat`'d only while the path so far is local by the
+       mount list, and from the first far part the rest is taken by its text. `far_dir` (by the
+       mount list, then through the local links), the start, `--select`, Follow Link, the drag's
+       checks, `same_dir`, Enter on a far link, the listing's link check and the tree use it. So
+       `~/nas/sub`, nas a link into a share, is far wherever it comes from (a start, a typed
+       location, a tab, Back), and step 2b's known gap (a chain through a local link) is closed.
+     - **A far folder's refusal, as a local one's** (`FarThen`, by how ofx got there): a typed or
+       started path that is a file shows its folder with it selected; Back or Forward onto one that
+       is gone skips it (`hist_take`); a reload or a tab onto one gone goes to the nearest folder
+       above. Shown with its reason otherwise.
+     - **The search walk** takes the mount list: a far mount point, a link into a far drive and a
+       far folder searched are matched by name only, never entered or read, and counted ("skipped
+       1 network folder"). The search view's prune doesn't `lstat` a far result.
+     - **The trash scan** leaves far drives out (a dead NFS mount under /mnt held each Trash icon
+       refresh).
+     - **Tests:** f16d (start, typed file, gone on Forward and on reload, a chain, Follow Link, a
+       drop, the search, a far drive's trash) and f16e (`--select`). Their paths run through a part
+       missing on the stand-in share (`none/..`): realpath fails there where `far_real` takes the
+       text, so a look in-process shows in the f16 group without a dead server.
+     - **Drops onto a far folder** are taken unless its lister said it can't be written (the folder
+       shown), and are never "the same drive" (a copy).
+     - **Left:** `clean_real` (fs/clean.c) and `far_real` overlap; for the milestone's code-health
+       review.
+   - **3b, the actions** (Michael, 2026-11-09: "child, bounded wait"): rename, New Folder/File,
+     Trash, Make Link, Permissions, undo, the paste's checks and Properties on a far folder run in
+     `ofx-list --do …` (fs/fardo.c), and ofx waits for it at most 1.5 s (gui/far.c `far_do`). On a
+     dead share the window stalls that long, then says the share isn't answering (the action may
+     still land; a reload shows). The child is killed and held as a lister is.
+     - **A batch** (trash, links) stops at the first that doesn't answer.
+     - **New Folder** there doesn't open its name to edit (its row comes with the listing): "F2
+       renames it".
+     - **A reload's cursor:** on the name asked (a rename's new one), unless the cursor was moved
+       meanwhile (the 2a rule).
+     - **Without a look:** the menus' write check (the lister's word for the folder shown, else
+       yes), Properties' folder test (the listing's kinds), a far link's type in Open With and
+       Properties (by its name).
+     - **Found under load:** a reload while a far folder's first listing was still coming reset how
+       ofx got there, so a far link that was a file showed "Not a directory". It keeps it now.
+     - **Measured on the real share:** a `--do mkdir` killed while the server was paused stayed in
+       the kernel over 60 s after it came back (gvfsd's affair; the run's end ends it).
 4. **Connect to Server… and passwords:** the address line (Go menu and Ctrl+L with `smb://`), the
    password question, `gio mount` on a job thread, wrong password and unknown host said in the
    status line.

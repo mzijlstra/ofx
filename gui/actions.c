@@ -31,6 +31,37 @@ static void undo_start(UndoKind k)
 }
 #include "eject.c"
 
+// ---- on a far drive (F16 step 3b) ------------------------------------------------------------
+
+static FarReply far_r;   // the last far action's answer (its fields in far.c's far_do_mem)
+
+// An action on the far drive under dir, run by ofx-list --do (far_do: ofx waits for it a moment at
+// most), args from the action's name on, NULL ended. False with the reason, its own or "isn't
+// answering"; its answer in far_r.
+static bool far_act(const char *dir, const char *const *args, Err *err)
+{
+    if (!far_do(app.exe, dir, args, &far_r, err)) return false;
+    if (!far_r.ok) return err_set(err, "%.*s", STR_ARG(far_r.f[0])), false;
+    return true;
+}
+
+// Whether the far drive didn't answer (the action's err): the rest of a batch isn't tried, each
+// would wait as long again.
+static bool far_silent(const Err *err)
+{
+    return strstr(err->msg, " isn't answering: ") != NULL;
+}
+
+// path's lstat (a far one's from ofx-list, F16 step 3b). False, with the reason, when it can't be.
+static bool lstat_far(const char *path, struct stat *st, Err *err)
+{
+    if (!far_dir(path)) return lstat(path, st) == 0 || (err_set(err, "%s: %s", path, strerror(errno)), false);
+    if (!far_act(path, (const char *const[]){ "stat", path, NULL }, err)) return false;
+    if (far_r.f[0].len != (isize)sizeof *st) return err_set(err, "%s: no answer from its reader", path), false;
+    memcpy(st, far_r.f[0].p, sizeof *st);
+    return true;
+}
+
 // "Trashed a.txt", "Trashed 3 items" or "Trashed 2 of 3: why" (verb, ok of n done, one the name
 // when it is the only one).
 static void say_done(const char *verb, isize ok, isize n, const char *one, const char *why)
@@ -60,9 +91,15 @@ static void trash_paths(char *const *paths, isize n, bool marks)
     Err err, first = { "" };
     undo_start(UNDO_TRASH);
     for (isize i = 0; i < n; i++) {
-        Trashed t;
-        if (trash_put(paths[i], &t, &err)) undo_add(&undo, t.from, t.file, t.info), ok++;
+        static Trashed t;
+        bool one;
+        if (!far_dir(paths[i])) one = trash_put(paths[i], &t, &err);
+        else if ((one = far_act(paths[i], (const char *const[]){ "trash", paths[i], NULL }, &err)))   // (F16 step 3b)
+            snprintf(t.from, sizeof t.from, "%.*s", STR_ARG(far_r.f[0])), snprintf(t.file, sizeof t.file, "%.*s", STR_ARG(far_r.f[1])),
+                snprintf(t.info, sizeof t.info, "%.*s", STR_ARG(far_r.f[2]));
+        if (one) undo_add(&undo, t.from, t.file, t.info), ok++;
         else if (!first.msg[0]) first = err;
+        if (!one && far_silent(&err)) break;
     }
     if (ok == 0) undo_clear(&undo);
     if (n > 0) say_done("Trashed", ok, n, path_base(str_from_c(paths[0])).p, first.msg);
@@ -202,6 +239,15 @@ static void copy_targets(bool cut, const char *only)
     else set_status(false, "%s %td items%s", cut ? "Cut" : "Copied", own.n, note);
 }
 
+// Whether folder src would go into itself in dst_dir (fs/job.c's into_itself), resolved by far_path:
+// never past a far drive (F16 step 3b).
+static bool into_itself_far(const char *src, const char *dst_dir)
+{
+    char s[PATH_MAX], d[PATH_MAX];
+    bool fs, fd;
+    return far_path(src, s, sizeof s, &fs) && far_path(dst_dir, d, sizeof d, &fd) && path_within(d, s);
+}
+
 // Whether a and b are the same folder, resolved (never past a far drive: far_path, F16 step 3).
 static bool same_dir(const char *a, const char *b)
 {
@@ -225,11 +271,16 @@ static void copy_here(const ClipFiles *c, const char *into)
         path_parent(sdir, sizeof sdir, src);
         const char *dest = into ? into : sdir;
         struct stat st;
-        if (lstat(src, &st) != 0) {
+        Err err;
+        if (!lstat_far(src, &st, &err)) {
+            if (far_silent(&err)) {   // (r unused: still free)
+                set_status(true, "%s", err.msg);
+                return;
+            }
             gone++;
             continue;
         }
-        if (S_ISDIR(st.st_mode) && into_itself(src, dest)) {
+        if (S_ISDIR(st.st_mode) && into_itself_far(src, dest)) {
             self++;
             continue;
         }
@@ -238,7 +289,20 @@ static void copy_here(const ClipFiles *c, const char *into)
                 here++;
                 continue;
             }
-            if (!name_free(dest, base, S_ISDIR(st.st_mode), true, true, name, sizeof name)) continue;
+            if (!far_dir(dest)) {
+                if (!name_free(dest, base, S_ISDIR(st.st_mode), true, true, name, sizeof name)) continue;
+            } else {   // (a far one: its free name from ofx-list, F16 step 3b)
+                char bn[NAME_MAX + 1];
+                snprintf(bn, sizeof bn, "%.*s", STR_ARG(base));
+                if (!far_act(dest, (const char *const[]){ "free", dest, bn, S_ISDIR(st.st_mode) ? "1" : "0", "1", "1", NULL }, &err)) {
+                    if (far_silent(&err)) {   // (r unused: still free)
+                        set_status(true, "%s", err.msg);
+                        return;
+                    }
+                    continue;
+                }
+                snprintf(name, sizeof name, "%.*s", STR_ARG(far_r.f[0]));
+            }
         } else {
             snprintf(name, sizeof name, "%.*s", STR_ARG(base));
         }
@@ -318,7 +382,10 @@ static void make_link(void)
         }
         char in[PATH_MAX];
         path_parent(in, sizeof in, paths[i]);   // (beside it: a search result's own folder, F9)
-        if (!op_symlink(in, paths[i], str_from_c(name), one, sizeof one, &err) || !path_put(p, sizeof p, in, str_from_c(one))) continue;
+        bool ok = far_dir(in) ? far_act(in, (const char *const[]){ "symlink", in, paths[i], name, NULL }, &err) && snprintf(one, sizeof one, "%.*s", STR_ARG(far_r.f[0])) > 0
+                              : op_symlink(in, paths[i], str_from_c(name), one, sizeof one, &err);   // (F16 step 3b: made by ofx-list there)
+        if (!ok && far_silent(&err)) break;
+        if (!ok || !path_put(p, sizeof p, in, str_from_c(one))) continue;
         if (done++ == 0) undo_start(UNDO_LINK);
         undo_add(&undo, paths[i], p, NULL);
         snprintf(made, sizeof made, "%s", one);
@@ -398,7 +465,11 @@ static void rename_commit(void)
     if (path_put(was, sizeof was, in, from) && jobs_refuse(was)) return;
     if (path_put(will, sizeof will, in, to) && jobs_refuse(will)) return;
     Err err;
-    if (!op_rename(in, from, to, &err)) { set_status(true, "%s", err.msg); return; }
+    char fc[NAME_MAX + 1], tc[NAME_MAX + 1];   // (on a far drive: by ofx-list, F16 step 3b)
+    snprintf(fc, sizeof fc, "%.*s", STR_ARG(from)), snprintf(tc, sizeof tc, "%.*s", STR_ARG(to));
+    bool ok = far_dir(in) ? (to.len < (isize)sizeof tc || (err_set(&err, "the name is too long"), false)) && far_act(in, (const char *const[]){ "rename", in, fc, tc, NULL }, &err)
+                          : op_rename(in, from, to, &err);
+    if (!ok) { set_status(true, "%s", err.msg); return; }
     // The cursor stays on it: by its new name, in a search its folder's too, where the result takes
     // the new name in place (F9).
     char a[PATH_MAX], b[PATH_MAX], keep[PATH_MAX];
@@ -424,7 +495,13 @@ static void new_made(bool file)
     char made[NAME_MAX + 1], p[PATH_MAX];
     Err err;
     UndoKind kind = file ? UNDO_MKFILE : UNDO_MKDIR;
-    bool ok = file ? op_mkfile(app.cwd, S("New file"), made, sizeof made, &err) : op_mkdir(app.cwd, S("New folder"), made, sizeof made, &err);
+    bool ok;
+    if (app.far_on) {   // (by ofx-list, F16 step 3b)
+        ok = far_act(app.cwd, (const char *const[]){ file ? "mkfile" : "mkdir", app.cwd, file ? "New file" : "New folder", NULL }, &err);
+        if (ok) snprintf(made, sizeof made, "%.*s", STR_ARG(far_r.f[0]));
+    } else {
+        ok = file ? op_mkfile(app.cwd, S("New file"), made, sizeof made, &err) : op_mkdir(app.cwd, S("New folder"), made, sizeof made, &err);
+    }
     if (!ok) {
         set_status(true, "%s", err.msg);
         return;
@@ -432,6 +509,10 @@ static void new_made(bool file)
     if (path_put(p, sizeof p, app.cwd, str_from_c(made))) undo_start(kind), undo_add(&undo, NULL, p, NULL);
     ui_mark_clear(&app.ui);
     go_to(app.cwd, str_from_c(made), app.ui.list.sel);
+    if (app.far_on) {   // (its row comes with the listing: not edited before it is there, F16 step 3b)
+        set_status(false, "Made %s: F2 renames it", made);
+        return;
+    }
     ui_edit_open_all(&app.ui, str_from_c(made));
     snprintf(app.edit_from, sizeof app.edit_from, "%s", made), snprintf(app.edit_dir, sizeof app.edit_dir, "%s", app.cwd);
     app.edit_new = kind;
@@ -442,6 +523,38 @@ static void props_open(const char *path);
 static void folder_do(UiMenuItem it);
 static void props_chmod(int k);
 
+// Whether any of the undo's paths is on a far drive: then all of it is done by ofx-list (F16 step 3b).
+static bool undo_far(void)
+{
+    for (isize i = 0; i < undo.n; i++)
+        if ((undo.it[i].to && far_dir(undo.it[i].to)) || (undo.it[i].from && far_dir(undo.it[i].from))) return true;
+    return false;
+}
+
+enum { UNDO_FAR_MAX = 256 };   // (each item three arguments to ofx-list: FAR_DO_ARGS)
+
+// The undo by ofx-list --do undo: true with *job when it is a move across drives, checked there,
+// for a job to undo; false with the reason (the undo used up).
+static bool undo_by_far(bool *job, isize *done, Err *err)
+{
+    static const char *args[3 + 3 * UNDO_FAR_MAX];
+    char kind[8];
+    *job = false, *done = 0;
+    if (undo.n > UNDO_FAR_MAX) return err_set(err, "%td items on a network drive is more than ofx undoes at once", undo.n), false;
+    snprintf(kind, sizeof kind, "%d", (int)undo.kind);
+    int k = 0;
+    args[k++] = "undo", args[k++] = kind;
+    for (isize i = 0; i < undo.n; i++) {
+        const UndoItem *it = &undo.it[i];
+        args[k++] = it->from ? it->from : "", args[k++] = it->to ? it->to : "", args[k++] = it->info ? it->info : "";
+    }
+    args[k] = NULL;
+    bool ok = far_act(undo.it[0].to ? undo.it[0].to : app.cwd, args, err);
+    if (ok && str_eq(far_r.f[0], S("job"))) *job = true;
+    else if (far_r.n > 1) *done = (isize)strtol(arena_cstr(&scratch, far_r.f[1]), NULL, 10);
+    return ok;
+}
+
 static void undo_last(void)
 {
     char what[64];
@@ -450,9 +563,17 @@ static void undo_last(void)
         if ((undo.it[i].from && jobs_refuse(undo.it[i].from)) || (undo.it[i].to && jobs_refuse(undo.it[i].to))) return;
     undo_gen++;
     Err err;
-    if (undo_is_job(&undo)) {
+    bool on_far = undo_far(), job = false, far_ok = true;
+    isize done;
+    if (on_far) far_ok = undo_by_far(&job, &done, &err);
+    if (on_far && !far_ok) {   // (its reason; the undo used up, as undo_do's)
+        undo_clear(&undo), set_status(true, "%s", err.msg);
+        reload();
+        return;
+    }
+    if (on_far ? job : undo_is_job(&undo)) {
         // A move across drives goes back as a move.
-        if (!undo_check(&undo, &err)) { undo_clear(&undo), set_status(true, "%s", err.msg); return; }
+        if (!on_far && !undo_check(&undo, &err)) { undo_clear(&undo), set_status(true, "%s", err.msg); return; }
         JobRec *r = job_new();
         if (!r) return;
         for (isize i = 0; i < undo.n; i++)
@@ -471,8 +592,8 @@ static void undo_last(void)
         path_parent(dir, sizeof dir, undo.it[0].from);
         if (same_dir(dir, app.cwd)) snprintf(back, sizeof back, "%.*s", STR_ARG(path_base(f)));
     }
-    isize done;
-    if (undo_do(&undo, &done, &err)) set_status(false, "Undid the %s", what);
+    if (on_far) undo_clear(&undo), set_status(false, "Undid the %s", what);   // (done by ofx-list above)
+    else if (undo_do(&undo, &done, &err)) set_status(false, "Undid the %s", what);
     else set_status(true, "%s", err.msg);
     if (back[0]) go_to(app.cwd, str_from_c(back), app.ui.list.sel);
     else reload();

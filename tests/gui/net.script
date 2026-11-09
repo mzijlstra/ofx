@@ -46,4 +46,27 @@ sh "$OFX_ROOT/pause"
 key alt-home
 wait-for 3000 faron=0 n=1 sel=nas
 sh "$OFX_ROOT/unpause"
+# An action on the share with the server stopped (step 3b): run by ofx-list --do, ofx waits 1.5 s
+# for it, says the share isn't answering, and holds the killed child while it is in the kernel.
+key enter
+wait-for 8000 faron=1 farloading=0 n=2 fardos=0
+key home
+expect sel=sub
+sh "$OFX_ROOT/pause"
+# A drag from the share with the server stopped: what is dragged isn't looked at (a look would hold
+# the window until gvfs gives up).
+point-ui row 0
+press-here
+move-by 0 10
+expect drag=files dragn=1 dragname=sub
+key esc
+expect drag=-
+key ctrl-shift-n
+expect fardos=1 statusbad=1 farheld=1
+expect answering: it may still happen there
+key down
+expect sel=hello.txt
+# (When gvfsd answers the request it took before the pause is its own affair: over 60 s for this
+# mkdir after the unpause, measured. The run's end takes the share and the held child with it.)
+sh "$OFX_ROOT/unpause"
 quit

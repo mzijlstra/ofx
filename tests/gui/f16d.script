@@ -1,7 +1,8 @@
 # F16 step 3: paths that reach a far folder through local links, and far folders that turn out to
 # be a file or gone. run.sh's tree: share (far by the mount list) with sub/ and x.txt; local holds
-# a.txt, mylinks (a link to ../links) and chain (to mylinks/nas); links/nas is ../share. ofx starts
-# on local/mylinks/nas: far only through the links, so the start doesn't read it (its lister does).
+# a.txt, mylinks (a link to ../links), chain (to mylinks/nas) and viaghost (to mylinks/nas/none/..);
+# links/nas is ../share. ofx starts on local/mylinks/nas/none/..: far only through the links, so the
+# start doesn't read it (its lister does; realpath would fail on none).
 settle
 wait-for 3000 faron=1 farloading=0 n=2 sel=sub
 # media/nas, a far drive, holds an item in its trash: never looked at, so the Trash stays empty.
@@ -14,7 +15,7 @@ wait-for 3000 faron=0 n=3 sel=share
 key ctrl-l
 type local/mylinks/nas/x.txt
 key enter
-wait-for 3000 faron=1 farloading=0 n=2 sel=x.txt statusbad=0
+wait-for 3000 faron=1 farloading=0 n=2 sel=x.txt statusbad=0 thumblocal=0
 # Back from there: tree, as before the typed path (the file took no place in the history).
 key alt-left
 wait-for 3000 faron=0 sel=share
@@ -49,19 +50,56 @@ expect is gone
 key backspace
 wait-for 3000 faron=0 n=1 sel=nas
 key backspace
-wait-for 3000 faron=0 n=3 sel=mylinks
+wait-for 3000 faron=0 n=4 sel=mylinks
+key home
+expect sel=chain
+# viaghost, a far link through none/..: Follow Link goes to the share's folder (tree), the share
+# selected, by the text; a drop onto it is taken (a copy, never looked at).
+key end
+key up
+expect sel=viaghost
+point-ui row 2
+right-here
+point-menu follow
+click-here
+wait-for 3000 faron=0 sel=share statusbad=0
+key alt-left
+wait-for 3000 faron=0 sel=viaghost
+point-ui row 3
+press-here
+move-by 0 -10
+point-ui row 2
+move-here
+expect drop=row:2 dropok=1 dropop=copy
+key esc
 key home
 expect sel=chain
 wait-for 2000 sizecell=?
 key enter
 wait-for 3000 faron=1 farloading=0 n=1 sel=x.txt
-# A search in local: chain and mylinks/nas lead into the share. chain is found by its name but
-# neither it nor the share is entered (x.txt there isn't found); said in the line.
+# x.txt dragged from the share to Home (local): a copy, the share's file never looked at for its drive.
+point-ui row 0
+press-here
+move-by 0 10
+point-side Home
+move-here
+expect drop=side:1 dropok=1 dropop=copy
+key esc
+# A search in local: chain, viaghost and mylinks/nas lead into the share. chain and viaghost are
+# found by their names, but neither they nor the share are entered (x.txt there isn't found); said
+# in the line.
 key alt-left
 wait-for 3000 faron=0 sel=chain
 key ctrl-shift-f
 wait-for 2000 search=1
 type a
-wait-for 3000 searchdue=0 searchdone=1 n=2
-expect searchinfo=2_found_·_skipped_1_network_folder,_1_link_to_a_folder
+wait-for 3000 searchdue=0 searchdone=1 n=3
+expect searchinfo=3_found_·_skipped_2_network_folders,_1_link_to_a_folder
+# viaghost among them: a far link (a folder, its count not asked), not a broken one (its target not
+# followed, where none/.. would fail).
+key enter
+expect searchkeys=0
+key down
+expect sel=viaghost
+wait-for 2000 sizecell=?
 quit

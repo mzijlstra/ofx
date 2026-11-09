@@ -208,8 +208,11 @@ static isize far_scan;   // how far what the lister said was looked through for 
 // with the reason, when it can't start.
 static bool far_begin(const char *dir, Str select, isize fallback, Err *err)
 {
+    // Listed again before its first answer came (a reload meanwhile): how ofx got there still holds
+    // (a link that may be a file, a path typed; found under load, step 3).
+    if (!(app.far_loading && strcmp(dir, app.cwd) == 0)) app.far_then = FAR_THEN_SHOW;
     snprintf(app.far_select, sizeof app.far_select, "%.*s", STR_ARG(select));
-    app.far_fallback = fallback, app.far_since = now_ms(), app.far_slow = false, app.far_note[0] = 0, far_scan = 0, app.far_then = FAR_THEN_SHOW;
+    app.far_fallback = fallback, app.far_since = now_ms(), app.far_slow = false, app.far_note[0] = 0, far_scan = 0;
     // The last lister killed first: if it is still in the kernel (a reload of a folder that hangs),
     // it holds this one back too (step 2a review: asked before, a reload started one at once).
     far_drop();
@@ -287,8 +290,7 @@ static void far_gone_step(int dir)
 // step 3), as a local folder's refusal would; else the reason stays in the list.
 static void far_refused(void)
 {
-    FarThen then = app.far_then;
-    app.far_then = FAR_THEN_SHOW;
+    FarThen then = app.far_then;   // (far_begin sets it back for the next listing)
     bool file = far_reason_is(app.status, ENOTDIR), gone = far_reason_is(app.status, ENOENT);
     if (file && then == FAR_THEN_OPEN) return far_link_file();
     if (file && then == FAR_THEN_SELECT) {   // (a path typed: its folder, it selected, in its place in the history)
@@ -325,12 +327,13 @@ static bool far_poll(void)
         while (!ended && (r = far_next(b, &far_scan, &m)) == 1) ended = m.type == 'L' || m.type == 'X';
         if (ended || r < 0) {
             app.far_ready = true;
-            // A reload kept its listing on screen: the cursor where it is now, not where it was
-            // asked (moves made meanwhile stay; step 2a review).
+            // A reload kept its listing on screen: the cursor where it is now when it was moved
+            // meanwhile (step 2a review), else on the name asked (a rename's new one, step 3b).
             char keep[NAME_MAX + 1];
-            if (app.far_kept) snprintf(keep, sizeof keep, "%.*s", STR_ARG(sel_name()));
-            Str select = app.far_kept ? str_from_c(keep) : str_from_c(app.far_select);
-            bool ok = go_to_in(app.cwd, select, app.far_kept ? app.ui.list.sel : app.far_fallback, true);
+            bool moved = app.far_kept && app.ui.list.sel != app.far_kept_sel;
+            if (moved) snprintf(keep, sizeof keep, "%.*s", STR_ARG(sel_name()));
+            Str select = moved ? str_from_c(keep) : str_from_c(app.far_select);
+            bool ok = go_to_in(app.cwd, select, moved ? app.ui.list.sel : app.far_fallback, true);
             app.far_ready = false, app.far_loading = false;
             if (!ok) return far_refused(), true;
             if (app.far_slow) app.status[0] = 0;   // (its "isn't answering" said its last)
@@ -352,6 +355,17 @@ static bool far_poll(void)
     while (far_next(b, &app.far_at, &m) == 1)
         if (m.type == 'C' && m.v[0] == app.far_cgen && m.v[1] < app.list.n) app.count[m.v[1]] = m.v[2], any = true;
     return any;
+}
+
+// Whether path (a folder) can be written to, for a menu's entries. On a far drive it isn't asked
+// (that would hold the window, F16 step 3b): the folder shown's lister's word for it and its
+// folders, else yes (the action itself says if not).
+static bool can_write_at(const char *path)
+{
+    if (!far_dir(path)) return access(path, W_OK) == 0;
+    char up[PATH_MAX];
+    bool here = app.far_on && (strcmp(path, app.cwd) == 0 || (path_parent(up, sizeof up, path) && strcmp(up, app.cwd) == 0));
+    return here ? !app.far_loading && app.far_can_write : true;
 }
 
 // Entry i's item count asked: of its folder's lister on a far folder (once its listing is shown),
@@ -378,7 +392,7 @@ static bool go_to_in(const char *dir, Str select, isize fallback, bool stepping)
     // A far folder listed again (Ctrl+R, a change ofx made): a new lister, the listing shown kept
     // until its answer comes.
     if (on_far && !app.far_ready && same && app.far_on && app.have_list) {
-        if (far_begin(dir, select, fallback, &err)) return app.far_kept = true, true;
+        if (far_begin(dir, select, fallback, &err)) return app.far_kept = true, app.far_kept_sel = app.ui.list.sel, true;
         return far_failed(err.msg), false;
     }
     // Another folder (F11): the one left keeps its cursor; this one's own view, size and sort, its
@@ -740,7 +754,7 @@ static void reload(void)
     char keep[PATH_MAX] = "";
     snprintf(keep, sizeof keep, "%.*s", STR_ARG(sel_name()));
     if (go_to(app.cwd, str_from_c(keep), app.ui.list.sel)) {
-        if (app.far_loading) app.far_then = FAR_THEN_UP;   // (a far one: if its lister says it is gone, F16 step 3)
+        if (app.far_loading && app.far_then == FAR_THEN_SHOW) app.far_then = FAR_THEN_UP;   // (a far one: if its lister says it is gone, F16 step 3; not over another way's)
         return;
     }
     go_up_from(app.cwd);

@@ -736,6 +736,7 @@ static void script_state(char *out, size_t cap)
     sw(out, cap, &len, "farkills=%d ", far.kills);
     sw(out, cap, &len, "farheld=%d ", far.nkilled);
     sw(out, cap, &len, "farasked=%d ", far.asked);
+    sw(out, cap, &len, "fardos=%d ", far.dos);
     bool word_bad;
     const char *word = app.have_list && !app.list.n ? list_word(&word_bad) : "";
     char listword[sizeof app.far_note];

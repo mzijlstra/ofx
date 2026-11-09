@@ -381,6 +381,7 @@ static struct {
     bool      far_waiting;        // its last lister is still in the kernel: a new one waits for it
     bool      far_ready;          // (go_to_in's: the listing came, take it)
     bool      far_kept;           // a reload: the listing shown kept until it comes (the cursor taken then)
+    isize     far_kept_sel;       // (the cursor's row as it was asked: moved since, it stays where moved)
     FarThen   far_then;           // what its lister's refusal leads to (a file, a folder gone): set by the way there
     bool      far_slow;           // no answer within FAR_ANSWER_MS: said so
     bool      far_can_write;      // what the lister said
@@ -841,7 +842,7 @@ static void ctx_opened(void)
     if (ctx_up && !app.ctx_placed && app.ui.menu == UI_CTX_FOLDER) ctx_facts();
     if (ctx_up && !app.ctx_placed && app.ui.menu == UI_CTX_ENTRY) {   // (Paste Into Folder: the cursor's, writable)
         char e[PATH_MAX];
-        app.ui.ctx_w = app.ui.ctx_dir && app.ui.list.sel < app.list.n && entry_path(app.ui.list.sel, e, sizeof e) && access(e, W_OK) == 0;
+        app.ui.ctx_w = app.ui.ctx_dir && app.ui.list.sel < app.list.n && entry_path(app.ui.list.sel, e, sizeof e) && can_write_at(e);
     }
     if (ctx_up && !app.ctx_placed && app.ui.menu == UI_CTX_BRANCH) git_ask_branches(), menu_facts();   // (its list read as it opens: F12 step 5b)
     if (ctx_up && !app.ctx_placed) ctx_place();

@@ -218,24 +218,48 @@ static const char *props_drive(const char *path)
     return best >= 0 ? app.places.p[best].label : "-";
 }
 
+// The one entry's details as ofx-list read them on a far drive (F16 step 3b): false when it didn't
+// answer (said in the status line).
+static bool props_read_far(const char *path)
+{
+    Err err;
+    if (!far_act(path, (const char *const[]){ "stat", path, NULL }, &err)) {
+        set_status(true, "%s", err.msg);
+        return props.have = false;
+    }
+    if (far_r.n != 4 || far_r.f[0].len != (isize)sizeof props.st || (far_r.f[1].len && far_r.f[1].len != (isize)sizeof props.st)) return props.have = false;
+    props.have = true;
+    struct stat lst;   // (copied out: the answer's bytes aren't aligned for a struct)
+    memcpy(&lst, far_r.f[0].p, sizeof lst);
+    props.broken = S_ISLNK(lst.st_mode) && !far_r.f[1].len;
+    memcpy(&props.st, far_r.f[far_r.f[1].len ? 1 : 0].p, sizeof props.st);
+    snprintf(props.link, sizeof props.link, "%.*s", STR_ARG(far_r.f[2]));
+    props.btime = (i64)strtoll(arena_cstr(&scratch, far_r.f[3]), NULL, 10);
+    return true;
+}
+
 // The one entry's details, read again.
 static void props_read(void)
 {
     const char *path = props_path[0];
     struct stat lst;
-    props.have = lstat(path, &lst) == 0;
     props.link[0] = 0, props.broken = false, props.btime = -1;
-    if (!props.have) return;
-    props.st = lst;
-    if (S_ISLNK(lst.st_mode)) {
-        ssize_t k = readlink(path, props.link, sizeof props.link - 1);
-        props.link[k > 0 ? k : 0] = 0;
-        props.broken = stat(path, &props.st) != 0;
-        if (props.broken) props.st = lst;
+    if (far_dir(path)) {
+        if (!props_read_far(path)) return;
+    } else {
+        props.have = lstat(path, &lst) == 0;
+        if (!props.have) return;
+        props.st = lst;
+        if (S_ISLNK(lst.st_mode)) {
+            ssize_t k = readlink(path, props.link, sizeof props.link - 1);
+            props.link[k > 0 ? k : 0] = 0;
+            props.broken = stat(path, &props.st) != 0;
+            if (props.broken) props.st = lst;
+        }
+        struct statx sx;
+        if (statx(AT_FDCWD, path, props.broken ? AT_SYMLINK_NOFOLLOW : 0, STATX_BTIME, &sx) == 0 && (sx.stx_mask & STATX_BTIME))
+            props.btime = (i64)sx.stx_btime.tv_sec;
     }
-    struct statx sx;
-    if (statx(AT_FDCWD, path, props.broken ? AT_SYMLINK_NOFOLLOW : 0, STATX_BTIME, &sx) == 0 && (sx.stx_mask & STATX_BTIME))
-        props.btime = (i64)sx.stx_btime.tv_sec;
     snprintf(props.owner, sizeof props.owner, "%s", id_name(false, props.st.st_uid));   // (the list's columns' names, cached)
     snprintf(props.group, sizeof props.group, "%s", id_name(true, props.st.st_gid));
     // Its permissions change only when it is Michael's, not in the trash, and there (one entry:
@@ -273,7 +297,7 @@ static void props_open(const char *path)
         if (app.ui.view == UI_VIEW_TRASH && props.idx >= 0) snprintf(props.name, sizeof props.name, "%.*s", STR_ARG(app.list.e[props.idx].name));
         // The type gio opens it as, its content read (Michael, 2026-10-26); on a network drive,
         // whose reads can hang (F6.4), or when gio doesn't say, the name's.
-        props.type_by_name = !app.thumb_local || !spawn_gio_type(props_path[0], props.type, sizeof props.type, 1000);
+        props.type_by_name = !app.thumb_local || far_dir(props_path[0]) || !spawn_gio_type(props_path[0], props.type, sizeof props.type, 1000);   // (a far link too, F16 step 3b)
         if (props.type_by_name) {
             Str type = props.idx >= 0 ? entry_mime(props.idx) : S("inode/directory");
             snprintf(props.type, sizeof props.type, "%.*s", STR_ARG(type));
@@ -286,11 +310,11 @@ static void props_open(const char *path)
     if (n == 1) props_read();
     // Counted all the way down, but not on a network drive (its reads can hang, F6.4).
     props.local = app.thumb_local;
-    bool any_dir = false;
-    for (isize i = 0; i < n; i++) {
-        struct stat st;
-        any_dir |= lstat(props_path[i], &st) == 0 && S_ISDIR(st.st_mode);
-    }
+    // On a network drive, whether a folder is among them: by the listing's kinds, never looked at
+    // (F16 step 3b). A path asked (a folder's menu) or the folder shown, empty, is one.
+    bool any_dir = !props.local && (here || app.list.n == 0);
+    for (isize j = 0; !props.local && j < app.list.n; j++)
+        if (app.ui.marked ? app.ui.mark[j] : j == app.ui.list.sel) any_dir |= kind_is_dir(app.list.e[j].kind);
     props.walking = props.local;
     if (props.local) walk_ask(props_path, n);
     else if (!any_dir) {   // files on a network drive: the listing's sizes
@@ -307,7 +331,12 @@ static void props_chmod(int k)
     mode_t old, perms = (props.st.st_mode & 0777) ^ perm_bit(k);
     Err err;
     if (jobs_refuse(props_path[0])) return;
-    if (!op_chmod(props_path[0], perms, &old, &err)) {
+    char octal[8];   // (on a far drive: by ofx-list, F16 step 3b)
+    snprintf(octal, sizeof octal, "%o", (unsigned)perms);
+    bool ok = !far_dir(props_path[0]) ? op_chmod(props_path[0], perms, &old, &err)
+                                      : far_act(props_path[0], (const char *const[]){ "chmod", props_path[0], octal, NULL }, &err) &&
+                                            (old = (mode_t)strtol(arena_cstr(&scratch, far_r.f[0]), NULL, 8), true);
+    if (!ok) {
         set_status(true, "%s", err.msg);
         props_read();
         return;

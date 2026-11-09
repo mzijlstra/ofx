@@ -132,9 +132,12 @@ shared state. Every test runs against fakes and scratch folders. Keep it that wa
   window's run, `<T>/pause` and `<T>/unpause` for its script.
 - **A far folder** (F16: a network share, any FUSE mount, by the mount list) is read by `ofx-list`,
   a child (gui/far.c, fs/farlist.c), never by ofx: a read there can block for 90 s, and a thread
-  blocked on it would hold the whole process. run-script copies the `ofx-list` beside the binary
-  among the fakes (the guard runs no other). The `f16` group stands a scratch folder in for a share
-  through its mount list; `net` uses a real one.
+  blocked on it would hold the whole process. Its actions (rename, New Folder/File, Trash, Make
+  Link, Permissions, undo, a paste's checks, Properties) run in `ofx-list --do` (fs/fardo.c), which
+  ofx waits for 1.5 s at most; its writes go through the same guard. A path reaching a far drive
+  through local links is judged by `far_real` (fs/list.c), which never looks past the far mount.
+  run-script copies the `ofx-list` beside the binary among the fakes (the guard runs no other). The
+  `f16` group stands a scratch folder in for a share through its mount list; `net` uses a real one.
 - **A window that stops answering** makes the compositor ask whether to terminate it, on your
   screen. The script's `sh` runs under `timeout 5` for that reason; keep everything a script waits
   for short.
@@ -230,8 +233,9 @@ ui/ that nothing calls makes the test build warn.
   `fs/search.c` the search's address and walk; `fs/editors.c` Open at Line's recipes; `fs/conf.c`
   ofx.conf; `fs/places.c` the sidebar's places; `fs/clean.c` ofx-clean's rules; `fs/sandbox.c`
   bubblewrap's runs; `fs/thumbers.c` the system's thumbnailers; `fs/git.c` git status;
-  `fs/farlist.c` what `ofx-list` says about a far folder (F16); `fs/state.c` the state file (its lock, `state_rewrite`), `fs/folders.c` its per-folder lines,
-  `fs/session.c` its window lines.
+  `fs/farlist.c` what `ofx-list` says about a far folder (F16), `fs/fardo.c` the actions it does
+  there (`--do`); `fs/state.c` the state file (its lock, `state_rewrite`), `fs/folders.c` its
+  per-folder lines, `fs/session.c` its window lines.
 - `ui/ui.c`: the types (Ui, UiInput, UiAction, UiFocus, UiOnTop) and tables, then `keys.c` (the
   keys: each key's own meaning, the commands, the bindings, the event a key sends; F15), `cursor.c`,
   `match.c`, `find.c`, `edit.c`, `prompts.c`, `menus.c`, `panels.c`, `handle.c` (ui_handle),

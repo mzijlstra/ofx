@@ -404,6 +404,7 @@ static void test_far_real(void)
     // Errors as realpath's, from the local parts.
     struct { const char *path; int e; } bad[] = {
         { "fr/home/missing/x", ENOENT }, { "fr/home/x.txt/y", ENOTDIR }, { "fr/home/loop", ELOOP },
+        { "fr/home/x.txt/..", ENOTDIR }, { "fr/home/x.txt/", ENOTDIR },   // (a file isn't gone through, even by "..")
     };
     for (int i = 0; i < COUNT(bad); i++) {
         errno = 0;
@@ -415,6 +416,20 @@ static void test_far_real(void)
     snprintf(want, sizeof want, "%s/share/d", real);
     CHECK(strcmp(out, want) == 0);
     CHECK(!far_real(STR_EMPTY, at("fr/home/nas/missing"), out, sizeof out, &far) && errno == ENOENT);
+    // A part longer than a path can be: refused before it is put together.
+    char *longp = arena_sprintf(&ta, "%s/%0*d", at("fr/home"), 5000, 0);
+    CHECK(!far_real(mounts, longp, out, sizeof out, &far) && errno == ENAMETOOLONG);
+    // Relative: from the current folder (ofx's start, ".").
+    int here = open(".", O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+    CHECK(here >= 0 && chdir(at("fr/home")) == 0);
+    CHECK(far_real(mounts, "mylinks/nas/q", out, sizeof out, &far) && far);
+    snprintf(want, sizeof want, "%s/share/q", real);
+    CHECK(strcmp(out, want) == 0);
+    CHECK(far_real(mounts, ".", out, sizeof out, &far) && !far);
+    snprintf(want, sizeof want, "%s/home", real);
+    CHECK(strcmp(out, want) == 0);
+    CHECK(here >= 0 && fchdir(here) == 0);
+    if (here >= 0) close(here);
     // Too small an out: refused, not cut.
     char small[8];
     CHECK(!far_real(mounts, at("fr/home"), small, sizeof small, &far) && errno == ENAMETOOLONG);
@@ -483,4 +498,96 @@ static void test_search_far(void)
     // No mount list: the share is entered, as any folder.
     w = sw_walk("a", (UiMatchOpts){ 0 }, false);
     CHECK(search_walk(&w, r) && sw_has("share|a.txt") && sw_has("share/inner|a.txt") && w.s.far == 0);
+}
+
+// ofx-list --do (step 3b): each action run as ofx would run it, its answer parsed as ofx parses it.
+static Str fd_buf;
+static FarReply fd_r;
+static bool fd_parsed;   // (the answer was a whole one, whatever its rc)
+
+static bool fd_run(int argc, char **argv)
+{
+    static char *mem;
+    static size_t len;
+    free(mem), mem = NULL, len = 0;
+    FILE *f = open_memstream(&mem, &len);
+    if (!f) return false;
+    int rc = far_do_serve(f, argc, argv);
+    fclose(f);
+    fd_buf = (Str){ arena_cstr(&ta, (Str){ mem, (isize)len }), (isize)len };
+    fd_parsed = far_reply_parse(fd_buf, &fd_r);
+    return fd_parsed && rc == 0;
+}
+
+#define FD(...) fd_run((int)COUNT(((char *[]){ __VA_ARGS__ })), (char *[]){ __VA_ARGS__ })
+
+static void test_far_do(void)
+{
+    arena_reset(&ta);
+    char d[300];
+    snprintf(d, sizeof d, "%s", at("fdo"));
+    mkdirs(d);
+    CHECK(FD("mkdir", d, "New folder") && fd_r.ok && fd_r.n == 1 && str_eq(fd_r.f[0], S("New folder")));
+    CHECK(FD("mkdir", d, "New folder") && fd_r.ok && str_eq(fd_r.f[0], S("New folder (2)")));
+    CHECK(FD("mkfile", d, "New file") && fd_r.ok && str_eq(fd_r.f[0], S("New file")));
+    CHECK(FD("rename", d, "New file", "a\nb.txt") && fd_r.ok && fd_r.n == 0);   // (a newline in a name: by length)
+    CHECK(FD("rename", d, "gone", "x") && !fd_r.ok && fd_r.n == 1 && fd_r.f[0].len > 0);
+    CHECK(FD("free", d, "a\nb.txt", "0", "1", "1") && fd_r.ok && str_eq(fd_r.f[0], S("a\nb (copy).txt")));
+    CHECK(FD("free", d, "z.txt", "0", "0", "0") && fd_r.ok && str_eq(fd_r.f[0], S("z.txt")));
+    char target[PATH_MAX];
+    snprintf(target, sizeof target, "%s/a\nb.txt", d);
+    CHECK(FD("symlink", d, target, "Link to it") && fd_r.ok && str_eq(fd_r.f[0], S("Link to it")));
+    // stat: a link's lstat and its target's stat as bytes, its text, a birth time.
+    char lp[PATH_MAX];
+    snprintf(lp, sizeof lp, "%s/Link to it", d);
+    CHECK(FD("stat", lp) && fd_r.ok && fd_r.n == 4 && fd_r.f[0].len == (isize)sizeof(struct stat) && fd_r.f[1].len == (isize)sizeof(struct stat));
+    struct stat lst, st;
+    memcpy(&lst, fd_r.f[0].p, sizeof lst), memcpy(&st, fd_r.f[1].p, sizeof st);
+    CHECK(S_ISLNK(lst.st_mode) && S_ISREG(st.st_mode) && str_eq(fd_r.f[2], str_from_c(target)));
+    unlink(target);
+    CHECK(FD("stat", lp) && fd_r.ok && fd_r.f[1].len == 0);   // (broken: no stat)
+    CHECK(FD("stat", target) && !fd_r.ok);
+    // chmod: the mode it had.
+    char nf[PATH_MAX];
+    snprintf(nf, sizeof nf, "%s/New folder", d);
+    chmod(nf, 0755);
+    CHECK(FD("chmod", nf, "700") && fd_r.ok && str_eq(fd_r.f[0], S("755")));
+    CHECK(stat(nf, &st) == 0 && (st.st_mode & 0777) == 0700);
+    // trash, and its undo: back where it was.
+    CHECK(FD("trash", nf) && fd_r.ok && fd_r.n == 3 && str_eq(fd_r.f[0], str_from_c(nf)) && str_ends_with(fd_r.f[2], S(".trashinfo")) && !str_ends_with(fd_r.f[1], S(".trashinfo")));
+    char file[PATH_MAX], info[PATH_MAX], kind[8];
+    snprintf(file, sizeof file, "%.*s", STR_ARG(fd_r.f[1]));
+    snprintf(info, sizeof info, "%.*s", STR_ARG(fd_r.f[2]));
+    CHECK(access(nf, F_OK) != 0 && access(file, F_OK) == 0);
+    snprintf(kind, sizeof kind, "%d", UNDO_TRASH);
+    CHECK(FD("undo", kind, nf, file, info) && fd_r.ok && str_eq(fd_r.f[0], S("done")) && str_eq(fd_r.f[1], S("1")));
+    CHECK(stat(nf, &st) == 0 && S_ISDIR(st.st_mode));
+    // An undo that can't: its reason, nothing done.
+    snprintf(kind, sizeof kind, "%d", UNDO_MKDIR);
+    char gone[PATH_MAX];
+    snprintf(gone, sizeof gone, "%s/never", d);
+    CHECK(FD("undo", kind, "", gone, "") && !fd_r.ok && fd_r.n == 2 && str_eq(fd_r.f[1], S("0")));
+    // The guard: a write outside the test's root refused here too.
+    CHECK(FD("mkdir", decoy, "fdo") && !fd_r.ok);
+    char dfdo[PATH_MAX];
+    snprintf(dfdo, sizeof dfdo, "%s/fdo", decoy);
+    CHECK(access(dfdo, F_OK) != 0);
+    // Wrong calls: refused, rc 2.
+    CHECK(!FD("rename", d) && fd_parsed && !fd_r.ok);
+    CHECK(!FD("rename", d, "a", "b", "c") && fd_parsed && !fd_r.ok);   // (one too many)
+    CHECK(!FD("nonesuch") && fd_parsed && !fd_r.ok);
+    CHECK(!FD("undo", kind, "a") && !fd_r.ok);
+    // The parse: whole answers only.
+    CHECK(!far_reply_parse(S("ok 1\n5\nabc"), &fd_r) && !far_reply_parse(S("ok 1\n3\nabcd"), &fd_r) && !far_reply_parse(S("no 0\n"), &fd_r));
+    CHECK(!far_reply_parse(S("ok 9\n"), &fd_r) && !far_reply_parse(S("maybe 0\n"), &fd_r) && !far_reply_parse(S("ok x\n"), &fd_r));
+    CHECK(far_reply_parse(S("ok 2\n0\n2\nab"), &fd_r) && fd_r.n == 2 && fd_r.f[0].len == 0 && str_eq(fd_r.f[1], S("ab")));
+    CHECK(!far_reply_parse(S("ok /\n"), &fd_r) && !far_reply_parse(S("ok 1\n\n"), &fd_r));   // (digits only, and at least one)
+    CHECK(!far_reply_parse(S("ok 9\n0\n0\n0\n0\n0\n0\n0\n0\n0\n"), &fd_r));   // (more fields than it holds)
+    char *two = malloc(2);   // (a header too short, the last bytes there are: not read past)
+    CHECK(two != NULL);
+    if (two) {
+        memcpy(two, "ok", 2);
+        CHECK(!far_reply_parse((Str){ two, 2 }, &fd_r));
+        free(two);
+    }
 }

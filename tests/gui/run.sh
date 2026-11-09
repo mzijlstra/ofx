@@ -6,7 +6,7 @@
 # printed whole, in order, once all are done; clip, keys and dnd share one (each starts a sway,
 # which takes the first free wayland-N).
 # The groups (one or more scripts on one tree): browse big gone watchgap f2 f3 f4 f5 f52 f53 f54
-# f6 (f6, f6b) usb f62 (f62, f62b, f62c) f63 (f63, f63b, f63c, f63d) f64 (f64, f64b, f64c, f64d) f7 (f7, f7b) f72 f73 (f73, f73b, f73c, f73d) f74 f75 (f75, f75b, f75c) f15 (f15, f15b) f16 (f16, f16b, f16c, f16d) net f8 (f8, f8b, f8c, f8d, f8e) f9 (f9, f9b) f10 (f10, f10b, f10c, f10d) f11 (f11, f11b, f11c, f11d, f11e, f11f, f11g, f11h, f11i, f11j, f11k, f11l, f11m, f11n, f11o, f11p, f11q, f11r, f11s, f11t) f12 (f12, f12b) f12g f12h f12i f13 (f13, f13b, f13c, f13d, f13e, f13f, f13g, f13h) clip (clip, copypath) keys dnd (dnd, dndb, dndc, dndd, dnde, dndf, dndg, dndh, dndi, dndj, dndk) (the three in sway) hang guard3 guard harness (harness, harnessb, harnessc, harnessd). Named ones only, or all of them; a group
+# f6 (f6, f6b) usb f62 (f62, f62b, f62c) f63 (f63, f63b, f63c, f63d) f64 (f64, f64b, f64c, f64d) f7 (f7, f7b) f72 f73 (f73, f73b, f73c, f73d) f74 f75 (f75, f75b, f75c) f15 (f15, f15b) f16 (f16, f16b, f16c, f16d, f16e, f16f, f16g) net f8 (f8, f8b, f8c, f8d, f8e) f9 (f9, f9b) f10 (f10, f10b, f10c, f10d) f11 (f11, f11b, f11c, f11d, f11e, f11f, f11g, f11h, f11i, f11j, f11k, f11l, f11m, f11n, f11o, f11p, f11q, f11r, f11s, f11t) f12 (f12, f12b) f12g f12h f12i f13 (f13, f13b, f13c, f13d, f13e, f13f, f13g, f13h) clip (clip, copypath) keys dnd (dnd, dndb, dndc, dndd, dnde, dndf, dndg, dndh, dndi, dndj, dndk) (the three in sway) hang guard3 guard harness (harness, harnessb, harnessc, harnessd). Named ones only, or all of them; a group
 # that fails says "== <script>: FAILED" or "<group>: FAILED" (tools/mutation/gui.py reads it).
 set -u
 par=1
@@ -425,11 +425,27 @@ rs f16c OFX_TEST_MOUNTINFO="$T/mountinfo" -- "$T/tree"
 # whose nas is ../share: a chain no path's text shows. ofx starts on local/mylinks/nas.
 fresh f16d; mkdir -p "$T/tree/share/sub" "$T/tree/local" "$T/tree/links"; : > "$T/tree/share/x.txt"; : > "$T/tree/local/a.txt"
 ln -s ../links "$T/tree/local/mylinks"; ln -s ../share "$T/tree/links/nas"; ln -s mylinks/nas "$T/tree/local/chain"
+# Paths through a part missing on the "share" (none/..): realpath fails on them, while ofx takes what
+# follows the share's mount by its text. So a look in-process, which on a real share would hang, shows
+# here as a failure. viaghost: a far link through one.
+ln -s mylinks/nas/none/.. "$T/tree/local/viaghost"
 # media/nas: a far drive (nfs) whose trash holds an item, never looked at (the Trash icon stays empty).
 mkdir -p "$T/media/nas/.Trash-$(id -u)/info" "$T/media/nas/.Trash-$(id -u)/files"; : > "$T/media/nas/.Trash-$(id -u)/files/old"
 printf '[Trash Info]\nPath=%s\nDeletionDate=2026-11-09T10:00:00\n' "$T/media/nas/old" > "$T/media/nas/.Trash-$(id -u)/info/old.trashinfo"
 printf '1 0 0:1 / / rw - ext4 /dev/x rw\n2 1 0:2 / %s rw,nosuid,nodev - fuse.gvfsd-fuse gvfsd-fuse rw\n3 1 0:3 / %s rw - nfs4 h:/x rw\n' "$T/tree/share" "$T/media/nas" > "$T/mountinfo"
-rs f16d OFX_TEST_MEDIA="$T/media" OFX_TEST_MOUNTINFO="$T/mountinfo" -- "$T/tree/local/mylinks/nas"
+rs f16d OFX_TEST_MEDIA="$T/media" OFX_TEST_MOUNTINFO="$T/mountinfo" -- "$T/tree/local/mylinks/nas/none/.."
+# f16e: --select on a name in the share, through the links and none/..: its folder, the name not
+# looked at (ghost.txt isn't there: nothing selected, no error).
+rs f16e OFX_TEST_MOUNTINFO="$T/mountinfo" -- --select "$T/tree/local/mylinks/nas/none/../ghost.txt"
+# f16g: started on a file in the share through the links: not looked at; its lister says it is a
+# file, so its folder with it selected, as for a local file.
+rs f16g OFX_TEST_MOUNTINFO="$T/mountinfo" -- "$T/tree/local/mylinks/nas/x.txt"
+# f16f (step 3b): the actions on a far folder, each run by ofx-list --do (fardos= counts them);
+# moves taken as across drives (OFX_TEST_CROSS), for an undo that is a job.
+# tree/share (far by the mount list): a.txt (0644) and sub/.
+fresh f16f; mkdir -p "$T/tree/share/sub"; printf 'a\n' > "$T/tree/share/a.txt"; chmod 644 "$T/tree/share/a.txt"
+printf '1 0 0:1 / / rw - ext4 /dev/x rw\n2 1 0:2 / %s rw,nosuid,nodev - fuse.gvfsd-fuse gvfsd-fuse rw\n' "$T/tree/share" > "$T/mountinfo"
+rs f16f OFX_TEST_CROSS=1 OFX_TEST_MOUNTINFO="$T/mountinfo" -- "$T/tree/share"
 fi
 if want net; then
 # F16 step 2 on a real share (tests/net/lib.sh: a Samba container, a gvfs of the run's own under <T>/rt,

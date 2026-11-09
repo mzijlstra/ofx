@@ -341,7 +341,7 @@ static void ctx_facts(void)
                         : side_path(u->ctx_side, buf, sizeof buf);
     if (p && is_search(p)) p = app.search_root;   // the "Search" button's: the folder searched (F9), never its address
     snprintf(app.ctx_path, sizeof app.ctx_path, "%s", p ? p : "");
-    u->ctx_w = app.ctx_path[0] && access(app.ctx_path, W_OK) == 0;
+    u->ctx_w = app.ctx_path[0] && can_write_at(app.ctx_path);
     u->ctx_trash = strcmp(app.ctx_path, TRASH_URI) == 0;
     u->ctx_full = u->ctx_trash && (trash_state(), app.trash_full);   // (the icon's answer, looked at again)
     u->ctx_bmed = bm_find(&bmarks, app.ctx_path) >= 0;

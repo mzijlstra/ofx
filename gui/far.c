@@ -30,6 +30,7 @@ static struct {
     int   nkilled;
     int   kills;          // killed in all (the state line's farkills=)
     int   asked;          // counts asked of listers (farasked=)
+    int   dos;            // actions run by ofx-list --do (fardos=; main thread only)
 } far = { .mu = PTHREAD_MUTEX_INITIALIZER, .wake = { -1, -1 }, .pidfd = -1, .in = -1, .out = -1 };
 
 static u8 far_mi_mem[KiB(512)];   // the mount list, read for far_dir (main thread only)
@@ -132,22 +133,27 @@ static void far_start_thread(void)
     far.started = pthread_create(&far.th, NULL, far_loop, NULL) == 0;
 }
 
+// pidfd's child, killed, kept until it is gone and counted against dir (a lister's, or an action's
+// that didn't answer: one still in the kernel holds back a new lister for its folder). Takes pidfd.
+static void far_hold(int pidfd, const char *dir)
+{
+    syscall(SYS_pidfd_send_signal, pidfd, SIGKILL, NULL, 0);
+    far.kills++;
+    if (far.nkilled < FAR_KILLED_MAX) {
+        far.killed[far.nkilled].pidfd = pidfd;
+        snprintf(far.killed[far.nkilled].dir, PATH_MAX, "%s", dir);
+        far.nkilled++;
+    } else {
+        close(pidfd);   // (sixteen already: this one isn't counted against its folder)
+    }
+}
+
 // The lister shown (if any) killed: its input closed, SIGKILL through its pidfd, and its pidfd
 // kept until it is gone (one still in the kernel keeps another from starting for its folder).
 static void far_drop(void)
 {
     pthread_mutex_lock(&far.mu);
-    if (far.pidfd >= 0) {
-        syscall(SYS_pidfd_send_signal, far.pidfd, SIGKILL, NULL, 0);
-        far.kills++;
-        if (far.nkilled < FAR_KILLED_MAX) {
-            far.killed[far.nkilled].pidfd = far.pidfd;
-            snprintf(far.killed[far.nkilled].dir, PATH_MAX, "%s", far.dir);
-            far.nkilled++;
-        } else {
-            close(far.pidfd);   // (sixteen already: this one isn't counted against its folder)
-        }
-    }
+    if (far.pidfd >= 0) far_hold(far.pidfd, far.dir);
     if (far.in >= 0) close(far.in);
     if (far.out >= 0) close(far.out);   // (started but not yet handed over)
     far.pidfd = far.in = far.out = -1, far.pid = 0, far.dir[0] = 0;
@@ -166,21 +172,27 @@ static bool far_busy(const char *dir)
     return busy;
 }
 
-// ofx-list for dir started (the last one dropped first): from beside this ofx (as make install
-// puts them), else from PATH (the guard lets only a test's own run: its copy among the fakes).
-// False, with the reason, when it can't start.
+// ofx-list's path into prog: beside this ofx (as make install puts them), else from PATH (the guard
+// lets only a test's own run: its copy among the fakes). False, with the reason, when there is none.
+static bool far_prog(const char *exe, Str name, char *prog, size_t cap, Err *err)
+{
+    Err why;
+    Str d = path_dir(str_from_c(exe));
+    if (snprintf(prog, cap, "%.*s/ofx-list", STR_ARG(d)) < (int)cap && access(prog, X_OK) == 0 && ops_program_allowed(prog, &why)) return true;
+    if (!on_path("ofx-list")) return err_set(err, "%.*s is on a network drive, and reading it needs ofx-list, which isn't installed", STR_ARG(name)), false;
+    snprintf(prog, cap, "ofx-list");
+    return true;
+}
+
+// ofx-list for dir started (the last one dropped first). False, with the reason, when it can't
+// start.
 static bool far_start(const char *exe, const char *dir, bool hidden, Err *err)
 {
     far_drop();
     Str name = path_base(str_from_c(dir));   // (said by its name: the crumbs say where)
     if (!far.started) return err_set(err, "%.*s: the far folder reader didn't start", STR_ARG(name)), false;
     char prog[PATH_MAX];
-    Err why;
-    Str d = path_dir(str_from_c(exe));
-    if (snprintf(prog, sizeof prog, "%.*s/ofx-list", STR_ARG(d)) >= (int)sizeof prog || access(prog, X_OK) != 0 || !ops_program_allowed(prog, &why)) {
-        if (!on_path("ofx-list")) return err_set(err, "%.*s is on a network drive, and reading it needs ofx-list, which isn't installed", STR_ARG(name)), false;
-        snprintf(prog, sizeof prog, "ofx-list");
-    }
+    if (!far_prog(exe, name, prog, sizeof prog, err)) return false;
     char *argv[] = { prog, (char *)dir, hidden ? "--hidden" : NULL, NULL };
     int in[2], out[2];
     if (pipe2(in, O_CLOEXEC) != 0) return err_set(err, "a pipe: %s", strerror(errno)), false;
@@ -201,6 +213,67 @@ static bool far_start(const char *exe, const char *dir, bool hidden, Err *err)
     far.seq++, far.len = 0, far.eof = far.full = false;
     pthread_mutex_unlock(&far.mu);
     far_word();
+    return true;
+}
+
+// ---- an action on a far drive (F16 step 3b: ofx-list --do, fs/fardo.c) --------------------------
+
+enum { FAR_DO_MS = 1500, FAR_DO_ARGS = 800 };   // (Michael, 2026-11-09: a bounded wait; an undo's 256 items fit)
+
+static u8 far_do_mem[MiB(1)];   // the last action's answer (its fields point into it)
+
+// One action on the far drive under dir (said by its name), args from the action's name on (NULL
+// ended): run by ofx-list --do, its answer in *r. ofx waits for it FAR_DO_MS at most; then it is
+// killed and held as a lister is (far_hold), and the share is said not to answer: the action may
+// still happen there. False, with the reason, when there is no answer; true with r->ok false when it
+// was refused (r->f[0] says why).
+static bool far_do(const char *exe, const char *dir, const char *const *args, FarReply *r, Err *err)
+{
+    Str name = path_base(str_from_c(dir));
+    char prog[PATH_MAX];
+    if (!far_prog(exe, name, prog, sizeof prog, err)) return false;
+    char *argv[FAR_DO_ARGS + 3] = { prog, "--do" };
+    int n = 2;
+    for (const char *const *a = args; *a; a++) {
+        if (n == FAR_DO_ARGS + 2) return err_set(err, "far_do: too many arguments"), false;
+        argv[n++] = (char *)*a;
+    }
+    argv[n] = NULL;
+    far.dos++;
+    int out[2];
+    if (pipe2(out, O_CLOEXEC) != 0) return err_set(err, "a pipe: %s", strerror(errno)), false;
+    pid_t pid;
+    bool ok = spawn_fds(NULL, argv, -1, out[1], SPAWN_ERR_NULL, &pid, err);
+    close(out[1]);
+    int pfd = ok ? (int)syscall(SYS_pidfd_open, pid, 0) : -1;
+    if (!ok || pfd < 0) {
+        if (ok) kill(pid, SIGKILL), err_set(err, "%.*s: the action can't be watched: %s", STR_ARG(name), strerror(errno));
+        close(out[0]);
+        return false;
+    }
+    isize len = 0;
+    i64 until = now_ms() + FAR_DO_MS;
+    bool ended = false;
+    while (!ended) {
+        i64 left = until - now_ms();
+        struct pollfd p = { .fd = out[0], .events = POLLIN };
+        if (left <= 0 || (poll(&p, 1, (int)left) < 0 && errno != EINTR)) break;
+        if (!p.revents) continue;
+        ssize_t k = read(out[0], far_do_mem + len, sizeof far_do_mem - (size_t)len);
+        if (k > 0) len += k;
+        else if (k == 0 || errno != EINTR) ended = true;
+        if (len == (isize)sizeof far_do_mem) ended = true;
+    }
+    close(out[0]);
+    if (!ended) {   // (no answer in time: killed, held until it is gone)
+        pthread_mutex_lock(&far.mu);
+        far_hold(pfd, dir);
+        pthread_mutex_unlock(&far.mu);
+        if (far.started) far_word();
+        return err_set(err, "%.*s isn't answering: it may still happen there", STR_ARG(name)), false;
+    }
+    close(pfd);
+    if (!far_reply_parse((Str){ (char *)far_do_mem, len }, r)) return err_set(err, "%.*s: no answer from its reader", STR_ARG(name)), false;
     return true;
 }
 

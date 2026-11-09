@@ -23,6 +23,7 @@
 #include "props.c"
 #include "search.c"
 #include "undo.c"
+#include "fardo.c"   // (after undo.c: ofx-list --do runs ops, trash and undo; F16 step 3b)
 #include "jobq.c"
 #include "state.c"
 #include "tree.c"

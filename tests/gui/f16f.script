@@ -1,0 +1,206 @@
+# F16 step 3b: the actions on a far folder run by ofx-list --do (Michael, 2026-11-09: a child, ofx
+# waiting for it a moment at most), never in ofx: fardos= counts them. run.sh's tree/share (far by
+# the mount list): a.txt (0644) and sub/.
+settle
+wait-for 3000 faron=1 farloading=0 n=2 sel=sub fardos=0
+# New Folder: made there ("New folder", the first row); its name isn't edited before its row comes
+# (F2 renames it).
+key ctrl-shift-n
+wait-for 3000 farloading=0 n=3 idx=0 fardos=1 editing=0
+expect New folder: F2 renames it
+sh test -d "$OFX_DIR/New folder"
+# Rename, then Ctrl+Z: both by ofx-list, the cursor on the name each time.
+key f2
+expect editing=1
+key ctrl-a
+type nf
+key enter
+wait-for 3000 farloading=0 n=3 sel=nf fardos=2 statusbad=0
+sh test -d "$OFX_DIR/nf"
+key ctrl-z
+wait-for 3000 farloading=0 n=3 idx=0 fardos=3 statusbad=0
+sh test -d "$OFX_DIR/New folder" && ! test -e "$OFX_DIR/nf"
+# Trash, and Ctrl+Z.
+key delete
+wait-for 3000 farloading=0 n=2 fardos=4 statusbad=0
+sh ! test -e "$OFX_DIR/New folder"
+key ctrl-z
+wait-for 3000 farloading=0 n=3 fardos=5 statusbad=0
+sh test -d "$OFX_DIR/New folder"
+# Make Link on a.txt ("Link to a.txt", the last row), and Ctrl+Z.
+key end
+expect sel=a.txt
+key ctrl-m
+wait-for 3000 farloading=0 n=4 idx=3 fardos=6 statusbad=0
+sh test -L "$OFX_DIR/Link to a.txt"
+key ctrl-z
+wait-for 3000 farloading=0 n=3 fardos=7 statusbad=0
+sh ! test -L "$OFX_DIR/Link to a.txt"
+# Paste a copy beside it: its stat and its free name from ofx-list, the copy a job.
+key end
+key ctrl-c
+key ctrl-v
+wait-for 3000 job=- fardos=9
+wait-for 3000 farloading=0 n=4
+sh test -f "$OFX_DIR/a (copy).txt"
+# Properties: read by ofx-list; the owner's read flipped by it (a stat after), and put back by Ctrl+Z.
+key home
+key end
+expect sel=a.txt
+key ctrl-i
+wait-for 2000 props=1 propname=a.txt propmode=0644 propcan=1 fardos=10
+key space
+wait-for 2000 propmode=0244 fardos=12
+sh [ "$(stat -c %a "$OFX_DIR/a.txt")" = 244 ]
+key esc
+key ctrl-z
+wait-for 3000 fardos=13 statusbad=0
+sh [ "$(stat -c %a "$OFX_DIR/a.txt")" = 644 ]
+# A share its lister says can't be written: a drop onto it (the list's empty space) isn't taken.
+sh chmod a-w "$OFX_DIR"
+key ctrl-r
+wait-for 3000 farloading=0 canwrite=0
+point-ui row 1
+press-here
+move-by 0 10
+point-ui list
+move-here
+expect drop=list:-1 dropok=0
+key esc
+sh chmod u+w "$OFX_DIR"
+key ctrl-r
+wait-for 3000 farloading=0 canwrite=1
+# (The control: written again, the same drop is taken.)
+point-ui row 1
+press-here
+move-by 0 10
+point-ui list
+move-here
+expect drop=list:-1 dropok=1 dropop=copy
+key esc
+# A far folder dragged onto itself: refused, as a paste into itself is (resolved by far_path); onto
+# another folder, taken.
+key home
+point-ui row 1
+press-here
+move-by 0 10
+point-ui row 1
+move-here
+expect dragname=sub drop=row:1 dropok=0
+point-ui row 0
+move-here
+expect drop=row:0 dropok=1
+key esc
+# (Natural order: gone, c1 and the like before "New folder".)
+# A folder gone since the listing, entered just after a reload (which goes up from a folder gone):
+# its reason shown where it was, as for any folder entered (each way there its own).
+sh mkdir "$OFX_DIR/gone"
+key ctrl-r
+wait-for 3000 farloading=0 n=5
+key home
+expect sel=gone
+sh rmdir "$OFX_DIR/gone"
+key enter
+wait-for 3000 faron=1 farloading=0 n=0 farnote=gone:_No_such_file_or_directory
+key backspace
+wait-for 3000 faron=1 farloading=0 n=4
+# Unreadable since (a reload): its reason shown, not taken for gone.
+key home
+key down
+expect sel=sub
+key enter
+wait-for 3000 faron=1 farloading=0 n=0
+sh chmod 000 "$OFX_DIR"
+key ctrl-r
+wait-for 3000 farloading=0 farnote=sub:_Permission_denied statusbad=1
+sh chmod 755 "$OFX_DIR"
+key backspace
+wait-for 3000 farloading=0 n=4 sel=sub
+# Two folders gone at once, found by a reload in the lower: up past both, as for local ones.
+sh mkdir -p "$OFX_DIR/c1/c2"
+key ctrl-r
+wait-for 3000 farloading=0 n=5
+key home
+expect sel=c1
+key enter
+wait-for 3000 farloading=0 n=1 sel=c2
+key enter
+wait-for 3000 faron=1 farloading=0 n=0
+sh rmdir "$OFX_DIR" && rmdir "$(dirname "$OFX_DIR")"
+key ctrl-r
+wait-for 3000 faron=1 farloading=0 n=4 statusbad=1 farnote=-
+expect is gone
+# A tab on a far folder gone meanwhile: shown, it goes up, as a local one's does.
+sh mkdir "$OFX_DIR/t1"
+key ctrl-r
+wait-for 3000 farloading=0 n=5
+key ctrl-t
+wait-for 3000 tabs=2 tab=1 farloading=0
+key home
+key down
+key down
+expect sel=t1
+key enter
+wait-for 3000 farloading=0 n=0
+key alt-1
+wait-for 3000 tab=0 farloading=0 n=5
+sh rmdir "$OFX_DIR/t1"
+key alt-2
+wait-for 3000 tab=1 faron=1 farloading=0 n=4 statusbad=1 farnote=-
+expect is gone
+key ctrl-w
+wait-for 3000 tabs=1
+# Properties of a far folder: none of it counted (that would read the share), so not done.
+key home
+key down
+expect sel=sub
+key ctrl-i
+wait-for 2000 props=1 propname=sub propdone=0 propfiles=0
+key esc
+# A move across drives (OFX_TEST_CROSS) undone on a far folder: ofx-list checks it and says it is a
+# job, which moves it back. ("a (copy).txt", the third row.)
+key end
+key up
+expect idx=2
+key ctrl-x
+key home
+key down
+expect sel=sub
+key enter
+wait-for 3000 faron=1 farloading=0 n=0
+key ctrl-v
+wait-for 5000 job=- n=1
+key ctrl-z
+wait-for 5000 job=- n=0
+sh test -f "$(dirname "$OFX_DIR")/a (copy).txt"
+# The empty far folder's own Properties: a folder, not counted either.
+key ctrl-i
+wait-for 2000 props=1 propname=sub propdone=0
+key esc
+key backspace
+wait-for 3000 faron=1 farloading=0 n=4
+# A share that doesn't answer an action: ofx waits 1.5 s at most, says so, and goes on (the child
+# killed; one held in the kernel on a real share is the net group's). Nothing made.
+# (Written aside and renamed over: the lister running it keeps the old file.)
+sh cp "$OFX_ROOT/fakes/ofx-list" "$OFX_ROOT/fakes/ofx-list.real" && printf '#!/bin/sh\n[ "$1" = --do ] && exec sleep 4\nexec "%s/fakes/ofx-list.real" "$@"\n' "$OFX_ROOT" > "$OFX_ROOT/fakes/slow" && chmod +x "$OFX_ROOT/fakes/slow" && mv "$OFX_ROOT/fakes/slow" "$OFX_ROOT/fakes/ofx-list"
+key ctrl-shift-n
+expect fardos=18 statusbad=1 n=4
+expect answering: it may still happen there
+sh ! test -e "$OFX_DIR/New folder (2)"
+# A batch stops at the first that doesn't answer (each would wait as long again): all four marked,
+# trashed, one try; linked, one try.
+key home
+key ctrl-a
+expect marked=4
+key delete
+expect fardos=19
+expect answering: it may still happen there
+key ctrl-a
+expect marked=4
+key ctrl-m
+expect fardos=20
+key esc
+# The window answers after it.
+key home
+expect idx=0
+quit
