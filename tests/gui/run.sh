@@ -480,7 +480,9 @@ fresh net; mkdir -p "$T/home"
   # left gvfs to mount the guest share), checked on the run's own gvfs. Before netc, which mounts open.
   sed "s/@PORT@/$NET_PORT/g" "$here/netq.script" > "$T/netq.script"
   echo "== netq"
-  ( export OFX_TEST_HOME="$T/home" OFX_TEST_MOUNTINFO="$T/mountinfo" OFX_TEST_GIO="$T/giotest"
+  # (the thread closes gio's input 500 ms late, so a quit that didn't wait for it would kill gio
+  # first, which mounts; step 4 confirm)
+  ( export OFX_TEST_HOME="$T/home" OFX_TEST_MOUNTINFO="$T/mountinfo" OFX_TEST_GIO="$T/giotest" OFX_TEST_CONNECT_CLOSE_MS=500
     exec "$here/../../tools/gui/run-script.sh" "$T" "$T/netq.script" "$bin" "$T/home" ) || failed netq
   sleep 2   # (the killed gio's guest mount came 2 s later, measured)
   if "$T/giotest" mount -l 2>/dev/null | grep -q "open on 127.0.0.1"; then echo "netq: the guest share open was mounted after the window quit"; failed netq; fi

@@ -151,6 +151,11 @@ static bool cn_mount(bool guest, char *why, size_t cap, bool *cancelled, bool *a
             // (measured: a guest share mounts), and gio says how that went. A killed gio would leave
             // gvfs to do the same unseen (a Cancel that mounted anyway; 2026-11-09).
             if (rep != CN_ANSWER) {
+                // (a test knob: the close that late, so a quit's kill comes first unless quit waits;
+                // step 4 confirm)
+                static int late_ms = -1;
+                if (late_ms < 0) late_ms = env_int("OFX_TEST_CONNECT_CLOSE_MS", 0, 0, 5000);
+                if (late_ms) usleep((useconds_t)late_ms * 1000);
                 close(in[1]), in[1] = -1;
                 continue;
             }

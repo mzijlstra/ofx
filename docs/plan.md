@@ -1004,6 +1004,8 @@ blocks each of these for up to gvfs's 90 s. On a thread it also holds ofx's exit
      - While a connection runs ofx isn't dumpable (`PR_SET_DUMPABLE`): a crash then writes no core
        file holding a password, and no process of the same user reads its memory.
      - An unknown server's "Invalid argument" gets a hint: "(is the server's name right?)".
+     - **Known gap (step 4 confirm, not measured):** a server whose guest attempt outlasts the
+       1.5 s quit wait; whether gvfsd still mounts after gio is killed then.
    - **Tests:** unit (the address, gio's questions and errors, its local path, from the spike's
      recordings); the net group's netq (quit with the question up) and netc (a paused server, Cancel, Guest by button and by key, a
      guest refused, a wrong then right password, a share mounted already, a closed port, the

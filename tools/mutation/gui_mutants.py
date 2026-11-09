@@ -1119,10 +1119,7 @@ MUTANTS = [
     ('gui/actions.c', '    if (connect_start((Str){ app.ui.edit.b, app.ui.edit.len })) return;   // smb://… (F16 step 4)', '', 'net'),
     ('gui/input.c', '            if (in_box(CLAY_IDI("login-field", f), x, y)) h.login_field = f;', '', 'net'),
     # (step 4 review: quit cancels as Cancel does, waits, kills last; not dumpable while connecting)
-    # (Dropped, not seen: quit's wait for the thread. Without it gio is killed at once, but quit has
-    # closed its input already (the other workers are joined first), and the run's gvfs then mounted
-    # nothing in 8 s of looking, by hand. The wait keeps that order certain and lets the thread's
-    # unmount run when gvfs did mount.)
+    ('gui/connect.c', '    while (cn.running && pthread_cond_timedwait(&cn.cv, &cn.mu, &until) == 0) {}', '', 'net'),   # (netq: its close 500 ms late, step 4 confirm)
     ('gui/connect.c', '    cn.quit = true;\n    if (cn.reply == CN_WAIT) cn.reply = CN_CANCEL;', '    cn.quit = true;', 'net'),
     ('gui/connect.c', '        prctl(PR_SET_DUMPABLE, 0, 0, 0, 0);\n    }', '    }', 'net'),
     ('gui/connect.c', '    prctl(PR_SET_DUMPABLE, 1, 0, 0, 0);   // (every copy', '    // (every copy', 'net'),
