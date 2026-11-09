@@ -129,7 +129,7 @@ static const struct { UiKey cmd; const char *name; } UI_CMDS[] = {
     { UK_ITEM0 + UM_SIDE_PLACES, "side-places" }, { UK_ITEM0 + UM_SIDE_TREE, "side-tree" }, { UK_ITEM0 + UM_SIDE_NONE, "side-none" },
     { UK_ITEM0 + UM_COLORS, "colors" }, { UK_ITEM0 + UM_SHOW_MENU, "show-menu" }, { UK_ITEM0 + UM_SORT_NAME, "sort-name" },
     { UK_ITEM0 + UM_SORT_SIZE, "sort-size" }, { UK_ITEM0 + UM_SORT_MTIME, "sort-mtime" }, { UK_ITEM0 + UM_CLEAR_PREVIEWS, "clear-previews" },
-    { UK_ITEM0 + UM_ABOUT, "about" },
+    { UK_ITEM0 + UM_ABOUT, "about" }, { UK_ITEM0 + UM_CONNECT, "connect" },
     // and a right-click menu's that needs nothing clicked: the tab menu's, on the current tab
     // (Michael, 2026-11-08)
     { UK_ITEM0 + UM_TAB_OTHERS, "tab-others" },

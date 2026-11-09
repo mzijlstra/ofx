@@ -247,6 +247,7 @@ typedef struct {
     int   find_step;    // the find bar's chevrons: -1 the previous, 1 the next, 0 none
     int   bmp_row;      // a row of Edit Bookmarks' list (on screen), -1 for none (F7.5)
     int   bmp_btn;      // one of its buttons (UI_BMP_*), 0 for none
+    int   login_field;  // a field of Connect's question (UI_LOGIN_*), -1 for none (F16 step 4)
     int   field;        // a text bar's field (UiField), -1 for none; with field_toggle one of its toggles (1..3)
     int   field_toggle;
     bool  inside_btn;   // the search bar's "In files" (F9 step 3)
@@ -260,16 +261,16 @@ static bool hit_same(Hit a, Hit b)
     return a.row == b.row && a.side == b.side && a.header == b.header && a.bar == b.bar && a.crumb == b.crumb && a.tab == b.tab &&
            a.tab_x == b.tab_x && a.modal == b.modal && a.job_x == b.job_x && a.mode == b.mode && a.twisty == b.twisty && a.eject == b.eject &&
            a.zoom == b.zoom && a.side_edge == b.side_edge && a.menu_title == b.menu_title && a.menu_item == b.menu_item && a.prop_box == b.prop_box && a.pick_row == b.pick_row &&
-           a.find_x == b.find_x && a.pick_field == b.pick_field && a.toggle == b.toggle && a.find_step == b.find_step && a.bmp_row == b.bmp_row && a.bmp_btn == b.bmp_btn &&
+           a.find_x == b.find_x && a.pick_field == b.pick_field && a.toggle == b.toggle && a.find_step == b.find_step && a.bmp_row == b.bmp_row && a.bmp_btn == b.bmp_btn && a.login_field == b.login_field &&
            a.field == b.field && a.field_toggle == b.field_toggle && a.inside_btn == b.inside_btn;
 }
-_Static_assert(sizeof(Hit) == 100, "a new Hit field: hit_same compares it");
+_Static_assert(sizeof(Hit) == 104, "a new Hit field: hit_same compares it");
 
 // Under nothing: the start of hit_at, and the hover before the first frame (F11 review: two copies
 // had drifted, the hover's without .field).
 #define HIT_NONE                                                                                                   \
     { .row = -1, .side = -1, .header = -1, .bar = UB_NONE, .crumb = -1, .tab = -1, .tab_x = -1, .job_x = -1, .mode = -1, \
-      .twisty = -1, .eject = -1, .menu_title = -1, .menu_item = -1, .prop_box = -1, .pick_row = -1, .bmp_row = -1, .field = -1 }
+      .twisty = -1, .eject = -1, .menu_title = -1, .menu_item = -1, .prop_box = -1, .pick_row = -1, .bmp_row = -1, .field = -1, .login_field = -1 }
 
 static struct {
     char      cwd[PATH_MAX];
@@ -598,7 +599,7 @@ static void theme_apply(void)
 // (clip_close).
 static void quit_workers(void)
 {
-    jobs_quit(), clip_quit(), count_quit(), walk_quit(), search_quit(), thumbs_quit(), space_quit(), git_quit(), far_quit();
+    jobs_quit(), clip_quit(), count_quit(), walk_quit(), search_quit(), thumbs_quit(), space_quit(), git_quit(), far_quit(), connect_quit();
     struct timespec until = deadline_in(QUIT_WAIT_MS), jobs_until = deadline_in(QUIT_JOBS_MS);
     count_join(&until), walk_join(&until), search_join(&until), thumbs_join(&until), space_join(&until), git_join(&until), far_join(&until);
     jobs_join(&jobs_until), clear_join(&until);
@@ -817,6 +818,7 @@ static bool poll_workers(void)
     if (far_poll()) dirty = true;
     if (space_take(&app.places, app.cwd, &app.cwd_avail)) dirty = true;
     if (eject_take()) dirty = true;
+    if (connect_take()) dirty = true;
     if (props.walking && walk_take(&props.sum, &props.done)) dirty = true;
     if (props.walking && app.ui.panel != UI_PANEL_PROPS) walk_ask(NULL, 0), props.walking = false;   // the panel closed: the count stops
     if (clear_poll()) dirty = true;

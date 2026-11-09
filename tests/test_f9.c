@@ -950,7 +950,7 @@ static void test_line_words(void)
     Ui u = { 0 };
     char b[64] = "my-file name.tär";
     int len = (int)strlen(b), caret = len, anchor = len;
-    UiLine l = { b, &len, &caret, &anchor, 63, false };
+    UiLine l = { b, &len, &caret, &anchor, 63, false, false };
     UiEvent wl = ev_key(UK_WORD_LEFT), wr = ev_key(UK_WORD_RIGHT);
     CHECK(ui_line_key(&u, l, wl, STR_EMPTY) == UI_LINE_MOVED && caret == 13 && anchor == 13);   // tär (ä a word's)
     ui_line_key(&u, l, wl, STR_EMPTY);

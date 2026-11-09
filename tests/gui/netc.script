@@ -1,0 +1,116 @@
+# F16 step 4: Connect to Server on the test Samba (run.sh's net group; @PORT@ is its port, written in
+# as the group starts). ofx's gio mount and gio info go to a gio on the run's own gvfs session
+# (OFX_TEST_GIO). Shares: pub (a guest one, mounted by the run already), open (a guest one, mounted
+# only here), priv (user tester, password secret). ofx starts in its home, which holds nas.
+settle
+wait-for 5000 n=1 sel=nas conn=0 login=0
+# An address without a share: said, gio not run.
+key ctrl-l
+type smb://127.0.0.1:@PORT@
+key enter
+expect statusbad=1 conn=0 locating=1
+expect a share on 127.0.0.1: smb://127.0.0.1:@PORT@/share
+# A password in the address: refused, never run (gio's arguments can be read by any process).
+key ctrl-a
+type smb://tester:secret@127.0.0.1:@PORT@/priv
+key enter
+expect statusbad=1 conn=0 locating=1
+expect password in the address: ofx asks for it
+sh ! grep -qs secret "$OFX_ROOT/spawn.log"
+key esc
+expect locating=0
+# A server that doesn't answer: "Connecting…", and the window answers meanwhile. Once it answers,
+# gio asks; Esc cancels, and the share isn't mounted.
+sh "$OFX_ROOT/pause"
+key ctrl-l
+type smb://127.0.0.1:@PORT@/open
+key enter
+expect conn=1 locating=0 statusbad=0
+expect to open on 127.0.0.1…
+key up
+expect sel=nas
+# One at a time: another address meanwhile is told to wait.
+key ctrl-l
+type smb://127.0.0.1:@PORT@/pub
+key enter
+expect statusbad=1 conn=1 locating=1
+expect connecting to open on 127.0.0.1
+key esc
+sh "$OFX_ROOT/unpause"
+# (the user filled with gio's default: guest, as this run's gio has no USER)
+wait-for 8000 login=1 conn=2 connasked=1 loginagain=0 loginnouser=0 loginat=2 loginpass=0 loginuser=guest
+key esc
+wait-for 5000 login=0 conn=0
+expect connected to open on 127.0.0.1
+sh ! test -e "$OFX_ROOT/rt/gvfs/smb-share:port=@PORT@,server=127.0.0.1,share=open"
+# Go → Connect to Server…: the location line on smb://, the caret after it.
+point-ui menu-title 3
+click-here
+point-menu connect
+click-here
+expect locating=1 edit=smb:// menu=-
+type 127.0.0.1:@PORT@/open
+key enter
+wait-for 8000 login=1 conn=2 connasked=2
+shot netc-login.png
+# Guest, by its button: mounted as a guest, and gone to.
+point-ui modal-guest
+click-here
+wait-for 8000 conn=0 login=0 faron=1 farloading=0 n=1 sel=o.txt statusbad=0
+expect to open on 127.0.0.1
+# Guest on the password share (Alt+G): refused, said.
+key ctrl-l
+type smb://127.0.0.1:@PORT@/priv
+key enter
+wait-for 8000 login=1 connasked=3
+key alt-g
+wait-for 8000 conn=0 login=0 statusbad=1
+expect connect to priv on 127.0.0.1: Anonymous access denied
+# A wrong password: asked again, the user kept, the password emptied.
+key ctrl-l
+type smb://127.0.0.1:@PORT@/priv
+key enter
+wait-for 8000 login=1 connasked=4 loginat=2
+key up
+expect loginat=1
+# (the user's field by the pointer)
+point-ui login-field 0
+click-here
+expect loginat=0
+key ctrl-a
+type tester
+expect loginuser=tester
+key tab
+key tab
+expect loginat=2
+type wrong
+expect loginpass=5
+# (the password is never copied out of its field)
+key ctrl-a
+key ctrl-c
+key ctrl-x
+expect loginpass=5
+key enter
+# (and wiped from it as it is handed on)
+expect login=0 loginpass=0
+wait-for 8000 login=1 connasked=5 loginagain=1 loginuser=tester loginpass=0 loginat=2
+type secret
+key enter
+wait-for 8000 conn=0 login=0 faron=1 farloading=0 n=1 sel=p.txt statusbad=0
+expect to priv on 127.0.0.1
+# A share mounted already (the run's pub), and a folder in it: no question, straight there.
+key ctrl-l
+type smb://127.0.0.1:@PORT@/pub/sub
+key enter
+wait-for 8000 conn=0 faron=1 farloading=0 n=50 connasked=5
+# A server that isn't there: said.
+key ctrl-l
+type smb://127.0.0.1:1/x
+key enter
+wait-for 8000 conn=0 statusbad=1
+expect connect to x on 127.0.0.1: Connection refused
+# The password is nowhere ofx writes (its output, errors, the programs' arguments).
+sh ! grep -qs secret "$OFX_ROOT/spawn.log" "$OFX_ROOT/spawn-args.log" "$OFX_ROOT/out" "$OFX_ROOT/err"
+sh ! grep -qs wrong "$OFX_ROOT/spawn.log" "$OFX_ROOT/spawn-args.log" "$OFX_ROOT/out" "$OFX_ROOT/err"
+sh grep -q "gio mount smb://127.0.0.1:@PORT@/priv" "$OFX_ROOT/spawn.log"
+quit

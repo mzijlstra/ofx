@@ -1925,6 +1925,10 @@ int main(void)
     if (fast) test_search_far();
     if (fast) test_far_do();
     if (fast) test_far_drive();
+    if (fast) test_connect_uri();
+    if (fast) test_gio_ask();
+    if (fast) test_gio_why();
+    if (fast) test_login_keys();
     if (fast) test_wheel_under_question();
     if (fast) test_ui_age();
     if (fast) test_branch_panel();

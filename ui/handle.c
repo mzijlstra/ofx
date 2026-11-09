@@ -154,6 +154,13 @@ static bool ui_handle_panels(Ui *u, UiNames names, const UiInput *in, UiOnTop on
         // Keyboard Shortcuts: Close closes; the wheel scrolls it.
         if (in->modal == UI_MODAL_NO) return ui_keys_close(u), *out = UI_NONE, true;
         if (in->panel_wheel) ui_scroll(&u->keys_list, in->panel_wheel);
+    } else if (on == UI_ON_LOGIN) {
+        // Connect's question (F16 step 4): a field takes the keys; Connect, Guest and Cancel answer.
+        if (in->login_field >= 0 && in->login_field < UI_LOGIN_FIELDS && !(in->login_field == UI_LOGIN_USER && u->login_no_user)) u->login_at = in->login_field;
+        if (in->modal == UI_MODAL_YES) return *out = ui_login_close(u, UA_LOGIN), true;
+        if (in->modal == UI_MODAL_GUEST) return *out = ui_login_close(u, UA_LOGIN_GUEST), true;
+        if (in->modal == UI_MODAL_NO) return *out = ui_login_close(u, UA_LOGIN_CANCEL), true;
+        if (in->login_field >= 0) return *out = UI_NONE, true;
     } else if (on == UI_ON_ABOUT) {
         if (in->modal == UI_MODAL_NO) return ui_panel_close(u, UI_PANEL_ABOUT), *out = UI_NONE, true;
     } else if (on == UI_ON_BAR) {
@@ -529,6 +536,7 @@ static bool ui_panel_key(Ui *u, UiOnTop on, UiEvent e, const UiInput *in, UiActi
     case UI_ON_BRANCHES: *out = ui_brp_do(u, ui_pick_key(u, &u->brp, e, in), in); return true;
     case UI_ON_BM: *out = ui_bmp_event(u, e, in->paste); return true;
     case UI_ON_KEYS: ui_keys_event(u, e, in->paste); return true;
+    case UI_ON_LOGIN: *out = ui_login_event(u, e, in->paste); return true;
     case UI_ON_ABOUT: case UI_ON_BAR:   // Esc and Enter close them
         if (e.key == UK_ESC || e.key == UK_ENTER) u->panel = UI_PANEL_NONE;
         return true;

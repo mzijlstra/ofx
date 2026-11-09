@@ -23,6 +23,7 @@ static JobRec *job_by_id(int id)
 static const char *const MODAL_IDS[] = {
     [UI_MODAL_YES] = "modal-yes",       [UI_MODAL_NO] = "modal-no",         [UI_MODAL_SKIP] = "modal-skip", [UI_MODAL_REPLACE] = "modal-replace",
     [UI_MODAL_KEEP] = "modal-keep",     [UI_MODAL_CANCEL] = "modal-cancel", [UI_MODAL_ALL] = "modal-all",   [UI_MODAL_OK] = "modal-ok",
+    [UI_MODAL_GUEST] = "modal-guest",
 };
 
 // A panel's button; the main one (Enter's) filled, in red when it destroys something.
@@ -484,6 +485,66 @@ static void layout_props_panel(void)
     }
 }
 
+// ---- Connect to Server's question (F16 step 4) --------------------------------------------------
+
+// A password as dots, one a character, the caret and the selection where they are in it: a line
+// over the frame's copy, so edit_text draws it as any field.
+static UiLine login_masked(UiLine l)
+{
+    static const char DOT[] = "\xE2\x80\xA2";   // •
+    int n = 0, caret = 0, anchor = 0;
+    for (int i = 0; i <= *l.len; i++) {
+        if (i == *l.caret) caret = n * 3;
+        if (i == *l.anchor) anchor = n * 3;
+        if (i < *l.len && ((unsigned char)l.b[i] & 0xC0) != 0x80) n++;
+    }
+    char *b = arena_push(&frame, n * 3 + 1, 1);
+    for (int i = 0; i < n; i++) memcpy(b + i * 3, DOT, 3);
+    int *v = arena_push(&frame, 3 * (isize)sizeof(int), (isize)_Alignof(int));
+    v[0] = n * 3, v[1] = caret, v[2] = anchor;
+    return (UiLine){ b, &v[0], &v[1], &v[2], n * 3, false, true };
+}
+
+static void layout_login_panel(void)
+{
+    Theme *t = &app.theme;
+    Ui *u = &app.ui;
+    CLAY(CLAY_ID("login"), { .layout = { .sizing = { CLAY_SIZING_FIXED(480), CLAY_SIZING_FIT(0) }, .padding = { 24, 24, 20, 20 }, .childGap = 10,
+                                         .layoutDirection = CLAY_TOP_TO_BOTTOM },
+                             .backgroundColor = cc(t->bg_light),
+                             .border = { .color = cc(t->accent), .width = CLAY_BORDER_OUTSIDE(1) },
+                             .floating = { .attachTo = CLAY_ATTACH_TO_ROOT, .zIndex = 20,
+                                           .attachPoints = { CLAY_ATTACH_POINT_CENTER_CENTER, CLAY_ATTACH_POINT_CENTER_CENTER } } }) {
+        text(fit(str_from_c(arena_sprintf(&frame, "Connect to %s", cn_name())), 430, false), cc(t->fg));
+        if (u->login_again) text(cz("That user or password was refused: try again"), cc(t->red));
+        static const char *const LABEL[UI_LOGIN_FIELDS] = { "User", "Domain", "Password" };
+        for (int f = 0; f < UI_LOGIN_FIELDS; f++) {
+            if (f == UI_LOGIN_USER && u->login_no_user) continue;
+            UiLine l = ui_login_line(u, f);
+            bool on = f == u->login_at;
+            CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .childGap = 12, .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } } }) {
+                CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_FIXED(80), CLAY_SIZING_FIT(0) } } }) { text(cz(LABEL[f]), cc(t->fg_dim)); }
+                CLAY(CLAY_IDI("login-field", f), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(28) }, .padding = { 6, 6, 0, 0 },
+                                                               .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
+                                                   .backgroundColor = cc(t->bg), .border = { .color = on ? cc(t->accent) : rule_color(), .width = CLAY_BORDER_OUTSIDE(1) },
+                                                   .clip = { .horizontal = true } }) {
+                    UiLine shown = l.secret ? login_masked(l) : l;
+                    if (on) edit_text(t, arena_sprintf(&frame, "login-%d", f), 320, shown, cc(t->fg));
+                    else if (*shown.len) text(fit((Str){ shown.b, *shown.len }, 320, false), cc(t->fg));
+                    else if (f == UI_LOGIN_DOMAIN) text(cz("the server's"), cc(t->fg_dim));
+                }
+            }
+        }
+        text(cz("Enter connects \xC2\xB7 Alt+G as a guest \xC2\xB7 Esc cancels"), cc(t->fg_dim));
+        text(cz("ofx doesn't keep the password."), cc(t->fg_dim));
+        MODAL_ROW {
+            modal_button(UI_MODAL_NO, "Cancel", false, false);
+            modal_button(UI_MODAL_GUEST, "Guest", false, false);
+            modal_button(UI_MODAL_YES, "Connect", true, false);
+        }
+    }
+}
+
 #include "openwith.c"
 #include "branches.c"
 #include "bookmarks.c"
@@ -504,5 +565,6 @@ static void layout_modal(UiOnTop k, float w, float h)
     else if (k == UI_ON_KEYS) layout_keys_panel();
     else if (k == UI_ON_ABOUT) layout_about_panel();
     else if (k == UI_ON_BAR) layout_bar_panel();
+    else if (k == UI_ON_LOGIN) layout_login_panel();
     else layout_modal_panel(k);
 }

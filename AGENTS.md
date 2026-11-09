@@ -138,6 +138,11 @@ shared state. Every test runs against fakes and scratch folders. Keep it that wa
   through local links is judged by `far_real` (fs/list.c), which never looks past the far mount.
   run-script copies the `ofx-list` beside the binary among the fakes (the guard runs no other). The
   `f16` group stands a scratch folder in for a share through its mount list; `net` uses a real one.
+- **Connect to Server** (F16 step 4) runs `gio mount <address>` and `gio info <address>`, which on
+  your desktop mount a share through your session's gvfs, and hands gio a password on its input.
+  run-script's gio fake only logs them, unless the run gives `OFX_TEST_GIO`: the `net` group's,
+  a gio on that run's own gvfs session (its bus checked first). Never test it with the real gio on
+  the session bus, and never put a real password in a test.
 - **A window that stops answering** makes the compositor ask whether to terminate it, on your
   screen. The script's `sh` runs under `timeout 5` for that reason; keep everything a script waits
   for short.
@@ -234,7 +239,8 @@ ui/ that nothing calls makes the test build warn.
   ofx.conf; `fs/places.c` the sidebar's places; `fs/clean.c` ofx-clean's rules; `fs/sandbox.c`
   bubblewrap's runs; `fs/thumbers.c` the system's thumbnailers; `fs/git.c` git status;
   `fs/farlist.c` what `ofx-list` says about a far folder (F16), `fs/fardo.c` the actions it does
-  there (`--do`); `fs/state.c` the state file (its lock, `state_rewrite`), `fs/folders.c` its
+  there (`--do`); `fs/connect.c` Connect to Server's address and what `gio mount` says (gui/connect.c
+  runs it); `fs/state.c` the state file (its lock, `state_rewrite`), `fs/folders.c` its
   per-folder lines, `fs/session.c` its window lines.
 - `ui/ui.c`: the types (Ui, UiInput, UiAction, UiFocus, UiOnTop) and tables, then `keys.c` (the
   keys: each key's own meaning, the commands, the bindings, the event a key sends; F15), `cursor.c`,

@@ -30,6 +30,7 @@ static void undo_start(UndoKind k)
     undo_begin(&undo, k);
 }
 #include "eject.c"
+#include "connect.c"   // (F16 step 4: Connect to Server)
 
 // ---- on a far drive (F16 step 3b) ------------------------------------------------------------
 
@@ -789,6 +790,7 @@ static void location_go(void)
 {
     Str to;
     char path[PATH_MAX];
+    if (connect_start((Str){ app.ui.edit.b, app.ui.edit.len })) return;   // smb://… (F16 step 4)
     if (!ui_location(&scratch, (Str){ app.ui.edit.b, app.ui.edit.len }, here_dir(), getenv("HOME"), &to) || to.len >= PATH_MAX) {
         set_status(true, "Not a folder: %.*s", app.ui.edit.len, app.ui.edit.b);
         return;
@@ -1132,6 +1134,7 @@ static void act(UiAction a)
         break;
     case UA_LOCATION: ui_location_open(&app.ui, str_from_c(here_dir())); break;
     case UA_GO: location_go(); break;
+    case UA_LOGIN: case UA_LOGIN_GUEST: case UA_LOGIN_CANCEL: connect_answer(a.kind); break;
     case UA_CRUMB: crumb_go((int)a.index); break;
     case UA_CRUMB_SHIFT: ui_crumbs_shift(&app.crumbs, app.crumb_lo, (int)a.index); break;
     case UA_NEWFOLDER: new_made(false); break;

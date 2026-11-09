@@ -329,3 +329,35 @@ static UiAction ui_bmp_event(Ui *u, UiEvent e, Str paste)
     }
     return UI_NONE;
 }
+
+// ---- Connect to Server's question (F16 step 4) --------------------------------------------------
+
+// The panel gone, and what gui/ does with its answer (k).
+static UiAction ui_login_close(Ui *u, UiActionKind k)
+{
+    ui_panel_close(u, UI_PANEL_LOGIN);
+    return (UiAction){ k, 0, false };
+}
+
+// The keys to the next field that way (d: 1 or -1), round; the user's only when gio asks for one.
+static void ui_login_step(Ui *u, int d)
+{
+    do u->login_at = (u->login_at + d + UI_LOGIN_FIELDS) % UI_LOGIN_FIELDS;
+    while (u->login_at == UI_LOGIN_USER && u->login_no_user);
+}
+
+// A key while the question is up; it takes every key. The field with the keys edits as the edit
+// line does; Tab, Down and Up go from field to field; Enter connects, Alt+G as a guest, Esc doesn't.
+static UiAction ui_login_event(Ui *u, UiEvent e, Str paste)
+{
+    if (ui_line_key(u, ui_login_line(u, u->login_at), e, paste)) return UI_NONE;
+    switch (e.key) {
+    case UK_TAB: case UK_DOWN: ui_login_step(u, 1); break;
+    case UK_UP: ui_login_step(u, -1); break;
+    case UK_ENTER: case UK_SHIFT_ENTER: return ui_login_close(u, UA_LOGIN);
+    case UK_ESC: return ui_login_close(u, UA_LOGIN_CANCEL);
+    case UK_MENU: if (e.ch == 'g') return ui_login_close(u, UA_LOGIN_GUEST); break;
+    default: break;
+    }
+    return UI_NONE;
+}

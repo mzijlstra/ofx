@@ -33,6 +33,8 @@
 # - OFX_TEST_SYSBLOCK and OFX_TEST_UDEV, when set, are passed on: the block devices and udev's
 #   database read for unmounted drives (unset: empty folders in the scratch dir, so no run lists,
 #   or could mount, one of Michael's; ofx itself reads none under OFX_GUI_ROOT without them);
+# - OFX_TEST_GIO, when set, is passed on: the gio that `gio mount` and `gio info smb://…` run (the net
+#   group's, on its own gvfs; unset: they only log);
 # - OFX_TEST_HOME, when set, becomes the window's HOME, else <scratch-dir>/home (never his);
 # - OFX_GUI_SHOTS=<scratch-dir>/shots for the script's shots, OFX_GUI_ROOT=<scratch-dir> for its
 #   sh guard and ofx's own (fs/ops.c: no write outside it).
@@ -65,7 +67,21 @@ done
 real_gio=$(command -v gio)
 # gio mime (Set as default, F7.3.1) logs and runs the real one too: XDG_CONFIG_HOME is <scratch>/config,
 # so it writes the scratch mimeapps.list only.
-printf '#!/bin/sh\nif [ "$1" = info ]; then exec %s "$@"; fi\necho "gio $*" >> "%s/spawn.log"\nif [ "$1" = mime ]; then exec %s "$@"; fi\n' "$real_gio" "$T" "$real_gio" > "$T/fakes/gio"
+# gio mount and gio info on an smb:// address (Connect to Server, F16 step 4) log, and go to
+# OFX_TEST_GIO when the run has one (the net group's: a gio on that run's own gvfs session), else do
+# nothing: never the real gio, which would reach the session's gvfs.
+cat > "$T/fakes/gio" <<EOS
+#!/bin/sh
+case "\$1:\${2:-}" in
+mount:* | info:[sS][mM][bB]://*)
+    echo "gio \$*" >> "$T/spawn.log"
+    [ -z "\${OFX_TEST_GIO:-}" ] || exec "\$OFX_TEST_GIO" "\$@"
+    exit 0 ;;
+esac
+if [ "\$1" = info ]; then exec $real_gio "\$@"; fi
+echo "gio \$*" >> "$T/spawn.log"
+if [ "\$1" = mime ]; then exec $real_gio "\$@"; fi
+EOS
 # udisksctl (eject, F6.1): logs too, and fails the step named in <scratch-dir>/udisks-fail.
 # Mount (2026-10-30): makes <scratch-dir>/media/<name> (the name in <scratch-dir>/udisks-mount-as,
 # else the device's), adds it to the window's mount list (OFX_TEST_MOUNTINFO) and says where, as
@@ -161,7 +177,7 @@ cat > "$T/launch.sh" <<EOS
 echo \$\$ > "$T/run.pid"
 exec env -u DISPLAY -u WAYLAND_SOCKET -u DBUS_SESSION_BUS_ADDRESS -u HYPRLAND_INSTANCE_SIGNATURE GIO_USE_VFS=local GIT_CEILING_DIRECTORIES="$T" WAYLAND_DISPLAY="$sock" OFX_TEST_SIZE=${OFX_SCRIPT_SIZE:-936x516} OFX_TEST_WINDOWS="$T/windows" ${script_env} OFX_GUI_ROOT="$T" OFX_GUI_SHOTS="$T/shots" PATH="$T/fakes:\$PATH" XDG_STATE_HOME="$T/state" XDG_CONFIG_HOME="$T/config" XDG_DATA_HOME="$T/data" XDG_CACHE_HOME="$T/cache" \
   LSAN_OPTIONS=suppressions=$root/gui/lsan.supp ASAN_OPTIONS=log_path="$T/asan" ${OFX_TEST_LEAK:+OFX_TEST_LEAK=1} ${OFX_GUI_FAIL_FAST:+OFX_GUI_FAIL_FAST=1} ${OFX_GUI_DEBUG:+OFX_GUI_DEBUG=1} \
-  ${OFX_TEST_WATCH_DELAY_MS:+OFX_TEST_WATCH_DELAY_MS=$OFX_TEST_WATCH_DELAY_MS} ${OFX_TEST_COPY_DELAY_MS:+OFX_TEST_COPY_DELAY_MS=$OFX_TEST_COPY_DELAY_MS} ${OFX_TEST_CROSS:+OFX_TEST_CROSS=1} OFX_TEST_WRITE_MS=${OFX_TEST_WRITE_MS:-100} HOME=$OFX_TEST_HOME ${OFX_TEST_COUNT_DELAY_MS:+OFX_TEST_COUNT_DELAY_MS=$OFX_TEST_COUNT_DELAY_MS} ${OFX_TEST_MOUNTINFO:+OFX_TEST_MOUNTINFO=$OFX_TEST_MOUNTINFO} OFX_TEST_SYSBLOCK=$OFX_TEST_SYSBLOCK OFX_TEST_UDEV=$OFX_TEST_UDEV ${OFX_TEST_MEDIA:+OFX_TEST_MEDIA=$OFX_TEST_MEDIA} ${OFX_TEST_SPACE_DELAY_MS:+OFX_TEST_SPACE_DELAY_MS=$OFX_TEST_SPACE_DELAY_MS} ${OFX_TEST_ICONS_MAX:+OFX_TEST_ICONS_MAX=$OFX_TEST_ICONS_MAX} ${OFX_TEST_THUMB_HELD_MAX:+OFX_TEST_THUMB_HELD_MAX=$OFX_TEST_THUMB_HELD_MAX} \
+  ${OFX_TEST_WATCH_DELAY_MS:+OFX_TEST_WATCH_DELAY_MS=$OFX_TEST_WATCH_DELAY_MS} ${OFX_TEST_COPY_DELAY_MS:+OFX_TEST_COPY_DELAY_MS=$OFX_TEST_COPY_DELAY_MS} ${OFX_TEST_CROSS:+OFX_TEST_CROSS=1} ${OFX_TEST_GIO:+OFX_TEST_GIO=$OFX_TEST_GIO} OFX_TEST_WRITE_MS=${OFX_TEST_WRITE_MS:-100} HOME=$OFX_TEST_HOME ${OFX_TEST_COUNT_DELAY_MS:+OFX_TEST_COUNT_DELAY_MS=$OFX_TEST_COUNT_DELAY_MS} ${OFX_TEST_MOUNTINFO:+OFX_TEST_MOUNTINFO=$OFX_TEST_MOUNTINFO} OFX_TEST_SYSBLOCK=$OFX_TEST_SYSBLOCK OFX_TEST_UDEV=$OFX_TEST_UDEV ${OFX_TEST_MEDIA:+OFX_TEST_MEDIA=$OFX_TEST_MEDIA} ${OFX_TEST_SPACE_DELAY_MS:+OFX_TEST_SPACE_DELAY_MS=$OFX_TEST_SPACE_DELAY_MS} ${OFX_TEST_ICONS_MAX:+OFX_TEST_ICONS_MAX=$OFX_TEST_ICONS_MAX} ${OFX_TEST_THUMB_HELD_MAX:+OFX_TEST_THUMB_HELD_MAX=$OFX_TEST_THUMB_HELD_MAX} \
   OFX_TEST_THUMBNAILERS=$OFX_TEST_THUMBNAILERS ${OFX_TEST_THUMB_RUN_MS:+OFX_TEST_THUMB_RUN_MS=$OFX_TEST_THUMB_RUN_MS} ${OFX_TEST_SANDBOX:+OFX_TEST_SANDBOX=$OFX_TEST_SANDBOX} \
   "$bin" $args >"$T/out" 2>"$T/err"
 EOS

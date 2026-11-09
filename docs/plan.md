@@ -971,9 +971,36 @@ blocks each of these for up to gvfs's 90 s. On a thread it also holds ofx's exit
        ofx got there, so a far link that was a file showed "Not a directory". It keeps it now.
      - **Measured on the real share:** a `--do mkdir` killed while the server was paused stayed in
        the kernel over 60 s after it came back (gvfsd's affair; the run's end ends it).
-4. **Connect to Server… and passwords:** the address line (Go menu and Ctrl+L with `smb://`), the
-   password question, `gio mount` on a job thread, wrong password and unknown host said in the
-   status line.
+4. **Connect to Server… and passwords** (built 2026-11-09):
+   - **Where:** an `smb://[user@]server[:port]/share[/folder]` address in the location line
+     (Ctrl+L), or Go → Connect to Server…, which opens it on `smb://`. fs/connect.c checks the
+     address: a server and a share named, no password in it (it would be in gio's arguments).
+   - **How:** `gio mount` in a child, on a thread of its own (gui/connect.c); `gio info` then names
+     the share's folder, gone to as any far folder. gio talks to gvfsd over D-Bus, not through the
+     share's folder, so the thread never waits on FUSE.
+   - **The question** (Michael, 2026-11-09: always asked, with a Guest button): User, Domain,
+     Password, filled with gio's default user, put up when gio asks.
+     - Enter connects, Alt+G or Guest as a guest, Esc cancels.
+     - A refused password is asked again ("That user or password was refused"), the user kept.
+     - The password goes to gio's input as a line. It is never shown, copied or logged. ofx's
+       copies (the field, the thread's) are wiped as they are handed on, and when the panel goes.
+   - **Measured on the test Samba (spike):**
+     - gvfs asks even for a guest share. A question left unanswered (gio's input closed, or gio
+       killed) makes gvfs try the share as a guest. So Cancel closes gio's input, waits for its
+       answer, and unmounts what got mounted anyway; a killed gio left a Cancel that mounted.
+     - gio says nothing when it fails that way, and its exit status can't be read (SA_NOCLDWAIT).
+       So a mount is a folder `gio info` names. Guest that mounts nothing runs `gio mount -a` for
+       gvfs's reason ("Anonymous access denied").
+     - An empty Domain takes gio's default. A password typed after 130 s still mounts: gio waits.
+     - A server that doesn't answer fails after 20 s ("Connection timed out"); "Connecting…"
+       meanwhile. A port nothing listens on: "Connection refused" at once.
+     - An unknown server name is asked for a password first, then fails with "Invalid argument"
+       (libsmbclient's word): said as gvfs says it.
+   - **Tests:** unit (the address, gio's questions and errors, its local path, from the spike's
+     recordings); the net group's netc (a paused server, Cancel, Guest by button and by key, a
+     guest refused, a wrong then right password, a share mounted already, a closed port, the
+     password nowhere in ofx's output or the programs' arguments). Its gio reaches only the run's own
+     gvfs (run-script's `OFX_TEST_GIO`).
 5. **The sidebar's Network section:** mounted shares (read from the gvfs FUSE folder; a watch on
    it) with unmount, and `smb://` bookmarks mounted on a click. Add Bookmark on a share writes its
    `smb://` address. With the share's friendly name, the far actions' "isn't answering" and "is

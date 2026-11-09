@@ -1,0 +1,134 @@
+// Connect to Server (F16 step 4): an address typed as smb://[user@]server[:port]/share[/folder],
+// and what ofx reads of `gio mount` and `gio info` as they run (gui/connect.c runs them). Measured on
+// the test Samba (tests/net, 2026-11-09):
+// - gio asks on its output, a line at a time and with no newline after the question: a header
+//   ("Authentication Required", then "Enter user and password for share “priv” on “host”:"), then
+//   "User [default]: ", "Domain [default]: ", "Password: " (only those gvfs needs: a user in the
+//   address leaves out User). Answers are read from its input, a line each, and not echoed, so
+//   the next question follows the last on the same line.
+// - gvfs asks even for a guest share. A wrong password is asked again, with the same header.
+// - It says why it failed on its errors, as "gio: <address>: <why>" (after the volume monitors'
+//   noise), and nothing on success; "Location is already mounted" is a success for ofx.
+// - `gio info <address>` names the share's folder: "local path: <rt>/gvfs/smb-share:…".
+// Included by fs.c.
+
+#include <ctype.h>
+
+typedef enum { CONNECT_NOT, CONNECT_OK, CONNECT_BAD } ConnectUri;
+
+static bool connect_ieq(Str a, const char *b)
+{
+    isize n = (isize)strlen(b);
+    if (a.len != n) return false;
+    for (isize i = 0; i < n; i++)
+        if (tolower((unsigned char)a.p[i]) != (unsigned char)b[i]) return false;
+    return true;
+}
+
+// text as an address to connect to: CONNECT_NOT when it isn't one (no "smb://": a path), CONNECT_BAD
+// with why when it is one ofx won't take, else CONNECT_OK with the address (trimmed) in uri, and the
+// server and share in host and share for what ofx says ("priv on 127.0.0.1", as gvfs names it).
+// A password in the address is refused: it would be in gio's arguments, which any process can read.
+static ConnectUri connect_uri(Str text, char *uri, size_t ucap, char *host, size_t hcap, char *share, size_t scap, char *why, size_t wcap)
+{
+    text = str_trim(text);
+    if (text.len < 6 || !connect_ieq(str_cut(text, 0, 6), "smb://")) return CONNECT_NOT;
+    for (isize i = 0; i < text.len; i++)
+        if ((unsigned char)text.p[i] < 0x20 || text.p[i] == 0x7F) return snprintf(why, wcap, "An address has no control characters"), CONNECT_BAD;
+    if ((size_t)text.len >= ucap) return snprintf(why, wcap, "The address is too long"), CONNECT_BAD;
+    Str rest = str_cut(text, 6, text.len);
+    isize slash = str_find(rest, '/');
+    Str auth = slash < 0 ? rest : str_cut(rest, 0, slash);
+    Str path = slash < 0 ? STR_EMPTY : str_cut(rest, slash + 1, rest.len);
+    isize at = str_find_last(auth, '@');
+    if (at >= 0) {
+        if (str_find(str_cut(auth, 0, at), ':') >= 0) return snprintf(why, wcap, "No password in the address: ofx asks for it"), CONNECT_BAD;
+        auth = str_cut(auth, at + 1, auth.len);
+    }
+    isize colon = str_find_last(auth, ':');
+    Str name = colon < 0 ? auth : str_cut(auth, 0, colon);
+    if (colon >= 0) {
+        Str port = str_cut(auth, colon + 1, auth.len);
+        bool digits = port.len > 0 && port.len <= 5;
+        for (isize i = 0; i < port.len; i++) digits = digits && port.p[i] >= '0' && port.p[i] <= '9';
+        if (!digits) return snprintf(why, wcap, "Not a port: %.*s", STR_ARG(port)), CONNECT_BAD;
+    }
+    if (name.len == 0) return snprintf(why, wcap, "Name a server: smb://server/share"), CONNECT_BAD;
+    isize end = str_find(path, '/');
+    Str sh = end < 0 ? path : str_cut(path, 0, end);
+    if (sh.len == 0) return snprintf(why, wcap, "Name a share on %.*s: smb://%.*s/share", STR_ARG(name), STR_ARG(auth)), CONNECT_BAD;
+    if ((size_t)name.len >= hcap || (size_t)sh.len >= scap) return snprintf(why, wcap, "The address is too long"), CONNECT_BAD;
+    snprintf(uri, ucap, "%.*s", STR_ARG(text));
+    snprintf(host, hcap, "%.*s", STR_ARG(name));
+    snprintf(share, scap, "%.*s", STR_ARG(sh));
+    return CONNECT_OK;
+}
+
+typedef enum { GIO_ASK_NONE, GIO_ASK_USER, GIO_ASK_DOMAIN, GIO_ASK_PASSWORD } GioAsk;
+
+// The question gio's output out ends on, waiting for a line (GIO_ASK_NONE: none), its default
+// (between the brackets) into def; *rounds: how many times it has asked (its headers so far).
+static GioAsk gio_ask(Str out, char *def, size_t cap, int *rounds)
+{
+    static const Str HEAD = S("Authentication Required");
+    *rounds = 0;
+    for (isize i = 0; i + HEAD.len <= out.len; i++)
+        if (memcmp(out.p + i, HEAD.p, (size_t)HEAD.len) == 0) ++*rounds, i += HEAD.len - 1;
+    if (cap) def[0] = 0;
+    if (*rounds == 0) return GIO_ASK_NONE;
+    if (str_ends_with(out, S("Password: "))) return GIO_ASK_PASSWORD;
+    if (!str_ends_with(out, S("]: "))) return GIO_ASK_NONE;
+    isize nl = str_find_last(out, '\n');
+    Str line = str_cut(out, nl + 1, out.len - 3);   // ("… User [guest" of "… User [guest]: ")
+    isize open = str_find_last(line, '[');
+    if (open < 1 || line.p[open - 1] != ' ') return GIO_ASK_NONE;
+    Str label = str_cut(line, 0, open - 1), d = str_cut(line, open + 1, line.len);
+    GioAsk k = str_ends_with(label, S("User")) ? GIO_ASK_USER : str_ends_with(label, S("Domain")) ? GIO_ASK_DOMAIN : GIO_ASK_NONE;
+    if (k != GIO_ASK_NONE && cap) snprintf(def, cap, "%.*s", STR_ARG(d));
+    return k;
+}
+
+// Why gio failed, from its errors err (its last "gio: " line, without the address and gvfs's
+// "Failed to mount Windows share: ") into why; false when it said nothing.
+static bool gio_why(Str err, char *why, size_t cap)
+{
+    isize at = -1;
+    if (str_starts_with(err, S("gio: "))) at = 0;
+    for (isize i = 0; i + 6 <= err.len; i++)
+        if (err.p[i] == '\n' && memcmp(err.p + i + 1, "gio: ", 5) == 0) at = i + 1;
+    if (at < 0) return false;
+    Str line = str_cut(err, at + 5, err.len);
+    isize nl = str_find(line, '\n');
+    if (nl >= 0) line = str_cut(line, 0, nl);
+    // "smb://host/share/: why": the address ends at the first ": " after its "://"
+    for (isize i = 0; i + 3 <= line.len; i++)
+        if (memcmp(line.p + i, "://", 3) == 0) {
+            for (isize j = i + 3; j + 2 <= line.len; j++)
+                if (line.p[j] == ':' && line.p[j + 1] == ' ') {
+                    line = str_cut(line, j + 2, line.len);
+                    break;
+                }
+            break;
+        }
+    static const Str SMB = S("Failed to mount Windows share: ");
+    if (str_starts_with(line, SMB) && line.len > SMB.len) line = str_cut(line, SMB.len, line.len);
+    snprintf(why, cap, "%.*s", STR_ARG(line));
+    return true;
+}
+
+// The share's folder from `gio info`'s output into path; false when it names none (a server's
+// list of shares, which isn't a folder).
+static bool gio_local_path(Str info, char *path, size_t cap)
+{
+    static const Str KEY = S("local path: ");
+    for (isize i = 0; i + KEY.len <= info.len; i++) {
+        if ((i > 0 && info.p[i - 1] != '\n') || memcmp(info.p + i, KEY.p, (size_t)KEY.len) != 0) continue;
+        Str p = str_cut(info, i + KEY.len, info.len);
+        isize nl = str_find(p, '\n');
+        if (nl >= 0) p = str_cut(p, 0, nl);
+        if (p.len == 0 || p.p[0] != '/' || (size_t)p.len >= cap) return false;
+        snprintf(path, cap, "%.*s", STR_ARG(p));
+        return true;
+    }
+    return false;
+}

@@ -108,7 +108,7 @@ static bool ui_menu_enabled(const Ui *u, UiMenuItem it)
     case UM_PARENT: return u->can_up;
     case UM_BACK: return u->can_back;
     case UM_FORWARD: return u->can_forward;
-    case UM_HOME: case UM_TRASH_VIEW: case UM_FIND: case UM_LOCATION: return true;
+    case UM_HOME: case UM_TRASH_VIEW: case UM_FIND: case UM_LOCATION: case UM_CONNECT: return true;
     case UM_SEARCH: return ui_view_allows(u->view, UA_SEARCH);
     case UM_TERMINAL: return ui_view_allows(u->view, UA_TERMINAL);
     case UM_ADD_BOOKMARK: return u->can_bookmark && ui_view_allows(u->view, UA_ADD_BOOKMARK);
@@ -251,6 +251,10 @@ static UiAction ui_menu_pick(Ui *u, UiMenuItem it)
     case UM_OPEN: return (UiAction){ UA_OPEN, u->list.sel, u->marked > 0 };
     case UM_OPEN_WITH: return ui_ow_open(u);
     case UM_ABOUT: return u->panel = UI_PANEL_ABOUT, UI_NONE;
+    case UM_CONNECT:   // the location line on "smb://", the caret after it (F16 step 4: an address there connects)
+        ui_location_open(u, S("smb://"));
+        u->edit.anchor = u->edit.caret;
+        return UI_NONE;
     case UM_PREFERENCES: return (UiAction){ UA_PREFERENCES, 0, false };
     case UM_CLEAR_PREVIEWS: return u->clear_asking = true, UI_NONE;   // (gui/ counts them as it opens)
     case UM_OPEN_TAB: return (UiAction){ UA_TAB_BG_ROW, u->list.sel, false };

@@ -1,11 +1,11 @@
-# ofx's test Samba server (F16): a guest share (pub) and one for user tester, password secret
-# (priv). Built locally from alpine; tests/net/run.sh starts it on 127.0.0.1 only.
+# ofx's test Samba server (F16): guest shares (pub; open, which only Connect's test mounts) and one
+# for user tester, password secret (priv). Built locally from alpine; tests/net/run.sh starts it on 127.0.0.1 only.
 # alpine 3.24.1, pinned by digest: a new alpine (or samba) changes what the tests run against only
 # when this line changes (F16 step 1 review).
 FROM docker.io/library/alpine@sha256:79ff19e9084a00eece421b2523fb93e22d730e2c0e525905de047e848e56d95f
 RUN apk add --no-cache samba && \
     adduser -D -H tester && printf 'secret\nsecret\n' | smbpasswd -a -s tester && \
-    mkdir -p /srv/pub/sub /srv/priv && echo hi > /srv/pub/hello.txt && echo p > /srv/priv/p.txt && \
+    mkdir -p /srv/pub/sub /srv/priv /srv/open && echo hi > /srv/pub/hello.txt && echo p > /srv/priv/p.txt && echo o > /srv/open/o.txt && \
     for i in $(seq 1 50); do touch /srv/pub/sub/f$i; done && chmod -R a+rwX /srv
 COPY smb.conf /etc/samba/smb.conf
 EXPOSE 445

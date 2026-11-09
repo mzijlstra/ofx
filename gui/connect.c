@@ -1,0 +1,305 @@
+// Connect to Server (F16 step 4): an address typed in the location line (Go → Connect to Server…
+// opens it on "smb://") is mounted by `gio mount` in a child, on a thread of its own that reads gio's
+// questions (fs/connect.c) and answers them from Connect's question (ui/'s UI_PANEL_LOGIN), then
+// asks `gio info` for the share's folder. ofx goes there as to any far folder (its lister reads it).
+// The window never waits on any of it. gio talks to gvfsd over D-Bus, not through the share's FUSE
+// folder, so a killed gio ends at once, and the thread with it (measured on the test Samba). A
+// server that doesn't answer fails the mount after gvfs's own 20 s (measured): "Connecting…" until
+// then.
+// Passwords are asked each time and never stored (Michael, 2026-11-09). One goes to gio on its input,
+// as a line: never in its arguments (any process reads those) or a log. Each copy in ofx (the field,
+// the thread's) is wiped as it is handed on, and when the question goes unanswered.
+// One connection at a time. Included by actions.c.
+
+enum { CONNECT_INFO_MS = 10000 };   // `gio info` on a share just mounted answers in milliseconds
+
+typedef enum { CN_IDLE, CN_RUN, CN_ASK, CN_DONE } CnPhase;
+typedef enum { CN_WAIT, CN_ANSWER, CN_GUEST, CN_CANCEL } CnReply;
+
+static struct {
+    pthread_mutex_t mu;
+    pthread_cond_t  cv;
+    CnPhase phase;
+    bool    shown;    // the question for this ask is up (main thread's)
+    char    uri[PATH_MAX], host[256], share[256];
+    // gio's question (CN_ASK): whether it asks for a user, its default, and whether it asks again
+    bool    ask_user, again;
+    char    def_user[256];
+    // the answer (the main thread's, then the thread's)
+    CnReply reply;
+    char    user[256], domain[256], pass[256];
+    // the result (CN_DONE)
+    bool    ok, cancelled;
+    char    path[PATH_MAX], why[512];
+    int     pidfd;    // gio's while it runs, -1 none
+    bool    quit;
+    int     asked;    // questions put, for the scripts' state line (connasked=)
+} cn = { .mu = PTHREAD_MUTEX_INITIALIZER, .cv = PTHREAD_COND_INITIALIZER, .pidfd = -1 };
+
+// "priv on 127.0.0.1", as gvfs names a share.
+static const char *cn_name(void)
+{
+    return arena_sprintf(&frame, "%s on %s", cn.share, cn.host);
+}
+
+static void cn_line(int fd, const char *s)
+{
+    size_t n = strlen(s);
+    while (n > 0) {
+        ssize_t w = write(fd, s, n);
+        if (w < 0 && errno == EINTR) continue;
+        if (w <= 0) return;   // (gio gone: its output says why)
+        s += w, n -= (size_t)w;
+    }
+    while (write(fd, "\n", 1) < 0 && errno == EINTR) {}
+}
+
+static void cn_wipe(void)   // (cn.mu held)
+{
+    explicit_bzero(cn.pass, sizeof cn.pass);
+}
+
+// gio's output so far, into b (cap, *n), from fd; false at its end. Kept to the last cap/2 bytes when
+// full (a question is at the end).
+static bool cn_read(int fd, char *b, size_t cap, size_t *n)
+{
+    if (*n + 512 > cap) {
+        memmove(b, b + *n - cap / 2, cap / 2);
+        *n = cap / 2;
+    }
+    ssize_t r = read(fd, b + *n, cap - 1 - *n);
+    if (r < 0 && errno == EINTR) return true;
+    if (r <= 0) return false;
+    *n += (size_t)r, b[*n] = 0;
+    return true;
+}
+
+// One `gio mount` of the address (-a: as a guest), its questions answered as they come. False with
+// why when gio says it failed; true when it said nothing, which is not yet a mount: gio's exit
+// status can't be read (spawn_init's SA_NOCLDWAIT), and a mount it gave up on can end as quietly
+// (Guest on a share that takes none, measured), so cn_thread asks `gio info` for its folder.
+// *cancelled when the user said Cancel, *guest when Guest.
+static bool cn_mount(bool guest, char *why, size_t cap, bool *cancelled, bool *as_guest)
+{
+    char *argv[] = { "gio", "mount", guest ? "-a" : cn.uri, guest ? cn.uri : NULL, NULL };
+    int in[2], out[2], errs[2];
+    Err e;
+    if (pipe2(in, O_CLOEXEC) != 0) return snprintf(why, cap, "a pipe: %s", strerror(errno)), false;
+    if (pipe2(out, O_CLOEXEC) != 0) return close(in[0]), close(in[1]), snprintf(why, cap, "a pipe: %s", strerror(errno)), false;
+    if (pipe2(errs, O_CLOEXEC) != 0) return close(in[0]), close(in[1]), close(out[0]), close(out[1]), snprintf(why, cap, "a pipe: %s", strerror(errno)), false;
+    pid_t pid;
+    bool ok = spawn_fds(NULL, argv, in[0], out[1], errs[1], &pid, &e);
+    close(in[0]), close(out[1]), close(errs[1]);
+    int pfd = ok ? (int)syscall(SYS_pidfd_open, pid, 0) : -1;
+    if (!ok || pfd < 0) {
+        if (ok) kill(pid, SIGKILL), snprintf(e.msg, sizeof e.msg, "gio can't be watched: %s", strerror(errno));
+        close(in[1]), close(out[0]), close(errs[0]);
+        return snprintf(why, cap, "%s", e.msg), false;
+    }
+    pthread_mutex_lock(&cn.mu);
+    cn.pidfd = pfd;
+    if (cn.quit) syscall(SYS_pidfd_send_signal, pfd, SIGKILL, NULL, 0);
+    pthread_mutex_unlock(&cn.mu);
+    static char ob[16384], eb[4096];
+    size_t on = 0, en = 0, handled = 0;
+    ob[0] = eb[0] = 0;
+    int answered = 0;   // the questions (rounds) answered
+    char user[256] = "", domain[256] = "", pass[256] = "";
+    CnReply rep = CN_ANSWER;   // (Cancel or Guest: gio's input closed, its end awaited)
+    struct pollfd p[2] = { { out[0], POLLIN, 0 }, { errs[0], POLLIN, 0 } };
+    while (p[0].fd >= 0 || p[1].fd >= 0) {
+        if (poll(p, 2, -1) < 0) {
+            if (errno == EINTR) continue;
+            break;
+        }
+        if (p[1].revents && !cn_read(errs[0], eb, sizeof eb, &en)) p[1].fd = -1;
+        if (!p[0].revents) continue;
+        if (!cn_read(out[0], ob, sizeof ob, &on)) {
+            p[0].fd = -1;
+            continue;
+        }
+        char def[256];
+        int rounds;
+        GioAsk k = gio_ask((Str){ ob, (isize)on }, def, sizeof def, &rounds);
+        if (k == GIO_ASK_NONE || on == handled || in[1] < 0) continue;
+        handled = on;
+        if (rounds > answered) {   // gio asks (again): the user answers
+            pthread_mutex_lock(&cn.mu);
+            cn.ask_user = k == GIO_ASK_USER, cn.again = rounds > 1;
+            snprintf(cn.def_user, sizeof cn.def_user, "%s", k == GIO_ASK_USER ? def : "");
+            cn.phase = CN_ASK, cn.reply = guest || cn.quit ? CN_CANCEL : CN_WAIT, cn.asked++;
+            pthread_mutex_unlock(&cn.mu);
+            wake_main();
+            pthread_mutex_lock(&cn.mu);
+            while (cn.reply == CN_WAIT) pthread_cond_wait(&cn.cv, &cn.mu);
+            rep = cn.reply;
+            snprintf(user, sizeof user, "%s", cn.user), snprintf(domain, sizeof domain, "%s", cn.domain);
+            memcpy(pass, cn.pass, sizeof pass);
+            cn_wipe();
+            cn.phase = CN_RUN;
+            pthread_mutex_unlock(&cn.mu);
+            // Cancel or Guest: no answer, gio's input closed. gvfs then tries the share as a guest
+            // (measured: a guest share mounts), and gio says how that went. A killed gio would leave
+            // gvfs to do the same unseen (a Cancel that mounted anyway; 2026-11-09).
+            if (rep != CN_ANSWER) {
+                close(in[1]), in[1] = -1;
+                continue;
+            }
+            answered = rounds;
+        }
+        cn_line(in[1], k == GIO_ASK_USER ? user : k == GIO_ASK_DOMAIN ? domain : pass);
+        if (k == GIO_ASK_PASSWORD) explicit_bzero(pass, sizeof pass);
+    }
+    explicit_bzero(pass, sizeof pass);
+    if (in[1] >= 0) close(in[1]);
+    close(out[0]), close(errs[0]);
+    pthread_mutex_lock(&cn.mu);
+    cn.pidfd = -1;
+    pthread_mutex_unlock(&cn.mu);
+    close(pfd);
+    bool mounted = !gio_why((Str){ eb, (isize)en }, why, cap) || strcmp(why, "Location is already mounted") == 0;
+    if (rep == CN_CANCEL) {   // not connected, as asked: mounted all the same (as a guest), unmounted
+        if (mounted) {
+            static char got[4096];
+            bool late;
+            char *u[] = { "gio", "mount", "-u", cn.uri, NULL };
+            spawn_capture(NULL, u, got, sizeof got, CONNECT_INFO_MS, &late, &e);
+        }
+        return *cancelled = true, false;
+    }
+    *as_guest = rep == CN_GUEST;
+    return mounted;
+}
+
+// The share's folder, from `gio info`, into path; false with why when it names none (not mounted).
+static bool cn_folder(char *path, size_t pcap, char *why, size_t cap)
+{
+    static char info[8192];
+    bool late;
+    Err e;
+    char *argv[] = { "gio", "info", cn.uri, NULL };
+    if (!spawn_capture(NULL, argv, info, sizeof info, CONNECT_INFO_MS, &late, &e)) return snprintf(why, cap, "%s", e.msg), false;
+    if (late) return snprintf(why, cap, "gio info gave no answer in %d s", CONNECT_INFO_MS / 1000), false;
+    if (!gio_local_path(str_from_c(info), path, pcap)) return snprintf(why, cap, "it isn't mounted"), false;
+    return true;
+}
+
+static void *cn_thread(void *arg)
+{
+    (void)arg;
+    char why[512] = "", path[PATH_MAX] = "";
+    bool cancelled = false, guest = false, ok = cn_mount(false, why, sizeof why, &cancelled, &guest) && cn_folder(path, sizeof path, why, sizeof why);
+    // Guest, not mounted by it: gio -a, whose refusal says why ("Anonymous access denied").
+    if (!ok && guest && !cancelled) ok = cn_mount(true, why, sizeof why, &cancelled, &guest) && cn_folder(path, sizeof path, why, sizeof why);
+    pthread_mutex_lock(&cn.mu);
+    cn.ok = ok, cn.cancelled = cancelled, cn.phase = CN_DONE;
+    snprintf(cn.path, sizeof cn.path, "%s", path);
+    snprintf(cn.why, sizeof cn.why, "%s", why);
+    pthread_mutex_unlock(&cn.mu);
+    wake_main();
+    return NULL;
+}
+
+// The location line's text, when it is an address to connect to: the connection started (or why
+// not, in the status line), and true. False for anything else (a path: the location line goes there).
+static bool connect_start(Str text)
+{
+    char uri[PATH_MAX], host[256], share[256], why[256];
+    ConnectUri c = connect_uri(text, uri, sizeof uri, host, sizeof host, share, sizeof share, why, sizeof why);
+    if (c == CONNECT_NOT) return false;
+    if (c == CONNECT_BAD) return set_status(true, "%s", why), true;
+    pthread_mutex_lock(&cn.mu);
+    bool busy = cn.phase != CN_IDLE;
+    if (!busy) {
+        snprintf(cn.uri, sizeof cn.uri, "%s", uri), snprintf(cn.host, sizeof cn.host, "%s", host), snprintf(cn.share, sizeof cn.share, "%s", share);
+        cn.phase = CN_RUN, cn.shown = false, cn.reply = CN_WAIT, cn.user[0] = cn.domain[0] = 0;
+    }
+    pthread_mutex_unlock(&cn.mu);
+    if (busy) return set_status(true, "Still connecting to %s", cn_name()), true;
+    pthread_t t;
+    if (pthread_create(&t, NULL, cn_thread, NULL) != 0) {
+        pthread_mutex_lock(&cn.mu);
+        cn.phase = CN_IDLE;
+        pthread_mutex_unlock(&cn.mu);
+        return set_status(true, "Can't connect: %s", strerror(errno)), true;
+    }
+    pthread_detach(t);
+    ui_edit_close(&app.ui);
+    set_status(false, "Connecting to %s\xE2\x80\xA6", cn_name());
+    return true;
+}
+
+// The question's password wiped, as it is handed on (the panel is gone: every way out of it is an
+// answer).
+static void connect_fields_clear(void)
+{
+    Ui *u = &app.ui;
+    explicit_bzero(u->login_pass.b, sizeof u->login_pass.b);
+    UI_TEXT_CLEAR(u->login_pass);
+}
+
+// The question answered (UA_LOGIN), as a guest (UA_LOGIN_GUEST), or not (UA_LOGIN_CANCEL): handed to
+// the thread, the password wiped here.
+static void connect_answer(UiActionKind k)
+{
+    Ui *u = &app.ui;
+    pthread_mutex_lock(&cn.mu);
+    if (cn.phase == CN_ASK && cn.reply == CN_WAIT) {
+        snprintf(cn.user, sizeof cn.user, "%.*s", u->login_user.len, u->login_user.b);
+        snprintf(cn.domain, sizeof cn.domain, "%.*s", u->login_domain.len, u->login_domain.b);
+        int n = u->login_pass.len < (int)sizeof cn.pass - 1 ? u->login_pass.len : (int)sizeof cn.pass - 1;
+        memcpy(cn.pass, u->login_pass.b, (size_t)n), cn.pass[n] = 0;
+        cn.reply = k == UA_LOGIN ? CN_ANSWER : k == UA_LOGIN_GUEST ? CN_GUEST : CN_CANCEL;
+        cn.shown = false;
+        pthread_cond_signal(&cn.cv);
+    }
+    pthread_mutex_unlock(&cn.mu);
+    connect_fields_clear();
+    if (k == UA_LOGIN_CANCEL) set_status(false, "Not connected to %s", cn_name());
+    else set_status(false, "Connecting to %s%s\xE2\x80\xA6", cn_name(), k == UA_LOGIN_GUEST ? " as a guest" : "");
+}
+
+// The thread's news, each frame: its question put up, or its result taken (the share's folder gone
+// to, or why not said). True when something changed.
+static bool connect_take(void)
+{
+    Ui *u = &app.ui;
+    pthread_mutex_lock(&cn.mu);
+    CnPhase ph = cn.phase;
+    if (ph == CN_ASK && !cn.shown && cn.reply == CN_WAIT) {
+        cn.shown = true;
+        if (!cn.again) {   // (asked again: what was typed stays, save the password)
+            ui_line_set(ui_login_line(u, UI_LOGIN_USER), str_from_c(cn.def_user));
+            ui_line_set(ui_login_line(u, UI_LOGIN_DOMAIN), STR_EMPTY);
+        }
+        u->login_no_user = !cn.ask_user, u->login_again = cn.again;
+        u->login_at = cn.ask_user && u->login_user.len == 0 ? UI_LOGIN_USER : UI_LOGIN_PASS;
+        u->panel = UI_PANEL_LOGIN;
+        ui_edit_close(u), u->menu_on = false;
+        pthread_mutex_unlock(&cn.mu);
+        return true;
+    }
+    if (ph != CN_DONE) return pthread_mutex_unlock(&cn.mu), false;
+    bool ok = cn.ok, cancelled = cn.cancelled;
+    char path[PATH_MAX], why[512];
+    snprintf(path, sizeof path, "%s", cn.path), snprintf(why, sizeof why, "%s", cn.why);
+    cn.phase = CN_IDLE;
+    pthread_mutex_unlock(&cn.mu);
+    ui_panel_close(u, UI_PANEL_LOGIN);   // (an answer closed it: none is waited for now)
+    if (cancelled) return true;   // (said as it was cancelled)
+    if (!ok) return set_status(true, "Can't connect to %s: %s", cn_name(), why[0] ? why : "no reason given"), true;
+    if (go_to(path, STR_EMPTY, 0)) set_status(false, "Connected to %s", cn_name());
+    return true;
+}
+
+// At quit: a question unanswered is cancelled, and gio stopped (the thread ends with it).
+static void connect_quit(void)
+{
+    pthread_mutex_lock(&cn.mu);
+    cn.quit = true;
+    if (cn.reply == CN_WAIT) cn.reply = CN_CANCEL;
+    cn_wipe();
+    pthread_cond_signal(&cn.cv);
+    if (cn.pidfd >= 0) syscall(SYS_pidfd_send_signal, cn.pidfd, SIGKILL, NULL, 0);
+    pthread_mutex_unlock(&cn.mu);
+}

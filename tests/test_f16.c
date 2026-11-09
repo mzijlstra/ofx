@@ -631,3 +631,154 @@ static void test_far_drive(void)
     char small[16];   // (a share's name that doesn't fit: the mount point alone)
     CHECK(far_drive(S("2 1 0:2 / /g rw - fuse.gvfsd-fuse g rw\n"), "/g/smb-share:server=a,share=p", small, sizeof small, &gvfs) && strcmp(small, "/g") == 0);
 }
+
+// Connect to Server's address (step 4): smb:// with a server and a share; no password in it.
+static void test_connect_uri(void)
+{
+    char uri[64], host[32], share[32], why[128];
+#define CU(t) connect_uri(S(t), uri, sizeof uri, host, sizeof host, share, sizeof share, why, sizeof why)
+    CHECK(CU("/home/m") == CONNECT_NOT && CU("~/x") == CONNECT_NOT && CU("smb:/x/y") == CONNECT_NOT && CU("nfs://h/x") == CONNECT_NOT && CU("") == CONNECT_NOT);
+    CHECK(CU(" smb://nas/pub ") == CONNECT_OK && strcmp(uri, "smb://nas/pub") == 0 && strcmp(host, "nas") == 0 && strcmp(share, "pub") == 0);
+    CHECK(CU("SMB://127.0.0.1:4445/priv/sub/x") == CONNECT_OK && strcmp(host, "127.0.0.1") == 0 && strcmp(share, "priv") == 0 && strcmp(uri, "SMB://127.0.0.1:4445/priv/sub/x") == 0);
+    CHECK(CU("smb://michael@nas/home") == CONNECT_OK && strcmp(host, "nas") == 0 && strcmp(share, "home") == 0);
+    CHECK(CU("smb://dom;michael@nas:445/My Share") == CONNECT_OK && strcmp(host, "nas") == 0 && strcmp(share, "My Share") == 0);
+    CHECK(CU("smb://michael:secret@nas/home") == CONNECT_BAD && strstr(why, "No password") && !strstr(why, "secret"));
+    CHECK(CU("smb://nas") == CONNECT_BAD && strstr(why, "Name a share on nas"));
+    CHECK(CU("smb://nas:445/") == CONNECT_BAD && strstr(why, "smb://nas:445/share"));
+    CHECK(CU("smb:///pub") == CONNECT_BAD && strstr(why, "Name a server"));
+    CHECK(CU("smb://u@/pub") == CONNECT_BAD && strstr(why, "Name a server"));
+    CHECK(CU("smb://nas:x/pub") == CONNECT_BAD && strstr(why, "Not a port: x"));
+    CHECK(CU("smb://nas:/pub") == CONNECT_BAD && strstr(why, "Not a port"));
+    CHECK(CU("smb://nas:123456/pub") == CONNECT_BAD);
+    CHECK(CU("smb://nas/p\tb") == CONNECT_BAD && CU("smb://nas/p\x7f") == CONNECT_BAD);
+    CHECK(CU("smb://nas/0123456789012345678901234567890123456789012345678901234567890") == CONNECT_BAD && strstr(why, "too long"));
+    CHECK(CU("smb://0123456789012345678901234567890123/p") == CONNECT_BAD && strstr(why, "too long"));
+    CHECK(CU("smb://h/0123456789012345678901234567890123") == CONNECT_BAD && strstr(why, "too long"));
+    CHECK(CU("smb://h/p/0123456789012345678901234567890123456789012345678901abcdefgh") == CONNECT_BAD && strstr(why, "too long"));   // (a folder in the share past what the address holds)
+#undef CU
+}
+
+// What gio says as it mounts (step 4), as the spike recorded it on the test Samba.
+static void test_gio_ask(void)
+{
+    char d[32];
+    int r;
+    const char *head = "Authentication Required\nEnter user and password for share \xe2\x80\x9cpriv\xe2\x80\x9d on \xe2\x80\x9c" "127.0.0.1\xe2\x80\x9d:\n";
+    char b[512];
+    CHECK(gio_ask(S(""), d, sizeof d, &r) == GIO_ASK_NONE && r == 0 && d[0] == 0);
+    snprintf(b, sizeof b, "%sUser [guest]: ", head);
+    CHECK(gio_ask(str_from_c(b), d, sizeof d, &r) == GIO_ASK_USER && r == 1 && strcmp(d, "guest") == 0);
+    snprintf(b, sizeof b, "%sUser [guest]: Domain [WORKGROUP]: ", head);
+    CHECK(gio_ask(str_from_c(b), d, sizeof d, &r) == GIO_ASK_DOMAIN && strcmp(d, "WORKGROUP") == 0);
+    snprintf(b, sizeof b, "%sUser [guest]: Domain [WORKGROUP]: Password: ", head);
+    CHECK(gio_ask(str_from_c(b), d, sizeof d, &r) == GIO_ASK_PASSWORD && d[0] == 0 && r == 1);
+    snprintf(b, sizeof b, "%sUser [guest]: Domain [WORKGROUP]: Password: \n%sUser [guest]: ", head, head);   // (a wrong one: asked again)
+    CHECK(gio_ask(str_from_c(b), d, sizeof d, &r) == GIO_ASK_USER && r == 2);
+    snprintf(b, sizeof b, "%sUser [guest]: Domain [WORKGROUP]: Password: \n", head);   // (answered: no question now)
+    CHECK(gio_ask(str_from_c(b), d, sizeof d, &r) == GIO_ASK_NONE && r == 1);
+    CHECK(gio_ask(S("Authentication Required\nEnter password for share \xe2\x80\x9cpriv\xe2\x80\x9d on \xe2\x80\x9ch\xe2\x80\x9d:\nDomain [W]: "), d, sizeof d, &r) == GIO_ASK_DOMAIN && strcmp(d, "W") == 0);
+    CHECK(gio_ask(S("User [guest]: "), d, sizeof d, &r) == GIO_ASK_NONE);   // (no header: not gio's question)
+    CHECK(gio_ask(S("Authentication Required\nUser[x]: "), d, sizeof d, &r) == GIO_ASK_NONE);
+    CHECK(gio_ask(S("Authentication Required\nUsers[x]: "), d, sizeof d, &r) == GIO_ASK_NONE);   // (not "User" with a '[' after its last letter)
+    CHECK(gio_ask(S("Authentication Required\nColour [x]: "), d, sizeof d, &r) == GIO_ASK_NONE);
+    CHECK(gio_ask(S("Authentication Required\n[x]: "), d, sizeof d, &r) == GIO_ASK_NONE);
+    CHECK(gio_ask(S("Authentication Required\nUser [a [b]: "), d, sizeof d, &r) == GIO_ASK_NONE);   // (its last '[' after a space only: "a [b" isn't read as b)
+    char tiny[4];
+    CHECK(gio_ask(S("Authentication Required\nUser [michael]: "), tiny, sizeof tiny, &r) == GIO_ASK_USER && strcmp(tiny, "mic") == 0);
+    CHECK(gio_ask(S("Authentication RequiredAuthentication Required\nPassword: "), d, sizeof d, &r) == GIO_ASK_PASSWORD && r == 2);
+}
+
+static void test_gio_why(void)
+{
+    char w[64], p[64];
+    const char *noise = "invoking IsSupported() failed for remote volume monitor with dbus name org.gtk.vfs.UDisks2VolumeMonitor:: GDBus.Error: x\n";
+    char b[512];
+    CHECK(!gio_why(S(""), w, sizeof w) && !gio_why(str_from_c(noise), w, sizeof w));
+    snprintf(b, sizeof b, "%sgio: smb://127.0.0.1:1/pub/: Failed to mount Windows share: Connection refused\n", noise);
+    CHECK(gio_why(str_from_c(b), w, sizeof w) && strcmp(w, "Connection refused") == 0);
+    CHECK(gio_why(S("gio: smb://127.0.0.1:40933/priv/: Location is already mounted\n"), w, sizeof w) && strcmp(w, "Location is already mounted") == 0);
+    CHECK(gio_why(S("gio: smb://h/priv/: Anonymous access denied"), w, sizeof w) && strcmp(w, "Anonymous access denied") == 0);
+    CHECK(gio_why(S("gio: one\ngio: smb://h/x/: two\n"), w, sizeof w) && strcmp(w, "two") == 0);   // (the last)
+    CHECK(gio_why(S("gio: no address here\n"), w, sizeof w) && strcmp(w, "no address here") == 0);
+    CHECK(gio_why(S("gio: smb://h/x/: Failed to mount Windows share: "), w, sizeof w) && strcmp(w, "Failed to mount Windows share: ") == 0);
+    CHECK(gio_why(S("xgio: smb://h/x/: a\n"), w, sizeof w) == false);
+    CHECK(gio_local_path(S("display name: priv on h\nlocal path: /run/u/gvfs/smb-share:port=1,server=h,share=priv\nunix mount: x\n"), p, sizeof p) && strcmp(p, "/run/u/gvfs/smb-share:port=1,server=h,share=priv") == 0);
+    CHECK(gio_local_path(S("local path: /a b/c"), p, sizeof p) && strcmp(p, "/a b/c") == 0);
+    CHECK(!gio_local_path(S("display name: Windows shares on h\nuri: smb://h/\n"), p, sizeof p));
+    CHECK(!gio_local_path(S("x local path: /a\n"), p, sizeof p));
+    CHECK(!gio_local_path(S("local path: rel\n"), p, sizeof p) && !gio_local_path(S("local path: \n"), p, sizeof p));
+    char small[4];
+    CHECK(!gio_local_path(S("local path: /abcdef\n"), small, sizeof small));
+}
+
+// Connect's question's keys (step 4): typing goes to the field with the keys; the password is never
+// copied or cut, and is one word; Tab, Down and Up go round the fields (the user's only when gio
+// asks for one); Enter connects, Alt+G as a guest, Esc cancels, each closing the panel.
+static void test_login_keys(void)
+{
+    Ui u = { 0 };
+    u.panel = UI_PANEL_LOGIN, u.login_at = UI_LOGIN_PASS;
+    ui_line_set(ui_login_line(&u, UI_LOGIN_USER), S("guest"));
+    CHECK(ui_login_line(&u, UI_LOGIN_PASS).secret && !ui_login_line(&u, UI_LOGIN_USER).secret && !ui_login_line(&u, UI_LOGIN_DOMAIN).secret);
+    ui_login_event(&u, ev_ch('p'), STR_EMPTY), ui_login_event(&u, ev_ch('w'), STR_EMPTY), ui_login_event(&u, ev_ch('.'), STR_EMPTY), ui_login_event(&u, ev_ch('x'), STR_EMPTY);
+    CHECK(u.login_pass.len == 4 && memcmp(u.login_pass.b, "pw.x", 4) == 0 && u.login_user.len == 5);
+    ui_login_event(&u, ev_key(UK_WORD_LEFT), STR_EMPTY);
+    CHECK(u.login_pass.caret == 0);
+    ui_login_event(&u, ev_key(UK_WORD_RIGHT), STR_EMPTY);
+    CHECK(u.login_pass.caret == 4);
+    ui_login_event(&u, ev_key(UK_ALL), STR_EMPTY);
+    ui_login_event(&u, ev_key(UK_COPY), STR_EMPTY);
+    CHECK(!u.copied);
+    ui_login_event(&u, ev_key(UK_CUT), STR_EMPTY);
+    CHECK(!u.copied && u.login_pass.len == 4);
+    ui_login_event(&u, ev_key(UK_PASTE), S("se cret\nmore"));   // (a password manager's paste: its first line, over the selection)
+    CHECK(u.login_pass.len == 7 && memcmp(u.login_pass.b, "se cret", 7) == 0);
+    UiLine l;
+    CHECK(ui_line_active(&u, &l) && l.b == u.login_pass.b && l.secret);
+    // The user's field copies as any other.
+    ui_login_event(&u, ev_key(UK_UP), STR_EMPTY);
+    CHECK(u.login_at == UI_LOGIN_DOMAIN && ui_line_active(&u, &l) && l.b == u.login_domain.b);
+    ui_login_event(&u, ev_key(UK_UP), STR_EMPTY);
+    CHECK(u.login_at == UI_LOGIN_USER);
+    ui_login_event(&u, ev_key(UK_ALL), STR_EMPTY), ui_login_event(&u, ev_key(UK_COPY), STR_EMPTY);
+    CHECK(u.copied && u.copy_len == 5);
+    u.copied = false;
+    ui_login_event(&u, ev_key(UK_UP), STR_EMPTY);
+    CHECK(u.login_at == UI_LOGIN_PASS);   // (round)
+    ui_login_event(&u, ev_key(UK_TAB), STR_EMPTY);
+    CHECK(u.login_at == UI_LOGIN_USER);
+    ui_login_event(&u, ev_key(UK_DOWN), STR_EMPTY);
+    CHECK(u.login_at == UI_LOGIN_DOMAIN);
+    u.login_no_user = true;   // (the address names the user: no field for it)
+    ui_login_event(&u, ev_key(UK_TAB), STR_EMPTY), ui_login_event(&u, ev_key(UK_TAB), STR_EMPTY);
+    CHECK(u.login_at == UI_LOGIN_DOMAIN);
+    ui_login_event(&u, ev_key(UK_UP), STR_EMPTY);
+    CHECK(u.login_at == UI_LOGIN_PASS);
+    // The answers, each closing the panel; Alt and another letter does nothing.
+    UiEvent alt_f = { UK_MENU, 'f', UK_NONE }, alt_g = { UK_MENU, 'g', UK_NONE };
+    CHECK(ui_login_event(&u, alt_f, STR_EMPTY).kind == UA_NONE && u.panel == UI_PANEL_LOGIN);
+    CHECK(ui_login_event(&u, ev_key(UK_ENTER), STR_EMPTY).kind == UA_LOGIN && u.panel == UI_PANEL_NONE);
+    u.panel = UI_PANEL_LOGIN;
+    CHECK(ui_login_event(&u, alt_g, STR_EMPTY).kind == UA_LOGIN_GUEST && u.panel == UI_PANEL_NONE);
+    u.panel = UI_PANEL_LOGIN;
+    CHECK(ui_login_event(&u, ev_key(UK_ESC), STR_EMPTY).kind == UA_LOGIN_CANCEL && u.panel == UI_PANEL_NONE);
+    // By the pointer: a field takes the keys (not the user's when there is none); the buttons answer.
+    u.panel = UI_PANEL_LOGIN, u.login_no_user = false;
+    UiInput in = ui_input_none();
+    in.login_field = UI_LOGIN_USER;
+    UiAction a;
+    CHECK(ui_handle_panels(&u, (UiNames){ 0 }, &in, UI_ON_LOGIN, false, &a) && a.kind == UA_NONE && u.login_at == UI_LOGIN_USER);
+    u.login_no_user = true, in.login_field = UI_LOGIN_USER, u.login_at = UI_LOGIN_PASS;
+    ui_handle_panels(&u, (UiNames){ 0 }, &in, UI_ON_LOGIN, false, &a);
+    CHECK(u.login_at == UI_LOGIN_PASS);
+    in = ui_input_none(), in.modal = UI_MODAL_GUEST;
+    CHECK(ui_handle_panels(&u, (UiNames){ 0 }, &in, UI_ON_LOGIN, false, &a) && a.kind == UA_LOGIN_GUEST && u.panel == UI_PANEL_NONE);
+    u.panel = UI_PANEL_LOGIN, in.modal = UI_MODAL_YES;
+    CHECK(ui_handle_panels(&u, (UiNames){ 0 }, &in, UI_ON_LOGIN, false, &a) && a.kind == UA_LOGIN);
+    u.panel = UI_PANEL_LOGIN, in.modal = UI_MODAL_NO;
+    CHECK(ui_handle_panels(&u, (UiNames){ 0 }, &in, UI_ON_LOGIN, false, &a) && a.kind == UA_LOGIN_CANCEL && u.panel == UI_PANEL_NONE);
+    // Go → Connect to Server…: the location line on "smb://", the caret after it, nothing selected.
+    Ui g = { 0 };
+    ui_menu_pick(&g, UM_CONNECT);
+    CHECK(g.focus == UI_FOCUS_EDIT && g.edit_path && g.edit.len == 6 && memcmp(g.edit.b, "smb://", 6) == 0 && g.edit.caret == 6 && g.edit.anchor == 6);
+}

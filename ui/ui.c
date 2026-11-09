@@ -195,6 +195,7 @@ typedef struct {
     // button pressed (1 Remove, 2 Rename, 3 Move Up, 4 Move Down), 0 for none.
     int     bmp_row, bmp_drow, bmp_btn;   // (bmp_btn: UI_BMP_*)
     int     find_step;   // its chevrons: -1 the previous match, 1 the next, 0 none
+    int     login_field; // Connect's question (F16 step 4): a field pressed (UI_LOGIN_*), -1 for none
 } UiInput;
 
 typedef enum {
@@ -268,6 +269,9 @@ typedef enum {
     UA_OPEN_LINE,   // index: a search result found inside files: in the editor at its line (F9 step 4; gui/ says when it has none)
     UA_COPY_PATH,   // the marked entries' paths (or the cursor's; none: the folder shown's) as text, one a line (F13);
                     // all: a folder's instead, index the sidebar row, or UI_COPY_SHOWN the folder shown
+    // Connect to Server's question (F16 step 4): answered (Ui.login_*: gui/ hands them to gio and
+    // wipes the password), as a guest, or not (gio stops)
+    UA_LOGIN, UA_LOGIN_GUEST, UA_LOGIN_CANCEL,
 } UiActionKind;
 enum { UI_COPY_SHOWN = -1 };   // UA_COPY_PATH's index with all: the folder shown (the empty space's menu)
 
@@ -287,7 +291,9 @@ enum { UI_ANS_SKIP = 1, UI_ANS_REPLACE = 2, UI_ANS_KEEP = 3, UI_ANS_CANCEL = 4 }
 // The modal panels' buttons (F5.1): the delete question's, then the clash question's (the answers
 // above, and the "same for the rest" box). The cancel, quit, Empty Trash, Bring back (F11) and
 // Clear Previews (F12) questions use YES and NO, the queue-full note OK; the panels' Close is NO, Open With's Open YES.
-enum { UI_MODAL_YES = 1, UI_MODAL_NO, UI_MODAL_SKIP, UI_MODAL_REPLACE, UI_MODAL_KEEP, UI_MODAL_CANCEL, UI_MODAL_ALL, UI_MODAL_OK };
+enum { UI_MODAL_YES = 1, UI_MODAL_NO, UI_MODAL_SKIP, UI_MODAL_REPLACE, UI_MODAL_KEEP, UI_MODAL_CANCEL, UI_MODAL_ALL, UI_MODAL_OK, UI_MODAL_GUEST };
+// Connect's question's fields (F16 step 4), in their order.
+enum { UI_LOGIN_USER, UI_LOGIN_DOMAIN, UI_LOGIN_PASS, UI_LOGIN_FIELDS };
 
 // The menu bar (F7.1, docs/plan.md "F7 design"; Edit, View and Go F7.4): its menus, each a list of
 // entries; UM_SEP is a line between groups.
@@ -296,7 +302,7 @@ typedef enum {
     UM_UNDO, UM_CUT, UM_COPY, UM_COPY_PATH, UM_PASTE, UM_SELECT_ALL, UM_SELECT_MATCH, UM_INVERT, UM_DUPLICATE, UM_MAKE_LINK, UM_RENAME, UM_TRASH, UM_DELETE, UM_RESTORE,
     UM_RELOAD, UM_SIDE_PLACES, UM_SIDE_TREE, UM_SIDE_NONE, UM_HIDDEN, UM_PERMS_COLS, UM_GROUP_COL, UM_COLORS, UM_SHOW_MENU, UM_SORT_NAME, UM_SORT_SIZE, UM_SORT_MTIME, UM_SORT_REVERSE,
     UM_ZOOM_IN, UM_ZOOM_OUT, UM_ZOOM_RESET, UM_VIEW_LIST, UM_VIEW_ICONS,
-    UM_PARENT, UM_BACK, UM_FORWARD, UM_HOME, UM_TRASH_VIEW, UM_FIND, UM_SEARCH, UM_LOCATION, UM_TERMINAL,
+    UM_PARENT, UM_BACK, UM_FORWARD, UM_HOME, UM_TRASH_VIEW, UM_FIND, UM_SEARCH, UM_LOCATION, UM_CONNECT, UM_TERMINAL,
     UM_ADD_BOOKMARK, UM_EDIT_BOOKMARKS, UM_BM_0, UM_BM_1, UM_BM_2, UM_BM_3, UM_BM_4, UM_BM_5, UM_BM_6, UM_BM_7, UM_BM_MORE,
     UM_SHORTCUTS, UM_ABOUT, UM_PREFERENCES, UM_CLEAR_PREVIEWS,
     UM_OPEN_TAB, UM_EMPTY_TRASH, UM_HERE_PROPS, UM_OPEN_WINDOW, UM_PASTE_INTO, UM_TERMINAL_IN, UM_FOLLOW, UM_BOOKMARK_IT,
@@ -384,6 +390,7 @@ static const struct { const char *label, *word; UiKey cmd; bool runs; char mark;
     [UM_FIND] = { "Find in Folder\xE2\x80\xA6", "find", .cmd = UK_FIND, .runs = true },
     [UM_SEARCH] = { "Search\xE2\x80\xA6", "search", .cmd = UK_SEARCH, .runs = true },   // below the folder shown (F9)
     [UM_LOCATION] = { "Location\xE2\x80\xA6", "location", .cmd = UK_LOCATION, .runs = true },
+    [UM_CONNECT] = { "Connect to Server\xE2\x80\xA6", "connect", .cmd = UK_ITEM0 + UM_CONNECT },   // the location line on "smb://" (F16 step 4)
     [UM_TERMINAL] = { "Terminal Here", "terminal", .cmd = UK_TERMINAL, .runs = true },
     // Bookmarks (F7.5); a bookmark's label is gui/'s (the file's), marked when it is the folder shown
     [UM_ADD_BOOKMARK] = { "Add Bookmark", "add-bookmark", .cmd = UK_ADD_BOOKMARK, .runs = true },
@@ -455,7 +462,7 @@ static const UiMenuItem UI_MENU_VIEW[] = {
     UM_VIEW_LIST, UM_VIEW_ICONS, UM_SEP, UM_CLEAR_PREVIEWS,
 };
 static const UiMenuItem UI_MENU_GO[] = {
-    UM_PARENT, UM_BACK, UM_FORWARD, UM_SEP, UM_HOME, UM_TRASH_VIEW, UM_SEP, UM_FIND, UM_SEARCH, UM_LOCATION, UM_TERMINAL,
+    UM_PARENT, UM_BACK, UM_FORWARD, UM_SEP, UM_HOME, UM_TRASH_VIEW, UM_SEP, UM_FIND, UM_SEARCH, UM_LOCATION, UM_CONNECT, UM_TERMINAL,
 };
 static const UiMenuItem UI_MENU_BOOKMARKS_[] = {
     UM_ADD_BOOKMARK, UM_EDIT_BOOKMARKS, UM_SEP, UM_BM_0, UM_BM_1, UM_BM_2, UM_BM_3, UM_BM_4, UM_BM_5, UM_BM_6, UM_BM_7, UM_BM_MORE,
@@ -534,6 +541,7 @@ static const struct { UiKeySection sec; const char *action; UiKey cmd; const cha
     { KS_MOVE, "Home", UK_HOMEDIR, NULL, NULL },
     { KS_MOVE, "Trash", UK_TRASH_VIEW, NULL, NULL },
     { KS_MOVE, "Location\xE2\x80\xA6", UK_LOCATION, NULL, NULL },
+    { KS_MOVE, "Connect to Server\xE2\x80\xA6", UK_ITEM0 + UM_CONNECT, NULL, NULL },
     { KS_OPEN, "Open", UK_ENTER, NULL, NULL },
     { KS_OPEN, "Open With Other Application\xE2\x80\xA6", UK_SHIFT_ENTER, NULL, NULL },
     { KS_OPEN, "Terminal Here", UK_TERMINAL, NULL, NULL },
@@ -709,8 +717,9 @@ typedef struct {
 } UiPick;
 
 // The panel up, under the questions (ui_on_top): Properties, Open With, Edit Bookmarks, Keyboard
-// Shortcuts, About, the note that the menu bar is hidden, and the branches; UI_PANEL_NONE for none.
-typedef enum { UI_PANEL_NONE, UI_PANEL_PROPS, UI_PANEL_OW, UI_PANEL_BM, UI_PANEL_KEYS, UI_PANEL_ABOUT, UI_PANEL_BAR, UI_PANEL_BRANCHES, UI_PANELS } UiPanel;
+// Shortcuts, About, the note that the menu bar is hidden, the branches, and Connect's question (F16
+// step 4); UI_PANEL_NONE for none.
+typedef enum { UI_PANEL_NONE, UI_PANEL_PROPS, UI_PANEL_OW, UI_PANEL_BM, UI_PANEL_KEYS, UI_PANEL_ABOUT, UI_PANEL_BAR, UI_PANEL_BRANCHES, UI_PANEL_LOGIN, UI_PANELS } UiPanel;
 
 // Which listing is shown. One value (2026-10-28: in_trash and in_search before, two flags tested
 // apart at about 250 places, which could both be set).
@@ -884,6 +893,16 @@ typedef struct {
     // shows (their places in gui/'s list).
     UiPick brp;
     isize  brp_idx[UI_BRANCHES_MAX];
+    // Connect to Server's question (F16 step 4, UI_PANEL_LOGIN, Michael 2026-11-09: asked each time,
+    // with a Guest button): its fields, the one with the keys (UI_LOGIN_*), whether gio asks for a
+    // user (not when the address names one), and whether it asks again (the last was refused). gui/
+    // fills them as gio asks. The password is never shown, copied or kept: gui/ wipes it as it hands
+    // it on, and when the panel goes.
+    UI_TEXT(256) login_user;
+    UI_TEXT(256) login_domain;
+    UI_TEXT(256) login_pass;
+    int    login_at;
+    bool   login_no_user, login_again;
 } Ui;
 
 // The question or panel on top: the one that takes the keys and the pointer, and the one gui/
@@ -907,6 +926,7 @@ typedef enum {
     UI_ON_ABOUT,
     UI_ON_BAR,      // panel == UI_PANEL_BAR: the menu bar just hidden
     UI_ON_BRANCHES, // the branches panel (F12 step 6)
+    UI_ON_LOGIN,    // Connect to Server's question: user, domain, password (F16 step 4)
     UI_ON_KINDS     // (their count: tests/test_f14.c checks each has an owner for its keys)
 } UiOnTop;
 
@@ -1006,7 +1026,8 @@ static UiOnTop ui_on_top(const Ui *u)
     if (u->asking) return UI_ON_CLASH;
     static const UiOnTop OF_PANEL[] = { [UI_PANEL_NONE] = UI_ON_NONE, [UI_PANEL_PROPS] = UI_ON_PROPS, [UI_PANEL_OW] = UI_ON_OW,
                                          [UI_PANEL_BM] = UI_ON_BM, [UI_PANEL_KEYS] = UI_ON_KEYS, [UI_PANEL_ABOUT] = UI_ON_ABOUT,
-                                         [UI_PANEL_BAR] = UI_ON_BAR, [UI_PANEL_BRANCHES] = UI_ON_BRANCHES };
+                                         [UI_PANEL_BAR] = UI_ON_BAR, [UI_PANEL_BRANCHES] = UI_ON_BRANCHES,
+                                         [UI_PANEL_LOGIN] = UI_ON_LOGIN };
     _Static_assert(COUNT(OF_PANEL) == UI_PANELS, "every panel has its UiOnTop: a new one at the end without its entry would read past the table");
     return OF_PANEL[u->panel];
 }
@@ -1032,7 +1053,7 @@ static UiInput ui_input_none(void)
     return (UiInput){ .click = -1, .dclick = -1, .side_click = -1, .header = -1, .click_mods = 0, .bar = UB_NONE, .crumb = -1,
                       .tab_click = -1, .tab_close = -1, .mid_row = -1, .mid_side = -1, .mid_crumb = -1, .modal = 0, .job_x = -1, .side_mode = -1, .side_twisty = -1, .side_eject = -1,
                       .zoom_to = -1, .menu_title = -1, .menu_item = -1, .ctx_row = -1, .ctx_side = -1, .ctx_crumb = -1, .ctx_tab = -1, .prop_box = -1, .pick_row = -1, .pick_drow = -1, .bmp_row = -1, .bmp_drow = -1,
-                      .field = -1 };
+                      .field = -1, .login_field = -1 };
 }
 
 #include "keys.c"

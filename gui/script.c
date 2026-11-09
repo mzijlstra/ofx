@@ -295,9 +295,9 @@ static void script_state(char *out, size_t cap)
     static const char *const MODALS[] = {
         [UI_ON_NONE] = "-", [UI_ON_DELETE] = "delete", [UI_ON_CLASH] = "clash", [UI_ON_CANCEL] = "cancel", [UI_ON_QUIT] = "quit",
         [UI_ON_FULL] = "full", [UI_ON_EMPTY] = "empty", [UI_ON_CLEAR] = "clear-previews", [UI_ON_PROPS] = "props", [UI_ON_OW] = "open-with",
-        [UI_ON_BM] = "bookmarks", [UI_ON_KEYS] = "shortcuts", [UI_ON_ABOUT] = "about", [UI_ON_BAR] = "menubar", [UI_ON_RESTORE] = "restore", [UI_ON_BRANCHES] = "branches",
+        [UI_ON_BM] = "bookmarks", [UI_ON_KEYS] = "shortcuts", [UI_ON_ABOUT] = "about", [UI_ON_BAR] = "menubar", [UI_ON_RESTORE] = "restore", [UI_ON_BRANCHES] = "branches", [UI_ON_LOGIN] = "login",
     };
-    _Static_assert(sizeof MODALS / sizeof MODALS[0] == UI_ON_BRANCHES + 1, "a name for each panel");
+    _Static_assert(COUNT(MODALS) == UI_ON_KINDS, "a name for each panel");
     // The path buttons' labels, '|' between; the cursor's folder count (- unknown, ? unreadable).
     char crumbs[2048] = "", cnt[32] = "-";
     for (int i = 0; i < app.crumbs.n; i++) {
@@ -742,6 +742,15 @@ static void script_state(char *out, size_t cap)
     char listword[sizeof app.far_note];
     sw(out, cap, &len, "listword=%s ", state_word(listword, sizeof listword, str_from_c(word)));
     pthread_mutex_unlock(&far.mu);
+    // Connect to Server (F16 step 4): the thread's phase (0 idle, 1 gio runs, 2 a question, 3 a
+    // result), the questions put; the question up, its field with the keys, asked again, no user
+    // field; its user, and the password's length only (never its text).
+    pthread_mutex_lock(&cn.mu);
+    sw(out, cap, &len, "conn=%d connasked=%d ", (int)cn.phase, cn.asked);
+    pthread_mutex_unlock(&cn.mu);
+    char loginuser[256];
+    sw(out, cap, &len, "login=%d loginat=%d loginagain=%d loginnouser=%d loginuser=%s loginpass=%d ", app.ui.panel == UI_PANEL_LOGIN, app.ui.login_at, app.ui.login_again,
+       app.ui.login_no_user, state_word(loginuser, sizeof loginuser, (Str){ app.ui.login_user.b, app.ui.login_user.len }), app.ui.login_pass.len);
     sw(out, cap, &len, "windows=%d ", windows);
     sw(out, cap, &len, "siderows=%d ", app.ui.side.rows);
     sw(out, cap, &len, "sidetop=%td ", app.ui.side.top);

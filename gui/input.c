@@ -136,6 +136,8 @@ static Hit hit_at(float x, float y)
         h.pick_field = pick && !h.toggle && in_box(Clay_GetElementId(cz(field_id)), x, y);   // (Open With's toggles sit in its field)
         for (int r = 0; modal_kind() == UI_ON_BM && r < app.ui.bmp_list.rows && h.bmp_row < 0; r++)
             if (in_box(CLAY_IDI("bmp-row", r), x, y)) h.bmp_row = r;
+        for (int f = 0; modal_kind() == UI_ON_LOGIN && f < UI_LOGIN_FIELDS && h.login_field < 0; f++)
+            if (in_box(CLAY_IDI("login-field", f), x, y)) h.login_field = f;
         for (int k = 1; modal_kind() == UI_ON_BM && k <= UI_BMP_BTNS && !h.bmp_btn; k++)
             if (in_box(CLAY_IDI("bmp-btn", k), x, y)) h.bmp_btn = k;
         return h;
@@ -216,6 +218,7 @@ static void press_at(UiInput *in, float x, float y, int mods)
         else in->bmp_row = h.bmp_row;
     }
     in->bmp_btn = h.bmp_btn;
+    in->login_field = h.login_field;
     in->toggle = h.toggle;
     in->find_x = h.find_x, in->find_step = h.find_step;
     in->field = h.field, in->field_toggle = h.field_toggle, in->inside_btn = h.inside_btn;

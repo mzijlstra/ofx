@@ -140,19 +140,21 @@ static void ui_edit_close(Ui *u)
 // the rename and location lines, the find bar, the search field and its Containing (F9), Open
 // With's filter, Edit Bookmarks' name and Keyboard Shortcuts' filter. Its bytes and at most how many,
 // the caret and the selection's other end (bytes), and whether a '/' may go in (not in a name, find,
-// the search field or Containing).
+// the search field or Containing). A secret one (Connect's password, F16 step 4) is never copied
+// or cut, and is one word to Ctrl and the arrows (where its words end is something it tells).
 typedef struct {
     char *b;
     int  *len, *caret, *anchor;
     int   max;
     bool  slash;
+    bool  secret;
 } UiLine;
 
-#define UI_TEXT_LINE(t, slash) ((UiLine){ (t).b, &(t).len, &(t).caret, &(t).anchor, (int)sizeof (t).b - 1, (slash) })
+#define UI_TEXT_LINE(t, slash) ((UiLine){ (t).b, &(t).len, &(t).caret, &(t).anchor, (int)sizeof (t).b - 1, (slash), false })
 
 static UiLine ui_edit_line(Ui *u)
 {
-    return (UiLine){ u->edit.b, &u->edit.len, &u->edit.caret, &u->edit.anchor, ui_edit_max(u), u->edit_path };
+    return (UiLine){ u->edit.b, &u->edit.len, &u->edit.caret, &u->edit.anchor, ui_edit_max(u), u->edit_path, false };
 }
 
 static UiLine ui_pick_line(UiPick *p)   // (a picker's filter: Open With's, the branches'; a name may hold a '/')
@@ -163,6 +165,16 @@ static UiLine ui_pick_line(UiPick *p)   // (a picker's filter: Open With's, the 
 static UiLine ui_bmp_line(Ui *u)
 {
     return UI_TEXT_LINE(u->bmp_name, true);
+}
+
+// Connect's question's field at (UI_LOGIN_*): the password's is secret.
+static UiLine ui_login_line(Ui *u, int at)
+{
+    if (at == UI_LOGIN_USER) return UI_TEXT_LINE(u->login_user, true);
+    if (at == UI_LOGIN_DOMAIN) return UI_TEXT_LINE(u->login_domain, true);
+    UiLine l = UI_TEXT_LINE(u->login_pass, true);
+    l.secret = true;
+    return l;
 }
 
 static UiLine ui_keys_line(Ui *u)
@@ -301,6 +313,7 @@ static void ui_line_paste(UiLine l, Str text)
         i = e;
     }
     if (n > 0) ui_line_put(l, b, n);
+    if (l.secret) explicit_bzero(b, (size_t)n);
 }
 
 // A word's edges for Ctrl and the arrows (2026-10-28): from at, back over what isn't a word (spaces,
@@ -308,6 +321,7 @@ static void ui_line_paste(UiLine l, Str text)
 // word to its end (1). A word is ui_word_byte's: letters, digits, '_', anything past ASCII.
 static int ui_line_word(UiLine l, int at, int dir)
 {
+    if (l.secret) return dir < 0 ? 0 : *l.len;
     if (dir < 0) {
         while (at > 0 && !ui_word_byte((unsigned char)l.b[at - 1])) at--;
         while (at > 0 && ui_word_byte((unsigned char)l.b[at - 1])) at--;
@@ -349,9 +363,9 @@ static bool ui_line_do(Ui *u, UiLine l, UiEvent e, Str paste)
     case UK_DELETE: ui_line_cut(l, lo < hi ? lo : *l.caret, lo < hi ? hi : ui_line_fwd(l, *l.caret)); return true;
     case UK_WORD_BACKSPACE: ui_line_cut(l, lo < hi ? lo : ui_line_word(l, *l.caret, -1), lo < hi ? hi : *l.caret); return true;
     case UK_WORD_DELETE: ui_line_cut(l, lo < hi ? lo : *l.caret, lo < hi ? hi : ui_line_word(l, *l.caret, 1)); return true;
-    case UK_COPY: ui_line_copy(u, l); return true;
+    case UK_COPY: if (!l.secret) ui_line_copy(u, l); return true;
     case UK_CUT:
-        if (ui_line_copy(u, l)) ui_line_cut(l, lo, hi);
+        if (!l.secret && ui_line_copy(u, l)) ui_line_cut(l, lo, hi);
         return true;
     case UK_PASTE: ui_line_paste(l, paste); return true;
     default: return false;
@@ -372,8 +386,10 @@ static UiLineHit ui_line_key(Ui *u, UiLine l, UiEvent e, Str paste)
     char was[PATH_MAX];
     int was_len = *l.len;
     memcpy(was, l.b, (size_t)was_len);
-    if (!ui_line_do(u, l, e, paste)) return UI_LINE_NOT;
-    return *l.len != was_len || memcmp(was, l.b, (size_t)was_len) != 0 ? UI_LINE_CHANGED : UI_LINE_MOVED;
+    bool did = ui_line_do(u, l, e, paste);
+    UiLineHit hit = !did ? UI_LINE_NOT : *l.len != was_len || memcmp(was, l.b, (size_t)was_len) != 0 ? UI_LINE_CHANGED : UI_LINE_MOVED;
+    if (l.secret) explicit_bzero(was, (size_t)was_len);   // (no copy of a password left on the stack)
+    return hit;
 }
 
 // The line that has the keys now, in ui_handle's order (the panel on top's field; none under a
@@ -386,6 +402,7 @@ static bool ui_line_active(Ui *u, UiLine *out)
     else if (on == UI_ON_BRANCHES && !u->brp.in_list) l = ui_pick_line(&u->brp);
     else if (on == UI_ON_BM && u->bmp_naming) l = ui_bmp_line(u);
     else if (on == UI_ON_KEYS) l = ui_keys_line(u);
+    else if (on == UI_ON_LOGIN) l = ui_login_line(u, u->login_at);
     else if (on != UI_ON_NONE) return false;   // (a question, or a panel without a field)
     else if (u->focus == UI_FOCUS_EDIT) l = ui_edit_line(u);
     else if (u->focus == UI_FOCUS_SEARCH && u->view == UI_VIEW_SEARCH) l = ui_search_line(u);

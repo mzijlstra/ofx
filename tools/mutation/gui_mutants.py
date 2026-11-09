@@ -1097,4 +1097,25 @@ MUTANTS = [
     ('gui/actions.c', "        if (!kind[i]) kind[i] = f < far_r.n && far_r.f[f].len == 1 ? far_r.f[f].p[0] : '-', f++;", "        if (!kind[i]) kind[i] = 'o', f++;", 'f16'),
     ('gui/actions.c', '    for (isize w = 0; far_at && w < nw && w < far_r.n; w++) snprintf(names[wait[w]]', '    for (isize w = 0; far_at && w < nw && w < far_r.n; w++) snprintf(names[w]', 'f16'),
     ('gui/folder.c', '        if (app.far_loading && app.far_then == FAR_THEN_SHOW) app.far_then = FAR_THEN_UP;', '        if (app.far_loading) app.far_then = FAR_THEN_UP;', 'f16'),
+    # F16 step 4: Connect to Server (gui/connect.c), against the test Samba
+    ('gui/connect.c', '        if (rounds > answered) {   // gio asks (again): the user answers', '        if (answered == 0) {', 'net'),
+    ('gui/connect.c', '            answered = rounds;', '', 'net'),
+    ('gui/connect.c', '            cn.ask_user = k == GIO_ASK_USER, cn.again = rounds > 1;', '            cn.ask_user = k == GIO_ASK_USER, cn.again = false;', 'net'),
+    ('gui/connect.c', '            snprintf(cn.def_user, sizeof cn.def_user, "%s", k == GIO_ASK_USER ? def : "");', '', 'net'),
+    ('gui/connect.c', '        cn_line(in[1], k == GIO_ASK_USER ? user : k == GIO_ASK_DOMAIN ? domain : pass);', '        cn_line(in[1], k == GIO_ASK_USER ? user : k == GIO_ASK_DOMAIN ? pass : domain);', 'net'),
+    # (Dropped, a race no script can force: Cancel and Guest killing gio, not closing its input. The
+    # Cancel's unmount covers the guest mount gvfs makes after a killed gio, unless gvfs finishes it
+    # after the unmount; a closed input makes gio wait for gvfs's answer first, so there is no race.)
+    ('gui/connect.c', '        if (mounted) {', '        if (0) {', 'net'),
+    ('gui/connect.c', ' || strcmp(why, "Location is already mounted") == 0;', ';', 'net'),
+    ('gui/connect.c', '    if (!ok && guest && !cancelled) ok = cn_mount(true,', '    if (0) ok = cn_mount(true,', 'net'),
+    ('gui/connect.c', 'ok = cn_mount(false, why, sizeof why, &cancelled, &guest) && cn_folder(path, sizeof path, why, sizeof why);', 'ok = cn_mount(false, why, sizeof why, &cancelled, &guest) && (cn_folder(path, sizeof path, why, sizeof why) || true);', 'net'),
+    ('gui/connect.c', '    if (busy) return set_status(true, "Still connecting to %s", cn_name()), true;', '', 'net'),
+    ('gui/connect.c', '        cn.reply = k == UA_LOGIN ? CN_ANSWER : k == UA_LOGIN_GUEST ? CN_GUEST : CN_CANCEL;', '        cn.reply = k == UA_LOGIN ? CN_ANSWER : CN_CANCEL;', 'net'),
+    ('gui/connect.c', '    pthread_mutex_unlock(&cn.mu);\n    connect_fields_clear();\n    if (k == UA_LOGIN_CANCEL)', '    pthread_mutex_unlock(&cn.mu);\n    if (k == UA_LOGIN_CANCEL)', 'net'),
+    ('gui/connect.c', '        if (!cn.again) {   // (asked again: what was typed stays, save the password)', '        if (1) {', 'net'),
+    ('gui/connect.c', '        u->login_at = cn.ask_user && u->login_user.len == 0 ? UI_LOGIN_USER : UI_LOGIN_PASS;', '        u->login_at = UI_LOGIN_USER;', 'net'),
+    ('gui/connect.c', '    if (!ok) return set_status(true, "Can\'t connect to %s: %s", cn_name(), why[0] ? why : "no reason given"), true;', '    if (!ok) return true;', 'net'),
+    ('gui/actions.c', '    if (connect_start((Str){ app.ui.edit.b, app.ui.edit.len })) return;   // smb://… (F16 step 4)', '', 'net'),
+    ('gui/input.c', '            if (in_box(CLAY_IDI("login-field", f), x, y)) h.login_field = f;', '', 'net'),
 ]
