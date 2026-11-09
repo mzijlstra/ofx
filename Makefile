@@ -16,7 +16,7 @@ PREFIX  ?= $(HOME)/.local
 
 .PHONY: all release test test-fm1 install clean FORCE
 
-all: build/ofx build/ofx-clean build/ofx-fm1
+all: build/ofx build/ofx-clean build/ofx-fm1 build/ofx-probe   # (ofx-probe: the README's ofx.conf copy, which make test checks)
 
 # F14's pointer in the test sway (tools/gui/vptr.c, 2026-11-05), as vkbd is the keyboard.
 VPTR_XML = tools/gui/wlr-virtual-pointer-unstable-v1.xml
@@ -37,26 +37,26 @@ build/vkbd: tools/gui/vkbd.c tools/gui/testsway.h $(VKBD_XML) Makefile | build
 	wayland-scanner private-code $(VKBD_XML) build/virtual-keyboard-unstable-v1-protocol.c
 	$(CC) $(CFLAGS) -Ibuild -o $@ tools/gui/vkbd.c build/virtual-keyboard-unstable-v1-protocol.c $(shell pkg-config --cflags --libs wayland-client xkbcommon)
 
-build/ofx-probe: tools/probe.c $(wildcard base/*.c base/*.h fs/*.c ui/*.c) | build
+build/ofx-probe: tools/probe.c $(wildcard base/*.c base/*.h fs/*.c ui/*.c) Makefile | build
 	$(CC) $(CFLAGS) $(IMG_INC) $(DEBUG) -o $@ tools/probe.c $(IMG_LIBS) -lm
 
-build/ofx-clean: tools/clean.c $(wildcard base/*.c base/*.h fs/*.c) | build
+build/ofx-clean: tools/clean.c $(wildcard base/*.c base/*.h fs/*.c) Makefile | build
 	$(CC) $(CFLAGS) $(IMG_INC) $(DEBUG) -o $@ tools/clean.c $(IMG_LIBS) -lm
 
-build/release/ofx-clean: tools/clean.c $(wildcard base/*.c base/*.h fs/*.c) | build/release
+build/release/ofx-clean: tools/clean.c $(wildcard base/*.c base/*.h fs/*.c) Makefile | build/release
 	$(CC) $(CFLAGS) $(IMG_INC) $(RELEASE) -o $@ tools/clean.c $(IMG_LIBS) -lm
 
 # FileManager1 on the session bus (2026-10-26): sd-bus, from libsystemd.
-build/ofx-fm1: tools/fm1.c $(wildcard base/*.c base/*.h fs/*.c) | build
+build/ofx-fm1: tools/fm1.c $(wildcard base/*.c base/*.h fs/*.c) Makefile | build
 	$(CC) $(CFLAGS) $(IMG_INC) $(DEBUG) -o $@ tools/fm1.c $(IMG_LIBS) -lsystemd -lm
 
-build/release/ofx-fm1: tools/fm1.c $(wildcard base/*.c base/*.h fs/*.c) | build/release
+build/release/ofx-fm1: tools/fm1.c $(wildcard base/*.c base/*.h fs/*.c) Makefile | build/release
 	$(CC) $(CFLAGS) $(IMG_INC) $(RELEASE) -o $@ tools/fm1.c $(IMG_LIBS) -lsystemd -lm
 
 # The tests warn of a function nothing calls: they take in every fs/ and ui/ function, so one unused
 # there is dead (2026-10-28: state_save had 20 checks on code ofx no longer ran). The binaries can't:
 # each takes in all of fs/ and uses part of it.
-build/test: $(wildcard tests/*.c) $(wildcard base/*.c base/*.h fs/*.c ui/*.c) gui/glfwkeys.c | build
+build/test: $(wildcard tests/*.c) $(wildcard base/*.c base/*.h fs/*.c ui/*.c) gui/glfwkeys.c Makefile | build
 	$(CC) $(CFLAGS) -Wunused-function $(IMG_INC) -isystem vendor/raylib/src/external/glfw/include $(DEBUG) -o $@ tests/test.c $(IMG_LIBS) -lm
 
 # Then ofx-clean as its timer runs it, reading ofx.conf (a scratch cache and config, the guard on).

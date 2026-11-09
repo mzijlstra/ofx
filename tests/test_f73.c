@@ -261,10 +261,7 @@ static UiAction ow_keys(Ui *u, int n, ...)
     in.app_name = OW_APPS, in.app_n = COUNT(OW_APPS);
     va_list ap;
     va_start(ap, n);
-    for (int i = 0; i < n; i++) {
-        int k = va_arg(ap, int);
-        in.ev[in.nev++] = k >= 0x100 ? ev_ch((u32)(k - 0x100)) : k < 0 ? ui_event_of((UiChord){ (u32)-k, UI_MOD_ALT }) : ev_key((UiKey)k);
-    }
+    ev_codes(&in, n, ap);
     va_end(ap);
     return ui_handle(u, names, &in);
 }

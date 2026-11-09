@@ -19,7 +19,7 @@ static void edit_keys(Ui *u, UiNames names, int n, ...)
     UiInput in = ui_input_none();
     va_list ap;
     va_start(ap, n);
-    for (int i = 0; i < n; i++) in.ev[in.nev++] = ev_key((UiKey)va_arg(ap, int));
+    ev_codes(&in, n, ap);
     va_end(ap);
     ui_handle(u, names, &in);
 }

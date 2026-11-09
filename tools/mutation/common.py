@@ -16,3 +16,16 @@ def rmtree(path):
             except OSError:
                 pass
     shutil.rmtree(path, ignore_errors=True)
+
+
+# Each mutant's old text must occur exactly once in its file under root (else it would land on a
+# second site unseen, or on none): those that don't, printed. True when any.
+def check_unique(root, mutants):
+    bad = 0
+    for i, m in enumerate(mutants):
+        f, old = m[0], m[1]
+        n = open(os.path.join(root, f)).read().count(old)
+        if n != 1:
+            print(f'#{i} {f}: old text occurs {n} times, not once: {old!r}')
+            bad += 1
+    return bad > 0

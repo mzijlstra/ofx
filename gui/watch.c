@@ -45,7 +45,6 @@ static struct {
     atomic_int  trash_wd[TRASH_DIRS_MAX];   // each trash folder's files/, 0 for none (inotify's start at 1)
     int         udev_wd;       // udev's database folder: a drive plugged in or pulled (2026-10-30)
     atomic_bool list_ready, theme_ready, mounts_ready, trash_ready, conf_ready, git_ready;
-    atomic_int  batches;       // how many batches it raised, for the tests' state line
     // The thread's re-watch of the theme folder (an add, then its store) against main's release of a
     // wd it no longer wants: inotify gives a folder one wd, so between the two main could take the
     // theme's watch away as the old folder's (the F15 code-health review).
@@ -242,7 +241,6 @@ static void *watch_thread(void *arg)
         if (mounts) atomic_store(&watch.mounts_ready, true);
         if (trash) atomic_store(&watch.trash_ready, true);
         if (conf) atomic_store(&watch.conf_ready, true);
-        atomic_fetch_add(&watch.batches, 1);
         wake_main();
     }
     return NULL;

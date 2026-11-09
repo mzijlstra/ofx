@@ -57,6 +57,11 @@ key ctrl-1
 # Outside the repository: none.
 key backspace
 wait-for 3000 sel=repo gitshown=0 gitn=0
+# A change here, well within the test's 3 s gap: asked at once, no timer put off for it (no git
+# runs outside a repository; a timer would wake the window for nothing).
+sh printf 'o\n' > "$OFX_DIR/outside.txt"
+wait-for 2000 n=2 sel=repo
+expect gitdue=0
 key enter
 wait-for 3000 gitshown=1
 # git-status = off (ofx.conf): none; on again: back.

@@ -179,10 +179,7 @@ static UiAction props_keys(Ui *u, int n, ...)
     UiInput in = ui_input_none();
     va_list ap;
     va_start(ap, n);
-    for (int i = 0; i < n; i++) {
-        int k = va_arg(ap, int);
-        in.ev[in.nev++] = k >= 0x100 ? ev_ch((u32)(k - 0x100)) : ev_key((UiKey)k);
-    }
+    ev_codes(&in, n, ap);
     va_end(ap);
     return ui_handle(u, (UiNames){ name_at, NULL, NULL }, &in);
 }

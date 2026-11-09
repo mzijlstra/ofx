@@ -589,9 +589,7 @@ static void script_state(char *out, size_t cap)
     sw(out, cap, &len, "scale=%d ", app.icon_scale);
     sw(out, cap, &len, "w=%d ", GetScreenWidth());
     sw(out, cap, &len, "h=%d ", GetScreenHeight());
-    sw(out, cap, &len, "reloads=%d ", app.reloads);
     sw(out, cap, &len, "themes=%d ", app.themes);
-    sw(out, cap, &len, "batches=%d ", atomic_load(&watch.batches));
     sw(out, cap, &len, "frame_ms_max=%.1f ", (double)frame_us_max / 1000.0);
     sw(out, cap, &len, "icon=%s ", icon);
     sw(out, cap, &len, "shown=%d ", app.show_hidden);
@@ -614,7 +612,6 @@ static void script_state(char *out, size_t cap)
     sw(out, cap, &len, "confirming=%d ", app.ui.confirming);
     sw(out, cap, &len, "asking=%d ", app.ui.asking);
     sw(out, cap, &len, "job=%s ", !oldest ? "-" : JOB_PHASES[atomic_load(&oldest->j.phase)]);
-    sw(out, cap, &len, "done=%lld/%lld ", oldest ? atomic_load(&oldest->j.files_done) : 0LL, oldest ? atomic_load(&oldest->j.files_total) : 0LL);
     sw(out, cap, &len, "undo=%s ", UNDO_KINDS[undo.kind]);
     sw(out, cap, &len, "clip=%td ", own.n);
     sw(out, cap, &len, "cut=%d ", own.cut);
@@ -640,15 +637,12 @@ static void script_state(char *out, size_t cap)
     sw(out, cap, &len, "waiting=%d ", jobs.nwait);
     sw(out, cap, &len, "jobrows=%s ", joblabels);
     sw(out, cap, &len, "jobkey=%s ", jobkey);
-    sw(out, cap, &len, "jobline=%d ", oldest ? oldest->line.reached : 0);
     sw(out, cap, &len, "jobspeed=%d ", oldest && oldest->line.now > 0);
     sw(out, cap, &len, "clashjob=%s ", clashjob);
     sw(out, cap, &len, "sides=%s ", sides[0] ? sides : "-");
     sw(out, cap, &len, "spaced=%d ", spaced);
     sw(out, cap, &len, "sidemode=%s ", SIDE_MODES_W[app.ui.side_mode]);
-    sw(out, cap, &len, "treen=%d ", app.ui.side_mode == SIDE_TREE ? tree.n : 0);
     sw(out, cap, &len, "treecur=%s ", treecur);
-    sw(out, cap, &len, "treerow=%td ", app.ui.side.sel - app.ui.side.top);
     sw(out, cap, &len, "treehere=%d ", treehere);
     sw(out, cap, &len, "trash=%d ", app.ui.view == UI_VIEW_TRASH);
     sw(out, cap, &len, "sidehover=%d ", app.hov.side);
@@ -661,7 +655,6 @@ static void script_state(char *out, size_t cap)
     sw(out, cap, &len, "cells=%d ", app.grid_cells);
     sw(out, cap, &len, "cellfirst=%td ", app.grid_first);
     sw(out, cap, &len, "celllast=%td ", app.grid_last);
-    sw(out, cap, &len, "fulllines=%d ", app.grid_full_lines);
     sw(out, cap, &len, "celllines=%d ", app.grid_hover_lines);
     sw(out, cap, &len, "cellcut=%d ", app.grid_hover_cut);
     sw(out, cap, &len, "iconpx=%d ", entry_px());
@@ -765,11 +758,8 @@ static void script_state(char *out, size_t cap)
     sw(out, cap, &len, "owapp=%s ", owapp);
     sw(out, cap, &len, "owicon=%s ", owicon);
     sw(out, cap, &len, "owtex=%d ", owtex);
-    sw(out, cap, &len, "owshown=%td ", ow.shown);
     sw(out, cap, &len, "owtype=%s ", ow.type[0] ? ow.type : "-");
     sw(out, cap, &len, "owfiles=%td ", ow.n);
-    sw(out, cap, &len, "owrows=%d ", app.ui.ow.list.rows);
-    sw(out, cap, &len, "owtop=%td ", app.ui.ow.list.top);
     sw(out, cap, &len, "owopts=%s ", owopts);
     sw(out, cap, &len, "owbad=%d ", app.ui.ow.m.bad);
     sw(out, cap, &len, "owdef=%d ", app.ui.ow_def);

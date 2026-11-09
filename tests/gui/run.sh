@@ -70,8 +70,11 @@ git_env() {   # in a scratch repository's subshell: git's own config files out o
 menu_tree() {   # <home>/tree for the menus' groups (f74, f8): sub/, a.txt (3 bytes), b.txt (10), c.txt (1), .hid
     mkdir -p "$1/tree/sub"; printf aaa > "$1/tree/a.txt"; printf 0123456789 > "$1/tree/b.txt"; printf c > "$1/tree/c.txt"; : > "$1/tree/.hid"
 }
-home_tree() {   # $base/<name> as T, emptied (made writable first: a run that failed may have left a read-only folder), H its home
-    T=$base/$1; [ ! -d "$T" ] || chmod -R u+rwx "$T"; rm -rf "$T"; H=$T/home
+fresh() {   # $base/<name> as T, emptied (made writable first: a run that stopped early, OFX_GUI_FAIL_FAST, may have left a read-only folder: f12g, f13e, f7)
+    T=$base/$1; [ ! -d "$T" ] || chmod -R u+rwx "$T"; rm -rf "$T"
+}
+home_tree() {   # fresh, with H its home
+    fresh "$1"; H=$T/home
 }
 tree() {   # a fresh <T>/tree
     rm -rf "$1" && mkdir -p "$1/tree/adir" "$1/tree/bdir"
@@ -83,7 +86,7 @@ T=$base/browse; tree "$T"
 rs browse -- "$T/tree"
 fi
 if want big; then
-T=$base/big; rm -rf "$T"; mkdir -p "$T/tree"; (cd "$T/tree" && seq -f 'f%g' 0 9999 | xargs touch)
+fresh big; mkdir -p "$T/tree"; (cd "$T/tree" && seq -f 'f%g' 0 9999 | xargs touch)
 rs big -- "$T/tree"
 fi
 if want gone; then
@@ -95,7 +98,7 @@ T=$base/watchgap; tree "$T"
 rs watchgap OFX_TEST_WATCH_DELAY_MS=300 -- "$T/tree"
 fi
 if want f2; then
-T=$base/f2; rm -rf "$T"; mkdir -p "$T/tree/adir" "$T/tree/bdir" "$T/config/gtk-3.0"
+fresh f2; mkdir -p "$T/tree/adir" "$T/tree/bdir" "$T/config/gtk-3.0"
 printf '%030d' 0 > "$T/tree/apple.txt"; printf '%010d' 0 > "$T/tree/Banana.txt"; printf '%020d' 0 > "$T/tree/cherry.txt"
 printf '%05d' 0 > "$T/tree/.dot"; touch "$T/tree/adir/in-a.txt" "$T/tree/bdir/in-b.txt"
 touch -d 2024-01-03 "$T/tree/apple.txt"; touch -d 2024-01-01 "$T/tree/Banana.txt"; touch -d 2024-01-02 "$T/tree/cherry.txt"
@@ -104,7 +107,7 @@ printf 'file://%s/tree/bdir Bee\nfile://%s/tree Tree\n' "$T" "$T" > "$T/config/g
 rs f2 -- "$T/tree"
 fi
 if want f3; then
-T=$base/f3; rm -rf "$T"; mkdir -p "$T/tree/adir" "$T/tree/bdir" "$T/data"
+fresh f3; mkdir -p "$T/tree/adir" "$T/tree/bdir" "$T/data"
 touch "$T/tree/adir/inner.txt" "$T/tree/a.txt" "$T/tree/b.txt" "$T/tree/c.txt"
 head -c 8388608 /dev/urandom > "$T/tree/big.bin"
 rs f3 OFX_TEST_COPY_DELAY_MS=150 -- "$T/tree"
@@ -150,7 +153,7 @@ fi
 if want f6; then
 # F6: a bookmark, a mount list of its own (OFX_TEST_MOUNTINFO), then f6b on the same tree: the
 # sidebar's mode came back from the state file.
-T=$base/f6; [ -d "$T" ] && chmod -R u+rwx "$T"; rm -rf "$T"   # a failed run can leave f6's locked folder
+fresh f6   # (a failed run can leave f6's locked folder)
 mkdir -p "$T/tree/adir" "$T/tree/bdir" "$T/config/gtk-3.0" "$T/data"
 touch "$T/tree/adir/inner.txt" "$T/tree/b.txt" "$T/tree/c.txt"; printf abc > "$T/tree/a.txt"
 printf 'file://%s/tree/bdir Bee\n' "$T" > "$T/config/gtk-3.0/bookmarks"
@@ -167,7 +170,7 @@ fi
 if want usb; then
 # Unmounted drives (2026-10-30): a block device folder and a udev database of the run's own (the
 # script adds and removes drives in them), mounted by run-script's fake udisksctl under media/.
-T=$base/usb; rm -rf "$T"; mkdir -p "$T/tree/adir" "$T/sys" "$T/udevdb" "$T/media" "$T/home"
+fresh usb; mkdir -p "$T/tree/adir" "$T/sys" "$T/udevdb" "$T/media" "$T/home"
 touch "$T/tree/a.txt"
 mi btrfs
 rs usb OFX_TEST_HOME="$T/home" OFX_TEST_MEDIA="$T/media" OFX_TEST_MOUNTINFO="$T/mountinfo" OFX_TEST_SYSBLOCK="$T/sys" OFX_TEST_UDEV="$T/udevdb" -- "$T/tree"
@@ -223,13 +226,13 @@ rs f11r -- "$T/tree/top.txt"
 printf 'window 6161 9999999999 0 closed %s\n' "$T/tree/sub1" >> "$T/state/ofx/state"
 rs f11s -- "$T/tree"
 # The table's strings in 8 KiB, a name of 200 bytes kept again and again (f11t)
-T=$base/f11t; rm -rf "$T"; mkdir -p "$T/tree/d"; mi btrfs
+fresh f11t; mkdir -p "$T/tree/d"; mi btrfs
 touch "$T/tree/d/a" "$T/tree/d/$(printf 'x%.0s' $(seq 200))"
 rs f11t OFX_TEST_FOLDERS_MEM=8192 OFX_TEST_MOUNTINFO="$T/mountinfo" -- "$T/tree"
 fi
 if want f10; then
 # F10 step 1: ofx.conf, made at the start in the run's own config folder (run-script's).
-T=$base/f10; rm -rf "$T"; mkdir -p "$T/tree/target" "$T/tree/node_modules"
+fresh f10; mkdir -p "$T/tree/target" "$T/tree/node_modules"
 touch -d '2025-01-02 03:04:05' "$T/tree/a.txt"; touch "$T/tree/target/x.txt" "$T/tree/node_modules/x.txt"
 cp "$here/f64/wide.png" "$T/tree/z.png"
 rs f10 -- "$T/tree"
@@ -241,7 +244,7 @@ rs f10d -- "$T/tree"
 fi
 if want f62; then
 # F6.2: the icon view, then f62b on the same tree: the view came back from the state file.
-T=$base/f62; rm -rf "$T"; mkdir -p "$T/tree/adir" "$T/tree/bdir"
+fresh f62; mkdir -p "$T/tree/adir" "$T/tree/bdir"
 touch "$T/tree/adir/inner.txt" "$T/tree/bdir/bin.txt" "$T/tree/a rather long file name that wraps over lines.txt" \
       "$T/tree/verylongnamewithoutanybreaksatallhere.bin"
 for i in $(seq -w 1 20); do touch "$T/tree/f$i"; done
@@ -252,17 +255,17 @@ rs f62c OFX_TEST_ICONS_MAX=2 OFX_TEST_MOUNTINFO="$T/mountinfo" -- "$T/tree"
 fi
 if want f63; then
 # F6.3: the icon view's sizes, then f63b on the same tree: the size came back from the state file.
-T=$base/f63; rm -rf "$T"; mkdir -p "$T/tree"
+fresh f63; mkdir -p "$T/tree"
 for i in $(seq -w 1 60); do touch "$T/tree/f$i"; done
 mi btrfs
 rs f63 OFX_TEST_MOUNTINFO="$T/mountinfo" -- "$T/tree"
 rs f63b OFX_TEST_MOUNTINFO="$T/mountinfo" -- "$T/tree"
 # A full icon cache at a zoom (F6.3 review): 24 slots, 12 MIME types.
-T=$base/f63c; rm -rf "$T"; mkdir -p "$T/tree"
+fresh f63c; mkdir -p "$T/tree"
 for f in a.txt b.png c.jpg d.pdf e.c f.py g.sh h.html i.md j.zip k.mp3 l.mp4; do touch "$T/tree/$f"; done
 rs f63c OFX_TEST_ICONS_MAX=24 OFX_TEST_MOUNTINFO="$base/f63/mountinfo" -- "$T/tree"
 # The same 12 types again in in/, remembered as icons (F11): entered from the list (f63d)
-T=$base/f63d; rm -rf "$T"; mkdir -p "$T/tree/in"
+fresh f63d; mkdir -p "$T/tree/in"
 for f in a.txt b.png c.jpg d.pdf e.c f.py g.sh h.html i.md j.zip k.mp3 l.mp4; do touch "$T/tree/$f" "$T/tree/in/$f"; done
 mkdir -p "$T/state/ofx" && printf 'folder %s 1 icons - - - -\n' "$T/tree/in" > "$T/state/ofx/state"
 rs f63d OFX_TEST_ICONS_MAX=24 OFX_TEST_MOUNTINFO="$base/f63/mountinfo" -- "$T/tree"
@@ -270,7 +273,7 @@ fi
 if want f64; then
 # F6.4: previews in the icon view (tests/gui/f64/ has the images), then f64b on the same tree and
 # cache: a new window reads them, and knows the failures, making none. f64c: textures dropped.
-T=$base/f64; rm -rf "$T"; mkdir -p "$T/tree/sub" "$T/tree/far" "$T/cache/thumbnails/normal"
+fresh f64; mkdir -p "$T/tree/sub" "$T/tree/far" "$T/cache/thumbnails/normal"
 cp "$here/f64/wide.png" "$here/f64/photo.jpg" "$here/f64/anim.gif" "$here/f64/pic.webp" "$here/f64/small.png" "$T/tree/"
 cp "$here/f64/wide.png" "$T/tree/far/x.png"
 printf 'not a png' > "$T/tree/broken.png"; : > "$T/tree/empty.jpg"; echo text > "$T/tree/readme.txt"
@@ -293,7 +296,7 @@ rs f64 OFX_TEST_MOUNTINFO="$T/mountinfo" -- "$T/tree"
 rs f64b OFX_TEST_MOUNTINFO="$T/mountinfo" -- "$T/tree"
 # 40 previews of 96 by 64 (24 KiB each): f64d where 10 may be held (fewer than a screen's 18), f64c
 # where 20 may: scrolling away drops the first ones.
-T=$base/f64c; rm -rf "$T"; mkdir -p "$T/tree"
+fresh f64c; mkdir -p "$T/tree"
 for i in $(seq -w 1 40); do cp "$here/f64/wide.png" "$T/tree/w$i.png"; done
 rs f64c OFX_TEST_THUMB_HELD_MAX=491520 OFX_TEST_MOUNTINFO="$base/f64/mountinfo" -- "$T/tree"
 rs f64d OFX_TEST_THUMB_HELD_MAX=245760 OFX_TEST_MOUNTINFO="$base/f64/mountinfo" -- "$T/tree"
@@ -310,7 +313,7 @@ printf '[Default Applications]\ntext/plain=ofx-test-editor.desktop\n' > "$T/conf
 printf '[Desktop Entry]\nType=Application\nName=Test editor\nExec=true %%f\n' > "$T/data/applications/ofx-test-editor.desktop"
 rs f7 -- "$H/tree"
 chmod 755 "$H/tree/ro"
-T=$base/f7b; rm -rf "$T"; mkdir -p "$T/tree/src" "$T/tree/dst"; head -c 8388608 /dev/urandom > "$T/tree/src/big.bin"
+fresh f7b; mkdir -p "$T/tree/src" "$T/tree/dst"; head -c 8388608 /dev/urandom > "$T/tree/src/big.bin"
 rs f7b OFX_TEST_COPY_DELAY_MS=300 -- "$T/tree"
 # Its own entry gone with it, the live one's taken away at the menu's pass; the sleeps ended.
 for k in live reused; do [ -f "$T/$k.pid" ] && kill "$(cat "$T/$k.pid")" 2>/dev/null; done
@@ -321,7 +324,7 @@ if want f72; then
 # F7.2: the Properties panel. HOME=<T>/home; home/tree: notes.txt (11 bytes, 0644), run.sh (0755),
 # dir/ (a 10 bytes; sub/b 20 bytes), empty/, link -> notes.txt, broken -> none, root -> /etc/hostname
 # (root's), out -> a file outside <T> (the guard: never changed).
-T=$base/f72; O=$base/f72-outside; rm -rf "$T" "$O"; H=$T/home; mkdir -p "$H/tree/dir/sub" "$H/tree/empty" "$O"
+fresh f72; O=$base/f72-outside; rm -rf "$O"; H=$T/home; mkdir -p "$H/tree/dir/sub" "$H/tree/empty" "$O"
 RS_HOME=$H
 printf 'hello world' > "$H/tree/notes.txt"; printf '#!/bin/sh\n' > "$H/tree/run.sh"
 printf '0123456789' > "$H/tree/dir/a"; printf '01234567890123456789' > "$H/tree/dir/sub/b"
@@ -383,7 +386,7 @@ fi
 if want f15; then
 # F15 step 2: ofx.conf's key lines, written into the run's own config folder (run-script's) as the
 # script goes.
-T=$base/f15; rm -rf "$T"; mkdir -p "$T/tree/a" "$T/tree/b"; touch "$T/tree/c.txt"
+fresh f15; mkdir -p "$T/tree/a" "$T/tree/b"; touch "$T/tree/c.txt"
 rs f15 -- "$T/tree"
 rs f15b -- "$T/tree"
 fi
@@ -449,7 +452,7 @@ fi
 if want keys; then
 # Keys through the compositor (tools/gui/vkbd.c in the test sway, 2026-10-28): GLFW's keycodes and
 # gui/glfwkeys.c, which the other scripts' keys skip.
-T=$base/keys; rm -rf "$T"; mkdir -p "$T/tree/adir" "$T/tree/bdir"; touch "$T/tree/a.txt" "$T/tree/my-file name.txt" "$T/tree/adir/inner.txt"
+fresh keys; mkdir -p "$T/tree/adir" "$T/tree/bdir"; touch "$T/tree/a.txt" "$T/tree/my-file name.txt" "$T/tree/adir/inner.txt"
 # The test tools' guard first (tools/gui/testsway.h, shared by vkbd, vptr and dndpeer): each acts
 # only on the sway OFX_GUI_ROOT names, as the kernel sees the socket's other end (review,
 # 2026-10-28). Refused: a display with no test sway's socket file; an inherited WAYLAND_SOCKET; a
@@ -496,7 +499,7 @@ if want dnd; then
 # vptr the pointer (tools/gui/; both refused outside the test sway, as vkbd: the keys group proves
 # their guard).
 # Each script on its own tree: adir/, a.txt, b.txt, and from/c.txt beside it (a source's file).
-dnd_tree() { T=$base/$1; rm -rf "$T"; mkdir -p "$T/tree/adir" "$T/from"; touch "$T/tree/a.txt" "$T/tree/b.txt" "$T/from/c.txt"; }
+dnd_tree() { fresh "$1"; mkdir -p "$T/tree/adir" "$T/from"; touch "$T/tree/a.txt" "$T/tree/b.txt" "$T/from/c.txt"; }
 dnd_tree dnd; rs dnd RUN_SCRIPT_LIMIT=40 OFX_COMPOSITOR=sway -- "$T/tree"
 for x in b c d e f g h i j k; do dnd_tree "dnd$x"; rs "dnd$x" RUN_SCRIPT_LIMIT=40 OFX_COMPOSITOR=sway -- "$T/tree"; done
 fi
@@ -505,7 +508,7 @@ if want f12; then
 # other .thumbnailer files): copy makes a video's (they are PNGs, talk.mp4 with 11 MiB after it:
 # past preview-max-size, which a thumbnailer doesn't go by), hang never finishes (killed after
 # OFX_TEST_THUMB_RUN_MS), each in bubblewrap as the real ones would be.
-T=$base/f12; rm -rf "$T"; mkdir -p "$T/tree" "$T/thumbnailers" "$T/tbin"
+fresh f12; mkdir -p "$T/tree" "$T/thumbnailers" "$T/tbin"
 cp "$here/f64/wide.png" "$T/tree/clip.mp4"; cp "$here/f64/wide.png" "$T/tree/doc.pdf"
 cp "$here/f64/wide.png" "$T/tree/talk.mp4"; head -c 11534336 /dev/zero >> "$T/tree/talk.mp4"
 echo hi > "$T/tree/readme.txt"
@@ -562,7 +565,7 @@ if want f12g; then
 # F12 step 5: git status, on a scratch repository made here (git's own config files out of it), the
 # real git behind a wrapper among the fakes (the guard runs no program outside the run's folder), in
 # bubblewrap as always. HOME is the run's: no config of Michael's comes in.
-T=$base/f12g; rm -rf "$T"; mkdir -p "$T/tree/repo/src" "$T/fakes"
+fresh f12g; mkdir -p "$T/tree/repo/src" "$T/fakes"
 git_fake "$T"
 ( cd "$T/tree/repo" && git_env "$T" &&
   git init -q -b main . && printf 'a\n' > a.txt && printf 'k\n' > kept.txt && printf '*.log\nbuild/\n' > .gitignore && printf 'b\n' > src/b.txt &&
@@ -581,7 +584,7 @@ if want f12h; then
 # switch there refused with a.txt changed); the wrapper takes a second over a switch to base (the
 # menu says so meanwhile, and past OFX_TEST_GIT_SWITCH_MS it carries on). A post-checkout hook says
 # something on feat-a.
-T=$base/f12h; rm -rf "$T"; mkdir -p "$T/tree/repo" "$T/fakes"
+fresh f12h; mkdir -p "$T/tree/repo" "$T/fakes"
 git_fake "$T" 'case "$*" in *" switch "*" base") sleep 1 ;; esac'
 ( cd "$T/tree/repo" && git_env "$T" &&
   c() { GIT_AUTHOR_DATE="$1 +0000" GIT_COMMITTER_DATE="$1 +0000" git commit -q --allow-empty -m "$1"; } &&
@@ -599,7 +602,7 @@ fi
 if want f12i; then
 # F12 step 6 review: repo O on main with a branch other, and inside it repo inner with 12 branches,
 # other among them; the script removes inner under the branches panel.
-T=$base/f12i; rm -rf "$T"; mkdir -p "$T/tree/O" "$T/fakes"
+fresh f12i; mkdir -p "$T/tree/O" "$T/fakes"
 git_fake "$T"
 ( cd "$T/tree/O" && git_env "$T" &&
   git init -q -b main . && git commit -q --allow-empty -m o && git branch other &&
@@ -608,7 +611,7 @@ git_fake "$T"
 rs f12i -- "$T/tree/O/inner"
 fi
 if want hang; then
-T=$base/hang; rm -rf "$T"; mkdir -p "$T/tree/stuck"
+fresh hang; mkdir -p "$T/tree/stuck"
 echo "== hang"
 t0=$(date +%s)
 # The count stuck 60 s and the run due within 45 s: a window that waits for the count takes over 60 s,
@@ -624,7 +627,7 @@ fi
 fi
 if want guard3; then
 # ofx's own guard: started outside <T>, every change it tries there is refused, nothing changes.
-T=$base/guard3; O=$base/guard3-outside; rm -rf "$T" "$O"; mkdir -p "$T" "$O"; echo keep > "$O/victim.txt"
+fresh guard3; O=$base/guard3-outside; rm -rf "$O"; mkdir -p "$T" "$O"; echo keep > "$O/victim.txt"
 echo "== guard3"
 "$here/../../tools/gui/run-script.sh" "$T" "$here/guard3.script" "$bin" "$O" > "$T/run.out" 2>&1
 if [ "$(ls -A "$O")" = victim.txt ] && [ "$(cat "$O/victim.txt")" = keep ] && grep -q "script: 0 of" "$T/run.out" &&
@@ -637,7 +640,7 @@ rm -rf "$O"
 fi
 if want guard; then
 # The guard: started in $base, outside <T>, every sh line is refused and nothing runs.
-T=$base/guard; rm -rf "$T"; mkdir -p "$T"
+fresh guard; mkdir -p "$T"
 echo "== guard"
 "$here/../../tools/gui/run-script.sh" "$T" "$here/guard.script" "$bin" "$base" > "$T/run.out" 2>&1
 if grep -q "sh refused: .* is not under OFX_GUI_ROOT" "$T/run.out" && [ ! -e "$T/outside-ran" ] && grep -q "no asan reports" "$T/run.out"; then
@@ -651,7 +654,7 @@ if want harness; then
 # wait-for, fails, and so does a `quits` whose command leaves it open; a quit with only comments
 # left passes. Without the
 # first, a mutant that quit where f7b expects a question passed.
-T=$base/harness; rm -rf "$T"; mkdir -p "$T/tree"
+fresh harness; mkdir -p "$T/tree"
 echo "== harness"
 h() {   # <script> <rc> <line the output must hold>
     "$here/../../tools/gui/run-script.sh" "$T" "$here/$1.script" "$bin" "$T/tree" > "$T/$1.out" 2>&1

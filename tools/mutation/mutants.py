@@ -104,7 +104,8 @@ MUTANTS = [
     ('ui/cursor.c', "    l->rows = rows;\n    l->top = ui_top_at(l, l->top);\n    ui_show_sel(l);", "    l->rows = rows;"),
     ('ui/cursor.c', "    if (l->n == 0) return;\n    l->sel", "    l->sel"),
     ('ui/handle.c', "isize page = m->rows > 1 ? m->rows - 1 : 1;", "isize page = m->rows;"),
-    ('ui/handle.c', "    if (in->wheel) ui_scroll(l, in->wheel);", "    if (in->wheel) ui_scroll(l, -in->wheel);"),
+    ('ui/handle.c', "    if (!prompt && in->wheel) ui_scroll(l, in->wheel);", "    if (!prompt && in->wheel) ui_scroll(l, -in->wheel);"),
+    ('ui/handle.c', "    if (!prompt && in->wheel) ui_scroll(l, in->wheel);", "    if (in->wheel) ui_scroll(l, in->wheel);"),
     ('ui/handle.c', "    if (!prompt && in->click >= 0 && l->top + in->click < l->n) {", "    if (!prompt && in->click >= 0) {"),
     ('ui/handle.c', "if (!prompt && in->dclick >= 0 && l->top + in->dclick < l->n) {", "if (!prompt && in->dclick >= 0) {"),
     ('ui/handle.c', '    if (!prompt && in->backs > 0) return *out = (UiAction){ UA_BACK, 0, false }, true;\n', ''),
@@ -2681,4 +2682,7 @@ MUTANTS += [
     ('fs/paths.c', "    if (eq < 0) return false;\n    *key", "    if (eq < 0) eq = 0;\n    *key"),
     ('fs/places.c', "    *uri = sp < 0 ? line : str_cut(line, 0, sp), *label = sp < 0 ? STR_EMPTY : str_trim(str_cut(line, sp + 1, line.len));", "    *uri = line, *label = STR_EMPTY;"),
     ('fs/sandbox.c', "        if (!j->outlive) av[n++] = \"--die-with-parent\";\n", ""),
+    # (the group D review's pin: test_write_all's slow pipe and timer signal)
+    ('fs/paths.c', "        if (k < 0 && errno == EINTR) continue;\n", ""),
+    ('fs/paths.c', "        at += k;\n    }\n    return true;", "        return k == n;\n    }\n    return true;"),
 ]

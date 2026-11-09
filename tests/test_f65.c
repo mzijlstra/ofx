@@ -15,12 +15,6 @@ static i64 atime_ns(const char *path)
     return lstat(path, &st) == 0 ? (i64)st.st_atim.tv_sec * 1000000000 + st.st_atim.tv_nsec : -1;
 }
 
-static bool exists(const char *path)
-{
-    struct stat st;
-    return lstat(path, &st) == 0;
-}
-
 // A preview in cache/dir of uri (with mtime and size when >= 0), read last at atime; its path in
 // out.
 static void preview(Arena *a, const char *cache, const char *dir, const char *uri, i64 mtime, i64 size, i64 atime, char *out)
@@ -327,7 +321,7 @@ static void test_clean_run(void)
     CHECK(st.n[CR_ORPHAN] == 6 && st.n[CR_STALE] == 2 && st.n[CR_UNUSED] == 2 && st.n[CR_TEMP] == 1 && st.n[CR_CAP] == 0);
     CHECK(s.n[CR_ORPHAN] == 6 && s.n[CR_STALE] == 2 && s.n[CR_UNUSED] == 2 && s.n[CR_TEMP] == 1 && s.n[CR_KEEP] == 0);
     CHECK(st.n[CR_KEEP] == 13 && st.failed == 0 && !st.cut);   // keep, 89 days, nas, nodrive, trash, junk, tmp_new, nouri, locked, big, via away, via nas, linked file
-    for (int i = 0; i < P_N; i++) CHECK(exists(p[i]) && atime_ns(p[i]) == before[i]);
+    for (int i = 0; i < P_N; i++) CHECK(there(p[i]) && atime_ns(p[i]) == before[i]);
 
     // The run: the same files go, the others stay with their atimes.
     memset(&s, 0, sizeof s);
@@ -337,11 +331,11 @@ static void test_clean_run(void)
     CHECK(s.n[CR_ORPHAN] == 6);
     for (int i = 0; i < P_N; i++) {
         bool stays = want[i] == CR_KEEP;
-        CHECK(exists(p[i]) == stays);
-        if (stays && exists(p[i]) != stays) fprintf(stderr, "  preview %d\n", i);
+        CHECK(there(p[i]) == stays);
+        if (stays && there(p[i]) != stays) fprintf(stderr, "  preview %d\n", i);
         if (stays) CHECK(atime_ns(p[i]) == before[i]);
     }
-    CHECK(exists(target) && exists(awayf) && exists(rootf) && exists(keep));
+    CHECK(there(target) && there(awayf) && there(rootf) && there(keep));
     // A preview reached through a link is never read (O_NOFOLLOW): a link to an orphan's preview.
     {
         char orph[PATH_MAX], lnk[PATH_MAX];
@@ -370,16 +364,16 @@ static void test_clean_run(void)
     o.cap = 2 * one;
     clean_run(&a, capc, str_from_c(mi), &o, &st);
     CHECK(st.n[CR_CAP] == 2 && st.bytes[CR_CAP] == 2 * one && st.n[CR_KEEP] == 2 && st.bytes[CR_KEEP] == 2 * one);
-    CHECK(!exists(c[0]) && !exists(c[1]) && exists(c[2]) && exists(c[3]));
+    CHECK(!there(c[0]) && !there(c[1]) && there(c[2]) && there(c[3]));
     o.cap = 0;   // clean-cap = 0: no cap
     clean_run(&a, capc, str_from_c(mi), &o, &st);
-    CHECK(st.n[CR_CAP] == 0 && exists(c[2]) && exists(c[3]));
+    CHECK(st.n[CR_CAP] == 0 && there(c[2]) && there(c[3]));
     o.cap = 2 * one;
     clean_run(&a, capc, str_from_c(mi), &o, &st);   // exactly at the cap: nothing goes
-    CHECK(st.n[CR_CAP] == 0 && exists(c[2]) && exists(c[3]));
+    CHECK(st.n[CR_CAP] == 0 && there(c[2]) && there(c[3]));
     o.cap = 2 * one - 1;   // one byte over: one more goes
     clean_run(&a, capc, str_from_c(mi), &o, &st);
-    CHECK(st.n[CR_CAP] == 1 && !exists(c[2]) && exists(c[3]));
+    CHECK(st.n[CR_CAP] == 1 && !there(c[2]) && there(c[3]));
     // A delete that fails frees nothing: the next ones still go until the rest fit.
     char capd[1200], d[4][PATH_MAX];
     snprintf(capd, sizeof capd, "%s", at("f65/capfail/thumbnails"));
@@ -392,7 +386,7 @@ static void test_clean_run(void)
     CHECK(chmod(ro, 0555) == 0);
     o.cap = 2 * size_of(d[1]);
     clean_run(&a, capd, str_from_c(mi), &o, &st);
-    CHECK(st.failed == 1 && st.n[CR_CAP] == 2 && exists(d[0]) && !exists(d[1]) && !exists(d[2]) && exists(d[3]));
+    CHECK(st.failed == 1 && st.n[CR_CAP] == 2 && there(d[0]) && !there(d[1]) && !there(d[2]) && there(d[3]));
     chmod(ro, 0755);
     o.cap = CLEAN_CAP;
 
@@ -401,10 +395,10 @@ static void test_clean_run(void)
     snprintf(far, sizeof far, "%s/thumbnails", decoy);
     preview(&a, far, "normal", "file:///nowhere/a.png", 1, 1, recent, farf);
     clean_run(&a, far, str_from_c(mi), &o, &st);
-    CHECK(st.failed == 1 && st.n[CR_ORPHAN] == 0 && exists(farf));
+    CHECK(st.failed == 1 && st.n[CR_ORPHAN] == 0 && there(farf));
     // A cache that is a link: not followed.
     CHECK(symlink(capc, at("f65/linkcache")) == 0);
     clean_run(&a, at("f65/linkcache"), str_from_c(mi), &o, &st);
-    CHECK(st.n[CR_KEEP] == 0 && exists(c[3]));
+    CHECK(st.n[CR_KEEP] == 0 && there(c[3]));
     ops_guard(NULL);
 }

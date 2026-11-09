@@ -702,6 +702,45 @@ static void test_keys_in_fields(void)
     keys_set(0);
 }
 
+// fd_write_all (the F15 code-health review's whole-file writer) through what a regular file never
+// does on tmpfs: a pipe whose reader is slow, so writes come back short, and a timer signal without
+// SA_RESTART, so they come back EINTR (the group D review's pin: one write() passed make test).
+static volatile sig_atomic_t write_ticks;
+static void write_tick(int sig) { (void)sig; write_ticks++; }
+
+static void test_write_all(void)
+{
+    enum { N = 1 << 20 };
+    static char body[N];
+    for (int i = 0; i < N; i++) body[i] = (char)(i * 31 + 7);
+    int p[2];
+    CHECK(pipe(p) == 0);
+    pid_t kid = fork();
+    if (kid == 0) {   // the slow reader: a little at a time, then the sum of what came
+        close(p[1]);
+        static char got[N];
+        isize n = 0;
+        for (ssize_t k; (k = read(p[0], got + n, 4096)) > 0;) {
+            n += k;
+            nanosleep(&(struct timespec){ 0, 2000000 }, NULL);   // (2 ms a read: the pipe stays full, so a signal finds a write that wrote nothing)
+        }
+        _exit(n == N && memcmp(got, body, N) == 0 ? 0 : 1);
+    }
+    close(p[0]);
+    struct sigaction sa = { .sa_handler = write_tick }, was;   // (no SA_RESTART: a blocked write ends EINTR or short)
+    sigemptyset(&sa.sa_mask);
+    sigaction(SIGALRM, &sa, &was);
+    struct itimerval every = { { 0, 300 }, { 0, 300 } }, off = { 0 };
+    setitimer(ITIMER_REAL, &every, NULL);
+    bool ok = fd_write_all(p[1], body, N);
+    setitimer(ITIMER_REAL, &off, NULL);
+    sigaction(SIGALRM, &was, NULL);
+    close(p[1]);
+    int st = 0;
+    waitpid(kid, &st, 0);
+    CHECK(ok && write_ticks > 0 && WIFEXITED(st) && WEXITSTATUS(st) == 0);
+}
+
 // The wheel under a question (the group D review): the list stays where it was.
 static void test_wheel_under_question(void)
 {

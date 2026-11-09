@@ -18,6 +18,8 @@ is killed. Only the rest (survivors, and mutants tcc can't build: it may refuse 
 under clang with ASan and UBSan, where a sanitizer may still catch them. --clang-only skips tcc.
 """
 import os, shutil, signal, subprocess, sys, tempfile, time, importlib.util
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from common import rmtree, check_unique
 from concurrent.futures import ThreadPoolExecutor
 from queue import Queue
 
@@ -38,13 +40,7 @@ mod = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(mod)
 mutants = [m for m in mod.MUTANTS if only in m[0] or only in m[1]]
 
-bad = 0
-for i, (f, old, new) in enumerate(mutants):
-    n = open(os.path.join(root, f)).read().count(old)
-    if n != 1:
-        print(f'#{i} {f}: old text occurs {n} times, not once: {old!r}')
-        bad += 1
-if bad:
+if check_unique(root, mutants):
     sys.exit(2)
 
 # One copy of the repo per worker. The tests' mkdtemp roots go under each copy (TMPDIR), so a
@@ -103,8 +99,6 @@ def run(work, cc='clang'):
             return 'fail'
     return 'pass'
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from common import rmtree
 
 free = Queue()
 for work in workers:

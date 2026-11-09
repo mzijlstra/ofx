@@ -725,14 +725,20 @@ static bool wait_file(const char *path, char *out, size_t cap)
     return false;
 }
 
+// A program at path: text written, made executable (a test's fake, a hook).
+static void put_exec(const char *path, const char *text)
+{
+    put(path, text);
+    chmod(path, 0755);
+}
+
 static void fake(const char *dir, const char *name, const char *log)
 {
     char path[1024], text[2048];
     snprintf(path, sizeof path, "%s/%s", dir, name);
     // The session id from /proc with builtins only: PATH holds just the fakes.
     snprintf(text, sizeof text, "#!/bin/sh\nread -r _ _ _ _ _ sid _ < /proc/$$/stat\necho \"%s $* sid=$sid pid=$$\" >> %s\n", name, log);
-    put(path, text);
-    chmod(path, 0755);
+    put_exec(path, text);
 }
 
 static void test_spawn(void)
@@ -815,12 +821,30 @@ static UiEvent ev_ch(u32 ch)
     return ui_event_of((UiChord){ ch, UI_MOD_TYPED });
 }
 
+// The tests' code for one event (every frame helper's, the F15 code-health review: ten helpers
+// each read their own): a UiKey; 0x100 + c, the typed character c; -c, Alt and the letter c.
+static UiEvent ev_code(int k)
+{
+    return k < 0 ? ui_event_of((UiChord){ (u32)-k, UI_MOD_ALT }) : k >= 0x100 ? ev_ch((u32)(k - 0x100)) : ev_key((UiKey)k);
+}
+
+// n codes (ev_code's) from ap onto in, past UI_EVENTS_MAX a failed check (a test's mistake).
+static void ev_codes(UiInput *in, int n, va_list ap)
+{
+    for (int i = 0; i < n; i++) {
+        UiEvent e = ev_code(va_arg(ap, int));
+        CHECK(in->nev < UI_EVENTS_MAX);
+        if (in->nev < UI_EVENTS_MAX) in->ev[in->nev++] = e;
+    }
+}
+
+// One frame of input, n events in ev_code's codes.
 static UiInput keys(int n, ...)
 {
     UiInput in = ui_input_none();
     va_list ap;
     va_start(ap, n);
-    for (int i = 0; i < n; i++) in.ev[in.nev++] = ev_key((UiKey)va_arg(ap, int));
+    ev_codes(&in, n, ap);
     va_end(ap);
     return in;
 }
@@ -1885,6 +1909,7 @@ int main(void)
     if (fast) test_keys_conf();
     if (fast) test_keys_panel();
     if (fast) test_keys_in_fields();
+    if (slow) test_write_all();
     if (fast) test_wheel_under_question();
     if (fast) test_ui_age();
     if (fast) test_branch_panel();

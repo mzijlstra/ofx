@@ -38,7 +38,7 @@ static Theme fit_theme_of(const char *words)
 
 static bool rgb_same(Rgb a, Rgb b)
 {
-    return a.r == b.r && a.g == b.g && a.b == b.b;
+    return rgb_is(a, b.r, b.g, b.b);
 }
 
 // A colour reads min over n backgrounds, or is fg and fg itself reads (nothing short of it does).

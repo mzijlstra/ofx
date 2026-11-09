@@ -138,12 +138,6 @@ static void test_shift_range(void)
 static u8 thumbers_test_mem[MiB(24)];
 
 // text at path, executable: a test's own fake thumbnailer.
-static void put_exec(const char *path, const char *text)
-{
-    put(path, text);
-    chmod(path, 0755);
-}
-
 // A .thumbnailer file at path from its lines.
 static void put_thumber(const char *path, const char *lines)
 {
