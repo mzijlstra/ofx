@@ -1,0 +1,9 @@
+# F16 step 2b review: a far link in a folder reached through a local link. run.sh's tree: proj (a
+# link to real/proj), whose nas is ../../share, which is far only from proj's real path.
+settle
+expect n=3 sel=proj
+key enter
+wait-for 3000 faron=0 n=1 sel=nas
+key enter
+wait-for 3000 faron=1 farloading=0 n=1 sel=f.txt
+quit

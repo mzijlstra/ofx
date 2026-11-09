@@ -306,6 +306,13 @@ static float perms_w(void)
 
 enum { NAME_MIN_W = 150 };   // Name's least width beside Owner and Permissions (200 until Michael found it hid them beside a second window)
 
+// Whether entry e's Owner, Group and Permissions are unknown: a far drive's mount point, never
+// looked at (F16; blank, not root and d---------: step 2b review).
+static bool entry_unknown(const Entry *e)
+{
+    return e->far && e->kind == K_DIR;
+}
+
 // Entry e's date as the list shows it, in ofx.conf's date-format (F10; "" without one). The list
 // and the scripts' state line both take it from here.
 static void entry_when(const Entry *e, i64 now, char *buf, size_t cap)
@@ -663,9 +670,11 @@ static void layout_row(int r, isize i, float w, i64 now)
         // Owner, Group (View → Show Group), Permissions (2026-10-27): the target's for a link, as Size is.
         if (perms) {
             // (eza's: you and your group yellow, others plain)
-            info_cell(CLAY_IDI("owner", r), id_name(false, e->uid), OWNER_W, OWNER_PAD, app.ui.colors && e->uid == (u32)geteuid() ? cc(t->yellow) : cc(t->fg_dim));
-            if (app.ui.group_col) info_cell(CLAY_IDI("group", r), id_name(true, e->gid), GROUP_W, 0, app.ui.colors && e->gid == (u32)getegid() ? cc(t->yellow) : cc(t->fg_dim));
-            ls_perms_cell(CLAY_IDI("perms", r), e->mode, PERM_W);
+            bool unknown = entry_unknown(e);
+            info_cell(CLAY_IDI("owner", r), unknown ? "" : id_name(false, e->uid), OWNER_W, OWNER_PAD, app.ui.colors && e->uid == (u32)geteuid() ? cc(t->yellow) : cc(t->fg_dim));
+            if (app.ui.group_col) info_cell(CLAY_IDI("group", r), unknown ? "" : id_name(true, e->gid), GROUP_W, 0, app.ui.colors && e->gid == (u32)getegid() ? cc(t->yellow) : cc(t->fg_dim));
+            if (unknown) info_cell(CLAY_IDI("perms", r), "", PERM_W, 0, cc(t->fg_dim));
+            else ls_perms_cell(CLAY_IDI("perms", r), e->mode, PERM_W);
         }
     }
 }

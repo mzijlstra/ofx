@@ -6,7 +6,7 @@
 # printed whole, in order, once all are done; clip, keys and dnd share one (each starts a sway,
 # which takes the first free wayland-N).
 # The groups (one or more scripts on one tree): browse big gone watchgap f2 f3 f4 f5 f52 f53 f54
-# f6 (f6, f6b) usb f62 (f62, f62b, f62c) f63 (f63, f63b, f63c, f63d) f64 (f64, f64b, f64c, f64d) f7 (f7, f7b) f72 f73 (f73, f73b, f73c, f73d) f74 f75 (f75, f75b, f75c) f15 (f15, f15b) f16 (f16, f16b) net f8 (f8, f8b, f8c, f8d, f8e) f9 (f9, f9b) f10 (f10, f10b, f10c, f10d) f11 (f11, f11b, f11c, f11d, f11e, f11f, f11g, f11h, f11i, f11j, f11k, f11l, f11m, f11n, f11o, f11p, f11q, f11r, f11s, f11t) f12 (f12, f12b) f12g f12h f12i f13 (f13, f13b, f13c, f13d, f13e, f13f, f13g, f13h) clip (clip, copypath) keys dnd (dnd, dndb, dndc, dndd, dnde, dndf, dndg, dndh, dndi, dndj, dndk) (the three in sway) hang guard3 guard harness (harness, harnessb, harnessc, harnessd). Named ones only, or all of them; a group
+# f6 (f6, f6b) usb f62 (f62, f62b, f62c) f63 (f63, f63b, f63c, f63d) f64 (f64, f64b, f64c, f64d) f7 (f7, f7b) f72 f73 (f73, f73b, f73c, f73d) f74 f75 (f75, f75b, f75c) f15 (f15, f15b) f16 (f16, f16b, f16c) net f8 (f8, f8b, f8c, f8d, f8e) f9 (f9, f9b) f10 (f10, f10b, f10c, f10d) f11 (f11, f11b, f11c, f11d, f11e, f11f, f11g, f11h, f11i, f11j, f11k, f11l, f11m, f11n, f11o, f11p, f11q, f11r, f11s, f11t) f12 (f12, f12b) f12g f12h f12i f13 (f13, f13b, f13c, f13d, f13e, f13f, f13g, f13h) clip (clip, copypath) keys dnd (dnd, dndb, dndc, dndd, dnde, dndf, dndg, dndh, dndi, dndj, dndk) (the three in sway) hang guard3 guard harness (harness, harnessb, harnessc, harnessd). Named ones only, or all of them; a group
 # that fails says "== <script>: FAILED" or "<group>: FAILED" (tools/mutation/gui.py reads it).
 set -u
 par=1
@@ -402,7 +402,8 @@ if want f16; then
 fresh f16; mkdir -p "$T/tree/share/sub" "$T/tree/local"
 touch "$T/tree/share/sub/1" "$T/tree/share/sub/2" "$T/tree/share/sub/3" "$T/tree/share/x.txt" "$T/tree/share/.dot" "$T/tree/local/a.txt"
 ln -s ../share "$T/tree/local/nas"; ln -s ../share/x.txt "$T/tree/local/doc"   # (2b: links into the share)
-printf '1 0 0:1 / / rw - ext4 /dev/x rw\n2 1 0:2 / %s rw,nosuid,nodev - fuse.gvfsd-fuse gvfsd-fuse rw\n' "$T/tree/share" > "$T/mountinfo"
+ln -s "../share/Not a directory" "$T/tree/local/ghost"; mkdir -p "$T/tree/local/mnt"   # (a link to nothing there, by a telling name; a far mount point)
+printf '1 0 0:1 / / rw - ext4 /dev/x rw\n2 1 0:2 / %s rw,nosuid,nodev - fuse.gvfsd-fuse gvfsd-fuse rw\n3 1 0:3 / %s rw - nfs4 h:/x rw\n' "$T/tree/share" "$T/tree/local/mnt" > "$T/mountinfo"
 rs f16 OFX_TEST_MOUNTINFO="$T/mountinfo" -- "$T/tree"
 # f16b: git on a far folder. f16b/tree/repo (local) and f16b/tree/share2 (far by the mount list), each
 # a scratch repository with a changed file; git's wrapper among the fakes, as f12g's.
@@ -413,6 +414,12 @@ for r in repo share2; do
 done
 printf '1 0 0:1 / / rw - ext4 /dev/x rw\n2 1 0:2 / %s rw,nosuid,nodev - fuse.gvfsd-fuse gvfsd-fuse rw\n' "$T/tree/share2" > "$T/mountinfo"
 rs f16b OFX_TEST_MOUNTINFO="$T/mountinfo" OFX_TEST_GIT_GAP_MS=10000 -- "$T/tree/repo"
+# f16c: a far link in a folder reached through a local link (step 2b review): tree/proj is a link to
+# real/proj, whose nas is ../../share, right only from the real path; share (far) holds f.txt.
+fresh f16c; mkdir -p "$T/tree/real/proj" "$T/tree/share"; : > "$T/tree/share/f.txt"
+ln -s real/proj "$T/tree/proj"; ln -s ../../share "$T/tree/real/proj/nas"
+printf '1 0 0:1 / / rw - ext4 /dev/x rw\n2 1 0:2 / %s rw,nosuid,nodev - fuse.gvfsd-fuse gvfsd-fuse rw\n' "$T/tree/share" > "$T/mountinfo"
+rs f16c OFX_TEST_MOUNTINFO="$T/mountinfo" -- "$T/tree"
 fi
 if want net; then
 # F16 step 2 on a real share (tests/net/lib.sh: a Samba container, a gvfs of the run's own under <T>/rt,

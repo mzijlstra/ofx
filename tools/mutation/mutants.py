@@ -1570,7 +1570,7 @@ MUTANTS += [
     (L, "        if (str_eq(l->e[i].name, name) && str_eq(l->e[i].dir, dir)) return i;", "        if (str_eq(l->e[i].name, name)) return i;"),
     (L, "    int n = e->dir.len ? snprintf(buf, cap, \"%.*s/%.*s\", STR_ARG(e->dir), STR_ARG(e->name)) : snprintf(buf, cap, \"%.*s\", STR_ARG(e->name));", "    int n = snprintf(buf, cap, \"%.*s\", STR_ARG(e->name));"),
     (L, "    return n >= 0 && (size_t)n < cap ? (Str){ buf, n } : STR_EMPTY;", "    return n >= 0 ? (Str){ buf, n } : STR_EMPTY;"),
-    (L, "        if (!entry_read_far(a, fd, dir, nm, mounts, &e[n])) {", "        if (!entry_read_far(a, fd, dir, nm, mounts, &e[n]) && false) {"),
+    (L, "        if (!entry_read_far(a, fd, at, nm, mounts, &e[n])) {", "        if (!entry_read_far(a, fd, at, nm, mounts, &e[n]) && false) {"),
     # the wildcard
     ('ui/match.c', "    return !m->o.regex && (memchr(m->text, '*', (size_t)m->len) || memchr(m->text, '?', (size_t)m->len));", "    return memchr(m->text, '*', (size_t)m->len) || memchr(m->text, '?', (size_t)m->len);"),
     ('ui/match.c', "    return !m->o.regex && (memchr(m->text, '*', (size_t)m->len) || memchr(m->text, '?', (size_t)m->len));", "    return !m->o.regex && memchr(m->text, '*', (size_t)m->len);"),
@@ -2749,4 +2749,8 @@ MUTANTS += [
     ('fs/list.c', "    if (o == 0) out[o++] = '/';\n", ''),
     ('fs/tree.c', '    if (t->mounts.len && (!thumb_local(t->mounts, dir) || tree_far_link(t->mounts, dir))) return;', '    if (t->mounts.len && !thumb_local(t->mounts, dir)) return;'),
     ('fs/tree.c', '    return kind_is_dir(kind_of_far(dirfd, dir, de->d_name, mounts, &st, &far));', '    return kind_is_dir(kind_of_far(dirfd, dir, de->d_name, STR_EMPTY, &st, &far));'),
+    # (the step 2b review: the far checks from the folder's real path)
+    ('fs/list.c', '    const char *at = mounts.len && realpath(dir, real) ? real : dir;', '    const char *at = dir;'),
+    ('fs/tree.c', '    const char *at = t->mounts.len && realpath(dir, real) ? real : dir;', '    const char *at = dir;'),
+    ('fs/tree.c', 'path_parent(dir, sizeof dir, path) && realpath(dir, real) && link_abs(real,', 'path_parent(dir, sizeof dir, path) && realpath(dir, real) && link_abs(dir,'),
 ]

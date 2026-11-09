@@ -321,6 +321,29 @@ static void test_fs_list_far(void)
     }
     isize k = listing_find(&l, S("nas"));
     CHECK(k >= 0 && str_eq(l.e[k].target, S("../share")) && l.e[k].size == 0);
+    // The folder reached through a local link: its entries' ".." go up from where it really is
+    // (step 2b review). flf/proj is a link to flf/real/proj, whose nas is ../nas: really
+    // flf/real/nas (far, a file here: not looked at), not flf/nas by the path's text.
+    mkdirs(at("flf/real/proj"));
+    put(at("flf/real/nas"), "a file standing in for a share's root");
+    CHECK(symlink("../nas", at("flf/real/proj/nas")) == 0);
+    CHECK(symlink("real/proj", at("flf/proj")) == 0);
+    Str m2 = str_from_c(arena_sprintf(&ta, "1 0 0:1 / / rw - ext4 /dev/x rw\n2 1 0:2 / %s rw - fuse.sshfs s rw\n", at("flf/real/nas")));
+    CHECK(fs_list_far(&ta, at("flf/proj"), false, (Sort){ SORT_NAME, false }, m2, &l, &err) && l.n == 1);
+    CHECK(l.e[0].kind == K_LINK_DIR && l.e[0].far);
+    // The tree from the same linked folder: nasf (a far "file") still a folder, nasd (a far folder
+    // with a child) open but not read; both judged from flf/real/proj, not the path's text.
+    put(at("flf/real/nasf"), "f");
+    mkdirs(at("flf/real/nasd/c"));
+    CHECK(symlink("../nasf", at("flf/real/proj/nasf")) == 0 && symlink("../nasd", at("flf/real/proj/nasd")) == 0);
+    Str m3 = str_from_c(arena_sprintf(&ta, "1 0 0:1 / / rw - ext4 /dev/x rw\n2 1 0:2 / %s rw - fuse.sshfs s rw\n3 1 0:3 / %s rw - fuse.sshfs s rw\n",
+                                      at("flf/real/nasf"), at("flf/real/nasd")));
+    static Tree tp;
+    tp = (Tree){ 0 };
+    tree_follow(&tp, at("flf/proj/nasd/c"));
+    tp.mounts = m3;
+    tree_build(&ta, &tp, str_from_c(arena_cstr(&ta, str_from_c(at("flf/proj")))), false);
+    CHECK(tp.n == 3 && str_eq(tp.row[1].name, S("nasd")) && tp.row[1].open && str_eq(tp.row[2].name, S("nasf")));
     // Without the mount list (fs_list): followed as before.
     CHECK(fs_list(&ta, at("flf/home"), false, (Sort){ SORT_NAME, false }, &l, &err));
     k = listing_find(&l, S("tofile"));

@@ -76,7 +76,18 @@ wait-for 3000 faron=0 sel=share
 key up
 expect sel=local
 key enter
-wait-for 3000 faron=0 n=3 sel=doc
+wait-for 3000 faron=0 n=5 sel=doc
+# ghost: a link into the share to "Not a directory", which isn't there. Its reason is shown, not
+# taken for a file because of the name (step 2b review).
+key down
+expect sel=ghost
+key enter
+wait-for 3000 faron=1 farloading=0 farnote=Not_a_directory:_No_such_file_or_directory
+key alt-left
+wait-for 3000 faron=0 sel=ghost
+# mnt: a far drive's mount point, never looked at: its Owner and Permissions blank, no date.
+key down
+expect sel=mnt selowner=- selperms=- seldate=-
 key down
 expect sel=nas
 # Its item count isn't asked (the count thread would read the share): "?".
@@ -85,7 +96,7 @@ key enter
 wait-for 3000 faron=1 farloading=0 n=2 sel=sub
 key alt-left
 wait-for 3000 faron=0 sel=nas
-key up
+key home
 expect sel=doc
 key enter
 wait-for 3000 faron=0 sel=doc

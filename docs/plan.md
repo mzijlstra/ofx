@@ -908,8 +908,13 @@ blocks each of these for up to gvfs's 90 s. On a thread it also holds ofx's exit
      - **Enter on one** goes to its target the far way. If the lister says it is a file ("Not a
        directory"), ofx goes Back and opens the file.
      - **What isn't done for them:** item counts ("?"), and the tree doesn't read below such a link.
-     - **Known gap:** a chain through a local link (a link to a local link into the share) isn't
-       seen. The list follows it in-process.
+     - **From the folder's real path** (step 2b review): `fs_list_far`, the tree and Enter call
+       `realpath` on the local folder once, so a link's `..` goes up from where the folder really
+       is. A far mount point's Owner, Group and Permissions are blank, not root and `d---------`.
+     - **Known gap:** a link whose target runs through another local link into the share (nas →
+       mylinks/nas, mylinks a link) isn't seen. The list follows it in-process.
+     - **For step 3** (step 2b review): the search walk; and on far links, `copy_here`'s
+       into-itself check, drag sources and Open With.
 3. **The audit's other touches** moved off the main thread or skipped on far folders.
 4. **Connect to Server… and passwords:** the address line (Go menu and Ctrl+L with `smb://`), the
    password question, `gio mount` on a job thread, wrong password and unknown host said in the

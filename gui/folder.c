@@ -245,6 +245,16 @@ static void far_failed(const char *why)
 
 static void hist_go(int dir);
 
+// Whether the lister's refusal said its folder is a file: the reason at the end ("<name>: Not a
+// directory"), not the words anywhere (a folder can be named that; step 2b review).
+static bool far_not_dir(const char *status)
+{
+    char tail[128];
+    snprintf(tail, sizeof tail, ": %s", strerror(ENOTDIR));
+    size_t n = strlen(status), k = strlen(tail);
+    return n >= k && strcmp(status + n - k, tail) == 0;
+}
+
 // A link into a far drive, taken for a folder (F16, Michael 2026-11-09: no second look), was a file:
 // back to the folder it is in, and the file opened from there.
 static void far_link_file(void)
@@ -287,7 +297,7 @@ static bool far_poll(void)
             Str select = app.far_kept ? str_from_c(keep) : str_from_c(app.far_select);
             bool ok = go_to_in(app.cwd, select, app.far_kept ? app.ui.list.sel : app.far_fallback, true);
             app.far_ready = false, app.far_loading = false;
-            if (!ok && app.far_link && strstr(app.status, strerror(ENOTDIR))) return far_link_file(), true;
+            if (!ok && app.far_link && far_not_dir(app.status)) return far_link_file(), true;
             if (!ok) snprintf(app.far_note, sizeof app.far_note, "%s", app.status);
             else if (app.far_slow) app.status[0] = 0;   // (its "isn't answering" said its last)
             if (ok) app.far_note[0] = 0, app.far_slow = false;
@@ -751,8 +761,9 @@ static void open_entry(isize i)
     }
     if (e->far) {   // (F16) a far mount point, or a link into a far drive: its target, the far way
         char to[PATH_MAX];
+        char real[PATH_MAX];   // (from the folder's real path, as the listing took it; local: realpath can't hang)
         if (e->kind == K_DIR) snprintf(to, sizeof to, "%s", path);
-        else if (!link_abs(here_dir(), e->target, to, sizeof to)) {
+        else if (!realpath(here_dir(), real) || !link_abs(real, e->target, to, sizeof to)) {
             set_status(true, "%.*s: its target is too long", STR_ARG(e->name));
             return;
         }

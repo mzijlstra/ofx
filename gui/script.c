@@ -816,6 +816,9 @@ static void script_state(char *out, size_t cap)
     sw(out, cap, &len, "conf=%s ", confw);
     sw(out, cap, &len, "confbad=%d ", app.conf.bad);
     sw(out, cap, &len, "seldate=%s ", seldate);
+    char selperms[16] = "-";
+    if (se && !entry_unknown(se)) ui_perms(selperms, sizeof selperms, se->mode);
+    sw(out, cap, &len, "selowner=%s selperms=%s ", se && !entry_unknown(se) ? id_name(false, se->uid) : "-", selperms);
     sw(out, cap, &len, "trashfull=%d ", app.trash_full);
     sw(out, cap, &len, "trashicon=%s ", trashicon);
     sw(out, cap, &len, "spawned=%d ", spawn_started);

@@ -248,6 +248,11 @@ static bool fs_list(Arena *a, const char *dir, bool show_hidden, Sort sort, List
 static bool fs_list_far(Arena *a, const char *dir, bool show_hidden, Sort sort, Str mounts, Listing *out, Err *err)
 {
     *out = (Listing){ 0 };
+    // The far checks from the folder's real path: a link's ".." goes up from where the folder
+    // really is, not from its path's text (step 2b review: ~/proj a link to /srv/proj, its nas a
+    // link to ../nas, /srv/nas a share). The folder is local, so realpath can't hang here.
+    char real[PATH_MAX];
+    const char *at = mounts.len && realpath(dir, real) ? real : dir;
     DIR *d = opendir(dir);
     if (!d) return err_set(err, "%s: %s", dir, strerror(errno)), false;
     int fd = dirfd(d);
@@ -272,7 +277,7 @@ static bool fs_list_far(Arena *a, const char *dir, bool show_hidden, Sort sort, 
             memcpy(grown, e, (size_t)n * sizeof *e);
             e = grown, cap *= 2;
         }
-        if (!entry_read_far(a, fd, dir, nm, mounts, &e[n])) {
+        if (!entry_read_far(a, fd, at, nm, mounts, &e[n])) {
             ok = false;
             break;
         }

@@ -1004,4 +1004,8 @@ MUTANTS = [
     ('gui/folder.c', '        if (go_to(to, STR_EMPTY, 0) && app.far_loading) app.far_link = e->kind == K_LINK_DIR;', '        go_to(to, STR_EMPTY, 0);', 'f16'),
     ('gui/folder.c', '    if (e->far) {   // (F16) a far mount point', '    if (0) {   // (F16) a far mount point', 'f16'),
     ('gui/folder.c', '    hist_go(-1);\n    if (spawn_open(file, &err))', '    if (spawn_open(file, &err))', 'f16'),
+    # (the step 2b review: the reason's tail, blank columns, the real path on Enter)
+    ('gui/folder.c', '    return n >= k && strcmp(status + n - k, tail) == 0;', '    return strstr(status, tail + 2) != NULL;', 'f16'),
+    ('gui/files.c', '    return e->far && e->kind == K_DIR;', '    return false;', 'f16'),
+    ('gui/folder.c', '        else if (!realpath(here_dir(), real) || !link_abs(real, e->target, to, sizeof to)) {', '        else if (!realpath(here_dir(), real) || !link_abs(here_dir(), e->target, to, sizeof to)) {', 'f16'),
 ]
