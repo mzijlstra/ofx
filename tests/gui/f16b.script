@@ -1,0 +1,21 @@
+# F16 step 2: no git on a far folder (git_top and git's status would read it, on the main thread and
+# the git thread). run.sh's tree: repo/ (local) and share2/ (far by the mount list), each a
+# repository with a.txt changed; git's gap 10 s.
+settle
+# The control: a local repository's status shows.
+wait-for 5000 gitshown=1 gitn=1
+key backspace
+wait-for 3000 sel=repo
+key down
+expect sel=share2
+key enter
+wait-for 3000 faron=1 farloading=0 n=1 sel=a.txt
+# Its status isn't asked: a second for git to answer if it were, then still none.
+sh sleep 1
+key up
+expect gitshown=0 gitn=0 gitsel=-
+# Listed again within git's gap: not put off for later either (git_top would read the folder).
+key ctrl-r
+wait-for 3000 farloading=0
+expect gitdue=0 gitshown=0
+quit

@@ -36,8 +36,8 @@ static int spawn_started;   // programs started, for the GUI scripts' state line
 // err_too (else ofx's), and none of ofx's other fds (a folder's fd a copy job holds would keep a
 // USB drive busy for as long as a terminal ran). False, with the reason, when it can't start or the
 // test guard refuses check (the program that runs in the end: udisksctl under eject's sh -c, given
-// as resolved; NULL: argv[0]'s file).
-static bool spawn_with(const char *check, char *const *argv, int out, bool err_too, pid_t *pid, Err *err)
+// as resolved; NULL: argv[0]'s file). spawn_fds: in for its input instead of /dev/null (-1: that).
+static bool spawn_fds(const char *check, char *const *argv, int in, int out, bool err_too, pid_t *pid, Err *err)
 {
     char full[PATH_MAX];
     if (!prog_resolve(argv[0], full, sizeof full)) return err_set(err, "%s is not installed", argv[0]), false;
@@ -50,7 +50,8 @@ static bool spawn_with(const char *check, char *const *argv, int out, bool err_t
     posix_spawnattr_setsigmask(&attr, &none);
     posix_spawnattr_setflags(&attr, POSIX_SPAWN_SETSID | POSIX_SPAWN_SETSIGMASK);
     posix_spawn_file_actions_init(&fa);
-    posix_spawn_file_actions_addopen(&fa, 0, "/dev/null", O_RDONLY, 0);
+    if (in >= 0) posix_spawn_file_actions_adddup2(&fa, in, 0);
+    else posix_spawn_file_actions_addopen(&fa, 0, "/dev/null", O_RDONLY, 0);
     if (out >= 0) posix_spawn_file_actions_adddup2(&fa, out, 1);   // (dup2 drops O_CLOEXEC on 1)
     else posix_spawn_file_actions_addopen(&fa, 1, "/dev/null", O_WRONLY, 0);
     if (out >= 0 && err_too) posix_spawn_file_actions_adddup2(&fa, out, 2);
@@ -61,6 +62,11 @@ static bool spawn_with(const char *check, char *const *argv, int out, bool err_t
     if (rc != 0) return err_set(err, "%s: %s", argv[0], strerror(rc)), false;
     spawn_started++;
     return true;
+}
+
+static bool spawn_with(const char *check, char *const *argv, int out, bool err_too, pid_t *pid, Err *err)
+{
+    return spawn_fds(check, argv, -1, out, err_too, pid, err);
 }
 
 // Runs argv detached. False, with the reason, when it can't start, or when the test guard refuses

@@ -69,11 +69,13 @@ static void space_join(const struct timespec *until)
 // The space of each drive in pl and of cwd, asked for.
 static void space_ask(const Places *pl, const char *cwd)
 {
+    // Not a far drive's (F16): statvfs there can block the thread, and a blocked thread holds ofx.
+    Str mi = far_mounts();
     pthread_mutex_lock(&space.mu);
     int n = 0;
     for (int i = 0; i < pl->n && n < SPACE_PATHS - 1; i++)
-        if (place_is_drive(pl->p[i].kind)) snprintf(space.req[n++], PATH_MAX, "%s", pl->p[i].path);
-    if (cwd[0] == '/') snprintf(space.req[n++], PATH_MAX, "%s", cwd);
+        if (place_is_drive(pl->p[i].kind) && thumb_local(mi, pl->p[i].path)) snprintf(space.req[n++], PATH_MAX, "%s", pl->p[i].path);
+    if (cwd[0] == '/' && thumb_local(mi, cwd)) snprintf(space.req[n++], PATH_MAX, "%s", cwd);
     space.nreq = n, space.asked = n > 0;
     if (space.asked) pthread_cond_signal(&space.cv);
     pthread_mutex_unlock(&space.mu);

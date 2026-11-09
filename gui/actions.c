@@ -522,7 +522,7 @@ static void tab_load(void)
         char why[sizeof app.status];
         snprintf(why, sizeof why, "%s", app.status);
         struct stat st;
-        bool there = stat(t->dir, &st) == 0;
+        bool there = !far_dir(t->dir) && stat(t->dir, &st) == 0;   // (not a far one: F16)
         go_up_from(t->dir);
         if (there) set_status(true, "%s", why);
         return;
@@ -568,8 +568,8 @@ static void tab_open(const char *dir, Str sel, bool show)
 // A middle click's folder, in a background tab; a file isn't one.
 static void tab_open_bg(const char *path)
 {
-    struct stat st;
-    if (strcmp(path, TRASH_URI) != 0 && !is_search(path) && (stat(path, &st) != 0 || !S_ISDIR(st.st_mode))) {
+    struct stat st;   // (a far folder isn't looked at here: its lister says, F16)
+    if (strcmp(path, TRASH_URI) != 0 && !is_search(path) && !far_dir(path) && (stat(path, &st) != 0 || !S_ISDIR(st.st_mode))) {
         set_status(true, "%s isn't a folder", path_base(str_from_c(path)).p);
         return;
     }
@@ -624,6 +624,11 @@ static void location_go(void)
         return;
     }
     snprintf(path, sizeof path, "%.*s", STR_ARG(to));
+    // A far one (F16) is gone to as a folder, never looked at here: its lister says what it is.
+    if (far_dir(path)) {
+        if (go_to(path, STR_EMPTY, 0)) ui_edit_close(&app.ui);
+        return;
+    }
     struct stat st;
     if (stat(path, &st) != 0) {
         set_status(true, "%s: %s", path, strerror(errno));

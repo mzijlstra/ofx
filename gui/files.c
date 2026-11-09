@@ -468,7 +468,7 @@ static void size_cell(isize i, char *size, size_t cap, bool ask)
     if (!kind_is_dir(e->kind) && e->kind != K_LINK_BROKEN && e->kind != K_OTHER) ui_size(size, cap, e->size);
     if (!kind_is_dir(e->kind)) return;
     char path[PATH_MAX];
-    if (ask && app.count[i] == COUNT_UNKNOWN && entry_path(i, path, sizeof path) && count_ask(i, path, app.show_hidden))
+    if (ask && app.count[i] == COUNT_UNKNOWN && entry_path(i, path, sizeof path) && row_count_ask(i, path))
         app.count[i] = COUNT_ASKED;
     if (app.count[i] >= 0) snprintf(size, cap, "%td item%s", app.count[i], app.count[i] == 1 ? "" : "s");
     else if (app.count[i] == -1) snprintf(size, cap, "?");

@@ -1,0 +1,73 @@
+# F16 step 2: a far folder (run.sh's tree/share, a gvfs FUSE mount by the mount list) is read by
+# ofx-list, never by ofx: its listing, Can Write and item counts all come from the lister.
+settle
+expect faron=0 n=2 sel=local
+key down
+expect sel=share
+key enter
+wait-for 3000 faron=1 farloading=0 n=2 sel=sub canwrite=1 farnote=- statusbad=0
+# The count of sub: asked of the lister for the row on screen (not the count thread: it would read
+# the share itself). No free space said: statvfs there could hold ofx.
+wait-for 3000 sizecell=3_items farasked=1
+expect info=2_items_(1_hidden)
+# Show Hidden: listed again by a new lister (the last one killed), .dot with it.
+key ctrl-h
+wait-for 3000 n=3 hidden=1 farkills=1
+key ctrl-h
+wait-for 3000 n=2 farkills=2
+# A share that can't be written: the lister says so.
+sh chmod a-w "$OFX_DIR"
+key ctrl-r
+wait-for 3000 canwrite=0 farkills=3
+sh chmod u+w "$OFX_DIR"
+key ctrl-r
+wait-for 3000 canwrite=1 farkills=4
+# Back out: its lister killed, and gone from the kernel.
+key backspace
+wait-for 3000 faron=0 sel=share farkills=5 farheld=0 canwrite=1
+# A slow drive: a lister that answers after 4 s. The list says Opening, then after 3 s that it
+# isn't answering, while the window keeps answering (this script's lines go on); then the listing.
+sh cp "$OFX_ROOT/fakes/ofx-list" "$OFX_ROOT/fakes/ofx-list.real" && printf '#!/bin/sh\nsleep 4\nexec "%s/fakes/ofx-list.real" "$@"\n' "$OFX_ROOT" > "$OFX_ROOT/fakes/ofx-list"
+key enter
+expect faron=1 farloading=1 farslow=0 n=0 canwrite=0 info=Opening… listword=Opening…
+shot far-opening.png
+# The window asleep meanwhile, as unscripted: the timer wakes it to say so (not the 3 s stand-in,
+# which starts half a second later).
+sleep 500
+idle
+expect idlewoke=timer farslow=1 statusbad=1 farnote=share_isn't_answering listword=share_isn't_answering
+shot far-slow.png
+key down
+expect farloading=1
+wait-for 3000 farloading=0 farslow=0 farnote=- n=2 statusbad=0
+# Left before it answers: its lister killed, and its answer never shown.
+key backspace
+wait-for 3000 faron=0 sel=share
+key enter
+expect farloading=1
+key backspace
+wait-for 3000 faron=0 sel=share farheld=0
+expect n=2 sel=share
+# The folder gone meanwhile (the real lister back): listed again, the lister says so; the listing
+# shown stays.
+sh cp "$OFX_ROOT/fakes/ofx-list.real" "$OFX_ROOT/fakes/ofx-list"
+key enter
+wait-for 3000 faron=1 farloading=0 n=2
+sh mv "$OFX_DIR" "$OFX_DIR.away"
+key ctrl-r
+wait-for 3000 farloading=0 n=2 statusbad=1 farnote=share:_No_such_file_or_directory
+sh mv "$OFX_DIR.away" "$OFX_DIR"
+key backspace
+wait-for 3000 faron=0 sel=share
+# A lister that ends without a word: said, not waited for.
+sh printf '#!/bin/sh\nexit 0\n' > "$OFX_ROOT/fakes/ofx-list"
+key enter
+wait-for 3000 faron=1 farloading=0 statusbad=1 farnote=share:_its_reader_ended_without_an_answer
+key backspace
+wait-for 3000 faron=0 sel=share
+# No ofx-list at all: the folder isn't entered, and the status line says why.
+sh rm "$OFX_ROOT/fakes/ofx-list" "$OFX_ROOT/fakes/ofx-list.real"
+key enter
+expect faron=0 sel=share statusbad=1
+expect needs ofx-list, which isn't installed
+quit

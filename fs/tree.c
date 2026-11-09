@@ -26,7 +26,10 @@ typedef struct {
     bool    cut;                            // more folders than TREE_ROWS_MAX: the rest left out
     char    open[TREE_OPEN_MAX][PATH_MAX];  // the folders open, oldest first
     int     nopen;
+    Str     mounts;                         // the mount list (mountinfo): a far drive's folders aren't read (F16)
 } Tree;
+
+static bool thumb_local(Str mountinfo, const char *path);   // (thumb.c)
 
 static int tree_open_at(const Tree *t, Str path)
 {
@@ -122,6 +125,7 @@ static void tree_children(Arena *a, Tree *t, Str path, int depth, bool hidden)
 {
     char dir[PATH_MAX];
     snprintf(dir, sizeof dir, "%.*s", STR_ARG(path));
+    if (t->mounts.len && !thumb_local(t->mounts, dir)) return;   // (open, but shown without its subfolders: a dead share would hold the window, F16)
     DIR *d = opendir(dir);
     if (!d) return;
     isize cap = 64, n = 0;

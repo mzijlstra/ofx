@@ -73,13 +73,13 @@ expect view=list previews=0
 key ctrl-2
 wait 2
 expect previews=5
-# A network drive: no preview made there, nothing written. far/ opens in the icon view (its own, in
+# A network drive: no preview made there, nothing written (its listing ofx-list's, F16). far/ opens in the icon view (its own, in
 # run.sh's state file), so its first frame draws cells: the drive is far's from that frame on, not
 # the folder left's (2026-11-04: with tree's, that frame asked for x.png).
 key home
 expect sel=far
 key enter
-wait-for 5000 view=icons thumblocal=0
+wait-for 5000 view=icons thumblocal=0 faron=1 farloading=0
 wait-for 5000 thumbbusy=0
 wait 2
 expect previews=0 thumbmade=11 thumbnone=5

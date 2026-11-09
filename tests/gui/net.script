@@ -1,0 +1,39 @@
+# F16 step 2 on a real share (run.sh's net group): a server that stops answering leaves the window
+# answering, and a lister killed while it waits on the share (in the kernel, for gvfsd's answer)
+# keeps a new one for that folder from starting until it is gone.
+settle
+wait-for 8000 faron=1 farloading=0 n=2 sel=sub canwrite=1
+wait-for 5000 sizecell=50_items
+# The server stops answering: listed again, the listing kept meanwhile; after 3 s it says so.
+sh "$OFX_ROOT/pause"
+key ctrl-r
+expect farloading=1 n=2 sel=sub
+wait-for 4000 farslow=1 statusbad=1
+expect isn't answering
+shot net-slow.png
+# The window answers meanwhile.
+key down
+expect sel=hello.txt
+# A typed path into the share: gone to, never looked at by ofx itself (the lister says).
+key ctrl-l
+expect locating=1
+key end
+type /sub
+key enter
+expect locating=0 faron=1 farloading=1 n=0
+# Home: both listers killed. The share's is still in the kernel (its request is gvfsd's, waiting on
+# the server); sub's ended at once (its request was still queued behind it, and could be dropped).
+key alt-home
+wait-for 3000 faron=0 farheld=1 farkills=3
+# Back to sub: none held for it, so a new lister starts (and waits on the server).
+key alt-left
+wait-for 3000 faron=1 farwait=0 farloading=1 n=0
+# Back to the share: a new lister for it waits for its killed one; the list says Opening.
+key alt-left
+wait-for 3000 faron=1 farwait=1 farloading=1 n=0
+# The server answers again: the killed lister ends, the new one starts and lists.
+# (the killed one is really in the kernel, waiting on the share: else this would prove nothing)
+sh ps -o stat=,args= -C ofx-list | grep -q "^D.*$OFX_DIR"
+sh "$OFX_ROOT/unpause"
+wait-for 20000 farwait=0 farloading=0 farheld=0 n=2 farnote=-
+quit

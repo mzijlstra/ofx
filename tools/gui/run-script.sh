@@ -90,6 +90,10 @@ if [ "\$1" = mount ]; then
 fi
 EOS
 chmod +x "$T/fakes/udisksctl"
+# ofx-list (F16), a far folder's reader: the one beside the binary, copied among the fakes (the guard
+# runs no program outside the run's folder). A script swaps that copy for a slow one or none.
+list=$(dirname "$bin")/ofx-list
+[ ! -x "$list" ] || [ -e "$T/fakes/ofx-list" ] || cp -L "$list" "$T/fakes/ofx-list"
 # vkbd (tools/gui/vkbd.c), the scripts' keyboard in the test sway: `make build/vkbd` first.
 root=$(cd "$(dirname "$0")/../.." && pwd)
 if [ "${OFX_COMPOSITOR:-weston}" = sway ]; then

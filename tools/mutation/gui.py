@@ -192,7 +192,7 @@ def run_groups(work, base, groups, fast=True, binary='build/ofx-mut'):
 # The unmutated build in each worker, kept as build/ofx-base for the base's groups (a mutant's build
 # replaces build/ofx-mut).
 def build_base(w):
-    b = subprocess.run(['make', '-s', 'build/ofx-mut'], cwd=works[w], capture_output=True, text=True)
+    b = subprocess.run(['make', '-s', 'build/ofx-mut', 'build/ofx-list'], cwd=works[w], capture_output=True, text=True)   # (ofx-list: run-script copies it beside the binary's, F16)
     if b.returncode == 0:
         shutil.copy2(os.path.join(works[w], 'build/ofx-mut'), os.path.join(works[w], 'build/ofx-base'))
     return b
@@ -260,7 +260,7 @@ def one(i):
         path = os.path.join(work, f)
         text = open(path).read()
         open(path, 'w').write(text.replace(old, new, 1))
-        b = subprocess.run(['make', '-s', 'build/ofx-mut'], cwd=work, capture_output=True, text=True)
+        b = subprocess.run(['make', '-s', 'build/ofx-mut', 'build/ofx-list'], cwd=work, capture_output=True, text=True)
         if b.returncode != 0:
             open(path, 'w').write(text)
             print(f'#{i} {k} build failed: {b.stderr[-300:]}', flush=True)

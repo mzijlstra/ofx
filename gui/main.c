@@ -148,6 +148,7 @@ static void timer_stop(void)
 #include "watch.c"
 #include "clipboard.c"
 #include "dnd.c"
+#include "far.c"      // (before counts.c: a far folder's counts are its lister's)
 #include "counts.c"
 #include "thumbs.c"
 #include "space.c"
@@ -368,6 +369,19 @@ static struct {
     char      ctx_path[PATH_MAX]; // the folder a folder menu is on (ctx_facts)
     char      exe[PATH_MAX];      // this ofx's binary, for New Window (F7.1); "ofx" when unknown
     char      windows[PATH_MAX];  // the window registry's folder (fs/windows.c); "" for none
+    // A far folder (F16 step 2: a network share, gui/far.c), read by ofx-list:
+    bool      far_on;             // the folder shown is one
+    bool      far_loading;        // its listing hasn't come yet (the list shown: none, or the last one's)
+    bool      far_waiting;        // its last lister is still in the kernel: a new one waits for it
+    bool      far_ready;          // (go_to_in's: the listing came, take it)
+    bool      far_slow;           // no answer within FAR_ANSWER_MS: said so
+    bool      far_can_write;      // what the lister said
+    i64       far_since;          // when it was asked
+    isize     far_at;             // where the counts start in what it said
+    isize     far_fallback;       // the row asked when its listing comes
+    u32       far_cgen;           // the counts' generation (a new listing, a new order)
+    char      far_select[NAME_MAX + 1];   // the name asked when its listing comes
+    char      far_note[PATH_MAX + 64];   // the list's word while there is none: why it can't be read
 } app = { .tip = { -1, 0, false, false },
         .hov = HIT_NONE };
 
@@ -575,9 +589,9 @@ static void theme_apply(void)
 // (clip_close).
 static void quit_workers(void)
 {
-    jobs_quit(), clip_quit(), count_quit(), walk_quit(), search_quit(), thumbs_quit(), space_quit(), git_quit();
+    jobs_quit(), clip_quit(), count_quit(), walk_quit(), search_quit(), thumbs_quit(), space_quit(), git_quit(), far_quit();
     struct timespec until = deadline_in(QUIT_WAIT_MS), jobs_until = deadline_in(QUIT_JOBS_MS);
-    count_join(&until), walk_join(&until), search_join(&until), thumbs_join(&until), space_join(&until), git_join(&until);
+    count_join(&until), walk_join(&until), search_join(&until), thumbs_join(&until), space_join(&until), git_join(&until), far_join(&until);
     jobs_join(&jobs_until), clear_join(&until);
     clip_close();
     dnd_close();
@@ -728,6 +742,7 @@ static void app_start(void)
     clip_init();   // false: the clipboard stays inside ofx
     dnd_init();    // (F14: drags to and from other programs)
     count_start();
+    far_start_thread();
     walk_start();
     search_start();
     thumbs_start(&scratch);
@@ -788,6 +803,7 @@ static bool poll_workers(void)
     if (atomic_exchange(&watch.trash_ready, false) && trash_state()) dirty = true;
     dirty |= jobs_poll();
     if (app.have_list && count_take(app.count, app.list.n)) dirty = true;
+    if (far_poll()) dirty = true;
     if (space_take(&app.places, app.cwd, &app.cwd_avail)) dirty = true;
     if (eject_take()) dirty = true;
     if (props.walking && walk_take(&props.sum, &props.done)) dirty = true;

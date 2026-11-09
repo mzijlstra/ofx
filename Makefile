@@ -16,7 +16,7 @@ PREFIX  ?= $(HOME)/.local
 
 .PHONY: all release test test-fm1 test-net install clean FORCE
 
-all: build/ofx build/ofx-clean build/ofx-fm1 build/ofx-probe   # (ofx-probe: the README's ofx.conf copy, which make test checks)
+all: build/ofx build/ofx-clean build/ofx-list build/ofx-fm1 build/ofx-probe   # (ofx-probe: the README's ofx.conf copy, which make test checks)
 
 # F14's pointer in the test sway (tools/gui/vptr.c, 2026-11-05), as vkbd is the keyboard.
 VPTR_XML = tools/gui/wlr-virtual-pointer-unstable-v1.xml
@@ -45,6 +45,13 @@ build/ofx-clean: tools/clean.c $(wildcard base/*.c base/*.h fs/*.c) Makefile | b
 
 build/release/ofx-clean: tools/clean.c $(wildcard base/*.c base/*.h fs/*.c) Makefile | build/release
 	$(CC) $(CFLAGS) $(IMG_INC) $(RELEASE) -o $@ tools/clean.c $(IMG_LIBS) -lm
+
+# A far folder's reader (F16): ofx starts it beside itself, never reading a share in its own process.
+build/ofx-list: tools/list.c $(wildcard base/*.c base/*.h fs/*.c) Makefile | build
+	$(CC) $(CFLAGS) $(IMG_INC) $(DEBUG) -o $@ tools/list.c $(IMG_LIBS) -lm
+
+build/release/ofx-list: tools/list.c $(wildcard base/*.c base/*.h fs/*.c) Makefile | build/release
+	$(CC) $(CFLAGS) $(IMG_INC) $(RELEASE) -o $@ tools/list.c $(IMG_LIBS) -lm
 
 # FileManager1 on the session bus (2026-10-26): sd-bus, from libsystemd.
 build/ofx-fm1: tools/fm1.c $(wildcard base/*.c base/*.h fs/*.c) Makefile | build
@@ -180,9 +187,9 @@ UNITS   ?= $(HOME)/.config/systemd/user
 APPS    ?= $(PREFIX)/share/applications
 DBUS_SVC ?= $(PREFIX)/share/dbus-1/services
 
-install: build/release/ofx build/release/ofx-clean build/release/ofx-fm1
+install: build/release/ofx build/release/ofx-clean build/release/ofx-list build/release/ofx-fm1
 	install -d $(PREFIX)/bin $(UNITS)
-	install -m 755 build/release/ofx build/release/ofx-clean build/release/ofx-fm1 $(PREFIX)/bin/
+	install -m 755 build/release/ofx build/release/ofx-clean build/release/ofx-list build/release/ofx-fm1 $(PREFIX)/bin/
 	rm -f $(PREFIX)/bin/fx   # the name before ofx (2026-10-22)
 	install -d $(APPS)
 	sed 's|@BIN@|$(PREFIX)/bin|' tools/desktop/ofx.desktop > $(APPS)/ofx.desktop   # the folder handler's entry (2026-10-26)

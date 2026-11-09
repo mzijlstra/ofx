@@ -132,7 +132,7 @@ static void git_ask(const char *dir)
     git.last = now_ms(), git.due = 0;
     pthread_mutex_lock(&git.mu);
     git.gen++, git.ready = -1;
-    bool asked = dir && app.conf.git_status && git.started;
+    bool asked = dir && app.conf.git_status && git.started && !far_dir(dir);   // (a far folder: the thread's git_top would read it and hold ofx, F16)
     if (asked) snprintf(git.want, sizeof git.want, "%s", dir), git.asked = true, pthread_cond_signal(&git.cv);
     else git.slot[git.shown].repo = false;   // (nothing shown until an answer)
     pthread_mutex_unlock(&git.mu);
@@ -149,7 +149,7 @@ static i64 wake_due(void);
 static void git_ask_soon(void)
 {
     char top[PATH_MAX];
-    bool none = !app.conf.git_status || !git_top(app.cwd, top, sizeof top);   // (a realpath and a few lstats)
+    bool none = !app.conf.git_status || app.far_on || !git_top(app.cwd, top, sizeof top);   // (a realpath and a few lstats; none on a far folder, F16)
     i64 now = now_ms();
     if (none || now - git.last >= git_gap_ms) git_ask(app.cwd);
     else if (!git.due) git.due = git.last + git_gap_ms, timer_at(wake_due());

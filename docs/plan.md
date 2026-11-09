@@ -870,7 +870,29 @@ blocks each of these for up to gvfs's 90 s. On a thread it also holds ofx's exit
    of the folder, each with what happens on a dead share today (measured on a paused container).
 2. **`ofx-list`, the child lister:** far folders listed and counted through it, the "not
    answering" state, kill on leave. Tests: a paused server, the window still answering (frames
-   keep coming), a leave mid-hang, unpause and reload.
+   keep coming), a leave mid-hang, unpause and reload. Split in two (2026-11-09):
+   - **2a, far folders** (done):
+     - **How it works:**
+       - `ofx-list` (tools/list.c, fs/farlist.c) lists the folder, says Can Write, then answers
+         count questions for the rows on screen until its input ends.
+       - gui/far.c has one lister at a time and a thread that only reads its pipe and polls pidfds.
+     - **What the window does:**
+       - Entering a far folder shows it at once with "Opening…" (list and footer), then its
+         listing. A reload keeps the listing shown until the new one comes.
+       - After 3 s: "<name> isn't answering". Leaving kills the lister. A killed lister still in the
+         kernel holds back a new one for its folder ("one per folder").
+     - **What is skipped there:** no watch (`inotify_add_watch` looks the folder up), no git (`git_ask`
+       refuses far folders), no free space, the tree not read below a far mount, no `stat` before
+       going to a typed location or a background tab.
+     - **Measured on the real share** (group `net`): only a request gvfsd has already taken holds
+       its killed reader. A request still queued behind it ends with the kill.
+     - **Test harness:** `script_under` (the scripts' `sh` guard) checks a far folder by its path,
+       not `realpath` (that blocked the window on a paused share).
+     - **Known gaps, for step 3:** starting ofx on a far path (`realpath` at start), and a typed
+       far path that is a file (the lister says "Not a directory").
+   - **2b, links into far mounts from local folders**, and a far mount point listed in a local
+     folder (its `fstatat` reaches the share's root): not followed in-process, kinds reported later
+     by a lister (step 1 review).
 3. **The audit's other touches** moved off the main thread or skipped on far folders.
 4. **Connect to Server… and passwords:** the address line (Go menu and Ctrl+L with `smb://`), the
    password question, `gio mount` on a job thread, wrong password and unknown host said in the

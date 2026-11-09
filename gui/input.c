@@ -483,7 +483,8 @@ static bool hover_at(float x, float y);
 // status ask put off (git.c's once a second, F12), or a drag's tab to open (F13 step 4).
 static i64 wake_due(void)
 {
-    i64 d[] = { ui_tip_due(&app.tip), app.search_due, rem.due, restore.due, app.spring_tab >= 0 ? app.spring_at + UI_SPRING_MS : 0, git.due };
+    i64 d[] = { ui_tip_due(&app.tip), app.search_due, rem.due, restore.due, app.spring_tab >= 0 ? app.spring_at + UI_SPRING_MS : 0, git.due,
+                app.far_loading && !app.far_slow ? app.far_since + FAR_ANSWER_MS : 0 };
     return ui_due_min(d, COUNT(d));
 }
 

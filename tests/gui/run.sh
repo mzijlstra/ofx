@@ -6,7 +6,7 @@
 # printed whole, in order, once all are done; clip, keys and dnd share one (each starts a sway,
 # which takes the first free wayland-N).
 # The groups (one or more scripts on one tree): browse big gone watchgap f2 f3 f4 f5 f52 f53 f54
-# f6 (f6, f6b) usb f62 (f62, f62b, f62c) f63 (f63, f63b, f63c, f63d) f64 (f64, f64b, f64c, f64d) f7 (f7, f7b) f72 f73 (f73, f73b, f73c, f73d) f74 f75 (f75, f75b, f75c) f15 (f15, f15b) f8 (f8, f8b, f8c, f8d, f8e) f9 (f9, f9b) f10 (f10, f10b, f10c, f10d) f11 (f11, f11b, f11c, f11d, f11e, f11f, f11g, f11h, f11i, f11j, f11k, f11l, f11m, f11n, f11o, f11p, f11q, f11r, f11s, f11t) f12 (f12, f12b) f12g f12h f12i f13 (f13, f13b, f13c, f13d, f13e, f13f, f13g, f13h) clip (clip, copypath) keys dnd (dnd, dndb, dndc, dndd, dnde, dndf, dndg, dndh, dndi, dndj, dndk) (the three in sway) hang guard3 guard harness (harness, harnessb, harnessc, harnessd). Named ones only, or all of them; a group
+# f6 (f6, f6b) usb f62 (f62, f62b, f62c) f63 (f63, f63b, f63c, f63d) f64 (f64, f64b, f64c, f64d) f7 (f7, f7b) f72 f73 (f73, f73b, f73c, f73d) f74 f75 (f75, f75b, f75c) f15 (f15, f15b) f16 (f16, f16b) net f8 (f8, f8b, f8c, f8d, f8e) f9 (f9, f9b) f10 (f10, f10b, f10c, f10d) f11 (f11, f11b, f11c, f11d, f11e, f11f, f11g, f11h, f11i, f11j, f11k, f11l, f11m, f11n, f11o, f11p, f11q, f11r, f11s, f11t) f12 (f12, f12b) f12g f12h f12i f13 (f13, f13b, f13c, f13d, f13e, f13f, f13g, f13h) clip (clip, copypath) keys dnd (dnd, dndb, dndc, dndd, dnde, dndf, dndg, dndh, dndi, dndj, dndk) (the three in sway) hang guard3 guard harness (harness, harnessb, harnessc, harnessd). Named ones only, or all of them; a group
 # that fails says "== <script>: FAILED" or "<group>: FAILED" (tools/mutation/gui.py reads it).
 set -u
 par=1
@@ -394,6 +394,42 @@ if want f15; then
 fresh f15; mkdir -p "$T/tree/a" "$T/tree/b"; touch "$T/tree/c.txt"
 rs f15 -- "$T/tree"
 rs f15b -- "$T/tree"
+fi
+if want f16; then
+# F16 step 2: a far folder read by ofx-list. tree/share stands for a share: the mount list says it is
+# a gvfs FUSE mount (no network here; the net group has a real one). share: sub/ (3 files), x.txt,
+# .dot; local: a.txt.
+fresh f16; mkdir -p "$T/tree/share/sub" "$T/tree/local"
+touch "$T/tree/share/sub/1" "$T/tree/share/sub/2" "$T/tree/share/sub/3" "$T/tree/share/x.txt" "$T/tree/share/.dot" "$T/tree/local/a.txt"
+printf '1 0 0:1 / / rw - ext4 /dev/x rw\n2 1 0:2 / %s rw,nosuid,nodev - fuse.gvfsd-fuse gvfsd-fuse rw\n' "$T/tree/share" > "$T/mountinfo"
+rs f16 OFX_TEST_MOUNTINFO="$T/mountinfo" -- "$T/tree"
+# f16b: git on a far folder. f16b/tree/repo (local) and f16b/tree/share2 (far by the mount list), each
+# a scratch repository with a changed file; git's wrapper among the fakes, as f12g's.
+fresh f16b; mkdir -p "$T/tree/repo" "$T/tree/share2" "$T/fakes"
+git_fake "$T"
+for r in repo share2; do
+    ( cd "$T/tree/$r" && git_env "$T" && git init -q -b main . && printf 'a\n' > a.txt && git add -A && git commit -qm one && printf 'b\n' >> a.txt ) || failed f16b
+done
+printf '1 0 0:1 / / rw - ext4 /dev/x rw\n2 1 0:2 / %s rw,nosuid,nodev - fuse.gvfsd-fuse gvfsd-fuse rw\n' "$T/tree/share2" > "$T/mountinfo"
+rs f16b OFX_TEST_MOUNTINFO="$T/mountinfo" OFX_TEST_GIT_GAP_MS=10000 -- "$T/tree/repo"
+fi
+if want net; then
+# F16 step 2 on a real share (tests/net/lib.sh: a Samba container, a gvfs of the run's own under <T>/rt,
+# so the share's path is inside the guard's root). ofx starts in the share; <T>/pause and <T>/unpause
+# stop and start its server for the script. Skipped, saying so, without podman or gvfs-smb.
+fresh net; mkdir -p "$T/home"
+( NET_LIB="$here/../net/lib.sh"; . "$NET_LIB"
+  net_ok || exit 0
+  trap net_end EXIT; trap 'exit 130' INT TERM
+  { net_server "$T" && net_hold "$T" pub; } || { echo "== net: FAILED (its server or share)"; exit 1; }
+  for w in pause unpause; do
+      printf '#!/bin/sh\nexec env -i HOME="%s" XDG_RUNTIME_DIR="%s" PATH=/usr/bin podman %s %s > /dev/null\n' "$NET_REAL_HOME" "$NET_REAL_RT" "$w" "$NET_C" > "$T/$w"
+      chmod +x "$T/$w"
+  done
+  printf '1 0 0:1 / / rw - ext4 /dev/x rw\n2 1 0:2 / %s rw,nosuid,nodev - fuse.gvfsd-fuse gvfsd-fuse rw\n' "$T/rt/gvfs" > "$T/mountinfo"
+  RS_HOME=$T/home fail=0
+  rs net OFX_TEST_MOUNTINFO="$T/mountinfo" -- "$NET_SHARE"
+  exit $fail ) || fail=1
 fi
 if want f8; then
 # F8: the right-click menus. The tree as f74's: home/tree: sub/, a.txt, b.txt, c.txt, .hid; the

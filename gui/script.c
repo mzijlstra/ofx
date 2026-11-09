@@ -726,6 +726,21 @@ static void script_state(char *out, size_t cap)
     sw(out, cap, &len, "barshown=%d ", bar_shown());
     sw(out, cap, &len, "menuhover=%d ", app.hov.menu_title);
     sw(out, cap, &len, "canwrite=%d ", app.ui.can_write);
+    sw(out, cap, &len, "faron=%d ", app.far_on);
+    sw(out, cap, &len, "farloading=%d ", app.far_loading);
+    sw(out, cap, &len, "farwait=%d ", app.far_waiting);
+    sw(out, cap, &len, "farslow=%d ", app.far_slow);
+    char farnote[sizeof app.far_note];
+    sw(out, cap, &len, "farnote=%s ", state_word(farnote, sizeof farnote, str_from_c(app.far_note)));
+    pthread_mutex_lock(&far.mu);
+    sw(out, cap, &len, "farkills=%d ", far.kills);
+    sw(out, cap, &len, "farheld=%d ", far.nkilled);
+    sw(out, cap, &len, "farasked=%d ", far.asked);
+    bool word_bad;
+    const char *word = app.have_list && !app.list.n ? list_word(&word_bad) : "";
+    char listword[sizeof app.far_note];
+    sw(out, cap, &len, "listword=%s ", state_word(listword, sizeof listword, str_from_c(word)));
+    pthread_mutex_unlock(&far.mu);
     sw(out, cap, &len, "windows=%d ", windows);
     sw(out, cap, &len, "siderows=%d ", app.ui.side.rows);
     sw(out, cap, &len, "sidetop=%td ", app.ui.side.top);
@@ -915,7 +930,10 @@ static void script_fail(const char *fmt, ...)
 static bool script_under(const char *path, const char *root)
 {
     char p[PATH_MAX], r[PATH_MAX];
-    if (!root || !root[0] || !realpath(path, p) || !realpath(root, r)) return false;
+    // A far folder (F16) by its path as ofx holds it, not realpath's: that would read it, on the
+    // main thread, and a share whose server the script stopped would hold the window.
+    bool held = far_dir(path) && snprintf(p, sizeof p, "%s", path) < (int)sizeof p;
+    if (!root || !root[0] || (!held && !realpath(path, p)) || !realpath(root, r)) return false;
     size_t n = strlen(r);
     return strncmp(p, r, n) == 0 && (p[n] == 0 || p[n] == '/');
 }

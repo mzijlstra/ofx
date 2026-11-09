@@ -169,7 +169,7 @@ static void view_watch(UiView v)
 {
     char tinfo[PATH_MAX + 8] = "";
     if (v == UI_VIEW_TRASH && trash_home(tinfo, sizeof tinfo - 8)) strcat(tinfo, "/info");
-    watch_dir(v == UI_VIEW_TRASH ? tinfo : v == UI_VIEW_SEARCH ? NULL : app.cwd);
+    watch_dir(v == UI_VIEW_TRASH ? tinfo : v == UI_VIEW_SEARCH || app.far_on ? NULL : app.cwd);   // (a far folder: no watch, its add would look it up; F16)
 }
 
 static void view_title(UiView v)
@@ -193,6 +193,107 @@ static void view_changed(void)
     if (app.ui.view == UI_VIEW_SEARCH) search_prune(app.search_root);
 }
 
+// ---- a far folder (F16 step 2: gui/far.c) -------------------------------------------------------
+
+enum { FAR_ANSWER_MS = 3000 };   // no answer by then: the list says the drive isn't answering
+
+static bool go_to_in(const char *dir, Str select, isize fallback, bool stepping);
+
+static isize far_scan;   // how far what the lister said was looked through for its listing's end
+
+// dir's lister started (or, while one killed for it is still in the kernel, put off until it is
+// gone: far_poll), its listing to come with the cursor on `select` (else row `fallback`). False,
+// with the reason, when it can't start.
+static bool far_begin(const char *dir, Str select, isize fallback, Err *err)
+{
+    snprintf(app.far_select, sizeof app.far_select, "%.*s", STR_ARG(select));
+    app.far_fallback = fallback, app.far_since = now_ms(), app.far_slow = false, app.far_note[0] = 0, far_scan = 0;
+    app.far_loading = true, app.far_waiting = far_busy(dir);
+    if (!app.far_waiting && !far_start(app.exe, dir, app.show_hidden, err)) return app.far_loading = false, false;
+    timer_at(wake_due());   // (one timer for all: wake_due holds the "isn't answering" time)
+    return true;
+}
+
+// go_to_in's listing of far folder dir: the lister's answer when it came (app.far_ready), into a;
+// else none yet, the lister started.
+static bool far_list(const char *dir, Arena *a, Listing *l, Str select, isize fallback, Err *err)
+{
+    if (!app.far_ready) {
+        *l = (Listing){ 0 }, app.far_can_write = false;   // (not known until it says: not the last folder's)
+        return far_begin(dir, select, fallback, err);
+    }
+    isize len;
+    bool eof, full, ended;
+    far_said(&len, &eof, &full);
+    char name[NAME_MAX + 1];   // (said by its name: the crumbs say where)
+    snprintf(name, sizeof name, "%.*s", STR_ARG(path_base(str_from_c(dir))));
+    if (!far_listing(a, (Str){ (char *)far_mem, len }, name, l, &app.far_can_write, &app.far_at, &ended, err)) return false;
+    fs_sort(l, app.ui.sort);
+    return true;
+}
+
+// The far folder's lister can't give its listing: why, in the list and the status line.
+static void far_failed(const char *why)
+{
+    app.far_loading = false;
+    snprintf(app.far_note, sizeof app.far_note, "%s", why);
+    set_status(true, "%s", why);
+}
+
+// Each frame, on a far folder: its listing taken when it has come (then the counts asked since),
+// its lister started once a killed one is gone, and "isn't answering" said after FAR_ANSWER_MS.
+// True when the window must draw again.
+static bool far_poll(void)
+{
+    if (!app.far_on) return false;
+    Err err;
+    if (app.far_waiting && !far_busy(app.cwd)) {
+        app.far_waiting = false;
+        if (!far_start(app.exe, app.cwd, app.show_hidden, &err)) return far_failed(err.msg), true;
+    }
+    isize len;
+    bool eof, full;
+    far_said(&len, &eof, &full);
+    Str b = { (char *)far_mem, len };
+    FarMsg m;
+    if (app.far_loading && !app.far_waiting) {
+        int r;
+        bool ended = false;
+        while (!ended && (r = far_next(b, &far_scan, &m)) == 1) ended = m.type == 'L' || m.type == 'X';
+        if (ended || r < 0) {
+            app.far_ready = true;
+            bool ok = go_to_in(app.cwd, str_from_c(app.far_select), app.far_fallback, true);
+            app.far_ready = false, app.far_loading = false;
+            if (!ok) snprintf(app.far_note, sizeof app.far_note, "%s", app.status);
+            else if (app.far_slow) app.status[0] = 0;   // (its "isn't answering" said its last)
+            if (ok) app.far_note[0] = 0, app.far_slow = false;
+            return true;
+        }
+        Str name = path_base(str_from_c(app.cwd));
+        if (full) return far_failed(TextFormat("%.*s: too many entries for memory", STR_ARG(name))), true;
+        if (eof) return far_failed(TextFormat("%.*s: its reader ended without an answer", STR_ARG(name))), true;
+    }
+    if (app.far_loading) {
+        if (app.far_slow || now_ms() - app.far_since < FAR_ANSWER_MS) return false;
+        app.far_slow = true;
+        snprintf(app.far_note, sizeof app.far_note, "%.*s isn't answering", STR_ARG(path_base(str_from_c(app.cwd))));   // (its name: the crumbs say where)
+        set_status(true, "%s", app.far_note);
+        return true;
+    }
+    bool any = false;
+    while (far_next(b, &app.far_at, &m) == 1)
+        if (m.type == 'C' && m.v[0] == app.far_cgen && m.v[1] < app.list.n) app.count[m.v[1]] = m.v[2], any = true;
+    return any;
+}
+
+// Entry i's item count asked: of its folder's lister on a far folder (once its listing is shown),
+// else of the count thread.
+static bool row_count_ask(isize i, const char *path)
+{
+    if (app.far_on) return !app.far_loading && far_count_send(app.far_cgen, i, app.list.e[i].name);
+    return count_ask(i, path, app.show_hidden);
+}
+
 // Shows dir, the cursor on the entry called `select` (else on row `fallback`). A move to another
 // folder goes in the history, unless it is the history's own (`stepping`). False, with the reason
 // in the status line, when dir can't be read: the old listing stays.
@@ -204,6 +305,13 @@ static bool go_to_in(const char *dir, Str select, isize fallback, bool stepping)
     Err err;
     UiView view = view_of(dir);
     bool same = strcmp(dir, app.cwd) == 0;
+    bool on_far = view == UI_VIEW_FOLDER && far_dir(dir);
+    // A far folder listed again (Ctrl+R, a change ofx made): a new lister, the listing shown kept
+    // until its answer comes.
+    if (on_far && !app.far_ready && same && app.far_on && app.have_list) {
+        if (far_begin(dir, select, fallback, &err)) return true;
+        return far_failed(err.msg), false;
+    }
     // Another folder (F11): the one left keeps its cursor; this one's own view, size and sort, its
     // remembered cursor when none is asked for. All as they were if it can't be listed.
     bool grid = app.ui.grid;
@@ -220,7 +328,7 @@ static bool go_to_in(const char *dir, Str select, isize fallback, bool stepping)
     Str *mime = NULL;
     u8 *mark = NULL;
     isize *count = NULL;
-    bool ok = view_list(view, &lists[next], dir, &l, &err);
+    bool ok = on_far ? far_list(dir, &lists[next], &l, select, fallback, &err) : view_list(view, &lists[next], dir, &l, &err);
     if (ok) {
         mime = arena_try_new(&lists[next], Str, l.n + 1);
         mark = arena_try_new(&lists[next], u8, l.n + 1);
@@ -247,6 +355,8 @@ static bool go_to_in(const char *dir, Str select, isize fallback, bool stepping)
     // The folder left, with its cursor, for Back: its name is still in the old listing's arena.
     if (!same && app.have_list && !stepping) hist_leave(&hist, app.cwd, sel_name());
     app.cur = next, app.list = l, app.mime = mime, app.have_list = true, app.error[0] = 0, app.lists++;
+    if (app.far_on && !on_far) far_drop(), app.far_loading = app.far_waiting = app.far_slow = false, app.far_note[0] = 0;   // (left: its lister killed)
+    app.far_on = on_far;
     if (!same && app.ui.panel == UI_PANEL_BRANCHES) ui_brp_close(&app.ui);   // (its list was the folder left's: 2026-11-03)
     if (!same && app.ui.menu_on && app.ui.menu == UI_CTX_BRANCH) app.ui.menu_on = false;
     if (app.ui.view == UI_VIEW_SEARCH && view != UI_VIEW_SEARCH) search_ask((SearchQuery){ .root = "", .skips = &app.conf.skip }), app.search_due = 0;   // (out of it: the walk stops)
@@ -257,10 +367,10 @@ static bool go_to_in(const char *dir, Str select, isize fallback, bool stepping)
         snprintf(app.search_pick, sizeof app.search_pick, "%.*s", STR_ARG(select));
     }
     ui_view_set(&app.ui, view, same, text, inside);
-    app.ui.can_write = view == UI_VIEW_FOLDER && access(dir, W_OK) == 0;   // the File menu's Create entries (F7.1)
+    app.ui.can_write = view == UI_VIEW_FOLDER && (on_far ? app.far_can_write : access(dir, W_OK) == 0);   // the File menu's Create entries (F7.1); a far folder's lister says (F16)
     for (isize i = 0; i < l.n; i++) count[i] = COUNT_UNKNOWN;
     app.count = count;
-    count_new_listing();
+    count_new_listing(), app.far_cgen++;
     ArenaMark mi_mark = arena_mark(&scratch);
     app.thumb_local = thumb_local(read_file(&scratch, mountinfo_path()), view == UI_VIEW_SEARCH ? app.search_root : dir);   // (not here_dir: cwd is still the last one's)
     arena_restore(&scratch, mi_mark);
@@ -277,15 +387,15 @@ static bool go_to_in(const char *dir, Str select, isize fallback, bool stepping)
         // tests/gui/watchgap.script can put a change in it.
         if (watch_delay_ms > 0) nanosleep(&(struct timespec){ watch_delay_ms / 1000, (watch_delay_ms % 1000) * 1000000L }, NULL);
         view_watch(view);
-        // A change between the listing and the watch made no event: list once more.
-        atomic_store(&watch.list_ready, true);
-        glfwPostEmptyEvent();
+        // A change between the listing and the watch made no event: list once more (not a far
+        // folder: it has no watch, and its listing hasn't come yet).
+        if (!on_far) atomic_store(&watch.list_ready, true), glfwPostEmptyEvent();
         view_title(view);
     }
     ui_set(&app.ui.list, l.n, sel);
     // Each listing asks git (a change in the folder may be git's too; F12): a new folder at once, the
     // same one again at most once a second.
-    if (view != UI_VIEW_FOLDER) git_ask(NULL);
+    if (view != UI_VIEW_FOLDER) git_ask(NULL);   // (a far folder: git_ask refuses it, F16)
     else if (!same) git_ask(app.cwd);
     else git_ask_soon();
     // The find bar stays open in another folder; Esc there goes back to where this one opened, not
@@ -515,6 +625,7 @@ static void tree_refresh(bool follow, int fallback)
     if (!follow && app.ui.side.sel < tree.n) snprintf(keep, sizeof keep, "%.*s", STR_ARG(tree.row[app.ui.side.sel].path));
     if (follow) tree_follow(&tree, app.cwd);
     arena_reset(&treea);
+    tree.mounts = read_file(&treea, mountinfo_path());
     tree_build(&treea, &tree, S("/"), app.show_hidden);
     int sel = tree_find(&tree, str_from_c(follow ? app.cwd : keep));
     if (sel < 0) sel = fallback < tree.n ? fallback : 0;
@@ -659,7 +770,7 @@ static void resort(void)
     memset(app.mime, 0, sizeof *app.mime * (size_t)app.list.n);
     // The counts are by row too: asked again in the new order.
     for (isize i = 0; i < app.list.n; i++) app.count[i] = COUNT_UNKNOWN;
-    count_new_listing();
+    count_new_listing(), app.far_cgen++;
     isize sel = listing_find(&app.list, str_from_c(keep));
     ui_set(&app.ui.list, app.list.n, sel >= 0 ? sel : 0);
 }

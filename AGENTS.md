@@ -124,9 +124,17 @@ shared state. Every test runs against fakes and scratch folders. Keep it that wa
   `dbus-run-session` with a bus config listing only gvfsd, `XDG_RUNTIME_DIR` and `HOME` under
   `build/net-test`, so gvfsd-fuse mounts there. Never run `gio mount` in a test on the session's
   bus: the share would appear in your file managers and `/run/user/$UID/gvfs`, and a password
-  could reach your keyring (the default session config starts a gnome-keyring). podman inside it
-  runs with the real `HOME` and `XDG_RUNTIME_DIR`; with the scratch ones it starts a stray pause
-  process (`catatonit`) of its own. Never touch a container that isn't the run's.
+  could reach your keyring (the default session config starts a gnome-keyring). podman runs with
+  `env -i` and only the real `HOME` and `XDG_RUNTIME_DIR` (tests/net/lib.sh): with the scratch
+  ones it starts a stray pause process (`catatonit`) of its own, and under run-script the XDG
+  folders are the run's, where podman would put its storage. Never touch a container that isn't
+  the run's. The GUI group `net` uses the same library: the share mounted under `<T>/rt` for the
+  window's run, `<T>/pause` and `<T>/unpause` for its script.
+- **A far folder** (F16: a network share, any FUSE mount, by the mount list) is read by `ofx-list`,
+  a child (gui/far.c, fs/farlist.c), never by ofx: a read there can block for 90 s, and a thread
+  blocked on it would hold the whole process. run-script copies the `ofx-list` beside the binary
+  among the fakes (the guard runs no other). The `f16` group stands a scratch folder in for a share
+  through its mount list; `net` uses a real one.
 - **A window that stops answering** makes the compositor ask whether to terminate it, on your
   screen. The script's `sh` runs under `timeout 5` for that reason; keep everything a script waits
   for short.
@@ -222,7 +230,7 @@ ui/ that nothing calls makes the test build warn.
   `fs/search.c` the search's address and walk; `fs/editors.c` Open at Line's recipes; `fs/conf.c`
   ofx.conf; `fs/places.c` the sidebar's places; `fs/clean.c` ofx-clean's rules; `fs/sandbox.c`
   bubblewrap's runs; `fs/thumbers.c` the system's thumbnailers; `fs/git.c` git status;
-  `fs/state.c` the state file (its lock, `state_rewrite`), `fs/folders.c` its per-folder lines,
+  `fs/farlist.c` what `ofx-list` says about a far folder (F16); `fs/state.c` the state file (its lock, `state_rewrite`), `fs/folders.c` its per-folder lines,
   `fs/session.c` its window lines.
 - `ui/ui.c`: the types (Ui, UiInput, UiAction, UiFocus, UiOnTop) and tables, then `keys.c` (the
   keys: each key's own meaning, the commands, the bindings, the event a key sends; F15), `cursor.c`,

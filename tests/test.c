@@ -1713,6 +1713,7 @@ static void test_format(void)
 #include "test_f14.c"
 #include "test_fm1.c"
 #include "test_f15.c"
+#include "test_f16.c"
 
 int main(void)
 {
@@ -1910,6 +1911,12 @@ int main(void)
     if (fast) test_keys_panel();
     if (fast) test_keys_in_fields();
     if (slow) test_write_all();
+    if (fast) test_far_serve();
+    if (fast) test_far_next();
+    if (fast) test_far_many();
+    if (fast) test_tree_far();
+    if (fast) test_far_footer();
+    if (fast) test_spawn_fds_in();
     if (fast) test_wheel_under_question();
     if (fast) test_ui_age();
     if (fast) test_branch_panel();
