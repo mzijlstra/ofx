@@ -1190,7 +1190,9 @@ blocks each of these for up to gvfs's 90 s. On a thread it also holds ofx's exit
        - **A host not in known_hosts:** "Identity Verification Failed … [1] Log In Anyway
          [2] Cancel Login / Choice: ", the fingerprint shown as "???". Michael's call: ofx
          answers Cancel and says "<host> isn't a known host: connect once with ssh to check its
-         key, then try again".
+         key, then try again". (A user whose ssh config says `StrictHostKeyChecking accept-new`
+         is never asked: ssh takes the new key itself, so ofx's refusal never runs. That is the
+         user's ssh policy, as for ssh itself; the step 7c review.)
        - gvfs passes ssh `NoHostAuthenticationForLocalhost`, and puts its control socket in
          `$XDG_RUNTIME_DIR/gvfsd-sftp/<40 hex>`.
      - **What changed:**
