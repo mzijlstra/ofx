@@ -260,6 +260,15 @@ enum { FAR_DO_MS = 1500, FAR_DO_ARGS = 3 * CLIP_PATHS_MAX + 8 };   // (Michael, 
 
 static u8 far_do_mem[MiB(1)];   // the last action's answer (its fields point into it)
 
+// The bounded wait for an action, FAR_DO_MS; a test's own with OFX_TEST_FAR_DO_MS (f16f: longer, so
+// its slow fakes' timings keep a margin under a loaded machine; the cleanup's step B).
+static i64 far_do_ms(void)
+{
+    static int ms = -1;
+    if (ms < 0) ms = env_int("OFX_TEST_FAR_DO_MS", FAR_DO_MS, 100, 60000);
+    return ms;
+}
+
 // Whether the far drive path is on (its share, under gvfs) has a child still held, a lister or an
 // action that didn't answer (step 3 review): it isn't answering, and asking it again would only wait
 // as long again. Over when that child is gone, which is when the share answers.
@@ -322,7 +331,7 @@ static bool far_do(const char *exe, const char *dir, const char *const *args, i6
         return false;
     }
     isize len = 0;
-    if (!until) until = now_ms() + FAR_DO_MS;
+    if (!until) until = now_ms() + far_do_ms();
     bool ended = false;
     while (!ended) {
         i64 left = until - now_ms();

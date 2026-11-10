@@ -1,5 +1,5 @@
 # F16 step 3: ofx started on a file in the share, reached through local links: gone to as a folder
 # (never looked at), and its lister's "Not a directory" shows its folder with it selected.
 settle
-wait-for 3000 faron=1 farloading=0 n=1 sel=x.txt statusbad=0 farnote=-
+wait-for 3000 faron=1 farloading=0 n=2 sel=x.txt statusbad=0 farnote=-
 quit

@@ -28,9 +28,11 @@ wait-for 3000 canwrite=1 farkills=4
 # Back out: its lister killed, and gone from the kernel.
 key backspace
 wait-for 3000 faron=0 sel=share farkills=5 farheld=0 canwrite=1
-# A slow drive: a lister that answers after 4 s. The list says Opening, then after 3 s that it
+# A slow drive: a lister that answers after 6 s. The list says Opening, then after 3 s that it
 # isn't answering, while the window keeps answering (this script's lines go on); then the listing.
-sh cp "$OFX_ROOT/fakes/ofx-list" "$OFX_ROOT/fakes/ofx-list.real" && printf '#!/bin/sh\nsleep 4\nexec "%s/fakes/ofx-list.real" "$@"\n' "$OFX_ROOT" > "$OFX_ROOT/fakes/ofx-list"
+# (6 s: at 4 the answer came half a second after the 3 s note, which a loaded run could pass; the
+# cleanup's step B.)
+sh cp "$OFX_ROOT/fakes/ofx-list" "$OFX_ROOT/fakes/ofx-list.real" && printf '#!/bin/sh\nsleep 6\nexec "%s/fakes/ofx-list.real" "$@"\n' "$OFX_ROOT" > "$OFX_ROOT/fakes/ofx-list"
 key enter
 expect faron=1 farloading=1 farslow=0 n=0 canwrite=0 info=Opening… listword=Opening…
 shot far-opening.png
@@ -42,7 +44,7 @@ expect idlewoke=timer farslow=1 statusbad=1 farnote=share_isn't_answering listwo
 shot far-slow.png
 key down
 expect farloading=1
-wait-for 3000 farloading=0 farslow=0 farnote=- n=2 statusbad=0
+wait-for 5000 farloading=0 farslow=0 farnote=- n=2 statusbad=0
 # A slow reload keeps the listing shown, and the cursor where it is moved meanwhile (step 2a review:
 # it went back to where it was at Ctrl+R).
 key home
@@ -50,7 +52,7 @@ key ctrl-r
 expect farloading=1 sel=sub n=2
 key down
 expect sel=x.txt
-wait-for 6000 farloading=0 sel=x.txt n=2
+wait-for 9000 farloading=0 sel=x.txt n=2
 # Left before it answers: its lister killed, and its answer never shown.
 key backspace
 wait-for 3000 faron=0 sel=share
@@ -102,13 +104,15 @@ expect sel=doc
 key enter
 wait-for 3000 faron=0 sel=doc
 sh grep -q "share/x.txt" "$OFX_ROOT/spawn.log"
-# The same with a reload before the lister answers (a slow one): the reload keeps how ofx got
-# there, so the file is still opened (step 3: under load, it was taken for a folder's error).
-sh printf '#!/bin/sh\nsleep 1\nexec "%s/fakes/ofx-list.real" "$@"\n' "$OFX_ROOT" > "$OFX_ROOT/fakes/slow" && chmod +x "$OFX_ROOT/fakes/slow" && mv "$OFX_ROOT/fakes/slow" "$OFX_ROOT/fakes/ofx-list"
+# The same with a reload before the lister answers (a slow one, 3 s: at 1 s the reload could come
+# after the answer and the check passed either way; the cleanup's step B): the reload keeps how ofx
+# got there, so the file is still opened (step 3: under load, it was taken for a folder's error).
+sh printf '#!/bin/sh\nsleep 3\nexec "%s/fakes/ofx-list.real" "$@"\n' "$OFX_ROOT" > "$OFX_ROOT/fakes/slow" && chmod +x "$OFX_ROOT/fakes/slow" && mv "$OFX_ROOT/fakes/slow" "$OFX_ROOT/fakes/ofx-list"
 key enter
 expect faron=1 farloading=1
 key ctrl-r
-wait-for 5000 faron=0 sel=doc
+expect farloading=1
+wait-for 8000 faron=0 sel=doc
 sh [ "$(grep -c "share/x.txt" "$OFX_ROOT/spawn.log")" = 2 ]
 sh cp "$OFX_ROOT/fakes/ofx-list.real" "$OFX_ROOT/fakes/real" && mv "$OFX_ROOT/fakes/real" "$OFX_ROOT/fakes/ofx-list"
 key backspace

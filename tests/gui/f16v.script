@@ -1,6 +1,7 @@
 # F16 step 7b: servers on the network, on a stand-in avahi-browse (run.sh's f16v; OFX_TEST_AVAHI): its
 # query finds YOGA (once for IPv4, once for IPv6); its cache reads (every second here) find Office
-# too once <T>/office exists, until <T>/gone does. The stand-in gio (f16s's) lists shares. ofx starts in an empty home.
+# too once <T>/office exists, until <T>/gone does. A stand-in gio as f16s's lists shares. ofx starts
+# in an empty home.
 settle
 # One query on the network as ofx starts; the server in the Network section, dim (not connected).
 wait-for 10000 sides=^Places|Home|Trash|^Drives|File_System|^Network|~YOGA

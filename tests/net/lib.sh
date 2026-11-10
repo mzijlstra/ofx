@@ -153,10 +153,23 @@ net_release() {
     NET_HOLD_PID=
 }
 
+# Whether a session under scratch $1 keeps every socket path within a unix socket's 107 bytes; said
+# when not (it bit three times in F16, each as a "Connection failed" far from its cause: the step 7c
+# review asked for one place). Measured 2026-11-10 (test-net from a 105-byte scratch, this check off):
+# SMB and SFTP pass; only NFS fails. The bus and ssh's control sockets are in $NET_B, a short folder of
+# their own; what lies under the scratch is rt/bus (7 bytes more), which gvfsd-nfs reaches as its file
+# capability makes GLib ignore the bus's address. gvfsd's own socket-<random> files didn't break there.
+# A new daemon that needs a socket under rt/ goes here.
+net_short() {
+    [ "${#1}" -le 100 ] && return 0
+    echo "$2: skipped, the scratch folder's path is too long for the bus's socket under it (${#1} bytes, 100 at most)"
+    return 1
+}
+
 net_nfs() {
     [ -x /usr/lib/gvfsd-nfs ] || { echo "nfs: skipped, gvfs-nfs isn't installed"; return 1; }
-    # (a socket's path holds 107 bytes: the bus at <scratch>/rt/bus must fit)
-    [ "${#1}" -le 100 ] || { echo "nfs: skipped, the scratch folder's path is too long for the bus's socket under it (${#1} bytes, 100 at most)"; return 1; }
+    net_short "$1" nfs || return 1
+
     timeout 1 bash -c ': < /dev/tcp/127.0.0.1/2049' 2> /dev/null && timeout 1 bash -c ': < /dev/tcp/127.0.0.1/111' 2> /dev/null ||
         { echo "nfs: skipped, no NFS test server on 127.0.0.1 (sudo tests/net/nfs-server.sh start)"; return 1; }
 }

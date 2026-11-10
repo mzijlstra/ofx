@@ -288,6 +288,8 @@ static bool watch_gvfs_scan(void)
     if (!far_prog(gvfsw.exe, S("A share"), prog, sizeof prog, &err)) return false;
     char *argv[] = { prog, "--shares", NULL };
     atomic_fetch_add(&gvfsw.scans, 1);
+    static int answer_ms = -1;   // (OFX_TEST_SHARES_MS: longer for the stand-in tests, whose ASan lister starts slowly under load)
+    if (answer_ms < 0) answer_ms = env_int("OFX_TEST_SHARES_MS", SHARES_MS, 100, 60000);
     int fd[2];
     if (pipe2(fd, O_CLOEXEC) != 0) return false;
     pid_t pid;
@@ -301,7 +303,7 @@ static bool watch_gvfs_scan(void)
     static char now[sizeof gvfsw.text];
     int n = 0;
     bool done = false;
-    for (i64 until = now_ms() + SHARES_MS; !done;) {
+    for (i64 until = now_ms() + answer_ms; !done;) {
         i64 left = until - now_ms();
         struct pollfd p = { fd[0], POLLIN, 0 };
         if (left <= 0 || poll(&p, 1, (int)left) == 0) break;

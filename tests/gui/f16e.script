@@ -1,6 +1,6 @@
 # F16 step 3: --select through local links into a share and a part missing there (none/..): the
-# share listed by its lister (f16d left x.txt alone there), the name to select taken as given
-# (ghost.txt isn't there).
+# share listed by its lister (sub/ and x.txt), the name to select taken as given (ghost.txt isn't
+# there: the cursor on the first).
 settle
-wait-for 3000 faron=1 farloading=0 n=1 sel=x.txt statusbad=0
+wait-for 3000 faron=1 farloading=0 n=2 sel=sub statusbad=0
 quit

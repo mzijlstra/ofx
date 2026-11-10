@@ -1086,12 +1086,12 @@ MUTANTS = [
     # no trash, a paste's looks in two children)
     ('gui/far.c', '    if (far_stuck(dir)) return err_set(err, "%.*s isn\'t answering: not tried", STR_ARG(name)), false;', '', 'net'),
     ('gui/far.c', '    for (int i = 0; i < far.nkilled && !stuck; i++) stuck = far_drive(mi, far.killed[i].dir, other, sizeof other, &gvfs) && strcmp(other, drive) == 0;', '', 'net'),
-    ('gui/far.c', '    if (!until) until = now_ms() + FAR_DO_MS;', '    until = now_ms() + FAR_DO_MS;', 'f16'),
+    ('gui/far.c', '    if (!until) until = now_ms() + far_do_ms();', '    until = now_ms() + far_do_ms();', 'f16'),
     ('gui/actions.c', '    if (done > 0) err_set(why, "%.*s is slow: the rest weren\'t tried", STR_ARG(far_who(path)));', '', 'f16'),
     # (Justified, step 3 confirm: far_do's "is slow" before spawning past a batch's deadline. The
     # deadline passes during a child's wait, which kills it, and the batch stops there; it is only
     # reached when it passed between two actions, where it saves a fork.)
-    ('gui/actions.c', '    if (!*until) *until = now_ms() + FAR_DO_MS;', '    *until = now_ms() + FAR_DO_MS;', 'f16'),
+    ('gui/actions.c', '    if (!*until) *until = now_ms() + far_do_ms();', '    *until = now_ms() + far_do_ms();', 'f16'),
     ('gui/actions.c', '        if (far_no_trash(paths[i])) {', '        if (0) {', 'net'),
     ('gui/far.c', '    return far_path(path, real, sizeof real, &reaches) && reaches && far_drive(far_mounts(), real, drive, sizeof drive, &gvfs) && gvfs;', '    return false;', 'net'),
     ('gui/actions.c', "        if (!kind[i]) kind[i] = f < far_r.n && far_r.f[f].len == 1 ? far_r.f[f].p[0] : '-', f++;", "        if (!kind[i]) kind[i] = 'o', f++;", 'f16'),
@@ -1213,4 +1213,6 @@ MUTANTS = [
     ('gui/panels.c', 'props.local = here ? !far_dir(props_path[0]) : app.thumb_local;', 'props.local = app.thumb_local;', 'f16'),
     ('gui/walk.c', '.mounts = read_file(&mia, mountinfo_path()), .pts = pts,', '.mounts = STR_EMPTY, .pts = pts,', 'f72'),
     ('gui/walk.c', '.pts = pts, .pts_cap = sizeof pts };', '.pts = NULL, .pts_cap = sizeof pts };', 'f72'),
+    # The milestone's code-health cleanup, step B
+    ('gui/far.c', '    if (ms < 0) ms = env_int("OFX_TEST_FAR_DO_MS", FAR_DO_MS, 100, 60000);', '    if (ms < 0) ms = FAR_DO_MS;', 'f16'),
 ]

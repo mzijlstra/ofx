@@ -55,7 +55,7 @@ static bool far_act(const char *dir, const char *const *args, Err *err)
 // its actions), set by its first far action: *until 0 before.
 static i64 far_batch(i64 *until)
 {
-    if (!*until) *until = now_ms() + FAR_DO_MS;
+    if (!*until) *until = now_ms() + far_do_ms();
     return *until;
 }
 

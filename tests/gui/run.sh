@@ -17,8 +17,13 @@ bin=${2:-$(cd "$(dirname "$0")/../.." && pwd)/build/ofx}
 shift 2 2>/dev/null || shift $#
 only=" $* "
 want() { RS_HOME=; [ "$only" = "  " ] || case $only in *" $1 "*) true ;; *) false ;; esac; }   # (each group sets its own RS_HOME)
-# Each run removes $base/<name>: an empty or relative base would aim that at / or the cwd.
+# Each run removes $base/<name>: an empty or relative base would aim that at / or the cwd; a shallow
+# one, or your home, at folders of yours that share a group's name (~/f16, /tmp/net; the cleanup's
+# step B: fm1 and net already insist on a scratch of their own).
 case $base in /?*) ;; *) echo "run.sh: the scratch dir must be an absolute path: '$base'" >&2; exit 1 ;; esac
+case $base in */../* | */.. | */./* | */.) echo "run.sh: the scratch dir must be a plain path, no . or ..: '$base'" >&2; exit 1 ;; esac
+case ${base%/} in "${HOME%/}" | /*/*/*) [ "${base%/}" != "${HOME%/}" ] || { echo "run.sh: the scratch dir can't be your home: '$base'" >&2; exit 1; } ;;
+*) echo "run.sh: the scratch dir must be three folders deep at least (a scratch of its own): '$base'" >&2; exit 1 ;; esac
 here=$(cd "$(dirname "$0")" && pwd)
 fail=0
 # The test sway's tools (vkbd, vptr, dndpeer) as built from their sources now: plain make doesn't
@@ -445,30 +450,36 @@ rs f16c OFX_TEST_MOUNTINFO="$T/mountinfo" -- "$T/tree"
 # f16d (step 3): paths that reach the share through local links, and far folders that turn out to be
 # a file or gone. tree/share (far) holds sub/ and x.txt; tree/local/mylinks is a link to ../links,
 # whose nas is ../share: a chain no path's text shows. ofx starts on local/mylinks/nas.
-fresh f16d; mkdir -p "$T/tree/share/sub" "$T/tree/local" "$T/tree/links"; : > "$T/tree/share/x.txt"; : > "$T/tree/local/a.txt"
-ln -s ../links "$T/tree/local/mylinks"; ln -s ../share "$T/tree/links/nas"; ln -s mylinks/nas "$T/tree/local/chain"
-# Paths through a part missing on the "share" (none/..): realpath fails on them, while ofx takes what
-# follows the share's mount by its text. So a look in-process, which on a real share would hang, shows
-# here as a failure. viaghost: a far link through one.
-ln -s mylinks/nas/none/.. "$T/tree/local/viaghost"
-# media/nas: a far drive (nfs) whose trash holds an item, never looked at (the Trash icon stays empty).
-mkdir -p "$T/media/nas/.Trash-$(id -u)/info" "$T/media/nas/.Trash-$(id -u)/files"; : > "$T/media/nas/.Trash-$(id -u)/files/old"
-printf '[Trash Info]\nPath=%s\nDeletionDate=2026-11-09T10:00:00\n' "$T/media/nas/old" > "$T/media/nas/.Trash-$(id -u)/info/old.trashinfo"
-printf '1 0 0:1 / / rw - ext4 /dev/x rw\n2 1 0:2 / %s rw,nosuid,nodev - fuse.gvfsd-fuse gvfsd-fuse rw\n3 1 0:3 / %s rw - nfs4 h:/x rw\n' "$T/tree/share" "$T/media/nas" > "$T/mountinfo"
+f16d_tree() {   # the tree f16d, f16e and f16g start on, each in a fresh T of its own (they shared f16d's: one failure showed as three; the cleanup's step B)
+    mkdir -p "$T/tree/share/sub" "$T/tree/local" "$T/tree/links"; : > "$T/tree/share/x.txt"; : > "$T/tree/local/a.txt"
+    ln -s ../links "$T/tree/local/mylinks"; ln -s ../share "$T/tree/links/nas"; ln -s mylinks/nas "$T/tree/local/chain"
+    # Paths through a part missing on the "share" (none/..): realpath fails on them, while ofx takes what
+    # follows the share's mount by its text. So a look in-process, which on a real share would hang, shows
+    # here as a failure. viaghost: a far link through one.
+    ln -s mylinks/nas/none/.. "$T/tree/local/viaghost"
+    # media/nas: a far drive (nfs) whose trash holds an item, never looked at (the Trash icon stays empty).
+    mkdir -p "$T/media/nas/.Trash-$(id -u)/info" "$T/media/nas/.Trash-$(id -u)/files"; : > "$T/media/nas/.Trash-$(id -u)/files/old"
+    printf '[Trash Info]\nPath=%s\nDeletionDate=2026-11-09T10:00:00\n' "$T/media/nas/old" > "$T/media/nas/.Trash-$(id -u)/info/old.trashinfo"
+    printf '1 0 0:1 / / rw - ext4 /dev/x rw\n2 1 0:2 / %s rw,nosuid,nodev - fuse.gvfsd-fuse gvfsd-fuse rw\n3 1 0:3 / %s rw - nfs4 h:/x rw\n' "$T/tree/share" "$T/media/nas" > "$T/mountinfo"
+}
+fresh f16d; f16d_tree
 rs f16d OFX_TEST_MEDIA="$T/media" OFX_TEST_MOUNTINFO="$T/mountinfo" -- "$T/tree/local/mylinks/nas/none/.."
 # f16e: --select on a name in the share, through the links and none/..: its folder, the name not
 # looked at (ghost.txt isn't there: nothing selected, no error).
+fresh f16e; f16d_tree
 rs f16e OFX_TEST_MOUNTINFO="$T/mountinfo" -- --select "$T/tree/local/mylinks/nas/none/../ghost.txt"
 # f16g: started on a file in the share through the links: not looked at; its lister says it is a
 # file, so its folder with it selected, as for a local file.
+fresh f16g; f16d_tree
 rs f16g OFX_TEST_MOUNTINFO="$T/mountinfo" -- "$T/tree/local/mylinks/nas/x.txt"
 # f16f (step 3b): the actions on a far folder, each run by ofx-list --do (fardos= counts them);
-# moves taken as across drives (OFX_TEST_CROSS), for an undo that is a job.
+# moves taken as across drives (OFX_TEST_CROSS), for an undo that is a job; the actions' wait 3 s, not
+# 1.5, so its slow fakes (2 s, 8 s) keep a second's margin either way under load (the cleanup's step B).
 # tree/share (far by the mount list): a.txt (0644) and sub/.
 # An sshfs mount, not gvfs's: gvfs gives a share no trash (net checks that), sshfs a .Trash-uid.
 fresh f16f; mkdir -p "$T/tree/share/sub"; printf 'a\n' > "$T/tree/share/a.txt"; chmod 644 "$T/tree/share/a.txt"
 printf '1 0 0:1 / / rw - ext4 /dev/x rw\n2 1 0:2 / %s rw,nosuid,nodev - fuse.sshfs sshfs rw\n' "$T/tree/share" > "$T/mountinfo"
-rs f16f OFX_TEST_CROSS=1 OFX_TEST_MOUNTINFO="$T/mountinfo" -- "$T/tree/share"
+rs f16f OFX_TEST_CROSS=1 OFX_TEST_MOUNTINFO="$T/mountinfo" OFX_TEST_FAR_DO_MS=3000 -- "$T/tree/share"
 # f16h (step 5): the sidebar's Network section on a stand-in gvfs FUSE folder: <T>/gvfs in the mount
 # list as gvfsd-fuse's, holding a share's folder named as gvfs names one (sub/ and a.txt in it) and
 # folders that aren't (junk, "My Notes:x=1", a:b); <T>/other, an ext4 mount holding a folder named as
@@ -479,13 +490,12 @@ mkdir -p "$T/other/smb-share:server=no,share=no"   # (gvfs's form, in a mount th
 printf 'file://%s/home Mine\nsmb://nas/home Home NAS\nsmb://nas/pub\n' "$T" > "$T/config/gtk-3.0/bookmarks"
 printf '1 0 0:1 / / rw - ext4 /dev/x rw\n2 1 0:2 / %s rw,nosuid,nodev - fuse.gvfsd-fuse gvfsd-fuse rw\n3 1 0:3 / %s rw - ext4 /dev/y rw\n' "$T/gvfs" "$T/other" > "$T/mountinfo"
 RS_HOME=$T/home
-rs f16h OFX_TEST_MOUNTINFO="$T/mountinfo" -- "$T/home"
+rs f16h OFX_TEST_MOUNTINFO="$T/mountinfo" OFX_TEST_SHARES_MS=3000 -- "$T/home"
 # f16s (step 7a): a server's shares through a stand-in gio (no network): its mount waits a second
 # and asks nothing, `gio list` names three shares (one hidden), none on the server "empty", and
 # fails on "bad" saying why; `gio info` names no folder; the bookmarks file has the server's address.
-fresh f16s; mkdir -p "$T/home" "$T/config/gtk-3.0"
-printf 'smb://nas NAS\n' > "$T/config/gtk-3.0/bookmarks"
-cat > "$T/giofake" <<'EOF'
+giofake_shares() {   # $1: f16s's stand-in gio, f16v's too (each its own: f16v copied f16s's; the cleanup's step B)
+    cat > "$1" <<'EOF'
 #!/bin/sh
 case "$1:$*" in
 mount:*) sleep 1 ;;
@@ -495,15 +505,19 @@ list:*) printf 'pub\t0\t(mountable)\nIPC$\t0\t(mountable)\nMusic\t0\t(mountable)
 esac
 exit 0
 EOF
-chmod +x "$T/giofake"
+    chmod +x "$1"
+}
+fresh f16s; mkdir -p "$T/home" "$T/config/gtk-3.0"
+printf 'smb://nas NAS\n' > "$T/config/gtk-3.0/bookmarks"
+giofake_shares "$T/giofake"
 RS_HOME=$T/home
 rs f16s OFX_TEST_GIO="$T/giofake" -- "$T/home"
 # f16v (step 7b): servers on the network through a stand-in avahi-browse (no network): its query
 # (no -c) finds YOGA, its cache reads (-c) Office too once <T>/office is made (Lab once <T>/renamed
-# is) until <T>/gone is; f16s's stand-in gio. (Office waits for the script: on the first cache read,
+# is) until <T>/gone is; a stand-in gio as f16s's. (Office waits for the script: on the first cache read,
 # a second after the query, it was gone past before a loaded window's first frames; F16 step 7d.)
 fresh f16v; mkdir -p "$T/home"
-cp "$base/f16s/giofake" "$T/giofake"
+giofake_shares "$T/giofake"
 cat > "$T/avahi" <<EOF
 #!/bin/sh
 [ "\$1" = -k ] || exit 0   # (as avahi-browse with -k prints: without it, the type's database name)
@@ -534,7 +548,7 @@ printf '=;eth0;IPv4;YOGA;_smb._tcp;local;yoga.local;192.168.1.165;445;\n'
 EOF
 chmod +x "$T/avahi"
 RS_HOME=$T/home
-rs f16w OFX_TEST_MOUNTINFO="$T/mountinfo" OFX_TEST_AVAHI="$T/avahi" OFX_TEST_DISCO_MS=1000 OFX_TEST_GVFS_MS=200 OFX_TEST_GVFS_MAX_MS=1600 -- "$T/home"
+rs f16w OFX_TEST_MOUNTINFO="$T/mountinfo" OFX_TEST_SHARES_MS=3000 OFX_TEST_AVAHI="$T/avahi" OFX_TEST_DISCO_MS=1000 OFX_TEST_GVFS_MS=200 OFX_TEST_GVFS_MAX_MS=1600 -- "$T/home"
 fi
 if want net; then
 # F16 step 2 on a real share (tests/net/lib.sh: a Samba container, a gvfs of the run's own under <T>/rt,
@@ -567,42 +581,37 @@ if ( NET_LIB="$here/../net/lib.sh"; . "$NET_LIB"
   printf '#!/bin/sh\n[ -S "%s/bus" ] || { echo "net: not the run'"'"'s bus" >&2; exit 9; }\nexec env -i HOME="%s/home" XDG_RUNTIME_DIR="%s/rt" DBUS_SESSION_BUS_ADDRESS="unix:path=%s/bus" PATH=/usr/bin LANG=C.UTF-8 GIO_USE_VOLUME_MONITOR=unix /usr/bin/gio "$@"\n' \
       "$NET_B" "$T" "$T" "$NET_B" > "$T/giotest"
   chmod +x "$T/giotest"
+  # One net script, its @PORT@ and @SPORT@ the servers' ports, on that gio and mount list, with any
+  # VAR=value given (the five were written out each; the cleanup's step B).
+  netrun() {
+      n=$1; shift
+      sed "s/@PORT@/$NET_PORT/g; s/@SPORT@/$NET_SPORT/g" "$here/$n.script" > "$T/$n.script"
+      echo "== $n"
+      ( export OFX_TEST_HOME="$T/home" OFX_TEST_MOUNTINFO="$T/mountinfo" OFX_TEST_GIO="$T/giotest"
+        for v; do export "$v"; done
+        exec "$here/../../tools/gui/run-script.sh" "$T" "$T/$n.script" "$bin" "$T/home" ) || failed "$n"
+  }
   # Quitting with the question up (step 4 review): nothing mounted after the window ends (a killed gio
   # left gvfs to mount the guest share), checked on the run's own gvfs. Before netc, which mounts open.
-  sed "s/@PORT@/$NET_PORT/g" "$here/netq.script" > "$T/netq.script"
-  echo "== netq"
   # (the thread closes gio's input 500 ms late, so a quit that didn't wait for it would kill gio
   # first, which mounts; step 4 confirm)
-  ( export OFX_TEST_HOME="$T/home" OFX_TEST_MOUNTINFO="$T/mountinfo" OFX_TEST_GIO="$T/giotest" OFX_TEST_CONNECT_CLOSE_MS=500
-    exec "$here/../../tools/gui/run-script.sh" "$T" "$T/netq.script" "$bin" "$T/home" ) || failed netq
+  netrun netq OFX_TEST_CONNECT_CLOSE_MS=500
   "$T/unpause"   # (a script that failed before its own unpause leaves its server stopped for the next)
   sleep 2   # (the killed gio's guest mount came 2 s later, measured)
   if "$T/giotest" mount -l 2>/dev/null | grep -q "open on 127.0.0.1"; then echo "netq: the guest share open was mounted after the window quit"; failed netq; fi
-  sed "s/@PORT@/$NET_PORT/g" "$here/netc.script" > "$T/netc.script"
-  echo "== netc"
-  ( export OFX_TEST_HOME="$T/home" OFX_TEST_MOUNTINFO="$T/mountinfo" OFX_TEST_GIO="$T/giotest"
-    exec "$here/../../tools/gui/run-script.sh" "$T" "$T/netc.script" "$bin" "$T/home" ) || failed netc
+  netrun netc
   "$T/unpause"   # (a script that failed before its own unpause leaves its server stopped for the next)
   # The Network section on the real shares (F16 step 5), after netc mounted open and priv; a bookmark
   # of priv. (Unmounting open from the sidebar: its row goes as gvfs's FUSE folder, listed again, no
   # longer has it.)
-  sed "s/@PORT@/$NET_PORT/g" "$here/netu.script" > "$T/netu.script"
   mkdir -p "$T/config/gtk-3.0"; printf 'smb://127.0.0.1:%s/priv Priv\n' "$NET_PORT" > "$T/config/gtk-3.0/bookmarks"
-  echo "== netu"
   # (the shares listed every 10 min: only ofx's own unmount and connect show them at once)
-  ( export OFX_TEST_HOME="$T/home" OFX_TEST_MOUNTINFO="$T/mountinfo" OFX_TEST_GIO="$T/giotest" OFX_TEST_GVFS_MS=600000
-    exec "$here/../../tools/gui/run-script.sh" "$T" "$T/netu.script" "$bin" "$T/home" ) || failed netu
+  netrun netu OFX_TEST_GVFS_MS=600000
   # A server's shares (F16 step 7a): its address alone lists them; a pick connects.
-  sed "s/@PORT@/$NET_PORT/g" "$here/nets.script" > "$T/nets.script"
-  echo "== nets"
-  ( export OFX_TEST_HOME="$T/home" OFX_TEST_MOUNTINFO="$T/mountinfo" OFX_TEST_GIO="$T/giotest"
-    exec "$here/../../tools/gui/run-script.sh" "$T" "$T/nets.script" "$bin" "$T/home" ) || failed nets
+  netrun nets
   # SFTP through Connect to Server (F16 step 7c): @SPORT@ the SSH server's port; the private
   # session's ssh is lib.sh's (never ~/.ssh).
-  sed "s/@SPORT@/$NET_SPORT/g" "$here/netf.script" > "$T/netf.script"
-  echo "== netf"
-  ( export OFX_TEST_HOME="$T/home" OFX_TEST_MOUNTINFO="$T/mountinfo" OFX_TEST_GIO="$T/giotest"
-    exec "$here/../../tools/gui/run-script.sh" "$T" "$T/netf.script" "$bin" "$T/home" ) || failed netf
+  netrun netf
   for d in "$T"/rt/gvfs/sftp:*; do [ ! -e "$d" ] || "$T/giotest" mount -u "$d" > /dev/null 2>&1; done   # (netn sees the shares it did)
   printf 'IdentityFile none\nIdentitiesOnly yes\n' > "$T/ssh/config"   # (a netf that stopped early may leave its key in)
   printf 'smb://127.0.0.1:%s/priv Priv\n' "$NET_PORT" > "$T/config/gtk-3.0/bookmarks"   # (netu's again: netf added its own)
@@ -610,9 +619,7 @@ if ( NET_LIB="$here/../net/lib.sh"; . "$NET_LIB"
   # start: lib.sh's net_nfs says so, and why it skipped). Its export unmounted after, so a run of the
   # suite leaves the server as it found it.
   if net_nfs "$T"; then
-      echo "== netn"
-      ( export OFX_TEST_HOME="$T/home" OFX_TEST_MOUNTINFO="$T/mountinfo" OFX_TEST_GIO="$T/giotest"
-        exec "$here/../../tools/gui/run-script.sh" "$T" "$here/netn.script" "$bin" "$T/home" ) || failed netn
+      netrun netn
       "$T/giotest" mount -u "nfs://127.0.0.1/srv/nfs" > /dev/null 2>&1
   fi
   exit $fail ); then rm -rf "$base/net-shots"; [ ! -d "$T/shots" ] || cp -r "$T/shots" "$base/net-shots"; rm -rf "$T" "$base/net"   # (its shots kept beside the others)
