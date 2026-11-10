@@ -1304,8 +1304,8 @@ blocks each of these for up to gvfs's 90 s. On a thread it also holds ofx's exit
       case), an ofx.conf option turns them off on risky drives altogether; with it off, a risky
       folder in the icon view says so in the status line, naming the option, so missing previews
       don't puzzle anyone. Previews being made show "Making previews" with a small progress bar
-      (the rows on screen: done of to make), on any drive; proposed: only once it has taken about
-      300 ms, so a folder whose previews are cached doesn't flash it.
+      (the rows on screen: done of to make), on any drive, only once it has taken about
+      300 ms (Michael, 2026-11-10), so a folder whose previews are cached doesn't flash it.
     - **The two main-thread waits:** an action on a share starts its child and returns at once
       (polled as the listing is, "Renaming…" meanwhile, one far action at a time); a file's type
       for Open With and Properties is guessed by its name at once and corrected when gio answers.
