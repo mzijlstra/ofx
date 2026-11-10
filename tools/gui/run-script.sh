@@ -33,7 +33,7 @@
 # - OFX_TEST_SYSBLOCK and OFX_TEST_UDEV, when set, are passed on: the block devices and udev's
 #   database read for unmounted drives (unset: empty folders in the scratch dir, so no run lists,
 #   or could mount, one of Michael's; ofx itself reads none under OFX_GUI_ROOT without them);
-# - OFX_TEST_GIO, when set, is passed on: the gio that `gio mount` and `gio info smb://…` run (the net
+# - OFX_TEST_GIO, when set, is passed on: the gio that `gio mount` and `gio info <address>` run (the net
 #   group's, on its own gvfs; unset: they only log); OFX_TEST_CONNECT_CLOSE_MS, when set, too (Connect's
 #   Cancel closes gio's input that late: netq's quit); OFX_TEST_GVFS_MS, when set, too (how often the
 #   gvfs shares are listed: netu's long one leaves only ofx's own kicks);
@@ -69,13 +69,15 @@ done
 real_gio=$(command -v gio)
 # gio mime (Set as default, F7.3.1) logs and runs the real one too: XDG_CONFIG_HOME is <scratch>/config,
 # so it writes the scratch mimeapps.list only.
-# gio mount and gio info on an smb:// address (Connect to Server, F16 step 4) log, and go to
-# OFX_TEST_GIO when the run has one (the net group's: a gio on that run's own gvfs session), else do
-# nothing: never the real gio, which would reach the session's gvfs.
+# gio mount, and gio info on any address (smb://, nfs://: Connect to Server, F16 steps 4 and 6), log,
+# and go to OFX_TEST_GIO when the run has one (the net group's: a gio on that run's own gvfs
+# session), else do nothing: never the real gio, which would reach the session's gvfs. (Until
+# 2026-11-10 only smb:// was caught here: netn's first run sent two `gio info nfs://…` to the real
+# gio, which asked the session's gvfs and found nothing mounted.)
 cat > "$T/fakes/gio" <<EOS
 #!/bin/sh
 case "\$1:\${2:-}" in
-mount:* | info:[sS][mM][bB]://*)
+mount:* | info:*://*)
     echo "gio \$*" >> "$T/spawn.log"
     [ -z "\${OFX_TEST_GIO:-}" ] || exec "\$OFX_TEST_GIO" "\$@"
     exit 0 ;;
