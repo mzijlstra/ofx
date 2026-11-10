@@ -63,7 +63,8 @@ static bool far_share(const char *path, char *root, size_t rcap, char *label, si
     return true;
 }
 
-// The smb:// address of path, a folder in an SMB share gvfs mounted; false for any other.
+// The smb:// or nfs:// address of path, a folder in an SMB share or NFS export gvfs mounted; false
+// for any other.
 static bool far_share_uri(const char *path, char *uri, size_t cap)
 {
     char root[PATH_MAX], label[256];

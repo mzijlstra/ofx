@@ -68,11 +68,27 @@ check "answers again" timeout 10 ls "$PUB"
 
 check "unmount pub" timeout 20 gio mount -u "$U/pub"
 check "unmount priv" timeout 20 gio mount -u "$U/priv"
+
+# NFS (F16 step 6), when the NFS test server runs (lib.sh's net_nfs): gvfs asks nothing, mounts the
+# export holding the path, and names its folder by the export.
+if [ -e "$S/nfs" ]; then
+    NFS="$G/nfs:host=127.0.0.1,prefix=%2Fsrv%2Fnfs"
+    check "nfs: a folder's address mounts its export" timeout 20 gio mount nfs://127.0.0.1/srv/nfs/sub < /dev/null
+    check "nfs: its FUSE path" test -d "$NFS"
+    check "nfs: gio info names the folder in it" sh -c "gio info nfs://127.0.0.1/srv/nfs/sub 2> /dev/null | grep -qxF 'local path: $NFS/sub'"
+    check "nfs: its files" test "$(ls "$NFS/sub" | wc -l)" -eq 20
+    check "nfs: a read" grep -qx nfs "$NFS/hello.txt"
+    check "nfs: a write, as the user" sh -c "echo new > '$NFS/written-$$.txt' && grep -qx new '$NFS/written-$$.txt' && test \"\$(stat -c %u '$NFS/written-$$.txt')\" = $(id -u) && rm '$NFS/written-$$.txt'"
+    check "nfs: the export again: already mounted" sh -c "timeout 20 gio mount nfs://127.0.0.1/srv/nfs < /dev/null 2>&1 | grep -q 'already mounted'"
+    check "nfs: a path not exported" sh -c "timeout 20 gio mount nfs://127.0.0.1/nope < /dev/null 2>&1 | grep -q 'Mount point does not exist'"
+    check "nfs: unmount by its folder" timeout 20 gio mount -u "$NFS"
+fi
 check "none left" test -z "$(ls "$G")"
 echo "net: $n checks, $bad failed"
 [ $bad -eq 0 ]
 EOF
 
+if net_nfs "$S"; then : > "$S/nfs"; fi
 rc=0
 net_session "$S" "$S/checks.sh" > "$S/session.log" 2>&1 || rc=$?
 grep "^net: " "$S/session.log" || true

@@ -20,7 +20,7 @@ enum { PLACES_MAX = 64 };
 // PL_UNMOUNTED: a removable drive not mounted yet (2026-10-30), its path and dev the device's
 // (/dev/sdb1); a click mounts it. Not a drive for place_is_drive: it has no folder yet.
 // The Network section (F16 step 5): PL_SHARE, a share gvfs has mounted, its path the share's folder
-// under gvfs's FUSE mount; PL_NETBM, an smb:// bookmark, its path the address (a click connects).
+// under gvfs's FUSE mount; PL_NETBM, an smb:// or nfs:// bookmark (step 6), its path the address (a click connects).
 // Neither is a drive: their space isn't asked (statvfs would wait on a share that doesn't answer).
 typedef enum { PL_HEAD, PL_HOME, PL_BOOKMARK, PL_TRASH, PL_ROOT, PL_MOUNT, PL_REMOVABLE, PL_UNMOUNTED, PL_SHARE, PL_NETBM } PlaceKind;
 
@@ -356,7 +356,7 @@ static void places_load(Arena *scratch, Places *pl, const char *bookmarks, const
 
 // The Network section (F16 step 5), after the rest, under its heading when it has a row: the shares
 // gvfs has mounted (shares: their folders, one a line, as the watch thread lists gvfs's FUSE
-// folders), then the smb:// lines of the bookmarks file, with their labels (else the share's name
+// folders), then the smb:// and nfs:// lines of the bookmarks file, with their labels (else the share's name
 // as gvfs gives it). A bookmark of a mounted share stays a bookmark: a click on it connects, which
 // for a share mounted already goes straight there.
 static void places_load_net(Arena *scratch, Places *pl, const char *bookmarks, Str shares)

@@ -2853,7 +2853,7 @@ MUTANTS += [
     ('fs/connect.c', '    if (sh.len == 0) return', '    if (0) return'),
     ('fs/connect.c', '    if ((size_t)name.len >= hcap || (size_t)sh.len >= scap) return', '    if ((size_t)name.len >= hcap) return'),
     ('fs/connect.c', '    if ((size_t)name.len >= hcap || (size_t)sh.len >= scap) return', '    if ((size_t)sh.len >= scap) return'),
-    ('fs/connect.c', '    Str sh = end < 0 ? path : str_cut(path, 0, end);', '    Str sh = path;'),
+    ('fs/connect.c', '        sh = end < 0 ? path : str_cut(path, 0, end);', '        sh = path;'),   # (retargeted, step 6)
     ('fs/connect.c', '        if (memcmp(out.p + i, HEAD.p, (size_t)HEAD.len) == 0) ++*rounds, i += HEAD.len - 1;', '        if (memcmp(out.p + i, HEAD.p, (size_t)HEAD.len) == 0) *rounds = 1, i += HEAD.len - 1;'),
     ('fs/connect.c', '    if (*rounds == 0) return GIO_ASK_NONE;', ''),
     ('fs/connect.c', '    if (str_ends_with(out, S("Password: "))) return GIO_ASK_PASSWORD;', '    if (str_ends_with(out, S("Password: "))) return GIO_ASK_USER;'),
@@ -2881,4 +2881,19 @@ MUTANTS += [
     ('ui/handle.c', ' && !(in->login_field == UI_LOGIN_USER && u->login_no_user)) u->login_at = in->login_field;', ') u->login_at = in->login_field;'),
     ('ui/handle.c', '        if (in->modal == UI_MODAL_GUEST) return *out = ui_login_close(u, UA_LOGIN_GUEST), true;', ''),
     ('ui/menus.c', '        u->edit.anchor = u->edit.caret;\n        return UI_NONE;', '        return UI_NONE;'),
+    # F16 step 6: nfs:// addresses, an export's name and address
+    ('fs/connect.c', '    bool nfs = connect_ieq(str_cut(text, 0, 6), "nfs://");', '    bool nfs = false;'),
+    ('fs/connect.c', '        if (nfs) return snprintf(why, wcap, "No user in an NFS address: the server goes by your user id"), CONNECT_BAD;\n', ''),
+    ('fs/connect.c', '        if (nfs) return snprintf(why, wcap, "No port in an NFS address: gvfs asks the server\'s portmapper"), CONNECT_BAD;\n', ''),
+    ('fs/connect.c', 'Name a server: %s://server/%s", kind, nfs ? "folder" : "share")', 'Name a server: %s://server/%s", kind, "share")'),
+    ('fs/connect.c', "        while (path.len > 0 && path.p[path.len - 1] == '/') path.len--;\n", ''),
+    ('fs/connect.c', "        sh = str_cut(path, str_find_last(path, '/') + 1, path.len);", '        sh = path;'),
+    ('fs/connect.c', '    if (!share && gvfs_key(name, "prefix", prefix, sizeof prefix)) {', '    if (!share && false && gvfs_key(name, "prefix", prefix, sizeof prefix)) {'),
+    ('fs/connect.c', "        while (pre.len > 1 && pre.p[pre.len - 1] == '/') pre.len--;\n", ''),
+    ('fs/connect.c', '        share = base.len > 0 && (size_t)base.len < sizeof what;', '        share = (size_t)base.len < sizeof what;'),
+    ('fs/connect.c', '    if (str_starts_with(name, S("nfs:"))) {', '    if (false) {'),
+    ('fs/connect.c', ' || !gvfs_key(name, "prefix", path, sizeof path) || path[0] != \'/\') return false;', ' || !gvfs_key(name, "prefix", path, sizeof path)) return false;'),
+    ('fs/connect.c', "        if (pl > 1 && path[pl - 1] == '/') path[--pl] = 0;\n", ''),
+    ('fs/connect.c', "pl == 1 && rest[0] == '/' ? rest + 1 : rest)", 'rest)'),
+    ('fs/connect.c', '        return n > 0 && (size_t)n < cap;\n    }', '        return n > 0;\n    }'),
 ]

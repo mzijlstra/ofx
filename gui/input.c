@@ -347,7 +347,7 @@ static void ctx_facts(void)
     u->ctx_w = app.ctx_path[0] && can_write_at(app.ctx_path);
     u->ctx_trash = strcmp(app.ctx_path, TRASH_URI) == 0;
     u->ctx_full = u->ctx_trash && (trash_state(), app.trash_full);   // (the icon's answer, looked at again)
-    char uri[PATH_MAX];   // (a folder in a share: its smb:// address, F16 step 5)
+    char uri[PATH_MAX];   // (a folder in a share: its smb:// or nfs:// address, F16 steps 5, 6)
     u->ctx_bmed = bm_find(&bmarks, app.ctx_path) >= 0 || (app.ctx_path[0] == '/' && far_share_uri(app.ctx_path, uri, sizeof uri) && bm_find_uri(&bmarks, uri) >= 0);
     u->ctx_bms = bmarks.n;
     if (u->ctx_crumb < 0 && u->side_mode == SIDE_PLACES && u->ctx_side >= 0 && u->ctx_side < app.places.n) {

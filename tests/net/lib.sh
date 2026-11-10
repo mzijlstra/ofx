@@ -18,6 +18,12 @@
 #                               (guest): NET_SHARE its path; it stays until net_release
 #   net_release                 the session ended (its gvfs with it: nothing stays mounted)
 #   net_end                     the container removed, the session ended (the callers' trap)
+#   net_nfs <scratch>           true when the NFS checks can run (else says why not): the NFS test
+#                               server (tests/net/nfs-server.sh, which takes root) answers
+#
+# The NFS server isn't started here: gvfs-nfs finds a server's ports only through its portmapper, on
+# 111, which takes root to publish. `sudo tests/net/nfs-server.sh start` runs one (nfs-ganesha, its
+# export /srv/nfs, on 127.0.0.1 only) until `stop`.
 
 NET_D=$(cd "$(dirname "${NET_LIB:-$0}")" && pwd)
 NET_REAL_HOME=$HOME NET_REAL_RT=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}
@@ -63,6 +69,9 @@ net_bus() {
     chmod 700 "$1/rt"
     cp /usr/share/dbus-1/services/org.gtk.vfs.Daemon.service "$1/services/"
     [ -n "$NET_B" ] || NET_B=$(mktemp -d "${TMPDIR:-/tmp}/ofx-net-XXXXXX")
+    # (gvfsd-nfs has a file capability, so GLib ignores DBUS_SESSION_BUS_ADDRESS there and looks for
+    # the bus only at $XDG_RUNTIME_DIR/bus, measured 2026-11-10)
+    ln -sfn "$NET_B/bus" "$1/rt/bus"
     cat > "$1/bus.conf" <<EOF
 <!DOCTYPE busconfig PUBLIC "-//freedesktop//DTD D-Bus Bus Configuration 1.0//EN"
  "http://www.freedesktop.org/standards/dbus/1.0/busconfig.dtd">
@@ -122,6 +131,14 @@ net_release() {
     exec 9>&-
     wait "$NET_HOLD_PID" 2> /dev/null
     NET_HOLD_PID=
+}
+
+net_nfs() {
+    [ -x /usr/lib/gvfsd-nfs ] || { echo "nfs: skipped, gvfs-nfs isn't installed"; return 1; }
+    # (a socket's path holds 107 bytes: the bus at <scratch>/rt/bus must fit)
+    [ "${#1}" -le 100 ] || { echo "nfs: skipped, the scratch folder's path is too long for the bus's socket under it (${#1} bytes, 100 at most)"; return 1; }
+    timeout 1 bash -c ': < /dev/tcp/127.0.0.1/2049' 2> /dev/null && timeout 1 bash -c ': < /dev/tcp/127.0.0.1/111' 2> /dev/null ||
+        { echo "nfs: skipped, no NFS test server on 127.0.0.1 (sudo tests/net/nfs-server.sh start)"; return 1; }
 }
 
 net_end() {   # (every step, whatever the one before did: it is the trap, and set -e is off in it)

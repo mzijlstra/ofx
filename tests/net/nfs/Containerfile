@@ -1,0 +1,13 @@
+# ofx's test NFS server (F16 step 6): nfs-ganesha (user space) and rpcbind, exporting /srv/nfs read
+# and write to anyone (NFSv3 and 4, TCP). /srv/nfs is a tmpfs the run mounts (ganesha's VFS backend
+# needs file handles, which podman's overlay doesn't give), filled by start.sh. gvfs-nfs speaks NFSv3 through the portmapper on port 111
+# only, so this one runs rootful, started by hand with sudo (tests/net/nfs-server.sh), on 127.0.0.1
+# only. Debian 12 slim, pinned by digest: a new release changes what the tests run against only when
+# this line changes.
+FROM docker.io/library/debian@sha256:c67e92c8099ba22853ab4cfda7cfb494d253d6012ca82dee98ba8976772af018
+RUN apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends nfs-ganesha nfs-ganesha-vfs rpcbind netbase > /dev/null && \
+    rm -rf /var/lib/apt/lists/* && mkdir -p /srv/nfs /run/ganesha /var/lib/nfs/ganesha
+COPY ganesha.conf /etc/ganesha/ganesha.conf
+COPY start.sh /start.sh
+EXPOSE 111 2049 20048
+CMD ["sh", "/start.sh"]

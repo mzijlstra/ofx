@@ -1,0 +1,55 @@
+# F16 step 6: NFS through Connect to Server, on the NFS test server (run.sh's net group after netu,
+# when that server runs: tests/net/lib.sh's net_nfs). Its export /srv/nfs holds hello.txt and sub/
+# (f1 to f20). gvfs asks nothing for NFS (the server goes by the user's id). ofx starts in its home,
+# which holds nas; open, priv and pub are mounted (netu), and the bookmarks file has priv.
+settle
+wait-for 5000 n=1 sel=nas conn=0 login=0
+# A port in an NFS address: refused, gio not run (gvfs-nfs asks the portmapper, it would be ignored).
+key ctrl-l
+type nfs://127.0.0.1:2049/srv/nfs
+key enter
+expect statusbad=1 conn=0 locating=1
+expect port in an NFS address: gvfs asks the server's portmapper
+key esc
+expect locating=0
+# A folder's address: no question, the folder in the export gone to; the export in the Network
+# section by gvfs's name for it, its path buttons from there.
+key ctrl-l
+type nfs://127.0.0.1/srv/nfs/sub
+key enter
+wait-for 8000 conn=0 login=0 faron=1 farloading=0 n=20 sel=f1 connasked=0 statusbad=0 crumbs=nfs_on_127.0.0.1|sub crumbshare=1
+expect to sub on 127.0.0.1
+# (gio info on it went to the run's gio, logged by run-script's fake: never the session's)
+sh grep -qx "gio info nfs://127.0.0.1/srv/nfs/sub" "$OFX_ROOT/spawn.log"
+wait-for 3000 sides=^Places|Home|Trash|^Drives|File_System|^Network|nfs_on_127.0.0.1|open_on_127.0.0.1|priv_on_127.0.0.1|pub_on_127.0.0.1|~Priv
+# Add Bookmark there writes its nfs:// address, labelled with the folder's name.
+expect canbm=1
+key ctrl-d
+wait-for 3000 sides=^Places|Home|Trash|^Drives|File_System|^Network|nfs_on_127.0.0.1|open_on_127.0.0.1|priv_on_127.0.0.1|pub_on_127.0.0.1|~Priv|~sub canbm=0
+sh grep -qx "nfs://127.0.0.1/srv/nfs/sub sub" "$OFX_ROOT/config/gtk-3.0/bookmarks"
+# The export from the sidebar: its files, read as a far folder's.
+point-side nfs on 127.0.0.1
+click-here
+wait-for 5000 faron=1 farloading=0 n=2 sel=sub crumb=0 crumbshare=1
+# Unmounted from the sidebar: gone from it, the folder shown on it Home.
+point-ui side-row 6
+hover-here
+wait-for 2000 ejectbtn=1
+point-ui side-eject 6
+click-here
+wait-for 8000 statusbad=0 unmounted
+wait-for 3000 sides=^Places|Home|Trash|^Drives|File_System|^Network|open_on_127.0.0.1|priv_on_127.0.0.1|pub_on_127.0.0.1|~Priv|~sub faron=0 sel=nas
+# Its bookmark connects again, no question, to the folder. (After 3 s: an export mounted again within
+# about 2 s of its unmount reads "Input/output error" in gvfs's FUSE folder, as an SMB share does;
+# plan.md's known gap.)
+sleep 3000
+point-side sub
+click-here
+wait-for 8000 conn=0 login=0 faron=1 farloading=0 n=20 connasked=0 statusbad=0 crumbs=nfs_on_127.0.0.1|sub
+# A path the server doesn't export: gvfs-nfs's one word for every failure, with a hint.
+key ctrl-l
+type nfs://127.0.0.1/nope
+key enter
+wait-for 8000 conn=0 statusbad=1
+expect connect to nope on 127.0.0.1: Mount point does not exist (are the server's name and the folder right?)
+quit

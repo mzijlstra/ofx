@@ -688,8 +688,8 @@ static void bookmark_add(const char *dir)
 {
     char file[PATH_MAX], uri[PATH_MAX], root[PATH_MAX], label[256];
     Err err = { 0 };
-    // A folder in an SMB share: its smb:// address, which connects when it isn't mounted (F16 step
-    // 5); labelled with the share's name at its top, else the folder's (the sidebar shows the label).
+    // A folder in an SMB share or NFS export: its smb:// or nfs:// address, which connects when it
+    // isn't mounted (F16 steps 5, 6); labelled with the share's name at its top, else the folder's (the sidebar shows the label).
     bool net = far_share_uri(dir, uri, sizeof uri) && far_share(dir, root, sizeof root, label, sizeof label);
     Str name = net && strcmp(dir, root) != 0 ? path_base(str_from_c(dir)) : str_from_c(label);
     Bookmarks *now = bm_begin(file, sizeof file, &err);

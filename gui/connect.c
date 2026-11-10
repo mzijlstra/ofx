@@ -1,6 +1,6 @@
 // Connect to Server (F16 step 4): an address typed in the location line (Go → Connect to Server…
-// opens it on "smb://") is mounted by `gio mount` in a child, on a thread of its own that reads gio's
-// questions (fs/connect.c) and answers them from Connect's question (ui/'s UI_PANEL_LOGIN), then
+// opens it on "smb://"; nfs:// too, F16 step 6) is mounted by `gio mount` in a child, on a thread of
+// its own that reads gio's questions (fs/connect.c; NFS has none) and answers them from Connect's question (ui/'s UI_PANEL_LOGIN), then
 // asks `gio info` for the share's folder. ofx goes there as to any far folder (its lister reads it).
 // The window never waits on any of it. gio talks to gvfsd over D-Bus, not through the share's FUSE
 // folder, so a killed gio ends at once, and the thread with it (measured on the test Samba). A
@@ -310,8 +310,10 @@ static bool connect_take(void)
     ui_panel_close(u, UI_PANEL_LOGIN);   // (an answer closed it: none is waited for now)
     if (cancelled) return true;   // (said as it was cancelled)
     // (libsmbclient's word for a server name it can't find, and gvfs passes it on: a hint, as a name
-    // isn't looked up first, which would miss the ones only found by broadcast)
-    if (!ok) return set_status(true, "Can't connect to %s: %s%s", cn_name(), why[0] ? why : "no reason given", strcmp(why, "Invalid argument") == 0 ? " (is the server's name right?)" : ""), true;
+    // isn't looked up first, which would miss the ones only found by broadcast; gvfs-nfs's for a
+    // server unknown, not answering, or without that path, step 6)
+    const char *hint = strcmp(why, "Invalid argument") == 0 ? " (is the server's name right?)" : strcmp(why, "Mount point does not exist") == 0 ? " (are the server's name and the folder right?)" : "";
+    if (!ok) return set_status(true, "Can't connect to %s: %s%s", cn_name(), why[0] ? why : "no reason given", hint), true;
     watch_gvfs_kick();   // (the share in the sidebar's Network section at once, F16 step 5)
     if (go_to(path, STR_EMPTY, 0)) set_status(false, "Connected to %s", cn_name());
     return true;

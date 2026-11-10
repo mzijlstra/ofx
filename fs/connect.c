@@ -1,6 +1,6 @@
-// Connect to Server (F16 step 4): an address typed as smb://[user@]server[:port]/share[/folder],
-// and what ofx reads of `gio mount` and `gio info` as they run (gui/connect.c runs them). Measured on
-// the test Samba (tests/net, 2026-11-09):
+// Connect to Server (F16 step 4): an address typed as smb://[user@]server[:port]/share[/folder]
+// or nfs://server/path (step 6), and what ofx reads of `gio mount` and `gio info` as they run
+// (gui/connect.c runs them). Measured on the test Samba (tests/net, 2026-11-09):
 // - gio asks on its output, a line at a time and with no newline after the question: a header
 //   ("Authentication Required", then "Enter user and password for share “priv” on “host”:"), then
 //   "User [default]: ", "Domain [default]: ", "Password: " (only those gvfs needs: a user in the
@@ -10,6 +10,11 @@
 // - It says why it failed on its errors, as "gio: <address>: <why>" (after the volume monitors'
 //   noise), and nothing on success; "Location is already mounted" is a success for ofx.
 // - `gio info <address>` names the share's folder: "local path: <rt>/gvfs/smb-share:…".
+// And on the test NFS server (tests/net/nfs, 2026-11-10): gvfs asks nothing (NFS goes by the user's
+// id), and mounts the export holding the path (nfs://h/srv/nfs/sub mounts /srv/nfs, its folder
+// "nfs:host=h,prefix=%2Fsrv%2Fnfs"); a wrong path, an unknown server or none answering all fail as
+// "Mount point does not exist". gvfs-nfs takes no user and no port (it asks the server's
+// portmapper, on 111).
 // Included by fs.c.
 
 #include <ctype.h>
@@ -25,14 +30,19 @@ static bool connect_ieq(Str a, const char *b)
     return true;
 }
 
-// text as an address to connect to: CONNECT_NOT when it isn't one (no "smb://": a path), CONNECT_BAD
-// with why when it is one ofx won't take, else CONNECT_OK with the address (trimmed) in uri, and the
-// server and share in host and share for what ofx says ("priv on 127.0.0.1", as gvfs names it).
-// A password in the address is refused: it would be in gio's arguments, which any process can read.
+// text as an address to connect to: CONNECT_NOT when it isn't one (no "smb://" or "nfs://": a
+// path), CONNECT_BAD with why when it is one ofx won't take, else CONNECT_OK with the address
+// (trimmed) in uri, and the server and share in host and share for what ofx says ("priv on
+// 127.0.0.1", as gvfs names it; an NFS path's last name, as gvfs names an export: "nfs" of
+// /srv/nfs). A password in the address is refused: it would be in gio's arguments, which any process
+// can read.
 static ConnectUri connect_uri(Str text, char *uri, size_t ucap, char *host, size_t hcap, char *share, size_t scap, char *why, size_t wcap)
 {
     text = str_trim(text);
-    if (text.len < 6 || !connect_ieq(str_cut(text, 0, 6), "smb://")) return CONNECT_NOT;
+    if (text.len < 6) return CONNECT_NOT;
+    bool nfs = connect_ieq(str_cut(text, 0, 6), "nfs://");
+    if (!nfs && !connect_ieq(str_cut(text, 0, 6), "smb://")) return CONNECT_NOT;
+    const char *kind = nfs ? "nfs" : "smb";
     for (isize i = 0; i < text.len; i++)
         if ((unsigned char)text.p[i] < 0x20 || text.p[i] == 0x7F) return snprintf(why, wcap, "An address has no control characters"), CONNECT_BAD;
     if ((size_t)text.len >= ucap) return snprintf(why, wcap, "The address is too long"), CONNECT_BAD;
@@ -43,20 +53,28 @@ static ConnectUri connect_uri(Str text, char *uri, size_t ucap, char *host, size
     isize at = str_find_last(auth, '@');
     if (at >= 0) {
         if (str_find(str_cut(auth, 0, at), ':') >= 0) return snprintf(why, wcap, "No password in the address: ofx asks for it"), CONNECT_BAD;
+        if (nfs) return snprintf(why, wcap, "No user in an NFS address: the server goes by your user id"), CONNECT_BAD;
         auth = str_cut(auth, at + 1, auth.len);
     }
     isize colon = str_find_last(auth, ':');
     Str name = colon < 0 ? auth : str_cut(auth, 0, colon);
     if (colon >= 0) {
+        if (nfs) return snprintf(why, wcap, "No port in an NFS address: gvfs asks the server's portmapper"), CONNECT_BAD;
         Str port = str_cut(auth, colon + 1, auth.len);
         bool digits = port.len > 0 && port.len <= 5;
         for (isize i = 0; i < port.len; i++) digits = digits && port.p[i] >= '0' && port.p[i] <= '9';
         if (!digits) return snprintf(why, wcap, "Not a port: %.*s", STR_ARG(port)), CONNECT_BAD;
     }
-    if (name.len == 0) return snprintf(why, wcap, "Name a server: smb://server/share"), CONNECT_BAD;
-    isize end = str_find(path, '/');
-    Str sh = end < 0 ? path : str_cut(path, 0, end);
-    if (sh.len == 0) return snprintf(why, wcap, "Name a share on %.*s: smb://%.*s/share", STR_ARG(name), STR_ARG(auth)), CONNECT_BAD;
+    if (name.len == 0) return snprintf(why, wcap, "Name a server: %s://server/%s", kind, nfs ? "folder" : "share"), CONNECT_BAD;
+    Str sh;
+    if (nfs) {   // (the path's last name: "nfs" of srv/nfs/, as gvfs names an export)
+        while (path.len > 0 && path.p[path.len - 1] == '/') path.len--;
+        sh = str_cut(path, str_find_last(path, '/') + 1, path.len);
+    } else {
+        isize end = str_find(path, '/');
+        sh = end < 0 ? path : str_cut(path, 0, end);
+    }
+    if (sh.len == 0) return nfs ? snprintf(why, wcap, "Name a folder on %.*s: nfs://%.*s/folder", STR_ARG(name), STR_ARG(name)) : snprintf(why, wcap, "Name a share on %.*s: smb://%.*s/share", STR_ARG(name), STR_ARG(auth)), CONNECT_BAD;
     if ((size_t)name.len >= hcap || (size_t)sh.len >= scap) return snprintf(why, wcap, "The address is too long"), CONNECT_BAD;
     snprintf(uri, ucap, "%.*s", STR_ARG(text));
     snprintf(host, hcap, "%.*s", STR_ARG(name));
@@ -169,11 +187,19 @@ static bool gvfs_key(Str name, const char *key, char *out, size_t cap)
 }
 
 // A share's name as gvfs (and Nautilus, Nemo) give it, from its folder's name: "pub on nas" for an
-// SMB share or an AFP volume, "u@h" or "h" for others; the folder's name when it isn't one of gvfs's.
+// SMB share or an AFP volume, "nfs on h" for an NFS export (its path's last name: /srv/nfs), "u@h"
+// or "h" for others; the folder's name when it isn't one of gvfs's.
 static void gvfs_share_label(Str name, char *out, size_t cap)
 {
-    char what[256], host[256], user[128];
+    char what[256], host[256], user[128], prefix[PATH_MAX];
     bool share = gvfs_key(name, "share", what, sizeof what) || gvfs_key(name, "volume", what, sizeof what);
+    if (!share && gvfs_key(name, "prefix", prefix, sizeof prefix)) {   // (an NFS export's path)
+        Str pre = str_from_c(prefix);
+        while (pre.len > 1 && pre.p[pre.len - 1] == '/') pre.len--;
+        Str base = path_base(pre);
+        share = base.len > 0 && (size_t)base.len < sizeof what;
+        if (share) snprintf(what, sizeof what, "%.*s", STR_ARG(base));
+    }
     bool server = gvfs_key(name, "server", host, sizeof host) || gvfs_key(name, "host", host, sizeof host);
     if (share && server) snprintf(out, cap, "%s on %s", what, host);
     else if (server && gvfs_key(name, "user", user, sizeof user)) snprintf(out, cap, "%s@%s", user, host);
@@ -181,13 +207,21 @@ static void gvfs_share_label(Str name, char *out, size_t cap)
     else snprintf(out, cap, "%.*s", STR_ARG(name));
 }
 
-// The smb:// address of a folder in an SMB share gvfs mounted (Add Bookmark there writes it, as
-// Nautilus does, not the FUSE folder's path): name its share's folder's name, rest the path below
-// that ("" or "/sub/x"). The share and rest escaped as a URI's path; false for another kind of share
-// or one that doesn't fit.
+// The address of a folder in an SMB share or NFS export gvfs mounted (Add Bookmark there writes it,
+// as Nautilus does, not the FUSE folder's path): name its share's folder's name, rest the path below
+// that ("" or "/sub/x"). smb://[dom;user@]server[:port]/share/rest or nfs://server/prefix/rest, the
+// path escaped as a URI's; false for another kind of share or one that doesn't fit.
 static bool gvfs_share_uri(Str name, const char *rest, char *out, size_t cap)
 {
     char server[256], share[256], port[16], user[128], domain[128], path[PATH_MAX], esc[PATH_MAX * 3 + 8];
+    if (str_starts_with(name, S("nfs:"))) {
+        if (!gvfs_key(name, "host", server, sizeof server) || !gvfs_key(name, "prefix", path, sizeof path) || path[0] != '/') return false;
+        size_t pl = strlen(path);
+        if (pl > 1 && path[pl - 1] == '/') path[--pl] = 0;
+        if (snprintf(path + pl, sizeof path - pl, "%s", pl == 1 && rest[0] == '/' ? rest + 1 : rest) >= (int)(sizeof path - pl) || !percent_encode(str_from_c(path), "!$&'()*+,=@:/", esc, sizeof esc)) return false;
+        int n = snprintf(out, cap, "nfs://%s%s", server, esc);
+        return n > 0 && (size_t)n < cap;
+    }
     if (!str_starts_with(name, S("smb-share:")) || !gvfs_key(name, "server", server, sizeof server) || !gvfs_key(name, "share", share, sizeof share)) return false;
     bool hp = gvfs_key(name, "port", port, sizeof port), hu = gvfs_key(name, "user", user, sizeof user), hd = gvfs_key(name, "domain", domain, sizeof domain);
     if (snprintf(path, sizeof path, "/%s%s", share, rest) >= (int)sizeof path || !percent_encode(str_from_c(path), "!$&'()*+,=@:/", esc, sizeof esc)) return false;

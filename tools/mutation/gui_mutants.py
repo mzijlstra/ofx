@@ -1123,7 +1123,9 @@ MUTANTS = [
     ('gui/connect.c', '    cn.quit = true;\n    if (cn.reply == CN_WAIT) cn.reply = CN_CANCEL;', '    cn.quit = true;', 'net'),
     ('gui/connect.c', '        prctl(PR_SET_DUMPABLE, 0, 0, 0, 0);\n    }', '    }', 'net'),
     ('gui/connect.c', '    prctl(PR_SET_DUMPABLE, 1, 0, 0, 0);   // (every copy', '    // (every copy', 'net'),
-    ('gui/connect.c', ', strcmp(why, "Invalid argument") == 0 ? " (is the server\'s name right?)" : ""), true;', ', ""), true;', 'net'),
+    ('gui/connect.c', 'const char *hint = strcmp(why, "Invalid argument") == 0 ? " (is the server\'s name right?)" : strcmp', 'const char *hint = strcmp', 'net'),   # (retargeted, step 6)
+    # F16 step 6: NFS
+    ('gui/connect.c', 'strcmp(why, "Mount point does not exist") == 0 ? " (are the server\'s name and the folder right?)" : "";', '"";', 'net'),
     # F16 step 5: the Network section, a share's unmount, crumbs, bookmarks and names
     ('gui/watch.c', '        if (kicked || now_ms() >= gvfs_due) {', '        if (now_ms() >= gvfs_due) {', 'net'),
     ('gui/folder.c', '    places_load_net(&scratch, &app.places, bm, watch_shares(&scratch));   // (F16 step 5: after the drives)', '', 'f16'),

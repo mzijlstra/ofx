@@ -6,7 +6,7 @@
 # printed whole, in order, once all are done; clip, keys and dnd share one (each starts a sway,
 # which takes the first free wayland-N).
 # The groups (one or more scripts on one tree): browse big gone watchgap f2 f3 f4 f5 f52 f53 f54
-# f6 (f6, f6b) usb f62 (f62, f62b, f62c) f63 (f63, f63b, f63c, f63d) f64 (f64, f64b, f64c, f64d) f7 (f7, f7b) f72 f73 (f73, f73b, f73c, f73d) f74 f75 (f75, f75b, f75c) f15 (f15, f15b) f16 (f16, f16b, f16c, f16d, f16e, f16f, f16g, f16h) net (net, netq, netc, netu) f8 (f8, f8b, f8c, f8d, f8e) f9 (f9, f9b) f10 (f10, f10b, f10c, f10d) f11 (f11, f11b, f11c, f11d, f11e, f11f, f11g, f11h, f11i, f11j, f11k, f11l, f11m, f11n, f11o, f11p, f11q, f11r, f11s, f11t) f12 (f12, f12b) f12g f12h f12i f13 (f13, f13b, f13c, f13d, f13e, f13f, f13g, f13h) clip (clip, copypath) keys dnd (dnd, dndb, dndc, dndd, dnde, dndf, dndg, dndh, dndi, dndj, dndk) (the three in sway) hang guard3 guard harness (harness, harnessb, harnessc, harnessd). Named ones only, or all of them; a group
+# f6 (f6, f6b) usb f62 (f62, f62b, f62c) f63 (f63, f63b, f63c, f63d) f64 (f64, f64b, f64c, f64d) f7 (f7, f7b) f72 f73 (f73, f73b, f73c, f73d) f74 f75 (f75, f75b, f75c) f15 (f15, f15b) f16 (f16, f16b, f16c, f16d, f16e, f16f, f16g, f16h) net (net, netq, netc, netu, netn: the last only with the NFS test server) f8 (f8, f8b, f8c, f8d, f8e) f9 (f9, f9b) f10 (f10, f10b, f10c, f10d) f11 (f11, f11b, f11c, f11d, f11e, f11f, f11g, f11h, f11i, f11j, f11k, f11l, f11m, f11n, f11o, f11p, f11q, f11r, f11s, f11t) f12 (f12, f12b) f12g f12h f12i f13 (f13, f13b, f13c, f13d, f13e, f13f, f13g, f13h) clip (clip, copypath) keys dnd (dnd, dndb, dndc, dndd, dnde, dndf, dndg, dndh, dndi, dndj, dndk) (the three in sway) hang guard3 guard harness (harness, harnessb, harnessc, harnessd). Named ones only, or all of them; a group
 # that fails says "== <script>: FAILED" or "<group>: FAILED" (tools/mutation/gui.py reads it).
 set -u
 par=1
@@ -469,8 +469,12 @@ if want net; then
 # F16 step 2 on a real share (tests/net/lib.sh: a Samba container, a gvfs of the run's own under <T>/rt,
 # so the share's path is inside the guard's root). ofx starts in the share; <T>/pause and <T>/unpause
 # stop and start its server for the script. Skipped, saying so, without podman or gvfs-smb.
-fresh net; mkdir -p "$T/home"
-( NET_LIB="$here/../net/lib.sh"; . "$NET_LIB"
+# Its tree is a short folder of its own, <base>/net a link to it (F16 step 6): gvfsd-nfs finds the
+# bus only at <T>/rt/bus, and a socket's path holds 107 bytes, which a long scratch path (gui.py's)
+# passes, skipping netn. Removed once the group passes; kept, and named, when it fails.
+old=$(readlink "$base/net" 2> /dev/null) && case $old in /tmp/ofx-gnet-*) chmod -R u+rwx "$old"; rm -rf "$old" ;; esac
+fresh net; T=$(mktemp -d /tmp/ofx-gnet-XXXXXX); ln -s "$T" "$base/net"; mkdir -p "$T/home"
+if ( NET_LIB="$here/../net/lib.sh"; . "$NET_LIB"
   net_ok || exit 0
   trap net_end EXIT; trap 'exit 130' INT TERM
   { net_server "$T" && net_hold "$T" pub; } || { echo "== net: FAILED (its server or share)"; exit 1; }
@@ -513,7 +517,18 @@ fresh net; mkdir -p "$T/home"
   # (the shares listed every 10 min: only ofx's own unmount and connect show them at once)
   ( export OFX_TEST_HOME="$T/home" OFX_TEST_MOUNTINFO="$T/mountinfo" OFX_TEST_GIO="$T/giotest" OFX_TEST_GVFS_MS=600000
     exec "$here/../../tools/gui/run-script.sh" "$T" "$T/netu.script" "$bin" "$T/home" ) || failed netu
-  exit $fail ) || fail=1
+  # NFS through Connect to Server (F16 step 6), on the NFS test server when it runs (it takes root to
+  # start: lib.sh's net_nfs says so, and why it skipped). Its export unmounted after, so a run of the
+  # suite leaves the server as it found it.
+  if net_nfs "$T"; then
+      echo "== netn"
+      ( export OFX_TEST_HOME="$T/home" OFX_TEST_MOUNTINFO="$T/mountinfo" OFX_TEST_GIO="$T/giotest"
+        exec "$here/../../tools/gui/run-script.sh" "$T" "$here/netn.script" "$bin" "$T/home" ) || failed netn
+      "$T/giotest" mount -u "nfs://127.0.0.1/srv/nfs" > /dev/null 2>&1
+  fi
+  exit $fail ); then rm -rf "$T" "$base/net"
+else fail=1; echo "== net: its tree kept at $T"
+fi
 fi
 if want f8; then
 # F8: the right-click menus. The tree as f74's: home/tree: sub/, a.txt, b.txt, c.txt, .hid; the

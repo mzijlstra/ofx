@@ -637,7 +637,7 @@ static void test_connect_uri(void)
 {
     char uri[64], host[32], share[32], why[128];
 #define CU(t) connect_uri(S(t), uri, sizeof uri, host, sizeof host, share, sizeof share, why, sizeof why)
-    CHECK(CU("/home/m") == CONNECT_NOT && CU("~/x") == CONNECT_NOT && CU("smb:/x/y") == CONNECT_NOT && CU("nfs://h/x") == CONNECT_NOT && CU("") == CONNECT_NOT);
+    CHECK(CU("/home/m") == CONNECT_NOT && CU("~/x") == CONNECT_NOT && CU("smb:/x/y") == CONNECT_NOT && CU("ftp://h/x") == CONNECT_NOT && CU("nfs:/h/x") == CONNECT_NOT && CU("") == CONNECT_NOT && CU("smb:/") == CONNECT_NOT);
     CHECK(CU(" smb://nas/pub ") == CONNECT_OK && strcmp(uri, "smb://nas/pub") == 0 && strcmp(host, "nas") == 0 && strcmp(share, "pub") == 0);
     CHECK(CU("SMB://127.0.0.1:4445/priv/sub/x") == CONNECT_OK && strcmp(host, "127.0.0.1") == 0 && strcmp(share, "priv") == 0 && strcmp(uri, "SMB://127.0.0.1:4445/priv/sub/x") == 0);
     CHECK(CU("smb://michael@nas/home") == CONNECT_OK && strcmp(host, "nas") == 0 && strcmp(share, "home") == 0);
@@ -655,6 +655,20 @@ static void test_connect_uri(void)
     CHECK(CU("smb://0123456789012345678901234567890123/p") == CONNECT_BAD && strstr(why, "too long"));
     CHECK(CU("smb://h/0123456789012345678901234567890123") == CONNECT_BAD && strstr(why, "too long"));
     CHECK(CU("smb://h/p/0123456789012345678901234567890123456789012345678901abcdefgh") == CONNECT_BAD && strstr(why, "too long"));   // (a folder in the share past what the address holds)
+    // NFS (step 6): the share named by the path's last name, as gvfs names an export; no user, no
+    // port (gvfs-nfs takes neither), no password
+    CHECK(CU("nfs://127.0.0.1/srv/nfs") == CONNECT_OK && strcmp(uri, "nfs://127.0.0.1/srv/nfs") == 0 && strcmp(host, "127.0.0.1") == 0 && strcmp(share, "nfs") == 0);
+    CHECK(CU(" NFS://nas/export/home/m/ ") == CONNECT_OK && strcmp(uri, "NFS://nas/export/home/m/") == 0 && strcmp(host, "nas") == 0 && strcmp(share, "m") == 0);
+    CHECK(CU("nfs://nas/x") == CONNECT_OK && strcmp(share, "x") == 0);
+    CHECK(CU("nfs://nas") == CONNECT_BAD && strstr(why, "Name a folder on nas: nfs://nas/folder"));
+    CHECK(CU("nfs://nas/") == CONNECT_BAD && strstr(why, "Name a folder on nas"));
+    CHECK(CU("nfs://nas//") == CONNECT_BAD && strstr(why, "Name a folder on nas"));
+    CHECK(CU("nfs:///srv") == CONNECT_BAD && strstr(why, "Name a server: nfs://server/folder"));
+    CHECK(CU("nfs://me@nas/srv") == CONNECT_BAD && strstr(why, "No user in an NFS address"));
+    CHECK(CU("nfs://me:pw@nas/srv") == CONNECT_BAD && strstr(why, "No password") && !strstr(why, "pw"));
+    CHECK(CU("nfs://nas:2049/srv") == CONNECT_BAD && strstr(why, "No port in an NFS address"));
+    CHECK(CU("nfs://nas/s\x01") == CONNECT_BAD && CU("nfs://nas/s\x7f") == CONNECT_BAD && strstr(why, "control characters"));
+    CHECK(CU("nfs://nas/a/0123456789012345678901234567890123") == CONNECT_BAD && strstr(why, "too long"));
 #undef CU
 }
 
@@ -799,6 +813,12 @@ static void test_gvfs_label(void)
     CHECK(strcmp(l, "web") == 0);
     gvfs_share_label(S("mtp:host=Phone"), l, sizeof l);
     CHECK(strcmp(l, "Phone") == 0);
+    gvfs_share_label(S("nfs:host=127.0.0.1,prefix=%2Fsrv%2Fnfs"), l, sizeof l);   // (an NFS export: its path's last name, as gvfs names it)
+    CHECK(strcmp(l, "nfs on 127.0.0.1") == 0);
+    gvfs_share_label(S("nfs:host=nas,prefix=%2Fexport%2Fmy%20home%2F"), l, sizeof l);
+    CHECK(strcmp(l, "my home on nas") == 0);
+    gvfs_share_label(S("nfs:host=nas,prefix=%2F"), l, sizeof l);   // (the root: the server)
+    CHECK(strcmp(l, "nas") == 0);
     gvfs_share_label(S("something"), l, sizeof l);   // (not one of gvfs's: its name)
     CHECK(strcmp(l, "something") == 0);
     gvfs_share_label(S("smb-share:server=,share=x"), l, sizeof l);   // (an empty value is none)
@@ -817,12 +837,12 @@ static void test_gvfs_label(void)
 // when there are none; a share's folder isn't a drive, so its space isn't asked.
 static void test_places_net(void)
 {
-    put(at("places/netbm"), "file:///home/m/x\nsmb://nas/pub/sub Music\nsmb://nas/home\nsftp://box/x\nsmb://nas Server\nsmb://u:pw@nas/p\n");
+    put(at("places/netbm"), "file:///home/m/x\nsmb://nas/pub/sub Music\nsmb://nas/home\nsftp://box/x\nsmb://nas Server\nsmb://u:pw@nas/p\nnfs://box/srv/data\nnfs://box:2049/srv\n");
     Places pl = { 0 };
     places_load_net(&ta, &pl, at("places/netbm"), S("/run/u/gvfs/smb-share:server=nas,share=pub\nrel\n\n/run/u/gvfs/sftp:host=box,user=me\n/run/u/gvfs/smb-share:server=nas,share=pub\n"));
     const char *want[][3] = {
         { "", "Network", "h" }, { "/run/u/gvfs/smb-share:server=nas,share=pub", "pub on nas", "s" }, { "/run/u/gvfs/sftp:host=box,user=me", "me@box", "s" },
-        { "smb://nas/pub/sub", "Music", "b" }, { "smb://nas/home", "home on nas", "b" },
+        { "smb://nas/pub/sub", "Music", "b" }, { "smb://nas/home", "home on nas", "b" }, { "nfs://box/srv/data", "data on box", "b" },   // (an nfs:// one too, step 6; with a port it isn't one)
     };
     CHECK(pl.n == COUNT(want));
     for (int i = 0; i < pl.n && i < COUNT(want); i++) {
@@ -855,12 +875,22 @@ static void test_gvfs_uri(void)
     CHECK(gvfs_share_uri(S("smb-share:domain=W,server=nas,share=h"), "", u, sizeof u) && strcmp(u, "smb://nas/h") == 0);   // (a domain without a user: none)
     CHECK(!gvfs_share_uri(S("sftp:host=box,user=me"), "", u, sizeof u) && !gvfs_share_uri(S("dav:server=a,share=b"), "", u, sizeof u));
     CHECK(!gvfs_share_uri(S("smb-share:server=nas"), "", u, sizeof u) && !gvfs_share_uri(S("smb-share:share=x"), "", u, sizeof u));
+    // NFS (step 6): nfs://host/prefix/rest
+    CHECK(gvfs_share_uri(S("nfs:host=127.0.0.1,prefix=%2Fsrv%2Fnfs"), "", u, sizeof u) && strcmp(u, "nfs://127.0.0.1/srv/nfs") == 0);
+    CHECK(gvfs_share_uri(S("nfs:host=nas,prefix=%2Fsrv%2Fnfs"), "/a b/c", u, sizeof u) && strcmp(u, "nfs://nas/srv/nfs/a%20b/c") == 0);
+    CHECK(gvfs_share_uri(S("nfs:host=nas,prefix=%2Fsrv%2F"), "/x", u, sizeof u) && strcmp(u, "nfs://nas/srv/x") == 0);   // (a prefix ending in /: one /)
+    CHECK(gvfs_share_uri(S("nfs:host=nas,prefix=%2F"), "/x", u, sizeof u) && strcmp(u, "nfs://nas/x") == 0);   // (the root)
+    CHECK(gvfs_share_uri(S("nfs:host=nas,prefix=%2F"), "", u, sizeof u) && strcmp(u, "nfs://nas/") == 0);
+    CHECK(!gvfs_share_uri(S("nfs:prefix=%2Fsrv"), "", u, sizeof u) && !gvfs_share_uri(S("nfs:host=nas"), "", u, sizeof u) && !gvfs_share_uri(S("nfs:host=nas,prefix=srv"), "", u, sizeof u));
     char tiny[12];
     CHECK(!gvfs_share_uri(S("smb-share:server=nas,share=pub"), "/long", tiny, sizeof tiny));
+    CHECK(!gvfs_share_uri(S("nfs:host=nas,prefix=%2Fsrv"), "/long", tiny, sizeof tiny));
     // and back: the address Connect takes, naming the same share
     char uri[128], host[32], share[32], why[64];
     CHECK(gvfs_share_uri(S("smb-share:port=4445,server=nas,share=pub,user=m"), "/s", u, sizeof u) && connect_uri(str_from_c(u), uri, sizeof uri, host, sizeof host, share, sizeof share, why, sizeof why) == CONNECT_OK &&
           strcmp(host, "nas") == 0 && strcmp(share, "pub") == 0);
+    CHECK(gvfs_share_uri(S("nfs:host=nas,prefix=%2Fsrv%2Fnfs"), "/s", u, sizeof u) && connect_uri(str_from_c(u), uri, sizeof uri, host, sizeof host, share, sizeof share, why, sizeof why) == CONNECT_OK &&
+          strcmp(host, "nas") == 0 && strcmp(share, "s") == 0);
 }
 
 // A share's path buttons (step 5): from the share, named as gvfs names it, not from / or home.

@@ -130,6 +130,12 @@ shared state. Every test runs against fakes and scratch folders. Keep it that wa
   folders are the run's, where podman would put its storage. Never touch a container that isn't
   the run's. The GUI group `net` uses the same library: the share mounted under `<T>/rt` for the
   window's run, `<T>/pause` and `<T>/unpause` for its script.
+  **NFS** (F16 step 6) needs a server on port 111, which takes root:
+  `sudo tests/net/nfs-server.sh start` runs one (`ofx-test-nfs`, nfs-ganesha, 127.0.0.1 only,
+  its export a tmpfs) until `stop`. The NFS checks (test-net's, the net group's netn) skip
+  without it. They write only their own files there, and remove them. The net group's tree is a
+  short folder of its own, `/tmp/ofx-gnet-*` (`<base>/net` links to it), removed once the group
+  passes and kept, named, when it fails: remove it once read.
 - **A far folder** (F16: a network share, any FUSE mount, by the mount list) is read by `ofx-list`,
   a child (gui/far.c, fs/farlist.c), never by ofx: a read there can block for 90 s, and a thread
   blocked on it would hold the whole process. Its actions (rename, New Folder/File, Trash, Make
@@ -139,10 +145,11 @@ shared state. Every test runs against fakes and scratch folders. Keep it that wa
   run-script copies the `ofx-list` beside the binary among the fakes (the guard runs no other). The
   `f16` group stands a scratch folder in for a share through its mount list; `net` uses a real one.
 - **Connect to Server** (F16 step 4) runs `gio mount <address>` and `gio info <address>`, which on
-  your desktop mount a share through your session's gvfs, and hands gio a password on its input.
-  run-script's gio fake only logs them, unless the run gives `OFX_TEST_GIO`: the `net` group's,
-  a gio on that run's own gvfs session (its bus checked first). Never test it with the real gio on
-  the session bus, and never put a real password in a test.
+  your desktop mount a share through your session's gvfs, and hands gio a password on its input
+  (`nfs://` too, step 6). run-script's gio fake only logs `gio mount` and `gio info <address>`,
+  unless the run gives `OFX_TEST_GIO`: the `net` group's, a gio on that run's own gvfs session (its
+  bus checked first). Never test it with the real gio on the session bus, and never put a real
+  password in a test.
 - **The Network section** (F16 step 5) lists the shares in every `fuse.gvfsd-fuse` mount of the mount
   list (the watch thread, every 2 s), and its unmount button runs `gio mount -u <share folder>`.
   With `OFX_TEST_MOUNTINFO` a test's stand-in folder is listed instead (f16h); the gio fake only

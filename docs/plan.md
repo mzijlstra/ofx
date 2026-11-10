@@ -1053,8 +1053,47 @@ blocks each of these for up to gvfs's 90 s. On a thread it also holds ofx's exit
      f16h on a stand-in gvfs folder (no network: listing, unmount, a share appearing, bookmarks,
      Add Bookmark); the net group's netu on the real shares (unmount from the sidebar checked on the
      run's gvfs; a bookmark of a mounted share) and the share's name in net's "isn't answering".
-6. **NFS spike, then NFS:** gvfs-nfs against nfs-ganesha rootless; nfs:// in Connect to Server if
-   it works, else kernel NFS mounts only (above).
+6. **NFS** (built 2026-11-10): `nfs://server/path` in the location line, as `smb://`.
+   - **The spike:**
+     - gvfs-nfs (libnfs, NFSv3) finds a server's ports only through its portmapper, on 111, and
+       takes no port in the address. A rootless container can't publish 111.
+     - So the test server takes root: `sudo tests/net/nfs-server.sh start` (nfs-ganesha on
+       127.0.0.1, its export /srv/nfs a tmpfs) until `stop`. Michael chose that over kernel mounts
+       only (2026-11-10).
+     - gvfsd-nfs has a file capability (`cap_net_bind_service`, for a privileged source port). So
+       GLib treats it as setuid: it ignores DBUS_SESSION_BUS_ADDRESS and finds the bus only at
+       `$XDG_RUNTIME_DIR/bus`. The tests' private session links that to its bus. On a desktop that is
+       where the bus is already.
+   - **Measured on the test server:**
+     - gvfs asks nothing (NFS goes by the user's id). A mount takes about 40 ms.
+     - An address below the export (`nfs://h/srv/nfs/sub`) mounts the export holding it. Its
+       folder is named by the export (`nfs:host=h,prefix=%2Fsrv%2Fnfs`), and `gio info` gives the
+       subfolder's path in it.
+     - A path not exported, an unknown server and none answering all fail as "Mount point does not
+       exist": said with a hint ("are the server's name and the folder right?").
+     - A user or a port in the address is ignored by gvfs-nfs, so ofx refuses both and says why.
+     - The EIO gap after a quick remount (step 5's) holds for NFS too.
+   - **What changed:**
+     - `connect_uri` takes `nfs://`; ofx names it by the path's last name, as gvfs names an export
+       ("nfs on 127.0.0.1").
+     - `gvfs_share_label` gives an export that name in the Network section. `gvfs_share_uri` gives
+       a folder's `nfs://` address, so Add Bookmark there writes it, and an `nfs://` bookmark is
+       listed and connects like an `smb://` one.
+   - **Found on the way:** run-script's gio fake sent only `gio info smb://…` to the run's gio. Any
+     other address went to the real gio, so netn's first run asked the session's gvfs about two
+     `nfs://` addresses (read only: nothing mounted, nothing changed). Every `gio info` on an
+     address goes to the run's gio now, and netn checks the fake logged it.
+   - **Tests:**
+     - unit: the addresses, the labels, the `nfs://` of a folder and back through `connect_uri`;
+     - `make test-net`: nine NFS checks (mount by a folder's address, its path, read, write as the
+       user, already mounted, a missing export, unmount by folder);
+     - the GUI net group's netn: connect with no question, the Network section, Add Bookmark,
+       unmount from the sidebar, the bookmark reconnecting, the refusals and the hint.
+     - All of them skip, saying so, when the NFS test server isn't running.
+     - The bus's socket must be at `<T>/rt/bus`, and a socket's path holds 107 bytes. gui.py's long
+       scratch paths passed that, so netn skipped there and a mutant of the NFS hint survived. The
+       net group's tree is now a short folder of its own (`/tmp/ofx-gnet-*`, linked from
+       `<base>/net`), removed when the group passes.
 7. **Discovery:** the Network place browsing servers and shares (`smb://` root through gvfs's
    smb-browse, and avahi), apart from everything above, so it can be dropped without touching
    them.
