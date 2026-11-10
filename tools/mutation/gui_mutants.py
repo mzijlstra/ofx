@@ -593,7 +593,7 @@ MUTANTS = [
     # shot usb-unmounted.png shows it), and the guard's NULL folders (no test runs without its own).
     ('gui/watch.c', "        if (e->wd == watch.udev_wd && e->len && e->name[0] == 'b') *mounts = true;", '', 'usb'),
     ('gui/watch.c', "        if (e->wd == watch.udev_wd && e->len && e->name[0] == 'b') *mounts = true;", "        if (e->wd == watch.udev_wd && e->len && e->name[0] == 'c') *mounts = true;", 'usb'),
-    ('gui/folder.c', 'app.places.p[i].kind == PL_HEAD || app.places.p[i].kind == PL_UNMOUNTED', 'app.places.p[i].kind == PL_HEAD', 'usb'),
+    ('gui/folder.c', 'app.places.p[i].kind == PL_HEAD || place_folderless(app.places.p[i].kind))\n        return NULL;', 'app.places.p[i].kind == PL_HEAD)\n        return NULL;', 'usb'),   # (F16 step 7d: place_folderless)
     ('gui/actions.c', '            mount_start(&app.places.p[a.index]);   // a drive not mounted yet', '            {}   // a drive not mounted yet', 'usb'),
     ('gui/input.c', '    if (it == UM_MOUNT_IT && ctx_pl && ctx_pl->kind == PL_UNMOUNTED) mount_start(ctx_pl);', '', 'usb'),
     ('gui/input.c', '        u->ctx_unmounted = pl->kind == PL_UNMOUNTED || place_connects(pl->kind);', '        u->ctx_unmounted = place_connects(pl->kind);', 'usb'),   # (retargeted, step 7b)
@@ -716,7 +716,7 @@ MUTANTS = [
     ('gui/main.c', '    if (atomic_exchange(&watch.mounts_ready, false)) places_reload(), trash_state(), dirty = true;\n    if (app.drive_gone) {', '    if (atomic_exchange(&watch.list_ready, false)) reload(), dirty = true;\n    if (atomic_exchange(&watch.mounts_ready, false)) places_reload(), trash_state(), dirty = true;\n    if (app.drive_gone) {', 'usb'),
     ('gui/eject.c', '        else if (go_to(at, STR_EMPTY, 0)) set_status(false, "Mounted %s", ej.label);', '        else set_status(false, "Mounted %s", ej.label);', 'usb'),
     ('gui/eject.c', '        if (!mounted) set_status(true, "Can\'t mount %s: %s"', '        if (false) set_status(true, "Can\'t mount %s: %s"', 'usb'),
-    ('gui/script.c', ' : p->kind == PL_UNMOUNTED || place_connects(p->kind) ? "~" : ""', ' : place_connects(p->kind) ? "~" : ""', 'usb'),   # (retargeted, step 7b)
+    ('gui/script.c', ' : place_folderless(p->kind) ? "~" : ""', ' : place_connects(p->kind) ? "~" : ""', 'usb'),   # (retargeted, step 7b)
     # Not run (2026-10-30): drive_start's ops_program_allowed (a script can't change the window's
     # PATH to a udisksctl outside the root; the unit test has it), and the mount's longer limit.
     ('gui/folder.c', '    if (v == UI_VIEW_TRASH && trash_home(tinfo, sizeof tinfo - 8)) strcat(tinfo, "/info");\n', '', 'f6'),
@@ -1127,10 +1127,10 @@ MUTANTS = [
     # F16 step 6: NFS
     ('gui/connect.c', 'strcmp(why, "Mount point does not exist") == 0 ? " (are the server\'s name and the folder right?)" : "";', '"";', 'net'),
     # F16 step 5: the Network section, a share's unmount, crumbs, bookmarks and names
-    ('gui/watch.c', '        if (kicked || now_ms() >= gvfs_due) {', '        if (now_ms() >= gvfs_due) {', 'net'),
-    ('gui/folder.c', '    places_load_net(&scratch, &app.places, bm, watch_shares(&scratch), servers, nservers);', '', 'f16'),   # (retargeted, step 7b)
+    ('gui/watch.c', '        if (!atomic_load(&airplane) && (kicked || now_ms() >= gvfs_due)) {', '        if (!atomic_load(&airplane) && (now_ms() >= gvfs_due)) {', 'net'),
+    ('gui/folder.c', '    places_load_net(&scratch, &app.places, bm, watch_shares(&scratch), servers, nservers, app.ui.airplane);', '', 'f16'),   # (retargeted, step 7b)
     ('gui/folder.c', '    return (place_is_drive(k) && k != PL_ROOT) || k == PL_SHARE;', '    return place_is_drive(k) && k != PL_ROOT;', 'f16'),
-    ('gui/folder.c', ' || app.places.p[i].kind == PL_UNMOUNTED || place_connects(app.places.p[i].kind))\n        return NULL;', ' || app.places.p[i].kind == PL_UNMOUNTED)\n        return NULL;', 'f16'),   # (retargeted, step 7b)
+    # (F16 step 7d: side_path's check is place_folderless now; the unit mutants' place_folderless ones)
     ('gui/actions.c', '            connect_start(str_from_c(app.places.p[a.index].path));   // a network bookmark', '            ;   // a network bookmark', 'f16'),   # (retargeted, step 7b)
     ('gui/actions.c', '        else if (a.index >= 0 && a.index < app.places.n && app.places.p[a.index].kind == PL_SHARE) share_unmount_start(&app.places.p[a.index]);   // (F16 step 5)', '', 'f16'),
     ('gui/input.c', '        u->ctx_share = pl->kind == PL_SHARE;', '', 'f16'),
@@ -1169,8 +1169,8 @@ MUTANTS = [
     ('gui/connect.c', '    shp.pending = false;   // (a server', '    // (a server', 'f16'),   # (step 7a review)
     # F16 step 7b: servers on the network
     ('gui/disco.c', '    if (getenv("OFX_GUI_ROOT") && !getenv("OFX_TEST_AVAHI")) return;', '    if (getenv("OFX_GUI_ROOT")) return;', 'f16'),
-    ('gui/disco.c', '    for (bool cache = false; disco_ask(cache); cache = true) {', '    for (bool cache = true; disco_ask(cache); cache = true) {', 'f16'),
-    ('gui/disco.c', '    for (bool cache = false; disco_ask(cache); cache = true) {', '    for (bool cache = false; disco_ask(cache); cache = false) {', 'f16'),
+    ('gui/disco.c', '    for (bool cache = false;; cache = true) {', '    for (bool cache = true;; cache = true) {', 'f16'),
+    ('gui/disco.c', '    for (bool cache = false;; cache = true) {', '    for (bool cache = false;; cache = false) {', 'f16'),
     ('gui/disco.c', '    if (changed) atomic_store(&watch.mounts_ready, true), wake_main();', '', 'f16'),
     ('gui/disco.c', '    bool changed = n != disco.n || memcmp(now, disco.s, (size_t)n * sizeof *now) != 0;', '    bool changed = n != disco.n;', 'f16'),
     ('gui/folder.c', '    int nservers = disco_servers(servers);', '    int nservers = 0; (void)disco_servers;', 'f16'),
@@ -1185,4 +1185,26 @@ MUTANTS = [
     ('gui/connect.c', '    if (!ok && unknown) {   // (the host alone', '    if (false) {   // (the host alone', 'net'),
     ('gui/connect.c', '        return set_status(true, "%s isn\'t a known host: connect once with ssh to check its key, then try again", h ? h + 1 : cn.host), true;', '        return set_status(true, "%s isn\'t a known host: connect once with ssh to check its key, then try again", cn.host), true;', 'net'),
     ('gui/connect.c', '        cn.browse = c == CONNECT_SERVER,', '        cn.browse = false,', 'f16'),
+    # F16 step 7d: Airplane Mode, and the share poll's back-off
+    ('gui/watch.c', '        if (!atomic_load(&airplane) && (kicked || now_ms() >= gvfs_due)) {', '        if (kicked || now_ms() >= gvfs_due) {', 'f16'),
+    ('gui/watch.c', 'base, most, kicked || changed || gvfsw.len > 0);', 'base, most, kicked || changed);', 'f16'),
+    ('gui/watch.c', 'base, most, kicked || changed || gvfsw.len > 0);', 'base, most, false);', 'f16'),
+    ('gui/watch.c', '        if (e->wd == watch.state_wd && e->len && strcmp(e->name, "state") == 0) atomic_store(&watch.state_ready, true), wake_main();   // (F16 step 7d)\n', '', 'f16'),
+    ('gui/watch.c', '        watch.state_wd = inotify_add_watch(', '        watch.state_wd = -1 + 0 * inotify_add_watch(', 'f16'),
+    ('gui/disco.c', '        while (atomic_load(&airplane)) cache = false, pthread_cond_wait(&disco.cv, &disco.mu);', '        while (false) cache = false, pthread_cond_wait(&disco.cv, &disco.mu);', 'f16'),
+    ('gui/disco.c', '        while (atomic_load(&airplane)) cache = false, pthread_cond_wait(', '        while (atomic_load(&airplane)) pthread_cond_wait(', 'f16'),
+    ('gui/connect.c', '    if (atomic_load(&airplane)) return set_status(true, "Airplane mode is on', '    if (false) return set_status(true, "Airplane mode is on', 'f16'),
+    ('gui/actions.c', '    if (!on) app.ui.airplane_asking = false;\n', '', 'f16'),
+    ('gui/actions.c', '    watch_gvfs_kick(), disco_wake();\n', '    disco_wake();\n', 'f16'),
+    ('gui/actions.c', '    watch_gvfs_kick(), disco_wake();\n', '    watch_gvfs_kick();\n', 'f16'),
+    ('gui/actions.c', '    watch_gvfs_kick(), disco_wake();\n    places_reload();\n', '    watch_gvfs_kick(), disco_wake();\n', 'f16'),
+    ('gui/actions.c', '    airplane_apply(str_eq(state_value(&scratch, path, "airplane"), S("on")));', '    airplane_apply(false);', 'f16'),
+    ('gui/actions.c', '        state_key("airplane", app.ui.airplane ? "on" : "off");\n', '', 'f16'),
+    ('gui/actions.c', '        airplane_apply(app.ui.airplane);\n        set_status', '        set_status', 'f16'),
+    ('gui/actions.c', '            app.ui.airplane_asking = true;   // (F16 step 7d: asked, then turned off)', '            ;', 'f16'),
+    ('gui/main.c', '    if (atomic_exchange(&watch.state_ready, false)) airplane_sync(), dirty = true;', '    if (atomic_exchange(&watch.state_ready, false)) dirty = true;', 'f16'),
+    ('gui/main.c', 'atomic_store(&airplane, state_load(&scratch, state_at).airplane);', 'atomic_store(&airplane, false);', 'f16'),
+    ('gui/main.c', '    app.ui.airplane = atomic_load(&airplane);\n', '', 'f16'),
+    ('gui/input.c', '        u->ctx_airplane = pl->kind == PL_AIRPLANE;   // (F16 step 7d)\n', '', 'f16'),
+    ('gui/folder.c', 'servers, nservers, app.ui.airplane);', 'servers, nservers, false);', 'f16'),
 ]

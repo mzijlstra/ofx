@@ -881,7 +881,7 @@ static void test_places_net(void)
     Places pl = { 0 };
     // (servers found: one a bookmark has, by its address, which keeps the bookmark's label; step 7b)
     static const NetServer SV[] = { { "BOX", "smb://box" }, { "Yoga", "smb://yoga.local" } };
-    places_load_net(&ta, &pl, at("places/netbm"), S("/run/u/gvfs/smb-share:server=nas,share=pub\nrel\n\n/run/u/gvfs/sftp:host=box,user=me\n/run/u/gvfs/smb-share:server=nas,share=pub\n"), SV, 2);
+    places_load_net(&ta, &pl, at("places/netbm"), S("/run/u/gvfs/smb-share:server=nas,share=pub\nrel\n\n/run/u/gvfs/sftp:host=box,user=me\n/run/u/gvfs/smb-share:server=nas,share=pub\n"), SV, 2, false);
     const char *want[][3] = {
         { "", "Network", "h" }, { "/run/u/gvfs/smb-share:server=nas,share=pub", "pub on nas", "s" }, { "/run/u/gvfs/sftp:host=box,user=me", "me@box", "s" },
         { "smb://nas/pub/sub", "Music", "b" }, { "smb://nas/home", "home on nas", "b" }, { "sftp://box/x", "box", "b" },   // (an sftp:// one, step 7c: by its host)
@@ -901,20 +901,20 @@ static void test_places_net(void)
     CHECK(place_icon_names(&pl.p[1], &(UserDirs){ 0 }, false, names) == 2 && str_eq(names[0], S("folder-remote")));
     CHECK(place_icon_names(&pl.p[3], &(UserDirs){ 0 }, false, names) == 2 && str_eq(names[0], S("folder-remote")));
     Places none = { 0 };
-    places_load_net(&ta, &none, at("places/none"), S(""), NULL, 0);
+    places_load_net(&ta, &none, at("places/none"), S(""), NULL, 0, false);
     CHECK(none.n == 0);
     // A share is a place in its own section: a Places bookmark to the same folder doesn't hide it.
     Places both = { 0 };
     places_add(&both, PL_BOOKMARK, "/run/u/gvfs/smb-share:server=nas,share=pub", S("b"));
-    places_load_net(&ta, &both, at("places/none"), S("/run/u/gvfs/smb-share:server=nas,share=pub\n"), NULL, 0);
+    places_load_net(&ta, &both, at("places/none"), S("/run/u/gvfs/smb-share:server=nas,share=pub\n"), NULL, 0, false);
     // A server found that a bookmark has: the bookmark's, its label kept.
     Places dup = { 0 };
     put(at("places/dupbm"), "smb://box Office\n");
-    places_load_net(&ta, &dup, at("places/dupbm"), S(""), (NetServer[]){ { "BOX", "smb://box" } }, 1);
+    places_load_net(&ta, &dup, at("places/dupbm"), S(""), (NetServer[]){ { "BOX", "smb://box" } }, 1, false);
     CHECK(dup.n == 2 && dup.p[1].kind == PL_NETBM && strcmp(dup.p[1].label, "Office") == 0);
     // Only servers: the section's heading and them; a server isn't a drive, has no folder, connects.
     Places sv = { 0 };
-    places_load_net(&ta, &sv, at("places/none"), S(""), (NetServer[]){ { "BOX", "smb://box" } }, 1);
+    places_load_net(&ta, &sv, at("places/none"), S(""), (NetServer[]){ { "BOX", "smb://box" } }, 1, false);
     CHECK(sv.n == 2 && sv.p[1].kind == PL_SERVER && place_connects(PL_SERVER) && place_connects(PL_NETBM) && !place_connects(PL_SHARE) && place_is_net(PL_SERVER) && !place_unmountable(&sv.p[1]));
     CHECK(places_current(&sv, "smb://box") == -1);
     CHECK(place_icon_names(&sv.p[1], &(UserDirs){ 0 }, false, names) == 3 && str_eq(names[0], S("network-server")) && str_eq(names[1], S("folder-remote")));
@@ -1113,4 +1113,77 @@ static void test_gvfs_shares(void)
     free(buf);
     CHECK(gvfs_is_share("smb-share:server=a") && gvfs_is_share("sftp:host=h") && !gvfs_is_share("junk") && !gvfs_is_share(":x=1") &&
           !gvfs_is_share("Ab:x=1") && !gvfs_is_share("a b:x=1") && !gvfs_is_share("a:b"));
+}
+
+// Airplane Mode (step 7d): the state file's line, the Network section's one row, the menu entry, the
+// sidebar row's menu and question; and the share poll's back-off.
+static void test_airplane(void)
+{
+    put(at("air/state"), "sidebar=places\nairplane=on\n");
+    CHECK(state_load(&ta, at("air/state")).airplane);
+    put(at("air/state"), "airplane=off\n");
+    CHECK(!state_load(&ta, at("air/state")).airplane);
+    put(at("air/state"), "hidden=on\n");
+    CHECK(!state_load(&ta, at("air/state")).airplane);
+    // The Network section: its heading and the row, nothing else (bookmarks, shares, servers left out).
+    put(at("air/bm"), "smb://nas/pub Pub\n");
+    Places pl = { 0 };
+    places_load_net(&ta, &pl, at("air/bm"), S("/run/u/gvfs/smb-share:server=nas,share=pub\n"), (NetServer[]){ { "BOX", "smb://box" } }, 1, true);
+    CHECK(pl.n == 2 && pl.p[0].kind == PL_HEAD && pl.p[1].kind == PL_AIRPLANE && strcmp(pl.p[1].label, "Airplane mode") == 0);
+    CHECK(place_folderless(PL_AIRPLANE) && place_folderless(PL_UNMOUNTED) && place_folderless(PL_NETBM) && place_folderless(PL_SERVER) &&
+          !place_folderless(PL_SHARE) && !place_folderless(PL_MOUNT) && !place_connects(PL_AIRPLANE) && !place_is_drive(PL_AIRPLANE) && !place_unmountable(&pl.p[1]));
+    CHECK(places_current(&pl, "airplane:") == -1);
+    Str names[3];
+    CHECK(place_icon_names(&pl.p[1], &(UserDirs){ 0 }, false, names) == 2 && str_eq(names[0], S("airplane-mode")));
+    Places off = { 0 };
+    places_load_net(&ta, &off, at("air/bm"), S(""), NULL, 0, false);
+    CHECK(off.n == 2 && off.p[1].kind == PL_NETBM);
+    // Go → Airplane Mode: a check, on and off, each said to gui/ (bindable: its word).
+    Ui u = { 0 };
+    CHECK(ui_menu_shown(&u, UM_AIRPLANE) && ui_menu_enabled(&u, UM_AIRPLANE) && ui_menu_mark(&u, UM_AIRPLANE) == 0);
+    UiAction a = ui_menu_pick(&u, UM_AIRPLANE);
+    CHECK(a.kind == UA_AIRPLANE && u.airplane && ui_menu_mark(&u, UM_AIRPLANE) == 1);
+    a = ui_menu_pick(&u, UM_AIRPLANE);
+    CHECK(a.kind == UA_AIRPLANE && !u.airplane);
+    CHECK(strcmp(UI_MENU_ITEM[UM_AIRPLANE].word, "airplane-mode") == 0);
+    bool in_go = false;
+    for (isize i = 0; i < COUNT(UI_MENU_GO); i++) in_go |= UI_MENU_GO[i] == UM_AIRPLANE && i > 0 && UI_MENU_GO[i - 1] == UM_CONNECT;
+    CHECK(in_go);
+    // The row's own menu: Turn Off Airplane Mode alone (no check, so the folder menu keeps no column for
+    // one); picked there, it turns off as from Go.
+    Ui f = { .airplane = true, .menu = UI_CTX_FOLDER, .ctx_airplane = true };
+    CHECK(ui_folder_shown(&f, UM_AIRPLANE_OFF_IT) && !ui_folder_shown(&f, UM_OPEN_IT) && !ui_folder_shown(&f, UM_MOUNT_IT) && !ui_folder_shown(&f, UM_PROPS_IT));
+    CHECK(UI_MENU_ITEM[UM_AIRPLANE_OFF_IT].mark == 0);
+    f.ctx_airplane = false, f.ctx_unmounted = true;
+    CHECK(!ui_folder_shown(&f, UM_AIRPLANE_OFF_IT));
+    f.ctx_unmounted = false;
+    CHECK(!ui_folder_shown(&f, UM_AIRPLANE_OFF_IT));
+    f.ctx_airplane = true;
+    ui_folder_open(&f, 3, -1, false);   // (another row's menu: gui/ says again what it is)
+    CHECK(!f.ctx_airplane);
+    f.ctx_airplane = true, f.menu = UI_CTX_FOLDER;
+    a = ui_menu_pick(&f, UM_AIRPLANE_OFF_IT);
+    CHECK(a.kind == UA_AIRPLANE && !f.airplane);
+    // The row's question: Enter or y turns it off, n or Esc keeps it, and its buttons the same.
+    Ui q = { .airplane = true, .airplane_asking = true };
+    CHECK(ui_on_top(&q) == UI_ON_AIRPLANE && ui_is_question(UI_ON_AIRPLANE));
+    UiInput in = ui_input_none();
+    in.ev[in.nev++] = (UiEvent){ .key = UK_NONE, .ch = 'n' };
+    a = ui_handle(&q, (UiNames){ 0 }, &in);
+    CHECK(a.kind == UA_NONE && q.airplane && !q.airplane_asking);
+    q.airplane_asking = true, in = ui_input_none(), in.ev[in.nev++] = (UiEvent){ .key = UK_ENTER };
+    a = ui_handle(&q, (UiNames){ 0 }, &in);
+    CHECK(a.kind == UA_AIRPLANE && !q.airplane && !q.airplane_asking);
+    q.airplane = q.airplane_asking = true, in = ui_input_none(), in.modal = UI_MODAL_NO;
+    a = ui_handle(&q, (UiNames){ 0 }, &in);
+    CHECK(a.kind == UA_NONE && q.airplane && !q.airplane_asking);
+    q.airplane_asking = true, in = ui_input_none(), in.modal = UI_MODAL_YES;
+    a = ui_handle(&q, (UiNames){ 0 }, &in);
+    CHECK(a.kind == UA_AIRPLANE && !q.airplane && !q.airplane_asking);
+    // The share poll's waits: 2, 4, 8, 16, then 30 s; back to 2 at a reset.
+    int w = 0, seen[7];
+    for (int i = 0; i < 7; i++) seen[i] = w = share_poll_next(w, 2000, 30000, false);
+    CHECK(seen[0] == 2000 && seen[1] == 4000 && seen[2] == 8000 && seen[3] == 16000 && seen[4] == 30000 && seen[5] == 30000 && seen[6] == 30000);
+    CHECK(share_poll_next(30000, 2000, 30000, true) == 2000 && share_poll_next(16000, 2000, 30000, true) == 2000);
+    CHECK(share_poll_next(4000, 2000, 5000, false) == 5000 && share_poll_next(2000, 2000, 2000, false) == 2000);
 }

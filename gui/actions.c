@@ -941,6 +941,28 @@ static void state_key(const char *key, const char *value)
     if (state_path(path, sizeof path) && !state_put(&scratch, path, key, value, &err)) set_status(true, "%s", err.msg);
 }
 
+// Airplane Mode on or off in this window (F16 step 7d; Ui.airplane, the state file's airplane=): the
+// threads told (the shares' listing kicked, discovery woken), the places read again (the Network
+// section is its row alone while on), and its question gone when another window turned it off.
+static void airplane_apply(bool on)
+{
+    app.ui.airplane = on;
+    if (!on) app.ui.airplane_asking = false;
+    if (atomic_exchange(&airplane, on) == on) return;
+    watch_gvfs_kick(), disco_wake();
+    places_reload();
+}
+
+// The state file changed (another window's, or this one's own write): Airplane Mode as it says.
+static void airplane_sync(void)
+{
+    char path[PATH_MAX];
+    if (!state_path(path, sizeof path)) return;
+    ArenaMark m = arena_mark(&scratch);
+    airplane_apply(str_eq(state_value(&scratch, path, "airplane"), S("on")));
+    arena_restore(&scratch, m);
+}
+
 // The sidebar's width w, dragged to or given back (F13): kept, and remembered for every window as
 // its mode is (sidewidth=).
 static void side_keep(int w)
@@ -1006,6 +1028,11 @@ static void act(UiAction a)
     // View's toggles: each remembered, its one key (as UA_VIEW).
     case UA_COLORS: state_key("colors", app.ui.colors ? "on" : "off"); break;
     case UA_MENUBAR: state_key("menubar", app.ui.bar_hidden ? "off" : "on"); break;
+    case UA_AIRPLANE:   // (F16 step 7d: kept for every window; each applies it as the state file changes)
+        state_key("airplane", app.ui.airplane ? "on" : "off");
+        airplane_apply(app.ui.airplane);
+        set_status(false, app.ui.airplane ? "Airplane mode is on: ofx makes no network connections" : "Airplane mode is off");
+        break;
     case UA_PERMS_COLS: state_key("perms", app.ui.perms_cols ? "on" : "off"); break;
     case UA_GROUP_COL: state_key("group", app.ui.group_col ? "on" : "off"); break;
     case UA_ZOOM:     // F6.3: as the view, the cursor kept on its row at the refit (ui_refit)
@@ -1034,6 +1061,8 @@ static void act(UiAction a)
             mount_start(&app.places.p[a.index]);   // a drive not mounted yet: mounted, then opened (2026-10-30)
         else if (app.ui.side_mode == SIDE_PLACES && a.index >= 0 && a.index < app.places.n && place_connects(app.places.p[a.index].kind))
             connect_start(str_from_c(app.places.p[a.index].path));   // a network bookmark (connected, then opened) or a server found (its shares listed): F16 steps 5, 7b
+        else if (app.ui.side_mode == SIDE_PLACES && a.index >= 0 && a.index < app.places.n && app.places.p[a.index].kind == PL_AIRPLANE)
+            app.ui.airplane_asking = true;   // (F16 step 7d: asked, then turned off)
         break;
     }
     case UA_TREE_LEFT:

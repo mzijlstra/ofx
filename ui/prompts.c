@@ -49,10 +49,10 @@ static bool ui_yes_no(UiEvent e, bool *answered)
 }
 
 // The yes/no questions: delete for good, cancel a job, quit with jobs, Empty Trash, Bring back
-// (F11), Clear Previews (F12).
+// (F11), Clear Previews (F12), turn Airplane Mode off (F16 step 7d).
 static bool ui_is_question(UiOnTop on)
 {
-    return on == UI_ON_QUIT || on == UI_ON_CANCEL || on == UI_ON_DELETE || on == UI_ON_EMPTY || on == UI_ON_RESTORE || on == UI_ON_CLEAR;
+    return on == UI_ON_QUIT || on == UI_ON_CANCEL || on == UI_ON_DELETE || on == UI_ON_EMPTY || on == UI_ON_RESTORE || on == UI_ON_CLEAR || on == UI_ON_AIRPLANE;
 }
 
 // Question on answered, by a button or a key: it goes, and what it asks for comes back (yes; Bring
@@ -67,6 +67,7 @@ static UiAction ui_answer(Ui *u, UiOnTop on, bool yes)
     case UI_ON_EMPTY: u->empty_asking = false; return (UiAction){ yes ? UA_EMPTY_TRASH : UA_NONE, 0, false };   // (from any view: the folder menu's on Trash, F8)
     case UI_ON_RESTORE: u->restore_n = 0; return (UiAction){ UA_RESTORE_WINDOWS, 0, yes };
     case UI_ON_CLEAR: u->clear_asking = false; return (UiAction){ yes ? UA_CLEAR_PREVIEWS : UA_NONE, 0, false };
+    case UI_ON_AIRPLANE: u->airplane_asking = false; return yes ? (u->airplane = false, (UiAction){ UA_AIRPLANE, 0, false }) : UI_NONE;
     default: return UI_NONE;
     }
 }

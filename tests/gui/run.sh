@@ -6,7 +6,7 @@
 # printed whole, in order, once all are done; clip, keys and dnd share one (each starts a sway,
 # which takes the first free wayland-N).
 # The groups (one or more scripts on one tree): browse big gone watchgap f2 f3 f4 f5 f52 f53 f54
-# f6 (f6, f6b) usb f62 (f62, f62b, f62c) f63 (f63, f63b, f63c, f63d) f64 (f64, f64b, f64c, f64d) f7 (f7, f7b) f72 f73 (f73, f73b, f73c, f73d) f74 f75 (f75, f75b, f75c) f15 (f15, f15b) f16 (f16, f16b, f16c, f16d, f16e, f16f, f16g, f16h, f16s, f16v) net (net, netq, netc, netu, nets, netf, netn: the last only with the NFS test server) f8 (f8, f8b, f8c, f8d, f8e) f9 (f9, f9b) f10 (f10, f10b, f10c, f10d) f11 (f11, f11b, f11c, f11d, f11e, f11f, f11g, f11h, f11i, f11j, f11k, f11l, f11m, f11n, f11o, f11p, f11q, f11r, f11s, f11t) f12 (f12, f12b) f12g f12h f12i f13 (f13, f13b, f13c, f13d, f13e, f13f, f13g, f13h) clip (clip, copypath) keys dnd (dnd, dndb, dndc, dndd, dnde, dndf, dndg, dndh, dndi, dndj, dndk) (the three in sway) hang guard3 guard harness (harness, harnessb, harnessc, harnessd). Named ones only, or all of them; a group
+# f6 (f6, f6b) usb f62 (f62, f62b, f62c) f63 (f63, f63b, f63c, f63d) f64 (f64, f64b, f64c, f64d) f7 (f7, f7b) f72 f73 (f73, f73b, f73c, f73d) f74 f75 (f75, f75b, f75c) f15 (f15, f15b) f16 (f16, f16b, f16c, f16d, f16e, f16f, f16g, f16h, f16s, f16v, f16w) net (net, netq, netc, netu, nets, netf, netn: the last only with the NFS test server) f8 (f8, f8b, f8c, f8d, f8e) f9 (f9, f9b) f10 (f10, f10b, f10c, f10d) f11 (f11, f11b, f11c, f11d, f11e, f11f, f11g, f11h, f11i, f11j, f11k, f11l, f11m, f11n, f11o, f11p, f11q, f11r, f11s, f11t) f12 (f12, f12b) f12g f12h f12i f13 (f13, f13b, f13c, f13d, f13e, f13f, f13g, f13h) clip (clip, copypath) keys dnd (dnd, dndb, dndc, dndd, dnde, dndf, dndg, dndh, dndi, dndj, dndk) (the three in sway) hang guard3 guard harness (harness, harnessb, harnessc, harnessd). Named ones only, or all of them; a group
 # that fails says "== <script>: FAILED" or "<group>: FAILED" (tools/mutation/gui.py reads it).
 set -u
 par=1
@@ -510,6 +510,21 @@ EOF
 chmod +x "$T/avahi"
 RS_HOME=$T/home
 rs f16v OFX_TEST_AVAHI="$T/avahi" OFX_TEST_DISCO_MS=1000 OFX_TEST_GIO="$T/giofake" -- "$T/home"
+# f16w (step 7d): Airplane Mode and the share poll's back-off: <T>/gvfs in the mount list as
+# gvfsd-fuse's (no share in it until the script makes one), a stand-in avahi-browse finding YOGA,
+# an smb:// bookmark; the poll's waits 200 ms doubling to 1600; the state file says airplane=on.
+fresh f16w; mkdir -p "$T/home" "$T/gvfs" "$T/config/gtk-3.0" "$T/state/ofx"
+printf 'airplane=on\n' > "$T/state/ofx/state"
+printf 'smb://nas/home Home NAS\n' > "$T/config/gtk-3.0/bookmarks"
+printf '1 0 0:1 / / rw - ext4 /dev/x rw\n2 1 0:2 / %s rw,nosuid,nodev - fuse.gvfsd-fuse gvfsd-fuse rw\n' "$T/gvfs" > "$T/mountinfo"
+cat > "$T/avahi" <<'EOF'
+#!/bin/sh
+[ "$1" = -k ] || exit 0
+printf '=;eth0;IPv4;YOGA;_smb._tcp;local;yoga.local;192.168.1.165;445;\n'
+EOF
+chmod +x "$T/avahi"
+RS_HOME=$T/home
+rs f16w OFX_TEST_MOUNTINFO="$T/mountinfo" OFX_TEST_AVAHI="$T/avahi" OFX_TEST_DISCO_MS=1000 OFX_TEST_GVFS_MS=200 OFX_TEST_GVFS_MAX_MS=1600 -- "$T/home"
 fi
 if want net; then
 # F16 step 2 on a real share (tests/net/lib.sh: a Samba container, a gvfs of the run's own under <T>/rt,

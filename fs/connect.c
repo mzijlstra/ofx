@@ -437,3 +437,12 @@ static bool gvfs_shares(FILE *out, Arena *a, Str mi)
     fprintf(out, ".\n");
     return true;
 }
+
+// The wait before the next listing of gvfs's shares (F16 step 7d, Michael 2026-11-10), after one that
+// waited prev ms (0: the first): base again when reset (a share is mounted, the list changed, or ofx
+// itself connected or unmounted), else twice prev, up to most.
+static int share_poll_next(int prev, int base, int most, bool reset)
+{
+    if (reset || prev <= 0) return base;
+    return prev > most / 2 ? most : prev * 2;
+}

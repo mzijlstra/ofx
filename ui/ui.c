@@ -276,6 +276,7 @@ typedef enum {
     // Connect to Server's question (F16 step 4): answered (Ui.login_*: gui/ hands them to gio and
     // wipes the password), as a guest, or not (gio stops)
     UA_LOGIN, UA_LOGIN_GUEST, UA_LOGIN_CANCEL,
+    UA_AIRPLANE,    // Airplane Mode turned on or off (Ui.airplane; F16 step 7d): gui/ keeps it for every window
 } UiActionKind;
 enum { UI_COPY_SHOWN = -1 };   // UA_COPY_PATH's index with all: the folder shown (the empty space's menu)
 
@@ -306,13 +307,13 @@ typedef enum {
     UM_UNDO, UM_CUT, UM_COPY, UM_COPY_PATH, UM_PASTE, UM_SELECT_ALL, UM_SELECT_MATCH, UM_INVERT, UM_DUPLICATE, UM_MAKE_LINK, UM_RENAME, UM_TRASH, UM_DELETE, UM_RESTORE,
     UM_RELOAD, UM_SIDE_PLACES, UM_SIDE_TREE, UM_SIDE_NONE, UM_HIDDEN, UM_PERMS_COLS, UM_GROUP_COL, UM_COLORS, UM_SHOW_MENU, UM_SORT_NAME, UM_SORT_SIZE, UM_SORT_MTIME, UM_SORT_REVERSE,
     UM_ZOOM_IN, UM_ZOOM_OUT, UM_ZOOM_RESET, UM_VIEW_LIST, UM_VIEW_ICONS,
-    UM_PARENT, UM_BACK, UM_FORWARD, UM_HOME, UM_TRASH_VIEW, UM_FIND, UM_SEARCH, UM_LOCATION, UM_CONNECT, UM_TERMINAL,
+    UM_PARENT, UM_BACK, UM_FORWARD, UM_HOME, UM_TRASH_VIEW, UM_FIND, UM_SEARCH, UM_LOCATION, UM_CONNECT, UM_AIRPLANE, UM_TERMINAL,
     UM_ADD_BOOKMARK, UM_EDIT_BOOKMARKS, UM_BM_0, UM_BM_1, UM_BM_2, UM_BM_3, UM_BM_4, UM_BM_5, UM_BM_6, UM_BM_7, UM_BM_MORE,
     UM_SHORTCUTS, UM_ABOUT, UM_PREFERENCES, UM_CLEAR_PREVIEWS,
     UM_OPEN_TAB, UM_EMPTY_TRASH, UM_HERE_PROPS, UM_OPEN_WINDOW, UM_PASTE_INTO, UM_TERMINAL_IN, UM_FOLLOW, UM_BOOKMARK_IT,
     UM_CONTAINING, UM_OPEN_LINE, UM_SEARCH_IN,
     UM_OPEN_IT, UM_CUT_IT, UM_COPY_IT, UM_COPY_PATH_IT, UM_COPY_PATH_HERE, UM_BM_RENAME_IT, UM_BM_UP_IT, UM_BM_DOWN_IT, UM_BM_REMOVE_IT, UM_BM_EDIT_IT, UM_EJECT_IT,
-    UM_UNMOUNT_IT, UM_MOUNT_IT, UM_EMPTY_IT, UM_PROPS_IT, UM_TAB_LEFT, UM_TAB_RIGHT, UM_TAB_OTHERS,
+    UM_UNMOUNT_IT, UM_MOUNT_IT, UM_AIRPLANE_OFF_IT, UM_EMPTY_IT, UM_PROPS_IT, UM_TAB_LEFT, UM_TAB_RIGHT, UM_TAB_OTHERS,
     UM_BR_NOTE, UM_BR_0, UM_BR_1, UM_BR_2, UM_BR_3, UM_BR_4, UM_BR_5, UM_BR_6, UM_BR_7, UM_BR_ALL,
     UM_ITEMS
 } UiMenuItem;
@@ -395,6 +396,7 @@ static const struct { const char *label, *word; UiKey cmd; bool runs; char mark;
     [UM_SEARCH] = { "Search\xE2\x80\xA6", "search", .cmd = UK_SEARCH, .runs = true },   // below the folder shown (F9)
     [UM_LOCATION] = { "Location\xE2\x80\xA6", "location", .cmd = UK_LOCATION, .runs = true },
     [UM_CONNECT] = { "Connect to Server\xE2\x80\xA6", "connect", .cmd = UK_ITEM0 + UM_CONNECT },   // the location line on "smb://" (F16 step 4)
+    [UM_AIRPLANE] = { "Airplane Mode", "airplane-mode", .cmd = UK_ITEM0 + UM_AIRPLANE, .mark = 'c' },   // no network from ofx, every window (F16 step 7d)
     [UM_TERMINAL] = { "Terminal Here", "terminal", .cmd = UK_TERMINAL, .runs = true },
     // Bookmarks (F7.5); a bookmark's label is gui/'s (the file's), marked when it is the folder shown
     [UM_ADD_BOOKMARK] = { "Add Bookmark", "add-bookmark", .cmd = UK_ADD_BOOKMARK, .runs = true },
@@ -435,6 +437,7 @@ static const struct { const char *label, *word; UiKey cmd; bool runs; char mark;
     [UM_BM_EDIT_IT] = { "Edit Bookmarks\xE2\x80\xA6", "bm-edit", .cmd = UK_EDIT_BOOKMARKS },
     [UM_EJECT_IT] = { "Eject", "eject" },
     [UM_MOUNT_IT] = { "Mount", "mount-it" },
+    [UM_AIRPLANE_OFF_IT] = { "Turn Off Airplane Mode", "airplane-off-it" },   // the sidebar's Airplane mode row (F16 step 7d; no check: the folder menu keeps no column for one)
     [UM_UNMOUNT_IT] = { "Unmount", "unmount-it" },
     [UM_EMPTY_IT] = { "Empty Trash\xE2\x80\xA6", "empty-it" },
     [UM_PROPS_IT] = { "Properties\xE2\x80\xA6", "properties-it" },
@@ -466,7 +469,7 @@ static const UiMenuItem UI_MENU_VIEW[] = {
     UM_VIEW_LIST, UM_VIEW_ICONS, UM_SEP, UM_CLEAR_PREVIEWS,
 };
 static const UiMenuItem UI_MENU_GO[] = {
-    UM_PARENT, UM_BACK, UM_FORWARD, UM_SEP, UM_HOME, UM_TRASH_VIEW, UM_SEP, UM_FIND, UM_SEARCH, UM_LOCATION, UM_CONNECT, UM_TERMINAL,
+    UM_PARENT, UM_BACK, UM_FORWARD, UM_SEP, UM_HOME, UM_TRASH_VIEW, UM_SEP, UM_FIND, UM_SEARCH, UM_LOCATION, UM_CONNECT, UM_AIRPLANE, UM_TERMINAL,
 };
 static const UiMenuItem UI_MENU_BOOKMARKS_[] = {
     UM_ADD_BOOKMARK, UM_EDIT_BOOKMARKS, UM_SEP, UM_BM_0, UM_BM_1, UM_BM_2, UM_BM_3, UM_BM_4, UM_BM_5, UM_BM_6, UM_BM_7, UM_BM_MORE,
@@ -483,7 +486,7 @@ static const UiMenuItem UI_MENU_CTX_ENTRY[] = {
 // A folder elsewhere: a tree row, a path button, a place (Trash, a bookmark, a drive have their own).
 static const UiMenuItem UI_MENU_CTX_FOLDER[] = {
     UM_OPEN_IT, UM_OPEN_TAB, UM_OPEN_WINDOW, UM_TERMINAL_IN, UM_SEARCH_IN, UM_SEP, UM_CUT_IT, UM_COPY_IT, UM_COPY_PATH_IT, UM_PASTE_INTO, UM_SEP, UM_BOOKMARK_IT,
-    UM_BM_RENAME_IT, UM_BM_UP_IT, UM_BM_DOWN_IT, UM_BM_REMOVE_IT, UM_BM_EDIT_IT, UM_SEP, UM_UNMOUNT_IT, UM_EJECT_IT, UM_MOUNT_IT, UM_EMPTY_IT, UM_SEP, UM_PROPS_IT,
+    UM_BM_RENAME_IT, UM_BM_UP_IT, UM_BM_DOWN_IT, UM_BM_REMOVE_IT, UM_BM_EDIT_IT, UM_SEP, UM_UNMOUNT_IT, UM_EJECT_IT, UM_MOUNT_IT, UM_AIRPLANE_OFF_IT, UM_EMPTY_IT, UM_SEP, UM_PROPS_IT,
 };
 // A tab (the current one: a right press on another shows it first).
 static const UiMenuItem UI_MENU_CTX_TAB[] = { UM_NEW_TAB, UM_TAB_REOPEN, UM_SEP, UM_TAB_LEFT, UM_TAB_RIGHT, UM_SEP, UM_CLOSE, UM_TAB_OTHERS };
@@ -546,6 +549,7 @@ static const struct { UiKeySection sec; const char *action; UiKey cmd; const cha
     { KS_MOVE, "Trash", UK_TRASH_VIEW, NULL, NULL },
     { KS_MOVE, "Location\xE2\x80\xA6", UK_LOCATION, NULL, NULL },
     { KS_MOVE, "Connect to Server\xE2\x80\xA6", UK_ITEM0 + UM_CONNECT, NULL, NULL },
+    { KS_MOVE, "Airplane Mode", UK_ITEM0 + UM_AIRPLANE, NULL, NULL },
     { KS_OPEN, "Open", UK_ENTER, NULL, NULL },
     { KS_OPEN, "Open With Other Application\xE2\x80\xA6", UK_SHIFT_ENTER, NULL, NULL },
     { KS_OPEN, "Terminal Here", UK_TERMINAL, NULL, NULL },
@@ -803,6 +807,8 @@ typedef struct {
     UiView view;
     bool   empty_asking;     // "Empty the trash?" up
     bool   clear_asking;     // "Delete all N previews?" up (View → Clear Previews…, F12)
+    bool   airplane;         // Airplane Mode (F16 step 7d): gui/ reads it from the state file, every window's
+    bool   airplane_asking;  // "Turn off airplane mode?" up (a click on its row in the sidebar)
     bool   clearing;         // gui/ says ofx-clean --all runs: Clear Previews… waits
     int    restore_n;        // "Bring back the N other windows?" up (F11 step 3): their number, 0 none
     // The search view's field's text (find's toggles apply), and search_edited when the text or a
@@ -850,6 +856,7 @@ typedef struct {
     bool   ctx_trash, ctx_place, ctx_bmed, ctx_eject, ctx_full;
     bool   ctx_unmounted;   // a drive not mounted yet (2026-10-30), or a network bookmark (F16 step 5): Mount is all its menu has
     bool   ctx_share;       // a share gvfs has mounted (F16 step 5): Unmount, no Eject
+    bool   ctx_airplane;    // the sidebar's Airplane mode row (F16 step 7d): Turn Off Airplane Mode is all its menu has
     bool   ctx_w;   // the folder (either menu's, as it opens) takes new files: Paste Into Folder
     int    ctx_bmk, ctx_bms;
     // The tabs, from gui/ each frame (menu_facts): the current one's place, how many (F8's tab menu).
@@ -929,6 +936,7 @@ typedef enum {
     UI_ON_DELETE,   // confirming: delete for good
     UI_ON_EMPTY,    // empty_asking: Empty Trash
     UI_ON_CLEAR,    // clear_asking: Clear Previews (F12)
+    UI_ON_AIRPLANE, // airplane_asking: turn Airplane Mode off (F16 step 7d)
     UI_ON_RESTORE,  // restore_n: the other windows after Close All (F11)
     UI_ON_CLASH,    // asking: a job waits for a clash answer
     UI_ON_PROPS,
@@ -1035,6 +1043,7 @@ static UiOnTop ui_on_top(const Ui *u)
     if (u->confirming) return UI_ON_DELETE;
     if (u->empty_asking) return UI_ON_EMPTY;
     if (u->clear_asking) return UI_ON_CLEAR;
+    if (u->airplane_asking) return UI_ON_AIRPLANE;
     if (u->restore_n > 0) return UI_ON_RESTORE;
     if (u->asking) return UI_ON_CLASH;
     static const UiOnTop OF_PANEL[] = { [UI_PANEL_NONE] = UI_ON_NONE, [UI_PANEL_PROPS] = UI_ON_PROPS, [UI_PANEL_OW] = UI_ON_OW,

@@ -1937,6 +1937,7 @@ int main(void)
     if (fast) test_avahi_servers();
     if (fast) test_crumbs_share();
     if (fast) test_gvfs_shares();
+    if (fast) test_airplane();
     if (fast) test_wheel_under_question();
     if (fast) test_ui_age();
     if (fast) test_branch_panel();

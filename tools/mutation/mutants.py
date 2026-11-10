@@ -347,7 +347,7 @@ MUTANTS += [
 ]
 # ---- F5.1: the modal panels
 MUTANTS += [
-    ('ui/handle.c', 'case UI_ON_CANCEL: case UI_ON_DELETE: case UI_ON_EMPTY:', 'case UI_ON_CANCEL: case UI_ON_EMPTY:'),
+    ('ui/prompts.c', ' || on == UI_ON_DELETE || on == UI_ON_EMPTY', ' || on == UI_ON_EMPTY'),   # (F16 step 7d: the case list there is ui_is_question now)
     ('ui/prompts.c', 'u->confirming = false; return (UiAction){ yes ? UA_DELETE : UA_NONE, 0, false };', 'u->confirming = false; return (UiAction){ UA_DELETE, 0, false };'),
     ('ui/handle.c', '    if (on == UI_ON_CLASH && in->modal == UI_MODAL_ALL) u->ask_all = !u->ask_all;\n', ''),
     ('ui/handle.c', '        return *out = (UiAction){ UA_ANSWER, a, a != UI_ANS_CANCEL && u->ask_all }, true;', '        return *out = (UiAction){ UA_ANSWER, a, false }, true;'),
@@ -2143,7 +2143,7 @@ MUTANTS += [
     (CF, '{ "restore-tabs", CK_BOOL, offsetof(Conf, restore_tabs), "off",', '{ "restore-tabs", CK_BOOL, offsetof(Conf, sort_rev), "off",'),
     ('ui/ui.c', '    if (u->restore_n > 0) return UI_ON_RESTORE;\n', ''),
     ('ui/prompts.c', 'u->restore_n = 0; return (UiAction){ UA_RESTORE_WINDOWS, 0, yes };', 'u->restore_n = 0; return (UiAction){ UA_RESTORE_WINDOWS, 0, true };'),
-    ('ui/prompts.c', ' || on == UI_ON_RESTORE || on == UI_ON_CLEAR;', ' || on == UI_ON_CLEAR;'),
+    ('ui/prompts.c', ' || on == UI_ON_RESTORE || on == UI_ON_CLEAR || on == UI_ON_AIRPLANE;', ' || on == UI_ON_CLEAR || on == UI_ON_AIRPLANE;'),
 ]
 MUTANTS += [
     # F11 milestone review, step 1 (2026-11-02)
@@ -2258,7 +2258,7 @@ MUTANTS += [
     ('ui/prompts.c', '    case UI_ON_CLEAR: u->clear_asking = false; return (UiAction){ yes ? UA_CLEAR_PREVIEWS : UA_NONE, 0, false };', '    case UI_ON_CLEAR: u->clear_asking = false; return (UiAction){ UA_CLEAR_PREVIEWS, 0, false };'),
     ('ui/prompts.c', '    case UI_ON_CLEAR: u->clear_asking = false; return (UiAction){ yes ? UA_CLEAR_PREVIEWS : UA_NONE, 0, false };', '    case UI_ON_CLEAR: return (UiAction){ yes ? UA_CLEAR_PREVIEWS : UA_NONE, 0, false };'),
     ('ui/ui.c', '    if (u->clear_asking) return UI_ON_CLEAR;\n', ''),
-    ('ui/handle.c', ' case UI_ON_RESTORE: case UI_ON_CLEAR:\n', ' case UI_ON_RESTORE:\n'),
+    ('ui/prompts.c', ' || on == UI_ON_CLEAR || on == UI_ON_AIRPLANE;', ' || on == UI_ON_AIRPLANE;'),   # (F16 step 7d: the case list there is ui_is_question now)
     ('ui/ui.c', '    UM_VIEW_LIST, UM_VIEW_ICONS, UM_SEP, UM_CLEAR_PREVIEWS,\n};', '    UM_VIEW_LIST, UM_VIEW_ICONS,\n};'),
     (TH, '        if (got == TG_FAILED && !png.len && access(dir, F_OK) != 0) got = TG_NONE;', '        if (got == TG_FAILED && !png.len) got = TG_NONE;'),
     (TH, '        if (got == TG_FAILED && !png.len && access(dir, F_OK) != 0) got = TG_NONE;', '        if (false) got = TG_NONE;'),
@@ -2938,7 +2938,8 @@ MUTANTS += [
     ('fs/places.c', "    return k == PL_NETBM || k == PL_SERVER;", "    return k == PL_NETBM;"),
     ('fs/places.c', "    case PL_SERVER: names[n++] = S(\"network-server\"), names[n++] = S(\"folder-remote\"); break;", ""),
     ('fs/places.c', "    for (int i = 0; i < n; i++) places_add(pl, PL_SERVER, servers[i].addr, str_from_c(servers[i].name));", ""),
-    ('fs/places.c', "pl->p[i].kind == PL_UNMOUNTED || place_connects(pl->p[i].kind)) continue;", "pl->p[i].kind == PL_UNMOUNTED) continue;"),
+    ('fs/places.c', '    return k == PL_UNMOUNTED || place_connects(k) || k == PL_AIRPLANE;', '    return k == PL_UNMOUNTED || k == PL_AIRPLANE;'),   # (F16 step 7d: place_folderless now)
+    ('fs/places.c', 'pl->p[i].kind == PL_TRASH || place_folderless(pl->p[i].kind)) continue;', 'pl->p[i].kind == PL_TRASH) continue;'),
     # F16 step 7c: SFTP
     ('fs/connect.c', 'sftp = text.len >= 7 && connect_ieq(str_cut(text, 0, 7), "sftp://");', 'sftp = false;'),
     ('fs/connect.c', '    Str rest = str_cut(text, sftp ? 7 : 6, text.len);', '    Str rest = str_cut(text, 6, text.len);'),
@@ -2963,4 +2964,27 @@ MUTANTS += [
     ('ui/panels.c', ' && !(f == UI_LOGIN_DOMAIN && u->login_ssh);', ';'),
     ('ui/panels.c', "    case UK_MENU: if (e.ch == 'g' && !u->login_ssh) return", "    case UK_MENU: if (e.ch == 'g') return"),
     ('ui/handle.c', '        if (in->modal == UI_MODAL_GUEST && !u->login_ssh) return', '        if (in->modal == UI_MODAL_GUEST) return'),
+    # F16 step 7d: Airplane Mode, and the share poll's back-off
+    ('fs/state.c', '        if (str_eq(key, S("airplane"))) s.airplane = str_eq(val, S("on"));\n', ''),
+    ('fs/state.c', 's.airplane = str_eq(val, S("on"));', 's.airplane = true;'),
+    ('fs/places.c', '    if (airplane) {\n        places_add(pl, PL_AIRPLANE', '    if (false) {\n        places_add(pl, PL_AIRPLANE'),
+    ('fs/places.c', '        places_add(pl, PL_AIRPLANE, "airplane:", S("Airplane mode"));\n        return;\n', '        places_add(pl, PL_AIRPLANE, "airplane:", S("Airplane mode"));\n'),
+    ('fs/places.c', '    return k == PL_UNMOUNTED || place_connects(k) || k == PL_AIRPLANE;', '    return k == PL_UNMOUNTED || place_connects(k);'),
+    ('fs/places.c', '    case PL_AIRPLANE: names[n++] = S("airplane-mode"); break;', '    case PL_AIRPLANE: break;'),
+    ('fs/connect.c', '    if (reset || prev <= 0) return base;', '    if (prev <= 0) return base;'),
+    ('fs/connect.c', '    if (reset || prev <= 0) return base;', '    if (reset) return base;'),
+    ('fs/connect.c', '    return prev > most / 2 ? most : prev * 2;', '    return prev * 2;'),
+    ('fs/connect.c', '    return prev > most / 2 ? most : prev * 2;', '    return prev > most ? most : prev * 2;'),
+    ('ui/menus.c', '    if (u->ctx_airplane) return it == UM_AIRPLANE_OFF_IT;   // (F16 step 7d: the sidebar\'s row)\n', ''),
+    ('ui/menus.c', '    case UM_AIRPLANE: return u->airplane;\n', ''),
+    ('ui/menus.c', 'case UM_LOCATION: case UM_CONNECT: case UM_AIRPLANE: return true;', 'case UM_LOCATION: case UM_CONNECT: return true;'),
+    ('ui/menus.c', '        case UM_AIRPLANE_OFF_IT: return u->airplane = false, (UiAction){ UA_AIRPLANE, 0, false };', '        case UM_AIRPLANE_OFF_IT: return (UiAction){ UA_AIRPLANE, 0, false };'),
+    ('ui/menus.c', '    case UM_AIRPLANE: return u->airplane = !u->airplane, (UiAction){ UA_AIRPLANE, 0, false };', '    case UM_AIRPLANE: return u->airplane = true, (UiAction){ UA_AIRPLANE, 0, false };'),
+    ('ui/menus.c', 'u->ctx_unmounted = u->ctx_share = u->ctx_airplane = false;', 'u->ctx_unmounted = u->ctx_share = false;'),
+    ('ui/ui.c', '    if (u->airplane_asking) return UI_ON_AIRPLANE;\n', ''),
+    ('ui/prompts.c', ' || on == UI_ON_CLEAR || on == UI_ON_AIRPLANE;', ' || on == UI_ON_CLEAR;'),
+    ('ui/prompts.c', 'return yes ? (u->airplane = false, (UiAction){ UA_AIRPLANE, 0, false }) : UI_NONE;', 'return (u->airplane = false, (UiAction){ UA_AIRPLANE, 0, false });'),
+    ('ui/prompts.c', '    case UI_ON_AIRPLANE: u->airplane_asking = false; return', '    case UI_ON_AIRPLANE: return'),
+    ('ui/handle.c', '        if (yes_no && ui_is_question(ui_on_top(u))) return', '        if (yes_no && false) return'),
+    ('ui/keys.c', ' { UK_ITEM0 + UM_AIRPLANE, "airplane-mode" },', ''),
 ]

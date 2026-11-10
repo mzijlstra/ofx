@@ -3,7 +3,9 @@
 // its own asks `avahi-browse` (fs/connect.c avahi_smb_servers): one query on the network as it
 // starts (about 1 s), then avahi's cache alone every DISCO_MS (25 ms, no traffic), so ofx puts no
 // query on the network on a timer. A change reads the places again (mounts_ready, as the shares'
-// listing). Without avahi-browse (or avahi), nothing is found and the thread ends. In the tests,
+// listing). Without avahi-browse nothing is found and the thread ends (with avahi-browse but no
+// avahi-daemon, each run finds nothing). In Airplane Mode (step 7d) it runs none; turned off, it
+// makes one query again (the cache may be another network's), then reads the cache. In the tests,
 // run-script's avahi-browse stand-in answers (OFX_TEST_AVAHI), never the real one: it would query
 // the desktop's network. Included by main.c after watch.c.
 
@@ -11,10 +13,19 @@ enum { DISCO_MS = 30000, DISCO_LIMIT_MS = 5000 };   // (the query ends after ava
 
 static struct {
     pthread_mutex_t mu;
+    pthread_cond_t  cv;     // Airplane Mode turned on or off (disco_wake)
     int             n;
     NetServer       s[NET_SERVERS_MAX];
     atomic_int      asks;   // avahi-browse runs so far (the scripts' discoasks=)
-} disco = { .mu = PTHREAD_MUTEX_INITIALIZER };
+} disco = { .mu = PTHREAD_MUTEX_INITIALIZER, .cv = PTHREAD_COND_INITIALIZER };
+
+// Airplane Mode changed (airplane_apply): the thread looks again now.
+static void disco_wake(void)
+{
+    pthread_mutex_lock(&disco.mu);
+    pthread_cond_broadcast(&disco.cv);
+    pthread_mutex_unlock(&disco.mu);
+}
 
 // One run of avahi-browse (cache: avahi's cache alone): false when it can't be run at all.
 static bool disco_ask(bool cache)
@@ -45,9 +56,19 @@ static void *disco_thread(void *arg)
     (void)arg;
     static int every = -1;   // (OFX_TEST_DISCO_MS: a test's cache reads come sooner)
     if (every < 0) every = env_int("OFX_TEST_DISCO_MS", DISCO_MS, 100, 600000);
-    for (bool cache = false; disco_ask(cache); cache = true) {
-        struct timespec ts = { every / 1000, (long)(every % 1000) * 1000000L };
-        while (nanosleep(&ts, &ts) != 0 && errno == EINTR) {}
+    for (bool cache = false;; cache = true) {
+        pthread_mutex_lock(&disco.mu);
+        while (atomic_load(&airplane)) cache = false, pthread_cond_wait(&disco.cv, &disco.mu);   // (off again: a real query)
+        pthread_mutex_unlock(&disco.mu);
+        if (!disco_ask(cache)) break;
+        struct timespec until;
+        clock_gettime(CLOCK_REALTIME, &until);
+        i64 ns = until.tv_nsec + (i64)(every % 1000) * 1000000L;
+        until.tv_sec += every / 1000 + ns / 1000000000L, until.tv_nsec = ns % 1000000000L;
+        pthread_mutex_lock(&disco.mu);
+        int r = 0;
+        while (!atomic_load(&airplane) && r != ETIMEDOUT) r = pthread_cond_timedwait(&disco.cv, &disco.mu, &until);   // (Airplane Mode on: stops waiting)
+        pthread_mutex_unlock(&disco.mu);
     }
     return NULL;
 }

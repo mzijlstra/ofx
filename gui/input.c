@@ -356,6 +356,7 @@ static void ctx_facts(void)
         u->ctx_place = true;
         u->ctx_eject = place_ejectable(pl);
         u->ctx_share = pl->kind == PL_SHARE;
+        u->ctx_airplane = pl->kind == PL_AIRPLANE;   // (F16 step 7d)
         u->ctx_unmounted = pl->kind == PL_UNMOUNTED || place_connects(pl->kind);   // (a network bookmark, a server found: Mount connects, F16 steps 5, 7b)
         if (pl->kind == PL_BOOKMARK) u->ctx_bmk = bm_find(&bmarks, pl->path);
     }

@@ -1214,8 +1214,58 @@ blocks each of these for up to gvfs's 90 s. On a thread it also holds ofx's exit
        - test-net: a password, no user, a host not known (refused, not trusted), a key's
          passphrase;
        - the net group's netf: the same through the window, the Network section, Add Bookmark.
+   - **7d, Airplane Mode and the share poll's back-off** (Michael, 2026-11-10, from the step 8
+     review's note: each window spawned `ofx-list --shares` every 2 s whenever gvfsd-fuse is
+     mounted, about 43,000 children a day with no share; "when I'm traveling I would most
+     certainly set it to airplane mode"). Designed and built before step 8's cleanup.
+     - **Airplane Mode** (Michael's answers):
+       - **Stops all of ofx's network traffic:** no discovery (no avahi-browse, not even its
+         cache), no share poll, and no connect: Connect to Server, a network bookmark, a found
+         server and a share picked from a server's list are refused with "Airplane mode is on:
+         Go → Airplane Mode turns it off". The one place they all meet is `connect_start`.
+         A folder the user opens on a share gvfs already has mounted, or on any FUSE mount
+         (sshfs), still opens: that is their own action, read by ofx-list as before.
+       - **Go → Airplane Mode,** a checked entry under Connect to Server (`airplane-mode`,
+         bindable as every menu entry). It is kept in the state file (`airplane=on`), which ofx
+         already writes, so it outlasts a restart; ofx still never writes ofx.conf.
+       - **Every window at once:** the watch thread watches the state file's folder; a window
+         reads `airplane=` again when the file is replaced, and applies it.
+       - **The sidebar:** the Network section shows one dim "Airplane mode" row (a plane icon,
+         else network-offline) and nothing else: no found servers, no mounted shares, no network
+         bookmarks (the share list would go stale without the poll). The bookmarks come back
+         when it's off. A click on the row asks "Turn off airplane mode?".
+       - **Turned off:** the share poll runs at once, and discovery makes one real query (the
+         cache may be from another network), then reads the cache as before.
+     - **The back-off** (Michael's pick): while gvfs has no share mounted, the share poll waits
+       2, 4, 8, 16, then 30 s; any change in the list, and ofx's own connect and unmount, put it
+       back to 2 s at once. With shares mounted it stays at 2 s. About 3,000 spawns a day per
+       window instead of 43,000, and a share mounted by another program shows within 30 s.
+     - **Tests:** unit (the state line, the places in airplane mode, the back-off's steps); a GUI
+       script on the stand-ins: the menu's check, the state line written, the sidebar's row,
+       no avahi-browse or share poll while on, a connect refused, the row's question, a state
+       file changed by "another window" applied, and the poll's waits growing and resetting
+       (their times scaled down for the test).
 8. **The milestone's code-health review and cleanup** (AGENTS.md "At the end of each major
    milestone"), then install.
+   - **The review (2026-11-10):** four read-only reviewers (gui/main.c and its files; ui/; fs/
+     with base/; threads, tests and tooling). Findings:
+     https://claude.ai/artifact/764K21fGBZtHDWgyVLiQnK. Michael picked all of it, A to H, after
+     7d. In order, each with its commits, gates and reviewer-2 round:
+     - **A, bugs:** `ofx-list` never turned the test guard on (its `--do` writes unguarded in
+       GUI tests); Properties on a share row walked the share (the folder shown decided); a
+       pre-1970 mtime broke a far listing; the deep count stats far mount points; 12 unit
+       mutants stale since F16's own commits (a full run.py couldn't start; `make test` to
+       check both lists); gvfs's `%XX` decoded by hand and cut silently; the login field click.
+     - **B, flaky-test candidates and the harness:** f16f against the 1.5 s `--do` deadline,
+       other tight waits, groups run on another's leftovers, the socket-path check (the 7c
+       review), run.sh's base check, the net block's copies.
+     - **C, one mount table:** the "which mount holds this path" lookup written three times and
+       re-parsed per entry since F16; `far_real` and `clean_real` merged on top. Measure first.
+     - **D, far folders in the window:** one `far_writable`, the far state passed as arguments.
+     - **E, the picker panels and the login question:** one table of pickers, `ui_login_open`.
+     - **F, place kinds and protocols:** helpers for the kind checks, a scheme table.
+     - **G, the children the threads read:** one spawn-and-read helper, the quit deadline.
+     - **H, comments and small tidy-ups.**
 
 ## F15 design: key bindings the user sets (2026-11-08; Michael's answers the same day)
 

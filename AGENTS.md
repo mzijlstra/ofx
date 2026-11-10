@@ -155,13 +155,16 @@ shared state. Every test runs against fakes and scratch folders. Keep it that wa
   bus checked first). Never test it with the real gio on the session bus, and never put a real
   password in a test.
 - **The Network section** (F16 step 5) lists the shares in every `fuse.gvfsd-fuse` mount of the mount
-  list (the watch thread, every 2 s), and its unmount button runs `gio mount -u <share folder>`.
-  With `OFX_TEST_MOUNTINFO` a test's stand-in folder is listed instead (f16h); the gio fake only
-  logs the unmount. On your desktop that button unmounts your real share.
+  list (the watch thread, every 2 s, slowing to 30 s while none is mounted: step 7d), and its unmount
+  button runs `gio mount -u <share folder>`. With `OFX_TEST_MOUNTINFO` a test's stand-in folder is
+  listed instead (f16h); the gio fake only logs the unmount. On your desktop that button unmounts your real share.
 - **Servers on the network** (F16 step 7b): ofx runs `avahi-browse` (one query on the network as
   it starts, then avahi's cache). On your desktop it asks your LAN. run-script puts a logging
   stand-in first on PATH that runs `OFX_TEST_AVAHI` when given (f16v's), else finds nothing; under
   the guard (`OFX_GUI_ROOT`) discovery doesn't run at all without `OFX_TEST_AVAHI`.
+- **Airplane Mode** (F16 step 7d) is the state file's `airplane=on`, which every window watches: a
+  test that turns it on writes the run's own state file (`<scratch>/state`), never yours. While it
+  is on, ofx runs no avahi-browse, no share listing and no `gio mount`.
 - **A window that stops answering** makes the compositor ask whether to terminate it, on your
   screen. The script's `sh` runs under `timeout 5` for that reason; keep everything a script waits
   for short.

@@ -23,8 +23,10 @@ enum { PLACES_MAX = 64 };
 // under gvfs's FUSE mount; PL_NETBM, an smb:// or nfs:// bookmark (step 6), its path the address (a click connects);
 // PL_SERVER, an SMB server avahi found on the network (step 7b), its path its address, smb://host
 // (a click lists its shares).
+// PL_AIRPLANE: the one row the Network section has in Airplane Mode (step 7d), path "airplane:" (no folder); a click asks
+// to turn it off.
 // Neither is a drive: their space isn't asked (statvfs would wait on a share that doesn't answer).
-typedef enum { PL_HEAD, PL_HOME, PL_BOOKMARK, PL_TRASH, PL_ROOT, PL_MOUNT, PL_REMOVABLE, PL_UNMOUNTED, PL_SHARE, PL_NETBM, PL_SERVER } PlaceKind;
+typedef enum { PL_HEAD, PL_HOME, PL_BOOKMARK, PL_TRASH, PL_ROOT, PL_MOUNT, PL_REMOVABLE, PL_UNMOUNTED, PL_SHARE, PL_NETBM, PL_SERVER, PL_AIRPLANE } PlaceKind;
 
 typedef struct {
     char      path[PATH_MAX];   // "" for a heading
@@ -67,6 +69,13 @@ static bool place_is_net(PlaceKind k)
 static bool place_connects(PlaceKind k)
 {
     return k == PL_NETBM || k == PL_SERVER;
+}
+
+// Whether a place has no folder to open (a drive not mounted yet, an address, Airplane Mode's row):
+// drawn dim, never the place of a folder, no folder for its menu.
+static bool place_folderless(PlaceKind k)
+{
+    return k == PL_UNMOUNTED || place_connects(k) || k == PL_AIRPLANE;
 }
 
 // Whether path is a place already in its section (a drive among the drives, a share or network
@@ -369,10 +378,16 @@ static void places_load(Arena *scratch, Places *pl, const char *bookmarks, const
 // as gvfs gives it), then the SMB servers avahi found (servers, n of them; step 7b), but for one a
 // bookmark has (by its address: the bookmark's label stays). A bookmark of a mounted share stays a
 // bookmark: a click on it connects, which for a share mounted already goes straight there.
-static void places_load_net(Arena *scratch, Places *pl, const char *bookmarks, Str shares, const NetServer *servers, int n)
+// In Airplane Mode (step 7d) only its row: without the poll the shares' list would be stale, and
+// nothing there connects.
+static void places_load_net(Arena *scratch, Places *pl, const char *bookmarks, Str shares, const NetServer *servers, int n, bool airplane)
 {
     int head = pl->n;
     places_head(pl, "Network");
+    if (airplane) {
+        places_add(pl, PL_AIRPLANE, "airplane:", S("Airplane mode"));
+        return;
+    }
     isize at = 0;
     for (Str line; next_line(shares, &at, &line);) {
         if (line.len == 0 || line.len >= PATH_MAX || line.p[0] != '/') continue;
@@ -414,7 +429,7 @@ static int places_current(const Places *pl, const char *path)
     size_t best_n = 0;
     for (int i = 0; i < pl->n; i++) {
         if (pl->p[i].kind == PL_TRASH && strcmp(path, TRASH_URI) == 0) return i;
-        if (pl->p[i].kind == PL_HEAD || pl->p[i].kind == PL_TRASH || pl->p[i].kind == PL_UNMOUNTED || place_connects(pl->p[i].kind)) continue;
+        if (pl->p[i].kind == PL_HEAD || pl->p[i].kind == PL_TRASH || place_folderless(pl->p[i].kind)) continue;
         const char *p = pl->p[i].path;
         size_t n = strlen(p);
         if (path_within(path, p) && (best < 0 || n > best_n)) best = i, best_n = n;
@@ -434,6 +449,7 @@ static isize place_icon_names(const Place *p, const UserDirs *u, bool trash_full
     case PL_SHARE:
     case PL_NETBM: names[n++] = S("folder-remote"); break;
     case PL_SERVER: names[n++] = S("network-server"), names[n++] = S("folder-remote"); break;
+    case PL_AIRPLANE: names[n++] = S("airplane-mode"); break;   // (a PNG theme's; Yaru and Adwaita have only a symbolic SVG, which the places' icons don't read: the folder then)
     case PL_TRASH:   // full: when any trash folder holds something (2026-10-30)
         if (trash_full) names[n++] = S("user-trash-full");
         names[n++] = S("user-trash");

@@ -286,6 +286,7 @@ static bool connect_start(Str text)
     ConnectUri c = connect_uri(text, uri, sizeof uri, host, sizeof host, share, sizeof share, why, sizeof why);
     if (c == CONNECT_NOT) return false;
     if (c == CONNECT_BAD) return set_status(true, "%s", why), true;
+    if (atomic_load(&airplane)) return set_status(true, "Airplane mode is on: Go \xE2\x86\x92 Airplane Mode turns it off"), true;   // (F16 step 7d: every connect comes here)
     pthread_mutex_lock(&cn.mu);
     bool busy = cn.phase != CN_IDLE;
     if (!busy) {

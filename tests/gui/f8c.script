@@ -11,7 +11,7 @@ expect menu=-
 # A bookmark's row: Edit Bookmarks' own; no Cut or Copy (a place), no Add Bookmark (one already)
 point-ui side-row 2
 right-here
-expect menu=folder menuhid=cut-it,copy-it,bookmark-it,unmount-it,eject,mount-it,empty-it menugrey=cut-it,copy-it,paste-into,bookmark-it,bm-up,unmount-it,eject,mount-it,empty-it menuin=1
+expect menu=folder menuhid=cut-it,copy-it,bookmark-it,unmount-it,eject,mount-it,airplane-off-it,empty-it menugrey=cut-it,copy-it,paste-into,bookmark-it,bm-up,unmount-it,eject,mount-it,airplane-off-it,empty-it menuin=1
 shot ctx-bookmark.png
 key esc
 # Another writer changes the file under an open menu: it closes, its line read again would be another
@@ -57,7 +57,7 @@ sh ! grep -q "tree/sub2" "$OFX_ROOT/config/gtk-3.0/bookmarks"
 # Home: Open in New Tab, a tab behind on it; Add Bookmark there
 point-ui side-row 1
 right-here
-expect menu=folder menuhid=cut-it,copy-it,bm-rename,bm-up,bm-down,bm-remove,bm-edit,unmount-it,eject,mount-it,empty-it
+expect menu=folder menuhid=cut-it,copy-it,bm-rename,bm-up,bm-down,bm-remove,bm-edit,unmount-it,eject,mount-it,airplane-off-it,empty-it
 point-menu open-tab
 click-here
 expect menu=- tabs=2 tab=0
@@ -82,8 +82,8 @@ expect menu=- tabs=1 tabdirs=tree
 # Trash: gone to, not into; Empty Trash greyed while it is empty
 point-ui side-row 3
 right-here
-expect menu=folder menuhid=open-window,terminal-in,search-in,cut-it,copy-it,copy-path-it,paste-into,bookmark-it,bm-rename,bm-up,bm-down,bm-remove,bm-edit,unmount-it,eject,mount-it,properties-it
-expect menugrey=open-window,terminal-in,search-in,cut-it,copy-it,copy-path-it,paste-into,bookmark-it,bm-rename,bm-up,bm-down,bm-remove,bm-edit,unmount-it,eject,mount-it,empty-it,properties-it
+expect menu=folder menuhid=open-window,terminal-in,search-in,cut-it,copy-it,copy-path-it,paste-into,bookmark-it,bm-rename,bm-up,bm-down,bm-remove,bm-edit,unmount-it,eject,mount-it,airplane-off-it,properties-it
+expect menugrey=open-window,terminal-in,search-in,cut-it,copy-it,copy-path-it,paste-into,bookmark-it,bm-rename,bm-up,bm-down,bm-remove,bm-edit,unmount-it,eject,mount-it,airplane-off-it,empty-it,properties-it
 key esc
 # Something in the trash: Empty Trash asks
 key down
@@ -91,7 +91,7 @@ key delete
 wait-for 2000 undo=trash n=1
 point-ui side-row 3
 right-here
-expect menugrey=open-window,terminal-in,search-in,cut-it,copy-it,copy-path-it,paste-into,bookmark-it,bm-rename,bm-up,bm-down,bm-remove,bm-edit,unmount-it,eject,mount-it,properties-it
+expect menugrey=open-window,terminal-in,search-in,cut-it,copy-it,copy-path-it,paste-into,bookmark-it,bm-rename,bm-up,bm-down,bm-remove,bm-edit,unmount-it,eject,mount-it,airplane-off-it,properties-it
 point-menu empty-it
 click-here
 expect menu=- modal=empty
@@ -123,7 +123,7 @@ key f9
 wait-for 2000 sidemode=tree
 point-ui side-row 0
 right-here
-expect menu=folder menuhid=bm-rename,bm-up,bm-down,bm-remove,bm-edit,unmount-it,eject,mount-it,empty-it
+expect menu=folder menuhid=bm-rename,bm-up,bm-down,bm-remove,bm-edit,unmount-it,eject,mount-it,airplane-off-it,empty-it
 key esc
 key f9
 key f9
@@ -132,7 +132,7 @@ wait-for 2000 sidemode=places
 # would paste as "sub (copy)")
 point-ui crumb 1
 right-here
-expect menuhid=bm-rename,bm-up,bm-down,bm-remove,bm-edit,unmount-it,eject,mount-it,empty-it
+expect menuhid=bm-rename,bm-up,bm-down,bm-remove,bm-edit,unmount-it,eject,mount-it,airplane-off-it,empty-it
 point-menu copy-it
 click-here
 expect menu=- clip=1 cut=0
@@ -141,7 +141,7 @@ sh sleep 1; test ! -e "$OFX_DIR/sub (copy)"
 # With files copied, Paste Into Folder on a folder that takes them
 point-ui side-row 2
 right-here
-expect menu=folder menugrey=cut-it,copy-it,bookmark-it,bm-up,bm-down,unmount-it,eject,mount-it,empty-it
+expect menu=folder menugrey=cut-it,copy-it,bookmark-it,bm-up,bm-down,unmount-it,eject,mount-it,airplane-off-it,empty-it
 key esc
 # Open: there
 point-ui side-row 2

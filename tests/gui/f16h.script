@@ -33,7 +33,7 @@ hover-here
 wait-for 2000 sidehover=6 ejectbtn=1
 right-here
 expect menu=folder
-expect menuhid=cut-it,copy-it,bookmark-it,bm-rename,bm-up,bm-down,bm-remove,bm-edit,eject,mount-it,empty-it
+expect menuhid=cut-it,copy-it,bookmark-it,bm-rename,bm-up,bm-down,bm-remove,bm-edit,eject,mount-it,airplane-off-it,empty-it
 key esc
 point-ui side-row 6
 hover-here
@@ -60,7 +60,7 @@ sh grep -qx "gio mount smb://nas/home" "$OFX_ROOT/spawn.log"
 point-side pub on nas
 right-here
 expect menu=folder
-expect menuhid=open-it,open-tab,open-window,terminal-in,search-in,cut-it,copy-it,copy-path-it,paste-into,bookmark-it,bm-rename,bm-up,bm-down,bm-remove,bm-edit,unmount-it,eject,empty-it,properties-it
+expect menuhid=open-it,open-tab,open-window,terminal-in,search-in,cut-it,copy-it,copy-path-it,paste-into,bookmark-it,bm-rename,bm-up,bm-down,bm-remove,bm-edit,unmount-it,eject,airplane-off-it,empty-it,properties-it
 point-menu mount-it
 click-here
 wait-for 4000 conn=0 statusbad=1
