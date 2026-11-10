@@ -933,12 +933,13 @@ static void open_at_line(isize i)
 }
 
 // One key of the state file put (its value; another window's keys left alone: state_put), a failure
-// said in the status line.
-static void state_key(const char *key, const char *value)
+// said in the status line (false then).
+static bool state_key(const char *key, const char *value)
 {
     char path[PATH_MAX];
     Err err;
-    if (state_path(path, sizeof path) && !state_put(&scratch, path, key, value, &err)) set_status(true, "%s", err.msg);
+    if (state_path(path, sizeof path) && !state_put(&scratch, path, key, value, &err)) return set_status(true, "%s", err.msg), false;
+    return true;
 }
 
 // Airplane Mode on or off in this window (F16 step 7d; Ui.airplane, the state file's airplane=): the
@@ -1029,9 +1030,10 @@ static void act(UiAction a)
     case UA_COLORS: state_key("colors", app.ui.colors ? "on" : "off"); break;
     case UA_MENUBAR: state_key("menubar", app.ui.bar_hidden ? "off" : "on"); break;
     case UA_AIRPLANE:   // (F16 step 7d: kept for every window; each applies it as the state file changes)
-        state_key("airplane", app.ui.airplane ? "on" : "off");
+        // (applied here too: the file's change reaches this window as well, but not when it couldn't
+        // be written, which the status line then says)
+        if (state_key("airplane", app.ui.airplane ? "on" : "off")) set_status(false, app.ui.airplane ? "Airplane mode is on: ofx makes no network connections" : "Airplane mode is off");
         airplane_apply(app.ui.airplane);
-        set_status(false, app.ui.airplane ? "Airplane mode is on: ofx makes no network connections" : "Airplane mode is off");
         break;
     case UA_PERMS_COLS: state_key("perms", app.ui.perms_cols ? "on" : "off"); break;
     case UA_GROUP_COL: state_key("group", app.ui.group_col ? "on" : "off"); break;

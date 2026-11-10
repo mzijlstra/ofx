@@ -85,4 +85,13 @@ wait-for 2000 modal=airplane
 key enter
 wait-for 2000 modal=- airplane=0 sides=^Places|Home|Trash|^Drives|File_System|^Network|~Home_NAS|~YOGA
 sh grep -qx "airplane=off" "$OFX_ROOT/state/ofx/state"
+# A state file that can't be written: this window still turns it on, and says why the others won't.
+sh chmod a-w "$OFX_ROOT/state/ofx"
+point-ui menu-title 3
+click-here
+point-menu airplane-mode
+click-here
+wait-for 2000 airplane=1 statusbad=1 sides=^Places|Home|Trash|^Drives|File_System|^Network|~Airplane_mode
+sh chmod u+w "$OFX_ROOT/state/ofx"
+sh grep -qx "airplane=off" "$OFX_ROOT/state/ofx/state"
 quit

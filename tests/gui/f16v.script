@@ -1,12 +1,12 @@
 # F16 step 7b: servers on the network, on a stand-in avahi-browse (run.sh's f16v; OFX_TEST_AVAHI): its
 # query finds YOGA (once for IPv4, once for IPv6); its cache reads (every second here) find Office
-# too, until <T>/gone exists. The stand-in gio (f16s's) lists shares. ofx starts in an empty home.
+# too once <T>/office exists, until <T>/gone does. The stand-in gio (f16s's) lists shares. ofx starts in an empty home.
 settle
 # One query on the network as ofx starts; the server in the Network section, dim (not connected).
-# (10 s: gui.py's base once missed it in 4, under the mutants' load; never seen by hand)
 wait-for 10000 sides=^Places|Home|Trash|^Drives|File_System|^Network|~YOGA
 sh grep -qx "avahi-browse -k -t -r -p _smb._tcp" "$OFX_ROOT/spawn.log"
 # Then avahi's cache alone (no query on the network): a server that came, in its place.
+sh touch "$OFX_ROOT/office"
 wait-for 4000 sides=^Places|Home|Trash|^Drives|File_System|^Network|~Office|~YOGA
 sh grep -qx "avahi-browse -k -t -c -r -p _smb._tcp" "$OFX_ROOT/spawn.log"
 sh [ "$(grep -c "avahi-browse -k -t -r" "$OFX_ROOT/spawn.log")" -eq 1 ]

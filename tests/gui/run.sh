@@ -493,8 +493,9 @@ chmod +x "$T/giofake"
 RS_HOME=$T/home
 rs f16s OFX_TEST_GIO="$T/giofake" -- "$T/home"
 # f16v (step 7b): servers on the network through a stand-in avahi-browse (no network): its query
-# (no -c) finds YOGA, its cache reads (-c) Office too (Lab once <T>/renamed is made) until <T>/gone
-# is; f16s's stand-in gio.
+# (no -c) finds YOGA, its cache reads (-c) Office too once <T>/office is made (Lab once <T>/renamed
+# is) until <T>/gone is; f16s's stand-in gio. (Office waits for the script: on the first cache read,
+# a second after the query, it was gone past before a loaded window's first frames; F16 step 7d.)
 fresh f16v; mkdir -p "$T/home"
 cp "$base/f16s/giofake" "$T/giofake"
 cat > "$T/avahi" <<EOF
@@ -504,7 +505,7 @@ y='=;eth0;IPv4;YOGA;_smb._tcp;local;yoga.local;192.168.1.165;445;"model=MacSamba
 y6='=;eth0;IPv6;YOGA;_smb._tcp;local;yoga.local;fe80::1;445;'
 o='=;eth0;IPv4;Office;_smb._tcp;local;office.local;192.168.1.9;4445;'
 [ -e "$T/renamed" ] && o='=;eth0;IPv4;Lab;_smb._tcp;local;lab.local;192.168.1.9;445;'
-case " \$* " in *" -c "*) [ -e "$T/gone" ] && o= ;; *) o= ;; esac
+case " \$* " in *" -c "*) [ -e "$T/office" ] || o=; [ -e "$T/gone" ] && o= ;; *) o= ;; esac
 printf '+;eth0;IPv4;YOGA;_smb._tcp;local\n%s\n%s\n%s\n' "\$y" "\$y6" "\$o"
 EOF
 chmod +x "$T/avahi"
