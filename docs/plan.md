@@ -1124,6 +1124,9 @@ blocks each of these for up to gvfs's 90 s. On a thread it also holds ofx's exit
          it. libsmbclient's share listing tries 139 too; mounting a share took 93 ms either way.
          So a server whose firewall drops 139 lists its shares after about 20 s, with
          "Connecting…" meanwhile.
+       - **By its mDNS name** (`yoga.local`, step 7b): the name resolves to IPv6 link-local too,
+         and libsmbclient tries that first. With the firewall dropping IPv6 to 445 and 139 the
+         listing took 20.5 s; with both refused, 616 ms.
        - A share named with a space works raw in the address (reviewer-2 measured it). gvfs
          lower-cases the name in its folder's name, so the sidebar says "my docs" where the
          picker says "My Docs": cosmetic.
