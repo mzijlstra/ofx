@@ -11,8 +11,10 @@
 //   E <kind> <size> <mtime> <mode> <uid> <gid> <nlen> <tlen>\n<name><target>
 //   H <hidden>                                         dot-files in the folder, then the end:
 //   L
-//   X <errno> <reason>                                 it can't be read (then ofx-list ends); the errno
+//   X <errno>: <reason>                                it can't be read (then ofx-list ends); the errno
 //                                                      for ofx to act on (ENOENT, ENOTDIR), the reason to say
+//                                                      (": " before it: a window started before the errno
+//                                                      came still finds the reason at its status's end)
 //   C <gen> <idx> <n>                                  a count asked for (n -1: unreadable)
 // What ofx asks on its input, for the rows on screen: "C <gen> <idx> <nlen>\n<name>". Its input's
 // end is ofx-list's.
@@ -67,10 +69,10 @@ static int far_next(Str b, isize *at, FarMsg *m)
         if (line.len != 1) return -1;
         break;
     case 'X': {
-        isize sp = 2;   // (the errno, 1 to 4095, then the reason, not empty)
-        while (sp < line.len && line.p[sp] != ' ') sp++;
-        if (sp >= line.len - 1 || !far_nums((Str){ line.p, sp }, m->v, 1, 1, 4095)) return -1;
-        m->text = (Str){ line.p + sp + 1, line.len - sp - 1 };
+        isize c = 2;   // (the errno, 1 to 4095, ": ", then the reason, not empty)
+        while (c < line.len && line.p[c] != ':') c++;
+        if (c + 2 >= line.len || line.p[c + 1] != ' ' || !far_nums((Str){ line.p, c }, m->v, 1, 1, 4095)) return -1;
+        m->text = (Str){ line.p + c + 2, line.len - c - 2 };
         break;
     }
     case 'C':
@@ -161,7 +163,7 @@ static int far_serve(FILE *in, FILE *out, Arena *a, const char *dir, bool hidden
 {
     DIR *d = opendir(dir);
     if (!d) {
-        fprintf(out, "X %d %s\n", errno, strerror(errno)), fflush(out);
+        fprintf(out, "X %d: %s\n", errno, strerror(errno)), fflush(out);
         return 1;
     }
     fprintf(out, "W %d\n", access(dir, W_OK) == 0);

@@ -221,6 +221,7 @@ typedef struct {
     bool    stepping;   // Back, Forward, a tab, a relist: the folder left gets no history entry
     FarThen then;       // a far folder: what its lister's refusal leads to (far_refused)
     bool    far_take;   // far_poll's: the lister's answer has come, the listing is made from it
+    bool    reload;     // reload()'s: the folder shown again (a far one still loading keeps a way set)
 } GoHow;
 enum { DROP_AGAIN = -2 };
 typedef struct {

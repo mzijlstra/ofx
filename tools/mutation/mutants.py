@@ -2697,7 +2697,7 @@ MUTANTS += [
     ('fs/farlist.c', 'if (!far_nums(line, m->v, 1, 0, 1)) return -1;', ''),
     ('fs/farlist.c', 'if (!far_nums(line, m->v, 1, 0, INT64_MAX)) return -1;', ''),
     ('fs/farlist.c', 'if (line.len != 1) return -1;', ''),
-    ('fs/farlist.c', '        if (sp >= line.len - 1 || !far_nums((Str){ line.p, sp }, m->v, 1, 1, 4095)) return -1;', '        if (sp >= line.len - 1 || !far_nums((Str){ line.p, sp }, m->v, 1, 0, 4095)) return -1;'),   # (retargeted, step D)
+    ('fs/farlist.c', "        if (c + 2 >= line.len || line.p[c + 1] != ' ' || !far_nums((Str){ line.p, c }, m->v, 1, 1, 4095)) return -1;", "        if (c + 2 >= line.len || line.p[c + 1] != ' ' || !far_nums((Str){ line.p, c }, m->v, 1, 0, 4095)) return -1;"),   # (retargeted, step D review)
     ('fs/farlist.c', 'if (!far_nums(line, m->v, 3, -1, INT64_MAX) || m->v[0] < 0 || m->v[1] < 0) return -1;', 'if (!far_nums(line, m->v, 3, -1, INT64_MAX)) return -1;'),
     ('fs/farlist.c', 'if (!far_nums(line, m->v, 3, -1, INT64_MAX) || m->v[0] < 0 || m->v[1] < 0) return -1;', 'if (!far_nums(line, m->v, 3, -1, INT64_MAX) || m->v[0] < 0) return -1;'),
     ('fs/farlist.c', 'if (!ok || v[0] > K_OTHER ||', 'if (!ok ||'),   # (retargeted, step 8 A)
@@ -3006,10 +3006,11 @@ MUTANTS += [
     ('fs/paths.c', '        if (!mountinfo_line(line, mp, sizeof mp, &type, &src) || !type.len) continue;', '        if (!mountinfo_line(line, mp, sizeof mp, &type, &src)) continue;'),
     ('fs/paths.c', ', mount_far_type(type), str_eq(type, S("fuse.gvfsd-fuse")) };', ', mount_far_type(type), false };'),
     # The milestone's code-health cleanup, step D: the lister's refusal carries its errno
-    ('fs/farlist.c', 'fprintf(out, "X %d %s\\n", errno, strerror(errno))', 'fprintf(out, "X %d %s\\n", 1, strerror(errno))'),
-    ('fs/farlist.c', '        m->text = (Str){ line.p + sp + 1, line.len - sp - 1 };', '        m->text = (Str){ line.p + 2, line.len - 2 };'),
-    ('fs/farlist.c', '        if (sp >= line.len - 1 ||', '        if (sp >= line.len ||'),
+    ('fs/farlist.c', 'fprintf(out, "X %d: %s\\n", errno, strerror(errno))', 'fprintf(out, "X %d: %s\\n", 1, strerror(errno))'),   # (retargeted, step D review)
+    ('fs/farlist.c', '        m->text = (Str){ line.p + c + 2, line.len - c - 2 };', '        m->text = (Str){ line.p + 2, line.len - 2 };'),   # (retargeted, step D review)
+    ('fs/farlist.c', "        if (c + 2 >= line.len || line.p[c + 1] != ' ' ||", "        if (c + 2 > line.len || line.p[c + 1] != ' ' ||"),   # (retargeted, step D review)
     # The step C review: the mount list's text in an arena of its own
     ('fs/paths.c', '    arena_restore(tmp, m);\n    return ms;', '    return ms;'),
     ('fs/paths.c', '    Mounts ms = mounts_parse(a, read_file(tmp, path));', '    Mounts ms = mounts_parse(a, read_file(a, path));'),
+    ('fs/farlist.c', "        if (c + 2 >= line.len || line.p[c + 1] != ' ' ||", "        if (c + 2 >= line.len ||"),
 ]

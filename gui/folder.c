@@ -205,12 +205,14 @@ static isize far_scan;   // how far what the lister said was looked through for 
 
 // dir's lister started (or, while one killed for it is still in the kernel, put off until it is
 // gone: far_poll), its listing to come with the cursor on `select` (else row `fallback`), its
-// refusal leading where `then` says. False, with the reason, when it can't start.
-static bool far_begin(const char *dir, Str select, isize fallback, FarThen then, Err *err)
+// refusal leading where how.then says. False, with the reason, when it can't start.
+static bool far_begin(const char *dir, Str select, isize fallback, GoHow how, Err *err)
 {
-    // Listed again before its first answer came (a reload meanwhile): how ofx got there still holds
-    // (a link that may be a file, a path typed; found under load, step 3), unless it was plain.
-    if (!(app.far_loading && strcmp(dir, app.cwd) == 0) || app.far_then == FAR_THEN_SHOW) app.far_then = then;
+    // Listed again before its first answer came: a reload keeps how ofx got there (a link that may
+    // be a file, a path typed; found under load, step 3) unless that was plain; another way there (a
+    // new tab on it) sets its own, when it has one. (As the calls patched far_then after go_to did,
+    // the step D review.)
+    if (!(app.far_loading && strcmp(dir, app.cwd) == 0) || (how.reload ? app.far_then == FAR_THEN_SHOW : how.then != FAR_THEN_SHOW)) app.far_then = how.then;
     snprintf(app.far_select, sizeof app.far_select, "%.*s", STR_ARG(select));
     app.far_fallback = fallback, app.far_since = now_ms(), app.far_slow = false, app.far_note[0] = 0, far_scan = 0;
     // The last lister killed first: if it is still in the kernel (a reload of a folder that hangs),
@@ -228,7 +230,7 @@ static bool far_list(const char *dir, Arena *a, Listing *l, Str select, isize fa
 {
     if (!how.far_take) {
         *l = (Listing){ 0 }, app.far_can_write = false, app.far_kept = false;   // (not known until it says: not the last folder's)
-        return far_begin(dir, select, fallback, how.then, err);
+        return far_begin(dir, select, fallback, how, err);
     }
     isize len;
     bool eof, full, ended;
@@ -390,7 +392,7 @@ static bool go_to_in(const char *dir, Str select, isize fallback, GoHow how)
     // A far folder listed again (Ctrl+R, a change ofx made): a new lister, the listing shown kept
     // until its answer comes.
     if (on_far && !how.far_take && same && app.far_on && app.have_list) {
-        if (far_begin(dir, select, fallback, how.then, &err)) return app.far_kept = true, app.far_kept_sel = app.ui.list.sel, true;
+        if (far_begin(dir, select, fallback, how, &err)) return app.far_kept = true, app.far_kept_sel = app.ui.list.sel, true;
         return far_failed(err.msg), false;
     }
     // Another folder (F11): the one left keeps its cursor; this one's own view, size and sort, its
@@ -773,7 +775,7 @@ static void reload(void)
     view_changed();   // (what went since: trashed, deleted, moved, F9)
     char keep[PATH_MAX] = "";
     snprintf(keep, sizeof keep, "%.*s", STR_ARG(sel_name()));
-    if (go_to_then(app.cwd, str_from_c(keep), app.ui.list.sel, FAR_THEN_UP)) return;   // (a far one: if its lister says it is gone, F16 step 3; not over another way's, far_begin)
+    if (go_to_in(app.cwd, str_from_c(keep), app.ui.list.sel, (GoHow){ .then = FAR_THEN_UP, .reload = true })) return;   // (a far one: if its lister says it is gone, F16 step 3; not over another way's, far_begin)
     go_up_from(app.cwd);
 }
 

@@ -86,7 +86,7 @@ static void test_far_serve(void)
     CHECK(far_listing(&ta, b, at("far/d"), &l, &w, &after, &ended, &err) && after == b.len);
     // A folder it can't read: X with the errno and the reason, and far_listing says it.
     b = far_said_of(at("far/none"), false, "", 0);
-    CHECK(str_eq(b, S("X 2 No such file or directory\n")));
+    CHECK(str_eq(b, S("X 2: No such file or directory\n")));
     CHECK(!far_listing(&ta, b, at("far/none"), &l, &w, &after, &ended, &err) && ended);
     CHECK(strstr(err.msg, "far/none: No such file or directory") != NULL);
     // A folder that can't be written: W 0.
@@ -119,7 +119,7 @@ static void test_far_next(void)
 {
     FarMsg m;
     isize at = 0;
-    Str ok = S("W 1\nE 1 0 5 16877 1 2 3 0\nsubH 2\nL\nC 3 4 -1\nX 20 gone away\n");
+    Str ok = S("W 1\nE 1 0 5 16877 1 2 3 0\nsubH 2\nL\nC 3 4 -1\nX 20: gone away\n");
     CHECK(far_next(ok, &at, &m) == 1 && m.type == 'W' && m.v[0] == 1);
     CHECK(far_next(ok, &at, &m) == 1 && m.type == 'E' && m.v[0] == K_DIR && m.v[2] == 5 && m.v[3] == 16877 && m.v[4] == 1 && m.v[5] == 2 &&
           str_eq(m.name, S("sub")) && m.target.len == 0);
@@ -140,7 +140,7 @@ static void test_far_next(void)
     }
     // Malformed: -1.
     const char *bad[] = {
-        "W 2\n", "W\n", "W 1 1\n", "W x\n", "W_1\n", "W  1\n", "W +1\n", "Q 1\n", "\n", "L 1\n", "X\n", "X \n", "X 2\n", "X 2 \n", "X x y\n", "X 0 y\n", "X 4096 y\n", "X -2 y\n", "X  2 y\n", "H -1\n",
+        "W 2\n", "W\n", "W 1 1\n", "W x\n", "W_1\n", "W  1\n", "W +1\n", "Q 1\n", "\n", "L 1\n", "X\n", "X \n", "X 2\n", "X 2:\n", "X 2: \n", "X 2 y\n", "X 2:y\n", "X 2:yz\n", "X x: y\n", "X 0: y\n", "X 4096: y\n", "X -2: y\n", "X  2: y\n", "H -1\n",
         "C -1 0 1\n", "C 1 -1 1\n", "C 1 2\n",
         "E 6 0 0 0 0 0 1 0\na",                 // a kind past K_OTHER
         "E 0 0 0 0 0 0 0 0\n",                  // no name
