@@ -1166,4 +1166,5 @@ MUTANTS = [
     ('gui/main.c', '    if (app.ui.panel == UI_PANEL_SHARES) in->sh_name = shp_names(), in->sh_names = shp.n;', '', 'f16'),
     ('gui/input.c', '    if (on == UI_ON_SHARES) return *row_id = "shp-row", *field_id = "shp-field", &app.ui.shp;', '', 'f16'),
     ('gui/actions.c', '    case UA_SHARE: share_pick(a.index); break;', '', 'f16'),
+    ('gui/connect.c', '    shp.pending = false;   // (a server', '    // (a server', 'f16'),   # (step 7a review)
 ]

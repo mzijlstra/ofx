@@ -1108,6 +1108,11 @@ blocks each of these for up to gvfs's 90 s. On a thread it also holds ofx's exit
        - A port nothing listens on fails at once ("Failed to retrieve share list from server:
          Connection refused"); a paused server after gvfs's 20 s ("Connection timed out").
        - gvfs-nfs lists no exports, so `nfs://server/` is still refused ("Name a folder").
+       - Each server connected to leaves its browse mount in gvfsd until gvfsd ends (gio can't
+         unmount it). Nautilus leaves the same.
+       - A share named with a space works raw in the address (reviewer-2 measured it). gvfs
+         lower-cases the name in its folder's name, so the sidebar says "my docs" where the
+         picker says "My Docs": cosmetic.
      - **What changed:**
        - `connect_uri` takes a server's address alone (share "").
        - Connect's thread runs `gio list` after the mount instead of `gio info`

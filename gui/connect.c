@@ -282,6 +282,7 @@ static bool connect_start(Str text)
     }
     pthread_mutex_unlock(&cn.mu);
     if (busy) return set_status(true, "Still connecting to %s", cn_name()), true;
+    shp.pending = false;   // (a server's shares not yet shown: another connection replaces them, step 7a review)
     pthread_t t;
     if (pthread_create(&t, NULL, cn_thread, NULL) != 0) {
         pthread_mutex_lock(&cn.mu);

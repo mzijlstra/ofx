@@ -24,6 +24,19 @@ wait-for 2000 shpn=1 shpsel=pub
 key enter
 wait-for 4000 shp=0 conn=0 statusbad=1
 sh grep -qx "gio mount smb://nas/pub" "$OFX_ROOT/spawn.log"
+# A connection started while the shares wait (the location line open): they are dropped, never put
+# up over it (step 7a review).
+key ctrl-l
+key ctrl-a
+type smb://nas
+key enter
+key ctrl-l
+wait-for 4000 conn=0 shppending=1 shp=0 editing=1
+key ctrl-a
+type smb://nas/pub
+key enter
+expect shppending=0
+wait-for 4000 conn=0 shp=0 shppending=0
 # Esc closes it, nothing connected.
 key ctrl-l
 key ctrl-a
