@@ -2835,6 +2835,13 @@ MUTANTS += [
     ('ui/helpers.c', '    if (c->seg[i].share) return str_from_c(c->share_label);', ''),
     # (Dropped, not observable: places_load_net's skip of an address connect_uri refuses. Its buffer
     # then still holds the last good address, which places_has drops as a second row.)
+    ('fs/connect.c', "        if (!((*c >= 'a' && *c <= 'z') || (*c >= '0' && *c <= '9') || *c == '-')) return false;", ''),
+    ('fs/connect.c', "    return strchr(colon, '=') != NULL;", '    return true;'),
+    ('fs/connect.c', '    if (!colon || colon == n) return false;', '    if (!colon) return false;'),
+    ('fs/connect.c', '        if (!mountinfo_line(line, mp, sizeof mp, &type, &src) || !str_eq(type, S("fuse.gvfsd-fuse"))) continue;', '        if (!mountinfo_line(line, mp, sizeof mp, &type, &src)) continue;'),
+    ('fs/connect.c', '    qsort(line_of, (size_t)k, sizeof *line_of, gvfs_cmp);', ''),
+    ('fs/connect.c', '    fprintf(out, ".\\n");\n    return true;', '    return true;'),
+    ('fs/connect.c', '    if (mi.len == 0) return false;\n    char *line_of', '    char *line_of'),
     # F16 step 4: Connect to Server's address and what gio says (fs/connect.c), the question's keys (ui/)
     ('fs/connect.c', '        if (tolower((unsigned char)a.p[i]) != (unsigned char)b[i]) return false;', '        if ((unsigned char)a.p[i] != (unsigned char)b[i]) return false;'),
     ('fs/connect.c', '        if ((unsigned char)text.p[i] < 0x20 || text.p[i] == 0x7F) return', '        if ((unsigned char)text.p[i] < 0x20) return'),

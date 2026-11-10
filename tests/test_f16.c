@@ -882,3 +882,35 @@ static void test_crumbs_share(void)
     ui_crumbs_set_share(&c, "/home/m/s", "/home/m/s", "/home/m/s", NULL);   // (no label: none)
     CHECK(!c.seg[0].share && c.seg[0].home);
 }
+
+// ofx-list --shares (step 5 review): gvfs's FUSE folders' shares, sorted, then "."; only gvfs's
+// mounts and names of its form; nothing for a mount list that reads empty.
+static void test_gvfs_shares(void)
+{
+    mkdir(at("gv"), 0755), mkdir(at("gv/g"), 0755), mkdir(at("gv/o"), 0755);
+    // (made in order a, c, b: a folder lists in an order of its own, tmpfs newest first)
+    mkdir(at("gv/g/smb-share:server=a,share=x"), 0755), mkdir(at("gv/g/smb-share:server=c,share=z"), 0755), mkdir(at("gv/g/smb-share:server=b,share=y"), 0755);
+    mkdir(at("gv/g/junk"), 0755), mkdir(at("gv/g/My Notes:x=1"), 0755), mkdir(at("gv/g/a:b"), 0755);
+    mkdir(at("gv/o/smb-share:server=no,share=no"), 0755);
+    char mi[2048];
+    snprintf(mi, sizeof mi, "1 0 0:1 / / rw - ext4 /dev/x rw\n2 1 0:2 / %s rw - fuse.gvfsd-fuse g rw\n", at("gv/g"));
+    snprintf(mi + strlen(mi), sizeof mi - strlen(mi), "3 1 0:3 / %s rw - ext4 /dev/y rw\n", at("gv/o"));
+    char *buf = NULL;
+    size_t len = 0;
+    FILE *f = open_memstream(&buf, &len);
+    CHECK(gvfs_shares(f, &ta, str_from_c(mi)));
+    fclose(f);
+    char want[3 * PATH_MAX + 256];
+    char g[PATH_MAX];
+    snprintf(g, sizeof g, "%s", at("gv/g"));
+    snprintf(want, sizeof want, "%s/smb-share:server=a,share=x\n%s/smb-share:server=b,share=y\n%s/smb-share:server=c,share=z\n.\n", g, g, g);
+    CHECK(buf && strcmp(buf, want) == 0);
+    free(buf);
+    f = open_memstream(&buf, &len);
+    CHECK(!gvfs_shares(f, &ta, STR_EMPTY));
+    fclose(f);
+    CHECK(len == 0);
+    free(buf);
+    CHECK(gvfs_is_share("smb-share:server=a") && gvfs_is_share("sftp:host=h") && !gvfs_is_share("junk") && !gvfs_is_share(":x=1") &&
+          !gvfs_is_share("Ab:x=1") && !gvfs_is_share("a b:x=1") && !gvfs_is_share("a:b"));
+}

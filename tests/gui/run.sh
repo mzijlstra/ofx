@@ -482,6 +482,7 @@ fresh net; mkdir -p "$T/home"
   printf '1 0 0:1 / / rw - ext4 /dev/x rw\n2 1 0:2 / %s rw,nosuid,nodev - fuse.gvfsd-fuse gvfsd-fuse rw\n' "$T/rt/gvfs" > "$T/mountinfo"
   RS_HOME=$T/home fail=0
   rs net OFX_TEST_MOUNTINFO="$T/mountinfo" -- "$NET_SHARE"
+  "$T/unpause"   # (a script that failed before its own unpause leaves its server stopped for the next)
   # Connect to Server (F16 step 4): ofx's gio mount and gio info go to this gio, on the run's own
   # gvfs session (its bus checked first), never the desktop's. netc.script's @PORT@ is the server's.
   printf '#!/bin/sh\n[ -S "%s/bus" ] || { echo "net: not the run'"'"'s bus" >&2; exit 9; }\nexec env -i HOME="%s/home" XDG_RUNTIME_DIR="%s/rt" DBUS_SESSION_BUS_ADDRESS="unix:path=%s/bus" PATH=/usr/bin LANG=C.UTF-8 GIO_USE_VOLUME_MONITOR=unix /usr/bin/gio "$@"\n' \
@@ -495,12 +496,14 @@ fresh net; mkdir -p "$T/home"
   # first, which mounts; step 4 confirm)
   ( export OFX_TEST_HOME="$T/home" OFX_TEST_MOUNTINFO="$T/mountinfo" OFX_TEST_GIO="$T/giotest" OFX_TEST_CONNECT_CLOSE_MS=500
     exec "$here/../../tools/gui/run-script.sh" "$T" "$T/netq.script" "$bin" "$T/home" ) || failed netq
+  "$T/unpause"   # (a script that failed before its own unpause leaves its server stopped for the next)
   sleep 2   # (the killed gio's guest mount came 2 s later, measured)
   if "$T/giotest" mount -l 2>/dev/null | grep -q "open on 127.0.0.1"; then echo "netq: the guest share open was mounted after the window quit"; failed netq; fi
   sed "s/@PORT@/$NET_PORT/g" "$here/netc.script" > "$T/netc.script"
   echo "== netc"
   ( export OFX_TEST_HOME="$T/home" OFX_TEST_MOUNTINFO="$T/mountinfo" OFX_TEST_GIO="$T/giotest"
     exec "$here/../../tools/gui/run-script.sh" "$T" "$T/netc.script" "$bin" "$T/home" ) || failed netc
+  "$T/unpause"   # (a script that failed before its own unpause leaves its server stopped for the next)
   # The Network section on the real shares (F16 step 5), after netc mounted open and priv; a bookmark
   # of priv. (Unmounting open from the sidebar: its row goes as gvfs's FUSE folder, listed again, no
   # longer has it.)

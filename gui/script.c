@@ -748,6 +748,7 @@ static void script_state(char *out, size_t cap)
     // result), the questions put, whether ofx is dumpable (not while one runs); the question up, its field with the keys, asked again, no user
     // field; its user, and the password's length only (never its text).
     pthread_mutex_lock(&cn.mu);
+    sw(out, cap, &len, "sharesheld=%d ", gvfsw.held >= 0);   // (step 5 review: a share lister that didn't answer, killed, held now)
     sw(out, cap, &len, "conn=%d connasked=%d dumpable=%d ", (int)cn.phase, cn.asked, prctl(PR_GET_DUMPABLE, 0, 0, 0, 0));
     pthread_mutex_unlock(&cn.mu);
     char loginuser[256];

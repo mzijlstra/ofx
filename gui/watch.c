@@ -23,10 +23,9 @@
 //
 // The shares gvfs has mounted (F16 step 5): gvfsd-fuse shows each as a folder of its FUSE mount, and
 // no inotify event comes as one appears (measured: only the folder's link count moves). So the thread
-// lists those FUSE folders every WATCH_GVFS_MS, and at once when the main thread kicks it (ofx's own
-// connect or unmount, watch_gvfs_kick); a change reads the places again. A listing there is answered
-// by gvfsd-fuse from its mount table, not the servers: 4 ms with a server paused and 30 requests
-// stuck on its share (measured). Only names gvfs gives ("type:key=value,…") are shares.
+// has those FUSE folders listed every WATCH_GVFS_MS, and at once when the main thread kicks it (ofx's
+// own connect or unmount, watch_gvfs_kick); a change reads the places again. The listing is a child's
+// (ofx-list --shares, watch_gvfs_scan), never this thread's own.
 //
 // The main thread points the folder watch at a new folder (watch_dir); the thread owns the theme
 // watches. inotify's calls are safe from both threads. A batch ends 100 ms after its last event,
@@ -46,7 +45,10 @@ static struct {
     char            text[32768];
     int             len;
     int             kick;   // an eventfd: watch_gvfs_kick lists them again at once (-1: none)
-} gvfsw = { .mu = PTHREAD_MUTEX_INITIALIZER, .kick = -1 };
+    int             held;   // a lister that didn't answer, killed, not yet seen gone (its pidfd; -1 none: the scripts' sharesheld=)
+    atomic_bool     held_moved;   // held set or cleared since the main loop last looked
+    char            exe[PATH_MAX];   // this ofx's binary (ofx-list is beside it), read at watch_start
+} gvfsw = { .mu = PTHREAD_MUTEX_INITIALIZER, .kick = -1, .held = -1 };
 
 static struct {
     int         fd;
@@ -226,49 +228,82 @@ static void watch_read(bool *list, bool *theme, bool *mounts, bool *trash, bool 
     }
 }
 
-// Whether a folder name is one gvfs gives a share: "type:key=value…" (a scratch stand-in's own
-// folders aren't).
-static bool gvfs_share_name(const char *n)
-{
-    const char *colon = strchr(n, ':');
-    if (!colon || colon == n) return false;
-    for (const char *c = n; c < colon; c++)
-        if (!((*c >= 'a' && *c <= 'z') || (*c >= '0' && *c <= '9') || *c == '-')) return false;
-    return strchr(colon, '=') != NULL;
-}
+static bool far_prog(const char *exe, Str name, char *prog, size_t cap, Err *err);   // (far.c)
 
-static int cmp_cstr(const void *x, const void *y)
-{
-    return strcmp(*(char *const *)x, *(char *const *)y);
-}
+enum { SHARES_MS = 1000 };   // ofx-list --shares answers in milliseconds; past this it is held
 
-// The shares listed again (sorted): true when they changed.
+// The shares listed again, by `ofx-list --shares` (gvfs's FUSE folders are read in a child, as
+// every far read is: step 5 review, measured: with nine or more lookups stuck on a dead share,
+// gvfsd-fuse's workers are all taken and even its root's listing waits, which would stall this
+// thread's folder, theme, bookmarks and trash watches). Its answer within SHARES_MS, else it is
+// killed and held: no other runs until it has left the kernel, and the last list stands. True when
+// the list changed.
 static bool watch_gvfs_scan(void)
 {
-    static char now[sizeof gvfsw.text], mem[KiB(512)];
+    if (gvfsw.held >= 0) {
+        struct pollfd p = { gvfsw.held, POLLIN, 0 };
+        if (poll(&p, 1, 0) <= 0) return false;   // (still in the kernel)
+        close(gvfsw.held), gvfsw.held = -1;
+        atomic_store(&gvfsw.held_moved, true), wake_main();   // (a frame: the scripts' sharesheld= is read at one)
+    }
+    // No gvfs FUSE mount in the mount list: no shares, and no child (read here: the mount list is the
+    // kernel's, never a share's).
+    static u8 mem[KiB(512)];
     static Arena a;
     arena_init(&a, "gvfs mounts", mem, sizeof mem);
     Str mi = read_file(&a, mountinfo_path());
-    if (mi.len == 0) return false;   // (a read that failed isn't every share gone: no tab goes Home for it)
-    enum { SHARES_MAX = 64 };   // (as many as the sidebar has places)
-    char *line_of[SHARES_MAX];
-    int k = 0;
+    bool any = false;
     isize at = 0;
-    for (Str line; next_line(mi, &at, &line);) {
+    for (Str line; !any && next_line(mi, &at, &line);) {
         char mp[PATH_MAX];
         Str type, src;
-        if (!mountinfo_line(line, mp, sizeof mp, &type, &src) || !str_eq(type, S("fuse.gvfsd-fuse"))) continue;
-        DIR *d = opendir(mp);
-        for (struct dirent *e; d && k < SHARES_MAX && (e = readdir(d));)
-            if (gvfs_share_name(e->d_name)) line_of[k++] = arena_sprintf(&a, "%s/%s\n", mp, e->d_name);
-        if (d) closedir(d);
+        any = mountinfo_line(line, mp, sizeof mp, &type, &src) && str_eq(type, S("fuse.gvfsd-fuse"));
     }
-    qsort(line_of, (size_t)k, sizeof *line_of, cmp_cstr);   // (by name, whatever order the folder gives)
+    if (!any) {
+        if (mi.len == 0) return false;   // (a read that failed: the last list stands)
+        pthread_mutex_lock(&gvfsw.mu);
+        bool changed = gvfsw.len != 0;
+        gvfsw.len = 0;
+        pthread_mutex_unlock(&gvfsw.mu);
+        return changed;
+    }
+    char prog[PATH_MAX];
+    Err err;
+    if (!far_prog(gvfsw.exe, S("A share"), prog, sizeof prog, &err)) return false;
+    char *argv[] = { prog, "--shares", NULL };
+    int fd[2];
+    if (pipe2(fd, O_CLOEXEC) != 0) return false;
+    pid_t pid;
+    bool ok = spawn_fds(NULL, argv, -1, fd[1], SPAWN_ERR_NULL, &pid, &err);
+    close(fd[1]);
+    int pfd = ok ? (int)syscall(SYS_pidfd_open, pid, 0) : -1;
+    if (!ok || pfd < 0) {
+        if (ok) kill(pid, SIGKILL);
+        return close(fd[0]), false;
+    }
+    static char now[sizeof gvfsw.text];
     int n = 0;
-    for (int i = 0; i < k; i++) {
-        int w = (int)strlen(line_of[i]);
-        if (n + w < (int)sizeof now) memcpy(now + n, line_of[i], (size_t)w), n += w;
+    bool done = false;
+    for (i64 until = now_ms() + SHARES_MS; !done;) {
+        i64 left = until - now_ms();
+        struct pollfd p = { fd[0], POLLIN, 0 };
+        if (left <= 0 || poll(&p, 1, (int)left) == 0) break;
+        ssize_t r = read(fd[0], now + n, sizeof now - 1 - (size_t)n);
+        if (r < 0 && errno == EINTR) continue;
+        if (r <= 0) done = true;
+        else n += (int)r;
+        if (n >= (int)sizeof now - 1) done = true;   // (more than fit: what fits)
     }
+    close(fd[0]);
+    if (!done) {   // no answer: killed, held until it leaves the kernel; the last list stands
+        syscall(SYS_pidfd_send_signal, pfd, SIGKILL, NULL, 0);
+        gvfsw.held = pfd;
+        atomic_store(&gvfsw.held_moved, true), wake_main();
+        return false;
+    }
+    close(pfd);
+    if (n < 2 || memcmp(now + n - 2, ".\n", 2) != 0 || (n > 2 && now[n - 3] != '\n')) return false;   // (not its whole answer: the last list stands)
+    n -= 2;
     pthread_mutex_lock(&gvfsw.mu);
     bool changed = n != gvfsw.len || memcmp(now, gvfsw.text, (size_t)n) != 0;
     if (changed) memcpy(gvfsw.text, now, (size_t)n), gvfsw.len = n;
@@ -348,6 +383,8 @@ static bool watch_start(void)
     watch.fd = inotify_init1(IN_CLOEXEC);
     if (watch.fd < 0) return false;
     gvfsw.kick = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
+    ssize_t xn = readlink("/proc/self/exe", gvfsw.exe, sizeof gvfsw.exe - 1);
+    gvfsw.exe[xn > 0 ? xn : 0] = 0;
     char dir[PATH_MAX];
     theme_dir(dir, sizeof dir);
     snprintf(watch.theme, sizeof watch.theme, "%s", dir);

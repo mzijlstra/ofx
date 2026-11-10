@@ -1031,11 +1031,19 @@ blocks each of these for up to gvfs's 90 s. On a thread it also holds ofx's exit
    - **Measured on the test Samba (spike):**
      - gvfsd-fuse shows each mounted share as a folder of its FUSE mount, named by its mount spec
        (`smb-share:port=…,server=…,share=…`).
-     - Listing that FUSE folder took 4 ms with the server paused and 30 requests stuck on its share:
-       gvfsd-fuse answers it from its mount table.
+     - Listing that FUSE folder took 4 ms with the server paused and 30 `ls` of one folder stuck on
+       its share (they queue in the kernel).
      - No inotify event comes as a share appears (only the folder's link count moves). So the
-       watch thread lists the FUSE folders every 2 s, and at once after ofx's own connect or
+       watch thread has the FUSE folders listed every 2 s, and at once after ofx's own connect or
        unmount; only names of gvfs's form count.
+     - **The step 5 review's fix (measured by the reviewer, then here):** distinct lookups each take
+       a gvfsd-fuse worker. With six or more stuck on a dead share, even its root's listing waits
+       (`ls -f` 19-59 s). ofx's own held children can be among them. So the listing is a child's,
+       `ofx-list --shares` (fs/connect.c `gvfs_shares`), waited for 1 s. Past that it is killed
+       and held (one at a time) and the last list stands, so the watch thread's folder, theme,
+       bookmarks and trash watches go on. Its answer ends with "." (a cut-off one is never every
+       share gone). net checks it: a dozen lookups stuck, the lister held, a local change still
+       shown.
      - `gio mount -u <folder>` unmounts by the FUSE path in 10 ms. gvfs unmounts with a process
        inside the share. A paused server takes gvfs's 20 s.
      - **Known gap (gvfs's):** a share mounted again within about 2 s of its unmount reads

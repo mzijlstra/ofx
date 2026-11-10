@@ -58,7 +58,7 @@ static bool far_share(const char *path, char *root, size_t rcap, char *label, si
     bool gvfs;
     if (!far_drive(far_mounts(), path, root, rcap, &gvfs) || !gvfs) return false;
     Str base = path_base(str_from_c(root));
-    if (!gvfs_share_name(root + strlen(root) - base.len)) return false;
+    if (!gvfs_is_share(root + strlen(root) - base.len)) return false;
     gvfs_share_label(base, label, lcap);
     return true;
 }

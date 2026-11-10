@@ -820,6 +820,7 @@ static bool poll_workers(void)
     if (space_take(&app.places, app.cwd, &app.cwd_avail)) dirty = true;
     if (eject_take()) dirty = true;
     if (connect_take()) dirty = true;
+    if (atomic_exchange(&gvfsw.held_moved, false)) dirty = true;   // (a share lister held or let go: F16 step 5)
     if (props.walking && walk_take(&props.sum, &props.done)) dirty = true;
     if (props.walking && app.ui.panel != UI_PANEL_PROPS) walk_ask(NULL, 0), props.walking = false;   // the panel closed: the count stops
     if (clear_poll()) dirty = true;

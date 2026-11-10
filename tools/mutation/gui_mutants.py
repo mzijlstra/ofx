@@ -1125,11 +1125,7 @@ MUTANTS = [
     ('gui/connect.c', '    prctl(PR_SET_DUMPABLE, 1, 0, 0, 0);   // (every copy', '    // (every copy', 'net'),
     ('gui/connect.c', ', strcmp(why, "Invalid argument") == 0 ? " (is the server\'s name right?)" : ""), true;', ', ""), true;', 'net'),
     # F16 step 5: the Network section, a share's unmount, crumbs, bookmarks and names
-    ('gui/watch.c', '        if (!((*c >= \'a\' && *c <= \'z\') || (*c >= \'0\' && *c <= \'9\') || *c == \'-\')) return false;', '', 'f16'),
-    ('gui/watch.c', '    return strchr(colon, \'=\') != NULL;', '    return true;', 'f16'),
-    ('gui/watch.c', '        if (!mountinfo_line(line, mp, sizeof mp, &type, &src) || !str_eq(type, S("fuse.gvfsd-fuse"))) continue;', '        if (!mountinfo_line(line, mp, sizeof mp, &type, &src)) continue;', 'f16'),
     ('gui/watch.c', '        if (kicked || now_ms() >= gvfs_due) {', '        if (now_ms() >= gvfs_due) {', 'net'),
-    ('gui/watch.c', '    qsort(line_of, (size_t)k, sizeof *line_of, cmp_cstr);', '', 'net'),
     ('gui/folder.c', '    places_load_net(&scratch, &app.places, bm, watch_shares(&scratch));   // (F16 step 5: after the drives)', '', 'f16'),
     ('gui/folder.c', '    return (place_is_drive(k) && k != PL_ROOT) || k == PL_SHARE;', '    return place_is_drive(k) && k != PL_ROOT;', 'f16'),
     ('gui/folder.c', ' || app.places.p[i].kind == PL_UNMOUNTED || app.places.p[i].kind == PL_NETBM)\n        return NULL;', ' || app.places.p[i].kind == PL_UNMOUNTED)\n        return NULL;', 'f16'),
@@ -1142,11 +1138,19 @@ MUTANTS = [
     ('gui/eject.c', '    if (op == DRIVE_SHARE) watch_gvfs_kick();   // (gone from the sidebar, and its folders Home, at once)', '', 'net'),
     ('gui/eject.c', '    else if (ej.op == DRIVE_SHARE) r = gio_why(str_from_c(out), why, sizeof why) ? EJECT_FAILED : EJECT_DONE;', '    else if (ej.op == DRIVE_SHARE) r = EJECT_FAILED;', 'f16'),
     ('gui/connect.c', '    watch_gvfs_kick();   // (the share in the sidebar', '    // (the share in the sidebar', 'net'),
-    ('gui/far.c', '    if (!gvfs_share_name(root + strlen(root) - base.len)) return false;', '', 'f16'),
+    ('gui/far.c', '    if (!gvfs_is_share(root + strlen(root) - base.len)) return false;', '', 'f16'),
     ('gui/far.c', '    if (far_share(path, root, sizeof root, label, sizeof label)) return str_from_c(label);', '', 'net'),
     ('gui/far.c', '    ui_crumbs_set_share(c, dir, getenv("HOME"), sh ? root : NULL, sh ? label : NULL);', '    ui_crumbs_set_share(c, dir, getenv("HOME"), NULL, NULL);', 'f16'),
     ('gui/folder.c', '        if (!far_share_uri(app.cwd, app.cwd_uri, sizeof app.cwd_uri)) app.cwd_uri[0] = 0;', '        app.cwd_uri[0] = 0;', 'f16'),
     ('gui/folder.c', '    Str name = net && strcmp(dir, root) != 0 ? path_base(str_from_c(dir)) : str_from_c(label);', '    Str name = str_from_c(label);', 'f16'),
     ('gui/folder.c', '    if (!now || !(net ? bm_add_uri(&bmwa, now, uri, name, &err) : bm_add(&bmwa, now, dir, &err))', '    if (!now || !bm_add(&bmwa, now, dir, &err)', 'f16'),
     ('gui/script.c', '    state_unspace(crumbs);   // (a share\'s button', '    // (a share\'s button', 'f16'),
+    # (step 5 review: the shares listed by ofx-list --shares, its wait bounded, held when stuck)
+    ('gui/watch.c', '        if (left <= 0 || poll(&p, 1, (int)left) == 0) break;', '        if (poll(&p, 1, -1) == 0) break;', 'net'),
+    # (Dropped, not seen by a script: the scan's check for ofx-list's "." end. Only a lister killed
+    # mid-answer, or one that failed, leaves it off; a whole answer without it, the "." line itself
+    # would be skipped as a share (places_load_net takes only absolute folders).)
+    # (Dropped, test plumbing only: the frame marked when a held share lister is let go. It only lets
+    # the scripts' sharesheld= fall back to 0 at once; no script waits for that, and ofx shows nothing
+    # for it. The mark when one is held is net's sharesheld=1.)
 ]

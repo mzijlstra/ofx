@@ -194,3 +194,46 @@ static bool gvfs_share_uri(Str name, const char *rest, char *out, size_t cap)
     int n = snprintf(out, cap, "smb://%s%s%s%s%s%s%s%s", hd && hu ? domain : "", hd && hu ? ";" : "", hu ? user : "", hu ? "@" : "", server, hp ? ":" : "", hp ? port : "", esc);
     return n > 0 && (size_t)n < cap;
 }
+
+// Whether a folder name is one gvfs gives a share: "type:key=value…" (a scratch stand-in's own
+// folders aren't).
+static bool gvfs_is_share(const char *n)
+{
+    const char *colon = strchr(n, ':');
+    if (!colon || colon == n) return false;
+    for (const char *c = n; c < colon; c++)
+        if (!((*c >= 'a' && *c <= 'z') || (*c >= '0' && *c <= '9') || *c == '-')) return false;
+    return strchr(colon, '=') != NULL;
+}
+
+static int gvfs_cmp(const void *x, const void *y)
+{
+    return strcmp(*(char *const *)x, *(char *const *)y);
+}
+
+enum { GVFS_SHARES_MAX = 64 };   // (as many as the sidebar has places)
+
+// `ofx-list --shares` (F16 step 5): the shares gvfs has mounted, a folder a line, sorted: every
+// fuse.gvfsd-fuse mount of the mount list mi, its folders named as gvfs names a share. Then a line
+// "." (a cut-off answer, or one from a lister that failed, isn't taken for every share gone). False,
+// writing nothing, when mi is empty (a read that failed).
+static bool gvfs_shares(FILE *out, Arena *a, Str mi)
+{
+    if (mi.len == 0) return false;
+    char *line_of[GVFS_SHARES_MAX];
+    int k = 0;
+    isize at = 0;
+    for (Str line; next_line(mi, &at, &line);) {
+        char mp[PATH_MAX];
+        Str type, src;
+        if (!mountinfo_line(line, mp, sizeof mp, &type, &src) || !str_eq(type, S("fuse.gvfsd-fuse"))) continue;
+        DIR *d = opendir(mp);
+        for (struct dirent *e; d && k < GVFS_SHARES_MAX && (e = readdir(d));)
+            if (gvfs_is_share(e->d_name)) line_of[k++] = arena_sprintf(a, "%s/%s", mp, e->d_name);
+        if (d) closedir(d);
+    }
+    qsort(line_of, (size_t)k, sizeof *line_of, gvfs_cmp);   // (by name, whatever order the folder gives)
+    for (int i = 0; i < k; i++) fprintf(out, "%s\n", line_of[i]);
+    fprintf(out, ".\n");
+    return true;
+}

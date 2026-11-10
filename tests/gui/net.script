@@ -83,4 +83,18 @@ expect answering: not tried
 # (When gvfsd answers the request it took before the pause is its own affair: over 60 s for this
 # mkdir after the unpause, measured. The run's end takes the share and the held child with it.)
 sh "$OFX_ROOT/unpause"
+# The shares are listed by a child (step 5 review, measured: with nine or more lookups stuck on a
+# dead share, gvfsd-fuse's workers are all taken and even its root's listing waits). With the server
+# stopped and a dozen stuck, the listing child is held, and the watch thread goes on: a change in a
+# local folder still shows.
+key alt-home
+wait-for 3000 faron=0 n=1 sel=nas
+sh "$OFX_ROOT/pause"
+sh d=$(echo "$OFX_ROOT"/rt/gvfs/smb-share:*share=pub); for i in $(seq 12); do (stat -L "$d/stuck$i" > /dev/null 2>&1 &); done
+wait-for 15000 sharesheld=1
+sh touch "$OFX_DIR/new.txt"
+wait-for 3000 n=2
+sh "$OFX_ROOT/unpause"
+sh rm "$OFX_DIR/new.txt"
+wait-for 3000 n=1
 quit
