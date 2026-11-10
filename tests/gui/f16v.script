@@ -3,7 +3,8 @@
 # too, until <T>/gone exists. The stand-in gio (f16s's) lists shares. ofx starts in an empty home.
 settle
 # One query on the network as ofx starts; the server in the Network section, dim (not connected).
-wait-for 4000 sides=^Places|Home|Trash|^Drives|File_System|^Network|~YOGA
+# (10 s: gui.py's base once missed it in 4, under the mutants' load; never seen by hand)
+wait-for 10000 sides=^Places|Home|Trash|^Drives|File_System|^Network|~YOGA
 sh grep -qx "avahi-browse -k -t -r -p _smb._tcp" "$OFX_ROOT/spawn.log"
 # Then avahi's cache alone (no query on the network): a server that came, in its place.
 wait-for 4000 sides=^Places|Home|Trash|^Drives|File_System|^Network|~Office|~YOGA

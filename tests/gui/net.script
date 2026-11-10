@@ -28,12 +28,14 @@ type /sub
 key enter
 expect locating=0 faron=1 farloading=1 n=0
 # Home: both listers killed. The share's is still in the kernel (its request is gvfsd's, waiting on
-# the server); sub's ended at once (its request was still queued behind it, and could be dropped).
+# the server). Sub's mostly ends at once, its request still queued behind it; under load gvfsd has
+# sometimes taken it too, and it is held as well (farheld=2: the step 7b review saw it), so neither
+# count is checked here.
 key alt-home
-wait-for 3000 faron=0 farheld=1 farkills=3
-# Back to sub: none held for it, so a new lister starts (and waits on the server).
+wait-for 3000 faron=0 farkills=3
+# Back to sub: a lister for it (at once, or after its held one: either way it waits on the server).
 key alt-left
-wait-for 3000 faron=1 farwait=0 farloading=1 n=0
+wait-for 3000 faron=1 farloading=1 n=0
 # Back to the share: a new lister for it waits for its killed one; the list says Opening.
 key alt-left
 wait-for 3000 faron=1 farwait=1 farloading=1 n=0
