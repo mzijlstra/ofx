@@ -300,6 +300,12 @@ enum { UI_MODAL_YES = 1, UI_MODAL_NO, UI_MODAL_SKIP, UI_MODAL_REPLACE, UI_MODAL_
 // Connect's question's fields (F16 step 4), in their order.
 enum { UI_LOGIN_USER, UI_LOGIN_DOMAIN, UI_LOGIN_PASS, UI_LOGIN_FIELDS };
 
+// What Connect to Server's question is for (F16 steps 4 and 7c): a share's login (user, domain,
+// password, and Guest), an SFTP server's (user and password: no domain, no guest), or a key's
+// passphrase (that alone). One word, where two flags could contradict (the code-health review's
+// step E).
+typedef enum { UI_LOGIN_SHARE, UI_LOGIN_SSH, UI_LOGIN_KEY } UiLoginKind;
+
 // The menu bar (F7.1, docs/plan.md "F7 design"; Edit, View and Go F7.4): its menus, each a list of
 // entries; UM_SEP is a line between groups.
 typedef enum {
@@ -919,9 +925,7 @@ typedef struct {
     UI_TEXT(256) login_pass;
     int    login_at;
     bool   login_no_user, login_again;
-    // An SFTP server's (F16 step 7c): no domain and no guest; login_key: the password is a key's
-    // passphrase (gio asks for nothing else then).
-    bool   login_ssh, login_key;
+    UiLoginKind login_kind;
 } Ui;
 
 // The question or panel on top: the one that takes the keys and the pointer, and the one gui/
@@ -1062,6 +1066,22 @@ static int ui_utf8(u32 cp, char b[4])
          : cp < 0x800 ? (b[0] = (char)(0xC0 | cp >> 6), b[1] = (char)(0x80 | (cp & 0x3F)), 2)
          : cp < 0x10000 ? (b[0] = (char)(0xE0 | cp >> 12), b[1] = (char)(0x80 | (cp >> 6 & 0x3F)), b[2] = (char)(0x80 | (cp & 0x3F)), 3)
          : (b[0] = (char)(0xF0 | cp >> 18), b[1] = (char)(0x80 | (cp >> 12 & 0x3F)), b[2] = (char)(0x80 | (cp >> 6 & 0x3F)), b[3] = (char)(0x80 | (cp & 0x3F)), 4);
+}
+
+// ---- the picker panels (Open With's, the branches', a server's shares): a filter field over a list
+// of gui/'s names. Each picker's parts are in ui_picker (panels.c); the code-health review's step E
+// (each was wired in about ten places, and the shares' copied the branches' line for line).
+
+// Picker panel p's picker; NULL when p isn't a picker.
+static UiPick *ui_pick_of(Ui *u, UiPanel p)
+{
+    return p == UI_PANEL_OW ? &u->ow : p == UI_PANEL_BRANCHES ? &u->brp : p == UI_PANEL_SHARES ? &u->shp : NULL;
+}
+
+// The picker panel on top, by what is on top; UI_PANEL_NONE when it isn't one.
+static UiPanel ui_picker_on(UiOnTop on)
+{
+    return on == UI_ON_OW ? UI_PANEL_OW : on == UI_ON_BRANCHES ? UI_PANEL_BRANCHES : on == UI_ON_SHARES ? UI_PANEL_SHARES : UI_PANEL_NONE;
 }
 
 // Panel p closed, if it is the one up.

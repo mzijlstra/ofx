@@ -48,7 +48,7 @@ static void ow_open(void)
     arena_reset(&owa);
     ow.n = targets(&owa, ow.paths, CLIP_PATHS_MAX), ow.shown = 0;
     if (ow.n == 0) {
-        ui_ow_close(&app.ui);
+        ui_picker_close(&app.ui, UI_PANEL_OW);
         return;
     }
     if (!app.here_local || far_dir(ow.paths[0]) || !spawn_gio_type(ow.paths[0], ow.type, sizeof ow.type, 1000)) {   // (a far link's target: by its name, F16 step 3b)
@@ -83,7 +83,7 @@ static void ow_open(void)
     // matches" until then (Michael, 2026-10-26).
     UiInput in = ui_input_none();
     in.app_name = ow.names, in.app_n = ow.shown < UI_APPS_MAX ? ow.shown : UI_APPS_MAX;
-    ui_ow_filter(&app.ui, &in);
+    ui_picker_filter(&app.ui, UI_PANEL_OW, &in);
 }
 
 // The app ui/ picked (UA_LAUNCH): made the type's default first when the box was ticked (def);
@@ -261,12 +261,7 @@ static void layout_ow_panel(void)
     Theme *t = &app.theme;
     Ui *u = &app.ui;
     static const char *const SECTION[] = { "Default", "Recommended", "Related", "Other applications" };
-    CLAY(CLAY_ID("ow"), { .layout = { .sizing = { CLAY_SIZING_FIXED(OW_W), CLAY_SIZING_FIT(0) }, .padding = { 24, 24, 20, 20 }, .childGap = 10,
-                                      .layoutDirection = CLAY_TOP_TO_BOTTOM },
-                          .backgroundColor = cc(t->bg_light),
-                          .border = { .color = cc(t->accent), .width = CLAY_BORDER_OUTSIDE(1) },
-                          .floating = { .attachTo = CLAY_ATTACH_TO_ROOT, .zIndex = 20,
-                                        .attachPoints = { CLAY_ATTACH_POINT_CENTER_CENTER, CLAY_ATTACH_POINT_CENTER_CENTER } } }) {
+    CLAY(CLAY_ID("ow"), panel_box(OW_W, 10, app.theme.accent)) {
         CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .childGap = 8 } }) {
             text(cz("Open"), cc(t->fg_dim));
             text(fit(str_from_c(ow.what), OW_W - 260, false), cc(t->fg));

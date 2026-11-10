@@ -26,6 +26,24 @@ static const char *const MODAL_IDS[] = {
     [UI_MODAL_GUEST] = "modal-guest",
 };
 
+// A panel's box, w wide, its rows gap apart: floating over the window's centre, the theme's light
+// background, a one-pixel border in border's colour (the accent; red for a question that destroys).
+// Every question and panel's (the code-health review's step E: written ten times).
+static Clay_Color panel_border;   // the last box's border as drawn (the state line's panelred)
+
+static Clay_ElementDeclaration panel_box(int w, int gap, Rgb border)
+{
+    Theme *t = &app.theme;
+    Clay_ElementDeclaration d = {
+        .layout = { .sizing = { CLAY_SIZING_FIXED(w), CLAY_SIZING_FIT(0) }, .padding = { 24, 24, 20, 20 }, .childGap = (uint16_t)gap,
+                    .layoutDirection = CLAY_TOP_TO_BOTTOM },
+        .backgroundColor = cc(t->bg_light),
+        .border = { .color = cc(border), .width = CLAY_BORDER_OUTSIDE(1) },
+        .floating = { .attachTo = CLAY_ATTACH_TO_ROOT, .zIndex = 20, .attachPoints = { CLAY_ATTACH_POINT_CENTER_CENTER, CLAY_ATTACH_POINT_CENTER_CENTER } } };
+    panel_border = d.border.color;
+    return d;
+}
+
 // A panel's button; the main one (Enter's) filled, in red when it destroys something.
 static void modal_button(int which, const char *label, bool main_one, bool danger)
 {
@@ -71,12 +89,7 @@ static void props_digits(char *buf, size_t cap, i64 n)
 static void layout_modal_panel(UiOnTop k)
 {
     Theme *t = &app.theme;
-    CLAY(CLAY_ID("modal"), { .layout = { .sizing = { CLAY_SIZING_FIXED(480), CLAY_SIZING_FIT(0) }, .padding = { 24, 24, 20, 20 }, .childGap = 10,
-                                         .layoutDirection = CLAY_TOP_TO_BOTTOM },
-                             .backgroundColor = cc(t->bg_light),
-                             .border = { .color = k == UI_ON_DELETE || k == UI_ON_CANCEL || k == UI_ON_QUIT || k == UI_ON_EMPTY || k == UI_ON_CLEAR ? cc(t->red) : cc(t->accent), .width = CLAY_BORDER_OUTSIDE(1) },
-                             .floating = { .attachTo = CLAY_ATTACH_TO_ROOT, .zIndex = 20,
-                                           .attachPoints = { CLAY_ATTACH_POINT_CENTER_CENTER, CLAY_ATTACH_POINT_CENTER_CENTER } } }) {
+    CLAY(CLAY_ID("modal"), panel_box(480, 10, k == UI_ON_DELETE || k == UI_ON_CANCEL || k == UI_ON_QUIT || k == UI_ON_EMPTY || k == UI_ON_CLEAR ? t->red : t->accent)) {
         if (k == UI_ON_FULL || k == UI_ON_QUIT || k == UI_ON_CANCEL) {
             const char *line, *hint;
             if (k == UI_ON_FULL) {
@@ -392,11 +405,7 @@ static const char *props_links(void)
 static void layout_props_panel(void)
 {
     Theme *t = &app.theme;
-    CLAY(CLAY_ID("props"), { .layout = { .sizing = { CLAY_SIZING_FIXED(560), CLAY_SIZING_FIT(0) }, .padding = { 24, 24, 20, 20 }, .childGap = 8,
-                                         .layoutDirection = CLAY_TOP_TO_BOTTOM },
-                             .backgroundColor = cc(t->bg_light), .border = { .color = cc(t->accent), .width = CLAY_BORDER_OUTSIDE(1) },
-                             .floating = { .attachTo = CLAY_ATTACH_TO_ROOT, .zIndex = 20,
-                                           .attachPoints = { CLAY_ATTACH_POINT_CENTER_CENTER, CLAY_ATTACH_POINT_CENTER_CENTER } } }) {
+    CLAY(CLAY_ID("props"), panel_box(560, 8, app.theme.accent)) {
         // The icon (or preview) and the name, or the count of several.
         CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .childGap = 14, .childAlignment = { .y = CLAY_ALIGN_Y_CENTER },
                                    .padding = { 0, 0, 0, 8 } } }) {
@@ -513,22 +522,17 @@ static void layout_login_panel(void)
 {
     Theme *t = &app.theme;
     Ui *u = &app.ui;
-    CLAY(CLAY_ID("login"), { .layout = { .sizing = { CLAY_SIZING_FIXED(480), CLAY_SIZING_FIT(0) }, .padding = { 24, 24, 20, 20 }, .childGap = 10,
-                                         .layoutDirection = CLAY_TOP_TO_BOTTOM },
-                             .backgroundColor = cc(t->bg_light),
-                             .border = { .color = cc(t->accent), .width = CLAY_BORDER_OUTSIDE(1) },
-                             .floating = { .attachTo = CLAY_ATTACH_TO_ROOT, .zIndex = 20,
-                                           .attachPoints = { CLAY_ATTACH_POINT_CENTER_CENTER, CLAY_ATTACH_POINT_CENTER_CENTER } } }) {
+    CLAY(CLAY_ID("login"), panel_box(480, 10, app.theme.accent)) {
         text(fit(str_from_c(arena_sprintf(&frame, "Connect to %s", cn_name())), 430, false), cc(t->fg));
-        if (u->login_key) text(cz("The key's passphrase (no agent holds it)"), cc(t->fg_dim));   // (F16 step 7c)
-        if (u->login_again) text(cz(u->login_key ? "That passphrase was refused: try again" : "That user or password was refused: try again"), cc(t->red));
+        if ((u->login_kind == UI_LOGIN_KEY)) text(cz("The key's passphrase (no agent holds it)"), cc(t->fg_dim));   // (F16 step 7c)
+        if (u->login_again) text(cz((u->login_kind == UI_LOGIN_KEY) ? "That passphrase was refused: try again" : "That user or password was refused: try again"), cc(t->red));
         static const char *const LABEL[UI_LOGIN_FIELDS] = { "User", "Domain", "Password" };
         for (int f = 0; f < UI_LOGIN_FIELDS; f++) {
             if (!ui_login_shown(u, f)) continue;
             UiLine l = ui_login_line(u, f);
             bool on = f == u->login_at;
             CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .childGap = 12, .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } } }) {
-                CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_FIXED(80), CLAY_SIZING_FIT(0) } } }) { text(cz(f == UI_LOGIN_PASS && u->login_key ? "Passphrase" : LABEL[f]), cc(t->fg_dim)); }
+                CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_FIXED(80), CLAY_SIZING_FIT(0) } } }) { text(cz(f == UI_LOGIN_PASS && (u->login_kind == UI_LOGIN_KEY) ? "Passphrase" : LABEL[f]), cc(t->fg_dim)); }
                 CLAY(CLAY_IDI("login-field", f), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(28) }, .padding = { 6, 6, 0, 0 },
                                                                .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
                                                    .backgroundColor = cc(t->bg), .border = { .color = on ? cc(t->accent) : rule_color(), .width = CLAY_BORDER_OUTSIDE(1) },
@@ -540,11 +544,11 @@ static void layout_login_panel(void)
                 }
             }
         }
-        text(cz(u->login_ssh ? "Enter connects \xC2\xB7 Esc cancels" : "Enter connects \xC2\xB7 Alt+G as a guest \xC2\xB7 Esc cancels"), cc(t->fg_dim));
-        text(cz(u->login_key ? "ofx doesn't keep the passphrase." : "ofx doesn't keep the password."), cc(t->fg_dim));
+        text(cz(!ui_login_guest(u) ? "Enter connects \xC2\xB7 Esc cancels" : "Enter connects \xC2\xB7 Alt+G as a guest \xC2\xB7 Esc cancels"), cc(t->fg_dim));
+        text(cz((u->login_kind == UI_LOGIN_KEY) ? "ofx doesn't keep the passphrase." : "ofx doesn't keep the password."), cc(t->fg_dim));
         MODAL_ROW {
             modal_button(UI_MODAL_NO, "Cancel", false, false);
-            if (!u->login_ssh) modal_button(UI_MODAL_GUEST, "Guest", false, false);   // (no guest over ssh, step 7c)
+            if (ui_login_guest(u)) modal_button(UI_MODAL_GUEST, "Guest", false, false);   // (no guest over ssh, step 7c)
             modal_button(UI_MODAL_YES, "Connect", true, false);
         }
     }

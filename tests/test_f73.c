@@ -337,7 +337,7 @@ static void test_ow_keys(void)
     ow_keys(&u, 1, UK_BACKSPACE);
     CHECK(u.ow.m.re_on);
     // Closed with an expression compiled: freed; opened again as it was, the toggle kept.
-    ui_ow_close(&u);
+    ui_picker_close(&u, UI_PANEL_OW);
     CHECK(!u.ow.m.re_on && u.panel != UI_PANEL_OW);
     ui_ow_open(&u);
     ow_keys(&u, 0);
@@ -397,7 +397,7 @@ static void test_ow_keys(void)
     ui_ow_open(&u);
     CHECK(u.ow.filter.len == 0 && u.ow.filter.caret == 0 && u.ow_opts.word && u.ow.list.n == 0 && u.ow.fresh);
     u.ow_opts.word = false;
-    ui_ow_close(&u);
+    ui_picker_close(&u, UI_PANEL_OW);
     // A full field drops what doesn't fit.
     ui_ow_open(&u);
     ow_keys(&u, 0);
@@ -405,7 +405,7 @@ static void test_ow_keys(void)
     CHECK(u.ow.filter.len == UI_FIND_MAX);
     ui_line_key(&u, ui_pick_line(&u.ow), ev_ch(0xE9), STR_EMPTY);
     CHECK(u.ow.filter.len == UI_FIND_MAX);
-    ui_ow_close(&u);
+    ui_picker_close(&u, UI_PANEL_OW);
 }
 
 static void test_ow_mouse(void)
@@ -485,7 +485,7 @@ static void test_ow_mouse(void)
     in = ui_input_none(), in.app_name = OW_APPS, in.app_n = COUNT(OW_APPS), in.menu_title = 0;
     ui_handle(&u, names, &in);
     CHECK(!u.menu_on && u.panel == UI_PANEL_OW);
-    ui_ow_close(&u);
+    ui_picker_close(&u, UI_PANEL_OW);
     ui_matcher_set(&u.find_m, STR_EMPTY, (UiMatchOpts){ 0 });
 }
 

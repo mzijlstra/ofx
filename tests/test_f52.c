@@ -132,7 +132,7 @@ static void test_edit_select(void)
     CHECK(ui_handle(&u, names, &in).kind == UA_NONE);
     in = keys(1, UK_SHIFT_ENTER);
     CHECK(ui_handle(&u, names, &in).kind == UA_OPEN_WITH && u.panel == UI_PANEL_OW);
-    ui_ow_close(&u);
+    ui_picker_close(&u, UI_PANEL_OW);
     in = keys(1, UK_SEL_END);
     ui_handle(&u, names, &in);
     CHECK(u.list.sel == 19);

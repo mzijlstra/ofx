@@ -8,12 +8,9 @@
 static void layout_about_panel(void)
 {
     Theme *t = &app.theme;
-    CLAY(CLAY_ID("about"), { .layout = { .sizing = { CLAY_SIZING_FIXED(420), CLAY_SIZING_FIT(0) }, .padding = { 24, 24, 24, 20 }, .childGap = 8,
-                                         .layoutDirection = CLAY_TOP_TO_BOTTOM, .childAlignment = { .x = CLAY_ALIGN_X_CENTER } },
-                             .backgroundColor = cc(t->bg_light),
-                             .border = { .color = cc(t->accent), .width = CLAY_BORDER_OUTSIDE(1) },
-                             .floating = { .attachTo = CLAY_ATTACH_TO_ROOT, .zIndex = 20,
-                                           .attachPoints = { CLAY_ATTACH_POINT_CENTER_CENTER, CLAY_ATTACH_POINT_CENTER_CENTER } } }) {
+    Clay_ElementDeclaration box = panel_box(420, 8, t->accent);
+    box.layout.padding.top = 24, box.layout.childAlignment.x = CLAY_ALIGN_X_CENTER;   // (its icon and name centred)
+    CLAY(CLAY_ID("about"), box) {
         CLAY_TEXT(CLAY_STRING("OFX"), { .textColor = cc(t->fg), .fontSize = 36, .letterSpacing = 2, .wrapMode = CLAY_TEXT_WRAP_NONE });
         text(cz("Omarchy File Explorer"), cc(t->fg));
         CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_FIT(0), CLAY_SIZING_FIXED(6) } } }) {}
@@ -31,12 +28,7 @@ static void layout_about_panel(void)
 static void layout_bar_panel(void)
 {
     Theme *t = &app.theme;
-    CLAY(CLAY_ID("bar-note"), { .layout = { .sizing = { CLAY_SIZING_FIXED(460), CLAY_SIZING_FIT(0) }, .padding = { 24, 24, 20, 20 }, .childGap = 8,
-                                            .layoutDirection = CLAY_TOP_TO_BOTTOM },
-                                .backgroundColor = cc(t->bg_light),
-                                .border = { .color = cc(t->accent), .width = CLAY_BORDER_OUTSIDE(1) },
-                                .floating = { .attachTo = CLAY_ATTACH_TO_ROOT, .zIndex = 20,
-                                              .attachPoints = { CLAY_ATTACH_POINT_CENTER_CENTER, CLAY_ATTACH_POINT_CENTER_CENTER } } }) {
+    CLAY(CLAY_ID("bar-note"), panel_box(460, 8, app.theme.accent)) {
         text(cz("The menu bar is hidden"), cc(t->fg));
         CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_FIT(0), CLAY_SIZING_FIXED(4) } } }) {}
         const char *k = ui_cmd_key(UK_F10, 0);   // (as bound, F15)

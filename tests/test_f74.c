@@ -280,7 +280,7 @@ static void test_f74_keys(void)
     // In the files: Open With, on the cursor's entry or the marked ones (the panel takes the targets).
     UiAction a = menu_keys(&u, 1, UK_SHIFT_ENTER);
     CHECK(a.kind == UA_OPEN_WITH && u.panel == UI_PANEL_OW);
-    ui_ow_close(&u);
+    ui_picker_close(&u, UI_PANEL_OW);
     // The trash view: Open With doesn't work there, as from the menu.
     u.view = UI_VIEW_TRASH;
     CHECK(menu_keys(&u, 1, UK_SHIFT_ENTER).kind == UA_NOT_IN_TRASH && u.panel != UI_PANEL_OW);

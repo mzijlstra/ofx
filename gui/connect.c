@@ -59,23 +59,13 @@ static const char *cn_name(void)
     return cn.share[0] ? arena_sprintf(&frame, "%s on %s", cn.share, cn.host) : arena_sprintf(&frame, "%s", cn.host);
 }
 
-// A server's shares, from the shares panel (F16 step 7a): the server's address they were read from,
-// its name, the names (gui's copy: the panel's list, and UA_SHARE's index into it), and whether the
-// panel waits for another one to close (a panel opened while it connected stays).
-static struct {
-    char server[PATH_MAX], host[256];
-    int  n;
-    char name[SERVER_SHARES_MAX][SERVER_SHARE_NAME];
-    bool pending;
-} shp;
-_Static_assert((int)SERVER_SHARES_MAX <= (int)UI_SHARES_MAX, "the panel holds every share fs/connect.c reads");
-
-static const Str *shp_names(void)
-{
-    static Str names[SERVER_SHARES_MAX];
-    for (int i = 0; i < shp.n; i++) names[i] = str_from_c(shp.name[i]);
-    return names;
-}
+// A server's shares go to their panel, gui/shares.c (its state lived here before the code-health
+// review's step E): kept from the thread's answer, offered once nothing else is up, dropped when
+// another connection starts; UA_SHARE connects to one.
+static void shares_keep(const char *server, const char *host, const char (*names)[SERVER_SHARE_NAME], int n);
+static int  shares_offer(void);
+static void shares_drop(void);
+static void share_pick(isize i);
 
 static void cn_line(int fd, const char *s)
 {
@@ -297,7 +287,7 @@ static bool connect_start(Str text)
     }
     pthread_mutex_unlock(&cn.mu);
     if (busy) return set_status(true, "Still connecting to %s", cn_name()), true;
-    shp.pending = false;   // (a server's shares not yet shown: another connection replaces them, step 7a review)
+    shares_drop();   // (a server's shares not yet shown: another connection replaces them, step 7a review)
     pthread_t t;
     if (pthread_create(&t, NULL, cn_thread, NULL) != 0) {
         pthread_mutex_lock(&cn.mu);
@@ -351,24 +341,13 @@ static bool connect_take(void)
     CnPhase ph = cn.phase;
     if (ph == CN_ASK && !cn.shown && cn.reply == CN_WAIT) {
         cn.shown = true;
-        if (!cn.again) {   // (asked again: what was typed stays, save the password)
-            ui_line_set(ui_login_line(u, UI_LOGIN_USER), str_from_c(cn.def_user));
-            ui_line_set(ui_login_line(u, UI_LOGIN_DOMAIN), STR_EMPTY);
-        }
-        u->login_no_user = !cn.ask_user, u->login_again = cn.again, u->login_ssh = cn.ssh, u->login_key = cn.key;
-        u->login_at = cn.ask_user && u->login_user.len == 0 ? UI_LOGIN_USER : UI_LOGIN_PASS;
-        u->panel = UI_PANEL_LOGIN;
-        ui_edit_close(u), u->menu_on = false;
+        ui_login_open(u, cn.key ? UI_LOGIN_KEY : cn.ssh ? UI_LOGIN_SSH : UI_LOGIN_SHARE, cn.ask_user, cn.again, str_from_c(cn.def_user));
         pthread_mutex_unlock(&cn.mu);
         return true;
     }
     if (ph != CN_DONE) return pthread_mutex_unlock(&cn.mu), false;
     bool ok = cn.ok, cancelled = cn.cancelled, server = cn.browse, unknown = cn.unknown;
-    if (ok && server) {   // (the shares gui/ keeps: the panel's)
-        snprintf(shp.server, sizeof shp.server, "%s", cn.uri), snprintf(shp.host, sizeof shp.host, "%s", cn.host);
-        shp.n = cn.nshares;
-        memcpy(shp.name, cn.shares, sizeof shp.name);
-    }
+    if (ok && server) shares_keep(cn.uri, cn.host, cn.shares, cn.nshares);   // (the shares gui/ keeps: the panel's)
     char path[PATH_MAX], why[512];
     snprintf(path, sizeof path, "%s", cn.path), snprintf(why, sizeof why, "%s", cn.why);
     cn.phase = CN_IDLE;
@@ -385,35 +364,14 @@ static bool connect_take(void)
     }
     if (!ok) return set_status(true, "Can't connect to %s: %s%s", cn_name(), why[0] ? why : "no reason given", hint), true;
     if (server) {   // (a server's address: its shares to pick from, step 7a)
-        if (shp.n == 0) return set_status(false, "%s lists no shares", cn_name()), true;
-        shp.pending = true;
-        set_status(false, "%d share%s on %s", shp.n, shp.n == 1 ? "" : "s", cn_name());
+        int n = shares_offer();
+        if (n == 0) return set_status(false, "%s lists no shares", cn_name()), true;
+        set_status(false, "%d share%s on %s", n, n == 1 ? "" : "s", cn_name());
         return true;
     }
     watch_gvfs_kick();   // (the share in the sidebar's Network section at once, F16 step 5)
     if (go_to(path, STR_EMPTY, 0)) set_status(false, "Connected to %s", cn_name());
     return true;
-}
-
-// A server's shares panel put up once nothing else is (a panel, a menu or the location line opened
-// while it connected stays theirs). True when it opened.
-static bool shares_show(void)
-{
-    Ui *u = &app.ui;
-    if (!shp.pending || u->panel != UI_PANEL_NONE || u->menu_on || u->focus == UI_FOCUS_EDIT || ui_on_top(u) != UI_ON_NONE) return false;
-    shp.pending = false;
-    ui_shp_open(u);
-    return true;
-}
-
-// A share picked in the panel (UA_SHARE): its address, the server's and its name, connected to as if
-// typed.
-static void share_pick(isize i)
-{
-    char uri[PATH_MAX];
-    if (i < 0 || i >= shp.n) return;
-    if (!server_share_uri(shp.server, shp.name[i], uri, sizeof uri)) return (void)set_status(true, "The address is too long");
-    connect_start(str_from_c(uri));
 }
 
 // At quit: a question unanswered is cancelled as Cancel cancels it (and one gio asks later, too).

@@ -112,12 +112,7 @@ static void layout_bmp_panel(void)
     Theme *t = &app.theme;
     Ui *u = &app.ui;
     UiList *l = &u->bmp_list;
-    CLAY(CLAY_ID("bmp"), { .layout = { .sizing = { CLAY_SIZING_FIXED(BMP_W), CLAY_SIZING_FIT(0) }, .padding = { 24, 24, 20, 20 }, .childGap = 10,
-                                       .layoutDirection = CLAY_TOP_TO_BOTTOM },
-                           .backgroundColor = cc(t->bg_light),
-                           .border = { .color = cc(t->accent), .width = CLAY_BORDER_OUTSIDE(1) },
-                           .floating = { .attachTo = CLAY_ATTACH_TO_ROOT, .zIndex = 20,
-                                         .attachPoints = { CLAY_ATTACH_POINT_CENTER_CENTER, CLAY_ATTACH_POINT_CENTER_CENTER } } }) {
+    CLAY(CLAY_ID("bmp"), panel_box(BMP_W, 10, app.theme.accent)) {
         text(cz("Bookmarks"), cc(t->fg));
         // A row a line of the file: its name, where it goes (dimmer); the cursor's lit; renaming, the
         // name is a field with its caret.

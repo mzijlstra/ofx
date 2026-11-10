@@ -39,12 +39,7 @@ static void layout_keys_panel(void)
     Theme *t = &app.theme;
     Ui *u = &app.ui;
     UiList *l = &u->keys_list;
-    CLAY(CLAY_ID("keys"), { .layout = { .sizing = { CLAY_SIZING_FIXED(KEYS_W), CLAY_SIZING_FIT(0) }, .padding = { 24, 24, 20, 20 }, .childGap = 10,
-                                        .layoutDirection = CLAY_TOP_TO_BOTTOM },
-                            .backgroundColor = cc(t->bg_light),
-                            .border = { .color = cc(t->accent), .width = CLAY_BORDER_OUTSIDE(1) },
-                            .floating = { .attachTo = CLAY_ATTACH_TO_ROOT, .zIndex = 20,
-                                          .attachPoints = { CLAY_ATTACH_POINT_CENTER_CENTER, CLAY_ATTACH_POINT_CENTER_CENTER } } }) {
+    CLAY(CLAY_ID("keys"), panel_box(KEYS_W, 10, app.theme.accent)) {
         CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .childGap = 12, .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } } }) {
             text(cz("Keyboard Shortcuts"), cc(t->fg));
             // The filter: what is typed, a caret; a hint when empty.

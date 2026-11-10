@@ -754,6 +754,32 @@ static void test_gio_why(void)
     CHECK(!gio_local_path(S("local path: /abcdef\n"), small, sizeof small));
 }
 
+// ui_login_open (the code-health review's step E: gui/ set four flags itself, two of which could
+// contradict): the fields by its kind, the user's default unless asked again, the keys' field.
+static void test_login_open(void)
+{
+    Ui u = { 0 };
+    u.focus = UI_FOCUS_EDIT, u.menu_on = true;
+    ui_login_open(&u, UI_LOGIN_SHARE, true, false, S("mz"));
+    CHECK(u.panel == UI_PANEL_LOGIN && u.focus != UI_FOCUS_EDIT && !u.menu_on && ui_login_guest(&u));
+    CHECK(u.login_user.len == 2 && u.login_at == UI_LOGIN_PASS && ui_login_shown(&u, UI_LOGIN_USER) && ui_login_shown(&u, UI_LOGIN_DOMAIN));
+    // Asked again: what was typed stays (the default doesn't come back), "again" said.
+    ui_line_set(ui_login_line(&u, UI_LOGIN_USER), S("other")), ui_line_set(ui_login_line(&u, UI_LOGIN_DOMAIN), S("WG"));
+    ui_login_open(&u, UI_LOGIN_SHARE, true, true, S("mz"));
+    CHECK(u.login_again && u.login_user.len == 5 && u.login_domain.len == 2);
+    // A first ask with no default user: the keys on the user's field; the domain emptied.
+    ui_login_open(&u, UI_LOGIN_SHARE, true, false, STR_EMPTY);
+    CHECK(!u.login_again && u.login_user.len == 0 && u.login_domain.len == 0 && u.login_at == UI_LOGIN_USER);
+    // The address names the user: no field for it, the keys on the password.
+    ui_login_open(&u, UI_LOGIN_SHARE, false, false, STR_EMPTY);
+    CHECK(u.login_no_user && !ui_login_shown(&u, UI_LOGIN_USER) && u.login_at == UI_LOGIN_PASS);
+    // SFTP: no domain, no guest. A key: the passphrase alone, no guest.
+    ui_login_open(&u, UI_LOGIN_SSH, true, false, S("mz"));
+    CHECK(!ui_login_guest(&u) && ui_login_shown(&u, UI_LOGIN_USER) && !ui_login_shown(&u, UI_LOGIN_DOMAIN));
+    ui_login_open(&u, UI_LOGIN_KEY, false, false, STR_EMPTY);
+    CHECK(!ui_login_guest(&u) && !ui_login_shown(&u, UI_LOGIN_USER) && !ui_login_shown(&u, UI_LOGIN_DOMAIN) && u.login_at == UI_LOGIN_PASS);
+}
+
 // Connect's question's keys (step 4): typing goes to the field with the keys; the password is never
 // copied or cut, and is one word; Tab, Down and Up go round the fields (the user's only when gio
 // asks for one); Enter connects, Alt+G as a guest, Esc cancels, each closing the panel.
@@ -807,7 +833,7 @@ static void test_login_keys(void)
     CHECK(ui_login_event(&u, ev_key(UK_ESC), STR_EMPTY).kind == UA_LOGIN_CANCEL && u.panel == UI_PANEL_NONE);
     // An SFTP server's (step 7c): no domain (Tab and Up skip it), no guest (Alt+G, the button); a
     // key's passphrase: the password alone.
-    u.panel = UI_PANEL_LOGIN, u.login_no_user = false, u.login_ssh = true, u.login_at = UI_LOGIN_USER;
+    u.panel = UI_PANEL_LOGIN, u.login_no_user = false, u.login_kind = UI_LOGIN_SSH, u.login_at = UI_LOGIN_USER;
     ui_login_event(&u, ev_key(UK_TAB), STR_EMPTY);
     CHECK(u.login_at == UI_LOGIN_PASS && ui_login_shown(&u, UI_LOGIN_USER) && !ui_login_shown(&u, UI_LOGIN_DOMAIN));
     ui_login_event(&u, ev_key(UK_UP), STR_EMPTY);
@@ -818,10 +844,10 @@ static void test_login_keys(void)
     UiAction ga = { 0 };
     ui_handle_panels(&u, (UiNames){ 0 }, &gin, UI_ON_LOGIN, false, &ga);
     CHECK(ga.kind != UA_LOGIN_GUEST && u.panel == UI_PANEL_LOGIN);
-    u.login_key = true, u.login_at = UI_LOGIN_PASS;
+    u.login_kind = UI_LOGIN_KEY, u.login_at = UI_LOGIN_PASS;
     ui_login_event(&u, ev_key(UK_TAB), STR_EMPTY);
     CHECK(u.login_at == UI_LOGIN_PASS && !ui_login_shown(&u, UI_LOGIN_USER) && !ui_login_shown(&u, UI_LOGIN_DOMAIN) && ui_login_shown(&u, UI_LOGIN_PASS));
-    u.login_ssh = u.login_key = false;
+    u.login_kind = UI_LOGIN_SHARE;
     // By the pointer: a field takes the keys (not the user's when there is none); the buttons answer.
     u.panel = UI_PANEL_LOGIN, u.login_no_user = false;
     UiInput in = ui_input_none();
@@ -833,16 +859,16 @@ static void test_login_keys(void)
     CHECK(u.login_at == UI_LOGIN_PASS);
     // Nor a field an SSH question hasn't (Domain), nor any but the passphrase for a key's (the F16
     // code-health review: the click's own check knew only the user field).
-    u.login_no_user = false, u.login_ssh = true, in.login_field = UI_LOGIN_DOMAIN, u.login_at = UI_LOGIN_PASS;
+    u.login_no_user = false, u.login_kind = UI_LOGIN_SSH, in.login_field = UI_LOGIN_DOMAIN, u.login_at = UI_LOGIN_PASS;
     ui_handle_panels(&u, (UiNames){ 0 }, &in, UI_ON_LOGIN, false, &a);
     CHECK(u.login_at == UI_LOGIN_PASS);
     in.login_field = UI_LOGIN_USER;
     ui_handle_panels(&u, (UiNames){ 0 }, &in, UI_ON_LOGIN, false, &a);
     CHECK(u.login_at == UI_LOGIN_USER);
-    u.login_key = true, u.login_at = UI_LOGIN_PASS;
+    u.login_kind = UI_LOGIN_KEY, u.login_at = UI_LOGIN_PASS;
     ui_handle_panels(&u, (UiNames){ 0 }, &in, UI_ON_LOGIN, false, &a);
     CHECK(u.login_at == UI_LOGIN_PASS);
-    u.login_ssh = u.login_key = false;
+    u.login_kind = UI_LOGIN_SHARE;
     in = ui_input_none(), in.modal = UI_MODAL_GUEST;
     CHECK(ui_handle_panels(&u, (UiNames){ 0 }, &in, UI_ON_LOGIN, false, &a) && a.kind == UA_LOGIN_GUEST && u.panel == UI_PANEL_NONE);
     u.panel = UI_PANEL_LOGIN, in.modal = UI_MODAL_YES;

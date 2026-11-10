@@ -94,15 +94,15 @@ static const struct {
     [UI_FIELD_INSIDE] = { "inside-field", TOGGLE_INSIDE },
 };
 
-// The picker panel on top (Open With's, F7.3; the branches', F12 step 6) and its rows' and field's
-// element ids; NULL for none.
+// The picker panel on top (ui_picker_on: Open With's, the branches', a server's shares) and its rows'
+// and field's element ids, by its layout's own id ("ow", "brp", "shp"); NULL for none.
 static const UiPick *pick_on_top(const char **row_id, const char **field_id)
 {
-    UiOnTop on = modal_kind();
-    if (on == UI_ON_OW) return *row_id = "ow-row", *field_id = "ow-field", &app.ui.ow;
-    if (on == UI_ON_BRANCHES) return *row_id = "brp-row", *field_id = "brp-field", &app.ui.brp;
-    if (on == UI_ON_SHARES) return *row_id = "shp-row", *field_id = "shp-field", &app.ui.shp;   // (a server's shares, F16 step 7a)
-    return *row_id = *field_id = NULL, NULL;
+    static const char *const ROW[UI_PANELS] = { [UI_PANEL_OW] = "ow-row", [UI_PANEL_BRANCHES] = "brp-row", [UI_PANEL_SHARES] = "shp-row" };
+    static const char *const FIELD[UI_PANELS] = { [UI_PANEL_OW] = "ow-field", [UI_PANEL_BRANCHES] = "brp-field", [UI_PANEL_SHARES] = "shp-field" };
+    UiPanel p = ui_picker_on(modal_kind());
+    if (p == UI_PANEL_NONE) return *row_id = *field_id = NULL, NULL;
+    return *row_id = ROW[p], *field_id = FIELD[p], ui_pick_of(&app.ui, p);
 }
 
 // What is under a point of the last frame drawn: a list row, a sidebar row, a column header, a
@@ -406,7 +406,7 @@ static float wheel_left;   // a touchpad's part of a notch, carried to the next 
 static bool wheel_at(UiInput *in, float x, int notches, bool ctrl)
 {
     UiOnTop on = modal_kind();   // (what is on top, not the panel under a question: the F15 code-health review)
-    if (on == UI_ON_OW || on == UI_ON_KEYS || on == UI_ON_BRANCHES || on == UI_ON_SHARES) return in->panel_wheel = notches, false;   // the panel's list (Open With's, F7.3; Keyboard Shortcuts', F7.5; the branches', F12 step 6)
+    if (ui_picker_on(on) != UI_PANEL_NONE || on == UI_ON_KEYS) return in->panel_wheel = notches, false;   // the panel's list (a picker's; Keyboard Shortcuts', F7.5)
     if (on != UI_ON_NONE) return false;   // (a question or another panel: nothing under it scrolls, the group D review)
     if (x >= side_w() && ctrl) in->zoom_wheel = notches;
     else if (x >= side_w()) in->wheel = notches;

@@ -1066,7 +1066,7 @@ MUTANTS += [
 
 
 
-    ('ui/panels.c', '    if (u->ow.list.n == 0) return UI_NONE;\n    isize app', '    isize app'),
+    ('ui/panels.c', '    else if (d == UI_PICK_CHOOSE && k.pick->list.n > 0) {', '    else if (d == UI_PICK_CHOOSE) {'),   # (retargeted, step E)
     ('ui/panels.c', '    case UK_TAB: p->in_list = !p->in_list; return UI_PICK_NONE;', ''),
     ('ui/panels.c', '        if (e.key == UK_UP && l->sel == 0) p->in_list = false;', '        if (0) p->in_list = false;'),
     ('ui/cursor.c', '    case UK_HOME: ui_move(l, -l->n); return true;\n', ''),
@@ -1078,7 +1078,7 @@ MUTANTS += [
     ('ui/panels.c', '    if (!h && e.key == UK_DOWN && l->n > 0) p->in_list = true;', '    if (!h && e.key == UK_DOWN) p->in_list = true;'),
     ('ui/panels.c', '    if (h == UI_LINE_CHANGED) return UI_PICK_FILTER;\n    if (!h', '    if (false) return UI_PICK_FILTER;\n    if (!h'),
     ('ui/menus.c', '    case UM_OPEN_WITH: return ui_ow_open(u);\n', ''),
-    ('ui/handle.c', "    if (u->panel == UI_PANEL_OW && u->ow.fresh && in->app_name) ui_ow_filter(u, in);", ""),
+    ('ui/handle.c', '    if (k.pick && k.pick->fresh && k.names) ui_picker_filter(u, u->panel, in);', ''),   # (retargeted, step E)
     ('ui/panels.c', '    if (in->pick_field) p->in_list = false;', ''),
     ('ui/panels.c', '        if (in->pick_drow >= 0) return UI_PICK_CHOOSE;', ''),
     ('ui/panels.c', '    if (in->modal == UI_MODAL_YES) return UI_PICK_CHOOSE;', ''),
@@ -1137,8 +1137,8 @@ MUTANTS += [
     ('fs/apps.c', '    if (late || strcmp(now, app) != 0) {', '    if (late) {'),
     ('fs/apps.c', '        return err_set(err, "%s", out[0] ? out : "gio didn\'t set it"), false;', '        return err_set(err, "gio didn\'t set it"), false;'),
     ('ui/panels.c', '    if (u->ow_def_can) u->ow_def = !u->ow_def;', '    u->ow_def = !u->ow_def;'),
-    ('ui/panels.c', "    bool def = u->ow_def && u->ow_def_can;", "    bool def = u->ow_def;"),
-    ('ui/panels.c', '    u->panel = UI_PANEL_OW, u->ow_def = false;', '    u->panel = UI_PANEL_OW;'),
+    ('ui/panels.c', '        bool def = p == UI_PANEL_OW && u->ow_def && u->ow_def_can;', '        bool def = p == UI_PANEL_OW && u->ow_def;'),   # (retargeted, step E)
+    ('ui/panels.c', '    u->ow_def = false;\n    ui_picker_open(u, UI_PANEL_OW);', '    ui_picker_open(u, UI_PANEL_OW);'),   # (retargeted, step E)
     ('ui/handle.c', '        if (in->toggle == UI_TOGGLE_ALWAYS) {\n            ui_ow_def_flip(u);', '        if (in->toggle == UI_TOGGLE_ALWAYS) {\n            u->ow_def = !u->ow_def;'),
 ]
 # ---- the find bar (Michael, 2026-10-26)
@@ -1331,7 +1331,7 @@ MUTANTS += [
     ('ui/handle.c', '    case UK_EDIT_BOOKMARKS: return *out = ui_bmp_open(u, 0), true;', ''),
     ('ui/handle.c', '            if (in->bmp_drow >= 0) return *out = (ui_panel_close(u, UI_PANEL_BM), (UiAction){ UA_BM_GO, u->bmp_list.sel, false }), true;', ''),
     ('ui/handle.c', '        if (in->bmp_btn >= 1 && in->bmp_btn <= UI_BMP_BTNS && !u->bmp_naming)', '        if (in->bmp_btn >= 1 && in->bmp_btn <= UI_BMP_BTNS)'),
-    ('ui/handle.c', '        if (in->modal == UI_MODAL_NO) return ui_panel_close(u, UI_PANEL_BM), *out = UI_NONE, true;\n    } else if (on == UI_ON_BRANCHES', '    } else if (on == UI_ON_BRANCHES'),
+    ('ui/handle.c', '        if (in->modal == UI_MODAL_NO) return ui_panel_close(u, UI_PANEL_BM), *out = UI_NONE, true;\n    } else if (on == UI_ON_KEYS', '    } else if (on == UI_ON_KEYS'),   # (retargeted, step E)
     ('ui/cursor.c', 'in->bmp_row >= 0 || in->bmp_drow >= 0 || in->bmp_btn || in->panel_wheel != 0;', 'in->bmp_row >= 0 || in->bmp_drow >= 0 || in->panel_wheel != 0;'),
 ]
 # ---- F7.5: Keyboard Shortcuts
@@ -1649,7 +1649,7 @@ MUTANTS += [
     ('ui/edit.c', "    *l.caret = (int)ui_clamp(*l.caret, 0, *l.len), *l.anchor = (int)ui_clamp(*l.anchor, 0, *l.len);", ""),
     ('ui/edit.c', ': *l.len != was_len || memcmp(was, l.b, (size_t)was_len) != 0 ? UI_LINE_CHANGED', ': *l.len != was_len ? UI_LINE_CHANGED'),   # (retargeted, step 8 A)
     ('ui/edit.c', '!did ? UI_LINE_NOT : *l.len != was_len || memcmp(was, l.b, (size_t)was_len) != 0 ? UI_LINE_CHANGED : UI_LINE_MOVED;', '!did ? UI_LINE_NOT : UI_LINE_CHANGED;'),   # (retargeted, step 8 A)
-    ('ui/edit.c', '    if (on == UI_ON_OW && !u->ow.in_list) l = ui_pick_line(&u->ow);', '    if (on == UI_ON_OW) l = ui_pick_line(&u->ow);'),
+    ('ui/edit.c', '    if (pk && !pk->in_list) l = ui_pick_line(pk);', '    if (pk) l = ui_pick_line(pk);'),   # (retargeted, step E)
     ('ui/edit.c', '    else if (on == UI_ON_BM && u->bmp_naming) l = ui_bmp_line(u);', '    else if (on == UI_ON_BM) l = ui_bmp_line(u);'),
     ('ui/edit.c', '    else if (on == UI_ON_KEYS) l = ui_keys_line(u);\n', ''),
     ('ui/edit.c', '    else if (u->focus == UI_FOCUS_EDIT) l = ui_edit_line(u);', ''),
@@ -2388,11 +2388,11 @@ MUTANTS += [
     ('fs/git.c', '    if (r == BOX_NOT_RUN) snprintf(msg, cap, "%s", why.msg[0] ? why.msg : "git didn\'t run");', '    if (r == BOX_NOT_RUN) snprintf(msg, cap, "git didn\'t run");'),
     # F12 step 6: the branches panel, the full list with times
     ('ui/menus.c', '    if (it == UM_BR_ALL) return ui_brp_open(u);\n', ''),
-    ('ui/panels.c', '    isize k = u->brp_idx[u->brp.list.sel];', '    isize k = u->brp.list.sel;'),
-    ('ui/panels.c', '    else if (d == UI_PICK_CHOOSE && u->brp.list.n > 0) {', '    else if (d == UI_PICK_CHOOSE) {'),
-    ('ui/handle.c', '        if ((d = ui_pick_press(&u->brp, in))) return *out = ui_brp_do(u, d, in), true;', ''),
-    ('ui/handle.c', '        if ((d = ui_pick_press(&u->ow, in))) return *out = ui_ow_do(u, d, in), true;', ''),
-    ('ui/panels.c', '} else if (d == UI_PICK_CLOSE) ui_brp_close(u);', '}'),
+    ('ui/panels.c', '        isize i = k.idx[k.pick->list.sel];', '        isize i = k.pick->list.sel;'),   # (retargeted, step E)
+    # (dropped, step E: the pickers share one path now, whose own mutant is kept)
+    ('ui/handle.c', '        if ((d = ui_pick_press(ui_pick_of(u, pk), in))) return *out = ui_picker_do(u, pk, d, in), true;', ''),   # (retargeted, step E)
+    # (dropped, step E: the pickers share one path now, whose own mutant is kept)
+    ('ui/panels.c', '    } else if (d == UI_PICK_CLOSE) ui_picker_close(u, p);', '    }'),   # (retargeted, step E)
     ('ui/helpers.c', '    else if (d < 14 * 86400) snprintf(out, cap, "%lld %s", (long long)(d / 86400), d / 86400 == 1 ? "day" : "days");', '    else if (d < 14 * 86400) snprintf(out, cap, "%lld days", (long long)(d / 86400));'),
     ('ui/helpers.c', '    if (d < 60) snprintf(out, cap, "now");', '    if (d <= 0) snprintf(out, cap, "now");'),
     ('fs/git.c', '        r->name[r->n] = str_cut(l, sp + 1, l.len), r->when[r->n] = t, r->taken[r->n] = false, r->n++;', '        r->name[r->n] = str_cut(l, sp + 1, l.len), r->when[r->n] = 0, r->taken[r->n] = false, r->n++;'),
@@ -2400,9 +2400,9 @@ MUTANTS += [
     # F12 code-health B (2026-11-03): the pickers shared by Open With and the branches
     ('ui/panels.c', '    case UK_ESC: return UI_PICK_CLOSE;', ''),
     ('ui/panels.c', '    case UK_ENTER: case UK_SHIFT_ENTER: return UI_PICK_CHOOSE;', ''),
-    ('ui/panels.c', '    else if (d == UI_PICK_CLOSE) ui_ow_close(u);', ''),
-    ('ui/panels.c', '    else if (d == UI_PICK_CHOOSE) return ui_ow_launch(u);', ''),
-    ('ui/panels.c', '    if (d == UI_PICK_FILTER) ui_brp_filter(u, in);', '    if (d == UI_PICK_FILTER) {}'),
+    # (dropped, step E: the pickers share one path now, whose own mutant is kept)
+    ('ui/panels.c', '    else if (d == UI_PICK_CHOOSE && k.pick->list.n > 0) {', '    else if (0) {'),   # (retargeted, step E)
+    ('ui/panels.c', '    if (d == UI_PICK_FILTER) ui_picker_filter(u, p, in);', '    if (d == UI_PICK_FILTER) {}'),   # (retargeted, step E)
     ('ui/handle.c', '    ui_picks_fresh(u, in);\n    return a;', '    return a;'),
     # F12 code-health A (2026-11-03): the cut output, long names, more, a panel press acts
     ('fs/git.c', '        if (k < 0 && b->more) snprintf(', '        if (k < 0 && false) snprintf('),
@@ -2876,10 +2876,10 @@ MUTANTS += [
     ('ui/edit.c', '    else if (on == UI_ON_LOGIN) l = ui_login_line(u, u->login_at);', ''),
     ('ui/panels.c', '    while (!ui_login_shown(u, u->login_at));', '    while (0);'), # (retargeted, step 7c)
     ('ui/panels.c', '    case UK_TAB: case UK_DOWN: ui_login_step(u, 1); break;', '    case UK_DOWN: ui_login_step(u, 1); break;'),
-    ('ui/panels.c', "    case UK_MENU: if (e.ch == 'g' && !u->login_ssh) return ui_login_close(u, UA_LOGIN_GUEST); break;", '    case UK_MENU: return ui_login_close(u, UA_LOGIN_GUEST);'), # (retargeted, step 7c)
+    ('ui/panels.c', "    case UK_MENU: if (e.ch == 'g' && ui_login_guest(u)) return ui_login_close(u, UA_LOGIN_GUEST); break;", '    case UK_MENU: return ui_login_close(u, UA_LOGIN_GUEST);'),   # (retargeted, step E)
     ('ui/panels.c', '    ui_panel_close(u, UI_PANEL_LOGIN);\n    return (UiAction){ k, 0, false };', '    return (UiAction){ k, 0, false };'),
     ('ui/handle.c', ' && ui_login_shown(u, in->login_field)) u->login_at = in->login_field;', ') u->login_at = in->login_field;'),   # (retargeted, step 8 A)
-    ('ui/handle.c', '        if (in->modal == UI_MODAL_GUEST && !u->login_ssh) return *out = ui_login_close(u, UA_LOGIN_GUEST), true;', ''), # (retargeted, step 7c)
+    ('ui/handle.c', '        if (in->modal == UI_MODAL_GUEST && ui_login_guest(u)) return *out = ui_login_close(u, UA_LOGIN_GUEST), true;', ''),   # (retargeted, step E)
     ('ui/menus.c', '        u->edit.anchor = u->edit.caret;\n        return UI_NONE;', '        return UI_NONE;'),
     # F16 step 6: nfs:// addresses, an export's name and address
     ('fs/connect.c', '    bool nfs = connect_ieq(str_cut(text, 0, 6), "nfs://"), sftp', '    bool nfs = false, sftp'), # (retargeted, step 7c)
@@ -2910,14 +2910,14 @@ MUTANTS += [
     ('fs/connect.c', "    while (s.len > 0 && s.p[s.len - 1] == '/') s.len--;\n    int n = snprintf(out, cap, \"%.*s/%s\"", "    int n = snprintf(out, cap, \"%.*s/%s\""),
     ('fs/connect.c', '    int n = snprintf(out, cap, "%.*s/%s", STR_ARG(s), share);\n    return n > 0 && (size_t)n < cap;', '    int n = snprintf(out, cap, "%.*s/%s", STR_ARG(s), share);\n    return n > 0;'),
     ('fs/places.c', 'share[0] ? "%s on %s" : "%s%s", share, host)', '"%s on %s", share, host)'),
-    ('ui/panels.c', '    else if (d == UI_PICK_CHOOSE && u->shp.list.n > 0) {', '    else if (d == UI_PICK_CHOOSE) {'),
-    ('ui/panels.c', '        isize k = u->shp_idx[u->shp.list.sel];\n        ui_shp_close(u);', '        isize k = u->shp_idx[u->shp.list.sel];'),
-    ('ui/panels.c', '    } else if (d == UI_PICK_CLOSE) ui_shp_close(u);\n    return UI_NONE;\n}\n\n// ---- Keyboard', '    }\n    return UI_NONE;\n}\n\n// ---- Keyboard'),
-    ('ui/panels.c', '    if (d == UI_PICK_FILTER) ui_shp_filter(u, in);', '    if (d == UI_PICK_FILTER) {}'),
-    ('ui/handle.c', '        if ((d = ui_pick_press(&u->shp, in))) return *out = ui_shp_do(u, d, in), true;', ''),
-    ('ui/handle.c', '    case UI_ON_SHARES: *out = ui_shp_do(u, ui_pick_key(u, &u->shp, e, in), in); return true;\n', ''),
-    ('ui/handle.c', '    if (u->panel == UI_PANEL_SHARES && u->shp.fresh && in->sh_name) ui_shp_filter(u, in);\n', ''),
-    ('ui/edit.c', '    else if (on == UI_ON_SHARES && !u->shp.in_list) l = ui_pick_line(&u->shp);\n', ''),
+    # (dropped, step E: the pickers share one path now, whose own mutant is kept)
+    ('ui/panels.c', '        ui_picker_close(u, p);\n        return (UiAction){ k.chose', '        return (UiAction){ k.chose'),   # (retargeted, step E)
+    # (dropped, step E: the pickers share one path now, whose own mutant is kept)
+    # (dropped, step E: the pickers share one path now, whose own mutant is kept)
+    # (dropped, step E: the pickers share one path now, whose own mutant is kept)
+    ('ui/handle.c', '    case UI_ON_BRANCHES: case UI_ON_SHARES: *out = ui_picker_do(', '    case UI_ON_BRANCHES: *out = ui_picker_do('),   # (retargeted, step E)
+    # (dropped, step E: the pickers share one path now, whose own mutant is kept)
+    ('ui/ui.c', 'on == UI_ON_SHARES ? UI_PANEL_SHARES : UI_PANEL_NONE;', 'UI_PANEL_NONE;'),   # (retargeted, step E)
     # F16 step 7b: servers on the network
     ('fs/connect.c', "        if (f.p[i] != '\\\\' || i + 1 >= f.len) { out[o++] = f.p[i]; continue; }", "        if (f.p[i] != '\\\\') { out[o++] = f.p[i]; continue; }"),
     ('fs/connect.c', "            if (v > 0 && v < 256) out[o++] = (char)v;", "            out[o++] = (char)v;"),
@@ -2961,10 +2961,10 @@ MUTANTS += [
     ('fs/connect.c', '"sftp://%s%s%s%s%s%s", hu ? user : "", hu ? "@" : "", server, hp ? ":" : "", hp ? port : "", esc);', '"sftp://%s%s%s%s", server, hp ? ":" : "", hp ? port : "", esc);'),
     ('fs/connect.c', '        if (!gvfs_key(name, "host", server, sizeof server)) return false;\n        bool hp', '        gvfs_key(name, "host", server, sizeof server);\n        bool hp'),
     ('fs/places.c', '        if (c != CONNECT_OK && c != CONNECT_SERVER) continue;', '        if (c != CONNECT_OK) continue;'),
-    ('ui/panels.c', '    if (u->login_key) return f == UI_LOGIN_PASS;\n', ''),
-    ('ui/panels.c', ' && !(f == UI_LOGIN_DOMAIN && u->login_ssh);', ';'),
-    ('ui/panels.c', "    case UK_MENU: if (e.ch == 'g' && !u->login_ssh) return", "    case UK_MENU: if (e.ch == 'g') return"),
-    ('ui/handle.c', '        if (in->modal == UI_MODAL_GUEST && !u->login_ssh) return', '        if (in->modal == UI_MODAL_GUEST) return'),
+    ('ui/panels.c', '    if (u->login_kind == UI_LOGIN_KEY) return f == UI_LOGIN_PASS;\n', ''),   # (retargeted, step E)
+    ('ui/panels.c', ' && !(f == UI_LOGIN_DOMAIN && u->login_kind == UI_LOGIN_SSH);', ';'),   # (retargeted, step E)
+    ('ui/panels.c', "    case UK_MENU: if (e.ch == 'g' && ui_login_guest(u)) return", "    case UK_MENU: if (e.ch == 'g') return"),   # (retargeted, step E)
+    ('ui/handle.c', '        if (in->modal == UI_MODAL_GUEST && ui_login_guest(u)) return', '        if (in->modal == UI_MODAL_GUEST) return'),   # (retargeted, step E)
     # F16 step 7d: Airplane Mode, and the share poll's back-off
     ('fs/state.c', '        if (str_eq(key, S("airplane"))) s.airplane = str_eq(val, S("on"));\n', ''),
     ('fs/state.c', 's.airplane = str_eq(val, S("on"));', 's.airplane = true;'),
@@ -3013,4 +3013,10 @@ MUTANTS += [
     ('fs/paths.c', '    arena_restore(tmp, m);\n    return ms;', '    return ms;'),
     ('fs/paths.c', '    Mounts ms = mounts_parse(a, read_file(tmp, path));', '    Mounts ms = mounts_parse(a, read_file(a, path));'),
     ('fs/farlist.c', "        if (c + 2 >= line.len || line.p[c + 1] != ' ' ||", "        if (c + 2 >= line.len ||"),
+    # The milestone's code-health cleanup, step E: the pickers' table, ui_login_open
+    ('ui/ui.c', 'p == UI_PANEL_SHARES ? &u->shp : NULL;', 'NULL;'),
+    ('ui/panels.c', '    return u->login_kind == UI_LOGIN_SHARE;', '    return true;'),
+    ('ui/panels.c', '    if (!again) {\n        ui_line_set(ui_login_line(u, UI_LOGIN_USER), def_user);', '    if (1) {\n        ui_line_set(ui_login_line(u, UI_LOGIN_USER), def_user);'),
+    ('ui/panels.c', '    u->login_at = ask_user && kind != UI_LOGIN_KEY && u->login_user.len == 0 ? UI_LOGIN_USER : UI_LOGIN_PASS;', '    u->login_at = UI_LOGIN_USER;'),
+    ('ui/panels.c', '    u->panel = UI_PANEL_LOGIN;\n    ui_edit_close(u), u->menu_on = false;\n}', '    u->panel = UI_PANEL_LOGIN;\n}'),
 ]

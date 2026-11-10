@@ -163,6 +163,8 @@ key space
 expect marked=2 sel=k3
 key shift-delete
 expect confirming=1
+# Its box's border red, as a question that destroys (panel_box, the code-health review's step E).
+expect panelred=1
 wait-for 5000 job=-
 expect marked=2 confirming=1
 key enter

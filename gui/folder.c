@@ -440,7 +440,7 @@ static bool go_to_in(const char *dir, Str select, isize fallback, GoHow how)
     app.cur = next, app.list = l, app.mime = mime, app.have_list = true, app.error[0] = 0, app.lists++;
     if (app.far_on && !on_far) far_drop(), app.far_loading = app.far_waiting = app.far_slow = false, app.far_note[0] = 0;   // (left: its lister killed)
     app.far_on = on_far;
-    if (!same && app.ui.panel == UI_PANEL_BRANCHES) ui_brp_close(&app.ui);   // (its list was the folder left's: 2026-11-03)
+    if (!same && app.ui.panel == UI_PANEL_BRANCHES) ui_picker_close(&app.ui, UI_PANEL_BRANCHES);   // (its list was the folder left's: 2026-11-03)
     if (!same && app.ui.menu_on && app.ui.menu == UI_CTX_BRANCH) app.ui.menu_on = false;
     if (app.ui.view == UI_VIEW_SEARCH && view != UI_VIEW_SEARCH) search_ask((SearchQuery){ .root = "", .skips = &app.conf.skip }), app.search_due = 0;   // (out of it: the walk stops)
     Str root, text = STR_EMPTY, inside = STR_EMPTY;

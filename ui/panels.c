@@ -1,5 +1,6 @@
 // The panels' keys: Properties (F7.2), Open With (F7.3), Keyboard Shortcuts and Edit Bookmarks (F7.5),
-// the branches (F12 step 6); Open With's and the branches' share a picker.
+// the branches (F12 step 6), a server's shares (F16 step 7a), Connect's question (F16 step 4); Open
+// With's, the branches' and the shares' are pickers (ui_picker).
 // Included by ui.c, before menus.c (whose entries open them).
 
 // ---- Properties (F7.2) --------------------------------------------------------------------------
@@ -35,9 +36,9 @@ static UiAction ui_props_event(Ui *u, UiEvent e)
     return UI_NONE;
 }
 
-// ---- a picker: Open With's and the branches' filter field over its list -------------------------
+// ---- a picker: a filter field over its list (Open With's, the branches', a server's shares) -------
 
-// What a picker's key or press asks of its panel (ui_ow_do, ui_brp_do).
+// What a picker's key or press asks of its panel (ui_picker_do).
 typedef enum { UI_PICK_NONE, UI_PICK_FILTER, UI_PICK_CHOOSE, UI_PICK_CLOSE } UiPickDo;
 
 // Opened: the field empty with the keys; gui/ gives the names to filter.
@@ -117,43 +118,74 @@ static UiPickDo ui_pick_press(UiPick *p, const UiInput *in)
     return UI_PICK_NONE;
 }
 
+// A picker panel's parts: its picker, the places its filter shows (in gui/'s list) and their room,
+// the names gui/ gives this frame (none without in), how they match, and what choosing one asks.
+typedef struct {
+    UiPick      *pick;
+    isize       *idx, max;
+    const Str   *names;
+    isize        n;
+    UiMatchOpts  opts;
+    UiActionKind chose;
+} UiPicker;
+
+// Picker panel p's parts (.pick NULL when p isn't one). A new picker is a panel, its fields in Ui,
+// and a line here and in ui_pick_of.
+static UiPicker ui_picker(Ui *u, UiPanel p, const UiInput *in)
+{
+    switch (p) {
+    case UI_PANEL_OW:   // (Open With, F7.3: the apps, by gui/'s toggles; Enter launches)
+        return (UiPicker){ &u->ow, u->ow_idx, UI_APPS_MAX, in ? in->app_name : NULL, in ? in->app_n : 0, u->ow_opts, UA_LAUNCH };
+    case UI_PANEL_BRANCHES:   // (F12 step 6: the branch menu's, case folded; Enter switches)
+        return (UiPicker){ &u->brp, u->brp_idx, UI_BRANCHES_MAX, in ? in->br_name : NULL, in ? in->br_names : 0, { 0 }, UA_BRANCH };
+    case UI_PANEL_SHARES:   // (F16 step 7a: a server's, case folded; Enter connects)
+        return (UiPicker){ &u->shp, u->shp_idx, UI_SHARES_MAX, in ? in->sh_name : NULL, in ? in->sh_names : 0, { 0 }, UA_SHARE };
+    default: return (UiPicker){ 0 };
+    }
+}
+
+// Picker panel p opened: the field empty with the keys; gui/ gives the names.
+static void ui_picker_open(Ui *u, UiPanel p)
+{
+    u->panel = p;
+    ui_pick_open(ui_pick_of(u, p));
+}
+
+static void ui_picker_close(Ui *u, UiPanel p)
+{
+    ui_pick_close(u, p, ui_pick_of(u, p));
+}
+
+// The names the field's text matches, by gui/'s names this frame.
+static void ui_picker_filter(Ui *u, UiPanel p, const UiInput *in)
+{
+    UiPicker k = ui_picker(u, p, in);
+    ui_pick_filter(k.pick, k.opts, k.names, k.n, k.idx, k.max);
+}
+
+// What the picker asked: the list filtered again, the one under the cursor chosen (its place in
+// gui/'s list; Open With's with its "Use as default" box), or the panel closed.
+static UiAction ui_picker_do(Ui *u, UiPanel p, UiPickDo d, const UiInput *in)
+{
+    UiPicker k = ui_picker(u, p, in);
+    if (d == UI_PICK_FILTER) ui_picker_filter(u, p, in);
+    else if (d == UI_PICK_CHOOSE && k.pick->list.n > 0) {
+        isize i = k.idx[k.pick->list.sel];
+        bool def = p == UI_PANEL_OW && u->ow_def && u->ow_def_can;
+        ui_picker_close(u, p);
+        return (UiAction){ k.chose, i, def };
+    } else if (d == UI_PICK_CLOSE) ui_picker_close(u, p);
+    return UI_NONE;
+}
+
 // ---- Open With (F7.3) ------------------------------------------------------------------------
 
 // The panel opened: the field empty with the keys, the toggles as last time; gui/ lists the apps.
 static UiAction ui_ow_open(Ui *u)
 {
-    u->panel = UI_PANEL_OW, u->ow_def = false;
-    ui_pick_open(&u->ow);
+    u->ow_def = false;
+    ui_picker_open(u, UI_PANEL_OW);
     return (UiAction){ UA_OPEN_WITH, 0, false };
-}
-
-static void ui_ow_close(Ui *u)
-{
-    ui_pick_close(u, UI_PANEL_OW, &u->ow);
-}
-
-static void ui_ow_filter(Ui *u, const UiInput *in)
-{
-    ui_pick_filter(&u->ow, u->ow_opts, in->app_name, in->app_n, u->ow_idx, UI_APPS_MAX);
-}
-
-// The app under the cursor launched, when the filter shows any.
-static UiAction ui_ow_launch(Ui *u)
-{
-    if (u->ow.list.n == 0) return UI_NONE;
-    isize app = u->ow_idx[u->ow.list.sel];
-    bool def = u->ow_def && u->ow_def_can;
-    ui_ow_close(u);
-    return (UiAction){ UA_LAUNCH, app, def };
-}
-
-// What the picker asked: the list filtered again, the app launched, or the panel closed.
-static UiAction ui_ow_do(Ui *u, UiPickDo d, const UiInput *in)
-{
-    if (d == UI_PICK_FILTER) ui_ow_filter(u, in);
-    else if (d == UI_PICK_CHOOSE) return ui_ow_launch(u);
-    else if (d == UI_PICK_CLOSE) ui_ow_close(u);
-    return UI_NONE;
 }
 
 // Open With's "Use as default" box flipped, when the type allows one (a key, or the box pressed).
@@ -172,80 +204,27 @@ static UiAction ui_ow_event(Ui *u, UiEvent e, const UiInput *in)
     }
     if (ui_toggle_key(e)) {
         u->ow_opts = ui_toggle(u->ow_opts, ui_toggle_key(e));
-        ui_ow_filter(u, in);
+        ui_picker_filter(u, UI_PANEL_OW, in);
         return UI_NONE;
     }
-    return ui_ow_do(u, ui_pick_key(u, &u->ow, e, in), in);
+    return ui_picker_do(u, UI_PANEL_OW, ui_pick_key(u, &u->ow, e, in), in);
 }
 
-// ---- the branches (F12 step 6) -------------------------------------------------------------------
+// ---- the branches (F12 step 6) and a server's shares (F16 step 7a) -------------------------------
 
-// The panel opened from the branch menu's "All branches…": the field empty with the keys; gui/
-// gives the names.
+// The branches panel opened from the branch menu's "All branches…".
 static UiAction ui_brp_open(Ui *u)
 {
-    u->panel = UI_PANEL_BRANCHES;
-    ui_pick_open(&u->brp);
+    ui_picker_open(u, UI_PANEL_BRANCHES);
     return UI_NONE;
 }
 
-static void ui_brp_close(Ui *u)
-{
-    ui_pick_close(u, UI_PANEL_BRANCHES, &u->brp);
-}
-
-// The branches the field's text is in (case folded: a ticket id typed either way).
-static void ui_brp_filter(Ui *u, const UiInput *in)
-{
-    ui_pick_filter(&u->brp, (UiMatchOpts){ 0 }, in->br_name, in->br_names, u->brp_idx, UI_BRANCHES_MAX);
-}
-
-// What the picker asked: the list filtered again, the branch under the cursor switched to as the
-// menu's entry would (its place in gui/'s list), or the panel closed.
-static UiAction ui_brp_do(Ui *u, UiPickDo d, const UiInput *in)
-{
-    if (d == UI_PICK_FILTER) ui_brp_filter(u, in);
-    else if (d == UI_PICK_CHOOSE && u->brp.list.n > 0) {
-        isize k = u->brp_idx[u->brp.list.sel];
-        ui_brp_close(u);
-        return (UiAction){ UA_BRANCH, k, false };
-    } else if (d == UI_PICK_CLOSE) ui_brp_close(u);
-    return UI_NONE;
-}
-
-// ---- a server's shares (F16 step 7a) -------------------------------------------------------------
-
-// The panel opened by gui/ once Connect to Server has read a server's shares, and no other panel is
-// up: the field empty with the keys; gui/ gives the names.
+// The shares panel opened by gui/ once Connect to Server has read a server's shares, and no other
+// panel is up.
 static void ui_shp_open(Ui *u)
 {
-    u->panel = UI_PANEL_SHARES;
-    ui_pick_open(&u->shp);
+    ui_picker_open(u, UI_PANEL_SHARES);
     ui_edit_close(u), u->menu_on = false;
-}
-
-static void ui_shp_close(Ui *u)
-{
-    ui_pick_close(u, UI_PANEL_SHARES, &u->shp);
-}
-
-// The shares the field's text is in (case folded).
-static void ui_shp_filter(Ui *u, const UiInput *in)
-{
-    ui_pick_filter(&u->shp, (UiMatchOpts){ 0 }, in->sh_name, in->sh_names, u->shp_idx, UI_SHARES_MAX);
-}
-
-// What the picker asked: the list filtered again, the share under the cursor connected to (its
-// place in gui/'s list), or the panel closed.
-static UiAction ui_shp_do(Ui *u, UiPickDo d, const UiInput *in)
-{
-    if (d == UI_PICK_FILTER) ui_shp_filter(u, in);
-    else if (d == UI_PICK_CHOOSE && u->shp.list.n > 0) {
-        isize k = u->shp_idx[u->shp.list.sel];
-        ui_shp_close(u);
-        return (UiAction){ UA_SHARE, k, false };
-    } else if (d == UI_PICK_CLOSE) ui_shp_close(u);
-    return UI_NONE;
 }
 
 // ---- Keyboard Shortcuts (F7.5) -------------------------------------------------------------------
@@ -378,8 +357,30 @@ static UiAction ui_login_close(Ui *u, UiActionKind k)
 // SFTP server, only the password for a key's passphrase (F16 step 7c).
 static bool ui_login_shown(const Ui *u, int f)
 {
-    if (u->login_key) return f == UI_LOGIN_PASS;
-    return !(f == UI_LOGIN_USER && u->login_no_user) && !(f == UI_LOGIN_DOMAIN && u->login_ssh);
+    if (u->login_kind == UI_LOGIN_KEY) return f == UI_LOGIN_PASS;
+    return !(f == UI_LOGIN_USER && u->login_no_user) && !(f == UI_LOGIN_DOMAIN && u->login_kind == UI_LOGIN_SSH);
+}
+
+// Whether the question offers Guest: a share's only (no guest over SSH, step 7c).
+static bool ui_login_guest(const Ui *u)
+{
+    return u->login_kind == UI_LOGIN_SHARE;
+}
+
+// The question put up, for kind: the user's field only when gio asks for one (ask_user), again when
+// the last answer was refused (what was typed then stays, save the password; else the user field
+// starts as def_user, the domain empty). The keys on the user's field when it is shown and empty,
+// else the password's. The edit line and a menu close.
+static void ui_login_open(Ui *u, UiLoginKind kind, bool ask_user, bool again, Str def_user)
+{
+    if (!again) {
+        ui_line_set(ui_login_line(u, UI_LOGIN_USER), def_user);
+        ui_line_set(ui_login_line(u, UI_LOGIN_DOMAIN), STR_EMPTY);
+    }
+    u->login_kind = kind, u->login_no_user = !ask_user, u->login_again = again;
+    u->login_at = ask_user && kind != UI_LOGIN_KEY && u->login_user.len == 0 ? UI_LOGIN_USER : UI_LOGIN_PASS;
+    u->panel = UI_PANEL_LOGIN;
+    ui_edit_close(u), u->menu_on = false;
 }
 
 // The keys to the next field that way (d: 1 or -1), round, over the fields shown.
@@ -399,7 +400,7 @@ static UiAction ui_login_event(Ui *u, UiEvent e, Str paste)
     case UK_UP: ui_login_step(u, -1); break;
     case UK_ENTER: case UK_SHIFT_ENTER: return ui_login_close(u, UA_LOGIN);
     case UK_ESC: return ui_login_close(u, UA_LOGIN_CANCEL);
-    case UK_MENU: if (e.ch == 'g' && !u->login_ssh) return ui_login_close(u, UA_LOGIN_GUEST); break;   // (no guest over ssh)
+    case UK_MENU: if (e.ch == 'g' && ui_login_guest(u)) return ui_login_close(u, UA_LOGIN_GUEST); break;
     default: break;
     }
     return UI_NONE;

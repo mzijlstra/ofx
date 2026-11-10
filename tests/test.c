@@ -1944,7 +1944,7 @@ int main(void)
     if (fast) test_connect_uri();
     if (fast) test_gio_ask();
     if (fast) test_gio_why();
-    if (fast) test_login_keys();
+    if (fast) test_login_keys(), test_login_open();
     if (fast) test_gvfs_label();
     if (fast) test_places_net();
     if (fast) test_gvfs_uri();

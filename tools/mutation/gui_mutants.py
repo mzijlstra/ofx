@@ -255,7 +255,7 @@ MUTANTS = [
     ('gui/main.c', '    if (app.ui.panel == UI_PANEL_OW) in->app_name = ow.names, in->app_n = ow.shown < UI_APPS_MAX ? ow.shown : UI_APPS_MAX;', '', 'f73'),
     ('gui/files.c', '    ui_resize(&app.ui.ow.list, ow_rows(GetScreenHeight()));   // Open With\'s list (F7.3)', '', 'f73'),
     # ---- after Michael's try: listed at once, the apps' icons
-    (OW, '    ui_ow_filter(&app.ui, &in);\n}', '}', 'f73'),
+    ('gui/openwith.c', '    ui_picker_filter(&app.ui, UI_PANEL_OW, &in);\n}', '}', 'f73'),   # (retargeted, step E)
     (OW, '            if (access(f, R_OK) == 0) file = f;', '', 'f73'),
     (OW, '            if ((str_ends_with(icon, S(".png")) || str_ends_with(icon, S(".svg"))) && access(f, R_OK) == 0) file = f;', '', 'f73'),
     (OW, '    return s->tex.id ? s : icon_for(generic, &generic, 1);', '    return s;', 'f73'),
@@ -324,7 +324,7 @@ MUTANTS = [
     # Not run: bmp_change's bm_read refusal (with the file unreadable the panel lists no line to act
     # on) and the empty-format refusals (an over-a-MiB file); test_f75.c covers bm_read and bm_format.
     # ---- F7.5: Keyboard Shortcuts
-    ('gui/input.c', '    if (on == UI_ON_OW || on == UI_ON_KEYS || on == UI_ON_BRANCHES || on == UI_ON_SHARES) return in->panel_wheel = notches, false;', '    if (on == UI_ON_OW || on == UI_ON_BRANCHES || on == UI_ON_SHARES) return in->panel_wheel = notches, false;', 'f75'),   # (retargeted, step 7a)
+    ('gui/input.c', '    if (ui_picker_on(on) != UI_PANEL_NONE || on == UI_ON_KEYS) return', '    if (ui_picker_on(on) != UI_PANEL_NONE) return', 'f75'),   # (retargeted, step E)
     ('gui/files.c', '    ui_resize(&app.ui.keys_list, keys_rows(GetScreenHeight()));   // Keyboard Shortcuts\'', '', 'f75'),
     # Left out: the panel's drawing (pixels); shortcuts.png shows it.
     # ---- Help → About (2026-10-27); its drawing left out (pixels), about.png shows it
@@ -448,8 +448,8 @@ MUTANTS = [
     ('gui/main.c', '    if (app.ui.panel == UI_PANEL_BRANCHES || (app.ui.menu_on && app.ui.menu == UI_CTX_BRANCH)) in->br_name = brp_names(), in->br_names = git.br.n;', '    (void)0;', 'f12h'),
     # (Not the menu's half of that line: a script draws a frame each step, and the next one fills the
     # panel. The bug it caught showed only with no frame to come; test_branch_panel holds ui/'s side.)
-    ('gui/folder.c', '    if (!same && app.ui.panel == UI_PANEL_BRANCHES) ui_brp_close(&app.ui);', '    if (false) ui_brp_close(&app.ui);', 'f12i'),
-    ('gui/input.c', '    if (on == UI_ON_BRANCHES) return *row_id = "brp-row", *field_id = "brp-field", &app.ui.brp;', '    if (false) return *row_id = "brp-row", *field_id = "brp-field", &app.ui.brp;'),
+    ('gui/folder.c', '    if (!same && app.ui.panel == UI_PANEL_BRANCHES) ui_picker_close(&app.ui, UI_PANEL_BRANCHES);', '    if (false) ui_picker_close(&app.ui, UI_PANEL_BRANCHES);', 'f12i'),   # (retargeted, step E)
+    ('gui/input.c', '    if (p == UI_PANEL_NONE) return *row_id = *field_id = NULL, NULL;', '    if (p != UI_PANEL_OW) return *row_id = *field_id = NULL, NULL;'),   # (retargeted, step E)
     # F12 code-health step 5 (J): watch_release, modal_kind
     ('gui/watch.c', '    if (wd > 0 && !watch_fixed(wd) && !watch_is_trash(wd) && wd != atomic_load(&watch.dir_wd)) inotify_rm_watch(watch.fd, wd);', '    if (wd > 0 && !watch_is_trash(wd) && wd != atomic_load(&watch.dir_wd)) inotify_rm_watch(watch.fd, wd);', 'f10'),
     ('gui/watch.c', '    if (wd > 0 && !watch_fixed(wd) && !watch_is_trash(wd) && wd != atomic_load(&watch.dir_wd)) inotify_rm_watch(watch.fd, wd);', '    if (wd > 0 && !watch_fixed(wd) && wd != atomic_load(&watch.dir_wd)) inotify_rm_watch(watch.fd, wd);', 'f6'),
@@ -1113,8 +1113,8 @@ MUTANTS = [
     ('gui/connect.c', '    if (busy) return set_status(true, "Still connecting to %s", cn_name()), true;', '', 'net'),
     ('gui/connect.c', '        cn.reply = k == UA_LOGIN ? CN_ANSWER : k == UA_LOGIN_GUEST ? CN_GUEST : CN_CANCEL;', '        cn.reply = k == UA_LOGIN ? CN_ANSWER : CN_CANCEL;', 'net'),
     ('gui/connect.c', '    pthread_mutex_unlock(&cn.mu);\n    connect_fields_clear();\n    if (k == UA_LOGIN_CANCEL)', '    pthread_mutex_unlock(&cn.mu);\n    if (k == UA_LOGIN_CANCEL)', 'net'),
-    ('gui/connect.c', '        if (!cn.again) {   // (asked again: what was typed stays, save the password)', '        if (1) {', 'net'),
-    ('gui/connect.c', '        u->login_at = cn.ask_user && u->login_user.len == 0 ? UI_LOGIN_USER : UI_LOGIN_PASS;', '        u->login_at = UI_LOGIN_USER;', 'net'),
+    # (dropped, step E: ui_login_open is ui/'s now: its unit mutant)
+    # (dropped, step E: ui_login_open is ui/'s now: its unit mutant)
     ('gui/connect.c', '    if (!ok) return set_status(true, "Can\'t connect to %s: %s%s", cn_name(),', '    if (!ok) return true; if (0) set_status(true, "%s%s%s", cn_name(),', 'net'),
     ('gui/actions.c', '    if (connect_start((Str){ app.ui.edit.b, app.ui.edit.len })) return;   // smb://… (F16 step 4)', '', 'net'),
     ('gui/input.c', '            if (in_box(CLAY_IDI("login-field", f), x, y)) h.login_field = f;', '', 'net'),
@@ -1156,17 +1156,17 @@ MUTANTS = [
     # the scripts' sharesheld= fall back to 0 at once; no script waits for that, and ofx shows nothing
     # for it. The mark when one is held is net's sharesheld=1.)
     # F16 step 7a: a server's shares
-    ('gui/connect.c', ' || u->menu_on || u->focus == UI_FOCUS_EDIT || ui_on_top(u) != UI_ON_NONE) return false;', ' || u->menu_on || ui_on_top(u) != UI_ON_NONE) return false;', 'f16'),
+    ('gui/shares.c', ' || u->menu_on || u->focus == UI_FOCUS_EDIT || ui_on_top(u) != UI_ON_NONE) return false;', ' || u->menu_on || ui_on_top(u) != UI_ON_NONE) return false;', 'f16'),   # (retargeted, step E)
     ('gui/connect.c', '    return cn.browse ? cn_list(why, cap) : cn_folder(path, pcap, why, cap);', '    return cn_folder(path, pcap, why, cap);', 'f16'), # (retargeted, step 7c)
     ('gui/connect.c', '    if (n == 0 && gio_why(str_from_c(out), why, cap)) return false;', '', 'f16'),
-    ('gui/connect.c', '        if (shp.n == 0) return set_status(false, "%s lists no shares", cn_name()), true;', '', 'f16'),
-    ('gui/connect.c', '    if (!server_share_uri(shp.server, shp.name[i], uri, sizeof uri))', '    if (!server_share_uri("smb://nas", shp.name[i], uri, sizeof uri))', 'net'),
+    ('gui/connect.c', '        if (n == 0) return set_status(false, "%s lists no shares", cn_name()), true;', '', 'f16'),   # (retargeted, step E)
+    ('gui/shares.c', '    if (!server_share_uri(shp.server, shp.name[i], uri, sizeof uri))', '    if (!server_share_uri("smb://nas", shp.name[i], uri, sizeof uri))', 'net'),   # (retargeted, step E)
     ('gui/connect.c', '    return cn.share[0] ? arena_sprintf(&frame, "%s on %s", cn.share, cn.host) : arena_sprintf(&frame, "%s", cn.host);', '    return arena_sprintf(&frame, "%s on %s", cn.share, cn.host);', 'f16'),
-    ('gui/connect.c', '        shp.pending = true;\n', '', 'f16'),
+    ('gui/shares.c', '    shp.pending = shp.n > 0;', '    shp.pending = false;', 'f16'),   # (retargeted, step E)
     ('gui/main.c', '    if (app.ui.panel == UI_PANEL_SHARES) in->sh_name = shp_names(), in->sh_names = shp.n;', '', 'f16'),
-    ('gui/input.c', '    if (on == UI_ON_SHARES) return *row_id = "shp-row", *field_id = "shp-field", &app.ui.shp;', '', 'f16'),
+    # (dropped, step E: the picker ids are one table now: #364 covers it)
     ('gui/actions.c', '    case UA_SHARE: share_pick(a.index); break;', '', 'f16'),
-    ('gui/connect.c', '    shp.pending = false;   // (a server', '    // (a server', 'f16'),   # (step 7a review)
+    ('gui/connect.c', '    shares_drop();   // (a server', '    // (a server', 'f16'),   # (retargeted, step E)
     # F16 step 7b: servers on the network
     ('gui/disco.c', '    if (getenv("OFX_GUI_ROOT") && !getenv("OFX_TEST_AVAHI")) return;', '    if (getenv("OFX_GUI_ROOT")) return;', 'f16'),
     ('gui/disco.c', '    for (bool cache = false;; cache = true) {', '    for (bool cache = true;; cache = true) {', 'f16'),
@@ -1181,7 +1181,7 @@ MUTANTS = [
     ('gui/connect.c', '            cn.unknown = true;\n', '', 'net'),
     ('gui/connect.c', '            cn_line(in[1], "2");\n            close(in[1]), in[1] = -1;', '            cn_line(in[1], "1");\n            close(in[1]), in[1] = -1;', 'net'),
     ('gui/connect.c', ', cn.again = rounds > 1, cn.key = k == GIO_ASK_KEY;', ', cn.again = rounds > 1, cn.key = false;', 'net'),
-    ('gui/connect.c', ', u->login_ssh = cn.ssh, u->login_key = cn.key;', ', u->login_ssh = false, u->login_key = cn.key;', 'net'),
+    ('gui/connect.c', 'cn.key ? UI_LOGIN_KEY : cn.ssh ? UI_LOGIN_SSH : UI_LOGIN_SHARE', 'cn.key ? UI_LOGIN_KEY : UI_LOGIN_SHARE', 'net'),   # (retargeted, step E)
     ('gui/connect.c', '    if (!ok && unknown) {   // (the host alone', '    if (false) {   // (the host alone', 'net'),
     ('gui/connect.c', '        return set_status(true, "%s isn\'t a known host: connect once with ssh to check its key, then try again", h ? h + 1 : cn.host), true;', '        return set_status(true, "%s isn\'t a known host: connect once with ssh to check its key, then try again", cn.host), true;', 'net'),
     ('gui/connect.c', '        cn.browse = c == CONNECT_SERVER,', '        cn.browse = false,', 'f16'),
@@ -1224,4 +1224,6 @@ MUTANTS = [
     # The step D review: a new tab on a far folder still loading sets its own way
     ('gui/folder.c', '(how.reload ? app.far_then == FAR_THEN_SHOW : how.then != FAR_THEN_SHOW)', '(how.reload ? app.far_then == FAR_THEN_SHOW : false)', 'f16'),
     ('gui/folder.c', ', (GoHow){ .then = FAR_THEN_UP, .reload = true })) return;', ', (GoHow){ .then = FAR_THEN_UP })) return;', 'f16'),
+    # The milestone's code-health cleanup, step E
+    ('gui/panels.c', '        .border = { .color = cc(border), .width = CLAY_BORDER_OUTSIDE(1) },', '        .border = { .color = cc(t->accent), .width = CLAY_BORDER_OUTSIDE(1) },', 'f5'),
 ]

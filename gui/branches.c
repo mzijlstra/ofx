@@ -26,12 +26,7 @@ static void layout_brp_panel(void)
     Theme *t = &app.theme;
     Ui *u = &app.ui;
     i64 now = (i64)time(NULL);
-    CLAY(CLAY_ID("brp"), { .layout = { .sizing = { CLAY_SIZING_FIXED(BRP_W), CLAY_SIZING_FIT(0) }, .padding = { 24, 24, 20, 20 }, .childGap = 10,
-                                       .layoutDirection = CLAY_TOP_TO_BOTTOM },
-                           .backgroundColor = cc(t->bg_light),
-                           .border = { .color = cc(t->accent), .width = CLAY_BORDER_OUTSIDE(1) },
-                           .floating = { .attachTo = CLAY_ATTACH_TO_ROOT, .zIndex = 20,
-                                         .attachPoints = { CLAY_ATTACH_POINT_CENTER_CENTER, CLAY_ATTACH_POINT_CENTER_CENTER } } }) {
+    CLAY(CLAY_ID("brp"), panel_box(BRP_W, 10, app.theme.accent)) {
         CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .childGap = 8 } }) {
             text(cz("Branches"), cc(t->fg));
             CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) } } }) {}

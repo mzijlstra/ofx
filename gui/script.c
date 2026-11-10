@@ -596,6 +596,7 @@ static void script_state(char *out, size_t cap)
     sw(out, cap, &len, "rows=%d ", app.ui.list.rows);
     sw(out, cap, &len, "hover=%d ", app.hov.row);
     sw(out, cap, &len, "accent=#%02x%02x%02x ", t->accent.r, t->accent.g, t->accent.b);
+    sw(out, cap, &len, "panelred=%d ", memcmp(&panel_border, &(Clay_Color){ 0 }, sizeof panel_border) != 0 && memcmp(&panel_border, (Clay_Color[]){ cc(t->red) }, sizeof panel_border) == 0);   // (the last question's or panel's border: red for one that destroys)
     sw(out, cap, &len, "listacc=#%02x%02x%02x ", app.theme_list.accent.r, app.theme_list.accent.g, app.theme_list.accent.b);
     sw(out, cap, &len, "markedname=%s ", marked_name_drawn.a ? arena_sprintf(&frame, "#%02x%02x%02x", (int)marked_name_drawn.r, (int)marked_name_drawn.g, (int)marked_name_drawn.b) : "-");
     sw(out, cap, &len, "bg=#%02x%02x%02x ", t->bg.r, t->bg.g, t->bg.b);
@@ -764,7 +765,7 @@ static void script_state(char *out, size_t cap)
     sw(out, cap, &len, "conn=%d connasked=%d dumpable=%d ", (int)cn.phase, cn.asked, prctl(PR_GET_DUMPABLE, 0, 0, 0, 0));
     pthread_mutex_unlock(&cn.mu);
     char loginuser[256];
-    sw(out, cap, &len, "loginssh=%d loginkey=%d ", app.ui.login_ssh, app.ui.login_key);   // (F16 step 7c)
+    sw(out, cap, &len, "loginssh=%d loginkey=%d ", app.ui.login_kind != UI_LOGIN_SHARE, app.ui.login_kind == UI_LOGIN_KEY);   // (F16 step 7c)
     sw(out, cap, &len, "login=%d loginat=%d loginagain=%d loginnouser=%d loginuser=%s loginpass=%d ", app.ui.panel == UI_PANEL_LOGIN, app.ui.login_at, app.ui.login_again,
        app.ui.login_no_user, state_word(loginuser, sizeof loginuser, (Str){ app.ui.login_user.b, app.ui.login_user.len }), app.ui.login_pass.len);
     sw(out, cap, &len, "windows=%d ", windows);

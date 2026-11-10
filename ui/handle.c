@@ -125,7 +125,7 @@ static bool ui_find_event(Ui *u, UiNames names, UiEvent e, const UiInput *in)
 static bool ui_handle_panels(Ui *u, UiNames names, const UiInput *in, UiOnTop on, bool prompt, UiAction *out)
 {
     UiPickDo d;
-    // Open With (F7.3): a toggle flips; its picker's press (ui_pick_press).
+    // Open With (F7.3): a toggle flips.
     if (on == UI_ON_OW) {
         if (in->toggle == UI_TOGGLE_ALWAYS) {
             ui_ow_def_flip(u);
@@ -133,10 +133,14 @@ static bool ui_handle_panels(Ui *u, UiNames names, const UiInput *in, UiOnTop on
         }
         if (in->toggle >= 1 && in->toggle <= UI_TOGGLES) {
             u->ow_opts = ui_toggle(u->ow_opts, in->toggle);
-            ui_ow_filter(u, in);
+            ui_picker_filter(u, UI_PANEL_OW, in);
             return *out = UI_NONE, true;
         }
-        if ((d = ui_pick_press(&u->ow, in))) return *out = ui_ow_do(u, d, in), true;
+    }
+    // A picker's press (ui_pick_press: a double click chooses).
+    UiPanel pk = ui_picker_on(on);
+    if (pk != UI_PANEL_NONE) {
+        if ((d = ui_pick_press(ui_pick_of(u, pk), in))) return *out = ui_picker_do(u, pk, d, in), true;
     } else if (on == UI_ON_BM) {
         // Edit Bookmarks (F7.5): a row takes the cursor (a double click goes there), a button acts on
         // it as its key does, Close closes; the rename field takes no press (its own keys only).
@@ -147,12 +151,6 @@ static bool ui_handle_panels(Ui *u, UiNames names, const UiInput *in, UiOnTop on
         }
         if (in->bmp_btn >= 1 && in->bmp_btn <= UI_BMP_BTNS && !u->bmp_naming) return *out = ui_bmp_do(u, in->bmp_btn), true;
         if (in->modal == UI_MODAL_NO) return ui_panel_close(u, UI_PANEL_BM), *out = UI_NONE, true;
-    } else if (on == UI_ON_BRANCHES) {
-        // The branches (F12 step 6): its picker's press (a double click switches).
-        if ((d = ui_pick_press(&u->brp, in))) return *out = ui_brp_do(u, d, in), true;
-    } else if (on == UI_ON_SHARES) {
-        // A server's shares (F16 step 7a): its picker's press (a double click connects).
-        if ((d = ui_pick_press(&u->shp, in))) return *out = ui_shp_do(u, d, in), true;
     } else if (on == UI_ON_KEYS) {
         // Keyboard Shortcuts: Close closes; the wheel scrolls it.
         if (in->modal == UI_MODAL_NO) return ui_keys_close(u), *out = UI_NONE, true;
@@ -161,7 +159,7 @@ static bool ui_handle_panels(Ui *u, UiNames names, const UiInput *in, UiOnTop on
         // Connect's question (F16 step 4): a field takes the keys; Connect, Guest and Cancel answer.
         if (in->login_field >= 0 && in->login_field < UI_LOGIN_FIELDS && ui_login_shown(u, in->login_field)) u->login_at = in->login_field;   // (only a field shown: the F16 code-health review)
         if (in->modal == UI_MODAL_YES) return *out = ui_login_close(u, UA_LOGIN), true;
-        if (in->modal == UI_MODAL_GUEST && !u->login_ssh) return *out = ui_login_close(u, UA_LOGIN_GUEST), true;
+        if (in->modal == UI_MODAL_GUEST && ui_login_guest(u)) return *out = ui_login_close(u, UA_LOGIN_GUEST), true;
         if (in->modal == UI_MODAL_NO) return *out = ui_login_close(u, UA_LOGIN_CANCEL), true;
         if (in->login_field >= 0) return *out = UI_NONE, true;
     } else if (on == UI_ON_ABOUT) {
@@ -536,8 +534,7 @@ static bool ui_panel_key(Ui *u, UiOnTop on, UiEvent e, const UiInput *in, UiActi
     switch (on) {
     case UI_ON_PROPS: *out = ui_props_event(u, e); return true;
     case UI_ON_OW: *out = ui_ow_event(u, e, in); return true;
-    case UI_ON_BRANCHES: *out = ui_brp_do(u, ui_pick_key(u, &u->brp, e, in), in); return true;
-    case UI_ON_SHARES: *out = ui_shp_do(u, ui_pick_key(u, &u->shp, e, in), in); return true;
+    case UI_ON_BRANCHES: case UI_ON_SHARES: *out = ui_picker_do(u, ui_picker_on(on), ui_pick_key(u, ui_pick_of(u, ui_picker_on(on)), e, in), in); return true;
     case UI_ON_BM: *out = ui_bmp_event(u, e, in->paste); return true;
     case UI_ON_KEYS: ui_keys_event(u, e, in->paste); return true;
     case UI_ON_LOGIN: *out = ui_login_event(u, e, in->paste); return true;
@@ -686,9 +683,8 @@ static UiAction ui_handle_frame(Ui *u, UiNames names, const UiInput *in)
 // a frame or more after it opens).
 static void ui_picks_fresh(Ui *u, const UiInput *in)
 {
-    if (u->panel == UI_PANEL_OW && u->ow.fresh && in->app_name) ui_ow_filter(u, in);
-    if (u->panel == UI_PANEL_BRANCHES && u->brp.fresh && in->br_name) ui_brp_filter(u, in);
-    if (u->panel == UI_PANEL_SHARES && u->shp.fresh && in->sh_name) ui_shp_filter(u, in);
+    UiPicker k = ui_picker(u, u->panel, in);
+    if (k.pick && k.pick->fresh && k.names) ui_picker_filter(u, u->panel, in);
 }
 
 // One frame's input. Clicks first, then the events in order up to the first that asks gui/ for
