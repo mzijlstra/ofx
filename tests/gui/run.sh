@@ -591,6 +591,7 @@ if ( NET_LIB="$here/../net/lib.sh"; . "$NET_LIB"
       "$T/giotest" mount -u "nfs://127.0.0.1/srv/nfs" > /dev/null 2>&1
   fi
   exit $fail ); then rm -rf "$base/net-shots"; [ ! -d "$T/shots" ] || cp -r "$T/shots" "$base/net-shots"; rm -rf "$T" "$base/net"   # (its shots kept beside the others)
+elif [ -n "${OFX_GUI_FAIL_FAST:-}" ]; then fail=1; rm -rf "$T" "$base/net"   # (gui.py: a mutant's failure is its kill, read from the log; 52 trees piled up in one run, 2026-11-10)
 else fail=1; echo "== net: its tree kept at $T"
 fi
 fi
