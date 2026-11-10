@@ -18,6 +18,7 @@
 // Included by fs.c.
 
 #include <ctype.h>
+#include <strings.h>
 
 typedef enum { CONNECT_NOT, CONNECT_OK, CONNECT_BAD } ConnectUri;
 
@@ -34,7 +35,8 @@ static bool connect_ieq(Str a, const char *b)
 // path), CONNECT_BAD with why when it is one ofx won't take, else CONNECT_OK with the address
 // (trimmed) in uri, and the server and share in host and share for what ofx says ("priv on
 // 127.0.0.1", as gvfs names it; an NFS path's last name, as gvfs names an export: "nfs" of
-// /srv/nfs). A password in the address is refused: it would be in gio's arguments, which any process
+// /srv/nfs). An SMB server's address alone (smb://nas, smb://nas:445/) leaves share "": Connect
+// lists its shares (step 7a). A password in the address is refused: it would be in gio's arguments, which any process
 // can read.
 static ConnectUri connect_uri(Str text, char *uri, size_t ucap, char *host, size_t hcap, char *share, size_t scap, char *why, size_t wcap)
 {
@@ -74,7 +76,9 @@ static ConnectUri connect_uri(Str text, char *uri, size_t ucap, char *host, size
         isize end = str_find(path, '/');
         sh = end < 0 ? path : str_cut(path, 0, end);
     }
-    if (sh.len == 0) return nfs ? snprintf(why, wcap, "Name a folder on %.*s: nfs://%.*s/folder", STR_ARG(name), STR_ARG(name)) : snprintf(why, wcap, "Name a share on %.*s: smb://%.*s/share", STR_ARG(name), STR_ARG(auth)), CONNECT_BAD;
+    // (smb://server[:port][/] alone: the server, whose shares Connect lists, step 7a; gvfs-nfs lists
+    // no exports)
+    if (sh.len == 0 && (nfs || path.len > 0)) return nfs ? snprintf(why, wcap, "Name a folder on %.*s: nfs://%.*s/folder", STR_ARG(name), STR_ARG(name)) : snprintf(why, wcap, "Name a share on %.*s: smb://%.*s/share", STR_ARG(name), STR_ARG(auth)), CONNECT_BAD;
     if ((size_t)name.len >= hcap || (size_t)sh.len >= scap) return snprintf(why, wcap, "The address is too long"), CONNECT_BAD;
     snprintf(uri, ucap, "%.*s", STR_ARG(text));
     snprintf(host, hcap, "%.*s", STR_ARG(name));
@@ -132,6 +136,56 @@ static bool gio_why(Str err, char *why, size_t cap)
     if (str_starts_with(line, SMB) && line.len > SMB.len) line = str_cut(line, SMB.len, line.len);
     snprintf(why, cap, "%.*s", STR_ARG(line));
     return true;
+}
+
+// ---- a server's shares (F16 step 7a) -----------------------------------------------------------
+//
+// `gio mount smb://server/` mounts gvfs's browse of the server (no FUSE folder: measured, it isn't
+// even in `gio mount -l`), then `gio list -a standard::type smb://server/` names its shares, one a
+// line: "pub\t0\t(mountable)". Each share's target-uri drops the port (smb://127.0.0.1/pub,
+// measured), so ofx makes a share's address from the server's itself.
+
+enum { SERVER_SHARES_MAX = 64, SERVER_SHARE_NAME = 256 };
+
+static int server_share_cmp(const void *a, const void *b)
+{
+    return strcasecmp((const char *)a, (const char *)b);
+}
+
+// The shares in `gio list`'s output out, into names (max at most), sorted as a person reads them
+// (case folded); their count. Only lines of the mountable kind; the hidden ones a Windows server
+// lists ("C$", "IPC$": a name ending in $) and a name with a control character left out.
+static int gio_server_shares(Str out, char (*names)[SERVER_SHARE_NAME], int max)
+{
+    int n = 0;
+    isize at = 0;
+    for (Str line; n < max && next_line(out, &at, &line);) {
+        isize t1 = str_find(line, '\t');
+        if (t1 <= 0) continue;
+        Str name = str_cut(line, 0, t1), rest = str_cut(line, t1 + 1, line.len);
+        isize t2 = str_find(rest, '\t');
+        if (t2 < 0) continue;
+        Str kind = str_cut(rest, t2 + 1, rest.len);
+        isize t3 = str_find(kind, '\t');
+        if (t3 >= 0) kind = str_cut(kind, 0, t3);
+        if (!str_eq(kind, S("(mountable)")) || name.p[name.len - 1] == '$' || (size_t)name.len >= SERVER_SHARE_NAME) continue;
+        bool ctl = false;
+        for (isize i = 0; i < name.len; i++) ctl = ctl || (unsigned char)name.p[i] < 0x20 || name.p[i] == 0x7F;
+        if (ctl) continue;
+        snprintf(names[n++], SERVER_SHARE_NAME, "%.*s", STR_ARG(name));
+    }
+    qsort(names, (size_t)n, SERVER_SHARE_NAME, server_share_cmp);
+    return n;
+}
+
+// The address of a share on the server whose address is server (smb://nas, smb://nas:445/), into
+// out; false when it doesn't fit. The name as it is: Connect takes it as typed (connect_uri).
+static bool server_share_uri(const char *server, const char *share, char *out, size_t cap)
+{
+    Str s = str_from_c(server);
+    while (s.len > 0 && s.p[s.len - 1] == '/') s.len--;
+    int n = snprintf(out, cap, "%.*s/%s", STR_ARG(s), share);
+    return n > 0 && (size_t)n < cap;
 }
 
 // The share's folder from `gio info`'s output into path; false when it names none (a server's

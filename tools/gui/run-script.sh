@@ -69,7 +69,8 @@ done
 real_gio=$(command -v gio)
 # gio mime (Set as default, F7.3.1) logs and runs the real one too: XDG_CONFIG_HOME is <scratch>/config,
 # so it writes the scratch mimeapps.list only.
-# gio mount, and gio info on any address (smb://, nfs://: Connect to Server, F16 steps 4 and 6), log,
+# gio mount, and gio info or gio list on any address (smb://, nfs://: Connect to Server, F16 steps 4,
+# 6 and 7a; `gio list -a …` too), log,
 # and go to OFX_TEST_GIO when the run has one (the net group's: a gio on that run's own gvfs
 # session), else do nothing: never the real gio, which would reach the session's gvfs. (Until
 # 2026-11-10 only smb:// was caught here: netn's first run sent two `gio info nfs://…` to the real
@@ -77,7 +78,7 @@ real_gio=$(command -v gio)
 cat > "$T/fakes/gio" <<EOS
 #!/bin/sh
 case "\$1:\${2:-}" in
-mount:* | info:*://*)
+mount:* | info:*://* | list:*://* | list:-*)
     echo "gio \$*" >> "$T/spawn.log"
     [ -z "\${OFX_TEST_GIO:-}" ] || exec "\$OFX_TEST_GIO" "\$@"
     exit 0 ;;

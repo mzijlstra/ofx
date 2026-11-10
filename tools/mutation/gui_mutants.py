@@ -324,7 +324,7 @@ MUTANTS = [
     # Not run: bmp_change's bm_read refusal (with the file unreadable the panel lists no line to act
     # on) and the empty-format refusals (an over-a-MiB file); test_f75.c covers bm_read and bm_format.
     # ---- F7.5: Keyboard Shortcuts
-    ('gui/input.c', '    if (on == UI_ON_OW || on == UI_ON_KEYS || on == UI_ON_BRANCHES) return in->panel_wheel = notches, false;', '    if (on == UI_ON_OW || on == UI_ON_BRANCHES) return in->panel_wheel = notches, false;', 'f75'),
+    ('gui/input.c', '    if (on == UI_ON_OW || on == UI_ON_KEYS || on == UI_ON_BRANCHES || on == UI_ON_SHARES) return in->panel_wheel = notches, false;', '    if (on == UI_ON_OW || on == UI_ON_BRANCHES || on == UI_ON_SHARES) return in->panel_wheel = notches, false;', 'f75'),   # (retargeted, step 7a)
     ('gui/files.c', '    ui_resize(&app.ui.keys_list, keys_rows(GetScreenHeight()));   // Keyboard Shortcuts\'', '', 'f75'),
     # Left out: the panel's drawing (pixels); shortcuts.png shows it.
     # ---- Help → About (2026-10-27); its drawing left out (pixels), about.png shows it
@@ -1109,7 +1109,7 @@ MUTANTS = [
     ('gui/connect.c', '        if (mounted) {', '        if (0) {', 'net'),
     ('gui/connect.c', ' || strcmp(why, "Location is already mounted") == 0;', ';', 'net'),
     ('gui/connect.c', '    if (!ok && guest && !cancelled && !quit) ok = cn_mount(true,', '    if (0) ok = cn_mount(true,', 'net'),
-    ('gui/connect.c', 'ok = cn_mount(false, why, sizeof why, &cancelled, &guest) && cn_folder(path, sizeof path, why, sizeof why);', 'ok = cn_mount(false, why, sizeof why, &cancelled, &guest) && (cn_folder(path, sizeof path, why, sizeof why) || true);', 'net'),
+    ('gui/connect.c', 'ok = cn_mount(false, why, sizeof why, &cancelled, &guest) && cn_after(path, sizeof path, why, sizeof why);', 'ok = cn_mount(false, why, sizeof why, &cancelled, &guest) && (cn_after(path, sizeof path, why, sizeof why) || true);', 'net'),   # (retargeted, step 7a)
     ('gui/connect.c', '    if (busy) return set_status(true, "Still connecting to %s", cn_name()), true;', '', 'net'),
     ('gui/connect.c', '        cn.reply = k == UA_LOGIN ? CN_ANSWER : k == UA_LOGIN_GUEST ? CN_GUEST : CN_CANCEL;', '        cn.reply = k == UA_LOGIN ? CN_ANSWER : CN_CANCEL;', 'net'),
     ('gui/connect.c', '    pthread_mutex_unlock(&cn.mu);\n    connect_fields_clear();\n    if (k == UA_LOGIN_CANCEL)', '    pthread_mutex_unlock(&cn.mu);\n    if (k == UA_LOGIN_CANCEL)', 'net'),
@@ -1155,4 +1155,15 @@ MUTANTS = [
     # (Dropped, test plumbing only: the frame marked when a held share lister is let go. It only lets
     # the scripts' sharesheld= fall back to 0 at once; no script waits for that, and ofx shows nothing
     # for it. The mark when one is held is net's sharesheld=1.)
+    # F16 step 7a: a server's shares
+    ('gui/connect.c', ' || u->menu_on || u->focus == UI_FOCUS_EDIT || ui_on_top(u) != UI_ON_NONE) return false;', ' || u->menu_on || ui_on_top(u) != UI_ON_NONE) return false;', 'f16'),
+    ('gui/connect.c', '    return cn.share[0] ? cn_folder(path, pcap, why, cap) : cn_list(why, cap);', '    return cn_folder(path, pcap, why, cap);', 'f16'),
+    ('gui/connect.c', '    if (n == 0 && gio_why(str_from_c(out), why, cap)) return false;', '', 'f16'),
+    ('gui/connect.c', '        if (shp.n == 0) return set_status(false, "%s lists no shares", cn_name()), true;', '', 'f16'),
+    ('gui/connect.c', '    if (!server_share_uri(shp.server, shp.name[i], uri, sizeof uri))', '    if (!server_share_uri("smb://nas", shp.name[i], uri, sizeof uri))', 'net'),
+    ('gui/connect.c', '    return cn.share[0] ? arena_sprintf(&frame, "%s on %s", cn.share, cn.host) : arena_sprintf(&frame, "%s", cn.host);', '    return arena_sprintf(&frame, "%s on %s", cn.share, cn.host);', 'f16'),
+    ('gui/connect.c', '        shp.pending = true;\n', '', 'f16'),
+    ('gui/main.c', '    if (app.ui.panel == UI_PANEL_SHARES) in->sh_name = shp_names(), in->sh_names = shp.n;', '', 'f16'),
+    ('gui/input.c', '    if (on == UI_ON_SHARES) return *row_id = "shp-row", *field_id = "shp-field", &app.ui.shp;', '', 'f16'),
+    ('gui/actions.c', '    case UA_SHARE: share_pick(a.index); break;', '', 'f16'),
 ]

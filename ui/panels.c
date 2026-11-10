@@ -213,6 +213,41 @@ static UiAction ui_brp_do(Ui *u, UiPickDo d, const UiInput *in)
     return UI_NONE;
 }
 
+// ---- a server's shares (F16 step 7a) -------------------------------------------------------------
+
+// The panel opened by gui/ once Connect to Server has read a server's shares, and no other panel is
+// up: the field empty with the keys; gui/ gives the names.
+static void ui_shp_open(Ui *u)
+{
+    u->panel = UI_PANEL_SHARES;
+    ui_pick_open(&u->shp);
+    ui_edit_close(u), u->menu_on = false;
+}
+
+static void ui_shp_close(Ui *u)
+{
+    ui_pick_close(u, UI_PANEL_SHARES, &u->shp);
+}
+
+// The shares the field's text is in (case folded).
+static void ui_shp_filter(Ui *u, const UiInput *in)
+{
+    ui_pick_filter(&u->shp, (UiMatchOpts){ 0 }, in->sh_name, in->sh_names, u->shp_idx, UI_SHARES_MAX);
+}
+
+// What the picker asked: the list filtered again, the share under the cursor connected to (its
+// place in gui/'s list), or the panel closed.
+static UiAction ui_shp_do(Ui *u, UiPickDo d, const UiInput *in)
+{
+    if (d == UI_PICK_FILTER) ui_shp_filter(u, in);
+    else if (d == UI_PICK_CHOOSE && u->shp.list.n > 0) {
+        isize k = u->shp_idx[u->shp.list.sel];
+        ui_shp_close(u);
+        return (UiAction){ UA_SHARE, k, false };
+    } else if (d == UI_PICK_CLOSE) ui_shp_close(u);
+    return UI_NONE;
+}
+
 // ---- Keyboard Shortcuts (F7.5) -------------------------------------------------------------------
 
 // The lines for the filter's text: each section's heading and its rows whose action, keys or

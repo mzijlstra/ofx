@@ -150,6 +150,9 @@ static bool ui_handle_panels(Ui *u, UiNames names, const UiInput *in, UiOnTop on
     } else if (on == UI_ON_BRANCHES) {
         // The branches (F12 step 6): its picker's press (a double click switches).
         if ((d = ui_pick_press(&u->brp, in))) return *out = ui_brp_do(u, d, in), true;
+    } else if (on == UI_ON_SHARES) {
+        // A server's shares (F16 step 7a): its picker's press (a double click connects).
+        if ((d = ui_pick_press(&u->shp, in))) return *out = ui_shp_do(u, d, in), true;
     } else if (on == UI_ON_KEYS) {
         // Keyboard Shortcuts: Close closes; the wheel scrolls it.
         if (in->modal == UI_MODAL_NO) return ui_keys_close(u), *out = UI_NONE, true;
@@ -534,6 +537,7 @@ static bool ui_panel_key(Ui *u, UiOnTop on, UiEvent e, const UiInput *in, UiActi
     case UI_ON_PROPS: *out = ui_props_event(u, e); return true;
     case UI_ON_OW: *out = ui_ow_event(u, e, in); return true;
     case UI_ON_BRANCHES: *out = ui_brp_do(u, ui_pick_key(u, &u->brp, e, in), in); return true;
+    case UI_ON_SHARES: *out = ui_shp_do(u, ui_pick_key(u, &u->shp, e, in), in); return true;
     case UI_ON_BM: *out = ui_bmp_event(u, e, in->paste); return true;
     case UI_ON_KEYS: ui_keys_event(u, e, in->paste); return true;
     case UI_ON_LOGIN: *out = ui_login_event(u, e, in->paste); return true;
@@ -685,6 +689,7 @@ static void ui_picks_fresh(Ui *u, const UiInput *in)
 {
     if (u->panel == UI_PANEL_OW && u->ow.fresh && in->app_name) ui_ow_filter(u, in);
     if (u->panel == UI_PANEL_BRANCHES && u->brp.fresh && in->br_name) ui_brp_filter(u, in);
+    if (u->panel == UI_PANEL_SHARES && u->shp.fresh && in->sh_name) ui_shp_filter(u, in);
 }
 
 // One frame's input. Clicks first, then the events in order up to the first that asks gui/ for

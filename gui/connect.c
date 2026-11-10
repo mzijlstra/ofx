@@ -37,7 +37,9 @@ static struct {
     // the answer (the main thread's, then the thread's)
     CnReply reply;
     char    user[256], domain[256], pass[256];
-    // the result (CN_DONE)
+    // the result (CN_DONE); a server's address (share ""): its shares (step 7a)
+    int     nshares;
+    char    shares[SERVER_SHARES_MAX][SERVER_SHARE_NAME];
     bool    ok, cancelled;
     char    path[PATH_MAX], why[512];
     int     pidfd;    // gio's while it runs, -1 none
@@ -46,10 +48,28 @@ static struct {
     int     asked;    // questions put, for the scripts' state line (connasked=)
 } cn = { .mu = PTHREAD_MUTEX_INITIALIZER, .cv = PTHREAD_COND_INITIALIZER, .pidfd = -1 };
 
-// "priv on 127.0.0.1", as gvfs names a share.
+// "priv on 127.0.0.1", as gvfs names a share; a server's address: the server (step 7a).
 static const char *cn_name(void)
 {
-    return arena_sprintf(&frame, "%s on %s", cn.share, cn.host);
+    return cn.share[0] ? arena_sprintf(&frame, "%s on %s", cn.share, cn.host) : arena_sprintf(&frame, "%s", cn.host);
+}
+
+// A server's shares, from the shares panel (F16 step 7a): the server's address they were read from,
+// its name, the names (gui's copy: the panel's list, and UA_SHARE's index into it), and whether the
+// panel waits for another one to close (a panel opened while it connected stays).
+static struct {
+    char server[PATH_MAX], host[256];
+    int  n;
+    char name[SERVER_SHARES_MAX][SERVER_SHARE_NAME];
+    bool pending;
+} shp;
+_Static_assert((int)SERVER_SHARES_MAX <= (int)UI_SHARES_MAX, "the panel holds every share fs/connect.c reads");
+
+static const Str *shp_names(void)
+{
+    static Str names[SERVER_SHARES_MAX];
+    for (int i = 0; i < shp.n; i++) names[i] = str_from_c(shp.name[i]);
+    return names;
 }
 
 static void cn_line(int fd, const char *s)
@@ -198,16 +218,41 @@ static bool cn_folder(char *path, size_t pcap, char *why, size_t cap)
     return true;
 }
 
+// A server's shares, from `gio list` once its browse is mounted (step 7a), into cn.shares; false
+// with why when gio names none and says why (a server that lists none: true, none).
+static bool cn_list(char *why, size_t cap)
+{
+    static char out[65536];
+    bool late;
+    Err e;
+    char *argv[] = { "gio", "list", "-a", "standard::type", cn.uri, NULL };
+    if (!spawn_capture(NULL, argv, out, sizeof out, CONNECT_INFO_MS, &late, &e)) return snprintf(why, cap, "%s", e.msg), false;
+    if (late) return snprintf(why, cap, "gio list gave no answer in %d s", CONNECT_INFO_MS / 1000), false;
+    static char names[SERVER_SHARES_MAX][SERVER_SHARE_NAME];
+    int n = gio_server_shares(str_from_c(out), names, SERVER_SHARES_MAX);
+    if (n == 0 && gio_why(str_from_c(out), why, cap)) return false;
+    pthread_mutex_lock(&cn.mu);
+    memcpy(cn.shares, names, sizeof names), cn.nshares = n;
+    pthread_mutex_unlock(&cn.mu);
+    return true;
+}
+
+// What follows a mount: the share's folder, or a server's shares (its address alone, step 7a).
+static bool cn_after(char *path, size_t pcap, char *why, size_t cap)
+{
+    return cn.share[0] ? cn_folder(path, pcap, why, cap) : cn_list(why, cap);
+}
+
 static void *cn_thread(void *arg)
 {
     (void)arg;
     char why[512] = "", path[PATH_MAX] = "";
-    bool cancelled = false, guest = false, ok = cn_mount(false, why, sizeof why, &cancelled, &guest) && cn_folder(path, sizeof path, why, sizeof why);
+    bool cancelled = false, guest = false, ok = cn_mount(false, why, sizeof why, &cancelled, &guest) && cn_after(path, sizeof path, why, sizeof why);
     // Guest, not mounted by it: gio -a, whose refusal says why ("Anonymous access denied").
     pthread_mutex_lock(&cn.mu);
     bool quit = cn.quit;
     pthread_mutex_unlock(&cn.mu);
-    if (!ok && guest && !cancelled && !quit) ok = cn_mount(true, why, sizeof why, &cancelled, &guest) && cn_folder(path, sizeof path, why, sizeof why);
+    if (!ok && guest && !cancelled && !quit) ok = cn_mount(true, why, sizeof why, &cancelled, &guest) && cn_after(path, sizeof path, why, sizeof why);
     pthread_mutex_lock(&cn.mu);
     cn_wipe();
     prctl(PR_SET_DUMPABLE, 1, 0, 0, 0);   // (every copy of a password wiped: the field as it was answered)
@@ -302,7 +347,12 @@ static bool connect_take(void)
         return true;
     }
     if (ph != CN_DONE) return pthread_mutex_unlock(&cn.mu), false;
-    bool ok = cn.ok, cancelled = cn.cancelled;
+    bool ok = cn.ok, cancelled = cn.cancelled, server = !cn.share[0];
+    if (ok && server) {   // (the shares gui/ keeps: the panel's)
+        snprintf(shp.server, sizeof shp.server, "%s", cn.uri), snprintf(shp.host, sizeof shp.host, "%s", cn.host);
+        shp.n = cn.nshares;
+        memcpy(shp.name, cn.shares, sizeof shp.name);
+    }
     char path[PATH_MAX], why[512];
     snprintf(path, sizeof path, "%s", cn.path), snprintf(why, sizeof why, "%s", cn.why);
     cn.phase = CN_IDLE;
@@ -314,9 +364,36 @@ static bool connect_take(void)
     // server unknown, not answering, or without that path, step 6)
     const char *hint = strcmp(why, "Invalid argument") == 0 ? " (is the server's name right?)" : strcmp(why, "Mount point does not exist") == 0 ? " (are the server's name and the folder right?)" : "";
     if (!ok) return set_status(true, "Can't connect to %s: %s%s", cn_name(), why[0] ? why : "no reason given", hint), true;
+    if (server) {   // (a server's address: its shares to pick from, step 7a)
+        if (shp.n == 0) return set_status(false, "%s lists no shares", cn_name()), true;
+        shp.pending = true;
+        set_status(false, "%d share%s on %s", shp.n, shp.n == 1 ? "" : "s", cn_name());
+        return true;
+    }
     watch_gvfs_kick();   // (the share in the sidebar's Network section at once, F16 step 5)
     if (go_to(path, STR_EMPTY, 0)) set_status(false, "Connected to %s", cn_name());
     return true;
+}
+
+// A server's shares panel put up once nothing else is (a panel, a menu or the location line opened
+// while it connected stays theirs). True when it opened.
+static bool shares_show(void)
+{
+    Ui *u = &app.ui;
+    if (!shp.pending || u->panel != UI_PANEL_NONE || u->menu_on || u->focus == UI_FOCUS_EDIT || ui_on_top(u) != UI_ON_NONE) return false;
+    shp.pending = false;
+    ui_shp_open(u);
+    return true;
+}
+
+// A share picked in the panel (UA_SHARE): its address, the server's and its name, connected to as if
+// typed.
+static void share_pick(isize i)
+{
+    char uri[PATH_MAX];
+    if (i < 0 || i >= shp.n) return;
+    if (!server_share_uri(shp.server, shp.name[i], uri, sizeof uri)) return (void)set_status(true, "The address is too long");
+    connect_start(str_from_c(uri));
 }
 
 // At quit: a question unanswered is cancelled as Cancel cancels it (and one gio asks later, too).

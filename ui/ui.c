@@ -14,7 +14,7 @@
 #include <time.h>
 #include <wctype.h>
 
-enum { UI_EVENTS_MAX = 64, UI_FIND_MAX = 256, UI_HISTORY_MAX = 64, UI_JOB_ROWS = 4, UI_APPS_MAX = 1024, UI_BRANCHES_MAX = 1024 };
+enum { UI_EVENTS_MAX = 64, UI_FIND_MAX = 256, UI_HISTORY_MAX = 64, UI_JOB_ROWS = 4, UI_APPS_MAX = 1024, UI_BRANCHES_MAX = 1024, UI_SHARES_MAX = 64 };
 
 // What a key means (UiEvent.key: the text fields', panels', menus' and questions' own meaning of a
 // key, fixed) and the commands keys are bound to (UiEvent.cmd), in one list: many are both (Enter,
@@ -179,6 +179,9 @@ typedef struct {
     // which the filter matches).
     const Str *br_name;
     isize   br_names;
+    // A server's shares (F16 step 7a), as Connect to Server read them (their names).
+    const Str *sh_name;
+    isize   sh_names;
     // A picker panel's (Open With's or the branches'): a row pressed or double-clicked (its place on
     // screen), the field pressed (-1, false: none); and the wheel's notches over a panel's list
     // (theirs, or Keyboard Shortcuts'), as wheel.
@@ -255,6 +258,7 @@ typedef enum {
     UA_FOLLOW,      // index: the entry, a link: to its target's folder, the target selected (F8)
     UA_TAB_OTHERS,  // every tab but the current one closed (F8)
     UA_BRANCH,      // index: the branch menu's entry picked (F12 step 5b; gui/'s list of them)
+    UA_SHARE,       // index: a share picked in a server's shares panel (F16 step 7a; gui/'s list)
     UA_TAB_REOPEN,  // the tab closed last, open again (F11)
     UA_RESTORE_WINDOWS,  // all: yes, the other windows back; no, forgotten (F11 step 3)
     UA_COLORS,      // the list's colours on or off (Ui.colors): gui/ remembers it
@@ -719,7 +723,7 @@ typedef struct {
 // The panel up, under the questions (ui_on_top): Properties, Open With, Edit Bookmarks, Keyboard
 // Shortcuts, About, the note that the menu bar is hidden, the branches, and Connect's question (F16
 // step 4); UI_PANEL_NONE for none.
-typedef enum { UI_PANEL_NONE, UI_PANEL_PROPS, UI_PANEL_OW, UI_PANEL_BM, UI_PANEL_KEYS, UI_PANEL_ABOUT, UI_PANEL_BAR, UI_PANEL_BRANCHES, UI_PANEL_LOGIN, UI_PANELS } UiPanel;
+typedef enum { UI_PANEL_NONE, UI_PANEL_PROPS, UI_PANEL_OW, UI_PANEL_BM, UI_PANEL_KEYS, UI_PANEL_ABOUT, UI_PANEL_BAR, UI_PANEL_BRANCHES, UI_PANEL_LOGIN, UI_PANEL_SHARES, UI_PANELS } UiPanel;
 
 // Which listing is shown. One value (2026-10-28: in_trash and in_search before, two flags tested
 // apart at about 250 places, which could both be set).
@@ -894,6 +898,10 @@ typedef struct {
     // shows (their places in gui/'s list).
     UiPick brp;
     isize  brp_idx[UI_BRANCHES_MAX];
+    // A server's shares (F16 step 7a, UI_PANEL_SHARES, Michael 2026-11-10: a picker): its picker,
+    // and the shares the filter shows (their places in gui/'s list).
+    UiPick shp;
+    isize  shp_idx[UI_SHARES_MAX];
     // Connect to Server's question (F16 step 4, UI_PANEL_LOGIN, Michael 2026-11-09: asked each time,
     // with a Guest button): its fields, the one with the keys (UI_LOGIN_*), whether gio asks for a
     // user (not when the address names one), and whether it asks again (the last was refused). gui/
@@ -928,6 +936,7 @@ typedef enum {
     UI_ON_BAR,      // panel == UI_PANEL_BAR: the menu bar just hidden
     UI_ON_BRANCHES, // the branches panel (F12 step 6)
     UI_ON_LOGIN,    // Connect to Server's question: user, domain, password (F16 step 4)
+    UI_ON_SHARES,   // a server's shares (F16 step 7a)
     UI_ON_KINDS     // (their count: tests/test_f14.c checks each has an owner for its keys)
 } UiOnTop;
 
@@ -1028,7 +1037,7 @@ static UiOnTop ui_on_top(const Ui *u)
     static const UiOnTop OF_PANEL[] = { [UI_PANEL_NONE] = UI_ON_NONE, [UI_PANEL_PROPS] = UI_ON_PROPS, [UI_PANEL_OW] = UI_ON_OW,
                                          [UI_PANEL_BM] = UI_ON_BM, [UI_PANEL_KEYS] = UI_ON_KEYS, [UI_PANEL_ABOUT] = UI_ON_ABOUT,
                                          [UI_PANEL_BAR] = UI_ON_BAR, [UI_PANEL_BRANCHES] = UI_ON_BRANCHES,
-                                         [UI_PANEL_LOGIN] = UI_ON_LOGIN };
+                                         [UI_PANEL_LOGIN] = UI_ON_LOGIN, [UI_PANEL_SHARES] = UI_ON_SHARES };
     _Static_assert(COUNT(OF_PANEL) == UI_PANELS, "every panel has its UiOnTop: a new one at the end without its entry would read past the table");
     return OF_PANEL[u->panel];
 }

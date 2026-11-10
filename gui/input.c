@@ -101,6 +101,7 @@ static const UiPick *pick_on_top(const char **row_id, const char **field_id)
     UiOnTop on = modal_kind();
     if (on == UI_ON_OW) return *row_id = "ow-row", *field_id = "ow-field", &app.ui.ow;
     if (on == UI_ON_BRANCHES) return *row_id = "brp-row", *field_id = "brp-field", &app.ui.brp;
+    if (on == UI_ON_SHARES) return *row_id = "shp-row", *field_id = "shp-field", &app.ui.shp;   // (a server's shares, F16 step 7a)
     return *row_id = *field_id = NULL, NULL;
 }
 
@@ -404,7 +405,7 @@ static float wheel_left;   // a touchpad's part of a notch, carried to the next 
 static bool wheel_at(UiInput *in, float x, int notches, bool ctrl)
 {
     UiOnTop on = modal_kind();   // (what is on top, not the panel under a question: the F15 code-health review)
-    if (on == UI_ON_OW || on == UI_ON_KEYS || on == UI_ON_BRANCHES) return in->panel_wheel = notches, false;   // the panel's list (Open With's, F7.3; Keyboard Shortcuts', F7.5; the branches', F12 step 6)
+    if (on == UI_ON_OW || on == UI_ON_KEYS || on == UI_ON_BRANCHES || on == UI_ON_SHARES) return in->panel_wheel = notches, false;   // the panel's list (Open With's, F7.3; Keyboard Shortcuts', F7.5; the branches', F12 step 6)
     if (on != UI_ON_NONE) return false;   // (a question or another panel: nothing under it scrolls, the group D review)
     if (x >= side_w() && ctrl) in->zoom_wheel = notches;
     else if (x >= side_w()) in->wheel = notches;

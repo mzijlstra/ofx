@@ -33,6 +33,13 @@ static void test_bookmarks(void)
     CHECK(str_eq(bm.b[5].uri, S("file:///home/m/new%20dir%20%231")) && strcmp(bm.b[5].path, "/home/m/new dir #1") == 0);
     CHECK(!bm_add(a, &bm, "/home/m/new dir #1", &err) && strstr(err.msg, "already") && bm.n == 6);
     CHECK(!bm_add(a, &bm, "/home/m/a b", &err) && bm.n == 6);   // found by path, written with a slash
+    // A share's address (F16 step 5: Add Bookmark in a share), labelled; twice is refused, by its
+    // address; written as GTK writes one.
+    CHECK(bm_add_uri(a, &bm, "smb://nas/pub/sub%20x", S("sub x"), &err) && bm.n == 7 && bm.b[6].path[0] == 0);
+    CHECK(bm_find_uri(&bm, "smb://nas/pub/sub%20x") == 6 && !bm_add_uri(a, &bm, "smb://nas/pub/sub%20x", S("y"), &err) && strstr(err.msg, "already") && bm.n == 7);
+    CHECK(bm_add_uri(a, &bm, "nfs://box/srv", STR_EMPTY, &err) && bm.b[7].label.len == 0);
+    CHECK(str_ends_with(bm_format(a, &bm), S("smb://nas/pub/sub%20x sub x\nnfs://box/srv\n")));
+    bm.n = 6;
     // Full: more lines than BM_MAX; nothing is added.
     char big[BM_MAX * 24];
     size_t o = 0;

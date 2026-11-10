@@ -2822,9 +2822,9 @@ MUTANTS += [
     ('fs/connect.c', '    if (!str_starts_with(name, S("smb-share:")) || !gvfs_key(name, "server"', '    if (!gvfs_key(name, "server"'),
     ('fs/connect.c', 'hd && hu ? domain : "", hd && hu ? ";" : ""', 'hd ? domain : "", hd ? ";" : ""'),
     ('fs/connect.c', '    if (snprintf(path, sizeof path, "/%s%s", share, rest) >= (int)sizeof path || !percent_encode(', '    if (!percent_encode('),
-    ('fs/connect.c', '    return n > 0 && (size_t)n < cap;\n}', '    return n > 0;\n}'),
+    ('fs/connect.c', 'hp ? port : "", esc);\n    return n > 0 && (size_t)n < cap;\n}', 'hp ? port : "", esc);\n    return n > 0;\n}'),   # (retargeted, step 7a)
     ('fs/places.c', "        if (line.len == 0 || line.len >= PATH_MAX || line.p[0] != '/') continue;", '        if (line.len == 0 || line.len >= PATH_MAX) continue;'),
-    ('fs/places.c', '        if (label.len == 0) snprintf(name, sizeof name, "%s on %s", share, host), label = str_from_c(name);', ''),
+    ('fs/places.c', '        if (label.len == 0) snprintf(name, sizeof name, share[0] ? "%s on %s" : "%s%s", share, host), label = str_from_c(name);', ''),   # (retargeted, step 7a)
     ('fs/places.c', '    if (pl->n == head + 1) pl->n = head;   // (nothing in it: no heading)', ''),
     ('fs/places.c', '&& place_is_net(pl->p[i].kind) == place_is_net(kind) && strcmp', '&& strcmp'),
     ('fs/places.c', '    return place_ejectable(p) || p->kind == PL_SHARE;', '    return place_ejectable(p);'),
@@ -2850,7 +2850,7 @@ MUTANTS += [
     ('fs/connect.c', '        bool digits = port.len > 0 && port.len <= 5;', '        bool digits = port.len <= 5;'),
     ('fs/connect.c', "        for (isize i = 0; i < port.len; i++) digits = digits && port.p[i] >= '0' && port.p[i] <= '9';", ''),
     ('fs/connect.c', '    if (name.len == 0) return', '    if (0) return'),
-    ('fs/connect.c', '    if (sh.len == 0) return', '    if (0) return'),
+    ('fs/connect.c', '    if (sh.len == 0 && (nfs || path.len > 0)) return', '    if (0) return'),   # (retargeted, step 7a)
     ('fs/connect.c', '    if ((size_t)name.len >= hcap || (size_t)sh.len >= scap) return', '    if ((size_t)name.len >= hcap) return'),
     ('fs/connect.c', '    if ((size_t)name.len >= hcap || (size_t)sh.len >= scap) return', '    if ((size_t)sh.len >= scap) return'),
     ('fs/connect.c', '        sh = end < 0 ? path : str_cut(path, 0, end);', '        sh = path;'),   # (retargeted, step 6)
@@ -2896,4 +2896,26 @@ MUTANTS += [
     ('fs/connect.c', "        if (pl > 1 && path[pl - 1] == '/') path[--pl] = 0;\n", ''),
     ('fs/connect.c', "pl == 1 && rest[0] == '/' ? rest + 1 : rest)", 'rest)'),
     ('fs/connect.c', '        return n > 0 && (size_t)n < cap;\n    }', '        return n > 0;\n    }'),
+    # F16 step 7a: a server's address, its shares, the panel
+    ('fs/connect.c', '    if (sh.len == 0 && (nfs || path.len > 0)) return', '    if (sh.len == 0) return'),
+    ('fs/connect.c', '    if (sh.len == 0 && (nfs || path.len > 0)) return', '    if (sh.len == 0 && nfs) return'),
+    ('fs/connect.c', '        if (t1 <= 0) continue;', '        if (t1 < 0) continue;'),
+    ('fs/connect.c', '        if (t3 >= 0) kind = str_cut(kind, 0, t3);', ''),
+    ('fs/connect.c', "        if (!str_eq(kind, S(\"(mountable)\")) || name.p[name.len - 1] == '$' ||", "        if (name.p[name.len - 1] == '$' ||"),
+    ('fs/connect.c', "        if (!str_eq(kind, S(\"(mountable)\")) || name.p[name.len - 1] == '$' ||", "        if (!str_eq(kind, S(\"(mountable)\")) ||"),
+    ('fs/connect.c', "        for (isize i = 0; i < name.len; i++) ctl = ctl || (unsigned char)name.p[i] < 0x20 || name.p[i] == 0x7F;", ''),
+    ('fs/connect.c', '    qsort(names, (size_t)n, SERVER_SHARE_NAME, server_share_cmp);', ''),
+    ('fs/connect.c', '    return strcasecmp((const char *)a, (const char *)b);', '    return strcmp((const char *)a, (const char *)b);'),
+    ('fs/connect.c', '    for (Str line; n < max && next_line(out, &at, &line);) {', '    for (Str line; next_line(out, &at, &line);) {'),
+    ('fs/connect.c', "    while (s.len > 0 && s.p[s.len - 1] == '/') s.len--;\n    int n = snprintf(out, cap, \"%.*s/%s\"", "    int n = snprintf(out, cap, \"%.*s/%s\""),
+    ('fs/connect.c', '    int n = snprintf(out, cap, "%.*s/%s", STR_ARG(s), share);\n    return n > 0 && (size_t)n < cap;', '    int n = snprintf(out, cap, "%.*s/%s", STR_ARG(s), share);\n    return n > 0;'),
+    ('fs/places.c', 'share[0] ? "%s on %s" : "%s%s", share, host)', '"%s on %s", share, host)'),
+    ('ui/panels.c', '    else if (d == UI_PICK_CHOOSE && u->shp.list.n > 0) {', '    else if (d == UI_PICK_CHOOSE) {'),
+    ('ui/panels.c', '        isize k = u->shp_idx[u->shp.list.sel];\n        ui_shp_close(u);', '        isize k = u->shp_idx[u->shp.list.sel];'),
+    ('ui/panels.c', '    } else if (d == UI_PICK_CLOSE) ui_shp_close(u);\n    return UI_NONE;\n}\n\n// ---- Keyboard', '    }\n    return UI_NONE;\n}\n\n// ---- Keyboard'),
+    ('ui/panels.c', '    if (d == UI_PICK_FILTER) ui_shp_filter(u, in);', '    if (d == UI_PICK_FILTER) {}'),
+    ('ui/handle.c', '        if ((d = ui_pick_press(&u->shp, in))) return *out = ui_shp_do(u, d, in), true;', ''),
+    ('ui/handle.c', '    case UI_ON_SHARES: *out = ui_shp_do(u, ui_pick_key(u, &u->shp, e, in), in); return true;\n', ''),
+    ('ui/handle.c', '    if (u->panel == UI_PANEL_SHARES && u->shp.fresh && in->sh_name) ui_shp_filter(u, in);\n', ''),
+    ('ui/edit.c', '    else if (on == UI_ON_SHARES && !u->shp.in_list) l = ui_pick_line(&u->shp);\n', ''),
 ]

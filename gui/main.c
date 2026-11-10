@@ -820,6 +820,7 @@ static bool poll_workers(void)
     if (space_take(&app.places, app.cwd, &app.cwd_avail)) dirty = true;
     if (eject_take()) dirty = true;
     if (connect_take()) dirty = true;
+    if (shares_show()) dirty = true;   // (F16 step 7a)
     if (atomic_exchange(&gvfsw.held_moved, false)) dirty = true;   // (a share lister held or let go: F16 step 5)
     if (props.walking && walk_take(&props.sum, &props.done)) dirty = true;
     if (props.walking && app.ui.panel != UI_PANEL_PROPS) walk_ask(NULL, 0), props.walking = false;   // the panel closed: the count stops
@@ -912,6 +913,7 @@ static void input_feed(UiInput *in, bool *seen)
     if (ui_input_acts(in) && ui_tip_act(&app.tip)) *seen = true;   // a click or key: the tooltip goes
     if (app.ui.panel == UI_PANEL_OW) in->app_name = ow.names, in->app_n = ow.shown < UI_APPS_MAX ? ow.shown : UI_APPS_MAX;
     if (app.ui.panel == UI_PANEL_BRANCHES || (app.ui.menu_on && app.ui.menu == UI_CTX_BRANCH)) in->br_name = brp_names(), in->br_names = git.br.n;   // (the menu's too: its All branches opens the panel this frame)
+    if (app.ui.panel == UI_PANEL_SHARES) in->sh_name = shp_names(), in->sh_names = shp.n;   // (a server's shares, F16 step 7a)
 }
 
 int main(int argc, char **argv)

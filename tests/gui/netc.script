@@ -4,9 +4,10 @@
 # only here), priv (user tester, password secret). ofx starts in its home, which holds nas.
 settle
 wait-for 5000 n=1 sel=nas conn=0 login=0
-# An address without a share: said, gio not run.
+# An address with an empty share before a folder: said, gio not run. (The server's address alone
+# lists its shares: nets, step 7a.)
 key ctrl-l
-type smb://127.0.0.1:@PORT@
+type smb://127.0.0.1:@PORT@//x
 key enter
 expect statusbad=1 conn=0 locating=1
 expect a share on 127.0.0.1: smb://127.0.0.1:@PORT@/share

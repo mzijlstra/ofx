@@ -643,8 +643,12 @@ static void test_connect_uri(void)
     CHECK(CU("smb://michael@nas/home") == CONNECT_OK && strcmp(host, "nas") == 0 && strcmp(share, "home") == 0);
     CHECK(CU("smb://dom;michael@nas:445/My Share") == CONNECT_OK && strcmp(host, "nas") == 0 && strcmp(share, "My Share") == 0);
     CHECK(CU("smb://michael:secret@nas/home") == CONNECT_BAD && strstr(why, "No password") && !strstr(why, "secret"));
-    CHECK(CU("smb://nas") == CONNECT_BAD && strstr(why, "Name a share on nas"));
-    CHECK(CU("smb://nas:445/") == CONNECT_BAD && strstr(why, "smb://nas:445/share"));
+    // A server's address alone (step 7a): its shares listed; a share named empty isn't one.
+    CHECK(CU("smb://nas") == CONNECT_OK && strcmp(host, "nas") == 0 && share[0] == 0 && strcmp(uri, "smb://nas") == 0);
+    CHECK(CU("smb://nas:445/") == CONNECT_OK && strcmp(host, "nas") == 0 && share[0] == 0);
+    CHECK(CU("smb://me@nas/") == CONNECT_OK && share[0] == 0);
+    CHECK(CU("smb://nas//x") == CONNECT_BAD && strstr(why, "Name a share on nas"));
+    CHECK(CU("smb://nas:445//") == CONNECT_BAD && strstr(why, "smb://nas:445/share"));
     CHECK(CU("smb:///pub") == CONNECT_BAD && strstr(why, "Name a server"));
     CHECK(CU("smb://u@/pub") == CONNECT_BAD && strstr(why, "Name a server"));
     CHECK(CU("smb://nas:x/pub") == CONNECT_BAD && strstr(why, "Not a port: x"));
@@ -837,12 +841,13 @@ static void test_gvfs_label(void)
 // when there are none; a share's folder isn't a drive, so its space isn't asked.
 static void test_places_net(void)
 {
-    put(at("places/netbm"), "file:///home/m/x\nsmb://nas/pub/sub Music\nsmb://nas/home\nsftp://box/x\nsmb://nas Server\nsmb://u:pw@nas/p\nnfs://box/srv/data\nnfs://box:2049/srv\n");
+    put(at("places/netbm"), "file:///home/m/x\nsmb://nas/pub/sub Music\nsmb://nas/home\nsftp://box/x\nsmb://nas Server\nsmb://u:pw@nas/p\nnfs://box/srv/data\nnfs://box:2049/srv\nsmb://box/\n");
     Places pl = { 0 };
     places_load_net(&ta, &pl, at("places/netbm"), S("/run/u/gvfs/smb-share:server=nas,share=pub\nrel\n\n/run/u/gvfs/sftp:host=box,user=me\n/run/u/gvfs/smb-share:server=nas,share=pub\n"));
     const char *want[][3] = {
         { "", "Network", "h" }, { "/run/u/gvfs/smb-share:server=nas,share=pub", "pub on nas", "s" }, { "/run/u/gvfs/sftp:host=box,user=me", "me@box", "s" },
-        { "smb://nas/pub/sub", "Music", "b" }, { "smb://nas/home", "home on nas", "b" }, { "nfs://box/srv/data", "data on box", "b" },   // (an nfs:// one too, step 6; with a port it isn't one)
+        { "smb://nas/pub/sub", "Music", "b" }, { "smb://nas/home", "home on nas", "b" }, { "smb://nas", "Server", "b" },   // (a server's own, step 7a)
+        { "nfs://box/srv/data", "data on box", "b" }, { "smb://box/", "box", "b" },   // (an nfs:// one too, step 6; with a port it isn't one; a server's without a label: its name)
     };
     CHECK(pl.n == COUNT(want));
     for (int i = 0; i < pl.n && i < COUNT(want); i++) {
@@ -866,6 +871,81 @@ static void test_places_net(void)
 }
 
 // A share's folder's smb:// address (step 5: Add Bookmark there).
+// A server's shares (step 7a): what `gio list` says of them, and a share's address from the
+// server's.
+static void test_server_shares(void)
+{
+    static char n[SERVER_SHARES_MAX][SERVER_SHARE_NAME];
+    // gio list -a standard::type's lines (measured on the test Samba), Windows' hidden ones, a file,
+    // a line without tabs, a name with a control character, and gio's noise
+    Str out = S("pub\t0\t(mountable)\nopen\t0\t(mountable)\nPriv\t0\t(mountable)\nIPC$\t0\t(mountable)\nC$\t0\t(mountable)\n"
+                "a.txt\t12\t(regular)\njunk\nb\x01d\t0\t(mountable)\nMy Docs\t0\t(mountable)\textra=1\n\t0\t(mountable)\n"
+                "invoking IsSupported() failed for remote volume monitor\n");
+    int k = gio_server_shares(out, n, SERVER_SHARES_MAX);
+    CHECK(k == 4 && strcmp(n[0], "My Docs") == 0 && strcmp(n[1], "open") == 0 && strcmp(n[2], "Priv") == 0 && strcmp(n[3], "pub") == 0);   // (sorted, case folded)
+    CHECK(gio_server_shares(S(""), n, SERVER_SHARES_MAX) == 0);
+    CHECK(gio_server_shares(S("gio: smb://h/: The specified location is not mounted\n"), n, SERVER_SHARES_MAX) == 0);
+    CHECK(gio_server_shares(out, n, 2) == 2);   // (no more than max)
+    char u[64];
+    CHECK(server_share_uri("smb://127.0.0.1:4445/", "pub", u, sizeof u) && strcmp(u, "smb://127.0.0.1:4445/pub") == 0);   // (the port kept: gvfs's target-uri drops it)
+    CHECK(server_share_uri("smb://nas", "My Docs", u, sizeof u) && strcmp(u, "smb://nas/My Docs") == 0);
+    CHECK(server_share_uri("smb://me@nas//", "x", u, sizeof u) && strcmp(u, "smb://me@nas/x") == 0);
+    char tiny[12];
+    CHECK(!server_share_uri("smb://nas/", "pub", tiny, sizeof tiny));
+    // and back: Connect takes it as a share's address
+    char uri[64], host[32], share[32], why[64];
+    CHECK(server_share_uri("smb://nas:445/", "My Docs", u, sizeof u) && connect_uri(str_from_c(u), uri, sizeof uri, host, sizeof host, share, sizeof share, why, sizeof why) == CONNECT_OK &&
+          strcmp(host, "nas") == 0 && strcmp(share, "My Docs") == 0);
+}
+
+// The shares panel (step 7a): the branches panel's picker over a server's shares.
+static void test_shares_panel(void)
+{
+    UiNames names = { name_at, NULL, NULL };
+    static const Str SH[] = { { "music", 5 }, { "open", 4 }, { "priv", 4 }, { "pub", 3 } };
+    Ui u = { 0 };
+    u.shp.list.rows = 3;
+    ui_shp_open(&u);
+    CHECK(u.panel == UI_PANEL_SHARES && ui_on_top(&u) == UI_ON_SHARES && u.shp.fresh);
+    UiInput in = ui_input_none();
+    in.sh_name = SH, in.sh_names = COUNT(SH);
+    ui_handle(&u, names, &in);   // (filtered the frame it opens)
+    CHECK(!u.shp.fresh && u.shp.list.n == 4);
+    in = chars("pu"), in.sh_name = SH, in.sh_names = COUNT(SH);
+    ui_handle(&u, names, &in);
+    CHECK(u.shp.list.n == 1 && u.shp_idx[0] == 3);
+    UiLine l;
+    CHECK(ui_line_active(&u, &l) && l.b == u.shp.filter.b);   // (its field has the keys: a Ctrl+V pastes there)
+    in = keys(1, UK_ENTER), in.sh_name = SH, in.sh_names = COUNT(SH);
+    UiAction a = ui_handle(&u, names, &in);
+    CHECK(a.kind == UA_SHARE && a.index == 3 && u.panel == UI_PANEL_NONE);
+    ui_shp_open(&u);
+    in = ui_input_none(), in.sh_name = SH, in.sh_names = COUNT(SH);
+    ui_handle(&u, names, &in);
+    in = keys(2, UK_DOWN, UK_DOWN), in.sh_name = SH, in.sh_names = COUNT(SH);
+    ui_handle(&u, names, &in);
+    CHECK(u.shp.in_list && u.shp.list.sel == 1);
+    in = ui_input_none(), in.sh_name = SH, in.sh_names = COUNT(SH), in.pick_drow = 2;   // (a double click: the row under it)
+    a = ui_handle(&u, names, &in);
+    CHECK(a.kind == UA_SHARE && a.index == 2 && u.panel == UI_PANEL_NONE);
+    ui_shp_open(&u);
+    in = ui_input_none(), in.sh_name = SH, in.sh_names = COUNT(SH), in.modal = UI_MODAL_YES;
+    a = ui_handle(&u, names, &in);
+    CHECK(a.kind == UA_SHARE && a.index == 0);
+    ui_shp_open(&u);
+    in = keys(1, UK_ESC), in.sh_name = SH, in.sh_names = COUNT(SH);
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.panel == UI_PANEL_NONE);
+    ui_shp_open(&u);
+    in = ui_input_none(), in.sh_name = SH, in.sh_names = COUNT(SH), in.modal = UI_MODAL_NO;
+    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.panel == UI_PANEL_NONE);
+    // Nothing matches: Enter does nothing.
+    ui_shp_open(&u);
+    in = chars("zz"), in.sh_name = SH, in.sh_names = COUNT(SH);
+    ui_handle(&u, names, &in);
+    in = keys(1, UK_ENTER), in.sh_name = SH, in.sh_names = COUNT(SH);
+    CHECK(u.shp.list.n == 0 && ui_handle(&u, names, &in).kind == UA_NONE && u.panel == UI_PANEL_SHARES);
+}
+
 static void test_gvfs_uri(void)
 {
     char u[128];

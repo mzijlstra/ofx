@@ -6,7 +6,7 @@
 # printed whole, in order, once all are done; clip, keys and dnd share one (each starts a sway,
 # which takes the first free wayland-N).
 # The groups (one or more scripts on one tree): browse big gone watchgap f2 f3 f4 f5 f52 f53 f54
-# f6 (f6, f6b) usb f62 (f62, f62b, f62c) f63 (f63, f63b, f63c, f63d) f64 (f64, f64b, f64c, f64d) f7 (f7, f7b) f72 f73 (f73, f73b, f73c, f73d) f74 f75 (f75, f75b, f75c) f15 (f15, f15b) f16 (f16, f16b, f16c, f16d, f16e, f16f, f16g, f16h) net (net, netq, netc, netu, netn: the last only with the NFS test server) f8 (f8, f8b, f8c, f8d, f8e) f9 (f9, f9b) f10 (f10, f10b, f10c, f10d) f11 (f11, f11b, f11c, f11d, f11e, f11f, f11g, f11h, f11i, f11j, f11k, f11l, f11m, f11n, f11o, f11p, f11q, f11r, f11s, f11t) f12 (f12, f12b) f12g f12h f12i f13 (f13, f13b, f13c, f13d, f13e, f13f, f13g, f13h) clip (clip, copypath) keys dnd (dnd, dndb, dndc, dndd, dnde, dndf, dndg, dndh, dndi, dndj, dndk) (the three in sway) hang guard3 guard harness (harness, harnessb, harnessc, harnessd). Named ones only, or all of them; a group
+# f6 (f6, f6b) usb f62 (f62, f62b, f62c) f63 (f63, f63b, f63c, f63d) f64 (f64, f64b, f64c, f64d) f7 (f7, f7b) f72 f73 (f73, f73b, f73c, f73d) f74 f75 (f75, f75b, f75c) f15 (f15, f15b) f16 (f16, f16b, f16c, f16d, f16e, f16f, f16g, f16h, f16s) net (net, netq, netc, netu, nets, netn: the last only with the NFS test server) f8 (f8, f8b, f8c, f8d, f8e) f9 (f9, f9b) f10 (f10, f10b, f10c, f10d) f11 (f11, f11b, f11c, f11d, f11e, f11f, f11g, f11h, f11i, f11j, f11k, f11l, f11m, f11n, f11o, f11p, f11q, f11r, f11s, f11t) f12 (f12, f12b) f12g f12h f12i f13 (f13, f13b, f13c, f13d, f13e, f13f, f13g, f13h) clip (clip, copypath) keys dnd (dnd, dndb, dndc, dndd, dnde, dndf, dndg, dndh, dndi, dndj, dndk) (the three in sway) hang guard3 guard harness (harness, harnessb, harnessc, harnessd). Named ones only, or all of them; a group
 # that fails says "== <script>: FAILED" or "<group>: FAILED" (tools/mutation/gui.py reads it).
 set -u
 par=1
@@ -474,6 +474,24 @@ printf 'file://%s/home Mine\nsmb://nas/home Home NAS\nsmb://nas/pub\n' "$T" > "$
 printf '1 0 0:1 / / rw - ext4 /dev/x rw\n2 1 0:2 / %s rw,nosuid,nodev - fuse.gvfsd-fuse gvfsd-fuse rw\n3 1 0:3 / %s rw - ext4 /dev/y rw\n' "$T/gvfs" "$T/other" > "$T/mountinfo"
 RS_HOME=$T/home
 rs f16h OFX_TEST_MOUNTINFO="$T/mountinfo" -- "$T/home"
+# f16s (step 7a): a server's shares through a stand-in gio (no network): its mount waits a second
+# and asks nothing, `gio list` names three shares (one hidden), none on the server "empty", and
+# fails on "bad" saying why; `gio info` names no folder; the bookmarks file has the server's address.
+fresh f16s; mkdir -p "$T/home" "$T/config/gtk-3.0"
+printf 'smb://nas NAS\n' > "$T/config/gtk-3.0/bookmarks"
+cat > "$T/giofake" <<'EOF'
+#!/bin/sh
+case "$1:$*" in
+mount:*) sleep 1 ;;
+list:*smb://empty*) ;;
+list:*smb://bad*) echo "gio: smb://bad/: Permission denied" >&2; exit 1 ;;
+list:*) printf 'pub\t0\t(mountable)\nIPC$\t0\t(mountable)\nMusic\t0\t(mountable)\n' ;;
+esac
+exit 0
+EOF
+chmod +x "$T/giofake"
+RS_HOME=$T/home
+rs f16s OFX_TEST_GIO="$T/giofake" -- "$T/home"
 fi
 if want net; then
 # F16 step 2 on a real share (tests/net/lib.sh: a Samba container, a gvfs of the run's own under <T>/rt,
@@ -528,6 +546,11 @@ if ( NET_LIB="$here/../net/lib.sh"; . "$NET_LIB"
   # (the shares listed every 10 min: only ofx's own unmount and connect show them at once)
   ( export OFX_TEST_HOME="$T/home" OFX_TEST_MOUNTINFO="$T/mountinfo" OFX_TEST_GIO="$T/giotest" OFX_TEST_GVFS_MS=600000
     exec "$here/../../tools/gui/run-script.sh" "$T" "$T/netu.script" "$bin" "$T/home" ) || failed netu
+  # A server's shares (F16 step 7a): its address alone lists them; a pick connects.
+  sed "s/@PORT@/$NET_PORT/g" "$here/nets.script" > "$T/nets.script"
+  echo "== nets"
+  ( export OFX_TEST_HOME="$T/home" OFX_TEST_MOUNTINFO="$T/mountinfo" OFX_TEST_GIO="$T/giotest"
+    exec "$here/../../tools/gui/run-script.sh" "$T" "$T/nets.script" "$bin" "$T/home" ) || failed nets
   # NFS through Connect to Server (F16 step 6), on the NFS test server when it runs (it takes root to
   # start: lib.sh's net_nfs says so, and why it skipped). Its export unmounted after, so a run of the
   # suite leaves the server as it found it.

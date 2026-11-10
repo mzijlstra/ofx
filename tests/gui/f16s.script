@@ -1,0 +1,56 @@
+# F16 step 7a: a server's shares, on a stand-in gio (run.sh's f16s; OFX_TEST_GIO): its mount takes a
+# second and asks nothing, its list names pub, Music and IPC$ (a hidden one). The bookmarks file has
+# the server's own address, as NAS. ofx starts in an empty home.
+settle
+wait-for 4000 n=0 shp=0 sides=^Places|Home|Trash|^Drives|File_System|^Network|~NAS
+# The server's address alone: connected, then its shares. The location line opened meanwhile keeps
+# the keys; the panel comes up once it closes.
+key ctrl-l
+type smb://nas/
+key enter
+expect conn=1 statusbad=0
+key ctrl-l
+wait-for 4000 conn=0 shppending=1 shp=0 editing=1
+key esc
+wait-for 2000 shp=1 shppending=0 modal=shares shpn=2 shps=Music|pub shpsel=Music
+shot f16s-shares.png
+# A press on a row takes the cursor; filtered; Enter connects to the share by its address (the
+# server's, its name: the port kept).
+point-ui shp-row 1
+click-here
+wait-for 2000 shpsel=pub shpinlist=1
+type pu
+wait-for 2000 shpn=1 shpsel=pub
+key enter
+wait-for 4000 shp=0 conn=0 statusbad=1
+sh grep -qx "gio mount smb://nas/pub" "$OFX_ROOT/spawn.log"
+# Esc closes it, nothing connected.
+key ctrl-l
+key ctrl-a
+type smb://nas
+key enter
+wait-for 4000 shp=1 shpn=2
+key esc
+wait-for 2000 shp=0 modal=-
+# The server's bookmark in the sidebar: a click lists its shares too; Connect on the cursor's.
+point-side NAS
+click-here
+wait-for 4000 shp=1 shpn=2 shpsel=Music
+point-ui modal-yes
+click-here
+wait-for 4000 shp=0 conn=0
+sh grep -qx "gio mount smb://nas/Music" "$OFX_ROOT/spawn.log"
+# A server that lists none: said, by its name; one whose list fails: gio's reason.
+key ctrl-l
+key ctrl-a
+type smb://empty
+key enter
+wait-for 4000 conn=0 shp=0 shppending=0 statusbad=0 status=empty
+expect lists no shares
+key ctrl-l
+key ctrl-a
+type smb://bad/
+key enter
+wait-for 4000 conn=0 shp=0 statusbad=1 status=Can't
+expect connect to bad: Permission denied
+quit

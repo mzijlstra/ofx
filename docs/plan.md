@@ -1094,9 +1094,34 @@ blocks each of these for up to gvfs's 90 s. On a thread it also holds ofx's exit
        scratch paths passed that, so netn skipped there and a mutant of the NFS hint survived. The
        net group's tree is now a short folder of its own (`/tmp/ofx-gnet-*`, linked from
        `<base>/net`), removed when the group passes.
-7. **Discovery:** the Network place browsing servers and shares (`smb://` root through gvfs's
-   smb-browse, and avahi), apart from everything above, so it can be dropped without touching
-   them.
+7. **Discovery**, in two parts (Michael, 2026-11-10):
+   - **7a, a server's shares** (built 2026-11-10): `smb://server[:port][/]` alone lists its
+     shares in a picker panel (Michael's pick over a folder of shares), the branches panel's kind:
+     a filter, Enter or a double click connects to one as if its address were typed.
+     - **Measured on the test Samba:**
+       - `gio mount smb://server/` mounts gvfs's browse of the server in about 1.3 s. It asks
+         nothing here, though a server that lists only to a user would ask as a share does.
+       - The browse has no FUSE folder and isn't in `gio mount -l`, and `gio mount -u` can't find
+         it. It stays as a cache: `gio list` answered with the server paused.
+       - `gio list -a standard::type` names each share "(mountable)". Their `target-uri` drops
+         the port, so ofx makes a share's address from the server's.
+       - A port nothing listens on fails at once ("Failed to retrieve share list from server:
+         Connection refused"); a paused server after gvfs's 20 s ("Connection timed out").
+       - gvfs-nfs lists no exports, so `nfs://server/` is still refused ("Name a folder").
+     - **What changed:**
+       - `connect_uri` takes a server's address alone (share "").
+       - Connect's thread runs `gio list` after the mount instead of `gio info`
+         (`gio_server_shares`: sorted, Windows' hidden `$` shares and odd names left out).
+       - The panel (gui/shares.c, `UI_PANEL_SHARES`) comes up once nothing else is: a panel, a
+         menu or the location line opened while it connected keeps the keys.
+       - An `smb://server` bookmark is listed in Network, named by its label or the server.
+     - **Tests:**
+       - unit: the addresses, the parser, a share's address, the panel's keys and presses;
+       - f16s, on a stand-in gio: the panel waiting for the location line, the list, a pick's
+         address, Esc, a server bookmark;
+       - the net group's nets, on the real Samba: the list, a pick with the port, a closed port.
+   - **7b, servers on the network** (mDNS, Windows browsing): a spike first, read only, on Michael's
+     LAN; perhaps his old laptops as servers to test with. Then his call whether to build it.
 8. **The milestone's code-health review and cleanup** (AGENTS.md "At the end of each major
    milestone"), then install.
 

@@ -1,0 +1,24 @@
+# F16 step 7a: a server's shares on the test Samba (run.sh's net group after netu, which leaves open,
+# priv and pub mounted; @PORT@ the server's). ofx starts in its home.
+settle
+wait-for 5000 n=1 sel=nas conn=0 shp=0
+# The server's address alone: gvfs's browse of it mounted (no question here), its shares listed.
+key ctrl-l
+type smb://127.0.0.1:@PORT@/
+key enter
+wait-for 10000 conn=0 shp=1 shpn=3 shps=open|priv|pub connasked=0
+sh grep -qx "gio list -a standard::type smb://127.0.0.1:@PORT@/" "$OFX_ROOT/spawn.log"
+# A share picked: its address with the server's port (gvfs's own drops it), mounted already, so
+# gone to with no question.
+type pr
+wait-for 2000 shpn=1 shpsel=priv
+key enter
+wait-for 8000 shp=0 conn=0 faron=1 farloading=0 n=1 sel=p.txt connasked=0 statusbad=0
+sh grep -qx "gio mount smb://127.0.0.1:@PORT@/priv" "$OFX_ROOT/spawn.log"
+# A port nothing listens on: said at once, as gvfs says it.
+key ctrl-l
+type smb://127.0.0.1:1/
+key enter
+wait-for 8000 conn=0 shp=0 statusbad=1
+expect connect to 127.0.0.1: Failed to retrieve share list from server: Connection refused
+quit

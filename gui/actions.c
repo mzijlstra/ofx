@@ -1105,6 +1105,7 @@ static void act(UiAction a)
         else if (tabbar.n == UI_TABS_MAX) set_status(true, "%d tabs is the most ofx keeps open", UI_TABS_MAX);   // (kept for when one closes)
         else closed_tabs.n--, tab_open(closed_tabs.dir[closed_tabs.n], STR_EMPTY, true);
         break;
+    case UA_SHARE: share_pick(a.index); break;   // a server's share picked (F16 step 7a)
     case UA_BRANCH:   // (F12 step 5c) the one checked out: nothing
         // The list is for the folder the menu opened in: one another folder took over meanwhile
         // (the one shown removed, the view gone up into an outer repository) isn't switched by it

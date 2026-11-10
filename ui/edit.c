@@ -400,6 +400,7 @@ static bool ui_line_active(Ui *u, UiLine *out)
     UiOnTop on = ui_on_top(u);
     if (on == UI_ON_OW && !u->ow.in_list) l = ui_pick_line(&u->ow);
     else if (on == UI_ON_BRANCHES && !u->brp.in_list) l = ui_pick_line(&u->brp);
+    else if (on == UI_ON_SHARES && !u->shp.in_list) l = ui_pick_line(&u->shp);
     else if (on == UI_ON_BM && u->bmp_naming) l = ui_bmp_line(u);
     else if (on == UI_ON_KEYS) l = ui_keys_line(u);
     else if (on == UI_ON_LOGIN) l = ui_login_line(u, u->login_at);
