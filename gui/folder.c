@@ -52,9 +52,9 @@ static void trash_scan(void)
 {
     const char *mp[PLACES_MAX];
     int n = 0;
-    Str mi = far_mounts();
+    const Mounts *mi = far_mounts();
     for (int i = 0; i < app.places.n; i++)
-        if (place_is_drive(app.places.p[i].kind) && thumb_local(mi, app.places.p[i].path)) mp[n++] = app.places.p[i].path;
+        if (place_is_drive(app.places.p[i].kind) && mounts_local(mi, app.places.p[i].path)) mp[n++] = app.places.p[i].path;
     trash_dirs(&trashd, mp, n);
 }
 
@@ -454,9 +454,7 @@ static bool go_to_in(const char *dir, Str select, isize fallback, bool stepping)
     for (isize i = 0; i < l.n; i++) count[i] = COUNT_UNKNOWN;
     app.count = count;
     count_new_listing(), app.far_cgen++;
-    ArenaMark mi_mark = arena_mark(&scratch);
-    app.thumb_local = !on_far && thumb_local(read_file(&scratch, mountinfo_path()), view == UI_VIEW_SEARCH ? app.search_root : dir);   // (not here_dir: cwd is still the last one's; far through a link too, F16 step 3)
-    arena_restore(&scratch, mi_mark);
+    app.thumb_local = !on_far && mounts_local(far_mounts(), view == UI_VIEW_SEARCH ? app.search_root : dir);   // (not here_dir: cwd is still the last one's; far through a link too, F16 step 3)
     ui_mark_set(&app.ui, mark);
     app.ui.marked = marked;
     if (!same) ui_edit_close(&app.ui);
@@ -725,7 +723,7 @@ static void tree_refresh(bool follow, int fallback)
     if (!follow && app.ui.side.sel < tree.n) snprintf(keep, sizeof keep, "%.*s", STR_ARG(tree.row[app.ui.side.sel].path));
     if (follow) tree_follow(&tree, app.cwd);
     arena_reset(&treea);
-    tree.mounts = read_file(&treea, mountinfo_path());
+    tree.mounts = mounts_parse(&treea, read_file(&treea, mountinfo_path()));
     tree_build(&treea, &tree, S("/"), app.show_hidden);
     int sel = tree_find(&tree, str_from_c(follow ? app.cwd : keep));
     if (sel < 0) sel = fallback < tree.n ? fallback : 0;

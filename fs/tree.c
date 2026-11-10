@@ -26,7 +26,7 @@ typedef struct {
     bool    cut;                            // more folders than TREE_ROWS_MAX: the rest left out
     char    open[TREE_OPEN_MAX][PATH_MAX];  // the folders open, oldest first
     int     nopen;
-    Str     mounts;                         // the mount list (mountinfo): a far drive's folders aren't read (F16)
+    Mounts  mounts;                         // the mount list (mounts_parse): a far drive's folders aren't read (F16)
 } Tree;
 
 
@@ -110,13 +110,13 @@ static int tree_name_cmp(const void *x, const void *y)
 
 // Whether entry de of the folder dirfd (dir) is a folder, or a symlink to one: as the list takes it
 // (kind_of_far), so a link into a far drive is one, never followed (F16).
-static bool tree_is_dir(int dirfd, const char *dir, Str mounts, const struct dirent *de)
+static bool tree_is_dir(int dirfd, const char *dir, const Mounts *ms, const struct dirent *de)
 {
     if (de->d_type == DT_DIR) return true;
     if (de->d_type != DT_LNK && de->d_type != DT_UNKNOWN) return false;
     struct stat st;
     bool far;
-    return kind_is_dir(kind_of_far(dirfd, dir, de->d_name, mounts, &st, &far));
+    return kind_is_dir(kind_of_far(dirfd, dir, de->d_name, ms, &st, &far));
 }
 
 static void tree_add(Arena *a, Tree *t, Str path, int depth, bool hidden);
@@ -130,15 +130,15 @@ static void tree_children(Arena *a, Tree *t, Str path, int depth, bool hidden)
     // without its subfolders, a dead share would hold the window. Its far checks from that path too.
     char real[PATH_MAX];
     bool far = false;
-    if (t->mounts.len && (!far_real(t->mounts, dir, real, sizeof real, &far) || far)) return;
-    const char *at = t->mounts.len ? real : dir;
+    if (t->mounts.n && (!far_real(&t->mounts, dir, real, sizeof real, &far) || far)) return;
+    const char *at = t->mounts.n ? real : dir;
     DIR *d = opendir(dir);
     if (!d) return;
     isize cap = 64, n = 0;
     Str *names = arena_try_new(a, Str, cap);
     for (struct dirent *de; names && (de = readdir(d));) {
         const char *nm = de->d_name;
-        if (strcmp(nm, ".") == 0 || strcmp(nm, "..") == 0 || (nm[0] == '.' && !hidden) || !tree_is_dir(dirfd(d), at, t->mounts, de)) continue;
+        if (strcmp(nm, ".") == 0 || strcmp(nm, "..") == 0 || (nm[0] == '.' && !hidden) || !tree_is_dir(dirfd(d), at, &t->mounts, de)) continue;
         if (n == cap) {
             Str *grown = arena_try_new(a, Str, cap * 2);
             if (!grown) break;

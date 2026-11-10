@@ -69,9 +69,9 @@ static void test_thumb_names(void)
     CHECK(thumb_kind(S("image/webp")) == TK_WEBP && thumb_kind(S("application/pdf")) == TK_NONE && thumb_kind(S("image/png2")) == TK_NONE);
 }
 
-static void test_thumb_local(void)
+static void test_mounts_local(void)
 {
-    Str mi = S("22 1 259:2 / / rw,relatime shared:1 - ext4 /dev/nvme0n1p2 rw\n"
+    Str mi = S("22 1 259:2 / / rw),relatime shared:1 - ext4 /dev/nvme0n1p2 rw\n"
                "40 22 179:1 / /mnt/sd rw shared:20 - exfat /dev/mmcblk0p1 rw\n"
                "41 22 0:50 / /mnt/nas rw - nfs4 server:/export rw\n"
                "42 22 0:51 / /mnt/box rw - fuse.sshfs me@box: rw\n"
@@ -80,15 +80,15 @@ static void test_thumb_local(void)
                "45 41 259:3 / /mnt/nas/local rw - ext4 /dev/nvme0n1p3 rw\n"
                "46 22 0:53 / /run/user/1000/gvfs rw - fuse.gvfsd-fuse gvfsd-fuse rw\n"
                "47 22 0:54 / /mnt/fuser rw - fuserfs x rw\n");
-    CHECK(thumb_local(mi, "/home/m/a.png") && thumb_local(mi, "/mnt/sd/x/y.jpg") && thumb_local(mi, "/mnt/win/a.png"));
-    CHECK(!thumb_local(mi, "/mnt/nas/a.png") && !thumb_local(mi, "/mnt/nas") && !thumb_local(mi, "/mnt/box/p/a.png"));
-    CHECK(!thumb_local(mi, "/mnt/my share/a.png") && !thumb_local(mi, "/run/user/1000/gvfs/sftp:host=x/a.png"));
-    CHECK(thumb_local(mi, "/mnt/nas/local/a.png") && thumb_local(mi, "/mnt/nasty/a.png") && thumb_local(mi, "/mnt/sdx"));
-    CHECK(thumb_local(mi, "/mnt/fuser/a.png") && thumb_local(STR_EMPTY, "/x"));
+    CHECK(mounts_local(mt(mi), "/home/m/a.png") && mounts_local(mt(mi), "/mnt/sd/x/y.jpg") && mounts_local(mt(mi), "/mnt/win/a.png"));
+    CHECK(!mounts_local(mt(mi), "/mnt/nas/a.png") && !mounts_local(mt(mi), "/mnt/nas") && !mounts_local(mt(mi), "/mnt/box/p/a.png"));
+    CHECK(!mounts_local(mt(mi), "/mnt/my share/a.png") && !mounts_local(mt(mi), "/run/user/1000/gvfs/sftp:host=x/a.png"));
+    CHECK(mounts_local(mt(mi), "/mnt/nas/local/a.png") && mounts_local(mt(mi), "/mnt/nasty/a.png") && mounts_local(mt(mi), "/mnt/sdx"));
+    CHECK(mounts_local(mt(mi), "/mnt/fuser/a.png") && mounts_local(mt(STR_EMPTY), "/x"));
     // Mounted over: the later line on the same point.
-    CHECK(!thumb_local(S("1 0 0:1 / / rw - ext4 a rw\n2 1 0:2 / /m rw - ext4 b rw\n3 1 0:3 / /m rw - nfs c rw\n"), "/m/a"));
-    CHECK(thumb_local(S("1 0 0:1 / / rw - nfs a rw\n2 1 0:2 / /m rw - ext4 b rw\n"), "/m/a"));
-    CHECK(!thumb_local(S("1 0 0:1 / / rw - nfs a rw\n"), "/m/a"));
+    CHECK(!mounts_local(mt(S("1 0 0:1 / / rw - ext4 a rw\n2 1 0:2 / /m rw - ext4 b rw\n3 1 0:3 / /m rw - nfs c rw\n")), "/m/a"));
+    CHECK(mounts_local(mt(S("1 0 0:1 / / rw - nfs a rw\n2 1 0:2 / /m rw - ext4 b rw\n")), "/m/a"));
+    CHECK(!mounts_local(mt(S("1 0 0:1 / / rw - nfs a rw\n")), "/m/a"));
 }
 
 // A w by h picture: the left half red, the right half blue, opaque.

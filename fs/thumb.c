@@ -515,38 +515,8 @@ static bool thumb_make(Arena *a, ThumbKind k, Str src, int side, Img *out)
 
 // ---- which drives ------------------------------------------------------------------------------
 
-// Whether ofx makes previews on the drive holding path, by mountinfo (the mount with the longest
-// mount point above it): not on network file systems or FUSE ones (fuse.sshfs, fuse.gvfsd-fuse),
-// whose reads can hang a worker; fuseblk, a local disk (NTFS), isn't "fuse" nor "fuse.*"; autofs, as
-// a look under it mounts what it stands for (a NAS that is down blocks it; review, 2026-11-01).
-// Unknown: local.
-// Whether a mount of type t (as mountinfo writes it: "nfs4", "fuse.sshfs") is a network or user
-// one, whose files may be far or slow.
-static bool thumb_far_type(Str t)
-{
-    static const char *const far[] = { "nfs", "nfs4", "cifs", "smb3", "smbfs", "9p", "ceph", "afs", "glusterfs", "davfs", "lustre", "fuse", "autofs" };
-    for (int i = 0; i < COUNT(far); i++) {
-        isize n = (isize)strlen(far[i]);
-        if (t.len >= n && memcmp(t.p, far[i], (size_t)n) == 0 && (t.len == n || t.p[n] == '.')) return true;
-    }
-    return false;
-}
-
-static bool thumb_local(Str mountinfo, const char *path)
-{
-    isize at = 0, best = -1;
-    char type[64] = "";
-    for (Str line; next_line(mountinfo, &at, &line);) {
-        char mp[PATH_MAX];
-        Str t, src;
-        if (!mountinfo_line(line, mp, sizeof mp, &t, &src)) continue;
-        size_t n = strlen(mp);
-        if (!path_within(path, mp) || (isize)n < best || !t.len) continue;   // a later mount on the same point wins
-        snprintf(type, sizeof type, "%.*s", STR_ARG(t));
-        best = (isize)n;
-    }
-    return !thumb_far_type(str_from_c(type));
-}
+// Whether ofx makes previews on a drive: mounts_local (fs/paths.c), the mount list's verdict on the
+// mount holding the file (the code-health review's step C: this file had its own copy).
 
 // ---- one preview --------------------------------------------------------------------------------
 

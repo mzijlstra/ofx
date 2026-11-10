@@ -133,8 +133,6 @@ static void fs_sort(Listing *l, Sort s)
 
 // ---- reading --------------------------------------------------------------------------------
 
-static bool thumb_local(Str mountinfo, const char *path);   // (thumb.c)
-
 // A link's target as an absolute path, from readlink's text alone (dir: the link's folder): "."
 // and ".." taken by the text, no syscall (F16: the target may be on a share that hangs). False when
 // it doesn't fit. Links on the way aren't followed, so a chain through a local link isn't seen.
@@ -163,14 +161,20 @@ static bool link_abs(const char *dir, Str target, char *out, size_t cap)
     return true;
 }
 
+// path_walk's flags: WALK_MISSING_OK, a part that isn't there (or a file with more after it) is
+// taken by its text, and so is the rest (ofx-clean: a link onto a card that is out still names where
+// it leads, so the drive rules judge where its file really is).
+enum { WALK_MISSING_OK = 1 };
+
 // path resolved as realpath does, every link on the way followed, but never past a far drive (F16
 // step 3): each part is lstat'd (and a link read) only while the path so far is local by the mount
-// list `mounts`; from the first part on a far drive the rest is taken by its text (link_abs), *far
-// set. So `~/nas/sub`, nas a link into a share, comes out as the share's path, and nothing of the
-// share is looked at. A relative path is taken from the current folder. False, errno set, as
-// realpath: a local part missing (ENOENT), not a folder (ENOTDIR), too many links (ELOOP), too
-// long (ENAMETOOLONG).
-static bool far_real(Str mounts, const char *path, char *out, size_t cap, bool *far)
+// list ms; from the first part on a far drive the rest is taken by its text (link_abs), *far set.
+// So `~/nas/sub`, nas a link into a share, comes out as the share's path, and nothing of the share
+// is looked at. A relative path is taken from the current folder. False, errno set, as realpath: a
+// local part missing (ENOENT; not with WALK_MISSING_OK), not a folder (ENOTDIR; the same), too many
+// links (ELOOP), too long (ENAMETOOLONG). One walk for the far folders and ofx-clean, which had a
+// copy of their own (clean_real; the code-health review's step C).
+static bool path_walk(const Mounts *ms, const char *path, char *out, size_t cap, int flags, bool *far)
 {
     enum { LINKS_MAX = 40 };
     char todo[2 * PATH_MAX], cwd[PATH_MAX], res[PATH_MAX] = "", cand[PATH_MAX], t[PATH_MAX];
@@ -194,13 +198,15 @@ static bool far_real(Str mounts, const char *path, char *out, size_t cap, bool *
         }
         if (rl + 1 + len + 1 > sizeof cand) return errno = ENAMETOOLONG, false;
         memcpy(cand, res, rl), cand[rl] = '/', memcpy(cand + rl + 1, seg, len), cand[rl + 1 + len] = 0;
-        if (mounts.len && !thumb_local(mounts, cand)) {   // far from here: the rest by its text
+        if (!mounts_local(ms, cand)) {   // far from here: the rest by its text
             while (*p == '/') p++;   // (relative to cand: link_abs would take "/rest" from /)
             if (!link_abs(cand, str_from_c(p), out, cap)) return errno = ENAMETOOLONG, false;
-            return *far = !thumb_local(mounts, out), true;   // (a ".." back out of it: real, and local again)
+            return *far = !mounts_local(ms, out), true;   // (a ".." back out of it: real, and local again)
         }
         struct stat st;
-        if (lstat(cand, &st) != 0) return false;
+        bool there = lstat(cand, &st) == 0;
+        if (!there && !(flags & WALK_MISSING_OK)) return false;
+        if (!there) st = (struct stat){ .st_mode = S_IFREG };   // (not there: taken as it is written, as the rest)
         if (S_ISLNK(st.st_mode)) {
             if (++links > LINKS_MAX) return errno = ELOOP, false;
             ssize_t k = readlink(cand, t, sizeof t - 1);
@@ -214,7 +220,7 @@ static bool far_real(Str mounts, const char *path, char *out, size_t cap, bool *
             memcpy(todo, rest, (size_t)m + 1), p = todo;
             continue;
         }
-        if (*p && !S_ISDIR(st.st_mode)) return errno = ENOTDIR, false;
+        if (*p && !S_ISDIR(st.st_mode) && !(flags & WALK_MISSING_OK)) return errno = ENOTDIR, false;
         memcpy(res, cand, rl + 1 + len + 1), rl += 1 + len;
     }
     if ((rl ? rl : 1) + 1 > cap) return errno = ENAMETOOLONG, false;
@@ -222,28 +228,25 @@ static bool far_real(Str mounts, const char *path, char *out, size_t cap, bool *
     return true;
 }
 
+// path_walk as realpath: a missing part is an error.
+static bool far_real(const Mounts *ms, const char *path, char *out, size_t cap, bool *far)
+{
+    return path_walk(ms, path, out, cap, 0, far);
+}
+
 // The drive path is on, by the mount list alone, into out: its mount point, and under gvfs's one
 // FUSE mount for every share, the share's own folder below it (F16 step 3 review: one share that
 // doesn't answer isn't another). *gvfs says it is one (gvfs gives a share no trash). False when no
 // mount holds it.
-static bool far_drive(Str mounts, const char *path, char *out, size_t cap, bool *gvfs)
+static bool far_drive(const Mounts *ms, const char *path, char *out, size_t cap, bool *gvfs)
 {
-    isize at = 0, best = -1;
-    char mp[PATH_MAX], type[64] = "";
+    const MountEnt *m = mounts_at(ms, path);
     *gvfs = false;
-    for (Str line; next_line(mounts, &at, &line);) {
-        Str t, src;
-        if (!mountinfo_line(line, mp, sizeof mp, &t, &src)) continue;
-        isize n = (isize)strlen(mp);
-        if (!path_within(path, mp) || n < best) continue;   // (a later mount on the same point wins)
-        best = n;
-        snprintf(out, cap, "%s", mp);
-        snprintf(type, sizeof type, "%.*s", STR_ARG(t));
-    }
-    if (best < 0) return false;
-    *gvfs = strcmp(type, "fuse.gvfsd-fuse") == 0;
+    if (!m) return false;
+    snprintf(out, cap, "%s", m->mp);
+    *gvfs = m->gvfs;
     if (!*gvfs) return true;
-    const char *rest = path + best;   // (the share: the part after the mount point)
+    const char *rest = path + m->n;   // (the share: the part after the mount point)
     while (*rest == '/') rest++;
     size_t k = strcspn(rest, "/"), o = strlen(out);
     if (k && o + 1 + k < cap) out[o] = '/', memcpy(out + o + 1, rest, k), out[o + 1 + k] = 0;
@@ -251,22 +254,22 @@ static bool far_drive(Str mounts, const char *path, char *out, size_t cap, bool 
 }
 
 // What name in the folder dirfd is (a symlink by its target), its stat in st. In a local folder
-// dir with the mount list `mounts` (F16; empty: none): a far drive's mount point is a folder, not
+// dir with the mount list ms (F16; NULL or empty: none): a far drive's mount point is a folder, not
 // even lstat'd (that reaches the drive's root), and a link whose target is, by its text, on a far
 // drive is a link to a folder, not followed (*far set for both).
-static Kind kind_of_far(int dirfd, const char *dir, const char *name, Str mounts, struct stat *st, bool *far)
+static Kind kind_of_far(int dirfd, const char *dir, const char *name, const Mounts *ms, struct stat *st, bool *far)
 {
     char p[PATH_MAX];
     *far = false;
-    bool look = mounts.len && dir && path_put(p, sizeof p, dir, str_from_c(name));
-    if (look && !thumb_local(mounts, p)) return *far = true, *st = (struct stat){ .st_mode = S_IFDIR }, K_DIR;
+    bool look = ms && ms->n && dir && path_put(p, sizeof p, dir, str_from_c(name));
+    if (look && !mounts_local(ms, p)) return *far = true, *st = (struct stat){ .st_mode = S_IFDIR }, K_DIR;
     if (fstatat(dirfd, name, st, AT_SYMLINK_NOFOLLOW) != 0) return *st = (struct stat){ 0 }, K_OTHER;   // (gone since readdir: nothing to show)
     if (S_ISLNK(st->st_mode)) {
         char t[PATH_MAX], abs[PATH_MAX];
         ssize_t n = look ? readlinkat(dirfd, name, t, sizeof t - 1) : 0;
         char real[PATH_MAX];
         bool f = false;   // (its target's way resolved: a chain through a local link into a share caught too, step 3)
-        if (n > 0 && link_abs(dir, (Str){ t, n }, abs, sizeof abs) && far_real(mounts, abs, real, sizeof real, &f) && f) return *far = true, K_LINK_DIR;
+        if (n > 0 && link_abs(dir, (Str){ t, n }, abs, sizeof abs) && far_real(ms, abs, real, sizeof real, &f) && f) return *far = true, K_LINK_DIR;
         struct stat tg;
         if (fstatat(dirfd, name, &tg, 0) != 0) return K_LINK_BROKEN;
         *st = tg;
@@ -278,7 +281,7 @@ static Kind kind_of_far(int dirfd, const char *dir, const char *name, Str mounts
 static Kind kind_of(int dirfd, const char *name, struct stat *st)
 {
     bool far;
-    return kind_of_far(dirfd, NULL, name, STR_EMPTY, st, &far);
+    return kind_of_far(dirfd, NULL, name, NULL, st, &far);
 }
 
 // A symlink's target as it is written, into a; empty when it can't be read (or a is full).
@@ -295,11 +298,11 @@ static Str link_target(Arena *a, int dirfd, const char *name)
 
 // The entry nm in the folder fd, its name and a link's target in a; false when a is full. (fs_list's,
 // and the search view's walk's, F9.)
-static bool entry_read_far(Arena *a, int fd, const char *dir, const char *nm, Str mounts, Entry *out)
+static bool entry_read_far(Arena *a, int fd, const char *dir, const char *nm, const Mounts *ms, Entry *out)
 {
     struct stat st;
     bool far;
-    Kind k = kind_of_far(fd, dir, nm, mounts, &st, &far);
+    Kind k = kind_of_far(fd, dir, nm, ms, &st, &far);
     isize len = (isize)strlen(nm);
     char *copy = arena_try_push(a, len + 1, 1);
     if (!copy) return false;
@@ -320,21 +323,21 @@ static bool entry_read_far(Arena *a, int fd, const char *dir, const char *nm, St
 
 static bool entry_read(Arena *a, int fd, const char *nm, Entry *out)
 {
-    return entry_read_far(a, fd, NULL, nm, STR_EMPTY, out);
+    return entry_read_far(a, fd, NULL, nm, NULL, out);
 }
 
 // The entries of dir, sorted; dot-files counted in hidden, and left out unless show_hidden. False,
 // with the reason, when the folder can't be opened or the arena is full.
-static bool fs_list_far(Arena *a, const char *dir, bool show_hidden, Sort sort, Str mounts, Listing *out, Err *err);
+static bool fs_list_far(Arena *a, const char *dir, bool show_hidden, Sort sort, const Mounts *ms, Listing *out, Err *err);
 
 static bool fs_list(Arena *a, const char *dir, bool show_hidden, Sort sort, Listing *out, Err *err)
 {
-    return fs_list_far(a, dir, show_hidden, sort, STR_EMPTY, out, err);
+    return fs_list_far(a, dir, show_hidden, sort, NULL, out, err);
 }
 
-// fs_list in a local folder that may hold far links or mount points (mounts: the mount list; F16):
+// fs_list in a local folder that may hold far links or mount points (ms: the mount list; F16):
 // those listed by kind_of_far, never looked at.
-static bool fs_list_far(Arena *a, const char *dir, bool show_hidden, Sort sort, Str mounts, Listing *out, Err *err)
+static bool fs_list_far(Arena *a, const char *dir, bool show_hidden, Sort sort, const Mounts *ms, Listing *out, Err *err)
 {
     *out = (Listing){ 0 };
     // The far checks from the folder's real path: a link's ".." goes up from where the folder
@@ -342,7 +345,7 @@ static bool fs_list_far(Arena *a, const char *dir, bool show_hidden, Sort sort, 
     // link to ../nas, /srv/nas a share). far_real: never past a far drive (step 3).
     char real[PATH_MAX];
     bool f;
-    const char *at = mounts.len && far_real(mounts, dir, real, sizeof real, &f) ? real : dir;
+    const char *at = ms && ms->n && far_real(ms, dir, real, sizeof real, &f) ? real : dir;
     DIR *d = opendir(dir);
     if (!d) return err_set(err, "%s: %s", dir, strerror(errno)), false;
     int fd = dirfd(d);
@@ -367,7 +370,7 @@ static bool fs_list_far(Arena *a, const char *dir, bool show_hidden, Sort sort, 
             memcpy(grown, e, (size_t)n * sizeof *e);
             e = grown, cap *= 2;
         }
-        if (!entry_read_far(a, fd, at, nm, mounts, &e[n])) {
+        if (!entry_read_far(a, fd, at, nm, ms, &e[n])) {
             ok = false;
             break;
         }

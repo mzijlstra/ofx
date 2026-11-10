@@ -43,7 +43,7 @@ static void test_du_walk(void)
     snprintf(mi, sizeof mi, "1 0 0:1 / / rw - ext4 /dev/x rw\n2 1 0:2 / %s rw - fuse.sshfs h:/ rw\n3 1 0:3 / %s rw - nfs4 h:/e rw\n",
              at("f72du/d/sub"), at("f72du/m/x/y"));
     static char pts[2 * PATH_MAX];
-    w.mounts = str_from_c(mi), w.pts = pts, w.pts_cap = sizeof pts;
+    w.mounts = mounts_parse(&ta, str_from_c(mi)), w.pts = pts, w.pts_cap = sizeof pts;
     CHECK(du_walk(&w, one, 1, &s) && s.dirs == 2 && s.files == 3 && s.bytes == 10 + 1 + 3 && !s.cut);   // d, sub; a, la, lsub
     const char *m[] = { at("f72du/m") };
     char mroot[PATH_MAX];
@@ -61,7 +61,7 @@ static void test_du_walk(void)
     w.pts_cap = 4;
     CHECK(du_walk(&w, m, 1, &s) && s.dirs == 3 && s.files == 1 && s.cut);
     w.pts_cap = sizeof pts;
-    w.mounts = STR_EMPTY;
+    w.mounts = (Mounts){ 0 };
     CHECK(du_walk(&w, m, 1, &s) && s.dirs == 3 && s.files == 1 && s.bytes == 7);
     // A root that is gone, a folder that can't be read: what could be counted, and cut.
     const char *gone[] = { at("f72du/none"), f };

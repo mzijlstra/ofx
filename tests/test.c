@@ -49,6 +49,18 @@ static Arena ta;
 
 static char root[256];   // this run's mkdtemp directory
 
+// A mount list's text parsed (fs/paths.c, mounts_parse) into a static arena each call reuses: valid
+// until the next call (the code-health review's step C: the functions take the table, not the text).
+static const Mounts *mt(Str text)
+{
+    static u8 mem[MiB(1)];
+    static Arena a;
+    static Mounts ms;
+    arena_init(&a, "mt", mem, sizeof mem);
+    ms = mounts_parse(&a, text);
+    return &ms;
+}
+
 static const char *at(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
 static const char *at(const char *fmt, ...)
 {
@@ -1798,7 +1810,7 @@ int main(void)
     if (fast) test_state_zoom();
     if (fast) test_md5();
     if (fast) test_thumb_names();
-    if (fast) test_thumb_local();
+    if (fast) test_mounts_local();
     if (fast) test_png_meta();
     if (fast) test_thumb_decode();
     if (fast) test_thumb_get();

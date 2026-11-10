@@ -99,71 +99,22 @@ static bool clean_temp_name(const char *n)
     return strcmp(p, "png") == 0;
 }
 
-// The mount list, parsed once a run: clean_real looks up every prefix of every preview's path, and
-// reading mountinfo's text for each (about 66,000 times on Michael's cache) made a run 4-5 times
-// slower (review, 2026-10-25). far is thumb_local's verdict on the mount point itself: the same
-// mount wins for any path below it, so it is the verdict for those paths too.
-typedef struct {
-    char  *mp;
-    size_t n;
-    bool   far;
-} CleanMount;
-
-typedef struct {
-    CleanMount *m;
-    isize       n;
-    bool        unknown;   // the list didn't fit its arena: no path is judged (clean_real refuses)
-} CleanMounts;
-
-static CleanMounts clean_mounts(Arena *a, Str mountinfo)
-{
-    isize at = 0, lines = 0;
-    for (Str line; next_line(mountinfo, &at, &line);) lines++;
-    CleanMounts ms = { arena_try_new(a, CleanMount, lines + 1), 0, false };
-    if (!ms.m) ms.unknown = true;
-    at = 0;
-    // (try, never abort: thousands of mounts give the caller's arena no room, and then none are known,
-    // so clean_real keeps every file; F11 review)
-    for (Str line; ms.m && next_line(mountinfo, &at, &line);) {
-        char mp[PATH_MAX];
-        Str type, src;
-        if (!mountinfo_line(line, mp, sizeof mp, &type, &src)) continue;
-        size_t n = strlen(mp);
-        char *p = arena_try_push(a, (isize)n + 1, 1);
-        if (!p) return (CleanMounts){ NULL, 0, true };
-        memcpy(p, mp, n + 1);
-        // (its own type: clean_local takes the last mount on a point, as thumb_local does; one with
-        // no type, thumb_local's rule, which skips it. Once a mount, not once a mount per mount: the
-        // F15 code-health review, about 4 million line reads for 2,000 mounts)
-        ms.m[ms.n++] = (CleanMount){ p, n, type.len ? thumb_far_type(type) : !thumb_local(mountinfo, mp) };
-    }
-    return ms;
-}
-
-// thumb_local on the parsed list: the mount with the longest mount point above path, a later one
-// on the same point winning.
-static bool clean_local(const CleanMounts *ms, const char *path)
-{
-    isize best = -1;
-    bool far = false;
-    for (isize i = 0; i < ms->n; i++) {
-        const CleanMount *m = &ms->m[i];
-        if (path_within(path, m->mp) && (isize)m->n >= best) best = (isize)m->n, far = m->far;
-    }
-    return !far;
-}
+// The mount list is mounts_parse's (fs/paths.c), parsed once a run: clean_real looks up every prefix
+// of every preview's path, and reading mountinfo's text for each (about 66,000 times on Michael's
+// cache) made a run 4-5 times slower (review, 2026-10-25). This file had that table first; it is
+// everyone's now (the code-health review's step C).
 
 // Whether the mount list has dir as a mount point.
-static bool clean_mounted(const CleanMounts *ms, const char *dir)
+static bool clean_mounted(const Mounts *ms, const char *dir)
 {
     for (isize i = 0; i < ms->n; i++)
-        if (strcmp(ms->m[i].mp, dir) == 0) return true;
+        if (strcmp(ms->e[i].mp, dir) == 0) return true;
     return false;
 }
 
 // Whether path is on a drive that isn't mounted now: under /run/media/<user>/<name>, /media/<name>
 // or /mnt/<name> when that folder isn't a mount point. Its previews wait for the drive.
-static bool clean_absent_drive(const CleanMounts *ms, const char *path)
+static bool clean_absent_drive(const Mounts *ms, const char *path)
 {
     static const struct { const char *prefix; int depth; } roots[] = { { "/run/media/", 2 }, { "/media/", 1 }, { "/mnt/", 1 } };
     for (int i = 0; i < COUNT(roots); i++) {
@@ -185,47 +136,17 @@ static bool clean_absent_drive(const CleanMounts *ms, const char *path)
 // path with its links followed as far as they go, into out: a link that leads nowhere (its drive
 // away) still names where it leads. Michael's ~/Documents and the like are links onto /mnt/sd, a
 // card that may be out (review, 2026-10-25), so the drive rules judge where a file really is.
-// False past 40 links, past PATH_MAX, or on reaching a network or FUSE mount, where a readlink could
-// hang (clean_local): the caller then keeps the preview.
-static bool clean_real(const CleanMounts *ms, const char *path, char *out, size_t cap)
+// False past 40 links, past PATH_MAX, on reaching a network or FUSE mount, where a readlink could
+// hang, or with no mount list known: the caller then keeps the preview. path_walk's (fs/list.c),
+// with its missing parts kept (it had a copy of its own: the code-health review's step C).
+static bool clean_real(const Mounts *ms, const char *path, char *out, size_t cap)
 {
-    if (ms->unknown) return false;   // (no mount list: never judged, kept)
-    char rest[PATH_MAX], t[PATH_MAX];
-    if (snprintf(rest, sizeof rest, "%s", path) >= (int)sizeof rest || cap < 2) return false;
-    snprintf(out, cap, "/");
-    for (int hops = 0; rest[0];) {
-        char *p = rest;
-        while (*p == '/') p++;
-        size_t n = strcspn(p, "/");
-        if (n == 0) break;
-        char part[NAME_MAX + 1];
-        if (n > NAME_MAX) return false;
-        memcpy(part, p, n), part[n] = 0;
-        memmove(rest, p + n, strlen(p + n) + 1);
-        if (strcmp(part, ".") == 0) continue;
-        if (strcmp(part, "..") == 0) {   // out is resolved already, so its parent is the real one
-            char *s = strrchr(out, '/');
-            s == out ? (void)(out[1] = 0) : (void)(*s = 0);
-            continue;
-        }
-        size_t o = strlen(out);
-        if (snprintf(out + o, cap - o, "%s%s", o > 1 ? "/" : "", part) >= (int)(cap - o)) return false;
-        if (!clean_local(ms, out)) return false;
-        ssize_t k = readlink(out, t, sizeof t - 1);
-        if (k < 0) continue;   // not a link, or not there: kept as it is
-        if (++hops > 40) return false;
-        t[k] = 0;
-        char *s = strrchr(out, '/');
-        s == out ? (void)(out[1] = 0) : (void)(*s = 0);
-        if (t[0] == '/') snprintf(out, cap, "/");
-        if (snprintf(t + k, sizeof t - (size_t)k, "/%s", rest) >= (int)(sizeof t - (size_t)k)) return false;
-        memcpy(rest, t, strlen(t) + 1);
-    }
-    return true;
+    bool far;
+    return !ms->unknown && path_walk(ms, path, out, cap, WALK_MISSING_OK, &far) && !far;
 }
 
 // What the second rule makes of one preview, read from dfd/name: CR_ORPHAN, CR_STALE or CR_KEEP.
-static CleanRule clean_judge(Arena *a, const CleanMounts *ms, int dfd, const char *name)
+static CleanRule clean_judge(Arena *a, const Mounts *ms, int dfd, const char *name)
 {
     ArenaMark mark = arena_mark(a);
     CleanRule r = CR_KEEP;
@@ -312,7 +233,7 @@ static void clean_runs(int rfd, const char *root, const CleanOpts *o, CleanStats
 static void clean_run(Arena *a, const char *root, Str mountinfo, const CleanOpts *o, CleanStats *s)
 {
     *s = (CleanStats){ 0 };
-    CleanMounts ms = clean_mounts(a, mountinfo);
+    Mounts ms = mounts_parse(a, mountinfo);
     const char *dirs[CLEAN_DIRS_MAX];
     int fds[CLEAN_DIRS_MAX], nd = 0;
     int rfd = open(root, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);

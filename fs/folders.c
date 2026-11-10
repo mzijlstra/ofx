@@ -132,7 +132,7 @@ static int folder_line(const FolderPrefs *f, char *out, size_t cap)
 
 // Whether a folder is gone for good: not there (ENOENT, ENOTDIR), and not on a drive that is out now
 // or a network or FUSE mount, where a look could hang (ofx-clean's rules: clean_real stops there).
-static bool folder_gone(const CleanMounts *ms, const char *path)
+static bool folder_gone(const Mounts *ms, const char *path)
 {
     char real[PATH_MAX];
     struct stat st;
@@ -148,7 +148,7 @@ static int folders_by_age(const void *x, const void *y)
 
 // The housekeeping on t before a write: entries that say nothing, or whose folder is gone, out; then
 // the most recently opened FOLDERS_MAX kept. The number dropped.
-static int folders_tidy(Folders *t, const CleanMounts *ms)
+static int folders_tidy(Folders *t, const Mounts *ms)
 {
     int k = 0, before = t->n;
     for (int i = 0; i < t->n; i++)
@@ -165,7 +165,7 @@ static int folders_tidy(Folders *t, const CleanMounts *ms)
 // housekeeping, then its lines.
 typedef struct {
     Folders           *mine;
-    const CleanMounts *ms;
+    const Mounts *ms;
 } FoldersWrite;
 
 static Folders folders_new;   // (the table as written: the file's, with this window's changes)
@@ -219,7 +219,7 @@ static isize folders_write_tail(void *ctx, char *out, isize cap)
 // kept. mine is then the file's folders as written, nothing changed (another window's changes seen
 // too), its strings in a: a is not the arena mine's strings are in now (the caller swaps two). ms:
 // the mount list, for the housekeeping (NULL: no folder judged gone).
-static bool folders_write(Arena *a, const char *path, Folders *mine, const CleanMounts *ms, Err *err)
+static bool folders_write(Arena *a, const char *path, Folders *mine, const Mounts *ms, Err *err)
 {
     FoldersWrite fw = { mine, ms };
     StateEdit e = { folders_write_prepare, folders_write_keep, folders_write_tail, &fw, false };

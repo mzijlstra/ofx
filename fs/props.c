@@ -33,7 +33,7 @@ typedef struct {
     DuInode           *inodes; // DU_INODES slots, cleared by du_walk; NULL: links aren't told apart
     dev_t              dev;    // the drive the walk started on: it doesn't go onto others
     isize              seen;
-    Str                mounts; // the mount list (mountinfo's text; empty: none known)
+    Mounts             mounts; // the mount list (mounts_parse; none: none known)
     // The mount points below the root, from it (du_walk), and the folder being read, by its real
     // path (du_dir): one of them is counted as a folder without a stat, which on a dead network
     // share would hang the walk (the F16 code-health review: the stat came before the drive check).
@@ -147,12 +147,10 @@ static bool du_walk(DuWalk *w, const char *const *roots, isize n, DuSum *s)
         // Properties walks no far path.
         if (!realpath(roots[i], w->path)) snprintf(w->path, sizeof w->path, "%s", roots[i]);
         w->pts_len = 0;
-        isize at = 0;
-        for (Str line; w->pts && next_line(w->mounts, &at, &line);) {
-            char mp[PATH_MAX];
-            Str type, src;
-            if (!mountinfo_line(line, mp, sizeof mp, &type, &src) || !path_within(mp, w->path) || strcmp(mp, w->path) == 0) continue;
-            isize k = (isize)strlen(mp) + 1;
+        for (isize j = 0; w->pts && j < w->mounts.n; j++) {
+            const char *mp = w->mounts.e[j].mp;
+            if (!path_within(mp, w->path) || strcmp(mp, w->path) == 0) continue;
+            isize k = w->mounts.e[j].n + 1;
             if (w->pts_len + k > w->pts_cap) {   // (more than fit: those left are stat'ed as before, and the count says it's cut)
                 s->cut = true;
                 break;

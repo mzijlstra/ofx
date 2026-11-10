@@ -84,8 +84,8 @@ static void test_clean_names(void)
                "4 1 0:4 / /media/cd rw - iso9660 d rw\n");
     Arena a;
     arena_init(&a, "clean test", clean_test_mem, sizeof clean_test_mem);
-    CleanMounts m = clean_mounts(&a, mi), none = clean_mounts(&a, STR_EMPTY);
-    CleanMounts *ms = &m;
+    Mounts m = mounts_parse(&a, mi), none = mounts_parse(&a, STR_EMPTY);
+    Mounts *ms = &m;
     CHECK(m.n == 4 && none.n == 0);
     CHECK(clean_mounted(ms, "/mnt/sd") && clean_mounted(ms, "/") && clean_mounted(ms, "/run/media/m/USB KEY"));
     CHECK(!clean_mounted(ms, "/mnt") && !clean_mounted(ms, "/mnt/s") && !clean_mounted(&none, "/"));
@@ -115,20 +115,20 @@ static void test_clean_names(void)
                "52 22 0:59 / /mnt/nodash rw ext4 i rw\n"
                "53 22 0:60 / /mnt/deep/in rw - ext4 j rw\n"   // listed before the mount above it
                "54 22 0:61 / /mnt/deep rw - nfs k rw\n");
-    CleanMounts t = clean_mounts(&a, tl);
+    Mounts t = mounts_parse(&a, tl);
     const char *paths[] = { "/", "/home/m/a.png", "/mnt/sd/x/y.jpg", "/mnt/win/a.png", "/mnt/nas/a.png", "/mnt/nas",
                             "/mnt/box/p/a.png", "/mnt/my share/a.png", "/run/user/1000/gvfs/sftp:host=x/a.png",
                             "/mnt/nas/local/a.png", "/mnt/nasty/a.png", "/mnt/sdx", "/mnt/fuser/a.png", "/mnt/over/a",
                             "/mnt/back/a", "/mnt/nodash/a", "/mnt/nas/localx/a", "/mnt/deep/in/a", "/mnt/deep/a" };
     for (int i = 0; i < COUNT(paths); i++) {
-        CHECK(clean_local(&t, paths[i]) == thumb_local(tl, paths[i]));
-        if (clean_local(&t, paths[i]) != thumb_local(tl, paths[i])) fprintf(stderr, "  clean_local %s\n", paths[i]);
+        CHECK(mounts_local(&t, paths[i]) == mounts_local(mt(tl), paths[i]));
+        if (mounts_local(&t, paths[i]) != mounts_local(mt(tl), paths[i])) fprintf(stderr, "  clean_local %s\n", paths[i]);
     }
-    CHECK(!clean_local(&t, "/mnt/nas/a.png") && !clean_local(&t, "/mnt/over/a") && clean_local(&t, "/mnt/back/a"));
-    CHECK(clean_local(&t, "/mnt/nas/local/a.png") && clean_local(&t, "/mnt/deep/in/a") && !clean_local(&t, "/mnt/deep/a"));
-    CHECK(clean_local(&none, "/x"));
-    CleanMounts rootnfs = clean_mounts(&a, S("1 0 0:1 / / rw - nfs a rw\n"));
-    CHECK(!clean_local(&rootnfs, "/m/a") && !clean_local(&rootnfs, "/"));
+    CHECK(!mounts_local(&t, "/mnt/nas/a.png") && !mounts_local(&t, "/mnt/over/a") && mounts_local(&t, "/mnt/back/a"));
+    CHECK(mounts_local(&t, "/mnt/nas/local/a.png") && mounts_local(&t, "/mnt/deep/in/a") && !mounts_local(&t, "/mnt/deep/a"));
+    CHECK(mounts_local(&none, "/x"));
+    Mounts rootnfs = mounts_parse(&a, S("1 0 0:1 / / rw - nfs a rw\n"));
+    CHECK(!mounts_local(&rootnfs, "/m/a") && !mounts_local(&rootnfs, "/"));
 }
 
 static void test_clean_real(void)
@@ -139,7 +139,7 @@ static void test_clean_real(void)
     snprintf(mi, sizeof mi, "1 0 0:1 / / rw - ext4 a rw\n2 1 0:2 / %s rw - nfs4 b rw\n", nas);
     Arena a;
     arena_init(&a, "clean test", clean_test_mem, sizeof clean_test_mem);
-    CleanMounts mounts = clean_mounts(&a, str_from_c(mi)), *m = &mounts;
+    Mounts mounts = mounts_parse(&a, str_from_c(mi)), *m = &mounts;
     mkdirs(at("f65r/real/deep")), mkdirs(nas);
     CHECK(symlink("real", at("f65r/rel")) == 0);                         // relative
     CHECK(symlink(at("f65r/real"), at("f65r/abs")) == 0);                // absolute
@@ -343,7 +343,7 @@ static void test_clean_run(void)
         snprintf(lnk, sizeof lnk, "%s", at("f65/linked/normal/link.png"));
         CHECK(symlink(orph, lnk) == 0);
         int dfd = open(at("f65/linked/normal"), O_RDONLY | O_DIRECTORY);
-        CleanMounts ms = clean_mounts(&a, str_from_c(mi));
+        Mounts ms = mounts_parse(&a, str_from_c(mi));
         CHECK(clean_judge(&a, &ms, dfd, path_base(str_from_c(orph)).p) == CR_ORPHAN);
         CHECK(clean_judge(&a, &ms, dfd, "link.png") == CR_KEEP);
         close(dfd);

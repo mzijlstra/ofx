@@ -330,3 +330,79 @@ static bool mountinfo_line(Str line, char *mp, size_t cap, Str *type, Str *sourc
     }
     return true;
 }
+
+// ---- the mount list, parsed once (the F16 code-health review's step C) ---------------------------
+//
+// Which mount holds a path, and whether that mount is far, used to be looked up three times over:
+// thumb_local, far_drive and clean.c's own table, which disagreed on a line with no type. And since
+// F16 thumb_local read the whole mountinfo text again for every entry of every local listing
+// (measured: a 10,000-entry folder 11 ms to list, 45 ms with this machine's 39 mounts). Now one table,
+// read once per mount-list read, and every lookup asks it.
+
+// Whether a mount of type t (as mountinfo writes it: "nfs4", "fuse.sshfs") is a network or user one,
+// whose files may be far or slow: not network file systems or FUSE ones (fuse.sshfs, fuse.gvfsd-fuse),
+// whose reads can hang a worker; fuseblk, a local disk (NTFS), isn't "fuse" nor "fuse.*"; autofs, as a
+// look under it mounts what it stands for (a NAS that is down blocks it; review, 2026-11-01).
+static bool mount_far_type(Str t)
+{
+    static const char *const far[] = { "nfs", "nfs4", "cifs", "smb3", "smbfs", "9p", "ceph", "afs", "glusterfs", "davfs", "lustre", "fuse", "autofs" };
+    for (int i = 0; i < COUNT(far); i++) {
+        isize n = (isize)strlen(far[i]);
+        if (t.len >= n && memcmp(t.p, far[i], (size_t)n) == 0 && (t.len == n || t.p[n] == '.')) return true;
+    }
+    return false;
+}
+
+typedef struct {
+    const char *mp;     // its mount point, decoded
+    isize       n;      // strlen(mp)
+    bool        far;    // mount_far_type of its type
+    bool        gvfs;   // gvfs's one FUSE mount for every share (fuse.gvfsd-fuse)
+} MountEnt;
+
+typedef struct {
+    const MountEnt *e;
+    isize           n;
+    bool            unknown;   // the list didn't fit its arena: no path can be judged (clean_real refuses)
+} Mounts;
+
+// The mount list's text parsed into a, in its order. A line with no type is left out (thumb_local's
+// rule; clean.c gave it the verdict of the mount holding it, the same answer). Never aborts: thousands
+// of mounts that don't fit give unknown and no entries (F11 review).
+static Mounts mounts_parse(Arena *a, Str text)
+{
+    isize at = 0, lines = 0;
+    for (Str line; next_line(text, &at, &line);) lines++;
+    MountEnt *e = arena_try_new(a, MountEnt, lines + 1);
+    if (!e) return (Mounts){ NULL, 0, true };
+    isize n = 0;
+    at = 0;
+    for (Str line; next_line(text, &at, &line);) {
+        char mp[PATH_MAX];
+        Str type, src;
+        if (!mountinfo_line(line, mp, sizeof mp, &type, &src) || !type.len) continue;
+        isize k = (isize)strlen(mp);
+        char *p = arena_try_push(a, k + 1, 1);
+        if (!p) return (Mounts){ NULL, 0, true };
+        memcpy(p, mp, (size_t)k + 1);
+        e[n++] = (MountEnt){ p, k, mount_far_type(type), str_eq(type, S("fuse.gvfsd-fuse")) };
+    }
+    return (Mounts){ e, n, false };
+}
+
+// The mount holding path: the one with the longest mount point that is path or above it, a later one
+// on the same point winning (it is mounted over the first); NULL when none (or no list).
+static const MountEnt *mounts_at(const Mounts *ms, const char *path)
+{
+    const MountEnt *best = NULL;
+    for (isize i = 0; ms && i < ms->n; i++)
+        if ((!best || ms->e[i].n >= best->n) && path_within(path, ms->e[i].mp)) best = &ms->e[i];
+    return best;
+}
+
+// Whether path is on a local drive by the list (none holding it: local).
+static bool mounts_local(const Mounts *ms, const char *path)
+{
+    const MountEnt *m = mounts_at(ms, path);
+    return !m || !m->far;
+}

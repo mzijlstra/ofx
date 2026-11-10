@@ -41,7 +41,7 @@ static void test_folders(void)
     snprintf(d1, sizeof d1, "%s", at("f11/one")), snprintf(d2, sizeof d2, "%s", at("f11/two")), snprintf(d3, sizeof d3, "%s", at("f11/three"));
     mkdirs(d1), mkdirs(d2), mkdirs(d3);
     snprintf(mi, sizeof mi, "1 0 0:1 / / rw - ext4 a rw\n2 1 0:2 / %s rw - nfs4 b rw\n", at("f11/nas"));
-    CleanMounts ms = clean_mounts(&a[0], str_from_c(mi));
+    Mounts ms = mounts_parse(&a[0], str_from_c(mi));
     put(path, "sidebar=places\nhidden=on\n");
     Err err;
     folders_parse(&a[0], STR_EMPTY, &t), folders_parse(&a[0], STR_EMPTY, &w);
@@ -266,7 +266,7 @@ static void test_state_writers(void)
     CHECK(fails == 0 && keys == 90 && w.n == 120);
     ops_guard(NULL);
     // autofs: a look under it mounts what it stands for.
-    CHECK(!thumb_local(S("1 0 0:1 / / rw - ext4 a rw\n2 1 0:2 / /net rw - autofs b rw\n"), "/net/nas/x"));
+    CHECK(!mounts_local(mt(S("1 0 0:1 / / rw - ext4 a rw\n2 1 0:2 / /net rw - autofs b rw\n")), "/net/nas/x"));
 }
 
 // F11 steps 3 and 3b: the window lines (fs/session.c): written, read back (old lines too), a
@@ -432,27 +432,28 @@ static void test_review_fs(void)
     static u8 tiny[64];
     Arena small;
     arena_init(&small, "mounts-tiny", tiny, sizeof tiny);
-    CleanMounts ms = clean_mounts(&small, S("1 0 0:1 / / rw - ext4 a rw\n2 1 0:2 / /x rw - ext4 b rw\n3 1 0:3 / /y rw - ext4 c rw\n"));
+    Mounts ms = mounts_parse(&small, S("1 0 0:1 / / rw - ext4 a rw\n2 1 0:2 / /x rw - ext4 b rw\n3 1 0:3 / /y rw - ext4 c rw\n"));
     char real[PATH_MAX];
     CHECK(ms.unknown && !clean_real(&ms, "/home/m/x", real, sizeof real) && !folder_gone(&ms, "/nowhere/ofx-test"));
     static u8 room[120];   // (room for the table, not for the long mount points: unknown too)
     arena_init(&small, "mounts-room", room, sizeof room);
-    ms = clean_mounts(&small, S("1 0 0:1 / /mnt/a-mount-point-with-a-rather-long-name-indeed rw - ext4 a rw\n2 1 0:2 / /mnt/another-mount-point-with-a-long-name-too rw - ext4 b rw\n"));
+    ms = mounts_parse(&small, S("1 0 0:1 / /mnt/a-mount-point-with-a-rather-long-name-indeed rw - ext4 a rw\n2 1 0:2 / /mnt/another-mount-point-with-a-long-name-too rw - ext4 b rw\n"));
     CHECK(ms.unknown && !clean_real(&ms, "/home/m/x", real, sizeof real));
     // Each mount's far or not from its own type, read once (the F15 code-health review: it read the
-    // whole list again per mount): the same answer as thumb_local, mount by mount, with a later
-    // mount on the same point, a fuse type, an nfs one over a local one.
+    // whole list again per mount), with a later mount on the same point, a fuse type, an nfs one over
+    // a local one; a line with no type left out (step C: one table for everyone, thumb_local's rule).
     {
         static const char *const MI = "1 0 0:1 / / rw - ext4 a rw\n2 1 0:2 / /n rw - nfs4 b rw\n3 2 0:3 / /n/x rw - ext4 c rw\n"
                                       "4 1 0:4 / /s rw - fuse.sshfs d rw\n5 1 0:5 / /m rw - ext4 e rw\n6 1 0:6 / /m rw - cifs f rw\n"
-                                      "7 2 0:7 / /n/y rw\n";   // (no type: the mount above it decides, as thumb_local reads it)
+                                      "7 2 0:7 / /n/y rw\n";   // (no type: left out, so the mount above it decides)
         static u8 mem2[KiB(16)];
         Arena a2;
         arena_init(&a2, "f11-mounts", mem2, sizeof mem2);
-        CleanMounts all = clean_mounts(&a2, str_from_c(MI));
-        CHECK(all.n == 7 && !clean_local(&all, "/n/y/f"));
-        for (isize i = 0; i < all.n; i++) CHECK(clean_local(&all, all.m[i].mp) == thumb_local(str_from_c(MI), all.m[i].mp));   // (per point: a covered mount's own flag is never read)
-        CHECK(clean_local(&all, "/n/x/f") && !clean_local(&all, "/n/f") && !clean_local(&all, "/s/f") && !clean_local(&all, "/m/f") && clean_local(&all, "/f"));
+        Mounts all = mounts_parse(&a2, str_from_c(MI));
+        CHECK(all.n == 6 && !mounts_local(&all, "/n/y/f") && mounts_at(&all, "/n/y/f") == &all.e[1]);
+        CHECK(mounts_at(&all, "/m/f") == &all.e[5] && all.e[5].far && !all.e[4].far);   // (the later on /m)
+        CHECK(all.e[3].far && !all.e[3].gvfs && !mounts_at(&(Mounts){ 0 }, "/x") && mounts_local(NULL, "/x"));
+        CHECK(mounts_local(&all, "/n/x/f") && !mounts_local(&all, "/n/f") && !mounts_local(&all, "/s/f") && !mounts_local(&all, "/m/f") && mounts_local(&all, "/f"));
     }
     ops_guard(root);
     char path[PATH_MAX], line[256];

@@ -35,13 +35,29 @@ static struct {
 
 static u8 far_mi_mem[KiB(512)];   // the mount list, read for far_dir (main thread only)
 static Arena far_mia;
+static Mounts far_ms;
+static i64 far_ms_at = -1;   // when it was read; -1: read it again (far_mounts_changed)
 
-// The mount list, read again (valid until the next call). Main thread only.
-static Str far_mounts(void)
+// The mount list, parsed (valid until the next call). Main thread only. Kept until the mounts change
+// (far_mounts_changed: the watch thread's word); with no mount watch (inotify missing), a second.
+// It was read and parsed again for every far check: six to eight for each pasted item, up to 4,096
+// items (the F16 code-health review's step C).
+static const Mounts *far_mounts(void)
 {
     if (!far_mia.base) arena_init(&far_mia, "far mounts", far_mi_mem, sizeof far_mi_mem);
-    arena_reset(&far_mia);
-    return read_file(&far_mia, mountinfo_path());
+    i64 now = now_ms();
+    bool watched = watch.mount_fd >= 0 || watch.mount_wd >= 0;
+    if (far_ms_at < 0 || (!watched && now - far_ms_at > 1000)) {
+        arena_reset(&far_mia);
+        far_ms = mounts_parse(&far_mia, read_file(&far_mia, mountinfo_path())), far_ms_at = now;
+    }
+    return &far_ms;
+}
+
+// The mount list changed (the watch thread said so): the next far_mounts reads it again.
+static void far_mounts_changed(void)
+{
+    far_ms_at = -1;
 }
 
 // path resolved, every local link on the way followed, never past a far drive (far_real, F16 step
@@ -94,7 +110,7 @@ static void crumbs_for(UiCrumbs *c, const char *dir)
 static bool far_dir(const char *path)
 {
     if (path[0] != '/') return false;
-    if (!thumb_local(far_mounts(), path)) return true;
+    if (!mounts_local(far_mounts(), path)) return true;
     char real[PATH_MAX];
     bool reaches;
     return far_path(path, real, sizeof real, &reaches) && reaches;
@@ -277,7 +293,7 @@ static bool far_stuck(const char *path)
     char drive[PATH_MAX], other[PATH_MAX], real[PATH_MAX];
     bool gvfs, reaches;
     if (!far_path(path, real, sizeof real, &reaches) || !reaches) return false;   // (through local links too)
-    Str mi = far_mounts();
+    const Mounts *mi = far_mounts();
     if (!far_drive(mi, real, drive, sizeof drive, &gvfs)) return false;
     pthread_mutex_lock(&far.mu);
     bool stuck = false;

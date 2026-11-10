@@ -57,7 +57,7 @@ static void remember_write(void)
     if (!state_path(path, sizeof path)) return;
     int next = 1 - rem.cur;
     arena_reset(&rem.a[next]);
-    CleanMounts ms = clean_mounts(&rem.a[next], read_file(&rem.a[next], mountinfo_path()));
+    Mounts ms = mounts_parse(&rem.a[next], read_file(&rem.a[next], mountinfo_path()));
     if (!folders_write(&rem.a[next], path, &rem.t, &ms, &err)) {
         set_status(true, "%s", err.msg);
         return;

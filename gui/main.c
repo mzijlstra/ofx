@@ -810,7 +810,7 @@ static bool poll_workers(void)
     // The mounts before the folder: a drive unmounted and its folder removed come in one batch,
     // and the folder's going would move ofx to the folder above before the drive's going sends it
     // Home (2026-10-30).
-    if (atomic_exchange(&watch.mounts_ready, false)) places_reload(), trash_state(), dirty = true;
+    if (atomic_exchange(&watch.mounts_ready, false)) far_mounts_changed(), places_reload(), trash_state(), dirty = true;
     if (app.drive_gone) {
         const char *home = getenv("HOME");
         app.drive_gone = false;

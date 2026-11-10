@@ -59,7 +59,7 @@ static void *walk_loop(void *arg)
         static Arena mia;
         arena_init(&mia, "walk mounts", mi_mem, sizeof mi_mem);
         w = (DuWalk){ .gen = &walk.gen, .mine = gen, .tick = walk_tick, .ctx = (void *)(uintptr_t)gen, .inodes = walk_inodes,
-                      .mounts = read_file(&mia, mountinfo_path()), .pts = pts, .pts_cap = sizeof pts };   // (the mount points under the roots: never stat'ed)
+                      .mounts = mounts_parse(&mia, read_file(&mia, mountinfo_path())), .pts = pts, .pts_cap = sizeof pts };   // (the mount points under the roots: never stat'ed)
         DuSum s;
         bool whole = du_walk(&w, roots, n, &s);
         pthread_mutex_lock(&walk.mu);

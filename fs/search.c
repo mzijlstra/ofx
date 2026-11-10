@@ -121,7 +121,7 @@ typedef struct {
     // The mount list (F16 step 3; empty: none): a far drive's mount point and a link into one are
     // never looked at (a dead share would hold the walk's thread, and with it ofx's exit). root:
     // the folder searched, resolved by far_real (rel's folders are below it, not links).
-    Str                mounts;
+    Mounts             mounts;
     char               root[PATH_MAX];
     SearchSkips        s;
     isize              seen;
@@ -283,14 +283,14 @@ static bool search_at(const SearchWalk *w, char *out, size_t cap)
 // nothing on the far drive looked at.
 static bool search_far(const SearchWalk *w, int dfd, const char *nm, unsigned char t)
 {
-    if (!w->mounts.len || (t != DT_DIR && t != DT_LNK && t != DT_UNKNOWN)) return false;
+    if (!w->mounts.n || (t != DT_DIR && t != DT_LNK && t != DT_UNKNOWN)) return false;
     char dir[PATH_MAX], p[PATH_MAX], tg[PATH_MAX], abs[PATH_MAX], real[PATH_MAX];
     if (!search_at(w, dir, sizeof dir) || !path_put(p, sizeof p, dir, str_from_c(nm))) return false;
-    if (!thumb_local(w->mounts, p)) return true;
+    if (!mounts_local(&w->mounts, p)) return true;
     if (t == DT_DIR) return false;
     bool far = false;
     ssize_t n = readlinkat(dfd, nm, tg, sizeof tg - 1);   // (DT_UNKNOWN: fails unless it is a link)
-    return n > 0 && link_abs(dir, (Str){ tg, n }, abs, sizeof abs) && far_real(w->mounts, abs, real, sizeof real, &far) && far;
+    return n > 0 && link_abs(dir, (Str){ tg, n }, abs, sizeof abs) && far_real(&w->mounts, abs, real, sizeof real, &far) && far;
 }
 
 // The folder fd (closed here) and everything below it it may enter. False when stopped or full.
@@ -370,8 +370,8 @@ static bool search_walk(SearchWalk *w, const char *root)
     w->s = (SearchSkips){ 0 }, w->seen = 0, w->rel_len = 0, w->rel[0] = 0;
     struct stat st;
     bool far = false;
-    if (!w->mounts.len) snprintf(w->root, sizeof w->root, "%s", root);
-    else if (!far_real(w->mounts, root, w->root, sizeof w->root, &far) || far) {   // (a far folder searched: none of it read)
+    if (!w->mounts.n) snprintf(w->root, sizeof w->root, "%s", root);
+    else if (!far_real(&w->mounts, root, w->root, sizeof w->root, &far) || far) {   // (a far folder searched: none of it read)
         if (far) w->s.far++;
         else w->s.unread++;
         if (w->tick) w->tick(w->ctx, &w->s);

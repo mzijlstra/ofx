@@ -103,7 +103,7 @@ static bool search_found_cb(void *ctx, Str dir, Str name, int fd, const SearchHi
         search_dir_last = (Str){ p, dir.len };
     }
     char at[PATH_MAX];   // (a far mount point or a link into a far drive: not looked at, F16 step 3)
-    if (!search_at(w, at, sizeof at) || !entry_read_far(&search_arena, fd, at, name.p, w->mounts, &search_res[search_wrote])) return false;
+    if (!search_at(w, at, sizeof at) || !entry_read_far(&search_arena, fd, at, name.p, &w->mounts, &search_res[search_wrote])) return false;
     if (hit && !(search_res[search_wrote].hit = search_hit_copy(&search_arena, hit))) return false;
     search_res[search_wrote++].dir = search_dir_last;
     if (now_ms() - search_pub_at >= SEARCH_PUBLISH_MS) search_publish(w, false);
@@ -139,7 +139,7 @@ static void *search_loop(void *arg)
         SearchWalk w = { .gen = &search.gen, .mine = gen, .hidden = hidden, .skips = &search_skips_mine, .match = search_match_cb,
                          .found = search_found_cb, .tick = search_tick_cb };
         if (inside.len) w.line = search_line_cb, w.buf = search_buf;
-        w.mounts = read_file(&search_arena, mountinfo_path());   // (F16 step 3: far drives never entered)
+        w.mounts = mounts_parse(&search_arena, read_file(&search_arena, mountinfo_path()));   // (F16 step 3: far drives never entered)
         w.ctx = &w;
         search_walk(&w, search_root);
         search_publish(&w, true);   // (stopped: another generation, nothing published)

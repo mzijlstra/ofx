@@ -200,10 +200,10 @@ static void test_tree_far(void)
     Str top = str_from_c(arena_cstr(&ta, str_from_c(at("treefar/top"))));
     tree_follow(&t, at("treefar/top/share/inside"));
     tree_follow(&t, at("treefar/top/local/inside"));
-    t.mounts = str_from_c(arena_sprintf(&ta, "1 0 0:1 / / rw - ext4 /dev/x rw\n2 1 0:2 / %s rw - fuse.gvfsd-fuse gvfsd-fuse rw\n", at("treefar/top/share")));
+    t.mounts = mounts_parse(&ta, str_from_c(arena_sprintf(&ta, "1 0 0:1 / / rw - ext4 /dev/x rw\n2 1 0:2 / %s rw - fuse.gvfsd-fuse gvfsd-fuse rw\n", at("treefar/top/share"))));
     tree_build(&ta, &t, top, false);
     CHECK(t.n == 4 && str_eq(t.row[1].name, S("local")) && str_eq(t.row[2].name, S("inside")) && str_eq(t.row[3].name, S("share")) && t.row[3].open);
-    t.mounts = STR_EMPTY;   // (none: everything read, as before F16)
+    t.mounts = (Mounts){ 0 };   // (none: everything read, as before F16)
     tree_build(&ta, &t, top, false);
     CHECK(t.n == 5 && str_eq(t.row[4].name, S("inside")));
 }
@@ -313,11 +313,11 @@ static void test_fs_list_far(void)
     CHECK(symlink(at("flf/share/f.txt"), at("flf/home/tofile")) == 0);
     CHECK(symlink("../share", at("flf/home/nas")) == 0);
     CHECK(symlink("local.txt", at("flf/home/ll")) == 0);
-    Str mounts = str_from_c(arena_sprintf(&ta, "1 0 0:1 / / rw - ext4 /dev/x rw\n2 1 0:2 / %s rw - fuse.gvfsd-fuse g rw\n3 1 0:3 / %s rw - nfs4 h:/x rw\n",
-                                          at("flf/share"), at("flf/home/mp")));
+    Mounts mounts = mounts_parse(&ta, str_from_c(arena_sprintf(&ta, "1 0 0:1 / / rw - ext4 /dev/x rw\n2 1 0:2 / %s rw - fuse.gvfsd-fuse g rw\n3 1 0:3 / %s rw - nfs4 h:/x rw\n",
+                                          at("flf/share"), at("flf/home/mp"))));
     Listing l;
     Err err;
-    CHECK(fs_list_far(&ta, at("flf/home"), false, (Sort){ SORT_NAME, false }, mounts, &l, &err) && l.n == 5);
+    CHECK(fs_list_far(&ta, at("flf/home"), false, (Sort){ SORT_NAME, false }, &mounts, &l, &err) && l.n == 5);
     struct { const char *name; Kind kind; bool far; } want[] = {
         { "mp", K_DIR, true }, { "nas", K_LINK_DIR, true }, { "tofile", K_LINK_DIR, true }, { "ll", K_LINK_FILE, false }, { "local.txt", K_FILE, false },
     };
@@ -334,16 +334,16 @@ static void test_fs_list_far(void)
     put(at("flf/real/nas"), "a file standing in for a share's root");
     CHECK(symlink("../nas", at("flf/real/proj/nas")) == 0);
     CHECK(symlink("real/proj", at("flf/proj")) == 0);
-    Str m2 = str_from_c(arena_sprintf(&ta, "1 0 0:1 / / rw - ext4 /dev/x rw\n2 1 0:2 / %s rw - fuse.sshfs s rw\n", at("flf/real/nas")));
-    CHECK(fs_list_far(&ta, at("flf/proj"), false, (Sort){ SORT_NAME, false }, m2, &l, &err) && l.n == 1);
+    Mounts m2 = mounts_parse(&ta, str_from_c(arena_sprintf(&ta, "1 0 0:1 / / rw - ext4 /dev/x rw\n2 1 0:2 / %s rw - fuse.sshfs s rw\n", at("flf/real/nas"))));
+    CHECK(fs_list_far(&ta, at("flf/proj"), false, (Sort){ SORT_NAME, false }, &m2, &l, &err) && l.n == 1);
     CHECK(l.e[0].kind == K_LINK_DIR && l.e[0].far);
     // The tree from the same linked folder: nasf (a far "file") still a folder, nasd (a far folder
     // with a child) open but not read; both judged from flf/real/proj, not the path's text.
     put(at("flf/real/nasf"), "f");
     mkdirs(at("flf/real/nasd/c"));
     CHECK(symlink("../nasf", at("flf/real/proj/nasf")) == 0 && symlink("../nasd", at("flf/real/proj/nasd")) == 0);
-    Str m3 = str_from_c(arena_sprintf(&ta, "1 0 0:1 / / rw - ext4 /dev/x rw\n2 1 0:2 / %s rw - fuse.sshfs s rw\n3 1 0:3 / %s rw - fuse.sshfs s rw\n",
-                                      at("flf/real/nasf"), at("flf/real/nasd")));
+    Mounts m3 = mounts_parse(&ta, str_from_c(arena_sprintf(&ta, "1 0 0:1 / / rw - ext4 /dev/x rw\n2 1 0:2 / %s rw - fuse.sshfs s rw\n3 1 0:3 / %s rw - fuse.sshfs s rw\n",
+                                      at("flf/real/nasf"), at("flf/real/nasd"))));
     static Tree tp;
     tp = (Tree){ 0 };
     tree_follow(&tp, at("flf/proj/nasd/c"));
@@ -364,7 +364,7 @@ static void test_fs_list_far(void)
     bool found = false;
     for (int i = 0; i < t.n; i++) found |= str_eq(t.row[i].name, S("nas"));
     CHECK(found && t.n == 3 && t.row[1].open && str_eq(t.row[2].name, S("tofile")));   // (home, nas open, tofile: nothing below nas; mp, a file here, has no folder d_type)
-    t.mounts = STR_EMPTY;
+    t.mounts = (Mounts){ 0 };
     tree_build(&ta, &t, str_from_c(arena_cstr(&ta, str_from_c(at("flf/home")))), false);
     CHECK(t.n == 3 && str_eq(t.row[2].name, S("d")) && t.row[2].depth == 2);   // (nas read: d below it; tofile followed to a file, gone)
 }
@@ -385,7 +385,7 @@ static void test_far_real(void)
     CHECK(symlink("../share", at("fr/links/nas")) == 0);
     CHECK(symlink("loop", at("fr/home/loop")) == 0);
     CHECK(symlink(at("fr/home"), at("fr/abs")) == 0);
-    Str mounts = str_from_c(arena_sprintf(&ta, "1 0 0:1 / / rw - ext4 /dev/x rw\n2 1 0:2 / %s rw - fuse.gvfsd-fuse g rw\n", at("fr/share")));
+    Mounts mounts = mounts_parse(&ta, str_from_c(arena_sprintf(&ta, "1 0 0:1 / / rw - ext4 /dev/x rw\n2 1 0:2 / %s rw - fuse.gvfsd-fuse g rw\n", at("fr/share"))));
     char real[PATH_MAX], out[PATH_MAX];
     bool far;
     CHECK(realpath(at("fr"), real));   // (the test root may itself sit below a link)
@@ -400,13 +400,13 @@ static void test_far_real(void)
     };
     for (int i = 0; i < COUNT(c); i++) {
         far = !c[i].far;
-        bool ok = far_real(mounts, at(c[i].path), out, sizeof out, &far);
+        bool ok = far_real(&mounts, at(c[i].path), out, sizeof out, &far);
         char want[PATH_MAX + 16];
         snprintf(want, sizeof want, "%s%s", real, c[i].want);
         if (!ok || strcmp(out, want) != 0 || far != c[i].far) fprintf(stderr, "far_real %s: %d %s %d\n", c[i].path, ok, ok ? out : strerror(errno), far);
         CHECK(ok && strcmp(out, want) == 0 && far == c[i].far);
     }
-    CHECK(far_real(mounts, "/", out, sizeof out, &far) && strcmp(out, "/") == 0 && !far);
+    CHECK(far_real(&mounts, "/", out, sizeof out, &far) && strcmp(out, "/") == 0 && !far);
     // Errors as realpath's, from the local parts.
     struct { const char *path; int e; } bad[] = {
         { "fr/home/missing/x", ENOENT }, { "fr/home/x.txt/y", ENOTDIR }, { "fr/home/loop", ELOOP },
@@ -414,7 +414,7 @@ static void test_far_real(void)
     };
     for (int i = 0; i < COUNT(bad); i++) {
         errno = 0;
-        CHECK(!far_real(mounts, at(bad[i].path), out, sizeof out, &far) && errno == bad[i].e);
+        CHECK(!far_real(&mounts, at(bad[i].path), out, sizeof out, &far) && errno == bad[i].e);
     }
     // A chain of 41 links: one past the kernel's 40, refused as realpath refuses it.
     mkdirs(at("fr/chain"));
@@ -425,37 +425,37 @@ static void test_far_real(void)
         CHECK(symlink(to, from) == 0);
     }
     errno = 0;
-    CHECK(!far_real(mounts, at("fr/chain/l0"), out, sizeof out, &far) && errno == ELOOP);
-    CHECK(far_real(mounts, at("fr/chain/l1"), out, sizeof out, &far) && !far);   // (40: still followed)
+    CHECK(!far_real(&mounts, at("fr/chain/l0"), out, sizeof out, &far) && errno == ELOOP);
+    CHECK(far_real(&mounts, at("fr/chain/l1"), out, sizeof out, &far) && !far);   // (40: still followed)
     // No mount list: realpath's answer (share is a plain folder here).
-    CHECK(far_real(STR_EMPTY, at("fr/home/mylinks/nas/d"), out, sizeof out, &far) && !far);
+    CHECK(far_real(NULL, at("fr/home/mylinks/nas/d"), out, sizeof out, &far) && !far);
     char want[PATH_MAX + 16];
     snprintf(want, sizeof want, "%s/share/d", real);
     CHECK(strcmp(out, want) == 0);
-    CHECK(!far_real(STR_EMPTY, at("fr/home/nas/missing"), out, sizeof out, &far) && errno == ENOENT);
+    CHECK(!far_real(NULL, at("fr/home/nas/missing"), out, sizeof out, &far) && errno == ENOENT);
     // A part longer than a path can be: refused before it is put together.
     char *longp = arena_sprintf(&ta, "%s/%0*d", at("fr/home"), 5000, 0);
-    CHECK(!far_real(mounts, longp, out, sizeof out, &far) && errno == ENAMETOOLONG);
+    CHECK(!far_real(&mounts, longp, out, sizeof out, &far) && errno == ENAMETOOLONG);
     // Relative: from the current folder (ofx's start, ".").
     int here = open(".", O_RDONLY | O_DIRECTORY | O_CLOEXEC);
     CHECK(here >= 0 && chdir(at("fr/home")) == 0);
-    CHECK(far_real(mounts, "mylinks/nas/q", out, sizeof out, &far) && far);
+    CHECK(far_real(&mounts, "mylinks/nas/q", out, sizeof out, &far) && far);
     snprintf(want, sizeof want, "%s/share/q", real);
     CHECK(strcmp(out, want) == 0);
-    CHECK(far_real(mounts, ".", out, sizeof out, &far) && !far);
+    CHECK(far_real(&mounts, ".", out, sizeof out, &far) && !far);
     snprintf(want, sizeof want, "%s/home", real);
     CHECK(strcmp(out, want) == 0);
     CHECK(here >= 0 && fchdir(here) == 0);
     if (here >= 0) close(here);
     // Too small an out: refused, not cut.
     char small[8];
-    CHECK(!far_real(mounts, at("fr/home"), small, sizeof small, &far) && errno == ENAMETOOLONG);
+    CHECK(!far_real(&mounts, at("fr/home"), small, sizeof small, &far) && errno == ENAMETOOLONG);
     // A listing in fr/home: chain, a chain through a local link into the share, is far now
     // (step 2b's known gap), not followed.
     CHECK(symlink("mylinks/nas", at("fr/home/chain")) == 0);
     Listing l;
     Err err;
-    CHECK(fs_list_far(&ta, at("fr/home"), false, (Sort){ SORT_NAME, false }, mounts, &l, &err));
+    CHECK(fs_list_far(&ta, at("fr/home"), false, (Sort){ SORT_NAME, false }, &mounts, &l, &err));
     isize k = listing_find(&l, S("chain"));
     CHECK(k >= 0 && l.e[k].kind == K_LINK_DIR && l.e[k].far);
     k = listing_find(&l, S("mylinks"));
@@ -496,7 +496,7 @@ static void test_search_far(void)
     CHECK(symlink("../links", at("sf/top/mylinks")) == 0);
     CHECK(symlink("../top/share", at("sf/links/nas")) == 0);
     CHECK(symlink("mylinks/nas", at("sf/top/chain")) == 0);
-    Str mounts = str_from_c(arena_sprintf(&ta, "1 0 0:1 / / rw - ext4 /dev/x rw\n2 1 0:2 / %s rw - fuse.gvfsd-fuse g rw\n", sh));
+    Mounts mounts = mounts_parse(&ta, str_from_c(arena_sprintf(&ta, "1 0 0:1 / / rw - ext4 /dev/x rw\n2 1 0:2 / %s rw - fuse.gvfsd-fuse g rw\n", sh)));
     SearchWalk w = sw_walk("a", (UiMatchOpts){ 0 }, false);
     w.mounts = mounts;
     CHECK(search_walk(&w, r));
@@ -623,19 +623,19 @@ static void test_far_do(void)
 // one share that doesn't answer isn't taken for another.
 static void test_far_drive(void)
 {
-    Str mi = S("1 0 0:1 / / rw - ext4 /dev/x rw\n2 1 0:2 / /run/u/gvfs rw - fuse.gvfsd-fuse g rw\n3 1 0:3 / /mnt/nas rw - nfs4 h:/x rw\n");
+    Mounts mi = mounts_parse(&ta, S("1 0 0:1 / / rw - ext4 /dev/x rw\n2 1 0:2 / /run/u/gvfs rw - fuse.gvfsd-fuse g rw\n3 1 0:3 / /mnt/nas rw - nfs4 h:/x rw\n"));
     char d[PATH_MAX];
     bool gvfs;
-    CHECK(far_drive(mi, "/run/u/gvfs/smb-share:server=a,share=p/sub/x", d, sizeof d, &gvfs) && gvfs && strcmp(d, "/run/u/gvfs/smb-share:server=a,share=p") == 0);
-    CHECK(far_drive(mi, "/run/u/gvfs/smb-share:server=a,share=p", d, sizeof d, &gvfs) && gvfs && strcmp(d, "/run/u/gvfs/smb-share:server=a,share=p") == 0);
-    CHECK(far_drive(mi, "/run/u/gvfs", d, sizeof d, &gvfs) && gvfs && strcmp(d, "/run/u/gvfs") == 0);
-    CHECK(far_drive(mi, "/mnt/nas/a/b", d, sizeof d, &gvfs) && !gvfs && strcmp(d, "/mnt/nas") == 0);
-    CHECK(far_drive(mi, "/home/m", d, sizeof d, &gvfs) && !gvfs && strcmp(d, "/") == 0);
-    CHECK(!far_drive(S("1 0 0:2 / /mnt/nas rw - nfs4 h:/x rw\n"), "/home/m", d, sizeof d, &gvfs));
+    CHECK(far_drive(&mi, "/run/u/gvfs/smb-share:server=a,share=p/sub/x", d, sizeof d, &gvfs) && gvfs && strcmp(d, "/run/u/gvfs/smb-share:server=a,share=p") == 0);
+    CHECK(far_drive(&mi, "/run/u/gvfs/smb-share:server=a,share=p", d, sizeof d, &gvfs) && gvfs && strcmp(d, "/run/u/gvfs/smb-share:server=a,share=p") == 0);
+    CHECK(far_drive(&mi, "/run/u/gvfs", d, sizeof d, &gvfs) && gvfs && strcmp(d, "/run/u/gvfs") == 0);
+    CHECK(far_drive(&mi, "/mnt/nas/a/b", d, sizeof d, &gvfs) && !gvfs && strcmp(d, "/mnt/nas") == 0);
+    CHECK(far_drive(&mi, "/home/m", d, sizeof d, &gvfs) && !gvfs && strcmp(d, "/") == 0);
+    CHECK(!far_drive(mt(S("1 0 0:2 / /mnt/nas rw - nfs4 h:/x rw\n")), "/home/m", d, sizeof d, &gvfs));
     // The longest mount point holding it, wherever its line is.
-    CHECK(far_drive(S("3 1 0:3 / /mnt/nas rw - nfs4 h:/x rw\n1 0 0:1 / / rw - ext4 /dev/x rw\n"), "/mnt/nas/a", d, sizeof d, &gvfs) && strcmp(d, "/mnt/nas") == 0);
+    CHECK(far_drive(mt(S("3 1 0:3 / /mnt/nas rw - nfs4 h:/x rw\n1 0 0:1 / / rw - ext4 /dev/x rw\n")), "/mnt/nas/a", d, sizeof d, &gvfs) && strcmp(d, "/mnt/nas") == 0);
     char small[16];   // (a share's name that doesn't fit: the mount point alone)
-    CHECK(far_drive(S("2 1 0:2 / /g rw - fuse.gvfsd-fuse g rw\n"), "/g/smb-share:server=a,share=p", small, sizeof small, &gvfs) && strcmp(small, "/g") == 0);
+    CHECK(far_drive(mt(S("2 1 0:2 / /g rw - fuse.gvfsd-fuse g rw\n")), "/g/smb-share:server=a,share=p", small, sizeof small, &gvfs) && strcmp(small, "/g") == 0);
 }
 
 // Connect to Server's address (step 4): smb:// with a server and a share; no password in it.

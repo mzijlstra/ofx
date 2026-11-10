@@ -733,8 +733,8 @@ MUTANTS += [
     (TH, '        if (png_encode(a, (Img){ clear, 1, 1 }, uri, q->mtime, q->size, &png)) thumb_write(fail, png);', '        ;'),
     (TH, '    if (png_encode(a, t, uri, q->mtime, q->size, &png)) thumb_write(file, png);', '    ;'),
     (TH, '    return img_fit(a, t, q->px, out) ? TG_MADE : TG_NONE;', '    return img_fit(a, t, side, out) ? TG_MADE : TG_NONE;'),
-    (TH, "        if (t.len >= n && memcmp(t.p, far[i], (size_t)n) == 0 && (t.len == n || t.p[n] == '.')) return true;", '        if (t.len >= n && memcmp(t.p, far[i], (size_t)n) == 0 && t.len == n) return true;'),
-    (TH, "        if (t.len >= n && memcmp(t.p, far[i], (size_t)n) == 0 && (t.len == n || t.p[n] == '.')) return true;", '        if (t.len >= n && memcmp(t.p, far[i], (size_t)n) == 0) return true;'),
+    ('fs/paths.c', "        if (t.len >= n && memcmp(t.p, far[i], (size_t)n) == 0 && (t.len == n || t.p[n] == '.')) return true;", '        if (t.len >= n && memcmp(t.p, far[i], (size_t)n) == 0 && t.len == n) return true;'),   # (retargeted, step C)
+    ('fs/paths.c', "        if (t.len >= n && memcmp(t.p, far[i], (size_t)n) == 0 && (t.len == n || t.p[n] == '.')) return true;", '        if (t.len >= n && memcmp(t.p, far[i], (size_t)n) == 0) return true;'),   # (retargeted, step C)
     (TH, '                            if (c == transparent || c >= map->ColorCount) continue;', '                            if (c >= map->ColorCount) continue;'),
     (TH, ' || d->Left + d->Width > g->SWidth || ', ' || '),
     (TH, '                    for (int y = d->Interlace ? start[pass] : 0; ok', '                    for (int y = 0; ok'),
@@ -758,7 +758,7 @@ MUTANTS += [
     (CL, "        if (p == d || p - d > 10 || *p != (part ? '.' : '-')) return false;", "        if (p == d || p - d > 10 || *p != (part ? '.' : '.')) return false;"),
     (CL, '    const char *p = n + 5;\n    for (int part = 0; part < 2; part++) {', '    const char *p = n + 5;\n    for (int part = 0; part < 1; part++) {'),
     (CL, '    return strcmp(p, "png") == 0;', '    return strncmp(p, "png", 3) == 0;'),
-    (CL, "    CleanMounts ms = { arena_try_new(a, CleanMount, lines + 1), 0, false };", "    CleanMounts ms = { arena_try_new(a, CleanMount, 1), 0, false };"),
+    ('fs/paths.c', '    MountEnt *e = arena_try_new(a, MountEnt, lines + 1);', '    MountEnt *e = arena_try_new(a, MountEnt, 1);'),   # (retargeted, step C)
     (CL, '{ { "/run/media/", 2 }, { "/media/", 1 }, { "/mnt/", 1 } };', '{ { "/run/media/", 1 }, { "/media/", 1 }, { "/mnt/", 1 } };'),
     (CL, '{ { "/run/media/", 2 }, { "/media/", 1 }, { "/mnt/", 1 } };', '{ { "/run/media/", 2 }, { "/media/", 1 } };'),
     (CL, '{ { "/run/media/", 2 }, { "/media/", 1 }, { "/mnt/", 1 } };', '{ { "/run/media/", 2 }, { "/mnt/", 1 } };'),
@@ -800,23 +800,23 @@ MUTANTS += [
     (CL, "            clean_real(ms, path, real, sizeof real) && !clean_absent_drive(ms, real)) {", "            clean_real(ms, path, real, sizeof real) && !clean_absent_drive(ms, path)) {"),
     (CL, "            clean_real(ms, path, real, sizeof real) && !clean_absent_drive(ms, real)) {", "            !clean_absent_drive(ms, path)) {"),
     (CL, "            if (stat(path, &f) != 0) r =", "            if (lstat(path, &f) != 0) r ="),
-    (CL, "        if (!clean_local(ms, out)) return false;\n", ""),
+    # (dropped, step C: clean_real's own walk is path_walk now, whose own mutants cover this step)
     # ---- the mount list parsed once a run (clean_mounts, clean_local)
-    (CL, "    CleanMounts ms = clean_mounts(a, mountinfo);", "    CleanMounts ms = clean_mounts(a, STR_EMPTY);"),
-    (CL, "!thumb_local(mountinfo, mp) };", "false };"),
+    ('fs/clean.c', '    Mounts ms = mounts_parse(a, mountinfo);', '    Mounts ms = mounts_parse(a, STR_EMPTY);'),   # (retargeted, step C)
+    # (dropped, step C: a line with no type is left out now, not given its parent's verdict)
     # Not a mutant: `>` for `>=` in clean_local is equivalent, as far is thumb_local's verdict on
     # the mount point, the same for every line on that point.
-    (CL, "    return !far;", "    return far;"),
-    (CL, "        if (strcmp(ms->m[i].mp, dir) == 0) return true;", "        if (strncmp(ms->m[i].mp, dir, strlen(dir)) == 0) return true;"),
-    (CL, "        if (++hops > 40) return false;", "        if (++hops > 40000) return false;"),
-    (CL, "        if (t[0] == '/') snprintf(out, cap, \"/\");", "        ;"),
-    (CL, "        if (strcmp(part, \".\") == 0) continue;", ""),
-    (CL, "            s == out ? (void)(out[1] = 0) : (void)(*s = 0);\n            continue;", "            continue;"),
-    (CL, "        if (k < 0) continue;   // not a link, or not there: kept as it is", "        if (k < 0) return false;"),
-    (CL, "        s == out ? (void)(out[1] = 0) : (void)(*s = 0);\n        if (t[0] == '/')", "        if (t[0] == '/')"),
-    (CL, "        if (snprintf(out + o, cap - o, \"%s%s\", o > 1 ? \"/\" : \"\", part) >= (int)(cap - o)) return false;", "        snprintf(out + o, cap - o, \"%s%s\", o > 1 ? \"/\" : \"\", part);"),
-    (CL, "        if (snprintf(out + o, cap - o, \"%s%s\", o > 1 ? \"/\" : \"\", part) >= (int)(cap - o)) return false;", "        if (snprintf(out + o, cap - o, \"%s%s\", \"/\", part) >= (int)(cap - o)) return false;"),
-    (CL, "        while (*p == '/') p++;", "        if (*p == '/') p++;"),
+    ('fs/paths.c', '    return !m || !m->far;', '    return !m || m->far;'),   # (retargeted, step C)
+    ('fs/clean.c', '        if (strcmp(ms->e[i].mp, dir) == 0) return true;', '        if (strncmp(ms->e[i].mp, dir, strlen(dir)) == 0) return true;'),   # (retargeted, step C)
+    # (dropped, step C: clean_real's own walk is path_walk now, whose own mutants cover this step)
+    # (dropped, step C: clean_real's own walk is path_walk now, whose own mutants cover this step)
+    # (dropped, step C: clean_real's own walk is path_walk now, whose own mutants cover this step)
+    # (dropped, step C: clean_real's own walk is path_walk now, whose own mutants cover this step)
+    ('fs/list.c', '        if (!there && !(flags & WALK_MISSING_OK)) return false;', '        if (!there) return false;'),   # (retargeted, step C)
+    # (dropped, step C: clean_real's own walk is path_walk now, whose own mutants cover this step)
+    # (dropped, step C: clean_real's own walk is path_walk now, whose own mutants cover this step)
+    # (dropped, step C: clean_real's own walk is path_walk now, whose own mutants cover this step)
+    # (dropped, step C: clean_real's own walk is path_walk now, whose own mutants cover this step)
 ]
 
 # ---- F7.1: the menu bar, New Window, Create New Empty File, the state's one key, the registry
@@ -948,7 +948,7 @@ MUTANTS += [
     (PR, "        if (fstatat(dirfd(d), e->d_name, &st, AT_SYMLINK_NOFOLLOW) != 0) {", "        if (fstatat(dirfd(d), e->d_name, &st, 0) != 0) {"),
     # Not a mutant without a mount to walk onto: `st.st_dev != w->dev` (a drive mounted inside a
     # folder counted, not entered; network mounts below one never read). Kept; checked by hand.
-    ('fs/props.c', '            if (sub < 0) s->cut = true;\n            else if (w->pts_len', '            if (sub < 0) {}\n            else if (w->nbelow'),   # (retargeted, step 8 A)
+    ('fs/props.c', '            if (sub < 0) s->cut = true;\n            else if (w->pts_len', '            if (sub < 0) {}\n            else if (w->pts_len'),   # (retargeted, step 8 A)
     (PR, "    s->files++, s->bytes += st->st_size, s->once_bytes += st->st_size;", "    s->files++, s->once_bytes += st->st_size;"),
     # ---- hard links counted once too (Michael, 2026-10-26)
     (PR, "    s->files++, s->bytes += st->st_size, s->once_bytes += st->st_size;", "    s->files++, s->bytes += st->st_size;"),
@@ -1570,7 +1570,7 @@ MUTANTS += [
     (L, "        if (str_eq(l->e[i].name, name) && str_eq(l->e[i].dir, dir)) return i;", "        if (str_eq(l->e[i].name, name)) return i;"),
     (L, "    int n = e->dir.len ? snprintf(buf, cap, \"%.*s/%.*s\", STR_ARG(e->dir), STR_ARG(e->name)) : snprintf(buf, cap, \"%.*s\", STR_ARG(e->name));", "    int n = snprintf(buf, cap, \"%.*s\", STR_ARG(e->name));"),
     (L, "    return n >= 0 && (size_t)n < cap ? (Str){ buf, n } : STR_EMPTY;", "    return n >= 0 ? (Str){ buf, n } : STR_EMPTY;"),
-    (L, "        if (!entry_read_far(a, fd, at, nm, mounts, &e[n])) {", "        if (!entry_read_far(a, fd, at, nm, mounts, &e[n]) && false) {"),
+    ('fs/list.c', '        if (!entry_read_far(a, fd, at, nm, ms, &e[n])) {', '        if (!entry_read_far(a, fd, at, nm, ms, &e[n]) && false) {'),   # (retargeted, step C)
     # the wildcard
     ('ui/match.c', "    return !m->o.regex && (memchr(m->text, '*', (size_t)m->len) || memchr(m->text, '?', (size_t)m->len));", "    return memchr(m->text, '*', (size_t)m->len) || memchr(m->text, '?', (size_t)m->len);"),
     ('ui/match.c', "    return !m->o.regex && (memchr(m->text, '*', (size_t)m->len) || memchr(m->text, '?', (size_t)m->len));", "    return !m->o.regex && memchr(m->text, '*', (size_t)m->len);"),
@@ -1705,12 +1705,12 @@ MUTANTS += [
     ('fs/places.c', 'if (path_within(path, p) && (best < 0 || n > best_n)) best = i, best_n = n;', 'if (path_within(path, p) && best < 0) best = i, best_n = n;'),
     ('fs/places.c', '    if (!file_uri_path(*uri, path, cap)) return path[0] = 0, false;', '    file_uri_path(*uri, path, cap);'),
     ('fs/thumb.c', '    if (path_below(q->path, q->root)) return TG_NONE;', '    if (0) return TG_NONE;'),
-    ('fs/thumb.c', '        if (!path_within(path, mp) || (isize)n < best || !t.len) continue;', '        if (!path_within(path, mp) || (isize)n <= best || !t.len) continue;'),
-    ('fs/thumb.c', '        if (!path_within(path, mp) || (isize)n < best || !t.len) continue;', '        if ((isize)n < best || !t.len) continue;'),
+    ('fs/paths.c', '(!best || ms->e[i].n >= best->n) && path_within', '(!best || ms->e[i].n > best->n) && path_within'),   # (retargeted, step C)
+    ('fs/paths.c', '        if ((!best || ms->e[i].n >= best->n) && path_within(path, ms->e[i].mp)) best = &ms->e[i];', '        if (!best || ms->e[i].n >= best->n) best = &ms->e[i];'),   # (retargeted, step C)
     ('fs/paths.c', '    return percent_encode(str_from_c(path), "!$&\'()*+,=@:/", out + 7, cap - 7);', '    return percent_encode(str_from_c(path), "!$\'()*+,=@:/", out + 7, cap - 7);'),
     ('fs/thumb.c', ' || !ops_allowed(file, &err) || !mkdir_p(file, 0700, false, &err)) return false;', ' || !mkdir_p(file, 0700, false, &err)) return false;'),
     ('fs/thumb.c', '!mkdir_p(file, 0700, false, &err)) return false;', '!mkdir_p(file, 0755, false, &err)) return false;'),
-    ('fs/clean.c', '        if (path_within(path, m->mp) && (isize)m->n >= best) best', '        if (path_within(path, m->mp)) best'),
+    ('fs/paths.c', '        if ((!best || ms->e[i].n >= best->n) && path_within(path, ms->e[i].mp)) best = &ms->e[i];', '        if (path_within(path, ms->e[i].mp)) best = &ms->e[i];'),   # (retargeted, step C)
     ('fs/trash.c', '    if (strcmp(top, "/") == 0) return res + 1;\n', ''),
     ('fs/trash.c', '    return path_below(res, top) ? res + strlen(top) + 1 : res;', '    return res + strlen(top) + 1;'),
     ('fs/trash.c', '    if (!top[0]) return res;\n', ''),
@@ -2108,7 +2108,7 @@ MUTANTS += [
 MUTANTS += [
     ('fs/state.c', '    if (text->len == 0 && stat(path, &st) == 0 && st.st_size > 0) return err_set', '    if (false) return err_set'),
     ('fs/state.c', '    if (fd >= 0 && flock(fd, LOCK_EX) != 0) close(fd), fd = -1;', '    if (fd >= 0 && 0) close(fd), fd = -1;'),
-    ('fs/thumb.c', '"lustre", "fuse", "autofs" };', '"lustre", "fuse" };'),
+    ('fs/paths.c', '"lustre", "fuse", "autofs" };', '"lustre", "fuse" };'),   # (retargeted, step C)
 ]
 MUTANTS += [
     # the review's LOW on f3092a0: tree='s room from the paths themselves
@@ -2148,8 +2148,8 @@ MUTANTS += [
 ]
 MUTANTS += [
     # F11 milestone review, step 1 (2026-11-02)
-    (CL, '    if (ms->unknown) return false;   // (no mount list', '    // (no mount list'),
-    (CL, '        if (!p) return (CleanMounts){ NULL, 0, true };', '        if (!p) return ms;'),
+    ('fs/clean.c', '    return !ms->unknown && path_walk(', '    return path_walk('),   # (retargeted, step C)
+    ('fs/paths.c', '        if (!p) return (Mounts){ NULL, 0, true };', '        if (!p) return (Mounts){ e, n, false };'),   # (retargeted, step C)
     (SE, '        const char *s = a ? folder_str(a, str_from_c(p)) : "";', '        const char *s = "";'),
 ]
 MUTANTS += [
@@ -2734,49 +2734,49 @@ MUTANTS += [
     ('fs/farlist.c', 'if (n < 0 || (size_t)n + (size_t)name.len > cap || name.len < 1 || name.len > NAME_MAX) return 0;', 'if (n < 0 || name.len < 1 || name.len > NAME_MAX) return 0;'),
     ('fs/farlist.c', 'if (n < 0 || (size_t)n + (size_t)name.len > cap || name.len < 1 || name.len > NAME_MAX) return 0;', 'if (n < 0 || (size_t)n + (size_t)name.len > cap || name.len > NAME_MAX) return 0;'),
     ('fs/farlist.c', 'if (n < 0 || (size_t)n + (size_t)name.len > cap || name.len < 1 || name.len > NAME_MAX) return 0;', 'if (n < 0 || (size_t)n + (size_t)name.len > cap || name.len < 1) return 0;'),
-    ('fs/tree.c', '    if (t->mounts.len && (!far_real(t->mounts, dir, real, sizeof real, &far) || far)) return;', ''),
+    ('fs/tree.c', '    if (t->mounts.n && (!far_real(&t->mounts, dir, real, sizeof real, &far) || far)) return;', ''),   # (retargeted, step C)
     ('ui/helpers.c', '    if (in->opening) {\n        snprintf(buf, cap, "Opening\\xE2\\x80\\xA6");\n        return;\n    }\n', ''),
     ('fs/spawn.c', '    if (in >= 0) posix_spawn_file_actions_adddup2(&fa, in, 0);\n    else posix_spawn_file_actions_addopen', '    posix_spawn_file_actions_addopen'),
     ('fs/spawn.c', '    else if (errs == SPAWN_ERR_NULL) posix_spawn_file_actions_addopen(&fa, 2, "/dev/null", O_WRONLY, 0);\n', ''),
     ('fs/spawn.c', '    if (errs >= 0) posix_spawn_file_actions_adddup2(&fa, errs, 2);', '    if (errs >= 0) {}'),
     # ---- F16 step 2b: links into far drives, far mount points
-    ('fs/list.c', '    if (look && !thumb_local(mounts, p)) return *far = true, *st = (struct stat){ .st_mode = S_IFDIR }, K_DIR;\n', ''),
-    ('fs/list.c', '        if (n > 0 && link_abs(dir, (Str){ t, n }, abs, sizeof abs) && far_real(mounts, abs, real, sizeof real, &f) && f) return *far = true, K_LINK_DIR;\n', ''),
+    ('fs/list.c', '    if (look && !mounts_local(ms, p)) return *far = true, *st = (struct stat){ .st_mode = S_IFDIR }, K_DIR;\n', ''),   # (retargeted, step C)
+    ('fs/list.c', '        if (n > 0 && link_abs(dir, (Str){ t, n }, abs, sizeof abs) && far_real(ms, abs, real, sizeof real, &f) && f) return *far = true, K_LINK_DIR;\n', ''),   # (retargeted, step C)
     ('fs/list.c', '        .far = far,\n', ''),
     ('fs/list.c', '    int n = target.len && target.p[0] == \'/\' ? snprintf(buf, sizeof buf, "%.*s", STR_ARG(target)) :', '    int n = 0 ? snprintf(buf, sizeof buf, "%.*s", STR_ARG(target)) :'),
     ('fs/list.c', "        if (len == 0 || (len == 1 && seg[0] == '.')) continue;\n        if (len == 2 && seg[0] == '.' && seg[1] == '.') {   // (the last part off", "        if (len == 0) continue;\n        if (len == 2 && seg[0] == '.' && seg[1] == '.') {   // (the last part off"),
     ('fs/list.c', "            while (o > 0 && out[o - 1] != '/') o--;\n            if (o > 0) o--;\n", "            while (o > 0 && out[o - 1] != '/') o--;\n"),
     ('fs/list.c', '        if (o + 1 + len + 1 > cap) return false;', '        if (o + 1 + len > cap) return false;'),
     ('fs/list.c', "    if (o == 0) out[o++] = '/';\n", ''),
-    ('fs/tree.c', '    if (t->mounts.len && (!far_real(t->mounts, dir, real, sizeof real, &far) || far)) return;', '    if (t->mounts.len && !far_real(t->mounts, dir, real, sizeof real, &far)) return;'),
-    ('fs/tree.c', '    return kind_is_dir(kind_of_far(dirfd, dir, de->d_name, mounts, &st, &far));', '    return kind_is_dir(kind_of_far(dirfd, dir, de->d_name, STR_EMPTY, &st, &far));'),
+    ('fs/tree.c', '    if (t->mounts.n && (!far_real(&t->mounts, dir, real, sizeof real, &far) || far)) return;', '    if (t->mounts.n && !far_real(&t->mounts, dir, real, sizeof real, &far)) return;'),   # (retargeted, step C)
+    ('fs/tree.c', '    return kind_is_dir(kind_of_far(dirfd, dir, de->d_name, ms, &st, &far));', '    return kind_is_dir(kind_of_far(dirfd, dir, de->d_name, NULL, &st, &far));'),   # (retargeted, step C)
     # (the step 2b review: the far checks from the folder's real path)
-    ('fs/list.c', '    const char *at = mounts.len && far_real(mounts, dir, real, sizeof real, &f) ? real : dir;', '    const char *at = dir;'),
-    ('fs/tree.c', '    const char *at = t->mounts.len ? real : dir;', '    const char *at = dir;'),
+    ('fs/list.c', '    const char *at = ms && ms->n && far_real(ms, dir, real, sizeof real, &f) ? real : dir;', '    const char *at = dir;'),   # (retargeted, step C)
+    ('fs/tree.c', '    const char *at = t->mounts.n ? real : dir;', '    const char *at = dir;'),   # (retargeted, step C)
     # ---- F16 step 3: far_real, the search walk
     ('fs/list.c', '    if (path[0] != \'/\' && !getcwd(cwd, sizeof cwd)) return false;', '    if (0) return false;'),
     ('fs/list.c', '        if (len == 0 || (len == 1 && seg[0] == \'.\')) continue;\n        if (len == 2 && seg[0] == \'.\' && seg[1] == \'.\') {   // (res is real', '        if (len == 0) continue;\n        if (len == 2 && seg[0] == \'.\' && seg[1] == \'.\') {   // (res is real'),
     ('fs/list.c', '            while (rl > 0 && res[rl - 1] != \'/\') rl--;\n            if (rl > 0) rl--;\n            res[rl] = 0;', '            while (rl > 0 && res[rl - 1] != \'/\') rl--;\n            res[rl] = 0;'),
     ('fs/list.c', '        if (rl + 1 + len + 1 > sizeof cand) return errno = ENAMETOOLONG, false;\n', ''),
-    ('fs/list.c', '        if (mounts.len && !thumb_local(mounts, cand)) {   // far from here', '        if (0) {   // far from here'),
+    ('fs/list.c', '        if (!mounts_local(ms, cand)) {   // far from here', '        if (0) {   // far from here'),   # (retargeted, step C)
     ('fs/list.c', "            while (*p == '/') p++;   // (relative to cand", "            {}   // (relative to cand"),
-    ('fs/list.c', '            return *far = !thumb_local(mounts, out), true;', '            return *far = true, true;'),
-    ('fs/list.c', '        if (lstat(cand, &st) != 0) return false;', '        if (lstat(cand, &st) != 0) {}'),
+    ('fs/list.c', '            return *far = !mounts_local(ms, out), true;', '            return *far = true, true;'),   # (retargeted, step C)
+    ('fs/list.c', '        if (!there && !(flags & WALK_MISSING_OK)) return false;', '        if (0) return false;'),   # (retargeted, step C)
     ('fs/list.c', '            if (++links > LINKS_MAX) return errno = ELOOP, false;', '            if (++links > 400000) return errno = ELOOP, false;'),
     ('fs/list.c', '            if (t[0] == \'/\') rl = 0, res[0] = 0;', '            if (0) rl = 0, res[0] = 0;'),
-    ('fs/list.c', '        if (*p && !S_ISDIR(st.st_mode)) return errno = ENOTDIR, false;', '        if (0) return errno = ENOTDIR, false;'),
+    ('fs/list.c', '        if (*p && !S_ISDIR(st.st_mode) && !(flags & WALK_MISSING_OK)) return errno = ENOTDIR, false;', '        if (0) return errno = ENOTDIR, false;'),   # (retargeted, step C)
     ('fs/list.c', '    if ((rl ? rl : 1) + 1 > cap) return errno = ENAMETOOLONG, false;', '    if (0) return errno = ENAMETOOLONG, false;'),
     ('fs/list.c', '    snprintf(out, cap, "%s", rl ? res : "/");', '    snprintf(out, cap, "%s", res);'),
     ('fs/search.c', '    int n = snprintf(out, cap, "%s%s%s", w->root, w->rel_len && strcmp(w->root, "/") != 0 ? "/" : "", w->rel);', '    int n = snprintf(out, cap, "%s/%s", w->root, w->rel);'),
     # (Dropped as inert: the type filter in search_far, and `t == DT_DIR` returning early. Without
     # them a file only costs a path_put, a parse of the mount list and a failing readlinkat; the
     # answer is the same unless a regular file is itself a far mount point, which a share isn't.)
-    ('fs/search.c', '    if (!thumb_local(w->mounts, p)) return true;', ''),
-    ('fs/search.c', 'link_abs(dir, (Str){ tg, n }, abs, sizeof abs) && far_real(w->mounts, abs, real, sizeof real, &far) && far;', 'link_abs(dir, (Str){ tg, n }, abs, sizeof abs) && !thumb_local(w->mounts, abs);'),
+    ('fs/search.c', '    if (!mounts_local(&w->mounts, p)) return true;', ''),   # (retargeted, step C)
+    ('fs/search.c', 'link_abs(dir, (Str){ tg, n }, abs, sizeof abs) && far_real(&w->mounts, abs, real, sizeof real, &far) && far;', 'link_abs(dir, (Str){ tg, n }, abs, sizeof abs) && !mounts_local(&w->mounts, abs);'),   # (retargeted, step C)
     ('fs/search.c', '        if (search_far(w, dirfd(d), nm, t)) {   // (found by its name only', '        if (0) {   // (found by its name only'),
     ('fs/search.c', '            w->s.far++;\n            if (!w->line', '            if (!w->line'),
     ('fs/search.c', '            if (!w->line && w->match(w->ctx, name) && !w->found(', '            if (w->match(w->ctx, name) && !w->found('),
-    ('fs/search.c', '    else if (!far_real(w->mounts, root, w->root, sizeof w->root, &far) || far) {', '    else if (!far_real(w->mounts, root, w->root, sizeof w->root, &far)) {'),
+    ('fs/search.c', '    else if (!far_real(&w->mounts, root, w->root, sizeof w->root, &far) || far) {', '    else if (!far_real(&w->mounts, root, w->root, sizeof w->root, &far)) {'),   # (retargeted, step C)
     ('fs/search.c', '        if (far) w->s.far++;\n        else w->s.unread++;', '        w->s.unread++;'),
     ('fs/search.c', '    SEARCH_PART(s->far, "network folder", "network folders")\n', ''),
     ('ui/helpers.c', '    *was = other[--*no];', '    *was = other[*no - 1];'),
@@ -2803,8 +2803,8 @@ MUTANTS += [
     ('fs/fardo.c', '            f[i - 1] = lstat(argv[i], &st) != 0 ? S("-") : S_ISDIR(st.st_mode) ? S("d") : S("o");', '            f[i - 1] = lstat(argv[i], &st) != 0 ? S("-") : S("o");'),
     ('fs/fardo.c', '        if (argc < 4 || (argc - 1) % 3 != 0 ||', '        if (argc < 4 ||'),
     # (Justified: frees' "" for a name not free, as free's was: 10,000 names taken.)
-    ('fs/list.c', '        if (!path_within(path, mp) || n < best) continue;   // (a later mount', '        if (!path_within(path, mp)) continue;   // (a later mount'),
-    ('fs/list.c', '    *gvfs = strcmp(type, "fuse.gvfsd-fuse") == 0;\n    if (!*gvfs) return true;', '    *gvfs = strcmp(type, "fuse.gvfsd-fuse") == 0;\n    return true;'),
+    # (dropped, step C: far_drive asks mounts_at now, whose own mutants cover this)
+    ('fs/list.c', '    *gvfs = m->gvfs;\n    if (!*gvfs) return true;', '    *gvfs = m->gvfs;\n    return true;'),   # (retargeted, step C)
     ('fs/list.c', '    while (*rest == \'/\') rest++;\n    size_t k = strcspn', '    size_t k = strcspn'),
     ('fs/list.c', '    if (k && o + 1 + k < cap) out[o] =', '    if (k) out[o] ='),
     # (Dropped as equivalent: a field's length capped at what is left of the answer (past it, the
@@ -2998,4 +2998,9 @@ MUTANTS += [
     ('fs/props.c', '        if (!realpath(roots[i], w->path)) snprintf(w->path, sizeof w->path, "%s", roots[i]);', '        snprintf(w->path, sizeof w->path, "%s", roots[i]);'),
     ('fs/props.c', '            if (w->pts_len + k > w->pts_cap) {', '            if (false) {'),
     ('fs/props.c', '                s->cut = true;\n                break;', '                break;'),
+    # The milestone's code-health cleanup, step C
+    ('fs/clean.c', 'path_walk(ms, path, out, cap, WALK_MISSING_OK, &far) && !far;', 'path_walk(ms, path, out, cap, WALK_MISSING_OK, &far);'),
+    ('fs/clean.c', 'path_walk(ms, path, out, cap, WALK_MISSING_OK, &far)', 'path_walk(ms, path, out, cap, 0, &far)'),
+    ('fs/paths.c', '        if (!mountinfo_line(line, mp, sizeof mp, &type, &src) || !type.len) continue;', '        if (!mountinfo_line(line, mp, sizeof mp, &type, &src)) continue;'),
+    ('fs/paths.c', ', mount_far_type(type), str_eq(type, S("fuse.gvfsd-fuse")) };', ', mount_far_type(type), false };'),
 ]
