@@ -1296,8 +1296,16 @@ blocks each of these for up to gvfs's 90 s. On a thread it also holds ofx's exit
       child; finding `.git` and the reflog move into it), item counts (ofx-list, as for shares),
       the deep count (an ofx-list mode), previews (the thumbnailers already are; ofx's own decode
       as an ofx-list mode), the folder watch (inotify in the child, or a timer). One child a drive
-      at a time, with the shares' back-off ("isn't answering", not more children). Previews on a
-      network share download each file: perhaps a per-share setting.
+      at a time, with the shares' back-off ("isn't answering", not more children).
+    - **Removable, as the kernel says it:** the author's card is in a USB reader (`sda`, removable,
+      hotplug), under dm-crypt; device-mapper devices never say removable, so the rule follows
+      `/sys/block/dm-N/slaves` down to the disk (mounting through fstab changes nothing).
+    - **Previews there** (Michael, 2026-11-10): on by default (pictures on a NAS are the classic
+      case), an ofx.conf option turns them off on risky drives altogether; with it off, a risky
+      folder in the icon view says so in the status line, naming the option, so missing previews
+      don't puzzle anyone. Previews being made show "Making previews" with a small progress bar
+      (the rows on screen: done of to make), on any drive; proposed: only once it has taken about
+      300 ms, so a folder whose previews are cached doesn't flash it.
     - **The two main-thread waits:** an action on a share starts its child and returns at once
       (polled as the listing is, "Renaming…" meanwhile, one far action at a time); a file's type
       for Open With and Properties is guessed by its name at once and corrected when gio answers.
