@@ -596,7 +596,7 @@ MUTANTS = [
     ('gui/folder.c', 'app.places.p[i].kind == PL_HEAD || app.places.p[i].kind == PL_UNMOUNTED', 'app.places.p[i].kind == PL_HEAD', 'usb'),
     ('gui/actions.c', '            mount_start(&app.places.p[a.index]);   // a drive not mounted yet', '            {}   // a drive not mounted yet', 'usb'),
     ('gui/input.c', '    if (it == UM_MOUNT_IT && ctx_pl && ctx_pl->kind == PL_UNMOUNTED) mount_start(ctx_pl);', '', 'usb'),
-    ('gui/input.c', '        u->ctx_unmounted = pl->kind == PL_UNMOUNTED || pl->kind == PL_NETBM;', '        u->ctx_unmounted = pl->kind == PL_NETBM;', 'usb'),
+    ('gui/input.c', '        u->ctx_unmounted = pl->kind == PL_UNMOUNTED || place_connects(pl->kind);', '        u->ctx_unmounted = place_connects(pl->kind);', 'usb'),   # (retargeted, step 7b)
     ('gui/eject.c', '    else if (ej.op == DRIVE_MOUNT) mount_argv(ej.dev, argv);', '    else if (false) mount_argv(ej.dev, argv);', 'usb'),
     # Unmount (2026-10-30)
     ('gui/eject.c', '    else if (ej.op == DRIVE_UNMOUNT) unmount_argv(ej.dev, udisks, argv);\n', '', 'usb'),
@@ -716,7 +716,7 @@ MUTANTS = [
     ('gui/main.c', '    if (atomic_exchange(&watch.mounts_ready, false)) places_reload(), trash_state(), dirty = true;\n    if (app.drive_gone) {', '    if (atomic_exchange(&watch.list_ready, false)) reload(), dirty = true;\n    if (atomic_exchange(&watch.mounts_ready, false)) places_reload(), trash_state(), dirty = true;\n    if (app.drive_gone) {', 'usb'),
     ('gui/eject.c', '        else if (go_to(at, STR_EMPTY, 0)) set_status(false, "Mounted %s", ej.label);', '        else set_status(false, "Mounted %s", ej.label);', 'usb'),
     ('gui/eject.c', '        if (!mounted) set_status(true, "Can\'t mount %s: %s"', '        if (false) set_status(true, "Can\'t mount %s: %s"', 'usb'),
-    ('gui/script.c', ' : p->kind == PL_UNMOUNTED || p->kind == PL_NETBM ? "~" : ""', ' : p->kind == PL_NETBM ? "~" : ""', 'usb'),
+    ('gui/script.c', ' : p->kind == PL_UNMOUNTED || place_connects(p->kind) ? "~" : ""', ' : place_connects(p->kind) ? "~" : ""', 'usb'),   # (retargeted, step 7b)
     # Not run (2026-10-30): drive_start's ops_program_allowed (a script can't change the window's
     # PATH to a udisksctl outside the root; the unit test has it), and the mount's longer limit.
     ('gui/folder.c', '    if (v == UI_VIEW_TRASH && trash_home(tinfo, sizeof tinfo - 8)) strcat(tinfo, "/info");\n', '', 'f6'),
@@ -1128,14 +1128,14 @@ MUTANTS = [
     ('gui/connect.c', 'strcmp(why, "Mount point does not exist") == 0 ? " (are the server\'s name and the folder right?)" : "";', '"";', 'net'),
     # F16 step 5: the Network section, a share's unmount, crumbs, bookmarks and names
     ('gui/watch.c', '        if (kicked || now_ms() >= gvfs_due) {', '        if (now_ms() >= gvfs_due) {', 'net'),
-    ('gui/folder.c', '    places_load_net(&scratch, &app.places, bm, watch_shares(&scratch));   // (F16 step 5: after the drives)', '', 'f16'),
+    ('gui/folder.c', '    places_load_net(&scratch, &app.places, bm, watch_shares(&scratch), servers, nservers);', '', 'f16'),   # (retargeted, step 7b)
     ('gui/folder.c', '    return (place_is_drive(k) && k != PL_ROOT) || k == PL_SHARE;', '    return place_is_drive(k) && k != PL_ROOT;', 'f16'),
-    ('gui/folder.c', ' || app.places.p[i].kind == PL_UNMOUNTED || app.places.p[i].kind == PL_NETBM)\n        return NULL;', ' || app.places.p[i].kind == PL_UNMOUNTED)\n        return NULL;', 'f16'),
-    ('gui/actions.c', '            connect_start(str_from_c(app.places.p[a.index].path));   // an smb:// bookmark: connected, then opened (F16 step 5)', '            ;', 'f16'),
+    ('gui/folder.c', ' || app.places.p[i].kind == PL_UNMOUNTED || place_connects(app.places.p[i].kind))\n        return NULL;', ' || app.places.p[i].kind == PL_UNMOUNTED)\n        return NULL;', 'f16'),   # (retargeted, step 7b)
+    ('gui/actions.c', '            connect_start(str_from_c(app.places.p[a.index].path));   // a network bookmark', '            ;   // a network bookmark', 'f16'),   # (retargeted, step 7b)
     ('gui/actions.c', '        else if (a.index >= 0 && a.index < app.places.n && app.places.p[a.index].kind == PL_SHARE) share_unmount_start(&app.places.p[a.index]);   // (F16 step 5)', '', 'f16'),
     ('gui/input.c', '        u->ctx_share = pl->kind == PL_SHARE;', '', 'f16'),
-    ('gui/input.c', '        u->ctx_unmounted = pl->kind == PL_UNMOUNTED || pl->kind == PL_NETBM;', '        u->ctx_unmounted = pl->kind == PL_UNMOUNTED;', 'f16'),
-    ('gui/input.c', '    if (it == UM_MOUNT_IT && ctx_pl && ctx_pl->kind == PL_NETBM) connect_start(str_from_c(ctx_pl->path));', '', 'f16'),
+    ('gui/input.c', '        u->ctx_unmounted = pl->kind == PL_UNMOUNTED || place_connects(pl->kind);', '        u->ctx_unmounted = pl->kind == PL_UNMOUNTED;', 'f16'),   # (retargeted, step 7b)
+    ('gui/input.c', '    if (it == UM_MOUNT_IT && ctx_pl && place_connects(ctx_pl->kind)) connect_start(str_from_c(ctx_pl->path));', '', 'f16'),   # (retargeted, step 7b)
     ('gui/input.c', ' || (app.ctx_path[0] == \'/\' && far_share_uri(app.ctx_path, uri, sizeof uri) && bm_find_uri(&bmarks, uri) >= 0);', ';', 'f16'),
     ('gui/eject.c', '    if (op == DRIVE_SHARE) watch_gvfs_kick();   // (gone from the sidebar, and its folders Home, at once)', '', 'net'),
     ('gui/eject.c', '    else if (ej.op == DRIVE_SHARE) r = gio_why(str_from_c(out), why, sizeof why) ? EJECT_FAILED : EJECT_DONE;', '    else if (ej.op == DRIVE_SHARE) r = EJECT_FAILED;', 'f16'),
@@ -1167,4 +1167,13 @@ MUTANTS = [
     ('gui/input.c', '    if (on == UI_ON_SHARES) return *row_id = "shp-row", *field_id = "shp-field", &app.ui.shp;', '', 'f16'),
     ('gui/actions.c', '    case UA_SHARE: share_pick(a.index); break;', '', 'f16'),
     ('gui/connect.c', '    shp.pending = false;   // (a server', '    // (a server', 'f16'),   # (step 7a review)
+    # F16 step 7b: servers on the network
+    ('gui/disco.c', '    if (getenv("OFX_GUI_ROOT") && !getenv("OFX_TEST_AVAHI")) return;', '    if (getenv("OFX_GUI_ROOT")) return;', 'f16'),
+    ('gui/disco.c', '    for (bool cache = false; disco_ask(cache); cache = true) {', '    for (bool cache = true; disco_ask(cache); cache = true) {', 'f16'),
+    ('gui/disco.c', '    for (bool cache = false; disco_ask(cache); cache = true) {', '    for (bool cache = false; disco_ask(cache); cache = false) {', 'f16'),
+    ('gui/disco.c', '    if (changed) atomic_store(&watch.mounts_ready, true), wake_main();', '', 'f16'),
+    ('gui/disco.c', '    bool changed = n != disco.n || memcmp(now, disco.s, (size_t)n * sizeof *now) != 0;', '    bool changed = n != disco.n;', 'f16'),
+    ('gui/folder.c', '    int nservers = disco_servers(servers);', '    int nservers = 0; (void)disco_servers;', 'f16'),
+    # (Dropped, drawing only: the dim label of a network bookmark or a server found. No state word
+    # reads a colour; f16v's shot shows it, checked by eye on 2026-11-10.)
 ]

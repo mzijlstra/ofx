@@ -20,9 +20,11 @@ enum { PLACES_MAX = 64 };
 // PL_UNMOUNTED: a removable drive not mounted yet (2026-10-30), its path and dev the device's
 // (/dev/sdb1); a click mounts it. Not a drive for place_is_drive: it has no folder yet.
 // The Network section (F16 step 5): PL_SHARE, a share gvfs has mounted, its path the share's folder
-// under gvfs's FUSE mount; PL_NETBM, an smb:// or nfs:// bookmark (step 6), its path the address (a click connects).
+// under gvfs's FUSE mount; PL_NETBM, an smb:// or nfs:// bookmark (step 6), its path the address (a click connects);
+// PL_SERVER, an SMB server avahi found on the network (step 7b), its path its address, smb://host
+// (a click lists its shares).
 // Neither is a drive: their space isn't asked (statvfs would wait on a share that doesn't answer).
-typedef enum { PL_HEAD, PL_HOME, PL_BOOKMARK, PL_TRASH, PL_ROOT, PL_MOUNT, PL_REMOVABLE, PL_UNMOUNTED, PL_SHARE, PL_NETBM } PlaceKind;
+typedef enum { PL_HEAD, PL_HOME, PL_BOOKMARK, PL_TRASH, PL_ROOT, PL_MOUNT, PL_REMOVABLE, PL_UNMOUNTED, PL_SHARE, PL_NETBM, PL_SERVER } PlaceKind;
 
 typedef struct {
     char      path[PATH_MAX];   // "" for a heading
@@ -57,7 +59,14 @@ static bool place_unmountable(const Place *p)
 
 static bool place_is_net(PlaceKind k)
 {
-    return k == PL_SHARE || k == PL_NETBM;
+    return k == PL_SHARE || k == PL_NETBM || k == PL_SERVER;
+}
+
+// Whether a click on a place connects to its address (a network bookmark, a server found): it has
+// no folder until then.
+static bool place_connects(PlaceKind k)
+{
+    return k == PL_NETBM || k == PL_SERVER;
 }
 
 // Whether path is a place already in its section (a drive among the drives, a share or network
@@ -357,9 +366,10 @@ static void places_load(Arena *scratch, Places *pl, const char *bookmarks, const
 // The Network section (F16 step 5), after the rest, under its heading when it has a row: the shares
 // gvfs has mounted (shares: their folders, one a line, as the watch thread lists gvfs's FUSE
 // folders), then the smb:// and nfs:// lines of the bookmarks file, with their labels (else the share's name
-// as gvfs gives it). A bookmark of a mounted share stays a bookmark: a click on it connects, which
-// for a share mounted already goes straight there.
-static void places_load_net(Arena *scratch, Places *pl, const char *bookmarks, Str shares)
+// as gvfs gives it), then the SMB servers avahi found (servers, n of them; step 7b), but for one a
+// bookmark has (by its address: the bookmark's label stays). A bookmark of a mounted share stays a
+// bookmark: a click on it connects, which for a share mounted already goes straight there.
+static void places_load_net(Arena *scratch, Places *pl, const char *bookmarks, Str shares, const NetServer *servers, int n)
 {
     int head = pl->n;
     places_head(pl, "Network");
@@ -383,6 +393,7 @@ static void places_load_net(Arena *scratch, Places *pl, const char *bookmarks, S
         places_add(pl, PL_NETBM, u, label);
     }
     arena_restore(scratch, mark);
+    for (int i = 0; i < n; i++) places_add(pl, PL_SERVER, servers[i].addr, str_from_c(servers[i].name));
     if (pl->n == head + 1) pl->n = head;   // (nothing in it: no heading)
 }
 
@@ -402,7 +413,7 @@ static int places_current(const Places *pl, const char *path)
     size_t best_n = 0;
     for (int i = 0; i < pl->n; i++) {
         if (pl->p[i].kind == PL_TRASH && strcmp(path, TRASH_URI) == 0) return i;
-        if (pl->p[i].kind == PL_HEAD || pl->p[i].kind == PL_TRASH || pl->p[i].kind == PL_UNMOUNTED || pl->p[i].kind == PL_NETBM) continue;
+        if (pl->p[i].kind == PL_HEAD || pl->p[i].kind == PL_TRASH || pl->p[i].kind == PL_UNMOUNTED || place_connects(pl->p[i].kind)) continue;
         const char *p = pl->p[i].path;
         size_t n = strlen(p);
         if (path_within(path, p) && (best < 0 || n > best_n)) best = i, best_n = n;
@@ -421,6 +432,7 @@ static isize place_icon_names(const Place *p, const UserDirs *u, bool trash_full
     case PL_UNMOUNTED: names[n++] = S("drive-removable-media"), names[n++] = S("drive-harddisk"); break;
     case PL_SHARE:
     case PL_NETBM: names[n++] = S("folder-remote"); break;
+    case PL_SERVER: names[n++] = S("network-server"), names[n++] = S("folder-remote"); break;
     case PL_TRASH:   // full: when any trash folder holds something (2026-10-30)
         if (trash_full) names[n++] = S("user-trash-full");
         names[n++] = S("user-trash");

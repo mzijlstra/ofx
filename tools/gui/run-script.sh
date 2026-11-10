@@ -36,7 +36,9 @@
 # - OFX_TEST_GIO, when set, is passed on: the gio that `gio mount` and `gio info <address>` run (the net
 #   group's, on its own gvfs; unset: they only log); OFX_TEST_CONNECT_CLOSE_MS, when set, too (Connect's
 #   Cancel closes gio's input that late: netq's quit); OFX_TEST_GVFS_MS, when set, too (how often the
-#   gvfs shares are listed: netu's long one leaves only ofx's own kicks);
+#   gvfs shares are listed: netu's long one leaves only ofx's own kicks); OFX_TEST_AVAHI and
+#   OFX_TEST_DISCO_MS, when set, too (avahi-browse's stand-in, how often avahi's cache is read: F16
+#   step 7b);
 # - OFX_TEST_HOME, when set, becomes the window's HOME, else <scratch-dir>/home (never his);
 # - OFX_GUI_SHOTS=<scratch-dir>/shots for the script's shots, OFX_GUI_ROOT=<scratch-dir> for its
 #   sh guard and ofx's own (fs/ops.c: no write outside it).
@@ -87,6 +89,16 @@ if [ "\$1" = info ]; then exec $real_gio "\$@"; fi
 echo "gio \$*" >> "$T/spawn.log"
 if [ "\$1" = mime ]; then exec $real_gio "\$@"; fi
 EOS
+# avahi-browse (servers on the network, F16 step 7b): logs, and runs OFX_TEST_AVAHI when the run has
+# one (a stand-in printing avahi-browse's lines), else finds nothing: never the real one, which would
+# query the desktop's network.
+cat > "$T/fakes/avahi-browse" <<EOS
+#!/bin/sh
+echo "avahi-browse \$*" >> "$T/spawn.log"
+[ -z "\${OFX_TEST_AVAHI:-}" ] || exec "\$OFX_TEST_AVAHI" "\$@"
+exit 0
+EOS
+chmod +x "$T/fakes/avahi-browse"
 # udisksctl (eject, F6.1): logs too, and fails the step named in <scratch-dir>/udisks-fail.
 # Mount (2026-10-30): makes <scratch-dir>/media/<name> (the name in <scratch-dir>/udisks-mount-as,
 # else the device's), adds it to the window's mount list (OFX_TEST_MOUNTINFO) and says where, as
@@ -185,7 +197,7 @@ cat > "$T/launch.sh" <<EOS
 echo \$\$ > "$T/run.pid"
 exec env -u DISPLAY -u WAYLAND_SOCKET -u DBUS_SESSION_BUS_ADDRESS -u HYPRLAND_INSTANCE_SIGNATURE GIO_USE_VFS=local GIT_CEILING_DIRECTORIES="$T" XDG_RUNTIME_DIR="$T/xdg-run" WAYLAND_DISPLAY="$XDG_RUNTIME_DIR/$sock" OFX_TEST_SIZE=${OFX_SCRIPT_SIZE:-936x516} OFX_TEST_WINDOWS="$T/windows" ${script_env} OFX_GUI_ROOT="$T" OFX_GUI_SHOTS="$T/shots" PATH="$T/fakes:\$PATH" XDG_STATE_HOME="$T/state" XDG_CONFIG_HOME="$T/config" XDG_DATA_HOME="$T/data" XDG_CACHE_HOME="$T/cache" \
   LSAN_OPTIONS=suppressions=$root/gui/lsan.supp ASAN_OPTIONS=log_path="$T/asan" ${OFX_TEST_LEAK:+OFX_TEST_LEAK=1} ${OFX_GUI_FAIL_FAST:+OFX_GUI_FAIL_FAST=1} ${OFX_GUI_DEBUG:+OFX_GUI_DEBUG=1} \
-  ${OFX_TEST_WATCH_DELAY_MS:+OFX_TEST_WATCH_DELAY_MS=$OFX_TEST_WATCH_DELAY_MS} ${OFX_TEST_COPY_DELAY_MS:+OFX_TEST_COPY_DELAY_MS=$OFX_TEST_COPY_DELAY_MS} ${OFX_TEST_CROSS:+OFX_TEST_CROSS=1} ${OFX_TEST_GIO:+OFX_TEST_GIO=$OFX_TEST_GIO} ${OFX_TEST_CONNECT_CLOSE_MS:+OFX_TEST_CONNECT_CLOSE_MS=$OFX_TEST_CONNECT_CLOSE_MS} ${OFX_TEST_GVFS_MS:+OFX_TEST_GVFS_MS=$OFX_TEST_GVFS_MS} OFX_TEST_WRITE_MS=${OFX_TEST_WRITE_MS:-100} HOME=$OFX_TEST_HOME ${OFX_TEST_COUNT_DELAY_MS:+OFX_TEST_COUNT_DELAY_MS=$OFX_TEST_COUNT_DELAY_MS} ${OFX_TEST_MOUNTINFO:+OFX_TEST_MOUNTINFO=$OFX_TEST_MOUNTINFO} OFX_TEST_SYSBLOCK=$OFX_TEST_SYSBLOCK OFX_TEST_UDEV=$OFX_TEST_UDEV ${OFX_TEST_MEDIA:+OFX_TEST_MEDIA=$OFX_TEST_MEDIA} ${OFX_TEST_SPACE_DELAY_MS:+OFX_TEST_SPACE_DELAY_MS=$OFX_TEST_SPACE_DELAY_MS} ${OFX_TEST_ICONS_MAX:+OFX_TEST_ICONS_MAX=$OFX_TEST_ICONS_MAX} ${OFX_TEST_THUMB_HELD_MAX:+OFX_TEST_THUMB_HELD_MAX=$OFX_TEST_THUMB_HELD_MAX} \
+  ${OFX_TEST_WATCH_DELAY_MS:+OFX_TEST_WATCH_DELAY_MS=$OFX_TEST_WATCH_DELAY_MS} ${OFX_TEST_COPY_DELAY_MS:+OFX_TEST_COPY_DELAY_MS=$OFX_TEST_COPY_DELAY_MS} ${OFX_TEST_CROSS:+OFX_TEST_CROSS=1} ${OFX_TEST_GIO:+OFX_TEST_GIO=$OFX_TEST_GIO} ${OFX_TEST_CONNECT_CLOSE_MS:+OFX_TEST_CONNECT_CLOSE_MS=$OFX_TEST_CONNECT_CLOSE_MS} ${OFX_TEST_GVFS_MS:+OFX_TEST_GVFS_MS=$OFX_TEST_GVFS_MS} ${OFX_TEST_AVAHI:+OFX_TEST_AVAHI=$OFX_TEST_AVAHI} ${OFX_TEST_DISCO_MS:+OFX_TEST_DISCO_MS=$OFX_TEST_DISCO_MS} OFX_TEST_WRITE_MS=${OFX_TEST_WRITE_MS:-100} HOME=$OFX_TEST_HOME ${OFX_TEST_COUNT_DELAY_MS:+OFX_TEST_COUNT_DELAY_MS=$OFX_TEST_COUNT_DELAY_MS} ${OFX_TEST_MOUNTINFO:+OFX_TEST_MOUNTINFO=$OFX_TEST_MOUNTINFO} OFX_TEST_SYSBLOCK=$OFX_TEST_SYSBLOCK OFX_TEST_UDEV=$OFX_TEST_UDEV ${OFX_TEST_MEDIA:+OFX_TEST_MEDIA=$OFX_TEST_MEDIA} ${OFX_TEST_SPACE_DELAY_MS:+OFX_TEST_SPACE_DELAY_MS=$OFX_TEST_SPACE_DELAY_MS} ${OFX_TEST_ICONS_MAX:+OFX_TEST_ICONS_MAX=$OFX_TEST_ICONS_MAX} ${OFX_TEST_THUMB_HELD_MAX:+OFX_TEST_THUMB_HELD_MAX=$OFX_TEST_THUMB_HELD_MAX} \
   OFX_TEST_THUMBNAILERS=$OFX_TEST_THUMBNAILERS ${OFX_TEST_THUMB_RUN_MS:+OFX_TEST_THUMB_RUN_MS=$OFX_TEST_THUMB_RUN_MS} ${OFX_TEST_SANDBOX:+OFX_TEST_SANDBOX=$OFX_TEST_SANDBOX} \
   "$bin" $args >"$T/out" 2>"$T/err"
 EOS

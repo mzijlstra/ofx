@@ -1032,8 +1032,8 @@ static void act(UiAction a)
         if (p) go_to(p, STR_EMPTY, 0);
         else if (app.ui.side_mode == SIDE_PLACES && a.index >= 0 && a.index < app.places.n && app.places.p[a.index].kind == PL_UNMOUNTED)
             mount_start(&app.places.p[a.index]);   // a drive not mounted yet: mounted, then opened (2026-10-30)
-        else if (app.ui.side_mode == SIDE_PLACES && a.index >= 0 && a.index < app.places.n && app.places.p[a.index].kind == PL_NETBM)
-            connect_start(str_from_c(app.places.p[a.index].path));   // an smb:// bookmark: connected, then opened (F16 step 5)
+        else if (app.ui.side_mode == SIDE_PLACES && a.index >= 0 && a.index < app.places.n && place_connects(app.places.p[a.index].kind))
+            connect_start(str_from_c(app.places.p[a.index].path));   // a network bookmark (connected, then opened) or a server found (its shares listed): F16 steps 5, 7b
         break;
     }
     case UA_TREE_LEFT:

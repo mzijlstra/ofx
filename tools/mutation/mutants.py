@@ -2828,7 +2828,6 @@ MUTANTS += [
     ('fs/places.c', '    if (pl->n == head + 1) pl->n = head;   // (nothing in it: no heading)', ''),
     ('fs/places.c', '&& place_is_net(pl->p[i].kind) == place_is_net(kind) && strcmp', '&& strcmp'),
     ('fs/places.c', '    return place_ejectable(p) || p->kind == PL_SHARE;', '    return place_ejectable(p);'),
-    ('fs/places.c', ' || pl->p[i].kind == PL_UNMOUNTED || pl->p[i].kind == PL_NETBM) continue;', ' || pl->p[i].kind == PL_UNMOUNTED) continue;'),
     ('fs/places.c', '    case PL_SHARE:\n    case PL_NETBM: names[n++] = S("folder-remote"); break;', ''),
     ('ui/helpers.c', '    if (sh.len > 1 && sh.p[0] == \'/\' && ui_under(cw, sh) && label) {', '    if (sh.len > 1 && sh.p[0] == \'/\' && label) {'),
     ('ui/helpers.c', '    if (sh.len > 1 && sh.p[0] == \'/\' && ui_under(cw, sh) && label) {', '    if (sh.len > 1 && sh.p[0] == \'/\' && ui_under(cw, sh)) {'),
@@ -2906,7 +2905,7 @@ MUTANTS += [
     ('fs/connect.c', "        for (isize i = 0; i < name.len; i++) ctl = ctl || (unsigned char)name.p[i] < 0x20 || name.p[i] == 0x7F;", ''),
     ('fs/connect.c', '    qsort(names, (size_t)n, SERVER_SHARE_NAME, server_share_cmp);', ''),
     ('fs/connect.c', '    return strcasecmp((const char *)a, (const char *)b);', '    return strcmp((const char *)a, (const char *)b);'),
-    ('fs/connect.c', '    for (Str line; n < max && next_line(out, &at, &line);) {', '    for (Str line; next_line(out, &at, &line);) {'),
+    ('fs/connect.c', "    for (Str line; n < max && next_line(out, &at, &line);) {\n        isize t1", "    for (Str line; next_line(out, &at, &line);) {\n        isize t1"),   # (retargeted, step 7b)
     ('fs/connect.c', "    while (s.len > 0 && s.p[s.len - 1] == '/') s.len--;\n    int n = snprintf(out, cap, \"%.*s/%s\"", "    int n = snprintf(out, cap, \"%.*s/%s\""),
     ('fs/connect.c', '    int n = snprintf(out, cap, "%.*s/%s", STR_ARG(s), share);\n    return n > 0 && (size_t)n < cap;', '    int n = snprintf(out, cap, "%.*s/%s", STR_ARG(s), share);\n    return n > 0;'),
     ('fs/places.c', 'share[0] ? "%s on %s" : "%s%s", share, host)', '"%s on %s", share, host)'),
@@ -2918,4 +2917,26 @@ MUTANTS += [
     ('ui/handle.c', '    case UI_ON_SHARES: *out = ui_shp_do(u, ui_pick_key(u, &u->shp, e, in), in); return true;\n', ''),
     ('ui/handle.c', '    if (u->panel == UI_PANEL_SHARES && u->shp.fresh && in->sh_name) ui_shp_filter(u, in);\n', ''),
     ('ui/edit.c', '    else if (on == UI_ON_SHARES && !u->shp.in_list) l = ui_pick_line(&u->shp);\n', ''),
+    # F16 step 7b: servers on the network
+    ('fs/connect.c', "        if (f.p[i] != '\\\\' || i + 1 >= f.len) { out[o++] = f.p[i]; continue; }", "        if (f.p[i] != '\\\\') { out[o++] = f.p[i]; continue; }"),
+    ('fs/connect.c', "            if (v > 0 && v < 256) out[o++] = (char)v;", "            out[o++] = (char)v;"),
+    ('fs/connect.c', "            i += 3;\n        } else out[o++] = f.p[++i];", "            i += 2;\n        } else out[o++] = f.p[++i];"),
+    ('fs/connect.c', "        } else out[o++] = f.p[++i];", "        } else out[o++] = f.p[i];"),
+    ('fs/connect.c', "    return strcasecmp(((const NetServer *)a)->name, ((const NetServer *)b)->name);", "    return strcmp(((const NetServer *)a)->name, ((const NetServer *)b)->name);"),
+    ('fs/connect.c', "        if (k < 9 || !str_eq(f[4], S(\"_smb._tcp\")) ||", "        if (k < 9 ||"),
+    ('fs/connect.c', "        if (k < 9 || !str_eq(f[4], S(\"_smb._tcp\")) ||", "        if (!str_eq(f[4], S(\"_smb._tcp\")) ||"),
+    # (Dropped from the code, shown redundant by surviving mutants: the "=" check (a resolved line alone has
+    # nine fields or more) and a port's length (one past five digits fails the range check).)
+    ('fs/connect.c', "        for (isize i = 0; i < f[6].len; i++) ok = ok && (isalnum((unsigned char)f[6].p[i]) || f[6].p[i] == '.' || f[6].p[i] == '-');", ""),
+    ('fs/connect.c', "        for (isize i = 0; i < f[8].len; i++) ok = ok && isdigit((unsigned char)f[8].p[i]);", ""),
+    ('fs/connect.c', "        for (const char *c = v.name; *c && ok; c++) ok = (unsigned char)*c >= 0x20 && *c != 0x7F;", ""),
+    ('fs/connect.c', "        if (port <= 0 || port > 65535) continue;", ""),
+    ('fs/connect.c', "        int w = port == 445 ? snprintf(", "        int w = port == 0 ? snprintf("),
+    ('fs/connect.c', "        for (int j = 0; j < n && !seen; j++) seen = strcmp(s[j].addr, v.addr) == 0;", ""),
+    ('fs/connect.c', "    qsort(s, (size_t)n, sizeof *s, net_server_cmp);", ""),
+    ('fs/places.c', "    return k == PL_SHARE || k == PL_NETBM || k == PL_SERVER;", "    return k == PL_SHARE || k == PL_NETBM;"),
+    ('fs/places.c', "    return k == PL_NETBM || k == PL_SERVER;", "    return k == PL_NETBM;"),
+    ('fs/places.c', "    case PL_SERVER: names[n++] = S(\"network-server\"), names[n++] = S(\"folder-remote\"); break;", ""),
+    ('fs/places.c', "    for (int i = 0; i < n; i++) places_add(pl, PL_SERVER, servers[i].addr, str_from_c(servers[i].name));", ""),
+    ('fs/places.c', "pl->p[i].kind == PL_UNMOUNTED || place_connects(pl->p[i].kind)) continue;", "pl->p[i].kind == PL_UNMOUNTED) continue;"),
 ]

@@ -602,7 +602,9 @@ static void places_reload(void)
     char bm[PATH_MAX];
     places_load(&scratch, &app.places, bookmarks_path(bm, sizeof bm), mountinfo_path(), sysblock_path(), udev_path());
     ArenaMark m = arena_mark(&scratch);
-    places_load_net(&scratch, &app.places, bm, watch_shares(&scratch));   // (F16 step 5: after the drives)
+    static NetServer servers[NET_SERVERS_MAX];
+    int nservers = disco_servers(servers);
+    places_load_net(&scratch, &app.places, bm, watch_shares(&scratch), servers, nservers);   // (F16 steps 5, 7b: after the drives)
     arena_restore(&scratch, m);
     // The Bookmarks menu's (F7.5). With Edit Bookmarks up its cursor stays on its line, found
     // again as a change finds it (bm_locate), wherever a change made elsewhere moved it; the lines
@@ -749,7 +751,7 @@ static const char *side_path(isize i, char *buf, size_t cap)
         snprintf(buf, cap, "%.*s", STR_ARG(tree.row[i].path));
         return buf;
     }
-    if (i < 0 || i >= app.places.n || app.places.p[i].kind == PL_HEAD || app.places.p[i].kind == PL_UNMOUNTED || app.places.p[i].kind == PL_NETBM)
+    if (i < 0 || i >= app.places.n || app.places.p[i].kind == PL_HEAD || app.places.p[i].kind == PL_UNMOUNTED || place_connects(app.places.p[i].kind))
         return NULL;   // (a device, or a network bookmark's address: no folder to open in a tab)
     return app.places.p[i].path;
 }

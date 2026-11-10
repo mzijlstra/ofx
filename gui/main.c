@@ -146,6 +146,7 @@ static void timer_stop(void)
 }
 
 #include "watch.c"
+#include "disco.c"   // (F16 step 7b: servers on the network)
 #include "clipboard.c"
 #include "dnd.c"
 #include "far.c"      // (before counts.c: a far folder's counts are its lister's)
@@ -752,6 +753,7 @@ static void app_start(void)
     theme_apply();
     conf_start();   // (F10: before watch_start, which watches the file's folder)
     if (!watch_start()) set_status(true, "inotify is unavailable: no live refresh");
+    disco_start();   // (F16 step 7b)
     clip_init();   // false: the clipboard stays inside ofx
     dnd_init();    // (F14: drags to and from other programs)
     count_start();

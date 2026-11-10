@@ -1934,6 +1934,7 @@ int main(void)
     if (fast) test_gvfs_uri();
     if (fast) test_server_shares();
     if (fast) test_shares_panel();
+    if (fast) test_avahi_servers();
     if (fast) test_crumbs_share();
     if (fast) test_gvfs_shares();
     if (fast) test_wheel_under_question();

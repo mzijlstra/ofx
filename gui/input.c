@@ -356,7 +356,7 @@ static void ctx_facts(void)
         u->ctx_place = true;
         u->ctx_eject = place_ejectable(pl);
         u->ctx_share = pl->kind == PL_SHARE;
-        u->ctx_unmounted = pl->kind == PL_UNMOUNTED || pl->kind == PL_NETBM;   // (a network bookmark: Mount connects, F16 step 5)
+        u->ctx_unmounted = pl->kind == PL_UNMOUNTED || place_connects(pl->kind);   // (a network bookmark, a server found: Mount connects, F16 steps 5, 7b)
         if (pl->kind == PL_BOOKMARK) u->ctx_bmk = bm_find(&bmarks, pl->path);
     }
 }
@@ -368,7 +368,7 @@ static void folder_do(UiMenuItem it)
     const char *dir = app.ctx_path;
     const Place *ctx_pl = app.ui.ctx_side >= 0 && app.ui.ctx_side < app.places.n ? &app.places.p[app.ui.ctx_side] : NULL;
     if (it == UM_MOUNT_IT && ctx_pl && ctx_pl->kind == PL_UNMOUNTED) mount_start(ctx_pl);   // (no folder yet: before the check below)
-    if (it == UM_MOUNT_IT && ctx_pl && ctx_pl->kind == PL_NETBM) connect_start(str_from_c(ctx_pl->path));
+    if (it == UM_MOUNT_IT && ctx_pl && place_connects(ctx_pl->kind)) connect_start(str_from_c(ctx_pl->path));
     if (!dir[0]) return;
     switch (it) {
     case UM_OPEN_IT: go_to(dir, STR_EMPTY, 0); break;

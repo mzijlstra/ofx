@@ -244,8 +244,9 @@ static void layout_side(float h)
                 CLAY(CLAY_IDI("side-text", r), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .layoutDirection = CLAY_TOP_TO_BOTTOM,
                                                              .childGap = 3 } }) {
                     CLAY(CLAY_IDI("side-line", r), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .childGap = 8 } }) {
-                        // (a drive not mounted yet dim, 2026-10-30)
-                        text(fit(str_from_c(p->label), room, false), here ? cc(t->accent) : p->kind == PL_UNMOUNTED ? cc(t->fg_dim) : cc(t->fg));
+                        // (a drive not mounted yet dim, 2026-10-30; a network bookmark or a server found too, as
+                        // nothing of theirs is mounted: F16 steps 5, 7b)
+                        text(fit(str_from_c(p->label), room, false), here ? cc(t->accent) : p->kind == PL_UNMOUNTED || place_connects(p->kind) ? cc(t->fg_dim) : cc(t->fg));
                         if (drive) {
                             CLAY(CLAY_IDI("side-gap", r), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(1) } } }) {}
                             text(cs(free_s), hover ? drive_used_color(p) : drive_free_color());

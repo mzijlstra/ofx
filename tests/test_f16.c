@@ -843,15 +843,18 @@ static void test_places_net(void)
 {
     put(at("places/netbm"), "file:///home/m/x\nsmb://nas/pub/sub Music\nsmb://nas/home\nsftp://box/x\nsmb://nas Server\nsmb://u:pw@nas/p\nnfs://box/srv/data\nnfs://box:2049/srv\nsmb://box/\n");
     Places pl = { 0 };
-    places_load_net(&ta, &pl, at("places/netbm"), S("/run/u/gvfs/smb-share:server=nas,share=pub\nrel\n\n/run/u/gvfs/sftp:host=box,user=me\n/run/u/gvfs/smb-share:server=nas,share=pub\n"));
+    // (servers found: one a bookmark has, by its address, which keeps the bookmark's label; step 7b)
+    static const NetServer SV[] = { { "BOX", "smb://box" }, { "Yoga", "smb://yoga.local" } };
+    places_load_net(&ta, &pl, at("places/netbm"), S("/run/u/gvfs/smb-share:server=nas,share=pub\nrel\n\n/run/u/gvfs/sftp:host=box,user=me\n/run/u/gvfs/smb-share:server=nas,share=pub\n"), SV, 2);
     const char *want[][3] = {
         { "", "Network", "h" }, { "/run/u/gvfs/smb-share:server=nas,share=pub", "pub on nas", "s" }, { "/run/u/gvfs/sftp:host=box,user=me", "me@box", "s" },
         { "smb://nas/pub/sub", "Music", "b" }, { "smb://nas/home", "home on nas", "b" }, { "smb://nas", "Server", "b" },   // (a server's own, step 7a)
         { "nfs://box/srv/data", "data on box", "b" }, { "smb://box/", "box", "b" },   // (an nfs:// one too, step 6; with a port it isn't one; a server's without a label: its name)
+        { "smb://box", "BOX", "v" }, { "smb://yoga.local", "Yoga", "v" },   // (smb://box/ is another address: both kept)
     };
     CHECK(pl.n == COUNT(want));
     for (int i = 0; i < pl.n && i < COUNT(want); i++) {
-        PlaceKind k = want[i][2][0] == 'h' ? PL_HEAD : want[i][2][0] == 's' ? PL_SHARE : PL_NETBM;
+        PlaceKind k = want[i][2][0] == 'h' ? PL_HEAD : want[i][2][0] == 's' ? PL_SHARE : want[i][2][0] == 'v' ? PL_SERVER : PL_NETBM;
         CHECK(pl.p[i].kind == k && strcmp(pl.p[i].path, want[i][0]) == 0 && strcmp(pl.p[i].label, want[i][1]) == 0);
         CHECK(!place_is_drive(pl.p[i].kind));
     }
@@ -861,12 +864,23 @@ static void test_places_net(void)
     CHECK(place_icon_names(&pl.p[1], &(UserDirs){ 0 }, false, names) == 2 && str_eq(names[0], S("folder-remote")));
     CHECK(place_icon_names(&pl.p[3], &(UserDirs){ 0 }, false, names) == 2 && str_eq(names[0], S("folder-remote")));
     Places none = { 0 };
-    places_load_net(&ta, &none, at("places/none"), S(""));
+    places_load_net(&ta, &none, at("places/none"), S(""), NULL, 0);
     CHECK(none.n == 0);
     // A share is a place in its own section: a Places bookmark to the same folder doesn't hide it.
     Places both = { 0 };
     places_add(&both, PL_BOOKMARK, "/run/u/gvfs/smb-share:server=nas,share=pub", S("b"));
-    places_load_net(&ta, &both, at("places/none"), S("/run/u/gvfs/smb-share:server=nas,share=pub\n"));
+    places_load_net(&ta, &both, at("places/none"), S("/run/u/gvfs/smb-share:server=nas,share=pub\n"), NULL, 0);
+    // A server found that a bookmark has: the bookmark's, its label kept.
+    Places dup = { 0 };
+    put(at("places/dupbm"), "smb://box Office\n");
+    places_load_net(&ta, &dup, at("places/dupbm"), S(""), (NetServer[]){ { "BOX", "smb://box" } }, 1);
+    CHECK(dup.n == 2 && dup.p[1].kind == PL_NETBM && strcmp(dup.p[1].label, "Office") == 0);
+    // Only servers: the section's heading and them; a server isn't a drive, has no folder, connects.
+    Places sv = { 0 };
+    places_load_net(&ta, &sv, at("places/none"), S(""), (NetServer[]){ { "BOX", "smb://box" } }, 1);
+    CHECK(sv.n == 2 && sv.p[1].kind == PL_SERVER && place_connects(PL_SERVER) && place_connects(PL_NETBM) && !place_connects(PL_SHARE) && place_is_net(PL_SERVER) && !place_unmountable(&sv.p[1]));
+    CHECK(places_current(&sv, "smb://box") == -1);
+    CHECK(place_icon_names(&sv.p[1], &(UserDirs){ 0 }, false, names) == 3 && str_eq(names[0], S("network-server")) && str_eq(names[1], S("folder-remote")));
     CHECK(both.n == 3 && both.p[2].kind == PL_SHARE);
 }
 
@@ -896,6 +910,41 @@ static void test_server_shares(void)
     char uri[64], host[32], share[32], why[64];
     CHECK(server_share_uri("smb://nas:445/", "My Docs", u, sizeof u) && connect_uri(str_from_c(u), uri, sizeof uri, host, sizeof host, share, sizeof share, why, sizeof why) == CONNECT_OK &&
           strcmp(host, "nas") == 0 && strcmp(share, "My Docs") == 0);
+}
+
+// Servers on the network (step 7b): avahi-browse -r -p's lines (measured on Michael's LAN), escapes,
+// each server once, sorted; the lines that aren't one left out.
+static void test_avahi_servers(void)
+{
+    static NetServer s[NET_SERVERS_MAX];
+    Str out = S("+;eth0;IPv4;YOGA;_smb._tcp;local\n"
+                "=;eth0;IPv6;YOGA;_smb._tcp;local;yoga.local;fe80::3e18:a0ff:fe04:68b;445;\"model=MacSamba\"\n"
+                "=;eth0;IPv4;YOGA;_smb._tcp;local;yoga.local;192.168.1.165;445;\"model=MacSamba\"\n"
+                "=;eth0;IPv4;My\\032NAS\\059x;_smb._tcp;local;nas-1.local;192.168.1.9;4445;\n"
+                "=;eth0;IPv4;alpha;_smb._tcp;local;alpha.local;192.168.1.7;445;\n"
+                "=;eth0;IPv4;Printer;_ipp._tcp;local;p.local;192.168.1.8;631;\n"
+                "=;eth0;IPv4;Bad;_smb._tcp;local;bad host.local;192.168.1.10;445;\n"
+                "=;eth0;IPv4;BadPort;_smb._tcp;local;bp.local;192.168.1.11;44x;\n"
+                "=;eth0;IPv4;Zero;_smb._tcp;local;z.local;192.168.1.12;0;\n"
+                "=;eth0;IPv4;Ctl\\001;_smb._tcp;local;c.local;192.168.1.13;445;\n"
+                "=;eth0;IPv4;Short;_smb._tcp\n"
+                "=;eth0;IPv4;NoK;Microsoft Windows Network;local;nok.local;192.168.1.14;445;\n"   // (without -k: its database name, not taken)
+                "Failed to create client object: Daemon not running\n");
+    int n = avahi_smb_servers(out, s, NET_SERVERS_MAX);
+    CHECK(n == 3);
+    CHECK(strcmp(s[0].name, "alpha") == 0 && strcmp(s[0].addr, "smb://alpha.local") == 0);
+    CHECK(strcmp(s[1].name, "My NAS;x") == 0 && strcmp(s[1].addr, "smb://nas-1.local:4445") == 0);   // (\032 a space, \059 ';'; the port kept)
+    CHECK(strcmp(s[2].name, "YOGA") == 0 && strcmp(s[2].addr, "smb://yoga.local") == 0);   // (once for IPv4 and IPv6; 445 left out)
+    CHECK(avahi_smb_servers(S(""), s, NET_SERVERS_MAX) == 0);
+    CHECK(avahi_smb_servers(out, s, 1) == 1);
+    char u[32];
+    avahi_unescape(S("A\\000B\\300C"), u, sizeof u);   // (\000 and past 255: no such byte, left out)
+    CHECK(strcmp(u, "ABC") == 0);
+    avahi_unescape(S("a\\\\b\\.c\\"), u, sizeof u);   // (\\ and \. : the character; a lone \ at the end kept)
+    CHECK(strcmp(u, "a\\b.c\\") == 0);
+    // and Connect takes a server's address
+    char uri[64], host[32], share[32], why[64];
+    CHECK(connect_uri(S("smb://nas-1.local:4445"), uri, sizeof uri, host, sizeof host, share, sizeof share, why, sizeof why) == CONNECT_OK && share[0] == 0 && strcmp(host, "nas-1.local") == 0);
 }
 
 // The shares panel (step 7a): the branches panel's picker over a server's shares.

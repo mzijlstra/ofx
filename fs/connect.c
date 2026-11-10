@@ -188,6 +188,80 @@ static bool server_share_uri(const char *server, const char *share, char *out, s
     return n > 0 && (size_t)n < cap;
 }
 
+// ---- servers on the network (F16 step 7b) ------------------------------------------------------
+//
+// Arch's gvfs has no dnssd backend (network:/// lists nothing) and Windows' NetBIOS browsing
+// (smb:///) finds nothing on a modern network, so ofx asks avahi itself:
+// `avahi-browse -k -t -r -p _smb._tcp` (a query on the network, about 1 s; -k keeps the type as
+// "_smb._tcp", not its database name), or with -c avahi's cache
+// alone (25 ms, no traffic; measured on Michael's LAN, 2026-11-10). A resolved service a line:
+// "=;eth0;IPv4;YOGA;_smb._tcp;local;yoga.local;192.168.1.165;445;\"txt\"", its name escaped as
+// avahi does (a byte as \DDD, its decimal value: \059 for ';', \032 a space; or \ and the
+// character), each server once for IPv4 and once for IPv6.
+
+enum { NET_SERVERS_MAX = 32 };
+typedef struct {
+    char name[64];     // as it announces itself ("YOGA")
+    char addr[300];    // smb://host[:port]: what Connect takes
+} NetServer;
+
+// An avahi name field unescaped into out (cut at cap).
+static void avahi_unescape(Str f, char *out, size_t cap)
+{
+    size_t o = 0;
+    for (isize i = 0; i < f.len && o + 1 < cap; i++) {
+        if (f.p[i] != '\\' || i + 1 >= f.len) { out[o++] = f.p[i]; continue; }
+        if (i + 3 < f.len && isdigit((unsigned char)f.p[i + 1]) && isdigit((unsigned char)f.p[i + 2]) && isdigit((unsigned char)f.p[i + 3])) {
+            int v = (f.p[i + 1] - '0') * 100 + (f.p[i + 2] - '0') * 10 + (f.p[i + 3] - '0');
+            if (v > 0 && v < 256) out[o++] = (char)v;
+            i += 3;
+        } else out[o++] = f.p[++i];
+    }
+    out[o] = 0;
+}
+
+static int net_server_cmp(const void *a, const void *b)
+{
+    return strcasecmp(((const NetServer *)a)->name, ((const NetServer *)b)->name);
+}
+
+// The SMB servers in `avahi-browse -r -p`'s output out, into s (max at most), each once (by its
+// address), sorted by name; their count. A line not of a resolved service, a host name with other
+// than letters, digits, '.' and '-', a port that isn't a number, or a name with a control
+// character, left out.
+static int avahi_smb_servers(Str out, NetServer *s, int max)
+{
+    int n = 0;
+    isize at = 0;
+    for (Str line; n < max && next_line(out, &at, &line);) {
+        Str f[10];
+        int k = 0;
+        for (isize i = 0, start = 0; i <= line.len && k < 10; i++)
+            if (i == line.len || line.p[i] == ';') f[k++] = str_cut(line, start, i), start = i + 1;
+        // (a resolved service's line has ten fields; the others, "+" and "-", six)
+        if (k < 9 || !str_eq(f[4], S("_smb._tcp")) || f[6].len == 0 || f[8].len == 0) continue;
+        bool ok = true;
+        for (isize i = 0; i < f[6].len; i++) ok = ok && (isalnum((unsigned char)f[6].p[i]) || f[6].p[i] == '.' || f[6].p[i] == '-');
+        for (isize i = 0; i < f[8].len; i++) ok = ok && isdigit((unsigned char)f[8].p[i]);
+        if (!ok) continue;
+        NetServer v;
+        avahi_unescape(f[3], v.name, sizeof v.name);
+        for (const char *c = v.name; *c && ok; c++) ok = (unsigned char)*c >= 0x20 && *c != 0x7F;
+        if (!ok || !v.name[0]) continue;
+        char ps[8];
+        snprintf(ps, sizeof ps, "%.*s", STR_ARG(f[8]));
+        int port = atoi(ps);
+        if (port <= 0 || port > 65535) continue;
+        int w = port == 445 ? snprintf(v.addr, sizeof v.addr, "smb://%.*s", STR_ARG(f[6])) : snprintf(v.addr, sizeof v.addr, "smb://%.*s:%d", STR_ARG(f[6]), port);
+        if (w <= 0 || (size_t)w >= sizeof v.addr) continue;
+        bool seen = false;
+        for (int j = 0; j < n && !seen; j++) seen = strcmp(s[j].addr, v.addr) == 0;
+        if (!seen) s[n++] = v;
+    }
+    qsort(s, (size_t)n, sizeof *s, net_server_cmp);
+    return n;
+}
+
 // The share's folder from `gio info`'s output into path; false when it names none (a server's
 // list of shares, which isn't a folder).
 static bool gio_local_path(Str info, char *path, size_t cap)

@@ -1139,8 +1139,36 @@ blocks each of these for up to gvfs's 90 s. On a thread it also holds ofx's exit
        - f16s, on a stand-in gio: the panel waiting for the location line, the list, a pick's
          address, Esc, a server bookmark;
        - the net group's nets, on the real Samba: the list, a pick with the port, a closed port.
-   - **7b, servers on the network** (mDNS, Windows browsing): a spike first, read only, on Michael's
-     LAN; perhaps his old laptops as servers to test with. Then his call whether to build it.
+   - **7b, servers on the network** (built 2026-11-10, Michael's go after the spike):
+     - **The test server:** Michael's old laptop (Ubuntu 24.04) on the LAN, updated, hardened
+       and serving one SMB share and one NFS export to his desktop; avahi announces it as YOGA.
+     - **The spike** (read only, on his LAN):
+       - Arch's gvfs ships no `gvfsd-dnssd`, so `network:///` lists nothing.
+       - Windows' NetBIOS browsing (`smb:///`) finds nothing on a modern network ("Failed to
+         retrieve share list from server").
+       - `.local` names resolve already (nss-mdns): `smb://yoga.local/` works with 7a as it is.
+       - avahi finds the server: `avahi-browse -k -t -r -p _smb._tcp` takes about 1 s (one query
+         on the network), with `-c` (avahi's cache alone, no traffic) 25 ms. `-k` matters:
+         without it avahi-browse names the type from its database ("Microsoft Windows Network",
+         translatable). The first run against the real network found that; the stand-in had
+         printed what ofx expected.
+     - **What it does:**
+       - the Network section lists the SMB servers avahi finds (`PL_SERVER`), dim, with
+         network-server's icon, after the bookmarks; a bookmark of the same address wins, its
+         label kept;
+       - a click, or its menu's Mount, runs 7a on `smb://host[:port]`;
+       - gui/disco.c, a thread of its own: one query as ofx starts, then the cache every 30 s,
+         so ofx puts no query on the network on a timer. A change reads the places again.
+         Without avahi-browse nothing is found and the thread ends.
+       - NFS servers rarely announce themselves, and gvfs couldn't list their exports: left out.
+     - **Found on the way:** step 5 said network bookmarks were drawn dim; only unmounted
+       drives were. Both dim now.
+     - **Tests:**
+       - unit: avahi's lines (escapes, IPv4 and IPv6 once, a port kept, bad hosts, ports and
+         names left out), the places with servers, a bookmark winning;
+       - f16v, on a stand-in avahi-browse (run-script's avahi-browse runs `OFX_TEST_AVAHI`, else
+         finds nothing; under the guard discovery runs only with it): the first query, the cache
+         reads adding and dropping a server, a click listing the shares, the menu's Mount.
 8. **The milestone's code-health review and cleanup** (AGENTS.md "At the end of each major
    milestone"), then install.
 

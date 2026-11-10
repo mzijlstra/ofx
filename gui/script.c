@@ -321,7 +321,7 @@ static void script_state(char *out, size_t cap)
         const Place *p = &app.places.p[i];
         size_t k = strlen(sides);
         // (^ a heading; ~ a drive not mounted yet, 2026-10-30)
-        snprintf(sides + k, sizeof sides - k, "%s%s%s", i ? "|" : "", p->kind == PL_HEAD ? "^" : p->kind == PL_UNMOUNTED || p->kind == PL_NETBM ? "~" : "", p->label);
+        snprintf(sides + k, sizeof sides - k, "%s%s%s", i ? "|" : "", p->kind == PL_HEAD ? "^" : p->kind == PL_UNMOUNTED || place_connects(p->kind) ? "~" : "", p->label);
         spaced += place_is_drive(p->kind) && p->size > 0;
     }
     for (char *c = sides; *c; c++)
@@ -874,6 +874,7 @@ static void script_state(char *out, size_t cap)
     sw(out, cap, &len, "brpsel=%s ", brpsel);
     sw(out, cap, &len, "brptext=%s ", brptext);
     sw(out, cap, &len, "brpinlist=%d ", app.ui.brp.in_list);
+    sw(out, cap, &len, "discoasks=%d ", atomic_load(&disco.asks));   // (F16 step 7b)
     sw(out, cap, &len, "shp=%d shpn=%td shpsel=%s shptext=%s shps=%s shppending=%d shpinlist=%d ", app.ui.panel == UI_PANEL_SHARES, app.ui.shp.list.n, shpsel, shptext, shplist, shp.pending, app.ui.shp.in_list);
     sw(out, cap, &len, "sidew=%d ", side_w());
     sw(out, cap, &len, "sidebox=%.0f ", Clay_GetElementData(CLAY_ID("side")).boundingBox.width);
