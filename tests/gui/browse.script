@@ -2,6 +2,9 @@
 # a.txt, b2.txt, b10.txt and .hidden. spawn.log is <T>/spawn.log, the theme <T>/state.
 settle
 expect n=5 hidden=1 sel=adir idx=0 scale=2
+# The window's environment (run-script): no session bus, its runtime folder the run's own (a program
+# with file capabilities looks for the bus there: F16 step 6 review), the display by its full path.
+sh [ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ] && [ "$XDG_RUNTIME_DIR" = "$OFX_ROOT/xdg-run" ] && [ ! -e "$XDG_RUNTIME_DIR/bus" ] && [ -S "$WAYLAND_DISPLAY" ]
 char j
 expect sel=bdir
 key down

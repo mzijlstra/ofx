@@ -21,6 +21,16 @@ want() { RS_HOME=; [ "$only" = "  " ] || case $only in *" $1 "*) true ;; *) fals
 case $base in /?*) ;; *) echo "run.sh: the scratch dir must be an absolute path: '$base'" >&2; exit 1 ;; esac
 here=$(cd "$(dirname "$0")" && pwd)
 fail=0
+# The test sway's tools (vkbd, vptr, dndpeer) as built from their sources now: plain make doesn't
+# build them, and an old one tests old code (a guard change ran stale in keys and dnd, F16 step 6).
+tools_current() {   # <group> <tool>...: false, saying so, when one is missing or older than its sources
+    g=$1; shift
+    for t in "$@"; do
+        for f in "$here/../../tools/gui/$t.c" "$here/../../tools/gui/testsway.h"; do
+            [ "$here/../../build/$t" -nt "$f" ] || { echo "$g: build/$t is missing or older than $f: make build/$t" >&2; return 1; }
+        done
+    done
+}
 if [ "$par" -gt 1 ]; then
     jobs=""
     for g in $(sed -n 's/^if want \([a-z0-9]*\); then$/\1/p' "$0"); do
@@ -472,7 +482,8 @@ if want net; then
 # Its tree is a short folder of its own, <base>/net a link to it (F16 step 6): gvfsd-nfs finds the
 # bus only at <T>/rt/bus, and a socket's path holds 107 bytes, which a long scratch path (gui.py's)
 # passes, skipping netn. Removed once the group passes; kept, and named, when it fails.
-old=$(readlink "$base/net" 2> /dev/null) && case $old in /tmp/ofx-gnet-*) chmod -R u+rwx "$old"; rm -rf "$old" ;; esac
+# (mktemp's six characters only: a case * would match /tmp/ofx-gnet-x/../.. too; step 6 review)
+old=$(readlink "$base/net" 2> /dev/null) && case $old in /tmp/ofx-gnet-[A-Za-z0-9][A-Za-z0-9][A-Za-z0-9][A-Za-z0-9][A-Za-z0-9][A-Za-z0-9]) chmod -R u+rwx "$old"; rm -rf "$old" ;; esac
 fresh net; T=$(mktemp -d /tmp/ofx-gnet-XXXXXX); ln -s "$T" "$base/net"; mkdir -p "$T/home"
 if ( NET_LIB="$here/../net/lib.sh"; . "$NET_LIB"
   net_ok || exit 0
@@ -590,6 +601,7 @@ RS_HOME=$H
 rs copypath RUN_SCRIPT_LIMIT=30 OFX_COMPOSITOR=sway -- "$H/tree"
 fi
 if want keys; then
+tools_current keys vkbd vptr dndpeer || failed keys
 # Keys through the compositor (tools/gui/vkbd.c in the test sway, 2026-10-28): GLFW's keycodes and
 # gui/glfwkeys.c, which the other scripts' keys skip.
 fresh keys; mkdir -p "$T/tree/adir" "$T/tree/bdir"; touch "$T/tree/a.txt" "$T/tree/my-file name.txt" "$T/tree/adir/inner.txt"
@@ -635,6 +647,7 @@ fi
 rs keys RUN_SCRIPT_LIMIT=60 OFX_COMPOSITOR=sway -- "$T/tree"
 fi
 if want dnd; then
+tools_current dnd vptr dndpeer || failed dnd
 # Drag and drop with other programs (F14, gui/dnd.c), in the test sway: dndpeer is the other program,
 # vptr the pointer (tools/gui/; both refused outside the test sway, as vkbd: the keys group proves
 # their guard).

@@ -22,7 +22,10 @@ static const char *test_sway_refused(int *pid)
     snprintf(path, sizeof path, "%s/sway.socket", root);
     FILE *f = fopen(path, "r");
     if (f) fscanf(f, "%255s", sock), fclose(f);
-    if (strcmp(sock, wd) != 0) return "WAYLAND_DISPLAY is not the test sway's ($OFX_GUI_ROOT/sway.socket)";
+    // (run-script names it by its absolute path, the window's XDG_RUNTIME_DIR being the run's own:
+    // its last part is the name; the peer's pid below proves the socket is the test sway's)
+    const char *base = strrchr(wd, '/');
+    if (strcmp(sock, base ? base + 1 : wd) != 0) return "WAYLAND_DISPLAY is not the test sway's ($OFX_GUI_ROOT/sway.socket)";
     snprintf(path, sizeof path, "%s/sway.pid", root);
     if ((f = fopen(path, "r"))) fscanf(f, "%d", pid), fclose(f);
     snprintf(path, sizeof path, "/proc/%d/comm", *pid);

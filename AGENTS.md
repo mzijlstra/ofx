@@ -221,6 +221,11 @@ copy, scripts included, so editing `tests/gui` during a run is safe.
   your own compositor, vkbd would type into your focused window, vptr move your pointer, and
   dndpeer drop into your windows. A drag out of a real ofx reaches your programs as any drag does;
   test that only by hand.
+- The window runs without the session's bus address, with `GIO_USE_VFS=local`, and with
+  `XDG_RUNTIME_DIR` the run's own (`<scratch>/xdg-run`), the display named by its absolute path: a
+  program with file capabilities (gvfsd-nfs) ignores a bus address and looks for the bus at
+  `$XDG_RUNTIME_DIR/bus`. vkbd, vptr and dndpeer aren't built by plain `make`: run.sh's keys and
+  dnd groups fail when one is older than its sources (`make build/vkbd build/vptr build/dndpeer`).
 - `run-script.sh` checks the socket is the one weston made before launching, takes the pid from the
   launch script, and stops weston after the run. For an unscripted run (`-`), kill the pid, then
   `tools/gui/weston.sh stop <scratch>`.

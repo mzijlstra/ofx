@@ -175,11 +175,14 @@ case $comp:$sock in weston:ofx-test-* | sway:wayland-[0-9]*) ;; *) echo "run-scr
 [ "$sock" != "${WAYLAND_DISPLAY:-}" ] || { echo "run-script: $comp's socket is this session's display" >&2; "$here/$comp.sh" stop "$T"; exit 1; }
 # Nor his session's bus or Hyprland (the window's and its sh lines'): no D-Bus or hyprctl call a
 # future feature makes reaches them, gio stays local, and git finds no repository above the run's
-# (code-health review, 2026-11-03).
+# (code-health review, 2026-11-03). XDG_RUNTIME_DIR is the run's own, the display named by its
+# absolute path: a program with file capabilities (gvfsd-nfs) ignores a bus address and looks for
+# the bus at $XDG_RUNTIME_DIR/bus, which would be his session's (F16 step 6 review, 2026-11-10).
+mkdir -p "$T/xdg-run" && chmod 700 "$T/xdg-run"
 cat > "$T/launch.sh" <<EOS
 #!/bin/sh
 echo \$\$ > "$T/run.pid"
-exec env -u DISPLAY -u WAYLAND_SOCKET -u DBUS_SESSION_BUS_ADDRESS -u HYPRLAND_INSTANCE_SIGNATURE GIO_USE_VFS=local GIT_CEILING_DIRECTORIES="$T" WAYLAND_DISPLAY="$sock" OFX_TEST_SIZE=${OFX_SCRIPT_SIZE:-936x516} OFX_TEST_WINDOWS="$T/windows" ${script_env} OFX_GUI_ROOT="$T" OFX_GUI_SHOTS="$T/shots" PATH="$T/fakes:\$PATH" XDG_STATE_HOME="$T/state" XDG_CONFIG_HOME="$T/config" XDG_DATA_HOME="$T/data" XDG_CACHE_HOME="$T/cache" \
+exec env -u DISPLAY -u WAYLAND_SOCKET -u DBUS_SESSION_BUS_ADDRESS -u HYPRLAND_INSTANCE_SIGNATURE GIO_USE_VFS=local GIT_CEILING_DIRECTORIES="$T" XDG_RUNTIME_DIR="$T/xdg-run" WAYLAND_DISPLAY="$XDG_RUNTIME_DIR/$sock" OFX_TEST_SIZE=${OFX_SCRIPT_SIZE:-936x516} OFX_TEST_WINDOWS="$T/windows" ${script_env} OFX_GUI_ROOT="$T" OFX_GUI_SHOTS="$T/shots" PATH="$T/fakes:\$PATH" XDG_STATE_HOME="$T/state" XDG_CONFIG_HOME="$T/config" XDG_DATA_HOME="$T/data" XDG_CACHE_HOME="$T/cache" \
   LSAN_OPTIONS=suppressions=$root/gui/lsan.supp ASAN_OPTIONS=log_path="$T/asan" ${OFX_TEST_LEAK:+OFX_TEST_LEAK=1} ${OFX_GUI_FAIL_FAST:+OFX_GUI_FAIL_FAST=1} ${OFX_GUI_DEBUG:+OFX_GUI_DEBUG=1} \
   ${OFX_TEST_WATCH_DELAY_MS:+OFX_TEST_WATCH_DELAY_MS=$OFX_TEST_WATCH_DELAY_MS} ${OFX_TEST_COPY_DELAY_MS:+OFX_TEST_COPY_DELAY_MS=$OFX_TEST_COPY_DELAY_MS} ${OFX_TEST_CROSS:+OFX_TEST_CROSS=1} ${OFX_TEST_GIO:+OFX_TEST_GIO=$OFX_TEST_GIO} ${OFX_TEST_CONNECT_CLOSE_MS:+OFX_TEST_CONNECT_CLOSE_MS=$OFX_TEST_CONNECT_CLOSE_MS} ${OFX_TEST_GVFS_MS:+OFX_TEST_GVFS_MS=$OFX_TEST_GVFS_MS} OFX_TEST_WRITE_MS=${OFX_TEST_WRITE_MS:-100} HOME=$OFX_TEST_HOME ${OFX_TEST_COUNT_DELAY_MS:+OFX_TEST_COUNT_DELAY_MS=$OFX_TEST_COUNT_DELAY_MS} ${OFX_TEST_MOUNTINFO:+OFX_TEST_MOUNTINFO=$OFX_TEST_MOUNTINFO} OFX_TEST_SYSBLOCK=$OFX_TEST_SYSBLOCK OFX_TEST_UDEV=$OFX_TEST_UDEV ${OFX_TEST_MEDIA:+OFX_TEST_MEDIA=$OFX_TEST_MEDIA} ${OFX_TEST_SPACE_DELAY_MS:+OFX_TEST_SPACE_DELAY_MS=$OFX_TEST_SPACE_DELAY_MS} ${OFX_TEST_ICONS_MAX:+OFX_TEST_ICONS_MAX=$OFX_TEST_ICONS_MAX} ${OFX_TEST_THUMB_HELD_MAX:+OFX_TEST_THUMB_HELD_MAX=$OFX_TEST_THUMB_HELD_MAX} \
   OFX_TEST_THUMBNAILERS=$OFX_TEST_THUMBNAILERS ${OFX_TEST_THUMB_RUN_MS:+OFX_TEST_THUMB_RUN_MS=$OFX_TEST_THUMB_RUN_MS} ${OFX_TEST_SANDBOX:+OFX_TEST_SANDBOX=$OFX_TEST_SANDBOX} \
