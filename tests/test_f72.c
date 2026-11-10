@@ -35,6 +35,22 @@ static void test_du_walk(void)
     CHECK(s.dirs == 3 && s.files == 4 && s.bytes == 10 + 20 + 1 + 3 && !s.cut && ticks == 1);   // d, sub, deeper; a, b, la, lsub
     const char *both[] = { d, f };
     CHECK(du_walk(&w, both, 2, &s) && s.dirs == 3 && s.files == 5 && s.bytes == 39);
+    // A mount point below the root (by the mount list): counted as a folder, never looked at (a
+    // dead share's root would hang the walk; the F16 code-health review). One directly under the
+    // root, one deeper.
+    mkdirs(at("f72du/m/x/y")), put(at("f72du/m/x/y/z"), "0123456");
+    char mi[3 * PATH_MAX];
+    snprintf(mi, sizeof mi, "1 0 0:1 / / rw - ext4 /dev/x rw\n2 1 0:2 / %s rw - fuse.sshfs h:/ rw\n3 1 0:3 / %s rw - nfs4 h:/e rw\n",
+             at("f72du/d/sub"), at("f72du/m/x/y"));
+    w.mounts = str_from_c(mi);
+    CHECK(du_walk(&w, one, 1, &s) && s.dirs == 2 && s.files == 3 && s.bytes == 10 + 1 + 3 && !s.cut);   // d, sub; a, la, lsub
+    const char *m[] = { at("f72du/m") };
+    char mroot[PATH_MAX];
+    snprintf(mroot, sizeof mroot, "%s", m[0]), m[0] = mroot;
+    CHECK(du_walk(&w, m, 1, &s) && s.dirs == 3 && s.files == 0 && !s.cut);   // m, x, y; not z
+    CHECK(w.nbelow == 1 && strcmp(w.below[0], at("f72du/m/x/y")) == 0);   // (d/sub isn't below m)
+    w.mounts = STR_EMPTY;
+    CHECK(du_walk(&w, m, 1, &s) && s.dirs == 3 && s.files == 1 && s.bytes == 7);
     // A root that is gone, a folder that can't be read: what could be counted, and cut.
     const char *gone[] = { at("f72du/none"), f };
     CHECK(du_walk(&w, gone, 2, &s) && s.cut && s.files == 1 && s.bytes == 5);

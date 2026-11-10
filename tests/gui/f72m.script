@@ -1,0 +1,9 @@
+# The milestone's code-health cleanup, step A (run.sh's f72m): Properties' count of a folder holding a
+# mount point (d/m, a stand-in sshfs in the mount list, a file in it): the mount point is counted as a
+# folder and never looked at, as a dead share's root would hang the walk (fstatat came before the
+# drive check). d/e, an ordinary folder beside it, is counted all the way down.
+settle
+wait-for 2000 n=1 sel=d
+key ctrl-i
+wait-for 3000 propdone=1 propdirs=3 propfiles=1 propbytes=3 propcut=0 propname=d
+quit

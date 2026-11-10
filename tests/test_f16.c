@@ -128,6 +128,10 @@ static void test_far_next(void)
     CHECK(far_next(ok, &at, &m) == 1 && m.type == 'C' && m.v[0] == 3 && m.v[1] == 4 && m.v[2] == -1);
     CHECK(far_next(ok, &at, &m) == 1 && m.type == 'X' && str_eq(m.text, S("gone away")));
     CHECK(at == ok.len && far_next(ok, &at, &m) == 0);
+    // A file from before 1970: its mtime negative, the rest as any (the F16 code-health review).
+    Str old = S("E 0 3 -86400 33188 1 2 1 0\na");
+    at = 0;
+    CHECK(far_next(old, &at, &m) == 1 && m.type == 'E' && m.v[1] == 3 && m.v[2] == -86400 && m.v[3] == 33188 && str_eq(m.name, S("a")));
     // Not all come yet: 0, and *at kept.
     const char *part[] = { "W 1", "E 0 1 2 3 4 5 3 2\nab", "E 0 1 2 3 4 5 3 2\nabcd" };
     for (int i = 0; i < COUNT(part); i++) {
@@ -146,6 +150,8 @@ static void test_far_next(void)
         "E 0 0 0 0 0 0 3 0\na/b",               // a '/' in a name
         "E 0 0 0 0 0 0 1\na",                   // a number missing
         "E 0 -1 0 0 0 0 1 0\na",                // a negative size
+        "E -1 0 0 0 0 0 1 0\na", "E 0 0 0 -1 0 0 1 0\na", "E 0 0 0 0 -1 0 1 0\na", "E 0 0 0 0 0 -1 1 0\na",   // the others negative
+        "E 0 0 0 0 0 0 -1 0\na", "E 0 0 0 0 0 0 1 -1\na",
     };
     for (int i = 0; i < COUNT(bad); i++) {
         at = 0;
@@ -825,6 +831,18 @@ static void test_login_keys(void)
     u.login_no_user = true, in.login_field = UI_LOGIN_USER, u.login_at = UI_LOGIN_PASS;
     ui_handle_panels(&u, (UiNames){ 0 }, &in, UI_ON_LOGIN, false, &a);
     CHECK(u.login_at == UI_LOGIN_PASS);
+    // Nor a field an SSH question hasn't (Domain), nor any but the passphrase for a key's (the F16
+    // code-health review: the click's own check knew only the user field).
+    u.login_no_user = false, u.login_ssh = true, in.login_field = UI_LOGIN_DOMAIN, u.login_at = UI_LOGIN_PASS;
+    ui_handle_panels(&u, (UiNames){ 0 }, &in, UI_ON_LOGIN, false, &a);
+    CHECK(u.login_at == UI_LOGIN_PASS);
+    in.login_field = UI_LOGIN_USER;
+    ui_handle_panels(&u, (UiNames){ 0 }, &in, UI_ON_LOGIN, false, &a);
+    CHECK(u.login_at == UI_LOGIN_USER);
+    u.login_key = true, u.login_at = UI_LOGIN_PASS;
+    ui_handle_panels(&u, (UiNames){ 0 }, &in, UI_ON_LOGIN, false, &a);
+    CHECK(u.login_at == UI_LOGIN_PASS);
+    u.login_ssh = u.login_key = false;
     in = ui_input_none(), in.modal = UI_MODAL_GUEST;
     CHECK(ui_handle_panels(&u, (UiNames){ 0 }, &in, UI_ON_LOGIN, false, &a) && a.kind == UA_LOGIN_GUEST && u.panel == UI_PANEL_NONE);
     u.panel = UI_PANEL_LOGIN, in.modal = UI_MODAL_YES;
@@ -864,13 +882,15 @@ static void test_gvfs_label(void)
     gvfs_share_label(S("smb-share:server=,share=x"), l, sizeof l);   // (an empty value is none)
     CHECK(strcmp(l, "smb-share:server=,share=x") == 0);
     CHECK(gvfs_key(S("smb-share:servers=a,server=b"), "server", v, sizeof v) && strcmp(v, "b") == 0);   // (a key, not its prefix)
-    CHECK(gvfs_key(S("smb-share:a=1,server=b%2"), "server", v, sizeof v) && strcmp(v, "b%2") == 0);   // (half an escape: kept)
+    CHECK(!gvfs_key(S("smb-share:a=1,server=b%2"), "server", v, sizeof v));   // (half an escape: not one of gvfs's, refused)
+    CHECK(!gvfs_key(S("smb-share:server=a%00b"), "server", v, sizeof v));   // (%00: no NUL inside a name)
     CHECK(gvfs_key(S("smb-share:server=%4e%41s"), "server", v, sizeof v) && strcmp(v, "NAs") == 0);
     CHECK(!gvfs_key(S("noколон"), "server", v, sizeof v) && !gvfs_key(S("x:server=a"), "share", v, sizeof v));
     CHECK(!gvfs_key(S("server=a"), "server", v, sizeof v));   // (no "type:": not one of gvfs's)
-    CHECK(gvfs_key(str_cut(S("x:server=b%41"), 0, 12), "server", v, sizeof v) && strcmp(v, "b%4") == 0);   // (an escape cut off at the name's end: not read past it)
+    CHECK(!gvfs_key(str_cut(S("x:server=b%41"), 0, 12), "server", v, sizeof v));   // (an escape cut off at the name's end: not read past it)
     char tiny[3];
-    CHECK(gvfs_key(S("x:server=abcdef"), "server", tiny, sizeof tiny) && strcmp(tiny, "ab") == 0);
+    CHECK(!gvfs_key(S("x:server=abcdef"), "server", tiny, sizeof tiny));   // (too long: false, never a cut value; the code-health review)
+    CHECK(gvfs_key(S("x:server=ab"), "server", tiny, sizeof tiny) && strcmp(tiny, "ab") == 0);
 }
 
 // The Network section (step 5): the shares gvfs has mounted, then the smb:// bookmarks; no heading

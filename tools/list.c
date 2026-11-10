@@ -14,6 +14,7 @@ static u8 mem[MiB(1)];   // one entry's name and link target at a time
 
 int main(int argc, char **argv)
 {
+    ops_guard(getenv("OFX_GUI_ROOT"));   // (a test's: --do writes only inside its folder, as ofx; the cleanup's step A)
     if (getenv("OFX_TEST_CROSS")) job_test_cross = true;   // (a test's moves as across drives, as ofx's: an undo's job)
     if (argc >= 2 && strcmp(argv[1], "--do") == 0) return far_do_serve(stdout, argc - 2, argv + 2);
     if (argc == 2 && strcmp(argv[1], "--shares") == 0) {

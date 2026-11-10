@@ -74,7 +74,11 @@ static int far_next(Str b, isize *at, FarMsg *m)
         break;
     case 'E': {
         i64 v[8];
-        if (!far_nums(line, v, 8, 0, INT64_MAX) || v[0] > K_OTHER || v[3] > UINT32_MAX || v[4] > UINT32_MAX || v[5] > UINT32_MAX ||
+        // (the mtime, v[2], may be before 1970: a file's date as an archive kept it; the rest can't
+        // be negative. The F16 code-health review: one such file made the whole folder malformed.)
+        bool ok = far_nums(line, v, 8, INT64_MIN, INT64_MAX);
+        for (int k = 0; ok && k < 8; k++) ok = k == 2 || v[k] >= 0;
+        if (!ok || v[0] > K_OTHER || v[3] > UINT32_MAX || v[4] > UINT32_MAX || v[5] > UINT32_MAX ||
             v[6] < 1 || v[6] > NAME_MAX || v[7] >= PATH_MAX)
             return -1;
         if (b.len - next < v[6] + v[7]) return 0;

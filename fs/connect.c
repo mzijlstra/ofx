@@ -317,7 +317,9 @@ static bool gio_local_path(Str info, char *path, size_t cap)
 // "dav:host=h,ssl=true", keys sorted, values escaped as in a URI (%xx).
 
 // The value of key in a gvfs folder name (the part after its "type:"), unescaped into out; false
-// when it has none.
+// when it has none, or it doesn't fit, or its escapes are bad or %00 (percent_decode's rules: the
+// F16 code-health review found a copy here that cut a long value short and still said true, which
+// Add Bookmark would have written as a wrong address).
 static bool gvfs_key(Str name, const char *key, char *out, size_t cap)
 {
     isize colon = str_find(name, ':');
@@ -329,16 +331,7 @@ static bool gvfs_key(Str name, const char *key, char *out, size_t cap)
         while (end < rest.len && rest.p[end] != ',') end++;
         Str part = str_cut(rest, at, end);
         if (part.len > k.len && memcmp(part.p, k.p, (size_t)k.len) == 0 && part.p[k.len] == '=') {
-            Str v = str_cut(part, k.len + 1, part.len);
-            size_t o = 0;
-            for (isize i = 0; i < v.len && o + 1 < cap; i++) {
-                int hi, lo;
-                if (v.p[i] == '%' && i + 2 < v.len && (hi = hex_digit(v.p[i + 1])) >= 0 && (lo = hex_digit(v.p[i + 2])) >= 0)
-                    out[o++] = (char)(hi << 4 | lo), i += 2;
-                else out[o++] = v.p[i];
-            }
-            out[o] = 0;
-            return o > 0;
+            return percent_decode(str_cut(part, k.len + 1, part.len), out, cap) && out[0];
         }
         at = end + 1;
     }

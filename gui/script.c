@@ -780,6 +780,7 @@ static void script_state(char *out, size_t cap)
     sw(out, cap, &len, "propdirs=%lld ", (long long)props.sum.dirs);
     sw(out, cap, &len, "propbytes=%lld ", (long long)props.sum.bytes);
     sw(out, cap, &len, "propdone=%d ", props.done);
+    sw(out, cap, &len, "propwalk=%d ", props.walking);   // (the walk thread asked: never on a far drive)
     sw(out, cap, &len, "propcut=%d ", props.sum.cut || props.cut);
     sw(out, cap, &len, "proplinks=%lld,%lld,%lld,%d ", (long long)props.sum.linked_names, (long long)props.sum.linked_files, (long long)props.sum.once_bytes, props.sum.once_over);
     sw(out, cap, &len, "propnlink=%llu ", props.have ? (unsigned long long)props.st.st_nlink : 0ull);

@@ -231,7 +231,7 @@ MUTANTS = [
     ('gui/panels.c', '            if (app.ui.marked ? app.ui.mark[i] : i == app.ui.list.sel) props.idx = i;', '            {}', 'f72'),
     (WK, '        if (whole && gen == atomic_load(&walk.gen)) walk.sum = s, walk.sum_gen = gen, walk.done = walk.fresh = true;', '', 'f72'),
     # ---- F7.2 follow-ups: hard links, the MIME type (Michael, 2026-10-26)
-    (WK, '                    .inodes = walk_inodes };', '                    .inodes = NULL };', 'f72'),
+    (WK, '.ctx = (void *)(uintptr_t)gen, .inodes = walk_inodes,', '.ctx = (void *)(uintptr_t)gen, .inodes = NULL,', 'f72'),   # (retargeted, step 8 A)
     ('gui/panels.c', '        props.type_by_name = !app.thumb_local || far_dir(props_path[0]) || !spawn_gio_type(props_path[0], props.type, sizeof props.type, 1000);', '        props.type_by_name = true;', 'f72'),
     ('gui/panels.c', '        mime_comment(&scratch, str_from_c(props.type), props.type_name, sizeof props.type_name);', '', 'f72'),
     # ---- F7.3: Open With, Enter on several, find's toggles
@@ -1209,4 +1209,7 @@ MUTANTS = [
     ('gui/folder.c', 'servers, nservers, app.ui.airplane);', 'servers, nservers, false);', 'f16'),
     ('gui/disco.c', '        if (gen != seen) cache = false, seen = gen;', '        if (gen != seen) seen = gen;', 'f16'),
     ('gui/actions.c', '    if (on) atomic_fetch_add(&airplane_gen, 1);\n', '', 'f16'),
+    # The milestone's code-health cleanup, step A
+    ('gui/panels.c', 'props.local = here ? !far_dir(props_path[0]) : app.thumb_local;', 'props.local = app.thumb_local;', 'f16'),
+    ('gui/walk.c', '                      .mounts = read_file(&mia, mountinfo_path()) };', '                      .mounts = STR_EMPTY };', 'f72'),
 ]

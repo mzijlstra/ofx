@@ -315,8 +315,11 @@ static void props_open(const char *path)
     else ui_tilde(props.where, sizeof props.where, n == 1 ? d : here_dir(), getenv("HOME"));
     snprintf(props.drive, sizeof props.drive, "%s", props_drive(props_path[0]));
     if (n == 1) props_read();
-    // Counted all the way down, but not on a network drive (its reads can hang, F6.4).
-    props.local = app.thumb_local;
+    // Counted all the way down, but not on a network drive (its reads can hang, F6.4): the folder
+    // shown's drive for its entries, the path's own for a folder asked by its menu (a sidebar share
+    // or a bookmark into one, with a local folder shown, walked the share: the F16 code-health
+    // review).
+    props.local = here ? !far_dir(props_path[0]) : app.thumb_local;
     // On a network drive, whether a folder is among them: by the listing's kinds, never looked at
     // (F16 step 3b). A path asked (a folder's menu) or the folder shown, empty, is one.
     bool any_dir = !props.local && (here || app.list.n == 0);

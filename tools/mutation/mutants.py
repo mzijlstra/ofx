@@ -379,7 +379,7 @@ MUTANTS += [
     ('ui/edit.c', '    case UK_SEL_END: *l.caret = *l.len; return true;\n', ''),
     ('ui/edit.c', '    case UK_ALL: *l.anchor = 0, *l.caret = *l.len; return true;\n', ''),
     ('ui/edit.c', '    case UK_BACKSPACE: ui_line_cut(l, lo < hi ? lo : ui_line_back(l, *l.caret), lo < hi ? hi : *l.caret); return true;', '    case UK_BACKSPACE: ui_line_cut(l, ui_line_back(l, *l.caret), *l.caret); return true;'),
-    ('ui/edit.c', '        if (ui_line_copy(u, l)) ui_line_cut(l, lo, hi);', '        ui_line_copy(u, l);'),
+    ('ui/edit.c', '        if (!l.secret && ui_line_copy(u, l)) ui_line_cut(l, lo, hi);', '        if (!l.secret) ui_line_copy(u, l);'),   # (retargeted, step 8 A)
     ('ui/edit.c', '    case UK_PASTE: ui_line_paste(l, paste); return true;\n', ''),
     # the path buttons
     ('ui/prompts.c', '    if (in->crumb_n <= 0) return;\n    u->focus = UI_FOCUS_CRUMBS', '    u->focus = UI_FOCUS_CRUMBS'),
@@ -495,11 +495,11 @@ MUTANTS += [
 # ---- F6: places and drives, the headings, the modes, the state, the status line, the tree, the trash view
 ST, TR = 'fs/state.c', 'fs/tree.c'
 MUTANTS += [
-    (PL, "        if (place_is_drive(pl->p[i].kind) == place_is_drive(kind) && strcmp(pl->p[i].path, path) == 0) return true;", "        if (strcmp(pl->p[i].path, path) == 0) return true;"),
+    ('fs/places.c', '        if (place_is_drive(pl->p[i].kind) == place_is_drive(kind) && place_is_net(pl->p[i].kind) == place_is_net(kind) && strcmp(pl->p[i].path, path) == 0) return true;', '        if (strcmp(pl->p[i].path, path) == 0) return true;'),   # (retargeted, step 8 A)
     (PL, "    places_add(pl, PL_TRASH, TRASH_URI, S(\"Trash\"));\n", ""),
     (PL, "    places_head(pl, \"Drives\");\n", ""),
     (PL, "        if (pl->p[i].kind == PL_TRASH && strcmp(path, TRASH_URI) == 0) return i;\n", ""),
-    (PL, "        if (pl->p[i].kind == PL_HEAD || pl->p[i].kind == PL_TRASH || pl->p[i].kind == PL_UNMOUNTED) continue;\n", ""),
+    ('fs/places.c', '        if (pl->p[i].kind == PL_HEAD || pl->p[i].kind == PL_TRASH || place_folderless(pl->p[i].kind)) continue;\n', ''),   # (retargeted, step 8 A)
     (PL, "        names[n++] = S(\"user-trash\");\n        break;\n", "        break;\n"),
     (PL, "    *size = (i64)v.f_blocks * (i64)v.f_frsize;", "    *size = 0;"),
     ('ui/cursor.c', "    while (ui_side_head(u, i)) i += dir;", "    if (ui_side_head(u, i)) i += dir;"),
@@ -948,7 +948,7 @@ MUTANTS += [
     (PR, "        if (fstatat(dirfd(d), e->d_name, &st, AT_SYMLINK_NOFOLLOW) != 0) {", "        if (fstatat(dirfd(d), e->d_name, &st, 0) != 0) {"),
     # Not a mutant without a mount to walk onto: `st.st_dev != w->dev` (a drive mounted inside a
     # folder counted, not entered; network mounts below one never read). Kept; checked by hand.
-    (PR, "            if (sub < 0) s->cut = true;\n            else go", "            if (sub < 0) {}\n            else go"),
+    ('fs/props.c', '            if (sub < 0) s->cut = true;\n            else if (w->nbelow', '            if (sub < 0) {}\n            else if (w->nbelow'),   # (retargeted, step 8 A)
     (PR, "    s->files++, s->bytes += st->st_size, s->once_bytes += st->st_size;", "    s->files++, s->once_bytes += st->st_size;"),
     # ---- hard links counted once too (Michael, 2026-10-26)
     (PR, "    s->files++, s->bytes += st->st_size, s->once_bytes += st->st_size;", "    s->files++, s->bytes += st->st_size;"),
@@ -1120,7 +1120,7 @@ MUTANTS += [
 MUTANTS += [
     (I, "    if (apps) return str_eq(context, S(\"Apps\")) || str_eq(context, S(\"Applications\"));", ""),
     (I, "    if (apps) return str_eq(context, S(\"Apps\")) || str_eq(context, S(\"Applications\"));", "    if (apps) return str_eq(context, S(\"Apps\"));"),
-    (I, "        bool png = str_ends_with(s, S(\".png\")), is_svg = svg && str_ends_with(s, S(\".svg\"));", "        bool png = str_ends_with(s, S(\".png\")), is_svg = str_ends_with(s, S(\".svg\"));"),
+    ('fs/icons.c', 'is_svg = (svg || str_ends_with(s, S("-symbolic.svg"))) && str_ends_with(s, S(".svg"));', 'is_svg = str_ends_with(s, S(".svg"));'),   # (retargeted, step 8 A)
     (I, "        if (!strmap_get(m, names[i], &had) || kind[i] < had) strmap_put(m, names[i], kind[i]);", "        strmap_put(m, names[i], kind[i]);"),
     (I, "kind == 2 ? \"svg\" : \"png\");", "\"png\");"),
     (I, "    icon_load_ctx(a, db, theme, true);", "    icon_load_ctx(a, db, theme, false);"),
@@ -1421,7 +1421,7 @@ MUTANTS += [
     ('ui/menus.c', "    case UM_BOOKMARK_IT: return !u->ctx_trash && !u->ctx_bmed;", "    case UM_BOOKMARK_IT: return !u->ctx_trash;"),
     ('ui/menus.c', "    case UM_BOOKMARK_IT: return !u->ctx_trash && !u->ctx_bmed;", "    case UM_BOOKMARK_IT: return !u->ctx_bmed;"),
     ('ui/menus.c', " case UM_BM_EDIT_IT: return u->ctx_bmk >= 0;", " case UM_BM_EDIT_IT: return u->ctx_bmk > 0;"),
-    ('ui/menus.c', "    case UM_EJECT_IT: case UM_UNMOUNT_IT: return u->ctx_eject;", "    case UM_EJECT_IT: case UM_UNMOUNT_IT: return true;"),
+    ('ui/menus.c', '    case UM_EJECT_IT: return u->ctx_eject;', '    case UM_EJECT_IT: return true;'),   # (retargeted, step 8 A)
     ('ui/menus.c', "    case UM_EMPTY_IT: return u->ctx_trash;", "    case UM_EMPTY_IT: return true;"),
     ('ui/menus.c', "    case UM_SEP: case UM_OPEN_IT: case UM_OPEN_TAB: return true;", "    case UM_SEP: case UM_OPEN_TAB: return true;"),
     ('ui/menus.c', "        if (it == UM_PASTE_INTO) return u->can_paste && u->ctx_w;", ""),
@@ -1436,7 +1436,7 @@ MUTANTS += [
     ('ui/menus.c', '        case UM_EMPTY_IT: return u->empty_asking = true, UI_NONE;', ''),
     ('ui/menus.c', '        case UM_PROPS_IT: return ui_props_open(u, UI_PROPS_CTX);', '        case UM_PROPS_IT: return ui_props_open(u, UI_PROPS_MARKED);'),
     ('ui/menus.c', "    u->ctx_side = (int)side, u->ctx_crumb = crumb, u->ctx_key = keys;", "    u->ctx_side = (int)side, u->ctx_crumb = crumb;"),
-    ('ui/menus.c', "    u->ctx_trash = u->ctx_place = u->ctx_bmed = u->ctx_eject = u->ctx_full = u->ctx_w = u->ctx_unmounted = false;\n", "    u->ctx_w = u->ctx_unmounted = false;\n"),
+    ('ui/menus.c', '    u->ctx_trash = u->ctx_place = u->ctx_bmed = u->ctx_eject = u->ctx_full = u->ctx_w = u->ctx_unmounted = u->ctx_share = u->ctx_airplane = false;\n', '    u->ctx_w = u->ctx_unmounted = u->ctx_share = u->ctx_airplane = false;\n'),   # (retargeted, step 8 A)
     ('ui/menus.c', "    u->ctx_bmk = -1, u->ctx_bms = 0;\n", ""),
     ('ui/handle.c', "    if (!prompt && in->ctx_side >= 0 && u->side.top + in->ctx_side < u->side.n && !ui_side_head(u, u->side.top + in->ctx_side)) {", "    if (!prompt && in->ctx_side >= 0 && u->side.top + in->ctx_side < u->side.n) {"),
     ('ui/handle.c', "        u->side.sel = u->side.top + in->ctx_side;\n        ui_folder_open", "        ui_folder_open"),
@@ -1473,7 +1473,7 @@ MUTANTS += [
 MUTANTS += [
     ('ui/menus.c', "        if (it == UM_PASTE_INTO) return u->can_paste && u->ctx_w;", "        if (it == UM_PASTE_INTO) return u->can_paste;"),
     ('ui/menus.c', "    case UM_PASTE_INTO: return files && u->can_paste && u->ctx_w;", "    case UM_PASTE_INTO: return files && u->can_paste;"),
-    ('ui/menus.c', "u->ctx_eject = u->ctx_full = u->ctx_w = u->ctx_unmounted = false;", "u->ctx_eject = u->ctx_full = u->ctx_unmounted = false;"),
+    ('ui/menus.c', 'u->ctx_eject = u->ctx_full = u->ctx_w = u->ctx_unmounted = u->ctx_share', 'u->ctx_eject = u->ctx_full = u->ctx_unmounted = u->ctx_share'),   # (retargeted, step 8 A)
     ('ui/menus.c', "    u->ctx_key = keys, u->ctx_w = false;   // (gui/ says, as it opens)", "    u->ctx_key = keys;   // (gui/ says, as it opens)"),
 ]
 # ---- the list's Owner, Group, Permissions (View → Show Permissions) and links' targets (2026-10-27).
@@ -1590,7 +1590,7 @@ MUTANTS += [
     ('ui/handle.c', '            return *out = ui_search_open(u), true;', '            return *out = UI_NONE, true;'),
     ('ui/handle.c', '    case UK_SEARCH: return *out = ui_search_open(u), true;', ''),
     (U, '"search", .cmd = UK_SEARCH, .runs = true },', '"search", .cmd = UK_SEARCH },'),
-    (U, "UM_SEP, UM_FIND, UM_SEARCH, UM_LOCATION, UM_TERMINAL,\n};", "UM_SEP, UM_FIND, UM_LOCATION, UM_TERMINAL,\n};"),
+    ('ui/ui.c', 'UM_SEP, UM_FIND, UM_SEARCH, UM_LOCATION, UM_CONNECT, UM_AIRPLANE, UM_TERMINAL,\n};', 'UM_SEP, UM_FIND, UM_LOCATION, UM_CONNECT, UM_AIRPLANE, UM_TERMINAL,\n};'),   # (retargeted, step 8 A)
     # what the results can't do yet, and the menus
     ('ui/menus.c', '    case UM_HERE_PROPS: return u->view != UI_VIEW_SEARCH;', '    case UM_HERE_PROPS: return true;'),
     ('ui/helpers.c', "    if (str_eq(cw, S(TRASH_URI)) || is_search(cwd)) {", "    if (str_eq(cw, S(TRASH_URI))) {"),
@@ -1647,8 +1647,8 @@ MUTANTS += [
     ('ui/edit.c', "    case UK_WORD_BACKSPACE: ui_line_cut(l, lo < hi ? lo : ui_line_word(l, *l.caret, -1), lo < hi ? hi : *l.caret); return true;", "    case UK_WORD_BACKSPACE: ui_line_cut(l, ui_line_word(l, *l.caret, -1), *l.caret); return true;"),
     ('ui/edit.c', "    case UK_WORD_DELETE: ui_line_cut(l, lo < hi ? lo : *l.caret, lo < hi ? hi : ui_line_word(l, *l.caret, 1)); return true;", "    case UK_WORD_DELETE: ui_line_cut(l, *l.caret, ui_line_word(l, *l.caret, 1)); return true;"),
     ('ui/edit.c', "    *l.caret = (int)ui_clamp(*l.caret, 0, *l.len), *l.anchor = (int)ui_clamp(*l.anchor, 0, *l.len);", ""),
-    ('ui/edit.c', "    return *l.len != was_len || memcmp(was, l.b, (size_t)was_len) != 0 ? UI_LINE_CHANGED : UI_LINE_MOVED;", "    return *l.len != was_len ? UI_LINE_CHANGED : UI_LINE_MOVED;"),
-    ('ui/edit.c', "    return *l.len != was_len || memcmp(was, l.b, (size_t)was_len) != 0 ? UI_LINE_CHANGED : UI_LINE_MOVED;", "    return UI_LINE_CHANGED;"),
+    ('ui/edit.c', ': *l.len != was_len || memcmp(was, l.b, (size_t)was_len) != 0 ? UI_LINE_CHANGED', ': *l.len != was_len ? UI_LINE_CHANGED'),   # (retargeted, step 8 A)
+    ('ui/edit.c', '!did ? UI_LINE_NOT : *l.len != was_len || memcmp(was, l.b, (size_t)was_len) != 0 ? UI_LINE_CHANGED : UI_LINE_MOVED;', '!did ? UI_LINE_NOT : UI_LINE_CHANGED;'),   # (retargeted, step 8 A)
     ('ui/edit.c', '    if (on == UI_ON_OW && !u->ow.in_list) l = ui_pick_line(&u->ow);', '    if (on == UI_ON_OW) l = ui_pick_line(&u->ow);'),
     ('ui/edit.c', '    else if (on == UI_ON_BM && u->bmp_naming) l = ui_bmp_line(u);', '    else if (on == UI_ON_BM) l = ui_bmp_line(u);'),
     ('ui/edit.c', '    else if (on == UI_ON_KEYS) l = ui_keys_line(u);\n', ''),
@@ -1905,7 +1905,7 @@ MUTANTS += [
 MUTANTS += [
     (PL, '    places_head(pl, "Drives");\n    Str mi = read_file(scratch, mountinfo);\n    places_add_mounts(pl, mi);\n', '    Str mi = read_file(scratch, mountinfo);\n'),
     (PL, '    ArenaMark mark = arena_mark(scratch);\n    places_head(pl, "Places");', '    ArenaMark mark = arena_mark(scratch);\n    places_head(pl, "Drives");\n    places_add_mounts(pl, read_file(scratch, mountinfo));\n    places_head(pl, "Places");'),
-    (PL, 'if (place_is_drive(pl->p[i].kind) == place_is_drive(kind) && strcmp(pl->p[i].path, path) == 0) return true;', 'if (pl->p[i].kind == kind && strcmp(pl->p[i].path, path) == 0) return true;'),
+    ('fs/places.c', 'place_is_drive(pl->p[i].kind) == place_is_drive(kind) && place_is_net', 'pl->p[i].kind == kind && place_is_net'),   # (retargeted, step 8 A)
     (PL, '(best < 0 || n > best_n)) best = i', '(best < 0 || n >= best_n)) best = i'),
 ]
 
@@ -1956,7 +1956,8 @@ MUTANTS += [
     (PL, 'size >= 10000000000 ? "%.0f GB Drive" : "%.1f GB Drive"', '"%.0f GB Drive"'),
     (PL, '    if (sysblock && udev) places_add_unmounted(scratch, pl, sysblock, udev, mi);\n', ''),
     (PL, '    if (sysblock && udev) places_add_unmounted', '    if (udev) places_add_unmounted'),
-    (PL, ' || pl->p[i].kind == PL_TRASH || pl->p[i].kind == PL_UNMOUNTED) continue;', ' || pl->p[i].kind == PL_TRASH) continue;'),
+    # (dropped, step 8 A: removing places_current's Trash skip is equivalent: the line above returns Trash for the
+    # trash view, and trash:/// holds no real path. Removing the skip instead made that line the redundant one.)
     # (the trailing-dot strip of 01f20c3: replaced by a stat check below, review, 2026-10-30)
     (SP, "            if (p.len && p.p[0] == '/' && (size_t)p.len < atcap)", "            if (p.len && (size_t)p.len < atcap)"),
     (SP, "            if (p.len && p.p[0] == '/' && (size_t)p.len < atcap)", "            if (p.len && p.p[0] == '/')"),
@@ -1980,7 +1981,7 @@ MUTANTS += [
 MUTANTS += [
     # Unmount (2026-10-30)
     ('fs/spawn.c', '    udisks_sh_argv("\\"$2\\" unmount -b \\"$1\\" && echo OFX-UNMOUNTED", dev, udisks, argv);', '    udisks_sh_argv("\\"$2\\" unmount -b \\"$1\\" && echo OFX-UNMOUNTED && \\"$2\\" power-off -b \\"$1\\"", dev, udisks, argv);'),
-    ('ui/menus.c', '    case UM_EJECT_IT: case UM_UNMOUNT_IT: return u->ctx_eject;', '    case UM_EJECT_IT: return u->ctx_eject;'),
+    ('ui/menus.c', '    case UM_UNMOUNT_IT: return u->ctx_eject || u->ctx_share;', '    case UM_UNMOUNT_IT: return u->ctx_share;'),   # (retargeted, step 8 A)
 ]
 
 # ---- F10 step 1: ofx.conf (2026-10-30)
@@ -2699,7 +2700,7 @@ MUTANTS += [
     ('fs/farlist.c', "if (line.len < 3 || line.p[1] != ' ') return -1;", 'if (line.len < 2) return -1;'),
     ('fs/farlist.c', 'if (!far_nums(line, m->v, 3, -1, INT64_MAX) || m->v[0] < 0 || m->v[1] < 0) return -1;', 'if (!far_nums(line, m->v, 3, -1, INT64_MAX)) return -1;'),
     ('fs/farlist.c', 'if (!far_nums(line, m->v, 3, -1, INT64_MAX) || m->v[0] < 0 || m->v[1] < 0) return -1;', 'if (!far_nums(line, m->v, 3, -1, INT64_MAX) || m->v[0] < 0) return -1;'),
-    ('fs/farlist.c', 'if (!far_nums(line, v, 8, 0, INT64_MAX) || v[0] > K_OTHER ||', 'if (!far_nums(line, v, 8, 0, INT64_MAX) ||'),
+    ('fs/farlist.c', 'if (!ok || v[0] > K_OTHER ||', 'if (!ok ||'),   # (retargeted, step 8 A)
     ('fs/farlist.c', 'v[3] > UINT32_MAX || v[4] > UINT32_MAX', 'v[4] > UINT32_MAX'),
     ('fs/farlist.c', 'v[6] < 1 || v[6] > NAME_MAX || v[7] >= PATH_MAX)', 'v[6] > NAME_MAX || v[7] >= PATH_MAX)'),
     ('fs/farlist.c', 'v[6] < 1 || v[6] > NAME_MAX || v[7] >= PATH_MAX)', 'v[6] < 1 || v[7] >= PATH_MAX)'),
@@ -2813,8 +2814,8 @@ MUTANTS += [
     ('ui/helpers.c', '    UiPlace *other = dir < 0 ? h->fwd : h->back;\n    int *no = dir < 0 ? &h->nfwd : &h->nback;\n    if (*no == 0) return false;', '    UiPlace *other = dir < 0 ? h->fwd : h->back;\n    int *no = dir < 0 ? &h->nfwd : &h->nback;'),
     # F16 step 5: gvfs's share folders' names and addresses, the Network places, a share's crumbs, a network bookmark
     ('fs/connect.c', "        if (part.len > k.len && memcmp(part.p, k.p, (size_t)k.len) == 0 && part.p[k.len] == '=') {", '        if (part.len > k.len && memcmp(part.p, k.p, (size_t)k.len) == 0) {'),
-    ('fs/connect.c', "                if (v.p[i] == '%' && i + 2 < v.len && (hi = hex_digit(v.p[i + 1])) >= 0 && (lo = hex_digit(v.p[i + 2])) >= 0)", "                if (v.p[i] == '%' && i + 2 <= v.len && (hi = hex_digit(v.p[i + 1])) >= 0 && (lo = hex_digit(v.p[i + 2])) >= 0)"),
-    ('fs/connect.c', '            return o > 0;\n        }\n        at = end + 1;', '            return true;\n        }\n        at = end + 1;'),
+    # (dropped, step 8 A: gvfs_key's own %XX loop is percent_decode now, which has its own)
+    ('fs/connect.c', 'return percent_decode(str_cut(part, k.len + 1, part.len), out, cap) && out[0];', 'return percent_decode(str_cut(part, k.len + 1, part.len), out, cap);'),   # (retargeted, step 8 A: percent_decode's)
     ('fs/connect.c', '    if (colon < 0 || cap == 0) return false;\n    Str rest', '    if (cap == 0) return false;\n    Str rest'),
     ('fs/connect.c', '    bool share = gvfs_key(name, "share", what, sizeof what) || gvfs_key(name, "volume", what, sizeof what);', '    bool share = gvfs_key(name, "share", what, sizeof what);'),
     ('fs/connect.c', '    bool server = gvfs_key(name, "server", host, sizeof host) || gvfs_key(name, "host", host, sizeof host);', '    bool server = gvfs_key(name, "server", host, sizeof host);'),
@@ -2877,7 +2878,7 @@ MUTANTS += [
     ('ui/panels.c', '    case UK_TAB: case UK_DOWN: ui_login_step(u, 1); break;', '    case UK_DOWN: ui_login_step(u, 1); break;'),
     ('ui/panels.c', "    case UK_MENU: if (e.ch == 'g' && !u->login_ssh) return ui_login_close(u, UA_LOGIN_GUEST); break;", '    case UK_MENU: return ui_login_close(u, UA_LOGIN_GUEST);'), # (retargeted, step 7c)
     ('ui/panels.c', '    ui_panel_close(u, UI_PANEL_LOGIN);\n    return (UiAction){ k, 0, false };', '    return (UiAction){ k, 0, false };'),
-    ('ui/handle.c', ' && !(in->login_field == UI_LOGIN_USER && u->login_no_user)) u->login_at = in->login_field;', ') u->login_at = in->login_field;'),
+    ('ui/handle.c', ' && ui_login_shown(u, in->login_field)) u->login_at = in->login_field;', ') u->login_at = in->login_field;'),   # (retargeted, step 8 A)
     ('ui/handle.c', '        if (in->modal == UI_MODAL_GUEST && !u->login_ssh) return *out = ui_login_close(u, UA_LOGIN_GUEST), true;', ''), # (retargeted, step 7c)
     ('ui/menus.c', '        u->edit.anchor = u->edit.caret;\n        return UI_NONE;', '        return UI_NONE;'),
     # F16 step 6: nfs:// addresses, an export's name and address
@@ -2970,7 +2971,7 @@ MUTANTS += [
     ('fs/places.c', '    if (airplane) {\n        places_add(pl, PL_AIRPLANE', '    if (false) {\n        places_add(pl, PL_AIRPLANE'),
     ('fs/places.c', '        places_add(pl, PL_AIRPLANE, "airplane:", S("Airplane mode"));\n        return;\n', '        places_add(pl, PL_AIRPLANE, "airplane:", S("Airplane mode"));\n'),
     ('fs/places.c', '    return k == PL_UNMOUNTED || place_connects(k) || k == PL_AIRPLANE;', '    return k == PL_UNMOUNTED || place_connects(k);'),
-    ('fs/places.c', '    case PL_AIRPLANE: names[n++] = S("airplane-mode"); break;', '    case PL_AIRPLANE: break;'),
+    ('fs/places.c', '    case PL_AIRPLANE: names[n++] = S("airplane-mode"), names[n++] = S("airplane-mode-symbolic"); break;', '    case PL_AIRPLANE: break;'),
     ('fs/connect.c', '    if (reset || prev <= 0) return base;', '    if (prev <= 0) return base;'),
     ('fs/connect.c', '    if (reset || prev <= 0) return base;', '    if (reset) return base;'),
     ('fs/connect.c', '    return prev > most / 2 ? most : prev * 2;', '    return prev * 2;'),
@@ -2989,4 +2990,9 @@ MUTANTS += [
     ('ui/keys.c', ' { UK_ITEM0 + UM_AIRPLANE, "airplane-mode" },', ''),
     ('fs/icons.c', 'is_svg = (svg || str_ends_with(s, S("-symbolic.svg"))) && str_ends_with', 'is_svg = svg && str_ends_with'),
     ('fs/places.c', 'S("airplane-mode"), names[n++] = S("airplane-mode-symbolic"); break;', 'S("airplane-mode"); break;'),
+    # The milestone's code-health cleanup, step A
+    ('fs/farlist.c', '        for (int k = 0; ok && k < 8; k++) ok = k == 2 || v[k] >= 0;\n', ''),
+    ('fs/farlist.c', 'ok = k == 2 || v[k] >= 0;', 'ok = v[k] >= 0;'),
+    ('fs/props.c', '        if (w->nbelow && du_mount_point(w, e->d_name)) {', '        if (false) {'),
+    ('fs/props.c', 'strcmp(b + base + 1, name) == 0) return true;', 'true) return true;'),
 ]

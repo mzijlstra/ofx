@@ -35,6 +35,24 @@ right-here
 expect menu=folder
 expect menuhid=cut-it,copy-it,bookmark-it,bm-rename,bm-up,bm-down,bm-remove,bm-edit,eject,mount-it,airplane-off-it,empty-it
 key esc
+# Its Properties with a local folder shown: the share isn't walked (a dead server would hold the walk
+# thread; the F16 code-health review: the folder shown decided).
+key alt-home
+wait-for 2000 faron=0
+point-ui side-row 6
+right-here
+point-menu properties-it
+click-here
+wait-for 2000 props=1 propn=1 propwalk=0
+key esc
+wait-for 2000 props=0
+# And Home's own, from its row: walked.
+point-ui side-row 1
+right-here
+point-menu properties-it
+click-here
+wait-for 2000 props=1 propwalk=1
+key esc
 point-ui side-row 6
 hover-here
 wait-for 2000 ejectbtn=1

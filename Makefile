@@ -66,10 +66,14 @@ build/release/ofx-fm1: tools/fm1.c $(wildcard base/*.c base/*.h fs/*.c) Makefile
 build/test: $(wildcard tests/*.c) $(wildcard base/*.c base/*.h fs/*.c ui/*.c) gui/glfwkeys.c Makefile | build
 	$(CC) $(CFLAGS) -Wunused-function $(IMG_INC) -isystem vendor/raylib/src/external/glfw/include $(DEBUG) -o $@ tests/test.c $(IMG_LIBS) -lm
 
-# Then ofx-clean as its timer runs it, reading ofx.conf (a scratch cache and config, the guard on).
-test: build/test build/ofx-clean
+# Then ofx-clean as its timer runs it, reading ofx.conf (a scratch cache and config, the guard on),
+# ofx-list's --do with the guard on, as the GUI tests run it, and the mutant lists still matching the
+# code.
+test: build/test build/ofx-clean build/ofx-list
 	./build/test
 	tests/clean/run.sh "$(CURDIR)/build/ofx-clean"
+	tests/list/run.sh "$(CURDIR)/build/ofx-list"
+	python3 -B tools/mutation/check.py
 
 # ofx-fm1 on a private bus (dbus-run-session, its own config: only the test's service folder),
 # with fakes for uwsm-app and ofx: no call reaches Michael's bus, no window opens.

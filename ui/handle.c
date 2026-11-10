@@ -159,7 +159,7 @@ static bool ui_handle_panels(Ui *u, UiNames names, const UiInput *in, UiOnTop on
         if (in->panel_wheel) ui_scroll(&u->keys_list, in->panel_wheel);
     } else if (on == UI_ON_LOGIN) {
         // Connect's question (F16 step 4): a field takes the keys; Connect, Guest and Cancel answer.
-        if (in->login_field >= 0 && in->login_field < UI_LOGIN_FIELDS && !(in->login_field == UI_LOGIN_USER && u->login_no_user)) u->login_at = in->login_field;
+        if (in->login_field >= 0 && in->login_field < UI_LOGIN_FIELDS && ui_login_shown(u, in->login_field)) u->login_at = in->login_field;   // (only a field shown: the F16 code-health review)
         if (in->modal == UI_MODAL_YES) return *out = ui_login_close(u, UA_LOGIN), true;
         if (in->modal == UI_MODAL_GUEST && !u->login_ssh) return *out = ui_login_close(u, UA_LOGIN_GUEST), true;
         if (in->modal == UI_MODAL_NO) return *out = ui_login_close(u, UA_LOGIN_CANCEL), true;
