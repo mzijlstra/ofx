@@ -948,7 +948,7 @@ MUTANTS += [
     (PR, "        if (fstatat(dirfd(d), e->d_name, &st, AT_SYMLINK_NOFOLLOW) != 0) {", "        if (fstatat(dirfd(d), e->d_name, &st, 0) != 0) {"),
     # Not a mutant without a mount to walk onto: `st.st_dev != w->dev` (a drive mounted inside a
     # folder counted, not entered; network mounts below one never read). Kept; checked by hand.
-    ('fs/props.c', '            if (sub < 0) s->cut = true;\n            else if (w->nbelow', '            if (sub < 0) {}\n            else if (w->nbelow'),   # (retargeted, step 8 A)
+    ('fs/props.c', '            if (sub < 0) s->cut = true;\n            else if (w->pts_len', '            if (sub < 0) {}\n            else if (w->nbelow'),   # (retargeted, step 8 A)
     (PR, "    s->files++, s->bytes += st->st_size, s->once_bytes += st->st_size;", "    s->files++, s->once_bytes += st->st_size;"),
     # ---- hard links counted once too (Michael, 2026-10-26)
     (PR, "    s->files++, s->bytes += st->st_size, s->once_bytes += st->st_size;", "    s->files++, s->bytes += st->st_size;"),
@@ -2993,6 +2993,9 @@ MUTANTS += [
     # The milestone's code-health cleanup, step A
     ('fs/farlist.c', '        for (int k = 0; ok && k < 8; k++) ok = k == 2 || v[k] >= 0;\n', ''),
     ('fs/farlist.c', 'ok = k == 2 || v[k] >= 0;', 'ok = v[k] >= 0;'),
-    ('fs/props.c', '        if (w->nbelow && du_mount_point(w, e->d_name)) {', '        if (false) {'),
+    ('fs/props.c', '        if (w->pts_len && du_mount_point(w, e->d_name)) {', '        if (false) {'),
     ('fs/props.c', 'strcmp(b + base + 1, name) == 0) return true;', 'true) return true;'),
+    ('fs/props.c', '        if (!realpath(roots[i], w->path)) snprintf(w->path, sizeof w->path, "%s", roots[i]);', '        snprintf(w->path, sizeof w->path, "%s", roots[i]);'),
+    ('fs/props.c', '            if (w->pts_len + k > w->pts_cap) {', '            if (false) {'),
+    ('fs/props.c', '                s->cut = true;\n                break;', '                break;'),
 ]

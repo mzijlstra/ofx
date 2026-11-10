@@ -53,12 +53,13 @@ static void *walk_loop(void *arg)
         pthread_mutex_unlock(&walk.mu);
         const char *roots[WALK_ROOTS_MAX];
         for (isize i = 0; i < n; i++) roots[i] = walk_roots[i];
-        static DuWalk w;   // (its mount points and path: ~140 KiB, not on the thread's stack)
+        static DuWalk w;   // (its path: not on the thread's stack)
+        static char pts[KiB(64)];   // (the mount points under the root)
         static u8 mi_mem[KiB(512)];
         static Arena mia;
         arena_init(&mia, "walk mounts", mi_mem, sizeof mi_mem);
         w = (DuWalk){ .gen = &walk.gen, .mine = gen, .tick = walk_tick, .ctx = (void *)(uintptr_t)gen, .inodes = walk_inodes,
-                      .mounts = read_file(&mia, mountinfo_path()) };   // (the mount points under the roots: never stat'ed)
+                      .mounts = read_file(&mia, mountinfo_path()), .pts = pts, .pts_cap = sizeof pts };   // (the mount points under the roots: never stat'ed)
         DuSum s;
         bool whole = du_walk(&w, roots, n, &s);
         pthread_mutex_lock(&walk.mu);

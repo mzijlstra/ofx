@@ -12,7 +12,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-enum { DU_DEPTH_MAX = 256, DU_TICK = 512, DU_INODES = 1 << 16, DU_MOUNTS_MAX = 32 };
+enum { DU_DEPTH_MAX = 256, DU_TICK = 512, DU_INODES = 1 << 16 };
 
 typedef struct {
     i64  files, dirs, bytes;   // a link counts as a file, its own size; a folder's own size isn't added
@@ -34,21 +34,22 @@ typedef struct {
     dev_t              dev;    // the drive the walk started on: it doesn't go onto others
     isize              seen;
     Str                mounts; // the mount list (mountinfo's text; empty: none known)
-    // The mount points below the roots, from it (du_walk), and the folder being read (du_dir): one
-    // of them is counted as a folder without a stat, which on a dead network share would hang the
-    // walk (the F16 code-health review: the stat came before the drive check).
-    char               below[DU_MOUNTS_MAX][PATH_MAX];
-    isize              nbelow;
+    // The mount points below the root, from it (du_walk), and the folder being read, by its real
+    // path (du_dir): one of them is counted as a folder without a stat, which on a dead network
+    // share would hang the walk (the F16 code-health review: the stat came before the drive check).
+    // The points packed one after another, each NUL-ended, in pts (pts_cap bytes, the caller's;
+    // NULL: none looked for): no cap on their number (a snap or container host has hundreds).
+    char              *pts;
+    isize              pts_cap, pts_len;
     char               path[PATH_MAX];
 } DuWalk;
 
-// Whether w->path + "/" + name is a mount point below the roots.
+// Whether w->path + "/" + name is a mount point below the root.
 static bool du_mount_point(const DuWalk *w, const char *name)
 {
-    size_t n = strlen(w->path);
-    for (isize i = 0; i < w->nbelow; i++) {
-        const char *b = w->below[i];
-        size_t base = n == 1 ? 0 : n;   // (the root "/": "/" + name)
+    size_t n = strlen(w->path), base = n == 1 ? 0 : n;   // (the root "/": "/" + name)
+    for (isize at = 0; at < w->pts_len; at += (isize)strlen(w->pts + at) + 1) {
+        const char *b = w->pts + at;
         if (strncmp(b, w->path, base) == 0 && b[base] == '/' && strcmp(b + base + 1, name) == 0) return true;
     }
     return false;
@@ -95,7 +96,7 @@ static bool du_dir(DuWalk *w, int fd, DuSum *s, int depth)
             go = false;
             break;
         }
-        if (w->nbelow && du_mount_point(w, e->d_name)) {   // another drive mounted here: counted, not looked at
+        if (w->pts_len && du_mount_point(w, e->d_name)) {   // another drive mounted here: counted, not looked at
             s->dirs++;
             continue;
         }
@@ -110,7 +111,7 @@ static bool du_dir(DuWalk *w, int fd, DuSum *s, int depth)
             int sub = openat(dirfd(d), e->d_name, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
             size_t n = strlen(w->path);
             if (sub < 0) s->cut = true;
-            else if (w->nbelow && snprintf(w->path + n, sizeof w->path - n, "%s%s", n == 1 ? "" : "/", e->d_name) >= (int)(sizeof w->path - n))
+            else if (w->pts_len && snprintf(w->path + n, sizeof w->path - n, "%s%s", n == 1 ? "" : "/", e->d_name) >= (int)(sizeof w->path - n))
                 close(sub), w->path[n] = 0, s->cut = true;   // (too deep a path to compare: not entered)
             else go = du_dir(w, sub, s, depth + 1), w->path[n] = 0;
         } else {
@@ -141,15 +142,23 @@ static bool du_walk(DuWalk *w, const char *const *roots, isize n, DuSum *s)
         }
         s->dirs++;
         w->dev = st.st_dev;
-        w->nbelow = 0;
+        // The root by its real path, as the mount list names folders (a root reached through a
+        // local link, ~/proj to /srv/proj, missed /srv/proj/nas: the step A review). It is local:
+        // Properties walks no far path.
+        if (!realpath(roots[i], w->path)) snprintf(w->path, sizeof w->path, "%s", roots[i]);
+        w->pts_len = 0;
         isize at = 0;
-        for (Str line; w->nbelow < DU_MOUNTS_MAX && next_line(w->mounts, &at, &line);) {
+        for (Str line; w->pts && next_line(w->mounts, &at, &line);) {
             char mp[PATH_MAX];
             Str type, src;
-            if (mountinfo_line(line, mp, sizeof mp, &type, &src) && path_within(mp, roots[i]) && strcmp(mp, roots[i]) != 0)
-                snprintf(w->below[w->nbelow++], PATH_MAX, "%s", mp);
+            if (!mountinfo_line(line, mp, sizeof mp, &type, &src) || !path_within(mp, w->path) || strcmp(mp, w->path) == 0) continue;
+            isize k = (isize)strlen(mp) + 1;
+            if (w->pts_len + k > w->pts_cap) {   // (more than fit: those left are stat'ed as before, and the count says it's cut)
+                s->cut = true;
+                break;
+            }
+            memcpy(w->pts + w->pts_len, mp, (size_t)k), w->pts_len += k;
         }
-        snprintf(w->path, sizeof w->path, "%s", roots[i]);
         int fd = open(roots[i], O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
         if (fd < 0) s->cut = true;
         else if (!du_dir(w, fd, s, 1)) return false;

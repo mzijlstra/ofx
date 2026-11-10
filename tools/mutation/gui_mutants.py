@@ -1211,5 +1211,6 @@ MUTANTS = [
     ('gui/actions.c', '    if (on) atomic_fetch_add(&airplane_gen, 1);\n', '', 'f16'),
     # The milestone's code-health cleanup, step A
     ('gui/panels.c', 'props.local = here ? !far_dir(props_path[0]) : app.thumb_local;', 'props.local = app.thumb_local;', 'f16'),
-    ('gui/walk.c', '                      .mounts = read_file(&mia, mountinfo_path()) };', '                      .mounts = STR_EMPTY };', 'f72'),
+    ('gui/walk.c', '.mounts = read_file(&mia, mountinfo_path()), .pts = pts,', '.mounts = STR_EMPTY, .pts = pts,', 'f72'),
+    ('gui/walk.c', '.pts = pts, .pts_cap = sizeof pts };', '.pts = NULL, .pts_cap = sizeof pts };', 'f72'),
 ]

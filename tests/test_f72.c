@@ -42,13 +42,25 @@ static void test_du_walk(void)
     char mi[3 * PATH_MAX];
     snprintf(mi, sizeof mi, "1 0 0:1 / / rw - ext4 /dev/x rw\n2 1 0:2 / %s rw - fuse.sshfs h:/ rw\n3 1 0:3 / %s rw - nfs4 h:/e rw\n",
              at("f72du/d/sub"), at("f72du/m/x/y"));
-    w.mounts = str_from_c(mi);
+    static char pts[2 * PATH_MAX];
+    w.mounts = str_from_c(mi), w.pts = pts, w.pts_cap = sizeof pts;
     CHECK(du_walk(&w, one, 1, &s) && s.dirs == 2 && s.files == 3 && s.bytes == 10 + 1 + 3 && !s.cut);   // d, sub; a, la, lsub
     const char *m[] = { at("f72du/m") };
     char mroot[PATH_MAX];
     snprintf(mroot, sizeof mroot, "%s", m[0]), m[0] = mroot;
     CHECK(du_walk(&w, m, 1, &s) && s.dirs == 3 && s.files == 0 && !s.cut);   // m, x, y; not z
-    CHECK(w.nbelow == 1 && strcmp(w.below[0], at("f72du/m/x/y")) == 0);   // (d/sub isn't below m)
+    CHECK(w.pts_len == (isize)strlen(at("f72du/m/x/y")) + 1 && strcmp(w.pts, at("f72du/m/x/y")) == 0);   // (d/sub isn't below m)
+    // Reached through a local link (the step A review: ~/proj to /srv/proj): the root by its real
+    // path, as the mount list names it.
+    CHECK(symlink(mroot, at("f72du/mlink")) == 0);
+    char lroot[PATH_MAX];
+    snprintf(lroot, sizeof lroot, "%s", at("f72du/mlink/x"));   // (a folder through a link: the link itself is one file)
+    const char *ml[] = { lroot };
+    CHECK(du_walk(&w, ml, 1, &s) && s.dirs == 2 && s.files == 0 && !s.cut);   // x, y; not z
+    // More points than its room: those left looked at as before, and the count says it's cut.
+    w.pts_cap = 4;
+    CHECK(du_walk(&w, m, 1, &s) && s.dirs == 3 && s.files == 1 && s.cut);
+    w.pts_cap = sizeof pts;
     w.mounts = STR_EMPTY;
     CHECK(du_walk(&w, m, 1, &s) && s.dirs == 3 && s.files == 1 && s.bytes == 7);
     // A root that is gone, a folder that can't be read: what could be counted, and cut.
