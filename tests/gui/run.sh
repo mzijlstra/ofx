@@ -21,7 +21,7 @@ want() { RS_HOME=; [ "$only" = "  " ] || case $only in *" $1 "*) true ;; *) fals
 # one, or your home, at folders of yours that share a group's name (~/f16, /tmp/net; the cleanup's
 # step B: fm1 and net already insist on a scratch of their own).
 case $base in /?*) ;; *) echo "run.sh: the scratch dir must be an absolute path: '$base'" >&2; exit 1 ;; esac
-case $base in */../* | */.. | */./* | */.) echo "run.sh: the scratch dir must be a plain path, no . or ..: '$base'" >&2; exit 1 ;; esac
+case $base in */../* | */.. | */./* | */. | *//*) echo "run.sh: the scratch dir must be a plain path, no . or .. or //: '$base'" >&2; exit 1 ;; esac   # (// too: /tmp//x passed as three deep; step B review)
 case ${base%/} in "${HOME%/}" | /*/*/*) [ "${base%/}" != "${HOME%/}" ] || { echo "run.sh: the scratch dir can't be your home: '$base'" >&2; exit 1; } ;;
 *) echo "run.sh: the scratch dir must be three folders deep at least (a scratch of its own): '$base'" >&2; exit 1 ;; esac
 here=$(cd "$(dirname "$0")" && pwd)

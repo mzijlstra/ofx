@@ -158,8 +158,9 @@ net_release() {
 # review asked for one place). Measured 2026-11-10 (test-net from a 105-byte scratch, this check off):
 # SMB and SFTP pass; only NFS fails. The bus and ssh's control sockets are in $NET_B, a short folder of
 # their own; what lies under the scratch is rt/bus (7 bytes more), which gvfsd-nfs reaches as its file
-# capability makes GLib ignore the bus's address. gvfsd's own socket-<random> files didn't break there.
-# A new daemon that needs a socket under rt/ goes here.
+# capability makes GLib ignore the bus's address. gvfsd's per-client sockets (rt/gvfsd/socket-*: path
+# sockets, short-lived) overflow too but appear to fall back to the bus (the step B review: not
+# measured); only NFS fails. A new daemon that needs a socket under rt/ goes here.
 net_short() {
     [ "${#1}" -le 100 ] && return 0
     echo "$2: skipped, the scratch folder's path is too long for the bus's socket under it (${#1} bytes, 100 at most)"
