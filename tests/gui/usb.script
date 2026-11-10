@@ -43,18 +43,18 @@ sleep 500
 sh test "$OFX_DIR" = "$OFX_ROOT/media/MY STICK"
 sh cat "$OFX_ROOT/mountinfo.keep" > "$OFX_ROOT/mountinfo" && rm "$OFX_ROOT/mountinfo.keep"
 wait-for 3000 sides=^Places|Home|Trash|^Drives|File_System|MY_STICK|~1.0_GB_Drive here=MY STICK
-expect faron=0 thumblocal=1
+expect faron=0 herelocal=1
 # The window keeps the mount list parsed until its watch says the list changed (the code-health
 # review's step C): the stick's line turned into a network mount, a reload lists it the far way,
 # and back.
 sh m="$OFX_ROOT/mountinfo" && sed 's/ - vfat \(.*sdz1\)/ - fuse.sshfs \1/' "$m" > "$m.new" && cat "$m.new" > "$m" && rm "$m.new"
 sleep 500
 key ctrl-r
-wait-for 3000 faron=1 farloading=0 thumblocal=0
+wait-for 3000 faron=1 farloading=0 herelocal=0
 sh m="$OFX_ROOT/mountinfo" && sed 's/ - fuse.sshfs \(.*sdz1\)/ - vfat \1/' "$m" > "$m.new" && cat "$m.new" > "$m" && rm "$m.new"
 sleep 500
 key ctrl-r
-wait-for 3000 faron=0 thumblocal=1
+wait-for 3000 faron=0 herelocal=1
 wait-for 3000 sides=^Places|Home|Trash|^Drives|File_System|MY_STICK|~1.0_GB_Drive here=MY STICK
 # Unmount in its menu (2026-10-30): unmounted, not powered off; the row is a drive to mount again.
 # Its folder was the one shown: Home first, then the message (the fake removes the mount point, as

@@ -5,7 +5,7 @@
 # normal (128).
 settle
 # The list asks for none.
-expect view=list previews=0 thumblocal=1 thumbmade=0 thumbread=0 thumbnone=0
+expect view=list previews=0 herelocal=1 thumbmade=0 thumbread=0 thumbnone=0
 key ctrl-2
 wait-for 5000 thumbbusy=0 previews=6
 expect thumbmade=5 thumbread=1 thumbfailed=2 thumbnone=1 thumbknown=0 thumbchanged=0
@@ -79,11 +79,11 @@ expect previews=5
 key home
 expect sel=far
 key enter
-wait-for 5000 view=icons thumblocal=0 faron=1 farloading=0
+wait-for 5000 view=icons herelocal=0 faron=1 farloading=0
 wait-for 5000 thumbbusy=0
 wait 2
 expect previews=0 thumbmade=11 thumbnone=5
 sh test ! -e "$OFX_ROOT/cache/thumbnails/normal/$(printf 'file://%s' "$OFX_DIR/x.png" | md5sum | cut -c1-32).png"
 key backspace
-wait-for 5000 thumblocal=1 previews=5
+wait-for 5000 herelocal=1 previews=5
 quit

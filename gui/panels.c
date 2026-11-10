@@ -304,7 +304,7 @@ static void props_open(const char *path)
         if (app.ui.view == UI_VIEW_TRASH && props.idx >= 0) snprintf(props.name, sizeof props.name, "%.*s", STR_ARG(app.list.e[props.idx].name));
         // The type gio opens it as, its content read (Michael, 2026-10-26); on a network drive,
         // whose reads can hang (F6.4), or when gio doesn't say, the name's.
-        props.type_by_name = !app.thumb_local || far_dir(props_path[0]) || !spawn_gio_type(props_path[0], props.type, sizeof props.type, 1000);   // (a far link too, F16 step 3b)
+        props.type_by_name = !app.here_local || far_dir(props_path[0]) || !spawn_gio_type(props_path[0], props.type, sizeof props.type, 1000);   // (a far link too, F16 step 3b)
         if (props.type_by_name) {
             Str type = props.idx >= 0 ? entry_mime(props.idx) : S("inode/directory");
             snprintf(props.type, sizeof props.type, "%.*s", STR_ARG(type));
@@ -319,7 +319,7 @@ static void props_open(const char *path)
     // shown's drive for its entries, the path's own for a folder asked by its menu (a sidebar share
     // or a bookmark into one, with a local folder shown, walked the share: the F16 code-health
     // review).
-    props.local = here ? !far_dir(props_path[0]) : app.thumb_local;
+    props.local = here ? !far_dir(props_path[0]) : app.here_local;
     // On a network drive, whether a folder is among them: by the listing's kinds, never looked at
     // (F16 step 3b). A path asked (a folder's menu) or the folder shown, empty, is one.
     bool any_dir = !props.local && (here || app.list.n == 0);
@@ -341,12 +341,7 @@ static void props_chmod(int k)
     mode_t old, perms = (props.st.st_mode & 0777) ^ perm_bit(k);
     Err err;
     if (jobs_refuse(props_path[0])) return;
-    char octal[8];   // (on a far drive: by ofx-list, F16 step 3b)
-    snprintf(octal, sizeof octal, "%o", (unsigned)perms);
-    bool ok = !far_dir(props_path[0]) ? op_chmod(props_path[0], perms, &old, &err)
-                                      : far_act(props_path[0], (const char *const[]){ "chmod", props_path[0], octal, NULL }, &err) &&
-                                            (old = (mode_t)strtol(arena_cstr(&scratch, far_r.f[0]), NULL, 8), true);
-    if (!ok) {
+    if (!act_chmod(props_path[0], perms, &old, &err)) {
         set_status(true, "%s", err.msg);
         props_read();
         return;

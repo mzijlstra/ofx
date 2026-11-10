@@ -84,9 +84,9 @@ static void test_far_serve(void)
     // A malformed question ends it: nothing more is answered.
     b = far_said_of(at("far/d"), false, "C 1 2 x\nsub", 11);
     CHECK(far_listing(&ta, b, at("far/d"), &l, &w, &after, &ended, &err) && after == b.len);
-    // A folder it can't read: X with the reason, and far_listing says it.
+    // A folder it can't read: X with the errno and the reason, and far_listing says it.
     b = far_said_of(at("far/none"), false, "", 0);
-    CHECK(str_eq(b, S("X No such file or directory\n")));
+    CHECK(str_eq(b, S("X 2 No such file or directory\n")));
     CHECK(!far_listing(&ta, b, at("far/none"), &l, &w, &after, &ended, &err) && ended);
     CHECK(strstr(err.msg, "far/none: No such file or directory") != NULL);
     // A folder that can't be written: W 0.
@@ -119,14 +119,14 @@ static void test_far_next(void)
 {
     FarMsg m;
     isize at = 0;
-    Str ok = S("W 1\nE 1 0 5 16877 1 2 3 0\nsubH 2\nL\nC 3 4 -1\nX gone away\n");
+    Str ok = S("W 1\nE 1 0 5 16877 1 2 3 0\nsubH 2\nL\nC 3 4 -1\nX 20 gone away\n");
     CHECK(far_next(ok, &at, &m) == 1 && m.type == 'W' && m.v[0] == 1);
     CHECK(far_next(ok, &at, &m) == 1 && m.type == 'E' && m.v[0] == K_DIR && m.v[2] == 5 && m.v[3] == 16877 && m.v[4] == 1 && m.v[5] == 2 &&
           str_eq(m.name, S("sub")) && m.target.len == 0);
     CHECK(far_next(ok, &at, &m) == 1 && m.type == 'H' && m.v[0] == 2);
     CHECK(far_next(ok, &at, &m) == 1 && m.type == 'L');
     CHECK(far_next(ok, &at, &m) == 1 && m.type == 'C' && m.v[0] == 3 && m.v[1] == 4 && m.v[2] == -1);
-    CHECK(far_next(ok, &at, &m) == 1 && m.type == 'X' && str_eq(m.text, S("gone away")));
+    CHECK(far_next(ok, &at, &m) == 1 && m.type == 'X' && m.v[0] == ENOTDIR && str_eq(m.text, S("gone away")));
     CHECK(at == ok.len && far_next(ok, &at, &m) == 0);
     // A file from before 1970: its mtime negative, the rest as any (the F16 code-health review).
     Str old = S("E 0 3 -86400 33188 1 2 1 0\na");
@@ -140,7 +140,7 @@ static void test_far_next(void)
     }
     // Malformed: -1.
     const char *bad[] = {
-        "W 2\n", "W\n", "W 1 1\n", "W x\n", "W_1\n", "W  1\n", "W +1\n", "Q 1\n", "\n", "L 1\n", "X\n", "X \n", "H -1\n",
+        "W 2\n", "W\n", "W 1 1\n", "W x\n", "W_1\n", "W  1\n", "W +1\n", "Q 1\n", "\n", "L 1\n", "X\n", "X \n", "X 2\n", "X 2 \n", "X x y\n", "X 0 y\n", "X 4096 y\n", "X -2 y\n", "X  2 y\n", "H -1\n",
         "C -1 0 1\n", "C 1 -1 1\n", "C 1 2\n",
         "E 6 0 0 0 0 0 1 0\na",                 // a kind past K_OTHER
         "E 0 0 0 0 0 0 0 0\n",                  // no name

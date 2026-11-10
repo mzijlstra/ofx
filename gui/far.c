@@ -1,5 +1,5 @@
 // A far folder's lister (F16 step 2): ofx-list (tools/list.c) started for the folder shown when it is
-// on a far drive (a network share, any FUSE mount: thumb_local's rule), its output read by a thread
+// on a far drive (a network share, any FUSE mount: mount_far_type's rule), its output read by a thread
 // of its own, and its counts asked on its input. Neither the thread nor the main thread ever touch
 // the folder: the thread reads a pipe and polls pidfds, nothing else, so a dead share can't hold
 // ofx (fs/farlist.c says why a child). One lister at a time; one left killed but still in the

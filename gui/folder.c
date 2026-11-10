@@ -199,18 +199,18 @@ static void view_changed(void)
 
 enum { FAR_ANSWER_MS = 3000 };   // no answer by then: the list says the drive isn't answering
 
-static bool go_to_in(const char *dir, Str select, isize fallback, bool stepping);
+static bool go_to_in(const char *dir, Str select, isize fallback, GoHow how);
 
 static isize far_scan;   // how far what the lister said was looked through for its listing's end
 
 // dir's lister started (or, while one killed for it is still in the kernel, put off until it is
-// gone: far_poll), its listing to come with the cursor on `select` (else row `fallback`). False,
-// with the reason, when it can't start.
-static bool far_begin(const char *dir, Str select, isize fallback, Err *err)
+// gone: far_poll), its listing to come with the cursor on `select` (else row `fallback`), its
+// refusal leading where `then` says. False, with the reason, when it can't start.
+static bool far_begin(const char *dir, Str select, isize fallback, FarThen then, Err *err)
 {
     // Listed again before its first answer came (a reload meanwhile): how ofx got there still holds
-    // (a link that may be a file, a path typed; found under load, step 3).
-    if (!(app.far_loading && strcmp(dir, app.cwd) == 0)) app.far_then = FAR_THEN_SHOW;
+    // (a link that may be a file, a path typed; found under load, step 3), unless it was plain.
+    if (!(app.far_loading && strcmp(dir, app.cwd) == 0) || app.far_then == FAR_THEN_SHOW) app.far_then = then;
     snprintf(app.far_select, sizeof app.far_select, "%.*s", STR_ARG(select));
     app.far_fallback = fallback, app.far_since = now_ms(), app.far_slow = false, app.far_note[0] = 0, far_scan = 0;
     // The last lister killed first: if it is still in the kernel (a reload of a folder that hangs),
@@ -222,13 +222,13 @@ static bool far_begin(const char *dir, Str select, isize fallback, Err *err)
     return true;
 }
 
-// go_to_in's listing of far folder dir: the lister's answer when it came (app.far_ready), into a;
+// go_to_in's listing of far folder dir: the lister's answer when it came (how.far_take), into a;
 // else none yet, the lister started.
-static bool far_list(const char *dir, Arena *a, Listing *l, Str select, isize fallback, Err *err)
+static bool far_list(const char *dir, Arena *a, Listing *l, Str select, isize fallback, GoHow how, Err *err)
 {
-    if (!app.far_ready) {
+    if (!how.far_take) {
         *l = (Listing){ 0 }, app.far_can_write = false, app.far_kept = false;   // (not known until it says: not the last folder's)
-        return far_begin(dir, select, fallback, err);
+        return far_begin(dir, select, fallback, how.then, err);
     }
     isize len;
     bool eof, full, ended;
@@ -251,16 +251,6 @@ static void far_failed(const char *why)
 static void hist_go(int dir);
 static void hist_go_from(int dir, const char *cur, Str cur_sel, bool back_to_cur);
 static void go_up_from(const char *from);
-
-// Whether the lister's refusal gave errno e as its reason: at the end ("<name>: Not a directory"),
-// not the words anywhere (a folder can be named that; step 2b review).
-static bool far_reason_is(const char *status, int e)
-{
-    char tail[128];
-    snprintf(tail, sizeof tail, ": %s", strerror(e));
-    size_t n = strlen(status), k = strlen(tail);
-    return n >= k && strcmp(status + n - k, tail) == 0;
-}
 
 // A link into a far drive, taken for a folder (F16, Michael 2026-11-09: no second look), was a file:
 // back to the folder it is in, and the file opened from there.
@@ -286,18 +276,20 @@ static void far_gone_step(int dir)
     set_status(true, "%s is gone: skipped", gone);
 }
 
-// The far folder's lister refused it: what that leads to by how ofx got there (app.far_then; F16
-// step 3), as a local folder's refusal would; else the reason stays in the list.
-static void far_refused(void)
+// The far folder's lister refused it, with errno e (0: not a refusal of its own, as a malformed
+// answer): what that leads to by how ofx got there (app.far_then; F16 step 3), as a local folder's
+// refusal would; else the reason stays in the list. (The errno is the lister's own word since the
+// code-health review's step D: it was matched as strerror's text at the status line's end.)
+static void far_refused(int e)
 {
-    FarThen then = app.far_then;   // (far_begin sets it back for the next listing)
-    bool file = far_reason_is(app.status, ENOTDIR), gone = far_reason_is(app.status, ENOENT);
+    FarThen then = app.far_then;   // (far_begin sets it again for the next listing)
+    bool file = e == ENOTDIR, gone = e == ENOENT;
     if (file && then == FAR_THEN_OPEN) return far_link_file();
     if (file && then == FAR_THEN_SELECT) {   // (a path typed: its folder, it selected, in its place in the history)
         char up[PATH_MAX], name[NAME_MAX + 1];
         snprintf(name, sizeof name, "%.*s", STR_ARG(path_base(str_from_c(app.cwd))));
         path_parent(up, sizeof up, app.cwd);
-        go_to_in(up, str_from_c(name), 0, true);
+        go_to_in(up, str_from_c(name), 0, (GoHow){ .stepping = true });
         return;
     }
     if (gone && (then == FAR_THEN_BACK || then == FAR_THEN_FORWARD)) return far_gone_step(then == FAR_THEN_BACK ? -1 : 1);
@@ -326,16 +318,16 @@ static bool far_poll(void)
         bool ended = false;
         while (!ended && (r = far_next(b, &far_scan, &m)) == 1) ended = m.type == 'L' || m.type == 'X';
         if (ended || r < 0) {
-            app.far_ready = true;
+            int refused = ended && m.type == 'X' ? (int)m.v[0] : 0;
             // A reload kept its listing on screen: the cursor where it is now when it was moved
             // meanwhile (step 2a review), else on the name asked (a rename's new one, step 3b).
             char keep[NAME_MAX + 1];
             bool moved = app.far_kept && app.ui.list.sel != app.far_kept_sel;
             if (moved) snprintf(keep, sizeof keep, "%.*s", STR_ARG(sel_name()));
             Str select = moved ? str_from_c(keep) : str_from_c(app.far_select);
-            bool ok = go_to_in(app.cwd, select, moved ? app.ui.list.sel : app.far_fallback, true);
-            app.far_ready = false, app.far_loading = false;
-            if (!ok) return far_refused(), true;
+            bool ok = go_to_in(app.cwd, select, moved ? app.ui.list.sel : app.far_fallback, (GoHow){ .stepping = true, .far_take = true });
+            app.far_loading = false;
+            if (!ok) return far_refused(refused), true;
             if (app.far_slow) app.status[0] = 0;   // (its "isn't answering" said its last)
             app.far_note[0] = 0, app.far_slow = false;
             return true;
@@ -357,15 +349,21 @@ static bool far_poll(void)
     return any;
 }
 
-// Whether path (a folder) can be written to, for a menu's entries. On a far drive it isn't asked
-// (that would hold the window, F16 step 3b): the folder shown's lister's word for it and its
-// folders, else yes (the action itself says if not).
-static bool can_write_at(const char *path)
+// Whether folder path on a far drive can be written to, never asking the drive (that would hold
+// the window, F16 step 3b): the folder shown's lister's word for it and its folders, else yes (the
+// action itself says if not). The menus' and a drop's one rule (the code-health review's step D: a
+// drop onto a folder in a read-only far folder was taken while Paste Into there was greyed).
+static bool far_writable(const char *path)
 {
-    if (!far_dir(path)) return access(path, W_OK) == 0;
     char up[PATH_MAX];
     bool here = app.far_on && (strcmp(path, app.cwd) == 0 || (path_parent(up, sizeof up, path) && strcmp(up, app.cwd) == 0));
     return here ? !app.far_loading && app.far_can_write : true;
+}
+
+// Whether path (a folder) can be written to, for a menu's entries.
+static bool can_write_at(const char *path)
+{
+    return far_dir(path) ? far_writable(path) : access(path, W_OK) == 0;
 }
 
 // Entry i's item count asked: of its folder's lister on a far folder (once its listing is shown),
@@ -380,7 +378,7 @@ static bool row_count_ask(isize i, const char *path)
 // Shows dir, the cursor on the entry called `select` (else on row `fallback`). A move to another
 // folder goes in the history, unless it is the history's own (`stepping`). False, with the reason
 // in the status line, when dir can't be read: the old listing stays.
-static bool go_to_in(const char *dir, Str select, isize fallback, bool stepping)
+static bool go_to_in(const char *dir, Str select, isize fallback, GoHow how)
 {
     int next = app.have_list ? 1 - app.cur : app.cur;
     arena_reset(&lists[next]);
@@ -391,8 +389,8 @@ static bool go_to_in(const char *dir, Str select, isize fallback, bool stepping)
     bool on_far = view == UI_VIEW_FOLDER && far_dir(dir);
     // A far folder listed again (Ctrl+R, a change ofx made): a new lister, the listing shown kept
     // until its answer comes.
-    if (on_far && !app.far_ready && same && app.far_on && app.have_list) {
-        if (far_begin(dir, select, fallback, &err)) return app.far_kept = true, app.far_kept_sel = app.ui.list.sel, true;
+    if (on_far && !how.far_take && same && app.far_on && app.have_list) {
+        if (far_begin(dir, select, fallback, how.then, &err)) return app.far_kept = true, app.far_kept_sel = app.ui.list.sel, true;
         return far_failed(err.msg), false;
     }
     // Another folder (F11): the one left keeps its cursor; this one's own view, size and sort, its
@@ -411,7 +409,7 @@ static bool go_to_in(const char *dir, Str select, isize fallback, bool stepping)
     Str *mime = NULL;
     u8 *mark = NULL;
     isize *count = NULL;
-    bool ok = on_far ? far_list(dir, &lists[next], &l, select, fallback, &err) : view_list(view, &lists[next], dir, &l, &err);
+    bool ok = on_far ? far_list(dir, &lists[next], &l, select, fallback, how, &err) : view_list(view, &lists[next], dir, &l, &err);
     if (ok) {
         mime = arena_try_new(&lists[next], Str, l.n + 1);
         mark = arena_try_new(&lists[next], u8, l.n + 1);
@@ -436,7 +434,7 @@ static bool go_to_in(const char *dir, Str select, isize fallback, bool stepping)
         if (k >= 0 && !mark[k]) mark[k] = 1, marked++;
     }
     // The folder left, with its cursor, for Back: its name is still in the old listing's arena.
-    if (!same && app.have_list && !stepping) hist_leave(&hist, app.cwd, sel_name());
+    if (!same && app.have_list && !how.stepping) hist_leave(&hist, app.cwd, sel_name());
     app.cur = next, app.list = l, app.mime = mime, app.have_list = true, app.error[0] = 0, app.lists++;
     if (app.far_on && !on_far) far_drop(), app.far_loading = app.far_waiting = app.far_slow = false, app.far_note[0] = 0;   // (left: its lister killed)
     app.far_on = on_far;
@@ -454,7 +452,7 @@ static bool go_to_in(const char *dir, Str select, isize fallback, bool stepping)
     for (isize i = 0; i < l.n; i++) count[i] = COUNT_UNKNOWN;
     app.count = count;
     count_new_listing(), app.far_cgen++;
-    app.thumb_local = !on_far && mounts_local(far_mounts(), view == UI_VIEW_SEARCH ? app.search_root : dir);   // (not here_dir: cwd is still the last one's; far through a link too, F16 step 3)
+    app.here_local = !on_far && mounts_local(far_mounts(), view == UI_VIEW_SEARCH ? app.search_root : dir);   // (not here_dir: cwd is still the last one's; far through a link too, F16 step 3)
     ui_mark_set(&app.ui, mark);
     app.ui.marked = marked;
     if (!same) ui_edit_close(&app.ui);
@@ -500,7 +498,7 @@ static void search_relist(void)
 {
     char keep[PATH_MAX];
     snprintf(keep, sizeof keep, "%.*s", STR_ARG(sel_name()));
-    go_to_in(app.cwd, str_from_c(app.search_pick[0] ? app.search_pick : keep), app.ui.list.sel, true);
+    go_to_in(app.cwd, str_from_c(app.search_pick[0] ? app.search_pick : keep), app.ui.list.sel, (GoHow){ .stepping = true });
     if (app.search_done || (app.search_pick[0] && listing_find(&app.list, str_from_c(app.search_pick)) >= 0)) app.search_pick[0] = 0;
 }
 
@@ -518,7 +516,7 @@ static void search_retype(void)
     }
     snprintf(app.cwd, sizeof app.cwd, "%s", uri);
     app.search_pick[0] = 0;
-    go_to_in(app.cwd, STR_EMPTY, 0, true);
+    go_to_in(app.cwd, STR_EMPTY, 0, (GoHow){ .stepping = true });
 }
 
 // Ctrl+R in the search view: the same search again.
@@ -756,7 +754,13 @@ static const char *side_path(isize i, char *buf, size_t cap)
 
 static bool go_to(const char *dir, Str select, isize fallback)
 {
-    return go_to_in(dir, select, fallback, false);
+    return go_to_in(dir, select, fallback, (GoHow){ 0 });
+}
+
+// go_to, and on a far folder its lister's refusal leads where `then` says (far_refused).
+static bool go_to_then(const char *dir, Str select, isize fallback, FarThen then)
+{
+    return go_to_in(dir, select, fallback, (GoHow){ .then = then });
 }
 
 static void go_up_from(const char *from);
@@ -769,10 +773,7 @@ static void reload(void)
     view_changed();   // (what went since: trashed, deleted, moved, F9)
     char keep[PATH_MAX] = "";
     snprintf(keep, sizeof keep, "%.*s", STR_ARG(sel_name()));
-    if (go_to(app.cwd, str_from_c(keep), app.ui.list.sel)) {
-        if (app.far_loading && app.far_then == FAR_THEN_SHOW) app.far_then = FAR_THEN_UP;   // (a far one: if its lister says it is gone, F16 step 3; not over another way's)
-        return;
-    }
+    if (go_to_then(app.cwd, str_from_c(keep), app.ui.list.sel, FAR_THEN_UP)) return;   // (a far one: if its lister says it is gone, F16 step 3; not over another way's, far_begin)
     go_up_from(app.cwd);
 }
 
@@ -788,8 +789,7 @@ static void go_up_from(const char *from)
         if (d.len == 0) d = S("/");
         memmove(up, d.p, (size_t)d.len);
         up[d.len] = 0;
-        if (go_to(up, STR_EMPTY, 0)) {
-            if (app.far_loading) app.far_then = FAR_THEN_UP;   // (on up from a far one gone too, F16 step 3)
+        if (go_to_then(up, STR_EMPTY, 0, FAR_THEN_UP)) {   // (on up from a far one gone too, F16 step 3)
             set_status(true, "%s is gone", gone);
             return;
         }
@@ -836,7 +836,7 @@ static void open_entry(isize i)
             set_status(true, "%.*s: its target is too long", STR_ARG(e->name));
             return;
         }
-        if (go_to(to, STR_EMPTY, 0) && app.far_loading && e->kind == K_LINK_DIR) app.far_then = FAR_THEN_OPEN;   // (a file after all: opened, far_refused)
+        go_to_then(to, STR_EMPTY, 0, e->kind == K_LINK_DIR ? FAR_THEN_OPEN : FAR_THEN_SHOW);   // (a link: a file after all is opened, far_refused)
         return;
     }
     if (kind_is_dir(e->kind)) {
@@ -877,14 +877,11 @@ static void hist_go_from(int dir, const char *cur, Str cur_sel, bool back_to_cur
 {
     static UiPlace to;   // (static: a UiPlace holds a path)
     while (hist_step(&hist, dir, cur, cur_sel, &to)) {
-        if (go_to_in(to.dir, str_from_c(to.sel), 0, true)) {
-            if (app.far_loading) app.far_then = dir < 0 ? FAR_THEN_BACK : FAR_THEN_FORWARD;
-            return;
-        }
+        if (go_to_in(to.dir, str_from_c(to.sel), 0, (GoHow){ .stepping = true, .then = dir < 0 ? FAR_THEN_BACK : FAR_THEN_FORWARD })) return;
         hist_unstep(&hist, dir);
         set_status(true, "%s is gone: skipped", to.dir);
     }
-    if (back_to_cur) go_to_in(cur, cur_sel, 0, true);
+    if (back_to_cur) go_to_in(cur, cur_sel, 0, (GoHow){ .stepping = true });
 }
 
 // The listing in a new order, the cursor kept on its entry. The MIME types, cached by row, go.

@@ -66,6 +66,11 @@ move-by 0 10
 point-ui list
 move-here
 expect drop=list:-1 dropok=0
+# Onto a folder in it: not taken either, as Paste Into there is greyed (far_writable, the code-health
+# review's step D: the drop was taken).
+point-ui row 0
+move-here
+expect drop=row:0 dropok=0
 key esc
 sh chmod u+w "$OFX_DIR"
 key ctrl-r

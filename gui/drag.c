@@ -57,8 +57,8 @@ static bool drag_start(void)
 
 // Whether folder dir takes the files dragged: there, writable, neither one of them nor inside one
 // (as a paste refuses); *same_drive: on the first one's drive (Nemo's rule, ui_drop_op). A far one
-// (F16 step 3) isn't looked at: taken unless its lister said it can't be written (the folder shown),
-// and never "the same drive" (a copy, the safer guess).
+// (F16 step 3) isn't looked at: far_writable, as the menus, and never "the same drive" (a copy, the
+// safer guess).
 static bool drop_takes(const char *dir, bool *same_drive)
 {
     struct stat ds, fs;
@@ -66,7 +66,7 @@ static bool drop_takes(const char *dir, bool *same_drive)
     bool reaches;
     if (!far_path(dir, real, sizeof real, &reaches)) return false;
     if (reaches) {
-        if (app.far_on && strcmp(dir, app.cwd) == 0 && !app.far_loading && !app.far_can_write) return false;
+        if (!far_writable(dir)) return false;
         for (isize i = 0; i < dragged.n; i++)
             if (dragged_real[i] && ui_under(str_from_c(real), str_from_c(dragged_real[i]))) return false;
         return *same_drive = false, true;

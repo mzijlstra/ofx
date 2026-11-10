@@ -697,7 +697,7 @@ static void script_state(char *out, size_t cap)
     sw(out, cap, &len, "thumbheld=%td ", thumbs.held);
     sw(out, cap, &len, "thumbdropped=%d ", thumbs.evicted);
     sw(out, cap, &len, "thumbresets=%d ", thumbs.resets);
-    sw(out, cap, &len, "thumblocal=%d ", app.thumb_local);
+    sw(out, cap, &len, "herelocal=%d ", app.here_local);
     sw(out, cap, &len, "reloadasked=%d ", app.reloads_asked);
     sw(out, cap, &len, "menuseps=%d ", menuseps);
     sw(out, cap, &len, "bmlist=%s ", bmlist);

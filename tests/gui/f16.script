@@ -117,6 +117,24 @@ sh [ "$(grep -c "share/x.txt" "$OFX_ROOT/spawn.log")" = 2 ]
 sh cp "$OFX_ROOT/fakes/ofx-list.real" "$OFX_ROOT/fakes/real" && mv "$OFX_ROOT/fakes/real" "$OFX_ROOT/fakes/ofx-list"
 key backspace
 wait-for 3000 sel=local
+# A reload before a plain listing's answer, the folder gone meanwhile: up to the folder above, as a
+# reload of one listed (the reload's way replaces a plain one; the code-health review's step D).
+sh printf '#!/bin/sh\nsleep 3\nexec "%s/fakes/ofx-list.real" "$@"\n' "$OFX_ROOT" > "$OFX_ROOT/fakes/slow" && chmod +x "$OFX_ROOT/fakes/slow" && mv "$OFX_ROOT/fakes/slow" "$OFX_ROOT/fakes/ofx-list"
+key down
+expect sel=share
+key enter
+expect faron=1 farloading=1
+sh mv "$OFX_DIR" "$OFX_DIR.away"
+key ctrl-r
+expect farloading=1
+wait-for 8000 faron=0 statusbad=1
+expect is gone
+sh mv "$OFX_DIR/share.away" "$OFX_DIR/share"
+sh cp "$OFX_ROOT/fakes/ofx-list.real" "$OFX_ROOT/fakes/real" && mv "$OFX_ROOT/fakes/real" "$OFX_ROOT/fakes/ofx-list"
+key ctrl-r
+wait-for 3000 n=2
+key home
+expect sel=local
 key down
 expect sel=share
 # A lister that ends without a word: said, not waited for.

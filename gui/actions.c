@@ -73,6 +73,50 @@ static void far_slow_said(Err *why, isize done, const char *path)
     if (done > 0) err_set(why, "%.*s is slow: the rest weren't tried", STR_ARG(far_who(path)));
 }
 
+// ---- one action, made where its folder is: by ofx-list on a far drive (F16 step 3b), else by
+// fs/ops.c. (The code-health review's step D: each caller chose for itself, with its own checks.)
+
+// from renamed to `to` in folder in.
+static bool act_rename(const char *in, Str from, Str to, Err *err)
+{
+    if (!far_dir(in)) return op_rename(in, from, to, err);
+    char fc[NAME_MAX + 1], tc[NAME_MAX + 1];
+    if (from.len >= (isize)sizeof fc || to.len >= (isize)sizeof tc) return err_set(err, "the name is too long"), false;
+    snprintf(fc, sizeof fc, "%.*s", STR_ARG(from)), snprintf(tc, sizeof tc, "%.*s", STR_ARG(to));
+    return far_act(in, (const char *const[]){ "rename", in, fc, tc, NULL }, err);
+}
+
+// An empty file "New file" or (!file) a folder "New folder" in folder in, a number added when the
+// name is taken: the name made into made.
+static bool act_make(const char *in, bool file, char *made, size_t cap, Err *err)
+{
+    const char *name = file ? "New file" : "New folder";
+    if (!far_dir(in)) return file ? op_mkfile(in, str_from_c(name), made, cap, err) : op_mkdir(in, str_from_c(name), made, cap, err);
+    if (!far_act(in, (const char *const[]){ file ? "mkfile" : "mkdir", in, name, NULL }, err)) return false;
+    return snprintf(made, cap, "%.*s", STR_ARG(far_r.f[0])), true;
+}
+
+// A link named name to target in folder in, a number added when the name is taken: the name made
+// into made. until: the batch's deadline on a far drive (far_batch).
+static bool act_symlink(const char *in, const char *target, const char *name, char *made, size_t cap, i64 *until, Err *err)
+{
+    if (!far_dir(in)) return op_symlink(in, target, str_from_c(name), made, cap, err);
+    if (!far_act_by(in, (const char *const[]){ "symlink", in, target, name, NULL }, far_batch(until), err)) return false;
+    return snprintf(made, cap, "%.*s", STR_ARG(far_r.f[0])), true;
+}
+
+// path's permissions set to perms, the ones it had into *old.
+static bool act_chmod(const char *path, mode_t perms, mode_t *old, Err *err)
+{
+    if (!far_dir(path)) return op_chmod(path, perms, old, err);
+    char octal[8];
+    snprintf(octal, sizeof octal, "%o", (unsigned)perms);
+    if (!far_act(path, (const char *const[]){ "chmod", path, octal, NULL }, err)) return false;
+    char said[16];
+    snprintf(said, sizeof said, "%.*s", STR_ARG(far_r.f[0]));
+    return *old = (mode_t)strtol(said, NULL, 8), true;
+}
+
 // "Trashed a.txt", "Trashed 3 items" or "Trashed 2 of 3: why" (verb, ok of n done, one the name
 // when it is the only one).
 static void say_done(const char *verb, isize ok, isize n, const char *one, const char *why)
@@ -425,8 +469,7 @@ static void make_link(void)
         }
         char in[PATH_MAX];
         path_parent(in, sizeof in, paths[i]);   // (beside it: a search result's own folder, F9)
-        bool ok = far_dir(in) ? far_act_by(in, (const char *const[]){ "symlink", in, paths[i], name, NULL }, far_batch(&until), &err) && snprintf(one, sizeof one, "%.*s", STR_ARG(far_r.f[0])) > 0
-                              : op_symlink(in, paths[i], str_from_c(name), one, sizeof one, &err);   // (F16 step 3b: made by ofx-list there)
+        bool ok = act_symlink(in, paths[i], name, one, sizeof one, &until, &err);
         if (!ok && far_silent(&err)) {
             far_slow_said(&err, done, paths[i]);
             break;
@@ -511,11 +554,7 @@ static void rename_commit(void)
     if (path_put(was, sizeof was, in, from) && jobs_refuse(was)) return;
     if (path_put(will, sizeof will, in, to) && jobs_refuse(will)) return;
     Err err;
-    char fc[NAME_MAX + 1], tc[NAME_MAX + 1];   // (on a far drive: by ofx-list, F16 step 3b)
-    snprintf(fc, sizeof fc, "%.*s", STR_ARG(from)), snprintf(tc, sizeof tc, "%.*s", STR_ARG(to));
-    bool ok = far_dir(in) ? (to.len < (isize)sizeof tc || (err_set(&err, "the name is too long"), false)) && far_act(in, (const char *const[]){ "rename", in, fc, tc, NULL }, &err)
-                          : op_rename(in, from, to, &err);
-    if (!ok) { set_status(true, "%s", err.msg); return; }
+    if (!act_rename(in, from, to, &err)) { set_status(true, "%s", err.msg); return; }
     // The cursor stays on it: by its new name, in a search its folder's too, where the result takes
     // the new name in place (F9).
     char a[PATH_MAX], b[PATH_MAX], keep[PATH_MAX];
@@ -541,14 +580,7 @@ static void new_made(bool file)
     char made[NAME_MAX + 1], p[PATH_MAX];
     Err err;
     UndoKind kind = file ? UNDO_MKFILE : UNDO_MKDIR;
-    bool ok;
-    if (app.far_on) {   // (by ofx-list, F16 step 3b)
-        ok = far_act(app.cwd, (const char *const[]){ file ? "mkfile" : "mkdir", app.cwd, file ? "New file" : "New folder", NULL }, &err);
-        if (ok) snprintf(made, sizeof made, "%.*s", STR_ARG(far_r.f[0]));
-    } else {
-        ok = file ? op_mkfile(app.cwd, S("New file"), made, sizeof made, &err) : op_mkdir(app.cwd, S("New folder"), made, sizeof made, &err);
-    }
-    if (!ok) {
+    if (!act_make(app.cwd, file, made, sizeof made, &err)) {
         set_status(true, "%s", err.msg);
         return;
     }
@@ -686,9 +718,7 @@ static void tab_load(void)
     ui_edit_close(&app.ui);
     ui_find_close(&app.ui);   // (a tab's own find isn't kept)
     ui_mark_clear(&app.ui);   // the same folder in two tabs: this tab's marks, not the other's
-    if (go_to_in(t->dir, str_from_c(t->sel), t->row, true)) {
-        if (app.far_loading) app.far_then = FAR_THEN_UP;   // (a far one: if its lister says it is gone, F16 step 3)
-    } else {
+    if (!go_to_in(t->dir, str_from_c(t->sel), t->row, (GoHow){ .stepping = true, .then = FAR_THEN_UP })) {   // (a far one: if its lister says it is gone, F16 step 3)
         // Gone: the nearest folder above. There but unreadable: the same, with its error kept.
         char why[sizeof app.status];
         snprintf(why, sizeof why, "%s", app.status);
@@ -799,8 +829,7 @@ static void location_go(void)
     // A far one (F16) is gone to as a folder, never looked at here: its lister says what it is.
     // A file there: its folder, it selected, when the lister says so (far_refused, step 3).
     if (far_dir(path)) {
-        if (!go_to(path, STR_EMPTY, 0)) return;
-        if (app.far_loading) app.far_then = FAR_THEN_SELECT;
+        if (!go_to_then(path, STR_EMPTY, 0, FAR_THEN_SELECT)) return;
         ui_edit_close(&app.ui);
         return;
     }

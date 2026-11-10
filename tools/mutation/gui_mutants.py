@@ -3,13 +3,13 @@ since the F15 code-health review, as run.py's are in mutants.py."""
 G, W, K, J, TB, WK, OW = 'gui/main.c', 'gui/watch.c', 'gui/counts.c', 'gui/jobs.c', 'gui/thumbs.c', 'gui/walk.c', 'gui/openwith.c'
 MUTANTS = [
     ('gui/folder.c', "    go_to(up, str_from_c(child_buf), 0);", "    go_to(up, STR_EMPTY, 0);"),
-    ('gui/folder.c', "    if (go_to(app.cwd, str_from_c(keep), app.ui.list.sel)) {", "    if (go_to(app.cwd, STR_EMPTY, app.ui.list.sel)) {"),
+    ('gui/folder.c', '    if (go_to_then(app.cwd, str_from_c(keep), app.ui.list.sel, FAR_THEN_UP)) return;', '    if (go_to_then(app.cwd, STR_EMPTY, app.ui.list.sel, FAR_THEN_UP)) return;'),   # (retargeted, step D)
     ('gui/folder.c', "        memmove(up, d.p, (size_t)d.len);\n        up[d.len] = 0;", "        snprintf(up, sizeof up, \"%.*s\", STR_ARG(d));"),
     (W, "static const u32 WATCH_DIR_MASK = IN_CREATE | ", "static const u32 WATCH_DIR_MASK = "),
     ('gui/watch.c', '        atomic_store(&watch.theme_wd, inotify_add_watch(watch.fd, watch.theme, WATCH_THEME_MASK | IN_MASK_ADD));\n        pthread_mutex_unlock(&watch.wd_mu);\n    }', '        pthread_mutex_unlock(&watch.wd_mu);\n    }'),
     (W, "        if (theme) atomic_store(&watch.theme_ready, true);", ""),
     # F2
-    ('gui/folder.c', "    if (!same && app.have_list && !stepping) hist_leave(&hist, app.cwd, sel_name());\n", ""),
+    ('gui/folder.c', '    if (!same && app.have_list && !how.stepping) hist_leave(&hist, app.cwd, sel_name());\n', ''),   # (retargeted, step D)
     ('gui/folder.c', "    isize sel = listing_find(&app.list, str_from_c(keep));\n    ui_set(&app.ui.list, app.list.n, sel >= 0 ? sel : 0);", "    ui_set(&app.ui.list, app.list.n, 0);"),
     ('gui/actions.c', "        go_to(app.cwd, str_from_c(keep), 0);\n        break;", "        go_to(app.cwd, STR_EMPTY, 0);\n        break;"),
     ('gui/input.c', "        if (in_box(CLAY_IDI(\"side-row\", r), x, y)) h.side = r;", "        if (0) h.side = r;"),
@@ -189,7 +189,7 @@ MUTANTS = [
     ('gui/input.c', '    app.hov = h;\n', '', 'f7'),
     ('gui/input.c', "            if (in_box(CLAY_IDI(\"menu-title\", m), x, y)) h.menu_title = m;", "", 'f7'),
     ('gui/actions.c', '    UndoKind kind = file ? UNDO_MKFILE : UNDO_MKDIR;', '    UndoKind kind = UNDO_MKDIR;', 'f7'),
-    ('gui/actions.c', '        ok = file ? op_mkfile(', '        ok = false ? op_mkfile(', 'f7'),
+    ('gui/actions.c', '    if (!far_dir(in)) return file ? op_mkfile(', '    if (!far_dir(in)) return false ? op_mkfile(', 'f7'),   # (retargeted, step D)
     ('gui/actions.c', '    case UA_NEWFILE: new_made(true); break;', '    case UA_NEWFILE: new_made(false); break;', 'f7'),
     ('gui/actions.c', 'if (spawn_window(app.exe, dir, &err))', 'if (spawn_window("ofx", dir, &err))', 'f7'),
     (G, "    if (app.windows[0]) win_signal_others(app.windows, getpid(), SIGUSR1);", "", 'f7'),
@@ -232,10 +232,10 @@ MUTANTS = [
     (WK, '        if (whole && gen == atomic_load(&walk.gen)) walk.sum = s, walk.sum_gen = gen, walk.done = walk.fresh = true;', '', 'f72'),
     # ---- F7.2 follow-ups: hard links, the MIME type (Michael, 2026-10-26)
     (WK, '.ctx = (void *)(uintptr_t)gen, .inodes = walk_inodes,', '.ctx = (void *)(uintptr_t)gen, .inodes = NULL,', 'f72'),   # (retargeted, step 8 A)
-    ('gui/panels.c', '        props.type_by_name = !app.thumb_local || far_dir(props_path[0]) || !spawn_gio_type(props_path[0], props.type, sizeof props.type, 1000);', '        props.type_by_name = true;', 'f72'),
+    ('gui/panels.c', '        props.type_by_name = !app.here_local || far_dir(props_path[0]) || !spawn_gio_type(props_path[0], props.type, sizeof props.type, 1000);', '        props.type_by_name = true;', 'f72'),
     ('gui/panels.c', '        mime_comment(&scratch, str_from_c(props.type), props.type_name, sizeof props.type_name);', '', 'f72'),
     # ---- F7.3: Open With, Enter on several, find's toggles
-    (OW, '    if (!app.thumb_local || far_dir(ow.paths[0]) || !spawn_gio_type(ow.paths[0], ow.type, sizeof ow.type, 1000)) {', '    if (true) {', 'f73'),
+    (OW, '    if (!app.here_local || far_dir(ow.paths[0]) || !spawn_gio_type(ow.paths[0], ow.type, sizeof ow.type, 1000)) {', '    if (true) {', 'f73'),
     (OW, '    ow.shown = apps_rank(&owa, &ow.apps, str_from_c(ow.type));', '    ow.shown = ow.apps.n;', 'f73'),
     (OW, '    for (isize i = 0; i < ow.shown && i < UI_APPS_MAX; i++) ow.names[i] = ow.apps.a[i].name;', '    for (isize i = 0; i < ow.shown && i < UI_APPS_MAX; i++) ow.names[i] = ow.apps.a[i].id;', 'f73'),
     # Not a mutant: ow_launch's `i >= ow.shown` is inert, ui/ hands only the listed apps' places.
@@ -352,7 +352,7 @@ MUTANTS = [
     ('gui/folder.c', ' : bm_add(&bmwa, now, dir, &err))', ' : bm_add(&bmwa, now, app.cwd, &err))', 'f8'),
     ('gui/actions.c', '        if (!same_dir(sdir, dest)) {', '        if (!same_dir(sdir, app.cwd)) {', 'f8'),
     ('gui/actions.c', 'if (!names[i][0] || !path_put(dst, sizeof dst, into ? into : sdir, str_from_c(names[i]))) continue;', 'if (!names[i][0] || !path_put(dst, sizeof dst, app.cwd, str_from_c(names[i]))) continue;', 'f8'),
-    ('gui/actions.c', '                              : op_symlink(in, paths[i], str_from_c(name), one, sizeof one, &err);', '                              : op_symlink(in, in, str_from_c(name), one, sizeof one, &err);', 'f8'),
+    ('gui/actions.c', '    if (!far_dir(in)) return op_symlink(in, target, str_from_c(name), made, cap, err);', '    if (!far_dir(in)) return op_symlink(in, in, str_from_c(name), made, cap, err);', 'f8'),   # (retargeted, step D)
     ('gui/actions.c', 'if (done++ == 0) undo_start(UNDO_LINK);', 'if (done++ == 0) undo_gen++;', 'f8'),
     ('gui/actions.c', '        undo_add(&undo, paths[i], p, NULL);\n', '', 'f8'),
     ('gui/actions.c', '    if (done) ui_mark_clear(&app.ui), go_to(app.cwd, app.ui.view == UI_VIEW_SEARCH ? sel_name() : str_from_c(made), app.ui.list.sel);', '    if (done) ui_mark_clear(&app.ui);', 'f8'),
@@ -530,7 +530,7 @@ MUTANTS = [
     ('gui/folder.c', '        return path_put(out, cap, e->dir.len ? dir : app.search_root, e->name);', '        return path_put(out, cap, app.search_root, e->name);', 'f9'),
     ('gui/folder.c', '    if (!search_is(q)) {', '    if (false) {', 'f9'),
     ('gui/folder.c', '    fs_sort(l, app.ui.sort);\n    snprintf(app.search_root', '    snprintf(app.search_root', 'f9'),
-    ('gui/folder.c', '    go_to_in(app.cwd, str_from_c(app.search_pick[0] ? app.search_pick : keep), app.ui.list.sel, true);', '    go_to_in(app.cwd, str_from_c(keep), app.ui.list.sel, true);', 'f9'),
+    ('gui/folder.c', '    go_to_in(app.cwd, str_from_c(app.search_pick[0] ? app.search_pick : keep), app.ui.list.sel, (GoHow){ .stepping = true });', '    go_to_in(app.cwd, str_from_c(keep), app.ui.list.sel, (GoHow){ .stepping = true });', 'f9'),   # (retargeted, step D)
     ('gui/folder.c', '    snprintf(app.cwd, sizeof app.cwd, "%s", uri);\n    app.search_pick[0] = 0;', '    app.search_pick[0] = 0;', 'f9'),
     ('gui/folder.c', '        snprintf(app.search_pick, sizeof app.search_pick, "%.*s", STR_ARG(select));\n    }', '    }', 'f9'),
     ('gui/actions.c', '    if (dir && search_uri(uri, sizeof uri, dir, STR_EMPTY, STR_EMPTY)) tab_open(uri, STR_EMPTY, true);', '    if (dir) tab_open(dir, STR_EMPTY, true);', 'f9'),
@@ -564,7 +564,7 @@ MUTANTS = [
     ('gui/actions.c', '    if (rel.len) snprintf(keep, sizeof keep, "%.*s/%.*s", STR_ARG(rel), STR_ARG(to));', '    if (false) {}', 'f9'),
     ('gui/actions.c', '    if (e && entry_path(app.ui.list.sel, path, sizeof path)) path_parent(app.edit_dir, sizeof app.edit_dir, path);', '    if (false) {}', 'f9'),
     ('gui/actions.c', '    snprintf(app.edit_from, sizeof app.edit_from, "%.*s", e ? (int)e->name.len : 0, e ? e->name.p : "");', '    snprintf(app.edit_from, sizeof app.edit_from, "%.*s", STR_ARG(sel_name()));', 'f9'),
-    ('gui/actions.c', '                              : op_symlink(in, paths[i], str_from_c(name), one, sizeof one, &err);   // (F16 step 3b: made by ofx-list there)', '                              : op_symlink(app.cwd, paths[i], str_from_c(name), one, sizeof one, &err);   // (F16 step 3b: made by ofx-list there)', 'f9'),
+    ('gui/actions.c', '        bool ok = act_symlink(in, paths[i], name, one, sizeof one, &until, &err);', '        bool ok = act_symlink(app.cwd, paths[i], name, one, sizeof one, &until, &err);', 'f9'),   # (retargeted, step D)
     ('gui/actions.c', '        const char *dest = into ? into : sdir;', '        const char *dest = into ? into : app.cwd;', 'f9'),
     ('gui/folder.c', '    return app.ui.view == UI_VIEW_SEARCH ? app.search_root : app.cwd;', '    return app.cwd;', 'f9'),
     ('gui/folder.c', '    if (!a.all) return here_dir();', '    if (!a.all) return app.cwd;', 'f9'),
@@ -671,8 +671,8 @@ MUTANTS = [
     ('gui/restore.c', '    if (!app.conf.restore_tabs || (others > 0 && !closing_all)) {', '    if ((others > 0 && !closing_all)) {', 'f11'),
     ('gui/restore.c', '    return i == tabbar.cur ? app.cwd : tabs[tabbar.slot[i]].dir;', '    return tabs[tabbar.slot[i]].dir;', 'f11'),
     ('gui/restore.c', 'session_line((long)getpid(), (i64)time(NULL), tabbar.cur, live', 'session_line((long)getpid(), (i64)time(NULL), 0, live', 'f11'),
-    ('gui/restore.c', '        if (plain) go_to_in(w.dir[0], STR_EMPTY, 0, true);', '        go_to_in(w.dir[0], STR_EMPTY, 0, true);', 'f11'),
-    ('gui/restore.c', '        if (plain) go_to_in(w.dir[0], STR_EMPTY, 0, true);', '        if (plain) go_to_in(w.dir[0], STR_EMPTY, 0, false);', 'f11'),
+    ('gui/restore.c', '        if (plain) go_to_in(w.dir[0], STR_EMPTY, 0, (GoHow){ .stepping = true });', '        go_to_in(w.dir[0], STR_EMPTY, 0, (GoHow){ .stepping = true });', 'f11'),   # (retargeted, step D)
+    ('gui/restore.c', '        if (plain) go_to_in(w.dir[0], STR_EMPTY, 0, (GoHow){ .stepping = true });', '        if (plain) go_to_in(w.dir[0], STR_EMPTY, 0, (GoHow){ 0 });', 'f11'),   # (retargeted, step D)
     ('gui/restore.c', '        for (int i = w.n - 1; i >= (plain ? 1 : 0); i--)', '        for (int i = w.n - 1; i >= 1; i--)', 'f11'),
     ('gui/restore.c', '        for (int i = w.n - 1; i >= (plain ? 1 : 0); i--) tab_open', '        for (int i = (plain ? 1 : 0); i < w.n; i++) tab_open', 'f11'),
     ('gui/restore.c', '    if (plain) tab_show(w.shown);', '', 'f11'),
@@ -985,54 +985,54 @@ MUTANTS = [
     ('gui/folder.c', "        if (m.type == 'C' && m.v[0] == app.far_cgen && m.v[1] < app.list.n) app.count[m.v[1]] = m.v[2], any = true;", '', 'f16'),
     ('gui/folder.c', '    if (app.far_on) return !app.far_loading && far_count_send(app.far_cgen, i, app.list.e[i].name);\n', '', 'f16'),
     ('gui/folder.c', '    bool on_far = view == UI_VIEW_FOLDER && far_dir(dir);', '    bool on_far = false;', 'f16'),
-    ('gui/folder.c', '    if (on_far && !app.far_ready && same && app.far_on && app.have_list) {', '    if (0) {', 'net'),
+    ('gui/folder.c', '    if (on_far && !how.far_take && same && app.far_on && app.have_list) {', '    if (0) {', 'net'),   # (retargeted, step D)
     ('gui/folder.c', '    if (app.far_on && !on_far) far_drop(), app.far_loading', '    if (0) far_drop(), app.far_loading', 'f16'),
     ('gui/folder.c', '        if (!on_far) atomic_store(&watch.list_ready, true), glfwPostEmptyEvent();', '        atomic_store(&watch.list_ready, true), glfwPostEmptyEvent();', 'f16'),
     ('gui/git.c', '    bool asked = dir && app.conf.git_status && git.started && !far_dir(dir);', '    bool asked = dir && app.conf.git_status && git.started;', 'f16'),
     ('gui/git.c', '    bool none = !app.conf.git_status || app.far_on || !git_top(app.cwd, top, sizeof top);', '    bool none = !app.conf.git_status || !git_top(app.cwd, top, sizeof top);', 'f16'),
     ('gui/space.c', "    if (cwd[0] == '/' && mounts_local(mi, cwd)) snprintf", "    if (cwd[0] == '/') snprintf", 'f16'),   # (retargeted, step C)
-    ('gui/actions.c', '    if (far_dir(path)) {\n        if (!go_to(path, STR_EMPTY, 0)) return;', '    if (0) {\n        if (!go_to(path, STR_EMPTY, 0)) return;', 'net'),
+    ('gui/actions.c', '    if (far_dir(path)) {\n        if (!go_to_then(path, STR_EMPTY, 0, FAR_THEN_SELECT)) return;', '    if (0) {\n        if (!go_to_then(path, STR_EMPTY, 0, FAR_THEN_SELECT)) return;', 'net'),   # (retargeted, step D)
     ('gui/frame.c', '           : far_word                   ? (app.far_note[0] ? app.far_note : "Opening\\xE2\\x80\\xA6")\n', '', 'f16'),
     ('gui/footer.c', ', .opening = app.far_on && app.far_loading && !app.list.n };', ' };', 'f16'),
     # (the step 2a review: a reload while hung, the cursor across a slow reload, the lister's stderr)
     ('gui/folder.c', '    far_drop();\n    app.far_loading = true, app.far_waiting = far_busy(dir);', '    app.far_loading = true, app.far_waiting = far_busy(dir);', 'net'),
-    ('gui/folder.c', '        if (far_begin(dir, select, fallback, &err)) return app.far_kept = true, app.far_kept_sel = app.ui.list.sel, true;', '        if (far_begin(dir, select, fallback, &err)) return app.far_kept_sel = app.ui.list.sel, true;', 'f16'),
+    ('gui/folder.c', '        if (far_begin(dir, select, fallback, how.then, &err)) return app.far_kept = true, app.far_kept_sel = app.ui.list.sel, true;', '        if (far_begin(dir, select, fallback, how.then, &err)) return app.far_kept_sel = app.ui.list.sel, true;', 'f16'),   # (retargeted, step D)
     ('gui/far.c', '    bool ok = spawn_fds(NULL, argv, in[0], out[1], SPAWN_ERR_NULL, &pid, err);', '    bool ok = spawn_fds(NULL, argv, in[0], out[1], SPAWN_ERR_OURS, &pid, err);', 'f16'),
     # ---- F16 step 2b: links into far drives, far mount points
     ('gui/folder.c', '    return fs_list_far(a, dir, app.show_hidden, app.ui.sort, far_mounts(), l, err);', '    return fs_list(a, dir, app.show_hidden, app.ui.sort, l, err);', 'net'),
     ('gui/folder.c', '    if (app.list.e[i].far) return app.count[i] = -1, false;', '', 'f16'),
-    ('gui/folder.c', '        if (go_to(to, STR_EMPTY, 0) && app.far_loading && e->kind == K_LINK_DIR) app.far_then = FAR_THEN_OPEN;', '        go_to(to, STR_EMPTY, 0);', 'f16'),
+    ('gui/folder.c', '        go_to_then(to, STR_EMPTY, 0, e->kind == K_LINK_DIR ? FAR_THEN_OPEN : FAR_THEN_SHOW);', '        go_to_then(to, STR_EMPTY, 0, FAR_THEN_SHOW);', 'f16'),   # (retargeted, step D)
     ('gui/folder.c', '    if (e->far) {   // (F16) a far mount point', '    if (0) {   // (F16) a far mount point', 'f16'),
     ('gui/folder.c', '    hist_go(-1);\n    if (spawn_open(file, &err))', '    if (spawn_open(file, &err))', 'f16'),
     # (the step 2b review: the reason's tail, blank columns, the real path on Enter)
-    ('gui/folder.c', '    return n >= k && strcmp(status + n - k, tail) == 0;', '    return strstr(status, tail + 2) != NULL;', 'f16'),
+    # (dropped, step D: far_reason_is is gone: the lister says the errno, whose own mutants are the next ones)
     ('gui/files.c', '    return e->far && e->kind == K_DIR;', '    return false;', 'f16'),
     ('gui/folder.c', '        else if (!far_path(here_dir(), real, sizeof real, &reaches) || !link_abs(real, e->target, to, sizeof to)) {', '        else if (!far_path(here_dir(), real, sizeof real, &reaches) || !link_abs(here_dir(), e->target, to, sizeof to)) {', 'f16'),
     # ---- F16 step 3: paths through local links, far refusals, the search walk, the trash scan
     ('gui/far.c', '    if (!mounts_local(far_mounts(), path)) return true;\n    char real[PATH_MAX];\n    bool reaches;\n    return far_path(path, real, sizeof real, &reaches) && reaches;', '    return !mounts_local(far_mounts(), path);', 'f16'),   # (retargeted, step C)
     ('gui/main.c', '!far_path(start ? start : ".", dir, sizeof dir, &start_far)) {', '!realpath(start ? start : ".", dir)) {', 'f16'),
-    ('gui/main.c', '    if (app.far_loading && start_far) app.far_then = FAR_THEN_SELECT;\n', '', 'f16'),
+    ('gui/main.c', '    go_to_then(dir, pick, 0, start_far ? FAR_THEN_SELECT : FAR_THEN_SHOW);', '    go_to_then(dir, pick, 0, FAR_THEN_SHOW);', 'f16'),   # (retargeted, step D)
     ('gui/main.c', '    if (!far_path(!slash ? "." : slash == p ? "/" : (*slash = 0, p), parent, sizeof parent, &reaches)) return false;', '    if (!realpath(!slash ? "." : slash == p ? "/" : (*slash = 0, p), parent)) return false;', 'f16'),
     ('gui/main.c', '    return reaches || lstat(out, &st) == 0;', '    return lstat(out, &st) == 0;', 'f16'),
     ('gui/folder.c', '    if (file && then == FAR_THEN_OPEN) return far_link_file();', '', 'f16'),
     ('gui/folder.c', '    if (file && then == FAR_THEN_SELECT) {', '    if (0) {', 'f16'),
-    ('gui/folder.c', '        go_to_in(up, str_from_c(name), 0, true);\n        return;', '        go_to_in(up, STR_EMPTY, 0, true);\n        return;', 'f16'),
-    ('gui/folder.c', '        go_to_in(up, str_from_c(name), 0, true);\n        return;', '        go_to_in(up, str_from_c(name), 0, false);\n        return;', 'f16'),
+    ('gui/folder.c', '        go_to_in(up, str_from_c(name), 0, (GoHow){ .stepping = true });\n        return;', '        go_to_in(up, STR_EMPTY, 0, (GoHow){ .stepping = true });\n        return;', 'f16'),   # (retargeted, step D)
+    ('gui/folder.c', '        go_to_in(up, str_from_c(name), 0, (GoHow){ .stepping = true });\n        return;', '        go_to_in(up, str_from_c(name), 0, (GoHow){ 0 });\n        return;', 'f16'),   # (retargeted, step D)
     ('gui/folder.c', '    if (gone && (then == FAR_THEN_BACK || then == FAR_THEN_FORWARD)) return far_gone_step(then == FAR_THEN_BACK ? -1 : 1);', '', 'f16'),
     ('gui/folder.c', '    if (gone && then == FAR_THEN_UP) return go_up_from(app.cwd);', '', 'f16'),
-    ('gui/folder.c', '    bool file = far_reason_is(app.status, ENOTDIR), gone = far_reason_is(app.status, ENOENT);', '    bool file = far_reason_is(app.status, ENOTDIR), gone = true;', 'f16'),
+    ('gui/folder.c', '    bool file = e == ENOTDIR, gone = e == ENOENT;', '    bool file = e == ENOTDIR, gone = true;', 'f16'),   # (retargeted, step D)
     ('gui/folder.c', '    snprintf(app.far_note, sizeof app.far_note, "%s", app.status);\n}', '}', 'f16'),
-    ('gui/folder.c', '    if (!(app.far_loading && strcmp(dir, app.cwd) == 0)) app.far_then = FAR_THEN_SHOW;', '    if (0) app.far_then = FAR_THEN_SHOW;', 'f16'),
+    ('gui/folder.c', '    if (!(app.far_loading && strcmp(dir, app.cwd) == 0) || app.far_then == FAR_THEN_SHOW) app.far_then = then;', '    if (0) app.far_then = then;', 'f16'),   # (retargeted, step D)
     ('gui/folder.c', '    hist_go_from(dir, was.dir, str_from_c(was.sel), true);\n    set_status(true, "%s is gone: skipped", gone);', '    hist_go_from(dir, was.dir, str_from_c(was.sel), false);\n    set_status(true, "%s is gone: skipped", gone);', 'f16'),
     ('gui/folder.c', '    if (!hist_take(&hist, dir, &was)) return;', '    if (!hist_take(&hist, -dir, &was)) return;', 'f16'),
-    ('gui/folder.c', '            if (app.far_loading) app.far_then = dir < 0 ? FAR_THEN_BACK : FAR_THEN_FORWARD;', '            if (app.far_loading) app.far_then = FAR_THEN_BACK;', 'f16'),
-    ('gui/folder.c', '            if (app.far_loading) app.far_then = dir < 0 ? FAR_THEN_BACK : FAR_THEN_FORWARD;', '', 'f16'),
-    ('gui/folder.c', '    if (back_to_cur) go_to_in(cur, cur_sel, 0, true);', '', 'f16'),
-    ('gui/folder.c', '        if (app.far_loading && app.far_then == FAR_THEN_SHOW) app.far_then = FAR_THEN_UP;   // (a far one', '        if (0) app.far_then = FAR_THEN_UP;   // (a far one', 'f16'),
-    ('gui/folder.c', '            if (app.far_loading) app.far_then = FAR_THEN_UP;   // (on up from a far one gone too, F16 step 3)', '', 'f16'),
-    ('gui/actions.c', '        if (app.far_loading) app.far_then = FAR_THEN_UP;   // (a far one: if its lister says it is gone, F16 step 3)', '', 'f16'),
-    ('gui/actions.c', '        if (app.far_loading) app.far_then = FAR_THEN_SELECT;\n        ui_edit_close(&app.ui);', '        ui_edit_close(&app.ui);', 'f16'),
-    ('gui/folder.c', '    app.thumb_local = !on_far && mounts_local(', '    app.thumb_local = mounts_local(', 'f16'),   # (retargeted, step C)
+    ('gui/folder.c', '        if (go_to_in(to.dir, str_from_c(to.sel), 0, (GoHow){ .stepping = true, .then = dir < 0 ? FAR_THEN_BACK : FAR_THEN_FORWARD })) return;', '        if (go_to_in(to.dir, str_from_c(to.sel), 0, (GoHow){ .stepping = true, .then = FAR_THEN_BACK })) return;', 'f16'),   # (retargeted, step D)
+    ('gui/folder.c', '        if (go_to_in(to.dir, str_from_c(to.sel), 0, (GoHow){ .stepping = true, .then = dir < 0 ? FAR_THEN_BACK : FAR_THEN_FORWARD })) return;', '        if (go_to_in(to.dir, str_from_c(to.sel), 0, (GoHow){ .stepping = true })) return;', 'f16'),   # (retargeted, step D)
+    ('gui/folder.c', '    if (back_to_cur) go_to_in(cur, cur_sel, 0, (GoHow){ .stepping = true });', '', 'f16'),   # (retargeted, step D)
+    ('gui/folder.c', '    if (go_to_then(app.cwd, str_from_c(keep), app.ui.list.sel, FAR_THEN_UP)) return;', '    if (go_to_then(app.cwd, str_from_c(keep), app.ui.list.sel, FAR_THEN_SHOW)) return;', 'f16'),   # (retargeted, step D)
+    ('gui/folder.c', '        if (go_to_then(up, STR_EMPTY, 0, FAR_THEN_UP)) {', '        if (go_to_then(up, STR_EMPTY, 0, FAR_THEN_SHOW)) {', 'f16'),   # (retargeted, step D)
+    ('gui/actions.c', '    if (!go_to_in(t->dir, str_from_c(t->sel), t->row, (GoHow){ .stepping = true, .then = FAR_THEN_UP })) {', '    if (!go_to_in(t->dir, str_from_c(t->sel), t->row, (GoHow){ .stepping = true })) {', 'f16'),   # (retargeted, step D)
+    ('gui/actions.c', '        if (!go_to_then(path, STR_EMPTY, 0, FAR_THEN_SELECT)) return;', '        if (!go_to_then(path, STR_EMPTY, 0, FAR_THEN_SHOW)) return;', 'f16'),   # (retargeted, step D)
+    ('gui/folder.c', '    app.here_local = !on_far && mounts_local(', '    app.here_local = mounts_local(', 'f16'),   # (retargeted, step C)
     ('gui/folder.c', '        if (place_is_drive(app.places.p[i].kind) && mounts_local(mi, app.places.p[i].path)) mp[n++]', '        if (place_is_drive(app.places.p[i].kind)) mp[n++]', 'f16'),   # (retargeted, step C)
     ('gui/search.c', '        w.mounts = mounts_parse(&search_arena, read_file(&search_arena, mountinfo_path()));', '', 'f16'),   # (retargeted, step C)
     ('gui/search.c', '!entry_read_far(&search_arena, fd, at, name.p, &w->mounts, &search_res[search_wrote])) return false;', '!entry_read_far(&search_arena, fd, at, name.p, NULL, &search_res[search_wrote])) return false;', 'f16'),   # (retargeted, step C)
@@ -1041,8 +1041,8 @@ MUTANTS = [
     # same, and on a dead one the child's wait ends the action first. Kept by principle: nothing on a
     # far drive is looked at in ofx.)
     ('gui/actions.c', '    if (!far_path(path, real, sizeof real, &reaches)) {', '    if (!realpath(path, real)) {', 'f16'),
-    ('gui/drag.c', '    if (reaches) {\n        if (app.far_on', '    if (0) {\n        if (app.far_on', 'f16'),
-    ('gui/drag.c', '        if (app.far_on && strcmp(dir, app.cwd) == 0 && !app.far_loading && !app.far_can_write) return false;\n', '', 'f16'),
+    ('gui/drag.c', '    if (reaches) {\n        if (!far_writable(dir))', '    if (0) {\n        if (!far_writable(dir))', 'f16'),   # (retargeted, step D)
+    ('gui/drag.c', '        if (!far_writable(dir)) return false;\n', '', 'f16'),   # (retargeted, step D)
     ('gui/drag.c', '            if (dragged_real[i] && ui_under(str_from_c(real), str_from_c(dragged_real[i]))) return false;\n        return *same_drive = false, true;', '        return *same_drive = false, true;', 'f16'),
     ('gui/drag.c', '    *same_drive = !far_dir(dragged.path[0]) && lstat(', '    *same_drive = lstat(', 'f16'),
     # ---- F16 step 3b: the actions on a far folder, by ofx-list --do
@@ -1065,10 +1065,10 @@ MUTANTS = [
     ('gui/actions.c', '        } else if (!far_dir(dest)) {\n            name_free(', '        } else if (1) {\n            name_free(', 'f16'),
     # (Dropped, step 3 review: into_itself by realpath for a paste's far folder. As same_dir, it is reached only after ofx-list answered for the batch; on a live share it answers the same.)
     ('gui/actions.c', '    return far_path(src, s, sizeof s, &fs) && far_path(dst_dir, d, sizeof d, &fd) && path_within(d, s);', '    return false;', 'f13'),
-    ('gui/actions.c', '        bool ok = far_dir(in) ? far_act_by(in, (const char *const[]){ "symlink"', '        bool ok = 0 ? far_act_by(in, (const char *const[]){ "symlink"', 'f16'),
+    ('gui/actions.c', '    if (!far_dir(in)) return op_symlink(', '    if (1) return op_symlink(', 'f16'),   # (retargeted, step D)
     ('gui/actions.c', '        if (!ok && far_silent(&err)) {\n            far_slow_said(&err, done, paths[i]);\n            break;\n        }', '        if (!ok && far_silent(&err)) {\n            far_slow_said(&err, done, paths[i]);\n        }', 'f16'),
-    ('gui/actions.c', '    bool ok = far_dir(in) ? (to.len < (isize)sizeof tc', '    bool ok = 0 ? (to.len < (isize)sizeof tc', 'f16'),
-    ('gui/actions.c', '    if (app.far_on) {   // (by ofx-list, F16 step 3b)', '    if (0) {   // (by ofx-list, F16 step 3b)', 'f16'),
+    ('gui/actions.c', '    if (!far_dir(in)) return op_rename(', '    if (1) return op_rename(', 'f16'),   # (retargeted, step D)
+    ('gui/actions.c', '    if (!far_dir(in)) return file ? op_mkfile(', '    if (1) return file ? op_mkfile(', 'f16'),   # (retargeted, step D)
     ('gui/actions.c', '    if (app.far_on) {   // (its row comes with the listing', '    if (0) {   // (its row comes with the listing', 'f16'),
     ('gui/actions.c', '        if ((undo.it[i].to && far_dir(undo.it[i].to)) || (undo.it[i].from && far_dir(undo.it[i].from))) return true;', '', 'f16'),
     ('gui/actions.c', '    if (on_far) undo_clear(&undo), set_status(false, "Undid the %s", what);', '    if (0) undo_clear(&undo), set_status(false, "Undid the %s", what);', 'f16'),
@@ -1077,11 +1077,11 @@ MUTANTS = [
     # on disk; it is only there so f16f reaches the job path, which #864's kill shows it does.)
     ('gui/panels.c', '    if (far_dir(path)) {\n        if (!props_read_far(path)) return;', '    if (0) {\n        if (!props_read_far(path)) return;', 'f16'),
     ('gui/panels.c', '    memcpy(&props.st, far_r.f[far_r.f[1].len ? 1 : 0].p, sizeof props.st);', '    memcpy(&props.st, far_r.f[0].p, sizeof props.st);', 'f16'),
-    ('gui/panels.c', '    bool ok = !far_dir(props_path[0]) ? op_chmod(', '    bool ok = 1 ? op_chmod(', 'f16'),
+    ('gui/actions.c', '    if (!far_dir(path)) return op_chmod(', '    if (1) return op_chmod(', 'f16'),   # (retargeted, step D)
     ('gui/panels.c', '    bool any_dir = !props.local && (here || app.list.n == 0);', '    bool any_dir = false;', 'f16'),
     ('gui/folder.c', '    return here ? !app.far_loading && app.far_can_write : true;', '    return true;', 'f16'),
     ('gui/folder.c', '            bool moved = app.far_kept && app.ui.list.sel != app.far_kept_sel;', '            bool moved = app.far_kept;', 'f16'),
-    ('gui/folder.c', '    if (!(app.far_loading && strcmp(dir, app.cwd) == 0)) app.far_then = FAR_THEN_SHOW;', '    app.far_then = FAR_THEN_SHOW;', 'f16'),
+    ('gui/folder.c', '    if (!(app.far_loading && strcmp(dir, app.cwd) == 0) || app.far_then == FAR_THEN_SHOW) app.far_then = then;', '    app.far_then = then;', 'f16'),   # (retargeted, step D)
     # (step 3 review: one deadline a batch, the share not asked while a child of it is held, gvfs's
     # no trash, a paste's looks in two children)
     ('gui/far.c', '    if (far_stuck(dir)) return err_set(err, "%.*s isn\'t answering: not tried", STR_ARG(name)), false;', '', 'net'),
@@ -1096,7 +1096,7 @@ MUTANTS = [
     ('gui/far.c', '    return far_path(path, real, sizeof real, &reaches) && reaches && far_drive(far_mounts(), real, drive, sizeof drive, &gvfs) && gvfs;', '    return false;', 'net'),
     ('gui/actions.c', "        if (!kind[i]) kind[i] = f < far_r.n && far_r.f[f].len == 1 ? far_r.f[f].p[0] : '-', f++;", "        if (!kind[i]) kind[i] = 'o', f++;", 'f16'),
     ('gui/actions.c', '    for (isize w = 0; far_at && w < nw && w < far_r.n; w++) snprintf(names[wait[w]]', '    for (isize w = 0; far_at && w < nw && w < far_r.n; w++) snprintf(names[w]', 'f16'),
-    ('gui/folder.c', '        if (app.far_loading && app.far_then == FAR_THEN_SHOW) app.far_then = FAR_THEN_UP;', '        if (app.far_loading) app.far_then = FAR_THEN_UP;', 'f16'),
+    ('gui/folder.c', '    if (!(app.far_loading && strcmp(dir, app.cwd) == 0) || app.far_then == FAR_THEN_SHOW) app.far_then = then;', '    if (!(app.far_loading && strcmp(dir, app.cwd) == 0)) app.far_then = then;', 'f16'),   # (retargeted, step D)
     # F16 step 4: Connect to Server (gui/connect.c), against the test Samba
     ('gui/connect.c', '        if (rounds > answered) {   // gio asks (again): the user answers', '        if (answered == 0) {', 'net'),
     ('gui/connect.c', '            answered = rounds;', '', 'net'),
@@ -1210,11 +1210,15 @@ MUTANTS = [
     ('gui/disco.c', '        if (gen != seen) cache = false, seen = gen;', '        if (gen != seen) seen = gen;', 'f16'),
     ('gui/actions.c', '    if (on) atomic_fetch_add(&airplane_gen, 1);\n', '', 'f16'),
     # The milestone's code-health cleanup, step A
-    ('gui/panels.c', 'props.local = here ? !far_dir(props_path[0]) : app.thumb_local;', 'props.local = app.thumb_local;', 'f16'),
+    ('gui/panels.c', 'props.local = here ? !far_dir(props_path[0]) : app.here_local;', 'props.local = app.here_local;', 'f16'),
     ('gui/walk.c', '.mounts = mounts_parse(&mia, read_file(&mia, mountinfo_path())), .pts = pts,', '.mounts = (Mounts){ 0 }, .pts = pts,', 'f72'),   # (retargeted, step C)
     ('gui/walk.c', '.pts = pts, .pts_cap = sizeof pts };', '.pts = NULL, .pts_cap = sizeof pts };', 'f72'),
     # The milestone's code-health cleanup, step B
     ('gui/far.c', '    if (ms < 0) ms = env_int("OFX_TEST_FAR_DO_MS", FAR_DO_MS, 100, 60000);', '    if (ms < 0) ms = FAR_DO_MS;', 'f16'),
     # The milestone's code-health cleanup, step C
     ('gui/far.c', '    far_ms_at = -1;\n', '', 'usb'),
+    # The milestone's code-health cleanup, step D
+    ('gui/folder.c', "            int refused = ended && m.type == 'X' ? (int)m.v[0] : 0;", '            int refused = 0;', 'f16'),
+    ('gui/folder.c', '    bool here = app.far_on && (strcmp(path, app.cwd) == 0 || (path_parent(up, sizeof up, path) && strcmp(up, app.cwd) == 0));', '    bool here = app.far_on && strcmp(path, app.cwd) == 0;', 'f16'),
+    ('gui/folder.c', '    return go_to_in(dir, select, fallback, (GoHow){ .then = then });', '    return go_to_in(dir, select, fallback, (GoHow){ 0 });', 'f16'),
 ]

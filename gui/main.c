@@ -214,6 +214,14 @@ typedef enum { DROP_NONE, DROP_ROW, DROP_SIDE, DROP_TAB, DROP_CRUMB, DROP_LIST }
 // or its folder shown with it selected (a path typed or started on). Gone: skipped as Back and
 // Forward skip one, or the nearest folder above (a reload, a tab).
 typedef enum { FAR_THEN_SHOW, FAR_THEN_OPEN, FAR_THEN_SELECT, FAR_THEN_BACK, FAR_THEN_FORWARD, FAR_THEN_UP } FarThen;
+
+// How go_to_in gets to a folder (the F16 code-health review's step D: these were app fields set
+// around the call, and far_then patched after it at seven places).
+typedef struct {
+    bool    stepping;   // Back, Forward, a tab, a relist: the folder left gets no history entry
+    FarThen then;       // a far folder: what its lister's refusal leads to (far_refused)
+    bool    far_take;   // far_poll's: the lister's answer has come, the listing is made from it
+} GoHow;
 enum { DROP_AGAIN = -2 };
 typedef struct {
     DropKind kind;            // what is under the pointer
@@ -372,7 +380,7 @@ static struct {
     i64       spring_at;    // since when
     int       side_px;      // the sidebar's width dragged to, UI_SIDE_W at first (fitted to the window: ui_side_fit)
     UiPress   edge_press;   // the sidebar edge's presses, for its double click
-    bool      thumb_local;  // the folder's drive is one ofx makes previews on (F6.4: not a network one)
+    bool      here_local;   // the folder shown is on a local drive, not a far one: previews made there (F6.4), types asked of gio
     float     ctx_x, ctx_y;       // a right-click menu's top left (F8): where it opens, kept inside the window
     bool      ctx_placed;         // one is up and placed (ctx_place)
     char      ctx_path[PATH_MAX]; // the folder a folder menu is on (ctx_facts)
@@ -382,7 +390,6 @@ static struct {
     bool      far_on;             // the folder shown is one
     bool      far_loading;        // its listing hasn't come yet (the list shown: none, or the last one's)
     bool      far_waiting;        // its last lister is still in the kernel: a new one waits for it
-    bool      far_ready;          // (go_to_in's: the listing came, take it)
     bool      far_kept;           // a reload: the listing shown kept until it comes (the cursor taken then)
     isize     far_kept_sel;       // (the cursor's row as it was asked: moved since, it stays where moved)
     FarThen   far_then;           // what its lister's refusal leads to (a file, a folder gone): set by the way there
@@ -992,8 +999,7 @@ int main(int argc, char **argv)
         if (slash == dir) dir[1] = 0;
         else *slash = 0;
     }
-    go_to(dir, pick, 0);
-    if (app.far_loading && start_far) app.far_then = FAR_THEN_SELECT;
+    go_to_then(dir, pick, 0, start_far ? FAR_THEN_SELECT : FAR_THEN_SHOW);
     if (!app.have_list) snprintf(app.cwd, sizeof app.cwd, "%s", dir);
     tabs[0].used = true;
     ui_tabs_open(&tabbar, 0, true);

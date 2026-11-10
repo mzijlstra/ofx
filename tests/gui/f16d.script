@@ -15,7 +15,7 @@ wait-for 3000 faron=0 n=3 sel=share
 key ctrl-l
 type local/mylinks/nas/x.txt
 key enter
-wait-for 3000 faron=1 farloading=0 n=2 sel=x.txt statusbad=0 thumblocal=0
+wait-for 3000 faron=1 farloading=0 n=2 sel=x.txt statusbad=0 herelocal=0
 # Back from there: tree, as before the typed path (the file took no place in the history).
 key alt-left
 wait-for 3000 faron=0 sel=share
