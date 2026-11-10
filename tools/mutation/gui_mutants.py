@@ -1207,4 +1207,6 @@ MUTANTS = [
     ('gui/main.c', '    app.ui.airplane = atomic_load(&airplane);\n', '', 'f16'),
     ('gui/input.c', '        u->ctx_airplane = pl->kind == PL_AIRPLANE;   // (F16 step 7d)\n', '', 'f16'),
     ('gui/folder.c', 'servers, nservers, app.ui.airplane);', 'servers, nservers, false);', 'f16'),
+    ('gui/disco.c', '        if (gen != seen) cache = false, seen = gen;', '        if (gen != seen) seen = gen;', 'f16'),
+    ('gui/actions.c', '    if (on) atomic_fetch_add(&airplane_gen, 1);\n', '', 'f16'),
 ]

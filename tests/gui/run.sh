@@ -513,14 +513,17 @@ RS_HOME=$T/home
 rs f16v OFX_TEST_AVAHI="$T/avahi" OFX_TEST_DISCO_MS=1000 OFX_TEST_GIO="$T/giofake" -- "$T/home"
 # f16w (step 7d): Airplane Mode and the share poll's back-off: <T>/gvfs in the mount list as
 # gvfsd-fuse's (no share in it until the script makes one), a stand-in avahi-browse finding YOGA,
-# an smb:// bookmark; the poll's waits 200 ms doubling to 1600; the state file says airplane=on.
-fresh f16w; mkdir -p "$T/home" "$T/gvfs" "$T/config/gtk-3.0" "$T/state/ofx"
+# an smb:// bookmark; the poll's waits 200 ms doubling to 1600; the state file says airplane=on;
+# ofx.conf binds F8 to airplane-mode; a cache read takes 2 s once <T>/slow exists.
+fresh f16w; mkdir -p "$T/home" "$T/gvfs" "$T/config/gtk-3.0" "$T/config/ofx" "$T/state/ofx"
 printf 'airplane=on\n' > "$T/state/ofx/state"
+printf 'key = F8 airplane-mode\n' > "$T/config/ofx/ofx.conf"
 printf 'smb://nas/home Home NAS\n' > "$T/config/gtk-3.0/bookmarks"
 printf '1 0 0:1 / / rw - ext4 /dev/x rw\n2 1 0:2 / %s rw,nosuid,nodev - fuse.gvfsd-fuse gvfsd-fuse rw\n' "$T/gvfs" > "$T/mountinfo"
-cat > "$T/avahi" <<'EOF'
+cat > "$T/avahi" <<EOF
 #!/bin/sh
-[ "$1" = -k ] || exit 0
+[ "\$1" = -k ] || exit 0
+case " \$* " in *" -c "*) [ -e "$T/slow" ] && sleep 2 ;; esac   # (a cache read the script makes slow)
 printf '=;eth0;IPv4;YOGA;_smb._tcp;local;yoga.local;192.168.1.165;445;\n'
 EOF
 chmod +x "$T/avahi"

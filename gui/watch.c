@@ -46,8 +46,10 @@
 enum { WATCH_QUIET_MS = 100, WATCH_MAX_MS = 1000, WATCH_GVFS_MS = 2000, WATCH_GVFS_MAX_MS = 30000 };
 
 // Airplane Mode (F16 step 7d): ofx starts no network traffic (the shares' listing here, discovery,
-// a connect). The main thread sets it (airplane_apply); the threads read it.
+// a connect). The main thread sets it (airplane_apply); the threads read it. airplane_gen counts its
+// turnings on, so discovery knows one happened while it waited (the step 7d review).
 static atomic_bool airplane;
+static atomic_uint airplane_gen;
 
 // The shares' folders, one a line, as the thread last listed them (watch_shares copies them out).
 static struct {

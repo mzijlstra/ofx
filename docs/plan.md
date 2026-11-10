@@ -1230,12 +1230,19 @@ blocks each of these for up to gvfs's 90 s. On a thread it also holds ofx's exit
          already writes, so it outlasts a restart; ofx still never writes ofx.conf.
        - **Every window at once:** the watch thread watches the state file's folder; a window
          reads `airplane=` again when the file is replaced, and applies it.
-       - **The sidebar:** the Network section shows one dim "Airplane mode" row (a plane icon,
-         else network-offline) and nothing else: no found servers, no mounted shares, no network
-         bookmarks (the share list would go stale without the poll). The bookmarks come back
-         when it's off. A click on the row asks "Turn off airplane mode?".
+       - **The sidebar:** the Network section shows one dim "Airplane mode" row and nothing
+         else: no found servers, no mounted shares, no network bookmarks (the share list would go
+         stale without the poll). The bookmarks come back when it's off. A click on the row asks
+         "Turn off airplane mode?"; its menu has Turn Off Airplane Mode.
+       - **Its icon** (Michael, 2026-11-10: "so that it shows a plane"): Yaru and Adwaita have
+         `airplane-mode` only as a symbolic SVG, and ofx drew theme icons from PNGs only. The
+         icon index now takes every theme's `-symbolic.svg` too (about 2,000 names in Yaru and
+         hicolor, ~200 KiB; only a name asked for with `-symbolic` finds one), drawn through
+         nanosvg as the apps' icons are, in the theme's dim foreground as GTK tints them.
        - **Turned off:** the share poll runs at once, and discovery makes one real query (the
-         cache may be from another network), then reads the cache as before.
+         cache may be from another network), then reads the cache as before. Also when it was
+         turned on and off while discovery was busy and never saw it (a count of its turnings
+         on, `airplane_gen`; the review).
      - **The back-off** (Michael's pick): while gvfs has no share mounted, the share poll waits
        2, 4, 8, 16, then 30 s; any change in the list, and ofx's own connect and unmount, put it
        back to 2 s at once. With shares mounted it stays at 2 s. About 3,000 spawns a day per

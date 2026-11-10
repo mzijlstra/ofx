@@ -56,10 +56,13 @@ static void *disco_thread(void *arg)
     (void)arg;
     static int every = -1;   // (OFX_TEST_DISCO_MS: a test's cache reads come sooner)
     if (every < 0) every = env_int("OFX_TEST_DISCO_MS", DISCO_MS, 100, 600000);
+    unsigned seen = atomic_load(&airplane_gen);
     for (bool cache = false;; cache = true) {
         pthread_mutex_lock(&disco.mu);
         while (atomic_load(&airplane)) cache = false, pthread_cond_wait(&disco.cv, &disco.mu);   // (off again: a real query)
         pthread_mutex_unlock(&disco.mu);
+        unsigned gen = atomic_load(&airplane_gen);
+        if (gen != seen) cache = false, seen = gen;   // (on and off again while it waited: a real query too, the review)
         if (!disco_ask(cache)) break;
         struct timespec until;
         clock_gettime(CLOCK_REALTIME, &until);

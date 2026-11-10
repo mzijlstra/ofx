@@ -73,6 +73,18 @@ wait-for 2000 modal=airplane
 sh sed 's/^airplane=on$/airplane=off/' "$OFX_ROOT/state/ofx/state" > "$OFX_ROOT/state/ofx/state.new" && mv "$OFX_ROOT/state/ofx/state.new" "$OFX_ROOT/state/ofx/state"
 wait-for 4000 airplane=0 modal=- sides=^Places|Home|Trash|^Drives|File_System|^Network|~Home_NAS|~YOGA sharesevery=200
 sh [ "$(grep -c "avahi-browse -k -t -r -p _smb._tcp" "$OFX_ROOT/spawn.log")" -eq 2 ]
+# On and off again while discovery is busy (a cache read made to take 2 s; F8 is airplane-mode in
+# this run's ofx.conf), so it never sees "on" itself: its next look is a real query anyway, not the
+# cache of the network it had (the step 7d review).
+sh touch "$OFX_ROOT/slow"
+sleep 1200
+key f8
+wait-for 1000 airplane=1
+key f8
+wait-for 1000 airplane=0
+sh rm "$OFX_ROOT/slow"
+sleep 3000
+sh [ "$(grep -c "avahi-browse -k -t -r -p _smb._tcp" "$OFX_ROOT/spawn.log")" -eq 3 ]
 # On again, then the row's question answered yes: off, and written.
 point-ui menu-title 3
 click-here

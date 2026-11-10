@@ -950,6 +950,7 @@ static void airplane_apply(bool on)
     app.ui.airplane = on;
     if (!on) app.ui.airplane_asking = false;
     if (atomic_exchange(&airplane, on) == on) return;
+    if (on) atomic_fetch_add(&airplane_gen, 1);
     watch_gvfs_kick(), disco_wake();
     places_reload();
 }
