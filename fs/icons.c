@@ -86,7 +86,10 @@ static isize icon_bases(Arena *a, const char **out, isize max)
 }
 
 // The PNG names in dir into m (sized to them), and with svg the SVG ones too (a name with both:
-// the PNG); the value is 1 for a PNG, 2 for an SVG. False when dir isn't there.
+// the PNG); the value is 1 for a PNG, 2 for an SVG. A symbolic SVG (name-symbolic.svg) is taken
+// always: Yaru and Adwaita have Airplane Mode's icon only so (F16 step 7d; about 2,000 names in
+// Yaru and hicolor, ~200 KiB, and only a name ending -symbolic, which only that row asks for, finds
+// one). False when dir isn't there.
 static bool icon_scan(Arena *a, const char *dir, StrMap *m, bool svg)
 {
     DIR *d = opendir(dir);
@@ -96,7 +99,7 @@ static bool icon_scan(Arena *a, const char *dir, StrMap *m, bool svg)
     u8 *kind = arena_new(a, u8, cap);
     for (struct dirent *de; (de = readdir(d));) {
         Str s = str_from_c(de->d_name);
-        bool png = str_ends_with(s, S(".png")), is_svg = svg && str_ends_with(s, S(".svg"));
+        bool png = str_ends_with(s, S(".png")), is_svg = (svg || str_ends_with(s, S("-symbolic.svg"))) && str_ends_with(s, S(".svg"));
         if ((!png && !is_svg) || s.len == 4) continue;
         if (n == cap) {
             Str *grown = arena_new(a, Str, cap * 2);

@@ -2987,4 +2987,6 @@ MUTANTS += [
     ('ui/prompts.c', '    case UI_ON_AIRPLANE: u->airplane_asking = false; return', '    case UI_ON_AIRPLANE: return'),
     ('ui/handle.c', '        if (yes_no && ui_is_question(ui_on_top(u))) return', '        if (yes_no && false) return'),
     ('ui/keys.c', ' { UK_ITEM0 + UM_AIRPLANE, "airplane-mode" },', ''),
+    ('fs/icons.c', 'is_svg = (svg || str_ends_with(s, S("-symbolic.svg"))) && str_ends_with', 'is_svg = svg && str_ends_with'),
+    ('fs/places.c', 'S("airplane-mode"), names[n++] = S("airplane-mode-symbolic"); break;', 'S("airplane-mode"); break;'),
 ]

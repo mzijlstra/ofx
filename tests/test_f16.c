@@ -1134,7 +1134,7 @@ static void test_airplane(void)
           !place_folderless(PL_SHARE) && !place_folderless(PL_MOUNT) && !place_connects(PL_AIRPLANE) && !place_is_drive(PL_AIRPLANE) && !place_unmountable(&pl.p[1]));
     CHECK(places_current(&pl, "airplane:") == -1);
     Str names[3];
-    CHECK(place_icon_names(&pl.p[1], &(UserDirs){ 0 }, false, names) == 2 && str_eq(names[0], S("airplane-mode")));
+    CHECK(place_icon_names(&pl.p[1], &(UserDirs){ 0 }, false, names) == 3 && str_eq(names[0], S("airplane-mode")) && str_eq(names[1], S("airplane-mode-symbolic")));
     Places off = { 0 };
     places_load_net(&ta, &off, at("air/bm"), S(""), NULL, 0, false);
     CHECK(off.n == 2 && off.p[1].kind == PL_NETBM);

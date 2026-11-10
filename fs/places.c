@@ -449,7 +449,7 @@ static isize place_icon_names(const Place *p, const UserDirs *u, bool trash_full
     case PL_SHARE:
     case PL_NETBM: names[n++] = S("folder-remote"); break;
     case PL_SERVER: names[n++] = S("network-server"), names[n++] = S("folder-remote"); break;
-    case PL_AIRPLANE: names[n++] = S("airplane-mode"); break;   // (a PNG theme's; Yaru and Adwaita have only a symbolic SVG, which the places' icons don't read: the folder then)
+    case PL_AIRPLANE: names[n++] = S("airplane-mode"), names[n++] = S("airplane-mode-symbolic"); break;   // (a PNG theme's, else Yaru's and Adwaita's symbolic SVG)
     case PL_TRASH:   // full: when any trash folder holds something (2026-10-30)
         if (trash_full) names[n++] = S("user-trash-full");
         names[n++] = S("user-trash");
