@@ -388,7 +388,8 @@ static void places_load_net(Arena *scratch, Places *pl, const char *bookmarks, S
         Str uri, label;
         char path[PATH_MAX], u[PATH_MAX], host[256], share[256], why[256], name[520];
         gtk_bookmark_line(str_trim(line), &uri, &label, path, sizeof path);   // (a local one isn't an address: Places has it)
-        if (connect_uri(uri, u, sizeof u, host, sizeof host, share, sizeof share, why, sizeof why) != CONNECT_OK) continue;
+        ConnectUri c = connect_uri(uri, u, sizeof u, host, sizeof host, share, sizeof share, why, sizeof why);
+        if (c != CONNECT_OK && c != CONNECT_SERVER) continue;
         if (label.len == 0) snprintf(name, sizeof name, share[0] ? "%s on %s" : "%s%s", share, host), label = str_from_c(name);   // (a server's own address, step 7a: its name)
         places_add(pl, PL_NETBM, u, label);
     }

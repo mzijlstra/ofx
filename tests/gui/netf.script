@@ -1,0 +1,47 @@
+# F16 step 7c: SFTP through Connect to Server, on the test SSH server (run.sh's net group; @SPORT@ its
+# port). Its host keys are in the private session's known_hosts (as if the user had connected once
+# with ssh); user tester, password secret, home /home/tester (hello.txt, sub/). <T>/ssh/config is
+# that ssh's own (no keys; a key with the passphrase keypass is <T>/ssh/id). ofx starts in its home.
+settle
+wait-for 5000 n=1 sel=nas conn=0 login=0
+# A password: the question has neither a domain nor a guest (Alt+G does nothing).
+key ctrl-l
+type sftp://tester@127.0.0.1:@SPORT@/home/tester
+key enter
+wait-for 8000 login=1 loginssh=1 loginkey=0 loginnouser=1 loginat=2
+key alt-g
+expect login=1
+shot netf-login.png
+type secret
+key enter
+wait-for 8000 conn=0 login=0 faron=1 farloading=0 n=2 sel=sub statusbad=0 crumbs=tester@127.0.0.1|home|tester crumbshare=1
+expect to tester@127.0.0.1
+# In the Network section; Add Bookmark writes its sftp:// address.
+wait-for 3000 sides=^Places|Home|Trash|^Drives|File_System|^Network|tester@127.0.0.1|open_on_127.0.0.1|priv_on_127.0.0.1|pub_on_127.0.0.1|~Priv
+key ctrl-d
+wait-for 3000 canbm=0
+sh grep -qx "sftp://tester@127.0.0.1:@SPORT@/home/tester tester" "$OFX_ROOT/config/gtk-3.0/bookmarks"
+# A host ssh doesn't know (known_hosts emptied for it): refused, said how to check its key; nothing
+# trusted.
+sh cp "$OFX_ROOT/ssh/known_hosts" "$OFX_ROOT/ssh/known_hosts.keep" && : > "$OFX_ROOT/ssh/known_hosts"
+key ctrl-l
+type sftp://other@127.0.0.1:@SPORT@/
+key enter
+wait-for 8000 conn=0 login=0 statusbad=1 status=127.0.0.1
+expect isn't a known host: connect once with ssh to check its key, then try again
+sh [ ! -s "$OFX_ROOT/ssh/known_hosts" ] && mv "$OFX_ROOT/ssh/known_hosts.keep" "$OFX_ROOT/ssh/known_hosts"
+# A key the agent doesn't hold: its passphrase, the only field. (The password's connection unmounted
+# first: else the address is mounted already, and gone to with no question.)
+key alt-home
+sh "$OFX_ROOT/giotest" mount -u "sftp://tester@127.0.0.1:@SPORT@/"
+wait-for 5000 sides=^Places|Home|Trash|^Drives|File_System|^Network|open_on_127.0.0.1|priv_on_127.0.0.1|pub_on_127.0.0.1|~Priv|~tester
+sh printf 'IdentityFile %s\nIdentitiesOnly yes\n' "$OFX_ROOT/ssh/id" > "$OFX_ROOT/ssh/config"
+key ctrl-l
+type sftp://tester@127.0.0.1:@SPORT@/home/tester/sub
+key enter
+wait-for 8000 login=1 loginkey=1 loginat=2
+type keypass
+key enter
+wait-for 8000 conn=0 login=0 faron=1 farloading=0 n=20 sel=f1 statusbad=0
+sh printf 'IdentityFile none\nIdentitiesOnly yes\n' > "$OFX_ROOT/ssh/config"
+quit

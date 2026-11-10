@@ -1,6 +1,6 @@
-// Connect to Server (F16 step 4): an address typed as smb://[user@]server[:port]/share[/folder]
-// or nfs://server/path (step 6), and what ofx reads of `gio mount` and `gio info` as they run
-// (gui/connect.c runs them). Measured on the test Samba (tests/net, 2026-11-09):
+// Connect to Server (F16 step 4): an address typed as smb://[user@]server[:port]/share[/folder],
+// nfs://server/path (step 6) or sftp://[user@]server[:port][/path] (step 7c), and what ofx reads of
+// `gio mount` and `gio info` as they run (gui/connect.c runs them). Measured on the test Samba (tests/net, 2026-11-09):
 // - gio asks on its output, a line at a time and with no newline after the question: a header
 //   ("Authentication Required", then "Enter user and password for share “priv” on “host”:"), then
 //   "User [default]: ", "Domain [default]: ", "Password: " (only those gvfs needs: a user in the
@@ -15,12 +15,21 @@
 // "nfs:host=h,prefix=%2Fsrv%2Fnfs"); a wrong path, an unknown server or none answering all fail as
 // "Mount point does not exist". gvfs-nfs takes no user and no port (it asks the server's
 // portmapper, on 111).
+// And on a test sshd (step 7c, 2026-11-10): gvfs-sftp runs ssh, which reads the user's own ~/.ssh
+// (its config, known_hosts, keys; OpenSSH takes the home folder from the user database, not HOME)
+// and the agent. It asks "Enter password for “u” on “h”:" then "Password: " (no domain; "User: "
+// first, with no default, when the address names no user), or "Enter passphrase for secure key for
+// …" then "Password: " for a key the agent doesn't hold. A host not in known_hosts: "Identity
+// Verification Failed … [1] Log In Anyway [2] Cancel Login / Choice: ", with no fingerprint shown
+// ("???"); ofx answers Cancel and says how to check the key (Michael, 2026-11-10). gvfs passes ssh
+// NoHostAuthenticationForLocalhost, so 127.0.0.1 is never asked about.
 // Included by fs.c.
 
 #include <ctype.h>
 #include <strings.h>
 
-typedef enum { CONNECT_NOT, CONNECT_OK, CONNECT_BAD } ConnectUri;
+// CONNECT_SERVER: an SMB server's address alone, whose shares Connect lists (step 7a).
+typedef enum { CONNECT_NOT, CONNECT_OK, CONNECT_BAD, CONNECT_SERVER } ConnectUri;
 
 static bool connect_ieq(Str a, const char *b)
 {
@@ -31,31 +40,34 @@ static bool connect_ieq(Str a, const char *b)
     return true;
 }
 
-// text as an address to connect to: CONNECT_NOT when it isn't one (no "smb://" or "nfs://": a
-// path), CONNECT_BAD with why when it is one ofx won't take, else CONNECT_OK with the address
-// (trimmed) in uri, and the server and share in host and share for what ofx says ("priv on
+// text as an address to connect to: CONNECT_NOT when it isn't one (no "smb://", "nfs://" or
+// "sftp://": a path), CONNECT_BAD with why when it is one ofx won't take, else CONNECT_OK with the
+// address (trimmed) in uri, and the server and share in host and share for what ofx says ("priv on
 // 127.0.0.1", as gvfs names it; an NFS path's last name, as gvfs names an export: "nfs" of
-// /srv/nfs). An SMB server's address alone (smb://nas, smb://nas:445/) leaves share "": Connect
-// lists its shares (step 7a). A password in the address is refused: it would be in gio's arguments, which any process
-// can read.
+// /srv/nfs). An SMB server's address alone (smb://nas, smb://nas:445/) is CONNECT_SERVER, share "":
+// Connect lists its shares (step 7a). An SFTP address (step 7c) leaves share "" and names its host
+// as gvfs does, "user@host" when it has a user. A password in the address is refused: it would be
+// in gio's arguments, which any process can read.
 static ConnectUri connect_uri(Str text, char *uri, size_t ucap, char *host, size_t hcap, char *share, size_t scap, char *why, size_t wcap)
 {
     text = str_trim(text);
     if (text.len < 6) return CONNECT_NOT;
-    bool nfs = connect_ieq(str_cut(text, 0, 6), "nfs://");
-    if (!nfs && !connect_ieq(str_cut(text, 0, 6), "smb://")) return CONNECT_NOT;
-    const char *kind = nfs ? "nfs" : "smb";
+    bool nfs = connect_ieq(str_cut(text, 0, 6), "nfs://"), sftp = text.len >= 7 && connect_ieq(str_cut(text, 0, 7), "sftp://");
+    if (!nfs && !sftp && !connect_ieq(str_cut(text, 0, 6), "smb://")) return CONNECT_NOT;
+    const char *kind = nfs ? "nfs" : sftp ? "sftp" : "smb";
     for (isize i = 0; i < text.len; i++)
         if ((unsigned char)text.p[i] < 0x20 || text.p[i] == 0x7F) return snprintf(why, wcap, "An address has no control characters"), CONNECT_BAD;
     if ((size_t)text.len >= ucap) return snprintf(why, wcap, "The address is too long"), CONNECT_BAD;
-    Str rest = str_cut(text, 6, text.len);
+    Str rest = str_cut(text, sftp ? 7 : 6, text.len);
     isize slash = str_find(rest, '/');
     Str auth = slash < 0 ? rest : str_cut(rest, 0, slash);
     Str path = slash < 0 ? STR_EMPTY : str_cut(rest, slash + 1, rest.len);
     isize at = str_find_last(auth, '@');
+    Str user = STR_EMPTY;
     if (at >= 0) {
         if (str_find(str_cut(auth, 0, at), ':') >= 0) return snprintf(why, wcap, "No password in the address: ofx asks for it"), CONNECT_BAD;
         if (nfs) return snprintf(why, wcap, "No user in an NFS address: the server goes by your user id"), CONNECT_BAD;
+        user = str_cut(auth, 0, at);
         auth = str_cut(auth, at + 1, auth.len);
     }
     isize colon = str_find_last(auth, ':');
@@ -67,7 +79,15 @@ static ConnectUri connect_uri(Str text, char *uri, size_t ucap, char *host, size
         for (isize i = 0; i < port.len; i++) digits = digits && port.p[i] >= '0' && port.p[i] <= '9';
         if (!digits) return snprintf(why, wcap, "Not a port: %.*s", STR_ARG(port)), CONNECT_BAD;
     }
-    if (name.len == 0) return snprintf(why, wcap, "Name a server: %s://server/%s", kind, nfs ? "folder" : "share"), CONNECT_BAD;
+    if (name.len == 0) return snprintf(why, wcap, "Name a server: %s://server/%s", kind, nfs ? "folder" : sftp ? "" : "share"), CONNECT_BAD;
+    if (sftp) {   // (a path or none: the server's root)
+        if ((size_t)(user.len + 1 + name.len) >= hcap) return snprintf(why, wcap, "The address is too long"), CONNECT_BAD;
+        snprintf(uri, ucap, "%.*s", STR_ARG(text));
+        if (user.len) snprintf(host, hcap, "%.*s@%.*s", STR_ARG(user), STR_ARG(name));
+        else snprintf(host, hcap, "%.*s", STR_ARG(name));
+        if (scap) share[0] = 0;
+        return CONNECT_OK;
+    }
     Str sh;
     if (nfs) {   // (the path's last name: "nfs" of srv/nfs/, as gvfs names an export)
         while (path.len > 0 && path.p[path.len - 1] == '/') path.len--;
@@ -83,22 +103,33 @@ static ConnectUri connect_uri(Str text, char *uri, size_t ucap, char *host, size
     snprintf(uri, ucap, "%.*s", STR_ARG(text));
     snprintf(host, hcap, "%.*s", STR_ARG(name));
     snprintf(share, scap, "%.*s", STR_ARG(sh));
-    return CONNECT_OK;
+    return sh.len == 0 ? CONNECT_SERVER : CONNECT_OK;
 }
 
-typedef enum { GIO_ASK_NONE, GIO_ASK_USER, GIO_ASK_DOMAIN, GIO_ASK_PASSWORD } GioAsk;
+// GIO_ASK_KEY: the password of a key (ssh's passphrase, step 7c); GIO_ASK_CHOICE: a question with
+// numbered answers (an SFTP host not known: ofx answers Cancel).
+typedef enum { GIO_ASK_NONE, GIO_ASK_USER, GIO_ASK_DOMAIN, GIO_ASK_PASSWORD, GIO_ASK_KEY, GIO_ASK_CHOICE } GioAsk;
 
 // The question gio's output out ends on, waiting for a line (GIO_ASK_NONE: none), its default
-// (between the brackets) into def; *rounds: how many times it has asked (its headers so far).
+// (between the brackets; none without them) into def; *rounds: how many times it has asked (its
+// headers so far).
 static GioAsk gio_ask(Str out, char *def, size_t cap, int *rounds)
 {
     static const Str HEAD = S("Authentication Required");
     *rounds = 0;
+    isize last = -1;   // (the last header: what this question is about)
     for (isize i = 0; i + HEAD.len <= out.len; i++)
-        if (memcmp(out.p + i, HEAD.p, (size_t)HEAD.len) == 0) ++*rounds, i += HEAD.len - 1;
+        if (memcmp(out.p + i, HEAD.p, (size_t)HEAD.len) == 0) ++*rounds, last = i, i += HEAD.len - 1;
     if (cap) def[0] = 0;
+    if (str_ends_with(out, S("\nChoice: "))) return GIO_ASK_CHOICE;
     if (*rounds == 0) return GIO_ASK_NONE;
-    if (str_ends_with(out, S("Password: "))) return GIO_ASK_PASSWORD;
+    if (str_ends_with(out, S("Password: "))) {
+        Str about = str_cut(out, last, out.len);
+        for (isize i = 0; i + 10 <= about.len; i++)
+            if (memcmp(about.p + i, "passphrase", 10) == 0) return GIO_ASK_KEY;
+        return GIO_ASK_PASSWORD;
+    }
+    if (str_ends_with(out, S("\nUser: "))) return GIO_ASK_USER;   // (sftp's: no default)
     if (!str_ends_with(out, S("]: "))) return GIO_ASK_NONE;
     isize nl = str_find_last(out, '\n');
     Str line = str_cut(out, nl + 1, out.len - 3);   // ("… User [guest" of "… User [guest]: ")
@@ -335,13 +366,20 @@ static void gvfs_share_label(Str name, char *out, size_t cap)
     else snprintf(out, cap, "%.*s", STR_ARG(name));
 }
 
-// The address of a folder in an SMB share or NFS export gvfs mounted (Add Bookmark there writes it,
+// The address of a folder in an SMB share, NFS export or SFTP server gvfs mounted (Add Bookmark there writes it,
 // as Nautilus does, not the FUSE folder's path): name its share's folder's name, rest the path below
 // that ("" or "/sub/x"). smb://[dom;user@]server[:port]/share/rest or nfs://server/prefix/rest, the
 // path escaped as a URI's; false for another kind of share or one that doesn't fit.
 static bool gvfs_share_uri(Str name, const char *rest, char *out, size_t cap)
 {
     char server[256], share[256], port[16], user[128], domain[128], path[PATH_MAX], esc[PATH_MAX * 3 + 8];
+    if (str_starts_with(name, S("sftp:"))) {   // (sftp://[user@]host[:port]/path: the folder's path from the server's root)
+        if (!gvfs_key(name, "host", server, sizeof server)) return false;
+        bool hp = gvfs_key(name, "port", port, sizeof port), hu = gvfs_key(name, "user", user, sizeof user);
+        if (snprintf(path, sizeof path, "%s", rest[0] ? rest : "/") >= (int)sizeof path || !percent_encode(str_from_c(path), "!$&'()*+,=@:/", esc, sizeof esc)) return false;
+        int n = snprintf(out, cap, "sftp://%s%s%s%s%s%s", hu ? user : "", hu ? "@" : "", server, hp ? ":" : "", hp ? port : "", esc);
+        return n > 0 && (size_t)n < cap;
+    }
     if (str_starts_with(name, S("nfs:"))) {
         if (!gvfs_key(name, "host", server, sizeof server) || !gvfs_key(name, "prefix", path, sizeof path) || path[0] != '/') return false;
         size_t pl = strlen(path);

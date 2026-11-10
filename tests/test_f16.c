@@ -644,9 +644,19 @@ static void test_connect_uri(void)
     CHECK(CU("smb://dom;michael@nas:445/My Share") == CONNECT_OK && strcmp(host, "nas") == 0 && strcmp(share, "My Share") == 0);
     CHECK(CU("smb://michael:secret@nas/home") == CONNECT_BAD && strstr(why, "No password") && !strstr(why, "secret"));
     // A server's address alone (step 7a): its shares listed; a share named empty isn't one.
-    CHECK(CU("smb://nas") == CONNECT_OK && strcmp(host, "nas") == 0 && share[0] == 0 && strcmp(uri, "smb://nas") == 0);
-    CHECK(CU("smb://nas:445/") == CONNECT_OK && strcmp(host, "nas") == 0 && share[0] == 0);
-    CHECK(CU("smb://me@nas/") == CONNECT_OK && share[0] == 0);
+    CHECK(CU("smb://nas") == CONNECT_SERVER && strcmp(host, "nas") == 0 && share[0] == 0 && strcmp(uri, "smb://nas") == 0);
+    CHECK(CU("smb://nas:445/") == CONNECT_SERVER && strcmp(host, "nas") == 0 && share[0] == 0);
+    CHECK(CU("smb://me@nas/") == CONNECT_SERVER && share[0] == 0);
+    // SFTP (step 7c): a user and a port taken, a path or none; named "user@host" (gvfs's); no
+    // password; not a server's shares.
+    CHECK(CU("sftp://me@box:2020/home/me") == CONNECT_OK && strcmp(uri, "sftp://me@box:2020/home/me") == 0 && strcmp(host, "me@box") == 0 && share[0] == 0);
+    CHECK(CU(" SFTP://box ") == CONNECT_OK && strcmp(uri, "SFTP://box") == 0 && strcmp(host, "box") == 0 && share[0] == 0);
+    CHECK(CU("sftp://box/") == CONNECT_OK && strcmp(host, "box") == 0);
+    CHECK(CU("sftp://me:pw@box/") == CONNECT_BAD && strstr(why, "No password") && !strstr(why, "pw"));
+    CHECK(CU("sftp:///x") == CONNECT_BAD && strcmp(why, "Name a server: sftp://server/") == 0);
+    CHECK(CU("sftp://box:x/") == CONNECT_BAD && strstr(why, "Not a port: x"));
+    CHECK(CU("sftp://0123456789012345678901234567890123@b/") == CONNECT_BAD && strstr(why, "too long"));   // (user@host past what host holds)
+    CHECK(CU("sftp:/box") == CONNECT_NOT && CU("sftpx://box") == CONNECT_NOT);
     CHECK(CU("smb://nas//x") == CONNECT_BAD && strstr(why, "Name a share on nas"));
     CHECK(CU("smb://nas:445//") == CONNECT_BAD && strstr(why, "smb://nas:445/share"));
     CHECK(CU("smb:///pub") == CONNECT_BAD && strstr(why, "Name a server"));
@@ -704,6 +714,15 @@ static void test_gio_ask(void)
     char tiny[4];
     CHECK(gio_ask(S("Authentication Required\nUser [michael]: "), tiny, sizeof tiny, &r) == GIO_ASK_USER && strcmp(tiny, "mic") == 0);
     CHECK(gio_ask(S("Authentication RequiredAuthentication Required\nPassword: "), d, sizeof d, &r) == GIO_ASK_PASSWORD && r == 2);
+    // SFTP (step 7c, measured on the test sshd and Michael's laptop): no domain; "User: " with no
+    // default; a key's passphrase; the host-key question (numbered answers).
+    CHECK(gio_ask(S("Authentication Required\nEnter user and password for \xe2\x80\x9c" "127.0.0.1\xe2\x80\x9d:\nUser: "), d, sizeof d, &r) == GIO_ASK_USER && d[0] == 0 && r == 1);
+    CHECK(gio_ask(S("Authentication Required\nEnter user and password for \xe2\x80\x9ch\xe2\x80\x9d:\nUser: Password: "), d, sizeof d, &r) == GIO_ASK_PASSWORD);
+    CHECK(gio_ask(S("Authentication Required\nEnter passphrase for secure key for \xe2\x80\x9cm\xe2\x80\x9d on \xe2\x80\x9ch\xe2\x80\x9d:\nPassword: "), d, sizeof d, &r) == GIO_ASK_KEY && r == 1);
+    CHECK(gio_ask(S("Authentication Required\nEnter passphrase for secure key for \xe2\x80\x9cm\xe2\x80\x9d on \xe2\x80\x9ch\xe2\x80\x9d:\nPassword: \nAuthentication Required\nEnter password for \xe2\x80\x9cm\xe2\x80\x9d on \xe2\x80\x9ch\xe2\x80\x9d:\nPassword: "), d, sizeof d, &r) == GIO_ASK_PASSWORD && r == 2);   // (the last question's header decides)
+    CHECK(gio_ask(S("Identity Verification Failed\nVerifying the identity of \xe2\x80\x9ch\xe2\x80\x9d failed\n[1] Log In Anyway\n[2] Cancel Login\nChoice: "), d, sizeof d, &r) == GIO_ASK_CHOICE && r == 0);
+    CHECK(gio_ask(S("Authentication Required\nNameUser: "), d, sizeof d, &r) == GIO_ASK_NONE);   // (a label ending in User isn't "User: ")
+    CHECK(gio_ask(S("Choice: "), d, sizeof d, &r) == GIO_ASK_NONE);   // (only after a line of its own)
 }
 
 static void test_gio_why(void)
@@ -780,6 +799,23 @@ static void test_login_keys(void)
     CHECK(ui_login_event(&u, alt_g, STR_EMPTY).kind == UA_LOGIN_GUEST && u.panel == UI_PANEL_NONE);
     u.panel = UI_PANEL_LOGIN;
     CHECK(ui_login_event(&u, ev_key(UK_ESC), STR_EMPTY).kind == UA_LOGIN_CANCEL && u.panel == UI_PANEL_NONE);
+    // An SFTP server's (step 7c): no domain (Tab and Up skip it), no guest (Alt+G, the button); a
+    // key's passphrase: the password alone.
+    u.panel = UI_PANEL_LOGIN, u.login_no_user = false, u.login_ssh = true, u.login_at = UI_LOGIN_USER;
+    ui_login_event(&u, ev_key(UK_TAB), STR_EMPTY);
+    CHECK(u.login_at == UI_LOGIN_PASS && ui_login_shown(&u, UI_LOGIN_USER) && !ui_login_shown(&u, UI_LOGIN_DOMAIN));
+    ui_login_event(&u, ev_key(UK_UP), STR_EMPTY);
+    CHECK(u.login_at == UI_LOGIN_USER);
+    CHECK(ui_login_event(&u, alt_g, STR_EMPTY).kind == UA_NONE && u.panel == UI_PANEL_LOGIN);
+    UiInput gin = ui_input_none();
+    gin.modal = UI_MODAL_GUEST;
+    UiAction ga = { 0 };
+    ui_handle_panels(&u, (UiNames){ 0 }, &gin, UI_ON_LOGIN, false, &ga);
+    CHECK(ga.kind != UA_LOGIN_GUEST && u.panel == UI_PANEL_LOGIN);
+    u.login_key = true, u.login_at = UI_LOGIN_PASS;
+    ui_login_event(&u, ev_key(UK_TAB), STR_EMPTY);
+    CHECK(u.login_at == UI_LOGIN_PASS && !ui_login_shown(&u, UI_LOGIN_USER) && !ui_login_shown(&u, UI_LOGIN_DOMAIN) && ui_login_shown(&u, UI_LOGIN_PASS));
+    u.login_ssh = u.login_key = false;
     // By the pointer: a field takes the keys (not the user's when there is none); the buttons answer.
     u.panel = UI_PANEL_LOGIN, u.login_no_user = false;
     UiInput in = ui_input_none();
@@ -848,7 +884,8 @@ static void test_places_net(void)
     places_load_net(&ta, &pl, at("places/netbm"), S("/run/u/gvfs/smb-share:server=nas,share=pub\nrel\n\n/run/u/gvfs/sftp:host=box,user=me\n/run/u/gvfs/smb-share:server=nas,share=pub\n"), SV, 2);
     const char *want[][3] = {
         { "", "Network", "h" }, { "/run/u/gvfs/smb-share:server=nas,share=pub", "pub on nas", "s" }, { "/run/u/gvfs/sftp:host=box,user=me", "me@box", "s" },
-        { "smb://nas/pub/sub", "Music", "b" }, { "smb://nas/home", "home on nas", "b" }, { "smb://nas", "Server", "b" },   // (a server's own, step 7a)
+        { "smb://nas/pub/sub", "Music", "b" }, { "smb://nas/home", "home on nas", "b" }, { "sftp://box/x", "box", "b" },   // (an sftp:// one, step 7c: by its host)
+        { "smb://nas", "Server", "b" },   // (a server's own, step 7a)
         { "nfs://box/srv/data", "data on box", "b" }, { "smb://box/", "box", "b" },   // (an nfs:// one too, step 6; with a port it isn't one; a server's without a label: its name)
         { "smb://box", "BOX", "v" }, { "smb://yoga.local", "Yoga", "v" },   // (smb://box/ is another address: both kept)
     };
@@ -944,7 +981,7 @@ static void test_avahi_servers(void)
     CHECK(strcmp(u, "a\\b.c\\") == 0);
     // and Connect takes a server's address
     char uri[64], host[32], share[32], why[64];
-    CHECK(connect_uri(S("smb://nas-1.local:4445"), uri, sizeof uri, host, sizeof host, share, sizeof share, why, sizeof why) == CONNECT_OK && share[0] == 0 && strcmp(host, "nas-1.local") == 0);
+    CHECK(connect_uri(S("smb://nas-1.local:4445"), uri, sizeof uri, host, sizeof host, share, sizeof share, why, sizeof why) == CONNECT_SERVER && share[0] == 0 && strcmp(host, "nas-1.local") == 0);
 }
 
 // The shares panel (step 7a): the branches panel's picker over a server's shares.
@@ -1002,8 +1039,12 @@ static void test_gvfs_uri(void)
     CHECK(gvfs_share_uri(S("smb-share:server=nas,share=My%20Docs"), "/a b/c", u, sizeof u) && strcmp(u, "smb://nas/My%20Docs/a%20b/c") == 0);
     CHECK(gvfs_share_uri(S("smb-share:domain=W,server=nas,share=h,user=m"), "", u, sizeof u) && strcmp(u, "smb://W;m@nas/h") == 0);
     CHECK(gvfs_share_uri(S("smb-share:domain=W,server=nas,share=h"), "", u, sizeof u) && strcmp(u, "smb://nas/h") == 0);   // (a domain without a user: none)
-    CHECK(!gvfs_share_uri(S("sftp:host=box,user=me"), "", u, sizeof u) && !gvfs_share_uri(S("dav:server=a,share=b"), "", u, sizeof u));
+    CHECK(gvfs_share_uri(S("sftp:host=box,user=me"), "", u, sizeof u) && strcmp(u, "sftp://me@box/") == 0 && !gvfs_share_uri(S("dav:server=a,share=b"), "", u, sizeof u));   // (sftp: step 7c)
     CHECK(!gvfs_share_uri(S("smb-share:server=nas"), "", u, sizeof u) && !gvfs_share_uri(S("smb-share:share=x"), "", u, sizeof u));
+    // SFTP (step 7c): sftp://[user@]host[:port]/path, the path from the server's root
+    CHECK(gvfs_share_uri(S("sftp:host=127.0.0.1,port=38165,user=tester"), "", u, sizeof u) && strcmp(u, "sftp://tester@127.0.0.1:38165/") == 0);
+    CHECK(gvfs_share_uri(S("sftp:host=box"), "/home/me/a b", u, sizeof u) && strcmp(u, "sftp://box/home/me/a%20b") == 0);
+    CHECK(!gvfs_share_uri(S("sftp:user=me"), "", u, sizeof u));
     // NFS (step 6): nfs://host/prefix/rest
     CHECK(gvfs_share_uri(S("nfs:host=127.0.0.1,prefix=%2Fsrv%2Fnfs"), "", u, sizeof u) && strcmp(u, "nfs://127.0.0.1/srv/nfs") == 0);
     CHECK(gvfs_share_uri(S("nfs:host=nas,prefix=%2Fsrv%2Fnfs"), "/a b/c", u, sizeof u) && strcmp(u, "nfs://nas/srv/nfs/a%20b/c") == 0);

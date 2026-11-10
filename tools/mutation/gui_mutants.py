@@ -1100,7 +1100,7 @@ MUTANTS = [
     # F16 step 4: Connect to Server (gui/connect.c), against the test Samba
     ('gui/connect.c', '        if (rounds > answered) {   // gio asks (again): the user answers', '        if (answered == 0) {', 'net'),
     ('gui/connect.c', '            answered = rounds;', '', 'net'),
-    ('gui/connect.c', '            cn.ask_user = k == GIO_ASK_USER, cn.again = rounds > 1;', '            cn.ask_user = k == GIO_ASK_USER, cn.again = false;', 'net'),
+    ('gui/connect.c', '            cn.ask_user = k == GIO_ASK_USER, cn.again = rounds > 1,', '            cn.ask_user = k == GIO_ASK_USER, cn.again = false,', 'net'), # (retargeted, step 7c)
     ('gui/connect.c', '            snprintf(cn.def_user, sizeof cn.def_user, "%s", k == GIO_ASK_USER ? def : "");', '', 'net'),
     ('gui/connect.c', '        cn_line(in[1], k == GIO_ASK_USER ? user : k == GIO_ASK_DOMAIN ? domain : pass);', '        cn_line(in[1], k == GIO_ASK_USER ? user : k == GIO_ASK_DOMAIN ? pass : domain);', 'net'),
     # (Dropped, a race no script can force: Cancel and Guest killing gio, not closing its input. The
@@ -1157,7 +1157,7 @@ MUTANTS = [
     # for it. The mark when one is held is net's sharesheld=1.)
     # F16 step 7a: a server's shares
     ('gui/connect.c', ' || u->menu_on || u->focus == UI_FOCUS_EDIT || ui_on_top(u) != UI_ON_NONE) return false;', ' || u->menu_on || ui_on_top(u) != UI_ON_NONE) return false;', 'f16'),
-    ('gui/connect.c', '    return cn.share[0] ? cn_folder(path, pcap, why, cap) : cn_list(why, cap);', '    return cn_folder(path, pcap, why, cap);', 'f16'),
+    ('gui/connect.c', '    return cn.browse ? cn_list(why, cap) : cn_folder(path, pcap, why, cap);', '    return cn_folder(path, pcap, why, cap);', 'f16'), # (retargeted, step 7c)
     ('gui/connect.c', '    if (n == 0 && gio_why(str_from_c(out), why, cap)) return false;', '', 'f16'),
     ('gui/connect.c', '        if (shp.n == 0) return set_status(false, "%s lists no shares", cn_name()), true;', '', 'f16'),
     ('gui/connect.c', '    if (!server_share_uri(shp.server, shp.name[i], uri, sizeof uri))', '    if (!server_share_uri("smb://nas", shp.name[i], uri, sizeof uri))', 'net'),
@@ -1176,4 +1176,13 @@ MUTANTS = [
     ('gui/folder.c', '    int nservers = disco_servers(servers);', '    int nservers = 0; (void)disco_servers;', 'f16'),
     # (Dropped, drawing only: the dim label of a network bookmark or a server found. No state word
     # reads a colour; f16v's shot shows it, checked by eye on 2026-11-10.)
+    # F16 step 7c: SFTP
+    ('gui/connect.c', ', cn.ssh = strncasecmp(uri, "sftp:", 5) == 0,', ', cn.ssh = false,', 'net'),
+    ('gui/connect.c', '            cn.unknown = true;\n', '', 'net'),
+    ('gui/connect.c', '            cn_line(in[1], "2");\n            close(in[1]), in[1] = -1;', '            cn_line(in[1], "1");\n            close(in[1]), in[1] = -1;', 'net'),
+    ('gui/connect.c', ', cn.again = rounds > 1, cn.key = k == GIO_ASK_KEY;', ', cn.again = rounds > 1, cn.key = false;', 'net'),
+    ('gui/connect.c', ', u->login_ssh = cn.ssh, u->login_key = cn.key;', ', u->login_ssh = false, u->login_key = cn.key;', 'net'),
+    ('gui/connect.c', '    if (!ok && unknown) {   // (the host alone', '    if (false) {   // (the host alone', 'net'),
+    ('gui/connect.c', '        return set_status(true, "%s isn\'t a known host: connect once with ssh to check its key, then try again", h ? h + 1 : cn.host), true;', '        return set_status(true, "%s isn\'t a known host: connect once with ssh to check its key, then try again", cn.host), true;', 'net'),
+    ('gui/connect.c', '        cn.browse = c == CONNECT_SERVER,', '        cn.browse = false,', 'f16'),
 ]

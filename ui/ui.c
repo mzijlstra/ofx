@@ -912,6 +912,9 @@ typedef struct {
     UI_TEXT(256) login_pass;
     int    login_at;
     bool   login_no_user, login_again;
+    // An SFTP server's (F16 step 7c): no domain and no guest; login_key: the password is a key's
+    // passphrase (gio asks for nothing else then).
+    bool   login_ssh, login_key;
 } Ui;
 
 // The question or panel on top: the one that takes the keys and the pointer, and the one gui/

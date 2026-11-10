@@ -133,7 +133,11 @@ shared state. Every test runs against fakes and scratch folders. Keep it that wa
   **NFS** (F16 step 6) needs a server on port 111, which takes root:
   `sudo tests/net/nfs-server.sh start` runs one (`ofx-test-nfs`, nfs-ganesha, 127.0.0.1 only,
   its export a tmpfs) until `stop`. The NFS checks (test-net's, the net group's netn) skip
-  without it. They write only their own files there, and remove them. The net group's tree is a
+  without it. They write only their own files there, and remove them.
+  **SFTP** (F16 step 7c): a rootless sshd container (`ofx-test-sftp-<pid>`, tests/net/sftp). gvfs's
+  ssh reads the user's own `~/.ssh` (OpenSSH takes the home from the user database, not HOME), so
+  the private session's `ssh` is lib.sh's wrapper: the test's own config, known_hosts and keys.
+  Never run an SFTP test without it: a new host would be written to your known_hosts. The net group's tree is a
   short folder of its own, `/tmp/ofx-gnet-*` (`<base>/net` links to it), removed once the group
   passes and kept, named, when it fails: remove it once read.
 - **A far folder** (F16: a network share, any FUSE mount, by the mount list) is read by `ofx-list`,

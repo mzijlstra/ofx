@@ -15,6 +15,11 @@ mkdir -p "$S"
 trap net_end EXIT
 trap 'exit 130' INT TERM
 net_server "$S" || exit 1
+# SFTP (F16 step 7c): the test sshd, its host keys known; a key with a passphrase (keypass) the
+# server takes.
+net_sftp_server "$S" || exit 1
+ssh-keygen -q -t ed25519 -N keypass -C ofx-test -f "$S/ssh/id" || exit 1
+net_pm exec -i -u tester "$NET_SC" sh -c 'cat >> /home/tester/.ssh/authorized_keys' < "$S/ssh/id.pub" || exit 1
 
 # Inside the private session.
 cat > "$S/checks.sh" <<'EOF'
@@ -83,6 +88,31 @@ if [ -e "$S/nfs" ]; then
     check "nfs: a path not exported" sh -c "timeout 20 gio mount nfs://127.0.0.1/nope < /dev/null 2>&1 | grep -q 'Mount point does not exist'"
     check "nfs: unmount by its folder" timeout 20 gio mount -u "$NFS"
 fi
+# SFTP (F16 step 7c), through the session's ssh (lib.sh: its own config and known_hosts, never
+# ~/.ssh). A known host and a password; no user in the address (asked, with no default); a host
+# not known (asked whether to log in anyway: ofx answers Cancel); a key's passphrase.
+SF=sftp://tester@127.0.0.1:$SPORT
+SD="$G/sftp:host=127.0.0.1,port=$SPORT,user=tester"
+# (gio's answer read whole, then searched: a grep -q that leaves early would take gio down mid-mount)
+mnt() { out=$(printf "$1" | timeout 20 gio mount "$2" 2>&1); case $out in *"$3"*) return 0 ;; esac; echo "$out" >&2; return 1; }
+check "sftp: a password" mnt 'secret\n' "$SF/" 'Enter password for'
+check "sftp: its FUSE path" test -d "$SD"
+check "sftp: its files" test "$(ls "$SD/home/tester/sub" 2>/dev/null | wc -l)" -eq 20
+check "sftp: a read" grep -qx hi "$SD/home/tester/hello.txt"
+check "sftp: a write" sh -c "echo new > '$SD/home/tester/w.txt' && grep -qx new '$SD/home/tester/w.txt' && rm '$SD/home/tester/w.txt'"
+check "sftp: gio info names a folder in it" sh -c "gio info '$SF/home/tester' 2> /dev/null | grep -qxF 'local path: $SD/home/tester'"
+check "sftp: unmount" timeout 20 gio mount -u "$SF/"
+check "sftp: no user: User asked, no default" mnt 'tester\nsecret\n' "sftp://127.0.0.1:$SPORT/" 'User: Password: '
+check "sftp: unmount it" timeout 20 gio mount -u "sftp://127.0.0.1:$SPORT/"
+cp "$S/ssh/known_hosts" "$S/ssh/known_hosts.keep" && : > "$S/ssh/known_hosts"
+check "sftp: a host not known: asked, cancelled" mnt '2\n' "sftp://other@127.0.0.1:$SPORT/" 'Identity Verification Failed'
+check "sftp: and not trusted" test ! -s "$S/ssh/known_hosts"
+mv "$S/ssh/known_hosts.keep" "$S/ssh/known_hosts"
+printf 'IdentityFile %s\nIdentitiesOnly yes\n' "$S/ssh/id" > "$S/ssh/config"
+check "sftp: a key's passphrase" mnt 'keypass\n' "$SF/" 'Enter passphrase for secure key'
+check "sftp: mounted by the key" test -d "$SD/home/tester"
+check "sftp: unmount, keyed" timeout 20 gio mount -u "$SF/"
+printf 'IdentityFile none\nIdentitiesOnly yes\n' > "$S/ssh/config"
 check "none left" test -z "$(ls "$G")"
 echo "net: $n checks, $bad failed"
 [ $bad -eq 0 ]

@@ -769,6 +769,9 @@ folder, and `thumb_far_type` keeps previews off them and off every FUSE mount. G
 - podman inside the private session needs the real `HOME` and `XDG_RUNTIME_DIR` (its storage and
   state). With the scratch ones it starts a pause process of its own.
 
+**Later list (F16):** remembering passwords in the keyring; WebDAV (`dav://`, `davs://`: Nextcloud,
+some NASes) once there's a server to test against. FTP stays out (unencrypted; SFTP covers it).
+
 **Michael's answers:**
 1. **Through gvfs:** ofx runs `gio mount` and lists the share's FUSE path as any folder. Shares
    mounted by Nemo or a GTK file chooser show up too; kernel mounts stay as they are.
@@ -1164,6 +1167,9 @@ blocks each of these for up to gvfs's 90 s. On a thread it also holds ofx's exit
          so ofx puts no query on the network on a timer. A change reads the places again.
          Without avahi-browse nothing is found and the thread ends.
        - NFS servers rarely announce themselves, and gvfs couldn't list their exports: left out.
+       - avahi-daemon caches the announcements it receives with no browser running (the review),
+         so a server that starts later shows at the next cache read. A real query every ~10
+         minutes would be insurance against a missed announcement; not done for now.
      - **Found on the way:** step 5 said network bookmarks were drawn dim; only unmounted
        drives were. Both dim now.
      - **Tests:**
@@ -1172,6 +1178,40 @@ blocks each of these for up to gvfs's 90 s. On a thread it also holds ofx's exit
        - f16v, on a stand-in avahi-browse (run-script's avahi-browse runs `OFX_TEST_AVAHI`, else
          finds nothing; under the guard discovery runs only with it): the first query, the cache
          reads adding and dropping a server, a click listing the shares, the menu's Mount.
+   - **7c, SFTP** (Michael, 2026-11-10: brought along now the test server exists; WebDAV on the
+     later list, FTP out): `sftp://[user@]server[:port][/path]` in Connect to Server.
+     - **Measured** (a test sshd in podman; Michael's laptop for the host-key question):
+       - gvfs-sftp runs ssh, which reads the user's own `~/.ssh` (config, known_hosts, keys:
+         OpenSSH takes the home from the user database, not HOME) and the agent. With the key in
+         the agent, nothing is asked.
+       - Else gio asks "Enter password for “u” on “h”:", then "Password: " (no domain). With no
+         user in the address it asks "User: " first, with no default. For a key the agent doesn't
+         hold: "Enter passphrase for secure key…", then "Password: ".
+       - **A host not in known_hosts:** "Identity Verification Failed … [1] Log In Anyway
+         [2] Cancel Login / Choice: ", the fingerprint shown as "???". Michael's call: ofx
+         answers Cancel and says "<host> isn't a known host: connect once with ssh to check its
+         key, then try again".
+       - gvfs passes ssh `NoHostAuthenticationForLocalhost`, and puts its control socket in
+         `$XDG_RUNTIME_DIR/gvfsd-sftp/<40 hex>`.
+     - **What changed:**
+       - `connect_uri` takes sftp:// (a user and a port, a path or none; named "user@host"). An
+         SMB server's address alone is its own result now (`CONNECT_SERVER`), so an SFTP address
+         without a share isn't taken for one.
+       - `gio_ask` reads "User: " with no default, a key's passphrase (`GIO_ASK_KEY`) and a
+         choice (`GIO_ASK_CHOICE`).
+       - The question has no domain and no Guest for SFTP; a passphrase is its only field.
+       - `gvfs_share_uri` gives a folder's sftp:// address; sftp:// bookmarks are listed and
+         connect.
+     - **Test isolation:** the private session's ssh is a wrapper (tests/net/lib.sh):
+       - its own config, known_hosts and keys, never `~/.ssh`;
+       - localhost checked as any host;
+       - the control socket in the bus's short folder: gvfs's passed a socket path's 107 bytes
+         under a scratch folder ("Connection failed").
+     - **Tests:**
+       - unit: the addresses, the questions, the panel's fields and Guest;
+       - test-net: a password, no user, a host not known (refused, not trusted), a key's
+         passphrase;
+       - the net group's netf: the same through the window, the Network section, Add Bookmark.
 8. **The milestone's code-health review and cleanup** (AGENTS.md "At the end of each major
    milestone"), then install.
 

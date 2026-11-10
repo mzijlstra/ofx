@@ -20,6 +20,17 @@
 #   net_end                     the container removed, the session ended (the callers' trap)
 #   net_nfs <scratch>           true when the NFS checks can run (else says why not): the NFS test
 #                               server (tests/net/nfs-server.sh, which takes root) answers
+#   net_sftp_server <scratch>   the test SSH server (tests/net/sftp) started: NET_SC, NET_SPORT; its
+#                               host keys put in <scratch>/ssh/known_hosts, as if the user had
+#                               connected once with ssh (F16 step 7c)
+#
+# ssh in the private session (gvfs-sftp runs it) is <scratch>/bin/ssh: the real one with
+# <scratch>/ssh/config alone (a test writes it: an IdentityFile, say), <scratch>/ssh/known_hosts,
+# and no keys of its own. OpenSSH reads the user's home from the user database, not HOME, so without
+# it a test would read (and on a new host write) the real ~/.ssh. It also turns gvfs's
+# NoHostAuthenticationForLocalhost off, so the server on 127.0.0.1 is checked as any host is, and
+# puts ssh's control socket in the bus's short folder: gvfs's ($XDG_RUNTIME_DIR/gvfsd-sftp/<40 hex>
+# and a suffix) passes a socket path's 107 bytes under a scratch folder ("Connection failed").
 #
 # The NFS server isn't started here: gvfs-nfs finds a server's ports only through its portmapper, on
 # 111, which takes root to publish. `sudo tests/net/nfs-server.sh start` runs one (nfs-ganesha, its
@@ -27,7 +38,7 @@
 
 NET_D=$(cd "$(dirname "${NET_LIB:-$0}")" && pwd)
 NET_REAL_HOME=$HOME NET_REAL_RT=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}
-NET_C= NET_PORT= NET_B= NET_HOLD_PID= NET_FIFO=
+NET_C= NET_PORT= NET_B= NET_HOLD_PID= NET_FIFO= NET_SC= NET_SPORT=
 
 # podman with only what it needs of the real environment: under run-script the XDG folders are the
 # run's, and podman keeps its storage and config there (XDG_DATA_HOME, XDG_CONFIG_HOME).
@@ -72,6 +83,15 @@ net_bus() {
     # (gvfsd-nfs has a file capability, so GLib ignores DBUS_SESSION_BUS_ADDRESS there and looks for
     # the bus only at $XDG_RUNTIME_DIR/bus, measured 2026-11-10)
     ln -sfn "$NET_B/bus" "$1/rt/bus"
+    mkdir -p "$1/bin" "$1/ssh"
+    chmod 700 "$1/ssh"
+    [ -e "$1/ssh/config" ] || printf 'IdentityFile none\nIdentitiesOnly yes\n' > "$1/ssh/config"
+    touch "$1/ssh/known_hosts"
+    cat > "$1/bin/ssh" <<EOF
+#!/bin/sh
+exec /usr/bin/ssh -F "$1/ssh/config" -o UserKnownHostsFile="$1/ssh/known_hosts" -o GlobalKnownHostsFile=/dev/null -o NoHostAuthenticationForLocalhost=no -o ControlPath="$NET_B/%C" "\$@"
+EOF
+    chmod +x "$1/bin/ssh"
     cat > "$1/bus.conf" <<EOF
 <!DOCTYPE busconfig PUBLIC "-//freedesktop//DTD D-Bus Bus Configuration 1.0//EN"
  "http://www.freedesktop.org/standards/dbus/1.0/busconfig.dtd">
@@ -90,8 +110,8 @@ EOF
 
 # The private session's environment, for env -i (the commands inside check they are in it).
 net_env() {
-    echo HOME="$1/home" XDG_RUNTIME_DIR="$1/rt" PATH=/usr/bin LANG=C.UTF-8 S="$1" B="$NET_B" PORT="$NET_PORT" C="$NET_C" \
-        REAL_HOME="$NET_REAL_HOME" REAL_RT="$NET_REAL_RT"
+    echo HOME="$1/home" XDG_RUNTIME_DIR="$1/rt" PATH="$1/bin:/usr/bin" LANG=C.UTF-8 S="$1" B="$NET_B" PORT="$NET_PORT" C="$NET_C" \
+        SPORT="$NET_SPORT" REAL_HOME="$NET_REAL_HOME" REAL_RT="$NET_REAL_RT"
 }
 
 net_session() {
@@ -141,11 +161,32 @@ net_nfs() {
         { echo "nfs: skipped, no NFS test server on 127.0.0.1 (sudo tests/net/nfs-server.sh start)"; return 1; }
 }
 
+net_sftp_server() {
+    tag=localhost/ofx-test-sftp:$(sha1sum < "$NET_D/sftp/Containerfile" | cut -c1-12)
+    if ! net_pm image exists "$tag"; then
+        net_pm build -q -t "$tag" "$NET_D/sftp" > /dev/null || return 1
+        net_pm images --format '{{.Repository}}:{{.Tag}}' | grep '^localhost/ofx-test-sftp:' | grep -vx "$tag" |
+            xargs -r env -i HOME="$NET_REAL_HOME" XDG_RUNTIME_DIR="$NET_REAL_RT" PATH=/usr/bin podman rmi > /dev/null 2>&1 || true
+    fi
+    NET_SC=ofx-test-sftp-$$
+    net_pm run -d --rm --name "$NET_SC" -p 127.0.0.1::22 "$tag" > /dev/null || return 1
+    NET_SPORT=$(net_pm port "$NET_SC" 22/tcp | sed 's/.*://')
+    mkdir -p "$1/ssh"
+    chmod 700 "$1/ssh"
+    for _ in $(seq 100); do   # (until sshd answers: its host keys, into the test's known_hosts)
+        ssh-keyscan -p "$NET_SPORT" -T 1 127.0.0.1 > "$1/ssh/known_hosts" 2> /dev/null && [ -s "$1/ssh/known_hosts" ] && return 0
+        sleep 0.1
+    done
+    echo "net: the SSH server didn't start" >&2
+    return 1
+}
+
 net_end() {   # (every step, whatever the one before did: it is the trap, and set -e is off in it)
     set +e
     [ -z "$NET_C" ] || net_unpause > /dev/null 2>&1   # (a paused server would hold the unmount)
     net_release
     [ -z "$NET_C" ] || net_pm rm -f -t 0 "$NET_C" > /dev/null 2>&1
+    [ -z "$NET_SC" ] || net_pm rm -f -t 0 "$NET_SC" > /dev/null 2>&1
     [ -z "$NET_B" ] || rm -rf "$NET_B"
     return 0
 }

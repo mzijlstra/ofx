@@ -374,11 +374,19 @@ static UiAction ui_login_close(Ui *u, UiActionKind k)
     return (UiAction){ k, 0, false };
 }
 
-// The keys to the next field that way (d: 1 or -1), round; the user's only when gio asks for one.
+// Whether the question shows field f: the user's only when gio asks for one, the domain not for an
+// SFTP server, only the password for a key's passphrase (F16 step 7c).
+static bool ui_login_shown(const Ui *u, int f)
+{
+    if (u->login_key) return f == UI_LOGIN_PASS;
+    return !(f == UI_LOGIN_USER && u->login_no_user) && !(f == UI_LOGIN_DOMAIN && u->login_ssh);
+}
+
+// The keys to the next field that way (d: 1 or -1), round, over the fields shown.
 static void ui_login_step(Ui *u, int d)
 {
     do u->login_at = (u->login_at + d + UI_LOGIN_FIELDS) % UI_LOGIN_FIELDS;
-    while (u->login_at == UI_LOGIN_USER && u->login_no_user);
+    while (!ui_login_shown(u, u->login_at));
 }
 
 // A key while the question is up; it takes every key. The field with the keys edits as the edit
@@ -391,7 +399,7 @@ static UiAction ui_login_event(Ui *u, UiEvent e, Str paste)
     case UK_UP: ui_login_step(u, -1); break;
     case UK_ENTER: case UK_SHIFT_ENTER: return ui_login_close(u, UA_LOGIN);
     case UK_ESC: return ui_login_close(u, UA_LOGIN_CANCEL);
-    case UK_MENU: if (e.ch == 'g') return ui_login_close(u, UA_LOGIN_GUEST); break;
+    case UK_MENU: if (e.ch == 'g' && !u->login_ssh) return ui_login_close(u, UA_LOGIN_GUEST); break;   // (no guest over ssh)
     default: break;
     }
     return UI_NONE;

@@ -31,6 +31,10 @@ static struct {
     CnPhase phase;
     bool    shown;    // the question for this ask is up (main thread's)
     char    uri[PATH_MAX], host[256], share[256];
+    bool    browse;   // a server's address alone: its shares listed (step 7a)
+    bool    ssh;      // an sftp:// one: no domain, no guest (step 7c)
+    bool    key;      // the question is a key's passphrase (step 7c)
+    bool    unknown;  // gvfs asked whether to trust a host it doesn't know: cancelled (step 7c)
     // gio's question (CN_ASK): whether it asks for a user, its default, and whether it asks again
     bool    ask_user, again;
     char    def_user[256];
@@ -48,7 +52,8 @@ static struct {
     int     asked;    // questions put, for the scripts' state line (connasked=)
 } cn = { .mu = PTHREAD_MUTEX_INITIALIZER, .cv = PTHREAD_COND_INITIALIZER, .pidfd = -1 };
 
-// "priv on 127.0.0.1", as gvfs names a share; a server's address: the server (step 7a).
+// "priv on 127.0.0.1", as gvfs names a share; a server's address: the server (step 7a); an SFTP
+// one: "user@host" (step 7c).
 static const char *cn_name(void)
 {
     return cn.share[0] ? arena_sprintf(&frame, "%s on %s", cn.share, cn.host) : arena_sprintf(&frame, "%s", cn.host);
@@ -152,9 +157,17 @@ static bool cn_mount(bool guest, char *why, size_t cap, bool *cancelled, bool *a
         GioAsk k = gio_ask((Str){ ob, (isize)on }, def, sizeof def, &rounds);
         if (k == GIO_ASK_NONE || on == handled || in[1] < 0) continue;
         handled = on;
+        if (k == GIO_ASK_CHOICE) {   // (an SFTP host ssh doesn't know: Cancel Login, said why; Michael, 2026-11-10)
+            pthread_mutex_lock(&cn.mu);
+            cn.unknown = true;
+            pthread_mutex_unlock(&cn.mu);
+            cn_line(in[1], "2");
+            close(in[1]), in[1] = -1;
+            continue;
+        }
         if (rounds > answered) {   // gio asks (again): the user answers
             pthread_mutex_lock(&cn.mu);
-            cn.ask_user = k == GIO_ASK_USER, cn.again = rounds > 1;
+            cn.ask_user = k == GIO_ASK_USER, cn.again = rounds > 1, cn.key = k == GIO_ASK_KEY;
             snprintf(cn.def_user, sizeof cn.def_user, "%s", k == GIO_ASK_USER ? def : "");
             cn.phase = CN_ASK, cn.reply = guest || cn.quit ? CN_CANCEL : CN_WAIT, cn.asked++;
             pthread_mutex_unlock(&cn.mu);
@@ -182,7 +195,7 @@ static bool cn_mount(bool guest, char *why, size_t cap, bool *cancelled, bool *a
             answered = rounds;
         }
         cn_line(in[1], k == GIO_ASK_USER ? user : k == GIO_ASK_DOMAIN ? domain : pass);
-        if (k == GIO_ASK_PASSWORD) explicit_bzero(pass, sizeof pass);
+        if (k == GIO_ASK_PASSWORD || k == GIO_ASK_KEY) explicit_bzero(pass, sizeof pass);
     }
     explicit_bzero(pass, sizeof pass);
     if (in[1] >= 0) close(in[1]);
@@ -240,7 +253,7 @@ static bool cn_list(char *why, size_t cap)
 // What follows a mount: the share's folder, or a server's shares (its address alone, step 7a).
 static bool cn_after(char *path, size_t pcap, char *why, size_t cap)
 {
-    return cn.share[0] ? cn_folder(path, pcap, why, cap) : cn_list(why, cap);
+    return cn.browse ? cn_list(why, cap) : cn_folder(path, pcap, why, cap);
 }
 
 static void *cn_thread(void *arg)
@@ -277,6 +290,7 @@ static bool connect_start(Str text)
     bool busy = cn.phase != CN_IDLE;
     if (!busy) {
         snprintf(cn.uri, sizeof cn.uri, "%s", uri), snprintf(cn.host, sizeof cn.host, "%s", host), snprintf(cn.share, sizeof cn.share, "%s", share);
+        cn.browse = c == CONNECT_SERVER, cn.ssh = strncasecmp(uri, "sftp:", 5) == 0, cn.key = cn.unknown = false;
         cn.phase = CN_RUN, cn.shown = false, cn.reply = CN_WAIT, cn.user[0] = cn.domain[0] = 0, cn.running = true;
         prctl(PR_SET_DUMPABLE, 0, 0, 0, 0);
     }
@@ -340,7 +354,7 @@ static bool connect_take(void)
             ui_line_set(ui_login_line(u, UI_LOGIN_USER), str_from_c(cn.def_user));
             ui_line_set(ui_login_line(u, UI_LOGIN_DOMAIN), STR_EMPTY);
         }
-        u->login_no_user = !cn.ask_user, u->login_again = cn.again;
+        u->login_no_user = !cn.ask_user, u->login_again = cn.again, u->login_ssh = cn.ssh, u->login_key = cn.key;
         u->login_at = cn.ask_user && u->login_user.len == 0 ? UI_LOGIN_USER : UI_LOGIN_PASS;
         u->panel = UI_PANEL_LOGIN;
         ui_edit_close(u), u->menu_on = false;
@@ -348,7 +362,7 @@ static bool connect_take(void)
         return true;
     }
     if (ph != CN_DONE) return pthread_mutex_unlock(&cn.mu), false;
-    bool ok = cn.ok, cancelled = cn.cancelled, server = !cn.share[0];
+    bool ok = cn.ok, cancelled = cn.cancelled, server = cn.browse, unknown = cn.unknown;
     if (ok && server) {   // (the shares gui/ keeps: the panel's)
         snprintf(shp.server, sizeof shp.server, "%s", cn.uri), snprintf(shp.host, sizeof shp.host, "%s", cn.host);
         shp.n = cn.nshares;
@@ -364,6 +378,10 @@ static bool connect_take(void)
     // isn't looked up first, which would miss the ones only found by broadcast; gvfs-nfs's for a
     // server unknown, not answering, or without that path, step 6)
     const char *hint = strcmp(why, "Invalid argument") == 0 ? " (is the server's name right?)" : strcmp(why, "Mount point does not exist") == 0 ? " (are the server's name and the folder right?)" : "";
+    if (!ok && unknown) {   // (the host alone: "u@h" names the login)
+        const char *h = strrchr(cn.host, '@');
+        return set_status(true, "%s isn't a known host: connect once with ssh to check its key, then try again", h ? h + 1 : cn.host), true;
+    }
     if (!ok) return set_status(true, "Can't connect to %s: %s%s", cn_name(), why[0] ? why : "no reason given", hint), true;
     if (server) {   // (a server's address: its shares to pick from, step 7a)
         if (shp.n == 0) return set_status(false, "%s lists no shares", cn_name()), true;

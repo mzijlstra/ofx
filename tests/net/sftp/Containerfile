@@ -1,0 +1,13 @@
+# ofx's test SSH server (F16 step 7c): user tester, password secret, home /home/tester (hello.txt,
+# sub/ with f1..f20); a test may add a key to its authorized_keys. Built locally from alpine (the
+# Samba image's, pinned by digest); tests/net/lib.sh starts it on 127.0.0.1 only, rootless.
+FROM docker.io/library/alpine@sha256:79ff19e9084a00eece421b2523fb93e22d730e2c0e525905de047e848e56d95f
+RUN apk add --no-cache openssh-server openssh-sftp-server && ssh-keygen -A && \
+    adduser -D tester && echo 'tester:secret' | chpasswd && \
+    mkdir -p /home/tester/sub /home/tester/.ssh && echo hi > /home/tester/hello.txt && \
+    for i in $(seq 1 20); do touch /home/tester/sub/f$i; done && \
+    touch /home/tester/.ssh/authorized_keys && chmod 700 /home/tester/.ssh && chmod 600 /home/tester/.ssh/authorized_keys && \
+    chown -R tester:tester /home/tester && \
+    printf 'PasswordAuthentication yes\nKbdInteractiveAuthentication no\nSubsystem sftp internal-sftp\n' > /etc/ssh/sshd_config.d/test.conf
+EXPOSE 22
+CMD ["/usr/sbin/sshd", "-D", "-e"]

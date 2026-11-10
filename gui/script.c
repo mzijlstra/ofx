@@ -764,6 +764,7 @@ static void script_state(char *out, size_t cap)
     sw(out, cap, &len, "conn=%d connasked=%d dumpable=%d ", (int)cn.phase, cn.asked, prctl(PR_GET_DUMPABLE, 0, 0, 0, 0));
     pthread_mutex_unlock(&cn.mu);
     char loginuser[256];
+    sw(out, cap, &len, "loginssh=%d loginkey=%d ", app.ui.login_ssh, app.ui.login_key);   // (F16 step 7c)
     sw(out, cap, &len, "login=%d loginat=%d loginagain=%d loginnouser=%d loginuser=%s loginpass=%d ", app.ui.panel == UI_PANEL_LOGIN, app.ui.login_at, app.ui.login_again,
        app.ui.login_no_user, state_word(loginuser, sizeof loginuser, (Str){ app.ui.login_user.b, app.ui.login_user.len }), app.ui.login_pass.len);
     sw(out, cap, &len, "windows=%d ", windows);

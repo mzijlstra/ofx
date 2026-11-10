@@ -2853,9 +2853,9 @@ MUTANTS += [
     ('fs/connect.c', '    if ((size_t)name.len >= hcap || (size_t)sh.len >= scap) return', '    if ((size_t)name.len >= hcap) return'),
     ('fs/connect.c', '    if ((size_t)name.len >= hcap || (size_t)sh.len >= scap) return', '    if ((size_t)sh.len >= scap) return'),
     ('fs/connect.c', '        sh = end < 0 ? path : str_cut(path, 0, end);', '        sh = path;'),   # (retargeted, step 6)
-    ('fs/connect.c', '        if (memcmp(out.p + i, HEAD.p, (size_t)HEAD.len) == 0) ++*rounds, i += HEAD.len - 1;', '        if (memcmp(out.p + i, HEAD.p, (size_t)HEAD.len) == 0) *rounds = 1, i += HEAD.len - 1;'),
+    ('fs/connect.c', '        if (memcmp(out.p + i, HEAD.p, (size_t)HEAD.len) == 0) ++*rounds, last = i, i += HEAD.len - 1;', '        if (memcmp(out.p + i, HEAD.p, (size_t)HEAD.len) == 0) *rounds = 1, last = i, i += HEAD.len - 1;'), # (retargeted, step 7c)
     ('fs/connect.c', '    if (*rounds == 0) return GIO_ASK_NONE;', ''),
-    ('fs/connect.c', '    if (str_ends_with(out, S("Password: "))) return GIO_ASK_PASSWORD;', '    if (str_ends_with(out, S("Password: "))) return GIO_ASK_USER;'),
+    ('fs/connect.c', '        return GIO_ASK_PASSWORD;\n    }', '        return GIO_ASK_USER;\n    }'), # (retargeted, step 7c)
     ('fs/connect.c', '    if (open < 1 || line.p[open - 1] != \' \') return GIO_ASK_NONE;', '    if (open < 1) return GIO_ASK_NONE;'),
     ('fs/connect.c', '    GioAsk k = str_ends_with(label, S("User")) ? GIO_ASK_USER : str_ends_with(label, S("Domain")) ? GIO_ASK_DOMAIN : GIO_ASK_NONE;', '    GioAsk k = str_ends_with(label, S("User")) ? GIO_ASK_USER : GIO_ASK_DOMAIN;'),
     ('fs/connect.c', '    if (k != GIO_ASK_NONE && cap) snprintf(def, cap, "%.*s", STR_ARG(d));', ''),
@@ -2873,18 +2873,18 @@ MUTANTS += [
     ('ui/edit.c', '    if (l.secret) return dir < 0 ? 0 : *l.len;', ''),
     ('ui/edit.c', '    l.secret = true;\n    return l;', '    return l;'),
     ('ui/edit.c', '    else if (on == UI_ON_LOGIN) l = ui_login_line(u, u->login_at);', ''),
-    ('ui/panels.c', '    while (u->login_at == UI_LOGIN_USER && u->login_no_user);', '    while (0);'),
+    ('ui/panels.c', '    while (!ui_login_shown(u, u->login_at));', '    while (0);'), # (retargeted, step 7c)
     ('ui/panels.c', '    case UK_TAB: case UK_DOWN: ui_login_step(u, 1); break;', '    case UK_DOWN: ui_login_step(u, 1); break;'),
-    ('ui/panels.c', "    case UK_MENU: if (e.ch == 'g') return ui_login_close(u, UA_LOGIN_GUEST); break;", '    case UK_MENU: return ui_login_close(u, UA_LOGIN_GUEST);'),
+    ('ui/panels.c', "    case UK_MENU: if (e.ch == 'g' && !u->login_ssh) return ui_login_close(u, UA_LOGIN_GUEST); break;", '    case UK_MENU: return ui_login_close(u, UA_LOGIN_GUEST);'), # (retargeted, step 7c)
     ('ui/panels.c', '    ui_panel_close(u, UI_PANEL_LOGIN);\n    return (UiAction){ k, 0, false };', '    return (UiAction){ k, 0, false };'),
     ('ui/handle.c', ' && !(in->login_field == UI_LOGIN_USER && u->login_no_user)) u->login_at = in->login_field;', ') u->login_at = in->login_field;'),
-    ('ui/handle.c', '        if (in->modal == UI_MODAL_GUEST) return *out = ui_login_close(u, UA_LOGIN_GUEST), true;', ''),
+    ('ui/handle.c', '        if (in->modal == UI_MODAL_GUEST && !u->login_ssh) return *out = ui_login_close(u, UA_LOGIN_GUEST), true;', ''), # (retargeted, step 7c)
     ('ui/menus.c', '        u->edit.anchor = u->edit.caret;\n        return UI_NONE;', '        return UI_NONE;'),
     # F16 step 6: nfs:// addresses, an export's name and address
-    ('fs/connect.c', '    bool nfs = connect_ieq(str_cut(text, 0, 6), "nfs://");', '    bool nfs = false;'),
+    ('fs/connect.c', '    bool nfs = connect_ieq(str_cut(text, 0, 6), "nfs://"), sftp', '    bool nfs = false, sftp'), # (retargeted, step 7c)
     ('fs/connect.c', '        if (nfs) return snprintf(why, wcap, "No user in an NFS address: the server goes by your user id"), CONNECT_BAD;\n', ''),
     ('fs/connect.c', '        if (nfs) return snprintf(why, wcap, "No port in an NFS address: gvfs asks the server\'s portmapper"), CONNECT_BAD;\n', ''),
-    ('fs/connect.c', 'Name a server: %s://server/%s", kind, nfs ? "folder" : "share")', 'Name a server: %s://server/%s", kind, "share")'),
+    ('fs/connect.c', 'kind, nfs ? "folder" : sftp ? "" : "share"', 'kind, sftp ? "" : "share"'), # (retargeted, step 7c)
     ('fs/connect.c', "        while (path.len > 0 && path.p[path.len - 1] == '/') path.len--;\n", ''),
     ('fs/connect.c', "        sh = str_cut(path, str_find_last(path, '/') + 1, path.len);", '        sh = path;'),
     ('fs/connect.c', '    if (!share && gvfs_key(name, "prefix", prefix, sizeof prefix)) {', '    if (!share && false && gvfs_key(name, "prefix", prefix, sizeof prefix)) {'),
@@ -2894,7 +2894,7 @@ MUTANTS += [
     ('fs/connect.c', ' || !gvfs_key(name, "prefix", path, sizeof path) || path[0] != \'/\') return false;', ' || !gvfs_key(name, "prefix", path, sizeof path)) return false;'),
     ('fs/connect.c', "        if (pl > 1 && path[pl - 1] == '/') path[--pl] = 0;\n", ''),
     ('fs/connect.c', "pl == 1 && rest[0] == '/' ? rest + 1 : rest)", 'rest)'),
-    ('fs/connect.c', '        return n > 0 && (size_t)n < cap;\n    }', '        return n > 0;\n    }'),
+    ('fs/connect.c', '"nfs://%s%s", server, esc);\n        return n > 0 && (size_t)n < cap;', '"nfs://%s%s", server, esc);\n        return n > 0;'), # (retargeted, step 7c)
     # F16 step 7a: a server's address, its shares, the panel
     ('fs/connect.c', '    if (sh.len == 0 && (nfs || path.len > 0)) return', '    if (sh.len == 0) return'),
     ('fs/connect.c', '    if (sh.len == 0 && (nfs || path.len > 0)) return', '    if (sh.len == 0 && nfs) return'),
@@ -2939,4 +2939,28 @@ MUTANTS += [
     ('fs/places.c', "    case PL_SERVER: names[n++] = S(\"network-server\"), names[n++] = S(\"folder-remote\"); break;", ""),
     ('fs/places.c', "    for (int i = 0; i < n; i++) places_add(pl, PL_SERVER, servers[i].addr, str_from_c(servers[i].name));", ""),
     ('fs/places.c', "pl->p[i].kind == PL_UNMOUNTED || place_connects(pl->p[i].kind)) continue;", "pl->p[i].kind == PL_UNMOUNTED) continue;"),
+    # F16 step 7c: SFTP
+    ('fs/connect.c', 'sftp = text.len >= 7 && connect_ieq(str_cut(text, 0, 7), "sftp://");', 'sftp = false;'),
+    ('fs/connect.c', '    Str rest = str_cut(text, sftp ? 7 : 6, text.len);', '    Str rest = str_cut(text, 6, text.len);'),
+    ('fs/connect.c', '        user = str_cut(auth, 0, at);\n', ''),
+    ('fs/connect.c', '        if (user.len) snprintf(host, hcap, "%.*s@%.*s", STR_ARG(user), STR_ARG(name));\n        else snprintf', '        snprintf'),
+    ('fs/connect.c', '        if ((size_t)(user.len + 1 + name.len) >= hcap) return snprintf(why, wcap, "The address is too long"), CONNECT_BAD;\n', ''),
+    ('fs/connect.c', '    return sh.len == 0 ? CONNECT_SERVER : CONNECT_OK;', '    return CONNECT_OK;'),
+    ('fs/connect.c', 'nfs ? "folder" : sftp ? "" : "share"', 'nfs ? "folder" : "share"'),
+    ('fs/connect.c', '        if (scap) share[0] = 0;\n        return CONNECT_OK;', '        return CONNECT_OK;'),
+    ('fs/connect.c', '    if (str_ends_with(out, S("\\nChoice: "))) return GIO_ASK_CHOICE;\n', ''),
+    ('fs/connect.c', '            if (memcmp(about.p + i, "passphrase", 10) == 0) return GIO_ASK_KEY;', '            if (memcmp(about.p + i, "passphrase", 10) == 0) return GIO_ASK_PASSWORD;'),
+    ('fs/connect.c', '        if (memcmp(out.p + i, HEAD.p, (size_t)HEAD.len) == 0) ++*rounds, last = i, i += HEAD.len - 1;', '        if (memcmp(out.p + i, HEAD.p, (size_t)HEAD.len) == 0) ++*rounds, i += HEAD.len - 1;'),
+    ('fs/connect.c', '    if (str_ends_with(out, S("\\nUser: "))) return GIO_ASK_USER;', ''),
+    # (Dropped from the code, shown unneeded by a surviving mutant: "User: " after a space; gio put it
+    # after a newline in every run measured.)
+    ('fs/connect.c', '    if (str_starts_with(name, S("sftp:"))) {', '    if (false) {'),
+    ('fs/connect.c', 'snprintf(path, sizeof path, "%s", rest[0] ? rest : "/")', 'snprintf(path, sizeof path, "%s", rest)'),
+    ('fs/connect.c', '"sftp://%s%s%s%s%s%s", hu ? user : "", hu ? "@" : "", server, hp ? ":" : "", hp ? port : "", esc);', '"sftp://%s%s%s%s", server, hp ? ":" : "", hp ? port : "", esc);'),
+    ('fs/connect.c', '        if (!gvfs_key(name, "host", server, sizeof server)) return false;\n        bool hp', '        gvfs_key(name, "host", server, sizeof server);\n        bool hp'),
+    ('fs/places.c', '        if (c != CONNECT_OK && c != CONNECT_SERVER) continue;', '        if (c != CONNECT_OK) continue;'),
+    ('ui/panels.c', '    if (u->login_key) return f == UI_LOGIN_PASS;\n', ''),
+    ('ui/panels.c', ' && !(f == UI_LOGIN_DOMAIN && u->login_ssh);', ';'),
+    ('ui/panels.c', "    case UK_MENU: if (e.ch == 'g' && !u->login_ssh) return", "    case UK_MENU: if (e.ch == 'g') return"),
+    ('ui/handle.c', '        if (in->modal == UI_MODAL_GUEST && !u->login_ssh) return', '        if (in->modal == UI_MODAL_GUEST) return'),
 ]

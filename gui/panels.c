@@ -516,14 +516,15 @@ static void layout_login_panel(void)
                              .floating = { .attachTo = CLAY_ATTACH_TO_ROOT, .zIndex = 20,
                                            .attachPoints = { CLAY_ATTACH_POINT_CENTER_CENTER, CLAY_ATTACH_POINT_CENTER_CENTER } } }) {
         text(fit(str_from_c(arena_sprintf(&frame, "Connect to %s", cn_name())), 430, false), cc(t->fg));
-        if (u->login_again) text(cz("That user or password was refused: try again"), cc(t->red));
+        if (u->login_key) text(cz("The key's passphrase (no agent holds it)"), cc(t->fg_dim));   // (F16 step 7c)
+        if (u->login_again) text(cz(u->login_key ? "That passphrase was refused: try again" : "That user or password was refused: try again"), cc(t->red));
         static const char *const LABEL[UI_LOGIN_FIELDS] = { "User", "Domain", "Password" };
         for (int f = 0; f < UI_LOGIN_FIELDS; f++) {
-            if (f == UI_LOGIN_USER && u->login_no_user) continue;
+            if (!ui_login_shown(u, f)) continue;
             UiLine l = ui_login_line(u, f);
             bool on = f == u->login_at;
             CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0) }, .childGap = 12, .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } } }) {
-                CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_FIXED(80), CLAY_SIZING_FIT(0) } } }) { text(cz(LABEL[f]), cc(t->fg_dim)); }
+                CLAY_AUTO_ID({ .layout = { .sizing = { CLAY_SIZING_FIXED(80), CLAY_SIZING_FIT(0) } } }) { text(cz(f == UI_LOGIN_PASS && u->login_key ? "Passphrase" : LABEL[f]), cc(t->fg_dim)); }
                 CLAY(CLAY_IDI("login-field", f), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(28) }, .padding = { 6, 6, 0, 0 },
                                                                .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
                                                    .backgroundColor = cc(t->bg), .border = { .color = on ? cc(t->accent) : rule_color(), .width = CLAY_BORDER_OUTSIDE(1) },
@@ -535,11 +536,11 @@ static void layout_login_panel(void)
                 }
             }
         }
-        text(cz("Enter connects \xC2\xB7 Alt+G as a guest \xC2\xB7 Esc cancels"), cc(t->fg_dim));
-        text(cz("ofx doesn't keep the password."), cc(t->fg_dim));
+        text(cz(u->login_ssh ? "Enter connects \xC2\xB7 Esc cancels" : "Enter connects \xC2\xB7 Alt+G as a guest \xC2\xB7 Esc cancels"), cc(t->fg_dim));
+        text(cz(u->login_key ? "ofx doesn't keep the passphrase." : "ofx doesn't keep the password."), cc(t->fg_dim));
         MODAL_ROW {
             modal_button(UI_MODAL_NO, "Cancel", false, false);
-            modal_button(UI_MODAL_GUEST, "Guest", false, false);
+            if (!u->login_ssh) modal_button(UI_MODAL_GUEST, "Guest", false, false);   // (no guest over ssh, step 7c)
             modal_button(UI_MODAL_YES, "Connect", true, false);
         }
     }
