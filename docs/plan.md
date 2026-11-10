@@ -1073,6 +1073,15 @@ blocks each of these for up to gvfs's 90 s. On a thread it also holds ofx's exit
        exist": said with a hint ("are the server's name and the folder right?").
      - A user or a port in the address is ignored by gvfs-nfs, so ofx refuses both and says why.
      - The EIO gap after a quick remount (step 5's) holds for NFS too.
+     - **A server that stops answering** (Michael paused the container for about 6 minutes,
+       2026-11-10, at the review's ask):
+       - a `stat` and an `ls` in the export waited the whole 6.4 minutes;
+       - both returned as the server came back, with their right answers (not found, the
+         listing).
+       - So gvfs-nfs (libnfs) has no timeout of its own, unlike gvfs-smb's 20 s.
+       - For ofx: the window never waits; a far listing's child is held until the server
+         answers, and that export reads as not answering meanwhile. The window is safe either
+         way, as the review said.
    - **What changed:**
      - `connect_uri` takes `nfs://`; ofx names it by the path's last name, as gvfs names an export
        ("nfs on 127.0.0.1").
