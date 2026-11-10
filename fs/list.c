@@ -163,8 +163,10 @@ static bool link_abs(const char *dir, Str target, char *out, size_t cap)
 
 // path_walk's flags: WALK_MISSING_OK, a part that isn't there (or a file with more after it) is
 // taken by its text, and so is the rest (ofx-clean: a link onto a card that is out still names where
-// it leads, so the drive rules judge where its file really is).
-enum { WALK_MISSING_OK = 1 };
+// it leads, so the drive rules judge where its file really is). WALK_STOP_FAR: the first far part
+// ends the walk, *far set, out that part (ofx-clean: `<share>/../x` isn't taken back out by its
+// text, where x could be a link through the share, stat'ed later; step C review).
+enum { WALK_MISSING_OK = 1, WALK_STOP_FAR = 2 };
 
 // path resolved as realpath does, every link on the way followed, but never past a far drive (F16
 // step 3): each part is lstat'd (and a link read) only while the path so far is local by the mount
@@ -199,6 +201,7 @@ static bool path_walk(const Mounts *ms, const char *path, char *out, size_t cap,
         if (rl + 1 + len + 1 > sizeof cand) return errno = ENAMETOOLONG, false;
         memcpy(cand, res, rl), cand[rl] = '/', memcpy(cand + rl + 1, seg, len), cand[rl + 1 + len] = 0;
         if (!mounts_local(ms, cand)) {   // far from here: the rest by its text
+            if (flags & WALK_STOP_FAR) return snprintf(out, cap, "%s", cand), *far = true, true;
             while (*p == '/') p++;   // (relative to cand: link_abs would take "/rest" from /)
             if (!link_abs(cand, str_from_c(p), out, cap)) return errno = ENAMETOOLONG, false;
             return *far = !mounts_local(ms, out), true;   // (a ".." back out of it: real, and local again)

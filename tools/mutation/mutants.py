@@ -2999,12 +2999,17 @@ MUTANTS += [
     ('fs/props.c', '            if (w->pts_len + k > w->pts_cap) {', '            if (false) {'),
     ('fs/props.c', '                s->cut = true;\n                break;', '                break;'),
     # The milestone's code-health cleanup, step C
-    ('fs/clean.c', 'path_walk(ms, path, out, cap, WALK_MISSING_OK, &far) && !far;', 'path_walk(ms, path, out, cap, WALK_MISSING_OK, &far);'),
-    ('fs/clean.c', 'path_walk(ms, path, out, cap, WALK_MISSING_OK, &far)', 'path_walk(ms, path, out, cap, 0, &far)'),
+    ('fs/clean.c', 'path_walk(ms, path, out, cap, WALK_MISSING_OK | WALK_STOP_FAR, &far) && !far;', 'path_walk(ms, path, out, cap, WALK_MISSING_OK | WALK_STOP_FAR, &far);'),   # (retargeted, step C review)
+    ('fs/clean.c', 'path_walk(ms, path, out, cap, WALK_MISSING_OK | WALK_STOP_FAR, &far)', 'path_walk(ms, path, out, cap, WALK_STOP_FAR, &far)'),   # (retargeted, step C review)
+    ('fs/clean.c', 'path_walk(ms, path, out, cap, WALK_MISSING_OK | WALK_STOP_FAR, &far)', 'path_walk(ms, path, out, cap, WALK_MISSING_OK, &far)'),
+    ('fs/list.c', '            if (flags & WALK_STOP_FAR) return snprintf(out, cap, "%s", cand), *far = true, true;\n', ''),
     ('fs/paths.c', '        if (!mountinfo_line(line, mp, sizeof mp, &type, &src) || !type.len) continue;', '        if (!mountinfo_line(line, mp, sizeof mp, &type, &src)) continue;'),
     ('fs/paths.c', ', mount_far_type(type), str_eq(type, S("fuse.gvfsd-fuse")) };', ', mount_far_type(type), false };'),
     # The milestone's code-health cleanup, step D: the lister's refusal carries its errno
     ('fs/farlist.c', 'fprintf(out, "X %d %s\\n", errno, strerror(errno))', 'fprintf(out, "X %d %s\\n", 1, strerror(errno))'),
     ('fs/farlist.c', '        m->text = (Str){ line.p + sp + 1, line.len - sp - 1 };', '        m->text = (Str){ line.p + 2, line.len - 2 };'),
     ('fs/farlist.c', '        if (sp >= line.len - 1 ||', '        if (sp >= line.len ||'),
+    # The step C review: the mount list's text in an arena of its own
+    ('fs/paths.c', '    arena_restore(tmp, m);\n    return ms;', '    return ms;'),
+    ('fs/paths.c', '    Mounts ms = mounts_parse(a, read_file(tmp, path));', '    Mounts ms = mounts_parse(a, read_file(a, path));'),
 ]

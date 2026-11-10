@@ -1810,7 +1810,7 @@ int main(void)
     if (fast) test_state_zoom();
     if (fast) test_md5();
     if (fast) test_thumb_names();
-    if (fast) test_mounts_local();
+    if (fast) test_mounts_local(), test_mounts_read();
     if (fast) test_png_meta();
     if (fast) test_thumb_decode();
     if (fast) test_thumb_get();

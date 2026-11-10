@@ -390,6 +390,17 @@ static Mounts mounts_parse(Arena *a, Str text)
     return (Mounts){ e, n, false };
 }
 
+// The mount list at path parsed into a, its text read into tmp and let go there: only the table is
+// kept. (The step C review: text and table in one 512 KiB arena turned the list unknown from about
+// 1,300 container-style mounts, where the text alone had fitted about 2,000.)
+static Mounts mounts_read(Arena *a, Arena *tmp, const char *path)
+{
+    ArenaMark m = arena_mark(tmp);
+    Mounts ms = mounts_parse(a, read_file(tmp, path));
+    arena_restore(tmp, m);
+    return ms;
+}
+
 // The mount holding path: the one with the longest mount point that is path or above it, a later one
 // on the same point winning (it is mounted over the first); NULL when none (or no list).
 static const MountEnt *mounts_at(const Mounts *ms, const char *path)

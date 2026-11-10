@@ -137,12 +137,13 @@ static bool clean_absent_drive(const Mounts *ms, const char *path)
 // away) still names where it leads. Michael's ~/Documents and the like are links onto /mnt/sd, a
 // card that may be out (review, 2026-10-25), so the drive rules judge where a file really is.
 // False past 40 links, past PATH_MAX, on reaching a network or FUSE mount, where a readlink could
-// hang, or with no mount list known: the caller then keeps the preview. path_walk's (fs/list.c),
+// hang (even when a ".." would lead back out of it), or with no mount list known: the caller then
+// keeps the preview. path_walk's (fs/list.c),
 // with its missing parts kept (it had a copy of its own: the code-health review's step C).
 static bool clean_real(const Mounts *ms, const char *path, char *out, size_t cap)
 {
     bool far;
-    return !ms->unknown && path_walk(ms, path, out, cap, WALK_MISSING_OK, &far) && !far;
+    return !ms->unknown && path_walk(ms, path, out, cap, WALK_MISSING_OK | WALK_STOP_FAR, &far) && !far;
 }
 
 // What the second rule makes of one preview, read from dfd/name: CR_ORPHAN, CR_STALE or CR_KEEP.

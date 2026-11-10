@@ -1211,7 +1211,7 @@ MUTANTS = [
     ('gui/actions.c', '    if (on) atomic_fetch_add(&airplane_gen, 1);\n', '', 'f16'),
     # The milestone's code-health cleanup, step A
     ('gui/panels.c', 'props.local = here ? !far_dir(props_path[0]) : app.here_local;', 'props.local = app.here_local;', 'f16'),
-    ('gui/walk.c', '.mounts = mounts_parse(&mia, read_file(&mia, mountinfo_path())), .pts = pts,', '.mounts = (Mounts){ 0 }, .pts = pts,', 'f72'),   # (retargeted, step C)
+    ('gui/walk.c', '.mounts = mounts_read(&mia, &mta, mountinfo_path()), .pts = pts,', '.mounts = (Mounts){ 0 }, .pts = pts,', 'f72'),   # (retargeted, step C review)
     ('gui/walk.c', '.pts = pts, .pts_cap = sizeof pts };', '.pts = NULL, .pts_cap = sizeof pts };', 'f72'),
     # The milestone's code-health cleanup, step B
     ('gui/far.c', '    if (ms < 0) ms = env_int("OFX_TEST_FAR_DO_MS", FAR_DO_MS, 100, 60000);', '    if (ms < 0) ms = FAR_DO_MS;', 'f16'),

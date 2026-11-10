@@ -98,7 +98,7 @@ static void test_clean_names(void)
     CHECK(!clean_absent_drive(ms, "/mnt/a.png") && !clean_absent_drive(ms, "/media/a.png") && !clean_absent_drive(ms, "/run/media/m/a.png"));
     CHECK(!clean_absent_drive(ms, "/mnt") && !clean_absent_drive(ms, "/run/media") && !clean_absent_drive(ms, "/mntx/y/a.png"));
 
-    // clean_local, the parsed list's thumb_local: the same verdict on test_thumb_local's list.
+    // mounts_local on the parsed list: the same verdict as test_mounts_local's.
     Str tl = S("22 1 259:2 / / rw,relatime shared:1 - ext4 /dev/nvme0n1p2 rw\n"
                "40 22 179:1 / /mnt/sd rw shared:20 - exfat /dev/mmcblk0p1 rw\n"
                "41 22 0:50 / /mnt/nas rw - nfs4 server:/export rw\n"
@@ -148,6 +148,8 @@ static void test_clean_real(void)
     CHECK(symlink("real/deep", at("f65r/down")) == 0);
     CHECK(symlink("loop2", at("f65r/loop1")) == 0 && symlink("loop1", at("f65r/loop2")) == 0);
     CHECK(symlink("nas", at("f65r/tonas")) == 0);
+    CHECK(symlink("../nas", at("f65r/real/upnas")) == 0);              // into the share again
+    CHECK(symlink("/mnt/ofx-test-nodrive/D", at("f65r/real/awayd")) == 0);
     struct { const char *in, *out; } cases[] = {
         { "real/a.png", "real/a.png" }, { "rel/a.png", "real/a.png" }, { "abs/a.png", "real/a.png" },
         { "chain/x/a.png", "real/x/a.png" }, { "rel/./deep/../a.png", "real/a.png" },
@@ -176,6 +178,14 @@ static void test_clean_real(void)
     // Refused: a loop, a network mount (by the path, or through a link), too small an out.
     CHECK(!clean_real(m, at("f65r/loop1/a.png"), r, sizeof r));
     CHECK(!clean_real(m, at("f65r/nas/a.png"), r, sizeof r) && !clean_real(m, at("f65r/tonas/a.png"), r, sizeof r));
+    // Through the share and back out by "..": still refused, never taken by its text (a link there
+    // would be stat'ed through the share; a link onto a card that is out would go unresolved). The
+    // step C review: the merged walk took it.
+    CHECK(!clean_real(m, at("f65r/nas/../real/upnas/a.png"), r, sizeof r) && !clean_real(m, at("f65r/nas/../real/awayd/a.png"), r, sizeof r));
+    CHECK(!clean_real(m, at("f65r/tonas/../real"), r, sizeof r));
+    // Without the share on the way, the same ones are walked (the control).
+    CHECK(clean_real(m, at("f65r/real/awayd/a.png"), r, sizeof r));
+    CHECK_STR(str_from_c(r), "/mnt/ofx-test-nodrive/D/a.png");
     CHECK(!clean_real(m, at("f65r/real/a.png"), r, 1) && !clean_real(m, at("f65r/real/a.png"), r, strlen(base) + 5));
     CHECK(clean_real(m, at("f65r/real"), r, strlen(base) + 6));
 }

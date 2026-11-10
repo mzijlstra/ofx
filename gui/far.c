@@ -33,8 +33,8 @@ static struct {
     int   dos;            // actions run by ofx-list --do (fardos=; main thread only)
 } far = { .mu = PTHREAD_MUTEX_INITIALIZER, .wake = { -1, -1 }, .pidfd = -1, .in = -1, .out = -1 };
 
-static u8 far_mi_mem[KiB(512)];   // the mount list, read for far_dir (main thread only)
-static Arena far_mia;
+static u8 far_mi_mem[KiB(512)], far_mt_mem[KiB(512)];   // the mount list's table, and its text while parsed (main thread only)
+static Arena far_mia, far_mta;
 static Mounts far_ms;
 static i64 far_ms_at = -1;   // when it was read; -1: read it again (far_mounts_changed)
 
@@ -44,12 +44,12 @@ static i64 far_ms_at = -1;   // when it was read; -1: read it again (far_mounts_
 // items (the F16 code-health review's step C).
 static const Mounts *far_mounts(void)
 {
-    if (!far_mia.base) arena_init(&far_mia, "far mounts", far_mi_mem, sizeof far_mi_mem);
+    if (!far_mia.base) arena_init(&far_mia, "far mounts", far_mi_mem, sizeof far_mi_mem), arena_init(&far_mta, "far mount text", far_mt_mem, sizeof far_mt_mem);
     i64 now = now_ms();
     bool watched = watch.mount_fd >= 0 || watch.mount_wd >= 0;
     if (far_ms_at < 0 || (!watched && now - far_ms_at > 1000)) {
         arena_reset(&far_mia);
-        far_ms = mounts_parse(&far_mia, read_file(&far_mia, mountinfo_path())), far_ms_at = now;
+        far_ms = mounts_read(&far_mia, &far_mta, mountinfo_path()), far_ms_at = now;
     }
     return &far_ms;
 }

@@ -69,6 +69,31 @@ static void test_thumb_names(void)
     CHECK(thumb_kind(S("image/webp")) == TK_WEBP && thumb_kind(S("application/pdf")) == TK_NONE && thumb_kind(S("image/png2")) == TK_NONE);
 }
 
+// mounts_read: the text read into its own arena and let go there, so a list whose text and table
+// don't fit one arena together is still known (the step C review: 1,300 container-style mounts did).
+static void test_mounts_read(void)
+{
+    static char text[KiB(400)];
+    static u8 tmem[KiB(512)], amem[KiB(512)];
+    isize n = 0;
+    for (int i = 0; i < 3000; i++) n += snprintf(text + n, sizeof text - (size_t)n, "%d 22 0:1 / /var/lib/c/%080d rw - overlay o rw\n", 100 + i, i);
+    put(at("f64mounts"), text);
+    Arena a, tmp;
+    arena_init(&a, "mounts", amem, sizeof amem), arena_init(&tmp, "mount text", tmem, sizeof tmem);
+    ArenaMark before = arena_mark(&tmp);
+    Mounts ms = mounts_read(&a, &tmp, at("f64mounts"));
+    CHECK(!ms.unknown && ms.n == 3000 && strcmp(ms.e[2999].mp + ms.e[2999].n - 4, "2999") == 0);
+    CHECK(arena_mark(&tmp).used == before.used);   // (the text let go)
+    // The same list, text and table in one arena of the same size: unknown (what it was).
+    arena_init(&a, "mounts", amem, sizeof amem);
+    ms = mounts_parse(&a, read_file(&a, at("f64mounts")));
+    CHECK(ms.unknown && ms.n == 0);
+    // No file: no mounts, known.
+    arena_init(&a, "mounts", amem, sizeof amem);
+    ms = mounts_read(&a, &tmp, at("f64none"));
+    CHECK(!ms.unknown && ms.n == 0);
+}
+
 static void test_mounts_local(void)
 {
     Str mi = S("22 1 259:2 / / rw),relatime shared:1 - ext4 /dev/nvme0n1p2 rw\n"
