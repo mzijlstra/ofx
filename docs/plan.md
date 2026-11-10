@@ -1273,6 +1273,34 @@ blocks each of these for up to gvfs's 90 s. On a thread it also holds ofx's exit
      - **F, place kinds and protocols:** helpers for the kind checks, a scheme table.
      - **G, the children the threads read:** one spawn-and-read helper, the quit deadline.
      - **H, comments and small tidy-ups.**
+     - **After H, from the reviews:** "the mount list didn't fit" fails safe in the window too
+       (said in the status line; network and FUSE types still taken as far), as clean.c does; past
+       about 2,000 long mountinfo lines today every path is taken as local (step C review).
+9. **A Doherty check** (Michael, 2026-11-10, after LaurieWired's note on the Doherty Threshold:
+   400 ms is the most a response may take before it breaks the user's flow). ofx keeps its longest
+   main-loop iteration since start in the state line (`maxframe=` ms, the script's own waits not
+   counted), and run.sh fails a group whose window went past 400 ms (a warning past 100). Every GUI
+   script becomes a latency check; a stall we accept is a number we chose.
+10. **Responsive on a slow or failing drive** (Michael, 2026-11-10: USB drives that fail hang the
+    window). The main thread's waits that can pass 400 ms today: an action on a share (`ofx-list
+    --do`, up to 1.5 s, step 3b), a file's type for Open With and Properties (`gio info`, up to 1 s),
+    and every syscall on a local drive (a listing, `stat`, `access`), which a dying USB drive or a
+    disk spinning up can hold for many seconds.
+    - **Why children, not threads** (Michael, 2026-11-10): a syscall on a dying drive sleeps in D,
+      where nothing can kill it. A thread there holds ofx's quit (the window frozen on screen) and
+      its worker for every folder; a child holds nothing of ofx, which kills it and moves on.
+    - **Proposed, details to be picked when we get there:** the risky drives (network, removable,
+      and a removable one under dm-crypt, as the author's code card: its mount source is
+      `/dev/mapper/…`, so "removable" follows the dm slaves down to an mmc or USB device) are never
+      touched in-process. Every feature comes back through children: git status (already a
+      child; finding `.git` and the reflog move into it), item counts (ofx-list, as for shares),
+      the deep count (an ofx-list mode), previews (the thumbnailers already are; ofx's own decode
+      as an ofx-list mode), the folder watch (inotify in the child, or a timer). One child a drive
+      at a time, with the shares' back-off ("isn't answering", not more children). Previews on a
+      network share download each file: perhaps a per-share setting.
+    - **The two main-thread waits:** an action on a share starts its child and returns at once
+      (polled as the listing is, "Renaming…" meanwhile, one far action at a time); a file's type
+      for Open With and Properties is guessed by its name at once and corrected when gio answers.
 
 ## F15 design: key bindings the user sets (2026-11-08; Michael's answers the same day)
 
