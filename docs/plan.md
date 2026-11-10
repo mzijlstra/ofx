@@ -1119,6 +1119,11 @@ blocks each of these for up to gvfs's 90 s. On a thread it also holds ofx's exit
        - gvfs-nfs lists no exports, so `nfs://server/` is still refused ("Name a folder").
        - Each server connected to leaves its browse mount in gvfsd until gvfsd ends (gio can't
          unmount it). Nautilus leaves the same.
+       - **On a real server** (Michael's laptop, Ubuntu 24.04, Samba with NetBIOS off, 2026-11-10):
+         listing its shares took 20.5 s while ufw dropped port 139, and 140 ms once it refused
+         it. libsmbclient's share listing tries 139 too; mounting a share took 93 ms either way.
+         So a server whose firewall drops 139 lists its shares after about 20 s, with
+         "Connecting…" meanwhile.
        - A share named with a space works raw in the address (reviewer-2 measured it). gvfs
          lower-cases the name in its folder's name, so the sidebar says "my docs" where the
          picker says "My Docs": cosmetic.
