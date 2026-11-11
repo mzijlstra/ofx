@@ -31,6 +31,23 @@
 // CONNECT_SERVER: an SMB server's address alone, whose shares Connect lists (step 7a).
 typedef enum { CONNECT_NOT, CONNECT_OK, CONNECT_BAD, CONNECT_SERVER } ConnectUri;
 
+// The addresses Connect takes, one row a scheme (the code-health review's step F: what each allows
+// was spread over four functions). user, port: an address may name them (NFS neither: the server
+// goes by the user's id, and gvfs asks its portmapper); names: what the path names first, which ofx
+// says as gvfs names the share (an SMB share, an NFS folder's last name; an SFTP path, nothing: its
+// host alone); server: the address alone names a server whose shares Connect lists (SMB, step 7a).
+typedef enum { NET_NAMES_SHARE, NET_NAMES_FOLDER, NET_NAMES_NONE } NetNames;
+typedef struct {
+    const char *scheme;
+    bool        user, port, server;
+    NetNames    names;
+} NetScheme;
+static const NetScheme NET_SCHEMES[] = {
+    { "smb", true, true, true, NET_NAMES_SHARE },
+    { "nfs", false, false, false, NET_NAMES_FOLDER },   // (step 6)
+    { "sftp", true, true, false, NET_NAMES_NONE },     // (step 7c)
+};
+
 static bool connect_ieq(Str a, const char *b)
 {
     isize n = (isize)strlen(b);
@@ -51,14 +68,16 @@ static bool connect_ieq(Str a, const char *b)
 static ConnectUri connect_uri(Str text, char *uri, size_t ucap, char *host, size_t hcap, char *share, size_t scap, char *why, size_t wcap)
 {
     text = str_trim(text);
-    if (text.len < 6) return CONNECT_NOT;
-    bool nfs = connect_ieq(str_cut(text, 0, 6), "nfs://"), sftp = text.len >= 7 && connect_ieq(str_cut(text, 0, 7), "sftp://");
-    if (!nfs && !sftp && !connect_ieq(str_cut(text, 0, 6), "smb://")) return CONNECT_NOT;
-    const char *kind = nfs ? "nfs" : sftp ? "sftp" : "smb";
+    isize sep = str_find_str(text, S("://"));
+    const NetScheme *s = NULL;
+    for (int i = 0; sep > 0 && i < COUNT(NET_SCHEMES); i++)
+        if (connect_ieq(str_cut(text, 0, sep), NET_SCHEMES[i].scheme)) s = &NET_SCHEMES[i];
+    if (!s) return CONNECT_NOT;
+    const char *kind = s->scheme;
     for (isize i = 0; i < text.len; i++)
         if ((unsigned char)text.p[i] < 0x20 || text.p[i] == 0x7F) return snprintf(why, wcap, "An address has no control characters"), CONNECT_BAD;
     if ((size_t)text.len >= ucap) return snprintf(why, wcap, "The address is too long"), CONNECT_BAD;
-    Str rest = str_cut(text, sftp ? 7 : 6, text.len);
+    Str rest = str_cut(text, sep + 3, text.len);
     isize slash = str_find(rest, '/');
     Str auth = slash < 0 ? rest : str_cut(rest, 0, slash);
     Str path = slash < 0 ? STR_EMPTY : str_cut(rest, slash + 1, rest.len);
@@ -66,21 +85,25 @@ static ConnectUri connect_uri(Str text, char *uri, size_t ucap, char *host, size
     Str user = STR_EMPTY;
     if (at >= 0) {
         if (str_find(str_cut(auth, 0, at), ':') >= 0) return snprintf(why, wcap, "No password in the address: ofx asks for it"), CONNECT_BAD;
-        if (nfs) return snprintf(why, wcap, "No user in an NFS address: the server goes by your user id"), CONNECT_BAD;
+        if (!s->user) return snprintf(why, wcap, "No user in an NFS address: the server goes by your user id"), CONNECT_BAD;
         user = str_cut(auth, 0, at);
         auth = str_cut(auth, at + 1, auth.len);
     }
-    isize colon = str_find_last(auth, ':');
+    // (an IPv6 address in brackets, as a URI has it: smb://[fd00::1]/pub; its port after the bracket)
+    isize close = auth.len > 0 && auth.p[0] == '[' ? str_find(auth, ']') : -1;
+    if (auth.len > 0 && auth.p[0] == '[' && (close < 2 || (close + 1 < auth.len && auth.p[close + 1] != ':')))
+        return snprintf(why, wcap, "Not a server: %.*s", STR_ARG(auth)), CONNECT_BAD;
+    isize colon = close >= 0 ? (close + 1 < auth.len ? close + 1 : -1) : str_find_last(auth, ':');
     Str name = colon < 0 ? auth : str_cut(auth, 0, colon);
     if (colon >= 0) {
-        if (nfs) return snprintf(why, wcap, "No port in an NFS address: gvfs asks the server's portmapper"), CONNECT_BAD;
+        if (!s->port) return snprintf(why, wcap, "No port in an NFS address: gvfs asks the server's portmapper"), CONNECT_BAD;
         Str port = str_cut(auth, colon + 1, auth.len);
         bool digits = port.len > 0 && port.len <= 5;
         for (isize i = 0; i < port.len; i++) digits = digits && port.p[i] >= '0' && port.p[i] <= '9';
         if (!digits) return snprintf(why, wcap, "Not a port: %.*s", STR_ARG(port)), CONNECT_BAD;
     }
-    if (name.len == 0) return snprintf(why, wcap, "Name a server: %s://server/%s", kind, nfs ? "folder" : sftp ? "" : "share"), CONNECT_BAD;
-    if (sftp) {   // (a path or none: the server's root)
+    if (name.len == 0) return snprintf(why, wcap, "Name a server: %s://server/%s", kind, s->names == NET_NAMES_FOLDER ? "folder" : s->names == NET_NAMES_NONE ? "" : "share"), CONNECT_BAD;
+    if (s->names == NET_NAMES_NONE) {   // (a path or none: the server's root)
         if ((size_t)(user.len + 1 + name.len) >= hcap) return snprintf(why, wcap, "The address is too long"), CONNECT_BAD;
         snprintf(uri, ucap, "%.*s", STR_ARG(text));
         if (user.len) snprintf(host, hcap, "%.*s@%.*s", STR_ARG(user), STR_ARG(name));
@@ -89,6 +112,7 @@ static ConnectUri connect_uri(Str text, char *uri, size_t ucap, char *host, size
         return CONNECT_OK;
     }
     Str sh;
+    bool nfs = s->names == NET_NAMES_FOLDER;
     if (nfs) {   // (the path's last name: "nfs" of srv/nfs/, as gvfs names an export)
         while (path.len > 0 && path.p[path.len - 1] == '/') path.len--;
         sh = str_cut(path, str_find_last(path, '/') + 1, path.len);
@@ -98,11 +122,13 @@ static ConnectUri connect_uri(Str text, char *uri, size_t ucap, char *host, size
     }
     // (smb://server[:port][/] alone: the server, whose shares Connect lists, step 7a; gvfs-nfs lists
     // no exports)
-    if (sh.len == 0 && (nfs || path.len > 0)) return nfs ? snprintf(why, wcap, "Name a folder on %.*s: nfs://%.*s/folder", STR_ARG(name), STR_ARG(name)) : snprintf(why, wcap, "Name a share on %.*s: smb://%.*s/share", STR_ARG(name), STR_ARG(auth)), CONNECT_BAD;
+    if (sh.len == 0 && (!s->server || path.len > 0)) return nfs ? snprintf(why, wcap, "Name a folder on %.*s: nfs://%.*s/folder", STR_ARG(name), STR_ARG(name)) : snprintf(why, wcap, "Name a share on %.*s: smb://%.*s/share", STR_ARG(name), STR_ARG(auth)), CONNECT_BAD;
     if ((size_t)name.len >= hcap || (size_t)sh.len >= scap) return snprintf(why, wcap, "The address is too long"), CONNECT_BAD;
     snprintf(uri, ucap, "%.*s", STR_ARG(text));
     snprintf(host, hcap, "%.*s", STR_ARG(name));
-    snprintf(share, scap, "%.*s", STR_ARG(sh));
+    // (its name as said, decoded: "My Docs on nas" of smb://nas/My%20Docs, as gvfs names it; as
+    // written when it doesn't decode)
+    if (!percent_decode(sh, share, scap) || !share[0]) snprintf(share, scap, "%.*s", STR_ARG(sh));
     return sh.len == 0 ? CONNECT_SERVER : CONNECT_OK;
 }
 
@@ -118,16 +144,12 @@ static GioAsk gio_ask(Str out, char *def, size_t cap, int *rounds)
     static const Str HEAD = S("Authentication Required");
     *rounds = 0;
     isize last = -1;   // (the last header: what this question is about)
-    for (isize i = 0; i + HEAD.len <= out.len; i++)
-        if (memcmp(out.p + i, HEAD.p, (size_t)HEAD.len) == 0) ++*rounds, last = i, i += HEAD.len - 1;
+    for (isize i = 0, k; (k = str_find_str(str_cut(out, i, out.len), HEAD)) >= 0; i += k + HEAD.len) ++*rounds, last = i + k;
     if (cap) def[0] = 0;
     if (str_ends_with(out, S("\nChoice: "))) return GIO_ASK_CHOICE;
     if (*rounds == 0) return GIO_ASK_NONE;
     if (str_ends_with(out, S("Password: "))) {
-        Str about = str_cut(out, last, out.len);
-        for (isize i = 0; i + 10 <= about.len; i++)
-            if (memcmp(about.p + i, "passphrase", 10) == 0) return GIO_ASK_KEY;
-        return GIO_ASK_PASSWORD;
+        return str_find_str(str_cut(out, last, out.len), S("passphrase")) >= 0 ? GIO_ASK_KEY : GIO_ASK_PASSWORD;
     }
     if (str_ends_with(out, S("\nUser: "))) return GIO_ASK_USER;   // (sftp's: no default)
     if (!str_ends_with(out, S("]: "))) return GIO_ASK_NONE;
@@ -145,24 +167,15 @@ static GioAsk gio_ask(Str out, char *def, size_t cap, int *rounds)
 // "Failed to mount Windows share: ") into why; false when it said nothing.
 static bool gio_why(Str err, char *why, size_t cap)
 {
-    isize at = -1;
-    if (str_starts_with(err, S("gio: "))) at = 0;
-    for (isize i = 0; i + 6 <= err.len; i++)
-        if (err.p[i] == '\n' && memcmp(err.p + i + 1, "gio: ", 5) == 0) at = i + 1;
+    isize at = str_starts_with(err, S("gio: ")) ? 0 : -1;
+    for (isize i = 0, k; (k = str_find_str(str_cut(err, i, err.len), S("\ngio: "))) >= 0; i += k + 1) at = i + k + 1;   // (the last)
     if (at < 0) return false;
     Str line = str_cut(err, at + 5, err.len);
     isize nl = str_find(line, '\n');
     if (nl >= 0) line = str_cut(line, 0, nl);
     // "smb://host/share/: why": the address ends at the first ": " after its "://"
-    for (isize i = 0; i + 3 <= line.len; i++)
-        if (memcmp(line.p + i, "://", 3) == 0) {
-            for (isize j = i + 3; j + 2 <= line.len; j++)
-                if (line.p[j] == ':' && line.p[j + 1] == ' ') {
-                    line = str_cut(line, j + 2, line.len);
-                    break;
-                }
-            break;
-        }
+    isize sch = str_find_str(line, S("://")), end = sch < 0 ? -1 : str_find_str(str_cut(line, sch + 3, line.len), S(": "));
+    if (end >= 0) line = str_cut(line, sch + 3 + end + 2, line.len);
     static const Str SMB = S("Failed to mount Windows share: ");
     if (str_starts_with(line, SMB) && line.len > SMB.len) line = str_cut(line, SMB.len, line.len);
     snprintf(why, cap, "%.*s", STR_ARG(line));
@@ -298,16 +311,14 @@ static int avahi_smb_servers(Str out, NetServer *s, int max)
 static bool gio_local_path(Str info, char *path, size_t cap)
 {
     static const Str KEY = S("local path: ");
-    for (isize i = 0; i + KEY.len <= info.len; i++) {
-        if ((i > 0 && info.p[i - 1] != '\n') || memcmp(info.p + i, KEY.p, (size_t)KEY.len) != 0) continue;
-        Str p = str_cut(info, i + KEY.len, info.len);
-        isize nl = str_find(p, '\n');
-        if (nl >= 0) p = str_cut(p, 0, nl);
-        if (p.len == 0 || p.p[0] != '/' || (size_t)p.len >= cap) return false;
-        snprintf(path, cap, "%.*s", STR_ARG(p));
-        return true;
-    }
-    return false;
+    isize i = str_starts_with(info, KEY) ? 0 : str_find_str(info, S("\nlocal path: "));   // (at a line's start)
+    if (i < 0) return false;
+    Str p = str_cut(info, i + (i > 0) + KEY.len, info.len);
+    isize nl = str_find(p, '\n');
+    if (nl >= 0) p = str_cut(p, 0, nl);
+    if (p.len == 0 || p.p[0] != '/' || (size_t)p.len >= cap) return false;
+    snprintf(path, cap, "%.*s", STR_ARG(p));
+    return true;
 }
 
 // ---- gvfs's share folders (F16 step 5) ---------------------------------------------------------
@@ -359,32 +370,43 @@ static void gvfs_share_label(Str name, char *out, size_t cap)
     else snprintf(out, cap, "%.*s", STR_ARG(name));
 }
 
-// The address of a folder in an SMB share, NFS export or SFTP server gvfs mounted (Add Bookmark there writes it,
-// as Nautilus does, not the FUSE folder's path): name its share's folder's name, rest the path below
-// that ("" or "/sub/x"). smb://[dom;user@]server[:port]/share/rest or nfs://server/prefix/rest, the
-// path escaped as a URI's; false for another kind of share or one that doesn't fit.
+// The address of a folder in a share gvfs mounted (Add Bookmark there writes it, as Nautilus does,
+// not the FUSE folder's path): name its share's folder's name, rest the path below that ("" or
+// "/sub/x"). [dom;][user@]server[:port] then the share's own path, then rest, escaped as a URI's:
+// smb://…/share/rest, afp://…/volume/rest, nfs://server/prefix/rest, sftp://…/path from the root,
+// dav[s]://…/prefix/rest. False for another kind or one that doesn't fit. (AFP and WebDAV had a
+// label but no address, so Add Bookmark failed there: the code-health review's step F.)
 static bool gvfs_share_uri(Str name, const char *rest, char *out, size_t cap)
 {
-    char server[256], share[256], port[16], user[128], domain[128], path[PATH_MAX], esc[PATH_MAX * 3 + 8];
-    if (str_starts_with(name, S("sftp:"))) {   // (sftp://[user@]host[:port]/path: the folder's path from the server's root)
-        if (!gvfs_key(name, "host", server, sizeof server)) return false;
-        bool hp = gvfs_key(name, "port", port, sizeof port), hu = gvfs_key(name, "user", user, sizeof user);
-        if (snprintf(path, sizeof path, "%s", rest[0] ? rest : "/") >= (int)sizeof path || !percent_encode(str_from_c(path), "!$&'()*+,=@:/", esc, sizeof esc)) return false;
-        int n = snprintf(out, cap, "sftp://%s%s%s%s%s%s", hu ? user : "", hu ? "@" : "", server, hp ? ":" : "", hp ? port : "", esc);
-        return n > 0 && (size_t)n < cap;
+    static const struct { const char *type, *scheme, *host, *first; bool user; } KIND[] = {
+        { "smb-share:", "smb", "server", "share", true },
+        { "afp-volume:", "afp", "host", "volume", true },
+        { "nfs:", "nfs", "host", "prefix", false },
+        { "sftp:", "sftp", "host", NULL, true },
+        { "dav:", "dav", "host", "prefix", true },
+    };
+    int k = 0;
+    while (k < COUNT(KIND) && !str_starts_with(name, str_from_c(KIND[k].type))) k++;
+    char host[256], port[16], user[128], domain[128], ssl[8], first[PATH_MAX] = "", path[PATH_MAX], esc[PATH_MAX * 3 + 8];
+    if (k == COUNT(KIND) || !gvfs_key(name, KIND[k].host, host, sizeof host)) return false;
+    // The share's own path: "/share", "/volume", or the NFS export's or WebDAV folder's prefix (an
+    // NFS export must name one; a WebDAV server's root has none).
+    if (KIND[k].first && !gvfs_key(name, KIND[k].first, first + 1, sizeof first - 1)) {
+        if (strcmp(KIND[k].type, "dav:") != 0) return false;
+    } else if (KIND[k].first) {
+        bool prefix = strcmp(KIND[k].first, "prefix") == 0;
+        if (prefix && first[1] != '/') return false;
+        if (prefix) memmove(first, first + 1, strlen(first + 1) + 1);
+        else first[0] = '/';
     }
-    if (str_starts_with(name, S("nfs:"))) {
-        if (!gvfs_key(name, "host", server, sizeof server) || !gvfs_key(name, "prefix", path, sizeof path) || path[0] != '/') return false;
-        size_t pl = strlen(path);
-        if (pl > 1 && path[pl - 1] == '/') path[--pl] = 0;
-        if (snprintf(path + pl, sizeof path - pl, "%s", pl == 1 && rest[0] == '/' ? rest + 1 : rest) >= (int)(sizeof path - pl) || !percent_encode(str_from_c(path), "!$&'()*+,=@:/", esc, sizeof esc)) return false;
-        int n = snprintf(out, cap, "nfs://%s%s", server, esc);
-        return n > 0 && (size_t)n < cap;
-    }
-    if (!str_starts_with(name, S("smb-share:")) || !gvfs_key(name, "server", server, sizeof server) || !gvfs_key(name, "share", share, sizeof share)) return false;
-    bool hp = gvfs_key(name, "port", port, sizeof port), hu = gvfs_key(name, "user", user, sizeof user), hd = gvfs_key(name, "domain", domain, sizeof domain);
-    if (snprintf(path, sizeof path, "/%s%s", share, rest) >= (int)sizeof path || !percent_encode(str_from_c(path), "!$&'()*+,=@:/", esc, sizeof esc)) return false;
-    int n = snprintf(out, cap, "smb://%s%s%s%s%s%s%s%s", hd && hu ? domain : "", hd && hu ? ";" : "", hu ? user : "", hu ? "@" : "", server, hp ? ":" : "", hp ? port : "", esc);
+    size_t fl = strlen(first);
+    while (fl > 0 && first[fl - 1] == '/') first[--fl] = 0;   // (a prefix ending in /: one /)
+    if (snprintf(path, sizeof path, "%s%s", first, fl == 0 && !rest[0] ? "/" : rest) >= (int)sizeof path || !percent_encode(str_from_c(path), URI_PATH_KEEP, esc, sizeof esc)) return false;
+    bool hp = gvfs_key(name, "port", port, sizeof port), hu = KIND[k].user && gvfs_key(name, "user", user, sizeof user);
+    bool hd = hu && gvfs_key(name, "domain", domain, sizeof domain);   // (SMB's: a domain without a user, none)
+    const char *scheme = KIND[k].scheme;
+    if (strcmp(scheme, "dav") == 0 && gvfs_key(name, "ssl", ssl, sizeof ssl) && strcmp(ssl, "true") == 0) scheme = "davs";
+    int n = snprintf(out, cap, "%s://%s%s%s%s%s%s%s%s", scheme, hd ? domain : "", hd ? ";" : "", hu ? user : "", hu ? "@" : "", host, hp ? ":" : "", hp ? port : "", esc);
     return n > 0 && (size_t)n < cap;
 }
 

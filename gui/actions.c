@@ -32,6 +32,37 @@ static void undo_start(UndoKind k)
 #include "eject.c"
 #include "connect.c"   // (F16 step 4: Connect to Server)
 
+// ---- a sidebar place's own actions (the code-health review's step F: each written two or three
+// times by its kind) -----------------------------------------------------------------------------
+
+// What the folder menu is on a place (UiCtxKind).
+static UiCtxKind place_ctx_kind(const Place *p)
+{
+    if (place_brings(p->kind)) return UI_CTX_BRINGS;
+    if (p->kind == PL_AIRPLANE) return UI_CTX_AIRPLANE;   // (F16 step 7d)
+    if (place_ejectable(p)) return UI_CTX_DRIVE;
+    if (p->kind == PL_SHARE) return UI_CTX_SHARE;   // (F16 step 5)
+    return UI_CTX_PLACE;
+}
+
+// A place without a folder yet brought: a drive mounted, then opened (2026-10-30); an address
+// connected to (a network bookmark: then opened; a server found: its shares listed; F16 steps 5,
+// 7b). False when it isn't one.
+static bool place_bring(const Place *p)
+{
+    if (p->kind == PL_UNMOUNTED) return mount_start(p), true;
+    if (place_connects(p->kind)) return connect_start(str_from_c(p->path)), true;
+    return false;
+}
+
+// A place's eject button or menu entry: a removable drive ejected (eject) or unmounted, a share
+// unmounted (gio mount -u, F16 step 5; it has no Eject).
+static void place_unmount(const Place *p, bool eject)
+{
+    if (place_ejectable(p)) (eject ? eject_start : unmount_start)(p);
+    else if (p->kind == PL_SHARE) share_unmount_start(p);
+}
+
 // ---- on a far drive (F16 step 3b) ------------------------------------------------------------
 
 static FarReply far_r;   // the last far action's answer (its fields in far.c's far_do_mem)
@@ -1029,8 +1060,7 @@ static void act(UiAction a)
     switch (a.kind) {
     case UA_RESTORE: trash_restore_targets(); break;
     case UA_EJECT:
-        if (a.index >= 0 && a.index < app.places.n && place_ejectable(&app.places.p[a.index])) eject_start(&app.places.p[a.index]);
-        else if (a.index >= 0 && a.index < app.places.n && app.places.p[a.index].kind == PL_SHARE) share_unmount_start(&app.places.p[a.index]);   // (F16 step 5)
+        if (a.index >= 0 && a.index < app.places.n) place_unmount(&app.places.p[a.index], true);
         break;
     case UA_EMPTY_TRASH: trash_empty(); break;
     case UA_CLEAR_PREVIEWS: clear_start(); break;
@@ -1088,13 +1118,10 @@ static void act(UiAction a)
     case UA_PLACE: {
         char buf[PATH_MAX];
         const char *p = side_path(a.index, buf, sizeof buf);
+        const Place *pl = app.ui.side_mode == SIDE_PLACES && a.index >= 0 && a.index < app.places.n ? &app.places.p[a.index] : NULL;
         if (p) go_to(p, STR_EMPTY, 0);
-        else if (app.ui.side_mode == SIDE_PLACES && a.index >= 0 && a.index < app.places.n && app.places.p[a.index].kind == PL_UNMOUNTED)
-            mount_start(&app.places.p[a.index]);   // a drive not mounted yet: mounted, then opened (2026-10-30)
-        else if (app.ui.side_mode == SIDE_PLACES && a.index >= 0 && a.index < app.places.n && place_connects(app.places.p[a.index].kind))
-            connect_start(str_from_c(app.places.p[a.index].path));   // a network bookmark (connected, then opened) or a server found (its shares listed): F16 steps 5, 7b
-        else if (app.ui.side_mode == SIDE_PLACES && a.index >= 0 && a.index < app.places.n && app.places.p[a.index].kind == PL_AIRPLANE)
-            app.ui.airplane_asking = true;   // (F16 step 7d: asked, then turned off)
+        else if (pl && place_bring(pl)) {}   // (no folder yet: mounted or connected first)
+        else if (pl && pl->kind == PL_AIRPLANE) app.ui.airplane_asking = true;   // (F16 step 7d: asked, then turned off)
         break;
     }
     case UA_TREE_LEFT:

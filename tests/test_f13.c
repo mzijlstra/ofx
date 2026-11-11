@@ -55,14 +55,14 @@ static void test_copy_path(void)
     u = menu_ui(3);
     u.menu_on = true, u.menu = UI_CTX_FOLDER, u.ctx_bmk = -1;
     CHECK(ui_menu_shown(&u, UM_COPY_PATH_IT) && ui_menu_enabled(&u, UM_COPY_PATH_IT) && !ui_menu_shown(&u, UM_COPY_PATH));
-    u.ctx_place = true;
+    u.ctx_kind = UI_CTX_PLACE;
     CHECK(ui_menu_shown(&u, UM_COPY_PATH_IT) && !ui_menu_shown(&u, UM_COPY_IT));
     in = ui_input_none(), in.menu_item = menu_place(UI_CTX_FOLDER, UM_COPY_PATH_IT);
     a = ui_handle(&u, (UiNames){ name_at, NULL, NULL }, &in);
     CHECK(a.kind == UA_FOLDER_DO && a.index == UM_COPY_PATH_IT);
-    u.menu_on = true, u.ctx_trash = true;
+    u.menu_on = true, u.ctx_kind = UI_CTX_TRASH;
     CHECK(!ui_menu_shown(&u, UM_COPY_PATH_IT));
-    u.ctx_trash = false, u.ctx_unmounted = true;
+    u.ctx_kind = UI_CTX_BRINGS;
     CHECK(!ui_menu_shown(&u, UM_COPY_PATH_IT));
 }
 

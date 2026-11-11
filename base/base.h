@@ -39,6 +39,7 @@ bool str_ends_with(Str s, Str suffix);
 Str  str_cut(Str s, isize from, isize to);   // s[from..to), clamped to s
 isize str_find(Str s, char c);               // index of the first c, or -1
 isize str_find_last(Str s, char c);          // index of the last c, or -1
+isize str_find_str(Str s, Str w);            // index of the first w in s, or -1 (w empty: 0)
 
 // The code point at s[*i], advancing *i past it. Reads only s[*i .. len-1]. Malformed or cut-off
 // UTF-8 (overlongs, surrogates, past U+10FFFF, a lead without its continuations) yields U+FFFD and

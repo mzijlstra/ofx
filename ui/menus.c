@@ -39,18 +39,20 @@ static bool ui_menu_shown(const Ui *u, UiMenuItem it)
 // Copy; a bookmark's row has Edit Bookmarks' own.
 static bool ui_folder_shown(const Ui *u, UiMenuItem it)
 {
-    if (u->ctx_unmounted) return it == UM_MOUNT_IT;   // no folder yet (2026-10-30)
-    if (u->ctx_airplane) return it == UM_AIRPLANE_OFF_IT;   // (F16 step 7d: the sidebar's row)
+    UiCtxKind k = u->ctx_kind;
+    if (k == UI_CTX_BRINGS) return it == UM_MOUNT_IT;   // no folder yet (2026-10-30)
+    if (k == UI_CTX_AIRPLANE) return it == UM_AIRPLANE_OFF_IT;   // (F16 step 7d: the sidebar's row)
+    bool trash = k == UI_CTX_TRASH;
     switch (it) {
     case UM_SEP: case UM_OPEN_IT: case UM_OPEN_TAB: return true;
-    case UM_OPEN_WINDOW: case UM_TERMINAL_IN: case UM_SEARCH_IN: case UM_PASTE_INTO: case UM_PROPS_IT: return !u->ctx_trash;
-    case UM_CUT_IT: case UM_COPY_IT: return !u->ctx_trash && !u->ctx_place;
-    case UM_COPY_PATH_IT: return !u->ctx_trash;   // (a place's too: a bookmark's, a drive's)
-    case UM_BOOKMARK_IT: return !u->ctx_trash && !u->ctx_bmed;
+    case UM_OPEN_WINDOW: case UM_TERMINAL_IN: case UM_SEARCH_IN: case UM_PASTE_INTO: case UM_PROPS_IT: return !trash;
+    case UM_CUT_IT: case UM_COPY_IT: return k == UI_CTX_DIR;   // (a place has none)
+    case UM_COPY_PATH_IT: return !trash;   // (a place's too: a bookmark's, a drive's)
+    case UM_BOOKMARK_IT: return !trash && !u->ctx_bmed;
     case UM_BM_RENAME_IT: case UM_BM_UP_IT: case UM_BM_DOWN_IT: case UM_BM_REMOVE_IT: case UM_BM_EDIT_IT: return u->ctx_bmk >= 0;
-    case UM_EJECT_IT: return u->ctx_eject;
-    case UM_UNMOUNT_IT: return u->ctx_eject || u->ctx_share;   // (Unmount: the drive stays, to mount again, 2026-10-30)
-    case UM_EMPTY_IT: return u->ctx_trash;
+    case UM_EJECT_IT: return k == UI_CTX_DRIVE;
+    case UM_UNMOUNT_IT: return k == UI_CTX_DRIVE || k == UI_CTX_SHARE;   // (Unmount: the drive stays, to mount again, 2026-10-30)
+    case UM_EMPTY_IT: return trash;
     default: return false;
     }
 }
@@ -205,7 +207,7 @@ static void ui_branch_open(Ui *u, bool keys)
 static void ui_folder_open(Ui *u, isize side, int crumb, bool keys)
 {
     u->ctx_side = (int)side, u->ctx_crumb = crumb, u->ctx_key = keys;
-    u->ctx_trash = u->ctx_place = u->ctx_bmed = u->ctx_eject = u->ctx_full = u->ctx_w = u->ctx_unmounted = u->ctx_share = u->ctx_airplane = false;
+    u->ctx_kind = UI_CTX_DIR, u->ctx_bmed = u->ctx_full = u->ctx_w = false;
     u->ctx_bmk = -1, u->ctx_bms = 0;
     ui_menu_open(u, UI_CTX_FOLDER, keys);
 }

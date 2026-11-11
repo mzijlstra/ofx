@@ -300,6 +300,13 @@ enum { UI_MODAL_YES = 1, UI_MODAL_NO, UI_MODAL_SKIP, UI_MODAL_REPLACE, UI_MODAL_
 // Connect's question's fields (F16 step 4), in their order.
 enum { UI_LOGIN_USER, UI_LOGIN_DOMAIN, UI_LOGIN_PASS, UI_LOGIN_FIELDS };
 
+// What the folder menu's folder is (F8), by what was right-clicked: a folder (a row, a crumb, a tree
+// row) has every entry; a sidebar place no Cut or Copy, a removable drive Eject and Unmount too, a
+// mounted share Unmount; the Trash Empty Trash; a place without a folder yet (a drive not mounted, a
+// network bookmark, a server found) Mount alone, Airplane Mode's row Turn Off alone. One word where
+// six flags could contradict (the code-health review's step F).
+typedef enum { UI_CTX_DIR, UI_CTX_PLACE, UI_CTX_DRIVE, UI_CTX_SHARE, UI_CTX_TRASH, UI_CTX_BRINGS, UI_CTX_AIRPLANE } UiCtxKind;
+
 // What Connect to Server's question is for (F16 steps 4 and 7c): a share's login (user, domain,
 // password, and Guest), an SFTP server's (user and password: no domain, no guest), or a key's
 // passphrase (that alone). One word, where two flags could contradict (the code-health review's
@@ -859,10 +866,8 @@ typedef struct {
     // isn't the folder to move), its bookmark's line in the file and how many lines (-1: not a
     // bookmark's row), a bookmark already, a drive with an eject button, a trash with something in it.
     int    ctx_side, ctx_crumb;
-    bool   ctx_trash, ctx_place, ctx_bmed, ctx_eject, ctx_full;
-    bool   ctx_unmounted;   // a drive not mounted yet (2026-10-30), or a network bookmark (F16 step 5): Mount is all its menu has
-    bool   ctx_share;       // a share gvfs has mounted (F16 step 5): Unmount, no Eject
-    bool   ctx_airplane;    // the sidebar's Airplane mode row (F16 step 7d): Turn Off Airplane Mode is all its menu has
+    UiCtxKind ctx_kind;     // what the folder is (gui/ says as the menu opens)
+    bool   ctx_bmed, ctx_full;
     bool   ctx_w;   // the folder (either menu's, as it opens) takes new files: Paste Into Folder
     int    ctx_bmk, ctx_bms;
     // The tabs, from gui/ each frame (menu_facts): the current one's place, how many (F8's tab menu).

@@ -368,12 +368,12 @@ MUTANTS = [
     ('gui/input.c', '    else if (h.side >= 0) in->ctx_side = h.side;', '', 'f8'),
     ('gui/input.c', '    else if (h.bar == UB_CRUMB) in->ctx_crumb = h.crumb;', '', 'f8'),
     ('gui/main.c', '    if (ctx_up && !app.ctx_placed && app.ui.menu == UI_CTX_FOLDER) ctx_facts();', '', 'f8'),
-    ('gui/input.c', '    u->ctx_trash = strcmp(app.ctx_path, TRASH_URI) == 0;', '    u->ctx_trash = false;', 'f8'),
-    ('gui/input.c', '    u->ctx_full = u->ctx_trash && (trash_state(), app.trash_full);', '    u->ctx_full = u->ctx_trash;', 'f8'),
+    ('gui/input.c', '    u->ctx_kind = trash ? UI_CTX_TRASH : UI_CTX_DIR;', '    u->ctx_kind = UI_CTX_DIR;', 'f8'),   # (retargeted, step F)
+    ('gui/input.c', '    u->ctx_full = trash && (trash_state(), app.trash_full);', '    u->ctx_full = trash;', 'f8'),   # (retargeted, step F)
     ('gui/folder.c', ' < (int)sizeof files && !dir_empty(files)) return true;', ' < (int)sizeof files) return true;', 'f8'),
     ('gui/input.c', '    u->ctx_bmed = bm_find(&bmarks, app.ctx_path) >= 0 ||', '    u->ctx_bmed = false ||', 'f8'),
     ('gui/input.c', '    u->ctx_bms = bmarks.n;', '', 'f8'),
-    ('gui/input.c', '        u->ctx_place = true;\n', '', 'f8'),
+    ('gui/actions.c', '    return UI_CTX_PLACE;\n}', '    return UI_CTX_DIR;\n}', 'f8'),   # (retargeted, step F)
     ('gui/input.c', '        if (pl->kind == PL_BOOKMARK) u->ctx_bmk = bm_find(&bmarks, pl->path);', '', 'f8'),
     ('gui/input.c', '    case UM_OPEN_IT: go_to(dir, STR_EMPTY, 0); break;', '', 'f8'),
     ('gui/input.c', '    case UM_OPEN_TAB: tab_open_bg(dir); break;', '', 'f8'),
@@ -594,15 +594,15 @@ MUTANTS = [
     ('gui/watch.c', "        if (e->wd == watch.udev_wd && e->len && e->name[0] == 'b') *mounts = true;", '', 'usb'),
     ('gui/watch.c', "        if (e->wd == watch.udev_wd && e->len && e->name[0] == 'b') *mounts = true;", "        if (e->wd == watch.udev_wd && e->len && e->name[0] == 'c') *mounts = true;", 'usb'),
     ('gui/folder.c', 'app.places.p[i].kind == PL_HEAD || place_folderless(app.places.p[i].kind))\n        return NULL;', 'app.places.p[i].kind == PL_HEAD)\n        return NULL;', 'usb'),   # (F16 step 7d: place_folderless)
-    ('gui/actions.c', '            mount_start(&app.places.p[a.index]);   // a drive not mounted yet', '            {}   // a drive not mounted yet', 'usb'),
-    ('gui/input.c', '    if (it == UM_MOUNT_IT && ctx_pl && ctx_pl->kind == PL_UNMOUNTED) mount_start(ctx_pl);', '', 'usb'),
-    ('gui/input.c', '        u->ctx_unmounted = pl->kind == PL_UNMOUNTED || place_connects(pl->kind);', '        u->ctx_unmounted = place_connects(pl->kind);', 'usb'),   # (retargeted, step 7b)
+    ('gui/actions.c', '    if (p->kind == PL_UNMOUNTED) return mount_start(p), true;', '    if (p->kind == PL_UNMOUNTED) return true;', 'usb'),   # (retargeted, step F)
+    # (dropped, step F: the menu's Mount and a click are one place_bring now: #483 and #904)
+    ('fs/places.c', '    return k == PL_UNMOUNTED || place_connects(k);', '    return place_connects(k);', 'usb'),   # (retargeted, step F)
     ('gui/eject.c', '    else if (ej.op == DRIVE_MOUNT) mount_argv(ej.dev, argv);', '    else if (false) mount_argv(ej.dev, argv);', 'usb'),
     # Unmount (2026-10-30)
     ('gui/eject.c', '    else if (ej.op == DRIVE_UNMOUNT) unmount_argv(ej.dev, udisks, argv);\n', '', 'usb'),
     ('gui/eject.c', '        else set_status(false, "%s is unmounted", ej.label);', '', 'usb'),
     ('gui/eject.c', '        if (r == EJECT_FAILED) set_status(true, "Can\'t unmount %s: %s"', '        if (false) set_status(true, "Can\'t unmount %s: %s"', 'usb'),
-    ('gui/input.c', '        if (ctx_pl && place_ejectable(ctx_pl)) (it == UM_EJECT_IT ? eject_start : unmount_start)(ctx_pl);', '        if (ctx_pl && place_ejectable(ctx_pl)) eject_start(ctx_pl);', 'usb'),
+    ('gui/actions.c', '    if (place_ejectable(p)) (eject ? eject_start : unmount_start)(p);', '    if (place_ejectable(p)) eject_start(p);', 'usb'),   # (retargeted, step F)
     ('gui/folder.c', '        if (path_within(here_dir(), was[k])) app.drive_gone = true;\n', '', 'usb'),
     ('gui/folder.c', '        drive_gone_tabs(was[k]);\n', '', 'usb'),
     ('gui/folder.c', '        if (!t->used || !path_within(dir, mp)) continue;', '        if (!t->used) continue;', 'usb'),
@@ -1131,11 +1131,11 @@ MUTANTS = [
     ('gui/folder.c', '    places_load_net(&scratch, &app.places, bm, watch_shares(&scratch), servers, nservers, app.ui.airplane);', '', 'f16'),   # (retargeted, step 7b)
     ('gui/folder.c', '    return (place_is_drive(k) && k != PL_ROOT) || k == PL_SHARE;', '    return place_is_drive(k) && k != PL_ROOT;', 'f16'),
     # (F16 step 7d: side_path's check is place_folderless now; the unit mutants' place_folderless ones)
-    ('gui/actions.c', '            connect_start(str_from_c(app.places.p[a.index].path));   // a network bookmark', '            ;   // a network bookmark', 'f16'),   # (retargeted, step 7b)
-    ('gui/actions.c', '        else if (a.index >= 0 && a.index < app.places.n && app.places.p[a.index].kind == PL_SHARE) share_unmount_start(&app.places.p[a.index]);   // (F16 step 5)', '', 'f16'),
-    ('gui/input.c', '        u->ctx_share = pl->kind == PL_SHARE;', '', 'f16'),
-    ('gui/input.c', '        u->ctx_unmounted = pl->kind == PL_UNMOUNTED || place_connects(pl->kind);', '        u->ctx_unmounted = pl->kind == PL_UNMOUNTED;', 'f16'),   # (retargeted, step 7b)
-    ('gui/input.c', '    if (it == UM_MOUNT_IT && ctx_pl && place_connects(ctx_pl->kind)) connect_start(str_from_c(ctx_pl->path));', '', 'f16'),   # (retargeted, step 7b)
+    ('gui/actions.c', '    if (place_connects(p->kind)) return connect_start(str_from_c(p->path)), true;', '    if (place_connects(p->kind)) return true;', 'f16'),   # (retargeted, step F)
+    ('gui/actions.c', '    else if (p->kind == PL_SHARE) share_unmount_start(p);\n', '', 'f16'),   # (retargeted, step F)
+    ('gui/actions.c', '    if (p->kind == PL_SHARE) return UI_CTX_SHARE;   // (F16 step 5)\n', '', 'f16'),   # (retargeted, step F)
+    # (dropped, step F: place_brings is fs/'s now: its unit mutant #2399)
+    # (dropped, step F: the menu's Mount and a click are one place_bring now: #483 and #904)
     ('gui/input.c', ' || (app.ctx_path[0] == \'/\' && far_share_uri(app.ctx_path, uri, sizeof uri) && bm_find_uri(&bmarks, uri) >= 0);', ';', 'f16'),
     ('gui/eject.c', '    if (op == DRIVE_SHARE) watch_gvfs_kick();   // (gone from the sidebar, and its folders Home, at once)', '', 'net'),
     ('gui/eject.c', '    else if (ej.op == DRIVE_SHARE) r = gio_why(str_from_c(out), why, sizeof why) ? EJECT_FAILED : EJECT_DONE;', '    else if (ej.op == DRIVE_SHARE) r = EJECT_FAILED;', 'f16'),
@@ -1201,11 +1201,11 @@ MUTANTS = [
     ('gui/actions.c', '    airplane_apply(str_eq(state_value(&scratch, path, "airplane"), S("on")));', '    airplane_apply(false);', 'f16'),
     ('gui/actions.c', '        if (state_key("airplane", app.ui.airplane ? "on" : "off")) set_status', '        if (true) set_status', 'f16'),
     ('gui/actions.c', '"Airplane mode is off");\n        airplane_apply(app.ui.airplane);', '"Airplane mode is off");', 'f16'),
-    ('gui/actions.c', '            app.ui.airplane_asking = true;   // (F16 step 7d: asked, then turned off)', '            ;', 'f16'),
+    ('gui/actions.c', '        else if (pl && pl->kind == PL_AIRPLANE) app.ui.airplane_asking = true;', '        else if (pl && pl->kind == PL_AIRPLANE) {}', 'f16'),   # (retargeted, step F)
     ('gui/main.c', '    if (atomic_exchange(&watch.state_ready, false)) airplane_sync(), dirty = true;', '    if (atomic_exchange(&watch.state_ready, false)) dirty = true;', 'f16'),
     ('gui/main.c', 'atomic_store(&airplane, state_load(&scratch, state_at).airplane);', 'atomic_store(&airplane, false);', 'f16'),
     ('gui/main.c', '    app.ui.airplane = atomic_load(&airplane);\n', '', 'f16'),
-    ('gui/input.c', '        u->ctx_airplane = pl->kind == PL_AIRPLANE;   // (F16 step 7d)\n', '', 'f16'),
+    ('gui/actions.c', '    if (p->kind == PL_AIRPLANE) return UI_CTX_AIRPLANE;   // (F16 step 7d)\n', '', 'f16'),   # (retargeted, step F)
     ('gui/folder.c', 'servers, nservers, app.ui.airplane);', 'servers, nservers, false);', 'f16'),
     ('gui/disco.c', '        if (gen != seen) cache = false, seen = gen;', '        if (gen != seen) seen = gen;', 'f16'),
     ('gui/actions.c', '    if (on) atomic_fetch_add(&airplane_gen, 1);\n', '', 'f16'),
@@ -1226,4 +1226,7 @@ MUTANTS = [
     ('gui/folder.c', ', (GoHow){ .then = FAR_THEN_UP, .reload = true })) return;', ', (GoHow){ .then = FAR_THEN_UP })) return;', 'f16'),
     # The milestone's code-health cleanup, step E
     ('gui/panels.c', '        .border = { .color = cc(border), .width = CLAY_BORDER_OUTSIDE(1) },', '        .border = { .color = cc(t->accent), .width = CLAY_BORDER_OUTSIDE(1) },', 'f5'),
+    # The milestone's code-health cleanup, step F
+    ('gui/actions.c', '    if (place_ejectable(p)) return UI_CTX_DRIVE;\n', '', 'usb'),
+    ('gui/input.c', '        if (!trash) u->ctx_kind = place_ctx_kind(pl);', '        {}', 'f8'),
 ]

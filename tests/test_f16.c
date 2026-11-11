@@ -639,12 +639,30 @@ static void test_far_drive(void)
 }
 
 // Connect to Server's address (step 4): smb:// with a server and a share; no password in it.
+// str_find_str (base/; the code-health review's step F: six loops wrote it out).
+static void test_str_find_str(void)
+{
+    CHECK(str_find_str(S("abcabc"), S("ca")) == 2 && str_find_str(S("abc"), S("abc")) == 0 && str_find_str(S("abc"), S("bcd")) == -1);
+    CHECK(str_find_str(S("ab"), S("abc")) == -1 && str_find_str(S("abc"), STR_EMPTY) == 0 && str_find_str(STR_EMPTY, S("a")) == -1);
+    CHECK(str_find_str(S("xx\nlocal path: /a"), S("\nlocal path: ")) == 2);
+}
+
 static void test_connect_uri(void)
 {
     char uri[64], host[32], share[32], why[128];
 #define CU(t) connect_uri(S(t), uri, sizeof uri, host, sizeof host, share, sizeof share, why, sizeof why)
     CHECK(CU("/home/m") == CONNECT_NOT && CU("~/x") == CONNECT_NOT && CU("smb:/x/y") == CONNECT_NOT && CU("ftp://h/x") == CONNECT_NOT && CU("nfs:/h/x") == CONNECT_NOT && CU("") == CONNECT_NOT && CU("smb:/") == CONNECT_NOT);
     CHECK(CU(" smb://nas/pub ") == CONNECT_OK && strcmp(uri, "smb://nas/pub") == 0 && strcmp(host, "nas") == 0 && strcmp(share, "pub") == 0);
+    // (the code-health review's step F) A share's name as said, decoded, as gvfs names it (the
+    // address as written); an IPv6 server in brackets, its port after them.
+    CHECK(CU("smb://nas/My%20Docs/x") == CONNECT_OK && strcmp(share, "My Docs") == 0 && strcmp(uri, "smb://nas/My%20Docs/x") == 0);
+    CHECK(CU("smb://nas/a%2") == CONNECT_OK && strcmp(share, "a%2") == 0);   // (a bad escape: as written)
+    CHECK(CU("smb://[fd00::1]/pub") == CONNECT_OK && strcmp(host, "[fd00::1]") == 0 && strcmp(share, "pub") == 0);
+    CHECK(CU("smb://[fd00::1]:4445/pub") == CONNECT_OK && strcmp(host, "[fd00::1]") == 0);
+    CHECK(CU("sftp://me@[::1]:2222/home") == CONNECT_OK && strcmp(host, "me@[::1]") == 0);
+    CHECK(CU("smb://[fd00::1]x/pub") == CONNECT_BAD && CU("smb://[fd00::1/pub") == CONNECT_BAD && CU("smb://[]/pub") == CONNECT_BAD && CU("smb://[::1]:x/pub") == CONNECT_BAD);
+    CHECK(CU("smb://[::1]1445/pub") == CONNECT_BAD);   // (no ':' after the bracket: not a port)
+    CHECK(CU("nfs://[::1]/srv") == CONNECT_OK && CU("nfs://[::1]:2049/srv") == CONNECT_BAD);   // (NFS: no port, brackets or not)
     CHECK(CU("SMB://127.0.0.1:4445/priv/sub/x") == CONNECT_OK && strcmp(host, "127.0.0.1") == 0 && strcmp(share, "priv") == 0 && strcmp(uri, "SMB://127.0.0.1:4445/priv/sub/x") == 0);
     CHECK(CU("smb://michael@nas/home") == CONNECT_OK && strcmp(host, "nas") == 0 && strcmp(share, "home") == 0);
     CHECK(CU("smb://dom;michael@nas:445/My Share") == CONNECT_OK && strcmp(host, "nas") == 0 && strcmp(share, "My Share") == 0);
@@ -1087,6 +1105,13 @@ static void test_gvfs_uri(void)
     CHECK(gvfs_share_uri(S("smb-share:domain=W,server=nas,share=h"), "", u, sizeof u) && strcmp(u, "smb://nas/h") == 0);   // (a domain without a user: none)
     CHECK(gvfs_share_uri(S("sftp:host=box,user=me"), "", u, sizeof u) && strcmp(u, "sftp://me@box/") == 0 && !gvfs_share_uri(S("dav:server=a,share=b"), "", u, sizeof u));   // (sftp: step 7c)
     CHECK(!gvfs_share_uri(S("smb-share:server=nas"), "", u, sizeof u) && !gvfs_share_uri(S("smb-share:share=x"), "", u, sizeof u));
+    // AFP and WebDAV (the code-health review's step F: they had a label, no address).
+    CHECK(gvfs_share_uri(S("afp-volume:host=mac,user=m,volume=Photos"), "/2026", u, sizeof u) && strcmp(u, "afp://m@mac/Photos/2026") == 0);
+    CHECK(!gvfs_share_uri(S("afp-volume:host=mac"), "", u, sizeof u));
+    CHECK(!gvfs_share_uri(S("ftp:host=x"), "", u, sizeof u) && !gvfs_share_uri(S("davx:host=x"), "", u, sizeof u));   // (a kind it doesn't know)
+    CHECK(gvfs_share_uri(S("dav:host=cloud,port=8443,prefix=%2Fremote.php%2Fwebdav,ssl=true,user=m"), "/a b", u, sizeof u) && strcmp(u, "davs://m@cloud:8443/remote.php/webdav/a%20b") == 0);
+    CHECK(gvfs_share_uri(S("dav:host=nas,ssl=false"), "", u, sizeof u) && strcmp(u, "dav://nas/") == 0);   // (its root: no prefix)
+    CHECK(gvfs_share_uri(S("nfs:host=nas,prefix=%2Fsrv,user=m"), "", u, sizeof u) && strcmp(u, "nfs://nas/srv") == 0);   // (NFS takes no user)
     // SFTP (step 7c): sftp://[user@]host[:port]/path, the path from the server's root
     CHECK(gvfs_share_uri(S("sftp:host=127.0.0.1,port=38165,user=tester"), "", u, sizeof u) && strcmp(u, "sftp://tester@127.0.0.1:38165/") == 0);
     CHECK(gvfs_share_uri(S("sftp:host=box"), "/home/me/a b", u, sizeof u) && strcmp(u, "sftp://box/home/me/a%20b") == 0);
@@ -1197,17 +1222,17 @@ static void test_airplane(void)
     CHECK(in_go);
     // The row's own menu: Turn Off Airplane Mode alone (no check, so the folder menu keeps no column for
     // one); picked there, it turns off as from Go.
-    Ui f = { .airplane = true, .menu = UI_CTX_FOLDER, .ctx_airplane = true };
+    Ui f = { .airplane = true, .menu = UI_CTX_FOLDER, .ctx_kind = UI_CTX_AIRPLANE };
     CHECK(ui_folder_shown(&f, UM_AIRPLANE_OFF_IT) && !ui_folder_shown(&f, UM_OPEN_IT) && !ui_folder_shown(&f, UM_MOUNT_IT) && !ui_folder_shown(&f, UM_PROPS_IT));
     CHECK(UI_MENU_ITEM[UM_AIRPLANE_OFF_IT].mark == 0);
-    f.ctx_airplane = false, f.ctx_unmounted = true;
+    f.ctx_kind = UI_CTX_BRINGS;
     CHECK(!ui_folder_shown(&f, UM_AIRPLANE_OFF_IT));
-    f.ctx_unmounted = false;
+    f.ctx_kind = UI_CTX_DIR;
     CHECK(!ui_folder_shown(&f, UM_AIRPLANE_OFF_IT));
-    f.ctx_airplane = true;
+    f.ctx_kind = UI_CTX_AIRPLANE;
     ui_folder_open(&f, 3, -1, false);   // (another row's menu: gui/ says again what it is)
-    CHECK(!f.ctx_airplane);
-    f.ctx_airplane = true, f.menu = UI_CTX_FOLDER;
+    CHECK(f.ctx_kind == UI_CTX_DIR);
+    f.ctx_kind = UI_CTX_AIRPLANE, f.menu = UI_CTX_FOLDER;
     a = ui_menu_pick(&f, UM_AIRPLANE_OFF_IT);
     CHECK(a.kind == UA_AIRPLANE && !f.airplane);
     // The row's question: Enter or y turns it off, n or Esc keeps it, and its buttons the same.

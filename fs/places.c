@@ -71,11 +71,18 @@ static bool place_connects(PlaceKind k)
     return k == PL_NETBM || k == PL_SERVER;
 }
 
-// Whether a place has no folder to open (a drive not mounted yet, an address, Airplane Mode's row):
-// drawn dim, never the place of a folder, no folder for its menu.
+// Whether a place gets its folder by a click first: a drive not mounted yet is mounted, an address
+// (a network bookmark, a server found) connected to; its menu has Mount alone.
+static bool place_brings(PlaceKind k)
+{
+    return k == PL_UNMOUNTED || place_connects(k);
+}
+
+// Whether a place has no folder to open (place_brings, or Airplane Mode's row): drawn dim, never the
+// place of a folder, no folder for its menu.
 static bool place_folderless(PlaceKind k)
 {
-    return k == PL_UNMOUNTED || place_connects(k) || k == PL_AIRPLANE;
+    return place_brings(k) || k == PL_AIRPLANE;
 }
 
 // Whether path is a place already in its section (a drive among the drives, a share or network

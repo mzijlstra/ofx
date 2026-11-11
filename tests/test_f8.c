@@ -277,7 +277,7 @@ static void test_ctx_folder_menu(void)
     ui_handle(&u, names, &in);
     CHECK(u.menu_on && u.menu == UI_CTX_FOLDER && u.ctx_side == 5 && u.ctx_crumb == -1 && u.side.sel == 5 && u.focus != UI_FOCUS_SIDE && !u.ctx_key);
     // As gui/ finds it: a place (no Cut or Copy), not a bookmark's row, no eject.
-    u.ctx_place = true, u.ctx_bms = 3;
+    u.ctx_kind = UI_CTX_PLACE, u.ctx_bms = 3;
     CHECK(ui_menu_shown(&u, UM_OPEN_IT) && ui_menu_shown(&u, UM_OPEN_TAB) && ui_menu_shown(&u, UM_OPEN_WINDOW) && ui_menu_shown(&u, UM_TERMINAL_IN));
     CHECK(!ui_menu_shown(&u, UM_CUT_IT) && !ui_menu_shown(&u, UM_COPY_IT) && ui_menu_shown(&u, UM_PASTE_INTO) && ui_menu_shown(&u, UM_BOOKMARK_IT));
     CHECK(!ui_menu_shown(&u, UM_BM_RENAME_IT) && !ui_menu_shown(&u, UM_EJECT_IT) && !ui_menu_shown(&u, UM_EMPTY_IT) && ui_menu_shown(&u, UM_PROPS_IT));
@@ -299,21 +299,25 @@ static void test_ctx_folder_menu(void)
     u.menu_on = true;
     u.ctx_bmed = true;
     CHECK(!ui_menu_shown(&u, UM_BOOKMARK_IT));
-    u.ctx_eject = true;
+    u.ctx_kind = UI_CTX_DRIVE;
     CHECK(ui_menu_shown(&u, UM_EJECT_IT) && ui_menu_enabled(&u, UM_EJECT_IT) && !ui_menu_shown(&u, UM_MOUNT_IT));
     CHECK(ui_menu_shown(&u, UM_UNMOUNT_IT) && ui_menu_enabled(&u, UM_UNMOUNT_IT));   // (2026-10-30)
     in = ui_input_none(), in.menu_item = menu_place(UI_CTX_FOLDER, UM_UNMOUNT_IT);
     CHECK(ui_handle(&u, names, &in).kind == UA_FOLDER_DO && !u.menu_on);
     u.menu_on = true;
+    // A mounted share (F16 step 5): Unmount, no Eject, no Cut or Copy (a place).
+    u.ctx_kind = UI_CTX_SHARE;
+    CHECK(ui_menu_shown(&u, UM_UNMOUNT_IT) && !ui_menu_shown(&u, UM_EJECT_IT) && !ui_menu_shown(&u, UM_COPY_IT) && ui_menu_shown(&u, UM_OPEN_IT));
+    u.ctx_kind = UI_CTX_DIR;
+    CHECK(ui_menu_shown(&u, UM_COPY_IT) && !ui_menu_shown(&u, UM_UNMOUNT_IT));
     // A drive not mounted yet (2026-10-30): Mount alone.
-    u.ctx_unmounted = true;
+    u.ctx_kind = UI_CTX_BRINGS;
     CHECK(ui_menu_shown(&u, UM_MOUNT_IT) && ui_menu_enabled(&u, UM_MOUNT_IT) && !ui_menu_shown(&u, UM_OPEN_IT) && !ui_menu_shown(&u, UM_EJECT_IT));
     CHECK(!ui_menu_shown(&u, UM_UNMOUNT_IT));
     CHECK(!ui_menu_shown(&u, UM_PROPS_IT) && !ui_menu_shown(&u, UM_OPEN_TAB));
     in = ui_input_none(), in.menu_item = menu_place(UI_CTX_FOLDER, UM_MOUNT_IT);
     CHECK(ui_handle(&u, names, &in).kind == UA_FOLDER_DO);
-    u.menu_on = true, u.ctx_unmounted = false;
-    u.ctx_place = false;
+    u.menu_on = true, u.ctx_kind = UI_CTX_DIR;
     CHECK(ui_menu_shown(&u, UM_CUT_IT) && ui_menu_shown(&u, UM_COPY_IT));
     in = ui_input_none(), in.menu_item = menu_place(UI_CTX_FOLDER, UM_COPY_IT);
     CHECK(ui_handle(&u, names, &in).kind == UA_FOLDER_DO);
@@ -326,8 +330,8 @@ static void test_ctx_folder_menu(void)
     // A bookmark's row (line 1 of 3): Edit Bookmarks' own on that line.
     in = ui_input_none(), in.ctx_side = 3;
     ui_handle(&u, names, &in);
-    CHECK(u.ctx_bmk == -1 && !u.ctx_place && !u.ctx_bmed && !u.ctx_eject && !u.ctx_w);   // (reset as it opens, for gui/ to say)
-    u.ctx_place = true, u.ctx_bmk = 1, u.ctx_bms = 3, u.bm_total = 3;
+    CHECK(u.ctx_bmk == -1 && u.ctx_kind == UI_CTX_DIR && !u.ctx_bmed && !u.ctx_w);   // (reset as it opens, for gui/ to say)
+    u.ctx_kind = UI_CTX_PLACE, u.ctx_bmk = 1, u.ctx_bms = 3, u.bm_total = 3;
     UiMenuItem bm[] = { UM_BM_RENAME_IT, UM_BM_UP_IT, UM_BM_DOWN_IT, UM_BM_REMOVE_IT, UM_BM_EDIT_IT };
     for (int k = 0; k < COUNT(bm); k++) CHECK(ui_menu_shown(&u, bm[k]) && ui_menu_enabled(&u, bm[k]));
     struct { UiMenuItem it; UiActionKind kind; } line[] = { { UM_BM_UP_IT, UA_BM_UP }, { UM_BM_DOWN_IT, UA_BM_DOWN }, { UM_BM_REMOVE_IT, UA_BM_REMOVE } };
@@ -352,7 +356,7 @@ static void test_ctx_folder_menu(void)
     u.ctx_bmk = 2;
     CHECK(ui_menu_enabled(&u, UM_BM_UP_IT) && !ui_menu_enabled(&u, UM_BM_DOWN_IT));
     // Trash: gone to, not into; Empty Trash, greyed when empty, asks.
-    u.ctx_bmk = -1, u.ctx_trash = true, u.ctx_eject = false, u.ctx_place = false;   // (its path button)
+    u.ctx_bmk = -1, u.ctx_kind = UI_CTX_TRASH;   // (its path button)
     CHECK(ui_menu_shown(&u, UM_OPEN_IT) && ui_menu_shown(&u, UM_OPEN_TAB) && !ui_menu_shown(&u, UM_OPEN_WINDOW) && !ui_menu_shown(&u, UM_TERMINAL_IN));
     CHECK(!ui_menu_shown(&u, UM_PASTE_INTO) && !ui_menu_shown(&u, UM_BOOKMARK_IT) && !ui_menu_shown(&u, UM_PROPS_IT) && !ui_menu_shown(&u, UM_CUT_IT));
     CHECK(ui_menu_shown(&u, UM_EMPTY_IT) && !ui_menu_enabled(&u, UM_EMPTY_IT));
@@ -368,7 +372,7 @@ static void test_ctx_folder_menu(void)
     CHECK(ui_handle(&u, names, &in).kind == UA_EMPTY_TRASH && !u.empty_asking);
     u.empty_asking = true, in = ui_input_none(), in.modal = UI_MODAL_YES;
     CHECK(ui_handle(&u, names, &in).kind == UA_EMPTY_TRASH && !u.empty_asking);
-    u.empty_asking = false, u.ctx_trash = u.ctx_full = false;
+    u.empty_asking = false, u.ctx_kind = UI_CTX_DIR, u.ctx_full = false;
     // A path button: its menu, the sidebar's cursor left alone; one that isn't there: nothing.
     in = ui_input_none(), in.ctx_crumb = 1, in.crumb_n = 3;
     ui_handle(&u, names, &in);

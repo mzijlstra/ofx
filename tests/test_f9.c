@@ -726,7 +726,7 @@ static void test_search_ui_refused(void)
     u.view = UI_VIEW_FOLDER;
     u.menu = UI_CTX_FOLDER;
     CHECK(ui_menu_shown(&u, UM_SEARCH_IN) && ui_menu_enabled(&u, UM_SEARCH_IN));
-    u.ctx_trash = true;
+    u.ctx_kind = UI_CTX_TRASH;
     CHECK(!ui_menu_shown(&u, UM_SEARCH_IN));
     // Restore, split from them: the trash view's, with the files' cursor.
     u = menu_ui(5);

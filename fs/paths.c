@@ -263,6 +263,10 @@ static bool percent_encode(Str s, const char *keep, char *out, size_t cap)
     return true;
 }
 
+// What a URI's path keeps as it is (GLib's: letters, digits, -._~ and these), the rest %XX: a
+// file:// URI's and a share's address (the code-health review's step F: written four times).
+#define URI_PATH_KEEP "!$&'()*+,=@:/"
+
 // path's file:// URI as GLib makes it (g_filename_to_uri), which is what Nemo hashes for its
 // previews: every byte but letters, digits and -._~!$&'()*+,=@:/ as %XX in upper case (seen with
 // `gio info`, 2026-10-24). The previews', the bookmarks' and the clipboard's and drags' (one
@@ -271,7 +275,7 @@ static bool file_uri(const char *path, char *out, size_t cap)
 {
     if (cap < 8) return false;
     memcpy(out, "file://", 7);
-    return percent_encode(str_from_c(path), "!$&'()*+,=@:/", out + 7, cap - 7);
+    return percent_encode(str_from_c(path), URI_PATH_KEEP, out + 7, cap - 7);
 }
 
 // A file:// URI's path: "file:///" or "file://localhost/", then %XX escapes; false for another
@@ -316,9 +320,7 @@ static bool mountinfo_line(Str line, char *mp, size_t cap, Str *type, Str *sourc
     isize sp = str_find(f, ' ');
     if (sp <= 0 || !octal_decode(str_cut(f, 0, sp), mp, cap)) return false;
     *type = *source = STR_EMPTY;
-    isize dash = -1;
-    for (isize i = 0; dash < 0 && i + 3 <= line.len; i++)
-        if (memcmp(line.p + i, " - ", 3) == 0) dash = i;
+    isize dash = str_find_str(line, S(" - "));
     if (dash < 0) return true;
     Str rest = str_cut(line, dash + 3, line.len);
     isize s1 = str_find(rest, ' ');

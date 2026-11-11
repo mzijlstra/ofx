@@ -58,6 +58,13 @@ isize str_find_last(Str s, char c)
     return -1;
 }
 
+isize str_find_str(Str s, Str w)
+{
+    for (isize i = 0; i + w.len <= s.len; i++)
+        if (memcmp(s.p + i, w.p, (size_t)w.len) == 0) return i;
+    return -1;
+}
+
 u32 utf8_next(const char *s, isize len, isize *i)
 {
     const u8 *p = (const u8 *)s + *i;
