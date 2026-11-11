@@ -2735,7 +2735,7 @@ MUTANTS += [
     ('fs/farlist.c', 'if (n < 0 || (size_t)n + (size_t)name.len > cap || name.len < 1 || name.len > NAME_MAX) return 0;', 'if (n < 0 || (size_t)n + (size_t)name.len > cap || name.len > NAME_MAX) return 0;'),
     ('fs/farlist.c', 'if (n < 0 || (size_t)n + (size_t)name.len > cap || name.len < 1 || name.len > NAME_MAX) return 0;', 'if (n < 0 || (size_t)n + (size_t)name.len > cap || name.len < 1) return 0;'),
     ('fs/tree.c', '    if (t->mounts.n && (!far_real(&t->mounts, dir, real, sizeof real, &far) || far)) return;', ''),   # (retargeted, step C)
-    ('ui/helpers.c', '    if (in->opening) {\n        snprintf(buf, cap, in->noun && strcmp(in->noun, "server") == 0 ? "Searching the network\\xE2\\x80\\xA6" : "Opening\\xE2\\x80\\xA6");   // (Browse Network\'s: the last rows shown meanwhile)\n        return;\n    }\n', ''),   # (retargeted, F16 7e part 3)
+    ('ui/helpers.c', '    if (in->opening) {\n        snprintf(buf, cap, in->rows == UI_ROWS_SERVERS ? "Searching the network\\xE2\\x80\\xA6" : "Opening\\xE2\\x80\\xA6");   // (Browse Network\'s: the last rows shown meanwhile)\n        return;\n    }\n', ''),   # (retargeted, 7e code-health C)
     ('fs/spawn.c', '    if (in >= 0) posix_spawn_file_actions_adddup2(&fa, in, 0);\n    else posix_spawn_file_actions_addopen', '    posix_spawn_file_actions_addopen'),
     ('fs/spawn.c', '    else if (errs == SPAWN_ERR_NULL) posix_spawn_file_actions_addopen(&fa, 2, "/dev/null", O_WRONLY, 0);\n', ''),
     ('fs/spawn.c', '    if (errs >= 0) posix_spawn_file_actions_adddup2(&fa, errs, 2);', '    if (errs >= 0) {}'),
@@ -3044,7 +3044,7 @@ MUTANTS += [
     ('fs/places.c', '    places_add(pl, PL_BROWSE, NETWORK_URI, S("Browse Network"));', '    {}'),
     ('ui/ui.c', '    if (v == UI_VIEW_NETWORK) {\n        switch (k) {', '    if (0) {\n        switch (k) {'),
     ('ui/menus.c', '    if (k == UI_CTX_NETWORK) return it == UM_OPEN_IT || it == UM_OPEN_TAB;', '    if (k == UI_CTX_NETWORK) return it == UM_OPEN_IT;'),
-    ('ui/helpers.c', '    const char *noun = in->noun ? in->noun : "item";', '    const char *noun = "item";'),   # (retargeted, F16 7e part 3)
+    ('ui/helpers.c', '    const char *noun = NOUN[in->rows];', '    const char *noun = NOUN[UI_ROWS_ITEMS];'),   # (retargeted, 7e code-health C)
     ('ui/helpers.c', '    if (str_eq(ui_crumb_path(c, i), S(NETWORK_URI))) return S("Browse Network");\n', ''),
     ('fs/list.c', '    int c = n ? memcmp(a.p, b.p, (size_t)n) : 0;', '    int c = memcmp(a.p, b.p, (size_t)n);'),
     ('fs/state.c', '    if (!sep || sep == uri || !h[0] || n <= 0 || (size_t)n >= cap || strpbrk(h, " =\\n")) return false;', '    if (!sep || sep == uri || !h[0] || n <= 0 || (size_t)n >= cap) return false;'),   # (retargeted, 7e code-health B)
@@ -3062,7 +3062,7 @@ MUTANTS += [
     ('ui/helpers.c', '    if (str_starts_with(cw, S(NETWORK_URI))) {   // a server', '    if (0) {   // a server'),   # (F16 7e part 3)
     ('ui/helpers.c', '        Str host = sep < 0 ? p : str_cut(p, sep + 3, p.len);', '        Str host = sep < 0 ? p : str_cut(p, sep, p.len);'),   # (F16 7e part 3)
     ('ui/helpers.c', "        while (host.len > 1 && host.p[host.len - 1] == '/') host.len--;\n        return host;", '        return host;'),   # (F16 7e part 3)
-    ('ui/helpers.c', 'in->noun && strcmp(in->noun, "server") == 0 ? "Searching', 'in->noun ? "Searching'),   # (F16 7e part 3)
+    ('ui/helpers.c', 'in->rows == UI_ROWS_SERVERS ? "Searching', 'in->rows != UI_ROWS_ITEMS ? "Searching'),   # (retargeted, 7e code-health C)
     ('ui/menus.c', '    if (u->menu == UI_CTX_ENTRY && u->view == UI_VIEW_NETWORK) return it == UM_SEP || it == UM_OPEN || it == UM_OPEN_TAB || it == UM_COPY_PATH;\n', ''),   # (7e code-health A)
     ('ui/menus.c', 'it == UM_OPEN_TAB || it == UM_COPY_PATH;', 'it == UM_OPEN_TAB;'),   # (7e code-health A)
     ('ui/menus.c', '    case UM_HERE_PROPS: return u->view == UI_VIEW_FOLDER || u->view == UI_VIEW_TRASH;', '    case UM_HERE_PROPS: return u->view != UI_VIEW_SEARCH;'),   # (7e code-health A)
@@ -3075,4 +3075,5 @@ MUTANTS += [
     ('fs/state.c', '    int n = snprintf(out, cap, "login.%.*s.%s", sep ? (int)(sep - uri) : 0, uri, h);', '    int n = snprintf(out, cap, "login.%s", h);'),   # (7e code-health B)
     ('fs/state.c', '    if (!sep || sep == uri || !h[0] ||', '    if (!sep || !h[0] ||'),   # (7e code-health B)
     ('fs/places.c', '        snprintf(u, sizeof u, "%.*s", STR_ARG(str_trim(uri)));   // (the line\'s own', "        // (the line's own"),   # (7e code-health B)
+    ('ui/helpers.c', '[UI_ROWS_SHARES] = "share" };', '[UI_ROWS_SHARES] = "server" };'),   # (7e code-health C)
 ]

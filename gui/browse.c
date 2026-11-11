@@ -14,7 +14,6 @@ static struct {
     pthread_mutex_t mu;
     bool            running;   // a query on its way (one at a time; a reload meanwhile waits for it)
     bool            again;     // asked again while one ran: another when it ends
-    bool            answered;  // a query has answered since the window started
     int             n;
     NetServer       s[NET_SERVERS_MAX];
     atomic_bool     ready;     // an answer the main loop hasn't taken (browse_take)
@@ -57,7 +56,7 @@ static void *browse_thread(void *arg)
         int n = browse_query(now);
         atomic_fetch_add(&browse.asks, 1);
         pthread_mutex_lock(&browse.mu);
-        memcpy(browse.s, now, (size_t)n * sizeof *now), browse.n = n, browse.answered = true;
+        memcpy(browse.s, now, (size_t)n * sizeof *now), browse.n = n;
         bool again = browse.again;
         browse.again = false, browse.running = again;
         pthread_mutex_unlock(&browse.mu);
@@ -74,7 +73,7 @@ static void browse_start(void)
     // (under the test guard only a run that gives a stand-in asks: the others' spawn logs stay as
     // they were, and their view answers at once with none)
     if (getenv("OFX_GUI_ROOT") && !getenv("OFX_TEST_AVAHI")) {
-        browse.n = 0, browse.answered = true;
+        browse.n = 0;
         pthread_mutex_unlock(&browse.mu);
         atomic_store(&browse.ready, true);
         return;
@@ -111,15 +110,15 @@ static int browse_servers(NetServer *s)
 // alone; since step 7e the view's rows at NETWORK_URI followed by that address): the address, its
 // name, the shares' names. Main thread only.
 static struct {
-    char server[PATH_MAX], host[256];
+    char server[PATH_MAX];
     int  n;
     char name[SERVER_SHARES_MAX][SERVER_SHARE_NAME];
 } shp;
 
 // A server's shares as Connect to Server read them (connect_take, its lock held): kept for the view.
-static void shares_keep(const char *server, const char *host, const char (*names)[SERVER_SHARE_NAME], int n)
+static void shares_keep(const char *server, const char (*names)[SERVER_SHARE_NAME], int n)
 {
-    snprintf(shp.server, sizeof shp.server, "%s", server), snprintf(shp.host, sizeof shp.host, "%s", host);
+    snprintf(shp.server, sizeof shp.server, "%s", server);
     shp.n = n;
     memcpy(shp.name, names, sizeof shp.name);
 }

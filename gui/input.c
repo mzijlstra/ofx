@@ -94,8 +94,8 @@ static const struct {
     [UI_FIELD_INSIDE] = { "inside-field", TOGGLE_INSIDE },
 };
 
-// The picker panel on top (ui_picker_on: Open With's, the branches', a server's shares) and its rows'
-// and field's element ids, by its layout's own id ("ow", "brp", "shp"); NULL for none.
+// The picker panel on top (ui_picker_on: Open With's, the branches') and its rows' and field's
+// element ids, by its layout's own id ("ow", "brp"); NULL for none.
 static const UiPick *pick_on_top(const char **row_id, const char **field_id)
 {
     static const char *const ROW[UI_PANELS] = { [UI_PANEL_OW] = "ow-row", [UI_PANEL_BRANCHES] = "brp-row" };

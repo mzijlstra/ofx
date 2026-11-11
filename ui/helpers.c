@@ -577,6 +577,8 @@ static void ui_size(char *buf, size_t cap, i64 size)
 
 // What the status line says when no message is up (F6): about the one entry marked, how many are
 // marked, or else the folder's count and its drive's free space.
+typedef enum { UI_ROWS_ITEMS, UI_ROWS_SERVERS, UI_ROWS_SHARES } UiRows;   // (the status line's noun for them)
+
 typedef struct {
     isize n, hidden;     // the listing's entries, and its dot-files (left out or not)
     isize marked;
@@ -588,7 +590,7 @@ typedef struct {
     bool  cramped;       // Show Permissions on, but the window has no room for them: said (2026-10-27)
     bool  opening;       // a far folder's listing still to come (F16), or Browse Network's query (step 7e): said instead of its count
     isize changed;       // in a git repository, the changes under the folder (F12 step 5); 0: none said
-    const char *noun;    // what the rows are when not files: "server", "share" (Browse Network's, F16 step 7e); NULL: items
+    UiRows rows;         // what the rows are: items, or Browse Network's servers or shares (F16 step 7e)
 } UiInfo;
 
 static void ui_status_base(char *buf, size_t cap, const UiInfo *in);
@@ -612,13 +614,14 @@ static void ui_status_base(char *buf, size_t cap, const UiInfo *in)
         else if (!in->one_dir && in->one_size >= 0) ui_size(size, sizeof size, in->one_size), snprintf(buf + k, cap - (size_t)k, " (%s)", size);
         return;
     }
-    const char *noun = in->noun ? in->noun : "item";
+    static const char *const NOUN[] = { [UI_ROWS_ITEMS] = "item", [UI_ROWS_SERVERS] = "server", [UI_ROWS_SHARES] = "share" };
+    const char *noun = NOUN[in->rows];
     if (in->marked > 1) {
         snprintf(buf, cap, "%td %ss selected", in->marked, noun);
         return;
     }
     if (in->opening) {
-        snprintf(buf, cap, in->noun && strcmp(in->noun, "server") == 0 ? "Searching the network\xE2\x80\xA6" : "Opening\xE2\x80\xA6");   // (Browse Network's: the last rows shown meanwhile)
+        snprintf(buf, cap, in->rows == UI_ROWS_SERVERS ? "Searching the network\xE2\x80\xA6" : "Opening\xE2\x80\xA6");   // (Browse Network's: the last rows shown meanwhile)
         return;
     }
     int k = snprintf(buf, cap, "%td %s%s", in->n, noun, in->n == 1 ? "" : "s");

@@ -71,7 +71,7 @@ static bool place_connects(PlaceKind k)
 }
 
 // Whether a place gets its folder by a click first: a drive not mounted yet is mounted, an address
-// (a network bookmark, a server found) connected to; its menu has Mount alone.
+// (a network bookmark) connected to; its menu has Mount alone.
 static bool place_brings(PlaceKind k)
 {
     return k == PL_UNMOUNTED || place_connects(k);

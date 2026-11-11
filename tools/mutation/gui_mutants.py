@@ -993,7 +993,7 @@ MUTANTS = [
     ('gui/space.c', "    if (cwd[0] == '/' && mounts_local(mi, cwd)) snprintf", "    if (cwd[0] == '/') snprintf", 'f16'),   # (retargeted, step C)
     ('gui/actions.c', '    if (far_dir(path)) {\n        if (!go_to_then(path, STR_EMPTY, 0, FAR_THEN_SELECT)) return;', '    if (0) {\n        if (!go_to_then(path, STR_EMPTY, 0, FAR_THEN_SELECT)) return;', 'net'),   # (retargeted, step D)
     ('gui/frame.c', '           : far_word                   ? (app.far_note[0] ? app.far_note : "Opening\\xE2\\x80\\xA6")\n', '', 'f16'),
-    ('gui/footer.c', '.opening = (app.far_on && app.far_loading && !app.list.n) || (app.ui.view', '.opening = (app.ui.view', 'f16'),   # (retargeted, F16 7e part 3)
+    ('gui/footer.c', '.opening = (app.far_on && app.far_loading && !app.list.n) || network_busy() };', '.opening = network_busy() };', 'f16'),   # (retargeted, 7e code-health C)
     # (the step 2a review: a reload while hung, the cursor across a slow reload, the lister's stderr)
     ('gui/folder.c', '    far_drop();\n    app.far_loading = true, app.far_waiting = far_busy(dir);', '    app.far_loading = true, app.far_waiting = far_busy(dir);', 'net'),
     ('gui/folder.c', '        if (far_begin(dir, select, fallback, how, &err)) return app.far_kept = true, app.far_kept_sel = app.ui.list.sel, true;', '        if (far_begin(dir, select, fallback, how, &err)) return app.far_kept_sel = app.ui.list.sel, true;', 'f16'),   # (retargeted, step D review)
@@ -1241,7 +1241,7 @@ MUTANTS = [
     ('gui/browse.c', '    if (browse.running) browse.again = true;', '    if (browse.running) {}', 'f16'),
     ('gui/actions.c', '    if (p->kind == PL_BROWSE) return UI_CTX_NETWORK;   // (F16 step 7e)\n', '', 'f16'),
     ('gui/main.c', ' && app.ui.view == UI_VIEW_NETWORK) network_relist(), dirty = true;', ' && app.ui.view == UI_VIEW_NETWORK) dirty = true;', 'f16'),
-    ('gui/footer.c', ' || (app.ui.view == UI_VIEW_NETWORK && (browse_server_of(app.cwd) ? connect_busy() : browse_busy())) };', ' };', 'f16'),   # (retargeted, F16 7e part 3)
+    ('gui/footer.c', '.opening = (app.far_on && app.far_loading && !app.list.n) || network_busy() };', '.opening = (app.far_on && app.far_loading && !app.list.n) };', 'f16'),   # (retargeted, 7e code-health C)
     ('gui/connect.c', '    if (keep) state_key(key, login);\n', '', 'f16'),   # (F16 7e part 3)
     # (dropped, 7e code-health B: B rewrote the line: cn.answered is per round now; B's own mutants cover it)
     ('gui/connect.c', 'str_from_c(user[0] ? user : cn.def_user), str_from_c(domain));', 'str_from_c(cn.def_user), str_from_c(domain));', 'f16'),   # (F16 7e part 3)
@@ -1268,4 +1268,6 @@ MUTANTS = [
     ('gui/connect.c', '        if (strcasecmp(app.cwd, at) == 0) network_relist();', '        if (strcmp(app.cwd, at) == 0) network_relist();', 'f16'),   # (7e code-health B)
     ('gui/browse.c', '    return strcasecmp(server, shp.server) == 0;', '    return strcmp(server, shp.server) == 0;', 'f16'),   # (7e code-health B)
     ('gui/frame.c', ' shares_of(browse_server_of(app.cwd)) ? "No shares" : "Not connected: Ctrl+R tries again")', ' "No shares")', 'f16'),   # (7e code-health B)
+    ('gui/connect.c', '    return app.ui.view == UI_VIEW_NETWORK && (browse_server_of(app.cwd) ? connect_busy() : browse_busy());', '    return app.ui.view == UI_VIEW_NETWORK && browse_busy();', 'f16'),   # (7e code-health C)
+    ('gui/connect.c', '    return app.ui.view == UI_VIEW_NETWORK && (browse_server_of(app.cwd) ? connect_busy() : browse_busy());', '    return app.ui.view == UI_VIEW_NETWORK && connect_busy();', 'f16'),   # (7e code-health C)
 ]

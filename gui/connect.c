@@ -62,7 +62,6 @@ static const char *cn_name(void)
     return cn.share[0] ? arena_sprintf(&frame, "%s on %s", cn.share, cn.host) : arena_sprintf(&frame, "%s", cn.host);
 }
 
-
 static bool state_key(const char *key, const char *value);   // (gui/actions.c: a server's login kept, step 7e)
 
 static void cn_line(int fd, const char *s)
@@ -360,7 +359,7 @@ static bool connect_take(void)
     char key[300], login[3 * 512 + 8];   // (a login answered and taken: kept for the server, step 7e)
     bool keep = ok && cn.answered && (cn.used_user[0] || cn.used_domain[0]) && login_key(   // (nothing to fill: no line)
         cn.uri, cn.host, key, sizeof key) && login_value(str_from_c(cn.used_user), str_from_c(cn.used_domain), login, sizeof login);
-    if (ok && server) shares_keep(cn.uri, cn.host, cn.shares, cn.nshares);   // (the shares gui/ keeps: the panel's)
+    if (ok && server) shares_keep(cn.uri, cn.shares, cn.nshares);   // (the shares Browse Network's view lists, step 7e)
     char path[PATH_MAX], why[512];
     snprintf(path, sizeof path, "%s", cn.path), snprintf(why, sizeof why, "%s", cn.why);
     cn.phase = CN_IDLE;
@@ -398,6 +397,13 @@ static bool connect_busy(void)
     bool busy = cn.phase != CN_IDLE;
     pthread_mutex_unlock(&cn.mu);
     return busy;
+}
+
+// Whether Browse Network's view shown waits for its rows: the servers' query, or a server's
+// connect for its shares (the footer's count and the empty list's word say so).
+static bool network_busy(void)
+{
+    return app.ui.view == UI_VIEW_NETWORK && (browse_server_of(app.cwd) ? connect_busy() : browse_busy());
 }
 
 // At quit: a question unanswered is cancelled as Cancel cancels it (and one gio asks later, too).

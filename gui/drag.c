@@ -106,6 +106,8 @@ static void drop_find(float x, float y)
         d.kind = DROP_CRUMB, d.at = h.crumb;
         snprintf(buf, sizeof buf, "%.*s", STR_ARG(ui_crumb_path(&app.crumbs, h.crumb)));
         dir = view_of(buf) == UI_VIEW_FOLDER ? buf : NULL;   // (Trash's, a search's, Browse Network's: no folder)
+        // (until the 7e code-health review "network:" was stat'ed here as a relative path: harmless only
+        // as main.c's chdir("/") leaves no "/network:" to find)
     } else if (in_box(CLAY_ID("list"), x, y)) {
         d.kind = DROP_LIST;
         if (shown) dir = app.cwd;
