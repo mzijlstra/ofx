@@ -39,9 +39,11 @@ point-side Browse Network
 click-here
 wait-for 1500 network=1 browseasks=2
 expect n=4 info=Searching_the_network…
-# Ctrl+R while it runs: another query after it, not a second one at once.
+# Ctrl+R while it runs: another query after it, not a second one at once (the stand-in logs a type
+# asked while its last ask runs: the 7e code-health review).
 key ctrl-r
 wait-for 8000 browseasks=4 n=4
+sh [ ! -e "$OFX_ROOT/overlap" ]
 sh rm "$OFX_ROOT/slow"
 # None found: said so.
 sh touch "$OFX_ROOT/none"

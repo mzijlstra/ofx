@@ -532,12 +532,17 @@ rs f16q OFX_TEST_GIO="$T/giohang" -- "$T/home"
 took=$(( $(date +%s) - start )); if [ "$took" -ge 20 ]; then cat "$T/times"; echo "f16q: FAILED, took ${took}s (quit waited on a hung gio?)"; failed f16q; else echo "f16q: quit in ${took}s with gio hung"; fi
 # f16v (step 7e): Browse Network through a stand-in avahi-browse (no network): _smb._tcp finds
 # YOGA (and Office, on port 4445, once <T>/office is made), _sftp-ssh._tcp YOGA and box (IPv6 only);
-# none at all once <T>/none is made; two seconds late once <T>/slow is. A stand-in gio as f16s's.
+# none at all once <T>/none is made; two seconds late once <T>/slow is; a type asked while its last
+# ask still runs is logged to <T>/overlap (one query at a time, the 7e code-health review). A
+# stand-in gio as f16s's.
 fresh f16v; mkdir -p "$T/home"
 giofake_shares "$T/giofake"
 cat > "$T/avahi" <<EOF
 #!/bin/sh
 [ "\$1" = -k ] || exit 0   # (as avahi-browse with -k prints: without it, the type's database name)
+lk="$T/avahi\$5.run"
+[ -e "\$lk" ] && echo "\$5" >> "$T/overlap"
+: > "\$lk"; trap 'rm -f "\$lk"' EXIT
 [ -e "$T/slow" ] && sleep 2
 [ -e "$T/none" ] && exit 0
 case " \$* " in

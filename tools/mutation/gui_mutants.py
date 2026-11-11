@@ -1270,4 +1270,5 @@ MUTANTS = [
     ('gui/frame.c', ' shares_of(browse_server_of(app.cwd)) ? "No shares" : "Not connected: Ctrl+R tries again")', ' "No shares")', 'f16'),   # (7e code-health B)
     ('gui/connect.c', '    return app.ui.view == UI_VIEW_NETWORK && (browse_server_of(app.cwd) ? connect_busy() : browse_busy());', '    return app.ui.view == UI_VIEW_NETWORK && browse_busy();', 'f16'),   # (7e code-health C)
     ('gui/connect.c', '    return app.ui.view == UI_VIEW_NETWORK && (browse_server_of(app.cwd) ? connect_busy() : browse_busy());', '    return app.ui.view == UI_VIEW_NETWORK && connect_busy();', 'f16'),   # (7e code-health C)
+    ('gui/browse.c', '    if (browse.running) browse.again = true;\n    else {', '    {', 'f16'),   # (7e code-health D: two queries at once)
 ]
