@@ -143,7 +143,7 @@ static bool browse_list(Arena *a, const char *dir, Sort sort, Listing *l, Err *e
     if (!server) n = browse_servers(s);
     else if (strcmp(server, shp.server) == 0) {   // (a server's shares, step 7e: each its address, in the Address column)
         for (int i = 0; i < shp.n; i++) {
-            s[n] = (NetServer){ .kind = NET_SMB };
+            s[n] = (NetServer){ .kind = NET_SMB, .share = true };
             snprintf(s[n].name, sizeof s[n].name, "%s", shp.name[i]);
             if (server_share_uri(shp.server, shp.name[i], s[n].addr, sizeof s[n].addr)) n++;
         }

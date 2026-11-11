@@ -348,7 +348,7 @@ static void ctx_facts(void)
     snprintf(app.ctx_path, sizeof app.ctx_path, "%s", p ? p : "");
     u->ctx_w = app.ctx_path[0] && can_write_at(app.ctx_path);
     bool trash = strcmp(app.ctx_path, TRASH_URI) == 0;
-    u->ctx_kind = trash ? UI_CTX_TRASH : UI_CTX_DIR;
+    u->ctx_kind = trash ? UI_CTX_TRASH : view_of(app.ctx_path) == UI_VIEW_NETWORK ? UI_CTX_NETWORK : UI_CTX_DIR;   // (Browse Network's path buttons: Open, Open in New Tab; 7e)
     u->ctx_full = trash && (trash_state(), app.trash_full);   // (the icon's answer, looked at again)
     char uri[PATH_MAX];   // (a folder in a share: its address, gvfs_share_uri: F16 steps 5, 6, 7c; afp, dav since the code-health review)
     u->ctx_bmed = bm_find(&bmarks, app.ctx_path) >= 0 || (app.ctx_path[0] == '/' && far_share_uri(app.ctx_path, uri, sizeof uri) && bm_find_uri(&bmarks, uri) >= 0);

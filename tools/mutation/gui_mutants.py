@@ -51,7 +51,7 @@ MUTANTS = [
     ('gui/actions.c', "        go_up_from(t->dir);\n        if (there)", "        if (there)"),
     ('gui/actions.c', "    if (tabbar.n == 1) {\n        app.quit = true;\n        return;\n    }", ""),
     ('gui/actions.c', "    if (shown) tab_load();", ""),
-    ('gui/actions.c', '    if (strcmp(path, TRASH_URI) != 0 && strcmp(path, NETWORK_URI) != 0 && !is_search(path) && !far_dir(path) && (stat(path, &st) != 0 || !S_ISDIR(st.st_mode))) {', '    if (strcmp(path, TRASH_URI) != 0 && strcmp(path, NETWORK_URI) != 0 && !is_search(path) && !far_dir(path) && stat(path, &st) != 0) {'),   # (retargeted, step 7e)
+    ('gui/actions.c', '    if (view_of(path) == UI_VIEW_FOLDER && !far_dir(path) && (stat(path, &st) != 0 || !S_ISDIR(st.st_mode))) {', '    if (view_of(path) == UI_VIEW_FOLDER && !far_dir(path) && stat(path, &st) != 0) {'),   # (retargeted, 7e code-health A)
     ('gui/input.c', "    if (h.tab >= 0) in->tab_close = h.tab;\n    else if (h.row >= 0)", "    if (h.row >= 0)"),
     (G, "    return bar_h() + HEADER_H + (tabbar.n >= 2 ? TAB_H : 0);", "    return bar_h() + HEADER_H;"),
     ('gui/actions.c', "    case UA_TAB_MOVE: ui_tabs_move(&tabbar, (int)a.index); break;", "    case UA_TAB_MOVE: break;"),
@@ -368,7 +368,7 @@ MUTANTS = [
     ('gui/input.c', '    else if (h.side >= 0) in->ctx_side = h.side;', '', 'f8'),
     ('gui/input.c', '    else if (h.bar == UB_CRUMB) in->ctx_crumb = h.crumb;', '', 'f8'),
     ('gui/main.c', '    if (ctx_up && !app.ctx_placed && app.ui.menu == UI_CTX_FOLDER) ctx_facts();', '', 'f8'),
-    ('gui/input.c', '    u->ctx_kind = trash ? UI_CTX_TRASH : UI_CTX_DIR;', '    u->ctx_kind = UI_CTX_DIR;', 'f8'),   # (retargeted, step F)
+    ('gui/input.c', '    u->ctx_kind = trash ? UI_CTX_TRASH : view_of(app.ctx_path) == UI_VIEW_NETWORK ? UI_CTX_NETWORK : UI_CTX_DIR;', '    u->ctx_kind = UI_CTX_DIR;', 'f8'),   # (retargeted, 7e code-health A)
     ('gui/input.c', '    u->ctx_full = trash && (trash_state(), app.trash_full);', '    u->ctx_full = trash;', 'f8'),   # (retargeted, step F)
     ('gui/folder.c', ' < (int)sizeof files && !dir_empty(files)) return true;', ' < (int)sizeof files) return true;', 'f8'),
     ('gui/input.c', '    u->ctx_bmed = bm_find(&bmarks, app.ctx_path) >= 0 ||', '    u->ctx_bmed = false ||', 'f8'),
@@ -1235,7 +1235,7 @@ MUTANTS = [
     ('gui/folder.c', '    if (view == UI_VIEW_NETWORK && !same && !server) browse_start();', '    if (0) browse_start();', 'f16'),   # (retargeted, F16 7e part 3)
     ('gui/actions.c', '            else if (app.ui.view == UI_VIEW_NETWORK) browse_start();', '            else if (0) browse_start();', 'f16'),   # (retargeted, F16 7e part 3)
     ('gui/folder.c', '    if (e->net) {   // (Browse Network\'s: connected to', '    if (0) {   // (Browse Network\'s: connected to', 'f16'),
-    ('gui/files.c', '    if (e->net) snprintf(buf, cap, "%s", e->net->ip[0] ? e->net->ip : e->net->addr);', '    if (0) snprintf(buf, cap, "%s", e->net->ip[0] ? e->net->ip : e->net->addr);', 'f16'),   # (retargeted, F16 7e part 3)
+    ('gui/files.c', '    if (e->net) snprintf(buf, cap, "%s", e->net->share ? e->net->addr : e->net->ip);', '    if (0) snprintf(buf, cap, "%s", e->net->share ? e->net->addr : e->net->ip);', 'f16'),   # (retargeted, 7e code-health A)
     ('gui/files.c', '    if (e->net) {   // (Browse Network\'s Kind column', '    if (0) {   // (Browse Network\'s Kind column', 'f16'),
     ('gui/browse.c', '        if (!again) return NULL;', '        return NULL;', 'f16'),
     ('gui/browse.c', '    if (browse.running) browse.again = true;', '    if (browse.running) {}', 'f16'),
@@ -1254,7 +1254,13 @@ MUTANTS = [
     ('gui/actions.c', '            if (server) connect_start(str_from_c(server));', '            if (0) connect_start(str_from_c(server));', 'f16'),   # (F16 7e part 3)
     ('gui/browse.c', '    return strncmp(dir, NETWORK_URI, k) == 0 && dir[k] ? dir + k : NULL;', '    return strncmp(dir, NETWORK_URI, k) == 0 ? dir + k : NULL;', 'f16'),   # (F16 7e part 3)
     ('gui/browse.c', '    else if (strcmp(server, shp.server) == 0) {', '    else if (1) {', 'f16'),   # (F16 7e part 3)
-    ('gui/browse.c', '            s[n] = (NetServer){ .kind = NET_SMB };', '            s[n] = (NetServer){ .kind = NET_SFTP };', 'f16'),   # (F16 7e part 3)
-    ('gui/icons.c', '    if (e->net && !e->net->ip[0]) return icon_for_px(S("folder-remote"), NULL, 0, px);   // (a server\'s share, F16 step 7e)\n', '', 'f16'),   # (F16 7e part 3)
+    ('gui/browse.c', '            s[n] = (NetServer){ .kind = NET_SMB, .share = true };', '            s[n] = (NetServer){ .kind = NET_SFTP, .share = true };', 'f16'),   # (retargeted, 7e code-health A)
+    ('gui/icons.c', '    if (e->net && e->net->share) return icon_for_px(S("folder-remote"), NULL, 0, px);   // (a server\'s share, F16 step 7e)\n', '', 'f16'),   # (retargeted, 7e code-health A)
     ('gui/input.c', ' && app.ui.view != UI_VIEW_NETWORK && app.have_list', ' && app.have_list', 'f16'),   # (F16 7e part 3)
+    ('gui/actions.c', '    if (view_of(path) == UI_VIEW_FOLDER && !far_dir(path)', '    if (strcmp(path, NETWORK_URI) != 0 && strcmp(path, TRASH_URI) != 0 && !is_search(path) && !far_dir(path)', 'f16'),   # (7e code-health A)
+    ('gui/actions.c', '        if (ns && ns->kind == NET_SMB && !ns->share) snprintf(', '        if (ns && !ns->share) snprintf(', 'f16'),   # (7e code-health A)
+    ('gui/actions.c', '        else if (ns) set_status(true, "%s: Enter connects', '        else if (0) set_status(true, "%s: Enter connects', 'f16'),   # (7e code-health A)
+    ('gui/input.c', ' : view_of(app.ctx_path) == UI_VIEW_NETWORK ? UI_CTX_NETWORK : UI_CTX_DIR;', ' : UI_CTX_DIR;', 'f16'),   # (7e code-health A)
+    ('gui/files.c', 'e->net->share ? e->net->addr : e->net->ip);', 'e->net->ip);', 'f16'),   # (7e code-health A)
+    ('gui/browse.c', '            s[n] = (NetServer){ .kind = NET_SMB, .share = true };', '            s[n] = (NetServer){ .kind = NET_SMB };', 'f16'),   # (7e code-health A)
 ]

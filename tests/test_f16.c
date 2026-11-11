@@ -1249,10 +1249,32 @@ static void test_gvfs_shares(void)
 // nothing else; the row's menu has Open and Open in New Tab alone; Go → Browse Network asks for it.
 static void test_browse_ui(void)
 {
-    UiActionKind no[] = { UA_COPY, UA_CUT, UA_MAKE_LINK, UA_TERMINAL, UA_NEW_WINDOW, UA_SEARCH, UA_RENAME, UA_DUPLICATE, UA_OPEN_WITH, UA_PASTE,
-                          UA_NEWFOLDER, UA_NEWFILE, UA_ADD_BOOKMARK, UA_RESTORE, UA_EMPTY_TRASH, UA_CONTAINING, UA_TRASH, UA_DELETE, UA_PROPS };
-    for (int i = 0; i < COUNT(no); i++) CHECK(!ui_view_allows(UI_VIEW_NETWORK, no[i]));
+    // Every kind walked: exactly these are refused (what makes, changes or opens files, or needs a
+    // folder); the rest move about. A kind added later must be put on one side or the other.
+    static const UiActionKind NO[] = { UA_COPY, UA_CUT, UA_PASTE, UA_TRASH, UA_DELETE, UA_RENAME, UA_NEWFOLDER, UA_NEWFILE, UA_DUPLICATE,
+                                       UA_MAKE_LINK, UA_FOLLOW, UA_TERMINAL, UA_NEW_WINDOW, UA_SEARCH, UA_CONTAINING, UA_OPEN_LINE, UA_OPEN_WITH,
+                                       UA_LAUNCH, UA_PROPS, UA_CHMOD, UA_ADD_BOOKMARK, UA_RESTORE, UA_EMPTY_TRASH, UA_BRANCH };
+    int refused = 0;
+    for (int k = 0; k < UA_KINDS; k++) {
+        bool no = false;
+        for (int i = 0; i < COUNT(NO); i++) no |= NO[i] == k;
+        CHECK(ui_view_allows(UI_VIEW_NETWORK, (UiActionKind)k) == !no);
+        refused += !ui_view_allows(UI_VIEW_NETWORK, (UiActionKind)k);
+    }
+    CHECK(refused == COUNT(NO) && !ui_view_allows(UI_VIEW_NETWORK, UA_KINDS) && !ui_view_allows(UI_VIEW_NETWORK, (UiActionKind)(UA_KINDS + 1)));
     CHECK(ui_view_allows(UI_VIEW_NETWORK, UA_OPEN) && ui_view_allows(UI_VIEW_NETWORK, UA_COPY_PATH) && ui_view_allows(UI_VIEW_NETWORK, UA_RELOAD));
+    // A row's menu: Open, Open in New Tab, Copy Path, nothing that takes it for a folder; the empty
+    // space's: no Properties (no folder to look at).
+    Ui m = { .view = UI_VIEW_NETWORK, .menu = UI_CTX_ENTRY, .list = { .n = 3 } };
+    for (int it = 0; it < UM_ITEMS; it++)
+        if (it != UM_SEP && ui_menu_enabled(&m, (UiMenuItem)it)) CHECK(it == UM_OPEN || it == UM_OPEN_TAB || it == UM_COPY_PATH);
+    CHECK(ui_menu_enabled(&m, UM_OPEN) && ui_menu_enabled(&m, UM_OPEN_TAB) && ui_menu_enabled(&m, UM_COPY_PATH));
+    m.menu = UI_CTX_HERE;
+    CHECK(!ui_menu_enabled(&m, UM_HERE_PROPS) && ui_menu_enabled(&m, UM_HIDDEN));
+    m.view = UI_VIEW_FOLDER;
+    CHECK(ui_menu_enabled(&m, UM_HERE_PROPS));
+    m.view = UI_VIEW_TRASH;
+    CHECK(ui_menu_enabled(&m, UM_HERE_PROPS));
     CHECK(ui_view_allows(UI_VIEW_FOLDER, UA_TRASH) && ui_view_allows(UI_VIEW_FOLDER, UA_PROPS));   // (a folder's: unchanged)
     Ui u = { .view = UI_VIEW_NETWORK };
     CHECK(ui_view_act(&u, (UiAction){ UA_TRASH, 0, false }).kind == UA_NOT_IN_NETWORK && ui_view_act(&u, (UiAction){ UA_OPEN, 0, false }).kind == UA_OPEN);

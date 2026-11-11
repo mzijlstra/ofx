@@ -319,7 +319,7 @@ static bool entry_unknown(const Entry *e)
 static void entry_when(const Entry *e, i64 now, char *buf, size_t cap)
 {
     buf[0] = 0;
-    if (e->net) snprintf(buf, cap, "%s", e->net->ip[0] ? e->net->ip : e->net->addr);   // (Browse Network's Address column, F16 step 7e: a server's IP, a share's address)
+    if (e->net) snprintf(buf, cap, "%s", e->net->share ? e->net->addr : e->net->ip);   // (Browse Network's Address column, F16 step 7e: a server's IP, a share's address)
     else if (e->mtime) ui_when(buf, cap, e->mtime, now, app.conf.date, app.conf.date_pattern);
 }
 

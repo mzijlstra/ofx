@@ -274,6 +274,7 @@ typedef enum {
     UA_LOGIN, UA_LOGIN_GUEST, UA_LOGIN_CANCEL,
     UA_BROWSE,      // Browse Network (F16 step 7e): its view, asked of the network now
     UA_NOT_IN_NETWORK,   // something Browse Network's view can't do: its rows are servers, not files (gui/ says so)
+    UA_KINDS        // (their count: the tests walk every kind through each view's rules)
 } UiActionKind;
 enum { UI_COPY_SHOWN = -1 };   // UA_COPY_PATH's index with all: the folder shown (the empty space's menu)
 
@@ -952,17 +953,30 @@ typedef enum {
 // open, copy, link or make from them, or go from there, waits until they are restored. A search's
 // results are in many folders: what needs one folder to put something in (paste, a new folder, a
 // bookmark of it) doesn't work there (F9). Restoring and emptying are the trash view's own.
-// Browse Network's rows are servers (F16 step 7e): opened (connected to), their addresses copied,
-// nothing else.
+// Browse Network's rows are servers and shares (F16 step 7e): opened (connected to), opened in a
+// tab, their addresses copied, nothing else. Its rule is a list of what it allows, so an action
+// added later is refused there until it is thought about (the 7e code-health review).
 static bool ui_view_allows(UiView v, UiActionKind k)
 {
     if (v == UI_VIEW_NETWORK) {
         switch (k) {
-        case UA_COPY: case UA_CUT: case UA_MAKE_LINK: case UA_TERMINAL: case UA_NEW_WINDOW: case UA_SEARCH: case UA_RENAME:
-        case UA_DUPLICATE: case UA_OPEN_WITH: case UA_PASTE: case UA_NEWFOLDER: case UA_NEWFILE: case UA_ADD_BOOKMARK: case UA_RESTORE:
-        case UA_EMPTY_TRASH: case UA_CONTAINING: case UA_TRASH: case UA_DELETE: case UA_PROPS: return false;
-        default: return true;
+        case UA_COPY: case UA_CUT: case UA_PASTE: case UA_TRASH: case UA_DELETE: case UA_RENAME: case UA_NEWFOLDER: case UA_NEWFILE:
+        case UA_DUPLICATE: case UA_MAKE_LINK: case UA_FOLLOW: case UA_TERMINAL: case UA_NEW_WINDOW: case UA_SEARCH: case UA_CONTAINING:
+        case UA_OPEN_LINE: case UA_OPEN_WITH: case UA_LAUNCH: case UA_PROPS: case UA_CHMOD: case UA_ADD_BOOKMARK: case UA_RESTORE:
+        case UA_EMPTY_TRASH: case UA_BRANCH: case UA_KINDS: return false;
+        // (what moves about, the tabs, the window, the sidebar, the menus' own, the jobs, the login)
+        case UA_NONE: case UA_OPEN: case UA_PARENT: case UA_HOMEDIR: case UA_BACK: case UA_FORWARD: case UA_HIDDEN: case UA_SORT:
+        case UA_PLACE: case UA_UNDO: case UA_ANSWER: case UA_CANCEL_JOB: case UA_QUIT: case UA_LOCATION: case UA_GO: case UA_CRUMB:
+        case UA_CRUMB_SHIFT: case UA_TAB_NEW: case UA_TAB_CLOSE: case UA_TAB_SHOW: case UA_TAB_STEP: case UA_TAB_MOVE: case UA_TAB_JUMP:
+        case UA_TAB_BG_ROW: case UA_TAB_BG_PLACE: case UA_TAB_BG_CRUMB: case UA_TAB_OTHERS: case UA_TAB_REOPEN: case UA_SIDE_MODE:
+        case UA_TREE_LEFT: case UA_TREE_RIGHT: case UA_TREE_TOGGLE: case UA_CLEAR_PREVIEWS: case UA_NOT_IN_TRASH: case UA_NOT_IN_SEARCH:
+        case UA_NOT_IN_NETWORK: case UA_READ_ONLY: case UA_EJECT: case UA_VIEW: case UA_ZOOM: case UA_CLOSE_ALL: case UA_RELOAD:
+        case UA_TRASH_VIEW: case UA_BOOKMARK: case UA_BM_EDIT: case UA_BM_GO: case UA_BM_REMOVE: case UA_BM_UP: case UA_BM_DOWN:
+        case UA_BM_NAME: case UA_BM_RENAME: case UA_RESTORE_WINDOWS: case UA_COLORS: case UA_MENUBAR: case UA_PREFERENCES:
+        case UA_PERMS_COLS: case UA_GROUP_COL: case UA_FOLDER_DO: case UA_COPY_PATH: case UA_LOGIN: case UA_LOGIN_GUEST:
+        case UA_LOGIN_CANCEL: case UA_BROWSE: return true;
         }
+        return false;
     }
     switch (k) {
     case UA_COPY: case UA_COPY_PATH: case UA_CUT: case UA_MAKE_LINK: case UA_TERMINAL: case UA_NEW_WINDOW: case UA_SEARCH:

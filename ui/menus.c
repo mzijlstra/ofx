@@ -15,6 +15,9 @@ static bool ui_menu_shown(const Ui *u, UiMenuItem it)
     // A right-click menu leaves out what doesn't fit its target (F8): a tab for a folder only, a
     // rename for one entry, the new entries outside the trash view (Empty Trash in it).
     bool ctx = u->menu >= UI_MENUS, trash = u->view == UI_VIEW_TRASH;
+    // (a row of Browse Network's: a server or a share, no folder yet; its menu has what its view
+    // allows, F16 step 7e's code-health review: a pick from a menu isn't checked again)
+    if (u->menu == UI_CTX_ENTRY && u->view == UI_VIEW_NETWORK) return it == UM_SEP || it == UM_OPEN || it == UM_OPEN_TAB || it == UM_COPY_PATH;
     switch (it) {
     case UM_BM_MORE: return u->bm_more > 0;
     case UM_BR_NOTE: return u->br_note;
@@ -125,7 +128,7 @@ static bool ui_menu_enabled(const Ui *u, UiMenuItem it)
     case UM_OPEN_TAB: case UM_EMPTY_TRASH: case UM_OPEN_WINDOW: case UM_TERMINAL_IN: case UM_SEARCH_IN: case UM_FOLLOW: case UM_BOOKMARK_IT: return files;
     case UM_CONTAINING: case UM_OPEN_LINE: return true;   // (on a result's menu only)
     case UM_PASTE_INTO: return files && u->can_paste && u->ctx_w;
-    case UM_HERE_PROPS: return u->view != UI_VIEW_SEARCH;   // (a search is no folder)
+    case UM_HERE_PROPS: return u->view == UI_VIEW_FOLDER || u->view == UI_VIEW_TRASH;   // (a search, Browse Network: no folder)
     case UM_COPY_PATH_HERE: return true;   // (the folder searched, in a search)
     default: return false;
     }

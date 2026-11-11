@@ -1376,7 +1376,7 @@ MUTANTS += [
 MUTANTS += [
     (U, ".menu_item = -1, .ctx_row = -1, .ctx_side = -1, .ctx_crumb = -1, .ctx_tab = -1, .prop_box = -1,", ".menu_item = -1, .ctx_row = 0, .ctx_side = -1, .ctx_crumb = -1, .ctx_tab = -1, .prop_box = -1,"),
     ('ui/menus.c', "    case UM_OPEN_TAB: case UM_EMPTY_TRASH: case UM_OPEN_WINDOW:", "    case UM_OPEN_TAB: case UM_EMPTY_TRASH: return true;\n    case UM_OPEN_WINDOW:"),
-    ('ui/menus.c', '    case UM_HERE_PROPS: return u->view != UI_VIEW_SEARCH;   // (a search is no folder)\n', ''),
+    ('ui/menus.c', '    case UM_HERE_PROPS: return u->view == UI_VIEW_FOLDER || u->view == UI_VIEW_TRASH;   // (a search, Browse Network: no folder)\n', ''),   # (retargeted, 7e code-health A)
     ('ui/menus.c', '    case UM_OPEN_TAB: return (UiAction){ UA_TAB_BG_ROW, u->list.sel, false };', ''),
     ('ui/menus.c', '    case UM_EMPTY_TRASH: return u->empty_asking = true, UI_NONE;', ''),
     ('ui/menus.c', '    case UM_HERE_PROPS: return ui_props_open(u, UI_PROPS_HERE);', '    case UM_HERE_PROPS: return ui_props_open(u, UI_PROPS_MARKED);'),
@@ -1592,7 +1592,7 @@ MUTANTS += [
     (U, '"search", .cmd = UK_SEARCH, .runs = true },', '"search", .cmd = UK_SEARCH },'),
     ('ui/ui.c', 'UM_SEP, UM_FIND, UM_SEARCH, UM_LOCATION, UM_CONNECT, UM_BROWSE, UM_TERMINAL,\n};', 'UM_SEP, UM_FIND, UM_LOCATION, UM_CONNECT, UM_BROWSE, UM_TERMINAL,\n};'),   # (retargeted, step 7e)
     # what the results can't do yet, and the menus
-    ('ui/menus.c', '    case UM_HERE_PROPS: return u->view != UI_VIEW_SEARCH;', '    case UM_HERE_PROPS: return true;'),
+    ('ui/menus.c', '    case UM_HERE_PROPS: return u->view == UI_VIEW_FOLDER || u->view == UI_VIEW_TRASH;', '    case UM_HERE_PROPS: return true;'),   # (retargeted, 7e code-health A)
     ('ui/helpers.c', '    if (str_eq(cw, S(TRASH_URI)) || str_eq(cw, S(NETWORK_URI)) || is_search(cwd)) {', '    if (str_eq(cw, S(TRASH_URI)) || str_eq(cw, S(NETWORK_URI))) {'),   # (retargeted, step 7e)
     ('ui/helpers.c', "    if (str_starts_with(ui_crumb_path(c, i), S(SEARCH_URI))) return S(\"Search\");", ""),
     ('ui/helpers.c', "sel.len < (isize)sizeof stack[*n].sel ? (int)sel.len : 0, sel.p ? sel.p : \"\");", "(int)sel.len, sel.p ? sel.p : \"\");"),
@@ -3063,4 +3063,9 @@ MUTANTS += [
     ('ui/helpers.c', '        Str host = sep < 0 ? p : str_cut(p, sep + 3, p.len);', '        Str host = sep < 0 ? p : str_cut(p, sep, p.len);'),   # (F16 7e part 3)
     ('ui/helpers.c', "        while (host.len > 1 && host.p[host.len - 1] == '/') host.len--;\n        return host;", '        return host;'),   # (F16 7e part 3)
     ('ui/helpers.c', 'in->noun && strcmp(in->noun, "server") == 0 ? "Searching', 'in->noun ? "Searching'),   # (F16 7e part 3)
+    ('ui/menus.c', '    if (u->menu == UI_CTX_ENTRY && u->view == UI_VIEW_NETWORK) return it == UM_SEP || it == UM_OPEN || it == UM_OPEN_TAB || it == UM_COPY_PATH;\n', ''),   # (7e code-health A)
+    ('ui/menus.c', 'it == UM_OPEN_TAB || it == UM_COPY_PATH;', 'it == UM_OPEN_TAB;'),   # (7e code-health A)
+    ('ui/menus.c', '    case UM_HERE_PROPS: return u->view == UI_VIEW_FOLDER || u->view == UI_VIEW_TRASH;', '    case UM_HERE_PROPS: return u->view != UI_VIEW_SEARCH;'),   # (7e code-health A)
+    ('ui/menus.c', '    case UM_HERE_PROPS: return u->view == UI_VIEW_FOLDER || u->view == UI_VIEW_TRASH;', '    case UM_HERE_PROPS: return u->view == UI_VIEW_FOLDER;'),   # (7e code-health A)
+    ('ui/ui.c', '        case UA_LOGIN_CANCEL: case UA_BROWSE: return true;\n        }\n        return false;', '        case UA_LOGIN_CANCEL: case UA_BROWSE: return true;\n        }\n        return true;'),   # (7e code-health A)
 ]

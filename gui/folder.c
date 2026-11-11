@@ -155,6 +155,9 @@ static int view_bar_h(void)
     return VIEWS[app.ui.view].bar_h + (app.ui.view == UI_VIEW_SEARCH && app.ui.search_inside ? SEARCH_ROW_H : 0);
 }
 
+// The view dir's address opens: one of the views' own (Trash's, a search's, Browse Network's and a
+// server's shares in it), or a folder. The one test of "is this a folder" for what takes a path:
+// a tab in the background, a drop, a folder menu (the 7e code-health review: three had their own).
 static UiView view_of(const char *dir)
 {
     return strcmp(dir, TRASH_URI) == 0 ? UI_VIEW_TRASH : strncmp(dir, NETWORK_URI, strlen(NETWORK_URI)) == 0 ? UI_VIEW_NETWORK : is_search(dir) ? UI_VIEW_SEARCH : UI_VIEW_FOLDER;

@@ -77,4 +77,29 @@ click-here
 point-menu browse-network
 click-here
 wait-for 4000 network=1
+# (the 7e code-health review) A server's row is no folder: its menu has Open, Open in New Tab and
+# Copy Path alone; the empty space's has no Properties; a path button's menu is the sidebar row's.
+wait-for 4000 n=4 sel=box
+point-ui row 0
+right-here
+expect menu=entry menuhid=containing,open-line,open-window,open-with,cut,copy,paste-into,duplicate,make-link,rename,terminal-in,search-in,follow,bookmark-it,trash,restore,delete,properties
+key esc
+wait-for 1000 menu=-
+point-ui list
+right-here
+wait-for 1000 menu=here menugrey=new-folder,new-file,empty-trash,paste,terminal,add-bookmark,here-properties
+key esc
+wait-for 1000 menu=-
+point-ui crumb 0
+right-here
+expect menu=folder menuhid=open-window,terminal-in,search-in,cut-it,copy-it,copy-path-it,paste-into,bookmark-it,bm-rename,bm-up,bm-down,bm-remove,bm-edit,unmount-it,eject,mount-it,empty-it,properties-it
+key esc
+wait-for 1000 menu=-
+# A middle click: an SMB server's shares in a tab of their own; an SFTP server's, said why not.
+point-ui row 0
+middle-here
+expect tabs=2 statusbad=1 status=box:
+point-ui row 1
+middle-here
+wait-for 2000 tabs=3 statusbad=0 tabdirs=network:|office.local:4445|network:
 quit

@@ -97,14 +97,15 @@ static void drop_find(float x, float y)
         d.kind = DROP_SIDE, d.at = h.side;
         dir = side_path(app.ui.side.top + h.side, buf, sizeof buf);
         d.trash = dir && strcmp(dir, TRASH_URI) == 0;
+        if (dir && !d.trash && view_of(dir) != UI_VIEW_FOLDER) dir = NULL;   // (Browse Network's row: no folder, 7e)
     } else if (h.tab >= 0) {
         d.kind = DROP_TAB, d.at = h.tab;
         dir = h.tab == tabbar.cur ? (shown ? app.cwd : NULL) : tabs[tabbar.slot[h.tab]].dir;
-        if (dir && (strcmp(dir, TRASH_URI) == 0 || is_search(dir))) dir = NULL;
+        if (dir && view_of(dir) != UI_VIEW_FOLDER) dir = NULL;
     } else if (h.bar == UB_CRUMB && h.crumb >= 0) {
         d.kind = DROP_CRUMB, d.at = h.crumb;
         snprintf(buf, sizeof buf, "%.*s", STR_ARG(ui_crumb_path(&app.crumbs, h.crumb)));
-        dir = buf;
+        dir = view_of(buf) == UI_VIEW_FOLDER ? buf : NULL;   // (Trash's, a search's, Browse Network's: no folder)
     } else if (in_box(CLAY_ID("list"), x, y)) {
         d.kind = DROP_LIST;
         if (shown) dir = app.cwd;

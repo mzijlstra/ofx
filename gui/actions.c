@@ -801,7 +801,7 @@ static void tab_open(const char *dir, Str sel, bool show)
 static void tab_open_bg(const char *path)
 {
     struct stat st;   // (a far folder isn't looked at here: its lister says, F16)
-    if (strcmp(path, TRASH_URI) != 0 && strcmp(path, NETWORK_URI) != 0 && !is_search(path) && !far_dir(path) && (stat(path, &st) != 0 || !S_ISDIR(st.st_mode))) {
+    if (view_of(path) == UI_VIEW_FOLDER && !far_dir(path) && (stat(path, &st) != 0 || !S_ISDIR(st.st_mode))) {
         set_status(true, "%s isn't a folder", path_base(str_from_c(path)).p);
         return;
     }
@@ -1178,7 +1178,10 @@ static void act(UiAction a)
         break;
     case UA_TAB_BG_ROW: {
         char path[PATH_MAX];
-        if (a.index < app.list.n && app.ui.view != UI_VIEW_TRASH && entry_path(a.index, path, sizeof path)) tab_open_bg(path);
+        const NetServer *ns = a.index < app.list.n ? app.list.e[a.index].net : NULL;
+        if (ns && ns->kind == NET_SMB && !ns->share) snprintf(path, sizeof path, "%s%s", NETWORK_URI, ns->addr), tab_open_bg(path);   // (an SMB server's shares, F16 step 7e)
+        else if (ns) set_status(true, "%s: Enter connects to it, then it opens here", ns->name);   // (a share, an SFTP server: no folder before the connect)
+        else if (a.index < app.list.n && app.ui.view != UI_VIEW_TRASH && entry_path(a.index, path, sizeof path)) tab_open_bg(path);
         break;
     }
     case UA_TAB_BG_PLACE: {

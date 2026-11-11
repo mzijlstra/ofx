@@ -264,6 +264,7 @@ typedef struct NetServer {
     char    addr[300];  // smb://host[:port] or sftp://host[:port]: what Connect takes
     char    ip[64];     // its address as avahi resolved it (IPv4 when it has one): the view's Address
     NetKind kind;
+    bool    share;      // a server's share (a row of its shares' view; ip empty), not a server
 } NetServer;
 
 // An avahi name field unescaped into out (cut at cap).
