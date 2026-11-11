@@ -1281,6 +1281,12 @@ blocks each of these for up to gvfs's 90 s. On a thread it also holds ofx's exit
        Airplane Mode whole (the Go menu's entry, the state file's `airplane=` read and ignored,
        the sidebar row, its question, `connect_start`'s refusal, `airplane_gen`). The symbolic-SVG
        icon index stays if the view's row uses a symbolic icon, else it goes too.
+     - **Done 2026-11-11,** in three parts, each reviewed and shipped: Airplane Mode and the
+       background discovery removed, and the symbolic-SVG index with them (the view's icons are
+       PNGs); the Browse Network view; a server's shares as rows in it, the login kept per server.
+       Next: a code-health review of 7e's code alone (the whole tree had step 8's), its cleanup,
+       then Michael's install. From part 3's review: the login's key is case-sensitive
+       (`NAS.local` and `nas.local` are two lines); lower-case it in `login_key` if that shows.
 8. **The milestone's code-health review and cleanup** (AGENTS.md "At the end of each major
    milestone"), then install.
    - **The review (2026-11-10):** four read-only reviewers (gui/main.c and its files; ui/; fs/
