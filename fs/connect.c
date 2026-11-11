@@ -95,6 +95,9 @@ static ConnectUri connect_uri(Str text, char *uri, size_t ucap, char *host, size
         return snprintf(why, wcap, "Not a server: %.*s", STR_ARG(auth)), CONNECT_BAD;
     isize colon = close >= 0 ? (close + 1 < auth.len ? close + 1 : -1) : str_find_last(auth, ':');
     Str name = colon < 0 ? auth : str_cut(auth, 0, colon);
+    // (an IPv6 address without its brackets would read as a host and a port: refused, not guessed;
+    // the step F review)
+    if (close < 0 && str_find(name, ':') >= 0) return snprintf(why, wcap, "An IPv6 server goes in brackets: %s://[%.*s]/", kind, STR_ARG(auth)), CONNECT_BAD;
     if (colon >= 0) {
         if (!s->port) return snprintf(why, wcap, "No port in an NFS address: gvfs asks the server's portmapper"), CONNECT_BAD;
         Str port = str_cut(auth, colon + 1, auth.len);
@@ -127,8 +130,11 @@ static ConnectUri connect_uri(Str text, char *uri, size_t ucap, char *host, size
     snprintf(uri, ucap, "%.*s", STR_ARG(text));
     snprintf(host, hcap, "%.*s", STR_ARG(name));
     // (its name as said, decoded: "My Docs on nas" of smb://nas/My%20Docs, as gvfs names it; as
-    // written when it doesn't decode)
-    if (!percent_decode(sh, share, scap) || !share[0]) snprintf(share, scap, "%.*s", STR_ARG(sh));
+    // written when it doesn't decode, or decodes to a control character or a '/', which a label
+    // can't show: the step F review)
+    bool plain = percent_decode(sh, share, scap) && share[0];
+    for (const char *c = share; plain && *c; c++) plain = (unsigned char)*c >= 0x20 && *c != 0x7F && *c != '/';
+    if (!plain) snprintf(share, scap, "%.*s", STR_ARG(sh));
     return sh.len == 0 ? CONNECT_SERVER : CONNECT_OK;
 }
 
@@ -406,7 +412,8 @@ static bool gvfs_share_uri(Str name, const char *rest, char *out, size_t cap)
     bool hd = hu && gvfs_key(name, "domain", domain, sizeof domain);   // (SMB's: a domain without a user, none)
     const char *scheme = KIND[k].scheme;
     if (strcmp(scheme, "dav") == 0 && gvfs_key(name, "ssl", ssl, sizeof ssl) && strcmp(ssl, "true") == 0) scheme = "davs";
-    int n = snprintf(out, cap, "%s://%s%s%s%s%s%s%s%s", scheme, hd ? domain : "", hd ? ";" : "", hu ? user : "", hu ? "@" : "", host, hp ? ":" : "", hp ? port : "", esc);
+    bool v6 = strchr(host, ':') && host[0] != '[';   // (gvfs keeps an IPv6 server without its brackets; a URI needs them: the step F review)
+    int n = snprintf(out, cap, "%s://%s%s%s%s%s%s%s%s%s%s", scheme, hd ? domain : "", hd ? ";" : "", hu ? user : "", hu ? "@" : "", v6 ? "[" : "", host, v6 ? "]" : "", hp ? ":" : "", hp ? port : "", esc);
     return n > 0 && (size_t)n < cap;
 }
 

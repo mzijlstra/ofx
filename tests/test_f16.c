@@ -710,6 +710,11 @@ static void test_connect_uri(void)
     CHECK(CU("sftp://me@[::1]:2222/home") == CONNECT_OK && strcmp(host, "me@[::1]") == 0);
     CHECK(CU("smb://[fd00::1]x/pub") == CONNECT_BAD && CU("smb://[fd00::1/pub") == CONNECT_BAD && CU("smb://[]/pub") == CONNECT_BAD && CU("smb://[::1]:x/pub") == CONNECT_BAD);
     CHECK(CU("smb://[::1]1445/pub") == CONNECT_BAD);   // (no ':' after the bracket: not a port)
+    // (the step F review) An IPv6 server without brackets: refused, not read as a host and a port;
+    // a share name that decodes to a control character or a '/': said as written.
+    CHECK(CU("smb://fd00::1/pub") == CONNECT_BAD && strstr(why, "smb://[fd00::1]/") != NULL);
+    CHECK(CU("smb://nas/a%0Ab") == CONNECT_OK && strcmp(share, "a%0Ab") == 0);
+    CHECK(CU("smb://nas/a%2Fb") == CONNECT_OK && strcmp(share, "a%2Fb") == 0 && CU("smb://nas/a%7Fb") == CONNECT_OK && strcmp(share, "a%7Fb") == 0);
     CHECK(CU("nfs://[::1]/srv") == CONNECT_OK && CU("nfs://[::1]:2049/srv") == CONNECT_BAD);   // (NFS: no port, brackets or not)
     CHECK(CU("SMB://127.0.0.1:4445/priv/sub/x") == CONNECT_OK && strcmp(host, "127.0.0.1") == 0 && strcmp(share, "priv") == 0 && strcmp(uri, "SMB://127.0.0.1:4445/priv/sub/x") == 0);
     CHECK(CU("smb://michael@nas/home") == CONNECT_OK && strcmp(host, "nas") == 0 && strcmp(share, "home") == 0);
@@ -1159,6 +1164,10 @@ static void test_gvfs_uri(void)
     CHECK(!gvfs_share_uri(S("ftp:host=x"), "", u, sizeof u) && !gvfs_share_uri(S("davx:host=x"), "", u, sizeof u));   // (a kind it doesn't know)
     CHECK(gvfs_share_uri(S("dav:host=cloud,port=8443,prefix=%2Fremote.php%2Fwebdav,ssl=true,user=m"), "/a b", u, sizeof u) && strcmp(u, "davs://m@cloud:8443/remote.php/webdav/a%20b") == 0);
     CHECK(gvfs_share_uri(S("dav:host=nas,ssl=false"), "", u, sizeof u) && strcmp(u, "dav://nas/") == 0);   // (its root: no prefix)
+    // An IPv6 server, which gvfs names without its brackets: in brackets, as a URI needs (and Connect
+    // takes back; the step F review).
+    CHECK(gvfs_share_uri(S("smb-share:server=fd00::1,share=pub"), "", u, sizeof u) && strcmp(u, "smb://[fd00::1]/pub") == 0);
+    CHECK(gvfs_share_uri(S("sftp:host=::1,port=22,user=m"), "", u, sizeof u) && strcmp(u, "sftp://m@[::1]:22/") == 0);
     CHECK(gvfs_share_uri(S("nfs:host=nas,prefix=%2Fsrv,user=m"), "", u, sizeof u) && strcmp(u, "nfs://nas/srv") == 0);   // (NFS takes no user)
     // SFTP (step 7c): sftp://[user@]host[:port]/path, the path from the server's root
     CHECK(gvfs_share_uri(S("sftp:host=127.0.0.1,port=38165,user=tester"), "", u, sizeof u) && strcmp(u, "sftp://tester@127.0.0.1:38165/") == 0);

@@ -2958,7 +2958,7 @@ MUTANTS += [
     # after a newline in every run measured.)
     ('fs/connect.c', '        { "sftp:", "sftp", "host", NULL, true },\n', ''),   # (retargeted, step F)
     # (dropped, step F: the table rewrote this; its rows are covered by the unit mutants on gvfs_share_uri's one path)
-    ('fs/connect.c', '    int n = snprintf(out, cap, "%s://%s%s%s%s%s%s%s%s", scheme, hd ? domain : "", hd ? ";" : "", hu ? user : "", hu ? "@" : "",', '    int n = snprintf(out, cap, "%s://%s%s%s%s%s%s%s%s", scheme, hd ? domain : "", hd ? ";" : "", "", "",'),   # (retargeted, step F)
+    ('fs/connect.c', '    int n = snprintf(out, cap, "%s://%s%s%s%s%s%s%s%s%s%s", scheme, hd ? domain : "", hd ? ";" : "", hu ? user : "", hu ? "@" : "",', '    int n = snprintf(out, cap, "%s://%s%s%s%s%s%s%s%s%s%s", scheme, hd ? domain : "", hd ? ";" : "", "", "",'),   # (retargeted, step F review)
     ('fs/connect.c', '    if (k == COUNT(KIND) || !gvfs_key(name, KIND[k].host, host, sizeof host)) return false;', '    if (k == COUNT(KIND)) return false;\n    gvfs_key(name, KIND[k].host, host, sizeof host);'),   # (retargeted, step F)
     ('fs/places.c', '        if (c != CONNECT_OK && c != CONNECT_SERVER) continue;', '        if (c != CONNECT_OK) continue;'),
     ('ui/panels.c', '    if (u->login_kind == UI_LOGIN_KEY) return f == UI_LOGIN_PASS;\n', ''),   # (retargeted, step E)
@@ -3026,10 +3026,16 @@ MUTANTS += [
     ('fs/connect.c', '        if (strcmp(KIND[k].type, "dav:") != 0) return false;', '        {}'),
     ('fs/connect.c', '    isize close = auth.len > 0 && auth.p[0] == \'[\' ? str_find(auth, \']\') : -1;', '    isize close = -1;'),
     ('fs/connect.c', '(close < 2 || (close + 1 < auth.len && auth.p[close + 1] != \':\')))', '(close < 2))'),
-    ('fs/connect.c', '    if (!percent_decode(sh, share, scap) || !share[0]) snprintf(share, scap, "%.*s", STR_ARG(sh));', '    snprintf(share, scap, "%.*s", STR_ARG(sh));'),
+    ('fs/connect.c', '    if (!plain) snprintf(share, scap, "%.*s", STR_ARG(sh));', '    if (0) snprintf(share, scap, "%.*s", STR_ARG(sh));'),   # (retargeted, step F review)
     # The milestone's code-health cleanup, step G: a child watched by its pidfd
     ('fs/spawn.c', '        if (r <= 0) return false;\n        ssize_t k = read(c->out,', '        if (r < 0) return false;\n        ssize_t k = read(c->out,'),
     ('fs/spawn.c', '    c->pidfd = pfd, c->in = pi[1], c->out = po[0], c->errs = pe[0];', '    c->pidfd = pfd, c->in = pi[1], c->out = po[0], c->errs = -1;'),
     ('fs/spawn.c', '        if (k <= 0) return true;\n        *len += k;', '        if (k < 0) return true;\n        *len += k;'),
     ('fs/spawn.c', '    bool ok = spawn_fds(NULL, argv, pi[0], po[1],', '    bool ok = spawn_fds(NULL, argv, -1, po[1],'),
+    # The step F review: a share's name that decodes to what a label can't show; IPv6 without brackets
+    ('fs/connect.c', "plain = (unsigned char)*c >= 0x20 && *c != 0x7F && *c != '/';", "plain = (unsigned char)*c >= 0x20 && *c != 0x7F;"),
+    ('fs/connect.c', "plain = (unsigned char)*c >= 0x20 && *c != 0x7F && *c != '/';", "plain = *c != 0x7F && *c != '/';"),
+    ('fs/connect.c', "plain = (unsigned char)*c >= 0x20 && *c != 0x7F && *c != '/';", "plain = (unsigned char)*c >= 0x20 && *c != '/';"),
+    ('fs/connect.c', '    if (close < 0 && str_find(name, \':\') >= 0) return', '    if (0) return'),
+    ('fs/connect.c', "    bool v6 = strchr(host, ':') && host[0] != '[';", '    bool v6 = false;'),
 ]
