@@ -107,14 +107,47 @@ static int browse_servers(NetServer *s)
     return n;
 }
 
-// Browse Network's listing: the last query's servers as rows into a (their name, a server's icon,
-// Kind in the size column's place and Address in the date's: Entry.net), none while the first
-// query is on its way. Sorting by those columns sorts by kind and by address (size and mtime carry
-// them: the kind's number, an IPv4 address as a number, IPv6 after).
-static bool browse_list(Arena *a, Sort sort, Listing *l, Err *err)
+// A server's shares as Connect to Server last read them (step 7a's list, from a server's address
+// alone; since step 7e the view's rows at NETWORK_URI followed by that address): the address, its
+// name, the shares' names. Main thread only.
+static struct {
+    char server[PATH_MAX], host[256];
+    int  n;
+    char name[SERVER_SHARES_MAX][SERVER_SHARE_NAME];
+} shp;
+
+// A server's shares as Connect to Server read them (connect_take, its lock held): kept for the view.
+static void shares_keep(const char *server, const char *host, const char (*names)[SERVER_SHARE_NAME], int n)
 {
-    static NetServer s[NET_SERVERS_MAX];
-    int n = browse_servers(s);
+    snprintf(shp.server, sizeof shp.server, "%s", server), snprintf(shp.host, sizeof shp.host, "%s", host);
+    shp.n = n;
+    memcpy(shp.name, names, sizeof shp.name);
+}
+
+// The server whose shares view dir is (NETWORK_URI and its address), or NULL for the servers' view.
+static const char *browse_server_of(const char *dir)
+{
+    size_t k = strlen(NETWORK_URI);
+    return strncmp(dir, NETWORK_URI, k) == 0 && dir[k] ? dir + k : NULL;
+}
+
+// Browse Network's listing for dir: the last query's servers (NETWORK_URI), or a server's shares
+// (NETWORK_URI and its address: none until Connect has read them), as rows into a (their name, an
+// icon, Kind in the size column's place and Address in the date's: Entry.net). Sorting by those columns sorts by kind and by address (size and mtime carry
+// them: the kind's number, an IPv4 address as a number, IPv6 after).
+static bool browse_list(Arena *a, const char *dir, Sort sort, Listing *l, Err *err)
+{
+    static NetServer s[(int)NET_SERVERS_MAX > (int)SERVER_SHARES_MAX ? (int)NET_SERVERS_MAX : (int)SERVER_SHARES_MAX];
+    const char *server = browse_server_of(dir);
+    int n = 0;
+    if (!server) n = browse_servers(s);
+    else if (strcmp(server, shp.server) == 0) {   // (a server's shares, step 7e: each its address, in the Address column)
+        for (int i = 0; i < shp.n; i++) {
+            s[n] = (NetServer){ .kind = NET_SMB };
+            snprintf(s[n].name, sizeof s[n].name, "%s", shp.name[i]);
+            if (server_share_uri(shp.server, shp.name[i], s[n].addr, sizeof s[n].addr)) n++;
+        }
+    }
     Entry *e = arena_try_new(a, Entry, n + 1);
     NetServer *keep = arena_try_new(a, NetServer, n + 1);
     if (!e || !keep) return err_set(err, "Browse Network: too many servers for memory"), false;

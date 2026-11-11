@@ -98,8 +98,8 @@ static const struct {
 // and field's element ids, by its layout's own id ("ow", "brp", "shp"); NULL for none.
 static const UiPick *pick_on_top(const char **row_id, const char **field_id)
 {
-    static const char *const ROW[UI_PANELS] = { [UI_PANEL_OW] = "ow-row", [UI_PANEL_BRANCHES] = "brp-row", [UI_PANEL_SHARES] = "shp-row" };
-    static const char *const FIELD[UI_PANELS] = { [UI_PANEL_OW] = "ow-field", [UI_PANEL_BRANCHES] = "brp-field", [UI_PANEL_SHARES] = "shp-field" };
+    static const char *const ROW[UI_PANELS] = { [UI_PANEL_OW] = "ow-row", [UI_PANEL_BRANCHES] = "brp-row" };
+    static const char *const FIELD[UI_PANELS] = { [UI_PANEL_OW] = "ow-field", [UI_PANEL_BRANCHES] = "brp-field" };
     UiPanel p = ui_picker_on(modal_kind());
     if (p == UI_PANEL_NONE) return *row_id = *field_id = NULL, NULL;
     return *row_id = ROW[p], *field_id = FIELD[p], ui_pick_of(&app.ui, p);
@@ -228,8 +228,9 @@ static void press_at(UiInput *in, float x, float y, int mods)
     in->side_twisty = h.twisty;
     // A plain press on an entry, or on a tree row's folder, may become a drag of files (F13 step 3)
     // once it moves UI_DRAG_PX: not the second press of a double click, not in the trash view
-    // (Restore is its own), not a drive's root.
-    if (!mods && in->dclick < 0 && h.row >= 0 && app.ui.view != UI_VIEW_TRASH && app.have_list && app.ui.list.top + h.row < app.list.n)
+    // (Restore is its own) nor Browse Network's (its rows are servers and shares, not files: the
+    // step 7e review), not a drive's root.
+    if (!mods && in->dclick < 0 && h.row >= 0 && app.ui.view != UI_VIEW_TRASH && app.ui.view != UI_VIEW_NETWORK && app.have_list && app.ui.list.top + h.row < app.list.n)
         drag_arm_entry(x, y, app.ui.list.top + h.row);
     else if (!mods && h.side >= 0 && h.twisty < 0 && app.ui.side_mode == SIDE_TREE && app.ui.side.top + h.side < tree.n &&
              tree.row[app.ui.side.top + h.side].depth > 0) {

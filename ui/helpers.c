@@ -43,6 +43,12 @@ static void ui_crumbs_set_share(UiCrumbs *c, const char *cwd, const char *home, 
         c->n = 1, c->cur = 0, c->lo = -1;
         return;
     }
+    if (str_starts_with(cw, S(NETWORK_URI))) {   // a server's shares (F16 step 7e): "Browse Network", then the server
+        snprintf(c->deep, sizeof c->deep, "%s", cwd);
+        c->seg[0] = (UiCrumb){ (isize)strlen(NETWORK_URI), false, false }, c->seg[1] = (UiCrumb){ cw.len, false, false };
+        c->n = 2, c->cur = 1, c->lo = -1;
+        return;
+    }
     while (h.len > 1 && h.p[h.len - 1] == '/') h.len--;
     if (!c->deep[0] || !ui_under(str_from_c(c->deep), cw)) snprintf(c->deep, sizeof c->deep, "%s", cwd);
     c->lo = -1;
@@ -83,6 +89,13 @@ static Str ui_crumb_label(const UiCrumbs *c, int i)
     if (!c->seg[i].home && c->seg[i].end == 1) return S("/");
     if (str_eq(ui_crumb_path(c, i), S(TRASH_URI))) return S("Trash");
     if (str_eq(ui_crumb_path(c, i), S(NETWORK_URI))) return S("Browse Network");
+    if (str_starts_with(ui_crumb_path(c, i), S(NETWORK_URI))) {   // (a server's shares: its host, "yoga.local" of smb://yoga.local)
+        Str p = ui_crumb_path(c, i);
+        isize sep = str_find_str(p, S("://"));
+        Str host = sep < 0 ? p : str_cut(p, sep + 3, p.len);
+        while (host.len > 1 && host.p[host.len - 1] == '/') host.len--;
+        return host;
+    }
     if (str_starts_with(ui_crumb_path(c, i), S(SEARCH_URI))) return S("Search");
     return path_base(ui_crumb_path(c, i));
 }
@@ -575,7 +588,7 @@ typedef struct {
     bool  cramped;       // Show Permissions on, but the window has no room for them: said (2026-10-27)
     bool  opening;       // a far folder's listing still to come (F16), or Browse Network's query (step 7e): said instead of its count
     isize changed;       // in a git repository, the changes under the folder (F12 step 5); 0: none said
-    bool  servers;       // Browse Network's rows (F16 step 7e): counted as servers, not items
+    const char *noun;    // what the rows are when not files: "server", "share" (Browse Network's, F16 step 7e); NULL: items
 } UiInfo;
 
 static void ui_status_base(char *buf, size_t cap, const UiInfo *in);
@@ -599,13 +612,13 @@ static void ui_status_base(char *buf, size_t cap, const UiInfo *in)
         else if (!in->one_dir && in->one_size >= 0) ui_size(size, sizeof size, in->one_size), snprintf(buf + k, cap - (size_t)k, " (%s)", size);
         return;
     }
-    const char *noun = in->servers ? "server" : "item";
+    const char *noun = in->noun ? in->noun : "item";
     if (in->marked > 1) {
         snprintf(buf, cap, "%td %ss selected", in->marked, noun);
         return;
     }
     if (in->opening) {
-        snprintf(buf, cap, in->servers ? "Searching the network\xE2\x80\xA6" : "Opening\xE2\x80\xA6");   // (Browse Network's: the last rows shown meanwhile)
+        snprintf(buf, cap, in->noun && strcmp(in->noun, "server") == 0 ? "Searching the network\xE2\x80\xA6" : "Opening\xE2\x80\xA6");   // (Browse Network's: the last rows shown meanwhile)
         return;
     }
     int k = snprintf(buf, cap, "%td %s%s", in->n, noun, in->n == 1 ? "" : "s");

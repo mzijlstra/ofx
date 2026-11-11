@@ -585,7 +585,7 @@ MUTANTS = [
     # other script reaches, and the scripted window's door for them.
     ('gui/main.c', '        memcpy(in->ev, real.ev, sizeof *real.ev * (size_t)real.nev);\n        in->nev = real.nev;', '        memcpy(in->ev, real.ev, sizeof *real.ev * (size_t)real.nev);', 'keys'),
     # The views in gui/folder.c (2026-10-28): listing, watching, Up, what changes prune, the table.
-    ('gui/folder.c', '    return strcmp(dir, TRASH_URI) == 0 ? UI_VIEW_TRASH : strcmp(dir, NETWORK_URI) == 0', '    return 0 ? UI_VIEW_TRASH : strcmp(dir, NETWORK_URI) == 0', 'f6'),   # (retargeted, step 7e)
+    ('gui/folder.c', '    return strcmp(dir, TRASH_URI) == 0 ? UI_VIEW_TRASH : strncmp(dir, NETWORK_URI', '    return 0 ? UI_VIEW_TRASH : strncmp(dir, NETWORK_URI', 'f6'),   # (retargeted, F16 7e part 3)
     ('gui/folder.c', 'is_search(dir) ? UI_VIEW_SEARCH : UI_VIEW_FOLDER;', 'UI_VIEW_FOLDER;', 'f9'),
     ('gui/folder.c', '    case UI_VIEW_TRASH: trash_state(); return', '    case UI_VIEW_TRASH: return', 'f6'),
     ('gui/folder.c', '    case UI_VIEW_TRASH: trash_state(); return', '    case UI_VIEW_TRASH: trash_scan(); return', 'f6'),
@@ -821,7 +821,7 @@ MUTANTS = [
     ('gui/main.c', 'app.ui.colors = true, app.side_px = UI_SIDE_W;', 'app.ui.colors = true;', 'f13'),
     ('gui/main.c', '    cursor_shape();\n', '', 'f13'),
     # F13 step 3 (2026-11-04): drag and drop inside ofx (f13e)
-    ('gui/input.c', ' && h.row >= 0 && app.ui.view != UI_VIEW_TRASH && app.have_list', ' && h.row >= 0 && app.have_list', 'f13'),
+    ('gui/input.c', ' && h.row >= 0 && app.ui.view != UI_VIEW_TRASH && app.ui.view != UI_VIEW_NETWORK && app.have_list', ' && h.row >= 0 && app.have_list', 'f13'),   # (retargeted, F16 7e part 3)
     ('gui/input.c', '        app.drag_side = in->side_click, in->side_click = -1;', '        app.drag_side = in->side_click;', 'f13'),
     ('gui/input.c', '    if (app.drag == DRAG_PRESS && app.drag_tree) in->side_click = app.drag_side;\n', '', 'f13'),
     ('gui/drag.c', ' drag_arm(x, y, str_from_c(p), ui_marked(&app.ui, i), false,', ' drag_arm(x, y, str_from_c(p), false, false,', 'f13'),
@@ -993,7 +993,7 @@ MUTANTS = [
     ('gui/space.c', "    if (cwd[0] == '/' && mounts_local(mi, cwd)) snprintf", "    if (cwd[0] == '/') snprintf", 'f16'),   # (retargeted, step C)
     ('gui/actions.c', '    if (far_dir(path)) {\n        if (!go_to_then(path, STR_EMPTY, 0, FAR_THEN_SELECT)) return;', '    if (0) {\n        if (!go_to_then(path, STR_EMPTY, 0, FAR_THEN_SELECT)) return;', 'net'),   # (retargeted, step D)
     ('gui/frame.c', '           : far_word                   ? (app.far_note[0] ? app.far_note : "Opening\\xE2\\x80\\xA6")\n', '', 'f16'),
-    ('gui/footer.c', '.opening = (app.far_on && app.far_loading && !app.list.n) || (app.ui.view == UI_VIEW_NETWORK && browse_busy()) };', '.opening = (app.ui.view == UI_VIEW_NETWORK && browse_busy()) };', 'f16'),   # (retargeted, step 7e)
+    ('gui/footer.c', '.opening = (app.far_on && app.far_loading && !app.list.n) || (app.ui.view', '.opening = (app.ui.view', 'f16'),   # (retargeted, F16 7e part 3)
     # (the step 2a review: a reload while hung, the cursor across a slow reload, the lister's stderr)
     ('gui/folder.c', '    far_drop();\n    app.far_loading = true, app.far_waiting = far_busy(dir);', '    app.far_loading = true, app.far_waiting = far_busy(dir);', 'net'),
     ('gui/folder.c', '        if (far_begin(dir, select, fallback, how, &err)) return app.far_kept = true, app.far_kept_sel = app.ui.list.sel, true;', '        if (far_begin(dir, select, fallback, how, &err)) return app.far_kept_sel = app.ui.list.sel, true;', 'f16'),   # (retargeted, step D review)
@@ -1156,17 +1156,17 @@ MUTANTS = [
     # the scripts' sharesheld= fall back to 0 at once; no script waits for that, and ofx shows nothing
     # for it. The mark when one is held is net's sharesheld=1.)
     # F16 step 7a: a server's shares
-    ('gui/shares.c', ' || u->menu_on || u->focus == UI_FOCUS_EDIT || ui_on_top(u) != UI_ON_NONE) return false;', ' || u->menu_on || ui_on_top(u) != UI_ON_NONE) return false;', 'f16'),   # (retargeted, step E)
+    # (dropped, F16 7e part 3: gui/shares.c is gone (the panel's key guard with it))
     ('gui/connect.c', '    return cn.browse ? cn_list(why, cap) : cn_folder(path, pcap, why, cap);', '    return cn_folder(path, pcap, why, cap);', 'f16'), # (retargeted, step 7c)
     ('gui/connect.c', '    if (n == 0 && gio_why(str_from_c(out), why, cap)) return false;', '', 'f16'),
-    ('gui/connect.c', '        if (n == 0) return set_status(false, "%s lists no shares", cn_name()), true;', '', 'f16'),   # (retargeted, step E)
-    ('gui/shares.c', '    if (!server_share_uri(shp.server, shp.name[i], uri, sizeof uri))', '    if (!server_share_uri("smb://nas", shp.name[i], uri, sizeof uri))', 'net'),   # (retargeted, step E)
+    ('gui/connect.c', '        if (shp.n == 0) return set_status(false, "%s lists no shares", cn_name()), true;', '', 'f16'),   # (retargeted, F16 7e part 3)
+    ('gui/browse.c', '            if (server_share_uri(shp.server, shp.name[i], s[n].addr, sizeof s[n].addr)) n++;', '            if (server_share_uri("smb://nas", shp.name[i], s[n].addr, sizeof s[n].addr)) n++;', 'net'),   # (retargeted, F16 7e part 3)
     ('gui/connect.c', '    return cn.share[0] ? arena_sprintf(&frame, "%s on %s", cn.share, cn.host) : arena_sprintf(&frame, "%s", cn.host);', '    return arena_sprintf(&frame, "%s on %s", cn.share, cn.host);', 'f16'),
-    ('gui/shares.c', '    shp.pending = shp.n > 0;', '    shp.pending = false;', 'f16'),   # (retargeted, step E)
-    ('gui/main.c', '    if (app.ui.panel == UI_PANEL_SHARES) in->sh_name = shp_names(), in->sh_names = shp.n;', '', 'f16'),
+    # (dropped, F16 7e part 3: gui/shares.c is gone (no panel waits to open))
+    # (dropped, F16 7e part 3: the shares panel is gone)
     # (dropped, step E: the picker ids are one table now: #364 covers it)
-    ('gui/actions.c', '    case UA_SHARE: share_pick(a.index); break;', '', 'f16'),
-    ('gui/connect.c', '    shares_drop();   // (a server', '    // (a server', 'f16'),   # (retargeted, step E)
+    # (dropped, F16 7e part 3: UA_SHARE is gone)
+    # (dropped, F16 7e part 3: shares_drop is gone (the kept shares are replaced by the next server's))
     # F16 step 7b: servers on the network
     # (dropped, step 7e: Airplane Mode and the found servers are gone (step 7e))
     # (dropped, step 7e: Airplane Mode and the found servers are gone (step 7e))
@@ -1232,14 +1232,29 @@ MUTANTS = [
     # The milestone's code-health cleanup, step G
     ('gui/main.c', 'connect_until = deadline_in(CONNECT_QUIT_MS);', 'connect_until = deadline_in(60000);', 'net'),
     # F16 step 7e, part 2: Browse Network
-    ('gui/folder.c', '    if (view == UI_VIEW_NETWORK && !same) browse_start();', '    if (0) browse_start();', 'f16'),
-    ('gui/actions.c', '            if (app.ui.view == UI_VIEW_NETWORK) browse_start();\n', '', 'f16'),
+    ('gui/folder.c', '    if (view == UI_VIEW_NETWORK && !same && !server) browse_start();', '    if (0) browse_start();', 'f16'),   # (retargeted, F16 7e part 3)
+    ('gui/actions.c', '            else if (app.ui.view == UI_VIEW_NETWORK) browse_start();', '            else if (0) browse_start();', 'f16'),   # (retargeted, F16 7e part 3)
     ('gui/folder.c', '    if (e->net) {   // (Browse Network\'s: connected to', '    if (0) {   // (Browse Network\'s: connected to', 'f16'),
-    ('gui/files.c', '    if (e->net) snprintf(buf, cap, "%s", e->net->ip);', '    if (0) snprintf(buf, cap, "%s", e->net->ip);', 'f16'),
+    ('gui/files.c', '    if (e->net) snprintf(buf, cap, "%s", e->net->ip[0] ? e->net->ip : e->net->addr);', '    if (0) snprintf(buf, cap, "%s", e->net->ip[0] ? e->net->ip : e->net->addr);', 'f16'),   # (retargeted, F16 7e part 3)
     ('gui/files.c', '    if (e->net) {   // (Browse Network\'s Kind column', '    if (0) {   // (Browse Network\'s Kind column', 'f16'),
     ('gui/browse.c', '        if (!again) return NULL;', '        return NULL;', 'f16'),
     ('gui/browse.c', '    if (browse.running) browse.again = true;', '    if (browse.running) {}', 'f16'),
     ('gui/actions.c', '    if (p->kind == PL_BROWSE) return UI_CTX_NETWORK;   // (F16 step 7e)\n', '', 'f16'),
     ('gui/main.c', ' && app.ui.view == UI_VIEW_NETWORK) network_relist(), dirty = true;', ' && app.ui.view == UI_VIEW_NETWORK) dirty = true;', 'f16'),
-    ('gui/footer.c', '.opening = (app.far_on && app.far_loading && !app.list.n) || (app.ui.view == UI_VIEW_NETWORK && browse_busy()) };', '.opening = (app.far_on && app.far_loading && !app.list.n) };', 'f16'),
+    ('gui/footer.c', ' || (app.ui.view == UI_VIEW_NETWORK && (browse_server_of(app.cwd) ? connect_busy() : browse_busy())) };', ' };', 'f16'),   # (retargeted, F16 7e part 3)
+    ('gui/connect.c', '    if (keep) state_key(key, login);\n', '', 'f16'),   # (F16 7e part 3)
+    ('gui/connect.c', '    bool keep = ok && cn.answered && login_key(', '    bool keep = ok && login_key(', 'f16'),   # (F16 7e part 3)
+    ('gui/connect.c', 'str_from_c(user[0] ? user : cn.def_user), str_from_c(domain));', 'str_from_c(cn.def_user), str_from_c(domain));', 'f16'),   # (F16 7e part 3)
+    ('gui/connect.c', 'str_from_c(user[0] ? user : cn.def_user), str_from_c(domain));', 'str_from_c(user[0] ? user : cn.def_user), STR_EMPTY);', 'f16'),   # (F16 7e part 3)
+    ('gui/connect.c', '            if (rep == CN_ANSWER) cn.answered = true, snprintf(', '            if (rep == CN_ANSWER) snprintf(', 'f16'),   # (F16 7e part 3)
+    ('gui/connect.c', '        if (strcmp(app.cwd, at) == 0) network_relist();   // (asked again there: Ctrl+R)\n        else go_to(at, STR_EMPTY, 0);', '        go_to(at, STR_EMPTY, 0);', 'f16'),   # (F16 7e part 3)
+    ('gui/connect.c', '        if (strcmp(app.cwd, at) == 0) network_relist();   // (asked again there: Ctrl+R)\n        else go_to(at, STR_EMPTY, 0);', '        if (strcmp(app.cwd, at) == 0) network_relist();   // (asked again there: Ctrl+R)', 'f16'),   # (F16 7e part 3)
+    ('gui/connect.c', '    bool busy = cn.phase != CN_IDLE;\n    pthread_mutex_unlock(&cn.mu);\n    return busy;', '    bool busy = false;\n    pthread_mutex_unlock(&cn.mu);\n    return busy;', 'f16'),   # (F16 7e part 3)
+    ('gui/folder.c', '    if (server && !same && strcmp(server, shp.server) != 0) connect_start(str_from_c(server));', '    if (0) connect_start(str_from_c(server));', 'f16'),   # (F16 7e part 3)
+    ('gui/actions.c', '            if (server) connect_start(str_from_c(server));', '            if (0) connect_start(str_from_c(server));', 'f16'),   # (F16 7e part 3)
+    ('gui/browse.c', '    return strncmp(dir, NETWORK_URI, k) == 0 && dir[k] ? dir + k : NULL;', '    return strncmp(dir, NETWORK_URI, k) == 0 ? dir + k : NULL;', 'f16'),   # (F16 7e part 3)
+    ('gui/browse.c', '    else if (strcmp(server, shp.server) == 0) {', '    else if (1) {', 'f16'),   # (F16 7e part 3)
+    ('gui/browse.c', '            s[n] = (NetServer){ .kind = NET_SMB };', '            s[n] = (NetServer){ .kind = NET_SFTP };', 'f16'),   # (F16 7e part 3)
+    ('gui/icons.c', '    if (e->net && !e->net->ip[0]) return icon_for_px(S("folder-remote"), NULL, 0, px);   // (a server\'s share, F16 step 7e)\n', '', 'f16'),   # (F16 7e part 3)
+    ('gui/input.c', ' && app.ui.view != UI_VIEW_NETWORK && app.have_list', ' && app.have_list', 'f16'),   # (F16 7e part 3)
 ]

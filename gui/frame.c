@@ -55,7 +55,8 @@ static const char *list_word(bool *bad)
     bool far_word = app.far_on && (app.far_loading || app.far_note[0]);
     *bad = far_word && app.far_note[0];
     return app.ui.view == UI_VIEW_SEARCH ? (!app.ui.search.len ? "Type a name to search" : app.search_done ? "Nothing found" : "Searching\xE2\x80\xA6")
-           : app.ui.view == UI_VIEW_NETWORK ? (browse_busy() ? "Searching the network\xE2\x80\xA6" : "No servers found")   // (F16 step 7e)
+           : app.ui.view == UI_VIEW_NETWORK && browse_server_of(app.cwd) ? (connect_busy() ? "Opening\xE2\x80\xA6" : "No shares")   // (F16 step 7e)
+           : app.ui.view == UI_VIEW_NETWORK ? (browse_busy() ? "Searching the network\xE2\x80\xA6" : "No servers found")
            : far_word                   ? (app.far_note[0] ? app.far_note : "Opening\xE2\x80\xA6")
            : app.list.hidden            ? "Only hidden files"
                                         : "Empty folder";
@@ -235,7 +236,6 @@ static const char *footer_hint(void)
                                  : "Bookmarks: \xE2\x86\x91 \xE2\x86\x93 (k j) move \xC2\xB7 Enter goes there \xC2\xB7 Delete removes \xC2\xB7 F2 renames \xC2\xB7 "
                                    "Alt+\xE2\x86\x91 Alt+\xE2\x86\x93 move it \xC2\xB7 Esc closes";
     case UI_ON_BRANCHES: return "Branches: type to filter \xC2\xB7 Tab or \xE2\x86\x93 the list \xC2\xB7 Enter switches \xC2\xB7 Esc closes";
-    case UI_ON_SHARES: return "Shares: type to filter \xC2\xB7 Tab or \xE2\x86\x93 the list \xC2\xB7 Enter connects \xC2\xB7 Esc closes";
     case UI_ON_OW:
         return "Open With: type to filter \xC2\xB7 Tab or \xE2\x86\x93 the list \xC2\xB7 Enter opens \xC2\xB7 Esc closes \xC2\xB7 "
                "Alt+C/W/R case, words, regex \xC2\xB7 Alt+D default";

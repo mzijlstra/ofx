@@ -62,7 +62,6 @@ static int list_cells(void)
 // The list's rows and columns for the window as it is now.
 static int  ow_rows(int h);   // Open With (gui/openwith.c, F7.3)
 static int  brp_rows(int h);   // the branches panel (gui/branches.c, F12 step 6)
-static int  shp_rows(int h);   // a server's shares (gui/shares.c, F16 step 7a)
 static int  bmp_rows(int h);  // Edit Bookmarks (gui/bookmarks.c, F7.5)
 static int  keys_rows(int h); // Keyboard Shortcuts (gui/shortcuts.c, F7.5)
 
@@ -72,7 +71,6 @@ static void list_fit(void)
     ui_resize(&app.ui.list, list_rows(GetScreenHeight()));
     ui_resize(&app.ui.ow.list, ow_rows(GetScreenHeight()));   // Open With's list (F7.3)
     ui_resize(&app.ui.brp.list, brp_rows(GetScreenHeight()));   // the branches panel's (F12 step 6)
-    ui_resize(&app.ui.shp.list, shp_rows(GetScreenHeight()));   // a server's shares (F16 step 7a)
     ui_resize(&app.ui.bmp_list, bmp_rows(GetScreenHeight()));   // Edit Bookmarks' (F7.5)
     ui_resize(&app.ui.keys_list, keys_rows(GetScreenHeight()));   // Keyboard Shortcuts'
 }
@@ -321,7 +319,7 @@ static bool entry_unknown(const Entry *e)
 static void entry_when(const Entry *e, i64 now, char *buf, size_t cap)
 {
     buf[0] = 0;
-    if (e->net) snprintf(buf, cap, "%s", e->net->ip);   // (Browse Network's Address column, F16 step 7e)
+    if (e->net) snprintf(buf, cap, "%s", e->net->ip[0] ? e->net->ip : e->net->addr);   // (Browse Network's Address column, F16 step 7e: a server's IP, a share's address)
     else if (e->mtime) ui_when(buf, cap, e->mtime, now, app.conf.date, app.conf.date_pattern);
 }
 

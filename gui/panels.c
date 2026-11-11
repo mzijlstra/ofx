@@ -550,7 +550,6 @@ static void layout_login_panel(void)
 
 #include "openwith.c"
 #include "branches.c"
-#include "shares.c"
 #include "bookmarks.c"
 #include "shortcuts.c"
 #include "about.c"
@@ -565,7 +564,6 @@ static void layout_modal(UiOnTop k, float w, float h)
     if (k == UI_ON_PROPS) layout_props_panel();
     else if (k == UI_ON_OW) layout_ow_panel();
     else if (k == UI_ON_BRANCHES) layout_brp_panel();
-    else if (k == UI_ON_SHARES) layout_shp_panel();
     else if (k == UI_ON_BM) layout_bmp_panel();
     else if (k == UI_ON_KEYS) layout_keys_panel();
     else if (k == UI_ON_ABOUT) layout_about_panel();

@@ -1,6 +1,6 @@
 // The panels' keys: Properties (F7.2), Open With (F7.3), Keyboard Shortcuts and Edit Bookmarks (F7.5),
-// the branches (F12 step 6), a server's shares (F16 step 7a), Connect's question (F16 step 4); Open
-// With's, the branches' and the shares' are pickers (ui_picker).
+// the branches (F12 step 6), Connect's question (F16 step 4); Open With's and the branches' are
+// pickers (ui_picker).
 // Included by ui.c, before menus.c (whose entries open them).
 
 // ---- Properties (F7.2) --------------------------------------------------------------------------
@@ -36,7 +36,7 @@ static UiAction ui_props_event(Ui *u, UiEvent e)
     return UI_NONE;
 }
 
-// ---- a picker: a filter field over its list (Open With's, the branches', a server's shares) -------
+// ---- a picker: a filter field over its list (Open With's, the branches') -------------------------
 
 // What a picker's key or press asks of its panel (ui_picker_do).
 typedef enum { UI_PICK_NONE, UI_PICK_FILTER, UI_PICK_CHOOSE, UI_PICK_CLOSE } UiPickDo;
@@ -138,8 +138,6 @@ static UiPicker ui_picker(Ui *u, UiPanel p, const UiInput *in)
         return (UiPicker){ &u->ow, u->ow_idx, UI_APPS_MAX, in ? in->app_name : NULL, in ? in->app_n : 0, u->ow_opts, UA_LAUNCH };
     case UI_PANEL_BRANCHES:   // (F12 step 6: the branch menu's, case folded; Enter switches)
         return (UiPicker){ &u->brp, u->brp_idx, UI_BRANCHES_MAX, in ? in->br_name : NULL, in ? in->br_names : 0, { 0 }, UA_BRANCH };
-    case UI_PANEL_SHARES:   // (F16 step 7a: a server's, case folded; Enter connects)
-        return (UiPicker){ &u->shp, u->shp_idx, UI_SHARES_MAX, in ? in->sh_name : NULL, in ? in->sh_names : 0, { 0 }, UA_SHARE };
     default: return (UiPicker){ 0 };
     }
 }
@@ -210,21 +208,13 @@ static UiAction ui_ow_event(Ui *u, UiEvent e, const UiInput *in)
     return ui_picker_do(u, UI_PANEL_OW, ui_pick_key(u, &u->ow, e, in), in);
 }
 
-// ---- the branches (F12 step 6) and a server's shares (F16 step 7a) -------------------------------
+// ---- the branches (F12 step 6) -------------------------------------------------------------------
 
 // The branches panel opened from the branch menu's "All branches…".
 static UiAction ui_brp_open(Ui *u)
 {
     ui_picker_open(u, UI_PANEL_BRANCHES);
     return UI_NONE;
-}
-
-// The shares panel opened by gui/ once Connect to Server has read a server's shares, and no other
-// panel is up.
-static void ui_shp_open(Ui *u)
-{
-    ui_picker_open(u, UI_PANEL_SHARES);
-    ui_edit_close(u), u->menu_on = false;
 }
 
 // ---- Keyboard Shortcuts (F7.5) -------------------------------------------------------------------
@@ -368,14 +358,14 @@ static bool ui_login_guest(const Ui *u)
 }
 
 // The question put up, for kind: the user's field only when gio asks for one (ask_user), again when
-// the last answer was refused (what was typed then stays, save the password; else the user field
-// starts as def_user, the domain empty). The keys on the user's field when it is shown and empty,
-// else the password's. The edit line and a menu close.
-static void ui_login_open(Ui *u, UiLoginKind kind, bool ask_user, bool again, Str def_user)
+// the last answer was refused (what was typed then stays, save the password; else the fields start
+// as def_user and def_domain: the server's last, F16 step 7e). The keys on the user's field when it
+// is shown and empty, else the password's. The edit line and a menu close.
+static void ui_login_open(Ui *u, UiLoginKind kind, bool ask_user, bool again, Str def_user, Str def_domain)
 {
     if (!again) {
         ui_line_set(ui_login_line(u, UI_LOGIN_USER), def_user);
-        ui_line_set(ui_login_line(u, UI_LOGIN_DOMAIN), STR_EMPTY);
+        ui_line_set(ui_login_line(u, UI_LOGIN_DOMAIN), def_domain);
     }
     u->login_kind = kind, u->login_no_user = !ask_user, u->login_again = again;
     u->login_at = ask_user && kind != UI_LOGIN_KEY && u->login_user.len == 0 ? UI_LOGIN_USER : UI_LOGIN_PASS;

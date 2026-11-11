@@ -15,6 +15,12 @@ sh grep -q "avahi-browse -k -t -r -p _smb._tcp" "$OFX_ROOT/spawn.log" && grep -q
 key down
 expect sel=YOGA sizecell=SMB seldate=192.168.1.165
 shot f16v-browse.png
+# A row pressed and moved isn't dragged: it is a server, not a file (the step 7e review).
+point-ui row 1
+press-here
+move-by 0 40
+expect drag=-
+release
 # Nothing else works on a server's row: said why.
 key delete
 expect statusbad=1 status=Browse
@@ -44,7 +50,8 @@ wait-for 4000 browseasks=5 n=0 listword=No_servers_found
 sh rm "$OFX_ROOT/none"
 key ctrl-r
 wait-for 4000 browseasks=6 n=4
-# Enter on an SMB server connects, as its address typed (its shares listed: step 7a's panel).
+# Enter on an SMB server connects, as its address typed: its shares in the same view, Browse
+# Network › the server; Back to the servers.
 key home
 expect sel=box
 key down
@@ -52,9 +59,9 @@ expect sel=Office
 key enter
 wait-for 4000 conn=1
 sh grep -q "gio mount smb://office.local:4445" "$OFX_ROOT/spawn.log"
-wait-for 6000 conn=0 shp=1
-key esc
-wait-for 2000 shp=0
+wait-for 6000 conn=0 network=1 n=2 shps=Music|pub info=2_shares
+key alt-left
+wait-for 4000 network=1 n=4 info=4_servers
 # The row's menu: Open and Open in New Tab alone.
 point-side Browse Network
 right-here

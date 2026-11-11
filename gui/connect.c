@@ -41,6 +41,9 @@ static struct {
     // the answer (the main thread's, then the thread's)
     CnReply reply;
     char    user[256], domain[256], pass[256];
+    // the user and domain last answered with (not Guest): kept for the server once it connects (step 7e)
+    bool    answered;
+    char    used_user[256], used_domain[256];
     // the result (CN_DONE); a server's address (share ""): its shares (step 7a)
     int     nshares;
     char    shares[SERVER_SHARES_MAX][SERVER_SHARE_NAME];
@@ -59,13 +62,8 @@ static const char *cn_name(void)
     return cn.share[0] ? arena_sprintf(&frame, "%s on %s", cn.share, cn.host) : arena_sprintf(&frame, "%s", cn.host);
 }
 
-// A server's shares go to their panel, gui/shares.c (its state lived here before the code-health
-// review's step E): kept from the thread's answer, offered once nothing else is up, dropped when
-// another connection starts; UA_SHARE connects to one.
-static void shares_keep(const char *server, const char *host, const char (*names)[SERVER_SHARE_NAME], int n);
-static int  shares_offer(void);
-static void shares_drop(void);
-static void share_pick(isize i);
+
+static bool state_key(const char *key, const char *value);   // (gui/actions.c: a server's login kept, step 7e)
 
 static void cn_line(int fd, const char *s)
 {
@@ -149,6 +147,7 @@ static CnReply cn_converse(Child *c, bool guest, char *eb, size_t ecap, size_t *
             while (cn.reply == CN_WAIT) pthread_cond_wait(&cn.cv, &cn.mu);
             rep = cn.reply;
             snprintf(user, sizeof user, "%s", cn.user), snprintf(domain, sizeof domain, "%s", cn.domain);
+            if (rep == CN_ANSWER) cn.answered = true, snprintf(cn.used_user, sizeof cn.used_user, "%s", cn.user), snprintf(cn.used_domain, sizeof cn.used_domain, "%s", cn.domain);
             memcpy(pass, cn.pass, sizeof pass);
             cn_wipe();
             cn.phase = CN_RUN;
@@ -282,12 +281,11 @@ static bool connect_start(Str text)
     if (!busy) {
         snprintf(cn.uri, sizeof cn.uri, "%s", uri), snprintf(cn.host, sizeof cn.host, "%s", host), snprintf(cn.share, sizeof cn.share, "%s", share);
         cn.browse = c == CONNECT_SERVER, cn.ssh = strncasecmp(uri, "sftp:", 5) == 0, cn.key = cn.unknown = false;
-        cn.phase = CN_RUN, cn.shown = false, cn.reply = CN_WAIT, cn.user[0] = cn.domain[0] = 0, cn.running = true;
+        cn.phase = CN_RUN, cn.shown = false, cn.reply = CN_WAIT, cn.user[0] = cn.domain[0] = 0, cn.running = true, cn.answered = false;
         prctl(PR_SET_DUMPABLE, 0, 0, 0, 0);
     }
     pthread_mutex_unlock(&cn.mu);
     if (busy) return set_status(true, "Still connecting to %s", cn_name()), true;
-    shares_drop();   // (a server's shares not yet shown: another connection replaces them, step 7a review)
     pthread_t t;
     if (pthread_create(&t, NULL, cn_thread, NULL) != 0) {
         pthread_mutex_lock(&cn.mu);
@@ -341,18 +339,29 @@ static bool connect_take(void)
     CnPhase ph = cn.phase;
     if (ph == CN_ASK && !cn.shown && cn.reply == CN_WAIT) {
         cn.shown = true;
-        ui_login_open(u, cn.key ? UI_LOGIN_KEY : cn.ssh ? UI_LOGIN_SSH : UI_LOGIN_SHARE, cn.ask_user, cn.again, str_from_c(cn.def_user));
+        // (the user and domain last used for this server, kept in the state file: step 7e; else gio's
+        // default user)
+        char key[300], path[PATH_MAX], user[256] = "", domain[256] = "";
+        if (login_key(cn.host, key, sizeof key) && state_path(path, sizeof path)) {
+            ArenaMark m = arena_mark(&scratch);
+            login_parse(state_value(&scratch, path, key), user, sizeof user, domain, sizeof domain);
+            arena_restore(&scratch, m);
+        }
+        ui_login_open(u, cn.key ? UI_LOGIN_KEY : cn.ssh ? UI_LOGIN_SSH : UI_LOGIN_SHARE, cn.ask_user, cn.again, str_from_c(user[0] ? user : cn.def_user), str_from_c(domain));
         pthread_mutex_unlock(&cn.mu);
         return true;
     }
     if (ph != CN_DONE) return pthread_mutex_unlock(&cn.mu), false;
     bool ok = cn.ok, cancelled = cn.cancelled, server = cn.browse, unknown = cn.unknown;
+    char key[300], login[3 * 512 + 8];   // (a login answered and taken: kept for the server, step 7e)
+    bool keep = ok && cn.answered && login_key(cn.host, key, sizeof key) && login_value(str_from_c(cn.used_user), str_from_c(cn.used_domain), login, sizeof login);
     if (ok && server) shares_keep(cn.uri, cn.host, cn.shares, cn.nshares);   // (the shares gui/ keeps: the panel's)
     char path[PATH_MAX], why[512];
     snprintf(path, sizeof path, "%s", cn.path), snprintf(why, sizeof why, "%s", cn.why);
     cn.phase = CN_IDLE;
     pthread_mutex_unlock(&cn.mu);
     ui_panel_close(u, UI_PANEL_LOGIN);   // (an answer closed it: none is waited for now)
+    if (keep) state_key(key, login);
     if (cancelled) return true;   // (said as it was cancelled)
     // (libsmbclient's word for a server name it can't find, and gvfs passes it on: a hint, as a name
     // isn't looked up first, which would miss the ones only found by broadcast; gvfs-nfs's for a
@@ -363,15 +372,27 @@ static bool connect_take(void)
         return set_status(true, "%s isn't a known host: connect once with ssh to check its key, then try again", h ? h + 1 : cn.host), true;
     }
     if (!ok) return set_status(true, "Can't connect to %s: %s%s", cn_name(), why[0] ? why : "no reason given", hint), true;
-    if (server) {   // (a server's address: its shares to pick from, step 7a)
-        int n = shares_offer();
-        if (n == 0) return set_status(false, "%s lists no shares", cn_name()), true;
-        set_status(false, "%d share%s on %s", n, n == 1 ? "" : "s", cn_name());
+    if (server) {   // (a server's address: its shares, step 7a, listed in Browse Network's view since 7e)
+        char at[PATH_MAX + 16];
+        snprintf(at, sizeof at, "%s%s", NETWORK_URI, shp.server);
+        if (strcmp(app.cwd, at) == 0) network_relist();   // (asked again there: Ctrl+R)
+        else go_to(at, STR_EMPTY, 0);
+        if (shp.n == 0) return set_status(false, "%s lists no shares", cn_name()), true;
+        set_status(false, "%d share%s on %s", shp.n, shp.n == 1 ? "" : "s", cn_name());
         return true;
     }
     watch_gvfs_kick();   // (the share in the sidebar's Network section at once, F16 step 5)
     if (go_to(path, STR_EMPTY, 0)) set_status(false, "Connected to %s", cn_name());
     return true;
+}
+
+// Whether a connection is on its way (Browse Network's shares view says "Opening…" meanwhile, step 7e).
+static bool connect_busy(void)
+{
+    pthread_mutex_lock(&cn.mu);
+    bool busy = cn.phase != CN_IDLE;
+    pthread_mutex_unlock(&cn.mu);
+    return busy;
 }
 
 // At quit: a question unanswered is cancelled as Cancel cancels it (and one gio asks later, too).

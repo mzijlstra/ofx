@@ -498,6 +498,11 @@ giofake_shares() {   # $1: f16s's stand-in gio
     cat > "$1" <<'EOF'
 #!/bin/sh
 case "$1:$*" in
+mount:*smb://ask*)   # (asks as gio does: user, domain, password; the answers logged, never the password)
+    printf 'Authentication Required\nEnter user and password for share \342\200\234x\342\200\235 on \342\200\234ask\342\200\235:\nUser [guest]: '
+    read -r u; printf 'Domain [WORKGROUP]: '; read -r d; printf 'Password: '; read -r p
+    echo "$u $d" >> "$OFX_GUI_ROOT/asked"; mkdir -p "$OFX_GUI_ROOT/asked-share" ;;
+info:*smb://ask*) printf 'local path: %s\n' "$OFX_GUI_ROOT/asked-share" ;;
 mount:*) sleep 1 ;;
 list:*smb://empty*) ;;
 list:*smb://bad*) echo "gio: smb://bad/: Permission denied" >&2; exit 1 ;;

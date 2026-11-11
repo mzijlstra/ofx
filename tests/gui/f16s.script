@@ -1,69 +1,87 @@
 # F16 step 7a: a server's shares, on a stand-in gio (run.sh's f16s; OFX_TEST_GIO): its mount takes a
 # second and asks nothing, its list names pub, Music and IPC$ (a hidden one). The bookmarks file has
-# the server's own address, as NAS. ofx starts in an empty home.
+# the server's own address, as NAS. ofx starts in an empty home. Since step 7e the shares are rows
+# in Browse Network's view (network:<the server's address>), not a panel.
 settle
-wait-for 4000 n=0 shp=0 sides=^Places|Home|Trash|^Drives|File_System|^Network|Browse_Network|~NAS
-# The server's address alone: connected, then its shares. The location line opened meanwhile keeps
-# the keys; the panel comes up once it closes.
+wait-for 4000 n=0 network=0 sides=^Places|Home|Trash|^Drives|File_System|^Network|Browse_Network|~NAS
+# The server's address alone: connected ("Opening…" meanwhile, the window answering), then its
+# shares as rows, each its address beside it.
 key ctrl-l
 type smb://nas/
 key enter
 expect conn=1 statusbad=0
-key ctrl-l
-wait-for 4000 conn=0 shppending=1 shp=0 editing=1
-key esc
-wait-for 2000 shp=1 shppending=0 modal=shares shpn=2 shps=Music|pub shpsel=Music
+wait-for 4000 conn=0 network=1 n=2 shps=Music|pub sel=Music sizecell=SMB seldate=smb://nas/Music statusbad=0 status=2
+expect shares on nas
+# (a share's icon, not a server's; nothing kept for a server that asked nothing)
+expect icon=/usr/share/icons/Yaru-magenta/24x24@2x/places/folder-remote.png
+sh ! grep -q "^login\." "$OFX_ROOT/state/ofx/state"
 shot f16s-shares.png
-# A press on a row takes the cursor; filtered; Enter connects to the share by its address (the
-# server's, its name: the port kept).
-point-ui shp-row 1
-click-here
-wait-for 2000 shpsel=pub shpinlist=1
-type pu
-wait-for 2000 shpn=1 shpsel=pub
+# Enter on a share connects to it by its address (the server's, and its name).
+key down
+expect sel=pub
 key enter
-wait-for 4000 shp=0 conn=0 statusbad=1
+wait-for 4000 conn=0 statusbad=1
 sh grep -qx "gio mount smb://nas/pub" "$OFX_ROOT/spawn.log"
-# A connection started while the shares wait (the location line open): they are dropped, never put
-# up over it (step 7a review).
-key ctrl-l
-key ctrl-a
-type smb://nas
-key enter
-key ctrl-l
-wait-for 4000 conn=0 shppending=1 shp=0 editing=1
-key ctrl-a
-type smb://nas/pub
-key enter
-expect shppending=0
-wait-for 4000 conn=0 shp=0 shppending=0
-# Esc closes it, nothing connected.
-key ctrl-l
-key ctrl-a
-type smb://nas
-key enter
-wait-for 4000 shp=1 shpn=2
-key esc
-wait-for 2000 shp=0 modal=-
-# The server's bookmark in the sidebar: a click lists its shares too; Connect on the cursor's.
+# Ctrl+R there reads the server's shares again.
+sh [ "$(grep -c "gio mount smb://nas/$" "$OFX_ROOT/spawn.log")" -eq 1 ]
+key ctrl-r
+wait-for 4000 conn=0 network=1 n=2 sel=pub
+sh [ "$(grep -c "gio mount smb://nas/$" "$OFX_ROOT/spawn.log")" -eq 2 ]
+# The server's bookmark in the sidebar: a click lists its shares too; Enter on the cursor's.
 point-side NAS
 click-here
-wait-for 4000 shp=1 shpn=2 shpsel=Music
-point-ui modal-yes
-click-here
-wait-for 4000 shp=0 conn=0
+wait-for 4000 conn=0 network=1 n=2 sel=Music
+key enter
+wait-for 4000 conn=0
 sh grep -qx "gio mount smb://nas/Music" "$OFX_ROOT/spawn.log"
-# A server that lists none: said, by its name; one whose list fails: gio's reason.
+# A server that lists none: its view says so, by its name; one whose list fails: gio's reason.
 key ctrl-l
 key ctrl-a
 type smb://empty
 key enter
-wait-for 4000 conn=0 shp=0 shppending=0 statusbad=0 status=empty
+wait-for 4000 conn=0 network=1 n=0 listword=No_shares statusbad=0 status=empty
 expect lists no shares
+# Back and forth between two servers' views: each visit connects again for its own shares, never
+# showing the other's meanwhile ("Opening…" while it connects).
+key alt-left
+wait-for 4000 conn=0 dir=network:smb://nas n=2 shps=Music|pub
+key alt-right
+expect dir=network:smb://empty n=0 listword=Opening…
+wait-for 4000 conn=0 n=0 listword=No_shares
 key ctrl-l
 key ctrl-a
 type smb://bad/
 key enter
-wait-for 4000 conn=0 shp=0 statusbad=1 status=Can't
+wait-for 4000 conn=0 statusbad=1 status=Can't
 expect connect to bad: Permission denied
+# A server that asks (step 7e): the user and domain typed are kept for it in the state file, the
+# password never; asked again, they are filled in and the keys are on the password.
+key ctrl-l
+key ctrl-a
+type smb://ask/x
+key enter
+wait-for 4000 login=1 loginat=2 loginuser=guest
+key up
+key up
+expect loginat=0
+key ctrl-a
+type mz
+key tab
+type HOME
+key tab
+expect loginat=2
+type hunter2
+key enter
+wait-for 4000 conn=0 login=0 statusbad=0
+sh grep -qx "mz HOME" "$OFX_ROOT/asked"
+sh grep -qx "login.ask=mz HOME" "$OFX_ROOT/state/ofx/state"
+sh ! grep -qs hunter2 "$OFX_ROOT/state/ofx/state" "$OFX_ROOT/spawn.log" "$OFX_ROOT/out" "$OFX_ROOT/err"
+key ctrl-l
+key ctrl-a
+type smb://ask/x
+key enter
+wait-for 4000 login=1 loginat=2 loginuser=mz
+key enter
+wait-for 4000 conn=0 login=0
+sh [ "$(tail -1 "$OFX_ROOT/asked")" = "mz HOME" ]
 quit

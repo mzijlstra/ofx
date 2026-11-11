@@ -2735,7 +2735,7 @@ MUTANTS += [
     ('fs/farlist.c', 'if (n < 0 || (size_t)n + (size_t)name.len > cap || name.len < 1 || name.len > NAME_MAX) return 0;', 'if (n < 0 || (size_t)n + (size_t)name.len > cap || name.len > NAME_MAX) return 0;'),
     ('fs/farlist.c', 'if (n < 0 || (size_t)n + (size_t)name.len > cap || name.len < 1 || name.len > NAME_MAX) return 0;', 'if (n < 0 || (size_t)n + (size_t)name.len > cap || name.len < 1) return 0;'),
     ('fs/tree.c', '    if (t->mounts.n && (!far_real(&t->mounts, dir, real, sizeof real, &far) || far)) return;', ''),   # (retargeted, step C)
-    ('ui/helpers.c', '    if (in->opening) {\n        snprintf(buf, cap, in->servers ? "Searching the network\\xE2\\x80\\xA6" : "Opening\\xE2\\x80\\xA6");   // (Browse Network\'s: the last rows shown meanwhile)\n        return;\n    }\n', ''),   # (retargeted, step 7e)
+    ('ui/helpers.c', '    if (in->opening) {\n        snprintf(buf, cap, in->noun && strcmp(in->noun, "server") == 0 ? "Searching the network\\xE2\\x80\\xA6" : "Opening\\xE2\\x80\\xA6");   // (Browse Network\'s: the last rows shown meanwhile)\n        return;\n    }\n', ''),   # (retargeted, F16 7e part 3)
     ('fs/spawn.c', '    if (in >= 0) posix_spawn_file_actions_adddup2(&fa, in, 0);\n    else posix_spawn_file_actions_addopen', '    posix_spawn_file_actions_addopen'),
     ('fs/spawn.c', '    else if (errs == SPAWN_ERR_NULL) posix_spawn_file_actions_addopen(&fa, 2, "/dev/null", O_WRONLY, 0);\n', ''),
     ('fs/spawn.c', '    if (errs >= 0) posix_spawn_file_actions_adddup2(&fa, errs, 2);', '    if (errs >= 0) {}'),
@@ -2915,9 +2915,9 @@ MUTANTS += [
     # (dropped, step E: the pickers share one path now, whose own mutant is kept)
     # (dropped, step E: the pickers share one path now, whose own mutant is kept)
     # (dropped, step E: the pickers share one path now, whose own mutant is kept)
-    ('ui/handle.c', '    case UI_ON_BRANCHES: case UI_ON_SHARES: *out = ui_picker_do(', '    case UI_ON_BRANCHES: *out = ui_picker_do('),   # (retargeted, step E)
+    # (dropped, F16 7e part 3: the shares picker is gone (a server's shares are rows in Browse Network's view))
     # (dropped, step E: the pickers share one path now, whose own mutant is kept)
-    ('ui/ui.c', 'on == UI_ON_SHARES ? UI_PANEL_SHARES : UI_PANEL_NONE;', 'UI_PANEL_NONE;'),   # (retargeted, step E)
+    # (dropped, F16 7e part 3: UI_PANEL_SHARES is gone)
     # F16 step 7b: servers on the network
     ('fs/connect.c', "        if (f.p[i] != '\\\\' || i + 1 >= f.len) { out[o++] = f.p[i]; continue; }", "        if (f.p[i] != '\\\\') { out[o++] = f.p[i]; continue; }"),
     ('fs/connect.c', "            if (v > 0 && v < 256) out[o++] = (char)v;", "            out[o++] = (char)v;"),
@@ -3014,7 +3014,7 @@ MUTANTS += [
     ('fs/paths.c', '    Mounts ms = mounts_parse(a, read_file(tmp, path));', '    Mounts ms = mounts_parse(a, read_file(a, path));'),
     ('fs/farlist.c', "        if (c + 2 >= line.len || line.p[c + 1] != ' ' ||", "        if (c + 2 >= line.len ||"),
     # The milestone's code-health cleanup, step E: the pickers' table, ui_login_open
-    ('ui/ui.c', 'p == UI_PANEL_SHARES ? &u->shp : NULL;', 'NULL;'),
+    # (dropped, F16 7e part 3: UI_PANEL_SHARES is gone)
     ('ui/panels.c', '    return u->login_kind == UI_LOGIN_SHARE;', '    return true;'),
     ('ui/panels.c', '    if (!again) {\n        ui_line_set(ui_login_line(u, UI_LOGIN_USER), def_user);', '    if (1) {\n        ui_line_set(ui_login_line(u, UI_LOGIN_USER), def_user);'),
     ('ui/panels.c', '    u->login_at = ask_user && kind != UI_LOGIN_KEY && u->login_user.len == 0 ? UI_LOGIN_USER : UI_LOGIN_PASS;', '    u->login_at = UI_LOGIN_USER;'),
@@ -3044,7 +3044,23 @@ MUTANTS += [
     ('fs/places.c', '    places_add(pl, PL_BROWSE, NETWORK_URI, S("Browse Network"));', '    {}'),
     ('ui/ui.c', '    if (v == UI_VIEW_NETWORK) {\n        switch (k) {', '    if (0) {\n        switch (k) {'),
     ('ui/menus.c', '    if (k == UI_CTX_NETWORK) return it == UM_OPEN_IT || it == UM_OPEN_TAB;', '    if (k == UI_CTX_NETWORK) return it == UM_OPEN_IT;'),
-    ('ui/helpers.c', '    const char *noun = in->servers ? "server" : "item";', '    const char *noun = "item";'),
+    ('ui/helpers.c', '    const char *noun = in->noun ? in->noun : "item";', '    const char *noun = "item";'),   # (retargeted, F16 7e part 3)
     ('ui/helpers.c', '    if (str_eq(ui_crumb_path(c, i), S(NETWORK_URI))) return S("Browse Network");\n', ''),
     ('fs/list.c', '    int c = n ? memcmp(a.p, b.p, (size_t)n) : 0;', '    int c = memcmp(a.p, b.p, (size_t)n);'),
+    ('fs/state.c', '    return h[0] && n > 0 && (size_t)n < cap && !strpbrk(h, " =\\n");', '    return h[0] && n > 0 && (size_t)n < cap;'),   # (F16 7e part 3)
+    ('fs/state.c', '    return h[0] && n > 0 && (size_t)n < cap && !strpbrk(h, " =\\n");', '    return n > 0 && (size_t)n < cap && !strpbrk(h, " =\\n");'),   # (F16 7e part 3)
+    ('fs/state.c', '    return h[0] && n > 0 && (size_t)n < cap && !strpbrk(h, " =\\n");', '    return h[0] && n > 0 && !strpbrk(h, " =\\n");'),   # (F16 7e part 3)
+    ('fs/state.c', '    const char *h = at ? at + 1 : host;', '    const char *h = host;'),   # (F16 7e part 3)
+    ('fs/state.c', '    int n = snprintf(out, cap, "%s %s", u, d);', '    int n = snprintf(out, cap, "%s %s", d, u);'),   # (F16 7e part 3)
+    ('fs/state.c', '    if (!percent_encode(user, "", u, sizeof u) || !percent_encode(domain, "", d, sizeof d)) return false;\n    int n', '    snprintf(u, sizeof u, "%.*s", (int)user.len, user.p), snprintf(d, sizeof d, "%.*s", (int)domain.len, domain.p);\n    int n'),   # (F16 7e part 3)
+    ('fs/state.c', '    int n = snprintf(out, cap, "%s %s", u, d);\n    return n > 0 && (size_t)n < cap;', '    int n = snprintf(out, cap, "%s %s", u, d);\n    return n > 0;'),   # (F16 7e part 3)
+    ('fs/state.c', 'sp < 0 ? STR_EMPTY : str_cut(v, sp + 1, v.len);', 'sp < 0 ? v : str_cut(v, sp + 1, v.len);'),   # (F16 7e part 3)
+    ('fs/state.c', 'sp < 0 ? STR_EMPTY : str_cut(v, sp + 1, v.len);', 'sp < 0 ? STR_EMPTY : str_cut(v, sp, v.len);'),   # (F16 7e part 3)
+    ('fs/state.c', '    if (!percent_decode(u, user, ucap)) user[0] = 0;', '    percent_decode(u, user, ucap);'),   # (F16 7e part 3)
+    ('ui/panels.c', '        ui_line_set(ui_login_line(u, UI_LOGIN_DOMAIN), def_domain);\n', ''),   # (F16 7e part 3)
+    ('ui/helpers.c', '        c->n = 2, c->cur = 1, c->lo = -1;\n        return;\n    }\n    while (h.len', '        c->n = 1, c->cur = 0, c->lo = -1;\n        return;\n    }\n    while (h.len'),   # (F16 7e part 3)
+    ('ui/helpers.c', '    if (str_starts_with(cw, S(NETWORK_URI))) {   // a server', '    if (0) {   // a server'),   # (F16 7e part 3)
+    ('ui/helpers.c', '        Str host = sep < 0 ? p : str_cut(p, sep + 3, p.len);', '        Str host = sep < 0 ? p : str_cut(p, sep, p.len);'),   # (F16 7e part 3)
+    ('ui/helpers.c', "        while (host.len > 1 && host.p[host.len - 1] == '/') host.len--;\n        return host;", '        return host;'),   # (F16 7e part 3)
+    ('ui/helpers.c', 'in->noun && strcmp(in->noun, "server") == 0 ? "Searching', 'in->noun ? "Searching'),   # (F16 7e part 3)
 ]

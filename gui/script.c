@@ -296,7 +296,6 @@ static void script_state(char *out, size_t cap)
         [UI_ON_NONE] = "-", [UI_ON_DELETE] = "delete", [UI_ON_CLASH] = "clash", [UI_ON_CANCEL] = "cancel", [UI_ON_QUIT] = "quit",
         [UI_ON_FULL] = "full", [UI_ON_EMPTY] = "empty", [UI_ON_CLEAR] = "clear-previews", [UI_ON_PROPS] = "props", [UI_ON_OW] = "open-with",
         [UI_ON_BM] = "bookmarks", [UI_ON_KEYS] = "shortcuts", [UI_ON_ABOUT] = "about", [UI_ON_BAR] = "menubar", [UI_ON_RESTORE] = "restore", [UI_ON_BRANCHES] = "branches", [UI_ON_LOGIN] = "login",
-        [UI_ON_SHARES] = "shares",
     };
     _Static_assert(COUNT(MODALS) == UI_ON_KINDS, "a name for each panel");
     // The path buttons' labels, '|' between; the cursor's folder count (- unknown, ? unreadable).
@@ -372,11 +371,8 @@ static void script_state(char *out, size_t cap)
     if (app.ui.panel == UI_PANEL_BRANCHES && app.ui.brp.list.n > 0 && app.ui.brp_idx[app.ui.brp.list.sel] < git.br.n)
         state_word(brpsel, sizeof brpsel, str_from_c(git.br.name[app.ui.brp_idx[app.ui.brp.list.sel]]));
     if (app.ui.brp.filter.len) state_word(brptext, sizeof brptext, (Str){ app.ui.brp.filter.b, app.ui.brp.filter.len });
-    // A server's shares (F16 step 7a): the cursor's, the filter's text, the list as read.
-    char shpsel[SERVER_SHARE_NAME] = "-", shptext[UI_FIND_MAX + 1] = "-", shplist[2048] = "-";
-    if (app.ui.panel == UI_PANEL_SHARES && app.ui.shp.list.n > 0 && app.ui.shp_idx[app.ui.shp.list.sel] < shp.n)
-        state_word(shpsel, sizeof shpsel, str_from_c(shp.name[app.ui.shp_idx[app.ui.shp.list.sel]]));
-    if (app.ui.shp.filter.len) state_word(shptext, sizeof shptext, (Str){ app.ui.shp.filter.b, app.ui.shp.filter.len });
+    // A server's shares as last read (F16 step 7a; listed in Browse Network's view since step 7e).
+    char shplist[2048] = "-";
     for (int i = 0, o = 0; i < shp.n && o < (int)sizeof shplist - 1; i++) {
         char w[SERVER_SHARE_NAME];
         state_word(w, sizeof w, str_from_c(shp.name[i]));
@@ -879,7 +875,7 @@ static void script_state(char *out, size_t cap)
     sw(out, cap, &len, "brptext=%s ", brptext);
     sw(out, cap, &len, "brpinlist=%d ", app.ui.brp.in_list);
     sw(out, cap, &len, "sharesscans=%d sharesevery=%d ", atomic_load(&gvfsw.scans), atomic_load(&gvfsw.every));   // (F16 step 7d)
-    sw(out, cap, &len, "shp=%d shpn=%td shpsel=%s shptext=%s shps=%s shppending=%d shpinlist=%d ", app.ui.panel == UI_PANEL_SHARES, app.ui.shp.list.n, shpsel, shptext, shplist, shp.pending, app.ui.shp.in_list);
+    sw(out, cap, &len, "shps=%s ", shplist);
     sw(out, cap, &len, "sidew=%d ", side_w());
     sw(out, cap, &len, "sidebox=%.0f ", Clay_GetElementData(CLAY_ID("side")).boundingBox.width);
     sw(out, cap, &len, "sidepx=%d ", app.side_px);

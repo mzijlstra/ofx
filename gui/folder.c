@@ -157,7 +157,7 @@ static int view_bar_h(void)
 
 static UiView view_of(const char *dir)
 {
-    return strcmp(dir, TRASH_URI) == 0 ? UI_VIEW_TRASH : strcmp(dir, NETWORK_URI) == 0 ? UI_VIEW_NETWORK : is_search(dir) ? UI_VIEW_SEARCH : UI_VIEW_FOLDER;
+    return strcmp(dir, TRASH_URI) == 0 ? UI_VIEW_TRASH : strncmp(dir, NETWORK_URI, strlen(NETWORK_URI)) == 0 ? UI_VIEW_NETWORK : is_search(dir) ? UI_VIEW_SEARCH : UI_VIEW_FOLDER;
 }
 
 static bool view_list(UiView v, Arena *a, const char *dir, Listing *l, Err *err)
@@ -165,7 +165,7 @@ static bool view_list(UiView v, Arena *a, const char *dir, Listing *l, Err *err)
     switch (v) {
     case UI_VIEW_TRASH: trash_state(); return trash_list(a, &trashd, app.show_hidden, app.ui.sort, l, err);
     case UI_VIEW_SEARCH: return search_list(a, dir, l, err);
-    case UI_VIEW_NETWORK: return browse_list(a, app.ui.sort, l, err);
+    case UI_VIEW_NETWORK: return browse_list(a, dir, app.ui.sort, l, err);
     case UI_VIEW_FOLDER: break;
     }
     return fs_list_far(a, dir, app.show_hidden, app.ui.sort, far_mounts(), l, err);   // (its far links and mount points never looked at, F16)
@@ -396,7 +396,11 @@ static bool go_to_in(const char *dir, Str select, isize fallback, GoHow how)
     Err err;
     UiView view = view_of(dir);
     bool same = strcmp(dir, app.cwd) == 0;
-    if (view == UI_VIEW_NETWORK && !same) browse_start();   // (each visit asks the network again: F16 step 7e)
+    // (each visit asks the network again: F16 step 7e; a server's shares, its own when another
+    // server's were read last)
+    const char *server = view == UI_VIEW_NETWORK ? browse_server_of(dir) : NULL;
+    if (view == UI_VIEW_NETWORK && !same && !server) browse_start();
+    if (server && !same && strcmp(server, shp.server) != 0) connect_start(str_from_c(server));
     bool on_far = view == UI_VIEW_FOLDER && far_dir(dir);
     // A far folder listed again (Ctrl+R, a change ofx made): a new lister, the listing shown kept
     // until its answer comes.

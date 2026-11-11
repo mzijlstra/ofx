@@ -1942,12 +1942,11 @@ int main(void)
     if (fast) test_connect_uri(), test_str_find_str();
     if (fast) test_gio_ask();
     if (fast) test_gio_why();
-    if (fast) test_login_keys(), test_login_open();
+    if (fast) test_login_keys(), test_login_open(), test_login_line();
     if (fast) test_gvfs_label();
     if (fast) test_places_net();
     if (fast) test_gvfs_uri();
     if (fast) test_server_shares();
-    if (fast) test_shares_panel();
     if (fast) test_avahi_servers();
     if (fast) test_crumbs_share();
     if (fast) test_gvfs_shares();

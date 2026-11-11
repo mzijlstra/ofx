@@ -242,8 +242,8 @@ static void status_info(char *buf, size_t cap)
     UiInfo in = { .n = app.list.n, .hidden = app.show_hidden ? 0 : app.list.hidden, .marked = app.ui.marked,
                   .one_count = -1, .one_size = -1, .avail = app.cwd_avail,
                   .cramped = app.ui.perms_cols && !app.ui.grid && app.ui.view != UI_VIEW_NETWORK && !perms_shown((float)GetScreenWidth()),
-                  .servers = app.ui.view == UI_VIEW_NETWORK,
-                  .changed = git_shown() ? git_shown()->g.changed : 0, .opening = (app.far_on && app.far_loading && !app.list.n) || (app.ui.view == UI_VIEW_NETWORK && browse_busy()) };
+                  .noun = app.ui.view != UI_VIEW_NETWORK ? NULL : browse_server_of(app.cwd) ? "share" : "server",
+                  .changed = git_shown() ? git_shown()->g.changed : 0, .opening = (app.far_on && app.far_loading && !app.list.n) || (app.ui.view == UI_VIEW_NETWORK && (browse_server_of(app.cwd) ? connect_busy() : browse_busy())) };
     for (isize i = 0; app.ui.marked == 1 && i < app.list.n; i++) {
         if (!app.ui.mark[i]) continue;
         const Entry *e = &app.list.e[i];

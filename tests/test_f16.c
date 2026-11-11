@@ -831,24 +831,61 @@ static void test_login_open(void)
 {
     Ui u = { 0 };
     u.focus = UI_FOCUS_EDIT, u.menu_on = true;
-    ui_login_open(&u, UI_LOGIN_SHARE, true, false, S("mz"));
+    ui_login_open(&u, UI_LOGIN_SHARE, true, false, S("mz"), STR_EMPTY);
     CHECK(u.panel == UI_PANEL_LOGIN && u.focus != UI_FOCUS_EDIT && !u.menu_on && ui_login_guest(&u));
     CHECK(u.login_user.len == 2 && u.login_at == UI_LOGIN_PASS && ui_login_shown(&u, UI_LOGIN_USER) && ui_login_shown(&u, UI_LOGIN_DOMAIN));
     // Asked again: what was typed stays (the default doesn't come back), "again" said.
     ui_line_set(ui_login_line(&u, UI_LOGIN_USER), S("other")), ui_line_set(ui_login_line(&u, UI_LOGIN_DOMAIN), S("WG"));
-    ui_login_open(&u, UI_LOGIN_SHARE, true, true, S("mz"));
+    ui_login_open(&u, UI_LOGIN_SHARE, true, true, S("mz"), STR_EMPTY);
     CHECK(u.login_again && u.login_user.len == 5 && u.login_domain.len == 2);
     // A first ask with no default user: the keys on the user's field; the domain emptied.
-    ui_login_open(&u, UI_LOGIN_SHARE, true, false, STR_EMPTY);
+    ui_login_open(&u, UI_LOGIN_SHARE, true, false, STR_EMPTY, STR_EMPTY);
     CHECK(!u.login_again && u.login_user.len == 0 && u.login_domain.len == 0 && u.login_at == UI_LOGIN_USER);
     // The address names the user: no field for it, the keys on the password.
-    ui_login_open(&u, UI_LOGIN_SHARE, false, false, STR_EMPTY);
+    ui_login_open(&u, UI_LOGIN_SHARE, false, false, STR_EMPTY, STR_EMPTY);
     CHECK(u.login_no_user && !ui_login_shown(&u, UI_LOGIN_USER) && u.login_at == UI_LOGIN_PASS);
     // SFTP: no domain, no guest. A key: the passphrase alone, no guest.
-    ui_login_open(&u, UI_LOGIN_SSH, true, false, S("mz"));
+    ui_login_open(&u, UI_LOGIN_SSH, true, false, S("mz"), STR_EMPTY);
     CHECK(!ui_login_guest(&u) && ui_login_shown(&u, UI_LOGIN_USER) && !ui_login_shown(&u, UI_LOGIN_DOMAIN));
-    ui_login_open(&u, UI_LOGIN_KEY, false, false, STR_EMPTY);
+    ui_login_open(&u, UI_LOGIN_KEY, false, false, STR_EMPTY, STR_EMPTY);
     CHECK(!ui_login_guest(&u) && !ui_login_shown(&u, UI_LOGIN_USER) && !ui_login_shown(&u, UI_LOGIN_DOMAIN) && u.login_at == UI_LOGIN_PASS);
+    // The server's last user and domain (step 7e, from the state file): both filled, the keys on the
+    // password; asked again, what was typed stays.
+    ui_login_open(&u, UI_LOGIN_SHARE, true, false, S("mz"), S("HOME"));
+    CHECK(u.login_user.len == 2 && u.login_domain.len == 4 && memcmp(u.login_domain.b, "HOME", 4) == 0 && u.login_at == UI_LOGIN_PASS);
+    ui_line_set(ui_login_line(&u, UI_LOGIN_DOMAIN), S("WG"));
+    ui_login_open(&u, UI_LOGIN_SHARE, true, true, S("mz"), S("HOME"));
+    CHECK(u.login_domain.len == 2);
+}
+
+// A server's login line in the state file (step 7e): its key by host (an SFTP one's user left out),
+// its value user then domain, each escaped; read back as written.
+static void test_login_line(void)
+{
+    char key[64], v[256], user[64], domain[64];
+    CHECK(login_key("nas", key, sizeof key) && strcmp(key, "login.nas") == 0);
+    CHECK(login_key("me@box", key, sizeof key) && strcmp(key, "login.box") == 0);
+    CHECK(login_key("[fd00::1]", key, sizeof key) && strcmp(key, "login.[fd00::1]") == 0);
+    CHECK(!login_key("", key, sizeof key) && !login_key("me@", key, sizeof key) && !login_key("a b", key, sizeof key) && !login_key("a=b", key, sizeof key));
+    CHECK(!login_key("nas", key, 6));
+    CHECK(login_value(S("mz"), S("WORKGROUP"), v, sizeof v) && strcmp(v, "mz WORKGROUP") == 0);
+    CHECK(login_value(S("Jane Doe"), S(""), v, sizeof v) && strcmp(v, "Jane%20Doe ") == 0);
+    login_parse(str_from_c(v), user, sizeof user, domain, sizeof domain);
+    CHECK(strcmp(user, "Jane Doe") == 0 && strcmp(domain, "") == 0);
+    CHECK(login_value(S("a=b"), S("x y"), v, sizeof v));
+    login_parse(str_from_c(v), user, sizeof user, domain, sizeof domain);
+    CHECK(strcmp(user, "a=b") == 0 && strcmp(domain, "x y") == 0);
+    login_parse(S("only"), user, sizeof user, domain, sizeof domain);
+    CHECK(strcmp(user, "only") == 0 && domain[0] == 0);
+    login_parse(S("a%zz b%4"), user, sizeof user, domain, sizeof domain);   // (a hand-edited line: a bad escape gives nothing, not half)
+    CHECK(user[0] == 0 && domain[0] == 0);
+    CHECK(!login_value(S("a"), S("b"), v, 3));
+    // Through the state file as state_put writes it: the line read back by its key.
+    put(at("login/state"), "sidebar=places\n");
+    Err err;
+    CHECK(login_value(S("tester"), S("WG"), v, sizeof v) && state_put(&ta, at("login/state"), "login.127.0.0.1", v, &err));
+    login_parse(state_value(&ta, at("login/state"), "login.127.0.0.1"), user, sizeof user, domain, sizeof domain);
+    CHECK(strcmp(user, "tester") == 0 && strcmp(domain, "WG") == 0 && state_load(&ta, at("login/state")).side == SIDE_PLACES);
 }
 
 // Connect's question's keys (step 4): typing goes to the field with the keys; the password is never
@@ -1114,54 +1151,6 @@ static void test_avahi_servers(void)
     CHECK(connect_uri(S("smb://nas-1.local:4445"), uri, sizeof uri, host, sizeof host, share, sizeof share, why, sizeof why) == CONNECT_SERVER && share[0] == 0 && strcmp(host, "nas-1.local") == 0);
 }
 
-// The shares panel (step 7a): the branches panel's picker over a server's shares.
-static void test_shares_panel(void)
-{
-    UiNames names = { name_at, NULL, NULL };
-    static const Str SH[] = { { "music", 5 }, { "open", 4 }, { "priv", 4 }, { "pub", 3 } };
-    Ui u = { 0 };
-    u.shp.list.rows = 3;
-    ui_shp_open(&u);
-    CHECK(u.panel == UI_PANEL_SHARES && ui_on_top(&u) == UI_ON_SHARES && u.shp.fresh);
-    UiInput in = ui_input_none();
-    in.sh_name = SH, in.sh_names = COUNT(SH);
-    ui_handle(&u, names, &in);   // (filtered the frame it opens)
-    CHECK(!u.shp.fresh && u.shp.list.n == 4);
-    in = chars("pu"), in.sh_name = SH, in.sh_names = COUNT(SH);
-    ui_handle(&u, names, &in);
-    CHECK(u.shp.list.n == 1 && u.shp_idx[0] == 3);
-    UiLine l;
-    CHECK(ui_line_active(&u, &l) && l.b == u.shp.filter.b);   // (its field has the keys: a Ctrl+V pastes there)
-    in = keys(1, UK_ENTER), in.sh_name = SH, in.sh_names = COUNT(SH);
-    UiAction a = ui_handle(&u, names, &in);
-    CHECK(a.kind == UA_SHARE && a.index == 3 && u.panel == UI_PANEL_NONE);
-    ui_shp_open(&u);
-    in = ui_input_none(), in.sh_name = SH, in.sh_names = COUNT(SH);
-    ui_handle(&u, names, &in);
-    in = keys(2, UK_DOWN, UK_DOWN), in.sh_name = SH, in.sh_names = COUNT(SH);
-    ui_handle(&u, names, &in);
-    CHECK(u.shp.in_list && u.shp.list.sel == 1);
-    in = ui_input_none(), in.sh_name = SH, in.sh_names = COUNT(SH), in.pick_drow = 2;   // (a double click: the row under it)
-    a = ui_handle(&u, names, &in);
-    CHECK(a.kind == UA_SHARE && a.index == 2 && u.panel == UI_PANEL_NONE);
-    ui_shp_open(&u);
-    in = ui_input_none(), in.sh_name = SH, in.sh_names = COUNT(SH), in.modal = UI_MODAL_YES;
-    a = ui_handle(&u, names, &in);
-    CHECK(a.kind == UA_SHARE && a.index == 0);
-    ui_shp_open(&u);
-    in = keys(1, UK_ESC), in.sh_name = SH, in.sh_names = COUNT(SH);
-    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.panel == UI_PANEL_NONE);
-    ui_shp_open(&u);
-    in = ui_input_none(), in.sh_name = SH, in.sh_names = COUNT(SH), in.modal = UI_MODAL_NO;
-    CHECK(ui_handle(&u, names, &in).kind == UA_NONE && u.panel == UI_PANEL_NONE);
-    // Nothing matches: Enter does nothing.
-    ui_shp_open(&u);
-    in = chars("zz"), in.sh_name = SH, in.sh_names = COUNT(SH);
-    ui_handle(&u, names, &in);
-    in = keys(1, UK_ENTER), in.sh_name = SH, in.sh_names = COUNT(SH);
-    CHECK(u.shp.list.n == 0 && ui_handle(&u, names, &in).kind == UA_NONE && u.panel == UI_PANEL_SHARES);
-}
-
 static void test_gvfs_uri(void)
 {
     char u[128];
@@ -1279,15 +1268,23 @@ static void test_browse_ui(void)
     ui_crumbs_set_share(&c, NETWORK_URI, "/home/m", NULL, NULL);
     CHECK(c.n == 1 && str_eq(ui_crumb_label(&c, 0), S("Browse Network")));
     char line[128];
-    ui_status_info(line, sizeof line, &(UiInfo){ .n = 3, .avail = -1, .servers = true });
+    ui_status_info(line, sizeof line, &(UiInfo){ .n = 3, .avail = -1, .noun = "server" });
     CHECK(strcmp(line, "3 servers") == 0);
-    ui_status_info(line, sizeof line, &(UiInfo){ .n = 1, .avail = -1, .servers = true });
+    ui_status_info(line, sizeof line, &(UiInfo){ .n = 1, .avail = -1, .noun = "server" });
     CHECK(strcmp(line, "1 server") == 0);
-    ui_status_info(line, sizeof line, &(UiInfo){ .n = 4, .marked = 2, .avail = -1, .servers = true });
+    ui_status_info(line, sizeof line, &(UiInfo){ .n = 4, .marked = 2, .avail = -1, .noun = "server" });
     CHECK(strcmp(line, "2 servers selected") == 0);
     ui_status_info(line, sizeof line, &(UiInfo){ .n = 3, .avail = -1 });
     CHECK(strcmp(line, "3 items") == 0);
-    ui_status_info(line, sizeof line, &(UiInfo){ .n = 3, .avail = -1, .servers = true, .opening = true });
+    ui_status_info(line, sizeof line, &(UiInfo){ .n = 2, .avail = -1, .noun = "share" });
+    CHECK(strcmp(line, "2 shares") == 0);
+    ui_status_info(line, sizeof line, &(UiInfo){ .n = 2, .avail = -1, .noun = "share", .opening = true });
+    CHECK(strcmp(line, "Opening\xE2\x80\xA6") == 0);
+    // A server's shares: two buttons, Browse Network and the server's host.
+    ui_crumbs_set_share(&c, NETWORK_URI "smb://yoga.local:4445/", "/home/m", NULL, NULL);
+    CHECK(c.n == 2 && c.cur == 1 && str_eq(ui_crumb_label(&c, 0), S("Browse Network")) && str_eq(ui_crumb_label(&c, 1), S("yoga.local:4445")));
+    CHECK(str_eq(ui_crumb_path(&c, 0), S(NETWORK_URI)));
+    ui_status_info(line, sizeof line, &(UiInfo){ .n = 3, .avail = -1, .noun = "server", .opening = true });
     CHECK(strcmp(line, "Searching the network\xE2\x80\xA6") == 0);
     bool in_go = false;
     for (isize i = 0; i < COUNT(UI_MENU_GO); i++) in_go |= UI_MENU_GO[i] == UM_BROWSE && i > 0 && UI_MENU_GO[i - 1] == UM_CONNECT;

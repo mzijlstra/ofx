@@ -534,7 +534,7 @@ static bool ui_panel_key(Ui *u, UiOnTop on, UiEvent e, const UiInput *in, UiActi
     switch (on) {
     case UI_ON_PROPS: *out = ui_props_event(u, e); return true;
     case UI_ON_OW: *out = ui_ow_event(u, e, in); return true;
-    case UI_ON_BRANCHES: case UI_ON_SHARES: *out = ui_picker_do(u, ui_picker_on(on), ui_pick_key(u, ui_pick_of(u, ui_picker_on(on)), e, in), in); return true;
+    case UI_ON_BRANCHES: *out = ui_picker_do(u, ui_picker_on(on), ui_pick_key(u, ui_pick_of(u, ui_picker_on(on)), e, in), in); return true;
     case UI_ON_BM: *out = ui_bmp_event(u, e, in->paste); return true;
     case UI_ON_KEYS: ui_keys_event(u, e, in->paste); return true;
     case UI_ON_LOGIN: *out = ui_login_event(u, e, in->paste); return true;

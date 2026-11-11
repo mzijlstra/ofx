@@ -88,6 +88,40 @@ static Str state_value(Arena *a, const char *path, const char *key)
     return v;
 }
 
+// ---- a server's login, kept (F16 step 7e, Michael 2026-11-11) ----------------------------------
+//
+// Connect to Server's question fills the user and domain last used for a server, its keys on the
+// password, which is never kept (step 4's rule). One line a server: login.<host>=<user> <domain>,
+// each part %XX-escaped so a space or a '=' in it can't break the line.
+
+// The state file's key for server host (as connect_uri names it; an SFTP one's "user@host": the
+// host alone), into out; false when it doesn't fit or the host is empty.
+static bool login_key(const char *host, char *out, size_t cap)
+{
+    const char *at = strrchr(host, '@');
+    const char *h = at ? at + 1 : host;
+    int n = snprintf(out, cap, "login.%s", h);
+    return h[0] && n > 0 && (size_t)n < cap && !strpbrk(h, " =\n");
+}
+
+// The line's value for user and domain, into out; false when it doesn't fit.
+static bool login_value(Str user, Str domain, char *out, size_t cap)
+{
+    char u[3 * 256 + 1], d[3 * 256 + 1];
+    if (!percent_encode(user, "", u, sizeof u) || !percent_encode(domain, "", d, sizeof d)) return false;
+    int n = snprintf(out, cap, "%s %s", u, d);
+    return n > 0 && (size_t)n < cap;
+}
+
+// A line's value read back into user and domain (each "" when absent or not decoded).
+static void login_parse(Str v, char *user, size_t ucap, char *domain, size_t dcap)
+{
+    isize sp = str_find(v, ' ');
+    Str u = sp < 0 ? v : str_cut(v, 0, sp), d = sp < 0 ? STR_EMPTY : str_cut(v, sp + 1, v.len);
+    if (!percent_decode(u, user, ucap)) user[0] = 0;
+    if (!percent_decode(d, domain, dcap)) domain[0] = 0;
+}
+
 // body (n bytes) as file path, its folder made first: written beside it and renamed over it, so a
 // crash leaves the old file or the new, never half of one.
 static bool state_write(const char *path, const char *body, isize n, bool sync, Err *err)

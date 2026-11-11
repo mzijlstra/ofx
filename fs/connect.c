@@ -260,7 +260,7 @@ static const struct { const char *type, *scheme, *kind; int port; } NET_TYPES[] 
 };
 
 typedef struct NetServer {
-    char    name[64];   // as it announces itself ("YOGA")
+    char    name[256];  // as it announces itself ("YOGA"); a share's name in a server's shares (step 7e)
     char    addr[300];  // smb://host[:port] or sftp://host[:port]: what Connect takes
     char    ip[64];     // its address as avahi resolved it (IPv4 when it has one): the view's Address
     NetKind kind;
