@@ -1252,6 +1252,29 @@ blocks each of these for up to gvfs's 90 s. On a thread it also holds ofx's exit
        no avahi-browse or share poll while on, a connect refused, the row's question, a state
        file changed by "another window" applied, and the poll's waits growing and resetting
        (their times scaled down for the test).
+   - **7e, Browse Network** (Michael, 2026-11-11, after step 8's cleanup and before the install:
+     "we took a wrong turn on the UI/UX for network browsing"). Replaces 7b's found servers in the
+     sidebar and 7d's Airplane Mode; built forward on the cleaned branch, not by going back (the
+     cleanup, A to H, came after 7d and touches all of it).
+     - **Why:** discovery asked the network as each window started and read avahi's cache every
+       30 s on its own; Airplane Mode existed to stop that. With nothing asked until the user
+       asks, there is nothing to stop. (The share poll was never network traffic: it lists the
+       shares gvfs has mounted, from its local FUSE folder; it and its back-off stay.)
+     - **A "Browse Network" row** under Network, as Trash is under Places: a view of its own in
+       the files area (`network:`), the servers avahi finds as rows, with columns for the name,
+       the address (IP) and the kind.
+     - **SMB and SFTP** (Michael's pick): `_smb._tcp` and `_sftp-ssh._tcp`, the Kind column
+       telling them apart. NFS rarely advertises, and gvfs can't list its exports.
+     - **The query** (Michael's pick): on each visit to the view and on Ctrl+R, about a second,
+       "Searching…" meanwhile; nothing in the background, no query as a window starts.
+     - **A server's shares in the files area** (Michael's pick): Enter on an SMB server lists its
+       shares as rows (gio list, as 7a's), Enter on a share mounts and opens it; an SFTP server
+       opens at its root. The shares picker panel (7a) goes; Connect to Server on a server's
+       address alone opens the same listing.
+     - **Gone:** the sidebar's found-server rows (PL_SERVER) and the disco thread's timer;
+       Airplane Mode whole (the Go menu's entry, the state file's `airplane=` read and ignored,
+       the sidebar row, its question, `connect_start`'s refusal, `airplane_gen`). The symbolic-SVG
+       icon index stays if the view's row uses a symbolic icon, else it goes too.
 8. **The milestone's code-health review and cleanup** (AGENTS.md "At the end of each major
    milestone"), then install.
    - **The review (2026-11-10):** four read-only reviewers (gui/main.c and its files; ui/; fs/
@@ -1274,7 +1297,8 @@ blocks each of these for up to gvfs's 90 s. On a thread it also holds ofx's exit
      - **G, the children the threads read:** one spawn-and-read helper, the quit deadline.
      - **H, comments and small tidy-ups.**
      - **Done 2026-11-11:** A to H each reviewed and shipped, every finding fixed and confirmed
-       (C, D and F had a follow-up for their LOWs). Next: Michael's install.
+       (C, D and F had a follow-up for their LOWs). Next: step 7e (Browse Network), then
+       Michael's install.
      - **After H, from the reviews:** "the mount list didn't fit" fails safe in the window too
        (said in the status line; network and FUSE types still taken as far), as clean.c does; past
        about 2,000 long mountinfo lines today every path is taken as local (step C review).
