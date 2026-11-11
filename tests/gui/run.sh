@@ -6,7 +6,7 @@
 # printed whole, in order, once all are done; clip, keys and dnd share one (each starts a sway,
 # which takes the first free wayland-N).
 # The groups (one or more scripts on one tree): browse big gone watchgap f2 f3 f4 f5 f52 f53 f54
-# f6 (f6, f6b) usb f62 (f62, f62b, f62c) f63 (f63, f63b, f63c, f63d) f64 (f64, f64b, f64c, f64d) f7 (f7, f7b) f72 (f72, f72m) f73 (f73, f73b, f73c, f73d) f74 f75 (f75, f75b, f75c) f15 (f15, f15b) f16 (f16, f16b, f16c, f16d, f16e, f16f, f16g, f16h, f16s, f16v, f16w) net (net, netq, netc, netu, nets, netf, netn: the last only with the NFS test server) f8 (f8, f8b, f8c, f8d, f8e) f9 (f9, f9b) f10 (f10, f10b, f10c, f10d) f11 (f11, f11b, f11c, f11d, f11e, f11f, f11g, f11h, f11i, f11j, f11k, f11l, f11m, f11n, f11o, f11p, f11q, f11r, f11s, f11t) f12 (f12, f12b) f12g f12h f12i f13 (f13, f13b, f13c, f13d, f13e, f13f, f13g, f13h) clip (clip, copypath) keys dnd (dnd, dndb, dndc, dndd, dnde, dndf, dndg, dndh, dndi, dndj, dndk) (the three in sway) hang guard3 guard harness (harness, harnessb, harnessc, harnessd). Named ones only, or all of them; a group
+# f6 (f6, f6b) usb f62 (f62, f62b, f62c) f63 (f63, f63b, f63c, f63d) f64 (f64, f64b, f64c, f64d) f7 (f7, f7b) f72 (f72, f72m) f73 (f73, f73b, f73c, f73d) f74 f75 (f75, f75b, f75c) f15 (f15, f15b) f16 (f16, f16b, f16c, f16d, f16e, f16f, f16g, f16h, f16q, f16s, f16v, f16w) net (net, netq, netc, netu, nets, netf, netn: the last only with the NFS test server) f8 (f8, f8b, f8c, f8d, f8e) f9 (f9, f9b) f10 (f10, f10b, f10c, f10d) f11 (f11, f11b, f11c, f11d, f11e, f11f, f11g, f11h, f11i, f11j, f11k, f11l, f11m, f11n, f11o, f11p, f11q, f11r, f11s, f11t) f12 (f12, f12b) f12g f12h f12i f13 (f13, f13b, f13c, f13d, f13e, f13f, f13g, f13h) clip (clip, copypath) keys dnd (dnd, dndb, dndc, dndd, dnde, dndf, dndg, dndh, dndi, dndj, dndk) (the three in sway) hang guard3 guard harness (harness, harnessb, harnessc, harnessd). Named ones only, or all of them; a group
 # that fails says "== <script>: FAILED" or "<group>: FAILED" (tools/mutation/gui.py reads it).
 set -u
 par=1
@@ -512,6 +512,14 @@ printf 'smb://nas NAS\n' > "$T/config/gtk-3.0/bookmarks"
 giofake_shares "$T/giofake"
 RS_HOME=$T/home
 rs f16s OFX_TEST_GIO="$T/giofake" -- "$T/home"
+# f16q (the code-health review's step G): quit while Connect's gio hangs (a stand-in that sleeps 30 s
+# on mount, asking nothing): gone at CONNECT_QUIT_MS (1.5 s), not 30 s (or the window would hang).
+fresh f16q; mkdir -p "$T/home"
+printf '#!/bin/sh\ncase "$1" in mount) exec sleep 30 ;; esac\nexit 0\n' > "$T/giohang" && chmod +x "$T/giohang"
+RS_HOME=$T/home
+start=$(date +%s)
+rs f16q OFX_TEST_GIO="$T/giohang" -- "$T/home"
+took=$(( $(date +%s) - start )); if [ "$took" -ge 20 ]; then cat "$T/times"; echo "f16q: FAILED, took ${took}s (quit waited on a hung gio?)"; failed f16q; else echo "f16q: quit in ${took}s with gio hung"; fi
 # f16v (step 7b): servers on the network through a stand-in avahi-browse (no network): its query
 # (no -c) finds YOGA, its cache reads (-c) Office too once <T>/office is made (Lab once <T>/renamed
 # is) until <T>/gone is; a stand-in gio as f16s's. (Office waits for the script: on the first cache read,

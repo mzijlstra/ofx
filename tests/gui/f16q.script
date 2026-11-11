@@ -1,0 +1,10 @@
+# The code-health review's step G: quit while Connect to Server's gio hangs without asking anything
+# (a paused server; run.sh's stand-in sleeps 30 s on mount). quit_workers waits for the connect
+# thread until CONNECT_QUIT_MS from the moment every worker was told, then kills gio by its pidfd:
+# run.sh checks the window is gone well before the stand-in would have ended.
+settle
+key ctrl-l
+type smb://nas/pub
+key enter
+wait-for 3000 conn=1
+quit

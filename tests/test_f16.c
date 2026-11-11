@@ -245,6 +245,54 @@ static void test_spawn_fds_in(void)
     CHECK(strcmp(buf, "got hello\n") == 0);
 }
 
+// child_start and child_read (the code-health review's step G: four copies of spawn, pidfd and a
+// read to a deadline): its input and errors piped when asked, its output read until it ends or the
+// time is up (then killed through its pidfd, and that pidfd says when it is gone).
+static void test_child(void)
+{
+    ops_guard(root);
+    mkdirs(at("f16/bin"));
+    char talk[PATH_MAX], slow[PATH_MAX];
+    snprintf(talk, sizeof talk, "%s", at("f16/bin/talk")), snprintf(slow, sizeof slow, "%s", at("f16/bin/slowtalk"));
+    put_exec(talk, "#!/bin/sh\nread -r line\necho \"got $line\"\necho oops >&2\n");
+    put_exec(slow, "#!/bin/sh\nprintf hi\nexec sleep 7\n");
+    Child c;
+    Err err;
+    char buf[64];
+    isize n = 0;
+    CHECK(child_start((char *[]){ talk, NULL }, true, true, &c, &err) && c.pidfd >= 0 && c.in >= 0 && c.out >= 0 && c.errs >= 0);
+    CHECK(write(c.in, "x\n", 2) == 2);
+    close(c.in);
+    CHECK(child_read(&c, buf, sizeof buf - 1, &n, now_ms() + 5000) && n == 6 && memcmp(buf, "got x\n", 6) == 0);
+    char eb[16];
+    ssize_t k = read(c.errs, eb, sizeof eb);
+    CHECK(k == 5 && memcmp(eb, "oops\n", 5) == 0);
+    close(c.out), close(c.errs), close(c.pidfd);
+    // Its input not asked: /dev/null (read ends at once); its errors not asked: none to us.
+    n = 0;
+    CHECK(child_start((char *[]){ talk, NULL }, false, false, &c, &err) && c.in < 0 && c.errs < 0);
+    CHECK(child_read(&c, buf, sizeof buf - 1, &n, now_ms() + 5000) && n == 5 && memcmp(buf, "got \n", 5) == 0);
+    close(c.out), close(c.pidfd);
+    // The time up: false, what came so far kept; then killed by its pidfd, which says it is gone.
+    n = 0;
+    i64 t0 = now_ms();
+    CHECK(child_start((char *[]){ slow, NULL }, false, false, &c, &err));
+    CHECK(!child_read(&c, buf, sizeof buf - 1, &n, now_ms() + 300) && n == 2 && memcmp(buf, "hi", 2) == 0 && now_ms() - t0 < 3000);
+    CHECK(syscall(SYS_pidfd_send_signal, c.pidfd, SIGKILL, NULL, 0) == 0);
+    struct pollfd p = { c.pidfd, POLLIN, 0 };
+    CHECK(poll(&p, 1, 3000) == 1);
+    close(c.out), close(c.pidfd);
+    // A buffer full: ended (true) at what fits.
+    n = 0;
+    CHECK(child_start((char *[]){ slow, NULL }, false, false, &c, &err));
+    CHECK(child_read(&c, buf, 1, &n, now_ms() + 3000) && n == 1);
+    syscall(SYS_pidfd_send_signal, c.pidfd, SIGKILL, NULL, 0);
+    close(c.out), close(c.pidfd);
+    // Not there: false with why, nothing left open (a guard refusal too: outside the root).
+    CHECK(!child_start((char *[]){ (char *)at("f16/bin/none"), NULL }, true, true, &c, &err) && c.pidfd < 0 && c.in < 0 && c.out < 0);
+    CHECK(!child_start((char *[]){ "/usr/bin/true", NULL }, false, false, &c, &err) && c.pidfd < 0);
+}
+
 // spawn_fds' errors: /dev/null when asked (a lister that outlives ofx holds none of its fds), ofx's
 // own when asked, or the fd given.
 static void test_spawn_fds_errs(void)

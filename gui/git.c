@@ -126,13 +126,22 @@ static void git_start(void)
     git.started = pthread_create(&git.th, NULL, git_loop, NULL) == 0;
 }
 
+// Whether folder dir gets a git status: git-status on, and not a far folder (the thread's git_top
+// would read it and hold ofx, F16). Both asks' one rule, taken outside git's lock (the code-health
+// review's step G: one asked far_dir under it, the other read far_on).
+static bool git_may(const char *dir)
+{
+    return dir && app.conf.git_status && !far_dir(dir);
+}
+
 // Git status for folder dir asked for (NULL, or git-status off: none, at once).
 static void git_ask(const char *dir)
 {
     git.last = now_ms(), git.due = 0;
+    bool may = git_may(dir);
     pthread_mutex_lock(&git.mu);
     git.gen++, git.ready = -1;
-    bool asked = dir && app.conf.git_status && git.started && !far_dir(dir);   // (a far folder: the thread's git_top would read it and hold ofx, F16)
+    bool asked = may && git.started;
     if (asked) snprintf(git.want, sizeof git.want, "%s", dir), git.asked = true, pthread_cond_signal(&git.cv);
     else git.slot[git.shown].repo = false;   // (nothing shown until an answer)
     pthread_mutex_unlock(&git.mu);
@@ -149,7 +158,7 @@ static i64 wake_due(void);
 static void git_ask_soon(void)
 {
     char top[PATH_MAX];
-    bool none = !app.conf.git_status || app.far_on || !git_top(app.cwd, top, sizeof top);   // (a realpath and a few lstats; none on a far folder, F16)
+    bool none = !git_may(app.cwd) || !git_top(app.cwd, top, sizeof top);   // (a realpath and a few lstats; none on a far folder, F16)
     i64 now = now_ms();
     if (none || now - git.last >= git_gap_ms) git_ask(app.cwd);
     else if (!git.due) git.due = git.last + git_gap_ms, timer_at(wake_due());

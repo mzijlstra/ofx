@@ -248,21 +248,11 @@ static bool far_start(const char *exe, const char *dir, bool hidden, Err *err)
     char prog[PATH_MAX];
     if (!far_prog(exe, name, prog, sizeof prog, err)) return false;
     char *argv[] = { prog, (char *)dir, hidden ? "--hidden" : NULL, NULL };
-    int in[2], out[2];
-    if (pipe2(in, O_CLOEXEC) != 0) return err_set(err, "a pipe: %s", strerror(errno)), false;
-    if (pipe2(out, O_CLOEXEC) != 0) return close(in[0]), close(in[1]), err_set(err, "a pipe: %s", strerror(errno)), false;
-    pid_t pid;
-    bool ok = spawn_fds(NULL, argv, in[0], out[1], SPAWN_ERR_NULL, &pid, err);
-    close(in[0]), close(out[1]);
-    int pfd = ok ? (int)syscall(SYS_pidfd_open, pid, 0) : -1;
-    if (!ok || pfd < 0) {   // (no pidfd: it can't be killed safely later; not used)
-        if (ok) kill(pid, SIGKILL), err_set(err, "%.*s: the reader can't be watched: %s", STR_ARG(name), strerror(errno));
-        close(in[1]), close(out[0]);
-        return false;
-    }
-    fcntl(in[1], F_SETFL, O_NONBLOCK);   // (a count asked never blocks the window)
+    Child c;
+    if (!child_start(argv, true, false, &c, err)) return false;
+    fcntl(c.in, F_SETFL, O_NONBLOCK);   // (a count asked never blocks the window)
     pthread_mutex_lock(&far.mu);
-    far.pid = pid, far.pidfd = pfd, far.in = in[1], far.out = out[0];
+    far.pid = c.pid, far.pidfd = c.pidfd, far.in = c.in, far.out = c.out;
     snprintf(far.dir, sizeof far.dir, "%s", dir);
     far.seq++, far.len = 0, far.eof = far.full = false;
     pthread_mutex_unlock(&far.mu);
@@ -335,39 +325,20 @@ static bool far_do(const char *exe, const char *dir, const char *const *args, i6
     }
     argv[n] = NULL;
     far.dos++;
-    int out[2];
-    if (pipe2(out, O_CLOEXEC) != 0) return err_set(err, "a pipe: %s", strerror(errno)), false;
-    pid_t pid;
-    bool ok = spawn_fds(NULL, argv, -1, out[1], SPAWN_ERR_NULL, &pid, err);
-    close(out[1]);
-    int pfd = ok ? (int)syscall(SYS_pidfd_open, pid, 0) : -1;
-    if (!ok || pfd < 0) {
-        if (ok) kill(pid, SIGKILL), err_set(err, "%.*s: the action can't be watched: %s", STR_ARG(name), strerror(errno));
-        close(out[0]);
-        return false;
-    }
+    Child c;
+    if (!child_start(argv, false, false, &c, err)) return false;
     isize len = 0;
     if (!until) until = now_ms() + far_do_ms();
-    bool ended = false;
-    while (!ended) {
-        i64 left = until - now_ms();
-        struct pollfd p = { .fd = out[0], .events = POLLIN };
-        if (left <= 0 || (poll(&p, 1, (int)left) < 0 && errno != EINTR)) break;
-        if (!p.revents) continue;
-        ssize_t k = read(out[0], far_do_mem + len, sizeof far_do_mem - (size_t)len);
-        if (k > 0) len += k;
-        else if (k == 0 || errno != EINTR) ended = true;
-        if (len == (isize)sizeof far_do_mem) ended = true;
-    }
-    close(out[0]);
+    bool ended = child_read(&c, (char *)far_do_mem, sizeof far_do_mem, &len, until);
+    close(c.out);
     if (!ended) {   // (no answer in time: killed, held until it is gone)
         pthread_mutex_lock(&far.mu);
-        far_hold(pfd, dir);
+        far_hold(c.pidfd, dir);
         pthread_mutex_unlock(&far.mu);
         if (far.started) far_word();
         return err_set(err, "%.*s isn't answering: it may still happen there", STR_ARG(name)), false;
     }
-    close(pfd);
+    close(c.pidfd);
     if (!far_reply_parse((Str){ (char *)far_do_mem, len }, r)) return err_set(err, "%.*s: no answer from its reader", STR_ARG(name)), false;
     return true;
 }

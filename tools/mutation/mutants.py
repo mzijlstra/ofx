@@ -3027,4 +3027,9 @@ MUTANTS += [
     ('fs/connect.c', '    isize close = auth.len > 0 && auth.p[0] == \'[\' ? str_find(auth, \']\') : -1;', '    isize close = -1;'),
     ('fs/connect.c', '(close < 2 || (close + 1 < auth.len && auth.p[close + 1] != \':\')))', '(close < 2))'),
     ('fs/connect.c', '    if (!percent_decode(sh, share, scap) || !share[0]) snprintf(share, scap, "%.*s", STR_ARG(sh));', '    snprintf(share, scap, "%.*s", STR_ARG(sh));'),
+    # The milestone's code-health cleanup, step G: a child watched by its pidfd
+    ('fs/spawn.c', '        if (r <= 0) return false;\n        ssize_t k = read(c->out,', '        if (r < 0) return false;\n        ssize_t k = read(c->out,'),
+    ('fs/spawn.c', '    c->pidfd = pfd, c->in = pi[1], c->out = po[0], c->errs = pe[0];', '    c->pidfd = pfd, c->in = pi[1], c->out = po[0], c->errs = -1;'),
+    ('fs/spawn.c', '        if (k <= 0) return true;\n        *len += k;', '        if (k < 0) return true;\n        *len += k;'),
+    ('fs/spawn.c', '    bool ok = spawn_fds(NULL, argv, pi[0], po[1],', '    bool ok = spawn_fds(NULL, argv, -1, po[1],'),
 ]

@@ -603,16 +603,16 @@ static void theme_apply(void)
 #include "script.c"
 
 // Quitting: every worker told to stop first, so they wind down together, then joined by deadlines
-// from that one moment: 200 ms, and half a second for the jobs (a cancelled copy removes its part
-// file). A hung mount under all of them costs the longest once; before, each stop told and waited
-// in turn, 500 + 5 × 200 ms (F11 review). The clipboard's thread is told with them and joined last
-// (clip_close).
+// from that one moment: 200 ms, half a second for the jobs (a cancelled copy removes its part file),
+// 1.5 s for Connect to Server (its unmount of a guest mount gvfs made anyway). A hung mount under all
+// of them costs the longest once; before, each stop told and waited in turn, 500 + 5 × 200 ms (F11
+// review). The clipboard's thread is told with them and joined last (clip_close).
 static void quit_workers(void)
 {
     jobs_quit(), clip_quit(), count_quit(), walk_quit(), search_quit(), thumbs_quit(), space_quit(), git_quit(), far_quit(), connect_quit();
-    struct timespec until = deadline_in(QUIT_WAIT_MS), jobs_until = deadline_in(QUIT_JOBS_MS);
+    struct timespec until = deadline_in(QUIT_WAIT_MS), jobs_until = deadline_in(QUIT_JOBS_MS), connect_until = deadline_in(CONNECT_QUIT_MS);
     count_join(&until), walk_join(&until), search_join(&until), thumbs_join(&until), space_join(&until), git_join(&until), far_join(&until);
-    jobs_join(&jobs_until), clear_join(&until), connect_join();
+    jobs_join(&jobs_until), clear_join(&until), connect_join(&connect_until);
     clip_close();
     dnd_close();
 }

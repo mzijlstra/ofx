@@ -16,6 +16,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/stat.h>
+#include <sys/syscall.h>
 #include <unistd.h>
 
 extern char **environ;
@@ -160,6 +161,65 @@ static bool spawn_terminal(const char *dir, Err *err)
     snprintf(arg, sizeof arg, "--dir=%s", dir);
     const char *cmd[] = { "xdg-terminal-exec", arg };
     return spawn_app(cmd, COUNT(cmd), err);
+}
+
+// ---- a child watched by its pidfd (the code-health review's step G: written four times) ---------
+
+// A child ofx reads from and may kill: its pidfd (a kill by pid could reach another process once
+// the kernel reaped it: SA_NOCLDWAIT), and the parent's ends of its pipes (-1 for none).
+typedef struct {
+    pid_t pid;
+    int   pidfd, in, out, errs;
+} Child;
+
+// argv started (argv[0] as given: a path, or on PATH) with its output piped, its input when in (else
+// /dev/null), its errors when errs (else /dev/null); the parent's ends close on exec. False with
+// why, nothing left open (one started but not watchable is killed: it couldn't be safely later).
+static bool child_start(char *const *argv, bool in, bool errs, Child *c, Err *err)
+{
+    *c = (Child){ 0, -1, -1, -1, -1 };
+    int pi[2] = { -1, -1 }, po[2] = { -1, -1 }, pe[2] = { -1, -1 };
+    if ((in && pipe2(pi, O_CLOEXEC) != 0) || pipe2(po, O_CLOEXEC) != 0 || (errs && pipe2(pe, O_CLOEXEC) != 0)) {
+        int e = errno;
+        for (int k = 0; k < 2; k++) {
+            if (pi[k] >= 0) close(pi[k]);
+            if (po[k] >= 0) close(po[k]);
+            if (pe[k] >= 0) close(pe[k]);
+        }
+        return err_set(err, "a pipe: %s", strerror(e)), false;
+    }
+    bool ok = spawn_fds(NULL, argv, pi[0], po[1], errs ? pe[1] : SPAWN_ERR_NULL, &c->pid, err);
+    if (pi[0] >= 0) close(pi[0]);
+    if (pe[1] >= 0) close(pe[1]);
+    close(po[1]);
+    int pfd = ok ? (int)syscall(SYS_pidfd_open, c->pid, 0) : -1;
+    if (!ok || pfd < 0) {
+        if (ok) kill(c->pid, SIGKILL), err_set(err, "%s can't be watched: %s", argv[0], strerror(errno));
+        if (pi[1] >= 0) close(pi[1]);
+        if (pe[0] >= 0) close(pe[0]);
+        close(po[0]);
+        return false;
+    }
+    c->pidfd = pfd, c->in = pi[1], c->out = po[0], c->errs = pe[0];
+    return true;
+}
+
+// Child c's output read into buf from *len (at most cap) until it ends (its output closed, or buf
+// full: true) or now_ms() reaches until (false). Its output stays open: the caller closes it.
+static bool child_read(const Child *c, char *buf, size_t cap, isize *len, i64 until)
+{
+    for (;;) {
+        if ((size_t)*len >= cap) return true;
+        i64 left = until - now_ms();
+        struct pollfd p = { .fd = c->out, .events = POLLIN };
+        int r = left > 0 ? poll(&p, 1, (int)left) : 0;
+        if (r < 0 && errno == EINTR) continue;
+        if (r <= 0) return false;
+        ssize_t k = read(c->out, buf + *len, cap - (size_t)*len);
+        if (k < 0 && errno == EINTR) continue;
+        if (k <= 0) return true;
+        *len += k;
+    }
 }
 
 // ---- a program's output; eject, mount, unmount (F6.1) --------------------------------------------

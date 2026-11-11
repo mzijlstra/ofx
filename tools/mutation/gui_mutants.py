@@ -428,7 +428,7 @@ MUTANTS = [
     ('gui/folder.c', '    else git_ask_soon();\n', '', 'f12g'),
     ('gui/git.c', '    if (none || now - git.last >= git_gap_ms) git_ask(app.cwd);', '    if (true) git_ask(app.cwd);', 'f12g'),
     ('gui/git.c', '    if (git.due && now_ms() >= git.due) git_ask(app.cwd), timer_at(wake_due());', '    if (false) git_ask(app.cwd);', 'f12g'),
-    ('gui/git.c', '    bool none = !app.conf.git_status || app.far_on || !git_top(app.cwd, top, sizeof top);', '    bool none = !app.conf.git_status || app.far_on;', 'f62'),
+    ('gui/git.c', '    bool none = !git_may(app.cwd) || !git_top(app.cwd, top, sizeof top);', '    bool none = !git_may(app.cwd);', 'f62'),   # (retargeted, step G)
     # F12 step 5b: the branch button and its menu
     ('gui/frame.c', '    u->branch_on = branch_label() != NULL;', '    u->branch_on = false;', 'f12h'),
     ('gui/frame.c', '    u->br_n = git.br.n < UI_MENU_BRANCHES ? git.br.n : UI_MENU_BRANCHES, u->br_here = git.br.cur, u->br_note = git.br.n == 0;', '    u->br_n = git.br.n < UI_MENU_BRANCHES ? git.br.n : UI_MENU_BRANCHES, u->br_here = 0, u->br_note = git.br.n == 0;', 'f12h'),
@@ -455,7 +455,7 @@ MUTANTS = [
     ('gui/watch.c', '    if (wd > 0 && !watch_fixed(wd) && !watch_is_trash(wd) && wd != atomic_load(&watch.dir_wd)) inotify_rm_watch(watch.fd, wd);', '    if (wd > 0 && !watch_fixed(wd) && wd != atomic_load(&watch.dir_wd)) inotify_rm_watch(watch.fd, wd);', 'f6'),
     ('gui/watch.c', '    if (wd > 0 && !watch_fixed(wd) && !watch_is_trash(wd) && wd != atomic_load(&watch.dir_wd)) inotify_rm_watch(watch.fd, wd);', '    if (wd > 0 && !watch_fixed(wd) && !watch_is_trash(wd)) inotify_rm_watch(watch.fd, wd);', 'f6'),
     # F12 code-health step 3: the .git watch off the folder view, a switch's own folder
-    ('gui/git.c', '    bool asked = dir && app.conf.git_status && git.started && !far_dir(dir);', '    bool asked = dir && git.started && !far_dir(dir);', 'f12g'),
+    ('gui/git.c', '    return dir && app.conf.git_status && !far_dir(dir);', '    return dir && !far_dir(dir);', 'f12g'),   # (retargeted, step G)
     ('gui/git.c', '    if (!asked) watch_git(NULL);', '    (void)asked;', 'f12g'),
     ('gui/actions.c', '    if (app.ui.view == UI_VIEW_FOLDER && strcmp(app.cwd, asked) == 0) reload();', '    if (false) reload();', 'f12h'),
     ('gui/main.c', '    if (atomic_exchange(&watch.git_ready, false) && app.ui.view == UI_VIEW_FOLDER) git_ask_soon();', '    if (false) git_ask_soon();', 'f12g'),
@@ -988,8 +988,8 @@ MUTANTS = [
     ('gui/folder.c', '    if (on_far && !how.far_take && same && app.far_on && app.have_list) {', '    if (0) {', 'net'),   # (retargeted, step D)
     ('gui/folder.c', '    if (app.far_on && !on_far) far_drop(), app.far_loading', '    if (0) far_drop(), app.far_loading', 'f16'),
     ('gui/folder.c', '        if (!on_far) atomic_store(&watch.list_ready, true), glfwPostEmptyEvent();', '        atomic_store(&watch.list_ready, true), glfwPostEmptyEvent();', 'f16'),
-    ('gui/git.c', '    bool asked = dir && app.conf.git_status && git.started && !far_dir(dir);', '    bool asked = dir && app.conf.git_status && git.started;', 'f16'),
-    ('gui/git.c', '    bool none = !app.conf.git_status || app.far_on || !git_top(app.cwd, top, sizeof top);', '    bool none = !app.conf.git_status || !git_top(app.cwd, top, sizeof top);', 'f16'),
+    ('gui/git.c', '    return dir && app.conf.git_status && !far_dir(dir);', '    return dir && app.conf.git_status;', 'f16'),   # (retargeted, step G)
+    # (dropped, step G: git's two far checks are one rule now (git_may): #795)
     ('gui/space.c', "    if (cwd[0] == '/' && mounts_local(mi, cwd)) snprintf", "    if (cwd[0] == '/') snprintf", 'f16'),   # (retargeted, step C)
     ('gui/actions.c', '    if (far_dir(path)) {\n        if (!go_to_then(path, STR_EMPTY, 0, FAR_THEN_SELECT)) return;', '    if (0) {\n        if (!go_to_then(path, STR_EMPTY, 0, FAR_THEN_SELECT)) return;', 'net'),   # (retargeted, step D)
     ('gui/frame.c', '           : far_word                   ? (app.far_note[0] ? app.far_note : "Opening\\xE2\\x80\\xA6")\n', '', 'f16'),
@@ -997,7 +997,7 @@ MUTANTS = [
     # (the step 2a review: a reload while hung, the cursor across a slow reload, the lister's stderr)
     ('gui/folder.c', '    far_drop();\n    app.far_loading = true, app.far_waiting = far_busy(dir);', '    app.far_loading = true, app.far_waiting = far_busy(dir);', 'net'),
     ('gui/folder.c', '        if (far_begin(dir, select, fallback, how, &err)) return app.far_kept = true, app.far_kept_sel = app.ui.list.sel, true;', '        if (far_begin(dir, select, fallback, how, &err)) return app.far_kept_sel = app.ui.list.sel, true;', 'f16'),   # (retargeted, step D review)
-    ('gui/far.c', '    bool ok = spawn_fds(NULL, argv, in[0], out[1], SPAWN_ERR_NULL, &pid, err);', '    bool ok = spawn_fds(NULL, argv, in[0], out[1], SPAWN_ERR_OURS, &pid, err);', 'f16'),
+    ('gui/far.c', '    if (!child_start(argv, true, false, &c, err)) return false;\n    fcntl', '    if (!child_start(argv, true, true, &c, err)) return false;\n    fcntl', 'f16'),   # (retargeted, step G)
     # ---- F16 step 2b: links into far drives, far mount points
     ('gui/folder.c', '    return fs_list_far(a, dir, app.show_hidden, app.ui.sort, far_mounts(), l, err);', '    return fs_list(a, dir, app.show_hidden, app.ui.sort, l, err);', 'net'),
     ('gui/folder.c', '    if (app.list.e[i].far) return app.count[i] = -1, false;', '', 'f16'),
@@ -1053,9 +1053,9 @@ MUTANTS = [
     # does for what a drag takes, measured in net); Open With's and Properties' type of a far link
     # by its name (gio info in a child, bounded at 1 s: a stall, not a hang); the menus' write check
     # on a far folder (the same cache answers access). Kept by principle, each one line.)
-    ('gui/far.c', '        if (left <= 0 || (poll(&p, 1, (int)left) < 0 && errno != EINTR)) break;', '        if (poll(&p, 1, -1) < 0 && errno != EINTR) break;', 'f16'),
+    ('gui/far.c', 'sizeof far_do_mem, &len, until);', 'sizeof far_do_mem, &len, now_ms() + 600000);', 'f16'),   # (retargeted, step G)
     ('gui/far.c', '    if (!ended) {   // (no answer in time', '    if (0) {   // (no answer in time', 'f16'),
-    ('gui/far.c', '        far_hold(pfd, dir);\n        pthread_mutex_unlock(&far.mu);', '        close(pfd);\n        pthread_mutex_unlock(&far.mu);', 'net'),
+    ('gui/far.c', '        far_hold(c.pidfd, dir);\n        pthread_mutex_unlock(&far.mu);', '        close(c.pidfd);\n        pthread_mutex_unlock(&far.mu);', 'net'),   # (retargeted, step G)
     ('gui/far.c', '    far.dos++;\n', '', 'f16'),
     ('gui/actions.c', '    if (!far_r.ok) return err_set(err, "%.*s", STR_ARG(far_r.f[0])), false;', '', 'f16'),
     ('gui/actions.c', '    return strstr(err->msg, " isn\'t answering: ") != NULL || strstr(err->msg, " is slow: ") != NULL;', '    return false;', 'f16'),
@@ -1102,7 +1102,7 @@ MUTANTS = [
     ('gui/connect.c', '            answered = rounds;', '', 'net'),
     ('gui/connect.c', '            cn.ask_user = k == GIO_ASK_USER, cn.again = rounds > 1,', '            cn.ask_user = k == GIO_ASK_USER, cn.again = false,', 'net'), # (retargeted, step 7c)
     ('gui/connect.c', '            snprintf(cn.def_user, sizeof cn.def_user, "%s", k == GIO_ASK_USER ? def : "");', '', 'net'),
-    ('gui/connect.c', '        cn_line(in[1], k == GIO_ASK_USER ? user : k == GIO_ASK_DOMAIN ? domain : pass);', '        cn_line(in[1], k == GIO_ASK_USER ? user : k == GIO_ASK_DOMAIN ? pass : domain);', 'net'),
+    ('gui/connect.c', '        cn_line(c->in, k == GIO_ASK_USER ? user : k == GIO_ASK_DOMAIN ? domain : pass);', '        cn_line(c->in, k == GIO_ASK_USER ? user : k == GIO_ASK_DOMAIN ? pass : domain);', 'net'),   # (retargeted, step G)
     # (Dropped, a race no script can force: Cancel and Guest killing gio, not closing its input. The
     # Cancel's unmount covers the guest mount gvfs makes after a killed gio, unless gvfs finishes it
     # after the unmount; a closed input makes gio wait for gvfs's answer first, so there is no race.)
@@ -1119,7 +1119,7 @@ MUTANTS = [
     ('gui/actions.c', '    if (connect_start((Str){ app.ui.edit.b, app.ui.edit.len })) return;   // smb://… (F16 step 4)', '', 'net'),
     ('gui/input.c', '            if (in_box(CLAY_IDI("login-field", f), x, y)) h.login_field = f;', '', 'net'),
     # (step 4 review: quit cancels as Cancel does, waits, kills last; not dumpable while connecting)
-    ('gui/connect.c', '    while (cn.running && pthread_cond_timedwait(&cn.cv, &cn.mu, &until) == 0) {}', '', 'net'),   # (netq: its close 500 ms late, step 4 confirm)
+    ('gui/connect.c', '    while (cn.running && pthread_cond_timedwait(&cn.cv, &cn.mu, until) == 0) {}', '', 'net'),   # (retargeted, step G)
     ('gui/connect.c', '    cn.quit = true;\n    if (cn.reply == CN_WAIT) cn.reply = CN_CANCEL;', '    cn.quit = true;', 'net'),
     ('gui/connect.c', '        prctl(PR_SET_DUMPABLE, 0, 0, 0, 0);\n    }', '    }', 'net'),
     ('gui/connect.c', '    prctl(PR_SET_DUMPABLE, 1, 0, 0, 0);   // (every copy', '    // (every copy', 'net'),
@@ -1148,7 +1148,7 @@ MUTANTS = [
     ('gui/folder.c', '    if (!now || !(net ? bm_add_uri(&bmwa, now, uri, name, &err) : bm_add(&bmwa, now, dir, &err))', '    if (!now || !bm_add(&bmwa, now, dir, &err)', 'f16'),
     ('gui/script.c', '    state_unspace(crumbs);   // (a share\'s button', '    // (a share\'s button', 'f16'),
     # (step 5 review: the shares listed by ofx-list --shares, its wait bounded, held when stuck)
-    ('gui/watch.c', '        if (left <= 0 || poll(&p, 1, (int)left) == 0) break;', '        if (poll(&p, 1, -1) == 0) break;', 'net'),
+    ('gui/watch.c', 'now_ms() + answer_ms);', 'now_ms() + 600000);', 'net'),   # (retargeted, step G)
     # (Dropped, not seen by a script: the scan's check for ofx-list's "." end. Only a lister killed
     # mid-answer, or one that failed, leaves it off; a whole answer without it, the "." line itself
     # would be skipped as a share (places_load_net takes only absolute folders).)
@@ -1179,7 +1179,7 @@ MUTANTS = [
     # F16 step 7c: SFTP
     ('gui/connect.c', ', cn.ssh = strncasecmp(uri, "sftp:", 5) == 0,', ', cn.ssh = false,', 'net'),
     ('gui/connect.c', '            cn.unknown = true;\n', '', 'net'),
-    ('gui/connect.c', '            cn_line(in[1], "2");\n            close(in[1]), in[1] = -1;', '            cn_line(in[1], "1");\n            close(in[1]), in[1] = -1;', 'net'),
+    ('gui/connect.c', '            cn_line(c->in, "2");', '            cn_line(c->in, "1");', 'net'),   # (retargeted, step G)
     ('gui/connect.c', ', cn.again = rounds > 1, cn.key = k == GIO_ASK_KEY;', ', cn.again = rounds > 1, cn.key = false;', 'net'),
     ('gui/connect.c', 'cn.key ? UI_LOGIN_KEY : cn.ssh ? UI_LOGIN_SSH : UI_LOGIN_SHARE', 'cn.key ? UI_LOGIN_KEY : UI_LOGIN_SHARE', 'net'),   # (retargeted, step E)
     ('gui/connect.c', '    if (!ok && unknown) {   // (the host alone', '    if (false) {   // (the host alone', 'net'),
@@ -1229,4 +1229,6 @@ MUTANTS = [
     # The milestone's code-health cleanup, step F
     ('gui/actions.c', '    if (place_ejectable(p)) return UI_CTX_DRIVE;\n', '', 'usb'),
     ('gui/input.c', '        if (!trash) u->ctx_kind = place_ctx_kind(pl);', '        {}', 'f8'),
+    # The milestone's code-health cleanup, step G
+    ('gui/main.c', 'connect_until = deadline_in(CONNECT_QUIT_MS);', 'connect_until = deadline_in(60000);', 'net'),
 ]

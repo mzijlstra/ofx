@@ -290,37 +290,20 @@ static bool watch_gvfs_scan(void)
     atomic_fetch_add(&gvfsw.scans, 1);
     static int answer_ms = -1;   // (OFX_TEST_SHARES_MS: longer for the stand-in tests, whose ASan lister starts slowly under load)
     if (answer_ms < 0) answer_ms = env_int("OFX_TEST_SHARES_MS", SHARES_MS, 100, 60000);
-    int fd[2];
-    if (pipe2(fd, O_CLOEXEC) != 0) return false;
-    pid_t pid;
-    bool ok = spawn_fds(NULL, argv, -1, fd[1], SPAWN_ERR_NULL, &pid, &err);
-    close(fd[1]);
-    int pfd = ok ? (int)syscall(SYS_pidfd_open, pid, 0) : -1;
-    if (!ok || pfd < 0) {
-        if (ok) kill(pid, SIGKILL);
-        return close(fd[0]), false;
-    }
+    Child c;
+    if (!child_start(argv, false, false, &c, &err)) return false;
     static char now[sizeof gvfsw.text];
-    int n = 0;
-    bool done = false;
-    for (i64 until = now_ms() + answer_ms; !done;) {
-        i64 left = until - now_ms();
-        struct pollfd p = { fd[0], POLLIN, 0 };
-        if (left <= 0 || poll(&p, 1, (int)left) == 0) break;
-        ssize_t r = read(fd[0], now + n, sizeof now - 1 - (size_t)n);
-        if (r < 0 && errno == EINTR) continue;
-        if (r <= 0) done = true;
-        else n += (int)r;
-        if (n >= (int)sizeof now - 1) done = true;   // (more than fit: what fits)
-    }
-    close(fd[0]);
+    isize got = 0;
+    bool done = child_read(&c, now, sizeof now - 1, &got, now_ms() + answer_ms);   // (more than fit: what fits)
+    int n = (int)got;
+    close(c.out);
     if (!done) {   // no answer: killed, held until it leaves the kernel; the last list stands
-        syscall(SYS_pidfd_send_signal, pfd, SIGKILL, NULL, 0);
-        gvfsw.held = pfd;
+        syscall(SYS_pidfd_send_signal, c.pidfd, SIGKILL, NULL, 0);
+        gvfsw.held = c.pidfd;
         atomic_store(&gvfsw.held_moved, true), wake_main();
         return false;
     }
-    close(pfd);
+    close(c.pidfd);
     if (n < 2 || memcmp(now + n - 2, ".\n", 2) != 0 || (n > 2 && now[n - 3] != '\n')) return false;   // (not its whole answer: the last list stands)
     n -= 2;
     pthread_mutex_lock(&gvfsw.mu);
