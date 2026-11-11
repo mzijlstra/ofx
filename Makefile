@@ -48,10 +48,10 @@ HELPER_DEPS = $(wildcard base/*.c base/*.h fs/*.c) Makefile
 HELPER_LIBS_fm1 = -lsystemd
 
 build/ofx-%: tools/%.c $(HELPER_DEPS) | build
-	$(CC) $(CFLAGS) $(IMG_INC) $(DEBUG) -o $@ $< $(IMG_LIBS) $(HELPER_LIBS_$*) -lm
+	$(CC) $(CFLAGS) $(IMG_INC) $(DEBUG) -o $@ $< $(IMG_LIBS) $(HELPER_LIBS_$*)$(if $(HELPER_LIBS_$*), )-lm
 
 build/release/ofx-%: tools/%.c $(HELPER_DEPS) | build/release
-	$(CC) $(CFLAGS) $(IMG_INC) $(RELEASE) -o $@ $< $(IMG_LIBS) $(HELPER_LIBS_$*) -lm
+	$(CC) $(CFLAGS) $(IMG_INC) $(RELEASE) -o $@ $< $(IMG_LIBS) $(HELPER_LIBS_$*)$(if $(HELPER_LIBS_$*), )-lm
 
 # The tests warn of a function nothing calls: they take in every fs/ and ui/ function, so one unused
 # there is dead (2026-10-28: state_save had 20 checks on code ofx no longer ran). The binaries can't:

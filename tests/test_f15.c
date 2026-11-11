@@ -346,7 +346,7 @@ static void test_keys_table(void)
 }
 
 // The commands that were letters in the files, as their own: S reverses and reverses back; Ctrl+F
-// in the find bar keeps its text (a second find_open would clear it).
+// in the find bar keeps its text (a second ui_find_open would clear it).
 static void test_keys_commands(void)
 {
     Ui u = menu_ui(5);

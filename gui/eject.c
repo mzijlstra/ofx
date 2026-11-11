@@ -79,6 +79,8 @@ static bool drive_start(const Place *p, DriveOp op)
     }
     if (op != DRIVE_MOUNT && jobs_refuse(p->path)) return false;   // a job of ours writes there: it says so
     Err gerr;
+    // (early, for the status line's word before the thread starts; the check that counts is
+    // spawn_capture's, on the program the thread resolved and runs)
     if (!ops_program_allowed(op == DRIVE_SHARE ? "gio" : "udisksctl", &gerr)) return set_status(true, "%s", gerr.msg), false;
     snprintf(ej.dev, sizeof ej.dev, "%s", op == DRIVE_SHARE ? p->path : p->dev);
     snprintf(ej.label, sizeof ej.label, "%s", p->label);

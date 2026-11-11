@@ -1273,6 +1273,8 @@ blocks each of these for up to gvfs's 90 s. On a thread it also holds ofx's exit
      - **F, place kinds and protocols:** helpers for the kind checks, a scheme table.
      - **G, the children the threads read:** one spawn-and-read helper, the quit deadline.
      - **H, comments and small tidy-ups.**
+     - **Done 2026-11-11:** A to H each reviewed and shipped, every finding fixed and confirmed
+       (C, D and F had a follow-up for their LOWs). Next: Michael's install.
      - **After H, from the reviews:** "the mount list didn't fit" fails safe in the window too
        (said in the status line; network and FUSE types still taken as far), as clean.c does; past
        about 2,000 long mountinfo lines today every path is taken as local (step C review).
