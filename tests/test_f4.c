@@ -19,64 +19,64 @@ static void test_crumbs(void)
     static UiCrumbs c;
     memset(&c, 0, sizeof c);
     // Under home: home first, the folders above it left out.
-    ui_crumbs_set(&c, "/home/m/code/proj", "/home/m");
+    ui_crumbs_set_share(&c, "/home/m/code/proj", "/home/m", NULL, NULL);
     crumbs_check(&c, "m|code|proj", 2);
     CHECK(c.seg[0].home && !c.seg[1].home);
     CHECK_STR(ui_crumb_path(&c, 1), "/home/m/code");
     CHECK_STR(ui_crumb_path(&c, 0), "/home/m");
     // Up keeps the deeper buttons; the current one moves.
-    ui_crumbs_set(&c, "/home/m/code", "/home/m");
+    ui_crumbs_set_share(&c, "/home/m/code", "/home/m", NULL, NULL);
     crumbs_check(&c, "m|code|proj", 1);
-    ui_crumbs_set(&c, "/home/m", "/home/m");
+    ui_crumbs_set_share(&c, "/home/m", "/home/m", NULL, NULL);
     crumbs_check(&c, "m|code|proj", 0);
     // Down the same path again: still the same bar.
-    ui_crumbs_set(&c, "/home/m/code/proj", "/home/m");
+    ui_crumbs_set_share(&c, "/home/m/code/proj", "/home/m", NULL, NULL);
     crumbs_check(&c, "m|code|proj", 2);
     // Off the path: anew.
-    ui_crumbs_set(&c, "/home/m/code", "/home/m");
-    ui_crumbs_set(&c, "/home/m/code/rust", "/home/m");
+    ui_crumbs_set_share(&c, "/home/m/code", "/home/m", NULL, NULL);
+    ui_crumbs_set_share(&c, "/home/m/code/rust", "/home/m", NULL, NULL);
     crumbs_check(&c, "m|code|rust", 2);
     // A sibling whose name starts the same is off the path (code2 isn't under code).
-    ui_crumbs_set(&c, "/home/m/code2", "/home/m");
+    ui_crumbs_set_share(&c, "/home/m/code2", "/home/m", NULL, NULL);
     crumbs_check(&c, "m|code2", 1);
     // Above home: from /, home shown as an ordinary folder.
-    ui_crumbs_set(&c, "/home", "/home/m");
+    ui_crumbs_set_share(&c, "/home", "/home/m", NULL, NULL);
     crumbs_check(&c, "/|home|m|code2", 1);
     CHECK(!c.seg[2].home);
-    ui_crumbs_set(&c, "/", "/home/m");
+    ui_crumbs_set_share(&c, "/", "/home/m", NULL, NULL);
     crumbs_check(&c, "/|home|m|code2", 0);
     CHECK_STR(ui_crumb_path(&c, 0), "/");
     // Elsewhere: from /.
-    ui_crumbs_set(&c, "/mnt/sd", "/home/m");
+    ui_crumbs_set_share(&c, "/mnt/sd", "/home/m", NULL, NULL);
     crumbs_check(&c, "/|mnt|sd", 2);
     CHECK_STR(ui_crumb_path(&c, 2), "/mnt/sd");
     // No home, a home with a trailing slash, a home that is a prefix of another name.
-    ui_crumbs_set(&c, "/home/m/x", NULL);
+    ui_crumbs_set_share(&c, "/home/m/x", NULL, NULL, NULL);
     crumbs_check(&c, "/|home|m|x", 3);
-    ui_crumbs_set(&c, "/home/m/x", "/home/m/");
+    ui_crumbs_set_share(&c, "/home/m/x", "/home/m/", NULL, NULL);
     crumbs_check(&c, "m|x", 1);
     memset(&c, 0, sizeof c);
-    ui_crumbs_set(&c, "/home/mm/x", "/home/m");
+    ui_crumbs_set_share(&c, "/home/mm/x", "/home/m", NULL, NULL);
     crumbs_check(&c, "/|home|mm|x", 3);
     // Deeper than UI_CRUMBS_MAX: the deepest button shown is marked, not the root.
     char deep[4096] = "";
     for (int i = 0; i < UI_CRUMBS_MAX + 10; i++) strcat(deep, "/d");
     memset(&c, 0, sizeof c);
-    ui_crumbs_set(&c, deep, NULL);
+    ui_crumbs_set_share(&c, deep, NULL, NULL, NULL);
     CHECK(c.n == UI_CRUMBS_MAX && c.cur == UI_CRUMBS_MAX - 1);
     // The window: all fit, no arrows.
     float w[6] = { 10, 10, 10, 10, 10, 10 };
     memset(&c, 0, sizeof c);
-    ui_crumbs_set(&c, "/a/b/c/d/e", NULL);
+    ui_crumbs_set_share(&c, "/a/b/c/d/e", NULL, NULL, NULL);
     crumbs_check(&c, "/|a|b|c|d|e", 5);
     int lo, hi;
     CHECK(!ui_crumbs_window(&c, w, 60, 5, &lo, &hi) && lo == 0 && hi == 6);
     // Too narrow: arrows, as many above the current one as fit, the current one shown.
     CHECK(ui_crumbs_window(&c, w, 40, 5, &lo, &hi) && lo == 3 && hi == 6);   // room 30: three
-    ui_crumbs_set(&c, "/a/b", NULL);
+    ui_crumbs_set_share(&c, "/a/b", NULL, NULL, NULL);
     crumbs_check(&c, "/|a|b|c|d|e", 2);
     CHECK(ui_crumbs_window(&c, w, 40, 5, &lo, &hi) && lo == 0 && hi == 3);
-    ui_crumbs_set(&c, "/a/b/c", NULL);
+    ui_crumbs_set_share(&c, "/a/b/c", NULL, NULL, NULL);
     CHECK(ui_crumbs_window(&c, w, 40, 5, &lo, &hi) && lo == 1 && hi == 4);
     // The arrows move it a button, within the ends; a folder change goes back to automatic.
     ui_crumbs_shift(&c, lo, 1);
@@ -87,11 +87,11 @@ static void test_crumbs(void)
     CHECK(lo == 5 && hi == 6);
     ui_crumbs_shift(&c, -3, -1);
     CHECK(ui_crumbs_window(&c, w, 40, 5, &lo, &hi) && lo == 0 && hi == 3);
-    ui_crumbs_set(&c, "/a/b/c", NULL);
+    ui_crumbs_set_share(&c, "/a/b/c", NULL, NULL, NULL);
     CHECK(ui_crumbs_window(&c, w, 40, 5, &lo, &hi) && lo == 1);
     // One button wider than the room still shows (cut by the layout).
     float wide[6] = { 10, 10, 10, 100, 10, 10 };
-    ui_crumbs_set(&c, "/a/b/c", NULL);
+    ui_crumbs_set_share(&c, "/a/b/c", NULL, NULL, NULL);
     CHECK(ui_crumbs_window(&c, wide, 40, 5, &lo, &hi) && lo == 3 && hi == 4);
 }
 

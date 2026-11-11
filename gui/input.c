@@ -349,7 +349,7 @@ static void ctx_facts(void)
     bool trash = strcmp(app.ctx_path, TRASH_URI) == 0;
     u->ctx_kind = trash ? UI_CTX_TRASH : UI_CTX_DIR;
     u->ctx_full = trash && (trash_state(), app.trash_full);   // (the icon's answer, looked at again)
-    char uri[PATH_MAX];   // (a folder in a share: its smb:// or nfs:// address, F16 steps 5, 6)
+    char uri[PATH_MAX];   // (a folder in a share: its address, gvfs_share_uri: F16 steps 5, 6, 7c; afp, dav since the code-health review)
     u->ctx_bmed = bm_find(&bmarks, app.ctx_path) >= 0 || (app.ctx_path[0] == '/' && far_share_uri(app.ctx_path, uri, sizeof uri) && bm_find_uri(&bmarks, uri) >= 0);
     u->ctx_bms = bmarks.n;
     if (u->ctx_crumb < 0 && u->side_mode == SIDE_PLACES && u->ctx_side >= 0 && u->ctx_side < app.places.n) {

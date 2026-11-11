@@ -437,7 +437,7 @@ static void test_crumbs_show(void)
 {
     static UiCrumbs c;
     memset(&c, 0, sizeof c);
-    ui_crumbs_set(&c, "/a/b/c/d/e/f/g", NULL);   // 8 buttons: / a b c d e f g, cur 7
+    ui_crumbs_set_share(&c, "/a/b/c/d/e/f/g", NULL, NULL, NULL);   // 8 buttons: / a b c d e f g, cur 7
     float w[UI_CRUMBS_MAX];
     for (int i = 0; i < c.n; i++) w[i] = 10;
     int lo, hi;

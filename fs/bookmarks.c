@@ -14,7 +14,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-enum { BM_MAX = 256 };   // lines kept; past that the rest are left out of the menu, never dropped from the file (bm_full)
+enum { BM_MAX = 256 };   // lines kept; past that the rest are left out of the menu, never dropped from the file (Bookmarks.full)
 
 typedef struct {
     Str  uri;               // as the file has it

@@ -651,10 +651,10 @@ static void test_trash_keys(void)
     CHECK(ui_handle(&u, names, &in).kind == UA_NONE);
     // The path buttons in the trash view: one, Trash.
     static UiCrumbs c;
-    ui_crumbs_set(&c, "/home/m/x", "/home/m");
-    ui_crumbs_set(&c, TRASH_URI, "/home/m");
+    ui_crumbs_set_share(&c, "/home/m/x", "/home/m", NULL, NULL);
+    ui_crumbs_set_share(&c, TRASH_URI, "/home/m", NULL, NULL);
     CHECK(c.n == 1 && c.cur == 0 && str_eq(ui_crumb_label(&c, 0), S("Trash")) && str_eq(ui_crumb_path(&c, 0), S(TRASH_URI)));
-    ui_crumbs_set(&c, "/home/m/y", "/home/m");   // and back
+    ui_crumbs_set_share(&c, "/home/m/y", "/home/m", NULL, NULL);   // and back
     CHECK(c.n == 2 && str_eq(ui_crumb_label(&c, 1), S("y")));
 }
 

@@ -3,8 +3,8 @@
 // its own asks `avahi-browse` (fs/connect.c avahi_smb_servers): one query on the network as it
 // starts (about 1 s), then avahi's cache alone every DISCO_MS (25 ms, no traffic), so ofx puts no
 // query on the network on a timer. A change reads the places again (mounts_ready, as the shares'
-// listing). Without avahi-browse nothing is found and the thread ends (with avahi-browse but no
-// avahi-daemon, each run finds nothing). In Airplane Mode (step 7d) it runs none; turned off, it
+// listing). Without avahi-browse, or with it but no avahi-daemon, each run finds nothing and the
+// thread goes on asking at its pace (it doesn't end: the code-health review). In Airplane Mode (step 7d) it runs none; turned off, it
 // makes one query again (the cache may be another network's), then reads the cache. In the tests,
 // run-script's avahi-browse stand-in answers (OFX_TEST_AVAHI), never the real one: it would query
 // the desktop's network. Included by main.c after watch.c.

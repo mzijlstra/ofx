@@ -48,8 +48,6 @@ static bool tip_of(int k, char *buf, size_t cap, Clay_ElementId *id)
     return false;
 }
 
-// The tooltip, under a top bar button or a tab's x, over the bottom bar's, beside the sidebar's;
-// lined up with the button's edge on the side the window has room.
 // The files area's word when it lists nothing: the search's state, a far folder's listing to come or
 // why not (F16; *bad: in red), only hidden files, or none at all.
 static const char *list_word(bool *bad)
@@ -62,6 +60,8 @@ static const char *list_word(bool *bad)
                                         : "Empty folder";
 }
 
+// The tooltip, under a top bar button or a tab's x, over the bottom bar's, beside the sidebar's;
+// lined up with the button's edge on the side the window has room.
 static void layout_tip(int w)
 {
     char txt[NAME_MAX + 64];
@@ -145,9 +145,6 @@ static float       spring_fill = -1;           // the spring's bar, 0 to 1; -1 n
 static float       badge_x, badge_y;           // where the badge was put
 static const char *badge_op;
 
-// A drag of files (F13 step 3): the place it would drop in, outlined in the accent (nowhere it
-// can't), and by the pointer a badge: the entry pressed, its icon and name, "+ N more", and what
-// the drop does there ("Move", "Copy", "Trash").
 // The badge's place, w x h: right of the pointer and below it; left of it, or above it, where the
 // window's edge would cut it.
 static void badge_place(float w, float h)
@@ -158,6 +155,9 @@ static void badge_place(float w, float h)
     badge_x = bx < 0 ? 0 : bx, badge_y = by < 0 ? 0 : by;
 }
 
+// A drag of files (F13 step 3): the place it would drop in, outlined in the accent (nowhere it
+// can't), and by the pointer a badge: the entry pressed, its icon and name, "+ N more", and what
+// the drop does there ("Move", "Copy", "Trash").
 static void layout_drag(void)
 {
     drop_marked = badge_drawn = false, badge_op = NULL, spring_fill = -1, badge_icon[0] = 0;
@@ -215,7 +215,6 @@ static void layout_drag(void)
     }
 }
 
-// The window, and the modal panel on top when one is up.
 // The footer's hint for what has the keys now (a panel, a question, a menu, a field), NULL when
 // nothing does (the status line or the folder's line then). One draw for all of them (the F15
 // code-health review: 17 branches, each its own text() call, three without fit).
@@ -263,6 +262,7 @@ static const char *footer_hint(void)
     }
 }
 
+// The window, and the modal panel on top when one is up.
 static Clay_RenderCommandArray layout(int w, int h)
 {
     menu_facts();

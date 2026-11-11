@@ -57,7 +57,7 @@ static struct {
     char            text[32768];
     int             len;
     int             kick;   // an eventfd: watch_gvfs_kick lists them again at once (-1: none)
-    int             held;   // a lister that didn't answer, killed, not yet seen gone (its pidfd; -1 none: the scripts' sharesheld=)
+    atomic_int      held;   // a lister that didn't answer, killed, not yet seen gone (its pidfd; -1 none: the scripts' sharesheld=, read by the main thread: atomic, the code-health review)
     atomic_bool     held_moved;   // held set or cleared, or every changed, since the main loop last looked (a frame for the scripts)
     atomic_int      scans;   // listings started so far (the scripts' sharesscans=)
     atomic_int      every;   // the wait before the next one, in ms (the scripts' sharesevery=)
@@ -256,10 +256,11 @@ enum { SHARES_MS = 1000 };   // ofx-list --shares answers in milliseconds; past 
 // the list changed.
 static bool watch_gvfs_scan(void)
 {
-    if (gvfsw.held >= 0) {
-        struct pollfd p = { gvfsw.held, POLLIN, 0 };
+    int held = atomic_load(&gvfsw.held);
+    if (held >= 0) {
+        struct pollfd p = { held, POLLIN, 0 };
         if (poll(&p, 1, 0) <= 0) return false;   // (still in the kernel)
-        close(gvfsw.held), gvfsw.held = -1;
+        atomic_store(&gvfsw.held, -1), close(held);
         atomic_store(&gvfsw.held_moved, true), wake_main();   // (a frame: the scripts' sharesheld= is read at one)
     }
     // No gvfs FUSE mount in the mount list: no shares, and no child (read here: the mount list is the
@@ -299,7 +300,7 @@ static bool watch_gvfs_scan(void)
     close(c.out);
     if (!done) {   // no answer: killed, held until it leaves the kernel; the last list stands
         syscall(SYS_pidfd_send_signal, c.pidfd, SIGKILL, NULL, 0);
-        gvfsw.held = c.pidfd;
+        atomic_store(&gvfsw.held, c.pidfd);
         atomic_store(&gvfsw.held_moved, true), wake_main();
         return false;
     }

@@ -741,9 +741,9 @@ static void test_search_crumbs(void)
     UiCrumbs c = { 0 };
     char u[128];
     CHECK(search_uri(u, sizeof u, "/home/m/code", S("x"), STR_EMPTY));
-    ui_crumbs_set(&c, u, "/home/m");
+    ui_crumbs_set_share(&c, u, "/home/m", NULL, NULL);
     CHECK(c.n == 1 && c.cur == 0 && str_eq(ui_crumb_label(&c, 0), S("Search")) && str_eq(ui_crumb_path(&c, 0), str_from_c(u)));
-    ui_crumbs_set(&c, "/home/m/code", "/home/m");   // off it again: a path's buttons
+    ui_crumbs_set_share(&c, "/home/m/code", "/home/m", NULL, NULL);   // off it again: a path's buttons
     CHECK(c.n == 2 && str_eq(ui_crumb_label(&c, 1), S("code")));
 }
 

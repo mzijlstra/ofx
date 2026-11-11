@@ -41,7 +41,7 @@
 #   step 7b);
 # - OFX_TEST_HOME, when set, becomes the window's HOME, else <scratch-dir>/home (never his);
 # - OFX_GUI_SHOTS=<scratch-dir>/shots for the script's shots, OFX_GUI_ROOT=<scratch-dir> for its
-#   sh guard and ofx's own (fs/ops.c: no write outside it).
+#   sh guard and ofx's own (fs/guard.c: no write outside it).
 # Prints the script's output, stderr's first lines, and whether LeakSanitizer or ASan reported
 # anything. Exit status: 1 when an expectation failed, an ASan report appeared, or the window had
 # to be killed.

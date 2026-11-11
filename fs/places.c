@@ -20,7 +20,7 @@ enum { PLACES_MAX = 64 };
 // PL_UNMOUNTED: a removable drive not mounted yet (2026-10-30), its path and dev the device's
 // (/dev/sdb1); a click mounts it. Not a drive for place_is_drive: it has no folder yet.
 // The Network section (F16 step 5): PL_SHARE, a share gvfs has mounted, its path the share's folder
-// under gvfs's FUSE mount; PL_NETBM, an smb:// or nfs:// bookmark (step 6), its path the address (a click connects);
+// under gvfs's FUSE mount; PL_NETBM, an smb://, nfs:// or sftp:// bookmark (steps 6, 7c: connect_uri's), its path the address (a click connects);
 // PL_SERVER, an SMB server avahi found on the network (step 7b), its path its address, smb://host
 // (a click lists its shares).
 // PL_AIRPLANE: the one row the Network section has in Airplane Mode (step 7d), path "airplane:" (no folder); a click asks
@@ -381,7 +381,7 @@ static void places_load(Arena *scratch, Places *pl, const char *bookmarks, const
 
 // The Network section (F16 step 5), after the rest, under its heading when it has a row: the shares
 // gvfs has mounted (shares: their folders, one a line, as the watch thread lists gvfs's FUSE
-// folders), then the smb:// and nfs:// lines of the bookmarks file, with their labels (else the share's name
+// folders), then the bookmarks file's addresses Connect takes (connect_uri), with their labels (else the share's name
 // as gvfs gives it), then the SMB servers avahi found (servers, n of them; step 7b), but for one a
 // bookmark has (by its address: the bookmark's label stays). A bookmark of a mounted share stays a
 // bookmark: a click on it connects, which for a share mounted already goes straight there.

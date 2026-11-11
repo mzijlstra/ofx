@@ -284,7 +284,7 @@ _Static_assert(sizeof(Hit) == 104, "a new Hit field: hit_same compares it");
 
 static struct {
     char      cwd[PATH_MAX];
-    char      cwd_uri[PATH_MAX];   // its smb:// or nfs:// address when it is in a share gvfs mounted, else "" (F16 steps 5, 6)
+    char      cwd_uri[PATH_MAX];   // its address when it is in a share gvfs mounted (smb://, nfs://, sftp://, afp://, dav[s]://: gvfs_share_uri), else "" (F16 steps 5, 6, 7c)
     // The search view (F9): the folder searched, what the walk left out so far and whether it ended,
     // when the field's last change runs (0: none waiting), and the entry to put the cursor on when
     // it comes (back to a search, the one left from).
@@ -991,7 +991,7 @@ int main(int argc, char **argv)
     // (ShowItems): its folder, it selected.
     struct stat sst;
     Str pick = STR_EMPTY;
-    // A far one isn't looked at: gone to as a folder, its lister says if it is a file (far_typed).
+    // A far one isn't looked at: gone to as a folder, its lister says if it is a file (far_refused).
     if ((selecting && strcmp(dir, "/") != 0) || (!start_far && stat(dir, &sst) == 0 && !S_ISDIR(sst.st_mode))) {
         char *slash = strrchr(dir, '/');
         static char base[NAME_MAX + 1];

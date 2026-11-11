@@ -34,7 +34,9 @@ static void *eject_thread(void *arg)
     const char *argv[7];
     char udisks[PATH_MAX] = "udisksctl";   // (eject's and unmount's sh -c run it as resolved)
     if (!prog_resolve("udisksctl", udisks, sizeof udisks)) snprintf(udisks, sizeof udisks, "udisksctl");
-    if (ej.op == DRIVE_SHARE) argv[0] = "gio", argv[1] = "mount", argv[2] = "-u", argv[3] = ej.dev, argv[4] = NULL;   // (dev: the share's folder)
+    char gio[PATH_MAX] = "gio";   // (a share's unmount runs gio as resolved, the one the guard is asked about: it looked gio up twice; the code-health review)
+    if (!prog_resolve("gio", gio, sizeof gio)) snprintf(gio, sizeof gio, "gio");
+    if (ej.op == DRIVE_SHARE) argv[0] = gio, argv[1] = "mount", argv[2] = "-u", argv[3] = ej.dev, argv[4] = NULL;   // (dev: the share's folder)
     else if (ej.op == DRIVE_MOUNT) mount_argv(ej.dev, argv);
     else if (ej.op == DRIVE_UNMOUNT) unmount_argv(ej.dev, udisks, argv);
     else eject_argv(ej.dev, udisks, argv);   // dev and op are not written while busy
@@ -46,7 +48,7 @@ static void *eject_thread(void *arg)
     bool late, mounted = false;
     at[0] = 0;
     int limit = ej.op == DRIVE_MOUNT ? MOUNT_TIMEOUT_MS : EJECT_TIMEOUT_MS;
-    if (!spawn_capture(ej.op == DRIVE_SHARE ? NULL : udisks, (char *const *)argv, out, sizeof out, limit, &late, &err)) snprintf(why, sizeof why, "%s", err.msg);
+    if (!spawn_capture(ej.op == DRIVE_SHARE ? gio : udisks, (char *const *)argv, out, sizeof out, limit, &late, &err)) snprintf(why, sizeof why, "%s", err.msg);
     else if (ej.op == DRIVE_SHARE) r = gio_why(str_from_c(out), why, sizeof why) ? EJECT_FAILED : EJECT_DONE;
     else if (ej.op == DRIVE_MOUNT) mounted = mount_result(str_from_c(out), at, sizeof at, why, sizeof why);
     else r = eject_result(str_from_c(out), why, sizeof why);

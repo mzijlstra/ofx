@@ -1,4 +1,4 @@
-# ofx's own guard (fs/ops.c): started outside the run's scratch tree, so trash, delete for good,
+# ofx's own guard (fs/guard.c): started outside the run's scratch tree, so trash, delete for good,
 # rename and new folder must all be refused there. tests/gui/run.sh checks nothing changed.
 settle
 expect sel=victim.txt

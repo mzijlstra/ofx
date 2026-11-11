@@ -40,25 +40,18 @@ build/vkbd: tools/gui/vkbd.c tools/gui/testsway.h $(VKBD_XML) Makefile | build
 build/ofx-probe: tools/probe.c $(wildcard base/*.c base/*.h fs/*.c ui/*.c) Makefile | build
 	$(CC) $(CFLAGS) $(IMG_INC) $(DEBUG) -o $@ tools/probe.c $(IMG_LIBS) -lm
 
-build/ofx-clean: tools/clean.c $(wildcard base/*.c base/*.h fs/*.c) Makefile | build
-	$(CC) $(CFLAGS) $(IMG_INC) $(DEBUG) -o $@ tools/clean.c $(IMG_LIBS) -lm
+# The helpers, each tools/<name>.c over base/ and fs/, a debug build in build/ and a release one in
+# build/release/ (two rules for the six: the F16 code-health review): ofx-clean (F6.5), ofx-list (a
+# far folder's reader, F16: ofx starts it beside itself, never reading a share in its own process),
+# ofx-fm1 (FileManager1 on the session bus, 2026-10-26: sd-bus, from libsystemd).
+HELPER_DEPS = $(wildcard base/*.c base/*.h fs/*.c) Makefile
+HELPER_LIBS_fm1 = -lsystemd
 
-build/release/ofx-clean: tools/clean.c $(wildcard base/*.c base/*.h fs/*.c) Makefile | build/release
-	$(CC) $(CFLAGS) $(IMG_INC) $(RELEASE) -o $@ tools/clean.c $(IMG_LIBS) -lm
+build/ofx-%: tools/%.c $(HELPER_DEPS) | build
+	$(CC) $(CFLAGS) $(IMG_INC) $(DEBUG) -o $@ $< $(IMG_LIBS) $(HELPER_LIBS_$*) -lm
 
-# A far folder's reader (F16): ofx starts it beside itself, never reading a share in its own process.
-build/ofx-list: tools/list.c $(wildcard base/*.c base/*.h fs/*.c) Makefile | build
-	$(CC) $(CFLAGS) $(IMG_INC) $(DEBUG) -o $@ tools/list.c $(IMG_LIBS) -lm
-
-build/release/ofx-list: tools/list.c $(wildcard base/*.c base/*.h fs/*.c) Makefile | build/release
-	$(CC) $(CFLAGS) $(IMG_INC) $(RELEASE) -o $@ tools/list.c $(IMG_LIBS) -lm
-
-# FileManager1 on the session bus (2026-10-26): sd-bus, from libsystemd.
-build/ofx-fm1: tools/fm1.c $(wildcard base/*.c base/*.h fs/*.c) Makefile | build
-	$(CC) $(CFLAGS) $(IMG_INC) $(DEBUG) -o $@ tools/fm1.c $(IMG_LIBS) -lsystemd -lm
-
-build/release/ofx-fm1: tools/fm1.c $(wildcard base/*.c base/*.h fs/*.c) Makefile | build/release
-	$(CC) $(CFLAGS) $(IMG_INC) $(RELEASE) -o $@ tools/fm1.c $(IMG_LIBS) -lsystemd -lm
+build/release/ofx-%: tools/%.c $(HELPER_DEPS) | build/release
+	$(CC) $(CFLAGS) $(IMG_INC) $(RELEASE) -o $@ $< $(IMG_LIBS) $(HELPER_LIBS_$*) -lm
 
 # The tests warn of a function nothing calls: they take in every fs/ and ui/ function, so one unused
 # there is dead (2026-10-28: state_save had 20 checks on code ofx no longer ran). The binaries can't:

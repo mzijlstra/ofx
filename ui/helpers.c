@@ -69,10 +69,6 @@ static void ui_crumbs_set_share(UiCrumbs *c, const char *cwd, const char *home, 
     if (c->cur < 0) c->cur = c->n - 1;
 }
 
-static void ui_crumbs_set(UiCrumbs *c, const char *cwd, const char *home)
-{
-    ui_crumbs_set_share(c, cwd, home, NULL, NULL);
-}
 
 // Button i's folder.
 static Str ui_crumb_path(const UiCrumbs *c, int i)

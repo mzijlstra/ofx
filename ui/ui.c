@@ -727,8 +727,8 @@ typedef struct {
 #define UI_TEXT_CLEAR(t) ((t).len = (t).caret = (t).anchor = 0)
 
 // A picker: a panel's filter field over a list of what it matches (Open With's apps, F7.3; the
-// branches, F12 step 6). The keys in the list or the field; fresh until filtered from gui/'s names
-// (panels.c, ui_pick_*).
+// branches, F12 step 6; a server's shares, F16 step 7a). The keys in the list or the field; fresh
+// until filtered from gui/'s names (panels.c: ui_pick_*, and ui_picker for each panel's parts).
 typedef struct {
     bool   in_list;
     bool   fresh;
