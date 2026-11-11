@@ -1271,6 +1271,12 @@ blocks each of these for up to gvfs's 90 s. On a thread it also holds ofx's exit
        shares as rows (gio list, as 7a's), Enter on a share mounts and opens it; an SFTP server
        opens at its root. The shares picker panel (7a) goes; Connect to Server on a server's
        address alone opens the same listing.
+     - **Credentials** (Michael's answers): asked every time, the password never kept (step 4's
+       rule); the user and domain last used for a server kept in the state file, per server, and
+       filled in, the keys on the password field. No "Connect As…": the question asks anyway. The
+       question itself stays as steps 4 and 7c made it (SMB: user, domain, password, Guest; SFTP:
+       user and password, or a key's passphrase; NFS asks nothing); a path is the address's,
+       typed or browsed to, never a field.
      - **Gone:** the sidebar's found-server rows (PL_SERVER) and the disco thread's timer;
        Airplane Mode whole (the Go menu's entry, the state file's `airplane=` read and ignored,
        the sidebar row, its question, `connect_start`'s refusal, `airplane_gen`). The symbolic-SVG
