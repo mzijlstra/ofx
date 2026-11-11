@@ -39,6 +39,7 @@ static void undo_start(UndoKind k)
 static UiCtxKind place_ctx_kind(const Place *p)
 {
     if (place_brings(p->kind)) return UI_CTX_BRINGS;
+    if (p->kind == PL_BROWSE) return UI_CTX_NETWORK;   // (F16 step 7e)
     if (place_ejectable(p)) return UI_CTX_DRIVE;
     if (p->kind == PL_SHARE) return UI_CTX_SHARE;   // (F16 step 5)
     return UI_CTX_PLACE;
@@ -800,7 +801,7 @@ static void tab_open(const char *dir, Str sel, bool show)
 static void tab_open_bg(const char *path)
 {
     struct stat st;   // (a far folder isn't looked at here: its lister says, F16)
-    if (strcmp(path, TRASH_URI) != 0 && !is_search(path) && !far_dir(path) && (stat(path, &st) != 0 || !S_ISDIR(st.st_mode))) {
+    if (strcmp(path, TRASH_URI) != 0 && strcmp(path, NETWORK_URI) != 0 && !is_search(path) && !far_dir(path) && (stat(path, &st) != 0 || !S_ISDIR(st.st_mode))) {
         set_status(true, "%s isn't a folder", path_base(str_from_c(path)).p);
         return;
     }
@@ -1043,6 +1044,7 @@ static void act(UiAction a)
     case UA_NOT_IN_TRASH: set_status(true, "That doesn't work in the trash: restore it first"); break;
     case UA_READ_ONLY: set_status(true, "%.*s can't be written to", STR_ARG(path_base(str_from_c(app.cwd)))); break;
     case UA_NOT_IN_SEARCH: set_status(true, "A search isn't a folder: that works in one"); break;
+    case UA_NOT_IN_NETWORK: set_status(true, "Browse Network lists servers: Enter connects to one"); break;   // (F16 step 7e)
     case UA_SEARCH: {   // below the folder shown, or (all) a folder entry's (F9)
         char in[PATH_MAX];
         search_in(act_dir(a, in, sizeof in));
@@ -1225,8 +1227,16 @@ static void act(UiAction a)
         if (!too_many_marked()) duplicate();
         break;
     case UA_UNDO: undo_last(); break;
-    case UA_RELOAD: app.reloads_asked++, app.ui.view == UI_VIEW_SEARCH ? search_again() : reload(); break;   // (a search isn't watched)
+    case UA_RELOAD:   // (a search isn't watched; Browse Network asks the network again, F16 step 7e)
+        app.reloads_asked++;
+        if (app.ui.view == UI_VIEW_SEARCH) search_again();
+        else {
+            if (app.ui.view == UI_VIEW_NETWORK) browse_start();
+            reload();
+        }
+        break;
     case UA_TRASH_VIEW: go_to(TRASH_URI, STR_EMPTY, 0); break;
+    case UA_BROWSE: go_to(NETWORK_URI, STR_EMPTY, 0); break;   // (F16 step 7e)
     case UA_BM_EDIT: case UA_BM_GO: case UA_BM_NAME: case UA_BM_REMOVE: case UA_BM_UP: case UA_BM_DOWN: case UA_BM_RENAME: bmp_act(a); break;
     case UA_ADD_BOOKMARK: {   // all: the folder entry index (F8)
         char bm[PATH_MAX];

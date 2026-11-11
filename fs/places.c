@@ -16,13 +16,16 @@ enum { PLACES_MAX = 64 };
 // The trash view's folder name: no real path, so nothing that writes into a folder can take it for
 // one (gio and Nemo name it the same).
 #define TRASH_URI "trash:///"
+#define NETWORK_URI "network:"   // Browse Network's view (F16 step 7e)
 
 // PL_UNMOUNTED: a removable drive not mounted yet (2026-10-30), its path and dev the device's
 // (/dev/sdb1); a click mounts it. Not a drive for place_is_drive: it has no folder yet.
 // The Network section (F16 step 5): PL_SHARE, a share gvfs has mounted, its path the share's folder
 // under gvfs's FUSE mount; PL_NETBM, an smb://, nfs:// or sftp:// bookmark (steps 6, 7c: connect_uri's), its path the address (a click connects);
-// Neither is a drive: their space isn't asked (statvfs would wait on a share that doesn't answer).
-typedef enum { PL_HEAD, PL_HOME, PL_BOOKMARK, PL_TRASH, PL_ROOT, PL_MOUNT, PL_REMOVABLE, PL_UNMOUNTED, PL_SHARE, PL_NETBM } PlaceKind;
+// PL_BROWSE (step 7e): Browse Network, the section's first row, path NETWORK_URI (its view, as
+// Trash's is TRASH_URI): the servers found when it is visited.
+// None is a drive: their space isn't asked (statvfs would wait on a share that doesn't answer).
+typedef enum { PL_HEAD, PL_HOME, PL_BOOKMARK, PL_TRASH, PL_ROOT, PL_MOUNT, PL_REMOVABLE, PL_UNMOUNTED, PL_SHARE, PL_NETBM, PL_BROWSE } PlaceKind;
 
 typedef struct {
     char      path[PATH_MAX];   // "" for a heading
@@ -57,7 +60,7 @@ static bool place_unmountable(const Place *p)
 
 static bool place_is_net(PlaceKind k)
 {
-    return k == PL_SHARE || k == PL_NETBM;
+    return k == PL_SHARE || k == PL_NETBM || k == PL_BROWSE;
 }
 
 // Whether a click on a place connects to its address (a network bookmark): it has no folder until
@@ -383,8 +386,8 @@ static void places_load(Arena *scratch, Places *pl, const char *bookmarks, const
 // until F16 step 7e: Browse Network lists them when asked.)
 static void places_load_net(Arena *scratch, Places *pl, const char *bookmarks, Str shares)
 {
-    int head = pl->n;
     places_head(pl, "Network");
+    places_add(pl, PL_BROWSE, NETWORK_URI, S("Browse Network"));   // (F16 step 7e: always there, so the section is)
     isize at = 0;
     for (Str line; next_line(shares, &at, &line);) {
         if (line.len == 0 || line.len >= PATH_MAX || line.p[0] != '/') continue;
@@ -406,7 +409,6 @@ static void places_load_net(Arena *scratch, Places *pl, const char *bookmarks, S
         places_add(pl, PL_NETBM, u, label);
     }
     arena_restore(scratch, mark);
-    if (pl->n == head + 1) pl->n = head;   // (nothing in it: no heading)
 }
 
 // $XDG_CONFIG_HOME/gtk-3.0/bookmarks, ~/.config by default; into buf.
@@ -444,6 +446,7 @@ static isize place_icon_names(const Place *p, const UserDirs *u, bool trash_full
     case PL_UNMOUNTED: names[n++] = S("drive-removable-media"), names[n++] = S("drive-harddisk"); break;
     case PL_SHARE:
     case PL_NETBM: names[n++] = S("folder-remote"); break;
+    case PL_BROWSE: names[n++] = S("network-workgroup"), names[n++] = S("network-server"); break;   // (Yaru's and Adwaita's, PNGs)
     case PL_TRASH:   // full: when any trash folder holds something (2026-10-30)
         if (trash_full) names[n++] = S("user-trash-full");
         names[n++] = S("user-trash");

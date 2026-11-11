@@ -998,32 +998,35 @@ static void test_places_net(void)
     Places pl = { 0 };
     places_load_net(&ta, &pl, at("places/netbm"), S("/run/u/gvfs/smb-share:server=nas,share=pub\nrel\n\n/run/u/gvfs/sftp:host=box,user=me\n/run/u/gvfs/smb-share:server=nas,share=pub\n"));
     const char *want[][3] = {
-        { "", "Network", "h" }, { "/run/u/gvfs/smb-share:server=nas,share=pub", "pub on nas", "s" }, { "/run/u/gvfs/sftp:host=box,user=me", "me@box", "s" },
+        { "", "Network", "h" }, { "network:", "Browse Network", "w" },   // (step 7e: always its first row)
+        { "/run/u/gvfs/smb-share:server=nas,share=pub", "pub on nas", "s" }, { "/run/u/gvfs/sftp:host=box,user=me", "me@box", "s" },
         { "smb://nas/pub/sub", "Music", "b" }, { "smb://nas/home", "home on nas", "b" }, { "sftp://box/x", "box", "b" },   // (an sftp:// one, step 7c: by its host)
         { "smb://nas", "Server", "b" },   // (a server's own, step 7a)
         { "nfs://box/srv/data", "data on box", "b" }, { "smb://box/", "box", "b" },   // (an nfs:// one too, step 6; with a port it isn't one; a server's without a label: its name)
     };
     CHECK(pl.n == COUNT(want));
     for (int i = 0; i < pl.n && i < COUNT(want); i++) {
-        PlaceKind k = want[i][2][0] == 'h' ? PL_HEAD : want[i][2][0] == 's' ? PL_SHARE : PL_NETBM;
+        PlaceKind k = want[i][2][0] == 'h' ? PL_HEAD : want[i][2][0] == 's' ? PL_SHARE : want[i][2][0] == 'w' ? PL_BROWSE : PL_NETBM;
         CHECK(pl.p[i].kind == k && strcmp(pl.p[i].path, want[i][0]) == 0 && strcmp(pl.p[i].label, want[i][1]) == 0);
         CHECK(!place_is_drive(pl.p[i].kind));
     }
-    CHECK(place_unmountable(&pl.p[1]) && !place_unmountable(&pl.p[3]) && !place_ejectable(&pl.p[1]));
-    CHECK(places_current(&pl, "/run/u/gvfs/smb-share:server=nas,share=pub/a/b") == 1 && places_current(&pl, "smb://nas/home") == -1);
+    CHECK(place_unmountable(&pl.p[2]) && !place_unmountable(&pl.p[4]) && !place_ejectable(&pl.p[2]) && !place_unmountable(&pl.p[1]));
+    CHECK(places_current(&pl, "/run/u/gvfs/smb-share:server=nas,share=pub/a/b") == 2 && places_current(&pl, "smb://nas/home") == -1 && places_current(&pl, "network:") == 1);
+    CHECK(!place_folderless(PL_BROWSE) && !place_connects(PL_BROWSE) && !place_is_drive(PL_BROWSE) && place_is_net(PL_BROWSE));
     CHECK(place_connects(PL_NETBM) && !place_connects(PL_SHARE) && place_folderless(PL_NETBM) && place_folderless(PL_UNMOUNTED) && !place_folderless(PL_SHARE) && !place_folderless(PL_MOUNT));
     CHECK(place_is_net(PL_SHARE) && place_is_net(PL_NETBM) && !place_is_net(PL_MOUNT));
     Str names[3];
-    CHECK(place_icon_names(&pl.p[1], &(UserDirs){ 0 }, false, names) == 2 && str_eq(names[0], S("folder-remote")));
-    CHECK(place_icon_names(&pl.p[3], &(UserDirs){ 0 }, false, names) == 2 && str_eq(names[0], S("folder-remote")));
+    CHECK(place_icon_names(&pl.p[1], &(UserDirs){ 0 }, false, names) == 3 && str_eq(names[0], S("network-workgroup")) && str_eq(names[1], S("network-server")));
+    CHECK(place_icon_names(&pl.p[2], &(UserDirs){ 0 }, false, names) == 2 && str_eq(names[0], S("folder-remote")));
+    CHECK(place_icon_names(&pl.p[4], &(UserDirs){ 0 }, false, names) == 2 && str_eq(names[0], S("folder-remote")));
     Places none = { 0 };
     places_load_net(&ta, &none, at("places/none"), S(""));
-    CHECK(none.n == 0);
+    CHECK(none.n == 2 && none.p[1].kind == PL_BROWSE);   // (step 7e: the heading and Browse Network, always)
     // A share is a place in its own section: a Places bookmark to the same folder doesn't hide it.
     Places both = { 0 };
     places_add(&both, PL_BOOKMARK, "/run/u/gvfs/smb-share:server=nas,share=pub", S("b"));
     places_load_net(&ta, &both, at("places/none"), S("/run/u/gvfs/smb-share:server=nas,share=pub\n"));
-    CHECK(both.n == 3 && both.p[2].kind == PL_SHARE);
+    CHECK(both.n == 4 && both.p[3].kind == PL_SHARE);
 }
 
 // A share's folder's smb:// address (step 5: Add Bookmark there).
@@ -1072,13 +1075,35 @@ static void test_avahi_servers(void)
                 "=;eth0;IPv4;Short;_smb._tcp\n"
                 "=;eth0;IPv4;NoK;Microsoft Windows Network;local;nok.local;192.168.1.14;445;\n"   // (without -k: its database name, not taken)
                 "Failed to create client object: Daemon not running\n");
-    int n = avahi_smb_servers(out, s, NET_SERVERS_MAX);
+    int n = 0;
+    avahi_servers(out, s, &n, NET_SERVERS_MAX);
     CHECK(n == 3);
-    CHECK(strcmp(s[0].name, "alpha") == 0 && strcmp(s[0].addr, "smb://alpha.local") == 0);
+    CHECK(strcmp(s[0].name, "alpha") == 0 && strcmp(s[0].addr, "smb://alpha.local") == 0 && strcmp(s[0].ip, "192.168.1.7") == 0 && s[0].kind == NET_SMB);
     CHECK(strcmp(s[1].name, "My NAS;x") == 0 && strcmp(s[1].addr, "smb://nas-1.local:4445") == 0);   // (\032 a space, \059 ';'; the port kept)
     CHECK(strcmp(s[2].name, "YOGA") == 0 && strcmp(s[2].addr, "smb://yoga.local") == 0);   // (once for IPv4 and IPv6; 445 left out)
-    CHECK(avahi_smb_servers(S(""), s, NET_SERVERS_MAX) == 0);
-    CHECK(avahi_smb_servers(out, s, 1) == 1);
+    CHECK(strcmp(s[2].ip, "192.168.1.165") == 0);   // (its IPv6 line came first: the IPv4 address kept)
+    n = 0;
+    avahi_servers(S(""), s, &n, NET_SERVERS_MAX);
+    CHECK(n == 0);
+    avahi_servers(out, s, &n, 1);
+    CHECK(n == 1);
+    // SFTP servers (step 7e): sftp://host, 22 left out; a second query's answer added to the first's
+    // (one avahi-browse a type), the list sorted by name then kind; an IPv6-only one keeps its own.
+    n = 0;
+    avahi_servers(out, s, &n, NET_SERVERS_MAX);
+    avahi_servers(S("=;eth0;IPv4;YOGA;_sftp-ssh._tcp;local;yoga.local;192.168.1.165;22;\n"
+                    "=;eth0;IPv6;box;_sftp-ssh._tcp;local;box.local;fd00::5;2222;\n"
+                    "=;eth0;IPv4;ssh;_ssh._tcp;local;s.local;192.168.1.3;22;\n"), s, &n, NET_SERVERS_MAX);   // (_ssh._tcp: not asked for)
+    CHECK(n == 5 && strcmp(s[0].name, "alpha") == 0 && strcmp(s[1].name, "box") == 0 && strcmp(s[1].addr, "sftp://box.local:2222") == 0 && strcmp(s[1].ip, "fd00::5") == 0 && s[1].kind == NET_SFTP);
+    CHECK(strcmp(s[3].name, "YOGA") == 0 && s[3].kind == NET_SMB && strcmp(s[4].name, "YOGA") == 0 && s[4].kind == NET_SFTP && strcmp(s[4].addr, "sftp://yoga.local") == 0);
+    CHECK(strcmp(NET_TYPES[NET_SMB].kind, "SMB") == 0 && strcmp(NET_TYPES[NET_SFTP].kind, "SFTP") == 0);
+    // The same name for both kinds, the SFTP one first in avahi's answer: SMB first all the same.
+    n = 0;
+    avahi_servers(S("=;eth0;IPv4;Same;_sftp-ssh._tcp;local;same.local;192.168.1.4;22;\n=;eth0;IPv4;Same;_smb._tcp;local;same.local;192.168.1.4;445;\n"), s, &n, NET_SERVERS_MAX);
+    CHECK(n == 2 && s[0].kind == NET_SMB && s[1].kind == NET_SFTP);
+    // Two rows of the same name tie on their (empty) folders, which have no bytes at all: equal, not
+    // a memcmp of nothing (UBSan's; Browse Network's YOGA twice, step 7e).
+    CHECK(natural_cmp((Str){ 0 }, (Str){ 0 }) == 0 && natural_cmp((Str){ 0 }, S("a")) < 0);
     char u[32];
     avahi_unescape(S("A\\000B\\300C"), u, sizeof u);   // (\000 and past 255: no such byte, left out)
     CHECK(strcmp(u, "ABC") == 0);
@@ -1229,6 +1254,44 @@ static void test_gvfs_shares(void)
     free(buf);
     CHECK(gvfs_is_share("smb-share:server=a") && gvfs_is_share("sftp:host=h") && !gvfs_is_share("junk") && !gvfs_is_share(":x=1") &&
           !gvfs_is_share("Ab:x=1") && !gvfs_is_share("a b:x=1") && !gvfs_is_share("a:b"));
+}
+
+// Browse Network's view and row (step 7e): its rows are servers, opened and their addresses copied,
+// nothing else; the row's menu has Open and Open in New Tab alone; Go → Browse Network asks for it.
+static void test_browse_ui(void)
+{
+    UiActionKind no[] = { UA_COPY, UA_CUT, UA_MAKE_LINK, UA_TERMINAL, UA_NEW_WINDOW, UA_SEARCH, UA_RENAME, UA_DUPLICATE, UA_OPEN_WITH, UA_PASTE,
+                          UA_NEWFOLDER, UA_NEWFILE, UA_ADD_BOOKMARK, UA_RESTORE, UA_EMPTY_TRASH, UA_CONTAINING, UA_TRASH, UA_DELETE, UA_PROPS };
+    for (int i = 0; i < COUNT(no); i++) CHECK(!ui_view_allows(UI_VIEW_NETWORK, no[i]));
+    CHECK(ui_view_allows(UI_VIEW_NETWORK, UA_OPEN) && ui_view_allows(UI_VIEW_NETWORK, UA_COPY_PATH) && ui_view_allows(UI_VIEW_NETWORK, UA_RELOAD));
+    CHECK(ui_view_allows(UI_VIEW_FOLDER, UA_TRASH) && ui_view_allows(UI_VIEW_FOLDER, UA_PROPS));   // (a folder's: unchanged)
+    Ui u = { .view = UI_VIEW_NETWORK };
+    CHECK(ui_view_act(&u, (UiAction){ UA_TRASH, 0, false }).kind == UA_NOT_IN_NETWORK && ui_view_act(&u, (UiAction){ UA_OPEN, 0, false }).kind == UA_OPEN);
+    Ui f = { .menu = UI_CTX_FOLDER, .ctx_kind = UI_CTX_NETWORK };
+    for (int it = 0; it < UM_ITEMS; it++)
+        if (ui_folder_shown(&f, (UiMenuItem)it)) CHECK(it == UM_OPEN_IT || it == UM_OPEN_TAB);
+    CHECK(ui_folder_shown(&f, UM_OPEN_IT) && ui_folder_shown(&f, UM_OPEN_TAB));
+    Ui g = { 0 };
+    CHECK(ui_menu_shown(&g, UM_BROWSE) && ui_menu_enabled(&g, UM_BROWSE) && ui_menu_pick(&g, UM_BROWSE).kind == UA_BROWSE);
+    CHECK(strcmp(UI_MENU_ITEM[UM_BROWSE].word, "browse-network") == 0);
+    // The path bar: one button, "Browse Network"; the status line counts servers.
+    UiCrumbs c = { 0 };
+    ui_crumbs_set_share(&c, NETWORK_URI, "/home/m", NULL, NULL);
+    CHECK(c.n == 1 && str_eq(ui_crumb_label(&c, 0), S("Browse Network")));
+    char line[128];
+    ui_status_info(line, sizeof line, &(UiInfo){ .n = 3, .avail = -1, .servers = true });
+    CHECK(strcmp(line, "3 servers") == 0);
+    ui_status_info(line, sizeof line, &(UiInfo){ .n = 1, .avail = -1, .servers = true });
+    CHECK(strcmp(line, "1 server") == 0);
+    ui_status_info(line, sizeof line, &(UiInfo){ .n = 4, .marked = 2, .avail = -1, .servers = true });
+    CHECK(strcmp(line, "2 servers selected") == 0);
+    ui_status_info(line, sizeof line, &(UiInfo){ .n = 3, .avail = -1 });
+    CHECK(strcmp(line, "3 items") == 0);
+    ui_status_info(line, sizeof line, &(UiInfo){ .n = 3, .avail = -1, .servers = true, .opening = true });
+    CHECK(strcmp(line, "Searching the network\xE2\x80\xA6") == 0);
+    bool in_go = false;
+    for (isize i = 0; i < COUNT(UI_MENU_GO); i++) in_go |= UI_MENU_GO[i] == UM_BROWSE && i > 0 && UI_MENU_GO[i - 1] == UM_CONNECT;
+    CHECK(in_go);
 }
 
 // The share poll's back-off (step 7d); and a state file an Airplane Mode window left (airplane=on,

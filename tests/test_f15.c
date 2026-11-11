@@ -133,6 +133,7 @@ static const struct { const char *key; UiKey uk; u32 ch; } PIN_MENU[UM_ITEMS] = 
     [UM_SEARCH] = { "Ctrl+Shift+F", UK_SEARCH, 0 },
     [UM_LOCATION] = { "Ctrl+L", UK_LOCATION, 0 },
     [UM_CONNECT] = { "", UK_NONE, 0 },   // (F16 step 4: no key)
+    [UM_BROWSE] = { "", UK_NONE, 0 },   // (F16 step 7e: no key)
     [UM_TERMINAL] = { "Alt+Enter", UK_TERMINAL, 0 },
     [UM_ADD_BOOKMARK] = { "Ctrl+D", UK_ADD_BOOKMARK, 0 },
     [UM_EDIT_BOOKMARKS] = { "Ctrl+B", UK_EDIT_BOOKMARKS, 0 },

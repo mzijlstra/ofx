@@ -2,7 +2,7 @@
 # second and asks nothing, its list names pub, Music and IPC$ (a hidden one). The bookmarks file has
 # the server's own address, as NAS. ofx starts in an empty home.
 settle
-wait-for 4000 n=0 shp=0 sides=^Places|Home|Trash|^Drives|File_System|^Network|~NAS
+wait-for 4000 n=0 shp=0 sides=^Places|Home|Trash|^Drives|File_System|^Network|Browse_Network|~NAS
 # The server's address alone: connected, then its shares. The location line opened meanwhile keeps
 # the keys; the panel comes up once it closes.
 key ctrl-l

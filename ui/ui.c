@@ -276,6 +276,8 @@ typedef enum {
     // Connect to Server's question (F16 step 4): answered (Ui.login_*: gui/ hands them to gio and
     // wipes the password), as a guest, or not (gio stops)
     UA_LOGIN, UA_LOGIN_GUEST, UA_LOGIN_CANCEL,
+    UA_BROWSE,      // Browse Network (F16 step 7e): its view, asked of the network now
+    UA_NOT_IN_NETWORK,   // something Browse Network's view can't do: its rows are servers, not files (gui/ says so)
 } UiActionKind;
 enum { UI_COPY_SHOWN = -1 };   // UA_COPY_PATH's index with all: the folder shown (the empty space's menu)
 
@@ -302,9 +304,9 @@ enum { UI_LOGIN_USER, UI_LOGIN_DOMAIN, UI_LOGIN_PASS, UI_LOGIN_FIELDS };
 // What the folder menu's folder is (F8), by what was right-clicked: a folder (a row, a crumb, a tree
 // row) has every entry; a sidebar place no Cut or Copy, a removable drive Eject and Unmount too, a
 // mounted share Unmount; the Trash Empty Trash; a place without a folder yet (a drive not mounted, a
-// network bookmark) Mount alone. One word where
+// network bookmark) Mount alone; Browse Network's row (F16 step 7e) Open and Open in New Tab alone. One word where
 // six flags could contradict (the code-health review's step F).
-typedef enum { UI_CTX_DIR, UI_CTX_PLACE, UI_CTX_DRIVE, UI_CTX_SHARE, UI_CTX_TRASH, UI_CTX_BRINGS } UiCtxKind;
+typedef enum { UI_CTX_DIR, UI_CTX_PLACE, UI_CTX_DRIVE, UI_CTX_SHARE, UI_CTX_TRASH, UI_CTX_BRINGS, UI_CTX_NETWORK } UiCtxKind;
 
 // What Connect to Server's question is for (F16 steps 4 and 7c): a share's login (user, domain,
 // password, and Guest), an SFTP server's (user and password: no domain, no guest), or a key's
@@ -319,7 +321,7 @@ typedef enum {
     UM_UNDO, UM_CUT, UM_COPY, UM_COPY_PATH, UM_PASTE, UM_SELECT_ALL, UM_SELECT_MATCH, UM_INVERT, UM_DUPLICATE, UM_MAKE_LINK, UM_RENAME, UM_TRASH, UM_DELETE, UM_RESTORE,
     UM_RELOAD, UM_SIDE_PLACES, UM_SIDE_TREE, UM_SIDE_NONE, UM_HIDDEN, UM_PERMS_COLS, UM_GROUP_COL, UM_COLORS, UM_SHOW_MENU, UM_SORT_NAME, UM_SORT_SIZE, UM_SORT_MTIME, UM_SORT_REVERSE,
     UM_ZOOM_IN, UM_ZOOM_OUT, UM_ZOOM_RESET, UM_VIEW_LIST, UM_VIEW_ICONS,
-    UM_PARENT, UM_BACK, UM_FORWARD, UM_HOME, UM_TRASH_VIEW, UM_FIND, UM_SEARCH, UM_LOCATION, UM_CONNECT, UM_TERMINAL,
+    UM_PARENT, UM_BACK, UM_FORWARD, UM_HOME, UM_TRASH_VIEW, UM_FIND, UM_SEARCH, UM_LOCATION, UM_CONNECT, UM_BROWSE, UM_TERMINAL,
     UM_ADD_BOOKMARK, UM_EDIT_BOOKMARKS, UM_BM_0, UM_BM_1, UM_BM_2, UM_BM_3, UM_BM_4, UM_BM_5, UM_BM_6, UM_BM_7, UM_BM_MORE,
     UM_SHORTCUTS, UM_ABOUT, UM_PREFERENCES, UM_CLEAR_PREVIEWS,
     UM_OPEN_TAB, UM_EMPTY_TRASH, UM_HERE_PROPS, UM_OPEN_WINDOW, UM_PASTE_INTO, UM_TERMINAL_IN, UM_FOLLOW, UM_BOOKMARK_IT,
@@ -408,6 +410,7 @@ static const struct { const char *label, *word; UiKey cmd; bool runs; char mark;
     [UM_SEARCH] = { "Search\xE2\x80\xA6", "search", .cmd = UK_SEARCH, .runs = true },   // below the folder shown (F9)
     [UM_LOCATION] = { "Location\xE2\x80\xA6", "location", .cmd = UK_LOCATION, .runs = true },
     [UM_CONNECT] = { "Connect to Server\xE2\x80\xA6", "connect", .cmd = UK_ITEM0 + UM_CONNECT },   // the location line on "smb://" (F16 step 4)
+    [UM_BROWSE] = { "Browse Network", "browse-network", .cmd = UK_ITEM0 + UM_BROWSE },   // the servers on the network (F16 step 7e)
     [UM_TERMINAL] = { "Terminal Here", "terminal", .cmd = UK_TERMINAL, .runs = true },
     // Bookmarks (F7.5); a bookmark's label is gui/'s (the file's), marked when it is the folder shown
     [UM_ADD_BOOKMARK] = { "Add Bookmark", "add-bookmark", .cmd = UK_ADD_BOOKMARK, .runs = true },
@@ -479,7 +482,7 @@ static const UiMenuItem UI_MENU_VIEW[] = {
     UM_VIEW_LIST, UM_VIEW_ICONS, UM_SEP, UM_CLEAR_PREVIEWS,
 };
 static const UiMenuItem UI_MENU_GO[] = {
-    UM_PARENT, UM_BACK, UM_FORWARD, UM_SEP, UM_HOME, UM_TRASH_VIEW, UM_SEP, UM_FIND, UM_SEARCH, UM_LOCATION, UM_CONNECT, UM_TERMINAL,
+    UM_PARENT, UM_BACK, UM_FORWARD, UM_SEP, UM_HOME, UM_TRASH_VIEW, UM_SEP, UM_FIND, UM_SEARCH, UM_LOCATION, UM_CONNECT, UM_BROWSE, UM_TERMINAL,
 };
 static const UiMenuItem UI_MENU_BOOKMARKS_[] = {
     UM_ADD_BOOKMARK, UM_EDIT_BOOKMARKS, UM_SEP, UM_BM_0, UM_BM_1, UM_BM_2, UM_BM_3, UM_BM_4, UM_BM_5, UM_BM_6, UM_BM_7, UM_BM_MORE,
@@ -559,6 +562,7 @@ static const struct { UiKeySection sec; const char *action; UiKey cmd; const cha
     { KS_MOVE, "Trash", UK_TRASH_VIEW, NULL, NULL },
     { KS_MOVE, "Location\xE2\x80\xA6", UK_LOCATION, NULL, NULL },
     { KS_MOVE, "Connect to Server\xE2\x80\xA6", UK_ITEM0 + UM_CONNECT, NULL, NULL },
+    { KS_MOVE, "Browse Network", UK_ITEM0 + UM_BROWSE, NULL, NULL },
     { KS_OPEN, "Open", UK_ENTER, NULL, NULL },
     { KS_OPEN, "Open With Other Application\xE2\x80\xA6", UK_SHIFT_ENTER, NULL, NULL },
     { KS_OPEN, "Terminal Here", UK_TERMINAL, NULL, NULL },
@@ -740,7 +744,7 @@ typedef enum { UI_PANEL_NONE, UI_PANEL_PROPS, UI_PANEL_OW, UI_PANEL_BM, UI_PANEL
 
 // Which listing is shown. One value (2026-10-28: in_trash and in_search before, two flags tested
 // apart at about 250 places, which could both be set).
-typedef enum { UI_VIEW_FOLDER, UI_VIEW_TRASH, UI_VIEW_SEARCH } UiView;
+typedef enum { UI_VIEW_FOLDER, UI_VIEW_TRASH, UI_VIEW_SEARCH, UI_VIEW_NETWORK } UiView;   // (NETWORK: Browse Network, F16 step 7e)
 
 // The text bars' fields (F9's review, 2026-10-29: one table for what was three of each): the find
 // bar's, the search's name and its Containing. ui_field_shown says when each is there.
@@ -957,8 +961,18 @@ typedef enum {
 // open, copy, link or make from them, or go from there, waits until they are restored. A search's
 // results are in many folders: what needs one folder to put something in (paste, a new folder, a
 // bookmark of it) doesn't work there (F9). Restoring and emptying are the trash view's own.
+// Browse Network's rows are servers (F16 step 7e): opened (connected to), their addresses copied,
+// nothing else.
 static bool ui_view_allows(UiView v, UiActionKind k)
 {
+    if (v == UI_VIEW_NETWORK) {
+        switch (k) {
+        case UA_COPY: case UA_CUT: case UA_MAKE_LINK: case UA_TERMINAL: case UA_NEW_WINDOW: case UA_SEARCH: case UA_RENAME:
+        case UA_DUPLICATE: case UA_OPEN_WITH: case UA_PASTE: case UA_NEWFOLDER: case UA_NEWFILE: case UA_ADD_BOOKMARK: case UA_RESTORE:
+        case UA_EMPTY_TRASH: case UA_CONTAINING: case UA_TRASH: case UA_DELETE: case UA_PROPS: return false;
+        default: return true;
+        }
+    }
     switch (k) {
     case UA_COPY: case UA_COPY_PATH: case UA_CUT: case UA_MAKE_LINK: case UA_TERMINAL: case UA_NEW_WINDOW: case UA_SEARCH:
     case UA_RENAME: case UA_DUPLICATE: case UA_OPEN_WITH: return v != UI_VIEW_TRASH;
@@ -997,7 +1011,7 @@ static UiAction ui_view_act(const Ui *u, UiAction a)
 {
     if (ui_allows(u, a.kind)) return a;
     if (ui_view_allows(u->view, a.kind)) return (UiAction){ UA_READ_ONLY, 0, false };
-    return (UiAction){ u->view == UI_VIEW_TRASH ? UA_NOT_IN_TRASH : u->view == UI_VIEW_SEARCH ? UA_NOT_IN_SEARCH : UA_NONE, 0, false };   // (a folder's: nothing to say)
+    return (UiAction){ u->view == UI_VIEW_TRASH ? UA_NOT_IN_TRASH : u->view == UI_VIEW_SEARCH ? UA_NOT_IN_SEARCH : u->view == UI_VIEW_NETWORK ? UA_NOT_IN_NETWORK : UA_NONE, 0, false };   // (a folder's: nothing to say)
 }
 
 // h, j, k and l as Left, Down, Up and Right (vi's, Michael 2026-10-21) where they are fixed: the

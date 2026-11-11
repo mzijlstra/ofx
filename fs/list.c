@@ -21,6 +21,7 @@ typedef enum {
 } Kind;
 
 typedef struct TrashItem TrashItem;
+typedef struct NetServer NetServer;   // (fs/connect.c: Browse Network's rows, F16 step 7e)
 
 // A file's first matching line, searched inside (F9 step 3): its number and the match's column
 // (from 1, in characters), how many more lines match, and the line cut around the match (control
@@ -45,6 +46,7 @@ typedef struct {
     const TrashItem *trash;   // the trash view's (F6, trash.c): where the item is; NULL elsewhere
     Str   dir;       // the search view's (F9): its folder below the one searched ("" in that one)
     const SearchHit *hit;   // the search view's inside files (F9 step 3): where it matched; NULL elsewhere
+    const NetServer *net;   // Browse Network's (F16 step 7e): the server the row is; NULL elsewhere
     bool  far;       // (F16) a link into a far drive, or a far drive's mount point, in a local folder:
                      // never looked at (a dead share would hold the window), taken for a folder
 } Entry;
@@ -107,7 +109,7 @@ static int natural_cmp(Str a, Str b)
     }
     if (i < a.len || j < b.len) return i < a.len ? 1 : -1;
     isize n = a.len < b.len ? a.len : b.len;
-    int c = memcmp(a.p, b.p, (size_t)n);
+    int c = n ? memcmp(a.p, b.p, (size_t)n) : 0;   // (an empty Str may have no bytes at all: Browse Network's rows tie by name, F16 step 7e)
     return c < 0 ? -1 : c > 0 ? 1 : a.len < b.len ? -1 : a.len > b.len ? 1 : 0;
 }
 

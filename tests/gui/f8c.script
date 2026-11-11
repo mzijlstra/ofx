@@ -3,7 +3,7 @@
 # file in the scratch config: home/tree/sub "Sub", then home/tree/sub2. The sidebar: Places,
 # Home, Sub, sub2, Trash, Drives, File System.
 settle
-expect sides=^Places|Home|Sub|sub2|Trash|^Drives|File_System bmn=2
+expect sides=^Places|Home|Sub|sub2|Trash|^Drives|File_System|^Network|Browse_Network bmn=2
 # A heading: nothing
 point-ui side-row 0
 right-here
@@ -36,7 +36,7 @@ right-here
 # Move Down: the file's order changes, the places follow
 point-menu bm-down
 click-here
-wait-for 2000 sides=^Places|Home|sub2|Sub|Trash|^Drives|File_System
+wait-for 2000 sides=^Places|Home|sub2|Sub|Trash|^Drives|File_System|^Network|Browse_Network
 sh [ "$(head -1 "$OFX_ROOT/config/gtk-3.0/bookmarks")" = "file://$OFX_DIR/sub2" ]
 # Rename…: Edit Bookmarks on that line, its field open with the label
 point-ui side-row 3
@@ -52,7 +52,7 @@ point-ui side-row 2
 right-here
 point-menu bm-remove
 click-here
-wait-for 2000 sides=^Places|Home|Sub|Trash|^Drives|File_System bmn=1
+wait-for 2000 sides=^Places|Home|Sub|Trash|^Drives|File_System|^Network|Browse_Network bmn=1
 sh ! grep -q "tree/sub2" "$OFX_ROOT/config/gtk-3.0/bookmarks"
 # Home: Open in New Tab, a tab behind on it; Add Bookmark there
 point-ui side-row 1
@@ -154,7 +154,7 @@ wait-for 2000 crumb=1
 # Three bookmarks more push Sub down, and its long menu is moved up over the menu bar: a press on
 # its top entry is the entry's, not the title's under it (2026-10-29)
 sh sed -i "1i file://$OFX_ROOT A\nfile://$OFX_DIR B\nfile://$OFX_DIR/sub2 C" "$OFX_ROOT/config/gtk-3.0/bookmarks"
-wait-for 3000 bmn=4 sides=^Places|Home|A|B|C|Sub|Trash|^Drives|File_System
+wait-for 3000 bmn=4 sides=^Places|Home|A|B|C|Sub|Trash|^Drives|File_System|^Network|Browse_Network
 point-ui side-row 5
 right-here
 # (its top at 0, over the menu bar: the overlap this checks, pinned, review, 2026-10-30)
@@ -165,7 +165,7 @@ wait-for 2000 crumbs=home|tree|sub menu=-
 key alt-left
 wait-for 2000 crumb=1
 sh sed -i 1,3d "$OFX_ROOT/config/gtk-3.0/bookmarks"
-wait-for 3000 bmn=1 sides=^Places|Home|Sub|Trash|^Drives|File_System
+wait-for 3000 bmn=1 sides=^Places|Home|Sub|Trash|^Drives|File_System|^Network|Browse_Network
 # By the keys: the sidebar's cursor (Tab, on Home: the place shown), the path buttons' (Ctrl+K);
 # the keys stay there
 key tab

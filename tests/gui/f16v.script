@@ -1,0 +1,73 @@
+# F16 step 7e: Browse Network (run.sh's f16v): a stand-in avahi-browse that answers for _smb._tcp
+# with YOGA (and Office once <T>/office is made) and for _sftp-ssh._tcp with YOGA and box, nothing
+# at all once <T>/none is made, two seconds late once <T>/slow is; a stand-in gio as f16s's.
+settle
+# The Network section's first row, always there; nothing asked of the network until it is visited.
+wait-for 4000 sides=^Places|Home|Trash|^Drives|File_System|^Network|Browse_Network
+expect network=0 browseasks=0
+sh ! grep -q avahi-browse "$OFX_ROOT/spawn.log"
+# Visited: both types asked at once; the servers as rows, Kind and Address in their columns, a
+# server's icon.
+point-side Browse Network
+click-here
+wait-for 4000 network=1 browseasks=1 n=3 sel=box sizecell=SFTP seldate=fd00::5 info=3_servers
+sh grep -q "avahi-browse -k -t -r -p _smb._tcp" "$OFX_ROOT/spawn.log" && grep -q "avahi-browse -k -t -r -p _sftp-ssh._tcp" "$OFX_ROOT/spawn.log"
+key down
+expect sel=YOGA sizecell=SMB seldate=192.168.1.165
+shot f16v-browse.png
+# Nothing else works on a server's row: said why.
+key delete
+expect statusbad=1 status=Browse
+key f2
+expect statusbad=1 status=Browse
+# Ctrl+R asks again: Office comes, the cursor stays on its server.
+sh touch "$OFX_ROOT/office"
+key ctrl-r
+wait-for 4000 browseasks=2 n=4 sel=YOGA
+# A slow answer: "Searching the network…" until it comes, on a fresh visit (the last rows kept
+# on a reload).
+key alt-home
+wait-for 2000 network=0
+sh touch "$OFX_ROOT/slow"
+point-side Browse Network
+click-here
+wait-for 1500 network=1 browseasks=2
+expect n=4 info=Searching_the_network…
+# Ctrl+R while it runs: another query after it, not a second one at once.
+key ctrl-r
+wait-for 8000 browseasks=4 n=4
+sh rm "$OFX_ROOT/slow"
+# None found: said so.
+sh touch "$OFX_ROOT/none"
+key ctrl-r
+wait-for 4000 browseasks=5 n=0 listword=No_servers_found
+sh rm "$OFX_ROOT/none"
+key ctrl-r
+wait-for 4000 browseasks=6 n=4
+# Enter on an SMB server connects, as its address typed (its shares listed: step 7a's panel).
+key home
+expect sel=box
+key down
+expect sel=Office
+key enter
+wait-for 4000 conn=1
+sh grep -q "gio mount smb://office.local:4445" "$OFX_ROOT/spawn.log"
+wait-for 6000 conn=0 shp=1
+key esc
+wait-for 2000 shp=0
+# The row's menu: Open and Open in New Tab alone.
+point-side Browse Network
+right-here
+expect menu=folder menuhid=open-window,terminal-in,search-in,cut-it,copy-it,copy-path-it,paste-into,bookmark-it,bm-rename,bm-up,bm-down,bm-remove,bm-edit,unmount-it,eject,mount-it,empty-it,properties-it
+point-menu open-tab
+click-here
+wait-for 4000 tabs=2 network=1
+# Go → Browse Network, from home.
+key alt-home
+wait-for 2000 network=0
+point-ui menu-title 3
+click-here
+point-menu browse-network
+click-here
+wait-for 4000 network=1
+quit

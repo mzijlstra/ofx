@@ -2,7 +2,7 @@
 # only), a.txt, b.txt, c.txt; the bookmarks file: home/tree/bdir. The sidebar: Places, Home,
 # bdir, Trash, Drives, File System.
 settle
-expect n=6 sel=adir sides=^Places|Home|bdir|Trash|^Drives|File_System drag=-
+expect n=6 sel=adir sides=^Places|Home|bdir|Trash|^Drives|File_System|^Network|Browse_Network drag=-
 # ---- Under 6 px a press stays a click; past it, the entry pressed is dragged
 point-ui row 3
 press-here

@@ -3,13 +3,13 @@
 # modes, the mode remembered (f6b.script reads it after a restart). The mount list is
 # $OFX_ROOT/mountinfo (OFX_TEST_MOUNTINFO); run.sh makes the tree, the bookmark Bee, the list.
 settle
-expect sidemode=places sides=^Places|Home|Bee|Trash|^Drives|File_System trash=0 trashfull=0 trashicon=user-trash
+expect sidemode=places sides=^Places|Home|Bee|Trash|^Drives|File_System|^Network|Browse_Network trash=0 trashfull=0 trashicon=user-trash
 # ofx keeps no folder busy by its own working directory (F6.1 review)
 sh test "$(readlink /proc/$(cat "$OFX_ROOT/run.pid")/cwd)" = /
 wait-for 2000 spaced=1
 # A drive mounted, and gone again
 sh printf '33 1 0:31 / / rw - btrfs /dev/x rw\n50 33 8:17 / %s rw - vfat /dev/sdz1 rw\n' "$OFX_ROOT/media/OFXUSB" > "$OFX_ROOT/mountinfo"
-wait-for 3000 sides=^Places|Home|Bee|Trash|^Drives|File_System|OFXUSB
+wait-for 3000 sides=^Places|Home|Bee|Trash|^Drives|File_System|OFXUSB|^Network|Browse_Network
 # The pointer over a drive: its used space in place of its free; a removable one's eject button
 # in its icon's place (F6.1). The fake udisksctl logs; a step named in udisks-fail fails.
 point-ui side-row 5
@@ -66,7 +66,7 @@ point-ui side-row 0
 hover-here
 expect sidehover=0 hovernum=- ejectbtn=0
 sh printf '33 1 0:31 / / rw - btrfs /dev/x rw\n' > "$OFX_ROOT/mountinfo"
-wait-for 3000 sides=^Places|Home|Bee|Trash|^Drives|File_System
+wait-for 3000 sides=^Places|Home|Bee|Trash|^Drives|File_System|^Network|Browse_Network
 # The cursor skips the headings
 key tab
 # (on File System, the place shown)
@@ -76,6 +76,8 @@ expect side=1 place=Home
 key up
 expect side=1
 key end
+expect side=7
+key up
 expect side=5
 key up
 expect side=3 place=Trash
@@ -206,9 +208,9 @@ type ../data/Trash/files
 key enter
 wait-for 2000 n=0 cwdavail=1
 sh printf '33 1 0:31 / / rw - btrfs /dev/x rw\n50 33 8:17 / %s rw - vfat /dev/sdz1 rw\n' "$OFX_ROOT/media/OFXUSB" > "$OFX_ROOT/mountinfo"
-wait-for 3000 sides=^Places|Home|Bee|Trash|^Drives|File_System|OFXUSB
+wait-for 3000 sides=^Places|Home|Bee|Trash|^Drives|File_System|OFXUSB|^Network|Browse_Network
 sh printf '33 1 0:31 / / rw - btrfs /dev/x rw\n' > "$OFX_ROOT/mountinfo"
-wait-for 3000 sides=^Places|Home|Bee|Trash|^Drives|File_System
+wait-for 3000 sides=^Places|Home|Bee|Trash|^Drives|File_System|^Network|Browse_Network
 sh printf x > "$OFX_ROOT/data/Trash/files/o.txt"
 wait-for 2000 n=1 trashfull=1
 # the folder's own watch kept its mask: a write shows (review, 2026-10-30: it was replaced)
@@ -219,18 +221,18 @@ wait-for 2000 n=0 trashfull=0
 # no longer a trash (its info/ gone) while open: its watch dropped as a trash's stays the folder's
 sh mv "$OFX_ROOT/data/Trash/info" "$OFX_ROOT/data/Trash/info.away"
 sh printf '33 1 0:31 / / rw - btrfs /dev/x rw\n50 33 8:17 / %s rw - vfat /dev/sdz1 rw\n' "$OFX_ROOT/media/OFXUSB" > "$OFX_ROOT/mountinfo"
-wait-for 3000 sides=^Places|Home|Bee|Trash|^Drives|File_System|OFXUSB
+wait-for 3000 sides=^Places|Home|Bee|Trash|^Drives|File_System|OFXUSB|^Network|Browse_Network
 sh printf '33 1 0:31 / / rw - btrfs /dev/x rw\n' > "$OFX_ROOT/mountinfo"
-wait-for 3000 sides=^Places|Home|Bee|Trash|^Drives|File_System
+wait-for 3000 sides=^Places|Home|Bee|Trash|^Drives|File_System|^Network|Browse_Network
 sh printf z > "$OFX_ROOT/data/Trash/files/p.txt"
 wait-for 2000 n=1
 sh rm "$OFX_ROOT/data/Trash/files/p.txt"
 wait-for 2000 n=0
 sh mv "$OFX_ROOT/data/Trash/info.away" "$OFX_ROOT/data/Trash/info"
 sh printf '33 1 0:31 / / rw - btrfs /dev/x rw\n50 33 8:17 / %s rw - vfat /dev/sdz1 rw\n' "$OFX_ROOT/media/OFXUSB" > "$OFX_ROOT/mountinfo"
-wait-for 3000 sides=^Places|Home|Bee|Trash|^Drives|File_System|OFXUSB
+wait-for 3000 sides=^Places|Home|Bee|Trash|^Drives|File_System|OFXUSB|^Network|Browse_Network
 sh printf '33 1 0:31 / / rw - btrfs /dev/x rw\n' > "$OFX_ROOT/mountinfo"
-wait-for 3000 sides=^Places|Home|Bee|Trash|^Drives|File_System
+wait-for 3000 sides=^Places|Home|Bee|Trash|^Drives|File_System|^Network|Browse_Network
 key alt-left
 wait-for 2000 n=2
 sh printf x > "$OFX_ROOT/data/Trash/files/o.txt"
@@ -240,7 +242,7 @@ wait-for 2000 trashfull=0
 # A trash folder made on a drive already mounted: no watch yet, so the trash view finds it (and
 # the icon follows)
 sh printf '33 1 0:31 / / rw - btrfs /dev/x rw\n50 33 8:17 / %s rw - vfat /dev/sdz1 rw\n' "$OFX_ROOT/media/OFXUSB" > "$OFX_ROOT/mountinfo"
-wait-for 3000 sides=^Places|Home|Bee|Trash|^Drives|File_System|OFXUSB trashfull=0
+wait-for 3000 sides=^Places|Home|Bee|Trash|^Drives|File_System|OFXUSB|^Network|Browse_Network trashfull=0
 sh d="$OFX_ROOT/media/OFXUSB/.Trash-$(id -u)" && mkdir -p "$d/files" "$d/info" && printf x > "$d/files/u.txt" && printf '[Trash Info]\nPath=u.txt\n' > "$d/info/u.txt.trashinfo"
 key tab
 key home
@@ -254,13 +256,13 @@ wait-for 2000 trash=0
 sh rm -r "$OFX_ROOT/media/OFXUSB/.Trash-$(id -u)"
 wait-for 2000 trashfull=0
 sh printf '33 1 0:31 / / rw - btrfs /dev/x rw\n' > "$OFX_ROOT/mountinfo"
-wait-for 3000 sides=^Places|Home|Bee|Trash|^Drives|File_System
+wait-for 3000 sides=^Places|Home|Bee|Trash|^Drives|File_System|^Network|Browse_Network
 # A drive mounted with something in its own trash: full; unmounted: empty again
 sh d="$OFX_ROOT/media/OFXUSB/.Trash-$(id -u)" && mkdir -p "$d/files" "$d/info" && printf x > "$d/files/u.txt" && printf '[Trash Info]\nPath=u.txt\n' > "$d/info/u.txt.trashinfo"
 sh printf '33 1 0:31 / / rw - btrfs /dev/x rw\n50 33 8:17 / %s rw - vfat /dev/sdz1 rw\n' "$OFX_ROOT/media/OFXUSB" > "$OFX_ROOT/mountinfo"
-wait-for 3000 sides=^Places|Home|Bee|Trash|^Drives|File_System|OFXUSB trashfull=1
+wait-for 3000 sides=^Places|Home|Bee|Trash|^Drives|File_System|OFXUSB|^Network|Browse_Network trashfull=1
 sh printf '33 1 0:31 / / rw - btrfs /dev/x rw\n' > "$OFX_ROOT/mountinfo"
-wait-for 3000 sides=^Places|Home|Bee|Trash|^Drives|File_System trashfull=0
+wait-for 3000 sides=^Places|Home|Bee|Trash|^Drives|File_System|^Network|Browse_Network trashfull=0
 sh rm -r "$OFX_ROOT/media/OFXUSB/.Trash-$(id -u)"
 # The tree: F9, opened down to the folder shown, the cursor on it; Left and Right
 key f9
@@ -295,10 +297,10 @@ type many/zz
 key enter
 expect treecur=zz:0 treehere=1
 sh printf '33 1 0:31 / / rw - btrfs /dev/x rw\n50 33 8:17 / %s rw - vfat /dev/sdz1 rw\n' "$OFX_ROOT/media/OFXUSB" > "$OFX_ROOT/mountinfo"
-wait-for 3000 sides=^Places|Home|Bee|Trash|^Drives|File_System|OFXUSB
+wait-for 3000 sides=^Places|Home|Bee|Trash|^Drives|File_System|OFXUSB|^Network|Browse_Network
 expect sidemode=tree treecur=zz:0 treehere=1 place=-
 sh printf '33 1 0:31 / / rw - btrfs /dev/x rw\n' > "$OFX_ROOT/mountinfo"
-wait-for 3000 sides=^Places|Home|Bee|Trash|^Drives|File_System
+wait-for 3000 sides=^Places|Home|Bee|Trash|^Drives|File_System|^Network|Browse_Network
 key alt-left
 key alt-left
 expect sel=a.txt treehere=1

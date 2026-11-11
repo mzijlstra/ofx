@@ -145,6 +145,7 @@ static IconSlot *entry_icon(isize i)
 {
     const Entry *e = &app.list.e[i];
     int px = entry_px();
+    if (e->net) return icon_for_px(S("network-server"), (Str[]){ S("network-server"), S("folder-remote") }, 2, px);   // (Browse Network's, F16 step 7e)
     if (!kind_is_dir(e->kind)) return icon_for_px(entry_mime(i), NULL, 0, px);
     Str names[2];
     isize n = 0;

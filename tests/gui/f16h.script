@@ -3,7 +3,7 @@
 # the smb:// bookmarks, dim, as a drive not mounted is (the local bookmark is Home: one row). The
 # real share's are net's.
 settle
-wait-for 4000 sides=^Places|Home|Trash|^Drives|File_System|^Network|pub_on_nas|~Home_NAS|~pub_on_nas
+wait-for 4000 sides=^Places|Home|Trash|^Drives|File_System|^Network|Browse_Network|pub_on_nas|~Home_NAS|~pub_on_nas
 # The share: its folder, read as a far one.
 point-side pub on nas
 click-here
@@ -16,7 +16,7 @@ expect crumbs=pub_on_nas crumbhome=-1 crumbshare=1 canbm=0
 key enter
 wait-for 4000 faron=1 farloading=0 n=0 crumbs=pub_on_nas|sub canbm=1
 key ctrl-d
-wait-for 3000 sides=^Places|Home|Trash|^Drives|File_System|^Network|pub_on_nas|~Home_NAS|~pub_on_nas|~sub canbm=0
+wait-for 3000 sides=^Places|Home|Trash|^Drives|File_System|^Network|Browse_Network|pub_on_nas|~Home_NAS|~pub_on_nas|~sub canbm=0
 expect status=Bookmarked
 sh grep -qx "smb://nas/pub/sub sub" "$OFX_ROOT/config/gtk-3.0/bookmarks"
 # A folder in gvfs's FUSE folder that isn't a share: its buttons from / as anywhere.
@@ -28,9 +28,9 @@ wait-for 4000 crumbshare=0 n=0
 key alt-left
 wait-for 4000 crumbshare=1 crumbs=pub_on_nas|sub
 # Its unmount button in its icon's place; its menu has Unmount, not Eject (nor Add Bookmark: it is one).
-point-ui side-row 6
+point-ui side-row 7
 hover-here
-wait-for 2000 sidehover=6 ejectbtn=1
+wait-for 2000 sidehover=7 ejectbtn=1
 right-here
 expect menu=folder
 expect menuhid=cut-it,copy-it,bookmark-it,bm-rename,bm-up,bm-down,bm-remove,bm-edit,eject,mount-it,empty-it
@@ -39,7 +39,7 @@ key esc
 # thread; the F16 code-health review: the folder shown decided).
 key alt-home
 wait-for 2000 faron=0
-point-ui side-row 6
+point-ui side-row 7
 right-here
 point-menu properties-it
 click-here
@@ -53,10 +53,10 @@ point-menu properties-it
 click-here
 wait-for 2000 props=1 propwalk=1
 key esc
-point-ui side-row 6
+point-ui side-row 7
 hover-here
 wait-for 2000 ejectbtn=1
-point-ui side-eject 6
+point-ui side-eject 7
 hover-here
 click-here
 wait-for 3000 statusbad=0 unmounted
@@ -64,10 +64,10 @@ expect on nas is unmounted
 sh grep -qx "gio mount -u $OFX_ROOT/gvfs/smb-share:server=nas,share=pub" "$OFX_ROOT/spawn.log"
 # (the run's gio only logs: gone when gvfs takes it away, and the folder shown on it goes Home)
 sh rm -rf "$OFX_ROOT/gvfs/smb-share:server=nas,share=pub"
-wait-for 5000 sides=^Places|Home|Trash|^Drives|File_System|^Network|~Home_NAS|~pub_on_nas|~sub faron=0 n=0
+wait-for 5000 sides=^Places|Home|Trash|^Drives|File_System|^Network|Browse_Network|~Home_NAS|~pub_on_nas|~sub faron=0 n=0
 # A share another program mounted shows within the watch's 2 s.
 sh mkdir "$OFX_ROOT/gvfs/smb-share:port=4445,server=box,share=Media%20Files"
-wait-for 4000 sides=^Places|Home|Trash|^Drives|File_System|^Network|Media_Files_on_box|~Home_NAS|~pub_on_nas|~sub
+wait-for 4000 sides=^Places|Home|Trash|^Drives|File_System|^Network|Browse_Network|Media_Files_on_box|~Home_NAS|~pub_on_nas|~sub
 # A network bookmark: a click connects (the run's gio only logs: nothing mounted, said so).
 point-side Home NAS
 click-here

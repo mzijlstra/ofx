@@ -51,7 +51,7 @@ MUTANTS = [
     ('gui/actions.c', "        go_up_from(t->dir);\n        if (there)", "        if (there)"),
     ('gui/actions.c', "    if (tabbar.n == 1) {\n        app.quit = true;\n        return;\n    }", ""),
     ('gui/actions.c', "    if (shown) tab_load();", ""),
-    ('gui/actions.c', "    if (strcmp(path, TRASH_URI) != 0 && !is_search(path) && !far_dir(path) && (stat(path, &st) != 0 || !S_ISDIR(st.st_mode))) {", "    if (strcmp(path, TRASH_URI) != 0 && !is_search(path) && !far_dir(path) && stat(path, &st) != 0) {"),
+    ('gui/actions.c', '    if (strcmp(path, TRASH_URI) != 0 && strcmp(path, NETWORK_URI) != 0 && !is_search(path) && !far_dir(path) && (stat(path, &st) != 0 || !S_ISDIR(st.st_mode))) {', '    if (strcmp(path, TRASH_URI) != 0 && strcmp(path, NETWORK_URI) != 0 && !is_search(path) && !far_dir(path) && stat(path, &st) != 0) {'),   # (retargeted, step 7e)
     ('gui/input.c', "    if (h.tab >= 0) in->tab_close = h.tab;\n    else if (h.row >= 0)", "    if (h.row >= 0)"),
     (G, "    return bar_h() + HEADER_H + (tabbar.n >= 2 ? TAB_H : 0);", "    return bar_h() + HEADER_H;"),
     ('gui/actions.c', "    case UA_TAB_MOVE: ui_tabs_move(&tabbar, (int)a.index); break;", "    case UA_TAB_MOVE: break;"),
@@ -278,7 +278,7 @@ MUTANTS = [
     ('gui/frame.c', '    u->can_back = hist.nback > 0, u->can_forward = hist.nfwd > 0;', '    u->can_back = hist.nback > 0, u->can_forward = true;', 'f74'),
     ('gui/frame.c', '    u->can_paste = clip.ok || own.n > 0;', '    u->can_paste = clip.ok;', 'f74'),
     ('gui/frame.c', '    u->shows_hidden = app.show_hidden;', '', 'f74'),
-    ('gui/actions.c', '    case UA_RELOAD: app.reloads_asked++, app.ui.view == UI_VIEW_SEARCH ? search_again() : reload(); break;', '', 'f74'),
+    ('gui/actions.c', '        if (app.ui.view == UI_VIEW_SEARCH) search_again();\n        else {', '        if (0) search_again();\n        else {', 'f74'),   # (retargeted, step 7e)
     ('gui/actions.c', '    case UA_TRASH_VIEW: go_to(TRASH_URI, STR_EMPTY, 0); break;', '', 'f74'),
     ('gui/topbar.c', '            if (!ui_menu_shown(&app.ui, it) || (it == UM_SEP', '            if ((it == UM_SEP', 'f74'),
     # Left out: the marks' column and the ✓ / • drawn (pixels only); menu-view.png shows them.
@@ -398,14 +398,14 @@ MUTANTS = [
     (G, '        app.ui.side_mode = st.side, app.ui.perms_cols = !st.no_perms,', '        app.ui.side_mode = st.side, app.ui.perms_cols = true,', 'f8'),
     ('gui/actions.c', 'state_key("perms", app.ui.perms_cols ? "on" : "off");', 'state_key("perms", "on");', 'f8'),
     # ---- the three columns give way to a Name under 200 px (2026-10-27)
-    ('gui/files.c', '    return app.ui.perms_cols && rest - perms_w() >= NAME_MIN_W;', '    return app.ui.perms_cols;', 'f8'),
-    ('gui/files.c', '    return app.ui.perms_cols && rest - perms_w() >= NAME_MIN_W;', '    return rest - perms_w() >= NAME_MIN_W;', 'f8'),
+    ('gui/files.c', '    return app.ui.perms_cols && app.ui.view != UI_VIEW_NETWORK && rest - perms_w() >= NAME_MIN_W;', '    return app.ui.perms_cols && app.ui.view != UI_VIEW_NETWORK;', 'f8'),   # (retargeted, step 7e)
+    ('gui/files.c', '    return app.ui.perms_cols && app.ui.view != UI_VIEW_NETWORK && rest - perms_w() >= NAME_MIN_W;', '    return app.ui.view != UI_VIEW_NETWORK && rest - perms_w() >= NAME_MIN_W;', 'f8'),   # (retargeted, step 7e)
     # ---- View → Show Colors and the note (2026-10-27). Not run: the colours drawn (pixels:
     # f8e's list-plain.png, f8b's list-columns.png)
     (G, '        app.ui.colors = !st.no_colors,', '        app.ui.colors = true,', 'f8'),
     ('gui/actions.c', 'state_key("colors", app.ui.colors ? "on" : "off");', 'state_key("colors", "on");', 'f8'),
-    ('gui/footer.c', '                  .cramped = app.ui.perms_cols && !app.ui.grid && !perms_shown((float)GetScreenWidth()),', '                  .cramped = false,', 'f8'),
-    ('gui/footer.c', '                  .cramped = app.ui.perms_cols && !app.ui.grid && !perms_shown((float)GetScreenWidth()),', '                  .cramped = !perms_shown((float)GetScreenWidth()),', 'f8'),
+    ('gui/footer.c', '                  .cramped = app.ui.perms_cols && !app.ui.grid && app.ui.view != UI_VIEW_NETWORK && !perms_shown((float)GetScreenWidth()),', '                  .cramped = false,', 'f8'),   # (retargeted, step 7e)
+    ('gui/footer.c', '                  .cramped = app.ui.perms_cols && !app.ui.grid && app.ui.view != UI_VIEW_NETWORK && !perms_shown((float)GetScreenWidth()),', '                  .cramped = app.ui.view != UI_VIEW_NETWORK && !perms_shown((float)GetScreenWidth()),', 'f8'),   # (retargeted, step 7e)
     # ---- View → Show Menu (2026-10-27). Not run: the note's drawing and footer hint (pixels:
     # f8b's menubar-hidden.png, menubar-float.png)
     (G, '    return !app.ui.bar_hidden || (app.ui.menu_on && app.ui.menu < UI_MENUS);', '    return !app.ui.bar_hidden;', 'f8'),
@@ -585,7 +585,7 @@ MUTANTS = [
     # other script reaches, and the scripted window's door for them.
     ('gui/main.c', '        memcpy(in->ev, real.ev, sizeof *real.ev * (size_t)real.nev);\n        in->nev = real.nev;', '        memcpy(in->ev, real.ev, sizeof *real.ev * (size_t)real.nev);', 'keys'),
     # The views in gui/folder.c (2026-10-28): listing, watching, Up, what changes prune, the table.
-    ('gui/folder.c', '    return strcmp(dir, TRASH_URI) == 0 ? UI_VIEW_TRASH : is_search(dir)', '    return is_search(dir)', 'f6'),
+    ('gui/folder.c', '    return strcmp(dir, TRASH_URI) == 0 ? UI_VIEW_TRASH : strcmp(dir, NETWORK_URI) == 0', '    return 0 ? UI_VIEW_TRASH : strcmp(dir, NETWORK_URI) == 0', 'f6'),   # (retargeted, step 7e)
     ('gui/folder.c', 'is_search(dir) ? UI_VIEW_SEARCH : UI_VIEW_FOLDER;', 'UI_VIEW_FOLDER;', 'f9'),
     ('gui/folder.c', '    case UI_VIEW_TRASH: trash_state(); return', '    case UI_VIEW_TRASH: return', 'f6'),
     ('gui/folder.c', '    case UI_VIEW_TRASH: trash_state(); return', '    case UI_VIEW_TRASH: trash_scan(); return', 'f6'),
@@ -709,7 +709,7 @@ MUTANTS = [
     ('gui/folder.c', '        for (struct dirent *e; d && (e = readdir(d));) n += strcmp(e->d_name, ".") != 0 && strcmp(e->d_name, "..") != 0;', '        for (struct dirent *e; d && (e = readdir(d));) n++;', 'f8'),
     ('gui/main.c', '            restore_id = strtol(argv[++i], NULL, 10);', '            restore_id = 0, i++;', 'f11'),
     ('gui/actions.c', '    case UA_RESTORE_WINDOWS: restore_others(a.all); break;   // (F11 step 3)', '    case UA_RESTORE_WINDOWS: break;', 'f11'),
-    ('gui/files.c', '    if (e->mtime) ui_when(buf, cap, e->mtime, now, app.conf.date, app.conf.date_pattern);', '    if (e->mtime) ui_when(buf, cap, e->mtime, now, DATE_SHORT, "");', 'f10'),
+    ('gui/files.c', '    else if (e->mtime) ui_when(buf, cap, e->mtime, now, app.conf.date, app.conf.date_pattern);', '    else if (e->mtime) ui_when(buf, cap, e->mtime, now, DATE_SHORT, "");', 'f10'),   # (retargeted, step 7e)
     ('gui/files.c', '    if (app.conf.date == DATE_SHORT) return DATE_W;\n    static', '    return DATE_W;\n    static', 'f10'),
     ('gui/files.c', '    for (int k = 0; k < COUNT(WIDE); k++) {', '    for (int k = 0; k < 1; k++) {', 'f10'),
     ('gui/actions.c', '    case UA_PREFERENCES: prefs_open(); break;\n', '', 'f10'),
@@ -993,7 +993,7 @@ MUTANTS = [
     ('gui/space.c', "    if (cwd[0] == '/' && mounts_local(mi, cwd)) snprintf", "    if (cwd[0] == '/') snprintf", 'f16'),   # (retargeted, step C)
     ('gui/actions.c', '    if (far_dir(path)) {\n        if (!go_to_then(path, STR_EMPTY, 0, FAR_THEN_SELECT)) return;', '    if (0) {\n        if (!go_to_then(path, STR_EMPTY, 0, FAR_THEN_SELECT)) return;', 'net'),   # (retargeted, step D)
     ('gui/frame.c', '           : far_word                   ? (app.far_note[0] ? app.far_note : "Opening\\xE2\\x80\\xA6")\n', '', 'f16'),
-    ('gui/footer.c', ', .opening = app.far_on && app.far_loading && !app.list.n };', ' };', 'f16'),
+    ('gui/footer.c', '.opening = (app.far_on && app.far_loading && !app.list.n) || (app.ui.view == UI_VIEW_NETWORK && browse_busy()) };', '.opening = (app.ui.view == UI_VIEW_NETWORK && browse_busy()) };', 'f16'),   # (retargeted, step 7e)
     # (the step 2a review: a reload while hung, the cursor across a slow reload, the lister's stderr)
     ('gui/folder.c', '    far_drop();\n    app.far_loading = true, app.far_waiting = far_busy(dir);', '    app.far_loading = true, app.far_waiting = far_busy(dir);', 'net'),
     ('gui/folder.c', '        if (far_begin(dir, select, fallback, how, &err)) return app.far_kept = true, app.far_kept_sel = app.ui.list.sel, true;', '        if (far_begin(dir, select, fallback, how, &err)) return app.far_kept_sel = app.ui.list.sel, true;', 'f16'),   # (retargeted, step D review)
@@ -1231,4 +1231,15 @@ MUTANTS = [
     ('gui/input.c', '        if (!trash) u->ctx_kind = place_ctx_kind(pl);', '        {}', 'f8'),
     # The milestone's code-health cleanup, step G
     ('gui/main.c', 'connect_until = deadline_in(CONNECT_QUIT_MS);', 'connect_until = deadline_in(60000);', 'net'),
+    # F16 step 7e, part 2: Browse Network
+    ('gui/folder.c', '    if (view == UI_VIEW_NETWORK && !same) browse_start();', '    if (0) browse_start();', 'f16'),
+    ('gui/actions.c', '            if (app.ui.view == UI_VIEW_NETWORK) browse_start();\n', '', 'f16'),
+    ('gui/folder.c', '    if (e->net) {   // (Browse Network\'s: connected to', '    if (0) {   // (Browse Network\'s: connected to', 'f16'),
+    ('gui/files.c', '    if (e->net) snprintf(buf, cap, "%s", e->net->ip);', '    if (0) snprintf(buf, cap, "%s", e->net->ip);', 'f16'),
+    ('gui/files.c', '    if (e->net) {   // (Browse Network\'s Kind column', '    if (0) {   // (Browse Network\'s Kind column', 'f16'),
+    ('gui/browse.c', '        if (!again) return NULL;', '        return NULL;', 'f16'),
+    ('gui/browse.c', '    if (browse.running) browse.again = true;', '    if (browse.running) {}', 'f16'),
+    ('gui/actions.c', '    if (p->kind == PL_BROWSE) return UI_CTX_NETWORK;   // (F16 step 7e)\n', '', 'f16'),
+    ('gui/main.c', ' && app.ui.view == UI_VIEW_NETWORK) network_relist(), dirty = true;', ' && app.ui.view == UI_VIEW_NETWORK) dirty = true;', 'f16'),
+    ('gui/footer.c', '.opening = (app.far_on && app.far_loading && !app.list.n) || (app.ui.view == UI_VIEW_NETWORK && browse_busy()) };', '.opening = (app.far_on && app.far_loading && !app.list.n) };', 'f16'),
 ]

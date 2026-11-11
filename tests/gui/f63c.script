@@ -1,19 +1,19 @@
 # F6.3 review: zooming in one folder fills the icon cache. run.sh gives it 24 slots
-# (OFX_TEST_ICONS_MAX) and a folder of 12 MIME types: the list and the sidebar take 15, so the
+# (OFX_TEST_ICONS_MAX) and a folder of 12 MIME types: the list and the sidebar take 16 (Browse Network's since F16 step 7e), so the
 # icon view's 12 more don't fit beside them. A view change or a zoom empties a full cache once,
 # before the next frame, and what is on screen fills it again; a frame that alone needs more than
 # it holds doesn't empty it again and again (f62c).
 settle
-expect view=list slots=15 iconresets=0
+expect view=list slots=16 iconresets=0
 key ctrl-2
-wait-for 2000 view=icons zoom=48 icontex=96 iconresets=1 slots=15
+wait-for 2000 view=icons zoom=48 icontex=96 iconresets=1 slots=16
 key ctrl-equal
-wait-for 2000 zoom=64 icontex=128 iconresets=2 slots=15
+wait-for 2000 zoom=64 icontex=128 iconresets=2 slots=16
 # 96's 8 cells on screen fit beside 64's: nothing emptied.
 key ctrl-equal
-wait-for 2000 zoom=96 icontex=192 iconresets=2 slots=23
+wait-for 2000 zoom=96 icontex=192 iconresets=2 slots=24
 key ctrl-0
-wait-for 2000 zoom=48 icontex=96 iconresets=3 slots=15
+wait-for 2000 zoom=48 icontex=96 iconresets=3 slots=16
 wait 5
 expect iconresets=3
 quit

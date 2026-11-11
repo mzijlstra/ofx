@@ -3,18 +3,18 @@
 # (OFX_TEST_GVFS_MS, OFX_TEST_GVFS_MAX_MS). The poll reads gvfs's local folder, never the network
 # (step 7e removed Airplane Mode, which turned it off, with the rest of what asked the network).
 settle
-wait-for 4000 sides=^Places|Home|Trash|^Drives|File_System|^Network|~Home_NAS
+wait-for 4000 sides=^Places|Home|Trash|^Drives|File_System|^Network|Browse_Network|~Home_NAS
 # No share mounted: the waits grow to their longest.
 wait-for 6000 sharesevery=1600
 # A share mounted by another program: listed within the longest wait, and the wait back to 200,
 # staying there while it is mounted.
 sh mkdir "$OFX_ROOT/gvfs/smb-share:server=nas,share=pub"
-wait-for 4000 sides=^Places|Home|Trash|^Drives|File_System|^Network|pub_on_nas|~Home_NAS sharesevery=200
+wait-for 4000 sides=^Places|Home|Trash|^Drives|File_System|^Network|Browse_Network|pub_on_nas|~Home_NAS sharesevery=200
 sleep 1500
 expect sharesevery=200
 # Gone again: the waits grow again.
 sh rmdir "$OFX_ROOT/gvfs/smb-share:server=nas,share=pub"
-wait-for 6000 sides=^Places|Home|Trash|^Drives|File_System|^Network|~Home_NAS sharesevery=1600
+wait-for 6000 sides=^Places|Home|Trash|^Drives|File_System|^Network|Browse_Network|~Home_NAS sharesevery=1600
 # No avahi-browse runs on its own (step 7e: Browse Network asks, when visited).
 sh ! grep -q "avahi-browse" "$OFX_ROOT/spawn.log"
 quit

@@ -25,6 +25,10 @@ static bool entry_path(isize i, char *out, size_t cap)
         int n = snprintf(out, cap, "%s", e->trash->file);
         return n >= 0 && (size_t)n < cap;
     }
+    if (e->net) {   // (Browse Network's: the server's address, F16 step 7e)
+        int n = snprintf(out, cap, "%s", e->net->addr);
+        return n >= 0 && (size_t)n < cap;
+    }
     if (app.ui.view == UI_VIEW_SEARCH) {
         char dir[PATH_MAX];
         if (e->dir.len && !path_put(dir, sizeof dir, app.search_root, e->dir)) return false;
@@ -142,6 +146,7 @@ static const struct {
     [UI_VIEW_FOLDER] = { "Modified", 0 },
     [UI_VIEW_TRASH] = { "Deleted", TRASH_BAR_H },
     [UI_VIEW_SEARCH] = { "Modified", SEARCH_BAR_H },
+    [UI_VIEW_NETWORK] = { "Address", 0 },   // (F16 step 7e: Browse Network's servers, browse.c)
 };
 
 // The view's bar's height: the search's grows by its "Containing" row inside files (step 3).
@@ -152,7 +157,7 @@ static int view_bar_h(void)
 
 static UiView view_of(const char *dir)
 {
-    return strcmp(dir, TRASH_URI) == 0 ? UI_VIEW_TRASH : is_search(dir) ? UI_VIEW_SEARCH : UI_VIEW_FOLDER;
+    return strcmp(dir, TRASH_URI) == 0 ? UI_VIEW_TRASH : strcmp(dir, NETWORK_URI) == 0 ? UI_VIEW_NETWORK : is_search(dir) ? UI_VIEW_SEARCH : UI_VIEW_FOLDER;
 }
 
 static bool view_list(UiView v, Arena *a, const char *dir, Listing *l, Err *err)
@@ -160,6 +165,7 @@ static bool view_list(UiView v, Arena *a, const char *dir, Listing *l, Err *err)
     switch (v) {
     case UI_VIEW_TRASH: trash_state(); return trash_list(a, &trashd, app.show_hidden, app.ui.sort, l, err);
     case UI_VIEW_SEARCH: return search_list(a, dir, l, err);
+    case UI_VIEW_NETWORK: return browse_list(a, app.ui.sort, l, err);
     case UI_VIEW_FOLDER: break;
     }
     return fs_list_far(a, dir, app.show_hidden, app.ui.sort, far_mounts(), l, err);   // (its far links and mount points never looked at, F16)
@@ -171,14 +177,14 @@ static void view_watch(UiView v)
 {
     char tinfo[PATH_MAX + 8] = "";
     if (v == UI_VIEW_TRASH && trash_home(tinfo, sizeof tinfo - 8)) strcat(tinfo, "/info");
-    watch_dir(v == UI_VIEW_TRASH ? tinfo : v == UI_VIEW_SEARCH || app.far_on ? NULL : app.cwd);   // (a far folder: no watch, its add would look it up; F16)
+    watch_dir(v == UI_VIEW_TRASH ? tinfo : v == UI_VIEW_SEARCH || v == UI_VIEW_NETWORK || app.far_on ? NULL : app.cwd);   // (a far folder: no watch, its add would look it up; F16)
 }
 
 static void view_title(UiView v)
 {
     char shown[PATH_MAX + 1];
     ui_tilde(shown, sizeof shown, app.search_root, getenv("HOME"));
-    SetWindowTitle(v == UI_VIEW_TRASH ? "ofx: Trash" : v == UI_VIEW_SEARCH ? TextFormat("ofx: Search in %s", shown) : TextFormat("ofx: %s", app.cwd));
+    SetWindowTitle(v == UI_VIEW_TRASH ? "ofx: Trash" : v == UI_VIEW_NETWORK ? "ofx: Browse Network" : v == UI_VIEW_SEARCH ? TextFormat("ofx: Search in %s", shown) : TextFormat("ofx: %s", app.cwd));
 }
 
 // Whether Up goes somewhere: from a search to the folder searched, from a folder but "/" to the one
@@ -200,6 +206,7 @@ static void view_changed(void)
 enum { FAR_ANSWER_MS = 3000 };   // no answer by then: the list says the drive isn't answering
 
 static bool go_to_in(const char *dir, Str select, isize fallback, GoHow how);
+static bool connect_start(Str text);   // (gui/connect.c: Browse Network's rows connect, F16 step 7e)
 
 static isize far_scan;   // how far what the lister said was looked through for its listing's end
 
@@ -373,6 +380,7 @@ static bool can_write_at(const char *path)
 static bool row_count_ask(isize i, const char *path)
 {
     if (app.list.e[i].far) return app.count[i] = -1, false;   // (a far link's target: never counted here, it would hold the count thread)
+    if (app.list.e[i].net) return false;   // (a server Browse Network found: nothing to count, F16 step 7e)
     if (app.far_on) return !app.far_loading && far_count_send(app.far_cgen, i, app.list.e[i].name);
     return count_ask(i, path, app.show_hidden);
 }
@@ -388,6 +396,7 @@ static bool go_to_in(const char *dir, Str select, isize fallback, GoHow how)
     Err err;
     UiView view = view_of(dir);
     bool same = strcmp(dir, app.cwd) == 0;
+    if (view == UI_VIEW_NETWORK && !same) browse_start();   // (each visit asks the network again: F16 step 7e)
     bool on_far = view == UI_VIEW_FOLDER && far_dir(dir);
     // A far folder listed again (Ctrl+R, a change ofx made): a new lister, the listing shown kept
     // until its answer comes.
@@ -502,6 +511,14 @@ static void search_relist(void)
     snprintf(keep, sizeof keep, "%.*s", STR_ARG(sel_name()));
     go_to_in(app.cwd, str_from_c(app.search_pick[0] ? app.search_pick : keep), app.ui.list.sel, (GoHow){ .stepping = true });
     if (app.search_done || (app.search_pick[0] && listing_find(&app.list, str_from_c(app.search_pick)) >= 0)) app.search_pick[0] = 0;
+}
+
+// Browse Network's listing again, as a query answers (F16 step 7e): the cursor stays on its server.
+static void network_relist(void)
+{
+    char keep[PATH_MAX];
+    snprintf(keep, sizeof keep, "%.*s", STR_ARG(sel_name()));
+    go_to_in(app.cwd, str_from_c(keep), app.ui.list.sel, (GoHow){ .stepping = true });
 }
 
 // The field's text, 150 ms after its last change (F9): searched for in place, the cursor on the
@@ -749,7 +766,7 @@ static const char *side_path(isize i, char *buf, size_t cap)
         return buf;
     }
     if (i < 0 || i >= app.places.n || app.places.p[i].kind == PL_HEAD || place_folderless(app.places.p[i].kind))
-        return NULL;   // (a device, a network bookmark's address, Airplane Mode's row: no folder to open in a tab)
+        return NULL;   // (a device, a network bookmark's address: no folder to open in a tab)
     return app.places.p[i].path;
 }
 
@@ -822,6 +839,10 @@ static void open_entry(isize i)
     char path[PATH_MAX];
     if (!entry_path(i, path, sizeof path)) {
         set_status(true, "%.*s: the path is too long", STR_ARG(e->name));
+        return;
+    }
+    if (e->net) {   // (Browse Network's: connected to, as its address typed; F16 step 7e)
+        connect_start(str_from_c(e->net->addr));
         return;
     }
     if (kind_is_dir(e->kind) && e->trash) {   // the trash view: a file opens, a folder doesn't

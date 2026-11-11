@@ -41,6 +41,7 @@ static bool ui_folder_shown(const Ui *u, UiMenuItem it)
 {
     UiCtxKind k = u->ctx_kind;
     if (k == UI_CTX_BRINGS) return it == UM_MOUNT_IT;   // no folder yet (2026-10-30)
+    if (k == UI_CTX_NETWORK) return it == UM_OPEN_IT || it == UM_OPEN_TAB;   // (Browse Network's row: a view, not a folder; F16 step 7e)
     bool trash = k == UI_CTX_TRASH;
     switch (it) {
     case UM_SEP: case UM_OPEN_IT: case UM_OPEN_TAB: return true;
@@ -111,7 +112,7 @@ static bool ui_menu_enabled(const Ui *u, UiMenuItem it)
     case UM_PARENT: return u->can_up;
     case UM_BACK: return u->can_back;
     case UM_FORWARD: return u->can_forward;
-    case UM_HOME: case UM_TRASH_VIEW: case UM_FIND: case UM_LOCATION: case UM_CONNECT: return true;
+    case UM_HOME: case UM_TRASH_VIEW: case UM_FIND: case UM_LOCATION: case UM_CONNECT: case UM_BROWSE: return true;
     case UM_SEARCH: return ui_view_allows(u->view, UA_SEARCH);
     case UM_TERMINAL: return ui_view_allows(u->view, UA_TERMINAL);
     case UM_ADD_BOOKMARK: return u->can_bookmark && ui_view_allows(u->view, UA_ADD_BOOKMARK);
@@ -258,6 +259,7 @@ static UiAction ui_menu_pick(Ui *u, UiMenuItem it)
         ui_location_open(u, S("smb://"));
         u->edit.anchor = u->edit.caret;
         return UI_NONE;
+    case UM_BROWSE: return (UiAction){ UA_BROWSE, 0, false };
     case UM_PREFERENCES: return (UiAction){ UA_PREFERENCES, 0, false };
     case UM_CLEAR_PREVIEWS: return u->clear_asking = true, UI_NONE;   // (gui/ counts them as it opens)
     case UM_OPEN_TAB: return (UiAction){ UA_TAB_BG_ROW, u->list.sel, false };

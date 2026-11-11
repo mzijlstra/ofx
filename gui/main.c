@@ -146,6 +146,7 @@ static void timer_stop(void)
 }
 
 #include "watch.c"
+#include "browse.c"   // (F16 step 7e: Browse Network)
 #include "clipboard.c"
 #include "dnd.c"
 #include "far.c"      // (before counts.c: a far folder's counts are its lister's)
@@ -842,6 +843,7 @@ static bool poll_workers(void)
     if (drag_out_poll()) dirty = true;   // (F14: our drag out, back over the window or ended)
     if (drag_in_poll()) dirty = true;    // (F14: another program's files over the window, or dropped)
     if (app.ui.view == UI_VIEW_SEARCH && search_take()) search_relist(), dirty = true;
+    if (atomic_exchange(&browse.ready, false) && app.ui.view == UI_VIEW_NETWORK) network_relist(), dirty = true;   // (F16 step 7e: a query answered)
     if (app.search_due && now_ms() >= app.search_due) app.search_due = 0, search_retype(), dirty = true;
     i64 was_due = restore.due, was_rem = rem.due;   // (F11: the tabs, a folder's view, written 2 s after a change)
     if ((restore_tick(now_ms()) != was_due && restore.due) | (remember_tick(now_ms()) != was_rem && rem.due)) timer_at(wake_due());

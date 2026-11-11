@@ -321,7 +321,8 @@ static bool entry_unknown(const Entry *e)
 static void entry_when(const Entry *e, i64 now, char *buf, size_t cap)
 {
     buf[0] = 0;
-    if (e->mtime) ui_when(buf, cap, e->mtime, now, app.conf.date, app.conf.date_pattern);
+    if (e->net) snprintf(buf, cap, "%s", e->net->ip);   // (Browse Network's Address column, F16 step 7e)
+    else if (e->mtime) ui_when(buf, cap, e->mtime, now, app.conf.date, app.conf.date_pattern);
 }
 
 // The date column's width: DATE_W for the short dates; for ofx.conf's longer ones (F10), a wide
@@ -357,7 +358,7 @@ static float date_w(void)
 static bool perms_shown(float w)
 {
     float rest = w - side_w() - 2 * PAD - ICON_PX - 3 * GAP - SIZE_W - date_w();
-    return app.ui.perms_cols && rest - perms_w() >= NAME_MIN_W;
+    return app.ui.perms_cols && app.ui.view != UI_VIEW_NETWORK && rest - perms_w() >= NAME_MIN_W;   // (a server has none: F16 step 7e)
 }
 
 // A user's or a group's name, cached (the list's Owner and Group, 2026-10-27): a getpwuid per row
@@ -389,7 +390,7 @@ static const char *const COL_IDS[SORT_KEYS] = { "col-name", "col-size", "col-dat
 static void layout_cols(void)
 {
     Theme *t = &app.theme;
-    const char *const NAMES[SORT_KEYS] = { "Name", "Size", VIEWS[app.ui.view].date_col };
+    const char *const NAMES[SORT_KEYS] = { "Name", app.ui.view == UI_VIEW_NETWORK ? "Kind" : "Size", VIEWS[app.ui.view].date_col };   // (Browse Network: Kind, Address)
     CLAY(CLAY_ID("cols"), { .layout = { .sizing = { CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(COLS_H) },
                                         .padding = { PAD + ICON_PX + GAP, PAD, 0, 0 }, .childGap = GAP,
                                         .childAlignment = { .y = CLAY_ALIGN_Y_CENTER } },
@@ -475,6 +476,10 @@ static void size_cell(isize i, char *size, size_t cap, bool ask)
 {
     const Entry *e = &app.list.e[i];
     size[0] = 0;
+    if (e->net) {   // (Browse Network's Kind column, F16 step 7e: no item count asked)
+        snprintf(size, cap, "%s", NET_TYPES[e->net->kind].kind);
+        return;
+    }
     if (!kind_is_dir(e->kind) && e->kind != K_LINK_BROKEN && e->kind != K_OTHER) ui_size(size, cap, e->size);
     if (!kind_is_dir(e->kind)) return;
     char path[PATH_MAX];

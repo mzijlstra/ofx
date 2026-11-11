@@ -21,24 +21,24 @@ wait-for 8000 conn=0 login=0 faron=1 farloading=0 n=20 sel=f1 connasked=0 status
 expect to sub on 127.0.0.1
 # (gio info on it went to the run's gio, logged by run-script's fake: never the session's)
 sh grep -qx "gio info nfs://127.0.0.1/srv/nfs/sub" "$OFX_ROOT/spawn.log"
-wait-for 3000 sides=^Places|Home|Trash|^Drives|File_System|^Network|nfs_on_127.0.0.1|open_on_127.0.0.1|priv_on_127.0.0.1|pub_on_127.0.0.1|~Priv
+wait-for 3000 sides=^Places|Home|Trash|^Drives|File_System|^Network|Browse_Network|nfs_on_127.0.0.1|open_on_127.0.0.1|priv_on_127.0.0.1|pub_on_127.0.0.1|~Priv
 # Add Bookmark there writes its nfs:// address, labelled with the folder's name.
 expect canbm=1
 key ctrl-d
-wait-for 3000 sides=^Places|Home|Trash|^Drives|File_System|^Network|nfs_on_127.0.0.1|open_on_127.0.0.1|priv_on_127.0.0.1|pub_on_127.0.0.1|~Priv|~sub canbm=0
+wait-for 3000 sides=^Places|Home|Trash|^Drives|File_System|^Network|Browse_Network|nfs_on_127.0.0.1|open_on_127.0.0.1|priv_on_127.0.0.1|pub_on_127.0.0.1|~Priv|~sub canbm=0
 sh grep -qx "nfs://127.0.0.1/srv/nfs/sub sub" "$OFX_ROOT/config/gtk-3.0/bookmarks"
 # The export from the sidebar: its files, read as a far folder's.
 point-side nfs on 127.0.0.1
 click-here
 wait-for 5000 faron=1 farloading=0 n=2 sel=sub crumb=0 crumbshare=1
 # Unmounted from the sidebar: gone from it, the folder shown on it Home.
-point-ui side-row 6
+point-ui side-row 7
 hover-here
 wait-for 2000 ejectbtn=1
-point-ui side-eject 6
+point-ui side-eject 7
 click-here
 wait-for 8000 statusbad=0 unmounted
-wait-for 3000 sides=^Places|Home|Trash|^Drives|File_System|^Network|open_on_127.0.0.1|priv_on_127.0.0.1|pub_on_127.0.0.1|~Priv|~sub faron=0 sel=nas
+wait-for 3000 sides=^Places|Home|Trash|^Drives|File_System|^Network|Browse_Network|open_on_127.0.0.1|priv_on_127.0.0.1|pub_on_127.0.0.1|~Priv|~sub faron=0 sel=nas
 # Its bookmark connects again, no question, to the folder. (After 3 s: an export mounted again within
 # about 2 s of its unmount reads "Input/output error" in gvfs's FUSE folder, as an SMB share does;
 # plan.md's known gap.)

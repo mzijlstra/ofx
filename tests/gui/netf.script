@@ -17,7 +17,7 @@ key enter
 wait-for 8000 conn=0 login=0 faron=1 farloading=0 n=2 sel=sub statusbad=0 crumbs=tester@127.0.0.1|home|tester crumbshare=1
 expect to tester@127.0.0.1
 # In the Network section; Add Bookmark writes its sftp:// address.
-wait-for 3000 sides=^Places|Home|Trash|^Drives|File_System|^Network|tester@127.0.0.1|open_on_127.0.0.1|priv_on_127.0.0.1|pub_on_127.0.0.1|~Priv
+wait-for 3000 sides=^Places|Home|Trash|^Drives|File_System|^Network|Browse_Network|tester@127.0.0.1|open_on_127.0.0.1|priv_on_127.0.0.1|pub_on_127.0.0.1|~Priv
 key ctrl-d
 wait-for 3000 canbm=0
 sh grep -qx "sftp://tester@127.0.0.1:@SPORT@/home/tester tester" "$OFX_ROOT/config/gtk-3.0/bookmarks"
@@ -34,7 +34,7 @@ sh [ ! -s "$OFX_ROOT/ssh/known_hosts" ] && mv "$OFX_ROOT/ssh/known_hosts.keep" "
 # first: else the address is mounted already, and gone to with no question.)
 key alt-home
 sh "$OFX_ROOT/giotest" mount -u "sftp://tester@127.0.0.1:@SPORT@/"
-wait-for 5000 sides=^Places|Home|Trash|^Drives|File_System|^Network|open_on_127.0.0.1|priv_on_127.0.0.1|pub_on_127.0.0.1|~Priv|~tester
+wait-for 5000 sides=^Places|Home|Trash|^Drives|File_System|^Network|Browse_Network|open_on_127.0.0.1|priv_on_127.0.0.1|pub_on_127.0.0.1|~Priv|~tester
 sh printf 'IdentityFile %s\nIdentitiesOnly yes\n' "$OFX_ROOT/ssh/id" > "$OFX_ROOT/ssh/config"
 key ctrl-l
 type sftp://tester@127.0.0.1:@SPORT@/home/tester/sub

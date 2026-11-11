@@ -516,7 +516,7 @@ MUTANTS += [
     ('ui/helpers.c', "        if (in->one_dir && in->one_count >= 0) snprintf", "        if (in->one_dir) snprintf"),
     ('ui/helpers.c', "\" (%td item%s)\", in->one_count, in->one_count == 1 ? \"\" : \"s\");", "\" (%td items)\", in->one_count);"),
     ('ui/helpers.c', "        else if (!in->one_dir && in->one_size >= 0) ui_size", "        else if (in->one_size >= 0) ui_size"),
-    ('ui/helpers.c', "    if (in->marked > 1) {\n        snprintf(buf, cap, \"%td items selected\", in->marked);\n        return;\n    }\n", ""),
+    ('ui/helpers.c', '    if (in->marked > 1) {\n        snprintf(buf, cap, "%td %ss selected", in->marked, noun);\n        return;\n    }\n', ''),   # (retargeted, step 7e)
     ('ui/helpers.c', "    if (k > 0 && in->hidden && (size_t)k < cap) k += snprintf", "    if (k > 0 && (size_t)k < cap) k += snprintf"),
     ('ui/helpers.c', "    if (k > 0 && in->avail >= 0 && (size_t)k < cap) ui_size", "    if (k > 0 && (size_t)k < cap) ui_size"),
     ('ui/handle.c', "    if (!prompt && in->side_twisty >= 0 && u->side_mode == SIDE_TREE && u->side.top", "    if (!prompt && in->side_twisty >= 0 && u->side.top"),
@@ -1590,10 +1590,10 @@ MUTANTS += [
     ('ui/handle.c', '            return *out = ui_search_open(u), true;', '            return *out = UI_NONE, true;'),
     ('ui/handle.c', '    case UK_SEARCH: return *out = ui_search_open(u), true;', ''),
     (U, '"search", .cmd = UK_SEARCH, .runs = true },', '"search", .cmd = UK_SEARCH },'),
-    ('ui/ui.c', 'UM_SEP, UM_FIND, UM_SEARCH, UM_LOCATION, UM_CONNECT, UM_TERMINAL,\n};', 'UM_SEP, UM_FIND, UM_LOCATION, UM_CONNECT, UM_TERMINAL,\n};'),   # (retargeted, step 7e)
+    ('ui/ui.c', 'UM_SEP, UM_FIND, UM_SEARCH, UM_LOCATION, UM_CONNECT, UM_BROWSE, UM_TERMINAL,\n};', 'UM_SEP, UM_FIND, UM_LOCATION, UM_CONNECT, UM_BROWSE, UM_TERMINAL,\n};'),   # (retargeted, step 7e)
     # what the results can't do yet, and the menus
     ('ui/menus.c', '    case UM_HERE_PROPS: return u->view != UI_VIEW_SEARCH;', '    case UM_HERE_PROPS: return true;'),
-    ('ui/helpers.c', "    if (str_eq(cw, S(TRASH_URI)) || is_search(cwd)) {", "    if (str_eq(cw, S(TRASH_URI))) {"),
+    ('ui/helpers.c', '    if (str_eq(cw, S(TRASH_URI)) || str_eq(cw, S(NETWORK_URI)) || is_search(cwd)) {', '    if (str_eq(cw, S(TRASH_URI)) || str_eq(cw, S(NETWORK_URI))) {'),   # (retargeted, step 7e)
     ('ui/helpers.c', "    if (str_starts_with(ui_crumb_path(c, i), S(SEARCH_URI))) return S(\"Search\");", ""),
     ('ui/helpers.c', "sel.len < (isize)sizeof stack[*n].sel ? (int)sel.len : 0, sel.p ? sel.p : \"\");", "(int)sel.len, sel.p ? sel.p : \"\");"),
     ('ui/helpers.c', "sel.len < (isize)sizeof stack[*n].sel ? (int)sel.len : 0, sel.p ? sel.p : \"\");", "sel.len <= (isize)sizeof stack[*n].sel ? (int)sel.len : 0, sel.p ? sel.p : \"\");"),
@@ -1729,7 +1729,7 @@ MUTANTS += [
     ('ui/ui.c', 'case UA_COPY: case UA_COPY_PATH: case UA_CUT: case UA_MAKE_LINK:', 'case UA_COPY_PATH: case UA_CUT: case UA_MAKE_LINK:'),
     ('ui/ui.c', '    case UA_RESTORE: case UA_EMPTY_TRASH: return v == UI_VIEW_TRASH;\n', ''),
     ('ui/ui.c', '    case UA_CONTAINING: return v == UI_VIEW_SEARCH;\n', ''),
-    ('ui/ui.c', 'u->view == UI_VIEW_SEARCH ? UA_NOT_IN_SEARCH : UA_NONE, 0, false };', 'UA_NOT_IN_SEARCH, 0, false };'),
+    ('ui/ui.c', 'u->view == UI_VIEW_SEARCH ? UA_NOT_IN_SEARCH : u->view == UI_VIEW_NETWORK ? UA_NOT_IN_NETWORK : UA_NONE, 0, false };', 'UA_NOT_IN_SEARCH, 0, false };'),   # (retargeted, step 7e)
     ('ui/ui.c', '{ u->view == UI_VIEW_TRASH ? UA_NOT_IN_TRASH : u->view', '{ false ? UA_NOT_IN_TRASH : u->view'),
     ('ui/handle.c', '    if (u->view != UI_VIEW_SEARCH) return ui_view_act(u, (UiAction){ UA_SEARCH, 0, false });', '    if (u->view != UI_VIEW_SEARCH) return (UiAction){ UA_SEARCH, 0, false };'),
     (KY, "{ T('t'), UK_TERMINAL },", ''),
@@ -2735,7 +2735,7 @@ MUTANTS += [
     ('fs/farlist.c', 'if (n < 0 || (size_t)n + (size_t)name.len > cap || name.len < 1 || name.len > NAME_MAX) return 0;', 'if (n < 0 || (size_t)n + (size_t)name.len > cap || name.len > NAME_MAX) return 0;'),
     ('fs/farlist.c', 'if (n < 0 || (size_t)n + (size_t)name.len > cap || name.len < 1 || name.len > NAME_MAX) return 0;', 'if (n < 0 || (size_t)n + (size_t)name.len > cap || name.len < 1) return 0;'),
     ('fs/tree.c', '    if (t->mounts.n && (!far_real(&t->mounts, dir, real, sizeof real, &far) || far)) return;', ''),   # (retargeted, step C)
-    ('ui/helpers.c', '    if (in->opening) {\n        snprintf(buf, cap, "Opening\\xE2\\x80\\xA6");\n        return;\n    }\n', ''),
+    ('ui/helpers.c', '    if (in->opening) {\n        snprintf(buf, cap, in->servers ? "Searching the network\\xE2\\x80\\xA6" : "Opening\\xE2\\x80\\xA6");   // (Browse Network\'s: the last rows shown meanwhile)\n        return;\n    }\n', ''),   # (retargeted, step 7e)
     ('fs/spawn.c', '    if (in >= 0) posix_spawn_file_actions_adddup2(&fa, in, 0);\n    else posix_spawn_file_actions_addopen', '    posix_spawn_file_actions_addopen'),
     ('fs/spawn.c', '    else if (errs == SPAWN_ERR_NULL) posix_spawn_file_actions_addopen(&fa, 2, "/dev/null", O_WRONLY, 0);\n', ''),
     ('fs/spawn.c', '    if (errs >= 0) posix_spawn_file_actions_adddup2(&fa, errs, 2);', '    if (errs >= 0) {}'),
@@ -2826,7 +2826,7 @@ MUTANTS += [
     ('fs/connect.c', 'hp ? port : "", esc);\n    return n > 0 && (size_t)n < cap;\n}', 'hp ? port : "", esc);\n    return n > 0;\n}'),   # (retargeted, step 7a)
     ('fs/places.c', "        if (line.len == 0 || line.len >= PATH_MAX || line.p[0] != '/') continue;", '        if (line.len == 0 || line.len >= PATH_MAX) continue;'),
     ('fs/places.c', '        if (label.len == 0) snprintf(name, sizeof name, share[0] ? "%s on %s" : "%s%s", share, host), label = str_from_c(name);', ''),   # (retargeted, step 7a)
-    ('fs/places.c', '    if (pl->n == head + 1) pl->n = head;   // (nothing in it: no heading)', ''),
+    # (dropped, step 7e: the Network section always has Browse Network now (step 7e): never empty)
     ('fs/places.c', '&& place_is_net(pl->p[i].kind) == place_is_net(kind) && strcmp', '&& strcmp'),
     ('fs/places.c', '    return place_ejectable(p) || p->kind == PL_SHARE;', '    return place_ejectable(p);'),
     ('fs/places.c', '    case PL_SHARE:\n    case PL_NETBM: names[n++] = S("folder-remote"); break;', ''),
@@ -2923,19 +2923,19 @@ MUTANTS += [
     ('fs/connect.c', "            if (v > 0 && v < 256) out[o++] = (char)v;", "            out[o++] = (char)v;"),
     ('fs/connect.c', "            i += 3;\n        } else out[o++] = f.p[++i];", "            i += 2;\n        } else out[o++] = f.p[++i];"),
     ('fs/connect.c', "        } else out[o++] = f.p[++i];", "        } else out[o++] = f.p[i];"),
-    ('fs/connect.c', "    return strcasecmp(((const NetServer *)a)->name, ((const NetServer *)b)->name);", "    return strcmp(((const NetServer *)a)->name, ((const NetServer *)b)->name);"),
-    ('fs/connect.c', "        if (k < 9 || !str_eq(f[4], S(\"_smb._tcp\")) ||", "        if (k < 9 ||"),
-    ('fs/connect.c', "        if (k < 9 || !str_eq(f[4], S(\"_smb._tcp\")) ||", "        if (!str_eq(f[4], S(\"_smb._tcp\")) ||"),
+    ('fs/connect.c', '    int c = strcasecmp(x->name, y->name);', '    int c = strcmp(x->name, y->name);'),   # (retargeted, step 7e)
+    ('fs/connect.c', '        while (t < COUNT(NET_TYPES) && (k < 9 || !str_eq(f[4], str_from_c(NET_TYPES[t].type)))) t++;', '        while (t < COUNT(NET_TYPES) && (k < 9)) t++;'),   # (retargeted, step 7e)
+    ('fs/connect.c', '        while (t < COUNT(NET_TYPES) && (k < 9 || !str_eq(f[4], str_from_c(NET_TYPES[t].type)))) t++;', '        while (t < COUNT(NET_TYPES) && (!str_eq(f[4], str_from_c(NET_TYPES[t].type)))) t++;'),   # (retargeted, step 7e)
     # (Dropped from the code, shown redundant by surviving mutants: the "=" check (a resolved line alone has
     # nine fields or more) and a port's length (one past five digits fails the range check).)
     ('fs/connect.c', "        for (isize i = 0; i < f[6].len; i++) ok = ok && (isalnum((unsigned char)f[6].p[i]) || f[6].p[i] == '.' || f[6].p[i] == '-');", ""),
     ('fs/connect.c', "        for (isize i = 0; i < f[8].len; i++) ok = ok && isdigit((unsigned char)f[8].p[i]);", ""),
     ('fs/connect.c', "        for (const char *c = v.name; *c && ok; c++) ok = (unsigned char)*c >= 0x20 && *c != 0x7F;", ""),
     ('fs/connect.c', "        if (port <= 0 || port > 65535) continue;", ""),
-    ('fs/connect.c', "        int w = port == 445 ? snprintf(", "        int w = port == 0 ? snprintf("),
-    ('fs/connect.c', "        for (int j = 0; j < n && !seen; j++) seen = strcmp(s[j].addr, v.addr) == 0;", ""),
-    ('fs/connect.c', "    qsort(s, (size_t)n, sizeof *s, net_server_cmp);", ""),
-    ('fs/places.c', '    return k == PL_SHARE || k == PL_NETBM;', '    return k == PL_SHARE;'),   # (retargeted, step 7e)
+    ('fs/connect.c', '        int w = port == NET_TYPES[t].port ? snprintf(', '        int w = port == 0 ? snprintf('),   # (retargeted, step 7e)
+    ('fs/connect.c', '            if (strcmp(s[j].addr, v.addr) == 0) seen = j;', '            if (0) seen = j;'),   # (retargeted, step 7e)
+    ('fs/connect.c', '    qsort(s, (size_t)*n, sizeof *s, net_server_cmp);', ''),   # (retargeted, step 7e)
+    ('fs/places.c', '    return k == PL_SHARE || k == PL_NETBM || k == PL_BROWSE;', '    return k == PL_SHARE || k == PL_BROWSE;'),   # (retargeted, step 7e)
     ('fs/places.c', '    return k == PL_NETBM;\n}', '    return false;\n}'),   # (retargeted, step 7e)
     # (dropped, step 7e: Airplane Mode and the found servers are gone (step 7e))
     # (dropped, step 7e: Airplane Mode and the found servers are gone (step 7e))
@@ -3038,4 +3038,13 @@ MUTANTS += [
     ('fs/connect.c', "plain = (unsigned char)*c >= 0x20 && *c != 0x7F && *c != '/';", "plain = (unsigned char)*c >= 0x20 && *c != '/';"),
     ('fs/connect.c', '    if (close < 0 && str_find(name, \':\') >= 0) return', '    if (0) return'),
     ('fs/connect.c', "    bool v6 = strchr(host, ':') && host[0] != '[';", '    bool v6 = false;'),
+    # F16 step 7e, part 2: Browse Network
+    ('fs/connect.c', '        if (seen >= 0 && strchr(s[seen].ip, \':\') && !strchr(v.ip, \':\')) snprintf', '        if (0) snprintf'),
+    ('fs/connect.c', '    return c ? c : (int)x->kind - (int)y->kind;', '    return c;'),
+    ('fs/places.c', '    places_add(pl, PL_BROWSE, NETWORK_URI, S("Browse Network"));', '    {}'),
+    ('ui/ui.c', '    if (v == UI_VIEW_NETWORK) {\n        switch (k) {', '    if (0) {\n        switch (k) {'),
+    ('ui/menus.c', '    if (k == UI_CTX_NETWORK) return it == UM_OPEN_IT || it == UM_OPEN_TAB;', '    if (k == UI_CTX_NETWORK) return it == UM_OPEN_IT;'),
+    ('ui/helpers.c', '    const char *noun = in->servers ? "server" : "item";', '    const char *noun = "item";'),
+    ('ui/helpers.c', '    if (str_eq(ui_crumb_path(c, i), S(NETWORK_URI))) return S("Browse Network");\n', ''),
+    ('fs/list.c', '    int c = n ? memcmp(a.p, b.p, (size_t)n) : 0;', '    int c = memcmp(a.p, b.p, (size_t)n);'),
 ]

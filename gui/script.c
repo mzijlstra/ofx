@@ -661,6 +661,7 @@ static void script_state(char *out, size_t cap)
     sw(out, cap, &len, "treecur=%s ", treecur);
     sw(out, cap, &len, "treehere=%d ", treehere);
     sw(out, cap, &len, "trash=%d ", app.ui.view == UI_VIEW_TRASH);
+    sw(out, cap, &len, "network=%d browseasks=%d ", app.ui.view == UI_VIEW_NETWORK, atomic_load(&browse.asks));   // (Browse Network, F16 step 7e)
     sw(out, cap, &len, "sidehover=%d ", app.hov.side);
     sw(out, cap, &len, "hovernum=%s ", hovernum);
     sw(out, cap, &len, "ejectbtn=%d ", ejectbtn);
@@ -983,9 +984,10 @@ static void script_sh(Str cmd)
         return;
     }
     // The trash view (F6) has no folder of its own: the home trash's stands in for it; the search
-    // view's (F9) is the folder searched.
+    // view's (F9) is the folder searched; Browse Network's (F16 step 7e), the run's own folder.
     char shown[PATH_MAX];
-    if (app.ui.view != UI_VIEW_TRASH || !trash_home(shown, sizeof shown)) snprintf(shown, sizeof shown, "%s", here_dir());
+    if (app.ui.view == UI_VIEW_NETWORK && root) snprintf(shown, sizeof shown, "%s", root);
+    else if (app.ui.view != UI_VIEW_TRASH || !trash_home(shown, sizeof shown)) snprintf(shown, sizeof shown, "%s", here_dir());
     if (!script_under(shown, root)) {
         script_fail("sh refused: %s is not under OFX_GUI_ROOT (%s)", shown, root ? root : "unset");
         return;

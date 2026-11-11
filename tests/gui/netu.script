@@ -4,18 +4,18 @@
 # there with no question; a connect shows its share at once. The shares are listed at the start and
 # then only when ofx kicks the listing (its unmount, its connect: OFX_TEST_GVFS_MS is 10 min here).
 settle
-wait-for 5000 sides=^Places|Home|Trash|^Drives|File_System|^Network|open_on_127.0.0.1|priv_on_127.0.0.1|pub_on_127.0.0.1|~Priv
+wait-for 5000 sides=^Places|Home|Trash|^Drives|File_System|^Network|Browse_Network|open_on_127.0.0.1|priv_on_127.0.0.1|pub_on_127.0.0.1|~Priv
 point-side open on 127.0.0.1
 click-here
 wait-for 5000 faron=1 farloading=0 n=1 sel=o.txt crumbs=open_on_127.0.0.1
-point-ui side-row 6
+point-ui side-row 7
 hover-here
 wait-for 2000 ejectbtn=1
-point-ui side-eject 6
+point-ui side-eject 7
 click-here
 wait-for 5000 statusbad=0 unmounted
 # Gone from the sidebar at once (ofx lists gvfs's folders again), and the folder shown on it Home.
-wait-for 3000 sides=^Places|Home|Trash|^Drives|File_System|^Network|priv_on_127.0.0.1|pub_on_127.0.0.1|~Priv faron=0 sel=nas
+wait-for 3000 sides=^Places|Home|Trash|^Drives|File_System|^Network|Browse_Network|priv_on_127.0.0.1|pub_on_127.0.0.1|~Priv faron=0 sel=nas
 point-side Priv
 click-here
 wait-for 8000 conn=0 login=0 faron=1 farloading=0 n=1 sel=p.txt connasked=0 statusbad=0
@@ -27,5 +27,5 @@ type smb://127.0.0.1:@PORT@/open
 key enter
 wait-for 8000 login=1
 key alt-g
-wait-for 8000 conn=0 login=0 faron=1 sel=o.txt sides=^Places|Home|Trash|^Drives|File_System|^Network|open_on_127.0.0.1|priv_on_127.0.0.1|pub_on_127.0.0.1|~Priv
+wait-for 8000 conn=0 login=0 faron=1 sel=o.txt sides=^Places|Home|Trash|^Drives|File_System|^Network|Browse_Network|open_on_127.0.0.1|priv_on_127.0.0.1|pub_on_127.0.0.1|~Priv
 quit

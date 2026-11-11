@@ -268,16 +268,16 @@ expect menugrey=parent,forward,search,terminal
 key esc
 key alt-left
 wait-for 2000 trash=0 n=4
-# Find in Folder…, Location…, Terminal Here (Search… between: f9.script; Connect to Server… after
-# Location…: netc.script)
+# Find in Folder…, Location…, Terminal Here (Search… between: f9.script; Connect to Server… and
+# Browse Network after Location…: netc.script, f16v.script)
 key alt-g
-keys up up up up up
+keys up up up up up up
 expect menuat=find
 key enter
 expect finding=1 findkeys=1 menu=-
 key esc
 key alt-g
-keys up up up
+keys up up up up
 expect menuat=location
 key enter
 expect locating=1 menu=-

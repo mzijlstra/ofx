@@ -48,13 +48,14 @@ static bool tip_of(int k, char *buf, size_t cap, Clay_ElementId *id)
     return false;
 }
 
-// The files area's word when it lists nothing: the search's state, a far folder's listing to come or
+// The files area's word when it lists nothing: the search's state, Browse Network's, a far folder's listing to come or
 // why not (F16; *bad: in red), only hidden files, or none at all.
 static const char *list_word(bool *bad)
 {
     bool far_word = app.far_on && (app.far_loading || app.far_note[0]);
     *bad = far_word && app.far_note[0];
     return app.ui.view == UI_VIEW_SEARCH ? (!app.ui.search.len ? "Type a name to search" : app.search_done ? "Nothing found" : "Searching\xE2\x80\xA6")
+           : app.ui.view == UI_VIEW_NETWORK ? (browse_busy() ? "Searching the network\xE2\x80\xA6" : "No servers found")   // (F16 step 7e)
            : far_word                   ? (app.far_note[0] ? app.far_note : "Opening\xE2\x80\xA6")
            : app.list.hidden            ? "Only hidden files"
                                         : "Empty folder";
