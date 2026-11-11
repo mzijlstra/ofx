@@ -403,7 +403,7 @@ static bool go_to_in(const char *dir, Str select, isize fallback, GoHow how)
     // server's were read last)
     const char *server = view == UI_VIEW_NETWORK ? browse_server_of(dir) : NULL;
     if (view == UI_VIEW_NETWORK && !same && !server) browse_start();
-    if (server && !same && strcmp(server, shp.server) != 0) connect_start(str_from_c(server));
+    if (server && !same && !shares_of(server)) connect_start(str_from_c(server));
     bool on_far = view == UI_VIEW_FOLDER && far_dir(dir);
     // A far folder listed again (Ctrl+R, a change ofx made): a new lister, the listing shown kept
     // until its answer comes.

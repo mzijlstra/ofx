@@ -8,7 +8,7 @@ key ctrl-l
 type smb://127.0.0.1:@PORT@/
 key enter
 wait-for 10000 conn=0 network=1 n=3 shps=open|priv|pub sel=open connasked=0
-sh grep -qx "gio list -a standard::type smb://127.0.0.1:@PORT@/" "$OFX_ROOT/spawn.log"
+sh grep -qx "gio list -a standard::type smb://127.0.0.1:@PORT@" "$OFX_ROOT/spawn.log"
 # A share picked: its address with the server's port (gvfs's own drops it), mounted already, so
 # gone to with no question.
 key down

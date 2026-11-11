@@ -406,6 +406,7 @@ static void places_load_net(Arena *scratch, Places *pl, const char *bookmarks, S
         ConnectUri c = connect_uri(uri, u, sizeof u, host, sizeof host, share, sizeof share, why, sizeof why);
         if (c != CONNECT_OK && c != CONNECT_SERVER) continue;
         if (label.len == 0) snprintf(name, sizeof name, share[0] ? "%s on %s" : "%s%s", share, host), label = str_from_c(name);   // (a server's own address, step 7a: its name)
+        snprintf(u, sizeof u, "%.*s", STR_ARG(str_trim(uri)));   // (the line's own, as Edit Bookmarks finds it: not connect_uri's one spelling of a server)
         places_add(pl, PL_NETBM, u, label);
     }
     arena_restore(scratch, mark);

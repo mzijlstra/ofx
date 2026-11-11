@@ -91,17 +91,22 @@ static Str state_value(Arena *a, const char *path, const char *key)
 // ---- a server's login, kept (F16 step 7e, Michael 2026-11-11) ----------------------------------
 //
 // Connect to Server's question fills the user and domain last used for a server, its keys on the
-// password, which is never kept (step 4's rule). One line a server: login.<host>=<user> <domain>,
-// each part %XX-escaped so a space or a '=' in it can't break the line.
+// password, which is never kept (step 4's rule). One line a server and protocol:
+// login.<scheme>.<host>=<user> <domain>, each part %XX-escaped so a space or a '=' in it can't
+// break the line.
 
-// The state file's key for server host (as connect_uri names it; an SFTP one's "user@host": the
-// host alone), into out; false when it doesn't fit or the host is empty.
-static bool login_key(const char *host, char *out, size_t cap)
+// The state file's key for server host of address uri (as connect_uri names them; an SFTP one's
+// "user@host": the host alone), in lower case (a host's name has none), into out; false when it
+// doesn't fit, the host is empty or has a space, '=' or a newline.
+static bool login_key(const char *uri, const char *host, char *out, size_t cap)
 {
     const char *at = strrchr(host, '@');
     const char *h = at ? at + 1 : host;
-    int n = snprintf(out, cap, "login.%s", h);
-    return h[0] && n > 0 && (size_t)n < cap && !strpbrk(h, " =\n");
+    const char *sep = strstr(uri, "://");
+    int n = snprintf(out, cap, "login.%.*s.%s", sep ? (int)(sep - uri) : 0, uri, h);
+    if (!sep || sep == uri || !h[0] || n <= 0 || (size_t)n >= cap || strpbrk(h, " =\n")) return false;   // (the scheme: connect_uri's, a known one)
+    for (char *c = out; *c; c++) *c = (char)tolower((unsigned char)*c);   // (NAS.local is nas.local; SMB's and SFTP's logins apart)
+    return true;
 }
 
 // The line's value for user and domain, into out; false when it doesn't fit.

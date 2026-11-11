@@ -498,6 +498,10 @@ giofake_shares() {   # $1: f16s's stand-in gio
     cat > "$1" <<'EOF'
 #!/bin/sh
 case "$1:$*" in
+mount:*smb://askg*)   # (asks; a wrong password asks again (Guest then closes it); the 7e code-health review)
+    printf 'Authentication Required\nEnter user and password for share \342\200\234x\342\200\235 on \342\200\234askg\342\200\235:\nUser [guest]: '
+    read -r u; printf 'Domain [WORKGROUP]: '; read -r d; printf 'Password: '; read -r p
+    if [ "$p" = wrong ]; then printf 'Authentication Required\nEnter user and password for share \342\200\234x\342\200\235 on \342\200\234askg\342\200\235:\nUser [guest]: '; read -r u; fi ;;
 mount:*smb://ask*)   # (asks as gio does: user, domain, password; the answers logged, never the password)
     printf 'Authentication Required\nEnter user and password for share \342\200\234x\342\200\235 on \342\200\234ask\342\200\235:\nUser [guest]: '
     read -r u; printf 'Domain [WORKGROUP]: '; read -r d; printf 'Password: '; read -r p
@@ -506,6 +510,7 @@ info:*smb://ask*) printf 'local path: %s\n' "$OFX_GUI_ROOT/asked-share" ;;
 mount:*) sleep 1 ;;
 list:*smb://empty*) ;;
 list:*smb://bad*) echo "gio: smb://bad/: Permission denied" >&2; exit 1 ;;
+list:*smb://flaky*) if [ -e "$OFX_GUI_ROOT/flaky-down" ]; then echo "gio: smb://flaky/: Connection refused" >&2; exit 1; fi; printf 'docs\t0\t(mountable)\n' ;;   # (its list fails once <root>/flaky-down is made)
 list:*) printf 'pub\t0\t(mountable)\nIPC$\t0\t(mountable)\nMusic\t0\t(mountable)\n' ;;
 esac
 exit 0
@@ -538,7 +543,7 @@ cat > "$T/avahi" <<EOF
 case " \$* " in
 *" _smb._tcp "*)
     printf '+;eth0;IPv4;YOGA;_smb._tcp;local\n=;eth0;IPv6;YOGA;_smb._tcp;local;yoga.local;fe80::1;445;\n=;eth0;IPv4;YOGA;_smb._tcp;local;yoga.local;192.168.1.165;445;"model=MacSamba"\n'
-    [ -e "$T/office" ] && printf '=;eth0;IPv4;Office;_smb._tcp;local;office.local;192.168.1.9;4445;\n' ;;
+    [ -e "$T/office" ] && printf '=;eth0;IPv4;Office;_smb._tcp;local;Office.local;192.168.1.9;4445;\n' ;;   # (its host in capitals: one server however spelled)
 *" _sftp-ssh._tcp "*)
     printf '=;eth0;IPv4;YOGA;_sftp-ssh._tcp;local;yoga.local;192.168.1.165;22;\n=;eth0;IPv6;box;_sftp-ssh._tcp;local;box.local;fd00::5;2222;\n' ;;
 esac

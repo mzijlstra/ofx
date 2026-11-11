@@ -23,14 +23,18 @@ key enter
 wait-for 4000 conn=0 statusbad=1
 sh grep -qx "gio mount smb://nas/pub" "$OFX_ROOT/spawn.log"
 # Ctrl+R there reads the server's shares again.
-sh [ "$(grep -c "gio mount smb://nas/$" "$OFX_ROOT/spawn.log")" -eq 1 ]
+sh [ "$(grep -c "gio mount smb://nas$" "$OFX_ROOT/spawn.log")" -eq 1 ]
 key ctrl-r
 wait-for 4000 conn=0 network=1 n=2 sel=pub
-sh [ "$(grep -c "gio mount smb://nas/$" "$OFX_ROOT/spawn.log")" -eq 2 ]
-# The server's bookmark in the sidebar: a click lists its shares too; Enter on the cursor's.
+sh [ "$(grep -c "gio mount smb://nas$" "$OFX_ROOT/spawn.log")" -eq 2 ]
+# The server's bookmark in the sidebar (smb://nas: the same server as smb://nas/, so the same view,
+# read again, the cursor kept; the 7e code-health review); Enter on the cursor's.
 point-side NAS
 click-here
-wait-for 4000 conn=0 network=1 n=2 sel=Music
+wait-for 4000 conn=0 network=1 n=2 sel=pub back=1
+sh [ "$(grep -c "gio mount smb://nas$" "$OFX_ROOT/spawn.log")" -eq 3 ]
+key up
+expect sel=Music
 key enter
 wait-for 4000 conn=0
 sh grep -qx "gio mount smb://nas/Music" "$OFX_ROOT/spawn.log"
@@ -74,7 +78,7 @@ type hunter2
 key enter
 wait-for 4000 conn=0 login=0 statusbad=0
 sh grep -qx "mz HOME" "$OFX_ROOT/asked"
-sh grep -qx "login.ask=mz HOME" "$OFX_ROOT/state/ofx/state"
+sh grep -qx "login.smb.ask=mz HOME" "$OFX_ROOT/state/ofx/state"
 sh ! grep -qs hunter2 "$OFX_ROOT/state/ofx/state" "$OFX_ROOT/spawn.log" "$OFX_ROOT/out" "$OFX_ROOT/err"
 key ctrl-l
 key ctrl-a
@@ -84,4 +88,39 @@ wait-for 4000 login=1 loginat=2 loginuser=mz
 key enter
 wait-for 4000 conn=0 login=0
 sh [ "$(tail -1 "$OFX_ROOT/asked")" = "mz HOME" ]
+# (the 7e code-health review) A server has one spelling: SMB://NAS/ is nas's view, not another.
+key ctrl-l
+key ctrl-a
+type SMB://NAS/
+key enter
+wait-for 4000 conn=0 dir=network:smb://nas n=2 shps=Music|pub
+# A server's view whose shares couldn't be read (another's kept): said so, not "No shares".
+key ctrl-l
+key ctrl-a
+type smb://flaky
+key enter
+wait-for 4000 conn=0 dir=network:smb://flaky n=1 sel=docs
+key ctrl-l
+key ctrl-a
+type smb://nas
+key enter
+wait-for 4000 conn=0 dir=network:smb://nas n=2
+sh touch "$OFX_ROOT/flaky-down"
+key alt-left
+wait-for 4000 conn=0 dir=network:smb://flaky n=0 statusbad=1 listword=Not_connected:_Ctrl+R_tries_again
+sh rm "$OFX_ROOT/flaky-down"
+key ctrl-r
+wait-for 4000 conn=0 n=1 sel=docs statusbad=0
+# Guest after an answer (a wrong password): nothing kept for the server.
+key ctrl-l
+key ctrl-a
+type smb://askg/x
+key enter
+wait-for 4000 login=1 loginat=2 loginuser=guest
+type wrong
+key enter
+wait-for 4000 login=1 loginagain=1
+key alt-g
+wait-for 4000 conn=0 login=0 statusbad=0
+sh ! grep -q "^login.smb.askg" "$OFX_ROOT/state/ofx/state"
 quit

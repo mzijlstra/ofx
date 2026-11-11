@@ -3047,9 +3047,9 @@ MUTANTS += [
     ('ui/helpers.c', '    const char *noun = in->noun ? in->noun : "item";', '    const char *noun = "item";'),   # (retargeted, F16 7e part 3)
     ('ui/helpers.c', '    if (str_eq(ui_crumb_path(c, i), S(NETWORK_URI))) return S("Browse Network");\n', ''),
     ('fs/list.c', '    int c = n ? memcmp(a.p, b.p, (size_t)n) : 0;', '    int c = memcmp(a.p, b.p, (size_t)n);'),
-    ('fs/state.c', '    return h[0] && n > 0 && (size_t)n < cap && !strpbrk(h, " =\\n");', '    return h[0] && n > 0 && (size_t)n < cap;'),   # (F16 7e part 3)
-    ('fs/state.c', '    return h[0] && n > 0 && (size_t)n < cap && !strpbrk(h, " =\\n");', '    return n > 0 && (size_t)n < cap && !strpbrk(h, " =\\n");'),   # (F16 7e part 3)
-    ('fs/state.c', '    return h[0] && n > 0 && (size_t)n < cap && !strpbrk(h, " =\\n");', '    return h[0] && n > 0 && !strpbrk(h, " =\\n");'),   # (F16 7e part 3)
+    ('fs/state.c', '    if (!sep || sep == uri || !h[0] || n <= 0 || (size_t)n >= cap || strpbrk(h, " =\\n")) return false;', '    if (!sep || sep == uri || !h[0] || n <= 0 || (size_t)n >= cap) return false;'),   # (retargeted, 7e code-health B)
+    ('fs/state.c', '    if (!sep || sep == uri || !h[0] || n <= 0 || (size_t)n >= cap || strpbrk(h, " =\\n")) return false;', '    if (!sep || sep == uri || n <= 0 || (size_t)n >= cap || strpbrk(h, " =\\n")) return false;'),   # (retargeted, 7e code-health B)
+    ('fs/state.c', '    if (!sep || sep == uri || !h[0] || n <= 0 || (size_t)n >= cap || strpbrk(h, " =\\n")) return false;', '    if (!sep || sep == uri || !h[0] || n <= 0 || strpbrk(h, " =\\n")) return false;'),   # (retargeted, 7e code-health B)
     ('fs/state.c', '    const char *h = at ? at + 1 : host;', '    const char *h = host;'),   # (F16 7e part 3)
     ('fs/state.c', '    int n = snprintf(out, cap, "%s %s", u, d);', '    int n = snprintf(out, cap, "%s %s", d, u);'),   # (F16 7e part 3)
     ('fs/state.c', '    if (!percent_encode(user, "", u, sizeof u) || !percent_encode(domain, "", d, sizeof d)) return false;\n    int n', '    snprintf(u, sizeof u, "%.*s", (int)user.len, user.p), snprintf(d, sizeof d, "%.*s", (int)domain.len, domain.p);\n    int n'),   # (F16 7e part 3)
@@ -3068,4 +3068,11 @@ MUTANTS += [
     ('ui/menus.c', '    case UM_HERE_PROPS: return u->view == UI_VIEW_FOLDER || u->view == UI_VIEW_TRASH;', '    case UM_HERE_PROPS: return u->view != UI_VIEW_SEARCH;'),   # (7e code-health A)
     ('ui/menus.c', '    case UM_HERE_PROPS: return u->view == UI_VIEW_FOLDER || u->view == UI_VIEW_TRASH;', '    case UM_HERE_PROPS: return u->view == UI_VIEW_FOLDER;'),   # (7e code-health A)
     ('ui/ui.c', '        case UA_LOGIN_CANCEL: case UA_BROWSE: return true;\n        }\n        return false;', '        case UA_LOGIN_CANCEL: case UA_BROWSE: return true;\n        }\n        return true;'),   # (7e code-health A)
+    ('fs/connect.c', '        for (char *c = uri + k; *c; c++) *c = (char)tolower((unsigned char)*c);\n', ''),   # (7e code-health B)
+    ('fs/connect.c', '    if (sh.len == 0) {   // (a server alone', '    if (0) {   // (a server alone'),   # (7e code-health B)
+    ('fs/connect.c', 'int k = snprintf(uri, ucap, "%s://%.*s%s", kind, (int)user.len, user.p, user.len ? "@" : "");', 'int k = snprintf(uri, ucap, "%s://", kind);'),   # (7e code-health B)
+    ('fs/state.c', '    for (char *c = out; *c; c++) *c = (char)tolower((unsigned char)*c);   // (NAS.local', '    for (char *c = out; 0; c++) *c = (char)tolower((unsigned char)*c);   // (NAS.local'),   # (7e code-health B)
+    ('fs/state.c', '    int n = snprintf(out, cap, "login.%.*s.%s", sep ? (int)(sep - uri) : 0, uri, h);', '    int n = snprintf(out, cap, "login.%s", h);'),   # (7e code-health B)
+    ('fs/state.c', '    if (!sep || sep == uri || !h[0] ||', '    if (!sep || !h[0] ||'),   # (7e code-health B)
+    ('fs/places.c', '        snprintf(u, sizeof u, "%.*s", STR_ARG(str_trim(uri)));   // (the line\'s own', "        // (the line's own"),   # (7e code-health B)
 ]

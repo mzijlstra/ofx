@@ -128,6 +128,12 @@ static ConnectUri connect_uri(Str text, char *uri, size_t ucap, char *host, size
     if (sh.len == 0 && (!s->server || path.len > 0)) return nfs ? snprintf(why, wcap, "Name a folder on %.*s: nfs://%.*s/folder", STR_ARG(name), STR_ARG(name)) : snprintf(why, wcap, "Name a share on %.*s: smb://%.*s/share", STR_ARG(name), STR_ARG(auth)), CONNECT_BAD;
     if ((size_t)name.len >= hcap || (size_t)sh.len >= scap) return snprintf(why, wcap, "The address is too long"), CONNECT_BAD;
     snprintf(uri, ucap, "%.*s", STR_ARG(text));
+    if (sh.len == 0) {   // (a server alone: one spelling for it, as its shares are kept and its view named by it,
+                         // smb://NAS/ as smb://nas: the 7e code-health review)
+        int k = snprintf(uri, ucap, "%s://%.*s%s", kind, (int)user.len, user.p, user.len ? "@" : "");
+        snprintf(uri + k, ucap - (size_t)k, "%.*s", STR_ARG(auth));
+        for (char *c = uri + k; *c; c++) *c = (char)tolower((unsigned char)*c);
+    }
     snprintf(host, hcap, "%.*s", STR_ARG(name));
     // (its name as said, decoded: "My Docs on nas" of smb://nas/My%20Docs, as gvfs names it; as
     // written when it doesn't decode, or decodes to a control character or a '/', which a label

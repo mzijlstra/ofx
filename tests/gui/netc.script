@@ -100,7 +100,7 @@ key enter
 wait-for 8000 conn=0 login=0 faron=1 farloading=0 n=1 sel=p.txt statusbad=0 dumpable=1
 expect to priv on 127.0.0.1
 # The login kept for the server (step 7e): its user and domain, never the password.
-sh grep -q "^login.127.0.0.1=tester " "$OFX_ROOT/state/ofx/state"
+sh grep -q "^login.smb.127.0.0.1=tester " "$OFX_ROOT/state/ofx/state"
 sh ! grep -qs secret "$OFX_ROOT/state/ofx/state"
 # A share mounted already (the run's pub), and a folder in it: no question, straight there.
 key ctrl-l

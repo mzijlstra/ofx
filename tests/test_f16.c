@@ -722,8 +722,12 @@ static void test_connect_uri(void)
     CHECK(CU("smb://michael:secret@nas/home") == CONNECT_BAD && strstr(why, "No password") && !strstr(why, "secret"));
     // A server's address alone (step 7a): its shares listed; a share named empty isn't one.
     CHECK(CU("smb://nas") == CONNECT_SERVER && strcmp(host, "nas") == 0 && share[0] == 0 && strcmp(uri, "smb://nas") == 0);
-    CHECK(CU("smb://nas:445/") == CONNECT_SERVER && strcmp(host, "nas") == 0 && share[0] == 0);
-    CHECK(CU("smb://me@nas/") == CONNECT_SERVER && share[0] == 0);
+    CHECK(CU("smb://nas:445/") == CONNECT_SERVER && strcmp(host, "nas") == 0 && share[0] == 0 && strcmp(uri, "smb://nas:445") == 0);
+    CHECK(CU("smb://me@nas/") == CONNECT_SERVER && share[0] == 0 && strcmp(uri, "smb://me@nas") == 0);
+    // (a server alone has one spelling: its shares are kept, and its view named, by it; the user's
+    // own case kept; a share's address as typed)
+    CHECK(CU(" SMB://Me@NAS.Local:445/ ") == CONNECT_SERVER && strcmp(uri, "smb://Me@nas.local:445") == 0 && strcmp(host, "NAS.Local") == 0);
+    CHECK(CU("SMB://NAS/Pub") == CONNECT_OK && strcmp(uri, "SMB://NAS/Pub") == 0);
     // SFTP (step 7c): a user and a port taken, a path or none; named "user@host" (gvfs's); no
     // password; not a server's shares.
     CHECK(CU("sftp://me@box:2020/home/me") == CONNECT_OK && strcmp(uri, "sftp://me@box:2020/home/me") == 0 && strcmp(host, "me@box") == 0 && share[0] == 0);
@@ -863,11 +867,14 @@ static void test_login_open(void)
 static void test_login_line(void)
 {
     char key[64], v[256], user[64], domain[64];
-    CHECK(login_key("nas", key, sizeof key) && strcmp(key, "login.nas") == 0);
-    CHECK(login_key("me@box", key, sizeof key) && strcmp(key, "login.box") == 0);
-    CHECK(login_key("[fd00::1]", key, sizeof key) && strcmp(key, "login.[fd00::1]") == 0);
-    CHECK(!login_key("", key, sizeof key) && !login_key("me@", key, sizeof key) && !login_key("a b", key, sizeof key) && !login_key("a=b", key, sizeof key));
-    CHECK(!login_key("nas", key, 6));
+    CHECK(login_key("smb://nas/pub", "nas", key, sizeof key) && strcmp(key, "login.smb.nas") == 0);
+    CHECK(login_key("sftp://me@box/", "me@box", key, sizeof key) && strcmp(key, "login.sftp.box") == 0);   // (SMB's and SFTP's apart)
+    CHECK(login_key("SMB://NAS.Local", "NAS.Local", key, sizeof key) && strcmp(key, "login.smb.nas.local") == 0);   // (one line, however typed)
+    CHECK(login_key("smb://[fd00::1]/x", "[fd00::1]", key, sizeof key) && strcmp(key, "login.smb.[fd00::1]") == 0);
+    CHECK(!login_key("smb://x", "", key, sizeof key) && !login_key("smb://x", "me@", key, sizeof key) && !login_key("smb://x", "a b", key, sizeof key) &&
+          !login_key("smb://x", "a=b", key, sizeof key) && !login_key("smb://x", "a\nb", key, sizeof key) && !login_key("nas", "nas", key, sizeof key) &&
+          !login_key("://nas", "nas", key, sizeof key));
+    CHECK(!login_key("smb://nas", "nas", key, 13) && login_key("smb://nas", "nas", key, 14));
     CHECK(login_value(S("mz"), S("WORKGROUP"), v, sizeof v) && strcmp(v, "mz WORKGROUP") == 0);
     CHECK(login_value(S("Jane Doe"), S(""), v, sizeof v) && strcmp(v, "Jane%20Doe ") == 0);
     login_parse(str_from_c(v), user, sizeof user, domain, sizeof domain);

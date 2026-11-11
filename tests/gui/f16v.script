@@ -101,5 +101,14 @@ middle-here
 expect tabs=2 statusbad=1 status=box:
 point-ui row 1
 middle-here
-wait-for 2000 tabs=3 statusbad=0 tabdirs=network:|office.local:4445|network:
+wait-for 2000 tabs=3 statusbad=0 tabdirs=network:|Office.local:4445|network:
+# That tab: Office's shares, kept (its host however spelled), not read again; Ctrl+R there reads
+# them in the same view.
+sh [ "$(grep -c "gio mount smb://office.local:4445" "$OFX_ROOT/spawn.log")" -eq 1 ]
+key ctrl-tab
+wait-for 4000 conn=0 dir=network:smb://Office.local:4445 n=2
+sh [ "$(grep -c "gio mount smb://office.local:4445" "$OFX_ROOT/spawn.log")" -eq 1 ]
+key ctrl-r
+wait-for 4000 conn=1
+wait-for 4000 conn=0 dir=network:smb://Office.local:4445 n=2 back=0
 quit

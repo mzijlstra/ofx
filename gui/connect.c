@@ -147,7 +147,11 @@ static CnReply cn_converse(Child *c, bool guest, char *eb, size_t ecap, size_t *
             while (cn.reply == CN_WAIT) pthread_cond_wait(&cn.cv, &cn.mu);
             rep = cn.reply;
             snprintf(user, sizeof user, "%s", cn.user), snprintf(domain, sizeof domain, "%s", cn.domain);
-            if (rep == CN_ANSWER) cn.answered = true, snprintf(cn.used_user, sizeof cn.used_user, "%s", cn.user), snprintf(cn.used_domain, sizeof cn.used_domain, "%s", cn.domain);
+            // (the last round's answer, kept for the server once it connects: a Guest after an answer
+            // keeps nothing, the 7e code-health review. A field the question hid holds what this
+            // server's line filled it with, so it is written back as it was read)
+            cn.answered = rep == CN_ANSWER;
+            snprintf(cn.used_user, sizeof cn.used_user, "%s", cn.user), snprintf(cn.used_domain, sizeof cn.used_domain, "%s", cn.domain);
             memcpy(pass, cn.pass, sizeof pass);
             cn_wipe();
             cn.phase = CN_RUN;
@@ -342,7 +346,7 @@ static bool connect_take(void)
         // (the user and domain last used for this server, kept in the state file: step 7e; else gio's
         // default user)
         char key[300], path[PATH_MAX], user[256] = "", domain[256] = "";
-        if (login_key(cn.host, key, sizeof key) && state_path(path, sizeof path)) {
+        if (login_key(cn.uri, cn.host, key, sizeof key) && state_path(path, sizeof path)) {
             ArenaMark m = arena_mark(&scratch);
             login_parse(state_value(&scratch, path, key), user, sizeof user, domain, sizeof domain);
             arena_restore(&scratch, m);
@@ -354,7 +358,8 @@ static bool connect_take(void)
     if (ph != CN_DONE) return pthread_mutex_unlock(&cn.mu), false;
     bool ok = cn.ok, cancelled = cn.cancelled, server = cn.browse, unknown = cn.unknown;
     char key[300], login[3 * 512 + 8];   // (a login answered and taken: kept for the server, step 7e)
-    bool keep = ok && cn.answered && login_key(cn.host, key, sizeof key) && login_value(str_from_c(cn.used_user), str_from_c(cn.used_domain), login, sizeof login);
+    bool keep = ok && cn.answered && (cn.used_user[0] || cn.used_domain[0]) && login_key(   // (nothing to fill: no line)
+        cn.uri, cn.host, key, sizeof key) && login_value(str_from_c(cn.used_user), str_from_c(cn.used_domain), login, sizeof login);
     if (ok && server) shares_keep(cn.uri, cn.host, cn.shares, cn.nshares);   // (the shares gui/ keeps: the panel's)
     char path[PATH_MAX], why[512];
     snprintf(path, sizeof path, "%s", cn.path), snprintf(why, sizeof why, "%s", cn.why);
@@ -375,7 +380,7 @@ static bool connect_take(void)
     if (server) {   // (a server's address: its shares, step 7a, listed in Browse Network's view since 7e)
         char at[PATH_MAX + 16];
         snprintf(at, sizeof at, "%s%s", NETWORK_URI, shp.server);
-        if (strcmp(app.cwd, at) == 0) network_relist();   // (asked again there: Ctrl+R)
+        if (strcasecmp(app.cwd, at) == 0) network_relist();   // (asked again there: Ctrl+R)
         else go_to(at, STR_EMPTY, 0);
         if (shp.n == 0) return set_status(false, "%s lists no shares", cn_name()), true;
         set_status(false, "%d share%s on %s", shp.n, shp.n == 1 ? "" : "s", cn_name());

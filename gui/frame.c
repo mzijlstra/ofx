@@ -55,7 +55,8 @@ static const char *list_word(bool *bad)
     bool far_word = app.far_on && (app.far_loading || app.far_note[0]);
     *bad = far_word && app.far_note[0];
     return app.ui.view == UI_VIEW_SEARCH ? (!app.ui.search.len ? "Type a name to search" : app.search_done ? "Nothing found" : "Searching\xE2\x80\xA6")
-           : app.ui.view == UI_VIEW_NETWORK && browse_server_of(app.cwd) ? (connect_busy() ? "Opening\xE2\x80\xA6" : "No shares")   // (F16 step 7e)
+           // (a server's shares, F16 step 7e: none, or not read, as another connect ran or it failed; the 7e code-health review)
+           : app.ui.view == UI_VIEW_NETWORK && browse_server_of(app.cwd) ? (connect_busy() ? "Opening\xE2\x80\xA6" : shares_of(browse_server_of(app.cwd)) ? "No shares" : "Not connected: Ctrl+R tries again")
            : app.ui.view == UI_VIEW_NETWORK ? (browse_busy() ? "Searching the network\xE2\x80\xA6" : "No servers found")
            : far_word                   ? (app.far_note[0] ? app.far_note : "Opening\xE2\x80\xA6")
            : app.list.hidden            ? "Only hidden files"

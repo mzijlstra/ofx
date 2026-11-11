@@ -124,6 +124,13 @@ static void shares_keep(const char *server, const char *host, const char (*names
     memcpy(shp.name, names, sizeof shp.name);
 }
 
+// Whether the shares kept are server's (an address as connect_uri spells a server's; a host's name
+// in any case, as a tab's address is the row's: the 7e code-health review).
+static bool shares_of(const char *server)
+{
+    return strcasecmp(server, shp.server) == 0;
+}
+
 // The server whose shares view dir is (NETWORK_URI and its address), or NULL for the servers' view.
 static const char *browse_server_of(const char *dir)
 {
@@ -141,7 +148,7 @@ static bool browse_list(Arena *a, const char *dir, Sort sort, Listing *l, Err *e
     const char *server = browse_server_of(dir);
     int n = 0;
     if (!server) n = browse_servers(s);
-    else if (strcmp(server, shp.server) == 0) {   // (a server's shares, step 7e: each its address, in the Address column)
+    else if (shares_of(server)) {   // (a server's shares, step 7e: each its address, in the Address column)
         for (int i = 0; i < shp.n; i++) {
             s[n] = (NetServer){ .kind = NET_SMB, .share = true };
             snprintf(s[n].name, sizeof s[n].name, "%s", shp.name[i]);

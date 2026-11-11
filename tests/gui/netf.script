@@ -16,6 +16,9 @@ type secret
 key enter
 wait-for 8000 conn=0 login=0 faron=1 farloading=0 n=2 sel=sub statusbad=0 crumbs=tester@127.0.0.1|home|tester crumbshare=1
 expect to tester@127.0.0.1
+# (nothing to fill next time, the user in the address: no SFTP line kept (netc's SMB one is in this
+# group's state); the 7e code-health review)
+sh ! grep -q "^login.sftp" "$OFX_ROOT/state/ofx/state"
 # In the Network section; Add Bookmark writes its sftp:// address.
 wait-for 3000 sides=^Places|Home|Trash|^Drives|File_System|^Network|Browse_Network|tester@127.0.0.1|open_on_127.0.0.1|priv_on_127.0.0.1|pub_on_127.0.0.1|~Priv
 key ctrl-d
