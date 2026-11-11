@@ -65,14 +65,6 @@ static void icon_tex_load(IconSlot *s, const char *file, int px)
     int want = px * app.icon_scale;
     if (str_ends_with(str_from_c(file), S(".svg"))) {
         Image img = svg_image(file, want);
-        // A symbolic icon is a shape in one colour, which the theme gives (as GTK does): the dim
-        // foreground, as the rows that have one draw their labels (F16 step 7d: Airplane Mode's).
-        // The icon cache is emptied on a theme change, so it follows.
-        if (img.data && str_ends_with(str_from_c(file), S("-symbolic.svg"))) {
-            u8 *p = img.data;
-            for (isize k = 0; k < (isize)img.width * img.height; k++)
-                p[k * 4] = app.theme.fg_dim.r, p[k * 4 + 1] = app.theme.fg_dim.g, p[k * 4 + 2] = app.theme.fg_dim.b;
-        }
         if (img.data) s->tex = LoadTextureFromImage(img);   // (the buffer is static: not unloaded)
     } else {
         Image img = LoadImage(file);

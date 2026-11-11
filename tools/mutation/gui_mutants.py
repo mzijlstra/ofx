@@ -1127,8 +1127,8 @@ MUTANTS = [
     # F16 step 6: NFS
     ('gui/connect.c', 'strcmp(why, "Mount point does not exist") == 0 ? " (are the server\'s name and the folder right?)" : "";', '"";', 'net'),
     # F16 step 5: the Network section, a share's unmount, crumbs, bookmarks and names
-    ('gui/watch.c', '        if (!atomic_load(&airplane) && (kicked || now_ms() >= gvfs_due)) {', '        if (!atomic_load(&airplane) && (now_ms() >= gvfs_due)) {', 'net'),
-    ('gui/folder.c', '    places_load_net(&scratch, &app.places, bm, watch_shares(&scratch), servers, nservers, app.ui.airplane);', '', 'f16'),   # (retargeted, step 7b)
+    # (dropped, step 7e: the same as #941 now that Airplane Mode's half is gone (step 7e))
+    ('gui/folder.c', '    places_load_net(&scratch, &app.places, bm, watch_shares(&scratch));', '', 'f16'),   # (retargeted, step 7e)
     ('gui/folder.c', '    return (place_is_drive(k) && k != PL_ROOT) || k == PL_SHARE;', '    return place_is_drive(k) && k != PL_ROOT;', 'f16'),
     # (F16 step 7d: side_path's check is place_folderless now; the unit mutants' place_folderless ones)
     ('gui/actions.c', '    if (place_connects(p->kind)) return connect_start(str_from_c(p->path)), true;', '    if (place_connects(p->kind)) return true;', 'f16'),   # (retargeted, step F)
@@ -1168,12 +1168,12 @@ MUTANTS = [
     ('gui/actions.c', '    case UA_SHARE: share_pick(a.index); break;', '', 'f16'),
     ('gui/connect.c', '    shares_drop();   // (a server', '    // (a server', 'f16'),   # (retargeted, step E)
     # F16 step 7b: servers on the network
-    ('gui/disco.c', '    if (getenv("OFX_GUI_ROOT") && !getenv("OFX_TEST_AVAHI")) return;', '    if (getenv("OFX_GUI_ROOT")) return;', 'f16'),
-    ('gui/disco.c', '    for (bool cache = false;; cache = true) {', '    for (bool cache = true;; cache = true) {', 'f16'),
-    ('gui/disco.c', '    for (bool cache = false;; cache = true) {', '    for (bool cache = false;; cache = false) {', 'f16'),
-    ('gui/disco.c', '    if (changed) atomic_store(&watch.mounts_ready, true), wake_main();', '', 'f16'),
-    ('gui/disco.c', '    bool changed = n != disco.n || memcmp(now, disco.s, (size_t)n * sizeof *now) != 0;', '    bool changed = n != disco.n;', 'f16'),
-    ('gui/folder.c', '    int nservers = disco_servers(servers);', '    int nservers = 0; (void)disco_servers;', 'f16'),
+    # (dropped, step 7e: Airplane Mode and the found servers are gone (step 7e))
+    # (dropped, step 7e: Airplane Mode and the found servers are gone (step 7e))
+    # (dropped, step 7e: Airplane Mode and the found servers are gone (step 7e))
+    # (dropped, step 7e: Airplane Mode and the found servers are gone (step 7e))
+    # (dropped, step 7e: Airplane Mode and the found servers are gone (step 7e))
+    # (dropped, step 7e: Airplane Mode and the found servers are gone (step 7e))
     # (Dropped, drawing only: the dim label of a network bookmark or a server found. No state word
     # reads a colour; f16v's shot shows it, checked by eye on 2026-11-10.)
     # F16 step 7c: SFTP
@@ -1186,29 +1186,29 @@ MUTANTS = [
     ('gui/connect.c', '        return set_status(true, "%s isn\'t a known host: connect once with ssh to check its key, then try again", h ? h + 1 : cn.host), true;', '        return set_status(true, "%s isn\'t a known host: connect once with ssh to check its key, then try again", cn.host), true;', 'net'),
     ('gui/connect.c', '        cn.browse = c == CONNECT_SERVER,', '        cn.browse = false,', 'f16'),
     # F16 step 7d: Airplane Mode, and the share poll's back-off
-    ('gui/watch.c', '        if (!atomic_load(&airplane) && (kicked || now_ms() >= gvfs_due)) {', '        if (kicked || now_ms() >= gvfs_due) {', 'f16'),
+    ('gui/watch.c', '        if (kicked || now_ms() >= gvfs_due) {', '        if (now_ms() >= gvfs_due) {', 'f16'),   # (retargeted, step 7e)
     ('gui/watch.c', 'base, most, kicked || changed || gvfsw.len > 0);', 'base, most, kicked || changed);', 'f16'),
     ('gui/watch.c', 'base, most, kicked || changed || gvfsw.len > 0);', 'base, most, false);', 'f16'),
-    ('gui/watch.c', '        if (e->wd == watch.state_wd && e->len && strcmp(e->name, "state") == 0) atomic_store(&watch.state_ready, true), wake_main();   // (F16 step 7d)\n', '', 'f16'),
-    ('gui/watch.c', '        watch.state_wd = inotify_add_watch(', '        watch.state_wd = -1 + 0 * inotify_add_watch(', 'f16'),
-    ('gui/disco.c', '        while (atomic_load(&airplane)) cache = false, pthread_cond_wait(&disco.cv, &disco.mu);', '        while (false) cache = false, pthread_cond_wait(&disco.cv, &disco.mu);', 'f16'),
-    ('gui/disco.c', '        while (atomic_load(&airplane)) cache = false, pthread_cond_wait(', '        while (atomic_load(&airplane)) pthread_cond_wait(', 'f16'),
-    ('gui/connect.c', '    if (atomic_load(&airplane)) return set_status(true, "Airplane mode is on', '    if (false) return set_status(true, "Airplane mode is on', 'f16'),
-    ('gui/actions.c', '    if (!on) app.ui.airplane_asking = false;\n', '', 'f16'),
-    ('gui/actions.c', '    watch_gvfs_kick(), disco_wake();\n', '    disco_wake();\n', 'f16'),
-    ('gui/actions.c', '    watch_gvfs_kick(), disco_wake();\n', '    watch_gvfs_kick();\n', 'f16'),
-    ('gui/actions.c', '    watch_gvfs_kick(), disco_wake();\n    places_reload();\n', '    watch_gvfs_kick(), disco_wake();\n', 'f16'),
-    ('gui/actions.c', '    airplane_apply(str_eq(state_value(&scratch, path, "airplane"), S("on")));', '    airplane_apply(false);', 'f16'),
-    ('gui/actions.c', '        if (state_key("airplane", app.ui.airplane ? "on" : "off")) set_status', '        if (true) set_status', 'f16'),
-    ('gui/actions.c', '"Airplane mode is off");\n        airplane_apply(app.ui.airplane);', '"Airplane mode is off");', 'f16'),
-    ('gui/actions.c', '        else if (pl && pl->kind == PL_AIRPLANE) app.ui.airplane_asking = true;', '        else if (pl && pl->kind == PL_AIRPLANE) {}', 'f16'),   # (retargeted, step F)
-    ('gui/main.c', '    if (atomic_exchange(&watch.state_ready, false)) airplane_sync(), dirty = true;', '    if (atomic_exchange(&watch.state_ready, false)) dirty = true;', 'f16'),
-    ('gui/main.c', 'atomic_store(&airplane, state_load(&scratch, state_at).airplane);', 'atomic_store(&airplane, false);', 'f16'),
-    ('gui/main.c', '    app.ui.airplane = atomic_load(&airplane);\n', '', 'f16'),
-    ('gui/actions.c', '    if (p->kind == PL_AIRPLANE) return UI_CTX_AIRPLANE;   // (F16 step 7d)\n', '', 'f16'),   # (retargeted, step F)
-    ('gui/folder.c', 'servers, nservers, app.ui.airplane);', 'servers, nservers, false);', 'f16'),
-    ('gui/disco.c', '        if (gen != seen) cache = false, seen = gen;', '        if (gen != seen) seen = gen;', 'f16'),
-    ('gui/actions.c', '    if (on) atomic_fetch_add(&airplane_gen, 1);\n', '', 'f16'),
+    # (dropped, step 7e: Airplane Mode and the found servers are gone (step 7e))
+    # (dropped, step 7e: Airplane Mode and the found servers are gone (step 7e))
+    # (dropped, step 7e: Airplane Mode and the found servers are gone (step 7e))
+    # (dropped, step 7e: Airplane Mode and the found servers are gone (step 7e))
+    # (dropped, step 7e: Airplane Mode and the found servers are gone (step 7e))
+    # (dropped, step 7e: Airplane Mode and the found servers are gone (step 7e))
+    # (dropped, step 7e: Airplane Mode and the found servers are gone (step 7e))
+    # (dropped, step 7e: Airplane Mode and the found servers are gone (step 7e))
+    # (dropped, step 7e: Airplane Mode and the found servers are gone (step 7e))
+    # (dropped, step 7e: Airplane Mode and the found servers are gone (step 7e))
+    # (dropped, step 7e: Airplane Mode and the found servers are gone (step 7e))
+    # (dropped, step 7e: Airplane Mode and the found servers are gone (step 7e))
+    # (dropped, step 7e: Airplane Mode and the found servers are gone (step 7e))
+    # (dropped, step 7e: Airplane Mode and the found servers are gone (step 7e))
+    # (dropped, step 7e: Airplane Mode and the found servers are gone (step 7e))
+    # (dropped, step 7e: Airplane Mode and the found servers are gone (step 7e))
+    # (dropped, step 7e: Airplane Mode and the found servers are gone (step 7e))
+    # (dropped, step 7e: Airplane Mode and the found servers are gone (step 7e))
+    # (dropped, step 7e: Airplane Mode and the found servers are gone (step 7e))
+    # (dropped, step 7e: Airplane Mode and the found servers are gone (step 7e))
     # The milestone's code-health cleanup, step A
     ('gui/panels.c', 'props.local = here ? !far_dir(props_path[0]) : app.here_local;', 'props.local = app.here_local;', 'f16'),
     ('gui/walk.c', '.mounts = mounts_read(&mia, &mta, mountinfo_path()), .pts = pts,', '.mounts = (Mounts){ 0 }, .pts = pts,', 'f72'),   # (retargeted, step C review)

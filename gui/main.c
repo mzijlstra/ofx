@@ -146,7 +146,6 @@ static void timer_stop(void)
 }
 
 #include "watch.c"
-#include "disco.c"   // (F16 step 7b: servers on the network)
 #include "clipboard.c"
 #include "dnd.c"
 #include "far.c"      // (before counts.c: a far folder's counts are its lister's)
@@ -760,11 +759,7 @@ static void app_start(void)
     user_dirs_load(&data, &app.user_dirs);
     theme_apply();
     conf_start();   // (F10: before watch_start, which watches the file's folder)
-    char state_at[PATH_MAX];   // (F16 step 7d: Airplane Mode before the threads it stops start)
-    if (state_path(state_at, sizeof state_at)) atomic_store(&airplane, state_load(&scratch, state_at).airplane);
-    app.ui.airplane = atomic_load(&airplane);
     if (!watch_start()) set_status(true, "inotify is unavailable: no live refresh");
-    disco_start();   // (F16 step 7b)
     clip_init();   // false: the clipboard stays inside ofx
     dnd_init();    // (F14: drags to and from other programs)
     count_start();
@@ -826,7 +821,6 @@ static bool poll_workers(void)
     }
     if (atomic_exchange(&watch.list_ready, false)) reload(), dirty = true;
     if (atomic_exchange(&watch.conf_ready, false)) conf_apply(), reload(), dirty = true;   // (the dates, a search's skips)
-    if (atomic_exchange(&watch.state_ready, false)) airplane_sync(), dirty = true;   // (F16 step 7d: another window's Airplane Mode)
     if (atomic_exchange(&watch.trash_ready, false) && trash_state()) dirty = true;
     dirty |= jobs_poll();
     if (app.have_list && count_take(app.count, app.list.n)) dirty = true;

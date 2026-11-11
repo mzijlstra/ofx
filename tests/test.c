@@ -507,9 +507,7 @@ static void test_icons(void)
     CHECK(!icon_find(&ta, &apps_db, (Str[]){ S("a-place") }, 1, 48, 1) && !icon_find(&ta, &apps_db, (Str[]){ S("not-an-icon") }, 1, 48, 1));
     CHECK(strcmp(FIND(48, 1, S("vec-app")), "") == 0);   // the files' lookup takes no SVG
     CHECK(strcmp(FIND(24, 1, S("only-svg")), "") == 0);       // PNG only
-    // but a symbolic SVG, by its own name only (F16 step 7d: Yaru has Airplane Mode's only so)
-    CHECK(strcmp(FIND(24, 1, S("plane-symbolic")), at("icons/Parent/scalable/mimetypes/plane-symbolic.svg")) == 0);
-    CHECK(strcmp(FIND(24, 1, S("plane")), "") == 0);
+    CHECK(strcmp(FIND(24, 1, S("plane-symbolic")), "") == 0);   // (a symbolic SVG too: F16 step 7d took those, 7e not)
     CHECK(strcmp(FIND(24, 1, S("not-an-icon")), "") == 0);
     CHECK(strcmp(FIND(24, 1, S("absent")), "") == 0);
     // Threshold 32 +-2: 30 and 34 match it.
@@ -1953,7 +1951,7 @@ int main(void)
     if (fast) test_avahi_servers();
     if (fast) test_crumbs_share();
     if (fast) test_gvfs_shares();
-    if (fast) test_airplane();
+    if (fast) test_share_poll();
     if (fast) test_wheel_under_question();
     if (fast) test_ui_age();
     if (fast) test_branch_panel();

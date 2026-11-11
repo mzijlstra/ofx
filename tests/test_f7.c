@@ -165,7 +165,7 @@ static void test_menu_enabled(void)
                             [UM_TRASH] = true, [UM_DELETE] = true, [UM_RELOAD] = true, [UM_SIDE_PLACES] = true, [UM_SIDE_TREE] = true,
                             [UM_SIDE_NONE] = true, [UM_HIDDEN] = true, [UM_SORT_NAME] = true, [UM_SORT_SIZE] = true, [UM_SORT_MTIME] = true,
                             [UM_SORT_REVERSE] = true, [UM_VIEW_LIST] = true, [UM_VIEW_ICONS] = true, [UM_HOME] = true, [UM_TRASH_VIEW] = true,
-                            [UM_FIND] = true, [UM_SEARCH] = true, [UM_LOCATION] = true, [UM_CONNECT] = true, [UM_AIRPLANE] = true, [UM_TERMINAL] = true, [UM_EDIT_BOOKMARKS] = true, [UM_SHORTCUTS] = true, [UM_ABOUT] = true, [UM_PREFERENCES] = true,
+                            [UM_FIND] = true, [UM_SEARCH] = true, [UM_LOCATION] = true, [UM_CONNECT] = true, [UM_TERMINAL] = true, [UM_EDIT_BOOKMARKS] = true, [UM_SHORTCUTS] = true, [UM_ABOUT] = true, [UM_PREFERENCES] = true,
                             [UM_CLEAR_PREVIEWS] = true, [UM_OPEN_TAB] = true, [UM_HERE_PROPS] = true, [UM_MAKE_LINK] = true,
                             [UM_PERMS_COLS] = true, [UM_SHOW_MENU] = true, [UM_COLORS] = true };
     for (int it = 0; it < UM_ITEMS; it++) CHECK(ui_menu_enabled(&u, (UiMenuItem)it) == want[it]);

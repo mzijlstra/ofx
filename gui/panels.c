@@ -141,12 +141,6 @@ static void layout_modal_panel(UiOnTop k)
                       { .textColor = cc(t->fg_dim), .fontSize = FONT_PX, .wrapMode = CLAY_TEXT_WRAP_WORDS });
             text(cz("Enter or y deletes \xC2\xB7 n or Esc cancels"), cc(t->fg_dim));
             modal_yes_no("Cancel", "Delete");
-        } else if (k == UI_ON_AIRPLANE) {   // (F16 step 7d: a click on the sidebar's row)
-            text(cz("Turn off airplane mode?"), cc(t->fg));
-            CLAY_TEXT(CLAY_STRING("ofx then finds servers on the network again, lists your shares and connects to them, in every window."),
-                      { .textColor = cc(t->fg_dim), .fontSize = FONT_PX, .wrapMode = CLAY_TEXT_WRAP_WORDS });
-            text(cz("Enter or y turns it off \xC2\xB7 n or Esc keeps it on"), cc(t->fg_dim));
-            modal_yes_no("Keep On", "Turn Off");
         } else if (k == UI_ON_DELETE) {
             text(cz(arena_sprintf(&frame, "Delete %td %s for good?", app.ui.confirm_n, items(app.ui.confirm_n))), cc(t->fg));
             CLAY(CLAY_ID("modal-names"), { .layout = { .layoutDirection = CLAY_TOP_TO_BOTTOM, .childGap = 2, .padding = { 12, 0, 4, 4 } } }) {

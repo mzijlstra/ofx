@@ -294,7 +294,7 @@ static void script_state(char *out, size_t cap)
     static const char *const GIT_WORDS[GS_N] = { "-", "ignored", "untracked", "staged", "renamed", "modified", "conflict" };   // (the cursor's, F12)
     static const char *const MODALS[] = {
         [UI_ON_NONE] = "-", [UI_ON_DELETE] = "delete", [UI_ON_CLASH] = "clash", [UI_ON_CANCEL] = "cancel", [UI_ON_QUIT] = "quit",
-        [UI_ON_FULL] = "full", [UI_ON_EMPTY] = "empty", [UI_ON_CLEAR] = "clear-previews", [UI_ON_AIRPLANE] = "airplane", [UI_ON_PROPS] = "props", [UI_ON_OW] = "open-with",
+        [UI_ON_FULL] = "full", [UI_ON_EMPTY] = "empty", [UI_ON_CLEAR] = "clear-previews", [UI_ON_PROPS] = "props", [UI_ON_OW] = "open-with",
         [UI_ON_BM] = "bookmarks", [UI_ON_KEYS] = "shortcuts", [UI_ON_ABOUT] = "about", [UI_ON_BAR] = "menubar", [UI_ON_RESTORE] = "restore", [UI_ON_BRANCHES] = "branches", [UI_ON_LOGIN] = "login",
         [UI_ON_SHARES] = "shares",
     };
@@ -877,8 +877,7 @@ static void script_state(char *out, size_t cap)
     sw(out, cap, &len, "brpsel=%s ", brpsel);
     sw(out, cap, &len, "brptext=%s ", brptext);
     sw(out, cap, &len, "brpinlist=%d ", app.ui.brp.in_list);
-    sw(out, cap, &len, "discoasks=%d ", atomic_load(&disco.asks));   // (F16 step 7b)
-    sw(out, cap, &len, "airplane=%d sharesscans=%d sharesevery=%d ", app.ui.airplane, atomic_load(&gvfsw.scans), atomic_load(&gvfsw.every));   // (F16 step 7d)
+    sw(out, cap, &len, "sharesscans=%d sharesevery=%d ", atomic_load(&gvfsw.scans), atomic_load(&gvfsw.every));   // (F16 step 7d)
     sw(out, cap, &len, "shp=%d shpn=%td shpsel=%s shptext=%s shps=%s shppending=%d shpinlist=%d ", app.ui.panel == UI_PANEL_SHARES, app.ui.shp.list.n, shpsel, shptext, shplist, shp.pending, app.ui.shp.in_list);
     sw(out, cap, &len, "sidew=%d ", side_w());
     sw(out, cap, &len, "sidebox=%.0f ", Clay_GetElementData(CLAY_ID("side")).boundingBox.width);

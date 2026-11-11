@@ -1,6 +1,6 @@
 // What ofx remembers by itself across a restart (docs/plan.md, F6 "Remembered", F11), in
 // $XDG_STATE_HOME/ofx/state (~/.local/state by default), which ofx writes: the sidebar's mode and
-// width (sidewidth=, F13), the View menu's toggles, Airplane Mode (airplane=, F16 step 7d), Show Hidden Files, the tree's open folders (tree=), per folder its view, icon
+// width (sidewidth=, F13), the View menu's toggles, Show Hidden Files, the tree's open folders (tree=), per folder its view, icon
 // size, sort and cursor (fs/folders.c's "folder …" lines), and each window's tabs (fs/session.c's
 // "window …" lines). Options Michael sets go in $XDG_CONFIG_HOME/ofx/ofx.conf (fs/conf.c), which
 // ofx only writes when it isn't there.
@@ -32,7 +32,6 @@ typedef struct {
     bool     group;      // and Group shown between them (2026-10-27, off by default as eza's): "group=on"
     bool     no_colors;  // the list's colours off (2026-10-27): "colors=off"
     int      side_px;    // the sidebar's width dragged to (F13): "sidewidth=260"; 0 none
-    bool     airplane;   // Airplane Mode (F16 step 7d), every window's: "airplane=on"
 } State;
 
 // $XDG_STATE_HOME/ofx/state, else ~/.local/state/ofx/state; false when neither is set.
@@ -70,7 +69,6 @@ static State state_load(Arena *scratch, const char *path)
         if (str_eq(key, S("menubar"))) s.no_bar = str_eq(val, S("off"));
         if (str_eq(key, S("colors"))) s.no_colors = str_eq(val, S("off"));
         if (str_eq(key, S("group"))) s.group = str_eq(val, S("on"));
-        if (str_eq(key, S("airplane"))) s.airplane = str_eq(val, S("on"));
         if (str_eq(key, S("sidewidth"))) s.side_px = state_px(val);
         if (!str_eq(key, S("sidebar"))) continue;
         for (int k = 0; k < SIDE_MODES; k++)

@@ -24,7 +24,12 @@ def check_unique(root, mutants):
     bad = 0
     for i, m in enumerate(mutants):
         f, old = m[0], m[1]
-        n = open(os.path.join(root, f)).read().count(old)
+        path = os.path.join(root, f)
+        if not os.path.exists(path):   # (a file removed: its mutants go too, said as the stale are)
+            print(f'#{i} {f}: the file is gone')
+            bad += 1
+            continue
+        n = open(path).read().count(old)
         if n != 1:
             print(f'#{i} {f}: old text occurs {n} times, not once: {old!r}')
             bad += 1

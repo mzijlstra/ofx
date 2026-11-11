@@ -1,109 +1,20 @@
-# F16 step 7d: Airplane Mode and the share poll's back-off (run.sh's f16w): a stand-in gvfs FUSE folder
-# with no share yet, a stand-in avahi-browse that finds YOGA, an smb:// bookmark, and a state file
-# saying airplane=on (as a window left it). The poll's waits are scaled down: 200 ms doubling to
-# 1600 ms (OFX_TEST_GVFS_MS, OFX_TEST_GVFS_MAX_MS).
+# F16 step 7d: the share poll's back-off (run.sh's f16w): a stand-in gvfs FUSE folder with no share
+# yet, and an smb:// bookmark. The poll's waits are scaled down: 200 ms doubling to 1600 ms
+# (OFX_TEST_GVFS_MS, OFX_TEST_GVFS_MAX_MS). The poll reads gvfs's local folder, never the network
+# (step 7e removed Airplane Mode, which turned it off, with the rest of what asked the network).
 settle
-# Started in Airplane Mode: the Network section is its row alone; no discovery at all.
-wait-for 4000 airplane=1 sides=^Places|Home|Trash|^Drives|File_System|^Network|~Airplane_mode
-expect discoasks=0
-shot f16w-airplane.png
-# Go → Airplane Mode, checked; picked, it turns off: one real query (no -c), the section back.
-point-ui menu-title 3
-click-here
-expect menu=Go menumarked=airplane-mode
-point-menu airplane-mode
-click-here
-wait-for 10000 airplane=0 sides=^Places|Home|Trash|^Drives|File_System|^Network|~Home_NAS|~YOGA
-expect status=Airplane
-sh grep -qx "airplane=off" "$OFX_ROOT/state/ofx/state"
-sh [ "$(grep -c "avahi-browse -k -t -r -p _smb._tcp" "$OFX_ROOT/spawn.log")" -eq 1 ]
+wait-for 4000 sides=^Places|Home|Trash|^Drives|File_System|^Network|~Home_NAS
 # No share mounted: the waits grow to their longest.
 wait-for 6000 sharesevery=1600
 # A share mounted by another program: listed within the longest wait, and the wait back to 200,
 # staying there while it is mounted.
 sh mkdir "$OFX_ROOT/gvfs/smb-share:server=nas,share=pub"
-wait-for 4000 sides=^Places|Home|Trash|^Drives|File_System|^Network|pub_on_nas|~Home_NAS|~YOGA sharesevery=200
+wait-for 4000 sides=^Places|Home|Trash|^Drives|File_System|^Network|pub_on_nas|~Home_NAS sharesevery=200
 sleep 1500
 expect sharesevery=200
 # Gone again: the waits grow again.
 sh rmdir "$OFX_ROOT/gvfs/smb-share:server=nas,share=pub"
-wait-for 6000 sides=^Places|Home|Trash|^Drives|File_System|^Network|~Home_NAS|~YOGA sharesevery=1600
-# On again from Go: kept in the state file; the Network section is its row alone.
-point-ui menu-title 3
-click-here
-point-menu airplane-mode
-click-here
-wait-for 2000 airplane=1 sides=^Places|Home|Trash|^Drives|File_System|^Network|~Airplane_mode
-expect status=Airplane
-sh grep -qx "airplane=on" "$OFX_ROOT/state/ofx/state"
-# No discovery and no share listing while it is on: avahi-browse not run for 3 s (three of its
-# cycles here), and a share mounted meanwhile not listed (a listing would put the wait back to 200).
-sh cp "$OFX_ROOT/spawn.log" "$OFX_ROOT/spawn.before"
-sh mkdir "$OFX_ROOT/gvfs/smb-share:server=nas,share=pub"
-sleep 3000
-sh cmp -s "$OFX_ROOT/spawn.log" "$OFX_ROOT/spawn.before"
-expect sharesevery=1600 sides=^Places|Home|Trash|^Drives|File_System|^Network|~Airplane_mode
-sh rmdir "$OFX_ROOT/gvfs/smb-share:server=nas,share=pub"
-# A connect is refused, saying how to turn it off: the bookmark's address in the location line.
-key ctrl-l
-type smb://nas/home
-key enter
-expect statusbad=1 status=Airplane conn=0
-sh ! grep -q "gio mount smb://nas/home" "$OFX_ROOT/spawn.log"
-# The row's menu: Turn Off Airplane Mode alone.
-point-side Airplane mode
-right-here
-expect menu=folder
-point-menu airplane-off-it
-key esc
-# A click on the row asks; No keeps it on.
-point-side Airplane mode
-click-here
-wait-for 2000 modal=airplane
-shot f16w-ask.png
-point-ui modal-no
-click-here
-wait-for 2000 modal=- airplane=1
-# Asked again, and meanwhile another window turns it off (its state file written, renamed into
-# place): this one follows, its question gone, the section back, a real query made again, and the
-# shares listed at once (the wait back to 200).
-point-side Airplane mode
-click-here
-wait-for 2000 modal=airplane
-sh sed 's/^airplane=on$/airplane=off/' "$OFX_ROOT/state/ofx/state" > "$OFX_ROOT/state/ofx/state.new" && mv "$OFX_ROOT/state/ofx/state.new" "$OFX_ROOT/state/ofx/state"
-wait-for 4000 airplane=0 modal=- sides=^Places|Home|Trash|^Drives|File_System|^Network|~Home_NAS|~YOGA sharesevery=200
-sh [ "$(grep -c "avahi-browse -k -t -r -p _smb._tcp" "$OFX_ROOT/spawn.log")" -eq 2 ]
-# On and off again while discovery is busy (a cache read made to take 2 s; F8 is airplane-mode in
-# this run's ofx.conf), so it never sees "on" itself: its next look is a real query anyway, not the
-# cache of the network it had (the step 7d review).
-sh touch "$OFX_ROOT/slow"
-sleep 1200
-key f8
-wait-for 1000 airplane=1
-key f8
-wait-for 1000 airplane=0
-sh rm "$OFX_ROOT/slow"
-sleep 3000
-sh [ "$(grep -c "avahi-browse -k -t -r -p _smb._tcp" "$OFX_ROOT/spawn.log")" -eq 3 ]
-# On again, then the row's question answered yes: off, and written.
-point-ui menu-title 3
-click-here
-point-menu airplane-mode
-click-here
-wait-for 2000 airplane=1
-point-side Airplane mode
-click-here
-wait-for 2000 modal=airplane
-key enter
-wait-for 2000 modal=- airplane=0 sides=^Places|Home|Trash|^Drives|File_System|^Network|~Home_NAS|~YOGA
-sh grep -qx "airplane=off" "$OFX_ROOT/state/ofx/state"
-# A state file that can't be written: this window still turns it on, and says why the others won't.
-sh chmod a-w "$OFX_ROOT/state/ofx"
-point-ui menu-title 3
-click-here
-point-menu airplane-mode
-click-here
-wait-for 2000 airplane=1 statusbad=1 sides=^Places|Home|Trash|^Drives|File_System|^Network|~Airplane_mode
-sh chmod u+w "$OFX_ROOT/state/ofx"
-sh grep -qx "airplane=off" "$OFX_ROOT/state/ofx/state"
+wait-for 6000 sides=^Places|Home|Trash|^Drives|File_System|^Network|~Home_NAS sharesevery=1600
+# No avahi-browse runs on its own (step 7e: Browse Network asks, when visited).
+sh ! grep -q "avahi-browse" "$OFX_ROOT/spawn.log"
 quit

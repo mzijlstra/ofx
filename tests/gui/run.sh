@@ -6,7 +6,7 @@
 # printed whole, in order, once all are done; clip, keys and dnd share one (each starts a sway,
 # which takes the first free wayland-N).
 # The groups (one or more scripts on one tree): browse big gone watchgap f2 f3 f4 f5 f52 f53 f54
-# f6 (f6, f6b) usb f62 (f62, f62b, f62c) f63 (f63, f63b, f63c, f63d) f64 (f64, f64b, f64c, f64d) f7 (f7, f7b) f72 (f72, f72m) f73 (f73, f73b, f73c, f73d) f74 f75 (f75, f75b, f75c) f15 (f15, f15b) f16 (f16, f16b, f16c, f16d, f16e, f16f, f16g, f16h, f16q, f16s, f16v, f16w) net (net, netq, netc, netu, nets, netf, netn: the last only with the NFS test server) f8 (f8, f8b, f8c, f8d, f8e) f9 (f9, f9b) f10 (f10, f10b, f10c, f10d) f11 (f11, f11b, f11c, f11d, f11e, f11f, f11g, f11h, f11i, f11j, f11k, f11l, f11m, f11n, f11o, f11p, f11q, f11r, f11s, f11t) f12 (f12, f12b) f12g f12h f12i f13 (f13, f13b, f13c, f13d, f13e, f13f, f13g, f13h) clip (clip, copypath) keys dnd (dnd, dndb, dndc, dndd, dnde, dndf, dndg, dndh, dndi, dndj, dndk) (the three in sway) hang guard3 guard harness (harness, harnessb, harnessc, harnessd). Named ones only, or all of them; a group
+# f6 (f6, f6b) usb f62 (f62, f62b, f62c) f63 (f63, f63b, f63c, f63d) f64 (f64, f64b, f64c, f64d) f7 (f7, f7b) f72 (f72, f72m) f73 (f73, f73b, f73c, f73d) f74 f75 (f75, f75b, f75c) f15 (f15, f15b) f16 (f16, f16b, f16c, f16d, f16e, f16f, f16g, f16h, f16q, f16s, f16w) net (net, netq, netc, netu, nets, netf, netn: the last only with the NFS test server) f8 (f8, f8b, f8c, f8d, f8e) f9 (f9, f9b) f10 (f10, f10b, f10c, f10d) f11 (f11, f11b, f11c, f11d, f11e, f11f, f11g, f11h, f11i, f11j, f11k, f11l, f11m, f11n, f11o, f11p, f11q, f11r, f11s, f11t) f12 (f12, f12b) f12g f12h f12i f13 (f13, f13b, f13c, f13d, f13e, f13f, f13g, f13h) clip (clip, copypath) keys dnd (dnd, dndb, dndc, dndd, dnde, dndf, dndg, dndh, dndi, dndj, dndk) (the three in sway) hang guard3 guard harness (harness, harnessb, harnessc, harnessd). Named ones only, or all of them; a group
 # that fails says "== <script>: FAILED" or "<group>: FAILED" (tools/mutation/gui.py reads it).
 set -u
 par=1
@@ -494,7 +494,7 @@ rs f16h OFX_TEST_MOUNTINFO="$T/mountinfo" OFX_TEST_SHARES_MS=3000 -- "$T/home"
 # f16s (step 7a): a server's shares through a stand-in gio (no network): its mount waits a second
 # and asks nothing, `gio list` names three shares (one hidden), none on the server "empty", and
 # fails on "bad" saying why; `gio info` names no folder; the bookmarks file has the server's address.
-giofake_shares() {   # $1: f16s's stand-in gio, f16v's too (each its own: f16v copied f16s's; the cleanup's step B)
+giofake_shares() {   # $1: f16s's stand-in gio
     cat > "$1" <<'EOF'
 #!/bin/sh
 case "$1:$*" in
@@ -520,43 +520,13 @@ RS_HOME=$T/home
 start=$(date +%s)
 rs f16q OFX_TEST_GIO="$T/giohang" -- "$T/home"
 took=$(( $(date +%s) - start )); if [ "$took" -ge 20 ]; then cat "$T/times"; echo "f16q: FAILED, took ${took}s (quit waited on a hung gio?)"; failed f16q; else echo "f16q: quit in ${took}s with gio hung"; fi
-# f16v (step 7b): servers on the network through a stand-in avahi-browse (no network): its query
-# (no -c) finds YOGA, its cache reads (-c) Office too once <T>/office is made (Lab once <T>/renamed
-# is) until <T>/gone is; a stand-in gio as f16s's. (Office waits for the script: on the first cache read,
-# a second after the query, it was gone past before a loaded window's first frames; F16 step 7d.)
-fresh f16v; mkdir -p "$T/home"
-giofake_shares "$T/giofake"
-cat > "$T/avahi" <<EOF
-#!/bin/sh
-[ "\$1" = -k ] || exit 0   # (as avahi-browse with -k prints: without it, the type's database name)
-y='=;eth0;IPv4;YOGA;_smb._tcp;local;yoga.local;192.168.1.165;445;"model=MacSamba"'
-y6='=;eth0;IPv6;YOGA;_smb._tcp;local;yoga.local;fe80::1;445;'
-o='=;eth0;IPv4;Office;_smb._tcp;local;office.local;192.168.1.9;4445;'
-[ -e "$T/renamed" ] && o='=;eth0;IPv4;Lab;_smb._tcp;local;lab.local;192.168.1.9;445;'
-case " \$* " in *" -c "*) [ -e "$T/office" ] || o=; [ -e "$T/gone" ] && o= ;; *) o= ;; esac
-printf '+;eth0;IPv4;YOGA;_smb._tcp;local\n%s\n%s\n%s\n' "\$y" "\$y6" "\$o"
-EOF
-chmod +x "$T/avahi"
-RS_HOME=$T/home
-rs f16v OFX_TEST_AVAHI="$T/avahi" OFX_TEST_DISCO_MS=1000 OFX_TEST_GIO="$T/giofake" -- "$T/home"
-# f16w (step 7d): Airplane Mode and the share poll's back-off: <T>/gvfs in the mount list as
-# gvfsd-fuse's (no share in it until the script makes one), a stand-in avahi-browse finding YOGA,
-# an smb:// bookmark; the poll's waits 200 ms doubling to 1600; the state file says airplane=on;
-# ofx.conf binds F8 to airplane-mode; a cache read takes 2 s once <T>/slow exists.
-fresh f16w; mkdir -p "$T/home" "$T/gvfs" "$T/config/gtk-3.0" "$T/config/ofx" "$T/state/ofx"
-printf 'airplane=on\n' > "$T/state/ofx/state"
-printf 'key = F8 airplane-mode\n' > "$T/config/ofx/ofx.conf"
+# f16w (step 7d): the share poll's back-off: <T>/gvfs in the mount list as gvfsd-fuse's (no share in
+# it until the script makes one), an smb:// bookmark; the poll's waits 200 ms doubling to 1600.
+fresh f16w; mkdir -p "$T/home" "$T/gvfs" "$T/config/gtk-3.0"
 printf 'smb://nas/home Home NAS\n' > "$T/config/gtk-3.0/bookmarks"
 printf '1 0 0:1 / / rw - ext4 /dev/x rw\n2 1 0:2 / %s rw,nosuid,nodev - fuse.gvfsd-fuse gvfsd-fuse rw\n' "$T/gvfs" > "$T/mountinfo"
-cat > "$T/avahi" <<EOF
-#!/bin/sh
-[ "\$1" = -k ] || exit 0
-case " \$* " in *" -c "*) [ -e "$T/slow" ] && sleep 2 ;; esac   # (a cache read the script makes slow)
-printf '=;eth0;IPv4;YOGA;_smb._tcp;local;yoga.local;192.168.1.165;445;\n'
-EOF
-chmod +x "$T/avahi"
 RS_HOME=$T/home
-rs f16w OFX_TEST_MOUNTINFO="$T/mountinfo" OFX_TEST_SHARES_MS=3000 OFX_TEST_AVAHI="$T/avahi" OFX_TEST_DISCO_MS=1000 OFX_TEST_GVFS_MS=200 OFX_TEST_GVFS_MAX_MS=1600 -- "$T/home"
+rs f16w OFX_TEST_MOUNTINFO="$T/mountinfo" OFX_TEST_SHARES_MS=3000 OFX_TEST_GVFS_MS=200 OFX_TEST_GVFS_MAX_MS=1600 -- "$T/home"
 fi
 if want net; then
 # F16 step 2 on a real share (tests/net/lib.sh: a Samba container, a gvfs of the run's own under <T>/rt,

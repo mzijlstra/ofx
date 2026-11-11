@@ -41,7 +41,6 @@ static bool ui_folder_shown(const Ui *u, UiMenuItem it)
 {
     UiCtxKind k = u->ctx_kind;
     if (k == UI_CTX_BRINGS) return it == UM_MOUNT_IT;   // no folder yet (2026-10-30)
-    if (k == UI_CTX_AIRPLANE) return it == UM_AIRPLANE_OFF_IT;   // (F16 step 7d: the sidebar's row)
     bool trash = k == UI_CTX_TRASH;
     switch (it) {
     case UM_SEP: case UM_OPEN_IT: case UM_OPEN_TAB: return true;
@@ -112,7 +111,7 @@ static bool ui_menu_enabled(const Ui *u, UiMenuItem it)
     case UM_PARENT: return u->can_up;
     case UM_BACK: return u->can_back;
     case UM_FORWARD: return u->can_forward;
-    case UM_HOME: case UM_TRASH_VIEW: case UM_FIND: case UM_LOCATION: case UM_CONNECT: case UM_AIRPLANE: return true;
+    case UM_HOME: case UM_TRASH_VIEW: case UM_FIND: case UM_LOCATION: case UM_CONNECT: return true;
     case UM_SEARCH: return ui_view_allows(u->view, UA_SEARCH);
     case UM_TERMINAL: return ui_view_allows(u->view, UA_TERMINAL);
     case UM_ADD_BOOKMARK: return u->can_bookmark && ui_view_allows(u->view, UA_ADD_BOOKMARK);
@@ -142,7 +141,6 @@ static int ui_menu_mark(const Ui *u, UiMenuItem it)
     case UM_SIDE_TREE: return u->side_mode == SIDE_TREE;
     case UM_SIDE_NONE: return u->side_mode == SIDE_HIDDEN;
     case UM_HIDDEN: return u->shows_hidden;
-    case UM_AIRPLANE: return u->airplane;
     case UM_PERMS_COLS: return u->perms_cols;
     case UM_GROUP_COL: return u->group_col;
     case UM_SHOW_MENU: return !u->bar_hidden;
@@ -229,7 +227,6 @@ static UiAction ui_menu_pick(Ui *u, UiMenuItem it)
         case UM_BM_REMOVE_IT: return (UiAction){ UA_BM_REMOVE, u->ctx_bmk, false };
         case UM_EMPTY_IT: return u->empty_asking = true, UI_NONE;
         case UM_PROPS_IT: return ui_props_open(u, UI_PROPS_CTX);
-        case UM_AIRPLANE_OFF_IT: return u->airplane = false, (UiAction){ UA_AIRPLANE, 0, false };
         default: return (UiAction){ UA_FOLDER_DO, it, false };
         }
     }
@@ -250,7 +247,6 @@ static UiAction ui_menu_pick(Ui *u, UiMenuItem it)
         return (UiAction){ UA_SORT, 0, false };
     case UM_DUPLICATE: return (UiAction){ UA_DUPLICATE, 0, false };
     case UM_COLORS: return u->colors = !u->colors, (UiAction){ UA_COLORS, 0, false };
-    case UM_AIRPLANE: return u->airplane = !u->airplane, (UiAction){ UA_AIRPLANE, 0, false };
     case UM_SHOW_MENU: return u->bar_hidden = !u->bar_hidden, u->panel = u->bar_hidden ? UI_PANEL_BAR : UI_PANEL_NONE,   // (a menu was open: no panel is)
                              (UiAction){ UA_MENUBAR, 0, false };
     case UM_BM_MORE: return ui_bmp_open(u, u->bm_more_at);

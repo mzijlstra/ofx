@@ -600,9 +600,7 @@ static void places_reload(void)
     char bm[PATH_MAX];
     places_load(&scratch, &app.places, bookmarks_path(bm, sizeof bm), mountinfo_path(), sysblock_path(), udev_path());
     ArenaMark m = arena_mark(&scratch);
-    static NetServer servers[NET_SERVERS_MAX];
-    int nservers = disco_servers(servers);
-    places_load_net(&scratch, &app.places, bm, watch_shares(&scratch), servers, nservers, app.ui.airplane);   // (F16 steps 5, 7b, 7d: after the drives)
+    places_load_net(&scratch, &app.places, bm, watch_shares(&scratch));   // (F16 step 5: after the drives)
     arena_restore(&scratch, m);
     // The Bookmarks menu's (F7.5). With Edit Bookmarks up its cursor stays on its line, found
     // again as a change finds it (bm_locate), wherever a change made elsewhere moved it; the lines

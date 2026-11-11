@@ -27,11 +27,8 @@
 // own connect or unmount, watch_gvfs_kick); a change reads the places again. The listing is a child's
 // (ofx-list --shares, watch_gvfs_scan), never this thread's own. While none is mounted the wait grows
 // (2, 4, 8, 16, then 30 s: F16 step 7d, Michael 2026-11-10: a child every 2 s was ~43,000 a day on a
-// desktop with no share); a change in the list, or a kick, puts it back to 2 s. In Airplane Mode no
-// listing at all, until a kick.
-//
-// The state file's folder (F16 step 7d): a change there reads Airplane Mode again (state_ready), so
-// one window turning it on or off turns every window's.
+// desktop with no share); a change in the list, or a kick, puts it back to 2 s. It reads gvfs's
+// local FUSE folder, never the network.
 //
 // The main thread points the folder watch at a new folder (watch_dir); the thread owns the theme
 // watches. inotify's calls are safe from both threads. A batch ends 100 ms after its last event,
@@ -44,12 +41,6 @@
 #include <sys/inotify.h>
 
 enum { WATCH_QUIET_MS = 100, WATCH_MAX_MS = 1000, WATCH_GVFS_MS = 2000, WATCH_GVFS_MAX_MS = 30000 };
-
-// Airplane Mode (F16 step 7d): ofx starts no network traffic (the shares' listing here, discovery,
-// a connect). The main thread sets it (airplane_apply); the threads read it. airplane_gen counts its
-// turnings on, so discovery knows one happened while it waited (the step 7d review).
-static atomic_bool airplane;
-static atomic_uint airplane_gen;
 
 // The shares' folders, one a line, as the thread last listed them (watch_shares copies them out).
 static struct {
@@ -71,18 +62,17 @@ static struct {
     int         mount_fd, mount_wd;  // the mountinfo file polled, or the test's watched; -1 for none
     atomic_int  bm_wd;         // the bookmarks file's folder, -1 for none (F7.5)
     atomic_int  conf_wd;       // ofx.conf's folder, -1 for none (F10)
-    int         state_wd;      // the state file's folder: Airplane Mode (F16 step 7d), -1 for none
     atomic_int  git_wd;        // the shown repository's git folder: its index and HEAD (F12), -1 for none
     char        current[PATH_MAX];   // $XDG_STATE_HOME/omarchy/current
     char        theme[PATH_MAX + 8]; // .../current/theme
     atomic_int  trash_wd[TRASH_DIRS_MAX];   // each trash folder's files/, 0 for none (inotify's start at 1)
     int         udev_wd;       // udev's database folder: a drive plugged in or pulled (2026-10-30)
-    atomic_bool list_ready, theme_ready, mounts_ready, trash_ready, conf_ready, git_ready, state_ready;
+    atomic_bool list_ready, theme_ready, mounts_ready, trash_ready, conf_ready, git_ready;
     // The thread's re-watch of the theme folder (an add, then its store) against main's release of a
     // wd it no longer wants: inotify gives a folder one wd, so between the two main could take the
     // theme's watch away as the old folder's (the F15 code-health review).
     pthread_mutex_t wd_mu;
-} watch = { .wd_mu = PTHREAD_MUTEX_INITIALIZER, .fd = -1, .dir_wd = -1, .theme_wd = -1, .current_wd = -1, .mount_fd = -1, .mount_wd = -1, .bm_wd = -1, .udev_wd = -1, .conf_wd = -1, .git_wd = -1, .state_wd = -1 };
+} watch = { .wd_mu = PTHREAD_MUTEX_INITIALIZER, .fd = -1, .dir_wd = -1, .theme_wd = -1, .current_wd = -1, .mount_fd = -1, .mount_wd = -1, .bm_wd = -1, .udev_wd = -1, .conf_wd = -1, .git_wd = -1 };
 
 // The mount list ofx reads: /proc/self/mountinfo, or the tests' OFX_TEST_MOUNTINFO.
 static const char *mountinfo_path(void)
@@ -123,7 +113,7 @@ static bool watch_is_trash(int wd)
 static bool watch_fixed(int wd)
 {
     return wd == atomic_load(&watch.theme_wd) || wd == atomic_load(&watch.current_wd) || wd == atomic_load(&watch.conf_wd) ||
-           wd == atomic_load(&watch.bm_wd) || wd == watch.udev_wd || wd == watch.state_wd || wd == watch.mount_wd || wd == atomic_load(&watch.git_wd);
+           wd == atomic_load(&watch.bm_wd) || wd == watch.udev_wd || wd == watch.mount_wd || wd == atomic_load(&watch.git_wd);
 }
 
 // wd, one a watch no longer wants (its slot already holds its new one), removed unless another
@@ -232,7 +222,6 @@ static void watch_read(bool *list, bool *theme, bool *mounts, bool *trash, bool 
         if (!(e->mask & IN_IGNORED) && watch_is_trash(e->wd)) *trash = true;
         if (e->wd == atomic_load(&watch.conf_wd) && e->len && strcmp(e->name, "ofx.conf") == 0) *conf = true;   // (F10)
         if (e->wd == atomic_load(&watch.conf_wd) && (e->mask & IN_IGNORED)) atomic_store(&watch.conf_wd, -1);   // (its folder gone: Preferences watches the new one, review, 2026-11-01)
-        if (e->wd == watch.state_wd && e->len && strcmp(e->name, "state") == 0) atomic_store(&watch.state_ready, true), wake_main();   // (F16 step 7d)
         if (e->wd == atomic_load(&watch.theme_wd) && !(e->mask & IN_IGNORED)) *theme = true;
         if (e->wd == atomic_load(&watch.current_wd)) *theme = true, rewatch = true;
     }
@@ -356,11 +345,9 @@ static void *watch_thread(void *arg)
     i64 gvfs_due = 0;   // (listed at once)
     for (;;) {
         bool list = false, theme = false, mounts = false, trash = false, conf = false, kicked = false;
-        bool off = atomic_load(&airplane);
         i64 wait = gvfs_due - now_ms();
-        if (off) watch_poll(-1, &list, &theme, &mounts, &trash, &conf, &kicked);   // (Airplane Mode: no listing until a kick)
-        else if (wait > 0) watch_poll((int)wait, &list, &theme, &mounts, &trash, &conf, &kicked);
-        if (!atomic_load(&airplane) && (kicked || now_ms() >= gvfs_due)) {
+        if (wait > 0) watch_poll((int)wait, &list, &theme, &mounts, &trash, &conf, &kicked);
+        if (kicked || now_ms() >= gvfs_due) {
             bool changed = watch_gvfs_scan();
             if (changed) mounts = true;
             // The next wait: 2 s while a share is mounted, or after a change or a kick; else twice
@@ -374,7 +361,7 @@ static void *watch_thread(void *arg)
         for (i64 now; (now = now_ms()) < ui_batch_due(first, last, WATCH_QUIET_MS, WATCH_MAX_MS);) {
             bool l2 = false, t2 = false, m2 = false, r2 = false, c2 = false, k2 = false;
             watch_poll((int)(ui_batch_due(first, last, WATCH_QUIET_MS, WATCH_MAX_MS) - now), &l2, &t2, &m2, &r2, &c2, &k2);
-            if (k2 && !atomic_load(&airplane)) {   // (a kick: listed now, and the wait back to its shortest)
+            if (k2) {   // (a kick: listed now, and the wait back to its shortest)
                 if (watch_gvfs_scan()) m2 = true;
                 if (atomic_exchange(&gvfsw.every, base) != base) atomic_store(&gvfsw.held_moved, true), wake_main();
                 gvfs_due = now_ms() + base;
@@ -409,10 +396,6 @@ static bool watch_start(void)
     else watch.mount_wd = inotify_add_watch(watch.fd, mi, IN_CLOSE_WRITE | IN_MODIFY | IN_MOVE_SELF | IN_DELETE_SELF);
     watch_bookmarks();
     watch_conf();
-    char state[PATH_MAX], sdir[PATH_MAX];   // (F16 step 7d; the folder made if it isn't there yet, as the state file's first write would)
-    Err serr;
-    if (state_path(state, sizeof state) && path_parent(sdir, sizeof sdir, state) && ops_allowed(sdir, &serr) && mkdir_private(sdir, &serr))
-        watch.state_wd = inotify_add_watch(watch.fd, sdir, IN_MOVED_TO | IN_CLOSE_WRITE | IN_ONLYDIR | IN_MASK_ADD);
     const char *udev = udev_path();
     if (udev) watch.udev_wd = inotify_add_watch(watch.fd, udev, IN_CREATE | IN_DELETE | IN_MOVED_TO | IN_CLOSE_WRITE | IN_ONLYDIR | IN_MASK_ADD);
     pthread_t t;
