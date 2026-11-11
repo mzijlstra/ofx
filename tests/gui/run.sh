@@ -540,7 +540,7 @@ giofake_shares "$T/giofake"
 cat > "$T/avahi" <<EOF
 #!/bin/sh
 [ "\$1" = -k ] || exit 0   # (as avahi-browse with -k prints: without it, the type's database name)
-lk="$T/avahi\$5.run"
+lk="$T/avahi\$5.run"   # (a stand-in killed at BROWSE_LIMIT_MS skips its trap: a stale lock, a false overlap; none reaches it)
 [ -e "\$lk" ] && echo "\$5" >> "$T/overlap"
 : > "\$lk"; trap 'rm -f "\$lk"' EXIT
 [ -e "$T/slow" ] && sleep 2

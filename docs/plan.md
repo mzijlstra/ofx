@@ -1287,6 +1287,14 @@ blocks each of these for up to gvfs's 90 s. On a thread it also holds ofx's exit
        Next: a code-health review of 7e's code alone (the whole tree had step 8's), its cleanup,
        then Michael's install. From part 3's review: the login's key is case-sensitive
        (`NAS.local` and `nas.local` are two lines); lower-case it in `login_key` if that shows.
+     - **The code-health review of 7e's code (2026-11-11):** one read-only reviewer on
+       `f33004e..ad4c0ab`, 12 findings, all picked, four steps, each shipped by reviewer-2 with no
+       findings: A, the rows and paths never taken for folders (a middle click on a server, the
+       empty space's Properties, drop targets, and a row's menu offering Terminal and Open in New
+       Window on a server); B, one spelling of a server (`smb://NAS/` is `smb://nas`), the login
+       per protocol in lower case (`login.smb.nas`), nothing kept after Guest, "Not connected"
+       instead of a false "No shares"; C, dead fields, `network_busy`, `UiInfo.rows`; D, f16v's
+       check that two queries never run at once. Next: Michael's install.
 8. **The milestone's code-health review and cleanup** (AGENTS.md "At the end of each major
    milestone"), then install.
    - **The review (2026-11-10):** four read-only reviewers (gui/main.c and its files; ui/; fs/
